@@ -764,12 +764,18 @@ public class FrmMain extends javax.swing.JFrame
         });
 
         // Listener de la sesión: pause/resume mueve highlights y refresca paneles.
-        debug.addListener(new DebugSession.Listener() {
-            @Override public void onPaused(DebugContext ctx) {
-                SwingUtilities.invokeLater(() -> onDebugPaused(ctx));
-            }
-            @Override public void onResumed() {
-                SwingUtilities.invokeLater(() -> onDebugResumed());
+        // A1.3 — los eventos llegan como DebugEvent serializable; las queries
+        // de memoria/locals/stack siguen saliendo del DebugContext live vía
+        // debug.currentContext() hasta que A1.4 sustituya por RPC.
+        debug.addListener(e -> {
+            if (e instanceof edu.bpgenvm.vm.debug.PausedEvent) {
+                edu.bpgenvm.vm.debug.PausedEvent pe = (edu.bpgenvm.vm.debug.PausedEvent) e;
+                DebugContext ctx = debug.currentContext();
+                if (ctx != null) {
+                    SwingUtilities.invokeLater(() -> onDebugPaused(ctx));
+                }
+            } else if (e instanceof edu.bpgenvm.vm.debug.ResumedEvent) {
+                SwingUtilities.invokeLater(this::onDebugResumed);
             }
         });
     }

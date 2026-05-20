@@ -2,6 +2,10 @@ package com.mycompany.bpide;
 
 import edu.bpgenvm.vm.DebugContext;
 import edu.bpgenvm.vm.DebugHook;
+import edu.bpgenvm.vm.debug.DebugEvent;
+import edu.bpgenvm.vm.debug.DebugListener;
+import edu.bpgenvm.vm.debug.PausedEvent;
+import edu.bpgenvm.vm.debug.ResumedEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.SynchronousQueue;
@@ -14,8 +18,15 @@ import java.util.concurrent.SynchronousQueue;
  *      antes de arrancar la VM. El hook corre en el thread worker BP y
  *      decide si pausar; cuando pausa, bloquea hasta recibir un comando.
  *
- *   2. La UI del IDE escucha el {@link Listener} para refrescar paneles
- *      cuando se pausa/reanuda. Envía comandos vía {@link #sendCommand}.
+ *   2. La UI del IDE escucha por {@link DebugListener} para refrescar
+ *      paneles cuando llegan {@link PausedEvent}/{@link ResumedEvent}.
+ *      Envía comandos vía {@link #sendCommand}.
+ *
+ * <p>A1.3 — los listeners reciben ahora objetos {@link DebugEvent}
+ * (POJOs serializables) en lugar de callbacks específicos. La query
+ * de memoria/locals/stack sigue saliendo del {@link DebugContext}
+ * accesible vía {@link #currentContext()}, que cuando la VM viva en
+ * otro proceso será sustituido por un cliente RPC con la misma API.</p>
  *
  * <p>Concurrencia: los campos compartidos entre worker BP y EDT son
  * {@code volatile}. El paso de comandos va por una {@link SynchronousQueue}
@@ -25,20 +36,14 @@ import java.util.concurrent.SynchronousQueue;
  */
 public final class DebugSession {
 
-    public interface Listener {
-        /** Pausa en breakpoint o tras step. Llamado desde thread worker BP. */
-        void onPaused(DebugContext ctx);
-        /** Reanudación tras un comando. Llamado desde thread worker BP. */
-        void onResumed();
-    }
-
     // ---- Estado observable ----
 
     private final ObservableList<Breakpoint> breakpoints = new ObservableList<>();
-    private final List<Listener> listeners = new ArrayList<>();
+    private final List<DebugListener> listeners = new ArrayList<>();
 
     public ObservableList<Breakpoint> breakpoints() { return breakpoints; }
-    public void addListener(Listener l) { listeners.add(l); }
+
+    public void addListener(DebugListener l) { listeners.add(l); }
 
     // ---- Estado del run actual ----
 
@@ -48,9 +53,12 @@ public final class DebugSession {
     /** bp del frame donde se emitió el último STEP_OVER / STEP_OUT. */
     private volatile int stepFromBp = 0;
 
-    /** Contexto del último pause; null si la VM no está pausada. */
+    /** Contexto del último pause; null si la VM no está pausada. Los
+     *  listeners pueden leerlo para hacer queries de memoria que aún no
+     *  encajan en un evento (hasta que A1.4 + RPC los reemplace). */
     private volatile DebugContext pausedAt = null;
     public DebugContext pausedAt() { return pausedAt; }
+    public DebugContext currentContext() { return pausedAt; }
     public boolean isPaused() { return pausedAt != null; }
 
     // Rendezvous para coordinar EDT → worker BP (envío de comando).
@@ -104,6 +112,18 @@ public final class DebugSession {
         // breakpoints persisten entre runs (es lo que el usuario espera).
     }
 
+    // ---- Helpers para emitir eventos a los listeners ----
+
+    private void emit(DebugEvent ev) {
+        for (DebugListener l : listeners) {
+            try { l.onEvent(ev); }
+            catch (Throwable t) {
+                // Un listener mal escrito no debe tumbar el worker BP.
+                System.err.println("DebugSession listener falló: " + t.getMessage());
+            }
+        }
+    }
+
     // ---- Hook que se instala en la VM ----
 
     public DebugHook hook() {
@@ -130,9 +150,12 @@ public final class DebugSession {
             }
             if (!shouldPause) return;
 
-            // Pausa: publicamos contexto + notificamos listeners + bloqueamos.
+            // Pausa: publicamos contexto + emitimos PausedEvent + bloqueamos.
             pausedAt = ctx;
-            for (Listener l : listeners) l.onPaused(ctx);
+            PausedEvent pe = new PausedEvent(
+                    ctx.tid, ctx.absPc, ctx.line, ctx.sourceFile,
+                    ctx.bp, ctx.sp, ctx.cs, ctx.stackBase);
+            emit(pe);
 
             StepCommand cmd;
             try {
@@ -150,8 +173,9 @@ public final class DebugSession {
                 case STEP_OUT:  mode = Mode.STEP_OUT;  stepFromBp = ctx.bp; break;
                 case STOP:      mode = Mode.RUN;  /* TODO: signal vm shutdown */ break;
             }
+            int resumedTid = ctx.tid;
             pausedAt = null;
-            for (Listener l : listeners) l.onResumed();
+            emit(new ResumedEvent(resumedTid));
         };
     }
 

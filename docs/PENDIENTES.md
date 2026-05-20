@@ -238,14 +238,19 @@ llamadas Java↔Java (`DebugSession` ↔ `DebugContext`).
    desplegado). Hot-attach/detach del IDE es deseable.
 
 **Sub-tareas previstas** (no necesariamente en este orden):
-- **A1.1** — Decisión de transporte + protocolo (gating de todo
-  el resto).
-- **A1.2** — Refactor de `print` en la VM: hoy escribe a
-  `System.out`. Pasar a un `OutputSink` inyectable (stdout local
-  por defecto; en modo IDE conectado, redirige al canal).
-- **A1.3** — Refactor del debugger: mover los hooks
-  `DebugContext` → eventos serializables en lugar de callbacks
-  Java directos.
+- **A1.1** — Decisión de transporte + protocolo (cerrado).
+  TCP sockets + JSON por línea + IDE lanza VM como subproceso.
+- **A1.2** — Refactor de `print` en la VM (cerrado).
+  Nuevo `OutputSink` interface + `StdoutSink` default; VM expone
+  `setProgramOut()`. Los opcodes PRINT_CHAR/STRING/NONL/STR_NONL/NL
+  ahora van por el sink. Tests en `OutputSinkTest`. Regresiones OK.
+- **A1.3** — Refactor de hooks del debugger (cerrado).
+  Nuevo paquete `edu.bpgenvm.vm.debug` con `DebugEvent` (abstracta) +
+  `PausedEvent` / `ResumedEvent` / `ExitedEvent` / `ExceptionEvent` —
+  POJOs serializables. `DebugListener.onEvent(DebugEvent)` reemplaza al
+  antiguo `DebugSession.Listener.onPaused/onResumed`. `DebugSession`
+  emite eventos; `DebugContext` (las queries de memoria) sigue accesible
+  vía `DebugSession.currentContext()` hasta que A1.4 lo sustituya por RPC.
 - **A1.4** — Servidor en la VM (escucha en un puerto cuando se
   arranca con `--listen <port>` o similar).
 - **A1.5** — Cliente en el IDE (sustituye las llamadas

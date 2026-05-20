@@ -537,9 +537,24 @@ public class VirtualMachine {
      */
     private Deque<int[]> handlerStack;
 
+    /** Sink al que se escribe el output de los opcodes PRINT_* del programa
+     *  BP. Por defecto System.out; el IDE inyecta su propio sink cuando
+     *  arranca la VM como subproceso (A1.2). NO incluye el output de
+     *  diagnóstico interno de la VM (GC log, banner, trace). */
+    private volatile OutputSink programOut = new StdoutSink();
+
     public VirtualMachine() {
         this(DEFAULT_MEMORY_SIZE, DEFAULT_STACK_BASE);
     }
+
+    /** Reemplaza el sink de output del programa. Llamable en cualquier
+     *  momento (los workers leen el campo volatile en cada print).
+     *  Pasar null restaura el StdoutSink por defecto. */
+    public void setProgramOut(OutputSink sink) {
+        this.programOut = (sink != null) ? sink : new StdoutSink();
+    }
+
+    public OutputSink getProgramOut() { return programOut; }
 
     /**
      * Variante con tamaño total y `stackBase` (donde termina el heap y
@@ -1074,6 +1089,10 @@ public class VirtualMachine {
         this.SP = main.sp;
         this.BP = main.bp;
         this.CS = main.cs;
+        // Asegura que el último output del programa BP llegue al sink
+        // antes de que la VM termine — crítico cuando el sink es un
+        // socket cuyo lado lector cierra al ver el evento "exited".
+        programOut.flush();
         System.out.println("=== FIN DE LA EJECUCIÓN ===");
     }
 
@@ -1616,17 +1635,18 @@ public class VirtualMachine {
 
                 case 0x21: { // PRINT_CHAR
                     sp -= 4; int c = readI32(mem, sp);
-                    System.out.print((char) c);
+                    programOut.writeChar((char) c);
                     break;
                 }
-                case 0x22: { // PRINT_STRING
+                case 0x22: { // PRINT_STRING (legacy: con \n al final)
                     sp -= 4; int ref = readI32(mem, sp);
                     int length = readI32(mem, ref);
                     StringBuilder sb = new StringBuilder(length);
                     for (int i = 0; i < length; i++) {
                         sb.append((char) readI32(mem, ref + 4 + i * 4));
                     }
-                    System.out.println(sb.toString());
+                    programOut.writeText(sb.toString());
+                    programOut.newline();
                     break;
                 }
 
@@ -1949,12 +1969,12 @@ public class VirtualMachine {
                 }
                 case 0x56: { // PRINT_NONL
                     sp -= 4; int v = readI32(mem, sp);
-                    System.out.print(v);
+                    programOut.writeText(Integer.toString(v));
                     break;
                 }
                 case 0x57: { // FPRINT_NONL
                     sp -= 4; float v = Float.intBitsToFloat(readI32(mem, sp));
-                    System.out.print(v);
+                    programOut.writeText(Float.toString(v));
                     break;
                 }
                 case 0x58: { // PRINT_STR_NONL
@@ -1964,11 +1984,11 @@ public class VirtualMachine {
                     for (int i = 0; i < length; i++) {
                         sb.append((char) readI32(mem, ref + 4 + i * 4));
                     }
-                    System.out.print(sb.toString());
+                    programOut.writeText(sb.toString());
                     break;
                 }
                 case 0x59: { // PRINT_NL
-                    System.out.println();
+                    programOut.newline();
                     break;
                 }
 
