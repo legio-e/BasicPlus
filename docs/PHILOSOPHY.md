@@ -138,6 +138,50 @@ y "haz 10 cosas a la vez" se escribe arrancando 10 threads.
 
 ---
 
+## IDE y VM separados — y eventualmente remotos
+
+Hoy la VM se ejecuta dentro del proceso del IDE: el IDE invoca a la
+VM por llamadas in-process Java↔Java. Era el camino más corto para
+ponerlo todo en pie y arrancar.
+
+**A medio plazo, IDE y VM tienen que ser dos programas separados,
+comunicados por un canal bidireccional**. La motivación es la misma
+que el resto del proyecto: el destino final es un dispositivo
+pequeño que ejecuta la VM. El IDE corre en el PC del programador.
+Cuando llegue ese momento, lo que separa "PC" de "robot" no es más
+que el cable (o radio) entre ellos.
+
+Por eso conviene hacer el split AHORA, mientras los dos lados están
+en la misma máquina. El protocolo nace local-only y se extiende
+naturalmente a remoto cuando lo necesitemos.
+
+**Qué tiene que hacer el canal**:
+
+- **IDE → VM**: arranca un programa, párelo, paso a paso, breakpoints,
+  inspección de memoria/locals/properties, copia de ficheros (.mod /
+  .bpi / config) al dispositivo.
+- **VM → IDE**: salida de `print` redirigida a una ventana del IDE,
+  eventos del debugger (paused, hit-breakpoint, exception, exit),
+  notificación de errores no atrapados.
+
+**Implicaciones para el diseño del lenguaje y la VM**:
+
+- `print` no puede asumir un `System.out` "local". La VM lo escribe
+  a un buffer / stream que el transporte serializa al IDE.
+- El debugger ya tiene una API (`DebugSession` en el IDE,
+  `DebugContext` en la VM); esa API es la que se serializa al canal.
+- La VM debe seguir funcionando **sin IDE conectado** (un dispositivo
+  desplegado no tiene IDE), simplemente sin redirigir `print` ni
+  reportar eventos de debug. Conectar/desconectar el IDE en caliente
+  es deseable.
+
+Esta separación tampoco es gratis: añade latencia, protocolo,
+serialización, manejo de desconexiones. La aceptamos porque sin
+ella el escenario "robot a 5 metros con IDE en el portátil" no
+es posible.
+
+---
+
 ## Lo que NO somos
 
 - **No somos un lenguaje de sistemas**. No vamos a competir con C

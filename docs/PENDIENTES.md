@@ -208,6 +208,63 @@ comentarios `//`).
 
 ---
 
+## 🔵 Cambios arquitectónicos planificados
+
+### A1 — Separar IDE y VM en dos procesos con canal bidireccional (pendiente)
+**Motivación**: el destino final es un dispositivo remoto que ejecuta
+la VM mientras el IDE vive en el PC del programador. Hacer el split
+ahora, con los dos lados en la misma máquina, valida el protocolo
+antes de añadir el cable. Ver `docs/PHILOSOPHY.md` §"IDE y VM
+separados — y eventualmente remotos".
+
+**Estado actual**: la VM se invoca in-process desde
+`BpIde/.../FrmMain.java`. El debugger acopla las dos capas con
+llamadas Java↔Java (`DebugSession` ↔ `DebugContext`).
+
+**Diseño a decidir** (preguntas abiertas):
+1. **Transporte**: ¿TCP sockets, UNIX domain sockets, o pipes
+   stdio? TCP escala a remoto sin tocar nada; stdio es lo más
+   simple para local; UDS está en medio.
+2. **Protocolo**: ¿line-based (texto JSON por línea, fácil de
+   depurar), binario length-prefixed (más eficiente, peor de
+   depurar), o algo establecido (gRPC, MessagePack, DAP)?
+3. **Quién arranca a quién**: ¿el IDE lanza la VM como subprocess
+   y se conecta? ¿O la VM corre como daemon y el IDE se conecta
+   cuando arranca?
+4. **Multiplexación**: ¿una sola conexión que lleva control +
+   eventos + stdout? ¿O dos sockets (control, output)?
+5. **Lifecycle de la VM sin IDE**: la VM debe poder ejecutar un
+   programa "headless" sin nadie conectado (un dispositivo
+   desplegado). Hot-attach/detach del IDE es deseable.
+
+**Sub-tareas previstas** (no necesariamente en este orden):
+- **A1.1** — Decisión de transporte + protocolo (gating de todo
+  el resto).
+- **A1.2** — Refactor de `print` en la VM: hoy escribe a
+  `System.out`. Pasar a un `OutputSink` inyectable (stdout local
+  por defecto; en modo IDE conectado, redirige al canal).
+- **A1.3** — Refactor del debugger: mover los hooks
+  `DebugContext` → eventos serializables en lugar de callbacks
+  Java directos.
+- **A1.4** — Servidor en la VM (escucha en un puerto cuando se
+  arranca con `--listen <port>` o similar).
+- **A1.5** — Cliente en el IDE (sustituye las llamadas
+  in-process; gestiona conexión, reconexión, error).
+- **A1.6** — Comandos del IDE → VM: `run`, `stop`, `step`,
+  `setBreakpoint`, `getLocals`, `getModuleProperties`, `upload
+  file`, `download file`, `exit`.
+- **A1.7** — Eventos VM → IDE: `print-output`, `paused-at`,
+  `exception`, `exited`, `error`.
+- **A1.8** — Smoke test end-to-end: arrancar VM, conectar IDE,
+  ejecutar un .mod, ver el print en la ventana, parar.
+
+**Compatibilidad**: durante el desarrollo conviene mantener un
+modo "in-process" funcional para no romper el flujo de trabajo,
+o tener una bandera que conmute entre los dos. Una vez el modo
+"out-of-process" sea estable, el in-process se puede retirar.
+
+---
+
 ## 🟠 Hallazgos de la sesión actual
 
 ### N1 — Modelo de memoria Java en `mem[]` (investigado, no es la causa)
