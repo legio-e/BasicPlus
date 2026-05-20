@@ -47,3 +47,9 @@ lexer-java/out/
 # Stray outputs de tests
 out_test.txt
 tmp_iotest/
+
+# ============================================================
+# Claude Code (caché local de permisos por carpeta)
+# ============================================================
+.claude/settings.local.json
+**/.claude/settings.local.json
