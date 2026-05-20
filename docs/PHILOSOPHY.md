@@ -182,6 +182,61 @@ es posible.
 
 ---
 
+## Una aplicación por VM, módulos stdlib pre-instalados
+
+Una decisión deliberada: **la VM ejecuta UNA aplicación a la vez. No
+multi-app**. La razón es que el target son dispositivos pequeños, y
+multiplexar varias apps complica enormemente el modelo de memoria (heap
+compartido vs aislado, GC entre apps, schedulers anidados…) sin
+beneficio real para el caso de uso.
+
+Dentro de una app sí hay multitarea: el programa puede arrancar
+**N hilos concurrentes sin límite predefinido**. La VM los multiplexa
+con su scheduler cooperativo + GC stop-the-world. Una app que controla
+un robot tendrá fácilmente 10 hilos (lectura de sensores, control de
+motores, comunicaciones, control loop…); eso es lo normal.
+
+### Qué se sube al dispositivo y cuándo
+
+Hay dos clases de módulos con frecuencias de actualización opuestas:
+
+- **Módulos stdlib** (`Math.mod`, `IO.mod`, `Json.mod`, …):
+  pre-instalados en el dispositivo. Sólo se suben cuando sale una
+  nueva versión del lenguaje. Viven fuera del workdir, accesibles
+  vía `--stdlibDir` (o `BpVM.cfg` `stdlibDir`). Es responsabilidad
+  del administrador del dispositivo mantenerlos al día — el IDE
+  del programador NO los gestiona en cada Run.
+
+- **Módulos de la aplicación** (`App.mod`, `Util.mod`, …): generados
+  por el compilador cada vez que el usuario hace cambios. Se suben
+  al **workdir** de la VM (efímero / por sesión) por cada Run.
+  Junto con sus `.bpi` (interfaces) y `.dbg` (info de debug).
+
+El **workdir** es por tanto un directorio "de aplicación": vacío en
+estado limpio, se llena con los `.mod` de la app que se va a ejecutar,
+y opcionalmente con ficheros que la app cree en runtime. Cuando termina
+la sesión, el workdir queda como esté — el IDE puede limpiarlo o
+preservarlo según interese (logs de la app, por ejemplo).
+
+Cuando la app importa `Math`, la VM busca primero `Math.mod` en el
+workdir (no estará — el IDE no lo subió) y luego en `stdlibDir` (sí
+estará — el admin lo instaló una vez). Si el dispositivo no tiene
+el stdlib instalado todavía, el import falla con un error claro: el
+usuario sabe que tiene que aprovisionar el dispositivo primero.
+
+Esta separación cumple dos objetivos:
+
+- **Eficiencia**: no hay que retransmitir megabytes de stdlib en
+  cada Run. La app del usuario es pequeña; el stdlib puede ser
+  comparativamente grande.
+- **Responsabilidad clara**: el IDE habla con UN dispositivo a la
+  vez como cliente "usuario" — sube su app y la ejecuta. Cómo se
+  aprovisiona el dispositivo (stdlib, configuración de memoria,
+  permisos) es un problema separado, que un día tendrá su propia
+  herramienta de administración.
+
+---
+
 ## Lo que NO somos
 
 - **No somos un lenguaje de sistemas**. No vamos a competir con C

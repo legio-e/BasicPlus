@@ -947,28 +947,13 @@ public class FrmMain extends javax.swing.JFrame
                     return null;
                 }
                 publish("== debug " + mod.getFileName() + " ==\n");
-                final String modAbs = mod.toString();
+                final String mainModName = moduleName + ".mod";
 
-                // A1.9 — la sesión de debug también pasa por VmClient: la VM
-                // corre como subproceso con --listen + --wait-client. Tras
-                // attach, la VM está pausada en su primer hook (STEP_INTO por
-                // defecto) y los listeners de debug.addListener reciben el
-                // PausedEvent + hacen las queries de locals/frames/props vía
-                // wire. El usuario controla el avance con los menús
-                // Continue/Step que pasan por debug.sendCommand → VmClient.
-                try (VmClient client = new VmClient()) {
-                    client.setDiagSink(s -> publish("[vm] " + s + "\n"));
-                    client.setOutputSink(this::publish);
-                    client.start(modAbs, /*waitClient=*/true);
-                    debug.attach(client);
-                    try {
-                        client.waitForExit();
-                    } finally {
-                        debug.detach();
-                    }
-                } catch (Throwable t) {
-                    publish("[VM error] " + t.getMessage() + "\n");
-                }
+                // A2.5 — mismo flow que doRun pero adjuntando DebugSession:
+                // la VM en daemon, recibe los .mod via upload, runModule
+                // tras el handshake. La pausa inicial NO se libera —
+                // el usuario controla con Continue/Step.
+                runOnVmRemote(outDir, mainModName, /*pauseInitially=*/true, this::publish);
                 publish("== fin debug ==\n");
                 return null;
             }
@@ -1117,31 +1102,14 @@ public class FrmMain extends javax.swing.JFrame
                     return null;
                 }
                 publish("== ejecutando " + mod.getFileName() + " ==\n");
-                final String modAbs = mod.toString();
+                final String mainModName = moduleName + ".mod";
 
-                // A1.5 — lanzar la VM como subproceso y consumir el wire
-                // JSON. En modo Run no usamos debug del usuario: pasamos
-                // --wait-client + auto-continue al primer paused (que es
-                // STEP_INTO por defecto) para que el programa arranque
-                // inmediato sin pausar en la primera línea.
-                try (VmClient client = new VmClient()) {
-                    client.setDiagSink(s -> publish("[vm] " + s + "\n"));
-                    client.setOutputSink(this::publish);
-                    client.setEventListener(ev -> {
-                        if (ev instanceof edu.bpgenvm.vm.debug.PausedEvent) {
-                            // En Run mode, libera la pausa inicial sin más.
-                            client.sendCommand(edu.bpgenvm.vm.debug.StepCommand.CONTINUE);
-                        } else if (ev instanceof edu.bpgenvm.vm.debug.ExceptionEvent) {
-                            edu.bpgenvm.vm.debug.ExceptionEvent e =
-                                    (edu.bpgenvm.vm.debug.ExceptionEvent) ev;
-                            publish("[exception tid=" + e.tid + "] " + e.message + "\n");
-                        }
-                    });
-                    client.start(modAbs, /*waitClient=*/true);
-                    client.waitForExit();
-                } catch (Throwable t) {
-                    publish("[VM error] " + t.getMessage() + "\n");
-                }
+                // A2.5 — flow remote-friendly: workdir temporal, VM en modo
+                // daemon, subir todos los .mod/.bpi/.dbg del outDir local
+                // por el wire, runModule del main. El stdlib NO se sube:
+                // se asume preinstalado en el dispositivo (--stdlibDir
+                // del BpVM.cfg del lado VM).
+                runOnVmRemote(outDir, mainModName, /*pauseInitially=*/false, this::publish);
                 publish("== fin ==\n");
                 return null;
             }
@@ -1153,6 +1121,117 @@ public class FrmMain extends javax.swing.JFrame
                 }
             }
         }.execute();
+    }
+
+    /**
+     * A2.5 — Ejecuta un módulo en una VM REMOTE-FRIENDLY:
+     *   1) Crea un workdir temporal local.
+     *   2) Lanza la VM en modo daemon con `--workdir <tmp>`.
+     *   3) Sube TODOS los .mod / .bpi / .dbg que el outDir local
+     *      contenga (la app del usuario y sus dependencias compiladas).
+     *      El stdlib NO se sube: vive preinstalado en el dispositivo.
+     *   4) Si {@code pauseInitially} es true, hace {@code debug.attach}
+     *      ANTES del runModule, así la sesión de debug recibe el primer
+     *      PausedEvent. Si es false (Run), libera el paused inicial
+     *      automáticamente.
+     *   5) Manda {@code runModule(mainModName)}, espera al ExitedEvent
+     *      / fin del subproceso.
+     *   6) Limpia el workdir.
+     */
+    private void runOnVmRemote(Path outDir, String mainModName,
+                               boolean pauseInitially,
+                               java.util.function.Consumer<String> publish) {
+        Path workdir = null;
+        try {
+            workdir = Files.createTempDirectory("bpide-vm-");
+            publish.accept("[ide] workdir temporal: " + workdir + "\n");
+
+            try (VmClient client = new VmClient()) {
+                client.setDiagSink(s -> publish.accept("[vm] " + s + "\n"));
+                client.setOutputSink(publish::accept);
+
+                if (pauseInitially) {
+                    // Debug: dejamos que la sesión gestione todo
+                    // (incluido el primer paused) tras attach().
+                    // No ponemos listener aquí; debug.attach pone el suyo.
+                } else {
+                    // Run: auto-continue al primer paused.
+                    client.setEventListener(ev -> {
+                        if (ev instanceof edu.bpgenvm.vm.debug.PausedEvent) {
+                            client.sendCommand(edu.bpgenvm.vm.debug.StepCommand.CONTINUE);
+                        } else if (ev instanceof edu.bpgenvm.vm.debug.ExceptionEvent) {
+                            edu.bpgenvm.vm.debug.ExceptionEvent e =
+                                    (edu.bpgenvm.vm.debug.ExceptionEvent) ev;
+                            publish.accept("[exception tid=" + e.tid + "] " + e.message + "\n");
+                        }
+                    });
+                }
+
+                client.startDaemon(workdir.toString(), /*waitClient=*/true);
+
+                // Sube los artefactos de la app compilada.
+                int nUploaded = uploadAppArtifacts(client, outDir, publish);
+                publish.accept("[ide] subidos " + nUploaded + " ficheros\n");
+
+                if (pauseInitially) {
+                    debug.attach(client);
+                }
+                try {
+                    client.runModule(mainModName);
+                    client.waitForExit();
+                } finally {
+                    if (pauseInitially) debug.detach();
+                }
+            } catch (Throwable t) {
+                publish.accept("[VM error] " + t.getMessage() + "\n");
+            }
+        } catch (java.io.IOException ie) {
+            publish.accept("[IDE error creando workdir] " + ie.getMessage() + "\n");
+        } finally {
+            if (workdir != null) {
+                deleteRecursively(workdir);
+            }
+        }
+    }
+
+    /** Sube .mod/.bpi/.dbg del outDir local a la raíz del workdir del VmClient.
+     *  No recurre: asume que outDir está plano (lo está hoy). */
+    private int uploadAppArtifacts(VmClient client, Path outDir,
+                                   java.util.function.Consumer<String> publish) throws java.io.IOException {
+        if (!Files.isDirectory(outDir)) return 0;
+        int n = 0;
+        try (java.util.stream.Stream<Path> s = Files.list(outDir)) {
+            java.util.List<Path> files = s
+                    .filter(p -> {
+                        String name = p.getFileName().toString().toLowerCase();
+                        return name.endsWith(".mod") || name.endsWith(".bpi") || name.endsWith(".dbg");
+                    })
+                    .sorted()
+                    .collect(java.util.stream.Collectors.toList());
+            for (Path p : files) {
+                String name = p.getFileName().toString();
+                try {
+                    int size = client.uploadFile(p, name, 10_000);
+                    publish.accept("[ide] up " + name + " (" + size + " bytes)\n");
+                    n++;
+                } catch (java.io.IOException ue) {
+                    publish.accept("[ide] upload " + name + " falló: " + ue.getMessage() + "\n");
+                }
+            }
+        }
+        return n;
+    }
+
+    private static void deleteRecursively(Path root) {
+        if (!Files.exists(root)) return;
+        try {
+            Files.walk(root)
+                    .sorted(java.util.Comparator.reverseOrder())
+                    .forEach(p -> {
+                        try { Files.deleteIfExists(p); }
+                        catch (java.io.IOException ignored) {}
+                    });
+        } catch (java.io.IOException ignored) {}
     }
 
     /**

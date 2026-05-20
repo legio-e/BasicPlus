@@ -396,20 +396,26 @@ llamadas Java↔Java (`DebugSession` ↔ `DebugContext`).
   manda runModule" funciona sin necesidad de que IDE y VM
   compartan filesystem.
 
-**Lo que queda en A2 / rewire IDE**:
-- **A2.5** — Rewire `doRun`/`doDebug` del IDE para que sigan el
-  patrón daemon: usar un workdir temporal por sesión, subir los
-  artefactos compilados (`.mod` + `.bpi` + `.dbg`), llamar
-  runModule. Hoy ambos pasan el path local al subproceso (lo
-  cual sólo funciona en mismo PC). Cuando A2.5 esté hecho, cambiar
-  `localhost` por una IP remota es lo único que falta para
-  ejecutar contra un dispositivo.
-- Subida de stdlib: si el dispositivo no tiene `Math.mod`/`IO.mod`/
-  `Json.mod` preinstalados, el IDE debe subirlos al workdir antes
-  de runModule. Hoy el IDE no lo hace.
+### A2.5 — IDE usa el flow daemon + workdir + upload (cerrado)
+- `FrmMain.runOnVmRemote(outDir, mainModName, pauseInitially, publish)`:
+  1) crea workdir temporal (`bpide-vm-XXXX/`);
+  2) `VmClient.startDaemon(workdir, waitClient=true)`;
+  3) `uploadAppArtifacts`: sube `.mod` + `.bpi` + `.dbg` del outDir local;
+  4) si pause inicial: `debug.attach(client)`;
+  5) `client.runModule(<main>.mod)`; espera `waitForExit`;
+  6) `deleteRecursively(workdir)`.
+- `doRun` → `runOnVmRemote(..., pauseInitially=false, ...)` (auto-continue al primer paused).
+- `doDebug` → `runOnVmRemote(..., pauseInitially=true, ...)` (attach DebugSession; usuario controla con Continue/Step).
+- El stdlib NO se sube — vive preinstalado en el dispositivo, accesible via `--stdlibDir` que el lado VM lee de su propio `BpVM.cfg`.
+- Hoy localhost; cambiar a IP remota es trivial cuando A2.6 esté hecho.
+
+**Lo que queda en A2**:
+- **A2.6** — Configurar host/puerto remoto en el IDE (hoy hard-coded a "localhost"). Una preferencia tipo "VM endpoint" en BpIde, leído de un fichero o de un menú. Cuando esté, **NO se toca código** para apuntar a un dispositivo: sólo se cambia esa preferencia.
 - Multi-run en el mismo daemon: hoy la VM termina tras un
   runModule. Para soportar "Run otra vez" sin matar el proceso,
   habría que reiniciar memoria/heap/threads.
+- Aprovisionamiento del dispositivo (subir/actualizar stdlib,
+  configurar BpVM.cfg) — herramienta separada del IDE de usuario.
 
 **Compatibilidad**: durante el desarrollo conviene mantener un
 modo "in-process" funcional para no romper el flujo de trabajo,
