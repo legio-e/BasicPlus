@@ -93,6 +93,51 @@ extremo "máxima velocidad / ecosistema enorme" (eso es Java).
 
 ---
 
+## Paralelismo real, no `async`
+
+El caso de uso que tenemos en mente — pongamos un robot pequeño —
+suele necesitar **muchas tareas concurrentes a la vez**: leer
+sensores, controlar motores, comunicarse por red, parsear comandos,
+mantener un loop de control. Diez hilos no son raros, son lo normal.
+
+Aquí MicroPython falla por la dirección opuesta a la nuestra:
+
+- Los hilos de MicroPython "no funcionan bien" en la práctica. La
+  GIL global y la integración floja con cada port hacen que el modelo
+  multithread sea inestable o muy limitado según el dispositivo.
+- La salida recomendada es `async`/`await`. Funciona, pero **obliga
+  al programador a colorear todas las funciones** (sync vs async),
+  propagar `await` por todos los call-sites, gestionar event loops…
+  Para un programa "haz N cosas a la vez" es ruido constante.
+
+BasicPlus apuesta por **hilos preemptivos de verdad**, gestionados
+por la VM:
+
+- `class MyTask extends Thread` con un `run()` virtual. `start()` /
+  `join()` como en Java.
+- Sincronización con `Mutex` y `sync property` integrados en el
+  lenguaje, no en una librería.
+- El intérprete ya tiene un scheduler propio que reparte CPU entre
+  los `ThreadContext`s con safepoints, GC stop-the-world, y bloqueo
+  en lock/sleep.
+- Ninguna función necesita marcarse como `async` ni propagar `await`.
+  Las funciones se llaman entre sí como siempre; lo paralelo es el
+  hilo, no la función.
+
+El coste de esa decisión es:
+
+- La VM se complica internamente (scheduler, GC con safepoint, JMM,
+  hand-off de mutex). Lo asumimos — es UNA vez al implementar la VM,
+  y libera al usuario para siempre.
+- Hay un pequeño residual de race conditions bajo contención
+  extrema (ver B1 en PENDIENTES.md). Es deuda nuestra, no del modelo
+  conceptual.
+
+A cambio, el código de usuario se lee como código secuencial normal,
+y "haz 10 cosas a la vez" se escribe arrancando 10 threads.
+
+---
+
 ## Lo que NO somos
 
 - **No somos un lenguaje de sistemas**. No vamos a competir con C
