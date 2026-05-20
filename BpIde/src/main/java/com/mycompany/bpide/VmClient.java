@@ -87,6 +87,19 @@ public final class VmClient implements AutoCloseable {
     private Thread stderrPumpThread;
     private final CountDownLatch helloLatch = new CountDownLatch(1);
 
+    /** Executor single-thread donde se invocan los DebugListener. Es CRUCIAL
+     *  que no corran en el reader thread: si lo hicieran y un listener
+     *  invocase una query síncrona (sendRequest → future.get), el reader
+     *  thread quedaría bloqueado esperando una respuesta que él mismo es
+     *  el único que puede leer del socket. Single-thread mantiene el orden
+     *  de eventos. */
+    private final java.util.concurrent.ExecutorService listenerExec =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "bp-vmclient-listener");
+                t.setDaemon(true);
+                return t;
+            });
+
     private volatile boolean closed = false;
 
     // ---- Request/response (A1.6) ----
@@ -139,6 +152,9 @@ public final class VmClient implements AutoCloseable {
         terminateProcess();
         try { if (readerThread != null) readerThread.join(2000); } catch (InterruptedException ignored) {}
         try { if (stderrPumpThread != null) stderrPumpThread.join(1000); } catch (InterruptedException ignored) {}
+        listenerExec.shutdown();
+        try { listenerExec.awaitTermination(1, TimeUnit.SECONDS); }
+        catch (InterruptedException ignored) {}
     }
 
     private void terminateProcess() {
@@ -480,10 +496,13 @@ public final class VmClient implements AutoCloseable {
 
     private void fire(edu.bpgenvm.vm.debug.DebugEvent ev) {
         DebugListener l = eventListener;
-        if (l != null) {
+        if (l == null) return;
+        // Dispatchear FUERA del reader thread para evitar deadlock cuando
+        // el listener hace queries síncronas vía sendRequest.
+        listenerExec.execute(() -> {
             try { l.onEvent(ev); }
             catch (Throwable t) { diag("[VmClient] listener: " + t.getMessage()); }
-        }
+        });
     }
 
     private void diag(String line) {

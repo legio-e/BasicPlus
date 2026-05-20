@@ -316,9 +316,39 @@ llamadas Java↔Java (`DebugSession` ↔ `DebugContext`).
     paused, ejercita las 3 queries (getLocals/stackFrames/
     moduleProperties), continúa, recibe los 18 prints + exited.
   - Pendiente: smoke end-to-end con la GUI del IDE (requiere
-    interacción manual; no se automatiza offline). doDebug del IDE
-    sigue usando la VM in-process hasta que se rewire por VmClient
-    (apuntado como A1.9 futuro).
+    interacción manual; no se automatiza offline).
+- **A1.9** — Rewire de `doDebug` (cerrado).
+  - `DebugSession` ya no envuelve un `DebugController` in-process —
+    es un wrapper de `VmClient` con `attach()`/`detach()` por sesión.
+    `toggleBreakpoint` actualiza la ObservableList (UI) y replica al
+    wire vía `setBreakpoint`. `sendCommand` / `getLocals` /
+    `getStackFrames` / `getModuleProperties` forwarded al VmClient.
+  - `FrmMain.onDebugPaused` cambia firma — recibe `PausedEvent` +
+    snapshots de locals/frames/props ya cargados. Las queries se
+    hacen en el listener del VmClient (executor dedicado), NO en EDT.
+  - **Bug detectado y arreglado en `VmClient`**: el listener corría
+    inline en el reader thread → deadlock cuando hacía una query
+    síncrona (`sendRequest.future.get()` esperaba una respuesta que
+    el mismo thread bloqueado tendría que leer). Solución: dispatch
+    de listeners a un `Executor` single-thread (preserva el orden).
+  - `doDebug` arranca un `VmClient` con `--listen --wait-client`,
+    hace `debug.attach(client)`, espera `client.waitForExit()`.
+  - **DebugSessionSmoke**: clase main de validación. Verificado en
+    MoveTest.bp con BP en línea 22 → pause 1 (line=14, locals=0,
+    frames=2) → pause 2 (line=22, locals=9, frames=2) → exit.
+
+**Lo que queda en A1 / arquitectura IDE↔VM**:
+- describePc remoto: el call-stack del debugger muestra `PC=<n>`
+  porque el `ModuleManager` ya no vive en el IDE. Si se quiere
+  el nombre del símbolo, añadir un `req: describePc(pc)` al wire.
+- Smoke GUI manual: arrancar el IDE, abrir un proyecto, Run/Debug
+  y comprobar que la consola muestra los `print` y los paneles
+  Variables/Stack/Properties se rellenan al pausar.
+- Upload/download de ficheros y comandos remotos del filesystem
+  (necesarios cuando la VM viva en un dispositivo).
+- Stop real: hoy `STOP` no termina la sesión — sólo libera el
+  step. Falta una señal de shutdown al `vm.run()` que detenga
+  todos los workers.
 
 **Compatibilidad**: durante el desarrollo conviene mantener un
 modo "in-process" funcional para no romper el flujo de trabajo,

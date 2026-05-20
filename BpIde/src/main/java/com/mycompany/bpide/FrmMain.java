@@ -764,18 +764,21 @@ public class FrmMain extends javax.swing.JFrame
             @Override public void onCleared()                       { refreshBreakpointHighlights(); }
         });
 
-        // Listener de la sesión: pause/resume mueve highlights y refresca paneles.
-        // A1.3 — los eventos llegan como DebugEvent serializable; las queries
-        // de memoria/locals/stack siguen saliendo del DebugContext live vía
-        // debug.currentContext() hasta que A1.4 sustituya por RPC.
+        // Listener de la sesión (A1.9): los eventos llegan en el thread
+        // reader del VmClient. Para paused, ya en ese thread hacemos las
+        // queries de locals/frames/properties (es seguro bloquear ahí)
+        // y luego invokeLater para pintar la UI con el snapshot completo.
         debug.addListener(e -> {
             if (e instanceof edu.bpgenvm.vm.debug.PausedEvent) {
                 edu.bpgenvm.vm.debug.PausedEvent pe = (edu.bpgenvm.vm.debug.PausedEvent) e;
-                DebugContext ctx = debug.currentContext();
-                if (ctx != null) {
-                    SwingUtilities.invokeLater(() -> onDebugPaused(ctx));
-                }
+                int[] locals = debug.getLocals(2000);
+                List<int[]> frames = debug.getStackFrames(2000);
+                List<edu.bpgenvm.vm.ModuleManager.PropertyView> props =
+                        debug.getModuleProperties(2000);
+                SwingUtilities.invokeLater(() -> onDebugPaused(pe, locals, frames, props));
             } else if (e instanceof edu.bpgenvm.vm.debug.ResumedEvent) {
+                SwingUtilities.invokeLater(this::onDebugResumed);
+            } else if (e instanceof edu.bpgenvm.vm.debug.ExitedEvent) {
                 SwingUtilities.invokeLater(this::onDebugResumed);
             }
         });
@@ -837,19 +840,24 @@ public class FrmMain extends javax.swing.JFrame
         });
     }
 
-    /** Llamado en EDT cuando la sesión pausa: actualiza paneles + highlight. */
-    private void onDebugPaused(DebugContext ctx) {
+    /** Llamado en EDT cuando la sesión pausa: actualiza paneles + highlight.
+     *  Los datos (locals, frames, props) llegan precargados desde el thread
+     *  reader del VmClient — aquí NO se hace I/O. */
+    private void onDebugPaused(edu.bpgenvm.vm.debug.PausedEvent pe,
+                               int[] locals,
+                               List<int[]> frames,
+                               List<edu.bpgenvm.vm.ModuleManager.PropertyView> props) {
         // Highlight de línea actual (amarillo).
         Highlighter hl = editorArea.getHighlighter();
         if (pausedLineHighlight != null) {
             hl.removeHighlight(pausedLineHighlight);
             pausedLineHighlight = null;
         }
-        if (ctx.line > 0) {
+        if (pe.line > 0) {
             try {
                 Element root = editorArea.getDocument().getDefaultRootElement();
-                if (ctx.line - 1 < root.getElementCount()) {
-                    Element el = root.getElement(ctx.line - 1);
+                if (pe.line - 1 < root.getElementCount()) {
+                    Element el = root.getElement(pe.line - 1);
                     DefaultHighlighter.DefaultHighlightPainter painter =
                             new DefaultHighlighter.DefaultHighlightPainter(new Color(255, 240, 150));
                     pausedLineHighlight = hl.addHighlight(el.getStartOffset(), el.getEndOffset(), painter);
@@ -857,23 +865,17 @@ public class FrmMain extends javax.swing.JFrame
                 }
             } catch (Exception ex) { /* ignore */ }
         }
-        // Variables: leer slots de bp..sp como i32.
-        int nLocals = Math.max(0, (ctx.sp - ctx.bp) / 4);
-        int[] vs = new int[nLocals];
-        for (int i = 0; i < nLocals; i++) vs[i] = ctx.readLocal(i * 4);
-        localsModel.update(vs);
-        // Properties de módulo: snapshot read-only del data block de cada módulo.
-        modulePropsModel.update(ctx.moduleProperties());
-        // Call Stack: reconstruir desde DebugContext.
-        List<int[]> fs = ctx.stackFrames();
-        List<String> labels = new java.util.ArrayList<>(fs.size());
-        for (int[] f : fs) {
-            String lbl = (currentModuleManager != null)
-                    ? currentModuleManager.describePc(f[0])
-                    : "PC=" + f[0];
-            labels.add(lbl);
+        localsModel.update(locals);
+        modulePropsModel.update(props);
+        // Call Stack: hoy mostramos PC raw — describePc requiere el
+        // ModuleManager in-process; cuando la VM corre como subproceso ya
+        // no lo tenemos. Si en algún momento queremos labels legibles,
+        // añadir un query "describePc(pc)" al wire.
+        List<String> labels = new java.util.ArrayList<>(frames.size());
+        for (int[] f : frames) {
+            labels.add("PC=" + f[0]);
         }
-        stackModel.update(fs, labels);
+        stackModel.update(frames, labels);
         // Saltar a la pestaña Variables para que se vea.
         int tabVars = findTabByTitlePrefix(jTabbedPane2, "Variables");
         if (tabVars >= 0) jTabbedPane2.setSelectedIndex(tabVars);
@@ -946,29 +948,27 @@ public class FrmMain extends javax.swing.JFrame
                 }
                 publish("== debug " + mod.getFileName() + " ==\n");
                 final String modAbs = mod.toString();
-                final String modName = moduleName;
-                final edu.bpgenvm.config.VmConfig dbgCfg =
-                        edu.bpgenvm.config.VmConfig.loadDefaultFor(mod);
-                if (dbgCfg.sourcePath != null) {
-                    publish("config: " + dbgCfg.sourcePath + "\n");
-                }
-                invokeWithCapture(() -> {
+
+                // A1.9 — la sesión de debug también pasa por VmClient: la VM
+                // corre como subproceso con --listen + --wait-client. Tras
+                // attach, la VM está pausada en su primer hook (STEP_INTO por
+                // defecto) y los listeners de debug.addListener reciben el
+                // PausedEvent + hacen las queries de locals/frames/props vía
+                // wire. El usuario controla el avance con los menús
+                // Continue/Step que pasan por debug.sendCommand → VmClient.
+                try (VmClient client = new VmClient()) {
+                    client.setDiagSink(s -> publish("[vm] " + s + "\n"));
+                    client.setOutputSink(this::publish);
+                    client.start(modAbs, /*waitClient=*/true);
+                    debug.attach(client);
                     try {
-                        edu.bpgenvm.vm.VirtualMachine vm =
-                                new edu.bpgenvm.vm.VirtualMachine(dbgCfg.memorySize, dbgCfg.stackBase);
-                        edu.bpgenvm.vm.ModuleManager mm = new edu.bpgenvm.vm.ModuleManager(vm);
-                        if (dbgCfg.stdlibDir != null) mm.setStdlibDir(dbgCfg.stdlibDir);
-                        vm.setModuleManager(mm);
-                        currentModuleManager = mm;
-                        vm.setDebugHook(debug.hook());
-                        mm.executeRootModule(modAbs, modName);
-                        vm.run();
-                        return Boolean.TRUE;
-                    } catch (Throwable t) {
-                        System.err.println("[VM error] " + t.getMessage());
-                        return Boolean.FALSE;
+                        client.waitForExit();
+                    } finally {
+                        debug.detach();
                     }
-                }, this::publish);
+                } catch (Throwable t) {
+                    publish("[VM error] " + t.getMessage() + "\n");
+                }
                 publish("== fin debug ==\n");
                 return null;
             }
