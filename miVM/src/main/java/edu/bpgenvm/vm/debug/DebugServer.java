@@ -72,6 +72,11 @@ public final class DebugServer implements AutoCloseable {
      *  "debugger attach". countDown al hacer accept. */
     private final CountDownLatch clientConnected = new CountDownLatch(1);
 
+    /** A2.3 — Latch + slot para que el modo daemon de Main espere un
+     *  runModule command y reciba el nombre del módulo a ejecutar. */
+    private final java.util.concurrent.CompletableFuture<String> runModuleRequest =
+            new java.util.concurrent.CompletableFuture<>();
+
     private volatile boolean closed = false;
 
     public DebugServer(VirtualMachine vm, DebugController controller) {
@@ -242,8 +247,35 @@ public final class DebugServer implements AutoCloseable {
             case "hello":
                 send("{\"type\":\"hello\",\"vm\":\"" + SERVER_BANNER + "\"}");
                 break;
+            case "runModule": {
+                // A2.3 — el cliente pide ejecutar un .mod (relativo al
+                // workdir). Sólo válido en modo daemon (Main lo espera).
+                String module = Json.getString(m, "module", "");
+                if (module.isEmpty()) {
+                    System.err.println("[DebugServer] runModule sin 'module'");
+                    break;
+                }
+                if (!runModuleRequest.isDone()) {
+                    runModuleRequest.complete(module);
+                } else {
+                    System.err.println("[DebugServer] runModule ignorado: ya hay módulo cargado");
+                }
+                break;
+            }
             default:
                 System.err.println("[DebugServer] comando desconocido: '" + cmd + "'");
+        }
+    }
+
+    /** Bloquea hasta que llegue un runModule command, o el timeout. Devuelve
+     *  el nombre del módulo (path relativo al workdir) o null si timeout. */
+    public String awaitRunModule(long timeoutMs) throws InterruptedException {
+        try {
+            return runModuleRequest.get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException te) {
+            return null;
+        } catch (java.util.concurrent.ExecutionException ee) {
+            return null;
         }
     }
 
@@ -261,11 +293,131 @@ public final class DebugServer implements AutoCloseable {
                 case "moduleProperties":  sendModulePropertiesResponse(reqId); break;
                 case "readInt":           sendReadIntResponse(reqId, m); break;
                 case "readString":        sendReadStringResponse(reqId, m); break;
+                // A2.2 — transferencia de ficheros (workdir-relative).
+                case "uploadFile":        sendUploadFileResponse(reqId, m); break;
+                case "downloadFile":      sendDownloadFileResponse(reqId, m); break;
+                case "listFiles":         sendListFilesResponse(reqId, m); break;
+                case "deleteFile":        sendDeleteFileResponse(reqId, m); break;
+                case "mkdir":             sendMkdirResponse(reqId, m); break;
                 default:
                     sendError(reqId, "req desconocido: " + req);
             }
         } catch (Throwable t) {
             sendError(reqId, "error procesando '" + req + "': " + t.getMessage());
+        }
+    }
+
+    // ---- File transfer (A2.2) ----
+
+    /** Resuelve un path del wire dentro del workdir. Si no hay workdir
+     *  configurado, error: la VM debe haberse arrancado con --workdir
+     *  para aceptar transferencias. */
+    private java.nio.file.Path workdirPath(String userPath, long reqId) {
+        ModuleManager mm = vm.getModuleManager();
+        if (mm == null || mm.getWorkdir() == null) {
+            throw new IllegalStateException("VM sin workdir; arrancar con --workdir");
+        }
+        return mm.resolveInWorkdir(userPath);
+    }
+
+    private void sendUploadFileResponse(long requestId, Map<String, Object> m) {
+        String path = Json.getString(m, "path", "");
+        String b64  = Json.getString(m, "data", "");
+        if (path.isEmpty()) {
+            sendError(requestId, "uploadFile: falta 'path'"); return;
+        }
+        byte[] bytes;
+        try { bytes = java.util.Base64.getDecoder().decode(b64); }
+        catch (IllegalArgumentException iae) {
+            sendError(requestId, "uploadFile: base64 inválido"); return;
+        }
+        try {
+            java.nio.file.Path dst = workdirPath(path, requestId);
+            java.nio.file.Path parent = dst.getParent();
+            if (parent != null) java.nio.file.Files.createDirectories(parent);
+            java.nio.file.Files.write(dst, bytes);
+            send("{\"resp\":\"uploadFile\",\"requestId\":" + requestId
+                    + ",\"size\":" + bytes.length + "}");
+        } catch (java.io.IOException e) {
+            sendError(requestId, "uploadFile: " + e.getMessage());
+        }
+    }
+
+    private void sendDownloadFileResponse(long requestId, Map<String, Object> m) {
+        String path = Json.getString(m, "path", "");
+        if (path.isEmpty()) {
+            sendError(requestId, "downloadFile: falta 'path'"); return;
+        }
+        try {
+            java.nio.file.Path src = workdirPath(path, requestId);
+            byte[] data = java.nio.file.Files.readAllBytes(src);
+            String b64 = java.util.Base64.getEncoder().encodeToString(data);
+            send("{\"resp\":\"downloadFile\",\"requestId\":" + requestId
+                    + ",\"size\":" + data.length
+                    + ",\"data\":\"" + b64 + "\"}");
+        } catch (java.io.IOException e) {
+            sendError(requestId, "downloadFile: " + e.getMessage());
+        }
+    }
+
+    private void sendListFilesResponse(long requestId, Map<String, Object> m) {
+        String path = Json.getString(m, "path", "");
+        try {
+            java.nio.file.Path dir = workdirPath(path.isEmpty() ? "." : path, requestId);
+            if (!java.nio.file.Files.isDirectory(dir)) {
+                sendError(requestId, "listFiles: no es un directorio: " + path); return;
+            }
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\"resp\":\"listFiles\",\"requestId\":").append(requestId);
+            sb.append(",\"files\":[");
+            boolean first = true;
+            try (java.util.stream.Stream<java.nio.file.Path> s = java.nio.file.Files.list(dir)) {
+                java.util.List<java.nio.file.Path> sorted = s
+                        .sorted(java.util.Comparator.comparing(java.nio.file.Path::getFileName))
+                        .collect(java.util.stream.Collectors.toList());
+                for (java.nio.file.Path p : sorted) {
+                    if (!first) sb.append(',');
+                    first = false;
+                    boolean isDir = java.nio.file.Files.isDirectory(p);
+                    long size = isDir ? 0 : java.nio.file.Files.size(p);
+                    sb.append("{\"name\":").append(Json.quote(p.getFileName().toString()));
+                    sb.append(",\"size\":").append(size);
+                    sb.append(",\"isDirectory\":").append(isDir ? "true" : "false");
+                    sb.append('}');
+                }
+            }
+            sb.append("]}");
+            send(sb.toString());
+        } catch (java.io.IOException e) {
+            sendError(requestId, "listFiles: " + e.getMessage());
+        }
+    }
+
+    private void sendDeleteFileResponse(long requestId, Map<String, Object> m) {
+        String path = Json.getString(m, "path", "");
+        if (path.isEmpty()) {
+            sendError(requestId, "deleteFile: falta 'path'"); return;
+        }
+        try {
+            java.nio.file.Path p = workdirPath(path, requestId);
+            java.nio.file.Files.delete(p);
+            send("{\"resp\":\"deleteFile\",\"requestId\":" + requestId + "}");
+        } catch (java.io.IOException e) {
+            sendError(requestId, "deleteFile: " + e.getMessage());
+        }
+    }
+
+    private void sendMkdirResponse(long requestId, Map<String, Object> m) {
+        String path = Json.getString(m, "path", "");
+        if (path.isEmpty()) {
+            sendError(requestId, "mkdir: falta 'path'"); return;
+        }
+        try {
+            java.nio.file.Path p = workdirPath(path, requestId);
+            java.nio.file.Files.createDirectories(p);
+            send("{\"resp\":\"mkdir\",\"requestId\":" + requestId + "}");
+        } catch (java.io.IOException e) {
+            sendError(requestId, "mkdir: " + e.getMessage());
         }
     }
 

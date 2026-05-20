@@ -583,6 +583,29 @@ public class VirtualMachine {
     }
 
     /**
+     * A2.1 — Resuelve un path de usuario aplicando el sandbox del workdir
+     * si está configurado. Si no hay workdir (legacy), el path se usa
+     * tal cual.
+     *
+     * Llamado por los builtins de IO. Lanza BpThreadFault si el sandbox
+     * lo rechaza (path absoluto o traversal), así que el thread BP que
+     * lo invocó muere con un mensaje claro pero la VM sigue.
+     */
+    private java.nio.file.Path sandboxPath(String userPath) {
+        ModuleManager mm = getModuleManager();
+        if (mm != null && mm.getWorkdir() != null) {
+            try {
+                return mm.resolveInWorkdir(userPath);
+            } catch (SecurityException se) {
+                throw new BpThreadFault("sandbox: " + se.getMessage());
+            } catch (RuntimeException re) {
+                throw new BpThreadFault("sandbox: " + re.getMessage());
+            }
+        }
+        return java.nio.file.Paths.get(userPath);
+    }
+
+    /**
      * Variante con tamaño total y `stackBase` (donde termina el heap y
      * empiezan los stacks). Llamada desde {@link edu.bpgenvm.Main} cuando
      * hay un BpVM.cfg activo. Validaciones:
@@ -2455,7 +2478,7 @@ public class VirtualMachine {
             case READ_FILE: {
                 String path = readVmString(popTc(tc));
                 try {
-                    byte[] data = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path));
+                    byte[] data = java.nio.file.Files.readAllBytes(sandboxPath(path));
                     pushTc(tc, allocVmString(new String(data, java.nio.charset.StandardCharsets.UTF_8)));
                 } catch (java.io.IOException e) {
                     throw new RuntimeException("readFile('" + path + "'): " + e.getMessage());
@@ -2466,7 +2489,7 @@ public class VirtualMachine {
                 String content = readVmString(popTc(tc));
                 String path    = readVmString(popTc(tc));
                 try {
-                    java.nio.file.Files.write(java.nio.file.Paths.get(path),
+                    java.nio.file.Files.write(sandboxPath(path),
                             content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 } catch (java.io.IOException e) {
                     throw new RuntimeException("writeFile('" + path + "'): " + e.getMessage());
@@ -2478,7 +2501,7 @@ public class VirtualMachine {
                 String content = readVmString(popTc(tc));
                 String path    = readVmString(popTc(tc));
                 try {
-                    java.nio.file.Files.write(java.nio.file.Paths.get(path),
+                    java.nio.file.Files.write(sandboxPath(path),
                             content.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                             java.nio.file.StandardOpenOption.CREATE,
                             java.nio.file.StandardOpenOption.APPEND);
@@ -2490,7 +2513,7 @@ public class VirtualMachine {
             }
             case FILE_EXISTS: {
                 String path = readVmString(popTc(tc));
-                pushTc(tc, java.nio.file.Files.exists(java.nio.file.Paths.get(path)) ? 1 : 0);
+                pushTc(tc, java.nio.file.Files.exists(sandboxPath(path)) ? 1 : 0);
                 break;
             }
             case GC: {
@@ -2500,7 +2523,7 @@ public class VirtualMachine {
             }
             case LIST_DIR: {
                 String path = readVmString(popTc(tc));
-                java.io.File dir = new java.io.File(path);
+                java.io.File dir = sandboxPath(path).toFile();
                 String[] names = dir.list();
                 if (names == null) names = new String[0];
                 int[] refs = new int[names.length];
@@ -2835,13 +2858,16 @@ public class VirtualMachine {
             }
             case PATH_ABSOLUTE: {
                 String p = readVmString(popTc(tc));
-                String r = java.nio.file.Paths.get(p).toAbsolutePath().normalize().toString();
+                // Con sandbox: devuelve el path absoluto DENTRO del workdir
+                // (no filtra info del host). Sin sandbox: usa Paths.get raw.
+                java.nio.file.Path resolved = sandboxPath(p);
+                String r = resolved.toAbsolutePath().normalize().toString();
                 pushTc(tc, allocVmString(r));
                 break;
             }
             case MKDIR: {
                 String p = readVmString(popTc(tc));
-                try { java.nio.file.Files.createDirectories(java.nio.file.Paths.get(p)); }
+                try { java.nio.file.Files.createDirectories(sandboxPath(p)); }
                 catch (java.io.IOException e) {
                     throw new BpThreadFault("mkdir('" + p + "'): " + e.getMessage());
                 }
@@ -2850,7 +2876,7 @@ public class VirtualMachine {
             }
             case RMDIR: {
                 String p = readVmString(popTc(tc));
-                try { java.nio.file.Files.delete(java.nio.file.Paths.get(p)); }
+                try { java.nio.file.Files.delete(sandboxPath(p)); }
                 catch (java.nio.file.DirectoryNotEmptyException e) {
                     throw new BpThreadFault("rmdir('" + p + "'): directorio no vacío");
                 } catch (java.io.IOException e) {
@@ -2861,7 +2887,7 @@ public class VirtualMachine {
             }
             case REMOVE_FILE: {
                 String p = readVmString(popTc(tc));
-                try { java.nio.file.Files.delete(java.nio.file.Paths.get(p)); }
+                try { java.nio.file.Files.delete(sandboxPath(p)); }
                 catch (java.io.IOException e) {
                     throw new BpThreadFault("removeFile('" + p + "'): " + e.getMessage());
                 }
@@ -2872,8 +2898,8 @@ public class VirtualMachine {
                 String to   = readVmString(popTc(tc));
                 String from = readVmString(popTc(tc));
                 try {
-                    java.nio.file.Files.move(java.nio.file.Paths.get(from),
-                            java.nio.file.Paths.get(to),
+                    java.nio.file.Files.move(sandboxPath(from),
+                            sandboxPath(to),
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 } catch (java.io.IOException e) {
                     throw new BpThreadFault("rename('" + from + "' → '" + to + "'): " + e.getMessage());
@@ -2885,8 +2911,8 @@ public class VirtualMachine {
                 String to   = readVmString(popTc(tc));
                 String from = readVmString(popTc(tc));
                 try {
-                    java.nio.file.Files.copy(java.nio.file.Paths.get(from),
-                            java.nio.file.Paths.get(to),
+                    java.nio.file.Files.copy(sandboxPath(from),
+                            sandboxPath(to),
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 } catch (java.io.IOException e) {
                     throw new BpThreadFault("copyFile('" + from + "' → '" + to + "'): " + e.getMessage());
@@ -2897,7 +2923,7 @@ public class VirtualMachine {
             case FILE_SIZE: {
                 String p = readVmString(popTc(tc));
                 try {
-                    long sz = java.nio.file.Files.size(java.nio.file.Paths.get(p));
+                    long sz = java.nio.file.Files.size(sandboxPath(p));
                     // i32: si sobrepasa Integer.MAX_VALUE, error claro.
                     if (sz > Integer.MAX_VALUE)
                         throw new BpThreadFault("fileSize('" + p + "'): tamaño > 2GB no representable en integer");
@@ -2909,13 +2935,13 @@ public class VirtualMachine {
             }
             case IS_DIRECTORY: {
                 String p = readVmString(popTc(tc));
-                pushTc(tc, java.nio.file.Files.isDirectory(java.nio.file.Paths.get(p)) ? 1 : 0);
+                pushTc(tc, java.nio.file.Files.isDirectory(sandboxPath(p)) ? 1 : 0);
                 break;
             }
             case LAST_MODIFIED: {
                 String p = readVmString(popTc(tc));
                 try {
-                    long ms = java.nio.file.Files.getLastModifiedTime(java.nio.file.Paths.get(p)).toMillis();
+                    long ms = java.nio.file.Files.getLastModifiedTime(sandboxPath(p)).toMillis();
                     pushTc(tc, (int) (ms & 0x7FFFFFFFL));
                 } catch (java.io.IOException e) {
                     throw new BpThreadFault("lastModified('" + p + "'): " + e.getMessage());

@@ -125,8 +125,21 @@ public final class VmClient implements AutoCloseable {
      *                          hasta que conectemos; recomendado).
      */
     public void start(String modOrProjectPath, boolean waitClient) throws IOException {
+        startInternal(modOrProjectPath, null, waitClient);
+    }
+
+    /** A2.3 — Arranca la VM en MODO DAEMON: sin .mod en CLI, con un
+     *  workdir activo. Tras conectar, sube ficheros con uploadFile() y
+     *  arranca con runModule(). */
+    public void startDaemon(String workdir, boolean waitClient) throws IOException {
+        if (workdir == null) throw new IllegalArgumentException("workdir requerido en modo daemon");
+        startInternal(null, workdir, waitClient);
+    }
+
+    private void startInternal(String modPath, String workdir, boolean waitClient)
+            throws IOException {
         int port = reserveFreePort();
-        spawnVmProcess(port, modOrProjectPath, waitClient);
+        spawnVmProcess(port, modPath, workdir, waitClient);
         try {
             connectWithRetry(port, 5000);
         } catch (IOException e) {
@@ -189,6 +202,14 @@ public final class VmClient implements AutoCloseable {
 
     public void clearAllBreakpoints() {
         sendRaw("{\"cmd\":\"clearAllBreakpoints\"}");
+    }
+
+    /** A2.3 — Ordena al daemon arrancar el módulo `module` (path relativo
+     *  al workdir). Sólo válido si la VM se lanzó en modo daemon (sin
+     *  fichero en CLI). Fire-and-forget: el ExitedEvent es la confirmación
+     *  del fin de ejecución. */
+    public void runModule(String module) {
+        sendRaw("{\"cmd\":\"runModule\",\"module\":\"" + Json.escape(module) + "\"}");
     }
 
     public void sendCommand(StepCommand cmd) {
@@ -300,6 +321,80 @@ public final class VmClient implements AutoCloseable {
     }
 
     // ============================================================
+    // Transferencia de ficheros (A2.2) — paths relativos al workdir
+    // ============================================================
+
+    /** Sube `bytes` al workdir de la VM en `remotePath`. Devuelve el
+     *  tamaño confirmado por el server. */
+    public int uploadFile(String remotePath, byte[] bytes, long timeoutMs) throws IOException {
+        String b64 = java.util.Base64.getEncoder().encodeToString(bytes);
+        String extra = "\"path\":" + jsonStr(remotePath) + ",\"data\":\"" + b64 + "\"";
+        Map<String, Object> resp = sendRequest("uploadFile", extra, timeoutMs);
+        return (int) Json.getLong(resp, "size", 0);
+    }
+
+    /** Sube un fichero local al workdir de la VM. */
+    public int uploadFile(java.nio.file.Path localFile, String remotePath, long timeoutMs)
+            throws IOException {
+        byte[] data = java.nio.file.Files.readAllBytes(localFile);
+        return uploadFile(remotePath, data, timeoutMs);
+    }
+
+    /** Descarga `remotePath` del workdir de la VM. */
+    public byte[] downloadFile(String remotePath, long timeoutMs) throws IOException {
+        Map<String, Object> resp = sendRequest("downloadFile",
+                "\"path\":" + jsonStr(remotePath), timeoutMs);
+        String b64 = Json.getString(resp, "data", "");
+        return java.util.Base64.getDecoder().decode(b64);
+    }
+
+    /** Una entrada de un directorio devuelta por listFiles. */
+    public static final class RemoteFile {
+        public final String name;
+        public final long size;
+        public final boolean isDirectory;
+        public RemoteFile(String n, long s, boolean d) {
+            this.name = n; this.size = s; this.isDirectory = d;
+        }
+        @Override public String toString() {
+            return (isDirectory ? "[D] " : "[F] ") + name
+                    + (isDirectory ? "" : " (" + size + ")");
+        }
+    }
+
+    /** Lista los ficheros bajo `remotePath` ("" o "." = raíz del workdir). */
+    public List<RemoteFile> listFiles(String remotePath, long timeoutMs) throws IOException {
+        String extra = "\"path\":" + jsonStr(remotePath == null ? "" : remotePath);
+        Map<String, Object> resp = sendRequest("listFiles", extra, timeoutMs);
+        List<Object> arr = Json.getList(resp, "files");
+        List<RemoteFile> out = new ArrayList<>();
+        if (arr == null) return out;
+        for (Object o : arr) {
+            if (!(o instanceof Map)) continue;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) o;
+            out.add(new RemoteFile(
+                    Json.getString(m, "name", ""),
+                    Json.getLong(m, "size", 0),
+                    Json.getBool(m, "isDirectory", false)));
+        }
+        return out;
+    }
+
+    /** Borra un fichero (no recursivo para dirs — el dir debe estar vacío). */
+    public void deleteFile(String remotePath, long timeoutMs) throws IOException {
+        sendRequest("deleteFile", "\"path\":" + jsonStr(remotePath), timeoutMs);
+    }
+
+    /** Crea un directorio (incluyendo intermedios) en el workdir. */
+    public void mkdir(String remotePath, long timeoutMs) throws IOException {
+        sendRequest("mkdir", "\"path\":" + jsonStr(remotePath), timeoutMs);
+    }
+
+    /** Helper para serializar un string con comillas + escape. */
+    private static String jsonStr(String s) { return "\"" + Json.escape(s) + "\""; }
+
+    // ============================================================
     // Internos
     // ============================================================
 
@@ -309,7 +404,7 @@ public final class VmClient implements AutoCloseable {
         }
     }
 
-    private void spawnVmProcess(int port, String modOrProject, boolean waitClient) throws IOException {
+    private void spawnVmProcess(int port, String modOrProject, String workdir, boolean waitClient) throws IOException {
         String javaBin = System.getProperty("java.home") + File.separator + "bin"
                 + File.separator + "java";
         if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
@@ -345,7 +440,11 @@ public final class VmClient implements AutoCloseable {
         argv.add("--listen");
         argv.add(Integer.toString(port));
         if (waitClient) argv.add("--wait-client");
-        argv.add(modOrProject);
+        if (workdir != null) {
+            argv.add("--workdir");
+            argv.add(workdir);
+        }
+        if (modOrProject != null) argv.add(modOrProject);
 
         ProcessBuilder pb = new ProcessBuilder(argv);
         // stderr en pipe separado para bombearlo al diagSink.

@@ -344,11 +344,72 @@ llamadas Java↔Java (`DebugSession` ↔ `DebugContext`).
 - Smoke GUI manual: arrancar el IDE, abrir un proyecto, Run/Debug
   y comprobar que la consola muestra los `print` y los paneles
   Variables/Stack/Properties se rellenan al pausar.
-- Upload/download de ficheros y comandos remotos del filesystem
-  (necesarios cuando la VM viva en un dispositivo).
 - Stop real: hoy `STOP` no termina la sesión — sólo libera el
   step. Falta una señal de shutdown al `vm.run()` que detenga
   todos los workers.
+
+---
+
+## 🔵 A2 — VM con workdir + transferencia de ficheros
+
+### A2.1 — workdir de la VM + sandbox de paths (cerrado)
+- Nuevo flag `--workdir <dir>` en `Main`. Cuando está activo:
+  - `ModuleManager.workdir` se fija al path (absoluto, normalizado).
+  - Resolución de módulos prefiere `workdir/<basename>` antes que
+    `modulePaths` y `stdlibDir`.
+  - Los builtins de IO (`readFile`/`writeFile`/`appendFile`/
+    `fileExists`/`listDir`/`mkdir`/`rmdir`/`removeFile`/`rename`/
+    `copyFile`/`fileSize`/`isDirectory`/`lastModified`/`pathAbsolute`)
+    pasan por `sandboxPath()` que llama a `resolveInWorkdir`.
+  - Path absoluto o traversal con `..` que escape del workdir →
+    `BpThreadFault("sandbox: path escapa del workdir...")`.
+- Sin `--workdir` el comportamiento es el legacy (la VM ve todo el
+  filesystem).
+
+### A2.2 — Transferencia de ficheros sobre el wire (cerrado)
+- Nuevos requests en el wire (workdir-relative, base64 para binarios):
+  - `uploadFile {path, data}` → `{size}`
+  - `downloadFile {path}` → `{size, data}`
+  - `listFiles {path}` → `{files:[{name, size, isDirectory}]}`
+  - `deleteFile {path}` → ok
+  - `mkdir {path}` → ok
+- Server route via `ModuleManager.resolveInWorkdir`; si la VM no
+  tiene workdir, error: "VM sin workdir; arrancar con --workdir".
+- `VmClient` con helpers tipados: `uploadFile(Path, String, ms)`,
+  `downloadFile`, `listFiles` → `List<RemoteFile>`, etc.
+
+### A2.3 — Modo daemon + comando runModule (cerrado)
+- Si `--listen` se pasa SIN un fichero, la VM arranca en modo
+  daemon: monta server + workdir y espera a que el cliente envíe
+  `runModule {module: "App.mod"}` (path relativo al workdir).
+- `DebugServer.awaitRunModule(timeoutMs)` bloquea Main hasta recibir
+  el comando. El path se resuelve contra el workdir y se carga
+  como root module.
+- Tras el `vm.run()` la VM emite ExitedEvent y termina. Una sola
+  ejecución por proceso (el reset multi-run es futuro).
+
+### A2.4 — Smoke end-to-end (cerrado)
+- `WorkdirSmoke` (clase main): crea workdir temporal → spawn VM
+  daemon → upload `MoveTest.mod` (3168 bytes) → listFiles confirma
+  → runModule → recibe 18 prints + ExitedEvent → cleanup. Pasa.
+- Valida que el flow "IDE compila localmente → sube por wire →
+  manda runModule" funciona sin necesidad de que IDE y VM
+  compartan filesystem.
+
+**Lo que queda en A2 / rewire IDE**:
+- **A2.5** — Rewire `doRun`/`doDebug` del IDE para que sigan el
+  patrón daemon: usar un workdir temporal por sesión, subir los
+  artefactos compilados (`.mod` + `.bpi` + `.dbg`), llamar
+  runModule. Hoy ambos pasan el path local al subproceso (lo
+  cual sólo funciona en mismo PC). Cuando A2.5 esté hecho, cambiar
+  `localhost` por una IP remota es lo único que falta para
+  ejecutar contra un dispositivo.
+- Subida de stdlib: si el dispositivo no tiene `Math.mod`/`IO.mod`/
+  `Json.mod` preinstalados, el IDE debe subirlos al workdir antes
+  de runModule. Hoy el IDE no lo hace.
+- Multi-run en el mismo daemon: hoy la VM termina tras un
+  runModule. Para soportar "Run otra vez" sin matar el proceso,
+  habría que reiniciar memoria/heap/threads.
 
 **Compatibilidad**: durante el desarrollo conviene mantener un
 modo "in-process" funcional para no romper el flujo de trabajo,

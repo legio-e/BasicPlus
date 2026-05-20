@@ -51,6 +51,7 @@ public class Main {
         boolean noConfig = false;
         int listenPort = -1;    // -1 = no servidor de debug
         boolean waitClient = false;  // bloquear la VM hasta que conecte el IDE
+        String workdir = null;       // sandbox del filesystem; null = sin sandbox
         String file = null;
 
         for (int i = 0; i < args.length; i++) {
@@ -128,6 +129,18 @@ public class Main {
                         waitClient = true;
                         break;
                     }
+                    if (a.startsWith("--workdir=")) {
+                        workdir = a.substring("--workdir=".length());
+                        break;
+                    }
+                    if ("--workdir".equals(a)) {
+                        if (i + 1 >= args.length) {
+                            System.err.println("--workdir requiere una ruta");
+                            System.exit(2); return;
+                        }
+                        workdir = args[++i];
+                        break;
+                    }
                     if (a.startsWith("-")) {
                         System.err.println("Argumento desconocido: " + a);
                         printUsage(System.err);
@@ -144,27 +157,34 @@ public class Main {
             }
         }
 
-        if (file == null) {
+        // A2.3 — modo daemon: si no se pasa fichero pero sí --listen, la
+        // VM arranca a la espera de un runModule command. Útil para el flujo
+        // IDE→VM separados: el IDE conecta, sube ficheros, y manda runModule.
+        boolean daemonMode = (file == null);
+        if (daemonMode && listenPort <= 0) {
             printUsage(System.err);
             System.exit(2);
             return;
         }
-
-        if (!new File(file).isFile()) {
+        if (!daemonMode && !new File(file).isFile()) {
             System.err.println("No existe el fichero: " + file);
             System.exit(1);
             return;
         }
 
         if (disasm) {
+            if (daemonMode) {
+                System.err.println("--disasm requiere un fichero");
+                System.exit(2); return;
+            }
             Disasm.dump(file, System.out);
             return;
         }
 
         // Detectar tipo de argumento: .bpproject (fichero de proyecto) o .mod.
         BpProject project = null;
-        String runMod = file;
-        if (file.toLowerCase().endsWith(".bpproject")) {
+        String runMod = file;   // null en modo daemon — se resuelve tras runModule.
+        if (!daemonMode && file.toLowerCase().endsWith(".bpproject")) {
             try {
                 project = BpProject.load(Paths.get(file));
             } catch (IOException ex) {
@@ -191,8 +211,12 @@ public class Main {
                 System.err.println("error leyendo " + configPath + ": " + ex.getMessage());
                 System.exit(2); return;
             }
-        } else {
+        } else if (runMod != null) {
             cfg = VmConfig.loadDefaultFor(Paths.get(runMod));
+        } else {
+            // Daemon mode sin .mod conocido aún: autodiscover en cwd / workdir.
+            java.nio.file.Path probe = (workdir != null) ? Paths.get(workdir) : null;
+            cfg = VmConfig.loadDefaultFor(probe);
         }
         if (cfg.sourcePath != null) {
             System.out.println("config: " + cfg.sourcePath
@@ -202,14 +226,24 @@ public class Main {
                     + ")");
         }
 
-        // Ejecutar el módulo
-        String moduleName = stripModExtension(new File(runMod).getName());
+        // Crear la VM (en daemon mode el moduleName se calcula tras runModule).
         VirtualMachine vm = new VirtualMachine(cfg.memorySize, cfg.stackBase);
         vm.setTracing(trace);
         if (workers > 0) vm.setNumWorkers(workers);
         ModuleManager loader = new ModuleManager(vm);
         if (cfg.stdlibDir != null) loader.setStdlibDir(cfg.stdlibDir);
         if (project != null)       loader.setModulePaths(project.modulePaths());
+        // A2.1 — workdir como sandbox. Si se pasa --workdir, todas las
+        // operaciones de fichero (IO builtins) se confinan ahí.
+        if (workdir != null) {
+            java.nio.file.Path wd = java.nio.file.Paths.get(workdir).toAbsolutePath().normalize();
+            if (!java.nio.file.Files.isDirectory(wd)) {
+                System.err.println("--workdir no es un directorio: " + wd);
+                System.exit(2); return;
+            }
+            loader.setWorkdir(wd);
+            System.err.println("[main] workdir = " + wd);
+        }
         vm.setModuleManager(loader);
 
         // A1.4.b: si se pidió --listen, levantar el servidor de debug
@@ -239,6 +273,32 @@ public class Main {
                 }
             }
         }
+
+        // En modo daemon, esperar a que el cliente mande runModule. El
+        // path llega RELATIVO al workdir (el cliente acaba de subir los
+        // ficheros vía uploadFile y ahora pide ejecutar uno).
+        if (daemonMode) {
+            System.err.println("[main] modo daemon — esperando runModule...");
+            try {
+                String mod = dbgServer.awaitRunModule(60 * 60 * 1000L); // 1 hora
+                if (mod == null || mod.isEmpty()) {
+                    System.err.println("[main] sin runModule, abortando");
+                    if (dbgServer != null) dbgServer.close();
+                    System.exit(2); return;
+                }
+                if (workdir != null) {
+                    runMod = Paths.get(workdir).resolve(mod).toString();
+                } else {
+                    runMod = mod;
+                }
+                System.err.println("[main] runModule: " + runMod);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                if (dbgServer != null) dbgServer.close();
+                System.exit(2); return;
+            }
+        }
+        String moduleName = stripModExtension(new File(runMod).getName());
 
         int exitCode = 0;
         String exitReason = "main returned";
@@ -285,6 +345,7 @@ public class Main {
         out.println("  bpgenvm --no-config             ignora cualquier BpVM.cfg auto-descubierto");
         out.println("  bpgenvm --listen <puerto>       arranca servidor de debug TCP+JSON");
         out.println("  bpgenvm --wait-client           con --listen, bloquea hasta que conecte el IDE");
+        out.println("  bpgenvm --workdir <dir>         sandbox: la VM sólo ve ficheros bajo este dir");
         out.println("  bpgenvm -h | --help             muestra esta ayuda");
         out.println();
         out.println("BpVM.cfg (JSON, todos los campos opcionales):");

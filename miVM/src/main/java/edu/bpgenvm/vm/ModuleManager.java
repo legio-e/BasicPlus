@@ -44,6 +44,59 @@ public class ModuleManager {
     public String getStdlibDir() { return stdlibDir; }
 
     /**
+     * Workdir (sandbox) de la VM. Cuando está fijado, las operaciones de
+     * fichero del programa BP (readFile/writeFile/listDir/etc.) y la
+     * carga de módulos por path relativo se confinan a este directorio
+     * y sus descendientes. Path traversal (`..`) que intente escapar se
+     * rechaza. El `stdlibDir` y los `modulePaths` (vienen de config) son
+     * dirs externos "blessed" — siguen accesibles SÓLO para carga de
+     * módulos, no para IO genérico.
+     *
+     * null = sandbox desactivado (comportamiento legacy: la VM ve todo
+     * el sistema de ficheros). Se cablea desde Main con --workdir.
+     */
+    private java.nio.file.Path workdir = null;
+
+    public void setWorkdir(java.nio.file.Path dir) {
+        if (dir == null) { this.workdir = null; return; }
+        this.workdir = dir.toAbsolutePath().normalize();
+    }
+
+    public java.nio.file.Path getWorkdir() { return workdir; }
+
+    /**
+     * Resuelve un userPath dentro del workdir y verifica que no escape.
+     * Devuelve el Path absoluto (siempre dentro del workdir). Lanza si:
+     *   - el workdir no está fijado (programación: no debería llamarse en
+     *     ese caso);
+     *   - el userPath escapa del workdir (path traversal);
+     *   - el userPath es absoluto (los programas BP deben usar paths
+     *     relativos al workdir; un path absoluto se rechaza).
+     */
+    public java.nio.file.Path resolveInWorkdir(String userPath) {
+        if (workdir == null)
+            throw new IllegalStateException("workdir no configurado");
+        if (userPath == null)
+            throw new IllegalArgumentException("path null");
+        java.nio.file.Path candidate = java.nio.file.Paths.get(userPath);
+        if (candidate.isAbsolute())
+            throw new SecurityException("path absoluto rechazado por sandbox: " + userPath);
+        java.nio.file.Path resolved = workdir.resolve(candidate).toAbsolutePath().normalize();
+        if (!resolved.startsWith(workdir))
+            throw new SecurityException("path escapa del workdir: " + userPath);
+        return resolved;
+    }
+
+    /**
+     * Variante segura para llamadas desde dispatchers: devuelve null si
+     * el path es inválido o escapa, en lugar de lanzar excepción.
+     */
+    public java.nio.file.Path resolveInWorkdirOrNull(String userPath) {
+        try { return resolveInWorkdir(userPath); }
+        catch (RuntimeException ignored) { return null; }
+    }
+
+    /**
      * Directorios extra donde se buscan los módulos importados. Vienen del
      * .bpproject que arrancó la ejecución (si lo hay). Se prueban DESPUÉS
      * del path tal cual y ANTES de stdlibDir. Lista vacía = no aplica.
@@ -72,16 +125,37 @@ public class ModuleManager {
      * "lib.Module.mod" o "Module.mod" — no rutas relativas con subdir).
      */
     private String resolveModulePath(String filename) {
+        // A2.1 — orden con workdir:
+        //   1) si workdir está activo y `filename` es relativo, probamos
+        //      workdir/filename (con sandbox).
+        //   2) `filename` tal cual (absoluto o relativo al cwd — sólo
+        //      útil cuando no hay workdir).
+        //   3) modulePaths del proyecto.
+        //   4) stdlibDir del BpVM.cfg.
         java.io.File asGiven = new java.io.File(filename);
-        if (asGiven.isFile()) return filename;
         String base = asGiven.getName();
-        // 2) modulePaths del proyecto (orden de declaración).
+        if (workdir != null && !asGiven.isAbsolute()) {
+            java.nio.file.Path safe = resolveInWorkdirOrNull(filename);
+            if (safe != null && java.nio.file.Files.isRegularFile(safe)) {
+                return safe.toString();
+            }
+            // Si el path original tenía subdir y no apareció, probamos sólo basename
+            // dentro del workdir (los imports llegan típicamente como "Util.mod").
+            if (!base.equals(filename)) {
+                java.nio.file.Path baseInWd = resolveInWorkdirOrNull(base);
+                if (baseInWd != null && java.nio.file.Files.isRegularFile(baseInWd)) {
+                    return baseInWd.toString();
+                }
+            }
+        }
+        if (asGiven.isFile()) return filename;
+        // 3) modulePaths del proyecto (orden de declaración).
         for (String dir : modulePaths) {
             if (dir == null || dir.isEmpty()) continue;
             java.io.File cand = new java.io.File(dir, base);
             if (cand.isFile()) return cand.getPath();
         }
-        // 3) stdlibDir del BpVM.cfg.
+        // 4) stdlibDir del BpVM.cfg.
         if (stdlibDir != null && !stdlibDir.isEmpty()) {
             java.io.File inStd = new java.io.File(stdlibDir, base);
             if (inStd.isFile()) return inStd.getPath();
