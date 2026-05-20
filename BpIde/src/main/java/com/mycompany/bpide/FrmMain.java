@@ -1118,27 +1118,30 @@ public class FrmMain extends javax.swing.JFrame
                 }
                 publish("== ejecutando " + mod.getFileName() + " ==\n");
                 final String modAbs = mod.toString();
-                final String modName = moduleName;
-                final edu.bpgenvm.config.VmConfig runCfg =
-                        edu.bpgenvm.config.VmConfig.loadDefaultFor(mod);
-                if (runCfg.sourcePath != null) {
-                    publish("config: " + runCfg.sourcePath + "\n");
+
+                // A1.5 — lanzar la VM como subproceso y consumir el wire
+                // JSON. En modo Run no usamos debug del usuario: pasamos
+                // --wait-client + auto-continue al primer paused (que es
+                // STEP_INTO por defecto) para que el programa arranque
+                // inmediato sin pausar en la primera línea.
+                try (VmClient client = new VmClient()) {
+                    client.setDiagSink(s -> publish("[vm] " + s + "\n"));
+                    client.setOutputSink(this::publish);
+                    client.setEventListener(ev -> {
+                        if (ev instanceof edu.bpgenvm.vm.debug.PausedEvent) {
+                            // En Run mode, libera la pausa inicial sin más.
+                            client.sendCommand(edu.bpgenvm.vm.debug.StepCommand.CONTINUE);
+                        } else if (ev instanceof edu.bpgenvm.vm.debug.ExceptionEvent) {
+                            edu.bpgenvm.vm.debug.ExceptionEvent e =
+                                    (edu.bpgenvm.vm.debug.ExceptionEvent) ev;
+                            publish("[exception tid=" + e.tid + "] " + e.message + "\n");
+                        }
+                    });
+                    client.start(modAbs, /*waitClient=*/true);
+                    client.waitForExit();
+                } catch (Throwable t) {
+                    publish("[VM error] " + t.getMessage() + "\n");
                 }
-                invokeWithCapture(() -> {
-                    try {
-                        edu.bpgenvm.vm.VirtualMachine vm =
-                                new edu.bpgenvm.vm.VirtualMachine(runCfg.memorySize, runCfg.stackBase);
-                        edu.bpgenvm.vm.ModuleManager mm = new edu.bpgenvm.vm.ModuleManager(vm);
-                        if (runCfg.stdlibDir != null) mm.setStdlibDir(runCfg.stdlibDir);
-                        vm.setModuleManager(mm);
-                        mm.executeRootModule(modAbs, modName);
-                        vm.run();
-                        return Boolean.TRUE;
-                    } catch (Throwable t) {
-                        System.err.println("[VM error] " + t.getMessage());
-                        return Boolean.FALSE;
-                    }
-                }, this::publish);
                 publish("== fin ==\n");
                 return null;
             }

@@ -261,12 +261,25 @@ llamadas Java↔Java (`DebugSession` ↔ `DebugContext`).
     canal. Verificado end-to-end con cliente Python: handshake →
     paused → continue → prints. `DebugServerTest` con 2 tests
     integración (incluye port reservation).
-- **A1.5** — Cliente en el IDE (sustituye las llamadas
-  in-process; gestiona conexión, reconexión, error). Es la pieza
-  simétrica de A1.4.b: lanza el subproceso de la VM con `--listen
-  <port>`, conecta, parsea los eventos JSON en `DebugEvent` y los
-  inyecta al `DebugListener` actual del IDE; envía comandos cuando
-  el usuario interactúa con la UI.
+- **A1.5** — Cliente en el IDE (parcial: cerrado para Run, pendiente para Debug).
+  - Hecho: `com.mycompany.bpide.VmClient` lanza `bpgenvm` como
+    subproceso con `--listen <freePort> --wait-client`, conecta por
+    TCP, parsea las líneas JSON entrantes en `DebugEvent`s y los
+    inyecta al `DebugListener` configurado. Envía comandos como
+    líneas JSON (`setBreakpoint`, `continue`, step*, `stop`).
+    Localiza el jar de `bpgenvm` vía `ProtectionDomain` para
+    construir el classpath del subproceso (funciona en Maven, IDE
+    de Netbeans y fat jar). `awaitTermination` / `waitForExit` para
+    que el SwingWorker bloquee hasta el fin del subproceso.
+  - `doRun` del `FrmMain` ahora pasa por `VmClient`. El Run del
+    IDE arranca la VM en proceso separado; los `print` vienen
+    streamed a la consola del IDE. Verificado con `VmClientSmoke`
+    (clase main ejecutable + sample MoveTest.mod): handshake →
+    auto-continue → 36 mensajes print recibidos.
+  - Pendiente: `doDebug` sigue usando la VM in-process porque las
+    queries de variables/properties/locales aún acceden al
+    `DebugContext` live. A1.6 las cablea por RPC y entonces se
+    puede rewire también doDebug.
 - **A1.6** — Comandos avanzados IDE → VM: `getLocals`,
   `getModuleProperties`, `readMemory`, `stackFrames`,
   `upload file`, `download file`, `exit`. Hoy las queries de
