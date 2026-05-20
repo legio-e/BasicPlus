@@ -280,20 +280,45 @@ llamadas Java↔Java (`DebugSession` ↔ `DebugContext`).
     queries de variables/properties/locales aún acceden al
     `DebugContext` live. A1.6 las cablea por RPC y entonces se
     puede rewire también doDebug.
-- **A1.6** — Comandos avanzados IDE → VM: `getLocals`,
-  `getModuleProperties`, `readMemory`, `stackFrames`,
-  `upload file`, `download file`, `exit`. Hoy las queries de
-  locales/properties siguen accediendo a `DebugContext` in-process;
-  cuando lleguemos al modo remoto de verdad estos se vuelven
-  request/response sobre el wire.
-- **A1.7** — Refinamiento del wire: chunking de prints (consolidar
-  varios writeText/Char en una línea), exited/exception events
-  conectados a los caminos de salida de la VM (hoy se definen pero
-  no se emiten — la VM termina con stdout pero sin `exited`
-  cruzando el canal).
-- **A1.8** — Smoke test end-to-end con el IDE real: arrancar la VM
-  como subproceso desde el IDE, conectar, ver `print` en una
-  ventana, parar/continuar/step desde botones.
+- **A1.6** — Queries por RPC (cerrado).
+  - `Json.parse()` recursivo en `edu.bpgenvm.util.Json`
+    (objetos + arrays + primitivos). `parseFlatObject` se mantiene
+    como wrapper.
+  - Request/response sobre el mismo socket: `{"req":..., "requestId":N}`
+    desde el cliente, `{"resp":..., "requestId":N, ...}` desde el
+    server. `error` como `resp` especial cuando algo falla.
+  - Queries soportadas: `getLocals`, `stackFrames`, `moduleProperties`,
+    `readInt`, `readString`. Las primeras tres requieren VM pausada;
+    si no, devuelven error.
+  - Cliente: `VmClient.sendRequest()` con `AtomicLong` para IDs y
+    `Map<Long, CompletableFuture>` para correlar. Métodos
+    convenientes `getLocals(timeout)`, `getStackFrames(timeout)`,
+    `getModuleProperties(timeout)` con timeout configurable.
+- **A1.7** — Pulido del wire (cerrado).
+  - **Chunking de prints**: `SocketSink` consolida
+    `writeText`/`writeChar`/`newline` en un solo mensaje JSON por
+    línea. Flush forzado a 4 KiB para evitar acumular en programas
+    sin saltos de línea. Test medido: 36 mensajes → 18 sobre
+    MoveTest.mod.
+  - **ExitedEvent**: `Main.java` emite `{"type":"exited","exitCode":0,
+    "reason":"main returned"}` (o `exitCode=1` con la excepción
+    correspondiente) al terminar `vm.run()`. El cliente sabe cuándo
+    cerrar la sesión sin polling del subproceso.
+  - **ExceptionEvent**: el `WorkerLoop` emite
+    `{"type":"exception","tid":N,"message":"..."}` cuando un
+    `BpThreadFault` o `RuntimeException` no atrapada llega al worker.
+    `VirtualMachine.setDebugEventListener` cablea el sink; Main lo
+    apunta a `controller.emitEvent`.
+- **A1.8** — Smoke tests (cerrado).
+  - JUnit en `DebugServerTest` (5 tests): handshake, paused JSON,
+    chunking de prints, error de getLocals sin pausa, ExitedEvent.
+  - Smoke Python: arranca VM real con MoveTest.mod, llega al
+    paused, ejercita las 3 queries (getLocals/stackFrames/
+    moduleProperties), continúa, recibe los 18 prints + exited.
+  - Pendiente: smoke end-to-end con la GUI del IDE (requiere
+    interacción manual; no se automatiza offline). doDebug del IDE
+    sigue usando la VM in-process hasta que se rewire por VmClient
+    (apuntado como A1.9 futuro).
 
 **Compatibilidad**: durante el desarrollo conviene mantener un
 modo "in-process" funcional para no romper el flujo de trabajo,

@@ -176,6 +176,14 @@ public final class DebugController {
         };
     }
 
+    /** Emite un evento ARBITRARIO a los listeners. Pensado para que código
+     *  fuera del hook (e.g. el WorkerLoop al detectar BpThreadFault, o Main
+     *  al terminar vm.run()) pueda inyectar ExitedEvent / ExceptionEvent.
+     *  No participa del rendezvous del hook — sólo notifica. */
+    public void emitEvent(DebugEvent ev) {
+        if (ev != null) emit(ev);
+    }
+
     // ---- Helpers ----
 
     private void emit(DebugEvent ev) {

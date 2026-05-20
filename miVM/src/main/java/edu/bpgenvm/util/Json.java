@@ -1,26 +1,32 @@
 // ============================================================
 // Json.java
-// Helpers JSON minimalistas para el wire IDE↔VM. NO es un parser
-// completo — sólo cubre lo que el protocolo necesita:
-//   - Emisión: escape de strings.
-//   - Parseo: objetos JSON PLANOS (sin anidamiento) con valores
-//     string, número (long), boolean, null. No arrays. No objetos
-//     dentro de objetos. Si alguna vez los necesitamos, refactorizamos
-//     hacia VmConfig.JsonParser (que sí los soporta) o un parser de
-//     verdad.
+// Helpers JSON para el wire IDE↔VM. Cubre:
+//   - Emisión: escape de strings (escape).
+//   - Parseo recursivo: parse(src) devuelve Object (Map<String,Object>,
+//     List<Object>, String, Long, Boolean, null).
+//   - Compat: parseFlatObject(src) sigue funcionando — asume top-level
+//     objeto y devuelve el Map; los valores pueden ser primitivos o
+//     anidados (el caller los castea según contexto).
 //
-// Por qué un parser cojo: el protocolo del debugger usa mensajes muy
-// regulares (`{"cmd":"continue"}`, `{"cmd":"setBreakpoint","file":"x.bp",
-// "line":10,"enabled":true}`). Mantener el parser tonto evita un binding
-// transitivo a Jackson/Gson y deja explícita la superficie del wire.
+// Por qué no Jackson/Gson: el contrato del wire es muy regular y el
+// tráfico es pequeño. Mantener el parser local evita un dep transitivo
+// y deja explícita la superficie del protocolo. Si en algún momento
+// el wire se complica (binary chunks de upload de ficheros, etc.),
+// reevaluar.
 // ============================================================
 package edu.bpgenvm.util;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public final class Json {
     private Json() {}
+
+    // ============================================================
+    // Emisión
+    // ============================================================
 
     /** Escapa un String para meterlo entre comillas en JSON. */
     public static String escape(String s) {
@@ -47,40 +53,48 @@ public final class Json {
         return sb.toString();
     }
 
-    /**
-     * Parsea un objeto JSON PLANO. Devuelve un Map preservando orden de
-     * llaves. Valores admitidos: String, Long, Boolean, null.
-     *
-     * Lanza IllegalArgumentException si la sintaxis no encaja en lo
-     * que admitimos.
-     */
-    public static Map<String, Object> parseFlatObject(String src) {
-        FlatParser p = new FlatParser(src);
-        p.skipWs();
-        if (p.peek() != '{') throw p.err("se esperaba '{'");
-        p.pos++;
-        Map<String, Object> out = new LinkedHashMap<>();
-        p.skipWs();
-        if (p.peek() == '}') { p.pos++; return out; }
-        while (true) {
-            p.skipWs();
-            String key = p.parseString();
-            p.skipWs();
-            if (p.peek() != ':') throw p.err("se esperaba ':' tras la clave '" + key + "'");
-            p.pos++;
-            p.skipWs();
-            Object val = p.parseValue();
-            out.put(key, val);
-            p.skipWs();
-            char c = p.peek();
-            if (c == ',') { p.pos++; continue; }
-            if (c == '}') { p.pos++; break; }
-            throw p.err("se esperaba ',' o '}', vi '" + c + "'");
-        }
-        return out;
+    /** Devuelve `"<escape(s)>"`. */
+    public static String quote(String s) {
+        return "\"" + escape(s) + "\"";
     }
 
-    /** Get tipado con default si la clave no está o no es del tipo. */
+    // ============================================================
+    // Parsing
+    // ============================================================
+
+    /**
+     * Parsea un valor JSON arbitrario. Devuelve uno de:
+     *   - Map&lt;String,Object&gt;  (objetos)
+     *   - List&lt;Object&gt;        (arrays)
+     *   - String, Long, Boolean, null
+     *
+     * Lanza IllegalArgumentException si la sintaxis no es válida o hay
+     * texto extra tras el valor raíz.
+     */
+    public static Object parse(String src) {
+        Parser p = new Parser(src);
+        p.skipWs();
+        Object v = p.parseValue();
+        p.skipWs();
+        if (p.pos < p.src.length())
+            throw p.err("texto extra tras el valor raíz");
+        return v;
+    }
+
+    /** Conveniencia: parsea esperando un objeto top-level. Devuelve el
+     *  Map directamente. Lanza si la raíz no es objeto. */
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> parseFlatObject(String src) {
+        Object v = parse(src);
+        if (!(v instanceof Map))
+            throw new IllegalArgumentException("se esperaba objeto JSON top-level");
+        return (Map<String, Object>) v;
+    }
+
+    // ============================================================
+    // Getters tipados con default
+    // ============================================================
+
     public static String getString(Map<String, Object> m, String k, String def) {
         Object v = m.get(k);
         return (v instanceof String) ? (String) v : def;
@@ -96,13 +110,25 @@ public final class Json {
         return (v instanceof Boolean) ? (Boolean) v : def;
     }
 
+    @SuppressWarnings("unchecked")
+    public static List<Object> getList(Map<String, Object> m, String k) {
+        Object v = m.get(k);
+        return (v instanceof List) ? (List<Object>) v : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> getMap(Map<String, Object> m, String k) {
+        Object v = m.get(k);
+        return (v instanceof Map) ? (Map<String, Object>) v : null;
+    }
+
     // ============================================================
     // Parser
     // ============================================================
-    private static final class FlatParser {
+    private static final class Parser {
         final String src;
         int pos;
-        FlatParser(String src) { this.src = src; this.pos = 0; }
+        Parser(String src) { this.src = src; this.pos = 0; }
 
         char peek() {
             if (pos >= src.length()) throw err("EOF inesperado");
@@ -114,12 +140,55 @@ public final class Json {
         }
 
         Object parseValue() {
+            skipWs();
             char c = peek();
+            if (c == '{') return parseObject();
+            if (c == '[') return parseArray();
             if (c == '"') return parseString();
             if (c == '-' || (c >= '0' && c <= '9')) return parseNumber();
             if (c == 't' || c == 'f') return parseBool();
             if (c == 'n') { expectLit("null"); return null; }
             throw err("valor JSON inválido empezando por '" + c + "'");
+        }
+
+        Map<String, Object> parseObject() {
+            if (peek() != '{') throw err("se esperaba '{'");
+            pos++;
+            Map<String, Object> m = new LinkedHashMap<>();
+            skipWs();
+            if (peek() == '}') { pos++; return m; }
+            while (true) {
+                skipWs();
+                String key = parseString();
+                skipWs();
+                if (peek() != ':') throw err("se esperaba ':' tras la clave '" + key + "'");
+                pos++;
+                skipWs();
+                Object val = parseValue();
+                m.put(key, val);
+                skipWs();
+                char c = peek();
+                if (c == ',') { pos++; continue; }
+                if (c == '}') { pos++; return m; }
+                throw err("se esperaba ',' o '}', vi '" + c + "'");
+            }
+        }
+
+        List<Object> parseArray() {
+            if (peek() != '[') throw err("se esperaba '['");
+            pos++;
+            List<Object> out = new ArrayList<>();
+            skipWs();
+            if (peek() == ']') { pos++; return out; }
+            while (true) {
+                skipWs();
+                out.add(parseValue());
+                skipWs();
+                char c = peek();
+                if (c == ',') { pos++; continue; }
+                if (c == ']') { pos++; return out; }
+                throw err("se esperaba ',' o ']', vi '" + c + "'");
+            }
         }
 
         String parseString() {
@@ -162,7 +231,7 @@ public final class Json {
                 throw err("número vacío");
             if (pos < src.length() && (src.charAt(pos) == '.' || src.charAt(pos) == 'e'
                     || src.charAt(pos) == 'E'))
-                throw err("decimales/cientifica no soportados en wire");
+                throw err("decimales/científica no soportados en wire");
             try { return Long.parseLong(src.substring(start, pos)); }
             catch (NumberFormatException ex) { throw err("número inválido"); }
         }

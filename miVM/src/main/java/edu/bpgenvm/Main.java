@@ -219,9 +219,13 @@ public class Main {
         // and forget"). El servidor también instala el sink + listener de
         // debug en el momento del accept.
         DebugServer dbgServer = null;
+        DebugController controller = null;
         if (listenPort > 0) {
-            DebugController controller = new DebugController();
+            controller = new DebugController();
             vm.setDebugHook(controller.hook());
+            // A1.7: cablear el listener no-pause para que ExceptionEvent
+            // generado en WorkerLoop salga al cliente del debugger.
+            vm.setDebugEventListener(controller::emitEvent);
             dbgServer = new DebugServer(vm, controller);
             dbgServer.start(listenPort);
             if (waitClient) {
@@ -236,11 +240,26 @@ public class Main {
             }
         }
 
+        int exitCode = 0;
+        String exitReason = "main returned";
         try {
             loader.executeRootModule(runMod, moduleName);
             vm.run();
+        } catch (Throwable t) {
+            exitCode = 1;
+            exitReason = t.getClass().getSimpleName() + ": " + t.getMessage();
+            throw t;
         } finally {
+            if (controller != null) {
+                // A1.7: notificar al cliente debug que la ejecución terminó.
+                // Útil para que el IDE cierre la sesión sin necesidad de
+                // poll en el process.exited.
+                controller.emitEvent(new edu.bpgenvm.vm.debug.ExitedEvent(exitCode, exitReason));
+            }
             if (dbgServer != null) {
+                // Pequeña pausa antes de cerrar el socket para que el
+                // ExitedEvent termine de escribirse al wire.
+                try { Thread.sleep(50); } catch (InterruptedException ignored) {}
                 dbgServer.close();
             }
         }

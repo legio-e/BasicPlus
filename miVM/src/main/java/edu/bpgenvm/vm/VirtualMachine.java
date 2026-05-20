@@ -537,6 +537,13 @@ public class VirtualMachine {
      */
     private Deque<int[]> handlerStack;
 
+    /** Listener de eventos del debugger no-pause: ExceptionEvent que la VM
+     *  emite cuando un worker BP muere por BpThreadFault no atrapada. Lo
+     *  cablea Main cuando arranca con --listen (apunta a
+     *  DebugController.emitEvent). Si está a null, los eventos se descartan
+     *  (modo headless). */
+    private volatile java.util.function.Consumer<edu.bpgenvm.vm.debug.DebugEvent> debugEventListener;
+
     /** Sink al que se escribe el output de los opcodes PRINT_* del programa
      *  BP. Por defecto System.out; el IDE inyecta su propio sink cuando
      *  arranca la VM como subproceso (A1.2). NO incluye el output de
@@ -555,6 +562,25 @@ public class VirtualMachine {
     }
 
     public OutputSink getProgramOut() { return programOut; }
+
+    /** Cablea un listener para eventos del debugger emitidos directamente
+     *  por la VM (hoy ExceptionEvent al morir un thread). NO sustituye al
+     *  DebugHook — ése sigue siendo el camino de pausa/step. */
+    public void setDebugEventListener(java.util.function.Consumer<edu.bpgenvm.vm.debug.DebugEvent> l) {
+        this.debugEventListener = l;
+    }
+
+    /** Helper: emite un evento al listener si está cableado. Llamable desde
+     *  cualquier thread; el listener decide cómo serializar al canal. */
+    private void emitDebugEvent(edu.bpgenvm.vm.debug.DebugEvent ev) {
+        java.util.function.Consumer<edu.bpgenvm.vm.debug.DebugEvent> l = this.debugEventListener;
+        if (l != null) {
+            try { l.accept(ev); }
+            catch (Throwable t) {
+                System.err.println("[VM] debugEventListener falló: " + t.getMessage());
+            }
+        }
+    }
 
     /**
      * Variante con tamaño total y `stackBase` (donde termina el heap y
@@ -1157,6 +1183,9 @@ public class VirtualMachine {
                         // programa principal.
                         System.err.println("[bpgenvm worker " + workerId + ", tid="
                                 + tc.id + "] " + tf.getMessage());
+                        // A1.7: notificar al IDE remoto si hay listener cableado.
+                        emitDebugEvent(new edu.bpgenvm.vm.debug.ExceptionEvent(
+                                tc.id, tf.getMessage(), ""));
                         synchronized (vmLock) {
                             if (tc.id == 0) {
                                 // main: shutdown coordinado
@@ -1176,6 +1205,8 @@ public class VirtualMachine {
                         // Excepción no atrapada en BP: imprimimos y tumbamos la VM.
                         System.err.println("[bpgenvm worker " + workerId + ", tid="
                                 + tc.id + "] " + ex.getMessage());
+                        emitDebugEvent(new edu.bpgenvm.vm.debug.ExceptionEvent(
+                                tc.id, String.valueOf(ex.getMessage()), ""));
                         synchronized (vmLock) {
                             vmShutdown = true;
                             vmLock.notifyAll();

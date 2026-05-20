@@ -73,16 +73,13 @@ class DebugServerTest {
                 sink.writeText("hola");
                 sink.newline();
 
+                // A1.7: chunking — writeText + newline → UNA sola línea JSON
+                // con `data` = "hola\n".
                 String l1 = in.readLine();
                 assertNotNull(l1, "esperaba primera línea de print");
                 Map<String,Object> m1 = Json.parseFlatObject(l1);
                 assertEquals("print", Json.getString(m1, "type", ""));
-                assertEquals("hola", Json.getString(m1, "data", ""));
-
-                String l2 = in.readLine();
-                Map<String,Object> m2 = Json.parseFlatObject(l2);
-                assertEquals("print", Json.getString(m2, "type", ""));
-                assertEquals("\n", Json.getString(m2, "data", ""));
+                assertEquals("hola\n", Json.getString(m1, "data", ""));
 
                 // 3) Enviamos un comando setBreakpoint y verificamos efecto.
                 PrintWriter out = new PrintWriter(
@@ -98,6 +95,110 @@ class DebugServerTest {
                 Thread.sleep(50);
                 assertFalse(controller.isBreakpointAt("foo.bp", 42),
                         "el comando debió quitarlo");
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    void chunkingDePrintAgrupaHastaNewline() throws Exception {
+        // A1.7: el SocketSink consolida writeText/writeChar en un solo
+        // mensaje por línea. Verificamos que un print "5\n" emite UNA línea
+        // JSON (no dos), conteniendo "5\n" en `data`.
+        int port = freePort();
+        VirtualMachine vm = new VirtualMachine();
+        DebugController controller = new DebugController();
+        try (DebugServer server = new DebugServer(vm, controller)) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                in.readLine();   // hello, descartado
+
+                OutputSink sink = vm.getProgramOut();
+                // Caso 1: dos writeText + un newline → UN solo mensaje.
+                sink.writeText("hola ");
+                sink.writeText("mundo");
+                sink.newline();
+                String l1 = in.readLine();
+                Map<String,Object> m1 = Json.parseFlatObject(l1);
+                assertEquals("print", Json.getString(m1, "type", ""));
+                assertEquals("hola mundo\n", Json.getString(m1, "data", ""));
+
+                // Caso 2: writeChar repetido + newline → UN solo mensaje.
+                sink.writeChar('a');
+                sink.writeChar('b');
+                sink.writeChar('c');
+                sink.newline();
+                String l2 = in.readLine();
+                Map<String,Object> m2 = Json.parseFlatObject(l2);
+                assertEquals("print", Json.getString(m2, "type", ""));
+                assertEquals("abc\n", Json.getString(m2, "data", ""));
+
+                // Caso 3: flush() explícito sin newline emite lo pendiente.
+                sink.writeText("parcial");
+                sink.flush();
+                String l3 = in.readLine();
+                Map<String,Object> m3 = Json.parseFlatObject(l3);
+                assertEquals("parcial", Json.getString(m3, "data", ""));
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    void queryGetLocalsSinPausaDevuelveError() throws Exception {
+        // A1.6: si no hay pausa, getLocals debe responder con error.
+        int port = freePort();
+        VirtualMachine vm = new VirtualMachine();
+        DebugController controller = new DebugController();
+        try (DebugServer server = new DebugServer(vm, controller)) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                in.readLine();   // hello
+
+                java.io.PrintWriter out = new java.io.PrintWriter(
+                        new java.io.OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8),
+                        true);
+                out.println("{\"req\":\"getLocals\",\"requestId\":42}");
+
+                String resp = in.readLine();
+                Map<String,Object> m = Json.parseFlatObject(resp);
+                assertEquals("error",  Json.getString(m, "resp", ""));
+                assertEquals(42L,      Json.getLong(m, "requestId", -1));
+                assertTrue(Json.getString(m, "message", "").contains("no está pausada"));
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    void exitedEventLlegaAlCliente() throws Exception {
+        // A1.7: cuando el controller emite ExitedEvent (lo hace Main al
+        // terminar vm.run()), el cliente debe recibir el JSON correspondiente.
+        int port = freePort();
+        VirtualMachine vm = new VirtualMachine();
+        DebugController controller = new DebugController();
+        try (DebugServer server = new DebugServer(vm, controller)) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                in.readLine();   // hello
+
+                // Simulamos lo que hace Main.java al terminar la ejecución.
+                controller.emitEvent(new edu.bpgenvm.vm.debug.ExitedEvent(0, "main returned"));
+
+                String resp = in.readLine();
+                Map<String,Object> m = Json.parseFlatObject(resp);
+                assertEquals("exited",        Json.getString(m, "type", ""));
+                assertEquals(0L,              Json.getLong(m, "exitCode", -1));
+                assertEquals("main returned", Json.getString(m, "reason", ""));
             }
         }
     }

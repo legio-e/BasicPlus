@@ -39,6 +39,8 @@
 package edu.bpgenvm.vm.debug;
 
 import edu.bpgenvm.util.Json;
+import edu.bpgenvm.vm.DebugContext;
+import edu.bpgenvm.vm.ModuleManager;
 import edu.bpgenvm.vm.VirtualMachine;
 
 import java.io.BufferedReader;
@@ -48,6 +50,7 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -214,6 +217,11 @@ public final class DebugServer implements AutoCloseable {
 
     private void handleCommand(String jsonLine) {
         Map<String, Object> m = Json.parseFlatObject(jsonLine);
+        // Requests (request/response) llegan con el campo "req" en lugar de "cmd".
+        if (m.get("req") instanceof String) {
+            handleRequest(m);
+            return;
+        }
         String cmd = Json.getString(m, "cmd", "");
         switch (cmd) {
             case "setBreakpoint": {
@@ -237,6 +245,126 @@ public final class DebugServer implements AutoCloseable {
             default:
                 System.err.println("[DebugServer] comando desconocido: '" + cmd + "'");
         }
+    }
+
+    // ============================================================
+    // Requests (request/response sobre el mismo socket)
+    // ============================================================
+
+    private void handleRequest(Map<String, Object> m) {
+        String req = Json.getString(m, "req", "");
+        long reqId = Json.getLong(m, "requestId", -1);
+        try {
+            switch (req) {
+                case "getLocals":         sendLocalsResponse(reqId); break;
+                case "stackFrames":       sendStackFramesResponse(reqId); break;
+                case "moduleProperties":  sendModulePropertiesResponse(reqId); break;
+                case "readInt":           sendReadIntResponse(reqId, m); break;
+                case "readString":        sendReadStringResponse(reqId, m); break;
+                default:
+                    sendError(reqId, "req desconocido: " + req);
+            }
+        } catch (Throwable t) {
+            sendError(reqId, "error procesando '" + req + "': " + t.getMessage());
+        }
+    }
+
+    private void sendError(long requestId, String message) {
+        send("{\"resp\":\"error\",\"requestId\":" + requestId
+                + ",\"message\":" + Json.quote(message) + "}");
+    }
+
+    private void sendLocalsResponse(long requestId) {
+        DebugContext ctx = controller.currentContext();
+        if (ctx == null) {
+            sendError(requestId, "getLocals: VM no está pausada");
+            return;
+        }
+        // Locals = slots i32 entre bp y sp (no incluye saved PC/BP/CS bajo bp).
+        int nLocals = Math.max(0, (ctx.sp - ctx.bp) / 4);
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"resp\":\"getLocals\",\"requestId\":").append(requestId);
+        sb.append(",\"tid\":").append(ctx.tid);
+        sb.append(",\"locals\":[");
+        for (int i = 0; i < nLocals; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(ctx.readLocal(i * 4));
+        }
+        sb.append("]}");
+        send(sb.toString());
+    }
+
+    private void sendStackFramesResponse(long requestId) {
+        DebugContext ctx = controller.currentContext();
+        if (ctx == null) {
+            sendError(requestId, "stackFrames: VM no está pausada");
+            return;
+        }
+        List<int[]> frames = ctx.stackFrames();
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"resp\":\"stackFrames\",\"requestId\":").append(requestId);
+        sb.append(",\"tid\":").append(ctx.tid);
+        sb.append(",\"frames\":[");
+        for (int i = 0; i < frames.size(); i++) {
+            if (i > 0) sb.append(',');
+            int[] f = frames.get(i);
+            sb.append("[").append(f[0]).append(',').append(f[1]).append(']');
+        }
+        sb.append("]}");
+        send(sb.toString());
+    }
+
+    private void sendModulePropertiesResponse(long requestId) {
+        DebugContext ctx = controller.currentContext();
+        if (ctx == null) {
+            sendError(requestId, "moduleProperties: VM no está pausada");
+            return;
+        }
+        List<ModuleManager.PropertyView> props = ctx.moduleProperties();
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"resp\":\"moduleProperties\",\"requestId\":").append(requestId);
+        sb.append(",\"props\":[");
+        for (int i = 0; i < props.size(); i++) {
+            if (i > 0) sb.append(',');
+            ModuleManager.PropertyView p = props.get(i);
+            sb.append("{\"module\":").append(Json.quote(p.module));
+            sb.append(",\"name\":").append(Json.quote(p.name));
+            sb.append(",\"type\":").append(Json.quote(p.type));
+            sb.append(",\"rawValue\":").append(p.rawValue);
+            sb.append(",\"display\":").append(Json.quote(p.display));
+            sb.append('}');
+        }
+        sb.append("]}");
+        send(sb.toString());
+    }
+
+    private void sendReadIntResponse(long requestId, Map<String, Object> m) {
+        // Para leer una dirección absoluta de memoria de la VM. Útil para
+        // inspectores avanzados; no se usa hoy desde el IDE.
+        long addr = Json.getLong(m, "addr", -1);
+        int value;
+        try {
+            value = vm.readMemoryInt((int) addr);
+        } catch (Throwable t) {
+            sendError(requestId, "readInt(" + addr + "): " + t.getMessage());
+            return;
+        }
+        send("{\"resp\":\"readInt\",\"requestId\":" + requestId
+                + ",\"value\":" + value + "}");
+    }
+
+    private void sendReadStringResponse(long requestId, Map<String, Object> m) {
+        // Si ref apunta a un VM string, devuelve su contenido; si no, "".
+        long ref = Json.getLong(m, "ref", 0);
+        String s;
+        try {
+            s = vm.readStringIfPossible((int) ref);
+        } catch (Throwable t) {
+            sendError(requestId, "readString(" + ref + "): " + t.getMessage());
+            return;
+        }
+        send("{\"resp\":\"readString\",\"requestId\":" + requestId
+                + ",\"value\":" + Json.quote(s == null ? "" : s) + "}");
     }
 
     @Override public void close() {

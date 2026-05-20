@@ -24,8 +24,16 @@ import java.io.PrintWriter;
 
 public final class SocketSink implements OutputSink {
 
+    /** Tamaño del buffer antes de forzar un flush aunque no haya newline.
+     *  Evita que un programa que escribe mucho sin saltos de línea acumule
+     *  indefinidamente en memoria. */
+    private static final int FLUSH_THRESHOLD = 4096;
+
     private final PrintWriter out;
     private final Object lock = new Object();
+    /** Buffer de chunks pendientes — se consolida en un solo mensaje JSON
+     *  cuando llega un newline() o se supera FLUSH_THRESHOLD. */
+    private final StringBuilder buf = new StringBuilder();
 
     public SocketSink(PrintWriter out) {
         if (out == null) throw new IllegalArgumentException("out null");
@@ -34,29 +42,40 @@ public final class SocketSink implements OutputSink {
 
     @Override public void writeText(String s) {
         if (s == null || s.isEmpty()) return;
-        sendChunk(s);
+        synchronized (lock) {
+            buf.append(s);
+            if (buf.length() > FLUSH_THRESHOLD) flushBuffer();
+        }
     }
 
     @Override public void writeChar(char c) {
-        sendChunk(String.valueOf(c));
+        synchronized (lock) {
+            buf.append(c);
+            if (buf.length() > FLUSH_THRESHOLD) flushBuffer();
+        }
     }
 
     @Override public void newline() {
-        sendChunk("\n");
+        synchronized (lock) {
+            buf.append('\n');
+            flushBuffer();
+        }
     }
 
     @Override public void flush() {
         synchronized (lock) {
+            flushBuffer();
             out.flush();
         }
     }
 
-    private void sendChunk(String data) {
-        synchronized (lock) {
-            out.print("{\"type\":\"print\",\"data\":\"");
-            out.print(Json.escape(data));
-            out.print("\"}\n");
-            out.flush();
-        }
+    /** Emite el buffer (si tiene algo) como un único mensaje "print". */
+    private void flushBuffer() {
+        if (buf.length() == 0) return;
+        out.print("{\"type\":\"print\",\"data\":\"");
+        out.print(Json.escape(buf.toString()));
+        out.print("\"}\n");
+        out.flush();
+        buf.setLength(0);
     }
 }

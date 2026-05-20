@@ -38,6 +38,7 @@
 package com.mycompany.bpide;
 
 import edu.bpgenvm.util.Json;
+import edu.bpgenvm.vm.ModuleManager;
 import edu.bpgenvm.vm.debug.DebugListener;
 import edu.bpgenvm.vm.debug.ExceptionEvent;
 import edu.bpgenvm.vm.debug.ExitedEvent;
@@ -54,10 +55,14 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 public final class VmClient implements AutoCloseable {
@@ -83,6 +88,11 @@ public final class VmClient implements AutoCloseable {
     private final CountDownLatch helloLatch = new CountDownLatch(1);
 
     private volatile boolean closed = false;
+
+    // ---- Request/response (A1.6) ----
+    private final AtomicLong nextRequestId = new AtomicLong(1);
+    private final Map<Long, CompletableFuture<Map<String, Object>>> pendingRequests = new HashMap<>();
+    private final Object pendingLock = new Object();
 
     // ---- Configuración ----
 
@@ -173,6 +183,104 @@ public final class VmClient implements AutoCloseable {
             case STEP_OUT:  sendRaw("{\"cmd\":\"stepOut\"}"); break;
             case STOP:      sendRaw("{\"cmd\":\"stop\"}"); break;
         }
+    }
+
+    // ============================================================
+    // Request/response — queries síncronas al VM (A1.6)
+    // ============================================================
+
+    /** Envía un request y devuelve el mapa de respuesta (incluyendo el campo
+     *  "resp" para discriminar). Lanza si timeout o si la respuesta es "error". */
+    private Map<String, Object> sendRequest(String req, String extraJson, long timeoutMs)
+            throws IOException {
+        long id = nextRequestId.getAndIncrement();
+        CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+        synchronized (pendingLock) { pendingRequests.put(id, future); }
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"req\":\"").append(req).append("\",\"requestId\":").append(id);
+        if (extraJson != null && !extraJson.isEmpty()) {
+            sb.append(',').append(extraJson);   // sin envoltorio { } — caller lo formatea
+        }
+        sb.append('}');
+        sendRaw(sb.toString());
+        try {
+            Map<String, Object> resp = future.get(timeoutMs, TimeUnit.MILLISECONDS);
+            String type = Json.getString(resp, "resp", "");
+            if ("error".equals(type)) {
+                throw new IOException("VM error: " + Json.getString(resp, "message", "?"));
+            }
+            return resp;
+        } catch (TimeoutException te) {
+            synchronized (pendingLock) { pendingRequests.remove(id); }
+            throw new IOException("timeout esperando respuesta a '" + req + "' (id=" + id + ")");
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted", ie);
+        } catch (java.util.concurrent.ExecutionException ee) {
+            throw new IOException("fallo en future", ee.getCause());
+        }
+    }
+
+    /** Locales del thread pausado: i32 entre bp y sp. Falla si no hay pausa. */
+    public int[] getLocals(long timeoutMs) throws IOException {
+        Map<String, Object> resp = sendRequest("getLocals", null, timeoutMs);
+        List<Object> locals = Json.getList(resp, "locals");
+        if (locals == null) return new int[0];
+        int[] out = new int[locals.size()];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = (int) ((Long) locals.get(i)).longValue();
+        }
+        return out;
+    }
+
+    /** Stack frames como pares [pc, bp]. */
+    public List<int[]> getStackFrames(long timeoutMs) throws IOException {
+        Map<String, Object> resp = sendRequest("stackFrames", null, timeoutMs);
+        List<Object> frames = Json.getList(resp, "frames");
+        List<int[]> out = new ArrayList<>();
+        if (frames == null) return out;
+        for (Object o : frames) {
+            if (!(o instanceof List)) continue;
+            List<?> pair = (List<?>) o;
+            if (pair.size() < 2) continue;
+            int pc = (int) ((Long) pair.get(0)).longValue();
+            int bp = (int) ((Long) pair.get(1)).longValue();
+            out.add(new int[]{pc, bp});
+        }
+        return out;
+    }
+
+    /** Snapshot de properties públicas de todos los módulos. Reconstruye
+     *  PropertyView para que el código del IDE no sepa que viene por wire. */
+    public List<ModuleManager.PropertyView> getModuleProperties(long timeoutMs) throws IOException {
+        Map<String, Object> resp = sendRequest("moduleProperties", null, timeoutMs);
+        List<Object> props = Json.getList(resp, "props");
+        List<ModuleManager.PropertyView> out = new ArrayList<>();
+        if (props == null) return out;
+        for (Object o : props) {
+            if (!(o instanceof Map)) continue;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) o;
+            out.add(new ModuleManager.PropertyView(
+                    Json.getString(m, "module", ""),
+                    Json.getString(m, "name", ""),
+                    Json.getString(m, "type", ""),
+                    (int) Json.getLong(m, "rawValue", 0),
+                    Json.getString(m, "display", "")));
+        }
+        return out;
+    }
+
+    /** Lee un i32 de la memoria de la VM en una dirección absoluta. */
+    public int readMemoryInt(int addr, long timeoutMs) throws IOException {
+        Map<String, Object> resp = sendRequest("readInt", "\"addr\":" + addr, timeoutMs);
+        return (int) Json.getLong(resp, "value", 0);
+    }
+
+    /** Lee un string BP por ref; "" si no es un string válido. */
+    public String readStringIfPossible(int ref, long timeoutMs) throws IOException {
+        Map<String, Object> resp = sendRequest("readString", "\"ref\":" + ref, timeoutMs);
+        return Json.getString(resp, "value", "");
     }
 
     // ============================================================
@@ -311,6 +419,15 @@ public final class VmClient implements AutoCloseable {
             m = Json.parseFlatObject(line);
         } catch (Throwable t) {
             diag("[VmClient] línea no parseable: " + line);
+            return;
+        }
+        // Respuesta a un request previo: completar el future correspondiente.
+        if (m.get("resp") instanceof String) {
+            long reqId = Json.getLong(m, "requestId", -1);
+            CompletableFuture<Map<String, Object>> fut;
+            synchronized (pendingLock) { fut = pendingRequests.remove(reqId); }
+            if (fut != null) fut.complete(m);
+            else diag("[VmClient] resp sin request pendiente, requestId=" + reqId);
             return;
         }
         String type = Json.getString(m, "type", "");
