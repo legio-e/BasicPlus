@@ -251,17 +251,36 @@ llamadas Java↔Java (`DebugSession` ↔ `DebugContext`).
   antiguo `DebugSession.Listener.onPaused/onResumed`. `DebugSession`
   emite eventos; `DebugContext` (las queries de memoria) sigue accesible
   vía `DebugSession.currentContext()` hasta que A1.4 lo sustituya por RPC.
-- **A1.4** — Servidor en la VM (escucha en un puerto cuando se
-  arranca con `--listen <port>` o similar).
+- **A1.4** — Servidor en la VM (cerrado).
+  - **A1.4.a** — `DebugController` mueve la lógica de pausa al VM
+    (breakpoints, mode, queue de comandos). El IDE `DebugSession`
+    queda como wrapper fino. `DebugControllerTest` con 5 tests.
+  - **A1.4.b** — `DebugServer` con `--listen <port>` (+ `--wait-client`).
+    Encoder JSON de los DebugEvent + parser de comandos planos
+    (`edu.bpgenvm.util.Json`). `SocketSink` redirige los PRINT_* al
+    canal. Verificado end-to-end con cliente Python: handshake →
+    paused → continue → prints. `DebugServerTest` con 2 tests
+    integración (incluye port reservation).
 - **A1.5** — Cliente en el IDE (sustituye las llamadas
-  in-process; gestiona conexión, reconexión, error).
-- **A1.6** — Comandos del IDE → VM: `run`, `stop`, `step`,
-  `setBreakpoint`, `getLocals`, `getModuleProperties`, `upload
-  file`, `download file`, `exit`.
-- **A1.7** — Eventos VM → IDE: `print-output`, `paused-at`,
-  `exception`, `exited`, `error`.
-- **A1.8** — Smoke test end-to-end: arrancar VM, conectar IDE,
-  ejecutar un .mod, ver el print en la ventana, parar.
+  in-process; gestiona conexión, reconexión, error). Es la pieza
+  simétrica de A1.4.b: lanza el subproceso de la VM con `--listen
+  <port>`, conecta, parsea los eventos JSON en `DebugEvent` y los
+  inyecta al `DebugListener` actual del IDE; envía comandos cuando
+  el usuario interactúa con la UI.
+- **A1.6** — Comandos avanzados IDE → VM: `getLocals`,
+  `getModuleProperties`, `readMemory`, `stackFrames`,
+  `upload file`, `download file`, `exit`. Hoy las queries de
+  locales/properties siguen accediendo a `DebugContext` in-process;
+  cuando lleguemos al modo remoto de verdad estos se vuelven
+  request/response sobre el wire.
+- **A1.7** — Refinamiento del wire: chunking de prints (consolidar
+  varios writeText/Char en una línea), exited/exception events
+  conectados a los caminos de salida de la VM (hoy se definen pero
+  no se emiten — la VM termina con stdout pero sin `exited`
+  cruzando el canal).
+- **A1.8** — Smoke test end-to-end con el IDE real: arrancar la VM
+  como subproceso desde el IDE, conectar, ver `print` en una
+  ventana, parar/continuar/step desde botones.
 
 **Compatibilidad**: durante el desarrollo conviene mantener un
 modo "in-process" funcional para no romper el flujo de trabajo,

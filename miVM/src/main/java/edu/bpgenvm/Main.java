@@ -34,9 +34,12 @@ import edu.bpgenvm.config.VmConfig;
 import edu.bpgenvm.tools.Disasm;
 import edu.bpgenvm.vm.ModuleManager;
 import edu.bpgenvm.vm.VirtualMachine;
+import edu.bpgenvm.vm.debug.DebugController;
+import edu.bpgenvm.vm.debug.DebugServer;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
 
 public class Main {
 
@@ -46,6 +49,8 @@ public class Main {
         int workers = -1;       // -1 = default de la VM
         String configPath = null;
         boolean noConfig = false;
+        int listenPort = -1;    // -1 = no servidor de debug
+        boolean waitClient = false;  // bloquear la VM hasta que conecte el IDE
         String file = null;
 
         for (int i = 0; i < args.length; i++) {
@@ -91,6 +96,36 @@ public class Main {
                             System.exit(2);
                             return;
                         }
+                        break;
+                    }
+                    if (a.startsWith("--listen=")) {
+                        try {
+                            listenPort = Integer.parseInt(a.substring("--listen=".length()));
+                        } catch (NumberFormatException nfe) {
+                            System.err.println("--listen requiere un puerto: " + a);
+                            System.exit(2); return;
+                        }
+                        if (listenPort < 1 || listenPort > 65535) {
+                            System.err.println("--listen puerto fuera de rango: " + listenPort);
+                            System.exit(2); return;
+                        }
+                        break;
+                    }
+                    if ("--listen".equals(a)) {
+                        if (i + 1 >= args.length) {
+                            System.err.println("--listen requiere un puerto");
+                            System.exit(2); return;
+                        }
+                        try {
+                            listenPort = Integer.parseInt(args[++i]);
+                        } catch (NumberFormatException nfe) {
+                            System.err.println("--listen requiere un puerto entero");
+                            System.exit(2); return;
+                        }
+                        break;
+                    }
+                    if ("--wait-client".equals(a)) {
+                        waitClient = true;
                         break;
                     }
                     if (a.startsWith("-")) {
@@ -176,8 +211,39 @@ public class Main {
         if (cfg.stdlibDir != null) loader.setStdlibDir(cfg.stdlibDir);
         if (project != null)       loader.setModulePaths(project.modulePaths());
         vm.setModuleManager(loader);
-        loader.executeRootModule(runMod, moduleName);
-        vm.run();
+
+        // A1.4.b: si se pidió --listen, levantar el servidor de debug
+        // ANTES de cargar el módulo. Con --wait-client la VM bloquea hasta
+        // que conecte un cliente (el IDE); sin él, ejecuta de inmediato y
+        // el cliente puede conectarse en cualquier momento (modo "fire
+        // and forget"). El servidor también instala el sink + listener de
+        // debug en el momento del accept.
+        DebugServer dbgServer = null;
+        if (listenPort > 0) {
+            DebugController controller = new DebugController();
+            vm.setDebugHook(controller.hook());
+            dbgServer = new DebugServer(vm, controller);
+            dbgServer.start(listenPort);
+            if (waitClient) {
+                System.err.println("[main] esperando cliente debug en puerto " + listenPort + "...");
+                try {
+                    if (!dbgServer.awaitClient(30, TimeUnit.SECONDS)) {
+                        System.err.println("[main] timeout esperando cliente, sigo en modo headless");
+                    }
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+
+        try {
+            loader.executeRootModule(runMod, moduleName);
+            vm.run();
+        } finally {
+            if (dbgServer != null) {
+                dbgServer.close();
+            }
+        }
     }
 
     private static String stripModExtension(String fname) {
@@ -198,6 +264,8 @@ public class Main {
         out.println("  bpgenvm --workers=N             N workers Java en paralelo (default 2)");
         out.println("  bpgenvm --config <archivo>      configuración JSON (BpVM.cfg)");
         out.println("  bpgenvm --no-config             ignora cualquier BpVM.cfg auto-descubierto");
+        out.println("  bpgenvm --listen <puerto>       arranca servidor de debug TCP+JSON");
+        out.println("  bpgenvm --wait-client           con --listen, bloquea hasta que conecte el IDE");
         out.println("  bpgenvm -h | --help             muestra esta ayuda");
         out.println();
         out.println("BpVM.cfg (JSON, todos los campos opcionales):");

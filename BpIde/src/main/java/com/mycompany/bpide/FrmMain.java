@@ -6,6 +6,7 @@
 package com.mycompany.bpide;
 
 import edu.bpgenvm.vm.DebugContext;
+import edu.bpgenvm.vm.debug.StepCommand;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Desktop;
