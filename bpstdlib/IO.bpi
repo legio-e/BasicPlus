@@ -1,0 +1,15 @@
+bpi 5
+module IO
+func pathJoin(a:string,b:string):string public intrinsic
+func pathParent(p:string):string public intrinsic
+func copyFile(src:string,dst:string):void public intrinsic
+func rmdir(p:string):void public intrinsic
+func pathExtension(p:string):string public intrinsic
+func pathAbsolute(p:string):string public intrinsic
+func removeFile(p:string):void public intrinsic
+func rename(src:string,dst:string):void public intrinsic
+func fileSize(p:string):integer public intrinsic
+func lastModified(p:string):integer public intrinsic
+func mkdir(p:string):void public intrinsic
+func isDirectory(p:string):boolean public intrinsic
+func pathBasename(p:string):string public intrinsic

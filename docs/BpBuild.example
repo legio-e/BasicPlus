@@ -1,0 +1,60 @@
+// =============================================================
+// .bpbuild — fichero de proyecto JSON para el COMPILADOR (frontend)
+// y el IDE de BasicPlus.
+//
+// Distinto del .bpproject que come la VM:
+//   *.bpproject → run-time: qué .mod ejecutar + dónde buscar más
+//                  .mod en formato compilado.
+//   *.bpbuild   → build-time: qué .bp fuente compilar, dónde dejar
+//                  los .mod/.bpi, y qué dependencias de compilación
+//                  (otros proyectos, librerías) buscar al resolver
+//                  imports.
+//
+// Uso desde la línea de comandos:
+//   lexer-java --project app.bpbuild
+//
+// Uso desde el BpIde:
+//   File → Project → Open Project... → seleccionar el .bpbuild.
+//   El IDE muestra el árbol del proyecto en el panel superior
+//   izquierdo (estilo NetBeans) y Run/Debug compila usando el
+//   build file en lugar del fichero activo.
+//
+// Formato JSON. Soporta comentarios `// hasta-fin-de-línea`.
+// =============================================================
+{
+  // Directorio raíz del proyecto. OPCIONAL — si no se indica, se
+  // usa el directorio donde está este .bpbuild. Todos los demás
+  // paths relativos se resuelven respecto a `projectDir`.
+  "projectDir": "./",
+
+  // Directorio con los fuentes .bp del proyecto. OBLIGATORIO.
+  // El compilador buscará aquí `<main>.bp`.
+  "sourceDir": "src",
+
+  // Directorio donde el compilador emite los .mod (bytecode) y
+  // .bpi (interfaz pública). OBLIGATORIO. Se crea on-demand si
+  // no existe.
+  "outDir": "out",
+
+  // Nombre lógico del módulo principal (sin extensión). El
+  // compilador busca `<sourceDir>/<main>.bp` como punto de
+  // entrada. OBLIGATORIO.
+  "main": "App",
+
+  // Dependencias de compilación. OPCIONAL — lista de entradas.
+  // Cada entrada puede ser:
+  //   - un directorio: el compilador busca dentro CUALQUIER
+  //     .bpi/.mod cuando resuelve un import.
+  //   - un fichero .mod o .bpi específico.
+  //
+  // Resolución de un import (orden):
+  //   1) sources del proyecto (otro .bp en sourceDir)
+  //   2) outDir (.bpi de un .bp del proyecto ya compilado)
+  //   3) cada entrada de dependencies, en orden
+  //
+  // Paths relativos se resuelven respecto a projectDir.
+  "dependencies": [
+    "../shared/lib",
+    "../utils/Logger.mod"
+  ]
+}

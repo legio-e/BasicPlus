@@ -1,0 +1,65 @@
+module OwnerListTest
+
+  class Recurso
+    public var nombre: string
+
+    public function Recurso(nombre: string)
+      this.nombre := nombre
+      print "  [crear] Recurso(" + nombre + ")"
+    end Recurso
+  end Recurso
+
+  // Caso 1: variable owner sobre OwnerList. Al salir de scope debe liberar
+  // la lista Y los recursos.
+  function caso1()
+    print "=== caso1: var owner ol: OwnerList sale de scope ==="
+    var owner ol: OwnerList := OwnerList()
+    ol.add(Recurso("A"))
+    ol.add(Recurso("B"))
+    ol.add(Recurso("C"))
+    print "  longitud antes de salir = " + intToString(ol.length())
+    // fin de funcion → FREE_REF(ol) → libera array TYPE_ARRAY_REF →
+    // libera Recurso A, B, C en cascada.
+  end caso1
+
+  // Caso 2: reasignacion de la variable owner. El primer OwnerList y sus
+  // recursos se liberan.
+  function caso2()
+    print "=== caso2: reasignacion ==="
+    var owner ol: OwnerList := OwnerList()
+    ol.add(Recurso("X"))
+    ol.add(Recurso("Y"))
+    print "  reasignando (debe liberar X, Y)..."
+    ol := OwnerList()
+    ol.add(Recurso("Z"))
+    print "  nueva lista tiene length = " + intToString(ol.length())
+  end caso2
+
+  // Caso 3: List normal (sin owner). Al salir, los recursos quedan vivos
+  // hasta el siguiente GC. Sin destruccion deterministica.
+  function caso3()
+    print "=== caso3: List normal (compara) ==="
+    var l: List := List()
+    l.add(Recurso("R1"))
+    l.add(Recurso("R2"))
+    print "  length = " + intToString(l.length())
+    // sale de scope SIN liberar nada (l no es owner). Los recursos quedan
+    // huerfanos hasta GC.
+  end caso3
+
+  function main(arg: string)
+    caso1()
+    print "(gc tras caso1: deberia haber 0 alive del caso, todo liberado deterministicamente)"
+    gc()
+    print ""
+    caso2()
+    print "(gc tras caso2: idem, todo cascadeado)"
+    gc()
+    print ""
+    caso3()
+    print "(gc tras caso3: Recursos huerfanos liberados ahora, no antes)"
+    gc()
+    print "fin"
+  end main
+
+end OwnerListTest

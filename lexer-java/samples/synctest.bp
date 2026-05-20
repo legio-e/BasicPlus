@@ -1,0 +1,75 @@
+module SyncTest
+
+  // Demo de `public sync property`: get y set se envuelven con un Mutex
+  // de instancia (campo oculto __syncMutex). Garantiza que cada acceso
+  // individual al backing field es atómico respecto a otros threads.
+  //
+  // Importante: una compuesta `value := value + 1` NO es atómica como
+  // expresión — se descompone en get + add + set, cada uno atómico
+  // individualmente, pero entre ellos otro thread puede colarse. Para
+  // operaciones atómicas compuestas usa un Mutex propio (ver MutexTest).
+  //
+  // Lo que SÍ garantiza sync property:
+  //   - Una lectura SIEMPRE devuelve un valor que algún thread escribió
+  //     (nunca un estado parcial).
+  //   - Una escritura es indivisible: o se ve toda, o no se ve nada.
+
+  public class Account
+    public sync property balance: integer
+
+    public function Account(initial: integer)
+      this.balance := initial
+    end Account
+  end Account
+
+  // Worker que asigna un valor fijo a la sync property muchas veces.
+  // No es interesante "qué valor queda al final" — es que la VM no se
+  // corrompe y siempre devuelve algo coherente.
+  public class Setter extends Thread
+    public var acc:   Account
+    public var v:     integer
+    public var iters: integer
+
+    public function Setter(acc: Account, v: integer, iters: integer)
+      super(2048)
+      this.acc   := acc
+      this.v     := v
+      this.iters := iters
+    end Setter
+
+    public function run()
+      var i: integer := 0
+      while i < this.iters do
+        this.acc.balance := this.v
+        i := i + 1
+      endwh
+    end run
+  end Setter
+
+  function main(arg: string)
+    var acc: Account := Account(0)
+    var iters: integer := 5000
+    print "arrancando 2 setters x " + intToString(iters) + " iters"
+
+    var t1: Thread := Setter(acc, 1111, iters)
+    var t2: Thread := Setter(acc, 2222, iters)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    // Resultado: el último escritor en ganar la sync escribe el valor
+    // final. Verificamos que el valor leído es uno de los dos válidos
+    // (1111 o 2222) — nunca un valor corrupto.
+    var v: integer := acc.balance
+    print "balance final = " + intToString(v)
+    if v == 1111 then
+      print "OK: leemos un valor válido (1111)"
+    elseif v == 2222 then
+      print "OK: leemos un valor válido (2222)"
+    else
+      print "ERROR: valor inesperado " + intToString(v)
+    endif
+  end main
+
+end SyncTest

@@ -1,0 +1,83 @@
+// fase2.bp — sample para el emisor JVM Fase 2.
+// Cubre: clases con campos, constructores, métodos de instancia,
+// herencia con extends, this, super(args), super.metodo(),
+// miembros estáticos, construcción NombreClase(args), null.
+
+module Fase2
+
+  // Inicializador del módulo
+  function Fase2()
+    print "[init] Fase2"
+  end Fase2
+
+  // ---------- Clase base ----------
+  public class Animal
+    var nombre: string
+    public var Animal.totalCreados: integer := 0
+
+    public function Animal(nombre: string)
+      this.nombre := nombre
+      Animal.totalCreados += 1
+    end Animal
+
+    public function Hablar(): string
+      return "soy un animal llamado " + nombre
+    end Hablar
+
+    public function CambiarNombre(nuevo: string)
+      this.nombre := nuevo
+    end CambiarNombre
+
+    // Función estática (factory-style)
+    public function Animal.cuantos(): integer
+      return Animal.totalCreados
+    end Animal.cuantos
+  end Animal
+
+  // ---------- Subclase ----------
+  public class Perro extends Animal
+    var raza: string
+
+    public function Perro(nombre: string, raza: string)
+      super(nombre)
+      this.raza := raza
+    end Perro
+
+    public function Hablar(): string
+      return super.Hablar() + " - guau, soy un " + raza
+    end Hablar
+  end Perro
+
+  // ---------- Otra subclase ----------
+  public class Gato extends Animal
+    public function Gato(nombre: string)
+      super(nombre)
+    end Gato
+
+    public function Hablar(): string
+      return super.Hablar() + " - miau"
+    end Hablar
+  end Gato
+
+  function Main()
+    print "Total al inicio:", Animal.cuantos()
+
+    var p: Perro := Perro("Rex", "labrador")
+    print p.Hablar()
+
+    var g: Gato := Gato("Misi")
+    print g.Hablar()
+
+    p.CambiarNombre("Rocky")
+    print "tras cambiar nombre:", p.Hablar()
+
+    print "Total tras crear 2 animales:", Animal.cuantos()
+
+    // null en referencias
+    var sin: Animal := null
+    if sin == null then
+      print "sin es null"
+    endif
+  end Main
+
+end Fase2

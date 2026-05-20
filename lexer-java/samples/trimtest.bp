@@ -1,0 +1,17 @@
+module TrimTest
+
+  function Main()
+    var s: string := "  Hola  "
+    print "raw:", s
+    print "len(raw):", strlen(s)
+
+    var t: string := trim(s)
+    print "trim:", t
+    print "len(trim):", strlen(t)
+
+    var concat: string := "[" + t + "]"
+    print "concat:", concat
+    print "len(concat):", strlen(concat)
+  end Main
+
+end TrimTest

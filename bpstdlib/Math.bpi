@@ -1,0 +1,17 @@
+bpi 5
+module Math
+func tan(x:float):float public intrinsic
+func ln(x:float):float public intrinsic
+func e():float public intrinsic
+func cos(x:float):float public intrinsic
+func log10(x:float):float public intrinsic
+func factorial(n:integer):integer public intrinsic
+func sign(x:integer):integer public intrinsic
+func acos(x:float):float public intrinsic
+func signF(x:float):integer public intrinsic
+func atan(x:float):float public intrinsic
+func pi():float public intrinsic
+func sin(x:float):float public intrinsic
+func asin(x:float):float public intrinsic
+func gamma(x:float):float public intrinsic
+func atan2(y:float,x:float):float public intrinsic

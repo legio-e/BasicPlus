@@ -1,0 +1,15 @@
+library "com.example"
+module StealthLogger implements com.example.LogApi
+
+  // ERROR: 'log' es del contrato pero no es public.
+  function log(msg: string)
+    print "stealth: " + msg
+  end log
+
+  public function level(): integer
+    return 0
+  end level
+
+  public const VERSION: integer := 1
+
+end StealthLogger

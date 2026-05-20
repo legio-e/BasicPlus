@@ -1,0 +1,14 @@
+library "com.example.app"
+module MidA
+
+  import com.example.util.MathUtil
+
+  function MidA()
+    print "[MidA init]"
+  end MidA
+
+  public function useA(): integer
+    return MathUtil.suma(10, 20)
+  end useA
+
+end MidA

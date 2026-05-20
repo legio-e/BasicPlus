@@ -1,0 +1,118 @@
+// hello.bp — programa de prueba que ejercita la mayoría
+// de tokens del lenguaje BASICPLUS.
+
+module Hello
+  import IO.Console
+
+  // Enum estilo C
+  public enum Dia
+    LUNES
+    MARTES
+    MIERCOLES
+    JUEVES
+    VIERNES
+    SABADO := 10
+    DOMINGO
+  end Dia
+
+  // Constante a nivel módulo
+  public const PI: float := 3.14159
+
+  // Clase de excepción mínima (mientras no haya librería estándar).
+  public class RuntimeError
+    var mensaje: string
+
+    public function RuntimeError(mensaje: string)
+      this.mensaje := mensaje
+    end RuntimeError
+  end RuntimeError
+
+  // Clase con miembros normales y estáticos
+  public class Animal
+    var nombre: string
+    public var Animal.totalCreados: integer := 0
+
+    public function Animal(nombre: string)
+      this.nombre := nombre
+      Animal.totalCreados += 1
+    end Animal
+
+    public final function CambiarNombre(nombre: string)
+      this.nombre := nombre
+    end CambiarNombre
+
+    public property edad: integer := 0
+      set(e)
+        if e < 0 then
+          throw "edad invalida"
+        endif
+        field := e
+      endset
+    endprop
+
+    public function Hablar(): string
+      return "soy un animal"
+    end Hablar
+
+    // Funcion estatica
+    public function Animal.cuantos(): integer
+      return Animal.totalCreados
+    end Animal.cuantos
+  end Animal
+
+  // Subclase con super()
+  public class Perro extends Animal
+    public function Perro(nombre: string)
+      super(nombre)
+    end Perro
+
+    public function Hablar(): string
+      return super.Hablar() + " - Guau!"
+    end Hablar
+  end Perro
+
+  function Main()
+    var n: integer  := 42
+    var h: integer  := 0xFF
+    var b: integer  := 0b1010
+    var x: float    := 1.5e-3
+    var s: string   := "Hola \"BASICPLUS\"\n"
+
+    n += 1
+    n -= 2
+
+    var primos: integer[] := [2, 3, 5, 7, 11]
+    var suma: integer := 0
+    for p in primos do
+      suma += p
+    next p
+
+    var k: integer := 3
+    do
+      print k
+      k -= 1
+    loop k > 0
+
+    var d: Dia := Dia.MIERCOLES
+    switch d
+      case Dia.SABADO, Dia.DOMINGO
+        print "fin de semana"
+      default
+        print "otro dia"
+    endsw
+
+    try
+      var perro: Perro := Perro("Rex")
+      print perro.Hablar()
+    catch err: RuntimeError
+      print "runtime:", err
+    catch
+      print "algo fallo"
+    finally
+      print "fin"
+    endtry
+
+    print "Total animales:", Animal.cuantos()
+  end Main
+
+end Hello

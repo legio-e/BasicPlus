@@ -1,0 +1,100 @@
+// fase1.bp — sample procedural BASICPLUS para el emisor IL Fase 1.
+// Sin clases, sin propiedades, sin enums, sin try/catch.
+// Solo funciones top-level, primitivas y control de flujo.
+
+module Fase1
+
+  // Variable y constante a nivel módulo (campos estáticos en IL).
+  // Nota: el inicializador de `var` a nivel módulo NO se ejecuta (ver L8);
+  // asignar en la función inicializadora del módulo si hace falta != 0.
+  public var contador: integer
+  public const PI: float := 3.14159
+
+  // Inicializador del módulo: se llama antes de Main.
+  function Fase1()
+    contador := 0
+    print "[init] cargando modulo Fase1, PI =", PI
+  end Fase1
+
+  // Función pura que devuelve un entero.
+  public function Cuadrado(n: integer): integer
+    return n * n
+  end Cuadrado
+
+  // Función recursiva.
+  public function Factorial(n: integer): integer
+    if n <= 1 then
+      return 1
+    endif
+    return n * Factorial(n - 1)
+  end Factorial
+
+  // Suma de enteros con bucle for.
+  public function SumaHasta(n: integer): integer
+    var s: integer := 0
+    for i := 1 to n do
+      s += i
+    next i
+    return s
+  end SumaHasta
+
+  // Cuenta atrás con while.
+  public function CuentaAtras(n: integer)
+    while n > 0 do
+      print "  ", n
+      n -= 1
+    endwh
+    print "  fin"
+  end CuentaAtras
+
+  // do-while: ejecuta al menos una vez.
+  public function HazAlMenos(n: integer)
+    var k: integer := n
+    do
+      print "  hago", k
+      k -= 1
+    loop k > 0
+  end HazAlMenos
+
+  // Concatenación de strings con '+'.
+  public function Saludar(nombre: string): string
+    return "Hola, " + nombre + "!"
+  end Saludar
+
+  // Lógica con corto-circuito.
+  public function Clasifica(n: integer): string
+    if n < 0 then
+      return "negativo"
+    elseif n == 0 then
+      return "cero"
+    elseif n > 0 and n < 10 then
+      return "pequenyo"
+    else
+      return "grande"
+    endif
+  end Clasifica
+
+  // Punto de entrada del programa.
+  function Main()
+    print "Cuadrado(7) =", Cuadrado(7)
+    print "Factorial(5) =", Factorial(5)
+    print "SumaHasta(10) =", SumaHasta(10)
+
+    print Saludar("BASICPLUS")
+
+    print "Clasifica(-3) =", Clasifica(-3)
+    print "Clasifica(0)  =", Clasifica(0)
+    print "Clasifica(5)  =", Clasifica(5)
+    print "Clasifica(99) =", Clasifica(99)
+
+    print "CuentaAtras desde 3:"
+    CuentaAtras(3)
+
+    print "HazAlMenos con 2:"
+    HazAlMenos(2)
+
+    contador += 1
+    print "contador final =", contador
+  end Main
+
+end Fase1

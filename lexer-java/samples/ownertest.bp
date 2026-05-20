@@ -1,0 +1,53 @@
+// ownertest.bp — Fase 1 de ownership: locales con destrucción determinista.
+// Forzamos un GC manual al final para ver el heap (las owner locales deberían
+// haberse liberado ya, así que el GC apenas debería ver objetos vivos).
+
+module OwnerTest
+
+  public class Punto
+    var x: integer
+    var y: integer
+    public function Punto(x: integer, y: integer)
+      this.x := x
+      this.y := y
+    end Punto
+    public function Distancia(): integer
+      return x * x + y * y
+    end Distancia
+  end Punto
+
+  public function CrearYUsar(): integer
+    var owner p: Punto := Punto(3, 4)
+    var r: integer := p.Distancia()    // r = 25
+    return r
+    // p sale de scope → su objeto debe liberarse
+  end CrearYUsar
+
+  public function ProbarMove()
+    var owner a: Punto := Punto(1, 1)
+    print "  a creado"
+    var owner b: Punto := a            // move: b adopta, a queda null
+    print "  tras move, a apunta a 0:", a == null
+    print "  tras move, b vivo, dist =", b.Distancia()
+    // Al salir, b libera su objeto. a ya era null (no-op).
+  end ProbarMove
+
+  public function ProbarReasign()
+    var owner p: Punto := Punto(2, 3)
+    print "  primer p, dist =", p.Distancia()  // 13
+    p := Punto(5, 12)
+    // el viejo (2,3) debe haberse liberado antes de la nueva asignación
+    print "  segundo p, dist =", p.Distancia() // 169
+    // Al salir, el (5,12) se libera.
+  end ProbarReasign
+
+  function Main()
+    print "[CrearYUsar] dist =", CrearYUsar()
+    print "[ProbarMove]"
+    ProbarMove()
+    print "[ProbarReasign]"
+    ProbarReasign()
+    print "[fin]"
+  end Main
+
+end OwnerTest

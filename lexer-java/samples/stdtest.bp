@@ -1,0 +1,51 @@
+module StdTest
+
+  class Persona
+    public var nombre: string
+    public var edad: integer
+
+    public function Persona(nombre: string, edad: integer)
+      this.nombre := nombre
+      this.edad := edad
+    end Persona
+  end Persona
+
+  function main(arg: string)
+    // ---- StringBuilder ----
+    var sb: StringBuilder := StringBuilder()
+    sb.appendStr("Hola, ")
+    sb.appendStr("mundo")
+    sb.appendChar(33)  // '!'
+    sb.appendStr(" Tengo ")
+    sb.appendInt(42)
+    sb.appendStr(" anyos.")
+    print "sb = " + sb.toString()
+    print "sb.length = " + intToString(sb.length())
+
+    // ---- List ----
+    var personas: List := List()
+    personas.add(Persona("Ana", 30))
+    personas.add(Persona("Bea", 25))
+    personas.add(Persona("Carlos", 41))
+
+    print "personas.length = " + intToString(personas.length())
+
+    var i: integer := 0
+    while i < personas.length() do
+      var p: Persona := personas.get(i)
+      print "  [" + intToString(i) + "] " + p.nombre + " (" + intToString(p.edad) + ")"
+      i := i + 1
+    endwh
+
+    // remove del medio
+    personas.remove(1)
+    print "tras remove(1):"
+    i := 0
+    while i < personas.length() do
+      var p: Persona := personas.get(i)
+      print "  [" + intToString(i) + "] " + p.nombre
+      i := i + 1
+    endwh
+  end main
+
+end StdTest

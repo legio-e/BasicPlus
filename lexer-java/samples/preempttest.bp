@@ -1,0 +1,42 @@
+module PreemptTest
+
+  // Worker CPU-bound que imprime un marcador cada N iteraciones — SIN llamar
+  // a yield(). Sin timer preemptivo, un worker monopolizaría hasta terminar
+  // y luego iría el segundo (cooperativo puro). CON timer preemptivo, los
+  // workers interleavean visualmente.
+  class Marker extends Thread
+    public var nombre: string
+
+    public function Marker(nombre: string)
+      super(2048)
+      this.nombre := nombre
+    end Marker
+
+    public function run()
+      var work: integer := 200000
+      var marks: integer := 0
+      var k: integer := 0
+      while marks < 6 do
+        // bucle CPU-bound puro, sin yield
+        k := 0
+        while k < work do
+          k := k + 1
+        endwh
+        print this.nombre + " mark " + intToString(marks)
+        marks := marks + 1
+      endwh
+    end run
+  end Marker
+
+  function main(arg: string)
+    var a: Thread := Marker("A")
+    var b: Thread := Marker("B")
+    print "[main] arrancando A y B (sin yield)"
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "[main] fin"
+  end main
+
+end PreemptTest

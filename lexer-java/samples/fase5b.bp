@@ -1,0 +1,48 @@
+// fase5b.bp — sample de la stdlib ampliada (numéricas, strings, conversiones).
+
+module Fase5b
+
+  function Fase5b()
+    print "[init] Fase5b"
+  end Fase5b
+
+  function Main()
+    print "-- numericas integer --"
+    print "abs(-7) =", abs(-7)
+    print "min(3, 5) =", min(3, 5)
+    print "max(3, 5) =", max(3, 5)
+
+    print "-- numericas float --"
+    print "sqrt(2.0) =", sqrt(2.0)
+    print "pow(2.0, 10.0) =", pow(2.0, 10.0)
+    print "random() (entre 0 y 1) =", random()
+
+    print "-- float -> integer --"
+    print "floor(3.7) =", floor(3.7)
+    print "ceil(3.2) =", ceil(3.2)
+    print "round(3.5) =", round(3.5)
+    print "round(3.4) =", round(3.4)
+
+    print "-- conversiones a string --"
+    print "intToString(42) =", intToString(42)
+    print "floatToString(3.14) =", floatToString(3.14)
+    print "boolToString(true) =", boolToString(true)
+
+    print "-- strings --"
+    var s: string := "  Hola BASICPLUS  "
+    print "trim:", "[" + trim(s) + "]"
+    print "upper:", upper("hola")
+    print "lower:", lower("HOLA")
+    print "substring('BASICPLUS', 0, 5) =", substring("BASICPLUS", 0, 5)
+    print "indexOf('BASICPLUS', 'PLUS') =", indexOf("BASICPLUS", "PLUS")
+    print "startsWith('BASICPLUS', 'BASIC') =", startsWith("BASICPLUS", "BASIC")
+    print "endsWith('BASICPLUS', 'PLUS') =", endsWith("BASICPLUS", "PLUS")
+    print "contains('BASICPLUS', 'SIC') =", contains("BASICPLUS", "SIC")
+    print "charAt('BASICPLUS', 2) =", charAt("BASICPLUS", 2)
+
+    print "-- combo --"
+    print "longitud al cuadrado:", strlen("hola") * strlen("hola")
+    print "parseFloat + sqrt:", sqrt(parseFloat("16.0"))
+  end Main
+
+end Fase5b

@@ -1,0 +1,14 @@
+library "ext.tools"
+module Helper
+
+  function Helper()
+    print "[Helper init] external module loaded"
+  end Helper
+
+  public function doble(x: integer): integer
+    return x * 2
+  end doble
+
+  public const TAG: string := "EXT"
+
+end Helper

@@ -1,0 +1,21 @@
+// stacktrace.bp — provoca una excepción no atrapada para ver el trace.
+
+module StackTrace
+
+  public function nivelTres()
+    throw "boom desde nivelTres"
+  end nivelTres
+
+  public function nivelDos()
+    nivelTres()
+  end nivelDos
+
+  public function nivelUno()
+    nivelDos()
+  end nivelUno
+
+  function Main()
+    nivelUno()
+  end Main
+
+end StackTrace

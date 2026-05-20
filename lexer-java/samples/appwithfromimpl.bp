@@ -1,0 +1,11 @@
+library "com.example"
+module AppWithFromImpl
+
+  import com.example.LogApi : plugins.io.FileLogger from "plugins/filelogger.mod"
+
+  function main(arg: string)
+    LogApi.log("ejecutando con impl en plugins/")
+    LogApi.log("nivel = " + intToString(LogApi.level()))
+  end main
+
+end AppWithFromImpl

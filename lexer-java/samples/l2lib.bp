@@ -1,0 +1,50 @@
+// Librería de ejemplo para L2 (clases exportadas en .bpi).
+// Compílala con:
+//   java -jar lexer-java/target/basicplus-frontend.jar lexer-java/samples/l2lib.bp \
+//        --compile bpstdlib --backend=mivm
+//
+// Luego un app que haga `import L2Lib` puede construir instancias de
+// Counter y SafeCounter, y compartirlas entre threads (SafeCounter usa
+// sync property que se mantiene atómica cross-module).
+module L2Lib
+
+  // Contador simple. La clase es `public` → se exporta al .bpi.
+  // El módulo dueño sintetiza `__cls_new_Counter(init)` que el importador
+  // llama vía CALL_EXT para construir instancias.
+  public class Counter
+    public var n: integer
+
+    public function Counter(init: integer)
+      this.n := init
+    end Counter
+
+    public function increment()
+      this.n := this.n + 1
+    end increment
+
+    public function value(): integer
+      return this.n
+    end value
+
+    public function add(delta: integer): integer
+      this.n := this.n + delta
+      return this.n
+    end add
+  end Counter
+
+  // SafeCounter expone su estado vía `sync property`. Cross-module las
+  // garantías sync se mantienen porque la dispatch va vía vtable al
+  // módulo dueño (que tiene el lock/unlock alrededor del accesor).
+  public class SafeCounter
+    public sync property tick: integer
+
+    public function SafeCounter()
+      // sin args
+    end SafeCounter
+
+    public function increment()
+      this.tick := this.tick + 1
+    end increment
+  end SafeCounter
+
+end L2Lib

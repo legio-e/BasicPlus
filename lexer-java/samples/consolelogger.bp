@@ -1,0 +1,18 @@
+library "com.example"
+module ConsoleLogger implements com.example.LogApi
+
+  function ConsoleLogger()
+    print "[ConsoleLogger] inicializado"
+  end ConsoleLogger
+
+  public function log(msg: string)
+    print "[CON] " + msg
+  end log
+
+  public function level(): integer
+    return 0
+  end level
+
+  public const VERSION: integer := 1
+
+end ConsoleLogger

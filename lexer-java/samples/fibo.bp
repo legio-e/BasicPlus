@@ -1,0 +1,22 @@
+module Fibo
+
+	function fibo(n:integer):integer
+		if n <= 1 then
+			return n
+		else
+			return fibo(n-1) + fibo(n-2)
+		endif
+	end fibo
+	
+	function Main()
+		var ini, fin:float
+		
+		fibo(30)
+		ini:=now()
+		fibo(30)
+		fin:=now()
+		print "Tiempo (s):", (fin -ini)*0.001
+	end Main
+	
+end Fibo
+

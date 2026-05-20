@@ -1,0 +1,48 @@
+// arraytest.bp — test mínimo de arrays + for-in + enums.
+
+module ArrayTest
+
+  public enum Color
+    ROJO
+    VERDE
+    AZUL := 7
+    NEGRO
+  end Color
+
+  function ArrayTest()
+    print "[init] ArrayTest"
+  end ArrayTest
+
+  public function Suma(nums: integer[]): integer
+    var total: integer := 0
+    for n in nums do
+      total += n
+    next n
+    return total
+  end Suma
+
+  function Main()
+    var primos: integer[] := [2, 3, 5, 7, 11]
+    print "suma primos:", Suma(primos)
+
+    primos[0] := 99
+    print "primos[0] tras asignar:", primos[0]
+    print "primos[4]:", primos[4]
+
+    print "Color.ROJO  =", Color.ROJO
+    print "Color.VERDE =", Color.VERDE
+    print "Color.AZUL  =", Color.AZUL
+    print "Color.NEGRO =", Color.NEGRO
+
+    var c: Color := Color.AZUL
+    switch c
+      case Color.ROJO, Color.VERDE
+        print "primario"
+      case Color.AZUL
+        print "azul"
+      default
+        print "otro"
+    endsw
+  end Main
+
+end ArrayTest

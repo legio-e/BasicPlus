@@ -1,0 +1,142 @@
+module SyncListTest
+
+  // Demo de SyncList: lista builtin thread-safe.
+  //
+  // SyncList expone la misma API que List (add, remove, get, set, length)
+  // m�s un pop() at�mico �til para producer/consumer. Cada operaci�n se
+  // serializa contra un Mutex propio de la instancia.
+  //
+  // L�mite a recordar: SyncList garantiza atomicidad POR OPERACI�N. Si
+  // necesitas un read-modify-write at�mico compuesto (e.g. "si est� vac�a
+  // a�ade X"), debes seguir usando un Mutex externo. Aqu� NO lo necesitamos:
+  // los productores s�lo hacen `add` y los consumidores s�lo hacen `pop`,
+  // ambos at�micos por s� mismos.
+
+  public class Item
+    public var n: integer
+    public function Item(n: integer)
+      this.n := n
+    end Item
+  end Item
+
+  public class Producer extends Thread
+    public var bag: SyncList
+    public var base: integer
+    public var iters: integer
+
+    public function Producer(bag: SyncList, base: integer, iters: integer)
+      super(2048)
+      this.bag   := bag
+      this.base  := base
+      this.iters := iters
+    end Producer
+
+    public function run()
+      var i: integer := 0
+      while i < this.iters do
+        this.bag.add(Item(this.base + i))
+        i := i + 1
+      endwh
+    end run
+  end Producer
+
+  // Consumer: dos consumidores compiten por pop(). Devuelve null si est�
+  // vac�a (uso seguro como sentinel desde el caller). El conteo de pops
+  // efectivos en cada hilo no es predecible (depende del scheduling), pero
+  // sumando los dos consumidores deber�amos haber consumido EXACTAMENTE lo
+  // producido.
+  public class Consumer extends Thread
+    public var bag: SyncList
+    public var consumed: integer    // contador propio del hilo
+    public var maxAttempts: integer  // tope para evitar bucle infinito
+
+    public function Consumer(bag: SyncList, maxAttempts: integer)
+      super(2048)
+      this.bag := bag
+      this.consumed := 0
+      this.maxAttempts := maxAttempts
+    end Consumer
+
+    public function run()
+      var attempts: integer := 0
+      while attempts < this.maxAttempts do
+        var it: Item := this.bag.pop()
+        if it != null then
+          this.consumed := this.consumed + 1
+        endif
+        attempts := attempts + 1
+      endwh
+    end run
+  end Consumer
+
+  function main(arg: string)
+    var bag: SyncList := SyncList()
+    var iters: integer := 1000
+
+    print "arrancando 2 productores x " + intToString(iters) + " items"
+    var t1: Thread := Producer(bag, 1000, iters)
+    var t2: Thread := Producer(bag, 9000, iters)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    var total: integer := bag.length()
+    print "total en lista = " + intToString(total)
+    if total == 2 * iters then
+      print "OK: no se perdi� ning�n item (sin race)"
+    else
+      print "ERROR: se esperaban " + intToString(2 * iters) + " items"
+    endif
+
+    // Comprobaci�n adicional: cada item tiene un valor �nico.
+    // Sum de todos los .n: prod1 = 1000..1999 = (1000+1999)*1000/2 = 1499500
+    //                     prod2 = 9000..9999 = (9000+9999)*1000/2 = 9499500
+    // Total esperado: 10999000.
+    var suma: integer := 0
+    var i: integer := 0
+    while i < total do
+      var it: Item := bag.get(i)
+      suma := suma + it.n
+      i := i + 1
+    endwh
+    print "suma de valores = " + intToString(suma)
+    if suma == 10999000 then
+      print "OK: todos los valores intactos"
+    else
+      print "ERROR: suma inesperada"
+    endif
+
+    // -------- Fase 2: producer + consumer concurrentes --------
+    // Llenamos un poco para tener stock inicial, y arrancamos un productor
+    // nuevo que mete m�s, y dos consumidores que vac�an.
+    print "--- fase 2: productor + 2 consumidores concurrentes ---"
+    var prodMore: Thread := Producer(bag, 100000, 500)
+    var c1: Consumer := Consumer(bag, 5000)
+    var c2: Consumer := Consumer(bag, 5000)
+    prodMore.start()
+    c1.start()
+    c2.start()
+    prodMore.join()
+    c1.join()
+    c2.join()
+
+    var consumed1: integer := c1.consumed
+    var consumed2: integer := c2.consumed
+    var totalConsumed: integer := consumed1 + consumed2
+    var remaining: integer := bag.length()
+    print "consumidos c1 = " + intToString(consumed1)
+    print "consumidos c2 = " + intToString(consumed2)
+    print "total consumidos = " + intToString(totalConsumed)
+    print "quedan en lista  = " + intToString(remaining)
+    // El total producido fue 2*iters (fase 1) + 500 (fase 2) = 2500.
+    // total consumidos + remaining debe coincidir con eso.
+    var esperado: integer := 2 * iters + 500
+    if totalConsumed + remaining == esperado then
+      print "OK: cuentas cuadran (sin items duplicados o perdidos)"
+    else
+      print "ERROR: cuentas no cuadran"
+    endif
+  end main
+
+end SyncListTest

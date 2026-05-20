@@ -1,0 +1,35 @@
+// mathtest.bp — exercise Math.mod intrinsic functions.
+// Run con BpVM.cfg apuntando a bpstdlib/ para que el import resuelva.
+module MathTest
+  import Math
+
+  function Main()
+    // sign sobre integer
+    print "sign(-7)  =", Math.sign(-7)        // -1
+    print "sign(0)   =", Math.sign(0)         // 0
+    print "sign(42)  =", Math.sign(42)        // 1
+
+    // signF sobre float
+    print "signF(-1.5) =", Math.signF(-1.5)   // -1
+    print "signF(0.0)  =", Math.signF(0.0)    // 0
+    print "signF(3.14) =", Math.signF(3.14)   // 1
+
+    // Trig inversas
+    print "asin(1.0)   =", Math.asin(1.0)     // pi/2 ≈ 1.5708
+    print "acos(0.0)   =", Math.acos(0.0)     // pi/2 ≈ 1.5708
+    print "atan(1.0)   =", Math.atan(1.0)     // pi/4 ≈ 0.7854
+    print "atan2(1,1)  =", Math.atan2(1.0, 1.0)   // pi/4 ≈ 0.7854
+    print "atan2(1,-1) =", Math.atan2(1.0, -1.0)  // 3pi/4 ≈ 2.3562
+
+    // Factorial
+    print "5!  =", Math.factorial(5)          // 120
+    print "10! =", Math.factorial(10)         // 3628800
+    print "12! =", Math.factorial(12)         // 479001600
+
+    // Gamma (real). Γ(6) = 5! = 120.
+    print "gamma(1.0) =", Math.gamma(1.0)     // 1
+    print "gamma(6.0) =", Math.gamma(6.0)     // 120 (con error de aproximación)
+    print "gamma(0.5) =", Math.gamma(0.5)     // sqrt(pi) ≈ 1.7725
+  end Main
+
+end MathTest

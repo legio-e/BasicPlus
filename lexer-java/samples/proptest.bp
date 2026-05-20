@@ -1,0 +1,51 @@
+// proptest.bp — properties forma corta + extendida (sin throw).
+
+module PropTest
+
+  function PropTest()
+    print "[init] PropTest"
+  end PropTest
+
+  public class Punto
+    // Forma corta: get/set implícitos sobre el backing field.
+    public property x: integer := 0
+    public property y: integer := 0
+
+    // Forma extendida con setter custom que clampea.
+    public property valor: integer := 0
+      set(v)
+        if v < 0 then
+          field := 0
+        else
+          field := v
+        endif
+      endset
+    endprop
+
+    public function Punto(x: integer, y: integer)
+      this.x := x
+      this.y := y
+    end Punto
+
+    public function Distancia(): integer
+      return x * x + y * y
+    end Distancia
+  end Punto
+
+  function Main()
+    var p: Punto := Punto(3, 4)
+    print "p.x =", p.x
+    print "p.y =", p.y
+    print "p.Distancia() =", p.Distancia()
+
+    p.x := 10
+    p.y += 5
+    print "tras mutar: p.x =", p.x, "p.y =", p.y, "dist =", p.Distancia()
+
+    p.valor := -7        // setter custom: clampea a 0
+    print "p.valor =", p.valor
+    p.valor := 42
+    print "p.valor =", p.valor
+  end Main
+
+end PropTest

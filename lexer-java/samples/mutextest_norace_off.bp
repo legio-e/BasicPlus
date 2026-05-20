@@ -1,0 +1,52 @@
+module MutexTestUnsafe
+
+  // Variante de MutexTest SIN llamar a lock()/unlock(). Demuestra la
+  // necesidad del mutex: con preempt 10ms el balance final estará muy
+  // por debajo de iters*2 (lost updates en read-modify-write).
+  class Account
+    public var balance: integer
+
+    public function Account()
+      this.balance := 0
+    end Account
+  end Account
+
+  class Adder extends Thread
+    public var acc:    Account
+    public var iters:  integer
+    public var nombre: string
+
+    public function Adder(nombre: string, acc: Account, iters: integer)
+      super(2048)
+      this.nombre := nombre
+      this.acc    := acc
+      this.iters  := iters
+    end Adder
+
+    public function run()
+      var i: integer := 0
+      while i < this.iters do
+        var b: integer := this.acc.balance
+        b := b + 1
+        this.acc.balance := b
+        i := i + 1
+      endwh
+      print this.nombre + " fin"
+    end run
+  end Adder
+
+  function main(arg: string)
+    var iters: integer := 50000
+    var acc:   Account  := Account()
+    var a:     Thread   := Adder("A", acc, iters)
+    var b:     Thread   := Adder("B", acc, iters)
+    print "[main] arrancando 2 workers SIN mutex"
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "[main] balance final = " + intToString(acc.balance)
+    print "[main] esperado      = " + intToString(iters + iters)
+  end main
+
+end MutexTestUnsafe

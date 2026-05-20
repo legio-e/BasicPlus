@@ -1,0 +1,31 @@
+library "com.example"
+module RichLogger implements com.example.LogApi
+
+  function RichLogger()
+    print "[RichLogger] inicializado con extras"
+  end RichLogger
+
+  // ----- Contract: LogApi -----
+  public function log(msg: string)
+    print "[RICH] " + msg
+  end log
+
+  public function level(): integer
+    return 1
+  end level
+
+  public const VERSION: integer := 1
+
+  // ----- Extras publicos (no exigidos por la interfaz) -----
+  public function logWithLevel(lvl: integer, msg: string)
+    print "[RICH@" + intToString(lvl) + "] " + msg
+  end logWithLevel
+
+  public const AUTHOR: string := "rich-team"
+
+  // ----- Helper privado (no public): solo intra-modulo -----
+  function timestamp(): integer
+    return 42
+  end timestamp
+
+end RichLogger

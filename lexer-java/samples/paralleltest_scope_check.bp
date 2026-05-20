@@ -1,0 +1,29 @@
+module ParallelScopeCheck
+
+  // Globals (intencionalmente NO accesibles desde el cuerpo de un case).
+  var globalCounter: integer
+  const SHARED_CONST: integer := 42
+
+  function pure(x: integer): integer
+    return x * 2
+  end pure
+
+  function main(arg: string)
+    var enclosingLocal: integer := 999
+    parallel
+      case t1 := Thread(1024)
+        // ✓ stdlib visible
+        print intToString(1)
+        // ✓ funciones del módulo visible
+        var ok1: integer := pure(5)
+        // ✓ consts del módulo visible
+        var ok2: integer := SHARED_CONST
+        // ✗ global var NO visible (descomenta para ver el error semántico):
+        //   var bad: integer := globalCounter
+        // ✗ local del encerrador NO visible (descomenta para ver el error):
+        //   var bad: integer := enclosingLocal
+    endpar
+    print "[main] OK"
+  end main
+
+end ParallelScopeCheck

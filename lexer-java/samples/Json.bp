@@ -1,0 +1,745 @@
+module Json
+
+  // ====================================================================
+  // Json.bp — librería para leer y escribir archivos JSON en BasicPlus.
+  //
+  // Jerarquía de objetos (clases sintetizadas en el módulo):
+  //
+  //   JsonValue (base; isXxx() y asXxx() polimórficos)
+  //     ├── JsonNull
+  //     ├── JsonBool    (value: boolean)
+  //     ├── JsonInt     (value: integer)
+  //     ├── JsonFloat   (value: float)
+  //     ├── JsonString  (value: string)
+  //     ├── JsonArray   (items)
+  //     └── JsonObject  (keys/values; preserva orden de inserción)
+  //
+  // API pública del módulo:
+  //
+  //   Json.parseJson(text)         → JsonValue   parsea string a árbol
+  //   Json.writeJson(root)         → string      serializa árbol (compacto)
+  //   Json.readJsonFile(path)      → JsonValue   readFile + parseJson
+  //   Json.writeJsonFile(path, v)  → void        toJson + writeFile
+  //
+  // Errores → throw RuntimeError(msg) con posición incluida.
+  //
+  // NOTA del autor: las funciones del parser recursivo (parseValue,
+  // parseObject, parseArray, ...) están a nivel de módulo en lugar de
+  // métodos sobre JsonReader porque BP resuelve las llamadas a métodos
+  // de clase EAGER por slot — no soportan forward references entre
+  // métodos de la misma clase. Las llamadas a funciones del módulo
+  // van por nombre con fixup tardío, así que la recursión mutua sí
+  // funciona ahí.
+  // ====================================================================
+
+  // -------------------------------------------------------------------
+  // Jerarquía JsonValue
+  // -------------------------------------------------------------------
+
+  public class JsonValue
+    public function JsonValue()
+    end JsonValue
+
+    public function isNull():   boolean
+      return false
+    end isNull
+    public function isBool():   boolean
+      return false
+    end isBool
+    public function isNumber(): boolean
+      return false
+    end isNumber
+    public function isInt():    boolean
+      return false
+    end isInt
+    public function isFloat():  boolean
+      return false
+    end isFloat
+    public function isString(): boolean
+      return false
+    end isString
+    public function isArray():  boolean
+      return false
+    end isArray
+    public function isObject(): boolean
+      return false
+    end isObject
+
+    // Conversores tipados — las subclases concretas overrideán los que les
+    // aplican. Llamarlos sobre un tipo equivocado lanza RuntimeError.
+    public function asBool(): boolean
+      throw RuntimeError("JsonValue: no es boolean")
+      return false
+    end asBool
+    public function asInt(): integer
+      throw RuntimeError("JsonValue: no es integer")
+      return 0
+    end asInt
+    public function asFloat(): float
+      throw RuntimeError("JsonValue: no es float")
+      return 0.0
+    end asFloat
+    public function asString(): string
+      throw RuntimeError("JsonValue: no es string")
+      return ""
+    end asString
+    public function asArray(): JsonArray
+      throw RuntimeError("JsonValue: no es array")
+      return null
+    end asArray
+    public function asObject(): JsonObject
+      throw RuntimeError("JsonValue: no es object")
+      return null
+    end asObject
+
+    // Hook polimórfico que las subclases overrideán para serializar.
+    public function writeTo(sb: StringBuilder)
+    end writeTo
+
+    // Empaqueta writeTo en un StringBuilder fresco.
+    public function toJson(): string
+      var sb: StringBuilder := StringBuilder()
+      this.writeTo(sb)
+      return sb.toString()
+    end toJson
+  end JsonValue
+
+  public class JsonNull extends JsonValue
+    public function JsonNull()
+      super()
+    end JsonNull
+    public function isNull(): boolean
+      return true
+    end isNull
+    public function writeTo(sb: StringBuilder)
+      sb.appendStr("null")
+    end writeTo
+  end JsonNull
+
+  public class JsonBool extends JsonValue
+    public var value: boolean
+    public function JsonBool(value: boolean)
+      super()
+      this.value := value
+    end JsonBool
+    public function isBool(): boolean
+      return true
+    end isBool
+    public function asBool(): boolean
+      return this.value
+    end asBool
+    public function writeTo(sb: StringBuilder)
+      if this.value then
+        sb.appendStr("true")
+      else
+        sb.appendStr("false")
+      endif
+    end writeTo
+  end JsonBool
+
+  public class JsonInt extends JsonValue
+    public var value: integer
+    public function JsonInt(value: integer)
+      super()
+      this.value := value
+    end JsonInt
+    public function isNumber(): boolean
+      return true
+    end isNumber
+    public function isInt(): boolean
+      return true
+    end isInt
+    public function asInt(): integer
+      return this.value
+    end asInt
+    public function writeTo(sb: StringBuilder)
+      sb.appendInt(this.value)
+    end writeTo
+  end JsonInt
+
+  public class JsonFloat extends JsonValue
+    public var value: float
+    public function JsonFloat(value: float)
+      super()
+      this.value := value
+    end JsonFloat
+    public function isNumber(): boolean
+      return true
+    end isNumber
+    public function isFloat(): boolean
+      return true
+    end isFloat
+    public function asFloat(): float
+      return this.value
+    end asFloat
+    public function writeTo(sb: StringBuilder)
+      sb.appendStr(floatToString(this.value))
+    end writeTo
+  end JsonFloat
+
+  public class JsonString extends JsonValue
+    public var value: string
+    public function JsonString(value: string)
+      super()
+      this.value := value
+    end JsonString
+    public function isString(): boolean
+      return true
+    end isString
+    public function asString(): string
+      return this.value
+    end asString
+    public function writeTo(sb: StringBuilder)
+      appendQuotedString(sb, this.value)
+    end writeTo
+  end JsonString
+
+  public class JsonArray extends JsonValue
+    public var items: List
+
+    public function JsonArray()
+      super()
+      this.items := List()
+    end JsonArray
+
+    public function isArray(): boolean
+      return true
+    end isArray
+
+    public function asArray(): JsonArray
+      return this
+    end asArray
+
+    public function add(v: JsonValue)
+      this.items.add(v)
+    end add
+
+    public function at(i: integer): JsonValue
+      return this.items.get(i)
+    end at
+
+    public function length(): integer
+      return this.items.length()
+    end length
+
+    public function writeTo(sb: StringBuilder)
+      sb.appendChar(91)         // '['
+      var n: integer := this.items.length()
+      var i: integer := 0
+      while i < n do
+        if i > 0 then
+          sb.appendChar(44)     // ','
+        endif
+        var v: JsonValue := this.items.get(i)
+        v.writeTo(sb)
+        i := i + 1
+      endwh
+      sb.appendChar(93)         // ']'
+    end writeTo
+  end JsonArray
+
+  public class JsonObject extends JsonValue
+    // Pareja paralela: keys[i] (JsonString) ↔ values[i] (JsonValue).
+    // Las claves se guardan como JsonString porque BP no permite asignar
+    // `any → string` (primitiva); sí permite `any → ClassType`.
+    // Preserva orden de inserción.
+    public var keys:   List
+    public var values: List
+
+    public function JsonObject()
+      super()
+      this.keys   := List()
+      this.values := List()
+    end JsonObject
+
+    public function isObject(): boolean
+      return true
+    end isObject
+
+    public function asObject(): JsonObject
+      return this
+    end asObject
+
+    public function length(): integer
+      return this.keys.length()
+    end length
+
+    // OJO: declarada ANTES de put/find/has — los métodos de clase se
+    // resuelven eagerly por slot, así que el callee debe ya existir
+    // cuando se emite el caller.
+    public function indexOfKey(key: string): integer
+      var n: integer := this.keys.length()
+      var i: integer := 0
+      while i < n do
+        var kw: JsonString := this.keys.get(i)
+        if kw.value == key then
+          return i
+        endif
+        i := i + 1
+      endwh
+      return -1
+    end indexOfKey
+
+    public function put(key: string, v: JsonValue)
+      var idx: integer := this.indexOfKey(key)
+      if idx >= 0 then
+        this.values.set(idx, v)
+      else
+        this.keys.add(JsonString(key))
+        this.values.add(v)
+      endif
+    end put
+
+    public function find(key: string): JsonValue
+      var idx: integer := this.indexOfKey(key)
+      if idx < 0 then
+        return null
+      endif
+      return this.values.get(idx)
+    end find
+
+    public function has(key: string): boolean
+      return this.indexOfKey(key) >= 0
+    end has
+
+    public function keyAt(i: integer): string
+      var kw: JsonString := this.keys.get(i)
+      return kw.value
+    end keyAt
+
+    public function valueAt(i: integer): JsonValue
+      return this.values.get(i)
+    end valueAt
+
+    public function writeTo(sb: StringBuilder)
+      sb.appendChar(123)        // '{'
+      var n: integer := this.keys.length()
+      var i: integer := 0
+      while i < n do
+        if i > 0 then
+          sb.appendChar(44)     // ','
+        endif
+        var kw: JsonString := this.keys.get(i)
+        appendQuotedString(sb, kw.value)
+        sb.appendChar(58)       // ':'
+        var v: JsonValue := this.values.get(i)
+        v.writeTo(sb)
+        i := i + 1
+      endwh
+      sb.appendChar(125)        // '}'
+    end writeTo
+  end JsonObject
+
+  // -------------------------------------------------------------------
+  // Reader (simple state container; los helpers que necesitan recursión
+  // mutua viven como funciones del módulo más abajo).
+  // -------------------------------------------------------------------
+
+  public class JsonReader
+    public var text: string
+    public var pos:  integer
+    public var len:  integer
+
+    public function JsonReader(text: string)
+      this.text := text
+      this.pos  := 0
+      this.len  := strlen(text)
+    end JsonReader
+
+    public function peek(): integer
+      if this.pos >= this.len then
+        return -1
+      endif
+      return charCodeAt(this.text, this.pos)
+    end peek
+
+    public function advance(): integer
+      var c: integer := this.peek()
+      this.pos := this.pos + 1
+      return c
+    end advance
+
+    public function expect(expected: integer)
+      var c: integer := this.advance()
+      if c != expected then
+        throw RuntimeError("JSON: esperaba código " + intToString(expected) + " pero llegó " + intToString(c) + " en pos " + intToString(this.pos - 1))
+      endif
+    end expect
+
+    public function skipWs()
+      var done: boolean := false
+      while not done do
+        if this.pos >= this.len then
+          done := true
+        else
+          var c: integer := charCodeAt(this.text, this.pos)
+          if c == 32 or c == 9 or c == 10 or c == 13 then
+            this.pos := this.pos + 1
+          else
+            done := true
+          endif
+        endif
+      endwh
+    end skipWs
+  end JsonReader
+
+  // -------------------------------------------------------------------
+  // Helpers de serialización (públicos para que sean callable desde
+  // métodos de clases del módulo)
+  // -------------------------------------------------------------------
+
+  public function appendQuotedString(sb: StringBuilder, s: string)
+    sb.appendChar(34)               // '"'
+    var n: integer := strlen(s)
+    var i: integer := 0
+    while i < n do
+      var c: integer := charCodeAt(s, i)
+      if c == 34 then
+        sb.appendChar(92)
+        sb.appendChar(34)
+      elseif c == 92 then
+        sb.appendChar(92)
+        sb.appendChar(92)
+      elseif c == 10 then
+        sb.appendChar(92)
+        sb.appendChar(110)
+      elseif c == 13 then
+        sb.appendChar(92)
+        sb.appendChar(114)
+      elseif c == 9 then
+        sb.appendChar(92)
+        sb.appendChar(116)
+      elseif c == 8 then
+        sb.appendChar(92)
+        sb.appendChar(98)
+      elseif c == 12 then
+        sb.appendChar(92)
+        sb.appendChar(102)
+      elseif c < 32 then
+        sb.appendChar(92)
+        sb.appendChar(117)          // 'u'
+        sb.appendChar(48)
+        sb.appendChar(48)
+        var hi: integer := (c / 16) mod 16
+        var lo: integer := c mod 16
+        sb.appendChar(hexDigit(hi))
+        sb.appendChar(hexDigit(lo))
+      else
+        sb.appendChar(c)
+      endif
+      i := i + 1
+    endwh
+    sb.appendChar(34)
+  end appendQuotedString
+
+  public function hexDigit(d: integer): integer
+    if d < 10 then
+      return 48 + d              // '0' + d
+    endif
+    return 87 + d                // 'a' + (d-10)
+  end hexDigit
+
+  public function isDigitCode(c: integer): boolean
+    if c >= 48 and c <= 57 then
+      return true
+    endif
+    return false
+  end isDigitCode
+
+  // -------------------------------------------------------------------
+  // Parser recursivo: funciones del módulo (no métodos de clase) para
+  // permitir recursión mutua via late-binding de CALL.
+  // -------------------------------------------------------------------
+
+  public function parseValueOn(r: JsonReader): JsonValue
+    r.skipWs()
+    var c: integer := r.peek()
+    if c == 123 then
+      return parseObjectOn(r)
+    endif
+    if c == 91 then
+      return parseArrayOn(r)
+    endif
+    if c == 34 then
+      return JsonString(parseStringLitOn(r))
+    endif
+    if c == 116 then
+      return parseTrueOn(r)
+    endif
+    if c == 102 then
+      return parseFalseOn(r)
+    endif
+    if c == 110 then
+      return parseNullLitOn(r)
+    endif
+    return parseNumberOn(r)
+  end parseValueOn
+
+  public function parseTrueOn(r: JsonReader): JsonValue
+    r.expect(116)
+    r.expect(114)
+    r.expect(117)
+    r.expect(101)
+    return JsonBool(true)
+  end parseTrueOn
+
+  public function parseFalseOn(r: JsonReader): JsonValue
+    r.expect(102)
+    r.expect(97)
+    r.expect(108)
+    r.expect(115)
+    r.expect(101)
+    return JsonBool(false)
+  end parseFalseOn
+
+  public function parseNullLitOn(r: JsonReader): JsonValue
+    r.expect(110)
+    r.expect(117)
+    r.expect(108)
+    r.expect(108)
+    return JsonNull()
+  end parseNullLitOn
+
+  public function parseHexDigitOn(r: JsonReader): integer
+    var c: integer := r.advance()
+    if c >= 48 and c <= 57 then
+      return c - 48
+    endif
+    if c >= 97 and c <= 102 then
+      return c - 87
+    endif
+    if c >= 65 and c <= 70 then
+      return c - 55
+    endif
+    throw RuntimeError("JSON: dígito hexadecimal inválido " + intToString(c))
+    return 0
+  end parseHexDigitOn
+
+  public function parseStringLitOn(r: JsonReader): string
+    r.expect(34)
+    var sb: StringBuilder := StringBuilder()
+    var done: boolean := false
+    while not done do
+      if r.pos >= r.len then
+        throw RuntimeError("JSON: string sin cerrar")
+      endif
+      var c: integer := charCodeAt(r.text, r.pos)
+      r.pos := r.pos + 1
+      if c == 34 then
+        done := true
+      elseif c == 92 then
+        var esc: integer := r.advance()
+        if esc == 34 then
+          sb.appendChar(34)
+        elseif esc == 92 then
+          sb.appendChar(92)
+        elseif esc == 47 then
+          sb.appendChar(47)
+        elseif esc == 98 then
+          sb.appendChar(8)
+        elseif esc == 102 then
+          sb.appendChar(12)
+        elseif esc == 110 then
+          sb.appendChar(10)
+        elseif esc == 114 then
+          sb.appendChar(13)
+        elseif esc == 116 then
+          sb.appendChar(9)
+        elseif esc == 117 then
+          var u: integer := 0
+          var k: integer := 0
+          while k < 4 do
+            u := u * 16 + parseHexDigitOn(r)
+            k := k + 1
+          endwh
+          sb.appendChar(u)
+        else
+          throw RuntimeError("JSON: secuencia de escape inválida en pos " + intToString(r.pos - 1))
+        endif
+      else
+        sb.appendChar(c)
+      endif
+    endwh
+    return sb.toString()
+  end parseStringLitOn
+
+  public function parseNumberOn(r: JsonReader): JsonValue
+    var startPos: integer := r.pos
+    var isF: boolean := false
+    if r.peek() == 45 then
+      r.pos := r.pos + 1
+    endif
+    while r.pos < r.len and isDigitCode(charCodeAt(r.text, r.pos)) do
+      r.pos := r.pos + 1
+    endwh
+    if r.peek() == 46 then
+      isF := true
+      r.pos := r.pos + 1
+      while r.pos < r.len and isDigitCode(charCodeAt(r.text, r.pos)) do
+        r.pos := r.pos + 1
+      endwh
+    endif
+    var pc: integer := r.peek()
+    if pc == 101 or pc == 69 then
+      isF := true
+      r.pos := r.pos + 1
+      var sign: integer := r.peek()
+      if sign == 43 or sign == 45 then
+        r.pos := r.pos + 1
+      endif
+      while r.pos < r.len and isDigitCode(charCodeAt(r.text, r.pos)) do
+        r.pos := r.pos + 1
+      endwh
+    endif
+    var numStr: string := substring(r.text, startPos, r.pos)
+    if isF then
+      return JsonFloat(parseFloat(numStr))
+    endif
+    return JsonInt(parseInt(numStr))
+  end parseNumberOn
+
+  public function parseArrayOn(r: JsonReader): JsonValue
+    r.expect(91)
+    var arr: JsonArray := JsonArray()
+    r.skipWs()
+    if r.peek() == 93 then
+      r.pos := r.pos + 1
+      return arr
+    endif
+    var done: boolean := false
+    while not done do
+      var v: JsonValue := parseValueOn(r)
+      arr.add(v)
+      r.skipWs()
+      var c: integer := r.peek()
+      if c == 44 then
+        r.pos := r.pos + 1
+        r.skipWs()
+      elseif c == 93 then
+        r.pos := r.pos + 1
+        done := true
+      else
+        throw RuntimeError("JSON: ',' o ']' esperado en pos " + intToString(r.pos))
+      endif
+    endwh
+    return arr
+  end parseArrayOn
+
+  public function parseObjectOn(r: JsonReader): JsonValue
+    r.expect(123)
+    var obj: JsonObject := JsonObject()
+    r.skipWs()
+    if r.peek() == 125 then
+      r.pos := r.pos + 1
+      return obj
+    endif
+    var done: boolean := false
+    while not done do
+      r.skipWs()
+      var key: string := parseStringLitOn(r)
+      r.skipWs()
+      r.expect(58)
+      var v: JsonValue := parseValueOn(r)
+      obj.put(key, v)
+      r.skipWs()
+      var c: integer := r.peek()
+      if c == 44 then
+        r.pos := r.pos + 1
+      elseif c == 125 then
+        r.pos := r.pos + 1
+        done := true
+      else
+        throw RuntimeError("JSON: ',' o '}' esperado en pos " + intToString(r.pos))
+      endif
+    endwh
+    return obj
+  end parseObjectOn
+
+  // -------------------------------------------------------------------
+  // API pública
+  // -------------------------------------------------------------------
+
+  public function parseJson(text: string): JsonValue
+    var r: JsonReader := JsonReader(text)
+    r.skipWs()
+    var v: JsonValue := parseValueOn(r)
+    r.skipWs()
+    if r.pos < r.len then
+      throw RuntimeError("JSON: contenido extra tras el valor raíz en pos " + intToString(r.pos))
+    endif
+    return v
+  end parseJson
+
+  public function writeJson(root: JsonValue): string
+    return root.toJson()
+  end writeJson
+
+  public function readJsonFile(path: string): JsonValue
+    return parseJson(readFile(path))
+  end readJsonFile
+
+  public function writeJsonFile(path: string, root: JsonValue)
+    writeFile(path, root.toJson())
+  end writeJsonFile
+
+  // -------------------------------------------------------------------
+  // Smoke test integrado: ejecuta el módulo standalone para verificar
+  // parse + serialize + roundtrip + acceso al árbol.
+  // -------------------------------------------------------------------
+  // ==================================================================
+  // Smoke test: construcción manual, serialización, parseo, roundtrip
+  // y acceso por campo tras parseo (todo end-to-end).
+  // ==================================================================
+  function main(arg: string)
+    // 1) Construcción manual: completo y profundo.
+    print "--- construcción manual ---"
+    var root: JsonObject := JsonObject()
+    root.put("name",   JsonString("Alice"))
+    root.put("age",    JsonInt(30))
+    root.put("active", JsonBool(true))
+    root.put("score",  JsonFloat(3.14))
+    root.put("address", JsonNull())
+    var likes: JsonArray := JsonArray()
+    likes.add(JsonString("java"))
+    likes.add(JsonString("basicplus"))
+    root.put("likes", likes)
+    print "  build OK"
+    print "  name=" + root.find("name").asString()
+    print "  age=" + intToString(root.find("age").asInt())
+    print "  score=" + floatToString(root.find("score").asFloat())
+    print "  likes[0]=" + root.find("likes").asArray().at(0).asString()
+
+    // 2) Serialización del árbol manual a JSON.
+    print "--- writeJson ---"
+    print writeJson(root)
+
+    // 3) Roundtrip: serializar → parsear → re-serializar.
+    print "--- roundtrip ---"
+    var src: string := writeJson(root)
+    var v: JsonValue := parseJson(src)
+    print "  parseado isObject=" + boolToString(v.isObject())
+    print "  re-serializado: " + writeJson(v)
+
+    // 3b) acceso por campo tras parseo (necesita string-equality por
+    //     contenido en find/indexOfKey, no por ref).
+    print "--- acceso campo tras parseo ---"
+    var pname: string := v.asObject().find("name").asString()
+    var page:  integer := v.asObject().find("age").asInt()
+    var pact:  boolean := v.asObject().find("active").asBool()
+    print "  name   = " + pname
+    print "  age    = " + intToString(page)
+    print "  active = " + boolToString(pact)
+
+    // 4) Parseo de strings con escapes.
+    print "--- escapes ---"
+    var weird: JsonObject := JsonObject()
+    weird.put("quote",   JsonString("She said \"hi\""))
+    weird.put("newline", JsonString("a\nb"))
+    weird.put("tab",     JsonString("col1\tcol2"))
+    var rendered: string := writeJson(weird)
+    print "  rendered: " + rendered
+    var back: JsonValue := parseJson(rendered)
+    print "  roundtrip: " + writeJson(back)
+  end main
+
+end Json

@@ -1,0 +1,17 @@
+library "com.example"
+module AppRich
+
+  // Importamos la interfaz pero bindeada a RichLogger
+  import com.example.LogApi:RichLogger
+
+  // Importamos RichLogger por su nombre concreto para acceder a sus
+  // funciones publicas extra (no estan en LogApi)
+  import com.example.RichLogger
+
+  function main(arg: string)
+    LogApi.log("via interfaz")
+    RichLogger.logWithLevel(3, "via extra del impl")
+    print "AUTHOR = " + RichLogger.AUTHOR
+  end main
+
+end AppRich

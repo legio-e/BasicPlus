@@ -1,0 +1,16 @@
+module ParallelScopeViolate
+
+  var globalVar: integer
+
+  function main(arg: string)
+    var localOfMain: integer := 7
+    parallel
+      case t1 := Thread(1024)
+        // Esto DEBE producir un error semántico: globalVar es var global.
+        var bad1: integer := globalVar
+        // Esto también: localOfMain es local del encerrador.
+        var bad2: integer := localOfMain
+    endpar
+  end main
+
+end ParallelScopeViolate

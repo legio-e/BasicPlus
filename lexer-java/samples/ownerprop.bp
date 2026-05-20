@@ -1,0 +1,38 @@
+// ownerprop.bp — `property owner`: el backing field es owner, así que la
+// recursión de FREE lo libera al destruir la instancia.
+
+module OwnerProp
+
+  public class Animal
+    public var nombre: string
+    public function Animal(nombre: string)
+      this.nombre := nombre
+    end Animal
+  end Animal
+
+  public class CajaProp
+    // Property en forma corta + owner: getter/setter auto-generados,
+    // pero el campo subyacente se libera con la CajaProp.
+    public property owner mascota: Animal := null
+    public function CajaProp(a: Animal)
+      this.mascota := a
+    end CajaProp
+  end CajaProp
+
+  function Main()
+    print "[baseline]"
+    gc()
+
+    print "[+ CajaProp(Animal(Rex))]"
+    var owner c: CajaProp := CajaProp(Animal("Rex"))
+    print "  c.mascota.nombre =", c.mascota.nombre
+    gc()                                                  // 24 bytes vivos
+
+    print "[reasignar c]"
+    c := CajaProp(Animal("Toby"))
+    print "  c.mascota.nombre =", c.mascota.nombre
+    gc()                                                  // sigue 24: los viejos
+                                                          // se liberaron recursivamente
+  end Main
+
+end OwnerProp

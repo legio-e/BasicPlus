@@ -1,0 +1,36 @@
+module ThreadTest
+
+  class Worker extends Thread
+    public var nombre: string
+    public var iters:  integer
+
+    public function Worker(nombre: string, iters: integer)
+      super(1024)            // 1K stack
+      this.nombre := nombre
+      this.iters  := iters
+    end Worker
+
+    public function run()
+      var i: integer := 0
+      while i < this.iters do
+        print this.nombre + " iter " + intToString(i)
+        yield()              // cede al otro thread
+        i := i + 1
+      endwh
+      print this.nombre + " FIN"
+    end run
+  end Worker
+
+  function main(arg: string)
+    var w1: Thread := Worker("A", 3)
+    var w2: Thread := Worker("B", 3)
+    print "[main] arrancando workers"
+    w1.start()
+    w2.start()
+    print "[main] esperando..."
+    w1.join()
+    w2.join()
+    print "[main] todos los workers terminaron"
+  end main
+
+end ThreadTest

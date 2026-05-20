@@ -1,0 +1,56 @@
+// ownerreassign.bp — re-asignación de fields owner: el viejo se libera.
+
+module OwnerReassign
+
+  public class Animal
+    public var nombre: string
+    public function Animal(nombre: string)
+      this.nombre := nombre
+    end Animal
+  end Animal
+
+  public class Caja
+    public var owner contenido: Animal
+    public function Caja(a: Animal)
+      this.contenido := a
+    end Caja
+    public function Sustituir(nuevo: Animal)
+      this.contenido := nuevo   // <-- el contenido viejo debe liberarse
+    end Sustituir
+  end Caja
+
+  public class CajaProp
+    public property owner mascota: Animal := null
+    public function CajaProp(a: Animal)
+      this.mascota := a
+    end CajaProp
+  end CajaProp
+
+  function Main()
+    print "[baseline]"
+    gc()
+
+    // ---- Field owner directo ----
+    print "[+ Caja(Animal(Rex))]"
+    var owner c: Caja := Caja(Animal("Rex"))
+    print "  contenido =", c.contenido.nombre
+    gc()                                                  // 24 vivos
+
+    print "[c.Sustituir(Animal(Toby)) — debería liberar Rex]"
+    c.Sustituir(Animal("Toby"))
+    print "  contenido =", c.contenido.nombre
+    gc()                                                  // sigue 24
+
+    // ---- Property owner ----
+    print "[+ CajaProp(Animal(Felix))]"
+    var owner cp: CajaProp := CajaProp(Animal("Felix"))
+    print "  mascota =", cp.mascota.nombre
+    gc()                                                  // +24 → 48 vivos
+
+    print "[cp.mascota := Animal(Misi) — debería liberar Felix]"
+    cp.mascota := Animal("Misi")
+    print "  mascota =", cp.mascota.nombre
+    gc()                                                  // sigue 48
+  end Main
+
+end OwnerReassign

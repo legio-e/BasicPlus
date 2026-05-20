@@ -1,0 +1,55 @@
+// trytest.bp — tests básicos de try/catch + throw (sin finally).
+
+module TryTest
+
+  function TryTest()
+    print "[init] TryTest"
+  end TryTest
+
+  // Lanza si negativo, OK si positivo.
+  public function ChequearPositivo(n: integer): string
+    if n < 0 then
+      throw "n era negativo"
+    endif
+    return "positivo"
+  end ChequearPositivo
+
+  public function Probar(n: integer): string
+    try
+      return ChequearPositivo(n)
+    catch err
+      return "atrapado: " + err
+    endtry
+  end Probar
+
+  function Main()
+    print "Probar(5)  =>", Probar(5)
+    print "Probar(-3) =>", Probar(-3)
+
+    // try anidado: el inner atrapa, el outer ya no ve nada.
+    try
+      try
+        throw "inner"
+      catch e1
+        print "inner catch:", e1
+      endtry
+      print "tras inner"
+    catch e2
+      print "outer catch:", e2
+    endtry
+
+    // try anidado: el inner re-lanza, el outer atrapa.
+    try
+      try
+        throw "primero inner"
+      catch e1
+        throw "relanzado desde catch"
+      endtry
+    catch e2
+      print "outer atrapa relanzado:", e2
+    endtry
+
+    print "fin"
+  end Main
+
+end TryTest

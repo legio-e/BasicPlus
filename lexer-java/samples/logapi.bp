@@ -1,0 +1,6 @@
+library "com.example"
+module interface LogApi
+  public function log(msg: string)
+  public function level(): integer
+  public const VERSION: integer := 1
+end LogApi

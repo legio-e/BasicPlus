@@ -1,0 +1,27 @@
+library "com.example"
+module BufferedLogger implements com.example.LogApiV2
+
+  function BufferedLogger()
+    print "[BufferedLogger] inicializado (impl LogApiV2)"
+  end BufferedLogger
+
+  // ----- Cumple toda la cadena LogApi + LogApiV2 -----
+  public function log(msg: string)
+    print "[BUF] " + msg
+  end log
+
+  public function level(): integer
+    return 2
+  end level
+
+  public const VERSION: integer := 2
+
+  public function logWithLevel(lvl: integer, msg: string)
+    print "[BUF@" + intToString(lvl) + "] " + msg
+  end logWithLevel
+
+  public function flush()
+    print "[BUF] (flushed)"
+  end flush
+
+end BufferedLogger

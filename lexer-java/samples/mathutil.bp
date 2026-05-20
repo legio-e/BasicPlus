@@ -1,0 +1,29 @@
+library "com.example.util"
+module MathUtil
+
+  public const PI: float := 3.14159
+  public const VERSION: string := "1.0"
+
+  public enum Color
+    ROJO
+    VERDE := 10
+    AZUL
+  end Color
+
+  function MathUtil()
+    print "[MathUtil init] cargado"
+  end MathUtil
+
+  public function suma(a: integer, b: integer): integer
+    return a + b
+  end suma
+
+  public function cuadrado(x: integer): integer
+    return x * x
+  end cuadrado
+
+  public function saludar(nombre: string): string
+    return "Hola, " + nombre + "!"
+  end saludar
+
+end MathUtil

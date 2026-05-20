@@ -1,0 +1,50 @@
+module ParallelSugar
+
+  // El statement `parallel/case/default/endpar` aplica la regla de
+  // encapsulación de objetos: el cuerpo de cada `case` es el run() de una
+  // subclase anónima de Thread, así que SOLO ve:
+  //
+  //   - stdlib (print, intToString, Mutex, ...).
+  //   - clases y funciones del módulo (lógica pura/compartida).
+  //   - locales declarados dentro del propio cuerpo.
+  //
+  // NO ve variables globales del módulo, ni locales del encerrador. Esto
+  // impide accidentes de escritura concurrente. Para coordinarse, los
+  // threads usan funciones globales (puras o sincronizadas internamente)
+  // que orquestan estado vivo dentro de una clase compartida.
+  //
+  // El bloque `default`, en cambio, corre en el thread llamador entre
+  // start()s y join()s, así que SÍ ve locales/globals del encerrador.
+
+  // Funciones puras: se pueden llamar desde un case sin riesgo de share.
+  function sumaRango(desde: integer, hasta: integer): integer
+    var s: integer := 0
+    var i: integer := desde
+    while i <= hasta do
+      s := s + i
+      i := i + 1
+    endwh
+    return s
+  end sumaRango
+
+  function main(arg: string)
+    print "[main] arrancando 2 ramas + default"
+    parallel
+      case t1 := Thread(2048)
+        // Solo stdlib + funciones del módulo + locales.
+        var r: integer := sumaRango(1, 50000)
+        print "t1 sumaRango(1,50000) = " + intToString(r)
+
+      case t2 := Thread(2048)
+        var r: integer := sumaRango(50001, 100000)
+        print "t2 sumaRango(50001,100000) = " + intToString(r)
+
+      default
+        // default sí ve el scope encerrador (de main).
+        var localDefault: integer := 12345
+        print "[default] localDefault = " + intToString(localDefault)
+    endpar
+    print "[main] fin (todos joineados)"
+  end main
+
+end ParallelSugar

@@ -1,0 +1,28 @@
+module Fibo
+
+	function fibo(n:integer):integer
+		if n <= 1 then
+			return n
+		else
+			return fibo(n-1) + fibo(n-2)
+		endif
+	end fibo
+	
+	function main(arg: string)
+		var ini, fin:float
+		var i, total:integer
+		
+		fibo(30)
+		ini:=now()
+		i := 0
+		total := 0
+		while i < 5 do
+			total := total + fibo(30)
+			i := i + 1
+		endwh
+		fin:=now()
+		print "Tiempo (s):", (fin -ini)*0.001
+		print "Suma fibo(30)*5 =", total
+	end main
+	
+end Fibo

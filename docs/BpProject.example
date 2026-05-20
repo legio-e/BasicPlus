@@ -1,0 +1,39 @@
+// =============================================================
+// .bpproject — fichero de proyecto JSON para la VM de BasicPlus.
+//
+// Le dice a `bpgenvm` qué .mod ejecutar y dónde buscar los .mod
+// de los imports (los módulos stdlib del lenguaje siguen viniendo
+// del BpVM.cfg, esto NO los reemplaza — los complementa).
+//
+// Pásaselo a la VM como argumento, igual que un .mod:
+//   bpgenvm MyApp.bpproject
+//
+// La VM detecta el tipo por extensión:
+//   *.mod        → ejecuta el módulo directo (sin proyecto).
+//   *.bpproject  → carga el proyecto, ejecuta el `main` indicado.
+//
+// Formato JSON. Soporta comentarios `// hasta-fin-de-línea`.
+// =============================================================
+{
+  // Ruta al .mod del módulo de arranque. La VM ejecuta su `main()`.
+  // Relativa al directorio del .bpproject, o absoluta.
+  // Campo OBLIGATORIO.
+  "main": "out/MyApp.mod",
+
+  // Directorios donde se buscan los .mod de los imports. Se prueban
+  // en orden, ANTES del stdlibDir y DESPUÉS del path tal cual.
+  // Resolución de un import:
+  //   1) tal cual (cwd o absoluto)
+  //   2) modulePaths[0]/<basename>
+  //   3) modulePaths[1]/<basename>
+  //   4) ...
+  //   5) stdlibDir/<basename>   (de BpVM.cfg)
+  //
+  // Paths relativos se resuelven respecto al .bpproject, NO al cwd.
+  // Campo OPCIONAL.
+  "modulePaths": [
+    "out",
+    "../shared/modules",
+    "/abs/path/to/extra/modules"
+  ]
+}

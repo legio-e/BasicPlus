@@ -1,0 +1,10 @@
+// Util.bp — módulo utilitario usado por App.
+module Util
+  public function greet(name: string): string
+    return "hello, " + name + "!"
+  end greet
+
+  public function square(n: integer): integer
+    return n * n
+  end square
+end Util

@@ -1,0 +1,14 @@
+library "com.example"
+module BadLogger implements com.example.LogApi
+
+  // ERROR: tipo de retorno incorrecto (debería ser integer, no float)
+  public function level(): float
+    return 0.0
+  end level
+
+  // ERROR: missing function log
+  // (no la declaramos)
+
+  public const VERSION: integer := 1
+
+end BadLogger

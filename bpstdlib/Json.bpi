@@ -1,0 +1,4 @@
+bpi 3
+module Json
+func isDigitCode(c:integer):boolean public
+func hexDigit(d:integer):integer public

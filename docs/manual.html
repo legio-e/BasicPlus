@@ -1,0 +1,1700 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>BasicPlus — Manual de referencia</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    font-size: 0.92rem;
+  }
+  nav.toc h2 {
+    margin: 0 0 .5rem 0;
+    font-size: 0.95rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav.toc ul { list-style: none; padding-left: 0; margin: 0 0 1rem 0; }
+  nav.toc li { margin: 0.1rem 0; }
+  nav.toc a {
+    color: var(--fg);
+    text-decoration: none;
+    display: block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+  nav.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+  nav.toc .group { margin-top: 0.8rem; }
+  nav.toc .sub { padding-left: 0.8rem; font-size: 0.85rem; color: var(--fg-muted); }
+
+  main {
+    padding: 2rem 3rem 6rem;
+    max-width: 900px;
+  }
+  h1 {
+    color: var(--accent);
+    margin-top: 0;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+  }
+  h2 {
+    color: var(--accent);
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 { margin-top: 1.8rem; color: #333; }
+  h4 { margin-top: 1.2rem; color: var(--fg-muted); }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.4;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.88em;
+  }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .note p:first-child, .warn p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Contenido</h2>
+  <ul>
+    <li><a href="#intro">1. Introducción</a></li>
+    <li><a href="#hello">2. Hola mundo</a></li>
+    <li class="group"><a href="#lexico">3. Léxico</a></li>
+    <li class="sub"><a href="#comentarios">3.1 Comentarios</a></li>
+    <li class="sub"><a href="#identificadores">3.2 Identificadores</a></li>
+    <li class="sub"><a href="#keywords">3.3 Palabras reservadas</a></li>
+    <li class="sub"><a href="#literales">3.4 Literales</a></li>
+
+    <li class="group"><a href="#tipos">4. Tipos</a></li>
+    <li class="sub"><a href="#primitivos">4.1 Primitivos</a></li>
+    <li class="sub"><a href="#arrays">4.2 Arrays (fijos vs variables)</a></li>
+    <li class="sub"><a href="#enums">4.3 Enums</a></li>
+    <li class="sub"><a href="#clases-tipo">4.4 Clases</a></li>
+    <li class="sub"><a href="#any">4.5 any</a></li>
+
+    <li class="group"><a href="#declaraciones">5. Declaraciones</a></li>
+    <li class="sub"><a href="#var">5.1 var</a></li>
+    <li class="sub"><a href="#const">5.2 const</a></li>
+    <li class="sub"><a href="#var-owner">5.3 var owner</a></li>
+
+    <li class="group"><a href="#operadores">6. Operadores</a></li>
+    <li class="group"><a href="#control">7. Control de flujo</a></li>
+    <li class="sub"><a href="#if">7.1 if / elseif</a></li>
+    <li class="sub"><a href="#while">7.2 while / do</a></li>
+    <li class="sub"><a href="#for">7.3 for</a></li>
+    <li class="sub"><a href="#switch">7.4 switch</a></li>
+    <li class="sub"><a href="#breakcont">7.5 break / continue</a></li>
+    <li class="sub"><a href="#parallel">7.6 parallel / endpar</a></li>
+
+    <li class="group"><a href="#funciones">8. Funciones</a></li>
+    <li class="group"><a href="#clases">9. Clases</a></li>
+    <li class="sub"><a href="#campos">9.1 Campos</a></li>
+    <li class="sub"><a href="#metodos">9.2 Métodos</a></li>
+    <li class="sub"><a href="#ctor">9.3 Constructor</a></li>
+    <li class="sub"><a href="#herencia">9.4 Herencia</a></li>
+    <li class="sub"><a href="#props">9.5 Properties</a></li>
+    <li class="sub"><a href="#static">9.6 static / final</a></li>
+    <li class="sub"><a href="#fields-owner">9.7 Fields owner</a></li>
+
+    <li class="group"><a href="#modulos">10. Módulos</a></li>
+    <li class="sub"><a href="#library">10.1 library</a></li>
+    <li class="sub"><a href="#main">10.2 main / initializer</a></li>
+    <li class="sub"><a href="#imports">10.3 import / from</a></li>
+    <li class="sub"><a href="#interfaces">10.4 module interface</a></li>
+    <li class="sub"><a href="#implements">10.5 implements</a></li>
+    <li class="sub"><a href="#binding">10.6 Binding I:Impl</a></li>
+    <li class="sub"><a href="#encapsulacion">10.7 Encapsulación clase↔módulo</a></li>
+
+    <li class="group"><a href="#excepciones">11. Excepciones</a></li>
+    <li class="group"><a href="#owner">12. Owner semantics</a></li>
+    <li class="group"><a href="#stdlib">13. Biblioteca estándar</a></li>
+    <li class="sub"><a href="#stdlib-funcs">13.1 Funciones built-in</a></li>
+    <li class="sub"><a href="#stdlib-list">13.2 List</a></li>
+    <li class="sub"><a href="#stdlib-ownerlist">13.3 OwnerList</a></li>
+    <li class="sub"><a href="#stdlib-synclist">13.4 SyncList</a></li>
+    <li class="sub"><a href="#stdlib-sb">13.5 StringBuilder</a></li>
+    <li class="sub"><a href="#stdlib-rterr">13.6 RuntimeError</a></li>
+    <li class="sub"><a href="#stdlib-thread">13.7 Thread</a></li>
+    <li class="sub"><a href="#stdlib-mutex">13.8 Mutex</a></li>
+
+    <li class="group"><a href="#concurrencia">14. Concurrencia</a></li>
+    <li class="sub"><a href="#conc-modelo">14.1 Modelo de ejecución</a></li>
+    <li class="sub"><a href="#conc-preempt">14.2 Preempción y yield</a></li>
+    <li class="sub"><a href="#conc-encapsulacion">14.3 Encapsulación de cuerpos de case</a></li>
+    <li class="sub"><a href="#conc-gc">14.4 GC y concurrencia</a></li>
+
+    <li class="group"><a href="#cli">15. Compilación &amp; ejecución</a></li>
+    <li class="sub"><a href="#cli-frontend">15.1 Frontend (bp → .mod)</a></li>
+    <li class="sub"><a href="#cli-vm">15.2 VM (bpgenvm)</a></li>
+    <li class="sub" style="padding-left:1.6em"><a href="#cli-vmproject">.bpproject (proyecto VM)</a></li>
+    <li class="sub" style="padding-left:1.6em"><a href="#cli-bpbuild">.bpbuild (proyecto compilador / IDE)</a></li>
+    <li class="sub"><a href="#cli-disasm">15.3 Disasm</a></li>
+
+    <li class="group"><a href="#artefactos">16. Artefactos en disco</a></li>
+    <li class="sub"><a href="#mod">16.1 .mod</a></li>
+    <li class="sub"><a href="#bpi">16.2 .bpi</a></li>
+
+    <li class="group"><a href="#pendientes">17. Pendientes / no soportado</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<h1>BasicPlus — Manual de referencia</h1>
+<p style="color:var(--fg-muted)">
+  Lenguaje estructurado tipado, orientado a módulos. Frontend en Java compila a
+  un bytecode propio (formato <code>.mod</code> v5, "MOD5") ejecutado por la VM
+  <code>bpgenvm</code> (mark-and-sweep GC, manejo determinístico de owners,
+  excepciones tipadas).
+</p>
+
+<!-- =========================================================== -->
+<h2 id="intro">1. Introducción</h2>
+<p>
+  BasicPlus (BP) toma la sintaxis amable de Basic / Pascal y la combina con
+  semántica moderna: clases con herencia simple, módulos como units
+  Modula-2-style, interfaces como contratos, manejo de excepciones, y
+  "ownership" determinístico para liberación inmediata de recursos.
+</p>
+<p>El pipeline general es:</p>
+<pre><code><span class="comment">// 1) Compilación: cada módulo → un .mod (binario) y un .bpi (interface textual)</span>
+java -jar basicplus-frontend.jar samples/hola.bp --compile out --backend=mivm
+
+<span class="comment">// 2) Ejecución: la VM carga el .mod raíz; los .mod de los imports los
+//    encuentra por convención <library>.<Module>.mod o por 'from "..."'</span>
+java -jar bpgenvm.jar out/Hola.mod</code></pre>
+
+<!-- =========================================================== -->
+<h2 id="hello">2. Hola mundo</h2>
+<pre><code><span class="kw">module</span> Hola
+
+  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+    <span class="kw">print</span> <span class="str">"hola, "</span> + arg
+  <span class="kw">end</span> main
+
+<span class="kw">end</span> Hola</code></pre>
+
+<p>
+  Mínimo: un <code>module</code>, una <code>function main(arg: string)</code>,
+  y <code>end</code> emparejados. La VM pasa al <code>main</code> una cadena
+  vacía si no hay argumentos.
+</p>
+
+<!-- =========================================================== -->
+<h2 id="lexico">3. Léxico</h2>
+
+<h3 id="comentarios">3.1 Comentarios</h3>
+<p>Sólo de línea, con <code>//</code> hasta fin de línea.</p>
+<pre><code><span class="comment">// esto es un comentario</span></code></pre>
+
+<h3 id="identificadores">3.2 Identificadores</h3>
+<p>
+  Letra o <code>_</code> seguido de letras, dígitos o <code>_</code>.
+  Case-sensitive. Los nombres que empiezan por doble guion bajo
+  (<code>__nombre</code>) se reservan por convención para el compilador y
+  la stdlib (e.g. <code>__init</code>, <code>__newRefArray</code>).
+</p>
+
+<h3 id="keywords">3.3 Palabras reservadas</h3>
+<table>
+  <tr><th>Categoría</th><th>Tokens</th></tr>
+  <tr><td>Estructura</td>
+      <td><code>module</code> <code>end</code> <code>import</code> <code>library</code> <code>from</code> <code>interface</code> <code>implements</code></td></tr>
+  <tr><td>Declaraciones</td>
+      <td><code>const</code> <code>var</code> <code>function</code> <code>class</code> <code>extends</code> <code>enum</code>
+          <code>property</code> <code>get</code> <code>set</code> <code>endprop</code> <code>endget</code> <code>endset</code></td></tr>
+  <tr><td>Visibilidad / mods</td>
+      <td><code>public</code> <code>final</code> <code>owner</code> <code>sync</code></td></tr>
+  <tr><td>Instancia</td>
+      <td><code>this</code> <code>super</code> <code>field</code></td></tr>
+  <tr><td>Control flujo</td>
+      <td><code>if</code> <code>then</code> <code>else</code> <code>elseif</code> <code>endif</code>
+          <code>while</code> <code>do</code> <code>endwh</code>
+          <code>for</code> <code>to</code> <code>step</code> <code>next</code>
+          <code>switch</code> <code>case</code> <code>default</code> <code>endsw</code>
+          <code>parallel</code> <code>endpar</code>
+          <code>break</code> <code>continue</code> <code>return</code></td></tr>
+  <tr><td>Excepciones</td>
+      <td><code>try</code> <code>catch</code> <code>finally</code> <code>endtry</code> <code>throw</code> <code>instanceof</code></td></tr>
+  <tr><td>Booleanos / null</td>
+      <td><code>true</code> <code>false</code> <code>null</code></td></tr>
+  <tr><td>Operadores palabra</td>
+      <td><code>and</code> <code>or</code> <code>not</code> <code>mod</code>
+          <code>xor</code> <code>shl</code> <code>shr</code></td></tr>
+  <tr><td>I/O</td>
+      <td><code>print</code></td></tr>
+</table>
+
+<h3 id="literales">3.4 Literales</h3>
+<table>
+  <tr><th>Tipo</th><th>Ejemplos</th></tr>
+  <tr><td>Integer</td><td><code>0</code> <code>42</code> <code>-7</code> <code>0xFF</code></td></tr>
+  <tr><td>Float</td><td><code>3.14</code> <code>1.0e-3</code></td></tr>
+  <tr><td>String</td><td><code>"hola"</code> con escapes <code>\n \t \" \\</code></td></tr>
+  <tr><td>Boolean</td><td><code>true</code> <code>false</code></td></tr>
+  <tr><td>Null</td><td><code>null</code> (sólo para referencias: clases y arrays)</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h2 id="tipos">4. Tipos</h2>
+
+<h3 id="primitivos">4.1 Primitivos</h3>
+<table>
+  <tr><th>Tipo</th><th>Rango / detalle</th></tr>
+  <tr><td><code>integer</code></td><td>Entero 32 bits con signo (-2³¹..2³¹-1)</td></tr>
+  <tr><td><code>float</code></td><td>IEEE-754 32 bits</td></tr>
+  <tr><td><code>string</code></td><td>Inmutable, secuencia de code points (i32 por carácter)</td></tr>
+  <tr><td><code>boolean</code></td><td><code>true</code> / <code>false</code></td></tr>
+</table>
+<p>
+  Promoción automática <code>integer → float</code> en operaciones mixtas y
+  asignación. No hay coerción <code>float → integer</code> implícita
+  (usar <code>floor</code>, <code>ceil</code>, <code>round</code>).
+</p>
+
+<h3 id="arrays">4.2 Arrays</h3>
+<p>
+  Un array es una secuencia indexable de elementos del mismo tipo. BP
+  distingue <strong>dos variantes</strong> según se conozca o no el tamaño
+  en tiempo de declaración, y eso determina <em>dónde se aloja</em> el
+  almacenamiento.
+</p>
+
+<h4>4.2.1 Arrays de tamaño fijo &nbsp;<code>T[N]</code></h4>
+<p>
+  El tamaño se conoce en tiempo de compilación. El espacio se reserva
+  <strong>en línea</strong>, no en el heap, junto al ámbito donde se declara:
+</p>
+<table>
+  <tr><th>Ámbito</th><th>Dónde vive</th></tr>
+  <tr><td>Local de función</td><td>En el stack frame de la función (BP+offset).</td></tr>
+  <tr><td>Global de módulo</td><td>En el data block del <code>.mod</code> (CS+offset).</td></tr>
+  <tr><td>Constante de módulo (con literal)</td><td>En el data block, valores inmutables.</td></tr>
+</table>
+<pre><code><span class="comment">// Local: 10 enteros reservados en el frame (40 bytes en stack)</span>
+<span class="kw">var</span> nums: <span class="type">integer</span>[<span class="num">10</span>]
+nums[<span class="num">0</span>] := <span class="num">42</span>
+<span class="kw">print</span> nums[<span class="num">0</span>]
+
+<span class="comment">// Global: el data block del módulo guarda el array entero</span>
+<span class="kw">var</span> tabla: <span class="type">integer</span>[<span class="num">256</span>]            <span class="comment">// fuera de cualquier función</span>
+
+<span class="comment">// Constante con valor literal: data block, inmutable</span>
+<span class="kw">public const</span> PRIMOS: <span class="type">integer</span>[] := [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>, <span class="num">11</span>]</code></pre>
+<p>
+  Sin asignación inicial, los elementos parten a cero / null. El array
+  fijo NO se libera porque no vive en el heap; desaparece con su frame /
+  módulo.
+</p>
+
+<h4>4.2.2 Arrays de tamaño variable &nbsp;<code>T[]</code></h4>
+<p>
+  El tamaño se decide en tiempo de ejecución. El array se aloja en el
+  <strong>heap</strong> (opcode <code>NEWARRAY</code>) y se referencia
+  mediante una ref (i32 con el puntero al bloque). Gestionado por el GC.
+</p>
+<pre><code><span class="comment">// Desde un literal: el frontend emite NEWARRAY n + ASTORE de cada elemento</span>
+<span class="kw">var</span> primos: <span class="type">integer</span>[] := [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>, <span class="num">11</span>]
+
+<span class="comment">// Desde una función: split, listDir, etc. devuelven arrays</span>
+<span class="kw">var</span> partes: <span class="type">string</span>[] := split(<span class="str">"a,b,c"</span>, <span class="str">","</span>)
+<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)</code></pre>
+<p>
+  La VM usa tres tipos físicos en el heap según el ancho del elemento:
+  <code>TYPE_ARRAY_I8</code>, <code>TYPE_ARRAY_I16</code>,
+  <code>TYPE_ARRAY_I32</code> (también vale para floats: 4 bytes opacos), y
+  <code>TYPE_ARRAY_REF</code> (4 bytes, refs a objetos, escaneado por el
+  GC). El array lleva su propia longitud como primer slot.
+</p>
+
+<h4>4.2.3 Acceso e iteración</h4>
+<p>
+  Indexado con <code>arr[i]</code> (0-based). <code>for-in</code> recorre
+  todos los elementos (ver <a href="#for">§7.3</a>).
+</p>
+<pre><code><span class="kw">for</span> n <span class="kw">in</span> primos <span class="kw">do</span>
+  total += n
+<span class="kw">next</span> n</code></pre>
+
+<div class="note">
+  Para colecciones <strong>dinámicas</strong> (crecen, encogen, mezcla de
+  tipos), usa <a href="#stdlib-list"><code>List</code></a> o
+  <a href="#stdlib-ownerlist"><code>OwnerList</code></a> en lugar de
+  <code>T[]</code>. Los arrays <code>T[]</code> tienen tamaño fijo tras su
+  creación (no hay <code>append</code>); <code>List</code> redimensiona
+  internamente.
+</div>
+
+<h3 id="enums">4.3 Enums</h3>
+<pre><code><span class="kw">public enum</span> Dia
+  LUNES               <span class="comment">// = 0</span>
+  MARTES              <span class="comment">// = 1</span>
+  MIERCOLES
+  JUEVES
+  VIERNES
+  SABADO := <span class="num">10</span>          <span class="comment">// salto explícito</span>
+  DOMINGO             <span class="comment">// = 11</span>
+<span class="kw">end</span> Dia
+
+<span class="kw">var</span> d: Dia := Dia.MIERCOLES</code></pre>
+<p>
+  Los enums son nombres simbólicos para constantes <code>integer</code>.
+  Auto-numeran desde 0 salvo asignación explícita.
+</p>
+
+<h3 id="clases-tipo">4.4 Clases</h3>
+<p>
+  Cualquier <code>class Foo ... end Foo</code> introduce un tipo
+  <code>Foo</code> usable como tipo de variable, parámetro y retorno.
+  Las refs admiten <code>null</code>.
+</p>
+
+<h3 id="any">4.5 <code>any</code></h3>
+<p>
+  Tipo interno usado por algunas signaturas de stdlib (e.g.
+  <code>List.add(item: any)</code>). Es bidireccionalmente asignable: cualquier
+  ref entra, cualquier tipo target acepta un valor de tipo <code>any</code>.
+  No se puede escribir <code>any</code> como tipo en BP source.
+</p>
+
+<!-- =========================================================== -->
+<h2 id="declaraciones">5. Declaraciones</h2>
+
+<h3 id="var">5.1 <code>var</code></h3>
+<pre><code><span class="kw">var</span> nombre: <span class="type">string</span>
+<span class="kw">var</span> edad:   <span class="type">integer</span> := <span class="num">30</span>
+<span class="kw">var</span> x, y, z: <span class="type">integer</span>                  <span class="comment">// múltiples nombres</span>
+<span class="kw">var</span> pts: <span class="type">integer</span>[<span class="num">100</span>]                  <span class="comment">// array local</span>
+<span class="kw">var</span> p: Punto := Punto(<span class="num">3</span>, <span class="num">4</span>)             <span class="comment">// ref a clase</span></code></pre>
+
+<h3 id="const">5.2 <code>const</code></h3>
+<pre><code><span class="kw">public const</span> PI: <span class="type">float</span> := <span class="num">3.14159</span>
+<span class="kw">const</span> SALUDO: <span class="type">string</span> := <span class="str">"hola"</span></code></pre>
+<p>
+  Las constantes públicas con valor literal viajan en el <code>.bpi</code> y
+  los importadores las inlinean. Las consts de tipo no-primitivo deben
+  inicializarse en el initializer del módulo.
+</p>
+
+<h3 id="var-owner">5.3 <code>var owner</code></h3>
+<pre><code><span class="kw">var owner</span> r: Recurso := Recurso(<span class="str">"db"</span>)
+<span class="comment">// al salir de scope o reasignarse, el objeto al que apunta se libera
+// determinísticamente vía FREE_REF (incluida cascada de owners).</span></code></pre>
+<p>Detalle completo en <a href="#owner">§12 Owner semantics</a>.</p>
+
+<!-- =========================================================== -->
+<h2 id="operadores">6. Operadores</h2>
+<table>
+  <tr><th>Categoría</th><th>Operadores</th></tr>
+  <tr><td>Aritmética</td><td><code>+ - * / mod</code> (con coerción int↔float)</td></tr>
+  <tr><td>Bit a bit (sólo integer)</td><td><code>&amp; | xor shl shr</code> y unario <code>~</code></td></tr>
+  <tr><td>Comparación</td><td><code>== != &lt; &lt;= &gt; &gt;=</code></td></tr>
+  <tr><td>Lógicos</td><td><code>and or not</code></td></tr>
+  <tr><td>Asignación</td><td><code>:= += -=</code></td></tr>
+  <tr><td>Acceso</td><td><code>.</code> (member) <code>[]</code> (index) <code>()</code> (call)</td></tr>
+  <tr><td>Type test</td><td><code>x instanceof Foo</code></td></tr>
+  <tr><td>String</td><td><code>+</code> concatena (coerciona escalares a string)</td></tr>
+</table>
+<p>
+  Precedencia (de menor a mayor):
+  <code>or</code> &lt; <code>and</code> &lt; <code>not</code> &lt; comparación
+  &lt; bit-or &lt; bit-xor &lt; bit-and &lt; shift &lt; <code>+ -</code>
+  &lt; <code>* / mod</code> &lt; unario.
+</p>
+
+<!-- =========================================================== -->
+<h2 id="control">7. Control de flujo</h2>
+
+<h3 id="if">7.1 <code>if / elseif / else</code></h3>
+<pre><code><span class="kw">if</span> edad &lt; <span class="num">18</span> <span class="kw">then</span>
+  <span class="kw">print</span> <span class="str">"menor"</span>
+<span class="kw">elseif</span> edad &lt; <span class="num">65</span> <span class="kw">then</span>
+  <span class="kw">print</span> <span class="str">"adulto"</span>
+<span class="kw">else</span>
+  <span class="kw">print</span> <span class="str">"senior"</span>
+<span class="kw">endif</span></code></pre>
+
+<h3 id="while">7.2 <code>while / do</code></h3>
+<pre><code><span class="kw">while</span> i &lt; n <span class="kw">do</span>
+  total := total + i
+  i := i + <span class="num">1</span>
+<span class="kw">endwh</span>
+
+<span class="kw">do</span>
+  i := i + <span class="num">1</span>
+<span class="kw">while</span> i &lt; <span class="num">100</span>          <span class="comment">// do-while: condición tras el cuerpo</span></code></pre>
+
+<h3 id="for">7.3 <code>for</code></h3>
+<p>Dos variantes: numérico y foreach (<code>for-in</code>).</p>
+<pre><code><span class="comment">// Numérico: i := from to to [step]</span>
+<span class="kw">for</span> i := <span class="num">0</span> <span class="kw">to</span> <span class="num">9</span> <span class="kw">do</span>
+  <span class="kw">print</span> i
+<span class="kw">next</span> i
+
+<span class="kw">for</span> i := <span class="num">10</span> <span class="kw">to</span> <span class="num">1</span> <span class="kw">step</span> -<span class="num">1</span> <span class="kw">do</span>
+  <span class="kw">print</span> i
+<span class="kw">next</span> i
+
+<span class="comment">// Foreach sobre un array (fijo o variable, cualquier tipo de elemento)</span>
+<span class="kw">var</span> primos: <span class="type">integer</span>[] := [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>, <span class="num">11</span>]
+<span class="kw">for</span> n <span class="kw">in</span> primos <span class="kw">do</span>
+  total += n
+<span class="kw">next</span> n</code></pre>
+<p>
+  El cuerpo se cierra con <code>next [nombre]</code> (no <code>endfor</code>);
+  el nombre tras <code>next</code> es opcional y, si está, debe coincidir
+  con la variable de iteración (uso documental).
+</p>
+
+<h3 id="switch">7.4 <code>switch</code></h3>
+<pre><code><span class="kw">switch</span> dia
+  <span class="kw">case</span> Dia.SABADO, Dia.DOMINGO
+    <span class="kw">print</span> <span class="str">"fin de semana"</span>
+  <span class="kw">case</span> Dia.LUNES
+    <span class="kw">print</span> <span class="str">"a trabajar"</span>
+  <span class="kw">default</span>
+    <span class="kw">print</span> <span class="str">"laborable"</span>
+<span class="kw">endsw</span></code></pre>
+
+<h3 id="breakcont">7.5 <code>break</code> / <code>continue</code></h3>
+<p>
+  Sale (o salta a la próxima iteración) del bucle más cercano
+  (<code>while</code>, <code>do</code>, <code>for</code>, <code>switch</code>).
+</p>
+
+<h3 id="parallel">7.6 <code>parallel</code> / <code>endpar</code></h3>
+<p>
+  Azúcar sintáctico para arrancar varios threads sin escribir una subclase
+  de <a href="#stdlib-thread"><code>Thread</code></a> por cada uno. Cada
+  <code>case</code> introduce un thread cuyo cuerpo es el del bloque; el
+  <code>default</code> (opcional) corre en el thread llamador entre los
+  <code>start()</code>s y los <code>join()</code>s; tras
+  <code>endpar</code> todos los threads están joineados.
+</p>
+<pre><code><span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">parallel</span>
+    <span class="kw">case</span> t1 := Thread(<span class="num">2048</span>)
+      <span class="kw">var</span> r: <span class="type">integer</span> := sumaRango(<span class="num">1</span>, <span class="num">50000</span>)
+      <span class="kw">print</span> <span class="str">"t1 = "</span> + intToString(r)
+
+    <span class="kw">case</span> t2 := Thread(<span class="num">2048</span>)
+      <span class="kw">var</span> r: <span class="type">integer</span> := sumaRango(<span class="num">50001</span>, <span class="num">100000</span>)
+      <span class="kw">print</span> <span class="str">"t2 = "</span> + intToString(r)
+
+    <span class="kw">default</span>
+      <span class="comment">// corre en el thread llamador; ve sus locales y globals</span>
+      <span class="kw">print</span> <span class="str">"default mientras t1/t2 trabajan"</span>
+  <span class="kw">endpar</span>
+  <span class="kw">print</span> <span class="str">"todos joineados"</span>
+<span class="kw">end</span> main</code></pre>
+<p>
+  Equivalente conceptual al patrón largo (<code>class W extends Thread …; W().start(); W().join()</code>),
+  pero el compilador sintetiza una subclase anónima de Thread por cada
+  <code>case</code>, con el cuerpo del case como su <code>run()</code>.
+  Las variables <code>t1</code>, <code>t2</code>, … son visibles en el scope
+  encerrador <strong>tras</strong> <code>endpar</code>: ya están joineadas y
+  son inspeccionables.
+</p>
+<p>
+  El primer token tras <code>:=</code> debe ser literalmente <code>Thread</code>
+  con un argumento entero (el stack del worker). Para state propio del
+  thread con campos, usa el patrón clásico de subclase de Thread.
+</p>
+<p>
+  <strong>Reglas de visibilidad</strong> del cuerpo del <code>case</code>
+  (encapsulación de objeto — ver <a href="#conc-encapsulacion">14.3</a>):
+</p>
+<table>
+  <tr><th>Símbolo</th><th>Visible</th></tr>
+  <tr><td>Locales declaradas en el propio cuerpo</td><td>✓</td></tr>
+  <tr><td>stdlib (<code>print</code>, <code>intToString</code>, <code>yield()</code>, <code>Mutex</code>, ...)</td><td>✓</td></tr>
+  <tr><td>Clases, funciones, <code>const</code>s del módulo</td><td>✓</td></tr>
+  <tr><td>Variables globales (<code>var</code>) del módulo</td><td>✗ error semántico</td></tr>
+  <tr><td>Locales del encerrador</td><td>✗ "identificador no resuelto"</td></tr>
+</table>
+<p>
+  El bloque <code>default</code>, en cambio, corre en el encerrador y ve
+  TODO: locales, globals, etc. Para que las ramas se coordinen comparten
+  estado vía objetos (<a href="#stdlib-mutex">Mutex</a>, <code>List</code>,
+  clases compartidas).
+</p>
+
+<!-- =========================================================== -->
+<h2 id="funciones">8. Funciones</h2>
+<pre><code><span class="kw">public function</span> <span class="fn">suma</span>(a: <span class="type">integer</span>, b: <span class="type">integer</span>): <span class="type">integer</span>
+  <span class="kw">return</span> a + b
+<span class="kw">end</span> suma
+
+<span class="kw">function</span> <span class="fn">imprimir</span>(msg: <span class="type">string</span>)        <span class="comment">// sin ': T' → void</span>
+  <span class="kw">print</span> msg
+<span class="kw">end</span> imprimir</code></pre>
+<ul>
+  <li><code>public</code> → exportada en el <code>.bpi</code>, llamable cross-library.</li>
+  <li>Por defecto, las funciones son privadas al módulo.</li>
+  <li>El tipo de retorno se declara con <code>: T</code> tras los paréntesis.
+      Si se omite, la función es <code>void</code>.</li>
+  <li>Sólo retorno con <code>return [valor]</code>. Sin retorno explícito, void.</li>
+</ul>
+
+<!-- =========================================================== -->
+<h2 id="clases">9. Clases</h2>
+<pre><code><span class="kw">public class</span> Persona
+  <span class="kw">public var</span> nombre: <span class="type">string</span>
+  <span class="kw">public var</span> edad:   <span class="type">integer</span>
+
+  <span class="kw">public function</span> Persona(nombre: <span class="type">string</span>, edad: <span class="type">integer</span>)
+    <span class="kw">this</span>.nombre := nombre
+    <span class="kw">this</span>.edad   := edad
+  <span class="kw">end</span> Persona
+
+  <span class="kw">public function</span> saludar(): <span class="type">string</span>
+    <span class="kw">return</span> <span class="str">"Hola, soy "</span> + <span class="kw">this</span>.nombre
+  <span class="kw">end</span> saludar
+<span class="kw">end</span> Persona</code></pre>
+
+<h3 id="campos">9.1 Campos</h3>
+<p>
+  <code>var</code> dentro de la clase declara un campo de instancia.
+  Visibilidad <code>public</code> opcional. Acceso por <code>this.campo</code>
+  desde dentro; <code>obj.campo</code> desde fuera (sólo si es público).
+</p>
+
+<h3 id="metodos">9.2 Métodos</h3>
+<p>
+  Como funciones pero dentro de la clase. El parámetro implícito
+  <code>this</code> apunta a la instancia. Todos los métodos no-estáticos
+  son virtuales (dispatch dinámico vía vtable).
+</p>
+
+<h3 id="ctor">9.3 Constructor</h3>
+<p>
+  Función con el mismo nombre que la clase. Se ejecuta al hacer
+  <code>NombreClase(args)</code>. Si la clase tiene clase base, debe llamar
+  a <code>super(args)</code> como primera sentencia.
+</p>
+
+<h3 id="herencia">9.4 Herencia</h3>
+<pre><code><span class="kw">public class</span> Animal
+  <span class="kw">public var</span> nombre: <span class="type">string</span>
+  <span class="kw">public function</span> Animal(nombre: <span class="type">string</span>)
+    <span class="kw">this</span>.nombre := nombre
+  <span class="kw">end</span> Animal
+  <span class="kw">public function</span> hablar()
+    <span class="kw">print</span> <span class="str">"..."</span>
+  <span class="kw">end</span> hablar
+<span class="kw">end</span> Animal
+
+<span class="kw">public class</span> Perro <span class="kw">extends</span> Animal
+  <span class="kw">public function</span> Perro(nombre: <span class="type">string</span>)
+    <span class="kw">super</span>(nombre)
+  <span class="kw">end</span> Perro
+  <span class="kw">public function</span> hablar()
+    <span class="kw">print</span> <span class="kw">this</span>.nombre + <span class="str">" dice guau"</span>
+  <span class="kw">end</span> hablar
+<span class="kw">end</span> Perro</code></pre>
+<p>
+  Herencia simple. <code>super.metodo(args)</code> invoca explícitamente al
+  método del padre dentro de un override.
+</p>
+
+<h3 id="props">9.5 Properties</h3>
+<pre><code><span class="kw">public class</span> Punto
+  <span class="kw">var</span> _x: <span class="type">integer</span>
+  <span class="kw">public property</span> x: <span class="type">integer</span>
+    <span class="kw">get</span>
+      <span class="kw">return</span> <span class="kw">this</span>._x
+    <span class="kw">endget</span>
+    <span class="kw">set</span>(v)
+      <span class="kw">if</span> v &lt; <span class="num">0</span> <span class="kw">then throw</span> RuntimeError(<span class="str">"negativo"</span>) <span class="kw">endif</span>
+      <span class="kw">this</span>._x := v
+    <span class="kw">endset</span>
+  <span class="kw">endprop</span>
+<span class="kw">end</span> Punto
+
+<span class="comment">// Forma corta: backing field + getter/setter triviales auto-generados</span>
+<span class="kw">public property</span> y: <span class="type">integer</span></code></pre>
+<p>
+  Una <code>property</code> sintetiza un campo respaldo y dos métodos
+  <code>getX</code>/<code>setX</code>. Desde código se accede como un campo
+  (<code>p.x</code>, <code>p.x := 5</code>).
+</p>
+
+<h4>Properties sync (thread-safe)</h4>
+<pre><code><span class="kw">public class</span> Account
+  <span class="kw">public sync property</span> balance: <span class="type">integer</span>
+  <span class="kw">public function</span> Account(initial: <span class="type">integer</span>)
+    <span class="kw">this</span>.balance := initial
+  <span class="kw">end</span> Account
+<span class="kw">end</span> Account</code></pre>
+<p>
+  El modificador <code>sync</code> antes de <code>property</code> envuelve
+  el getter y setter auto-generados con <code>lock()</code> / <code>unlock()</code>
+  contra un <code>Mutex</code> compartido por instancia. El compilador:
+</p>
+<ul>
+  <li>Declara automáticamente un field oculto <code>__syncMutex</code>
+      (heredado por subclases — sólo se declara una vez en el primer eslabón
+      de la jerarquía que necesita sync).</li>
+  <li>Lo inicializa con <code>Mutex()</code> al entrar al constructor. Si la
+      clase no tiene constructor de usuario, sintetiza uno por defecto que
+      sólo hace esa inicialización.</li>
+  <li>Inserta <code>this.__syncMutex.lock()</code> al inicio y
+      <code>this.__syncMutex.unlock()</code> al final de cada
+      <code>getX</code>/<code>setX</code>.</li>
+</ul>
+<p>
+  <strong>Garantías</strong>: cada acceso individual al backing field es
+  atómico respecto a otros threads. Una lectura nunca devuelve un estado
+  parcial; una escritura es indivisible.
+</p>
+<p>
+  <strong>Importante</strong>: una expresión compuesta como
+  <code>this.value := this.value + 1</code> NO es atómica como un todo —
+  se descompone en get + add + set, cada uno atómico individualmente,
+  pero entre ellos otro thread puede colarse. Para operaciones atómicas
+  compuestas usa un <a href="#stdlib-mutex"><code>Mutex</code></a>
+  explícito alrededor del bloque.
+</p>
+<p>
+  Un <code>return</code> dentro del cuerpo custom de get/set sync libera
+  correctamente el mutex: el emisor inyecta el <code>unlock</code> antes
+  del salto al punto de salida (no hace falta try/finally explícito en BP).
+  Lo mismo aplica a sync properties a nivel módulo.
+</p>
+
+<h4>Properties a nivel módulo</h4>
+<pre><code><span class="kw">module</span> Counter
+  <span class="comment">// Property pública del módulo. El estado vive en un global
+  // privado, accesible desde fuera SÓLO a través del get/set.</span>
+  <span class="kw">public property</span> tick: <span class="type">integer</span>
+  <span class="kw">public function</span> bump()
+    tick := tick + <span class="num">1</span>
+  <span class="kw">end</span> bump
+<span class="kw">end</span> Counter
+
+<span class="kw">module</span> App
+  <span class="kw">import</span> Counter
+  <span class="kw">function</span> main(arg: <span class="type">string</span>)
+    Counter.bump()
+    <span class="kw">print</span> Counter.tick           <span class="comment">// lectura cross-module → 1</span>
+    Counter.tick := <span class="num">42</span>          <span class="comment">// escritura cross-module</span>
+  <span class="kw">end</span> main
+<span class="kw">end</span> App</code></pre>
+<p>
+  BP permite declarar <code>property</code> también fuera de una clase, a
+  nivel módulo. Es la forma canónica de exponer estado mutable a otros
+  módulos: las <code>var</code> de módulo son privadas por diseño (no se
+  exportan en la <code>.bpi</code>), pero una <code>public property</code>
+  expone su getter/setter sintéticos, accesibles vía <code>Modulo.nombre</code>
+  desde otro módulo que la importe.
+</p>
+<p>
+  Internamente el compilador emite:
+</p>
+<ul>
+  <li>Un global privado <code>__prop_&lt;nombre&gt;</code> que es el backing field.</li>
+  <li>Una función pública <code>__prop_get_&lt;nombre&gt;()</code> que devuelve el valor.</li>
+  <li>Una función pública <code>__prop_set_&lt;nombre&gt;(__val)</code> que lo escribe.</li>
+  <li>En el <code>.bpi</code>, una línea <code>prop &lt;nombre&gt;:&lt;tipo&gt; public</code>
+      que viaja a los módulos importadores (sin exponer los accesores como
+      funciones normales).</li>
+</ul>
+<p>
+  El identificador <code>tick</code> dentro del propio módulo resuelve al
+  getter/setter (no al global directo), así que la encapsulación se respeta
+  también dentro del módulo dueño. Si se necesita inicializar la property
+  con un valor distinto de cero, hazlo en la función inicializadora del
+  módulo (función con el mismo nombre que el módulo), igual que con
+  <code>var</code> a nivel módulo.
+</p>
+<p>
+  <code>sync</code> también es válido en properties de módulo:
+</p>
+<pre><code><span class="kw">module</span> Stats
+  <span class="kw">public sync property</span> contador: <span class="type">integer</span>
+<span class="kw">end</span> Stats</code></pre>
+<p>
+  En este caso el módulo declara un único <code>Mutex</code> global
+  (<code>__prop_mutex</code>) compartido por todas sus sync properties.
+  Se inicializa al cargar el módulo (en <code>__init</code>) y el get/set
+  envuelven su cuerpo con <code>lock</code>/<code>unlock</code>. Las
+  garantías y limitaciones son las mismas que para sync en clases.
+</p>
+<p>
+  Limitaciones del MVP:
+</p>
+<ul>
+  <li>No se soportan properties <code>owner</code> a nivel módulo (sólo en clases).</li>
+  <li>No se soporta <code>final</code> a nivel módulo (el modificador
+      sólo aplica a properties de clase).</li>
+  <li>El init expression de la property se ignora en compile-time; usa la
+      función inicializadora del módulo para fijar el valor inicial.</li>
+</ul>
+
+<h3 id="static">9.6 <code>static</code> / <code>final</code></h3>
+<p>
+  <code>static</code> en una variable de clase: campo a nivel clase, no de
+  instancia. <code>final</code> en clase: no extensible; en método: no
+  overridable. (En BP el modificador es <code>final</code> antes de
+  <code>function</code> o <code>class</code>.)
+</p>
+
+<h3 id="fields-owner">9.7 Fields owner</h3>
+<pre><code><span class="kw">public class</span> Caja
+  <span class="kw">public var owner</span> contenido: Recurso
+  <span class="kw">public function</span> Caja(r: Recurso)
+    <span class="kw">this</span>.contenido := r
+  <span class="kw">end</span> Caja
+<span class="kw">end</span> Caja</code></pre>
+<p>
+  Cuando una <code>Caja</code> se libera (via FREE_REF), su campo owner
+  <code>contenido</code> se libera también, recursivamente.
+</p>
+
+<!-- =========================================================== -->
+<h2 id="modulos">10. Módulos</h2>
+
+<h3 id="library">10.1 <code>library</code> opcional</h3>
+<pre><code><span class="kw">library</span> <span class="str">"com.example.app"</span>
+<span class="kw">module</span> Util
+  ...
+<span class="kw">end</span> Util</code></pre>
+<p>
+  Si declaras <code>library</code>, el artefacto se nombra
+  <code>com.example.app.Util.mod</code> y <code>.bpi</code>. Sin
+  <code>library</code>, se llama <code>Util.mod</code>.
+</p>
+
+<h3 id="main">10.2 <code>main(arg: string)</code> y constructor de módulo</h3>
+<pre><code><span class="kw">module</span> MiApp
+  <span class="comment">// Initializer (auto): se ejecuta al cargar el módulo, tras los imports.</span>
+  <span class="kw">function</span> MiApp()
+    <span class="kw">print</span> <span class="str">"[init] cargado"</span>
+  <span class="kw">end</span> MiApp
+
+  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+    <span class="kw">print</span> <span class="str">"ejecutando con arg='"</span> + arg + <span class="str">"'"</span>
+  <span class="kw">end</span> main
+<span class="kw">end</span> MiApp</code></pre>
+<ul>
+  <li><code>function ModuleName()</code> es el "constructor" del módulo. Se
+      ejecuta tras inicializar todos los imports.</li>
+  <li><code>function main(arg: string)</code> es el entry-point. Sólo se
+      llama al main del módulo raíz; los mains de las dependencias quedan
+      como utilidad para testing standalone.</li>
+  <li>Forma legacy: <code>function Main()</code> sin parámetros (sigue
+      aceptada).</li>
+</ul>
+
+<h3 id="imports">10.3 <code>import</code> / <code>from</code></h3>
+<pre><code><span class="kw">module</span> App
+  <span class="kw">import</span> Util                       <span class="comment">// misma library</span>
+  <span class="kw">import</span> com.example.Util           <span class="comment">// path cualificado</span>
+  <span class="kw">import</span> ext.tools.Helper <span class="kw">from</span> <span class="str">"plugins/helper.mod"</span>
+  ...
+<span class="kw">end</span> App</code></pre>
+<ul>
+  <li>El último segmento del path es el alias local (<code>Util</code>,
+      <code>Helper</code>). Lo usas como <code>Util.foo()</code>.</li>
+  <li><code>from "&lt;path&gt;"</code> dice a la VM dónde encontrar el
+      <code>.mod</code> en runtime. Compilable cuando el frontend localiza el
+      <code>.bp</code> fuente derivando la ruta.</li>
+</ul>
+
+<h3 id="interfaces">10.4 <code>module interface</code></h3>
+<pre><code><span class="kw">library</span> <span class="str">"com.example"</span>
+<span class="kw">module interface</span> LogApi
+  <span class="kw">public function</span> log(msg: <span class="type">string</span>)
+  <span class="kw">public function</span> level(): <span class="type">integer</span>
+  <span class="kw">public const</span> VERSION: <span class="type">integer</span> := <span class="num">1</span>
+<span class="kw">end</span> LogApi</code></pre>
+<p>
+  Una interfaz es un contrato (Modula-2 <code>DEFINITION MODULE</code>): sólo
+  firmas públicas, sin cuerpo de función. Compila a un <code>.bpi</code> con
+  el flag <code>interface true</code> y no produce <code>.mod</code>.
+</p>
+<p>
+  Las interfaces pueden extender otra interfaz (herencia de contratos):
+</p>
+<pre><code><span class="kw">module interface</span> LogApiV2 <span class="kw">extends</span> com.example.LogApi
+  <span class="kw">public function</span> logWithLevel(lvl: <span class="type">integer</span>, msg: <span class="type">string</span>)
+  <span class="kw">public function</span> flush()
+<span class="kw">end</span> LogApiV2</code></pre>
+
+<h3 id="implements">10.5 <code>implements</code></h3>
+<pre><code><span class="kw">module</span> ConsoleLogger <span class="kw">implements</span> com.example.LogApi
+  <span class="kw">public function</span> log(msg: <span class="type">string</span>)
+    <span class="kw">print</span> <span class="str">"[CON] "</span> + msg
+  <span class="kw">end</span> log
+  <span class="kw">public function</span> level(): <span class="type">integer</span>
+    <span class="kw">return</span> <span class="num">0</span>
+  <span class="kw">end</span> level
+  <span class="kw">public const</span> VERSION: <span class="type">integer</span> := <span class="num">1</span>
+<span class="kw">end</span> ConsoleLogger</code></pre>
+<p>
+  El analyzer verifica que el módulo expone TODAS las firmas del contrato
+  (funciones con tipos idénticos, consts con mismo tipo, enums con mismos
+  miembros y valores). El impl puede añadir libremente <em>extras</em>
+  públicos no exigidos por el contrato. Errores típicos:
+</p>
+<ul>
+  <li><code>no implementa la función 'foo' requerida por 'I'</code></li>
+  <li><code>la función 'foo': retorno declarado 'float', se esperaba 'integer'</code></li>
+  <li><code>la función 'foo' requerida por 'I' debe ser public</code></li>
+</ul>
+
+<h3 id="binding">10.6 Binding <code>import I:Impl</code></h3>
+<pre><code><span class="kw">module</span> App
+  <span class="kw">import</span> com.example.LogApi:ConsoleLogger
+  <span class="comment">// Equivalente con from:
+  // import com.example.LogApi:ConsoleLogger from "plugins/logger.mod"</span>
+
+  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+    LogApi.log(<span class="str">"hola"</span>)         <span class="comment">// tipa contra LogApi; CALL_EXT a ConsoleLogger.log</span>
+  <span class="kw">end</span> main
+<span class="kw">end</span> App</code></pre>
+<p>
+  Compile-time: el namespace <code>LogApi</code> se tipa contra la interfaz.
+  Codegen: cada <code>LogApi.x</code> emite <code>CALL_EXT</code> al impl
+  bindeado. Cambiar de impl = editar la línea del binding y recompilar.
+</p>
+<p>
+  <strong>Compatibilidad LSP</strong>: <code>import LogApi:BufferedLogger</code>
+  es válido aunque <code>BufferedLogger</code> declare
+  <code>implements LogApiV2</code> y <code>LogApiV2 extends LogApi</code>.
+  El driver recorre la cadena <code>implements → extends</code>.
+</p>
+
+<h3 id="encapsulacion">10.7 Encapsulación clase ↔ módulo</h3>
+<p>
+  Desde dentro de una clase, sólo se accede a símbolos <strong>públicos</strong>
+  del módulo (functions, consts, vars, properties). Tipos (clases, enums,
+  namespaces de imports) siempre visibles.
+</p>
+<pre><code><span class="kw">module</span> M
+  <span class="kw">function</span> helperPriv(): <span class="type">integer</span>     <span class="comment">// privado</span>
+    <span class="kw">return</span> <span class="num">99</span>
+  <span class="kw">end</span> helperPriv
+
+  <span class="kw">class</span> C
+    <span class="kw">public function</span> bad(): <span class="type">integer</span>
+      <span class="kw">return</span> helperPriv()             <span class="comment">// ERROR: no es public</span>
+    <span class="kw">end</span> bad
+  <span class="kw">end</span> C
+<span class="kw">end</span> M</code></pre>
+
+<!-- =========================================================== -->
+<h2 id="excepciones">11. Excepciones</h2>
+<pre><code><span class="kw">try</span>
+  riskyOp()
+<span class="kw">catch</span> e: RuntimeError
+  <span class="kw">print</span> <span class="str">"runtime: "</span> + e.msg
+<span class="kw">catch</span> e: MiError
+  <span class="kw">print</span> <span class="str">"mi error: "</span> + e.detalle
+<span class="kw">catch</span> e
+  <span class="kw">print</span> <span class="str">"desconocido"</span>
+<span class="kw">finally</span>
+  <span class="kw">print</span> <span class="str">"limpieza"</span>
+<span class="kw">endtry</span>
+
+<span class="kw">throw</span> RuntimeError(<span class="str">"algo fallo"</span>)</code></pre>
+<ul>
+  <li><code>try</code> establece un handler en una pila de handlers de la VM.</li>
+  <li><code>catch e: Foo</code> sólo atrapa instancias asignables a <code>Foo</code>.
+      <code>catch e</code> (sin tipo) atrapa cualquier excepción.</li>
+  <li><code>finally</code> se ejecuta siempre (con o sin excepción).</li>
+  <li><code>throw expr</code> lanza el valor. Si es una clase, su class_ptr
+      se usa para el match de <code>catch</code> tipado.</li>
+  <li><code>RuntimeError</code> está siempre disponible (la sintetiza el emisor).</li>
+  <li>Una excepción no atrapada termina la VM mostrando un stack trace
+      con el nombre simbólico de cada frame.</li>
+</ul>
+
+<!-- =========================================================== -->
+<h2 id="owner">12. Owner semantics</h2>
+<p>
+  BP soporta destrucción <em>determinística</em> de objetos en complemento al
+  GC tradicional. La regla básica: un objeto puede tener <strong>un</strong>
+  propietario; al liberarse el propietario, el objeto poseído también se
+  libera (cascada).
+</p>
+
+<h3>12.1 <code>var owner x: T</code></h3>
+<ul>
+  <li>Al asignar <code>x := y</code>, el anterior valor de <code>x</code> se
+      libera (FREE_REF) antes.</li>
+  <li>Al salir de scope, se libera el valor actual de <code>x</code>.</li>
+  <li>Asignar <code>x</code> a una variable no-owner copia la ref sin
+      transferir propiedad (sigue siendo de <code>x</code>).</li>
+  <li>Asignar a otra variable owner transfiere: la fuente queda a
+      <code>null</code> sin liberar.</li>
+</ul>
+
+<h3>12.2 Fields <code>owner</code></h3>
+<p>
+  <code>public var owner f: T</code> dentro de una clase. El descriptor de
+  la clase guarda un bitmap de owners; al liberar la instancia, cada slot
+  marcado se libera recursivamente. El opcode <code>SET_FIELD_OWNER</code>
+  libera el valor anterior del campo antes de escribir el nuevo (asignación
+  atómica owner-safe).
+</p>
+
+<h3>12.3 Cascada por arrays de refs</h3>
+<p>
+  Si un campo owner contiene una referencia a un array
+  <code>TYPE_ARRAY_REF</code>, al liberarse el contenedor se liberan también
+  todos los slots no-null del array. Esta es la mecánica que sustenta
+  <a href="#stdlib-ownerlist">OwnerList</a>.
+</p>
+
+<!-- =========================================================== -->
+<h2 id="stdlib">13. Biblioteca estándar</h2>
+
+<h3 id="stdlib-funcs">13.1 Funciones built-in</h3>
+<table>
+  <tr><th>Categoría</th><th>Funciones</th></tr>
+  <tr><td>Conversión</td>
+      <td><code>intToString(n)</code> <code>floatToString(x)</code> <code>boolToString(b)</code>
+          <code>parseInt(s)</code> <code>parseFloat(s)</code></td></tr>
+  <tr><td>Strings</td>
+      <td><code>strlen(s)</code> <code>upper(s)</code> <code>lower(s)</code>
+          <code>trim(s)</code> <code>substring(s, start, end)</code>
+          <code>indexOf(s, target)</code> <code>startsWith(s, pre)</code>
+          <code>endsWith(s, suf)</code> <code>contains(s, sub)</code>
+          <code>charAt(s, i)</code> <code>charCodeAt(s, i)</code>
+          <code>replace(s, target, repl)</code> <code>split(s, sep)</code></td></tr>
+  <tr><td>Aritmética int</td>
+      <td><code>abs</code> <code>min</code> <code>max</code></td></tr>
+  <tr><td>Aritmética float</td>
+      <td><code>sqrt</code> <code>pow</code> <code>log</code> <code>log10</code>
+          <code>exp</code> <code>sin</code> <code>cos</code> <code>tan</code>
+          <code>random()</code> <code>randomInt(lo, hi)</code>
+          <code>pi()</code> <code>e()</code></td></tr>
+  <tr><td>Conversión num</td>
+      <td><code>floor(x)</code> <code>ceil(x)</code> <code>round(x)</code></td></tr>
+  <tr><td>Tiempo</td>
+      <td><code>now()</code> ms desde epoch · <code>sleep(ms)</code></td></tr>
+  <tr><td>Concurrencia</td>
+      <td><code>yield()</code> cede CPU al scheduler (ver
+          <a href="#concurrencia">§14</a>)</td></tr>
+  <tr><td>Sistema</td>
+      <td><code>gc()</code> · <code>input()</code></td></tr>
+  <tr><td>Fichero</td>
+      <td><code>readFile(path)</code> <code>writeFile(path, content)</code>
+          <code>appendFile(path, content)</code> <code>fileExists(path)</code>
+          <code>listDir(path)</code></td></tr>
+  <tr><td>Internos (stdlib)</td>
+      <td><code>__newRefArray(cap)</code> <code>__growRefArray(arr, cap)</code>
+          <code>__growIntArray(arr, cap)</code> <code>__charsToString(chars, len)</code></td></tr>
+</table>
+
+<h3 id="stdlib-list">13.2 <code>List</code></h3>
+<pre><code><span class="kw">var</span> l: List := List()
+l.add(<span class="num">10</span>)                       <span class="comment">// add(item: any)</span>
+l.add(Persona(<span class="str">"Ana"</span>, <span class="num">30</span>))
+<span class="kw">var</span> p: Persona := l.get(<span class="num">1</span>)      <span class="comment">// get(idx): any</span>
+l.set(<span class="num">0</span>, <span class="num">42</span>)                    <span class="comment">// set(idx, item: any)</span>
+<span class="kw">print</span> l.length()              <span class="comment">// → 2</span>
+l.remove(<span class="num">0</span>)                    <span class="comment">// shift; el item queda huérfano (GC eventual)</span></code></pre>
+<p>
+  Lista dinámica de refs a objetos. Doubling al crecer. Backing
+  <code>items: integer[]</code> es <code>TYPE_ARRAY_REF</code>, escaneado
+  por el GC. <code>add</code> y <code>set</code> aceptan cualquier tipo de
+  objeto (vía <code>any</code>); <code>get</code> devuelve <code>any</code>
+  asignable a cualquier tipo de variable.
+</p>
+
+<h3 id="stdlib-ownerlist">13.3 <code>OwnerList</code></h3>
+<pre><code><span class="kw">var owner</span> ol: OwnerList := OwnerList()
+ol.add(Recurso(<span class="str">"A"</span>))
+ol.add(Recurso(<span class="str">"B"</span>))
+ol.removeAndFree(<span class="num">0</span>)               <span class="comment">// libera 'A' determinísticamente</span>
+<span class="comment">// al salir de scope: libera el array Y todos los items (cascada de FREE_REF)</span></code></pre>
+<p>
+  Hereda de <code>List</code>. Su descriptor marca el field
+  <code>items</code> como <code>owner</code>, así que al liberarse la lista
+  (por <code>var owner</code> o por cascada) los items se liberan también.
+  Métodos:
+</p>
+<ul>
+  <li><code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>, <code>remove</code>: heredados de List.</li>
+  <li><code>removeAndFree(idx)</code>: libera el objeto en
+      <code>items[idx]</code> antes de desplazar el resto.
+      <code>remove(idx)</code> no libera (se mantiene la API original).</li>
+</ul>
+
+<h3 id="stdlib-synclist">13.4 <code>SyncList</code></h3>
+<pre><code><span class="kw">var</span> sl: SyncList := SyncList()
+sl.add(Item(<span class="num">1</span>))               <span class="comment">// at�mico</span>
+sl.add(Item(<span class="num">2</span>))
+<span class="kw">var</span> n: <span class="type">integer</span> := sl.length()  <span class="comment">// at�mico</span>
+<span class="kw">var</span> it: Item := sl.get(<span class="num">0</span>)    <span class="comment">// at�mico</span>
+sl.remove(<span class="num">0</span>)                  <span class="comment">// at�mico</span>
+<span class="kw">var</span> last: Item := sl.pop()    <span class="comment">// at�mico; null si est� vac�a</span></code></pre>
+<p>
+  Hereda de <code>List</code> y a�ade un <code>Mutex</code> propio por
+  instancia (<code>__mutex</code>). Cada operaci�n p�blica
+  (<code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>,
+  <code>remove</code>) est� envuelta con <code>lock</code>/<code>unlock</code>,
+  as� que es segura para llamarse desde m�ltiples threads sin contenci�n
+  externa. M�todos:
+</p>
+<ul>
+  <li><code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>,
+      <code>remove</code>: idem a List, pero <strong>at�micos</strong>.</li>
+  <li><code>pop(): any</code>: extrae y devuelve el �ltimo elemento
+      at�micamente. Si la lista est� vac�a, devuelve <code>null</code>
+      (sentinel). Primitiva canon para producer/consumer queues.</li>
+</ul>
+<p>
+  <strong>Garant�a</strong>: cada operaci�n individual es serializable
+  respecto al resto. Una lectura nunca devuelve estado parcial; un
+  <code>pop</code> nunca duplica ni pierde el �ltimo elemento entre
+  threads.
+</p>
+<p>
+  <strong>L�mite a recordar</strong>: SyncList garantiza atomicidad
+  <em>por operaci�n individual</em>. Una secuencia compuesta como
+  &quot;si <code>length() &gt; 0</code> entonces <code>get(0)</code>&quot;
+  NO es at�mica como bloque � otro thread puede colarse entre las dos
+  llamadas y dejar la lista vac�a. Para read-modify-write compuestos
+  toma un <a href="#stdlib-mutex">Mutex</a> externo alrededor del bloque,
+  o usa <code>pop()</code> que combina chequeo y extracci�n en una sola
+  operaci�n at�mica.
+</p>
+<p>
+  <strong>Implementaci�n</strong>: SyncList extiende <code>List</code> y
+  a�ade un field <code>__mutex</code> inicializado en el constructor. Cada
+  m�todo override hace <code>this.__mutex.lock()</code>, llama directamente
+  al m�todo correspondiente de <code>List</code> (sin re-virtualizar) y
+  hace <code>this.__mutex.unlock()</code>. <code>pop()</code> es el �nico
+  m�todo nuevo (no existe en <code>List</code>).
+</p>
+
+<h3 id="stdlib-sb">13.5 <code>StringBuilder</code></h3>
+<pre><code><span class="kw">var</span> sb: StringBuilder := StringBuilder()
+sb.appendStr(<span class="str">"Hola, "</span>)
+sb.appendStr(<span class="str">"mundo"</span>)
+sb.appendChar(<span class="num">33</span>)                  <span class="comment">// '!'</span>
+sb.appendInt(<span class="num">42</span>)
+<span class="kw">print</span> sb.toString()              <span class="comment">// "Hola, mundo!42"</span>
+<span class="kw">print</span> sb.length()                <span class="comment">// → 14</span></code></pre>
+<p>
+  Constructor sin args (capacidad inicial 64). Doubling automático.
+</p>
+
+<h3 id="stdlib-rterr">13.6 <code>RuntimeError</code></h3>
+<pre><code><span class="kw">throw</span> RuntimeError(<span class="str">"algo fallo"</span>)
+
+<span class="kw">try</span>
+  ...
+<span class="kw">catch</span> e: RuntimeError
+  <span class="kw">print</span> e.msg
+<span class="kw">endtry</span></code></pre>
+<p>
+  Clase base de errores. Un campo <code>msg: string</code>. La sintetiza el
+  emisor en todo módulo. Si declaras tu propia <code>class RuntimeError</code>
+  en tu módulo, la tuya prevalece.
+</p>
+
+<h3 id="stdlib-thread">13.7 <code>Thread</code></h3>
+<pre><code><span class="kw">class</span> Worker <span class="kw">extends</span> Thread
+  <span class="kw">public var</span> nombre: <span class="type">string</span>
+  <span class="kw">public function</span> Worker(nombre: <span class="type">string</span>)
+    <span class="kw">super</span>(<span class="num">2048</span>)            <span class="comment">// stackSize en bytes</span>
+    <span class="kw">this</span>.nombre := nombre
+  <span class="kw">end</span> Worker
+  <span class="kw">public function</span> run()
+    <span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">0</span>
+    <span class="kw">while</span> i &lt; <span class="num">5</span> <span class="kw">do</span>
+      <span class="kw">print</span> <span class="kw">this</span>.nombre + <span class="str">" iter "</span> + intToString(i)
+      yield()
+      i := i + <span class="num">1</span>
+    <span class="kw">endwh</span>
+  <span class="kw">end</span> run
+<span class="kw">end</span> Worker
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> w: Thread := Worker(<span class="str">"A"</span>)
+  w.start()
+  w.join()
+<span class="kw">end</span> main</code></pre>
+<p>
+  Clase base de los threads BP. Sintetizada por el emisor; siempre
+  disponible sin <code>import</code>. Para crear un thread subclasea
+  <code>Thread</code> y sobrescribe <code>run()</code>. El constructor
+  recibe el tamaño de stack (bytes; default interno 2&nbsp;KB para workers,
+  16&nbsp;KB para el main del programa).
+</p>
+<table>
+  <tr><th>Método</th><th>Descripción</th></tr>
+  <tr><td><code>Thread(stackSize: integer)</code></td>
+      <td>Constructor. La subclase debe llamarlo via <code>super(N)</code>.</td></tr>
+  <tr><td><code>run()</code></td>
+      <td>Cuerpo del thread. Override en la subclase. Cuando retorna, el thread
+          termina. Slot 0 de la vtable (fijo por convención).</td></tr>
+  <tr><td><code>start()</code></td>
+      <td>Arranca el thread: la VM aloca su región de stack, lo encola RUNNABLE
+          y un worker Java lo recogerá.</td></tr>
+  <tr><td><code>join()</code></td>
+      <td>Bloquea el thread llamador hasta que <em>este</em> thread termine.
+          Si ya terminó es no-op.</td></tr>
+</table>
+<p>
+  Builtins relacionados (ver <a href="#stdlib-funcs">13.1</a>):
+  <code>yield()</code> (cede CPU sin terminar) y <code>sleep(ms)</code>
+  (cede + duerme N&nbsp;ms; cualquier otro thread RUNNABLE corre mientras).
+  Para el azúcar <code>parallel/case/default/endpar</code> ver
+  <a href="#parallel">§7.6</a>.
+</p>
+
+<h3 id="stdlib-mutex">13.8 <code>Mutex</code></h3>
+<pre><code><span class="kw">var</span> m: Mutex := Mutex()
+
+<span class="comment">// dentro del run() de cada Thread que comparta el mutex:</span>
+m.lock()                <span class="comment">// bloquea si está tomado por otro</span>
+<span class="comment">// sección crítica</span>
+m.unlock()              <span class="comment">// libera y hand-off al primer waiter</span></code></pre>
+<p>
+  Lock no reentrante para coordinar entre threads BP. Sintetizado por el
+  emisor; siempre disponible sin <code>import</code>. Internamente la
+  instancia guarda un id <code>__mid</code> que apunta a un mutex Java de
+  la VM (<code>JavaMutex</code> bajo <code>vmLock</code>).
+</p>
+<table>
+  <tr><th>Método</th><th>Descripción</th></tr>
+  <tr><td><code>Mutex()</code></td>
+      <td>Constructor. Pide un id nuevo a la VM (<code>__mutexCreate</code>).</td></tr>
+  <tr><td><code>lock()</code></td>
+      <td>Si libre, lo toma. Si lo tiene otro thread, marca al actual
+          <code>BLOCKED_MUTEX</code>, lo añade a la cola de waiters y cede
+          la CPU. Cuando reciba la propiedad, <code>lock()</code> regresa
+          ya con el lock tomado.</td></tr>
+  <tr><td><code>unlock()</code></td>
+      <td>Sólo legal desde el thread propietario; cualquier otro causa
+          excepción. Si hay waiters, el primero recibe directamente la
+          propiedad (hand-off, sin re-attempt) y pasa a RUNNABLE.</td></tr>
+</table>
+<p>
+  No reentrante: si el mismo thread vuelve a llamar <code>lock()</code>
+  sobre un mutex que ya tiene, se lanza una excepción.
+</p>
+
+<!-- =========================================================== -->
+<h2 id="concurrencia">14. Concurrencia</h2>
+<p>
+  La VM simula un microcontrolador de 2 cores: por defecto lanza N workers
+  Java reales (default <code>N=2</code>; configurable con
+  <code>--workers=N</code>, ver <a href="#cli-vm">§15.2</a>) que se reparten
+  los threads BP encolados.
+</p>
+
+<h3 id="conc-modelo">14.1 Modelo de ejecución</h3>
+<ul>
+  <li>El thread BP <strong>main</strong> (tid&nbsp;0) arranca primero: ejecuta
+      el initializer del módulo y luego <code>main(arg)</code>. Tiene stack
+      grande (16&nbsp;KB). Sólo <em>él</em> puede ejecutar la instrucción
+      <code>HALT</code> que apaga la VM.</li>
+  <li>Cualquier subclase de <code>Thread</code> añade un thread BP nuevo al
+      hacer <code>start()</code>. La VM le asigna stack (default 2&nbsp;KB)
+      y lo encola <code>RUNNABLE</code>. Un worker Java libre lo coge y
+      ejecuta su <code>run()</code> hasta retorno (THREAD_EXIT) o
+      <code>yield()</code>/<code>sleep()</code>/<code>join()</code>/lock.</li>
+  <li>Cada thread BP tiene su propio contexto (<code>ThreadContext</code>):
+      PC, SP, BP, CS, región de stack, pila de handlers de excepción. El
+      heap (incluyendo objetos owned por threads) es <strong>compartido</strong>.</li>
+  <li>Cuando todos los threads BP terminan, la VM se apaga. Si main hace
+      <code>HALT</code> antes, los workers en vuelo se cortan en su próximo
+      opcode.</li>
+</ul>
+
+<h3 id="conc-preempt">14.2 Preempción y <code>yield()</code></h3>
+<p>
+  Un timer daemon (<code>ScheduledExecutorService</code>, quantum por
+  defecto 10&nbsp;ms) marca <code>yieldRequested=true</code> sobre todos los
+  threads BP <code>RUNNING</code>. El bucle del intérprete lo observa entre
+  opcodes (campo <code>volatile</code>) y abandona el bucle inner con señal
+  YIELD; el worker re-encola el thread y coge el siguiente RUNNABLE.
+</p>
+<p>
+  En paralelo a la preempción, el código BP puede ceder CPU
+  <strong>cooperativamente</strong>:
+</p>
+<ul>
+  <li><code>yield()</code> &mdash; cede una vez; el thread sigue RUNNABLE y
+      el scheduler lo elige cuando le toque.</li>
+  <li><code>sleep(ms)</code> &mdash; marca BLOCKED_SLEEP hasta
+      <code>now() + ms</code>. Si no hay otro RUNNABLE, el worker Java duerme
+      hasta el próximo wake-up.</li>
+  <li><code>join()</code> sobre otro thread &mdash; marca BLOCKED_JOIN hasta
+      que el target termine.</li>
+  <li><code>Mutex.lock()</code> sobre un mutex tomado &mdash; marca
+      BLOCKED_MUTEX hasta hand-off.</li>
+</ul>
+
+<h3 id="conc-encapsulacion">14.3 Encapsulación de cuerpos de <code>case</code></h3>
+<p>
+  El cuerpo de cada <code>case</code> dentro de un <code>parallel</code> es
+  el <code>run()</code> de una subclase anónima de Thread sintetizada por
+  el compilador. Sigue la misma regla de encapsulación de objeto que un
+  método de clase normal: <strong>no puede leer/escribir variables globales
+  del módulo</strong>. Sí puede llamar funciones del módulo, instanciar
+  clases, usar <code>const</code>s y llamar builtins.
+</p>
+<p>
+  Para coordinarse, los threads usan objetos compartidos
+  (<a href="#stdlib-mutex">Mutex</a>, <code>List</code>, clases con
+  estado) en vez de globals mutables. El compilador rechaza la lectura
+  directa con mensaje:
+</p>
+<pre><code>error semántico: el cuerpo de un 'case' dentro de 'parallel' no puede
+acceder a la variable global 'X'; usa una const, una función o un
+objeto compartido</code></pre>
+<p>
+  El bloque <code>default</code> NO sufre esta restricción: corre en el
+  thread llamador y ve sus locales y globals.
+</p>
+
+<h3 id="conc-gc">14.4 GC y concurrencia</h3>
+<p>
+  El GC mark-and-sweep es conservativo: escanea los stacks de todos los
+  threads vivos y los data blocks de los módulos para identificar roots.
+  Las operaciones de heap (<code>heapAlloc</code>, <code>gc()</code>,
+  <code>freeOwnedObject</code>) están serializadas bajo
+  <code>vmLock</code> &mdash; dos workers no pueden mutar el heap a la vez.
+</p>
+<p>
+  <strong>Safepoint stop-the-world</strong>: cuando un worker necesita
+  GC (porque <code>heapAlloc</code> agota el heap), pone una bandera
+  global <code>stopTheWorld</code>. Los demás workers la chequean al
+  inicio de cada iteración del intérprete: sincronizan
+  <code>tc.{pc,sp,bp,cs}</code> y abandonan <code>runOnContext</code>
+  con señal YIELD. Vuelven a la <code>WorkerLoop</code>, ven la
+  bandera y parquean en <code>vmLock.wait()</code>. El worker que
+  pidió GC espera a que ninguno otro esté en estado RUNNING (los que
+  están parqueados en <code>vmLock.wait</code> dentro de
+  <code>heapAlloc</code> se cuentan como parqueados vía
+  <code>parkedInHeapAlloc</code>), corre <code>gcLocked</code>, y
+  luego limpia la bandera.
+</p>
+<p>
+  Además, cada <code>tc</code> mantiene una <strong>ancla de alloc</strong>
+  (<code>tc.allocAnchor</code>): <code>heapAlloc</code> deja en ella el
+  ref recién alocado antes de soltar <code>vmLock</code>. Si otro worker
+  dispara GC entre el <code>return</code> de <code>heapAlloc</code> y el
+  push posterior del caller, el escáner del GC ve la ancla como un root
+  extra y no libera el objeto en tránsito.
+</p>
+<p>
+  <strong>Wraps de opcodes de alocación</strong>:
+  <code>NEW_OBJECT</code> y las variantes de <code>NEWARRAY</code> mantienen
+  <code>vmLock</code> desde la alocación hasta la publicación al stack BP
+  (<code>tc.sp</code> sincronizado). Esto cierra la ventana en que otro
+  worker podría sweepear el objeto recién creado antes de que su
+  ref llegue al stack de quien lo creó.
+</p>
+<p>
+  <strong>Residual conocido</strong> (~5-10 % bajo contención muy alta):
+  algunos builtins de allocación
+  (<code>allocVmString</code>, <code>allocVmRefArray</code>,
+  <code>GROW_REF_ARRAY</code>) todavía liberan <code>vmLock</code> entre
+  la alocación y el push final. Cuando un patrón productor/consumidor
+  con muchas allocaciones simultáneas se materializa, puede aparecer
+  corrupción puntual. Síntomas: <code>INVOKE_VIRTUAL</code> sobre
+  <code>null</code>, &quot;Dirección 0&quot;, opcode 0xA6.
+</p>
+<p>
+  Cuando el residual se manifiesta, sólo muere el thread afectado
+  &mdash; el resto del programa continúa porque <code>BpThreadFault</code>
+  evita que un fallo individual tumbe la VM entera (ver el código de
+  <code>VirtualMachine.WorkerLoop</code>).
+</p>
+<p>
+  Tests de referencia con todos los fixes B1 activos:
+</p>
+<ul>
+  <li><code>synctest.bp</code> (clase + sync property + 5000 iters × 2 threads): ~90 % pass-rate.</li>
+  <li><code>synclisttest.bp</code> (SyncList + 1000 prods + 2 consumers): ~93 % pass-rate.</li>
+  <li><code>modpropsync.bp</code> (sync property a nivel módulo): ~95 % pass-rate.</li>
+</ul>
+
+<!-- =========================================================== -->
+<h2 id="cli">15. Compilación &amp; ejecución</h2>
+
+<h3 id="cli-frontend">15.1 Frontend</h3>
+<pre><code>java -jar basicplus-frontend.jar &lt;archivo.bp&gt; [opciones]</code></pre>
+<table>
+  <tr><th>Opción</th><th>Efecto</th></tr>
+  <tr><td><code>--tokens</code></td><td>Volcado de tokens del lexer.</td></tr>
+  <tr><td><code>--ast</code></td><td>Volcado del AST.</td></tr>
+  <tr><td><code>--quiet</code></td><td>Sólo diagnósticos.</td></tr>
+  <tr><td><code>--compile &lt;dir&gt;</code></td><td>Compila a <code>.mod</code> (+ <code>.bpi</code>).</td></tr>
+  <tr><td><code>--interface &lt;dir&gt;</code></td><td>Sólo emite <code>.bpi</code> (sin código).</td></tr>
+  <tr><td><code>--backend=jvm|mivm</code></td><td>Backend (mivm es el predeterminado).</td></tr>
+</table>
+<p>
+  Con <code>--compile</code>, el driver es recursivo: encuentra los
+  <code>.bp</code> de los imports faltantes, genera primero sus
+  <code>.bpi</code> (modo INTERFACE), después compila el módulo, y
+  finalmente recurre en modo FULL para producir los <code>.mod</code> de las
+  deps.
+</p>
+
+<h3 id="cli-vm">15.2 VM (bpgenvm)</h3>
+<pre><code>java -jar bpgenvm.jar [opciones] &lt;archivo.mod&gt;</code></pre>
+<ul>
+  <li>Por defecto carga y ejecuta el <code>.mod</code> raíz. La VM resuelve
+      transitivamente los imports leyendo cada <code>.mod</code> referenciado.</li>
+  <li><code>--trace</code> imprime PC/Opcode/CS/SP/tid por instrucción.</li>
+  <li><code>--workers=N</code> número de worker threads Java en paralelo
+      (default <code>2</code>; equivale a "cores físicos simulados").
+      <code>--workers=1</code> serializa todo: útil para reproducibilidad o
+      depurar races. Ver <a href="#concurrencia">§14</a>.</li>
+  <li><code>-d</code> hace dump del bytecode (disassembler integrado).</li>
+  <li><code>--config &lt;archivo&gt;</code> carga config JSON
+      (<a href="#cli-vmcfg">BpVM.cfg</a>) desde la ruta indicada.</li>
+  <li><code>--no-config</code> ignora cualquier BpVM.cfg auto-descubierto
+      y arranca con defaults.</li>
+</ul>
+
+<h4 id="cli-vmcfg">BpVM.cfg — configuración de la VM</h4>
+<pre><code>{
+  "memorySize": 524288,
+  "stackBase":  262144,
+  "stdlibDir":  "C:/lenguajes/pm/bpstdlib"
+}</code></pre>
+<p>
+  Fichero JSON con la configuración global de la VM. Todos los campos
+  son opcionales; los que falten toman el valor por defecto:
+</p>
+<ul>
+  <li><code>memorySize</code> (bytes totales del array <code>memory</code>;
+      default 524288 = 512 KiB).</li>
+  <li><code>stackBase</code> (offset donde empiezan los stacks; default
+      256 KiB &mdash; se valida que <code>stackBase &lt; memorySize</code> y
+      que quepa al menos <code>MAIN_STACK_BYTES</code>). Si pones
+      <code>memorySize</code> pero no <code>stackBase</code>, se deriva
+      a <code>memorySize/2</code>.</li>
+  <li><code>stdlibDir</code> (path al directorio donde la VM busca los
+      módulos stdlib &mdash; <code>Json.mod</code> hoy, más en el futuro
+      &mdash; cuando un import no resuelve desde el cwd o desde el
+      <code>fromPath</code> del importer).</li>
+</ul>
+<p>
+  El parser admite comentarios <code>// hasta-fin-de-línea</code>. No
+  soporta arrays ni objetos anidados (no hace falta hoy).
+</p>
+<p>
+  <strong>Resolución</strong>:
+</p>
+<ol>
+  <li>Si pasas <code>--config &lt;ruta&gt;</code>, se carga esa ruta. Si el
+      fichero no existe o el JSON está mal formado, la VM aborta con
+      mensaje claro.</li>
+  <li>En caso contrario, la VM busca <code>BpVM.cfg</code> en:
+    <ol>
+      <li>el directorio actual (<code>cwd</code>);</li>
+      <li>el directorio donde está el <code>.mod</code> raíz.</li>
+    </ol>
+    El primero que exista se usa.</li>
+  <li>Si no hay nada, se usan los defaults.</li>
+</ol>
+<p>
+  El BpIde también respeta <code>BpVM.cfg</code> al pulsar
+  <kbd>F5</kbd> (Run) o <kbd>F11</kbd> (Debug) &mdash; busca primero
+  en el cwd y luego junto al <code>.mod</code> que está ejecutando.
+</p>
+
+<h4 id="cli-vmproject">.bpproject — fichero de proyecto de la VM</h4>
+<pre><code>{
+  "main":        "out/MyApp.mod",
+  "modulePaths": ["out", "../shared/modules"]
+}</code></pre>
+<p>
+  Fichero JSON que describe qué .mod arrancar y dónde buscar los .mod
+  de los imports. Se le pasa a la VM como argumento alternativo al .mod:
+</p>
+<pre><code>bpgenvm MyApp.bpproject</code></pre>
+<p>
+  La VM detecta el tipo por extensión (<code>.mod</code> vs.
+  <code>.bpproject</code>). Campos:
+</p>
+<ul>
+  <li><code>main</code> (string, <strong>obligatorio</strong>): ruta al
+      .mod del módulo de arranque. Puede ser absoluta o relativa al
+      directorio del .bpproject. La VM verifica que el fichero existe.</li>
+  <li><code>modulePaths</code> (array de strings, opcional): directorios
+      donde la VM busca los .mod de los imports, en orden de prioridad.
+      Paths relativos se resuelven respecto al .bpproject.</li>
+</ul>
+<p>
+  <strong>Resolución completa de un import</strong>:
+</p>
+<ol>
+  <li>Como esté indicado (cwd o absoluto).</li>
+  <li>Cada <code>modulePaths[i]/&lt;basename&gt;</code> en orden.</li>
+  <li><code>stdlibDir/&lt;basename&gt;</code> (de BpVM.cfg).</li>
+  <li>Si nada existe, FileNotFound con mensaje claro.</li>
+</ol>
+<p>
+  El parser admite comentarios <code>//</code>. Soporta arrays
+  (a diferencia del BpVM.cfg, que es plano). Ver
+  <code>docs/BpProject.example</code> para una plantilla anotada.
+</p>
+
+<h4 id="cli-bpbuild">.bpbuild — fichero de proyecto del compilador y el IDE</h4>
+<pre><code>{
+  "projectDir":   "./",
+  "sourceDir":    "src",
+  "outDir":       "out",
+  "main":         "App",
+  "dependencies": ["../shared/lib", "../utils/Logger.mod"]
+}</code></pre>
+<p>
+  Fichero JSON consumido por el compilador (frontend
+  <code>lexer-java</code>) y por el BpIde. Distinto del
+  <code>.bpproject</code>: aquél vive en run-time y enumera <em>.mod</em>
+  compilados; éste vive en build-time y enumera <em>.bp</em> fuente +
+  dependencias de compilación.
+</p>
+<p>
+  Uso desde la CLI:
+</p>
+<pre><code>lexer-java --project app.bpbuild</code></pre>
+<p>
+  Campos:
+</p>
+<ul>
+  <li><code>projectDir</code> (string, opcional): raíz del proyecto.
+      Default = directorio donde está el <code>.bpbuild</code>. El resto
+      de paths relativos se resuelven respecto a este.</li>
+  <li><code>sourceDir</code> (string, <strong>obligatorio</strong>):
+      directorio con los <code>.bp</code> del proyecto.</li>
+  <li><code>outDir</code> (string, <strong>obligatorio</strong>):
+      directorio donde el compilador emite <code>.mod</code> y
+      <code>.bpi</code>. Se crea on-demand.</li>
+  <li><code>main</code> (string, <strong>obligatorio</strong>): nombre
+      lógico del módulo principal (sin extensión). El compilador busca
+      <code>&lt;sourceDir&gt;/&lt;main&gt;.bp</code>.</li>
+  <li><code>dependencies</code> (array de strings, opcional): cada entrada
+      es un directorio (busca cualquier <code>.bpi</code>/<code>.mod</code>
+      dentro al resolver imports) o un fichero <code>.mod</code>/<code>.bpi</code>
+      concreto.</li>
+</ul>
+<p>
+  <strong>Resolución de imports en modo proyecto</strong>:
+</p>
+<ol>
+  <li>Otros fuentes del proyecto bajo <code>sourceDir</code>.</li>
+  <li><code>outDir</code> (módulos del proyecto ya compilados).</li>
+  <li>Cada entrada de <code>dependencies</code> en orden.</li>
+</ol>
+<p>
+  <strong>Integración con el BpIde</strong>: menú <code>Project</code> con
+  entradas <em>New Project...</em>, <em>Open Project...</em>,
+  <em>Close Project</em>. Al abrir un proyecto el panel superior izquierdo
+  muestra un árbol estilo NetBeans con tres ramas:
+</p>
+<ul>
+  <li><strong>Sources</strong>: todos los <code>.bp</code> bajo <code>sourceDir</code>.</li>
+  <li><strong>Output</strong>: <code>.mod</code> y <code>.bpi</code> bajo <code>outDir</code>.</li>
+  <li><strong>Dependencies</strong>: las entradas del campo
+      <code>dependencies</code>.</li>
+</ul>
+<p>
+  Doble click abre el fichero en el editor. Con un proyecto cargado,
+  Run/Debug compila <code>&lt;sourceDir&gt;/&lt;main&gt;.bp</code> a
+  <code>outDir/&lt;main&gt;.mod</code> y lanza la VM apuntando a ese
+  módulo. Sin proyecto cargado, Run/Debug sigue usando el fichero
+  activo (modo single-file).
+</p>
+<p>
+  El parser admite comentarios <code>//</code>. Ver
+  <code>docs/BpBuild.example</code> para una plantilla anotada.
+</p>
+
+<h3 id="cli-disasm">15.3 Disasm</h3>
+<pre><code>java -cp bpgenvm.jar edu.bpgenvm.tools.Disasm &lt;archivo.mod&gt;</code></pre>
+<p>
+  Muestra el header, imports, exports, data block y código desensamblado
+  con anotaciones (nombre de función, sección, jumps con destino).
+</p>
+
+<!-- =========================================================== -->
+<h2 id="artefactos">16. Artefactos en disco</h2>
+
+<h3 id="mod">16.1 <code>.mod</code> (binario, MOD5)</h3>
+<pre>[MAGIC=0x4D4F4435]            4 bytes  "MOD5"
+[dataSize]                    4
+[mainOffset]                  4   offset al __startup, o -1
+[importsSize]                 4
+[exportsSize]                 4
+[codeSize]                    4
+[librarySize]                 4
+--- header (28) ---
+[library  bytes]              librarySize
+[imports  bytes]              importsSize   pares (name, fromPath) UTF
+[exports  bytes]              exportsSize   pares (name, offset)
+[data block]                  dataSize      strings, constantes, class descriptors
+[code]                        codeSize      bytecode</pre>
+
+<h3 id="bpi">16.2 <code>.bpi</code> (interface textual, v2)</h3>
+<pre>bpi 2
+library com.example
+module Util
+interface true                <span class="comment">// sólo si module interface</span>
+extends com.example.Base      <span class="comment">// sólo si interface hija</span>
+implements com.example.LogApi <span class="comment">// sólo en módulo concreto</span>
+func suma(a:integer,b:integer):integer public
+func saludar(nombre:string):string public
+const PI:float=3.14159 public
+const VERSION:string="1.0" public
+enum Color public
+  ROJO=0
+  VERDE=1
+end enum</pre>
+<p>
+  Soporta tipos primitivos (<code>integer/float/string/boolean</code>) +
+  <code>void</code> en signatures. Tipos compuestos (clases, arrays no
+  primitivos) NO se exportan todavía en <code>.bpi</code>.
+</p>
+
+<!-- =========================================================== -->
+<h2 id="pendientes">17. Pendientes / no soportado</h2>
+<ul>
+  <li>Tipos compuestos en <code>.bpi</code> (clases, arrays no primitivos,
+      properties) — cross-library hoy se limita a funciones, consts y enums
+      con tipos primitivos.</li>
+  <li><code>Map&lt;K,V&gt;</code> y otras estructuras en stdlib.</li>
+  <li>Versionado explícito de contratos (cubierto pragmáticamente con
+      <code>extends</code>).</li>
+  <li>Genéricos / type parameters en clases del usuario.</li>
+  <li>TypeRef cualificado en BP (<code>var c: Mod.Color</code>).</li>
+  <li>Fichero de proyecto (<code>.bpproj</code>) para multi-impl coexistente
+      en outDir con resolución a runtime.</li>
+  <li>JVM backend para cross-library / interfaces (sólo el backend mivm los
+      soporta hoy).</li>
+  <li>Owners en caminos de excepción (algunos paths de throw saltan free).</li>
+  <li><strong>Concurrencia &mdash; safepoint para GC stop-the-world</strong>:
+      hoy <code>gc()</code> lee <code>tc.sp</code> de workers en vuelo. Bajo
+      presión de heap con paralelismo intenso pueden no marcarse refs vivas
+      a medio opcode. Ver <a href="#conc-gc">§14.4</a>.</li>
+  <li>Mutex reentrante / <code>Semaphore</code> / <code>Channel</code> en stdlib.</li>
+  <li>Closures sobre locales del encerrador en cuerpos de <code>case</code>
+      del statement <code>parallel</code> (hoy sólo se ven stdlib + módulo
+      no-globals — ver <a href="#conc-encapsulacion">§14.3</a>).</li>
+</ul>
+
+<hr>
+<p style="color:var(--fg-muted); font-size:0.85em">
+  BasicPlus reference manual — generado al hilo del desarrollo.
+  Frontend: <code>lexer-java</code> · VM: <code>miVM</code> · Format <code>.mod</code> v5 / <code>.bpi</code> v2.
+</p>
+
+</main>
+</div>
+</body>
+</html>

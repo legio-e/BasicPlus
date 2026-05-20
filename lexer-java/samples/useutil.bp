@@ -1,0 +1,19 @@
+library "com.example.app"
+module UseUtil
+
+  import com.example.util.MathUtil
+
+  function UseUtil()
+    print "[UseUtil init] arrancando"
+  end UseUtil
+
+  function main(arg: string)
+    print "[UseUtil main] cross-library"
+    print "PI = " + floatToString(MathUtil.PI)
+    print "VERSION = " + MathUtil.VERSION
+    print MathUtil.saludar("mundo")
+    print "suma(3,4) = " + intToString(MathUtil.suma(3, 4))
+    print "cuadrado(7) = " + intToString(MathUtil.cuadrado(7))
+  end main
+
+end UseUtil

@@ -1,0 +1,14 @@
+c:\lenguajes\pm\lexer\obj\Release\net8.0\BasicPlus.Lexer.GeneratedMSBuildEditorConfig.editorconfig
+c:\lenguajes\pm\lexer\obj\Release\net8.0\BasicPlus.Lexer.AssemblyInfoInputs.cache
+c:\lenguajes\pm\lexer\obj\Release\net8.0\BasicPlus.Lexer.AssemblyInfo.cs
+c:\lenguajes\pm\lexer\obj\Release\net8.0\BasicPlus.Lexer.csproj.CoreCompileInputs.cache
+c:\lenguajes\pm\lexer\bin\Release\net8.0\BasicPlus.Lexer.exe
+c:\lenguajes\pm\lexer\bin\Release\net8.0\BasicPlus.Lexer.deps.json
+c:\lenguajes\pm\lexer\bin\Release\net8.0\BasicPlus.Lexer.runtimeconfig.json
+c:\lenguajes\pm\lexer\bin\Release\net8.0\BasicPlus.Lexer.dll
+c:\lenguajes\pm\lexer\bin\Release\net8.0\BasicPlus.Lexer.pdb
+c:\lenguajes\pm\lexer\obj\Release\net8.0\BasicPlus.Lexer.dll
+c:\lenguajes\pm\lexer\obj\Release\net8.0\refint\BasicPlus.Lexer.dll
+c:\lenguajes\pm\lexer\obj\Release\net8.0\BasicPlus.Lexer.pdb
+c:\lenguajes\pm\lexer\obj\Release\net8.0\BasicPlus.Lexer.genruntimeconfig.cache
+c:\lenguajes\pm\lexer\obj\Release\net8.0\ref\BasicPlus.Lexer.dll

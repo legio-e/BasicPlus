@@ -1,0 +1,110 @@
+// fase3.bp — sample que ejercita Fase 3:
+//   - enums
+//   - switch/case con default
+//   - try / catch / finally + throw
+//   - arrays (literal, indexado, for-in)
+//   - propiedades (forma corta + extendida con setter custom)
+
+module Fase3
+
+  function Fase3()
+    print "[init] Fase3"
+  end Fase3
+
+  // ---------- Enum ----------
+  public enum Dia
+    LUNES
+    MARTES
+    MIERCOLES
+    JUEVES
+    VIERNES
+    SABADO := 10
+    DOMINGO
+  end Dia
+
+  // ---------- Clase con propiedades ----------
+  public class Persona
+    var nombre: string
+
+    public function Persona(nombre: string)
+      this.nombre := nombre
+    end Persona
+
+    // Propiedad forma corta: get/set implícitos.
+    public property edad: integer := 0
+
+    // Propiedad forma extendida con setter validado.
+    public property altura: float := 0.0
+      set(h)
+        if h < 0.0 then
+          throw "altura negativa"
+        endif
+        field := h
+      endset
+    endprop
+
+    public function Saludar(): string
+      return "Hola, soy " + nombre
+    end Saludar
+  end Persona
+
+  // ---------- Función con try/catch/throw ----------
+  public function ChequearAltura(p: Persona, h: float): string
+    try
+      p.altura := h
+      return "altura asignada"
+    catch err
+      return "error: altura no válida"
+    finally
+      print "  (finally chequearAltura)"
+    endtry
+  end ChequearAltura
+
+  // ---------- Función con switch ----------
+  public function NombreDia(d: Dia): string
+    switch d
+      case Dia.LUNES
+        return "lunes"
+      case Dia.MARTES
+        return "martes"
+      case Dia.SABADO, Dia.DOMINGO
+        return "fin de semana"
+      default
+        return "otro"
+    endsw
+  end NombreDia
+
+  // ---------- Función con arrays + for-in ----------
+  public function Suma(nums: integer[]): integer
+    var total: integer := 0
+    for n in nums do
+      total += n
+    next n
+    return total
+  end Suma
+
+  function Main()
+    // Enum + switch
+    print "Dia.SABADO =>", NombreDia(Dia.SABADO)
+    print "Dia.MARTES =>", NombreDia(Dia.MARTES)
+
+    // Propiedades forma corta y extendida
+    var p: Persona := Persona("Ana")
+    p.edad := 30
+    print p.Saludar(), "tiene", p.edad
+
+    // Setter custom OK
+    print ChequearAltura(p, 1.75)
+    // Setter custom KO (altura negativa) → throw atrapado
+    print ChequearAltura(p, -1.0)
+
+    // Arrays + for-in
+    var primos: integer[] := [2, 3, 5, 7, 11]
+    print "suma primos:", Suma(primos)
+
+    // Indexado y asignación
+    primos[0] := 99
+    print "primos[0] tras asignar:", primos[0]
+  end Main
+
+end Fase3

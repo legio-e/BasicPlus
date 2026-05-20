@@ -1,0 +1,18 @@
+library "com.example"
+module NoisyLogger implements com.example.LogApi
+
+  function NoisyLogger()
+    print "[NoisyLogger] arrancando con ruido"
+  end NoisyLogger
+
+  public function log(msg: string)
+    print "*** NOISY *** " + msg + " *** NOISY ***"
+  end log
+
+  public function level(): integer
+    return 99
+  end level
+
+  public const VERSION: integer := 1
+
+end NoisyLogger

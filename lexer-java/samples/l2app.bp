@@ -1,0 +1,62 @@
+// App que usa la librería L2Lib (samples/l2lib.bp). Demuestra:
+//   - construcción cross-module: `L2Lib.Counter(10)` → vía factoría sintética.
+//   - llamadas a método cross-module: c.value(), c.increment(), c.add().
+//   - lectura/escritura de property cross-module: simple y sync.
+//   - sync property protegiendo accesos desde múltiples threads.
+//
+// Para ejecutar:
+//   1) compila l2lib.bp con --compile <dir> (deja L2Lib.bpi + L2Lib.mod).
+//   2) compila este fichero con --compile <misma_dir> (necesita el .bpi).
+//   3) ejecuta L2App.mod desde el directorio que tenga L2Lib.mod.
+module L2App
+  import L2Lib
+
+  // --- Worker que estresa la SafeCounter cross-module ---
+  public class Bumper extends Thread
+    public var c: SafeCounter
+    public var iters: integer
+
+    public function Bumper(c: SafeCounter, iters: integer)
+      super(2048)
+      this.c := c
+      this.iters := iters
+    end Bumper
+
+    public function run()
+      var i: integer := 0
+      while i < this.iters do
+        this.c.increment()
+        i := i + 1
+      endwh
+    end run
+  end Bumper
+
+  function main(arg: string)
+    print "--- Counter (sin sync) ---"
+    var c: Counter := L2Lib.Counter(10)
+    print "inicial = " + intToString(c.value())
+    c.increment()
+    c.increment()
+    print "tras 2 increments = " + intToString(c.value())
+    var nuevo: integer := c.add(40)
+    print "tras add(40) = " + intToString(nuevo)
+
+    print "--- SafeCounter (sync) ---"
+    var sc: SafeCounter := L2Lib.SafeCounter()
+    var t1: Thread := Bumper(sc, 500)
+    var t2: Thread := Bumper(sc, 500)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+    var tick: integer := sc.tick
+    print "tick = " + intToString(tick)
+    // Acceso cross-module a sync property: el lock vive en el módulo dueño,
+    // así que dos threads del importador siguen serializados correctamente.
+    if tick >= 0 and tick <= 1000 then
+      print "OK cross-module sync property coherente"
+    else
+      print "ERROR rango fuera"
+    endif
+  end main
+end L2App

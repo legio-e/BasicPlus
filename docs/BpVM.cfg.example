@@ -1,0 +1,37 @@
+// =============================================================
+// BpVM.cfg — fichero de configuración de la VM de BasicPlus.
+//
+// Este es un TEMPLATE anotado. Cópialo a:
+//   1. el cwd desde donde lanzas la VM, o
+//   2. el directorio donde está tu .mod raíz, o
+//   3. pásalo explícitamente con `bpgenvm --config <ruta>`.
+//
+// Renombra la copia a "BpVM.cfg" (sin la extensión .example) para
+// que la VM lo auto-descubra. Si no quieres usar config en absoluto,
+// `bpgenvm --no-config` ignora cualquier BpVM.cfg presente.
+//
+// Formato JSON. Soporta comentarios `// hasta-fin-de-línea`.
+// Todos los campos son opcionales — los que no aparezcan toman el
+// valor por defecto.
+// =============================================================
+{
+  // Bytes totales del array `memory` de la VM. Default 524288 = 512 KiB.
+  // El array contiene el data block de módulos, el heap y los stacks.
+  // Aumenta esto si tu programa alloca mucho.
+  "memorySize": 524288,
+
+  // Offset donde termina el heap y empiezan los stacks (uno por thread BP).
+  // Default = memorySize / 2. Si pones `memorySize` y no `stackBase`, se
+  // deriva a la mitad. Validaciones automáticas:
+  //   - stackBase > 0
+  //   - stackBase < memorySize
+  //   - stackBase + MAIN_STACK_BYTES <= memorySize  (cabe al menos el main)
+  "stackBase": 262144,
+
+  // Directorio donde la VM busca los .mod stdlib (Json.mod, etc) cuando
+  // un `import` no resuelve desde el cwd ni desde el fromPath del importer.
+  // null o ausente = sin fallback stdlib.
+  //
+  // Usa rutas absolutas con barras "/" para que Windows y Unix las acepten.
+  "stdlibDir": "C:/lenguajes/pm/bpstdlib"
+}

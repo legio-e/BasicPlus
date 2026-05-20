@@ -1,0 +1,60 @@
+// fase5.bp — sample que ejercita la stdlib mínima:
+//   - RuntimeError built-in (mapeado a java.lang.RuntimeException)
+//   - input(): string
+//   - parseInt(s): integer
+//   - parseFloat(s): float
+//   - strlen(s): integer
+
+module Fase5
+
+  function Fase5()
+    print "[init] Fase5"
+  end Fase5
+
+  // throw de un RuntimeError nativo (sin envoltura extra)
+  public function Dividir(a: integer, b: integer): integer
+    if b == 0 then
+      throw RuntimeError("division por cero")
+    endif
+    return a / b
+  end Dividir
+
+  // Usa parseInt y strlen
+  public function ChequearLongitud(s: string): string
+    var n: integer := strlen(s)
+    if n == 0 then
+      return "vacio"
+    endif
+    return "longitud=" + n
+  end ChequearLongitud
+
+  function Main()
+    // strlen + parseInt
+    print "strlen('Hola') =", strlen("Hola")
+    print ChequearLongitud("BASICPLUS")
+    print ChequearLongitud("")
+
+    print "parseInt('42') + 1 =", parseInt("42") + 1
+    print "parseFloat('3.14') * 2 =", parseFloat("3.14") * 2.0
+
+    // RuntimeError tipado
+    try
+      var r: integer := Dividir(10, 0)
+      print "no llega aqui:", r
+    catch err: RuntimeError
+      print "atrapado RuntimeError"
+    finally
+      print "  (finally)"
+    endtry
+
+    // División normal
+    print "10 / 2 =", Dividir(10, 2)
+
+    // input() comentado para no bloquear en ejecución no interactiva.
+    // Descomenta para probar:
+    // print "Como te llamas?"
+    // var nombre: string := input()
+    // print "Hola,", nombre
+  end Main
+
+end Fase5

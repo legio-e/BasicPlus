@@ -1,0 +1,16 @@
+library "com.example"
+module AppV1LSP
+
+  // Cliente solo conoce LogApi (v1). El binding apunta a BufferedLogger que
+  // implementa LogApiV2 (que extiende LogApi). El driver debe aceptarlo:
+  // BufferedLogger satisface LogApi por LSP.
+  import com.example.LogApi:BufferedLogger
+
+  function main(arg: string)
+    print "[AppV1LSP] usando contrato v1, impl de v2 via LSP"
+    LogApi.log("hola")
+    print "nivel = " + intToString(LogApi.level())
+    print "VERSION del contrato = " + intToString(LogApi.VERSION)
+  end main
+
+end AppV1LSP

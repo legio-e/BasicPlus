@@ -1,0 +1,30 @@
+// Sample para probar el panel "Properties módulo" del BpIde (N11).
+// Pasos en el IDE:
+//   1) Abre este fichero en el editor.
+//   2) Pon un breakpoint (F9) en alguna línea de `main`.
+//   3) Pulsa F11 (Debug). La ejecución para en el breakpoint.
+//   4) Mira la pestaña "Properties módulo" en el panel inferior:
+//      verás counter, nombre y flag actualizándose con cada paso.
+//
+// La lectura es directa al data block — el debugger NO invoca el
+// getter de la property, así que es segura incluso con sync property.
+module N11ModProps
+
+  public property counter: integer
+  public property nombre:  string
+  public sync property flag: boolean
+
+  function N11ModProps()
+    counter := 42
+    nombre  := "hola mundo"
+    flag    := true
+  end N11ModProps
+
+  function main(arg: string)
+    print "antes: counter=" + intToString(counter) + " nombre=" + nombre
+    counter := counter + 1
+    flag := false
+    print "después: counter=" + intToString(counter) + " flag dejó de estar puesto"
+  end main
+
+end N11ModProps

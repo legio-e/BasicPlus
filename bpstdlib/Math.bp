@@ -1,0 +1,55 @@
+// ============================================================
+// Math.bp — módulo stdlib con funciones matemáticas no implícitas.
+//
+// Todas las funciones aquí son `intrinsic`: declaran sólo la signature.
+// El compilador, al ver una llamada `Math.foo(...)`, inserta inline los
+// opcodes equivalentes en el call-site (en lugar de emitir CALL_EXT).
+// Por eso este .mod, una vez compilado, no contiene código de usuario —
+// existe sólo para darle a `import Math` un namespace y firmas tipadas.
+//
+// Lo que NO necesita estar aquí (ya es implícito sin import):
+//   abs, min, max, sqrt, pow, floor, ceil, round, exp, random, randomInt.
+// ============================================================
+module Math
+
+  // -------- Constantes --------
+  // π ≈ 3.14159...
+  public intrinsic function pi(): float
+  // e ≈ 2.71828... (constante de Euler).
+  public intrinsic function e(): float
+
+  // -------- Trigonometría --------
+  public intrinsic function sin(x: float): float
+  public intrinsic function cos(x: float): float
+  public intrinsic function tan(x: float): float
+
+  // -------- Logaritmos --------
+  // Logaritmo natural (base e). Equivalente a ln(x) en notación matemática.
+  public intrinsic function ln(x: float): float
+  // Logaritmo en base 10.
+  public intrinsic function log10(x: float): float
+
+  // -------- Signo --------
+  // Devuelve -1, 0, +1 según el signo del argumento.
+  public intrinsic function sign(x: integer): integer
+
+  // Versión para float. Devuelve un integer (-1/0/+1). NaN → 0.
+  public intrinsic function signF(x: float): integer
+
+  // -------- Trigonometría inversa --------
+  public intrinsic function asin(x: float): float
+  public intrinsic function acos(x: float): float
+  public intrinsic function atan(x: float): float
+
+  // atan2(y, x) — ángulo del vector (x,y) en (-π, π].
+  public intrinsic function atan2(y: float, x: float): float
+
+  // -------- Factorial / Gamma --------
+  // n >= 0, n <= 12 (máximo que cabe en i32). Fuera de rango → RuntimeError.
+  public intrinsic function factorial(n: integer): integer
+
+  // Función Γ (Lanczos approximation). Γ(n+1) = n! para naturales.
+  // Definida para x > 0; para 0 < x < 0.5 usa la reflexión de Euler.
+  public intrinsic function gamma(x: float): float
+
+end Math

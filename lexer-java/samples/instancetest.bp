@@ -1,0 +1,48 @@
+// instancetest.bp — operador instanceof + jerarquía de exception.
+
+module InstanceTest
+
+  public class Animal
+    var nombre: string
+    public function Animal(nombre: string)
+      this.nombre := nombre
+    end Animal
+  end Animal
+
+  public class Perro extends Animal
+    public function Perro(nombre: string)
+      super(nombre)
+    end Perro
+  end Perro
+
+  public class Gato extends Animal
+    public function Gato(nombre: string)
+      super(nombre)
+    end Gato
+  end Gato
+
+  function Main()
+    var p: Perro := Perro("Rex")
+    var a: Animal := p
+
+    print "p instanceof Perro  =", p instanceof Perro
+    print "p instanceof Animal =", p instanceof Animal
+    print "p instanceof Gato   =", p instanceof Gato
+    print "a instanceof Perro  =", a instanceof Perro
+    print "a instanceof Animal =", a instanceof Animal
+
+    var g: Animal := Gato("Misi")
+    print "g instanceof Perro  =", g instanceof Perro
+    print "g instanceof Gato   =", g instanceof Gato
+
+    // throw + catch tipado: lanza RuntimeError, atrapado por su clase.
+    try
+      throw RuntimeError("boom")
+    catch err: RuntimeError
+      print "atrapado RuntimeError"
+    endtry
+
+    print "fin"
+  end Main
+
+end InstanceTest

@@ -1,0 +1,58 @@
+module MutexTest
+
+  // Banco compartido entre threads. Cada Worker hace muchas transferencias
+  // sobre el balance global; con preempción a 10 ms y SIN mutex, las
+  // operaciones leer-modificar-escribir corrompen el contador.
+  class Account
+    public var balance: integer
+
+    public function Account()
+      this.balance := 0
+    end Account
+  end Account
+
+  class Adder extends Thread
+    public var acc:   Account
+    public var lock:  Mutex
+    public var iters: integer
+    public var nombre: string
+
+    public function Adder(nombre: string, acc: Account, lock: Mutex, iters: integer)
+      super(2048)
+      this.nombre := nombre
+      this.acc    := acc
+      this.lock   := lock
+      this.iters  := iters
+    end Adder
+
+    public function run()
+      var i: integer := 0
+      while i < this.iters do
+        this.lock.lock()
+        // Sección crítica: leer, calcular, escribir.
+        var b: integer := this.acc.balance
+        b := b + 1
+        this.acc.balance := b
+        this.lock.unlock()
+        i := i + 1
+      endwh
+      print this.nombre + " fin"
+    end run
+  end Adder
+
+  function main(arg: string)
+    var iters: integer := 50000
+    var acc:   Account  := Account()
+    var m:     Mutex    := Mutex()
+    var a:     Thread   := Adder("A", acc, m, iters)
+    var b:     Thread   := Adder("B", acc, m, iters)
+    print "[main] arrancando 2 workers, iters=" + intToString(iters)
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "[main] balance final = " + intToString(acc.balance)
+    print "[main] esperado      = " + intToString(iters + iters)
+  end main
+
+end MutexTest

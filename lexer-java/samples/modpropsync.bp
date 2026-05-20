@@ -1,0 +1,60 @@
+module ModPropSync
+
+  // Demo de `public sync property` a nivel MÓDULO. Es la contraparte de
+  // synctest.bp (que prueba sync en una property de clase): aquí el estado
+  // vive en un global privado del módulo, y los accesos cross-thread se
+  // serializan con un Mutex compartido por el módulo (__prop_mutex).
+  //
+  // Las property de módulo son la forma canónica de exponer estado mutable
+  // a otros módulos: las `var` de módulo NO se exportan en la .bpi, pero
+  // una `public property` sí expone su get/set sintéticos.
+  //
+  // Garantías SÍ: cada acceso individual (get y set por separado) es
+  //              atómico respecto a otros threads. Nunca lees un valor
+  //              corrupto.
+  // Garantía NO: `tick := tick + 1` se descompone en get + add + set, así
+  //              que entre el get y el set otro thread puede colarse y el
+  //              valor final puede ser menor que el ideal 2*iters. Para
+  //              read-modify-write atómico se necesita un Mutex propio.
+
+  public sync property tick: integer
+
+  public class Bumper extends Thread
+    public var iters: integer
+
+    public function Bumper(iters: integer)
+      super(2048)
+      this.iters := iters
+    end Bumper
+
+    public function run()
+      var i: integer := 0
+      while i < this.iters do
+        tick := tick + 1
+        i := i + 1
+      endwh
+    end run
+  end Bumper
+
+  function main(arg: string)
+    tick := 0
+    var iters: integer := 2000
+    print "arrancando 2 bumpers x " + intToString(iters)
+
+    var t1: Thread := Bumper(iters)
+    var t2: Thread := Bumper(iters)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    var v: integer := tick
+    print "tick final = " + intToString(v)
+    if v >= 0 and v <= 2 * iters then
+      print "OK: valor coherente (sin corrupción)"
+    else
+      print "ERROR: valor fuera de rango"
+    endif
+  end main
+
+end ModPropSync

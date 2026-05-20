@@ -1,0 +1,12 @@
+library "com.example"
+module AppWithLog
+
+  import com.example.LogApi:NoisyLogger
+
+  function main(arg: string)
+    LogApi.log("arrancando aplicacion")
+    LogApi.log("nivel: " + intToString(LogApi.level()))
+    LogApi.log("version interfaz: " + intToString(LogApi.VERSION))
+  end main
+
+end AppWithLog

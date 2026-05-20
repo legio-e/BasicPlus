@@ -1,0 +1,49 @@
+# ============================================================
+# Build outputs (Maven)
+# ============================================================
+target/
+*.class
+
+# Maven status / dependency-reduced poms
+**/dependency-reduced-pom.xml
+
+# ============================================================
+# IDE / editor metadata
+# ============================================================
+.idea/
+.vscode/
+*.iml
+nbproject/private/
+nb-configuration.xml
+.classpath
+.project
+.settings/
+
+# ============================================================
+# OS noise
+# ============================================================
+Thumbs.db
+.DS_Store
+
+# ============================================================
+# Compilation artifacts en samples/
+# ============================================================
+# Los .mod/.bpi/.dbg de lexer-java/samples/ son recompilables
+# en cualquier momento; los excluímos para que el repo no se
+# llene de binarios que cambian con cada compilación.
+# NOTA: lo de bpstdlib/ sí va al repo — es la distribución
+# del stdlib.
+lexer-java/samples/*.mod
+lexer-java/samples/*.bpi
+lexer-java/samples/*.dbg
+lexer-java/samples/**/out/*.mod
+lexer-java/samples/**/out/*.bpi
+lexer-java/samples/**/out/*.dbg
+lexer-java/samples/**/*.class
+
+# Dir de outputs de compilaciones ad-hoc del frontend
+lexer-java/out/
+
+# Stray outputs de tests
+out_test.txt
+tmp_iotest/

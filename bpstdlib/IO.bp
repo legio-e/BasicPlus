@@ -1,0 +1,69 @@
+// ============================================================
+// IO.bp — módulo stdlib con utilidades de fichero/directorio/path.
+//
+// Todas las funciones son `intrinsic`: el call-site se reemplaza por
+// opcodes inline. Este .mod, una vez compilado, no contiene código de
+// usuario — sólo da namespace y firmas tipadas a `import IO`.
+//
+// Lo que NO está aquí (ya es implícito sin import):
+//   readFile, writeFile, appendFile, fileExists, listDir, input.
+//
+// Convención: rutas como strings, separadores '/' o '\' aceptados
+// según OS. Las funciones de path NO acceden al filesystem — sólo
+// manipulan la string. Las que sí acceden lanzan RuntimeError si
+// fallan (fichero inexistente, permisos, etc.) — atrápalo con
+// `try ... catch e: RuntimeError`.
+// ============================================================
+module IO
+
+  // ---- Manipulación de paths (no tocan el filesystem) ----
+
+  // Une dos componentes de path con el separador adecuado.
+  //   pathJoin("dir", "file.txt")    → "dir/file.txt" (o "dir\file.txt" en Windows)
+  //   pathJoin("/a/b", "../c")       → "/a/b/../c"  (no resuelve "..")
+  public intrinsic function pathJoin(a: string, b: string): string
+
+  // Devuelve el directorio padre del path. "" si no tiene padre.
+  //   pathParent("/a/b/c") → "/a/b"
+  //   pathParent("c")      → ""
+  public intrinsic function pathParent(p: string): string
+
+  // Devuelve el nombre del fichero (último componente).
+  //   pathBasename("/a/b/c.txt") → "c.txt"
+  public intrinsic function pathBasename(p: string): string
+
+  // Devuelve la extensión SIN el punto. "" si no tiene.
+  //   pathExtension("foo.tar.gz") → "gz"
+  //   pathExtension("README")      → ""
+  public intrinsic function pathExtension(p: string): string
+
+  // Resuelve a path absoluto y normalizado (resuelve ".." y ".").
+  public intrinsic function pathAbsolute(p: string): string
+
+  // ---- Operaciones sobre filesystem ----
+
+  // Crea el directorio. Crea intermedios si faltan. No falla si ya existe.
+  public intrinsic function mkdir(p: string)
+
+  // Borra un directorio. Sólo si está vacío.
+  public intrinsic function rmdir(p: string)
+
+  // Borra un fichero.
+  public intrinsic function removeFile(p: string)
+
+  // Renombra/mueve. Si el destino existe, lo sobreescribe.
+  public intrinsic function rename(src: string, dst: string)
+
+  // Copia un fichero. Si el destino existe, lo sobreescribe.
+  public intrinsic function copyFile(src: string, dst: string)
+
+  // Tamaño del fichero en bytes. Falla si > 2 GB (no representable en integer).
+  public intrinsic function fileSize(p: string): integer
+
+  // true si p apunta a un directorio existente.
+  public intrinsic function isDirectory(p: string): boolean
+
+  // Última fecha de modificación, en milisegundos epoch (truncado a i32).
+  public intrinsic function lastModified(p: string): integer
+
+end IO

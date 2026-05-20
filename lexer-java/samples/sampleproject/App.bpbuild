@@ -1,0 +1,14 @@
+// Sample .bpbuild para BpIde / lexer-java --project.
+// Estructura:
+//   sampleproject/
+//     App.bpbuild          (este fichero)
+//     src/
+//       App.bp             (módulo main)
+//       Util.bp            (módulo importado por App)
+//     out/                 (.mod y .bpi generados aquí)
+{
+  "sourceDir":    "src",
+  "outDir":       "out",
+  "main":         "App",
+  "dependencies": []
+}

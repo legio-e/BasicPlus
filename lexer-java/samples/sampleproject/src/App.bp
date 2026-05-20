@@ -1,0 +1,10 @@
+// App.bp — main del proyecto sample.
+// Se compila con:  lexer-java --project ../App.bpbuild
+module App
+  import Util
+
+  function Main()
+    print Util.greet("BasicPlus")
+    print "5 squared =", Util.square(5)
+  end Main
+end App

@@ -1,0 +1,19 @@
+module ClassLeak
+
+  function helperPrivado(): integer
+    return 99
+  end helperPrivado
+
+  class Indiscreta
+    public function leer(): integer
+      // ERROR: helperPrivado no es public; la clase no puede usarlo
+      return helperPrivado()
+    end leer
+  end Indiscreta
+
+  function main(arg: string)
+    var i: Indiscreta := Indiscreta()
+    print "no llega"
+  end main
+
+end ClassLeak

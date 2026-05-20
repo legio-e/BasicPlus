@@ -1,0 +1,14 @@
+library "com.example.app"
+module MidB
+
+  import com.example.util.MathUtil
+
+  function MidB()
+    print "[MidB init]"
+  end MidB
+
+  public function useB(): integer
+    return MathUtil.cuadrado(5)
+  end useB
+
+end MidB

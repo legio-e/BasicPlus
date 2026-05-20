@@ -1,0 +1,62 @@
+module OwnerListRemove
+
+  class Recurso
+    public var nombre: string
+
+    public function Recurso(nombre: string)
+      this.nombre := nombre
+    end Recurso
+  end Recurso
+
+  function main(arg: string)
+    var ol: OwnerList := OwnerList()
+    ol.add(Recurso("A"))
+    ol.add(Recurso("B"))
+    ol.add(Recurso("C"))
+    ol.add(Recurso("D"))
+
+    print "antes del remove:"
+    var i: integer := 0
+    while i < ol.length() do
+      var r: Recurso := ol.get(i)
+      print "  [" + intToString(i) + "] " + r.nombre
+      i := i + 1
+    endwh
+
+    print ""
+    print "estado heap antes de removeAndFree(1):"
+    gc()
+
+    // Quita B y lo destruye.
+    ol.removeAndFree(1)
+
+    print ""
+    print "estado heap tras removeAndFree(1) (B liberado deterministicamente):"
+    gc()
+
+    print ""
+    print "lista actual:"
+    i := 0
+    while i < ol.length() do
+      var r: Recurso := ol.get(i)
+      print "  [" + intToString(i) + "] " + r.nombre
+      i := i + 1
+    endwh
+
+    // Comparemos: remove() del padre solo desplaza, NO libera.
+    ol.remove(0)   // quita A pero NO lo destruye (huerfano hasta el GC)
+    print ""
+    print "estado heap tras remove(0) sin free (A queda huerfano):"
+    gc()
+
+    print ""
+    print "lista actual:"
+    i := 0
+    while i < ol.length() do
+      var r: Recurso := ol.get(i)
+      print "  [" + intToString(i) + "] " + r.nombre
+      i := i + 1
+    endwh
+  end main
+
+end OwnerListRemove

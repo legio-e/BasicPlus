@@ -1,0 +1,6 @@
+library "com.example"
+module interface LogApiV2 extends com.example.LogApi
+  // Añade nueva funcionalidad encima de LogApi (log, level, VERSION).
+  public function logWithLevel(lvl: integer, msg: string)
+  public function flush()
+end LogApiV2

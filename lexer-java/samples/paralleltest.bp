@@ -1,0 +1,47 @@
+module ParallelTest
+
+  // Worker que hace CPU-bound puro: SIN llamadas a yield() / sleep().
+  // Si los 2 cores son reales, ambos workers corren simultáneamente y el
+  // tiempo total ≈ tiempo de UNO solo. Con 1 core físico (numWorkers=1),
+  // como no hay yields, el primero monopoliza hasta terminar y luego va el
+  // segundo: tiempo total ≈ 2× el de uno.
+  class Worker extends Thread
+    public var id:     integer
+    public var iters:  integer
+    public var result: integer
+
+    public function Worker(id: integer, iters: integer)
+      super(2048)
+      this.id     := id
+      this.iters  := iters
+      this.result := 0
+    end Worker
+
+    public function run()
+      var sum: integer := 0
+      var i:   integer := 0
+      while i < this.iters do
+        sum := sum + (i * 3) - (i / 2)
+        i := i + 1
+      endwh
+      this.result := sum
+      print "worker " + intToString(this.id) + " sum=" + intToString(sum)
+    end run
+  end Worker
+
+  function main(arg: string)
+    var iters: integer := 2000000
+
+    print "[main] arrancando workers (CPU-bound, sin yield)"
+    var t0: integer := now()
+    var w1: Thread := Worker(1, iters)
+    var w2: Thread := Worker(2, iters)
+    w1.start()
+    w2.start()
+    w1.join()
+    w2.join()
+    var elapsed: integer := now() - t0
+    print "[main] total ms = " + intToString(elapsed)
+  end main
+
+end ParallelTest

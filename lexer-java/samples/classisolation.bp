@@ -1,0 +1,42 @@
+module ClassIsolation
+
+  // ----- API publica del modulo (la clase puede llamar) -----
+  public function helperPublic(): integer
+    return 42
+  end helperPublic
+
+  // ----- Estado privado del modulo (la clase NO debe poder llamar) -----
+  function helperPrivado(): integer
+    return 99
+  end helperPrivado
+
+  public const PUBLIC_TAG: integer := 7
+
+  // -----------------------------------------------------------
+  class Caja
+    public var x: integer
+
+    public function Caja()
+      this.x := 0
+    end Caja
+
+    public function calcular(): integer
+      // Solo usamos lo PUBLICO del modulo. Compila.
+      return helperPublic() + this.x
+    end calcular
+
+    public function tag(): integer
+      return PUBLIC_TAG
+    end tag
+  end Caja
+
+  function main(arg: string)
+    var c: Caja := Caja()
+    c.x := 10
+    print "calcular = " + intToString(c.calcular())
+    print "tag = " + intToString(c.tag())
+    // Desde el modulo SI se puede llamar al privado:
+    print "privado (desde modulo) = " + intToString(helperPrivado())
+  end main
+
+end ClassIsolation

@@ -1,0 +1,16 @@
+library "test.fp"
+module FromPathTest
+
+  import ext.tools.Helper from "external/helper.mod"
+
+  function FromPathTest()
+    print "[FromPathTest init]"
+  end FromPathTest
+
+  function main(arg: string)
+    print "[FromPathTest main]"
+    print "Helper.TAG = " + Helper.TAG
+    print "doble(21) = " + intToString(Helper.doble(21))
+  end main
+
+end FromPathTest

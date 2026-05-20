@@ -1,0 +1,59 @@
+// fase5c.bp — sample del lote ampliado de stdlib:
+// strings extra, math extra, tiempo, I/O archivos.
+
+module Fase5c
+  import Math
+
+  function Fase5c()
+    print "[init] Fase5c"
+  end Fase5c
+
+  function Main()
+    print "-- strings extra --"
+    var partes: string[] := split("uno,dos,tres,cuatro", ",")
+    print "split('uno,dos,tres,cuatro', ','):"
+    for p in partes do
+      print "  ", p
+    next p
+    print "replace:", replace("hola mundo", "mundo", "BASICPLUS")
+
+    print "-- math extra --"
+    // pi/e/sin/cos/tan/ln/log10 viven en Math (intrínsecos: el compilador
+    // los inlinea como opcodes, igual coste que la versión "implícita" anterior).
+    print "Math.pi()         =", Math.pi()
+    print "Math.e()          =", Math.e()
+    print "Math.ln(Math.e()) =", Math.ln(Math.e())
+    print "Math.log10(1000)  =", Math.log10(1000.0)
+    print "exp(1.0)          =", exp(1.0)
+    print "Math.sin(0.0)     =", Math.sin(0.0)
+    print "Math.cos(0.0)     =", Math.cos(0.0)
+    print "randomInt(1, 100) =", randomInt(1, 100)
+
+    print "-- tiempo --"
+    var t0: integer := now()
+    print "now() =", t0
+    sleep(50)
+    var t1: integer := now()
+    print "tras sleep(50ms), elapsed =", t1 - t0
+
+    print "-- I/O archivos --"
+    var ruta: string := "out_test.txt"
+    writeFile(ruta, "hola desde BASICPLUS")
+    print "fileExists:", fileExists(ruta)
+    print "contenido:", readFile(ruta)
+    appendFile(ruta, "\nlinea anyadida")
+    print "tras append:", readFile(ruta)
+
+    print "-- listDir (directorio actual) --"
+    var entries: string[] := listDir(".")
+    var n: integer := 0
+    for f in entries do
+      if n < 5 then
+        print "  ", f
+      endif
+      n += 1
+    next f
+    print "  (total entries:", n, ")"
+  end Main
+
+end Fase5c

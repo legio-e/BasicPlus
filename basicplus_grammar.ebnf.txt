@@ -1,0 +1,573 @@
+# ============================================================
+#  Gramática EBNF del lenguaje BASICPLUS
+#  Estilo: BASIC moderno con clases, funciones, errores y librerías
+#
+#  Notación:
+#    rule  = expression            definición de regla
+#    e1 e2                         secuencia
+#    e1 | e2                       alternativa
+#    [ e ]                         opcional (cero o una vez)
+#    { e }                         repetición (cero o más veces)
+#    ( e )                         agrupación
+#    'texto'                       terminal literal
+#    NOMBRE_MAYUS                  token léxico
+# ============================================================
+
+(* ========================= PROGRAMA ========================= *)
+
+module ::= 'module' name NEWLINE
+           { import_stmt }
+           { defs_stmt }
+           'end' [ name ] NEWLINE;
+
+defs_stmt ::= const_decl | var_decl | func_def | class_def ;
+
+name   ::= LETTER { LETTER | DIGIT | '_' } ;
+
+const_decl = 'const' name [ ':' type ] '=' expr ( ';' | NEWLINE ) ;
+
+(* ========================= LIBRERÍAS ========================= *)
+import_stmt ::= 'IMPORT' lib_name { '.' lib_name } NEWLINE;
+lib_name = LETTER { LETTER | DIGIT } ;
+
+(* ========================= SENTENCIAS ========================= *)
+stmt = var_decl
+    | assign_stmt
+    | if_stmt
+    | while_stmt
+    | for_stmt
+    | try_stmt
+    | return_stmt
+    | throw_stmt
+    | print_stmt
+	| 'break' NEWLINE
+	| 'continue' NEWLINE
+    | call_expr NEWLINE 
+	| NEWLINE ;
+
+(* ========================= VARIABLES ========================= *)
+var_decl ::= 'var' name { ',' name } ':' type [ '=' expr ] ( ';' | NEWLINE ) ;
+
+type = 'INTEGER'
+       | 'FLOAT'
+       | 'STRING'
+       | 'BOOLEAN'
+       | name ;
+
+assign_stmt = name ':=' expr ( ';' | NEWLINE ) ; 
+
+(* ========================= FUNCIONES ========================= *)
+func_def ::= 'function' name '(' [ params ] ')' [ ':' type ] NEWLINE
+             body
+             'end' [ name ] NEWLINE ;
+
+params = param { ',' param } ;
+param = name ':' type ;
+return_stmt := 'return' [ expr ] NEWLINE ;
+call_expr = name '(' [ args ] ')' ;
+args = expr { ',' expr };
+
+(* ========================= CLASES ========================= *)
+class_def
+    = 'class' name [ 'extends' name ] NEWLINE
+      { member }
+      'end' [ name ] NEWLINE ;
+
+member ::= const_decl | var_decl | func_def ;
+
+(* ========================= CONTROL DE FLUJO ========================= *)
+body ::= { stmt } ;
+if_stmt ::= 'if' expr 'then' ( stmt NEWLINE | NEWLINE
+              body
+            { 'elseif' expr 'then' NEWLINE 
+			  body }
+            [ 'else' NEWLINE 
+			  body ]
+            'endif' ) ;
+
+while_stmt ::= 'while' expr 'do' ( stmt NEWLINE | NEWLINE
+                body
+               'endwh' );
+
+for_stmt   ::='for' name ':' 'integer' ':=' expr 'to' expr [ 'step' expr ] 'do' ( stmt NEWLINE | NEWLINE
+               body
+              'next' name ) ;
+
+print_stmt  ::= 'print' [ expr { print_expr } ] NEWLINE ;
+print_expr  ::= ( ';' | ',' ) [ expr ] ;
+
+(* ========================= MANEJO DE ERRORES ========================= *)
+try_stmt ::= 'try' NEWLINE
+               body
+             { 'catch' name ':' exception_type NEWLINE
+               body }
+             [ 'finally' NEWLINE 
+			   body ]
+             'endtry' ;
+
+throw_stmt ::= 'throw' expr NEWLINE ;
+
+(* ========================= EXPRESIONES ========================= *)
+(* Precedencia de menor a mayor:
+   expr → or_expr → and_expr → not_expr → cmp_expr
+        → add_expr → mul_expr → unary → atom             *)
+
+expr = or_expr ;
+or_expr ::= and_expr { 'or' and_expr } ;
+and_expr::= not_expr { 'and' not_expr } ;
+not_expr::= 'not' cmp_expr | cmp_expr ;
+cmp_expr::= add_expr [ ( '==' | '!=' | '<>' | '<' | '>' | '<=' | '>=' ) add_expr ] ;
+add_expr::= mul_expr { ( '+' | '-' | '|' | 'xor' ) mul_expr } ;
+mul_expr::= unary { ( '*' | '/' | 'mod' | '&' | 'shl' | 'shr' ) unary } ;
+unary   ::= '-' atom | atom ;
+atom    ::= INTEGER_LIT | FLOAT_LIT | STRING_LIT
+            | 'TRUE' | 'FALSE' | call_expr | name | '(' expr ')' ;
+
+(* ========================= TOKENS LÉXICOS ========================= *)
+
+INTEGER_LIT
+    = DIGIT { DIGIT }
+    ;
+
+FLOAT_LIT
+    = DIGIT { DIGIT } '.' DIGIT { DIGIT }
+    ;
+
+STRING_LIT
+    = '"' { CHAR } '"'
+    ;
+
+LETTER
+    = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
+    | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T'
+    | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
+    | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j'
+    | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't'
+    | 'u' | 'v' | 'w' | 'x' | 'y' | 'z'
+    ;
+
+DIGIT
+    = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+    ;
+
+CHAR
+    = (* cualquier carácter Unicode excepto '"' y NEWLINE *)
+    ;
+
+NEWLINE
+    = '\n' | '\r\n'
+    ;
+
+(* ========================= PALABRAS CLAVE RESERVADAS ========================= *)
+
+(* PROGRAM, END, IMPORT, DIM, AS, FUNCTION, METHOD, CLASS, EXTENDS,
+   IF, THEN, ELSEIF, ELSE, WHILE, FOR, TO, STEP, NEXT,
+   RETURN, PRINT, TRY, CATCH, FINALLY, THROW,
+   INTEGER, FLOAT, STRING, BOOLEAN, TRUE, FALSE,
+   AND, OR, NOT, MOD                                                            *)
+
+(* ========================= EJEMPLO COMPLETO ========================= *)
+
+(*
+PROGRAM Ejemplo
+  IMPORT MathLib
+  IMPORT IO.Console
+
+  CLASS Animal
+    DIM nombre AS STRING
+
+    METHOD Hablar() AS STRING
+      RETURN "..."
+    END METHOD
+  END CLASS
+
+  CLASS Perro EXTENDS Animal
+    METHOD Hablar() AS STRING
+      RETURN "Guau, soy " + nombre
+    END METHOD
+  END CLASS
+
+  FUNCTION Factorial(n AS INTEGER) AS INTEGER
+    IF n <= 1 THEN
+      RETURN 1
+    END IF
+    RETURN n * Factorial(n - 1)
+  END FUNCTION
+
+  DIM p AS Perro
+  p.nombre = "Rex"
+  PRINT p.Hablar()
+
+  TRY
+    DIM resultado AS INTEGER = Factorial(5)
+    PRINT resultado
+  CATCH err
+    PRINT "Error: " + err
+  FINALLY
+    PRINT "Fin del programa"
+  END TRY
+
+  FOR i = 1 TO 5 STEP 1
+    PRINT i
+  NEXT i
+
+END PROGRAM
+*)
+
+
+(* ============================================================
+   Gramática EBNF del lenguaje BASICPLUS
+   Estilo: BASIC moderno con clases, funciones, errores y librerías
+
+   Notación:
+     rule = expression          definición de regla
+     e1 e2                      secuencia
+     e1 | e2                    alternativa
+     [ e ]                      opcional (cero o una vez)
+     { e }                      repetición (cero o más veces)
+     ( e )                      agrupación
+     'texto'                    terminal literal
+     NOMBRE_MAYUS               token léxico
+   ============================================================ *)
+
+(* ========================= MÓDULO ========================= *)
+
+module
+    = 'module' name NEWLINE
+      { import_stmt }
+      { defs_stmt }
+      'end' [ name ] NEWLINE
+    ;
+
+name
+    = LETTER { LETTER | DIGIT | '_' }
+    ;
+
+(* ========================= LIBRERÍAS ========================= *)
+
+import_stmt
+    = 'import' lib_name { '.' lib_name } NEWLINE
+    ;
+
+lib_name
+    = LETTER { LETTER | DIGIT }
+    ;
+
+(* ========================= DEFINICIONES DE NIVEL MÓDULO ========================= *)
+
+defs_stmt
+    = const_decl
+    | var_decl
+    | func_def
+    | class_def
+    ;
+
+(* ========================= VARIABLES Y CONSTANTES ========================= *)
+
+const_decl
+    = 'const' name [ ':' type ] '=' expr ( ';' | NEWLINE )
+    ;
+
+var_decl
+    = 'var' name { ',' name } ':' type [ '=' expr ] ( ';' | NEWLINE )
+    ;
+
+type
+    = base_type [ '[' [ expr ] ']' ]
+    ;
+
+base_type
+    = 'INTEGER'
+    | 'FLOAT'
+    | 'STRING'
+    | 'BOOLEAN'
+    | name
+    ;
+
+(* ========================= ARRAYS ========================= *)
+
+array_literal
+    = '[' [ expr { ',' expr } ] ']'
+    ;
+
+(* ========================= FUNCIONES ========================= *)
+
+func_def
+    = 'function' name '(' [ params ] ')' [ ':' type ] NEWLINE
+      body
+      'end' [ name ] NEWLINE
+    ;
+
+params
+    = param { ',' param }
+    ;
+
+param
+    = name ':' type
+    ;
+
+return_stmt
+    = 'return' [ expr ] NEWLINE
+    ;
+
+call_expr
+    = name '(' [ args ] ')'
+    ;
+
+args
+    = expr { ',' expr }
+    ;
+
+(* ========================= CLASES ========================= *)
+
+class_def
+    = 'class' name [ 'extends' name ] NEWLINE
+      { member }
+      'end' [ name ] NEWLINE
+    ;
+
+member
+    = const_decl
+    | var_decl
+    | func_def
+    ;
+
+(* ========================= SENTENCIAS ========================= *)
+
+body
+    = { stmt }
+    ;
+
+stmt
+    = var_decl
+    | assign_stmt
+    | if_stmt
+    | while_stmt
+    | for_stmt
+    | try_stmt
+    | return_stmt
+    | throw_stmt
+    | print_stmt
+    | 'break' NEWLINE
+    | 'continue' NEWLINE
+    | call_expr NEWLINE
+    | NEWLINE
+    ;
+
+assign_stmt
+    = primary ':=' expr ( ';' | NEWLINE )
+    ;
+
+(* ========================= CONTROL DE FLUJO ========================= *)
+
+if_stmt
+    = 'if' expr 'then'
+      ( stmt NEWLINE
+      | NEWLINE
+        body
+        { 'elseif' expr 'then' NEWLINE
+          body }
+        [ 'else' NEWLINE
+          body ]
+        'endif'
+      )
+    ;
+
+while_stmt
+    = 'while' expr 'do'
+      ( stmt NEWLINE
+      | NEWLINE
+        body
+      )
+      'endwh'
+    ;
+
+for_stmt
+    = 'for' name ':' 'integer' ':=' expr 'to' expr [ 'step' expr ] 'do'
+      ( stmt NEWLINE
+      | NEWLINE
+        body
+        'next' name
+      )
+    ;
+
+print_stmt
+    = 'print' [ expr { print_expr } ] NEWLINE
+    ;
+
+print_expr
+    = ( ';' | ',' ) [ expr ]
+    ;
+
+(* ========================= MANEJO DE ERRORES ========================= *)
+
+try_stmt
+    = 'try' NEWLINE
+      body
+      { 'catch' name ':' exception_type NEWLINE
+        body }
+      [ 'finally' NEWLINE
+        body ]
+      'endtry'
+    ;
+
+exception_type
+    = name
+    ;
+
+throw_stmt
+    = 'throw' expr NEWLINE
+    ;
+
+(* ========================= EXPRESIONES ========================= *)
+
+(* Precedencia de menor a mayor:
+   expr → or_expr → and_expr → not_expr → cmp_expr
+        → add_expr → mul_expr → unary → primary → atom  *)
+
+expr
+    = or_expr
+    ;
+
+or_expr
+    = and_expr { 'or' and_expr }
+    ;
+
+and_expr
+    = not_expr { 'and' not_expr }
+    ;
+
+not_expr
+    = 'not' cmp_expr
+    | cmp_expr
+    ;
+
+cmp_expr
+    = add_expr [ ( '==' | '!=' | '<>' | '<' | '>' | '<=' | '>=' ) add_expr ]
+    ;
+
+add_expr
+    = mul_expr { ( '+' | '-' | '|' | 'xor' ) mul_expr }
+    ;
+
+mul_expr
+    = unary { ( '*' | '/' | 'mod' | '&' | 'shl' | 'shr' ) unary }
+    ;
+
+unary
+    = '-' primary
+    | primary
+    ;
+
+primary
+    = atom { '.' ( call_expr | name ) | '[' expr ']' }
+    ;
+
+atom
+    = INTEGER_LIT
+    | FLOAT_LIT
+    | STRING_LIT
+    | 'TRUE'
+    | 'FALSE'
+    | array_literal
+    | call_expr
+    | name
+    | '(' expr ')'
+    ;
+
+(* ========================= TOKENS LÉXICOS ========================= *)
+
+INTEGER_LIT
+    = DIGIT { DIGIT }
+    ;
+
+FLOAT_LIT
+    = DIGIT { DIGIT } '.' DIGIT { DIGIT }
+    ;
+
+STRING_LIT
+    = '"' { CHAR } '"'
+    ;
+
+LETTER
+    = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
+    | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T'
+    | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
+    | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j'
+    | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't'
+    | 'u' | 'v' | 'w' | 'x' | 'y' | 'z'
+    ;
+
+DIGIT
+    = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+    ;
+
+CHAR
+    = (* cualquier carácter Unicode excepto '"' y NEWLINE *)
+    ;
+
+NEWLINE
+    = '\n' | '\r\n'
+    ;
+
+(* ========================= PALABRAS CLAVE RESERVADAS ========================= *)
+
+(* module, end, import,
+   const, var, function, class, extends,
+   if, then, elseif, else, endif,
+   while, do, endwh,
+   for, to, step, next,
+   try, catch, finally, endtry, throw,
+   return, break, continue, print,
+   and, or, not, xor, mod, shl, shr,
+   INTEGER, FLOAT, STRING, BOOLEAN, TRUE, FALSE                *)
+
+(* ========================= EJEMPLO COMPLETO ========================= *)
+
+(*
+module Ejemplo
+  import MathLib
+  import IO.Console
+
+  class Animal
+    var nombre: STRING
+
+    function Hablar(): STRING
+      return "..."
+    end Hablar
+  end Animal
+
+  class Perro extends Animal
+    function Hablar(): STRING
+      return "Guau, soy " + nombre
+    end Hablar
+  end Perro
+
+  function Factorial(n: INTEGER): INTEGER
+    if n <= 1 then
+      return 1
+    endif
+    return n * Factorial(n - 1)
+  end Factorial
+
+  var primos: INTEGER[] = [2, 3, 5, 7, 11]
+  var p: Perro
+  p.nombre := "Rex"
+  print p.Hablar()
+
+  try
+    var resultado: INTEGER = Factorial(5)
+    print "Resultado:", resultado
+  catch err: RuntimeError
+    print "Error: ", err
+  finally
+    print "Fin del programa"
+  endtry
+
+  for i: integer := 0 to 4 do
+    print primos[i],
+  next i
+
+end Ejemplo
+*)
+

@@ -1,0 +1,12 @@
+module FloorTest
+
+  function Main()
+    print "floor(3.7) =", floor(3.7)
+    print "ceil(3.2)  =", ceil(3.2)
+    print "round(3.5) =", round(3.5)
+    print "round(3.4) =", round(3.4)
+    var x: float := 3.7
+    print "floor(x)   =", floor(x)
+  end Main
+
+end FloorTest

@@ -1,0 +1,40 @@
+// ownertest2.bp — Fase 2: campos owner en clase + destrucción recursiva.
+// Para que la liberación recursiva sea evidente, creamos un "ancla" externa
+// (otra Caja sin field owner) que SIEMPRE quede viva, así el delta de bytes
+// alive entre snapshots delata cuánto se ha liberado.
+
+module OwnerTest2
+
+  public class Animal
+    public var nombre: string
+    public function Animal(nombre: string)
+      this.nombre := nombre
+    end Animal
+  end Animal
+
+  public class Caja
+    public var owner contenido: Animal
+    public function Caja(a: Animal)
+      this.contenido := a
+    end Caja
+  end Caja
+
+  function Main()
+    print "[baseline]"
+    gc()
+
+    print "[+ Caja(Animal(Rex))]"
+    var owner c: Caja := Caja(Animal("Rex"))
+    gc()                                              // +24 (Caja + Animal)
+
+    print "[reassign c := Caja(Animal(Toby))]"
+    c := Caja(Animal("Toby"))
+    gc()                                              // sigue 24 (vieja Caja+Animal liberados, reusados)
+
+    print "[c.contenido.nombre =", c.contenido.nombre, "]"
+    gc()
+
+    // Salir → c se libera recursivamente.
+  end Main
+
+end OwnerTest2

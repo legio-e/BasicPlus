@@ -1,0 +1,15 @@
+module Trim2
+
+  function Main()
+    var s: string := "  Hola  "
+    // Caso 1: inline en print
+    print "[" + trim(s) + "]"
+    // Caso 2: inline con item previo
+    print "trim:", "[" + trim(s) + "]"
+    // Caso 3: vars intermedias (este sabemos que tira)
+    var t: string := trim(s)
+    var c: string := "[" + t + "]"
+    print "con vars:", c
+  end Main
+
+end Trim2

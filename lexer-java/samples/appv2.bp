@@ -1,0 +1,17 @@
+library "com.example"
+module AppV2
+
+  // Importamos LogApiV2 (la interfaz hija). El namespace debe exponer
+  // tanto los símbolos propios de V2 como los heredados de V1.
+  import com.example.LogApiV2:BufferedLogger
+
+  function main(arg: string)
+    print "[AppV2] usando contrato v2"
+    LogApiV2.log("via heredado de v1")
+    LogApiV2.logWithLevel(7, "extra de v2")
+    LogApiV2.flush()
+    print "nivel = " + intToString(LogApiV2.level())
+    print "VERSION = " + intToString(LogApiV2.VERSION)
+  end main
+
+end AppV2

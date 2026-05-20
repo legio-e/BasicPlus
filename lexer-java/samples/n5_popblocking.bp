@@ -1,0 +1,87 @@
+// Sample para N5: SyncList.popBlocking() — consumer eficiente.
+//
+// `pop()`: devuelve null si la lista está vacía. El consumer tiene que
+//          comprobar y reintentar si quiere esperar (busy-poll en BP).
+//
+// `popBlocking()`: NO devuelve null nunca. Si la lista está vacía,
+//          espera hasta que alguien añada algo. La implementación interna
+//          intenta extraer; si está vacía, libera el mutex y duerme 1ms;
+//          reintenta. No hace busy-spin (cede el slot del scheduler).
+//
+// Ejecuta y verifica que el consumer recibe los 8 items que el
+// productor mete con 20ms de espera entre cada uno.
+module N5PopBlocking
+
+  public class Item
+    public var n: integer
+    public function Item(n: integer)
+      this.n := n
+    end Item
+  end Item
+
+  // Productor "lento": añade un item cada 20ms. El consumer DEBE bloquearse.
+  public class SlowProd extends Thread
+    public var bag: SyncList
+    public var iters: integer
+    public function SlowProd(bag: SyncList, iters: integer)
+      super(2048)
+      this.bag := bag
+      this.iters := iters
+    end SlowProd
+    public function run()
+      var i: integer := 0
+      while i < this.iters do
+        sleep(20)
+        this.bag.add(Item(100 + i))
+        i := i + 1
+      endwh
+    end run
+  end SlowProd
+
+  // Consumer que llama popBlocking — espera SIEMPRE hasta haber item.
+  public class Cons extends Thread
+    public var bag: SyncList
+    public var iters: integer
+    public var got: integer
+    public var sum: integer
+    public function Cons(bag: SyncList, iters: integer)
+      super(2048)
+      this.bag := bag
+      this.iters := iters
+      this.got := 0
+      this.sum := 0
+    end Cons
+    public function run()
+      var i: integer := 0
+      while i < this.iters do
+        var it: Item := this.bag.popBlocking()
+        this.got := this.got + 1
+        this.sum := this.sum + it.n
+        i := i + 1
+      endwh
+    end run
+  end Cons
+
+  function main(arg: string)
+    var bag: SyncList := SyncList()
+    var iters: integer := 8
+
+    var p: Thread := SlowProd(bag, iters)
+    var c: Cons   := Cons(bag, iters)
+
+    p.start()
+    c.start()
+    p.join()
+    c.join()
+
+    // Suma esperada: 100..107 = (100+107)*8/2 = 828.
+    print "consumidos = " + intToString(c.got)
+    print "suma       = " + intToString(c.sum)
+    if c.got == iters and c.sum == 828 then
+      print "OK: popBlocking recibió todos los items y en orden"
+    else
+      print "ERROR: faltan items o suma incorrecta"
+    endif
+  end main
+
+end N5PopBlocking

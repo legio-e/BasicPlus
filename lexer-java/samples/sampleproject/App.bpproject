@@ -1,0 +1,8 @@
+// .bpproject — proyecto de la VM para ejecutar el sample compilado.
+// Complementa al App.bpbuild (que es para el compilador):
+//   1) lexer-java --project App.bpbuild --backend=mivm   → produce out/*.mod
+//   2) bpgenvm           App.bpproject                  → ejecuta out/App.mod
+{
+  "main":        "out/App.mod",
+  "modulePaths": ["out"]
+}

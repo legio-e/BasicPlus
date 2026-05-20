@@ -1,0 +1,17 @@
+library "com.example.app"
+module DiamondTest
+
+  import com.example.app.MidA
+  import com.example.app.MidB
+
+  function DiamondTest()
+    print "[Diamond init]"
+  end DiamondTest
+
+  function main(arg: string)
+    print "[Diamond main]"
+    print "useA = " + intToString(MidA.useA())
+    print "useB = " + intToString(MidB.useB())
+  end main
+
+end DiamondTest

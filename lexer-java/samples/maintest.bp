@@ -1,0 +1,18 @@
+module MainTest
+
+  function MainTest()
+    print "[init] constructor de MainTest"
+  end MainTest
+
+  function main(args: string)
+    print "[main] arg recibido por VM:"
+    if args == "" then
+      print "  (cadena vacia)"
+    else
+      print "  '" + args + "'"
+    endif
+    print "  longitud: " + intToString(strlen(args))
+    print "fin del programa"
+  end main
+
+end MainTest

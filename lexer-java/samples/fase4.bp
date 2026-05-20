@@ -1,0 +1,74 @@
+// fase4.bp — sample que ejercita los arreglos de Fase 4:
+//   1) Constructor heredado: Cachorro NO define constructor propio,
+//      hereda el de Animal(nombre).
+//   2) try/catch/finally completo: finally se ejecuta incluso cuando
+//      el catch lanza otra excepción.
+//   3) Acceso correcto a parámetros tras el fix VarSymbol/ParamSymbol.
+
+module Fase4
+
+  function Fase4()
+    print "[init] Fase4"
+  end Fase4
+
+  public class Animal
+    var nombre: string
+
+    public function Animal(nombre: string)
+      this.nombre := nombre
+    end Animal
+
+    public function Hablar(): string
+      return "soy " + nombre
+    end Hablar
+  end Animal
+
+  // Subclase SIN constructor propio: debe heredar Animal(nombre)
+  public class Cachorro extends Animal
+    public function Hablar(): string
+      return super.Hablar() + " (cachorro)"
+    end Hablar
+  end Cachorro
+
+  // Función con varios parámetros para chequear el fix VarSymbol
+  public function Combinar(a: string, b: string, c: integer): string
+    return a + " " + b + " (" + c + ")"
+  end Combinar
+
+  // try/catch/finally con throw dentro del catch
+  public function Riesgo(x: integer): string
+    try
+      if x < 0 then
+        throw "x negativo"
+      endif
+      return "ok"
+    catch err
+      // El catch lanza otra excepción: finally debe ejecutarse igualmente
+      // y la excepción nueva sale del Riesgo.
+      print "  (finally se ejecutara aunque el catch reemita)"
+      throw "fallo en el catch"
+    finally
+      print "  (finally ejecutado)"
+    endtry
+  end Riesgo
+
+  function Main()
+    // 1) Constructor heredado
+    var c: Cachorro := Cachorro("Toby")
+    print c.Hablar()
+
+    // 2) Parámetros múltiples
+    print Combinar("Hola", "BASICPLUS", 4)
+
+    // 3) Riesgo path normal
+    print Riesgo(5)
+
+    // 4) Riesgo con catch que reemite
+    try
+      print Riesgo(-1)
+    catch err2
+      print "Main atrapo:", err2
+    endtry
+  end Main
+
+end Fase4

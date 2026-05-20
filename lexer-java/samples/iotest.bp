@@ -1,0 +1,53 @@
+// iotest.bp — exercise IO.mod intrinsic functions.
+// Crea un directorio tmp, opera sobre él y limpia al final.
+module IoTest
+  import IO
+
+  function Main()
+    var tmpdir: string := "tmp_iotest"
+
+    // -------- path manipulation (no toca filesystem) --------
+    print "pathJoin('a','b.txt') =", IO.pathJoin("a", "b.txt")
+    print "pathParent('/x/y/z')  =", IO.pathParent("/x/y/z")
+    print "pathBasename('/x/y/z.txt') =", IO.pathBasename("/x/y/z.txt")
+    print "pathExtension('foo.tar.gz') =", IO.pathExtension("foo.tar.gz")
+    print "pathExtension('README')     =", IO.pathExtension("README")
+
+    // -------- mkdir, isDirectory --------
+    IO.mkdir(tmpdir)
+    print "isDirectory('" + tmpdir + "') =", IO.isDirectory(tmpdir)
+    print "isDirectory('does_not_exist') =", IO.isDirectory("does_not_exist")
+
+    // -------- write, fileSize, copy --------
+    var path1: string := IO.pathJoin(tmpdir, "a.txt")
+    var path2: string := IO.pathJoin(tmpdir, "b.txt")
+    var path3: string := IO.pathJoin(tmpdir, "c.txt")
+    writeFile(path1, "hello, BasicPlus!")
+    print "fileSize(a.txt) =", IO.fileSize(path1)
+
+    IO.copyFile(path1, path2)
+    print "fileSize(b.txt copia) =", IO.fileSize(path2)
+    print "contents(b.txt)       =", readFile(path2)
+
+    // -------- rename --------
+    IO.rename(path2, path3)
+    print "fileExists(b.txt) tras rename =", fileExists(path2)
+    print "fileExists(c.txt) tras rename =", fileExists(path3)
+
+    // -------- lastModified (sólo verifica que no peta) --------
+    var lm: integer := IO.lastModified(path1)
+    print "lastModified(a.txt) > 0 =", lm != 0
+
+    // -------- pathAbsolute --------
+    print "pathAbsolute(a.txt) tiene ':' o '/' =", IO.pathAbsolute(path1) != path1
+
+    // -------- limpieza --------
+    IO.removeFile(path1)
+    IO.removeFile(path3)
+    IO.rmdir(tmpdir)
+    print "isDirectory tras rmdir =", IO.isDirectory(tmpdir)
+
+    print "OK"
+  end Main
+
+end IoTest

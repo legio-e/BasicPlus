@@ -1,0 +1,12 @@
+library "test.app"
+module FromTest
+
+  import OtherMod from "external/other.mod"
+  import lib.Util from "../shared/util.mod"
+
+  function Main()
+    print "[FromTest] imports declarados con 'from'"
+    print "  (ningun CALL_EXT generado todavia)"
+  end Main
+
+end FromTest
