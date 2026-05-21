@@ -276,6 +276,12 @@ public final class Parser {
             case FLOAT:      baseType = new SimpleTypeRef("float",   tok.line, tok.column); advance(); break;
             case STRING:     baseType = new SimpleTypeRef("string",  tok.line, tok.column); advance(); break;
             case BOOLEAN:    baseType = new SimpleTypeRef("boolean", tok.line, tok.column); advance(); break;
+            // L10 — tipos enteros estrechos. `short` es alias de `int16`.
+            case BYTE:       baseType = new SimpleTypeRef("byte",    tok.line, tok.column); advance(); break;
+            case INT8:       baseType = new SimpleTypeRef("int8",    tok.line, tok.column); advance(); break;
+            case WORD:       baseType = new SimpleTypeRef("word",    tok.line, tok.column); advance(); break;
+            case INT16:      baseType = new SimpleTypeRef("int16",   tok.line, tok.column); advance(); break;
+            case SHORT:      baseType = new SimpleTypeRef("int16",   tok.line, tok.column); advance(); break;
             case IDENTIFIER: baseType = new SimpleTypeRef(tok.lexeme, tok.line, tok.column); advance(); break;
             default:
                 error("se esperaba un tipo, encontrado '" + tok.lexeme + "'");
@@ -995,6 +1001,36 @@ public final class Parser {
                             args, lp.line, lp.column);
                 }
                 return new IdentifierExpr(tok.lexeme, tok.line, tok.column);
+            }
+            // L10 — tipos estrechos como casts en posición de expresión:
+            //   byte(x), int8(x), word(x), int16(x), short(x).
+            // Se parsean como CallExpr con el nombre canónico del tipo;
+            // SemanticAnalyzer + MivmEmitter saben que son casts a tipo
+            // estrecho y emiten I32_TO_{U8,I8,U16,I16} en su lugar.
+            // `short(x)` se normaliza a `int16(x)` (mismo Kind).
+            case BYTE:
+            case INT8:
+            case WORD:
+            case INT16:
+            case SHORT: {
+                String castName;
+                switch (tok.type) {
+                    case BYTE:  castName = "byte";  break;
+                    case INT8:  castName = "int8";  break;
+                    case WORD:  castName = "word";  break;
+                    case SHORT: castName = "int16"; break;
+                    default:    castName = "int16"; break;   // INT16
+                }
+                advance();
+                if (!check(TokenType.LPAREN)) {
+                    error("se esperaba '(' tras tipo '" + castName + "' en expresión (cast)");
+                    return new NullLitExpr(tok.line, tok.column);
+                }
+                Token lp = current(); advance();
+                List<IExpr> args = parseArgList();
+                consume(TokenType.RPAREN, "se esperaba ')'");
+                return new CallExpr(new IdentifierExpr(castName, tok.line, tok.column),
+                        args, lp.line, lp.column);
             }
             default:
                 error("se esperaba una expresión, encontrado '" + tok.lexeme + "'");

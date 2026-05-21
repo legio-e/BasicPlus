@@ -1,0 +1,17 @@
+// narrowtypes_errors.bp — debe FALLAR compilación con varios errores L10.
+module NarrowErrors
+
+  function Main()
+    var b1: byte := 300            // literal fuera de rango
+    var b2: byte := -1             // literal fuera de rango (byte unsigned)
+    var i8: int8 := 200            // literal fuera de rango (int8 = [-128,127])
+    var w:  word := -5             // literal fuera de rango (word unsigned)
+
+    var n: integer := 1000
+    var b3: byte := n              // sin cast — error
+    var b4: int16 := n             // sin cast — error
+
+    var bad: byte := byte(99999)   // cast con literal fuera de rango — error compile-time
+  end Main
+
+end NarrowErrors

@@ -223,6 +223,22 @@ public final class SemanticAnalyzer {
         addBuiltin(s, "fileExists", PrimitiveType.BOOLEAN, new String[]{"path"},           new BpType[]{PrimitiveType.STRING});
         addBuiltin(s, "listDir",    STRING_ARRAY,          new String[]{"path"},           new BpType[]{PrimitiveType.STRING});
 
+        // ---- L10: casts de tipos estrechos ----
+        // `byte(i)`, `int8(i)`, `word(i)`, `int16(i)`: tomar un integer
+        // y devolver el tipo estrecho correspondiente. La VM hace check
+        // de rango en runtime (I32_TO_{U8,I8,U16,I16} → BpThreadFault si
+        // se sale). El SemanticAnalyzer pre-evalúa literales para
+        // dar el error en compile-time cuando es posible. `short` es
+        // alias gramatical de `int16` y se normaliza en el parser.
+        addBuiltin(s, "byte",  PrimitiveType.UINT8,
+                new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
+        addBuiltin(s, "int8",  PrimitiveType.INT8,
+                new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
+        addBuiltin(s, "word",  PrimitiveType.UINT16,
+                new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
+        addBuiltin(s, "int16", PrimitiveType.INT16,
+                new String[]{"i"}, new BpType[]{PrimitiveType.INTEGER});
+
         // ---- Arrays ----
         // move(src, dst, srcStart, dstStart, count) → void
         // Polimórfico: src y dst pueden ser arrays de cualquier tipo (i8/i16/i32/ref).
@@ -419,6 +435,44 @@ public final class SemanticAnalyzer {
         FunctionSymbol fn = new FunctionSymbol(name, true, false, false, owner, null);
         fn.returnType = returnType;
         return fn;
+    }
+
+    /**
+     * L10 — ¿Se admite asignar `sourceExpr` (de tipo `source`) a una variable
+     * de tipo `target` aun cuando `target.isAssignableFrom(source)` sea false?
+     *
+     * El único caso especial: `target` es un tipo estrecho (byte/int8/word/int16),
+     * `source` es INTEGER, y `sourceExpr` es un literal cuyo valor cabe en el
+     * rango del tipo estrecho. Ejemplos:
+     *   var b: byte := 250        ✓  (250 ∈ [0,255])
+     *   var b: byte := -1         ✗  (-1 fuera de [0,255])
+     *   var b: byte := someInt    ✗  (no es literal: requiere byte(someInt))
+     */
+    static boolean acceptsNarrowFromLiteral(BpType target, BpType source, IExpr sourceExpr) {
+        if (!(target instanceof PrimitiveType)) return false;
+        PrimitiveType t = (PrimitiveType) target;
+        if (!t.isNarrowInteger()) return false;
+        if (!(source instanceof PrimitiveType
+                && ((PrimitiveType) source).tag == PrimitiveType.Kind.INTEGER)) return false;
+        Long lit = constantIntValueOf(sourceExpr);
+        if (lit == null) return false;
+        return lit >= t.rangeMin() && lit <= t.rangeMax();
+    }
+
+    /** Si la expresión es un literal entero (con paréntesis y unario `-`
+     *  opcionales), devuelve su valor. Null si no es un literal constante
+     *  reconocido. NO hace constant-folding general — sólo casos triviales. */
+    static Long constantIntValueOf(IExpr e) {
+        while (e instanceof ParenExpr) e = ((ParenExpr) e).inner;
+        if (e instanceof IntLitExpr) return ((IntLitExpr) e).value;
+        if (e instanceof UnaryExpr) {
+            UnaryExpr u = (UnaryExpr) e;
+            if ("-".equals(u.op)) {
+                Long inner = constantIntValueOf(u.operand);
+                if (inner != null) return -inner;
+            }
+        }
+        return null;
     }
 
     private static void addBuiltin(Scope s, String name, BpType returnType,
@@ -763,6 +817,11 @@ public final class SemanticAnalyzer {
                 case "float":   return PrimitiveType.FLOAT;
                 case "string":  return PrimitiveType.STRING;
                 case "boolean": return PrimitiveType.BOOLEAN;
+                // L10 — tipos estrechos. `short` ya fue traducido a "int16" por el parser.
+                case "byte":    return PrimitiveType.UINT8;
+                case "int8":    return PrimitiveType.INT8;
+                case "word":    return PrimitiveType.UINT16;
+                case "int16":   return PrimitiveType.INT16;
                 default:        return resolveNamedType(st);
             }
         }
@@ -838,8 +897,10 @@ public final class SemanticAnalyzer {
         ConstSymbol cs = (ConstSymbol) s;
         BpType t = analyzeExpr(c.value, null, cs.type);
         if (cs.type == null) cs.type = t;
-        else if (!cs.type.isAssignableFrom(t))
-            err(c.line, c.column, "valor de tipo '" + t.display() + "' no asignable a const de tipo '" + cs.type.display() + "'");
+        else if (!cs.type.isAssignableFrom(t)
+                && !acceptsNarrowFromLiteral(cs.type, t, c.value))
+            err(c.line, c.column, narrowAssignErrorMessage(cs.type, t, c.value,
+                    "valor de tipo '" + t.display() + "' no asignable a const de tipo '" + cs.type.display() + "'"));
     }
 
     private void analyzeVarInit(VarDecl v) {
@@ -847,8 +908,10 @@ public final class SemanticAnalyzer {
         Symbol sym = info.declSymbols.get(v);
         BpType t = (sym instanceof VarSymbol) ? ((VarSymbol) sym).type : null;
         BpType got = analyzeExpr(v.init, null, t);
-        if (t != null && !t.isAssignableFrom(got))
-            err(v.line, v.column, "valor de tipo '" + got.display() + "' no asignable a var de tipo '" + t.display() + "'");
+        if (t != null && !t.isAssignableFrom(got)
+                && !acceptsNarrowFromLiteral(t, got, v.init))
+            err(v.line, v.column, narrowAssignErrorMessage(t, got, v.init,
+                    "valor de tipo '" + got.display() + "' no asignable a var de tipo '" + t.display() + "'"));
         if (t != null && t.isScalar() && got instanceof NullType)
             err(v.line, v.column, "no se puede asignar 'null' a un tipo escalar '" + t.display() + "'");
         // L8: el inicializador de una var/static a NIVEL MÓDULO se ignora hoy
@@ -1020,11 +1083,31 @@ public final class SemanticAnalyzer {
         }
         if (v.init != null) {
             BpType got = analyzeExpr(v.init, scope, t);
-            if (!t.isAssignableFrom(got))
-                err(v.line, v.column, "valor de tipo '" + got.display() + "' no asignable a variable de tipo '" + t.display() + "'");
+            if (!t.isAssignableFrom(got)
+                    && !acceptsNarrowFromLiteral(t, got, v.init))
+                err(v.line, v.column, narrowAssignErrorMessage(t, got, v.init,
+                        "valor de tipo '" + got.display() + "' no asignable a variable de tipo '" + t.display() + "'"));
             if (t.isScalar() && got instanceof NullType)
                 err(v.line, v.column, "no se puede asignar 'null' a un tipo escalar '" + t.display() + "'");
         }
+    }
+
+    /** Mensaje extendido para el error de asignación cuando lhs es narrow:
+     *  si la fuente es un literal entero que no cabe en el narrow target,
+     *  damos el rango exacto en lugar del mensaje genérico. */
+    private static String narrowAssignErrorMessage(BpType target, BpType source,
+                                                   IExpr sourceExpr, String fallback) {
+        if (!(target instanceof PrimitiveType)) return fallback;
+        PrimitiveType t = (PrimitiveType) target;
+        if (!t.isNarrowInteger()) return fallback;
+        Long lit = constantIntValueOf(sourceExpr);
+        if (lit != null && (source instanceof PrimitiveType
+                && ((PrimitiveType) source).tag == PrimitiveType.Kind.INTEGER)) {
+            return "literal " + lit + " fuera del rango de " + t.display()
+                    + " (" + t.rangeMin() + ".." + t.rangeMax() + ")";
+        }
+        return "asignación a '" + t.display() + "' requiere cast explícito: "
+                + t.display() + "(<valor>)";
     }
 
     private void analyzeLocalConstDecl(ConstDecl c, Scope scope) {
@@ -1037,8 +1120,10 @@ public final class SemanticAnalyzer {
         sym.type = t;
         if (!scope.tryDefine(sym))
             err(c.line, c.column, "const duplicada: '" + c.name.name + "'");
-        if (declared != null && !declared.isAssignableFrom(got))
-            err(c.line, c.column, "valor de tipo '" + got.display() + "' no asignable a const de tipo '" + declared.display() + "'");
+        if (declared != null && !declared.isAssignableFrom(got)
+                && !acceptsNarrowFromLiteral(declared, got, c.value))
+            err(c.line, c.column, narrowAssignErrorMessage(declared, got, c.value,
+                    "valor de tipo '" + got.display() + "' no asignable a const de tipo '" + declared.display() + "'"));
         info.declSymbols.put(c, sym);
     }
 
@@ -1069,8 +1154,10 @@ public final class SemanticAnalyzer {
         } else {
             if (rhsT instanceof NullType && lhsT.isScalar())
                 err(a.line, a.column, "no se puede asignar 'null' a un tipo escalar '" + lhsT.display() + "'");
-            else if (!lhsT.isAssignableFrom(rhsT))
-                err(a.line, a.column, "no se puede asignar '" + rhsT.display() + "' a '" + lhsT.display() + "'");
+            else if (!lhsT.isAssignableFrom(rhsT)
+                    && !acceptsNarrowFromLiteral(lhsT, rhsT, a.value))
+                err(a.line, a.column, narrowAssignErrorMessage(lhsT, rhsT, a.value,
+                        "no se puede asignar '" + rhsT.display() + "' a '" + lhsT.display() + "'"));
         }
     }
 
@@ -1649,6 +1736,22 @@ public final class SemanticAnalyzer {
         if (target instanceof FunctionSymbol) {
             FunctionSymbol fn = (FunctionSymbol) target;
             checkArgs(ce.line, ce.column, fn.params, ce.args, scope);
+            // L10 — pre-evaluación de literal en casts a tipo estrecho:
+            // si el arg es una constante entera fuera del rango, error
+            // en compile-time en lugar de esperar al runtime check.
+            if (fn.returnType instanceof PrimitiveType
+                    && ((PrimitiveType) fn.returnType).isNarrowInteger()
+                    && isBuiltin(fn) && ce.args.size() == 1) {
+                Long lit = constantIntValueOf(ce.args.get(0));
+                if (lit != null) {
+                    PrimitiveType rt = (PrimitiveType) fn.returnType;
+                    if (lit < rt.rangeMin() || lit > rt.rangeMax()) {
+                        err(ce.line, ce.column, fn.name + "(" + lit
+                                + "): literal fuera del rango de " + rt.display()
+                                + " (" + rt.rangeMin() + ".." + rt.rangeMax() + ")");
+                    }
+                }
+            }
             return (fn.returnType != null) ? fn.returnType : VoidType.INSTANCE;
         }
 
@@ -1717,11 +1820,13 @@ public final class SemanticAnalyzer {
                 err(b.line, b.column, "'" + b.op + "' requiere numéricos, encontrados '" + lt.display() + "' y '" + rt.display() + "'");
                 return ErrorType.INSTANCE;
             case "mod":
-                if (lt.sameAs(PrimitiveType.INTEGER) && rt.sameAs(PrimitiveType.INTEGER)) return PrimitiveType.INTEGER;
+                // L10 — los tipos narrow son integer-like al cargar (load auto-promote);
+                // mod opera siempre como i32 y devuelve integer.
+                if (isIntegerLike(lt) && isIntegerLike(rt)) return PrimitiveType.INTEGER;
                 err(b.line, b.column, "'mod' requiere integer");
                 return ErrorType.INSTANCE;
             case "&": case "|": case "xor": case "shl": case "shr":
-                if (lt.sameAs(PrimitiveType.INTEGER) && rt.sameAs(PrimitiveType.INTEGER)) return PrimitiveType.INTEGER;
+                if (isIntegerLike(lt) && isIntegerLike(rt)) return PrimitiveType.INTEGER;
                 err(b.line, b.column, "'" + b.op + "' requiere integer");
                 return ErrorType.INSTANCE;
             case "and": case "or":
@@ -1744,6 +1849,13 @@ public final class SemanticAnalyzer {
 
     private static boolean isString(BpType t) {
         return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING;
+    }
+
+    /** L10 — `integer-like`: INTEGER o cualquiera de los tipos estrechos.
+     *  Para operaciones que en la pila VM son i32 (mod, bitwise) y que
+     *  no tienen sentido sobre float. */
+    private static boolean isIntegerLike(BpType t) {
+        return t instanceof PrimitiveType && ((PrimitiveType) t).isIntegerLike();
     }
 
     private static BpType promote(BpType a, BpType b) {

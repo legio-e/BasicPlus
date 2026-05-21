@@ -42,7 +42,21 @@ public abstract class BpType {
     // ============================================================
     public static final class PrimitiveType extends BpType {
 
-        public enum Kind { INTEGER, FLOAT, STRING, BOOLEAN }
+        /**
+         * L10 — los tipos enteros estrechos (INT8/UINT8/INT16/UINT16) son
+         * "ciudadanos de segunda" del sistema: existen para layouts de
+         * memoria compactos (arrays, globals) y para señalar API contracts,
+         * pero la VM SÓLO opera con i32 en la pila. Por tanto:
+         *   - Cualquier LOAD de un valor estrecho lo promociona a INTEGER.
+         *   - Una asignación INTEGER → estrecho REQUIERE cast explícito
+         *     `byte(x)` / `int8(x)` / `word(x)` / `int16(x)` / `short(x)`
+         *     porque puede perder información.
+         *   - `short` es alias gramatical de `int16` (mismo Kind).
+         */
+        public enum Kind {
+            INTEGER, FLOAT, STRING, BOOLEAN,
+            INT8, UINT8, INT16, UINT16
+        }
 
         public final Kind tag;
         private PrimitiveType(Kind k) { this.tag = k; }
@@ -51,10 +65,38 @@ public abstract class BpType {
         public static final PrimitiveType FLOAT   = new PrimitiveType(Kind.FLOAT);
         public static final PrimitiveType STRING  = new PrimitiveType(Kind.STRING);
         public static final PrimitiveType BOOLEAN = new PrimitiveType(Kind.BOOLEAN);
+        public static final PrimitiveType INT8    = new PrimitiveType(Kind.INT8);
+        public static final PrimitiveType UINT8   = new PrimitiveType(Kind.UINT8);   // byte
+        public static final PrimitiveType INT16   = new PrimitiveType(Kind.INT16);   // short
+        public static final PrimitiveType UINT16  = new PrimitiveType(Kind.UINT16);  // word
 
-        @Override public String  display()   { return tag.name().toLowerCase(); }
+        @Override public String display() {
+            switch (tag) {
+                case UINT8:  return "byte";
+                case UINT16: return "word";
+                // int8/int16 se muestran tal cual (la versión "short" se mapea a int16 en
+                // el parser para colapsar el alias; el usuario que escribió "short" verá
+                // "int16" en mensajes de error, asumido como aceptable).
+                default:     return tag.name().toLowerCase();
+            }
+        }
         @Override public boolean isScalar()  { return true; }
-        @Override public boolean isNumeric() { return tag == Kind.INTEGER || tag == Kind.FLOAT; }
+        @Override public boolean isNumeric() {
+            return tag == Kind.INTEGER || tag == Kind.FLOAT
+                || isNarrowInteger();
+        }
+
+        /** True para INT8/UINT8/INT16/UINT16. Su semántica es: load auto
+         *  a INTEGER; store desde INTEGER requiere cast explícito. */
+        public boolean isNarrowInteger() {
+            return tag == Kind.INT8 || tag == Kind.UINT8
+                || tag == Kind.INT16 || tag == Kind.UINT16;
+        }
+
+        /** True para los tipos del "grupo integer-like" — i32 + estrechos. */
+        public boolean isIntegerLike() {
+            return tag == Kind.INTEGER || isNarrowInteger();
+        }
 
         @Override
         public boolean sameAs(BpType other) {
@@ -69,6 +111,16 @@ public abstract class BpType {
             if (tag == Kind.FLOAT && source instanceof PrimitiveType
                     && ((PrimitiveType) source).tag == Kind.INTEGER)
                 return true;
+            // L10 — Estrechos → INTEGER: load promociona automáticamente.
+            //   var n: integer := someByte    ✓
+            //   var n: integer := someInt16   ✓
+            if (tag == Kind.INTEGER && source instanceof PrimitiveType
+                    && ((PrimitiveType) source).isNarrowInteger())
+                return true;
+            // L10 — INTEGER → estrecho: SÓLO si la fuente es a su vez
+            // del mismo tipo (ya cubierto por sameAs). Cualquier otra
+            // asignación necesita cast explícito y NO pasa por aquí —
+            // la verifica el SemanticAnalyzer con literal-range-check.
             // L1: any → primitivo. A nivel bytecode los slots son
             // idénticos (4 bytes), así que la asignación es
             // mecánicamente correcta. Sin esto, List/SyncList con
@@ -80,6 +132,26 @@ public abstract class BpType {
             // bytes basura.
             if (source instanceof AnyType) return true;
             return false;
+        }
+
+        /** Rango [min,max] inclusive para tipos narrow. Indefinido para INTEGER/FLOAT. */
+        public long rangeMin() {
+            switch (tag) {
+                case INT8:   return -128L;
+                case UINT8:  return 0L;
+                case INT16:  return -32768L;
+                case UINT16: return 0L;
+                default:     return Long.MIN_VALUE;
+            }
+        }
+        public long rangeMax() {
+            switch (tag) {
+                case INT8:   return 127L;
+                case UINT8:  return 255L;
+                case INT16:  return 32767L;
+                case UINT16: return 65535L;
+                default:     return Long.MAX_VALUE;
+            }
         }
     }
 

@@ -117,6 +117,12 @@ public final class Lexer {
         m.put("float",    TokenType.FLOAT);
         m.put("string",   TokenType.STRING);
         m.put("boolean",  TokenType.BOOLEAN);
+        // tipos enteros estrechos (L10)
+        m.put("byte",     TokenType.BYTE);
+        m.put("int8",     TokenType.INT8);
+        m.put("word",     TokenType.WORD);
+        m.put("int16",    TokenType.INT16);
+        m.put("short",    TokenType.SHORT);
         // literales
         m.put("true",     TokenType.TRUE);
         m.put("false",    TokenType.FALSE);

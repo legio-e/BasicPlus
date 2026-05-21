@@ -138,8 +138,9 @@ tienen. Reabrible si surge caso de uso.
 **Decisión por diseño**: documentada en el manual. Para algoritmos que requieren
 re-entrada, el usuario debe usar un patrón diferente (e.g. flag + condvar).
 
-### L10 — Tipos enteros estrechos (byte / word / short / int8 / int16)
-**Estado**: pendiente. El lenguaje hoy sólo reconoce `integer`, `float`,
+### L10 — Tipos enteros estrechos (cerrado v1)
+**Estado**: cerrado v1 — locales + casts. Faltan los layouts compactos
+(narrow arrays + narrow globals) que se anotan como follow-up. El lenguaje hoy sólo reconoce `integer`, `float`,
 `string`, `boolean` (en `Lexer.KEYWORDS` y `BpType.PrimitiveType.Kind`).
 
 **Lo que ya existe a bajo nivel** (no expuesto a BP source):
@@ -182,6 +183,42 @@ re-entrada, el usuario debe usar un patrón diferente (e.g. flag + condvar).
 **Esfuerzo**: medio. La maquinaria de la VM ya está. Lo más fiddly es
 la sintaxis del cast (decisión de diseño) y el typecheck del store
 (detectar cuándo el origen "definitivamente cabe" vs cuándo no).
+
+**Implementado en v1**:
+- Lexer + TokenType: 5 keywords nuevos (`byte`, `int8`, `word`, `int16`,
+  `short`). `short` = alias gramatical de `int16` (mismo Kind tras parser).
+- `BpType.PrimitiveType.Kind`: 4 valores nuevos (INT8, UINT8, INT16,
+  UINT16). Helpers `isNarrowInteger()`, `isIntegerLike()`, `rangeMin/Max()`.
+- `isAssignableFrom`: load auto-promociona narrow → INTEGER. Store
+  INTEGER → narrow está bloqueado (necesita cast).
+- Cast functions: `byte(x)`/`int8(x)`/`word(x)`/`int16(x)`/`short(x)`
+  como builtins registrados en `addBuiltin`. El emisor especial-casea
+  estos nombres y emite `I32_TO_{U8,I8,U16,I16}` (en vez de CALL_BUILTIN)
+  que hace check de rango en runtime → RuntimeError si no cabe.
+- **Check estático de literal en rango**: `var b: byte := 250` ✓ ;
+  `var b: byte := 300` → error "literal 300 fuera del rango de byte
+  (0..255)". Aplica a IntLitExpr (con ParenExpr y unario `-` envueltos).
+- **Mensajes claros**: si el LHS narrow tiene un RHS no-literal sin
+  cast → "asignación a 'byte' requiere cast explícito: byte(<valor>)".
+- **Pre-check de literales en casts**: `byte(99999)` → error
+  compile-time (no espera al runtime).
+- Operadores `mod`/`& | xor shl shr` aceptan narrow (load auto-promote
+  → i32 → resultado integer).
+- `print` reconoce narrow → usa `PRINT_NONL` (el valor ya está extendido
+  a i32 en pila).
+- Sample: `narrowtypes.bp` (happy path) + `narrowtypes_errors.bp` (7
+  errores esperados) + `narrowtypes_runtime.bp` (RuntimeError en
+  I32_TO_U8 con valor variable fuera de rango).
+
+**Limitaciones documentadas (follow-up)**:
+- **Locales narrow viven como i32 en pila** — sin ahorro de memoria
+  real. El valor narrow es semántico (validación + intent del API).
+- **Narrow arrays con layout compacto pendiente**. Hoy `var arr: byte[5]`
+  se acepta sintácticamente, pero el emitter usa `NEWARRAY` (4 bytes por
+  elemento) no `NEWARRAY_I8`. Cuando se implemente, los elementos pasarán
+  por `ALOAD_U8`/`ASTORE_I8` etc. (la VM ya los tiene).
+- **Narrow globals pendiente**. Mismo motivo — el data block tendría
+  `addConstantInt8`/`Int16` y los accesores serían `GET_GLOBAL_I8`/etc.
 
 ---
 

@@ -57,6 +57,13 @@ public enum TokenType {
     // ---- Palabras clave: tipos primitivos ----
     INTEGER, FLOAT, STRING, BOOLEAN,
 
+    // ---- Palabras clave: tipos enteros estrechos (L10) ----
+    // `byte` = uint8, `int8` = signed 8-bit, `word` = uint16, `int16` =
+    // signed 16-bit, `short` es alias gramatical de `int16`. Promocionan
+    // a INTEGER al cargar; el store desde INTEGER requiere cast explícito
+    // del estilo `byte(x)` / `int16(x)` / `word(x)` / `short(x)`.
+    BYTE, INT8, WORD, INT16, SHORT,
+
     // ---- Palabras clave: literales especiales ----
     TRUE, FALSE, NULL,
 

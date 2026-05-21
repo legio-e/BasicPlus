@@ -1,0 +1,53 @@
+// narrowtypes.bp — L10: tipos enteros estrechos.
+//
+// Reglas:
+//   - Load de cualquier valor narrow promociona a integer en la pila.
+//     `var n: integer := someByte`  ✓ sin cast.
+//   - Store INTEGER → narrow requiere cast EXCEPTO cuando el RHS es un
+//     literal en rango. `var b: byte := 250` ✓ ; `var b: byte := 300` ✗.
+//   - `byte(x)`/`int8(x)`/`word(x)`/`int16(x)`/`short(x)` son casts.
+//     Hacen check de rango en runtime — RuntimeError si el valor no cabe.
+//   - `short` es alias gramatical de `int16` (mismo tipo).
+module NarrowTypes
+
+  function Main()
+    // ---- Literales en rango: sin cast ----
+    var b1: byte  := 250
+    var b2: byte  := 0
+    var w1: word  := 65535
+    var i8: int8  := -128
+    var s1: int16 := -32000
+    var sh: short := 32767      // `short` = int16
+
+    print "b1 =", b1
+    print "b2 =", b2
+    print "w1 =", w1
+    print "i8 =", i8
+    print "s1 =", s1
+    print "sh =", sh
+
+    // ---- Load auto-promociona a integer ----
+    var n: integer := b1        // sin cast, OK
+    var m: integer := s1 * 2    // expresión: load promociona, * en i32
+    print "n  =", n
+    print "m  =", m
+
+    // ---- Cast desde integer (runtime check de rango) ----
+    var x: integer := 100
+    var b3: byte := byte(x)
+    print "b3 (byte(100)) =", b3
+
+    // ---- Cast desde expresión ----
+    var sum: integer := 50 + 30
+    var b4: byte := byte(sum)
+    print "b4 (byte(50+30)) =", b4
+
+    // ---- short(x) y int16(x) son intercambiables ----
+    var t1: int16 := short(1234)
+    var t2: int16 := int16(5678)
+    print "t1 =", t1, " t2 =", t2
+
+    print "OK"
+  end Main
+
+end NarrowTypes

@@ -1,0 +1,12 @@
+// narrowtypes_runtime.bp — el cast debe fallar EN RUNTIME si el valor
+// no cabe (el compile-time check sólo cubre literales constantes).
+module NarrowRuntime
+
+  function Main()
+    var n: integer := 99999
+    print "antes del cast"
+    var b: byte := byte(n)      // I32_TO_U8 fallará: 99999 > 255
+    print "no deberíamos llegar aquí:", b
+  end Main
+
+end NarrowRuntime

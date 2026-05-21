@@ -561,6 +561,18 @@ public final class MivmEmitter {
     static final String MODULE_SYNC_MUTEX_GLOBAL    = "__prop_mutex";
 
     static String moduleBackingName(String propName) { return MODULE_PROP_BACKING_PREFIX + propName; }
+
+    /** L10 — devuelve el opcode VM para el cast `tipoNarrow(x)` o null si
+     *  el nombre no es uno de los casts. */
+    private static OpCode narrowCastOpFor(String fnName) {
+        switch (fnName) {
+            case "byte":  return OpCode.I32_TO_U8;
+            case "int8":  return OpCode.I32_TO_I8;
+            case "word":  return OpCode.I32_TO_U16;
+            case "int16": return OpCode.I32_TO_I16;
+            default:      return null;
+        }
+    }
     static String moduleGetterName(String propName)  { return MODULE_PROP_GET_PREFIX     + propName; }
     static String moduleSetterName(String propName)  { return MODULE_PROP_SET_PREFIX     + propName; }
 
@@ -1955,7 +1967,14 @@ public final class MivmEmitter {
             BpType t = info.exprTypes.get(it.expr);
             if (t instanceof PrimitiveType) {
                 switch (((PrimitiveType) t).tag) {
-                    case INTEGER: w.emit(OpCode.PRINT_NONL); break;
+                    case INTEGER:
+                    // L10 — narrow ints se imprimen como integer (el valor en
+                    // pila ya está extendido a i32 por el load).
+                    case INT8:
+                    case UINT8:
+                    case INT16:
+                    case UINT16:
+                                  w.emit(OpCode.PRINT_NONL); break;
                     case FLOAT:   w.emit(OpCode.FPRINT_NONL); break;
                     case STRING:  w.emit(OpCode.PRINT_STR_NONL); break;
                     case BOOLEAN:
@@ -2240,8 +2259,23 @@ public final class MivmEmitter {
                     emitConstruction(fs.ownerClass, c.args);
                     return;
                 }
-                // ¿Built-in del analyzer? → CALL_BUILTIN id
+                // ¿Built-in del analyzer? → CALL_BUILTIN id, salvo casts L10.
                 if (SemanticAnalyzer.isBuiltin(fs)) {
+                    // L10 — casts a tipos estrechos: NO son CALL_BUILTIN, son un
+                    // opcode único I32_TO_{U8,I8,U16,I16} tras evaluar el arg.
+                    // El check de rango lo hace la VM (RuntimeError si se sale).
+                    OpCode castOp = narrowCastOpFor(fs.name);
+                    if (castOp != null) {
+                        if (c.args.size() != 1) {
+                            errors.add(fs.name + "(): se esperaba 1 argumento");
+                            return;
+                        }
+                        emitExpr(c.args.get(0));
+                        coerceToTarget(c.args.get(0), PrimitiveType.INTEGER);
+                        try { w.emit(castOp); }
+                        catch (IOException ex) { errors.add("emit " + castOp + ": " + ex.getMessage()); }
+                        return;
+                    }
                     Builtin b = Builtin.byName(fs.name);
                     if (b == null) {
                         errors.add("built-in '" + fs.name + "' no soportado en miVM");
