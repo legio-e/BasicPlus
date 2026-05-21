@@ -649,23 +649,25 @@ public class VirtualMachine {
     }
 
     /**
-     * A2.1 — Resuelve un path de usuario aplicando el sandbox del workdir
-     * si está configurado. Si no hay workdir (legacy), el path se usa
-     * tal cual.
+     * A2.1 + B3 v3 — Resuelve un path de usuario aplicando el sandbox del
+     * workdir si está configurado. Si no hay workdir (legacy), el path se
+     * usa tal cual.
      *
-     * Llamado por los builtins de IO. Lanza BpThreadFault si el sandbox
-     * lo rechaza (path absoluto o traversal), así que el thread BP que
-     * lo invocó muere con un mensaje claro pero la VM sigue.
+     * Llamado por los builtins de IO. Si el sandbox rechaza el path,
+     * dispara un RuntimeError BP (vía throwBpRuntimeError) que el código
+     * BP puede atrapar con `try/catch e: RuntimeError`.
      */
-    private java.nio.file.Path sandboxPath(String userPath) {
+    private java.nio.file.Path sandboxPath(ThreadContext tc, String userPath) {
         ModuleManager mm = getModuleManager();
         if (mm != null && mm.getWorkdir() != null) {
             try {
                 return mm.resolveInWorkdir(userPath);
             } catch (SecurityException se) {
-                throw new BpThreadFault("sandbox: " + se.getMessage());
+                throwBpRuntimeError(tc, "sandbox: " + se.getMessage());
+                return null;   // unreachable: throwBpRuntimeError siempre throws
             } catch (RuntimeException re) {
-                throw new BpThreadFault("sandbox: " + re.getMessage());
+                throwBpRuntimeError(tc, "sandbox: " + re.getMessage());
+                return null;
             }
         }
         return java.nio.file.Paths.get(userPath);
@@ -1455,6 +1457,7 @@ public class VirtualMachine {
                         currentPC, op.name(), rawOp, cs, sp, tc.id);
             }
 
+            try {
             switch (rawOp) {
                 case 0x00: // HALT  (sólo legal en el thread main)
                     if (tc.id != 0) {
@@ -1613,14 +1616,14 @@ public class VirtualMachine {
                 case 0x12: { // DIV
                     sp -= 4; int b = readI32(mem, sp);
                     sp -= 4; int a = readI32(mem, sp);
-                    if (b == 0) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("División por cero en PC " + currentPC); }
+                    if (b == 0) { tc.sp=sp; throwBpRuntimeError(tc, "División por cero"); }
                     writeI32(mem, sp, a / b); sp += 4;
                     break;
                 }
                 case 0x13: { // MOD
                     sp -= 4; int b = readI32(mem, sp);
                     sp -= 4; int a = readI32(mem, sp);
-                    if (b == 0) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("Módulo por cero en PC " + currentPC); }
+                    if (b == 0) { tc.sp=sp; throwBpRuntimeError(tc, "Módulo por cero"); }
                     writeI32(mem, sp, a % b); sp += 4;
                     break;
                 }
@@ -1687,7 +1690,7 @@ public class VirtualMachine {
                 // --- Arrays con allocator GC-aware ---
                 case 0x1D: { // NEWARRAY
                     sp -= 4; int size = readI32(mem, sp);
-                    if (size < 0) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("NEWARRAY: tamaño negativo en PC " + currentPC); }
+                    if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY: tamaño negativo (" + size + ")"); }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 4, TYPE_ARRAY_I32);
@@ -1699,7 +1702,7 @@ public class VirtualMachine {
                 }
                 case 0x38: { // NEWARRAY_I8
                     sp -= 4; int size = readI32(mem, sp);
-                    if (size < 0) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("NEWARRAY_I8: tamaño negativo en PC " + currentPC); }
+                    if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY_I8: tamaño negativo (" + size + ")"); }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     synchronized (vmLock) {
                         int ref = heapAlloc(size, TYPE_ARRAY_I8);
@@ -1711,7 +1714,7 @@ public class VirtualMachine {
                 }
                 case 0x39: { // NEWARRAY_I16
                     sp -= 4; int size = readI32(mem, sp);
-                    if (size < 0) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("NEWARRAY_I16: tamaño negativo en PC " + currentPC); }
+                    if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY_I16: tamaño negativo (" + size + ")"); }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 2, TYPE_ARRAY_I16);
@@ -1727,9 +1730,9 @@ public class VirtualMachine {
                     sp -= 4; int ref = readI32(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) {
-                        tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
-                        throw new RuntimeException("ALOAD: índice fuera de rango " + idx
-                                + " (length=" + length + ") en PC " + currentPC);
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "ALOAD: índice fuera de rango "
+                                + idx + " (length=" + length + ")");
                     }
                     writeI32(mem, sp, readI32(mem, ref + 4 + idx * 4)); sp += 4;
                     break;
@@ -1740,9 +1743,9 @@ public class VirtualMachine {
                     sp -= 4; int ref = readI32(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) {
-                        tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
-                        throw new RuntimeException("ASTORE: índice fuera de rango " + idx
-                                + " (length=" + length + ") en PC " + currentPC);
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "ASTORE: índice fuera de rango "
+                                + idx + " (length=" + length + ")");
                     }
                     writeI32(mem, ref + 4 + idx * 4, val);
                     break;
@@ -1895,7 +1898,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= 4; int ref = readI32(mem, sp);
                     int length = readI32(mem, ref);
-                    if (idx < 0 || idx >= length) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("ALOAD_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     writeI32(mem, sp, (int) mem[ref + 4 + idx]); sp += 4;
                     break;
                 }
@@ -1903,7 +1906,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= 4; int ref = readI32(mem, sp);
                     int length = readI32(mem, ref);
-                    if (idx < 0 || idx >= length) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("ALOAD_U8: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     writeI32(mem, sp, mem[ref + 4 + idx] & 0xFF); sp += 4;
                     break;
                 }
@@ -1911,7 +1914,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= 4; int ref = readI32(mem, sp);
                     int length = readI32(mem, ref);
-                    if (idx < 0 || idx >= length) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("ALOAD_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = ref + 4 + idx * 2;
                     int raw = ((mem[addr] & 0xFF) << 8) | (mem[addr + 1] & 0xFF);
                     writeI32(mem, sp, (short) raw); sp += 4;
@@ -1921,7 +1924,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= 4; int ref = readI32(mem, sp);
                     int length = readI32(mem, ref);
-                    if (idx < 0 || idx >= length) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("ALOAD_U16: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = ref + 4 + idx * 2;
                     int raw = ((mem[addr] & 0xFF) << 8) | (mem[addr + 1] & 0xFF);
                     writeI32(mem, sp, raw); sp += 4;
@@ -1933,7 +1936,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= 4; int ref = readI32(mem, sp);
                     int length = readI32(mem, ref);
-                    if (idx < 0 || idx >= length) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("ASTORE_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     mem[ref + 4 + idx] = (byte) val;
                     break;
                 }
@@ -1942,7 +1945,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= 4; int ref = readI32(mem, sp);
                     int length = readI32(mem, ref);
-                    if (idx < 0 || idx >= length) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("ASTORE_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = ref + 4 + idx * 2;
                     mem[addr]     = (byte) ((val >> 8) & 0xFF);
                     mem[addr + 1] = (byte) ( val       & 0xFF);
@@ -2025,25 +2028,25 @@ public class VirtualMachine {
 
                 case 0x4D: { // I32_TO_I8
                     sp -= 4; int v = readI32(mem, sp);
-                    if (v < -128 || v > 127) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("I32_TO_I8: valor fuera de rango " + v + " en PC " + currentPC); }
+                    if (v < -128 || v > 127) { tc.sp=sp; throwBpRuntimeError(tc, "I32_TO_I8: valor fuera de rango " + v); }
                     writeI32(mem, sp, v); sp += 4;
                     break;
                 }
                 case 0x4E: { // I32_TO_U8
                     sp -= 4; int v = readI32(mem, sp);
-                    if (v < 0 || v > 255) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("I32_TO_U8: valor fuera de rango " + v + " en PC " + currentPC); }
+                    if (v < 0 || v > 255) { tc.sp=sp; throwBpRuntimeError(tc, "I32_TO_U8: valor fuera de rango " + v); }
                     writeI32(mem, sp, v); sp += 4;
                     break;
                 }
                 case 0x4F: { // I32_TO_I16
                     sp -= 4; int v = readI32(mem, sp);
-                    if (v < Short.MIN_VALUE || v > Short.MAX_VALUE) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("I32_TO_I16: valor fuera de rango " + v + " en PC " + currentPC); }
+                    if (v < Short.MIN_VALUE || v > Short.MAX_VALUE) { tc.sp=sp; throwBpRuntimeError(tc, "I32_TO_I16: valor fuera de rango " + v); }
                     writeI32(mem, sp, v); sp += 4;
                     break;
                 }
                 case 0x50: { // I32_TO_U16
                     sp -= 4; int v = readI32(mem, sp);
-                    if (v < 0 || v > 0xFFFF) { tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs; throw new RuntimeException("I32_TO_U16: valor fuera de rango " + v + " en PC " + currentPC); }
+                    if (v < 0 || v > 0xFFFF) { tc.sp=sp; throwBpRuntimeError(tc, "I32_TO_U16: valor fuera de rango " + v); }
                     writeI32(mem, sp, v); sp += 4;
                     break;
                 }
@@ -2115,45 +2118,12 @@ public class VirtualMachine {
                 case 0x5A: { // CALL_BUILTIN
                     int id = readI16(mem, pc) & 0xFFFF; pc += 2;
                     // Sincronizamos al ThreadContext antes de entrar al builtin:
-                    // dispatchBuiltin opera sobre tc.sp (thread-safe).
+                    // dispatchBuiltin opera sobre tc.sp (thread-safe). Si el
+                    // builtin lanza BpExceptionPending (B3 v2/v3), el catch
+                    // del while exterior se hace cargo del unwind.
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
-                    try {
-                        dispatchBuiltin(Builtin.byId(id), tc);
-                        sp = tc.sp;
-                    } catch (BpExceptionPending pending) {
-                        // B3 v2 — el builtin construyó un BP-RuntimeError y
-                        // empujó el ref al tc.sp. Replicamos la lógica del
-                        // opcode THROW (0x5D) con LOCAL vars del intérprete.
-                        sp = tc.sp;
-                        sp -= 4;
-                        int v = readI32(mem, sp);
-                        int thrownClass = classPtrOfRefOr0(v);
-                        boolean handled = false;
-                        while (ehHandlerPc != -1) {
-                            boolean matches = (ehExpectedClass == 0)
-                                    || (thrownClass != 0
-                                        && isDescendantOf(thrownClass, ehExpectedClass));
-                            int handlerPc = ehHandlerPc;
-                            int savedSp = ehSavedSp, savedBp = ehSavedBp, savedCs = ehSavedCs;
-                            int[] prev = handlerStack.pop();
-                            ehHandlerPc = prev[0]; ehSavedSp = prev[1]; ehSavedBp = prev[2];
-                            ehSavedCs = prev[3]; ehExpectedClass = prev[4];
-                            if (matches) {
-                                sp = savedSp; bp = savedBp; cs = savedCs; pc = handlerPc;
-                                writeI32(mem, sp, v); sp += 4;
-                                handled = true;
-                                break;
-                            }
-                        }
-                        if (!handled) {
-                            // Sin handler que atrape: comportamiento "uncaught"
-                            // — convertimos a BpThreadFault con el mensaje del
-                            // RuntimeError BP (leemos field msg para no perderlo).
-                            String msg = readRuntimeErrorMsg(v);
-                            tc.pc = pc; tc.sp = sp; tc.bp = bp; tc.cs = cs;
-                            throw new BpThreadFault(msg != null ? msg : pending.getMessage());
-                        }
-                    }
+                    dispatchBuiltin(Builtin.byId(id), tc);
+                    sp = tc.sp;
                     // tc.yieldRequested lo levantan los builtins yield/sleep/join;
                     // el while exterior lo observa y abandona el bucle.
                     break;
@@ -2334,12 +2304,9 @@ public class VirtualMachine {
                     pc += 2;
                     int thisRef    = readI32(mem, sp - 4 - numArgs * 4);
                     if (thisRef == 0) {
-                        tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
-                        throw new RuntimeException("INVOKE_VIRTUAL sobre null receiver"
-                                + " (PC=" + currentPC + ", vtSlot=" + vtSlot
-                                + ", numArgs=" + numArgs + ", sp=" + sp + ", bp=" + bp
-                                + ", caller=" + (moduleManager != null
-                                    ? moduleManager.describePc(currentPC) : "?") + ")");
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "INVOKE_VIRTUAL sobre null receiver"
+                                + " (vtSlot=" + vtSlot + ", numArgs=" + numArgs + ")");
                     }
                     int classPtr   = readI32(mem, thisRef);
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
@@ -2363,6 +2330,40 @@ public class VirtualMachine {
                     throw new RuntimeException(String.format(
                             "Opcode no implementado: 0x%02X en PC %d",
                             rawOp, currentPC));
+            }
+            } catch (BpExceptionPending pending) {
+                // B3 v3 — Cualquier opcode (no sólo CALL_BUILTIN) puede
+                // lanzar BpExceptionPending si invoca throwBpRuntimeError.
+                // Ejecutamos el unwind exacto del case 0x5D THROW sobre
+                // las locales del intérprete. Si ningún handler atrapa,
+                // convertimos a BpThreadFault para que WorkerLoop termine
+                // el thread con un mensaje legible.
+                sp = tc.sp;
+                sp -= 4;
+                int v = readI32(mem, sp);
+                int thrownClass = classPtrOfRefOr0(v);
+                boolean handled = false;
+                while (ehHandlerPc != -1) {
+                    boolean matches = (ehExpectedClass == 0)
+                            || (thrownClass != 0
+                                && isDescendantOf(thrownClass, ehExpectedClass));
+                    int handlerPc = ehHandlerPc;
+                    int savedSp = ehSavedSp, savedBp = ehSavedBp, savedCs = ehSavedCs;
+                    int[] prev = handlerStack.pop();
+                    ehHandlerPc = prev[0]; ehSavedSp = prev[1]; ehSavedBp = prev[2];
+                    ehSavedCs = prev[3]; ehExpectedClass = prev[4];
+                    if (matches) {
+                        sp = savedSp; bp = savedBp; cs = savedCs; pc = handlerPc;
+                        writeI32(mem, sp, v); sp += 4;
+                        handled = true;
+                        break;
+                    }
+                }
+                if (!handled) {
+                    String msg = readRuntimeErrorMsg(v);
+                    tc.pc = pc; tc.sp = sp; tc.bp = bp; tc.cs = cs;
+                    throw new BpThreadFault(msg != null ? msg : pending.getMessage());
+                }
             }
         }
         } finally {
@@ -2496,7 +2497,9 @@ public class VirtualMachine {
             case CHAR_AT: {
                 int i = popTc(tc);
                 String s = readVmString(popTc(tc));
-                if (i < 0 || i >= s.length()) throw new RuntimeException("charAt: idx fuera de rango " + i);
+                if (i < 0 || i >= s.length()) {
+                    throwBpRuntimeError(tc, "charAt: idx fuera de rango " + i + " (len=" + s.length() + ")");
+                }
                 pushTc(tc, allocVmString(String.valueOf(s.charAt(i))));
                 break;
             }
@@ -2579,10 +2582,10 @@ public class VirtualMachine {
             case READ_FILE: {
                 String path = readVmString(popTc(tc));
                 try {
-                    byte[] data = java.nio.file.Files.readAllBytes(sandboxPath(path));
+                    byte[] data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
                     pushTc(tc, allocVmString(new String(data, java.nio.charset.StandardCharsets.UTF_8)));
                 } catch (java.io.IOException e) {
-                    throw new RuntimeException("readFile('" + path + "'): " + e.getMessage());
+                    throwBpRuntimeError(tc, "readFile('" + path + "'): " + e.getMessage());
                 }
                 break;
             }
@@ -2590,10 +2593,10 @@ public class VirtualMachine {
                 String content = readVmString(popTc(tc));
                 String path    = readVmString(popTc(tc));
                 try {
-                    java.nio.file.Files.write(sandboxPath(path),
+                    java.nio.file.Files.write(sandboxPath(tc, path),
                             content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 } catch (java.io.IOException e) {
-                    throw new RuntimeException("writeFile('" + path + "'): " + e.getMessage());
+                    throwBpRuntimeError(tc, "writeFile('" + path + "'): " + e.getMessage());
                 }
                 pushTc(tc, 0); // dummy
                 break;
@@ -2602,19 +2605,19 @@ public class VirtualMachine {
                 String content = readVmString(popTc(tc));
                 String path    = readVmString(popTc(tc));
                 try {
-                    java.nio.file.Files.write(sandboxPath(path),
+                    java.nio.file.Files.write(sandboxPath(tc, path),
                             content.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                             java.nio.file.StandardOpenOption.CREATE,
                             java.nio.file.StandardOpenOption.APPEND);
                 } catch (java.io.IOException e) {
-                    throw new RuntimeException("appendFile('" + path + "'): " + e.getMessage());
+                    throwBpRuntimeError(tc, "appendFile('" + path + "'): " + e.getMessage());
                 }
                 pushTc(tc, 0); // dummy
                 break;
             }
             case FILE_EXISTS: {
                 String path = readVmString(popTc(tc));
-                pushTc(tc, java.nio.file.Files.exists(sandboxPath(path)) ? 1 : 0);
+                pushTc(tc, java.nio.file.Files.exists(sandboxPath(tc, path)) ? 1 : 0);
                 break;
             }
             case GC: {
@@ -2624,7 +2627,7 @@ public class VirtualMachine {
             }
             case LIST_DIR: {
                 String path = readVmString(popTc(tc));
-                java.io.File dir = sandboxPath(path).toFile();
+                java.io.File dir = sandboxPath(tc, path).toFile();
                 String[] names = dir.list();
                 if (names == null) names = new String[0];
                 int[] refs = new int[names.length];
@@ -2638,14 +2641,14 @@ public class VirtualMachine {
             // ---- Soporte para List / StringBuilder ----
             case NEW_REF_ARRAY: {
                 int cap = popTc(tc);
-                if (cap < 0) throw new RuntimeException("__newRefArray: capacidad negativa: " + cap);
+                if (cap < 0) throwBpRuntimeError(tc, "__newRefArray: capacidad negativa: " + cap);
                 pushTc(tc, allocVmRefArray(cap));
                 break;
             }
             case GROW_REF_ARRAY: {
                 int newCap = popTc(tc);
                 int oldRef = popTc(tc);
-                if (newCap < 0) throw new RuntimeException("__growRefArray: capacidad negativa: " + newCap);
+                if (newCap < 0) throwBpRuntimeError(tc, "__growRefArray: capacidad negativa: " + newCap);
                 int oldLen = (oldRef != 0) ? readInt32(oldRef) : 0;
                 int newRef = allocVmRefArray(newCap);
                 int copyLen = Math.min(oldLen, newCap);
@@ -2658,7 +2661,7 @@ public class VirtualMachine {
             case GROW_INT_ARRAY: {
                 int newCap = popTc(tc);
                 int oldRef = popTc(tc);
-                if (newCap < 0) throw new RuntimeException("__growIntArray: capacidad negativa: " + newCap);
+                if (newCap < 0) throwBpRuntimeError(tc, "__growIntArray: capacidad negativa: " + newCap);
                 int oldLen = (oldRef != 0) ? readInt32(oldRef) : 0;
                 int newRef = heapAlloc(newCap * 4, TYPE_ARRAY_I32);
                 writeInt32(newRef, newCap);
@@ -2675,9 +2678,9 @@ public class VirtualMachine {
             case CHARS_TO_STRING: {
                 int len = popTc(tc);
                 int charsRef = popTc(tc);
-                if (len < 0) throw new RuntimeException("__charsToString: longitud negativa: " + len);
+                if (len < 0) throwBpRuntimeError(tc, "__charsToString: longitud negativa: " + len);
                 int avail = (charsRef != 0) ? readInt32(charsRef) : 0;
-                if (len > avail) throw new RuntimeException("__charsToString: longitud " + len + " > capacidad " + avail);
+                if (len > avail) throwBpRuntimeError(tc, "__charsToString: longitud " + len + " > capacidad " + avail);
                 StringBuilder sb = new StringBuilder(len);
                 for (int i = 0; i < len; i++) sb.append((char) readInt32(charsRef + 4 + i * 4));
                 pushTc(tc, allocVmString(sb.toString()));
@@ -2687,7 +2690,7 @@ public class VirtualMachine {
                 int idx = popTc(tc);
                 int sRef = popTc(tc);
                 int len = readInt32(sRef);
-                if (idx < 0 || idx >= len) throw new RuntimeException("charCodeAt: índice " + idx + " fuera de [0," + len + ")");
+                if (idx < 0 || idx >= len) throwBpRuntimeError(tc, "charCodeAt: índice " + idx + " fuera de [0," + len + ")");
                 pushTc(tc, readInt32(sRef + 4 + idx * 4));
                 break;
             }
@@ -2837,44 +2840,44 @@ public class VirtualMachine {
                 int dstRef   = popTc(tc);
                 int srcRef   = popTc(tc);
                 if (srcRef <= 0)
-                    throw new BpThreadFault("move: src es null");
+                    throwBpRuntimeError(tc, "move: src es null");
                 if (dstRef <= 0)
-                    throw new BpThreadFault("move: dst es null");
+                    throwBpRuntimeError(tc, "move: dst es null");
                 int srcHeader = srcRef - 4;
                 int dstHeader = dstRef - 4;
                 if (srcHeader < heapStart || srcHeader >= heapNext)
-                    throw new BpThreadFault("move: src no es ref a heap");
+                    throwBpRuntimeError(tc, "move: src no es ref a heap");
                 if (dstHeader < heapStart || dstHeader >= heapNext)
-                    throw new BpThreadFault("move: dst no es ref a heap");
+                    throwBpRuntimeError(tc, "move: dst no es ref a heap");
                 int srcTag = readInt32(srcHeader);
                 int dstTag = readInt32(dstHeader);
                 if ((srcTag & TAG_FREE_BIT) != 0)
-                    throw new BpThreadFault("move: src apunta a bloque libre");
+                    throwBpRuntimeError(tc, "move: src apunta a bloque libre");
                 if ((dstTag & TAG_FREE_BIT) != 0)
-                    throw new BpThreadFault("move: dst apunta a bloque libre");
+                    throwBpRuntimeError(tc, "move: dst apunta a bloque libre");
                 int srcType = (srcTag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
                 int dstType = (dstTag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
                 if (srcType != TYPE_ARRAY_I8 && srcType != TYPE_ARRAY_I16
                         && srcType != TYPE_ARRAY_I32 && srcType != TYPE_ARRAY_REF)
-                    throw new BpThreadFault("move: src no es un array (type=" + srcType + ")");
+                    throwBpRuntimeError(tc, "move: src no es un array (type=" + srcType + ")");
                 if (dstType != TYPE_ARRAY_I8 && dstType != TYPE_ARRAY_I16
                         && dstType != TYPE_ARRAY_I32 && dstType != TYPE_ARRAY_REF)
-                    throw new BpThreadFault("move: dst no es un array (type=" + dstType + ")");
+                    throwBpRuntimeError(tc, "move: dst no es un array (type=" + dstType + ")");
                 if (srcType != dstType)
-                    throw new BpThreadFault("move: tipos de array distintos (src=" + srcType
+                    throwBpRuntimeError(tc, "move: tipos de array distintos (src=" + srcType
                             + " dst=" + dstType + ")");
                 int srcLen = readInt32(srcRef);
                 int dstLen = readInt32(dstRef);
                 if (count < 0)
-                    throw new BpThreadFault("move: count negativo (" + count + ")");
+                    throwBpRuntimeError(tc, "move: count negativo (" + count + ")");
                 if (srcStart < 0 || dstStart < 0)
-                    throw new BpThreadFault("move: offset negativo (srcStart=" + srcStart
+                    throwBpRuntimeError(tc, "move: offset negativo (srcStart=" + srcStart
                             + " dstStart=" + dstStart + ")");
                 if ((long) srcStart + count > srcLen)
-                    throw new BpThreadFault("move: rango fuera de src (srcStart=" + srcStart
+                    throwBpRuntimeError(tc, "move: rango fuera de src (srcStart=" + srcStart
                             + " count=" + count + " srcLen=" + srcLen + ")");
                 if ((long) dstStart + count > dstLen)
-                    throw new BpThreadFault("move: rango fuera de dst (dstStart=" + dstStart
+                    throwBpRuntimeError(tc, "move: rango fuera de dst (dstStart=" + dstStart
                             + " count=" + count + " dstLen=" + dstLen + ")");
                 int elemSz = elemSize(srcType);
                 int srcByte = srcRef + 4 + srcStart * elemSz;
@@ -2914,10 +2917,10 @@ public class VirtualMachine {
             case FACTORIAL_I: {
                 int n = popTc(tc);
                 if (n < 0)
-                    throw new BpThreadFault("factorial: argumento negativo (" + n + ")");
+                    throwBpRuntimeError(tc, "factorial: argumento negativo (" + n + ")");
                 if (n > 12)
                     // 13! = 6227020800 desborda i32 con signo.
-                    throw new BpThreadFault("factorial: " + n + " desborda integer (máx 12)");
+                    throwBpRuntimeError(tc, "factorial: " + n + " desborda integer (máx 12)");
                 int r = 1;
                 for (int i = 2; i <= n; i++) r *= i;
                 pushTc(tc, r);
@@ -2963,36 +2966,36 @@ public class VirtualMachine {
                 String p = readVmString(popTc(tc));
                 // Con sandbox: devuelve el path absoluto DENTRO del workdir
                 // (no filtra info del host). Sin sandbox: usa Paths.get raw.
-                java.nio.file.Path resolved = sandboxPath(p);
+                java.nio.file.Path resolved = sandboxPath(tc, p);
                 String r = resolved.toAbsolutePath().normalize().toString();
                 pushTc(tc, allocVmString(r));
                 break;
             }
             case MKDIR: {
                 String p = readVmString(popTc(tc));
-                try { java.nio.file.Files.createDirectories(sandboxPath(p)); }
+                try { java.nio.file.Files.createDirectories(sandboxPath(tc, p)); }
                 catch (java.io.IOException e) {
-                    throw new BpThreadFault("mkdir('" + p + "'): " + e.getMessage());
+                    throwBpRuntimeError(tc, "mkdir('" + p + "'): " + e.getMessage());
                 }
                 pushTc(tc, 0);   // dummy void
                 break;
             }
             case RMDIR: {
                 String p = readVmString(popTc(tc));
-                try { java.nio.file.Files.delete(sandboxPath(p)); }
+                try { java.nio.file.Files.delete(sandboxPath(tc, p)); }
                 catch (java.nio.file.DirectoryNotEmptyException e) {
-                    throw new BpThreadFault("rmdir('" + p + "'): directorio no vacío");
+                    throwBpRuntimeError(tc, "rmdir('" + p + "'): directorio no vacío");
                 } catch (java.io.IOException e) {
-                    throw new BpThreadFault("rmdir('" + p + "'): " + e.getMessage());
+                    throwBpRuntimeError(tc, "rmdir('" + p + "'): " + e.getMessage());
                 }
                 pushTc(tc, 0);
                 break;
             }
             case REMOVE_FILE: {
                 String p = readVmString(popTc(tc));
-                try { java.nio.file.Files.delete(sandboxPath(p)); }
+                try { java.nio.file.Files.delete(sandboxPath(tc, p)); }
                 catch (java.io.IOException e) {
-                    throw new BpThreadFault("removeFile('" + p + "'): " + e.getMessage());
+                    throwBpRuntimeError(tc, "removeFile('" + p + "'): " + e.getMessage());
                 }
                 pushTc(tc, 0);
                 break;
@@ -3001,11 +3004,11 @@ public class VirtualMachine {
                 String to   = readVmString(popTc(tc));
                 String from = readVmString(popTc(tc));
                 try {
-                    java.nio.file.Files.move(sandboxPath(from),
-                            sandboxPath(to),
+                    java.nio.file.Files.move(sandboxPath(tc, from),
+                            sandboxPath(tc, to),
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 } catch (java.io.IOException e) {
-                    throw new BpThreadFault("rename('" + from + "' → '" + to + "'): " + e.getMessage());
+                    throwBpRuntimeError(tc, "rename('" + from + "' → '" + to + "'): " + e.getMessage());
                 }
                 pushTc(tc, 0);
                 break;
@@ -3014,11 +3017,11 @@ public class VirtualMachine {
                 String to   = readVmString(popTc(tc));
                 String from = readVmString(popTc(tc));
                 try {
-                    java.nio.file.Files.copy(sandboxPath(from),
-                            sandboxPath(to),
+                    java.nio.file.Files.copy(sandboxPath(tc, from),
+                            sandboxPath(tc, to),
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 } catch (java.io.IOException e) {
-                    throw new BpThreadFault("copyFile('" + from + "' → '" + to + "'): " + e.getMessage());
+                    throwBpRuntimeError(tc, "copyFile('" + from + "' → '" + to + "'): " + e.getMessage());
                 }
                 pushTc(tc, 0);
                 break;
@@ -3026,28 +3029,28 @@ public class VirtualMachine {
             case FILE_SIZE: {
                 String p = readVmString(popTc(tc));
                 try {
-                    long sz = java.nio.file.Files.size(sandboxPath(p));
+                    long sz = java.nio.file.Files.size(sandboxPath(tc, p));
                     // i32: si sobrepasa Integer.MAX_VALUE, error claro.
                     if (sz > Integer.MAX_VALUE)
-                        throw new BpThreadFault("fileSize('" + p + "'): tamaño > 2GB no representable en integer");
+                        throwBpRuntimeError(tc, "fileSize('" + p + "'): tamaño > 2GB no representable en integer");
                     pushTc(tc, (int) sz);
                 } catch (java.io.IOException e) {
-                    throw new BpThreadFault("fileSize('" + p + "'): " + e.getMessage());
+                    throwBpRuntimeError(tc, "fileSize('" + p + "'): " + e.getMessage());
                 }
                 break;
             }
             case IS_DIRECTORY: {
                 String p = readVmString(popTc(tc));
-                pushTc(tc, java.nio.file.Files.isDirectory(sandboxPath(p)) ? 1 : 0);
+                pushTc(tc, java.nio.file.Files.isDirectory(sandboxPath(tc, p)) ? 1 : 0);
                 break;
             }
             case LAST_MODIFIED: {
                 String p = readVmString(popTc(tc));
                 try {
-                    long ms = java.nio.file.Files.getLastModifiedTime(sandboxPath(p)).toMillis();
+                    long ms = java.nio.file.Files.getLastModifiedTime(sandboxPath(tc, p)).toMillis();
                     pushTc(tc, (int) (ms & 0x7FFFFFFFL));
                 } catch (java.io.IOException e) {
-                    throw new BpThreadFault("lastModified('" + p + "'): " + e.getMessage());
+                    throwBpRuntimeError(tc, "lastModified('" + p + "'): " + e.getMessage());
                 }
                 break;
             }

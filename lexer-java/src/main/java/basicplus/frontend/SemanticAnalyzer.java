@@ -733,15 +733,33 @@ public final class SemanticAnalyzer {
     // ============================================================
     // PASE 2 — Resolución de tipos
     // ============================================================
+    /** L2 v2 — resuelve un nombre de clase base, soportando tanto el
+     *  caso local (`Foo`) como el cross-module (`Mod.Foo`). */
+    private ClassSymbol resolveBaseClassName(String name) {
+        int dot = name.indexOf('.');
+        if (dot < 0) {
+            Symbol s = module.members.resolve(name);
+            return (s instanceof ClassSymbol) ? (ClassSymbol) s : null;
+        }
+        String alias = name.substring(0, dot);
+        String simple = name.substring(dot + 1);
+        Symbol nsSym = module.members.resolve(alias);
+        if (nsSym instanceof Symbol.ImportedNamespaceSymbol) {
+            Symbol.ImportedNamespaceSymbol ns = (Symbol.ImportedNamespaceSymbol) nsSym;
+            return ns.classes.get(simple);
+        }
+        return null;
+    }
+
     private void resolveTypesPass(ModuleNode mod) {
         // 1) extends de cada clase
         for (Symbol s : module.members.getSymbols()) {
             if (s instanceof ClassSymbol) {
                 ClassSymbol cls = (ClassSymbol) s;
                 if (cls.baseClassName != null) {
-                    Symbol baseSym = module.members.resolve(cls.baseClassName);
-                    if (baseSym instanceof ClassSymbol) {
-                        cls.baseClass = (ClassSymbol) baseSym;
+                    ClassSymbol base = resolveBaseClassName(cls.baseClassName);
+                    if (base != null) {
+                        cls.baseClass = base;
                     } else {
                         err(cls.line, cls.column, "clase base '" + cls.baseClassName + "' no existe");
                     }
@@ -831,6 +849,23 @@ public final class SemanticAnalyzer {
     }
 
     private BpType resolveNamedType(SimpleTypeRef st) {
+        // L2 v2 — tipo cualificado `Mod.Type`: lookup en el namespace
+        // importado bajo el alias.
+        int dot = st.name.indexOf('.');
+        if (dot >= 0) {
+            String alias = st.name.substring(0, dot);
+            String simple = st.name.substring(dot + 1);
+            Symbol nsSym = module.members.resolve(alias);
+            if (nsSym instanceof Symbol.ImportedNamespaceSymbol) {
+                Symbol.ImportedNamespaceSymbol ns = (Symbol.ImportedNamespaceSymbol) nsSym;
+                Symbol cand = ns.classes.get(simple);
+                if (cand == null) cand = ns.enums.get(simple);
+                if (cand instanceof ClassSymbol) return new ClassType((ClassSymbol) cand);
+                if (cand instanceof EnumSymbol)  return new EnumType((EnumSymbol) cand);
+            }
+            err(st.line, st.column, "tipo cualificado '" + st.name + "' no encontrado");
+            return ErrorType.INSTANCE;
+        }
         Symbol sym = module.members.resolve(st.name);
         if (sym instanceof ClassSymbol) return new ClassType((ClassSymbol) sym);
         if (sym instanceof EnumSymbol)  return new EnumType((EnumSymbol) sym);

@@ -1,0 +1,41 @@
+// l2v2app.bp — L2 v2 (parcial): herencia cross-module a nivel typecheck.
+//
+// `class FastCounter extends L2Lib.Counter` extiende una clase de otro
+// módulo. Como L2 v2 NO emite vtable inheritance cross-module todavía,
+// FastCounter no puede USAR métodos del padre. Pero el typecheck del
+// SUBTIPO sí funciona — un FastCounter es-un L2Lib.Counter.
+//
+// El test demuestra que:
+//   - El parser acepta `class X extends Mod.Y`.
+//   - El semántico resuelve el padre cross-module.
+//   - Una variable de tipo cualificado `var c: L2Lib.Counter` se acepta.
+//   - Una asignación FastCounter → L2Lib.Counter typecheckea (subtipo).
+module L2v2App
+  import L2Lib
+
+  // Hereda de Counter pero NO usa miembros heredados (la VM no soporta
+  // vtable inheritance cross-module todavía). Sólo verificamos que el
+  // typecheck reconoce la relación is-a.
+  public class FastCounter extends L2Lib.Counter
+    // Constructor local sin super() — L2 v2 no soporta llamar al ctor
+    // del padre cross-module. La instancia se inicializa SÓLO con los
+    // campos locales del child; los heredados quedan a 0.
+    public function FastCounter()
+      // sin args
+    end FastCounter
+
+    public function tag(): integer
+      return 42
+    end tag
+  end FastCounter
+
+  function Main()
+    var fc: FastCounter := FastCounter()
+
+    // Asignación polimórfica: FastCounter → L2Lib.Counter (subtipo).
+    var c: L2Lib.Counter := fc
+    print "tag (en fc) =", fc.tag()
+    print "OK"
+  end Main
+
+end L2v2App

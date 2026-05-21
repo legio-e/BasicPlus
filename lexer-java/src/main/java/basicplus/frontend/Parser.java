@@ -282,7 +282,18 @@ public final class Parser {
             case WORD:       baseType = new SimpleTypeRef("word",    tok.line, tok.column); advance(); break;
             case INT16:      baseType = new SimpleTypeRef("int16",   tok.line, tok.column); advance(); break;
             case SHORT:      baseType = new SimpleTypeRef("int16",   tok.line, tok.column); advance(); break;
-            case IDENTIFIER: baseType = new SimpleTypeRef(tok.lexeme, tok.line, tok.column); advance(); break;
+            case IDENTIFIER: {
+                String first = tok.lexeme;
+                advance();
+                // L2 v2 — acepta tipos cualificados `Mod.Class`.
+                if (match(TokenType.DOT)) {
+                    String second = consumeIdentifier("nombre tras '" + first + ".'");
+                    baseType = new SimpleTypeRef(first + "." + second, tok.line, tok.column);
+                } else {
+                    baseType = new SimpleTypeRef(first, tok.line, tok.column);
+                }
+                break;
+            }
             default:
                 error("se esperaba un tipo, encontrado '" + tok.lexeme + "'");
                 advance();
@@ -408,7 +419,15 @@ public final class Parser {
         match(TokenType.CLASS);
         String name = consumeIdentifier("nombre de la clase");
         String baseClass = null;
-        if (match(TokenType.EXTENDS)) baseClass = consumeIdentifier("clase base");
+        if (match(TokenType.EXTENDS)) {
+            // L2 v2 — acepta `extends Foo` (local) o `extends Mod.Foo`
+            // (cross-module: alias del namespace importado + clase).
+            baseClass = consumeIdentifier("clase base");
+            if (match(TokenType.DOT)) {
+                String memberName = consumeIdentifier("clase tras '" + baseClass + ".'");
+                baseClass = baseClass + "." + memberName;
+            }
+        }
         consumeStmtTerminator("se esperaba salto de línea tras la cabecera de la clase");
 
         List<ITopLevelDecl> members = new ArrayList<>();

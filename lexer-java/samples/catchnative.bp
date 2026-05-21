@@ -1,0 +1,59 @@
+// catchnative.bp — B3 v3: errores nativos atrapables desde BP.
+// Todos los errores que antes mataban el thread (BpThreadFault o
+// RuntimeException) ahora se pueden capturar con try/catch.
+module CatchNative
+
+  function trapDivByZero()
+    try
+      var a: integer := 10
+      var b: integer := 0
+      var c: integer := a / b
+      print "no deberíamos llegar"
+    catch e: RuntimeError
+      print "div0:", e.msg
+    endtry
+  end trapDivByZero
+
+  function trapArrayBounds()
+    try
+      var arr: integer[] := [1, 2, 3]
+      var x: integer := arr[10]
+      print "no deberíamos llegar"
+    catch e: RuntimeError
+      print "OOB:", e.msg
+    endtry
+  end trapArrayBounds
+
+  function trapNarrowCast()
+    try
+      var n: integer := 99999
+      var b: byte := byte(n)
+      print "no deberíamos llegar"
+    catch e: RuntimeError
+      print "cast:", e.msg
+    endtry
+  end trapNarrowCast
+
+  function trapCharAt()
+    try
+      var s: string := "abc"
+      var c: string := charAt(s, 10)
+      print "no deberíamos llegar"
+    catch e: RuntimeError
+      print "charAt:", e.msg
+    endtry
+  end trapCharAt
+
+  function Main()
+    print "--- div por cero ---"
+    trapDivByZero()
+    print "--- array OOB ---"
+    trapArrayBounds()
+    print "--- cast narrow OOR ---"
+    trapNarrowCast()
+    print "--- charAt OOR ---"
+    trapCharAt()
+    print "OK"
+  end Main
+
+end CatchNative

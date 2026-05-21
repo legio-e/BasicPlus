@@ -772,7 +772,26 @@ public final class MivmEmitter {
             }
 
             // 2) Apertura de clase + fields + métodos virtuales.
-            w.addClass(cd.name, cls.baseClass != null ? cls.baseClass.name : null);
+            // L2 v2 — si el padre es EXTERNO (otro módulo), no podemos
+            // todavía heredar su vtable porque las offsets de métodos
+            // serían inválidas en este módulo. Pasamos null al
+            // ModWriter (sin herencia local) y emitimos un warning si
+            // el cuerpo de la clase usa métodos del padre — el
+            // typecheck en el semántico ya permite el is-a, pero
+            // INVOKE_VIRTUAL sobre métodos heredados cross-module no
+            // funciona hasta L2 v3.
+            String parentForModWriter = null;
+            if (cls.baseClass != null) {
+                if (cls.baseClass.isExternal) {
+                    // No threading parent al ModWriter — el descriptor
+                    // emitido tendrá parentOff=0. instanceof runtime no
+                    // verá Bar como subtipo del padre externo (limitación
+                    // documentada; el typecheck en compile-time sí lo ve).
+                } else {
+                    parentForModWriter = cls.baseClass.name;
+                }
+            }
+            w.addClass(cd.name, parentForModWriter);
 
             // ¿Esta clase declara su propio __syncMutex (porque tiene sync
             // properties Y ningún ancestor lo ha declarado ya)? El field se
@@ -3356,6 +3375,16 @@ public final class MivmEmitter {
         }
         ClassSymbol parent = sc2.fs.ownerClass.baseClass;
         FunctionSymbol parentCtor = parent.findConstructor();
+        // L2 v2 — si el padre es externo, super(args) NO es directamente
+        // soportable porque el constructor `<Cls>.__init` del módulo dueño
+        // hace NEW_OBJECT en SU módulo (su class_ptr local). Para evitar
+        // disparar errores opacos, lo bloqueamos aquí con un mensaje claro.
+        if (parent.isExternal) {
+            errors.add("super(...) sobre padre cross-module ('" + parent.name
+                    + "') no soportado en L2 v2 — herencia cross-module sólo a"
+                    + " nivel typecheck (sin invocación de métodos/ctor del padre)");
+            return;
+        }
         w.emitGetParam("this");
         for (int i = 0; i < sc.args.size(); i++) {
             emitExpr(sc.args.get(i));

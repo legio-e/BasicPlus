@@ -122,17 +122,39 @@ puede inferir bidireccionalmente.
 
 Sample: `samples/l2lib.bp` + `samples/l2app.bp`.
 
-**Lo que queda pendiente (v2)**:
-- Herencia cross-module (`class Bar extends Module.Foo`). Hoy se serializa el
-  `extends` en el `.bpi` pero el importador lo ignora — el `ClassSig` tiene el
-  campo `baseClassName`. Necesita extender el class section del .mod para que
-  las vtables del subtipo reciban los slots del padre externo.
-- Static members (consts / vars de clase). Hoy se ignoran en `extractClass`.
-- Static methods públicos cross-module (mismo trato que functions, pero
-  por nombre `Cls.method` en el namespace del módulo dueño).
-- Class types cross-module en signatures: hoy admitimos clases del MISMO
-  módulo (vía `UnresolvedClassRef` resuelto en el loader). Una signature
-  con `OtroModulo.OtraClase` no se soporta.
+**L2 v2 parcial (cerrado)** — herencia cross-module a nivel typecheck:
+- Parser acepta `class X extends Mod.Y` y tipos cualificados `var c: Mod.T`.
+- `SemanticAnalyzer.resolveBaseClassName` resuelve `Mod.Foo` lookup en
+  el `ImportedNamespaceSymbol.classes` del alias `Mod`.
+- `resolveNamedType` reconoce nombres dotted en cualquier posición de tipo.
+- `MivmEmitter.emitClassDef`: si `baseClass.isExternal`, pasa null al
+  ModWriter (no propaga herencia local). El descriptor del child sale con
+  parentOff=0 a nivel runtime.
+- `super(...)` sobre padre cross-module bloqueado con mensaje claro:
+  "no soportado en L2 v2".
+- Sample: `samples/l2v2app.bp` — `class FastCounter extends L2Lib.Counter`,
+  asignación polimórfica `var c: L2Lib.Counter := fc` typecheckea,
+  método local de FastCounter ejecuta. OK.
+
+**Lo que funciona en v2**: extends cross-module a nivel typecheck +
+asignación polimórfica (FastCounter → L2Lib.Counter) + métodos LOCALES
+de la clase hija + redeclaración de métodos.
+
+**Limitaciones documentadas (L2 v3)**:
+- Vtable inheritance cross-module: hoy el child no hereda los métodos
+  del padre cross-module. Cualquier `fc.parentMethod()` falla (semantic
+  ya lo reporta como "no tiene miembro"). Para soportarlo haría falta:
+  a) emitir trampolines en el child que hagan CALL_EXT al método del
+  parent, o b) cambiar runtime para que INVOKE_VIRTUAL caiga al
+  parent's vtable cuando el slot del child no exista.
+- `super(...)` cross-module: idem.
+- `instanceof` cross-module runtime: el parentOff = 0 en el descriptor
+  del child rompe `isDescendantOf` en la VM.
+- Static members (consts / vars de clase): siguen ignorados en
+  `extractClass`.
+- Static methods públicos cross-module.
+- Class types cross-module en signatures de método (e.g. parámetro
+  `OtraMod.OtraClase`): no se resuelve hoy.
 
 ### L3 — Métodos de clase sin forward references
 **Impacto**: dos métodos de la misma clase no pueden llamarse mutuamente si
