@@ -570,6 +570,94 @@ public class VirtualMachine {
         this.debugEventListener = l;
     }
 
+    /**
+     * B1 instrumentation. Activable con `-Dbpvm.b1.diag=1` o env
+     * `BPVM_B1_DIAG=1`. Cuando un thread cae con BpThreadFault /
+     * RuntimeException no recuperable, vuelca al stderr un snapshot
+     * completo: estado del thread fallido, snapshot de TODOS los
+     * threads BP, runQueue, mutexes. Objetivo: cuando la race del
+     * residual (~5-10%) dispara, capturar suficiente contexto para
+     * razonar sobre el estado imposible que produjo el fallo.
+     *
+     * Cuando ENABLED es false (default), las llamadas a dumpFault son
+     * un read de boolean estático y un return — JIT-eliminables.
+     */
+    private static final boolean B1_DIAG_ENABLED;
+    private static final java.util.concurrent.atomic.AtomicLong B1_DIAG_COUNTER =
+            new java.util.concurrent.atomic.AtomicLong(0);
+    static {
+        String prop = System.getProperty("bpvm.b1.diag");
+        String env  = System.getenv("BPVM_B1_DIAG");
+        B1_DIAG_ENABLED = "1".equals(prop) || "true".equalsIgnoreCase(prop)
+               || "1".equals(env)  || "true".equalsIgnoreCase(env);
+        if (B1_DIAG_ENABLED) {
+            System.err.println("[B1Diag] instrumentación ACTIVADA — vuelco estado al primer fallo");
+        }
+    }
+
+    private synchronized void dumpFault(int workerId, ThreadContext failedTc,
+                                        String label, Throwable cause) {
+        if (!B1_DIAG_ENABLED) return;
+        long seq = B1_DIAG_COUNTER.incrementAndGet();
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n======== [B1Diag #").append(seq).append("] ========\n");
+        sb.append("worker=").append(workerId)
+          .append(" failedTid=").append(failedTc == null ? -1 : failedTc.id)
+          .append(" label=").append(label).append('\n');
+        if (failedTc != null) {
+            sb.append("  pc=").append(failedTc.pc)
+              .append(" sp=").append(failedTc.sp)
+              .append(" bp=").append(failedTc.bp)
+              .append(" cs=").append(failedTc.cs)
+              .append(" status=").append(failedTc.status)
+              .append(" blockedOnMutex=").append(failedTc.blockedOnMutexId)
+              .append(" stackBase=").append(failedTc.stackBase)
+              .append(" stackTop=").append(failedTc.stackTop)
+              .append('\n');
+            sb.append("  ehHandlerPc=").append(failedTc.ehHandlerPc)
+              .append(" ehSavedSp=").append(failedTc.ehSavedSp)
+              .append(" handlerStack.size=")
+              .append(failedTc.handlerStack == null ? 0 : failedTc.handlerStack.size())
+              .append(" allocAnchor=").append(failedTc.allocAnchor)
+              .append('\n');
+        }
+        if (cause != null) {
+            sb.append("  cause: ").append(cause.getClass().getSimpleName())
+              .append(": ").append(cause.getMessage()).append('\n');
+            StackTraceElement[] st = cause.getStackTrace();
+            int n = Math.min(8, st == null ? 0 : st.length);
+            for (int i = 0; i < n; i++) {
+                sb.append("    at ").append(st[i]).append('\n');
+            }
+        }
+        synchronized (vmLock) {
+            sb.append("--- threads (").append(threads.size()).append(") ---\n");
+            for (ThreadContext t : threads) {
+                if (t == null) continue;
+                sb.append("  tid=").append(t.id)
+                  .append(" status=").append(t.status)
+                  .append(" pc=").append(t.pc)
+                  .append(" sp=").append(t.sp)
+                  .append(" bp=").append(t.bp)
+                  .append(" blockedOnMutex=").append(t.blockedOnMutexId)
+                  .append('\n');
+            }
+            sb.append("--- runQueue ").append(runQueue).append('\n');
+            if (!mutexes.isEmpty()) {
+                sb.append("--- mutexes (").append(mutexes.size()).append(") ---\n");
+                for (int i = 0; i < mutexes.size(); i++) {
+                    JavaMutex jm = mutexes.get(i);
+                    sb.append("  mid=").append(i)
+                      .append(" owner=").append(jm.ownerTid)
+                      .append(" waiters=").append(jm.waiters)
+                      .append('\n');
+                }
+            }
+        }
+        sb.append("======== /B1Diag #").append(seq).append(" ========");
+        System.err.println(sb.toString());
+    }
+
     /** Helper: emite un evento al listener si está cableado. Llamable desde
      *  cualquier thread; el listener decide cómo serializar al canal. */
     private void emitDebugEvent(edu.bpgenvm.vm.debug.DebugEvent ev) {
@@ -1274,6 +1362,7 @@ public class VirtualMachine {
                         // programa principal.
                         System.err.println("[bpgenvm worker " + workerId + ", tid="
                                 + tc.id + "] " + tf.getMessage());
+                        dumpFault(workerId, tc, "BpThreadFault", tf);
                         // A1.7: notificar al IDE remoto si hay listener cableado.
                         emitDebugEvent(new edu.bpgenvm.vm.debug.ExceptionEvent(
                                 tc.id, tf.getMessage(), ""));
@@ -1296,6 +1385,7 @@ public class VirtualMachine {
                         // Excepción no atrapada en BP: imprimimos y tumbamos la VM.
                         System.err.println("[bpgenvm worker " + workerId + ", tid="
                                 + tc.id + "] " + ex.getMessage());
+                        dumpFault(workerId, tc, "RuntimeException", ex);
                         emitDebugEvent(new edu.bpgenvm.vm.debug.ExceptionEvent(
                                 tc.id, String.valueOf(ex.getMessage()), ""));
                         synchronized (vmLock) {

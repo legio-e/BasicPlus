@@ -36,7 +36,7 @@ Mejora medida (todos los fixes acumulados):
 - `SyncListTest`: ~80 % → ~93 % pass-rate (1000 producers + 2 consumers).
 - `modpropsync.bp`: ~95 % pass-rate.
 
-**Lo que falta** (residual ≤10 %):
+**Lo que falta** (residual ≤10 % → ~40 % en runs frescos tras B3 v2/v3):
 1. Builtins que alocan y luego pushean siguen liberando `vmLock` entre
    la alocación y el push: `allocVmString`, `allocVmRefArray`, y
    varios builtins de stdlib (`__newRefArray`, etc., ≈15 callers).
@@ -48,6 +48,49 @@ Mejora medida (todos los fixes acumulados):
    estar contribuyendo: aunque las escrituras están bajo `vmLock`,
    las lecturas fuera de `vmLock` (`GET_FIELD`, `ALOAD`, etc.) pueden
    ver bytes desactualizados en multi-core.
+
+### B1 residual — caracterización con instrumentación (parcial)
+**Estado**: instrumentación añadida, fail rate empeoró tras B3 v2/v3.
+Investigación pendiente.
+
+**Instrumentación añadida** (`VirtualMachine.dumpFault`):
+Activable con `-Dbpvm.b1.diag=1` o env `BPVM_B1_DIAG=1`. Vuelca al
+stderr al primer fallo: thread fallado (pc, sp, bp, status,
+blockedOnMutex, ehHandlerPc, allocAnchor) + stack trace de la
+excepción + snapshot de TODOS los threads + runQueue + mutexes
+(owner + waiters). Hooks cableados en los catch de `BpThreadFault`
+y `RuntimeException` del `WorkerLoop`.
+
+**Fail rate medido** (SyncListTest, 10 runs frescos tras B3 v2/v3):
+- **40 % fail rate** (6 OK / 4 FAIL) — peor que el ~10 % previo.
+- Hipótesis: B3 v3 (que envuelve TODO el while del intérprete con
+  try-catch BpExceptionPending) puede haber introducido nuevas
+  ventanas de race. Verificar revirtiendo a antes del commit
+  `9857730` y medir baseline.
+
+**Firmas observadas**:
+1. **"HALT en thread no-main"**: tid=1 (Consumer) reporta haber
+   ejecutado opcode `0x00` (HALT) en PC ≈ 35000. Al mismo tiempo, su
+   `status=BLOCKED_MUTEX, blockedOnMutex=0`. Sugiere PC corrupto —
+   probablemente el PC saltó a la posición de un byte 0x00 en el
+   stack o heap. Stack trace dice
+   `runOnContext(VirtualMachine.java:1555)` (case 0x00).
+2. **"se esperaban N items / suma inesperada"**: la firma "clásica"
+   B1 — items perdidos o duplicados en SyncList bajo contención.
+3. **"BpExceptionPending(ref=...)" filtrada al stdout/stderr**: el
+   mensaje INTERNO de mi excepción Java se cuela al output como
+   string. Indica que se lanzó BpExceptionPending por un thread sin
+   handler, llegó a BpThreadFault, y `readRuntimeErrorMsg(v)` no
+   pudo leer el field `msg` (objeto BP mal formado o ref inválida).
+
+**Próximo paso (no en esta sesión)**: re-correr instrumentado con
+diff de baseline pre/post B3 v3 para confirmar si el path nuevo del
+unwind (catch BpExceptionPending dentro del while) es la fuente.
+Si lo confirma, considerar: a) sólo envolver opcodes que llaman a
+throwBpRuntimeError directamente, no todo el while; b) cachear el
+class_ptr de RuntimeError al cargar el módulo en lugar de buscarlo
+por nombre en cada throw (pero eso requeriría persistencia del
+class_ptr).
 
 ### B3 v2 — `try/catch e: RuntimeError` para errores de mutex (cerrado)
 **Estado**: cerrado. El código BP ya atrapa errores nativos de mutex.
