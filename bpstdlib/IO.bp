@@ -66,4 +66,18 @@ module IO
   // Última fecha de modificación, en milisegundos epoch (truncado a i32).
   public intrinsic function lastModified(p: string): integer
 
+  // ---- N20 — UI con supervisión del IDE ----
+  // Pide al IDE conectado que muestre un formulario y espera a que el
+  // usuario lo rellene. Devuelve un JSON-string con los valores.
+  //
+  // `spec` es un JSON-string con la descripción del formulario. Formato
+  // mínimo: `{"fields":[{"name":"x","type":"text","label":"X:"}]}`.
+  // Tipos soportados: text, integer, boolean, select. Si `spec` incluye
+  // `customHtml`, el IDE renderiza ese HTML en lugar de los widgets
+  // nativos. Detalles completos en docs.
+  //
+  // Si NO hay IDE conectado (modo headless en dispositivo) lanza
+  // RuntimeError BP atrapable con try/catch.
+  public intrinsic function prompt(spec: string): string
+
 end IO

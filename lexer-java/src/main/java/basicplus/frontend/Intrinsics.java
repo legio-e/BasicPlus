@@ -109,5 +109,7 @@ public final class Intrinsics {
         register("IO.fileSize",     w -> emitBuiltin(w, Builtin.FILE_SIZE));
         register("IO.isDirectory",  w -> emitBuiltin(w, Builtin.IS_DIRECTORY));
         register("IO.lastModified", w -> emitBuiltin(w, Builtin.LAST_MODIFIED));
+        // N20 — UI vía IDE conectado.
+        register("IO.prompt",       w -> emitBuiltin(w, Builtin.PROMPT));
     }
 }

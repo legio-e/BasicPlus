@@ -1,0 +1,20 @@
+// prompttest.bp — N20: pedir datos al usuario vía formulario del IDE.
+//
+// Sin IDE conectado: prompt() lanza RuntimeError atrapable.
+// Con IDE conectado: muestra JDialog; recibimos los valores como JSON.
+module PromptTest
+  import IO
+
+  function Main()
+    var spec: string := "{\"title\":\"Datos\",\"message\":\"Rellena:\",\"fields\":[{\"name\":\"nombre\",\"label\":\"Nombre:\",\"type\":\"text\",\"default\":\"Ana\"},{\"name\":\"edad\",\"label\":\"Edad:\",\"type\":\"integer\",\"default\":30},{\"name\":\"acepto\",\"label\":\"Acepto:\",\"type\":\"boolean\"},{\"name\":\"color\",\"label\":\"Color:\",\"type\":\"select\",\"options\":[\"rojo\",\"verde\",\"azul\"]}]}"
+
+    try
+      var resp: string := IO.prompt(spec)
+      print "respuesta del usuario:"
+      print resp
+    catch e: RuntimeError
+      print "prompt no disponible:", e.msg
+    endtry
+  end Main
+
+end PromptTest

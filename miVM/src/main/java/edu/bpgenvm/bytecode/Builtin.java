@@ -121,7 +121,14 @@ public enum Builtin {
     COPY_FILE("__copyFile"),             // (from, to)    → void
     FILE_SIZE("__fileSize"),             // (p: string)   → int   (bytes)
     IS_DIRECTORY("__isDirectory"),       // (p: string)   → boolean
-    LAST_MODIFIED("__lastModified");     // (p: string)   → int   (epoch ms truncado i32)
+    LAST_MODIFIED("__lastModified"),     // (p: string)   → int   (epoch ms truncado i32)
+
+    // ---- N20 — UI via IDE conectado ----
+    PROMPT("__prompt");                  // (spec: string) → string
+                                         //   Envía formRequest al IDE, bloquea el
+                                         //   thread BP hasta respuesta. Devuelve
+                                         //   el JSON con los valores. Si no hay
+                                         //   IDE, RuntimeError BP atrapable.
 
     public final String bpName;
     public final int id;

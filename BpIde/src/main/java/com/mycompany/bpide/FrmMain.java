@@ -1149,6 +1149,20 @@ public class FrmMain extends javax.swing.JFrame
             try (VmClient client = new VmClient()) {
                 client.setDiagSink(s -> publish.accept("[vm] " + s + "\n"));
                 client.setOutputSink(publish::accept);
+                // N20 — IO.prompt(spec) del programa BP abre un JDialog
+                // construido a partir del spec JSON. Las respuestas
+                // serializadas regresan al thread BP bloqueado.
+                client.setPromptHandler((reqId, spec) -> {
+                    final String[] resp = {"{}"};
+                    try {
+                        SwingUtilities.invokeAndWait(() -> {
+                            resp[0] = PromptDialog.showAndCollect(FrmMain.this, spec);
+                        });
+                    } catch (Throwable t) {
+                        publish.accept("[ide] PromptDialog falló: " + t.getMessage() + "\n");
+                    }
+                    client.respondToPrompt(reqId, resp[0]);
+                });
 
                 if (pauseInitially) {
                     // Debug: dejamos que la sesión gestione todo

@@ -121,10 +121,11 @@ public final class DebugServer implements AutoCloseable {
                     new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
             System.err.println("[DebugServer] cliente conectado desde " + s.getRemoteSocketAddress());
 
-            // Conectar sink + listener.
+            // Conectar sink + listener + promptSender.
             SocketSink sink = new SocketSink(clientOut);
             vm.setProgramOut(sink);
             controller.addListener(this::onEvent);
+            vm.setPromptSender(this.promptSender);
 
             // Handshake: anunciamos versión / capacidades.
             send("{\"type\":\"hello\",\"vm\":\"" + SERVER_BANNER + "\"}");
@@ -180,6 +181,19 @@ public final class DebugServer implements AutoCloseable {
      *  llega por el listener. Usar sólo desde test code. */
     public void onEventForTest(DebugEvent ev) { onEvent(ev); }
 
+    /** N20 — implementación de PromptSender que serializa el promptRequest
+     *  al cliente conectado. Si no hay cliente, NO se debe llegar aquí
+     *  porque vm.promptSender es null en ese caso. */
+    public final PromptSender promptSender = new PromptSender() {
+        @Override public void send(long requestId, String spec) {
+            // Llamada CUALIFICADA al send(jsonLine) de la outer class
+            // (el método unárico) — el send(long, String) del enclosing
+            // PromptSender shadowea el nombre.
+            DebugServer.this.send("{\"type\":\"promptRequest\",\"requestId\":" + requestId
+                    + ",\"spec\":" + Json.quote(spec) + "}");
+        }
+    };
+
     /** Envía una línea JSON. Si el cliente está cerrado, no-op. */
     public synchronized void send(String jsonLine) {
         PrintWriter w = this.clientOut;
@@ -214,6 +228,7 @@ public final class DebugServer implements AutoCloseable {
         } finally {
             System.err.println("[DebugServer] cliente desconectado");
             // No mata la VM: sigue ejecutando headless.
+            vm.setPromptSender(null);   // futuros prompt() lanzarán RuntimeError BP
             this.client = null;
             this.clientOut = null;
             this.clientIn = null;
@@ -247,6 +262,13 @@ public final class DebugServer implements AutoCloseable {
             case "hello":
                 send("{\"type\":\"hello\",\"vm\":\"" + SERVER_BANNER + "\"}");
                 break;
+            case "promptResponse": {
+                // N20 — el cliente IDE devuelve los valores del formulario.
+                long reqId = Json.getLong(m, "requestId", -1);
+                String values = Json.getString(m, "values", "");
+                vm.deliverPromptResponse(reqId, values);
+                break;
+            }
             case "runModule": {
                 // A2.3 — el cliente pide ejecutar un .mod (relativo al
                 // workdir). Sólo válido en modo daemon (Main lo espera).

@@ -82,6 +82,7 @@ public class VirtualMachine {
         BLOCKED_SLEEP,  // dormido hasta wakeAtMs
         BLOCKED_JOIN,   // esperando que un thread target termine
         BLOCKED_MUTEX,  // esperando que un mutex se libere
+        BLOCKED_PROMPT, // esperando promptResponse del cliente IDE (N20)
         TERMINATED      // run() devolvió
     }
 
@@ -302,6 +303,43 @@ public class VirtualMachine {
         final List<Integer> waiters = new ArrayList<>();
     }
     private final List<JavaMutex> mutexes = new ArrayList<>();
+
+    /** N20 — Prompts en vuelo desde el builtin PROMPT.
+     *  Key = requestId asignado por la VM. Value = tc bloqueado.
+     *  Cuando el cliente IDE manda promptResponse, la VM lo busca aquí,
+     *  aloja el VM string con `values`, lo empuja al stack del tc y lo
+     *  despierta (status RUNNABLE + runQueue). */
+    private final java.util.Map<Long, ThreadContext> pendingPrompts =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong nextPromptId =
+            new java.util.concurrent.atomic.AtomicLong(1);
+
+    /** Sender hacia el cliente IDE. Cableado por Main cuando hay --listen.
+     *  Si está a null, el builtin PROMPT lanza RuntimeError BP (modo
+     *  headless: no hay supervisor que muestre el form). */
+    private volatile edu.bpgenvm.vm.debug.PromptSender promptSender;
+
+    public void setPromptSender(edu.bpgenvm.vm.debug.PromptSender s) {
+        this.promptSender = s;
+    }
+
+    /** Llamado por el DebugServer cuando llega un promptResponse del IDE.
+     *  Aloja un VM string con `valuesJson` y lo empuja al stack del thread
+     *  bloqueado, luego lo despierta. Si el requestId no está en el mapa
+     *  (timeout, doble respuesta, etc.), se ignora silenciosamente. */
+    public void deliverPromptResponse(long requestId, String valuesJson) {
+        ThreadContext tc = pendingPrompts.remove(requestId);
+        if (tc == null) return;
+        synchronized (vmLock) {
+            int ref = allocVmString(valuesJson == null ? "" : valuesJson);
+            writeInt32(tc.sp, ref);
+            tc.sp += 4;
+            tc.status = ThreadStatus.RUNNABLE;
+            tc.blockedOnMutexId = -1;
+            runQueue.addLast(tc.id);
+            vmLock.notifyAll();
+        }
+    }
 
     /**
      * Crea un nuevo ThreadContext con el stackSize indicado (0 = default).
@@ -3142,6 +3180,41 @@ public class VirtualMachine {
                 } catch (java.io.IOException e) {
                     throwBpRuntimeError(tc, "lastModified('" + p + "'): " + e.getMessage());
                 }
+                break;
+            }
+
+            // ---- N20 — PROMPT(spec): string ----
+            case PROMPT: {
+                int specRef = popTc(tc);
+                String spec = readVmString(specRef);
+                // Sin sink al socket → no hay IDE → error atrapable.
+                edu.bpgenvm.vm.debug.PromptSender sender = this.promptSender;
+                if (sender == null) {
+                    throwBpRuntimeError(tc, "prompt: no hay IDE conectado");
+                    break;
+                }
+                long requestId = nextPromptId.getAndIncrement();
+                // Registrar el tc ANTES de enviar — para que si la respuesta
+                // llega muy rápido (rare, pero existe) el thread esté en el
+                // mapa cuando lo busquen.
+                pendingPrompts.put(requestId, tc);
+                try {
+                    sender.send(requestId, spec);
+                } catch (Throwable t) {
+                    pendingPrompts.remove(requestId);
+                    throwBpRuntimeError(tc, "prompt: error enviando al IDE: " + t.getMessage());
+                    break;
+                }
+                // Bloquear el thread: status BLOCKED_PROMPT, yieldRequested.
+                // Cuando llegue promptResponse, deliverPromptResponse() (otro
+                // thread Java) pondrá el ref del JSON resultado en tc.sp y
+                // restaurará a RUNNABLE + runQueue.
+                synchronized (vmLock) {
+                    tc.status = ThreadStatus.BLOCKED_PROMPT;
+                    tc.yieldRequested = true;
+                }
+                // NO pushTc dummy — la respuesta del IDE produce el ref que
+                // se empuja al sp del tc.
                 break;
             }
 

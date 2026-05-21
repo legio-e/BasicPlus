@@ -11,5 +11,6 @@ func rename(src:string,dst:string):void public intrinsic
 func fileSize(p:string):integer public intrinsic
 func lastModified(p:string):integer public intrinsic
 func mkdir(p:string):void public intrinsic
+func prompt(spec:string):string public intrinsic
 func isDirectory(p:string):boolean public intrinsic
 func pathBasename(p:string):string public intrinsic

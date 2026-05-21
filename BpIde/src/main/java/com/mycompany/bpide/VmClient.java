@@ -67,6 +67,23 @@ import java.util.function.Consumer;
 
 public final class VmClient implements AutoCloseable {
 
+    /** N20 — Listener para promptRequest del servidor. El IDE registra un
+     *  callback que muestra el formulario y devuelve los valores como JSON.
+     *  La VM espera bloqueada hasta que `respondToPrompt(requestId, json)`
+     *  sea llamado. */
+    @FunctionalInterface
+    public interface PromptHandler {
+        void onPrompt(long requestId, String spec);
+    }
+    private volatile PromptHandler promptHandler;
+    public void setPromptHandler(PromptHandler h) { this.promptHandler = h; }
+
+    /** Envía la respuesta del usuario para un prompt en vuelo (N20). */
+    public void respondToPrompt(long requestId, String valuesJson) {
+        sendRaw("{\"cmd\":\"promptResponse\",\"requestId\":" + requestId
+                + ",\"values\":" + jsonStr(valuesJson == null ? "" : valuesJson) + "}");
+    }
+
     /** Sink para los chunks "print" del programa BP. Lo invoca el thread
      *  lector — los handlers deben reenviar al EDT con invokeLater. */
     private volatile Consumer<String> outputSink;
@@ -556,6 +573,30 @@ public final class VmClient implements AutoCloseable {
                 String data = Json.getString(m, "data", "");
                 Consumer<String> sink = outputSink;
                 if (sink != null) sink.accept(data);
+                break;
+            }
+            case "promptRequest": {
+                // N20 — el programa BP llamó a IO.prompt(spec).
+                long reqId = Json.getLong(m, "requestId", -1);
+                String spec = Json.getString(m, "spec", "");
+                PromptHandler h = promptHandler;
+                if (h != null) {
+                    // Mismo dispatcher pattern que los DebugEvents — listenerExec
+                    // serializa para no bloquear el reader thread mientras la UI
+                    // construye el form.
+                    listenerExec.execute(() -> {
+                        try { h.onPrompt(reqId, spec); }
+                        catch (Throwable t) {
+                            diag("[VmClient] promptHandler: " + t.getMessage());
+                            // Fallback: responder con JSON vacío para no dejar la VM colgada.
+                            respondToPrompt(reqId, "{}");
+                        }
+                    });
+                } else {
+                    // No hay handler: responder vacío para que la VM no se quede colgada.
+                    diag("[VmClient] promptRequest sin handler; respondiendo vacío");
+                    respondToPrompt(reqId, "{}");
+                }
                 break;
             }
             case "paused": {
