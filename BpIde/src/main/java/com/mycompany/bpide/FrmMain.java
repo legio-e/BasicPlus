@@ -1181,7 +1181,16 @@ public class FrmMain extends javax.swing.JFrame
                     });
                 }
 
-                client.startDaemon(workdir.toString(), /*waitClient=*/true);
+                // Resolvemos stdlibDir desde BpVM.cfg para propagarlo al
+                // subproceso VM. El cwd de la VM normalmente coincidirá con
+                // el del IDE (sin BpVM.cfg si el IDE lo lanza NetBeans/etc.),
+                // así que caminamos hacia arriba desde el .mod del usuario
+                // — análogo al fix del frontend.
+                String stdlibDir = resolveStdlibDir(outDir);
+                if (stdlibDir != null) {
+                    publish.accept("[ide] stdlibDir → " + stdlibDir + "\n");
+                }
+                client.startDaemon(workdir.toString(), /*waitClient=*/true, stdlibDir);
 
                 // Sube los artefactos de la app compilada.
                 int nUploaded = uploadAppArtifacts(client, outDir, publish);
@@ -1206,6 +1215,38 @@ public class FrmMain extends javax.swing.JFrame
                 deleteRecursively(workdir);
             }
         }
+    }
+
+    /** Resuelve stdlibDir desde BpVM.cfg. Mira en este orden:
+     *   1) Si hay currentProject: project.outDir → walk up.
+     *   2) cwd del proceso IDE.
+     *   3) outDir del compile → walk up.
+     *  Devuelve null si no encuentra cfg o si no define stdlibDir.
+     *  Usado para propagar el dir al subproceso VM via --stdlibDir. */
+    private String resolveStdlibDir(Path outDirHint) {
+        try {
+            // 1) cwd primero (compatibilidad histórica)
+            edu.bpgenvm.config.VmConfig cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(null);
+            if (cfg.sourcePath != null && cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
+                return cfg.stdlibDir;
+            }
+            // 2) caminamos desde outDirHint si la tenemos
+            if (outDirHint != null) {
+                cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(outDirHint.toAbsolutePath());
+                if (cfg.sourcePath != null && cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
+                    return cfg.stdlibDir;
+                }
+            }
+            // 3) si hay proyecto activo, intentamos desde su outDir
+            if (currentProject != null && currentProject.outDir != null) {
+                cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(
+                        java.nio.file.Paths.get(currentProject.outDir).toAbsolutePath());
+                if (cfg.sourcePath != null && cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
+                    return cfg.stdlibDir;
+                }
+            }
+        } catch (Throwable ignored) { /* sin cfg, devuelve null */ }
+        return null;
     }
 
     /** Sube .mod/.bpi/.dbg del outDir local a la raíz del workdir del VmClient.

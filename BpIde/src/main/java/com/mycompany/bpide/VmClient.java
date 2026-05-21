@@ -142,21 +142,29 @@ public final class VmClient implements AutoCloseable {
      *                          hasta que conectemos; recomendado).
      */
     public void start(String modOrProjectPath, boolean waitClient) throws IOException {
-        startInternal(modOrProjectPath, null, waitClient);
+        startInternal(modOrProjectPath, null, waitClient, null);
     }
 
     /** A2.3 — Arranca la VM en MODO DAEMON: sin .mod en CLI, con un
      *  workdir activo. Tras conectar, sube ficheros con uploadFile() y
      *  arranca con runModule(). */
     public void startDaemon(String workdir, boolean waitClient) throws IOException {
-        if (workdir == null) throw new IllegalArgumentException("workdir requerido en modo daemon");
-        startInternal(null, workdir, waitClient);
+        startDaemon(workdir, waitClient, null);
     }
 
-    private void startInternal(String modPath, String workdir, boolean waitClient)
-            throws IOException {
+    /** Variante con stdlibDir explícito: se pasa como --stdlibDir al
+     *  subproceso VM y gana sobre cualquier BpVM.cfg autodiscovery. Útil
+     *  cuando el IDE conoce el cfg pero el subproceso se arranca desde un
+     *  cwd que no contiene BpVM.cfg. */
+    public void startDaemon(String workdir, boolean waitClient, String stdlibDir) throws IOException {
+        if (workdir == null) throw new IllegalArgumentException("workdir requerido en modo daemon");
+        startInternal(null, workdir, waitClient, stdlibDir);
+    }
+
+    private void startInternal(String modPath, String workdir, boolean waitClient,
+                               String stdlibDir) throws IOException {
         int port = reserveFreePort();
-        spawnVmProcess(port, modPath, workdir, waitClient);
+        spawnVmProcess(port, modPath, workdir, waitClient, stdlibDir);
         try {
             connectWithRetry(port, 5000);
         } catch (IOException e) {
@@ -421,7 +429,8 @@ public final class VmClient implements AutoCloseable {
         }
     }
 
-    private void spawnVmProcess(int port, String modOrProject, String workdir, boolean waitClient) throws IOException {
+    private void spawnVmProcess(int port, String modOrProject, String workdir, boolean waitClient,
+                                String stdlibDir) throws IOException {
         String javaBin = System.getProperty("java.home") + File.separator + "bin"
                 + File.separator + "java";
         if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
@@ -460,6 +469,10 @@ public final class VmClient implements AutoCloseable {
         if (workdir != null) {
             argv.add("--workdir");
             argv.add(workdir);
+        }
+        if (stdlibDir != null && !stdlibDir.isEmpty()) {
+            argv.add("--stdlibDir");
+            argv.add(stdlibDir);
         }
         if (modOrProject != null) argv.add(modOrProject);
 

@@ -52,6 +52,7 @@ public class Main {
         int listenPort = -1;    // -1 = no servidor de debug
         boolean waitClient = false;  // bloquear la VM hasta que conecte el IDE
         String workdir = null;       // sandbox del filesystem; null = sin sandbox
+        String cliStdlibDir = null;  // override de cfg.stdlibDir si != null
         String file = null;
 
         for (int i = 0; i < args.length; i++) {
@@ -141,6 +142,18 @@ public class Main {
                         workdir = args[++i];
                         break;
                     }
+                    if (a.startsWith("--stdlibDir=")) {
+                        cliStdlibDir = a.substring("--stdlibDir=".length());
+                        break;
+                    }
+                    if ("--stdlibDir".equals(a)) {
+                        if (i + 1 >= args.length) {
+                            System.err.println("--stdlibDir requiere una ruta");
+                            System.exit(2); return;
+                        }
+                        cliStdlibDir = args[++i];
+                        break;
+                    }
                     if (a.startsWith("-")) {
                         System.err.println("Argumento desconocido: " + a);
                         printUsage(System.err);
@@ -218,12 +231,21 @@ public class Main {
             java.nio.file.Path probe = (workdir != null) ? Paths.get(workdir) : null;
             cfg = VmConfig.loadDefaultFor(probe);
         }
+        // --stdlibDir CLI gana sobre cfg.stdlibDir. Útil cuando el IDE
+        // arranca la VM como subproceso desde un cwd sin BpVM.cfg: el IDE
+        // resuelve su propio cfg y propaga el dir explícitamente.
+        if (cliStdlibDir != null && !cliStdlibDir.isEmpty()) {
+            cfg.stdlibDir = cliStdlibDir;
+        }
         if (cfg.sourcePath != null) {
             System.out.println("config: " + cfg.sourcePath
                     + " (memorySize=" + cfg.memorySize
                     + ", stackBase=" + cfg.stackBase
                     + (cfg.stdlibDir == null ? "" : ", stdlibDir=" + cfg.stdlibDir)
                     + ")");
+        } else if (cfg.stdlibDir != null) {
+            // No hay BpVM.cfg pero sí stdlibDir via CLI — log para depurar.
+            System.out.println("config: defaults + --stdlibDir=" + cfg.stdlibDir);
         }
 
         // Crear la VM (en daemon mode el moduleName se calcula tras runModule).
@@ -346,6 +368,7 @@ public class Main {
         out.println("  bpgenvm --listen <puerto>       arranca servidor de debug TCP+JSON");
         out.println("  bpgenvm --wait-client           con --listen, bloquea hasta que conecte el IDE");
         out.println("  bpgenvm --workdir <dir>         sandbox: la VM sólo ve ficheros bajo este dir");
+        out.println("  bpgenvm --stdlibDir <dir>       override de cfg.stdlibDir (gana sobre BpVM.cfg)");
         out.println("  bpgenvm -h | --help             muestra esta ayuda");
         out.println();
         out.println("BpVM.cfg (JSON, todos los campos opcionales):");
