@@ -2455,6 +2455,10 @@ public final class MivmEmitter {
             w.addClass("RuntimeError", null);
             w.declareField("msg", true);
             w.endClass();
+            // B3 v2 — exportamos el descriptor para que builtins nativos
+            // del VM puedan instanciar RuntimeError sin parsear el data
+            // block. Nombre convencional: `__cls_RuntimeError`.
+            w.exportDataSymbol("RuntimeError");
 
             w.addFunction("RuntimeError.__init", false);
             w.declareParam("this");

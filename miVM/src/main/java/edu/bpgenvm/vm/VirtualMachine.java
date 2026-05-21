@@ -583,6 +583,72 @@ public class VirtualMachine {
     }
 
     /**
+     * B3 v2 — Construye una instancia BP de RuntimeError(message) en el
+     * thread {@code tc} y lanza {@link BpExceptionPending}. El dispatcher
+     * del CALL_BUILTIN captura la excepción y ejecuta el unwind igual que
+     * el opcode THROW: busca el handler `catch e: RuntimeError` más
+     * cercano en {@code handlerStack} y, si encuentra uno, transfiere
+     * control allí con el ref del exception en el top del stack.
+     *
+     * Si no se encuentra la clase RuntimeError en el módulo del tc o
+     * cualquier otra falla impide construir el objeto, se delega a
+     * {@link BpThreadFault} con el mensaje original (comportamiento
+     * legacy: mata el thread).
+     *
+     * El llamador NO retorna normalmente — esta función SIEMPRE lanza.
+     */
+    /** Lee el field `msg` (slot 0) de un objeto BP RuntimeError y devuelve
+     *  el contenido del string, o null si el ref no apunta a un objeto
+     *  con un campo string válido. Tolerante a referencias inválidas
+     *  (usado por el path de "uncaught"). */
+    private String readRuntimeErrorMsg(int objRef) {
+        try {
+            if (objRef <= 0) return null;
+            int msgRef = readInt32(objRef + 4 + 0 * 4);
+            if (msgRef <= 0) return null;
+            return readStringIfPossible(msgRef);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    public void throwBpRuntimeError(ThreadContext tc, String message) {
+        ModuleManager mm = getModuleManager();
+        if (mm == null) {
+            throw new BpThreadFault(message);
+        }
+        Integer classPtrBox = mm.resolveExportInModule(tc.cs, "RuntimeError");
+        if (classPtrBox == null) {
+            // El módulo del thread actual no exportó RuntimeError (es un
+            // .mod antiguo emitido antes de B3 v2, o un caso degenerado).
+            // Fallback al comportamiento previo.
+            throw new BpThreadFault(message);
+        }
+        int classPtr = classPtrBox;
+
+        int msgRef;
+        int objRef;
+        // Alocamos string + objeto bajo vmLock para sincronizar con GC.
+        synchronized (vmLock) {
+            msgRef = allocVmString(message == null ? "" : message);
+            int numFields = readInt16(classPtr + CLS_OFF_NUM_FIELDS) & 0xFFFF;
+            objRef = heapAlloc(numFields * 4, TYPE_OBJECT);
+            writeInt32(objRef, classPtr);
+            for (int i = 0; i < numFields; i++) {
+                writeInt32(objRef + 4 + i * 4, 0);
+            }
+            // Field `msg` está en slot 0 (la clase sintetizada lo declara
+            // primero y es el único campo).
+            writeInt32(objRef + 4 + 0 * 4, msgRef);
+            // Empujamos el ref al stack del thread. El dispatcher hará el
+            // pop como parte del unwind, igual que con el opcode THROW.
+            writeInt32(tc.sp, objRef);
+            tc.sp += 4;
+        }
+        throw new BpExceptionPending(objRef);
+    }
+
+    /**
      * A2.1 — Resuelve un path de usuario aplicando el sandbox del workdir
      * si está configurado. Si no hay workdir (legacy), el path se usa
      * tal cual.
@@ -2051,8 +2117,43 @@ public class VirtualMachine {
                     // Sincronizamos al ThreadContext antes de entrar al builtin:
                     // dispatchBuiltin opera sobre tc.sp (thread-safe).
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
-                    dispatchBuiltin(Builtin.byId(id), tc);
-                    sp = tc.sp;
+                    try {
+                        dispatchBuiltin(Builtin.byId(id), tc);
+                        sp = tc.sp;
+                    } catch (BpExceptionPending pending) {
+                        // B3 v2 — el builtin construyó un BP-RuntimeError y
+                        // empujó el ref al tc.sp. Replicamos la lógica del
+                        // opcode THROW (0x5D) con LOCAL vars del intérprete.
+                        sp = tc.sp;
+                        sp -= 4;
+                        int v = readI32(mem, sp);
+                        int thrownClass = classPtrOfRefOr0(v);
+                        boolean handled = false;
+                        while (ehHandlerPc != -1) {
+                            boolean matches = (ehExpectedClass == 0)
+                                    || (thrownClass != 0
+                                        && isDescendantOf(thrownClass, ehExpectedClass));
+                            int handlerPc = ehHandlerPc;
+                            int savedSp = ehSavedSp, savedBp = ehSavedBp, savedCs = ehSavedCs;
+                            int[] prev = handlerStack.pop();
+                            ehHandlerPc = prev[0]; ehSavedSp = prev[1]; ehSavedBp = prev[2];
+                            ehSavedCs = prev[3]; ehExpectedClass = prev[4];
+                            if (matches) {
+                                sp = savedSp; bp = savedBp; cs = savedCs; pc = handlerPc;
+                                writeI32(mem, sp, v); sp += 4;
+                                handled = true;
+                                break;
+                            }
+                        }
+                        if (!handled) {
+                            // Sin handler que atrape: comportamiento "uncaught"
+                            // — convertimos a BpThreadFault con el mensaje del
+                            // RuntimeError BP (leemos field msg para no perderlo).
+                            String msg = readRuntimeErrorMsg(v);
+                            tc.pc = pc; tc.sp = sp; tc.bp = bp; tc.cs = cs;
+                            throw new BpThreadFault(msg != null ? msg : pending.getMessage());
+                        }
+                    }
                     // tc.yieldRequested lo levantan los builtins yield/sleep/join;
                     // el while exterior lo observa y abandona el bucle.
                     break;
@@ -2668,14 +2769,16 @@ public class VirtualMachine {
                 int mutexRef = popTc(tc);
                 int mid = readInt32(mutexRef + 4 + 0 * 4);
                 if (mid < 0 || mid >= mutexes.size()) {
-                    throw new BpThreadFault("mutex.lock: id inválido " + mid);
+                    // B3 v2 — lanzamos RuntimeError BP atrapable en lugar de
+                    // BpThreadFault, así el código BP puede try/catch.
+                    throwBpRuntimeError(tc, "mutex.lock: id inválido " + mid);
                 }
                 synchronized (vmLock) {
                     JavaMutex jm = mutexes.get(mid);
                     if (jm.ownerTid == JavaMutex.FREE) {
                         jm.ownerTid = tc.id;
                     } else if (jm.ownerTid == tc.id) {
-                        throw new BpThreadFault("mutex.lock: re-entrada por mismo thread tid="
+                        throwBpRuntimeError(tc, "mutex.lock: re-entrada por mismo thread tid="
                                 + tc.id + " (los Mutex no son reentrantes)");
                     } else {
                         // Tomado por otro → nos bloqueamos. El que tenga ownership
@@ -2694,12 +2797,12 @@ public class VirtualMachine {
                 int mutexRef = popTc(tc);
                 int mid = readInt32(mutexRef + 4 + 0 * 4);
                 if (mid < 0 || mid >= mutexes.size()) {
-                    throw new BpThreadFault("mutex.unlock: id inválido " + mid);
+                    throwBpRuntimeError(tc, "mutex.unlock: id inválido " + mid);
                 }
                 synchronized (vmLock) {
                     JavaMutex jm = mutexes.get(mid);
                     if (jm.ownerTid != tc.id) {
-                        throw new BpThreadFault("mutex.unlock: thread " + tc.id
+                        throwBpRuntimeError(tc, "mutex.unlock: thread " + tc.id
                                 + " no es propietario (owner=" + jm.ownerTid + ")");
                     }
                     if (jm.waiters.isEmpty()) {

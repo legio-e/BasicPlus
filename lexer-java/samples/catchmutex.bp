@@ -1,0 +1,42 @@
+// catchmutex.bp — B3 v2: atrapar errores nativos de Mutex desde BP.
+//
+// Antes de B3 v2: si un programa BP intentaba `Mutex.unlock()` sin tener
+// la posesión, la VM lanzaba BpThreadFault y mataba el thread sin opción
+// de recuperar. El `try/catch e: RuntimeError` NO atrapaba.
+//
+// Tras B3 v2: el builtin nativo de mutex construye una instancia BP de
+// RuntimeError y dispara el unwind. El catch del programa lo atrapa
+// limpiamente.
+module CatchMutex
+
+  function tryReentrant()
+    var m: Mutex := Mutex()
+    m.lock()
+    try
+      m.lock()   // segunda toma desde el mismo thread → RuntimeError
+      print "no deberíamos llegar aquí"
+    catch e: RuntimeError
+      print "atrapado (reentrancy):", e.msg
+    endtry
+    m.unlock()
+  end tryReentrant
+
+  function tryUnlockNotOwned()
+    var m: Mutex := Mutex()
+    try
+      m.unlock()   // unlock sin lock previo → RuntimeError
+      print "no deberíamos llegar aquí"
+    catch e: RuntimeError
+      print "atrapado (unlock):", e.msg
+    endtry
+  end tryUnlockNotOwned
+
+  function Main()
+    print "--- caso 1: reentrancy ---"
+    tryReentrant()
+    print "--- caso 2: unlock no propio ---"
+    tryUnlockNotOwned()
+    print "OK"
+  end Main
+
+end CatchMutex

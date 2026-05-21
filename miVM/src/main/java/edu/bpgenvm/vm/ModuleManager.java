@@ -112,6 +112,26 @@ public class ModuleManager {
         return java.util.Collections.unmodifiableList(modulePaths);
     }
 
+    /** B3 v2 — Devuelve la dirección absoluta de un símbolo exportado, o
+     *  null si no existe. Usado por builtins nativos para instanciar
+     *  RuntimeError. Acepta tanto la forma cualificada (`Mod.symName`)
+     *  como un símbolo dentro del módulo cuyo `cs` se pasa. */
+    public Integer resolveExportInModule(int cs, String simpleName) {
+        // Buscar el módulo cuyo codeStart == cs.
+        for (ModuleMetadata m : loadedModules) {
+            if (m.codeStart == cs) {
+                String qualified = (m.library == null || m.library.isEmpty())
+                        ? (m.name + "." + simpleName)
+                        : (m.library + "." + m.name + "." + simpleName);
+                Integer addr = globalSymbolTable.get(qualified);
+                if (addr != null) return addr;
+                // Fallback: clave corta (sin prefijo de library).
+                return globalSymbolTable.get(m.name + "." + simpleName);
+            }
+        }
+        return null;
+    }
+
     /**
      * Resuelve la ruta real de un fichero .mod probando, en orden:
      *   1) `filename` tal cual (absoluto o relativo al cwd);
@@ -328,10 +348,19 @@ public class ModuleManager {
             String exportPrefix = library.isEmpty()
                     ? (moduleName + ".")
                     : (library + "." + moduleName + ".");
-            int expCount = in.readInt();
+            // Leemos la sección exports COMPLETA a un buffer para tener
+            // boundaries precisos: así podemos detectar la subsección
+            // opcional de data exports (B3 v2) que sólo está presente en
+            // .mods nuevos sin romper compat con los viejos.
+            byte[] expBuf = new byte[exportSize];
+            in.readFully(expBuf);
+            java.io.DataInputStream expIn = new java.io.DataInputStream(
+                    new java.io.ByteArrayInputStream(expBuf));
+
+            int expCount = expIn.readInt();
             for (int i = 0; i < expCount; i++) {
-                String expName = in.readUTF();
-                int relativeOffset = in.readInt();
+                String expName = expIn.readUTF();
+                int relativeOffset = expIn.readInt();
                 int absoluteAddress = codeStart + relativeOffset;
                 globalSymbolTable.put(exportPrefix + expName, absoluteAddress);
                 // Para compatibilidad con módulos library-less que importan sin
@@ -340,6 +369,24 @@ public class ModuleManager {
                 if (!library.isEmpty()) {
                     String shortKey = moduleName + "." + expName;
                     globalSymbolTable.putIfAbsent(shortKey, absoluteAddress);
+                }
+            }
+            // B3 v2 — subsección opcional de data symbol exports.
+            if (expIn.available() > 0) {
+                int dataExpCount = expIn.readInt();
+                for (int i = 0; i < dataExpCount; i++) {
+                    String name = expIn.readUTF();
+                    int csOffset = expIn.readInt();
+                    // csOffset es CS-relative (CS == codeStart), siguiendo
+                    // la convención de NEW_OBJECT que también añade csOff
+                    // a cs (= codeStart). csOffset suele ser NEGATIVO
+                    // (el data block precede al code).
+                    int absoluteAddress = codeStart + csOffset;
+                    globalSymbolTable.put(exportPrefix + name, absoluteAddress);
+                    if (!library.isEmpty()) {
+                        String shortKey = moduleName + "." + name;
+                        globalSymbolTable.putIfAbsent(shortKey, absoluteAddress);
+                    }
                 }
             }
 

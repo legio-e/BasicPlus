@@ -45,6 +45,17 @@ public class ModWriter {
     private final Map<String, Integer> functionAddresses = new HashMap<>();
     private final List<String> exportFunctions = new ArrayList<>();
 
+    /** B3 v2 — Data symbols exportados con nombre. Hoy se usa SÓLO para
+     *  exponer el class_ptr de `RuntimeError` (que el emisor sintetiza en
+     *  cada módulo) al runtime, para que builtins nativos puedan
+     *  instanciar la clase sin tener que parsear el data block.
+     *
+     *  Cada entrada se serializa como pareja (name, csOffset) AL FINAL de
+     *  la sección exports — el loader detecta la subsección por bytes
+     *  remanentes del exportsSize cabecera y mantiene compat con .mods
+     *  viejos (que no la tendrán). */
+    private final List<String> exportDataSymbols = new ArrayList<>();
+
     private final List<CallFixup> callFixups = new ArrayList<>();
 
     private final List<String> currentParams = new ArrayList<>();
@@ -240,6 +251,16 @@ public class ModWriter {
     }
 
     // --- Data block ---
+
+    /** B3 v2 — registra `name` (un símbolo de datos previamente registrado)
+     *  para ser exportado en el .mod. El loader lo cargará en su tabla de
+     *  símbolos globales con la dirección absoluta del descriptor. */
+    public void exportDataSymbol(String name) {
+        if (!dataSymbolOffset.containsKey(name)) {
+            throw new RuntimeException("exportDataSymbol: símbolo '" + name + "' no registrado");
+        }
+        exportDataSymbols.add(name);
+    }
 
     private int registerSymbol(String name, byte[] bytes) {
         requireUnique(name);
@@ -1335,6 +1356,18 @@ public class ModWriter {
         for (String func : exportFunctions) {
             exportOut.writeUTF(func);
             exportOut.writeInt(functionAddresses.get(func));
+        }
+        // B3 v2 — subsección de data symbols exportados. Si no hay
+        // ninguno, NO escribimos nada (compat con loaders viejos que no
+        // esperan más bytes); si hay alguno, escribimos int count +
+        // entries. Loaders nuevos detectan la subsección por bytes
+        // remanentes de exportsSize.
+        if (!exportDataSymbols.isEmpty()) {
+            exportOut.writeInt(exportDataSymbols.size());
+            for (String name : exportDataSymbols) {
+                exportOut.writeUTF(name);
+                exportOut.writeInt(dataSymbolOffset.get(name));
+            }
         }
         exportOut.flush();
 

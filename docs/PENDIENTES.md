@@ -49,22 +49,51 @@ Mejora medida (todos los fixes acumulados):
    las lecturas fuera de `vmLock` (`GET_FIELD`, `ALOAD`, etc.) pueden
    ver bytes desactualizados en multi-core.
 
-### B3 v2 — `try/catch e: RuntimeError` para errores de mutex (pendiente)
-**Estado**: B3 v1 cierra el síntoma peor (los errores de Mutex no tumban la VM
-gracias a `BpThreadFault`), pero el usuario sigue sin poder ATRAPAR el error en
-código BP con `try/catch e: RuntimeError`. Para eso falta construir una instancia
-BP de `RuntimeError` desde código nativo y disparar la lógica del opcode `THROW`.
+### B3 v2 — `try/catch e: RuntimeError` para errores de mutex (cerrado)
+**Estado**: cerrado. El código BP ya atrapa errores nativos de mutex.
 
-**Plan**:
-1. En `ModuleManager` indexar el `class_ptr` de `RuntimeError` por módulo durante
-   el load (RuntimeError lo sintetiza el emisor en CADA módulo, así que siempre
-   está disponible).
-2. Helper `throwBpRuntimeError(tc, msg)` en `VirtualMachine`:
-   - aloca BP-string con el mensaje;
-   - aloca BP-`RuntimeError`;
-   - setea `obj.msg := stringRef`;
-   - empuja el ref y ejecuta la lógica de unwind del case `THROW` (0x5D).
-3. Reemplazar los `throw new BpThreadFault(...)` de los builtins de mutex.
+**Implementado**:
+1. **ModWriter** soporta `exportDataSymbol(name)`: data symbols con nombre
+   se serializan al final de la sección exports (subsección opcional;
+   compat con .mods viejos por boundary del `exportsSize`).
+2. **MivmEmitter** llama `w.exportDataSymbol("RuntimeError")` al
+   sintetizar la clase, así cada `.mod` expone su descriptor.
+3. **ModuleManager** lee la subsección y registra el descriptor en
+   `globalSymbolTable` con dirección `codeStart + csOffset` (CS-relative
+   negativo; misma convención que NEW_OBJECT). Nuevo
+   `resolveExportInModule(cs, name)` para consultarlo desde la VM.
+4. **VirtualMachine** nueva clase `BpExceptionPending` (señal interna) +
+   helper `throwBpRuntimeError(tc, msg)` que:
+   - Resuelve el class_ptr de RuntimeError del módulo actual.
+   - Aloja BP-string con el mensaje (allocVmString).
+   - Aloja BP-RuntimeError (heapAlloc + write class_ptr + zero fields).
+   - Setea `obj.msg := stringRef` (slot 0).
+   - Empuja el ref a tc.sp.
+   - Lanza BpExceptionPending.
+5. **Dispatcher de CALL_BUILTIN** (case 0x5A) cubre con `try/catch` la
+   excepción y ejecuta el unwind exacto del opcode THROW (0x5D) sobre
+   las locales del intérprete. Si ningún handler atrapa, convierte a
+   BpThreadFault con el mensaje original (path "uncaught").
+6. **Mutex builtins** (MUTEX_LOCK/MUTEX_UNLOCK) cambian
+   `throw new BpThreadFault(...)` por `throwBpRuntimeError(tc, ...)`.
+
+**Verificado**: sample `catchmutex.bp` con dos casos:
+- `m.lock()` reentrant → catch atrapa, `e.msg = "mutex.lock: re-entrada
+  por mismo thread tid=0 ..."`, programa CONTINÚA.
+- `m.unlock()` sin posesión → mismo patrón, programa CONTINÚA.
+
+**Bug encontrado y arreglado durante la implementación**: el loader
+inicialmente sumaba `dataStart + csOffset` para calcular la dirección
+absoluta del descriptor, pero la convención de la VM (NEW_OBJECT,
+catch handlers) es `codeStart + csOffset` (csOffset negativo). Esto
+hacía que `thrownClass` y `ehExpectedClass` divergieran por
+`dataSize` bytes y nunca matcheaba el catch.
+
+**Fuera de scope (posibles futuros B3.v3)**:
+- Aplicar el mismo patrón al resto de errores nativos (sandbox path,
+  cast narrow fuera de rango, división por cero, etc.). Hoy varios
+  todavía van por `BpThreadFault` o `RuntimeException`.
+- Stack-trace BP atrapable (`e.stackTrace`).
 
 ---
 
