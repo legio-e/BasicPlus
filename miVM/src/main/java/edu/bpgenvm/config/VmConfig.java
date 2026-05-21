@@ -74,7 +74,10 @@ public final class VmConfig {
     /**
      * Intenta cargar config en este orden:
      *   1) cwd/BpVM.cfg
-     *   2) <dir del .mod raíz>/BpVM.cfg  (si rootModPath != null)
+     *   2) caminando hacia arriba desde el dir de {@code rootModPath} (parent,
+     *      grandparent, ...) hasta encontrar uno o llegar a la raíz del FS.
+     *      Útil para el IDE: el .bp del usuario puede estar en
+     *      <repo>/samples/foo.bp y el cfg en <repo>/BpVM.cfg.
      * Devuelve defaults() si no encuentra ninguno.
      */
     public static VmConfig loadDefaultFor(Path rootModPath) {
@@ -86,17 +89,19 @@ public final class VmConfig {
                 System.err.println("Advertencia: no se pudo leer " + cwd + ": " + ex.getMessage());
             }
         }
-        // 2) junto al .mod
+        // 2) caminamos hacia arriba desde el path fuente.
         if (rootModPath != null) {
-            Path parent = rootModPath.toAbsolutePath().getParent();
-            if (parent != null) {
-                Path next = parent.resolve(DEFAULT_FILENAME);
+            Path dir = rootModPath.toAbsolutePath().getParent();
+            while (dir != null) {
+                Path next = dir.resolve(DEFAULT_FILENAME);
                 if (Files.exists(next)) {
                     try { return load(next); }
                     catch (IOException ex) {
                         System.err.println("Advertencia: no se pudo leer " + next + ": " + ex.getMessage());
+                        break;  // existe pero ilegible: no sigamos subiendo
                     }
                 }
+                dir = dir.getParent();
             }
         }
         return defaults();

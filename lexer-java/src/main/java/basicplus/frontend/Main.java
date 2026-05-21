@@ -80,12 +80,23 @@ public final class Main {
         Ctx() {
             // Auto-discover BpVM.cfg/stdlibDir desde cwd. Útil para single-file
             // (CLI sin --project) y para que `import Math` funcione sin que el
-            // usuario configure dependencias.
+            // usuario configure dependencias. Si el caller tiene un path fuente
+            // (CLI o IDE), debería llamar adicionalmente a autodiscoverFromSource
+            // — esto cubre el caso del IDE arrancado con cwd != raíz del repo.
+            autodiscoverFromSource(null);
+        }
+
+        /** Intenta localizar BpVM.cfg caminando hacia arriba desde {@code source}
+         *  (o sólo en cwd si source==null). Si encuentra stdlibDir y aún no
+         *  está en {@link #dependencyPaths}, lo añade. No falla si no hay cfg. */
+        void autodiscoverFromSource(Path source) {
             try {
-                edu.bpgenvm.config.VmConfig cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(null);
+                edu.bpgenvm.config.VmConfig cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(source);
                 if (cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
                     Path sd = Paths.get(cfg.stdlibDir);
-                    if (Files.isDirectory(sd)) dependencyPaths.add(sd);
+                    if (Files.isDirectory(sd) && !dependencyPaths.contains(sd)) {
+                        dependencyPaths.add(sd);
+                    }
                 }
             } catch (Throwable ignored) {
                 // Sin config; sigue funcionando para módulos que no importan stdlib.
@@ -107,6 +118,11 @@ public final class Main {
         Ctx ctx = new Ctx();
         ctx.outDir = outDir;
         ctx.backend = (backend != null) ? backend : "mivm";
+        // Si el cwd no es el del repo (típico cuando un IDE invoca el compile)
+        // el ctor de Ctx no habrá localizado BpVM.cfg. Re-intentamos caminando
+        // hacia arriba desde el .bp para que `import IO` y resto de stdlib
+        // resuelvan sin tener que configurar dependencyPaths a mano.
+        if (source != null) ctx.autodiscoverFromSource(source.toAbsolutePath());
         try {
             boolean ok = compileFull(source, ctx, 0);
             return ok && ctx.totalErrors == 0;
@@ -209,6 +225,10 @@ public final class Main {
         ctx.showTokens = showTokens;
         ctx.showAst    = showAst;
         ctx.rootSrcDir = p.getParent();
+        // Re-intenta localizar BpVM.cfg caminando desde el .bp. Si el usuario
+        // lanza el comando desde un cwd que no contiene BpVM.cfg, así seguimos
+        // resolviendo stdlib.
+        ctx.autodiscoverFromSource(p);
 
         try {
             if (interfaceOutDir != null) {
