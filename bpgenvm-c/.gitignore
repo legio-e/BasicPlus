@@ -1,0 +1,5 @@
+build/
+*.o
+*.exe
+trace.txt
+out.txt

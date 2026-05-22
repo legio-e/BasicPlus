@@ -248,38 +248,51 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm) {
             sp += 4; break;
         }
 
-        /* ---- Control flow ---- */
+        /* ---- Control flow ----
+         *
+         * Convención CRÍTICA (que difiere del estilo JVM): los offsets de
+         * los jumps son RELATIVOS AL INSTRUCTION ADDRESS (= pc del byte
+         * opcode), no al pc post-operando. La VM Java los implementa así
+         * desde el principio y los .mod ya emitidos asumen esta
+         * convención. Ver VirtualMachine.java case 0x0D para referencia.
+         */
         case OP_JUMP: {
-            int32_t rel = bpvm_read_i32_be(mem + pc); pc += 4;
-            pc = (uint32_t)((int32_t) pc + rel);
+            uint32_t instr_addr = pc - 1;
+            int32_t rel = bpvm_read_i32_be(mem + pc);  /* pc NO avanza */
+            pc = (uint32_t)((int32_t) instr_addr + rel);
             break;
         }
         case OP_JUMP_IF_FALSE: {
+            uint32_t instr_addr = pc - 1;
             int32_t rel = bpvm_read_i32_be(mem + pc); pc += 4;
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v == 0) pc = (uint32_t)((int32_t) pc + rel);
+            if (v == 0) pc = (uint32_t)((int32_t) instr_addr + rel);
             break;
         }
         case OP_JUMP8: {
-            int8_t rel = (int8_t) mem[pc++];
-            pc = (uint32_t)((int32_t) pc + rel);
+            uint32_t instr_addr = pc - 1;
+            int8_t rel = (int8_t) mem[pc];   /* pc NO avanza */
+            pc = (uint32_t)((int32_t) instr_addr + rel);
             break;
         }
         case OP_JUMP_IF_FALSE8: {
+            uint32_t instr_addr = pc - 1;
             int8_t rel = (int8_t) mem[pc++];
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v == 0) pc = (uint32_t)((int32_t) pc + rel);
+            if (v == 0) pc = (uint32_t)((int32_t) instr_addr + rel);
             break;
         }
         case OP_JUMP16: {
-            int16_t rel = bpvm_read_i16_be(mem + pc); pc += 2;
-            pc = (uint32_t)((int32_t) pc + rel);
+            uint32_t instr_addr = pc - 1;
+            int16_t rel = bpvm_read_i16_be(mem + pc);  /* pc NO avanza */
+            pc = (uint32_t)((int32_t) instr_addr + rel);
             break;
         }
         case OP_JUMP_IF_FALSE16: {
+            uint32_t instr_addr = pc - 1;
             int16_t rel = bpvm_read_i16_be(mem + pc); pc += 2;
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v == 0) pc = (uint32_t)((int32_t) pc + rel);
+            if (v == 0) pc = (uint32_t)((int32_t) instr_addr + rel);
             break;
         }
 

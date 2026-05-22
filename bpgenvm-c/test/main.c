@@ -21,6 +21,10 @@ static size_t parse_size(const char* s) {
 }
 
 int main(int argc, char** argv) {
+    /* stdout unbuffered para que un crash no se trague output. */
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     const char* path  = NULL;
     int   trace       = 0;
     size_t mem_size   = 512 * 1024;

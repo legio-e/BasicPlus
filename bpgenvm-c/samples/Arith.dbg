@@ -1,0 +1,15 @@
+dbg 2
+module Arith
+source C:\lenguajes\pm\bpgenvm-c\samples\arith.bp
+lines
+1431 4
+1439 5
+1447 6
+1456 7
+1465 8
+1474 9
+1483 10
+1492 11
+1498 12
+1510 13
+1522 15

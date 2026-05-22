@@ -1,0 +1,18 @@
+// arith.bp — operaciones aritméticas básicas en F1.
+module Arith
+  function Main()
+    var a: integer := 7
+    var b: integer := 3
+    print a + b
+    print a - b
+    print a * b
+    print a / b
+    print a mod b
+    print -a
+    if a < b then
+      print 0
+    else
+      print 1
+    endif
+  end Main
+end Arith

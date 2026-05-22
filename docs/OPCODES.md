@@ -11,8 +11,16 @@ Convenciones:
 - **i32, u32, i16, u16, i8, u8, f32**: enteros y float big-endian.
 - **soff**: signed offset al `bp` (positivo = arg/var arriba; negativo
   = saved regs / args debajo).
-- **rel**: relativo al `pc` del **siguiente** opcode (`pc` tras leer
-  operando; igual que en JVM jumps).
+- **rel**: relativo al **instruction address** (byte del opcode de jump,
+  no al pc post-operando). Esto difiere del estilo JVM. Implementación
+  de referencia: `pc = (pc_at_opcode) + rel`. Pseudo-código:
+  ```
+  instruction_addr = pc - 1     # ya consumimos el byte de opcode
+  rel              = read_immediate(pc)
+  pc               = instruction_addr + rel
+  ```
+  Aplica a `JUMP`, `JUMP_IF_FALSE` y sus variantes compactas
+  (`JUMP8/16`, `JUMP_IF_FALSE8/16`).
 - **csOff**: relativo al `cs` (= codeStart) del módulo actual.
 - Stack effect notación: `( a b -- c )` significa pop b, pop a, push c.
 - "tc.X" = campos del ThreadContext (ver `HEAP_LAYOUT.md` §5).
