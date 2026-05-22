@@ -1,0 +1,36 @@
+// n8syncdebug.bp — N8: smoke del debugger sobre `sync property` con getter
+// y setter custom que tienen variables locales. Verifica que el .dbg
+// generado por el frontend incluye las locales dentro del cuerpo del
+// accesor, que es la condición previa para que el debugger del IDE las
+// muestre cuando pausa en una línea del getter/setter.
+module N8SyncDebug
+
+  public class Cell
+    public sync property value: integer
+      get
+        // Variable local dentro del getter — debe ser visible al debugger.
+        var dbl: integer := field
+        dbl := dbl + 100
+        return dbl
+      endget
+      set(nv)
+        var check: integer := nv
+        check := check + 1
+        field := check - 1
+      endset
+    endprop
+
+    public function Cell()
+      // sin args
+    end Cell
+  end Cell
+
+  function Main()
+    var c: Cell := Cell()
+    c.value := 5
+    print "c.value =", c.value
+    c.value := 10
+    print "c.value =", c.value
+  end Main
+
+end N8SyncDebug
