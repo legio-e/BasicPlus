@@ -43,7 +43,7 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 | 0x05 | `SET_GLOBAL` | `i16` soff | `( v -- )` | Escribe i32 `v` en `mem[cs + soff]`. |
 | 0x06 | `CALL_EXT` | `u16` idx | `( -- )` | Llama a la función importada en índice `idx` de la ext-table del módulo. Equivalente a `CALL` con target = `mem[extTableAddress + idx*4]`. Frame guarda saved pc/bp/cs como en CALL. |
 | 0x07 | `CALL` | `i32` relAddr | `( -- )` | Llama a función dentro del mismo módulo. `relAddr` es relativo al `cs` (= offset CS-relative del entry-point). Push saved pc, bp, cs; bp ← sp; pc ← cs + relAddr. |
-| 0x08 | `RET` | `u8` paramsCount | `( -- )` | Restaura cs/bp/pc de los slots saved en el frame; `sp ← bp - 12 - paramsCount*4`; deja el return value en el nuevo top (el callee lo dejó en `[bp+0]` antes del RET). |
+| 0x08 | `RET` | `u8` paramsCount | `( retVal -- )` | Pop `retVal` del top del stack del callee. Restaura cs/bp/pc de los slots guardados (`[bp-12]`, `[bp-8]`, `[bp-4]`). Sp ← `bp - 12 - paramsCount*4`. Push `retVal` al nuevo sp. (El callee debe asegurar que `retVal` está en el top antes del RET; típicamente con un `PUSH 0` o `GET_LOCAL +slot` que contenga el return value.) |
 | 0x09 | `GET_LOCAL` | `i16` soff | `( -- v )` | Push `mem[bp + soff]` i32. |
 | 0x0A | `SET_LOCAL` | `i16` soff | `( v -- )` | Escribe i32 `v` en `mem[bp + soff]`. |
 | 0x0B | `EQ` | — | `( a b -- (a==b)?1:0 )` | Comparación entera. |
@@ -217,12 +217,14 @@ Layout del frame tras `CALL` + `ENTER N`:
 
 `RET k` revierte:
 ```
-returnValue = mem[bp + 0]   ; (callee debe haberlo dejado aquí antes del RET)
-cs = mem[bp - 4]
-bp = mem[bp - 8]
+sp -= 4
+returnValue = mem[sp]              ; pop del top del stack del callee
 pc = mem[bp - 12]
-sp = bp - 12 - k*4
-mem[sp] = returnValue
+bp_old = mem[bp - 8]
+cs = mem[bp - 4]
+sp = bp - 12 - k*4                 ; descarta saved + args del caller
+bp = bp_old
+mem[sp] = returnValue              ; push retVal en el nuevo sp del caller
 sp += 4
 ```
 

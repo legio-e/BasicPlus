@@ -1,0 +1,6 @@
+module StrlenSimple
+  function Main()
+    var s: string := "hello"
+    print strlen(s)
+  end Main
+end StrlenSimple

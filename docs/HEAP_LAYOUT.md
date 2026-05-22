@@ -222,9 +222,13 @@ Cada `CALL` reserva en la pila del thread:
 El `CALL` empuja args en orden, luego saved_pc, saved_bp, saved_cs, y
 fija `bp = sp`. El callee hace `ENTER localsBytes` que avanza `sp`.
 
-El `RET paramsCount` revierte: `sp = bp - 12 - paramsCount*4`,
-restaura `pc/bp/cs` de los slots guardados y deja el return value
-(que el callee dejó en `[bp + 0]`) en la cima del nuevo sp.
+El `RET paramsCount` revierte: pop del **top del stack** del callee
+para obtener el `returnValue`, restaura `pc/bp/cs` de los slots
+guardados, `sp ← bp - 12 - paramsCount*4`, y push del `returnValue`
+en el nuevo sp del caller. El callee debe asegurar que `returnValue`
+está en el top justo antes del `RET` (típicamente con `GET_LOCAL
++slot` que apunta al "return slot" donde la función dejó su
+resultado, o con `PUSH 0` para funciones void).
 
 ---
 

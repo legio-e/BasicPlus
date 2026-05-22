@@ -1,0 +1,22 @@
+// strings.bp — F2: strings literales + intToString + concat.
+module Strings
+
+  function Main()
+    // String literal + print
+    print "Hola desde la VM"
+
+    // intToString (CALL_BUILTIN id=3)
+    var n: integer := 42
+    print intToString(n)
+
+    // Concat de strings (operador + sobre strings → __strconcat builtin)
+    print "respuesta: " + intToString(n + 100)
+
+    // Comparación con string vacio
+    var s: string := "abc"
+    print intToString(strlen(s))
+
+    print "fin"
+  end Main
+
+end Strings

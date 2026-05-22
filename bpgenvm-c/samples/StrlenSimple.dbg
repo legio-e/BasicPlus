@@ -1,0 +1,6 @@
+dbg 2
+module StrlenSimple
+source C:\lenguajes\pm\bpgenvm-c\samples\strlen_simple.bp
+lines
+1431 3
+1437 4

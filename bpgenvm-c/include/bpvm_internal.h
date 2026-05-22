@@ -183,4 +183,12 @@ bpvm_status_t bpvm_loader_load(bpvm_t* vm, const char* path);
 /* interp.c */
 bpvm_status_t bpvm_interp_run(bpvm_t* vm);
 
+/* heap.c (F2) */
+uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type);
+uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len);
+void     bpvm_heap_gc(bpvm_t* vm);
+
+/* builtins.c (F2) */
+bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id);
+
 #endif /* BPVM_INTERNAL_H */

@@ -1,0 +1,10 @@
+dbg 2
+module Concat
+source C:\lenguajes\pm\bpgenvm-c\samples\concat.bp
+lines
+1431 4
+1437 5
+1443 6
+1448 7
+1453 8
+1472 9

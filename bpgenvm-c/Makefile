@@ -11,7 +11,7 @@ CFLAGS  ?= -std=c99 -Wall -Wextra -Wpedantic -O2 -g
 CFLAGS  += -Iinclude
 CFLAGS  += $(CFLAGS_EXTRA)
 
-SRC     = src/bpvm.c src/loader.c src/interp.c
+SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c
 TEST    = test/main.c
 OBJ     = $(SRC:%.c=build/%.o) build/test/main.o
 BIN     = build/bpgenvm-c

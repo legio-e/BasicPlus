@@ -1,0 +1,11 @@
+// concat.bp — debug del strconcat
+module Concat
+  function Main()
+    var s1: string := "abc"
+    var s2: string := "XYZ"
+    print s1
+    print s2
+    print "len s1 = " + intToString(strlen(s1))
+    print s1 + s2
+  end Main
+end Concat

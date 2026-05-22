@@ -309,17 +309,20 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm) {
         }
         case OP_RET: {
             uint8_t params_count = mem[pc++];
-            /* Convención: el return value lo dejó el callee en [bp + 0]
-             * antes del RET. Lo leemos, restauramos cs/bp/pc, ajustamos
-             * sp y dejamos el return value en la nueva cima. */
-            int32_t ret_val  = bpvm_read_i32_be(mem + bp);
-            int32_t saved_cs = bpvm_read_i32_be(mem + bp - 4);
-            int32_t saved_bp = bpvm_read_i32_be(mem + bp - 8);
+            /* Convención: el return value lo dejó el callee POPEABLE en el
+             * top del stack del callee (no en [bp + 0] como sugería un
+             * comentario obsoleto). Mi RET hace POP, restaura cs/bp/pc,
+             * ajusta sp al pre-args del caller y push del ret_val. Mismo
+             * comportamiento que VirtualMachine.java case 0x08. */
+            sp -= 4; int32_t ret_val = bpvm_read_i32_be(mem + sp);
             int32_t saved_pc = bpvm_read_i32_be(mem + bp - 12);
-            sp = (uint32_t) bp - 12 - (uint32_t) params_count * 4;
+            int32_t saved_bp = bpvm_read_i32_be(mem + bp - 8);
+            int32_t saved_cs = bpvm_read_i32_be(mem + bp - 4);
+            uint32_t target_caller_sp = bp - 12 - (uint32_t) params_count * 4;
+            pc = (uint32_t) saved_pc;
             bp = (uint32_t) saved_bp;
             cs = (uint32_t) saved_cs;
-            pc = (uint32_t) saved_pc;
+            sp = target_caller_sp;
             bpvm_write_i32_be(mem + sp, ret_val);
             sp += 4;
             break;
@@ -372,19 +375,163 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm) {
             bpvm_write_i32_be(mem + sp, v & 0xFFFF); sp += 4; break;
         }
 
-        /* ---- Aún no implementados en F1 ---- */
-        case OP_NEWARRAY: case OP_NEWARRAY_I8: case OP_NEWARRAY_I16:
-        case OP_ALOAD: case OP_ASTORE: case OP_ALEN:
-        case OP_ALOAD_I8: case OP_ALOAD_U8: case OP_ALOAD_I16: case OP_ALOAD_U16:
-        case OP_ASTORE_I8: case OP_ASTORE_I16:
-        case OP_PRINT_STRING: case OP_PRINT_STR_NONL:
+        /* ---- F2: arrays ---- */
+        case OP_NEWARRAY: {
+            sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
+            if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 4, BPVM_TYPE_ARRAY_I32);
+            if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
+            bpvm_write_u32_be(mem + ref, (uint32_t) size);
+            bpvm_write_i32_be(mem + sp, (int32_t) ref); sp += 4;
+            mem = vm->memory;  /* heap_alloc no realoca pero defensivo */
+            break;
+        }
+        case OP_NEWARRAY_I8: {
+            sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
+            if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size, BPVM_TYPE_ARRAY_I8);
+            if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
+            bpvm_write_u32_be(mem + ref, (uint32_t) size);
+            bpvm_write_i32_be(mem + sp, (int32_t) ref); sp += 4;
+            break;
+        }
+        case OP_NEWARRAY_I16: {
+            sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
+            if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 2, BPVM_TYPE_ARRAY_I16);
+            if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
+            bpvm_write_u32_be(mem + ref, (uint32_t) size);
+            bpvm_write_i32_be(mem + sp, (int32_t) ref); sp += 4;
+            break;
+        }
+        case OP_ALOAD: {
+            sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            if (idx < 0 || (uint32_t) idx >= length) {
+                exit_status = BPVM_ERR_RUNTIME; goto done;
+            }
+            int32_t v = bpvm_read_i32_be(mem + ref + 4 + (uint32_t) idx * 4);
+            bpvm_write_i32_be(mem + sp, v); sp += 4;
+            break;
+        }
+        case OP_ASTORE: {
+            sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
+            sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            if (idx < 0 || (uint32_t) idx >= length) {
+                exit_status = BPVM_ERR_RUNTIME; goto done;
+            }
+            bpvm_write_i32_be(mem + ref + 4 + (uint32_t) idx * 4, v);
+            break;
+        }
+        case OP_ALEN: {
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            bpvm_write_i32_be(mem + sp, (int32_t) length); sp += 4;
+            break;
+        }
+        case OP_ALOAD_I8: {
+            sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            int8_t v = (int8_t) mem[ref + 4 + (uint32_t) idx];
+            bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
+            break;
+        }
+        case OP_ALOAD_U8: {
+            sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            uint8_t v = mem[ref + 4 + (uint32_t) idx];
+            bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
+            break;
+        }
+        case OP_ALOAD_I16: {
+            sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            int16_t v = bpvm_read_i16_be(mem + ref + 4 + (uint32_t) idx * 2);
+            bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
+            break;
+        }
+        case OP_ALOAD_U16: {
+            sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            uint16_t v = bpvm_read_u16_be(mem + ref + 4 + (uint32_t) idx * 2);
+            bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
+            break;
+        }
+        case OP_ASTORE_I8: {
+            sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
+            sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            mem[ref + 4 + (uint32_t) idx] = (uint8_t)(v & 0xFF);
+            break;
+        }
+        case OP_ASTORE_I16: {
+            sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
+            sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            int16_t v16 = (int16_t)(v & 0xFFFF);
+            bpvm_write_u32_be(mem + ref + 4 + (uint32_t) idx * 2, 0); /* unused */
+            mem[ref + 4 + (uint32_t) idx * 2]     = (uint8_t)((v16 >> 8) & 0xFF);
+            mem[ref + 4 + (uint32_t) idx * 2 + 1] = (uint8_t)(v16 & 0xFF);
+            break;
+        }
+
+        /* ---- F2: print strings ---- */
+        case OP_PRINT_STRING:
+        case OP_PRINT_STR_NONL: {
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            if (ref != 0) {
+                uint32_t length = bpvm_read_u32_be(mem + ref);
+                for (uint32_t i = 0; i < length; i++) {
+                    uint32_t cp = bpvm_read_u32_be(mem + ref + 4 + i * 4);
+                    char c = (cp < 128) ? (char) cp : '?';
+                    emit_text(vm, &c, 1);
+                }
+            }
+            if (op == OP_PRINT_STRING) emit_newline(vm);
+            break;
+        }
+
+        /* ---- F2: GC trigger manual ---- */
+        case OP_GC_COLLECT: {
+            tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+            bpvm_heap_gc(vm);
+            mem = vm->memory;
+            break;
+        }
+
+        /* ---- F2: builtins ---- */
+        case OP_CALL_BUILTIN: {
+            uint16_t id = bpvm_read_u16_be(mem + pc); pc += 2;
+            tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+            bpvm_status_t bs = bpvm_call_builtin(vm, tc, id);
+            sp = tc->sp; bp = tc->bp; pc = tc->pc; cs = tc->cs;
+            mem = vm->memory;
+            if (bs != BPVM_OK) { exit_status = bs; goto done; }
+            break;
+        }
+
+        /* ---- Aún no implementados ---- */
         case OP_NEW_OBJECT: case OP_GET_FIELD: case OP_SET_FIELD:
         case OP_INVOKE_VIRTUAL: case OP_INSTANCEOF: case OP_FREE_REF:
         case OP_SET_FIELD_OWNER:
-        case OP_CALL_EXT: case OP_CALL_BUILTIN:
+        case OP_CALL_EXT:
         case OP_TRY_BEGIN: case OP_TRY_END: case OP_THROW:
-        case OP_GC_COLLECT:
-            fprintf(stderr, "[bpvm-c F1] opcode 0x%02X aún no soportado en PC %u\n",
+            fprintf(stderr, "[bpvm-c F2] opcode 0x%02X aún no soportado en PC %u\n",
                     op, pc - 1);
             exit_status = BPVM_ERR_BAD_OPCODE;
             goto done;
