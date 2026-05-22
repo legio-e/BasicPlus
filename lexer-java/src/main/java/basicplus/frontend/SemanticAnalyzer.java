@@ -1691,6 +1691,28 @@ public final class SemanticAnalyzer {
             }
         }
 
+        // L2 v3.d — Acceso STÁTICO cuando el target NO es identifier directo
+        // (caso típico: `Lib.Cls.STATIC_MEMBER`, donde `Lib.Cls` ya fue
+        // resuelto a ClassSymbol y queda anotado en exprSymbols). Si el target
+        // es un ClassType pero el exprSymbol del target es directamente un
+        // ClassSymbol (no una instancia), buscamos en staticMembers primero.
+        if (tgtT instanceof ClassType) {
+            Symbol tgtSym = info.exprSymbols.get(ma.target);
+            if (tgtSym instanceof ClassSymbol) {
+                ClassSymbol cs = (ClassSymbol) tgtSym;
+                Symbol staticSub = cs.lookupStatic(ma.member);
+                if (staticSub != null) {
+                    checkVisibility(ma.line, ma.column, staticSub, cs);
+                    info.exprSymbols.put(ma, staticSub);
+                    return typeOfSymbol(staticSub);
+                }
+                // Si no hay static, sigue con acceso de instancia para no
+                // romper ningún uso existente — en práctica con un target tipo
+                // ClassType (no una instancia concreta) es ambiguo, pero
+                // dejamos el path de instancia por compat.
+            }
+        }
+
         // Acceso de instancia
         if (tgtT instanceof ClassType) {
             ClassType ct = (ClassType) tgtT;

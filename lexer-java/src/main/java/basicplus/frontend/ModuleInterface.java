@@ -193,6 +193,11 @@ public final class ModuleInterface {
         public int[] binaryFieldBitmap = new int[0];
         public int[] binaryOwnerBitmap = new int[0];
 
+        /** L2 v3.d — static consts públicos de la clase. Cross-module se
+         *  inlinean en el call-site (mismo patrón que consts de módulo).
+         *  Lista vacía si la clase no expone ninguno. */
+        public List<ConstSig> staticConsts = new ArrayList<>();
+
         public ClassSig(String name, boolean isPublic, String baseClassName,
                         List<ParamSig> ctorParams, List<PropSig> properties,
                         List<FuncSig> methods) {
@@ -403,6 +408,34 @@ public final class ModuleInterface {
             }
         }
         ClassSig sig = new ClassSig(cls.name, true, parent, ctorParams, properties, methods);
+
+        // L2 v3.d — static consts públicos (con literal exportable). Vars
+        // estáticos quedan pendientes (requieren opcodes nuevos para
+        // GET/SET global cross-module). Mismo criterio que ConstSig a nivel
+        // módulo: tipo exportable + valor literal accesible.
+        for (Symbol s2 : cls.staticMembers.getSymbols()) {
+            if (!(s2 instanceof Symbol.ConstSymbol)) continue;
+            Symbol.ConstSymbol cst = (Symbol.ConstSymbol) s2;
+            if (!cst.isPublic) continue;
+            if (cst.type == null || !isExportableType(cst.type)) {
+                skipped.add("class " + cls.name + ".static const " + cst.name
+                        + ": tipo no exportable: "
+                        + (cst.type == null ? "<null>" : cst.type.display()));
+                continue;
+            }
+            if (!(cst.decl instanceof Ast.ConstDecl)) {
+                skipped.add("class " + cls.name + ".static const " + cst.name
+                        + ": sin AST literal accesible");
+                continue;
+            }
+            Object lit = literalValueOf(((Ast.ConstDecl) cst.decl).value);
+            if (lit == null) {
+                skipped.add("class " + cls.name + ".static const " + cst.name
+                        + ": valor no es literal");
+                continue;
+            }
+            sig.staticConsts.add(new ConstSig(cst.name, cst.type, lit));
+        }
         // L2 v3 — propaga el layout binario para herencia cross-module. Si el
         // backend ya lo populates (cls.binaryLayout != null), usamos eso (la
         // fuente más fiel). Si no (típicamente porque estamos en modo
@@ -611,6 +644,10 @@ public final class ModuleInterface {
                     pw.printf("  prop %s:%s public%s%n",
                             p.name, typeToString(p.type), p.isSync ? " sync" : "");
                 }
+                for (ConstSig sc : c.staticConsts) {
+                    pw.printf("  staticconst %s:%s=%s public%n",
+                            sc.name, typeToString(sc.type), encodeLiteral(sc.value));
+                }
                 for (FuncSig m : c.methods) {
                     StringBuilder sb = new StringBuilder();
                     sb.append("  method ").append(m.name).append('(');
@@ -722,8 +759,21 @@ public final class ModuleInterface {
         if (t == null) return "void";
         if (t instanceof VoidType) return "void";
         if (t instanceof PrimitiveType) return ((PrimitiveType) t).tag.name().toLowerCase();
-        // L2: clase del mismo módulo o stub no resuelto — serializamos por nombre.
-        if (t instanceof BpType.ClassType) return ((BpType.ClassType) t).cls.name;
+        // L2 v3.e — para clases cross-module emitimos el nombre cualificado
+        // (`<Lib>.<Mod>.<Cls>` o `<Mod>.<Cls>`). El reader del importador
+        // resuelve contra los ImportedNamespaceSymbol disponibles. Para
+        // clases locales del propio módulo, sigue siendo el simpleName.
+        if (t instanceof BpType.ClassType) {
+            Symbol.ClassSymbol cls = ((BpType.ClassType) t).cls;
+            if (cls.isExternal) {
+                StringBuilder sb = new StringBuilder();
+                if (cls.externalLibrary != null && !cls.externalLibrary.isEmpty())
+                    sb.append(cls.externalLibrary).append('.');
+                sb.append(cls.externalModule).append('.').append(cls.name);
+                return sb.toString();
+            }
+            return cls.name;
+        }
         if (t instanceof BpType.UnresolvedClassRef) return ((BpType.UnresolvedClassRef) t).name;
         return "void"; // safety net; debería haber sido descartada por isExportableType
     }
@@ -751,6 +801,8 @@ public final class ModuleInterface {
             // L2 v3 — layout binario opcional (-1 = no presente).
             int clsBinNumFields = -1, clsBinNumMethods = -1;
             int[] clsBinFieldBitmap = new int[0], clsBinOwnerBitmap = new int[0];
+            // L2 v3.d — static consts del bloque class.
+            List<ConstSig> clsStaticConsts = new ArrayList<>();
 
             while ((line = br.readLine()) != null) {
                 lineNo++;
@@ -799,11 +851,13 @@ public final class ModuleInterface {
                         cs.binaryNumMethods = clsBinNumMethods;
                         cs.binaryFieldBitmap = clsBinFieldBitmap;
                         cs.binaryOwnerBitmap = clsBinOwnerBitmap;
+                        cs.staticConsts = clsStaticConsts;
                         iface.classes.add(cs);
                         clsName = null; clsParent = null;
                         clsCtorParams = null; clsProps = null; clsMethods = null;
                         clsBinNumFields = -1; clsBinNumMethods = -1;
                         clsBinFieldBitmap = new int[0]; clsBinOwnerBitmap = new int[0];
+                        clsStaticConsts = new ArrayList<>();
                         continue;
                     }
                     if (trimmed.startsWith("ctor(") || trimmed.startsWith("ctor (")) {
@@ -819,6 +873,10 @@ public final class ModuleInterface {
                     }
                     if (trimmed.startsWith("method ")) {
                         clsMethods.add(parseFunc(file, lineNo, trimmed.substring("method ".length())));
+                        continue;
+                    }
+                    if (trimmed.startsWith("staticconst ")) {
+                        clsStaticConsts.add(parseConst(file, lineNo, trimmed.substring("staticconst ".length())));
                         continue;
                     }
                     if (trimmed.startsWith("layout ")) {
@@ -1030,18 +1088,28 @@ public final class ModuleInterface {
                 // módulo (o jerarquía de stdlib). El consumidor del .bpi
                 // (Main.java loader) resolverá UnresolvedClassRef a un
                 // ClassType una vez tenga todos los stubs construidos.
-                // Validamos que sea un identificador legal para evitar basura.
-                if (!isValidIdentifier(s))
+                // L2 v3.e — acepta nombres dotted (`L2Lib.Counter`) para
+                // tipos de clase cross-module. El loader resuelve el name
+                // contra los ImportedNamespaceSymbol disponibles.
+                if (!isValidDottedIdentifier(s))
                     throw new IOException(file + ":" + lineNo + ": tipo no soportado en .bpi: " + s);
                 return new BpType.UnresolvedClassRef(s);
         }
     }
 
-    private static boolean isValidIdentifier(String s) {
+    /** Identificador simple o dotted (e.g. `Counter` o `L2Lib.Counter`). */
+    private static boolean isValidDottedIdentifier(String s) {
         if (s == null || s.isEmpty()) return false;
         if (!Character.isJavaIdentifierStart(s.charAt(0))) return false;
         for (int i = 1; i < s.length(); i++) {
-            if (!Character.isJavaIdentifierPart(s.charAt(i))) return false;
+            char c = s.charAt(i);
+            if (c == '.') {
+                // No vacíos a izq ni der; siguiente char debe ser start.
+                if (i + 1 >= s.length()
+                        || !Character.isJavaIdentifierStart(s.charAt(i + 1))) return false;
+            } else if (!Character.isJavaIdentifierPart(c)) {
+                return false;
+            }
         }
         return true;
     }

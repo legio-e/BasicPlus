@@ -861,6 +861,11 @@ public final class Main {
                                                SemanticAnalyzer analyzer, int depth) throws IOException {
         if (module.imports == null || module.imports.isEmpty()) return;
         Path importerDir = importerSrc.toAbsolutePath().getParent();
+        // L2 v3.e — recolectamos todos los namespaces que se cargan para
+        // poder resolver tipos cross-module (`L2Lib.Counter`) en un segundo
+        // pass tras crearlos todos. La resolución intra-ns se sigue haciendo
+        // inline en el primer pass.
+        java.util.List<Symbol.ImportedNamespaceSymbol> loadedNs = new java.util.ArrayList<>();
         for (Ast.ImportNode imp : module.imports) {
             String alias = imp.path.get(imp.path.size() - 1);
             String library = libraryFromImportPath(imp);
@@ -1030,6 +1035,18 @@ public final class Main {
                         stub.instanceMembers.tryDefine(fsym);
                         stub.externalMethodSlots.put(m.name, nextSlot++);
                     }
+                    // L2 v3.d — static consts públicos del .bpi. Se añaden al
+                    // staticMembers del stub con literalValue para que el
+                    // emisor los inlinee en el call-site (mismo path que
+                    // consts cross-module a nivel módulo).
+                    for (ModuleInterface.ConstSig sc : cs.staticConsts) {
+                        Symbol.ConstSymbol cst = new Symbol.ConstSymbol(
+                                sc.name, true, true, stub, 0, 0);   // isStatic=true
+                        cst.type = sc.type;
+                        cst.literalValue = sc.value;
+                        stub.staticMembers.tryDefine(cst);
+                    }
+
                     // Constructor: como FunctionSymbol cross-module. Lo expone-
                     // mos en realidad vía la factoría `__cls_new_<Cls>`, pero
                     // para el typecheck necesitamos el FunctionSymbol del ctor
@@ -1068,6 +1085,7 @@ public final class Main {
                     }
                 }
                 analyzer.registerImport(ns);
+                loadedNs.add(ns);
                 indent(depth); System.out.printf("-- cargado import '%s' desde %s (funcs=%d, consts=%d, enums=%d, props=%d, classes=%d) --%n",
                         alias, bpi.getFileName(),
                         ns.functions.size(), ns.consts.size(), ns.enums.size(),
@@ -1076,6 +1094,65 @@ public final class Main {
                 System.err.println("error leyendo " + bpi + ": " + ex.getMessage());
             }
         }
+
+        // L2 v3.e — post-pass: resuelve UnresolvedClassRef con nombre dotted
+        // (e.g. `L2Lib.Counter`) contra otros namespaces ya cargados. Hace
+        // esta pasada DESPUÉS del loop principal para que todos los ns estén
+        // disponibles. Sólo toca refs que no se resolvieron contra el propio
+        // ns en el primer pass.
+        for (Symbol.ImportedNamespaceSymbol ns : loadedNs) {
+            for (Symbol.FunctionSymbol fn : ns.functions.values()) {
+                fn.returnType = resolveCrossModuleType(fn.returnType, loadedNs);
+                for (Symbol.ParamSymbol p : fn.params) {
+                    p.type = resolveCrossModuleType(p.type, loadedNs);
+                }
+            }
+            for (Symbol.ClassSymbol stub : ns.classes.values()) {
+                for (Symbol mem : stub.instanceMembers.getSymbols()) {
+                    if (mem instanceof Symbol.FunctionSymbol) {
+                        Symbol.FunctionSymbol f = (Symbol.FunctionSymbol) mem;
+                        f.returnType = resolveCrossModuleType(f.returnType, loadedNs);
+                        for (Symbol.ParamSymbol p : f.params)
+                            p.type = resolveCrossModuleType(p.type, loadedNs);
+                    } else if (mem instanceof Symbol.PropertySymbol) {
+                        Symbol.PropertySymbol p = (Symbol.PropertySymbol) mem;
+                        p.type = resolveCrossModuleType(p.type, loadedNs);
+                    }
+                }
+            }
+        }
+    }
+
+    /** L2 v3.e — resuelve un UnresolvedClassRef contra TODOS los namespaces
+     *  importados. Si el nombre tiene puntos (`L2Lib.Counter`), separa
+     *  módulo + clase y busca en `ns.classes`. Devuelve el tipo original si
+     *  no se encuentra (deja que el typecheck lo marque). */
+    private static basicplus.frontend.BpType resolveCrossModuleType(
+            basicplus.frontend.BpType t,
+            java.util.List<Symbol.ImportedNamespaceSymbol> allNs) {
+        if (!(t instanceof basicplus.frontend.BpType.UnresolvedClassRef)) return t;
+        String name = ((basicplus.frontend.BpType.UnresolvedClassRef) t).name;
+        int lastDot = name.lastIndexOf('.');
+        if (lastDot > 0) {
+            String modPart = name.substring(0, lastDot);
+            String clsPart = name.substring(lastDot + 1);
+            for (Symbol.ImportedNamespaceSymbol candidate : allNs) {
+                String full = candidate.library.isEmpty()
+                        ? candidate.moduleName
+                        : candidate.library + "." + candidate.moduleName;
+                if (full.equals(modPart) || candidate.moduleName.equals(modPart)) {
+                    Symbol.ClassSymbol cls = candidate.classes.get(clsPart);
+                    if (cls != null) return new basicplus.frontend.BpType.ClassType(cls);
+                }
+            }
+            return t;   // no se encontró
+        }
+        // Sin punto: busca en cualquier ns que exponga esa clase.
+        for (Symbol.ImportedNamespaceSymbol candidate : allNs) {
+            Symbol.ClassSymbol cls = candidate.classes.get(name);
+            if (cls != null) return new basicplus.frontend.BpType.ClassType(cls);
+        }
+        return t;
     }
 
     private static Path locateImportBpi(Ast.ImportNode imp, String bpiName, String library, String alias,

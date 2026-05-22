@@ -1,0 +1,13 @@
+// l2v3sigsuse.bp — usa L2v3Sigs.pump cuyo tipo de param/return es
+// L2Lib.Counter (cross-module). Verifica el .bpi roundtrip + linkAll.
+module L2v3SigsUse
+  import L2Lib
+  import L2v3Sigs
+
+  function Main()
+    var c: L2Lib.Counter := L2Lib.Counter(7)
+    var r: L2Lib.Counter := L2v3Sigs.pump(c)
+    print "tras pump =", r.value()
+  end Main
+
+end L2v3SigsUse
