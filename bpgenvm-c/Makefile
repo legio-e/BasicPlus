@@ -11,7 +11,9 @@ CFLAGS  ?= -std=c99 -Wall -Wextra -Wpedantic -O2 -g
 CFLAGS  += -Iinclude
 CFLAGS  += $(CFLAGS_EXTRA)
 
-SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c src/link.c
+SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
+          src/link.c src/scheduler.c src/threading.c src/platform_pthread.c
+LDFLAGS = -lpthread
 TEST    = test/main.c
 OBJ     = $(SRC:%.c=build/%.o) build/test/main.o
 BIN     = build/bpgenvm-c
@@ -26,7 +28,7 @@ all: $(BIN)
 
 $(BIN): $(OBJ)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(OBJ) -o $@
+	$(CC) $(CFLAGS) $(OBJ) -o $@ $(LDFLAGS)
 
 build/%.o: %.c
 	@mkdir -p $(dir $@)

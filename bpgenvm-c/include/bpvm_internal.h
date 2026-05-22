@@ -123,8 +123,23 @@ typedef struct {
     uint32_t stack_base;       /* dirección baja de su región de pila */
     uint32_t stack_top;        /* dirección alta (excluida) */
     bpvm_thread_status_t status;
-    /* F4 añade: blockedOnMutex, wakeAt, handlerStack, allocAnchor */
+
+    /* F4 — bloqueo y join. */
+    int32_t  blocked_on_mutex;  /* mid o -1 */
+    int32_t  blocked_on_join;   /* tid o -1 */
+    int64_t  wake_at_ms;        /* timestamp absoluto (BLOCKED_SLEEP) */
+    int32_t  thread_ref_heap;   /* user_ref del objeto Thread BP (para join) */
 } bpvm_thread_t;
+
+/* F4 — Mutex BP. Lo gestionamos en lookups por id (no por ref BP) — el
+ * id es lo que devuelve __mutexCreate y lo que GET_FIELD del objeto
+ * Mutex BP entrega al builtin __mutexLock/Unlock. */
+typedef struct {
+    int32_t owner_tid;          /* tid del thread que lo tiene, -1 = libre */
+    int32_t* waiters;           /* array dinámico de tids */
+    int      waiter_count;
+    int      waiter_capacity;
+} bpvm_bp_mutex_t;
 
 struct bpvm {
     /* Buffer del caller. */
@@ -146,6 +161,18 @@ struct bpvm {
     bpvm_symbol_t* symbols;
     int            symbol_count;
     int            symbol_capacity;
+
+    /* F4 — alocador de regiones de stack para nuevos threads BP. Cada
+     * Thread.start() reserva una región a partir de `next_thread_stack`. */
+    uint32_t       next_thread_stack;
+
+    /* F4 — pool de mutexes BP. id 0 = no usado; ids ≥ 1 son válidos. */
+    bpvm_bp_mutex_t* mutexes;
+    int              mutex_count;
+    int              mutex_capacity;
+
+    /* F4 — preferencias de scheduler. */
+    int             quantum_ops;       /* opcodes por quantum de un tc */
 
     /* Threads BP. F1: sólo main. */
     bpvm_thread_t threads[BPVM_MAX_THREADS];
@@ -230,5 +257,23 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm);
 uint32_t      bpvm_get_cs_for_data_addr(const bpvm_t* vm, uint32_t addr);
 uint32_t      bpvm_get_cs_for_code_addr(const bpvm_t* vm, uint32_t code_addr);
 uint32_t      bpvm_get_ext_table_addr(const bpvm_t* vm, uint32_t cs);
+
+/* scheduler.c (F4) — single-worker cooperative scheduler.
+ * Pickea el siguiente tc RUNNABLE, le da un quantum, lo procesa. Wake
+ * up de BLOCKED_SLEEP cuando expira wakeAt. Detecta deadlock si todos
+ * están bloqueados sin posibilidad de progreso. */
+bpvm_status_t bpvm_scheduler_run(bpvm_t* vm);
+
+/* interp.c (F4) — ejecuta el tc dado por un quantum o hasta que ceda. */
+bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
+                                       int max_ops, int* yielded);
+
+/* Mutex BP helpers (F4). */
+int  bpvm_mutex_alloc(bpvm_t* vm);                    /* devuelve nuevo mid */
+void bpvm_mutex_add_waiter(bpvm_t* vm, int mid, int tid);
+int  bpvm_mutex_pop_waiter(bpvm_t* vm, int mid);
+
+/* Thread BP helpers (F4). */
+int  bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref);  /* devuelve tid o -1 */
 
 #endif /* BPVM_INTERNAL_H */

@@ -1,0 +1,18 @@
+dbg 2
+module Threads
+source C:\lenguajes\pm\bpgenvm-c\samples\threads.bp
+lines
+1431 17
+1439 18
+1453 19
+1462 20
+1474 21
+1483 22
+1566 28
+1589 29
+1612 30
+1635 31
+1644 32
+1653 33
+1662 34
+1671 35

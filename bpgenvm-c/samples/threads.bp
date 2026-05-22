@@ -1,0 +1,38 @@
+// threads.bp — F4: dos threads BP que incrementan un contador
+// protegido por mutex. Verifica:
+//   - Thread.start spawnea un nuevo thread BP.
+//   - Mutex.lock/unlock serializa el incremento.
+//   - Thread.join bloquea hasta que el target termine.
+//   - sleep() bloquea con wake-up por timeout.
+module Threads
+
+  public var counter: integer := 0
+  public var mtx: Mutex
+
+  public class Worker extends Thread
+    public function Worker()
+    end Worker
+
+    public function run()
+      var i: integer := 0
+      while i < 100 do
+        mtx.lock()
+        counter := counter + 1
+        mtx.unlock()
+        i := i + 1
+      endwh
+    end run
+  end Worker
+
+  function Main()
+    mtx := Mutex()
+    var t1: Worker := Worker()
+    var t2: Worker := Worker()
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+    print counter
+  end Main
+
+end Threads

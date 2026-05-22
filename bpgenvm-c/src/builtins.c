@@ -7,6 +7,7 @@
  */
 
 #include "bpvm_internal.h"
+#include "bpvm_platform.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -19,11 +20,19 @@ enum {
     BUILTIN_PARSE_INT       = 1,
     BUILTIN_INT_TO_STRING   = 3,
     BUILTIN_BOOL_TO_STRING  = 5,
+    BUILTIN_NOW             = 34,
+    BUILTIN_SLEEP           = 35,
     BUILTIN_GC              = 43,
     BUILTIN_NEW_REF_ARRAY   = 44,
     BUILTIN_GROW_INT_ARRAY  = 46,
     BUILTIN_CHARS_TO_STRING = 47,
-    BUILTIN_CHAR_CODE_AT    = 48
+    BUILTIN_CHAR_CODE_AT    = 48,
+    BUILTIN_THREAD_START    = 49,
+    BUILTIN_THREAD_JOIN     = 50,
+    BUILTIN_YIELD           = 51,
+    BUILTIN_MUTEX_CREATE    = 52,
+    BUILTIN_MUTEX_LOCK      = 53,
+    BUILTIN_MUTEX_UNLOCK    = 54
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -151,6 +160,140 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GC: {
         bpvm_heap_gc(vm);
         push_i32(vm, tc, 0);   /* void → push dummy */
+        return BPVM_OK;
+    }
+
+    /* ---- F4: tiempo y threading ---- */
+    case BUILTIN_NOW: {
+        int64_t ms = bpvm_platform_now_ms();
+        push_i32(vm, tc, (int32_t) ms);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_SLEEP: {
+        int32_t ms = pop_i32(vm, tc);
+        if (ms <= 0) { push_i32(vm, tc, 0); return BPVM_OK; }
+        tc->wake_at_ms = bpvm_platform_now_ms() + ms;
+        tc->status = BPVM_THREAD_BLOCKED_SLEEP;
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+
+    case BUILTIN_YIELD: {
+        /* Marcar RUNNABLE — el scheduler verá el cambio al consumir
+         * el quantum o al detectar el yield_requested al volver. F4 v1
+         * con quantum-based scheduler: el yield se manifiesta como un
+         * "saltar el resto del quantum". Forzamos terminar el quantum
+         * dejando el flag — implementación simple: setear RUNNABLE
+         * para que el wrapper del scheduler decida. */
+        tc->status = BPVM_THREAD_RUNNABLE;
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_THREAD_START: {
+        uint32_t thread_ref = (uint32_t) pop_i32(vm, tc);
+        int new_tid = bpvm_thread_spawn(vm, thread_ref);
+        if (new_tid < 0) {
+            fprintf(stderr, "[bpvm-c] Thread.start falló\n");
+            push_i32(vm, tc, 0);
+            return BPVM_ERR_RUNTIME;
+        }
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+
+    case BUILTIN_THREAD_JOIN: {
+        uint32_t thread_ref = (uint32_t) pop_i32(vm, tc);
+        if (thread_ref == 0) {
+            push_i32(vm, tc, 0); return BPVM_OK;
+        }
+        /* Convención: field[0] del Thread BP guarda el tid (escrito
+         * por __threadStart). 0 = no spawneado todavía. */
+        int32_t target_tid = bpvm_read_i32_be(vm->memory + thread_ref + 4 + 0 * 4);
+        if (target_tid <= 0 || target_tid >= vm->thread_count) {
+            push_i32(vm, tc, 0); return BPVM_OK;
+        }
+        if (vm->threads[target_tid].status == BPVM_THREAD_TERMINATED) {
+            push_i32(vm, tc, 0); return BPVM_OK;
+        }
+        tc->blocked_on_join = target_tid;
+        tc->status = BPVM_THREAD_BLOCKED_JOIN;
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_MUTEX_CREATE: {
+        int mid = bpvm_mutex_alloc(vm);
+        push_i32(vm, tc, (int32_t) mid);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_MUTEX_LOCK: {
+        /* Recibe el ref del objeto Mutex BP. El mid (id en el pool de
+         * la VM) está en field[0] del objeto, escrito por el ctor de
+         * Mutex que llama a __mutexCreate. */
+        uint32_t mref = (uint32_t) pop_i32(vm, tc);
+        if (mref == 0) {
+            push_i32(vm, tc, 0); return BPVM_ERR_NULL_RECEIVER;
+        }
+        int32_t mid = bpvm_read_i32_be(vm->memory + mref + 4 + 0 * 4);
+        if (mid < 0 || mid >= vm->mutex_count) {
+            fprintf(stderr, "[bpvm-c] mutex_lock: mid inválido %d\n", mid);
+            push_i32(vm, tc, 0);
+            return BPVM_ERR_RUNTIME;
+        }
+        bpvm_bp_mutex_t* m = &vm->mutexes[mid];
+        if (m->owner_tid == tc->id) {
+            fprintf(stderr, "[bpvm-c] mutex_lock: re-entrada tid=%d (no soportado)\n",
+                    tc->id);
+            push_i32(vm, tc, 0);
+            return BPVM_ERR_RUNTIME;
+        }
+        if (m->owner_tid < 0) {
+            m->owner_tid = tc->id;
+            push_i32(vm, tc, 0);
+            return BPVM_OK;
+        }
+        /* Contended: bloquea. */
+        bpvm_mutex_add_waiter(vm, mid, tc->id);
+        tc->blocked_on_mutex = mid;
+        tc->status = BPVM_THREAD_BLOCKED_MUTEX;
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_MUTEX_UNLOCK: {
+        uint32_t mref = (uint32_t) pop_i32(vm, tc);
+        if (mref == 0) {
+            push_i32(vm, tc, 0); return BPVM_ERR_NULL_RECEIVER;
+        }
+        int32_t mid = bpvm_read_i32_be(vm->memory + mref + 4 + 0 * 4);
+        if (mid < 0 || mid >= vm->mutex_count) {
+            fprintf(stderr, "[bpvm-c] mutex_unlock: mid inválido %d\n", mid);
+            push_i32(vm, tc, 0);
+            return BPVM_ERR_RUNTIME;
+        }
+        bpvm_bp_mutex_t* m = &vm->mutexes[mid];
+        if (m->owner_tid != tc->id) {
+            fprintf(stderr, "[bpvm-c] mutex_unlock: tid=%d intenta soltar mutex owned por %d\n",
+                    tc->id, m->owner_tid);
+            push_i32(vm, tc, 0);
+            return BPVM_ERR_RUNTIME;
+        }
+        /* Si hay waiters, traspasamos la propiedad al primero. */
+        int next = bpvm_mutex_pop_waiter(vm, mid);
+        if (next >= 0) {
+            m->owner_tid = next;
+            /* Lo despertamos. */
+            if (vm->threads[next].status == BPVM_THREAD_BLOCKED_MUTEX) {
+                vm->threads[next].status = BPVM_THREAD_RUNNABLE;
+                vm->threads[next].blocked_on_mutex = -1;
+            }
+        } else {
+            m->owner_tid = -1;
+        }
+        push_i32(vm, tc, 0);
         return BPVM_OK;
     }
 

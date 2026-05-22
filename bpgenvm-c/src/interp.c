@@ -39,33 +39,15 @@ static void emit_newline(bpvm_t* vm) {
     emit_text(vm, "\n", 1);
 }
 
-bpvm_status_t bpvm_interp_run(bpvm_t* vm) {
-    if (vm->main_absolute_address == 0) return BPVM_ERR_BAD_PC;
-    if (vm->thread_count == 0)          return BPVM_ERR_BAD_PC;
-
-    bpvm_thread_t* tc = &vm->threads[0];
+/* Ejecuta el thread `tc` durante hasta `max_ops` opcodes o hasta que
+ * el thread ceda (yield, sleep, mutex_lock contended, join, HALT,
+ * THREAD_EXIT). Setea *yielded a 1 si cedió, 0 si quedó RUNNABLE
+ * (consumió el quantum y volverá a correr). El scheduler le da
+ * el siguiente quantum. */
+bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
+                                       int max_ops, int* yielded) {
+    if (yielded) *yielded = 0;
     uint8_t* mem = vm->memory;
-
-    /* Inicializar el thread main desde la entry-point.
-     * El frontend emite un wrapper __startup en mainOffset que llama
-     * a __init + main(arg=""). El primer opcode que ejecutamos es ese
-     * __startup. La pila empieza limpia: sp = bp = stack_base. */
-    tc->pc = vm->main_absolute_address;
-    /* cs se determina por el módulo del entry-point. */
-    bpvm_module_t* main_mod = NULL;
-    for (int i = 0; i < vm->module_count; i++) {
-        bpvm_module_t* m = &vm->modules[i];
-        if (m->code_start <= vm->main_absolute_address
-                && vm->main_absolute_address < m->end_addr) {
-            main_mod = m;
-            break;
-        }
-    }
-    if (!main_mod) return BPVM_ERR_BAD_PC;
-    tc->cs = main_mod->code_start;
-    tc->sp = tc->stack_base;
-    tc->bp = tc->stack_base;
-    tc->status = BPVM_THREAD_RUNNING;
 
     /* Registros locales del intérprete — más rápidos que tocar tc.* */
     uint32_t pc = tc->pc;
@@ -73,9 +55,17 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm) {
     uint32_t bp = tc->bp;
     uint32_t cs = tc->cs;
 
+    tc->status = BPVM_THREAD_RUNNING;
     bpvm_status_t exit_status = BPVM_OK;
+    int ops = 0;
 
     for (;;) {
+        if (ops >= max_ops) {
+            /* Quantum agotado — el scheduler decide. Quedamos RUNNABLE. */
+            tc->status = BPVM_THREAD_RUNNABLE;
+            break;
+        }
+        ops++;
         if (pc >= vm->memory_size) { exit_status = BPVM_ERR_BAD_PC; break; }
 
         if (vm->tracing) {
@@ -87,13 +77,21 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm) {
         switch (op) {
 
         case OP_HALT:
-            exit_status = BPVM_OK;
+            /* HALT: termina el thread y la VM si es el main. */
+            if (tc->id != 0) {
+                fprintf(stderr, "[bpvm-c] HALT en thread no-main (tid=%d)\n", tc->id);
+                exit_status = BPVM_ERR_RUNTIME;
+            } else {
+                exit_status = BPVM_OK;
+            }
+            tc->status = BPVM_THREAD_TERMINATED;
+            if (yielded) *yielded = 1;
             goto done;
 
         case OP_THREAD_EXIT:
-            /* F1: sólo hay main thread; THREAD_EXIT termina la VM
-               igual que HALT. F4 cambia esto. */
-            exit_status = BPVM_OK;
+            /* THREAD_EXIT: termina sólo este thread. */
+            tc->status = BPVM_THREAD_TERMINATED;
+            if (yielded) *yielded = 1;
             goto done;
 
         /* ---- Push de inmediatos ---- */
@@ -522,6 +520,13 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm) {
             sp = tc->sp; bp = tc->bp; pc = tc->pc; cs = tc->cs;
             mem = vm->memory;
             if (bs != BPVM_OK) { exit_status = bs; goto done; }
+            /* F4: si el builtin cambió status a BLOCKED_* o RUNNABLE
+             * (yield), salimos del quantum para que el scheduler
+             * decida. */
+            if (tc->status != BPVM_THREAD_RUNNING) {
+                if (yielded) *yielded = 1;
+                goto done;
+            }
             break;
         }
 
@@ -711,8 +716,13 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm) {
     }
 
 done:
-    /* Persistir registros al ThreadContext (para inspección futura). */
+    /* Persistir registros al ThreadContext. El status ya lo seteó cada
+     * case (RUNNABLE si quantum, TERMINATED si HALT/THREAD_EXIT,
+     * BLOCKED_* si yield builtin, RUNNING si nada — defensivo). */
     tc->pc = pc; tc->sp = sp; tc->bp = bp; tc->cs = cs;
-    tc->status = BPVM_THREAD_TERMINATED;
+    if (exit_status != BPVM_OK) {
+        tc->status = BPVM_THREAD_TERMINATED;
+        if (yielded) *yielded = 1;
+    }
     return exit_status;
 }

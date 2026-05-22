@@ -39,8 +39,14 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     main_tc->sp = main_tc->stack_base;
     main_tc->bp = main_tc->stack_base;
     main_tc->status = BPVM_THREAD_RUNNABLE;
+    main_tc->blocked_on_mutex = -1;
+    main_tc->blocked_on_join = -1;
     vm->thread_count = 1;
     vm->current_thread_idx = 0;
+
+    /* F4: el alocador de stacks de threads BP empieza tras la región
+     * del main. Cada Thread.start() reserva BPVM_THREAD_STACK_BYTES. */
+    vm->next_thread_stack = main_tc->stack_top;
 
     return vm;
 }
@@ -171,7 +177,30 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
     /* F3 — resolver imports y aplicar class fixups antes de ejecutar. */
     bpvm_status_t ls = bpvm_link_all(vm);
     if (ls != BPVM_OK) return ls;
-    return bpvm_interp_run(vm);
+
+    /* Inicializar thread main desde el entry-point antes de entrar al
+     * scheduler. */
+    if (vm->main_absolute_address == 0) return BPVM_ERR_BAD_PC;
+    bpvm_thread_t* main_tc = &vm->threads[0];
+    main_tc->pc = vm->main_absolute_address;
+    /* cs del módulo del entry-point. */
+    for (int i = 0; i < vm->module_count; i++) {
+        bpvm_module_t* m = &vm->modules[i];
+        if (m->code_start <= vm->main_absolute_address
+                && vm->main_absolute_address < m->end_addr) {
+            main_tc->cs = m->code_start;
+            break;
+        }
+    }
+    if (main_tc->cs == 0) return BPVM_ERR_BAD_PC;
+    main_tc->sp = main_tc->stack_base;
+    main_tc->bp = main_tc->stack_base;
+    main_tc->status = BPVM_THREAD_RUNNABLE;
+
+    /* Default quantum si no se ajustó. */
+    if (vm->quantum_ops == 0) vm->quantum_ops = 1024;
+
+    return bpvm_scheduler_run(vm);
 }
 
 void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user) {
