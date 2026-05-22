@@ -129,7 +129,28 @@ typedef struct {
     int32_t  blocked_on_join;   /* tid o -1 */
     int64_t  wake_at_ms;        /* timestamp absoluto (BLOCKED_SLEEP) */
     int32_t  thread_ref_heap;   /* user_ref del objeto Thread BP (para join) */
+
+    /* F5 — Exception Handler Stack. Cada TRY_BEGIN empuja una entry;
+     * TRY_END pop. THROW busca el primer handler cuya expected_class
+     * matchee (o 0 = catch-all) y unwindea sp/bp/cs/pc desde lo
+     * guardado allí. */
+    struct bpvm_eh_entry* eh_stack;
+    int  eh_stack_size;
+    int  eh_stack_capacity;
+
+    /* F5 — RuntimeError anclar para GC durante unwind. */
+    int32_t  alloc_anchor;
 } bpvm_thread_t;
+
+/* F5 — entry del handlerStack. */
+typedef struct bpvm_eh_entry {
+    int32_t handler_pc;        /* dirección absoluta donde saltar */
+    int32_t saved_sp;
+    int32_t saved_bp;
+    int32_t saved_cs;
+    int32_t expected_class;    /* dirección absoluta del class_ptr esperado;
+                                  0 = catch-all. */
+} bpvm_eh_entry_t;
 
 /* F4 — Mutex BP. Lo gestionamos en lookups por id (no por ref BP) — el
  * id es lo que devuelve __mutexCreate y lo que GET_FIELD del objeto
@@ -275,5 +296,23 @@ int  bpvm_mutex_pop_waiter(bpvm_t* vm, int mid);
 
 /* Thread BP helpers (F4). */
 int  bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref);  /* devuelve tid o -1 */
+
+/* F5 — Exception handling helpers. */
+void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,
+                  int32_t saved_bp, int32_t saved_cs, int32_t expected_class);
+void bpvm_eh_pop(bpvm_thread_t* tc);
+
+/* Aloca un RuntimeError BP con `msg` y empuja el ref al stack de `tc`.
+ * Devuelve el ref alocado (también queda en tc.alloc_anchor para que
+ * el GC no lo libere). Si no encuentra la clase RuntimeError (módulo
+ * no la exporta), devuelve 0 y el caller debe abortar el thread. */
+uint32_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
+                                   const char* msg);
+
+/* Realiza el unwind del stack para encontrar un handler que matchee.
+ * Si encuentra: ajusta tc->pc/sp/bp/cs y deja `ref` en el top. Si no,
+ * deja tc en estado terminado con stack trace al stderr. Devuelve 1
+ * si fue atrapado, 0 si no. */
+int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref);
 
 #endif /* BPVM_INTERNAL_H */

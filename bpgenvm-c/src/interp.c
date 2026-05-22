@@ -119,11 +119,33 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                        bpvm_write_i32_be(mem+sp, a * b); sp += 4; break; }
         case OP_DIV: { sp -= 4; int32_t b = bpvm_read_i32_be(mem+sp);
                        sp -= 4; int32_t a = bpvm_read_i32_be(mem+sp);
-                       if (b == 0) { exit_status = BPVM_ERR_DIV_BY_ZERO; goto done; }
+                       if (b == 0) {
+                           tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+                           uint32_t ref = bpvm_throw_runtime_error(vm, tc, "División por cero");
+                           if (ref && bpvm_eh_unwind(vm, tc, ref)) {
+                               pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+                               mem = vm->memory;
+                               break;
+                           }
+                           exit_status = BPVM_ERR_RUNTIME;
+                           if (yielded) *yielded = 1;
+                           goto done;
+                       }
                        bpvm_write_i32_be(mem+sp, a / b); sp += 4; break; }
         case OP_MOD: { sp -= 4; int32_t b = bpvm_read_i32_be(mem+sp);
                        sp -= 4; int32_t a = bpvm_read_i32_be(mem+sp);
-                       if (b == 0) { exit_status = BPVM_ERR_DIV_BY_ZERO; goto done; }
+                       if (b == 0) {
+                           tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+                           uint32_t ref = bpvm_throw_runtime_error(vm, tc, "Módulo por cero");
+                           if (ref && bpvm_eh_unwind(vm, tc, ref)) {
+                               pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+                               mem = vm->memory;
+                               break;
+                           }
+                           exit_status = BPVM_ERR_RUNTIME;
+                           if (yielded) *yielded = 1;
+                           goto done;
+                       }
                        bpvm_write_i32_be(mem+sp, a % b); sp += 4; break; }
         case OP_NEG: { sp -= 4; int32_t a = bpvm_read_i32_be(mem+sp);
                        bpvm_write_i32_be(mem+sp, -a); sp += 4; break; }
@@ -700,12 +722,39 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
 
-        /* ---- Aún no implementados ---- */
-        case OP_TRY_BEGIN: case OP_TRY_END: case OP_THROW:
-            fprintf(stderr, "[bpvm-c F3] opcode 0x%02X aún no soportado en PC %u\n",
-                    op, pc - 1);
-            exit_status = BPVM_ERR_BAD_OPCODE;
-            goto done;
+        /* ---- F5: exception handling ---- */
+        case OP_TRY_BEGIN: {
+            /* Operando: handler_rel:i32 + cls_off:i16. handler_pc es
+             * RELATIVO al instruction address del TRY_BEGIN (= pc-1).
+             * Misma convención que JUMP. */
+            uint32_t instr_addr = pc - 1;
+            int32_t handler_rel = bpvm_read_i32_be(mem + pc); pc += 4;
+            int16_t cls_off     = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t handler_pc  = (int32_t) instr_addr + handler_rel;
+            int32_t expected_cls = (cls_off == 0) ? 0
+                                   : (int32_t)((int32_t) cs + cls_off);
+            bpvm_eh_push(tc, handler_pc, (int32_t) sp, (int32_t) bp,
+                         (int32_t) cs, expected_cls);
+            break;
+        }
+        case OP_TRY_END: {
+            bpvm_eh_pop(tc);
+            break;
+        }
+        case OP_THROW: {
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            tc->pc = pc; tc->sp = sp; tc->bp = bp; tc->cs = cs;
+            int caught = bpvm_eh_unwind(vm, tc, ref);
+            if (!caught) {
+                exit_status = BPVM_ERR_RUNTIME;
+                if (yielded) *yielded = 1;
+                /* tc ya marcado TERMINATED por eh_unwind. */
+                goto done;
+            }
+            /* Recargar registros tras unwind. */
+            pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+            break;
+        }
 
         default:
             fprintf(stderr, "[bpvm-c] opcode 0x%02X desconocido en PC %u\n",

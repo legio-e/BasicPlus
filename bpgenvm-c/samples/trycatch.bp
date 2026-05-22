@@ -1,0 +1,35 @@
+// trycatch.bp — F5: try/catch BP atrapando RuntimeError nativo
+// (división por cero) y RuntimeError lanzado por código BP.
+module TryCatch
+  function dividir(a: integer, b: integer): integer
+    return a / b
+  end dividir
+
+  function Main()
+    // 1) Catch sobre division por cero (la VM dispara RuntimeError
+    //    nativa via throwBpRuntimeError).
+    try
+      var r: integer := dividir(10, 0)
+      print r  // no se ejecuta
+    catch e: RuntimeError
+      print "catch div0:", e.msg
+    endtry
+
+    // 2) Throw manual desde el codigo BP.
+    try
+      throw RuntimeError("fallo manual")
+    catch e: RuntimeError
+      print "catch manual:", e.msg
+    endtry
+
+    // 3) Catch-all (sin tipo): se mantiene como catch en cualquier
+    //    Class.
+    try
+      throw RuntimeError("any-class")
+    catch e: RuntimeError
+      print "catch any:", e.msg
+    endtry
+
+    print "fin OK"
+  end Main
+end TryCatch

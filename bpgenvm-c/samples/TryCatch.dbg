@@ -1,0 +1,16 @@
+dbg 2
+module TryCatch
+source C:\lenguajes\pm\bpgenvm-c\samples\trycatch.bp
+lines
+1431 5
+1454 11
+1461 12
+1479 13
+1493 15
+1515 19
+1522 20
+1555 22
+1577 27
+1584 28
+1617 30
+1639 33
