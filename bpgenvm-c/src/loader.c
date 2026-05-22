@@ -117,23 +117,23 @@ bpvm_status_t bpvm_loader_load(bpvm_t* vm, const char* path) {
     uint32_t ext_count;
     if (read_be32(f, &ext_count) != 0)                 { fclose(f); return BPVM_ERR_IO; }
     mod->ext_count = ext_count;
-    /* En F1 leemos los nombres pero los descartamos (no hay linkAll).
-       Reservamos buffer scratch para los strings. */
-    {
-        char tmp_name[256];
+    mod->import_count = (int) ext_count;
+    if (ext_count > 0) {
+        mod->imports = (char**) calloc(ext_count, sizeof(char*));
+        if (!mod->imports) { fclose(f); return BPVM_ERR_OOM; }
         char tmp_from[256];
         for (uint32_t i = 0; i < ext_count; i++) {
+            char tmp_name[256];
             if (read_writeutf(f, tmp_name, sizeof(tmp_name)) != 0) {
                 fclose(f); return BPVM_ERR_IO;
             }
             if (read_writeutf(f, tmp_from, sizeof(tmp_from)) != 0) {
                 fclose(f); return BPVM_ERR_IO;
             }
+            mod->imports[i] = strdup(tmp_name);
+            if (!mod->imports[i]) { fclose(f); return BPVM_ERR_OOM; }
         }
     }
-
-    /* --- Exports (los descartamos en F1; F3 los necesitará) --- */
-    if (skip_bytes(f, exports_size) != 0)              { fclose(f); return BPVM_ERR_IO; }
     (void) imports_size; /* Ya consumido como ext_count + pares. */
 
     /* --- Layout en memory[] ---
@@ -158,17 +158,28 @@ bpvm_status_t bpvm_loader_load(bpvm_t* vm, const char* path) {
         memset(vm->memory + module_base, 0, ext_table_size);
     }
 
+    /* --- Sección exports: leerla COMPLETA a un buffer para poder
+     * detectar las sub-secciones opcionales (data symbols B3 v2 + class
+     * fixups L2 v3). El loader Java hace lo mismo (ModuleManager.java). */
+    uint8_t* exp_buf = (uint8_t*) malloc(exports_size);
+    if (!exp_buf && exports_size > 0) { fclose(f); return BPVM_ERR_OOM; }
+    if (exports_size > 0) {
+        if (read_exact(f, exp_buf, exports_size) != 0) {
+            free(exp_buf); fclose(f); return BPVM_ERR_IO;
+        }
+    }
+
     /* Leer el data block. */
     if (data_size > 0) {
         if (read_exact(f, vm->memory + data_start, data_size) != 0) {
-            fclose(f); return BPVM_ERR_IO;
+            free(exp_buf); fclose(f); return BPVM_ERR_IO;
         }
     }
 
     /* Leer el code block. */
     if (code_size > 0) {
         if (read_exact(f, vm->memory + code_start, code_size) != 0) {
-            fclose(f); return BPVM_ERR_IO;
+            free(exp_buf); fclose(f); return BPVM_ERR_IO;
         }
     }
 
@@ -179,6 +190,107 @@ bpvm_status_t bpvm_loader_load(bpvm_t* vm, const char* path) {
     mod->data_start     = data_start;
     mod->code_start     = code_start;
     mod->end_addr       = end_addr;
+
+    /* --- Procesar la sección exports del buffer ---
+     *
+     * Sub-secciones según docs/MOD_FORMAT.md §4:
+     *   4.1 funcs:        count:i32  (name:UTF, relOffset:i32)*
+     *   4.2 dataExports:  count:i32  (name:UTF, csOffset:i32)*       (opcional)
+     *   4.3 classFixups:  count:i32  (childName:UTF, childCsOff:i32, parentQName:UTF)*  (opcional)
+     */
+    size_t exp_off = 0;
+    char export_prefix[160];
+    if (mod->library[0]) snprintf(export_prefix, sizeof(export_prefix),
+                                   "%s.%s.", mod->library, mod->name);
+    else                 snprintf(export_prefix, sizeof(export_prefix), "%s.",
+                                   mod->name);
+
+    if (exports_size >= 4) {
+        uint32_t fcount = bpvm_read_u32_be(exp_buf + exp_off); exp_off += 4;
+        for (uint32_t i = 0; i < fcount; i++) {
+            if (exp_off + 2 > exports_size) break;
+            uint16_t nlen = bpvm_read_u16_be(exp_buf + exp_off); exp_off += 2;
+            if (exp_off + nlen + 4 > exports_size) break;
+            char name[128]; size_t nl = nlen < sizeof(name) - 1 ? nlen : sizeof(name) - 1;
+            memcpy(name, exp_buf + exp_off, nl); name[nl] = '\0';
+            exp_off += nlen;
+            int32_t rel = bpvm_read_i32_be(exp_buf + exp_off); exp_off += 4;
+            uint32_t abs = code_start + (uint32_t) rel;
+            char qual[320];
+            snprintf(qual, sizeof(qual), "%s%s", export_prefix, name);
+            bpvm_link_register_symbol(vm, qual, abs);
+            /* También sin library prefix si la hay (compat). */
+            if (mod->library[0]) {
+                char short_q[320];
+                snprintf(short_q, sizeof(short_q), "%s.%s", mod->name, name);
+                if (bpvm_link_lookup(vm, short_q) == 0) {
+                    bpvm_link_register_symbol(vm, short_q, abs);
+                }
+            }
+        }
+
+        /* 4.2 data exports opcional. */
+        if (exp_off + 4 <= exports_size) {
+            uint32_t dcount = bpvm_read_u32_be(exp_buf + exp_off); exp_off += 4;
+            for (uint32_t i = 0; i < dcount; i++) {
+                if (exp_off + 2 > exports_size) break;
+                uint16_t nlen = bpvm_read_u16_be(exp_buf + exp_off); exp_off += 2;
+                if (exp_off + nlen + 4 > exports_size) break;
+                char name[128]; size_t nl = nlen < sizeof(name) - 1 ? nlen : sizeof(name) - 1;
+                memcpy(name, exp_buf + exp_off, nl); name[nl] = '\0';
+                exp_off += nlen;
+                int32_t cs_off = bpvm_read_i32_be(exp_buf + exp_off); exp_off += 4;
+                uint32_t abs = (uint32_t)((int32_t) code_start + cs_off);
+                char qual[320];
+                snprintf(qual, sizeof(qual), "%s%s", export_prefix, name);
+                bpvm_link_register_symbol(vm, qual, abs);
+                if (mod->library[0]) {
+                    char short_q[320];
+                    snprintf(short_q, sizeof(short_q), "%s.%s", mod->name, name);
+                    if (bpvm_link_lookup(vm, short_q) == 0) {
+                        bpvm_link_register_symbol(vm, short_q, abs);
+                    }
+                }
+            }
+
+            /* 4.3 class fixups opcional. */
+            if (exp_off + 4 <= exports_size) {
+                uint32_t fxcount = bpvm_read_u32_be(exp_buf + exp_off); exp_off += 4;
+                if (fxcount > 0) {
+                    mod->class_fixups = (bpvm_class_fixup_t*) calloc(fxcount,
+                                          sizeof(bpvm_class_fixup_t));
+                    if (!mod->class_fixups) {
+                        free(exp_buf); return BPVM_ERR_OOM;
+                    }
+                    for (uint32_t i = 0; i < fxcount; i++) {
+                        if (exp_off + 2 > exports_size) break;
+                        uint16_t nlen = bpvm_read_u16_be(exp_buf + exp_off); exp_off += 2;
+                        char cname[64]; size_t nl = nlen < sizeof(cname) - 1
+                                                    ? nlen : sizeof(cname) - 1;
+                        memcpy(cname, exp_buf + exp_off, nl); cname[nl] = '\0';
+                        exp_off += nlen;
+                        int32_t cs_off = bpvm_read_i32_be(exp_buf + exp_off); exp_off += 4;
+                        uint16_t plen = bpvm_read_u16_be(exp_buf + exp_off); exp_off += 2;
+                        char pqual[128]; size_t pl = plen < sizeof(pqual) - 1
+                                                     ? plen : sizeof(pqual) - 1;
+                        memcpy(pqual, exp_buf + exp_off, pl); pqual[pl] = '\0';
+                        exp_off += plen;
+                        bpvm_class_fixup_t* fx = &mod->class_fixups[mod->class_fixup_count++];
+                        size_t cnl = strlen(cname);
+                        if (cnl >= sizeof(fx->child_class_name)) cnl = sizeof(fx->child_class_name) - 1;
+                        memcpy(fx->child_class_name, cname, cnl);
+                        fx->child_class_name[cnl] = '\0';
+                        fx->child_cs_off = cs_off;
+                        size_t pnl = strlen(pqual);
+                        if (pnl >= sizeof(fx->parent_qualified)) pnl = sizeof(fx->parent_qualified) - 1;
+                        memcpy(fx->parent_qualified, pqual, pnl);
+                        fx->parent_qualified[pnl] = '\0';
+                    }
+                }
+            }
+        }
+    }
+    free(exp_buf);
 
     vm->next_free_address = end_addr + 64; /* margen entre módulos */
     vm->heap_start        = vm->next_free_address;

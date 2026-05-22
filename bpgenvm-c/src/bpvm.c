@@ -7,6 +7,7 @@
  */
 
 #include "bpvm_internal.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -44,13 +45,132 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     return vm;
 }
 
+/* Extrae el dirname de un path. dst debe tener al menos 256 bytes. */
+static void path_dirname(const char* path, char* dst, size_t dst_size) {
+    const char* last_sep = NULL;
+    for (const char* p = path; *p; p++) {
+        if (*p == '/' || *p == '\\') last_sep = p;
+    }
+    if (!last_sep) { dst[0] = '\0'; return; }
+    size_t n = (size_t)(last_sep - path);
+    if (n >= dst_size) n = dst_size - 1;
+    memcpy(dst, path, n);
+    dst[n] = '\0';
+}
+
+/* Comprueba si un módulo con nombre dado ya está cargado. */
+static int module_loaded(const bpvm_t* vm, const char* library, const char* name) {
+    for (int i = 0; i < vm->module_count; i++) {
+        const bpvm_module_t* m = &vm->modules[i];
+        if (strcmp(m->name, name) == 0
+                && strcmp(m->library, library ? library : "") == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Para un import qualified (e.g. "L2Lib.Counter.__init"), deriva el
+ * (library, module) que apunta. Convención del frontend:
+ *   - "Mod.sym"             → library="",  module="Mod"
+ *   - "Lib.Mod.sym"         → library="Lib", module="Mod"
+ *   - "Lib.Mod.Cls.sym"     → library="Lib", module="Mod"  (frontend pone
+ *                              el nombre del módulo en parts[-2] cuando
+ *                              hay 3+ componentes; F3 simple asume eso) */
+static void derive_owner(const char* qualified, char* lib, size_t lib_size,
+                         char* mod, size_t mod_size) {
+    /* Split por '.'. parts[length-1] = símbolo, parts[length-2] = módulo,
+     * el resto = library (juntado con '.'). */
+    int dot_positions[16];
+    int ndots = 0;
+    for (const char* p = qualified; *p && ndots < 16; p++) {
+        if (*p == '.') dot_positions[ndots++] = (int)(p - qualified);
+    }
+    lib[0] = '\0'; mod[0] = '\0';
+    if (ndots < 1) return;   /* sin separador: no hay módulo. */
+    int last = dot_positions[ndots - 1];
+    int second_last = ndots >= 2 ? dot_positions[ndots - 2] : -1;
+    /* Modulo = parts[ndots-2..ndots-1) = subcadena (second_last+1, last). */
+    int mod_start = second_last + 1;
+    int mod_len = last - mod_start;
+    size_t mn = (size_t) mod_len;
+    if (mn >= mod_size) mn = mod_size - 1;
+    memcpy(mod, qualified + mod_start, mn);
+    mod[mn] = '\0';
+    if (ndots >= 2) {
+        /* Library = subcadena [0, second_last). */
+        int ll = second_last;
+        size_t llz = (size_t) ll;
+        if (llz >= lib_size) llz = lib_size - 1;
+        memcpy(lib, qualified, llz);
+        lib[llz] = '\0';
+    }
+}
+
+/* Resuelve recursivamente las dependencias del módulo en `mod_idx`,
+ * cargándolas desde `search_dir` por convención de naming
+ * (<lib>.<mod>.mod o <mod>.mod). */
+static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_dir) {
+    /* Re-snapshot del import_count: si cargamos un dep, vm->modules crece
+     * pero el mod actual no muta. */
+    bpvm_module_t* m = &vm->modules[mod_idx];
+    int n = m->import_count;
+    for (int k = 0; k < n; k++) {
+        const char* imp = m->imports[k];
+        if (!imp || !imp[0]) continue;
+        char lib[64], mod[64];
+        derive_owner(imp, lib, sizeof(lib), mod, sizeof(mod));
+        if (!mod[0]) continue;
+        if (module_loaded(vm, lib, mod)) continue;
+        /* Derivar filename. */
+        char filename[512];
+        if (lib[0]) {
+            snprintf(filename, sizeof(filename), "%s%s%s.%s.mod",
+                     search_dir, search_dir[0] ? "/" : "", lib, mod);
+        } else {
+            snprintf(filename, sizeof(filename), "%s%s%s.mod",
+                     search_dir, search_dir[0] ? "/" : "", mod);
+        }
+        FILE* f = fopen(filename, "rb");
+        if (!f) {
+            fprintf(stderr, "[bpvm-c] dep '%s' (%s) no encontrado: %s\n",
+                    imp, mod, filename);
+            continue;   /* dejamos que linkAll dispare el error si falta. */
+        }
+        fclose(f);
+        int idx_before = vm->module_count;
+        bpvm_status_t s = bpvm_loader_load(vm, filename);
+        if (s != BPVM_OK) return s;
+        /* Recursivo: descubre las deps de esta nueva carga. */
+        for (int j = idx_before; j < vm->module_count; j++) {
+            bpvm_status_t r = discover_deps(vm, j, search_dir);
+            if (r != BPVM_OK) return r;
+        }
+    }
+    return BPVM_OK;
+}
+
 bpvm_status_t bpvm_load_mod(bpvm_t* vm, const char* path) {
     if (!vm || !path) return BPVM_ERR_IO;
-    return bpvm_loader_load(vm, path);
+    int idx_before = vm->module_count;
+    bpvm_status_t s = bpvm_loader_load(vm, path);
+    if (s != BPVM_OK) return s;
+    /* Descubrir y cargar recursivamente las dependencias del módulo,
+     * buscándolas en el mismo directorio que el .mod cargado. */
+    char dir[256];
+    path_dirname(path, dir, sizeof(dir));
+    for (int j = idx_before; j < vm->module_count; j++) {
+        bpvm_status_t r = discover_deps(vm, j, dir);
+        if (r != BPVM_OK) return r;
+    }
+    return BPVM_OK;
 }
 
 bpvm_status_t bpvm_run(bpvm_t* vm) {
     if (!vm) return BPVM_ERR_BAD_PC;
+    /* F3 — resolver imports y aplicar class fixups antes de ejecutar. */
+    bpvm_status_t ls = bpvm_link_all(vm);
+    if (ls != BPVM_OK) return ls;
     return bpvm_interp_run(vm);
 }
 
@@ -67,6 +187,16 @@ void bpvm_set_tracing(bpvm_t* vm, int enabled) {
 
 void bpvm_destroy(bpvm_t* vm) {
     if (!vm) return;
+    /* Liberar módulos cargados. */
+    for (int i = 0; i < vm->module_count; i++) {
+        bpvm_module_t* m = &vm->modules[i];
+        if (m->imports) {
+            for (int k = 0; k < m->import_count; k++) free(m->imports[k]);
+            free(m->imports);
+        }
+        free(m->class_fixups);
+    }
+    free(vm->symbols);
     free(vm->scratch);
     free(vm);
 }

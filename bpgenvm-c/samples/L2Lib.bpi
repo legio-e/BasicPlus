@@ -1,0 +1,15 @@
+bpi 6
+module L2Lib
+class Counter public
+  layout 1 3 00000000 00000000
+  ctor(init:integer)
+  method increment():void public
+  method value():integer public
+  method add(delta:integer):integer public
+end class
+class SafeCounter public
+  layout 2 3 00000001 00000000
+  ctor()
+  prop tick:integer public sync
+  method increment():void public
+end class

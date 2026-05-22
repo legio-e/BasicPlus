@@ -1,0 +1,29 @@
+// l2v3sigs.bp — L2 v3.e: tipos de clase CROSS-MODULE en signatures.
+//
+// Verifica que un parámetro o return de tipo `OtraMod.Cls` se resuelve
+// correctamente, sobrevive ida-y-vuelta del .bpi, y typechequea en
+// llamadas cross-module.
+//
+// Sample: declara una función `tag(c)` que toma un L2Lib.Counter (otro
+// módulo) y devuelve un L2Lib.Counter — el tipo se exporta al .bpi de
+// L2v3Sigs y un import desde fuera debería poder usarlo.
+module L2v3Sigs
+  import L2Lib
+
+  // Función cuyo parámetro y return son tipos de otro módulo.
+  public function pump(c: L2Lib.Counter): L2Lib.Counter
+    c.increment()
+    c.increment()
+    return c
+  end pump
+
+  function Main()
+    var c: L2Lib.Counter := L2Lib.Counter(10)
+    print "antes =", c.value()
+    var r: L2Lib.Counter := pump(c)
+    print "tras pump (2 increments) =", r.value()
+    // r y c son el mismo ref — pump devuelve el receiver.
+    print "value via c =", c.value()
+  end Main
+
+end L2v3Sigs

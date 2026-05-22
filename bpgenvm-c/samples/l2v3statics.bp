@@ -1,0 +1,14 @@
+// l2v3statics.bp — L2 v3.d: static consts cross-module.
+//
+// Define una librería con static consts públicos. El consumidor
+// (l2v3staticsuse.bp) los lee como `Cfg.Limits.MAX` y el emisor
+// los inlinea (mismo path que consts de módulo cross-module).
+module L2v3Statics
+
+  public class Limits
+    public const Limits.MAX: integer := 100
+    public const Limits.MIN: integer := -100
+    public const Limits.TAG: string := "default"
+  end Limits
+
+end L2v3Statics

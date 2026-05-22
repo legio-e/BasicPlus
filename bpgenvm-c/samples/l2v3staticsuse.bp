@@ -1,0 +1,10 @@
+// l2v3staticsuse.bp — consumidor de L2v3Statics.Limits static consts.
+module L2v3StaticsUse
+  import L2v3Statics
+
+  function Main()
+    print "Limits.MAX =", L2v3Statics.Limits.MAX
+    print "Limits.TAG =", L2v3Statics.Limits.TAG
+  end Main
+
+end L2v3StaticsUse

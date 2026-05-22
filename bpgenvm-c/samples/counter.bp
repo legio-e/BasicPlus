@@ -1,0 +1,27 @@
+// counter.bp — F3: clase con field, método y constructor en mismo módulo.
+module CounterSample
+  class Counter
+    public var n: integer
+
+    public function Counter(init: integer)
+      this.n := init
+    end Counter
+
+    public function inc()
+      this.n := this.n + 1
+    end inc
+
+    public function value(): integer
+      return this.n
+    end value
+  end Counter
+
+  function Main()
+    var c: Counter := Counter(10)
+    print c.value()
+    c.inc()
+    c.inc()
+    c.inc()
+    print c.value()
+  end Main
+end CounterSample

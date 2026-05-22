@@ -525,13 +525,179 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm) {
             break;
         }
 
+        /* ---- F3: clases ---- */
+        case OP_NEW_OBJECT: {
+            int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2;
+            uint32_t class_ptr = (uint32_t)((int32_t) cs + cs_off);
+            uint16_t num_fields = bpvm_read_u16_be(mem + class_ptr
+                                                    + BPVM_CLS_OFF_NUM_FIELDS);
+            uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4,
+                                            BPVM_TYPE_OBJECT);
+            if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
+            bpvm_write_u32_be(mem + ref, class_ptr);   /* slot[0] = class_ptr */
+            /* fields ya zeroed por heap_alloc. */
+            bpvm_write_i32_be(mem + sp, (int32_t) ref); sp += 4;
+            mem = vm->memory;
+            break;
+        }
+        case OP_GET_FIELD: {
+            uint8_t slot = mem[pc++];
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            int32_t v = bpvm_read_i32_be(mem + ref + 4 + (uint32_t) slot * 4);
+            bpvm_write_i32_be(mem + sp, v); sp += 4;
+            break;
+        }
+        case OP_SET_FIELD: {
+            uint8_t slot = mem[pc++];
+            sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            bpvm_write_i32_be(mem + ref + 4 + (uint32_t) slot * 4, v);
+            break;
+        }
+
+        case OP_INVOKE_VIRTUAL: {
+            uint8_t vt_slot = mem[pc++];
+            uint8_t num_args = mem[pc++];
+            uint32_t this_addr = sp - 4 - (uint32_t) num_args * 4;
+            uint32_t this_ref = (uint32_t) bpvm_read_i32_be(mem + this_addr);
+            if (this_ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(mem + this_ref);
+
+            /* L2 v3: fall-back al parent si vt[slot] == -1 o slot >= num_methods.
+             * El bucle termina al encontrar un methodOff válido o llegar
+             * a la raíz (parent_offset == 0). */
+            uint32_t desc = class_ptr;
+            int32_t method_off = -1;
+            uint32_t target_cs = 0;
+            for (;;) {
+                uint16_t bw       = bpvm_read_u16_be(mem + desc
+                                                      + BPVM_CLS_OFF_BITMAP_WORDS);
+                uint16_t nmeth    = bpvm_read_u16_be(mem + desc
+                                                      + BPVM_CLS_OFF_NUM_METHODS);
+                uint32_t vt_base  = desc + BPVM_CLS_OFF_FIELD_BITMAP
+                                         + 2u * (uint32_t) bw * 4u;
+                if (vt_slot < nmeth) {
+                    int32_t off = bpvm_read_i32_be(mem + vt_base + (uint32_t) vt_slot * 4);
+                    if (off != -1) {
+                        method_off = off;
+                        target_cs  = bpvm_get_cs_for_data_addr(vm, desc);
+                        break;
+                    }
+                }
+                int32_t parent_off = bpvm_read_i32_be(mem + desc
+                                                       + BPVM_CLS_OFF_PARENT_OFF);
+                if (parent_off == 0) {
+                    fprintf(stderr,
+                            "[bpvm-c] INVOKE_VIRTUAL slot %u no resoluble en cadena de herencia\n",
+                            vt_slot);
+                    exit_status = BPVM_ERR_RUNTIME;
+                    goto done;
+                }
+                uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, desc);
+                desc = (uint32_t)((int32_t) cur_cs + parent_off);
+            }
+
+            uint32_t target_pc = target_cs + (uint32_t) method_off;
+            /* push saved pc/bp/cs, bp = sp, salta */
+            bpvm_write_i32_be(mem + sp, (int32_t) pc); sp += 4;
+            bpvm_write_i32_be(mem + sp, (int32_t) bp); sp += 4;
+            bpvm_write_i32_be(mem + sp, (int32_t) cs); sp += 4;
+            bp = sp;
+            pc = target_pc;
+            cs = target_cs;
+            break;
+        }
+
+        case OP_INSTANCEOF: {
+            int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2;
+            uint32_t expected = (uint32_t)((int32_t) cs + cs_off);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            int32_t result = 0;
+            if (ref != 0) {
+                uint32_t cur = (uint32_t) bpvm_read_i32_be(mem + ref);
+                while (cur != 0) {
+                    if (cur == expected) { result = 1; break; }
+                    int32_t parent_off = bpvm_read_i32_be(mem + cur
+                                                            + BPVM_CLS_OFF_PARENT_OFF);
+                    if (parent_off == 0) break;
+                    uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, cur);
+                    cur = (uint32_t)((int32_t) cur_cs + parent_off);
+                }
+            }
+            bpvm_write_i32_be(mem + sp, result); sp += 4;
+            break;
+        }
+
+        case OP_FREE_REF: {
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            if (ref != 0) {
+                /* Sólo objetos. Para arrays / strings, NOP. */
+                uint32_t header = ref - 4;
+                uint32_t tag = bpvm_read_u32_be(mem + header);
+                int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
+                if (type == BPVM_TYPE_OBJECT) {
+                    /* TODO: recorrer owner_bitmap y FREE_REF recursivo de
+                     * fields owners. F3 v1 sólo libera el objeto raíz. */
+                    bpvm_write_u32_be(mem + header, tag | BPVM_TAG_FREE_BIT);
+                }
+            }
+            break;
+        }
+
+        case OP_SET_FIELD_OWNER: {
+            uint8_t slot = mem[pc++];
+            sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            uint32_t field_addr = ref + 4 + (uint32_t) slot * 4;
+            uint32_t old_val = (uint32_t) bpvm_read_i32_be(mem + field_addr);
+            if (old_val != 0) {
+                uint32_t old_header = old_val - 4;
+                if (old_val >= vm->heap_start && old_val < vm->heap_next) {
+                    uint32_t otag = bpvm_read_u32_be(mem + old_header);
+                    int otype = (int)((otag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
+                    if (otype == BPVM_TYPE_OBJECT) {
+                        bpvm_write_u32_be(mem + old_header, otag | BPVM_TAG_FREE_BIT);
+                    }
+                }
+            }
+            bpvm_write_i32_be(mem + field_addr, v);
+            break;
+        }
+
+        /* ---- F3: CALL_EXT ---- */
+        case OP_CALL_EXT: {
+            uint16_t idx = bpvm_read_u16_be(mem + pc); pc += 2;
+            /* La ext-table del módulo actual vive al inicio del módulo.
+             * Lo encontramos buscando el módulo cuyo code_start == cs. */
+            uint32_t ext_table_addr = bpvm_get_ext_table_addr(vm, cs);
+            if (ext_table_addr == 0) {
+                fprintf(stderr, "[bpvm-c] CALL_EXT sin ext-table en cs=%u\n", cs);
+                exit_status = BPVM_ERR_RUNTIME; goto done;
+            }
+            uint32_t target = (uint32_t) bpvm_read_i32_be(mem
+                                + ext_table_addr + (uint32_t) idx * 4);
+            if (target == 0) {
+                fprintf(stderr, "[bpvm-c] CALL_EXT idx=%u no resuelto\n", idx);
+                exit_status = BPVM_ERR_RUNTIME; goto done;
+            }
+            /* Determinar el CS del módulo destino para que el frame
+             * tenga el cs correcto al ejecutar el target. */
+            uint32_t target_cs = bpvm_get_cs_for_code_addr(vm, target);
+            bpvm_write_i32_be(mem + sp, (int32_t) pc); sp += 4;
+            bpvm_write_i32_be(mem + sp, (int32_t) bp); sp += 4;
+            bpvm_write_i32_be(mem + sp, (int32_t) cs); sp += 4;
+            bp = sp;
+            pc = target;
+            cs = target_cs;
+            break;
+        }
+
         /* ---- Aún no implementados ---- */
-        case OP_NEW_OBJECT: case OP_GET_FIELD: case OP_SET_FIELD:
-        case OP_INVOKE_VIRTUAL: case OP_INSTANCEOF: case OP_FREE_REF:
-        case OP_SET_FIELD_OWNER:
-        case OP_CALL_EXT:
         case OP_TRY_BEGIN: case OP_TRY_END: case OP_THROW:
-            fprintf(stderr, "[bpvm-c F2] opcode 0x%02X aún no soportado en PC %u\n",
+            fprintf(stderr, "[bpvm-c F3] opcode 0x%02X aún no soportado en PC %u\n",
                     op, pc - 1);
             exit_status = BPVM_ERR_BAD_OPCODE;
             goto done;

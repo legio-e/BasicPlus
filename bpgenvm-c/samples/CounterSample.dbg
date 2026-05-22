@@ -1,0 +1,13 @@
+dbg 2
+module CounterSample
+source C:\lenguajes\pm\bpgenvm-c\samples\counter.bp
+lines
+1431 11
+1457 15
+1478 7
+1496 20
+1524 21
+1532 22
+1541 23
+1550 24
+1559 25

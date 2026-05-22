@@ -7,6 +7,8 @@
 
 #include "bpvm.h"
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* ============================================================ */
 /*  Constantes extraídas de docs/MOD_FORMAT.md / HEAP_LAYOUT.md  */
@@ -64,6 +66,15 @@
 /*  Tipos                                                        */
 /* ============================================================ */
 
+/* L2 v3 — class fixup. Tras cargar todos los módulos, el linker resuelve
+ * parent_qualified en la global symbol table y escribe parent_offset
+ * relativo al CS del módulo del child. */
+typedef struct {
+    char     child_class_name[64];
+    int32_t  child_cs_off;       /* offset del descriptor child relativo al CS */
+    char     parent_qualified[128];
+} bpvm_class_fixup_t;
+
 typedef struct {
     char     library[64];      /* "" si no hay */
     char     name[64];
@@ -76,7 +87,22 @@ typedef struct {
     uint32_t code_size;
     uint32_t end_addr;         /* code_start + code_size; primer byte libre */
     int32_t  main_offset;      /* -1 si no es entry-point */
+
+    /* F3 — imports cualificados (e.g. "L2Lib.Counter.__init"). Cada
+     * entry k corresponde al slot k de la ext-table. */
+    char**   imports;          /* malloc-ed; cada slot también malloc-ed */
+    int      import_count;     /* = ext_count si las leemos */
+
+    /* L2 v3 — class fixups del módulo. */
+    bpvm_class_fixup_t* class_fixups;
+    int                 class_fixup_count;
 } bpvm_module_t;
+
+/* Tabla global de símbolos exportados (F3). */
+typedef struct {
+    char     name[128];        /* qualified: e.g. "L2Lib.Counter" o "Foo.__init" */
+    uint32_t abs_addr;
+} bpvm_symbol_t;
 
 typedef enum {
     BPVM_THREAD_RUNNABLE = 0,
@@ -115,6 +141,11 @@ struct bpvm {
     bpvm_module_t modules[BPVM_MAX_MODULES];
     int           module_count;
     uint32_t      main_absolute_address;   /* 0 = sin entry-point */
+
+    /* F3 — global symbol table (función exports + data exports). */
+    bpvm_symbol_t* symbols;
+    int            symbol_count;
+    int            symbol_capacity;
 
     /* Threads BP. F1: sólo main. */
     bpvm_thread_t threads[BPVM_MAX_THREADS];
@@ -190,5 +221,14 @@ void     bpvm_heap_gc(bpvm_t* vm);
 
 /* builtins.c (F2) */
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id);
+
+/* link.c (F3) */
+bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
+                                         uint32_t abs_addr);
+uint32_t      bpvm_link_lookup(const bpvm_t* vm, const char* qualified);
+bpvm_status_t bpvm_link_all(bpvm_t* vm);
+uint32_t      bpvm_get_cs_for_data_addr(const bpvm_t* vm, uint32_t addr);
+uint32_t      bpvm_get_cs_for_code_addr(const bpvm_t* vm, uint32_t code_addr);
+uint32_t      bpvm_get_ext_table_addr(const bpvm_t* vm, uint32_t cs);
 
 #endif /* BPVM_INTERNAL_H */

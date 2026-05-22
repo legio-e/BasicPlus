@@ -1,0 +1,7 @@
+bpi 6
+module L2v3Statics
+class Limits public
+  layout 0 0 - -
+  staticconst MAX:integer=100 public
+  staticconst TAG:string="default" public
+end class

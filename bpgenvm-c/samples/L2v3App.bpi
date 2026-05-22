@@ -1,0 +1,7 @@
+bpi 6
+module L2v3App
+class FastCounter public extends L2Lib.Counter
+  layout 1 4 00000000 00000000
+  ctor()
+  method tag():integer public
+end class
