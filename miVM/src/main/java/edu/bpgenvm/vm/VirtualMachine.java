@@ -771,6 +771,11 @@ public class VirtualMachine {
             // pop como parte del unwind, igual que con el opcode THROW.
             writeInt32(tc.sp, objRef);
             tc.sp += 4;
+            // B1 residual — anclamos el objRef al thread para que el GC
+            // no lo libere entre soltar vmLock aquí y el unwind del catch
+            // BpExceptionPending del intérprete. El stack tiene el ref pero
+            // el GC no traza por type info — necesita la ancla.
+            tc.allocAnchor = objRef;
         }
         throw new BpExceptionPending(objRef);
     }
@@ -2568,6 +2573,12 @@ public class VirtualMachine {
         int ref = heapAlloc(len * 4, TYPE_ARRAY_I32);
         writeInt32(ref, len);
         for (int i = 0; i < len; i++) writeInt32(ref + 4 + i * 4, s.charAt(i));
+        // B1 residual — el caller llama a allocVmString desde dispatchBuiltin
+        // SIN vmLock, así que entre `return ref` y el `pushTc(tc, ref)` un GC
+        // de otro worker podría liberar `ref` (no hay raíz aún). Anclamos
+        // explícitamente en el tc actual; el GC lo agrega a roots.
+        ThreadContext me = currentTcLocal.get();
+        if (me != null) me.allocAnchor = ref;
         return ref;
     }
 
@@ -2576,6 +2587,10 @@ public class VirtualMachine {
         int ref = heapAlloc(n * 4, TYPE_ARRAY_REF);
         writeInt32(ref, n);
         for (int i = 0; i < n; i++) writeInt32(ref + 4 + i * 4, 0);
+        // B1 residual — ver allocVmString. Mismo motivo: ancla GC para el
+        // intervalo entre alocación y publicación al stack del programa.
+        ThreadContext me = currentTcLocal.get();
+        if (me != null) me.allocAnchor = ref;
         return ref;
     }
 
