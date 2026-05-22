@@ -1,0 +1,47 @@
+// l2v3app.bp — L2 v3: herencia cross-module completa (vtable + super).
+//
+// Extiende `L2Lib.Counter` (otro módulo) y demuestra:
+//   - super(0) cross-module: inicializa el field `n` del padre.
+//   - Llamada a método heredado (`fc.increment()`, `fc.value()`).
+//   - Método nuevo local (`fc.tag()`).
+//   - Asignación polimórfica + dispatch virtual con receiver child.
+//
+// Requiere L2Lib compilado al lado (L2Lib.mod + L2Lib.bpi).
+module L2v3App
+  import L2Lib
+
+  public class FastCounter extends L2Lib.Counter
+    public function FastCounter()
+      super(0)
+    end FastCounter
+
+    public function tag(): integer
+      return 42
+    end tag
+  end FastCounter
+
+  function Main()
+    var fc: FastCounter := FastCounter()
+    print "tag inicial =", fc.tag()
+    print "value inicial =", fc.value()
+    fc.increment()
+    fc.increment()
+    fc.increment()
+    print "value tras 3 increments =", fc.value()
+    print "add(10) =", fc.add(10)
+    print "value final =", fc.value()
+
+    // Asignación polimórfica: FastCounter → L2Lib.Counter (subtipo).
+    var c: L2Lib.Counter := fc
+    print "via Counter ref, value =", c.value()
+
+    // instanceof cross-module: c es L2Lib.Counter en compile time, pero
+    // dinámicamente apunta a un FastCounter. El check sube la cadena de
+    // herencia via parentOff (resuelto en linkAll para padres cross-module).
+    if c instanceof FastCounter then
+      print "c instanceof FastCounter (dinamico)"
+    endif
+    print "OK"
+  end Main
+
+end L2v3App

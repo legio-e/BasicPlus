@@ -83,12 +83,30 @@ public class ModWriter {
     }
     private static class ClassInfo {
         String name;
-        String parent;           // null si no hereda
+        String parent;           // null si no hereda; nombre LOCAL si parent del mismo módulo.
         final List<FieldInfo> fields = new ArrayList<>();
         final List<MethodInfo> methods = new ArrayList<>(); // ordenadas por slot
+        // L2 v3 — herencia cross-module. Si parent vive en otro módulo, el
+        // ModWriter local no tiene su descriptor; se cargan placeholders (campos
+        // dummy + slots vacíos) sólo para preservar el slot/field numbering y
+        // el bitmap del GC. El parentOff en el descriptor se escribe a 0 al
+        // emitir y se PARCHA en runtime vía la tabla classFixups (resuelto por
+        // ModuleManager.linkAll cuando ya están todos los módulos cargados).
+        boolean externalParent;
+        String externalParentQualified; // p.ej. "L2Lib.Counter", lookup en globalSymbolTable
     }
     private final Map<String, ClassInfo> classes = new HashMap<>();
     private ClassInfo currentClass = null;
+
+    /** L2 v3 — fixup que el loader aplica para parchear parentOff de una clase
+     *  cuyo padre vive cross-module. childClassName es el data symbol del child
+     *  (registrado en este .mod); parentQualified es el nombre cualificado del
+     *  parent data symbol exportado por su módulo dueño (e.g. "L2Lib.Counter"). */
+    private static class ClassFixup {
+        String childClassName;
+        String parentQualified;
+    }
+    private final List<ClassFixup> classFixups = new ArrayList<>();
 
     // --- Soporte de properties ---
     private enum PropertyScope { MODULE, INSTANCE, STATIC }
@@ -444,6 +462,24 @@ public class ModWriter {
      * qualifiedName original (puede ser overrideado luego con addMethod).
      */
     public void addClass(String name, String parentName) {
+        addClass(name, parentName, null);
+    }
+
+    /**
+     * L2 v3 — Variante con padre EXTERNO (otro módulo). El ModWriter local no
+     * tiene el ClassInfo del parent; recibe sólo el layout binario mínimo
+     * (numFields, numMethods, field+owner bitmaps) para preservar el slot/field
+     * numbering y el bitmap del GC. Los slots heredados quedan como placeholders
+     * sin qualifiedName: en endClass se serializan como vt[slot] = -1, y la VM
+     * sube por la cadena via parentOff (resuelto en linkAll).
+     *
+     * Si {@code externalParent} != null: parentName se trata como qualifiedName
+     * (e.g. "L2Lib.Counter") y se registra un classFixup.
+     *
+     * Si {@code externalParent} == null y parentName != null: parent local
+     * (como en la variante de dos args).
+     */
+    public void addClass(String name, String parentName, ExternalParentLayout externalParent) {
         if (currentClass != null) {
             throw new RuntimeException("addClass dentro de otra clase abierta: cierra primero con endClass()");
         }
@@ -452,12 +488,41 @@ public class ModWriter {
         }
         ClassInfo c = new ClassInfo();
         c.name = name;
-        c.parent = parentName;
-        if (parentName != null) {
+        if (externalParent != null) {
+            // Parent vive en otro módulo: pre-popular placeholders para el slot
+            // numbering, registrar fixup, y NO copiar nombres (no los conocemos
+            // todos del .bpi v6 inicial; v7 podría exponerlos para override).
+            c.externalParent = true;
+            c.externalParentQualified = parentName;   // qualifiedName
+            c.parent = null;                          // sin entrada local en `classes`
+            for (int i = 0; i < externalParent.numFields; i++) {
+                FieldInfo f = new FieldInfo();
+                f.name = "__inh" + i;                 // placeholder; no usable por GET_FIELD del child
+                int word = i >>> 5;
+                int mask = 1 << (i & 31);
+                f.isRef   = (word < externalParent.fieldBitmap.length)
+                            && (externalParent.fieldBitmap[word] & mask) != 0;
+                f.isOwner = (word < externalParent.ownerBitmap.length)
+                            && (externalParent.ownerBitmap[word] & mask) != 0;
+                c.fields.add(f);
+            }
+            for (int i = 0; i < externalParent.numMethods; i++) {
+                MethodInfo m = new MethodInfo();
+                m.simpleName = "__inh" + i;
+                m.qualifiedName = null;               // placeholder: vt[slot] = -1
+                m.slot = i;
+                c.methods.add(m);
+            }
+            ClassFixup fx = new ClassFixup();
+            fx.childClassName = name;
+            fx.parentQualified = parentName;
+            classFixups.add(fx);
+        } else if (parentName != null) {
             ClassInfo p = classes.get(parentName);
             if (p == null) {
                 throw new RuntimeException("Clase padre no declarada: " + parentName + " (en addClass " + name + ")");
             }
+            c.parent = parentName;
             for (FieldInfo pf : p.fields) {
                 FieldInfo f = new FieldInfo();
                 f.name = pf.name;
@@ -475,6 +540,23 @@ public class ModWriter {
         }
         classes.put(name, c);
         currentClass = c;
+    }
+
+    /** Layout binario mínimo de un parent cross-module, derivado del .bpi del
+     *  módulo dueño. fieldBitmap y ownerBitmap son arrays de int (cada int =
+     *  32 slots; mismo formato que el descriptor binario). */
+    public static final class ExternalParentLayout {
+        public final int numFields;
+        public final int numMethods;
+        public final int[] fieldBitmap;
+        public final int[] ownerBitmap;
+        public ExternalParentLayout(int numFields, int numMethods,
+                                    int[] fieldBitmap, int[] ownerBitmap) {
+            this.numFields = numFields;
+            this.numMethods = numMethods;
+            this.fieldBitmap = fieldBitmap != null ? fieldBitmap : new int[0];
+            this.ownerBitmap = ownerBitmap != null ? ownerBitmap : new int[0];
+        }
     }
 
     /** Declara un campo en la clase abierta.
@@ -593,6 +675,8 @@ public class ModWriter {
         desc[7] = 0;
 
         // Parent offset (CS-relative). 0 = sin padre.
+        // Si parent es cross-module, parentOffset se deja a 0 aquí y se PARCHA
+        // en runtime por el loader (ver classFixups + serializeClassFixups).
         int parentOffset = 0;
         if (c.parent != null) {
             Integer parentCsOff = dataSymbolOffset.get(c.parent);
@@ -619,9 +703,17 @@ public class ModWriter {
             writeIntInBuf(desc, ownerBitmapBase + wIdx * 4, ownerBitmap[wIdx]);
         }
 
-        // Vtable: offsets relativos al code start del módulo
+        // Vtable: offsets relativos al code start del módulo. Para slots
+        // heredados de un parent cross-module (qualifiedName == null) se
+        // escribe -1: la VM detecta el sentinel en INVOKE_VIRTUAL y sube
+        // por la cadena de herencia via parentOff (resuelto por linkAll).
         int vtBase = 12 + 2 * bitmapWords * 4;
         for (MethodInfo m : c.methods) {
+            if (m.qualifiedName == null) {
+                // Placeholder de slot heredado cross-module.
+                writeIntInBuf(desc, vtBase + m.slot * 4, -1);
+                continue;
+            }
             Integer relAddr = functionAddresses.get(m.qualifiedName);
             if (relAddr == null) {
                 throw new RuntimeException("Método sin cuerpo: " + m.qualifiedName
@@ -631,7 +723,30 @@ public class ModWriter {
         }
 
         registerSymbol(c.name, desc);
+        // Guardamos el layout binario (numFields/numMethods + bitmaps) por
+        // si el frontend lo necesita para emitir el ClassSig al .bpi.
+        // Se consulta vía getClassLayout(name) después de endClass.
+        ClassLayoutInfo info = new ClassLayoutInfo();
+        info.numFields = numFields;
+        info.numMethods = numMethods;
+        info.fieldBitmap = fieldBitmap.clone();
+        info.ownerBitmap = ownerBitmap.clone();
+        classLayouts.put(c.name, info);
         currentClass = null;
+    }
+
+    /** Layout binario público (numFields/numMethods + bitmaps) consultable
+     *  tras endClass. La info viaja al .bpi para que importadores con
+     *  extends cross-module puedan reservar el slot/field count correcto. */
+    public static final class ClassLayoutInfo {
+        public int numFields;
+        public int numMethods;
+        public int[] fieldBitmap;
+        public int[] ownerBitmap;
+    }
+    private final Map<String, ClassLayoutInfo> classLayouts = new HashMap<>();
+    public ClassLayoutInfo getClassLayout(String className) {
+        return classLayouts.get(className);
     }
 
     // --- Emisores para objetos ---
@@ -1362,11 +1477,26 @@ public class ModWriter {
         // esperan más bytes); si hay alguno, escribimos int count +
         // entries. Loaders nuevos detectan la subsección por bytes
         // remanentes de exportsSize.
-        if (!exportDataSymbols.isEmpty()) {
+        // L2 v3 — si hay classFixups, la subsección de data exports tiene
+        // que existir aunque sea vacía, para que el loader sepa dónde
+        // empieza la subsección de fixups (la detecta por bytes remanentes).
+        boolean writeDataExports = !exportDataSymbols.isEmpty() || !classFixups.isEmpty();
+        if (writeDataExports) {
             exportOut.writeInt(exportDataSymbols.size());
             for (String name : exportDataSymbols) {
                 exportOut.writeUTF(name);
                 exportOut.writeInt(dataSymbolOffset.get(name));
+            }
+        }
+        // L2 v3 — subsección de class fixups: parejas (childClassName,
+        // parentQualifiedName). El loader resuelve parentQualifiedName en
+        // globalSymbolTable y parcha parentOff del descriptor del child.
+        if (!classFixups.isEmpty()) {
+            exportOut.writeInt(classFixups.size());
+            for (ClassFixup fx : classFixups) {
+                exportOut.writeUTF(fx.childClassName);
+                exportOut.writeInt(dataSymbolOffset.get(fx.childClassName));
+                exportOut.writeUTF(fx.parentQualified);
             }
         }
         exportOut.flush();

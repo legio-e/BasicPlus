@@ -26,6 +26,29 @@ public final class SemanticInfo {
     /** Módulo procesado (símbolo raíz). */
     public Symbol.ModuleSymbol module;
 
+    /** L2 v3 — layout binario de cada clase emitida (numFields, numMethods,
+     *  fieldBitmap, ownerBitmap). Lo populates el MivmEmitter al cerrar
+     *  cada clase; lo consume ModuleInterface.extractClass para emitirlo
+     *  al .bpi y que importadores con extends cross-module reserven el
+     *  layout correcto. Key = ClassSymbol del módulo. */
+    public final Map<Symbol.ClassSymbol, ClassBinaryLayout> classLayouts = new IdentityHashMap<>();
+
+    /** Layout binario inmutable de una clase. fieldBitmap/ownerBitmap son
+     *  arrays de int donde cada int = 32 slots (mismo formato que el
+     *  descriptor binario que escribe ModWriter). */
+    public static final class ClassBinaryLayout {
+        public final int numFields;
+        public final int numMethods;
+        public final int[] fieldBitmap;
+        public final int[] ownerBitmap;
+        public ClassBinaryLayout(int numFields, int numMethods, int[] fieldBitmap, int[] ownerBitmap) {
+            this.numFields = numFields;
+            this.numMethods = numMethods;
+            this.fieldBitmap = fieldBitmap;
+            this.ownerBitmap = ownerBitmap;
+        }
+    }
+
     public final List<SemanticDiagnostic> diagnostics = new ArrayList<>();
 
     public boolean hasErrors() {

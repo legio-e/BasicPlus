@@ -216,7 +216,23 @@ public class ModuleManager {
 
     private static class LinkTask {
         int extTableAddress;
+        int moduleCodeStart;          // CS del módulo dueño (= codeStart)
         String[] requiredImports;
+        // L2 v3 — fixups de parentOff para clases con padre cross-module.
+        // En linkAll, después de resolver imports, recorremos esta lista
+        // y parcheamos parentOff del descriptor del child con
+        // (parentAbs - childAbs), siguiendo la convención CS-relative de
+        // la VM. Si está vacía, no hay clases con padre cross-module.
+        java.util.List<ClassFixupEntry> classFixups = new java.util.ArrayList<>();
+    }
+
+    /** Fixup de parentOff: el child está en `moduleCodeStart + childCsOff` (en
+     *  el módulo del LinkTask); el parent es el data symbol `parentQualified`
+     *  exportado por otro módulo (resuelto vía globalSymbolTable). */
+    private static class ClassFixupEntry {
+        String childClassName;
+        int childCsOff;           // offset del child descriptor relativo al CS de su módulo (negativo)
+        String parentQualified;   // p.ej. "L2Lib.Counter"
     }
 
     public ModuleManager(VirtualMachine vm) {
@@ -372,6 +388,7 @@ public class ModuleManager {
                 }
             }
             // B3 v2 — subsección opcional de data symbol exports.
+            java.util.List<ClassFixupEntry> moduleClassFixups = new java.util.ArrayList<>();
             if (expIn.available() > 0) {
                 int dataExpCount = expIn.readInt();
                 for (int i = 0; i < dataExpCount; i++) {
@@ -386,6 +403,19 @@ public class ModuleManager {
                     if (!library.isEmpty()) {
                         String shortKey = moduleName + "." + name;
                         globalSymbolTable.putIfAbsent(shortKey, absoluteAddress);
+                    }
+                }
+                // L2 v3 — subsección opcional de class fixups (parejas
+                // childClassName + childCsOff + parentQualified). Sólo
+                // presente si el módulo declara clases con padre cross-module.
+                if (expIn.available() > 0) {
+                    int fxCount = expIn.readInt();
+                    for (int i = 0; i < fxCount; i++) {
+                        ClassFixupEntry fx = new ClassFixupEntry();
+                        fx.childClassName = expIn.readUTF();
+                        fx.childCsOff = expIn.readInt();
+                        fx.parentQualified = expIn.readUTF();
+                        moduleClassFixups.add(fx);
                     }
                 }
             }
@@ -424,7 +454,9 @@ public class ModuleManager {
 
             LinkTask task = new LinkTask();
             task.extTableAddress = extTableAddress;
+            task.moduleCodeStart = codeStart;
             task.requiredImports = imports;
+            task.classFixups = moduleClassFixups;
             pendingLinks.add(task);
 
             nextFreeAddress = meta.endAddress + 64;
@@ -444,6 +476,23 @@ public class ModuleManager {
                     throw new RuntimeException("Símbolo no resuelto: " + symbolNeeded);
                 }
                 vm.writeInt32(task.extTableAddress + (i * 4), absoluteAddr);
+            }
+            // L2 v3 — parcha parentOff de clases con padre cross-module. El
+            // descriptor del child quedó con parentOff=0 al emitir; aquí
+            // resolvemos el parent vía globalSymbolTable y escribimos el offset
+            // CS-relative al CS del módulo del child (siguiendo la convención
+            // que usa isDescendantOf y INVOKE_VIRTUAL para navegar la cadena).
+            for (ClassFixupEntry fx : task.classFixups) {
+                Integer parentAbs = globalSymbolTable.get(fx.parentQualified);
+                if (parentAbs == null) {
+                    throw new RuntimeException("L2 v3 fixup: parent no resuelto '"
+                            + fx.parentQualified + "' para clase '"
+                            + fx.childClassName + "'");
+                }
+                int childAbs = task.moduleCodeStart + fx.childCsOff;
+                int parentOff = parentAbs - task.moduleCodeStart;  // CS-relative al CS del child
+                // CLS_OFF_PARENT_OFF = 8 (layout del descriptor; ver ModWriter.endClass)
+                vm.writeInt32(childAbs + 8, parentOff);
             }
         }
         vm.setPC(mainAbsoluteAddress);

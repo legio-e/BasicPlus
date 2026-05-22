@@ -50,6 +50,7 @@ import basicplus.frontend.Symbol.EnumSymbol;
 import basicplus.frontend.Symbol.FunctionSymbol;
 import basicplus.frontend.Symbol.ParamSymbol;
 import basicplus.frontend.Symbol.PropertySymbol;
+import basicplus.frontend.Symbol.VarSymbol;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -65,7 +66,7 @@ import java.util.Map;
 public final class ModuleInterface {
 
     /** Versión mínima del .bpi que sabemos leer (cuando se sube, lo bumpamos). */
-    public static final int CURRENT_VERSION = 5;
+    public static final int CURRENT_VERSION = 6;   // v6: ClassSig.layout (L2 v3)
     public static final int MIN_SUPPORTED_VERSION = 1;
 
     public String library = "";
@@ -180,6 +181,17 @@ public final class ModuleInterface {
          *  sin getX/setX sintéticos). El vtSlot del importador es:
          *  properties.size() * 2 + index del método aquí. */
         public final List<FuncSig> methods;
+
+        // L2 v3 — layout binario completo del descriptor (incluyendo fields
+        // privados y métodos sintéticos como getter/setter de props). Necesario
+        // para que un módulo importador con `extends X` reserve el slot/field
+        // numbering correcto. Si binaryNumFields/binaryNumMethods son -1, el
+        // .bpi es de una versión vieja sin esta info (herencia cross-module no
+        // disponible).
+        public int binaryNumFields = -1;
+        public int binaryNumMethods = -1;
+        public int[] binaryFieldBitmap = new int[0];
+        public int[] binaryOwnerBitmap = new int[0];
 
         public ClassSig(String name, boolean isPublic, String baseClassName,
                         List<ParamSig> ctorParams, List<PropSig> properties,
@@ -371,10 +383,120 @@ public final class ModuleInterface {
                 }
             }
         }
-        // baseClassName: hoy informativo; el importador no usa el campo para
-        // reconstruir vtables porque v1 no soporta herencia cross-module.
-        String parent = (cls.baseClass != null) ? cls.baseClass.name : null;
-        return new ClassSig(cls.name, true, parent, ctorParams, properties, methods);
+        // baseClassName: L2 v3 — si el parent es cross-module, cualificamos
+        // con `<Mod>.<Cls>` para que el importador pueda resolver el data
+        // symbol del parent en runtime (linkAll fixup). Si parent es local
+        // al módulo dueño, queda sólo el simpleName (mismo comportamiento
+        // que v1/v2; no causa colisión porque el importador ve el parent
+        // vía import del módulo dueño).
+        String parent = null;
+        if (cls.baseClass != null) {
+            Symbol.ClassSymbol p = cls.baseClass;
+            if (p.isExternal) {
+                StringBuilder sb = new StringBuilder();
+                if (p.externalLibrary != null && !p.externalLibrary.isEmpty())
+                    sb.append(p.externalLibrary).append('.');
+                sb.append(p.externalModule).append('.').append(p.name);
+                parent = sb.toString();
+            } else {
+                parent = p.name;
+            }
+        }
+        ClassSig sig = new ClassSig(cls.name, true, parent, ctorParams, properties, methods);
+        // L2 v3 — propaga el layout binario para herencia cross-module. Si el
+        // backend ya lo populates (cls.binaryLayout != null), usamos eso (la
+        // fuente más fiel). Si no (típicamente porque estamos en modo
+        // INTERFACE_ONLY, donde el emisor no corre), reconstruimos un layout
+        // aproximado a partir del AST — replicando la lógica de MivmEmitter:
+        //   * __syncMutex si la clase tiene sync property (slot 0, ref);
+        //   * fields VarDecl en orden (con flags isRef/isOwner);
+        //   * backing field de cada property en orden.
+        //   * num_methods = 2*nProps + nMethods.
+        if (cls.binaryLayout != null) {
+            sig.binaryNumFields  = cls.binaryLayout.numFields;
+            sig.binaryNumMethods = cls.binaryLayout.numMethods;
+            sig.binaryFieldBitmap = cls.binaryLayout.fieldBitmap;
+            sig.binaryOwnerBitmap = cls.binaryLayout.ownerBitmap;
+        } else {
+            // Reconstrucción del layout desde el AST (INTERFACE_ONLY mode).
+            // Sólo necesitamos saber num_fields, num_methods y los bitmaps.
+            int nFields = 0, nMethods = 0;
+            java.util.List<Boolean> fieldRefFlags  = new java.util.ArrayList<>();
+            java.util.List<Boolean> fieldOwnerFlags = new java.util.ArrayList<>();
+            boolean classHasSyncProp = false;
+            if (cls.astNode != null && cls.astNode.members != null) {
+                for (Ast.ITopLevelDecl m : cls.astNode.members) {
+                    if (m instanceof Ast.PropertyDef && ((Ast.PropertyDef) m).isSync) {
+                        classHasSyncProp = true;
+                        break;
+                    }
+                }
+            }
+            // Slot 0 = __syncMutex si la clase tiene sync property propia.
+            if (classHasSyncProp) {
+                fieldRefFlags.add(Boolean.TRUE);
+                fieldOwnerFlags.add(Boolean.FALSE);
+                nFields++;
+            }
+            // Fields (var/owner) y backing fields de properties, en orden de declaración.
+            if (cls.astNode != null && cls.astNode.members != null) {
+                for (Ast.ITopLevelDecl m : cls.astNode.members) {
+                    if (m instanceof Ast.VarDecl) {
+                        Ast.VarDecl vd = (Ast.VarDecl) m;
+                        for (Ast.DeclName dn : vd.names) {
+                            if (dn.isStatic()) continue;
+                            Symbol vsym = cls.instanceMembers.tryLookup(dn.name);
+                            boolean isRef = (vsym instanceof VarSymbol)
+                                    && isRefTypeForBpi(((VarSymbol) vsym).type);
+                            fieldRefFlags.add(isRef);
+                            fieldOwnerFlags.add(vd.isOwner);
+                            nFields++;
+                        }
+                    } else if (m instanceof Ast.PropertyDef) {
+                        Ast.PropertyDef pd = (Ast.PropertyDef) m;
+                        if (pd.name != null && pd.name.isStatic()) continue;
+                        Symbol psym = cls.instanceMembers.tryLookup(pd.name.name);
+                        boolean isRef = (psym instanceof PropertySymbol)
+                                && isRefTypeForBpi(((PropertySymbol) psym).type);
+                        fieldRefFlags.add(isRef);
+                        fieldOwnerFlags.add(pd.isOwner);
+                        nFields++;
+                        // cada property → 2 slots de método (getter + setter)
+                        nMethods += 2;
+                    } else if (m instanceof Ast.FuncDef) {
+                        Ast.FuncDef fn = (Ast.FuncDef) m;
+                        Symbol fsym = cls.instanceMembers.tryLookup(fn.name.name);
+                        if (fsym instanceof FunctionSymbol) {
+                            FunctionSymbol f = (FunctionSymbol) fsym;
+                            if (!f.isStatic && !f.isConstructor) nMethods++;
+                        }
+                    }
+                }
+            }
+            int bw = (nFields + 31) >>> 5;
+            int[] fieldBitmap = new int[bw];
+            int[] ownerBitmap = new int[bw];
+            for (int i = 0; i < nFields; i++) {
+                if (fieldRefFlags.get(i))  fieldBitmap[i >>> 5] |= (1 << (i & 31));
+                if (fieldOwnerFlags.get(i)) ownerBitmap[i >>> 5] |= (1 << (i & 31));
+            }
+            sig.binaryNumFields  = nFields;
+            sig.binaryNumMethods = nMethods;
+            sig.binaryFieldBitmap = fieldBitmap;
+            sig.binaryOwnerBitmap = ownerBitmap;
+        }
+        return sig;
+    }
+
+    /** Aproximación de isRefType para reconstruir el bitmap desde el AST.
+     *  Coincide con MivmEmitter.isRefType: refs = string, class, array, any. */
+    private static boolean isRefTypeForBpi(BpType t) {
+        if (t == null) return false;
+        if (t.isReference()) return true;
+        if (t instanceof BpType.PrimitiveType) {
+            return ((BpType.PrimitiveType) t).tag == BpType.PrimitiveType.Kind.STRING;
+        }
+        return false;
     }
 
     private static Object literalValueOf(Ast.IExpr e) {
@@ -462,6 +584,17 @@ public final class ModuleInterface {
                 if (c.baseClassName != null && !c.baseClassName.isEmpty())
                     hdr.append(" extends ").append(c.baseClassName);
                 pw.println(hdr.toString());
+                // L2 v3 — layout binario: línea opcional `layout=nF/nM/fbm/obm`
+                // donde fbm y obm son hex (little-endian de ints). El reader
+                // viejo (v5) ignora líneas desconocidas, así que es backward
+                // compatible. La línea sólo se emite si binaryNumFields >= 0.
+                if (c.binaryNumFields >= 0) {
+                    StringBuilder lay = new StringBuilder();
+                    lay.append("  layout ").append(c.binaryNumFields).append(' ').append(c.binaryNumMethods);
+                    lay.append(' '); appendHexInts(lay, c.binaryFieldBitmap);
+                    lay.append(' '); appendHexInts(lay, c.binaryOwnerBitmap);
+                    pw.println(lay.toString());
+                }
 
                 if (c.ctorParams != null) {
                     StringBuilder cs = new StringBuilder();
@@ -493,6 +626,25 @@ public final class ModuleInterface {
                 pw.println("end class");
             }
         }
+    }
+
+    /** Helper para serializar arrays de int como hex separado por '|'.
+     *  "" = array vacío. Cada int se escribe como 8 hex chars sin prefijo. */
+    private static void appendHexInts(StringBuilder sb, int[] arr) {
+        if (arr == null || arr.length == 0) { sb.append('-'); return; }
+        for (int i = 0; i < arr.length; i++) {
+            if (i > 0) sb.append('|');
+            sb.append(String.format("%08x", arr[i]));
+        }
+    }
+    private static int[] parseHexInts(String s) {
+        if (s == null || s.isEmpty() || "-".equals(s)) return new int[0];
+        String[] parts = s.split("\\|");
+        int[] out = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            out[i] = (int) Long.parseLong(parts[i], 16);
+        }
+        return out;
     }
 
     /**
@@ -596,6 +748,9 @@ public final class ModuleInterface {
             List<ParamSig> clsCtorParams = null;
             List<PropSig>  clsProps   = null;
             List<FuncSig>  clsMethods = null;
+            // L2 v3 — layout binario opcional (-1 = no presente).
+            int clsBinNumFields = -1, clsBinNumMethods = -1;
+            int[] clsBinFieldBitmap = new int[0], clsBinOwnerBitmap = new int[0];
 
             while ((line = br.readLine()) != null) {
                 lineNo++;
@@ -638,10 +793,17 @@ public final class ModuleInterface {
                 // Modo "dentro de class": parsea miembros hasta "end class".
                 if (clsName != null) {
                     if ("end class".equals(trimmed)) {
-                        iface.classes.add(new ClassSig(clsName, true, clsParent,
-                                clsCtorParams, clsProps, clsMethods));
+                        ClassSig cs = new ClassSig(clsName, true, clsParent,
+                                clsCtorParams, clsProps, clsMethods);
+                        cs.binaryNumFields  = clsBinNumFields;
+                        cs.binaryNumMethods = clsBinNumMethods;
+                        cs.binaryFieldBitmap = clsBinFieldBitmap;
+                        cs.binaryOwnerBitmap = clsBinOwnerBitmap;
+                        iface.classes.add(cs);
                         clsName = null; clsParent = null;
                         clsCtorParams = null; clsProps = null; clsMethods = null;
+                        clsBinNumFields = -1; clsBinNumMethods = -1;
+                        clsBinFieldBitmap = new int[0]; clsBinOwnerBitmap = new int[0];
                         continue;
                     }
                     if (trimmed.startsWith("ctor(") || trimmed.startsWith("ctor (")) {
@@ -657,6 +819,21 @@ public final class ModuleInterface {
                     }
                     if (trimmed.startsWith("method ")) {
                         clsMethods.add(parseFunc(file, lineNo, trimmed.substring("method ".length())));
+                        continue;
+                    }
+                    if (trimmed.startsWith("layout ")) {
+                        // formato: "layout <nFields> <nMethods> <fbmHex> <obmHex>"
+                        String[] tok = trimmed.substring("layout ".length()).split("\\s+");
+                        if (tok.length < 4)
+                            throw new IOException(file + ":" + lineNo + ": layout malformed (esperado: nFields nMethods fbm obm)");
+                        try {
+                            clsBinNumFields  = Integer.parseInt(tok[0]);
+                            clsBinNumMethods = Integer.parseInt(tok[1]);
+                        } catch (NumberFormatException nfe) {
+                            throw new IOException(file + ":" + lineNo + ": layout counts no enteros");
+                        }
+                        clsBinFieldBitmap = parseHexInts(tok[2]);
+                        clsBinOwnerBitmap = parseHexInts(tok[3]);
                         continue;
                     }
                     throw new IOException(file + ":" + lineNo + ": directiva no reconocida en class: " + trimmed);

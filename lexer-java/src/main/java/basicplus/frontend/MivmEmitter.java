@@ -772,26 +772,37 @@ public final class MivmEmitter {
             }
 
             // 2) Apertura de clase + fields + métodos virtuales.
-            // L2 v2 — si el padre es EXTERNO (otro módulo), no podemos
-            // todavía heredar su vtable porque las offsets de métodos
-            // serían inválidas en este módulo. Pasamos null al
-            // ModWriter (sin herencia local) y emitimos un warning si
-            // el cuerpo de la clase usa métodos del padre — el
-            // typecheck en el semántico ya permite el is-a, pero
-            // INVOKE_VIRTUAL sobre métodos heredados cross-module no
-            // funciona hasta L2 v3.
+            // L2 v3 — si el padre es EXTERNO (otro módulo), pasamos al
+            // ModWriter el layout binario del parent (numFields/numMethods
+            // + bitmaps) leído del ClassSymbol stub. El ModWriter reserva
+            // placeholders para preservar slot/field numbering, escribe
+            // vt[slot]=-1 para los slots heredados, y registra un fixup
+            // que el loader aplica para parchear parentOff (CS-relative al
+            // CS de este módulo).
             String parentForModWriter = null;
+            edu.bpgenvm.generador.ModWriter.ExternalParentLayout externalParent = null;
             if (cls.baseClass != null) {
                 if (cls.baseClass.isExternal) {
-                    // No threading parent al ModWriter — el descriptor
-                    // emitido tendrá parentOff=0. instanceof runtime no
-                    // verá Bar como subtipo del padre externo (limitación
-                    // documentada; el typecheck en compile-time sí lo ve).
+                    SemanticInfo.ClassBinaryLayout layout = (cls.baseClass.binaryLayout != null)
+                            ? cls.baseClass.binaryLayout : null;
+                    if (layout == null) {
+                        errors.add("L2 v3: parent cross-module '" + cls.baseClass.name
+                                + "' sin layout binario en .bpi — recompila el módulo dueño");
+                        return;
+                    }
+                    StringBuilder qname = new StringBuilder();
+                    if (cls.baseClass.externalLibrary != null && !cls.baseClass.externalLibrary.isEmpty())
+                        qname.append(cls.baseClass.externalLibrary).append('.');
+                    qname.append(cls.baseClass.externalModule).append('.').append(cls.baseClass.name);
+                    parentForModWriter = qname.toString();
+                    externalParent = new edu.bpgenvm.generador.ModWriter.ExternalParentLayout(
+                            layout.numFields, layout.numMethods,
+                            layout.fieldBitmap, layout.ownerBitmap);
                 } else {
                     parentForModWriter = cls.baseClass.name;
                 }
             }
-            w.addClass(cd.name, parentForModWriter);
+            w.addClass(cd.name, parentForModWriter, externalParent);
 
             // ¿Esta clase declara su propio __syncMutex (porque tiene sync
             // properties Y ningún ancestor lo ha declarado ya)? El field se
@@ -842,6 +853,25 @@ public final class MivmEmitter {
 
             w.endClass();
 
+            // L2 v3 — anotamos el layout binario (numFields/numMethods + bitmaps)
+            // en el ClassSymbol para que ModuleInterface.extractClass lo emita
+            // al .bpi. Sólo es relevante para clases públicas (las que otros
+            // módulos pueden heredar) pero lo anotamos siempre — es cheap.
+            edu.bpgenvm.generador.ModWriter.ClassLayoutInfo li = w.getClassLayout(cd.name);
+            if (li != null) {
+                cls.binaryLayout = new SemanticInfo.ClassBinaryLayout(
+                        li.numFields, li.numMethods,
+                        li.fieldBitmap, li.ownerBitmap);
+            }
+
+            // L2 v3 — exportar el descriptor de cada clase pública como data
+            // symbol, igual que B3 v2 hace con RuntimeError. Permite que un
+            // módulo importador con `extends X` resuelva el parent en linkAll
+            // (vía globalSymbolTable) y parche parentOff del child.
+            if (cd.isPublic) {
+                w.exportDataSymbol(cd.name);
+            }
+
             // 3) Constructores y métodos estáticos como funciones normales.
             boolean hasUserCtor = false;
             for (ITopLevelDecl m : cd.members) {
@@ -872,6 +902,14 @@ public final class MivmEmitter {
             //    Para clases privadas no emitimos factory (no cross-module).
             if (cd.isPublic) {
                 synthesizeCrossModuleFactory(cls);
+                // L2 v3 — si hay ctor, sintetiza también `__cls_init_<Cls>(this, args)`
+                // que un subclass cross-module puede llamar desde `super(...)` sin
+                // pasar por NEW_OBJECT. El nombre no contiene puntos, así que el
+                // loader lo interpreta como símbolo de este módulo (no como
+                // submódulo cualificado).
+                if (cls.constructor != null) {
+                    synthesizeCrossModuleInit(cls);
+                }
             }
         } catch (IOException e) {
             errors.add("error en clase " + cd.name + ": " + e.getMessage());
@@ -930,6 +968,33 @@ public final class MivmEmitter {
             // __result := newref
             w.emitGetLocal(newref);
             w.emitSetLocal("__result");
+            emitFunctionEnd();
+        } finally { scopeStack.pop(); }
+    }
+
+    /**
+     * L2 v3 — Emite `__cls_init_<Cls>(this, args)`: llama a `<Cls>.__init`
+     * localmente. La factoría es pública y se llama desde super(...)
+     * cross-module via CALL_EXT. El nombre sin puntos se interpreta como
+     * símbolo plano del módulo dueño en el loader (parts[len-2]=módulo).
+     */
+    private void synthesizeCrossModuleInit(ClassSymbol cls) throws IOException {
+        String initName = "__cls_init_" + cls.name;
+        w.addFunction(initName, true);   // pública: cross-module
+        w.declareParam("this");
+        FunctionSymbol ctor = cls.constructor;
+        for (ParamSymbol p : ctor.params) {
+            w.declareParam(p.name);
+        }
+        FunctionSymbol synthFs = new FunctionSymbol(initName, true, false, false, null, null);
+        beginFunctionScope(synthFs, null);   // void
+        try {
+            // Empujamos this + args, luego CALL local al __init real.
+            w.emitGetParam("this");
+            for (ParamSymbol p : ctor.params) {
+                w.emitGetParam(p.name);
+            }
+            w.emitCall(cls.name + ".__init");
             emitFunctionEnd();
         } finally { scopeStack.pop(); }
     }
@@ -1036,6 +1101,10 @@ public final class MivmEmitter {
     }
 
     private void emitConstructorFn(ClassSymbol cls, FuncDef fn, FunctionSymbol fs) throws IOException {
+        // `<Cls>.__init` queda como función intra-módulo (no exportada). El
+        // acceso cross-module pasa por la factoría `__cls_init_<Cls>` que se
+        // sintetiza separadamente — su nombre sin puntos evita la ambigüedad
+        // del parser de imports (parts[len-2] = módulo).
         w.addFunction(cls.name + ".__init", false);
         w.declareParam("this");
         for (ParamSymbol p : fs.params) w.declareParam(p.name);
@@ -3375,22 +3444,27 @@ public final class MivmEmitter {
         }
         ClassSymbol parent = sc2.fs.ownerClass.baseClass;
         FunctionSymbol parentCtor = parent.findConstructor();
-        // L2 v2 — si el padre es externo, super(args) NO es directamente
-        // soportable porque el constructor `<Cls>.__init` del módulo dueño
-        // hace NEW_OBJECT en SU módulo (su class_ptr local). Para evitar
-        // disparar errores opacos, lo bloqueamos aquí con un mensaje claro.
-        if (parent.isExternal) {
-            errors.add("super(...) sobre padre cross-module ('" + parent.name
-                    + "') no soportado en L2 v2 — herencia cross-module sólo a"
-                    + " nivel typecheck (sin invocación de métodos/ctor del padre)");
-            return;
-        }
         w.emitGetParam("this");
         for (int i = 0; i < sc.args.size(); i++) {
             emitExpr(sc.args.get(i));
             if (parentCtor != null && i < parentCtor.params.size()) {
                 coerceToTarget(sc.args.get(i), parentCtor.params.get(i).type);
             }
+        }
+        if (parent.isExternal) {
+            // L2 v3 — emitimos CALL_EXT a `__cls_init_<Cls>(this, args)` —
+            // la factoría sintetizada en el módulo dueño que internamente llama
+            // a `<Cls>.__init`. El símbolo `__cls_init_X` no tiene puntos, así
+            // que el loader lo interpreta como símbolo del módulo dueño
+            // (parts[len-2]=módulo). El receiver `this` del child es válido
+            // como ref de Cls porque los fields heredados ocupan los slots
+            // 0..N-1 del descriptor.
+            StringBuilder qname = new StringBuilder();
+            if (parent.externalLibrary != null && !parent.externalLibrary.isEmpty())
+                qname.append(parent.externalLibrary).append('.');
+            qname.append(parent.externalModule).append('.').append("__cls_init_").append(parent.name);
+            w.emitCallExt(qname.toString(), parent.externalFromPath);
+            return;
         }
         w.emitCall(parent.name + ".__init");
     }

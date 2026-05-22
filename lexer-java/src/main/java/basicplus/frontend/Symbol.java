@@ -77,6 +77,13 @@ public abstract class Symbol {
          *  propio ModWriter. */
         public final java.util.Map<String, Integer> externalMethodSlots = new java.util.HashMap<>();
 
+        /** L2 v3 — layout binario de la clase externa (numFields/numMethods +
+         *  bitmaps). Sólo poblado para clases externas con .bpi v6+. El emisor
+         *  lo usa cuando un subclass local hereda de esta clase externa, para
+         *  pasar el layout al ModWriter (que reserva placeholders y registra
+         *  el class fixup). */
+        public SemanticInfo.ClassBinaryLayout binaryLayout;
+
         public ClassSymbol(String name, boolean isPublic, String baseClassName,
                            Ast.ClassDef ast, int line, int column) {
             super(name, line, column);

@@ -539,6 +539,7 @@ public class VirtualMachine {
      *   [+12 + 2*bw*4]  vtable (num_methods * 4 bytes, offsets relativos a code)
      */
     private static final int CLS_OFF_NUM_FIELDS   = 0;
+    private static final int CLS_OFF_NUM_METHODS  = 2;
     private static final int CLS_OFF_BITMAP_WORDS = 4;
     private static final int CLS_OFF_PARENT_OFF   = 8;
     private static final int CLS_OFF_FIELD_BITMAP = 12;
@@ -2435,14 +2436,44 @@ public class VirtualMachine {
                         tc.sp = sp;
                         throwBpRuntimeError(tc, "INVOKE_VIRTUAL sobre null receiver"
                                 + " (vtSlot=" + vtSlot + ", numArgs=" + numArgs + ")");
+                        break;
                     }
                     int classPtr   = readI32(mem, thisRef);
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
-                    int targetCS   = moduleManager.getCSForDataAddr(classPtr);
-                    int bitmapW    = readI16(mem, classPtr + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
-                    int vtableBase = classPtr + CLS_OFF_FIELD_BITMAP + 2 * bitmapW * 4;
-                    int methodOff  = readI32(mem, vtableBase + vtSlot * 4);
-                    int targetPC   = targetCS + methodOff;
+
+                    // L2 v3 — herencia cross-module: si vt[slot] == -1 o el slot
+                    // está fuera del rango de num_methods del descriptor actual,
+                    // sube al parent y reintenta. Cada iteración recalcula CS
+                    // según el módulo dueño del descriptor (puede ser distinto al
+                    // del child cuando el parent vive cross-module). Termina al
+                    // encontrar un methodOff válido o al llegar a la raíz.
+                    int desc = classPtr;
+                    int methodOff = -1;
+                    int targetCS = -1;
+                    while (true) {
+                        int bitmapW   = readI16(mem, desc + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
+                        int nMethods  = readI16(mem, desc + CLS_OFF_NUM_METHODS)  & 0xFFFF;
+                        int vtBase    = desc + CLS_OFF_FIELD_BITMAP + 2 * bitmapW * 4;
+                        if (vtSlot < nMethods) {
+                            int off = readI32(mem, vtBase + vtSlot * 4);
+                            if (off != -1) {
+                                methodOff = off;
+                                targetCS  = moduleManager.getCSForDataAddr(desc);
+                                break;
+                            }
+                        }
+                        int parentOff = readI32(mem, desc + CLS_OFF_PARENT_OFF);
+                        if (parentOff == 0) {
+                            // No hay padre: el slot no es resoluble por la cadena.
+                            throwBpRuntimeError(tc, "INVOKE_VIRTUAL: slot "
+                                    + vtSlot + " no resoluble en la cadena de herencia");
+                            break;
+                        }
+                        int curCS = moduleManager.getCSForDataAddr(desc);
+                        desc = curCS + parentOff;
+                    }
+                    if (methodOff == -1) break;   // throwBpRuntimeError ya hizo break
+                    int targetPC = targetCS + methodOff;
 
                     writeI32(mem, sp, pc); sp += 4;
                     writeI32(mem, sp, bp); sp += 4;

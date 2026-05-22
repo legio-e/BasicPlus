@@ -996,6 +996,13 @@ public final class Main {
                     stub.externalLibrary = implLibrary;
                     stub.externalModule  = implModule;
                     stub.externalFromPath = fromPath;
+                    // L2 v3 — propaga layout binario para que subclasses
+                    // cross-module puedan reservar slots/fields correctamente.
+                    if (cs.binaryNumFields >= 0) {
+                        stub.binaryLayout = new SemanticInfo.ClassBinaryLayout(
+                                cs.binaryNumFields, cs.binaryNumMethods,
+                                cs.binaryFieldBitmap, cs.binaryOwnerBitmap);
+                    }
                     int nextSlot = 0;
                     // Properties → getter (slot N) + setter (slot N+1)
                     for (ModuleInterface.PropSig p : cs.properties) {
