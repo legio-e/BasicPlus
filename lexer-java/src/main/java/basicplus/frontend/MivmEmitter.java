@@ -436,6 +436,12 @@ public final class MivmEmitter {
                     Symbol sym = info.module.members.tryLookup(alias);
                     if (!(sym instanceof Symbol.ImportedNamespaceSymbol)) continue;
                     Symbol.ImportedNamespaceSymbol ns = (Symbol.ImportedNamespaceSymbol) sym;
+                    // Optimización — módulos all-intrinsic (todas las funcs
+                    // son `intrinsic`, sin properties/vars/clases) NO emiten
+                    // .mod con __init (su .bpi viaja solo). Saltar el
+                    // CALL_EXT evita un "Símbolo no resuelto" en linkAll.
+                    // Cubre Math, IO y similares.
+                    if (isAllIntrinsicNamespace(ns)) continue;
                     StringBuilder sb = new StringBuilder();
                     if (!ns.library.isEmpty()) sb.append(ns.library).append('.');
                     sb.append(ns.moduleName).append(".__init");
@@ -997,6 +1003,23 @@ public final class MivmEmitter {
             w.emitCall(cls.name + ".__init");
             emitFunctionEnd();
         } finally { scopeStack.pop(); }
+    }
+
+    /** true si el namespace importado es 100% intrínsecos sin estado: todas
+     *  las functions tienen isIntrinsic=true y no hay properties, vars ni
+     *  clases que requieran inicialización en runtime. Consts y enums son
+     *  literales por sí mismos — no necesitan __init. */
+    private static boolean isAllIntrinsicNamespace(Symbol.ImportedNamespaceSymbol ns) {
+        if (!ns.properties.isEmpty()) return false;
+        if (!ns.classes.isEmpty())    return false;
+        // Si no hay functions, también consideramos "todo lo no-trivial es
+        // estado" y forzamos init (defensivo). En la práctica los stdlib
+        // intrinsic-only siempre exportan al menos una function.
+        if (ns.functions.isEmpty()) return false;
+        for (Symbol.FunctionSymbol fs : ns.functions.values()) {
+            if (!fs.isIntrinsic) return false;
+        }
+        return true;
     }
 
     /** ¿Algún PropertyDef en esta ClassDef tiene isSync? */

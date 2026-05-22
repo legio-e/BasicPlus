@@ -1466,6 +1466,12 @@ public class VirtualMachine {
                     vmLock.notifyAll();
                 }
                 throw t;
+            } finally {
+                // N4 — limpia el ThreadLocal del worker para que el último tc
+                // ejecutado no quede referenciado tras shutdown (evita un
+                // pequeño "leak" del context cuando el ClassLoader del worker
+                // se mantiene vivo en escenarios embebidos o tests JUnit).
+                currentTcLocal.remove();
             }
         }
     }

@@ -1,0 +1,33 @@
+// l4getset.bp — L4: `get` y `set` ya pueden ser nombres de método/función.
+//
+// Antes eran reservadas globales (sólo dentro de property block tenían
+// uso), bloqueando APIs naturales como list.get(i) o cache.set(k,v).
+// Ahora son contextuales: el lexer las emite como GET/SET, el parser
+// las acepta como nombres en parseDeclName y consumeMemberName.
+module L4GetSet
+
+  public class Cache
+    public var n: integer
+
+    public function Cache()
+      this.n := 0
+    end Cache
+
+    public function get(): integer
+      return this.n
+    end get
+
+    public function set(v: integer)
+      this.n := v
+    end set
+  end Cache
+
+  function Main()
+    var c: Cache := Cache()
+    c.set(42)
+    print "c.get() =", c.get()
+    c.set(100)
+    print "c.get() =", c.get()
+  end Main
+
+end L4GetSet

@@ -323,6 +323,34 @@ public class FrmMain extends javax.swing.JFrame
         for (int i = 0; i < widths.length && i < jTable1.getColumnModel().getColumnCount(); i++) {
             jTable1.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
+        // N7 — renderer que pinta filas según severidad: rojo para "error",
+        // amarillo suave para "aviso". Aplicado a todas las columnas para
+        // que la fila entera quede tintada y los avisos no se confundan con
+        // errores reales.
+        javax.swing.table.DefaultTableCellRenderer severityRenderer =
+                new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public java.awt.Component getTableCellRendererComponent(
+                    javax.swing.JTable tbl, Object value, boolean sel,
+                    boolean focus, int row, int col) {
+                java.awt.Component c = super.getTableCellRendererComponent(
+                        tbl, value, sel, focus, row, col);
+                if (!sel && row >= 0 && row < errors.size()) {
+                    CompileError ce = errors.get(row);
+                    if ("aviso".equalsIgnoreCase(ce.kind)) {
+                        c.setBackground(new java.awt.Color(255, 248, 200));  // amarillo suave
+                        c.setForeground(java.awt.Color.BLACK);
+                    } else {
+                        c.setBackground(new java.awt.Color(255, 220, 220));  // rojo suave
+                        c.setForeground(java.awt.Color.BLACK);
+                    }
+                }
+                return c;
+            }
+        };
+        for (int i = 0; i < jTable1.getColumnModel().getColumnCount(); i++) {
+            jTable1.getColumnModel().getColumn(i).setCellRenderer(severityRenderer);
+        }
         jTable1.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
@@ -438,16 +466,63 @@ public class FrmMain extends javax.swing.JFrame
         JMenuItem miNew   = new JMenuItem("New Project...");
         JMenuItem miOpen  = new JMenuItem("Open Project...");
         JMenuItem miClose = new JMenuItem("Close Project");
+        JMenuItem miEndpoint = new JMenuItem("VM Endpoint...");
         miNew.addActionListener(e -> onNewProject());
         miOpen.addActionListener(e -> onOpenProject());
         miClose.addActionListener(e -> onCloseProject());
+        miEndpoint.addActionListener(e -> onConfigureVmEndpoint());
         menuProject.add(miNew);
         menuProject.add(miOpen);
         menuProject.addSeparator();
         menuProject.add(miClose);
+        menuProject.addSeparator();
+        menuProject.add(miEndpoint);
         // Insertar entre File y Edit. El JMenuBar tiene File, Edit, Run; queremos
         // File, Project, Edit, Run.
         jMenuBar1.add(menuProject, 1);
+    }
+
+    /** A2.6 — Diálogo simple para configurar host:port de la VM remota.
+     *  Vacío = comportamiento por defecto (spawn local). Se persiste en
+     *  un fichero JSON al lado del IDE para reuso entre sesiones. */
+    private void onConfigureVmEndpoint() {
+        IdePrefs prefs = IdePrefs.load();
+        String current = (prefs.vmHost == null || prefs.vmHost.isEmpty())
+                ? "" : (prefs.vmHost + ":" + prefs.vmPort);
+        String input = (String) javax.swing.JOptionPane.showInputDialog(
+                this,
+                "Endpoint de la VM remota (host:puerto). Vacío = lanzar VM local.\n"
+                        + "El daemon remoto debe estar corriendo: bpgenvm --listen <port> --workdir <dir>",
+                "VM Endpoint",
+                javax.swing.JOptionPane.PLAIN_MESSAGE,
+                null, null, current);
+        if (input == null) return;   // cancel
+        input = input.trim();
+        if (input.isEmpty()) {
+            prefs.vmHost = null;
+            prefs.vmPort = 0;
+        } else {
+            int colon = input.indexOf(':');
+            if (colon <= 0 || colon == input.length() - 1) {
+                javax.swing.JOptionPane.showMessageDialog(this,
+                        "Formato esperado: host:puerto", "VM Endpoint",
+                        javax.swing.JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            int p;
+            try { p = Integer.parseInt(input.substring(colon + 1).trim()); }
+            catch (NumberFormatException ex) {
+                javax.swing.JOptionPane.showMessageDialog(this,
+                        "Puerto inválido: " + input.substring(colon + 1),
+                        "VM Endpoint", javax.swing.JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            prefs.vmHost = input.substring(0, colon).trim();
+            prefs.vmPort = p;
+        }
+        prefs.save();
+        appendConsola("[ide] VM endpoint actualizado: "
+                + (prefs.vmHost == null ? "local (spawn)" : prefs.vmHost + ":" + prefs.vmPort) + "\n");
     }
 
     /** Pregunta al usuario: directorio del proyecto + nombre. Crea estructura:
@@ -1181,16 +1256,28 @@ public class FrmMain extends javax.swing.JFrame
                     });
                 }
 
-                // Resolvemos stdlibDir desde BpVM.cfg para propagarlo al
-                // subproceso VM. El cwd de la VM normalmente coincidirá con
-                // el del IDE (sin BpVM.cfg si el IDE lo lanza NetBeans/etc.),
-                // así que caminamos hacia arriba desde el .mod del usuario
-                // — análogo al fix del frontend.
-                String stdlibDir = resolveStdlibDir(outDir);
-                if (stdlibDir != null) {
-                    publish.accept("[ide] stdlibDir → " + stdlibDir + "\n");
+                // A2.6 — si el usuario configuró un endpoint remoto en las
+                // prefs del IDE, NO lanzamos VM local: nos conectamos al
+                // daemon que vive en el dispositivo. El workdir local sigue
+                // creándose pero queda vacío (los .mod viajan por el wire,
+                // como en el flow local).
+                IdePrefs prefs = IdePrefs.load();
+                if (prefs.vmHost != null && !prefs.vmHost.isEmpty()) {
+                    publish.accept("[ide] conectando a VM remota "
+                            + prefs.vmHost + ":" + prefs.vmPort + "\n");
+                    client.connectRemote(prefs.vmHost, prefs.vmPort);
+                } else {
+                    // Resolvemos stdlibDir desde BpVM.cfg para propagarlo al
+                    // subproceso VM. El cwd de la VM normalmente coincidirá
+                    // con el del IDE (sin BpVM.cfg si el IDE lo lanza
+                    // NetBeans/etc.), así que caminamos hacia arriba desde
+                    // el .mod del usuario — análogo al fix del frontend.
+                    String stdlibDir = resolveStdlibDir(outDir);
+                    if (stdlibDir != null) {
+                        publish.accept("[ide] stdlibDir → " + stdlibDir + "\n");
+                    }
+                    client.startDaemon(workdir.toString(), /*waitClient=*/true, stdlibDir);
                 }
-                client.startDaemon(workdir.toString(), /*waitClient=*/true, stdlibDir);
 
                 // Sube los artefactos de la app compilada.
                 int nUploaded = uploadAppArtifacts(client, outDir, publish);

@@ -152,6 +152,33 @@ public final class VmClient implements AutoCloseable {
         startDaemon(workdir, waitClient, null);
     }
 
+    /** A2.6 — Conecta a una VM REMOTA ya corriendo en {@code host:port}.
+     *  No lanza subproceso; asume que el daemon vive en el otro extremo y
+     *  está aceptando conexiones. El IDE sube ficheros y manda runModule
+     *  via wire — mismo flujo que startDaemon local, salto el spawn.
+     *  Útil para apuntar al dispositivo objetivo. */
+    public void connectRemote(String host, int port) throws IOException {
+        try {
+            this.socket = new java.net.Socket(host, port);
+            this.out = new PrintWriter(
+                    new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8),
+                    false);
+            this.in = new BufferedReader(
+                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new IOException("no se pudo conectar a la VM remota " + host + ":" + port
+                    + " — ¿está corriendo `bpgenvm --listen " + port + " --workdir ...` allí?", e);
+        }
+        startReaderThread();
+        try {
+            if (!helloLatch.await(5, TimeUnit.SECONDS)) {
+                diag("[VmClient] timeout esperando hello del server remoto");
+            }
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     /** Variante con stdlibDir explícito: se pasa como --stdlibDir al
      *  subproceso VM y gana sobre cualquier BpVM.cfg autodiscovery. Útil
      *  cuando el IDE conoce el cfg pero el subproceso se arranca desde un

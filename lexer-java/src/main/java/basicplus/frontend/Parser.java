@@ -254,15 +254,35 @@ public final class Parser {
         return new VarDecl(isPublic, isOwner, names, type, init, tok.line, tok.column);
     }
 
-    /** decl_name ::= name [ '.' name ]   — soporta miembros estáticos. */
+    /** decl_name ::= name [ '.' name ]   — soporta miembros estáticos.
+     *
+     *  L4: `get` y `set` son keywords contextuales — sólo reservadas dentro
+     *  de un bloque `property { get ... set ... }`. Como nombres de método
+     *  o función a nivel de declaración son legítimos (List.get(i),
+     *  Map.set(k,v), etc.), así que los aceptamos aquí. */
     private DeclName parseDeclName() {
         Token tok = current();
-        String first = consumeIdentifier("nombre");
+        String first = consumeIdentifierOrContextualKw("nombre");
         if (match(TokenType.DOT)) {
-            String second = consumeIdentifier("miembro tras 'NombreClase.'");
+            String second = consumeIdentifierOrContextualKw("miembro tras 'NombreClase.'");
             return new DeclName(first, second, tok.line, tok.column);
         }
         return new DeclName(null, first, tok.line, tok.column);
+    }
+
+    /** L4 — acepta IDENTIFIER o keywords contextuales (GET, SET) en
+     *  declaraciones, sin afectar el parsing de `property { get/set }`
+     *  (esos casos llaman a match(TokenType.GET/SET) directamente). */
+    private String consumeIdentifierOrContextualKw(String what) {
+        Token t = current();
+        if (t.type == TokenType.IDENTIFIER
+                || t.type == TokenType.GET
+                || t.type == TokenType.SET) {
+            advance();
+            return t.lexeme;
+        }
+        error("se esperaba " + what + ", encontrado '" + t.lexeme + "'");
+        return "?";
     }
 
     // ============================================================
@@ -343,7 +363,13 @@ public final class Parser {
 
         List<IStmt> body = parseBody(TokenType.END);
         consume(TokenType.END, "se esperaba 'end' al final de la función");
-        if (check(TokenType.IDENTIFIER)) parseDeclName();
+        // L4 — `end get` y `end set` también deben aceptarse (get/set como
+        // keywords contextuales se permiten como nombre de método).
+        if (check(TokenType.IDENTIFIER)
+                || check(TokenType.GET)
+                || check(TokenType.SET)) {
+            parseDeclName();
+        }
         consumeStmtTerminator("se esperaba salto de línea tras 'end'");
         return new FuncDef(isPublic, isFinal, false, name, paramList, retType, body, tok.line, tok.column);
     }
