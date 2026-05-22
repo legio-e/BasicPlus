@@ -1,0 +1,12 @@
+dbg 2
+module Hello
+source C:\lenguajes\pm\bpgenvm-c\samples\hello.bp
+lines
+1431 8
+1445 9
+1461 11
+1506 15
+1514 16
+1528 17
+1538 18
+1552 20

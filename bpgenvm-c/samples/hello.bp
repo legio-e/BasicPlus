@@ -1,0 +1,23 @@
+// hello.bp — programa F1 puramente computacional.
+// No usa strings (que requieren heap), no usa builtins ni imports.
+// Sólo aritmética entera + print int + locales — el subset que F1
+// del bpgenvm-c soporta.
+module Hello
+
+  function fib(n: integer): integer
+    if n < 2 then
+      return n
+    endif
+    return fib(n - 1) + fib(n - 2)
+  end fib
+
+  function Main()
+    var i: integer := 0
+    while i < 10 do
+      print fib(i)
+      i := i + 1
+    endwh
+    print 999
+  end Main
+
+end Hello
