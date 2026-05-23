@@ -27,6 +27,11 @@ public final class IdePrefs {
     public String vmHost;
     public int    vmPort;
 
+    /** Última carpeta donde se abrió o guardó un fichero .bp.
+     *  El JFileChooser arranca aquí en vez de en Documents para que el
+     *  usuario no tenga que navegar de nuevo cada vez. */
+    public String lastDir;
+
     private static final String FILENAME = ".bpide-prefs";
 
     /** Lee las prefs del cwd. Devuelve una instancia vacía si no existe el
@@ -38,9 +43,11 @@ public final class IdePrefs {
         try {
             String raw = new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
             Map<String, Object> m = Json.parseFlatObject(raw);
-            p.vmHost = Json.getString(m, "vmHost", null);
-            p.vmPort = (int) Json.getLong(m, "vmPort", 0);
-            if (p.vmHost != null && p.vmHost.isEmpty()) p.vmHost = null;
+            p.vmHost  = Json.getString(m, "vmHost", null);
+            p.vmPort  = (int) Json.getLong(m, "vmPort", 0);
+            p.lastDir = Json.getString(m, "lastDir", null);
+            if (p.vmHost  != null && p.vmHost.isEmpty())  p.vmHost  = null;
+            if (p.lastDir != null && p.lastDir.isEmpty()) p.lastDir = null;
         } catch (Throwable t) {
             System.err.println("[IdePrefs] no se pudo leer " + FILENAME + ": " + t.getMessage());
         }
@@ -50,8 +57,9 @@ public final class IdePrefs {
     /** Persiste al cwd. Errores se loggean. */
     public void save() {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("vmHost", vmHost == null ? "" : vmHost);
-        m.put("vmPort", (long) vmPort);
+        m.put("vmHost",  vmHost  == null ? "" : vmHost);
+        m.put("vmPort",  (long) vmPort);
+        m.put("lastDir", lastDir == null ? "" : lastDir);
         StringBuilder sb = new StringBuilder();
         sb.append('{');
         boolean first = true;

@@ -2322,6 +2322,27 @@ public final class MivmEmitter {
             return;
         }
 
+        // -------- AND / OR con short-circuit --------
+        // Los lógicos `and` y `or` evalúan en cortocircuito: si el LHS ya
+        // determina el resultado, el RHS NO se evalúa. Esto importa
+        // semánticamente cuando RHS tiene efectos colaterales (llamadas
+        // a funciones con side effects, asignaciones, lectura de HW, etc.)
+        // y suele ser idiomático en BP/Pascal escribir cosas como:
+        //   if obj != null and obj.value > 0 then ...
+        // donde el RHS no es seguro si LHS es false.
+        //
+        // `and also` / `or else` se tratan igual (mismo nombre, mismo
+        // patrón) — alias heredados de Ada que pedían short-circuit
+        // explícito.
+        if ("and".equals(b.op) || "and also".equals(b.op)) {
+            emitShortCircuitAnd(b);
+            return;
+        }
+        if ("or".equals(b.op) || "or else".equals(b.op)) {
+            emitShortCircuitOr(b);
+            return;
+        }
+
         boolean useFloat = isFloat(tl) || isFloat(tr) || isFloat(tb);
         emitExpr(b.left);
         if (useFloat && !isFloat(tl)) w.emit(OpCode.I2F);
@@ -2340,12 +2361,6 @@ public final class MivmEmitter {
             case "<=": w.emit(useFloat ? OpCode.FLE : OpCode.LE); break;
             case ">":  w.emit(useFloat ? OpCode.FGT : OpCode.GT); break;
             case ">=": w.emit(useFloat ? OpCode.FGE : OpCode.GE); break;
-            case "and": w.emit(OpCode.AND); break;
-            case "or":  w.emit(OpCode.OR); break;
-            case "and also":
-            case "or else":
-                // TODO short-circuit. Por ahora misma semántica que and/or.
-                w.emit("and also".equals(b.op) ? OpCode.AND : OpCode.OR); break;
             case "&": w.emit(OpCode.BAND); break;
             case "|": w.emit(OpCode.BOR); break;
             case "xor": w.emit(OpCode.BXOR); break;
@@ -2354,6 +2369,67 @@ public final class MivmEmitter {
             default:
                 errors.add("operador binario no soportado: " + b.op);
         }
+    }
+
+    /**
+     * AND lógico con short-circuit. Si LHS evalúa a false el RHS NO se
+     * evalúa, dejando el resultado a false directamente.
+     *
+     * Esquema emitido:
+     * <pre>
+     *     emit LHS
+     *     JUMP_IF_FALSE shortL    ; si LHS == false → salta sin evaluar RHS
+     *     emit RHS                ; resultado = RHS
+     *     JUMP end
+     * shortL:
+     *     PUSH 0                  ; resultado = false
+     * end:
+     * </pre>
+     */
+    private void emitShortCircuitAnd(BinaryExpr b) throws IOException {
+        int shortL = w.newLabel();
+        int end    = w.newLabel();
+        emitExpr(b.left);
+        w.emitJumpIfFalse(shortL);
+        emitExpr(b.right);
+        w.emitJump(end);
+        w.declareLabel(shortL);
+        w.emitPushInt(0);
+        w.declareLabel(end);
+    }
+
+    /**
+     * OR lógico con short-circuit. Si LHS evalúa a true el RHS NO se
+     * evalúa, dejando el resultado a true directamente.
+     *
+     * Como la VM solo expone JUMP_IF_FALSE (no JUMP_IF_TRUE), negamos
+     * LHS con NOT antes del salto y aprovechamos el mismo opcode:
+     *
+     * <pre>
+     *     emit LHS
+     *     NOT                     ; LHS true → 0, LHS false → 1
+     *     JUMP_IF_FALSE shortL    ; salta si !LHS == false, o sea, si LHS era true
+     *     emit RHS                ; resultado = RHS (caso LHS false)
+     *     JUMP end
+     * shortL:
+     *     PUSH 1                  ; resultado = true (caso LHS true)
+     * end:
+     * </pre>
+     *
+     * Coste: 1 NOT extra vs. AND short-circuit, pero seguimos ahorrando
+     * la evaluación completa de RHS, que era el objetivo.
+     */
+    private void emitShortCircuitOr(BinaryExpr b) throws IOException {
+        int shortL = w.newLabel();
+        int end    = w.newLabel();
+        emitExpr(b.left);
+        w.emit(OpCode.NOT);
+        w.emitJumpIfFalse(shortL);
+        emitExpr(b.right);
+        w.emitJump(end);
+        w.declareLabel(shortL);
+        w.emitPushInt(1);
+        w.declareLabel(end);
     }
 
     private void emitCall(CallExpr c) throws IOException {

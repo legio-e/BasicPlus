@@ -1,0 +1,49 @@
+// ShortCircuit.bp — test del short-circuit en `and` y `or`.
+//
+// Cada llamada incrementa un contador global y devuelve un bool fijo.
+// Si el short-circuit funciona, el contador refleja exactamente cuántos
+// lados se evaluaron, no siempre 2.
+//
+// Casos:
+//   1) false and X  → solo eval LHS (X no se ejecuta) → contador +1
+//   2) true  and X  → eval LHS + RHS                  → contador +2
+//   3) true  or  X  → solo eval LHS                   → contador +1
+//   4) false or  X  → eval LHS + RHS                  → contador +2
+//
+// Resultado esperado: 1, 2, 1, 2.
+
+module ShortCircuit
+
+  var calls: integer := 0
+
+  function sideTrue(): boolean
+    calls := calls + 1
+    return true
+  end sideTrue
+
+  function sideFalse(): boolean
+    calls := calls + 1
+    return false
+  end sideFalse
+
+  function main(arg: string)
+    var b: boolean
+
+    calls := 0
+    b := sideFalse() and sideTrue()
+    print "false and true →", b, "  calls =", calls, " (esperado 1)"
+
+    calls := 0
+    b := sideTrue() and sideTrue()
+    print "true  and true →", b, "  calls =", calls, " (esperado 2)"
+
+    calls := 0
+    b := sideTrue() or sideFalse()
+    print "true  or  false →", b, "  calls =", calls, " (esperado 1)"
+
+    calls := 0
+    b := sideFalse() or sideTrue()
+    print "false or  true →", b, "  calls =", calls, " (esperado 2)"
+  end main
+
+end ShortCircuit

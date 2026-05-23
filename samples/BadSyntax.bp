@@ -1,0 +1,44 @@
+// BadSyntax.bp — test del recovery del parser.
+//
+// Contiene errores deliberados en varios sitios. El parser DEBE:
+//   - reportar UN error por sitio (no cascadear).
+//   - seguir parseando el resto del fichero.
+//   - poder localizar `goodFunc` al final como función válida.
+//
+// Si el recovery está roto, suele pasar uno de estos:
+//   - El parser aborta tras el primer error y no ve `goodFunc`.
+//   - El parser genera 50 errores en cascada por desincronización.
+
+module BadSyntax
+
+  // Error 1: expresión rota (operador suelto). El sync debe parar en NEWLINE.
+  function f1(): integer
+    var x: integer := 1 + + 2
+    return x
+  end f1
+
+  // Error 2: falta el `then` en el if. Sync debe encontrar el end.
+  function f2(): integer
+    if 1 == 1
+      return 42
+    endif
+    return 0
+  end f2
+
+  // Error 3: cabecera de función incorrecta (falta `:` antes del tipo).
+  // El recovery de función debe saltarse esta entera hasta el `end f3`
+  // sin contaminar f4.
+  function f3() integer
+    return 99
+  end f3
+
+  // Esta sí está bien — el parser debe encontrarla y compilarla limpia.
+  function goodFunc(): integer
+    return 7
+  end goodFunc
+
+  function main(arg: string)
+    print "BadSyntax recovery test"
+  end main
+
+end BadSyntax

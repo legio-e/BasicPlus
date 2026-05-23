@@ -213,7 +213,20 @@ public final class Parser {
         switch (tok.type) {
             case CONST:    return parseConstDecl(isPublic);
             case VAR:      return parseVarDecl(isPublic);
-            case FUNCTION: return parseFuncDef(isPublic, isFinal, isIntrinsic);
+            case FUNCTION:
+                // Recovery específico para función rota: en lugar del
+                // sync genérico que pararía en el primer NEWLINE o
+                // keyword de bloque (y dejaría el resto del cuerpo
+                // como ruido), saltamos hasta el `end` que cierra
+                // esta función. Así un error en cabecera o body
+                // no descarrila el parseo del resto del módulo.
+                try {
+                    return parseFuncDef(isPublic, isFinal, isIntrinsic);
+                } catch (RuntimeException ex) {
+                    if (ex.getMessage() != null) error(ex.getMessage());
+                    synchronizeToFunctionEnd();
+                    return null;
+                }
             case PROPERTY: return parsePropertyDef(isPublic, isFinal, isSync);
             case CLASS:    return parseClassDef(isPublic);
             case ENUM:     return parseEnumDef(isPublic);
@@ -1166,9 +1179,96 @@ public final class Parser {
         errors.add(new ParserError(message, t.line, t.column));
     }
 
-    /** Recuperación: descarta tokens hasta el próximo NEWLINE. */
+    /**
+     * Tokens de sincronización para recuperación tras error de expresión
+     * o sentencia. Cuando el parser se topa con tokens que no encajan
+     * sintácticamente, salta hasta el próximo punto reconocible para
+     * intentar continuar parseando el resto del fichero sin cascadear
+     * errores en el resto del fichero.
+     *
+     * La lista es deliberadamente amplia para que el parser nunca se
+     * "trague" más de una sentencia ante un error puntual:
+     *
+     *   - Terminadores de sentencia (`;`, NEWLINE).
+     *   - Keywords que abren o cierran bloques (`if`, `while`, `for`,
+     *     `next`, `return`, `break`, `continue`, `endif`, `endwh`, `end`).
+     *   - Keywords intermedias de cabeceras (`then`, `do`, `to`).
+     *
+     * El criterio común: cualquiera de estos tokens marca un sitio donde
+     * un parser razonable puede volver a engancharse y seguir leyendo.
+     */
+    private static final java.util.Set<TokenType> EXPR_SYNC_TOKENS =
+            java.util.EnumSet.of(
+                    TokenType.SEMICOLON,    // ;
+                    TokenType.NEWLINE,      // CR
+                    TokenType.THEN,         // then
+                    TokenType.DO,           // do
+                    TokenType.TO,           // to
+                    TokenType.IF,           // if
+                    TokenType.WHILE,        // while
+                    TokenType.FOR,          // for
+                    TokenType.NEXT,         // next
+                    TokenType.RETURN,       // return
+                    TokenType.BREAK,        // break
+                    TokenType.CONTINUE,     // continue
+                    TokenType.ENDIF,        // endif
+                    TokenType.ENDWH,        // endwh
+                    TokenType.END           // end
+            );
+
+    /**
+     * Recuperación tras error de expresión/sentencia: avanza tokens
+     * hasta encontrar uno de los {@link #EXPR_SYNC_TOKENS}, SIN
+     * consumirlo (excepto NEWLINEs, que se saltan para arrancar limpio
+     * la sentencia siguiente).
+     *
+     * Diseño: dejamos el sync token en el stream para que el parser de
+     * más arriba lo reconozca como cierre de la sentencia que estaba
+     * intentando parsear (p. ej. `then` cerrando una condición rota de
+     * un if, `endwh` cerrando un body de while), o como apertura de la
+     * sentencia siguiente (p. ej. `return`, `if`).
+     */
     private void synchronize() {
-        while (!isAtEnd() && !check(TokenType.NEWLINE)) advance();
+        while (!isAtEnd() && !EXPR_SYNC_TOKENS.contains(current().type)) {
+            advance();
+        }
+        // Si paramos en NEWLINE, lo consumimos: la sentencia ya terminó.
+        // Los demás sync tokens los dejamos en el stream.
+        skipNewlines();
+    }
+
+    /**
+     * Recuperación para una función rota: avanza tokens hasta encontrar
+     * un `end`, lo consume (junto con el nombre opcional que le siga
+     * — estilo `end miFunc`) y deja el parser listo para la siguiente
+     * declaración top-level. Esto es más agresivo que {@link #synchronize}
+     * y se usa cuando un error en la cabecera o cuerpo de la función
+     * dejaría todo descolocado.
+     *
+     * No intenta balancear `if`/`endif`, `while`/`endwh`, etc. dentro
+     * del cuerpo: salta al primer `end` que vea. En código BP normal el
+     * primer `end` que aparece tras una cabecera de función rota es el
+     * cierre de la propia función (las construcciones internas usan sus
+     * propios cierres específicos: `endif`, `endwh`, `next`, `endsw`,
+     * `endtry`, `endprop`). Esa heurística es suficiente para casi todos
+     * los casos prácticos y evita el coste de mantener un parser de
+     * balance ad-hoc en modo pánico.
+     */
+    private void synchronizeToFunctionEnd() {
+        while (!isAtEnd() && !check(TokenType.END)) {
+            advance();
+        }
+        if (check(TokenType.END)) {
+            advance();
+            // Aceptamos opcionalmente el nombre tras 'end' (estilo
+            // `end miFunc`) o `end get` / `end set` para que el siguiente
+            // ciclo del parser no lo malinterprete como una declaración.
+            if (check(TokenType.IDENTIFIER)
+                    || check(TokenType.GET)
+                    || check(TokenType.SET)) {
+                advance();
+            }
+        }
         skipNewlines();
     }
 }

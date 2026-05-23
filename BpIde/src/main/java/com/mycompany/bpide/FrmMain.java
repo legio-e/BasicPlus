@@ -59,14 +59,30 @@ public class FrmMain extends javax.swing.JFrame
     static FrmMain form;
 
     // -------- Estado MVP (fuera del bloque GEN para que NetBeans no toque) --------
-    /** Editor con syntax highlighting, insertado en jTabbedPane1. */
+    /** Editor con syntax highlighting del tab ACTIVO. Se actualiza desde
+     *  el ChangeListener de jTabbedPane1 cuando el usuario cambia de tab.
+     *  Todas las acciones (save, compile, debug, run) operan sobre este. */
     private JTextPane editorArea;
     /** TextArea de salida del proceso (Consola). */
     private JTextArea consolaArea;
     /** Lista observable de errores; única fuente de verdad para la tabla y para futuros consumers. */
     private final ObservableList<CompileError> errors = new ObservableList<>();
-    /** Fichero actualmente cargado (.bp). null si todavía no se ha guardado. */
+    /** Fichero del tab ACTIVO. Igual que editorArea, se actualiza desde el
+     *  ChangeListener. null si el tab activo todavía no se ha guardado. */
     private Path currentFile = null;
+
+    /** Estado de cada tab abierto en jTabbedPane1. Indexado por su
+     *  componente (JScrollPane) porque los tabs pueden reordenarse,
+     *  insertar/quitar y los índices no son estables. */
+    private static final class OpenFile {
+        final JTextPane editor;
+        final JScrollPane scroll;
+        Path file;        // null = buffer sin guardar (p.ej. tab inicial)
+        OpenFile(JTextPane editor, JScrollPane scroll, Path file) {
+            this.editor = editor; this.scroll = scroll; this.file = file;
+        }
+    }
+    private final java.util.Map<java.awt.Component, OpenFile> openFiles = new java.util.HashMap<>();
     /** Patrón de líneas de diagnóstico del frontend BP: "[L:C] error/aviso categoría: msg".
      *  Importante: la categoría puede contener acentos ("sintáctico", "semántico");
      *  usamos \\S+? (no-greedy non-whitespace) en vez de \\w+ porque \\w no acepta
@@ -295,17 +311,53 @@ public class FrmMain extends javax.swing.JFrame
         setSize(1100, 720);
         setLocationRelativeTo(null);
 
-        // -- Editor: JTextPane con syntax highlighting de BasicPlus. --
-        editorArea = new JTextPane();
-        editorArea.setFont(new Font("Consolas", Font.PLAIN, 13));
-        BpSyntaxHighlighter.install(editorArea);
-        jTabbedPane1.addTab("(sin abrir)", new JScrollPane(editorArea));
+        // -- Editor inicial: tab "(sin abrir)" reciclable.
+        //    El primer openFileInEditor() reusará este tab si su Path
+        //    sigue siendo null (no se le ha cargado nada todavía).
+        //    Los siguientes ficheros crean tabs nuevos. --
+        editorArea = newEditorPane();
+        JScrollPane initialScroll = new JScrollPane(editorArea);
+        jTabbedPane1.addTab("(sin abrir)", initialScroll);
+        OpenFile initial = new OpenFile(editorArea, initialScroll, null);
+        openFiles.put(initialScroll, initial);
+        installTabCloseButton(initialScroll, "(sin abrir)");
 
         // -- Árbol del proyecto en el cuadro superior izquierdo (jSplitPane2). --
         setupProjectTree();
 
-        // Caret listener: refresca la status bar cada vez que el caret se mueve.
+        // Caret listener inicial — los tabs nuevos también lo instalan en
+        // newEditorPane() para que la status bar refleje el activo.
         editorArea.addCaretListener(e -> updateCaretStatus());
+
+        // ChangeListener: cuando el usuario cambia de tab, redirige
+        // editorArea y currentFile al buffer del tab activo. De este modo,
+        // las ~27 referencias a editorArea en el resto del IDE siguen
+        // funcionando sin cambios — siempre apuntan al editor visible.
+        jTabbedPane1.addChangeListener(e -> {
+            java.awt.Component sel = jTabbedPane1.getSelectedComponent();
+            OpenFile of = openFiles.get(sel);
+            if (of != null) {
+                editorArea = of.editor;
+                currentFile = of.file;
+                if (lblStatusFile != null) {
+                    lblStatusFile.setText(of.file != null ? of.file.toString() : "(sin guardar)");
+                }
+                setTitle("BpIde" + (of.file != null ? " — " + of.file : ""));
+                updateCaretStatus();
+            }
+        });
+
+        // Ctrl+W cierra el tab activo.
+        javax.swing.KeyStroke ctrlW = javax.swing.KeyStroke.getKeyStroke(
+                KeyEvent.VK_W, java.awt.event.InputEvent.CTRL_DOWN_MASK);
+        getRootPane().getInputMap(javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(ctrlW, "closeActiveTab");
+        getRootPane().getActionMap().put("closeActiveTab", new javax.swing.AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                int idx = jTabbedPane1.getSelectedIndex();
+                if (idx >= 0) closeTabAt(idx);
+            }
+        });
 
         // -- Status bar (jPanel1: ya estaba en BorderLayout.PAGE_END del form). --
         setupStatusBar();
@@ -727,19 +779,142 @@ public class FrmMain extends javax.swing.JFrame
         } catch (java.io.IOException ignored) { }
     }
 
-    /** Abre el fichero indicado en el editor central. Reusa el caret/load actual. */
+    /**
+     * Crea un JTextPane nuevo con el syntax highlighter de BP y el caret
+     * listener instalados. Usado por openFileInEditor() para cada tab
+     * nuevo. El tab inicial también lo crea con este método.
+     */
+    private JTextPane newEditorPane() {
+        JTextPane ed = new JTextPane();
+        ed.setFont(new Font("Consolas", Font.PLAIN, 13));
+        BpSyntaxHighlighter.install(ed);
+        ed.addCaretListener(e -> {
+            // Solo actualizamos la status bar si este es el editor activo.
+            if (ed == editorArea) updateCaretStatus();
+        });
+        return ed;
+    }
+
+    /**
+     * Instala un componente custom en la pestaña del JTabbedPane con
+     * label + botón "×". El click en el botón cierra el tab respectivo.
+     * El componente del tab se identifica por su JScrollPane (no por
+     * índice, que es inestable si el usuario reordena/cierra tabs).
+     */
+    private void installTabCloseButton(JScrollPane scroll, String title) {
+        JLabel lbl = new JLabel(title);
+        lbl.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 6));
+        javax.swing.JButton close = new javax.swing.JButton("×");
+        close.setFont(new Font("Dialog", Font.BOLD, 12));
+        close.setMargin(new java.awt.Insets(0, 4, 0, 4));
+        close.setFocusable(false);
+        close.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+        close.setContentAreaFilled(false);
+        close.addActionListener(e -> {
+            int idx = jTabbedPane1.indexOfComponent(scroll);
+            if (idx >= 0) closeTabAt(idx);
+        });
+        javax.swing.JPanel pnl = new javax.swing.JPanel(
+                new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0));
+        pnl.setOpaque(false);
+        pnl.add(lbl);
+        pnl.add(close);
+        int idx = jTabbedPane1.indexOfComponent(scroll);
+        if (idx >= 0) jTabbedPane1.setTabComponentAt(idx, pnl);
+    }
+
+    /** Cambia el título mostrado en el componente custom del tab. */
+    private void setTabTitle(JScrollPane scroll, String title) {
+        int idx = jTabbedPane1.indexOfComponent(scroll);
+        if (idx < 0) return;
+        java.awt.Component tabComp = jTabbedPane1.getTabComponentAt(idx);
+        if (tabComp instanceof javax.swing.JPanel) {
+            javax.swing.JPanel pnl = (javax.swing.JPanel) tabComp;
+            if (pnl.getComponentCount() > 0 && pnl.getComponent(0) instanceof JLabel) {
+                ((JLabel) pnl.getComponent(0)).setText(title);
+            }
+        }
+        jTabbedPane1.setTitleAt(idx, title);  // fallback por si no hay tabComponent
+    }
+
+    /**
+     * Cierra el tab en el índice indicado. Si es el último tab, lo
+     * sustituye por uno nuevo vacío para no dejar el IDE sin editor
+     * (mantiene jTabbedPane1 con al menos un tab visible).
+     */
+    private void closeTabAt(int idx) {
+        if (idx < 0 || idx >= jTabbedPane1.getTabCount()) return;
+        java.awt.Component comp = jTabbedPane1.getComponentAt(idx);
+        openFiles.remove(comp);
+        jTabbedPane1.remove(idx);
+
+        // Si quedamos sin tabs, abrimos uno vacío para no dejar al usuario
+        // sin editor donde escribir.
+        if (jTabbedPane1.getTabCount() == 0) {
+            JTextPane ed = newEditorPane();
+            JScrollPane sc = new JScrollPane(ed);
+            jTabbedPane1.addTab("(sin abrir)", sc);
+            openFiles.put(sc, new OpenFile(ed, sc, null));
+            installTabCloseButton(sc, "(sin abrir)");
+            jTabbedPane1.setSelectedComponent(sc);
+        } else {
+            // Selecciona el tab siguiente (o el anterior si era el último).
+            int newIdx = Math.min(idx, jTabbedPane1.getTabCount() - 1);
+            jTabbedPane1.setSelectedIndex(newIdx);
+        }
+    }
+
+    /**
+     * Abre el fichero indicado en un tab del editor.
+     *
+     * Política de tabs:
+     *   1. Si el fichero YA está abierto en algún tab → selecciona ese
+     *      tab y vuelve. No duplicamos buffers del mismo fichero.
+     *   2. Si solo existe el tab inicial vacío "(sin abrir)" sin Path
+     *      asignado → lo recicla cargándole el contenido. Útil para que
+     *      el primer fichero que abras no acumule dos tabs.
+     *   3. En otro caso → crea un tab nuevo con su propio JTextPane.
+     */
     private void openFileInEditor(java.nio.file.Path file) {
         try {
+            // 1) ¿ya abierto?
+            for (java.util.Map.Entry<java.awt.Component, OpenFile> e : openFiles.entrySet()) {
+                if (file.equals(e.getValue().file)) {
+                    jTabbedPane1.setSelectedComponent(e.getKey());
+                    return;
+                }
+            }
             String content = new String(java.nio.file.Files.readAllBytes(file),
                     java.nio.charset.StandardCharsets.UTF_8);
-            editorArea.setText(content);
-            editorArea.setCaretPosition(0);
-            currentFile = file;
-            if (lblStatusFile != null) lblStatusFile.setText(file.toString());
-            int tabIdx = jTabbedPane1.indexOfComponent(
-                    javax.swing.SwingUtilities.getAncestorOfClass(JScrollPane.class, editorArea));
-            if (tabIdx < 0) tabIdx = 0;
-            jTabbedPane1.setTitleAt(tabIdx, file.getFileName().toString());
+
+            // 2) ¿reciclar el tab inicial vacío?
+            OpenFile recycle = null;
+            if (jTabbedPane1.getTabCount() == 1) {
+                OpenFile only = openFiles.get(jTabbedPane1.getComponentAt(0));
+                if (only != null && only.file == null && only.editor.getText().isEmpty()) {
+                    recycle = only;
+                }
+            }
+
+            if (recycle != null) {
+                recycle.file = file;
+                recycle.editor.setText(content);
+                recycle.editor.setCaretPosition(0);
+                setTabTitle(recycle.scroll, file.getFileName().toString());
+                jTabbedPane1.setSelectedComponent(recycle.scroll);
+                // El ChangeListener actualiza editorArea/currentFile.
+            } else {
+                // 3) tab nuevo
+                JTextPane ed = newEditorPane();
+                ed.setText(content);
+                ed.setCaretPosition(0);
+                JScrollPane sc = new JScrollPane(ed);
+                String title = file.getFileName().toString();
+                jTabbedPane1.addTab(title, sc);
+                openFiles.put(sc, new OpenFile(ed, sc, file));
+                installTabCloseButton(sc, title);
+                jTabbedPane1.setSelectedComponent(sc);
+            }
         } catch (java.io.IOException ex) {
             javax.swing.JOptionPane.showMessageDialog(this,
                     "No se pudo abrir " + file + ": " + ex.getMessage(),
@@ -803,14 +978,17 @@ public class FrmMain extends javax.swing.JFrame
     private void setupDebug() {
         // Menú Debug con sus items y atajos.
         JMenu menuDebug = new JMenu("Debug");
-        JMenuItem miDebugRun  = mi("Debug Run",        KeyEvent.VK_F5,  KeyEvent.SHIFT_DOWN_MASK,  e -> doDebug());
-        JMenuItem miContinue  = mi("Continue",         KeyEvent.VK_F5,  0,                         e -> debug.sendCommand(StepCommand.CONTINUE));
-        JMenuItem miStepOver  = mi("Step Over",        KeyEvent.VK_F10, 0,                         e -> debug.sendCommand(StepCommand.STEP_OVER));
-        JMenuItem miStepInto  = mi("Step Into",        KeyEvent.VK_F11, 0,                         e -> debug.sendCommand(StepCommand.STEP_INTO));
-        JMenuItem miStepOut   = mi("Step Out",         KeyEvent.VK_F11, KeyEvent.SHIFT_DOWN_MASK,  e -> debug.sendCommand(StepCommand.STEP_OUT));
-        JMenuItem miStop      = mi("Stop",             KeyEvent.VK_F5,  KeyEvent.CTRL_DOWN_MASK,   e -> debug.sendCommand(StepCommand.STOP));
-        JMenuItem miToggleBP  = mi("Toggle Breakpoint",KeyEvent.VK_F9,  0,                         e -> onToggleBreakpoint());
+        JMenuItem miDebugRun    = mi("Debug",            KeyEvent.VK_F5,  KeyEvent.SHIFT_DOWN_MASK,  e -> doDebug());
+        JMenuItem miDebugOnPico = new JMenuItem("Debug on Pico");
+        miDebugOnPico.addActionListener(e -> doDebugOnPico());
+        JMenuItem miContinue    = mi("Continue",         KeyEvent.VK_F5,  0,                         e -> debug.sendCommand(StepCommand.CONTINUE));
+        JMenuItem miStepOver    = mi("Step Over",        KeyEvent.VK_F10, 0,                         e -> debug.sendCommand(StepCommand.STEP_OVER));
+        JMenuItem miStepInto    = mi("Step Into",        KeyEvent.VK_F11, 0,                         e -> debug.sendCommand(StepCommand.STEP_INTO));
+        JMenuItem miStepOut     = mi("Step Out",         KeyEvent.VK_F11, KeyEvent.SHIFT_DOWN_MASK,  e -> debug.sendCommand(StepCommand.STEP_OUT));
+        JMenuItem miStop        = mi("Stop",             KeyEvent.VK_F5,  KeyEvent.CTRL_DOWN_MASK,   e -> debug.sendCommand(StepCommand.STOP));
+        JMenuItem miToggleBP    = mi("Toggle Breakpoint",KeyEvent.VK_F9,  0,                         e -> onToggleBreakpoint());
         menuDebug.add(miDebugRun);
+        menuDebug.add(miDebugOnPico);
         menuDebug.addSeparator();
         menuDebug.add(miContinue);
         menuDebug.add(miStepOver);
@@ -1089,51 +1267,76 @@ public class FrmMain extends javax.swing.JFrame
     }
 
     /**
-     * File → Load: pide un .bp, lo lee y lo mete en el editor único.
+     * Devuelve el directorio inicial que debe usar el JFileChooser:
+     *   1. Carpeta del fichero del tab activo, si lo hay.
+     *   2. Última carpeta usada (persistida en .bpide-prefs).
+     *   3. null (deja que Swing use Documents — fallback).
+     */
+    private File initialChooserDir() {
+        if (currentFile != null && currentFile.getParent() != null) {
+            return currentFile.getParent().toFile();
+        }
+        IdePrefs prefs = IdePrefs.load();
+        if (prefs.lastDir != null && !prefs.lastDir.isEmpty()) {
+            File f = new File(prefs.lastDir);
+            if (f.isDirectory()) return f;
+        }
+        return null;
+    }
+
+    /** Persiste la carpeta como last-used. Se llama tras open/save exitoso. */
+    private void rememberLastDir(File parent) {
+        if (parent == null || !parent.isDirectory()) return;
+        IdePrefs prefs = IdePrefs.load();
+        prefs.lastDir = parent.getAbsolutePath();
+        prefs.save();
+    }
+
+    /**
+     * File → Load: pide un .bp, lo abre en un tab (nuevo o reciclando
+     * el "(sin abrir)" inicial si está vacío). Arranca el chooser en la
+     * última carpeta usada para que el usuario no tenga que navegar.
      */
     private void onLoad() {
         JFileChooser fc = new JFileChooser();
         fc.setFileFilter(new FileNameExtensionFilter("BasicPlus (*.bp)", "bp"));
-        if (currentFile != null) fc.setCurrentDirectory(currentFile.getParent().toFile());
+        File initial = initialChooserDir();
+        if (initial != null) fc.setCurrentDirectory(initial);
         if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
-        Path p = fc.getSelectedFile().toPath();
-        try {
-            String content = new String(Files.readAllBytes(p), StandardCharsets.UTF_8);
-            editorArea.setText(content);
-            editorArea.setCaretPosition(0);
-            currentFile = p;
-            int idx = jTabbedPane1.getSelectedIndex();
-            if (idx < 0) idx = 0;
-            jTabbedPane1.setTitleAt(idx, p.getFileName().toString());
-            setTitle("BpIde — " + p);
-            if (lblStatusFile != null) lblStatusFile.setText(p.toString());
-            updateCaretStatus();
-        } catch (IOException ex) {
-            JOptionPane.showMessageDialog(this, "No se pudo leer: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
-        }
+        File chosen = fc.getSelectedFile();
+        rememberLastDir(chosen.getParentFile());
+        openFileInEditor(chosen.toPath());
     }
 
     /**
-     * File → Save: escribe al fichero actual (si no hay, pide uno).
+     * File → Save: escribe al fichero del tab activo. Si el tab no tiene
+     * Path asociado (buffer nuevo sin guardar), pide uno con JFileChooser
+     * y lo asocia al OpenFile del tab. Actualiza el título del tab.
      */
     private void onSave() {
-        if (currentFile == null) {
+        java.awt.Component sel = jTabbedPane1.getSelectedComponent();
+        OpenFile of = openFiles.get(sel);
+        if (of == null) return;   // no debería pasar — siempre hay tab activo
+
+        if (of.file == null) {
             JFileChooser fc = new JFileChooser();
             fc.setFileFilter(new FileNameExtensionFilter("BasicPlus (*.bp)", "bp"));
+            File initial = initialChooserDir();
+            if (initial != null) fc.setCurrentDirectory(initial);
             if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
             File chosen = fc.getSelectedFile();
             if (!chosen.getName().toLowerCase().endsWith(".bp")) {
                 chosen = new File(chosen.getAbsolutePath() + ".bp");
             }
-            currentFile = chosen.toPath();
+            of.file = chosen.toPath();
+            currentFile = of.file;
+            rememberLastDir(chosen.getParentFile());
         }
         try {
-            Files.write(currentFile, editorArea.getText().getBytes(StandardCharsets.UTF_8));
-            int idx = jTabbedPane1.getSelectedIndex();
-            if (idx >= 0) jTabbedPane1.setTitleAt(idx, currentFile.getFileName().toString());
-            setTitle("BpIde — " + currentFile);
-            if (lblStatusFile != null) lblStatusFile.setText(currentFile.toString());
+            Files.write(of.file, of.editor.getText().getBytes(StandardCharsets.UTF_8));
+            setTabTitle(of.scroll, of.file.getFileName().toString());
+            setTitle("BpIde — " + of.file);
+            if (lblStatusFile != null) lblStatusFile.setText(of.file.toString());
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "No se pudo guardar: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
@@ -1300,6 +1503,51 @@ public class FrmMain extends javax.swing.JFrame
                 }
             }
         }.execute();
+    }
+
+    /**
+     * Debug on Pico — análogo a Run on Pico pero arrancando la VM del
+     * firmware en modo debug, con breakpoints, step y locals contra el
+     * source actual.
+     *
+     * Estado actual: el firmware no expone aún protocolo de debug sobre
+     * el USB CDC (su REPL solo entiende HELLO/LS/PUT/GET/DEL/RUN/MEM/
+     * SAVE/FORMAT/LOG/RESET/BOOTSEL). Implementarlo requiere:
+     *
+     *   1. Añadir un comando `DEBUG name` a la REPL que arranca la VM
+     *      del Pico con DebugController (mismo módulo que en la VM Java)
+     *      y un wire JSON-line equivalente al TCP del DebugServer.
+     *   2. Multiplexar el wire de debug sobre el mismo USB CDC que ya
+     *      usa la REPL (o asignar un canal independiente si TinyUSB
+     *      permite múltiples interfaces CDC).
+     *   3. Implementar DebugAdapter en PicoClient (parser JSON línea a
+     *      línea) que el IDE conecta como un VmClient remoto.
+     *
+     * Mientras tanto, el botón explica el estado al usuario y le ofrece
+     * la alternativa práctica: usar `Debug` local (Shift+F5) sobre el
+     * mismo .bp para depurar con la VM Java; cuando la lógica esté
+     * verificada, `Run on Pico` lo ejecuta en hardware real.
+     *
+     * Cuando el wire debug-on-Pico esté listo, este método se sustituye
+     * por la llamada análoga a doDebug() pero usando PicoClient como
+     * transporte (en vez de VmClient sobre TCP).
+     */
+    private void doDebugOnPico() {
+        String msg =
+            "Debug on Pico todavía no está implementado en el firmware.\n\n" +
+            "El firmware del RP2350 expone una REPL sobre USB CDC con\n" +
+            "comandos para subir y ejecutar módulos, pero no soporta\n" +
+            "aún el protocolo de debug (breakpoints, step, locals).\n\n" +
+            "Mientras tanto, para depurar BasicPlus puedes:\n\n" +
+            "  • Usar Run → Debug Run (Shift+F5) sobre el mismo .bp.\n" +
+            "    La VM Java local soporta breakpoints, step over/into/out,\n" +
+            "    inspección de variables y call stack.\n\n" +
+            "  • Cuando la lógica esté verificada, lanzar Run on Pico\n" +
+            "    para ejecutarla sobre el hardware real.\n\n" +
+            "Hito pendiente: protocolo debug sobre USB CDC en el firmware.";
+        JOptionPane.showMessageDialog(this, msg,
+                "Debug on Pico — no implementado todavía",
+                JOptionPane.INFORMATION_MESSAGE);
     }
 
     /** Nombres de módulos stdlib core que ya están pre-instalados en el
