@@ -42,6 +42,10 @@ public final class VmConfig {
     public int    memorySize = DEFAULT_MEMORY_SIZE;
     public int    stackBase  = DEFAULT_STACK_BASE;
     public String stdlibDir  = null;
+    /** Directorio de drivers de dispositivo (PCA9554, BME280, etc.).
+     *  El frontend lo añade al search path de imports; el firmware NO los
+     *  embebe — viajan por upload junto con la app del usuario. */
+    public String devicesDir = null;
     /** Path real de donde se cargó (null si es config default sintética). */
     public String sourcePath = null;
 
@@ -62,6 +66,7 @@ public final class VmConfig {
         if (map.containsKey("memorySize")) c.memorySize = toInt(map.get("memorySize"), "memorySize", file);
         if (map.containsKey("stackBase"))  c.stackBase  = toInt(map.get("stackBase"),  "stackBase",  file);
         if (map.containsKey("stdlibDir"))  c.stdlibDir  = toString(map.get("stdlibDir"), "stdlibDir", file);
+        if (map.containsKey("devicesDir")) c.devicesDir = toString(map.get("devicesDir"),"devicesDir",file);
 
         // Si memorySize está pero stackBase no, derivar a mitad-mitad.
         if (map.containsKey("memorySize") && !map.containsKey("stackBase")) {
@@ -117,6 +122,8 @@ public final class VmConfig {
                     + ") debe ser < memorySize (" + memorySize + ")");
         if (stdlibDir != null && stdlibDir.isEmpty())
             stdlibDir = null;
+        if (devicesDir != null && devicesDir.isEmpty())
+            devicesDir = null;
     }
 
     @Override public String toString() {

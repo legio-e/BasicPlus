@@ -1,0 +1,62 @@
+// ============================================================
+// Mcp9804.bp — driver para el sensor de temperatura I²C MCP9804.
+//
+// Port directo del driver Python equivalente. El MCP9804 es un
+// termómetro digital de ±0.5°C, resolución 0.0625°C, rango
+// -40..+125°C. Direcciones I²C 0x18..0x1F según pines A0/A1/A2.
+//
+// Registro 0x05 = Ambient Temperature (16 bits):
+//   MSB: [TA/TUP/TLO flags : 3 bits][SIGN : 1][T11..T8 : 4 bits]
+//   LSB: [T7..T0 : 8 bits]
+//
+// La resolución 1/16 LSB significa que el valor de 12 bits
+// dividido entre 16 da los grados. Para negativos se aplica la
+// fórmula 256 - magnitud (sign-magnitude del datasheet).
+//
+// Uso:
+//   import Mcp9804
+//   var s: Mcp9804.Sensor := Mcp9804.Sensor(I2c.BUS1(), 0x18)
+//   var t: float := s.readTemp()
+//   print "T =", t
+// ============================================================
+module Mcp9804
+  import I2c
+
+  public class Sensor
+    public var bus:  integer
+    public var addr: integer
+
+    public function Sensor(bus: integer, addr: integer)
+      this.bus  := bus
+      this.addr := addr
+    end Sensor
+
+    // Lee la temperatura en grados Celsius. Devuelve magnitud según
+    // el formato sign-magnitude del MCP9804.
+    public function readTemp(): float
+      // Set register pointer al 0x05 (Ambient Temperature).
+      var ptr: integer[] := [0x05]
+      I2c.write(this.bus, this.addr, ptr, 1)
+      // Lee 2 bytes [MSB, LSB].
+      var data: integer[] := [0, 0]
+      I2c.read(this.bus, this.addr, data, 2)
+      var msb: integer := data[0]
+      var lsb: integer := data[1]
+      // Limpia los bits de flag (mantenemos bits 4..0).
+      msb := msb & 0x1F
+      var temp: float := 0.0
+      if (msb & 0x10) == 0x10 then
+        // Temperatura negativa: limpia el bit de sign y aplica la
+        // fórmula del datasheet (sign-magnitude).
+        msb := msb & 0x0F
+        temp := 256.0 - (msb * 16.0 + lsb / 16.0)
+      else
+        // Temperatura positiva.
+        temp := msb * 16.0 + lsb / 16.0
+      endif
+      return temp
+    end readTemp
+
+  end Sensor
+
+end Mcp9804

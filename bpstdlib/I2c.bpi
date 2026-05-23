@@ -1,0 +1,10 @@
+bpi 6
+module I2c
+func init(bus:integer,sda:integer,scl:integer,baudrate:integer):void public intrinsic
+func read(bus:integer,addr:integer,data:integer[],count:integer):integer public intrinsic
+func scan(bus:integer):integer[] public
+func FAST():integer public
+func write(bus:integer,addr:integer,data:integer[],count:integer):integer public intrinsic
+func BUS1():integer public
+func STANDARD():integer public
+func BUS0():integer public

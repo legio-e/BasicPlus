@@ -1,0 +1,8 @@
+bpi 6
+module L4GetSet
+class Cache public
+  layout 1 2 00000000 00000000
+  ctor()
+  method get():integer public
+  method set(v:integer):void public
+end class

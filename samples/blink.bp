@@ -1,0 +1,26 @@
+// blink.bp — parpadea el LED on-board de la Pico (GP25) con el API OO.
+//
+// Usa la clase Gpio.Pin: el constructor configura el pin como OUTPUT y
+// los métodos on()/off() encienden y apagan el LED sin tener que
+// repetir el número de pin en cada llamada.
+//
+// En un host PC sin GPIO real, los builtins detrás de Pin loggean por
+// stdout. En la Pico, el firmware redirige a gpio_init/gpio_put del
+// SDK y el LED parpadea físicamente.
+
+module Blink
+  import Gpio
+
+  function Main()
+    var led: Gpio.Pin := Gpio.Pin(25, Gpio.Pin.OUTPUT)
+    var i: integer := 0
+    while i < 10 do
+      led.on()
+      sleep(300)
+      led.off()
+      sleep(300)
+      i := i + 1
+    endwh
+    print "Blink terminado"
+  end Main
+end Blink

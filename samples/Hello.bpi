@@ -1,0 +1,25 @@
+bpi 5
+module Hello
+const PI:float=3.14159 public
+enum Dia public
+  VIERNES=4
+  LUNES=0
+  DOMINGO=11
+  MARTES=1
+  SABADO=10
+  MIERCOLES=2
+  JUEVES=3
+end enum
+class Animal public
+  ctor(nombre:string)
+  prop edad:integer public
+  method CambiarNombre(nombre:string):void public
+  method Hablar():string public
+end class
+class RuntimeError public
+  ctor(mensaje:string)
+end class
+class Perro public extends Animal
+  ctor(nombre:string)
+  method Hablar():string public
+end class

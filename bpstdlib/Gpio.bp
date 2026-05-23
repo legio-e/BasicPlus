@@ -1,0 +1,150 @@
+// ============================================================
+// Gpio.bp — módulo stdlib para control de pines GPIO.
+//
+// Todas las funciones son `intrinsic`: el compilador inlina
+// CALL_BUILTIN <id> en el call-site. La implementación concreta
+// depende de la plataforma:
+//
+//   - VM Java (PC, x86):  loggea las acciones por stdout —
+//                          útil para desarrollo sin hardware.
+//   - VM C en Raspberry Pi Pico 2: el handler de builtin llama
+//                          al SDK del Pico (`gpio_init`, `gpio_put`,
+//                          `gpio_get`, `gpio_set_dir`, `gpio_pull_up/down`).
+//   - VM C en otros hosts: stubs no-op + logging por stdout.
+//
+// Convenciones de modos y valores:
+//   mode    : 0 = INPUT,    1 = OUTPUT
+//   value   : 0 = LOW,      cualquier otra cosa = HIGH
+//   pull    : 0 = none,     1 = up,   2 = down
+// ============================================================
+module Gpio
+
+  // Configura el modo del pin (entrada o salida).
+  // Llamar UNA vez por pin antes de read/write.
+  public intrinsic function init(pin: integer, mode: integer)
+
+  // Configura resistencia de pull-up/pull-down. 0=none, 1=up, 2=down.
+  public intrinsic function pull(pin: integer, pullMode: integer)
+
+  // Escribe en un pin configurado como OUTPUT.
+  // value: 0=LOW, !=0=HIGH.
+  public intrinsic function write(pin: integer, value: integer)
+
+  // Lee un pin configurado como INPUT. Devuelve 0 o 1.
+  public intrinsic function read(pin: integer): integer
+
+  // -------- Constantes públicas para los enums --------
+  // (Definidas como funciones intrínsecas de 0 args para mantener la
+  // simplicidad del modelo — el compilador inlina el literal en la
+  // pila. Alternativa más bonita: `public const INPUT: integer = 0`
+  // tras N-const-stdlib, pendiente.)
+  public function INPUT(): integer
+    return 0
+  end INPUT
+  public function OUTPUT(): integer
+    return 1
+  end OUTPUT
+  public function LOW(): integer
+    return 0
+  end LOW
+  public function HIGH(): integer
+    return 1
+  end HIGH
+  public function PULL_NONE(): integer
+    return 0
+  end PULL_NONE
+  public function PULL_UP(): integer
+    return 1
+  end PULL_UP
+  public function PULL_DOWN(): integer
+    return 2
+  end PULL_DOWN
+
+  // ============================================================
+  // Clase Pin — wrapper OO sobre los intrínsecos de arriba.
+  //
+  // Cada instancia encapsula el número de pin físico, así que el
+  // código de usuario no tiene que repetir el número en cada
+  // operación. Constructor `Pin(num, mode)` configura el pin
+  // automáticamente. Los métodos `on()`/`off()` son la forma
+  // canónica de escribir HIGH/LOW.
+  //
+  // Uso típico:
+  //
+  //   import Gpio
+  //   var led: Gpio.Pin := Gpio.Pin(25, Gpio.Pin.OUTPUT)
+  //   led.on()
+  //   sleep(500)
+  //   led.off()
+  //
+  //   var boton: Gpio.Pin := Gpio.Pin(14, Gpio.Pin.INPUT)
+  //   boton.setPull(Gpio.Pin.PULL_UP)
+  //   if boton.isLow() then
+  //     print "pulsado"
+  //   endif
+  // ============================================================
+  public class Pin
+
+    // Static consts accesibles como `Gpio.Pin.OUTPUT`, etc.
+    public const Pin.INPUT:     integer := 0
+    public const Pin.OUTPUT:    integer := 1
+    public const Pin.PULL_NONE: integer := 0
+    public const Pin.PULL_UP:   integer := 1
+    public const Pin.PULL_DOWN: integer := 2
+
+    public var num:  integer    // número de pin físico (GP0..GP29)
+    public var mode: integer    // INPUT (0) u OUTPUT (1)
+
+    // Constructor: configura el pin en el modo indicado.
+    public function Pin(num: integer, mode: integer)
+      this.num  := num
+      this.mode := mode
+      init(num, mode)
+    end Pin
+
+    // Pone el pin a HIGH (sólo válido si es OUTPUT).
+    public function on()
+      write(this.num, 1)
+    end on
+
+    // Pone el pin a LOW (sólo válido si es OUTPUT).
+    public function off()
+      write(this.num, 0)
+    end off
+
+    // Conmuta el pin (HIGH↔LOW). Comodidad para parpadeos.
+    public function toggle()
+      var v: integer := read(this.num)
+      if v == 0 then
+        write(this.num, 1)
+      else
+        write(this.num, 0)
+      endif
+    end toggle
+
+    // Lee el estado del pin. Devuelve 0 o 1.
+    public function value(): integer
+      return read(this.num)
+    end value
+
+    // Conveniencia: true si el pin lee HIGH (1).
+    public function isHigh(): boolean
+      return read(this.num) == 1
+    end isHigh
+
+    // Conveniencia: true si el pin lee LOW (0).
+    public function isLow(): boolean
+      return read(this.num) == 0
+    end isLow
+
+    // Configura la resistencia interna del pin (sólo útil en INPUT).
+    //   pullMode: Pin.PULL_NONE / Pin.PULL_UP / Pin.PULL_DOWN
+    // Nombre distinto del intrínseco `pull` del módulo para evitar
+    // la colisión de nombres dentro de la clase.
+    public function setPull(pullMode: integer)
+      pull(this.num, pullMode)
+    end setPull
+
+  end Pin
+
+end Gpio

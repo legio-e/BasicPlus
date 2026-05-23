@@ -1,0 +1,16 @@
+bpi 6
+module Spi
+func init(bus:integer,sck:integer,mosi:integer,miso:integer,baudrate:integer,mode:integer):void public intrinsic
+func read(bus:integer,data:integer[],count:integer):integer public intrinsic
+func KHZ_500():integer public
+func MHZ_4():integer public
+func MODE1():integer public
+func MODE2():integer public
+func BUS1():integer public
+func MHZ_1():integer public
+func BUS0():integer public
+func MODE0():integer public
+func MODE3():integer public
+func transfer(bus:integer,tx:integer[],rx:integer[],count:integer):integer public intrinsic
+func MHZ_10():integer public
+func write(bus:integer,data:integer[],count:integer):integer public intrinsic

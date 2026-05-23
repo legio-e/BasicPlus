@@ -1,0 +1,15 @@
+bpi 6
+module Pca9554
+class Expander public
+  layout 2 9 00000000 00000000
+  ctor(bus:integer,addr:integer)
+  method wreg(reg:integer,value:integer):void public
+  method rreg(reg:integer):integer public
+  method readIn():integer public
+  method getOut():integer public
+  method writeOut(value:integer):void public
+  method getInvert():integer public
+  method setInvert(value:integer):void public
+  method getDir():integer public
+  method setDir(value:integer):void public
+end class

@@ -1,0 +1,12 @@
+module BorTest
+  function Main()
+    var r: integer := 0x40
+    var s: integer := 0x07
+    var c: integer := r | s
+    print c
+    var d: integer := (0x40 | 0x07)
+    print d
+    var e: integer := r | 0x07
+    print e
+  end Main
+end BorTest

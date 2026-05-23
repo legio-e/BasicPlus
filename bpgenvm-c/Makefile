@@ -13,7 +13,7 @@ CFLAGS  += $(CFLAGS_EXTRA)
 
 SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/link.c src/scheduler.c src/threading.c src/exceptions.c \
-          src/platform_pthread.c
+          src/platform_pthread.c src/gpio.c src/i2c.c src/spi.c src/uart.c
 LDFLAGS = -lpthread
 TEST    = test/main.c
 OBJ     = $(SRC:%.c=build/%.o) build/test/main.o

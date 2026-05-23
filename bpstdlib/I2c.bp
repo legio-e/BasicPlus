@@ -1,0 +1,73 @@
+// ============================================================
+// I2c.bp — control de bus I2C en dispositivos embebidos.
+//
+// Buffers de bytes: parámetros `integer[]` donde cada slot
+// transporta un byte (solo el byte bajo, 0..255). El frontend
+// los serializa correctamente en .bpi cross-module gracias a
+// L-arr-export.
+//
+// Plataformas:
+//   - RP2350 (Pico 2): 2 buses HW (i2c0, i2c1).
+//   - PC (Java/host C): logging por stdout — desarrollo sin HW.
+// ============================================================
+module I2c
+
+  // Inicializa el bus con los pines dados a la velocidad indicada.
+  //   bus: 0 (i2c0) o 1 (i2c1).
+  //   sda, scl: GPIO pins.
+  //   baudrate: en Hz (típico 100000 = standard, 400000 = fast).
+  public intrinsic function init(bus: integer, sda: integer, scl: integer, baudrate: integer)
+
+  // Escribe `count` bytes al slave `addr` por `bus`. Cada slot de
+  // `data` transporta un byte (low 8 bits).
+  // Devuelve bytes escritos, o -1 si NAK/timeout.
+  public intrinsic function write(bus: integer, addr: integer, data: integer[], count: integer): integer
+
+  // Lee `count` bytes del slave `addr` por `bus` y los guarda en
+  // `data` (un slot por byte). Devuelve bytes leídos, o -1 en error.
+  public intrinsic function read(bus: integer, addr: integer, data: integer[], count: integer): integer
+
+  // Escanea el bus completo (direcciones I2C válidas 0x08..0x77) y
+  // devuelve un array con las direcciones de los dispositivos que
+  // respondieron al ACK. Implementado puramente en BP llamando a
+  // I2c.read(1 byte) — no necesita opcode dedicado.
+  //
+  // Ejemplo de uso:
+  //   var devs: integer[] := I2c.scan(I2c.BUS0())
+  //   for d in devs do
+  //     print "device at 0x", d
+  //   next d
+  public function scan(bus: integer): integer[]
+    var rxbuf: integer[] := [0]
+    var max: integer[] := newIntArray(112)        // pre-alloc 112 slots
+    var found: integer := 0
+    var addr: integer := 0x08
+    while addr < 0x78 do
+      var rc: integer := read(bus, addr, rxbuf, 1)
+      if rc >= 0 then
+        max[found] := addr
+        found := found + 1
+      endif
+      addr := addr + 1
+    endwh
+    // Devuelve copia recortada al tamaño exacto.
+    var result: integer[] := newIntArray(found)
+    move(max, result, 0, 0, found)
+    return result
+  end scan
+
+  // -------- Constantes de conveniencia --------
+  public function BUS0(): integer
+    return 0
+  end BUS0
+  public function BUS1(): integer
+    return 1
+  end BUS1
+  public function STANDARD(): integer
+    return 100000
+  end STANDARD
+  public function FAST(): integer
+    return 400000
+  end FAST
+
+end I2c

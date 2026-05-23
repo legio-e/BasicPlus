@@ -1,0 +1,119 @@
+// ============================================================
+// Uart.bp — bus serial asíncrono punto a punto (RS-232 lógico).
+//
+// UART es un bus de 2 hilos (TX, RX) sin reloj compartido:
+//   TX  — Transmit (master → otro extremo)
+//   RX  — Receive  (otro extremo → master)
+//
+// Ambos extremos acuerdan baudrate, formato de carácter (data bits,
+// stop bits, parity) y, opcionalmente, flow control (no soportado en
+// esta v1 — sólo 3 wire TX/RX/GND).
+//
+// Útil para:
+//   - Diálogo con módulos baratos (GPS NMEA, GSM/LTE AT, ESP-AT,
+//     BlueSMiRF, BT2.0/BT4.0 transparent, lectores RFID, módems
+//     LoRa AT, etc.)
+//   - Debug y comandos por puerto serie hacia un PC con FTDI/CP21xx
+//   - Telemetría a baja velocidad con framing simple
+//
+// Plataformas:
+//   - RP2350 (Pico 2): 2 UART HW (uart0, uart1). Cada uno admite
+//     varios pares de pines:
+//
+//       uart0: TX=GP0/12/16/28   RX=GP1/13/17/29
+//       uart1: TX=GP4/8/20/24    RX=GP5/9/21/25
+//
+//     OJO: el firmware del bpvm_pico habilita stdio_usb (USB CDC)
+//     y deshabilita stdio_uart, así que GP0/GP1 están libres para
+//     que tú los uses como UART de usuario.
+//   - PC (Java/host C): stub con logging por stdout — útil para
+//     desarrollar sin HW.
+//
+// Convención de buffers: como en I2c/Spi, los datos van en un
+// integer[] donde cada slot transporta un byte (low 8 bits).
+//
+// Ejemplo mínimo (eco de un módulo AT):
+//
+//   import Uart
+//   Uart.init(Uart.BUS0(), 0, 1, 115200,
+//             8, 1, Uart.PARITY_NONE())
+//   var tx: integer[] := [0x41, 0x54, 0x0D, 0x0A]   // "AT\r\n"
+//   Uart.write(Uart.BUS0(), tx, 4)
+//   var rx: integer[] := newIntArray(64)
+//   var n: integer := Uart.read(Uart.BUS0(), rx, 64, 1000)
+//   print "RX bytes:", n
+// ============================================================
+module Uart
+
+  // Configura el UART.
+  //   bus      : 0 (uart0) o 1 (uart1)
+  //   tx, rx   : GPIO pins (deben ser válidos para ese bus)
+  //   baudrate : Hz (típico 9600, 38400, 115200, 230400, 460800,
+  //              921600). En RP2350 el divisor admite hasta ~7,8 Mbps.
+  //   dataBits : 5..8 (típico 8)
+  //   stopBits : 1 ó 2
+  //   parity   : 0=NONE, 1=ODD, 2=EVEN
+  public intrinsic function init(bus: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)
+
+  // Escribe `count` bytes en el bus (bloquea hasta que el TX FIFO los
+  // ha aceptado). Devuelve bytes escritos, o -1 en error.
+  public intrinsic function write(bus: integer, data: integer[], count: integer): integer
+
+  // Lee hasta `count` bytes del bus. `timeoutMs`:
+  //   <= 0  → bloquea hasta tener `count` bytes
+  //   >  0  → devuelve cuando llegan `count` bytes O al expirar el
+  //           timeout total (lo que ocurra antes). El retorno indica
+  //           bytes realmente leídos (0..count).
+  // -1 en error de backend.
+  public intrinsic function read(bus: integer, data: integer[], count: integer, timeoutMs: integer): integer
+
+  // Bytes disponibles en el buffer RX para leer sin bloquear (0 si
+  // no hay nada todavía). -1 si el backend no implementa la query.
+  public intrinsic function available(bus: integer): integer
+
+  // -------- Constantes de conveniencia --------
+  public function BUS0(): integer
+    return 0
+  end BUS0
+  public function BUS1(): integer
+    return 1
+  end BUS1
+
+  // Paridad.
+  public function PARITY_NONE(): integer
+    return 0
+  end PARITY_NONE
+  public function PARITY_ODD(): integer
+    return 1
+  end PARITY_ODD
+  public function PARITY_EVEN(): integer
+    return 2
+  end PARITY_EVEN
+
+  // Baudrates típicos (alias).
+  public function BAUD_9600(): integer
+    return 9600
+  end BAUD_9600
+  public function BAUD_19200(): integer
+    return 19200
+  end BAUD_19200
+  public function BAUD_38400(): integer
+    return 38400
+  end BAUD_38400
+  public function BAUD_57600(): integer
+    return 57600
+  end BAUD_57600
+  public function BAUD_115200(): integer
+    return 115200
+  end BAUD_115200
+  public function BAUD_230400(): integer
+    return 230400
+  end BAUD_230400
+  public function BAUD_460800(): integer
+    return 460800
+  end BAUD_460800
+  public function BAUD_921600(): integer
+    return 921600
+  end BAUD_921600
+
+end Uart

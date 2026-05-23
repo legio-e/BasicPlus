@@ -1,0 +1,7 @@
+bpi 6
+module Mcp9804
+class Sensor public
+  layout 2 1 00000000 00000000
+  ctor(bus:integer,addr:integer)
+  method readTemp():float public
+end class

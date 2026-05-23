@@ -71,6 +71,23 @@ typedef void (*bpvm_output_cb)(const char* s, size_t len, void* user);
 bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base);
 
 /*
+ * Variante embebida: carga un .mod desde un buffer ya en memoria. No
+ * descubre dependencias (no hay filesystem). El caller debe pre-cargar
+ * todas las dependencias llamando esta función en orden (deps primero).
+ *
+ *   data       — bytes del .mod (puede ser un array C generado con
+ *                `xxd -i hello.mod` o cualquier blob que tengas en flash).
+ *   size       — tamaño en bytes.
+ *   name_hint  — nombre lógico opcional para módulos sin library prefix.
+ *                Si es NULL, se genera "embedded<N>".
+ *
+ * El buffer NO necesita persistir tras la llamada: el loader copia los
+ * data/code blocks al memory[] de la VM.
+ */
+bpvm_status_t bpvm_load_mod_buffer(bpvm_t* vm, const uint8_t* data,
+                                    size_t size, const char* name_hint);
+
+/*
  * Carga un .mod desde un fichero. Puede llamarse múltiples veces para
  * cargar el módulo principal + sus dependencias en orden.
  *

@@ -219,6 +219,12 @@
     <li class="sub"><a href="#stdlib-rterr">13.6 RuntimeError</a></li>
     <li class="sub"><a href="#stdlib-thread">13.7 Thread</a></li>
     <li class="sub"><a href="#stdlib-mutex">13.8 Mutex</a></li>
+    <li class="sub"><a href="#stdlib-math">13.9 Math</a></li>
+    <li class="sub"><a href="#stdlib-io">13.10 IO</a></li>
+    <li class="sub"><a href="#stdlib-gpio">13.11 Gpio</a></li>
+    <li class="sub"><a href="#stdlib-i2c">13.12 I2c</a></li>
+    <li class="sub"><a href="#stdlib-spi">13.13 Spi</a></li>
+    <li class="sub"><a href="#stdlib-uart">13.14 Uart</a></li>
 
     <li class="group"><a href="#concurrencia">14. Concurrencia</a></li>
     <li class="sub"><a href="#conc-modelo">14.1 Modelo de ejecución</a></li>
@@ -229,6 +235,8 @@
     <li class="group"><a href="#cli">15. Compilación &amp; ejecución</a></li>
     <li class="sub"><a href="#cli-frontend">15.1 Frontend (bp → .mod)</a></li>
     <li class="sub"><a href="#cli-vm">15.2 VM (bpgenvm)</a></li>
+    <li class="sub" style="padding-left:1.6em"><a href="#cli-vmproject">.bpproject (proyecto VM)</a></li>
+    <li class="sub" style="padding-left:1.6em"><a href="#cli-bpbuild">.bpbuild (proyecto compilador / IDE)</a></li>
     <li class="sub"><a href="#cli-disasm">15.3 Disasm</a></li>
 
     <li class="group"><a href="#artefactos">16. Artefactos en disco</a></li>
@@ -1067,10 +1075,10 @@ nums[<span class="num">0</span>] := <span class="num">42</span>
   <tr><td>Aritmética int</td>
       <td><code>abs</code> <code>min</code> <code>max</code></td></tr>
   <tr><td>Aritmética float</td>
-      <td><code>sqrt</code> <code>pow</code> <code>log</code> <code>log10</code>
-          <code>exp</code> <code>sin</code> <code>cos</code> <code>tan</code>
-          <code>random()</code> <code>randomInt(lo, hi)</code>
-          <code>pi()</code> <code>e()</code></td></tr>
+      <td><code>sqrt</code> <code>pow</code> <code>exp</code>
+          <code>random()</code> <code>randomInt(lo, hi)</code><br>
+          <em>Trigonometría, logaritmos, π, e y resto requieren
+          <code>import Math</code> — ver <a href="#stdlib-math">§13.9</a>.</em></td></tr>
   <tr><td>Conversión num</td>
       <td><code>floor(x)</code> <code>ceil(x)</code> <code>round(x)</code></td></tr>
   <tr><td>Tiempo</td>
@@ -1279,6 +1287,367 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 <p>
   No reentrante: si el mismo thread vuelve a llamar <code>lock()</code>
   sobre un mutex que ya tiene, se lanza una excepción.
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-math">13.9 <code>Math</code></h3>
+<p>
+  Funciones matemáticas accesibles tras <code>import Math</code>. Todas
+  son <code>intrinsic</code>: el call-site <code>Math.foo(...)</code>
+  se traduce inline al CALL_BUILTIN equivalente — no hay overhead de
+  call vs. el operador nativo. Las funciones implícitas
+  (<a href="#stdlib-funcs">§13.1</a>) no se duplican aquí.
+</p>
+<pre><code><span class="kw">import</span> Math
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> a: <span class="type">float</span> := Math.sin(Math.pi() / <span class="num">4.0</span>)
+  <span class="kw">print</span> a                          <span class="comment">// 0.7071...</span>
+  <span class="kw">var</span> n: <span class="type">integer</span> := Math.factorial(<span class="num">6</span>)
+  <span class="kw">print</span> n                          <span class="comment">// 720</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>pi(): float</code></td>
+      <td>Constante π ≈ 3.14159…</td></tr>
+  <tr><td><code>e(): float</code></td>
+      <td>Constante de Euler ≈ 2.71828…</td></tr>
+  <tr><td><code>sin(x: float): float</code></td>
+      <td>Seno. <code>x</code> en radianes.</td></tr>
+  <tr><td><code>cos(x: float): float</code></td>
+      <td>Coseno. <code>x</code> en radianes.</td></tr>
+  <tr><td><code>tan(x: float): float</code></td>
+      <td>Tangente. <code>x</code> en radianes.</td></tr>
+  <tr><td><code>asin(x: float): float</code></td>
+      <td>Arcoseno. Dominio [-1, 1] → [-π/2, π/2].</td></tr>
+  <tr><td><code>acos(x: float): float</code></td>
+      <td>Arcocoseno. Dominio [-1, 1] → [0, π].</td></tr>
+  <tr><td><code>atan(x: float): float</code></td>
+      <td>Arcotangente → (-π/2, π/2).</td></tr>
+  <tr><td><code>atan2(y: float, x: float): float</code></td>
+      <td>Ángulo del vector (x, y) en (-π, π]. Reparte por cuadrantes.</td></tr>
+  <tr><td><code>ln(x: float): float</code></td>
+      <td>Logaritmo natural (base e).</td></tr>
+  <tr><td><code>log10(x: float): float</code></td>
+      <td>Logaritmo base 10.</td></tr>
+  <tr><td><code>sign(x: integer): integer</code></td>
+      <td>−1, 0 o +1 según el signo de <code>x</code>.</td></tr>
+  <tr><td><code>signF(x: float): integer</code></td>
+      <td>Versión float. <code>NaN</code> → 0.</td></tr>
+  <tr><td><code>factorial(n: integer): integer</code></td>
+      <td><code>n!</code> con <code>0 ≤ n ≤ 12</code> (máximo que cabe en i32).
+          Fuera de rango lanza <code>RuntimeError</code>.</td></tr>
+  <tr><td><code>gamma(x: float): float</code></td>
+      <td>Función Γ (aproximación de Lanczos). Γ(n+1) = n! para naturales.
+          Definida para <code>x &gt; 0</code>; en <code>(0, 0.5)</code> usa
+          la reflexión de Euler.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-io">13.10 <code>IO</code></h3>
+<p>
+  Manipulación de paths y operaciones de filesystem accesibles tras
+  <code>import IO</code>. Todas las funciones son <code>intrinsic</code>.
+  Las funciones de path NO acceden al disco — sólo manipulan la string.
+  Las que sí acceden lanzan <code>RuntimeError</code> atrapable si fallan.
+</p>
+<p>
+  Hay aparte un <code>IO.prompt(spec)</code> que pide al IDE conectado
+  que renderice un formulario y devuelve el JSON con la respuesta del
+  usuario (ver <a href="#stdlib-funcs">§13.1</a>: la primitiva BLOQUEA
+  el thread BP hasta respuesta). Sin IDE conectado lanza
+  <code>RuntimeError</code>.
+</p>
+<pre><code><span class="kw">import</span> IO
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> p: <span class="type">string</span> := IO.pathJoin(<span class="str">"build"</span>, <span class="str">"out.txt"</span>)
+  <span class="kw">print</span> IO.pathExtension(p)               <span class="comment">// "txt"</span>
+  <span class="kw">if</span> IO.isDirectory(<span class="str">"build"</span>) == <span class="kw">false</span> <span class="kw">then</span>
+    IO.mkdir(<span class="str">"build"</span>)
+  <span class="kw">endif</span>
+  writeFile(p, <span class="str">"hola"</span>)
+  <span class="kw">print</span> IO.fileSize(p)                    <span class="comment">// 4</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>pathJoin(a, b): string</code></td>
+      <td>Une dos componentes con el separador del SO.</td></tr>
+  <tr><td><code>pathParent(p): string</code></td>
+      <td>Directorio padre. <code>""</code> si no tiene.</td></tr>
+  <tr><td><code>pathBasename(p): string</code></td>
+      <td>Último componente del path.</td></tr>
+  <tr><td><code>pathExtension(p): string</code></td>
+      <td>Extensión sin el punto. <code>""</code> si no hay.</td></tr>
+  <tr><td><code>pathAbsolute(p): string</code></td>
+      <td>Resuelve a path absoluto y normalizado (<code>".."</code>, <code>"."</code>).</td></tr>
+  <tr><td><code>mkdir(p)</code></td>
+      <td>Crea el directorio (y los intermedios que falten). No falla si ya existe.</td></tr>
+  <tr><td><code>rmdir(p)</code></td>
+      <td>Borra un directorio. Sólo si está vacío.</td></tr>
+  <tr><td><code>removeFile(p)</code></td>
+      <td>Borra un fichero.</td></tr>
+  <tr><td><code>rename(src, dst)</code></td>
+      <td>Renombra/mueve. Sobreescribe destino si existe.</td></tr>
+  <tr><td><code>copyFile(src, dst)</code></td>
+      <td>Copia un fichero. Sobreescribe destino si existe.</td></tr>
+  <tr><td><code>fileSize(p): integer</code></td>
+      <td>Tamaño en bytes. Falla si <code>&gt; 2 GB</code>.</td></tr>
+  <tr><td><code>isDirectory(p): boolean</code></td>
+      <td><code>true</code> si <code>p</code> es un directorio existente.</td></tr>
+  <tr><td><code>lastModified(p): integer</code></td>
+      <td>Último <code>mtime</code> en ms epoch (truncado a i32).</td></tr>
+  <tr><td><code>prompt(spec): string</code></td>
+      <td>Pide al IDE conectado que muestre un formulario. <code>spec</code>
+          es un JSON con la descripción. Bloquea el thread BP hasta
+          respuesta. Sin IDE conectado, <code>RuntimeError</code>.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-gpio">13.11 <code>Gpio</code></h3>
+<p>
+  Control de pines GPIO. La VM Java sobre PC sólo loggea; la VM C sobre
+  Pico 2 (RP2350) traduce cada llamada a la SDK del Pico
+  (<code>gpio_init</code>, <code>gpio_put</code>, <code>gpio_get</code>,
+  <code>gpio_set_dir</code>, <code>gpio_pull_up/down</code>). Mismo
+  <code>.mod</code> ejecuta en ambos lados — útil para desarrollar en el
+  PC y luego subir al microcontrolador.
+</p>
+<p>
+  El módulo expone dos capas: una clase <code>Gpio.Pin</code> orientada
+  a objetos (recomendada) y un conjunto de funciones intrínsecas de
+  bajo nivel que la propia clase usa por debajo (disponibles también
+  para drivers que las necesiten).
+</p>
+
+<h4>13.11.1 Clase <code>Gpio.Pin</code> (recomendado)</h4>
+<p>
+  Cada instancia encapsula el número de pin y el modo. El constructor
+  configura el pin; los métodos <code>on()</code>/<code>off()</code>
+  son la forma canónica de escribir HIGH/LOW sin tener que repetir el
+  número en cada llamada.
+</p>
+<pre><code><span class="kw">import</span> Gpio
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> led: Gpio.Pin := Gpio.Pin(<span class="num">25</span>, Gpio.Pin.OUTPUT)   <span class="comment">// LED on-board del Pico</span>
+  <span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">0</span>
+  <span class="kw">while</span> i &lt; <span class="num">10</span> <span class="kw">do</span>
+    led.on()
+    sleep(<span class="num">250</span>)
+    led.off()
+    sleep(<span class="num">250</span>)
+    i := i + <span class="num">1</span>
+  <span class="kw">endwh</span>
+
+  <span class="kw">var</span> boton: Gpio.Pin := Gpio.Pin(<span class="num">14</span>, Gpio.Pin.INPUT)
+  boton.setPull(Gpio.Pin.PULL_UP)
+  <span class="kw">if</span> boton.isLow() <span class="kw">then</span>
+    <span class="kw">print</span> <span class="str">"pulsado"</span>
+  <span class="kw">endif</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Miembro</th><th>Descripción</th></tr>
+  <tr><td><code>Pin(num, mode)</code></td>
+      <td>Constructor. Configura el pin automáticamente.
+          <code>mode</code>: <code>Pin.INPUT</code> o <code>Pin.OUTPUT</code>.</td></tr>
+  <tr><td><code>on()</code></td>
+      <td>Pone el pin a HIGH (sólo si es <code>OUTPUT</code>).</td></tr>
+  <tr><td><code>off()</code></td>
+      <td>Pone el pin a LOW (sólo si es <code>OUTPUT</code>).</td></tr>
+  <tr><td><code>toggle()</code></td>
+      <td>Conmuta HIGH↔LOW. Comodidad para parpadeos.</td></tr>
+  <tr><td><code>value(): integer</code></td>
+      <td>Lee el pin. Devuelve 0 o 1.</td></tr>
+  <tr><td><code>isHigh(): boolean</code></td>
+      <td><code>true</code> si el pin lee HIGH.</td></tr>
+  <tr><td><code>isLow(): boolean</code></td>
+      <td><code>true</code> si el pin lee LOW.</td></tr>
+  <tr><td><code>setPull(mode)</code></td>
+      <td>Configura la resistencia interna (sólo útil en <code>INPUT</code>).
+          <code>mode</code>: <code>Pin.PULL_NONE</code> /
+          <code>Pin.PULL_UP</code> / <code>Pin.PULL_DOWN</code>.</td></tr>
+</table>
+<p>
+  Static consts accesibles sin instanciar:
+  <code>Pin.INPUT</code> (0), <code>Pin.OUTPUT</code> (1),
+  <code>Pin.PULL_NONE</code> (0), <code>Pin.PULL_UP</code> (1),
+  <code>Pin.PULL_DOWN</code> (2).
+</p>
+
+<h4>13.11.2 API funcional de bajo nivel</h4>
+<p>
+  Las primitivas <code>intrinsic</code> que <code>Pin</code> usa por
+  debajo. Útiles para drivers de dispositivo que ya gestionan su
+  propio modelo de pines (CS de SPI, sync de ADCs, etc.) y no quieren
+  el overhead de un objeto Pin por línea.
+</p>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>init(pin, mode)</code></td>
+      <td>Configura el pin. <code>mode</code>:
+          <code>INPUT()</code> (0) o <code>OUTPUT()</code> (1). Llamar
+          una vez por pin antes de <code>read</code>/<code>write</code>.</td></tr>
+  <tr><td><code>pull(pin, pullMode)</code></td>
+      <td>Resistencia interna: <code>PULL_NONE()</code> (0),
+          <code>PULL_UP()</code> (1), <code>PULL_DOWN()</code> (2).</td></tr>
+  <tr><td><code>write(pin, value)</code></td>
+      <td>Escribe en un pin <code>OUTPUT</code>.
+          <code>LOW()</code> = 0, cualquier otro = <code>HIGH</code>.</td></tr>
+  <tr><td><code>read(pin): integer</code></td>
+      <td>Lee un pin <code>INPUT</code>. Devuelve 0 o 1.</td></tr>
+</table>
+<p>
+  Constantes funcionales (devuelven literales):
+  <code>INPUT()</code>, <code>OUTPUT()</code>,
+  <code>LOW()</code>, <code>HIGH()</code>,
+  <code>PULL_NONE()</code>, <code>PULL_UP()</code>, <code>PULL_DOWN()</code>.
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-i2c">13.12 <code>I2c</code></h3>
+<p>
+  Bus I²C master multi-slave de 2 hilos (SDA + SCL). En el Pico 2
+  hay 2 buses HW (<code>i2c0</code>, <code>i2c1</code>). Los buffers
+  de bytes se pasan como <code>integer[]</code> donde cada slot
+  transporta un byte en los 8 bits bajos.
+</p>
+<pre><code><span class="kw">import</span> I2c
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  I2c.init(I2c.BUS0(), <span class="num">4</span>, <span class="num">5</span>, I2c.STANDARD())     <span class="comment">// SDA=GP4, SCL=GP5, 100kHz</span>
+  <span class="kw">var</span> devs: <span class="type">integer</span>[] := I2c.scan(I2c.BUS0())
+  <span class="kw">for</span> d <span class="kw">in</span> devs <span class="kw">do</span>
+    <span class="kw">print</span> <span class="str">"device at 0x"</span>, d
+  <span class="kw">next</span> d
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>init(bus, sda, scl, baudrate)</code></td>
+      <td>Configura el bus. <code>bus</code>: 0 ó 1. <code>baudrate</code> en Hz
+          (típico 100&nbsp;000 = standard, 400&nbsp;000 = fast).</td></tr>
+  <tr><td><code>write(bus, addr, data, count): integer</code></td>
+      <td>Envía <code>count</code> bytes al slave <code>addr</code>.
+          Devuelve bytes escritos, o <code>-1</code> si NAK/timeout.</td></tr>
+  <tr><td><code>read(bus, addr, data, count): integer</code></td>
+      <td>Lee <code>count</code> bytes del slave <code>addr</code>.
+          Devuelve bytes leídos, o <code>-1</code> en error.</td></tr>
+  <tr><td><code>scan(bus): integer[]</code></td>
+      <td>Escanea direcciones <code>0x08..0x77</code> y devuelve un
+          array con las que respondieron al ACK. Implementado en BP
+          sobre <code>read</code> — no requiere opcode dedicado.</td></tr>
+</table>
+<p>
+  Constantes:
+  <code>BUS0()</code>, <code>BUS1()</code>,
+  <code>STANDARD()</code> (100 kHz), <code>FAST()</code> (400 kHz).
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-spi">13.13 <code>Spi</code></h3>
+<p>
+  Bus SPI master full-duplex de 4 hilos (SCK + MOSI + MISO + CS).
+  El CS de cada slave lo gestiona el usuario con
+  <code>Gpio.write(...)</code>; este módulo se encarga del bus
+  compartido. En el Pico 2 hay 2 buses HW (<code>spi0</code>,
+  <code>spi1</code>), cada uno con varios mapas de pines admitidos.
+</p>
+<pre><code><span class="kw">import</span> Spi
+<span class="kw">import</span> Gpio
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  Spi.init(Spi.BUS0(), <span class="num">6</span>, <span class="num">7</span>, <span class="num">16</span>, Spi.MHZ_1(), Spi.MODE3())
+  Gpio.init(<span class="num">9</span>, Gpio.OUTPUT())                <span class="comment">// CS</span>
+  Gpio.write(<span class="num">9</span>, Gpio.LOW())                   <span class="comment">// select</span>
+
+  <span class="kw">var</span> tx: <span class="type">integer</span>[] := [<span class="num">0x40</span>, <span class="num">0x00</span>, <span class="num">0x00</span>]
+  <span class="kw">var</span> rx: <span class="type">integer</span>[] := [<span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>]
+  Spi.transfer(Spi.BUS0(), tx, rx, <span class="num">3</span>)
+
+  Gpio.write(<span class="num">9</span>, Gpio.HIGH())                  <span class="comment">// deselect</span>
+  <span class="kw">print</span> <span class="str">"rx[1]="</span>, rx[<span class="num">1</span>], <span class="str">" rx[2]="</span>, rx[<span class="num">2</span>]
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>init(bus, sck, mosi, miso, baudrate, mode)</code></td>
+      <td>Configura el bus. <code>mode</code> 0..3 codifica
+          <code>(CPOL, CPHA)</code>: 0=(0,0), 1=(0,1), 2=(1,0), 3=(1,1).
+          <code>baudrate</code> en Hz (típico 1–10 MHz).</td></tr>
+  <tr><td><code>write(bus, data, count): integer</code></td>
+      <td>Envía <code>count</code> bytes. Devuelve bytes escritos.</td></tr>
+  <tr><td><code>read(bus, data, count): integer</code></td>
+      <td>Lee <code>count</code> bytes clockeando con dummy 0xFF en MOSI.
+          Devuelve bytes leídos.</td></tr>
+  <tr><td><code>transfer(bus, tx, rx, count): integer</code></td>
+      <td>Intercambio full-duplex: escribe <code>tx[i]</code> y lee
+          simultáneamente <code>rx[i]</code>. Devuelve bytes intercambiados.</td></tr>
+</table>
+<p>
+  Constantes:
+  <code>BUS0()</code>, <code>BUS1()</code>,
+  <code>MODE0()</code>..<code>MODE3()</code>,
+  <code>KHZ_500()</code>, <code>MHZ_1()</code>, <code>MHZ_4()</code>, <code>MHZ_10()</code>.
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-uart">13.14 <code>Uart</code></h3>
+<p>
+  Bus serial asíncrono punto a punto (RS-232 lógico) sobre 2 hilos
+  TX/RX + GND. Sin reloj compartido: ambos extremos deben acordar
+  baudrate, formato (data bits, stop bits, paridad) y, si lo hubiera,
+  flow control (no soportado en v1 — sólo 3 wire).
+</p>
+<p>
+  El Pico 2 tiene 2 UART HW (<code>uart0</code>, <code>uart1</code>) con
+  varios mapas de pines:
+</p>
+<table>
+  <tr><th>Bus</th><th>TX</th><th>RX</th></tr>
+  <tr><td><code>uart0</code></td><td>GP0 / GP12 / GP16 / GP28</td><td>GP1 / GP13 / GP17 / GP29</td></tr>
+  <tr><td><code>uart1</code></td><td>GP4 / GP8 / GP20 / GP24</td><td>GP5 / GP9 / GP21 / GP25</td></tr>
+</table>
+<p>
+  El firmware <code>bpvm_pico</code> usa USB CDC como stdio, así que
+  GP0/GP1 están libres para usuario (no entran en conflicto con
+  <code>print</code>).
+</p>
+<pre><code><span class="kw">import</span> Uart
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  Uart.init(Uart.BUS0(), <span class="num">0</span>, <span class="num">1</span>, Uart.BAUD_115200(),
+            <span class="num">8</span>, <span class="num">1</span>, Uart.PARITY_NONE())
+  <span class="kw">var</span> tx: <span class="type">integer</span>[] := [<span class="num">0x41</span>, <span class="num">0x54</span>, <span class="num">0x0D</span>, <span class="num">0x0A</span>]    <span class="comment">// "AT\r\n"</span>
+  Uart.write(Uart.BUS0(), tx, <span class="num">4</span>)
+  <span class="kw">var</span> rx: <span class="type">integer</span>[] := newIntArray(<span class="num">64</span>)
+  <span class="kw">var</span> n: <span class="type">integer</span> := Uart.read(Uart.BUS0(), rx, <span class="num">64</span>, <span class="num">1000</span>)
+  <span class="kw">print</span> <span class="str">"RX bytes:"</span>, n
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>init(bus, tx, rx, baudrate, dataBits, stopBits, parity)</code></td>
+      <td>Configura el UART. <code>dataBits</code> 5..8,
+          <code>stopBits</code> 1 ó 2, <code>parity</code>:
+          <code>PARITY_NONE()</code> / <code>PARITY_ODD()</code> / <code>PARITY_EVEN()</code>.</td></tr>
+  <tr><td><code>write(bus, data, count): integer</code></td>
+      <td>Envía <code>count</code> bytes. Bloquea hasta que el FIFO de
+          TX los haya aceptado. Devuelve bytes escritos o <code>-1</code>.</td></tr>
+  <tr><td><code>read(bus, data, count, timeoutMs): integer</code></td>
+      <td>Lee hasta <code>count</code> bytes. Si <code>timeoutMs &lt;= 0</code>
+          bloquea hasta tenerlos todos; si <code>&gt; 0</code> devuelve
+          al expirar el timeout O al recibir <code>count</code> bytes.
+          Devuelve los bytes realmente leídos (0..count).</td></tr>
+  <tr><td><code>available(bus): integer</code></td>
+      <td>Bytes ya recibidos esperando en el buffer RX. Útil para
+          polling no bloqueante.</td></tr>
+</table>
+<p>
+  Constantes:
+  <code>BUS0()</code>, <code>BUS1()</code>,
+  <code>PARITY_NONE()</code>, <code>PARITY_ODD()</code>, <code>PARITY_EVEN()</code>,
+  y alias de baudrate:
+  <code>BAUD_9600()</code>, <code>BAUD_19200()</code>, <code>BAUD_38400()</code>,
+  <code>BAUD_57600()</code>, <code>BAUD_115200()</code>, <code>BAUD_230400()</code>,
+  <code>BAUD_460800()</code>, <code>BAUD_921600()</code>.
 </p>
 
 <!-- =========================================================== -->
@@ -1541,6 +1910,77 @@ objeto compartido</code></pre>
   El parser admite comentarios <code>//</code>. Soporta arrays
   (a diferencia del BpVM.cfg, que es plano). Ver
   <code>docs/BpProject.example</code> para una plantilla anotada.
+</p>
+
+<h4 id="cli-bpbuild">.bpbuild — fichero de proyecto del compilador y el IDE</h4>
+<pre><code>{
+  "projectDir":   "./",
+  "sourceDir":    "src",
+  "outDir":       "out",
+  "main":         "App",
+  "dependencies": ["../shared/lib", "../utils/Logger.mod"]
+}</code></pre>
+<p>
+  Fichero JSON consumido por el compilador (frontend
+  <code>lexer-java</code>) y por el BpIde. Distinto del
+  <code>.bpproject</code>: aquél vive en run-time y enumera <em>.mod</em>
+  compilados; éste vive en build-time y enumera <em>.bp</em> fuente +
+  dependencias de compilación.
+</p>
+<p>
+  Uso desde la CLI:
+</p>
+<pre><code>lexer-java --project app.bpbuild</code></pre>
+<p>
+  Campos:
+</p>
+<ul>
+  <li><code>projectDir</code> (string, opcional): raíz del proyecto.
+      Default = directorio donde está el <code>.bpbuild</code>. El resto
+      de paths relativos se resuelven respecto a este.</li>
+  <li><code>sourceDir</code> (string, <strong>obligatorio</strong>):
+      directorio con los <code>.bp</code> del proyecto.</li>
+  <li><code>outDir</code> (string, <strong>obligatorio</strong>):
+      directorio donde el compilador emite <code>.mod</code> y
+      <code>.bpi</code>. Se crea on-demand.</li>
+  <li><code>main</code> (string, <strong>obligatorio</strong>): nombre
+      lógico del módulo principal (sin extensión). El compilador busca
+      <code>&lt;sourceDir&gt;/&lt;main&gt;.bp</code>.</li>
+  <li><code>dependencies</code> (array de strings, opcional): cada entrada
+      es un directorio (busca cualquier <code>.bpi</code>/<code>.mod</code>
+      dentro al resolver imports) o un fichero <code>.mod</code>/<code>.bpi</code>
+      concreto.</li>
+</ul>
+<p>
+  <strong>Resolución de imports en modo proyecto</strong>:
+</p>
+<ol>
+  <li>Otros fuentes del proyecto bajo <code>sourceDir</code>.</li>
+  <li><code>outDir</code> (módulos del proyecto ya compilados).</li>
+  <li>Cada entrada de <code>dependencies</code> en orden.</li>
+</ol>
+<p>
+  <strong>Integración con el BpIde</strong>: menú <code>Project</code> con
+  entradas <em>New Project...</em>, <em>Open Project...</em>,
+  <em>Close Project</em>. Al abrir un proyecto el panel superior izquierdo
+  muestra un árbol estilo NetBeans con tres ramas:
+</p>
+<ul>
+  <li><strong>Sources</strong>: todos los <code>.bp</code> bajo <code>sourceDir</code>.</li>
+  <li><strong>Output</strong>: <code>.mod</code> y <code>.bpi</code> bajo <code>outDir</code>.</li>
+  <li><strong>Dependencies</strong>: las entradas del campo
+      <code>dependencies</code>.</li>
+</ul>
+<p>
+  Doble click abre el fichero en el editor. Con un proyecto cargado,
+  Run/Debug compila <code>&lt;sourceDir&gt;/&lt;main&gt;.bp</code> a
+  <code>outDir/&lt;main&gt;.mod</code> y lanza la VM apuntando a ese
+  módulo. Sin proyecto cargado, Run/Debug sigue usando el fichero
+  activo (modo single-file).
+</p>
+<p>
+  El parser admite comentarios <code>//</code>. Ver
+  <code>docs/BpBuild.example</code> para una plantilla anotada.
 </p>
 
 <h3 id="cli-disasm">15.3 Disasm</h3>

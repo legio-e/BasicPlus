@@ -1,0 +1,14 @@
+// bench.bp — programa largo (~3s) para muestreo de memoria.
+// Mismo workload en ambas VMs: bucle con cálculo + sleep entre iters.
+module Bench
+  function Main()
+    var i: integer := 0
+    var sum: integer := 0
+    while i < 30 do
+      sum := sum + i * 2
+      sleep(100)
+      i := i + 1
+    endwh
+    print sum
+  end Main
+end Bench

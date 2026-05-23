@@ -1,0 +1,15 @@
+// Test: ¿se puede instanciar Pca9554.Expander cross-module?
+module DiagMini
+  import I2c
+  import Pca9554
+
+  function Main()
+    I2c.init(I2c.BUS1(), 2, 3, I2c.STANDARD())
+    var pca: Pca9554.Expander := Pca9554.Expander(1, 0x3F)
+    pca.writeOut(0)
+    pca.setDir(3)
+    var v: integer := pca.readIn()
+    v := v & 3
+    print "v=", v
+  end Main
+end DiagMini

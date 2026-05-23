@@ -1,0 +1,57 @@
+// uartecho.bp — smoke test del módulo Uart.
+//
+// Por defecto envía "Hola UART\r\n" por uart0 (TX=GP0, RX=GP1) a
+// 115200 8N1 y luego intenta leer hasta 32 bytes con timeout de
+// 2 segundos.
+//
+// Para verificar:
+//
+//   (a) LOOPBACK SIMPLE — Une físicamente GP0 (TX) y GP1 (RX) con
+//       un cable corto. Debes ver "Hola UART\r\n" devuelto.
+//
+//   (b) USB-Serial al PC — Cablea GP0 → RX del FTDI, GP1 ← TX del
+//       FTDI, GND común. Abre un terminal en el PC a 115200 8N1 y
+//       verás "Hola UART"; cualquier byte que envíes desde el PC
+//       lo verás impreso aquí.
+//
+//   (c) Sin nada conectado — el RX timeoutea a 2 s y reporta 0
+//       bytes leídos. Esto confirma que el flujo del programa es
+//       correcto y que el backend respeta el timeout.
+//
+// OJO: el firmware bpvm_pico usa USB CDC para stdio (los `print`
+// salen al COM del Pico). UART hardware está totalmente libre.
+module UartEcho
+  import Uart
+
+  function Main()
+    print "[1] init UART0 tx=GP0 rx=GP1 @115200 8N1"
+    Uart.init(Uart.BUS0(), 0, 1, Uart.BAUD_115200(), 8, 1, Uart.PARITY_NONE())
+
+    // "Hola UART\r\n"
+    var msg: integer[] := [0x48, 0x6F, 0x6C, 0x61, 0x20, 0x55, 0x41, 0x52, 0x54, 0x0D, 0x0A]
+    print "[2] write 11 bytes"
+    var wrote: integer := Uart.write(Uart.BUS0(), msg, 11)
+    print "  wrote =", wrote
+
+    print "[3] available antes de esperar"
+    print "  available =", Uart.available(Uart.BUS0())
+
+    print "[4] read hasta 32 bytes (timeout 2000ms)"
+    var rx: integer[] := newIntArray(32)
+    var n: integer := Uart.read(Uart.BUS0(), rx, 32, 2000)
+    print "  recibidos =", n
+
+    if n > 0 then
+      print "[5] bytes recibidos:"
+      var i: integer := 0
+      while i < n do
+        print "  byte[", i, "] =", rx[i]
+        i := i + 1
+      endwh
+    else
+      print "[5] sin bytes (ok si no hay loopback ni emisor)"
+    endif
+
+    print "[6] done"
+  end Main
+end UartEcho

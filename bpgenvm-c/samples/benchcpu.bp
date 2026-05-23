@@ -1,0 +1,17 @@
+// benchcpu.bp — benchmark CPU-bound (sin sleeps) para comparar
+// velocidad bruta de la VM C vs VM Java.
+// Fibonacci recursivo: trabajo proporcional a 2^n llamadas/returns +
+// aritmetica + comparaciones. Buen stress test del interprete.
+module BenchCpu
+  function fib(n: integer): integer
+    if n < 2 then
+      return n
+    endif
+    return fib(n - 1) + fib(n - 2)
+  end fib
+
+  function Main()
+    // fib(30) = 832040, ~2.7M llamadas recursivas.
+    print fib(30)
+  end Main
+end BenchCpu

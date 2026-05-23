@@ -1,0 +1,38 @@
+// adcid.bp — primer probe SPI: lee el ID del AD7177-2.
+//
+// Equivalente al test0() del driver Python:
+//   ad7177.disabled() → wait → enabled() → wait → reset() → wait
+//   → leerId()
+//
+// Para AD7177-2 esperamos un ID con forma 0xCDEx (x = silicio rev).
+// Si se ve 0xFFFF significa MISO en alto fijo (sin chip / mal cableado).
+// Si se ve 0x0000 significa MISO en bajo fijo (sin clock / mal CPOL/CPHA).
+//
+// Pinout (ajusta a tu cableado):
+//   SPI0:  SCK=GP6, MOSI=GP7, MISO=GP16
+//   CS=GP9, SYNC=GP8
+module AdcId
+  import Spi
+  import Gpio
+  import Ad7177
+
+  function Main()
+    // El AD7177 quiere mode 3 (CPOL=1, CPHA=1). 100 kHz para empezar
+    // conservador — se puede subir a varios MHz tras validar.
+    Spi.init(Spi.BUS0(), 6, 7, 16, 100000, Spi.MODE3())
+
+    var adc: Ad7177.Adc := Ad7177.Adc(Spi.BUS0(), 9, 8)
+
+    adc.disabled()
+    sleep(100)
+    adc.enabled()
+    sleep(100)
+    adc.reset()
+    sleep(100)
+
+    var id: integer := adc.leerId()
+    print "AD7177-2 ID = 0x", id, "(decimal:", id, ")"
+
+    adc.disabled()
+  end Main
+end AdcId

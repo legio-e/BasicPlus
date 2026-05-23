@@ -1,0 +1,13 @@
+bpi 6
+library com.example.util
+module MathUtil
+func suma(a:integer,b:integer):integer public
+func saludar(nombre:string):string public
+func cuadrado(x:integer):integer public
+const VERSION:string="1.0" public
+const PI:float=3.14159 public
+enum Color public
+  ROJO=0
+  VERDE=10
+  AZUL=11
+end enum

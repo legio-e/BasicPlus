@@ -1,0 +1,35 @@
+// i2cscan.bp — usa I2c.scan() que devuelve un array con las
+// direcciones encontradas, e imprime cada una.
+//
+// La función `I2c.scan(bus)` está implementada en BP dentro del
+// módulo I2c. Hace `I2c.read(1)` a cada address 0x08..0x77 y
+// recolecta las que respondieron en un integer[].
+//
+// Pinout: bus1 con SDA=GP2, SCL=GP3 (ajusta si tienes otro cableado).
+module I2cScan
+  import I2c
+
+  function Main()
+    var BUS: integer := I2c.BUS1()
+    var SDA: integer := 2
+    var SCL: integer := 3
+    I2c.init(BUS, SDA, SCL, I2c.STANDARD())
+
+    print "Escaneando bus", BUS, "(SDA=GP", SDA, ", SCL=GP", SCL, ")..."
+    var devices: integer[] := I2c.scan(BUS)
+    var n: integer := 0
+    for d in devices do
+      print "  0x", hex2(d), "(", d, ")"
+      n := n + 1
+    next d
+    print "Encontrados:", n
+  end Main
+
+  function hex2(b: integer): string
+    var lut: string := "0123456789ABCDEF"
+    var hi: integer := (b shr 4) & 0x0F
+    var lo: integer := b & 0x0F
+    return charAt(lut, hi) + charAt(lut, lo)
+  end hex2
+
+end I2cScan

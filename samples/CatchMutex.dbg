@@ -1,0 +1,21 @@
+dbg 2
+module CatchMutex
+source C:\lenguajes\pm\lexer-java\samples\catchmutex.bp
+lines
+1431 13
+1454 14
+1463 15
+1470 16
+1479 17
+1493 19
+1515 21
+1534 25
+1557 26
+1564 27
+1573 28
+1587 30
+1619 35
+1624 36
+1632 37
+1637 38
+1645 39

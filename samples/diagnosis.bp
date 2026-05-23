@@ -1,0 +1,79 @@
+// diagnosis.bp — port del diagnosis.py MicroPython.
+//
+// Escanea el bus I2C buscando un PCA9554A en 0x3F. Si lo encuentra,
+// lo configura con los pines 0+1 como input (resto output a 0) y lee
+// los 2 bits bajos para identificar qué tarjeta analógica está
+// conectada:
+//   v=0 → R (resistencia)
+//   v=1 → 4-20 mA
+//   v=2 → TC (termopar)
+//
+// El bit 7 hardware del PCA9554A indica que es la variante "A",
+// pero aquí solo nos importa que esté en 0x3F.
+
+module Diagnosis
+  import I2c
+  import Pca9554
+
+  class Diag
+    public var isAnalog: boolean
+    public var isR:      boolean
+    public var is420:    boolean
+    public var isTC:     boolean
+
+    public function Diag()
+      this.isAnalog := false
+      this.isR      := false
+      this.is420    := false
+      this.isTC     := false
+    end Diag
+
+    public function ini()
+      var BUS: integer := I2c.BUS1()
+      var devices: integer[] := I2c.scan(BUS)
+
+      // Pase único sobre el array de devices: cuenta, imprime e
+      // interroga el PCA9554A si está en la lista.
+      var n: integer := 0
+      print "Dispositivos detectados:"
+      for d in devices do
+        print "  0x", d
+        n := n + 1
+        if d == 0x3F then
+          var pca: Pca9554.Expander := Pca9554.Expander(BUS, d)
+          pca.writeOut(0)         // todos los outputs a 0
+          pca.setInvert(0)        // sin inversión
+          pca.setDir(3)           // bits 0+1 input, resto output
+          var v: integer := pca.readIn()
+          v := v & 3
+          print "PCA9554A en 0x3F, ID bits =", v
+          if v == 0 then
+            this.isR := true
+          elseif v == 1 then
+            this.is420 := true
+          elseif v == 2 then
+            this.isTC := true
+          endif
+        endif
+      next d
+      this.isAnalog := n > 0
+    end ini
+
+  end Diag
+
+  function Main()
+    // Bus1 con SDA=GP2 SCL=GP3 (mismo cableado que el scan).
+    I2c.init(I2c.BUS1(), 2, 3, I2c.STANDARD())
+
+    var dia: Diag := Diag()
+    dia.ini()
+
+    print ""
+    print "=== Resultado ==="
+    print "Hay analog:", dia.isAnalog
+    print "Es R    :", dia.isR
+    print "Es 420  :", dia.is420
+    print "Es TC   :", dia.isTC
+  end Main
+
+end Diagnosis

@@ -1,0 +1,81 @@
+// ============================================================
+// Spi.bp — control de bus SPI en dispositivos embebidos.
+//
+// SPI es un bus síncrono full-duplex master-slave de 4 hilos:
+//   SCK   — clock (master → slave)
+//   MOSI  — Master Out, Slave In (datos master → slave)
+//   MISO  — Master In, Slave Out (datos slave → master)
+//   CS    — chip select (uno por slave; lo gestiona el USER vía Gpio,
+//                        no este módulo)
+//
+// Útil para displays (SSD1306, ILI9341), SD cards, sensores rápidos
+// (BMP280 SPI), expanders rápidos, flash externa, etc.
+//
+// Plataformas:
+//   - RP2350 (Pico 2): 2 buses HW (spi0, spi1). Cada uno admite varios
+//     pares de pines.
+//     spi0:  SCK=GP2/6/18, MOSI=GP3/7/19, MISO=GP0/4/16
+//     spi1:  SCK=GP10/14/26, MOSI=GP11/15/27, MISO=GP8/12/28
+//   - PC (Java/host C): logging por stdout — desarrollo sin HW.
+//
+// El CS de cada slave se gestiona aparte:
+//
+//   Gpio.write(CS_PIN, Gpio.LOW())
+//   Spi.write(0, payload, n)
+//   Gpio.write(CS_PIN, Gpio.HIGH())
+// ============================================================
+module Spi
+
+  // Configura el bus SPI.
+  //   bus      : 0 (spi0) o 1 (spi1).
+  //   sck, mosi, miso : GPIO pins (deben ser válidos para ese bus).
+  //   baudrate : Hz (típico 1_000_000..10_000_000).
+  //   mode     : 0..3. (CPOL, CPHA) = (0,0), (0,1), (1,0), (1,1).
+  public intrinsic function init(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)
+
+  // Escribe `count` bytes en el bus. Cada slot de `data` transporta
+  // un byte (low 8 bits). Devuelve bytes escritos.
+  public intrinsic function write(bus: integer, data: integer[], count: integer): integer
+
+  // Lee `count` bytes del bus (envía 0xFF dummy para clockear).
+  // Devuelve bytes leídos.
+  public intrinsic function read(bus: integer, data: integer[], count: integer): integer
+
+  // Transferencia full-duplex: escribe tx[i] y lee rx[i] simultánea-
+  // mente. Devuelve bytes intercambiados.
+  public intrinsic function transfer(bus: integer, tx: integer[], rx: integer[], count: integer): integer
+
+  // -------- Constantes de conveniencia --------
+  public function BUS0(): integer
+    return 0
+  end BUS0
+  public function BUS1(): integer
+    return 1
+  end BUS1
+  public function MODE0(): integer
+    return 0
+  end MODE0
+  public function MODE1(): integer
+    return 1
+  end MODE1
+  public function MODE2(): integer
+    return 2
+  end MODE2
+  public function MODE3(): integer
+    return 3
+  end MODE3
+  // Baudrates típicos.
+  public function KHZ_500(): integer
+    return 500000
+  end KHZ_500
+  public function MHZ_1(): integer
+    return 1000000
+  end MHZ_1
+  public function MHZ_4(): integer
+    return 4000000
+  end MHZ_4
+  public function MHZ_10(): integer
+    return 10000000
+  end MHZ_10
+
+end Spi

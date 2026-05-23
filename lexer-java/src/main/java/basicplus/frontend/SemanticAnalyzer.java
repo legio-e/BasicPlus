@@ -257,6 +257,9 @@ public final class SemanticAnalyzer {
         addBuiltin(s, "__newRefArray",  INT_ARRAY,           new String[]{"cap"},           new BpType[]{PrimitiveType.INTEGER});
         addBuiltin(s, "__growRefArray", INT_ARRAY,           new String[]{"old","newCap"},  new BpType[]{INT_ARRAY, PrimitiveType.INTEGER});
         addBuiltin(s, "__growIntArray", INT_ARRAY,           new String[]{"old","newCap"},  new BpType[]{INT_ARRAY, PrimitiveType.INTEGER});
+        // Versión llamable desde user BP (sin __): aloca int array de tamaño `size`
+        // inicializado a ceros. Equivalente a __growIntArray(null, size).
+        addBuiltin(s, "newIntArray",    INT_ARRAY,           new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
         addBuiltin(s, "__charsToString", PrimitiveType.STRING, new String[]{"chars","len"},   new BpType[]{INT_ARRAY, PrimitiveType.INTEGER});
         addBuiltin(s, "charCodeAt",     PrimitiveType.INTEGER, new String[]{"s","i"},          new BpType[]{PrimitiveType.STRING, PrimitiveType.INTEGER});
 

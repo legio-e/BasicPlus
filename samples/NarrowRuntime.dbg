@@ -1,0 +1,8 @@
+dbg 2
+module NarrowRuntime
+source C:\lenguajes\pm\lexer-java\samples\narrowtypes_runtime.bp
+lines
+1431 6
+1439 7
+1444 8
+1451 9

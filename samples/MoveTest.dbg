@@ -1,0 +1,21 @@
+dbg 2
+module MoveTest
+source C:\lenguajes\pm\lexer-java\samples\movetest.bp
+lines
+1431 5
+1436 6
+1479 7
+1508 12
+1513 13
+1556 14
+1585 20
+1670 21
+1755 22
+1782 23
+1796 27
+1823 28
+1837 31
+1900 32
+1963 33
+1990 34
+2004 36

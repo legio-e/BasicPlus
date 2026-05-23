@@ -1,0 +1,13 @@
+bpi 5
+module SyncListTest
+class Item public
+  ctor(n:integer)
+end class
+class Producer public extends Thread
+  ctor(bag:SyncList,base:integer,iters:integer)
+  method run():void public
+end class
+class Consumer public extends Thread
+  ctor(bag:SyncList,maxAttempts:integer)
+  method run():void public
+end class

@@ -1,0 +1,10 @@
+dbg 2
+module PromptTest
+source C:\lenguajes\pm\lexer-java\samples\prompttest.bp
+lines
+1437 9
+1443 11
+1450 12
+1459 13
+1464 14
+1478 16

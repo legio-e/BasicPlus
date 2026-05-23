@@ -1,0 +1,112 @@
+// adctemp.bp — lee el sensor de temperatura INTERNO del AD7177-2.
+//
+// Misma secuencia que adcpower.bp pero con AINP=0x11, AINN=0x12 (los
+// nodos internos del termistor del propio chip, equivalente al
+// leerTemp() del driver Python). El propósito es validar el pipeline
+// SPI + driver con una entrada que NO depende de cableado externo: si
+// esto sale con status=0 y un valor razonable, el driver es correcto
+// y el ADC_ERROR de adcpower.bp es un problema de hardware en el
+// canal de "power voltage".
+//
+// Conversión (igual que en el Python):
+//   v_adc = 2.5 * raw / 2^32
+//   T_C   = v_adc / 0.000477 - 273.15
+module AdcTemp
+  import Spi
+  import Gpio
+  import Ad7177
+
+  function Main()
+    print "[1] init SPI"
+    Spi.init(Spi.BUS0(), 6, 7, 16, 100000, Spi.MODE3())
+
+    print "[2] construct Adc"
+    var adc: Ad7177.Adc := Ad7177.Adc(Spi.BUS0(), 9, 8)
+
+    print "[3] reset cycle"
+    adc.disabled()
+    sleep(100)
+    adc.enabled()
+    sleep(100)
+    adc.reset()
+    sleep(100)
+
+    print "[4] leerId"
+    var id: integer := adc.leerId()
+    print "ID =", id, "(esperado 20446 = 0x4FDE)"
+
+    // Configuración mínima — copiada de leerTemp() del Python.
+    // (En el Python además se toca GPIOCON r6 para activar el bias del
+    // sensor de temperatura: bit 3 del high byte. Lo replicamos aquí.)
+    print "[5] enable temp sensor bias (GPIOCON)"
+    var g: integer := adc.rreg16(6)        // REG_GPIOCON = 6
+    g := g | 0x0800                        // bit 11 = TEMPSEN_EN (variante: high byte | 0x08)
+    adc.wreg16(6, g)
+
+    print "[6] setInterface"
+    adc.setInterface(false, false, false)
+
+    print "[7] setSPS"
+    adc.setSPS(0, 14)             // SPS_100
+
+    print "[8] setChannel (AINP=0x11, AINN=0x12 → temp interna)"
+    adc.setChannel(0, true, 0, 0x11, 0x12)
+
+    print "[9] setChSetup unipolar / ref interna"
+    adc.setChSetup(0, 0, 2)
+
+    print "[10] setMode SINGLE_CONVERT"
+    adc.setMode(true, 0, 1, 0)
+
+    print "[11] sleep 1000ms"
+    sleep(1000)
+
+    print "[12] waitReady (max 50 iter * 100 ms)"
+    var ready: boolean := false
+    var iter: integer := 0
+    while iter < 50 do
+      ready := adc.isReady()
+      if ready then
+        iter := 100
+      else
+        sleep(100)
+        iter := iter + 1
+      endif
+    endwh
+    if ready == false then
+      print "WARNING: ADC nunca reportó ready"
+    endif
+
+    print "[13] status tras ready"
+    var st: integer := adc.leerStatus()
+    print "status =", st, " (bit7 RDY=0 esperado, bit6 ADC_ERROR=0 deseado)"
+
+    print "[14] read DATA (4 bytes crudos)"
+    var rb: integer[] := adc.rreg(4, 4)
+    print "byte[0] =", rb[0]
+    print "byte[1] =", rb[1]
+    print "byte[2] =", rb[2]
+    print "byte[3] =", rb[3]
+
+    var data: integer := (rb[0] & 0xFF) shl 24
+    data := data | ((rb[1] & 0xFF) shl 16)
+    data := data | ((rb[2] & 0xFF) shl 8)
+    data := data |  (rb[3] & 0xFF)
+    print "raw =", data
+
+    print "[15] disable channel + cleanup"
+    adc.setChannel(0, false, 0, 0, 1)
+    adc.disabled()
+
+    // Conversión a temperatura.
+    var raw: float := 0.0
+    if data >= 0 then
+      raw := data
+    else
+      raw := data + 4294967296.0
+    endif
+    var v: float := 2.5 * raw / 4294967295.0
+    var t: float := v / 0.000477 - 273.15
+    print "V_adc =", v, "V    T =", t, "C"
+  end Main
+end AdcTemp

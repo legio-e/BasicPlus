@@ -1,0 +1,14 @@
+dbg 2
+module Spi
+source C:\lenguajes\pm\bpstdlib\Spi.bp
+lines
+1423 50
+1444 53
+1465 56
+1486 59
+1507 62
+1528 65
+1549 69
+1570 72
+1591 75
+1612 78

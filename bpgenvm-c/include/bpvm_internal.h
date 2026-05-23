@@ -258,6 +258,11 @@ static inline void bpvm_mem_write_i32(bpvm_t* vm, uint32_t addr, int32_t v) {
 
 /* loader.c */
 bpvm_status_t bpvm_loader_load(bpvm_t* vm, const char* path);
+/* Variante buffer: parsea un .mod ya en memoria. `name_hint` se usa como
+ * nombre lógico si el módulo no tiene library prefix (en target embebido
+ * no hay path del cual derivarlo). Puede ser NULL → "embedded". */
+bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
+                                       size_t size, const char* name_hint);
 
 /* interp.c */
 bpvm_status_t bpvm_interp_run(bpvm_t* vm);

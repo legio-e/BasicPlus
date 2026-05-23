@@ -1,0 +1,10 @@
+dbg 2
+module L2Lib
+source C:\lenguajes\pm\lexer-java\samples\l2lib.bp
+lines
+1423 22
+1449 26
+1470 30
+1484 31
+1505 18
+1656 46

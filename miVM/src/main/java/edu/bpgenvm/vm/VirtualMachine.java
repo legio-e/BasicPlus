@@ -3270,6 +3270,221 @@ public class VirtualMachine {
                 break;
             }
 
+            // ---- Gpio — simulación en PC (logging) ----
+            // En la VM Java no hay hardware real; mostramos la acción por
+            // stdout para que el desarrollador pueda probar la lógica
+            // antes de subir el código a un dispositivo.
+            case GPIO_INIT: {
+                int mode = popTc(tc);
+                int pin  = popTc(tc);
+                System.out.println("[gpio] init pin=" + pin + " mode="
+                        + (mode == 0 ? "INPUT" : "OUTPUT"));
+                pushTc(tc, 0);  // dummy retorno (función void)
+                break;
+            }
+            case GPIO_PULL: {
+                int pull = popTc(tc);
+                int pin  = popTc(tc);
+                String pullStr = pull == 0 ? "NONE" : (pull == 1 ? "UP" : "DOWN");
+                System.out.println("[gpio] pull pin=" + pin + " mode=" + pullStr);
+                pushTc(tc, 0);
+                break;
+            }
+            case GPIO_WRITE: {
+                int val = popTc(tc);
+                int pin = popTc(tc);
+                System.out.println("[gpio] write pin=" + pin + " value="
+                        + (val == 0 ? "LOW" : "HIGH"));
+                pushTc(tc, 0);
+                break;
+            }
+            case GPIO_READ: {
+                int pin = popTc(tc);
+                System.out.println("[gpio] read pin=" + pin
+                        + " (sim → siempre 0 en PC)");
+                pushTc(tc, 0);   // siempre LOW en simulación
+                break;
+            }
+
+            // ---- I2C — simulación en PC (logging del frame) ----
+            case I2C_INIT: {
+                int baud = popTc(tc);
+                int scl  = popTc(tc);
+                int sda  = popTc(tc);
+                int bus  = popTc(tc);
+                System.out.println("[i2c] init bus=" + bus
+                        + " sda=" + sda + " scl=" + scl
+                        + " baud=" + baud);
+                pushTc(tc, 0);
+                break;
+            }
+            case I2C_WRITE: {
+                int count = popTc(tc);
+                int dataRef = popTc(tc);
+                int addr = popTc(tc);
+                int bus  = popTc(tc);
+                StringBuilder sb = new StringBuilder();
+                sb.append("[i2c] write bus=").append(bus)
+                  .append(" addr=0x").append(Integer.toHexString(addr))
+                  .append(" bytes=[");
+                for (int i = 0; i < count; i++) {
+                    int b1 = readI32(memory, dataRef + 4 + i * 4) & 0xFF;
+                    if (i > 0) sb.append(' ');
+                    sb.append(String.format("%02X", b1));
+                }
+                sb.append("]");
+                System.out.println(sb);
+                pushTc(tc, count);  // devuelve bytes "escritos" en sim
+                break;
+            }
+            case I2C_READ: {
+                int count = popTc(tc);
+                int dataRef = popTc(tc);
+                int addr = popTc(tc);
+                int bus  = popTc(tc);
+                // En PC simulamos: llenamos con 0x00.
+                for (int i = 0; i < count; i++) {
+                    writeI32(memory, dataRef + 4 + i * 4, 0);
+                }
+                System.out.println("[i2c] read bus=" + bus
+                        + " addr=0x" + Integer.toHexString(addr)
+                        + " count=" + count + " (sim → ceros)");
+                pushTc(tc, count);
+                break;
+            }
+
+            case NEW_INT_ARRAY: {
+                int size = popTc(tc);
+                if (size < 0) {
+                    throwBpRuntimeError(tc, "newIntArray: tamaño negativo: " + size);
+                    break;
+                }
+                int ref = heapAlloc(size * 4, TYPE_ARRAY_I32);
+                writeInt32(ref, size);
+                for (int i = 0; i < size; i++) {
+                    writeInt32(ref + 4 + i * 4, 0);
+                }
+                pushTc(tc, ref);
+                break;
+            }
+
+            // ---- SPI — simulación en PC (logging del frame) ----
+            case SPI_INIT: {
+                int mode = popTc(tc);
+                int baud = popTc(tc);
+                int miso = popTc(tc);
+                int mosi = popTc(tc);
+                int sck  = popTc(tc);
+                int bus  = popTc(tc);
+                System.out.println("[spi] init bus=" + bus
+                        + " sck=" + sck + " mosi=" + mosi + " miso=" + miso
+                        + " baud=" + baud + " mode=" + mode);
+                pushTc(tc, 0);
+                break;
+            }
+            case SPI_WRITE: {
+                int count = popTc(tc);
+                int dataRef = popTc(tc);
+                int bus  = popTc(tc);
+                StringBuilder sb = new StringBuilder();
+                sb.append("[spi] write bus=").append(bus).append(" bytes=[");
+                for (int i = 0; i < count; i++) {
+                    int b1 = readI32(memory, dataRef + 4 + i * 4) & 0xFF;
+                    if (i > 0) sb.append(' ');
+                    sb.append(String.format("%02X", b1));
+                }
+                sb.append("]");
+                System.out.println(sb);
+                pushTc(tc, count);
+                break;
+            }
+            case SPI_READ: {
+                int count = popTc(tc);
+                int dataRef = popTc(tc);
+                int bus  = popTc(tc);
+                for (int i = 0; i < count; i++) {
+                    writeI32(memory, dataRef + 4 + i * 4, 0);
+                }
+                System.out.println("[spi] read bus=" + bus
+                        + " count=" + count + " (sim → ceros)");
+                pushTc(tc, count);
+                break;
+            }
+            case SPI_TRANSFER: {
+                int count = popTc(tc);
+                int rxRef = popTc(tc);
+                int txRef = popTc(tc);
+                int bus  = popTc(tc);
+                StringBuilder sb = new StringBuilder();
+                sb.append("[spi] transfer bus=").append(bus).append(" tx=[");
+                for (int i = 0; i < count; i++) {
+                    int b1 = readI32(memory, txRef + 4 + i * 4) & 0xFF;
+                    if (i > 0) sb.append(' ');
+                    sb.append(String.format("%02X", b1));
+                    writeI32(memory, rxRef + 4 + i * 4, 0);
+                }
+                sb.append("] (rx sim → ceros)");
+                System.out.println(sb);
+                pushTc(tc, count);
+                break;
+            }
+
+            // ---- UART — simulación en PC (logging del frame) ----
+            case UART_INIT: {
+                int parity    = popTc(tc);
+                int stopBits  = popTc(tc);
+                int dataBits  = popTc(tc);
+                int baud      = popTc(tc);
+                int rx        = popTc(tc);
+                int tx        = popTc(tc);
+                int bus       = popTc(tc);
+                char pchar = (parity == 1) ? 'O' : (parity == 2) ? 'E' : 'N';
+                System.out.println("[uart] init bus=" + bus
+                        + " tx=" + tx + " rx=" + rx
+                        + " baud=" + baud
+                        + " " + dataBits + pchar + stopBits);
+                pushTc(tc, 0);
+                break;
+            }
+            case UART_WRITE: {
+                int count = popTc(tc);
+                int dataRef = popTc(tc);
+                int bus = popTc(tc);
+                StringBuilder sb = new StringBuilder();
+                StringBuilder ascii = new StringBuilder();
+                sb.append("[uart] write bus=").append(bus).append(" bytes=[");
+                for (int i = 0; i < count; i++) {
+                    int b1 = readI32(memory, dataRef + 4 + i * 4) & 0xFF;
+                    if (i > 0) sb.append(' ');
+                    sb.append(String.format("%02X", b1));
+                    ascii.append((b1 >= 32 && b1 < 127) ? (char) b1 : '.');
+                }
+                sb.append("] (\"").append(ascii).append("\")");
+                System.out.println(sb);
+                pushTc(tc, count);
+                break;
+            }
+            case UART_READ: {
+                int timeout = popTc(tc);
+                int count   = popTc(tc);
+                int dataRef = popTc(tc);
+                int bus     = popTc(tc);
+                for (int i = 0; i < count; i++) {
+                    writeI32(memory, dataRef + 4 + i * 4, 0);
+                }
+                System.out.println("[uart] read bus=" + bus
+                        + " count=" + count + " timeout=" + timeout
+                        + " (sim → ceros)");
+                pushTc(tc, count);
+                break;
+            }
+            case UART_AVAILABLE: {
+                int bus = popTc(tc);
+                System.out.println("[uart] available bus=" + bus + " (sim → 0)");
+                pushTc(tc, 0);
+                break;
+            }
+
             default:
                 throw new RuntimeException("Builtin no implementado: " + b);
         }

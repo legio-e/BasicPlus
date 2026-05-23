@@ -16,10 +16,98 @@
             <artifactId>bpgenvm</artifactId>
             <version>1.0</version>
         </dependency>
+        <!-- purejavacomm 1.0.5 (fork de org.bidib) usa JNA 5.x — la 1.0.2.RELEASE
+             bundle JNA 4.x antiguo y casca con "Can't find dependent libraries"
+             en Windows modernos sin Visual C++ 2013 redist instalado. -->
+        <dependency>
+            <groupId>org.bidib.com.github.purejavacomm</groupId>
+            <artifactId>purejavacomm</artifactId>
+            <version>1.0.5</version>
+        </dependency>
     </dependencies>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
+
+    <build>
+        <plugins>
+            <!--
+              Sincroniza el manual HTML del IDE con el manual canónico de
+              docs/. Single source of truth: docs/manual.html. En cada
+              build (fase generate-resources, antes de copiar resources al
+              target) el antrun copia el HTML a src/main/resources/ para
+              que el menú "Help → Manual (F1)" del IDE lo extraiga
+              actualizado desde el jar.
+
+              No edites a mano src/main/resources/manual.html — los
+              cambios se sobrescriben en el siguiente `mvn package`.
+              Edita docs/manual.html.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>sync-manual-html</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <copy file="${project.basedir}/../docs/manual.html"
+                                      tofile="${project.basedir}/src/main/resources/manual.html"
+                                      overwrite="true"
+                                      failonerror="true"/>
+                                <echo message="manual.html sincronizado desde docs/ → resources/"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+              Fat-jar: empaqueta el IDE + todas las deps (basicplus-frontend,
+              bpgenvm, purejavacomm + sus deps transitivas como JNA) en un
+              único jar ejecutable con `java -jar BpIde-1.0-SNAPSHOT.jar`.
+              Necesario para correr el IDE fuera de NetBeans sin pelear con
+              classpaths.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.mycompany.bpide.FrmMain</mainClass>
+                                </transformer>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <!-- Firmas inútiles de jars firmados (pueden romper el manifest). -->
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

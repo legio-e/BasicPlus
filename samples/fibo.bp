@@ -8,7 +8,7 @@ module Fibo
 		endif
 	end fibo
 	
-	function Main()
+	function Main(arg:string)
 		var ini, fin:float
 		
 		fibo(30)

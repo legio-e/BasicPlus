@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>      /* fmodf */
 
 /* Helper: emite un texto al output sink (o stdout por defecto). */
 static void emit_text(bpvm_t* vm, const char* s, size_t len) {
@@ -37,6 +38,40 @@ static void emit_int(bpvm_t* vm, int32_t v, int newline) {
 
 static void emit_newline(bpvm_t* vm) {
     emit_text(vm, "\n", 1);
+}
+
+/* Formatea un float estilo Java Float.toString (que es lo que usa la VM
+ * Java en FPRINT_NONL). Usa %g y limpia el trailing ".0" si es entero. */
+static void emit_float(bpvm_t* vm, float v, int newline) {
+    char buf[40];
+    /* %.7g da una representación razonable; Java's Float.toString es
+     * un poco más estricto pero para nuestros propósitos basta. */
+    int n = snprintf(buf, sizeof(buf), "%g", (double) v);
+    if (n <= 0) return;
+    /* Aseguramos que tenga punto decimal — Java lo hace ("1.0" no "1"). */
+    int has_dot = 0;
+    for (int i = 0; i < n; i++) {
+        if (buf[i] == '.' || buf[i] == 'e' || buf[i] == 'E'
+                || buf[i] == 'n' /*nan*/ || buf[i] == 'i' /*inf*/) {
+            has_dot = 1; break;
+        }
+    }
+    if (!has_dot && n + 2 < (int) sizeof(buf)) {
+        buf[n++] = '.'; buf[n++] = '0'; buf[n] = '\0';
+    }
+    if (newline && n + 1 < (int) sizeof(buf)) {
+        buf[n++] = '\n'; buf[n] = '\0';
+    }
+    emit_text(vm, buf, (size_t) n);
+}
+
+/* Helpers de reinterpretación int↔float (tipo punning seguro en C99 vía
+ * memcpy; los compiladores lo optimizan a 0 instrucciones). */
+static inline float bits_to_float(int32_t bits) {
+    float f; memcpy(&f, &bits, 4); return f;
+}
+static inline int32_t float_to_bits(float f) {
+    int32_t bits; memcpy(&bits, &f, 4); return bits;
 }
 
 /* Ejecuta el thread `tc` durante hasta `max_ops` opcodes o hasta que
@@ -371,6 +406,104 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
             char c = (char)(v & 0xFF);
             emit_text(vm, &c, 1);
+            break;
+        }
+
+        /* ---- Float ops (0x28..0x37, 0x57) — paridad con VM Java. ---- */
+        case OP_FPUSH: {
+            int32_t bits = bpvm_read_i32_be(mem + pc); pc += 4;
+            bpvm_write_i32_be(mem + sp, bits); sp += 4;
+            break;
+        }
+        case OP_FADD: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, float_to_bits(a + b)); sp += 4;
+            break;
+        }
+        case OP_FSUB: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, float_to_bits(a - b)); sp += 4;
+            break;
+        }
+        case OP_FMUL: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, float_to_bits(a * b)); sp += 4;
+            break;
+        }
+        case OP_FDIV: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, float_to_bits(a / b)); sp += 4;
+            break;
+        }
+        case OP_FMOD: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, float_to_bits(fmodf(a, b))); sp += 4;
+            break;
+        }
+        case OP_FNEG: {
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, float_to_bits(-a)); sp += 4;
+            break;
+        }
+        case OP_FEQ: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, a == b ? 1 : 0); sp += 4;
+            break;
+        }
+        case OP_FNEQ: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, a != b ? 1 : 0); sp += 4;
+            break;
+        }
+        case OP_FLT: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, a <  b ? 1 : 0); sp += 4;
+            break;
+        }
+        case OP_FLE: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, a <= b ? 1 : 0); sp += 4;
+            break;
+        }
+        case OP_FGT: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, a >  b ? 1 : 0); sp += 4;
+            break;
+        }
+        case OP_FGE: {
+            sp -= 4; float b = bits_to_float(bpvm_read_i32_be(mem + sp));
+            sp -= 4; float a = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, a >= b ? 1 : 0); sp += 4;
+            break;
+        }
+        case OP_FPRINT: {
+            sp -= 4; float v = bits_to_float(bpvm_read_i32_be(mem + sp));
+            emit_float(vm, v, /*newline=*/1);
+            break;
+        }
+        case OP_FPRINT_NONL: {
+            sp -= 4; float v = bits_to_float(bpvm_read_i32_be(mem + sp));
+            emit_float(vm, v, /*newline=*/0);
+            break;
+        }
+        case OP_I2F: {
+            sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
+            bpvm_write_i32_be(mem + sp, float_to_bits((float) v)); sp += 4;
+            break;
+        }
+        case OP_F2I: {
+            sp -= 4; float fv = bits_to_float(bpvm_read_i32_be(mem + sp));
+            bpvm_write_i32_be(mem + sp, (int32_t) fv); sp += 4;
             break;
         }
 

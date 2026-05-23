@@ -1,0 +1,8 @@
+dbg 2
+module DiamondTest
+source C:\lenguajes\pm\lexer-java\samples\diamondtest.bp
+lines
+1454 8
+1469 12
+1474 13
+1490 14

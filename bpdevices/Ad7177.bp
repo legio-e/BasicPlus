@@ -1,0 +1,282 @@
+// ============================================================
+// Ad7177.bp — driver completo para el ADC sigma-delta de 24-bit
+// AD7177-2 (Analog Devices) sobre SPI. Port del driver MicroPython
+// equivalente.
+//
+// SPI Mode 3 (CPOL=1, CPHA=1), MSB first, 8-bit words.
+// Protocolo:
+//   Read:  [0x40 | reg][dummy * N]    → respuesta en bytes 1..N
+//   Write: [0x00 | reg][data * N]
+//
+// El driver gestiona dos pines extra:
+//   CS    — chip select (LOW = chip seleccionado)
+//   SYNC  — pull-low pulse para arrancar conversiones
+//
+// API de alto nivel:
+//   leerId()     — ID del chip (debe ser 0x4FDx para AD7177-2)
+//   leerPowerV() — lectura del canal "power voltage" con todos los
+//                  registros configurados, devuelve float voltios.
+//
+// API de bajo nivel (set* / rreg / wreg / readData) disponible para
+// el usuario que quiera escribir sus propias rutinas de medida.
+// ============================================================
+module Ad7177
+  import Spi
+  import Gpio
+
+  public class Adc
+    public var bus:     integer
+    public var csPin:   integer
+    public var syncPin: integer
+
+    public function Adc(bus: integer, cs: integer, syncP: integer)
+      this.bus     := bus
+      this.csPin   := cs
+      this.syncPin := syncP
+      Gpio.init(cs,    Gpio.OUTPUT())
+      Gpio.init(syncP, Gpio.OUTPUT())
+      Gpio.write(cs,    Gpio.HIGH())
+      Gpio.write(syncP, Gpio.HIGH())
+    end Adc
+
+    public function enabled()
+      Gpio.write(this.csPin, Gpio.LOW())
+    end enabled
+
+    public function disabled()
+      Gpio.write(this.csPin, Gpio.HIGH())
+    end disabled
+
+    public function reset()
+      var cmd: integer[] := [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+      Spi.write(this.bus, cmd, 8)
+    end reset
+
+    // -------- I/O de registros (read N bytes / write N bytes) --------
+
+    public function rreg(register: integer, n: integer): integer[]
+      var tx: integer[] := newIntArray(n + 1)
+      var rx: integer[] := newIntArray(n + 1)
+      tx[0] := (0x40 | register)
+      var i: integer := 1
+      while i <= n do
+        tx[i] := 0
+        i := i + 1
+      endwh
+      Spi.transfer(this.bus, tx, rx, n + 1)
+      var out: integer[] := newIntArray(n)
+      i := 0
+      while i < n do
+        out[i] := rx[i + 1]
+        i := i + 1
+      endwh
+      return out
+    end rreg
+
+    public function wreg(register: integer, data: integer[], n: integer)
+      var cmd: integer[] := newIntArray(n + 1)
+      cmd[0] := register
+      var i: integer := 0
+      while i < n do
+        cmd[i + 1] := data[i]
+        i := i + 1
+      endwh
+      Spi.write(this.bus, cmd, n + 1)
+    end wreg
+
+    // -------- Helpers de I/O --------
+
+    // Escribe un valor de 16 bits en el registro indicado (high byte
+    // primero, como espera el AD7177-2).
+    public function wreg16(register: integer, value: integer)
+      var buf: integer[] := [((value shr 8) & 0xFF), (value & 0xFF)]
+      this.wreg(register, buf, 2)
+    end wreg16
+
+    // Lee un valor de 16 bits desde el registro.
+    public function rreg16(register: integer): integer
+      var b: integer[] := this.rreg(register, 2)
+      return (((b[0] & 0xFF) shl 8) | (b[1] & 0xFF))
+    end rreg16
+
+    // -------- Identificación / estado --------
+
+    public function leerId(): integer
+      return this.rreg16(7)              // REG_ID = 7
+    end leerId
+
+    public function leerStatus(): integer
+      var b: integer[] := this.rreg(0, 1)  // REG_STATUS = 0
+      return b[0] & 0xFF
+    end leerStatus
+
+    public function isReady(): boolean
+      var s: integer := this.leerStatus()
+      // RDY bit (status & 0x80 == 0 → datos listos).
+      return (s & 0x80) == 0
+    end isReady
+
+    public function waitReady()
+      var ready: boolean := false
+      while ready == false do
+        ready := this.isReady()
+        if ready == false then
+          sleep(5)
+        endif
+      endwh
+    end waitReady
+
+    // Variante con timeout: espera hasta maxIter iteraciones de stepMs
+    // milisegundos. Devuelve true si llegó ready, false si expiró el
+    // timeout. Útil para no bloquear el VM si la conversión nunca
+    // completa por mal config / cableado.
+    public function waitReadyMax(maxIter: integer, stepMs: integer): boolean
+      var ready: boolean := false
+      var iter: integer := 0
+      while iter < maxIter do
+        ready := this.isReady()
+        if ready then
+          iter := maxIter
+        else
+          sleep(stepMs)
+          iter := iter + 1
+        endif
+      endwh
+      return ready
+    end waitReadyMax
+
+    // Lee 4 bytes del registro DATA (0x04) → entero 32-bit con la
+    // última conversión.
+    public function readData(): integer
+      var b: integer[] := this.rreg(4, 4)   // REG_DATA = 4
+      var r: integer := (b[0] & 0xFF) shl 24
+      r := r | ((b[1] & 0xFF) shl 16)
+      r := r | ((b[2] & 0xFF) shl 8)
+      r := r |  (b[3] & 0xFF)
+      return r
+    end readData
+
+    // -------- Setters de configuración --------
+
+    // ADCMODE (reg 1): referencia interna, delay, modo, fuente de reloj.
+    //   intRef : true → enciende referencia interna (bit 15)
+    //   delay  : 0..7 (DELAY_xx) → bits 10..8
+    //   mode   : 0..7 (MODE_xx)   → bits 6..4
+    //   clock  : 0..3 (CLOCK_xx)  → bits 3..2
+    public function setMode(intRef: boolean, delay: integer, mode: integer, clock: integer)
+      var m: integer := 0
+      if intRef then
+        m := (m | 0x8000)
+      endif
+      m := (m | ((delay shl 8) & 0x700))
+      m := (m | ((mode  shl 4) & 0x70))
+      m := (m | ((clock shl 2) & 0xC))
+      this.wreg16(1, m)        // REG_ADCMODE = 1
+    end setMode
+
+    // IFMODE (reg 2): modo de interfaz serie.
+    //   altSync   : true → ALT_SYNC bit (12)
+    //   ioStrength: true → IOSTRENGTH bit (11)
+    //   contRead  : true → CONTREAD bit (7) — continuous read mode
+    // Se fuerza el bit 1 (32-bit data por palabra leída) que es el
+    // único modo que esta versión del driver soporta.
+    public function setInterface(altSync: boolean, ioStrength: boolean, contRead: boolean)
+      var i: integer := 0
+      if altSync then
+        i := (i | 0x1000)
+      endif
+      if ioStrength then
+        i := (i | 0x800)
+      endif
+      if contRead then
+        i := (i | 0x80)
+      endif
+      i := (i | 2)             // 32-bit data
+      this.wreg16(2, i)        // REG_IFMODE = 2
+    end setInterface
+
+    // CHANNEL_n (reg 0x10+ch): habilita un canal y le asigna el setup
+    // y los pines AIN+ / AIN-.
+    public function setChannel(channel: integer, enab: boolean, setupSel: integer, ainp: integer, ainn: integer)
+      var c: integer := 0
+      if enab then
+        c := (c | 0x8000)
+      endif
+      c := (c | ((setupSel shl 12) & 0x3000))
+      c := (c | (((ainp & 0x1F) shl 5) | (ainn & 0x1F)))
+      this.wreg16(0x10 + channel, c)
+    end setChannel
+
+    // SETUPCON_n (reg 0x20+ch): configuración del setup asociado al canal.
+    //   bipolar = 0 → unipolar; bipolar = 1 → bipolar
+    //   ref     : 0..3 (bits 5..4) — 0=ext+, 2=internal, etc.
+    public function setChSetup(channel: integer, bipolar: integer, ref: integer)
+      var sc: integer := this.rreg16(0x20 + channel)
+      if bipolar == 0 then
+        sc := (sc & 0xEFFF)
+      else
+        sc := (sc | 0x1000)
+      endif
+      sc := ((sc & 0xFFCF) | ref)
+      this.wreg16(0x20 + channel, sc)
+    end setChSetup
+
+    // FILTCON_n (reg 0x28+ch): output data rate (5 bits bajos).
+    public function setSPS(channel: integer, sps: integer)
+      var s: integer := this.rreg16(0x28 + channel)
+      s := ((s & 0xFFE0) | (sps & 0x1F))
+      this.wreg16(0x28 + channel, s)
+    end setSPS
+
+    // -------- Operaciones de alto nivel --------
+
+    // Configura el canal 0 para leer el "power voltage" (AINP=0x13,
+    // AINN=0x14) y devuelve el valor en voltios. Equivalente al
+    // leerPowerV del MicroPython original.
+    //
+    // Conversión: la lectura del ADC es un entero de 32 bits sin signo.
+    // En BP los enteros son SIGNED 32-bit, así que cuando el MSB está
+    // a 1 (valores grandes) se interpretan como negativos. Sumamos
+    // 2^32 en ese caso para reconstruir el valor unsigned como float.
+    //
+    // La fórmula final aplica el atenuador 5:1 del divisor de tensión:
+    //   v_real = 5.0 * 2.5 * (raw / 2^32 - 1)
+    public function leerPowerV(): float
+      this.setInterface(false, false, false)
+      this.setSPS(0, 14)               // SPS_100 = 0b01110
+      this.setChannel(0, true, 0, 0x13, 0x14)
+      this.setChSetup(0, 0, 2)         // unipolar, referencia interna
+      this.setMode(true, 0, 1, 0)      // SINGLE_CONVERT, CLOCK_INTERNAL
+
+      sleep(50)                        // breve espera a la conversión
+      this.waitReady()
+      var data: integer := this.readData()
+      this.setChannel(0, false, 0, 0, 1)   // disable channel
+
+      // raw como float, reconstruyendo unsigned si MSB=1.
+      var raw: float := 0.0
+      if data >= 0 then
+        raw := data
+      else
+        raw := data + 4294967296.0      // sumar 2^32
+      endif
+      var v: float := 5.0 * 2.5 * raw / 4294967295.0
+      return v
+    end leerPowerV
+
+    // Test equivalente al test0() del Python: identifica el chip.
+    public function test0(): integer
+      this.disabled()
+      sleep(100)
+      this.enabled()
+      sleep(100)
+      this.reset()
+      sleep(100)
+      var id: integer := this.leerId()
+      this.disabled()
+      return id
+    end test0
+
+  end Adc
+
+end Ad7177

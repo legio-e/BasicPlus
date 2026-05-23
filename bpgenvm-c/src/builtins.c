@@ -12,6 +12,11 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "bpvm_gpio.h"
+#include "bpvm_i2c.h"
+#include "bpvm_spi.h"
+#include "bpvm_uart.h"
+
 /* IDs estables (= ordinal del enum Builtin Java). Sólo los que F2
  * implementa; los demás devuelven BAD_OPCODE para que el caller sepa
  * que falta. */
@@ -20,6 +25,7 @@ enum {
     BUILTIN_PARSE_INT       = 1,
     BUILTIN_INT_TO_STRING   = 3,
     BUILTIN_BOOL_TO_STRING  = 5,
+    BUILTIN_CHAR_AT         = 14,
     BUILTIN_NOW             = 34,
     BUILTIN_SLEEP           = 35,
     BUILTIN_GC              = 43,
@@ -32,7 +38,29 @@ enum {
     BUILTIN_YIELD           = 51,
     BUILTIN_MUTEX_CREATE    = 52,
     BUILTIN_MUTEX_LOCK      = 53,
-    BUILTIN_MUTEX_UNLOCK    = 54
+    BUILTIN_MUTEX_UNLOCK    = 54,
+    BUILTIN_MOVE            = 55,
+    /* Gpio.* — paridad con enum Builtin Java (ordinals 78..81). */
+    BUILTIN_GPIO_INIT       = 78,
+    BUILTIN_GPIO_WRITE      = 79,
+    BUILTIN_GPIO_READ       = 80,
+    BUILTIN_GPIO_PULL       = 81,
+    /* I2c.* — ordinals 82..84. */
+    BUILTIN_I2C_INIT        = 82,
+    BUILTIN_I2C_WRITE       = 83,
+    BUILTIN_I2C_READ        = 84,
+    /* Allocator visible al user (ordinal 85). */
+    BUILTIN_NEW_INT_ARRAY   = 85,
+    /* Spi.* — ordinals 86..89. */
+    BUILTIN_SPI_INIT        = 86,
+    BUILTIN_SPI_WRITE       = 87,
+    BUILTIN_SPI_READ        = 88,
+    BUILTIN_SPI_TRANSFER    = 89,
+    /* Uart.* — ordinals 90..93. */
+    BUILTIN_UART_INIT       = 90,
+    BUILTIN_UART_WRITE      = 91,
+    BUILTIN_UART_READ       = 92,
+    BUILTIN_UART_AVAILABLE  = 93
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -110,6 +138,29 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (i < 0 || (uint32_t) i >= len) { push_i32(vm, tc, 0); return BPVM_OK; }
         uint32_t cp = bpvm_read_u32_be(vm->memory + ref + 4 + (uint32_t) i * 4);
         push_i32(vm, tc, (int32_t) cp);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_CHAR_AT: {
+        /* charAt(str, idx): string  — devuelve un string de 1 char con
+         * el codepoint en esa posición. Si idx fuera de rango, devuelve
+         * string vacía. */
+        int32_t i    = pop_i32(vm, tc);
+        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t cp  = 0;
+        if (ref != 0) {
+            uint32_t len = bpvm_read_u32_be(vm->memory + ref);
+            if (i >= 0 && (uint32_t) i < len) {
+                cp = bpvm_read_u32_be(vm->memory + ref + 4 + (uint32_t) i * 4);
+            }
+        }
+        /* Alocamos un string de 1 codepoint. */
+        uint32_t out = bpvm_heap_alloc(vm, 4u, BPVM_TYPE_ARRAY_I32);
+        if (out) {
+            bpvm_write_u32_be(vm->memory + out, 1u);
+            bpvm_write_u32_be(vm->memory + out + 4, cp);
+        }
+        push_i32(vm, tc, (int32_t) out);
         return BPVM_OK;
     }
 
@@ -294,6 +345,233 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             m->owner_tid = -1;
         }
         push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+
+    /* ---- Gpio — todos los handlers delegan al backend de plataforma.
+       En host: stubs con logging. En Pico: tabla rellenada por main.c. ---- */
+    case BUILTIN_GPIO_INIT: {
+        int mode = pop_i32(vm, tc);
+        int pin  = pop_i32(vm, tc);
+        bpvm_gpio_init(pin, mode);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_GPIO_PULL: {
+        int pull = pop_i32(vm, tc);
+        int pin  = pop_i32(vm, tc);
+        bpvm_gpio_pull(pin, pull);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_GPIO_WRITE: {
+        int val = pop_i32(vm, tc);
+        int pin = pop_i32(vm, tc);
+        bpvm_gpio_write(pin, val);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_GPIO_READ: {
+        int pin = pop_i32(vm, tc);
+        push_i32(vm, tc, bpvm_gpio_read(pin));
+        return BPVM_OK;
+    }
+
+    /* ---- I2C ----
+       Layout del array TYPE_ARRAY_I32 en memory:
+         [0..3] length (i32)
+         [4..]  elementos (i32 cada uno)
+       Cada elemento transporta un byte en el byte bajo. */
+    case BUILTIN_I2C_INIT: {
+        int baud = pop_i32(vm, tc);
+        int scl  = pop_i32(vm, tc);
+        int sda  = pop_i32(vm, tc);
+        int bus  = pop_i32(vm, tc);
+        bpvm_i2c_init(bus, sda, scl, baud);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_I2C_WRITE: {
+        /* write(bus, addr, data: integer[], count): integer */
+        int count = pop_i32(vm, tc);
+        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        int addr = pop_i32(vm, tc);
+        int bus  = pop_i32(vm, tc);
+        uint8_t buf[64];
+        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
+        for (int i = 0; i < n; i++) {
+            int32_t v = bpvm_read_i32_be(vm->memory + dataRef + 4 + i * 4);
+            buf[i] = (uint8_t)(v & 0xFF);
+        }
+        int wrote = bpvm_i2c_write(bus, addr, buf, (size_t) n);
+        push_i32(vm, tc, (int32_t) wrote);
+        return BPVM_OK;
+    }
+    case BUILTIN_I2C_READ: {
+        /* read(bus, addr, data: integer[], count): integer */
+        int count = pop_i32(vm, tc);
+        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        int addr = pop_i32(vm, tc);
+        int bus  = pop_i32(vm, tc);
+        uint8_t buf[64];
+        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
+        int got = bpvm_i2c_read(bus, addr, buf, (size_t) n);
+        if (got > 0) {
+            for (int i = 0; i < got; i++) {
+                bpvm_write_i32_be(vm->memory + dataRef + 4 + i * 4,
+                                  (int32_t) buf[i]);
+            }
+        }
+        push_i32(vm, tc, (int32_t) got);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_MOVE: {
+        /* move(src, dst, srcStart, dstStart, count): void
+         * Copia `count` slots de src[srcStart..] a dst[dstStart..].
+         * Para integer[]/string (TYPE_ARRAY_I32) cada slot = 4 bytes.
+         * Soporta overlapping (usa memmove). */
+        int32_t count    = pop_i32(vm, tc);
+        int32_t dstStart = pop_i32(vm, tc);
+        int32_t srcStart = pop_i32(vm, tc);
+        uint32_t dstRef  = (uint32_t) pop_i32(vm, tc);
+        uint32_t srcRef  = (uint32_t) pop_i32(vm, tc);
+        if (count <= 0 || srcRef == 0 || dstRef == 0) {
+            push_i32(vm, tc, 0);
+            return BPVM_OK;
+        }
+        /* Tamaño de slot por tipo. Para v1 asumimos I32 (caso común
+         * con integer[] y string). Para int8/int16 habría que mirar
+         * el tag — F3 lo añade. */
+        uint32_t slot = 4;
+        memmove(vm->memory + dstRef + 4 + (uint32_t) dstStart * slot,
+                vm->memory + srcRef + 4 + (uint32_t) srcStart * slot,
+                (size_t) count * slot);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_NEW_INT_ARRAY: {
+        int32_t size = pop_i32(vm, tc);
+        if (size < 0) return BPVM_ERR_RUNTIME;
+        uint32_t bytes = (uint32_t) size * 4u;
+        uint32_t ref = bpvm_heap_alloc(vm, bytes, BPVM_TYPE_ARRAY_I32);
+        if (ref == 0) return BPVM_ERR_OOM;
+        bpvm_write_u32_be(vm->memory + ref, (uint32_t) size);
+        /* bpvm_heap_alloc ya zero-init (memset en heap.c). */
+        push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+
+    /* ---- SPI ----  igual patrón que I2C, arrays de bytes empaquetados. */
+    case BUILTIN_SPI_INIT: {
+        int mode = pop_i32(vm, tc);
+        int baud = pop_i32(vm, tc);
+        int miso = pop_i32(vm, tc);
+        int mosi = pop_i32(vm, tc);
+        int sck  = pop_i32(vm, tc);
+        int bus  = pop_i32(vm, tc);
+        bpvm_spi_init(bus, sck, mosi, miso, baud, mode);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_SPI_WRITE: {
+        int count = pop_i32(vm, tc);
+        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        int bus = pop_i32(vm, tc);
+        uint8_t buf[256];
+        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
+        for (int i = 0; i < n; i++) {
+            int32_t v = bpvm_read_i32_be(vm->memory + dataRef + 4 + i * 4);
+            buf[i] = (uint8_t)(v & 0xFF);
+        }
+        int wrote = bpvm_spi_write(bus, buf, (size_t) n);
+        push_i32(vm, tc, (int32_t) wrote);
+        return BPVM_OK;
+    }
+    case BUILTIN_SPI_READ: {
+        int count = pop_i32(vm, tc);
+        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        int bus = pop_i32(vm, tc);
+        uint8_t buf[256];
+        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
+        int got = bpvm_spi_read(bus, buf, (size_t) n);
+        if (got > 0) {
+            for (int i = 0; i < got; i++) {
+                bpvm_write_i32_be(vm->memory + dataRef + 4 + i * 4, (int32_t) buf[i]);
+            }
+        }
+        push_i32(vm, tc, (int32_t) got);
+        return BPVM_OK;
+    }
+    case BUILTIN_SPI_TRANSFER: {
+        int count = pop_i32(vm, tc);
+        uint32_t rxRef = (uint32_t) pop_i32(vm, tc);
+        uint32_t txRef = (uint32_t) pop_i32(vm, tc);
+        int bus = pop_i32(vm, tc);
+        uint8_t txBuf[256], rxBuf[256];
+        int n = count > (int) sizeof(txBuf) ? (int) sizeof(txBuf) : count;
+        for (int i = 0; i < n; i++) {
+            int32_t v = bpvm_read_i32_be(vm->memory + txRef + 4 + i * 4);
+            txBuf[i] = (uint8_t)(v & 0xFF);
+        }
+        int xchg = bpvm_spi_transfer(bus, txBuf, rxBuf, (size_t) n);
+        if (xchg > 0) {
+            for (int i = 0; i < xchg; i++) {
+                bpvm_write_i32_be(vm->memory + rxRef + 4 + i * 4, (int32_t) rxBuf[i]);
+            }
+        }
+        push_i32(vm, tc, (int32_t) xchg);
+        return BPVM_OK;
+    }
+
+    /* ---- UART ---- mismo layout de buffers que I2C/SPI (TYPE_ARRAY_I32,
+       byte por slot). 7 argumentos en init para soportar paridad/bits. */
+    case BUILTIN_UART_INIT: {
+        int parity    = pop_i32(vm, tc);
+        int stop_bits = pop_i32(vm, tc);
+        int data_bits = pop_i32(vm, tc);
+        int baud      = pop_i32(vm, tc);
+        int rx        = pop_i32(vm, tc);
+        int tx        = pop_i32(vm, tc);
+        int bus       = pop_i32(vm, tc);
+        bpvm_uart_init(bus, tx, rx, baud, data_bits, stop_bits, parity);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_UART_WRITE: {
+        int count = pop_i32(vm, tc);
+        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        int bus = pop_i32(vm, tc);
+        uint8_t buf[256];
+        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
+        for (int i = 0; i < n; i++) {
+            int32_t v = bpvm_read_i32_be(vm->memory + dataRef + 4 + i * 4);
+            buf[i] = (uint8_t)(v & 0xFF);
+        }
+        int wrote = bpvm_uart_write(bus, buf, (size_t) n);
+        push_i32(vm, tc, (int32_t) wrote);
+        return BPVM_OK;
+    }
+    case BUILTIN_UART_READ: {
+        int timeout = pop_i32(vm, tc);
+        int count   = pop_i32(vm, tc);
+        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        int bus = pop_i32(vm, tc);
+        uint8_t buf[256];
+        int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
+        int got = bpvm_uart_read(bus, buf, (size_t) n, timeout);
+        if (got > 0) {
+            for (int i = 0; i < got; i++) {
+                bpvm_write_i32_be(vm->memory + dataRef + 4 + i * 4, (int32_t) buf[i]);
+            }
+        }
+        push_i32(vm, tc, (int32_t) got);
+        return BPVM_OK;
+    }
+    case BUILTIN_UART_AVAILABLE: {
+        int bus = pop_i32(vm, tc);
+        push_i32(vm, tc, (int32_t) bpvm_uart_available(bus));
         return BPVM_OK;
     }
 

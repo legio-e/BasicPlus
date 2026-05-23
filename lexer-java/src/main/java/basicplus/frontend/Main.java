@@ -87,19 +87,23 @@ public final class Main {
         }
 
         /** Intenta localizar BpVM.cfg caminando hacia arriba desde {@code source}
-         *  (o sólo en cwd si source==null). Si encuentra stdlibDir y aún no
-         *  está en {@link #dependencyPaths}, lo añade. No falla si no hay cfg. */
+         *  (o sólo en cwd si source==null). Añade stdlibDir y devicesDir a
+         *  {@link #dependencyPaths} si están definidos y son dirs. No falla. */
         void autodiscoverFromSource(Path source) {
             try {
                 edu.bpgenvm.config.VmConfig cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(source);
-                if (cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
-                    Path sd = Paths.get(cfg.stdlibDir);
-                    if (Files.isDirectory(sd) && !dependencyPaths.contains(sd)) {
-                        dependencyPaths.add(sd);
-                    }
-                }
+                addDepDirIfPresent(cfg.stdlibDir);
+                addDepDirIfPresent(cfg.devicesDir);
             } catch (Throwable ignored) {
                 // Sin config; sigue funcionando para módulos que no importan stdlib.
+            }
+        }
+
+        private void addDepDirIfPresent(String dirStr) {
+            if (dirStr == null || dirStr.isEmpty()) return;
+            Path d = Paths.get(dirStr);
+            if (Files.isDirectory(d) && !dependencyPaths.contains(d)) {
+                dependencyPaths.add(d);
             }
         }
     }

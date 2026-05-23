@@ -156,6 +156,13 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
     return BPVM_OK;
 }
 
+bpvm_status_t bpvm_load_mod_buffer(bpvm_t* vm, const uint8_t* data,
+                                    size_t size, const char* name_hint) {
+    if (!vm || !data || size == 0) return BPVM_ERR_IO;
+    /* En target embebido NO descubrimos deps. El caller las carga manualmente. */
+    return bpvm_loader_load_buffer(vm, data, size, name_hint);
+}
+
 bpvm_status_t bpvm_load_mod(bpvm_t* vm, const char* path) {
     if (!vm || !path) return BPVM_ERR_IO;
     int idx_before = vm->module_count;

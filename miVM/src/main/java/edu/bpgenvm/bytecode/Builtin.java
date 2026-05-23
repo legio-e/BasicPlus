@@ -124,11 +124,50 @@ public enum Builtin {
     LAST_MODIFIED("__lastModified"),     // (p: string)   → int   (epoch ms truncado i32)
 
     // ---- N20 — UI via IDE conectado ----
-    PROMPT("__prompt");                  // (spec: string) → string
+    PROMPT("__prompt"),                  // (spec: string) → string
                                          //   Envía formRequest al IDE, bloquea el
                                          //   thread BP hasta respuesta. Devuelve
                                          //   el JSON con los valores. Si no hay
                                          //   IDE, RuntimeError BP atrapable.
+
+    // ---- Gpio — control de pines ----
+    GPIO_INIT("__gpioInit"),             // (pin: int, mode: int) → void
+                                         //   mode: 0=INPUT, 1=OUTPUT
+    GPIO_WRITE("__gpioWrite"),           // (pin: int, value: int) → void
+                                         //   value: 0 (LOW) o !=0 (HIGH)
+    GPIO_READ("__gpioRead"),             // (pin: int) → int   (0 o 1)
+    GPIO_PULL("__gpioPull"),             // (pin: int, pull: int) → void
+                                         //   pull: 0=none, 1=up, 2=down
+
+    // ---- I2C — bus serial síncrono multi-slave ----
+    I2C_INIT("__i2cInit"),               // (bus, sda, scl, baudrate) → void
+                                         //   bus: 0 o 1
+    I2C_WRITE("__i2cWrite"),             // (bus, addr, data: int[], n) → int
+                                         //   bytes escritos; -1 en error
+    I2C_READ("__i2cRead"),               // (bus, addr, data: int[], n) → int
+                                         //   bytes leídos; -1 en error
+
+    // ---- Allocators dinámicos accesibles desde user BP ----
+    NEW_INT_ARRAY("newIntArray"),        // (size: int) → integer[] (zeros)
+
+    // ---- SPI — bus serial síncrono full-duplex master ----
+    SPI_INIT("__spiInit"),               // (bus, sck, mosi, miso, baudrate, mode) → void
+    SPI_WRITE("__spiWrite"),             // (bus, data: int[], n) → int (bytes escritos)
+    SPI_READ("__spiRead"),               // (bus, data: int[], n) → int (bytes leídos; envía 0xFF dummy)
+    SPI_TRANSFER("__spiTransfer"),       // (bus, tx: int[], rx: int[], n) → int (bytes intercambiados)
+
+    // ---- UART — bus serial asíncrono punto a punto ----
+    UART_INIT("__uartInit"),             // (bus, tx, rx, baud, dataBits, stopBits, parity) → void
+                                         //   bus: 0=uart0, 1=uart1
+                                         //   dataBits: 5..8 (típico 8)
+                                         //   stopBits: 1 ó 2
+                                         //   parity:   0=NONE, 1=ODD, 2=EVEN
+    UART_WRITE("__uartWrite"),           // (bus, data: int[], n) → int (bytes escritos; bloquea hasta vaciar TX)
+    UART_READ("__uartRead"),             // (bus, data: int[], n, timeoutMs) → int
+                                         //   lee hasta n bytes; devuelve los bytes recibidos
+                                         //   (puede ser menos que n si expira el timeout).
+                                         //   timeoutMs<=0 bloquea hasta tener todos.
+    UART_AVAILABLE("__uartAvailable");   // (bus) → int (bytes disponibles para leer sin bloquear)
 
     public final String bpName;
     public final int id;

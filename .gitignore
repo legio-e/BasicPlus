@@ -53,3 +53,31 @@ tmp_iotest/
 # ============================================================
 .claude/settings.local.json
 **/.claude/settings.local.json
+
+# ============================================================
+# Dependencias externas grandes (vendored / submodule candidates)
+# ============================================================
+# FreeRTOS-Kernel y FreeRTOS-LTS van con el SDK del Pico, fuera del repo.
+FreeRTOS-Kernel/
+FreeRTOS-LTS/
+FreeRTOSv202604.00-LTS.zip
+# Pico SDK: idem.
+pico-sdk/
+
+# ============================================================
+# Outputs ad-hoc y prefs del IDE
+# ============================================================
+out/
+BpIde/.bpide-prefs
+
+# ============================================================
+# Build artefacts del firmware Pico y de bpgenvm-c
+# ============================================================
+bpgenvm-c/pico/build/
+bpgenvm-c/build/
+bpgenvm-c/samples/*.mod
+bpgenvm-c/samples/*.bpi
+bpgenvm-c/samples/*.dbg
+
+# Outputs locales del IDE/runs en samples/
+samples/out/

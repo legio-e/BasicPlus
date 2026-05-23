@@ -111,5 +111,28 @@ public final class Intrinsics {
         register("IO.lastModified", w -> emitBuiltin(w, Builtin.LAST_MODIFIED));
         // N20 — UI vía IDE conectado.
         register("IO.prompt",       w -> emitBuiltin(w, Builtin.PROMPT));
+
+        // ---- Gpio (control de pines en dispositivos embebidos) ----
+        register("Gpio.init",       w -> emitBuiltin(w, Builtin.GPIO_INIT));
+        register("Gpio.pull",       w -> emitBuiltin(w, Builtin.GPIO_PULL));
+        register("Gpio.write",      w -> emitBuiltin(w, Builtin.GPIO_WRITE));
+        register("Gpio.read",       w -> emitBuiltin(w, Builtin.GPIO_READ));
+
+        // ---- I2C ----
+        register("I2c.init",        w -> emitBuiltin(w, Builtin.I2C_INIT));
+        register("I2c.write",       w -> emitBuiltin(w, Builtin.I2C_WRITE));
+        register("I2c.read",        w -> emitBuiltin(w, Builtin.I2C_READ));
+
+        // ---- SPI ----
+        register("Spi.init",        w -> emitBuiltin(w, Builtin.SPI_INIT));
+        register("Spi.write",       w -> emitBuiltin(w, Builtin.SPI_WRITE));
+        register("Spi.read",        w -> emitBuiltin(w, Builtin.SPI_READ));
+        register("Spi.transfer",    w -> emitBuiltin(w, Builtin.SPI_TRANSFER));
+
+        // ---- UART ----
+        register("Uart.init",       w -> emitBuiltin(w, Builtin.UART_INIT));
+        register("Uart.write",      w -> emitBuiltin(w, Builtin.UART_WRITE));
+        register("Uart.read",       w -> emitBuiltin(w, Builtin.UART_READ));
+        register("Uart.available",  w -> emitBuiltin(w, Builtin.UART_AVAILABLE));
     }
 }

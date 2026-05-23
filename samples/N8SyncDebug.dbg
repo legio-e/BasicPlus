@@ -1,0 +1,15 @@
+dbg 2
+module N8SyncDebug
+source C:\lenguajes\pm\lexer-java\samples\n8syncdebug.bp
+lines
+1442 12
+1450 13
+1462 14
+1520 17
+1526 18
+1538 19
+1657 29
+1680 30
+1694 31
+1712 32
+1726 33

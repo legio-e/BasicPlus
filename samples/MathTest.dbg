@@ -1,0 +1,21 @@
+dbg 2
+module MathTest
+source C:\lenguajes\pm\lexer-java\samples\mathtest.bp
+lines
+1431 8
+1452 9
+1472 10
+1492 13
+1513 14
+1533 15
+1553 18
+1573 19
+1593 20
+1613 21
+1638 22
+1664 25
+1684 26
+1704 27
+1724 30
+1744 31
+1764 32

@@ -559,6 +559,11 @@ public final class ModuleInterface {
         // L2: tipos clase referenciables si tenemos un ClassSymbol resuelto.
         // Se serializa por nombre; el importador resuelve contra los stubs.
         if (t instanceof BpType.ClassType) return true;
+        // L-arr-export: ArrayType es exportable si su elemento lo es.
+        // Permite firmas como `data: integer[]` cross-module (útil para
+        // buffers de bytes en I2c/SPI, samples de ADC, etc.).
+        if (t instanceof BpType.ArrayType)
+            return isExportableType(((BpType.ArrayType) t).element);
         return false;
     }
 
@@ -759,6 +764,11 @@ public final class ModuleInterface {
         if (t == null) return "void";
         if (t instanceof VoidType) return "void";
         if (t instanceof PrimitiveType) return ((PrimitiveType) t).tag.name().toLowerCase();
+        // L-arr-export: arrays se serializan como "<element>[]". Recursivo
+        // para arrays anidados (int[][] = "integer[][]", aunque BP no los
+        // usa de momento).
+        if (t instanceof BpType.ArrayType)
+            return typeToString(((BpType.ArrayType) t).element) + "[]";
         // L2 v3.e — para clases cross-module emitimos el nombre cualificado
         // (`<Lib>.<Mod>.<Cls>` o `<Mod>.<Cls>`). El reader del importador
         // resuelve contra los ImportedNamespaceSymbol disponibles. Para
@@ -1076,6 +1086,15 @@ public final class ModuleInterface {
     }
 
     private static BpType parseType(Path file, int lineNo, String s) throws IOException {
+        // L-arr-export: si termina en "[]", procesamos array recursivamente.
+        if (s.endsWith("[]")) {
+            BpType elem = parseType(file, lineNo, s.substring(0, s.length() - 2));
+            if (elem == null) {
+                throw new IOException(file + ":" + lineNo
+                        + ": elemento de array no puede ser void: " + s);
+            }
+            return new BpType.ArrayType(elem);
+        }
         switch (s) {
             case "void":    return null;
             case "integer": return PrimitiveType.INTEGER;

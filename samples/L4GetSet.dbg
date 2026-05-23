@@ -1,0 +1,12 @@
+dbg 2
+module L4GetSet
+source C:\lenguajes\pm\lexer-java\samples\l4getset.bp
+lines
+1431 17
+1452 21
+1470 13
+1539 26
+1562 27
+1576 28
+1594 29
+1608 30

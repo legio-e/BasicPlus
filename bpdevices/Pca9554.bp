@@ -1,0 +1,91 @@
+// ============================================================
+// Pca9554.bp — driver para el expander I/O I2C PCA9554/PCA9554A.
+//
+// Port directo del driver Python equivalente. El PCA9554 tiene 8
+// pines de I/O, configurables independientemente como entrada o
+// salida. Direcciones I2C: 0x20..0x27 (PCA9554) o 0x38..0x3F
+// (PCA9554A) según el strapping de A0/A1/A2.
+//
+// Registros internos (1 byte cada uno):
+//   0  INPUT       (read)  — estado de los pines configurados como input
+//   1  OUTPUT      (rw)    — qué nivel sacan los pines de output
+//   2  POLARITY    (rw)    — invierte la lectura por bit (1=invertir)
+//   3  CONFIG/DIR  (rw)    — 0=output, 1=input por bit
+//
+// Operaciones I2C usadas:
+//   wreg(reg, value): write 2 bytes [reg, value]
+//   rreg(reg):        write [reg] + read 1 byte (set register pointer + read)
+//
+// Uso típico:
+//
+//   import Pca9554
+//   ...
+//   var io: Pca9554.Expander := Pca9554.Expander(I2c.BUS1(), 0x3F)
+//   io.setDir(0x00)         // los 8 pines como output
+//   io.writeOut(0xAA)       // patrón 10101010
+//   var st: integer := io.readIn()
+// ============================================================
+module Pca9554
+  import I2c
+
+  public class Expander
+    public var bus:  integer
+    public var addr: integer
+
+    public function Expander(bus: integer, addr: integer)
+      this.bus  := bus
+      this.addr := addr
+    end Expander
+
+    // -------- I/O de bajo nivel a registros --------
+
+    public function wreg(reg: integer, value: integer)
+      var buf: integer[] := [reg, value]
+      I2c.write(this.bus, this.addr, buf, 2)
+    end wreg
+
+    public function rreg(reg: integer): integer
+      // Set register pointer (write 1 byte) y luego read 1 byte.
+      var ptr: integer[] := [reg]
+      I2c.write(this.bus, this.addr, ptr, 1)
+      var rx: integer[] := [0]
+      I2c.read(this.bus, this.addr, rx, 1)
+      return rx[0]
+    end rreg
+
+    // -------- API de alto nivel --------
+
+    // Lee el estado actual de los pines (registro 0 = INPUT).
+    public function readIn(): integer
+      return this.rreg(0)
+    end readIn
+
+    // Devuelve qué está saliendo por los pines de output (reg 1).
+    public function getOut(): integer
+      return this.rreg(1)
+    end getOut
+
+    // Escribe el valor que saldrá por los pines de output (reg 1).
+    public function writeOut(value: integer)
+      this.wreg(1, value)
+    end writeOut
+
+    // Polarity inversion (reg 2). 1=invertir la lectura por bit.
+    public function getInvert(): integer
+      return this.rreg(2)
+    end getInvert
+    public function setInvert(value: integer)
+      this.wreg(2, value)
+    end setInvert
+
+    // Configuración / dirección (reg 3). 0=output, 1=input por bit.
+    public function getDir(): integer
+      return this.rreg(3)
+    end getDir
+    public function setDir(value: integer)
+      this.wreg(3, value)
+    end setDir
+
+  end Expander
+
+end Pca9554

@@ -1,0 +1,26 @@
+// tempread.bp — lee los dos sensores MCP9804 detectados en el bus
+// (direcciones 0x18 y 0x19) e imprime la temperatura de cada uno.
+//
+// Equivalente al snippet MicroPython:
+//   self.senTemp1 = Mcp9804(self.i2c, 0x18)
+//   t1 = self.senTemp1.read_temp()
+//   print("T1:", t1)
+
+module TempRead
+  import I2c
+  import Mcp9804
+
+  function Main()
+    I2c.init(I2c.BUS1(), 2, 3, I2c.STANDARD())
+
+    var s1: Mcp9804.Sensor := Mcp9804.Sensor(I2c.BUS1(), 0x18)
+    var s2: Mcp9804.Sensor := Mcp9804.Sensor(I2c.BUS1(), 0x19)
+
+    var t1: float := s1.readTemp()
+    var t2: float := s2.readTemp()
+
+    print "T1 (0x18):", t1, "C"
+    print "T2 (0x19):", t2, "C"
+  end Main
+
+end TempRead

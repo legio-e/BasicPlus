@@ -1,0 +1,13 @@
+// benchloop.bp — workload bucle aritmetico puro (sin recursion).
+// Cross-check del speedup VM-C vs VM-Java sobre opcodes no-CALL.
+module BenchLoop
+  function Main()
+    var i: integer := 0
+    var sum: integer := 0
+    while i < 5000000 do
+      sum := sum + i * 3 - i / 2
+      i := i + 1
+    endwh
+    print sum
+  end Main
+end BenchLoop

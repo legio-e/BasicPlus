@@ -1,0 +1,25 @@
+bpi 6
+module Ad7177
+class Adc public
+  layout 3 19 00000000 00000000
+  ctor(bus:integer,cs:integer,syncP:integer)
+  method enabled():void public
+  method disabled():void public
+  method reset():void public
+  method rreg(register:integer,n:integer):integer[] public
+  method wreg(register:integer,data:integer[],n:integer):void public
+  method wreg16(register:integer,value:integer):void public
+  method rreg16(register:integer):integer public
+  method leerId():integer public
+  method leerStatus():integer public
+  method isReady():boolean public
+  method waitReady():void public
+  method readData():integer public
+  method setMode(intRef:boolean,delay:integer,mode:integer,clock:integer):void public
+  method setInterface(altSync:boolean,ioStrength:boolean,contRead:boolean):void public
+  method setChannel(channel:integer,enab:boolean,setupSel:integer,ainp:integer,ainn:integer):void public
+  method setChSetup(channel:integer,bipolar:integer,ref:integer):void public
+  method setSPS(channel:integer,sps:integer):void public
+  method leerPowerV():float public
+  method test0():integer public
+end class

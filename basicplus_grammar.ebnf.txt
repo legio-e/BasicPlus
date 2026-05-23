@@ -1,526 +1,702 @@
-# ============================================================
-#  Gramática EBNF del lenguaje BASICPLUS
-#  Estilo: BASIC moderno con clases, funciones, errores y librerías
-#
-#  Notación:
-#    rule  = expression            definición de regla
-#    e1 e2                         secuencia
-#    e1 | e2                       alternativa
-#    [ e ]                         opcional (cero o una vez)
-#    { e }                         repetición (cero o más veces)
-#    ( e )                         agrupación
-#    'texto'                       terminal literal
-#    NOMBRE_MAYUS                  token léxico
-# ============================================================
-
-(* ========================= PROGRAMA ========================= *)
-
-module ::= 'module' name NEWLINE
-           { import_stmt }
-           { defs_stmt }
-           'end' [ name ] NEWLINE;
-
-defs_stmt ::= const_decl | var_decl | func_def | class_def ;
-
-name   ::= LETTER { LETTER | DIGIT | '_' } ;
-
-const_decl = 'const' name [ ':' type ] '=' expr ( ';' | NEWLINE ) ;
-
-(* ========================= LIBRERÍAS ========================= *)
-import_stmt ::= 'IMPORT' lib_name { '.' lib_name } NEWLINE;
-lib_name = LETTER { LETTER | DIGIT } ;
-
-(* ========================= SENTENCIAS ========================= *)
-stmt = var_decl
-    | assign_stmt
-    | if_stmt
-    | while_stmt
-    | for_stmt
-    | try_stmt
-    | return_stmt
-    | throw_stmt
-    | print_stmt
-	| 'break' NEWLINE
-	| 'continue' NEWLINE
-    | call_expr NEWLINE 
-	| NEWLINE ;
-
-(* ========================= VARIABLES ========================= *)
-var_decl ::= 'var' name { ',' name } ':' type [ '=' expr ] ( ';' | NEWLINE ) ;
-
-type = 'INTEGER'
-       | 'FLOAT'
-       | 'STRING'
-       | 'BOOLEAN'
-       | name ;
-
-assign_stmt = name ':=' expr ( ';' | NEWLINE ) ; 
-
-(* ========================= FUNCIONES ========================= *)
-func_def ::= 'function' name '(' [ params ] ')' [ ':' type ] NEWLINE
-             body
-             'end' [ name ] NEWLINE ;
-
-params = param { ',' param } ;
-param = name ':' type ;
-return_stmt := 'return' [ expr ] NEWLINE ;
-call_expr = name '(' [ args ] ')' ;
-args = expr { ',' expr };
-
-(* ========================= CLASES ========================= *)
-class_def
-    = 'class' name [ 'extends' name ] NEWLINE
-      { member }
-      'end' [ name ] NEWLINE ;
-
-member ::= const_decl | var_decl | func_def ;
-
-(* ========================= CONTROL DE FLUJO ========================= *)
-body ::= { stmt } ;
-if_stmt ::= 'if' expr 'then' ( stmt NEWLINE | NEWLINE
-              body
-            { 'elseif' expr 'then' NEWLINE 
-			  body }
-            [ 'else' NEWLINE 
-			  body ]
-            'endif' ) ;
-
-while_stmt ::= 'while' expr 'do' ( stmt NEWLINE | NEWLINE
-                body
-               'endwh' );
-
-for_stmt   ::='for' name ':' 'integer' ':=' expr 'to' expr [ 'step' expr ] 'do' ( stmt NEWLINE | NEWLINE
-               body
-              'next' name ) ;
-
-print_stmt  ::= 'print' [ expr { print_expr } ] NEWLINE ;
-print_expr  ::= ( ';' | ',' ) [ expr ] ;
-
-(* ========================= MANEJO DE ERRORES ========================= *)
-try_stmt ::= 'try' NEWLINE
-               body
-             { 'catch' name ':' exception_type NEWLINE
-               body }
-             [ 'finally' NEWLINE 
-			   body ]
-             'endtry' ;
-
-throw_stmt ::= 'throw' expr NEWLINE ;
-
-(* ========================= EXPRESIONES ========================= *)
-(* Precedencia de menor a mayor:
-   expr → or_expr → and_expr → not_expr → cmp_expr
-        → add_expr → mul_expr → unary → atom             *)
-
-expr = or_expr ;
-or_expr ::= and_expr { 'or' and_expr } ;
-and_expr::= not_expr { 'and' not_expr } ;
-not_expr::= 'not' cmp_expr | cmp_expr ;
-cmp_expr::= add_expr [ ( '==' | '!=' | '<>' | '<' | '>' | '<=' | '>=' ) add_expr ] ;
-add_expr::= mul_expr { ( '+' | '-' | '|' | 'xor' ) mul_expr } ;
-mul_expr::= unary { ( '*' | '/' | 'mod' | '&' | 'shl' | 'shr' ) unary } ;
-unary   ::= '-' atom | atom ;
-atom    ::= INTEGER_LIT | FLOAT_LIT | STRING_LIT
-            | 'TRUE' | 'FALSE' | call_expr | name | '(' expr ')' ;
-
-(* ========================= TOKENS LÉXICOS ========================= *)
-
-INTEGER_LIT
-    = DIGIT { DIGIT }
-    ;
-
-FLOAT_LIT
-    = DIGIT { DIGIT } '.' DIGIT { DIGIT }
-    ;
-
-STRING_LIT
-    = '"' { CHAR } '"'
-    ;
-
-LETTER
-    = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
-    | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T'
-    | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
-    | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j'
-    | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't'
-    | 'u' | 'v' | 'w' | 'x' | 'y' | 'z'
-    ;
-
-DIGIT
-    = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
-    ;
-
-CHAR
-    = (* cualquier carácter Unicode excepto '"' y NEWLINE *)
-    ;
-
-NEWLINE
-    = '\n' | '\r\n'
-    ;
-
-(* ========================= PALABRAS CLAVE RESERVADAS ========================= *)
-
-(* PROGRAM, END, IMPORT, DIM, AS, FUNCTION, METHOD, CLASS, EXTENDS,
-   IF, THEN, ELSEIF, ELSE, WHILE, FOR, TO, STEP, NEXT,
-   RETURN, PRINT, TRY, CATCH, FINALLY, THROW,
-   INTEGER, FLOAT, STRING, BOOLEAN, TRUE, FALSE,
-   AND, OR, NOT, MOD                                                            *)
-
-(* ========================= EJEMPLO COMPLETO ========================= *)
-
-(*
-PROGRAM Ejemplo
-  IMPORT MathLib
-  IMPORT IO.Console
-
-  CLASS Animal
-    DIM nombre AS STRING
-
-    METHOD Hablar() AS STRING
-      RETURN "..."
-    END METHOD
-  END CLASS
-
-  CLASS Perro EXTENDS Animal
-    METHOD Hablar() AS STRING
-      RETURN "Guau, soy " + nombre
-    END METHOD
-  END CLASS
-
-  FUNCTION Factorial(n AS INTEGER) AS INTEGER
-    IF n <= 1 THEN
-      RETURN 1
-    END IF
-    RETURN n * Factorial(n - 1)
-  END FUNCTION
-
-  DIM p AS Perro
-  p.nombre = "Rex"
-  PRINT p.Hablar()
-
-  TRY
-    DIM resultado AS INTEGER = Factorial(5)
-    PRINT resultado
-  CATCH err
-    PRINT "Error: " + err
-  FINALLY
-    PRINT "Fin del programa"
-  END TRY
-
-  FOR i = 1 TO 5 STEP 1
-    PRINT i
-  NEXT i
-
-END PROGRAM
-*)
-
-
 (* ============================================================
    Gramática EBNF del lenguaje BASICPLUS
    Estilo: BASIC moderno con clases, funciones, errores y librerías
 
    Notación:
-     rule = expression          definición de regla
-     e1 e2                      secuencia
-     e1 | e2                    alternativa
-     [ e ]                      opcional (cero o una vez)
-     { e }                      repetición (cero o más veces)
-     ( e )                      agrupación
-     'texto'                    terminal literal
-     NOMBRE_MAYUS               token léxico
+     rule ::= expression ;        definición de regla
+     e1 e2                        secuencia
+     e1 | e2                      alternativa
+     [ e ]                        opcional (cero o una vez)
+     { e }                        repetición (cero o más veces)
+     ( e )                        agrupación
+     'texto'                      terminal literal
+     NOMBRE_MAYUS                 token léxico
+
+   Convenciones de estilo:
+     - Asignación e inicialización: ':='   (estilo Pascal)
+     - Igualdad / desigualdad:      '=='  '!='   (estilo C/Java)
+     - Comentarios: '//' línea, '/* ... */' bloque
+
+   Sensibilidad a mayúsculas/minúsculas:
+     - Las PALABRAS CLAVE son case-insensitive:
+         module ≡ MODULE ≡ Module ≡ mOdUlE
+         integer ≡ INTEGER ≡ Integer
+         true ≡ TRUE ≡ True
+       En esta gramática se escriben en minúsculas como forma canónica,
+       pero el lexer debe aceptar cualquier combinación de mayúsculas/
+       minúsculas y normalizarlas a la forma canónica.
+
+     - Los IDENTIFICADORES (nombres de variables, funciones, clases,
+       parámetros, módulos…) SÍ son case-sensitive:
+         miVar  ≠  MiVar  ≠  MIVAR
    ============================================================ *)
+
 
 (* ========================= MÓDULO ========================= *)
 
-module
-    = 'module' name NEWLINE
-      { import_stmt }
-      { defs_stmt }
-      'end' [ name ] NEWLINE
-    ;
+module ::= 'module' name NEWLINE
+           { import_stmt }
+           { defs_stmt }
+           'end' [ name ] NEWLINE ;
 
-name
-    = LETTER { LETTER | DIGIT | '_' }
-    ;
+(* CICLO DE VIDA Y PUNTO DE ENTRADA (regla semántica):
+
+   - INICIALIZADOR DE MÓDULO:
+       Si un módulo contiene una función con el MISMO nombre que el
+       propio módulo, esa función se invoca automáticamente al cargar
+       el módulo (análogo al constructor de una clase, pero para el
+       módulo entero).
+
+           module MathLib
+             ...
+             function MathLib()       // inicializador del módulo
+               ...                    // se ejecuta al hacer 'import MathLib'
+             end MathLib
+           end MathLib
+
+       Restricciones del inicializador:
+         - No declara parámetros.
+         - No declara tipo de retorno.
+         - 'return' (sin expresión) es válido para salir antes;
+           'return expr' es error de compilación.
+         - Su visibilidad es irrelevante (lo invoca el runtime).
+         - Es opcional: si no existe, el módulo se carga sin más.
+
+   - ORDEN DE CARGA:
+       Los módulos se cargan en profundidad siguiendo los 'import'.
+       El inicializador de un módulo se ejecuta DESPUÉS de haber
+       cargado todos sus imports (transitivamente).
+
+   - PUNTO DE ENTRADA DEL PROGRAMA:
+       El módulo principal (el que se ejecuta) debe contener una
+       función llamada 'Main' sin parámetros ni tipo de retorno.
+       Tras inicializar todos los módulos (incluido el principal),
+       el runtime invoca 'Main()' y la ejecución del programa
+       comienza ahí.
+
+           module App
+             ...
+             function App()       // (opcional) inicializador
+               ...
+             end App
+
+             function Main()      // entrada del programa
+               ...
+             end Main
+           end App
+
+       Si el módulo principal no tiene 'Main', es error de compilación.
+       Si NO es el módulo principal, 'Main' es una función normal sin
+       trato especial (puede existir o no).                            *)
+
+defs_stmt ::= [ 'public' ] ( const_decl
+                            | var_decl
+                            | property_def
+                            | func_def
+                            | class_def
+                            | enum_def ) ;
+
 
 (* ========================= LIBRERÍAS ========================= *)
 
-import_stmt
-    = 'import' lib_name { '.' lib_name } NEWLINE
-    ;
+import_stmt ::= 'import' lib_path NEWLINE ;
+lib_path    ::= lib_name { '.' lib_name } ;
+lib_name    ::= LETTER { LETTER | DIGIT } ;
 
-lib_name
-    = LETTER { LETTER | DIGIT }
-    ;
 
-(* ========================= DEFINICIONES DE NIVEL MÓDULO ========================= *)
+(* ========================= IDENTIFICADORES ========================= *)
 
-defs_stmt
-    = const_decl
-    | var_decl
-    | func_def
-    | class_def
-    ;
+name ::= LETTER { LETTER | DIGIT | '_' } ;
+
 
 (* ========================= VARIABLES Y CONSTANTES ========================= *)
 
-const_decl
-    = 'const' name [ ':' type ] '=' expr ( ';' | NEWLINE )
-    ;
+const_decl ::= 'const' decl_name [ ':' type ] ':=' expr ( ';' | NEWLINE ) ;
 
-var_decl
-    = 'var' name { ',' name } ':' type [ '=' expr ] ( ';' | NEWLINE )
-    ;
+var_decl   ::= 'var' decl_name { ',' decl_name } ':' type [ ':=' expr ] ( ';' | NEWLINE ) ;
 
-type
-    = base_type [ '[' [ expr ] ']' ]
-    ;
+(* decl_name permite el nombre cualificado 'NombreClase.miembro' que
+   se usa para declarar miembros ESTÁTICOS dentro de una clase
+   (ver sección "MIEMBROS ESTÁTICOS").                                *)
 
-base_type
-    = 'INTEGER'
-    | 'FLOAT'
-    | 'STRING'
-    | 'BOOLEAN'
-    | name
-    ;
+decl_name  ::= name [ '.' name ] ;
 
-(* ========================= ARRAYS ========================= *)
+type       ::= base_type [ '[' [ expr ] ']' ] ;
 
-array_literal
-    = '[' [ expr { ',' expr } ] ']'
-    ;
+base_type  ::= 'integer'
+             | 'float'
+             | 'string'
+             | 'boolean'
+             | name ;
+
 
 (* ========================= FUNCIONES ========================= *)
 
-func_def
-    = 'function' name '(' [ params ] ')' [ ':' type ] NEWLINE
-      body
-      'end' [ name ] NEWLINE
-    ;
+func_def    ::= [ 'final' ] 'function' decl_name '(' [ params ] ')' [ ':' type ] NEWLINE
+                body
+                'end' [ decl_name ] NEWLINE ;
 
-params
-    = param { ',' param }
-    ;
+params      ::= param { ',' param } ;
+param       ::= name ':' type ;
 
-param
-    = name ':' type
-    ;
+return_stmt ::= 'return' [ expr ] NEWLINE ;
 
-return_stmt
-    = 'return' [ expr ] NEWLINE
-    ;
+call_expr   ::= name '(' [ args ] ')' ;
+args        ::= expr { ',' expr } ;
 
-call_expr
-    = name '(' [ args ] ')'
-    ;
-
-args
-    = expr { ',' expr }
-    ;
 
 (* ========================= CLASES ========================= *)
 
-class_def
-    = 'class' name [ 'extends' name ] NEWLINE
-      { member }
-      'end' [ name ] NEWLINE
-    ;
+class_def ::= 'class' name [ 'extends' name ] NEWLINE
+              { member }
+              'end' [ name ] NEWLINE ;
 
-member
-    = const_decl
-    | var_decl
-    | func_def
-    ;
+member    ::= [ 'public' ] ( const_decl | var_decl | property_def | func_def ) ;
+
+(* CONSTRUCTORES (regla semántica, no sintáctica):
+
+   Un constructor es una función miembro cuyo NOMBRE coincide con el
+   nombre de la clase. No requiere palabra clave especial ni 'new'.
+
+       class Perro extends Animal
+         function Perro(n: string)        // <- constructor
+           this.nombre := n
+         end Perro
+       end Perro
+
+   Reglas:
+     - El constructor NO declara tipo de retorno.
+     - Dentro del cuerpo, 'return' (sin expresión) sale antes de tiempo;
+       'return expr' es error de compilación.
+     - Si una clase no define ningún constructor, se asume uno por
+       defecto sin argumentos, que no hace nada.
+     - Para construir una instancia se INVOCA la clase como una función:
+           var p: Perro := Perro("Rex")
+       No existe palabra clave 'new'.
+     - El constructor debe ser 'public' para poder invocarse desde
+       fuera del módulo donde se declara la clase.
+     - HERENCIA: si una subclase no define su propio constructor,
+       hereda el de su clase base (estilo Python). Por tanto:
+           class Animal
+             function Animal(n: string) ...
+           end Animal
+           class Perro extends Animal     // sin constructor propio
+           end Perro
+           ...
+           var p: Perro := Perro("Rex")   // usa el constructor de Animal *)
+
+
+(* MIEMBROS ESTÁTICOS (regla semántica):
+
+   No existe la palabra clave 'static'. En su lugar, un miembro se
+   declara estático escribiendo su nombre cualificado con el de la
+   propia clase ('NombreClase.miembro') al definirlo.
+
+       class Mi
+         var Mi.x: integer := 0          // var ESTÁTICA  (miembro de clase)
+         var y: integer                  // var de INSTANCIA
+
+         const Mi.MAX: integer := 100    // const ESTÁTICA
+
+         function Mi.crear(): Mi         // FUNCIÓN ESTÁTICA (factory)
+           return Mi()
+         end Mi.crear
+
+         function hacerAlgo()             // método de INSTANCIA
+           Mi.x += 1                     // accede al estático por su nombre
+         end hacerAlgo
+       end Mi
+
+   Reglas:
+     - La forma cualificada solo es válida DENTRO del cuerpo de la clase
+       cuyo nombre se está usando como prefijo. Fuera o con otro
+       prefijo es error de compilación.
+     - Los miembros estáticos pertenecen a la CLASE, no a las instancias:
+       hay un único valor compartido por todas las instancias.
+     - Acceso desde cualquier sitio: 'Mi.x', 'Mi.crear()'.
+     - Dentro de una función estática NO existe 'this' (es error usarlo).
+     - Dentro de una función de instancia, 'this' funciona como siempre,
+       y los estáticos se referencian con 'Mi.x' (no con 'this.x').
+     - 'public', 'final' y la regla de visibilidad para subclases se
+       aplican igual que a los miembros de instancia.
+     - Las propiedades estáticas también valen ('property Mi.X: integer'):
+       sus get/set son funciones estáticas implícitas.                  *)
+
+
+(* SOBREESCRITURA DE MÉTODOS Y PROPIEDADES (regla semántica):
+
+   Todos los métodos y propiedades son VIRTUALES por defecto: una
+   subclase puede sobreescribirlos definiendo otro miembro con el
+   mismo nombre y la misma firma. No hace falta marca alguna en
+   la subclase.
+
+   Para PROHIBIR la sobreescritura, se antepone 'final' a la
+   declaración del método o de la propiedad en la clase base:
+
+       class Base
+         final function Identidad(): string
+           return "base"
+         end Identidad
+       end Base
+
+       class Derivada extends Base
+         function Identidad(): string   // ERROR: 'Identidad' es final
+           return "derivada"
+         end Identidad
+       end Derivada
+
+   El modificador 'final' solo es significativo en miembros de clase.
+   Usado en una función o propiedad a nivel módulo es error de
+   compilación (no hay subclases que sobreescribir).
+
+   Resolución de la llamada: dado 'obj.M(...)', se busca M empezando
+   por la clase concreta de 'obj' y subiendo por la jerarquía
+   (despacho dinámico). Para forzar la versión de la clase base
+   se usa 'super.M(...)'.                                            *)
+
+
+(* ========================= PROPIEDADES ========================= *)
+
+(* Una propiedad puede aparecer a nivel de MÓDULO o de CLASE. Tiene tipo,
+   valor inicial opcional, y accesores 'get'/'set' implícitos.
+
+   - Forma corta:    los accesores son auto-generados (lectura y escritura).
+   - Forma extendida: cualquiera de los dos accesores se puede sobreescribir.
+
+   Dentro de los bloques 'get'/'set':
+     - 'field' referencia el almacenamiento subyacente (palabra contextual).
+   Fuera de los accesores, 'field' es un identificador normal.
+
+   El 'set' requiere un parámetro explícito que recibe el valor entrante.
+   Su tipo se infiere del tipo de la propiedad (no se declara).
+
+   Si en la forma extendida se omite 'get', la propiedad es de solo escritura.
+   Si se omite 'set', la propiedad es de solo lectura.                     *)
+
+property_def ::= [ 'final' ] 'property' decl_name ':' type [ ':=' expr ]
+                 ( ( ';' | NEWLINE )                         (* forma corta, get/set implícitos *)
+                 | NEWLINE
+                   [ getter ]
+                   [ setter ]
+                   'endprop' NEWLINE                         (* forma extendida *)
+                 ) ;
+
+getter ::= 'get' NEWLINE
+           body
+           'endget' NEWLINE ;
+
+setter ::= 'set' '(' name ')' NEWLINE
+           body
+           'endset' NEWLINE ;
+
+
+(* ========================= ENUMERACIONES ========================= *)
+
+(* Enumeración estilo C: cada miembro es un valor entero. Sin métodos,
+   sin estado, solo nombres con un entero asociado.
+
+   - Si no se asigna valor explícito, el primero es 0 y cada siguiente
+     es el anterior + 1.
+   - Si se asigna un valor explícito, los siguientes (sin asignación)
+     continúan a partir de ese valor + 1.
+   - El nombre del enum se usa como tipo en declaraciones:
+         var c: Color := Color.RED
+   - Los valores se acceden con notación punto: Color.RED.
+   - El tipo subyacente es 'integer'; las comparaciones son por valor.
+   - Valor por defecto al declarar 'var c: Color' sin inicializar:
+     el miembro cuyo valor sea 0 (o 0 si ningún miembro lo es).        *)
+
+enum_def ::= 'enum' name NEWLINE
+             enum_value NEWLINE
+             { enum_value NEWLINE }
+             'end' [ name ] NEWLINE ;
+
+enum_value ::= name [ ':=' INTEGER_LIT ] ;
+
 
 (* ========================= SENTENCIAS ========================= *)
 
-body
-    = { stmt }
-    ;
+body ::= { stmt } ;
 
-stmt
-    = var_decl
-    | assign_stmt
-    | if_stmt
-    | while_stmt
-    | for_stmt
-    | try_stmt
-    | return_stmt
-    | throw_stmt
-    | print_stmt
-    | 'break' NEWLINE
-    | 'continue' NEWLINE
-    | call_expr NEWLINE
-    | NEWLINE
-    ;
+stmt ::= var_decl
+       | assign_stmt
+       | if_stmt
+       | switch_stmt
+       | while_stmt
+       | do_loop_stmt
+       | for_stmt
+       | try_stmt
+       | return_stmt
+       | throw_stmt
+       | print_stmt
+       | 'break'    NEWLINE
+       | 'continue' NEWLINE
+       | call_expr  NEWLINE
+       | NEWLINE ;
 
-assign_stmt
-    = primary ':=' expr ( ';' | NEWLINE )
-    ;
+assign_stmt ::= primary assign_op expr ( ';' | NEWLINE ) ;
+
+assign_op   ::= ':=' | '+=' | '-=' ;
+
+(* Asignación compuesta:
+     x += y    es equivalente a   x := x + y
+     x -= y    es equivalente a   x := x - y
+
+   Como '+' está sobrecargado para concatenar strings, '+=' también
+   concatena cuando el operando izquierdo es string.
+   '-=' solo aplica a tipos numéricos (integer, float).               *)
+
 
 (* ========================= CONTROL DE FLUJO ========================= *)
 
-if_stmt
-    = 'if' expr 'then'
-      ( stmt NEWLINE
-      | NEWLINE
-        body
-        { 'elseif' expr 'then' NEWLINE
-          body }
-        [ 'else' NEWLINE
-          body ]
-        'endif'
-      )
-    ;
+if_stmt ::= 'if' expr 'then'
+            ( stmt NEWLINE
+            | NEWLINE
+              body
+              { 'elseif' expr 'then' NEWLINE
+                body }
+              [ 'else' NEWLINE
+                body ]
+              'endif' NEWLINE
+            ) ;
 
-while_stmt
-    = 'while' expr 'do'
-      ( stmt NEWLINE
-      | NEWLINE
-        body
-      )
-      'endwh'
-    ;
+(* No hay "fall-through": cada 'case' es un bloque independiente,
+   no se necesita 'break'. Un 'case' puede listar varios valores
+   separados por coma; el bloque se ejecuta si la expresión del
+   switch coincide con cualquiera de ellos. El 'default' es opcional
+   y se ejecuta si ningún 'case' coincide.                              *)
 
-for_stmt
-    = 'for' name ':' 'integer' ':=' expr 'to' expr [ 'step' expr ] 'do'
-      ( stmt NEWLINE
-      | NEWLINE
-        body
-        'next' name
-      )
-    ;
+switch_stmt ::= 'switch' expr NEWLINE
+                { case_clause }
+                [ default_clause ]
+                'endsw' NEWLINE ;
 
-print_stmt
-    = 'print' [ expr { print_expr } ] NEWLINE
-    ;
+case_clause    ::= 'case' expr { ',' expr } NEWLINE
+                   body ;
 
-print_expr
-    = ( ';' | ',' ) [ expr ]
-    ;
+default_clause ::= 'default' NEWLINE
+                   body ;
+
+while_stmt ::= 'while' expr 'do'
+               ( stmt NEWLINE
+               | NEWLINE
+                 body
+                 'endwh' NEWLINE
+               ) ;
+
+(* Bucle 'do ... loop':
+     - Sin condición: bucle infinito (se sale con 'break').
+         do
+           ...
+         loop
+
+     - Con condición: do-while. Ejecuta el cuerpo al menos una vez,
+       luego sigue iterando mientras la condición sea verdadera.
+         do
+           ...
+         loop x > 0                                                    *)
+
+do_loop_stmt ::= 'do' NEWLINE
+                 body
+                 'loop' [ expr ] NEWLINE ;
+
+for_stmt ::= 'for' name for_range 'do'
+             ( stmt NEWLINE
+             | NEWLINE
+               body
+               'next' [ name ] NEWLINE
+             ) ;
+
+(* Dos formas de bucle 'for':
+
+   1) Numérico (estilo BASIC):
+        for i := 0 to 9 [ step 2 ] do
+          ...
+        next i
+
+   2) Recorrido sobre array (foreach implícito):
+        for x in primos do
+          ...
+        next x
+
+   En la forma 'in', el tipo de 'x' se infiere del tipo de elemento del
+   array. Modificar el array durante el recorrido es comportamiento
+   indefinido.                                                          *)
+
+for_range ::= ':=' expr 'to' expr [ 'step' expr ]
+            | 'in' expr ;
+
+print_stmt ::= 'print' [ expr { print_sep [ expr ] } ] NEWLINE ;
+print_sep  ::= ';' | ',' ;
+
 
 (* ========================= MANEJO DE ERRORES ========================= *)
 
-try_stmt
-    = 'try' NEWLINE
-      body
-      { 'catch' name ':' exception_type NEWLINE
-        body }
-      [ 'finally' NEWLINE
-        body ]
-      'endtry'
-    ;
+try_stmt ::= 'try' NEWLINE
+             body
+             { catch_clause }
+             [ 'finally' NEWLINE
+               body ]
+             'endtry' NEWLINE ;
 
-exception_type
-    = name
-    ;
+(* catch_clause admite tres formas, de la más específica a la más laxa:
 
-throw_stmt
-    = 'throw' expr NEWLINE
-    ;
+     catch err: AlgúnError    -> atrapa solo AlgúnError, lo enlaza a 'err'
+     catch err                 -> atrapa CUALQUIER excepción, la enlaza a 'err'
+     catch                     -> atrapa CUALQUIER excepción, sin enlazar
+
+   Si hay varias 'catch' clauses, se prueban en el orden escrito y se
+   ejecuta el cuerpo de la primera que coincida. Por tanto, una clausula
+   'catch' sin tipo (atrapa todo) tiene que ir SIEMPRE la última, o las
+   posteriores quedan inalcanzables (error de compilación).             *)
+
+catch_clause ::= 'catch' [ name [ ':' exception_type ] ] NEWLINE
+                 body ;
+
+exception_type ::= name ;
+
+throw_stmt ::= 'throw' expr NEWLINE ;
+
 
 (* ========================= EXPRESIONES ========================= *)
 
 (* Precedencia de menor a mayor:
    expr → or_expr → and_expr → not_expr → cmp_expr
-        → add_expr → mul_expr → unary → primary → atom  *)
+        → add_expr → mul_expr → unary → primary → atom *)
 
-expr
-    = or_expr
-    ;
+expr     ::= or_expr ;
 
-or_expr
-    = and_expr { 'or' and_expr }
-    ;
+or_expr  ::= and_expr  { 'or'  and_expr } ;
+and_expr ::= not_expr  { 'and' not_expr } ;
+not_expr ::= 'not' cmp_expr | cmp_expr ;
 
-and_expr
-    = not_expr { 'and' not_expr }
-    ;
+(* CORTO-CIRCUITO (regla semántica):
+   'and' y 'or' evalúan en corto-circuito.
+     - En 'a and b', si 'a' es false, 'b' NO se evalúa; el resultado
+       es false directamente.
+     - En 'a or b', si 'a' es true, 'b' NO se evalúa; el resultado
+       es true directamente.
+   Esto permite escribir patrones del tipo:
+       if p != null and p.edad > 0 then ...
+   sin lanzar NullReferenceError cuando p es null.                    *)
 
-not_expr
-    = 'not' cmp_expr
-    | cmp_expr
-    ;
+cmp_expr ::= add_expr [ ( '==' | '!=' | '<' | '>' | '<=' | '>=' ) add_expr ] ;
 
-cmp_expr
-    = add_expr [ ( '==' | '!=' | '<>' | '<' | '>' | '<=' | '>=' ) add_expr ]
-    ;
+add_expr ::= mul_expr { ( '+' | '-' | '|' | 'xor' ) mul_expr } ;
+mul_expr ::= unary    { ( '*' | '/' | 'mod' | '&' | 'shl' | 'shr' ) unary } ;
 
-add_expr
-    = mul_expr { ( '+' | '-' | '|' | 'xor' ) mul_expr }
-    ;
+unary    ::= '-' primary
+           | primary ;
 
-mul_expr
-    = unary { ( '*' | '/' | 'mod' | '&' | 'shl' | 'shr' ) unary }
-    ;
+(* primary permite encadenar acceso a miembro, llamada y subíndice:
+     obj.field
+     obj.method(args)
+     arr[i]
+     obj.method().field[0].other()                                    *)
+primary  ::= atom { '.' ( call_expr | name ) | '[' expr ']' } ;
 
-unary
-    = '-' primary
-    | primary
-    ;
+atom     ::= INTEGER_LIT
+           | FLOAT_LIT
+           | STRING_LIT
+           | 'true'
+           | 'false'
+           | 'null'
+           | 'this'
+           | 'super' [ '(' [ args ] ')' ]
+           | array_literal
+           | call_expr
+           | name
+           | '(' expr ')' ;
 
-primary
-    = atom { '.' ( call_expr | name ) | '[' expr ']' }
-    ;
+(* ANULABILIDAD (regla semántica):
 
-atom
-    = INTEGER_LIT
-    | FLOAT_LIT
-    | STRING_LIT
-    | 'TRUE'
-    | 'FALSE'
-    | array_literal
-    | call_expr
-    | name
-    | '(' expr ')'
-    ;
+   Los tipos ESCALARES nunca pueden ser null:
+       integer, float, string, boolean
+   Asignar 'null' a una variable de uno de estos tipos es error
+   de compilación.
+
+   Los tipos REFERENCIA pueden ser null:
+       instancias de clase, arrays
+   Para ellos, 'null' es un valor válido y se puede comparar
+   con '==' y '!='.
+
+   Valores por defecto (cuando se declara una variable sin inicializar):
+       integer  -> 0
+       float    -> 0.0
+       boolean  -> false
+       string   -> ""        (cadena vacía)
+       clase    -> null
+       array    -> null
+
+   Acceder a un miembro o método de una referencia 'null' lanza
+   en tiempo de ejecución una excepción del tipo 'NullReferenceError'. *)
+
+(* 'this' referencia el objeto actual. Solo es válido dentro del cuerpo
+   de una función o propiedad miembro de una clase (incluidos getter/
+   setter de propiedades de clase). Usarlo en una función a nivel
+   módulo, en una propiedad a nivel módulo, o fuera de cualquier
+   contexto de instancia, es un error de compilación.
+
+   Encadena con '.' como cualquier otro 'primary':
+       this.nombre := nombre        // desambigua miembro vs parámetro
+       return this                   // se puede pasar como valor
+       this.Hablar()                 // llama a método propio
+
+   'super' referencia la clase base. Tiene dos formas:
+
+     1) super(args)
+        Invoca el constructor de la clase base. Solo válido dentro
+        del cuerpo de un constructor de una subclase. Si se usa,
+        debe ser la PRIMERA sentencia del constructor.
+
+     2) super.miembro      o      super.metodo(args)
+        Accede a un miembro de la clase base, saltándose la versión
+        sobreescrita en la subclase. Solo válido dentro de una
+        función o propiedad miembro de una subclase.
+
+   'super' a secas (sin '(' ni '.') NO es una expresión válida. *)
+
+array_literal ::= '[' [ expr { ',' expr } ] ']' ;
+
+(* ARRAYS — INDEXADO Y LÍMITES (regla semántica):
+
+   Los arrays son de índice CERO: el primer elemento es arr[0],
+   el último es arr[length-1].
+
+   Acceder con un índice fuera de rango (negativo o >= length) lanza
+   en tiempo de ejecución una excepción del tipo 'IndexOutOfRangeError'.
+
+   Tamaño:
+     - Declaración con tamaño fijo:  var v: integer[10]    (longitud 10)
+     - Declaración sin tamaño:       var v: integer[]      (= null)
+     - Literal:                       var v := [2, 3, 5]    (longitud 3) *)
+
 
 (* ========================= TOKENS LÉXICOS ========================= *)
 
-INTEGER_LIT
-    = DIGIT { DIGIT }
-    ;
+INTEGER_LIT ::= DEC_LIT | HEX_LIT | BIN_LIT ;
 
-FLOAT_LIT
-    = DIGIT { DIGIT } '.' DIGIT { DIGIT }
-    ;
+DEC_LIT     ::= DIGIT { DIGIT } ;
+HEX_LIT     ::= '0' ( 'x' | 'X' ) HEX_DIGIT { HEX_DIGIT } ;
+BIN_LIT     ::= '0' ( 'b' | 'B' ) BIN_DIGIT { BIN_DIGIT } ;
 
-STRING_LIT
-    = '"' { CHAR } '"'
-    ;
+FLOAT_LIT   ::= DIGIT { DIGIT } '.' DIGIT { DIGIT }
+                [ ( 'e' | 'E' ) [ '+' | '-' ] DIGIT { DIGIT } ] ;
 
-LETTER
-    = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
-    | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T'
-    | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
-    | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j'
-    | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't'
-    | 'u' | 'v' | 'w' | 'x' | 'y' | 'z'
-    ;
+STRING_LIT  ::= '"' { STR_CHAR | ESCAPE } '"' ;
 
-DIGIT
-    = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
-    ;
+ESCAPE      ::= '\' ( 'n' | 't' | 'r' | '\' | '"' | '0' ) ;
 
-CHAR
-    = (* cualquier carácter Unicode excepto '"' y NEWLINE *)
-    ;
+STR_CHAR    ::= (* cualquier carácter Unicode excepto '"', '\' y NEWLINE *) ;
 
-NEWLINE
-    = '\n' | '\r\n'
-    ;
+LETTER      ::= 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
+              | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T'
+              | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
+              | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j'
+              | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't'
+              | 'u' | 'v' | 'w' | 'x' | 'y' | 'z' ;
+
+DIGIT       ::= '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' ;
+
+HEX_DIGIT   ::= DIGIT
+              | 'a' | 'b' | 'c' | 'd' | 'e' | 'f'
+              | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' ;
+
+BIN_DIGIT   ::= '0' | '1' ;
+
+NEWLINE     ::= '\n' | '\r\n' ;
+
+
+(* ========================= COMENTARIOS Y ESPACIOS ========================= *)
+
+(* Los comentarios y espacios en blanco (excepto NEWLINE) son ignorados
+   por el analizador léxico:
+
+     LINE_COMMENT  ::= '//' { CHAR_NO_NL } NEWLINE
+     BLOCK_COMMENT ::= '/*' { ANY_CHAR } '*/'   (* no anidado *)
+     WHITESPACE    ::= ' ' | '\t'
+
+   NEWLINE NO se ignora: forma parte de la sintaxis (cierra sentencias). *)
+
 
 (* ========================= PALABRAS CLAVE RESERVADAS ========================= *)
 
-(* module, end, import,
-   const, var, function, class, extends,
-   if, then, elseif, else, endif,
-   while, do, endwh,
-   for, to, step, next,
-   try, catch, finally, endtry, throw,
-   return, break, continue, print,
-   and, or, not, xor, mod, shl, shr,
-   INTEGER, FLOAT, STRING, BOOLEAN, TRUE, FALSE                *)
+(* IMPORTANTE: las palabras clave son CASE-INSENSITIVE.
+   Es decir: 'if' ≡ 'IF' ≡ 'If' ≡ 'iF'.
+   Los IDENTIFICADORES (nombres) sí distinguen mayúsculas/minúsculas.
+
+   Estructura de programa:
+     module, end, import
+
+   Declaraciones:
+     const, var, function, class, extends, enum,
+     property, get, set, endprop, endget, endset
+
+   Referencias a la instancia actual / clase base:
+     this, super
+
+   Palabras reservadas CONTEXTUALES (solo dentro de get/set):
+     field
+
+   Visibilidad (por defecto todo es privado):
+     public
+
+   Modificadores de herencia:
+     final
+
+   Reglas de visibilidad (semántica):
+     - Una declaración SIN 'public' es privada.
+     - 'public' a nivel módulo  -> exportable a otros módulos vía 'import'.
+     - 'public' a nivel clase   -> accesible desde fuera de la clase
+                                   (otras clases, otros módulos si la
+                                   propia clase es 'public').
+     - No existe 'protected'. Una SUBCLASE puede acceder a TODOS los
+       miembros de su clase base, incluidos los privados (herencia
+       transparente al estilo "sin barrera entre padre e hijo").
+
+   Control de flujo:
+     if, then, elseif, else, endif,
+     switch, case, default, endsw,
+     while, do, endwh, loop,
+     for, to, step, next, in,
+     break, continue, return
+
+   Manejo de errores:
+     try, catch, finally, endtry, throw
+
+   E/S:
+     print
+
+   Tipos primitivos:
+     integer, float, string, boolean
+
+   Literales booleanos y de referencia:
+     true, false, null
+
+   Operadores en forma de palabra:
+     and, or, not, xor, mod, shl, shr                                  *)
+
+
+(* ========================= ROADMAP V2 (deferido) =========================
+
+   Estas características se han discutido pero quedan pendientes para
+   una versión más avanzada del lenguaje. No están en la gramática actual.
+
+   - Interpolación de strings:        "Hola $nombre"  o  "Hola ${expr}"
+   - Alias de import:                 import IO.Console as IO
+   - Type aliases:                    type Edad = integer
+   - Tuplas y retornos múltiples:     function divmod(): (integer, integer)
+   - Lambdas y funciones como valor:  var f := (x: integer) => x * 2
+   - Mapas/diccionarios nativos:      var m: Map<string, integer> := {...}
+   - Genéricos:                       List<integer>, Map<K, V>
+   - Interfaces / clases abstractas
+   - Asignaciones compuestas extra:   *=, /=, mod=, &=, |=, xor=, shl=, shr=
+   - Operador 'in' como expresión booleana fuera del 'for'
+   - Rangos en switch:                case 1..5
+   - Lectura de entrada estándar (input/readln)
+
+   ============================================================ *)
+
 
 (* ========================= EJEMPLO COMPLETO ========================= *)
 
@@ -529,45 +705,196 @@ module Ejemplo
   import MathLib
   import IO.Console
 
-  class Animal
-    var nombre: STRING
+  // Enumeración estilo C: valores enteros implícitos.
+  // LUNES=0, MARTES=1, ..., DOMINGO=6
+  public enum Dia
+    LUNES
+    MARTES
+    MIERCOLES
+    JUEVES
+    VIERNES
+    SABADO
+    DOMINGO
+  end Dia
 
-    function Hablar(): STRING
+  // Enum con valores explícitos parciales: ERROR=10, FATAL=11 (continúa)
+  public enum Severidad
+    INFO
+    WARN
+    ERROR := 10
+    FATAL
+  end Severidad
+
+  // Propiedad a nivel MÓDULO (forma corta, get/set implícitos).
+  public property version: string := "1.0.0"
+
+  // Propiedad a nivel MÓDULO con setter validado.
+  public property nivelLog: integer := 0
+    set(n)
+      if n < 0 then
+        throw "nivelLog inválido"
+      endif
+      field := n
+    end set
+  end property
+
+  // Clase pública (visible desde fuera del módulo).
+  // Por defecto todo es privado: hay que marcar 'public' para exportar.
+  public class Animal
+    var nombre: string                  // privado: solo accesible dentro de Animal
+
+    // Variable ESTÁTICA: cuenta cuántos animales se han creado.
+    // El prefijo 'Animal.' la marca como miembro de clase.
+    public var Animal.totalCreados: integer := 0
+
+    // Constructor: misma palabra que el nombre de la clase, sin 'new'.
+    public function Animal(nombre: string)
+      this.nombre := nombre
+      Animal.totalCreados += 1          // accedemos al estático por su nombre
+    end Animal
+
+    // Función ESTÁTICA: pertenece a la clase, no a la instancia.
+    public function Animal.cuantos(): integer
+      return Animal.totalCreados
+    end Animal.cuantos
+
+    // Propiedad pública con get/set implícitos y valor inicial.
+    public property edad: integer := 0
+
+    // Propiedad con setter personalizado: valida el valor entrante.
+    public property peso: float := 1.0
+      set(p)
+        if p < 0.0 then
+          throw "peso negativo no permitido"
+        endif
+        field := p
+      end set
+    end property
+
+    // Propiedad de solo lectura (sin 'set').
+    public property especie: string := "desconocida"
+      get
+        return field
+      end get
+    end property
+
+    // Virtual por defecto: las subclases pueden sobreescribirlo.
+    public function Hablar(): string
       return "..."
     end Hablar
+
+    // 'final' impide que las subclases la sobreescriban.
+    // Uso de 'this' para desambiguar parámetro vs miembro.
+    public final function CambiarNombre(nombre: string)
+      this.nombre := nombre
+    end CambiarNombre
   end Animal
 
-  class Perro extends Animal
-    function Hablar(): STRING
-      return "Guau, soy " + nombre
+  // Herencia: la subclase también es pública
+  public class Perro extends Animal
+    var raza: string
+
+    // Constructor propio: llama al de la clase base con super(...)
+    // y luego inicializa lo suyo. super(...) debe ir el primero.
+    public function Perro(nombre: string, raza: string)
+      super(nombre)
+      this.raza := raza
+    end Perro
+
+    public function Hablar(): string
+      // super.Hablar() invoca explícitamente la versión de Animal,
+      // saltándose la sobreescritura.
+      return super.Hablar() + " ¡Guau! Soy un " + raza
     end Hablar
   end Perro
 
-  function Factorial(n: INTEGER): INTEGER
+  // Inicializador del módulo: se llama automáticamente al cargar
+  // el módulo, antes de cualquier otra cosa.
+  function Ejemplo()
+    print "Cargando módulo Ejemplo v" + version
+  end Ejemplo
+
+  // Función auxiliar privada (no se exporta del módulo)
+  function Factorial(n: integer): integer
     if n <= 1 then
       return 1
     endif
     return n * Factorial(n - 1)
   end Factorial
 
-  var primos: INTEGER[] = [2, 3, 5, 7, 11]
-  var p: Perro
-  p.nombre := "Rex"
-  print p.Hablar()
+  // Punto de entrada público
+  public function Main()
+    var primos: integer[] := [2, 3, 5, 7, 11]
 
-  try
-    var resultado: INTEGER = Factorial(5)
-    print "Resultado:", resultado
-  catch err: RuntimeError
-    print "Error: ", err
-  finally
-    print "Fin del programa"
-  endtry
+    // Construcción: se invoca la clase como una función. Sin 'new'.
+    var p: Perro := Perro("Rex", "labrador")
+    print p.Hablar()
 
-  for i: integer := 0 to 4 do
-    print primos[i],
-  next i
+    // Acceso a un miembro estático desde fuera de la clase.
+    print "Animales creados:", Animal.cuantos()
+
+    // null solo es válido para referencias (clases, arrays):
+    var otro: Perro := null
+    if otro == null then
+      print "todavía no hay otro perro"
+    endif
+    // var n: integer := null   // ERROR de compilación: integer no es nullable
+
+    try
+      var resultado: integer := Factorial(5)
+      print "Resultado:", resultado
+    catch err: RuntimeError          // tipada
+      print "Runtime:", err
+    catch err                         // catch-all con enlace
+      print "Error inesperado:", err
+    // catch                          // catch-all sin enlace (alternativa)
+    //   print "Algo falló"
+    finally
+      print "Fin del programa"
+    endtry
+
+    // Suma con asignación compuesta '+=' y for numérico.
+    var suma: integer := 0
+    for i := 0 to 4 do
+      suma += primos[i]
+      print primos[i];
+    next i
+    print "Suma:", suma
+
+    // Recorrido con 'for ... in ...' (foreach implícito).
+    var producto: integer := 1
+    for n in primos do
+      producto := producto * n
+    next n
+    print "Producto:", producto
+
+    // Bucle do-while: cuenta atrás desde 3.
+    var k: integer := 3
+    do
+      print k
+      k -= 1
+    loop k > 0
+
+    // Bucle infinito con salida explícita.
+    var c: integer := 0
+    do
+      c += 1
+      if c == 10 then
+        break
+      endif
+    loop
+
+    // Switch sobre un valor de enum.
+    var hoy: Dia := Dia.MIERCOLES
+    switch hoy
+      case Dia.LUNES, Dia.MARTES, Dia.MIERCOLES, Dia.JUEVES, Dia.VIERNES
+        print "laborable"
+      case Dia.SABADO, Dia.DOMINGO
+        print "fin de semana"
+      default
+        print "día inválido"
+    endsw
+  end Main
 
 end Ejemplo
 *)
-

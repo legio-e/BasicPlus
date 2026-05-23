@@ -98,6 +98,8 @@ public class FrmMain extends javax.swing.JFrame
     private javax.swing.JTree projectTree;
     /** Modelo del árbol; lo reconstruimos al cargar/refrescar el proyecto. */
     private javax.swing.tree.DefaultTreeModel projectTreeModel;
+    /** FP4 — panel inferior izquierdo: ficheros remotos del dispositivo Pico. */
+    private PicoExplorer picoExplorer;
 
     // ---- Status bar (jPanel1 al PAGE_END del form) ----
     /** Lado izquierdo: nombre/ruta del fichero actual o "(sin fichero)". */
@@ -399,6 +401,10 @@ public class FrmMain extends javax.swing.JFrame
         miRun.addActionListener(e -> doRun(true));
         jMenu3.add(miRun);
 
+        JMenuItem miRunOnPico = new JMenuItem("Run on Pico");
+        miRunOnPico.addActionListener(e -> doRunOnPico());
+        jMenu3.add(miRunOnPico);
+
         jMenu3.addSeparator();
         JMenuItem miClear = new JMenuItem("Clear console");
         miClear.addActionListener(e -> {
@@ -445,8 +451,18 @@ public class FrmMain extends javax.swing.JFrame
             }
         });
         jSplitPane2.setTopComponent(new JScrollPane(projectTree));
-        // jSplitPane2 estaba con setDividerLocation(400) — VERTICAL_SPLIT —
-        // la parte de abajo queda vacía hasta que decidamos qué meter ahí.
+
+        // FP4 — explorador del dispositivo Pico en el panel inferior izquierdo.
+        // Envía el output del comando RUN remoto a la consola del IDE.
+        picoExplorer = new PicoExplorer();
+        picoExplorer.setOutputSink(line -> {
+            if (consolaArea != null) {
+                consolaArea.append(line);
+                consolaArea.append("\n");
+                consolaArea.setCaretPosition(consolaArea.getDocument().getLength());
+            }
+        });
+        jSplitPane2.setBottomComponent(picoExplorer);
     }
 
     /** Userdata adjunta a cada nodo del JTree: label visible + path opcional
@@ -1199,6 +1215,178 @@ public class FrmMain extends javax.swing.JFrame
     }
 
     /**
+     * FP4.c — Compile & Run on Pico: compila el .bp actual y delega el
+     * upload + ejecución al panel PicoExplorer (que usa su conexión
+     * USB CDC ya abierta). El output llega a la consola del IDE vía el
+     * outputSink que enchufamos al panel en setupProjectTree().
+     */
+    private void doRunOnPico() {
+        if (editorArea.getText().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Editor vacío. Carga o escribe un fichero primero.",
+                    "Aviso", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (picoExplorer == null || !picoExplorer.isConnected()) {
+            JOptionPane.showMessageDialog(this,
+                    "Conecta primero el dispositivo desde el panel Pico\n" +
+                    "(ventana inferior izquierda → Connect).",
+                    "Pico no conectado", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        onSave();
+        if (currentFile == null) return;
+
+        consolaArea.setText("");
+        errors.clear();
+
+        final Path bpFile;
+        final Path outDir;
+        if (currentProject != null) {
+            bpFile = java.nio.file.Paths.get(currentProject.sourceDir,
+                    currentProject.main + ".bp");
+            outDir = java.nio.file.Paths.get(currentProject.outDir);
+        } else {
+            bpFile = currentFile;
+            outDir = bpFile.getParent().resolve("out");
+        }
+
+        new SwingWorker<Boolean, String>() {
+            Path modPath = null;
+            @Override
+            protected Boolean doInBackground() {
+                publish("== compilando " + bpFile.getFileName() + " para Pico ==\n");
+                boolean ok = invokeWithCapture(() ->
+                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm"),
+                        this::publish);
+                if (!ok) {
+                    publish("== compilación falló ==\n");
+                    return false;
+                }
+                String moduleName = inferModuleName(bpFile);
+                modPath = outDir.resolve(moduleName + ".mod");
+                if (!Files.isRegularFile(modPath)) {
+                    publish("== no se encontró " + modPath.getFileName() + " ==\n");
+                    return false;
+                }
+                publish("== compilación OK: " + modPath.getFileName() + " ==\n");
+                return true;
+            }
+            @Override
+            protected void process(List<String> chunks) {
+                for (String s : chunks) {
+                    appendConsola(s);
+                    parseAndAddError(s);
+                }
+            }
+            @Override
+            protected void done() {
+                try {
+                    if (Boolean.TRUE.equals(get()) && modPath != null) {
+                        // Resolver deps no-core y subir todas antes del main.
+                        java.util.List<java.io.File> deps =
+                                resolveDeviceDeps(bpFile, outDir);
+                        if (!deps.isEmpty()) {
+                            appendConsola("[deps] " + deps.size()
+                                    + " driver(s) a subir:\n");
+                            for (java.io.File d : deps) {
+                                appendConsola("  - " + d.getName() + "\n");
+                            }
+                        }
+                        picoExplorer.uploadAndRun(modPath.toFile(), deps);
+                    }
+                } catch (Exception ex) {
+                    appendConsola("[ide] error: " + ex.getMessage() + "\n");
+                }
+            }
+        }.execute();
+    }
+
+    /** Nombres de módulos stdlib core que ya están pre-instalados en el
+     *  firmware. No se suben — están allí desde el boot.
+     *
+     *  Política: cuando se modifica la API de un módulo stdlib (p.ej.
+     *  añadiéndole una clase pública), la versión empotrada en flash
+     *  queda obsoleta y al hacer Run on Pico aparece:
+     *
+     *    [bpvm-c link] símbolo no resuelto: 'X.__cls_new_<Cls>'
+     *
+     *  Soluciones:
+     *    a) Sacar el módulo de esta lista temporalmente para que el IDE
+     *       lo suba fresco en cada run (sobreescribe el del FS). Lento
+     *       pero permite iterar sin reflashear.
+     *    b) Regenerar el array empotrado con `xxd -i -n X_mod X.mod >
+     *       bpgenvm-c/pico/X_mod.c`, recompilar el firmware
+     *       (`bpgenvm-c/pico/build/ ninja`) y reflashear el .uf2.
+     *       Después puede volver a entrar en esta lista.
+     *
+     *  Gpio entró aquí (con la clase Pin) tras reflashear el firmware
+     *  con el array empotrado actualizado el 23-may-2026. */
+    private static final java.util.Set<String> EMBEDDED_CORE_MODS =
+            new java.util.HashSet<>(java.util.Arrays.asList(
+                    "Math", "IO", "Gpio", "I2c", "Spi", "Uart"
+                    // ADC/PWM cuando los añadamos
+            ));
+
+    /**
+     * Resuelve los drivers de dispositivo necesarios para ejecutar
+     * {@code bpFile}. Parsea las líneas `import X` del fuente, filtra
+     * los stdlib core, y busca el `.mod` correspondiente en:
+     *   1) outDir (si el frontend lo emitió como dep)
+     *   2) {bpdevices/} via devicesDir del BpVM.cfg
+     *   3) {bpstdlib/} via stdlibDir (fallback)
+     *   4) directorio del bpFile
+     * Devuelve lista de .mod existentes a subir, en orden de
+     * descubrimiento. (No recursivo en deps-de-deps para v1.)
+     */
+    private java.util.List<java.io.File> resolveDeviceDeps(Path bpFile, Path outDir) {
+        java.util.List<java.io.File> result = new java.util.ArrayList<>();
+        java.util.Set<String> imports = parseImports(bpFile);
+        if (imports.isEmpty()) return result;
+
+        java.util.List<Path> searchDirs = new java.util.ArrayList<>();
+        if (outDir != null) searchDirs.add(outDir);
+        try {
+            edu.bpgenvm.config.VmConfig cfg =
+                    edu.bpgenvm.config.VmConfig.loadDefaultFor(bpFile);
+            if (cfg.devicesDir != null && !cfg.devicesDir.isEmpty())
+                searchDirs.add(java.nio.file.Paths.get(cfg.devicesDir));
+            if (cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty())
+                searchDirs.add(java.nio.file.Paths.get(cfg.stdlibDir));
+        } catch (Throwable ignored) { }
+        if (bpFile.getParent() != null) searchDirs.add(bpFile.getParent());
+
+        for (String imp : imports) {
+            if (EMBEDDED_CORE_MODS.contains(imp)) continue;
+            for (Path dir : searchDirs) {
+                Path candidate = dir.resolve(imp + ".mod");
+                if (Files.isRegularFile(candidate)) {
+                    result.add(candidate.toFile());
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    /** Parser ligero de imports del .bp. Devuelve los nombres a la
+     *  derecha de `import` (sin alias, sin `from`). */
+    private static java.util.Set<String> parseImports(Path bpFile) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        try {
+            java.util.List<String> lines = Files.readAllLines(bpFile,
+                    java.nio.charset.StandardCharsets.UTF_8);
+            java.util.regex.Pattern pat = java.util.regex.Pattern.compile(
+                    "^\\s*import\\s+([A-Za-z_][A-Za-z0-9_]*)");
+            for (String line : lines) {
+                java.util.regex.Matcher m = pat.matcher(line);
+                if (m.find()) out.add(m.group(1));
+            }
+        } catch (Exception ignored) { }
+        return out;
+    }
+
+    /**
      * A2.5 — Ejecuta un módulo en una VM REMOTE-FRIENDLY:
      *   1) Crea un workdir temporal local.
      *   2) Lanza la VM en modo daemon con `--workdir <tmp>`.
@@ -1337,11 +1525,25 @@ public class FrmMain extends javax.swing.JFrame
     }
 
     /** Sube .mod/.bpi/.dbg del outDir local a la raíz del workdir del VmClient.
-     *  No recurre: asume que outDir está plano (lo está hoy). */
+     *  No recurre: asume que outDir está plano (lo está hoy).
+     *
+     *  Filtro importante: NO sube ningún artefacto cuyo basename coincida
+     *  con un módulo de la stdlib core. Esos los resuelve la VM por su
+     *  cuenta vía --stdlibDir (que ya recibe). Subir una copia obsoleta
+     *  desde outDir (residuos de compilaciones anteriores cuando la
+     *  stdlib aún no había crecido con clases) hace que la VM use el
+     *  fichero del workdir y falle con
+     *  "Símbolo no resuelto: X.__cls_new_<Cls>". */
+    private static final java.util.Set<String> STDLIB_BASENAMES =
+            new java.util.HashSet<>(java.util.Arrays.asList(
+                    "Math", "IO", "Gpio", "I2c", "Spi", "Uart", "Json", "L2Lib"
+            ));
+
     private int uploadAppArtifacts(VmClient client, Path outDir,
                                    java.util.function.Consumer<String> publish) throws java.io.IOException {
         if (!Files.isDirectory(outDir)) return 0;
         int n = 0;
+        int skipped = 0;
         try (java.util.stream.Stream<Path> s = Files.list(outDir)) {
             java.util.List<Path> files = s
                     .filter(p -> {
@@ -1352,6 +1554,12 @@ public class FrmMain extends javax.swing.JFrame
                     .collect(java.util.stream.Collectors.toList());
             for (Path p : files) {
                 String name = p.getFileName().toString();
+                int dot = name.lastIndexOf('.');
+                String base = (dot > 0) ? name.substring(0, dot) : name;
+                if (STDLIB_BASENAMES.contains(base)) {
+                    skipped++;
+                    continue;   // la VM lo resuelve desde --stdlibDir
+                }
                 try {
                     int size = client.uploadFile(p, name, 10_000);
                     publish.accept("[ide] up " + name + " (" + size + " bytes)\n");
@@ -1360,6 +1568,10 @@ public class FrmMain extends javax.swing.JFrame
                     publish.accept("[ide] upload " + name + " falló: " + ue.getMessage() + "\n");
                 }
             }
+        }
+        if (skipped > 0) {
+            publish.accept("[ide] omitidos " + skipped
+                    + " artefactos stdlib (los resuelve la VM via --stdlibDir)\n");
         }
         return n;
     }

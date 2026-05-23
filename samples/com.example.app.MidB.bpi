@@ -1,0 +1,4 @@
+bpi 6
+library com.example.app
+module MidB
+func useB():integer public
