@@ -18,7 +18,10 @@
 /* ============================================================== */
 
 #define FS_MAGIC        0x42504656u    /* 'BPFV' big-endian, but stored as u32 le */
-#define FS_VERSION      2u             /* v1 → v2: header 1K → 4K, data 64K → 128K */
+#define FS_VERSION      3u             /* v2 → v3: layout idéntico pero el firmware
+                                          pre-instala stdlib en /lib/ y Hello en /app/.
+                                          Bump para que fs_init invalide persistencias v2
+                                          que ya no esperan ver esos paths. */
 
 /* Cada entry es 48 bytes (40 + 4 + 4). 64 entries -> 3072 bytes.
  * Header = 4 magic + 4 ver + 4 count + 64*48 = 3084 bytes. Reservamos

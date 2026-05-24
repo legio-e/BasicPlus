@@ -637,48 +637,52 @@ static void vm_task(void* arg) {
     log_printf("fs_init: %d ficheros, %u bytes",
                fs_file_count(), (unsigned) fs_used_bytes());
 
-    /* Stdlib siempre pre-instalada: si no está en el FS, la copiamos
-     * desde el array embebido. NO se persiste automáticamente a flash
-     * (el usuario decide con SAVE) — así un FORMAT borra apps pero la
-     * stdlib resurge en el siguiente reboot desde la imagen. */
+    /* Stdlib pre-instalada en /lib/, Hello en /app/. La resolución de
+     * imports en cmd_run busca también en estos directorios además del
+     * root (ver fs_get_resolve en repl.c), así que el usuario sigue
+     * pudiendo subir ficheros sin prefijo y todo funciona.
+     *
+     * NO persistimos automáticamente a flash — el FORMAT borra apps
+     * pero la stdlib resurge en el siguiente reboot desde la imagen. */
     const uint8_t* dummy; uint32_t dummy_sz;
-    if (fs_get("Gpio.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("Gpio.mod", gpio_mod, gpio_mod_len);
-        log_printf("stdlib: Gpio.mod installed (%u bytes)", gpio_mod_len);
+    if (fs_get("/lib/Gpio.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Gpio.mod", gpio_mod, gpio_mod_len);
+        log_printf("stdlib: /lib/Gpio.mod installed (%u bytes)", gpio_mod_len);
     }
-    if (fs_get("I2c.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("I2c.mod", i2c_mod, i2c_mod_len);
-        log_printf("stdlib: I2c.mod installed (%u bytes)", i2c_mod_len);
+    if (fs_get("/lib/I2c.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/I2c.mod", i2c_mod, i2c_mod_len);
+        log_printf("stdlib: /lib/I2c.mod installed (%u bytes)", i2c_mod_len);
     }
-    if (fs_get("Spi.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("Spi.mod", spi_mod, spi_mod_len);
-        log_printf("stdlib: Spi.mod installed (%u bytes)", spi_mod_len);
+    if (fs_get("/lib/Spi.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Spi.mod", spi_mod, spi_mod_len);
+        log_printf("stdlib: /lib/Spi.mod installed (%u bytes)", spi_mod_len);
     }
-    if (fs_get("Uart.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("Uart.mod", uart_mod, uart_mod_len);
-        log_printf("stdlib: Uart.mod installed (%u bytes)", uart_mod_len);
+    if (fs_get("/lib/Uart.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Uart.mod", uart_mod, uart_mod_len);
+        log_printf("stdlib: /lib/Uart.mod installed (%u bytes)", uart_mod_len);
     }
-    if (fs_get("Pulse.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("Pulse.mod", pulse_mod, pulse_mod_len);
-        log_printf("stdlib: Pulse.mod installed (%u bytes)", pulse_mod_len);
+    if (fs_get("/lib/Pulse.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Pulse.mod", pulse_mod, pulse_mod_len);
+        log_printf("stdlib: /lib/Pulse.mod installed (%u bytes)", pulse_mod_len);
     }
-    if (fs_get("Pwm.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("Pwm.mod", pwm_mod, pwm_mod_len);
-        log_printf("stdlib: Pwm.mod installed (%u bytes)", pwm_mod_len);
+    if (fs_get("/lib/Pwm.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Pwm.mod", pwm_mod, pwm_mod_len);
+        log_printf("stdlib: /lib/Pwm.mod installed (%u bytes)", pwm_mod_len);
     }
-    if (fs_get("Pico.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("Pico.mod", pico_mod, pico_mod_len);
-        log_printf("stdlib: Pico.mod installed (%u bytes)", pico_mod_len);
+    if (fs_get("/lib/Pico.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Pico.mod", pico_mod, pico_mod_len);
+        log_printf("stdlib: /lib/Pico.mod installed (%u bytes)", pico_mod_len);
     }
-    if (fs_get("Rtc.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("Rtc.mod", rtc_mod, rtc_mod_len);
-        log_printf("stdlib: Rtc.mod installed (%u bytes)", rtc_mod_len);
+    if (fs_get("/lib/Rtc.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Rtc.mod", rtc_mod, rtc_mod_len);
+        log_printf("stdlib: /lib/Rtc.mod installed (%u bytes)", rtc_mod_len);
     }
     /* Drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO se
-     * pre-instalan aquí — los sube el IDE como deps al hacer Run. */
-    if (fs_get("Hello.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("Hello.mod", hello_mod, hello_mod_len);
-        log_printf("stdlib: Hello.mod installed (%u bytes)", hello_mod_len);
+     * pre-instalan aquí — los sube el IDE como deps al hacer Run a
+     * /app/ o a root, da igual: la resolución encuentra ambos. */
+    if (fs_get("/app/Hello.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/app/Hello.mod", hello_mod, hello_mod_len);
+        log_printf("app: /app/Hello.mod installed (%u bytes)", hello_mod_len);
     }
 
     log_printf("fs: %d ficheros, %u/%u bytes usados",

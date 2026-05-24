@@ -220,6 +220,29 @@ static void cmd_format(void) {
     fflush(stdout);
 }
 
+/* Resuelve un nombre de módulo buscando en varios paths del FS, en
+ * orden:
+ *   1) Tal cual (el usuario puede pasar "/app/Mio.mod" explícito o
+ *      un "Mio.mod" en root).
+ *   2) /app/<name>   — apps del usuario y drivers que sube el IDE.
+ *   3) /lib/<name>   — stdlib pre-instalada por el firmware.
+ *
+ * Pensado para que código existente que tiene "Math.mod" en root
+ * siga funcionando, y el código nuevo pueda usar la jerarquía
+ * /app, /lib limpia. */
+static fs_status_t fs_get_resolve(const char* name,
+                                   const uint8_t** data_out,
+                                   uint32_t* size_out) {
+    fs_status_t s = fs_get(name, data_out, size_out);
+    if (s == FS_OK) return FS_OK;
+    char path[FS_NAME_LEN];
+    snprintf(path, sizeof(path), "/app/%s", name);
+    s = fs_get(path, data_out, size_out);
+    if (s == FS_OK) return FS_OK;
+    snprintf(path, sizeof(path), "/lib/%s", name);
+    return fs_get(path, data_out, size_out);
+}
+
 static void cmd_run(const char* args) {
     char name[FS_NAME_LEN];
     if (sscanf(args, "%39s", name) != 1) {
@@ -228,7 +251,7 @@ static void cmd_run(const char* args) {
         return;
     }
     const uint8_t* data; uint32_t size;
-    fs_status_t s = fs_get(name, &data, &size);
+    fs_status_t s = fs_get_resolve(name, &data, &size);
     if (s != FS_OK) {
         printf("ERR %s\n", fs_status_str(s));
         fflush(stdout);
@@ -280,12 +303,12 @@ static void cmd_run(const char* args) {
                     }
                 }
                 if (already) continue;
-                /* Buscar <owner>.mod en el FS. */
+                /* Buscar <owner>.mod en el FS — prueba root, /app/, /lib/. */
                 char fname[48];
                 snprintf(fname, sizeof(fname), "%s.mod", owner);
                 const uint8_t* dep; uint32_t dep_size;
-                if (fs_get(fname, &dep, &dep_size) != FS_OK) {
-                    printf("[run] dep '%s' no encontrado en FS\n", fname);
+                if (fs_get_resolve(fname, &dep, &dep_size) != FS_OK) {
+                    printf("[run] dep '%s' no encontrado en FS (probé root, /app, /lib)\n", fname);
                     continue;
                 }
                 bpvm_status_t ds = bpvm_load_mod_buffer(vm, dep, dep_size, owner);
