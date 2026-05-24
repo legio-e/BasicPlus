@@ -195,6 +195,13 @@ public final class PicoExplorer extends JPanel {
             }
 
             // 1) Subir deps primero (drivers), solo los que no estén ya o tengan tamaño distinto.
+            //
+            // Bug #111: PUT sobre fichero existente rompe USB CDC en el
+            // firmware. Workaround pragmático aquí: si existe con tamaño
+            // distinto, DEL primero y luego PUT — eso evita el code path
+            // de overwrite. Si existe con mismo tamaño, salto el PUT
+            // entero (asume mismo contenido — heurística aceptable para
+            // .mod compilados deterministicamente).
             for (File dep : deps) {
                 Long sz = remote.get(dep.getName());
                 if (sz != null && sz == dep.length()) {
@@ -204,6 +211,15 @@ public final class PicoExplorer extends JPanel {
                                 + " bytes), salto PUT"));
                     }
                     continue;
+                }
+                if (sz != null) {
+                    // Existe pero con tamaño distinto → DEL antes del PUT.
+                    try {
+                        client.del(dep.getName());
+                    } catch (java.io.IOException delErr) {
+                        // No fatal: si el DEL falla, intentaremos el PUT
+                        // y veremos qué pasa.
+                    }
                 }
                 byte[] depData = Files.readAllBytes(dep.toPath());
                 client.put(dep.getName(), depData);
@@ -217,6 +233,13 @@ public final class PicoExplorer extends JPanel {
                             + " bytes), salto PUT"));
                 }
             } else {
+                if (mainSz != null) {
+                    try {
+                        client.del(name);
+                    } catch (java.io.IOException delErr) {
+                        // ditto
+                    }
+                }
                 byte[] data = Files.readAllBytes(modFile.toPath());
                 client.put(name, data);
             }
