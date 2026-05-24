@@ -4,11 +4,17 @@
  * Modelo:
  *  - N slots de fichero, cada uno con nombre (<= FS_NAME_LEN) y datos
  *    binarios. Los .mod típicos son pocos KB, cabe holgado.
- *  - Espacio total FS_DATA_SIZE: 32 KB de datos, suficiente para
- *    docenas de .mod.
+ *  - Espacio total FS_DATA_SIZE: 128 KB de datos. Suficiente para
+ *    docenas de .mod (típicos 2-5 KB cada uno).
  *  - Los ficheros viven en RAM mientras la Pico esté encendida.
  *    fs_save_to_flash() los persiste en una región reservada de flash.
  *    fs_init() carga lo que haya en flash al arrancar.
+ *
+ *  Limitación de esta arquitectura: el FS_DATA_SIZE entero vive en
+ *  SRAM (mirror del contenido en flash). RP2350 tiene 520 KB SRAM,
+ *  así que ~128-256 KB es el techo razonable manteniendo el mirror.
+ *  Para FS más grande (varios MB) habría que rediseñar leyendo datos
+ *  directamente de XIP y no mantener mirror — pendiente.
  *
  * Layout de la región flash (al final de los 4 MB):
  *    offset 0:    magic ('BPFV') + version + count + entry[N]
@@ -29,8 +35,8 @@ extern "C" {
 #endif
 
 #define FS_NAME_LEN     40         /* incluyendo el NUL */
-#define FS_MAX_FILES    32
-#define FS_DATA_SIZE    (64 * 1024)
+#define FS_MAX_FILES    64                       /* antes 32, sube poco BSS (entry=48B) */
+#define FS_DATA_SIZE    (128 * 1024)             /* antes 64 KB */
 
 typedef enum {
     FS_OK = 0,

@@ -18,22 +18,24 @@
 /* ============================================================== */
 
 #define FS_MAGIC        0x42504656u    /* 'BPFV' big-endian, but stored as u32 le */
-#define FS_VERSION      1u
+#define FS_VERSION      2u             /* v1 → v2: header 1K → 4K, data 64K → 128K */
 
-/* Cada entry es 48 bytes (40 + 4 + 4). 16 entries -> 768 bytes.
- * Header = 4 magic + 4 ver + 4 count + 16*48 = 780 bytes. Reservamos 1 KB. */
+/* Cada entry es 48 bytes (40 + 4 + 4). 64 entries -> 3072 bytes.
+ * Header = 4 magic + 4 ver + 4 count + 64*48 = 3084 bytes. Reservamos
+ * 4 KB para que entre holgado y quede alineado a un sector de flash. */
 typedef struct {
     char     name[FS_NAME_LEN];
     uint32_t offset;     /* offset dentro del buffer de datos */
     uint32_t size;       /* bytes (0 = slot libre, pese a estar la entry) */
 } fs_entry_t;
 
-#define FS_HEADER_BYTES  1024u
-#define FS_REGION_SIZE   (FS_HEADER_BYTES + FS_DATA_SIZE)   /* 9 KB */
+#define FS_HEADER_BYTES  4096u                              /* 1 sector */
+#define FS_REGION_SIZE   (FS_HEADER_BYTES + FS_DATA_SIZE)   /* 132 KB con FS_DATA_SIZE=128K */
 
 /* Región en flash: últimos sectores del chip.
  * Pico 2: PICO_FLASH_SIZE_BYTES = 4 MB. Reservamos los últimos
- * FS_REGION_ALIGNED bytes (3 sectores de 4 KB = 12 KB). */
+ * FS_REGION_ALIGNED bytes — con header=4K + data=128K son
+ * (132 KB + 4 KB - 1) / 4 KB = 33 sectores = 132 KB exactos. */
 #ifndef PICO_FLASH_SIZE_BYTES
 #define PICO_FLASH_SIZE_BYTES (4 * 1024 * 1024)
 #endif
@@ -67,10 +69,22 @@ static int find_free_slot(void) {
     return -1;
 }
 
-/* Compacta el buffer de datos eliminando huecos. Re-asigna offsets. */
+/* Compacta el buffer de datos eliminando huecos. Re-asigna offsets.
+ *
+ * BUG #111 (resuelto aquí): la versión anterior declaraba
+ *   uint8_t tmp[FS_DATA_SIZE]
+ * como local — eso son 128 KB en el stack de vm_task (que solo tiene
+ * 16 KB). Stack overflow garantizado al primer PUT-overwrite (la
+ * función se llama cuando ya existía un fichero con ese nombre).
+ * El overflow corrompía memoria adyacente y mataba la USB CDC.
+ *
+ * Fix: hacer tmp `static` — mismo coste de RAM (en BSS en lugar de
+ * stack) pero sin la trampa. El BSS adicional (128 KB) es aceptable
+ * con 520 KB SRAM totales y deja al fs operando incluso bajo
+ * presión de stack alta. */
 static void compact(void) {
     uint32_t cursor = 0;
-    uint8_t tmp[FS_DATA_SIZE];
+    static uint8_t tmp[FS_DATA_SIZE];
     for (int i = 0; i < FS_MAX_FILES; i++) {
         if (s_entries[i].size == 0) continue;
         memcpy(tmp + cursor, s_data + s_entries[i].offset, s_entries[i].size);
@@ -129,36 +143,49 @@ static int load_from_flash(void) {
 }
 
 fs_status_t fs_save_to_flash(void) {
-    /* Serializa header + entries + data en un buffer en RAM, luego
-     * erase + program directos al flash. Single-core con IRQs OFF
-     * — patrón mínimo del SDK que no requiere pico_flash. */
-    static uint8_t save_buf[FS_REGION_ALIGNED];
-    memset(save_buf, 0xFF, sizeof(save_buf));   /* 0xFF = erased flash */
+    /* Serializa el header en un buffer pequeño (un sector flash = 4 KB)
+     * y luego programa los datos DIRECTAMENTE desde s_data sin
+     * intermediario. Antes había un `save_buf[FS_REGION_ALIGNED]`
+     * estático de 132 KB que no cabía en SRAM con FS_DATA_SIZE=128K.
+     *
+     * flash_range_program requiere que el size sea múltiplo de
+     * FLASH_PAGE_SIZE (256 bytes), así que redondeamos s_data_used
+     * hacia arriba al programar la zona de datos. Los bytes extra
+     * son padding 0xFF (la región está erased antes del program).
+     *
+     * IRQs OFF: single-core con FreeRTOS preempted, deshabilitamos
+     * IRQs para que el scheduler no nos eche a otra task mientras
+     * estamos accediendo a XIP en modo write — lo cual cuelga el
+     * chip. */
+    static uint8_t header_buf[FS_HEADER_BYTES];
+    memset(header_buf, 0xFF, sizeof(header_buf));
 
     uint32_t count = 0;
     for (int i = 0; i < FS_MAX_FILES; i++) {
         if (s_entries[i].size != 0) count++;
     }
 
-    /* Header. */
     uint32_t magic   = FS_MAGIC;
     uint32_t version = FS_VERSION;
-    memcpy(save_buf + 0, &magic,   4);
-    memcpy(save_buf + 4, &version, 4);
-    memcpy(save_buf + 8, &count,   4);
-    memcpy(save_buf + 12, s_entries, sizeof(s_entries));
+    memcpy(header_buf + 0, &magic,   4);
+    memcpy(header_buf + 4, &version, 4);
+    memcpy(header_buf + 8, &count,   4);
+    memcpy(header_buf + 12, s_entries, sizeof(s_entries));
 
-    if (s_data_used > 0) {
-        memcpy(save_buf + FS_HEADER_BYTES, s_data, s_data_used);
+    /* Datos: programamos solo lo que está usado, redondeado a página. */
+    uint32_t data_to_write = s_data_used;
+    if (data_to_write > 0) {
+        data_to_write = (data_to_write + FLASH_PAGE_SIZE - 1)
+                        & ~(uint32_t)(FLASH_PAGE_SIZE - 1);
     }
 
-    /* IRQs OFF durante erase+program. Single-core: con FreeRTOS
-     * preempted, deshabilitamos IRQs para que el scheduler no nos
-     * eche a otra task mientras estamos accediendo a XIP en modo
-     * write (lo cual cuelga el chip). */
     uint32_t saved = save_and_disable_interrupts();
     flash_range_erase(FS_FLASH_OFFSET, FS_REGION_ALIGNED);
-    flash_range_program(FS_FLASH_OFFSET, save_buf, sizeof(save_buf));
+    flash_range_program(FS_FLASH_OFFSET, header_buf, sizeof(header_buf));
+    if (data_to_write > 0) {
+        flash_range_program(FS_FLASH_OFFSET + FS_HEADER_BYTES,
+                            s_data, data_to_write);
+    }
     restore_interrupts(saved);
 
     return FS_OK;
