@@ -96,6 +96,53 @@ Desventaja: una indirección extra por call externo (despreciable a
 
 ---
 
+## Política de versiones: bytecode como "pata negra"
+
+**El bytecode siempre es la fuente canónica.** El compilador del PC
+siempre produce `Foo.mod` (bytecode) para cada `Foo.bp`. Esa es la
+versión auténtica, la "pata negra" del jamón.
+
+El `Foo.mod.native` (código nativo) es **opcional, derivado y
+descartable**. Se compila para un par concreto (versión de VM, tipo
+de procesador, ABI de helpers) y solo se envía al dispositivo si
+ese par coincide.
+
+### Reglas explícitas
+
+1. **Cada módulo BP siempre tiene su `.mod` bytecode.** Sin excepción.
+   Es el formato base, portable, debuggeable y la única vía
+   válida en host (PC con VM Java) sin recompilación.
+2. **El `.mod.native` lleva metadatos de compatibilidad**:
+   - Target ISA (`thumb2-cortex-m33-rp2350`, `x86_64-linux`, ...)
+   - Versión del firmware/VM esperada (ABI de helpers v.X)
+   - Hash del bytecode origen para garantizar identidad semántica
+3. **El IDE solo sube `.mod.native` si los tres metadatos cuadran
+   con la Pico conectada** (consultable vía HELLO + INFO). Si no,
+   sube solo el bytecode.
+4. **El firmware al cargar prefiere nativo si está presente** y
+   pasa todos los checks. Si falla cualquier check (hash distinto,
+   ABI mayor que la suya, etc.), cae al bytecode con un warning
+   en el log.
+5. **Recompilar es siempre la salida**: si tienes un `.mod.native`
+   obsoleto, basta con regenerarlo desde el `.bp`. No hay deuda
+   técnica acumulable — los nativos antiguos se tiran y se
+   regeneran a demanda.
+
+### Beneficios de esta política
+
+- **Sin "DLL hell"**: nunca hay un módulo nativo huérfano que
+  cause comportamiento inconsistente. Si dudas, regeneras.
+- **Cross-target trivial**: el mismo `.bp` se ejecuta en host Java,
+  host C y Pico sin pensarlo. El nativo es la optimización
+  específica de un target.
+- **Forward compatibility limpia**: al actualizar el firmware
+  (bump de ABI de helpers), todos los nativos antiguos quedan
+  inválidos pero el bytecode sigue funcionando. El usuario
+  recompila a su ritmo, sin urgencia.
+- **Debug seguro**: durante desarrollo siempre se ejecuta
+  bytecode (debuggeable paso a paso). Solo al "congelar" una
+  librería estable se compila a nativo.
+
 ## Convivencia bytecode/nativo
 
 El `.mod` actual tiene una entry por función con offset al
