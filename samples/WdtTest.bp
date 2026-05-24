@@ -1,0 +1,49 @@
+// WdtTest.bp — verifica el watchdog del MCU.
+//
+// AVISO: si ejecutas este programa en el Pico real Y el feed()
+// no se llama a tiempo, EL CHIP SE RESETEA. Eso es intencional
+// — es el comportamiento del watchdog. Recupera con BOOTSEL si
+// haces falta.
+//
+// El test:
+//   1) Activa el watchdog con timeout 2 segundos.
+//   2) Loop alimentando cada 500ms (5 ciclos = 2.5s totales).
+//      El chip NO debe resetearse.
+//   3) Desactiva el watchdog.
+//   4) Sleep largo (sin feed) sin watchdog activo: NO debe
+//      resetearse.
+//
+// En host es no-op: solo verifica que la API BP funciona sin
+// crashes; el wdt físico no existe.
+
+module WdtTest
+
+  import Wdt
+
+  function Main()
+    print "--- Wdt.Timer demo ---"
+
+    print "[1] Activando watchdog 2000 ms"
+    var wdog: Wdt.Timer := Wdt.Timer(2000)
+
+    print "[2] Loop con feed cada 500ms (5 iteraciones = 2.5s)..."
+    var i: integer := 0
+    while i < 5 do
+      sleep(500)
+      wdog.feed()
+      print "    feed #", i + 1, " — chip vivo"
+      i := i + 1
+    endwh
+
+    print ""
+    print "[3] Desactivando watchdog"
+    wdog.disable()
+
+    print "[4] Sleep 3 segundos sin feed — NO debe resetear..."
+    sleep(3000)
+    print "    chip vivo después de 3s sin feed"
+
+    print "--- fin ---"
+  end Main
+
+end WdtTest

@@ -569,6 +569,72 @@ static const bpvm_pico_backend_t s_pico_pico_backend = {
     .setCpuFreqMHz = pico_pico_set_cpu_freq_mhz_impl,
 };
 
+/* ============================ Adc ============================ */
+
+#include "bpvm_adc.h"
+#include "hardware/adc.h"   /* ya incluido para tempC pero idempotente */
+
+static int s_adc_chan_inited[4] = { 0, 0, 0, 0 };   /* CH0..CH3 */
+
+static int pico_adc_init_channel_impl(int ch) {
+    if (ch < 0 || ch > 3) return -1;
+    if (!s_adc_chan_inited[ch]) {
+        /* ensure_adc_inited() (más arriba) ya hace adc_init() la
+         * primera vez que tempC se usa. Lo replicamos aquí por si
+         * Adc.Channel se usa SIN haber tocado Pico.tempC antes. El
+         * SDK es idempotente. */
+        ensure_adc_inited();
+        adc_gpio_init(26 + ch);   /* CH0=GP26, CH1=GP27, CH2=GP28, CH3=GP29 */
+        s_adc_chan_inited[ch] = 1;
+    }
+    return 26 + ch;
+}
+
+static int pico_adc_read_channel_impl(int ch) {
+    if (ch < 0 || ch > 3) return -1;
+    adc_select_input(ch);
+    return (int) adc_read();
+}
+
+static const bpvm_adc_backend_t s_pico_adc_backend = {
+    .initChannel = pico_adc_init_channel_impl,
+    .readChannel = pico_adc_read_channel_impl,
+};
+
+/* ============================ Wdt ============================ */
+
+#include "bpvm_wdt.h"
+#include "hardware/watchdog.h"
+
+static int s_wdt_active = 0;
+
+static void pico_wdt_enable_impl(int timeoutMs) {
+    /* watchdog_enable(ms, pause_on_debug=true). pause_on_debug evita
+     * que el watchdog dispare cuando el chip está paused en debugger,
+     * que es lo razonable para desarrollo. */
+    if (timeoutMs <= 0) timeoutMs = 100;
+    watchdog_enable((uint32_t) timeoutMs, true);
+    s_wdt_active = 1;
+}
+
+static void pico_wdt_feed_impl(void) {
+    if (s_wdt_active) watchdog_update();
+}
+
+static void pico_wdt_disable_impl(void) {
+    /* RP2350: el watchdog no se puede deshabilitar completamente
+     * sin re-bootear. Aproximamos seteando el max valor (~8.4M ms)
+     * que en práctica nunca dispara. */
+    watchdog_enable(0x7FFFFF, true);
+    s_wdt_active = 0;
+}
+
+static const bpvm_wdt_backend_t s_pico_wdt_backend = {
+    .enable  = pico_wdt_enable_impl,
+    .feed    = pico_wdt_feed_impl,
+    .disable = pico_wdt_disable_impl,
+};
+
 /* --- Sink para los `print` de la VM. Sale por USB CDC. ----------- */
 static void usb_sink(const char* data, size_t len, void* user) {
     (void) user;
@@ -677,6 +743,18 @@ static void vm_task(void* arg) {
         fs_put("/lib/Rtc.mod", rtc_mod, rtc_mod_len);
         log_printf("stdlib: /lib/Rtc.mod installed (%u bytes)", rtc_mod_len);
     }
+    if (fs_get("/lib/Adc.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Adc.mod", adc_mod, adc_mod_len);
+        log_printf("stdlib: /lib/Adc.mod installed (%u bytes)", adc_mod_len);
+    }
+    if (fs_get("/lib/Wdt.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Wdt.mod", wdt_mod, wdt_mod_len);
+        log_printf("stdlib: /lib/Wdt.mod installed (%u bytes)", wdt_mod_len);
+    }
+    if (fs_get("/lib/Timer.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Timer.mod", timer_mod, timer_mod_len);
+        log_printf("stdlib: /lib/Timer.mod installed (%u bytes)", timer_mod_len);
+    }
     /* Drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO se
      * pre-instalan aquí — los sube el IDE como deps al hacer Run a
      * /app/ o a root, da igual: la resolución encuentra ambos. */
@@ -763,6 +841,8 @@ int main(void) {
     bpvm_pulse_set_backend(&s_pico_pulse_backend);
     bpvm_pwm_set_backend(&s_pico_pwm_backend);
     bpvm_pico_set_backend(&s_pico_pico_backend);
+    bpvm_adc_set_backend(&s_pico_adc_backend);
+    bpvm_wdt_set_backend(&s_pico_wdt_backend);
     /* Rtc en Pico usa el stub portable (bpvm_platform_now_ms + offset).
      * Cuando reset, el offset = 0 → epochSec devuelve segundos desde
      * boot. El IDE envía TIME <epochsec> al conectar y el comando

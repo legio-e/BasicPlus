@@ -1590,8 +1590,8 @@ public class FrmMain extends javax.swing.JFrame
      *  con el array empotrado actualizado el 23-may-2026. */
     private static final java.util.Set<String> EMBEDDED_CORE_MODS =
             new java.util.HashSet<>(java.util.Arrays.asList(
-                    "Math", "IO", "Gpio", "I2c", "Spi", "Uart", "Pulse", "Pwm", "Pico", "Rtc"
-                    // ADC cuando lo añadamos
+                    "Math", "IO", "Gpio", "I2c", "Spi", "Uart",
+                    "Pulse", "Pwm", "Pico", "Rtc", "Adc", "Wdt", "Timer"
             ));
 
     /**
@@ -1802,7 +1802,9 @@ public class FrmMain extends javax.swing.JFrame
      *  "Símbolo no resuelto: X.__cls_new_<Cls>". */
     private static final java.util.Set<String> STDLIB_BASENAMES =
             new java.util.HashSet<>(java.util.Arrays.asList(
-                    "Math", "IO", "Gpio", "I2c", "Spi", "Uart", "Pulse", "Pwm", "Pico", "Rtc", "Json", "L2Lib"
+                    "Math", "IO", "Gpio", "I2c", "Spi", "Uart",
+                    "Pulse", "Pwm", "Pico", "Rtc", "Adc", "Wdt", "Timer",
+                    "Json", "L2Lib"
             ));
 
     private int uploadAppArtifacts(VmClient client, Path outDir,

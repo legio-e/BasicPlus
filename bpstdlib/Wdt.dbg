@@ -1,0 +1,16 @@
+dbg 2
+module Wdt
+source C:\lenguajes\pm\bpstdlib\Wdt.bp
+lines
+1423 77
+1433 78
+1454 87
+1464 88
+1480 93
+1490 94
+1511 64
+1517 65
+1531 66
+1544 68
+1552 69
+1562 70

@@ -1,0 +1,99 @@
+// ============================================================
+// Wdt.bp — watchdog timer del MCU.
+//
+// El watchdog es un contador hardware que se decrementa
+// continuamente. Cuando llega a cero, el chip se RESETEA
+// automáticamente. Para evitar el reset, el código de usuario
+// tiene que "alimentar" (feed) el watchdog antes de que
+// expire — eso reinicia el contador.
+//
+// Casos de uso típicos:
+//   - Recovery automático de cuelgues en deployments unattended:
+//     si el código se atasca y deja de alimentar, el chip se
+//     reinicia solo y vuelve a la vida.
+//   - Detección de loops infinitos en código que debería ser
+//     responsivo.
+//
+// AVISO CRÍTICO: si activas el watchdog con un timeout corto
+// y luego tu código se cuelga o el sleep es muy largo, el chip
+// se resetea EN BUCLE. La única salida es:
+//   1) Re-flashear un firmware que NO active el watchdog al boot.
+//   2) Entrar en BOOTSEL al arrancar (mantener pulsado el botón
+//      al conectar USB) y subir un UF2 limpio.
+//
+// Para minimizar el riesgo, el constructor aplica un mínimo de
+// 100 ms al timeout — timeouts más cortos no son robustos para
+// código BP (la VM ya gasta varios ms entre opcodes en
+// situaciones normales).
+//
+// Wdt es SINGLETON del MCU: solo hay un watchdog. Construir
+// varias instancias de Wdt.Timer es legal pero todas operan
+// sobre el mismo HW; el último enable() gana.
+//
+// Uso típico:
+//
+//   import Wdt
+//   var wdog: Wdt.Timer := Wdt.Timer(2000)   // 2 segundos
+//   while running do
+//     doWork()
+//     wdog.feed()         // se debe ejecutar antes de 2s
+//   endwh
+//   wdog.disable()        // antes de un sleep largo
+// ============================================================
+module Wdt
+
+  // ---- Intrínsecos de bajo nivel ----
+  public intrinsic function enableRaw(timeoutMs: integer)
+  public intrinsic function feedRaw()
+  public intrinsic function disableRaw()
+
+  // ============================================================
+  // Clase Timer — watchdog encapsulado.
+  // ============================================================
+  public class Timer
+
+    // Static const con el mínimo recomendado.
+    public const Timer.MIN_TIMEOUT_MS: integer := 100
+
+    public var timeoutMs_: integer
+    public var active_:    boolean
+
+    // Constructor: activa el watchdog. Aplica clamp al mínimo
+    // de 100 ms para evitar bricks accidentales.
+    public function Timer(timeoutMs: integer)
+      var t: integer := timeoutMs
+      if t < 100 then
+        t := 100
+      endif
+      this.timeoutMs_ := t
+      this.active_ := true
+      enableRaw(t)
+    end Timer
+
+    // Alimenta el watchdog: resetea el contador al timeout
+    // configurado. Llamar periódicamente para mantener el chip
+    // vivo.
+    public function feed()
+      if this.active_ then
+        feedRaw()
+      endif
+    end feed
+
+    // Desactiva el watchdog. En RP2350 esto se simula con un
+    // timeout muy grande, no hay una API real de "off". Útil
+    // antes de operaciones largas conocidas (sleep prolongado,
+    // flash erase masivo, etc.).
+    public function disable()
+      this.active_ := false
+      disableRaw()
+    end disable
+
+    // Re-activa con el mismo timeout que tenía.
+    public function reenable()
+      this.active_ := true
+      enableRaw(this.timeoutMs_)
+    end reenable
+
+  end Timer
+
+end Wdt

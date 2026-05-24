@@ -1,0 +1,65 @@
+// TimerBlink.bp — uso de Timer.Alarm para blink no-bloqueante.
+//
+// Hace blink del LED interno (GP25 en Pico, pero ese GPIO está
+// conectado al chip wifi en Pico 2 W — usa otro pin si lo tienes).
+// Demuestra los tres modos de Timer.Alarm: check() polling,
+// wait() sincronizado, since() cronómetro.
+//
+// En host imprime los toggles en stdout (no hay LED).
+
+module TimerBlink
+
+  import Gpio
+  import Timer
+
+  function Main()
+    print "--- Timer.Alarm demo ---"
+
+    var led: Gpio.Pin := Gpio.Pin(25, Gpio.Pin.OUTPUT)
+
+    // ---- Modo A: check() polling ----
+    print "Modo A: check() polling. 10 toggles cada 250ms..."
+    var blink: Timer.Alarm := Timer.Alarm(250)
+    var n: integer := 0
+    var t0: integer := now()
+    while n < 10 do
+      if blink.check() then
+        led.toggle()
+        n := n + 1
+        print "  toggle #", n, " @ t=", now() - t0, "ms"
+      endif
+      // Aquí podrías hacer otras cosas no-bloqueantes
+      sleep(10)
+    endwh
+
+    print ""
+
+    // ---- Modo B: wait() sincronizado, sin drift ----
+    print "Modo B: wait() sincronizado. 5 toggles cada 200ms exactos..."
+    var beat: Timer.Alarm := Timer.Alarm(200)
+    var i: integer := 0
+    t0 := now()
+    while i < 5 do
+      led.toggle()
+      print "  beat #", i + 1, " @ t=", now() - t0, "ms"
+      beat.wait()
+      i := i + 1
+    endwh
+
+    print ""
+
+    // ---- Modo C: since() cronómetro ----
+    print "Modo C: since() cronómetro de operación..."
+    var chrono: Timer.Alarm := Timer.Alarm(0)
+    var sum: integer := 0
+    var j: integer := 0
+    while j < 1000 do
+      sum := sum + j
+      j := j + 1
+    endwh
+    print "  1000 iteraciones (sum=", sum, ") en ", chrono.since(), "ms"
+
+    print "--- fin ---"
+  end Main
+
+end TimerBlink

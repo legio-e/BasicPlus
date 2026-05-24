@@ -3662,6 +3662,46 @@ public class VirtualMachine {
                 break;
             }
 
+            /* ---- Adc — stub host con rampa por canal ---- */
+            case ADC_INIT_CHANNEL: {
+                int ch = popTc(tc);
+                if (ch < 0 || ch > 3) {
+                    System.out.println("[adc] initChannel(" + ch + ") fuera de rango");
+                    pushTc(tc, -1);
+                } else {
+                    System.out.println("[adc] initChannel(" + ch + ") → GP" + (26 + ch) + " (host)");
+                    pushTc(tc, 26 + ch);
+                }
+                break;
+            }
+            case ADC_READ_CHANNEL: {
+                int ch = popTc(tc);
+                if (ch < 0 || ch > 3) { pushTc(tc, -1); break; }
+                /* Rampa determinista para tests: cada canal con offset */
+                int v = (adcStubCounter + ch * 1024) & 0x0FFF;
+                adcStubCounter = (adcStubCounter + 73) & 0xFFFF;
+                pushTc(tc, v);
+                break;
+            }
+
+            /* ---- Wdt — no-op en host con logging ---- */
+            case WDT_ENABLE: {
+                int ms = popTc(tc);
+                System.out.println("[wdt] enable(" + ms + "ms) (host, no-op)");
+                pushTc(tc, 0);
+                break;
+            }
+            case WDT_FEED: {
+                /* Silencio — feed se llama mucho. */
+                pushTc(tc, 0);
+                break;
+            }
+            case WDT_DISABLE: {
+                System.out.println("[wdt] disable (host, no-op)");
+                pushTc(tc, 0);
+                break;
+            }
+
             default:
                 throw new RuntimeException("Builtin no implementado: " + b);
         }
@@ -3677,6 +3717,10 @@ public class VirtualMachine {
      *  de la JVM. Tras setNowSec(s), el offset cambia para que nowSec()
      *  empiece a contar desde s. */
     private long rtcOffsetMs = 0L;
+
+    /** Contador para el stub ADC en host. Determinista para que tests
+     *  reproducibles vean los mismos valores en runs sucesivos. */
+    private int adcStubCounter = 0;
 
     /**
      * Aproximación de Lanczos (g=7, coeficientes Numerical Recipes) para la

@@ -19,6 +19,8 @@
 #include "bpvm_pwm.h"
 #include "bpvm_pico.h"
 #include "bpvm_rtc.h"
+#include "bpvm_adc.h"
+#include "bpvm_wdt.h"
 #include "bpvm_uart.h"
 
 /* IDs estables (= ordinal del enum Builtin Java). Sólo los que F2
@@ -90,7 +92,14 @@ enum {
     BUILTIN_PICO_SET_CPU_FREQ_MHZ = 111,
     /* Rtc — ordinales 112..113. */
     BUILTIN_RTC_NOW_SEC     = 112,
-    BUILTIN_RTC_SET_NOW_SEC = 113
+    BUILTIN_RTC_SET_NOW_SEC = 113,
+    /* Adc — ordinales 114..115. */
+    BUILTIN_ADC_INIT_CHANNEL = 114,
+    BUILTIN_ADC_READ_CHANNEL = 115,
+    /* Wdt — ordinales 116..118. */
+    BUILTIN_WDT_ENABLE       = 116,
+    BUILTIN_WDT_FEED         = 117,
+    BUILTIN_WDT_DISABLE      = 118
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -753,6 +762,32 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_RTC_SET_NOW_SEC: {
         int32_t sec = pop_i32(vm, tc);
         bpvm_rtc_set_now_ms((int64_t) sec * 1000LL);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_ADC_INIT_CHANNEL: {
+        int32_t ch = pop_i32(vm, tc);
+        push_i32(vm, tc, bpvm_adc_init_channel((int) ch));
+        return BPVM_OK;
+    }
+    case BUILTIN_ADC_READ_CHANNEL: {
+        int32_t ch = pop_i32(vm, tc);
+        push_i32(vm, tc, bpvm_adc_read_channel((int) ch));
+        return BPVM_OK;
+    }
+    case BUILTIN_WDT_ENABLE: {
+        int32_t ms = pop_i32(vm, tc);
+        bpvm_wdt_enable((int) ms);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_WDT_FEED: {
+        bpvm_wdt_feed();
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_WDT_DISABLE: {
+        bpvm_wdt_disable();
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }

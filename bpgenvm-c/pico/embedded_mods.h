@@ -34,6 +34,12 @@ extern const uint8_t       pico_mod[];
 extern const unsigned int  pico_mod_len;
 extern const uint8_t       rtc_mod[];
 extern const unsigned int  rtc_mod_len;
+extern const uint8_t       adc_mod[];
+extern const unsigned int  adc_mod_len;
+extern const uint8_t       wdt_mod[];
+extern const unsigned int  wdt_mod_len;
+extern const uint8_t       timer_mod[];
+extern const unsigned int  timer_mod_len;
 
 #ifdef __cplusplus
 }

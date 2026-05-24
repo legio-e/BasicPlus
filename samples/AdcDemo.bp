@@ -1,0 +1,46 @@
+// AdcDemo.bp — lee los 4 canales ADC del RP2350.
+//
+// Hardware esperado:
+//   - GP26 (CH0): un potenciómetro entre 3V3 y GND, wiper a GP26.
+//   - GP27..GP29: flotantes (ver ruido) o conectados a algo.
+//
+// En host (sin HW) las lecturas son una rampa determinista —
+// útil para verificar que la cadena BP→builtin→backend funciona.
+
+module AdcDemo
+
+  import Adc
+
+  function Main()
+    print "--- Adc.Channel demo ---"
+
+    var ch0: Adc.Channel := Adc.Channel(Adc.Channel.CH0)
+    var ch1: Adc.Channel := Adc.Channel(Adc.Channel.CH1)
+    var ch2: Adc.Channel := Adc.Channel(Adc.Channel.CH2)
+    var ch3: Adc.Channel := Adc.Channel(Adc.Channel.CH3)
+
+    print "Tomando 5 muestras de cada canal..."
+    var i: integer := 0
+    while i < 5 do
+      var r0: integer := ch0.read()
+      var r1: integer := ch1.read()
+      var r2: integer := ch2.read()
+      var r3: integer := ch3.read()
+      print "  ", i, ": CH0=", r0, "  CH1=", r1, "  CH2=", r2, "  CH3=", r3
+      sleep(200)
+      i := i + 1
+    endwh
+
+    print ""
+    print "Voltaje CH0 (Vref=3.3V):"
+    var v: float := ch0.readVolts()
+    print "  ", v, "V"
+
+    print "Media de 16 lecturas CH0 (reduce ruido):"
+    var avg: integer := ch0.readAvg(16)
+    print "  raw=", avg
+
+    print "--- fin ---"
+  end Main
+
+end AdcDemo

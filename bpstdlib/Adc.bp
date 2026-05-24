@@ -1,0 +1,92 @@
+// ============================================================
+// Adc.bp — convertidor analógico-digital del MCU.
+//
+// El RP2350 tiene 4 canales ADC accesibles vía GPIO:
+//   Channel 0 → GP26   Channel 1 → GP27
+//   Channel 2 → GP28   Channel 3 → GP29
+//
+// Resolución 12-bit (0..4095), referencia Vref ≈ 3.3 V típico.
+// Para leer la temperatura interna del die, NO uses Adc — usa
+// Pico.tempC() que ya hace la conversión con la fórmula del
+// sensor interno.
+//
+// El sample rate es alto (~500 ksps) pero el ADC del RP2350 NO
+// tiene buffer DMA expuesto en este wrapper — cada read() hace
+// una conversión bloqueante de ~2 µs. Para muestreo continuo a
+// alta frecuencia futuro (oscilloscope mode) habría que añadir
+// un API tipo readBurst(n).
+//
+// Uso típico (potenciómetro en GP26):
+//
+//   import Adc
+//   var sensor: Adc.Channel := Adc.Channel(Adc.Channel.CH0)
+//   while true do
+//     var raw: integer := sensor.read()       // 0..4095
+//     var v: float := sensor.readVolts()      // 0.0..3.3 V
+//     print "raw:", raw, "  V:", v
+//     sleep(100)
+//   endwh
+// ============================================================
+module Adc
+
+  // ---- Intrínsecos de bajo nivel ----
+  public intrinsic function initChannel(ch: integer): integer
+  public intrinsic function readChannel(ch: integer): integer
+
+  // ============================================================
+  // Clase Channel — un canal ADC encapsulado.
+  // ============================================================
+  public class Channel
+
+    // Static consts para acceso sin instanciar: Adc.Channel.CH0
+    public const Channel.CH0: integer := 0
+    public const Channel.CH1: integer := 1
+    public const Channel.CH2: integer := 2
+    public const Channel.CH3: integer := 3
+
+    // Vref típico del Pico (3.3 V regulado). Algunos sensores
+    // requieren ajustar si la alimentación es distinta — leer
+    // VBUS y dividir por 4095 para una calibración exacta.
+    public const Channel.VREF: float := 3.3
+
+    public var ch_:  integer
+    public var pin_: integer
+
+    public function Channel(ch: integer)
+      this.ch_ := ch
+      this.pin_ := initChannel(ch)
+      if this.pin_ < 0 then
+        var msg: string := "Adc.Channel: canal " + intToString(ch) + " no válido (0..3)"
+        throw RuntimeError(msg)
+      endif
+    end Channel
+
+    // Lectura raw: integer 0..4095. Bloquea ~2 µs.
+    public function read(): integer
+      return readChannel(this.ch_)
+    end read
+
+    // Lectura convertida a voltios usando Vref nominal.
+    public function readVolts(): float
+      var raw: integer := readChannel(this.ch_)
+      return raw * 3.3 / 4095.0
+    end readVolts
+
+    // Media de N lecturas — útil para reducir ruido en sensores
+    // analógicos. N típico: 8 o 16. Coste: N * 2 µs.
+    public function readAvg(n: integer): integer
+      if n <= 1 then
+        return readChannel(this.ch_)
+      endif
+      var sum: integer := 0
+      var i: integer := 0
+      while i < n do
+        sum := sum + readChannel(this.ch_)
+        i := i + 1
+      endwh
+      return sum / n
+    end readAvg
+
+  end Channel
+
+end Adc

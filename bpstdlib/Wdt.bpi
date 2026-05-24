@@ -1,0 +1,13 @@
+bpi 6
+module Wdt
+func disableRaw():void public intrinsic
+func feedRaw():void public intrinsic
+func enableRaw(timeoutMs:integer):void public intrinsic
+class Timer public
+  layout 2 3 00000000 00000000
+  ctor(timeoutMs:integer)
+  staticconst MIN_TIMEOUT_MS:integer=100 public
+  method feed():void public
+  method disable():void public
+  method reenable():void public
+end class

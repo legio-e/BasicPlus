@@ -226,10 +226,22 @@ public enum Builtin {
                                          //   Segundos desde epoch Unix (1970-01-01 UTC).
                                          //   Si no se ha sincronizado, devuelve segundos
                                          //   desde el boot del firmware/JVM.
-    RTC_SET_NOW_SEC("__rtcSetNowSec");   // (sec: integer) → void
+    RTC_SET_NOW_SEC("__rtcSetNowSec"),   // (sec: integer) → void
                                          //   Calibra el reloj: a partir de aquí
                                          //   nowSec() devuelve sec + tiempo transcurrido
                                          //   desde esta llamada.
+
+    // ---- Adc — 4 canales ADC del RP2350 (CH0..CH3 → GP26..GP29) ----
+    ADC_INIT_CHANNEL("__adcInitChannel"),// (ch: int) → int (pin físico, -1 si error)
+    ADC_READ_CHANNEL("__adcReadChannel"),// (ch: int) → int (raw 0..4095)
+
+    // ---- Wdt — watchdog timer singleton del MCU ----
+    WDT_ENABLE("__wdtEnable"),           // (timeoutMs: int) → void
+    WDT_FEED("__wdtFeed"),               // () → void
+    WDT_DISABLE("__wdtDisable");         // () → void
+                                         //   En RP2350 "disable" se aproxima con un
+                                         //   timeout muy grande (no hay way real de
+                                         //   deshabilitar el watchdog una vez activado).
                                          //   Cambia el clk_sys del RP2350 a la frecuencia
                                          //   pedida en MHz. Si mhz > MAX_CPU_MHZ se aplica
                                          //   MAX_CPU_MHZ (clamp). Devuelve true si la PLL

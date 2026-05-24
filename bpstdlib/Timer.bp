@@ -1,0 +1,115 @@
+// ============================================================
+// Timer.bp — alarmas periódicas basadas en el reloj monotónico.
+//
+// Timer.Alarm es una abstracción puramente BP sobre `now()`. NO
+// usa interrupts hardware ni callbacks — el código de usuario
+// "consulta" la alarma con check() o se sincroniza con wait().
+//
+// Ventajas de esta implementación:
+//   - Portable a cualquier target (host Java, host C, Pico) sin
+//     backend nativo.
+//   - Inmune al overclock: now() en Pico usa el timer HW a 1 MHz
+//     que es independiente de clk_sys.
+//   - Cero coste en firmware (no consume timers HW del MCU).
+//
+// Limitaciones:
+//   - La resolución depende de la frecuencia con que el usuario
+//     llame a check(). Si tu loop tarda 50 ms y el periodo es
+//     10 ms, perderás 4 de cada 5 disparos.
+//   - Para timing crítico (debouncing, bit-banging, etc.) usa
+//     PWM hardware o, si más adelante añadimos Timer hardware
+//     con ISRs reales, esa otra API.
+//
+// Tres formas de uso:
+//
+//   A) Polling: check() devuelve true si ya tocaba disparar.
+//
+//      var blink: Timer.Alarm := Timer.Alarm(500)
+//      while running do
+//        if blink.check() then led.toggle() endif
+//        doOtherWork()
+//      endwh
+//
+//   B) Sincronización con wait(): bloquea hasta el siguiente
+//      disparo. Útil para loops periódicos sin drift.
+//
+//      var t: Timer.Alarm := Timer.Alarm(100)
+//      while i < 100 do
+//        sampleSensor()
+//        t.wait()
+//        i := i + 1
+//      endwh
+//
+//   C) Medir elapsed simple: since() devuelve ms desde el último
+//      reset.
+//
+//      var t: Timer.Alarm := Timer.Alarm(0)
+//      doLongOperation()
+//      print "tardó", t.since(), "ms"
+// ============================================================
+module Timer
+
+  // ============================================================
+  // Clase Alarm — periodo + próximo disparo.
+  // ============================================================
+  public class Alarm
+
+    public var periodMs_: integer
+    public var nextFire_: integer
+
+    // Constructor: configura el periodo en ms. El primer disparo
+    // será en `periodMs` ms desde ahora. Pasa periodMs=0 si solo
+    // quieres usar since() / reset() como cronómetro.
+    public function Alarm(periodMs: integer)
+      this.periodMs_ := periodMs
+      this.nextFire_ := now() + periodMs
+    end Alarm
+
+    // ¿Ha llegado o pasado el momento del próximo disparo?
+    // Si true, AVANZA el next fire al siguiente múltiplo del
+    // periodo (fast-forward sin drift). Si la última llamada
+    // fue hace mucho, salta los múltiplos perdidos en lugar de
+    // dispararse N veces seguidas — comportamiento "catch-up
+    // safe" que evita ráfagas.
+    public function check(): boolean
+      var cur: integer := now()
+      if cur >= this.nextFire_ then
+        if this.periodMs_ > 0 then
+          while this.nextFire_ <= cur do
+            this.nextFire_ := this.nextFire_ + this.periodMs_
+          endwh
+        endif
+        return true
+      endif
+      return false
+    end check
+
+    // Bloquea hasta el siguiente disparo y avanza el next fire.
+    // Equivalente a sleep(rem) + reset() pero más legible para
+    // loops periódicos. NO hay catch-up — si te retrasas, el
+    // siguiente fire se programa periodMs desde AHORA, no desde
+    // el fire perdido.
+    public function wait()
+      var rem: integer := this.nextFire_ - now()
+      if rem > 0 then
+        sleep(rem)
+      endif
+      this.nextFire_ := now() + this.periodMs_
+    end wait
+
+    // Resetea el cronómetro: el próximo disparo ocurrirá
+    // periodMs ms desde AHORA. Útil tras una operación bloqueante
+    // para no acumular drift.
+    public function reset()
+      this.nextFire_ := now() + this.periodMs_
+    end reset
+
+    // Ms transcurridos desde el último reset / construcción.
+    // Permite usar Alarm como cronómetro pasivo (con periodMs=0).
+    public function since(): integer
+      return now() - (this.nextFire_ - this.periodMs_)
+    end since
+
+  end Alarm
+
+end Timer

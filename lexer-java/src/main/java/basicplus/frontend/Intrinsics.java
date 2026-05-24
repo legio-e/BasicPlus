@@ -175,5 +175,14 @@ public final class Intrinsics {
         // ---- Rtc (wall clock) ----
         register("Rtc.nowSec",     w -> emitBuiltin(w, Builtin.RTC_NOW_SEC));
         register("Rtc.setNowSec",  w -> emitBuiltin(w, Builtin.RTC_SET_NOW_SEC));
+
+        // ---- Adc (4 canales del RP2350) ----
+        register("Adc.initChannel", w -> emitBuiltin(w, Builtin.ADC_INIT_CHANNEL));
+        register("Adc.readChannel", w -> emitBuiltin(w, Builtin.ADC_READ_CHANNEL));
+
+        // ---- Wdt (watchdog singleton) ----
+        register("Wdt.enableRaw", w -> emitBuiltin(w, Builtin.WDT_ENABLE));
+        register("Wdt.feedRaw",   w -> emitBuiltin(w, Builtin.WDT_FEED));
+        register("Wdt.disableRaw", w -> emitBuiltin(w, Builtin.WDT_DISABLE));
     }
 }
