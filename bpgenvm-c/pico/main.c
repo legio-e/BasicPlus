@@ -528,21 +528,35 @@ static int pico_pico_uptime_ms_impl(void) {
 static int pico_pico_set_cpu_freq_mhz_impl(int mhz) {
     if (mhz < 18) mhz = 18;
 
-    /* Subir voltaje ANTES de subir freq; bajar voltaje DESPUÉS de
-     * bajar freq. Evita que el core opere subvoltado un instante. */
     enum vreg_voltage target_v;
     if (mhz <= 200)      target_v = VREG_VOLTAGE_1_10;
     else if (mhz <= 250) target_v = VREG_VOLTAGE_1_15;
     else if (mhz <= 280) target_v = VREG_VOLTAGE_1_20;
     else                 target_v = VREG_VOLTAGE_1_30;
 
-    /* Para simplificar dejamos el voltaje aplicarse siempre. El
-     * vreg HW filtra writes redundantes, no es un gran coste. */
-    vreg_set_voltage(target_v);
-    busy_wait_us(10000);   /* 10 ms para estabilizar la rampa */
+    uint32_t cur_khz = clock_get_hz(clk_sys) / 1000u;
+    uint32_t new_khz = (uint32_t) mhz * 1000u;
+    bool going_up = (new_khz > cur_khz);
 
-    uint32_t khz = (uint32_t) mhz * 1000u;
-    bool ok = set_sys_clock_khz(khz, false);
+    /* Regla anti-cuelgue:
+     *   - SUBIR freq → subir voltaje PRIMERO, luego subir freq.
+     *     Asegura que el core no opere a más MHz de los que el
+     *     voltaje actual sostiene.
+     *   - BAJAR freq → bajar freq PRIMERO, luego bajar voltaje.
+     *     Asegura que el core no quede a freq alta con voltaje
+     *     reducido (cuelgue garantizado a 300 MHz con 1.10 V).
+     * El vreg HW filtra writes redundantes, así que llamar siempre
+     * no daña aunque target_v == voltaje actual. */
+    bool ok;
+    if (going_up) {
+        vreg_set_voltage(target_v);
+        busy_wait_us(10000);   /* 10 ms para estabilizar la rampa */
+        ok = set_sys_clock_khz(new_khz, false);
+    } else {
+        ok = set_sys_clock_khz(new_khz, false);
+        vreg_set_voltage(target_v);
+        /* Sin sleep aquí: la freq ya bajó, no hay riesgo. */
+    }
     return ok ? 1 : 0;
 }
 
