@@ -30,6 +30,8 @@ extern const uint8_t       pulse_mod[];
 extern const unsigned int  pulse_mod_len;
 extern const uint8_t       pwm_mod[];
 extern const unsigned int  pwm_mod_len;
+extern const uint8_t       pico_mod[];
+extern const unsigned int  pico_mod_len;
 
 #ifdef __cplusplus
 }

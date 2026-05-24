@@ -1,0 +1,28 @@
+// PicoInfo.bp — vuelca la información del microcontrolador.
+//
+// En PC (VM Java) devuelve los valores stub: "host-pc", "host",
+// 25.0 °C, etc. En la Pico 2 real devuelve datos del chip.
+module PicoInfo
+  import Pico
+
+  function Main()
+    print "============================================"
+    print "  Información del microcontrolador"
+    print "============================================"
+    print "Board:        ", Pico.boardName()
+    print "Serial number:", Pico.uniqueId()
+    print "CPU freq:     ", Pico.cpuFreqHz(), "Hz"
+    print "Chip temp:    ", Pico.tempC(), "°C"
+    print "Uptime:       ", Pico.uptimeMs(), "ms"
+    print ""
+    print "Capacidades:"
+    print "  I2C buses:    ", Pico.I2C_BUSES()
+    print "  SPI buses:    ", Pico.SPI_BUSES()
+    print "  UART buses:   ", Pico.UART_BUSES()
+    print "  GPIO count:   ", Pico.GPIO_COUNT()
+    print "  ADC channels: ", Pico.ADC_CHANNELS()
+    print "  PWM slices:   ", Pico.PWM_SLICES()
+    print "============================================"
+  end Main
+
+end PicoInfo

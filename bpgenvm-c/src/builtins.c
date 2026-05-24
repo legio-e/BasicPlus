@@ -17,6 +17,7 @@
 #include "bpvm_spi.h"
 #include "bpvm_pulse.h"
 #include "bpvm_pwm.h"
+#include "bpvm_pico.h"
 #include "bpvm_uart.h"
 
 /* IDs estables (= ordinal del enum Builtin Java). Sólo los que F2
@@ -74,7 +75,13 @@ enum {
     BUILTIN_PWM_SET_FREQ    = 100,
     BUILTIN_PWM_SET_DUTY    = 101,
     BUILTIN_PWM_START       = 102,
-    BUILTIN_PWM_STOP        = 103
+    BUILTIN_PWM_STOP        = 103,
+    /* Pico (info MCU) — ordinals 104..108. */
+    BUILTIN_PICO_UNIQUE_ID  = 104,
+    BUILTIN_PICO_BOARD_NAME = 105,
+    BUILTIN_PICO_TEMP_C     = 106,
+    BUILTIN_PICO_CPU_FREQ_HZ = 107,
+    BUILTIN_PICO_UPTIME_MS  = 108
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -657,6 +664,42 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int sliceId = pop_i32(vm, tc);
         bpvm_pwm_stop(sliceId);
         push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+
+    /* ---- Pico (info del MCU) ----
+       uniqueId y boardName devuelven string (alocado en heap BP);
+       tempC devuelve float (bit-cast a u32 para pushar al stack);
+       cpuFreqHz y uptimeMs devuelven int. */
+    case BUILTIN_PICO_UNIQUE_ID: {
+        char buf[32];
+        bpvm_pico_unique_id(buf, sizeof(buf));
+        uint32_t ref = bpvm_heap_alloc_string(vm, buf, strlen(buf));
+        push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_BOARD_NAME: {
+        char buf[32];
+        bpvm_pico_board_name(buf, sizeof(buf));
+        uint32_t ref = bpvm_heap_alloc_string(vm, buf, strlen(buf));
+        push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_TEMP_C: {
+        float v = bpvm_pico_temp_c();
+        /* Float en pila es bit-cast a u32 — la VM hace el mismo
+         * truco para LITERAL_F32. */
+        uint32_t bits;
+        memcpy(&bits, &v, sizeof(bits));
+        push_i32(vm, tc, (int32_t) bits);
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_CPU_FREQ_HZ: {
+        push_i32(vm, tc, (int32_t) bpvm_pico_cpu_freq_hz());
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_UPTIME_MS: {
+        push_i32(vm, tc, (int32_t) bpvm_pico_uptime_ms());
         return BPVM_OK;
     }
 

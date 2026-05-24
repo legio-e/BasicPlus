@@ -1,0 +1,85 @@
+// ============================================================
+// Pico.bp — información del microcontrolador.
+//
+// Específico de Raspberry Pi Pico 2 (RP2350). Cuando demos soporte
+// a otros MCUs (ESP32, STM32, etc.), cada uno tendrá su propio
+// módulo (Esp32.bp, Stm32.bp) con la misma API básica de
+// identificación / sensores / constantes — el código BP cambia
+// solo el `import` si quiere portabilidad.
+//
+// Decisión de diseño: este módulo expone FUNCIONES + CONSTANTES,
+// no una clase. Razón: la información del chip no tiene "instancia"
+// (es uno y único), no hay recursos que liberar (uniqueId es
+// estático, tempC se lee on-demand). La política HW=clases se
+// reserva para los periféricos que sí encapsulan recursos
+// (Gpio.Pin, Spi.Bus, Pulse.Counter, Pwm.Slice, etc.).
+//
+// Uso típico:
+//
+//   import Pico
+//
+//   print "Board:", Pico.boardName()
+//   print "Serial:", Pico.uniqueId()
+//   print "CPU:", Pico.cpuFreqHz() / 1000000, "MHz"
+//   print "Chip temperature:", Pico.tempC(), "°C"
+//   print "I2C buses:", Pico.I2C_BUSES()
+//   print "Uptime:", Pico.uptimeMs(), "ms"
+// ============================================================
+module Pico
+
+  // ---- Identificación ----
+  // ID único del chip flash (16 chars hex). Permanece estable
+  // entre reboots y entre flasheos del firmware.
+  public intrinsic function uniqueId(): string
+
+  // Nombre legible de la board. "pico2" en RP2350, "host" en VM
+  // Java sin HW.
+  public intrinsic function boardName(): string
+
+  // ---- Sensores internos ----
+  // Temperatura del die en °C. Lee el sensor interno del ADC
+  // (canal 4 en RP2350). Precisión típica ±2 °C sin calibración.
+  public intrinsic function tempC(): float
+
+  // ---- Reloj ----
+  // Frecuencia actual del clk_sys en Hz. En RP2350 con config por
+  // defecto es 150_000_000 (150 MHz).
+  public intrinsic function cpuFreqHz(): integer
+
+  // Milisegundos desde el boot del firmware. 32-bit unsigned con
+  // wrap ≈ 49 días. Para uptimes más largos, usar un acumulador en
+  // BP que detecte el wrap.
+  public intrinsic function uptimeMs(): integer
+
+  // ---- Constantes de capacidades del MCU ----
+  // Permiten que código BP defensivo valide rangos antes de usar
+  // p.ej. Spi.init(bus=3, ...) cuando solo hay 2 buses.
+  public function I2C_BUSES(): integer
+    return 2
+  end I2C_BUSES
+
+  public function SPI_BUSES(): integer
+    return 2
+  end SPI_BUSES
+
+  public function UART_BUSES(): integer
+    return 2
+  end UART_BUSES
+
+  public function GPIO_COUNT(): integer
+    return 30
+  end GPIO_COUNT
+
+  // ADC externos disponibles (GP26..GP29). El canal 4 está
+  // reservado al sensor de temperatura interno y se accede via
+  // tempC() — no se cuenta aquí.
+  public function ADC_CHANNELS(): integer
+    return 4
+  end ADC_CHANNELS
+
+  // Slices PWM del RP2350. Cada slice tiene 2 canales (A y B).
+  public function PWM_SLICES(): integer
+    return 12
+  end PWM_SLICES
+
+end Pico

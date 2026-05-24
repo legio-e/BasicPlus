@@ -152,5 +152,12 @@ public final class Intrinsics {
         register("Pwm.setDutyPct", w -> emitBuiltin(w, Builtin.PWM_SET_DUTY));
         register("Pwm.startSlice", w -> emitBuiltin(w, Builtin.PWM_START));
         register("Pwm.stopSlice",  w -> emitBuiltin(w, Builtin.PWM_STOP));
+
+        // ---- Pico (info del MCU) ----
+        register("Pico.uniqueId",  w -> emitBuiltin(w, Builtin.PICO_UNIQUE_ID));
+        register("Pico.boardName", w -> emitBuiltin(w, Builtin.PICO_BOARD_NAME));
+        register("Pico.tempC",     w -> emitBuiltin(w, Builtin.PICO_TEMP_C));
+        register("Pico.cpuFreqHz", w -> emitBuiltin(w, Builtin.PICO_CPU_FREQ_HZ));
+        register("Pico.uptimeMs",  w -> emitBuiltin(w, Builtin.PICO_UPTIME_MS));
     }
 }

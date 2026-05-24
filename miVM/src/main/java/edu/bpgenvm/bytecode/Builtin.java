@@ -189,7 +189,14 @@ public enum Builtin {
                                          //   pin para escoger canal A o B del slice.
                                          //   dutyPct: 0..100.
     PWM_START("__pwmStart"),             // (sliceId) → void
-    PWM_STOP("__pwmStop");               // (sliceId) → void
+    PWM_STOP("__pwmStop"),               // (sliceId) → void
+
+    // ---- Pico (info del microcontrolador) ----
+    PICO_UNIQUE_ID("__picoUniqueId"),    // () → string (16 hex chars del flash chip ID)
+    PICO_BOARD_NAME("__picoBoardName"),  // () → string ("pico2" / "host" / ...)
+    PICO_TEMP_C("__picoTempC"),          // () → float  (°C del sensor interno)
+    PICO_CPU_FREQ_HZ("__picoCpuFreqHz"), // () → integer (Hz del clk_sys)
+    PICO_UPTIME_MS("__picoUptimeMs");    // () → integer (ms desde boot, 32-bit wrap)
 
     public final String bpName;
     public final int id;

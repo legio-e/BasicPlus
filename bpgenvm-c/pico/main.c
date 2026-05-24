@@ -27,10 +27,14 @@
 #include "bpvm_uart.h"
 #include "bpvm_pulse.h"
 #include "bpvm_pwm.h"
+#include "bpvm_pico.h"
 #include "hardware/i2c.h"
 #include "hardware/spi.h"
 #include "hardware/uart.h"
 #include "hardware/pwm.h"
+#include "hardware/adc.h"
+#include "pico/unique_id.h"
+#include "pico/time.h"
 
 /* Buffer estático de la VM. 128 KB sobra para Hello.bp y deja sitio para
  * varios módulos. */
@@ -412,6 +416,89 @@ static const bpvm_pwm_backend_t s_pico_pwm_backend = {
     .stop    = pico_pwm_stop_impl,
 };
 
+/* --- Backend de info del MCU (Pico) -----------------------------
+ *
+ * Identificación: pico_get_unique_board_id_string() escribe los
+ *   8 bytes del flash chip ID como string ASCII de 16 hex chars.
+ *
+ * Temperatura interna: ADC canal 4 conectado al sensor del die.
+ *   Fórmula de conversión del datasheet:
+ *     T_C = 27 - (V_ADC - 0.706) / 0.001721
+ *   donde V_ADC = raw * 3.3 / 4095.
+ *
+ * Reloj: clock_get_hz(clk_sys) — afectado por overclocks o
+ *   downclocks; en boot por defecto 150 MHz en RP2350.
+ *
+ * Uptime: to_ms_since_boot(get_absolute_time()) — uint32 con
+ *   wrap a 49 días.
+ *
+ * El ADC se inicializa lazy en la primera llamada a tempC(). Si
+ * más adelante exponemos Adc.Channel como periférico de usuario,
+ * habrá que coordinar el adc_init para que no se llame dos veces
+ * (el SDK es idempotente, pero por orden). */
+
+static bool s_adc_inited = false;
+static void ensure_adc_inited(void) {
+    if (s_adc_inited) return;
+    adc_init();
+    adc_set_temp_sensor_enabled(true);
+    s_adc_inited = true;
+}
+
+static void pico_pico_unique_id_impl(char* buf, size_t len) {
+    if (len == 0) return;
+    /* El SDK pide len >= PICO_UNIQUE_BOARD_ID_SIZE_BYTES*2 + 1.
+     * Para RP2350 son 8 bytes → 17 chars con null. */
+    if (len >= 17) {
+        pico_get_unique_board_id_string(buf, (uint) len);
+    } else {
+        /* Buffer corto: escribimos en uno temporal y truncamos. */
+        char tmp[17];
+        pico_get_unique_board_id_string(tmp, sizeof(tmp));
+        size_t n = len - 1;
+        memcpy(buf, tmp, n);
+        buf[n] = '\0';
+    }
+}
+
+static void pico_pico_board_name_impl(char* buf, size_t len) {
+    const char* name = "pico2";
+    size_t n = strlen(name);
+    if (len == 0) return;
+    if (n > len - 1) n = len - 1;
+    memcpy(buf, name, n);
+    buf[n] = '\0';
+}
+
+static float pico_pico_temp_c_impl(void) {
+    ensure_adc_inited();
+    adc_select_input(4);   /* canal 4 = sensor de temperatura */
+    /* Promediamos 8 muestras para reducir ruido del ADC. */
+    uint32_t acc = 0;
+    for (int i = 0; i < 8; i++) acc += adc_read();
+    float raw = (float) acc / 8.0f;
+    /* V = raw * 3.3 / 4095. Sensor: T_C = 27 - (V - 0.706) / 0.001721. */
+    float v = raw * 3.3f / 4095.0f;
+    float t = 27.0f - (v - 0.706f) / 0.001721f;
+    return t;
+}
+
+static int pico_pico_cpu_freq_hz_impl(void) {
+    return (int) clock_get_hz(clk_sys);
+}
+
+static int pico_pico_uptime_ms_impl(void) {
+    return (int) to_ms_since_boot(get_absolute_time());
+}
+
+static const bpvm_pico_backend_t s_pico_pico_backend = {
+    .uniqueId  = pico_pico_unique_id_impl,
+    .boardName = pico_pico_board_name_impl,
+    .tempC     = pico_pico_temp_c_impl,
+    .cpuFreqHz = pico_pico_cpu_freq_hz_impl,
+    .uptimeMs  = pico_pico_uptime_ms_impl,
+};
+
 /* --- Sink para los `print` de la VM. Sale por USB CDC. ----------- */
 static void usb_sink(const char* data, size_t len, void* user) {
     (void) user;
@@ -509,6 +596,10 @@ static void vm_task(void* arg) {
         fs_put("Pwm.mod", pwm_mod, pwm_mod_len);
         log_printf("stdlib: Pwm.mod installed (%u bytes)", pwm_mod_len);
     }
+    if (fs_get("Pico.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("Pico.mod", pico_mod, pico_mod_len);
+        log_printf("stdlib: Pico.mod installed (%u bytes)", pico_mod_len);
+    }
     /* Drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO se
      * pre-instalan aquí — los sube el IDE como deps al hacer Run. */
     if (fs_get("Hello.mod", &dummy, &dummy_sz) != FS_OK) {
@@ -593,6 +684,7 @@ int main(void) {
     bpvm_uart_set_backend(&s_pico_uart_backend);
     bpvm_pulse_set_backend(&s_pico_pulse_backend);
     bpvm_pwm_set_backend(&s_pico_pwm_backend);
+    bpvm_pico_set_backend(&s_pico_pico_backend);
 
     BaseType_t r = xTaskCreate(vm_task, "vm_task", 4096, NULL,
                                 tskIDLE_PRIORITY + 2, NULL);

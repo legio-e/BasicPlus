@@ -3576,6 +3576,32 @@ public class VirtualMachine {
                 break;
             }
 
+            /* ---- Pico (info MCU) ----
+             * En host devolvemos valores estables y razonables para
+             * que código BP que use Pico.* corra en desarrollo sin
+             * HW. Solo el firmware Pico devuelve datos reales. */
+            case PICO_UNIQUE_ID: {
+                pushTc(tc, allocVmString("host-pc"));
+                break;
+            }
+            case PICO_BOARD_NAME: {
+                pushTc(tc, allocVmString("host"));
+                break;
+            }
+            case PICO_TEMP_C: {
+                pushTc(tc, Float.floatToRawIntBits(25.0f));
+                break;
+            }
+            case PICO_CPU_FREQ_HZ: {
+                pushTc(tc, 0);   /* host: no aplica */
+                break;
+            }
+            case PICO_UPTIME_MS: {
+                /* Sirve algo útil en host: ms del proceso JVM. */
+                pushTc(tc, (int) System.currentTimeMillis());
+                break;
+            }
+
             default:
                 throw new RuntimeException("Builtin no implementado: " + b);
         }

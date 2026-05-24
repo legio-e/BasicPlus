@@ -1,0 +1,10 @@
+dbg 2
+module Pico
+source C:\lenguajes\pm\bpstdlib\Pico.bp
+lines
+1423 58
+1444 62
+1465 66
+1486 70
+1507 77
+1528 82
