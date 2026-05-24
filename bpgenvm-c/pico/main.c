@@ -503,6 +503,18 @@ static int pico_pico_uptime_ms_impl(void) {
  * chip. Sí descartamos valores ridículamente bajos (< 18 MHz que es
  * el mínimo razonable de la PLL del RP2350).
  *
+ * VOLTAJE: el RP2350 nominal a Vdd_core=1.10V solo sostiene ~200 MHz.
+ * Por encima necesita subir Vdd_core. Escalamos automáticamente para
+ * que el contrato del builtin sea estable ("pides MHz, te los da si
+ * puede"):
+ *   - mhz <= 200: 1.10 V (default, no tocamos vreg)
+ *   - 200 <  mhz <= 250: 1.15 V
+ *   - 250 <  mhz <= 280: 1.20 V
+ *   - mhz >  280       : 1.30 V  (techo razonable sin overshoot)
+ * Tras vreg_set_voltage hay que dar tiempo para que la rampa se
+ * estabilice (10 ms es el valor que recomiendan los ejemplos del SDK).
+ * Si BAJAMOS clk_sys, bajamos voltaje también — ahorra energía.
+ *
  * AVISO documentado: tras cambiar clk_sys, los periféricos derivados
  * de clk_peri (UART/SPI/I2C/PWM) que ya estuvieran configurados
  * quedan con la frecuencia mal — el SDK del Pico recalcula clk_peri
@@ -511,8 +523,24 @@ static int pico_pico_uptime_ms_impl(void) {
  * ANTES de configurar periféricos. Las funciones sleep* siguen
  * exactas porque el timer hardware del Pico corre a 1 MHz
  * independiente del clk_sys. */
+#include "hardware/vreg.h"
+
 static int pico_pico_set_cpu_freq_mhz_impl(int mhz) {
     if (mhz < 18) mhz = 18;
+
+    /* Subir voltaje ANTES de subir freq; bajar voltaje DESPUÉS de
+     * bajar freq. Evita que el core opere subvoltado un instante. */
+    enum vreg_voltage target_v;
+    if (mhz <= 200)      target_v = VREG_VOLTAGE_1_10;
+    else if (mhz <= 250) target_v = VREG_VOLTAGE_1_15;
+    else if (mhz <= 280) target_v = VREG_VOLTAGE_1_20;
+    else                 target_v = VREG_VOLTAGE_1_30;
+
+    /* Para simplificar dejamos el voltaje aplicarse siempre. El
+     * vreg HW filtra writes redundantes, no es un gran coste. */
+    vreg_set_voltage(target_v);
+    busy_wait_us(10000);   /* 10 ms para estabilizar la rampa */
+
     uint32_t khz = (uint32_t) mhz * 1000u;
     bool ok = set_sys_clock_khz(khz, false);
     return ok ? 1 : 0;
@@ -702,7 +730,7 @@ int main(void) {
     /* Log persistente: carga el snapshot anterior antes de pisarlo con
      * mensajes del boot actual. */
     log_init();
-    log_printf("=== boot ===");
+    log_printf("=== boot " __DATE__ " " __TIME__ " ===");
 
     /* Conecta los backends de HW reales (Pico SDK) a los builtins de
      * la VM. Sin esto los handlers caen al stub con logging. */

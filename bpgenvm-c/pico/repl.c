@@ -122,7 +122,10 @@ static int ls_cb(const char* name, uint32_t size, void* user) {
 /* --- Comandos individuales ------------------------------------ */
 
 static void cmd_hello(void) {
-    printf("OK bpvm-pico v0.2 (RP2350+FreeRTOS)\n");
+    /* Incluye el build timestamp del firmware. Cuando algo se
+     * comporta como una versión vieja, este string permite verificar
+     * en segundos si el UF2 flasheado es el esperado. */
+    printf("OK bpvm-pico v0.2 (RP2350+FreeRTOS) build " __DATE__ " " __TIME__ "\n");
     fflush(stdout);
 }
 
