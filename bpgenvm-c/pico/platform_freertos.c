@@ -220,10 +220,19 @@ void bpvm_platform_thread_sleep_ms(int ms) {
 /* ============================== Time =========================== */
 
 int64_t bpvm_platform_now_ms(void) {
-    TickType_t ticks = xTaskGetTickCount();
-    /* 1 tick = 1 ms con configTICK_RATE_HZ=1000. Tipado explícito a
-     * 64 bits para no envolver. */
-    return (int64_t) ticks * (int64_t) portTICK_PERIOD_MS;
+    /* IMPORTANTE: NO usamos xTaskGetTickCount() porque el SysTick de
+     * FreeRTOS deriva de clk_sys. Si el código BP cambia clk_sys con
+     * Pico.setCpuFreqMHz(), el tick FreeRTOS corre a una freq distinta
+     * a la configurada (1000 Hz) y el "tiempo" reportado se desajusta
+     * proporcionalmente — un fibo(30) a 200 MHz parecería tardar
+     * 150/200 del tiempo real.
+     *
+     * En su lugar usamos `time_us_64()` del SDK Pico, que lee el timer
+     * hardware del RP2350 (registros TIMER0). Ese timer corre a 1 MHz
+     * fijos derivados de clk_ref/XOSC (12 MHz) — INMUNE al overclock
+     * de clk_sys. Misma fuente que `busy_wait_us()` usa internamente,
+     * así que sleep* y now() permanecen coherentes entre sí. */
+    return (int64_t) (time_us_64() / 1000ULL);
 }
 
 void bpvm_platform_busy_wait_us(int us) {

@@ -51,8 +51,8 @@ module FiboOverclock
     print ""
 
     // 2) 250 MHz (1.67× nominal).
-    print "[2] Subiendo a 250 MHz..."
-    var ok2: boolean := Pico.setCpuFreqMHz(250)
+    print "[2] Subiendo a 200 MHz..."
+    var ok2: boolean := Pico.setCpuFreqMHz(200)
     print "    ok=", ok2, "  freq actual:", Pico.cpuFreqHz() / 1000000, "MHz"
     var t250: integer := benchFibo()
     print ""
