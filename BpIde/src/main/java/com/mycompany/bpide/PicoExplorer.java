@@ -8,12 +8,25 @@
  *  │ Toolbar (Connect | Refresh | Upload    │
  *  │   | Run | Delete | Save | Reset | LOG) │
  *  ├────────────────────────────────────────┤
- *  │ JList con ficheros del dispositivo     │
- *  │   - Hello.mod (1911 bytes)             │
- *  │   - BenchCpu.mod (1870 bytes)          │
+ *  │ JTree con la jerarquía del dispositivo │
+ *  │   📁 Pico                              │
+ *  │     📁 app                             │
+ *  │       📄 Hello.mod  (3519 bytes)       │
+ *  │     📁 lib                             │
+ *  │       📄 Math.mod   (2103 bytes)       │
+ *  │       📄 Gpio.mod   (1844 bytes)       │
+ *  │     📄 LegacyFile.mod  (1000 bytes)    │
  *  ├────────────────────────────────────────┤
  *  │ Status: COMxx  |  N ficheros, free=YYY │
  *  └────────────────────────────────────────┘
+ *
+ * El árbol se construye parseando los nombres devueltos por LS. El FS
+ * subyacente del firmware es plano: los `/` son sólo namespace. Aquí
+ * en el IDE los renderizamos como carpetas anidadas.
+ *
+ * Convención de paths al subir desde el IDE:
+ *   - Si el nombre local no contiene `/`, se prefija con `/app/`.
+ *   - Si ya viene con `/`, se respeta tal cual (permite avanzado).
  *
  * Threading: todas las operaciones del puerto serie se ejecutan en un
  * SwingWorker para no bloquear el EDT. La UI muestra "trabajando..." en
@@ -22,13 +35,17 @@
 package com.mycompany.bpide;
 
 import javax.swing.*;
+import javax.swing.tree.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public final class PicoExplorer extends JPanel {
@@ -50,9 +67,12 @@ public final class PicoExplorer extends JPanel {
     private final JButton btnLog     = new JButton("Log");
     private final JButton btnReset   = new JButton("Reset");
 
-    private final DefaultListModel<PicoClient.RemoteFile> listModel =
-            new DefaultListModel<>();
-    private final JList<PicoClient.RemoteFile> fileList = new JList<>(listModel);
+    /** Raíz del árbol. user object = String "Pico" en la raíz, String
+     *  con el nombre del segmento en cada carpeta, RemoteFile en las
+     *  hojas. */
+    private final DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode("Pico");
+    private final DefaultTreeModel treeModel = new DefaultTreeModel(rootNode);
+    private final JTree fileTree = new JTree(treeModel);
     private final JLabel status = new JLabel("Disconnected");
 
     public PicoExplorer() {
@@ -80,33 +100,53 @@ public final class PicoExplorer extends JPanel {
         toolbar.add(row2);
         add(toolbar, BorderLayout.NORTH);
 
-        // Lista de ficheros remotos.
-        fileList.setCellRenderer(new DefaultListCellRenderer() {
+        // Árbol de ficheros remotos con render personalizado.
+        fileTree.setRootVisible(true);
+        fileTree.setShowsRootHandles(true);
+        fileTree.getSelectionModel().setSelectionMode(
+                TreeSelectionModel.SINGLE_TREE_SELECTION);
+        fileTree.setCellRenderer(new DefaultTreeCellRenderer() {
             @Override
-            public Component getListCellRendererComponent(JList<?> list,
-                    Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                JLabel l = (JLabel) super.getListCellRendererComponent(
-                        list, value, index, isSelected, cellHasFocus);
-                if (value instanceof PicoClient.RemoteFile) {
-                    PicoClient.RemoteFile f = (PicoClient.RemoteFile) value;
-                    l.setText(f.name + "  (" + f.size + " bytes)");
-                    l.setIcon(UIManager.getIcon("FileView.fileIcon"));
+            public Component getTreeCellRendererComponent(JTree tree,
+                    Object value, boolean sel, boolean expanded, boolean leaf,
+                    int row, boolean hasFocus) {
+                super.getTreeCellRendererComponent(tree, value, sel, expanded,
+                        leaf, row, hasFocus);
+                if (value instanceof DefaultMutableTreeNode) {
+                    Object uo = ((DefaultMutableTreeNode) value).getUserObject();
+                    if (uo instanceof PicoClient.RemoteFile) {
+                        PicoClient.RemoteFile f = (PicoClient.RemoteFile) uo;
+                        // Última componente del path como label.
+                        String label = f.name;
+                        int slash = label.lastIndexOf('/');
+                        if (slash >= 0) label = label.substring(slash + 1);
+                        setText(label + "  (" + f.size + " bytes)");
+                        setIcon(UIManager.getIcon("FileView.fileIcon"));
+                    } else {
+                        // Carpeta (o raíz). Usa los iconos nativos.
+                        Icon icon = expanded
+                                ? UIManager.getIcon("FileView.directoryIcon")
+                                : UIManager.getIcon("FileView.directoryIcon");
+                        if (icon != null) setIcon(icon);
+                    }
                 }
-                return l;
+                return this;
             }
         });
-        fileList.addMouseListener(new MouseAdapter() {
+        fileTree.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) onRun();
+                if (e.getClickCount() == 2 && getSelectedRemoteFile() != null) {
+                    onRun();
+                }
             }
         });
-        add(new JScrollPane(fileList), BorderLayout.CENTER);
+        add(new JScrollPane(fileTree), BorderLayout.CENTER);
 
         // Status bar.
         status.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
         add(status, BorderLayout.SOUTH);
 
-        // Refresca puertos al hacer click en el combo (mejor que solo al inicio).
+        // Refresca puertos al hacer click en el combo.
         portCombo.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             @Override public void popupMenuWillBecomeVisible(
                     javax.swing.event.PopupMenuEvent e) {
@@ -135,18 +175,17 @@ public final class PicoExplorer extends JPanel {
     /** Llamado por FrmMain para enchufar la consola del IDE. */
     public void setOutputSink(Consumer<String> sink) { this.outputSink = sink; }
 
-    /** ¿Hay conexión activa al dispositivo? Lo consulta FrmMain antes de
-     *  ofrecer "Run on Pico". */
+    /** ¿Hay conexión activa al dispositivo? */
     public boolean isConnected() { return client.isConnected(); }
 
     /**
      * Pipeline "Run on Pico" desde el IDE: sube un .mod local al
      * dispositivo (sobreescribiendo si ya existía con ese nombre) y lo
-     * ejecuta inmediatamente. El output stream va al sink configurado.
-     * No es bloqueante; corre en SwingWorker.
+     * ejecuta. El output stream va al sink configurado. No bloqueante.
      *
-     * Requiere que el cliente ya esté conectado (Connect manual desde
-     * el panel).
+     * El nombre remoto se construye anteponiendo `/app/` si el nombre
+     * local no tenía path, así los .mod de usuario quedan agrupados en
+     * /app y se distinguen de la stdlib en /lib.
      */
     public void uploadAndRun(File modFile) {
         uploadAndRun(modFile, java.util.Collections.emptyList());
@@ -165,21 +204,17 @@ public final class PicoExplorer extends JPanel {
                     "[Pico] fichero no existe: " + modFile);
             return;
         }
-        final String name = modFile.getName();
+        final String remoteName = toAppPath(modFile.getName());
         final java.util.List<File> deps = (depMods != null)
                 ? depMods : java.util.Collections.emptyList();
         status.setText("Compile&Run on Pico: uploading "
                 + (deps.size() + 1) + " file(s)...");
         if (outputSink != null) {
-            outputSink.accept("[Pico] subiendo " + name + " (" + modFile.length() + " bytes)"
+            outputSink.accept("[Pico] subiendo " + remoteName + " (" + modFile.length() + " bytes)"
                     + (deps.isEmpty() ? "" : " + " + deps.size() + " dep(s)"));
         }
         runAsync(() -> {
             // 0) Sondea LS para saber qué hay ya en la FS del Pico.
-            //    PUT tras RUN tiene un bug en el firmware (USB CDC se
-            //    atasca tras la primera sesión I/O larga). Workaround:
-            //    si el .mod ya está allí con tamaño igual, saltamos
-            //    el PUT y hacemos solo RUN — eso sí funciona.
             java.util.Map<String, Long> remote = new java.util.HashMap<>();
             try {
                 java.util.List<PicoClient.RemoteFile> ls = client.ls();
@@ -187,64 +222,54 @@ public final class PicoExplorer extends JPanel {
                     remote.put(rf.name, rf.size);
                 }
             } catch (java.io.IOException lsErr) {
-                // Si LS falla, seguimos sin caché — el PUT decidirá.
                 if (outputSink != null) {
                     SwingUtilities.invokeLater(() -> outputSink.accept(
                             "[Pico] LS falló, subiré todo: " + lsErr.getMessage()));
                 }
             }
 
-            // 1) Subir deps primero (drivers), solo los que no estén ya o tengan tamaño distinto.
-            //
-            // Bug #111: PUT sobre fichero existente rompe USB CDC en el
-            // firmware. Workaround pragmático aquí: si existe con tamaño
-            // distinto, DEL primero y luego PUT — eso evita el code path
-            // de overwrite. Si existe con mismo tamaño, salto el PUT
-            // entero (asume mismo contenido — heurística aceptable para
-            // .mod compilados deterministicamente).
+            // 1) Subir deps primero (drivers) a /app/.
+            //    Bug #111 ya arreglado en firmware, pero mantenemos
+            //    skip-if-same-size + DEL-before-overwrite por economía
+            //    (evita reescritura de flash innecesaria).
             for (File dep : deps) {
-                Long sz = remote.get(dep.getName());
+                String depRemote = toAppPath(dep.getName());
+                Long sz = remote.get(depRemote);
                 if (sz != null && sz == dep.length()) {
                     if (outputSink != null) {
                         SwingUtilities.invokeLater(() -> outputSink.accept(
-                                "[Pico] " + dep.getName() + " ya en FS (" + dep.length()
+                                "[Pico] " + depRemote + " ya en FS (" + dep.length()
                                 + " bytes), salto PUT"));
                     }
                     continue;
                 }
                 if (sz != null) {
-                    // Existe pero con tamaño distinto → DEL antes del PUT.
-                    try {
-                        client.del(dep.getName());
-                    } catch (java.io.IOException delErr) {
-                        // No fatal: si el DEL falla, intentaremos el PUT
-                        // y veremos qué pasa.
-                    }
+                    try { client.del(depRemote); }
+                    catch (java.io.IOException delErr) { /* tolerable */ }
                 }
                 byte[] depData = Files.readAllBytes(dep.toPath());
-                client.put(dep.getName(), depData);
+                client.put(depRemote, depData);
             }
             // 2) Subir el módulo principal solo si difiere.
-            Long mainSz = remote.get(name);
+            Long mainSz = remote.get(remoteName);
             if (mainSz != null && mainSz == modFile.length()) {
                 if (outputSink != null) {
                     SwingUtilities.invokeLater(() -> outputSink.accept(
-                            "[Pico] " + name + " ya en FS (" + modFile.length()
+                            "[Pico] " + remoteName + " ya en FS (" + modFile.length()
                             + " bytes), salto PUT"));
                 }
             } else {
                 if (mainSz != null) {
-                    try {
-                        client.del(name);
-                    } catch (java.io.IOException delErr) {
-                        // ditto
-                    }
+                    try { client.del(remoteName); }
+                    catch (java.io.IOException delErr) { /* tolerable */ }
                 }
                 byte[] data = Files.readAllBytes(modFile.toPath());
-                client.put(name, data);
+                client.put(remoteName, data);
             }
-            // 3) Ejecutar el principal — sus deps ya están en el FS de la Pico.
-            return client.run(name, line -> {
+            // 3) Ejecutar el principal. RUN del firmware acepta el path
+            //    completo y resuelve también en /app/ y /lib/, así que
+            //    podemos pasar el remoteName tal cual.
+            return client.run(remoteName, line -> {
                 if (outputSink != null) {
                     SwingUtilities.invokeLater(() -> outputSink.accept(line));
                 }
@@ -256,6 +281,13 @@ public final class PicoExplorer extends JPanel {
             status.setText("Done: " + statusStr);
             onRefresh();
         });
+    }
+
+    /** Convierte un nombre local (e.g. "Hello.mod") en un path remoto.
+     *  Si ya viene con `/`, se respeta. Si no, se prefija /app/. */
+    private static String toAppPath(String localName) {
+        if (localName.indexOf('/') >= 0) return localName;
+        return "/app/" + localName;
     }
 
     /* ============================================================ */
@@ -289,8 +321,9 @@ public final class PicoExplorer extends JPanel {
     private void onConnect() {
         if (client.isConnected()) {
             client.close();
-            listModel.clear();
             setConnectedUI(false);
+            rootNode.removeAllChildren();
+            treeModel.reload();
             status.setText("Disconnected");
             return;
         }
@@ -303,14 +336,9 @@ public final class PicoExplorer extends JPanel {
         runAsync(() -> {
             client.connect(port, 115200);
             String hello = client.hello();
-            // Sincronizamos el RTC del Pico con el wall clock del
-            // host. Tolerante a fallos: si el firmware no soporta
-            // TIME (versión antigua), seguimos adelante — el Rtc
-            // del Pico devolverá segundos desde boot, no es fatal.
             try {
                 client.syncTime();
             } catch (IOException ex) {
-                // logear pero no abortar la conexión
                 System.err.println("[PicoExplorer] TIME failed: " + ex.getMessage());
             }
             return hello;
@@ -331,10 +359,150 @@ public final class PicoExplorer extends JPanel {
             @SuppressWarnings("unchecked")
             List<PicoClient.RemoteFile> fs = (List<PicoClient.RemoteFile>) ((Object[]) result)[0];
             String mem = (String) ((Object[]) result)[1];
-            listModel.clear();
-            for (PicoClient.RemoteFile f : fs) listModel.addElement(f);
+            rebuildTree(fs);
             status.setText(fs.size() + " files  |  " + mem);
         });
+    }
+
+    /** Reconstruye el árbol a partir de la lista plana del LS.
+     *
+     *  Estrategia: para cada RemoteFile, parsea su path en segmentos
+     *  (/lib/Math.mod → ["lib", "Math.mod"]) y va navegando/creando
+     *  nodos. La hoja lleva el RemoteFile como userObject.
+     *
+     *  Preserva las carpetas que estaban expandidas antes — la
+     *  identificación se hace por el TreePath textual reconstruido. */
+    private void rebuildTree(List<PicoClient.RemoteFile> files) {
+        // 1) Captura paths expandidos antes de tocar nada.
+        Set<String> expandedPaths = new HashSet<>();
+        Enumeration<TreePath> e = fileTree.getExpandedDescendants(
+                new TreePath(rootNode));
+        if (e != null) {
+            while (e.hasMoreElements()) {
+                expandedPaths.add(treePathToKey(e.nextElement()));
+            }
+        }
+
+        // 2) Reconstruye desde cero.
+        rootNode.removeAllChildren();
+
+        // Orden estable: por path lex, para que el árbol salga
+        // determinista entre LS y LS.
+        java.util.List<PicoClient.RemoteFile> sorted = new java.util.ArrayList<>(files);
+        sorted.sort((a, b) -> a.name.compareTo(b.name));
+
+        for (PicoClient.RemoteFile f : sorted) {
+            insertFileIntoTree(f);
+        }
+        treeModel.reload();
+
+        // 3) Restaura expand state, y como fallback expande root y
+        //    primer nivel (/app, /lib, /sys, ...) para que el usuario
+        //    vea algo útil sin clicks.
+        fileTree.expandPath(new TreePath(rootNode));
+        for (int i = 0; i < rootNode.getChildCount(); i++) {
+            DefaultMutableTreeNode child =
+                    (DefaultMutableTreeNode) rootNode.getChildAt(i);
+            // Auto-expandir todas las carpetas (no son tantos ficheros).
+            // El usuario puede colapsar lo que no quiera ver.
+            expandAll(new TreePath(child.getPath()));
+        }
+        // Re-expandir lo que estaba abierto antes.
+        for (String key : expandedPaths) {
+            TreePath tp = keyToTreePath(key);
+            if (tp != null) fileTree.expandPath(tp);
+        }
+    }
+
+    private void expandAll(TreePath path) {
+        DefaultMutableTreeNode node =
+                (DefaultMutableTreeNode) path.getLastPathComponent();
+        if (!node.isLeaf()) {
+            fileTree.expandPath(path);
+            for (int i = 0; i < node.getChildCount(); i++) {
+                expandAll(path.pathByAddingChild(node.getChildAt(i)));
+            }
+        }
+    }
+
+    private String treePathToKey(TreePath tp) {
+        StringBuilder sb = new StringBuilder();
+        for (Object o : tp.getPath()) {
+            sb.append('/');
+            sb.append(((DefaultMutableTreeNode) o).getUserObject());
+        }
+        return sb.toString();
+    }
+
+    private TreePath keyToTreePath(String key) {
+        // key es del estilo "/Pico/lib/Math.mod" — descender desde root.
+        String[] segs = key.split("/");
+        DefaultMutableTreeNode cur = rootNode;
+        TreePath tp = new TreePath(cur);
+        // segs[0] = "", segs[1] = "Pico" (root), segs[2..] = niños.
+        for (int i = 2; i < segs.length; i++) {
+            DefaultMutableTreeNode next = findChildByLabel(cur, segs[i]);
+            if (next == null) return null;
+            tp = tp.pathByAddingChild(next);
+            cur = next;
+        }
+        return tp;
+    }
+
+    private DefaultMutableTreeNode findChildByLabel(
+            DefaultMutableTreeNode parent, String label) {
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            DefaultMutableTreeNode c =
+                    (DefaultMutableTreeNode) parent.getChildAt(i);
+            Object uo = c.getUserObject();
+            String l;
+            if (uo instanceof PicoClient.RemoteFile) {
+                String n = ((PicoClient.RemoteFile) uo).name;
+                int slash = n.lastIndexOf('/');
+                l = slash >= 0 ? n.substring(slash + 1) : n;
+            } else {
+                l = String.valueOf(uo);
+            }
+            if (l.equals(label)) return c;
+        }
+        return null;
+    }
+
+    /** Inserta un fichero (path completo) en el árbol, creando carpetas
+     *  intermedias según haga falta. */
+    private void insertFileIntoTree(PicoClient.RemoteFile f) {
+        String name = f.name;
+        // Si empieza con `/`, descártalo para que split no genere "".
+        String body = name.startsWith("/") ? name.substring(1) : name;
+        String[] parts = body.split("/");
+        DefaultMutableTreeNode cur = rootNode;
+        for (int i = 0; i < parts.length - 1; i++) {
+            String seg = parts[i];
+            DefaultMutableTreeNode child = findChildByLabel(cur, seg);
+            if (child == null) {
+                child = new DefaultMutableTreeNode(seg);
+                cur.add(child);
+            }
+            cur = child;
+        }
+        // Hoja con el RemoteFile completo.
+        DefaultMutableTreeNode leaf = new DefaultMutableTreeNode(f);
+        leaf.setAllowsChildren(false);
+        cur.add(leaf);
+    }
+
+    /** Devuelve el RemoteFile del nodo seleccionado, o null si no hay
+     *  nada seleccionado o el nodo seleccionado es una carpeta. */
+    private PicoClient.RemoteFile getSelectedRemoteFile() {
+        TreePath sel = fileTree.getSelectionPath();
+        if (sel == null) return null;
+        Object last = sel.getLastPathComponent();
+        if (!(last instanceof DefaultMutableTreeNode)) return null;
+        Object uo = ((DefaultMutableTreeNode) last).getUserObject();
+        if (uo instanceof PicoClient.RemoteFile) {
+            return (PicoClient.RemoteFile) uo;
+        }
+        return null;
     }
 
     private void onUpload() {
@@ -345,22 +513,24 @@ public final class PicoExplorer extends JPanel {
         if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
         File f = fc.getSelectedFile();
         if (f == null) return;
-        status.setText("Uploading " + f.getName() + "...");
+        // Sube a /app/<name> por convención.
+        String remote = toAppPath(f.getName());
+        status.setText("Uploading " + remote + "...");
         runAsync(() -> {
             byte[] data = Files.readAllBytes(f.toPath());
-            client.put(f.getName(), data);
+            client.put(remote, data);
             return data.length;
         }, n -> {
-            status.setText("Uploaded " + f.getName() + " (" + n + " bytes)");
+            status.setText("Uploaded " + remote + " (" + n + " bytes)");
             onRefresh();
         });
     }
 
     private void onRun() {
         if (!client.isConnected()) return;
-        PicoClient.RemoteFile sel = fileList.getSelectedValue();
+        PicoClient.RemoteFile sel = getSelectedRemoteFile();
         if (sel == null) {
-            status.setText("Select a file to run");
+            status.setText("Select a file (leaf) to run");
             return;
         }
         status.setText("Running " + sel.name + "...");
@@ -381,10 +551,14 @@ public final class PicoExplorer extends JPanel {
 
     private void onDownload() {
         if (!client.isConnected()) return;
-        PicoClient.RemoteFile sel = fileList.getSelectedValue();
+        PicoClient.RemoteFile sel = getSelectedRemoteFile();
         if (sel == null) return;
         JFileChooser fc = new JFileChooser();
-        fc.setSelectedFile(new File(sel.name));
+        // Como nombre por defecto, la última componente del path.
+        String basename = sel.name;
+        int slash = basename.lastIndexOf('/');
+        if (slash >= 0) basename = basename.substring(slash + 1);
+        fc.setSelectedFile(new File(basename));
         if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         File out = fc.getSelectedFile();
         runAsync(() -> {
@@ -397,7 +571,7 @@ public final class PicoExplorer extends JPanel {
 
     private void onDelete() {
         if (!client.isConnected()) return;
-        PicoClient.RemoteFile sel = fileList.getSelectedValue();
+        PicoClient.RemoteFile sel = getSelectedRemoteFile();
         if (sel == null) return;
         int rc = JOptionPane.showConfirmDialog(this,
                 "Borrar " + sel.name + " del dispositivo?", "Confirmar",
@@ -436,7 +610,8 @@ public final class PicoExplorer extends JPanel {
         runAsync(() -> { client.reset(); return null; },
                 v -> {
                     client.close();
-                    listModel.clear();
+                    rootNode.removeAllChildren();
+                    treeModel.reload();
                     setConnectedUI(false);
                     status.setText("Reset sent, port closed");
                 });
@@ -449,7 +624,6 @@ public final class PicoExplorer extends JPanel {
     private interface IOAction<T> { T run() throws IOException; }
 
     private <T> void runAsync(IOAction<T> task, Consumer<T> onSuccess) {
-        // Deshabilita botones mientras corre — evita doble-click race.
         setActionButtonsEnabled(false);
         new SwingWorker<T, Void>() {
             @Override protected T doInBackground() throws Exception {
@@ -474,7 +648,7 @@ public final class PicoExplorer extends JPanel {
 
     private void setActionButtonsEnabled(boolean enabled) {
         boolean connected = client.isConnected();
-        btnConnect.setEnabled(true);   // siempre disponible
+        btnConnect.setEnabled(true);
         btnRefresh.setEnabled(enabled && connected);
         btnUpload.setEnabled(enabled && connected);
         btnRun.setEnabled(enabled && connected);
