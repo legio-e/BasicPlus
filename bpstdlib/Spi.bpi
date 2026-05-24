@@ -1,16 +1,34 @@
 bpi 6
 module Spi
-func init(bus:integer,sck:integer,mosi:integer,miso:integer,baudrate:integer,mode:integer):void public intrinsic
-func read(bus:integer,data:integer[],count:integer):integer public intrinsic
+func init(bus:integer,sck:integer,mosi:integer,miso:integer,baudrate:integer,mode:integer):void public
+func read(bus:integer,data:integer[],count:integer):integer public
 func KHZ_500():integer public
 func MHZ_4():integer public
 func MODE1():integer public
 func MODE2():integer public
 func BUS1():integer public
 func MHZ_1():integer public
+func readBus(bus:integer,data:integer[],count:integer):integer public intrinsic
 func BUS0():integer public
 func MODE0():integer public
+func initBus(bus:integer,sck:integer,mosi:integer,miso:integer,baudrate:integer,mode:integer):void public intrinsic
+func writeBus(bus:integer,data:integer[],count:integer):integer public intrinsic
 func MODE3():integer public
-func transfer(bus:integer,tx:integer[],rx:integer[],count:integer):integer public intrinsic
+func transfer(bus:integer,tx:integer[],rx:integer[],count:integer):integer public
+func transferBus(bus:integer,tx:integer[],rx:integer[],count:integer):integer public intrinsic
 func MHZ_10():integer public
-func write(bus:integer,data:integer[],count:integer):integer public intrinsic
+func write(bus:integer,data:integer[],count:integer):integer public
+class Bus public
+  layout 6 3 00000000 00000000
+  ctor(id:integer,sck:integer,mosi:integer,miso:integer,baudrate:integer,mode:integer)
+  staticconst MODE3:integer=3 public
+  staticconst MHZ_10:integer=10000000 public
+  staticconst MHZ_4:integer=4000000 public
+  staticconst MODE1:integer=1 public
+  staticconst MODE2:integer=2 public
+  staticconst MHZ_1:integer=1000000 public
+  staticconst MODE0:integer=0 public
+  method write(data:integer[],count:integer):integer public
+  method read(data:integer[],count:integer):integer public
+  method transfer(tx:integer[],rx:integer[],count:integer):integer public
+end class

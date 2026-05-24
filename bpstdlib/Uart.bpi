@@ -1,19 +1,33 @@
 bpi 6
 module Uart
-func init(bus:integer,tx:integer,rx:integer,baudrate:integer,dataBits:integer,stopBits:integer,parity:integer):void public intrinsic
-func read(bus:integer,data:integer[],count:integer,timeoutMs:integer):integer public intrinsic
+func init(bus:integer,tx:integer,rx:integer,baudrate:integer,dataBits:integer,stopBits:integer,parity:integer):void public
+func read(bus:integer,data:integer[],count:integer,timeoutMs:integer):integer public
 func PARITY_NONE():integer public
-func available(bus:integer):integer public intrinsic
+func available(bus:integer):integer public
+func availablePort(bus:integer):integer public intrinsic
 func PARITY_EVEN():integer public
+func writePort(bus:integer,data:integer[],count:integer):integer public intrinsic
 func BUS1():integer public
+func initPort(bus:integer,tx:integer,rx:integer,baudrate:integer,dataBits:integer,stopBits:integer,parity:integer):void public intrinsic
 func BUS0():integer public
 func BAUD_9600():integer public
 func BAUD_115200():integer public
 func PARITY_ODD():integer public
 func BAUD_230400():integer public
 func BAUD_460800():integer public
-func write(bus:integer,data:integer[],count:integer):integer public intrinsic
+func write(bus:integer,data:integer[],count:integer):integer public
 func BAUD_19200():integer public
 func BAUD_38400():integer public
+func readPort(bus:integer,data:integer[],count:integer,timeoutMs:integer):integer public intrinsic
 func BAUD_57600():integer public
 func BAUD_921600():integer public
+class Port public
+  layout 7 3 00000000 00000000
+  ctor(id:integer,tx:integer,rx:integer,baudrate:integer,dataBits:integer,stopBits:integer,parity:integer)
+  staticconst PARITY_NONE:integer=0 public
+  staticconst PARITY_ODD:integer=1 public
+  staticconst PARITY_EVEN:integer=2 public
+  method write(data:integer[],count:integer):integer public
+  method read(data:integer[],count:integer,timeoutMs:integer):integer public
+  method available():integer public
+end class

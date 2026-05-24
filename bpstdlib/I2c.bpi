@@ -1,10 +1,22 @@
 bpi 6
 module I2c
-func init(bus:integer,sda:integer,scl:integer,baudrate:integer):void public intrinsic
-func read(bus:integer,addr:integer,data:integer[],count:integer):integer public intrinsic
+func initBus(bus:integer,sda:integer,scl:integer,baudrate:integer):void public intrinsic
+func writeBus(bus:integer,addr:integer,data:integer[],count:integer):integer public intrinsic
+func init(bus:integer,sda:integer,scl:integer,baudrate:integer):void public
+func read(bus:integer,addr:integer,data:integer[],count:integer):integer public
 func scan(bus:integer):integer[] public
 func FAST():integer public
-func write(bus:integer,addr:integer,data:integer[],count:integer):integer public intrinsic
+func write(bus:integer,addr:integer,data:integer[],count:integer):integer public
 func BUS1():integer public
 func STANDARD():integer public
+func readBus(bus:integer,addr:integer,data:integer[],count:integer):integer public intrinsic
 func BUS0():integer public
+class Bus public
+  layout 4 3 00000000 00000000
+  ctor(id:integer,sda:integer,scl:integer,baudrate:integer)
+  staticconst FAST:integer=400000 public
+  staticconst STANDARD:integer=100000 public
+  method write(addr:integer,data:integer[],count:integer):integer public
+  method read(addr:integer,data:integer[],count:integer):integer public
+  method scan():integer[] public
+end class

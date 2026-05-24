@@ -32,44 +32,48 @@
 // Convención de buffers: como en I2c/Spi, los datos van en un
 // integer[] donde cada slot transporta un byte (low 8 bits).
 //
-// Ejemplo mínimo (eco de un módulo AT):
+// Hay DOS formas de usar este módulo:
 //
-//   import Uart
-//   Uart.init(Uart.BUS0(), 0, 1, 115200,
-//             8, 1, Uart.PARITY_NONE())
-//   var tx: integer[] := [0x41, 0x54, 0x0D, 0x0A]   // "AT\r\n"
-//   Uart.write(Uart.BUS0(), tx, 4)
-//   var rx: integer[] := newIntArray(64)
-//   var n: integer := Uart.read(Uart.BUS0(), rx, 64, 1000)
-//   print "RX bytes:", n
+//   A) Funciones top-level (forma original, compatible):
+//
+//        import Uart
+//        Uart.init(0, 0, 1, 115200, 8, 1, Uart.PARITY_NONE())
+//        Uart.write(0, [0x41,0x54,0x0D,0x0A], 4)   // "AT\r\n"
+//
+//   B) Clase Port (forma OO recomendada):
+//
+//        import Uart
+//        var port: Uart.Port := Uart.Port(0, 0, 1, 115200,
+//                                          8, 1, Uart.Port.PARITY_NONE)
+//        port.write([0x41,0x54,0x0D,0x0A], 4)
 // ============================================================
 module Uart
 
-  // Configura el UART.
-  //   bus      : 0 (uart0) o 1 (uart1)
-  //   tx, rx   : GPIO pins (deben ser válidos para ese bus)
-  //   baudrate : Hz (típico 9600, 38400, 115200, 230400, 460800,
-  //              921600). En RP2350 el divisor admite hasta ~7,8 Mbps.
-  //   dataBits : 5..8 (típico 8)
-  //   stopBits : 1 ó 2
-  //   parity   : 0=NONE, 1=ODD, 2=EVEN
-  public intrinsic function init(bus: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)
+  // ---- Intrínsecos de bajo nivel ----
+  //
+  // Sufijo "Port" para evitar colisión con los métodos de la clase
+  // Uart.Port (init/write/read/available).
+  public intrinsic function initPort(bus: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)
+  public intrinsic function writePort(bus: integer, data: integer[], count: integer): integer
+  public intrinsic function readPort(bus: integer, data: integer[], count: integer, timeoutMs: integer): integer
+  public intrinsic function availablePort(bus: integer): integer
 
-  // Escribe `count` bytes en el bus (bloquea hasta que el TX FIFO los
-  // ha aceptado). Devuelve bytes escritos, o -1 en error.
-  public intrinsic function write(bus: integer, data: integer[], count: integer): integer
+  // ---- Funciones top-level de compatibilidad ----
+  public function init(bus: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)
+    initPort(bus, tx, rx, baudrate, dataBits, stopBits, parity)
+  end init
 
-  // Lee hasta `count` bytes del bus. `timeoutMs`:
-  //   <= 0  → bloquea hasta tener `count` bytes
-  //   >  0  → devuelve cuando llegan `count` bytes O al expirar el
-  //           timeout total (lo que ocurra antes). El retorno indica
-  //           bytes realmente leídos (0..count).
-  // -1 en error de backend.
-  public intrinsic function read(bus: integer, data: integer[], count: integer, timeoutMs: integer): integer
+  public function write(bus: integer, data: integer[], count: integer): integer
+    return writePort(bus, data, count)
+  end write
 
-  // Bytes disponibles en el buffer RX para leer sin bloquear (0 si
-  // no hay nada todavía). -1 si el backend no implementa la query.
-  public intrinsic function available(bus: integer): integer
+  public function read(bus: integer, data: integer[], count: integer, timeoutMs: integer): integer
+    return readPort(bus, data, count, timeoutMs)
+  end read
+
+  public function available(bus: integer): integer
+    return availablePort(bus)
+  end available
 
   // -------- Constantes de conveniencia --------
   public function BUS0(): integer
@@ -115,5 +119,72 @@ module Uart
   public function BAUD_921600(): integer
     return 921600
   end BAUD_921600
+
+  // ============================================================
+  // Clase Port — wrapper OO sobre los intrínsecos de UART.
+  //
+  // Una instancia representa un UART HW configurado con sus pines
+  // TX/RX, baudrate y formato de carácter.
+  //
+  // Uso típico (eco de un módulo AT):
+  //
+  //   import Uart
+  //   var port: Uart.Port := Uart.Port(0, 0, 1, Uart.BAUD_115200(),
+  //                                     8, 1, Uart.Port.PARITY_NONE)
+  //   var tx: integer[] := [0x41, 0x54, 0x0D, 0x0A]   // "AT\r\n"
+  //   port.write(tx, 4)
+  //   var rx: integer[] := newIntArray(64)
+  //   var n: integer := port.read(rx, 64, 1000)
+  //   print "RX bytes:", n
+  // ============================================================
+  public class Port
+
+    // Static consts dentro de la clase para no obligar a importar
+    // las top-level. Accesibles como Uart.Port.PARITY_NONE.
+    public const Port.PARITY_NONE: integer := 0
+    public const Port.PARITY_ODD:  integer := 1
+    public const Port.PARITY_EVEN: integer := 2
+
+    public var id:       integer    // 0 (uart0) o 1 (uart1)
+    public var tx:       integer    // pin TX
+    public var rx:       integer    // pin RX
+    public var baudrate: integer
+    public var dataBits: integer    // 5..8 (típico 8)
+    public var stopBits: integer    // 1 ó 2
+    public var parity:   integer    // PARITY_NONE/ODD/EVEN
+
+    // Constructor: configura el UART en HW. El backend del host
+    // loguea pero no aborta para mantener la VM-host usable sin
+    // hardware real.
+    public function Port(id: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)
+      this.id       := id
+      this.tx       := tx
+      this.rx       := rx
+      this.baudrate := baudrate
+      this.dataBits := dataBits
+      this.stopBits := stopBits
+      this.parity   := parity
+      initPort(id, tx, rx, baudrate, dataBits, stopBits, parity)
+    end Port
+
+    // Escribe `count` bytes. Bloquea hasta que el TX FIFO los
+    // acepta. Devuelve bytes escritos, -1 en error.
+    public function write(data: integer[], count: integer): integer
+      return writePort(this.id, data, count)
+    end write
+
+    // Lee hasta `count` bytes con timeout. Ver doc del intrínseco
+    // readPort para semántica exacta de timeoutMs.
+    public function read(data: integer[], count: integer, timeoutMs: integer): integer
+      return readPort(this.id, data, count, timeoutMs)
+    end read
+
+    // Bytes disponibles para leer sin bloquear (0 si nada todavía,
+    // -1 si el backend no implementa la query).
+    public function available(): integer
+      return availablePort(this.id)
+    end available
+
+  end Port
 
 end Uart

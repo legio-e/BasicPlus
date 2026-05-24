@@ -119,21 +119,31 @@ public final class Intrinsics {
         register("Gpio.read",       w -> emitBuiltin(w, Builtin.GPIO_READ));
 
         // ---- I2C ----
-        register("I2c.init",        w -> emitBuiltin(w, Builtin.I2C_INIT));
-        register("I2c.write",       w -> emitBuiltin(w, Builtin.I2C_WRITE));
-        register("I2c.read",        w -> emitBuiltin(w, Builtin.I2C_READ));
+        // Intrínsecos I2c — nombres internos sufijados con "Bus" para
+        // no colisionar con los métodos init/write/read de I2c.Bus.
+        // Las funciones top-level I2c.init/write/read son wrappers BP
+        // que delegan en estos (forma de compatibilidad).
+        register("I2c.initBus",     w -> emitBuiltin(w, Builtin.I2C_INIT));
+        register("I2c.writeBus",    w -> emitBuiltin(w, Builtin.I2C_WRITE));
+        register("I2c.readBus",     w -> emitBuiltin(w, Builtin.I2C_READ));
 
         // ---- SPI ----
-        register("Spi.init",        w -> emitBuiltin(w, Builtin.SPI_INIT));
-        register("Spi.write",       w -> emitBuiltin(w, Builtin.SPI_WRITE));
-        register("Spi.read",        w -> emitBuiltin(w, Builtin.SPI_READ));
-        register("Spi.transfer",    w -> emitBuiltin(w, Builtin.SPI_TRANSFER));
+        // Spi — nombres internos sufijados con "Bus" para no
+        // colisionar con los métodos de Spi.Bus. Las funciones
+        // top-level Spi.init/write/read/transfer son wrappers BP.
+        register("Spi.initBus",     w -> emitBuiltin(w, Builtin.SPI_INIT));
+        register("Spi.writeBus",    w -> emitBuiltin(w, Builtin.SPI_WRITE));
+        register("Spi.readBus",     w -> emitBuiltin(w, Builtin.SPI_READ));
+        register("Spi.transferBus", w -> emitBuiltin(w, Builtin.SPI_TRANSFER));
 
         // ---- UART ----
-        register("Uart.init",       w -> emitBuiltin(w, Builtin.UART_INIT));
-        register("Uart.write",      w -> emitBuiltin(w, Builtin.UART_WRITE));
-        register("Uart.read",       w -> emitBuiltin(w, Builtin.UART_READ));
-        register("Uart.available",  w -> emitBuiltin(w, Builtin.UART_AVAILABLE));
+        // Uart — nombres internos sufijados con "Port" para no
+        // colisionar con los métodos de Uart.Port. Las funciones
+        // top-level Uart.init/write/read/available son wrappers BP.
+        register("Uart.initPort",      w -> emitBuiltin(w, Builtin.UART_INIT));
+        register("Uart.writePort",     w -> emitBuiltin(w, Builtin.UART_WRITE));
+        register("Uart.readPort",      w -> emitBuiltin(w, Builtin.UART_READ));
+        register("Uart.availablePort", w -> emitBuiltin(w, Builtin.UART_AVAILABLE));
 
         // ---- Pulse (contador de pulsos hardware) ----
         // Los nombres llevan sufijo "Slice" para no colisionar con los

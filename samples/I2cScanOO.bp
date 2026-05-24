@@ -1,0 +1,38 @@
+// I2cScanOO.bp — escanea el bus I2C usando la nueva API OO (I2c.Bus).
+//
+// Equivalente a i2cscan.bp pero con la clase Bus en lugar de las
+// funciones top-level. Mismo backend nativo; el código BP es solo
+// más conciso porque no arrastra el `bus` en cada llamada.
+//
+// Pinout: bus1 con SDA=GP2, SCL=GP3 (ajusta si tienes otro cableado).
+module I2cScanOO
+
+  import I2c
+
+  function Main()
+    // Nota: hoy las public var de las clases no se exportan cross-
+    // module (issue #143), así que printamos los valores que sabemos
+    // desde el call-site en vez de leerlos de bus.id / bus.sda / etc.
+    var BUS_ID: integer := I2c.BUS1()
+    var SDA: integer := 2
+    var SCL: integer := 3
+    var bus: I2c.Bus := I2c.Bus(BUS_ID, SDA, SCL, I2c.Bus.STANDARD)
+
+    print "Escaneando bus", BUS_ID, "(SDA=GP", SDA, ", SCL=GP", SCL, ")..."
+    var devices: integer[] := bus.scan()
+    var n: integer := 0
+    for d in devices do
+      print "  0x", hex2(d), "(", d, ")"
+      n := n + 1
+    next d
+    print "Encontrados:", n
+  end Main
+
+  function hex2(b: integer): string
+    var lut: string := "0123456789ABCDEF"
+    var hi: integer := (b shr 4) & 0x0F
+    var lo: integer := b & 0x0F
+    return charAt(lut, hi) + charAt(lut, lo)
+  end hex2
+
+end I2cScanOO

@@ -1,49 +1,75 @@
 // ============================================================
 // I2c.bp — control de bus I2C en dispositivos embebidos.
 //
+// Plataformas:
+//   - RP2350 (Pico 2): 2 buses HW (i2c0, i2c1).
+//   - PC (Java/host C): logging por stdout — desarrollo sin HW.
+//
 // Buffers de bytes: parámetros `integer[]` donde cada slot
 // transporta un byte (solo el byte bajo, 0..255). El frontend
 // los serializa correctamente en .bpi cross-module gracias a
 // L-arr-export.
 //
-// Plataformas:
-//   - RP2350 (Pico 2): 2 buses HW (i2c0, i2c1).
-//   - PC (Java/host C): logging por stdout — desarrollo sin HW.
+// Hay DOS formas de usar este módulo:
+//
+//   A) Funciones top-level (forma original, compatible con
+//      drivers ya escritos):
+//
+//        import I2c
+//        I2c.init(0, 6, 7, I2c.FAST())
+//        I2c.write(0, 0x48, [0x00], 1)
+//
+//   B) Clase Bus (forma OO recomendada, ver HW_CLASS_POLICY):
+//
+//        import I2c
+//        var bus: I2c.Bus := I2c.Bus(0, 6, 7, I2c.FAST())
+//        bus.write(0x48, [0x00], 1)
+//
+// Las dos formas comparten el mismo backend nativo. Las top-level
+// existen para no romper código existente; la clase es la API
+// canónica para código nuevo.
 // ============================================================
 module I2c
 
-  // Inicializa el bus con los pines dados a la velocidad indicada.
-  //   bus: 0 (i2c0) o 1 (i2c1).
-  //   sda, scl: GPIO pins.
-  //   baudrate: en Hz (típico 100000 = standard, 400000 = fast).
-  public intrinsic function init(bus: integer, sda: integer, scl: integer, baudrate: integer)
+  // ---- Intrínsecos de bajo nivel ----
+  //
+  // Sufijo "Bus" para evitar colisión con los métodos init/write/
+  // read de la clase Bus envolvente (dentro de un método de la
+  // clase, `write(...)` resolvería a sí mismo → recursión).
+  public intrinsic function initBus(bus: integer, sda: integer, scl: integer, baudrate: integer)
+  public intrinsic function writeBus(bus: integer, addr: integer, data: integer[], count: integer): integer
+  public intrinsic function readBus(bus: integer, addr: integer, data: integer[], count: integer): integer
 
-  // Escribe `count` bytes al slave `addr` por `bus`. Cada slot de
-  // `data` transporta un byte (low 8 bits).
-  // Devuelve bytes escritos, o -1 si NAK/timeout.
-  public intrinsic function write(bus: integer, addr: integer, data: integer[], count: integer): integer
+  // ---- Funciones top-level de compatibilidad ----
+  //
+  // Conservan los nombres cortos init/write/read del API original.
+  // Internamente delegan en los intrínsecos *Bus. Coste: 1 frame
+  // extra de stack por llamada. Despreciable salvo en loops muy
+  // tight donde merezca la pena usar la clase directamente.
 
-  // Lee `count` bytes del slave `addr` por `bus` y los guarda en
-  // `data` (un slot por byte). Devuelve bytes leídos, o -1 en error.
-  public intrinsic function read(bus: integer, addr: integer, data: integer[], count: integer): integer
+  public function init(bus: integer, sda: integer, scl: integer, baudrate: integer)
+    initBus(bus, sda, scl, baudrate)
+  end init
+
+  public function write(bus: integer, addr: integer, data: integer[], count: integer): integer
+    return writeBus(bus, addr, data, count)
+  end write
+
+  public function read(bus: integer, addr: integer, data: integer[], count: integer): integer
+    return readBus(bus, addr, data, count)
+  end read
 
   // Escanea el bus completo (direcciones I2C válidas 0x08..0x77) y
   // devuelve un array con las direcciones de los dispositivos que
   // respondieron al ACK. Implementado puramente en BP llamando a
-  // I2c.read(1 byte) — no necesita opcode dedicado.
-  //
-  // Ejemplo de uso:
-  //   var devs: integer[] := I2c.scan(I2c.BUS0())
-  //   for d in devs do
-  //     print "device at 0x", d
-  //   next d
+  // readBus(1 byte) — no necesita opcode dedicado.
   public function scan(bus: integer): integer[]
     var rxbuf: integer[] := [0]
     var max: integer[] := newIntArray(112)        // pre-alloc 112 slots
     var found: integer := 0
     var addr: integer := 0x08
     while addr < 0x78 do
-      var rc: integer := read(bus, addr, rxbuf, 1)
+      var rc: integer := readBus(bus, addr, rxbuf, 1)
       if rc >= 0 then
         max[found] := addr
         found := found + 1
@@ -69,5 +95,83 @@ module I2c
   public function FAST(): integer
     return 400000
   end FAST
+
+  // ============================================================
+  // Clase Bus — wrapper OO sobre los intrínsecos de I2C.
+  //
+  // Una instancia representa un bus I2C físico configurado con sus
+  // pines SDA/SCL y baudrate. La gracia es que no arrastras el
+  // número de bus en cada operación.
+  //
+  // Uso típico:
+  //
+  //   import I2c
+  //   var bus: I2c.Bus := I2c.Bus(0, 6, 7, I2c.FAST())
+  //   var devs: integer[] := bus.scan()
+  //   for d in devs do
+  //     print "device at 0x", d
+  //   next d
+  //   var reg: integer[] := [0x00]
+  //   bus.write(0x48, reg, 1)
+  //   var temp: integer[] := newIntArray(2)
+  //   bus.read(0x48, temp, 2)
+  // ============================================================
+  public class Bus
+
+    // Static consts para uso sin instanciar: I2c.Bus.STANDARD
+    public const Bus.STANDARD: integer := 100000
+    public const Bus.FAST:     integer := 400000
+
+    public var id:       integer    // 0 (i2c0) o 1 (i2c1)
+    public var sda:      integer
+    public var scl:      integer
+    public var baudrate: integer
+
+    // Constructor: inicializa el bus en HW. Si id no es 0/1 el
+    // backend logueará pero no abortará — para mantener la VM-host
+    // utilizable en desarrollo sin hardware real.
+    public function Bus(id: integer, sda: integer, scl: integer, baudrate: integer)
+      this.id       := id
+      this.sda      := sda
+      this.scl      := scl
+      this.baudrate := baudrate
+      initBus(id, sda, scl, baudrate)
+    end Bus
+
+    // Escribe `count` bytes al slave addr. Devuelve bytes escritos,
+    // -1 si NAK/timeout.
+    public function write(addr: integer, data: integer[], count: integer): integer
+      return writeBus(this.id, addr, data, count)
+    end write
+
+    // Lee `count` bytes del slave addr a `data`. Devuelve bytes
+    // leídos, -1 en error.
+    public function read(addr: integer, data: integer[], count: integer): integer
+      return readBus(this.id, addr, data, count)
+    end read
+
+    // Escanea el bus completo (0x08..0x77) y devuelve un array con
+    // las direcciones que respondieron. Inlined manualmente porque
+    // el módulo no puede auto-referenciarse como `I2c.scan(...)`
+    // desde dentro, y `scan(...)` resolvería al propio método.
+    public function scan(): integer[]
+      var rxbuf: integer[] := [0]
+      var max:   integer[] := newIntArray(112)
+      var found: integer := 0
+      var addr:  integer := 0x08
+      while addr < 0x78 do
+        var rc: integer := readBus(this.id, addr, rxbuf, 1)
+        if rc >= 0 then
+          max[found] := addr
+          found := found + 1
+        endif
+        addr := addr + 1
+      endwh
+      var result: integer[] := newIntArray(found)
+      move(max, result, 0, 0, found)
+      return result
+    end scan
+
+  end Bus
 
 end I2c

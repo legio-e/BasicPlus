@@ -13,37 +13,58 @@
 //
 // Plataformas:
 //   - RP2350 (Pico 2): 2 buses HW (spi0, spi1). Cada uno admite varios
-//     pares de pines.
-//     spi0:  SCK=GP2/6/18, MOSI=GP3/7/19, MISO=GP0/4/16
-//     spi1:  SCK=GP10/14/26, MOSI=GP11/15/27, MISO=GP8/12/28
+//     pares de pines:
+//
+//       spi0:  SCK=GP2/6/18,  MOSI=GP3/7/19, MISO=GP0/4/16
+//       spi1:  SCK=GP10/14/26, MOSI=GP11/15/27, MISO=GP8/12/28
 //   - PC (Java/host C): logging por stdout — desarrollo sin HW.
 //
 // El CS de cada slave se gestiona aparte:
 //
 //   Gpio.write(CS_PIN, Gpio.LOW())
-//   Spi.write(0, payload, n)
+//   bus.write(payload, n)
 //   Gpio.write(CS_PIN, Gpio.HIGH())
+//
+// Hay DOS formas de usar este módulo:
+//
+//   A) Funciones top-level (forma original, compatible):
+//
+//        import Spi
+//        Spi.init(0, 2, 3, 4, Spi.MHZ_1(), Spi.MODE0())
+//        Spi.write(0, [0x55], 1)
+//
+//   B) Clase Bus (forma OO recomendada):
+//
+//        import Spi
+//        var bus: Spi.Bus := Spi.Bus(0, 2, 3, 4, Spi.MHZ_1(), Spi.Bus.MODE0)
+//        bus.write([0x55], 1)
 // ============================================================
 module Spi
 
-  // Configura el bus SPI.
-  //   bus      : 0 (spi0) o 1 (spi1).
-  //   sck, mosi, miso : GPIO pins (deben ser válidos para ese bus).
-  //   baudrate : Hz (típico 1_000_000..10_000_000).
-  //   mode     : 0..3. (CPOL, CPHA) = (0,0), (0,1), (1,0), (1,1).
-  public intrinsic function init(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)
+  // ---- Intrínsecos de bajo nivel ----
+  //
+  // Sufijo "Bus" para no colisionar con los métodos de Spi.Bus.
+  public intrinsic function initBus(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)
+  public intrinsic function writeBus(bus: integer, data: integer[], count: integer): integer
+  public intrinsic function readBus(bus: integer, data: integer[], count: integer): integer
+  public intrinsic function transferBus(bus: integer, tx: integer[], rx: integer[], count: integer): integer
 
-  // Escribe `count` bytes en el bus. Cada slot de `data` transporta
-  // un byte (low 8 bits). Devuelve bytes escritos.
-  public intrinsic function write(bus: integer, data: integer[], count: integer): integer
+  // ---- Funciones top-level de compatibilidad ----
+  public function init(bus: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)
+    initBus(bus, sck, mosi, miso, baudrate, mode)
+  end init
 
-  // Lee `count` bytes del bus (envía 0xFF dummy para clockear).
-  // Devuelve bytes leídos.
-  public intrinsic function read(bus: integer, data: integer[], count: integer): integer
+  public function write(bus: integer, data: integer[], count: integer): integer
+    return writeBus(bus, data, count)
+  end write
 
-  // Transferencia full-duplex: escribe tx[i] y lee rx[i] simultánea-
-  // mente. Devuelve bytes intercambiados.
-  public intrinsic function transfer(bus: integer, tx: integer[], rx: integer[], count: integer): integer
+  public function read(bus: integer, data: integer[], count: integer): integer
+    return readBus(bus, data, count)
+  end read
+
+  public function transfer(bus: integer, tx: integer[], rx: integer[], count: integer): integer
+    return transferBus(bus, tx, rx, count)
+  end transfer
 
   // -------- Constantes de conveniencia --------
   public function BUS0(): integer
@@ -77,5 +98,74 @@ module Spi
   public function MHZ_10(): integer
     return 10000000
   end MHZ_10
+
+  // ============================================================
+  // Clase Bus — wrapper OO sobre los intrínsecos de SPI.
+  //
+  // Una instancia representa un bus SPI HW configurado con sus
+  // pines SCK/MOSI/MISO, baudrate y modo (CPOL/CPHA).
+  //
+  // El chip-select (CS) NO lo gestiona esta clase — es un pin
+  // GPIO normal que el usuario controla aparte. Razón: un mismo
+  // bus suele compartirse entre varios slaves con CS distintos,
+  // y meter el CS en la instancia del Bus rompería esa flexibilidad.
+  //
+  // Uso típico:
+  //
+  //   var bus: Spi.Bus := Spi.Bus(0, 2, 3, 4, Spi.MHZ_4(), Spi.Bus.MODE0)
+  //   var cs: Gpio.Pin := Gpio.Pin(5, Gpio.Pin.OUTPUT)
+  //   cs.on()                       // CS inactivo (HIGH)
+  //
+  //   cs.off()                      // CS activo (LOW)
+  //   bus.write([0x9F], 1)          // mandar comando
+  //   var rx: integer[] := newIntArray(3)
+  //   bus.read(rx, 3)               // recibir respuesta
+  //   cs.on()
+  // ============================================================
+  public class Bus
+
+    // Static consts: Spi.Bus.MODE0..3
+    public const Bus.MODE0:   integer := 0
+    public const Bus.MODE1:   integer := 1
+    public const Bus.MODE2:   integer := 2
+    public const Bus.MODE3:   integer := 3
+    public const Bus.MHZ_1:   integer := 1000000
+    public const Bus.MHZ_4:   integer := 4000000
+    public const Bus.MHZ_10:  integer := 10000000
+
+    public var id:       integer    // 0 (spi0) o 1 (spi1)
+    public var sck:      integer
+    public var mosi:     integer
+    public var miso:     integer
+    public var baudrate: integer
+    public var mode:     integer    // 0..3
+
+    // Constructor: configura el bus SPI en HW.
+    public function Bus(id: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)
+      this.id       := id
+      this.sck      := sck
+      this.mosi     := mosi
+      this.miso     := miso
+      this.baudrate := baudrate
+      this.mode     := mode
+      initBus(id, sck, mosi, miso, baudrate, mode)
+    end Bus
+
+    // Escribe `count` bytes en el bus.
+    public function write(data: integer[], count: integer): integer
+      return writeBus(this.id, data, count)
+    end write
+
+    // Lee `count` bytes (envía 0xFF dummy para clockear).
+    public function read(data: integer[], count: integer): integer
+      return readBus(this.id, data, count)
+    end read
+
+    // Full-duplex: escribe tx[i] y lee rx[i] simultáneamente.
+    public function transfer(tx: integer[], rx: integer[], count: integer): integer
+      return transferBus(this.id, tx, rx, count)
+    end transfer
+
+  end Bus
 
 end Spi
