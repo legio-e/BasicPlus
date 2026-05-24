@@ -80,6 +80,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/pulse.c
     ${BPVM_C_ROOT}/src/pwm.c
     ${BPVM_C_ROOT}/src/pico.c
+    ${BPVM_C_ROOT}/src/rtc.c
     # Plataforma: usamos el backend FreeRTOS en vez del pthread del host.
     ${CMAKE_CURRENT_LIST_DIR}/platform_freertos.c
 )
@@ -95,6 +96,7 @@ add_executable(bpvm_pico
     pulse_mod.c     # stdlib core pre-instalada
     pwm_mod.c       # stdlib core pre-instalada
     pico_mod.c      # stdlib core pre-instalada (info MCU)
+    rtc_mod.c       # stdlib core pre-instalada (wall clock)
     # NOTA: drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO
     # se embeben aquí — viajan con la app del usuario al hacer upload
     # desde el IDE. Solo el core de stdlib (Math, IO, Gpio, I2c, ...)

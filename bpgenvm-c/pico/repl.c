@@ -411,6 +411,21 @@ void repl_run(void) {
         else if (strcmp(line, "LOG")     == 0) cmd_log();
         else if (strcmp(line, "LOGSAVE") == 0) cmd_logsave();
         else if (strcmp(line, "LOGCLEAR") == 0) cmd_logclear();
+        else if (strcmp(line, "TIME") == 0) {
+            /* TIME <epochsec> — calibra el RTC con el wall clock del
+             * IDE. El IDE manda este comando automáticamente al
+             * conectar, así código BP que use Rtc.Clock.epochSec()
+             * ve hora UTC real desde el primer arranque. */
+            extern void bpvm_rtc_set_now_ms(int64_t);
+            long long sec = 0;
+            if (sscanf(args, "%lld", &sec) == 1) {
+                bpvm_rtc_set_now_ms((int64_t) sec * 1000LL);
+                printf("OK time set\n");
+            } else {
+                printf("ERR usage: TIME <epochsec>\n");
+            }
+            fflush(stdout);
+        }
         else if (strcmp(line, "RESET")   == 0) {
             log_printf("RESET: rebooting");
             log_flush();   /* snapshot antes de morir */

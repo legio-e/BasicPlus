@@ -280,6 +280,16 @@ public final class PicoExplorer extends JPanel {
         runAsync(() -> {
             client.connect(port, 115200);
             String hello = client.hello();
+            // Sincronizamos el RTC del Pico con el wall clock del
+            // host. Tolerante a fallos: si el firmware no soporta
+            // TIME (versión antigua), seguimos adelante — el Rtc
+            // del Pico devolverá segundos desde boot, no es fatal.
+            try {
+                client.syncTime();
+            } catch (IOException ex) {
+                // logear pero no abortar la conexión
+                System.err.println("[PicoExplorer] TIME failed: " + ex.getMessage());
+            }
             return hello;
         }, hello -> {
             setConnectedUI(true);

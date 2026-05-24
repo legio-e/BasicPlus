@@ -3645,6 +3645,23 @@ public class VirtualMachine {
                 break;
             }
 
+            /* ---- Rtc — wall clock con offset ajustable ----
+             * En host usamos System.currentTimeMillis() directamente,
+             * con un offset opcional para que setEpochSec() pueda
+             * "rebobinar" o "adelantar" en tests. */
+            case RTC_NOW_SEC: {
+                long nowMs = System.currentTimeMillis() + rtcOffsetMs;
+                pushTc(tc, (int) (nowMs / 1000L));
+                break;
+            }
+            case RTC_SET_NOW_SEC: {
+                int sec = popTc(tc);
+                long targetMs = (long) sec * 1000L;
+                rtcOffsetMs = targetMs - System.currentTimeMillis();
+                pushTc(tc, 0);
+                break;
+            }
+
             default:
                 throw new RuntimeException("Builtin no implementado: " + b);
         }
@@ -3654,6 +3671,12 @@ public class VirtualMachine {
      *  contador a la vez (counterId siempre 0). El sample puede
      *  validar el flow bpvm → builtin → return aunque no se cuente HW. */
     private int pulseSimValue = 0;
+
+    /** Offset entre el wall clock pedido (setNowSec) y el reloj real del
+     *  sistema. Mientras es 0, Rtc.nowSec() devuelve el wall clock real
+     *  de la JVM. Tras setNowSec(s), el offset cambia para que nowSec()
+     *  empiece a contar desde s. */
+    private long rtcOffsetMs = 0L;
 
     /**
      * Aproximación de Lanczos (g=7, coeficientes Numerical Recipes) para la

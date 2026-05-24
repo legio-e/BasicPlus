@@ -18,6 +18,7 @@
 #include "bpvm_pulse.h"
 #include "bpvm_pwm.h"
 #include "bpvm_pico.h"
+#include "bpvm_rtc.h"
 #include "bpvm_uart.h"
 
 /* IDs estables (= ordinal del enum Builtin Java). Sólo los que F2
@@ -86,7 +87,10 @@ enum {
     BUILTIN_SLEEP_SEC       = 109,
     BUILTIN_SLEEP_US        = 110,
     /* Pico overclock — ordinal 111. */
-    BUILTIN_PICO_SET_CPU_FREQ_MHZ = 111
+    BUILTIN_PICO_SET_CPU_FREQ_MHZ = 111,
+    /* Rtc — ordinales 112..113. */
+    BUILTIN_RTC_NOW_SEC     = 112,
+    BUILTIN_RTC_SET_NOW_SEC = 113
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -736,6 +740,20 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t mhz = pop_i32(vm, tc);
         int ok = bpvm_pico_set_cpu_freq_mhz((int) mhz);
         push_i32(vm, tc, ok ? 1 : 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_RTC_NOW_SEC: {
+        /* Wall clock en segundos. Si nadie ha llamado a setNowSec
+         * desde el boot, devuelve segundos desde boot — todavía
+         * útil como reloj monotónico. */
+        int64_t now_ms = bpvm_rtc_now_ms();
+        push_i32(vm, tc, (int32_t) (now_ms / 1000));
+        return BPVM_OK;
+    }
+    case BUILTIN_RTC_SET_NOW_SEC: {
+        int32_t sec = pop_i32(vm, tc);
+        bpvm_rtc_set_now_ms((int64_t) sec * 1000LL);
+        push_i32(vm, tc, 0);
         return BPVM_OK;
     }
 

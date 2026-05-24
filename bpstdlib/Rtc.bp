@@ -1,0 +1,74 @@
+// ============================================================
+// Rtc.bp — wall clock con sincronización IDE→Pico.
+//
+// El Pico no tiene un RTC con backup battery por defecto, así que
+// el "reloj de pared" empieza en 0 cada vez que se enciende. Para
+// dar la ilusión de wall clock, este módulo mantiene un OFFSET
+// entre los segundos epoch (Unix) y el tiempo desde boot:
+//
+//   epoch = setpoint + (now_monotonic - now_at_setpoint)
+//
+// Para que el offset sea útil, hay que calibrarlo. El IDE BPIDE
+// envía un comando TIME <epochsec> automáticamente al conectar
+// con el Pico, lo cual ejecuta setNowSec() en el backend.
+//
+// Si nadie lo calibra, nowSec() devuelve segundos desde boot —
+// igual sigue siendo monotónico y útil como reloj relativo.
+//
+// API limitada a SEGUNDOS porque BP solo tiene int32. Eso da
+// rango de 1970..2038 (overflow en 2038-01-19). Para deltas más
+// finos dentro de una sesión usa now() del runtime.
+//
+// Uso típico:
+//
+//   import Rtc
+//   var clk: Rtc.Clock := Rtc.Clock()
+//   print "epoch ahora:", clk.epochSec()
+//
+//   // Recalibrar manualmente (lo hace el IDE solito):
+//   clk.setEpochSec(1716544800)   // 2024-05-24 10:00:00 UTC
+//   sleep(1000)
+//   print "1s después:", clk.epochSec()   // 1716544801
+// ============================================================
+module Rtc
+
+  // ---- Intrínsecos de bajo nivel ----
+  public intrinsic function nowSec(): integer
+  public intrinsic function setNowSec(sec: integer)
+
+  // ============================================================
+  // Clase Clock — wrapper OO del wall clock.
+  //
+  // Singleton lógico (sólo hay un wall clock por VM). Encapsular en
+  // una clase mantiene la consistencia con la política HW=clase y
+  // deja sitio a métodos futuros (toDateTime, formatIso, etc.)
+  // sin romper la API.
+  //
+  // Construir una segunda instancia es legal — todas comparten el
+  // mismo state interno del backend.
+  // ============================================================
+  public class Clock
+
+    // Constructor: no toma argumentos. No hay que reservar nada
+    // — el backend ya mantiene el offset globalmente. Si quieres
+    // calibrar al instanciar, encadénalo:
+    //   var clk: Rtc.Clock := Rtc.Clock()
+    //   clk.setEpochSec(epoch)
+    public function Clock()
+    end Clock
+
+    // Segundos desde epoch Unix (1970-01-01 UTC). Si no se ha
+    // calibrado, segundos desde boot del firmware/JVM.
+    public function epochSec(): integer
+      return nowSec()
+    end epochSec
+
+    // Calibra el reloj: a partir de aquí epochSec() devuelve
+    // `sec + tiempo_transcurrido_desde_aquí`.
+    public function setEpochSec(sec: integer)
+      setNowSec(sec)
+    end setEpochSec
+
+  end Clock
+
+end Rtc

@@ -1,0 +1,35 @@
+// RtcDemo.bp — wall clock con sincronización desde el IDE.
+//
+// El IDE BPIDE envía un comando TIME <epochsec> al Pico al
+// conectar, calibrando el reloj. Cuando este sample corre, lee
+// los segundos epoch desde el módulo Rtc y los muestra.
+//
+// Si lo ejecutas en host (VM Java) el reloj ya está calibrado
+// con el wall clock de la JVM. Si lo ejecutas en Pico sin que
+// el IDE haya enviado TIME, el reloj devuelve segundos desde
+// boot — todavía monotónico, pero no es wall clock real.
+
+module RtcDemo
+
+  import Rtc
+
+  function Main()
+    var clk: Rtc.Clock := Rtc.Clock()
+
+    print "--- Rtc.Clock demo ---"
+    print "epoch ahora:", clk.epochSec(), "seg"
+
+    print "Durmiendo 2 segundos..."
+    sleep(2000)
+    print "epoch después:", clk.epochSec(), "seg"
+
+    print ""
+    print "Recalibrando manualmente a 1000000000 (2001-09-09 01:46:40 UTC)..."
+    clk.setEpochSec(1000000000)
+    sleep(1000)
+    print "epoch tras 1s:", clk.epochSec(), "(debería ser 1000000001)"
+
+    print "--- fin ---"
+  end Main
+
+end RtcDemo

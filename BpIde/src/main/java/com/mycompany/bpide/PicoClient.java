@@ -253,6 +253,22 @@ public final class PicoClient implements AutoCloseable {
         return expectOk();
     }
 
+    /** Sincroniza el RTC del Pico con el wall clock del PC.
+     *
+     *  Envía TIME &lt;epochsec&gt; con la hora local actual. El comando
+     *  del REPL ejecuta bpvm_rtc_set_now_ms en el firmware. Tras
+     *  esto, código BP que use Rtc.Clock.epochSec() ve hora real.
+     *
+     *  Idempotente — llamar varias veces solo refresca el offset.
+     *  El usuario del IDE no necesita pulsar nada: se hace
+     *  automáticamente al conectar (ver PicoExplorer.onConnect).
+     */
+    public String syncTime() throws IOException {
+        long epochSec = System.currentTimeMillis() / 1000L;
+        sendLine("TIME " + epochSec);
+        return expectOk();
+    }
+
     /** Listado de ficheros. */
     public static final class RemoteFile {
         public final String name;

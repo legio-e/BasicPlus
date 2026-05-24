@@ -211,7 +211,25 @@ public enum Builtin {
                                          //   rápidos, etc.). En multi-thread el resto de
                                          //   threads BP NO corren durante el wait.
 
-    PICO_SET_CPU_FREQ_MHZ("__picoSetCpuFreqMHz"); // (mhz: int) → boolean
+    PICO_SET_CPU_FREQ_MHZ("__picoSetCpuFreqMHz"), // (mhz: int) → boolean
+                                         //   Cambia el clk_sys del RP2350 a la frecuencia
+                                         //   pedida en MHz. Si mhz > MAX_CPU_MHZ se aplica
+                                         //   MAX_CPU_MHZ (clamp). Devuelve true si la PLL
+                                         //   pudo configurarse, false en caso contrario.
+                                         //   Afecta a periféricos derivados de clk_peri
+                                         //   (UART/SPI/I2C/PWM): llamar ANTES de
+                                         //   configurarlos. Las funciones sleep* NO se ven
+                                         //   afectadas (timer HW corre a 1 MHz independiente).
+
+    // ---- Rtc — wall clock con sincronización IDE→Pico ----
+    RTC_NOW_SEC("__rtcNowSec"),          // () → integer
+                                         //   Segundos desde epoch Unix (1970-01-01 UTC).
+                                         //   Si no se ha sincronizado, devuelve segundos
+                                         //   desde el boot del firmware/JVM.
+    RTC_SET_NOW_SEC("__rtcSetNowSec");   // (sec: integer) → void
+                                         //   Calibra el reloj: a partir de aquí
+                                         //   nowSec() devuelve sec + tiempo transcurrido
+                                         //   desde esta llamada.
                                          //   Cambia el clk_sys del RP2350 a la frecuencia
                                          //   pedida en MHz. Si mhz > MAX_CPU_MHZ se aplica
                                          //   MAX_CPU_MHZ (clamp). Devuelve true si la PLL

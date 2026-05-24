@@ -171,5 +171,9 @@ public final class Intrinsics {
         register("Pico.uptimeMs",  w -> emitBuiltin(w, Builtin.PICO_UPTIME_MS));
         register("Pico.setCpuFreqMHzRaw",
                                    w -> emitBuiltin(w, Builtin.PICO_SET_CPU_FREQ_MHZ));
+
+        // ---- Rtc (wall clock) ----
+        register("Rtc.nowSec",     w -> emitBuiltin(w, Builtin.RTC_NOW_SEC));
+        register("Rtc.setNowSec",  w -> emitBuiltin(w, Builtin.RTC_SET_NOW_SEC));
     }
 }

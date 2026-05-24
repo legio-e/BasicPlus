@@ -670,6 +670,10 @@ static void vm_task(void* arg) {
         fs_put("Pico.mod", pico_mod, pico_mod_len);
         log_printf("stdlib: Pico.mod installed (%u bytes)", pico_mod_len);
     }
+    if (fs_get("Rtc.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("Rtc.mod", rtc_mod, rtc_mod_len);
+        log_printf("stdlib: Rtc.mod installed (%u bytes)", rtc_mod_len);
+    }
     /* Drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO se
      * pre-instalan aquí — los sube el IDE como deps al hacer Run. */
     if (fs_get("Hello.mod", &dummy, &dummy_sz) != FS_OK) {
@@ -755,6 +759,11 @@ int main(void) {
     bpvm_pulse_set_backend(&s_pico_pulse_backend);
     bpvm_pwm_set_backend(&s_pico_pwm_backend);
     bpvm_pico_set_backend(&s_pico_pico_backend);
+    /* Rtc en Pico usa el stub portable (bpvm_platform_now_ms + offset).
+     * Cuando reset, el offset = 0 → epochSec devuelve segundos desde
+     * boot. El IDE envía TIME <epochsec> al conectar y el comando
+     * del REPL llama a bpvm_rtc_set_now_ms — a partir de ahí el reloj
+     * está calibrado. */
 
     BaseType_t r = xTaskCreate(vm_task, "vm_task", 4096, NULL,
                                 tskIDLE_PRIORITY + 2, NULL);

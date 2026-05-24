@@ -1,0 +1,10 @@
+bpi 6
+module Rtc
+func nowSec():integer public intrinsic
+func setNowSec(sec:integer):void public intrinsic
+class Clock public
+  layout 0 2 - -
+  ctor()
+  method epochSec():integer public
+  method setEpochSec(sec:integer):void public
+end class
