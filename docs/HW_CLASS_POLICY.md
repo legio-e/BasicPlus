@@ -117,6 +117,50 @@ end Foo
 | Método de la clase | Verbo corto, sin sufijo | `start()`, `stop()`, `value()`, `setFreq(f)` |
 | Constante de modo | UPPER_SNAKE_CASE | `Bar.MODE_X`, `Pin.PULL_UP`, `Spi.Bus.MODE0` |
 
+### Encapsulación: fields privados, property si hace falta exponer
+
+Las clases HW declaran sus parámetros físicos como `public var`
+**por comodidad dentro del propio módulo dueño** (el constructor y
+los métodos acceden directo con `this.id`). Pero **cross-module
+esas vars NO se exportan en el `.bpi`**. Es decisión de diseño,
+no una limitación.
+
+Razón: exportar fields cross-module rompe encapsulación clásica.
+Fija la representación interna como ABI público — cualquier cambio
+posterior en cómo se guarda el campo rompe a todos los clientes.
+Imposibilita validación al asignar, observabilidad, lazy compute.
+Va contra Java/C#/Kotlin/Swift y el sentido común OO.
+
+**Si en algún momento se necesita acceder a un valor de instancia
+desde otro módulo**, la solución correcta es **añadir una
+`property` con getter** a la clase concreta:
+
+```basicplus
+public class Bus
+  public var id_: integer    // backing field, privado por convención
+  ...
+
+  // Getter explícito: exporta solo lo que el cliente externo
+  // necesita ver, y deja la libertad de cambiar la implementación.
+  public property id: integer
+    get
+      return this.id_
+    end get
+  end property
+end class
+```
+
+El emisor exporta las properties en el `.bpi` y el lector cross-
+module las resuelve vía vtable (getter sintético). El coste es 1
+INVOKE_VIRTUAL en el call-site — despreciable comparado con
+mantener encapsulación.
+
+**Heurística**: si un cliente externo necesita leer ≥3 fields de
+una clase, plantéate si lo correcto es exponer un método
+`info(): string` o `state(): SomeStruct` en lugar de N getters.
+Pero la decisión es por uso real — no se hacen getters
+preventivos para todos los fields "por si acaso".
+
 ### Estado del constructor
 
 El constructor SIEMPRE:
