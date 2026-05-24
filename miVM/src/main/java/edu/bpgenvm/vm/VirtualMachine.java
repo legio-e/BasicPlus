@@ -3632,6 +3632,18 @@ public class VirtualMachine {
                 pushTc(tc, (int) System.currentTimeMillis());
                 break;
             }
+            case PICO_SET_CPU_FREQ_MHZ: {
+                /* En host no hay PLL que reconfigurar. Aceptamos el
+                 * parámetro, lo logueamos por trazabilidad de samples
+                 * BP, y devolvemos true. El clamp real ocurre en BP
+                 * (función setCpuFreqMHz en Pico.bp) usando la
+                 * constante MAX_CPU_MHZ — así el contrato es idéntico
+                 * en host y en firmware. */
+                int mhz = popTc(tc);
+                System.out.println("[pico] setCpuFreqMHz(" + mhz + ") (host, no-op)");
+                pushTc(tc, 1);
+                break;
+            }
 
             default:
                 throw new RuntimeException("Builtin no implementado: " + b);

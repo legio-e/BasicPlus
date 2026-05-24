@@ -51,6 +51,62 @@ module Pico
   // BP que detecte el wrap.
   public intrinsic function uptimeMs(): integer
 
+  // Frecuencia máxima soportada en MHz para setCpuFreqMHz().
+  //
+  // Conservador: el RP2350 nominal es 150 MHz; con voltaje core
+  // estándar (~1.10 V) la mayoría de chips llegan a 250-300 MHz sin
+  // refrigeración. 300 MHz es el techo "seguro" para configs sin
+  // ajuste de voltaje. Por encima requiere vreg_set_voltage(),
+  // posible inestabilidad de XIP (flash) y refrigeración activa.
+  // Si alguien quiere apurar a 400+ MHz, que use el backend C
+  // directamente; nuestro BP juega seguro.
+  public function MAX_CPU_MHZ(): integer
+    return 300
+  end MAX_CPU_MHZ
+
+  // Frecuencia mínima razonable. Por debajo la PLL del RP2350 no
+  // sintetiza limpio.
+  public function MIN_CPU_MHZ(): integer
+    return 18
+  end MIN_CPU_MHZ
+
+  // Cambia el clk_sys del MCU a `mhz` MHz. Devuelve true si la PLL
+  // pudo configurarse, false si la combinación pedida (incluso tras
+  // clamp) no es alcanzable por el HW.
+  //
+  // Política: si mhz > MAX_CPU_MHZ se aplica MAX_CPU_MHZ
+  // (no falla); si mhz < MIN_CPU_MHZ se aplica MIN_CPU_MHZ.
+  // Ambos clamps ocurren AQUÍ — el backend recibe el valor ya
+  // saneado y limita su propio rango mínimo de PLL al margen.
+  //
+  // CRÍTICO: llamar a setCpuFreqMHz ANTES de configurar UART/SPI/
+  // I2C/PWM. Esos buses calculan sus divisores en base a clk_peri
+  // (derivado de clk_sys); cambiar clk_sys después deja los
+  // baudrates/freq mal. Si se hace, hay que re-llamar a Uart.init /
+  // Spi.init / etc. para recalcular.
+  //
+  // Las funciones sleep* (sleep, sleepSec, sleepUs, now) NO se ven
+  // afectadas — usan el timer hardware del RP2350 que corre a 1 MHz
+  // independiente del clk_sys.
+  public function setCpuFreqMHz(mhz: integer): boolean
+    var clamped: integer := mhz
+    if clamped > MAX_CPU_MHZ() then
+      clamped := MAX_CPU_MHZ()
+    endif
+    if clamped < MIN_CPU_MHZ() then
+      clamped := MIN_CPU_MHZ()
+    endif
+    return setCpuFreqMHzRaw(clamped)
+  end setCpuFreqMHz
+
+  // Intrínseco interno (mapea al builtin nativo). Aplica la
+  // frecuencia tal cual sin clampear — el wrapper público
+  // setCpuFreqMHz() es el que hace el clamp con MAX/MIN_CPU_MHZ.
+  // Se expone como `public` porque la infraestructura intrinsic
+  // exige visibilidad pública, pero no debería usarse directo
+  // desde BP de usuario.
+  public intrinsic function setCpuFreqMHzRaw(mhz: integer): boolean
+
   // ---- Constantes de capacidades del MCU ----
   // Permiten que código BP defensivo valide rangos antes de usar
   // p.ej. Spi.init(bus=3, ...) cuando solo hay 2 buses.

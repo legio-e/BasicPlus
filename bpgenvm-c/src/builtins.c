@@ -84,7 +84,9 @@ enum {
     BUILTIN_PICO_UPTIME_MS  = 108,
     /* Time (sleep variantes) — ordinals 109..110. */
     BUILTIN_SLEEP_SEC       = 109,
-    BUILTIN_SLEEP_US        = 110
+    BUILTIN_SLEEP_US        = 110,
+    /* Pico overclock — ordinal 111. */
+    BUILTIN_PICO_SET_CPU_FREQ_MHZ = 111
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -724,6 +726,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_PICO_UPTIME_MS: {
         push_i32(vm, tc, (int32_t) bpvm_pico_uptime_ms());
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_SET_CPU_FREQ_MHZ: {
+        /* Cambia el clk_sys del RP2350. En host es un no-op (stub
+         * loguea por stdout). El clamp al máximo soportado lo hace BP
+         * en Pico.bp (usando la constante MAX_CPU_MHZ) — aquí solo
+         * delegamos al backend. */
+        int32_t mhz = pop_i32(vm, tc);
+        int ok = bpvm_pico_set_cpu_freq_mhz((int) mhz);
+        push_i32(vm, tc, ok ? 1 : 0);
         return BPVM_OK;
     }
 

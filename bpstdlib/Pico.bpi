@@ -1,13 +1,17 @@
 bpi 6
 module Pico
 func SPI_BUSES():integer public
+func setCpuFreqMHz(mhz:integer):boolean public
 func PWM_SLICES():integer public
+func MAX_CPU_MHZ():integer public
 func UART_BUSES():integer public
 func GPIO_COUNT():integer public
-func tempC():float public intrinsic
 func ADC_CHANNELS():integer public
-func uniqueId():string public intrinsic
 func boardName():string public intrinsic
 func cpuFreqHz():integer public intrinsic
-func uptimeMs():integer public intrinsic
 func I2C_BUSES():integer public
+func MIN_CPU_MHZ():integer public
+func tempC():float public intrinsic
+func uniqueId():string public intrinsic
+func uptimeMs():integer public intrinsic
+func setCpuFreqMHzRaw(mhz:integer):boolean public intrinsic

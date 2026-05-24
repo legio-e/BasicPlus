@@ -203,13 +203,23 @@ public enum Builtin {
                                          //   Cede el thread BP al scheduler durante s segundos.
                                          //   Equivalente a sleep(s * 1000) pero más legible
                                          //   para pausas largas.
-    SLEEP_US("sleepUs");                 // (us: integer) → void
+    SLEEP_US("sleepUs"),                 // (us: integer) → void
                                          //   Busy-wait que NO cede el thread BP. Para pausas
                                          //   tan cortas (< 1 ms) el coste de un context switch
                                          //   supera la pausa misma. Útil para timing crítico
                                          //   (setup/hold de chips, bit-banging de protocolos
                                          //   rápidos, etc.). En multi-thread el resto de
                                          //   threads BP NO corren durante el wait.
+
+    PICO_SET_CPU_FREQ_MHZ("__picoSetCpuFreqMHz"); // (mhz: int) → boolean
+                                         //   Cambia el clk_sys del RP2350 a la frecuencia
+                                         //   pedida en MHz. Si mhz > MAX_CPU_MHZ se aplica
+                                         //   MAX_CPU_MHZ (clamp). Devuelve true si la PLL
+                                         //   pudo configurarse, false en caso contrario.
+                                         //   Afecta a periféricos derivados de clk_peri
+                                         //   (UART/SPI/I2C/PWM): llamar ANTES de
+                                         //   configurarlos. Las funciones sleep* NO se ven
+                                         //   afectadas (timer HW corre a 1 MHz independiente).
 
     public final String bpName;
     public final int id;

@@ -69,3 +69,14 @@ int bpvm_pico_uptime_ms(void) {
      * que sea relevante para BP en desarrollo. */
     return 0;
 }
+
+int bpvm_pico_set_cpu_freq_mhz(int mhz) {
+    if (g_backend && g_backend->setCpuFreqMHz) {
+        return g_backend->setCpuFreqMHz(mhz);
+    }
+    /* Stub: en host no podemos cambiar la frecuencia de nada,
+     * pero reportamos "éxito" para que el código BP no rompa en
+     * desarrollo. */
+    printf("[pico] setCpuFreqMHz(%d) (stub, no-op)\n", mhz);
+    return 1;
+}

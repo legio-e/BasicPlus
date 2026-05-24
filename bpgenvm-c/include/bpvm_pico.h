@@ -39,6 +39,10 @@ typedef struct {
     float (*tempC)(void);
     int   (*cpuFreqHz)(void);
     int   (*uptimeMs)(void);
+    /* setCpuFreqMHz: cambia el clk_sys. Debe clampear al máximo
+     * soportado por la board. Devuelve 1 si se aplicó, 0 si falló
+     * (la PLL no soporta esa frecuencia incluso después de clamp). */
+    int   (*setCpuFreqMHz)(int mhz);
 } bpvm_pico_backend_t;
 
 void bpvm_pico_set_backend(const bpvm_pico_backend_t* backend);
@@ -49,6 +53,7 @@ void  bpvm_pico_board_name(char* buf, size_t len);
 float bpvm_pico_temp_c(void);
 int   bpvm_pico_cpu_freq_hz(void);
 int   bpvm_pico_uptime_ms(void);
+int   bpvm_pico_set_cpu_freq_mhz(int mhz);
 
 #ifdef __cplusplus
 }

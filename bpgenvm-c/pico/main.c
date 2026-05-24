@@ -491,12 +491,40 @@ static int pico_pico_uptime_ms_impl(void) {
     return (int) to_ms_since_boot(get_absolute_time());
 }
 
+/* setCpuFreqMHz — cambia el clk_sys del RP2350.
+ *
+ * `set_sys_clock_khz(khz, required=false)` busca la combinación de PLL
+ * más cercana al objetivo y la aplica. Con `required=false` no resetea
+ * si no encuentra una válida; devolvemos 0 al BP en ese caso para que
+ * pueda detectar el fallo y reintentar con otro valor.
+ *
+ * El clamp al máximo soportado (MAX_CPU_MHZ) lo hace BP en Pico.bp
+ * ANTES de llamar — aquí no necesitamos saber el techo absoluto del
+ * chip. Sí descartamos valores ridículamente bajos (< 18 MHz que es
+ * el mínimo razonable de la PLL del RP2350).
+ *
+ * AVISO documentado: tras cambiar clk_sys, los periféricos derivados
+ * de clk_peri (UART/SPI/I2C/PWM) que ya estuvieran configurados
+ * quedan con la frecuencia mal — el SDK del Pico recalcula clk_peri
+ * automáticamente, pero los baudrates/clkdivs precalculados en
+ * Uart.init/Spi.init/etc. NO se reajustan. Llamar a setCpuFreqMHz
+ * ANTES de configurar periféricos. Las funciones sleep* siguen
+ * exactas porque el timer hardware del Pico corre a 1 MHz
+ * independiente del clk_sys. */
+static int pico_pico_set_cpu_freq_mhz_impl(int mhz) {
+    if (mhz < 18) mhz = 18;
+    uint32_t khz = (uint32_t) mhz * 1000u;
+    bool ok = set_sys_clock_khz(khz, false);
+    return ok ? 1 : 0;
+}
+
 static const bpvm_pico_backend_t s_pico_pico_backend = {
-    .uniqueId  = pico_pico_unique_id_impl,
-    .boardName = pico_pico_board_name_impl,
-    .tempC     = pico_pico_temp_c_impl,
-    .cpuFreqHz = pico_pico_cpu_freq_hz_impl,
-    .uptimeMs  = pico_pico_uptime_ms_impl,
+    .uniqueId      = pico_pico_unique_id_impl,
+    .boardName     = pico_pico_board_name_impl,
+    .tempC         = pico_pico_temp_c_impl,
+    .cpuFreqHz     = pico_pico_cpu_freq_hz_impl,
+    .uptimeMs      = pico_pico_uptime_ms_impl,
+    .setCpuFreqMHz = pico_pico_set_cpu_freq_mhz_impl,
 };
 
 /* --- Sink para los `print` de la VM. Sale por USB CDC. ----------- */
