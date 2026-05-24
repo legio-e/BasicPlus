@@ -1,0 +1,109 @@
+// ============================================================
+// Pwm.bp — generación de señal PWM hardware.
+//
+// En el RP2350 cada GPIO mapea a un slice + canal del PWM fijo
+// por hardware. Pares=canal A, impares=canal B. Las dos canales
+// del MISMO slice comparten frecuencia (clkdiv + wrap) pero
+// pueden tener duty cycle independiente.
+//
+// Constraint relevante para combinar con Pulse.Counter:
+//   El slice solo opera en UN modo a la vez. Si configuras un
+//   pin con Pwm.Slice, ese slice deja de poder usarse como
+//   Pulse.Counter. Para PWM + counter en el mismo bicho usa
+//   pins de slices DISTINTOS (p.ej. GP10 PWM (slice 5) + GP13
+//   counter (slice 6) — slices distintos, no chocan).
+//
+// Aplicaciones típicas:
+//   - LEDs con brillo regulable (PWM ~1-10 kHz)
+//   - Servos RC (50 Hz, pulso 1-2 ms)
+//   - Motores DC con MOSFET (5-20 kHz)
+//   - Generación de tonos audio (200-20000 Hz)
+//
+// Uso típico:
+//
+//   import Pwm
+//   var p: Pwm.Slice := Pwm.Slice(10, 1000)   // GP10 a 1 kHz
+//   p.setDuty(50)                              // 50% duty
+//   p.start()
+//   sleep(2000)
+//   p.stop()
+//
+// La frecuencia objetivo se aproxima lo mejor posible dadas las
+// limitaciones del HW (clkdiv 1..256, wrap 0..65535). Para
+// frecuencias muy bajas (<10 Hz) o muy altas (>10 MHz) la
+// resolución del duty se degrada.
+// ============================================================
+module Pwm
+
+  // ---- Intrínsecos de bajo nivel ----
+  // initSlice devuelve un sliceId opaco (>= 0) o -1 si el pin
+  // no es válido. Los demás operan sobre ese sliceId.
+  public intrinsic function initSlice(pin: integer, freqHz: integer): integer
+  public intrinsic function setFreqHz(sliceId: integer, freqHz: integer)
+  public intrinsic function setDutyPct(sliceId: integer, pin: integer, dutyPct: integer)
+  public intrinsic function startSlice(sliceId: integer)
+  public intrinsic function stopSlice(sliceId: integer)
+
+  // ============================================================
+  // Clase Slice — wrapper OO sobre los intrínsecos.
+  //
+  // Una instancia representa la salida PWM de un pin concreto.
+  // Internamente guarda el sliceId que devolvió initSlice y el pin
+  // físico (para que setDuty sepa si actúa sobre canal A o B del
+  // slice — ambos canales comparten freq pero tienen duty
+  // independiente).
+  // ============================================================
+  public class Slice
+
+    public var pin:     integer
+    public var id:      integer   // sliceId devuelto por initSlice
+    public var freqHz:  integer   // freq objetivo guardada para inspección
+    public var dutyPct: integer   // último duty seteado (0..100)
+
+    // Constructor: configura el slice del pin a la frecuencia
+    // indicada. Duty arranca a 0 (pin LOW). Llama start() para
+    // que la salida empiece a oscilar.
+    //
+    // Lanza RuntimeError si el pin no es válido (caso casi
+    // imposible: todos los GPIO 0..29 son válidos como salida PWM
+    // en el Pico 2).
+    public function Slice(pin: integer, freqHz: integer)
+      this.pin     := pin
+      this.freqHz  := freqHz
+      this.dutyPct := 0
+      this.id      := initSlice(pin, freqHz)
+      if this.id < 0 then
+        var msg: string := "Pwm.Slice: pin " + intToString(pin) + " inválido"
+        throw RuntimeError(msg)
+      endif
+    end Slice
+
+    // Cambia el duty cycle (0..100). Aplicación inmediata: la
+    // siguiente onda completa ya tiene el nuevo duty.
+    public function setDuty(dutyPct: integer)
+      this.dutyPct := dutyPct
+      setDutyPct(this.id, this.pin, dutyPct)
+    end setDuty
+
+    // Cambia la frecuencia. Afecta a AMBOS canales del slice si
+    // hay otra Slice usando el otro canal del mismo slice (raro
+    // pero posible). El duty actual se preserva.
+    public function setFreq(freqHz: integer)
+      this.freqHz := freqHz
+      setFreqHz(this.id, freqHz)
+    end setFreq
+
+    // Arranca la generación. Antes de esto el pin está flotante /
+    // LOW según el reset del slice.
+    public function start()
+      startSlice(this.id)
+    end start
+
+    // Para la generación. El pin queda en LOW.
+    public function stop()
+      stopSlice(this.id)
+    end stop
+
+  end Slice
+
+end Pwm

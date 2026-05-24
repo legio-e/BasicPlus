@@ -1,0 +1,121 @@
+// ============================================================
+// Pulse.bp — contador de pulsos hardware.
+//
+// En el RP2350 cada slice PWM puede operar en modo "input gate
+// edge counting": el contador del slice avanza con cada flanco del
+// pin B en lugar de con el reloj del sistema. Hardware puro, sin
+// coste de CPU. Útil para encoders rotatorios, sensores Hall,
+// turbinas de flujo, contadores Geiger, etc.
+//
+// Constraint del HW: el `pin` que se le pasa al constructor DEBE
+// ser un pin que mapee al canal B de algún slice PWM. En el
+// RP2350 los canales B viven en GPIOs impares: GP1, GP3, GP5,
+// GP7, GP9, GP11, GP13, GP15, GP17, GP19, GP21, GP23, GP25, GP27,
+// GP29. Si el pin no es válido, el constructor lanza RuntimeError.
+//
+// Además, el slice asociado a ese pin NO puede usarse a la vez
+// como salida PWM (un slice solo opera en un modo: free-running
+// para PWM o input-gated para counter). Si necesitas PWM en el
+// mismo slice, cambia el cableado.
+//
+// Uso típico:
+//
+//   import Pulse
+//   var c: Pulse.Counter := Pulse.Counter(11, Pulse.RISING)
+//   c.start()
+//   ... generar / esperar pulsos ...
+//   var n: integer := c.value()
+//   print "contados:", n
+//   c.stop()
+//
+// API de bajo nivel (init/start/stop/value/reset) accesible
+// directamente sin clase, por si algún driver lo prefiere.
+// ============================================================
+module Pulse
+
+  // ---- Intrínsecos de bajo nivel ----
+  // initSlice devuelve un counterId opaco (>= 0) o -1 si el pin
+  // no es válido. Los demás operan sobre ese counterId.
+  // Los nombres llevan sufijo "Slice" para no colisionar con los
+  // métodos start/stop/value/reset de la clase Counter — dentro
+  // de un método de Counter, un `start(this.id)` sin sufijo se
+  // resolvería al propio método (recursión infinita).
+  public intrinsic function initSlice(pin: integer, edgeKind: integer): integer
+  public intrinsic function startSlice(counterId: integer)
+  public intrinsic function stopSlice(counterId: integer)
+  public intrinsic function readSlice(counterId: integer): integer
+  public intrinsic function resetSlice(counterId: integer)
+
+  // ---- Constantes de flanco ----
+  public function RISING(): integer
+    return 0
+  end RISING
+  public function FALLING(): integer
+    return 1
+  end FALLING
+  public function BOTH(): integer
+    return 2
+  end BOTH
+
+  // ============================================================
+  // Clase Counter — wrapper OO sobre los intrínsecos.
+  //
+  // Cada instancia encapsula el counterId que devolvió init() y
+  // mantiene el pin y el edgeKind para inspección. El destructor
+  // implícito de BP (al salir del scope o al GC del objeto)
+  // libera el slice — bueno, no del todo: el GC en BP no ejecuta
+  // finalizers hoy. Mientras tanto, llama stop() explícitamente
+  // si quieres liberar el slice. El próximo init() del mismo pin
+  // lo reabre.
+  // ============================================================
+  public class Counter
+
+    // Static consts para uso sin instanciar:  Pulse.Counter.RISING
+    public const Counter.RISING:  integer := 0
+    public const Counter.FALLING: integer := 1
+    public const Counter.BOTH:    integer := 2
+
+    public var pin:      integer
+    public var edgeKind: integer
+    public var id:       integer    // counterId devuelto por init()
+
+    // Constructor: configura el slice PWM correspondiente al pin
+    // en modo input-gated edge counting. Lanza RuntimeError si el
+    // pin no es válido (no es canal B de ningún slice).
+    public function Counter(pin: integer, edgeKind: integer)
+      this.pin      := pin
+      this.edgeKind := edgeKind
+      this.id       := initSlice(pin, edgeKind)
+      if this.id < 0 then
+        var msg: string := "Pulse.Counter: pin " + intToString(pin) + " no es contador válido"
+        throw RuntimeError(msg)
+      endif
+    end Counter
+
+    // Arranca el conteo. Antes de esto, value() puede devolver
+    // valores indefinidos.
+    public function start()
+      startSlice(this.id)
+    end start
+
+    // Para el conteo y libera el slice para que pueda usarse en
+    // modo PWM normal de nuevo.
+    public function stop()
+      stopSlice(this.id)
+    end stop
+
+    // Cuenta actual. En el RP2350 el contador es de 16 bits
+    // (rango 0..65535). Si necesitas más, llama reset() con
+    // frecuencia y acumula en BP, o haz polling periódico.
+    public function value(): integer
+      return readSlice(this.id)
+    end value
+
+    // Pone el contador a cero sin parar el slice.
+    public function reset()
+      resetSlice(this.id)
+    end reset
+
+  end Counter
+
+end Pulse

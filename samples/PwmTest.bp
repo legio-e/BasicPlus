@@ -1,0 +1,71 @@
+// PwmTest.bp — verifica el PWM hardware usando el contador de
+// pulsos como instrumento de medida.
+//
+// Cableado: GP10 (Pwm.Slice canal A slice 5) ─── puente ─── GP13
+//           (Pulse.Counter canal B slice 6). Slices distintos —
+//           PWM y counter coexisten sin chocar.
+//
+// La idea: genera PWM a una frecuencia conocida en GP10. Cuenta los
+// flancos durante una ventana de tiempo conocida en GP13. Si la
+// frecuencia medida coincide con la pedida, el PWM funciona.
+//
+// Tests:
+//   1) 1 kHz × 1 s = ~1000 flancos
+//   2) 500 Hz × 1 s = ~500 flancos
+//   3) Cambio de freq en caliente (setFreq) y verificación.
+//
+// Tolerancia: ±2% por imprecisión del clkdiv del PWM + jitter de
+// los sleep BP entre start/stop del counter.
+
+module PwmTest
+  import Pwm
+  import Pulse
+
+  function Main()
+    print "--- PWM + Counter verification (GP10 PWM, GP13 counter) ---"
+
+    var p: Pwm.Slice    := Pwm.Slice(10, 1000)             // 1 kHz
+    var c: Pulse.Counter := Pulse.Counter(13, Pulse.RISING())
+
+    // Test 1: 1 kHz × 1 segundo.
+    print "Test 1: PWM @ 1 kHz, duty 50%, ventana 1 s"
+    p.setDuty(50)
+    c.reset()
+    c.start()
+    p.start()
+    sleep(1000)
+    p.stop()
+    c.stop()
+    var n1: integer := c.value()
+    print "  esperado ~1000  contado:", n1
+
+    // Test 2: cambiar a 500 Hz en caliente.
+    print "Test 2: cambio a 500 Hz, ventana 1 s"
+    p.setFreq(500)
+    p.setDuty(50)
+    c.reset()
+    c.start()
+    p.start()
+    sleep(1000)
+    p.stop()
+    c.stop()
+    var n2: integer := c.value()
+    print "  esperado ~500   contado:", n2
+
+    // Test 3: ventana corta (200 ms) a 1 kHz.
+    print "Test 3: PWM @ 1 kHz, ventana 200 ms"
+    p.setFreq(1000)
+    p.setDuty(50)
+    c.reset()
+    c.start()
+    p.start()
+    sleep(200)
+    p.stop()
+    c.stop()
+    var n3: integer := c.value()
+    print "  esperado ~200   contado:", n3
+
+    print "--- fin ---"
+  end Main
+
+end PwmTest

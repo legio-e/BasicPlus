@@ -1,0 +1,73 @@
+// PulseTest.bp — verifica el contador de pulsos hardware del Pico 2
+// generando pulsos por software desde otro pin puenteado.
+//
+// Cableado (ruta A):
+//   GP10 (Gpio.Pin OUTPUT) ─── puente físico ─── GP11 (Pulse.Counter)
+//
+// GP11 es canal B del slice PWM 5 del RP2350 → puede contar pulsos
+// en modo "input-gate edge counting" sin coste de CPU.
+//
+// GP10 se conduce como GPIO normal por software (bit-bang) — no usa
+// el slice 5 como PWM, así que no hay conflicto. Cuando luego
+// queramos probar PWM real, hay que mover el puente a GP12↔GP11.
+//
+// Lo que valida este sample:
+//   1. El hook bpvm_pulse_init devuelve el slice (>= 0).
+//   2. start() arranca el contador hardware.
+//   3. Cada flanco de subida en GP11 incrementa el contador.
+//   4. value() devuelve el número esperado de pulsos.
+//   5. reset() pone el contador a cero sin parar el slice.
+//   6. stop() libera el slice.
+//
+// Resultado esperado: las dos lecturas dan exactamente el número de
+// flancos generados (100 y 50 respectivamente).
+
+module PulseTest
+  import Pulse
+  import Gpio
+
+  function Main()
+    print "--- Pulse counter physical test (GP10 bit-bang → GP11 counter) ---"
+
+    // Configura el pin de salida (donde generamos los pulsos).
+    var p10: Gpio.Pin := Gpio.Pin(10, Gpio.Pin.OUTPUT)
+    p10.off()
+
+    // Configura el contador en GP11. Si el pin no es válido como
+    // canal B de un slice, el constructor lanza RuntimeError.
+    var c: Pulse.Counter := Pulse.Counter(13, Pulse.RISING())
+    c.reset()
+    c.start()
+
+    // Fase 1: 100 pulsos.
+    print "Generando 100 pulsos..."
+    var i: integer := 0
+    while i < 100 do
+      p10.on()
+      sleep(1)        // 1 ms HIGH
+      p10.off()
+      sleep(1)        // 1 ms LOW (cada par = 1 flanco RISING)
+      i := i + 1
+    endwh
+    var v1: integer := c.value()
+    print "  esperado: 100   contado:", v1
+
+    // Fase 2: reset y otros 50 pulsos.
+    c.reset()
+    print "Reset. Generando 50 pulsos..."
+    i := 0
+    while i < 50 do
+      p10.on()
+      sleep(1)
+      p10.off()
+      sleep(1)
+      i := i + 1
+    endwh
+    var v2: integer := c.value()
+    print "  esperado: 50    contado:", v2
+
+    c.stop()
+    print "--- fin ---"
+  end Main
+
+end PulseTest

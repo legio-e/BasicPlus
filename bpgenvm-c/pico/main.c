@@ -25,9 +25,12 @@
 #include "bpvm_i2c.h"
 #include "bpvm_spi.h"
 #include "bpvm_uart.h"
+#include "bpvm_pulse.h"
+#include "bpvm_pwm.h"
 #include "hardware/i2c.h"
 #include "hardware/spi.h"
 #include "hardware/uart.h"
+#include "hardware/pwm.h"
 
 /* Buffer estático de la VM. 128 KB sobra para Hello.bp y deja sitio para
  * varios módulos. */
@@ -220,6 +223,195 @@ static const bpvm_uart_backend_t s_pico_uart_backend = {
     .available = pico_uart_available_impl,
 };
 
+/* --- Backend Pulse counter del Pico SDK -------------------------
+ *
+ * Usa los slices PWM en modo input-gate edge counting: el contador
+ * del slice avanza con flancos del pin B en lugar de con el reloj
+ * del sistema. Hardware puro, sin coste de CPU. El counterId que
+ * devolvemos al BP es el slice number (0..11) — así start/stop/
+ * value/reset operan sobre el slice directamente.
+ *
+ * Constraint del HW: el pin debe ser canal B de algún slice. En el
+ * RP2350 los canales B están en GPIOs impares (GP1, GP3, GP5, GP7,
+ * GP9, GP11, GP13, GP15, GP17, GP19, GP21, GP23, GP25, GP27, GP29).
+ * Si el pin no lo es, init devuelve -1 y la clase Counter lanza
+ * RuntimeError.
+ *
+ * Limitación conocida: el SDK del Pico expone PWM_DIV_B_RISING y
+ * PWM_DIV_B_FALLING pero NO un modo "ambos flancos". Si el usuario
+ * pide BOTH, fallback a RISING (mejor que rechazar). Para BOTH
+ * real haría falta un programa PIO de 4 instrucciones — se añade
+ * cuando haya caso de uso. */
+static enum pwm_clkdiv_mode pico_pulse_edge_to_mode(int edgeKind) {
+    switch (edgeKind) {
+        case 1:  return PWM_DIV_B_FALLING;
+        case 0:
+        case 2:  /* BOTH no soportado por HW; fallback */
+        default: return PWM_DIV_B_RISING;
+    }
+}
+
+static int pico_pulse_init_impl(int pin, int edgeKind) {
+    /* Validación: el pin DEBE ser canal B de algún slice. */
+    if (pwm_gpio_to_channel((uint) pin) != PWM_CHAN_B) {
+        return -1;
+    }
+    uint slice = pwm_gpio_to_slice_num((uint) pin);
+
+    /* Patrón canónico del SDK: configurar el slice ANTES de conectar
+     * el GPIO al periférico (evita capturar flancos espurios del
+     * estado inicial) y usar pwm_config + pwm_init en lugar de las
+     * funciones sueltas — atómico, deja el slice en un estado
+     * coherente sin transiciones intermedias raras.
+     *
+     * clkdiv a 1.0 explícito: aunque el default ya es 1.0, lo
+     * forzamos por si la fábrica devuelve algo distinto en alguna
+     * revisión del SDK. */
+    pwm_config cfg = pwm_get_default_config();
+    pwm_config_set_clkdiv(&cfg, 1.0f);
+    pwm_config_set_clkdiv_mode(&cfg, pico_pulse_edge_to_mode(edgeKind));
+    pwm_config_set_wrap(&cfg, 0xFFFFu);
+    /* false = init sin enable; arrancamos con pwm_set_enabled en start(). */
+    pwm_init(slice, &cfg, false);
+
+    /* Ahora sí conectamos el pin al PWM. El bloque ya está
+     * configurado, así que cualquier nivel inicial no incrementa
+     * el contador erróneamente. */
+    gpio_set_function((uint) pin, GPIO_FUNC_PWM);
+    return (int) slice;
+}
+
+static void pico_pulse_start_impl(int counterId) {
+    pwm_set_enabled((uint) counterId, true);
+}
+
+static void pico_pulse_stop_impl(int counterId) {
+    pwm_set_enabled((uint) counterId, false);
+}
+
+static int pico_pulse_value_impl(int counterId) {
+    return (int) pwm_get_counter((uint) counterId);
+}
+
+static void pico_pulse_reset_impl(int counterId) {
+    pwm_set_counter((uint) counterId, 0);
+}
+
+static const bpvm_pulse_backend_t s_pico_pulse_backend = {
+    .init  = pico_pulse_init_impl,
+    .start = pico_pulse_start_impl,
+    .stop  = pico_pulse_stop_impl,
+    .value = pico_pulse_value_impl,
+    .reset = pico_pulse_reset_impl,
+};
+
+/* --- Backend PWM del Pico SDK -----------------------------------
+ *
+ * Genera señal PWM hardware en un pin. Política:
+ *
+ *  - WRAP fijo a 999 para tener resolución de duty del 0.1% (1000
+ *    pasos). Si la frecuencia objetivo exige clkdiv fuera del
+ *    rango [1, 256], reducimos resolución (subiendo wrap) para
+ *    encajar.
+ *  - f_pwm = f_sys / (clkdiv * (wrap + 1))
+ *    f_sys ≈ 150 MHz en RP2350 con la config por defecto.
+ *  - Ambos canales del mismo slice comparten clkdiv+wrap, por
+ *    eso setFreq afecta a los dos. Duty es independiente por
+ *    canal (set_chan_level).
+ */
+
+#include "hardware/clocks.h"   /* clock_get_hz(clk_sys) */
+
+/* Calcula clkdiv y wrap para acercarse a freqHz. wrap empieza a 999
+ * (1000 pasos para duty); si clkdiv calculado se sale de rango,
+ * subimos wrap. Devuelve (clkdiv, wrap) por punteros. */
+static void pico_pwm_calc_div_wrap(int freqHz, float* out_clkdiv,
+                                   uint16_t* out_wrap) {
+    if (freqHz <= 0) freqHz = 1;
+    uint32_t f_sys = clock_get_hz(clk_sys);
+    /* Empezamos con wrap=999 (resolución 0.1% del duty). */
+    uint32_t wrap = 999;
+    float clkdiv = (float) f_sys / ((float) freqHz * (float)(wrap + 1));
+    /* Si clkdiv > 256, no cabe → necesitamos wrap mayor. */
+    while (clkdiv > 256.0f && wrap < 65535u) {
+        wrap = wrap * 2u + 1u;
+        if (wrap > 65535u) wrap = 65535u;
+        clkdiv = (float) f_sys / ((float) freqHz * (float)(wrap + 1));
+    }
+    /* Si clkdiv < 1, freq objetivo demasiado alta para wrap actual →
+     * bajar wrap para subir freq. */
+    while (clkdiv < 1.0f && wrap > 0u) {
+        wrap = wrap / 2u;
+        clkdiv = (float) f_sys / ((float) freqHz * (float)(wrap + 1));
+    }
+    if (clkdiv < 1.0f)   clkdiv = 1.0f;
+    if (clkdiv > 255.99f) clkdiv = 255.99f;
+    *out_clkdiv = clkdiv;
+    *out_wrap   = (uint16_t) wrap;
+}
+
+static int pico_pwm_init_impl(int pin, int freqHz) {
+    if (pin < 0 || pin > 29) return -1;
+    uint slice = pwm_gpio_to_slice_num((uint) pin);
+
+    float clkdiv;
+    uint16_t wrap;
+    pico_pwm_calc_div_wrap(freqHz, &clkdiv, &wrap);
+
+    pwm_config cfg = pwm_get_default_config();
+    pwm_config_set_clkdiv(&cfg, clkdiv);
+    pwm_config_set_clkdiv_mode(&cfg, PWM_DIV_FREE_RUNNING);
+    pwm_config_set_wrap(&cfg, wrap);
+    pwm_init(slice, &cfg, false);   /* false = no enable todavía */
+
+    /* Duty inicial 0 (pin LOW). */
+    pwm_set_chan_level(slice, pwm_gpio_to_channel((uint) pin), 0);
+
+    gpio_set_function((uint) pin, GPIO_FUNC_PWM);
+    return (int) slice;
+}
+
+static void pico_pwm_set_freq_impl(int sliceId, int freqHz) {
+    float clkdiv;
+    uint16_t wrap;
+    pico_pwm_calc_div_wrap(freqHz, &clkdiv, &wrap);
+    pwm_set_clkdiv((uint) sliceId, clkdiv);
+    pwm_set_wrap((uint) sliceId, wrap);
+    /* Reset del counter interno para que el nuevo wrap arranque
+     * desde 0. Sin esto, si el counter está por encima del nuevo
+     * wrap, se tira varios ciclos viejos hasta wrap-around — esos
+     * "ciclos zombi" salen a frecuencia intermedia y aparecen como
+     * pulsos perdidos en ventanas cortas (ver Test 3 de PwmTest). */
+    pwm_set_counter((uint) sliceId, 0);
+}
+
+static void pico_pwm_set_duty_impl(int sliceId, int pin, int dutyPct) {
+    if (dutyPct < 0)   dutyPct = 0;
+    if (dutyPct > 100) dutyPct = 100;
+    uint16_t wrap = pwm_hw->slice[sliceId].top;
+    /* level = (dutyPct/100) * (wrap+1). Usamos enteros para evitar float. */
+    uint32_t level = ((uint32_t)(wrap + 1u) * (uint32_t) dutyPct) / 100u;
+    if (level > (uint32_t)(wrap + 1u)) level = wrap + 1u;
+    pwm_set_chan_level((uint) sliceId, pwm_gpio_to_channel((uint) pin),
+                       (uint16_t) level);
+}
+
+static void pico_pwm_start_impl(int sliceId) {
+    pwm_set_enabled((uint) sliceId, true);
+}
+
+static void pico_pwm_stop_impl(int sliceId) {
+    pwm_set_enabled((uint) sliceId, false);
+}
+
+static const bpvm_pwm_backend_t s_pico_pwm_backend = {
+    .init    = pico_pwm_init_impl,
+    .setFreq = pico_pwm_set_freq_impl,
+    .setDuty = pico_pwm_set_duty_impl,
+    .start   = pico_pwm_start_impl,
+    .stop    = pico_pwm_stop_impl,
+};
+
 /* --- Sink para los `print` de la VM. Sale por USB CDC. ----------- */
 static void usb_sink(const char* data, size_t len, void* user) {
     (void) user;
@@ -309,6 +501,14 @@ static void vm_task(void* arg) {
         fs_put("Uart.mod", uart_mod, uart_mod_len);
         log_printf("stdlib: Uart.mod installed (%u bytes)", uart_mod_len);
     }
+    if (fs_get("Pulse.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("Pulse.mod", pulse_mod, pulse_mod_len);
+        log_printf("stdlib: Pulse.mod installed (%u bytes)", pulse_mod_len);
+    }
+    if (fs_get("Pwm.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("Pwm.mod", pwm_mod, pwm_mod_len);
+        log_printf("stdlib: Pwm.mod installed (%u bytes)", pwm_mod_len);
+    }
     /* Drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO se
      * pre-instalan aquí — los sube el IDE como deps al hacer Run. */
     if (fs_get("Hello.mod", &dummy, &dummy_sz) != FS_OK) {
@@ -391,6 +591,8 @@ int main(void) {
     bpvm_i2c_set_backend(&s_pico_i2c_backend);
     bpvm_spi_set_backend(&s_pico_spi_backend);
     bpvm_uart_set_backend(&s_pico_uart_backend);
+    bpvm_pulse_set_backend(&s_pico_pulse_backend);
+    bpvm_pwm_set_backend(&s_pico_pwm_backend);
 
     BaseType_t r = xTaskCreate(vm_task, "vm_task", 4096, NULL,
                                 tskIDLE_PRIORITY + 2, NULL);

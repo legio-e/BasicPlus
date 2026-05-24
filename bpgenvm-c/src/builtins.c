@@ -15,6 +15,8 @@
 #include "bpvm_gpio.h"
 #include "bpvm_i2c.h"
 #include "bpvm_spi.h"
+#include "bpvm_pulse.h"
+#include "bpvm_pwm.h"
 #include "bpvm_uart.h"
 
 /* IDs estables (= ordinal del enum Builtin Java). Sólo los que F2
@@ -60,7 +62,19 @@ enum {
     BUILTIN_UART_INIT       = 90,
     BUILTIN_UART_WRITE      = 91,
     BUILTIN_UART_READ       = 92,
-    BUILTIN_UART_AVAILABLE  = 93
+    BUILTIN_UART_AVAILABLE  = 93,
+    /* Pulse counter — ordinals 94..98. */
+    BUILTIN_PULSE_INIT      = 94,
+    BUILTIN_PULSE_START     = 95,
+    BUILTIN_PULSE_STOP      = 96,
+    BUILTIN_PULSE_VALUE     = 97,
+    BUILTIN_PULSE_RESET     = 98,
+    /* PWM — ordinals 99..103. */
+    BUILTIN_PWM_INIT        = 99,
+    BUILTIN_PWM_SET_FREQ    = 100,
+    BUILTIN_PWM_SET_DUTY    = 101,
+    BUILTIN_PWM_START       = 102,
+    BUILTIN_PWM_STOP        = 103
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -572,6 +586,77 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_UART_AVAILABLE: {
         int bus = pop_i32(vm, tc);
         push_i32(vm, tc, (int32_t) bpvm_uart_available(bus));
+        return BPVM_OK;
+    }
+
+    /* ---- Pulse counter ----
+       init devuelve counterId (>=0) o -1 si pin inválido.
+       Los demás reciben counterId y operan sobre él. */
+    case BUILTIN_PULSE_INIT: {
+        int edgeKind = pop_i32(vm, tc);
+        int pin      = pop_i32(vm, tc);
+        push_i32(vm, tc, (int32_t) bpvm_pulse_init(pin, edgeKind));
+        return BPVM_OK;
+    }
+    case BUILTIN_PULSE_START: {
+        int counterId = pop_i32(vm, tc);
+        bpvm_pulse_start(counterId);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_PULSE_STOP: {
+        int counterId = pop_i32(vm, tc);
+        bpvm_pulse_stop(counterId);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_PULSE_VALUE: {
+        int counterId = pop_i32(vm, tc);
+        push_i32(vm, tc, (int32_t) bpvm_pulse_value(counterId));
+        return BPVM_OK;
+    }
+    case BUILTIN_PULSE_RESET: {
+        int counterId = pop_i32(vm, tc);
+        bpvm_pulse_reset(counterId);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+
+    /* ---- PWM ----
+       init devuelve sliceId (>=0) o -1 si pin inválido. setDuty
+       recibe (sliceId, pin, dutyPct) — el pin para distinguir
+       canal A o B del mismo slice. */
+    case BUILTIN_PWM_INIT: {
+        int freqHz = pop_i32(vm, tc);
+        int pin    = pop_i32(vm, tc);
+        push_i32(vm, tc, (int32_t) bpvm_pwm_init(pin, freqHz));
+        return BPVM_OK;
+    }
+    case BUILTIN_PWM_SET_FREQ: {
+        int freqHz  = pop_i32(vm, tc);
+        int sliceId = pop_i32(vm, tc);
+        bpvm_pwm_set_freq(sliceId, freqHz);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_PWM_SET_DUTY: {
+        int dutyPct = pop_i32(vm, tc);
+        int pin     = pop_i32(vm, tc);
+        int sliceId = pop_i32(vm, tc);
+        bpvm_pwm_set_duty(sliceId, pin, dutyPct);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_PWM_START: {
+        int sliceId = pop_i32(vm, tc);
+        bpvm_pwm_start(sliceId);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_PWM_STOP: {
+        int sliceId = pop_i32(vm, tc);
+        bpvm_pwm_stop(sliceId);
+        push_i32(vm, tc, 0);
         return BPVM_OK;
     }
 

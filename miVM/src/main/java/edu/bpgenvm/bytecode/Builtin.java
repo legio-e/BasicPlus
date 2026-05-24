@@ -167,7 +167,29 @@ public enum Builtin {
                                          //   lee hasta n bytes; devuelve los bytes recibidos
                                          //   (puede ser menos que n si expira el timeout).
                                          //   timeoutMs<=0 bloquea hasta tener todos.
-    UART_AVAILABLE("__uartAvailable");   // (bus) → int (bytes disponibles para leer sin bloquear)
+    UART_AVAILABLE("__uartAvailable"),   // (bus) → int (bytes disponibles para leer sin bloquear)
+
+    // ---- Pulse counter — contador de pulsos hardware en un GPIO ----
+    PULSE_INIT("__pulseInit"),           // (pin, edgeKind) → int counterId, o -1 si pin inválido.
+                                         //   edgeKind: 0=RISING, 1=FALLING, 2=BOTH.
+                                         //   En RP2350 usa el slice PWM correspondiente al pin
+                                         //   en modo "input gate edge counting" — pin debe ser
+                                         //   un canal B de slice (impares: GP1,3,5,7,9,11,...).
+    PULSE_START("__pulseStart"),         // (counterId) → void
+    PULSE_STOP("__pulseStop"),           // (counterId) → void
+    PULSE_VALUE("__pulseValue"),         // (counterId) → int (cuenta actual, 0..65535 en RP2350)
+    PULSE_RESET("__pulseReset"),         // (counterId) → void
+
+    // ---- PWM — generación de señal hardware ----
+    PWM_INIT("__pwmInit"),               // (pin, freqHz) → int sliceId, o -1 si pin inválido.
+                                         //   El pin determina el slice (cualquier canal A/B sirve).
+                                         //   freqHz: objetivo. El backend calcula clkdiv+wrap.
+    PWM_SET_FREQ("__pwmSetFreq"),        // (sliceId, freqHz) → void
+    PWM_SET_DUTY("__pwmSetDuty"),        // (sliceId, pin, dutyPct) → void
+                                         //   pin para escoger canal A o B del slice.
+                                         //   dutyPct: 0..100.
+    PWM_START("__pwmStart"),             // (sliceId) → void
+    PWM_STOP("__pwmStop");               // (sliceId) → void
 
     public final String bpName;
     public final int id;

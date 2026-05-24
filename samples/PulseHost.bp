@@ -1,0 +1,24 @@
+// PulseHost.bp — smoke test del flujo Pulse en host (VM Java).
+//
+// En host no hay HW PWM, así que el contador devuelve siempre 0 (stub
+// con logging). Lo que comprobamos aquí es que la cadena BP →
+// frontend → Intrinsics → CALL_BUILTIN → VirtualMachine.dispatchBuiltin
+// está cableada y no se rompe en ningún punto. El smoke completo
+// con conteo real se hace en Pico con backend HW.
+module PulseHost
+  import Pulse
+
+  function Main()
+    print "--- Pulse smoke (host) ---"
+    var c: Pulse.Counter := Pulse.Counter(11, Pulse.RISING())
+    c.start()
+    var v1: integer := c.value()
+    print "v1 (esperado 0 en stub):", v1
+    c.reset()
+    var v2: integer := c.value()
+    print "v2 (esperado 0 tras reset):", v2
+    c.stop()
+    print "--- fin ---"
+  end Main
+
+end PulseHost

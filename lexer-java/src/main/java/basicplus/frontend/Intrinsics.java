@@ -134,5 +134,23 @@ public final class Intrinsics {
         register("Uart.write",      w -> emitBuiltin(w, Builtin.UART_WRITE));
         register("Uart.read",       w -> emitBuiltin(w, Builtin.UART_READ));
         register("Uart.available",  w -> emitBuiltin(w, Builtin.UART_AVAILABLE));
+
+        // ---- Pulse (contador de pulsos hardware) ----
+        // Los nombres llevan sufijo "Slice" para no colisionar con los
+        // métodos start/stop/value/reset de la clase Pulse.Counter.
+        register("Pulse.initSlice",  w -> emitBuiltin(w, Builtin.PULSE_INIT));
+        register("Pulse.startSlice", w -> emitBuiltin(w, Builtin.PULSE_START));
+        register("Pulse.stopSlice",  w -> emitBuiltin(w, Builtin.PULSE_STOP));
+        register("Pulse.readSlice",  w -> emitBuiltin(w, Builtin.PULSE_VALUE));
+        register("Pulse.resetSlice", w -> emitBuiltin(w, Builtin.PULSE_RESET));
+
+        // ---- PWM (generación de señal hardware) ----
+        // Los nombres del módulo llevan sufijos para no chocar con los
+        // métodos start/stop/setFreq/setDuty de la clase Pwm.Slice.
+        register("Pwm.initSlice",  w -> emitBuiltin(w, Builtin.PWM_INIT));
+        register("Pwm.setFreqHz",  w -> emitBuiltin(w, Builtin.PWM_SET_FREQ));
+        register("Pwm.setDutyPct", w -> emitBuiltin(w, Builtin.PWM_SET_DUTY));
+        register("Pwm.startSlice", w -> emitBuiltin(w, Builtin.PWM_START));
+        register("Pwm.stopSlice",  w -> emitBuiltin(w, Builtin.PWM_STOP));
     }
 }

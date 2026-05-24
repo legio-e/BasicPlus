@@ -26,6 +26,10 @@ extern const uint8_t       spi_mod[];
 extern const unsigned int  spi_mod_len;
 extern const uint8_t       uart_mod[];
 extern const unsigned int  uart_mod_len;
+extern const uint8_t       pulse_mod[];
+extern const unsigned int  pulse_mod_len;
+extern const uint8_t       pwm_mod[];
+extern const unsigned int  pwm_mod_len;
 
 #ifdef __cplusplus
 }

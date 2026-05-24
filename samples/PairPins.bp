@@ -3,11 +3,12 @@ import Gpio
 
   function main(arg : string)
     print "Hola"
-    var pin10:Gpio.Pin:=Gpio.Pin(10, Gpio.Pin.OUTPUT)
-    var pin11:Gpio.Pin:=Gpio.Pin(11, Gpio.Pin.INPUT)
-    pin10.off()
+    var pin10:Gpio.Pin:=Gpio.Pin(12, Gpio.Pin.OUTPUT)
+    var pin11:Gpio.Pin:=Gpio.Pin(13, Gpio.Pin.INPUT)
+    pin10.on()
+    sleep(100)
     var v:integer:=pin11.value()
-    print "Pin11:" , v
+    print "Pin12:" , v
   end main
 
 end PairPins

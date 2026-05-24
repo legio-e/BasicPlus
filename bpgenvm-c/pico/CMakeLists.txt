@@ -77,6 +77,8 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/i2c.c
     ${BPVM_C_ROOT}/src/spi.c
     ${BPVM_C_ROOT}/src/uart.c
+    ${BPVM_C_ROOT}/src/pulse.c
+    ${BPVM_C_ROOT}/src/pwm.c
     # Plataforma: usamos el backend FreeRTOS en vez del pthread del host.
     ${CMAKE_CURRENT_LIST_DIR}/platform_freertos.c
 )
@@ -89,6 +91,8 @@ add_executable(bpvm_pico
     i2c_mod.c       # stdlib core pre-instalada
     spi_mod.c       # stdlib core pre-instalada
     uart_mod.c      # stdlib core pre-instalada
+    pulse_mod.c     # stdlib core pre-instalada
+    pwm_mod.c       # stdlib core pre-instalada
     # NOTA: drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO
     # se embeben aquí — viajan con la app del usuario al hacer upload
     # desde el IDE. Solo el core de stdlib (Math, IO, Gpio, I2c, ...)
@@ -110,6 +114,7 @@ target_link_libraries(bpvm_pico PRIVATE
     hardware_i2c         # I2c.* backend
     hardware_spi         # Spi.* backend
     hardware_uart        # Uart.* backend
+    hardware_pwm         # Pulse.* backend (PWM input-gate edge counting)
     hardware_flash       # FP2 step 3: erase/program de la región del FS
     hardware_sync        # save_and_disable_interrupts/restore_interrupts
     # NOTA: NO añadir pico_flash — rompió USB CDC en FP2-fail.

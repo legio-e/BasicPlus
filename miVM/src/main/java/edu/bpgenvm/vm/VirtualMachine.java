@@ -3485,10 +3485,106 @@ public class VirtualMachine {
                 break;
             }
 
+            /* ---- Pulse counter ----
+             * En host (Java) no hay HW PWM. Mantenemos un contador en
+             * memoria por counterId que se incrementa con un método
+             * helper (no se llama desde BP por usuario, solo desde el
+             * propio __pulseValue para que el stub sea "no salta solo").
+             * Para el host también exponemos un mecanismo de "tick"
+             * sincrónico: el sample puede simular pulsos llamando a
+             * Pulse.start() + un bucle que internamente cuenta, pero la
+             * cadena real bpvm → builtin → return queda probada. La
+             * comprobación de "cuenta lo que envías" solo es real en
+             * Pico con backend HW. */
+            case PULSE_INIT: {
+                int edgeKind = popTc(tc);
+                int pin      = popTc(tc);
+                String e = edgeKind == 0 ? "RISING" : edgeKind == 1 ? "FALLING"
+                         : edgeKind == 2 ? "BOTH" : "?";
+                System.out.println("[pulse] init pin=" + pin + " edge=" + e
+                        + " (sim → counterId=0)");
+                pulseSimValue = 0;
+                pushTc(tc, 0);
+                break;
+            }
+            case PULSE_START: {
+                int id = popTc(tc);
+                System.out.println("[pulse] start id=" + id + " (sim)");
+                pushTc(tc, 0);
+                break;
+            }
+            case PULSE_STOP: {
+                int id = popTc(tc);
+                System.out.println("[pulse] stop id=" + id
+                        + " (sim, value=" + pulseSimValue + ")");
+                pushTc(tc, 0);
+                break;
+            }
+            case PULSE_VALUE: {
+                int id = popTc(tc);
+                System.out.println("[pulse] value id=" + id
+                        + " (sim → " + pulseSimValue + ")");
+                pushTc(tc, pulseSimValue);
+                break;
+            }
+            case PULSE_RESET: {
+                int id = popTc(tc);
+                System.out.println("[pulse] reset id=" + id + " (sim)");
+                pulseSimValue = 0;
+                pushTc(tc, 0);
+                break;
+            }
+
+            /* ---- PWM ----
+             * Host: solo loggea. La validación real (que la duty
+             * coincida con la freq, etc.) se hace en Pico con HW. */
+            case PWM_INIT: {
+                int freqHz = popTc(tc);
+                int pin    = popTc(tc);
+                System.out.println("[pwm] init pin=" + pin + " freqHz=" + freqHz
+                        + " (sim → sliceId=0)");
+                pushTc(tc, 0);
+                break;
+            }
+            case PWM_SET_FREQ: {
+                int freqHz  = popTc(tc);
+                int sliceId = popTc(tc);
+                System.out.println("[pwm] setFreq slice=" + sliceId
+                        + " freqHz=" + freqHz + " (sim)");
+                pushTc(tc, 0);
+                break;
+            }
+            case PWM_SET_DUTY: {
+                int dutyPct = popTc(tc);
+                int pin     = popTc(tc);
+                int sliceId = popTc(tc);
+                System.out.println("[pwm] setDuty slice=" + sliceId
+                        + " pin=" + pin + " duty=" + dutyPct + "% (sim)");
+                pushTc(tc, 0);
+                break;
+            }
+            case PWM_START: {
+                int sliceId = popTc(tc);
+                System.out.println("[pwm] start slice=" + sliceId + " (sim)");
+                pushTc(tc, 0);
+                break;
+            }
+            case PWM_STOP: {
+                int sliceId = popTc(tc);
+                System.out.println("[pwm] stop slice=" + sliceId + " (sim)");
+                pushTc(tc, 0);
+                break;
+            }
+
             default:
                 throw new RuntimeException("Builtin no implementado: " + b);
         }
     }
+
+    /** Contador simulado para los hooks de Pulse en host. Solo un
+     *  contador a la vez (counterId siempre 0). El sample puede
+     *  validar el flow bpvm → builtin → return aunque no se cuente HW. */
+    private int pulseSimValue = 0;
 
     /**
      * Aproximación de Lanczos (g=7, coeficientes Numerical Recipes) para la
