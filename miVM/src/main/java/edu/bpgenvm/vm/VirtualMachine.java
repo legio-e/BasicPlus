@@ -2730,6 +2730,37 @@ public class VirtualMachine {
                 pushTc(tc, 0);  // dummy ret
                 break;
             }
+            case SLEEP_SEC: {
+                // Misma semántica que SLEEP pero la entrada está en segundos.
+                // Multiplicamos con long para evitar overflow si el usuario
+                // pide muchas horas (s * 1000 saldría de i32 a partir de ~24
+                // días). int_max ms = ~24.8 días — suficiente para uso normal.
+                int s = popTc(tc);
+                long ms = (long) s * 1000L;
+                if (ms > Integer.MAX_VALUE) ms = Integer.MAX_VALUE;
+                blockTcSleep(tc, (int) ms);
+                tc.yieldRequested = true;
+                pushTc(tc, 0);
+                break;
+            }
+            case SLEEP_US: {
+                // Busy-wait que NO cede el thread BP. La VM Java no puede
+                // garantizar precisión sub-ms (jitter del scheduler del SO,
+                // GC, JIT compilation, etc.) — el usuario debe tener esto
+                // en cuenta. En el Pico la VM-C sí da precisión µs real
+                // gracias a busy_wait_us() del SDK.
+                int us = popTc(tc);
+                if (us > 0) {
+                    long deadlineNs = System.nanoTime() + (long) us * 1000L;
+                    while (System.nanoTime() < deadlineNs) {
+                        // spin sin yield — no marcamos BLOCKED_SLEEP ni
+                        // tocamos yieldRequested. El intérprete sigue
+                        // ocupando la CPU del worker Java.
+                    }
+                }
+                pushTc(tc, 0);
+                break;
+            }
 
             case SPLIT: {
                 String sep = readVmString(popTc(tc));

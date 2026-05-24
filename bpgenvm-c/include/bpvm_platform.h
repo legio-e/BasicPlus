@@ -61,6 +61,14 @@ void bpvm_platform_thread_sleep_ms(int ms);
  * El offset 0 es arbitrario; sólo importan diferencias. */
 int64_t bpvm_platform_now_ms(void);
 
+/* Busy-wait sub-milisegundo. NO cede CPU al scheduler — gira en un
+ * loop comprobando el reloj hasta que pasan `us` microsegundos. Útil
+ * para timing crítico (setup/hold de chips, bit-bang fino) donde un
+ * context switch costaría más que la pausa misma. Implementación:
+ *  - Pico SDK: busy_wait_us() del SDK (lectura del timer hardware).
+ *  - pthread: clock_gettime(CLOCK_MONOTONIC) + spin. */
+void bpvm_platform_busy_wait_us(int us);
+
 #ifdef __cplusplus
 }
 #endif

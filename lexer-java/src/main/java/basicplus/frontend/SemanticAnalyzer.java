@@ -210,8 +210,10 @@ public final class SemanticAnalyzer {
         addBuiltin(s, "randomInt", PrimitiveType.INTEGER, new String[]{"lo","hi"}, new BpType[]{PrimitiveType.INTEGER, PrimitiveType.INTEGER});
 
         // ---- Tiempo ----
-        addBuiltin(s, "now",   PrimitiveType.INTEGER, new String[]{},     new BpType[]{});
-        addBuiltin(s, "sleep", VoidType.INSTANCE,     new String[]{"ms"}, new BpType[]{PrimitiveType.INTEGER});
+        addBuiltin(s, "now",      PrimitiveType.INTEGER, new String[]{},     new BpType[]{});
+        addBuiltin(s, "sleep",    VoidType.INSTANCE,     new String[]{"ms"}, new BpType[]{PrimitiveType.INTEGER});
+        addBuiltin(s, "sleepSec", VoidType.INSTANCE,     new String[]{"s"},  new BpType[]{PrimitiveType.INTEGER});
+        addBuiltin(s, "sleepUs",  VoidType.INSTANCE,     new String[]{"us"}, new BpType[]{PrimitiveType.INTEGER});
 
         // ---- Debug ----
         addBuiltin(s, "gc",    VoidType.INSTANCE,     new String[]{},     new BpType[]{});

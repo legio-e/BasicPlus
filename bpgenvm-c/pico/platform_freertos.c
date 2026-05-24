@@ -20,6 +20,8 @@
 #include "task.h"
 #include "semphr.h"
 
+#include "pico/time.h"   /* busy_wait_us — bpvm_platform_busy_wait_us */
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -222,4 +224,14 @@ int64_t bpvm_platform_now_ms(void) {
     /* 1 tick = 1 ms con configTICK_RATE_HZ=1000. Tipado explícito a
      * 64 bits para no envolver. */
     return (int64_t) ticks * (int64_t) portTICK_PERIOD_MS;
+}
+
+void bpvm_platform_busy_wait_us(int us) {
+    if (us <= 0) return;
+    /* busy_wait_us() del Pico SDK lee el timer hardware del RP2350 y
+     * gira hasta que pasan los us pedidos. NO cede CPU al scheduler
+     * de FreeRTOS — el resto de tasks BP no corren durante el wait.
+     * Es lo deseado para timings críticos (setup/hold de chips,
+     * bit-bang fino). */
+    busy_wait_us((uint64_t) us);
 }

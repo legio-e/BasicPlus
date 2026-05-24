@@ -1,0 +1,41 @@
+// SleepTest.bp — verifica sleep(ms), sleepSec(s) y sleepUs(us).
+//
+// Mide el tiempo real transcurrido con now() (que devuelve epoch ms)
+// y compara con lo esperado. Tolerancia ±20 ms por jitter del
+// scheduler / Java thread.
+
+module SleepTest
+
+  function Main()
+    print "--- sleep() / sleepSec() / sleepUs() ---"
+
+    var t1: integer := now()
+    sleep(500)
+    var t2: integer := now()
+    print "sleep(500ms):  esperado ~500   medido:", t2 - t1, "ms"
+
+    t1 := now()
+    sleepSec(1)
+    t2 := now()
+    print "sleepSec(1):   esperado ~1000  medido:", t2 - t1, "ms"
+
+    t1 := now()
+    sleepSec(2)
+    t2 := now()
+    print "sleepSec(2):   esperado ~2000  medido:", t2 - t1, "ms"
+
+    // 100 × sleepUs(1000us) = 100ms total. Aquí no medimos ciclo a
+    // ciclo (impreciso en host) sino el agregado, que sí debe cuadrar.
+    t1 := now()
+    var i: integer := 0
+    while i < 100 do
+      sleepUs(1000)
+      i := i + 1
+    endwh
+    t2 := now()
+    print "100x sleepUs(1000us): esperado ~100   medido:", t2 - t1, "ms"
+
+    print "--- fin ---"
+  end Main
+
+end SleepTest

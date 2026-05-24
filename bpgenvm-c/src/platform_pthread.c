@@ -144,3 +144,14 @@ int64_t bpvm_platform_now_ms(void) {
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (int64_t) ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
+
+void bpvm_platform_busy_wait_us(int us) {
+    if (us <= 0) return;
+    struct timespec start, now;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    int64_t deadline_ns = (int64_t) start.tv_sec * 1000000000LL
+                        + start.tv_nsec + (int64_t) us * 1000LL;
+    do {
+        clock_gettime(CLOCK_MONOTONIC, &now);
+    } while ((int64_t) now.tv_sec * 1000000000LL + now.tv_nsec < deadline_ns);
+}

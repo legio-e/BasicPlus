@@ -196,7 +196,20 @@ public enum Builtin {
     PICO_BOARD_NAME("__picoBoardName"),  // () → string ("pico2" / "host" / ...)
     PICO_TEMP_C("__picoTempC"),          // () → float  (°C del sensor interno)
     PICO_CPU_FREQ_HZ("__picoCpuFreqHz"), // () → integer (Hz del clk_sys)
-    PICO_UPTIME_MS("__picoUptimeMs");    // () → integer (ms desde boot, 32-bit wrap)
+    PICO_UPTIME_MS("__picoUptimeMs"),    // () → integer (ms desde boot, 32-bit wrap)
+
+    // ---- Time (variantes de sleep) ----
+    SLEEP_SEC("sleepSec"),               // (s: integer) → void
+                                         //   Cede el thread BP al scheduler durante s segundos.
+                                         //   Equivalente a sleep(s * 1000) pero más legible
+                                         //   para pausas largas.
+    SLEEP_US("sleepUs");                 // (us: integer) → void
+                                         //   Busy-wait que NO cede el thread BP. Para pausas
+                                         //   tan cortas (< 1 ms) el coste de un context switch
+                                         //   supera la pausa misma. Útil para timing crítico
+                                         //   (setup/hold de chips, bit-banging de protocolos
+                                         //   rápidos, etc.). En multi-thread el resto de
+                                         //   threads BP NO corren durante el wait.
 
     public final String bpName;
     public final int id;

@@ -81,7 +81,10 @@ enum {
     BUILTIN_PICO_BOARD_NAME = 105,
     BUILTIN_PICO_TEMP_C     = 106,
     BUILTIN_PICO_CPU_FREQ_HZ = 107,
-    BUILTIN_PICO_UPTIME_MS  = 108
+    BUILTIN_PICO_UPTIME_MS  = 108,
+    /* Time (sleep variantes) — ordinals 109..110. */
+    BUILTIN_SLEEP_SEC       = 109,
+    BUILTIN_SLEEP_US        = 110
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -248,6 +251,27 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         tc->wake_at_ms = bpvm_platform_now_ms() + ms;
         tc->status = BPVM_THREAD_BLOCKED_SLEEP;
         push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+
+    case BUILTIN_SLEEP_SEC: {
+        /* Misma semántica que SLEEP pero la entrada está en segundos. */
+        int32_t s = pop_i32(vm, tc);
+        if (s <= 0) { push_i32(vm, tc, 0); return BPVM_OK; }
+        int64_t ms = (int64_t) s * 1000LL;
+        tc->wake_at_ms = bpvm_platform_now_ms() + ms;
+        tc->status = BPVM_THREAD_BLOCKED_SLEEP;
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_SLEEP_US: {
+        /* Busy-wait que NO cede el thread BP. En Pico usa busy_wait_us
+         * del SDK (timer HW, precisión µs); en host usa clock_gettime
+         * con spin loop. */
+        int32_t us = pop_i32(vm, tc);
+        bpvm_platform_busy_wait_us(us);
+        push_i32(vm, tc, 0);
         return BPVM_OK;
     }
 
