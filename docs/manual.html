@@ -225,6 +225,14 @@
     <li class="sub"><a href="#stdlib-i2c">13.12 I2c</a></li>
     <li class="sub"><a href="#stdlib-spi">13.13 Spi</a></li>
     <li class="sub"><a href="#stdlib-uart">13.14 Uart</a></li>
+    <li class="sub"><a href="#stdlib-pulse">13.15 Pulse</a></li>
+    <li class="sub"><a href="#stdlib-pwm">13.16 Pwm</a></li>
+    <li class="sub"><a href="#stdlib-adc">13.17 Adc</a></li>
+    <li class="sub"><a href="#stdlib-pico">13.18 Pico (info MCU)</a></li>
+    <li class="sub"><a href="#stdlib-rtc">13.19 Rtc</a></li>
+    <li class="sub"><a href="#stdlib-wdt">13.20 Wdt</a></li>
+    <li class="sub"><a href="#stdlib-timer">13.21 Timer</a></li>
+    <li class="sub"><a href="#stdlib-hw-policy">13.22 Política HW = clase OO</a></li>
 
     <li class="group"><a href="#concurrencia">14. Concurrencia</a></li>
     <li class="sub"><a href="#conc-modelo">14.1 Modelo de ejecución</a></li>
@@ -1542,6 +1550,14 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   <code>BUS0()</code>, <code>BUS1()</code>,
   <code>STANDARD()</code> (100 kHz), <code>FAST()</code> (400 kHz).
 </p>
+<p>
+  También existe la clase <code>I2c.Bus</code> (recomendada) que
+  encapsula el bus + pines + baudrate en una instancia. Ver
+  <a href="#stdlib-hw-policy">§13.22</a> para el patrón general.
+</p>
+<pre><code><span class="kw">var</span> bus: I2c.Bus := I2c.Bus(<span class="num">0</span>, <span class="num">4</span>, <span class="num">5</span>, I2c.Bus.STANDARD)
+<span class="kw">var</span> devs: <span class="type">integer</span>[] := bus.scan()
+bus.write(<span class="num">0x48</span>, [<span class="num">0x00</span>], <span class="num">1</span>)</code></pre>
 
 <!-- =========================================================== -->
 <h3 id="stdlib-spi">13.13 <code>Spi</code></h3>
@@ -1588,6 +1604,11 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   <code>MODE0()</code>..<code>MODE3()</code>,
   <code>KHZ_500()</code>, <code>MHZ_1()</code>, <code>MHZ_4()</code>, <code>MHZ_10()</code>.
 </p>
+<p>
+  Forma OO con <code>Spi.Bus</code> (recomendada):
+</p>
+<pre><code><span class="kw">var</span> bus: Spi.Bus := Spi.Bus(<span class="num">0</span>, <span class="num">6</span>, <span class="num">7</span>, <span class="num">16</span>, Spi.Bus.MHZ_4, Spi.Bus.MODE0)
+bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
 
 <!-- =========================================================== -->
 <h3 id="stdlib-uart">13.14 <code>Uart</code></h3>
@@ -1649,6 +1670,421 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   <code>BAUD_57600()</code>, <code>BAUD_115200()</code>, <code>BAUD_230400()</code>,
   <code>BAUD_460800()</code>, <code>BAUD_921600()</code>.
 </p>
+<p>
+  También existe la clase <code>Uart.Port</code> (recomendada) con la
+  misma API en forma OO — ver <a href="#stdlib-hw-policy">§13.22</a>
+  para el patrón general.
+</p>
+<pre><code><span class="kw">var</span> port: Uart.Port := Uart.Port(<span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">115200</span>,
+                                  <span class="num">8</span>, <span class="num">1</span>, Uart.Port.PARITY_NONE)
+port.write(tx, <span class="num">4</span>)
+<span class="kw">var</span> n: <span class="type">integer</span> := port.read(rx, <span class="num">64</span>, <span class="num">1000</span>)</code></pre>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-pulse">13.15 <code>Pulse</code></h3>
+<p>
+  Contador de pulsos hardware. En el RP2350 cada slice PWM puede operar
+  en modo &quot;input gate edge counting&quot;: el contador del slice
+  avanza con cada flanco del pin B en lugar de con el reloj del sistema.
+  Hardware puro, sin coste de CPU. Útil para encoders rotatorios,
+  sensores Hall, turbinas de flujo, contadores Geiger, etc.
+</p>
+<p>
+  Constraint del HW: el pin que se pasa al constructor DEBE ser un pin
+  que mapee al canal B de algún slice PWM (GPIOs impares: GP1, GP3,
+  GP5, GP7, GP9, GP11, GP13, ..., GP29). Si no, se lanza
+  <code>RuntimeError</code>. Además, el slice asociado NO puede usarse
+  a la vez como salida PWM — un slice opera en UN modo a la vez.
+</p>
+<pre><code><span class="kw">import</span> Pulse
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> c: Pulse.Counter := Pulse.Counter(<span class="num">13</span>, Pulse.Counter.RISING)
+  c.start()
+  sleep(<span class="num">1000</span>)
+  <span class="kw">print</span> <span class="str">"pulsos en 1s:"</span>, c.value()
+  c.stop()
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Miembro</th><th>Descripción</th></tr>
+  <tr><td><code>Counter(pin, edgeKind)</code></td>
+      <td>Constructor. <code>edgeKind</code>:
+          <code>Counter.RISING</code> (0),
+          <code>Counter.FALLING</code> (1),
+          <code>Counter.BOTH</code> (2; en RP2350 cae a RISING — no hay soporte HW de both).</td></tr>
+  <tr><td><code>start()</code></td><td>Arranca el conteo.</td></tr>
+  <tr><td><code>stop()</code></td><td>Para el conteo y libera el slice.</td></tr>
+  <tr><td><code>value(): integer</code></td>
+      <td>Cuenta actual. Contador de 16 bits → 0..65535. Reset
+          periódico si necesitas más rango.</td></tr>
+  <tr><td><code>reset()</code></td><td>Pone el contador a cero sin parar.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-pwm">13.16 <code>Pwm</code></h3>
+<p>
+  Generación de señal PWM hardware. Cada GPIO mapea a un slice + canal
+  del PWM fijo por hardware (pares = canal A, impares = canal B). Las
+  dos canales del MISMO slice comparten frecuencia (clkdiv + wrap) pero
+  pueden tener duty cycle independiente.
+</p>
+<p>
+  Aplicaciones típicas:
+</p>
+<ul>
+  <li>LEDs con brillo regulable (PWM ~1-10 kHz).</li>
+  <li>Servos RC (50 Hz, pulso 1-2 ms).</li>
+  <li>Motores DC con MOSFET (5-20 kHz).</li>
+  <li>Generación de tonos audio (200-20000 Hz).</li>
+</ul>
+<pre><code><span class="kw">import</span> Pwm
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> p: Pwm.Slice := Pwm.Slice(<span class="num">10</span>, <span class="num">1000</span>)   <span class="comment">// GP10 a 1 kHz</span>
+  p.setDuty(<span class="num">50</span>)                              <span class="comment">// 50% duty</span>
+  p.start()
+  sleep(<span class="num">2000</span>)
+  p.stop()
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Miembro</th><th>Descripción</th></tr>
+  <tr><td><code>Slice(pin, freqHz)</code></td>
+      <td>Constructor. Configura el slice del pin a la frecuencia
+          indicada. Duty arranca a 0. Llama <code>start()</code> para
+          que oscile.</td></tr>
+  <tr><td><code>setDuty(dutyPct)</code></td>
+      <td>Duty cycle 0..100. Aplicación inmediata.</td></tr>
+  <tr><td><code>setFreq(freqHz)</code></td>
+      <td>Cambia la frecuencia. Afecta a ambos canales del slice.
+          El duty actual se preserva.</td></tr>
+  <tr><td><code>start()</code></td><td>Arranca la generación.</td></tr>
+  <tr><td><code>stop()</code></td><td>Para. El pin queda en LOW.</td></tr>
+</table>
+<p>
+  <strong>Tip combinado con Pulse:</strong> para verificar la
+  frecuencia generada con PWM puedes contar los pulsos con
+  <code>Pulse.Counter</code> en otro pin (cableado al pin PWM).
+  Importante: los dos pines deben estar en slices DISTINTOS
+  (e.g. GP10 (slice 5) + GP13 (slice 6)).
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-adc">13.17 <code>Adc</code></h3>
+<p>
+  Convertidor analógico-digital del MCU. El RP2350 tiene 4 canales
+  accesibles vía GPIO:
+</p>
+<table>
+  <tr><th>Canal</th><th>Pin</th></tr>
+  <tr><td><code>CH0</code></td><td>GP26</td></tr>
+  <tr><td><code>CH1</code></td><td>GP27</td></tr>
+  <tr><td><code>CH2</code></td><td>GP28</td></tr>
+  <tr><td><code>CH3</code></td><td>GP29</td></tr>
+</table>
+<p>
+  Resolución 12-bit (0..4095), referencia Vref ≈ 3.3 V típico. Para
+  leer la temperatura interna del die, NO uses <code>Adc</code> — usa
+  <code>Pico.tempC()</code> (ver <a href="#stdlib-pico">§13.18</a>)
+  que ya hace la conversión con la fórmula del sensor.
+</p>
+<pre><code><span class="kw">import</span> Adc
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> sensor: Adc.Channel := Adc.Channel(Adc.Channel.CH0)
+  <span class="kw">while</span> <span class="kw">true</span> <span class="kw">do</span>
+    <span class="kw">var</span> raw: <span class="type">integer</span> := sensor.read()        <span class="comment">// 0..4095</span>
+    <span class="kw">var</span> v:   <span class="type">float</span>   := sensor.readVolts()   <span class="comment">// 0.0..3.3 V</span>
+    <span class="kw">print</span> <span class="str">"raw:"</span>, raw, <span class="str">"  V:"</span>, v
+    sleep(<span class="num">100</span>)
+  <span class="kw">endwh</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Miembro</th><th>Descripción</th></tr>
+  <tr><td><code>Channel(ch)</code></td>
+      <td>Constructor. <code>ch</code>: <code>Channel.CH0</code>..<code>CH3</code>.
+          Lanza <code>RuntimeError</code> si ch fuera de rango.</td></tr>
+  <tr><td><code>read(): integer</code></td>
+      <td>Lectura raw 0..4095. Bloquea ~2 µs por conversión.</td></tr>
+  <tr><td><code>readVolts(): float</code></td>
+      <td>Lectura convertida a voltios usando Vref nominal (3.3 V).</td></tr>
+  <tr><td><code>readAvg(n): integer</code></td>
+      <td>Media de N lecturas. Reduce ruido en sensores analógicos.
+          Coste: N × 2 µs.</td></tr>
+</table>
+<p>
+  Static consts: <code>Channel.CH0</code> (0), <code>CH1</code> (1),
+  <code>CH2</code> (2), <code>CH3</code> (3), <code>VREF</code> (3.3).
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-pico">13.18 <code>Pico</code> (información del MCU)</h3>
+<p>
+  Información del microcontrolador físico: identificación, sensores
+  internos, reloj y control de la frecuencia del clk_sys.
+</p>
+<p>
+  <strong>Excepción documentada</strong> a la política HW = clase OO
+  (ver <a href="#stdlib-hw-policy">§13.22</a>): <code>Pico</code>
+  expone funciones + constantes sin clase porque la info del chip no
+  tiene &quot;instancia&quot; (es uno y único) y no encapsula recursos
+  liberables.
+</p>
+<pre><code><span class="kw">import</span> Pico
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">print</span> <span class="str">"Board:"</span>, Pico.boardName()
+  <span class="kw">print</span> <span class="str">"Serial:"</span>, Pico.uniqueId()
+  <span class="kw">print</span> <span class="str">"CPU MHz:"</span>, Pico.cpuFreqHz() / <span class="num">1000000</span>
+  <span class="kw">print</span> <span class="str">"Die °C:"</span>, Pico.tempC()
+  <span class="kw">print</span> <span class="str">"Uptime ms:"</span>, Pico.uptimeMs()
+
+  <span class="comment">// Overclock seguro a 250 MHz (escala voltaje automáticamente)</span>
+  Pico.setCpuFreqMHz(<span class="num">250</span>)
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>uniqueId(): string</code></td>
+      <td>ID único del chip flash (16 chars hex). Estable entre
+          reboots y reflasheos.</td></tr>
+  <tr><td><code>boardName(): string</code></td>
+      <td><code>&quot;pico2&quot;</code> en RP2350; <code>&quot;host&quot;</code>
+          en VM Java/C-host.</td></tr>
+  <tr><td><code>tempC(): float</code></td>
+      <td>Temperatura del die en °C. Sensor ADC4 con conversión interna.
+          Precisión ±2 °C sin calibración.</td></tr>
+  <tr><td><code>cpuFreqHz(): integer</code></td>
+      <td>Frecuencia actual del clk_sys en Hz.</td></tr>
+  <tr><td><code>uptimeMs(): integer</code></td>
+      <td>Ms desde el boot del firmware (32-bit, wrap a ~49 días).</td></tr>
+  <tr><td><code>setCpuFreqMHz(mhz): boolean</code></td>
+      <td>Cambia clk_sys. Clamp a <code>[MIN_CPU_MHZ, MAX_CPU_MHZ]</code>.
+          Auto-escala Vdd_core (1.10/1.15/1.20/1.30 V según mhz).
+          Devuelve <code>true</code> si la PLL pudo configurarse.
+          Llamar ANTES de configurar UART/SPI/I2C/PWM porque
+          sus divisores se calculan con clk_peri.
+          Las funciones <code>sleep*</code> y <code>now()</code> son
+          inmunes (timer HW a 1 MHz independiente).</td></tr>
+</table>
+<p>
+  Constantes (devuelven literales):
+  <code>MAX_CPU_MHZ()</code> (300), <code>MIN_CPU_MHZ()</code> (18),
+  <code>I2C_BUSES()</code> (2), <code>SPI_BUSES()</code> (2),
+  <code>UART_BUSES()</code> (2), <code>GPIO_COUNT()</code> (30),
+  <code>ADC_CHANNELS()</code> (4), <code>PWM_SLICES()</code> (12).
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-rtc">13.19 <code>Rtc</code></h3>
+<p>
+  Wall clock con sincronización IDE→Pico. El Pico no tiene RTC con
+  backup battery por defecto, así que este módulo mantiene un
+  <em>offset</em> entre &quot;segundos epoch (Unix)&quot; y &quot;tiempo
+  monotónico desde boot&quot;.
+</p>
+<p>
+  El IDE BPIDE envía un comando <code>TIME &lt;epochsec&gt;</code>
+  automáticamente al conectar al dispositivo. Tras eso,
+  <code>epochSec()</code> devuelve hora UTC real. Si no se calibra,
+  devuelve segundos desde boot — todavía útil como reloj relativo.
+</p>
+<p>
+  API limitada a SEGUNDOS porque BP solo tiene int32; rango
+  1970..2038. Para deltas más finos dentro de una sesión usa
+  <code>now()</code>.
+</p>
+<pre><code><span class="kw">import</span> Rtc
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> clk: Rtc.Clock := Rtc.Clock()
+  <span class="kw">print</span> <span class="str">"epoch ahora:"</span>, clk.epochSec()
+
+  <span class="comment">// Calibrar manualmente si hace falta:</span>
+  clk.setEpochSec(<span class="num">1716544800</span>)   <span class="comment">// 2024-05-24 10:00:00 UTC</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Miembro</th><th>Descripción</th></tr>
+  <tr><td><code>Clock()</code></td>
+      <td>Constructor sin argumentos. El backend mantiene el offset
+          globalmente (singleton lógico).</td></tr>
+  <tr><td><code>epochSec(): integer</code></td>
+      <td>Segundos desde epoch Unix. Sin calibrar, segundos desde boot.</td></tr>
+  <tr><td><code>setEpochSec(sec)</code></td>
+      <td>Calibra: a partir de aquí, <code>epochSec()</code> devuelve
+          <code>sec + tiempo_transcurrido_desde_aquí</code>.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-wdt">13.20 <code>Wdt</code> (watchdog)</h3>
+<p>
+  Watchdog timer del MCU. Si no se &quot;alimenta&quot; dentro del
+  timeout configurado, el chip se RESETEA automáticamente. Útil para
+  recovery de cuelgues en deployments unattended.
+</p>
+<p>
+  <strong>AVISO CRÍTICO:</strong> si activas el watchdog con un
+  timeout corto y el código se cuelga, el chip se resetea en bucle.
+  Para salir: re-flashea un firmware que NO active el watchdog al
+  boot, o entra en BOOTSEL (mantener el botón al conectar USB).
+</p>
+<p>
+  El constructor aplica un mínimo de 100 ms al timeout para minimizar
+  bricks accidentales. <code>Wdt</code> es <em>singleton del MCU</em>:
+  solo hay un watchdog; construir varias instancias es legal pero
+  todas operan sobre el mismo HW (el último <code>enable</code> gana).
+</p>
+<pre><code><span class="kw">import</span> Wdt
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> wdog: Wdt.Timer := Wdt.Timer(<span class="num">2000</span>)   <span class="comment">// 2 segundos</span>
+  <span class="kw">while</span> running <span class="kw">do</span>
+    doWork()
+    wdog.feed()        <span class="comment">// debe ejecutarse antes de 2s</span>
+  <span class="kw">endwh</span>
+  wdog.disable()       <span class="comment">// antes de un sleep largo</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Miembro</th><th>Descripción</th></tr>
+  <tr><td><code>Timer(timeoutMs)</code></td>
+      <td>Constructor. Activa el watchdog. Clamp al mínimo de 100 ms.</td></tr>
+  <tr><td><code>feed()</code></td>
+      <td>Alimenta el watchdog: resetea el contador al timeout
+          configurado. Llamar periódicamente.</td></tr>
+  <tr><td><code>disable()</code></td>
+      <td>Desactiva. En RP2350 esto se simula con un timeout muy
+          grande (no hay API real de off). Útil antes de operaciones
+          largas conocidas.</td></tr>
+  <tr><td><code>reenable()</code></td>
+      <td>Re-activa con el mismo timeout que tenía.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-timer">13.21 <code>Timer</code> (alarmas periódicas)</h3>
+<p>
+  <code>Timer.Alarm</code> es una abstracción puramente BP sobre
+  <code>now()</code>. NO usa interrupts hardware ni callbacks — el
+  código de usuario consulta la alarma con <code>check()</code> o se
+  sincroniza con <code>wait()</code>. Ventajas:
+</p>
+<ul>
+  <li>Portable a cualquier target (host Java, host C, Pico) sin
+      backend nativo.</li>
+  <li>Inmune al overclock: <code>now()</code> en Pico usa el timer
+      HW a 1 MHz que es independiente del clk_sys.</li>
+  <li>Cero coste en firmware (no consume timers HW del MCU).</li>
+</ul>
+<p>
+  Limitación: la resolución depende de la frecuencia con que el
+  usuario llame a <code>check()</code>. Para timing crítico
+  (debouncing, bit-banging) usa PWM hardware o el módulo
+  <code>Pulse</code>.
+</p>
+<pre><code><span class="kw">import</span> Timer
+<span class="kw">import</span> Gpio
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> led: Gpio.Pin := Gpio.Pin(<span class="num">25</span>, Gpio.Pin.OUTPUT)
+
+  <span class="comment">// Modo A: polling no bloqueante</span>
+  <span class="kw">var</span> blink: Timer.Alarm := Timer.Alarm(<span class="num">500</span>)
+  <span class="kw">while</span> running <span class="kw">do</span>
+    <span class="kw">if</span> blink.check() <span class="kw">then</span>
+      led.toggle()
+    <span class="kw">endif</span>
+    doOtherWork()
+  <span class="kw">endwh</span>
+
+  <span class="comment">// Modo B: loop periódico sin drift</span>
+  <span class="kw">var</span> beat: Timer.Alarm := Timer.Alarm(<span class="num">100</span>)
+  <span class="kw">while</span> i &lt; <span class="num">100</span> <span class="kw">do</span>
+    sampleSensor()
+    beat.wait()         <span class="comment">// bloquea hasta el siguiente fire</span>
+    i := i + <span class="num">1</span>
+  <span class="kw">endwh</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Miembro</th><th>Descripción</th></tr>
+  <tr><td><code>Alarm(periodMs)</code></td>
+      <td>Constructor. <code>periodMs=0</code> deja la instancia como
+          cronómetro pasivo (solo <code>since()</code>).</td></tr>
+  <tr><td><code>check(): boolean</code></td>
+      <td><code>true</code> si tocaba disparar; avanza
+          <code>nextFire</code>. Catch-up safe: si te retrasas, salta
+          múltiplos perdidos sin disparar en ráfaga.</td></tr>
+  <tr><td><code>wait()</code></td>
+      <td>Bloquea hasta el siguiente disparo. Para loops periódicos
+          sin drift acumulado.</td></tr>
+  <tr><td><code>reset()</code></td>
+      <td>El próximo disparo será <code>periodMs</code> desde AHORA.</td></tr>
+  <tr><td><code>since(): integer</code></td>
+      <td>Ms transcurridos desde el último reset/construcción. Útil
+          para usar la alarma como cronómetro.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-hw-policy">13.22 Política HW = clase OO</h3>
+<p>
+  Decisión arquitectónica del proyecto: <strong>todo periférico
+  hardware nuevo se modela como clase OO</strong> dentro de un módulo
+  BP que la encapsula. Detalle completo en
+  <code>docs/HW_CLASS_POLICY.md</code>; resumen aquí.
+</p>
+<p>
+  Razones: encapsulación (el id opaco del backend vive en la
+  instancia), tipado (<code>var bus: Spi.Bus</code> documenta qué
+  representa la variable), y liberación de recursos cuando lleguen
+  finalizers.
+</p>
+<p>
+  Patrón canónico:
+</p>
+<ul>
+  <li>Módulo <code>Foo</code> con intrínsecos de bajo nivel
+      sufijados con el tipo de recurso (e.g. <code>initBus</code>,
+      <code>startSlice</code>) para no colisionar con métodos cortos
+      de la clase (<code>start()</code>).</li>
+  <li>Clase <code>Foo.Bar</code> envolvente. Constructor recibe los
+      parámetros físicos + lanza <code>RuntimeError</code> si la
+      init backend falla.</li>
+  <li>Static consts dentro de la clase para enumeraciones
+      (<code>Bar.MODE_X</code>, <code>Pin.PULL_UP</code>, etc.).</li>
+  <li>Fields privados al módulo dueño. <strong>NO</strong> se
+      exportan cross-module. Para exponer valores cross-module se
+      usa <code>property</code> con getter (encapsulación clásica).</li>
+</ul>
+<p>
+  <strong>Excepción documentada</strong>: el módulo <code>Pico</code>
+  expone funciones + constantes sin clase porque la info del chip es
+  singleton sin recursos liberables. Misma lógica para futuros
+  módulos de información global.
+</p>
+<p>
+  Estado actual de la suite OO HW:
+</p>
+<table>
+  <tr><th>Módulo</th><th>Clase</th><th>Recurso encapsulado</th></tr>
+  <tr><td><code>Gpio</code></td><td><code>Gpio.Pin</code></td>
+      <td>Número de pin + modo</td></tr>
+  <tr><td><code>I2c</code></td><td><code>I2c.Bus</code></td>
+      <td>busId + pines + baudrate</td></tr>
+  <tr><td><code>Spi</code></td><td><code>Spi.Bus</code></td>
+      <td>busId + pines + baudrate + mode</td></tr>
+  <tr><td><code>Uart</code></td><td><code>Uart.Port</code></td>
+      <td>busId + pines + baudrate + format</td></tr>
+  <tr><td><code>Pulse</code></td><td><code>Pulse.Counter</code></td>
+      <td>counterSlice en modo input-gate</td></tr>
+  <tr><td><code>Pwm</code></td><td><code>Pwm.Slice</code></td>
+      <td>sliceId + canal A/B</td></tr>
+  <tr><td><code>Adc</code></td><td><code>Adc.Channel</code></td>
+      <td>Canal ADC + pin físico</td></tr>
+  <tr><td><code>Rtc</code></td><td><code>Rtc.Clock</code></td>
+      <td>Wall clock con offset (singleton lógico)</td></tr>
+  <tr><td><code>Wdt</code></td><td><code>Wdt.Timer</code></td>
+      <td>Watchdog HW (singleton)</td></tr>
+  <tr><td><code>Timer</code></td><td><code>Timer.Alarm</code></td>
+      <td>Periodo + nextFire (BP puro, sin HW)</td></tr>
+  <tr><td><code>Pico</code></td><td><em>(funcs + consts)</em></td>
+      <td><em>Info MCU singleton sin recursos — excepción documentada</em></td></tr>
+</table>
 
 <!-- =========================================================== -->
 <h2 id="concurrencia">14. Concurrencia</h2>
