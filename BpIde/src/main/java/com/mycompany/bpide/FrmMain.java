@@ -333,19 +333,7 @@ public class FrmMain extends javax.swing.JFrame
         // editorArea y currentFile al buffer del tab activo. De este modo,
         // las ~27 referencias a editorArea en el resto del IDE siguen
         // funcionando sin cambios — siempre apuntan al editor visible.
-        jTabbedPane1.addChangeListener(e -> {
-            java.awt.Component sel = jTabbedPane1.getSelectedComponent();
-            OpenFile of = openFiles.get(sel);
-            if (of != null) {
-                editorArea = of.editor;
-                currentFile = of.file;
-                if (lblStatusFile != null) {
-                    lblStatusFile.setText(of.file != null ? of.file.toString() : "(sin guardar)");
-                }
-                setTitle("BpIde" + (of.file != null ? " — " + of.file : ""));
-                updateCaretStatus();
-            }
-        });
+        jTabbedPane1.addChangeListener(e -> refreshActiveTab());
 
         // Ctrl+W cierra el tab activo.
         javax.swing.KeyStroke ctrlW = javax.swing.KeyStroke.getKeyStroke(
@@ -823,6 +811,30 @@ public class FrmMain extends javax.swing.JFrame
         if (idx >= 0) jTabbedPane1.setTabComponentAt(idx, pnl);
     }
 
+    /**
+     * Sincroniza editorArea, currentFile, status bar y título de
+     * ventana con el tab actualmente seleccionado. Lo llama el
+     * ChangeListener cuando el usuario cambia de tab; también se
+     * llama manualmente desde openFileInEditor() porque cuando
+     * solo hay un tab y se "selecciona" el ya activo,
+     * setSelectedComponent NO dispara el ChangeListener (no hay
+     * cambio de índice). Síntoma de no llamarlo: primer Load no
+     * actualiza currentFile y compile falla con "no se ha guardado".
+     */
+    private void refreshActiveTab() {
+        java.awt.Component sel = jTabbedPane1.getSelectedComponent();
+        OpenFile of = openFiles.get(sel);
+        if (of != null) {
+            editorArea = of.editor;
+            currentFile = of.file;
+            if (lblStatusFile != null) {
+                lblStatusFile.setText(of.file != null ? of.file.toString() : "(sin guardar)");
+            }
+            setTitle("BpIde" + (of.file != null ? " — " + of.file : ""));
+            updateCaretStatus();
+        }
+    }
+
     /** Cambia el título mostrado en el componente custom del tab. */
     private void setTabTitle(JScrollPane scroll, String title) {
         int idx = jTabbedPane1.indexOfComponent(scroll);
@@ -881,6 +893,7 @@ public class FrmMain extends javax.swing.JFrame
             for (java.util.Map.Entry<java.awt.Component, OpenFile> e : openFiles.entrySet()) {
                 if (file.equals(e.getValue().file)) {
                     jTabbedPane1.setSelectedComponent(e.getKey());
+                    refreshActiveTab();
                     return;
                 }
             }
@@ -902,7 +915,6 @@ public class FrmMain extends javax.swing.JFrame
                 recycle.editor.setCaretPosition(0);
                 setTabTitle(recycle.scroll, file.getFileName().toString());
                 jTabbedPane1.setSelectedComponent(recycle.scroll);
-                // El ChangeListener actualiza editorArea/currentFile.
             } else {
                 // 3) tab nuevo
                 JTextPane ed = newEditorPane();
@@ -915,6 +927,12 @@ public class FrmMain extends javax.swing.JFrame
                 installTabCloseButton(sc, title);
                 jTabbedPane1.setSelectedComponent(sc);
             }
+            // Sincroniza explícitamente editorArea/currentFile/etc con
+            // el tab activo. Crítico para el caso "reciclar el tab
+            // inicial": setSelectedComponent NO dispara ChangeListener
+            // si el tab ya estaba seleccionado (es el único). Sin esto,
+            // el primer Load no actualiza currentFile y compile falla.
+            refreshActiveTab();
         } catch (java.io.IOException ex) {
             javax.swing.JOptionPane.showMessageDialog(this,
                     "No se pudo abrir " + file + ": " + ex.getMessage(),
