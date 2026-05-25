@@ -32,13 +32,13 @@ module AdcDemo
     endwh
 
     print ""
-    print "Voltaje CH0 (Vref=3.3V):"
-    var v: float := ch0.readVolts()
+    print "Voltaje CH1 (Vref=3.3V):"
+    var v: float := ch1.readVolts()
     print "  ", v, "V"
 
-    print "Media de 16 lecturas CH0 (reduce ruido):"
-    var avg: integer := ch0.readAvg(16)
-    print "  raw=", avg
+    print "Media de 16 lecturas CH1 (reduce ruido):"
+    var avg: integer := ch1.readAvg(16)
+    print "  raw=", avg, " V1=", 3.3 * avg / 4048
 
     print "--- fin ---"
   end Main
