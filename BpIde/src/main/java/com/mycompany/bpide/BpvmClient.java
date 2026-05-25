@@ -220,6 +220,10 @@ public final class BpvmClient implements AutoCloseable {
         // bpvm-pico REPL listo ===" y prompts "> " residuales). 300 ms es
         // suficiente — el firmware reparte el banner en 3 rondas con
         // delays de 200ms; en runtime estable apenas hay tráfico.
+        // (Intento previo de drain adaptive con cap 500ms+50ms-de-silencio
+        // causaba delays inexplicables de ~10s en el primer LIST tras
+        // connect; pendiente de investigar — ver task #154. Hasta entender
+        // la causa, volvemos al wait fijo conservador.)
         try {
             long endDrain = System.currentTimeMillis() + 300;
             byte[] tmp = new byte[256];

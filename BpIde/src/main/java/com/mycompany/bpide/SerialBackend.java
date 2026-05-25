@@ -39,7 +39,7 @@ public final class SerialBackend extends AbstractBpvmBackend {
 
     @Override protected void postConnect(BpvmClient c) throws IOException {
         // Sincronizar RTC del Pico con wall clock del PC. Best-effort:
-        // si el firmware no soporta TIME (versión vieja) log y seguir.
+        // si el firmware no soporta TIME, traga el error silenciosa.
         try { c.syncTime(System.currentTimeMillis() / 1000L, TIMEOUT_MS); }
         catch (IOException ignored) { /* anecdotal */ }
     }
@@ -51,7 +51,7 @@ public final class SerialBackend extends AbstractBpvmBackend {
         long used  = Json.getLong(info, "fsUsedBytes", 0);
         long free  = total - used;
         // fileCount lo sacamos del LIST (barato — entries ya van en RAM
-        // del firmware). Si crece el coste, se puede añadir a INFO.
+        // del firmware).
         int fileCount;
         try { fileCount = client.listFiles("", TIMEOUT_MS).size(); }
         catch (IOException ioe) { fileCount = -1; }

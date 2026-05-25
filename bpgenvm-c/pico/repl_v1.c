@@ -478,16 +478,13 @@ static void handle_info(long id, const json_obj_t* obj) {
                                              (size_t) off, "cpuFreqHz", freq);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "uptimeMs", uptime);
-    /* tempC: JSON number con decimal. Los builders solo manejan long;
-     * insertamos manualmente con snprintf. Truncamos a 2 decimales. */
-    if (off >= 0) {
-        char temp_frag[40];
-        int nf = snprintf(temp_frag, sizeof(temp_frag), ",\"tempC\":%.2f", (double) tempC);
-        if (nf > 0 && (size_t)(off + nf) < sizeof(s_reply_buf)) {
-            memcpy(s_reply_buf + off, temp_frag, (size_t) nf);
-            off += nf;
-        }
-    }
+    /* tempC: el wire v1 NO soporta floats (parser del cliente rechaza
+     * decimales/científica). Enviamos como entero en milidegrees → el
+     * cliente divide por 1000 para mostrar con precisión de display.
+     * "tempMilliC":25430 → 25.43 °C en la UI. */
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "tempMilliC",
+                                             (long)(tempC * 1000.0f));
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "fsTotalBytes", fsTotal);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
