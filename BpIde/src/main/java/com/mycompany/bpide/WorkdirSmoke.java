@@ -5,7 +5,7 @@
 //
 //   1) Crea un workdir temporal vacío.
 //   2) Spawn la VM en modo daemon con --workdir.
-//   3) VmClient conecta.
+//   3) BpvmClient conecta.
 //   4) Upload del .mod local al workdir vía wire.
 //   5) listFiles para confirmar lo subido.
 //   6) runModule + recibir prints + ExitedEvent.
@@ -47,7 +47,7 @@ public final class WorkdirSmoke {
 
         CountDownLatch exited = new CountDownLatch(1);
 
-        try (VmClient vm = new VmClient()) {
+        try (BpvmClient vm = new BpvmClient()) {
             vm.setDiagSink(s -> System.err.println("DIAG  " + s));
             vm.setOutputSink(s -> System.out.print("OUT   " + s));
             vm.setEventListener((DebugEvent ev) -> {
@@ -69,9 +69,9 @@ public final class WorkdirSmoke {
             System.out.println("UPLOAD " + remoteName + " (" + size + " bytes)");
 
             // 5) Confirmar via listFiles.
-            List<VmClient.RemoteFile> files = vm.listFiles("", 5000);
+            List<BpvmClient.RemoteFile> files = vm.listFiles("", 5000);
             System.out.println("LISTED " + files.size() + " files:");
-            for (VmClient.RemoteFile f : files) System.out.println("  " + f);
+            for (BpvmClient.RemoteFile f : files) System.out.println("  " + f);
 
             // 6) runModule.
             vm.runModule(remoteName);

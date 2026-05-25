@@ -3,7 +3,7 @@
 // Primitivos de framing del wire BPVM v1: líneas JSON UTF-8
 // terminadas en `\n` + bulk binario raw inline.
 //
-// La capa que está justo encima (DebugServer / VmClient) lee así:
+// La capa que está justo encima (DebugServer / BpvmClient) lee así:
 //   1) recvLine(in) → String JSON (sin `\n`).
 //   2) Si el JSON tiene `"bulk":N`, recvBulk(in, N) → N bytes raw.
 //   3) Vuelve a 1.

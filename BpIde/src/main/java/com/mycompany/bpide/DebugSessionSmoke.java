@@ -1,6 +1,6 @@
 // ============================================================
 // DebugSessionSmoke.java
-// Valida A1.9: DebugSession con VmClient attached.
+// Valida A1.9: DebugSession con BpvmClient attached.
 //   - Pone un breakpoint en una línea conocida ANTES del attach.
 //   - attach replica el breakpoint al wire.
 //   - addListener registra PausedEvent → llama a las queries
@@ -39,7 +39,7 @@ public final class DebugSessionSmoke {
 
         AtomicInteger pauseCount = new AtomicInteger(0);
 
-        try (VmClient client = new VmClient()) {
+        try (BpvmClient client = new BpvmClient()) {
             client.setDiagSink(s -> System.err.println("DIAG  " + s));
             client.setOutputSink(s -> System.out.print("OUT   " + s.replace("\n", "\\n\n")));
 

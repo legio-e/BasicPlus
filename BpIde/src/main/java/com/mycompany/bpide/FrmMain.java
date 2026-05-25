@@ -1052,7 +1052,7 @@ public class FrmMain extends javax.swing.JFrame
         });
 
         // Listener de la sesión (A1.9): los eventos llegan en el thread
-        // reader del VmClient. Para paused, ya en ese thread hacemos las
+        // reader del BpvmClient. Para paused, ya en ese thread hacemos las
         // queries de locals/frames/properties (es seguro bloquear ahí)
         // y luego invokeLater para pintar la UI con el snapshot completo.
         debug.addListener(e -> {
@@ -1129,7 +1129,7 @@ public class FrmMain extends javax.swing.JFrame
 
     /** Llamado en EDT cuando la sesión pausa: actualiza paneles + highlight.
      *  Los datos (locals, frames, props) llegan precargados desde el thread
-     *  reader del VmClient — aquí NO se hace I/O. */
+     *  reader del BpvmClient — aquí NO se hace I/O. */
     private void onDebugPaused(edu.bpgenvm.vm.debug.PausedEvent pe,
                                int[] locals,
                                List<int[]> frames,
@@ -1539,7 +1539,7 @@ public class FrmMain extends javax.swing.JFrame
      *      usa la REPL (o asignar un canal independiente si TinyUSB
      *      permite múltiples interfaces CDC).
      *   3. Implementar DebugAdapter en PicoClient (parser JSON línea a
-     *      línea) que el IDE conecta como un VmClient remoto.
+     *      línea) que el IDE conecta como un BpvmClient remoto.
      *
      * Mientras tanto, el botón explica el estado al usuario y le ofrece
      * la alternativa práctica: usar `Debug` local (Shift+F5) sobre el
@@ -1548,7 +1548,7 @@ public class FrmMain extends javax.swing.JFrame
      *
      * Cuando el wire debug-on-Pico esté listo, este método se sustituye
      * por la llamada análoga a doDebug() pero usando PicoClient como
-     * transporte (en vez de VmClient sobre TCP).
+     * transporte (en vez de BpvmClient sobre TCP).
      */
     private void doDebugOnPico() {
         String msg =
@@ -1675,7 +1675,7 @@ public class FrmMain extends javax.swing.JFrame
             workdir = Files.createTempDirectory("bpide-vm-");
             publish.accept("[ide] workdir temporal: " + workdir + "\n");
 
-            try (VmClient client = new VmClient()) {
+            try (BpvmClient client = new BpvmClient()) {
                 client.setDiagSink(s -> publish.accept("[vm] " + s + "\n"));
                 client.setOutputSink(publish::accept);
                 // N20 — IO.prompt(spec) del programa BP abre un JDialog
@@ -1790,7 +1790,7 @@ public class FrmMain extends javax.swing.JFrame
         return null;
     }
 
-    /** Sube .mod/.bpi/.dbg del outDir local a la raíz del workdir del VmClient.
+    /** Sube .mod/.bpi/.dbg del outDir local a la raíz del workdir del BpvmClient.
      *  No recurre: asume que outDir está plano (lo está hoy).
      *
      *  Filtro importante: NO sube ningún artefacto cuyo basename coincida
@@ -1807,7 +1807,7 @@ public class FrmMain extends javax.swing.JFrame
                     "Json", "L2Lib"
             ));
 
-    private int uploadAppArtifacts(VmClient client, Path outDir,
+    private int uploadAppArtifacts(BpvmClient client, Path outDir,
                                    java.util.function.Consumer<String> publish) throws java.io.IOException {
         if (!Files.isDirectory(outDir)) return 0;
         int n = 0;

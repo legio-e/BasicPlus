@@ -1,5 +1,5 @@
 // ============================================================
-// VmClient.java
+// BpvmClient.java
 // Cliente del IDE para hablar con la VM cuando ésta corre como
 // PROCESO SEPARADO (A1.5).
 //
@@ -62,7 +62,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-public final class VmClient implements AutoCloseable {
+public final class BpvmClient implements AutoCloseable {
 
     /** Clave sintética que la readLoop pone en el Map de respuesta cuando
      *  el reply venía con bulk binario; el valor es el byte[] crudo. */
@@ -204,11 +204,11 @@ public final class VmClient implements AutoCloseable {
                     "\"protoVersion\":1,\"clientName\":\"BpIde\",\"clientBuild\":\"1.0\"",
                     null, 5000);
             serverBuild = Json.getString(resp, "serverBuild", "?");
-            diag("[VmClient] handshake con VM: " + Json.getString(resp, "serverName", "?")
+            diag("[BpvmClient] handshake con VM: " + Json.getString(resp, "serverName", "?")
                     + " " + serverBuild
                     + " protoVersion=" + Json.getLong(resp, "protoVersion", 0));
         } catch (IOException e) {
-            diag("[VmClient] handshake falló: " + e.getMessage());
+            diag("[BpvmClient] handshake falló: " + e.getMessage());
         }
     }
 
@@ -245,7 +245,7 @@ public final class VmClient implements AutoCloseable {
      *  detrás. Atómico para el peer (todo bajo writeLock). */
     private void writeFrame(String jsonLine, byte[] bulkOrNull) throws IOException {
         OutputStream w = this.outRaw;
-        if (w == null) throw new IOException("VmClient cerrado o no conectado");
+        if (w == null) throw new IOException("BpvmClient cerrado o no conectado");
         synchronized (writeLock) {
             WireFraming.sendLine(w, jsonLine);
             if (bulkOrNull != null && bulkOrNull.length > 0) {
@@ -272,7 +272,7 @@ public final class VmClient implements AutoCloseable {
         try {
             writeFrame(sb.toString(), bulkOrNull);
         } catch (IOException e) {
-            diag("[VmClient] sendOneShot('" + type + "') falló: " + e.getMessage());
+            diag("[BpvmClient] sendOneShot('" + type + "') falló: " + e.getMessage());
         }
     }
 
@@ -542,7 +542,7 @@ public final class VmClient implements AutoCloseable {
         pb.redirectErrorStream(false);
         this.process = pb.start();
         startStderrPump();
-        diag("[VmClient] subproceso lanzado en puerto " + port);
+        diag("[BpvmClient] subproceso lanzado en puerto " + port);
     }
 
     private static String locateBpgenvmJar() {
@@ -611,28 +611,28 @@ public final class VmClient implements AutoCloseable {
                 try {
                     m = Json.parseFlatObject(line);
                 } catch (Throwable t) {
-                    diag("[VmClient] línea no parseable: " + line);
+                    diag("[BpvmClient] línea no parseable: " + line);
                     continue;
                 }
                 // Si el frame trae bulk, leerlo del wire antes de procesar.
                 long bulkSize = Json.getLong(m, "bulk", 0);
                 if (bulkSize > 0) {
                     if (bulkSize > Integer.MAX_VALUE) {
-                        diag("[VmClient] bulk size fuera de rango: " + bulkSize);
+                        diag("[BpvmClient] bulk size fuera de rango: " + bulkSize);
                         break;
                     }
                     try {
                         byte[] data = WireFraming.recvBulk(inRaw, (int) bulkSize);
                         m.put(BULK_KEY, data);
                     } catch (IOException ioe) {
-                        diag("[VmClient] error leyendo bulk: " + ioe.getMessage());
+                        diag("[BpvmClient] error leyendo bulk: " + ioe.getMessage());
                         break;
                     }
                 }
                 handleMessage(m);
             }
         } catch (IOException e) {
-            if (!closed) diag("[VmClient] readLoop terminó: " + e.getMessage());
+            if (!closed) diag("[BpvmClient] readLoop terminó: " + e.getMessage());
         }
     }
 
@@ -666,7 +666,7 @@ public final class VmClient implements AutoCloseable {
         if ("FATAL".equals(type)) {
             String code = Json.getString(m, "code", "PROTOCOL_ERROR");
             String msg  = Json.getString(m, "message", "FATAL recibido");
-            diag("[VmClient] FATAL [" + code + "]: " + msg);
+            diag("[BpvmClient] FATAL [" + code + "]: " + msg);
             IOException ex = new IOException("VM FATAL [" + code + "]: " + msg);
             java.util.List<CompletableFuture<Map<String,Object>>> toFail;
             synchronized (pendingLock) {
@@ -695,12 +695,12 @@ public final class VmClient implements AutoCloseable {
                     listenerExec.execute(() -> {
                         try { h.onPrompt(promptId, spec); }
                         catch (Throwable t) {
-                            diag("[VmClient] promptHandler: " + t.getMessage());
+                            diag("[BpvmClient] promptHandler: " + t.getMessage());
                             respondToPrompt(promptId, "{}");
                         }
                     });
                 } else {
-                    diag("[VmClient] PROMPT_REQUEST sin handler; respondiendo vacío");
+                    diag("[BpvmClient] PROMPT_REQUEST sin handler; respondiendo vacío");
                     respondToPrompt(promptId, "{}");
                 }
                 break;
@@ -744,7 +744,7 @@ public final class VmClient implements AutoCloseable {
                 break;
             }
             default:
-                diag("[VmClient] tipo desconocido: " + type);
+                diag("[BpvmClient] tipo desconocido: " + type);
         }
     }
 
@@ -755,7 +755,7 @@ public final class VmClient implements AutoCloseable {
         // el listener hace queries síncronas vía sendRequest.
         listenerExec.execute(() -> {
             try { l.onEvent(ev); }
-            catch (Throwable t) { diag("[VmClient] listener: " + t.getMessage()); }
+            catch (Throwable t) { diag("[BpvmClient] listener: " + t.getMessage()); }
         });
     }
 
