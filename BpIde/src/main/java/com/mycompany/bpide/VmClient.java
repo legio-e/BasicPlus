@@ -15,22 +15,13 @@
 //          BP_HIT (→ PausedEvent), RESUMED, EXITED, EXCEPTION,
 //          PROMPT_REQUEST.
 //        - Entrante replies: X_REPLY con `id` correlado, ERROR.
+//        - Bulk binario inline en PUT (request) y GET_REPLY (reply):
+//          tras el `\n` del JSON vienen N bytes raw declarados en
+//          `"bulk":N`.
 //
-// PR-1: framing v1 con limitaciones documentadas en DebugServer.java
-// (sin bulk binario, sin session, sin códigos de error específicos).
-//
-// Strategy de localización del binario:
-//   - Lanzamos `java -cp <classpath actual> edu.bpgenvm.Main`. Eso
-//     funciona desde Maven, IntelliJ y desde un jar empaquetado, sin
-//     necesidad de buscar el jar de bpgenvm.
-//   - El java binario es el mismo que ejecuta el IDE
-//     (`java.home`/bin/java).
-//
-// Strategy del puerto:
-//   - Reservamos un puerto libre con ServerSocket(0), lo cerramos
-//     inmediatamente, lo pasamos a la VM. Pequeña race con otros
-//     procesos que pudieran agarrar el puerto; aceptable para
-//     localhost.
+// PR-2: bulk binario raw inline (sustituye el base64 de PR-1).
+// PR-1 framing limitaciones documentadas en DebugServer.java
+// (sin session, sin códigos de error específicos).
 //
 // Lifecycle:
 //   - start(modPath) bloquea hasta tener HELLO_REPLY del server o
@@ -40,6 +31,7 @@
 package com.mycompany.bpide;
 
 import edu.bpgenvm.util.Json;
+import edu.bpgenvm.util.WireFraming;
 import edu.bpgenvm.vm.ModuleManager;
 import edu.bpgenvm.vm.debug.DebugListener;
 import edu.bpgenvm.vm.debug.ExceptionEvent;
@@ -48,11 +40,14 @@ import edu.bpgenvm.vm.debug.PausedEvent;
 import edu.bpgenvm.vm.debug.ResumedEvent;
 import edu.bpgenvm.vm.debug.StepCommand;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -69,6 +64,10 @@ import java.util.function.Consumer;
 
 public final class VmClient implements AutoCloseable {
 
+    /** Clave sintética que la readLoop pone en el Map de respuesta cuando
+     *  el reply venía con bulk binario; el valor es el byte[] crudo. */
+    private static final String BULK_KEY = "__bulk";
+
     /** N20 — Listener para PROMPT_REQUEST del servidor. El IDE registra un
      *  callback que muestra el formulario y devuelve los valores como JSON.
      *  La VM espera bloqueada hasta que `respondToPrompt(promptId, json)`
@@ -84,7 +83,8 @@ public final class VmClient implements AutoCloseable {
     public void respondToPrompt(long promptId, String valuesJson) {
         sendOneShot("PROMPT_RESPONSE",
                 "\"promptId\":" + promptId
-                + ",\"values\":" + jsonStr(valuesJson == null ? "" : valuesJson));
+                + ",\"values\":" + jsonStr(valuesJson == null ? "" : valuesJson),
+                null);
     }
 
     /** Sink para los chunks OUTPUT del programa BP. Lo invoca el thread
@@ -100,8 +100,11 @@ public final class VmClient implements AutoCloseable {
 
     private Process process;
     private Socket socket;
-    private PrintWriter out;
-    private BufferedReader in;
+    /** Stream crudo de escritura. Protegido por `writeLock`. */
+    private OutputStream outRaw;
+    /** Stream crudo de lectura. Usado SÓLO desde readLoop thread. */
+    private InputStream inRaw;
+    private final Object writeLock = new Object();
 
     private Thread readerThread;
     private Thread stderrPumpThread;
@@ -142,10 +145,6 @@ public final class VmClient implements AutoCloseable {
      * Arranca el subproceso bpgenvm con --listen y --wait-client, y conecta
      * por socket. Devuelve cuando el HELLO_REPLY del server ha llegado, o
      * lanza IOException si timeout/error.
-     *
-     * @param modOrProjectPath  ruta absoluta a un .mod o .bpproject.
-     * @param waitClient        si true se pasa --wait-client (la VM bloquea
-     *                          hasta que conectemos; recomendado).
      */
     public void start(String modOrProjectPath, boolean waitClient) throws IOException {
         startInternal(modOrProjectPath, null, waitClient, null);
@@ -158,19 +157,12 @@ public final class VmClient implements AutoCloseable {
         startDaemon(workdir, waitClient, null);
     }
 
-    /** A2.6 — Conecta a una VM REMOTA ya corriendo en {@code host:port}.
-     *  No lanza subproceso; asume que el daemon vive en el otro extremo y
-     *  está aceptando conexiones. El IDE sube ficheros y manda RUN
-     *  via wire — mismo flujo que startDaemon local, salto el spawn.
-     *  Útil para apuntar al dispositivo objetivo. */
+    /** A2.6 — Conecta a una VM REMOTA ya corriendo en {@code host:port}. */
     public void connectRemote(String host, int port) throws IOException {
         try {
             this.socket = new java.net.Socket(host, port);
-            this.out = new PrintWriter(
-                    new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8),
-                    false);
-            this.in = new BufferedReader(
-                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            this.outRaw = new BufferedOutputStream(socket.getOutputStream());
+            this.inRaw  = new BufferedInputStream(socket.getInputStream());
         } catch (IOException e) {
             throw new IOException("no se pudo conectar a la VM remota " + host + ":" + port
                     + " — ¿está corriendo `bpgenvm --listen " + port + " --workdir ...` allí?", e);
@@ -180,9 +172,7 @@ public final class VmClient implements AutoCloseable {
     }
 
     /** Variante con stdlibDir explícito: se pasa como --stdlibDir al
-     *  subproceso VM y gana sobre cualquier BpVM.cfg autodiscovery. Útil
-     *  cuando el IDE conoce el cfg pero el subproceso se arranca desde un
-     *  cwd que no contiene BpVM.cfg. */
+     *  subproceso VM y gana sobre cualquier BpVM.cfg autodiscovery. */
     public void startDaemon(String workdir, boolean waitClient, String stdlibDir) throws IOException {
         if (workdir == null) throw new IllegalArgumentException("workdir requerido en modo daemon");
         startInternal(null, workdir, waitClient, stdlibDir);
@@ -205,13 +195,10 @@ public final class VmClient implements AutoCloseable {
     /** v1 handshake: client → HELLO request; server → HELLO_REPLY.
      *  Bloquea hasta recibir el HELLO_REPLY o un timeout corto. */
     private void doHandshake() {
-        // Enviamos el HELLO request en background para no bloquear si el
-        // socket no está listo. La respuesta cierra el helloLatch desde
-        // handleReply (camino regular).
         try {
             Map<String, Object> resp = sendRequest("HELLO",
                     "\"protoVersion\":1,\"clientName\":\"BpIde\",\"clientBuild\":\"1.0\"",
-                    5000);
+                    null, 5000);
             serverBuild = Json.getString(resp, "serverBuild", "?");
             diag("[VmClient] handshake con VM: " + Json.getString(resp, "serverName", "?")
                     + " " + serverBuild
@@ -224,7 +211,7 @@ public final class VmClient implements AutoCloseable {
     /** Cierra el socket, mata el subproceso, junta los threads. */
     @Override public void close() {
         closed = true;
-        try { if (out != null) out.flush(); } catch (Throwable ignored) {}
+        try { if (outRaw != null) outRaw.flush(); } catch (Throwable ignored) {}
         try { if (socket != null) socket.close(); } catch (IOException ignored) {}
         terminateProcess();
         try { if (readerThread != null) readerThread.join(2000); } catch (InterruptedException ignored) {}
@@ -250,57 +237,66 @@ public final class VmClient implements AutoCloseable {
 
     // ---- Comandos al VM (cliente → server) ----
 
-    public synchronized void sendRaw(String jsonLine) {
-        PrintWriter w = this.out;
-        if (w == null) return;
-        w.print(jsonLine);
-        w.print('\n');
-        w.flush();
+    /** Escribe una línea JSON + opcionalmente bulk binario inmediatamente
+     *  detrás. Atómico para el peer (todo bajo writeLock). */
+    private void writeFrame(String jsonLine, byte[] bulkOrNull) throws IOException {
+        OutputStream w = this.outRaw;
+        if (w == null) throw new IOException("VmClient cerrado o no conectado");
+        synchronized (writeLock) {
+            WireFraming.sendLine(w, jsonLine);
+            if (bulkOrNull != null && bulkOrNull.length > 0) {
+                WireFraming.sendBulk(w, bulkOrNull);
+            }
+            w.flush();
+        }
     }
 
     /** Envío fire-and-forget de un request v1 — asigna `id`, no espera
      *  reply. La reply correspondiente llega y se descarta (no hay future
-     *  registrada). Para acciones como SET_BP, CONTINUE, STEP, KILL,
-     *  RUN, PROMPT_RESPONSE que el IDE dispara desde EDT/menús sin
-     *  necesidad de aguardar confirmación síncrona. */
-    private synchronized void sendOneShot(String type, String extraJson) {
+     *  registrada). */
+    private void sendOneShot(String type, String extraJson, byte[] bulkOrNull) {
         long id = nextRequestId.getAndIncrement();
         StringBuilder sb = new StringBuilder(64);
         sb.append("{\"type\":\"").append(type).append("\",\"id\":").append(id);
         if (extraJson != null && !extraJson.isEmpty()) {
             sb.append(',').append(extraJson);
         }
+        if (bulkOrNull != null) {
+            sb.append(",\"bulk\":").append(bulkOrNull.length);
+        }
         sb.append('}');
-        sendRaw(sb.toString());
+        try {
+            writeFrame(sb.toString(), bulkOrNull);
+        } catch (IOException e) {
+            diag("[VmClient] sendOneShot('" + type + "') falló: " + e.getMessage());
+        }
     }
 
     public void setBreakpoint(String file, int line, boolean enabled) {
         sendOneShot("SET_BP",
                 "\"file\":\"" + Json.escape(file) + "\""
                 + ",\"line\":" + line
-                + ",\"enabled\":" + (enabled ? "true" : "false"));
+                + ",\"enabled\":" + (enabled ? "true" : "false"),
+                null);
     }
 
     public void clearAllBreakpoints() {
-        // PR-1: sin bpId → server interpreta como clear-all (compat).
-        sendOneShot("CLR_BP", "");
+        sendOneShot("CLR_BP", "", null);
     }
 
-    /** A2.3 — Ordena al daemon arrancar el módulo `module` (path relativo
-     *  al workdir). Sólo válido si la VM se lanzó en modo daemon (sin
-     *  fichero en CLI). Fire-and-forget: el EXITED event es la confirmación
-     *  del fin de ejecución; el RUN_REPLY se descarta. */
+    /** A2.3 — Ordena al daemon arrancar el módulo `module`. Fire-and-forget:
+     *  el EXITED event es la confirmación del fin de ejecución. */
     public void runModule(String module) {
-        sendOneShot("RUN", "\"path\":\"" + Json.escape(module) + "\"");
+        sendOneShot("RUN", "\"path\":\"" + Json.escape(module) + "\"", null);
     }
 
     public void sendCommand(StepCommand cmd) {
         switch (cmd) {
-            case CONTINUE:  sendOneShot("CONTINUE", ""); break;
-            case STEP_INTO: sendOneShot("STEP", "\"mode\":\"into\""); break;
-            case STEP_OVER: sendOneShot("STEP", "\"mode\":\"over\""); break;
-            case STEP_OUT:  sendOneShot("STEP", "\"mode\":\"out\""); break;
-            case STOP:      sendOneShot("KILL", ""); break;
+            case CONTINUE:  sendOneShot("CONTINUE", "", null); break;
+            case STEP_INTO: sendOneShot("STEP", "\"mode\":\"into\"", null); break;
+            case STEP_OVER: sendOneShot("STEP", "\"mode\":\"over\"", null); break;
+            case STEP_OUT:  sendOneShot("STEP", "\"mode\":\"out\"", null); break;
+            case STOP:      sendOneShot("KILL", "", null); break;
         }
     }
 
@@ -310,9 +306,9 @@ public final class VmClient implements AutoCloseable {
 
     /** Envía un request v1 y devuelve el mapa de respuesta. Lanza
      *  IOException si timeout o si la respuesta es un ERROR. `extraJson`
-     *  va como pares CSV ya formateados (sin llaves), p.ej.
-     *  "\"path\":\"/x\",\"size\":42". */
-    private Map<String, Object> sendRequest(String type, String extraJson, long timeoutMs)
+     *  va como pares CSV ya formateados (sin llaves). `bulkOrNull` se
+     *  serializa como `"bulk":N` + N bytes raw tras el `\n`. */
+    private Map<String, Object> sendRequest(String type, String extraJson, byte[] bulkOrNull, long timeoutMs)
             throws IOException {
         long id = nextRequestId.getAndIncrement();
         CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
@@ -322,8 +318,11 @@ public final class VmClient implements AutoCloseable {
         if (extraJson != null && !extraJson.isEmpty()) {
             sb.append(',').append(extraJson);
         }
+        if (bulkOrNull != null) {
+            sb.append(",\"bulk\":").append(bulkOrNull.length);
+        }
         sb.append('}');
-        sendRaw(sb.toString());
+        writeFrame(sb.toString(), bulkOrNull);
         try {
             Map<String, Object> resp = future.get(timeoutMs, TimeUnit.MILLISECONDS);
             String respType = Json.getString(resp, "type", "");
@@ -345,7 +344,7 @@ public final class VmClient implements AutoCloseable {
 
     /** Locales del thread pausado: i32 entre bp y sp. Falla si no hay pausa. */
     public int[] getLocals(long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("LOCALS", null, timeoutMs);
+        Map<String, Object> resp = sendRequest("LOCALS", null, null, timeoutMs);
         List<Object> locals = Json.getList(resp, "locals");
         if (locals == null) return new int[0];
         int[] out = new int[locals.size()];
@@ -357,7 +356,7 @@ public final class VmClient implements AutoCloseable {
 
     /** Stack frames como pares [pc, bp]. */
     public List<int[]> getStackFrames(long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("STACK", null, timeoutMs);
+        Map<String, Object> resp = sendRequest("STACK", null, null, timeoutMs);
         List<Object> frames = Json.getList(resp, "frames");
         List<int[]> out = new ArrayList<>();
         if (frames == null) return out;
@@ -372,11 +371,10 @@ public final class VmClient implements AutoCloseable {
         return out;
     }
 
-    /** Snapshot de properties públicas de todos los módulos. Reconstruye
-     *  PropertyView para que el código del IDE no sepa que viene por wire.
-     *  MODULE_PROPERTIES es extensión Java-only (no está en v1). */
+    /** Snapshot de properties públicas de todos los módulos. MODULE_PROPERTIES
+     *  es extensión Java-only (no está en v1). */
     public List<ModuleManager.PropertyView> getModuleProperties(long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("MODULE_PROPERTIES", null, timeoutMs);
+        Map<String, Object> resp = sendRequest("MODULE_PROPERTIES", null, null, timeoutMs);
         List<Object> props = Json.getList(resp, "props");
         List<ModuleManager.PropertyView> out = new ArrayList<>();
         if (props == null) return out;
@@ -394,31 +392,26 @@ public final class VmClient implements AutoCloseable {
         return out;
     }
 
-    /** Lee un i32 de la memoria de la VM en una dirección absoluta.
-     *  Extensión Java-only; PR-5 lo absorbe en INSPECT. */
+    /** Lee un i32 de la memoria de la VM en una dirección absoluta. */
     public int readMemoryInt(int addr, long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("READ_INT", "\"addr\":" + addr, timeoutMs);
+        Map<String, Object> resp = sendRequest("READ_INT", "\"addr\":" + addr, null, timeoutMs);
         return (int) Json.getLong(resp, "value", 0);
     }
 
-    /** Lee un string BP por ref; "" si no es un string válido.
-     *  Extensión Java-only; PR-5 lo absorbe en INSPECT. */
+    /** Lee un string BP por ref; "" si no es un string válido. */
     public String readStringIfPossible(int ref, long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("READ_STRING", "\"ref\":" + ref, timeoutMs);
+        Map<String, Object> resp = sendRequest("READ_STRING", "\"ref\":" + ref, null, timeoutMs);
         return Json.getString(resp, "value", "");
     }
 
     // ============================================================
-    // Transferencia de ficheros (A2.2) — PR-1 sigue con base64;
-    // PR-2 cambiará a bulk binario raw inline.
+    // Transferencia de ficheros (A2.2) — PR-2: bulk binario raw inline.
     // ============================================================
 
-    /** Sube `bytes` al workdir de la VM en `remotePath`. Devuelve el
-     *  tamaño confirmado por el server. */
+    /** Sube `bytes` al workdir de la VM en `remotePath`. Bulk raw inline. */
     public int uploadFile(String remotePath, byte[] bytes, long timeoutMs) throws IOException {
-        String b64 = java.util.Base64.getEncoder().encodeToString(bytes);
-        String extra = "\"path\":" + jsonStr(remotePath) + ",\"data\":\"" + b64 + "\"";
-        Map<String, Object> resp = sendRequest("PUT", extra, timeoutMs);
+        String extra = "\"path\":" + jsonStr(remotePath);
+        Map<String, Object> resp = sendRequest("PUT", extra, bytes, timeoutMs);
         return (int) Json.getLong(resp, "size", 0);
     }
 
@@ -429,12 +422,16 @@ public final class VmClient implements AutoCloseable {
         return uploadFile(remotePath, data, timeoutMs);
     }
 
-    /** Descarga `remotePath` del workdir de la VM. */
+    /** Descarga `remotePath` del workdir de la VM. Bulk raw inline. */
     public byte[] downloadFile(String remotePath, long timeoutMs) throws IOException {
         Map<String, Object> resp = sendRequest("GET",
-                "\"path\":" + jsonStr(remotePath), timeoutMs);
-        String b64 = Json.getString(resp, "data", "");
-        return java.util.Base64.getDecoder().decode(b64);
+                "\"path\":" + jsonStr(remotePath), null, timeoutMs);
+        Object b = resp.get(BULK_KEY);
+        if (b instanceof byte[]) return (byte[]) b;
+        // Fallback defensivo: si por algún motivo el server no envió bulk,
+        // devolvemos el tamaño cero como antes (el caller suele inspeccionar
+        // la longitud por su cuenta).
+        return new byte[0];
     }
 
     /** Una entrada de un directorio devuelta por listFiles. */
@@ -454,7 +451,7 @@ public final class VmClient implements AutoCloseable {
     /** Lista los ficheros bajo `remotePath` ("" o "." = raíz del workdir). */
     public List<RemoteFile> listFiles(String remotePath, long timeoutMs) throws IOException {
         String extra = "\"path\":" + jsonStr(remotePath == null ? "" : remotePath);
-        Map<String, Object> resp = sendRequest("LIST", extra, timeoutMs);
+        Map<String, Object> resp = sendRequest("LIST", extra, null, timeoutMs);
         List<Object> arr = Json.getList(resp, "entries");
         List<RemoteFile> out = new ArrayList<>();
         if (arr == null) return out;
@@ -472,12 +469,12 @@ public final class VmClient implements AutoCloseable {
 
     /** Borra un fichero (no recursivo para dirs — el dir debe estar vacío). */
     public void deleteFile(String remotePath, long timeoutMs) throws IOException {
-        sendRequest("DEL", "\"path\":" + jsonStr(remotePath), timeoutMs);
+        sendRequest("DEL", "\"path\":" + jsonStr(remotePath), null, timeoutMs);
     }
 
     /** Crea un directorio (incluyendo intermedios) en el workdir. */
     public void mkdir(String remotePath, long timeoutMs) throws IOException {
-        sendRequest("MKDIR", "\"path\":" + jsonStr(remotePath), timeoutMs);
+        sendRequest("MKDIR", "\"path\":" + jsonStr(remotePath), null, timeoutMs);
     }
 
     /** Helper para serializar un string con comillas + escape. */
@@ -501,14 +498,6 @@ public final class VmClient implements AutoCloseable {
             javaBin += ".exe";
         }
 
-        // Localizamos el classpath para el subproceso. Estrategia:
-        //   1) Resolver el origen físico de edu.bpgenvm.Main (su jar o
-        //      directorio de clases). Es lo único que el subproceso
-        //      necesita para ejecutarse como VM.
-        //   2) Concatenarlo con `java.class.path` actual. En producción
-        //      (jar empaquetado) ambos suelen coincidir; en mvn exec:java
-        //      `java.class.path` puede no incluir el jar de bpgenvm, así
-        //      que el paso 1 lo añade y todo va bien.
         String bpgenvmCp = locateBpgenvmJar();
         String runtimeCp = System.getProperty("java.class.path", "");
         String classpath;
@@ -541,16 +530,12 @@ public final class VmClient implements AutoCloseable {
         if (modOrProject != null) argv.add(modOrProject);
 
         ProcessBuilder pb = new ProcessBuilder(argv);
-        // stderr en pipe separado para bombearlo al diagSink.
         pb.redirectErrorStream(false);
         this.process = pb.start();
         startStderrPump();
-        // (Process.pid() requiere Java 9+; mantenemos el log sin PID por compat 1.8.)
         diag("[VmClient] subproceso lanzado en puerto " + port);
     }
 
-    /** Devuelve la ruta del jar (o dir de clases) que aloja edu.bpgenvm.Main,
-     *  o null si no se puede determinar. */
     private static String locateBpgenvmJar() {
         try {
             java.security.CodeSource cs = edu.bpgenvm.Main.class
@@ -584,15 +569,11 @@ public final class VmClient implements AutoCloseable {
         while (System.currentTimeMillis() < deadline) {
             try {
                 this.socket = new Socket("localhost", port);
-                this.out = new PrintWriter(
-                        new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8),
-                        false);
-                this.in = new BufferedReader(
-                        new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                this.outRaw = new BufferedOutputStream(socket.getOutputStream());
+                this.inRaw  = new BufferedInputStream(socket.getInputStream());
                 return;
             } catch (IOException e) {
                 last = e;
-                // El subproceso quizás aún no ha bindeado; pausa breve y reintenta.
                 try { Thread.sleep(50); } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     throw new IOException("interrupted while connecting", e);
@@ -613,23 +594,40 @@ public final class VmClient implements AutoCloseable {
 
     private void readLoop() {
         try {
-            String line;
-            while (!closed && (line = in.readLine()) != null) {
-                handleLine(line);
+            while (!closed) {
+                String line = WireFraming.recvLine(inRaw);
+                if (line == null) break;
+                if (line.isEmpty()) continue;
+                Map<String, Object> m;
+                try {
+                    m = Json.parseFlatObject(line);
+                } catch (Throwable t) {
+                    diag("[VmClient] línea no parseable: " + line);
+                    continue;
+                }
+                // Si el frame trae bulk, leerlo del wire antes de procesar.
+                long bulkSize = Json.getLong(m, "bulk", 0);
+                if (bulkSize > 0) {
+                    if (bulkSize > Integer.MAX_VALUE) {
+                        diag("[VmClient] bulk size fuera de rango: " + bulkSize);
+                        break;
+                    }
+                    try {
+                        byte[] data = WireFraming.recvBulk(inRaw, (int) bulkSize);
+                        m.put(BULK_KEY, data);
+                    } catch (IOException ioe) {
+                        diag("[VmClient] error leyendo bulk: " + ioe.getMessage());
+                        break;
+                    }
+                }
+                handleMessage(m);
             }
         } catch (IOException e) {
             if (!closed) diag("[VmClient] readLoop terminó: " + e.getMessage());
         }
     }
 
-    private void handleLine(String line) {
-        Map<String, Object> m;
-        try {
-            m = Json.parseFlatObject(line);
-        } catch (Throwable t) {
-            diag("[VmClient] línea no parseable: " + line);
-            return;
-        }
+    private void handleMessage(Map<String, Object> m) {
         String type = Json.getString(m, "type", "");
         // v1: si trae `id` es una reply (o ERROR a un request específico).
         Object rawId = m.get("id");
@@ -643,8 +641,6 @@ public final class VmClient implements AutoCloseable {
                 // Reply sin request pendiente: probablemente respuesta a un
                 // sendOneShot (fire-and-forget). Silencioso por diseño.
             }
-            // El handshake llega como HELLO_REPLY: tras enviárselo al future,
-            // marcamos el latch (algún consumidor puede esperarlo).
             if ("HELLO_REPLY".equals(type)) {
                 helloLatch.countDown();
             }
@@ -659,24 +655,18 @@ public final class VmClient implements AutoCloseable {
                 break;
             }
             case "PROMPT_REQUEST": {
-                // N20 — el programa BP llamó a IO.prompt(spec).
                 long promptId = Json.getLong(m, "promptId", -1);
                 String spec = Json.getString(m, "spec", "");
                 PromptHandler h = promptHandler;
                 if (h != null) {
-                    // Mismo dispatcher pattern que los DebugEvents — listenerExec
-                    // serializa para no bloquear el reader thread mientras la UI
-                    // construye el form.
                     listenerExec.execute(() -> {
                         try { h.onPrompt(promptId, spec); }
                         catch (Throwable t) {
                             diag("[VmClient] promptHandler: " + t.getMessage());
-                            // Fallback: responder con JSON vacío para no dejar la VM colgada.
                             respondToPrompt(promptId, "{}");
                         }
                     });
                 } else {
-                    // No hay handler: responder vacío para que la VM no se quede colgada.
                     diag("[VmClient] PROMPT_REQUEST sin handler; respondiendo vacío");
                     respondToPrompt(promptId, "{}");
                 }
@@ -735,16 +725,13 @@ public final class VmClient implements AutoCloseable {
         if (s != null) s.accept(line);
     }
 
-    /** Bloquea hasta que el subproceso termina O timeout. Devuelve true
-     *  si terminó, false si expiró. Útil para que el IDE espere "fin de
-     *  ejecución" antes de cerrar el VmClient. */
+    /** Bloquea hasta que el subproceso termina O timeout. */
     public boolean awaitTermination(long timeoutMs) throws InterruptedException {
         if (process == null) return true;
         return process.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
     }
 
-    /** Bloquea sin timeout hasta que el subproceso muere. Pensado para
-     *  el "Run" del IDE — el SwingWorker bloquea en este hilo de fondo. */
+    /** Bloquea sin timeout hasta que el subproceso muere. */
     public int waitForExit() throws InterruptedException {
         if (process == null) return 0;
         return process.waitFor();

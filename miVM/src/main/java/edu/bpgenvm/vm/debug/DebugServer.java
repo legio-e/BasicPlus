@@ -10,6 +10,11 @@
 //     Se parsean y se traducen a invocaciones del DebugController. Cada
 //     request recibe una reply síncrona con el mismo id.
 //
+//   - Bulk binario inline (v1 §2.2): cuando un mensaje declara
+//     `"bulk":N`, los N bytes raw vienen inmediatamente tras el `\n`
+//     del JSON, sin separador. Aplicable hoy a PUT (request) y
+//     GET_REPLY (reply).
+//
 // Vida del servidor:
 //   1) start(port) abre el ServerSocket y arranca un thread de accept.
 //   2) Al primer cliente, conecta sus streams al controller + sink y
@@ -23,12 +28,10 @@
 // attach"). Lo controla `waitForClient`.
 //
 // Protocolo wire — v1 (docs/BPVM_WIRE_PROTOCOL.md).
-// PR-1: framing base + nombres v1. Deviations conscientes (cerradas
-// en PRs siguientes):
+// PR-2 incorpora bulk binario raw inline en PUT/GET. Deviations
+// pendientes (cerradas en PRs siguientes):
 //   - SET_BP_REPLY devuelve bpId=0 placeholder (PR-5: real bpId).
 //   - BP_HIT/RESUMED conservan campos planos (PR-5: nested frame).
-//   - PUT/GET aún transportan los bytes como base64 en `data`
-//     (PR-2: bulk binario raw inline).
 //   - No hay sessionId todavía (PR-3).
 //   - No hay INFO/PING/RESET/STAT/RMDIR/RENAME/FORMAT/DF (PR-4),
 //     ni PAUSE/LIST_BP/EVAL/INSPECT (PR-5).
@@ -38,14 +41,16 @@
 package edu.bpgenvm.vm.debug;
 
 import edu.bpgenvm.util.Json;
+import edu.bpgenvm.util.WireFraming;
 import edu.bpgenvm.vm.DebugContext;
 import edu.bpgenvm.vm.ModuleManager;
 import edu.bpgenvm.vm.VirtualMachine;
 
-import java.io.BufferedReader;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -71,8 +76,13 @@ public final class DebugServer implements AutoCloseable {
 
     private ServerSocket serverSocket;
     private Socket client;
-    private PrintWriter clientOut;
-    private BufferedReader clientIn;
+    /** Stream crudo para escribir frames al cliente. Protegido por `writeLock`. */
+    private OutputStream clientOutRaw;
+    /** Stream crudo para leer frames del cliente. Usado SÓLO desde el readLoop thread. */
+    private InputStream clientInRaw;
+    /** Lock para escrituras al socket (eventos VM y replies pueden venir
+     *  de distintos threads — controller listeners, prompt sender, reader). */
+    private final Object writeLock = new Object();
     private Thread readerThread;
 
     /** Latch para esperar el primer cliente cuando se arranca en modo
@@ -121,15 +131,14 @@ public final class DebugServer implements AutoCloseable {
             Socket s = serverSocket.accept();   // bloquea hasta el primer cliente
             if (closed) { try { s.close(); } catch (IOException ignored) {} return; }
             this.client = s;
-            this.clientOut = new PrintWriter(
-                    new java.io.OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8),
-                    false);
-            this.clientIn = new BufferedReader(
-                    new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+            this.clientOutRaw = new BufferedOutputStream(s.getOutputStream());
+            this.clientInRaw  = new BufferedInputStream(s.getInputStream());
             System.err.println("[DebugServer] cliente conectado desde " + s.getRemoteSocketAddress());
 
-            // Conectar sink + listener + promptSender.
-            SocketSink sink = new SocketSink(clientOut);
+            // Conectar sink + listener + promptSender. El SocketSink emite
+            // OUTPUT events a través de nuestro send(jsonLine), garantizando
+            // sincronización con el resto de tráfico.
+            SocketSink sink = new SocketSink(this::send);
             vm.setProgramOut(sink);
             controller.addListener(this::onEvent);
             vm.setPromptSender(this.promptSender);
@@ -202,22 +211,34 @@ public final class DebugServer implements AutoCloseable {
      *  porque vm.promptSender es null en ese caso. */
     public final PromptSender promptSender = new PromptSender() {
         @Override public void send(long requestId, String spec) {
-            // Llamada CUALIFICADA al send(jsonLine) de la outer class.
             DebugServer.this.send("{\"type\":\"PROMPT_REQUEST\",\"promptId\":" + requestId
                     + ",\"spec\":" + Json.quote(spec) + "}");
         }
     };
 
-    /** Envía una línea JSON. Si el cliente está cerrado, no-op. */
-    public synchronized void send(String jsonLine) {
-        PrintWriter w = this.clientOut;
+    /** Envía una línea JSON (sin bulk). Si el cliente está cerrado, no-op. */
+    public void send(String jsonLine) {
+        sendFrame(jsonLine, null);
+    }
+
+    /** Envía una línea JSON + opcionalmente un bulk binario raw inmediatamente
+     *  después del `\n`. Atómico para el peer: ambos writes van bajo el mismo
+     *  writeLock y el flush sale al final.
+     *
+     *  Si el cliente está cerrado, no-op silencioso (log a stderr). */
+    public void sendFrame(String jsonLine, byte[] bulkOrNull) {
+        OutputStream w = this.clientOutRaw;
         if (w == null) return;
-        try {
-            w.print(jsonLine);
-            w.print('\n');
-            w.flush();
-        } catch (Throwable t) {
-            System.err.println("[DebugServer] send falló: " + t.getMessage());
+        synchronized (writeLock) {
+            try {
+                WireFraming.sendLine(w, jsonLine);
+                if (bulkOrNull != null && bulkOrNull.length > 0) {
+                    WireFraming.sendBulk(w, bulkOrNull);
+                }
+                w.flush();
+            } catch (Throwable t) {
+                System.err.println("[DebugServer] sendFrame falló: " + t.getMessage());
+            }
         }
     }
 
@@ -226,11 +247,38 @@ public final class DebugServer implements AutoCloseable {
     private void readLoop() {
         try {
             String line;
-            while (!closed && (line = clientIn.readLine()) != null) {
+            while (!closed && (line = WireFraming.recvLine(clientInRaw)) != null) {
                 line = line.trim();
                 if (line.isEmpty()) continue;
+                byte[] bulk = null;
+                Map<String, Object> m;
                 try {
-                    handleMessage(line);
+                    m = Json.parseFlatObject(line);
+                } catch (Throwable t) {
+                    System.err.println("[DebugServer] JSON inválido: " + t.getMessage()
+                            + "  (línea: " + line + ")");
+                    continue;
+                }
+                // Si el mensaje declara bulk, leer los bytes del wire ANTES
+                // de procesar nada más — la siguiente línea JSON viene
+                // después de los bulk bytes y aún no la hemos visto.
+                long bulkSize = Json.getLong(m, "bulk", 0);
+                if (bulkSize > 0) {
+                    if (bulkSize > Integer.MAX_VALUE) {
+                        // No deberíamos ver bulk > 2 GiB en práctica; si llega,
+                        // es un mensaje malformado y cerramos por protocolo.
+                        System.err.println("[DebugServer] bulk size fuera de rango: " + bulkSize);
+                        break;
+                    }
+                    try {
+                        bulk = WireFraming.recvBulk(clientInRaw, (int) bulkSize);
+                    } catch (IOException ioe) {
+                        System.err.println("[DebugServer] error leyendo bulk: " + ioe.getMessage());
+                        break;
+                    }
+                }
+                try {
+                    handleMessage(m, bulk);
                 } catch (Throwable t) {
                     System.err.println("[DebugServer] mensaje ignorado: " + t.getMessage()
                             + "  (línea: " + line + ")");
@@ -244,13 +292,12 @@ public final class DebugServer implements AutoCloseable {
             // No mata la VM: sigue ejecutando headless.
             vm.setPromptSender(null);   // futuros prompt() lanzarán RuntimeError BP
             this.client = null;
-            this.clientOut = null;
-            this.clientIn = null;
+            this.clientOutRaw = null;
+            this.clientInRaw = null;
         }
     }
 
-    private void handleMessage(String jsonLine) {
-        Map<String, Object> m = Json.parseFlatObject(jsonLine);
+    private void handleMessage(Map<String, Object> m, byte[] bulk) {
         String type = Json.getString(m, "type", "");
         long id = Json.getLong(m, "id", -1);
         try {
@@ -337,7 +384,7 @@ public final class DebugServer implements AutoCloseable {
                 // ---- FILES ----
                 case "LIST":  sendListReply(id, m); break;
                 case "GET":   sendGetReply(id, m); break;
-                case "PUT":   sendPutReply(id, m); break;
+                case "PUT":   sendPutReply(id, m, bulk); break;
                 case "DEL":   sendDelReply(id, m); break;
                 case "MKDIR": sendMkdirReply(id, m); break;
 
@@ -488,7 +535,7 @@ public final class DebugServer implements AutoCloseable {
         sendReply(id, "READ_STRING_REPLY", "\"value\":" + Json.quote(s == null ? "" : s));
     }
 
-    // ---- File transfer (A2.2) — PR-1 mantiene base64; PR-2 cambia a bulk raw ----
+    // ---- File transfer (A2.2) — PR-2: bulk binario raw inline ----
 
     /** Resuelve un path del wire dentro del workdir. Si no hay workdir
      *  configurado, error: la VM debe haberse arrancado con --workdir
@@ -501,23 +548,20 @@ public final class DebugServer implements AutoCloseable {
         return mm.resolveInWorkdir(userPath);
     }
 
-    private void sendPutReply(long id, Map<String, Object> m) {
+    private void sendPutReply(long id, Map<String, Object> m, byte[] bulk) {
         String path = Json.getString(m, "path", "");
-        String b64  = Json.getString(m, "data", "");
         if (path.isEmpty()) {
             sendError(id, "INVALID_PARAM", "PUT: falta 'path'"); return;
         }
-        byte[] bytes;
-        try { bytes = java.util.Base64.getDecoder().decode(b64); }
-        catch (IllegalArgumentException iae) {
-            sendError(id, "INVALID_PARAM", "PUT: base64 inválido"); return;
+        if (bulk == null) {
+            sendError(id, "INVALID_PARAM", "PUT: falta bulk binario (campo 'bulk':N + N bytes raw)"); return;
         }
         try {
             java.nio.file.Path dst = workdirPath(path);
             java.nio.file.Path parent = dst.getParent();
             if (parent != null) java.nio.file.Files.createDirectories(parent);
-            java.nio.file.Files.write(dst, bytes);
-            sendReply(id, "PUT_REPLY", "\"size\":" + bytes.length);
+            java.nio.file.Files.write(dst, bulk);
+            sendReply(id, "PUT_REPLY", "\"size\":" + bulk.length);
         } catch (java.io.IOException e) {
             sendError(id, "INTERNAL_ERROR", "PUT: " + e.getMessage());
         }
@@ -531,9 +575,12 @@ public final class DebugServer implements AutoCloseable {
         try {
             java.nio.file.Path src = workdirPath(path);
             byte[] data = java.nio.file.Files.readAllBytes(src);
-            String b64 = java.util.Base64.getEncoder().encodeToString(data);
-            sendReply(id, "GET_REPLY",
-                    "\"size\":" + data.length + ",\"data\":\"" + b64 + "\"");
+            // v1: reply lleva `bulk:N`, los N bytes raw vienen inmediatamente
+            // tras el `\n`. Atómico bajo writeLock.
+            String header = "{\"type\":\"GET_REPLY\",\"id\":" + id
+                    + ",\"size\":" + data.length
+                    + ",\"bulk\":" + data.length + "}";
+            sendFrame(header, data);
         } catch (java.io.IOException e) {
             sendError(id, "INTERNAL_ERROR", "GET: " + e.getMessage());
         }
