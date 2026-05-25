@@ -112,6 +112,10 @@ public final class VmClient implements AutoCloseable {
     private final CountDownLatch helloLatch = new CountDownLatch(1);
     /** Build/version reportado por el server en HELLO_REPLY. */
     private volatile String serverBuild;
+    /** PR-3 — sessionId activa (0 = ninguna). La aprendemos de RUN_REPLY o
+     *  del campo `session` de cualquier evento entrante. La usamos para
+     *  componer KILL { session: N }. */
+    private volatile long currentSession = 0;
 
     /** Executor single-thread donde se invocan los DebugListener. Es CRUCIAL
      *  que no corran en el reader thread: si lo hicieran y un listener
@@ -296,7 +300,12 @@ public final class VmClient implements AutoCloseable {
             case STEP_INTO: sendOneShot("STEP", "\"mode\":\"into\"", null); break;
             case STEP_OVER: sendOneShot("STEP", "\"mode\":\"over\"", null); break;
             case STEP_OUT:  sendOneShot("STEP", "\"mode\":\"out\"", null); break;
-            case STOP:      sendOneShot("KILL", "", null); break;
+            case STOP: {
+                long sess = currentSession;
+                String extra = sess > 0 ? "\"session\":" + sess : "";
+                sendOneShot("KILL", extra, null);
+                break;
+            }
         }
     }
 
@@ -629,6 +638,11 @@ public final class VmClient implements AutoCloseable {
 
     private void handleMessage(Map<String, Object> m) {
         String type = Json.getString(m, "type", "");
+        // PR-3: refrescar currentSession si el mensaje trae uno. Aplica a
+        // replies (RUN_REPLY) y a eventos (BP_HIT/STEP_DONE/RESUMED/...).
+        long s = Json.getLong(m, "session", 0);
+        if (s > 0) this.currentSession = s;
+
         // v1: si trae `id` es una reply (o ERROR a un request específico).
         Object rawId = m.get("id");
         if (rawId instanceof Long) {
@@ -672,9 +686,13 @@ public final class VmClient implements AutoCloseable {
                 }
                 break;
             }
-            case "BP_HIT": {
-                // PR-1: la VM aún emite los campos planos de la PausedEvent
-                // Java. PR-5 introducirá `frame:{...}` anidado v1-puro.
+            case "BP_HIT":
+            case "STEP_DONE": {
+                // PR-3: BP_HIT (pausa inicial o BP real) y STEP_DONE
+                // (pausa tras STEP_INTO/OVER/OUT) comparten payload en el
+                // wire. El API in-process Java no distingue todavía — ambos
+                // se convierten en PausedEvent.
+                // PR-5 introducirá `frame:{...}` anidado v1-puro.
                 PausedEvent e = new PausedEvent(
                         (int) Json.getLong(m, "tid", 0),
                         (int) Json.getLong(m, "absPc", 0),
@@ -695,6 +713,8 @@ public final class VmClient implements AutoCloseable {
                 fire(new ExitedEvent(
                         (int) Json.getLong(m, "exitCode", 0),
                         Json.getString(m, "reason", "")));
+                // Tras EXITED no hay sesión activa.
+                this.currentSession = 0;
                 break;
             }
             case "EXCEPTION": {

@@ -231,7 +231,8 @@ class DebugServerTest {
                 String line = in.readLine();
                 Map<String,Object> m = Json.parseFlatObject(line);
                 assertEquals("BP_HIT", Json.getString(m, "type", ""));
-                // PR-1: bpId placeholder = 0; PR-5 lo hará único.
+                // PR-3: session=0 sin RUN previo. PR-5 introducirá bpId real.
+                assertEquals(0L,    Json.getLong(m, "session", -1));
                 assertEquals(0L,    Json.getLong(m, "bpId", -1));
                 assertEquals(3L,    Json.getLong(m, "tid", -1));
                 assertEquals(42L,   Json.getLong(m, "line", -1));
@@ -239,6 +240,51 @@ class DebugServerTest {
                 assertEquals(1234L, Json.getLong(m, "absPc", -1));
                 assertEquals(1000L, Json.getLong(m, "bp", -1));
                 assertEquals(1008L, Json.getLong(m, "sp", -1));
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    void stepEmiteStepDoneNoBpHit() throws Exception {
+        // PR-3: tras un STEP, la siguiente PausedEvent del controller se
+        // serializa como STEP_DONE (no BP_HIT). Sin STEP previo es BP_HIT.
+        int port = freePort();
+        VirtualMachine vm = new VirtualMachine();
+        DebugController controller = new DebugController();
+        try (DebugServer server = new DebugServer(vm, controller)) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                PrintWriter out = new PrintWriter(
+                        new java.io.OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8),
+                        true);
+
+                // 1) Cliente manda STEP — server responde STEP_REPLY y marca
+                //    stepInProgress=true para la siguiente pausa.
+                out.println("{\"type\":\"STEP\",\"id\":7,\"mode\":\"into\"}");
+                String r1 = in.readLine();
+                Map<String,Object> mr1 = Json.parseFlatObject(r1);
+                assertEquals("STEP_REPLY", Json.getString(mr1, "type", ""));
+                assertEquals(7L, Json.getLong(mr1, "id", -1));
+
+                // 2) Se emite PausedEvent — debe salir como STEP_DONE.
+                server.onEventForTest(new PausedEvent(
+                        0, 100, 5, "x.bp", 1000, 1004, 0, 65536));
+                String l1 = in.readLine();
+                Map<String,Object> m1 = Json.parseFlatObject(l1);
+                assertEquals("STEP_DONE", Json.getString(m1, "type", ""));
+                assertEquals(5L, Json.getLong(m1, "line", -1));
+
+                // 3) Siguiente PausedEvent — ya no es step → BP_HIT.
+                server.onEventForTest(new PausedEvent(
+                        0, 200, 6, "x.bp", 1000, 1004, 0, 65536));
+                String l2 = in.readLine();
+                Map<String,Object> m2 = Json.parseFlatObject(l2);
+                assertEquals("BP_HIT", Json.getString(m2, "type", ""));
+                assertEquals(6L, Json.getLong(m2, "line", -1));
             }
         }
     }

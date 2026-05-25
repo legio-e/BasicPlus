@@ -28,15 +28,18 @@
 // attach"). Lo controla `waitForClient`.
 //
 // Protocolo wire — v1 (docs/BPVM_WIRE_PROTOCOL.md).
-// PR-2 incorpora bulk binario raw inline en PUT/GET. Deviations
-// pendientes (cerradas en PRs siguientes):
+// PR-3 introduce sessionId, KILL session-aware, STEP_DONE async.
+// Deviations pendientes (cerradas en PRs siguientes):
 //   - SET_BP_REPLY devuelve bpId=0 placeholder (PR-5: real bpId).
-//   - BP_HIT/RESUMED conservan campos planos (PR-5: nested frame).
-//   - No hay sessionId todavía (PR-3).
+//   - BP_HIT/STEP_DONE conservan campos planos (PR-5: nested frame).
 //   - No hay INFO/PING/RESET/STAT/RMDIR/RENAME/FORMAT/DF (PR-4),
 //     ni PAUSE/LIST_BP/EVAL/INSPECT (PR-5).
 //   - Códigos de error v1 sin uso aún — todo va con
 //     code="INTERNAL_ERROR" (PR-6).
+//   - KILL no termina realmente el programa — sólo manda STOP por
+//     la cola de comandos del controller. Sólo tiene efecto si la VM
+//     está pausada en el hook. Kill real requiere shutdown del
+//     WorkerLoop — diferido a un PR de A1 que toque la VM.
 // ============================================================
 package edu.bpgenvm.vm.debug;
 
@@ -94,6 +97,17 @@ public final class DebugServer implements AutoCloseable {
     private final java.util.concurrent.CompletableFuture<String> runModuleRequest =
             new java.util.concurrent.CompletableFuture<>();
 
+    /** PR-3 — sessionId allocator. v1 §9: una sesión activa por server.
+     *  La primera asignación es 1; activeSession=0 = sin sesión. */
+    private int nextSessionId = 1;
+    private volatile int activeSession = 0;
+
+    /** PR-3 — true cuando el último comando del cliente fue STEP_INTO/OVER/OUT
+     *  y todavía no hemos visto la PausedEvent resultante. Determina si la
+     *  siguiente pausa se serializa como STEP_DONE (step) o BP_HIT (BP real
+     *  o pausa inicial). */
+    private volatile boolean stepInProgress = false;
+
     private volatile boolean closed = false;
 
     public DebugServer(VirtualMachine vm, DebugController controller) {
@@ -137,8 +151,10 @@ public final class DebugServer implements AutoCloseable {
 
             // Conectar sink + listener + promptSender. El SocketSink emite
             // OUTPUT events a través de nuestro send(jsonLine), garantizando
-            // sincronización con el resto de tráfico.
-            SocketSink sink = new SocketSink(this::send);
+            // sincronización con el resto de tráfico. La sessionId se lee
+            // perezosamente en cada flush — refleja la sesión activa en ese
+            // momento (0 = sin sesión).
+            SocketSink sink = new SocketSink(this::send, () -> activeSession);
             vm.setProgramOut(sink);
             controller.addListener(this::onEvent);
             vm.setPromptSender(this.promptSender);
@@ -162,12 +178,22 @@ public final class DebugServer implements AutoCloseable {
 
     private void onEvent(DebugEvent ev) {
         if (!hasClient()) return;
+        int sess = this.activeSession;
         try {
             if (ev instanceof PausedEvent) {
                 PausedEvent e = (PausedEvent) ev;
-                // PR-1: BP_HIT con campos planos + bpId=0 placeholder. PR-5 introducirá
-                // el objeto `frame` anidado y el bpId real.
-                send("{\"type\":\"BP_HIT\",\"bpId\":0,\"tid\":" + e.tid
+                // PR-3: distinguir step-done de breakpoint-hit basándonos en
+                // si el último comando del cliente fue un STEP. La pausa
+                // inicial (sin STEP previo) y los hits de BPs reales emiten
+                // BP_HIT; las pausas que siguen a un STEP_INTO/OVER/OUT
+                // emiten STEP_DONE.
+                boolean wasStep = this.stepInProgress;
+                this.stepInProgress = false;
+                String type = wasStep ? "STEP_DONE" : "BP_HIT";
+                String header = "{\"type\":\"" + type + "\",\"session\":" + sess;
+                if (!wasStep) header += ",\"bpId\":0";   // PR-5 introducirá bpId real
+                send(header
+                        + ",\"tid\":" + e.tid
                         + ",\"absPc\":" + e.absPc
                         + ",\"line\":" + e.line
                         + ",\"file\":\"" + Json.escape(e.sourceFile == null ? "" : e.sourceFile) + "\""
@@ -177,25 +203,31 @@ public final class DebugServer implements AutoCloseable {
                 // RESUMED es extensión Java (no en v1). Útil para la UI:
                 // saber cuándo limpiar el highlight del breakpoint.
                 ResumedEvent e = (ResumedEvent) ev;
-                send("{\"type\":\"RESUMED\",\"tid\":" + e.tid + "}");
+                send("{\"type\":\"RESUMED\",\"session\":" + sess + ",\"tid\":" + e.tid + "}");
             } else if (ev instanceof ExitedEvent) {
                 ExitedEvent e = (ExitedEvent) ev;
                 // PR-1: `reason` se conserva como campo informativo. v1 puro
                 // tiene status/exitCode/elapsedMs/errorMessage — se completa
-                // en PR-3 cuando entren sessions.
-                send("{\"type\":\"EXITED\",\"exitCode\":" + e.exitCode
+                // en PRs posteriores.
+                send("{\"type\":\"EXITED\",\"session\":" + sess
+                        + ",\"exitCode\":" + e.exitCode
                         + ",\"reason\":\"" + Json.escape(e.reason) + "\"}");
+                // Limpieza de estado de la sesión: tras EXITED ya no hay
+                // pausa pendiente que esperar.
+                this.stepInProgress = false;
+                this.activeSession = 0;
             } else if (ev instanceof ExceptionEvent) {
                 // EXCEPTION es extensión Java (en v1 esto va dentro de EXITED
-                // con status=RUNTIME_ERROR). Se consolidará en PR-3.
+                // con status=RUNTIME_ERROR). Se consolidará en un PR futuro.
                 ExceptionEvent e = (ExceptionEvent) ev;
-                send("{\"type\":\"EXCEPTION\",\"tid\":" + e.tid
+                send("{\"type\":\"EXCEPTION\",\"session\":" + sess + ",\"tid\":" + e.tid
                         + ",\"message\":\"" + Json.escape(e.message) + "\""
                         + ",\"stackTrace\":\"" + Json.escape(e.stackTrace) + "\"}");
+                this.stepInProgress = false;
             } else {
                 // Tipo desconocido: lo envolvemos para no perderlo si añadimos
                 // eventos nuevos sin tocar este servidor.
-                send("{\"type\":\"" + Json.escape(ev.type()) + "\"}");
+                send("{\"type\":\"" + Json.escape(ev.type()) + "\",\"session\":" + sess + "}");
             }
         } catch (Throwable t) {
             System.err.println("[DebugServer] error emitiendo evento: " + t.getMessage());
@@ -211,7 +243,9 @@ public final class DebugServer implements AutoCloseable {
      *  porque vm.promptSender es null en ese caso. */
     public final PromptSender promptSender = new PromptSender() {
         @Override public void send(long requestId, String spec) {
-            DebugServer.this.send("{\"type\":\"PROMPT_REQUEST\",\"promptId\":" + requestId
+            int sess = DebugServer.this.activeSession;
+            DebugServer.this.send("{\"type\":\"PROMPT_REQUEST\",\"session\":" + sess
+                    + ",\"promptId\":" + requestId
                     + ",\"spec\":" + Json.quote(spec) + "}");
         }
     };
@@ -320,18 +354,38 @@ public final class DebugServer implements AutoCloseable {
                         sendError(id, "INVALID_PARAM", "RUN: falta 'path'");
                         break;
                     }
-                    if (!runModuleRequest.isDone()) {
-                        runModuleRequest.complete(module);
-                        sendReply(id, "RUN_REPLY", "");
-                    } else {
-                        sendError(id, "BUSY", "RUN ignorado: ya hay módulo cargado");
+                    if (this.activeSession != 0) {
+                        sendError(id, "BUSY", "RUN ignorado: ya hay sesión activa (session=" + activeSession + ")");
+                        break;
                     }
+                    if (runModuleRequest.isDone()) {
+                        // v1 §9: una ejecución por proceso (mismo lifecycle
+                        // que en PR-1/PR-2 — no soportamos re-runs todavía).
+                        sendError(id, "BUSY", "RUN ignorado: ya se ejecutó un módulo en este proceso");
+                        break;
+                    }
+                    int sess = this.nextSessionId++;
+                    this.activeSession = sess;
+                    this.stepInProgress = false;
+                    runModuleRequest.complete(module);
+                    sendReply(id, "RUN_REPLY", "\"session\":" + sess);
                     break;
                 }
-                case "KILL":
+                case "KILL": {
+                    // v1 KILL es session-targeted. En PR-3 el server tiene
+                    // una sola sesión activa; aceptamos `session` opcional y
+                    // si llega debe coincidir, si no la inferimos.
+                    long reqSess = Json.getLong(m, "session", -1);
+                    if (reqSess >= 0 && reqSess != activeSession) {
+                        sendError(id, "NO_SESSION", "KILL: session " + reqSess
+                                + " no existe (activa=" + activeSession + ")");
+                        break;
+                    }
                     controller.sendCommand(StepCommand.STOP);
+                    this.stepInProgress = false;
                     sendReply(id, "KILL_REPLY", "");
                     break;
+                }
                 case "PROMPT_RESPONSE": {
                     long promptId = Json.getLong(m, "promptId", -1);
                     String values = Json.getString(m, "values", "");
@@ -362,6 +416,7 @@ public final class DebugServer implements AutoCloseable {
                     break;
                 }
                 case "CONTINUE":
+                    this.stepInProgress = false;
                     controller.sendCommand(StepCommand.CONTINUE);
                     sendReply(id, "CONTINUE_REPLY", "");
                     break;
@@ -375,6 +430,9 @@ public final class DebugServer implements AutoCloseable {
                             sendError(id, "INVALID_PARAM", "STEP.mode inválido: " + mode);
                             return;
                     }
+                    // PR-3: la próxima PausedEvent del controller se serializa
+                    // como STEP_DONE (no BP_HIT).
+                    this.stepInProgress = true;
                     sendReply(id, "STEP_REPLY", "");
                     break;
                 }
