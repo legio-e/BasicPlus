@@ -325,6 +325,38 @@ class DebugServerTest {
 
     @Test
     @Timeout(10)
+    void jsonInvalidoProduceFatalYCierraConexion() throws Exception {
+        // PR-6 / v1 §8.3: JSON inválido → FATAL + cierre.
+        int port = freePort();
+        VirtualMachine vm = new VirtualMachine();
+        DebugController controller = new DebugController();
+        try (DebugServer server = new DebugServer(vm, controller)) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                PrintWriter out = new PrintWriter(
+                        new java.io.OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8),
+                        true);
+
+                // JSON roto (} cerrando sin contenido).
+                out.println("{esto no es json}");
+                String line = in.readLine();
+                assertNotNull(line);
+                Map<String,Object> m = Json.parseFlatObject(line);
+                assertEquals("FATAL", Json.getString(m, "type", ""));
+                assertEquals("PROTOCOL_ERROR", Json.getString(m, "code", ""));
+
+                // El siguiente readLine debe ver EOF — el server cerró.
+                String next = in.readLine();
+                assertNull(next, "tras FATAL el server debió cerrar la conexión");
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
     void setBpDevuelveRealBpIdYListBpLoEnumera() throws Exception {
         // PR-5: SET_BP_REPLY devuelve un bpId real (no más 0 placeholder).
         // LIST_BP enumera los breakpoints registrados.

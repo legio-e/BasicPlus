@@ -28,20 +28,18 @@
 // attach"). Lo controla `waitForClient`.
 //
 // Protocolo wire — v1 (docs/BPVM_WIRE_PROTOCOL.md).
-// PR-5 cubre DEBUG completo: bpId real en SET_BP_REPLY, LIST_BP,
-// CLR_BP por bpId, PAUSE, INSPECT (mínimo). EVAL queda como
-// UNSUPPORTED — eval real requiere meter el frontend BP en la VM.
-// BP_HIT/STEP_DONE ahora incluyen `frame:{file,line,function}`
-// además de los campos planos existentes (transitorio: los flat se
-// retiran cuando PR-7 cierre el BpvmClient unificado).
+// PR-6 estandariza los códigos de error según v1 §8.1 y añade FATAL
+// para errores de protocolo (JSON inválido, bulk size mismatch) que
+// cierran la conexión inmediatamente.
 // Deviations pendientes:
-//   - Códigos de error v1 sin uso aún — todo va con
-//     code="INTERNAL_ERROR" (PR-6).
 //   - KILL no termina realmente el programa — sólo manda STOP por
 //     la cola de comandos del controller. Sólo tiene efecto si la VM
 //     está pausada en el hook. Kill real requiere shutdown del
 //     WorkerLoop — diferido a un PR de A1 que toque la VM.
-//   - EVAL no implementado.
+//   - EVAL no implementado (UNSUPPORTED).
+//   - ID duplicado (v1 §8.4): no enforced — el server procesa cada
+//     mensaje secuencialmente, así que dos requests con el mismo id
+//     se procesan en orden de llegada, ambos producirán reply.
 // ============================================================
 package edu.bpgenvm.vm.debug;
 
@@ -318,9 +316,9 @@ public final class DebugServer implements AutoCloseable {
                 try {
                     m = Json.parseFlatObject(line);
                 } catch (Throwable t) {
-                    System.err.println("[DebugServer] JSON inválido: " + t.getMessage()
-                            + "  (línea: " + line + ")");
-                    continue;
+                    // v1 §8.3: JSON inválido → FATAL + cierre.
+                    sendFatal("PROTOCOL_ERROR", "JSON inválido: " + t.getMessage());
+                    break;
                 }
                 // Si el mensaje declara bulk, leer los bytes del wire ANTES
                 // de procesar nada más — la siguiente línea JSON viene
@@ -328,15 +326,15 @@ public final class DebugServer implements AutoCloseable {
                 long bulkSize = Json.getLong(m, "bulk", 0);
                 if (bulkSize > 0) {
                     if (bulkSize > Integer.MAX_VALUE) {
-                        // No deberíamos ver bulk > 2 GiB en práctica; si llega,
-                        // es un mensaje malformado y cerramos por protocolo.
-                        System.err.println("[DebugServer] bulk size fuera de rango: " + bulkSize);
+                        sendFatal("PROTOCOL_ERROR",
+                                "bulk size fuera de rango: " + bulkSize);
                         break;
                     }
                     try {
                         bulk = WireFraming.recvBulk(clientInRaw, (int) bulkSize);
                     } catch (IOException ioe) {
-                        System.err.println("[DebugServer] error leyendo bulk: " + ioe.getMessage());
+                        // v1 §8.5: bulk mismatch / corte de stream → FATAL.
+                        sendFatal("PROTOCOL_ERROR", "bulk lectura falló: " + ioe.getMessage());
                         break;
                     }
                 }
@@ -358,6 +356,14 @@ public final class DebugServer implements AutoCloseable {
             this.clientOutRaw = null;
             this.clientInRaw = null;
         }
+    }
+
+    /** v1 §8.3: emite un FATAL y cierra el socket inmediatamente. Tras un
+     *  FATAL el cliente debe reconectar. */
+    private void sendFatal(String code, String message) {
+        send("{\"type\":\"FATAL\",\"code\":\"" + Json.escape(code) + "\""
+                + ",\"message\":" + Json.quote(message) + "}");
+        try { if (client != null) client.close(); } catch (IOException ignored) {}
     }
 
     private void handleMessage(Map<String, Object> m, byte[] bulk) {
@@ -699,6 +705,15 @@ public final class DebugServer implements AutoCloseable {
         return mm.resolveInWorkdir(userPath);
     }
 
+    /** Traduce una excepción al code de error v1 más apropiado. */
+    private static String codeFor(Throwable t) {
+        if (t instanceof java.nio.file.NoSuchFileException) return "NOT_FOUND";
+        if (t instanceof java.nio.file.FileAlreadyExistsException) return "EXISTS";
+        if (t instanceof java.nio.file.DirectoryNotEmptyException) return "INVALID_PARAM";
+        if (t instanceof IllegalStateException) return "INVALID_PATH";   // sandbox escape
+        return "INTERNAL_ERROR";
+    }
+
     private void sendPutReply(long id, Map<String, Object> m, byte[] bulk) {
         String path = Json.getString(m, "path", "");
         if (path.isEmpty()) {
@@ -713,8 +728,8 @@ public final class DebugServer implements AutoCloseable {
             if (parent != null) java.nio.file.Files.createDirectories(parent);
             java.nio.file.Files.write(dst, bulk);
             sendReply(id, "PUT_REPLY", "\"size\":" + bulk.length);
-        } catch (java.io.IOException e) {
-            sendError(id, "INTERNAL_ERROR", "PUT: " + e.getMessage());
+        } catch (Throwable e) {
+            sendError(id, codeFor(e), "PUT: " + e.getMessage());
         }
     }
 
@@ -732,8 +747,8 @@ public final class DebugServer implements AutoCloseable {
                     + ",\"size\":" + data.length
                     + ",\"bulk\":" + data.length + "}";
             sendFrame(header, data);
-        } catch (java.io.IOException e) {
-            sendError(id, "INTERNAL_ERROR", "GET: " + e.getMessage());
+        } catch (Throwable e) {
+            sendError(id, codeFor(e), "GET: " + e.getMessage());
         }
     }
 
@@ -764,8 +779,8 @@ public final class DebugServer implements AutoCloseable {
             }
             sb.append("]");
             sendReply(id, "LIST_REPLY", sb.toString());
-        } catch (java.io.IOException e) {
-            sendError(id, "INTERNAL_ERROR", "LIST: " + e.getMessage());
+        } catch (Throwable e) {
+            sendError(id, codeFor(e), "LIST: " + e.getMessage());
         }
     }
 
@@ -778,8 +793,8 @@ public final class DebugServer implements AutoCloseable {
             java.nio.file.Path p = workdirPath(path);
             java.nio.file.Files.delete(p);
             sendReply(id, "DEL_REPLY", "");
-        } catch (java.io.IOException e) {
-            sendError(id, "INTERNAL_ERROR", "DEL: " + e.getMessage());
+        } catch (Throwable e) {
+            sendError(id, codeFor(e), "DEL: " + e.getMessage());
         }
     }
 
@@ -792,8 +807,8 @@ public final class DebugServer implements AutoCloseable {
             java.nio.file.Path p = workdirPath(path);
             java.nio.file.Files.createDirectories(p);
             sendReply(id, "MKDIR_REPLY", "");
-        } catch (java.io.IOException e) {
-            sendError(id, "INTERNAL_ERROR", "MKDIR: " + e.getMessage());
+        } catch (Throwable e) {
+            sendError(id, codeFor(e), "MKDIR: " + e.getMessage());
         }
     }
 
@@ -814,8 +829,8 @@ public final class DebugServer implements AutoCloseable {
                     "\"size\":" + size
                     + ",\"isDir\":" + (isDir ? "true" : "false")
                     + ",\"mtime\":" + mtime);
-        } catch (java.io.IOException e) {
-            sendError(id, "INTERNAL_ERROR", "STAT: " + e.getMessage());
+        } catch (Throwable e) {
+            sendError(id, codeFor(e), "STAT: " + e.getMessage());
         }
     }
 
@@ -831,10 +846,8 @@ public final class DebugServer implements AutoCloseable {
             }
             java.nio.file.Files.delete(p);   // falla si no está vacío
             sendReply(id, "RMDIR_REPLY", "");
-        } catch (java.nio.file.DirectoryNotEmptyException dne) {
-            sendError(id, "INTERNAL_ERROR", "RMDIR: directorio no vacío");
-        } catch (java.io.IOException e) {
-            sendError(id, "INTERNAL_ERROR", "RMDIR: " + e.getMessage());
+        } catch (Throwable e) {
+            sendError(id, codeFor(e), "RMDIR: " + e.getMessage());
         }
     }
 
@@ -849,10 +862,8 @@ public final class DebugServer implements AutoCloseable {
             java.nio.file.Path dst = workdirPath(to);
             java.nio.file.Files.move(src, dst);
             sendReply(id, "RENAME_REPLY", "");
-        } catch (java.nio.file.NoSuchFileException nf) {
-            sendError(id, "NOT_FOUND", "RENAME: no existe: " + from);
-        } catch (java.io.IOException e) {
-            sendError(id, "INTERNAL_ERROR", "RENAME: " + e.getMessage());
+        } catch (Throwable e) {
+            sendError(id, codeFor(e), "RENAME: " + e.getMessage());
         }
     }
 

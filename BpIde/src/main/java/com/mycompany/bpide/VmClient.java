@@ -660,6 +660,25 @@ public final class VmClient implements AutoCloseable {
             }
             return;
         }
+        // PR-6: FATAL — el server reporta un error de protocolo y cerrará
+        // la conexión. Completamos todos los pending requests con error
+        // claro para que sus callers no se queden colgados.
+        if ("FATAL".equals(type)) {
+            String code = Json.getString(m, "code", "PROTOCOL_ERROR");
+            String msg  = Json.getString(m, "message", "FATAL recibido");
+            diag("[VmClient] FATAL [" + code + "]: " + msg);
+            IOException ex = new IOException("VM FATAL [" + code + "]: " + msg);
+            java.util.List<CompletableFuture<Map<String,Object>>> toFail;
+            synchronized (pendingLock) {
+                toFail = new ArrayList<>(pendingRequests.values());
+                pendingRequests.clear();
+            }
+            for (CompletableFuture<Map<String,Object>> f : toFail) {
+                f.completeExceptionally(ex);
+            }
+            return;
+        }
+
         // Sin id → es un evento asíncrono.
         switch (type) {
             case "OUTPUT": {
