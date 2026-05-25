@@ -21,6 +21,7 @@
 #include "fs.h"
 #include "repl.h"
 #include "log.h"
+#include "bench.h"
 #include "bpvm_gpio.h"
 #include "bpvm_i2c.h"
 #include "bpvm_spi.h"
@@ -766,6 +767,11 @@ static void vm_task(void* arg) {
     log_printf("fs: %d ficheros, %u/%u bytes usados",
                fs_file_count(), (unsigned) fs_used_bytes(),
                (unsigned) fs_total_bytes());
+
+    /* H3 micro-bench (#159) — fib_native(28) en C puro para medir el
+     * techo de rendimiento del AOT. Compara con Bench.mod corriendo
+     * fib(28) en BP. Si el ratio C:BP < 2× → aparcamos AOT. */
+    bench_run_native();
 
     repl_run();
     (void) run_vm_once;  /* silenciar unused warning */

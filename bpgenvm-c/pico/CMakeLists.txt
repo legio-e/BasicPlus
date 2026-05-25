@@ -112,6 +112,7 @@ add_executable(bpvm_pico
     json_min.c      # H1 fase A: parser JSON minimal (~200 líneas)
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
+    bench.c         # H3 #159: micro-bench AOT ceiling (fib_native vs BP)
     ${BPVM_C_SRC}
 )
 

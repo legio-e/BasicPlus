@@ -1,0 +1,19 @@
+module Bench
+
+  import Pico
+
+  function fib(n: integer): integer
+    if n < 2 then
+      return n
+    endif
+    return fib(n - 1) + fib(n - 2)
+  end fib
+
+  function Main()   // nothing
+    var t0: integer := Pico.uptimeMs()
+    var r: integer := fib(28)
+    var dt: integer := Pico.uptimeMs() - t0
+    print "BP fib(28) = ", r, " in ", dt, " ms"
+  end Main
+
+end Bench
