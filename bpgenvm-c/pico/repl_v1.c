@@ -26,6 +26,10 @@
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* inspect deps en handle_run */
+#include "bpvm_pico.h"       /* INFO: uniqueId/boardName/temp/freq/uptime */
+#include "bpvm_rtc.h"        /* TIME: set epoch */
+
+#include "pico/bootrom.h"    /* reset_usb_boot (BOOTSEL) */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -98,9 +102,12 @@ static void handle_hello(long id, const json_obj_t* obj) {
     off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
                                 "serverBuild", BPVM_PICO_BUILD_DATE);
     if (off < 0) goto err;
-    /* Capabilities — crecerá con cada fase. Hoy META + FILES +
-     * TERMINAL (RUN/OUTPUT/EXITED, sin KILL ni PROMPT todavía). */
-    static const char* CAPS = ",\"capabilities\":[\"META\",\"FILES\",\"TERMINAL\"]";
+    /* Capabilities — crecerá con cada fase. Hoy META completo (HELLO/
+     * INFO/TIME/PING/RESET/BOOTSEL), FILES completo, TERMINAL parcial
+     * (RUN/OUTPUT/EXITED, sin KILL ni PROMPT — depende de #136/#139).
+     * Añadimos también "BOOTSEL" como capability separada porque es
+     * Pico-specific (la VM Java NO la tiene). */
+    static const char* CAPS = ",\"capabilities\":[\"META\",\"FILES\",\"TERMINAL\",\"BOOTSEL\"]";
     size_t caps_len = strlen(CAPS);
     if ((size_t) off + caps_len + 1 > sizeof(s_reply_buf)) goto err;
     memcpy(s_reply_buf + off, CAPS, caps_len);
@@ -447,6 +454,93 @@ static void handle_log_dump(long id, const json_obj_t* obj) {
 }
 
 /* ============================================================ */
+/* META — INFO, TIME, PING, RESET, BOOTSEL. */
+
+static void handle_info(long id, const json_obj_t* obj) {
+    (void) obj;
+    char unique[20]   = "";
+    char board[16]    = "";
+    bpvm_pico_unique_id(unique, sizeof(unique));
+    bpvm_pico_board_name(board, sizeof(board));
+    long freq    = (long) bpvm_pico_cpu_freq_hz();
+    long uptime  = (long) bpvm_pico_uptime_ms();
+    float tempC  = bpvm_pico_temp_c();
+    long fsTotal = (long) fs_total_bytes();
+    long fsUsed  = (long) fs_used_bytes();
+
+    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
+                                  "INFO_REPLY", id);
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                               (size_t) off, "uniqueId", unique);
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                               (size_t) off, "boardName", board);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "cpuFreqHz", freq);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "uptimeMs", uptime);
+    /* tempC: JSON number con decimal. Los builders solo manejan long;
+     * insertamos manualmente con snprintf. Truncamos a 2 decimales. */
+    if (off >= 0) {
+        char temp_frag[40];
+        int nf = snprintf(temp_frag, sizeof(temp_frag), ",\"tempC\":%.2f", (double) tempC);
+        if (nf > 0 && (size_t)(off + nf) < sizeof(s_reply_buf)) {
+            memcpy(s_reply_buf + off, temp_frag, (size_t) nf);
+            off += nf;
+        }
+    }
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "fsTotalBytes", fsTotal);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "fsUsedBytes", fsUsed);
+    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
+                                          (size_t) off);
+    if (off < 0) {
+        wire_v1_send_error(id, "INTERNAL_ERROR", "INFO_REPLY no cabe");
+        return;
+    }
+    wire_v1_send_line(s_reply_buf, (size_t) off);
+}
+
+static void handle_time(long id, const json_obj_t* obj) {
+    long epochSec = json_get_long(obj, "epochSec", -1);
+    if (epochSec < 0) {
+        wire_v1_send_error(id, "INVALID_PARAM", "TIME: falta 'epochSec' (>=0)");
+        return;
+    }
+    bpvm_rtc_set_now_ms((int64_t) epochSec * 1000LL);
+    wire_v1_send_reply_empty("TIME_REPLY", id);
+}
+
+static void handle_ping(long id, const json_obj_t* obj) {
+    (void) obj;
+    wire_v1_send_reply_empty("PONG", id);
+}
+
+static void handle_reset(long id, const json_obj_t* obj) {
+    (void) obj;
+    /* El cliente espera la reply ANTES del reset. Mandamos primero,
+     * después delay corto para que el USB CDC vacíe sus buffers, y
+     * por fin watchdog_reboot. El protocolo §6 lo documenta así. */
+    log_printf("RESET (wire v1): rebooting");
+    log_flush();
+    wire_v1_send_reply_empty("RESET_REPLY", id);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    extern void watchdog_reboot(uint32_t, uint32_t, uint32_t);
+    watchdog_reboot(0, 0, 0);
+    /* no retorna */
+}
+
+static void handle_bootsel(long id, const json_obj_t* obj) {
+    (void) obj;
+    log_printf("BOOTSEL (wire v1): entering bootloader");
+    log_flush();
+    wire_v1_send_reply_empty("BOOTSEL_REPLY", id);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    reset_usb_boot(0, 0);
+    /* no retorna */
+}
+
+/* ============================================================ */
 /* TERMINAL — RUN, OUTPUT streaming, EXITED. */
 
 /* Resolución de módulo con paths /app/ y /lib/. Replica la lógica de
@@ -718,6 +812,11 @@ void repl_v1_handle_request(int first_char) {
     /* 6. Despachar. */
     /* META */
     if (strcmp(type, "HELLO")    == 0) { handle_hello(id, &obj);    return; }
+    if (strcmp(type, "INFO")     == 0) { handle_info(id, &obj);     return; }
+    if (strcmp(type, "TIME")     == 0) { handle_time(id, &obj);     return; }
+    if (strcmp(type, "PING")     == 0) { handle_ping(id, &obj);     return; }
+    if (strcmp(type, "RESET")    == 0) { handle_reset(id, &obj);    return; }
+    if (strcmp(type, "BOOTSEL")  == 0) { handle_bootsel(id, &obj);  return; }
     /* FILES */
     if (strcmp(type, "LIST")     == 0) { handle_list(id, &obj);     return; }
     if (strcmp(type, "STAT")     == 0) { handle_stat(id, &obj);     return; }
