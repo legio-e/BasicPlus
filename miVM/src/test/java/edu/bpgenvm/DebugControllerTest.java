@@ -38,18 +38,45 @@ class DebugControllerTest {
     }
 
     @Test
-    void listBreakpointsReturnsSortedSnapshot() {
+    void listBreakpointsReturnsSnapshotSortedByBpId() {
+        // PR-5: listBreakpoints devuelve List<BreakpointInfo> ordenado por
+        // bpId (orden de creación) — no por la key.
         DebugController c = new DebugController();
-        c.setBreakpoint("z.bp", 3, true);
-        c.setBreakpoint("a.bp", 50, true);
-        c.setBreakpoint("a.bp", 10, true);
+        long b1 = c.setBreakpoint("z.bp", 3, true);
+        long b2 = c.setBreakpoint("a.bp", 50, true);
+        long b3 = c.setBreakpoint("a.bp", 10, true);
 
-        List<String> snap = c.listBreakpoints();
-        // Lexicográfico: "a.bp:10" < "a.bp:50" < "z.bp:3" (en string).
+        List<DebugController.BreakpointInfo> snap = c.listBreakpoints();
         assertEquals(3, snap.size());
-        assertEquals("a.bp:10", snap.get(0));
-        assertEquals("a.bp:50", snap.get(1));
-        assertEquals("z.bp:3",  snap.get(2));
+        assertEquals(b1, snap.get(0).bpId);
+        assertEquals("z.bp", snap.get(0).file);
+        assertEquals(3, snap.get(0).line);
+        assertEquals(b2, snap.get(1).bpId);
+        assertEquals(b3, snap.get(2).bpId);
+        // bpIds son únicos y crecientes.
+        assertTrue(b1 < b2 && b2 < b3);
+    }
+
+    @Test
+    void setBreakpointReusesBpIdForSameFileLine() {
+        // Toggle enabled→disabled→enabled debe mantener el mismo bpId.
+        DebugController c = new DebugController();
+        long b1 = c.setBreakpoint("x.bp", 5, true);
+        long b2 = c.setBreakpoint("x.bp", 5, false);
+        long b3 = c.setBreakpoint("x.bp", 5, true);
+        assertEquals(b1, b2);
+        assertEquals(b1, b3);
+    }
+
+    @Test
+    void clearBreakpointByIdRemoves() {
+        DebugController c = new DebugController();
+        long id = c.setBreakpoint("x.bp", 7, true);
+        assertTrue(c.isBreakpointAt("x.bp", 7));
+        assertTrue(c.clearBreakpointById(id));
+        assertFalse(c.isBreakpointAt("x.bp", 7));
+        // Segundo borrado del mismo id → false.
+        assertFalse(c.clearBreakpointById(id));
     }
 
     @Test

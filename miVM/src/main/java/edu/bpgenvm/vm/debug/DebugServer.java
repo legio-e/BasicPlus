@@ -28,18 +28,20 @@
 // attach"). Lo controla `waitForClient`.
 //
 // Protocolo wire — v1 (docs/BPVM_WIRE_PROTOCOL.md).
-// PR-3 introduce sessionId, KILL session-aware, STEP_DONE async.
-// Deviations pendientes (cerradas en PRs siguientes):
-//   - SET_BP_REPLY devuelve bpId=0 placeholder (PR-5: real bpId).
-//   - BP_HIT/STEP_DONE conservan campos planos (PR-5: nested frame).
-//   - No hay INFO/PING/RESET/STAT/RMDIR/RENAME/FORMAT/DF (PR-4),
-//     ni PAUSE/LIST_BP/EVAL/INSPECT (PR-5).
+// PR-5 cubre DEBUG completo: bpId real en SET_BP_REPLY, LIST_BP,
+// CLR_BP por bpId, PAUSE, INSPECT (mínimo). EVAL queda como
+// UNSUPPORTED — eval real requiere meter el frontend BP en la VM.
+// BP_HIT/STEP_DONE ahora incluyen `frame:{file,line,function}`
+// además de los campos planos existentes (transitorio: los flat se
+// retiran cuando PR-7 cierre el BpvmClient unificado).
+// Deviations pendientes:
 //   - Códigos de error v1 sin uso aún — todo va con
 //     code="INTERNAL_ERROR" (PR-6).
 //   - KILL no termina realmente el programa — sólo manda STOP por
 //     la cola de comandos del controller. Sólo tiene efecto si la VM
 //     está pausada en el hook. Kill real requiere shutdown del
 //     WorkerLoop — diferido a un PR de A1 que toque la VM.
+//   - EVAL no implementado.
 // ============================================================
 package edu.bpgenvm.vm.debug;
 
@@ -188,23 +190,44 @@ public final class DebugServer implements AutoCloseable {
         try {
             if (ev instanceof PausedEvent) {
                 PausedEvent e = (PausedEvent) ev;
-                // PR-3: distinguir step-done de breakpoint-hit basándonos en
-                // si el último comando del cliente fue un STEP. La pausa
-                // inicial (sin STEP previo) y los hits de BPs reales emiten
-                // BP_HIT; las pausas que siguen a un STEP_INTO/OVER/OUT
-                // emiten STEP_DONE.
+                // PR-3: distinguir step-done de breakpoint-hit. PR-5: incluir
+                // bpId real (busca el bp por file:line si lo hay) y `frame`
+                // anidado v1. Los campos planos se conservan para back-compat
+                // hasta que PR-7 cierre BpvmClient.
                 boolean wasStep = this.stepInProgress;
                 this.stepInProgress = false;
                 String type = wasStep ? "STEP_DONE" : "BP_HIT";
-                String header = "{\"type\":\"" + type + "\",\"session\":" + sess;
-                if (!wasStep) header += ",\"bpId\":0";   // PR-5 introducirá bpId real
-                send(header
-                        + ",\"tid\":" + e.tid
-                        + ",\"absPc\":" + e.absPc
+                // bpId: para BP_HIT, buscar bp por file:line; para STEP_DONE
+                // no aplica.
+                long bpId = 0;
+                if (!wasStep && e.sourceFile != null) {
+                    for (DebugController.BreakpointInfo bi : controller.listBreakpoints()) {
+                        if (bi.line == e.line && bi.file.equals(basenameOf(e.sourceFile))) {
+                            bpId = bi.bpId;
+                            break;
+                        }
+                    }
+                }
+                String safeFile = Json.escape(e.sourceFile == null ? "" : e.sourceFile);
+                String frame = "{\"file\":\"" + safeFile + "\""
                         + ",\"line\":" + e.line
-                        + ",\"file\":\"" + Json.escape(e.sourceFile == null ? "" : e.sourceFile) + "\""
-                        + ",\"bp\":" + e.bp + ",\"sp\":" + e.sp + ",\"cs\":" + e.cs
-                        + ",\"stackBase\":" + e.stackBase + "}");
+                        + ",\"function\":\"?\"}";  // función no disponible aún
+                StringBuilder sb = new StringBuilder(192);
+                sb.append("{\"type\":\"").append(type).append("\"");
+                sb.append(",\"session\":").append(sess);
+                if (!wasStep) sb.append(",\"bpId\":").append(bpId);
+                sb.append(",\"frame\":").append(frame);
+                // Campos planos transitorios:
+                sb.append(",\"tid\":").append(e.tid);
+                sb.append(",\"absPc\":").append(e.absPc);
+                sb.append(",\"line\":").append(e.line);
+                sb.append(",\"file\":\"").append(safeFile).append("\"");
+                sb.append(",\"bp\":").append(e.bp);
+                sb.append(",\"sp\":").append(e.sp);
+                sb.append(",\"cs\":").append(e.cs);
+                sb.append(",\"stackBase\":").append(e.stackBase);
+                sb.append("}");
+                send(sb.toString());
             } else if (ev instanceof ResumedEvent) {
                 // RESUMED es extensión Java (no en v1). Útil para la UI:
                 // saber cuándo limpiar el highlight del breakpoint.
@@ -430,20 +453,54 @@ public final class DebugServer implements AutoCloseable {
                     String file = Json.getString(m, "file", "");
                     int line = (int) Json.getLong(m, "line", 0);
                     boolean enabled = Json.getBool(m, "enabled", true);
-                    controller.setBreakpoint(file, line, enabled);
-                    // PR-1: bpId placeholder. PR-5 introducirá tracking real.
-                    sendReply(id, "SET_BP_REPLY", "\"bpId\":0");
+                    long bpId = controller.setBreakpoint(file, line, enabled);
+                    sendReply(id, "SET_BP_REPLY", "\"bpId\":" + bpId);
                     break;
                 }
                 case "CLR_BP": {
-                    // PR-1: si no llega bpId, comportamiento legacy =
-                    // clearAllBreakpoints. PR-5 implementará clear por bpId.
                     long bpId = Json.getLong(m, "bpId", -1);
                     if (bpId < 0) {
+                        // Sin bpId: convención legacy del IDE — borrar todos.
                         controller.clearAllBreakpoints();
+                    } else {
+                        controller.clearBreakpointById(bpId);
                     }
-                    // Con bpId concreto no hacemos nada aún (TODO PR-5).
                     sendReply(id, "CLR_BP_REPLY", "");
+                    break;
+                }
+                case "LIST_BP": {
+                    java.util.List<DebugController.BreakpointInfo> bps = controller.listBreakpoints();
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("\"breakpoints\":[");
+                    for (int i = 0; i < bps.size(); i++) {
+                        if (i > 0) sb.append(',');
+                        DebugController.BreakpointInfo bi = bps.get(i);
+                        sb.append("{\"bpId\":").append(bi.bpId);
+                        sb.append(",\"file\":").append(Json.quote(bi.file));
+                        sb.append(",\"line\":").append(bi.line);
+                        sb.append(",\"enabled\":").append(bi.enabled ? "true" : "false");
+                        sb.append(",\"hits\":").append(bi.hits);
+                        sb.append('}');
+                    }
+                    sb.append(']');
+                    sendReply(id, "LIST_BP_REPLY", sb.toString());
+                    break;
+                }
+                case "PAUSE":
+                    // PR-5: solicita pausa "manual". Cambia el modo a
+                    // STEP_INTO para que el hook pause en la próxima
+                    // llamada. Tras esa pausa, el server emitirá BP_HIT
+                    // con bpId=0 (pausa manual).
+                    controller.requestPause();
+                    sendReply(id, "PAUSE_REPLY", "");
+                    break;
+                case "EVAL":
+                    sendError(id, "UNSUPPORTED", "EVAL no implementado todavía");
+                    break;
+                case "INSPECT": {
+                    long ref = Json.getLong(m, "ref", 0);
+                    int depth = (int) Json.getLong(m, "depth", 1);
+                    sendInspectReply(id, ref, depth);
                     break;
                 }
                 case "CONTINUE":
@@ -903,6 +960,45 @@ public final class DebugServer implements AutoCloseable {
         }, "bp-debug-reset");
         shutdown.setDaemon(true);
         shutdown.start();
+    }
+
+    /** PR-5 — INSPECT mínimo: si ref apunta a un string BP, devuelve su
+     *  valor. Si no, devuelve `class:"?"` y el i32 leído en esa dirección.
+     *  La versión completa con walk de campos llegará cuando la VM exponga
+     *  la información del object header / class descriptor de forma
+     *  reutilizable (hoy esa lógica vive dispersa en VirtualMachine). */
+    private void sendInspectReply(long id, long ref, int depth) {
+        DebugContext ctx = controller.currentContext();
+        if (ctx == null) {
+            sendError(id, "INTERNAL_ERROR", "INSPECT: VM no está pausada");
+            return;
+        }
+        try {
+            String s = vm.readStringIfPossible((int) ref);
+            if (s != null) {
+                sendReply(id, "INSPECT_REPLY",
+                        "\"class\":\"string\""
+                        + ",\"value\":" + Json.quote(s));
+                return;
+            }
+            // Fallback: leer un int crudo de la dirección.
+            int rawInt = vm.readMemoryInt((int) ref);
+            sendReply(id, "INSPECT_REPLY",
+                    "\"class\":\"?\""
+                    + ",\"ref\":" + ref
+                    + ",\"rawInt\":" + rawInt
+                    + ",\"depth\":" + depth);
+        } catch (Throwable t) {
+            sendError(id, "INTERNAL_ERROR", "INSPECT(" + ref + "): " + t.getMessage());
+        }
+    }
+
+    /** Igual que DebugController.basenameOf — duplicado aquí para evitar
+     *  hacer público el helper en el controller. */
+    private static String basenameOf(String path) {
+        if (path == null) return "?";
+        int sep = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        return (sep >= 0) ? path.substring(sep + 1) : path;
     }
 
     /** Genera un identificador único para esta instancia del proceso.

@@ -325,6 +325,55 @@ class DebugServerTest {
 
     @Test
     @Timeout(10)
+    void setBpDevuelveRealBpIdYListBpLoEnumera() throws Exception {
+        // PR-5: SET_BP_REPLY devuelve un bpId real (no más 0 placeholder).
+        // LIST_BP enumera los breakpoints registrados.
+        int port = freePort();
+        VirtualMachine vm = new VirtualMachine();
+        DebugController controller = new DebugController();
+        try (DebugServer server = new DebugServer(vm, controller)) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                PrintWriter out = new PrintWriter(
+                        new java.io.OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8),
+                        true);
+
+                // SET_BP en a.bp:10
+                out.println("{\"type\":\"SET_BP\",\"id\":1,\"file\":\"a.bp\",\"line\":10,\"enabled\":true}");
+                Map<String,Object> r1 = Json.parseFlatObject(in.readLine());
+                assertEquals("SET_BP_REPLY", Json.getString(r1, "type", ""));
+                long bp1 = Json.getLong(r1, "bpId", -1);
+                assertTrue(bp1 > 0, "bpId debe ser > 0; obtuvo " + bp1);
+
+                // SET_BP en b.bp:20 — bpId distinto.
+                out.println("{\"type\":\"SET_BP\",\"id\":2,\"file\":\"b.bp\",\"line\":20,\"enabled\":true}");
+                Map<String,Object> r2 = Json.parseFlatObject(in.readLine());
+                long bp2 = Json.getLong(r2, "bpId", -1);
+                assertNotEquals(bp1, bp2);
+
+                // LIST_BP devuelve ambos.
+                out.println("{\"type\":\"LIST_BP\",\"id\":3}");
+                Map<String,Object> r3 = Json.parseFlatObject(in.readLine());
+                assertEquals("LIST_BP_REPLY", Json.getString(r3, "type", ""));
+                @SuppressWarnings("unchecked")
+                java.util.List<Object> bps = (java.util.List<Object>) r3.get("breakpoints");
+                assertEquals(2, bps.size());
+
+                // CLR_BP por bpId borra solo el indicado.
+                out.println("{\"type\":\"CLR_BP\",\"id\":4,\"bpId\":" + bp1 + "}");
+                Map<String,Object> r4 = Json.parseFlatObject(in.readLine());
+                assertEquals("CLR_BP_REPLY", Json.getString(r4, "type", ""));
+                assertFalse(controller.isBreakpointAt("a.bp", 10));
+                assertTrue(controller.isBreakpointAt("b.bp", 20));
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
     void stepEmiteStepDoneNoBpHit() throws Exception {
         // PR-3: tras un STEP, la siguiente PausedEvent del controller se
         // serializa como STEP_DONE (no BP_HIT). Sin STEP previo es BP_HIT.

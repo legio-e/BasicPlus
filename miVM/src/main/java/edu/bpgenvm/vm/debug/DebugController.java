@@ -14,14 +14,19 @@
 //   - El VM instala el hook devuelto por hook() antes de arrancar
 //     con executeRootModule.
 //   - El cliente (IDE in-process, o cliente RPC mañana) configura
-//     breakpoints con setBreakpoint / clearAllBreakpoints, ajusta el
+//     breakpoints con setBreakpoint / clearBreakpointById, ajusta el
 //     modo arrancando con STEP_INTO o RUN, y reacciona a los eventos
 //     que llegan a sus DebugListeners.
 //   - Cuando la VM pausa, el cliente debe invocar sendCommand(...)
 //     para soltar al worker.
 //
+// PR-5: breakpoints con bpId estable. Cada (file,line) recibe un long
+// único al primer setBreakpoint(enabled=true). Los hits se contabilizan
+// para que LIST_BP pueda reportar uso por breakpoint.
+//
 // Thread-safety:
-//   - breakpoints: HashSet protegido por sí mismo (synchronized).
+//   - byKey/byId: protegidos por bpLock (acceso multi-thread: hook
+//     desde worker BP, comandos desde reader thread).
 //   - mode / stepFromBp / pausedAt: volatile (lectura del hook,
 //     escritura del cliente o del propio hook).
 //   - commandQueue: SynchronousQueue (rendezvous; safe by design).
@@ -33,10 +38,10 @@ package edu.bpgenvm.vm.debug;
 import edu.bpgenvm.vm.DebugContext;
 import edu.bpgenvm.vm.DebugHook;
 
-import java.util.Collections;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.SynchronousQueue;
 
@@ -44,13 +49,33 @@ public final class DebugController {
 
     private enum Mode { RUN, STEP_INTO, STEP_OVER, STEP_OUT }
 
+    /** Información de un breakpoint individual. bpId estable durante la
+     *  vida del controller. */
+    public static final class BreakpointInfo {
+        public final long bpId;
+        public final String file;
+        public final int line;
+        public volatile boolean enabled;
+        public volatile long hits;
+
+        BreakpointInfo(long bpId, String file, int line, boolean enabled) {
+            this.bpId = bpId;
+            this.file = file;
+            this.line = line;
+            this.enabled = enabled;
+            this.hits = 0;
+        }
+    }
+
     // ---- Estado del breakpoint set ----
-    // Key estable que viaja en el wire en A1.4.b: "<basename>:<line>".
-    // Usamos basename porque ctx.sourceFile puede llegar como path
-    // absoluto distinto de la representación que ve el usuario en el
-    // editor; el hook normaliza a basename antes de consultar.
-    private final Set<String> breakpoints =
-            Collections.synchronizedSet(new HashSet<>());
+    // Key estable que viaja en el wire: "<basename>:<line>". Usamos
+    // basename porque ctx.sourceFile puede llegar como path absoluto
+    // distinto de la representación que ve el usuario en el editor;
+    // el hook normaliza a basename antes de consultar.
+    private final Map<String, BreakpointInfo> byKey = new HashMap<>();
+    private final Map<Long, BreakpointInfo> byId   = new HashMap<>();
+    private long nextBpId = 1;
+    private final Object bpLock = new Object();
 
     // ---- Estado del run actual ----
     private volatile Mode mode = Mode.STEP_INTO;     // primer break = primera línea
@@ -70,25 +95,75 @@ public final class DebugController {
         listeners.remove(l);
     }
 
-    public void setBreakpoint(String file, int line, boolean enabled) {
+    /** Crea o actualiza un breakpoint en (file, line). Si ya existe uno
+     *  con esa key, reutiliza el bpId previo (sólo cambia `enabled`).
+     *  Si no existe y enabled=true, asigna un nuevo bpId.
+     *  Devuelve el bpId del breakpoint (0 si se acaba de des-activar
+     *  uno que no existía — caso degenerado). */
+    public long setBreakpoint(String file, int line, boolean enabled) {
         String key = basenameOf(file) + ":" + line;
-        if (enabled) breakpoints.add(key);
-        else         breakpoints.remove(key);
+        synchronized (bpLock) {
+            BreakpointInfo info = byKey.get(key);
+            if (info == null) {
+                if (!enabled) return 0;   // nada que crear
+                long id = nextBpId++;
+                info = new BreakpointInfo(id, basenameOf(file), line, true);
+                byKey.put(key, info);
+                byId.put(id, info);
+                return id;
+            }
+            info.enabled = enabled;
+            return info.bpId;
+        }
     }
 
+    /** Comprueba si hay un breakpoint habilitado en (file, line). Si lo
+     *  encuentra, incrementa su contador de hits y devuelve true. */
+    public boolean checkAndCountBreakpointAt(String file, int line) {
+        String key = basenameOf(file) + ":" + line;
+        synchronized (bpLock) {
+            BreakpointInfo info = byKey.get(key);
+            if (info != null && info.enabled) {
+                info.hits++;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    /** Variante sin contar — útil para tests y para preguntar sin afectar
+     *  estadísticas. */
     public boolean isBreakpointAt(String file, int line) {
-        return breakpoints.contains(basenameOf(file) + ":" + line);
+        String key = basenameOf(file) + ":" + line;
+        synchronized (bpLock) {
+            BreakpointInfo info = byKey.get(key);
+            return info != null && info.enabled;
+        }
+    }
+
+    /** Elimina un breakpoint por bpId. Devuelve true si existía. */
+    public boolean clearBreakpointById(long bpId) {
+        synchronized (bpLock) {
+            BreakpointInfo info = byId.remove(bpId);
+            if (info == null) return false;
+            byKey.remove(basenameOf(info.file) + ":" + info.line);
+            return true;
+        }
     }
 
     public void clearAllBreakpoints() {
-        breakpoints.clear();
+        synchronized (bpLock) {
+            byKey.clear();
+            byId.clear();
+        }
     }
 
-    /** Snapshot del set, ordenado, en el formato del wire. Útil para
-     *  que el cliente que reconecta refresque su mirror. */
-    public List<String> listBreakpoints() {
-        synchronized (breakpoints) {
-            return new java.util.ArrayList<>(new java.util.TreeSet<>(breakpoints));
+    /** Snapshot inmutable de los breakpoints, ordenado por bpId. */
+    public List<BreakpointInfo> listBreakpoints() {
+        synchronized (bpLock) {
+            List<BreakpointInfo> out = new ArrayList<>(byId.values());
+            out.sort((a, b) -> Long.compare(a.bpId, b.bpId));
+            return out;
         }
     }
 
@@ -103,8 +178,7 @@ public final class DebugController {
     public boolean isPaused() { return pausedAt != null; }
 
     /** Envía un comando al worker BP que está bloqueado en el hook.
-     *  No-op si la VM no está pausada. Rendezvous: bloquea brevemente
-     *  hasta que el worker retire — en práctica el worker ya espera. */
+     *  No-op si la VM no está pausada. */
     public void sendCommand(StepCommand cmd) {
         if (pausedAt == null) return;
         try {
@@ -112,6 +186,14 @@ public final class DebugController {
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    /** PR-5 — solicita una pausa "manual" (PAUSE wire message). Cambia el
+     *  modo a STEP_INTO para que el hook pause en la próxima llamada,
+     *  sin necesidad de un breakpoint registrado. No tiene efecto si la
+     *  VM ya está pausada (el hook está bloqueado en commandQueue.take). */
+    public void requestPause() {
+        mode = Mode.STEP_INTO;
     }
 
     /** Resetea modo/pausa para arrancar una nueva sesión. NO toca los
@@ -143,7 +225,7 @@ public final class DebugController {
                     break;
                 case RUN:
                 default:
-                    shouldPause = isBreakpointAt(ctx.sourceFile, ctx.line);
+                    shouldPause = checkAndCountBreakpointAt(ctx.sourceFile, ctx.line);
                     break;
             }
             if (!shouldPause) return;
@@ -176,10 +258,7 @@ public final class DebugController {
         };
     }
 
-    /** Emite un evento ARBITRARIO a los listeners. Pensado para que código
-     *  fuera del hook (e.g. el WorkerLoop al detectar BpThreadFault, o Main
-     *  al terminar vm.run()) pueda inyectar ExitedEvent / ExceptionEvent.
-     *  No participa del rendezvous del hook — sólo notifica. */
+    /** Emite un evento ARBITRARIO a los listeners. */
     public void emitEvent(DebugEvent ev) {
         if (ev != null) emit(ev);
     }
@@ -190,7 +269,6 @@ public final class DebugController {
         for (DebugListener l : listeners) {
             try { l.onEvent(ev); }
             catch (Throwable t) {
-                // Un listener mal escrito no debe tumbar el worker BP.
                 System.err.println("DebugController listener falló: " + t.getMessage());
             }
         }
