@@ -107,7 +107,10 @@ add_executable(bpvm_pico
     # desde el IDE. Solo el core de stdlib (Math, IO, Gpio, I2c, ...)
     # va embebido.
     fs.c            # FP2 step 1+3: filesystem RAM + persistencia flash
-    repl.c          # FP2 step 2: REPL sobre USB CDC
+    repl.c          # FP2 step 2: REPL sobre USB CDC (protocolo texto legacy)
+    repl_v1.c       # H1 fase A: dispatcher wire BPVM v1 JSON
+    json_min.c      # H1 fase A: parser JSON minimal (~200 líneas)
+    wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
     ${BPVM_C_SRC}
 )

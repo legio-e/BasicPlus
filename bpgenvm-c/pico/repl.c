@@ -17,6 +17,7 @@
  */
 
 #include "repl.h"
+#include "repl_v1.h"
 #include "fs.h"
 #include "log.h"
 
@@ -406,9 +407,44 @@ void repl_run(void) {
     }
 
     for (;;) {
+        /* Detección de modo antes de imprimir nada: hacemos peek del
+         * primer carácter en stdin. Si es '{' → wire BPVM v1 (no
+         * imprimimos prompt ni hacemos eco, el IDE no lo espera y
+         * rompería el framing JSON). Si es CR/LF aislado (Enter en
+         * minicom) → tratamos como línea vacía legacy. Cualquier otro
+         * char → modo texto legacy: imprimimos "> ", hacemos eco del
+         * char y dejamos que read_line termine la línea. */
+        int first;
+        while ((first = try_get_char()) < 0) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+
+        if (first == '{') {
+            /* Wire v1: delegar al despachador JSON. NO prompt, NO eco. */
+            repl_v1_handle_request(first);
+            continue;
+        }
+
+        /* Modo texto legacy. */
         printf("> ");
+        if (first != '\r' && first != '\n') {
+            /* Eco del primer char ya consumido. */
+            putchar(first);
+        }
         fflush(stdout);
-        int n = read_line(line, sizeof(line));
+
+        /* Si el primer char era Enter, la "línea" es vacía. */
+        if (first == '\r' || first == '\n') {
+            printf("\r\n"); fflush(stdout);
+            continue;
+        }
+
+        /* Sembrar el buffer con el char consumido y dejar que
+         * read_line complete el resto. */
+        line[0] = (char) first;
+        int rest = read_line(line + 1, sizeof(line) - 1);
+        int n = (rest < 0) ? 1 : rest + 1;
+        line[n] = '\0';
         if (n <= 0) continue;
 
         /* Parse: COMANDO [args...] */
