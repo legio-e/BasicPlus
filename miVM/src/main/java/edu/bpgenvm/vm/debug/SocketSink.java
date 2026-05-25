@@ -1,16 +1,14 @@
 // ============================================================
 // SocketSink.java
 // OutputSink que serializa cada chunk PRINT_* del programa BP como un
-// mensaje JSON sobre un Writer (socket en la práctica).
+// mensaje OUTPUT v1 (docs/BPVM_WIRE_PROTOCOL.md §6.3) sobre un Writer
+// (socket en la práctica).
 //
 // Formato del mensaje: una línea JSON por chunk, terminada en \n.
-//   {"type":"print","data":"hola"}
-//   {"type":"print","data":"\n"}
+//   {"type":"OUTPUT","data":"hola\n","stream":"stdout"}
 //
-// El IDE concatena los `data` recibidos en orden. NO bufferizamos para
-// que la latencia entre `print` BP y la ventana del IDE sea baja —
-// si en algún momento eso causa overhead notable, añadimos un buffer
-// con flush por timer.
+// El IDE concatena los `data` recibidos en orden. PR-3 añadirá el
+// campo `session` cuando entren multi-sesión.
 //
 // Thread-safety: writeText/writeChar/newline/flush pueden invocarse
 // desde cualquier worker BP a la vez. Sincronizamos en el writer.
@@ -69,10 +67,10 @@ public final class SocketSink implements OutputSink {
         }
     }
 
-    /** Emite el buffer (si tiene algo) como un único mensaje "print". */
+    /** Emite el buffer (si tiene algo) como un único evento OUTPUT v1. */
     private void flushBuffer() {
         if (buf.length() == 0) return;
-        out.print("{\"type\":\"print\",\"data\":\"");
+        out.print("{\"type\":\"OUTPUT\",\"stream\":\"stdout\",\"data\":\"");
         out.print(Json.escape(buf.toString()));
         out.print("\"}\n");
         out.flush();

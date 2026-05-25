@@ -7,15 +7,17 @@
 //   1) Lanzar bpgenvm como subproceso con `--listen <port>
 //      --wait-client <fichero.mod>` (o `<proyecto.bpproject>`).
 //   2) Conectar por TCP a localhost:<port>.
-//   3) Leer líneas JSON entrantes y traducirlas a:
-//        - "print"     → outputSink (consola del IDE)
-//        - "paused"    → DebugListener (PausedEvent)
-//        - "resumed"   → DebugListener (ResumedEvent)
-//        - "exited"    → DebugListener (ExitedEvent) + close()
-//        - "exception" → DebugListener (ExceptionEvent)
-//        - "hello"     → log diagnóstico
-//   4) Enviar comandos (continue/step/setBreakpoint/stop) como
-//      líneas JSON al socket.
+//   3) Hablar el protocolo BPVM v1 (docs/BPVM_WIRE_PROTOCOL.md):
+//        - Saliente: HELLO, RUN, KILL, STEP, CONTINUE, SET_BP, CLR_BP,
+//          LOCALS, STACK, MODULE_PROPERTIES, READ_INT, READ_STRING,
+//          PUT, GET, LIST, DEL, MKDIR, PROMPT_RESPONSE.
+//        - Entrante eventos: HELLO_REPLY (handshake), OUTPUT,
+//          BP_HIT (→ PausedEvent), RESUMED, EXITED, EXCEPTION,
+//          PROMPT_REQUEST.
+//        - Entrante replies: X_REPLY con `id` correlado, ERROR.
+//
+// PR-1: framing v1 con limitaciones documentadas en DebugServer.java
+// (sin bulk binario, sin session, sin códigos de error específicos).
 //
 // Strategy de localización del binario:
 //   - Lanzamos `java -cp <classpath actual> edu.bpgenvm.Main`. Eso
@@ -31,8 +33,8 @@
 //     localhost.
 //
 // Lifecycle:
-//   - start(modPath) bloquea hasta tener handshake (hello del server)
-//     o timeout. Tras start() el lector y los comandos están listos.
+//   - start(modPath) bloquea hasta tener HELLO_REPLY del server o
+//     timeout. Tras start() el lector y los comandos están listos.
 //   - close() corta la conexión, manda SIGTERM al subproceso y espera.
 // ============================================================
 package com.mycompany.bpide;
@@ -67,24 +69,25 @@ import java.util.function.Consumer;
 
 public final class VmClient implements AutoCloseable {
 
-    /** N20 — Listener para promptRequest del servidor. El IDE registra un
+    /** N20 — Listener para PROMPT_REQUEST del servidor. El IDE registra un
      *  callback que muestra el formulario y devuelve los valores como JSON.
-     *  La VM espera bloqueada hasta que `respondToPrompt(requestId, json)`
+     *  La VM espera bloqueada hasta que `respondToPrompt(promptId, json)`
      *  sea llamado. */
     @FunctionalInterface
     public interface PromptHandler {
-        void onPrompt(long requestId, String spec);
+        void onPrompt(long promptId, String spec);
     }
     private volatile PromptHandler promptHandler;
     public void setPromptHandler(PromptHandler h) { this.promptHandler = h; }
 
     /** Envía la respuesta del usuario para un prompt en vuelo (N20). */
-    public void respondToPrompt(long requestId, String valuesJson) {
-        sendRaw("{\"cmd\":\"promptResponse\",\"requestId\":" + requestId
-                + ",\"values\":" + jsonStr(valuesJson == null ? "" : valuesJson) + "}");
+    public void respondToPrompt(long promptId, String valuesJson) {
+        sendOneShot("PROMPT_RESPONSE",
+                "\"promptId\":" + promptId
+                + ",\"values\":" + jsonStr(valuesJson == null ? "" : valuesJson));
     }
 
-    /** Sink para los chunks "print" del programa BP. Lo invoca el thread
+    /** Sink para los chunks OUTPUT del programa BP. Lo invoca el thread
      *  lector — los handlers deben reenviar al EDT con invokeLater. */
     private volatile Consumer<String> outputSink;
 
@@ -102,7 +105,10 @@ public final class VmClient implements AutoCloseable {
 
     private Thread readerThread;
     private Thread stderrPumpThread;
+    /** Latch que cierra cuando llega HELLO_REPLY (handshake completo). */
     private final CountDownLatch helloLatch = new CountDownLatch(1);
+    /** Build/version reportado por el server en HELLO_REPLY. */
+    private volatile String serverBuild;
 
     /** Executor single-thread donde se invocan los DebugListener. Es CRUCIAL
      *  que no corran en el reader thread: si lo hicieran y un listener
@@ -119,7 +125,7 @@ public final class VmClient implements AutoCloseable {
 
     private volatile boolean closed = false;
 
-    // ---- Request/response (A1.6) ----
+    // ---- Request/response (A1.6, v1 framing) ----
     private final AtomicLong nextRequestId = new AtomicLong(1);
     private final Map<Long, CompletableFuture<Map<String, Object>>> pendingRequests = new HashMap<>();
     private final Object pendingLock = new Object();
@@ -134,7 +140,7 @@ public final class VmClient implements AutoCloseable {
 
     /**
      * Arranca el subproceso bpgenvm con --listen y --wait-client, y conecta
-     * por socket. Devuelve cuando el hello banner del server ha llegado, o
+     * por socket. Devuelve cuando el HELLO_REPLY del server ha llegado, o
      * lanza IOException si timeout/error.
      *
      * @param modOrProjectPath  ruta absoluta a un .mod o .bpproject.
@@ -154,7 +160,7 @@ public final class VmClient implements AutoCloseable {
 
     /** A2.6 — Conecta a una VM REMOTA ya corriendo en {@code host:port}.
      *  No lanza subproceso; asume que el daemon vive en el otro extremo y
-     *  está aceptando conexiones. El IDE sube ficheros y manda runModule
+     *  está aceptando conexiones. El IDE sube ficheros y manda RUN
      *  via wire — mismo flujo que startDaemon local, salto el spawn.
      *  Útil para apuntar al dispositivo objetivo. */
     public void connectRemote(String host, int port) throws IOException {
@@ -170,13 +176,7 @@ public final class VmClient implements AutoCloseable {
                     + " — ¿está corriendo `bpgenvm --listen " + port + " --workdir ...` allí?", e);
         }
         startReaderThread();
-        try {
-            if (!helloLatch.await(5, TimeUnit.SECONDS)) {
-                diag("[VmClient] timeout esperando hello del server remoto");
-            }
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }
+        doHandshake();
     }
 
     /** Variante con stdlibDir explícito: se pasa como --stdlibDir al
@@ -199,13 +199,25 @@ public final class VmClient implements AutoCloseable {
             throw e;
         }
         startReaderThread();
-        // Esperamos al hello banner para considerar la sesión "lista".
+        doHandshake();
+    }
+
+    /** v1 handshake: client → HELLO request; server → HELLO_REPLY.
+     *  Bloquea hasta recibir el HELLO_REPLY o un timeout corto. */
+    private void doHandshake() {
+        // Enviamos el HELLO request en background para no bloquear si el
+        // socket no está listo. La respuesta cierra el helloLatch desde
+        // handleReply (camino regular).
         try {
-            if (!helloLatch.await(5, TimeUnit.SECONDS)) {
-                diag("[VmClient] timeout esperando hello del server");
-            }
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
+            Map<String, Object> resp = sendRequest("HELLO",
+                    "\"protoVersion\":1,\"clientName\":\"BpIde\",\"clientBuild\":\"1.0\"",
+                    5000);
+            serverBuild = Json.getString(resp, "serverBuild", "?");
+            diag("[VmClient] handshake con VM: " + Json.getString(resp, "serverName", "?")
+                    + " " + serverBuild
+                    + " protoVersion=" + Json.getLong(resp, "protoVersion", 0));
+        } catch (IOException e) {
+            diag("[VmClient] handshake falló: " + e.getMessage());
         }
     }
 
@@ -246,62 +258,83 @@ public final class VmClient implements AutoCloseable {
         w.flush();
     }
 
+    /** Envío fire-and-forget de un request v1 — asigna `id`, no espera
+     *  reply. La reply correspondiente llega y se descarta (no hay future
+     *  registrada). Para acciones como SET_BP, CONTINUE, STEP, KILL,
+     *  RUN, PROMPT_RESPONSE que el IDE dispara desde EDT/menús sin
+     *  necesidad de aguardar confirmación síncrona. */
+    private synchronized void sendOneShot(String type, String extraJson) {
+        long id = nextRequestId.getAndIncrement();
+        StringBuilder sb = new StringBuilder(64);
+        sb.append("{\"type\":\"").append(type).append("\",\"id\":").append(id);
+        if (extraJson != null && !extraJson.isEmpty()) {
+            sb.append(',').append(extraJson);
+        }
+        sb.append('}');
+        sendRaw(sb.toString());
+    }
+
     public void setBreakpoint(String file, int line, boolean enabled) {
-        sendRaw("{\"cmd\":\"setBreakpoint\",\"file\":\"" + Json.escape(file)
-                + "\",\"line\":" + line
-                + ",\"enabled\":" + (enabled ? "true" : "false") + "}");
+        sendOneShot("SET_BP",
+                "\"file\":\"" + Json.escape(file) + "\""
+                + ",\"line\":" + line
+                + ",\"enabled\":" + (enabled ? "true" : "false"));
     }
 
     public void clearAllBreakpoints() {
-        sendRaw("{\"cmd\":\"clearAllBreakpoints\"}");
+        // PR-1: sin bpId → server interpreta como clear-all (compat).
+        sendOneShot("CLR_BP", "");
     }
 
     /** A2.3 — Ordena al daemon arrancar el módulo `module` (path relativo
      *  al workdir). Sólo válido si la VM se lanzó en modo daemon (sin
-     *  fichero en CLI). Fire-and-forget: el ExitedEvent es la confirmación
-     *  del fin de ejecución. */
+     *  fichero en CLI). Fire-and-forget: el EXITED event es la confirmación
+     *  del fin de ejecución; el RUN_REPLY se descarta. */
     public void runModule(String module) {
-        sendRaw("{\"cmd\":\"runModule\",\"module\":\"" + Json.escape(module) + "\"}");
+        sendOneShot("RUN", "\"path\":\"" + Json.escape(module) + "\"");
     }
 
     public void sendCommand(StepCommand cmd) {
         switch (cmd) {
-            case CONTINUE:  sendRaw("{\"cmd\":\"continue\"}"); break;
-            case STEP_INTO: sendRaw("{\"cmd\":\"stepInto\"}"); break;
-            case STEP_OVER: sendRaw("{\"cmd\":\"stepOver\"}"); break;
-            case STEP_OUT:  sendRaw("{\"cmd\":\"stepOut\"}"); break;
-            case STOP:      sendRaw("{\"cmd\":\"stop\"}"); break;
+            case CONTINUE:  sendOneShot("CONTINUE", ""); break;
+            case STEP_INTO: sendOneShot("STEP", "\"mode\":\"into\""); break;
+            case STEP_OVER: sendOneShot("STEP", "\"mode\":\"over\""); break;
+            case STEP_OUT:  sendOneShot("STEP", "\"mode\":\"out\""); break;
+            case STOP:      sendOneShot("KILL", ""); break;
         }
     }
 
     // ============================================================
-    // Request/response — queries síncronas al VM (A1.6)
+    // Request/response — queries síncronas al VM (A1.6, v1 framing)
     // ============================================================
 
-    /** Envía un request y devuelve el mapa de respuesta (incluyendo el campo
-     *  "resp" para discriminar). Lanza si timeout o si la respuesta es "error". */
-    private Map<String, Object> sendRequest(String req, String extraJson, long timeoutMs)
+    /** Envía un request v1 y devuelve el mapa de respuesta. Lanza
+     *  IOException si timeout o si la respuesta es un ERROR. `extraJson`
+     *  va como pares CSV ya formateados (sin llaves), p.ej.
+     *  "\"path\":\"/x\",\"size\":42". */
+    private Map<String, Object> sendRequest(String type, String extraJson, long timeoutMs)
             throws IOException {
         long id = nextRequestId.getAndIncrement();
         CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
         synchronized (pendingLock) { pendingRequests.put(id, future); }
         StringBuilder sb = new StringBuilder();
-        sb.append("{\"req\":\"").append(req).append("\",\"requestId\":").append(id);
+        sb.append("{\"type\":\"").append(type).append("\",\"id\":").append(id);
         if (extraJson != null && !extraJson.isEmpty()) {
-            sb.append(',').append(extraJson);   // sin envoltorio { } — caller lo formatea
+            sb.append(',').append(extraJson);
         }
         sb.append('}');
         sendRaw(sb.toString());
         try {
             Map<String, Object> resp = future.get(timeoutMs, TimeUnit.MILLISECONDS);
-            String type = Json.getString(resp, "resp", "");
-            if ("error".equals(type)) {
-                throw new IOException("VM error: " + Json.getString(resp, "message", "?"));
+            String respType = Json.getString(resp, "type", "");
+            if ("ERROR".equals(respType)) {
+                throw new IOException("VM error [" + Json.getString(resp, "code", "?") + "]: "
+                        + Json.getString(resp, "message", "?"));
             }
             return resp;
         } catch (TimeoutException te) {
             synchronized (pendingLock) { pendingRequests.remove(id); }
-            throw new IOException("timeout esperando respuesta a '" + req + "' (id=" + id + ")");
+            throw new IOException("timeout esperando respuesta a '" + type + "' (id=" + id + ")");
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted", ie);
@@ -312,7 +345,7 @@ public final class VmClient implements AutoCloseable {
 
     /** Locales del thread pausado: i32 entre bp y sp. Falla si no hay pausa. */
     public int[] getLocals(long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("getLocals", null, timeoutMs);
+        Map<String, Object> resp = sendRequest("LOCALS", null, timeoutMs);
         List<Object> locals = Json.getList(resp, "locals");
         if (locals == null) return new int[0];
         int[] out = new int[locals.size()];
@@ -324,7 +357,7 @@ public final class VmClient implements AutoCloseable {
 
     /** Stack frames como pares [pc, bp]. */
     public List<int[]> getStackFrames(long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("stackFrames", null, timeoutMs);
+        Map<String, Object> resp = sendRequest("STACK", null, timeoutMs);
         List<Object> frames = Json.getList(resp, "frames");
         List<int[]> out = new ArrayList<>();
         if (frames == null) return out;
@@ -340,9 +373,10 @@ public final class VmClient implements AutoCloseable {
     }
 
     /** Snapshot de properties públicas de todos los módulos. Reconstruye
-     *  PropertyView para que el código del IDE no sepa que viene por wire. */
+     *  PropertyView para que el código del IDE no sepa que viene por wire.
+     *  MODULE_PROPERTIES es extensión Java-only (no está en v1). */
     public List<ModuleManager.PropertyView> getModuleProperties(long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("moduleProperties", null, timeoutMs);
+        Map<String, Object> resp = sendRequest("MODULE_PROPERTIES", null, timeoutMs);
         List<Object> props = Json.getList(resp, "props");
         List<ModuleManager.PropertyView> out = new ArrayList<>();
         if (props == null) return out;
@@ -360,20 +394,23 @@ public final class VmClient implements AutoCloseable {
         return out;
     }
 
-    /** Lee un i32 de la memoria de la VM en una dirección absoluta. */
+    /** Lee un i32 de la memoria de la VM en una dirección absoluta.
+     *  Extensión Java-only; PR-5 lo absorbe en INSPECT. */
     public int readMemoryInt(int addr, long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("readInt", "\"addr\":" + addr, timeoutMs);
+        Map<String, Object> resp = sendRequest("READ_INT", "\"addr\":" + addr, timeoutMs);
         return (int) Json.getLong(resp, "value", 0);
     }
 
-    /** Lee un string BP por ref; "" si no es un string válido. */
+    /** Lee un string BP por ref; "" si no es un string válido.
+     *  Extensión Java-only; PR-5 lo absorbe en INSPECT. */
     public String readStringIfPossible(int ref, long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("readString", "\"ref\":" + ref, timeoutMs);
+        Map<String, Object> resp = sendRequest("READ_STRING", "\"ref\":" + ref, timeoutMs);
         return Json.getString(resp, "value", "");
     }
 
     // ============================================================
-    // Transferencia de ficheros (A2.2) — paths relativos al workdir
+    // Transferencia de ficheros (A2.2) — PR-1 sigue con base64;
+    // PR-2 cambiará a bulk binario raw inline.
     // ============================================================
 
     /** Sube `bytes` al workdir de la VM en `remotePath`. Devuelve el
@@ -381,7 +418,7 @@ public final class VmClient implements AutoCloseable {
     public int uploadFile(String remotePath, byte[] bytes, long timeoutMs) throws IOException {
         String b64 = java.util.Base64.getEncoder().encodeToString(bytes);
         String extra = "\"path\":" + jsonStr(remotePath) + ",\"data\":\"" + b64 + "\"";
-        Map<String, Object> resp = sendRequest("uploadFile", extra, timeoutMs);
+        Map<String, Object> resp = sendRequest("PUT", extra, timeoutMs);
         return (int) Json.getLong(resp, "size", 0);
     }
 
@@ -394,7 +431,7 @@ public final class VmClient implements AutoCloseable {
 
     /** Descarga `remotePath` del workdir de la VM. */
     public byte[] downloadFile(String remotePath, long timeoutMs) throws IOException {
-        Map<String, Object> resp = sendRequest("downloadFile",
+        Map<String, Object> resp = sendRequest("GET",
                 "\"path\":" + jsonStr(remotePath), timeoutMs);
         String b64 = Json.getString(resp, "data", "");
         return java.util.Base64.getDecoder().decode(b64);
@@ -417,8 +454,8 @@ public final class VmClient implements AutoCloseable {
     /** Lista los ficheros bajo `remotePath` ("" o "." = raíz del workdir). */
     public List<RemoteFile> listFiles(String remotePath, long timeoutMs) throws IOException {
         String extra = "\"path\":" + jsonStr(remotePath == null ? "" : remotePath);
-        Map<String, Object> resp = sendRequest("listFiles", extra, timeoutMs);
-        List<Object> arr = Json.getList(resp, "files");
+        Map<String, Object> resp = sendRequest("LIST", extra, timeoutMs);
+        List<Object> arr = Json.getList(resp, "entries");
         List<RemoteFile> out = new ArrayList<>();
         if (arr == null) return out;
         for (Object o : arr) {
@@ -428,19 +465,19 @@ public final class VmClient implements AutoCloseable {
             out.add(new RemoteFile(
                     Json.getString(m, "name", ""),
                     Json.getLong(m, "size", 0),
-                    Json.getBool(m, "isDirectory", false)));
+                    Json.getBool(m, "isDir", false)));
         }
         return out;
     }
 
     /** Borra un fichero (no recursivo para dirs — el dir debe estar vacío). */
     public void deleteFile(String remotePath, long timeoutMs) throws IOException {
-        sendRequest("deleteFile", "\"path\":" + jsonStr(remotePath), timeoutMs);
+        sendRequest("DEL", "\"path\":" + jsonStr(remotePath), timeoutMs);
     }
 
     /** Crea un directorio (incluyendo intermedios) en el workdir. */
     public void mkdir(String remotePath, long timeoutMs) throws IOException {
-        sendRequest("mkdir", "\"path\":" + jsonStr(remotePath), timeoutMs);
+        sendRequest("MKDIR", "\"path\":" + jsonStr(remotePath), timeoutMs);
     }
 
     /** Helper para serializar un string con comillas + escape. */
@@ -593,31 +630,37 @@ public final class VmClient implements AutoCloseable {
             diag("[VmClient] línea no parseable: " + line);
             return;
         }
-        // Respuesta a un request previo: completar el future correspondiente.
-        if (m.get("resp") instanceof String) {
-            long reqId = Json.getLong(m, "requestId", -1);
+        String type = Json.getString(m, "type", "");
+        // v1: si trae `id` es una reply (o ERROR a un request específico).
+        Object rawId = m.get("id");
+        if (rawId instanceof Long) {
+            long reqId = (Long) rawId;
             CompletableFuture<Map<String, Object>> fut;
             synchronized (pendingLock) { fut = pendingRequests.remove(reqId); }
-            if (fut != null) fut.complete(m);
-            else diag("[VmClient] resp sin request pendiente, requestId=" + reqId);
+            if (fut != null) {
+                fut.complete(m);
+            } else {
+                // Reply sin request pendiente: probablemente respuesta a un
+                // sendOneShot (fire-and-forget). Silencioso por diseño.
+            }
+            // El handshake llega como HELLO_REPLY: tras enviárselo al future,
+            // marcamos el latch (algún consumidor puede esperarlo).
+            if ("HELLO_REPLY".equals(type)) {
+                helloLatch.countDown();
+            }
             return;
         }
-        String type = Json.getString(m, "type", "");
+        // Sin id → es un evento asíncrono.
         switch (type) {
-            case "hello": {
-                diag("[VmClient] handshake con VM: " + Json.getString(m, "vm", "?"));
-                helloLatch.countDown();
-                break;
-            }
-            case "print": {
+            case "OUTPUT": {
                 String data = Json.getString(m, "data", "");
                 Consumer<String> sink = outputSink;
                 if (sink != null) sink.accept(data);
                 break;
             }
-            case "promptRequest": {
+            case "PROMPT_REQUEST": {
                 // N20 — el programa BP llamó a IO.prompt(spec).
-                long reqId = Json.getLong(m, "requestId", -1);
+                long promptId = Json.getLong(m, "promptId", -1);
                 String spec = Json.getString(m, "spec", "");
                 PromptHandler h = promptHandler;
                 if (h != null) {
@@ -625,21 +668,23 @@ public final class VmClient implements AutoCloseable {
                     // serializa para no bloquear el reader thread mientras la UI
                     // construye el form.
                     listenerExec.execute(() -> {
-                        try { h.onPrompt(reqId, spec); }
+                        try { h.onPrompt(promptId, spec); }
                         catch (Throwable t) {
                             diag("[VmClient] promptHandler: " + t.getMessage());
                             // Fallback: responder con JSON vacío para no dejar la VM colgada.
-                            respondToPrompt(reqId, "{}");
+                            respondToPrompt(promptId, "{}");
                         }
                     });
                 } else {
                     // No hay handler: responder vacío para que la VM no se quede colgada.
-                    diag("[VmClient] promptRequest sin handler; respondiendo vacío");
-                    respondToPrompt(reqId, "{}");
+                    diag("[VmClient] PROMPT_REQUEST sin handler; respondiendo vacío");
+                    respondToPrompt(promptId, "{}");
                 }
                 break;
             }
-            case "paused": {
+            case "BP_HIT": {
+                // PR-1: la VM aún emite los campos planos de la PausedEvent
+                // Java. PR-5 introducirá `frame:{...}` anidado v1-puro.
                 PausedEvent e = new PausedEvent(
                         (int) Json.getLong(m, "tid", 0),
                         (int) Json.getLong(m, "absPc", 0),
@@ -652,17 +697,17 @@ public final class VmClient implements AutoCloseable {
                 fire(e);
                 break;
             }
-            case "resumed": {
+            case "RESUMED": {
                 fire(new ResumedEvent((int) Json.getLong(m, "tid", 0)));
                 break;
             }
-            case "exited": {
+            case "EXITED": {
                 fire(new ExitedEvent(
                         (int) Json.getLong(m, "exitCode", 0),
                         Json.getString(m, "reason", "")));
                 break;
             }
-            case "exception": {
+            case "EXCEPTION": {
                 fire(new ExceptionEvent(
                         (int) Json.getLong(m, "tid", 0),
                         Json.getString(m, "message", ""),

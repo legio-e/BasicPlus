@@ -176,7 +176,7 @@ Convención general:
 
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
-| 77 | `__prompt` | `(spec: string)` | `string` | Si no hay `PromptSender` registrado (= no IDE): RTErr BP atrapable. Si lo hay: bloquea el thread BP (`tc.status=BLOCKED_PROMPT`, registrado en `pendingPrompts[requestId]=tc`), envía `{"type":"promptRequest","requestId":N,"spec":...}` al IDE. El IDE responde con `{"cmd":"promptResponse","requestId":N,"values":...}` y la VM despierta el thread con el JSON empujado al stack. |
+| 77 | `__prompt` | `(spec: string)` | `string` | Si no hay `PromptSender` registrado (= no IDE): RTErr BP atrapable. Si lo hay: bloquea el thread BP (`tc.status=BLOCKED_PROMPT`, registrado en `pendingPrompts[promptId]=tc`), envía `{"type":"PROMPT_REQUEST","promptId":N,"spec":...}` al IDE. El IDE responde con `{"type":"PROMPT_RESPONSE","id":M,"promptId":N,"values":...}` (wire v1) y la VM despierta el thread con el JSON empujado al stack. |
 
 ---
 
