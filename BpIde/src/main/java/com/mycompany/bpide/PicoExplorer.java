@@ -50,13 +50,21 @@ import java.util.function.Consumer;
 
 public final class PicoExplorer extends JPanel {
 
-    private final PicoClient client = new PicoClient();
+    /** Backend activo. Se construye en connect() según el radio
+     *  Pico/VM-Java; null mientras no haya conexión. */
+    private Backend backend;
 
     /** Sink al que mandar el output de RUN. Lo enchufa FrmMain a la consola. */
     private Consumer<String> outputSink;
 
     /* --- UI components ----------------------------------------- */
+    private final JRadioButton rbSerial = new JRadioButton("Pico (serial)", true);
+    private final JRadioButton rbVm     = new JRadioButton("VM Java (TCP)");
     private final JComboBox<String> portCombo = new JComboBox<>();
+    private final JTextField endpointField = new JTextField("localhost:7332", 16);
+    private final JPanel endpointPanel = new JPanel(new CardLayout());
+    private static final String CARD_SERIAL = "SERIAL";
+    private static final String CARD_VM     = "VM";
     private final JButton btnConnect = new JButton("Connect");
     private final JButton btnRefresh = new JButton("Refresh");
     private final JButton btnUpload  = new JButton("Upload…");
@@ -78,12 +86,34 @@ public final class PicoExplorer extends JPanel {
     public PicoExplorer() {
         super(new BorderLayout());
 
-        // Toolbar 2 filas: fila 1 = puerto + connect; fila 2 = acciones.
-        JPanel toolbar = new JPanel(new GridLayout(2, 1));
-        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        row1.add(new JLabel("Port:"));
+        // Toolbar 3 filas: backend radio | endpoint (port/host) + connect |
+        // acciones.
+        JPanel toolbar = new JPanel(new GridLayout(3, 1));
+
+        JPanel rowBackend = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        rowBackend.add(new JLabel("Backend:"));
+        ButtonGroup bg = new ButtonGroup();
+        bg.add(rbSerial);
+        bg.add(rbVm);
+        rowBackend.add(rbSerial);
+        rowBackend.add(rbVm);
+
+        // CardLayout intercambia portCombo / endpointField según el radio.
+        JPanel serialCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        serialCard.add(new JLabel("Port:"));
         portCombo.setPreferredSize(new Dimension(120, 22));
-        row1.add(portCombo);
+        serialCard.add(portCombo);
+        JPanel vmCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        vmCard.add(new JLabel("Endpoint:"));
+        vmCard.add(endpointField);
+        endpointPanel.add(serialCard, CARD_SERIAL);
+        endpointPanel.add(vmCard,     CARD_VM);
+        showCard(CARD_SERIAL);
+        rbSerial.addActionListener(e -> showCard(CARD_SERIAL));
+        rbVm.addActionListener(e     -> showCard(CARD_VM));
+
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        row1.add(endpointPanel);
         row1.add(btnConnect);
 
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
@@ -96,6 +126,7 @@ public final class PicoExplorer extends JPanel {
         row2.add(btnLog);
         row2.add(btnReset);
 
+        toolbar.add(rowBackend);
         toolbar.add(row1);
         toolbar.add(row2);
         add(toolbar, BorderLayout.NORTH);
@@ -114,8 +145,8 @@ public final class PicoExplorer extends JPanel {
                         leaf, row, hasFocus);
                 if (value instanceof DefaultMutableTreeNode) {
                     Object uo = ((DefaultMutableTreeNode) value).getUserObject();
-                    if (uo instanceof PicoClient.RemoteFile) {
-                        PicoClient.RemoteFile f = (PicoClient.RemoteFile) uo;
+                    if (uo instanceof Backend.Entry) {
+                        Backend.Entry f = (Backend.Entry) uo;
                         // Última componente del path como label.
                         String label = f.name;
                         int slash = label.lastIndexOf('/');
@@ -135,7 +166,7 @@ public final class PicoExplorer extends JPanel {
         });
         fileTree.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2 && getSelectedRemoteFile() != null) {
+                if (e.getClickCount() == 2 && getSelectedEntry() != null) {
                     onRun();
                 }
             }
@@ -176,7 +207,12 @@ public final class PicoExplorer extends JPanel {
     public void setOutputSink(Consumer<String> sink) { this.outputSink = sink; }
 
     /** ¿Hay conexión activa al dispositivo? */
-    public boolean isConnected() { return client.isConnected(); }
+    public boolean isConnected() { return backend != null && backend.isConnected(); }
+
+    /** Helper UI: muestra el card correcto del CardLayout. */
+    private void showCard(String name) {
+        ((CardLayout) endpointPanel.getLayout()).show(endpointPanel, name);
+    }
 
     /**
      * Pipeline "Run on Pico" desde el IDE: sube un .mod local al
@@ -194,89 +230,86 @@ public final class PicoExplorer extends JPanel {
     /** Variante deps-aware: sube primero los .mod de la lista (drivers
      *  de dispositivo) y luego el principal, y ejecuta el principal. */
     public void uploadAndRun(File modFile, java.util.List<File> depMods) {
-        if (!client.isConnected()) {
+        if (!isConnected()) {
             if (outputSink != null) outputSink.accept(
-                    "[Pico] no conectado — pulsa Connect primero");
+                    "[Explorer] no conectado — pulsa Connect primero");
             return;
         }
         if (modFile == null || !modFile.isFile()) {
             if (outputSink != null) outputSink.accept(
-                    "[Pico] fichero no existe: " + modFile);
+                    "[Explorer] fichero no existe: " + modFile);
             return;
         }
         final String remoteName = toAppPath(modFile.getName());
         final java.util.List<File> deps = (depMods != null)
                 ? depMods : java.util.Collections.emptyList();
-        status.setText("Compile&Run on Pico: uploading "
+        final Backend b = this.backend;
+        status.setText("Compile&Run: uploading "
                 + (deps.size() + 1) + " file(s)...");
         if (outputSink != null) {
-            outputSink.accept("[Pico] subiendo " + remoteName + " (" + modFile.length() + " bytes)"
+            outputSink.accept("[Explorer] subiendo " + remoteName + " (" + modFile.length() + " bytes)"
                     + (deps.isEmpty() ? "" : " + " + deps.size() + " dep(s)"));
         }
         runAsync(() -> {
-            // 0) Sondea LS para saber qué hay ya en la FS del Pico.
+            // 0) Sondea LS para saber qué hay ya en el FS remoto.
             java.util.Map<String, Long> remote = new java.util.HashMap<>();
             try {
-                java.util.List<PicoClient.RemoteFile> ls = client.ls();
-                for (PicoClient.RemoteFile rf : ls) {
+                for (Backend.Entry rf : b.list()) {
                     remote.put(rf.name, rf.size);
                 }
             } catch (java.io.IOException lsErr) {
                 if (outputSink != null) {
                     SwingUtilities.invokeLater(() -> outputSink.accept(
-                            "[Pico] LS falló, subiré todo: " + lsErr.getMessage()));
+                            "[Explorer] LIST falló, subiré todo: " + lsErr.getMessage()));
                 }
             }
 
-            // 1) Subir deps primero (drivers) a /app/.
-            //    Bug #111 ya arreglado en firmware, pero mantenemos
+            // 1) Subir deps primero (drivers).
             //    skip-if-same-size + DEL-before-overwrite por economía
-            //    (evita reescritura de flash innecesaria).
+            //    (evita reescritura de flash innecesaria en Pico).
             for (File dep : deps) {
                 String depRemote = toAppPath(dep.getName());
                 Long sz = remote.get(depRemote);
                 if (sz != null && sz == dep.length()) {
                     if (outputSink != null) {
                         SwingUtilities.invokeLater(() -> outputSink.accept(
-                                "[Pico] " + depRemote + " ya en FS (" + dep.length()
+                                "[Explorer] " + depRemote + " ya en FS (" + dep.length()
                                 + " bytes), salto PUT"));
                     }
                     continue;
                 }
                 if (sz != null) {
-                    try { client.del(depRemote); }
+                    try { b.del(depRemote); }
                     catch (java.io.IOException delErr) { /* tolerable */ }
                 }
                 byte[] depData = Files.readAllBytes(dep.toPath());
-                client.put(depRemote, depData);
+                b.put(depRemote, depData);
             }
             // 2) Subir el módulo principal solo si difiere.
             Long mainSz = remote.get(remoteName);
             if (mainSz != null && mainSz == modFile.length()) {
                 if (outputSink != null) {
                     SwingUtilities.invokeLater(() -> outputSink.accept(
-                            "[Pico] " + remoteName + " ya en FS (" + modFile.length()
+                            "[Explorer] " + remoteName + " ya en FS (" + modFile.length()
                             + " bytes), salto PUT"));
                 }
             } else {
                 if (mainSz != null) {
-                    try { client.del(remoteName); }
+                    try { b.del(remoteName); }
                     catch (java.io.IOException delErr) { /* tolerable */ }
                 }
                 byte[] data = Files.readAllBytes(modFile.toPath());
-                client.put(remoteName, data);
+                b.put(remoteName, data);
             }
-            // 3) Ejecutar el principal. RUN del firmware acepta el path
-            //    completo y resuelve también en /app/ y /lib/, así que
-            //    podemos pasar el remoteName tal cual.
-            return client.run(remoteName, line -> {
+            // 3) Ejecutar el principal.
+            return b.run(remoteName, line -> {
                 if (outputSink != null) {
                     SwingUtilities.invokeLater(() -> outputSink.accept(line));
                 }
             });
         }, statusStr -> {
             if (outputSink != null) {
-                outputSink.accept("[Pico] VM finished: " + statusStr);
+                outputSink.accept("[Explorer] VM finished: " + statusStr);
             }
             status.setText("Done: " + statusStr);
             onRefresh();
@@ -305,7 +338,10 @@ public final class PicoExplorer extends JPanel {
 
     private void setConnectedUI(boolean connected) {
         btnConnect.setText(connected ? "Disconnect" : "Connect");
+        rbSerial.setEnabled(!connected);
+        rbVm.setEnabled(!connected);
         portCombo.setEnabled(!connected);
+        endpointField.setEnabled(!connected);
         btnRefresh.setEnabled(connected);
         btnUpload.setEnabled(connected);
         btnRun.setEnabled(connected);
@@ -319,45 +355,48 @@ public final class PicoExplorer extends JPanel {
     /* ============================================================ */
 
     private void onConnect() {
-        if (client.isConnected()) {
-            client.close();
+        if (isConnected()) {
+            backend.close();
+            backend = null;
             setConnectedUI(false);
             rootNode.removeAllChildren();
             treeModel.reload();
             status.setText("Disconnected");
             return;
         }
-        String port = (String) portCombo.getSelectedItem();
-        if (port == null || port.isEmpty()) {
-            status.setText("No port selected");
+        final boolean serial = rbSerial.isSelected();
+        final String endpoint = serial
+                ? (String) portCombo.getSelectedItem()
+                : endpointField.getText().trim();
+        if (endpoint == null || endpoint.isEmpty()) {
+            status.setText(serial ? "No port selected" : "Empty endpoint");
             return;
         }
-        status.setText("Connecting to " + port + "...");
+        final Backend b = serial ? new SerialBackend() : new BpvmBackend();
+        status.setText("Connecting to " + endpoint + " (" + b.displayName() + ")...");
         runAsync(() -> {
-            client.connect(port, 115200);
-            String hello = client.hello();
-            try {
-                client.syncTime();
-            } catch (IOException ex) {
-                System.err.println("[PicoExplorer] TIME failed: " + ex.getMessage());
-            }
+            String hello = b.connect(endpoint);
             return hello;
         }, hello -> {
+            this.backend = b;
             setConnectedUI(true);
-            status.setText(port + " — " + hello);
+            status.setText(endpoint + " — " + hello);
             onRefresh();
         });
     }
 
     private void onRefresh() {
-        if (!client.isConnected()) return;
+        if (!isConnected()) return;
+        final Backend b = this.backend;
         runAsync(() -> {
-            List<PicoClient.RemoteFile> fs = client.ls();
-            String mem = client.mem();
+            List<Backend.Entry> fs = b.list();
+            String mem;
+            try { mem = b.mem(); }
+            catch (java.io.IOException ie) { mem = "(no mem info)"; }
             return new Object[]{fs, mem};
         }, result -> {
             @SuppressWarnings("unchecked")
-            List<PicoClient.RemoteFile> fs = (List<PicoClient.RemoteFile>) ((Object[]) result)[0];
+            List<Backend.Entry> fs = (List<Backend.Entry>) ((Object[]) result)[0];
             String mem = (String) ((Object[]) result)[1];
             rebuildTree(fs);
             status.setText(fs.size() + " files  |  " + mem);
@@ -372,7 +411,7 @@ public final class PicoExplorer extends JPanel {
      *
      *  Preserva las carpetas que estaban expandidas antes — la
      *  identificación se hace por el TreePath textual reconstruido. */
-    private void rebuildTree(List<PicoClient.RemoteFile> files) {
+    private void rebuildTree(List<Backend.Entry> files) {
         // 1) Captura paths expandidos antes de tocar nada.
         Set<String> expandedPaths = new HashSet<>();
         Enumeration<TreePath> e = fileTree.getExpandedDescendants(
@@ -387,11 +426,11 @@ public final class PicoExplorer extends JPanel {
         rootNode.removeAllChildren();
 
         // Orden estable: por path lex, para que el árbol salga
-        // determinista entre LS y LS.
-        java.util.List<PicoClient.RemoteFile> sorted = new java.util.ArrayList<>(files);
+        // determinista entre listados.
+        java.util.List<Backend.Entry> sorted = new java.util.ArrayList<>(files);
         sorted.sort((a, b) -> a.name.compareTo(b.name));
 
-        for (PicoClient.RemoteFile f : sorted) {
+        for (Backend.Entry f : sorted) {
             insertFileIntoTree(f);
         }
         treeModel.reload();
@@ -456,8 +495,8 @@ public final class PicoExplorer extends JPanel {
                     (DefaultMutableTreeNode) parent.getChildAt(i);
             Object uo = c.getUserObject();
             String l;
-            if (uo instanceof PicoClient.RemoteFile) {
-                String n = ((PicoClient.RemoteFile) uo).name;
+            if (uo instanceof Backend.Entry) {
+                String n = ((Backend.Entry) uo).name;
                 int slash = n.lastIndexOf('/');
                 l = slash >= 0 ? n.substring(slash + 1) : n;
             } else {
@@ -470,7 +509,7 @@ public final class PicoExplorer extends JPanel {
 
     /** Inserta un fichero (path completo) en el árbol, creando carpetas
      *  intermedias según haga falta. */
-    private void insertFileIntoTree(PicoClient.RemoteFile f) {
+    private void insertFileIntoTree(Backend.Entry f) {
         String name = f.name;
         // Si empieza con `/`, descártalo para que split no genere "".
         String body = name.startsWith("/") ? name.substring(1) : name;
@@ -485,40 +524,42 @@ public final class PicoExplorer extends JPanel {
             }
             cur = child;
         }
-        // Hoja con el RemoteFile completo.
+        // Hoja con la Entry completa.
         DefaultMutableTreeNode leaf = new DefaultMutableTreeNode(f);
         leaf.setAllowsChildren(false);
         cur.add(leaf);
     }
 
-    /** Devuelve el RemoteFile del nodo seleccionado, o null si no hay
-     *  nada seleccionado o el nodo seleccionado es una carpeta. */
-    private PicoClient.RemoteFile getSelectedRemoteFile() {
+    /** Devuelve la Entry del nodo seleccionado, o null si no hay nada
+     *  seleccionado o el nodo seleccionado es una carpeta. */
+    private Backend.Entry getSelectedEntry() {
         TreePath sel = fileTree.getSelectionPath();
         if (sel == null) return null;
         Object last = sel.getLastPathComponent();
         if (!(last instanceof DefaultMutableTreeNode)) return null;
         Object uo = ((DefaultMutableTreeNode) last).getUserObject();
-        if (uo instanceof PicoClient.RemoteFile) {
-            return (PicoClient.RemoteFile) uo;
+        if (uo instanceof Backend.Entry) {
+            return (Backend.Entry) uo;
         }
         return null;
     }
 
     private void onUpload() {
-        if (!client.isConnected()) return;
+        if (!isConnected()) return;
+        final Backend b = this.backend;
         JFileChooser fc = new JFileChooser();
         fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
                 ".mod files", "mod"));
         if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
         File f = fc.getSelectedFile();
         if (f == null) return;
-        // Sube a /app/<name> por convención.
+        // Sube a /app/<name> por convención (relevante en Pico; en VM
+        // Java es un path arbitrario dentro del workdir).
         String remote = toAppPath(f.getName());
         status.setText("Uploading " + remote + "...");
         runAsync(() -> {
             byte[] data = Files.readAllBytes(f.toPath());
-            client.put(remote, data);
+            b.put(remote, data);
             return data.length;
         }, n -> {
             status.setText("Uploaded " + remote + " (" + n + " bytes)");
@@ -527,16 +568,17 @@ public final class PicoExplorer extends JPanel {
     }
 
     private void onRun() {
-        if (!client.isConnected()) return;
-        PicoClient.RemoteFile sel = getSelectedRemoteFile();
+        if (!isConnected()) return;
+        final Backend b = this.backend;
+        Backend.Entry sel = getSelectedEntry();
         if (sel == null) {
             status.setText("Select a file (leaf) to run");
             return;
         }
         status.setText("Running " + sel.name + "...");
-        if (outputSink != null) outputSink.accept("--- RUN " + sel.name + " on Pico ---");
+        if (outputSink != null) outputSink.accept("--- RUN " + sel.name + " on " + b.displayName() + " ---");
         runAsync(() -> {
-            return client.run(sel.name, line -> {
+            return b.run(sel.name, line -> {
                 if (outputSink != null) {
                     SwingUtilities.invokeLater(() -> outputSink.accept(line));
                 }
@@ -550,11 +592,11 @@ public final class PicoExplorer extends JPanel {
     }
 
     private void onDownload() {
-        if (!client.isConnected()) return;
-        PicoClient.RemoteFile sel = getSelectedRemoteFile();
+        if (!isConnected()) return;
+        final Backend b = this.backend;
+        Backend.Entry sel = getSelectedEntry();
         if (sel == null) return;
         JFileChooser fc = new JFileChooser();
-        // Como nombre por defecto, la última componente del path.
         String basename = sel.name;
         int slash = basename.lastIndexOf('/');
         if (slash >= 0) basename = basename.substring(slash + 1);
@@ -562,7 +604,7 @@ public final class PicoExplorer extends JPanel {
         if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         File out = fc.getSelectedFile();
         runAsync(() -> {
-            byte[] data = client.get(sel.name);
+            byte[] data = b.get(sel.name);
             Files.write(out.toPath(), data);
             return data.length;
         }, n -> status.setText("Downloaded " + sel.name + " → "
@@ -570,50 +612,55 @@ public final class PicoExplorer extends JPanel {
     }
 
     private void onDelete() {
-        if (!client.isConnected()) return;
-        PicoClient.RemoteFile sel = getSelectedRemoteFile();
+        if (!isConnected()) return;
+        final Backend b = this.backend;
+        Backend.Entry sel = getSelectedEntry();
         if (sel == null) return;
         int rc = JOptionPane.showConfirmDialog(this,
-                "Borrar " + sel.name + " del dispositivo?", "Confirmar",
+                "Borrar " + sel.name + "?", "Confirmar",
                 JOptionPane.YES_NO_OPTION);
         if (rc != JOptionPane.YES_OPTION) return;
-        runAsync(() -> { client.del(sel.name); return null; },
+        runAsync(() -> { b.del(sel.name); return null; },
                 v -> { status.setText("Deleted " + sel.name); onRefresh(); });
     }
 
     private void onSave() {
-        if (!client.isConnected()) return;
-        status.setText("Saving FS to flash...");
-        runAsync(() -> { client.save(); return null; },
-                v -> status.setText("FS saved to flash"));
+        if (!isConnected()) return;
+        final Backend b = this.backend;
+        status.setText("Saving FS...");
+        runAsync(() -> { b.save(); return null; },
+                v -> status.setText("FS saved (or no-op si VM Java)"));
     }
 
     private void onLog() {
-        if (!client.isConnected()) return;
-        runAsync(client::log, txt -> {
+        if (!isConnected()) return;
+        final Backend b = this.backend;
+        runAsync(b::log, txt -> {
             JTextArea area = new JTextArea(txt);
             area.setEditable(false);
             area.setFont(new Font("Consolas", Font.PLAIN, 11));
             JScrollPane sp = new JScrollPane(area);
             sp.setPreferredSize(new Dimension(600, 400));
             JOptionPane.showMessageDialog(this, sp,
-                    "Persistent log — Pico", JOptionPane.PLAIN_MESSAGE);
+                    "Persistent log — " + b.displayName(), JOptionPane.PLAIN_MESSAGE);
         });
     }
 
     private void onReset() {
-        if (!client.isConnected()) return;
+        if (!isConnected()) return;
+        final Backend b = this.backend;
         int rc = JOptionPane.showConfirmDialog(this,
-                "Reiniciar el dispositivo? El puerto se desconectará.",
+                "Reiniciar el backend? La conexión se cerrará.",
                 "Confirmar reset", JOptionPane.YES_NO_OPTION);
         if (rc != JOptionPane.YES_OPTION) return;
-        runAsync(() -> { client.reset(); return null; },
+        runAsync(() -> { b.reset(); return null; },
                 v -> {
-                    client.close();
+                    backend.close();
+                    backend = null;
                     rootNode.removeAllChildren();
                     treeModel.reload();
                     setConnectedUI(false);
-                    status.setText("Reset sent, port closed");
+                    status.setText("Reset sent, conexión cerrada");
                 });
     }
 
@@ -647,7 +694,7 @@ public final class PicoExplorer extends JPanel {
     }
 
     private void setActionButtonsEnabled(boolean enabled) {
-        boolean connected = client.isConnected();
+        boolean connected = isConnected();
         btnConnect.setEnabled(true);
         btnRefresh.setEnabled(enabled && connected);
         btnUpload.setEnabled(enabled && connected);
