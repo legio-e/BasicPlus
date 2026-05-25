@@ -893,6 +893,15 @@ public class VirtualMachine {
     /** Habilita o deshabilita el trace per-instrucción (PC/Opcode/CS/SP). */
     public void setTracing(boolean v) { this.tracing = v; }
 
+    /** Sincroniza el wall clock virtual de la VM con el segundo epoch
+     *  dado — equivalente a la llamada BP `Rtc.Clock.setNowSec(s)`. Lo
+     *  usa el wire protocol v1 TIME para que el IDE alinee el reloj del
+     *  dispositivo con su propio clock. */
+    public void setRtcEpochSec(long epochSec) {
+        long targetMs = epochSec * 1000L;
+        this.rtcOffsetMs = targetMs - System.currentTimeMillis();
+    }
+
     /**
      * Hook de depuración. Cuando es null (default) la VM no paga ningún
      * coste: el chequeo es un único {@code if (debugHook != null)} por

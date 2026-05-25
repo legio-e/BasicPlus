@@ -86,6 +86,12 @@ public final class DebugServer implements AutoCloseable {
     /** Lock para escrituras al socket (eventos VM y replies pueden venir
      *  de distintos threads — controller listeners, prompt sender, reader). */
     private final Object writeLock = new Object();
+    /** PR-4 — instante de arranque del proceso VM. Para reportar uptimeMs
+     *  en INFO. */
+    private final long startMs = System.currentTimeMillis();
+    /** PR-4 — uniqueId estable durante la vida del proceso. Lo generamos
+     *  una vez al construir el servidor. */
+    private final String uniqueId = generateUniqueId();
     private Thread readerThread;
 
     /** Latch para esperar el primer cliente cuando se arranca en modo
@@ -340,6 +346,31 @@ public final class DebugServer implements AutoCloseable {
                 case "HELLO":
                     sendHelloReply(id);
                     break;
+                case "INFO":
+                    sendInfoReply(id);
+                    break;
+                case "PING":
+                    sendReply(id, "PONG", "");
+                    break;
+                case "TIME": {
+                    long epochSec = Json.getLong(m, "epochSec", -1);
+                    if (epochSec < 0) {
+                        sendError(id, "INVALID_PARAM", "TIME: falta 'epochSec' (>=0)");
+                        break;
+                    }
+                    vm.setRtcEpochSec(epochSec);
+                    sendReply(id, "TIME_REPLY", "");
+                    break;
+                }
+                case "RESET":
+                    sendResetReply(id);
+                    break;
+                case "BOOTSEL":
+                case "SAVE":
+                case "LOG_DUMP":
+                    // Sólo aplicables al firmware Pico. La VM Java los rechaza.
+                    sendError(id, "UNSUPPORTED", type + ": no soportado en VM Java (sólo Pico)");
+                    break;
 
                 // ---- TERMINAL ----
                 case "RUN": {
@@ -440,11 +471,16 @@ public final class DebugServer implements AutoCloseable {
                 case "LOCALS": sendLocalsReply(id); break;
 
                 // ---- FILES ----
-                case "LIST":  sendListReply(id, m); break;
-                case "GET":   sendGetReply(id, m); break;
-                case "PUT":   sendPutReply(id, m, bulk); break;
-                case "DEL":   sendDelReply(id, m); break;
-                case "MKDIR": sendMkdirReply(id, m); break;
+                case "LIST":   sendListReply(id, m); break;
+                case "STAT":   sendStatReply(id, m); break;
+                case "GET":    sendGetReply(id, m); break;
+                case "PUT":    sendPutReply(id, m, bulk); break;
+                case "DEL":    sendDelReply(id, m); break;
+                case "MKDIR":  sendMkdirReply(id, m); break;
+                case "RMDIR":  sendRmdirReply(id, m); break;
+                case "RENAME": sendRenameReply(id, m); break;
+                case "FORMAT": sendFormatReply(id, m); break;
+                case "DF":     sendDfReply(id); break;
 
                 // ---- Extensiones Java-only (no en v1; futuros INSPECT en PR-5) ----
                 case "MODULE_PROPERTIES": sendModulePropertiesReply(id); break;
@@ -702,6 +738,180 @@ public final class DebugServer implements AutoCloseable {
         } catch (java.io.IOException e) {
             sendError(id, "INTERNAL_ERROR", "MKDIR: " + e.getMessage());
         }
+    }
+
+    private void sendStatReply(long id, Map<String, Object> m) {
+        String path = Json.getString(m, "path", "");
+        if (path.isEmpty()) {
+            sendError(id, "INVALID_PARAM", "STAT: falta 'path'"); return;
+        }
+        try {
+            java.nio.file.Path p = workdirPath(path);
+            if (!java.nio.file.Files.exists(p)) {
+                sendError(id, "NOT_FOUND", "STAT: no existe: " + path); return;
+            }
+            boolean isDir = java.nio.file.Files.isDirectory(p);
+            long size = isDir ? 0 : java.nio.file.Files.size(p);
+            long mtime = java.nio.file.Files.getLastModifiedTime(p).toMillis() / 1000L;
+            sendReply(id, "STAT_REPLY",
+                    "\"size\":" + size
+                    + ",\"isDir\":" + (isDir ? "true" : "false")
+                    + ",\"mtime\":" + mtime);
+        } catch (java.io.IOException e) {
+            sendError(id, "INTERNAL_ERROR", "STAT: " + e.getMessage());
+        }
+    }
+
+    private void sendRmdirReply(long id, Map<String, Object> m) {
+        String path = Json.getString(m, "path", "");
+        if (path.isEmpty()) {
+            sendError(id, "INVALID_PARAM", "RMDIR: falta 'path'"); return;
+        }
+        try {
+            java.nio.file.Path p = workdirPath(path);
+            if (!java.nio.file.Files.isDirectory(p)) {
+                sendError(id, "INVALID_PARAM", "RMDIR: no es directorio: " + path); return;
+            }
+            java.nio.file.Files.delete(p);   // falla si no está vacío
+            sendReply(id, "RMDIR_REPLY", "");
+        } catch (java.nio.file.DirectoryNotEmptyException dne) {
+            sendError(id, "INTERNAL_ERROR", "RMDIR: directorio no vacío");
+        } catch (java.io.IOException e) {
+            sendError(id, "INTERNAL_ERROR", "RMDIR: " + e.getMessage());
+        }
+    }
+
+    private void sendRenameReply(long id, Map<String, Object> m) {
+        String from = Json.getString(m, "from", "");
+        String to   = Json.getString(m, "to", "");
+        if (from.isEmpty() || to.isEmpty()) {
+            sendError(id, "INVALID_PARAM", "RENAME: faltan 'from'/'to'"); return;
+        }
+        try {
+            java.nio.file.Path src = workdirPath(from);
+            java.nio.file.Path dst = workdirPath(to);
+            java.nio.file.Files.move(src, dst);
+            sendReply(id, "RENAME_REPLY", "");
+        } catch (java.nio.file.NoSuchFileException nf) {
+            sendError(id, "NOT_FOUND", "RENAME: no existe: " + from);
+        } catch (java.io.IOException e) {
+            sendError(id, "INTERNAL_ERROR", "RENAME: " + e.getMessage());
+        }
+    }
+
+    private void sendFormatReply(long id, Map<String, Object> m) {
+        String confirm = Json.getString(m, "confirm", "");
+        if (!"YES".equals(confirm)) {
+            sendError(id, "MISSING_CONFIRM", "FORMAT requiere confirm:\"YES\"");
+            return;
+        }
+        try {
+            ModuleManager mm = vm.getModuleManager();
+            if (mm == null || mm.getWorkdir() == null) {
+                sendError(id, "INTERNAL_ERROR", "FORMAT: VM sin workdir");
+                return;
+            }
+            java.nio.file.Path root = mm.getWorkdir();
+            // Walk en post-orden para poder borrar dirs después de su contenido.
+            try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(root)) {
+                walk.sorted(java.util.Comparator.reverseOrder())
+                    .filter(p -> !p.equals(root))   // mantener el workdir
+                    .forEach(p -> {
+                        try { java.nio.file.Files.delete(p); }
+                        catch (java.io.IOException ignored) { /* best effort */ }
+                    });
+            }
+            sendReply(id, "FORMAT_REPLY", "");
+        } catch (java.io.IOException e) {
+            sendError(id, "INTERNAL_ERROR", "FORMAT: " + e.getMessage());
+        }
+    }
+
+    private void sendDfReply(long id) {
+        try {
+            ModuleManager mm = vm.getModuleManager();
+            if (mm == null || mm.getWorkdir() == null) {
+                // Sin workdir devolvemos un DF "neutro" para que el cliente
+                // no tenga que tratar el caso como error.
+                sendReply(id, "DF_REPLY",
+                        "\"totalBytes\":0,\"usedBytes\":0,\"freeBytes\":0,\"fileCount\":0");
+                return;
+            }
+            java.nio.file.Path root = mm.getWorkdir();
+            long[] used = {0};
+            long[] count = {0};
+            try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(root)) {
+                walk.filter(java.nio.file.Files::isRegularFile)
+                    .forEach(p -> {
+                        try { used[0] += java.nio.file.Files.size(p); count[0]++; }
+                        catch (java.io.IOException ignored) {}
+                    });
+            }
+            java.nio.file.FileStore fs = java.nio.file.Files.getFileStore(root);
+            long total = fs.getTotalSpace();
+            long free  = fs.getUsableSpace();
+            sendReply(id, "DF_REPLY",
+                    "\"totalBytes\":" + total
+                    + ",\"usedBytes\":" + used[0]
+                    + ",\"freeBytes\":" + free
+                    + ",\"fileCount\":" + count[0]);
+        } catch (java.io.IOException e) {
+            sendError(id, "INTERNAL_ERROR", "DF: " + e.getMessage());
+        }
+    }
+
+    private void sendInfoReply(long id) {
+        long uptimeMs = System.currentTimeMillis() - startMs;
+        long fsTotal = 0, fsUsed = 0;
+        try {
+            ModuleManager mm = vm.getModuleManager();
+            if (mm != null && mm.getWorkdir() != null) {
+                java.nio.file.Path root = mm.getWorkdir();
+                java.nio.file.FileStore fsx = java.nio.file.Files.getFileStore(root);
+                fsTotal = fsx.getTotalSpace();
+                long[] used = {0};
+                try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(root)) {
+                    walk.filter(java.nio.file.Files::isRegularFile)
+                        .forEach(p -> {
+                            try { used[0] += java.nio.file.Files.size(p); }
+                            catch (java.io.IOException ignored) {}
+                        });
+                }
+                fsUsed = used[0];
+            }
+        } catch (java.io.IOException ignored) { /* mantenemos 0 */ }
+        String payload = "\"uniqueId\":\"" + uniqueId + "\""
+                + ",\"boardName\":\"java-host\""
+                + ",\"cpuFreqHz\":0"
+                + ",\"uptimeMs\":" + uptimeMs
+                + ",\"tempC\":0"
+                + ",\"fsTotalBytes\":" + fsTotal
+                + ",\"fsUsedBytes\":" + fsUsed;
+        sendReply(id, "INFO_REPLY", payload);
+    }
+
+    private void sendResetReply(long id) {
+        // v1: "El servidor responde antes de rebootear; la conexión se cae
+        // poco después." En la VM Java, "reboot" = salir del proceso. El
+        // IDE puede reconectarse si rearranca el daemon.
+        sendReply(id, "RESET_REPLY", "");
+        // Pequeño delay para que el reply salga del socket antes de
+        // matar el JVM. Daemon thread para no bloquear el reader.
+        Thread shutdown = new Thread(() -> {
+            try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+            System.exit(0);
+        }, "bp-debug-reset");
+        shutdown.setDaemon(true);
+        shutdown.start();
+    }
+
+    /** Genera un identificador único para esta instancia del proceso.
+     *  No persistente entre runs; suficiente para que el IDE pueda
+     *  detectar "es el mismo proceso?" durante la sesión. */
+    private static String generateUniqueId() {
+        // 16 hex chars random, prefijo "j" para distinguir de Pico.
+        long r = java.util.concurrent.ThreadLocalRandom.current().nextLong();
+        return "j" + String.format("%016x", r);
     }
 
     @Override public void close() {

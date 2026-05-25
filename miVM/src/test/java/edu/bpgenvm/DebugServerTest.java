@@ -246,6 +246,85 @@ class DebugServerTest {
 
     @Test
     @Timeout(10)
+    void pingDevuelvePong() throws Exception {
+        int port = freePort();
+        VirtualMachine vm = new VirtualMachine();
+        DebugController controller = new DebugController();
+        try (DebugServer server = new DebugServer(vm, controller)) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                PrintWriter out = new PrintWriter(
+                        new java.io.OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8),
+                        true);
+
+                out.println("{\"type\":\"PING\",\"id\":11}");
+                Map<String,Object> m = Json.parseFlatObject(in.readLine());
+                assertEquals("PONG", Json.getString(m, "type", ""));
+                assertEquals(11L,    Json.getLong(m, "id", -1));
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    void infoDevuelveCamposEsperados() throws Exception {
+        int port = freePort();
+        VirtualMachine vm = new VirtualMachine();
+        DebugController controller = new DebugController();
+        try (DebugServer server = new DebugServer(vm, controller)) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                PrintWriter out = new PrintWriter(
+                        new java.io.OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8),
+                        true);
+
+                out.println("{\"type\":\"INFO\",\"id\":12}");
+                Map<String,Object> m = Json.parseFlatObject(in.readLine());
+                assertEquals("INFO_REPLY", Json.getString(m, "type", ""));
+                assertEquals(12L,          Json.getLong(m, "id", -1));
+                assertEquals("java-host",  Json.getString(m, "boardName", ""));
+                assertTrue(Json.getString(m, "uniqueId", "").startsWith("j"));
+                // uptimeMs siempre >= 0.
+                assertTrue(Json.getLong(m, "uptimeMs", -1) >= 0);
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    void bootselDevuelveUnsupportedEnJava() throws Exception {
+        // BOOTSEL/SAVE/LOG_DUMP son sólo para el firmware Pico. En la VM
+        // Java el server debe responder con ERROR code=UNSUPPORTED.
+        int port = freePort();
+        VirtualMachine vm = new VirtualMachine();
+        DebugController controller = new DebugController();
+        try (DebugServer server = new DebugServer(vm, controller)) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                PrintWriter out = new PrintWriter(
+                        new java.io.OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8),
+                        true);
+
+                out.println("{\"type\":\"BOOTSEL\",\"id\":13}");
+                Map<String,Object> m = Json.parseFlatObject(in.readLine());
+                assertEquals("ERROR",       Json.getString(m, "type", ""));
+                assertEquals(13L,           Json.getLong(m, "id", -1));
+                assertEquals("UNSUPPORTED", Json.getString(m, "code", ""));
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
     void stepEmiteStepDoneNoBpHit() throws Exception {
         // PR-3: tras un STEP, la siguiente PausedEvent del controller se
         // serializa como STEP_DONE (no BP_HIT). Sin STEP previo es BP_HIT.
