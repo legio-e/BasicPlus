@@ -24,12 +24,19 @@
 #include "fs.h"
 #include "log.h"
 
+#include "bpvm.h"
+#include "bpvm_internal.h"   /* inspect deps en handle_run */
+
 #include "FreeRTOS.h"
 #include "task.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* Buffer VM compartido (declarado en main.c). */
+extern uint8_t s_vm_buffer[];
+extern const uint32_t s_vm_buffer_size;
 
 #ifndef BPVM_PICO_BUILD_DATE
 #define BPVM_PICO_BUILD_DATE  __DATE__ " " __TIME__
@@ -91,8 +98,9 @@ static void handle_hello(long id, const json_obj_t* obj) {
     off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
                                 "serverBuild", BPVM_PICO_BUILD_DATE);
     if (off < 0) goto err;
-    /* Capabilities — crecerá con cada fase. Hoy META + FILES. */
-    static const char* CAPS = ",\"capabilities\":[\"META\",\"FILES\"]";
+    /* Capabilities — crecerá con cada fase. Hoy META + FILES +
+     * TERMINAL (RUN/OUTPUT/EXITED, sin KILL ni PROMPT todavía). */
+    static const char* CAPS = ",\"capabilities\":[\"META\",\"FILES\",\"TERMINAL\"]";
     size_t caps_len = strlen(CAPS);
     if ((size_t) off + caps_len + 1 > sizeof(s_reply_buf)) goto err;
     memcpy(s_reply_buf + off, CAPS, caps_len);
@@ -439,6 +447,220 @@ static void handle_log_dump(long id, const json_obj_t* obj) {
 }
 
 /* ============================================================ */
+/* TERMINAL — RUN, OUTPUT streaming, EXITED. */
+
+/* Resolución de módulo con paths /app/ y /lib/. Replica la lógica de
+ * fs_get_resolve en repl.c. La duplicamos aquí en lugar de exportarla
+ * para mantener el desacoplamiento entre los dos repls durante la
+ * migración. Cuando el legacy se borre, este queda como la canónica. */
+static fs_status_t v1_get_resolve(const char* name,
+                                   const uint8_t** data_out,
+                                   uint32_t* size_out) {
+    fs_status_t s = fs_get(name, data_out, size_out);
+    if (s == FS_OK) return FS_OK;
+    char path[FS_NAME_LEN];
+    snprintf(path, sizeof(path), "/app/%s", name);
+    s = fs_get(path, data_out, size_out);
+    if (s == FS_OK) return FS_OK;
+    snprintf(path, sizeof(path), "/lib/%s", name);
+    return fs_get(path, data_out, size_out);
+}
+
+/* Sesión activa (0 = ninguna). Sólo soportamos una sesión RUN a la
+ * vez por ahora — KILL multi-sesión y RUN concurrente vendrán cuando
+ * tengamos #136 arch-tasks. */
+static long s_active_session = 0;
+
+/* Contador monotónico de sesiones. Empieza en 1 (0 reservado para
+ * "ninguna"). */
+static long s_next_session = 1;
+
+/* Contexto del sink v1: lleva la session a embeber en cada OUTPUT. */
+typedef struct {
+    long session;
+} v1_sink_ctx_t;
+
+/* Sink que la VM invoca para cada chunk de output del programa BP.
+ * Cada chunk se envía como un evento OUTPUT con escape JSON. Chunks
+ * pequeños generan eventos pequeños; el USB CDC del Pico tolera bien
+ * muchos writes cortos. */
+static void v1_output_sink(const char* data, size_t len, void* user) {
+    v1_sink_ctx_t* ctx = (v1_sink_ctx_t*) user;
+    fputs("{\"type\":\"OUTPUT\",\"session\":", stdout);
+    fprintf(stdout, "%ld,\"data\":\"", ctx->session);
+    for (size_t i = 0; i < len; i++) {
+        char c = data[i];
+        switch (c) {
+            case '"':  fputs("\\\"", stdout); break;
+            case '\\': fputs("\\\\", stdout); break;
+            case '\n': fputs("\\n",  stdout); break;
+            case '\r': fputs("\\r",  stdout); break;
+            case '\t': fputs("\\t",  stdout); break;
+            default:
+                if ((unsigned char) c < 0x20) {
+                    fprintf(stdout, "\\u%04x", (unsigned) c);
+                } else {
+                    fputc(c, stdout);
+                }
+                break;
+        }
+    }
+    fputs("\"}\n", stdout);
+    fflush(stdout);
+}
+
+/* Mapea bpvm_status_t a (status_str, exitCode) del wire v1. */
+static void map_vm_status(bpvm_status_t rs, const char** status, int* exit_code) {
+    if (rs == BPVM_OK) {
+        *status    = "OK";
+        *exit_code = 0;
+    } else {
+        *status    = "RUNTIME_ERROR";
+        *exit_code = (int) rs;
+    }
+}
+
+static void handle_run(long id, const json_obj_t* obj) {
+    char path[FS_NAME_LEN];
+    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+        wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'");
+        return;
+    }
+    if (s_active_session != 0) {
+        wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
+        return;
+    }
+
+    /* 1. Resolver el módulo principal en el FS. */
+    const uint8_t* data; uint32_t size;
+    fs_status_t fs_s = v1_get_resolve(path, &data, &size);
+    if (fs_s != FS_OK) {
+        const char* code; const char* msg;
+        map_fs_status(fs_s, &code, &msg);
+        wire_v1_send_error(id, code, msg);
+        return;
+    }
+
+    /* 2. Asignar sessionId y mandar RUN_REPLY antes de empezar la
+     *    ejecución — así el cliente sabe que su petición fue aceptada
+     *    y empieza a esperar OUTPUT events. */
+    long session = s_next_session++;
+    s_active_session = session;
+    {
+        int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
+                                      "RUN_REPLY", id);
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "session", session);
+        if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
+                                              (size_t) off);
+        if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
+    }
+
+    /* 3. Init VM + cargar módulo + resolver deps. */
+    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size, 0);
+    if (!vm) {
+        /* No podemos mandar RUN_REPLY de error porque ya enviamos el
+         * RUN_REPLY positivo. Emitimos EXITED con código de error. */
+        fputs("{\"type\":\"EXITED\",\"session\":", stdout);
+        fprintf(stdout, "%ld,\"status\":\"INTERNAL_ERROR\",\"exitCode\":-1,"
+                        "\"errorMessage\":\"bpvm_init failed\"}\n", session);
+        fflush(stdout);
+        s_active_session = 0;
+        return;
+    }
+
+    v1_sink_ctx_t sink_ctx = { session };
+    bpvm_set_output(vm, v1_output_sink, &sink_ctx);
+
+    bpvm_status_t ls = bpvm_load_mod_buffer(vm, data, size, path);
+    if (ls != BPVM_OK) {
+        fputs("{\"type\":\"EXITED\",\"session\":", stdout);
+        fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
+                        "\"errorMessage\":\"load: %s\"}\n",
+                session, (int) ls, bpvm_status_str(ls));
+        fflush(stdout);
+        bpvm_destroy(vm);
+        s_active_session = 0;
+        return;
+    }
+
+    /* 4. Resolución iterativa de deps (mismo loop que cmd_run legacy). */
+    for (int pass = 0; pass < 4; pass++) {
+        int loaded_any = 0;
+        int n_before = vm->module_count;
+        for (int mi = 0; mi < n_before; mi++) {
+            bpvm_module_t* m = &vm->modules[mi];
+            for (int k = 0; k < m->import_count; k++) {
+                const char* imp = m->imports[k];
+                if (!imp || !imp[0]) continue;
+                char owner[40]; size_t ol = 0;
+                while (imp[ol] && imp[ol] != '.' && ol < sizeof(owner) - 1) {
+                    owner[ol] = imp[ol]; ol++;
+                }
+                owner[ol] = '\0';
+                if (!owner[0]) continue;
+                int already = 0;
+                for (int j = 0; j < vm->module_count; j++) {
+                    if (strcmp(vm->modules[j].name, owner) == 0) {
+                        already = 1; break;
+                    }
+                }
+                if (already) continue;
+                char fname[48];
+                snprintf(fname, sizeof(fname), "%s.mod", owner);
+                const uint8_t* dep; uint32_t dep_size;
+                if (v1_get_resolve(fname, &dep, &dep_size) != FS_OK) continue;
+                bpvm_status_t ds = bpvm_load_mod_buffer(vm, dep, dep_size, owner);
+                if (ds != BPVM_OK) {
+                    fputs("{\"type\":\"EXITED\",\"session\":", stdout);
+                    fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
+                                    "\"errorMessage\":\"dep %s: %s\"}\n",
+                            session, (int) ds, fname, bpvm_status_str(ds));
+                    fflush(stdout);
+                    bpvm_destroy(vm);
+                    s_active_session = 0;
+                    return;
+                }
+                loaded_any = 1;
+            }
+        }
+        if (!loaded_any) break;
+    }
+
+    /* 5. Ejecutar. Bloquea hasta que el programa termina. Cada print
+     *    del programa pasa por v1_output_sink → genera un OUTPUT event. */
+    uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    log_printf("RUN/v1 %s session=%ld", path, session);
+    bpvm_status_t rs = bpvm_run(vm);
+    uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
+    log_printf("RUN/v1 %s finished: %s", path, bpvm_status_str(rs));
+
+    /* 6. Emit EXITED. */
+    const char* status_str; int exit_code;
+    map_vm_status(rs, &status_str, &exit_code);
+    int off = wire_v1_msg_begin_event(s_reply_buf, sizeof(s_reply_buf), 0, "EXITED");
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "session", session);
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                               (size_t) off, "status", status_str);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "exitCode", exit_code);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "elapsedMs", (long) dt);
+    if (rs != BPVM_OK) {
+        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                                   (size_t) off, "errorMessage",
+                                                   bpvm_status_str(rs));
+    }
+    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
+                                          (size_t) off);
+    if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
+
+    bpvm_destroy(vm);
+    s_active_session = 0;
+}
+
+/* ============================================================ */
 /* Dispatcher principal. */
 
 void repl_v1_handle_request(int first_char) {
@@ -509,8 +731,26 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "SAVE")     == 0) { handle_save(id, &obj);     return; }
     if (strcmp(type, "DF")       == 0) { handle_df(id, &obj);       return; }
     if (strcmp(type, "LOG_DUMP") == 0) { handle_log_dump(id, &obj); return; }
+    /* TERMINAL */
+    if (strcmp(type, "RUN")      == 0) { handle_run(id, &obj);      return; }
+    /* KILL: requeriría interrumpir bpvm_run desde otra task. La VM C
+     * actual no expone un mecanismo de cancelación; #136 (arch-tasks)
+     * lo desbloqueará al separar VM y REPL en tasks independientes.
+     * Por ahora rechazamos limpiamente. */
+    if (strcmp(type, "KILL")     == 0) {
+        wire_v1_send_error(id, "UNSUPPORTED",
+                            "KILL no soportado todavía en el firmware Pico");
+        return;
+    }
+    /* PROMPT_RESPONSE: el builtin IO.prompt() aún no está implementado
+     * en la VM C, así que nunca emitimos PROMPT_REQUEST. Si llega un
+     * RESPONSE huérfano, ack silente. */
+    if (strcmp(type, "PROMPT_RESPONSE") == 0) {
+        wire_v1_send_reply_empty("PROMPT_RESPONSE_REPLY", id);
+        return;
+    }
 
-    /* Fase C-E: TERMINAL, META resto, DEBUG. */
+    /* Fase D-E: META resto (INFO/TIME/PING/RESET/BOOTSEL), DEBUG. */
     wire_v1_send_error(id, "UNSUPPORTED",
                         "type no implementado en este firmware");
 }
