@@ -58,8 +58,8 @@ public final class PicoExplorer extends JPanel {
     private Consumer<String> outputSink;
 
     /* --- UI components ----------------------------------------- */
-    private final JRadioButton rbSerial = new JRadioButton("Pico (serial)", true);
-    private final JRadioButton rbVm     = new JRadioButton("VM Java (TCP)");
+    private final JRadioButton rbSerial = new JRadioButton("Pico (serial v1)", true);
+    private final JRadioButton rbVm     = new JRadioButton("VM Java (TCP v1)");
     private final JComboBox<String> portCombo = new JComboBox<>();
     private final JTextField endpointField = new JTextField("localhost:7332", 16);
     private final JPanel endpointPanel = new JPanel(new CardLayout());

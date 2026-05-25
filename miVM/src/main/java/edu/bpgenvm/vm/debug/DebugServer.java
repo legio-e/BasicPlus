@@ -107,6 +107,9 @@ public final class DebugServer implements AutoCloseable {
      *  La primera asignación es 1; activeSession=0 = sin sesión. */
     private int nextSessionId = 1;
     private volatile int activeSession = 0;
+    /** Wallclock cuando se asignó activeSession — para `elapsedMs` en EXITED.
+     *  0 cuando no hay sesión activa. */
+    private volatile long activeSessionStartMs = 0;
 
     /** PR-3 — true cuando el último comando del cliente fue STEP_INTO/OVER/OUT
      *  y todavía no hemos visto la PausedEvent resultante. Determina si la
@@ -234,23 +237,53 @@ public final class DebugServer implements AutoCloseable {
                 send("{\"type\":\"RESUMED\",\"session\":" + sess + ",\"tid\":" + e.tid + "}");
             } else if (ev instanceof ExitedEvent) {
                 ExitedEvent e = (ExitedEvent) ev;
-                // PR-1: `reason` se conserva como campo informativo. v1 puro
-                // tiene status/exitCode/elapsedMs/errorMessage — se completa
-                // en PRs posteriores.
-                send("{\"type\":\"EXITED\",\"session\":" + sess
-                        + ",\"exitCode\":" + e.exitCode
-                        + ",\"reason\":\"" + Json.escape(e.reason) + "\"}");
+                // Wire v1 canon (§6.3): {type, session, status, exitCode,
+                // elapsedMs, errorMessage?}. Replica exactamente el formato
+                // que envía el firmware Pico (repl_v1.c handle_run). El
+                // mapeo de e.reason → status:
+                //   exitCode==0  → status="OK"            (no errorMessage)
+                //   exitCode!=0  → status="RUNTIME_ERROR" + errorMessage=e.reason
+                long elapsed = activeSessionStartMs > 0
+                        ? System.currentTimeMillis() - activeSessionStartMs
+                        : 0;
+                String status = (e.exitCode == 0) ? "OK" : "RUNTIME_ERROR";
+                StringBuilder sb = new StringBuilder(128);
+                sb.append("{\"type\":\"EXITED\",\"session\":").append(sess)
+                  .append(",\"status\":\"").append(status).append('"')
+                  .append(",\"exitCode\":").append(e.exitCode)
+                  .append(",\"elapsedMs\":").append(elapsed);
+                if (e.reason != null && !e.reason.isEmpty()) {
+                    sb.append(",\"errorMessage\":\"").append(Json.escape(e.reason)).append('"');
+                }
+                sb.append('}');
+                send(sb.toString());
                 // Limpieza de estado de la sesión: tras EXITED ya no hay
                 // pausa pendiente que esperar.
                 this.stepInProgress = false;
                 this.activeSession = 0;
+                this.activeSessionStartMs = 0;
             } else if (ev instanceof ExceptionEvent) {
-                // EXCEPTION es extensión Java (en v1 esto va dentro de EXITED
-                // con status=RUNTIME_ERROR). Se consolidará en un PR futuro.
+                // Wire v1 (§6.3) — las excepciones runtime se folddean en
+                // EXITED.status="RUNTIME_ERROR" + errorMessage. Para no
+                // perder el stackTrace lo concatenamos al message. El
+                // VM también emite ExitedEvent justo después del fault,
+                // así que el cliente verá los dos: EXITED es la fuente
+                // de verdad del fin de sesión.
                 ExceptionEvent e = (ExceptionEvent) ev;
-                send("{\"type\":\"EXCEPTION\",\"session\":" + sess + ",\"tid\":" + e.tid
-                        + ",\"message\":\"" + Json.escape(e.message) + "\""
-                        + ",\"stackTrace\":\"" + Json.escape(e.stackTrace) + "\"}");
+                long elapsed = activeSessionStartMs > 0
+                        ? System.currentTimeMillis() - activeSessionStartMs
+                        : 0;
+                StringBuilder sb = new StringBuilder(256);
+                sb.append("{\"type\":\"EXITED\",\"session\":").append(sess)
+                  .append(",\"status\":\"RUNTIME_ERROR\"")
+                  .append(",\"exitCode\":1")
+                  .append(",\"elapsedMs\":").append(elapsed)
+                  .append(",\"errorMessage\":\"").append(Json.escape(e.message));
+                if (e.stackTrace != null && !e.stackTrace.isEmpty()) {
+                    sb.append("\\n").append(Json.escape(e.stackTrace));
+                }
+                sb.append("\"}");
+                send(sb.toString());
                 this.stepInProgress = false;
             } else {
                 // Tipo desconocido: lo envolvemos para no perderlo si añadimos
@@ -427,6 +460,7 @@ public final class DebugServer implements AutoCloseable {
                     }
                     int sess = this.nextSessionId++;
                     this.activeSession = sess;
+                    this.activeSessionStartMs = System.currentTimeMillis();
                     this.stepInProgress = false;
                     runModuleRequest.complete(module);
                     sendReply(id, "RUN_REPLY", "\"session\":" + sess);

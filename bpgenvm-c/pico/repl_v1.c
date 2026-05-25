@@ -577,11 +577,15 @@ typedef struct {
 /* Sink que la VM invoca para cada chunk de output del programa BP.
  * Cada chunk se envía como un evento OUTPUT con escape JSON. Chunks
  * pequeños generan eventos pequeños; el USB CDC del Pico tolera bien
- * muchos writes cortos. */
+ * muchos writes cortos.
+ *
+ * El campo `stream:"stdout"` está por simetría con DebugServer (Java
+ * VM) y por extensibilidad — wire v1 §6.3 lo contempla por si en
+ * algún momento separamos stderr del programa. */
 static void v1_output_sink(const char* data, size_t len, void* user) {
     v1_sink_ctx_t* ctx = (v1_sink_ctx_t*) user;
     fputs("{\"type\":\"OUTPUT\",\"session\":", stdout);
-    fprintf(stdout, "%ld,\"data\":\"", ctx->session);
+    fprintf(stdout, "%ld,\"stream\":\"stdout\",\"data\":\"", ctx->session);
     for (size_t i = 0; i < len; i++) {
         char c = data[i];
         switch (c) {

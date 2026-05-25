@@ -40,6 +40,12 @@ import edu.bpgenvm.vm.debug.PausedEvent;
 import edu.bpgenvm.vm.debug.ResumedEvent;
 import edu.bpgenvm.vm.debug.StepCommand;
 
+import purejavacomm.CommPortIdentifier;
+import purejavacomm.NoSuchPortException;
+import purejavacomm.PortInUseException;
+import purejavacomm.SerialPort;
+import purejavacomm.UnsupportedCommOperationException;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
@@ -100,6 +106,8 @@ public final class BpvmClient implements AutoCloseable {
 
     private Process process;
     private Socket socket;
+    /** USB CDC port cuando connectSerial() en lugar de TCP. */
+    private SerialPort serialPort;
     /** Stream crudo de escritura. Protegido por `writeLock`. */
     private OutputStream outRaw;
     /** Stream crudo de lectura. Usado SÓLO desde readLoop thread. */
@@ -175,6 +183,110 @@ public final class BpvmClient implements AutoCloseable {
         doHandshake();
     }
 
+    /** Conecta por USB CDC al firmware Pico (wire v1 sobre serial). El
+     *  flujo es idéntico al TCP: abrir transporte, drenar banner del
+     *  boot, arrancar reader thread, hacer handshake HELLO/HELLO_REPLY.
+     *
+     *  Sobre purejavacomm:
+     *   - DTR=true es CRÍTICO: el firmware mira DTR para detectar host
+     *     conectado; sin él descarta la salida.
+     *   - enableReceiveTimeout no se llama → reads bloquean indefinidos.
+     *     close() del puerto interrumpe el read en curso. */
+    public void connectSerial(String portName, int baud) throws IOException {
+        SerialPort port;
+        try {
+            CommPortIdentifier id = CommPortIdentifier.getPortIdentifier(portName);
+            port = (SerialPort) id.open("BpIde-BpvmClient-v1", 2000);
+            port.setSerialPortParams(baud, SerialPort.DATABITS_8,
+                    SerialPort.STOPBITS_1, SerialPort.PARITY_NONE);
+            port.setFlowControlMode(SerialPort.FLOWCONTROL_NONE);
+            port.setDTR(true);
+            port.setRTS(false);
+            // enableReceiveTimeout(500): purejavacomm devuelve -1 en read()
+            // tras 500ms sin datos. Lo NECESITAMOS para que close() del puerto
+            // desbloquee el reader thread limpiamente. Envolvemos la
+            // InputStream para que ese -1-de-timeout se vea como "esperar más"
+            // en lugar de EOF.
+            port.enableReceiveTimeout(500);
+        } catch (NoSuchPortException | PortInUseException
+                | UnsupportedCommOperationException e) {
+            throw new IOException("open " + portName + ": " + e.getMessage(), e);
+        }
+        this.serialPort = port;
+        InputStream rawIn   = port.getInputStream();
+        OutputStream rawOut = port.getOutputStream();
+
+        // Drain inicial: descartar el banner de boot del firmware ("===
+        // bpvm-pico REPL listo ===" y prompts "> " residuales). 300 ms es
+        // suficiente — el firmware reparte el banner en 3 rondas con
+        // delays de 200ms; en runtime estable apenas hay tráfico.
+        try {
+            long endDrain = System.currentTimeMillis() + 300;
+            byte[] tmp = new byte[256];
+            while (System.currentTimeMillis() < endDrain) {
+                int avail = rawIn.available();
+                if (avail > 0) {
+                    int n = rawIn.read(tmp, 0, Math.min(avail, tmp.length));
+                    if (n <= 0) break;
+                } else {
+                    try { Thread.sleep(20); }
+                    catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("interrupted during drain", ie);
+                    }
+                }
+            }
+        } catch (IOException ioe) {
+            try { port.close(); } catch (Throwable ignored) {}
+            this.serialPort = null;
+            throw new IOException("drain inicial falló: " + ioe.getMessage(), ioe);
+        }
+
+        this.inRaw  = new SerialBlockingInputStream(rawIn);
+        this.outRaw = rawOut;   // raw — purejavacomm a veces se atraganta con buffered
+        startReaderThread();
+        doHandshake();
+    }
+
+    /** Wrapper que convierte el -1-de-timeout de purejavacomm en "espera
+     *  más" para que WireFraming.recvLine() no lo interprete como EOF.
+     *  Solo close() (que pone closed=true y cierra el puerto) sale del
+     *  bucle con un -1 "real". */
+    private final class SerialBlockingInputStream extends InputStream {
+        private final InputStream delegate;
+        SerialBlockingInputStream(InputStream d) { this.delegate = d; }
+        @Override public int read() throws IOException {
+            while (!closed) {
+                int c;
+                try { c = delegate.read(); }
+                catch (IOException ioe) {
+                    if (closed) return -1;
+                    throw ioe;
+                }
+                if (c >= 0) return c;
+                // -1: timeout en purejavacomm (NO EOF real). Reintentar.
+            }
+            return -1;
+        }
+        @Override public int read(byte[] b, int off, int len) throws IOException {
+            if (len == 0) return 0;
+            while (!closed) {
+                int r;
+                try { r = delegate.read(b, off, len); }
+                catch (IOException ioe) {
+                    if (closed) return -1;
+                    throw ioe;
+                }
+                if (r > 0) return r;
+                if (r == 0) continue;
+                // r == -1: timeout, reintentar.
+            }
+            return -1;
+        }
+        @Override public int available() throws IOException { return delegate.available(); }
+        @Override public void close() throws IOException { delegate.close(); }
+    }
+
     /** Variante con stdlibDir explícito: se pasa como --stdlibDir al
      *  subproceso VM y gana sobre cualquier BpVM.cfg autodiscovery. */
     public void startDaemon(String workdir, boolean waitClient, String stdlibDir) throws IOException {
@@ -212,11 +324,17 @@ public final class BpvmClient implements AutoCloseable {
         }
     }
 
-    /** Cierra el socket, mata el subproceso, junta los threads. */
+    /** Cierra el socket o el puerto serie, mata el subproceso (si lo hay),
+     *  junta los threads. Idempotente. */
     @Override public void close() {
         closed = true;
         try { if (outRaw != null) outRaw.flush(); } catch (Throwable ignored) {}
         try { if (socket != null) socket.close(); } catch (IOException ignored) {}
+        // El SerialPort.close() interrumpe el reader thread que está dentro
+        // de delegate.read() — purejavacomm lanza IOException que nuestro
+        // SerialBlockingInputStream traduce a -1 (porque closed=true ya).
+        try { if (serialPort != null) serialPort.close(); } catch (Throwable ignored) {}
+        serialPort = null;
         terminateProcess();
         try { if (readerThread != null) readerThread.join(2000); } catch (InterruptedException ignored) {}
         try { if (stderrPumpThread != null) stderrPumpThread.join(1000); } catch (InterruptedException ignored) {}
@@ -512,6 +630,47 @@ public final class BpvmClient implements AutoCloseable {
         sendRequest("MKDIR", "\"path\":" + jsonStr(remotePath), null, timeoutMs);
     }
 
+    /** Persiste el FS RAM a flash (operación Pico-only; VM Java responde
+     *  OK silente porque ya escribe directo al workdir host). Devuelve
+     *  milisegundos que tardó la operación en el peer, 0 si no reporta. */
+    public long save(long timeoutMs) throws IOException {
+        Map<String, Object> resp = sendRequest("SAVE", null, null, timeoutMs);
+        return Json.getLong(resp, "durationMs", 0);
+    }
+
+    /** Lee el log persistente del firmware como texto. VM Java responde
+     *  con ERROR UNSUPPORTED — el caller debe manejarlo. */
+    public String logDump(long timeoutMs) throws IOException {
+        Map<String, Object> resp = sendRequest("LOG_DUMP", null, null, timeoutMs);
+        return Json.getString(resp, "text", "");
+    }
+
+    /** Reboot al bootloader BOOTSEL (Pico-only). Mismo patrón que reset():
+     *  request → reply corta → la VM se va — cerramos el cliente. */
+    public void bootsel() throws IOException {
+        try {
+            sendRequest("BOOTSEL", null, null, 2000);
+        } catch (IOException ioe) {
+            diag("[BpvmClient] BOOTSEL sin reply síncrona: " + ioe.getMessage());
+        } finally {
+            close();
+        }
+    }
+
+    /** Sincroniza el RTC del peer con un epoch en segundos (típicamente
+     *  System.currentTimeMillis()/1000). El firmware Pico lo usa para
+     *  Rtc.Clock; la VM Java ignora el comando (devuelve UNSUPPORTED). */
+    public void syncTime(long epochSec, long timeoutMs) throws IOException {
+        sendRequest("TIME", "\"epochSec\":" + epochSec, null, timeoutMs);
+    }
+
+    /** Pide INFO al peer. Devuelve el Map completo del reply para que el
+     *  caller extraiga los campos relevantes (uniqueId, boardName, freq,
+     *  uptimeMs, tempC, fsTotalBytes, fsUsedBytes, ...). */
+    public Map<String, Object> getInfo(long timeoutMs) throws IOException {
+        return sendRequest("INFO", null, null, timeoutMs);
+    }
+
     /** Helper para serializar un string con comillas + escape. */
     private static String jsonStr(String s) { return "\"" + Json.escape(s) + "\""; }
 
@@ -768,9 +927,21 @@ public final class BpvmClient implements AutoCloseable {
                 break;
             }
             case "EXITED": {
+                // El firmware Pico envía {status, errorMessage} (wire v1
+                // canon); la VM Java envía {reason} (extensión histórica).
+                // Aceptamos ambos — preferencia: errorMessage → reason →
+                // status. Si solo hay status:"OK", lo usamos como reason
+                // para que la UI muestre "exit 0 (OK)" en lugar de "exit 0 ()".
+                String reason = Json.getString(m, "errorMessage", null);
+                if (reason == null || reason.isEmpty()) {
+                    reason = Json.getString(m, "reason", null);
+                }
+                if (reason == null || reason.isEmpty()) {
+                    reason = Json.getString(m, "status", "");
+                }
                 fire(new ExitedEvent(
                         (int) Json.getLong(m, "exitCode", 0),
-                        Json.getString(m, "reason", "")));
+                        reason));
                 // Tras EXITED no hay sesión activa.
                 this.currentSession = 0;
                 break;

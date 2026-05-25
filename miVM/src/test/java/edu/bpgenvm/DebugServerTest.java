@@ -201,9 +201,15 @@ class DebugServerTest {
 
                 String resp = in.readLine();
                 Map<String,Object> m = Json.parseFlatObject(resp);
+                // PR-align-vms: EXITED ahora habla canon v1 — status+errorMessage
+                // en lugar de reason. exitCode==0 mapea a status="OK" sin
+                // errorMessage. Para preservar el detalle "main returned" del
+                // ExitedEvent, lo emitimos como errorMessage cuando reason!=""
+                // (ver DebugServer.onEvent).
                 assertEquals("EXITED",        Json.getString(m, "type", ""));
                 assertEquals(0L,              Json.getLong(m, "exitCode", -1));
-                assertEquals("main returned", Json.getString(m, "reason", ""));
+                assertEquals("OK",            Json.getString(m, "status", ""));
+                assertEquals("main returned", Json.getString(m, "errorMessage", ""));
             }
         }
     }
@@ -231,12 +237,15 @@ class DebugServerTest {
                 String line = in.readLine();
                 Map<String,Object> m = Json.parseFlatObject(line);
                 assertEquals("BP_HIT", Json.getString(m, "type", ""));
-                // PR-3: session=0 sin RUN previo. PR-5 introducirá bpId real.
+                // PR-3: session=0 sin RUN previo. PR-5: file/line dentro
+                // del subobjeto `frame`; los campos planos restantes son
+                // extensión Java-only (tid/absPc/bp/sp/cs/stackBase).
                 assertEquals(0L,    Json.getLong(m, "session", -1));
                 assertEquals(0L,    Json.getLong(m, "bpId", -1));
                 assertEquals(3L,    Json.getLong(m, "tid", -1));
-                assertEquals(42L,   Json.getLong(m, "line", -1));
-                assertEquals("C:/x/foo.bp", Json.getString(m, "file", ""));
+                Map<String,Object> frame = Json.getMap(m, "frame");
+                assertEquals(42L,   Json.getLong(frame, "line", -1));
+                assertEquals("C:/x/foo.bp", Json.getString(frame, "file", ""));
                 assertEquals(1234L, Json.getLong(m, "absPc", -1));
                 assertEquals(1000L, Json.getLong(m, "bp", -1));
                 assertEquals(1008L, Json.getLong(m, "sp", -1));
@@ -431,12 +440,13 @@ class DebugServerTest {
                 assertEquals(7L, Json.getLong(mr1, "id", -1));
 
                 // 2) Se emite PausedEvent — debe salir como STEP_DONE.
+                // PR-5: line/file dentro del subobjeto `frame` (v1 puro).
                 server.onEventForTest(new PausedEvent(
                         0, 100, 5, "x.bp", 1000, 1004, 0, 65536));
                 String l1 = in.readLine();
                 Map<String,Object> m1 = Json.parseFlatObject(l1);
                 assertEquals("STEP_DONE", Json.getString(m1, "type", ""));
-                assertEquals(5L, Json.getLong(m1, "line", -1));
+                assertEquals(5L, Json.getLong(Json.getMap(m1, "frame"), "line", -1));
 
                 // 3) Siguiente PausedEvent — ya no es step → BP_HIT.
                 server.onEventForTest(new PausedEvent(
@@ -444,7 +454,7 @@ class DebugServerTest {
                 String l2 = in.readLine();
                 Map<String,Object> m2 = Json.parseFlatObject(l2);
                 assertEquals("BP_HIT", Json.getString(m2, "type", ""));
-                assertEquals(6L, Json.getLong(m2, "line", -1));
+                assertEquals(6L, Json.getLong(Json.getMap(m2, "frame"), "line", -1));
             }
         }
     }

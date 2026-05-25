@@ -1,58 +1,81 @@
 // ============================================================
 // SerialBackend.java
-// Implementación de Backend sobre PicoClient (USB CDC line-based).
-// Es el path histórico del PicoExplorer; se mantiene para hablar con
-// el firmware Pico hasta que éste se migre al wire v1.
+// Backend BPVM v1 sobre USB CDC contra el firmware Pico.
+// Hermano TCP: BpvmBackend (mismo wire, distinto transporte).
+//
+// La parte común (list/get/put/del/run/reset, framing, chunk→línea,
+// auto-CONTINUE PausedEvent) vive en AbstractBpvmBackend. Aquí solo
+// queda:
+//   - openTransport: connectSerial(port, baud).
+//   - postConnect: syncTime al RTC del Pico — best-effort.
+//   - mem(): vía INFO (fsTotalBytes/fsUsedBytes) + LIST para count.
+//   - save(): SAVE real (persiste FS RAM a flash).
+//   - log(): LOG_DUMP del log persistente.
+//   - bootsel(): extensión Pico-only (reboot al USB MSC bootloader).
 // ============================================================
 package com.mycompany.bpide;
 
+import edu.bpgenvm.util.Json;
+
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.Map;
 
-public final class SerialBackend implements Backend {
+public final class SerialBackend extends AbstractBpvmBackend {
 
-    private final PicoClient client = new PicoClient();
+    /** Baud nominal — USB CDC ignora el valor (no necesita baud rate);
+     *  lo dejamos a 115200 por inercia y para herramientas externas. */
+    private static final int DEFAULT_BAUD = 115200;
 
-    @Override public String displayName() { return "Pico (serial)"; }
+    @Override public String displayName() { return "Pico (serial v1)"; }
 
-    @Override public String connect(String endpoint) throws IOException {
-        if (endpoint == null || endpoint.isEmpty()) {
-            throw new IOException("falta puerto serie (ej. COM3)");
-        }
-        client.connect(endpoint, 115200);
-        String hello = client.hello();
-        // Sincronizar reloj — best effort, no falla si no soporta.
-        try { client.syncTime(); } catch (IOException ignored) {}
-        return hello;
+    @Override protected void openTransport(String endpoint, BpvmClient c) throws IOException {
+        c.connectSerial(endpoint, DEFAULT_BAUD);
     }
 
-    @Override public boolean isConnected() { return client.isConnected(); }
-    @Override public void close() { client.close(); }
-
-    @Override public List<Entry> list() throws IOException {
-        List<PicoClient.RemoteFile> raw = client.ls();
-        List<Entry> out = new ArrayList<>(raw.size());
-        for (PicoClient.RemoteFile f : raw) {
-            // PicoClient.RemoteFile no distingue dirs (FS plano del Pico
-            // con `/` como namespace). Marcamos isDir=false; el árbol
-            // del UI los anida igualmente por segmentos.
-            out.add(new Entry(f.name, f.size, false));
-        }
-        return out;
+    @Override protected String helloLabel(String endpoint) {
+        return "bpvm-pico wire-v1 @ " + endpoint;
     }
 
-    @Override public byte[] get(String path) throws IOException { return client.get(path); }
-    @Override public void put(String path, byte[] data) throws IOException { client.put(path, data); }
-    @Override public void del(String path) throws IOException { client.del(path); }
-
-    @Override public String run(String path, Consumer<String> lineSink) throws IOException {
-        return client.run(path, lineSink::accept);   // PicoClient.OutputSink wrapper
+    @Override protected void postConnect(BpvmClient c) throws IOException {
+        // Sincronizar RTC del Pico con wall clock del PC. Best-effort:
+        // si el firmware no soporta TIME (versión vieja) log y seguir.
+        try { c.syncTime(System.currentTimeMillis() / 1000L, TIMEOUT_MS); }
+        catch (IOException ignored) { /* anecdotal */ }
     }
 
-    @Override public String mem() throws IOException { return client.mem(); }
-    @Override public void save() throws IOException { client.save(); }
-    @Override public String log() throws IOException { return client.log(); }
-    @Override public void reset() throws IOException { client.reset(); }
+    @Override public String mem() throws IOException {
+        require();
+        Map<String, Object> info = client.getInfo(TIMEOUT_MS);
+        long total = Json.getLong(info, "fsTotalBytes", 0);
+        long used  = Json.getLong(info, "fsUsedBytes", 0);
+        long free  = total - used;
+        // fileCount lo sacamos del LIST (barato — entries ya van en RAM
+        // del firmware). Si crece el coste, se puede añadir a INFO.
+        int fileCount;
+        try { fileCount = client.listFiles("", TIMEOUT_MS).size(); }
+        catch (IOException ioe) { fileCount = -1; }
+        return "total=" + total + " used=" + used + " free=" + free
+                + " count=" + fileCount;
+    }
+
+    @Override public void save() throws IOException {
+        require();
+        client.save(TIMEOUT_MS);
+    }
+
+    @Override public String log() throws IOException {
+        require();
+        return client.logDump(TIMEOUT_MS);
+    }
+
+    /** Pico-only: reboot al bootloader BOOTSEL (USB MSC para reflashear).
+     *  El backend genérico no lo expone — quien la llama hace cast a
+     *  SerialBackend. */
+    public void bootsel() throws IOException {
+        require();
+        BpvmClient c = this.client;
+        this.client = null;
+        c.bootsel();
+    }
 }
