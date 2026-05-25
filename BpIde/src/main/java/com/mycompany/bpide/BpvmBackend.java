@@ -162,12 +162,14 @@ public final class BpvmBackend implements Backend {
     }
 
     @Override public void reset() throws IOException {
-        // PR-4 introdujo RESET en VM-Java: el daemon hace System.exit(0).
-        // No exponemos un helper tipado en BpvmClient, así que usamos
-        // sendOneShot interno via runModule…no, mejor abrir un helper:
-        // por ahora avisamos con UnsupportedOperationException — TODO
-        // pequeño en BpvmClient para exponer reset() tipado.
-        throw new IOException("RESET pendiente de exposición tipada en BpvmClient (TODO PR-7c)");
+        // PR-7c — RESET tipado: BpvmClient.reset() manda el request,
+        // espera el RESET_REPLY (corto timeout porque el server hace
+        // System.exit poco después), y cierra el socket en el finally.
+        // Anulamos `this.client` después porque ya está close()d.
+        require();
+        BpvmClient c = this.client;
+        this.client = null;   // evitar usar el cliente cerrado
+        c.reset();
     }
 
     private void require() throws IOException {

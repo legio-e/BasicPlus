@@ -215,11 +215,12 @@ public final class DebugServer implements AutoCloseable {
                 sb.append(",\"session\":").append(sess);
                 if (!wasStep) sb.append(",\"bpId\":").append(bpId);
                 sb.append(",\"frame\":").append(frame);
-                // Campos planos transitorios:
+                // PR-5: file/line ya están dentro de `frame` (v1 puro). El
+                // resto son extensión Java-only (no están en v1 standard) —
+                // los conservamos al nivel del mensaje porque el debugger
+                // in-process Java los necesita para queries de estado.
                 sb.append(",\"tid\":").append(e.tid);
                 sb.append(",\"absPc\":").append(e.absPc);
-                sb.append(",\"line\":").append(e.line);
-                sb.append(",\"file\":\"").append(safeFile).append("\"");
                 sb.append(",\"bp\":").append(e.bp);
                 sb.append(",\"sp\":").append(e.sp);
                 sb.append(",\"cs\":").append(e.cs);

@@ -294,6 +294,32 @@ public final class BpvmClient implements AutoCloseable {
         sendOneShot("RUN", "\"path\":\"" + Json.escape(module) + "\"", null);
     }
 
+    /** PR-7c — Pide al server que se reinicie. El protocolo v1 manda que el
+     *  server responda con RESET_REPLY ANTES de matar el proceso (delay
+     *  ~100ms para que el reply salga del socket). En la VM Java
+     *  &quot;reboot&quot; = System.exit(0); en el firmware Pico = reset HW.
+     *
+     *  Tras un RESET la conexión se rompe en breve, así que:
+     *   - Usamos un timeout corto (2s) para la reply.
+     *   - Al volver llamamos close() para limpiar el lado cliente y dejar
+     *     todo en orden, sin esperar a que el peer cierre TCP.
+     *
+     *  Si el server no responde a tiempo (e.g. ya estaba muriendo) no se
+     *  considera error fatal — devolvemos sin lanzar y aún así close().
+     */
+    public void reset() throws IOException {
+        try {
+            sendRequest("RESET", null, null, 2000);
+        } catch (IOException ioe) {
+            // Reply perdido es esperable cuando el proceso ya está muriendo.
+            // Lo logueamos pero no propagamos — el cliente quiere "reset
+            // best-effort", no una garantía de RESET_REPLY síncrona.
+            diag("[BpvmClient] RESET sin reply síncrona: " + ioe.getMessage());
+        } finally {
+            close();
+        }
+    }
+
     public void sendCommand(StepCommand cmd) {
         switch (cmd) {
             case CONTINUE:  sendOneShot("CONTINUE", "", null); break;
@@ -707,16 +733,29 @@ public final class BpvmClient implements AutoCloseable {
             }
             case "BP_HIT":
             case "STEP_DONE": {
-                // PR-3: BP_HIT (pausa inicial o BP real) y STEP_DONE
-                // (pausa tras STEP_INTO/OVER/OUT) comparten payload en el
-                // wire. El API in-process Java no distingue todavía — ambos
-                // se convierten en PausedEvent.
-                // PR-5 introducirá `frame:{...}` anidado v1-puro.
+                // PR-5: leer prioritariamente del campo `frame:{...}` v1.
+                // Si está, file/line vienen de ahí. Los demás campos
+                // (tid/absPc/bp/sp/cs/stackBase) son extensión Java-only
+                // — no están en v1 puro y se leen del nivel superior por
+                // back-compat con server PR-1..PR-4. Cuando el server
+                // deje de emitirlos quedarán a 0; el debugger Java los
+                // sigue usando para queries de estado del VM.
+                Map<String, Object> frame = Json.getMap(m, "frame");
+                String file;
+                int    line;
+                if (frame != null) {
+                    file = Json.getString(frame, "file", null);
+                    line = (int) Json.getLong(frame, "line", -1);
+                } else {
+                    // Fallback robusto a campos planos (server pre-PR-5).
+                    file = Json.getString(m, "file", null);
+                    line = (int) Json.getLong(m, "line", -1);
+                }
                 PausedEvent e = new PausedEvent(
                         (int) Json.getLong(m, "tid", 0),
                         (int) Json.getLong(m, "absPc", 0),
-                        (int) Json.getLong(m, "line", -1),
-                        Json.getString(m, "file", null),
+                        line,
+                        file,
                         (int) Json.getLong(m, "bp", 0),
                         (int) Json.getLong(m, "sp", 0),
                         (int) Json.getLong(m, "cs", 0),
