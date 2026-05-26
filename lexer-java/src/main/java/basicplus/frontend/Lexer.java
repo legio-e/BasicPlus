@@ -75,6 +75,7 @@ public final class Lexer {
         m.put("final",     TokenType.FINAL);
         m.put("sync",      TokenType.SYNC);
         m.put("intrinsic", TokenType.INTRINSIC);
+        m.put("native",    TokenType.NATIVE);   /* H3 #162 — modificador AOT */
         // ownership
         m.put("owner",    TokenType.OWNER);
         // instancia / clase base

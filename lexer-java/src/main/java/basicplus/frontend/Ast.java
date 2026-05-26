@@ -201,20 +201,31 @@ public final class Ast {
         public final boolean isFinal;
         /** Función `intrinsic`: sólo signature; el compilador inlinea opcodes en el call site. */
         public final boolean isIntrinsic;
+        /** H3 #162 — función `native`: candidata a tener versión AOT C.
+         *  El bytecode .mod se emite igual; el flag se propaga al .bpi
+         *  y al emisor AOT (#157). El runtime ignora el flag — quien
+         *  decide ejecutar AOT vs bytecode es el AOT registry tras link. */
+        public final boolean isNative;
         public final DeclName name;
         public final List<Param> params;
         public final TypeRef returnType;     // null si void
         public final List<IStmt> body;
         public FuncDef(boolean isPublic, boolean isFinal, DeclName name, List<Param> params,
                        TypeRef returnType, List<IStmt> body, int line, int column) {
-            this(isPublic, isFinal, false, name, params, returnType, body, line, column);
+            this(isPublic, isFinal, false, false, name, params, returnType, body, line, column);
         }
         public FuncDef(boolean isPublic, boolean isFinal, boolean isIntrinsic, DeclName name,
                        List<Param> params, TypeRef returnType, List<IStmt> body, int line, int column) {
+            this(isPublic, isFinal, isIntrinsic, false, name, params, returnType, body, line, column);
+        }
+        public FuncDef(boolean isPublic, boolean isFinal, boolean isIntrinsic, boolean isNative,
+                       DeclName name, List<Param> params, TypeRef returnType, List<IStmt> body,
+                       int line, int column) {
             super(line, column);
             this.isPublic = isPublic;
             this.isFinal = isFinal;
             this.isIntrinsic = isIntrinsic;
+            this.isNative = isNative;
             this.name = name;
             this.params = params;
             this.returnType = returnType;

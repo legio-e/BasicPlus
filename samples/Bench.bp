@@ -2,7 +2,10 @@ module Bench
 
   import Pico
 
-  function fib(n: integer): integer
+  // H3 #162 — keyword `native` opcional. El bytecode .mod se emite
+  // igual; el flag se propaga al AST y (cuando exista) al .bpi para
+  // que el emisor AOT sepa qué funciones tienen versión nativa.
+  native function fib(n: integer): integer
     if n < 2 then
       return n
     endif

@@ -200,6 +200,15 @@ public final class Parser {
             advance();
         }
 
+        // H3 #162 — modificador `native`. Marca la función como AOT'd.
+        // El bytecode .mod se emite IGUAL (sin cambios). El flag solo
+        // se propaga al .bpi (futuro) y al emisor AOT (#157).
+        boolean isNative = false;
+        if (check(TokenType.NATIVE)) {
+            isNative = true;
+            advance();
+        }
+
         Token tok = current();
         if (isSync && tok.type != TokenType.PROPERTY) {
             error("'sync' sólo se aplica a 'property'");
@@ -209,6 +218,14 @@ public final class Parser {
         if (isIntrinsic && tok.type != TokenType.FUNCTION) {
             error("'intrinsic' sólo se aplica a 'function'");
             isIntrinsic = false;
+        }
+        if (isNative && tok.type != TokenType.FUNCTION) {
+            error("'native' sólo se aplica a 'function'");
+            isNative = false;
+        }
+        if (isIntrinsic && isNative) {
+            error("una función no puede ser 'intrinsic' y 'native' a la vez");
+            isNative = false;
         }
         switch (tok.type) {
             case CONST:    return parseConstDecl(isPublic);
@@ -221,7 +238,7 @@ public final class Parser {
                 // esta función. Así un error en cabecera o body
                 // no descarrila el parseo del resto del módulo.
                 try {
-                    return parseFuncDef(isPublic, isFinal, isIntrinsic);
+                    return parseFuncDef(isPublic, isFinal, isIntrinsic, isNative);
                 } catch (RuntimeException ex) {
                     if (ex.getMessage() != null) error(ex.getMessage());
                     synchronizeToFunctionEnd();
@@ -346,10 +363,15 @@ public final class Parser {
     // FUNCIONES
     // ============================================================
     private FuncDef parseFuncDef(boolean isPublic, boolean isFinal) {
-        return parseFuncDef(isPublic, isFinal, false);
+        return parseFuncDef(isPublic, isFinal, false, false);
     }
 
     private FuncDef parseFuncDef(boolean isPublic, boolean isFinal, boolean isIntrinsic) {
+        return parseFuncDef(isPublic, isFinal, isIntrinsic, false);
+    }
+
+    private FuncDef parseFuncDef(boolean isPublic, boolean isFinal,
+                                  boolean isIntrinsic, boolean isNative) {
         Token tok = current();
         match(TokenType.FUNCTION);
         DeclName name = parseDeclName();
@@ -370,7 +392,7 @@ public final class Parser {
         // El emisor reemplaza las llamadas a intrínsecos por opcodes inline; sus
         // bodies no se emiten al .mod.
         if (isIntrinsic || inInterface) {
-            return new FuncDef(isPublic, isFinal, isIntrinsic, name, paramList, retType,
+            return new FuncDef(isPublic, isFinal, isIntrinsic, false, name, paramList, retType,
                                new ArrayList<>(), tok.line, tok.column);
         }
 
@@ -384,7 +406,7 @@ public final class Parser {
             parseDeclName();
         }
         consumeStmtTerminator("se esperaba salto de línea tras 'end'");
-        return new FuncDef(isPublic, isFinal, false, name, paramList, retType, body, tok.line, tok.column);
+        return new FuncDef(isPublic, isFinal, false, isNative, name, paramList, retType, body, tok.line, tok.column);
     }
 
     private Param parseParam() {

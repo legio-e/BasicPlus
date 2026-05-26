@@ -37,6 +37,12 @@ public enum TokenType {
     //      (el frontend reemplaza la llamada por opcodes en lugar de CALL_EXT). ----
     INTRINSIC,
 
+    // ---- Modificador para funciones AOT (H3 #162). Marca la función
+    //      como candidata a tener una versión C-nativa. El bytecode
+    //      .mod se emite igual (el flag NO afecta la compilación BP);
+    //      solo se propaga al .bpi y al emisor AOT cuando éste exista. ----
+    NATIVE,
+
     // ---- Palabras clave: instancia / clase base ----
     THIS, SUPER,
 

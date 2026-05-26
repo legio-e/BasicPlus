@@ -114,7 +114,8 @@ add_executable(bpvm_pico
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
     bench.c         # H3 #159: micro-bench AOT ceiling (fib_native vs BP)
-    aot_funcs.c     # H3 #160: AOT manual de Bench.fib + thunk + registro
+    aot_funcs.c     # H3 #160: agregador del registro AOT
+    aot_Bench.c     # H3 #157: AUTOGENERADO por AotCEmitter desde Bench.bp
     ${BPVM_C_SRC}
 )
 
