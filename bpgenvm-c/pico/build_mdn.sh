@@ -26,18 +26,26 @@ LEXER="$PM_ROOT/lexer-java"
 SAMPLES="$PM_ROOT/samples"
 WORK_DIR="$SCRIPT_DIR/mdn_build"     # intermedios (.c, .o)
 
-# Buscar el .bp en samples/ o samples/benchmarks/ (la suite de bench
-# vive en ese subdir). El IDE compila a <bp_dir>/out/ — el .mdn va
-# AL MISMO out/ para que el IDE lo encuentre alongside del .mod.
+# Buscar el .bp que declara `module <MOD>` en samples/ y subdirs.
+# Esto soporta que el filename NO coincida con el módulo (e.g.
+# fibobench.bp con `module Fibo`).
+#
+# El IDE compila a <bp_dir>/out/<MOD>.mod — el .mdn va al mismo
+# out/ para que el IDE lo encuentre alongside del .mod.
 BP_FILE=""
-for candidate in "$SAMPLES/${MOD}.bp" "$SAMPLES/benchmarks/${MOD}.bp"; do
-    if [ -f "$candidate" ]; then
+while IFS= read -r candidate; do
+    # primera línea no vacía con `module XXX` o `module interface XXX`
+    name=$(grep -m1 -E "^[[:space:]]*module([[:space:]]+interface)?[[:space:]]+[A-Za-z_][A-Za-z0-9_]*" "$candidate" \
+            | sed -E 's/^[[:space:]]*module([[:space:]]+interface)?[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\2/' \
+            | head -1)
+    if [ "$name" = "$MOD" ]; then
         BP_FILE="$candidate"
         break
     fi
-done
+done < <(find "$SAMPLES" -maxdepth 3 -name "*.bp" -type f 2>/dev/null)
+
 if [ -z "$BP_FILE" ]; then
-    echo "ERROR: no se encontró ${MOD}.bp en samples/ ni samples/benchmarks/" >&2
+    echo "ERROR: no se encontró ningún .bp con 'module ${MOD}' bajo $SAMPLES" >&2
     exit 3
 fi
 BP_DIR="$(dirname "$BP_FILE")"

@@ -53,6 +53,7 @@ cd bpgenvm-c/pico
 | Bench | `J` (host) | `Ci` (Pico interp) | `Ca` (Pico AOT) | `Ci/Ca` speedup | Notas |
 |---|---:|---:|---:|---:|---|
 | `Bench.fib(28)` | _pendiente_ | ~5500 ms | 83 ms | **66×** | ✅ validado #158 |
+| `Fibo.fib(30) × 5` | _pendiente_ | 80 645 ms | 1 095 ms | **73.6×** | ✅ fibobench.bp (mismo módulo, ambas versiones) |
 | `Factorial.run(10000)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
 | `Primes.sieveTo(10000)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
 | `Gcd.batch(1000)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
