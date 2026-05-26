@@ -83,6 +83,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/rtc.c
     ${BPVM_C_ROOT}/src/adc.c
     ${BPVM_C_ROOT}/src/wdt.c
+    ${BPVM_C_ROOT}/src/aot_registry.c   # H3 #160: AOT hijack registry
     # Plataforma: usamos el backend FreeRTOS en vez del pthread del host.
     ${CMAKE_CURRENT_LIST_DIR}/platform_freertos.c
 )
@@ -113,11 +114,13 @@ add_executable(bpvm_pico
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
     bench.c         # H3 #159: micro-bench AOT ceiling (fib_native vs BP)
+    aot_funcs.c     # H3 #160: AOT manual de Bench.fib + thunk + registro
     ${BPVM_C_SRC}
 )
 
 target_include_directories(bpvm_pico PRIVATE
     ${BPVM_C_ROOT}/include
+    ${BPVM_C_ROOT}/src                          # aot_registry.h (H3)
     ${CMAKE_CURRENT_LIST_DIR}                   # FreeRTOSConfig.h + embedded_mods.h
 )
 

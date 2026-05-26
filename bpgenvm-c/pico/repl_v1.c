@@ -23,11 +23,13 @@
 #include "json_min.h"
 #include "fs.h"
 #include "log.h"
+#include "aot_funcs.h"       /* H3 #160: registro AOT manual antes de run */
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* inspect deps en handle_run */
 #include "bpvm_pico.h"       /* INFO: uniqueId/boardName/temp/freq/uptime */
 #include "bpvm_rtc.h"        /* TIME: set epoch */
+#include "aot_registry.h"    /* H3 #160: bpvm_aot_clear */
 
 #include "pico/bootrom.h"    /* reset_usb_boot (BOOTSEL) */
 
@@ -721,6 +723,13 @@ static void handle_run(long id, const json_obj_t* obj) {
         }
         if (!loaded_any) break;
     }
+
+    /* 4b. H3 #160 — registrar funciones AOT manualmente. Tras link,
+     *     la global symbol table tiene "Bench.fib" si Bench.mod cargó;
+     *     aot_funcs_register hace lookup y registra el thunk. Tolerante
+     *     a símbolos ausentes (si no hay Bench.fib, no-op silencioso). */
+    bpvm_aot_clear();
+    aot_funcs_register(vm);
 
     /* 5. Ejecutar. Bloquea hasta que el programa termina. Cada print
      *    del programa pasa por v1_output_sink → genera un OUTPUT event. */

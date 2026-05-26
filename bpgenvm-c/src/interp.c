@@ -16,6 +16,7 @@
 
 #include "bpvm_internal.h"
 #include "bpvm_opcodes.h"
+#include "aot_registry.h"   /* H3 #160: hijack BP→AOT en OP_CALL/CALL_EXT */
 
 #include <stdio.h>
 #include <string.h>
@@ -354,12 +355,23 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         /* ---- Calls + frame setup ---- */
         case OP_CALL: {
             int32_t target_rel = bpvm_read_i32_be(mem + pc); pc += 4;
-            /* push saved pc/bp/cs, fija bp = sp tras los saves, salta */
+            uint32_t target_abs = cs + (uint32_t) target_rel;
+            /* H3 #160 — AOT hijack. Si el target tiene un thunk
+             * registrado, divertir SIN crear frame BP. El thunk lee
+             * args del top del stack, ejecuta la AOT C-ABI, y pushea
+             * el resultado. sp/bp se actualizan via punteros; pc
+             * queda intacto (continuamos en el opcode siguiente). */
+            bpvm_aot_thunk_t aot = bpvm_aot_lookup(target_abs);
+            if (aot) {
+                aot(vm, &sp, &bp);
+                break;
+            }
+            /* BP estándar: push saved pc/bp/cs, fija bp = sp, salta */
             bpvm_write_i32_be(mem + sp, (int32_t) pc); sp += 4;
             bpvm_write_i32_be(mem + sp, (int32_t) bp); sp += 4;
             bpvm_write_i32_be(mem + sp, (int32_t) cs); sp += 4;
             bp = sp;
-            pc = cs + (uint32_t) target_rel;
+            pc = target_abs;
             break;
         }
         case OP_RET: {
@@ -842,6 +854,14 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             if (target == 0) {
                 fprintf(stderr, "[bpvm-c] CALL_EXT idx=%u no resuelto\n", idx);
                 exit_status = BPVM_ERR_RUNTIME; goto done;
+            }
+            /* H3 #160 — AOT hijack para CALL_EXT (mismo patrón que CALL). */
+            {
+                bpvm_aot_thunk_t aot_ext = bpvm_aot_lookup(target);
+                if (aot_ext) {
+                    aot_ext(vm, &sp, &bp);
+                    break;
+                }
             }
             /* Determinar el CS del módulo destino para que el frame
              * tenga el cs correcto al ejecutar el target. */
