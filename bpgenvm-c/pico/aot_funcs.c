@@ -1,23 +1,19 @@
 /*
- * aot_funcs.c — agregador de funciones AOT baked en firmware.
+ * aot_funcs.c — agregador del registro AOT.
  *
- * H3 #157 fase 1: el contenido AOT real está en aot_<Mod>.c
- * AUTOGENERADOS por AotCEmitter desde el .bp con `native function`.
+ * H3 #157 baseline: el contenido AOT real está en aot_<Mod>.c
+ * AUTOGENERADO por AotCEmitter desde el .bp con `native function`.
  * Este fichero solo orquesta el registro al arrancar un RUN.
  *
- * Cuando se generen más módulos AOT, añadir extern y llamada aquí.
+ * (Fase #158 .mdn dinámico — pausada tras crash en first try.
+ *  Volveremos a ella con instrumentación más fina.)
  */
 
 #include "aot_funcs.h"
 #include "bpvm.h"
 
-/* Forwards a los register de cada aot_<Mod>.c generado. */
 extern void aot_Bench_register(struct bpvm* vm);
 
-/* Registra TODAS las funciones AOT disponibles. Tolerante a símbolos
- * ausentes — si el .mod correspondiente no está cargado, el register
- * by name del módulo concreto devuelve -2 silenciosamente. */
 void aot_funcs_register(struct bpvm* vm) {
     aot_Bench_register(vm);
-    /* Añadir aquí futuros aot_<Mod>_register(vm); */
 }

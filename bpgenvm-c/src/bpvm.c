@@ -7,6 +7,7 @@
  */
 
 #include "bpvm_internal.h"
+#include "bpvm_aot_helpers.h"   /* H3 #158: tabla helpers para AOT */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,6 +48,10 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     /* F4: el alocador de stacks de threads BP empieza tras la región
      * del main. Cada Thread.start() reserva BPVM_THREAD_STACK_BYTES. */
     vm->next_thread_stack = main_tc->stack_top;
+
+    /* H3 #158 — apuntar a la tabla global de helpers para AOT. El
+     * código AOT C-emitido la usa vía vm->aot_helpers->func(...). */
+    vm->aot_helpers = &bpvm_aot_helpers_v1;
 
     return vm;
 }

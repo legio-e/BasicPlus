@@ -10,6 +10,7 @@
 #include "aot_registry.h"
 #include "bpvm.h"
 #include "bpvm_internal.h"
+#include "bpvm_aot_helpers.h"   /* H3 #158 — helpers indirect */
 
 /* Forward decls de las funciones AOT de este módulo. */
 static int32_t aot_Bench_fib(struct bpvm* vm, int32_t arg0);
@@ -26,11 +27,15 @@ static void thunk_Bench_fib(struct bpvm* vm,
                               uint32_t* sp_p,
                               uint32_t* bp_p) {
     (void) bp_p;
+    /* H3 #158 — helpers accedidos indirect via vm.
+     * No referencia símbolos del runtime por nombre → el
+     * .o resultante con -fpic es 100% relocatable. */
+    const struct aot_helpers_v1* H = vm->aot_helpers;
     uint8_t* mem = vm->memory;
     uint32_t sp = *sp_p;
-    int32_t a0 = bpvm_read_i32_be(mem + sp - 4); sp -= 4;
+    int32_t a0 = H->read_i32_be(mem + sp - 4); sp -= 4;
     int32_t r = aot_Bench_fib(vm, a0);
-    bpvm_write_i32_be(mem + sp, r); sp += 4;
+    H->write_i32_be(mem + sp, r); sp += 4;
     *sp_p = sp;
 }
 

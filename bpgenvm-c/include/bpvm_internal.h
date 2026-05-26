@@ -162,6 +162,10 @@ typedef struct {
     int      waiter_capacity;
 } bpvm_bp_mutex_t;
 
+/* H3 #158 — forward del struct de helpers para código AOT. Definido
+ * en src/bpvm_aot_helpers.h; lo referenciamos sólo por puntero aquí. */
+struct aot_helpers_v1;
+
 struct bpvm {
     /* Buffer del caller. */
     uint8_t* memory;
@@ -210,6 +214,12 @@ struct bpvm {
     /* Buffer staging para imports/exports al cargar — re-usable. */
     uint8_t* scratch;
     size_t   scratch_size;
+
+    /* H3 #158 — Tabla de helpers para código AOT. Apunta a la
+     * instancia global del runtime (bpvm_aot_helpers_v1). El código
+     * AOT C-emitido accede a helpers vía vm->aot_helpers->func(...).
+     * Inicializado en bpvm_init. Definición en bpvm_aot_helpers.h. */
+    const struct aot_helpers_v1* aot_helpers;
 };
 
 /* ============================================================ */

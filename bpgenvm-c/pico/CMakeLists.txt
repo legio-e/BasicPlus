@@ -83,7 +83,8 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/rtc.c
     ${BPVM_C_ROOT}/src/adc.c
     ${BPVM_C_ROOT}/src/wdt.c
-    ${BPVM_C_ROOT}/src/aot_registry.c   # H3 #160: AOT hijack registry
+    ${BPVM_C_ROOT}/src/aot_registry.c        # H3 #160: AOT hijack registry
+    ${BPVM_C_ROOT}/src/bpvm_aot_helpers.c    # H3 #158: tabla helpers AOT
     # Plataforma: usamos el backend FreeRTOS en vez del pthread del host.
     ${CMAKE_CURRENT_LIST_DIR}/platform_freertos.c
 )
@@ -114,9 +115,21 @@ add_executable(bpvm_pico
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
     bench.c         # H3 #159: micro-bench AOT ceiling (fib_native vs BP)
-    aot_funcs.c     # H3 #160: agregador del registro AOT
-    aot_Bench.c     # H3 #157: AUTOGENERADO por AotCEmitter desde Bench.bp
+    aot_funcs.c              # H3 #160: agregador del registro AOT
+    aot_Bench.c              # H3 #157: AOT linkado (estado working confirmado)
+    # mdn_loader.c           # ← H3 #158 fase C: en pausa tras crash
+    # embedded_bench_mdn.c   # ← H3 #158 fase C: en pausa tras crash
     ${BPVM_C_SRC}
+)
+
+# H3 #158 fase B — compilar el AOT generado como position-independent.
+# Esto es el paso preparatorio para extraer .text al .mdn. Si la
+# perf se mantiene (~84ms para fib(28)), el código PIC vale tal cual
+# para el loader dinámico de fase C/D.
+set_source_files_properties(
+    aot_Bench.c
+    PROPERTIES
+    COMPILE_FLAGS "-fpic -fno-jump-tables"
 )
 
 target_include_directories(bpvm_pico PRIVATE

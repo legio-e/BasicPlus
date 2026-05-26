@@ -109,6 +109,7 @@ public final class AotCEmitter {
         w.println("#include \"aot_registry.h\"");
         w.println("#include \"bpvm.h\"");
         w.println("#include \"bpvm_internal.h\"");
+        w.println("#include \"bpvm_aot_helpers.h\"   /* H3 #158 — helpers indirect */");
         w.println();
         w.println("/* Forward decls de las funciones AOT de este módulo. */");
         for (String name : nativeFuncNames) {
@@ -157,12 +158,16 @@ public final class AotCEmitter {
         w.println("                              uint32_t* sp_p,");
         w.println("                              uint32_t* bp_p) {");
         w.println("    (void) bp_p;");
+        w.println("    /* H3 #158 — helpers accedidos indirect via vm.");
+        w.println("     * No referencia símbolos del runtime por nombre → el");
+        w.println("     * .o resultante con -fpic es 100% relocatable. */");
+        w.println("    const struct aot_helpers_v1* H = vm->aot_helpers;");
         w.println("    uint8_t* mem = vm->memory;");
         w.println("    uint32_t sp = *sp_p;");
         // Pop args en orden inverso (último pusheado, primero popeado).
         int n = f.params.size();
         for (int i = n - 1; i >= 0; i--) {
-            w.println("    int32_t a" + i + " = bpvm_read_i32_be(mem + sp - 4); sp -= 4;");
+            w.println("    int32_t a" + i + " = H->read_i32_be(mem + sp - 4); sp -= 4;");
         }
         // C call con args en orden original a0, a1, a2...
         StringBuilder call = new StringBuilder();
@@ -170,7 +175,7 @@ public final class AotCEmitter {
         for (int i = 0; i < n; i++) call.append(", a").append(i);
         call.append(");");
         w.println(call);
-        w.println("    bpvm_write_i32_be(mem + sp, r); sp += 4;");
+        w.println("    H->write_i32_be(mem + sp, r); sp += 4;");
         w.println("    *sp_p = sp;");
         w.println("}");
         w.println();
