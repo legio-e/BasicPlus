@@ -24,6 +24,7 @@
 #include "fs.h"
 #include "log.h"
 #include "aot_funcs.h"       /* H3 #160: registro AOT manual antes de run */
+#include "mdn_loader.h"      /* H3 #158 fase D: cargar .mdn desde FS */
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* inspect deps en handle_run */
@@ -455,6 +456,19 @@ static void handle_log_dump(long id, const json_obj_t* obj) {
     fflush(stdout);
 }
 
+/* Borra el log RAM + flash. Útil para bisects de instrumentación —
+ * partir de 0 y ver inequívocamente qué persiste tras el siguiente
+ * intento. NO reinicia el firmware. */
+static void handle_log_clear(long id, const json_obj_t* obj) {
+    (void) obj;
+    log_clear_ram();
+    log_clear_flash();
+    log_printf("LOG cleared via wire v1");
+    /* No log_flush() — dejamos el "cleared" en RAM. El siguiente
+     * flush natural lo persistirá si interesa. */
+    wire_v1_send_reply_empty("LOG_CLEAR_REPLY", id);
+}
+
 /* ============================================================ */
 /* META — INFO, TIME, PING, RESET, BOOTSEL. */
 
@@ -731,6 +745,35 @@ static void handle_run(long id, const json_obj_t* obj) {
     bpvm_aot_clear();
     aot_funcs_register(vm);
 
+    /* 4c. H3 #158 fase D — para cada módulo cargado, buscar su .mdn
+     *     correspondiente en el FS y, si existe, registrar sus thunks
+     *     (zero-copy — apuntando al buffer FS). El registry queda con
+     *     la versión .mdn más reciente para los símbolos en cuestión. */
+    log_printf("AOT/FS: scanning %d modules for .mdn", vm->module_count);
+    for (int mi = 0; mi < vm->module_count; mi++) {
+        const char* mname = vm->modules[mi].name;
+        if (!mname || !mname[0]) continue;
+        char mdn_path[48];
+        snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
+        const uint8_t* mdn_data; uint32_t mdn_size;
+        fs_status_t fs_s = v1_get_resolve(mdn_path, &mdn_data, &mdn_size);
+        if (fs_s != FS_OK) {
+            log_printf("AOT/FS: %s not found (fs=%d) — sin overlay", mdn_path, (int) fs_s);
+            continue;
+        }
+        int rc = bpvm_load_mdn(vm, mdn_data, (size_t) mdn_size);
+        if (rc == MDN_OK) {
+            log_printf("AOT/FS: %s loaded from FS (%u bytes) buf=%p",
+                       mdn_path, (unsigned) mdn_size, (const void*) mdn_data);
+        } else {
+            log_printf("AOT/FS: %s load failed rc=%d", mdn_path, rc);
+        }
+    }
+    log_printf("AOT/FS: scan done, about to bpvm_run");
+    log_flush();   /* CHECKPOINT — si vemos hasta aquí, fase D loaded
+                    * correctamente. Lo siguiente que crashee es la
+                    * ejecución del thunk desde el buffer del FS. */
+
     /* 5. Ejecutar. Bloquea hasta que el programa termina. Cada print
      *    del programa pasa por v1_output_sink → genera un OUTPUT event. */
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
@@ -840,6 +883,7 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "SAVE")     == 0) { handle_save(id, &obj);     return; }
     if (strcmp(type, "DF")       == 0) { handle_df(id, &obj);       return; }
     if (strcmp(type, "LOG_DUMP") == 0) { handle_log_dump(id, &obj); return; }
+    if (strcmp(type, "LOG_CLEAR")== 0) { handle_log_clear(id, &obj); return; }
     /* TERMINAL */
     if (strcmp(type, "RUN")      == 0) { handle_run(id, &obj);      return; }
     /* KILL: requeriría interrumpir bpvm_run desde otra task. La VM C

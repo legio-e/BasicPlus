@@ -50,10 +50,22 @@ public final class AotCEmitter {
      *  reconozca CallExpr internos como C call directa. */
     private final Set<String> nativeFuncNames = new HashSet<>();
 
+    /** H3 #158 — si es true, NO emite aot_<Mod>_register (esa función
+     *  tiene relocs externas a bpvm_aot_register_by_name + string
+     *  literal, que rompen la position-independence del .o standalone).
+     *  El loader del .mdn registra automáticamente desde el symtab. */
+    private boolean omitRegisterFunc = false;
+
     private int indentLevel = 0;
 
     public AotCEmitter(String moduleName) {
         this.moduleName = moduleName;
+    }
+
+    /** Activa modo "para .mdn": code section 100% PIC, sin
+     *  referencias a símbolos externos del runtime. */
+    public void setOmitRegisterFunc(boolean omit) {
+        this.omitRegisterFunc = omit;
     }
 
     /**
@@ -89,8 +101,13 @@ public final class AotCEmitter {
             emitThunk(f);
         }
 
-        // Función de registro.
-        emitRegisterFunc(nativeFuncs);
+        // Función de registro — solo si NO estamos en modo .mdn.
+        // En .mdn las relocs de bpvm_aot_register_by_name + string
+        // literal contaminan el code section. El loader del firmware
+        // registra automáticamente a partir del symtab.
+        if (!omitRegisterFunc) {
+            emitRegisterFunc(nativeFuncs);
+        }
         return out.toString();
     }
 
@@ -154,7 +171,17 @@ public final class AotCEmitter {
     private void emitThunk(Ast.FuncDef f) {
         String fname = "aot_" + moduleName + "_" + f.name.name;
         String tname = "thunk_" + moduleName + "_" + f.name.name;
-        w.println("static void " + tname + "(struct bpvm* vm,");
+        // En modo .mdn el thunk debe ser visible al linker — MdnPack lo
+        // busca por nombre en el symtab del .o. Además marcamos `used`
+        // para que -Os con -ffunction-sections no lo deade-code-stripe
+        // por no tener llamadores en este TU. En modo "linked-in" se
+        // mantiene como antes: static, registrado via aot_<Mod>_register.
+        if (omitRegisterFunc) {
+            w.println("__attribute__((used))");
+            w.println("void " + tname + "(struct bpvm* vm,");
+        } else {
+            w.println("static void " + tname + "(struct bpvm* vm,");
+        }
         w.println("                              uint32_t* sp_p,");
         w.println("                              uint32_t* bp_p) {");
         w.println("    (void) bp_p;");

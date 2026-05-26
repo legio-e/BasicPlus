@@ -79,6 +79,14 @@ public interface Backend extends AutoCloseable {
      *  si no aplica. */
     String log() throws IOException;
 
+    /** Borra el log persistente (RAM + flash) en el dispositivo. Tras
+     *  esto, log() devuelve cadena vacía hasta que el firmware vuelva a
+     *  loggear algo y haga flush. UnsupportedOperationException si no
+     *  aplica al backend (e.g. VM Java). */
+    default void clearLog() throws IOException {
+        throw new UnsupportedOperationException("clearLog no soportado");
+    }
+
     /** Reboot/reset del backend. */
     void reset() throws IOException;
 }

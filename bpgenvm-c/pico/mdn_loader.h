@@ -1,15 +1,17 @@
 /*
  * mdn_loader.h — loader de archivos .mdn (H3 #158).
  *
- * El loader:
- *  1. Valida magic + version + abi_version.
- *  2. Copia code section a un pool de RAM dedicado.
- *  3. Invalida I-cache del rango copiado (M33).
- *  4. Registra cada symbol vía bpvm_aot_register_by_name.
+ * Diseño zero-copy:
+ *  1. Valida magic + version + abi_version + layout.
+ *  2. Por cada símbolo, registra thunk_addr = (data + hdr_total
+ *     + sym.thunk_offset) | 1u vía bpvm_aot_register_by_name.
+ *  3. NO copia el código — confía en que el buffer `data` pasado
+ *     vive en RAM ejecutable con dirección estable y persiste
+ *     mientras los thunks estén registrados.
  *
- * Pool de RAM: 16 KB estáticos en .bss. Suficiente para varios
- * módulos típicos (fib + thunk son ~40 bytes; un Math.bp pequeño
- * ronda 1-2 KB).
+ * Para .mdn embebido en firmware (.data array de xxd -i), trivial.
+ * Para .mdn cargado desde FS, el caller debe asegurar que el buffer
+ * del FS no se mueva mientras los thunks estén activos.
  */
 #ifndef BPVM_PICO_MDN_LOADER_H
 #define BPVM_PICO_MDN_LOADER_H
@@ -40,12 +42,10 @@ extern "C" {
  * para resolver la dirección absoluta. */
 int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size);
 
-/* Limpia el pool de RAM de AOT y resetea el registry. Útil entre
- * cargas para evitar fragmentación. Llamar antes de un RUN nuevo
- * si quieres descartar AOTs de RUNs previos. */
-void bpvm_mdn_reset(void);
-
-/* Para diagnóstico. */
+/* Legacy del approach con copy/pool. Hoy son no-ops — el registry
+ * se limpia vía bpvm_aot_clear() (del aot_registry) y no hay pool
+ * de RAM extra que resetear. Mantenidos por compat con callers. */
+void   bpvm_mdn_reset(void);
 size_t bpvm_mdn_used_bytes(void);
 
 #ifdef __cplusplus

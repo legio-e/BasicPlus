@@ -117,8 +117,8 @@ add_executable(bpvm_pico
     bench.c         # H3 #159: micro-bench AOT ceiling (fib_native vs BP)
     aot_funcs.c              # H3 #160: agregador del registro AOT
     aot_Bench.c              # H3 #157: AOT linkado (estado working confirmado)
-    # mdn_loader.c           # ← H3 #158 fase C: en pausa tras crash
-    # embedded_bench_mdn.c   # ← H3 #158 fase C: en pausa tras crash
+    mdn_loader.c             # H3 #158 fase C v2: loader .mdn con logging completo
+    embedded_bench_mdn.c     # H3 #158 fase C v2: blob .mdn limpio (124 bytes)
     ${BPVM_C_SRC}
 )
 

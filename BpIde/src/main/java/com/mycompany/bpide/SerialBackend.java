@@ -69,6 +69,11 @@ public final class SerialBackend extends AbstractBpvmBackend {
         return client.logDump(TIMEOUT_MS);
     }
 
+    @Override public void clearLog() throws IOException {
+        require();
+        client.logClear(TIMEOUT_MS);
+    }
+
     /** Pico-only: reboot al bootloader BOOTSEL (USB MSC para reflashear).
      *  El backend genérico no lo expone — quien la llama hace cast a
      *  SerialBackend. */

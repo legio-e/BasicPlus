@@ -2,10 +2,17 @@
 // AotMain.java
 // CLI standalone para emisor AOT (H3 #157 fase 1).
 //
-//   java basicplus.frontend.AotMain <file.bp> [<outDir>]
+//   java basicplus.frontend.AotMain <file.bp> [<outDir>] [--mdn]
 //
 // Toma un .bp, lo lexa + parsea, busca funciones `function native`,
 // y emite aot_<Module>.c en outDir (defecto: cwd).
+//
+// Flags:
+//   --mdn   No emite la función aot_<Mod>_register (que mete relocs
+//           a bpvm_aot_register_by_name + string literal y rompe
+//           la position-independence del .o cuando lo empaquetamos
+//           a .mdn). El loader del firmware registra a partir del
+//           symtab del .mdn — H3 #158.
 //
 // Sin semantic analysis para mantenerlo simple — el emisor solo
 // asume integer i32 por ahora. Errores de tipo o constructos no
@@ -24,11 +31,21 @@ public final class AotMain {
 
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("Uso: AotMain <file.bp> [<outDir>]");
+            System.err.println("Uso: AotMain <file.bp> [<outDir>] [--mdn]");
             System.exit(2);
         }
-        Path src = Paths.get(args[0]);
-        Path outDir = (args.length >= 2) ? Paths.get(args[1]) : Paths.get(".");
+        // Separar flags y posicionales.
+        boolean mdnMode = false;
+        java.util.List<String> positional = new java.util.ArrayList<>();
+        for (String a : args) {
+            if ("--mdn".equals(a)) {
+                mdnMode = true;
+            } else {
+                positional.add(a);
+            }
+        }
+        Path src = Paths.get(positional.get(0));
+        Path outDir = (positional.size() >= 2) ? Paths.get(positional.get(1)) : Paths.get(".");
         try {
             String source = new String(Files.readAllBytes(src), StandardCharsets.UTF_8);
 
@@ -53,6 +70,7 @@ public final class AotMain {
 
             // 3. Emit AOT
             AotCEmitter emitter = new AotCEmitter(module.name);
+            emitter.setOmitRegisterFunc(mdnMode);
             String csrc;
             try {
                 csrc = emitter.emitModule(module);

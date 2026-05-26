@@ -649,6 +649,13 @@ public final class BpvmClient implements AutoCloseable {
         return Json.getString(resp, "text", "");
     }
 
+    /** Borra el log RAM + flash del peer (firmware Pico). La VM Java
+     *  devuelve UNSUPPORTED — los callers la tratan como soft-error y
+     *  no propagan. */
+    public void logClear(long timeoutMs) throws IOException {
+        sendRequest("LOG_CLEAR", null, null, timeoutMs);
+    }
+
     /** Reboot al bootloader BOOTSEL (Pico-only). Mismo patrón que reset():
      *  request → reply corta → la VM se va — cerramos el cliente. */
     public void bootsel() throws IOException {

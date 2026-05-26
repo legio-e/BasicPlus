@@ -73,6 +73,7 @@ public final class PicoExplorer extends JPanel {
     private final JButton btnDelete  = new JButton("Delete");
     private final JButton btnSave    = new JButton("Save");
     private final JButton btnLog     = new JButton("Log");
+    private final JButton btnLogClr  = new JButton("Clr Log");
     private final JButton btnReset   = new JButton("Reset");
 
     /** Raíz del árbol. user object = String "Pico" en la raíz, String
@@ -124,6 +125,7 @@ public final class PicoExplorer extends JPanel {
         row2.add(btnDelete);
         row2.add(btnSave);
         row2.add(btnLog);
+        row2.add(btnLogClr);
         row2.add(btnReset);
 
         toolbar.add(rowBackend);
@@ -197,6 +199,7 @@ public final class PicoExplorer extends JPanel {
         btnDelete.addActionListener(e -> onDelete());
         btnSave.addActionListener(e -> onSave());
         btnLog.addActionListener(e -> onLog());
+        btnLogClr.addActionListener(e -> onLogClear());
         btnReset.addActionListener(e -> onReset());
 
         refreshPorts();
@@ -349,6 +352,7 @@ public final class PicoExplorer extends JPanel {
         btnDelete.setEnabled(connected);
         btnSave.setEnabled(connected);
         btnLog.setEnabled(connected);
+        btnLogClr.setEnabled(connected);
         btnReset.setEnabled(connected);
     }
 
@@ -646,6 +650,16 @@ public final class PicoExplorer extends JPanel {
         });
     }
 
+    /** Borra el log persistente del backend (RAM + flash en el Pico).
+     *  Útil cuando estamos bisecting instrumentación y queremos partir
+     *  de un buffer limpio. */
+    private void onLogClear() {
+        if (!isConnected()) return;
+        final Backend b = this.backend;
+        runAsync(() -> { b.clearLog(); return null; },
+                v -> status.setText("Log borrado en " + b.displayName()));
+    }
+
     private void onReset() {
         if (!isConnected()) return;
         final Backend b = this.backend;
@@ -703,6 +717,7 @@ public final class PicoExplorer extends JPanel {
         btnDelete.setEnabled(enabled && connected);
         btnSave.setEnabled(enabled && connected);
         btnLog.setEnabled(enabled && connected);
+        btnLogClr.setEnabled(enabled && connected);
         btnReset.setEnabled(enabled && connected);
     }
 }

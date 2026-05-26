@@ -18,10 +18,13 @@
 /* ============================================================== */
 
 #define FS_MAGIC        0x42504656u    /* 'BPFV' big-endian, but stored as u32 le */
-#define FS_VERSION      3u             /* v2 → v3: layout idéntico pero el firmware
-                                          pre-instala stdlib en /lib/ y Hello en /app/.
-                                          Bump para que fs_init invalide persistencias v2
-                                          que ya no esperan ver esos paths. */
+#define FS_VERSION      4u             /* v3 → v4: ficheros alineados a 4 bytes en
+                                          s_data. Bump para que fs_init invalide
+                                          persistencias v3 cuyos offsets no respetaban
+                                          esa alineación — al recargar se ven en
+                                          posiciones erradas y .mdn no ejecuta.
+                                          v2 → v3: pre-install stdlib en /lib/, Hello
+                                          en /app/. */
 
 /* Cada entry es 48 bytes (40 + 4 + 4). 64 entries -> 3072 bytes.
  * Header = 4 magic + 4 ver + 4 count + 64*48 = 3084 bytes. Reservamos
@@ -46,11 +49,24 @@ typedef struct {
                                  / FLASH_SECTOR_SIZE) * FLASH_SECTOR_SIZE)
 #define FS_FLASH_OFFSET      (PICO_FLASH_SIZE_BYTES - FS_REGION_ALIGNED)
 
-/* En memoria. */
+/* En memoria. s_data alineado a 8 para que con offsets también
+ * alineados (ver fs_put / compact) cualquier fichero quede 4/8-aligned.
+ * Necesario para que .mdn cargado desde FS pueda ejecutarse: el código
+ * Thumb-2 requiere PC bit 1 = 0, lo que exige que el code section esté
+ * al menos 2-aligned (4 da margen).
+ *
+ * Trade-off: los ficheros se separan con padding hasta el siguiente
+ * múltiplo de 4. Para un FS con ~12 ficheros eso son <50 bytes de
+ * desperdicio total. Aceptable. */
 static fs_entry_t s_entries[FS_MAX_FILES];
-static uint8_t    s_data[FS_DATA_SIZE];
+static uint8_t    s_data[FS_DATA_SIZE] __attribute__((aligned(8)));
 static uint32_t   s_data_used;          /* cuántos bytes de s_data hay usados */
 static int        s_initialized = 0;
+
+#define FS_FILE_ALIGN  4u
+static inline uint32_t fs_align_up(uint32_t v) {
+    return (v + (FS_FILE_ALIGN - 1u)) & ~(FS_FILE_ALIGN - 1u);
+}
 
 /* ============================================================== */
 /* Helpers                                                         */
@@ -90,6 +106,7 @@ static void compact(void) {
     static uint8_t tmp[FS_DATA_SIZE];
     for (int i = 0; i < FS_MAX_FILES; i++) {
         if (s_entries[i].size == 0) continue;
+        cursor = fs_align_up(cursor);
         memcpy(tmp + cursor, s_data + s_entries[i].offset, s_entries[i].size);
         s_entries[i].offset = cursor;
         cursor += s_entries[i].size;
@@ -246,19 +263,23 @@ fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
     int slot = find_free_slot();
     if (slot < 0) return FS_ERR_TABLE_FULL;
 
-    /* ¿Cabe? */
-    if (s_data_used + size > FS_DATA_SIZE) {
+    /* Alinear el offset destino a FS_FILE_ALIGN para que cada
+     * fichero quede 4-aligned (necesario para .mdn ejecutable; los
+     * .mod no lo necesitan pero la política es uniforme). */
+    uint32_t off = fs_align_up(s_data_used);
+    if (off + size > FS_DATA_SIZE) {
         compact();    /* por si la compactación libera espacio */
-        if (s_data_used + size > FS_DATA_SIZE) return FS_ERR_NO_SPACE;
+        off = fs_align_up(s_data_used);
+        if (off + size > FS_DATA_SIZE) return FS_ERR_NO_SPACE;
     }
 
     /* Copia. */
     memset(s_entries[slot].name, 0, FS_NAME_LEN);
     memcpy(s_entries[slot].name, name, namelen);
-    s_entries[slot].offset = s_data_used;
+    s_entries[slot].offset = off;
     s_entries[slot].size   = size;
-    if (size > 0) memcpy(s_data + s_data_used, data, size);
-    s_data_used += size;
+    if (size > 0) memcpy(s_data + off, data, size);
+    s_data_used = off + size;
 
     return FS_OK;
 }

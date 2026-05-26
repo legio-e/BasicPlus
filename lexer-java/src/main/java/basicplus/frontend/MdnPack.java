@@ -61,6 +61,10 @@ public final class MdnPack {
         }
 
         // Símbolos exportados: aquellos cuyo nombre empieza por "thunk_<Module>_".
+        // En Thumb-2 el bit 0 del valor del símbolo indica "modo Thumb"
+        // (no es parte del offset). Lo limpiamos aquí — el loader del
+        // firmware re-añade `| 1u` cuando construye la dirección final
+        // del thunk para llamarlo.
         String prefix = "thunk_" + moduleName + "_";
         List<Symbol> exports = new ArrayList<>();
         for (Symbol s : f.symbols()) {
@@ -71,7 +75,8 @@ public final class MdnPack {
                     System.err.println("Nombre muy largo: '" + qualified + "'");
                     System.exit(4);
                 }
-                exports.add(new Symbol(qualified, (int) s.value, s.shndx));
+                int byteOff = ((int) s.value) & ~1;
+                exports.add(new Symbol(qualified, byteOff, s.shndx));
             }
         }
 
