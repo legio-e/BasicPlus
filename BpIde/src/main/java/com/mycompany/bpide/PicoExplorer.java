@@ -279,14 +279,35 @@ public final class PicoExplorer extends JPanel {
                                 "[Explorer] " + depRemote + " ya en FS (" + dep.length()
                                 + " bytes), salto PUT"));
                     }
-                    continue;
+                } else {
+                    if (sz != null) {
+                        try { b.del(depRemote); }
+                        catch (java.io.IOException delErr) { /* tolerable */ }
+                    }
+                    byte[] depData = Files.readAllBytes(dep.toPath());
+                    b.put(depRemote, depData);
                 }
-                if (sz != null) {
-                    try { b.del(depRemote); }
-                    catch (java.io.IOException delErr) { /* tolerable */ }
+                // Si el dep tiene .mdn alongside, subirlo también.
+                File depMdn = mdnSiblingOf(dep);
+                if (depMdn != null && depMdn.isFile()) {
+                    String depMdnRemote = toAppPath(depMdn.getName());
+                    Long mz = remote.get(depMdnRemote);
+                    if (mz != null && mz == depMdn.length()) {
+                        // skip
+                    } else {
+                        if (mz != null) {
+                            try { b.del(depMdnRemote); }
+                            catch (java.io.IOException delErr) { /* tolerable */ }
+                        }
+                        byte[] mdnData = Files.readAllBytes(depMdn.toPath());
+                        b.put(depMdnRemote, mdnData);
+                        if (outputSink != null) {
+                            SwingUtilities.invokeLater(() -> outputSink.accept(
+                                    "[Explorer] subido AOT " + depMdnRemote + " ("
+                                    + depMdn.length() + " bytes)"));
+                        }
+                    }
                 }
-                byte[] depData = Files.readAllBytes(dep.toPath());
-                b.put(depRemote, depData);
             }
             // 2) Subir el módulo principal solo si difiere.
             Long mainSz = remote.get(remoteName);
@@ -303,6 +324,35 @@ public final class PicoExplorer extends JPanel {
                 }
                 byte[] data = Files.readAllBytes(modFile.toPath());
                 b.put(remoteName, data);
+            }
+            // 2b) Si hay .mdn alongside del .mod, subirlo también (H3 #158
+            //     fase D). El firmware al hacer RUN escanea el FS por
+            //     <mod>.mdn y registra los thunks AOT zero-copy. Si el
+            //     .mdn no existe localmente, sin problema — BP corre
+            //     interpretado normal.
+            File mdnFile = mdnSiblingOf(modFile);
+            if (mdnFile != null && mdnFile.isFile()) {
+                String mdnRemote = toAppPath(mdnFile.getName());
+                Long mdnSz = remote.get(mdnRemote);
+                if (mdnSz != null && mdnSz == mdnFile.length()) {
+                    if (outputSink != null) {
+                        SwingUtilities.invokeLater(() -> outputSink.accept(
+                                "[Explorer] " + mdnRemote + " ya en FS ("
+                                + mdnFile.length() + " bytes), salto PUT"));
+                    }
+                } else {
+                    if (mdnSz != null) {
+                        try { b.del(mdnRemote); }
+                        catch (java.io.IOException delErr) { /* tolerable */ }
+                    }
+                    byte[] mdnData = Files.readAllBytes(mdnFile.toPath());
+                    b.put(mdnRemote, mdnData);
+                    if (outputSink != null) {
+                        SwingUtilities.invokeLater(() -> outputSink.accept(
+                                "[Explorer] subido AOT " + mdnRemote + " ("
+                                + mdnFile.length() + " bytes)"));
+                    }
+                }
             }
             // 3) Ejecutar el principal.
             return b.run(remoteName, line -> {
@@ -324,6 +374,17 @@ public final class PicoExplorer extends JPanel {
     private static String toAppPath(String localName) {
         if (localName.indexOf('/') >= 0) return localName;
         return "/app/" + localName;
+    }
+
+    /** Para "Foo.mod" devuelve "Foo.mdn" en el mismo directorio (o null
+     *  si el nombre no acaba en .mod). El fichero puede no existir —
+     *  el caller chequea con .isFile(). H3 #158 fase D. */
+    private static File mdnSiblingOf(File modFile) {
+        if (modFile == null) return null;
+        String name = modFile.getName();
+        if (!name.toLowerCase().endsWith(".mod")) return null;
+        String base = name.substring(0, name.length() - 4);
+        return new File(modFile.getParentFile(), base + ".mdn");
     }
 
     /* ============================================================ */
