@@ -254,6 +254,7 @@
     <li><a href="#c5">0x50..0x5F — clases, builtins, excepciones</a></li>
     <li><a href="#c6">0x60..0x70 — owner, compactos, threading</a></li>
     <li><a href="#legend">Convenciones de notación</a></li>
+    <li><a href="#aot-abi">ABI de frontera AOT ↔ BP (H3)</a></li>
     <li><a href="#calling">Calling convention (CALL/RET/INVOKE)</a></li>
     <li><a href="#operands">Tabla de tamaños de operando</a></li>
   </ul>
@@ -609,6 +610,118 @@ sp += 4;</pre></td></tr>
     <dd>Notación <code>( a b -- c )</code> = pop b, pop a, push c. La cima a la derecha.</dd>
   </dl>
   <p style="margin-top:14px;">Tras ejecutar un opcode, <code>pc</code> apunta al siguiente, salvo control flow.</p>
+</section>
+
+<section class="footer-notes" id="aot-abi">
+  <h2>ABI de frontera AOT ↔ BP (H3)</h2>
+  <p>Cuando una función está marcada <code>native</code> y compilada a AOT,
+  cohabita con código BP interpretado. Las llamadas entre los dos mundos
+  cruzan una <strong>frontera de ABI</strong>: la convención BP usa el
+  stack BP (sp/bp/cs/pc por memoria); la AOT usa la C ABI nativa (args en
+  registros, return en r0). El runtime resuelve la llamada en tiempo de
+  ejecución según el tipo de cada función.</p>
+
+  <h3>Los 4 patrones de llamada</h3>
+<pre>          caller             callee
+        ┌──────────┐    ┌──────────┐
+①  BP → │ OP_CALL  │───▶│ bytecode │   convención BP estándar (sin cambios)
+        └──────────┘    └──────────┘
+
+        ┌──────────┐    ┌──────────┐
+②  BP → │ OP_CALL  │───▶│  thunk   │──▶ aot_fn(vm, a, b)
+        └──────────┘    └──────────┘   thunk lee args del stack BP,
+                                        llama C, escribe ret al stack BP.
+
+        ┌──────────┐    ┌──────────┐
+③ AOT → │ aot_a    │───▶│ aot_b    │   C call directa.
+        └──────────┘    └──────────┘   Compilador puede inlinear y regalloc.
+
+        ┌──────────┐    ┌──────────┐
+④ AOT → │vm_call_bp│───▶│ bytecode │   helper materializa frame BP,
+        └──────────┘    └──────────┘   ejecuta interp, recoge ret.</pre>
+
+  <h3>Tabla de dispatch del runtime</h3>
+  <p>Por cada función importable, el módulo (al cargar) rellena una
+  entry indicando si es BP o AOT:</p>
+<pre>typedef struct {
+    enum { KIND_BP, KIND_AOT } kind;
+    union {
+        uint32_t bp_pc;                  // bytecode entry (CS-relative)
+        struct {
+            void* aot_fn;                // aot_Module_func directo
+            void  (*thunk)(bpvm_t*, uint32_t* sp_p, uint32_t* bp_p);
+        } aot;
+    };
+} bpvm_func_entry_t;</pre>
+
+  <h3>OP_CALL en el intérprete (modificación)</h3>
+<pre>case OP_CALL: {
+    int32_t rel = rd32(mem+pc); pc += 4;
+    bpvm_func_entry_t* fe = bpvm_resolve_call(vm, cs, rel);
+    if (fe->kind == KIND_AOT) {
+        // BP→AOT (patrón ②) — thunk se encarga.
+        fe->aot.thunk(vm, &amp;sp, &amp;bp);
+        // NO se pushean saved pc/bp/cs. El AOT 'flota' sobre el stack
+        // BP del caller sin tocarlo. pc del caller continúa intacto.
+    } else {
+        // BP→BP (patrón ①) — convención estándar.
+        wr32(mem+sp, pc); sp += 4;
+        wr32(mem+sp, bp); sp += 4;
+        wr32(mem+sp, cs); sp += 4;
+        bp = sp;
+        pc = cs + fe-&gt;bp_pc;
+    }
+    break;
+}</pre>
+
+  <h3>Generación del thunk (lado AOT emitter)</h3>
+  <p>Por cada función <code>native</code>, el compilador emite dos cosas:</p>
+<pre>// 1) La función AOT con C-ABI nativa.
+//    Locales BP → C locals (compiler regalloc). Recursión = C call directa.
+int32_t aot_Bench_fib(bpvm_t* vm, int32_t n) {
+    if (n &lt; 2) return n;
+    return aot_Bench_fib(vm, n - 1) + aot_Bench_fib(vm, n - 2);
+}
+
+// 2) El thunk para el patrón ② (BP→AOT).
+//    Lee args del top del BP stack, llama AOT, escribe ret.
+//    El interp llama esto en vez de hacer CALL/ENTER/RET para esta función.
+void thunk_Bench_fib(bpvm_t* vm, uint32_t* sp_p, uint32_t* bp_p) {
+    uint8_t* mem = vm-&gt;memory;
+    uint32_t sp = *sp_p;
+    int32_t n = rd32(mem + sp - 4);     // pop arg (1 i32)
+    sp -= 4;
+    int32_t r = aot_Bench_fib(vm, n);   // C call al AOT
+    wr32(mem + sp, r); sp += 4;         // push result
+    *sp_p = sp;
+    // bp no cambia — el thunk no creó frame en el stack BP.
+}</pre>
+
+  <h3>Acceso a sp/bp/cs/pc desde dentro del AOT</h3>
+  <dl>
+    <dt>pc</dt><dd>Nunca. El AOT es C — el control flow es C (goto, return, function call).</dd>
+    <dt>cs</dt><dd>Sólo si lee globals. Hardcoded en el .c generado (cs del módulo conocido en codegen), o param.</dd>
+    <dt>bp</dt><dd>Nunca con AOT "lifted" (locales BP = locales C, no via memoria). Sí con AOT "transcribed" pero pierdes la mayor parte del speedup.</dd>
+    <dt>sp</dt><dd>Igual que bp. Solo aparece en el thunk al cruzar la frontera.</dd>
+  </dl>
+
+  <h3>Patrón ④ — AOT llamando a BP no AOT-ed</h3>
+  <p>Si el AOT necesita llamar a una función BP que no está AOT-ed (caso
+  raro pero posible), usa un helper:</p>
+<pre>int32_t r = vm_call_bp(vm, target_pc, arg0, arg1, ...);
+// Internamente: prepara frame BP (push saved pc=ret-to-helper,
+// bp, cs; push args), ejecuta interp hasta RET, recoge ret del top.</pre>
+  <p>Si el target es desconocido en codegen (función polimórfica vía param),
+  el AOT usa este helper. Si el target es conocido y AOT-ed, C call directa
+  (patrón ③).</p>
+
+  <h3>Por qué este diseño</h3>
+  <p>Es lo que hacen HotSpot, V8, LuaJIT, todos los JITs serios. Mantener
+  la AOT en C-ABI nativa permite que el compilador C haga register
+  allocation, tail-call optimization, y inlining de los <code>vm_op_*</code>
+  helpers <code>static inline</code>. Si forzásemos la AOT a usar la
+  convención BP (sp/bp por memoria), perderíamos la mayor parte del
+  speedup que mostró el bench (#159: 53×).</p>
 </section>
 
 <section class="footer-notes" id="calling">
