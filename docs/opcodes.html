@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Catálogo de opcodes BasicPlus VM</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --fg: #222;
+    --muted: #666;
+    --accent: #b4441a;
+    --border: #ddd;
+    --code-bg: #f0eee8;
+    --code-fg: #6b3a1e;
+    --table-header: #ece9df;
+    --stack-bg: #eaf4ea;
+    --stack-fg: #205020;
+    --warn: #c0392b;
+    --aot-bg: #f4f8fc;
+    --aot-fg: #1a3a5a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+  }
+  header {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 18px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  header h1 {
+    margin: 0 0 6px 0;
+    font-size: 22px;
+    color: var(--accent);
+  }
+  header .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  #search {
+    margin-top: 10px;
+    width: 100%;
+    max-width: 480px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+  nav.toc {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin-bottom: 24px;
+  }
+  nav.toc h2 { margin: 0 0 8px 0; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  nav.toc ul { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 30px; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  section.opcat {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  section.opcat h2 {
+    margin: 0;
+    padding: 12px 20px;
+    background: var(--table-header);
+    border-bottom: 1px solid var(--border);
+    font-size: 16px;
+  }
+  section.opcat h2 .range {
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: normal;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    background: #faf8f3;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+  tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.hidden { display: none; }
+  td.code {
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    color: var(--muted);
+    white-space: nowrap;
+    width: 50px;
+  }
+  td.mnem {
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    color: var(--accent);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  td.operand {
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: var(--code-fg);
+    background: var(--code-bg);
+    white-space: nowrap;
+    width: 120px;
+  }
+  td.stack {
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 12px;
+    background: var(--stack-bg);
+    color: var(--stack-fg);
+    white-space: nowrap;
+    width: 170px;
+  }
+  td.sem { color: var(--fg); }
+  td.sem code, td.aot code {
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+  td.sem .warn { color: var(--warn); font-weight: 600; }
+  td.aot {
+    background: var(--aot-bg);
+    color: var(--aot-fg);
+    border-left: 1px solid var(--border);
+    width: 320px;
+    max-width: 320px;
+  }
+  td.aot pre {
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    color: inherit;
+  }
+  td.aot pre.helper { color: var(--accent); }
+  td.aot pre.ctrl   { color: #5a4080; font-style: italic; }
+  td.aot pre.na     { color: var(--muted); font-style: italic; }
+  .legend {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 24px;
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+  .legend h2 { margin: 0 0 10px 0; font-size: 15px; }
+  .legend h3 { font-size: 14px; margin: 18px 0 8px 0; }
+  .legend dl { margin: 0; }
+  .legend dt {
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    color: var(--code-fg);
+    font-weight: 600;
+    margin-top: 8px;
+  }
+  .legend dd { margin: 2px 0 0 20px; color: var(--muted); }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 12px 16px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.45;
+    border-left: 3px solid var(--accent);
+  }
+  .footer-notes {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 24px;
+    margin-top: 24px;
+    font-size: 13px;
+  }
+  .footer-notes h2 { margin: 0 0 12px 0; font-size: 16px; color: var(--accent); }
+  .footer-notes h3 { font-size: 14px; margin: 18px 0 8px 0; }
+  .empty-msg {
+    text-align: center;
+    color: var(--muted);
+    padding: 30px;
+    font-style: italic;
+    display: none;
+  }
+  #empty.visible { display: block; }
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .badge-inline { background: #d5e8d5; color: #205020; }
+  .badge-helper { background: #fcd9c0; color: #7a3010; }
+  .badge-ctrl   { background: #ddd5ee; color: #4a2080; }
+  .badge-na     { background: #e8e8e8; color: #555; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Catálogo de opcodes BasicPlus VM</h1>
+  <div class="subtitle">
+    Bytecode <code>.mod</code> — 80 opcodes • Fuente canónica: <code>docs/OPCODES.md</code> + <code>bpgenvm-c/include/bpvm_opcodes.h</code>
+  </div>
+  <input type="text" id="search" placeholder="Filtrar por mnemónico, hex code, palabra en la semántica o código AOT..." autocomplete="off">
+</header>
+
+<main>
+
+<nav class="toc">
+  <h2>Índice por categoría</h2>
+  <ul>
+    <li><a href="#aot-conv">Convención AOT (cómo leer la columna "AOT C")</a></li>
+    <li><a href="#c0">0x00..0x0F — núcleo</a></li>
+    <li><a href="#c1">0x10..0x1F — aritmética + arrays</a></li>
+    <li><a href="#c2">0x20..0x2F — output, jumps compactos, float push</a></li>
+    <li><a href="#c3">0x30..0x3F — float comparisons + arrays narrow</a></li>
+    <li><a href="#c4">0x40..0x4F — globals narrow + bitwise + casts</a></li>
+    <li><a href="#c5">0x50..0x5F — clases, builtins, excepciones</a></li>
+    <li><a href="#c6">0x60..0x70 — owner, compactos, threading</a></li>
+    <li><a href="#legend">Convenciones de notación</a></li>
+    <li><a href="#calling">Calling convention (CALL/RET/INVOKE)</a></li>
+    <li><a href="#operands">Tabla de tamaños de operando</a></li>
+  </ul>
+</nav>
+
+<section class="legend" id="aot-conv">
+  <h2>Convención de la columna "AOT C"</h2>
+  <p>Cada opcode incluye su traducción a C para el generador AOT (H3). Las
+  categorías visualmente marcadas:</p>
+  <ul style="margin:8px 0 12px 16px;">
+    <li><span class="badge badge-inline">inline</span> C directo, 1-5 líneas. El AOT lo emite literal.</li>
+    <li><span class="badge badge-helper">helper</span> Llamada a una función <code>vm_op_*</code> del runtime. Usado cuando la lógica es compleja (GC, dispatch virtual, excepciones, range checks).</li>
+    <li><span class="badge badge-ctrl">ctrl</span> Control flow — el AOT lo traduce a estructuras C nativas (<code>goto</code>, <code>return</code>, llamada directa).</li>
+    <li><span class="badge badge-na">n/a</span> No aplica al cuerpo de funciones AOT (HALT, THREAD_EXIT).</li>
+  </ul>
+  <h3>Variables en scope de la función AOT</h3>
+<pre>uint8_t* mem;          // memory[] de la VM
+uint32_t sp, bp, cs;   // registros BP del frame actual
+bpvm_t*  vm;           // contexto VM (para helpers / GC / sink)</pre>
+  <h3>Helpers asumidos</h3>
+<pre>static inline int32_t  rd32(uint8_t* p);                  // read i32 BE
+static inline void     wr32(uint8_t* p, int32_t v);       // write i32 BE
+static inline int16_t  rd16s(uint8_t* p);                 // read i16 BE sign-ext
+static inline uint16_t rd16u(uint8_t* p);                 // read u16 BE
+static inline float    i2f(int32_t b);                    // bitcast i32→f32
+static inline int32_t  f2i(float f);                      // bitcast f32→i32</pre>
+  <p>Los <code>vm_op_*</code> son funciones del runtime VM-C extraídas del switch
+  del intérprete; cada una replica un bloque <code>case OP_X:</code> de
+  <code>interp.c</code>. El refactor a <code>static inline</code> compartido
+  entre intérprete y AOT es el primer paso de #157.</p>
+</section>
+
+<div id="empty" class="empty-msg">Sin resultados para el filtro actual.</div>
+
+<section class="opcat" id="c0">
+  <h2>Núcleo <span class="range">0x00..0x0F</span></h2>
+  <table>
+    <thead><tr><th>Code</th><th>Op</th><th>Operando</th><th>Stack</th><th>Semántica</th><th>AOT C</th></tr></thead>
+    <tbody>
+      <tr><td class="code">0x00</td><td class="mnem">HALT</td><td class="operand">—</td><td class="stack">( -- )</td><td class="sem">Termina la VM entera. <span class="warn">Sólo legal en thread main</span>.</td><td class="aot"><pre class="na">// n/a — AOT no emite HALT.
+// Aparece en el entry point del módulo,
+// que sigue siendo bytecode interpretado.</pre></td></tr>
+      <tr><td class="code">0x01</td><td class="mnem">PUSH</td><td class="operand">i32 value</td><td class="stack">( -- v )</td><td class="sem">Empuja <code>value</code> al stack.</td><td class="aot"><pre>wr32(mem+sp, value); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x02</td><td class="mnem">ADD</td><td class="operand">—</td><td class="stack">( a b -- a+b )</td><td class="sem">Suma entera (i32 con wrap).</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a + b); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x03</td><td class="mnem">PRINT</td><td class="operand">—</td><td class="stack">( v -- )</td><td class="sem">Imprime int + newline al OutputSink.</td><td class="aot"><pre class="helper">→ vm_op_print_i32(vm, &amp;sp);</pre></td></tr>
+      <tr><td class="code">0x04</td><td class="mnem">GET_GLOBAL</td><td class="operand">i16 soff</td><td class="stack">( -- v )</td><td class="sem">Push <code>mem[cs + soff]</code> i32.</td><td class="aot"><pre>wr32(mem+sp, rd32(mem+cs+soff));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x05</td><td class="mnem">SET_GLOBAL</td><td class="operand">i16 soff</td><td class="stack">( v -- )</td><td class="sem">Escribe i32 en <code>mem[cs + soff]</code>.</td><td class="aot"><pre>sp -= 4;
+wr32(mem+cs+soff, rd32(mem+sp));</pre></td></tr>
+      <tr><td class="code">0x06</td><td class="mnem">CALL_EXT</td><td class="operand">u16 idx</td><td class="stack">( -- )</td><td class="sem">Llama función importada en ext-table[idx].</td><td class="aot"><pre class="ctrl">// Si target AOT'd → C call directa
+//   tgt(vm, &amp;sp, &amp;bp);
+// Si no → vm_op_call_ext(vm, &amp;sp, &amp;bp, &amp;cs, idx);</pre></td></tr>
+      <tr><td class="code">0x07</td><td class="mnem">CALL</td><td class="operand">i32 relAddr</td><td class="stack">( -- )</td><td class="sem">Llama función local. Push saved pc/bp/cs; bp ← sp.</td><td class="aot"><pre class="ctrl">// Self-call (recursión) o intra-módulo:
+//   tgt(vm, &amp;sp, &amp;bp);   // si AOT'd
+// Si no → vm_op_call(vm, &amp;sp, &amp;bp, relAddr);</pre></td></tr>
+      <tr><td class="code">0x08</td><td class="mnem">RET</td><td class="operand">u8 k</td><td class="stack">( retVal -- )</td><td class="sem">Restaura cs/bp/pc; sp ← bp-12-k*4; push retVal.</td><td class="aot"><pre class="ctrl">// Final de función AOT:
+sp -= 4; int32_t r = rd32(mem+sp);
+sp = bp - 12 - k*4;
+bp = rd32(mem+bp-8);
+return r;   // C return — caller pushea</pre></td></tr>
+      <tr><td class="code">0x09</td><td class="mnem">GET_LOCAL</td><td class="operand">i16 soff</td><td class="stack">( -- v )</td><td class="sem">Push <code>mem[bp + soff]</code> i32.</td><td class="aot"><pre>wr32(mem+sp, rd32(mem+bp+soff));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x0A</td><td class="mnem">SET_LOCAL</td><td class="operand">i16 soff</td><td class="stack">( v -- )</td><td class="sem">Escribe i32 en <code>mem[bp + soff]</code>.</td><td class="aot"><pre>sp -= 4;
+wr32(mem+bp+soff, rd32(mem+sp));</pre></td></tr>
+      <tr><td class="code">0x0B</td><td class="mnem">EQ</td><td class="operand">—</td><td class="stack">( a b -- a==b )</td><td class="sem">Comparación entera. Resultado 1 / 0.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a == b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x0C</td><td class="mnem">LT</td><td class="operand">—</td><td class="stack">( a b -- a&lt;b )</td><td class="sem">Comparación entera signed.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a &lt; b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x0D</td><td class="mnem">JUMP</td><td class="operand">i32 rel</td><td class="stack">( -- )</td><td class="sem">Salto incondicional.</td><td class="aot"><pre class="ctrl">goto label_X;   // X = pc destino,
+                // emitido como label por
+                // el AOT al hacer CFG pass</pre></td></tr>
+      <tr><td class="code">0x0E</td><td class="mnem">JUMP_IF_FALSE</td><td class="operand">i32 rel</td><td class="stack">( v -- )</td><td class="sem">Si <code>v == 0</code>, salta.</td><td class="aot"><pre class="ctrl">sp -= 4;
+if (rd32(mem+sp) == 0) goto label_X;</pre></td></tr>
+      <tr><td class="code">0x0F</td><td class="mnem">ENTER</td><td class="operand">u16 bytes</td><td class="stack">( -- )</td><td class="sem">Reserva <code>bytes</code> en stack para locales.</td><td class="aot"><pre>sp += bytes;</pre></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="opcat" id="c1">
+  <h2>Aritmética + arrays <span class="range">0x10..0x1F</span></h2>
+  <table>
+    <thead><tr><th>Code</th><th>Op</th><th>Operando</th><th>Stack</th><th>Semántica</th><th>AOT C</th></tr></thead>
+    <tbody>
+      <tr><td class="code">0x10</td><td class="mnem">SUB</td><td class="operand">—</td><td class="stack">( a b -- a-b )</td><td class="sem">Resta entera.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a - b); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x11</td><td class="mnem">MUL</td><td class="operand">—</td><td class="stack">( a b -- a*b )</td><td class="sem">Mul con wrap.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a * b); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x12</td><td class="mnem">DIV</td><td class="operand">—</td><td class="stack">( a b -- a/b )</td><td class="sem"><span class="warn">RuntimeError si b==0</span>.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+if (b == 0) return bpvm_throw(vm,"div0");
+wr32(mem+sp, a / b); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x13</td><td class="mnem">MOD</td><td class="operand">—</td><td class="stack">( a b -- a%b )</td><td class="sem">Signo del dividendo. <span class="warn">RuntimeError si b==0</span>.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+if (b == 0) return bpvm_throw(vm,"mod0");
+wr32(mem+sp, a % b); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x14</td><td class="mnem">NEG</td><td class="operand">—</td><td class="stack">( a -- -a )</td><td class="sem">i32 negate.</td><td class="aot"><pre>sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, -a); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x15</td><td class="mnem">AND</td><td class="operand">—</td><td class="stack">( a b -- a&amp;&amp;b )</td><td class="sem">Lógico boolean.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, (a&amp;&amp;b)?1:0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x16</td><td class="mnem">OR</td><td class="operand">—</td><td class="stack">( a b -- a||b )</td><td class="sem">Lógico boolean.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, (a||b)?1:0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x17</td><td class="mnem">NOT</td><td class="operand">—</td><td class="stack">( a -- !a )</td><td class="sem">Lógico boolean.</td><td class="aot"><pre>sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, !a?1:0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x18</td><td class="mnem">GT</td><td class="operand">—</td><td class="stack">( a b -- a&gt;b )</td><td class="sem">Compara signed.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a &gt; b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x19</td><td class="mnem">GE</td><td class="operand">—</td><td class="stack">( a b -- a&gt;=b )</td><td class="sem">Compara signed.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a &gt;= b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x1A</td><td class="mnem">LE</td><td class="operand">—</td><td class="stack">( a b -- a&lt;=b )</td><td class="sem">Compara signed.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a &lt;= b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x1B</td><td class="mnem">NEQ</td><td class="operand">—</td><td class="stack">( a b -- a!=b )</td><td class="sem">Compara entera.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a != b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x1C</td><td class="mnem">LEA_GLOBAL</td><td class="operand">i16 soff</td><td class="stack">( -- addr )</td><td class="sem">Push <code>cs + soff</code>.</td><td class="aot"><pre>wr32(mem+sp, (int32_t)(cs+soff));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x1D</td><td class="mnem">NEWARRAY</td><td class="operand">—</td><td class="stack">( size -- ref )</td><td class="sem">Aloca <code>TYPE_ARRAY_I32</code>. <span class="warn">RuntimeError si size&lt;0</span>.</td><td class="aot"><pre class="helper">→ vm_op_newarray_i32(vm, &amp;sp);
+// heap alloc + GC barrier — siempre helper</pre></td></tr>
+      <tr><td class="code">0x1E</td><td class="mnem">ALOAD</td><td class="operand">—</td><td class="stack">( ref idx -- v )</td><td class="sem"><code>v = mem[ref+4+idx*4]</code>. <span class="warn">RuntimeError out-of-range</span>.</td><td class="aot"><pre class="helper">→ vm_op_aload_i32(vm, &amp;sp);
+// bounds check obliga a helper</pre></td></tr>
+      <tr><td class="code">0x1F</td><td class="mnem">ASTORE</td><td class="operand">—</td><td class="stack">( ref idx v -- )</td><td class="sem"><span class="warn">RuntimeError out-of-range</span>.</td><td class="aot"><pre class="helper">→ vm_op_astore_i32(vm, &amp;sp);</pre></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="opcat" id="c2">
+  <h2>Output, jumps compactos, float push <span class="range">0x20..0x2F</span></h2>
+  <table>
+    <thead><tr><th>Code</th><th>Op</th><th>Operando</th><th>Stack</th><th>Semántica</th><th>AOT C</th></tr></thead>
+    <tbody>
+      <tr><td class="code">0x20</td><td class="mnem">ALEN</td><td class="operand">—</td><td class="stack">( ref -- length )</td><td class="sem">Push <code>mem[ref+0]</code>. 0 si ref==0.</td><td class="aot"><pre>sp -= 4; uint32_t r = (uint32_t)rd32(mem+sp);
+wr32(mem+sp, r ? rd32(mem+r) : 0);
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x21</td><td class="mnem">PRINT_CHAR</td><td class="operand">—</td><td class="stack">( ch -- )</td><td class="sem">Codepoint al output sin newline.</td><td class="aot"><pre class="helper">→ vm_op_print_char(vm, &amp;sp);</pre></td></tr>
+      <tr><td class="code">0x22</td><td class="mnem">PRINT_STRING</td><td class="operand">—</td><td class="stack">( ref -- )</td><td class="sem">Imprime string + newline.</td><td class="aot"><pre class="helper">→ vm_op_print_string(vm, &amp;sp, /*nl=*/1);</pre></td></tr>
+      <tr><td class="code">0x23</td><td class="mnem">LEA_LOCAL</td><td class="operand">i16 soff</td><td class="stack">( -- addr )</td><td class="sem">Push <code>bp + soff</code>.</td><td class="aot"><pre>wr32(mem+sp, (int32_t)(bp+soff));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x24</td><td class="mnem">JUMP8</td><td class="operand">i8 rel</td><td class="stack">( -- )</td><td class="sem">Salto corto.</td><td class="aot"><pre class="ctrl">goto label_X;   // X = pc destino</pre></td></tr>
+      <tr><td class="code">0x25</td><td class="mnem">JUMP16</td><td class="operand">i16 rel</td><td class="stack">( -- )</td><td class="sem">Salto medio.</td><td class="aot"><pre class="ctrl">goto label_X;</pre></td></tr>
+      <tr><td class="code">0x26</td><td class="mnem">JUMP_IF_FALSE8</td><td class="operand">i8 rel</td><td class="stack">( v -- )</td><td class="sem">Salto condicional corto.</td><td class="aot"><pre class="ctrl">sp -= 4;
+if (rd32(mem+sp) == 0) goto label_X;</pre></td></tr>
+      <tr><td class="code">0x27</td><td class="mnem">JUMP_IF_FALSE16</td><td class="operand">i16 rel</td><td class="stack">( v -- )</td><td class="sem">Salto condicional medio.</td><td class="aot"><pre class="ctrl">sp -= 4;
+if (rd32(mem+sp) == 0) goto label_X;</pre></td></tr>
+      <tr><td class="code">0x28</td><td class="mnem">FPUSH</td><td class="operand">f32 v</td><td class="stack">( -- v )</td><td class="sem">Push float como i32 raw-bits.</td><td class="aot"><pre>wr32(mem+sp, f2i(value)); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x29</td><td class="mnem">FADD</td><td class="operand">—</td><td class="stack">( a b -- a+b )</td><td class="sem">Float add.</td><td class="aot"><pre>sp -= 4; float b = i2f(rd32(mem+sp));
+sp -= 4; float a = i2f(rd32(mem+sp));
+wr32(mem+sp, f2i(a + b)); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x2A</td><td class="mnem">FSUB</td><td class="operand">—</td><td class="stack">( a b -- a-b )</td><td class="sem">Float sub.</td><td class="aot"><pre>sp -= 4; float b = i2f(rd32(mem+sp));
+sp -= 4; float a = i2f(rd32(mem+sp));
+wr32(mem+sp, f2i(a - b)); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x2B</td><td class="mnem">FMUL</td><td class="operand">—</td><td class="stack">( a b -- a*b )</td><td class="sem">Float mul.</td><td class="aot"><pre>sp -= 4; float b = i2f(rd32(mem+sp));
+sp -= 4; float a = i2f(rd32(mem+sp));
+wr32(mem+sp, f2i(a * b)); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x2C</td><td class="mnem">FDIV</td><td class="operand">—</td><td class="stack">( a b -- a/b )</td><td class="sem"><span class="warn">RuntimeError si b==0.0</span>.</td><td class="aot"><pre>sp -= 4; float b = i2f(rd32(mem+sp));
+sp -= 4; float a = i2f(rd32(mem+sp));
+if (b == 0.0f) return bpvm_throw(vm,"fdiv0");
+wr32(mem+sp, f2i(a / b)); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x2D</td><td class="mnem">FMOD</td><td class="operand">—</td><td class="stack">( a b -- a%b )</td><td class="sem">IEEE remainder.</td><td class="aot"><pre class="helper">→ vm_op_fmod(vm, &amp;sp);
+// fmodf() / IEEEremainder dependiente
+// de implementación — helper centraliza</pre></td></tr>
+      <tr><td class="code">0x2E</td><td class="mnem">FNEG</td><td class="operand">—</td><td class="stack">( a -- -a )</td><td class="sem">Float negate.</td><td class="aot"><pre>sp -= 4; float a = i2f(rd32(mem+sp));
+wr32(mem+sp, f2i(-a)); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x2F</td><td class="mnem">FEQ</td><td class="operand">—</td><td class="stack">( a b -- a==b )</td><td class="sem">Float equal estricto.</td><td class="aot"><pre>sp -= 4; float b = i2f(rd32(mem+sp));
+sp -= 4; float a = i2f(rd32(mem+sp));
+wr32(mem+sp, a == b ? 1 : 0); sp += 4;</pre></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="opcat" id="c3">
+  <h2>Float comparisons + arrays narrow <span class="range">0x30..0x3F</span></h2>
+  <table>
+    <thead><tr><th>Code</th><th>Op</th><th>Operando</th><th>Stack</th><th>Semántica</th><th>AOT C</th></tr></thead>
+    <tbody>
+      <tr><td class="code">0x30</td><td class="mnem">FNEQ</td><td class="operand">—</td><td class="stack">( a b -- a!=b )</td><td class="sem">Float not-equal.</td><td class="aot"><pre>sp -= 4; float b = i2f(rd32(mem+sp));
+sp -= 4; float a = i2f(rd32(mem+sp));
+wr32(mem+sp, a != b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x31</td><td class="mnem">FLT</td><td class="operand">—</td><td class="stack">( a b -- a&lt;b )</td><td class="sem">Float less-than.</td><td class="aot"><pre>sp -= 4; float b = i2f(rd32(mem+sp));
+sp -= 4; float a = i2f(rd32(mem+sp));
+wr32(mem+sp, a &lt; b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x32</td><td class="mnem">FLE</td><td class="operand">—</td><td class="stack">( a b -- a&lt;=b )</td><td class="sem">Float less-or-equal.</td><td class="aot"><pre>sp -= 4; float b = i2f(rd32(mem+sp));
+sp -= 4; float a = i2f(rd32(mem+sp));
+wr32(mem+sp, a &lt;= b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x33</td><td class="mnem">FGT</td><td class="operand">—</td><td class="stack">( a b -- a&gt;b )</td><td class="sem">Float greater-than.</td><td class="aot"><pre>sp -= 4; float b = i2f(rd32(mem+sp));
+sp -= 4; float a = i2f(rd32(mem+sp));
+wr32(mem+sp, a &gt; b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x34</td><td class="mnem">FGE</td><td class="operand">—</td><td class="stack">( a b -- a&gt;=b )</td><td class="sem">Float greater-or-equal.</td><td class="aot"><pre>sp -= 4; float b = i2f(rd32(mem+sp));
+sp -= 4; float a = i2f(rd32(mem+sp));
+wr32(mem+sp, a &gt;= b ? 1 : 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x35</td><td class="mnem">FPRINT</td><td class="operand">—</td><td class="stack">( f -- )</td><td class="sem">Imprime float + newline.</td><td class="aot"><pre class="helper">→ vm_op_print_f32(vm, &amp;sp, /*nl=*/1);</pre></td></tr>
+      <tr><td class="code">0x36</td><td class="mnem">I2F</td><td class="operand">—</td><td class="stack">( i -- f )</td><td class="sem">i32 → f32.</td><td class="aot"><pre>sp -= 4; int32_t i = rd32(mem+sp);
+wr32(mem+sp, f2i((float)i)); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x37</td><td class="mnem">F2I</td><td class="operand">—</td><td class="stack">( f -- i )</td><td class="sem">f32 → i32 (truncar).</td><td class="aot"><pre>sp -= 4; float f = i2f(rd32(mem+sp));
+wr32(mem+sp, (int32_t)f); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x38</td><td class="mnem">NEWARRAY_I8</td><td class="operand">—</td><td class="stack">( size -- ref )</td><td class="sem">Aloca <code>TYPE_ARRAY_I8</code>.</td><td class="aot"><pre class="helper">→ vm_op_newarray_i8(vm, &amp;sp);</pre></td></tr>
+      <tr><td class="code">0x39</td><td class="mnem">NEWARRAY_I16</td><td class="operand">—</td><td class="stack">( size -- ref )</td><td class="sem">Aloca <code>TYPE_ARRAY_I16</code>.</td><td class="aot"><pre class="helper">→ vm_op_newarray_i16(vm, &amp;sp);</pre></td></tr>
+      <tr><td class="code">0x3A</td><td class="mnem">ALOAD_I8</td><td class="operand">—</td><td class="stack">( ref idx -- v )</td><td class="sem">i8 sign-ext.</td><td class="aot"><pre class="helper">→ vm_op_aload_i8(vm, &amp;sp);
+// bounds check + sign-extend</pre></td></tr>
+      <tr><td class="code">0x3B</td><td class="mnem">ALOAD_U8</td><td class="operand">—</td><td class="stack">( ref idx -- v )</td><td class="sem">u8 zero-ext.</td><td class="aot"><pre class="helper">→ vm_op_aload_u8(vm, &amp;sp);</pre></td></tr>
+      <tr><td class="code">0x3C</td><td class="mnem">ALOAD_I16</td><td class="operand">—</td><td class="stack">( ref idx -- v )</td><td class="sem">i16 BE sign-ext.</td><td class="aot"><pre class="helper">→ vm_op_aload_i16(vm, &amp;sp);</pre></td></tr>
+      <tr><td class="code">0x3D</td><td class="mnem">ALOAD_U16</td><td class="operand">—</td><td class="stack">( ref idx -- v )</td><td class="sem">u16 zero-ext.</td><td class="aot"><pre class="helper">→ vm_op_aload_u16(vm, &amp;sp);</pre></td></tr>
+      <tr><td class="code">0x3E</td><td class="mnem">ASTORE_I8</td><td class="operand">—</td><td class="stack">( ref idx v -- )</td><td class="sem"><code>mem[ref+4+idx] = v &amp; 0xFF</code>.</td><td class="aot"><pre class="helper">→ vm_op_astore_i8(vm, &amp;sp);</pre></td></tr>
+      <tr><td class="code">0x3F</td><td class="mnem">ASTORE_I16</td><td class="operand">—</td><td class="stack">( ref idx v -- )</td><td class="sem">2 bytes BE.</td><td class="aot"><pre class="helper">→ vm_op_astore_i16(vm, &amp;sp);</pre></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="opcat" id="c4">
+  <h2>Globals narrow + bitwise + casts <span class="range">0x40..0x4F</span></h2>
+  <table>
+    <thead><tr><th>Code</th><th>Op</th><th>Operando</th><th>Stack</th><th>Semántica</th><th>AOT C</th></tr></thead>
+    <tbody>
+      <tr><td class="code">0x40</td><td class="mnem">GET_GLOBAL_I8</td><td class="operand">i16 soff</td><td class="stack">( -- v )</td><td class="sem">i8 sign-ext.</td><td class="aot"><pre>int32_t v = (int8_t)mem[cs+soff];
+wr32(mem+sp, v); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x41</td><td class="mnem">GET_GLOBAL_U8</td><td class="operand">i16 soff</td><td class="stack">( -- v )</td><td class="sem">u8 zero-ext.</td><td class="aot"><pre>wr32(mem+sp, (int32_t)mem[cs+soff]);
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x42</td><td class="mnem">GET_GLOBAL_I16</td><td class="operand">i16 soff</td><td class="stack">( -- v )</td><td class="sem">i16 BE sign-ext.</td><td class="aot"><pre>wr32(mem+sp, (int32_t)rd16s(mem+cs+soff));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x43</td><td class="mnem">GET_GLOBAL_U16</td><td class="operand">i16 soff</td><td class="stack">( -- v )</td><td class="sem">u16 zero-ext.</td><td class="aot"><pre>wr32(mem+sp, (int32_t)rd16u(mem+cs+soff));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x44</td><td class="mnem">SET_GLOBAL_I8</td><td class="operand">i16 soff</td><td class="stack">( v -- )</td><td class="sem"><code>mem[cs+soff] = v &amp; 0xFF</code>.</td><td class="aot"><pre>sp -= 4;
+mem[cs+soff] = (uint8_t)rd32(mem+sp);</pre></td></tr>
+      <tr><td class="code">0x45</td><td class="mnem">SET_GLOBAL_I16</td><td class="operand">i16 soff</td><td class="stack">( v -- )</td><td class="sem">2 bytes BE.</td><td class="aot"><pre>sp -= 4; int32_t v = rd32(mem+sp);
+mem[cs+soff]   = (v &gt;&gt; 8) &amp; 0xFF;
+mem[cs+soff+1] =  v       &amp; 0xFF;</pre></td></tr>
+      <tr><td class="code">0x46</td><td class="mnem">BAND</td><td class="operand">—</td><td class="stack">( a b -- a&amp;b )</td><td class="sem">Bitwise AND.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a &amp; b); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x47</td><td class="mnem">BOR</td><td class="operand">—</td><td class="stack">( a b -- a|b )</td><td class="sem">Bitwise OR.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a | b); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x48</td><td class="mnem">BXOR</td><td class="operand">—</td><td class="stack">( a b -- a^b )</td><td class="sem">Bitwise XOR.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a ^ b); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x49</td><td class="mnem">BNOT</td><td class="operand">—</td><td class="stack">( a -- ~a )</td><td class="sem">Bitwise NOT.</td><td class="aot"><pre>sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, ~a); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x4A</td><td class="mnem">SHL</td><td class="operand">—</td><td class="stack">( a b -- a&lt;&lt;b )</td><td class="sem"><code>b &amp; 31</code>.</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a &lt;&lt; (b &amp; 31)); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x4B</td><td class="mnem">SHR_S</td><td class="operand">—</td><td class="stack">( a b -- a&gt;&gt;b )</td><td class="sem">Aritmético (sign-fill).</td><td class="aot"><pre>sp -= 4; int32_t b = rd32(mem+sp);
+sp -= 4; int32_t a = rd32(mem+sp);
+wr32(mem+sp, a &gt;&gt; (b &amp; 31)); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x4C</td><td class="mnem">SHR_U</td><td class="operand">—</td><td class="stack">( a b -- a&gt;&gt;&gt;b )</td><td class="sem">Lógico (zero-fill).</td><td class="aot"><pre>sp -= 4; uint32_t b = (uint32_t)rd32(mem+sp);
+sp -= 4; uint32_t a = (uint32_t)rd32(mem+sp);
+wr32(mem+sp, (int32_t)(a &gt;&gt; (b &amp; 31)));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x4D</td><td class="mnem">I32_TO_I8</td><td class="operand">—</td><td class="stack">( v -- v8s )</td><td class="sem">Rango -128..127. <span class="warn">RuntimeError si fuera</span>.</td><td class="aot"><pre class="helper">→ vm_op_i32_to_i8(vm, &amp;sp);
+// range check obliga a helper</pre></td></tr>
+      <tr><td class="code">0x4E</td><td class="mnem">I32_TO_U8</td><td class="operand">—</td><td class="stack">( v -- v8u )</td><td class="sem">Rango 0..255.</td><td class="aot"><pre class="helper">→ vm_op_i32_to_u8(vm, &amp;sp);</pre></td></tr>
+      <tr><td class="code">0x4F</td><td class="mnem">I32_TO_I16</td><td class="operand">—</td><td class="stack">( v -- v16s )</td><td class="sem">Rango -32768..32767.</td><td class="aot"><pre class="helper">→ vm_op_i32_to_i16(vm, &amp;sp);</pre></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="opcat" id="c5">
+  <h2>Clases, builtins, excepciones <span class="range">0x50..0x5F</span></h2>
+  <table>
+    <thead><tr><th>Code</th><th>Op</th><th>Operando</th><th>Stack</th><th>Semántica</th><th>AOT C</th></tr></thead>
+    <tbody>
+      <tr><td class="code">0x50</td><td class="mnem">I32_TO_U16</td><td class="operand">—</td><td class="stack">( v -- v16u )</td><td class="sem">Rango 0..65535.</td><td class="aot"><pre class="helper">→ vm_op_i32_to_u16(vm, &amp;sp);</pre></td></tr>
+      <tr><td class="code">0x51</td><td class="mnem">GC_COLLECT</td><td class="operand">—</td><td class="stack">( -- )</td><td class="sem">Dispara GC manual.</td><td class="aot"><pre class="helper">→ vm_op_gc_collect(vm);</pre></td></tr>
+      <tr><td class="code">0x52</td><td class="mnem">NEW_OBJECT</td><td class="operand">i16 csOff</td><td class="stack">( -- ref )</td><td class="sem">Aloca objeto, escribe classPtr.</td><td class="aot"><pre class="helper">→ vm_op_new_object(vm, &amp;sp, cs+csOff);
+// heapAlloc + GC barrier — siempre helper</pre></td></tr>
+      <tr><td class="code">0x53</td><td class="mnem">GET_FIELD</td><td class="operand">u8 slot</td><td class="stack">( ref -- v )</td><td class="sem"><code>v = mem[ref+4+slot*4]</code>.</td><td class="aot"><pre>sp -= 4; uint32_t r = (uint32_t)rd32(mem+sp);
+wr32(mem+sp, rd32(mem+r+4+slot*4));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x54</td><td class="mnem">SET_FIELD</td><td class="operand">u8 slot</td><td class="stack">( ref v -- )</td><td class="sem"><code>mem[ref+4+slot*4] = v</code>.</td><td class="aot"><pre>sp -= 4; int32_t v = rd32(mem+sp);
+sp -= 4; uint32_t r = (uint32_t)rd32(mem+sp);
+wr32(mem+r+4+slot*4, v);</pre></td></tr>
+      <tr><td class="code">0x55</td><td class="mnem">INVOKE_VIRTUAL</td><td class="operand">u8 slot, u8 numArgs</td><td class="stack">( ...args this -- )</td><td class="sem">Despacho con fall-back al parent.</td><td class="aot"><pre class="helper">→ vm_op_invoke_virtual(
+    vm, &amp;sp, &amp;bp, &amp;cs,
+    slot, numArgs);
+// vtable walk — siempre helper</pre></td></tr>
+      <tr><td class="code">0x56</td><td class="mnem">PRINT_NONL</td><td class="operand">—</td><td class="stack">( v -- )</td><td class="sem">Int sin newline.</td><td class="aot"><pre class="helper">→ vm_op_print_i32(vm, &amp;sp, /*nl=*/0);</pre></td></tr>
+      <tr><td class="code">0x57</td><td class="mnem">FPRINT_NONL</td><td class="operand">—</td><td class="stack">( f -- )</td><td class="sem">Float sin newline.</td><td class="aot"><pre class="helper">→ vm_op_print_f32(vm, &amp;sp, /*nl=*/0);</pre></td></tr>
+      <tr><td class="code">0x58</td><td class="mnem">PRINT_STR_NONL</td><td class="operand">—</td><td class="stack">( ref -- )</td><td class="sem">String sin newline.</td><td class="aot"><pre class="helper">→ vm_op_print_string(vm, &amp;sp, /*nl=*/0);</pre></td></tr>
+      <tr><td class="code">0x59</td><td class="mnem">PRINT_NL</td><td class="operand">—</td><td class="stack">( -- )</td><td class="sem">Newline solo.</td><td class="aot"><pre class="helper">→ vm_op_print_nl(vm);</pre></td></tr>
+      <tr><td class="code">0x5A</td><td class="mnem">CALL_BUILTIN</td><td class="operand">u16 id</td><td class="stack">( args -- result )</td><td class="sem">Despacha al builtin <code>id</code>.</td><td class="aot"><pre class="helper">→ vm_op_call_builtin(vm, &amp;sp, &amp;bp, id);
+// AOT puede inlinear builtins concretos
+// si los conoce (Math.sqrt → sqrtf, etc.)</pre></td></tr>
+      <tr><td class="code">0x5B</td><td class="mnem">TRY_BEGIN</td><td class="operand">i32 handlerRel, i16 clsOff</td><td class="stack">( -- )</td><td class="sem">Push handler al stack de excepciones.</td><td class="aot"><pre class="helper">→ vm_op_try_begin(vm, sp, bp, cs,
+                  handler_pc, clsOff);
+// AOT v1 puede no soportar try — emit fail</pre></td></tr>
+      <tr><td class="code">0x5C</td><td class="mnem">TRY_END</td><td class="operand">—</td><td class="stack">( -- )</td><td class="sem">Pop top del handler stack.</td><td class="aot"><pre class="helper">→ vm_op_try_end(vm);</pre></td></tr>
+      <tr><td class="code">0x5D</td><td class="mnem">THROW</td><td class="operand">—</td><td class="stack">( ref -- )</td><td class="sem">Busca handler o BpThreadFault.</td><td class="aot"><pre class="helper">→ vm_op_throw(vm, &amp;sp);
+// puede no retornar — el AOT debe asumir
+// "tail call" o usar setjmp/longjmp</pre></td></tr>
+      <tr><td class="code">0x5E</td><td class="mnem">INSTANCEOF</td><td class="operand">i16 csOff</td><td class="stack">( ref -- 1|0 )</td><td class="sem">Sube por parent_offset buscando match.</td><td class="aot"><pre class="helper">→ vm_op_instanceof(vm, &amp;sp, cs+csOff);
+// class hierarchy walk — siempre helper</pre></td></tr>
+      <tr><td class="code">0x5F</td><td class="mnem">FREE_REF</td><td class="operand">—</td><td class="stack">( ref -- )</td><td class="sem">Liberación determinista.</td><td class="aot"><pre class="helper">→ vm_op_free_ref(vm, &amp;sp);
+// recorre owner_bitmap recursivo</pre></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="opcat" id="c6">
+  <h2>Owner, compactos, threading <span class="range">0x60..0x70</span></h2>
+  <table>
+    <thead><tr><th>Code</th><th>Op</th><th>Operando</th><th>Stack</th><th>Semántica</th><th>AOT C</th></tr></thead>
+    <tbody>
+      <tr><td class="code">0x60</td><td class="mnem">SET_FIELD_OWNER</td><td class="operand">u8 slot</td><td class="stack">( ref v -- )</td><td class="sem">SET_FIELD + FREE_REF del previo.</td><td class="aot"><pre class="helper">→ vm_op_set_field_owner(vm, &amp;sp, slot);</pre></td></tr>
+      <tr><td class="code">0x61</td><td class="mnem">PUSH_0</td><td class="operand">—</td><td class="stack">( -- 0 )</td><td class="sem">Push literal 0.</td><td class="aot"><pre>wr32(mem+sp, 0); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x62</td><td class="mnem">PUSH_1</td><td class="operand">—</td><td class="stack">( -- 1 )</td><td class="sem">Push literal 1.</td><td class="aot"><pre>wr32(mem+sp, 1); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x63</td><td class="mnem">PUSH_2</td><td class="operand">—</td><td class="stack">( -- 2 )</td><td class="sem">Push literal 2.</td><td class="aot"><pre>wr32(mem+sp, 2); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x64</td><td class="mnem">PUSH_3</td><td class="operand">—</td><td class="stack">( -- 3 )</td><td class="sem">Push literal 3.</td><td class="aot"><pre>wr32(mem+sp, 3); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x65</td><td class="mnem">PUSH_4</td><td class="operand">—</td><td class="stack">( -- 4 )</td><td class="sem">Push literal 4.</td><td class="aot"><pre>wr32(mem+sp, 4); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x66</td><td class="mnem">PUSH_NEG1</td><td class="operand">—</td><td class="stack">( -- -1 )</td><td class="sem">Push literal -1.</td><td class="aot"><pre>wr32(mem+sp, -1); sp += 4;</pre></td></tr>
+      <tr><td class="code">0x67</td><td class="mnem">GET_LOCAL_S8</td><td class="operand">i8 soff</td><td class="stack">( -- v )</td><td class="sem">Igual GET_LOCAL, offset i8.</td><td class="aot"><pre>wr32(mem+sp, rd32(mem+bp+soff));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x68</td><td class="mnem">SET_LOCAL_S8</td><td class="operand">i8 soff</td><td class="stack">( v -- )</td><td class="sem">Igual SET_LOCAL, offset i8.</td><td class="aot"><pre>sp -= 4;
+wr32(mem+bp+soff, rd32(mem+sp));</pre></td></tr>
+      <tr><td class="code">0x69</td><td class="mnem">LEA_LOCAL_S8</td><td class="operand">i8 soff</td><td class="stack">( -- addr )</td><td class="sem">Igual LEA_LOCAL, offset i8.</td><td class="aot"><pre>wr32(mem+sp, (int32_t)(bp+soff));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x6A</td><td class="mnem">GET_GLOBAL_S8</td><td class="operand">i8 soff</td><td class="stack">( -- v )</td><td class="sem">i32 read; offset i8 sign-ext.</td><td class="aot"><pre>wr32(mem+sp, rd32(mem+cs+soff));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x6B</td><td class="mnem">SET_GLOBAL_S8</td><td class="operand">i8 soff</td><td class="stack">( v -- )</td><td class="sem">i32 write; offset i8 sign-ext.</td><td class="aot"><pre>sp -= 4;
+wr32(mem+cs+soff, rd32(mem+sp));</pre></td></tr>
+      <tr><td class="code">0x6C</td><td class="mnem">LEA_GLOBAL_S8</td><td class="operand">i8 soff</td><td class="stack">( -- addr )</td><td class="sem">Igual LEA_GLOBAL, offset i8.</td><td class="aot"><pre>wr32(mem+sp, (int32_t)(cs+soff));
+sp += 4;</pre></td></tr>
+      <tr><td class="code">0x70</td><td class="mnem">THREAD_EXIT</td><td class="operand">—</td><td class="stack">( -- )</td><td class="sem">Termina thread actual. Sentinela en <code>mem[0]</code>.</td><td class="aot"><pre class="na">// n/a — sólo aparece como sentinela
+// en mem[0], que el AOT no toca.</pre></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="legend" id="legend">
+  <h2>Convenciones de notación (bytecode)</h2>
+  <dl>
+    <dt>i32, u32, i16, u16, i8, u8, f32</dt>
+    <dd>Enteros y float big-endian.</dd>
+    <dt>soff</dt>
+    <dd>Signed offset al <code>bp</code> (positivo = arg/var arriba; negativo = saved regs / args debajo).</dd>
+    <dt>rel</dt>
+    <dd>
+      Relativo al <strong>instruction address</strong> (byte del opcode, NO al pc post-operando). Difiere del estilo JVM.<br><br>
+      <code>instruction_addr = pc - 1</code> &nbsp;<em># ya consumimos el byte de opcode</em><br>
+      <code>rel = read_immediate(pc)</code><br>
+      <code>pc = instruction_addr + rel</code><br><br>
+      Aplica a <code>JUMP</code>, <code>JUMP_IF_FALSE</code> y sus variantes compactas.
+    </dd>
+    <dt>csOff</dt>
+    <dd>Relativo al <code>cs</code> (= codeStart) del módulo actual.</dd>
+    <dt>Stack effect</dt>
+    <dd>Notación <code>( a b -- c )</code> = pop b, pop a, push c. La cima a la derecha.</dd>
+  </dl>
+  <p style="margin-top:14px;">Tras ejecutar un opcode, <code>pc</code> apunta al siguiente, salvo control flow.</p>
+</section>
+
+<section class="footer-notes" id="calling">
+  <h2>Calling convention (CALL / RET / INVOKE_VIRTUAL)</h2>
+
+  <h3>CALL relAddr / CALL_EXT idx</h3>
+  <p>Preconditions: stack tiene los args en orden (último arg en top).</p>
+<pre>push pc                ; saved pc del caller
+push bp                ; saved bp del caller
+push cs                ; saved cs del caller
+bp ← sp                ; nuevo bp = top
+pc ← cs + relAddr      ; (CALL) o targetAbs (CALL_EXT)
+cs ← targetCS          ; sólo CALL_EXT lo cambia</pre>
+
+  <h3>Layout del frame tras CALL + ENTER N</h3>
+<pre>              ↑ direcciones altas
+  [bp + N-4]  último slot de los locales de ENTER N
+  [bp + 0]                                  ← inicio de locales, sp justo tras ENTER
+  ┌─────────────────────────┐
+  │ saved_cs    [bp - 4]    │
+  │ saved_bp    [bp - 8]    │
+  │ saved_pc    [bp - 12]   │
+  ├─────────────────────────┤
+  │ arg_N       [bp - 16]   │
+  │ ...                     │
+  │ arg_0                   │  ← bp - 12 - paramsCount*4
+  └─────────────────────────┘
+              ↓ direcciones bajas</pre>
+
+  <h3>RET k</h3>
+<pre>sp -= 4
+returnValue = mem[sp]              ; pop del top del callee
+pc = mem[bp - 12]
+bp_old = mem[bp - 8]
+cs = mem[bp - 4]
+sp = bp - 12 - k*4                 ; descarta saved + args
+bp = bp_old
+mem[sp] = returnValue              ; push retVal
+sp += 4</pre>
+
+  <h3>INVOKE_VIRTUAL slot, numArgs (L2 v3, fall-back al parent)</h3>
+<pre>this = peek(sp - 4 - numArgs*4)
+if this == 0: throwBpRuntimeError("null receiver")
+classPtr = mem[this]
+desc = classPtr
+loop:
+  nMethods = readU16(desc + 2)
+  bitmapW  = readU16(desc + 4)
+  vtBase   = desc + 12 + 2*bitmapW*4
+  if slot < nMethods:
+    methodOff = readI32(vtBase + slot*4)
+    if methodOff != -1: targetCS = getCSForDataAddr(desc); goto found
+  parentOff = readI32(desc + 8)
+  if parentOff == 0: throwBpRuntimeError(...)
+  curCS = getCSForDataAddr(desc)
+  desc = curCS + parentOff
+  goto loop
+found:
+  push saved pc, bp, cs ; bp ← sp ; pc ← targetCS + methodOff ; cs ← targetCS</pre>
+</section>
+
+<section class="footer-notes" id="operands">
+  <h2>Tabla de tamaños de operando</h2>
+  <table>
+    <thead><tr><th>OperandKind</th><th>Tamaño</th><th>Uso</th></tr></thead>
+    <tbody>
+      <tr><td class="mnem">NONE</td><td class="code">0</td><td class="sem">sin operando</td></tr>
+      <tr><td class="mnem">IMM_I32</td><td class="code">4</td><td class="sem">PUSH, JUMP/JUMP_IF_FALSE, CALL, FPUSH (f32)</td></tr>
+      <tr><td class="mnem">IMM_U8</td><td class="code">1</td><td class="sem">RET (paramsCount), GET/SET_FIELD (slot)</td></tr>
+      <tr><td class="mnem">SOFF_I8</td><td class="code">1</td><td class="sem">GET/SET_LOCAL_S8, GET/SET_GLOBAL_S8</td></tr>
+      <tr><td class="mnem">SOFF_I16</td><td class="code">2</td><td class="sem">GET/SET_LOCAL, GET/SET_GLOBAL, LEA_*, NEW_OBJECT, INSTANCEOF</td></tr>
+      <tr><td class="mnem">IDX_U16</td><td class="code">2</td><td class="sem">CALL_EXT, CALL_BUILTIN</td></tr>
+      <tr><td class="mnem">SIZE_U16</td><td class="code">2</td><td class="sem">ENTER</td></tr>
+      <tr><td class="mnem">CALL_TGT_I32</td><td class="code">4</td><td class="sem">CALL (offset CS-relative)</td></tr>
+      <tr><td class="mnem">JUMP_REL_I32</td><td class="code">4</td><td class="sem">JUMP, JUMP_IF_FALSE</td></tr>
+      <tr><td class="mnem">JUMP_REL_I16</td><td class="code">2</td><td class="sem">JUMP16, JUMP_IF_FALSE16</td></tr>
+      <tr><td class="mnem">JUMP_REL_I8</td><td class="code">1</td><td class="sem">JUMP8, JUMP_IF_FALSE8</td></tr>
+      <tr><td class="mnem">IMM_F32</td><td class="code">4</td><td class="sem">FPUSH</td></tr>
+      <tr><td class="mnem">SLOT_NUMARGS_U8U8</td><td class="code">2</td><td class="sem">INVOKE_VIRTUAL (slot u8, numArgs u8)</td></tr>
+      <tr><td class="mnem">TRY_HANDLER_I32_I16</td><td class="code">6</td><td class="sem">TRY_BEGIN (handlerRel i32, clsOff i16)</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:12px;">Tamaño total de la instrucción = 1 (opcode) + tamaño del operando.</p>
+
+  <h3 style="margin-top:18px;">Códigos no asignados</h3>
+  <p><code>0x6D..0x6F</code>, <code>0x71..0xFF</code> libres para futuras extensiones. Si una implementación encuentra un opcode no listado, debe fallar con <code>"Opcode no implementado: 0x%02X en PC %d"</code>.</p>
+</section>
+
+</main>
+
+<script>
+  const q = document.getElementById('search');
+  const empty = document.getElementById('empty');
+  const sections = document.querySelectorAll('section.opcat');
+  q.addEventListener('input', () => {
+    const term = q.value.toLowerCase().trim();
+    let totalVisible = 0;
+    sections.forEach(sec => {
+      let secVisible = 0;
+      sec.querySelectorAll('tbody tr').forEach(row => {
+        const txt = row.textContent.toLowerCase();
+        if (!term || txt.indexOf(term) >= 0) {
+          row.classList.remove('hidden');
+          secVisible++;
+        } else {
+          row.classList.add('hidden');
+        }
+      });
+      sec.style.display = secVisible > 0 ? '' : 'none';
+      totalVisible += secVisible;
+    });
+    empty.classList.toggle('visible', totalVisible === 0);
+  });
+</script>
+
+</body>
+</html>
