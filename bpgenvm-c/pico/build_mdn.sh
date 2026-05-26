@@ -24,9 +24,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PM_ROOT="$SCRIPT_DIR/../.."
 LEXER="$PM_ROOT/lexer-java"
 SAMPLES="$PM_ROOT/samples"
-SAMPLES_OUT="$SAMPLES/out"
 WORK_DIR="$SCRIPT_DIR/mdn_build"     # intermedios (.c, .o)
-BP_FILE="$SAMPLES/${MOD}.bp"
+
+# Buscar el .bp en samples/ o samples/benchmarks/ (la suite de bench
+# vive en ese subdir). El IDE compila a <bp_dir>/out/ — el .mdn va
+# AL MISMO out/ para que el IDE lo encuentre alongside del .mod.
+BP_FILE=""
+for candidate in "$SAMPLES/${MOD}.bp" "$SAMPLES/benchmarks/${MOD}.bp"; do
+    if [ -f "$candidate" ]; then
+        BP_FILE="$candidate"
+        break
+    fi
+done
+if [ -z "$BP_FILE" ]; then
+    echo "ERROR: no se encontró ${MOD}.bp en samples/ ni samples/benchmarks/" >&2
+    exit 3
+fi
+BP_DIR="$(dirname "$BP_FILE")"
+SAMPLES_OUT="$BP_DIR/out"
+echo "[bp]   $BP_FILE"
+echo "[out]  $SAMPLES_OUT"
 
 GCC="${GCC:-/c/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/bin/arm-none-eabi-gcc.exe}"
 

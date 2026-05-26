@@ -1,1 +1,1 @@
-java -jar C:\Windows| lenguajes\pm\target\bpgenvm-1.0.jar
+java -jar C:\lenguajes\pm\BpIde\target\BpIde-1.0-SNAPSHOT.jar
