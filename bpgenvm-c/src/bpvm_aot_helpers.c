@@ -151,6 +151,15 @@ static int32_t h_array_length(bpvm_t* vm, uint32_t ref) {
     return (int32_t) bpvm_read_u32_be(vm->memory + ref);
 }
 
+/* ---------- Builtins (H3 #168) ----------
+ * Wrappers de los OP_CALL_BUILTIN más usados, callables como C
+ * directo desde código AOT. */
+extern int64_t bpvm_platform_now_ms(void);
+static int32_t h_now_ms(bpvm_t* vm) {
+    (void) vm;
+    return (int32_t) bpvm_platform_now_ms();
+}
+
 /* ---------- Instancia exportada ----------
  * `const` para que viva en .rodata (flash en el Pico). */
 const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
@@ -173,4 +182,5 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     .array_load_i32  = h_array_load_i32,
     .array_store_i32 = h_array_store_i32,
     .array_length    = h_array_length,
+    .now_ms          = h_now_ms,
 };

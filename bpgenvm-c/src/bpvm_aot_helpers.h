@@ -77,6 +77,11 @@ struct aot_helpers_v1 {
     int32_t  (*array_load_i32)(struct bpvm* vm, uint32_t ref, int32_t idx);
     void     (*array_store_i32)(struct bpvm* vm, uint32_t ref, int32_t idx, int32_t v);
     int32_t  (*array_length)(struct bpvm* vm, uint32_t ref);
+
+    /* Builtins comunes invocables desde código native (H3 #168).
+     * Equivalente al OP_CALL_BUILTIN del intérprete pero accesible
+     * como C call directa (sin push/pop del stack BP). */
+    int32_t  (*now_ms)(struct bpvm* vm);   /* `now()` BP → ms desde boot */
 };
 
 /* Tabla v1 instanciada en el runtime con los punteros a las funciones

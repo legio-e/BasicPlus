@@ -499,10 +499,16 @@ public final class AotCEmitter {
                     "AOT: call con callee no-identifier no soportado (line " + c.line + ")");
             }
             String name = ((Ast.IdentifierExpr) c.callee).name;
+
+            /* Builtins (H3 #168) — antes que native funcs por si hubiera
+             * colisión de nombres. Lista hardcoded por ahora; expansible. */
+            if (emitBuiltinCall(name, c.args)) return;
+
             if (!nativeFuncNames.contains(name)) {
                 throw new UnsupportedAotException(
                     "AOT: call a función no-native '" + name + "' (line " + c.line + "). "
-                    + "Para AOT v1 todas las funciones llamadas deben ser native del mismo módulo.");
+                    + "Para AOT v1 todas las funciones llamadas deben ser native del mismo módulo "
+                    + "o un builtin soportado (now, len).");
             }
             w.print("aot_" + moduleName + "_" + name + "(vm");
             for (Ast.IExpr arg : c.args) {
@@ -538,6 +544,32 @@ public final class AotCEmitter {
             case "shr": return ">>";
             default:
                 throw new UnsupportedAotException("AOT: binary op '" + bpOp + "' no soportado");
+        }
+    }
+
+    /** Despacha CallExpr a un builtin si el nombre matchea uno conocido.
+     *  Devuelve true si emitió código, false si no es builtin (caller
+     *  prueba con native func). H3 #168. */
+    private boolean emitBuiltinCall(String name, List<Ast.IExpr> args) {
+        switch (name) {
+            case "now":
+                if (args.size() != 0) {
+                    throw new UnsupportedAotException(
+                        "AOT: now() no toma argumentos");
+                }
+                w.print("vm->aot_helpers->now_ms(vm)");
+                return true;
+            case "len":
+                if (args.size() != 1) {
+                    throw new UnsupportedAotException(
+                        "AOT: len(arr) toma exactamente un argumento");
+                }
+                w.print("vm->aot_helpers->array_length(vm, ");
+                emitExpr(args.get(0));
+                w.print(")");
+                return true;
+            default:
+                return false;
         }
     }
 

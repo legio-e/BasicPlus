@@ -1,0 +1,74 @@
+module SumBench
+
+	// Suma elementos de un array. Usa `len(a)` internamente — el
+	// signature ya no necesita pasar el tamaño explícito. Valida
+	// #168 (call a builtins desde native).
+	//
+	// El intérprete paga OP_CALL_BUILTIN(LEN) en CADA iteración del
+	// loop si el código fuera `while i < len(a)`. Mejor cachear, pero
+	// para el bench dejamos len(a) en el check para estresar el path.
+
+	function sumArray(a: integer[]): integer
+		var s, i: integer
+		s := 0
+		i := 0
+		while i < len(a) do
+			s := s + a[i]
+			i := i + 1
+		endwh
+		return s
+	end sumArray
+
+	native function sumArrayNative(a: integer[]): integer
+		var s, i: integer
+		s := 0
+		i := 0
+		while i < len(a) do
+			s := s + a[i]
+			i := i + 1
+		endwh
+		return s
+	end sumArrayNative
+
+	function fillSeq(a: integer[])
+		var i: integer := 0
+		while i < len(a) do
+			a[i] := i + 1
+			i := i + 1
+		endwh
+	end fillSeq
+
+	function Main(arg: string)
+		var ini, fin: float
+		var n: integer := 5000
+		var reps: integer := 50
+		var a: integer[] := newIntArray(n)
+		var s, i: integer
+
+		fillSeq(a)
+
+		// --- No-Native ---
+		ini := now()
+		s := 0
+		i := 0
+		while i < reps do
+			s := sumArray(a)
+			i := i + 1
+		endwh
+		fin := now()
+		print "sumArray(", n, ") x", reps, "    no-native:", (fin - ini)*0.001, "s   sum =", s
+
+		// --- Native ---
+		ini := now()
+		s := 0
+		i := 0
+		while i < reps do
+			s := sumArrayNative(a)
+			i := i + 1
+		endwh
+		fin := now()
+		print "sumArrayNative(", n, ") x", reps, "  native:", (fin - ini)*0.001, "s   sum =", s
+
+	end Main
+
+end SumBench
