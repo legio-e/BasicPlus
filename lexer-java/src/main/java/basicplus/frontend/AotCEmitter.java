@@ -357,6 +357,48 @@ public final class AotCEmitter {
             indent(); w.println("continue;");
             return;
         }
+        if (s instanceof Ast.ExprStmt) {
+            /* Statement-form de una expresión (call con side-effects,
+             * típicamente). Emitimos la expr seguida de ';'. */
+            Ast.ExprStmt es = (Ast.ExprStmt) s;
+            indent();
+            emitExpr(es.expr);
+            w.println(";");
+            return;
+        }
+        if (s instanceof Ast.SwitchStmt) {
+            /* BP switch → C switch. BP no tiene fall-through implícito
+             * (cada case acaba al final del bloque), así que añadimos
+             * `break;` automático tras cada case. */
+            Ast.SwitchStmt sw = (Ast.SwitchStmt) s;
+            indent();
+            w.print("switch (");
+            emitExpr(sw.subject);
+            w.println(") {");
+            indentLevel++;
+            for (Ast.CaseClause cc : sw.cases) {
+                for (Ast.IExpr v : cc.values) {
+                    indent();
+                    w.print("case ");
+                    emitExpr(v);
+                    w.println(":");
+                }
+                indentLevel++;
+                for (Ast.IStmt st : cc.body) emitStmt(st);
+                indent(); w.println("break;");
+                indentLevel--;
+            }
+            if (sw.defaultBody != null) {
+                indent(); w.println("default:");
+                indentLevel++;
+                for (Ast.IStmt st : sw.defaultBody) emitStmt(st);
+                indent(); w.println("break;");
+                indentLevel--;
+            }
+            indentLevel--;
+            indent(); w.println("}");
+            return;
+        }
         throw new UnsupportedAotException(
             "AOT: statement no soportado: " + s.getClass().getSimpleName()
             + " (line " + ((Ast.Node) s).line + ")");
@@ -451,6 +493,11 @@ public final class AotCEmitter {
             w.print(Float.toString((float) v) + "f");
             return;
         }
+        if (e instanceof Ast.BoolLitExpr) {
+            /* BP boolean → C int 0/1 (matchea cType(boolean) = int32_t). */
+            w.print(((Ast.BoolLitExpr) e).value ? "1" : "0");
+            return;
+        }
         if (e instanceof Ast.IdentifierExpr) {
             w.print(((Ast.IdentifierExpr) e).name);
             return;
@@ -494,6 +541,25 @@ public final class AotCEmitter {
         }
         if (e instanceof Ast.CallExpr) {
             Ast.CallExpr c = (Ast.CallExpr) e;
+
+            /* arr.length() (H3 #174 parcial). Sin type-tracking real
+             * asumimos que el target es un array — el helper
+             * array_length(NULL) devuelve 0 graceful, así que no crashea
+             * en caso de mismatch. Habilita `for i = 0 to arr.length()-1`
+             * desde código AOT. */
+            if (c.callee instanceof Ast.MemberAccessExpr) {
+                Ast.MemberAccessExpr ma = (Ast.MemberAccessExpr) c.callee;
+                if ("length".equals(ma.member) && c.args.isEmpty()) {
+                    w.print("vm->aot_helpers->array_length(vm, ");
+                    emitExpr(ma.target);
+                    w.print(")");
+                    return;
+                }
+                throw new UnsupportedAotException(
+                    "AOT: method call '" + ma.member + "' no soportado todavía (line "
+                    + c.line + "). Por ahora solo arr.length().");
+            }
+
             if (!(c.callee instanceof Ast.IdentifierExpr)) {
                 throw new UnsupportedAotException(
                     "AOT: call con callee no-identifier no soportado (line " + c.line + ")");
