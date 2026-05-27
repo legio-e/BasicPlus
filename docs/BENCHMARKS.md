@@ -63,6 +63,7 @@ cd bpgenvm-c/pico
 
 | Bench | `J` (host) | `Ci` (Pico interp) | `Ca` (Pico AOT) | speedup | Notas |
 |---|---:|---:|---:|---:|---|
+| `FloatBench.piLeibniz(200000)` | _pendiente_ | 1 781 ms | 33 ms | **54×** | ✅ floatbench.bp — while-loop con división float + signo. Valida #165 (loops) y #166 (float). Ratio menor que int (54× vs 90×) — el intérprete ya paga overhead serio por op float (bits↔float wrap), así que la ventaja relativa del AOT se comprime. |
 | `Mandelbrot.compute(80x40)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
 | `NewtonSqrt.batch(10000)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
 
