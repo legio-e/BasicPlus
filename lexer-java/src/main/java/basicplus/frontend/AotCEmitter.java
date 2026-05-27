@@ -50,6 +50,13 @@ public final class AotCEmitter {
      *  reconozca CallExpr internos como C call directa. */
     private final Set<String> nativeFuncNames = new HashSet<>();
 
+    /** Tabla nombre → FuncDef para resolver firma desde CallExpr. */
+    private final java.util.Map<String, Ast.FuncDef> nativeFuncDefs = new java.util.HashMap<>();
+
+    /** Contador para nombres únicos en for-loops (avoid colisión de
+     *  __end/__step entre fors anidados). */
+    private int forCounter = 0;
+
     /** H3 #158 — si es true, NO emite aot_<Mod>_register (esa función
      *  tiene relocs externas a bpvm_aot_register_by_name + string
      *  literal, que rompen la position-independence del .o standalone).
@@ -87,6 +94,7 @@ public final class AotCEmitter {
                 if (f.isNative && !f.isIntrinsic) {
                     nativeFuncs.add(f);
                     nativeFuncNames.add(f.name.name);
+                    nativeFuncDefs.put(f.name.name, f);
                 }
             }
         }
@@ -129,10 +137,13 @@ public final class AotCEmitter {
         w.println("#include \"bpvm_aot_helpers.h\"   /* H3 #158 — helpers indirect */");
         w.println();
         w.println("/* Forward decls de las funciones AOT de este módulo. */");
-        for (String name : nativeFuncNames) {
-            // Por ahora todas las funciones son (vm, i32) → i32. Más
-            // adelante el emisor inferirá la firma desde los Params.
-            w.println("static int32_t aot_" + moduleName + "_" + name + "(struct bpvm* vm, int32_t arg0);");
+        for (Ast.FuncDef f : nativeFuncDefs.values()) {
+            w.print("static " + cType(f.returnType) + " aot_"
+                + moduleName + "_" + f.name.name + "(struct bpvm* vm");
+            for (Ast.Param p : f.params) {
+                w.print(", " + cType(p.type) + " " + p.name);
+            }
+            w.println(");");
         }
         w.println();
     }
@@ -141,9 +152,10 @@ public final class AotCEmitter {
 
     private void emitFunction(Ast.FuncDef f) {
         String fname = "aot_" + moduleName + "_" + f.name.name;
-        w.print("static int32_t " + fname + "(struct bpvm* vm");
+        String cRet  = cType(f.returnType);
+        w.print("static " + cRet + " " + fname + "(struct bpvm* vm");
         for (Ast.Param p : f.params) {
-            w.print(", int32_t " + p.name);
+            w.print(", " + cType(p.type) + " " + p.name);
         }
         w.println(") {");
         w.println("    (void) vm;   /* no usado en funciones leaf */");
@@ -151,10 +163,12 @@ public final class AotCEmitter {
         for (Ast.IStmt s : f.body) {
             emitStmt(s);
         }
-        // Si la función no termina con return explícito, añadir return 0
-        // (solo para void; para typed deberían siempre retornar).
+        // Fall-through default: para retornos integer 0, float 0.0f.
+        // Si returnType es null (void), no se hace.
         if (f.returnType != null && !endsWithReturn(f.body)) {
-            indent(); w.println("return 0;   /* fall-through default */");
+            indent();
+            String z = "float".equals(cRet) ? "0.0f" : "0";
+            w.println("return " + z + ";   /* fall-through default */");
         }
         w.println("}");
         w.println();
@@ -192,17 +206,21 @@ public final class AotCEmitter {
         w.println("    uint8_t* mem = vm->memory;");
         w.println("    uint32_t sp = *sp_p;");
         // Pop args en orden inverso (último pusheado, primero popeado).
+        // Cada arg usa el helper de lectura adecuado a su tipo (int/float).
         int n = f.params.size();
         for (int i = n - 1; i >= 0; i--) {
-            w.println("    int32_t a" + i + " = H->read_i32_be(mem + sp - 4); sp -= 4;");
+            Ast.Param p = f.params.get(i);
+            w.println("    " + cType(p.type) + " a" + i + " = H->"
+                + readHelper(p.type) + "(mem + sp - 4); sp -= 4;");
         }
         // C call con args en orden original a0, a1, a2...
+        String cRet = cType(f.returnType);
         StringBuilder call = new StringBuilder();
-        call.append("    int32_t r = ").append(fname).append("(vm");
+        call.append("    ").append(cRet).append(" r = ").append(fname).append("(vm");
         for (int i = 0; i < n; i++) call.append(", a").append(i);
         call.append(");");
         w.println(call);
-        w.println("    H->write_i32_be(mem + sp, r); sp += 4;");
+        w.println("    H->" + writeHelper(f.returnType) + "(mem + sp, r); sp += 4;");
         w.println("    *sp_p = sp;");
         w.println("}");
         w.println();
@@ -245,9 +263,10 @@ public final class AotCEmitter {
         }
         if (s instanceof Ast.VarDecl) {
             Ast.VarDecl v = (Ast.VarDecl) s;
+            String cVarType = cType(v.type);
             for (Ast.DeclName dn : v.names) {
                 indent();
-                w.print("int32_t " + dn.name);
+                w.print(cVarType + " " + dn.name);
                 if (v.init != null) {
                     w.print(" = ");
                     emitExpr(v.init);
@@ -273,9 +292,80 @@ public final class AotCEmitter {
             w.println(";");
             return;
         }
+        if (s instanceof Ast.WhileStmt) {
+            Ast.WhileStmt wl = (Ast.WhileStmt) s;
+            indent();
+            w.print("while (");
+            emitExpr(wl.condition);
+            w.println(") {");
+            indentLevel++;
+            for (Ast.IStmt st : wl.body) emitStmt(st);
+            indentLevel--;
+            indent();
+            w.println("}");
+            return;
+        }
+        if (s instanceof Ast.ForStmt) {
+            emitForStmt((Ast.ForStmt) s);
+            return;
+        }
+        if (s instanceof Ast.BreakStmt) {
+            indent(); w.println("break;");
+            return;
+        }
+        if (s instanceof Ast.ContinueStmt) {
+            indent(); w.println("continue;");
+            return;
+        }
         throw new UnsupportedAotException(
             "AOT: statement no soportado: " + s.getClass().getSimpleName()
             + " (line " + ((Ast.Node) s).line + ")");
+    }
+
+    /** for-loop BP: `for i = <from> to <to> [step <step>]` con semántica
+     *  inclusiva. Cuando step es literal positivo emitimos un C `for`
+     *  optimizable; en otro caso una variante `while` con check dinámico
+     *  de dirección. */
+    private void emitForStmt(Ast.ForStmt fs) {
+        if (!(fs.range instanceof Ast.ForNumericRange)) {
+            throw new UnsupportedAotException(
+                "AOT: for-range no numérico no soportado (line " + fs.line + ")");
+        }
+        Ast.ForNumericRange r = (Ast.ForNumericRange) fs.range;
+        int tag = ++forCounter;
+        String it   = fs.iteratorName;
+        String end  = "__aot_end_"  + tag;
+        String step = "__aot_step_" + tag;
+
+        // Wrap en bloque para limitar el scope del iterator + end + step.
+        indent();
+        w.println("{");
+        indentLevel++;
+
+        indent(); w.print("int32_t " + it + " = ");
+                  emitExpr(r.from); w.println(";");
+        indent(); w.print("int32_t " + end + " = ");
+                  emitExpr(r.to);   w.println(";");
+        if (r.step != null) {
+            indent(); w.print("int32_t " + step + " = ");
+                      emitExpr(r.step); w.println(";");
+        } else {
+            indent(); w.println("int32_t " + step + " = 1;");
+        }
+
+        // while ((step > 0) ? (it <= end) : (it >= end)) { body; it += step; }
+        indent();
+        w.println("while ((" + step + " > 0) ? (" + it + " <= " + end + ") : ("
+                  + it + " >= " + end + ")) {");
+        indentLevel++;
+        for (Ast.IStmt st : fs.body) emitStmt(st);
+        indent(); w.println(it + " += " + step + ";");
+        indentLevel--;
+        indent(); w.println("}");
+
+        indentLevel--;
+        indent();
+        w.println("}");
     }
 
     private void emitIfStmt(Ast.IfStmt iff) {
@@ -311,6 +401,14 @@ public final class AotCEmitter {
     private void emitExpr(Ast.IExpr e) {
         if (e instanceof Ast.IntLitExpr) {
             w.print(((Ast.IntLitExpr) e).value);
+            return;
+        }
+        if (e instanceof Ast.FloatLitExpr) {
+            /* Emitimos con sufijo 'f' para que gcc no promocione a double.
+             * Java Float.toString puede dar "1.0E10" — eso es válido como
+             * literal C. */
+            double v = ((Ast.FloatLitExpr) e).value;
+            w.print(Float.toString((float) v) + "f");
             return;
         }
         if (e instanceof Ast.IdentifierExpr) {
@@ -394,6 +492,52 @@ public final class AotCEmitter {
     }
 
     // ==================== Helpers ====================
+
+    /** TypeRef BP → tipo C. null (sin tipo de retorno) → void. */
+    private String cType(Ast.TypeRef t) {
+        if (t == null) return "void";
+        if (t instanceof Ast.SimpleTypeRef) {
+            String n = ((Ast.SimpleTypeRef) t).name;
+            switch (n) {
+                case "integer": return "int32_t";
+                case "float":   return "float";
+                case "boolean": return "int32_t";   /* bool como i32 0/1 */
+                default:
+                    throw new UnsupportedAotException(
+                        "AOT: tipo '" + n + "' no soportado (solo integer/float/boolean por ahora)");
+            }
+        }
+        throw new UnsupportedAotException(
+            "AOT: TypeRef no soportado: " + t.getClass().getSimpleName());
+    }
+
+    /** Para el thunk: nombre del helper que lee un valor del tipo
+     *  indicado desde el stack BP. Cada slot ocupa 4 bytes BE. */
+    private String readHelper(Ast.TypeRef t) {
+        if (t instanceof Ast.SimpleTypeRef) {
+            String n = ((Ast.SimpleTypeRef) t).name;
+            switch (n) {
+                case "integer": case "boolean": return "read_i32_be";
+                case "float":                    return "read_f32_be";
+            }
+        }
+        throw new UnsupportedAotException(
+            "AOT: no hay readHelper para tipo " + (t == null ? "null" : t.getClass().getSimpleName()));
+    }
+
+    /** Para el thunk: nombre del helper que escribe un valor del tipo
+     *  indicado al stack BP. */
+    private String writeHelper(Ast.TypeRef t) {
+        if (t instanceof Ast.SimpleTypeRef) {
+            String n = ((Ast.SimpleTypeRef) t).name;
+            switch (n) {
+                case "integer": case "boolean": return "write_i32_be";
+                case "float":                    return "write_f32_be";
+            }
+        }
+        throw new UnsupportedAotException(
+            "AOT: no hay writeHelper para tipo " + (t == null ? "null" : t.getClass().getSimpleName()));
+    }
 
     private void indent() {
         for (int i = 0; i < indentLevel; i++) w.print("    ");

@@ -1,0 +1,54 @@
+module FloatBench
+
+	// π por la serie de Leibniz: 4 * (1 - 1/3 + 1/5 - 1/7 + ...)
+	// Cada iter hace: división float, suma float, negación, suma int.
+	// Bench de loops + float juntos.
+
+	function piLeibniz(iter: integer): float
+		var sum: float := 0.0
+		var sign: float := 1.0
+		var k: float := 1.0
+		var i: integer := 0
+		while i < iter do
+			sum := sum + sign / k
+			sign := -sign
+			k := k + 2.0
+			i := i + 1
+		endwh
+		return sum * 4.0
+	end piLeibniz
+
+	native function piLeibnizNative(iter: integer): float
+		var sum: float := 0.0
+		var sign: float := 1.0
+		var k: float := 1.0
+		var i: integer := 0
+		while i < iter do
+			sum := sum + sign / k
+			sign := -sign
+			k := k + 2.0
+			i := i + 1
+		endwh
+		return sum * 4.0
+	end piLeibnizNative
+
+	function Main(arg: string)
+		var ini, fin: float
+		var pi: float
+		var iter: integer := 200000
+
+		// --- No-Native ---
+		ini := now()
+		pi := piLeibniz(iter)
+		fin := now()
+		print "piLeibniz(", iter, ")    no-native:", (fin - ini)*0.001, "s   π ≈", pi
+
+		// --- Native ---
+		ini := now()
+		pi := piLeibnizNative(iter)
+		fin := now()
+		print "piLeibnizNative(", iter, ")  native:", (fin - ini)*0.001, "s   π ≈", pi
+
+	end Main
+
+end FloatBench

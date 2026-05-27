@@ -95,6 +95,26 @@ static void h_print_nl(bpvm_t* vm) {
     else fputc('\n', stdout);
 }
 
+/* ---------- I/O float (H3 #166) ----------
+ * Los floats viven en el stack BP como bits IEEE-754 i32 big-endian.
+ * Estos wrappers hacen la conversión bits↔float para que el thunk AOT
+ * no tenga que hacer type-punning manual.
+ *
+ * bits_to_float / float_to_bits replicados aquí inline; los originales
+ * en interp.c son `static` y no exportados. */
+static inline float aoth_bits_to_float(uint32_t bits) {
+    union { float f; uint32_t u; } u; u.u = bits; return u.f;
+}
+static inline uint32_t aoth_float_to_bits(float f) {
+    union { float f; uint32_t u; } u; u.f = f;    return u.u;
+}
+static float h_read_f32_be(const uint8_t* p) {
+    return aoth_bits_to_float((uint32_t) bpvm_read_i32_be(p));
+}
+static void h_write_f32_be(uint8_t* p, float v) {
+    bpvm_write_i32_be(p, (int32_t) aoth_float_to_bits(v));
+}
+
 /* ---------- Instancia exportada ----------
  * `const` para que viva en .rodata (flash en el Pico). */
 const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
@@ -112,4 +132,6 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     .print_string    = h_print_string,
     .print_char      = h_print_char,
     .print_nl        = h_print_nl,
+    .read_f32_be     = h_read_f32_be,
+    .write_f32_be    = h_write_f32_be,
 };

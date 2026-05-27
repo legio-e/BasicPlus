@@ -58,6 +58,13 @@ struct aot_helpers_v1 {
     void     (*print_nl)(struct bpvm* vm);
 
     /* --- AÑADIR AQUÍ slots futuros, NUNCA EN MEDIO ----------- */
+
+    /* I/O float (H3 #166). El BP stack guarda los floats como bits
+     * IEEE-754 en slots de 4 bytes big-endian. Los thunks AOT con
+     * args/return float usan estas funciones para hacer la conversión
+     * sin tener que hacer type-punning manual. */
+    float    (*read_f32_be)(const uint8_t* p);
+    void     (*write_f32_be)(uint8_t* p, float v);
 };
 
 /* Tabla v1 instanciada en el runtime con los punteros a las funciones
