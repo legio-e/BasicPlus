@@ -542,22 +542,18 @@ public final class AotCEmitter {
         if (e instanceof Ast.CallExpr) {
             Ast.CallExpr c = (Ast.CallExpr) e;
 
-            /* arr.length() (H3 #174 parcial). Sin type-tracking real
-             * asumimos que el target es un array — el helper
-             * array_length(NULL) devuelve 0 graceful, así que no crashea
-             * en caso de mismatch. Habilita `for i = 0 to arr.length()-1`
-             * desde código AOT. */
+            /* Method calls (obj.method(args)) requieren vtable dispatch
+             * o resolución de tipo del target — pendiente en #174. Por
+             * ahora rechazamos limpiamente. Nota: BP no permite
+             * `arr.length()` sobre `integer[]` (los arrays primitivos
+             * no tienen métodos), así que ese caso no llega aquí desde
+             * código BP válido — solo cuando lleguen llamadas a métodos
+             * de clase. */
             if (c.callee instanceof Ast.MemberAccessExpr) {
                 Ast.MemberAccessExpr ma = (Ast.MemberAccessExpr) c.callee;
-                if ("length".equals(ma.member) && c.args.isEmpty()) {
-                    w.print("vm->aot_helpers->array_length(vm, ");
-                    emitExpr(ma.target);
-                    w.print(")");
-                    return;
-                }
                 throw new UnsupportedAotException(
                     "AOT: method call '" + ma.member + "' no soportado todavía (line "
-                    + c.line + "). Por ahora solo arr.length().");
+                    + c.line + ") — pendiente #174 (dispatch virtual).");
             }
 
             if (!(c.callee instanceof Ast.IdentifierExpr)) {

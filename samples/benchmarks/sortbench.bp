@@ -5,14 +5,15 @@ module SortBench
 	//   1 = insertion sort
 	//   2 = selection sort
 	//
-	// Valida en AOT:
-	//   - arr.length() — usa method call (parcial de #174)
-	//   - switch/case — dispatch entre algoritmos (#176)
-	//   - Llamadas native → native dentro del mismo módulo
+	// NOTA: BP no expone .length() en arrays primitivos (integer[]),
+	// así que pasamos n explícito. Cuando hagamos #174 (method dispatch)
+	// se podrá usar arr.length() en código BP normal.
+	//
+	// Valida en AOT: switch/case (#176), múltiples natives en mismo
+	// módulo llamándose entre sí (sortDispatch → bubbleN/insertionN/...).
 
-	function bubble(a: integer[])
-		var i, j, tmp, n: integer
-		n := a.length()
+	function bubble(a: integer[], n: integer)
+		var i, j, tmp: integer
 		i := 0
 		while i < n - 1 do
 			j := 0
@@ -28,9 +29,8 @@ module SortBench
 		endwh
 	end bubble
 
-	function insertion(a: integer[])
-		var i, j, key, n: integer
-		n := a.length()
+	function insertion(a: integer[], n: integer)
+		var i, j, key: integer
 		i := 1
 		while i < n do
 			key := a[i]
@@ -44,9 +44,8 @@ module SortBench
 		endwh
 	end insertion
 
-	function selection(a: integer[])
-		var i, j, m, tmp, n: integer
-		n := a.length()
+	function selection(a: integer[], n: integer)
+		var i, j, m, tmp: integer
 		i := 0
 		while i < n - 1 do
 			m := i
@@ -64,9 +63,8 @@ module SortBench
 		endwh
 	end selection
 
-	native function bubbleN(a: integer[])
-		var i, j, tmp, n: integer
-		n := a.length()
+	native function bubbleN(a: integer[], n: integer)
+		var i, j, tmp: integer
 		i := 0
 		while i < n - 1 do
 			j := 0
@@ -82,9 +80,8 @@ module SortBench
 		endwh
 	end bubbleN
 
-	native function insertionN(a: integer[])
-		var i, j, key, n: integer
-		n := a.length()
+	native function insertionN(a: integer[], n: integer)
+		var i, j, key: integer
 		i := 1
 		while i < n do
 			key := a[i]
@@ -98,9 +95,8 @@ module SortBench
 		endwh
 	end insertionN
 
-	native function selectionN(a: integer[])
-		var i, j, m, tmp, n: integer
-		n := a.length()
+	native function selectionN(a: integer[], n: integer)
+		var i, j, m, tmp: integer
 		i := 0
 		while i < n - 1 do
 			m := i
@@ -119,21 +115,19 @@ module SortBench
 	end selectionN
 
 	// Dispatcher con switch — valida #176 (switch/case en AOT).
-	native function sortDispatch(a: integer[], kind: integer)
+	native function sortDispatch(a: integer[], n: integer, kind: integer)
 		switch kind
 			case 0
-				bubbleN(a)
+				bubbleN(a, n)
 			case 1
-				insertionN(a)
+				insertionN(a, n)
 			case 2
-				selectionN(a)
+				selectionN(a, n)
 		endsw
 	end sortDispatch
 
-	function fillReverse(a: integer[])
-		var i, n: integer
-		n := a.length()
-		i := 0
+	function fillReverse(a: integer[], n: integer)
+		var i: integer := 0
 		while i < n do
 			a[i] := n - i
 			i := i + 1
@@ -145,42 +139,39 @@ module SortBench
 		var n: integer := 300
 		var a: integer[] := newIntArray(n)
 
-		// -------- bubble --------
-		fillReverse(a)
+		fillReverse(a, n)
 		ini := now()
-		bubble(a)
+		bubble(a, n)
 		fin := now()
 		print "bubble    no-native:", (fin - ini)*0.001, "s   a[0..2]=", a[0], a[1], a[2]
 
-		fillReverse(a)
+		fillReverse(a, n)
 		ini := now()
-		sortDispatch(a, 0)
+		sortDispatch(a, n, 0)
 		fin := now()
 		print "bubble       native:", (fin - ini)*0.001, "s   a[0..2]=", a[0], a[1], a[2]
 
-		// -------- insertion --------
-		fillReverse(a)
+		fillReverse(a, n)
 		ini := now()
-		insertion(a)
+		insertion(a, n)
 		fin := now()
 		print "insertion no-native:", (fin - ini)*0.001, "s   a[0..2]=", a[0], a[1], a[2]
 
-		fillReverse(a)
+		fillReverse(a, n)
 		ini := now()
-		sortDispatch(a, 1)
+		sortDispatch(a, n, 1)
 		fin := now()
 		print "insertion    native:", (fin - ini)*0.001, "s   a[0..2]=", a[0], a[1], a[2]
 
-		// -------- selection --------
-		fillReverse(a)
+		fillReverse(a, n)
 		ini := now()
-		selection(a)
+		selection(a, n)
 		fin := now()
 		print "selection no-native:", (fin - ini)*0.001, "s   a[0..2]=", a[0], a[1], a[2]
 
-		fillReverse(a)
+		fillReverse(a, n)
 		ini := now()
-		sortDispatch(a, 2)
+		sortDispatch(a, n, 2)
 		fin := now()
 		print "selection    native:", (fin - ini)*0.001, "s   a[0..2]=", a[0], a[1], a[2]
 
