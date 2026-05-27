@@ -1,0 +1,57 @@
+module IntBench
+
+	// Benchmark de operaciones integer mixtas (mul / mod / sub / add).
+	//
+	// Cada llamada hace:
+	//   (n * 3) + (n mod 7)  →  mul + mod + add + add + recurse(n-1) + sub
+	// Es decir, ~6 ops por nivel de recursión, vs fib que solo hace 3
+	// (dos resta + suma). Permite comparar el speedup AOT en aritmética
+	// mixta (no solo recursión pura).
+	//
+	// n=500 → 500 llamadas recursivas, sum ≈ 3·500·501/2 ≈ 376 000
+	// (cabe en i32 con muchísimo margen).
+
+	function intOps(n: integer): integer
+		if n <= 0 then
+			return 0
+		endif
+		return (n * 3) + (n mod 7) + intOps(n - 1)
+	end intOps
+
+	native function intOpsNative(n: integer): integer
+		if n <= 0 then
+			return 0
+		endif
+		return (n * 3) + (n mod 7) + intOpsNative(n - 1)
+	end intOpsNative
+
+	function Main(arg: string)
+		var ini, fin: float
+		var i, result, reps: integer
+		reps := 200
+
+		// --- No-Native (interpretado) ---
+		ini := now()
+		i := 0
+		result := 0
+		while i < reps do
+			result := intOps(500)
+			i := i + 1
+		endwh
+		fin := now()
+		print "intOps(500) x", reps, "        no-native:", (fin - ini)*0.001, "s  result =", result
+
+		// --- Native (AOT) ---
+		ini := now()
+		i := 0
+		result := 0
+		while i < reps do
+			result := intOpsNative(500)
+			i := i + 1
+		endwh
+		fin := now()
+		print "intOpsNative(500) x", reps, "       native:", (fin - ini)*0.001, "s  result =", result
+
+	end Main
+
+end IntBench

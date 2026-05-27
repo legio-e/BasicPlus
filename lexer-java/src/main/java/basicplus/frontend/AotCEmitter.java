@@ -317,6 +317,14 @@ public final class AotCEmitter {
             w.print(((Ast.IdentifierExpr) e).name);
             return;
         }
+        if (e instanceof Ast.ParenExpr) {
+            /* Paréntesis explícitos en BP — los emitimos igual en C
+             * por claridad y para preservar precedencia escrita. */
+            w.print("(");
+            emitExpr(((Ast.ParenExpr) e).inner);
+            w.print(")");
+            return;
+        }
         if (e instanceof Ast.BinaryExpr) {
             Ast.BinaryExpr b = (Ast.BinaryExpr) e;
             w.print("(");
