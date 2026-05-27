@@ -214,13 +214,21 @@ public final class AotCEmitter {
                 + readHelper(p.type) + "(mem + sp - 4); sp -= 4;");
         }
         // C call con args en orden original a0, a1, a2...
+        // Si la función es void, no asignamos a una variable y no
+        // escribimos resultado al stack — los args ya están consumidos.
+        boolean isVoid = (f.returnType == null);
         String cRet = cType(f.returnType);
         StringBuilder call = new StringBuilder();
-        call.append("    ").append(cRet).append(" r = ").append(fname).append("(vm");
+        call.append("    ");
+        if (!isVoid) call.append(cRet).append(" r = ");
+        call.append(fname).append("(vm");
         for (int i = 0; i < n; i++) call.append(", a").append(i);
         call.append(");");
         w.println(call);
-        w.println("    H->" + writeHelper(f.returnType) + "(mem + sp, r); sp += 4;");
+        if (!isVoid) {
+            w.println("    H->" + writeHelper(f.returnType)
+                + "(mem + sp, r); sp += 4;");
+        }
         w.println("    *sp_p = sp;");
         w.println("}");
         w.println();
@@ -277,20 +285,52 @@ public final class AotCEmitter {
         }
         if (s instanceof Ast.AssignStmt) {
             Ast.AssignStmt a = (Ast.AssignStmt) s;
-            if (!(a.target instanceof Ast.IdentifierExpr)) {
-                throw new UnsupportedAotException(
-                    "AOT: assign target debe ser identifier simple (line " + a.line + ")");
+            /* Target IdentifierExpr: assignment a variable local/param. */
+            if (a.target instanceof Ast.IdentifierExpr) {
+                indent();
+                w.print(((Ast.IdentifierExpr) a.target).name);
+                switch (a.op) {
+                    case ASSIGN:       w.print(" = ");  break;
+                    case PLUS_ASSIGN:  w.print(" += "); break;
+                    case MINUS_ASSIGN: w.print(" -= "); break;
+                }
+                emitExpr(a.value);
+                w.println(";");
+                return;
             }
-            indent();
-            w.print(((Ast.IdentifierExpr) a.target).name);
-            switch (a.op) {
-                case ASSIGN:       w.print(" = ");  break;
-                case PLUS_ASSIGN:  w.print(" += "); break;
-                case MINUS_ASSIGN: w.print(" -= "); break;
+            /* Target IndexExpr (H3 #170): a[i] := v / += / -= via helper.
+             * Para += / -= cargamos primero, operamos, escribimos. */
+            if (a.target instanceof Ast.IndexExpr) {
+                Ast.IndexExpr ix = (Ast.IndexExpr) a.target;
+                indent();
+                if (a.op == Ast.AssignOpKind.ASSIGN) {
+                    w.print("vm->aot_helpers->array_store_i32(vm, ");
+                    emitExpr(ix.target);
+                    w.print(", ");
+                    emitExpr(ix.index);
+                    w.print(", ");
+                    emitExpr(a.value);
+                    w.println(");");
+                } else {
+                    /* a[i] += v  →  store(a, i, load(a, i) + v) */
+                    String binOp = (a.op == Ast.AssignOpKind.PLUS_ASSIGN) ? "+" : "-";
+                    w.print("vm->aot_helpers->array_store_i32(vm, ");
+                    emitExpr(ix.target);
+                    w.print(", ");
+                    emitExpr(ix.index);
+                    w.print(", vm->aot_helpers->array_load_i32(vm, ");
+                    emitExpr(ix.target);
+                    w.print(", ");
+                    emitExpr(ix.index);
+                    w.print(") " + binOp + " (");
+                    emitExpr(a.value);
+                    w.println("));");
+                }
+                return;
             }
-            emitExpr(a.value);
-            w.println(";");
-            return;
+            throw new UnsupportedAotException(
+                "AOT: assign target no soportado: "
+                + a.target.getClass().getSimpleName() + " (line " + a.line + ")");
         }
         if (s instanceof Ast.WhileStmt) {
             Ast.WhileStmt wl = (Ast.WhileStmt) s;
@@ -442,6 +482,16 @@ public final class AotCEmitter {
             w.print(")");
             return;
         }
+        if (e instanceof Ast.IndexExpr) {
+            /* a[i] — lectura de array via helper. v1: solo integer[]. */
+            Ast.IndexExpr ix = (Ast.IndexExpr) e;
+            w.print("vm->aot_helpers->array_load_i32(vm, ");
+            emitExpr(ix.target);
+            w.print(", ");
+            emitExpr(ix.index);
+            w.print(")");
+            return;
+        }
         if (e instanceof Ast.CallExpr) {
             Ast.CallExpr c = (Ast.CallExpr) e;
             if (!(c.callee instanceof Ast.IdentifierExpr)) {
@@ -493,7 +543,9 @@ public final class AotCEmitter {
 
     // ==================== Helpers ====================
 
-    /** TypeRef BP → tipo C. null (sin tipo de retorno) → void. */
+    /** TypeRef BP → tipo C. null (sin tipo de retorno) → void.
+     *  ArrayTypeRef se trata como handle i32 (el ref al heap donde
+     *  vive el array). El acceso a elementos pasa por helpers. */
     private String cType(Ast.TypeRef t) {
         if (t == null) return "void";
         if (t instanceof Ast.SimpleTypeRef) {
@@ -506,6 +558,11 @@ public final class AotCEmitter {
                     throw new UnsupportedAotException(
                         "AOT: tipo '" + n + "' no soportado (solo integer/float/boolean por ahora)");
             }
+        }
+        if (t instanceof Ast.ArrayTypeRef) {
+            /* Handle al heap. Element type se traduce a través de los
+             * helpers array_load_<T> / array_store_<T> en el AccessExpr. */
+            return "int32_t";
         }
         throw new UnsupportedAotException(
             "AOT: TypeRef no soportado: " + t.getClass().getSimpleName());
@@ -521,6 +578,10 @@ public final class AotCEmitter {
                 case "float":                    return "read_f32_be";
             }
         }
+        if (t instanceof Ast.ArrayTypeRef) {
+            /* El handle es i32. */
+            return "read_i32_be";
+        }
         throw new UnsupportedAotException(
             "AOT: no hay readHelper para tipo " + (t == null ? "null" : t.getClass().getSimpleName()));
     }
@@ -534,6 +595,9 @@ public final class AotCEmitter {
                 case "integer": case "boolean": return "write_i32_be";
                 case "float":                    return "write_f32_be";
             }
+        }
+        if (t instanceof Ast.ArrayTypeRef) {
+            return "write_i32_be";
         }
         throw new UnsupportedAotException(
             "AOT: no hay writeHelper para tipo " + (t == null ? "null" : t.getClass().getSimpleName()));

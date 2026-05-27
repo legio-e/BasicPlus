@@ -65,6 +65,18 @@ struct aot_helpers_v1 {
      * sin tener que hacer type-punning manual. */
     float    (*read_f32_be)(const uint8_t* p);
     void     (*write_f32_be)(uint8_t* p, float v);
+
+    /* Acceso a arrays (H3 #167). El handle 'ref' es el offset al heap
+     * donde vive el array (primeros 4 bytes = length BE, después los
+     * elementos contiguos). Estos helpers hacen bounds-check + null-
+     * check y lanzan runtime fault si fallan — mismo comportamiento
+     * que los OP_ALOAD/OP_ASTORE del intérprete.
+     *
+     * Por ahora solo i32 (BP `integer[]`). Cuando AOT-eemos arrays
+     * float/i8/i16/etc se añaden slots paralelos al final. */
+    int32_t  (*array_load_i32)(struct bpvm* vm, uint32_t ref, int32_t idx);
+    void     (*array_store_i32)(struct bpvm* vm, uint32_t ref, int32_t idx, int32_t v);
+    int32_t  (*array_length)(struct bpvm* vm, uint32_t ref);
 };
 
 /* Tabla v1 instanciada en el runtime con los punteros a las funciones

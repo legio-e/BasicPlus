@@ -1,0 +1,91 @@
+module ArrayBench
+
+	// Bubble sort sobre integer[]. Ejercita:
+	//   - Lectura  a[i]  via aot_helpers->array_load_i32
+	//   - Escritura a[i] := x  via aot_helpers->array_store_i32
+	//   - Nested while loops
+	//   - Bounds-check + null-check (en cada acceso)
+	//
+	// Cada iter del inner loop hace 2 reads + 1 compare + (a veces) 2 reads
+	// + 3 writes para el swap. Mucho overhead interpretado.
+
+	function bubbleSort(a: integer[], n: integer)
+		var i, j, tmp: integer
+		i := 0
+		while i < n - 1 do
+			j := 0
+			while j < n - 1 - i do
+				if a[j] > a[j+1] then
+					tmp := a[j]
+					a[j] := a[j+1]
+					a[j+1] := tmp
+				endif
+				j := j + 1
+			endwh
+			i := i + 1
+		endwh
+	end bubbleSort
+
+	native function bubbleSortNative(a: integer[], n: integer)
+		var i, j, tmp: integer
+		i := 0
+		while i < n - 1 do
+			j := 0
+			while j < n - 1 - i do
+				if a[j] > a[j+1] then
+					tmp := a[j]
+					a[j] := a[j+1]
+					a[j+1] := tmp
+				endif
+				j := j + 1
+			endwh
+			i := i + 1
+		endwh
+	end bubbleSortNative
+
+	// Inicializa array con valores reverse-ordered (peor caso del sort)
+	function fillReverse(a: integer[], n: integer)
+		var i: integer := 0
+		while i < n do
+			a[i] := n - i
+			i := i + 1
+		endwh
+	end fillReverse
+
+	// Suma los elementos — verificación de correctness
+	function sumArray(a: integer[], n: integer): integer
+		var s, i: integer
+		s := 0
+		i := 0
+		while i < n do
+			s := s + a[i]
+			i := i + 1
+		endwh
+		return s
+	end sumArray
+
+	function Main(arg: string)
+		var ini, fin: float
+		var n: integer := 200
+		var a: integer[] := newIntArray(n)
+		var s: integer
+
+		// --- No-Native ---
+		fillReverse(a, n)
+		ini := now()
+		bubbleSort(a, n)
+		fin := now()
+		s := sumArray(a, n)
+		print "bubbleSort(", n, " elems)    no-native:", (fin - ini)*0.001, "s   sum =", s
+
+		// --- Native ---
+		fillReverse(a, n)
+		ini := now()
+		bubbleSortNative(a, n)
+		fin := now()
+		s := sumArray(a, n)
+		print "bubbleSortNative(", n, " elems)  native:", (fin - ini)*0.001, "s   sum =", s
+
+	end Main
+
+end ArrayBench

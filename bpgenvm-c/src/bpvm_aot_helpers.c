@@ -115,6 +115,42 @@ static void h_write_f32_be(uint8_t* p, float v) {
     bpvm_write_i32_be(p, (int32_t) aoth_float_to_bits(v));
 }
 
+/* ---------- Acceso a arrays (H3 #167) ----------
+ * Layout heap: [length:u32 BE][el0:T][el1:T]... — T=4 bytes para i32.
+ * Bounds check + null check; en fallo invocamos throw_runtime (que hoy
+ * solo reporta a stderr — la integración con try/catch BP vendrá con
+ * #175). */
+static int32_t h_array_load_i32(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    if (ref == 0) {
+        if (vm) bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_i32: null array");
+        return 0;
+    }
+    uint8_t* mem = vm->memory;
+    uint32_t length = bpvm_read_u32_be(mem + ref);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_i32: index out of bounds");
+        return 0;
+    }
+    return bpvm_read_i32_be(mem + ref + 4 + (uint32_t) idx * 4);
+}
+static void h_array_store_i32(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
+    if (ref == 0) {
+        if (vm) bpvm_aot_helpers_v1.throw_runtime(vm, "array_store_i32: null array");
+        return;
+    }
+    uint8_t* mem = vm->memory;
+    uint32_t length = bpvm_read_u32_be(mem + ref);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v1.throw_runtime(vm, "array_store_i32: index out of bounds");
+        return;
+    }
+    bpvm_write_i32_be(mem + ref + 4 + (uint32_t) idx * 4, v);
+}
+static int32_t h_array_length(bpvm_t* vm, uint32_t ref) {
+    if (ref == 0) return 0;   /* null array → length 0 (BP semantics) */
+    return (int32_t) bpvm_read_u32_be(vm->memory + ref);
+}
+
 /* ---------- Instancia exportada ----------
  * `const` para que viva en .rodata (flash en el Pico). */
 const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
@@ -134,4 +170,7 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     .print_nl        = h_print_nl,
     .read_f32_be     = h_read_f32_be,
     .write_f32_be    = h_write_f32_be,
+    .array_load_i32  = h_array_load_i32,
+    .array_store_i32 = h_array_store_i32,
+    .array_length    = h_array_length,
 };
