@@ -549,7 +549,12 @@ public final class AotCEmitter {
 
     /** Despacha CallExpr a un builtin si el nombre matchea uno conocido.
      *  Devuelve true si emitió código, false si no es builtin (caller
-     *  prueba con native func). H3 #168. */
+     *  prueba con native func). H3 #168.
+     *
+     *  NOTA sobre length(): BP usa `arr.length()` (method call), NO
+     *  `len(arr)`. El AOT lo soportará cuando implementemos method
+     *  dispatch en #174 — entonces detectaremos MemberAccessExpr
+     *  "length" sobre target array y emitiremos array_length helper. */
     private boolean emitBuiltinCall(String name, List<Ast.IExpr> args) {
         switch (name) {
             case "now":
@@ -558,15 +563,6 @@ public final class AotCEmitter {
                         "AOT: now() no toma argumentos");
                 }
                 w.print("vm->aot_helpers->now_ms(vm)");
-                return true;
-            case "len":
-                if (args.size() != 1) {
-                    throw new UnsupportedAotException(
-                        "AOT: len(arr) toma exactamente un argumento");
-                }
-                w.print("vm->aot_helpers->array_length(vm, ");
-                emitExpr(args.get(0));
-                w.print(")");
                 return true;
             default:
                 return false;

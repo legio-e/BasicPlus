@@ -1,38 +1,53 @@
 module SumBench
 
-	// Suma elementos de un array. Usa `len(a)` internamente — el
-	// signature ya no necesita pasar el tamaño explícito. Valida
-	// #168 (call a builtins desde native).
+	// Suma elementos de un array. Pasamos n explícito porque BP
+	// usa `arr.length()` (method call) y AOT aún no maneja methods.
 	//
-	// El intérprete paga OP_CALL_BUILTIN(LEN) en CADA iteración del
-	// loop si el código fuera `while i < len(a)`. Mejor cachear, pero
-	// para el bench dejamos len(a) en el check para estresar el path.
+	// La native llama a `now()` internamente — validación de #168
+	// (builtin calls desde código AOT).
 
-	function sumArray(a: integer[]): integer
+	function sumArray(a: integer[], n: integer): integer
 		var s, i: integer
 		s := 0
 		i := 0
-		while i < len(a) do
+		while i < n do
 			s := s + a[i]
 			i := i + 1
 		endwh
 		return s
 	end sumArray
 
-	native function sumArrayNative(a: integer[]): integer
+	native function sumArrayNative(a: integer[], n: integer): integer
 		var s, i: integer
 		s := 0
 		i := 0
-		while i < len(a) do
+		while i < n do
 			s := s + a[i]
 			i := i + 1
 		endwh
 		return s
 	end sumArrayNative
 
-	function fillSeq(a: integer[])
+	// Native que se mide a sí misma con `now()` — confirma que el
+	// builtin se invoca correctamente desde AOT (#168). Devuelve los
+	// ms que tardó en sumar `reps` veces el array.
+	native function timedSumNative(a: integer[], n: integer, reps: integer): integer
+		var t0, t1: integer
+		var i, s: integer
+		t0 := now()
+		s := 0
+		i := 0
+		while i < reps do
+			s := sumArrayNative(a, n)
+			i := i + 1
+		endwh
+		t1 := now()
+		return t1 - t0
+	end timedSumNative
+
+	function fillSeq(a: integer[], n: integer)
 		var i: integer := 0
-		while i < len(a) do
+		while i < n do
 			a[i] := i + 1
 			i := i + 1
 		endwh
@@ -43,31 +58,35 @@ module SumBench
 		var n: integer := 5000
 		var reps: integer := 50
 		var a: integer[] := newIntArray(n)
-		var s, i: integer
+		var s, i, dt: integer
 
-		fillSeq(a)
+		fillSeq(a, n)
 
-		// --- No-Native ---
+		// --- No-Native (BP measurement) ---
 		ini := now()
 		s := 0
 		i := 0
 		while i < reps do
-			s := sumArray(a)
+			s := sumArray(a, n)
 			i := i + 1
 		endwh
 		fin := now()
-		print "sumArray(", n, ") x", reps, "    no-native:", (fin - ini)*0.001, "s   sum =", s
+		print "sumArray(", n, ") x", reps, "      no-native:", (fin - ini)*0.001, "s   sum =", s
 
-		// --- Native ---
+		// --- Native (BP measurement) ---
 		ini := now()
 		s := 0
 		i := 0
 		while i < reps do
-			s := sumArrayNative(a)
+			s := sumArrayNative(a, n)
 			i := i + 1
 		endwh
 		fin := now()
-		print "sumArrayNative(", n, ") x", reps, "  native:", (fin - ini)*0.001, "s   sum =", s
+		print "sumArrayNative(", n, ") x", reps, "    native:", (fin - ini)*0.001, "s   sum =", s
+
+		// --- Native self-timed (uses now() inside the AOT) ---
+		dt := timedSumNative(a, n, reps)
+		print "timedSumNative self-measured:", dt*0.001, "s"
 
 	end Main
 
