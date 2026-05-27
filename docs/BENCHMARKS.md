@@ -79,7 +79,7 @@ cd bpgenvm-c/pico
 
 | Bench | `J` (host) | `Ci` (Pico interp) | `Ca` (Pico AOT) | speedup | Notas |
 |---|---:|---:|---:|---:|---|
-| `Sort.bubble(1000)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
+| `ArrayBench.bubbleSort(200 rev)` | _pendiente_ | 359 ms | 33 ms | **10.9×** | ✅ arraybench.bp — bubble sort N=200 reverse-ordered (worst case, ~20k cmp + ~2.5k swap). Valida #167 (array read/write) y #170 (lvalues). Ratio compress vs int/float: el helper de array hace mismo bounds+null check que el OP del intérprete, sólo se ahorra el dispatch del bytecode + push/pop de stack. |
 | `Sort.quick(10000)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
 | `Matrix.mult(32x32)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
 
