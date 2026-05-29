@@ -379,6 +379,33 @@ prints/thread paralelos.
    port es swap de `platform_pthread.c → platform_freertos.c` y
    `comm_host.c → comm_pico.c`. El resto del runtime no cambia.
 
+## VALIDADO EN PLACA — single-core (2026-05-29)
+
+H2 SMP=1 confirmado en hardware (RP2350, firmware `esc1_smp1_FIXED`,
+vía IDE Run on Pico):
+
+| Test | Resultado en placa |
+| ---- | ------------------ |
+| `smp_print_stress` | 60 líneas íntegras (sin entrelazado) + `done` + exit 0 |
+| `smp_heap_stress_pico` (N=200) | `20100/20100/20100` — alloc cross-thread sin corrupción |
+| `smp_fib_bench_pico` (N=24) | `46368/46368`; paralelo 2226 ms ≈ secuencial 2224 ms |
+
+El paralelo≈secuencial es lo esperado en single-core (los 2 threads BP
+se turnan en un worker). Confirma scheduling + thread spawn/join +
+output queue + comm task + shutdown limpio, todo sobre FreeRTOS en el
+M33. **Lo que falta es el 2º core (dual-core), donde el paralelo debe
+caer a ~la mitad.**
+
+NOTA — regresión cazada en el camino: el `out_buf[128]` per-thread de
+#185 infló `bpvm_t` 6192→10288 bytes (×32 threads) y reventaba el
+`calloc` de `bpvm_init` en la RAM justa de la Pico → ningún módulo
+corría. Revertido (commit 6ef4e22). Lección: cambios al struct
+`bpvm_thread` se multiplican ×32 — vigilar en target.
+
+NOTA — `smp_heap_stress` original (N=3000) NO corre en Pico: 6000
+allocations ~144 KB > ~64 KB de heap VM, y el GC no reusa (F2). Usar
+`smp_heap_stress_pico` (N=200) en placa.
+
 ## Port a Pico — estado del cableado (2026-05-29)
 
 Toda la maquinaria SMP está integrada en el firmware Pico, opt-in
