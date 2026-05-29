@@ -1,0 +1,55 @@
+// smp_fib_bench_pico.bp — variante de smp_fib_bench dimensionada para
+// el intérprete del RP2350 (150 MHz). fib(30) interpretado tarda
+// ~15-25 s POR llamada en el M33 (el AOT es ×54-90 más rápido, pero
+// aquí fib corre interpretado), así que el original parece colgado.
+//
+// Cambios vs el original:
+//   - N=24 (fib=46368): ~1 s por llamada interpretada → test ágil.
+//   - print "arrancando" ANTES del cómputo → se ve enseguida que está
+//     vivo (distingue "lento" de "colgado").
+//   - print entre fase secuencial y paralela → progreso visible.
+module SmpFibBenchPico
+
+  public class FibWorker extends Thread
+    public var n: integer
+    public var result: integer
+    public function FibWorker(n_: integer)
+      n := n_
+      result := 0
+    end FibWorker
+
+    public function run()
+      result := fib(n)
+    end run
+  end FibWorker
+
+  public function fib(n: integer): integer
+    if n < 2 then
+      return n
+    endif
+    return fib(n - 1) + fib(n - 2)
+  end fib
+
+  function Main()
+    var N: integer := 24
+    print "arrancando fib bench, N =", N
+
+    var t0: integer := now()
+    var r1: integer := fib(N)
+    var r2: integer := fib(N)
+    var t1: integer := now()
+    print "secuencial 2x fib =", r1, r2, " ms =", t1 - t0
+
+    var t2: integer := now()
+    var w1: FibWorker := FibWorker(N)
+    var w2: FibWorker := FibWorker(N)
+    w1.start()
+    w2.start()
+    w1.join()
+    w2.join()
+    var t3: integer := now()
+    print "paralelo   2x fib =", w1.result, w2.result, " ms =", t3 - t2
+    print "done"
+  end Main
+
+end SmpFibBenchPico
