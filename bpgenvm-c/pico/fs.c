@@ -13,6 +13,8 @@
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 
+#include "flash_lock.h"     /* #153 — ventana XIP-safe (dual-core safe) */
+
 /* ============================================================== */
 /* Layout interno                                                  */
 /* ============================================================== */
@@ -199,14 +201,17 @@ fs_status_t fs_save_to_flash(void) {
                         & ~(uint32_t)(FLASH_PAGE_SIZE - 1);
     }
 
-    uint32_t saved = save_and_disable_interrupts();
+    /* #153 — bajo dual-core esto ADEMÁS parquea el otro core (que si no
+     * estaría ejecutando desde XIP y haría hard fault durante el erase).
+     * Single-core: idéntico a save_and_disable_interrupts() de antes. */
+    uint32_t saved = bpvm_flash_lock_begin();
     flash_range_erase(FS_FLASH_OFFSET, FS_REGION_ALIGNED);
     flash_range_program(FS_FLASH_OFFSET, header_buf, sizeof(header_buf));
     if (data_to_write > 0) {
         flash_range_program(FS_FLASH_OFFSET + FS_HEADER_BYTES,
                             s_data, data_to_write);
     }
-    restore_interrupts(saved);
+    bpvm_flash_lock_end(saved);
 
     return FS_OK;
 }

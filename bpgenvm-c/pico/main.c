@@ -829,6 +829,23 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTCB,
     *pulStackSize = configTIMER_TASK_STACK_DEPTH;
 }
 
+#if ( configNUMBER_OF_CORES > 1 )
+/* #153 — SMP necesita un idle "pasivo" por cada core extra (N-1). Con
+ * static allocation hay que proveer su memoria igual que el idle/timer.
+ * configNUMBER_OF_CORES-1 sets. */
+static StaticTask_t s_passive_idle_tcb[ configNUMBER_OF_CORES - 1 ];
+static StackType_t  s_passive_idle_stack[ configNUMBER_OF_CORES - 1 ]
+                                        [ configMINIMAL_STACK_SIZE ];
+void vApplicationGetPassiveIdleTaskMemory(StaticTask_t **ppxTCB,
+                                          StackType_t **ppxStack,
+                                          uint32_t *pulStackSize,
+                                          BaseType_t xPassiveIdleTaskIndex) {
+    *ppxTCB       = &s_passive_idle_tcb[ xPassiveIdleTaskIndex ];
+    *ppxStack     =  s_passive_idle_stack[ xPassiveIdleTaskIndex ];
+    *pulStackSize =  configMINIMAL_STACK_SIZE;
+}
+#endif
+
 int main(void) {
     led_init();
     stdio_init_all();

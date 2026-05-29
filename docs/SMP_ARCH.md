@@ -432,6 +432,91 @@ joineados, comm cerrado con `bpvm_oq_close` + drain).
 Si algo falla en 1-4, fallback inmediato: rebuild sin
 `-DBPVM_PICO_SMP_WORKERS`, vuelve a legacy en 1 minuto.
 
+## #153 — Dual-core RP2350 (TX-exclusive por core)
+
+Estado (2026-05-29): **scaffolding COMPLETO + build-verificado, NO
+validado en placa.** El dual-core es opt-in por compile-time y NO
+afecta al firmware que se envía (single-core por default, byte-idéntico).
+
+### Build switch
+
+```
+cmake .. -DBPVM_PICO_NUM_CORES=2 -DBPVM_PICO_SMP_WORKERS=2
+```
+
+- `BPVM_PICO_NUM_CORES` (default **1**) → `configNUMBER_OF_CORES` en
+  FreeRTOSConfig.h. Con =2 el port RP2350_ARM_NTZ (que es SMP-capaz)
+  arranca el segundo core en `vTaskStartScheduler`, activa
+  `configRUN_MULTIPLE_PRIORITIES` + `configUSE_CORE_AFFINITY`, y CMake
+  enlaza `pico_multicore`.
+- Build matrix verificada: =1 → 366 KiB uf2 (idéntico al baseline),
+  =2 → 372 KiB uf2 (delta = kernel SMP + passive idle + multicore).
+  Ambos linkan limpio.
+
+### Modelo "TX-exclusive por core"
+
+| Core | Rol | Toca USB/flash | Tasks |
+| ---- | --- | -------------- | ----- |
+| 0 | I/O + control | **SÍ** (USB CDC TX, SAVE/log flash) | `vm_task`, comm task, idle |
+| 1 | cómputo BP puro | **NO** | worker, passive idle |
+
+El worker (core 1) NUNCA transmite por USB ni escribe flash — solo
+encola en el ring buffer (`bpvm_comm_output_enqueue`). El comm task
+(core 0) es el único que llama `output_cb`/CDC. Por eso "TX-exclusive":
+una sola CPU habla con el USB, sin contención del periférico ni de
+TinyUSB entre cores. El pinning lo expresa
+`bpvm_platform_thread_create_pinned` (comm→0, worker→1).
+
+### Los tres peligros del dual-core y cómo se tratan
+
+1. **Flash XIP durante erase/program** — `flash_range_erase` deja el
+   flash inaccesible para fetch; el OTRO core, ejecutando desde XIP,
+   haría hard fault. **Resuelto**: `pico/flash_lock.{h,c}` centraliza
+   una ventana XIP-safe. fs.c y log.c ya NO llaman
+   `save_and_disable_interrupts` directo — usan
+   `bpvm_flash_lock_begin/end`. Single-core: idéntico a antes.
+   Dual-core: además `multicore_lockout_start/end_blocking` parquea el
+   core 1 en RAM. El worker se registra como víctima vía
+   `bpvm_flash_lock_init_victim()` (lo llama el trampolín de
+   platform_freertos cuando crea un task pinned a core != 0).
+
+2. **USB / TinyUSB affinity** — el IRQ USB y `tud_task` viven en el
+   core que hizo `stdio_init_all` (core 0, en `main`). **Resuelto por
+   diseño**: el comm task pinned a core 0 es el único que toca CDC;
+   core 1 nunca.
+
+3. **⚠️ FIFO IRQ: lockout del SDK vs scheduler SMP** — EL RIESGO #1 DE
+   BRING-UP. `multicore_lockout_victim_init()` instala un handler en
+   `SIO_IRQ_FIFO`, que el port FreeRTOS-SMP TAMBIÉN usa para señalizar
+   entre cores. Si chocan, el lockout o el scheduler se cuelga al
+   primer SAVE. Es el mismo tipo de conflicto que tumbó USB al meter
+   `pico_flash` en FP2 (por eso seguimos SIN `pico_flash`, usando
+   `pico_multicore` directo). **NO resuelto — necesita placa.**
+   Plan B si choca: barrera a nivel FreeRTOS en vez del lockout del
+   SDK — suspender el worker (`vTaskSuspend`) y girar el idle de core 1
+   en una rutina RAM-resident con IRQs off durante el flash. Más
+   invasivo pero no toca el FIFO.
+
+### Runbook de validación (en placa, por escalones)
+
+Cada escalón se flashea y valida ANTES del siguiente. Fallback siempre
+= rebuild con el flag anterior.
+
+0. **Baseline** (default, single-core) — confirmar que sigue todo.
+1. **`-DBPVM_PICO_SMP_WORKERS=1`** (single-core) — valida pipeline SMP
+   sin paralelismo. Ver checklist "SMP=1" arriba.
+2. **`-DBPVM_PICO_NUM_CORES=2 -DBPVM_PICO_SMP_WORKERS=2`, programa SIN
+   SAVE** — valida que arrancan 2 cores, el worker corre en core 1,
+   el output llega entero por core 0, EXITED OK. AQUÍ se mide el
+   speedup real (un fib BP en core 1 mientras core 0 drena). NO hacer
+   SAVE todavía.
+3. **dual-core + SAVE** — el momento de la verdad para el peligro #3.
+   Hacer un PUT+SAVE pequeño. Si cuelga → es el conflicto FIFO; aplicar
+   plan B. Si pasa → log persiste y reboot recarga: dual-core completo.
+
+Mientras 2-3 no se validen en placa, `BPVM_PICO_NUM_CORES=2` queda
+marcado **experimental** y NO se envía.
+
 ## Abstracción transport
 
 ```c

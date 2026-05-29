@@ -3,14 +3,38 @@
  * en Pico 2 (RP2350, Cortex-M33).
  *
  * Basado en los requisitos del port RP2350_ARM_NTZ del FreeRTOS-Kernel:
- * sin TrustZone, sin MPU, secure-only, FPU activa. Mantenemos
- * configNUMBER_OF_CORES=1 para el bring-up — luego se puede subir a 2.
+ * sin TrustZone, sin MPU, secure-only, FPU activa.
+ *
+ * #153 — Número de cores parametrizado por BPVM_PICO_NUM_CORES (lo
+ * inyecta CMake). Default 1 (single-core, el firmware que se envía).
+ * =2 activa SMP dual-core: el port RP2350_ARM_NTZ es SMP-capaz y
+ * arranca el segundo core en vTaskStartScheduler. Ver docs/SMP_ARCH.md
+ * §"Port a Pico" para el runbook de bring-up dual-core y los riesgos
+ * (lockout FIFO vs scheduler SMP, flash XIP-safe, USB en core 0).
  */
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
 /* --- Modelo de ejecución -------------------------------------- */
-#define configNUMBER_OF_CORES                   1
+#ifndef BPVM_PICO_NUM_CORES
+#define BPVM_PICO_NUM_CORES                     1
+#endif
+#define configNUMBER_OF_CORES                   BPVM_PICO_NUM_CORES
+
+#if ( configNUMBER_OF_CORES > 1 )
+/* --- Flags SMP (solo dual-core) ------------------------------- */
+/* Permite que corran simultáneamente tasks de DISTINTA prioridad en
+ * cores distintos (sin esto, SMP solo paraleliza tasks de igual prio).
+ * Nuestro comm (IDLE+1) y worker (IDLE+1) son iguales hoy, pero lo
+ * dejamos en 1 por si el comm sube de prioridad. */
+#define configRUN_MULTIPLE_PRIORITIES           1
+/* Habilita vTaskCoreAffinitySet / xTaskCreateAffinitySet — base del
+ * pinning comm→core0 / worker→core1 (bpvm_platform_thread_create_pinned). */
+#define configUSE_CORE_AFFINITY                 1
+/* No usamos hook en el passive idle (los N-1 idles extra de SMP). */
+#define configUSE_PASSIVE_IDLE_HOOK             0
+#endif
+
 #define configUSE_PREEMPTION                    1
 #define configUSE_IDLE_HOOK                     0
 #define configUSE_TICK_HOOK                     0

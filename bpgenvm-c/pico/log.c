@@ -14,6 +14,8 @@
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 
+#include "flash_lock.h"     /* #153 — ventana XIP-safe (dual-core safe) */
+
 #define LOG_MAGIC      0x4C4F4731u   /* 'LOG1' */
 #define LOG_VERSION    1u
 
@@ -118,10 +120,10 @@ void log_flush(void) {
 
     /* Erase + program. IRQs OFF para que FreeRTOS no cambie de contexto
      * y nadie acceda a XIP durante la operación. */
-    uint32_t saved = save_and_disable_interrupts();
+    uint32_t saved = bpvm_flash_lock_begin();
     flash_range_erase(LOG_FLASH_OFFSET, LOG_REGION_BYTES);
     flash_range_program(LOG_FLASH_OFFSET, flash_buf, sizeof(flash_buf));
-    restore_interrupts(saved);
+    bpvm_flash_lock_end(saved);
 }
 
 void log_clear_ram(void) {
@@ -130,9 +132,9 @@ void log_clear_ram(void) {
 }
 
 void log_clear_flash(void) {
-    uint32_t saved = save_and_disable_interrupts();
+    uint32_t saved = bpvm_flash_lock_begin();
     flash_range_erase(LOG_FLASH_OFFSET, LOG_REGION_BYTES);
-    restore_interrupts(saved);
+    bpvm_flash_lock_end(saved);
 }
 
 void log_dump(log_sink_t cb, void* user) {

@@ -139,6 +139,20 @@ el terreno; H2 lo extendería a "una task FreeRTOS por thread BP" o
 (el código nativo no sabe ni le importa qué core lo ejecuta). Da
 ×1.5-2 con esfuerzo razonable.
 
+**Estado v1**:
+- ✅ **#156 / #179 — runtime SMP en host VM-C**: pool de N workers +
+  STW GC + output queue + comm task. Speedup ×1.97 medido en host.
+- ✅ **Cabling Pico** (#136, #180-#185): comm task FreeRTOS, ring buffer
+  compartido (comm_common.c), pinning por core, atomicidad de línea
+  per-tc, `bpvm_run_smp` opt-in (`-DBPVM_PICO_SMP_WORKERS`).
+- 🟡 **#153 — dual-core RP2350**: scaffolding COMPLETO y build-verificado
+  (config gated `-DBPVM_PICO_NUM_CORES=2`, flash XIP-safe centralizado en
+  flash_lock.c, lockout multicore, passive idle, pinning TX-exclusivo).
+  Default sigue single-core (firmware enviado byte-idéntico). **Falta
+  validación en placa** — riesgo conocido: conflicto FIFO IRQ entre el
+  lockout del SDK y el scheduler SMP (ver runbook en docs/SMP_ARCH.md
+  §#153). Es el único trozo de H2 que NO se puede cerrar sin hardware.
+
 ### H3 — AOT por módulo (compilación a Thumb-2 nativo)
 
 **Tasks**: #144 P-aot-hybrid.

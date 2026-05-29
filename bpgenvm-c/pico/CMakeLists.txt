@@ -120,6 +120,7 @@ add_executable(bpvm_pico
     json_min.c      # H1 fase A: parser JSON minimal (~200 líneas)
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
+    flash_lock.c    # H2 #153: ventana XIP-safe (single + dual-core)
     bench.c         # H3 #159: micro-bench AOT ceiling (fib_native vs BP)
     aot_funcs.c              # H3 #160: agregador del registro AOT
     aot_Bench.c              # H3 #157: AOT linkado (estado working confirmado)
@@ -155,10 +156,27 @@ target_link_libraries(bpvm_pico PRIVATE
     pico_unique_id       # Pico.uniqueId() — flash chip ID
     hardware_flash       # FP2 step 3: erase/program de la región del FS
     hardware_sync        # save_and_disable_interrupts/restore_interrupts
-    # NOTA: NO añadir pico_flash — rompió USB CDC en FP2-fail.
+    # NOTA: NO añadir pico_flash — rompió USB CDC en FP2-fail. Para el
+    # lockout dual-core (#153) usamos pico_multicore directamente (abajo),
+    # NO pico_flash.
     FreeRTOS-Kernel
     FreeRTOS-Kernel-Heap4
 )
+
+# H2 #153 — número de cores. Default 1 (firmware que se envía hoy).
+# Activar dual-core con:  cmake .. -DBPVM_PICO_NUM_CORES=2
+# Eso inyecta configNUMBER_OF_CORES=2 (FreeRTOSConfig.h lo lee) y enlaza
+# pico_multicore para el flash lockout. Ver docs/SMP_ARCH.md runbook.
+if (NOT DEFINED BPVM_PICO_NUM_CORES)
+    set(BPVM_PICO_NUM_CORES 1)
+endif()
+message(STATUS "BPVM_PICO_NUM_CORES = ${BPVM_PICO_NUM_CORES}")
+target_compile_definitions(bpvm_pico PRIVATE
+    BPVM_PICO_NUM_CORES=${BPVM_PICO_NUM_CORES}
+)
+if (BPVM_PICO_NUM_CORES GREATER 1)
+    target_link_libraries(bpvm_pico PRIVATE pico_multicore)
+endif()
 
 # stdio: usar USB CDC, deshabilitar UART (libera GP0/GP1)
 pico_enable_stdio_usb(bpvm_pico  1)

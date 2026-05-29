@@ -22,6 +22,8 @@
 
 #include "pico/time.h"   /* busy_wait_us — bpvm_platform_busy_wait_us */
 
+#include "flash_lock.h"  /* #153 — registro de core víctima de lockout */
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -167,10 +169,22 @@ typedef struct {
     SemaphoreHandle_t   exited;     /* binary, 0 hasta que entry retorne */
     bpvm_thread_entry_t entry;
     void*               arg;
+    int                 lockout_victim;  /* #153: registrar este core como
+                                          * víctima de flash lockout antes
+                                          * de correr entry (solo dual-core,
+                                          * core != 0). */
 } fr_thread_t;
 
 static void fr_thread_trampoline(void* pv) {
     fr_thread_t* t = (fr_thread_t*) pv;
+    /* #153 — Si este task corre en un core que NO escribe flash (core 1),
+     * lo registramos como víctima de lockout AHORA, ya en su core, antes
+     * de empezar a ejecutar el interp. Así, cuando el core 0 vaya a
+     * escribir flash (SAVE / log), puede parquearlo en RAM. No-op en
+     * single-core. Se ejecuta una vez, en el contexto del propio core. */
+    if (t->lockout_victim) {
+        bpvm_flash_lock_init_victim();
+    }
     t->entry(t->arg);
     /* Marcar como terminado para join. */
     if (t->exited) xSemaphoreGive(t->exited);
@@ -187,6 +201,7 @@ int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,
     if (!ft->exited) { vPortFree(ft); return -1; }
     ft->entry = entry;
     ft->arg = arg;
+    ft->lockout_victim = 0;     /* sin afinidad → no asumimos core víctima */
     BaseType_t r = xTaskCreate(fr_thread_trampoline, "bpvm-thread",
                                 1024,   /* words → 4 KB stack */
                                 ft, tskIDLE_PRIORITY + 1, &ft->task);
@@ -222,6 +237,10 @@ int bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* t,
     if (!ft->exited) { vPortFree(ft); return -1; }
     ft->entry = entry;
     ft->arg = arg;
+    /* Core 0 escribe flash (REPL/comm/SAVE) y sirve USB; cualquier core
+     * != 0 (worker) debe registrarse como víctima de lockout para que
+     * core 0 pueda parquearlo durante un erase/program. */
+    ft->lockout_victim = (core_id != 0);
     UBaseType_t mask = (UBaseType_t) 1U << core_id;
     BaseType_t r = xTaskCreateAffinitySet(fr_thread_trampoline,
                                            "bpvm-thr-pin",
