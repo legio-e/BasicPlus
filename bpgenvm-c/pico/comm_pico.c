@@ -37,6 +37,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef BPVM_PICO_SMP_TRACE
+#include "log.h"   /* migas a flash para depurar el cuelgue SMP (#153) */
+#endif
+
 #define OUTPUT_QUEUE_CAP_PICO 1024
 
 /* ---------- Comm task body ---------- */
@@ -49,20 +53,44 @@ static void comm_task_entry(void* arg) {
      * platform_freertos.c::xTaskCreate), gastar 128 bytes en stack
      * temporal es asumible. */
     char tmp[128];
+#ifdef BPVM_PICO_SMP_TRACE
+    int dbg = 0;
+    log_printf("comm: task entry, cb=%p", (void*) vm->output_cb);
+    log_flush();
+#endif
     for (;;) {
+#ifdef BPVM_PICO_SMP_TRACE
+        /* Flush SÓLO en los dos puntos "a punto de bloquear" (pop y cb),
+         * primeras 4 vueltas. El flush hace erase de flash (IRQs off
+         * ~unos ms) → no abusar para no perturbar el propio USB que
+         * medimos. Interpretación tras un cuelgue (leer con LOG):
+         *   último = "pop #k"    → bloqueado esperando al worker (no
+         *                          produce): deadlock scheduler/cola.
+         *   último = "pre-cb #k" → bloqueado ESCRIBIENDO a USB. */
+        if (dbg < 4) { log_printf("comm: pop #%d", dbg); log_flush(); }
+#endif
         size_t n = bpvm_oq_pop(q, tmp, sizeof(tmp));
         if (n == 0) {
             /* closed + drained — workers han terminado, salimos. */
+#ifdef BPVM_PICO_SMP_TRACE
+            log_printf("comm: closed, exit (popped #%d)", dbg); log_flush();
+#endif
             return;
         }
         if (vm->output_cb) {
             /* Path normal: v1_output_sink envuelve en wire v1 JSON
              * OUTPUT y hace fputs(stdout). Single thread → JSON entero. */
+#ifdef BPVM_PICO_SMP_TRACE
+            if (dbg < 4) { log_printf("comm: pre-cb #%d n=%u", dbg, (unsigned) n); log_flush(); }
+#endif
             vm->output_cb(tmp, n, vm->output_user);
         } else {
             fwrite(tmp, 1, n, stdout);
             fflush(stdout);
         }
+#ifdef BPVM_PICO_SMP_TRACE
+        dbg++;
+#endif
     }
 }
 

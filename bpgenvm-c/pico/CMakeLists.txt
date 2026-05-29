@@ -211,3 +211,11 @@ if (DEFINED BPVM_PICO_SMP_WORKERS)
         BPVM_PICO_SMP_WORKERS=${BPVM_PICO_SMP_WORKERS}
     )
 endif()
+
+# H2 #153 — trazas a flash del comm task para depurar el cuelgue SMP.
+# Migas que sobreviven a un reset; se leen con el comando LOG.
+# Activar:  cmake .. -DBPVM_PICO_SMP_TRACE=1
+if (DEFINED BPVM_PICO_SMP_TRACE)
+    message(STATUS "BPVM_PICO_SMP_TRACE = ${BPVM_PICO_SMP_TRACE}")
+    target_compile_definitions(bpvm_pico PRIVATE BPVM_PICO_SMP_TRACE=1)
+endif()
