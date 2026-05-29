@@ -164,25 +164,6 @@ struct bpvm_thread {
      * vm_lock (write-races aceptados como triviales para status, pero
      * no para "está siendo ejecutado actualmente"). */
     int  sched_owner;
-
-    /* H2 — Staging buffer per-tc para atomicidad de línea bajo SMP.
-     * Un `print x, y` BP llama varias veces a emit_text (uno por arg
-     * + separador + newline). Sin buffer, otro worker puede colar chars
-     * de su línea entre dos emit_text del nuestro — la línea sale
-     * entrelazada en stdout/CDC.
-     *
-     * Estrategia: emit_text bajo SMP escribe al buffer; lo flushea
-     * (oq_push completo, atómico) en cuanto ve '\n' o se llena. Al
-     * yield/terminar del quantum también se flushea (no acumular
-     * silenciosamente entre quantums). En modo legacy (vm->smp==NULL)
-     * el buffer no se toca — emit_text va directo a output_cb/stdout.
-     *
-     * Tamaño 128 bytes: cubre la línea típica (`print "x =", x`
-     * son ~10-20 chars); rebases mayores hacen overflow → flushea por
-     * tamaño Y sigue acumulando. Cost: 32 threads × 128 = 4 KiB extra
-     * por VM. */
-    char out_buf[128];
-    int  out_buf_used;
 };
 
 /* F5 — entry del handlerStack. */

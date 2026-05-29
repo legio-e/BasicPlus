@@ -43,7 +43,6 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     main_tc->blocked_on_mutex = -1;
     main_tc->blocked_on_join = -1;
     main_tc->sched_owner = -1;
-    main_tc->out_buf_used = 0;          /* H2 atomic-line buffer vacío */
     vm->thread_count = 1;
     vm->current_thread_idx = 0;
 

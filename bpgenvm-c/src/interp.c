@@ -27,61 +27,22 @@
 /* Helper: emite un texto al sink correcto.
  *
  * Orden de prioridad:
- *   1. Modo SMP — siempre encola en la output queue. El comm task drena
- *      y, EN HILO ÚNICO, invoca output_cb (o fwrite a stdout si no hay).
- *      Esto serializa: dos workers no entrelazan ni fwrite ni una
- *      llamada al callback (importante en Pico, donde output_cb hace
- *      wire-v1 wrapping con varios fputs por chunk — entrelazado
- *      rompería el JSON).
+ *   1. Modo SMP — encola en la output queue. El comm task drena y, EN
+ *      HILO ÚNICO, invoca output_cb (o fwrite a stdout si no hay). Esto
+ *      serializa: dos workers no entrelazan ni fwrite ni una llamada al
+ *      callback (importante en Pico, donde output_cb hace wire-v1
+ *      wrapping con varios fputs por chunk). oq_push es atómico por
+ *      llamada (toma el mutex de la queue), así que cada emit_text sale
+ *      contiguo. NOTA: la atomicidad de LÍNEA completa (bufferizar
+ *      per-tc hasta '\n') se intentó en #185 pero infló bpvm_t ~4 KB
+ *      (×32 threads) y reventó la RAM de la Pico → revertido. Si se
+ *      quiere, hacerlo per-worker en bpvm_smp_t (2×128 B), no per-thread.
  *   2. Modo legacy single-worker — si hay callback, va ahí; si no,
  *      fwrite directo. Sin overhead extra para el camino existente.
  */
-/* H2 — Flush del staging buffer del tc al output queue. Una única
- * llamada a bpvm_comm_output_enqueue ⇒ oq_push toma el mutex de la
- * queue una sola vez ⇒ TODO el contenido del buffer queda contiguo
- * en el ring buffer ⇒ el comm task lo emite contiguo al transport.
- * Esa es la atomicidad de línea que queremos. */
-static void emit_flush_tc(bpvm_t* vm, bpvm_thread_t* tc) {
-    if (tc->out_buf_used > 0) {
-        bpvm_comm_output_enqueue(vm, tc->out_buf, (size_t) tc->out_buf_used);
-        tc->out_buf_used = 0;
-    }
-}
-
-/* current_tc_for_output — devuelve el tc activo del worker que llama,
- * o NULL si no estamos en un contexto de tc identificado. En SMP es
- * vm->threads[vm->current_thread_idx] (current_thread_idx lo setea el
- * worker bajo vm_lock antes de entrar al interp; mientras corre el
- * interp lock-free no cambia). En legacy también vale el current_thread_idx
- * — pero ahí no usamos este path. */
-static bpvm_thread_t* current_tc_for_output(bpvm_t* vm) {
-    int idx = vm->current_thread_idx;
-    if (idx < 0 || idx >= vm->thread_count) return NULL;
-    return &vm->threads[idx];
-}
-
 static void emit_text(bpvm_t* vm, const char* s, size_t len) {
     if (vm->smp) {
-        /* Acumular en el buffer del tc actual hasta '\n' o lleno.
-         * Cada flush es UN solo oq_push → contiguo en el ring → comm
-         * task lo emite entero. Eso garantiza que un `print x, y, z`
-         * (varios emit_text) llegue a stdout/CDC como una línea, sin
-         * chars de otro worker entrelazados. */
-        bpvm_thread_t* tc = current_tc_for_output(vm);
-        if (!tc) {
-            /* Sin contexto de tc — encolar directo. */
-            bpvm_comm_output_enqueue(vm, s, len);
-            return;
-        }
-        size_t cap = sizeof(tc->out_buf);
-        for (size_t i = 0; i < len; i++) {
-            tc->out_buf[tc->out_buf_used++] = s[i];
-            int hit_nl   = (s[i] == '\n');
-            int buf_full = ((size_t) tc->out_buf_used == cap);
-            if (hit_nl || buf_full) {
-                emit_flush_tc(vm, tc);
-            }
-        }
+        bpvm_comm_output_enqueue(vm, s, len);
     } else if (vm->output_cb) {
         vm->output_cb(s, len, vm->output_user);
     } else {
@@ -1012,16 +973,6 @@ done:
     if (exit_status != BPVM_OK) {
         tc->status = BPVM_THREAD_TERMINATED;
         if (yielded) *yielded = 1;
-    }
-    /* H2 — Antes de soltar este tc al scheduler, flush del buffer de
-     * salida. Si lo dejamos colgado entre quantums, una BP que imprime
-     * sin newline final no aparece nunca en stdout/CDC hasta que se
-     * llene el buffer o reciba un newline en un siguiente quantum.
-     * Caso clásico: prompt `IO.write("> ")` esperando input — no
-     * acabamos de leer la línea sin esto. En legacy (vm->smp NULL) el
-     * buffer no se usa así que esto es no-op. */
-    if (vm->smp) {
-        emit_flush_tc(vm, tc);
     }
     return exit_status;
 }

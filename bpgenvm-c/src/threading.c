@@ -147,7 +147,6 @@ int bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref) {
     tc->thread_ref_heap = (int32_t) thread_ref;
     tc->last_debug_line = 0;   /* #139: trigger en la primera línea vista */
     tc->sched_owner = -1;      /* H2: tc libre para ser pickeado */
-    tc->out_buf_used = 0;      /* H2: atomic-line buffer vacío */
 
     /* Guarda el tid en field[0] del Thread BP (convención del frontend
      * Java: el constructor de Thread sintetizado deja field[0]=0 hasta
