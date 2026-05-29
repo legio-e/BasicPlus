@@ -455,9 +455,83 @@ pero el back-end real de debug-on-Pico es **#140** ([v2]).
 
 ---
 
+# Overlays / carga dinámica de módulos
+
+## 17. `loadModule` / `unloadModule` — overlays estilo MS-DOS
+
+**Idea (del usuario)**: como los overlays del MS-DOS (640 K): una parte
+del programa es **residente** y el resto se carga desde disco según se
+necesita, permitiendo apps más grandes que la memoria, al coste del
+tiempo de carga. En BP los **módulos ya parten la app en piezas**. En
+vez de `import` de todo al arranque, importar solo lo necesario y cargar
+el resto en runtime con dos comandos nuevos: **`loadModule`** y
+**`unloadModule`**.
+
+**Por qué encaja**: el sistema de módulos + el FS en flash ya están. Un
+módulo es una unidad de código auto-contenida con su tabla de imports.
+Cargar/descargar módulos en caliente es la evolución natural.
+
+**Análisis de coste — DOS mitades muy distintas**:
+
+- **`loadModule(name)` — relativamente fácil**: es hacer en runtime lo
+  que el loader del boot ya hace (loader.c + link.c): leer el `.mod` del
+  FS, colocarlo en la región de código, resolver sus imports contra los
+  módulos ya cargados (y los imports pendientes hacia él), registrarlo en
+  `vm->modules[]`. La maquinaria existe; falta hacerla incremental.
+
+- **`unloadModule(name)` — la parte peliaguda** (dos problemas):
+  1. **Recuperar la memoria**: el código del módulo ocupa una región del
+     `memory[]` (zona CS), hoy bump-allocada contigua. Descargar uno del
+     medio deja un hueco → o un asignador de la región de código (free
+     list / compactación), o un esquema de **slot de overlay fijo**.
+  2. **Seguridad de referencias**: si algo vivo referencia al módulo
+     descargado (función en la pila de llamadas, objeto cuya clase vive
+     en él, call pendiente), descargarlo corrompe. Hay que garantizar
+     que NO hay referencias vivas — o restringir el modelo (ver abajo),
+     o contar referencias y **rechazar el unload si está en uso**.
+
+**Dos modelos de diseño**:
+- **(A) Slot de overlay fijo (fiel a MS-DOS, RECOMENDADO para empezar)**:
+  un conjunto **residente** (módulos cargados al boot, nunca descargados:
+  core + el módulo con Main + lo hot) + una **región de overlay** de
+  tamaño fijo donde se carga UN módulo (o pocos) on-demand. `loadModule`
+  carga en el slot (evicta lo anterior); `unloadModule` libera el slot.
+  **Ventaja clave**: el overlay carga siempre en una **dirección fija** →
+  las referencias son estables, sin fixups de direcciones. Restricción:
+  un overlay no puede llamar a otro arbitrariamente (lo evictaría). Ideal
+  para "función rara que se usa de vez en cuando" (pantalla de config,
+  rutina de diagnóstico, asistente). Simple y seguro.
+- **(B) Carga/descarga general con asignador de región de código**: los
+  módulos cargan en cualquier sitio, el unload libera con free-list o
+  compactación (+ fixup de direcciones si se compacta). Mucho más
+  flexible pero mucho más complejo (GC de la región de código + tracking
+  de referencias + relocación). Solo si (A) se queda corto.
+
+**Interacciones a tener presentes**:
+- **Linking por direcciones**: hoy OP_CALL_EXT resuelve imports a
+  direcciones absolutas al cargar. Si un módulo recarga en otra dirección,
+  las referencias rompen → el slot fijo del modelo (A) lo evita; el
+  modelo (B) necesitaría una tabla de indirección (thunks) re-parcheada.
+- **AOT (.mdn)**: el código native cachea CS de módulos (find_module_cs)
+  y baka direcciones. Descargar un módulo cuya CS quedó cacheada →
+  stale. Overlays + AOT deben invalidar esas cachés en el unload (o
+  prohibir AOT en módulos overlay en v1).
+- **⚠️ Relación con #10 (PSRAM)**: si la placa tiene 8 MB de PSRAM, el
+  problema "app más grande que la memoria" **casi desaparece** — cargas
+  todo y ya. O sea: **los overlays son la respuesta para placas de poca
+  memoria SIN PSRAM**; PSRAM es la respuesta para las que pueden
+  llevarla. Ambas válidas, para targets distintos. Priorizar overlays
+  según cuánto pesen las placas sin PSRAM en el roadmap.
+
+**Coste**: load = bajo-medio; unload modelo (A) = medio; modelo (B) =
+alto. Recomendación: empezar por (A) (slot fijo) si se aborda.
+
+---
+
 > **Cierre de la ronda de ideas V2** (2026-05-29). El backlog cubre:
 > tipos (long/double/byte/tuplas/strings UTF-8), OO (interfaces, no-MI),
 > compilador (anti-cascada), VM/memoria (mínimo, GC-reuse, PSRAM),
-> multi-MCU (una imagen por familia), host-simulador, IDE (RSTA+FlatLaf+
-> recientes), stdlib (TCP/CAN/JSON + native) y debugger. Pendiente cuando
-> arranque v2: pasada de priorización y convertir puntos en tareas.
+> overlays/carga dinámica de módulos, multi-MCU (una imagen por familia),
+> host-simulador, IDE (RSTA+FlatLaf+recientes), stdlib (TCP/CAN/JSON +
+> native) y debugger. Pendiente cuando arranque v2: pasada de
+> priorización y convertir puntos en tareas.
