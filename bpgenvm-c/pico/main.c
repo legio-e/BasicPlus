@@ -773,6 +773,14 @@ static void vm_task(void* arg) {
      * fib(28) en BP. Si el ratio C:BP < 2× → aparcamos AOT. */
     bench_run_native();
 
+#ifdef BPVM_PICO_BOOT_LED
+    /* #153 bring-up: llegamos al REPL → boot OK. Apaga el LED que
+     * main() encendió antes del scheduler. Si tras flashear el LED
+     * queda ENCENDIDO fijo → el boot se colgó ANTES de aquí (arranque
+     * del scheduler / core 1 / vm_task). Si queda APAGADO → boot llegó
+     * al REPL y un "no conecta" es problema de USB/conexión, no de boot. */
+    led_set(0);
+#endif
     repl_run();
     (void) run_vm_once;  /* silenciar unused warning */
 }
@@ -881,6 +889,13 @@ int main(void) {
         for (;;) {}
     }
 
+#ifdef BPVM_PICO_BOOT_LED
+    /* #153 bring-up: LED ON justo antes de arrancar el scheduler (que en
+     * dual-core lanza el core 1). vm_task lo apaga al llegar al REPL.
+     * LED fijo encendido tras flashear = boot colgado entre aquí y el
+     * REPL (scheduler/core1). LED apagado = boot OK. */
+    led_set(1);
+#endif
     vTaskStartScheduler();
     for (;;) {}
     return 0;

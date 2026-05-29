@@ -219,3 +219,11 @@ if (DEFINED BPVM_PICO_SMP_TRACE)
     message(STATUS "BPVM_PICO_SMP_TRACE = ${BPVM_PICO_SMP_TRACE}")
     target_compile_definitions(bpvm_pico PRIVATE BPVM_PICO_SMP_TRACE=1)
 endif()
+
+# H2 #153 — indicador LED de boot para diagnosticar cuelgues de arranque
+# (sobre todo dual-core, cuando el USB ni enumera). LED ON antes del
+# scheduler, OFF al llegar al REPL. Activar: cmake .. -DBPVM_PICO_BOOT_LED=1
+if (DEFINED BPVM_PICO_BOOT_LED)
+    message(STATUS "BPVM_PICO_BOOT_LED = ${BPVM_PICO_BOOT_LED}")
+    target_compile_definitions(bpvm_pico PRIVATE BPVM_PICO_BOOT_LED=1)
+endif()

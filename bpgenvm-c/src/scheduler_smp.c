@@ -247,18 +247,20 @@ int bpvm_scheduler_run_smp(bpvm_t* vm) {
     if (!vm || !vm->smp) return -1;
     bpvm_smp_t* smp = vm->smp;
 
-    /* Spawnea N workers. Pinning intent: worker i → core (i % 2).
-     * Con 2 cores (#153), worker 0 va a core 0 (junto al comm, low
-     * contention con I/O) y worker 1 a core 1 (cómputo aislado).
-     * Con 1 core (hoy en Pico), todos al mismo — la afinidad se
-     * ignora silenciosamente. Hoy en host (pthread) el pinning es
-     * no-op — el scheduler del OS decide. */
+    /* Spawnea N workers. Modelo ASIMÉTRICO (#153): core 0 reservado a
+     * I/O (USB CDC + REPL + comm task), los workers de la VM van a
+     * core 1+. Así el cómputo del intérprete NUNCA compite con el USB
+     * ni con el draining de salida — "TX-exclusivo": un solo core habla
+     * con el periférico. Con NUM_CORES=2 y 1 worker: VM en core 1, I/O
+     * en core 0 — VM-cómputo concurrente con I/O sin paralelismo entre
+     * threads BP (que se turnan cooperativamente en ese único worker).
+     * Con 1 core (o en host pthread) el pin se ignora — no-op. */
     for (int i = 0; i < smp->n_workers; i++) {
         worker_arg_t* arg = (worker_arg_t*) malloc(sizeof(*arg));
         if (!arg) return -1;
         arg->vm = vm;
         arg->worker_id = i;
-        int core_id = i % 2;     /* round-robin sobre 2 cores RP2350 */
+        int core_id = 1;         /* core 1 = "core de la VM"; core 0 = I/O */
         if (bpvm_platform_thread_create_pinned(&smp->worker_threads[i],
                                                 worker_loop, arg,
                                                 core_id) != 0) {
