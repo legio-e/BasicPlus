@@ -68,8 +68,18 @@ public final class AotMain {
                 System.exit(1);
             }
 
+            // 2.5 Análisis semántico (#173): el emisor necesita
+            //     info.exprTypes para saber el tipo de cada expresión y
+            //     distinguir ops de string (concat `+`, `==`) de las
+            //     numéricas. No abortamos por errores semánticos — AotMain
+            //     solo emite; los exprTypes de las expresiones locales del
+            //     cuerpo native se rellenan igualmente.
+            SemanticAnalyzer analyzer = new SemanticAnalyzer();
+            SemanticInfo info = analyzer.analyze(module);
+
             // 3. Emit AOT
             AotCEmitter emitter = new AotCEmitter(module.name);
+            emitter.setSemanticInfo(info);
             emitter.setOmitRegisterFunc(mdnMode);
             String csrc;
             try {

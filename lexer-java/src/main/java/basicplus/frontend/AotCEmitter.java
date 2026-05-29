@@ -34,6 +34,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import basicplus.frontend.BpType.*;   // #173 — PrimitiveType (anidado en BpType)
+
 public final class AotCEmitter {
 
     /** Excepción específica para señalar que una construcción no se
@@ -98,6 +100,74 @@ public final class AotCEmitter {
 
     public AotCEmitter(String moduleName) {
         this.moduleName = moduleName;
+    }
+
+    /** #173 — info semántica para conocer el tipo de cada expresión
+     *  (info.exprTypes). Necesaria para distinguir ops de string de las
+     *  numéricas: `a + b` es concat si algún operando es string, y
+     *  `==`/`!=` de strings comparan contenido (no la ref). Si es null
+     *  (emisión sin análisis), las ops string-ambiguas caen al
+     *  comportamiento numérico — por eso AotMain / Main lo inyectan
+     *  siempre que pueden. Los builtins de string (charAt, substring...)
+     *  y los literales NO dependen de esto (se detectan por nombre/nodo). */
+    private SemanticInfo semInfo = null;
+    public void setSemanticInfo(SemanticInfo info) { this.semInfo = info; }
+
+    /** #173 — ¿el tipo resuelto de `e` es string? false si no hay info. */
+    private boolean isStringExpr(Ast.IExpr e) {
+        if (semInfo == null) return false;
+        BpType t = semInfo.exprTypes.get(e);
+        return (t instanceof PrimitiveType)
+            && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING;
+    }
+
+    /** #173 — ¿el tipo resuelto de `e` es integer? */
+    private boolean isIntExpr(Ast.IExpr e) {
+        if (semInfo == null) return false;
+        BpType t = semInfo.exprTypes.get(e);
+        return (t instanceof PrimitiveType)
+            && ((PrimitiveType) t).tag == PrimitiveType.Kind.INTEGER;
+    }
+
+    /** #173 — emite un operando de concat como string-handle. Si ya es
+     *  string, tal cual; si es integer, lo convierte con int_to_string
+     *  (cubre el patrón típico `"x = " + n`). Otros tipos mixtos
+     *  (float/bool) aún sin soporte → UnsupportedAotException. */
+    private void emitStringOperand(Ast.IExpr e) {
+        if (isStringExpr(e)) {
+            emitExpr(e);
+            return;
+        }
+        if (isIntExpr(e)) {
+            w.print("vm->aot_helpers->int_to_string(vm, ");
+            emitExpr(e);
+            w.print(")");
+            return;
+        }
+        throw new UnsupportedAotException(
+            "AOT: concat de string solo soporta string/integer por ahora "
+            + "(float/bool → pendiente). line " + ((Ast.Node) e).line);
+    }
+
+    /** #173 — escapa los BYTES UTF-8 de un literal para un string C.
+     *  Trabajamos sobre bytes (no chars) para que el length que pasamos
+     *  a string_from_cstr cuadre exactamente con lo escapado. */
+    private static String cEscapeBytes(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            int c = b & 0xff;
+            switch (c) {
+                case '"':  sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n");  break;
+                case '\r': sb.append("\\r");  break;
+                case '\t': sb.append("\\t");  break;
+                default:
+                    if (c < 0x20 || c > 0x7e) sb.append(String.format("\\x%02x", c));
+                    else sb.append((char) c);
+            }
+        }
+        return sb.toString();
     }
 
     /** Activa modo "para .mdn": code section 100% PIC, sin
@@ -646,6 +716,16 @@ public final class AotCEmitter {
             w.print(((Ast.BoolLitExpr) e).value ? "1" : "0");
             return;
         }
+        if (e instanceof Ast.StringLitExpr) {
+            /* #173 — literal string: aloca un string heap en runtime con
+             * los bytes UTF-8 del literal. Devuelve el handle (i32). */
+            String v = ((Ast.StringLitExpr) e).value;
+            byte[] bytes = v.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            w.print("vm->aot_helpers->string_from_cstr(vm, \"");
+            w.print(cEscapeBytes(bytes));
+            w.print("\", " + bytes.length + ")");
+            return;
+        }
         if (e instanceof Ast.IdentifierExpr) {
             String name = ((Ast.IdentifierExpr) e).name;
             if (localNames.contains(name)) {
@@ -678,6 +758,32 @@ public final class AotCEmitter {
         }
         if (e instanceof Ast.BinaryExpr) {
             Ast.BinaryExpr b = (Ast.BinaryExpr) e;
+            boolean stringOp = isStringExpr(b.left) || isStringExpr(b.right);
+            /* #173 — concat: `a + b` con algún operando string → helper.
+             * Operando no-string se coacciona (integer → int_to_string;
+             * otros tipos mixtos quedan sin soporte por ahora). */
+            if (stringOp && "+".equals(b.op)) {
+                w.print("vm->aot_helpers->string_concat(vm, ");
+                emitStringOperand(b.left);
+                w.print(", ");
+                emitStringOperand(b.right);
+                w.print(")");
+                return;
+            }
+            /* #173 — igualdad de strings: compara CONTENIDO, no la ref.
+             * `==` → string_eq; `!=` → !string_eq. */
+            if (stringOp && ("==".equals(b.op) || "!=".equals(b.op))) {
+                boolean neg = "!=".equals(b.op);
+                if (neg) w.print("(!");
+                w.print("vm->aot_helpers->string_eq(vm, ");
+                emitExpr(b.left);
+                w.print(", ");
+                emitExpr(b.right);
+                w.print(")");
+                if (neg) w.print(")");
+                return;
+            }
+            /* Numérico/lógico normal. */
             w.print("(");
             emitExpr(b.left);
             w.print(" " + cBinaryOp(b.op) + " ");
@@ -796,8 +902,43 @@ public final class AotCEmitter {
                 }
                 w.print("vm->aot_helpers->now_ms(vm)");
                 return true;
+            /* #173 — builtins de string (funciones libres en BP). */
+            case "charAt":
+                requireArgc(name, args, 2);
+                w.print("vm->aot_helpers->string_char_at(vm, ");
+                emitExpr(args.get(0)); w.print(", "); emitExpr(args.get(1));
+                w.print(")");
+                return true;
+            case "charCodeAt":
+                requireArgc(name, args, 2);
+                w.print("vm->aot_helpers->string_char_code_at(vm, ");
+                emitExpr(args.get(0)); w.print(", "); emitExpr(args.get(1));
+                w.print(")");
+                return true;
+            case "substring":
+                requireArgc(name, args, 3);
+                w.print("vm->aot_helpers->string_substring(vm, ");
+                emitExpr(args.get(0)); w.print(", "); emitExpr(args.get(1));
+                w.print(", "); emitExpr(args.get(2));
+                w.print(")");
+                return true;
+            case "intToString":
+                requireArgc(name, args, 1);
+                w.print("vm->aot_helpers->int_to_string(vm, ");
+                emitExpr(args.get(0));
+                w.print(")");
+                return true;
             default:
                 return false;
+        }
+    }
+
+    /** #173 — valida nº de args de un builtin; lanza si no cuadra. */
+    private void requireArgc(String name, List<Ast.IExpr> args, int n) {
+        if (args.size() != n) {
+            throw new UnsupportedAotException(
+                "AOT: builtin '" + name + "' espera " + n + " args, recibió "
+                + args.size());
         }
     }
 
@@ -878,9 +1019,16 @@ public final class AotCEmitter {
         for (int i = 0; i < indentLevel; i++) w.print("    ");
     }
 
-    /** Para test unitario o uso desde IDE. */
+    /** Para test unitario o uso desde IDE. Corre análisis semántico
+     *  best-effort para que las ops de string (#173) se resuelvan. */
     public static String emit(Ast.ModuleNode module) {
         AotCEmitter e = new AotCEmitter(module.name);
+        try {
+            SemanticAnalyzer analyzer = new SemanticAnalyzer();
+            e.setSemanticInfo(analyzer.analyze(module));
+        } catch (RuntimeException ignore) {
+            /* sin info → las ops string-ambiguas caen a numérico */
+        }
         return e.emitModule(module);
     }
 

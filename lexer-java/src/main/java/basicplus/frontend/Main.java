@@ -366,7 +366,7 @@ public final class Main {
             //      el error debe saltar AQUÍ — en el compile normal, no
             //      sólo al lanzar el AOT pipeline (build_mdn.sh / AotMain).
             //      Es un error duro: aborta la compilación.
-            String aotMsg = validateNativeFunctionsAreAotable(module);
+            String aotMsg = validateNativeFunctionsAreAotable(module, info);
             if (aotMsg != null) {
                 indent(depth);
                 System.err.println("error AOT en función native:");
@@ -486,7 +486,7 @@ public final class Main {
      * descubre tarde, sin contexto. Validar aquí da el error en la fase
      * que el usuario asocia con "el compilador" y con la línea concreta.
      */
-    private static String validateNativeFunctionsAreAotable(Ast.ModuleNode module) {
+    private static String validateNativeFunctionsAreAotable(Ast.ModuleNode module, SemanticInfo info) {
         // Ningún native → no hay nada que validar.
         boolean hasNative = false;
         if (module.defs != null) {
@@ -501,6 +501,9 @@ public final class Main {
 
         try {
             AotCEmitter emitter = new AotCEmitter(module.name);
+            // #173 — info semántica para que el validador conozca tipos
+            // y acepte ops de string (concat/==) sin falsos negativos.
+            emitter.setSemanticInfo(info);
             // Modo .mdn-friendly: omitimos la función register para no
             // disparar errores espúreos sobre relocs a símbolos del
             // runtime que la validación no necesita verificar.

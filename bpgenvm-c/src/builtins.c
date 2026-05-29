@@ -31,6 +31,7 @@ enum {
     BUILTIN_PARSE_INT       = 1,
     BUILTIN_INT_TO_STRING   = 3,
     BUILTIN_BOOL_TO_STRING  = 5,
+    BUILTIN_SUBSTRING       = 9,   /* #173: substring(s, start, end) */
     BUILTIN_CHAR_AT         = 14,
     BUILTIN_NOW             = 34,
     BUILTIN_SLEEP           = 35,
@@ -198,6 +199,31 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (out) {
             bpvm_write_u32_be(vm->memory + out, 1u);
             bpvm_write_u32_be(vm->memory + out + 4, cp);
+        }
+        push_i32(vm, tc, (int32_t) out);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_SUBSTRING: {
+        /* substring(s, start, end): string — copia [start, end) con
+         * clamp estilo BP. Idéntico a aot_helpers h_string_substring
+         * para que intérprete y AOT den el mismo resultado (#173). */
+        int32_t end   = pop_i32(vm, tc);
+        int32_t start = pop_i32(vm, tc);
+        uint32_t ref  = (uint32_t) pop_i32(vm, tc);
+        uint32_t len  = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
+        if (start < 0) start = 0;
+        if (end   < 0) end = 0;
+        if ((uint32_t) end > len) end = (int32_t) len;
+        if (start > end) start = end;
+        uint32_t n = (uint32_t)(end - start);
+        uint32_t out = bpvm_heap_alloc(vm, n * 4u, BPVM_TYPE_ARRAY_I32);
+        if (out) {
+            bpvm_write_u32_be(vm->memory + out, n);
+            for (uint32_t i = 0; i < n; i++) {
+                bpvm_write_u32_be(vm->memory + out + 4 + i * 4,
+                    bpvm_read_u32_be(vm->memory + ref + 4 + ((uint32_t) start + i) * 4));
+            }
         }
         push_i32(vm, tc, (int32_t) out);
         return BPVM_OK;

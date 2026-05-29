@@ -1,0 +1,56 @@
+// strops.bp — test de #173: operaciones de string en código native.
+//
+// Funciones `native` que ejercitan cada op de string del emitter AOT:
+//   - literal de string + concat (`+`)
+//   - igualdad de contenido (`==`)
+//   - charAt / charCodeAt / substring (builtins libres)
+//   - concat con coerción int → string ("n=" + n via int_to_string)
+//
+// La BP-Main (interpretada) las llama e imprime. Con AOT registrado el
+// output debe ser IDÉNTICO al del intérprete.
+module StrOps
+
+    // literal + concat (anidado): "Hello, " + name + "!"
+    native function greet(name: string): string
+        return "Hello, " + name + "!"
+    end greet
+
+    // igualdad de CONTENIDO de strings → 1/0
+    native function same(a: string, b: string): integer
+        if a == b then
+            return 1
+        endif
+        return 0
+    end same
+
+    // charAt → string de 1 char
+    native function first(s: string): string
+        return charAt(s, 0)
+    end first
+
+    // charCodeAt → codepoint int
+    native function code0(s: string): integer
+        return charCodeAt(s, 0)
+    end code0
+
+    // substring(s, 0, 3)
+    native function head3(s: string): string
+        return substring(s, 0, 3)
+    end head3
+
+    // concat con coerción integer → string: "n=" + n
+    native function label(n: integer): string
+        return "n=" + n
+    end label
+
+    function Main()
+        print greet("BP")
+        print same("abc", "abc")
+        print same("abc", "xyz")
+        print first("hello")
+        print code0("hello")
+        print head3("abcdef")
+        print label(42)
+    end Main
+
+end StrOps
