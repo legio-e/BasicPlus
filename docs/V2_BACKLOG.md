@@ -132,3 +132,97 @@ toca VM + frontend + builtins + AOT + posiblemente el .mod)**:
 4. **Tuplas** (#2) — prototipo primero, scope según resultado.
 
 (El orden no es rígido; #1 y #2 son independientes de #3/#4.)
+
+---
+
+# Lenguaje / OO / compilador
+
+**Principio rector** (del usuario): NO meter muchos cambios en el
+lenguaje — solo añadir algo cuando se eche en falta de verdad.
+Minimalismo: cada feature nueva tiene que ganarse su sitio.
+
+## 5. Interfaces a nivel de clase (programación por contrato)
+
+**Qué**: interfaces Java-style sobre clases — `interface Drawable` con
+firmas de método (sin cuerpo); `class Circle implements Drawable,
+Comparable`. Una variable puede tiparse como la interfaz y despachar al
+método de la clase concreta.
+
+**Por qué**: el usuario las usa en Java y le gusta la programación por
+contrato. Dan polimorfismo limpio y múltiples supertipos sin herencia
+múltiple (ver #6).
+
+**Estado actual — OJO, no confundir**: BP YA tiene "contracts" pero a
+nivel de **MÓDULO** (`ModuleNode.isInterface` + `implementsName`, modo
+de compilación `--interface`, `setImplementsContract` — estilo Modula-2
+DEFINITION MODULE). Eso NO es lo mismo: lo de v2 son interfaces de
+**CLASE**. Se puede reusar parte de la maquinaria conceptual, pero es
+una feature distinta.
+
+**Implicaciones / coste (bajo-medio)**:
+- VM: el runtime YA tiene vtable dispatch (L2 v3). El único reto real es
+  el **itable** (interface method table): mapear "método k de la
+  interfaz I" al slot de vtable de la clase concreta que la implementa.
+  Con single inheritance + interfaces NO hay problema del diamante.
+  Opciones: itables por interfaz, o un esquema unificado nombre→slot.
+- Frontend: parse `interface`; semántico (implements-checking: la clase
+  provee todas las firmas con tipos compatibles; la interfaz es usable
+  como tipo en firmas, variables, params); `.bpi` exporta las firmas de
+  interfaz (encaja con las class-entries de L2.1).
+- **Sub-opción** (DbC de verdad, estilo Eiffel: pre/postcondiciones +
+  invariantes): es OTRA capa, independiente de las interfaces (asserts
+  inyectados en entry/exit de método). Anotado por si se echa en falta;
+  no es prerequisito de las interfaces.
+
+## 6. Herencia múltiple — recomendación: NO; cubrir con interfaces (#5)
+
+**Qué pregunta el usuario**: ¿permitimos herencia múltiple de clases?
+¿cómo de complejo es a nivel de VM?
+
+**Respuesta de diseño**: MI real de clases es **caro y propenso a
+errores** a nivel de VM — problema del diamante, múltiples vtables,
+ajuste del puntero `this` (thunks), conflictos de layout de campos
+(C++ lo resuelve con vptr por base + ajuste de this). Mucha complejidad
+en VM **y** frontend.
+
+**Recomendación**: NO hacer MI de clases. Adoptar el modelo Java/C#:
+**single inheritance de clases + múltiples interfaces** (#5). Eso da el
+~90% del valor (múltiples supertipos, polimorfismo) SIN el diamante de
+campos. Como el usuario ya quiere interfaces, esto cubre la necesidad.
+
+Si en el futuro se echa en falta **reutilizar implementación** desde
+varios sitios (no solo firmas): "default methods" en interfaces (estilo
+Java 8) o mixins/traits — ambos mucho menos invasivos que MI de campos.
+Anotar como escalón posterior, solo si hace falta.
+
+## 7. Compilador: recuperación de errores (anti-cascada)
+
+**Qué**: que un error no genere una cascada de errores espurios — el
+problema de usabilidad #1 del compilador hoy.
+
+**Por qué**: fricción diaria. Un fallo arriba debería dar 1 error claro,
+no 20 derivados que tapan el real.
+
+**Estado actual**: la infraestructura está EMPEZADA pero no aplicada a
+fondo:
+- Parser: ya hay `synchronize()` + `synchronizeToFunctionEnd()`
+  (#115/#116) — panic-mode básico.
+- Semántico: ya existe `ErrorType` (en BpType + SemanticAnalyzer).
+
+**Las dos fuentes de cascada y su fix**:
+- **(a) Parser** — tras un error de sintaxis se desincroniza y emite
+  espurios. Reforzar: sync robusto a fronteras de statement/bloque/
+  declaración, error productions, y no re-reportar dentro de una zona ya
+  marcada como rota.
+- **(b) Semántico** — tras un símbolo no definido o tipo incompatible,
+  los usos posteriores generan MÁS errores. Fix clásico: **poisoning**
+  — a la expresión fallida se le asigna `ErrorType`, que es compatible
+  con todo → corta la propagación. El tipo ya existe; falta aplicarlo
+  **consistentemente en TODOS los caminos** (lookup de símbolo fallido,
+  tipo incompatible, método/propiedad inexistente, arg count, ...).
+- **(c) Dedup / cap** — el mismo error en la misma línea una sola vez;
+  límite de N errores por compilación con "... y M más".
+
+**Coste**: medio, pero **ALTO valor de usabilidad**. Ortogonal al
+sistema de tipos (no depende de #1-#6). Buen candidato a hacer pronto en
+v2 porque mejora el día a día de escribir BP.
