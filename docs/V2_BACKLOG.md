@@ -321,3 +321,68 @@ la VM.
 default cuando haya PSRAM; escalón 2 solo guiado por profiling. Y como
 8 MB de heap hace casi irrelevante el GC-reuse, esto desactiva en gran
 parte la presión de #8 para placas con PSRAM.
+
+---
+
+# Host VM (PC) + IDE
+
+## 11. VM de host como SIMULADOR de MCU (perfiles de memoria/flash)
+
+**Idea (del usuario)**: la VM en el PC ha ido muy bien para depurar
+rápido — la mantenemos y ampliamos. Que con un **fichero de config (o
+por parámetros)** se puedan fijar distintas configuraciones de memoria,
+flash, etc. para **simular arquitecturas de micros reales** en el PC.
+
+**Por qué es ALTO valor** (lección directa de esta sesión): el OOM de
+#185 (el `out_buf` que infló `bpvm_t` y reventó la RAM) **solo se
+manifestó en la Pico** — en el host, con RAM de sobra, pasó
+desapercibido y nos costó una odisea de hardware. Si el host tuviera un
+**perfil "RP2350"** (buffer 128 KB, heap ~64 KB), ese OOM habría saltado
+en el PC en segundos. Convierte el host en un **pre-flight check**: cazas
+los bugs de memoria ANTES de flashear.
+
+**Cómo** (bajo coste — la VM ya recibe el buffer del caller y ya hay
+`--mem=N` + BpVM.cfg):
+- **Perfiles de placa** en config: tamaño de RAM, split heap/stack,
+  tamaño de flash (región FS), ¿PSRAM?, y nº de pines / instancias de
+  periférico. Cada perfil imita un chip real.
+- Validación de periféricos en host igual que en chip: `Gpio.Pin(99)`
+  debe fallar en el PC si el perfil tiene menos pines → cazas errores de
+  HW sin la placa.
+- **Sinergia con #9**: el perfil simulado = el **mismo descriptor de
+  chip** que el firmware lee en runtime. Un solo esquema, dos usos
+  (simular en host / descubrir en placa). Diseñarlos juntos.
+
+## 12. IDE: usabilidad y aspecto (hoy funciona pero está "hecho un desastre")
+
+**Idea (del usuario)**: el IDE funciona pero hay que hacerlo más
+amigable. Recordar ficheros/proyectos cargados, mejorar el aspecto, y
+—muy útil— poder **plegar funciones y clases** (code folding como VS
+Code) para estudiar el código que interesa e ignorar el resto.
+
+**Estado actual**: editor = `JTextPane` con resaltado propio
+(`BpSyntaxHighlighter`); LAF por defecto (Nimbus); ya recuerda la última
+carpeta del file chooser (#119) pero no una lista de recientes.
+
+**Sub-puntos, con recomendación técnica**:
+- **Recientes (ficheros + proyectos)**: lista MRU persistida en la
+  config del IDE. Extensión natural del #119 (que ya guarda la última
+  carpeta). Coste bajo.
+- **Code folding (plegar funciones/clases)** — el punto pivotal:
+  `JTextPane` NO soporta folding nativo; hacerlo a mano es mucho trabajo
+  y frágil. **Recomendación: migrar el editor a `RSyntaxTextArea`
+  (RSTA)**, el editor de código estándar de Swing. De un golpe trae
+  **folding + resaltado + números de línea + bracket matching +
+  find/replace**. El `BpSyntaxHighlighter` actual se reemplaza por un
+  `TokenMaker` de BP para RSTA. Esfuerzo medio (swap de componente +
+  token maker), pero es **la jugada de mayor leverage** del IDE: una
+  dependencia y caen folding y modernización del editor juntos.
+- **Aspecto / look & feel**: adoptar **FlatLaf** (LAF flat moderno con
+  temas claro/oscuro). Una dependencia + una línea para instalarlo →
+  modernización instantánea. Combina bien con RSTA.
+- Otros candidatos baratos cuando se toque: layout más limpio, iconos,
+  recordar tamaño/posición de ventana y disposición de paneles.
+
+**Coste global**: medio. Alto retorno en comodidad diaria. Ortogonal a
+VM/lenguaje. RSTA + FlatLaf son las dos decisiones que más cambian la
+experiencia con menos código propio.
