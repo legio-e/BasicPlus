@@ -485,17 +485,31 @@ TinyUSB entre cores. El pinning lo expresa
    diseño**: el comm task pinned a core 0 es el único que toca CDC;
    core 1 nunca.
 
-3. **⚠️ FIFO IRQ: lockout del SDK vs scheduler SMP** — EL RIESGO #1 DE
-   BRING-UP. `multicore_lockout_victim_init()` instala un handler en
-   `SIO_IRQ_FIFO`, que el port FreeRTOS-SMP TAMBIÉN usa para señalizar
-   entre cores. Si chocan, el lockout o el scheduler se cuelga al
-   primer SAVE. Es el mismo tipo de conflicto que tumbó USB al meter
-   `pico_flash` en FP2 (por eso seguimos SIN `pico_flash`, usando
-   `pico_multicore` directo). **NO resuelto — necesita placa.**
-   Plan B si choca: barrera a nivel FreeRTOS en vez del lockout del
-   SDK — suspender el worker (`vTaskSuspend`) y girar el idle de core 1
-   en una rutina RAM-resident con IRQs off durante el flash. Más
-   invasivo pero no toca el FIFO.
+3. **FIFO IRQ: lockout del SDK vs scheduler SMP** — analizado en
+   código (2026-05-29), riesgo REVISADO A LA BAJA. La hipótesis inicial
+   (mismo conflicto que tumbó `pico_flash` en FP2) era el modelo RP2040,
+   donde FreeRTOS y el lockout compartían el FIFO. En el RP2350 son
+   mecanismos HW DISJUNTOS:
+     * El port FreeRTOS-SMP RP2350_ARM_NTZ señaliza entre cores con los
+       **multicore doorbells** (`multicore_doorbell_*` en port.c) — NO
+       toca el SIO FIFO IRQ.
+     * `multicore_lockout_victim_init()` reclama el **SIO FIFO IRQ**
+       (`SIO_FIFO_IRQ_NUM` + `irq_set_exclusive_handler`).
+   Verificado además que NADIE más reclama el FIFO IRQ (ni el port ni
+   nuestro main.c — los únicos hits "FIFO" son el FIFO HW del UART).
+   Por tanto `irq_set_exclusive_handler` no debería panic-ar y los dos
+   mecanismos coexisten. Durante la ventana de flash (pocos ms) el
+   core 1 gira en el handler de lockout — el tick/doorbell de FreeRTOS
+   en core 1 se starva brevemente, aceptable (es de facto una sección
+   crítica). **Sigue necesitando confirmación en placa**, pero ya no
+   es "probable brick" — es "correctness SMP estándar a verificar".
+   Plan B si aun así falla: barrera FreeRTOS (suspender worker + girar
+   idle de core 1 en RAM con IRQs off) en vez del lockout del SDK.
+
+   Nota de recuperación: un "brick" en Pico NO es permanente —
+   BOOTSEL + arrastrar un .uf2 bueno siempre recupera. El peor caso de
+   cualquier escalón fallido = mantener BOOTSEL y reflashear el
+   single-core. Por eso se puede iterar sin miedo.
 
 ### Runbook de validación (en placa, por escalones)
 
