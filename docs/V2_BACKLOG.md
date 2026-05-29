@@ -226,3 +226,98 @@ fondo:
 **Coste**: medio, pero **ALTO valor de usabilidad**. Ortogonal al
 sistema de tipos (no depende de #1-#6). Buen candidato a hacer pronto en
 v2 porque mejora el día a día de escribir BP.
+
+---
+
+# VM / memoria / multi-MCU
+
+**Principios rectores** (del usuario):
+- **VM: tocar lo MÍNIMO.** Funciona muy bien y costó mucho. Cambios solo
+  si no queda otra; nada drástico salvo necesidad real.
+- **El compilador hace, la VM se ahorra.** Todo lo que se pueda resolver
+  en tiempo de compilación NO debe gastar ciclos/memoria en runtime. Es
+  la misma filosofía del AOT ("bytecode = pata negra, nativo = caché
+  derivada") llevada al resto: offsets, símbolos, constantes, checks.
+
+## 8. Ahorro de memoria (sin rediseños drásticos)
+
+Palancas, de menos a más invasivas:
+- **Strings UTF-8** (ver #4): hoy 4 bytes/char (codepoints); UTF-8 da
+  ~4× en ASCII. Es el mayor ahorro "fácil" de datos. (Ya anotado en #4.)
+- **Compile-time en vez de runtime** (#7-filosofía aplicada a memoria):
+  - Folding de constantes, dead-code elimination → menos bytecode.
+  - Offsets/símbolos resueltos en compilación (ya se hace para module
+    globals #172) → menos tablas en runtime.
+  - Bounds-check elimination cuando el índice es probadamente válido;
+    devirtualización cuando el tipo concreto se conoce → menos trabajo VM.
+- **Buffers estáticos del firmware Pico**: hoy ~3×128 KB (s_vm_buffer,
+  s_data del FS, tmp de compactación) comen casi toda la SRAM. Revisar
+  si se pueden compartir/reducir/configurar por placa.
+- **GC con reuse — LA palanca grande, pero toca GC (semi-drástico)**:
+  hoy el mark-sweep marca libre pero el bump NO reusa (limitación F2) →
+  el heap solo crece. Una free-list o compactación reduciría
+  drásticamente la presión de heap. ⚠️ Toca el GC → evaluar con cuidado
+  contra "tocar la VM lo mínimo". NOTA: si la placa tiene PSRAM (#10),
+  la urgencia de esto baja muchísimo (8 MB de heap).
+- Cuidado con el tamaño de structs replicados: `bpvm_thread` se
+  multiplica ×32 (lección de #185 — un buffer de 128 B reventó la RAM).
+
+## 9. Multi-MCU: UNA imagen por FAMILIA, no por placa (anti-MicroPython)
+
+**Postura de diseño (del usuario)**: NO el modelo MicroPython (una
+imagen de VM por placa). Una **misma imagen sirve para todos los micros
+de la misma familia** (mismo fabricante + familia), sin importar que uno
+tenga más pines, más periféricos o distinta memoria. "En el fondo son
+todos iguales."
+
+**Cómo se materializa** (clave: **descubrimiento de capacidades en
+runtime**, no variantes en compile-time):
+- El firmware NO hardcodea nº de pines / instancias de periférico /
+  tamaño de RAM. En su lugar, un **descriptor de chip en runtime** (nº
+  GPIO, cuántos I2C/SPI/UART, tamaño de RAM, ¿hay PSRAM?) que la VM lee
+  al arrancar y al que se adapta. Ya hay base: identificación de chip
+  (módulo Pico) + `/sys/device.json` (#134). Construir sobre eso.
+- Acceso a periféricos **por índice con validación en runtime** ("¿existe
+  el pin X? ¿la instancia SPI Y?") en vez de tablas fijas por placa.
+  Pin/periférico inexistente → RuntimeError claro, no corrupción.
+- **Impacto en el CORE de la VM: ~nulo** (la VM ya es genérica). Esto
+  vive en la capa de backends de HW + stdlib (Gpio/I2c/... validando
+  contra límites de runtime). Encaja perfecto con "tocar la VM mínimo".
+- Beneficio: una sola .uf2/.bin por familia → menos builds, menos
+  matriz de firmwares, despliegue trivial. (Enlaza con H4 ESP32-S3 #147:
+  diseñar el descriptor de forma que sirva para RP2350 Y ESP32-Sx.)
+
+## 10. PSRAM externa: heap fuera, stack/ejecución dentro
+
+**Idea (del usuario)**: muchos micros admiten PSRAM externa de 8 MB,
+barata. Reorganizar: **SRAM interna para stack + ejecución (rápida),
+PSRAM externa para el Heap (grande)**.
+
+**Por qué encaja bien con nuestra arquitectura**: la VM **ya recibe el
+buffer de memoria del caller** (`bpvm_init(memory, size, ...)`), y hoy
+parte ese buffer en heap (mitad baja) + stacks (mitad alta). O sea, el
+"de dónde sale la memoria" ya es responsabilidad de la plataforma, no de
+la VM.
+
+**Dos escalones, de menos a más toque de VM**:
+1. **Casi gratis (recomendado primero)**: en una placa con PSRAM, pasar
+   a `bpvm_init` un buffer que viva ENTERO en PSRAM (8 MB) para heap +
+   stacks. **Cero cambios en la VM.** Ganas la capacidad (8 MB de heap →
+   la presión de heap y la urgencia del GC-reuse #8 casi desaparecen).
+   Coste: los stacks en PSRAM son más lentos que en SRAM, pero la PSRAM
+   va memory-mapped con caché XIP, así que los frames calientes quedan
+   cacheados — probablemente aceptable. Medir.
+2. **Óptimo pero con toque de VM (solo si 1 se queda corto)**: separar
+   físicamente — stacks en SRAM, heap en PSRAM. Problema: SRAM y PSRAM
+   están en regiones de dirección NO contiguas (p.ej. RP2350: SRAM en
+   0x2000_0000, PSRAM/XIP en otra ventana). La VM hoy usa UN base +
+   offset u32 contiguo. Para dos regiones físicas hay que introducir una
+   traducción offset-lógico→puntero-físico (`bpvm_ptr(vm, off)`) que
+   elige base según rango. Es **mecánico pero pervasivo** (toca todos los
+   `vm->memory + X`) → choca con "tocar la VM mínimo". Por eso: solo si
+   el escalón 1 demuestra que stacks-en-PSRAM es demasiado lento.
+
+**Recomendación**: escalón 1 (buffer en PSRAM, cero cambios) como
+default cuando haya PSRAM; escalón 2 solo guiado por profiling. Y como
+8 MB de heap hace casi irrelevante el GC-reuse, esto desactiva en gran
+parte la presión de #8 para placas con PSRAM.
