@@ -96,6 +96,31 @@ struct aot_helpers_v1 {
      * en la tabla `vm->modules`. Devuelve `code_start` del módulo, o
      * 0 si no se encontró (caller lanza runtime). */
     uint32_t (*find_module_cs)(struct bpvm* vm, const char* module_name);
+
+    /* --- Strings (H3 #173) ----------------------------------------
+     * Un string BP es un objeto heap con layout
+     *   [len:u32 BE][codepoint_0:u32 BE]...[codepoint_{len-1}:u32 BE]
+     * (TYPE_ARRAY_I32 — 1 codepoint de 4 bytes por carácter, igual que
+     * un integer[]). El "handle" que circula por el código native es el
+     * offset `ref` a ese objeto (0 = string null). Estos helpers
+     * replican las ops de string del intérprete/builtins para que el
+     * código AOT las invoque como C call directa.
+     *
+     * Los que devuelven un string nuevo (char_at, concat, substring,
+     * from_cstr, int_to_string) alocan en el heap BP vía bpvm_heap_alloc
+     * — pueden disparar GC. En F2 el GC no compacta (bump sin reuse),
+     * así que los refs de entrada siguen válidos tras la alocación. */
+    int32_t  (*string_length)(struct bpvm* vm, uint32_t ref);
+    int32_t  (*string_char_code_at)(struct bpvm* vm, uint32_t ref, int32_t idx);
+    uint32_t (*string_char_at)(struct bpvm* vm, uint32_t ref, int32_t idx);
+    uint32_t (*string_concat)(struct bpvm* vm, uint32_t a, uint32_t b);
+    uint32_t (*string_substring)(struct bpvm* vm, uint32_t ref, int32_t from, int32_t to);
+    int32_t  (*string_eq)(struct bpvm* vm, uint32_t a, uint32_t b);
+    /* Literal C (ASCII/UTF-8 byte→codepoint) → string heap. El AOT
+     * emite los literales de string del .bp con esto. */
+    uint32_t (*string_from_cstr)(struct bpvm* vm, const char* s, int32_t len);
+    /* int → string decimal. Para format ("x = " + i) desde native. */
+    uint32_t (*int_to_string)(struct bpvm* vm, int32_t v);
 };
 
 /* Tabla v1 instanciada en el runtime con los punteros a las funciones

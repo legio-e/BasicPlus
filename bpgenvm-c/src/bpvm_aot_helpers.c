@@ -81,9 +81,22 @@ static void h_print_f32(bpvm_t* vm, float v, int nl) {
     }
 }
 static void h_print_string(bpvm_t* vm, uint32_t ref, int nl) {
-    /* Stub básico — el AOT de strings vendrá más adelante. */
-    (void) vm; (void) ref; (void) nl;
-    fprintf(stderr, "[aot] print_string stub\n");
+    /* Replica OP_PRINT_STRING/OP_PRINT_STR_NONL del intérprete: el string
+     * es [len][cp]×len; imprime cada codepoint como char ASCII (>127 → '?'
+     * en F2 v1). */
+    if (ref != 0) {
+        uint32_t len = bpvm_read_u32_be(vm->memory + ref);
+        for (uint32_t i = 0; i < len; i++) {
+            uint32_t cp = bpvm_read_u32_be(vm->memory + ref + 4 + i * 4);
+            char c = (cp < 128) ? (char) cp : '?';
+            if (vm->output_cb) vm->output_cb(&c, 1, vm->output_user);
+            else fputc(c, stdout);
+        }
+    }
+    if (nl) {
+        if (vm->output_cb) vm->output_cb("\n", 1, vm->output_user);
+        else fputc('\n', stdout);
+    }
 }
 static void h_print_char(bpvm_t* vm, int32_t ch) {
     char c = (char) ch;
@@ -181,6 +194,86 @@ static uint32_t h_find_module_cs(bpvm_t* vm, const char* module_name) {
     return 0;
 }
 
+/* ---------- Strings (H3 #173) ----------
+ * String heap = [len:u32 BE][cp:u32 BE]×len (TYPE_ARRAY_I32). Reusan
+ * bpvm_heap_alloc / bpvm_heap_alloc_string del runtime. */
+static int32_t h_string_length(bpvm_t* vm, uint32_t ref) {
+    if (ref == 0) return 0;
+    return (int32_t) bpvm_read_u32_be(vm->memory + ref);
+}
+static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    if (ref == 0) return 0;
+    uint32_t len = bpvm_read_u32_be(vm->memory + ref);
+    if (idx < 0 || (uint32_t) idx >= len) return 0;
+    return (int32_t) bpvm_read_u32_be(vm->memory + ref + 4 + (uint32_t) idx * 4);
+}
+static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    uint32_t cp = 0;
+    if (ref != 0) {
+        uint32_t len = bpvm_read_u32_be(vm->memory + ref);
+        if (idx >= 0 && (uint32_t) idx < len)
+            cp = bpvm_read_u32_be(vm->memory + ref + 4 + (uint32_t) idx * 4);
+    }
+    uint32_t out = bpvm_heap_alloc(vm, 4u, BPVM_TYPE_ARRAY_I32);  /* 1 cp */
+    if (out) {
+        bpvm_write_u32_be(vm->memory + out, 1u);
+        bpvm_write_u32_be(vm->memory + out + 4, cp);
+    }
+    return out;
+}
+static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
+    uint32_t la = a ? bpvm_read_u32_be(vm->memory + a) : 0;
+    uint32_t lb = b ? bpvm_read_u32_be(vm->memory + b) : 0;
+    uint32_t out = bpvm_heap_alloc(vm, (la + lb) * 4u, BPVM_TYPE_ARRAY_I32);
+    if (!out) return 0;
+    uint8_t* mem = vm->memory;   /* F2 no compacta: a/b siguen válidos */
+    bpvm_write_u32_be(mem + out, la + lb);
+    for (uint32_t i = 0; i < la; i++)
+        bpvm_write_u32_be(mem + out + 4 + i * 4, bpvm_read_u32_be(mem + a + 4 + i * 4));
+    for (uint32_t i = 0; i < lb; i++)
+        bpvm_write_u32_be(mem + out + 4 + (la + i) * 4, bpvm_read_u32_be(mem + b + 4 + i * 4));
+    return out;
+}
+static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {
+    if (ref == 0) return 0;
+    uint32_t len = bpvm_read_u32_be(vm->memory + ref);
+    /* Clamp estilo BP/Java: índices fuera de rango se recortan. */
+    if (from < 0) from = 0;
+    if (to < 0)   to = 0;
+    if ((uint32_t) to > len) to = (int32_t) len;
+    if (from > to) from = to;
+    uint32_t n = (uint32_t)(to - from);
+    uint32_t out = bpvm_heap_alloc(vm, n * 4u, BPVM_TYPE_ARRAY_I32);
+    if (!out) return 0;
+    uint8_t* mem = vm->memory;
+    bpvm_write_u32_be(mem + out, n);
+    for (uint32_t i = 0; i < n; i++)
+        bpvm_write_u32_be(mem + out + 4 + i * 4,
+                          bpvm_read_u32_be(mem + ref + 4 + ((uint32_t) from + i) * 4));
+    return out;
+}
+static int32_t h_string_eq(bpvm_t* vm, uint32_t a, uint32_t b) {
+    if (a == b) return 1;              /* misma ref (incl. ambos null) */
+    if (a == 0 || b == 0) return 0;
+    uint8_t* mem = vm->memory;
+    uint32_t la = bpvm_read_u32_be(mem + a);
+    uint32_t lb = bpvm_read_u32_be(mem + b);
+    if (la != lb) return 0;
+    for (uint32_t i = 0; i < la; i++)
+        if (bpvm_read_u32_be(mem + a + 4 + i * 4) != bpvm_read_u32_be(mem + b + 4 + i * 4))
+            return 0;
+    return 1;
+}
+static uint32_t h_string_from_cstr(bpvm_t* vm, const char* s, int32_t len) {
+    if (!s || len < 0) return 0;
+    return bpvm_heap_alloc_string(vm, s, (size_t) len);
+}
+static uint32_t h_int_to_string(bpvm_t* vm, int32_t v) {
+    char buf[16];
+    int n = snprintf(buf, sizeof(buf), "%d", (int) v);
+    return bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
+}
+
 /* ---------- Instancia exportada ----------
  * `const` para que viva en .rodata (flash en el Pico). */
 const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
@@ -205,4 +298,12 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     .array_length    = h_array_length,
     .now_ms          = h_now_ms,
     .find_module_cs  = h_find_module_cs,
+    .string_length       = h_string_length,
+    .string_char_code_at = h_string_char_code_at,
+    .string_char_at      = h_string_char_at,
+    .string_concat       = h_string_concat,
+    .string_substring    = h_string_substring,
+    .string_eq           = h_string_eq,
+    .string_from_cstr    = h_string_from_cstr,
+    .int_to_string       = h_int_to_string,
 };
