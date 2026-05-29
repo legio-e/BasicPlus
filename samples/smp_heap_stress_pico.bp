@@ -1,0 +1,50 @@
+// smp_heap_stress_pico.bp — versión dimensionada para los ~64 KB de
+// heap de la Pico. El original (N=3000) asume el heap del host (MB);
+// en la Pico las 6000 allocations no caben (el GC marca libre pero el
+// bump no reusa — limitación F2) y se cuelga por OOM, NO por SMP.
+// N=200 → 400 objetos (~10 KB), entra de sobra y sigue probando la
+// alocación cross-thread bajo vm_lock.
+module SmpHeapStressPico
+
+  public class Counter
+    public var v: integer
+    public function Counter(v_: integer)
+      v := v_
+    end Counter
+  end Counter
+
+  public class Builder extends Thread
+    public var n: integer
+    public var total: integer
+    public function Builder(n_: integer)
+      n := n_
+      total := 0
+    end Builder
+
+    public function run()
+      var sum: integer := 0
+      var i: integer := 1
+      while i <= n do
+        var c: Counter := Counter(i)
+        sum := sum + c.v
+        i := i + 1
+      endwh
+      total := sum
+    end run
+  end Builder
+
+  function Main()
+    var N: integer := 200
+    // Esperado por worker: N*(N+1)/2 = 200*201/2 = 20100
+    var w1: Builder := Builder(N)
+    var w2: Builder := Builder(N)
+    w1.start()
+    w2.start()
+    w1.join()
+    w2.join()
+    print "w1.total =", w1.total
+    print "w2.total =", w2.total
+    print "esperado  =", N * (N + 1) / 2
+  end Main
+
+end SmpHeapStressPico
