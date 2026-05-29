@@ -386,3 +386,78 @@ carpeta del file chooser (#119) pero no una lista de recientes.
 **Coste global**: medio. Alto retorno en comodidad diaria. Ortogonal a
 VM/lenguaje. RSTA + FlatLaf son las dos decisiones que más cambian la
 experiencia con menos código propio.
+
+---
+
+# Librerías estándar + debugger
+
+**Estado actual**: buena colección ya — HW (Gpio/Pwm/Pulse/Adc/Rtc/Wdt/
+Timer/Pico) + buses (I2c/Spi/Uart, todos refactorizados a clase OO) +
+drivers de dispositivo (PCA9554, MCP9804, AD7177...) + Math/IO. Política
+"todo HW nuevo es clase OO" (#123) ya en vigor.
+
+## 13. Buses que faltan
+
+- **TCP/IP** — ya es la tarea **#145** (P-pico-wifi-tcp, [v2]). Doble
+  cara: (a) transporte para el wire IDE↔dispositivo por WiFi, y (b)
+  módulo stdlib para programas de usuario (clase `Net.Socket`/`TcpConn`
+  sobre lwIP + cyw43). Diseñar la API BP de sockets junto con el
+  transporte para no duplicar.
+- **CAN bus** — importante en automoción (el usuario no lo usa, pero lo
+  quiere disponible). Clase `Can.Bus` (política HW-class). **Backend
+  dependiente del chip**: ESP32 tiene CAN nativo (TWAI); el RP2350 no →
+  vía MCP2515 externo por SPI, o PIO-CAN. Diseñar la interfaz BP una vez
+  y enchufar backend por familia (encaja con #9 multi-MCU). Prioridad
+  media (nice-to-have hasta que haya un usuario que lo pida).
+- Posibles más adelante: 1-Wire, USB-host, etc. — solo si se echan en
+  falta (principio de minimalismo).
+
+## 14. Pulir las existentes
+
+- **JSON** — ya hay parser interno (json_min.c en firmware, Json.java en
+  miVM) pero falta un **módulo BP de usuario** robusto (parse +
+  serialize) usable desde programas. Muy demandado (configs, APIs).
+- Repaso de consistencia de toda la stdlib: manejo de errores uniforme
+  (RuntimeError claros), nombres/firmas coherentes, y docs (manual.html)
+  al día con cada módulo.
+
+## 15. Funciones native (AOT) en stdlib donde se preste
+
+Donde una función de stdlib sea hot y AOT-able, marcarla `function
+native` para el speedup (×50-90). Candidatos naturales: Math, parsers
+(JSON/int/float), y ops de string intensivas.
+
+**Dependencia directa con #173 (AOT strings, en curso en v1)**: en
+cuanto el AOT soporte strings, los parsers y formatters de stdlib (JSON,
+split, format) son los mayores beneficiados — son string-heavy. O sea:
+terminar #173 desbloquea native en la parte de stdlib que más lo
+aprovecha. Anotado para encadenar.
+
+## 16. Debugger — FUNDAMENTAL
+
+El usuario lo subraya: el debugger es core, no accesorio.
+
+**Estado**: en el host (VM-Java) funciona bien — DebugServer + VmClient,
+breakpoints/step/inspect/stack/watch sobre el wire (toda la serie A1).
+En Pico está **diferido**: el hook en el inner loop está cableado (#139)
+pero el back-end real de debug-on-Pico es **#140** ([v2]).
+
+**Para v2**:
+- Tratar **#140 (debug-on-Pico real)** como prioridad alta, no como
+  nice-to-have — es lo que cierra el ciclo "programar y depurar en el
+  dispositivo real". Requiere también #138 (multiplexar el CDC para no
+  mezclar output del programa con eventos de debug).
+- Mejoras de UX del debugger en el IDE (sirven a host y Pico):
+  breakpoints condicionales, watch expressions, hover-inspect, y la
+  visualización de la pila/objetos más clara.
+- Sinergia con #11 (host simulador): depurar en el host CON el perfil de
+  la placa = la forma más rápida de cazar bugs antes de ir al hardware.
+
+---
+
+> **Cierre de la ronda de ideas V2** (2026-05-29). El backlog cubre:
+> tipos (long/double/byte/tuplas/strings UTF-8), OO (interfaces, no-MI),
+> compilador (anti-cascada), VM/memoria (mínimo, GC-reuse, PSRAM),
+> multi-MCU (una imagen por familia), host-simulador, IDE (RSTA+FlatLaf+
+> recientes), stdlib (TCP/CAN/JSON + native) y debugger. Pendiente cuando
+> arranque v2: pasada de priorización y convertir puntos en tareas.
