@@ -358,6 +358,26 @@ public final class Main {
                 return false;
             }
 
+            // 3.5) Validación AOT para funciones marcadas `function native`.
+            //      Una función nativa promete que su cuerpo es expresable
+            //      como C (subset soportado por AotCEmitter). Si el cuerpo
+            //      usa constructos fuera de ese subset (cross-module call,
+            //      tipos no soportados, statements como TRY/THROW, etc.),
+            //      el error debe saltar AQUÍ — en el compile normal, no
+            //      sólo al lanzar el AOT pipeline (build_mdn.sh / AotMain).
+            //      Es un error duro: aborta la compilación.
+            String aotMsg = validateNativeFunctionsAreAotable(module);
+            if (aotMsg != null) {
+                indent(depth);
+                System.err.println("error AOT en función native:");
+                indent(depth);
+                System.err.println("  " + aotMsg);
+                indent(depth);
+                System.err.println("compilación abortada por error AOT en " + srcAbs.getFileName());
+                ctx.totalErrors++;
+                return false;
+            }
+
             // 4) Emisión:
             //    - Si es `module interface X`, sólo escribimos la .bpi.
             //    - En otro caso, .mod (según backend) y la .bpi como subproducto.
@@ -450,6 +470,55 @@ public final class Main {
     // ============================================================
     // HELPERS DE EMISIÓN
     // ============================================================
+    /**
+     * Valida que cada función `native` del módulo sea AOT-able. Re-usa el
+     * AotCEmitter como oracle: lo invoca en modo dry-run (descartamos el
+     * .c emitido) y captura {@link AotCEmitter.UnsupportedAotException}.
+     *
+     * Devuelve `null` si todas las funciones nativas son válidas, o un
+     * mensaje de error legible (con número de línea cuando AotCEmitter lo
+     * incluye en su mensaje). El caller aborta la compilación.
+     *
+     * Diseño: la palabra clave `function native` es una PROMESA del autor
+     * de que el cuerpo encaja en el subset AOT. Aceptar esa promesa sin
+     * verificar permite que el bytecode .mod se emita OK pero el AOT
+     * pipeline falle aguas abajo (build_mdn.sh, AotMain) — el usuario lo
+     * descubre tarde, sin contexto. Validar aquí da el error en la fase
+     * que el usuario asocia con "el compilador" y con la línea concreta.
+     */
+    private static String validateNativeFunctionsAreAotable(Ast.ModuleNode module) {
+        // Ningún native → no hay nada que validar.
+        boolean hasNative = false;
+        if (module.defs != null) {
+            for (Ast.ITopLevelDecl d : module.defs) {
+                if (d instanceof Ast.FuncDef) {
+                    Ast.FuncDef f = (Ast.FuncDef) d;
+                    if (f.isNative && !f.isIntrinsic) { hasNative = true; break; }
+                }
+            }
+        }
+        if (!hasNative) return null;
+
+        try {
+            AotCEmitter emitter = new AotCEmitter(module.name);
+            // Modo .mdn-friendly: omitimos la función register para no
+            // disparar errores espúreos sobre relocs a símbolos del
+            // runtime que la validación no necesita verificar.
+            emitter.setOmitRegisterFunc(true);
+            String csrc = emitter.emitModule(module);
+            // csrc puede estar vacío si no hay nativas — ya filtrado arriba,
+            // así que aquí esperamos algo. Si no, raro pero no error.
+            if (csrc == null) return null;
+            return null;
+        } catch (AotCEmitter.UnsupportedAotException ex) {
+            return ex.getMessage();
+        } catch (RuntimeException ex) {
+            // Errores inesperados del emisor — mejor surfaciarlos como
+            // bug interno que ocultarlos.
+            return "fallo interno en validación AOT: " + ex.getMessage();
+        }
+    }
+
     private static void emitMivmMod(Ast.ModuleNode module, SemanticInfo info, Ctx ctx, int depth,
                                     java.nio.file.Path sourcePath) throws IOException {
         MivmEmitter emitter = new MivmEmitter(module, info);

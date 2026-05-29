@@ -1,0 +1,58 @@
+// =============================================================
+// device.cfg — config del dispositivo físico (RP2350, ESP32, ...)
+//
+// Vive dentro del FS del MCU en `/sys/device.cfg`. Describe el chip
+// concreto: memoria, flash, CPU, periféricos disponibles.
+//
+// ESTADO: spec preparada para v2. En v1 los firmwares usan valores
+// hard-codeados (ver fs.c, bpvm_pico.h). Documentado aquí para que
+// cuando v2 lo implemente, el formato ya esté pactado.
+//
+// Distinción con los otros .cfg:
+//   - device.cfg → el HARDWARE (este chip).
+//   - BpVM.cfg   → la VM (heap, paths).
+//   - .bpproject → el PROGRAMA en runtime.
+//   - .bpbuild   → el PROYECTO en build-time (PC).
+//
+// Formato JSON. Soporta comentarios `// hasta-fin-de-línea`.
+// Todos los tamaños en bytes salvo donde se indique.
+// =============================================================
+{
+  // Identificación del board. String informativo.
+  "board": "RP2350",
+
+  // Flash externa.
+  "flash": {
+    "total": 4194304,   // 4 MB
+    "fs":    135168,    // FS persistente (33 sectores de 4 KB)
+    "log":   4096       // log post-mortem (1 sector)
+  },
+
+  // SRAM y distribución.
+  "memory": {
+    "sram":  524288,    // 512 KB
+    "vmMax": 524288     // límite que firmware acepta para BpVM.cfg.memorySize
+  },
+
+  // CPU. Frecuencias en MHz.
+  "cpu": {
+    "default": 150,
+    "max":     250,
+    "cores":   2
+  },
+
+  // Pines reservados por el firmware (no expuestos a BP).
+  "reservedPins": [25],
+
+  // Periféricos físicamente presentes.
+  "periph": {
+    "i2c":  true,
+    "spi":  true,
+    "uart": true,
+    "pwm":  true,
+    "adc":  true,
+    "pio":  true,
+    "wifi": false,   // true en Pico 2 W
+    "bt":   false    // true en Pico 2 W
+  }
+}

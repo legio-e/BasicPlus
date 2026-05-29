@@ -33,5 +33,12 @@
   // null o ausente = sin fallback stdlib.
   //
   // Usa rutas absolutas con barras "/" para que Windows y Unix las acepten.
-  "stdlibDir": "C:/lenguajes/pm/bpstdlib"
+  "stdlibDir": "C:/lenguajes/pm/bpstdlib",
+
+  // Directorio de drivers de dispositivo (Pca9554, BME280, SSD1306, ...).
+  // El frontend lo añade al search path para resolver `import`. La
+  // diferencia con stdlibDir es que estos NO se embeben en el firmware:
+  // viajan al device como parte del upload del proyecto.
+  // null o ausente = no se busca aquí.
+  "devicesDir": "C:/lenguajes/pm/bpdevices"
 }

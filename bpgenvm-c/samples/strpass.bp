@@ -1,0 +1,29 @@
+// strpass.bp — test de #171 P-aot-mixed-types.
+//
+// Función `native` con signature mixta: toma un string + un integer,
+// devuelve el string tal cual (identity / pass-through).
+//
+// El AOT v1 NO opera sobre strings (eso es #173), pero el thunk debe
+// poder LEER el handle del stack como i32 y devolverlo. Esto exercita
+// que cType/readHelper/writeHelper reconocen "string" como slot
+// addressable.
+//
+// Esperado: imprime el string original (la BP-Main lo pasa al native
+// y reusa el return).
+module StrPass
+
+    native function passThrough(s: string, n: integer): string
+        return s
+    end passThrough
+
+    function Main(arg: string)
+        var i: integer := 0
+        var out: string := ""
+        while i < 3 do
+            out := passThrough("hello AOT", i)
+            print out
+            i := i + 1
+        endwh
+    end Main
+
+end StrPass

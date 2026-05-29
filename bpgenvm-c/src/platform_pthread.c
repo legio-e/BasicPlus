@@ -111,6 +111,17 @@ int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* th,
     return 0;
 }
 
+/* En host (pthread) la afinidad de core no aporta nada útil — el
+ * scheduler del OS sabe mejor que nosotros dónde colocar los threads.
+ * core_id se ignora silenciosamente. El handle es 100% compatible con
+ * `bpvm_platform_thread_join`. */
+int bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* th,
+                                        bpvm_thread_entry_t entry, void* arg,
+                                        int core_id) {
+    (void) core_id;
+    return bpvm_platform_thread_create(th, entry, arg);
+}
+
 void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t) {
     if (!t || !*t) return;
     pthread_t* p = (pthread_t*) *t;

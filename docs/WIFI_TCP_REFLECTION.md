@@ -250,8 +250,10 @@ Si algún día se aborda:
 7. **Discovery**: broadcast UDP primero, mDNS después si compensa.
 8. **NTP**: sincronización automática al conectar la red.
 9. **IDE**: combo de Picos detectadas, conexión TCP transparente.
-   La interfaz `transport` en el lado del IDE permite reutilizar
-   PicoClient para TCP también.
+   El backend ya está abstraído (AbstractBpvmBackend + BpvmClient
+   con `connectRemote`/`connectSerial`): añadir WiFi TCP al Pico es
+   reutilizar `connectRemote` apuntando al IP del Pico, sin tocar
+   más capas.
 
 Pasos 1-2 son de evaluación, no compromiso. Si tras medir vemos
 que añadir WiFi requiere sacrificar más de lo que aceptable,

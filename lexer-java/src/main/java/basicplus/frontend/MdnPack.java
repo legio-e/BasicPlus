@@ -66,18 +66,20 @@ public final class MdnPack {
         // firmware re-añade `| 1u` cuando construye la dirección final
         // del thunk para llamarlo.
         String prefix = "thunk_" + moduleName + "_";
+        int textIdx = f.findSectionIndex(".text");
         List<Symbol> exports = new ArrayList<>();
         for (Symbol s : f.symbols()) {
-            if (s.name.startsWith(prefix) && s.shndx == f.findSectionIndex(".text")) {
-                String funcName = s.name.substring(prefix.length());
-                String qualified = moduleName + "." + funcName;
-                if (qualified.length() >= MDN_NAME_MAX) {
-                    System.err.println("Nombre muy largo: '" + qualified + "'");
-                    System.exit(4);
-                }
-                int byteOff = ((int) s.value) & ~1;
-                exports.add(new Symbol(qualified, byteOff, s.shndx));
+            if (s.shndx != textIdx) continue;
+            if (s.name.contains(".")) continue;  // skip gcc localalias
+            if (!s.name.startsWith(prefix)) continue;
+            String funcName = s.name.substring(prefix.length());
+            String qualified = moduleName + "." + funcName;
+            if (qualified.length() >= MDN_NAME_MAX) {
+                System.err.println("Nombre muy largo: '" + qualified + "'");
+                System.exit(4);
             }
+            int byteOff = ((int) s.value) & ~1;
+            exports.add(new Symbol(qualified, byteOff, s.shndx));
         }
 
         if (exports.isEmpty()) {

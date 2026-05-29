@@ -85,6 +85,12 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/wdt.c
     ${BPVM_C_ROOT}/src/aot_registry.c        # H3 #160: AOT hijack registry
     ${BPVM_C_ROOT}/src/bpvm_aot_helpers.c    # H3 #158: tabla helpers AOT
+    # H2 SMP: scheduler multi-worker + comm task. comm_common.c es el
+    # ring buffer compartido; comm_pico.c es el backend del comm task
+    # sobre FreeRTOS (en vez del pthread del host).
+    ${BPVM_C_ROOT}/src/scheduler_smp.c
+    ${BPVM_C_ROOT}/src/comm_common.c
+    ${CMAKE_CURRENT_LIST_DIR}/comm_pico.c
     # Plataforma: usamos el backend FreeRTOS en vez del pthread del host.
     ${CMAKE_CURRENT_LIST_DIR}/platform_freertos.c
 )
@@ -175,3 +181,15 @@ target_compile_options(bpvm_pico PRIVATE
 target_compile_definitions(bpvm_pico PRIVATE
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=0
 )
+
+# H2 Pico SMP — opt-in al scheduler multi-worker.
+# Por defecto NO se define ⇒ repl_v1.c usa bpvm_run() (legacy).
+# Activar con:
+#   cmake .. -DBPVM_PICO_SMP_WORKERS=1   # validar arquitectura, sin paralelismo
+#   cmake .. -DBPVM_PICO_SMP_WORKERS=2   # paralelismo real (#153 cierra TX-excl)
+if (DEFINED BPVM_PICO_SMP_WORKERS)
+    message(STATUS "BPVM_PICO_SMP_WORKERS = ${BPVM_PICO_SMP_WORKERS}")
+    target_compile_definitions(bpvm_pico PRIVATE
+        BPVM_PICO_SMP_WORKERS=${BPVM_PICO_SMP_WORKERS}
+    )
+endif()

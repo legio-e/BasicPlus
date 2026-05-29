@@ -1,18 +1,24 @@
 // ============================================================
 // Backend.java
 // Abstracción del transporte que PicoExplorer usa para operar contra
-// un servidor BPVM (firmware Pico via serial, o VM-Java daemon via
-// TCP wire v1).
+// un servidor BPVM (firmware Pico via USB CDC, o VM-Java daemon/remoto
+// via TCP). Ambos hablan el mismo wire v1.
 //
-// El motivo de la abstracción: hoy PicoExplorer está pegado a
-// PicoClient (USB CDC line-based). Ahora que la VM-Java habla v1
-// completo (PRs 1-6), queremos que el panel pueda apuntar también al
-// daemon Java local — útil para iterar UI sin tocar el firmware ni
-// requerir HW.
+// Implementaciones:
+//   - SerialBackend → wire v1 sobre USB CDC al firmware Pico.
+//   - BpvmBackend   → wire v1 sobre TCP a la VM Java (local o remoto).
 //
-// Cuando el firmware Pico se migre a v1, SerialBackend se reescribirá
-// para hablar v1 sobre USB CDC y BpvmBackend cubrirá tanto local como
-// remoto. El interface aquí ya quedará listo.
+// La parte común (list/get/put/del/run/reset, framing, chunk→línea,
+// auto-CONTINUE PausedEvent) vive en AbstractBpvmBackend. Las dos
+// concretas solo aportan qué `BpvmClient.connect*` invocar y un par de
+// operaciones plataforma-específicas (mem/save/log) donde el wire v1
+// admite divergencia legítima.
+//
+// Histórico (#137): antes de la migración a wire v1, el SerialBackend
+// usaba PicoClient (cliente texto-protocolo legacy). #150/#151 lo
+// reemplazaron por BpvmClient.connectSerial(), dejando PicoClient
+// como código muerto que #137 retiró. La enumeración de puertos
+// vive ahora en SerialPorts.
 // ============================================================
 package com.mycompany.bpide;
 
@@ -23,7 +29,8 @@ import java.util.function.Consumer;
 public interface Backend extends AutoCloseable {
 
     /** Entrada de un directorio devuelta por list(). Neutral entre
-     *  backends (PicoClient.RemoteFile no tiene isDir; BpvmClient sí).*/
+     *  backends — todos hablan wire v1 sobre BpvmClient.RemoteFile, que
+     *  ya trae `isDirectory`; aquí lo normalizamos al campo `isDir`. */
     final class Entry {
         public final String name;
         public final long size;

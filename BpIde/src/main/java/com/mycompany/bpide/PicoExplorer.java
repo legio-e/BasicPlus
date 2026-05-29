@@ -392,10 +392,10 @@ public final class PicoExplorer extends JPanel {
     private void refreshPorts() {
         Object current = portCombo.getSelectedItem();
         portCombo.removeAllItems();
-        for (String p : PicoClient.listPorts()) portCombo.addItem(p);
+        for (String p : SerialPorts.listPorts()) portCombo.addItem(p);
         if (current != null) portCombo.setSelectedItem(current);
         else {
-            String auto = PicoClient.autoDetect();
+            String auto = SerialPorts.autoDetect();
             if (auto != null) portCombo.setSelectedItem(auto);
         }
     }

@@ -41,6 +41,12 @@
   // entrada. OBLIGATORIO.
   "main": "App",
 
+  // (v2) VM destino y AOT — campos planificados para v2:
+  //   "target": "host" | "pico" | "esp32",
+  //   "aot": { "enabled": true, "modules": ["Math"] }
+  // En v1 el target se decide implícitamente al pulsar Run/Build
+  // (host VM Java, o "Run on Pico" del IDE para el RP2350).
+
   // Dependencias de compilación. OPCIONAL — lista de entradas.
   // Cada entrada puede ser:
   //   - un directorio: el compilador busca dentro CUALQUIER

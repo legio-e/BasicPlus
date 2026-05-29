@@ -199,6 +199,49 @@ int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,
     return 0;
 }
 
+/* Variante pinned. Bajo configNUMBER_OF_CORES=1 (el bring-up actual)
+ * FreeRTOS-SMP no está activo, así que la afinidad NO se puede aplicar
+ * — caemos a la variante normal y core_id se ignora.
+ *
+ * Cuando #153 P-smp-tx-exclusive cierre y configNUMBER_OF_CORES=2
+ * se active, este wrapper hará xTaskCreateAffinitySet (o
+ * vTaskCoreAffinitySet tras xTaskCreate) con la máscara correspondiente.
+ * El call site (scheduler_smp.c, comm_pico.c) no cambia.
+ */
+int bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* t,
+                                        bpvm_thread_entry_t entry, void* arg,
+                                        int core_id) {
+#if (configNUMBER_OF_CORES > 1) && (configUSE_CORE_AFFINITY == 1)
+    if (!t || !entry) return -1;
+    if (core_id < 0 || core_id >= configNUMBER_OF_CORES) {
+        return bpvm_platform_thread_create(t, entry, arg);
+    }
+    fr_thread_t* ft = (fr_thread_t*) pvPortMalloc(sizeof(fr_thread_t));
+    if (!ft) return -1;
+    ft->exited = xSemaphoreCreateBinary();
+    if (!ft->exited) { vPortFree(ft); return -1; }
+    ft->entry = entry;
+    ft->arg = arg;
+    UBaseType_t mask = (UBaseType_t) 1U << core_id;
+    BaseType_t r = xTaskCreateAffinitySet(fr_thread_trampoline,
+                                           "bpvm-thr-pin",
+                                           1024, ft,
+                                           tskIDLE_PRIORITY + 1,
+                                           mask, &ft->task);
+    if (r != pdPASS) {
+        vSemaphoreDelete(ft->exited);
+        vPortFree(ft);
+        return -1;
+    }
+    *t = (void*) ft;
+    return 0;
+#else
+    /* Single-core: nada que pinear. Delegamos a la API normal. */
+    (void) core_id;
+    return bpvm_platform_thread_create(t, entry, arg);
+#endif
+}
+
 void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t) {
     if (!t || !*t) return;
     fr_thread_t* ft = (fr_thread_t*) *t;

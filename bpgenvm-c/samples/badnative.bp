@@ -1,0 +1,18 @@
+// badnative.bp — test NEGATIVO de validación AOT en compile-time.
+//
+// `bad()` está marcada `native` pero usa `print` en el cuerpo, que el
+// emisor AOT no soporta hoy. ANTES de este check, el compile producía
+// el .mod sin avisar y el error llegaba solo al lanzar AotMain.
+// AHORA el compile debe ABORTAR con un mensaje claro citando la línea.
+module BadNative
+
+    native function bad(x: integer): integer
+        print x
+        return x
+    end bad
+
+    function Main(arg: string)
+        print bad(5)
+    end Main
+
+end BadNative

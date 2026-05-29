@@ -82,6 +82,20 @@ struct aot_helpers_v1 {
      * Equivalente al OP_CALL_BUILTIN del intérprete pero accesible
      * como C call directa (sin push/pop del stack BP). */
     int32_t  (*now_ms)(struct bpvm* vm);   /* `now()` BP → ms desde boot */
+
+    /* Variables nivel-módulo (#172). El offset CS-relativo del global
+     * se conoce en compile-time (lo decide el bytecode emitter); el
+     * thunk AOT lo bakea como constante. CS sí es runtime (depende de
+     * en qué módulo cae cada uno al cargar), así que cada thunk
+     * resuelve la CS de su módulo UNA VEZ con find_module_cs y la
+     * cachea en una static. Los accesos posteriores son
+     * read_i32_be(memory + CS + OFFSET_LITERAL) — coste idéntico al
+     * intérprete pero sin dispatch de opcode.
+     *
+     * find_module_cs busca por nombre lógico del módulo (sin librería)
+     * en la tabla `vm->modules`. Devuelve `code_start` del módulo, o
+     * 0 si no se encontró (caller lanza runtime). */
+    uint32_t (*find_module_cs)(struct bpvm* vm, const char* module_name);
 };
 
 /* Tabla v1 instanciada en el runtime con los punteros a las funciones

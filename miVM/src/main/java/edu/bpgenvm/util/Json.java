@@ -229,11 +229,31 @@ public final class Json {
             while (pos < src.length() && Character.isDigit(src.charAt(pos))) pos++;
             if (pos == start || (pos == start + 1 && src.charAt(start) == '-'))
                 throw err("número vacío");
-            if (pos < src.length() && (src.charAt(pos) == '.' || src.charAt(pos) == 'e'
-                    || src.charAt(pos) == 'E'))
-                throw err("decimales/científica no soportados en wire");
-            try { return Long.parseLong(src.substring(start, pos)); }
-            catch (NumberFormatException ex) { throw err("número inválido"); }
+            int intEnd = pos;
+            boolean hasFloat = false;
+            // Wire v1 es integer-only por diseño. Si llega un float (violación
+            // de spec del otro lado), antes lanzábamos y el reader tragaba
+            // silenciosa → 10s de timeout del caller (tarea #155). Ahora
+            // consumimos todo el literal numérico y truncamos a long.
+            if (pos < src.length() && src.charAt(pos) == '.') {
+                hasFloat = true;
+                pos++;
+                while (pos < src.length() && Character.isDigit(src.charAt(pos))) pos++;
+            }
+            if (pos < src.length() && (src.charAt(pos) == 'e' || src.charAt(pos) == 'E')) {
+                hasFloat = true;
+                pos++;
+                if (pos < src.length() && (src.charAt(pos) == '+' || src.charAt(pos) == '-')) pos++;
+                while (pos < src.length() && Character.isDigit(src.charAt(pos))) pos++;
+            }
+            try {
+                if (hasFloat) {
+                    System.err.println("[Json] warn: float en wire (spec: int-only): "
+                        + src.substring(start, pos) + " — truncando a long");
+                    return (long) Double.parseDouble(src.substring(start, pos));
+                }
+                return Long.parseLong(src.substring(start, intEnd));
+            } catch (NumberFormatException ex) { throw err("número inválido"); }
         }
 
         Boolean parseBool() {

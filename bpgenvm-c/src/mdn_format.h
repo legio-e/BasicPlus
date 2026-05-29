@@ -18,7 +18,11 @@
  * vm->aot_helpers->func() (memoria indirect). Cero relocations a
  * resolver al cargar.
  *
- * Big-endian para los enteros del header — coherente con .mod.
+ * Endian: little-endian para los enteros del header y del symbol
+ * table. (Distinto del .mod, que es big-endian; el writer es
+ * MdnPack.java en el frontend Java y usa ByteOrder.LITTLE_ENDIAN
+ * explícito. El consumidor on-target son las arquitecturas ARM LE
+ * / RISC-V LE, así que no hay byte-swap en runtime.)
  */
 #ifndef BPVM_MDN_FORMAT_H
 #define BPVM_MDN_FORMAT_H

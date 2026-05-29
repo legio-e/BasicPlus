@@ -1,0 +1,56 @@
+// smp_fib_bench.bp — benchmark CPU-bound para H2 SMP.
+//
+// Dos threads BP calculando fib(N) independientes en paralelo. Si los
+// workers de la VM escalan, debería tardar ~la mitad que single-worker.
+// Mide: SINGLE-WORKER (fib(N) x2 secuencial) vs DUAL-WORKER (fib(N) x2
+// en paralelo).
+//
+// Esperado VM-Java:
+//   --workers=1 → ~2T
+//   --workers=2 → ~T   (speedup ~×2)
+module SmpFibBench
+
+  public class FibWorker extends Thread
+    public var n: integer
+    public var result: integer
+    public function FibWorker(n_: integer)
+      n := n_
+      result := 0
+    end FibWorker
+
+    public function run()
+      result := fib(n)
+    end run
+  end FibWorker
+
+  public function fib(n: integer): integer
+    if n < 2 then
+      return n
+    endif
+    return fib(n - 1) + fib(n - 2)
+  end fib
+
+  function Main()
+    // N=30 → fib=832040, ~2.7M llamadas recursivas — bastante carga.
+    var N: integer := 30
+
+    // Baseline: 2 fib(N) secuenciales en main thread.
+    var t0: integer := now()
+    var r1: integer := fib(N)
+    var r2: integer := fib(N)
+    var t1: integer := now()
+    print "secuencial 2x fib(30) =", r1, r2, " ms =", t1 - t0
+
+    // Paralelo: 2 workers BP haciendo fib(N) cada uno.
+    var t2: integer := now()
+    var w1: FibWorker := FibWorker(N)
+    var w2: FibWorker := FibWorker(N)
+    w1.start()
+    w2.start()
+    w1.join()
+    w2.join()
+    var t3: integer := now()
+    print "paralelo   2x fib(30) =", w1.result, w2.result, " ms =", t3 - t2
+  end Main
+
+end SmpFibBench

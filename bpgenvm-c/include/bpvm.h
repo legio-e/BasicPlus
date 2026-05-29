@@ -112,6 +112,16 @@ bpvm_status_t bpvm_load_mod(bpvm_t* vm, const char* path);
 bpvm_status_t bpvm_run(bpvm_t* vm);
 
 /*
+ * H2 — Variante multi-worker. n_workers >= 1. El runtime arranca un
+ * scheduler SMP con N pthreads + 1 comm task dedicado. El interp loop
+ * corre lock-free salvo los safepoints (STW GC). Para n_workers=1 el
+ * comportamiento es equivalente a bpvm_run() — ÚSALO solo si quieres
+ * paralelismo real (n>=2). El bpvm_smp_destroy se llama automático
+ * tras terminar el main thread.
+ */
+bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers);
+
+/*
  * Registra un callback para los opcodes PRINT_*. Si nunca se llama,
  * la VM escribe a stdout vía fwrite().
  */
@@ -122,6 +132,81 @@ void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user);
  * mismo). Coste alto, sólo para development.
  */
 void bpvm_set_tracing(bpvm_t* vm, int enabled);
+
+/* ============================================================ */
+/*  Debug hook (#139 P-interp-debug-hook).                       */
+/* ============================================================ */
+
+/*
+ * Forward — definido en bpvm_internal.h. El hook recibe el thread
+ * activo por puntero; el caller-VM no debe inspeccionar más allá de
+ * id/pc/sp/bp/cs/stack_base.
+ *
+ * Guard para que bpvm_internal.h pueda usar `typedef struct bpvm_thread
+ * { ... } bpvm_thread_t;` sin redefinición (C99-pedantic lo marca).
+ */
+#ifndef BPVM_THREAD_T_DEFINED
+#define BPVM_THREAD_T_DEFINED
+typedef struct bpvm_thread bpvm_thread_t;
+#endif
+
+/*
+ * Resolución de pc absoluto → (línea origen, nombre de fichero). La
+ * VM no parsea debug_lines del .mod en v1; el caller (el back-end de
+ * debug, p.ej. el firmware de #140) suministra esta función con la
+ * información que tenga.
+ *
+ * Devuelve la línea (>0) o ≤0 si el PC no tiene línea asociada (p.ej.
+ * código generado, prólogos, etc.). Si `source_out` no es NULL, debe
+ * apuntar al nombre del fichero fuente; el string debe permanecer
+ * vivo el tiempo que la VM lo necesite (típicamente una cadena
+ * interna del módulo).
+ */
+typedef int (*bpvm_pc_to_line_t)(uint32_t pc, const char** source_out,
+                                  void* user);
+
+/*
+ * Hook invocado por la VM ANTES de despachar el opcode en `pc`, sólo
+ * cuando la línea origen cambia respecto al opcode anterior. Esto
+ * acota la frecuencia a sentencias BP, no a opcodes individuales.
+ *
+ * El hook puede:
+ *  - Inspeccionar `tc` (id, pc/sp/bp/cs) — están sincronizados con
+ *    el estado interno del intérprete justo antes de la llamada.
+ *  - Bloquear el thread (semaforo, queue, etc.) hasta que el cliente
+ *    de debug envíe continue/step.
+ *  - NO debe mutar tc.pc/sp/bp/cs (edit-and-continue: deferred a v2).
+ */
+typedef void (*bpvm_debug_hook_t)(bpvm_t* vm, bpvm_thread_t* tc,
+                                   uint32_t pc, int line,
+                                   const char* source, void* user);
+
+/*
+ * Instala (o desinstala con NULL) el hook de debug. Cuando `hook` es
+ * NULL la VM no paga coste alguno en el inner loop (un único null-
+ * check por opcode); cuando está instalado paga además el
+ * pc_to_line() callback y la comparación contra last_debug_line.
+ *
+ * `pc_to_line` puede ser NULL — en ese caso el hook se llama una vez
+ * por opcode (modo "todo es una línea"). Útil para tests sintéticos
+ * antes de tener la tabla de líneas del .mod.
+ *
+ * Thread-safety: el setter es THREAD-UNSAFE. Llamarlo ANTES de
+ * arrancar la VM con bpvm_run().
+ */
+void bpvm_set_debug_hook(bpvm_t* vm,
+                          bpvm_debug_hook_t hook,
+                          bpvm_pc_to_line_t pc_to_line,
+                          void* user);
+
+/*
+ * Accessor: id del thread BP. El struct interno es opaco para callers
+ * fuera de la VM; este getter cubre el único campo que el hook
+ * típicamente necesita exponer (qué tid disparó el break). Otros
+ * accessors se irán añadiendo a medida que el back-end de debug los
+ * pida (sp/bp/cs para frame walking, status para join, etc.).
+ */
+int bpvm_thread_id(const bpvm_thread_t* tc);
 
 /*
  * Libera la estructura de control. NO toca el `memory[]` que pasó el

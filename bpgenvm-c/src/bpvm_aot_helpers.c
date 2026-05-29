@@ -160,6 +160,27 @@ static int32_t h_now_ms(bpvm_t* vm) {
     return (int32_t) bpvm_platform_now_ms();
 }
 
+/* ---------- Variables nivel-módulo (#172) ----------
+ * Las module-globals son INTERNAS al módulo (no se exportan en la
+ * sección 4.2 del .mod). Su dirección absoluta es CS + offset, donde
+ * offset es fijo en tiempo de compilación (lo decide el bytecode
+ * emitter y AotCEmitter lo bakea como literal C). El CS sí es runtime,
+ * por lo que cada thunk resuelve UNA vez la CS del módulo al que
+ * pertenece y la cachea.
+ *
+ * Acceso al campo `modules[]` directo: el `name` de bpvm_module_t es
+ * el nombre lógico ("GlobalsAot") sin librería. */
+static uint32_t h_find_module_cs(bpvm_t* vm, const char* module_name) {
+    if (!vm || !module_name) return 0;
+    for (int i = 0; i < vm->module_count; i++) {
+        const bpvm_module_t* m = &vm->modules[i];
+        if (strcmp(m->name, module_name) == 0) {
+            return m->code_start;
+        }
+    }
+    return 0;
+}
+
 /* ---------- Instancia exportada ----------
  * `const` para que viva en .rodata (flash en el Pico). */
 const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
@@ -183,4 +204,5 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     .array_store_i32 = h_array_store_i32,
     .array_length    = h_array_length,
     .now_ms          = h_now_ms,
+    .find_module_cs  = h_find_module_cs,
 };

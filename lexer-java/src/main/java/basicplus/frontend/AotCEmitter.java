@@ -57,6 +57,37 @@ public final class AotCEmitter {
      *  __end/__step entre fors anidados). */
     private int forCounter = 0;
 
+    /** #172 — nombres definidos en el ámbito de la función actual
+     *  (parámetros + VarDecl + induction de for). Cualquier
+     *  IdentifierExpr cuyo name NO esté aquí se asume variable
+     *  nivel-módulo y se emite como acceso directo `mem + cs + OFFSET`,
+     *  donde `cs` es la CS del módulo (cacheada via helper
+     *  find_module_cs) y OFFSET es el literal compile-time guardado
+     *  en `moduleVarOffsets`.
+     *
+     *  Limpieza: se vacía al inicio de cada emitFunction. */
+    private final Set<String> localNames = new HashSet<>();
+
+    /** #172 — offsets CS-relativos de variables nivel-módulo. Asignados
+     *  en {@link #precomputeModuleVarOffsets} antes de emitir cualquier
+     *  función, recorriendo module.defs en orden de declaración. Convención
+     *  empírica del MivmEmitter: vars y consts comparten el área negativa
+     *  desde CS hacia abajo, cada uno gana el siguiente slot de 4 bytes.
+     *  El offset es negativo: counter → -4, segundo decl → -8, etc.
+     *
+     *  Si AotCEmitter ve un IdentifierExpr no-local que NO aparece aquí,
+     *  asume que es un símbolo importado / cross-module y lanza
+     *  UnsupportedAotException (cross-module sigue diferido — #169 / v2). */
+    private final java.util.Map<String, Integer> moduleVarOffsets =
+            new java.util.LinkedHashMap<>();
+
+    /** #172 — true si alguna función emitida hasta ahora consume globals.
+     *  Cuando es true, el header del .c incluye:
+     *    - static uint32_t s_module_cs = 0;
+     *    - static inline uint32_t aot_<Mod>_cs(struct bpvm* vm) { ... }
+     *  Y cada función AOT empieza con: `uint32_t cs = aot_<Mod>_cs(vm);`. */
+    private boolean usesModuleGlobals = false;
+
     /** H3 #158 — si es true, NO emite aot_<Mod>_register (esa función
      *  tiene relocs externas a bpvm_aot_register_by_name + string
      *  literal, que rompen la position-independence del .o standalone).
@@ -99,6 +130,12 @@ public final class AotCEmitter {
             }
         }
         if (nativeFuncs.isEmpty()) return "";
+
+        // #172 — Pre-pass: asignar offsets CS-relativos a vars/consts
+        // nivel-módulo recorriendo en orden de declaración. MivmEmitter
+        // sigue la misma convención (cf. ModWriter.registerSymbol):
+        // primer decl encontrado → -4, segundo → -8, etc.
+        precomputeModuleVarOffsets(module);
 
         // Header del archivo.
         emitHeader();
@@ -146,6 +183,44 @@ public final class AotCEmitter {
             w.println(");");
         }
         w.println();
+
+        /* #172 — Si el módulo declara vars/consts a nivel-módulo, emitimos
+         * el cache de CS por-módulo. CS es runtime (depende de en qué
+         * orden cargue el loader los módulos), así que usamos lazy init.
+         * Las accesos a globales se compilan como:
+         *     read_i32_be(mem + cs + OFFSET_LITERAL)
+         * donde `cs` = aot_<Mod>_cs(vm) cacheado en la static. */
+        if (!moduleVarOffsets.isEmpty()) {
+            w.println("/* #172 — cache de CS del módulo. Lazy init en la primera");
+            w.println(" * invocación de cualquier thunk AOT de este .c. No hace");
+            w.println(" * falta sincronización: en runtime single-thread la");
+            w.println(" * primera escritura es idempotente; en multi-thread");
+            w.println(" * cualquier carrera escribiría el mismo valor (data race");
+            w.println(" * benigno tipo \"singly assigned\"). */");
+            w.println("static uint32_t s_aot_" + moduleName + "_cs = 0;");
+            w.println();
+            w.println("static inline uint32_t aot_" + moduleName + "_cs(struct bpvm* vm) {");
+            w.println("    uint32_t cs = s_aot_" + moduleName + "_cs;");
+            w.println("    if (!cs) {");
+            w.println("        cs = vm->aot_helpers->find_module_cs(vm, \""
+                    + moduleName + "\");");
+            w.println("        if (!cs) {");
+            w.println("            vm->aot_helpers->throw_runtime(vm,");
+            w.println("                \"AOT: módulo '" + moduleName + "' no encontrado\");");
+            w.println("            return 0;");
+            w.println("        }");
+            w.println("        s_aot_" + moduleName + "_cs = cs;");
+            w.println("    }");
+            w.println("    return cs;");
+            w.println("}");
+            w.println();
+            w.println("/* Offsets CS-relativos de los module-globals (compile-time): */");
+            for (java.util.Map.Entry<String, Integer> e : moduleVarOffsets.entrySet()) {
+                w.println("/*   " + moduleName + "." + e.getKey() + " @ CS"
+                        + (e.getValue() < 0 ? "" : "+") + e.getValue() + " */");
+            }
+            w.println();
+        }
     }
 
     // ==================== Función AOT ====================
@@ -158,7 +233,31 @@ public final class AotCEmitter {
             w.print(", " + cType(p.type) + " " + p.name);
         }
         w.println(") {");
-        w.println("    (void) vm;   /* no usado en funciones leaf */");
+        w.println("    (void) vm;   /* puede no usarse si la función no toca");
+        w.println("                  *  globals/arrays/builtins. */");
+
+        /* #172 — Si el módulo tiene globals declarados, exponemos `mem`
+         * y `cs` al cuerpo de la función. `cs` se resuelve UNA VEZ por
+         * thunk-invocation (no por acceso) vía la helper-static
+         * aot_<Mod>_cs(vm). Para funciones que no tocan globals el
+         * compilador C las elimina como dead-store con -O2. */
+        if (!moduleVarOffsets.isEmpty()) {
+            w.println("    uint8_t* mem = vm->memory;");
+            w.println("    uint32_t cs = aot_" + moduleName + "_cs(vm);");
+            w.println("    (void) mem; (void) cs;");
+        }
+
+        /* #171 — Silenciar warnings de params no usados (frecuente en
+         * funciones de pass-through o cuando el AOT no usa todos los
+         * args). El compilador C los elimina en -O2 igualmente. */
+        for (Ast.Param p : f.params) {
+            w.println("    (void) " + p.name + ";");
+        }
+
+        /* #172 — Inicializar ámbito local: params + reset entre funcs. */
+        localNames.clear();
+        for (Ast.Param p : f.params) localNames.add(p.name);
+
         indentLevel = 1;
         for (Ast.IStmt s : f.body) {
             emitStmt(s);
@@ -228,6 +327,15 @@ public final class AotCEmitter {
         if (!isVoid) {
             w.println("    H->" + writeHelper(f.returnType)
                 + "(mem + sp, r); sp += 4;");
+        } else {
+            /* #177 FIX — Las funciones BP normal con OP_RET siempre push
+             * un ret_val (incluso si son void). El compilador BP emite
+             * OP_POP tras un statement-call para discardarlo. Para que el
+             * thunk AOT void sea balance-equivalente al call BP, debe
+             * push un dummy 0 que el OP_POP siguiente popee. Si no, sp
+             * decrece en 4 bytes por cada call AOT void → frame corrupt
+             * tras varias calls. */
+            w.println("    H->write_i32_be(mem + sp, 0); sp += 4;  /* dummy ret para OP_POP del caller */");
         }
         w.println("    *sp_p = sp;");
         w.println("}");
@@ -280,22 +388,53 @@ public final class AotCEmitter {
                     emitExpr(v.init);
                 }
                 w.println(";");
+                localNames.add(dn.name);   /* #172 — registrar local */
             }
             return;
         }
         if (s instanceof Ast.AssignStmt) {
             Ast.AssignStmt a = (Ast.AssignStmt) s;
-            /* Target IdentifierExpr: assignment a variable local/param. */
+            /* Target IdentifierExpr: assignment a variable local/param,
+             * o bien a global de módulo (#172) si no está en localNames. */
             if (a.target instanceof Ast.IdentifierExpr) {
+                String tname = ((Ast.IdentifierExpr) a.target).name;
                 indent();
-                w.print(((Ast.IdentifierExpr) a.target).name);
-                switch (a.op) {
-                    case ASSIGN:       w.print(" = ");  break;
-                    case PLUS_ASSIGN:  w.print(" += "); break;
-                    case MINUS_ASSIGN: w.print(" -= "); break;
+                if (localNames.contains(tname)) {
+                    /* Local — emisión directa estilo C. */
+                    w.print(tname);
+                    switch (a.op) {
+                        case ASSIGN:       w.print(" = ");  break;
+                        case PLUS_ASSIGN:  w.print(" += "); break;
+                        case MINUS_ASSIGN: w.print(" -= "); break;
+                    }
+                    emitExpr(a.value);
+                    w.println(";");
+                } else {
+                    /* #172 — Global de módulo: acceso directo mem+cs+OFFSET.
+                     * - ASSIGN:        write(mem+cs+OFF, value).
+                     * - PLUS/MINUS:    write(mem+cs+OFF, read(mem+cs+OFF) [+|-] value). */
+                    Integer off = moduleVarOffsets.get(tname);
+                    if (off == null) {
+                        throw new UnsupportedAotException(
+                            "AOT: assign a '" + tname + "' — no es local"
+                            + " ni módulo-global conocido (cross-module o"
+                            + " tipo no soportado). line " + a.line);
+                    }
+                    usesModuleGlobals = true;
+                    String addr = "mem + (uint32_t)((int32_t)cs + (" + off + "))";
+                    if (a.op == Ast.AssignOpKind.ASSIGN) {
+                        w.print("vm->aot_helpers->write_i32_be(" + addr + ", ");
+                        emitExpr(a.value);
+                        w.println(");");
+                    } else {
+                        String binOp = (a.op == Ast.AssignOpKind.PLUS_ASSIGN) ? "+" : "-";
+                        w.print("vm->aot_helpers->write_i32_be(" + addr
+                              + ", vm->aot_helpers->read_i32_be(" + addr
+                              + ") " + binOp + " (");
+                        emitExpr(a.value);
+                        w.println("));");
+                    }
                 }
-                emitExpr(a.value);
-                w.println(";");
                 return;
             }
             /* Target IndexExpr (H3 #170): a[i] := v / += / -= via helper.
@@ -434,6 +573,15 @@ public final class AotCEmitter {
         } else {
             indent(); w.println("int32_t " + step + " = 1;");
         }
+        /* #172 — el iterador es local del bucle; registrarlo para que
+         * emitExpr(IdentifierExpr) lo trate como tal. Lo dejamos en
+         * localNames durante el ciclo del for; al cerrar el for queda
+         * el scope cerrado, pero como no removemos sería ambiguo si la
+         * misma variable se reutilizara en otro for hermano dentro de
+         * la misma función. En la práctica el frontend BP genera
+         * scoping por bloque, así que el riesgo es bajo; documentamos
+         * por si surge ruido futuro. */
+        localNames.add(it);
 
         // while ((step > 0) ? (it <= end) : (it >= end)) { body; it += step; }
         indent();
@@ -499,7 +647,25 @@ public final class AotCEmitter {
             return;
         }
         if (e instanceof Ast.IdentifierExpr) {
-            w.print(((Ast.IdentifierExpr) e).name);
+            String name = ((Ast.IdentifierExpr) e).name;
+            if (localNames.contains(name)) {
+                w.print(name);                          // param o local
+                return;
+            }
+            /* #172 — Variable nivel-módulo: acceso directo `mem + cs +
+             * OFFSET` con OFFSET compile-time y `cs` cacheada al inicio
+             * de la función. */
+            Integer off = moduleVarOffsets.get(name);
+            if (off == null) {
+                throw new UnsupportedAotException(
+                    "AOT: identificador '" + name + "' no resuelve a local"
+                    + " ni a módulo-global conocido (cross-module o tipo no"
+                    + " soportado — pendiente #169/#171). line "
+                    + ((Ast.Node) e).line);
+            }
+            usesModuleGlobals = true;
+            w.print("vm->aot_helpers->read_i32_be(mem + (uint32_t)((int32_t)cs + ("
+                    + off + ")))");
             return;
         }
         if (e instanceof Ast.ParenExpr) {
@@ -572,6 +738,10 @@ public final class AotCEmitter {
                     + "Para AOT v1 todas las funciones llamadas deben ser native del mismo módulo "
                     + "o un builtin soportado (now, len).");
             }
+
+            /* C call directo a otra función native del mismo módulo.
+             * BL PC-relative dentro del mismo blob — gcc lo resuelve
+             * sin relocations porque ambas son static en el mismo .o. */
             w.print("aot_" + moduleName + "_" + name + "(vm");
             for (Ast.IExpr arg : c.args) {
                 w.print(", ");
@@ -644,9 +814,16 @@ public final class AotCEmitter {
                 case "integer": return "int32_t";
                 case "float":   return "float";
                 case "boolean": return "int32_t";   /* bool como i32 0/1 */
+                case "string":  return "int32_t";   /* #171: handle al heap.
+                                                       Ops sobre strings
+                                                       siguen pendientes en
+                                                       #173 — esto sólo
+                                                       habilita pass-through
+                                                       a builtins (p.ej.
+                                                       print_string). */
                 default:
                     throw new UnsupportedAotException(
-                        "AOT: tipo '" + n + "' no soportado (solo integer/float/boolean por ahora)");
+                        "AOT: tipo '" + n + "' no soportado en signature");
             }
         }
         if (t instanceof Ast.ArrayTypeRef) {
@@ -664,8 +841,10 @@ public final class AotCEmitter {
         if (t instanceof Ast.SimpleTypeRef) {
             String n = ((Ast.SimpleTypeRef) t).name;
             switch (n) {
-                case "integer": case "boolean": return "read_i32_be";
-                case "float":                    return "read_f32_be";
+                case "integer": case "boolean": case "string":
+                    return "read_i32_be";
+                case "float":
+                    return "read_f32_be";
             }
         }
         if (t instanceof Ast.ArrayTypeRef) {
@@ -682,8 +861,10 @@ public final class AotCEmitter {
         if (t instanceof Ast.SimpleTypeRef) {
             String n = ((Ast.SimpleTypeRef) t).name;
             switch (n) {
-                case "integer": case "boolean": return "write_i32_be";
-                case "float":                    return "write_f32_be";
+                case "integer": case "boolean": case "string":
+                    return "write_i32_be";
+                case "float":
+                    return "write_f32_be";
             }
         }
         if (t instanceof Ast.ArrayTypeRef) {
@@ -701,5 +882,53 @@ public final class AotCEmitter {
     public static String emit(Ast.ModuleNode module) {
         AotCEmitter e = new AotCEmitter(module.name);
         return e.emitModule(module);
+    }
+
+    /* ============================================================ */
+    /*  #172 helpers — layout de variables nivel-módulo              */
+    /* ============================================================ */
+
+    /** Recorre `module.defs` en orden y asigna offsets CS-relativos a
+     *  cada VarDecl / ConstDecl con tipo primitivo. Convención cuadrada
+     *  con MivmEmitter / ModWriter.registerSymbol: el primer decl
+     *  encontrado obtiene offset -4, el siguiente -8, etc.
+     *
+     *  v1: solo cuenta integer/float/bool (4 bytes); otros tipos (string,
+     *  array, ref) no entran en este path. Limitación documentada — si
+     *  un .bp más complejo tiene class descriptors o synthetics
+     *  intercalados, los offsets podrían descuadrarse y la AOT cascarse
+     *  con datos incoherentes. La convención está fijada en MivmEmitter:
+     *  user-vars/consts van primero, __initialized y class descriptors
+     *  después (verificado en GlobalsAot.mod). */
+    private void precomputeModuleVarOffsets(Ast.ModuleNode module) {
+        int nextOffset = -4;
+        for (Ast.ITopLevelDecl d : module.defs) {
+            if (d instanceof Ast.VarDecl) {
+                Ast.VarDecl vd = (Ast.VarDecl) d;
+                if (!isPrimitiveTypeName(vd.type)) continue;
+                for (Ast.DeclName dn : vd.names) {
+                    moduleVarOffsets.put(dn.name, nextOffset);
+                    nextOffset -= 4;
+                }
+            } else if (d instanceof Ast.ConstDecl) {
+                Ast.ConstDecl cd = (Ast.ConstDecl) d;
+                if (cd.value instanceof Ast.IntLitExpr
+                        || cd.value instanceof Ast.FloatLitExpr
+                        || cd.value instanceof Ast.BoolLitExpr) {
+                    moduleVarOffsets.put(cd.name.name, nextOffset);
+                    nextOffset -= 4;
+                }
+            }
+        }
+    }
+
+    /** True si el tipo BP cabe en un slot de 4 bytes (integer/float/bool).
+     *  Sólo nombres simples; tipos compuestos (array, class refs) no. */
+    private boolean isPrimitiveTypeName(Ast.TypeRef t) {
+        if (!(t instanceof Ast.SimpleTypeRef)) return false;
+        String s = ((Ast.SimpleTypeRef) t).name;
+        return "integer".equals(s) || "int".equals(s)
+            || "float".equals(s)
+            || "boolean".equals(s) || "bool".equals(s);
     }
 }

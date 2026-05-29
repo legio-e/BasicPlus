@@ -18,13 +18,71 @@
 #include "bpvm_opcodes.h"
 #include "aot_registry.h"   /* H3 #160: hijack BP→AOT en OP_CALL/CALL_EXT */
 
+#include "bpvm_comm.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <math.h>      /* fmodf */
 
-/* Helper: emite un texto al output sink (o stdout por defecto). */
+/* Helper: emite un texto al sink correcto.
+ *
+ * Orden de prioridad:
+ *   1. Modo SMP — siempre encola en la output queue. El comm task drena
+ *      y, EN HILO ÚNICO, invoca output_cb (o fwrite a stdout si no hay).
+ *      Esto serializa: dos workers no entrelazan ni fwrite ni una
+ *      llamada al callback (importante en Pico, donde output_cb hace
+ *      wire-v1 wrapping con varios fputs por chunk — entrelazado
+ *      rompería el JSON).
+ *   2. Modo legacy single-worker — si hay callback, va ahí; si no,
+ *      fwrite directo. Sin overhead extra para el camino existente.
+ */
+/* H2 — Flush del staging buffer del tc al output queue. Una única
+ * llamada a bpvm_comm_output_enqueue ⇒ oq_push toma el mutex de la
+ * queue una sola vez ⇒ TODO el contenido del buffer queda contiguo
+ * en el ring buffer ⇒ el comm task lo emite contiguo al transport.
+ * Esa es la atomicidad de línea que queremos. */
+static void emit_flush_tc(bpvm_t* vm, bpvm_thread_t* tc) {
+    if (tc->out_buf_used > 0) {
+        bpvm_comm_output_enqueue(vm, tc->out_buf, (size_t) tc->out_buf_used);
+        tc->out_buf_used = 0;
+    }
+}
+
+/* current_tc_for_output — devuelve el tc activo del worker que llama,
+ * o NULL si no estamos en un contexto de tc identificado. En SMP es
+ * vm->threads[vm->current_thread_idx] (current_thread_idx lo setea el
+ * worker bajo vm_lock antes de entrar al interp; mientras corre el
+ * interp lock-free no cambia). En legacy también vale el current_thread_idx
+ * — pero ahí no usamos este path. */
+static bpvm_thread_t* current_tc_for_output(bpvm_t* vm) {
+    int idx = vm->current_thread_idx;
+    if (idx < 0 || idx >= vm->thread_count) return NULL;
+    return &vm->threads[idx];
+}
+
 static void emit_text(bpvm_t* vm, const char* s, size_t len) {
-    if (vm->output_cb) {
+    if (vm->smp) {
+        /* Acumular en el buffer del tc actual hasta '\n' o lleno.
+         * Cada flush es UN solo oq_push → contiguo en el ring → comm
+         * task lo emite entero. Eso garantiza que un `print x, y, z`
+         * (varios emit_text) llegue a stdout/CDC como una línea, sin
+         * chars de otro worker entrelazados. */
+        bpvm_thread_t* tc = current_tc_for_output(vm);
+        if (!tc) {
+            /* Sin contexto de tc — encolar directo. */
+            bpvm_comm_output_enqueue(vm, s, len);
+            return;
+        }
+        size_t cap = sizeof(tc->out_buf);
+        for (size_t i = 0; i < len; i++) {
+            tc->out_buf[tc->out_buf_used++] = s[i];
+            int hit_nl   = (s[i] == '\n');
+            int buf_full = ((size_t) tc->out_buf_used == cap);
+            if (hit_nl || buf_full) {
+                emit_flush_tc(vm, tc);
+            }
+        }
+    } else if (vm->output_cb) {
         vm->output_cb(s, len, vm->output_user);
     } else {
         fwrite(s, 1, len, stdout);
@@ -101,12 +159,44 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             tc->status = BPVM_THREAD_RUNNABLE;
             break;
         }
+        /* H2 — Safepoint para STW GC. Si otro worker pidió GC, salimos
+         * del quantum aquí. El worker_loop verá stop_the_world y se
+         * parqueará en cond_wait hasta que GC termine. Coste hot-path:
+         * un null-check + un volatile read si SMP, NADA si single-worker
+         * (vm->smp es NULL en legacy). */
+        if (vm->smp && vm->smp->stop_the_world) {
+            tc->status = BPVM_THREAD_RUNNABLE;
+            break;
+        }
         ops++;
         if (pc >= vm->memory_size) { exit_status = BPVM_ERR_BAD_PC; break; }
 
         if (vm->tracing) {
             fprintf(stderr, "[trace] pc=%u sp=%u bp=%u cs=%u op=0x%02X\n",
                     pc, sp, bp, cs, mem[pc]);
+        }
+
+        /* #139 — Debug hook (cambio de línea). Coste cuando NO está
+         * instalado: un único null-check por opcode. Cuando lo está:
+         * un callback pc_to_line + comparación contra last_debug_line.
+         * El hook puede bloquear el thread; al volver NO mutamos
+         * pc/sp/bp/cs (edit-and-continue queda para v2). */
+        if (vm->debug_hook != NULL) {
+            int dbg_line = -1;
+            const char* dbg_src = NULL;
+            if (vm->debug_pc_to_line != NULL) {
+                dbg_line = vm->debug_pc_to_line(pc, &dbg_src, vm->debug_user);
+            } else {
+                /* Modo "todo es una línea": cada opcode dispara. */
+                dbg_line = (int) pc;
+            }
+            if (dbg_line > 0 && dbg_line != tc->last_debug_line) {
+                tc->last_debug_line = dbg_line;
+                /* Sincronizar registros antes del hook para que el
+                 * back-end pueda inspeccionar tc.pc/sp/bp/cs. */
+                tc->pc = pc; tc->sp = sp; tc->bp = bp; tc->cs = cs;
+                vm->debug_hook(vm, tc, pc, dbg_line, dbg_src, vm->debug_user);
+            }
         }
 
         uint8_t op = mem[pc++];
@@ -357,10 +447,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             int32_t target_rel = bpvm_read_i32_be(mem + pc); pc += 4;
             uint32_t target_abs = cs + (uint32_t) target_rel;
             /* H3 #160 — AOT hijack. Si el target tiene un thunk
-             * registrado, divertir SIN crear frame BP. El thunk lee
-             * args del top del stack, ejecuta la AOT C-ABI, y pushea
-             * el resultado. sp/bp se actualizan via punteros; pc
-             * queda intacto (continuamos en el opcode siguiente). */
+             * registrado, divertir SIN crear frame BP. */
             bpvm_aot_thunk_t aot = bpvm_aot_lookup(target_abs);
             if (aot) {
                 aot(vm, &sp, &bp);
@@ -925,6 +1012,16 @@ done:
     if (exit_status != BPVM_OK) {
         tc->status = BPVM_THREAD_TERMINATED;
         if (yielded) *yielded = 1;
+    }
+    /* H2 — Antes de soltar este tc al scheduler, flush del buffer de
+     * salida. Si lo dejamos colgado entre quantums, una BP que imprime
+     * sin newline final no aparece nunca en stdout/CDC hasta que se
+     * llene el buffer o reciba un newline en un siguiente quantum.
+     * Caso clásico: prompt `IO.write("> ")` esperando input — no
+     * acabamos de leer la línea sin esto. En legacy (vm->smp NULL) el
+     * buffer no se usa así que esto es no-op. */
+    if (vm->smp) {
+        emit_flush_tc(vm, tc);
     }
     return exit_status;
 }

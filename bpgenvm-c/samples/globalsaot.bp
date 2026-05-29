@@ -1,0 +1,27 @@
+// globalsaot.bp — test de #172 P-aot-module-globals.
+//
+// Una función `native` que LEE y ESCRIBE una variable nivel-módulo.
+// Sirve como smoke-test del par get_global_i32 / set_global_i32 que
+// añadimos a aot_helpers_v1 + del emitter actualizado para
+// distinguir locals vs globals.
+//
+// Esperado: 1 2 3 4 5 — la global cuenta sin perder estado entre
+// invocaciones del thunk AOT.
+module GlobalsAot
+
+    var counter: integer := 0
+
+    native function bumpAndGet(): integer
+        counter := counter + 1
+        return counter
+    end bumpAndGet
+
+    function Main(arg: string)
+        var i: integer := 0
+        while i < 5 do
+            print bumpAndGet()
+            i := i + 1
+        endwh
+    end Main
+
+end GlobalsAot

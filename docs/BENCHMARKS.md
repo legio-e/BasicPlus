@@ -3,6 +3,21 @@
 Suite de pruebas de rendimiento del lenguaje BP sobre las distintas VMs.
 Las tablas se rellenan según vamos teniendo módulos validados.
 
+## Estado v1
+
+**Cubierto** (datos reales en las tablas):
+- Enteros — call overhead + aritmética 32-bit (×66-90 speedup AOT).
+- Floats — operaciones float + branches (×54 speedup AOT).
+- Memoria / arrays — bubble/insertion/selection sort (×11-14 speedup AOT).
+
+**Diferido a v2** (anotado en cada tabla):
+- Strings — depende de #173 P-aot-strings.
+- OO virtual dispatch — depende de #174 P-aot-methods.
+- HW (GPIO/I2C/ADC) — requiere mesa de pruebas con osciloscopio.
+
+Las 3 categorías cubiertas validan el AOT en los workloads más comunes
+(CPU-puro, float-math, memory-bound). Las 3 diferidas son refinamientos.
+
 ## Objetivo
 
 Tener un cuadro claro de:
@@ -69,11 +84,15 @@ cd bpgenvm-c/pico
 
 ### Strings — heap churn + memory ops
 
+> **v1**: AOT no soporta strings (ver #173 deferred a v2). Estos benches
+> ejecutarían sólo en `Ci` (Pico interp). Se difieren a v2 cuando #173
+> aporte la columna `Ca` con valor real.
+
 | Bench | `J` (host) | `Ci` (Pico interp) | `Ca` (Pico AOT) | speedup | Notas |
 |---|---:|---:|---:|---:|---|
-| `StringConcat.build(10000)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
-| `StringSplit.parse(N)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
-| `StringSearch.find(N)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
+| `StringConcat.build(10000)` | _v2_ | _v2_ | n/a en v1 | n/a | Bloqueado por #173 P-aot-strings |
+| `StringSplit.parse(N)` | _v2_ | _v2_ | n/a en v1 | n/a | Idem |
+| `StringSearch.find(N)` | _v2_ | _v2_ | n/a en v1 | n/a | Idem |
 
 ### Memoria / arrays — array access + locality
 
@@ -81,23 +100,35 @@ cd bpgenvm-c/pico
 |---|---:|---:|---:|---:|---|
 | `ArrayBench.bubbleSort(200 rev)` | _pendiente_ | 359 ms | 33 ms | **10.9×** | ✅ arraybench.bp — bubble sort N=200 reverse-ordered (worst case, ~20k cmp + ~2.5k swap). Valida #167 (array read/write) y #170 (lvalues). Ratio compress vs int/float: el helper de array hace mismo bounds+null check que el OP del intérprete, sólo se ahorra el dispatch del bytecode + push/pop de stack. |
 | `SumBench.sumArray(5000) × 50` | _pendiente_ | 1 525 ms | 70 ms | **21.8×** | ✅ sumbench.bp — read-only loop. Valida #168: native llama a `now()` internamente (self-measured = 70 ms, idéntico al external timing — confirma builtin call desde AOT). Ratio mejor que bubble (sin writes ni swap), pero limitado por bounds check del helper. |
+| `SortBench.bubble(300 rev)` | _pendiente_ | 804 ms | 70 ms | **11.5×** | ✅ sortbench.bp — bubble sort N=300 reverse. Mismo perfil que ArrayBench pero N mayor → más swaps. |
+| `SortBench.insertion(300 rev)` | _pendiente_ | 449 ms | 34 ms | **13.2×** | ✅ sortbench.bp — insertion sort N=300 reverse. Mejor ratio que bubble (menos branches, más read locality). Valida `and` short-circuit en AOT. |
+| `SortBench.selection(300 rev)` | _pendiente_ | 347 ms | 25 ms | **13.9×** | ✅ sortbench.bp — selection sort N=300 reverse. Mejor ratio del trío (fewer writes total). Valida switch/case (#176): los 3 sorts se invocan via `sortDispatch(a, n, kind)` en el mismo módulo. |
 | `Sort.quick(10000)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
 | `Matrix.mult(32x32)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | — |
 
 ### OO — INVOKE_VIRTUAL overhead
 
+> **v1**: AOT no soporta vtable dispatch desde nativo (ver #174 deferred
+> a v2). En v1 los methods llaman fallback al interpreter aunque la
+> función llamante sea AOT. Estos benches se difieren a v2.
+
 | Bench | `J` (host) | `Ci` (Pico interp) | `Ca` (Pico AOT) | speedup | Notas |
 |---|---:|---:|---:|---:|---|
-| `VtableDispatch.loop(1M)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | dispatch puro |
-| `PinToggle.virtual(100k)` | _pendiente_ | _pendiente_ | _pendiente_ | _pendiente_ | Pin.set via vtable |
+| `VtableDispatch.loop(1M)` | _v2_ | _v2_ | n/a en v1 | n/a | Bloqueado por #174 P-aot-methods |
+| `PinToggle.virtual(100k)` | _v2_ | _v2_ | n/a en v1 | n/a | Idem |
 
 ### HW (solo Pico) — builtin path
 
+> **v1**: requieren hardware específico (osciloscopio para GPIO, bus I2C
+> con periférico conocido, fuente analógica para ADC). Se difieren a v2
+> cuando se monte la mesa de pruebas. Ratio esperado: ~1× (el AOT no
+> aporta sobre el coste del builtin nativo HW).
+
 | Bench | `Ci` (interp) | `Ca` (AOT) | speedup | Notas |
 |---|---:|---:|---:|---|
-| `GpioToggle.rate(1M edges)` | _pendiente_ | _pendiente_ | _pendiente_ | Builtin nativo — esperamos ratio ~1× (no hay ops BP que AOT-izar). |
-| `I2c.scanLatency` | _pendiente_ | _pendiente_ | _pendiente_ | — |
-| `Adc.sampleRate` | _pendiente_ | _pendiente_ | _pendiente_ | — |
+| `GpioToggle.rate(1M edges)` | _v2_ | _v2_ | _esperado ~1×_ | Requiere oscilo. |
+| `I2c.scanLatency` | _v2_ | _v2_ | _esperado ~1×_ | Requiere bus con periférico. |
+| `Adc.sampleRate` | _v2_ | _v2_ | _esperado ~1×_ | Requiere señal analógica. |
 
 ### Mixto / dogfood
 

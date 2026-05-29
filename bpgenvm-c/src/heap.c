@@ -180,12 +180,47 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
     uint32_t total = align4(BPVM_OBJ_HEADER_SIZE + payload_bytes);
     if (total < BPVM_MIN_FREE_BLOCK) total = BPVM_MIN_FREE_BLOCK;
 
+    /* H2 — Heap allocation y GC son críticos en SMP: bump pointer y
+     * mark/sweep escriben estado compartido. Tomar el vm_lock global
+     * serializa los workers contra heap. En legacy mode (vm->smp NULL)
+     * el lock es no-op. */
+    bpvm_smp_lock(vm);
+
     if (vm->heap_next + total > vm->stack_base) {
-        /* Sin espacio: correr GC. */
+        /* Sin espacio: correr STW GC.
+         *
+         * H2 — DANCE STW: el GC mark-phase scanea tc->sp/stack_base de
+         * TODOS los threads para encontrar roots. Si otro worker está
+         * mid-interp con tc->sp obsoleto (pendiente de sync local), el
+         * scan se pierde refs vivas → free de objetos referenciados →
+         * corrupción heap.
+         *
+         * Solución: izar `stop_the_world`, esperar a que cada worker
+         * llegue al safepoint del interp y se parquee en sched_cond.
+         * Cuando running_workers == 1 (sólo nosotros), corremos GC.
+         * Tras GC: bajamos flag y broadcast para que los workers
+         * resuman.
+         *
+         * En legacy mode no hay smp, no hay otros workers — el GC corre
+         * directo sin dance. */
+        if (vm->smp) {
+            vm->smp->stop_the_world = true;
+            bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+            /* Esperar a que el resto de workers ceda y se parquee. */
+            while (vm->smp->running_workers > 1) {
+                bpvm_platform_cond_wait(&vm->smp->sched_cond,
+                                         &vm->smp->vm_lock);
+            }
+        }
         bpvm_gc(vm);
+        if (vm->smp) {
+            vm->smp->stop_the_world = false;
+            bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+        }
         /* F2 v1: el sweep marca FREE pero no compacta — el bump pointer
          * sigue avanzando. Si tras GC el bump todavía no cabe, OOM. */
         if (vm->heap_next + total > vm->stack_base) {
+            bpvm_smp_unlock(vm);
             return 0;
         }
     }
@@ -204,6 +239,7 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
     if (payload_bytes > 0) {
         memset(vm->memory + user_ref + 4, 0, payload_bytes);
     }
+    bpvm_smp_unlock(vm);
     return user_ref;
 }
 
@@ -223,5 +259,7 @@ uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len) {
  * entre heap_next antes y después es 0 porque F2 v1 no compacta, así
  * que devolvemos 0). */
 void bpvm_heap_gc(bpvm_t* vm) {
+    bpvm_smp_lock(vm);
     bpvm_gc(vm);
+    bpvm_smp_unlock(vm);
 }

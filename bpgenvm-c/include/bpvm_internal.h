@@ -114,7 +114,18 @@ typedef enum {
     BPVM_THREAD_BLOCKED_PROMPT
 } bpvm_thread_status_t;
 
-typedef struct {
+/* NOTE: tagged como `struct bpvm_thread` para que el forward declarado
+ * en bpvm.h (typedef struct bpvm_thread bpvm_thread_t;) cuadre — el
+ * caller que sólo incluye bpvm.h ve el tipo opaco; los .c de la VM
+ * (que incluyen bpvm_internal.h) ven la definición completa.
+ *
+ * `BPVM_THREAD_T_DEFINED` protege el typedef contra redefinición —
+ * bpvm.h ya lo emitió como forward incompleto. */
+#ifndef BPVM_THREAD_T_DEFINED
+#define BPVM_THREAD_T_DEFINED
+typedef struct bpvm_thread bpvm_thread_t;
+#endif
+struct bpvm_thread {
     int32_t  id;
     uint32_t pc;
     uint32_t sp;
@@ -140,7 +151,39 @@ typedef struct {
 
     /* F5 — RuntimeError anclar para GC durante unwind. */
     int32_t  alloc_anchor;
-} bpvm_thread_t;
+
+    /* #139 — última línea origen vista por el debug hook; 0 = "ninguna
+     * todavía". El hook sólo se invoca cuando la línea actual cambia
+     * respecto a este valor, acotando la frecuencia a sentencias BP. */
+    int  last_debug_line;
+
+    /* H2 — Worker ID que actualmente está ejecutando el interp sobre
+     * este tc. -1 = libre (puede ser pickeado). Sólo se modifica bajo
+     * vm_lock. El scheduler usa esta flag (NO tc->status) para decidir
+     * pickability porque tc->status lo escribe el interp sin sostener
+     * vm_lock (write-races aceptados como triviales para status, pero
+     * no para "está siendo ejecutado actualmente"). */
+    int  sched_owner;
+
+    /* H2 — Staging buffer per-tc para atomicidad de línea bajo SMP.
+     * Un `print x, y` BP llama varias veces a emit_text (uno por arg
+     * + separador + newline). Sin buffer, otro worker puede colar chars
+     * de su línea entre dos emit_text del nuestro — la línea sale
+     * entrelazada en stdout/CDC.
+     *
+     * Estrategia: emit_text bajo SMP escribe al buffer; lo flushea
+     * (oq_push completo, atómico) en cuanto ve '\n' o se llena. Al
+     * yield/terminar del quantum también se flushea (no acumular
+     * silenciosamente entre quantums). En modo legacy (vm->smp==NULL)
+     * el buffer no se toca — emit_text va directo a output_cb/stdout.
+     *
+     * Tamaño 128 bytes: cubre la línea típica (`print "x =", x`
+     * son ~10-20 chars); rebases mayores hacen overflow → flushea por
+     * tamaño Y sigue acumulando. Cost: 32 threads × 128 = 4 KiB extra
+     * por VM. */
+    char out_buf[128];
+    int  out_buf_used;
+};
 
 /* F5 — entry del handlerStack. */
 typedef struct bpvm_eh_entry {
@@ -220,6 +263,20 @@ struct bpvm {
      * AOT C-emitido accede a helpers vía vm->aot_helpers->func(...).
      * Inicializado en bpvm_init. Definición en bpvm_aot_helpers.h. */
     const struct aot_helpers_v1* aot_helpers;
+
+    /* #139 — Debug hook + lookup pc→línea. Si debug_hook == NULL el
+     * inner loop sólo paga un null-check por opcode (negligible).
+     * Cuando está instalado, paga además el debug_pc_to_line()
+     * callback y la comparación contra tc->last_debug_line, con la
+     * llamada efectiva al hook sólo en cambios de línea. */
+    bpvm_debug_hook_t   debug_hook;
+    bpvm_pc_to_line_t   debug_pc_to_line;
+    void*               debug_user;
+
+    /* H2 — Estado SMP (workers + comm task + locks). NULL = modo
+     * single-worker legacy (F4 v1, scheduler.c). Cuando no-NULL, la
+     * VM corre con scheduler_smp.c. Allocated by bpvm_smp_init(). */
+    struct bpvm_smp* smp;
 };
 
 /* ============================================================ */
@@ -273,6 +330,29 @@ bpvm_status_t bpvm_loader_load(bpvm_t* vm, const char* path);
  * no hay path del cual derivarlo). Puede ser NULL → "embedded". */
 bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
                                        size_t size, const char* name_hint);
+
+/* H2 SMP — lock helpers condicionales.
+ *
+ * En modo single-worker (vm->smp == NULL) son no-op. En SMP toman el
+ * vm_lock global. Pensados para envolver mutaciones a estado
+ * compartido (heap_alloc, thread_spawn, mutex_pool ops) sin tener que
+ * duplicar el código por modo. Inline-static para coste cero cuando
+ * no hay SMP.
+ *
+ * NO usar dentro de regiones ya bajo vm_lock (ej. dentro del
+ * scheduler_smp.c que ya lo agarra explícitamente) — eso sería
+ * recursión, y nuestro vm_lock NO es recursivo. */
+#include "bpvm_smp.h"
+static inline void bpvm_smp_lock(bpvm_t* vm) {
+    if (vm && vm->smp) {
+        bpvm_platform_mutex_lock(&vm->smp->vm_lock);
+    }
+}
+static inline void bpvm_smp_unlock(bpvm_t* vm) {
+    if (vm && vm->smp) {
+        bpvm_platform_mutex_unlock(&vm->smp->vm_lock);
+    }
+}
 
 /* interp.c */
 bpvm_status_t bpvm_interp_run(bpvm_t* vm);

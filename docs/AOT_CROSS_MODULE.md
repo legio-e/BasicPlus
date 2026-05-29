@@ -1,0 +1,182 @@
+# AOT — llamadas cross-module (#169)
+
+Diseño consensuado para resucitar #169 P-aot-cross-module-call.
+Captura el insight clave: **el trabajo de compilación es el mismo
+que para llamadas BP→BP entre módulos.** Solo hace falta una pieza
+runtime nueva.
+
+## 1. Cómo funcionan HOY las llamadas BP→BP cross-module
+
+Pipeline (lo que ya hace MivmEmitter + loader):
+
+### Compile-time
+
+1. El módulo declara `import B [from path]`. El frontend resuelve `B`:
+   - Si `B.mod` ya compilado existe: lo usa.
+   - Si solo existe `B.bp`: compila primero su **interfaz** (`B.bpi`)
+     — modelo Modula-2 DEFINITION. La `.bpi` lleva la lista de
+     funciones públicas con `(nombre, tipos de parámetros, tipo de
+     retorno, índice en la tabla pública del módulo)`.
+
+2. Cuando MivmEmitter encuentra una `CallExpr` que es `B.foo(args)`:
+   - Mira en el namespace import: `B.foo` resuelve a `(módulo=B,
+     índice=k)` vía la `.bpi`.
+   - Emite OP_CALL_EXT con el slot del import (un u16). El slot
+     queda registrado en la sección imports del `.mod` como
+     `qualified="B.foo"`.
+
+3. Resultado: el `.mod` lleva una tabla `imports[]` de strings
+   cualificados. El `code[]` referencia esos slots con
+   `OP_CALL_EXT idx`.
+
+### Runtime
+
+4. `bpvm_link_all` resuelve cada import del `.mod` cargado:
+   - Para cada slot k del import-table, hace
+     `bpvm_link_lookup(vm, imports[k])` → obtiene la dirección
+     absoluta de la función target.
+   - Escribe esa dirección en `ext_table[k]` (en `memory[]` del
+     módulo).
+
+5. El intérprete ejecuta `OP_CALL_EXT idx`:
+   - Lee `ext_table[idx]` → dirección absoluta de la función.
+   - Push frame, salta. Igual que un CALL local.
+
+**La dirección absoluta es `module.code_start + function.offset`**,
+donde `function.offset` viene del símbolo público del módulo target.
+Esto resuelve a la pregunta original del usuario:
+
+> CS+ offset positivo son las funciones. Desde fuera necesitamos
+> la referencia al módulo y el índice de la función.
+
+## 2. Aplicación a AOT (#169)
+
+Lo que descubrimos: **el AotCEmitter necesita exactamente la misma
+información que MivmEmitter**:
+
+- Para una `CallExpr` que es `B.foo(args)`, necesita:
+  - Resolver `B.foo` vía la `.bpi` → `(módulo=B, índice=k, signature
+    (paramTypes, retType))`.
+  - La signature le permite generar el código C tipo-seguro (no
+    hace falta asumir todo como `i32`).
+
+Es decir, **el trabajo de compilación se comparte con MivmEmitter**
+si AotCEmitter tiene acceso a las `.bpi` importadas. No es un
+problema nuevo — es el mismo que ya resolvimos para BP→BP.
+
+## 3. Lo que SÍ es nuevo: el trampolín runtime native→externa
+
+En BP→BP: el intérprete hace todo (OP_CALL_EXT → ext_table → jump).
+
+En AOT nativo: necesitamos una función del **runtime** que el código
+nativo emitido invoca, y que internamente hace lo equivalente al
+`OP_CALL_EXT`. Esa función VM:
+
+1. Recibe identificación del target (dirección absoluta, o índice de
+   import, o nombre cualificado — a decidir).
+2. Recibe los args.
+3. Computa la dirección de la función target (`vm->modules[k].code_start
+   + offset`, o lookup en `bpvm_link_lookup` con caché).
+4. Decide qué hacer según si el target tiene thunk AOT registrado:
+   - **Thunk AOT existe** (target es `native` AOT-compilado y
+     registrado): push args al BP stack del thread actual, llama
+     `thunk(vm, &sp, &bp)`, pop resultado.
+   - **No hay thunk** (target es BP interpretado): re-entra el
+     intérprete con esa PC como objetivo. Push frame de "return
+     sentinel", set tc.pc = target, corre interp_run_quantum hasta
+     que vuelva al sentinel, pop resultado.
+
+Llamémosle por ahora:
+
+```c
+/* En aot_helpers_v2 (no rompe ABI de v1). */
+int32_t (*call_external_i32)(struct bpvm* vm,
+                              uint32_t target_abs_addr,
+                              int32_t* args, int n_args);
+/* Variantes paralelas para float / void / etc. según signature. */
+```
+
+O — más elegante — un único helper que toma signature dinámica vía
+varargs o "tagged args":
+
+```c
+int32_t (*call_external)(struct bpvm* vm,
+                          uint32_t target_abs_addr,
+                          const char* sig,    /* "ii→i", "if→f", ... */
+                          ...);
+```
+
+A decidir cuando codifiquemos.
+
+## 4. Cómo AotCEmitter obtiene `target_abs_addr`
+
+Dos opciones:
+
+**Opción A — Resolver una vez en runtime, cachear en static.**
+Cada call-site emitido tiene su `static uint32_t s_addr_B_foo = 0;`,
+inicializado lazily con `H->find_external(vm, "B.foo")` la primera
+vez. Análogo al `s_module_cs` de #172. Coste por call: un check del
+cache + una llamada indirecta.
+
+Ventaja: AotCEmitter NO necesita compartir slot-numbering con
+MivmEmitter. Solo necesita los nombres cualificados (que ya tiene
+del AST).
+
+**Opción B — Compartir slot con MivmEmitter.**
+AotCEmitter usa el mismo número de slot que el bytecode usa con
+OP_CALL_EXT. El helper lee `ext_table[slot]` directamente.
+
+Ventaja: Más rápido (un memory read vs un cache check).
+Desventaja: Coordinación frágil. Si MivmEmitter cambia su esquema
+de slot allocation, AotCEmitter rompe.
+
+**Recomendación**: Opción A (`H->find_external + cache`). El coste
+es despreciable comparado con la llamada misma.
+
+## 5. Caso especial: native → native cross-module
+
+Subset que vale la pena soportar primero porque NO requiere re-entrar
+el intérprete (es el caso más complejo del helper):
+
+- Target es `native function` en otro módulo, registrada en
+  `aot_registry`.
+- El helper detecta el thunk y lo invoca directamente. Sin nested
+  interp.
+- Push args, llamar thunk, pop resultado. Casi tan rápido como
+  una llamada C directa.
+
+Para v1 de #169 podemos restringir al caso "ambos lados son AOT".
+Si el target NO está AOT-registrado, lanzamos RuntimeError BP.
+Eso cubre el caso útil real (encadenar funciones críticas en
+varios módulos) sin pagar el coste de implementar la re-entrada
+al intérprete.
+
+La re-entrada (native → BP interpretado) queda como v2 si surge
+necesidad real.
+
+## 6. Resumen del plan cuando resucitemos #169
+
+| Pieza | Trabajo |
+|---|---|
+| **Compile-time** | AotCEmitter lee `.bpi` de imports (igual que MivmEmitter). Para cada `CallExpr` cross-module, genera marshalling de args + llamada al helper con nombre cualificado + reads del resultado. |
+| **Runtime helper nuevo** | `H->call_external_*` con cache de dirección. Mira `aot_registry`; si hay thunk, llama. Si no, lanza RuntimeError BP ("target X no es AOT — v1 limitación"). |
+| **Validación AOT compile-time** | El check de #178 (validate-aot-in-compile) detecta cross-module call y verifica que el módulo importado existe en outDir. Si su `.bpi` indica que la función no es `native`, el compilador puede avisar: "X.foo es BP interpretada — el AOT fallará si la llamas desde código native". |
+| **Sample test** | Dos módulos: `Math` con `native function sqrt(x)`, `User` con `native function compute(x)` que llama `Math.sqrt(x)`. Verificar end-to-end. |
+
+## 7. Por qué quedó en v2 inicialmente
+
+La discusión original encontró 3 escollos:
+
+1. **Signatures**: cómo sabe AotCEmitter qué tipo tiene `B.foo(x)`. **Resuelto**: lo lee de `B.bpi` igual que MivmEmitter.
+2. **`extern` C symbols**: para call directo C→C necesitaríamos
+   símbolos externos en .o, que rompe el modelo `.mdn` (PIC).
+   **Resuelto**: NO usamos call directo C→C. Todo pasa por el helper
+   runtime que mira el registry. El `.mdn` mantiene su position-
+   independence.
+3. **Cross-module a través del intérprete**: re-entrar interp desde
+   C. **Resuelto en parte**: restricción v1 = ambos lados AOT, no
+   hay nested interp. El caso BP-target queda para v2.
+
+Con esos 3 escollos resueltos, **#169 vuelve a ser viable y limpio**.
+No urge para v1, pero si surge hueco después de H2+H4, es ataque
+mucho más enfocado que cuando lo deferimos.

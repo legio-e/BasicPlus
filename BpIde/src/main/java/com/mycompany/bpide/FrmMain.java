@@ -1528,27 +1528,29 @@ public class FrmMain extends javax.swing.JFrame
      * firmware en modo debug, con breakpoints, step y locals contra el
      * source actual.
      *
-     * Estado actual: el firmware no expone aún protocolo de debug sobre
-     * el USB CDC (su REPL solo entiende HELLO/LS/PUT/GET/DEL/RUN/MEM/
-     * SAVE/FORMAT/LOG/RESET/BOOTSEL). Implementarlo requiere:
+     * Estado v1 (FINAL para v1, deferido a v2):
      *
-     *   1. Añadir un comando `DEBUG name` a la REPL que arranca la VM
-     *      del Pico con DebugController (mismo módulo que en la VM Java)
-     *      y un wire JSON-line equivalente al TCP del DebugServer.
-     *   2. Multiplexar el wire de debug sobre el mismo USB CDC que ya
-     *      usa la REPL (o asignar un canal independiente si TinyUSB
-     *      permite múltiples interfaces CDC).
-     *   3. Implementar DebugAdapter en PicoClient (parser JSON línea a
-     *      línea) que el IDE conecta como un BpvmClient remoto.
+     * El firmware ya habla wire v1 sobre USB CDC (#150 P-pico-wire-v1)
+     * y la VM-C lleva el plumbing del debug hook en el inner loop
+     * (#139 P-interp-debug-hook, no-op por default). Lo que NO tiene
+     * v1 es el back-end real del debug sobre el Pico:
      *
-     * Mientras tanto, el botón explica el estado al usuario y le ofrece
-     * la alternativa práctica: usar `Debug` local (Shift+F5) sobre el
-     * mismo .bp para depurar con la VM Java; cuando la lógica esté
-     * verificada, `Run on Pico` lo ejecuta en hardware real.
+     *   - [v2] #138 P-cdc-multiplex: separar el canal de debug del
+     *     stdout del programa BP sobre el mismo USB CDC.
+     *   - [v2] #140 P-debug-pico-impl: cablear DebugController/Server
+     *     sobre el wire v1 del firmware y reportar capability DEBUG
+     *     en HELLO_REPLY.
      *
-     * Cuando el wire debug-on-Pico esté listo, este método se sustituye
-     * por la llamada análoga a doDebug() pero usando PicoClient como
-     * transporte (en vez de BpvmClient sobre TCP).
+     * Decisión de v1: el workflow combinado Shift+F5 (Debug Run en
+     * VM-Java local con breakpoints, step, locals, frames) + "Run on
+     * Pico" (ejecutar lógica ya verificada sobre el HW real) cubre
+     * el 95% del valor de "debug-on-Pico". Bugs que sólo se
+     * manifiesten sobre HW se cazan con `print` instrumentado.
+     *
+     * Cuando v2 traiga #140, este método se sustituye por la llamada
+     * análoga a doDebug() — el transporte ya existe (SerialBackend
+     * sobre BpvmClient.connectSerial), sólo hay que dejar de
+     * cortocircuitar y pasar `waitClient=true`.
      */
     private void doDebugOnPico() {
         String msg =

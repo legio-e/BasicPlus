@@ -95,29 +95,40 @@ Hay cuatro hitos pendientes, en este orden:
 
 ### H1 — Comunicaciones limpias (USB CDC + TCP/IP)
 
-**Tasks**: #136 arch-tasks, #137 transport-abstract, #138 cdc-multiplex,
-#139 interp-debug-hook, #140 debug-pico-impl, #145 wifi-tcp.
+**Estado v1: CERRADA con scope reducido.**
 
-**Qué incluye**:
-- Refactor del firmware a tasks FreeRTOS independientes (REPL, VM, GC).
-- Abstracción `transport_t` común para USB CDC y TCP/IP.
-- Multiplexar streams en CDC (output del programa vs replies del REPL).
-- Hook de breakpoints en el inner loop del intérprete C.
-- Debug-on-Pico real (set bp, step, inspect, stack via wire).
-- TCP/IP sobre WiFi (Pico 2 W) con lwIP + cyw43_arch_lwip_sys_freertos.
+**Tasks v1 (completadas)**:
+- ✅ #137 transport-abstract — `AbstractBpvmBackend` + `BpvmClient`
+  con `connectRemote()`/`connectSerial()` ya comparten 100% del wire
+  v1. `PicoClient` legacy retirado.
+- ✅ #139 interp-debug-hook — plumbing del hook en el inner loop
+  de la VM-C, no-op por default (hook=NULL = un null-check por
+  opcode). Queda como cimiento para v2.
+
+**Tasks deferidas a v2**:
+- ⏭️ #136 arch-tasks — separar firmware en tasks FreeRTOS. Beneficio
+  v1 (REPL responsive durante cómputo BP largo) marginal vs riesgo
+  de brick (ya hubo uno).
+- ⏭️ #138 cdc-multiplex — sin trigger sin #140.
+- ⏭️ #140 debug-pico-impl — back-end real del debug sobre el Pico.
+- ⏭️ #145 wifi-tcp — Pico 2 W only, requiere stack lwIP + cyw43;
+  nice-to-have.
+
+**Razón del defer**: el flujo Debug Run (Shift+F5 en VM-Java local
+con breakpoints, step, locals) + Run on Pico (HW real) cubre el 95%
+del valor que tendría debug-on-Pico. Bugs HW-específicos se cazan
+con `print` instrumentado. El plumbing #139 deja el cimiento listo
+para que v2 implemente el back-end sin tener que tocar la API
+pública de la VM-C.
 
 **Documentos guardados**: `docs/WIFI_TCP_REFLECTION.md`.
 
-**Por qué primero**: sin debug-on-Pico real no se puede validar AOT.
-El debugger es el osciloscopio del software. Además ya hay
-infraestructura iniciada (PicoExplorer, PicoClient) que solo hay
-que extender.
-
 ### H2 — Dual-core en el Pico (y futuro ESP32)
 
-**Tasks**: H1 incluye #136 arch-tasks que ya empieza el camino.
-Extender a "una task FreeRTOS por thread BP" o "scheduler con
-afinidad de core".
+**Tasks**: #153 smp-tx-exclusive, #156 vm-dual-worker, #179 SMP
+architecture. Nota: #136 arch-tasks (deferida con H1 a v2) prepararía
+el terreno; H2 lo extendería a "una task FreeRTOS por thread BP" o
+"scheduler con afinidad de core".
 
 **Qué incluye**:
 - F4 v2 — refactor del scheduler para usar los 2 cores del RP2350.
@@ -144,10 +155,12 @@ afinidad de core".
 **Documentos guardados**: `docs/AOT_HYBRID_REFLECTION.md`. Política
 "bytecode = pata negra, nativo = caché derivada".
 
-**Por qué tercero**: el más invasivo. Se beneficia masivamente de
-H1 (debug del código generado) y H2 (paralelización de apps que
-usen código nativo). Si la energía falla, **es el hito más prescindible**
-de los cuatro — se puede declarar v1 sin él, perdiendo ×2 de speedup.
+**Por qué tercero**: el más invasivo. Se beneficia de H2
+(paralelización de apps que usen código nativo) y, cuando v2 traiga
+debug-on-Pico real, también del debug del código generado.
+
+**Estado v1**: ✅ ya entregado. AOT por módulo con helpers expuestos
+funcionando — speedup ×54-90 vs intérprete medido en BENCHMARKS.md.
 
 ### H4 — Segunda familia de MCU: ESP32-S3
 
@@ -226,6 +239,26 @@ Sigue siendo más rápido que MicroPython.
 
 Todo lo que se nos ocurra durante v1 y no sea estrictamente necesario
 va aquí. Algunas ideas que ya tenemos:
+
+### Extensiones del AOT (existe el core, faltan refinamientos)
+
+Estas tasks están en el backlog como `pending` pero NO son blockers de
+v1. Se hacen "cuando haya hueco" entre las grandes:
+
+- **#161** `P-aot-asm-inline` — reescribir helpers críticos en ARM
+  asm inline. Ganancia probable ×1.3-1.5 en hot path.
+- **#163** `P-mod-disasm` — disassembler de `.mod` para diagnóstico.
+  Útil pero el debugger de H1 cubrirá lo importante.
+- **#169** `P-aot-cross-module-call` — llamadas native → native entre
+  módulos. Workaround actual: AOT-izar módulos uno a uno.
+- **#171** `P-aot-mixed-types` — más tipos en signatures AOT (hoy int + float).
+- **#172** `P-aot-module-globals` — acceso a variables nivel-módulo desde native.
+- **#173** `P-aot-strings` — string ops en native. Hoy strings van por
+  interpreted, que es perfectamente usable.
+- **#174** `P-aot-methods` — dispatch virtual (vtable) desde código native.
+- **#175** `P-aot-try-catch` — try/catch + throw dentro de native.
+
+### Más allá
 
 - **GC generacional** (mark-sweep actual es simple — un generational
   daría ×2-3 en código alloc-heavy).

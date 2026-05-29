@@ -57,6 +57,21 @@ void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t);
 void bpvm_platform_thread_yield(void);
 void bpvm_platform_thread_sleep_ms(int ms);
 
+/* Variante con afinidad de core. core_id = ID del core en el que se
+ * desea fijar el thread (RP2350: 0 ó 1). En backends sin SMP
+ * (pthread o FreeRTOS con configNUMBER_OF_CORES=1) actúa como
+ * `bpvm_platform_thread_create` corriente — `core_id` se ignora.
+ *
+ * El llamante usa esta variante cuando quiere expresar INTENCIÓN
+ * de pinning (comm en core 0, workers en cores distintos) aunque
+ * el backend actual no la honre todavía. Cuando #153 P-smp-tx-exclusive
+ * cierre, bumping configNUMBER_OF_CORES=2 cambia el comportamiento
+ * SIN tocar los call sites. */
+int  bpvm_platform_thread_create_pinned(bpvm_platform_thread_handle_t* t,
+                                         bpvm_thread_entry_t entry,
+                                         void* arg,
+                                         int core_id);
+
 /* Timestamp en ms (monotonic). Para Java equiv de System.currentTimeMillis().
  * El offset 0 es arbitrario; sólo importan diferencias. */
 int64_t bpvm_platform_now_ms(void);

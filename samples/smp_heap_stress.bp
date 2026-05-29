@@ -1,0 +1,48 @@
+// smp_heap_stress.bp — stress de heap allocation desde 2 BP threads
+// paralelos. Cada worker crea N objetos Counter, suma sus valores, y
+// reporta el total. Si heap_alloc no está protegido cross-worker, hay
+// corrupción del bump pointer → totales incorrectos o crash.
+module SmpHeapStress
+
+  public class Counter
+    public var v: integer
+    public function Counter(v_: integer)
+      v := v_
+    end Counter
+  end Counter
+
+  public class Builder extends Thread
+    public var n: integer
+    public var total: integer
+    public function Builder(n_: integer)
+      n := n_
+      total := 0
+    end Builder
+
+    public function run()
+      var sum: integer := 0
+      var i: integer := 1
+      while i <= n do
+        var c: Counter := Counter(i)
+        sum := sum + c.v
+        i := i + 1
+      endwh
+      total := sum
+    end run
+  end Builder
+
+  function Main()
+    var N: integer := 3000
+    // Esperado por worker: N*(N+1)/2 = 3000*3001/2 = 4501500
+    var w1: Builder := Builder(N)
+    var w2: Builder := Builder(N)
+    w1.start()
+    w2.start()
+    w1.join()
+    w2.join()
+    print "w1.total =", w1.total
+    print "w2.total =", w2.total
+    print "esperado  =", N * (N + 1) / 2
+  end Main
+
+end SmpHeapStress

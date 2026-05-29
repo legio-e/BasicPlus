@@ -42,6 +42,8 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     main_tc->status = BPVM_THREAD_RUNNABLE;
     main_tc->blocked_on_mutex = -1;
     main_tc->blocked_on_join = -1;
+    main_tc->sched_owner = -1;
+    main_tc->out_buf_used = 0;          /* H2 atomic-line buffer vacío */
     vm->thread_count = 1;
     vm->current_thread_idx = 0;
 
@@ -215,6 +217,36 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
     return bpvm_scheduler_run(vm);
 }
 
+/* H2 — variante SMP. Misma puesta a punto del main tc + n workers. */
+#include "bpvm_smp.h"
+bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
+    if (!vm) return BPVM_ERR_BAD_PC;
+    if (n_workers < 1) n_workers = 1;
+    bpvm_status_t ls = bpvm_link_all(vm);
+    if (ls != BPVM_OK) return ls;
+    if (vm->main_absolute_address == 0) return BPVM_ERR_BAD_PC;
+    bpvm_thread_t* main_tc = &vm->threads[0];
+    main_tc->pc = vm->main_absolute_address;
+    for (int i = 0; i < vm->module_count; i++) {
+        bpvm_module_t* m = &vm->modules[i];
+        if (m->code_start <= vm->main_absolute_address
+                && vm->main_absolute_address < m->end_addr) {
+            main_tc->cs = m->code_start;
+            break;
+        }
+    }
+    if (main_tc->cs == 0) return BPVM_ERR_BAD_PC;
+    main_tc->sp = main_tc->stack_base;
+    main_tc->bp = main_tc->stack_base;
+    main_tc->status = BPVM_THREAD_RUNNABLE;
+    if (vm->quantum_ops == 0) vm->quantum_ops = 1024;
+
+    if (bpvm_smp_init(vm, n_workers) != 0) return BPVM_ERR_OOM;
+    int rc = bpvm_scheduler_run_smp(vm);
+    bpvm_smp_destroy(vm);
+    return rc == 0 ? BPVM_OK : BPVM_ERR_RUNTIME;
+}
+
 void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user) {
     if (!vm) return;
     vm->output_cb = cb;
@@ -224,6 +256,22 @@ void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user) {
 void bpvm_set_tracing(bpvm_t* vm, int enabled) {
     if (!vm) return;
     vm->tracing = enabled ? true : false;
+}
+
+void bpvm_set_debug_hook(bpvm_t* vm,
+                          bpvm_debug_hook_t hook,
+                          bpvm_pc_to_line_t pc_to_line,
+                          void* user) {
+    if (!vm) return;
+    /* Setear todos juntos. El inner loop lee debug_hook primero — si
+     * es NULL no toca los otros dos campos. */
+    vm->debug_hook        = hook;
+    vm->debug_pc_to_line  = pc_to_line;
+    vm->debug_user        = user;
+}
+
+int bpvm_thread_id(const bpvm_thread_t* tc) {
+    return tc ? (int) tc->id : -1;
 }
 
 void bpvm_destroy(bpvm_t* vm) {

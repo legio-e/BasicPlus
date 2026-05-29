@@ -20,6 +20,9 @@
   // Campo OBLIGATORIO.
   "main": "out/MyApp.mod",
 
+  // (v2) Tamaño del stack BP por thread, en bytes.
+  //   "stack": 8192,
+
   // Directorios donde se buscan los .mod de los imports. Se prueban
   // en orden, ANTES del stdlibDir y DESPUÉS del path tal cual.
   // Resolución de un import:

@@ -775,10 +775,26 @@ static void handle_run(long id, const json_obj_t* obj) {
                     * ejecución del thunk desde el buffer del FS. */
 
     /* 5. Ejecutar. Bloquea hasta que el programa termina. Cada print
-     *    del programa pasa por v1_output_sink → genera un OUTPUT event. */
+     *    del programa pasa por v1_output_sink → genera un OUTPUT event.
+     *
+     * H2 Pico — Si BPVM_PICO_SMP_WORKERS está definido y ≥1, usamos
+     * el scheduler multi-worker (bpvm_run_smp). Con N=1 ejercitamos
+     * TODA la maquinaria SMP (worker + comm task + queue + STW dance)
+     * sin paralelismo — validación safe sin riesgo de race. Con N=2
+     * activamos paralelismo real (un worker por core del RP2350 cuando
+     * #153 P-smp-tx-exclusive cierre el pinning).
+     *
+     * Sin el define (default actual), seguimos en el camino legacy
+     * single-thread — el cambio del runtime SMP NO afecta a usuarios
+     * que no opten in. */
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     log_printf("RUN/v1 %s session=%ld", path, session);
+#if defined(BPVM_PICO_SMP_WORKERS) && BPVM_PICO_SMP_WORKERS >= 1
+    log_printf("RUN/v1: SMP path n_workers=%d", BPVM_PICO_SMP_WORKERS);
+    bpvm_status_t rs = bpvm_run_smp(vm, BPVM_PICO_SMP_WORKERS);
+#else
     bpvm_status_t rs = bpvm_run(vm);
+#endif
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
     log_printf("RUN/v1 %s finished: %s", path, bpvm_status_str(rs));
 

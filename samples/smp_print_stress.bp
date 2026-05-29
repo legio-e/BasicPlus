@@ -1,0 +1,35 @@
+// smp_print_stress.bp — 2 BP-threads emitiendo muchos prints en
+// paralelo. Si el output queue + comm task funcionan, cada línea
+// debe estar entera (no chars de A entrelazados dentro de chars
+// de B). El sample print los IDs 1 y 2 con su contador.
+module SmpPrintStress
+
+  public class Printer extends Thread
+    public var id: integer
+    public var n: integer
+    public function Printer(id_: integer, n_: integer)
+      id := id_
+      n := n_
+    end Printer
+
+    public function run()
+      var i: integer := 0
+      while i < n do
+        print id, i
+        i := i + 1
+      endwh
+    end run
+  end Printer
+
+  function Main()
+    var N: integer := 30
+    var p1: Printer := Printer(1, N)
+    var p2: Printer := Printer(2, N)
+    p1.start()
+    p2.start()
+    p1.join()
+    p2.join()
+    print "done"
+  end Main
+
+end SmpPrintStress
