@@ -379,6 +379,41 @@ prints/thread paralelos.
    port es swap de `platform_pthread.c → platform_freertos.c` y
    `comm_host.c → comm_pico.c`. El resto del runtime no cambia.
 
+## Dual-core: DIFERIDO A v2 (2026-05-29)
+
+Decisión: H2 se cierra con **single-core SMP validado en placa**
+(abajo). El dual-core real queda para v2.
+
+**Síntoma exacto**: con `-DBPVM_PICO_NUM_CORES=2` el firmware no
+arranca — el boot se cuelga al lanzar el core 1. Con el indicador
+`-DBPVM_PICO_BOOT_LED` el LED queda **encendido fijo** (= no se llegó
+al REPL) y el USB no enumera. Diagnóstico: el core 0 se bloquea en
+`multicore_launch_core1()` (dentro de `vTaskStartScheduler` →
+`xPortStartScheduler` del port RP2350_ARM_NTZ) esperando el ACK por
+FIFO del core 1, que **falla en su propio init** y nunca lo manda.
+
+**Descartado** (no es la causa): bloat #185 (revertido), firma del
+passive idle hook (`configSTACK_DEPTH_TYPE` = `StackType_t` = uint32_t,
+correcta), conflicto FIFO-vs-doorbell del lockout (eso era el escalón 3
+SAVE, no se llega ni a arrancar). El modelo asimétrico (I/O core0 / VM
+core1, `NUM_CORES=2 SMP_WORKERS=1`) NO ayuda: arranca el mismo kernel
+dual-core y se cuelga igual — el problema es "encender el 2º core".
+
+**Siguiente paso para v2 (con hardware + SWD)**:
+1. Picoprobe + gdb. Breakpoint en `multicore_launch_core1` y en el
+   entry del core 1 (`prvDisableInterruptsAndPortStartSchedulerOnCore`
+   en el port). Ver dónde muere el core 1 (¿vector table?, ¿FPU per-core?,
+   ¿stack?, ¿hard fault temprano?).
+2. Comparar con un blink dual-core mínimo del SDK (sin FreeRTOS) para
+   aislar SDK vs port FreeRTOS-SMP.
+3. Revisar si el port RP2350_ARM_NTZ exige algún `config*` o init que
+   no estamos dando (más allá de NUM_CORES, RUN_MULTIPLE_PRIORITIES,
+   USE_CORE_AFFINITY, passive idle mem — todos ya presentes).
+
+**Firmwares de bring-up** (en `pico/h2-test/`, gitignored):
+`split_vm1core_BOOTLED.uf2` (dual, cuelga, con LED de boot),
+`esc1_smp1_FIXED.uf2` (single-core, FUNCIONA — recovery).
+
 ## VALIDADO EN PLACA — single-core (2026-05-29)
 
 H2 SMP=1 confirmado en hardware (RP2350, firmware `esc1_smp1_FIXED`,

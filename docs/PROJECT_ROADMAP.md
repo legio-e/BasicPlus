@@ -139,19 +139,38 @@ el terreno; H2 lo extendería a "una task FreeRTOS por thread BP" o
 (el código nativo no sabe ni le importa qué core lo ejecuta). Da
 ×1.5-2 con esfuerzo razonable.
 
-**Estado v1**:
+**Estado v1 — CERRADA con scope: single-core SMP validado en placa;
+dual-core diferido a v2.**
+
 - ✅ **#156 / #179 — runtime SMP en host VM-C**: pool de N workers +
-  STW GC + output queue + comm task. Speedup ×1.97 medido en host.
-- ✅ **Cabling Pico** (#136, #180-#185): comm task FreeRTOS, ring buffer
-  compartido (comm_common.c), pinning por core, atomicidad de línea
-  per-tc, `bpvm_run_smp` opt-in (`-DBPVM_PICO_SMP_WORKERS`).
-- 🟡 **#153 — dual-core RP2350**: scaffolding COMPLETO y build-verificado
-  (config gated `-DBPVM_PICO_NUM_CORES=2`, flash XIP-safe centralizado en
-  flash_lock.c, lockout multicore, passive idle, pinning TX-exclusivo).
-  Default sigue single-core (firmware enviado byte-idéntico). **Falta
-  validación en placa** — riesgo conocido: conflicto FIFO IRQ entre el
-  lockout del SDK y el scheduler SMP (ver runbook en docs/SMP_ARCH.md
-  §#153). Es el único trozo de H2 que NO se puede cerrar sin hardware.
+  STW GC + output queue + comm task. Speedup ×1.97-2.4 medido en host.
+- ✅ **Cabling Pico** (#136, #180-#184): comm task FreeRTOS, ring buffer
+  compartido (comm_common.c), pinning por core, `bpvm_run_smp` opt-in
+  (`-DBPVM_PICO_SMP_WORKERS`).
+- ✅ **SMP single-core VALIDADO EN HARDWARE** (RP2350): print_stress
+  (60 líneas íntegras), heap_stress (20100×2, alloc cross-thread sin
+  corrupción), fib_bench (cómputo + join + timing). Ver SMP_ARCH.md.
+  El runtime SMP corre de verdad en el M33.
+- ⏭️ **#153 — dual-core RP2350: DIFERIDO A v2.** El scaffolding está
+  completo y build-verificado (config gated `-DBPVM_PICO_NUM_CORES=2`,
+  flash XIP-safe en flash_lock.c, lockout multicore, passive idle,
+  modelo asimétrico I/O-core0 / VM-core1). PERO el boot dual-core se
+  cuelga al **lanzar el core 1** (core 0 bloqueado en
+  `multicore_launch_core1` esperando ACK; el core 1 falla en su init).
+  Es bring-up del kernel FreeRTOS-SMP en RP2350, no de nuestro código.
+  Diferido a v2 porque pide un **depurador SWD (Picoprobe + gdb)** para
+  poner breakpoint en el arranque del core 1 — inviable por LED binario
+  remoto. Estado completo en SMP_ARCH.md §"Dual-core: diferido a v2".
+
+- ❌ **#185 — atomic-line per-tc: REVERTIDO.** Infló `bpvm_t` 4 KB
+  (×32 threads) → OOM en la Pico, ningún módulo corría. Lección
+  registrada: cambios al struct `bpvm_thread` se multiplican ×32.
+
+**Por qué single-core es suficiente para v1**: el modelo asimétrico
+(I/O en un core, VM en otro) que daría el beneficio real —REPL
+responsivo mientras la VM cruje— requiere el mismo arranque dual-core
+que falla. Single-core entrega un runtime SMP correcto y completo en
+el MCU; el paralelismo de cores es una optimización para v2.
 
 ### H3 — AOT por módulo (compilación a Thumb-2 nativo)
 
