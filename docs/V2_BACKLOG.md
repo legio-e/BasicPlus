@@ -11,6 +11,78 @@ dependencias con otros puntos.
 
 ---
 
+## ▶ Arranque de V2 — LEER PRIMERO  *(estado al cerrar V1, 2026-05-30)*
+
+**V1 cerrada oficialmente**: tag anotado `v1.0` → commit `b92fb3f` en
+`master`. Repo **local, sin remoto** (si algún día se publica:
+`git push origin master v1.0`).
+
+**Operativa de carpetas** (acordado): V2 continúa en `master`; V1 queda
+congelada en el tag `v1.0`. Para tener una carpeta V1 física lado-a-lado
+SIN duplicar ficheros: `git worktree add ../basicplus-v1 v1.0`. **NO**
+copiar el árbol a carpetas `v1/` `v2/`.
+
+**Pendientes operativos heredados de V1**:
+- Recompilar el jar del IDE para que embeba el manual actualizado (§8.1
+  native/AOT + §15.4 ejecución en MCU ya están en el fuente, commit b92fb3f).
+- Test físico de GPIO en ESP32-S3: **diferido sine die** — la placa
+  ESP32-S3-Touch-LCD-4.3 no tiene pines de usuario libres; necesita otra
+  placa. El backend (`esp32/gpio_esp32.c`) está completo y commiteado.
+
+**Primer frente de V2 (propuesto por el usuario, 2026-05-30 — H1)**: la
+capa de **tipos** — añadir `long`/`double` y revisar `byte` y strings
+UTF-8. El análisis técnico ya está hecho en **§1–§4** de este documento
+(coste, opcodes, dependencias). Hechos confirmados por exploración del
+código (mayo 2026):
+- Slot de stack/local/global = **4 bytes (int32)** en AMBAS VMs (C y Java);
+  float = f32 bit-casteado en el mismo slot. No hay unión etiquetada.
+- `byte` ya existe (UINT8: máscara &0xFF al store, zero-ext al load,
+  arrays I8 de 1 byte/elem) — falta hacerlo *first-class* + `byte[]` cómodo.
+- Strings = array de **codepoints i32** (4 bytes/char), indexados por
+  codepoint. NO hay UTF-8 en heap; la salida trunca no-ASCII a `'?'`.
+  → el modelo interno YA es Unicode; el hueco está SOLO en los bordes de I/O.
+- **Dependencia dura**: `byte[]` ANTES que UTF-8 (los strings UTF-8 se
+  implementan COMO byte[]).
+
+### Roadmap V2 confirmado (2026-05-30) — el «trío que toca la VM», al principio
+
+Estrategia: **concentrar al principio de V2 todo lo que toca la VM**, y
+después tocarla lo mínimo. Tres hitos seguidos:
+
+- **H1 — escalares**: `byte`/`byte[]` first-class + `long`/`double`
+  (+ pasada de portabilidad `PRIu32`). Cambia la representación de valores.
+- **H2 — strings UTF-8**: el grande (§4). Cambia el layout de strings;
+  depende del `byte[]` de H1.
+- **H3 — GC**: capítulo propio. Reimplementación **completa** del modelo
+  de memoria (reuse / free-list), **manteniendo la interfaz** GC↔VM para
+  afectar a la VM lo mínimo (ver nota de diseño en §8).
+
+**Por qué este orden** (no es "robustez después"): H1 y H2 cambian la VM y
+*añaden tipos de objeto nuevos* (I64/F64/byte[], string-UTF-8). Hacer el GC
+(H3) DESPUÉS → el nuevo allocator ve el zoo de objetos FINAL y se afina UNA
+vez; hacerlo antes obligaría a re-tocarlo al añadir los tipos. Tras H3 la VM
+queda **efectivamente congelada**; el resto de V2 (interfaces, stdlib, IDE,
+multi-MCU, debugger) se construye encima sin tocarla.
+
+### Principios de arquitectura (confirmados 2026-05-30)
+
+- **La estructura del `.mod` es la base INMUTABLE.** Es lo que permitió
+  todos los saltos de V1 (backend → VM propia → micro → 2º micro, sin
+  recompilar código de usuario). Aunque V2 toque la VM, el **contenedor**
+  del `.mod` (cabeceras, secciones, constant pool, descriptores de clase)
+  NO cambia. Solo se retoca lo esencial; cambiarlo exige análisis a fondo +
+  decisión conjunta. ⚠️ **Matiz clave**: *añadir opcodes/tipos nuevos*
+  (LOAD64, DPUSH, aritmética 64-bit…) NO es "cambiar la estructura" — el
+  bytecode es aditivo y versionado (loaders viejos saltan opcodes
+  desconocidos). **H1 añade opcodes 64-bit sin tocar el contenedor.**
+- **La VM se toca al PRINCIPIO de V2 y luego se congela.** Las
+  modificaciones de VM se concentran en H1–H3; después, tocar la VM lo
+  mínimo (principio de siempre). Si el futuro demuestra que hay que cambiar
+  la estructura de módulos o la VM, se analiza a fondo y se decide — nunca
+  por inercia.
+
+---
+
 ## 0. Visión y principios de la V2  *(reflexión de cierre de V1)*
 
 > Las reflexiones, salvo tonterías, conviene guardarlas: aportan el
@@ -351,6 +423,49 @@ Palancas, de menos a más invasivas:
   drásticamente la presión de heap. ⚠️ Toca el GC → evaluar con cuidado
   contra "tocar la VM lo mínimo". NOTA: si la placa tiene PSRAM (#10),
   la urgencia de esto baja muchísimo (8 MB de heap).
+
+  **→ H3 (V2): decisión de diseño (confirmada 2026-05-30).** El usuario
+  eleva el GC a hito propio: **reimplementar el modelo de memoria por
+  completo, pero manteniendo la interfaz GC↔VM** (alloc, layout de cabecera
+  de objeto, enumeración de roots) para que la VM cambie lo mínimo — misma
+  filosofía que el AOT y el HAL: interfaz estable, implementación
+  intercambiable.
+
+  **La elección moving vs no-moving se decide AL ABRIR H3, tras estudio +
+  benchmark de fragmentación — NO se pre-decide ahora.** Las opciones y su
+  coste (la interfaz estable favorece la primera, pero no la impone):
+  - **No-moving** (free-list / size-class segregado, estilo TLSF/buddy): las
+    direcciones NO cambian → interfaz y todos los `vm->memory + off` intactos
+    → VM sin tocar. Acota la fragmentación sin mover nada, pero no la
+    elimina. **Candidato líder** por simplicidad y por respetar la interfaz;
+    el más barato en RAM y CPU.
+  - **Moving + tabla de handles** (la analogía "FAT" del usuario, muy
+    acertada): cada referencia es un índice a una tabla que guarda la
+    dirección real; mover un objeto actualiza UNA entrada, no todas las refs.
+    Permite **compactar** (cero huecos → máxima memoria usable, valioso en
+    MCU con poca RAM). Coste: indirección en CADA acceso (CPU) + memoria de
+    la tabla.
+  - **Moving + fixup al compactar** (copying / mark-compact, sin tabla
+    permanente): las refs son direcciones reales; al compactar se reescriben
+    TODAS. Sin coste de indirección en el acceso (rápido), pero pausa de GC
+    más larga y **exige enumeración PRECISA de referencias** (stack maps) que
+    hoy quizá no tengamos. Copying gasta media heap (semispace) salvo
+    mark-compact.
+
+  **La pregunta empírica que decide H3**: ¿nuestro workload fragmenta de
+  verdad bajo un buen allocator no-moving (TLSF)? Si NO → no-moving gana
+  (simple, rápido, VM intacta). Si SÍ (dispositivo de larga vida, tamaños de
+  objeto diversos) → la compactación se gana su coste. **Benchmark primero,
+  decidir después.** (Latencia de pausa acotada — GC incremental — sigue
+  siendo una capa aparte, más invasiva; solo si un lazo de control real la
+  exige.)
+
+  **Meta-principio (usuario, 2026-05-30)**: decidir NO es grabar en piedra.
+  El GC es precisamente el sitio MÁS seguro para "decidir y, si luego se
+  demuestra mejor otra opción, cambiar" — porque está aislado tras el `.mod`
+  estable y la interfaz alloc/roots: el código de usuario y el bytecode no se
+  enteran del cambio de GC. Es la recompensa de la separación (§0: "es un
+  problema de implementación, no del lenguaje").
 - Cuidado con el tamaño de structs replicados: `bpvm_thread` se
   multiplica ×32 (lección de #185 — un buffer de 128 B reventó la RAM).
 
