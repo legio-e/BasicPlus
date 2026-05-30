@@ -11,6 +11,98 @@ dependencias con otros puntos.
 
 ---
 
+## 0. Visión y principios de la V2  *(reflexión de cierre de V1)*
+
+> Las reflexiones, salvo tonterías, conviene guardarlas: aportan el
+> "por qué" que el "qué" de los puntos siguientes no cuenta.
+
+### Mirando atrás: lo que demuestran los saltos
+
+V1 empezó como un compilador modesto (ASM → bytecode Java para PC) y dio
+cuatro saltos: **VM propia** → **VM en microcontrolador** → **segunda
+familia de MCU**. Lo importante no es el esfuerzo de cada salto, sino que
+cada uno **validó una decisión de arquitectura anterior**:
+
+- VM propia ← el compilador estaba desacoplado del backend (cambiar de
+  emitir JVM a emitir `.mod` no rehizo el front-end).
+- VM en micro ← la VM se diseñó con *caller-provided buffer* + C99 (C0).
+- Segundo micro ← la abstracción de HW (transport, platform_\*) **aguantó**.
+  Una VM que corre en una sola placa no prueba nada; en dos familias,
+  prueba que la frontera está bien puesta.
+
+El activo real de V1 no es "un lenguaje que funciona", sino **una
+separación limpia (compilador / bytecode / VM / frontera HW) que ha
+resistido cuatro saltos**. Eso es lo que hace viable todo lo de adelante.
+
+### ¿Se puede usar en una solución real? — sí, con matices
+
+El compilador y la VM funcionan bien → por ahí sí. El límite es el **GC**:
+es una solución de compromiso (mark-sweep **bump-sin-reuse**) que no
+aguanta estrés de heap. Pero — punto clave — **eso es un problema de la
+implementación de la VM, no del lenguaje.**
+
+Esa distinción es la mejor noticia técnica del proyecto: se puede cambiar
+el modelo de memoria entero **sin tocar el lenguaje y sin recompilar el
+código de usuario** (el `.mod` es estable). Es la recompensa de haber
+separado bien.
+
+Victoria concreta y contenida esperando ahí: hoy el GC marca FREE pero
+**no reusa**. Solo añadir **reuso por free-list** al mark-sweep existente
+quita el acantilado "estrés de heap = OOM" — sin tocar lenguaje, formato
+ni compilador. Es el cambio de **mayor palanca por línea** de toda la V2.
+
+### Robustez es más que el GC
+
+Para *"que cualquier usuario lo use con confianza"*, la palabra clave es
+**predecibilidad**, no solo "que no se quede sin memoria". Todo esto es
+VM, no lenguaje (lo cual refuerza la tesis):
+
+- **Latencia acotada** — un STW GC pausa; para un lazo de control eso
+  puede ser inaceptable. La pregunta de V2 no es solo "¿reusa?" sino
+  "¿cuánto pausa como máximo?".
+- **Recuperación de fallos** — #186 fue el primer paso (un fault ya no
+  corrompe). "Confianza" = OOM / stack overflow / etc. contenibles y
+  diagnosticables, no "se muere el thread".
+- **Límites de recursos** — memoria y stacks acotados y declarables;
+  en un micro no puedes "pedir más".
+
+### Replanteo: robustez y docs PRIMERO, ampliación después
+
+La V2 nació como "ampliación". Pero para el objetivo real —
+**gratis, abierto, que la gente confíe y contribuya**— la robustez y la
+documentación no son un complemento de la ampliación: son **la condición
+para que la ampliación importe**. Un lenguaje pequeño, sólido y bien
+documentado se adopta; uno lleno de features pero frágil, no. Encaja con
+el principio de siempre: *en el lenguaje, pocos cambios*; la energía de V2
+va a la VM y a los docs.
+
+Tres pilares, **en este orden**:
+
+1. **Robustez** — modelo de memoria (free-list → GC mejor → quizá
+   latencia acotada), recuperación de fallos, límites de recursos. Que
+   sea de fiar.
+2. **Documentación doble** — manual de usuario **+** doc técnica de
+   internals. Lo segundo es lo que habilita contribuciones externas:
+   nadie contribuye a una VM que no entiende. Base ya empezada
+   (MOD_FORMAT, OPCODES, HEAP_LAYOUT, BUILTINS, AOT_CROSS_MODULE,
+   SMP_ARCH) → consolidar y completar.
+3. **Ampliación** — el resto de este backlog. Más capaz, sin prisa, sin
+   comprometer 1 y 2.
+
+### Para el open source
+
+Lo que más baja la barrera de contribución no es el código limpio (que lo
+está), sino **un documento de arquitectura de una página** que cuente la
+historia de arriba: "compilador que emite `.mod` → VM que lo interpreta →
+AOT → frontera HW". Ese mapa mental es lo que falta para que alguien
+externo sepa *dónde* tocar. Es el primer doc a escribir cuando arranque
+la fase de documentación.
+
+**Objetivo último**: que cualquier usuario lo use con confianza, gratis;
+código abierto; que otros prueben y, si quieren, aporten código.
+
+---
+
 ## 1. Tipos de 64 bits: `long` (i64) y `double` (f64)
 
 **Qué**: dos primitivos nuevos de 64 bits, paralelos a `integer`(i32) y
