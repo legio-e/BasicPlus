@@ -190,6 +190,7 @@
     <li class="sub"><a href="#parallel">7.6 parallel / endpar</a></li>
 
     <li class="group"><a href="#funciones">8. Funciones</a></li>
+    <li class="sub"><a href="#funciones-native">8.1 Funciones native (AOT)</a></li>
     <li class="group"><a href="#clases">9. Clases</a></li>
     <li class="sub"><a href="#campos">9.1 Campos</a></li>
     <li class="sub"><a href="#metodos">9.2 Métodos</a></li>
@@ -246,6 +247,7 @@
     <li class="sub" style="padding-left:1.6em"><a href="#cli-vmproject">.bpproject (proyecto VM)</a></li>
     <li class="sub" style="padding-left:1.6em"><a href="#cli-bpbuild">.bpbuild (proyecto compilador / IDE)</a></li>
     <li class="sub"><a href="#cli-disasm">15.3 Disasm</a></li>
+    <li class="sub"><a href="#cli-mcu">15.4 Ejecución en microcontroladores</a></li>
 
     <li class="group"><a href="#artefactos">16. Artefactos en disco</a></li>
     <li class="sub"><a href="#mod">16.1 .mod</a></li>
@@ -651,6 +653,51 @@ nums[<span class="num">0</span>] := <span class="num">42</span>
   <li>El tipo de retorno se declara con <code>: T</code> tras los paréntesis.
       Si se omite, la función es <code>void</code>.</li>
   <li>Sólo retorno con <code>return [valor]</code>. Sin retorno explícito, void.</li>
+</ul>
+
+<h3 id="funciones-native">8.1 Funciones <code>native</code> (AOT)</h3>
+<p>
+  Una función marcada <code>native function</code> es candidata a
+  <strong>compilación AOT</strong> (Ahead-Of-Time): además del bytecode
+  normal, el compilador puede traducirla a C nativo del micro, que se
+  ejecuta directamente (sin el bucle del intérprete) para acelerar
+  kernels de cómputo calientes.
+</p>
+<pre><code><span class="kw">native function</span> <span class="fn">sumaCuadrados</span>(n: <span class="type">integer</span>): <span class="type">integer</span>
+  <span class="kw">var</span> s: <span class="type">integer</span> := <span class="num">0</span>
+  <span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">1</span>
+  <span class="kw">while</span> i &lt;= n <span class="kw">do</span>
+    s := s + i * i
+    i := i + <span class="num">1</span>
+  <span class="kw">endwh</span>
+  <span class="kw">return</span> s
+<span class="kw">end</span> sumaCuadrados</code></pre>
+<ul>
+  <li><strong>Aditivo</strong>: el <code>.mod</code> SIEMPRE contiene el
+      bytecode de la función. El AOT es un overlay opcional
+      (<code>.mdn</code>) que el runtime usa si está presente y es de la
+      arquitectura del micro; si no, la función corre interpretada. No
+      compilar el AOT nunca rompe el programa.</li>
+  <li><strong>Comportamiento por plataforma</strong>:
+    <table>
+      <tr><th>Plataforma</th><th>Función <code>native</code></th></tr>
+      <tr><td>Raspberry Pi Pico 2 (RP2350, ARM Cortex-M33)</td>
+          <td>Acelerada por AOT (≈40–90× en kernels enteros).</td></tr>
+      <tr><td>ESP32-S3 (Xtensa LX7)</td>
+          <td>Interpretada — misma semántica, sin speedup. El <code>.mdn</code>
+              es código ARM; el AOT para Xtensa es trabajo futuro.</td></tr>
+      <tr><td>VM de PC (host)</td>
+          <td>Interpretada (hay un camino AOT host sólo para pruebas).</td></tr>
+    </table>
+  </li>
+  <li><strong>Subset soportado</strong>: funciones hoja sobre primitivos,
+      <code>integer[]</code>, <code>string</code>, variables de módulo y
+      builtins (<code>print</code>, <code>now</code>, …). Un fallo en
+      runtime (índice fuera de rango, referencia null) o un
+      <code>throw RuntimeError("…")</code> dentro de la native se propaga
+      al <code>try/catch</code> BP que envuelva la llamada. Lo que aún NO
+      cabe (llamar métodos de objetos, <code>try/catch</code> dentro de la
+      native) cae a bytecode interpretado automáticamente.</li>
 </ul>
 
 <!-- =========================================================== -->
@@ -2424,6 +2471,31 @@ objeto compartido</code></pre>
 <p>
   Muestra el header, imports, exports, data block y código desensamblado
   con anotaciones (nombre de función, sección, jumps con destino).
+</p>
+
+<h3 id="cli-mcu">15.4 Ejecución en microcontroladores (Pico / ESP32-S3)</h3>
+<p>
+  Desde el IDE, <em>Run on Pico</em> ejecuta el módulo en un MCU conectado
+  por puerto serie (protocolo «wire v1»): el IDE sube el <code>.mod</code>
+  (y las deps que falten — la stdlib a <code>/lib</code>, los drivers a
+  <code>/app</code>), lo ejecuta y muestra la salida. Los ficheros
+  persisten en el FS del dispositivo entre reinicios.
+</p>
+<table>
+  <tr><th>MCU</th><th>Notas</th></tr>
+  <tr><td>Raspberry Pi Pico 2 (RP2350)</td>
+      <td>Wire v1 por USB-CDC. Funciones <code>native</code> aceleradas
+          por AOT (ver §8.1).</td></tr>
+  <tr><td>ESP32-S3 (Xtensa)</td>
+      <td>Wire v1 por UART0 (puerto del bridge USB-UART); consola/logs por
+          el USB nativo (USB-Serial-JTAG). FS persistente en partición
+          dedicada. <code>native</code> interpretada (sin AOT en Xtensa).</td></tr>
+</table>
+<p>
+  El <strong>lenguaje y el bytecode son idénticos</strong> en todas las
+  plataformas (PC, Pico, ESP32): el mismo <code>.mod</code> corre en
+  cualquiera. Sólo difieren la capa de backend de hardware (GPIO, I²C,
+  SPI…) y la aceleración AOT, que es específica de arquitectura.
 </p>
 
 <!-- =========================================================== -->

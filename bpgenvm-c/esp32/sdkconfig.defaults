@@ -11,6 +11,13 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 # Optimizar a tamaño.
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 
+# Task Watchdog OFF: esto es un dispositivo-VM que ejecuta código de
+# usuario que puede ser CPU-bound y tardar legítimamente (>5s). La
+# "inanición del idle" que vigila el task wdt NO es un bug aquí, así que
+# lo desactivamos para no spamear backtraces (ni arriesgar reset) en
+# programas pesados. El watchdog HW de arranque sigue activo.
+CONFIG_ESP_TASK_WDT_INIT=n
+
 # Tabla de particiones custom: añade "bpfs" (datos) para el FS persistente
 # (H4.4). Los .mod subidos por el wire sobreviven al reset.
 CONFIG_PARTITION_TABLE_CUSTOM=y
