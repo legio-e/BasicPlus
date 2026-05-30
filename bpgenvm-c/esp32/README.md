@@ -81,5 +81,6 @@ python wire_test.py COMb
 - [x] **H4.2** — `platform_esp32.c` (esp_timer, FreeRTOS). En uso.
 - [x] **H4.3** — wire v1 sobre UART0 → "Run on ESP32" desde el IDE.
       **Validado end-to-end** (PUT + RUN + OUTPUT + EXITED).
-- [ ] H4.4 — persistencia del FS (SPIFFS/partición). Ahora RAM-only.
+- [x] **H4.4** — FS persistente (partición `bpfs` + `esp_partition`).
+      **Validado con power-cycle**: el `.mod` sobrevive a apagar/encender.
 - [ ] H4.5 — backend GPIO (blink). `Blink.mod` falla hasta tenerlo.
