@@ -1,15 +1,14 @@
-# Componente `main` — H4.1. Compila el core VM portable (../../src/*),
-# el backend de plataforma ESP32 y el Hello.mod embebido.
-#
-# Se excluye platform_pthread.c (host) y comm_pico.c (Pico). El backend
-# de plataforma es platform_esp32.c. Los .c de HW (gpio/i2c/...) son
-# fachadas portables con backend registrable → sin backend son stubs
-# inofensivos (Hello no toca HW).
+# Componente `main` — H4.3. Core VM portable + backend ESP32 + wire v1
+# (UART0) + FS RAM + REPL. El parser JSON (pico/json_min.c) es C portable
+# y se reutiliza directamente.
 idf_component_register(
     SRCS
         "main.c"
         "platform_esp32.c"
-        "hello_mod.c"
+        "wire_v1.c"
+        "fs_ram.c"
+        "repl_esp32.c"
+        "json_min.c"
         # --- core VM (portable C99) ---
         "../../src/bpvm.c"
         "../../src/loader.c"
@@ -42,12 +41,10 @@ idf_component_register(
         "../../src"
     REQUIRES
         esp_timer
+        esp_driver_uart
 )
 
 # El core VM usa %d/%u con int32_t/uint32_t en mensajes de diagnóstico.
-# En Xtensa int32_t es `long` (mismo ancho de 32 bits que int → la salida
-# en runtime es CORRECTA), pero ESP-IDF activa -Werror=format y es estricto
-# con el TIPO. Degradamos ESE error a warning para no tocar el código de
-# la VM (mismo binario correcto). El fix "bonito" — barrer a PRIu32/PRId32
-# de <inttypes.h> — es una limpieza de portabilidad para v2.
+# En Xtensa int32_t es `long` (mismo ancho → correcto en runtime), pero
+# ESP-IDF es estricto con -Werror=format. Lo degradamos a warning.
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error=format)

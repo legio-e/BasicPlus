@@ -1,56 +1,38 @@
 /*
- * main.c — H4.1: arranque mínimo de la VM BasicPlus en ESP32-S3 (Xtensa).
+ * main.c — H4.3: firmware ESP32-S3 con REPL wire v1.
  *
- * Objetivo del hito: demostrar que el INTÉRPRETE (core VM portable, C99)
- * corre en una SEGUNDA ARQUITECTURA (Xtensa LX7, no ARM). Carga un
- * Hello.mod embebido en flash y lo ejecuta; la salida va por la consola
- * (UART0 → puerto USB-UART de la placa, visible con `idf.py monitor`).
+ * Arranca el FS (RAM), el wire v1 sobre UART0 y entra al bucle del REPL.
+ * El IDE (SerialBackend) conecta al UART0 (puerto del bridge USB-UART),
+ * sube .mod (PUT), los ejecuta (RUN) y recibe la salida (OUTPUT/EXITED).
  *
- * NO hay AOT aquí: el .mdn es ARM Thumb-2 y no cruza a Xtensa. El
- * intérprete ejecuta TODO el bytecode igualmente.
- *
- * app_main() ya corre dentro de una task FreeRTOS (la arranca el startup
- * de ESP-IDF), así que ejecutamos la VM directamente — sin xTaskCreate
- * ni vTaskStartScheduler manuales.
+ * Canales (ver esp32/README.md):
+ *   - UART0 (bridge CP210x/CH340)  → wire v1, lo usa el IDE.
+ *   - USB-Serial-JTAG (puerto nativo) → consola/logs ESP-IDF (printf),
+ *     para depurar con `idf.py monitor` SIN contaminar el wire.
  */
 #include <stdio.h>
 #include <stdint.h>
 
-#include "bpvm.h"
+#include "fs.h"
+#include "repl_esp32.h"
 
-/* Hello.mod embebido (hello_mod.c, generado con xxd). */
-extern const uint8_t      hello_mod[];
-extern const unsigned int hello_mod_len;
-
-/* Buffer caller-provided de la VM (modelo C0). El ESP32-S3 tiene ~512 KB
- * de SRAM interna; 128 KB en .bss va sobrado para Hello. */
+/* Buffer caller-provided de la VM. NO static — repl_esp32.c lo referencia
+ * como extern (igual convención que repl_v1.c en la Pico). */
 #define VM_BUFFER_SIZE (128 * 1024)
-static uint8_t s_vm_buffer[VM_BUFFER_SIZE];
+uint8_t        s_vm_buffer[VM_BUFFER_SIZE];
+const uint32_t s_vm_buffer_size = VM_BUFFER_SIZE;
 
 void app_main(void)
 {
-    printf("\n");
-    printf("=== BasicPlus VM en ESP32-S3 (H4.1) ===\n");
-    printf("[boot] ESP-IDF arriba, app_main en marcha\n");
-    printf("[boot] VM buffer: %u bytes\n", (unsigned) VM_BUFFER_SIZE);
+    /* Estos printf van a la CONSOLA = USB-Serial-JTAG (puerto nativo),
+     * NO al wire (UART0). Sirven para depurar el arranque. */
+    printf("\n=== BasicPlus VM en ESP32-S3 (H4.3 — wire v1) ===\n");
+    printf("[boot] consola/logs = USB-Serial-JTAG | wire v1 = UART0 @115200\n");
 
-    bpvm_t* vm = bpvm_init(s_vm_buffer, VM_BUFFER_SIZE, 0);
-    if (!vm) {
-        printf("[ERR] bpvm_init fallo\n");
-        return;
-    }
+    fs_init();
+    wire_v1_uart_init();
 
-    bpvm_status_t s = bpvm_load_mod_buffer(vm, hello_mod, hello_mod_len, "Hello");
-    if (s != BPVM_OK) {
-        printf("[ERR] load_mod_buffer: %s\n", bpvm_status_str(s));
-        return;
-    }
+    printf("[boot] REPL wire v1 escuchando en UART0. Conecta el IDE al puerto del bridge.\n");
 
-    printf("[run] ---- salida de Hello.mod ----\n");
-    s = bpvm_run(vm);
-    printf("[run] ---- fin ----\n");
-    printf("[done] status = %s\n", bpvm_status_str(s));
-
-    /* app_main retorna → ESP-IDF deja el sistema en idle. El hito está
-     * cumplido si la salida de Hello aparece por la consola. */
+    repl_esp32_run();   /* no retorna */
 }

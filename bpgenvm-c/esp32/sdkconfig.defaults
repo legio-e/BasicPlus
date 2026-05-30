@@ -1,12 +1,12 @@
-# Defaults del proyecto (H4.1). `idf.py set-target esp32s3` fija el target.
+# Defaults del proyecto (H4.3). `idf.py set-target esp32s3` fija el target.
 #
-# Consola por UART0 (el puerto USB-UART de la placa) — `idf.py monitor`
-# la lee directo. Es lo más simple para el primer arranque.
-CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+# Consola/logs de ESP-IDF → USB-Serial-JTAG (puerto nativo). El wire v1
+# (binario, lo usa el IDE) va por UART0 vía driver, así que el log de
+# texto NO contamina el wire. Depuras con `idf.py monitor` en el nativo.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 
-# La task de app_main ejecuta la VM. Damos holgura de stack C (el interp
-# es iterativo, pero helpers + eh dan algo de profundidad).
+# La task de app_main ejecuta el REPL + la VM. Holgura de stack C.
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
-# Optimizar a tamaño para el primer bring-up.
+# Optimizar a tamaño.
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
