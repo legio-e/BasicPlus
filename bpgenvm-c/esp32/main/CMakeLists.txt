@@ -42,6 +42,7 @@ idf_component_register(
     REQUIRES
         esp_timer
         esp_driver_uart
+        esp_partition
 )
 
 # El core VM usa %d/%u con int32_t/uint32_t en mensajes de diagnóstico.
