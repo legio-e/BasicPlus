@@ -1,0 +1,76 @@
+module StringBench
+
+    // Benchmark de operaciones de string READ-ONLY: suma de códigos de
+    // carácter sobre un string fijo, en bucle caliente. Mide el overhead
+    // de DISPATCH de las ops de string (charCodeAt) aislado del coste de
+    // alocación/GC.
+    //
+    // Por qué read-only: el GC de F2 es mark-sweep bump-sin-reuse, así que
+    // alocar en caliente (concat / substring / charAt) agota el heap antes
+    // de dar un número estable. charCodeAt no aloca → comparación limpia
+    // interpretado vs AOT del dispatch puro de string-ops.
+    //
+    // t*n charCodeAt por llamada (= 36*20000 = 720k), x reps.
+
+    function strScan(s: string, t: integer, n: integer): integer
+        var acc: integer := 0
+        var r: integer := 0
+        var i: integer := 0
+        while r < n do
+            i := 0
+            while i < t do
+                acc := acc + charCodeAt(s, i)
+                i := i + 1
+            endwh
+            r := r + 1
+        endwh
+        return acc
+    end strScan
+
+    native function strScanNative(s: string, t: integer, n: integer): integer
+        var acc: integer := 0
+        var r: integer := 0
+        var i: integer := 0
+        while r < n do
+            i := 0
+            while i < t do
+                acc := acc + charCodeAt(s, i)
+                i := i + 1
+            endwh
+            r := r + 1
+        endwh
+        return acc
+    end strScanNative
+
+    function Main()
+        var ini, fin: float
+        var i, result, reps: integer
+        var s: string := "abcdefghijklmnopqrstuvwxyz0123456789"
+        var t: integer := 36
+        var n: integer := 20000
+        reps := 20
+
+        // --- No-Native (interpretado) ---
+        ini := now()
+        i := 0
+        result := 0
+        while i < reps do
+            result := strScan(s, t, n)
+            i := i + 1
+        endwh
+        fin := now()
+        print "strScan       x", reps, "  no-native:", (fin - ini)*0.001, "s  result =", result
+
+        // --- Native (AOT) ---
+        ini := now()
+        i := 0
+        result := 0
+        while i < reps do
+            result := strScanNative(s, t, n)
+            i := i + 1
+        endwh
+        fin := now()
+        print "strScanNative x", reps, "     native:", (fin - ini)*0.001, "s  result =", result
+    end Main
+
+end StringBench
