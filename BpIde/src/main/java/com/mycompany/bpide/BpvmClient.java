@@ -201,7 +201,14 @@ public final class BpvmClient implements AutoCloseable {
                     SerialPort.STOPBITS_1, SerialPort.PARITY_NONE);
             port.setFlowControlMode(SerialPort.FLOWCONTROL_NONE);
             port.setDTR(true);
-            port.setRTS(false);
+            // RTS=true (no false): en la Pico (USB-CDC) el firmware mira DTR
+            // e ignora RTS, así que da igual. Pero en placas ESP32 (DevKitC),
+            // DTR/RTS van al circuito de auto-reset (DTR→GPIO0, RTS→EN). Con
+            // DTR=1/RTS=0, GPIO0 queda en bajo: si el open mete un pulso de
+            // reset, el chip arranca en DOWNLOAD y el REPL no corre. Con
+            // DTR=1/RTS=1 (iguales) NO se resetea al abrir, y si se reseteara
+            // arrancaría normal (GPIO0 alto). Seguro para ambos targets.
+            port.setRTS(true);
             // enableReceiveTimeout(500): purejavacomm devuelve -1 en read()
             // tras 500ms sin datos. Lo NECESITAMOS para que close() del puerto
             // desbloquee el reader thread limpiamente. Envolvemos la

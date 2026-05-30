@@ -21,6 +21,13 @@
 #define WIRE_UART        UART_NUM_0
 #define WIRE_UART_BAUD   115200
 #define WIRE_RX_BUF      4096
+/* Pines por defecto de UART0 en el ESP32-S3 (U0TXD/U0RXD), cableados al
+ * bridge USB-UART de la DevKitC. Hay que enrutarlos EXPLÍCITAMENTE: con
+ * la consola en USB-Serial-JTAG, ESP-IDF no configura UART0 en la app,
+ * así que sin uart_set_pin el periférico no queda conectado a los pines
+ * → RX/TX muertos (era el motivo de que no llegara el HELLO). */
+#define WIRE_UART_TX_PIN 43
+#define WIRE_UART_RX_PIN 44
 
 void wire_v1_uart_init(void) {
     const uart_config_t cfg = {
@@ -31,18 +38,26 @@ void wire_v1_uart_init(void) {
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_DEFAULT,
     };
-    /* UART0 usa los pines por defecto (TX=43, RX=44 en el S3), ya
-     * cableados al bridge — no tocamos pines. tx_buffer=0 ⇒
-     * uart_write_bytes bloquea hasta vaciar (envío síncrono). */
-    uart_driver_install(WIRE_UART, WIRE_RX_BUF, 0, 0, NULL, 0);
+    /* Orden canónico ESP-IDF: param_config → set_pin → driver_install.
+     * tx_buffer=0 ⇒ uart_write_bytes bloquea hasta vaciar (envío sínc.). */
     uart_param_config(WIRE_UART, &cfg);
+    uart_set_pin(WIRE_UART, WIRE_UART_TX_PIN, WIRE_UART_RX_PIN,
+                 UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    uart_driver_install(WIRE_UART, WIRE_RX_BUF, 0, 0, NULL, 0);
 }
 
 /* ===================== Lectura ===================== */
 
-static int try_get_char_v1(void) {
+/* Lee 1 byte BLOQUEANDO hasta `ms`. CLAVE: deja que el driver UART ceda
+ * CPU mientras espera, en vez de pollear con timeout 0 + vTaskDelay. El
+ * bug original: pdMS_TO_TICKS(5) con el tick de ESP-IDF (100 Hz = 10 ms/
+ * tick) = 0 ticks → vTaskDelay(0) NO cede → busy-spin → el task watchdog
+ * mata IDLE0. Bloquear en uart_read_bytes lo evita. Devuelve el byte o
+ * -1 si venció el timeout sin datos. uart_read_bytes retorna en cuanto
+ * llega un byte, así que la latencia de respuesta es mínima. */
+static int wire_read_byte(int ms) {
     uint8_t b;
-    int n = uart_read_bytes(WIRE_UART, &b, 1, 0);   /* no bloquea (timeout 0) */
+    int n = uart_read_bytes(WIRE_UART, &b, 1, pdMS_TO_TICKS(ms));
     return (n == 1) ? (int) b : -1;
 }
 
@@ -53,8 +68,8 @@ int wire_v1_recv_line(int first_char_already_read, char* buf, size_t buf_max) {
         buf[n++] = (char) first_char_already_read;
     }
     for (;;) {
-        int c = try_get_char_v1();
-        if (c < 0) { vTaskDelay(pdMS_TO_TICKS(5)); continue; }
+        int c = wire_read_byte(100);    /* bloquea ≤100 ms cediendo CPU */
+        if (c < 0) continue;             /* timeout sin datos: reintenta */
         if (c == '\n') return (int) n;
         if (c == '\r') continue;
         if (n + 1 >= buf_max) return -1;
@@ -66,10 +81,9 @@ int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
     if (n > buf_max) return -1;
     size_t got = 0;
     while (got < n) {
-        /* Lectura por bloques con timeout corto — más eficiente que 1 byte. */
-        int r = uart_read_bytes(WIRE_UART, buf + got, n - got, pdMS_TO_TICKS(50));
+        /* uart_read_bytes bloquea (cede CPU) hasta tener datos o timeout. */
+        int r = uart_read_bytes(WIRE_UART, buf + got, n - got, pdMS_TO_TICKS(200));
         if (r > 0) got += (size_t) r;
-        else vTaskDelay(pdMS_TO_TICKS(2));
     }
     return (int) n;
 }
