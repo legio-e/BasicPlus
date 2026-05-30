@@ -1504,17 +1504,28 @@ public class FrmMain extends javax.swing.JFrame
             protected void done() {
                 try {
                     if (Boolean.TRUE.equals(get()) && modPath != null) {
-                        // Resolver deps no-core y subir todas antes del main.
+                        // Resolver TODAS las deps (incl. stdlib core) a subir
+                        // antes del main. Las stdlib core van a /lib, el resto
+                        // a /app (lo decide uploadAndRun con este set).
                         java.util.List<java.io.File> deps =
                                 resolveDeviceDeps(bpFile, outDir);
+                        java.util.Set<String> libDeps = new java.util.HashSet<>();
+                        for (java.io.File d : deps) {
+                            String n = d.getName();
+                            String mod = n.endsWith(".mod")
+                                    ? n.substring(0, n.length() - 4) : n;
+                            if (EMBEDDED_CORE_MODS.contains(mod)) libDeps.add(n);
+                        }
                         if (!deps.isEmpty()) {
                             appendConsola("[deps] " + deps.size()
-                                    + " driver(s) a subir:\n");
+                                    + " módulo(s) a subir:\n");
                             for (java.io.File d : deps) {
-                                appendConsola("  - " + d.getName() + "\n");
+                                appendConsola("  - " + d.getName()
+                                        + (libDeps.contains(d.getName()) ? " → /lib" : " → /app")
+                                        + "\n");
                             }
                         }
-                        picoExplorer.uploadAndRun(modPath.toFile(), deps);
+                        picoExplorer.uploadAndRun(modPath.toFile(), deps, libDeps);
                     }
                 } catch (Exception ex) {
                     appendConsola("[ide] error: " + ex.getMessage() + "\n");

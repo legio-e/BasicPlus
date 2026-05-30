@@ -230,9 +230,18 @@ public final class PicoExplorer extends JPanel {
         uploadAndRun(modFile, java.util.Collections.emptyList());
     }
 
-    /** Variante deps-aware: sube primero los .mod de la lista (drivers
-     *  de dispositivo) y luego el principal, y ejecuta el principal. */
+    /** Variante deps-aware (2-arg): todas las deps a /app. */
     public void uploadAndRun(File modFile, java.util.List<File> depMods) {
+        uploadAndRun(modFile, depMods, java.util.Collections.emptySet());
+    }
+
+    /** Variante deps-aware: sube primero los .mod de la lista y luego el
+     *  principal, y ejecuta el principal. `libDepNames` = basenames (.mod)
+     *  que son stdlib core → van a /lib/ (y NO se pisan si ya están: la
+     *  versión del firmware/FS es la garantizada-compatible). El resto va
+     *  a /app/ con skip-if-same-size. */
+    public void uploadAndRun(File modFile, java.util.List<File> depMods,
+                             java.util.Set<String> libDepNames) {
         if (!isConnected()) {
             if (outputSink != null) outputSink.accept(
                     "[Explorer] no conectado — pulsa Connect primero");
@@ -246,6 +255,8 @@ public final class PicoExplorer extends JPanel {
         final String remoteName = toAppPath(modFile.getName());
         final java.util.List<File> deps = (depMods != null)
                 ? depMods : java.util.Collections.emptyList();
+        final java.util.Set<String> libNames = (libDepNames != null)
+                ? libDepNames : java.util.Collections.emptySet();
         final Backend b = this.backend;
         status.setText("Compile&Run: uploading "
                 + (deps.size() + 1) + " file(s)...");
@@ -271,21 +282,19 @@ public final class PicoExplorer extends JPanel {
             //    skip-if-same-size + DEL-before-overwrite por economía
             //    (evita reescritura de flash innecesaria en Pico).
             for (File dep : deps) {
-                String depRemote = toAppPath(dep.getName());
+                // stdlib core → /lib (como en la Pico); driver/app → /app.
+                boolean isLib = libNames.contains(dep.getName());
+                String depRemote = isLib ? ("/lib/" + dep.getName())
+                                         : toAppPath(dep.getName());
                 Long sz = remote.get(depRemote);
-                // ¿Ya está como stdlib pre-instalada en /lib/? (Pico la
-                // embebe en flash y la instala ahí al boot; esa versión es
-                // la garantizada-compatible con los intrínsecos del firmware,
-                // así que NO la pisamos). En dispositivos que no embeben
-                // stdlib (ESP32) no estará en /lib → cae al PUT a /app.
-                Long szLib = remote.get("/lib/" + dep.getName());
-                if (szLib != null) {
+                if (isLib && sz != null) {
+                    // stdlib ya en /lib (embebida del firmware o subida
+                    // antes) → NO la pisamos; es la compatible.
                     if (outputSink != null) {
                         SwingUtilities.invokeLater(() -> outputSink.accept(
-                                "[Explorer] /lib/" + dep.getName()
-                                + " pre-instalada, salto PUT"));
+                                "[Explorer] " + depRemote + " pre-instalada, salto PUT"));
                     }
-                } else if (sz != null && sz == dep.length()) {
+                } else if (!isLib && sz != null && sz == dep.length()) {
                     if (outputSink != null) {
                         SwingUtilities.invokeLater(() -> outputSink.accept(
                                 "[Explorer] " + depRemote + " ya en FS (" + dep.length()
