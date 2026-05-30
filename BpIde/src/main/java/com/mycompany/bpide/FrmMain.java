@@ -1624,8 +1624,15 @@ public class FrmMain extends javax.swing.JFrame
         } catch (Throwable ignored) { }
         if (bpFile.getParent() != null) searchDirs.add(bpFile.getParent());
 
+        // Resolvemos TODOS los imports, incluidos los stdlib core. Antes
+        // se saltaban asumiéndolos embebidos en el firmware; pero eso solo
+        // vale para la Pico. En dispositivos que NO embeben stdlib (ESP32)
+        // hay que subirlos. La decisión final de subir o no la toma
+        // uploadAndRun según lo que YA exista en el device (/lib = stdlib
+        // embebida → no se pisa; ausente → se sube a /app). Así funciona
+        // para ambos targets sin asumir nada. (EMBEDDED_CORE_MODS se queda
+        // como referencia documental de qué mods suele traer un firmware.)
         for (String imp : imports) {
-            if (EMBEDDED_CORE_MODS.contains(imp)) continue;
             for (Path dir : searchDirs) {
                 Path candidate = dir.resolve(imp + ".mod");
                 if (Files.isRegularFile(candidate)) {

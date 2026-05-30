@@ -273,7 +273,19 @@ public final class PicoExplorer extends JPanel {
             for (File dep : deps) {
                 String depRemote = toAppPath(dep.getName());
                 Long sz = remote.get(depRemote);
-                if (sz != null && sz == dep.length()) {
+                // ¿Ya está como stdlib pre-instalada en /lib/? (Pico la
+                // embebe en flash y la instala ahí al boot; esa versión es
+                // la garantizada-compatible con los intrínsecos del firmware,
+                // así que NO la pisamos). En dispositivos que no embeben
+                // stdlib (ESP32) no estará en /lib → cae al PUT a /app.
+                Long szLib = remote.get("/lib/" + dep.getName());
+                if (szLib != null) {
+                    if (outputSink != null) {
+                        SwingUtilities.invokeLater(() -> outputSink.accept(
+                                "[Explorer] /lib/" + dep.getName()
+                                + " pre-instalada, salto PUT"));
+                    }
+                } else if (sz != null && sz == dep.length()) {
                     if (outputSink != null) {
                         SwingUtilities.invokeLater(() -> outputSink.accept(
                                 "[Explorer] " + depRemote + " ya en FS (" + dep.length()

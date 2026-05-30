@@ -8,6 +8,7 @@ idf_component_register(
         "wire_v1.c"
         "fs_ram.c"
         "repl_esp32.c"
+        "gpio_esp32.c"
         "json_min.c"
         # --- core VM (portable C99) ---
         "../../src/bpvm.c"
@@ -43,6 +44,7 @@ idf_component_register(
         esp_timer
         esp_driver_uart
         esp_partition
+        esp_driver_gpio
 )
 
 # El core VM usa %d/%u con int32_t/uint32_t en mensajes de diagnóstico.

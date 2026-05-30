@@ -15,6 +15,7 @@
 
 #include "fs.h"
 #include "repl_esp32.h"
+#include "hw_esp32.h"
 
 /* Buffer caller-provided de la VM. NO static — repl_esp32.c lo referencia
  * como extern (igual convención que repl_v1.c en la Pico). */
@@ -30,6 +31,7 @@ void app_main(void)
     printf("[boot] consola/logs = USB-Serial-JTAG | wire v1 = UART0 @115200\n");
 
     fs_init();
+    esp32_hw_register();   /* backends de HW (GPIO, …) */
     wire_v1_uart_init();
 
     printf("[boot] REPL wire v1 escuchando en UART0. Conecta el IDE al puerto del bridge.\n");
