@@ -19,10 +19,14 @@
  * Ver bpvm_internal.h para el diseño. En host hay N workers pthread →
  * TLS (__thread). En Pico la config validada es single-worker → un
  * global plano basta (multi-worker Pico = v2, necesitará task-local). */
-#if defined(BPVM_PICO_NUM_CORES)
-#  define BPVM_AOT_TLS    /* Pico single-worker: global plano */
+#if defined(BPVM_PICO_NUM_CORES) || defined(ESP_PLATFORM)
+   /* MCU (Pico / ESP32): el AOT no corre (no hay codegen para la ISA del
+    * micro — el .mdn es ARM Thumb-2), así que el fault-slot NUNCA se arma
+    * → un global plano basta y evita depender de __thread (ELF TLS) en el
+    * toolchain del micro. */
+#  define BPVM_AOT_TLS
 #else
-#  define BPVM_AOT_TLS __thread
+#  define BPVM_AOT_TLS __thread   /* host: N workers pthread */
 #endif
 
 static BPVM_AOT_TLS bpvm_aot_fault_t g_aot_fault;

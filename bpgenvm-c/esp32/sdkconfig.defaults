@@ -1,0 +1,12 @@
+# Defaults del proyecto (H4.1). `idf.py set-target esp32s3` fija el target.
+#
+# Consola por UART0 (el puerto USB-UART de la placa) — `idf.py monitor`
+# la lee directo. Es lo más simple para el primer arranque.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+# La task de app_main ejecuta la VM. Damos holgura de stack C (el interp
+# es iterativo, pero helpers + eh dan algo de profundidad).
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Optimizar a tamaño para el primer bring-up.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
