@@ -83,4 +83,8 @@ python wire_test.py COMb
       **Validado end-to-end** (PUT + RUN + OUTPUT + EXITED).
 - [x] **H4.4** — FS persistente (partición `bpfs` + `esp_partition`).
       **Validado con power-cycle**: el `.mod` sobrevive a apagar/encender.
-- [ ] H4.5 — backend GPIO (blink). `Blink.mod` falla hasta tenerlo.
+- [~] **H4.5** — backend GPIO (`gpio_esp32.c`) + el IDE sube la stdlib
+      que falte (core → /lib, drivers → /app). **Código completo**; falta
+      validar GPIO en placa. Nota: la ESP32-S3-Touch-LCD-4.3 no tiene LED
+      de usuario en GPIO (RGB-LCD ocupa casi todo; backlight vía CH422G
+      I2C) → test pendiente: GPIO6 como INPUT, llevarlo a GND/3V3 y leerlo.
