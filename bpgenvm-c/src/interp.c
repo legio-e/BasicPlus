@@ -60,6 +60,37 @@ static void emit_newline(bpvm_t* vm) {
     emit_text(vm, "\n", 1);
 }
 
+/* #186 — invoca un thunk AOT con un boundary de fault armado.
+ *
+ * El setjmp vive AQUÍ (no en bpvm_interp_run_quantum) a propósito: si
+ * estuviera en el intérprete, sus registros calientes (pc/sp/bp/cs/mem)
+ * quedarían potencialmente clobbered por el longjmp (-Wclobbered) y
+ * habría que marcarlos volatile, penalizando el hot loop. Con el setjmp
+ * en este wrapper, el frame del intérprete nunca está en juego.
+ *
+ * Si el native lanza (throw_runtime → longjmp), construimos el
+ * RuntimeError con el mensaje del fault-slot y lo propagamos por el
+ * eh_stack del thread (maquinaria F5 reutilizada). Devuelve:
+ *   0 = el native terminó normal,
+ *   1 = fault cazado por un try/catch BP (tc->pc/sp/bp/cs → handler),
+ *   2 = fault NO cazado (eh_unwind dejó el thread TERMINATED).
+ * tc->cs debe estar fijado por el caller (throw_runtime_error localiza
+ * la clase RuntimeError por el cs del módulo en curso). */
+static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
+                            bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp) {
+    bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
+    int prev_armed = f->armed;   /* leaf natives: siempre 0; defensivo si anidaran */
+    if (setjmp(f->buf) == 0) {
+        f->armed = 1;
+        aot(vm, sp, bp);
+        f->armed = prev_armed;
+        return 0;
+    }
+    f->armed = prev_armed;
+    uint32_t obj = bpvm_throw_runtime_error(vm, tc, f->msg);
+    return bpvm_eh_unwind(vm, tc, obj) ? 1 : 2;
+}
+
 /* Formatea un float estilo Java Float.toString (que es lo que usa la VM
  * Java en FPRINT_NONL). Usa %g y limpia el trailing ".0" si es entero. */
 static void emit_float(bpvm_t* vm, float v, int newline) {
@@ -411,7 +442,20 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
              * registrado, divertir SIN crear frame BP. */
             bpvm_aot_thunk_t aot = bpvm_aot_lookup(target_abs);
             if (aot) {
-                aot(vm, &sp, &bp);
+                /* #186 — boundary de fault. Si el native lanza, el wrapper
+                 * propaga al try/catch BP que envuelva la llamada. */
+                tc->cs = cs;
+                int r = aot_call_guarded(vm, tc, aot, &sp, &bp);
+                if (r != 0) {
+                    /* Fault: recargamos regs desde tc (eh_unwind los fijó
+                     * al handler en r==1; en r==2 el thread está muerto). */
+                    pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+                    if (r == 2) {
+                        exit_status = BPVM_ERR_RUNTIME;
+                        if (yielded) *yielded = 1;
+                        goto done;
+                    }
+                }
                 break;
             }
             /* BP estándar: push saved pc/bp/cs, fija bp = sp, salta */
@@ -907,7 +951,17 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             {
                 bpvm_aot_thunk_t aot_ext = bpvm_aot_lookup(target);
                 if (aot_ext) {
-                    aot_ext(vm, &sp, &bp);
+                    /* #186 — mismo boundary de fault que OP_CALL. */
+                    tc->cs = cs;
+                    int r = aot_call_guarded(vm, tc, aot_ext, &sp, &bp);
+                    if (r != 0) {
+                        pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+                        if (r == 2) {
+                            exit_status = BPVM_ERR_RUNTIME;
+                            if (yielded) *yielded = 1;
+                            goto done;
+                        }
+                    }
                     break;
                 }
             }

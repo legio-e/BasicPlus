@@ -13,6 +13,23 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <setjmp.h>
+
+/* ---------- #186: slot de fault por worker ----------
+ * Ver bpvm_internal.h para el diseño. En host hay N workers pthread →
+ * TLS (__thread). En Pico la config validada es single-worker → un
+ * global plano basta (multi-worker Pico = v2, necesitará task-local). */
+#if defined(BPVM_PICO_NUM_CORES)
+#  define BPVM_AOT_TLS    /* Pico single-worker: global plano */
+#else
+#  define BPVM_AOT_TLS __thread
+#endif
+
+static BPVM_AOT_TLS bpvm_aot_fault_t g_aot_fault;
+
+bpvm_aot_fault_t* bpvm_aot_fault_slot(void) {
+    return &g_aot_fault;
+}
 
 /* ---------- I/O memoria big-endian ----------
  * Estos están como static inline en bpvm_internal.h — necesitamos
@@ -35,11 +52,23 @@ static void h_write_i16_be(uint8_t* p, int16_t v) {
  * throw_runtime levanta un BpThreadFault que sube por la pila de
  * frames hasta el handler más cercano (o tumba el thread). */
 static void h_throw_runtime(bpvm_t* vm, const char* msg) {
-    /* Por ahora reportamos al stderr y marcamos status fault. La
-     * integración con try/catch BP vendrá cuando el AOT lo soporte. */
-    if (msg) fprintf(stderr, "[aot] throw_runtime: %s\n", msg);
     (void) vm;
-    /* TODO: vm->thread_fault = BPVM_FAULT_RUNTIME; longjmp; */
+    /* #186: si el call-site AOT del intérprete armó un boundary en este
+     * worker, copiamos el mensaje y hacemos longjmp de vuelta. El interp
+     * construye el RuntimeError y lo propaga al try/catch BP (o termina
+     * el thread). NO retornamos — el native NO sigue ejecutando con
+     * basura como antes. */
+    bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
+    if (f->armed) {
+        size_t n = msg ? strlen(msg) : 0;
+        if (n > sizeof(f->msg) - 1) n = sizeof(f->msg) - 1;
+        if (msg && n) memcpy(f->msg, msg, n);
+        f->msg[n] = '\0';
+        longjmp(f->buf, 1);   /* no retorna */
+    }
+    /* Sin boundary armado: no debería ocurrir (los native sólo corren
+     * vía el hijack AOT del intérprete). Reportamos al menos. */
+    if (msg) fprintf(stderr, "[aot] throw_runtime sin boundary: %s\n", msg);
 }
 
 /* ---------- Heap / GC ----------

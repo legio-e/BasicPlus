@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <setjmp.h>
 
 /* ============================================================ */
 /*  Constantes extraídas de docs/MOD_FORMAT.md / HEAP_LAYOUT.md  */
@@ -390,5 +391,30 @@ uint32_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
  * deja tc en estado terminado con stack trace al stderr. Devuelve 1
  * si fue atrapado, 0 si no. */
 int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref);
+
+/* ---- #186: boundary de fault para código AOT native ----
+ *
+ * El código native es C puro sin frame BP: un fault (bounds/null via
+ * throw_runtime, o `throw RuntimeError(...)` explícito) no puede
+ * "retornar" un error por el stack BP. En su lugar, el call-site AOT
+ * del intérprete (interp.c OP_CALL/OP_CALL_EXT) arma un setjmp en este
+ * slot ANTES de invocar el thunk; el helper throw_runtime hace longjmp
+ * de vuelta, y el intérprete construye el RuntimeError + propaga via
+ * bpvm_eh_unwind al try/catch BP que envuelva la llamada (o termina el
+ * thread). Reutiliza toda la maquinaria F5 existente.
+ *
+ * El slot es POR WORKER (no por tc): sólo hay un native activo por
+ * worker a la vez, así que basta uno por hilo de ejecución — y evita
+ * inflar bpvm_thread_t ×N (la regresión OOM de #185). En host son N
+ * pthreads → TLS (__thread); en Pico single-worker basta un global.
+ * Multi-worker Pico (v2, con #153 dual-core) requerirá task-local. */
+typedef struct {
+    jmp_buf      buf;        /* destino del longjmp = boundary del interp */
+    char         msg[128];   /* mensaje del fault, copiado por throw_runtime */
+    volatile int armed;      /* 1 entre setjmp y fin del thunk */
+} bpvm_aot_fault_t;
+
+/* Devuelve el slot de fault del worker actual (TLS en host). */
+bpvm_aot_fault_t* bpvm_aot_fault_slot(void);
 
 #endif /* BPVM_INTERNAL_H */

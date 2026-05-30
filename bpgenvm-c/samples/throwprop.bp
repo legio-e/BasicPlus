@@ -1,0 +1,37 @@
+// throwprop.bp — test de #186 Parte 2: `throw RuntimeError("literal")`
+// EXPLÍCITO dentro de una función native, cazado por un try/catch BP.
+//
+// El emitter traduce `throw RuntimeError("...")` a
+//   vm->aot_helpers->throw_runtime(vm, "...");
+// que construye el RuntimeError en la VM y hace longjmp al boundary,
+// propagando por el eh_stack.
+//
+// Salida esperada (stdout):
+//   10
+//   caught: negative not allowed
+//   fin
+module ThrowProp
+
+    native function checkPositive(n: integer): integer
+        if n < 0 then
+            throw RuntimeError("negative not allowed")
+        endif
+        return n * 2
+    end checkPositive
+
+    function Main()
+        // 1) valor válido — sin throw
+        print checkPositive(5)
+
+        // 2) throw explícito DENTRO de try → cazado por el catch BP
+        try
+            var x: integer := checkPositive(-3)
+            print x
+        catch e: RuntimeError
+            print "caught: " + e.msg
+        endtry
+
+        print "fin"
+    end Main
+
+end ThrowProp

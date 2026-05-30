@@ -1,0 +1,47 @@
+// faultprop.bp — test de #186: un fault dentro de código native propaga
+// al try/catch BP que envuelve la llamada (o termina el thread limpio).
+//
+// readAt es `native`: `return a[i]` compila a array_load_i32, que hace
+// bounds-check y llama throw_runtime en fallo. Con #186 ese throw_runtime
+// hace longjmp al boundary del intérprete, que construye un RuntimeError
+// y lo propaga por el eh_stack.
+//
+// Salida esperada (stdout):
+//   20
+//   caught: array_load_i32: index out of bounds
+//   sigue vivo
+// y luego un fault NO atrapado (readAt(arr,1000) sin try) que termina el
+// thread → "no deberia verse" NO se imprime.
+module FaultProp
+
+    native function readAt(a: integer[], i: integer): integer
+        return a[i]
+    end readAt
+
+    function Main()
+        var arr: integer[] := newIntArray(3)
+        arr[0] := 10
+        arr[1] := 20
+        arr[2] := 30
+
+        // 1) acceso valido — sin fault
+        print readAt(arr, 1)
+
+        // 2) fault DENTRO de try → cazado por el catch BP
+        try
+            var x: integer := readAt(arr, 999)
+            print x
+        catch e: RuntimeError
+            print "caught: " + e.msg
+        endtry
+
+        // 3) la VM sigue viva tras cazar
+        print "sigue vivo"
+
+        // 4) fault SIN try → RuntimeError no atrapado → termina el thread
+        var y: integer := readAt(arr, 1000)
+        print y
+        print "no deberia verse"
+    end Main
+
+end FaultProp

@@ -608,9 +608,59 @@ public final class AotCEmitter {
             indent(); w.println("}");
             return;
         }
+        if (s instanceof Ast.ThrowStmt) {
+            emitThrowStmt((Ast.ThrowStmt) s);
+            return;
+        }
         throw new UnsupportedAotException(
             "AOT: statement no soportado: " + s.getClass().getSimpleName()
             + " (line " + ((Ast.Node) s).line + ")");
+    }
+
+    /** #186 — `throw RuntimeError("literal")` desde native.
+     *
+     *  El helper throw_runtime construye el RuntimeError EN LA VM
+     *  (bpvm_throw_runtime_error: localiza la clase, aloca string+objeto)
+     *  y hace longjmp al boundary AOT del intérprete, que lo propaga por
+     *  el eh_stack hasta el try/catch BP que envuelva la llamada (o
+     *  termina el thread). El native NO construye el objeto.
+     *
+     *  v1 SOLO acepta `throw RuntimeError(<string literal>)`. Un mensaje
+     *  no-literal (string runtime) o una clase de usuario != RuntimeError
+     *  exigiría construir un objeto en native = frontera native↔intérprete
+     *  (v2, junto a #174). En ese caso lanzamos UnsupportedAotException y
+     *  el módulo cae a bytecode interpretado (donde sí funciona). */
+    private void emitThrowStmt(Ast.ThrowStmt ts) {
+        String lit = runtimeErrorLiteral(ts.value);
+        if (lit == null) {
+            throw new UnsupportedAotException(
+                "AOT: en native solo se soporta `throw RuntimeError(\"literal\")` "
+                + "(mensaje no-literal o clase de usuario = v2). line " + ts.line);
+        }
+        byte[] bytes = lit.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        indent();
+        w.println("vm->aot_helpers->throw_runtime(vm, \"" + cEscapeBytes(bytes) + "\");");
+    }
+
+    /** Devuelve el literal del mensaje si {@code value} es exactamente
+     *  {@code RuntimeError("literal")}, o null si no matchea el subset v1. */
+    private static String runtimeErrorLiteral(Ast.IExpr value) {
+        if (!(value instanceof Ast.CallExpr)) return null;
+        Ast.CallExpr call = (Ast.CallExpr) value;
+        String name = calleeSimpleName(call.callee);
+        if (!"RuntimeError".equals(name)) return null;
+        if (call.args == null || call.args.size() != 1) return null;
+        Ast.IExpr arg = call.args.get(0);
+        if (!(arg instanceof Ast.StringLitExpr)) return null;
+        return ((Ast.StringLitExpr) arg).value;
+    }
+
+    /** Nombre simple del callee de una llamada: el identificador, o el
+     *  miembro final de un acceso {@code X.RuntimeError}. */
+    private static String calleeSimpleName(Ast.IExpr callee) {
+        if (callee instanceof Ast.IdentifierExpr)   return ((Ast.IdentifierExpr) callee).name;
+        if (callee instanceof Ast.MemberAccessExpr) return ((Ast.MemberAccessExpr) callee).member;
+        return null;
     }
 
     /** for-loop BP: `for i = <from> to <to> [step <step>]` con semántica
