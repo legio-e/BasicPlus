@@ -379,6 +379,39 @@ runtime**, no variantes en compile-time):
   matriz de firmwares, despliegue trivial. (Enlaza con H4 ESP32-S3 #147:
   diseñar el descriptor de forma que sirva para RP2350 Y ESP32-Sx.)
 
+## 9b. HAL: formalizar la abstracción HW (registro unificado + capabilities)
+
+**Contexto / observación (del usuario, mayo 2026)**: al portar a ESP32-S3
+surgió la duda de si la VM está demasiado acoplada al hardware. **No lo
+está** — ya existe abstracción: cada periférico (gpio, i2c, spi, uart,
+pwm, adc, pulse, rtc, wdt) tiene en `src/` una **fachada** que llama a un
+**backend de punteros a función** registrable (`bpvm_<perif>_backend_t` +
+`bpvm_<perif>_set_backend`). La VM core NUNCA llama al SDK del chip;
+`src/*.c` no tiene un solo `#include` de pico-sdk ni de ESP-IDF. Por eso
+el core saltó a Xtensa en H4 sin tocarse: solo hay que **escribir el
+backend** del micro nuevo (`esp32/gpio_mod.c`, etc.) y registrarlo al
+boot — la VM y el API BP (`import Gpio`, `Pin`, …) no cambian.
+
+**Qué mejorar en V2** (el "siguiente paso" no es crear la abstracción —
+existe — sino *formalizarla*):
+- Hoy son **N mini-abstracciones paralelas ad-hoc** (un struct + un
+  `set_backend` por periférico). Unificar en un **HAL coherente**: un
+  único mecanismo de registro/descubrimiento de backends (p.ej. una tabla
+  tipo `aot_helpers_v1_t` pero para HW), versionado y additivo.
+- El interfaz actual asume un **modelo "tipo-Pico"** (i2c con sda/scl/bus,
+  spi con sck/mosi/miso). Acoplar con el **descriptor de capabilities de
+  runtime (#9)**: el HAL expone qué periféricos/instancias/pines existen,
+  y la stdlib valida contra eso. Programa BP que pide algo inexistente →
+  RuntimeError claro, no asunción por placa.
+- Capa de **board/chip descriptor** (mapa de pines, defaults, nº de buses)
+  separada del código — datos, no `#define`s dispersos.
+- **Impacto en el CORE de la VM: nulo** (igual que #9). Esto vive en la
+  frontera de backends + stdlib. Es exactamente "tocar la VM lo mínimo".
+
+**Enlaza con**: #9 (multi-MCU), #147 (ESP32-S3), H4.5 (backend GPIO
+ESP32). El HAL formalizado haría que añadir el 3er/4º micro sea casi
+mecánico.
+
 ## 10. PSRAM externa: heap fuera, stack/ejecución dentro
 
 **Idea (del usuario)**: muchos micros admiten PSRAM externa de 8 MB,
