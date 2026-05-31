@@ -509,6 +509,42 @@ Palancas, de menos a más invasivas:
   siendo una capa aparte, más invasiva; solo si un lazo de control real la
   exige.)
 
+  **→ Arranque de H3 (usuario, 2026-05-31): MEDIR antes de decidir, con 2
+  herramientas sobre la VM-Java ÚNICAMENTE** (el GC es implementación de VM;
+  bytecode/`.mod` idénticos → lo medido en Java transfiere conceptualmente y
+  no duplicamos trabajo en C):
+
+  1. **Índice de fragmentación.** Recorre la lista de bloques del heap
+     (`heap_start..heap_next`, igual que el sweep), clasifica cada bloque
+     vivo/libre y reporta:
+     - `frag = 1 − (mayor_hueco_libre / total_libre)` — fragmentación externa:
+       0 = un único hueco contiguo (sin fragmentar); →1 = libre hecho añicos.
+     - auxiliares: total_libre, nº de huecos, mayor_hueco, bytes_vivos,
+       bytes_muertos, utilización = vivos / heap_usado.
+     Con el allocator ACTUAL (bump-sin-reuse) "fragmentación" = huecos muertos
+     que nunca se reúsan → el índice sobre el allocator actual es la **línea
+     base (peor caso) a batir**.
+  2. **Mapa de memoria ASCII** (más para calibrar a ojo). Cuantiza el heap
+     usado en N celdas (1 char ≈ `heap_usado/N` bytes, p.ej. 256 B/celda). Por
+     celda: `.`=libre, `#`=lleno (todo vivo), `:`=semi (mezcla vivo/libre
+     dentro de la celda). Una sola cadena de N chars partida cada 80 (o 60)
+     columnas → mapa. El "semi" surge de la cuantización (un bloque es vivo o
+     libre; una celda que cubre varios bytes puede mezclar).
+
+  Exposición: métodos en `VirtualMachine` (`heapFragIndex()`, `heapMap(cols)`)
+  llamables desde un driver de test, y/o un builtin para imprimirlos desde un
+  programa BP de estrés.
+
+  **Workloads de estrés** (los MISMOS para cada modelo candidato):
+  - churn: muchos objetos de vida corta (mucha basura) → eficiencia de reuso.
+  - tamaños mixtos interleaved con frees → fragmentación externa.
+  - vivos-largos + cortos mezclados → huecos alrededor de supervivientes.
+  - grande → free → llenar de pequeños → coalescing.
+  Comparar por modelo: tiempo (pausas GC), heap pico, índice de frag final,
+  forma del mapa, y si tras el churn se puede satisfacer un alloc GRANDE
+  (OOM-o-no). **Caracterizar primero el allocator ACTUAL (baseline), luego los
+  candidatos (free-list/TLSF y, si procede, moving), y entonces decidir.**
+
   **Meta-principio (usuario, 2026-05-30)**: decidir NO es grabar en piedra.
   El GC es precisamente el sitio MÁS seguro para "decidir y, si luego se
   demuestra mejor otra opción, cambiar" — porque está aislado tras el `.mod`
