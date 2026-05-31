@@ -1771,6 +1771,21 @@ public final class SemanticAnalyzer {
         boolean rejectedByModuleVisibility = false;
         if (ce.callee instanceof IdentifierExpr) {
             IdentifierExpr id = (IdentifierExpr) ce.callee;
+            // H1.3b — casts numéricos generales: integer()/long()/float()/double().
+            // No son símbolos (son keywords de tipo); se resuelven aquí.
+            BpType castT = numericCastTarget(id.name);
+            if (castT != null) {
+                BpType at = null;
+                for (int i = 0; i < ce.args.size(); i++) {
+                    BpType a = analyzeExpr(ce.args.get(i), scope, null);
+                    if (i == 0) at = a;
+                }
+                if (ce.args.size() != 1)
+                    err(ce.line, ce.column, id.name + "(): se esperaba 1 argumento");
+                else if (at != null && !at.isNumeric() && !(at instanceof ErrorType))
+                    err(ce.line, ce.column, id.name + "(): se esperaba un valor numérico, no '" + at.display() + "'");
+                return castT;
+            }
             target = module.members.resolve(id.name);
             // Gating: si estamos dentro de una clase y el match en el módulo
             // es un símbolo privado (function/var/const/property no public),
@@ -1943,6 +1958,18 @@ public final class SemanticAnalyzer {
 
     private static boolean isLong(BpType t) {   // H1.2 (V2)
         return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.LONG;
+    }
+
+    /** H1.3b (V2) — destino de un cast numérico general integer()/long()/
+     *  float()/double(), o null si el nombre no es uno de ellos. */
+    private static BpType numericCastTarget(String name) {
+        switch (name) {
+            case "integer": return PrimitiveType.INTEGER;
+            case "long":    return PrimitiveType.LONG;
+            case "float":   return PrimitiveType.FLOAT;
+            case "double":  return PrimitiveType.DOUBLE;
+            default:        return null;
+        }
     }
 
     private static BpType promote(BpType a, BpType b) {

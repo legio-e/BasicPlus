@@ -1,0 +1,20 @@
+module CastTest
+
+    // H1.3b: casts numéricos generales integer()/long()/float()/double().
+    // Downcasts (double->int, float->long, long->int) y upcasts explícitos.
+
+    function Main()
+        var d: double := 3.7d
+        print "i(3.7d)  =", integer(d)        // 3    (D2I, trunc)
+        print "l(3.7d)  =", long(d)           // 3    (D2L, trunc)
+        print "f(3.5d)  =", float(3.5d)       // 3.5  (D2F)
+        var big: long := 5000000000L
+        print "i(big)   =", integer(big)      // 705032704 (L2I, trunc low 32)
+        print "l(42)    =", long(42)          // 42   (I2L)
+        print "d(42)    =", double(42)        // 42.0 (I2D)
+        print "i(2.5f)  =", integer(2.5)      // 2    (F2I)
+        print "l(2.5f)  =", long(2.5)         // 2    (F2L)
+        print "d3.5+1   =", double(3.5d) + 1  // 4.5  (cast + aritmética)
+    end Main
+
+end CastTest

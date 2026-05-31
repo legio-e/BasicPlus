@@ -2484,6 +2484,16 @@ public final class MivmEmitter {
     }
 
     private void emitCall(CallExpr c) throws IOException {
+        // H1.3b (V2) — casts numéricos generales: integer()/long()/float()/double().
+        // No son símbolos; se reconocen por nombre y emiten la conversión
+        // type-directed según el tipo del argumento.
+        if (c.callee instanceof IdentifierExpr
+                && isNumericCastName(((IdentifierExpr) c.callee).name)
+                && c.args.size() == 1) {
+            emitExpr(c.args.get(0));
+            emitNumericConversion(info.exprTypes.get(c.args.get(0)), ((IdentifierExpr) c.callee).name);
+            return;
+        }
         // Caso 1: callee es IdentifierExpr → función top-level o construction.
         if (c.callee instanceof IdentifierExpr) {
             Symbol sym = info.exprSymbols.get(c.callee);
@@ -3850,6 +3860,41 @@ public final class MivmEmitter {
     /** H1.3 — tipos de 8 bytes (2 slots): long y double comparten storage. */
     private boolean is8Byte(BpType t) {
         return isLong(t) || isDouble(t);
+    }
+
+    private static boolean isNumericCastName(String n) {   // H1.3b (V2)
+        return "integer".equals(n) || "long".equals(n) || "float".equals(n) || "double".equals(n);
+    }
+
+    /** H1.3b — emite la conversión numérica del valor ya en pila (de tipo srcT)
+     *  al tipo destino del cast. Nada si ya coincide. */
+    private void emitNumericConversion(BpType srcT, String target) throws IOException {
+        boolean sInt    = srcT instanceof PrimitiveType && ((PrimitiveType) srcT).isIntegerLike();
+        boolean sLong   = isLong(srcT);
+        boolean sFloat  = isFloat(srcT);
+        boolean sDouble = isDouble(srcT);
+        switch (target) {
+            case "integer":
+                if (sLong)        w.emit(OpCode.I64_TO_I32);
+                else if (sFloat)  w.emit(OpCode.F2I);
+                else if (sDouble) w.emit(OpCode.D2I);
+                break;  // int/narrow: ya es i32 en pila
+            case "long":
+                if (sInt)         w.emit(OpCode.I32_TO_I64);
+                else if (sFloat)  w.emit(OpCode.F2L);
+                else if (sDouble) w.emit(OpCode.D2L);
+                break;  // long: nada
+            case "float":
+                if (sInt)         w.emit(OpCode.I2F);
+                else if (sLong)   w.emit(OpCode.L2F);
+                else if (sDouble) w.emit(OpCode.D2F);
+                break;  // float: nada
+            case "double":
+                if (sInt)         w.emit(OpCode.I2D);
+                else if (sLong)   w.emit(OpCode.L2D);
+                else if (sFloat)  w.emit(OpCode.F2D);
+                break;  // double: nada
+        }
     }
 
     /** H1.3 — convierte el operando ya en pila al tipo de la op binaria

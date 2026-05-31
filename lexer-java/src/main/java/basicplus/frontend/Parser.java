@@ -1124,6 +1124,31 @@ public final class Parser {
                 return new CallExpr(new IdentifierExpr(castName, tok.line, tok.column),
                         args, lp.line, lp.column);
             }
+            // H1.3b (V2) — casts numéricos generales en posición de expresión:
+            //   integer(x), long(x), float(x), double(x). Type-directed: el
+            //   emisor elige la conversión (F2I/D2I/I2D/L2D/...) según el arg.
+            case INTEGER:
+            case LONG:
+            case FLOAT:
+            case DOUBLE: {
+                String castName;
+                switch (tok.type) {
+                    case INTEGER: castName = "integer"; break;
+                    case LONG:    castName = "long";    break;
+                    case FLOAT:   castName = "float";   break;
+                    default:      castName = "double";  break;   // DOUBLE
+                }
+                advance();
+                if (!check(TokenType.LPAREN)) {
+                    error("se esperaba '(' tras tipo '" + castName + "' en expresión (cast)");
+                    return new NullLitExpr(tok.line, tok.column);
+                }
+                Token lp = current(); advance();
+                List<IExpr> args = parseArgList();
+                consume(TokenType.RPAREN, "se esperaba ')'");
+                return new CallExpr(new IdentifierExpr(castName, tok.line, tok.column),
+                        args, lp.line, lp.column);
+            }
             default:
                 error("se esperaba una expresión, encontrado '" + tok.lexeme + "'");
                 advance();
