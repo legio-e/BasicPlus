@@ -238,7 +238,7 @@ public enum Builtin {
     // ---- Wdt — watchdog timer singleton del MCU ----
     WDT_ENABLE("__wdtEnable"),           // (timeoutMs: int) → void
     WDT_FEED("__wdtFeed"),               // () → void
-    WDT_DISABLE("__wdtDisable");         // () → void
+    WDT_DISABLE("__wdtDisable"),         // () → void
                                          //   En RP2350 "disable" se aproxima con un
                                          //   timeout muy grande (no hay way real de
                                          //   deshabilitar el watchdog una vez activado).
@@ -250,6 +250,11 @@ public enum Builtin {
                                          //   (UART/SPI/I2C/PWM): llamar ANTES de
                                          //   configurarlos. Las funciones sleep* NO se ven
                                          //   afectadas (timer HW corre a 1 MHz independiente).
+
+    // ---- H2 (V2) — conversión string <-> byte[] (ambos TYPE_ARRAY_I8;
+    //      copia defensiva por la inmutabilidad del string) ----
+    TO_BYTES("toBytes"),                 // (s: string) → byte[]
+    FROM_BYTES("fromBytes");             // (b: byte[]) → string
 
     public final String bpName;
     public final int id;

@@ -101,7 +101,10 @@ enum {
     /* Wdt — ordinales 116..118. */
     BUILTIN_WDT_ENABLE       = 116,
     BUILTIN_WDT_FEED         = 117,
-    BUILTIN_WDT_DISABLE      = 118
+    BUILTIN_WDT_DISABLE      = 118,
+    /* H2 (V2) — conversión string <-> byte[] (ambos TYPE_ARRAY_I8). */
+    BUILTIN_TO_BYTES         = 119,
+    BUILTIN_FROM_BYTES       = 120
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -292,6 +295,21 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             for (uint32_t k = 0; k < el; k++) vm->memory[new_ref + 4 + w++] = enc[k];
         }
         push_i32(vm, tc, (int32_t) new_ref);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_TO_BYTES:
+    case BUILTIN_FROM_BYTES: {
+        /* H2 (V2): string y byte[] comparten layout (TYPE_ARRAY_I8). La
+         * conversión es una copia defensiva (string inmutable / byte[]
+         * mutable): mismos bytes, objeto nuevo. */
+        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t n = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
+        uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
+        if (out == 0) return BPVM_ERR_OOM;
+        bpvm_write_u32_be(vm->memory + out, n);
+        for (uint32_t i = 0; i < n; i++) vm->memory[out + 4 + i] = vm->memory[ref + 4 + i];
+        push_i32(vm, tc, (int32_t) out);
         return BPVM_OK;
     }
 

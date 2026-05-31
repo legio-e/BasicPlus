@@ -267,6 +267,13 @@ public final class SemanticAnalyzer {
         // implementa; sin builtin nuevo). Paralelo a newIntArray.
         BpType BYTE_ARRAY = new ArrayType(PrimitiveType.UINT8);
         addBuiltin(s, "newByteArray",   BYTE_ARRAY,          new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
+        // H2 (V2) — conversión string <-> byte[] (UTF-8). string y byte[] son
+        // el mismo layout TYPE_ARRAY_I8; la conversión copia los bytes a un
+        // objeto nuevo (defensiva, por la inmutabilidad del string).
+        //   toBytes(s): byte[]   — los bytes UTF-8 del string.
+        //   fromBytes(b): string — interpreta los bytes como UTF-8.
+        addBuiltin(s, "toBytes",   BYTE_ARRAY,           new String[]{"s"}, new BpType[]{PrimitiveType.STRING});
+        addBuiltin(s, "fromBytes", PrimitiveType.STRING, new String[]{"b"}, new BpType[]{BYTE_ARRAY});
         // H1.2 (V2) — long[]: aloca un long[] (8 bytes/elem, zero-init).
         // El emisor lo traduce a NEWARRAY_I64 inline (la VM ya lo implementa).
         BpType LONG_ARRAY = new ArrayType(PrimitiveType.LONG);

@@ -1,0 +1,23 @@
+module ConvTest
+
+    // H2.4: conversión string <-> byte[] (UTF-8). toBytes copia los bytes
+    // UTF-8 del string; fromBytes los reinterpreta. Copia defensiva: mutar
+    // el byte[] NO debe afectar al string original (inmutabilidad).
+
+    function Main()
+        var s: string := "héllo €"
+        // codepoints: h é l l o _ €   (7);  bytes: 1+2+1+1+1+1+3 = 10
+        var b: byte[] := toBytes(s)
+        print "scp   =", strlen(s)     // 7  (codepoints)
+        print "b0    =", b[0]          // 104 'h'
+        print "b1    =", b[1]          // 195 (0xC3, 1er byte de é)
+        print "b9    =", b[9]          // 172 (0xAC, ultimo byte de €)
+
+        b[0] := 88                     // 'X' — muta la COPIA
+        print "s     =", s             // héllo €  (intacto: copia defensiva)
+        var s2: string := fromBytes(b) // "Xéllo €"
+        print "s2    =", s2            // Xéllo €
+        print "s2cp  =", strlen(s2)    // 7
+    end Main
+
+end ConvTest

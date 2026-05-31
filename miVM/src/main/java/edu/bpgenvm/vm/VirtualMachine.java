@@ -3219,6 +3219,21 @@ public class VirtualMachine {
                 pushTc(tc, s.codePointAt(s.offsetByCodePoints(0, idx)));
                 break;
             }
+            case TO_BYTES:
+            case FROM_BYTES: {
+                // H2 (V2): string y byte[] comparten layout (TYPE_ARRAY_I8). La
+                // conversión es una copia defensiva (string inmutable / byte[]
+                // mutable): mismos bytes, objeto nuevo.
+                int ref = popTc(tc);
+                int n = (ref == 0) ? 0 : readInt32(ref);
+                int out = heapAlloc(n, TYPE_ARRAY_I8);
+                writeInt32(out, n);
+                System.arraycopy(memory, ref + 4, memory, out + 4, n);
+                ThreadContext me = currentTcLocal.get();
+                if (me != null) me.allocAnchor = out;
+                pushTc(tc, out);
+                break;
+            }
 
             // ---- Threading ----
             // Convención de fields en la clase Thread sintetizada:
