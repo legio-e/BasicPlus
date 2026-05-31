@@ -1,0 +1,26 @@
+module FragMixed
+
+    // H3.3 workload D — supervivientes dispersos de TAMAÑOS MIXTOS: como
+    // fragsurv pero los arrays varían de tamaño (10..94 ints). Huecos de
+    // tamaños dispares -> fragmentación externa peor (first-fit deja restos
+    // pequeños inservibles).
+
+    function Main()
+        var keep: List := List()
+        var i: integer := 0
+        var N: integer := 150
+        while i < N do
+            var sz: integer := 10 + (i mod 8) * 12      // 10,22,...,94
+            var arr: integer[] := newIntArray(sz)
+            if (i mod 3) == 0 then
+                keep.add(arr)
+            endif
+            i := i + 1
+        endwh
+        gc()
+        print "vivos en keep =", keep.length()
+        print "MIXED:", heapFrag()
+        print heapMap(80)
+    end Main
+
+end FragMixed

@@ -501,6 +501,27 @@ Palancas, de menos a más invasivas:
     hoy quizá no tengamos. Copying gasta media heap (semispace) salvo
     mark-compact.
 
+  **Restricción de PINNING (usuario, 2026-05-31) — clave si elegimos moving.**
+  Una función `native` (AOT) recibe un puntero CRUDO al payload de un objeto
+  (`vm->memory + ref`) y recorre los bytes directamente (es su razón de ser:
+  velocidad). Si un GC compacta y MUEVE ese buffer mientras la native trabaja
+  (porque la propia native aloca, u otro worker dispara GC), el puntero cacheado
+  queda colgante → corrupción. Por tanto, con CUALQUIER variante moving hay que
+  poder **marcar bloques como no-desplazables (pinned)** mientras una native los
+  usa. Implicaciones:
+  - Un **pin-bit** en el tag del objeto (hay bits libres: tag = MARK|FREE|
+    type<<24|...; bits 0..23 sin usar). El compactador trata los pinned como
+    anclas fijas y compacta a su alrededor (reduce algo la efectividad, pero es
+    obligatorio para correción).
+  - Punto natural para pin/unpin: el **boundary del thunk AOT** (el mismo de
+    #186): al entrar a la native se pinnan sus args-objeto, al salir se
+    despinnan. (También aplicaría a DMA/periféricos que lean un buffer del heap.)
+  - El handle-table no exime: si la native cacheó el puntero resuelto, mover el
+    objeto y actualizar la tabla no le sirve → pinning igualmente.
+  - **Lectura para la decisión**: el pinning es maquinaria EXTRA del lado moving
+    y un punto A FAVOR del no-moving (direcciones estables → punteros native
+    siempre válidos → cero pinning). Suma al "coste" de la columna moving.
+
   **La pregunta empírica que decide H3**: ¿nuestro workload fragmenta de
   verdad bajo un buen allocator no-moving (TLSF)? Si NO → no-moving gana
   (simple, rápido, VM intacta). Si SÍ (dispositivo de larga vida, tamaños de

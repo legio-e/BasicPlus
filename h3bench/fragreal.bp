@@ -1,0 +1,38 @@
+module FragReal
+
+    // H3.3 workload C — REALISTA (lazo tipo control embebido):
+    //   - working-set fijo alocado al arranque (vive siempre).
+    //   - por iteración: buffers transitorios (mueren en el acto) = churn.
+    //   - retención ACOTADA: ring de los últimos 8 resultados (los viejos
+    //     mueren al salir del ring). Patrón típico, no peor-caso.
+
+    function Main()
+        var ws: List := List()                 // working-set fijo
+        var k: integer := 0
+        while k < 10 do
+            ws.add(newIntArray(64))
+            k := k + 1
+        endwh
+
+        var ring: List := List()               // últimos 8 resultados
+        var i: integer := 0
+        var iters: integer := 500
+        while i < iters do
+            var tmp: integer[]  := newIntArray(40)   // transitorio (churn)
+            var tmp2: integer[] := newIntArray(25)   // transitorio (churn)
+            if (i mod 20) == 0 then
+                ring.add(newIntArray(50))            // resultado retenido
+                if ring.length() > 8 then
+                    ring.remove(0)                   // el más viejo muere
+                endif
+            endif
+            i := i + 1
+        endwh
+
+        gc()
+        print "ws =", ws.length(), " ring =", ring.length()
+        print "REAL:", heapFrag()
+        print heapMap(80)
+    end Main
+
+end FragReal
