@@ -55,9 +55,35 @@ después tocarla lo mínimo. Tres hitos seguidos:
 - **H2 — strings UTF-8** ✅ **CERRADO (2026-05-31)**: string = `byte[]`
   UTF-8 (§4), índice por codepoint, conversión `string↔byte[]`. Construido
   sobre el `byte[]` de H1.
-- **H3 — GC**: capítulo propio. Reimplementación **completa** del modelo
-  de memoria (reuse / free-list), **manteniendo la interfaz** GC↔VM para
-  afectar a la VM lo mínimo (ver nota de diseño en §8).
+- **H3 — GC** ✅ **CERRADO (2026-05-31)**: allocator **non-moving** con
+  free-list (first-fit + split + coalescing) + **GC proactivo por umbral**
+  + **heapNext-retreat**, en AMBAS VMs (la VM C era bump-sin-reuse → ahora
+  reusa de verdad). Compactación (moving) diferida, con pinning ya
+  documentado, solo si un workload real exhibe la patología. Ver §8 +
+  `h3bench/NOTAS.md`.
+
+**Con H3 cerrado, el «trío que toca la VM» está COMPLETO y la VM queda
+efectivamente congelada.** Lo que sigue se construye encima sin tocarla:
+
+- **H4 — librerías BP** (diseñado 2026-05-31; **primer hito post-VM**). Es
+  el lote de stdlib de esta tarde. Se organiza por su **impacto en el
+  COMPILADOR**:
+  - **H4.A — NO afecta al compilador** (BP puro, **programable YA**, no
+    bloquea con nada):
+    * **String**, subconjunto sin tuplas: `longToString`, `doubleToString`,
+      `formatDouble`, `padLeft`/`padRight`, `toHex`, `lastIndexOf`,
+      `fromCharCode`, `compare` (§14b).
+    * **`Map`** (§14c) — pura BP sobre `List` + `synchronized`; usa `compare`.
+    * **`Stats`** (§14d) — pura BP; `Accumulator` (Welford) + funciones
+      sobre `double[]`; usa la clase `LinFit` mientras no haya tuplas.
+  - **H4.B — SÍ afecta al compilador** (requiere feature de lenguaje antes):
+    * **Tuplas (§2)** — prerrequisito (campos nombrados).
+    * Luego los `parse*` (`parseLong`/`parseDouble`/`parseHex`) que devuelven
+      `{err, valor}` + unificar `parseInt`/`parseFloat` a tupla (§14b).
+  - **Orden natural**: **H4.A ya** (no bloquea nada); **H4.B** cuando se
+    prototipen las tuplas.
+  - **NO entran en H4** (son "posterior a H4, sin turno"): TCP (§13),
+    `Compress`/`Archive` (§14e) y parámetros por defecto (§10).
 
 **Estado H1 (cerrado 2026-05-31)** — entregado y validado en doble VM
 (miVM Java ↔ bpgenvm-c C, salida idéntica) + compilación limpia en Xtensa
@@ -248,7 +274,38 @@ precisión doble para cálculo numérico serio.
 
 ---
 
-## 2. Tuplas  *(si no resulta demasiado complejo)*
+## 2. Tuplas  *(✅ CONFIRMADA — mejora de compilador/lenguaje, 2026-05-31)*
+
+**Decisión (usuario, 2026-05-31)**: SÍ se quieren — útiles para devolver 2+
+valores de una función (caso concreto que lo motiva: `Stats.linfit` →
+`(slope, intercept)`). **Enfoque: tupla = objeto heap sintético** (clase oculta
+`__TupleN` con campos), usando opcodes existentes (`NEW_OBJECT`/`SET_FIELD`/
+`GET_FIELD`) → **CERO coste de VM** (principio "lo que hace el compilador se lo
+ahorra la VM"). El coste real está en el **frontend** (tipos tupla, inferencia,
+destructuring `var (x,y) := f()`, igualdad estructural) + 1 alocación pequeña por
+tupla (despreciable en retornos ocasionales; solo importaría en bucles muy
+calientes). Una tupla *alloc-free general* pediría un `RET` multi-valor
+(mini-cambio aditivo de VM); curiosidad: el caso 2×4-byte cabría gratis en el
+retorno de 8 bytes existente (`LRET`). **Plan: prototipar el caso mínimo**
+(retorno de 2 valores + destructuring en `var`) como objeto heap, evaluar,
+ampliar. Mientras tanto, las funciones que devuelven 2 valores usan una clase
+pequeña (p.ej. `Stats.LinFit`) y migran a tupla sin romper a nadie.
+
+**Actualización (usuario, 2026-05-31) — pasa de "algún día" a PRERREQUISITO**:
+- **Consumidores que la disparan**: (1) `Stats.LinFit` `(slope, intercept)`;
+  (2) **las funciones `parse*` de string** — decisión del usuario: los `parse*`
+  NO lanzan excepción (try/catch es una pesadez para input que falla por
+  diseño), **devuelven una tupla `{ err, valor }`** estilo Go. Con ≥2
+  consumidores reales, las tuplas dejan de ser opcionales.
+- **Las tuplas deben tener CAMPOS NOMBRADOS** (record-like): acceso `r.err`,
+  `r.valor`, no solo posicional `r.0`/`r.1`. (El usuario escribió `{err, valor}`.)
+- **Bloqueo**: la tanda de **stdlib de string** (los `parse*`) **depende de las
+  tuplas**. Camino elegido = **(a) tuplas primero, luego `parse*`** (tipado
+  limpio, `r.valor` es el tipo numérico real, sin `any`). Alternativa (b)
+  descartada salvo prisa: clase transitoria `ParseResult { err: boolean,
+  valor: any }` con la misma ergonomía, a migrar luego.
+- **Contenido de `parse*`**: `err: boolean` (true = falló); el `valor` solo es
+  válido si `err` es false. (Para parsear no se necesita el *por qué* del fallo.)
 
 **Qué**: tipo producto anónimo `(a, b, c)`. Casos de uso: retorno
 múltiple de funciones, agrupación ligera sin declarar una clase.
@@ -439,6 +496,131 @@ fondo:
 **Coste**: medio, pero **ALTO valor de usabilidad**. Ortogonal al
 sistema de tipos (no depende de #1-#6). Buen candidato a hacer pronto en
 v2 porque mejora el día a día de escribir BP.
+
+---
+
+## 8. Funciones de primera clase / callbacks + eventos
+
+**Qué**: poder pasar una función como parámetro (callback). Hoy BP **NO
+lo tiene** (confirmado: `BpType.Kind` no tiene `FunctionType`; el Parser
+no tiene lambdas ni referencias a función).
+
+**Por qué (necesidad real, no estética)**: surge de dos casos concretos:
+- **Comparador a medida** para el `Map` (orden de keys distinto al
+  string por defecto) y un futuro `sort(list, cmp)`.
+- **Eventos / listeners** (observer): `widget.onClick(handler)`. No
+  tenemos NADA de eventos todavía, y un sistema de eventos necesita
+  callbacks por definición.
+
+**Stopgap HOY (cero coste de VM)**: el patrón **objeto‑callback** (estilo
+`Comparator`/`Runnable` de Java pre‑lambdas): una clase con un método
+(`compare(a,b)`, `onEvent(...)`) que se pasa como objeto y se invoca por
+`INVOKE_VIRTUAL` (maquinaria existente). Es lo que usará el `Map` para el
+comparador. **Funciona ya**, pero es verboso (una clase por callback) →
+encaja con las **interfaces (#5)**: un `interface Comparator` / `Listener`.
+
+**Feature de lenguaje (quitar el boilerplate)** — en fases:
+- **Fase A — funciones nombradas como valor**: pasar una función top-level
+  o método como valor (`onClick(miHandler)`). Necesita: tipo función en el
+  frontend (firma) + un opcode **aditivo** `CALL_INDIRECT` en AMBAS VMs
+  (pop dirección destino → llama). Aditivo = NO toca el contenedor .mod
+  (consistente con "VM mínima"; como los opcodes de H1). Coste: bajo‑medio.
+  **NO es cero‑coste** (a diferencia de tuplas), pero es pequeño.
+- **Fase B — lambdas / clausuras**: funciones anónimas inline, con captura
+  de contexto. Mucho más pesado (entorno en heap para las variables
+  capturadas, lifetime/GC). Azúcar deseable, **diferir**.
+
+**Decisión / orden recomendado**:
+1. Ahora: el `Map` usa **objeto‑comparador** (stopgap, cero VM). No bloquea.
+2. Cuando lleguen las interfaces (#5): `interface Comparator`/`Listener`.
+3. Más adelante, si el boilerplate molesta: Fase A (función‑valor +
+   `CALL_INDIRECT`). Lambdas (Fase B) solo si se justifica.
+
+**Relación**: habilita un futuro **sistema de eventos** (§9) y un `sort`
+con comparador. Pareja natural de tuplas (§2) como "mejoras de
+lenguaje/compilador que no urgen pero se acumulan".
+
+---
+
+## 9. Interrupciones de hardware → eventos BP (Modelo B)
+
+**Qué**: que un módulo de HW que necesite interrupciones (flanco GPIO,
+alarma de timer, etc.) pueda invocar **una función handler en BP** sin que
+el usuario programe ISRs a mano.
+
+**Regla dura (no negociable)**: NUNCA se ejecuta bytecode BP dentro de una
+ISR real. El intérprete no es reentrante (heap, GC, pila, vtables) y una
+interrupción puede saltar a mitad de instrucción **o a mitad de un GC**.
+Lo que corre en contexto de interrupción tiene que ser C, corto y sin
+alocar.
+
+**Decisión del usuario (2026-05-31): Modelo B** (handler BP **diferido**),
+porque es el más sencillo para el usuario. Se descartó construir un
+"Modelo N" genérico (callback nativo registrado) como paso intermedio:
+los casos que de verdad necesitan trabajo *dentro* de la ISR (contar
+pulsos, DMA…) ya los cubre cada driver en su backend nativo, p.ej.
+`Pulse` (`bpvm_pulse_set_backend`). → No invertir en N si el destino es B.
+
+**Cómo (Modelo B)**:
+1. **ISR fija en C** (una por plataforma, RP2350 / ESP32): minimalista —
+   **encola un evento** (pin, flanco, timestamp) en un ring buffer y vuelve.
+2. **Ring buffer**: reutilizar el `comm_queue` que YA existe (productor/
+   consumidor con mutex+condvar; `bpvm_oq_*`).
+3. **Drain en safepoint**: el scheduler, en el safepoint donde ya chequea
+   el GC, drena la cola y **llama al handler BP como bytecode normal**
+   (fuera de contexto de interrupción).
+4. **Registro del handler**: vía el mecanismo de callbacks de §8 — hoy con
+   **objeto‑listener** (`gpio.onEdge(pin, RISING, listenerObj)` con método
+   `onEdge(pin)`); el día de mañana, función‑valor (§8 fase A).
+
+**Coste / latencia**: la respuesta llega con la latencia de un safepoint
+(µs–ms). Vale para "botón pulsado", **no** para tiempo‑real duro (eso es
+trabajo nativo en el driver). Toca la VM (drain + dispatch en el
+scheduler) → es un cambio **aditivo** y se hace **más adelante** (V2),
+cuando se ataque la VM otra vez; no ahora ("descansamos de la VM").
+
+**Dependencias**: §8 (callback — basta el objeto‑listener) + plumbing VM
+(cola + safepoint drain) + ISR trampolín por plataforma. N y B pueden
+coexistir (un encoder cuenta en nativo *y* postea "objetivo alcanzado"
+como evento BP).
+
+---
+
+## 10. Parámetros con valor por defecto (compilador + `.bpi`, cero VM)
+
+**Qué**: declarar params con default — `function f(x: int, y: int = 10)` — y
+poder omitirlos en la llamada.
+
+**Decisión del usuario (2026-05-31)**: SÍ; **solo defaults CONSTANTES**
+(literales/const) — "con constantes es suficiente". No se permiten expresiones
+arbitrarias (evita decidir el contexto de evaluación; mantiene todo simple).
+
+**Mecanismo — sustitución en el LLAMANTE (modelo C++), CERO coste de VM**:
+- El compilador, en cada call site, ve que faltan argumentos **finales** y
+  **empuja los valores por defecto** antes del `CALL`. La VM ve una llamada de
+  **aridad completa** → no se entera de nada (filosofía "lo que hace el
+  compilador se lo ahorra la VM").
+- **Reglas**: defaults solo en parámetros **finales** (no un defaulted antes de
+  uno obligatorio); el default debe ser **constante** (sustituible en cualquier
+  sitio).
+- **`.bpi`**: la firma exportada **lleva los valores por defecto**, para que los
+  llamantes **cross-module** puedan sustituirlos (igual que C++ los pone en el
+  header). Esto es lo que el usuario intuyó que "afecta a los .bpi".
+- **AOT (`.mdn`) NO se entera**: la función nativa recibe los args completos
+  (la sustitución ocurre antes del `CALL`).
+
+**Sinergia**: es la **solución general** a la limitación "BP no tiene
+sobrecarga ni params opcionales" que se topó en §14b. Con defaults,
+`doubleToString(x, dec = 6)` podría ser **una** función en vez de dos
+(`doubleToString` + `formatDouble`). Al implementar §10, revisar §14b para
+unificar.
+
+**Coste**: bajo, todo en el frontend (parser acepta `= const`; semántico
+rellena args faltantes en el call site; serializar/leer defaults en `.bpi`).
+Ortogonal a tuplas (§2) y callbacks (§8).
+
+**Planificación (usuario, 2026-05-31)**: más adelante, **sin turno asignado**
+— posterior a H4 (H4 = lo ya hablado).
 
 ---
 
@@ -783,6 +965,16 @@ drivers de dispositivo (PCA9554, MCP9804, AD7177...) + Math/IO. Política
   módulo stdlib para programas de usuario (clase `Net.Socket`/`TcpConn`
   sobre lwIP + cyw43). Diseñar la API BP de sockets junto con el
   transporte para no duplicar.
+  - **Decisión 2026-05-31 (sin prisa)**: empezar por **cliente**, que es
+    más sencillo: `Net.TcpConn` con `connect / send / recv / close`.
+    **Servidor** (`listen / accept`) para más adelante. Trabaja sobre
+    `byte[]`/string (sinergia con H2.4). **Backend nativo por familia**
+    (host = sockets BSD; Pico 2 W = lwIP+cyw43; ESP32 = lwIP) enchufado vía
+    HAL (#9b) — **NO toca la VM**, es librería con backend nativo como los
+    buses. Caveat: requiere HW con red (Pico 2 **W** o ESP32; la Pico
+    normal no tiene).
+  - **Planificación (usuario, 2026-05-31)**: más adelante, **sin turno
+    asignado** — posterior a H4 (H4 = lo ya hablado).
 - **CAN bus** — importante en automoción (el usuario no lo usa, pero lo
   quiere disponible). Clase `Can.Bus` (política HW-class). **Backend
   dependiente del chip**: ESP32 tiene CAN nativo (TWAI); el RP2350 no →
@@ -800,6 +992,160 @@ drivers de dispositivo (PCA9554, MCP9804, AD7177...) + Math/IO. Política
 - Repaso de consistencia de toda la stdlib: manejo de errores uniforme
   (RuntimeError claros), nombres/firmas coherentes, y docs (manual.html)
   al día con cada módulo.
+
+## 14b. String — funciones nuevas (catálogo + decisiones, 2026-05-31)
+
+**Origen**: faltan conversiones para los **tipos nuevos** de H1 (`long`,
+`double`), una función **Hex**, un **`indexOf` desde el final**, un
+**comparador** (lo pide el `Map`), y **justificación** de campo. Sesión de
+diseño 2026-05-31 (modo "pensar, no programar").
+
+**Catálogo final**:
+
+| función | firma | implementación | nota |
+|---|---|---|---|
+| `longToString` | `(x: long): string` | builtin (como `intToString`) | conversión base-10 |
+| `doubleToString` | `(x: double): string` | **BP puro** | default: punto fijo, **sin sci**, sin ceros de cola |
+| `formatDouble` | `(x: double, dec: int): string` | **BP puro** | decimales fijos (Pascal `:d`); `float` ensancha → cubre float |
+| `parseLong` | `(s): {err, valor}` | builtin | **dep. tuplas** (§2) |
+| `parseDouble` | `(s): {err, valor}` | builtin | **dep. tuplas** (§2) |
+| `parseHex` | `(s): {err, valor}` | builtin/BP | **dep. tuplas** (§2) |
+| `toHex` | `(x: long): string` | builtin/BP | minúsculas, **sin** prefijo `0x` |
+| `lastIndexOf` | `(s, sub): int` | builtin/BP | `indexOf` desde el final; sin `fromIndex` |
+| `fromCharCode` | `(cp: int): string` | builtin | codepoint→string; fuera de Unicode → `RuntimeError` |
+| `compare` | `(a, b): int` | builtin/BP | lexicográfico −1/0/1; **comparador por defecto del Map** |
+| `padLeft` / `padRight` | `(s, ancho): string` | **BP puro** | justifica con espacios; genérico (cualquier string) |
+
+**Decisiones tomadas**:
+1. **`parse*` NO lanzan excepción** — devuelven **tupla `{ err, valor }`**
+   (Go-style); `err: boolean` (true = falló), `valor` válido solo si `err`
+   es false. Para input que falla por diseño, `try/catch` es un antipatrón.
+   → **bloquea con tuplas (§2)**; camino (a) tuplas primero. Los
+   `parseInt`/`parseFloat` ACTUALES (valor pelado + throw) se **unifican a
+   tupla al migrar** (rompe poco código, y es nuestro).
+2. **`doubleToString`/`formatDouble` = formateador PROPIO** (no el nativo de
+   cada VM) → **sin notación científica** (preferencia del usuario).
+   **Implementado en BP puro** = mismo bytecode en ambas VMs → **paridad
+   Java/C gratis** y cero trabajo de VM. Modelo Turbo Pascal `x:totalSpace:
+   decimales` **descompuesto en dos piezas**: `formatDouble(x, dec)` (el
+   `:dec`) + `padLeft/padRight(s, ancho)` (el `:totalSpace`, genérico y
+   reutilizable para alinear tablas de cualquier tipo). Vigilar magnitudes
+   enormes (desbordan `long` al escalar `x*10^dec`) — acotar.
+3. **`toHex`**: minúsculas, sin `0x`, sobre `long`. **`fromCharCode`** fuera
+   de rango → `RuntimeError` (ahí el fallo es del **programador**, no input
+   de usuario; distinto de `parse*`). **`compare`** lexicográfico para el
+   comparador por defecto del Map.
+
+**Hechos del lenguaje que condicionan el diseño** (verificados):
+- **Aridad fija**: ni builtins ni funciones de usuario tienen sobrecarga ni
+  params opcionales → por eso `doubleToString(x)` y `formatDouble(x,dec)` son
+  **nombres distintos** (no se puede 1 nombre con 2 aridades).
+- `byteToString` **no hace falta**: un `byte` se carga como `int`; un "char"
+  sacado de un string **es un int** (codepoint). (Decisión del usuario.)
+
+**Preferencia de implementación**: **BP puro siempre que se pueda** (paridad
+gratis + cero VM, encaja con "descansar de la VM"); builtin nativo solo donde
+haga falta una primitiva (p.ej. `long`→string base-10, parse numérico).
+
+**Secuencia**: independientes de tuplas y listas para programar ya:
+`longToString`, `doubleToString`, `formatDouble`, `padLeft/Right`, `toHex`,
+`lastIndexOf`, `fromCharCode`, `compare`. Bloqueados por tuplas (§2):
+`parseLong`, `parseDouble`, `parseHex` + unificación de `parseInt/parseFloat`.
+
+## 14c. `Map` / Diccionario (diseño cerrado, 2026-05-31)
+
+**Qué**: una estructura clave→valor para la stdlib. Hoy hay `List`/`SyncList`
+pero no hay Map.
+
+**Decisiones del usuario**:
+- **UNA sola clase `Map`** — sin variantes (`IntMap`/`StringMap`…): "no me
+  gusta tener muchos maps, para el usuario es confuso". El comparador‑objeto
+  (abajo) hace innecesarias las variantes.
+- **Se usa menos que las listas** → no es hot path; el coste del lock es
+  asumible.
+- **Thread‑safe POR DENTRO** (`synchronized`) por defecto: "no todo el mundo
+  entiende programar con hilos y los efectos perversos sobre estructuras de
+  datos". "El Map es seguro" es un concepto simple de explicar.
+- **Interno = lista ORDENADA por key + búsqueda binaria O(log n)** — NO tabla
+  hash (decisión explícita del usuario).
+- **keys/values `any`**.
+
+**Comparador a medida = OBJETO, no función** (porque BP no tiene funciones de
+primera clase, §8): clase con método `compare(a, b): integer` (−1/0/1),
+invocado por `INVOKE_VIRTUAL` (maquinaria existente) → **cero coste de VM**.
+- `Map()` → comparador por defecto = **comparador de string** (`compare` de
+  §14b) → el caso común (keys string) funciona sin más.
+- `Map(miCmp)` → orden a medida (int, etc.).
+- Encaja con interfaces futuras (#5): `interface Comparator`. El día que haya
+  funciones‑valor (§8 fase A) se podrá pasar también una función.
+
+**API**: `put(k,v)`, `get(k)` → `null` si ausente, `containsKey(k)`,
+`remove(k)`, `size()`, `keys()`, `values()`.
+
+**Implementación**: **BP puro** sobre `List` + bloques `synchronized(this)`.
+Cero VM. **Dependencia**: `compare` de string (§14b) para el comparador
+por defecto. No depende de tuplas.
+
+## 14d. `Stats` — módulo de estadística (diseño cerrado, 2026-05-31)
+
+**Qué**: funciones estadísticas. **No tiene que ser estándar** — módulo
+**adicional** (decisión del usuario).
+
+**Dos APIs complementarias**:
+- **`Stats.Accumulator`** (streaming): `add(x: double)` incremental con el
+  **algoritmo de Welford** (varianza numéricamente estable, **memoria
+  acotada** — no guarda la muestra). Expone `count`, `mean`, `variance`,
+  `stdDev`, `min`, `max`. Ideal para MCU / flujos largos.
+- **Funciones sobre `double[]`** (muestra en memoria): `sum`, `mean`, `min`,
+  `max`, `range`, `variance`, `stdDev`, `median`, `percentile`, +
+  `covariance`, `correlation`, regresión lineal `linfit`.
+
+**Tipo de elemento = `double[]`** (confirmado). `add()` y las funciones
+aceptan todos los numéricos por ensanchado.
+
+**`linfit`** devuelve `(slope, intercept)` → mediante la clase **`Stats.LinFit`**
+(slope/intercept) **hasta que existan las tuplas** (§2), entonces migra a
+tupla. (Es uno de los 2 consumidores que disparan las tuplas.)
+
+**Implementación**: **BP puro**, cero VM. No depende de tuplas (usa `LinFit`
+mientras tanto).
+
+## 14e. `Compress` / `Archive` — compresión + multi-archivo (diseño, 2026-05-31)
+
+**Qué**: comprimir/descomprimir datos y empaquetar **varios archivos** en uno.
+**No tiene que ser `.Zip`** (decisión del usuario) → libres de DEFLATE/zlib.
+
+**Criterios del usuario**: **sencillo**, rendimiento **no crítico**, **poca
+memoria**, y **multi‑archivo** ("mucho mejor"). **NO toca la VM** (librería).
+
+**Dos capas**:
+- **Códec (compresor de bytes)** = **LZSS de ventana pequeña estilo
+  heatshrink**: RAM acotada (= ventana, 1–4 KB), streaming, sin `malloc`,
+  formato bien definido, MIT. Cumple "poca memoria" + "rendimiento no crítico"
+  y comprime de verdad. (RLE descartado como principal: apenas comprime datos
+  generales.) **Fallback "stored"**: si un fichero no comprime, se guarda crudo
+  → nunca mayor que el original.
+- **Contenedor (multi‑archivo)** = formato propio **tipo‑zip simple**: cada
+  fichero se comprime **independientemente** + un **índice** al final (nombre,
+  offset, tamaño original, tamaño comprimido, flag stored/compressed). Clave:
+  permite **extraer UN fichero sin descomprimir el resto** → RAM acotada en el
+  MCU (justo el requisito). No es `.Zip`, pero la estructura es esa.
+
+**API tentativa**:
+- Códec suelto (blob en memoria): `Compress.compress(byte[]) / decompress(byte[])`.
+- Archivo: `Archive.create(path)` → `addFile(name, data: byte[])` → `close()`;
+  `Archive.open(path)` → `list(): string[]`, `read(name): byte[]`,
+  `extract(name, outPath)`.
+
+**Paridad host↔MCU** (confirmado): **mismo formato, dos implementaciones**
+(Java + C), como con JSON — comprimir en uno, descomprimir en el otro.
+
+**Implementación**: backend **nativo** (códec en C + Java, mismo formato);
+opera sobre `byte[]` (sinergia H2.4). El contenedor puede ser **BP puro**
+sobre el códec. No depende de tuplas ni de nada nuevo del lenguaje.
+
+**Planificación (usuario, 2026-05-31)**: más adelante, **sin turno asignado**
+— posterior a H4 (H4 = lo ya hablado).
 
 ## 15. Funciones native (AOT) en stdlib donde se preste
 
