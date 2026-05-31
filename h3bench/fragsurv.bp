@@ -1,0 +1,27 @@
+module FragSurv
+
+    // H3.3 workload A — supervivientes DISPERSOS: 1 de cada 3 arrays sobrevive
+    // (retenido en una List), el resto muere. Los supervivientes intercalados
+    // impiden el coalescing -> debería fragmentar (muchos huecos pequeños).
+
+    function Main()
+        var keep: List := List()
+        var i: integer := 0
+        var N: integer := 150
+        var t0: integer := now()
+        while i < N do
+            var arr: integer[] := newIntArray(20)   // ~88 B
+            if (i mod 3) == 0 then
+                keep.add(arr)                        // sobrevive (disperso)
+            endif
+            i := i + 1
+        endwh
+        var t1: integer := now()
+        gc()
+        print "alloc_ms =", (t1 - t0)
+        print "vivos en keep =", keep.length()
+        print "SURV:", heapFrag()
+        print heapMap(80)
+    end Main
+
+end FragSurv
