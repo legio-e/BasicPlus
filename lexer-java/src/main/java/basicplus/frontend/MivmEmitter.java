@@ -4155,9 +4155,9 @@ public final class MivmEmitter {
         w.emitGetParam("a"); w.emit(OpCode.ALEN); w.emitSetLocal("la");
         // lb = b.length
         w.emitGetParam("b"); w.emit(OpCode.ALEN); w.emitSetLocal("lb");
-        // out = new int[la + lb]
+        // out = new byte[la + lb]  (H2: strings son byte[] UTF-8)
         w.emitGetLocal("la"); w.emitGetLocal("lb"); w.emit(OpCode.ADD);
-        w.emit(OpCode.NEWARRAY); w.emitSetLocal("out");
+        w.emit(OpCode.NEWARRAY_I8); w.emitSetLocal("out");
 
         // copy a
         emitInt(0); w.emitSetLocal("i");
@@ -4167,8 +4167,8 @@ public final class MivmEmitter {
         w.emitJumpIfFalse(end1);
         w.emitGetLocal("out");
         w.emitGetLocal("i");
-        w.emitGetParam("a"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD);
-        w.emit(OpCode.ASTORE);
+        w.emitGetParam("a"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD_U8);
+        w.emit(OpCode.ASTORE_I8);
         w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD); w.emitSetLocal("i");
         w.emitJump(top1);
         w.declareLabel(end1);
@@ -4181,8 +4181,8 @@ public final class MivmEmitter {
         w.emitJumpIfFalse(end2);
         w.emitGetLocal("out");
         w.emitGetLocal("i"); w.emitGetLocal("la"); w.emit(OpCode.ADD);
-        w.emitGetParam("b"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD);
-        w.emit(OpCode.ASTORE);
+        w.emitGetParam("b"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD_U8);
+        w.emit(OpCode.ASTORE_I8);
         w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD); w.emitSetLocal("i");
         w.emitJump(top2);
         w.declareLabel(end2);
@@ -4257,8 +4257,8 @@ public final class MivmEmitter {
             w.emitJumpIfFalse(loopEnd);
                 // a[i] vs b[i]
                 int charsEqual = w.newLabel();
-                w.emitGetParam("a"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD);
-                w.emitGetParam("b"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD);
+                w.emitGetParam("a"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD_U8);
+                w.emitGetParam("b"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD_U8);
                 w.emit(OpCode.EQ);
                 w.emitJumpIfFalse(charsEqual);
                     // i++

@@ -1934,12 +1934,7 @@ public class VirtualMachine {
                 }
                 case 0x22: { // PRINT_STRING (legacy: con \n al final)
                     sp -= 4; int ref = readI32(mem, sp);
-                    int length = readI32(mem, ref);
-                    StringBuilder sb = new StringBuilder(length);
-                    for (int i = 0; i < length; i++) {
-                        sb.append((char) readI32(mem, ref + 4 + i * 4));
-                    }
-                    programOut.writeText(sb.toString());
+                    programOut.writeText(readVmString(ref));  // H2: decodifica UTF-8
                     programOut.newline();
                     break;
                 }
@@ -2273,12 +2268,7 @@ public class VirtualMachine {
                 }
                 case 0x58: { // PRINT_STR_NONL
                     sp -= 4; int ref = readI32(mem, sp);
-                    int length = readI32(mem, ref);
-                    StringBuilder sb = new StringBuilder(length);
-                    for (int i = 0; i < length; i++) {
-                        sb.append((char) readI32(mem, ref + 4 + i * 4));
-                    }
-                    programOut.writeText(sb.toString());
+                    programOut.writeText(readVmString(ref));  // H2: decodifica UTF-8
                     break;
                 }
                 case 0x59: { // PRINT_NL
@@ -2874,18 +2864,21 @@ public class VirtualMachine {
 
     /** Lee un string de la VM (length + chars) a partir de su user_ref y devuelve String Java. */
     private String readVmString(int ref) {
-        int length = readInt32(ref);
-        StringBuilder sb = new StringBuilder(length);
-        for (int i = 0; i < length; i++) sb.append((char) readInt32(ref + 4 + i * 4));
-        return sb.toString();
+        // H2 (V2): strings son byte[] UTF-8. length = nº de bytes; payload en ref+4.
+        if (ref == 0) return "";
+        int nbytes = readInt32(ref);
+        byte[] buf = new byte[nbytes];
+        System.arraycopy(memory, ref + 4, buf, 0, nbytes);
+        return new String(buf, java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    /** Aloca un nuevo string en el heap con el contenido de Java String. Devuelve user_ref. */
+    /** Aloca un nuevo string en el heap (byte[] UTF-8) con el contenido de Java String. Devuelve user_ref. */
     private int allocVmString(String s) {
-        int len = s.length();
-        int ref = heapAlloc(len * 4, TYPE_ARRAY_I32);
+        byte[] utf8 = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        int len = utf8.length;
+        int ref = heapAlloc(len, TYPE_ARRAY_I8);
         writeInt32(ref, len);
-        for (int i = 0; i < len; i++) writeInt32(ref + 4 + i * 4, s.charAt(i));
+        System.arraycopy(utf8, 0, memory, ref + 4, len);
         // B1 residual — el caller llama a allocVmString desde dispatchBuiltin
         // SIN vmLock, así que entre `return ref` y el `pushTc(tc, ref)` un GC
         // de otro worker podría liberar `ref` (no hay raíz aún). Anclamos
@@ -2922,7 +2915,8 @@ public class VirtualMachine {
         switch (b) {
             case STRLEN: {
                 int ref = popTc(tc);
-                pushTc(tc, readInt32(ref));
+                String s = readVmString(ref);          // H2: longitud en codepoints
+                pushTc(tc, s.codePointCount(0, s.length()));
                 break;
             }
             case PARSE_INT: {
@@ -2957,10 +2951,11 @@ public class VirtualMachine {
             case SUBSTRING: {
                 int end = popTc(tc); int start = popTc(tc);
                 String s = readVmString(popTc(tc));
-                int n = s.length();
+                int n = s.codePointCount(0, s.length());   // H2: índices en codepoints
                 int from = Math.max(0, Math.min(n, start));
                 int to   = Math.max(from, Math.min(n, end));
-                pushTc(tc, allocVmString(s.substring(from, to)));
+                pushTc(tc, allocVmString(s.substring(s.offsetByCodePoints(0, from),
+                                                     s.offsetByCodePoints(0, to))));
                 break;
             }
             case INDEX_OF: {
@@ -2990,10 +2985,12 @@ public class VirtualMachine {
             case CHAR_AT: {
                 int i = popTc(tc);
                 String s = readVmString(popTc(tc));
-                if (i < 0 || i >= s.length()) {
-                    throwBpRuntimeError(tc, "charAt: idx fuera de rango " + i + " (len=" + s.length() + ")");
+                int n = s.codePointCount(0, s.length());   // H2: índice en codepoints
+                if (i < 0 || i >= n) {
+                    throwBpRuntimeError(tc, "charAt: idx fuera de rango " + i + " (len=" + n + ")");
                 }
-                pushTc(tc, allocVmString(String.valueOf(s.charAt(i))));
+                int cp = s.codePointAt(s.offsetByCodePoints(0, i));
+                pushTc(tc, allocVmString(new String(Character.toChars(cp))));
                 break;
             }
             case REPLACE: {
@@ -3206,16 +3203,17 @@ public class VirtualMachine {
                 int avail = (charsRef != 0) ? readInt32(charsRef) : 0;
                 if (len > avail) throwBpRuntimeError(tc, "__charsToString: longitud " + len + " > capacidad " + avail);
                 StringBuilder sb = new StringBuilder(len);
-                for (int i = 0; i < len; i++) sb.append((char) readInt32(charsRef + 4 + i * 4));
-                pushTc(tc, allocVmString(sb.toString()));
+                for (int i = 0; i < len; i++) sb.appendCodePoint(readInt32(charsRef + 4 + i * 4));
+                pushTc(tc, allocVmString(sb.toString()));   // H2: codifica UTF-8
                 break;
             }
             case CHAR_CODE_AT: {
                 int idx = popTc(tc);
                 int sRef = popTc(tc);
-                int len = readInt32(sRef);
-                if (idx < 0 || idx >= len) throwBpRuntimeError(tc, "charCodeAt: índice " + idx + " fuera de [0," + len + ")");
-                pushTc(tc, readInt32(sRef + 4 + idx * 4));
+                String s = readVmString(sRef);              // H2: índice en codepoints
+                int n = s.codePointCount(0, s.length());
+                if (idx < 0 || idx >= n) throwBpRuntimeError(tc, "charCodeAt: índice " + idx + " fuera de [0," + n + ")");
+                pushTc(tc, s.codePointAt(s.offsetByCodePoints(0, idx)));
                 break;
             }
 

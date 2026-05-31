@@ -245,14 +245,15 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
     return user_ref;
 }
 
-/* Helper: aloca un string a partir de una const-string C, codificándola
- * como TYPE_ARRAY_I32 con un codepoint por slot (4 bytes cada uno). */
+/* Helper: aloca un string a partir de una const-string C. H2 (V2): los
+ * strings son TYPE_ARRAY_I8 con los bytes UTF-8 tal cual (1 byte/elem).
+ * `len` = nº de bytes de `s`. */
 uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len) {
-    uint32_t ref = bpvm_heap_alloc(vm, (uint32_t)len * 4, BPVM_TYPE_ARRAY_I32);
+    uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) len, BPVM_TYPE_ARRAY_I8);
     if (ref == 0) return 0;
-    bpvm_write_u32_be(vm->memory + ref, (uint32_t) len);   /* length */
+    bpvm_write_u32_be(vm->memory + ref, (uint32_t) len);   /* length = bytes */
     for (size_t i = 0; i < len; i++) {
-        bpvm_write_u32_be(vm->memory + ref + 4 + i * 4, (uint8_t) s[i]);
+        vm->memory[ref + 4 + i] = (uint8_t) s[i];
     }
     return ref;
 }

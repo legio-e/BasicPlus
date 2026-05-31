@@ -86,11 +86,10 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
         /* Intenta leer field 0 = msg (asumiendo layout RuntimeError). */
         int32_t msg_ref = bpvm_read_i32_be(vm->memory + ref + 4);
         if (msg_ref > 0) {
-            uint32_t mlen = bpvm_read_u32_be(vm->memory + msg_ref);
+            uint32_t mlen = bpvm_read_u32_be(vm->memory + msg_ref);   /* H2: bytes UTF-8 */
             char buf[256]; size_t n = 0;
             for (uint32_t i = 0; i < mlen && n < sizeof(buf) - 1; i++) {
-                uint32_t cp = bpvm_read_u32_be(vm->memory + msg_ref + 4 + i * 4);
-                buf[n++] = (cp < 128) ? (char) cp : '?';
+                buf[n++] = (char) vm->memory[msg_ref + 4 + i];
             }
             buf[n] = '\0';
             fprintf(stderr, "  RuntimeError: %s\n", buf);

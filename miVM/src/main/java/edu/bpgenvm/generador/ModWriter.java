@@ -347,9 +347,12 @@ public class ModWriter {
     }
 
     public int addConstantString(String name, String value) {
-        byte[] b = new byte[4 + value.length() * 4];
-        writeIntInBuf(b, 0, value.length());
-        for (int i = 0; i < value.length(); i++) writeIntInBuf(b, 4 + i * 4, value.charAt(i));
+        // H2 (V2): strings son byte[] UTF-8. El literal en el data block es
+        // [u32 byte_len][bytes UTF-8]. length = nº de bytes (no codepoints).
+        byte[] utf8 = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] b = new byte[4 + utf8.length];
+        writeIntInBuf(b, 0, utf8.length);
+        System.arraycopy(utf8, 0, b, 4, utf8.length);
         return registerSymbol(name, b);
     }
 

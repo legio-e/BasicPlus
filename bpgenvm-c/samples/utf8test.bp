@@ -1,0 +1,30 @@
+module Utf8Test
+
+    // H2.1: strings UTF-8 (byte[] interno) con semántica de índice por codepoint.
+    // Mezcla ASCII + Latin-1 (é, ñ) + BMP de 3 bytes (€) para ejercitar el
+    // conteo/índice por codepoint y la (re)codificación UTF-8.
+
+    function Main()
+        var s: string := "café"
+        print "s      =", s                  // café
+        print "len    =", strlen(s)          // 4  (c a f é)
+        print "c0     =", charAt(s, 0)       // c
+        print "c3     =", charAt(s, 3)       // é
+        print "code3  =", charCodeAt(s, 3)   // 233 (U+00E9)
+        print "sub14  =", substring(s, 1, 4) // afé
+
+        var g: string := "señor"
+        var t: string := "hola " + g
+        print "concat =", t                  // hola señor
+        print "lenT   =", strlen(t)          // 10
+
+        print "eqA    =", ("ñ" == "ñ")        // 1
+        print "eqB    =", ("ñ" == "n")        // 0
+
+        var euro: string := "10€"
+        print "euro   =", euro               // 10€
+        print "lenE   =", strlen(euro)       // 3  (1 0 €)
+        print "codeE  =", charCodeAt(euro, 2) // 8364 (U+20AC)
+    end Main
+
+end Utf8Test

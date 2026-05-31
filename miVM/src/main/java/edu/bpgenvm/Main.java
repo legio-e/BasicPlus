@@ -44,6 +44,14 @@ import java.util.concurrent.TimeUnit;
 public class Main {
 
     public static void main(String[] args) throws IOException {
+        // H2 (V2): forzar UTF-8 en stdout/stderr, independiente del code page
+        // de consola (Windows usa cp1252/cp850 por defecto). Así los strings
+        // Unicode salen correctos y byte-idénticos a la VM-C. La ruta IDE/wire
+        // inyecta su propio sink (JSON ya es UTF-8), así que no le afecta.
+        System.setOut(new java.io.PrintStream(
+            new java.io.FileOutputStream(java.io.FileDescriptor.out), true, "UTF-8"));
+        System.setErr(new java.io.PrintStream(
+            new java.io.FileOutputStream(java.io.FileDescriptor.err), true, "UTF-8"));
         boolean disasm = false;
         boolean trace = false;
         int workers = -1;       // -1 = default de la VM

@@ -987,12 +987,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_PRINT_STR_NONL: {
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             if (ref != 0) {
-                uint32_t length = bpvm_read_u32_be(mem + ref);
-                for (uint32_t i = 0; i < length; i++) {
-                    uint32_t cp = bpvm_read_u32_be(mem + ref + 4 + i * 4);
-                    char c = (cp < 128) ? (char) cp : '?';
-                    emit_text(vm, &c, 1);
-                }
+                /* H2 (V2): strings son byte[] UTF-8 → emitimos los bytes
+                 * directamente, sin truncar (Unicode completo). */
+                uint32_t nbytes = bpvm_read_u32_be(mem + ref);
+                emit_text(vm, (const char*)(mem + ref + 4), nbytes);
             }
             if (op == OP_PRINT_STRING) emit_newline(vm);
             break;

@@ -118,15 +118,57 @@ static void push_i32(bpvm_t* vm, bpvm_thread_t* tc, int32_t v) {
  * Devuelve el número de bytes escritos (sin null terminator). Si el
  * codepoint > 127 lo escribe como '?' (F2 v1 sólo ASCII). */
 static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t dst_size) {
-    if (ref == 0) return 0;
-    uint32_t len = bpvm_read_u32_be(vm->memory + ref);
+    /* H2 (V2): strings son byte[] UTF-8 → copiamos los bytes tal cual. */
+    if (ref == 0) { if (dst_size) dst[0] = '\0'; return 0; }
+    uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
     size_t out = 0;
-    for (uint32_t i = 0; i < len && out + 1 < dst_size; i++) {
-        uint32_t cp = bpvm_read_u32_be(vm->memory + ref + 4 + i * 4);
-        dst[out++] = (cp < 128) ? (char) cp : '?';
+    for (uint32_t i = 0; i < nbytes && out + 1 < dst_size; i++) {
+        dst[out++] = (char) vm->memory[ref + 4 + i];
     }
     if (out < dst_size) dst[out] = '\0';
     return out;
+}
+
+/* ---- H2 (V2): helpers UTF-8 sobre el payload de un string byte[] ---- */
+
+/* Cuenta codepoints en una secuencia UTF-8 (= nº de bytes líder). */
+static uint32_t utf8_cp_count(const uint8_t* p, uint32_t nbytes) {
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < nbytes; i++)
+        if ((p[i] & 0xC0u) != 0x80u) count++;
+    return count;
+}
+
+/* Offset en bytes donde empieza el codepoint nº cp_index (0-based).
+ * Devuelve nbytes si cp_index >= nº de codepoints. */
+static uint32_t utf8_byte_offset(const uint8_t* p, uint32_t nbytes, uint32_t cp_index) {
+    uint32_t i = 0, cp = 0;
+    while (i < nbytes && cp < cp_index) {
+        i++;
+        while (i < nbytes && (p[i] & 0xC0u) == 0x80u) i++;
+        cp++;
+    }
+    return i;
+}
+
+/* Decodifica el codepoint que empieza en p[0]; *adv = bytes consumidos. */
+static uint32_t utf8_decode(const uint8_t* p, uint32_t nbytes, uint32_t* adv) {
+    if (nbytes == 0) { *adv = 0; return 0; }
+    uint8_t b0 = p[0];
+    if (b0 < 0x80u)                       { *adv = 1; return b0; }
+    if ((b0 & 0xE0u) == 0xC0u && nbytes >= 2) { *adv = 2; return ((uint32_t)(b0 & 0x1Fu) << 6) | (p[1] & 0x3Fu); }
+    if ((b0 & 0xF0u) == 0xE0u && nbytes >= 3) { *adv = 3; return ((uint32_t)(b0 & 0x0Fu) << 12) | ((uint32_t)(p[1] & 0x3Fu) << 6) | (p[2] & 0x3Fu); }
+    if ((b0 & 0xF8u) == 0xF0u && nbytes >= 4) { *adv = 4; return ((uint32_t)(b0 & 0x07u) << 18) | ((uint32_t)(p[1] & 0x3Fu) << 12) | ((uint32_t)(p[2] & 0x3Fu) << 6) | (p[3] & 0x3Fu); }
+    *adv = 1; return b0;   /* byte inválido: tratar como Latin-1 */
+}
+
+/* Codifica cp en out (hasta 4 bytes). Devuelve nº de bytes escritos. */
+static uint32_t utf8_encode(uint32_t cp, uint8_t* out) {
+    if (cp < 0x80u)    { out[0] = (uint8_t) cp; return 1; }
+    if (cp < 0x800u)   { out[0] = (uint8_t)(0xC0u | (cp >> 6));  out[1] = (uint8_t)(0x80u | (cp & 0x3Fu)); return 2; }
+    if (cp < 0x10000u) { out[0] = (uint8_t)(0xE0u | (cp >> 12)); out[1] = (uint8_t)(0x80u | ((cp >> 6) & 0x3Fu));  out[2] = (uint8_t)(0x80u | (cp & 0x3Fu)); return 3; }
+    out[0] = (uint8_t)(0xF0u | (cp >> 18)); out[1] = (uint8_t)(0x80u | ((cp >> 12) & 0x3Fu));
+    out[2] = (uint8_t)(0x80u | ((cp >> 6) & 0x3Fu)); out[3] = (uint8_t)(0x80u | (cp & 0x3Fu)); return 4;
 }
 
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
@@ -134,8 +176,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_STRLEN: {
         uint32_t ref = (uint32_t) pop_i32(vm, tc);
-        uint32_t len = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
-        push_i32(vm, tc, (int32_t) len);
+        uint32_t nbytes = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
+        uint32_t ncp = (ref == 0) ? 0 : utf8_cp_count(vm->memory + ref + 4, nbytes);
+        push_i32(vm, tc, (int32_t) ncp);   /* H2: longitud en codepoints */
         return BPVM_OK;
     }
 
@@ -175,10 +218,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t i   = pop_i32(vm, tc);
         uint32_t ref = (uint32_t) pop_i32(vm, tc);
         if (ref == 0) { push_i32(vm, tc, 0); return BPVM_OK; }
-        uint32_t len = bpvm_read_u32_be(vm->memory + ref);
-        if (i < 0 || (uint32_t) i >= len) { push_i32(vm, tc, 0); return BPVM_OK; }
-        uint32_t cp = bpvm_read_u32_be(vm->memory + ref + 4 + (uint32_t) i * 4);
-        push_i32(vm, tc, (int32_t) cp);
+        uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
+        const uint8_t* p = vm->memory + ref + 4;
+        uint32_t ncp = utf8_cp_count(p, nbytes);
+        if (i < 0 || (uint32_t) i >= ncp) { push_i32(vm, tc, 0); return BPVM_OK; }
+        uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) i);
+        uint32_t adv; uint32_t cp = utf8_decode(p + off, nbytes - off, &adv);
+        push_i32(vm, tc, (int32_t) cp);    /* H2: codepoint en índice de codepoint */
         return BPVM_OK;
     }
 
@@ -188,18 +234,22 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * string vacía. */
         int32_t i    = pop_i32(vm, tc);
         uint32_t ref = (uint32_t) pop_i32(vm, tc);
-        uint32_t cp  = 0;
+        uint8_t enc[4]; uint32_t enc_len = 0;
         if (ref != 0) {
-            uint32_t len = bpvm_read_u32_be(vm->memory + ref);
-            if (i >= 0 && (uint32_t) i < len) {
-                cp = bpvm_read_u32_be(vm->memory + ref + 4 + (uint32_t) i * 4);
+            uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
+            const uint8_t* p = vm->memory + ref + 4;
+            uint32_t ncp = utf8_cp_count(p, nbytes);
+            if (i >= 0 && (uint32_t) i < ncp) {
+                uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) i);
+                uint32_t adv; uint32_t cp = utf8_decode(p + off, nbytes - off, &adv);
+                enc_len = utf8_encode(cp, enc);   /* re-codifica a UTF-8 (antes de alocar) */
             }
         }
-        /* Alocamos un string de 1 codepoint. */
-        uint32_t out = bpvm_heap_alloc(vm, 4u, BPVM_TYPE_ARRAY_I32);
+        /* Alocamos un string UTF-8 de 1 codepoint (enc_len bytes). */
+        uint32_t out = bpvm_heap_alloc(vm, enc_len, BPVM_TYPE_ARRAY_I8);
         if (out) {
-            bpvm_write_u32_be(vm->memory + out, 1u);
-            bpvm_write_u32_be(vm->memory + out + 4, cp);
+            bpvm_write_u32_be(vm->memory + out, enc_len);
+            for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
         }
         push_i32(vm, tc, (int32_t) out);
         return BPVM_OK;
@@ -212,19 +262,21 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t end   = pop_i32(vm, tc);
         int32_t start = pop_i32(vm, tc);
         uint32_t ref  = (uint32_t) pop_i32(vm, tc);
-        uint32_t len  = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
+        uint32_t nbytes = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
+        const uint8_t* p = vm->memory + ref + 4;
+        uint32_t ncp = (ref == 0) ? 0 : utf8_cp_count(p, nbytes);   /* H2: índices en codepoints */
         if (start < 0) start = 0;
         if (end   < 0) end = 0;
-        if ((uint32_t) end > len) end = (int32_t) len;
+        if ((uint32_t) end > ncp) end = (int32_t) ncp;
         if (start > end) start = end;
-        uint32_t n = (uint32_t)(end - start);
-        uint32_t out = bpvm_heap_alloc(vm, n * 4u, BPVM_TYPE_ARRAY_I32);
+        uint32_t boff = utf8_byte_offset(p, nbytes, (uint32_t) start);
+        uint32_t eoff = utf8_byte_offset(p, nbytes, (uint32_t) end);
+        uint32_t n = eoff - boff;                                   /* nº de bytes del rango */
+        uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
         if (out) {
             bpvm_write_u32_be(vm->memory + out, n);
-            for (uint32_t i = 0; i < n; i++) {
-                bpvm_write_u32_be(vm->memory + out + 4 + i * 4,
-                    bpvm_read_u32_be(vm->memory + ref + 4 + ((uint32_t) start + i) * 4));
-            }
+            for (uint32_t i = 0; i < n; i++)
+                vm->memory[out + 4 + i] = vm->memory[ref + 4 + boff + i];
         }
         push_i32(vm, tc, (int32_t) out);
         return BPVM_OK;
@@ -263,12 +315,20 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (len < 0) return BPVM_ERR_RUNTIME;
         uint32_t avail = (chars_ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + chars_ref);
         if ((uint32_t) len > avail) return BPVM_ERR_RUNTIME;
-        uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) len * 4, BPVM_TYPE_ARRAY_I32);
-        if (new_ref == 0) return BPVM_ERR_OOM;
-        bpvm_write_u32_be(vm->memory + new_ref, (uint32_t) len);
+        /* H2: input = array i32 de codepoints; output = string byte[] UTF-8. */
+        uint32_t total = 0;
         for (uint32_t i = 0; i < (uint32_t) len; i++) {
             uint32_t cp = bpvm_read_u32_be(vm->memory + chars_ref + 4 + i * 4);
-            bpvm_write_u32_be(vm->memory + new_ref + 4 + i * 4, cp);
+            uint8_t tmp[4]; total += utf8_encode(cp, tmp);
+        }
+        uint32_t new_ref = bpvm_heap_alloc(vm, total, BPVM_TYPE_ARRAY_I8);
+        if (new_ref == 0) return BPVM_ERR_OOM;
+        bpvm_write_u32_be(vm->memory + new_ref, total);
+        uint32_t w = 0;
+        for (uint32_t i = 0; i < (uint32_t) len; i++) {
+            uint32_t cp = bpvm_read_u32_be(vm->memory + chars_ref + 4 + i * 4);
+            uint8_t enc[4]; uint32_t el = utf8_encode(cp, enc);
+            for (uint32_t k = 0; k < el; k++) vm->memory[new_ref + 4 + w++] = enc[k];
         }
         push_i32(vm, tc, (int32_t) new_ref);
         return BPVM_OK;
