@@ -9,6 +9,7 @@
 #include "bpvm_internal.h"
 #include "bpvm_platform.h"
 #include <stdio.h>
+#include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -141,7 +142,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_INT_TO_STRING: {
         int32_t v = pop_i32(vm, tc);
         char buf[32];
-        int n = snprintf(buf, sizeof(buf), "%d", v);
+        int n = snprintf(buf, sizeof(buf), "%" PRId32, v);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
         push_i32(vm, tc, (int32_t) ref);
         return BPVM_OK;
@@ -376,13 +377,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         int32_t mid = bpvm_read_i32_be(vm->memory + mref + 4 + 0 * 4);
         if (mid < 0 || mid >= vm->mutex_count) {
-            fprintf(stderr, "[bpvm-c] mutex_lock: mid inválido %d\n", mid);
+            fprintf(stderr, "[bpvm-c] mutex_lock: mid inválido %" PRId32 "\n", mid);
             push_i32(vm, tc, 0);
             return BPVM_ERR_RUNTIME;
         }
         bpvm_bp_mutex_t* m = &vm->mutexes[mid];
         if (m->owner_tid == tc->id) {
-            fprintf(stderr, "[bpvm-c] mutex_lock: re-entrada tid=%d (no soportado)\n",
+            fprintf(stderr, "[bpvm-c] mutex_lock: re-entrada tid=%" PRId32 " (no soportado)\n",
                     tc->id);
             push_i32(vm, tc, 0);
             return BPVM_ERR_RUNTIME;
@@ -407,13 +408,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         int32_t mid = bpvm_read_i32_be(vm->memory + mref + 4 + 0 * 4);
         if (mid < 0 || mid >= vm->mutex_count) {
-            fprintf(stderr, "[bpvm-c] mutex_unlock: mid inválido %d\n", mid);
+            fprintf(stderr, "[bpvm-c] mutex_unlock: mid inválido %" PRId32 "\n", mid);
             push_i32(vm, tc, 0);
             return BPVM_ERR_RUNTIME;
         }
         bpvm_bp_mutex_t* m = &vm->mutexes[mid];
         if (m->owner_tid != tc->id) {
-            fprintf(stderr, "[bpvm-c] mutex_unlock: tid=%d intenta soltar mutex owned por %d\n",
+            fprintf(stderr, "[bpvm-c] mutex_unlock: tid=%" PRId32 " intenta soltar mutex owned por %" PRId32 "\n",
                     tc->id, m->owner_tid);
             push_i32(vm, tc, 0);
             return BPVM_ERR_RUNTIME;

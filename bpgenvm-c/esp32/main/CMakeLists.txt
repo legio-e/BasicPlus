@@ -46,8 +46,3 @@ idf_component_register(
         esp_partition
         esp_driver_gpio
 )
-
-# El core VM usa %d/%u con int32_t/uint32_t en mensajes de diagnóstico.
-# En Xtensa int32_t es `long` (mismo ancho → correcto en runtime), pero
-# ESP-IDF es estricto con -Werror=format. Lo degradamos a warning.
-target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error=format)

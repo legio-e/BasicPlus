@@ -21,6 +21,7 @@
 #include "bpvm_internal.h"
 #include <string.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 static uint32_t align4(uint32_t v) {
     return (v + 3) & ~3u;
@@ -161,7 +162,7 @@ static void gc_sweep_phase(bpvm_t* vm) {
         cur += total;
     }
     if (vm->tracing) {
-        fprintf(stderr, "[gc] kept=%u freed=%u heap=[%u..%u)\n",
+        fprintf(stderr, "[gc] kept=%" PRIu32 " freed=%" PRIu32 " heap=[%" PRIu32 "..%" PRIu32 ")\n",
                 kept, freed, vm->heap_start, vm->heap_next);
     }
 }

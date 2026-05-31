@@ -21,6 +21,7 @@
 #include "bpvm_comm.h"
 
 #include <stdio.h>
+#include <inttypes.h>
 #include <string.h>
 #include <math.h>      /* fmodf */
 
@@ -52,7 +53,7 @@ static void emit_text(bpvm_t* vm, const char* s, size_t len) {
 
 static void emit_int(bpvm_t* vm, int32_t v, int newline) {
     char buf[32];
-    int n = snprintf(buf, sizeof(buf), newline ? "%d\n" : "%d", v);
+    int n = snprintf(buf, sizeof(buf), newline ? "%" PRId32 "\n" : "%" PRId32, v);
     if (n > 0) emit_text(vm, buf, (size_t) n);
 }
 
@@ -193,7 +194,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         if (pc >= vm->memory_size) { exit_status = BPVM_ERR_BAD_PC; break; }
 
         if (vm->tracing) {
-            fprintf(stderr, "[trace] pc=%u sp=%u bp=%u cs=%u op=0x%02X\n",
+            fprintf(stderr, "[trace] pc=%" PRIu32 " sp=%" PRIu32 " bp=%" PRIu32 " cs=%" PRIu32 " op=0x%02X\n",
                     pc, sp, bp, cs, mem[pc]);
         }
 
@@ -226,7 +227,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_HALT:
             /* HALT: termina el thread y la VM si es el main. */
             if (tc->id != 0) {
-                fprintf(stderr, "[bpvm-c] HALT en thread no-main (tid=%d)\n", tc->id);
+                fprintf(stderr, "[bpvm-c] HALT en thread no-main (tid=%" PRId32 ")\n", tc->id);
                 exit_status = BPVM_ERR_RUNTIME;
             } else {
                 exit_status = BPVM_OK;
@@ -1172,7 +1173,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
              * Lo encontramos buscando el módulo cuyo code_start == cs. */
             uint32_t ext_table_addr = bpvm_get_ext_table_addr(vm, cs);
             if (ext_table_addr == 0) {
-                fprintf(stderr, "[bpvm-c] CALL_EXT sin ext-table en cs=%u\n", cs);
+                fprintf(stderr, "[bpvm-c] CALL_EXT sin ext-table en cs=%" PRIu32 "\n", cs);
                 exit_status = BPVM_ERR_RUNTIME; goto done;
             }
             uint32_t target = (uint32_t) bpvm_read_i32_be(mem
@@ -1246,7 +1247,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
 
         default:
-            fprintf(stderr, "[bpvm-c] opcode 0x%02X desconocido en PC %u\n",
+            fprintf(stderr, "[bpvm-c] opcode 0x%02X desconocido en PC %" PRIu32 "\n",
                     op, pc - 1);
             exit_status = BPVM_ERR_BAD_OPCODE;
             goto done;

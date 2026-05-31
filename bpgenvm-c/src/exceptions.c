@@ -16,6 +16,7 @@
 
 #include "bpvm_internal.h"
 #include <stdio.h>
+#include <inttypes.h>
 #include <string.h>
 
 void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,
@@ -80,7 +81,7 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
          * exteriores). */
     }
     /* Sin handler: print error + terminar thread. */
-    fprintf(stderr, "[bpvm-c] excepción no atrapada en tid=%d\n", tc->id);
+    fprintf(stderr, "[bpvm-c] excepción no atrapada en tid=%" PRId32 "\n", tc->id);
     if (ref != 0) {
         /* Intenta leer field 0 = msg (asumiendo layout RuntimeError). */
         int32_t msg_ref = bpvm_read_i32_be(vm->memory + ref + 4);

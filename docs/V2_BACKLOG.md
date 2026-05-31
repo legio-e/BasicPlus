@@ -49,13 +49,35 @@ código (mayo 2026):
 Estrategia: **concentrar al principio de V2 todo lo que toca la VM**, y
 después tocarla lo mínimo. Tres hitos seguidos:
 
-- **H1 — escalares**: `byte`/`byte[]` first-class + `long`/`double`
-  (+ pasada de portabilidad `PRIu32`). Cambia la representación de valores.
-- **H2 — strings UTF-8**: el grande (§4). Cambia el layout de strings;
-  depende del `byte[]` de H1.
+- **H1 — escalares** ✅ **CERRADO (2026-05-31)**: `byte`/`byte[]`
+  first-class + `long`/`double` + casts numéricos + pasada de portabilidad
+  `PRIu32`. Cambia la representación de valores.
+- **H2 — strings UTF-8** ⏳ *siguiente*: el grande (§4). Cambia el layout
+  de strings; depende del `byte[]` de H1.
 - **H3 — GC**: capítulo propio. Reimplementación **completa** del modelo
   de memoria (reuse / free-list), **manteniendo la interfaz** GC↔VM para
   afectar a la VM lo mínimo (ver nota de diseño en §8).
+
+**Estado H1 (cerrado 2026-05-31)** — entregado y validado en doble VM
+(miVM Java ↔ bpgenvm-c C, salida idéntica) + compilación limpia en Xtensa
+(ESP32-S3, oráculo de portabilidad) y host gcc:
+- **H1.1** `byte`/`byte[]` first-class (`newByteArray`, dispatch de ancho
+  en subíndice; el `byte` en stack es i32, máscara &0xFF al store). Bug de
+  `byte[]` cross-module en `.bpi` corregido de paso (`uint8`/`int8`/
+  `uint16`/`int16` no se reconocían al parsear el tipo serializado).
+- **H1.2** `long` (i64) completo: locals/params/returns/globals/`long[]`
+  vía contabilidad de 2 slots + truco RET-operand-as-slot-count
+  (retrocompatible) + LRET para retornos de 8 bytes. Opcodes 0x71–0x90,
+  `OperandKind` IMM_I64, `TYPE_ARRAY_I64`.
+- **H1.3** `double` (f64) reusando TODA la maquinaria de 8 bytes de `long`
+  ("is8Byte") + casts numéricos `integer()/long()/float()/double()`
+  type-directed + promoción aritmética (double>float>long>int). Opcodes
+  0x91–0xA7.
+- **H1.4** portabilidad `PRId32`/`PRIu32` (`inttypes.h`) en los 12 sitios
+  de diagnóstico con args int32_t/uint32_t; eliminada la supresión
+  `-Wno-error=format` del CMakeLists del ESP32 → build Xtensa limpio.
+- **Principio honrado**: el contenedor `.mod` NO cambió — solo opcodes y
+  tipos *aditivos*. La VM se tocó al principio de V2, como estaba previsto.
 
 **Por qué este orden** (no es "robustez después"): H1 y H2 cambian la VM y
 *añaden tipos de objeto nuevos* (I64/F64/byte[], string-UTF-8). Hacer el GC
