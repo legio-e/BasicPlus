@@ -262,26 +262,44 @@ Los registros se sincronizan así:
 
 ---
 
-## 6. Convención de Strings
+## 6. Convención de Strings  *(V2 H2 — UTF-8)*
 
-Los strings BP se representan como arrays de chars (codepoints) con
-`TYPE_ARRAY_I32`:
+> **Cambio en V2 (H2).** Hasta V1 un string era un array de codepoints
+> `TYPE_ARRAY_I32` (4 bytes/char). En V2 un string es un **`byte[]` UTF-8**
+> `TYPE_ARRAY_I8` (1 byte/elem). Esto NO cambió la estructura del `.mod`
+> (solo la codificación de los bytes de un símbolo de string en el data
+> block) — fue aditivo, igual que añadir tipos.
+
+Los strings BP se representan como `byte[]` con contenido **UTF-8** y tipo
+`TYPE_ARRAY_I8`:
 
 ```
-[+0]  tag (type = 2)
-[+4]  length (en chars, no bytes)
-[+8]  char 0 (i32; el u16 superior queda a 0 para BMP)
-[+12] char 1
-[ ...]
+[+0]  tag (type = 0, TYPE_ARRAY_I8)
+[+4]  length (en BYTES UTF-8, no en codepoints)
+[+8]  byte 0
+[+9]  byte 1
+[ ...]   (ASCII = 1 byte; é = 2 bytes; € = 3 bytes; …)
 ```
 
-Equivalente exacto en memoria a un `int32[]` con codepoints. Las
-operaciones de string (concat, length, etc.) operan sobre este layout.
-La VM C debe respetar **4 bytes por char** para que el formato sea
-intercambiable con la VM Java.
+Es **exactamente un `byte[]`** — comparte toda la maquinaria de arrays I8
+(alloc, GC, tamaño de bloque). `string` y `byte[]` son indistinguibles en
+runtime; la diferencia es solo el tipo estático del compilador.
 
-Concat (`__strconcat`) y comparación (`__strequals`) son builtins; el
-emisor los inserta cuando ve `s1 + s2` o `s1 == s2`.
+**Semántica de índice = por codepoint** (no por byte): `strlen`, `charAt`,
+`charCodeAt`, `substring`, `indexOf` cuentan/indexan codepoints (decodifican
+UTF-8). Para ASCII, codepoint == byte (idéntico a V1). Acceso a bytes crudos
+vía conversión `toBytes(s): byte[]` / `fromBytes(b: byte[]): string` (copia
+defensiva: el string es inmutable).
+
+Las dos VMs comparten los helpers UTF-8 (`utf8_cp_count/byte_offset/decode/
+encode` en `bpvm_internal.h` para el lado C) para que bytecode y AOT, y Java
+y C, coincidan byte a byte. El `print` emite los bytes UTF-8 directamente (la
+VM C ya **no** trunca no-ASCII a `'?'`).
+
+Concat (`__strconcat`) y comparación (`__strequals`) son funciones inyectadas
+por el emisor (`s1 + s2`, `s1 == s2`); operan a nivel de **byte** (concatenar
+o comparar dos secuencias UTF-8 válidas es correcto byte a byte) usando los
+opcodes `NEWARRAY_I8`/`ALOAD_U8`/`ASTORE_I8`.
 
 ---
 

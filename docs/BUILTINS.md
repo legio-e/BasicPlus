@@ -22,6 +22,12 @@ Convención general:
 
 ## 0..15 — Strings utilitarios
 
+> **V2 (H2):** los strings son `byte[]` **UTF-8** (`TYPE_ARRAY_I8`), no arrays
+> de codepoints i32. Los builtins con índice (`strlen`, `substring`, `charAt`,
+> `charCodeAt`, `indexOf`) operan **por codepoint** (decodifican UTF-8); para
+> ASCII es idéntico a V1. `print` emite los bytes UTF-8 directos (sin truncar).
+> Ver HEAP_LAYOUT §6.
+
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
 | 0 | `strlen` | `(s: string)` | `int` | Length del array de chars. |
@@ -177,6 +183,24 @@ Convención general:
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
 | 77 | `__prompt` | `(spec: string)` | `string` | Si no hay `PromptSender` registrado (= no IDE): RTErr BP atrapable. Si lo hay: bloquea el thread BP (`tc.status=BLOCKED_PROMPT`, registrado en `pendingPrompts[promptId]=tc`), envía `{"type":"PROMPT_REQUEST","promptId":N,"spec":...}` al IDE. El IDE responde con `{"type":"PROMPT_RESPONSE","id":M,"promptId":N,"values":...}` (wire v1) y la VM despierta el thread con el JSON empujado al stack. |
+
+---
+
+## 119..120 — Conversión string ↔ byte[] (V2 H2)
+
+| id | bpName | Args | Return | Semántica |
+|---|---|---|---|---|
+| 119 | `toBytes` | `(s: string)` | `byte[]` | Copia los bytes UTF-8 del string a un `byte[]` nuevo (copia defensiva: el string es inmutable). |
+| 120 | `fromBytes` | `(b: byte[])` | `string` | Copia los bytes de `b` a un string nuevo (interpretados como UTF-8). |
+
+> `string` y `byte[]` comparten el layout `TYPE_ARRAY_I8`; la conversión es una
+> copia del payload con distinto tipo estático.
+>
+> **Nota de paridad C/Java:** la VM C (host/MCU) implementa solo un *subset* de
+> builtins. Los intrínsecos de filesystem de IO (`pathBasename`… ids 64..76) y
+> algunos de Math NO están en ese subset → solo corren en la VM Java. Si se
+> portan a la C, los de string deben respetar la semántica por codepoint. Gap
+> pre-existente, no introducido por H2.
 
 ---
 

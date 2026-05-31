@@ -52,8 +52,9 @@ después tocarla lo mínimo. Tres hitos seguidos:
 - **H1 — escalares** ✅ **CERRADO (2026-05-31)**: `byte`/`byte[]`
   first-class + `long`/`double` + casts numéricos + pasada de portabilidad
   `PRIu32`. Cambia la representación de valores.
-- **H2 — strings UTF-8** ⏳ *siguiente*: el grande (§4). Cambia el layout
-  de strings; depende del `byte[]` de H1.
+- **H2 — strings UTF-8** ✅ **CERRADO (2026-05-31)**: string = `byte[]`
+  UTF-8 (§4), índice por codepoint, conversión `string↔byte[]`. Construido
+  sobre el `byte[]` de H1.
 - **H3 — GC**: capítulo propio. Reimplementación **completa** del modelo
   de memoria (reuse / free-list), **manteniendo la interfaz** GC↔VM para
   afectar a la VM lo mínimo (ver nota de diseño en §8).
@@ -78,6 +79,32 @@ después tocarla lo mínimo. Tres hitos seguidos:
   `-Wno-error=format` del CMakeLists del ESP32 → build Xtensa limpio.
 - **Principio honrado**: el contenedor `.mod` NO cambió — solo opcodes y
   tipos *aditivos*. La VM se tocó al principio de V2, como estaba previsto.
+
+**Estado H2 (cerrado 2026-05-31)** — string pasó de "array de codepoints i32"
+a **`byte[]` UTF-8** (`TYPE_ARRAY_I8`), validado en doble VM (salida Unicode
+byte-idéntica: `café`, `ñ`, `€`):
+- **H2.1** representación núcleo: string = `TYPE_ARRAY_I8` UTF-8 en ambas VMs
+  (reusa la maquinaria I8 de H1.1) + literal `.mod` UTF-8 + print directo (la
+  VM C deja de truncar a `?`) + `Main` Java fuerza stdout/stderr a UTF-8.
+- **H2.2** índice por codepoint: `strlen`/`charAt`/`charCodeAt`/`substring`/
+  `indexOf` operan en codepoints (decodifican UTF-8; ASCII idéntico a V1).
+- **H2.3** helpers AOT de string a UTF-8; helpers `utf8_*` como fuente única
+  en `bpvm_internal.h` (bytecode ↔ native coinciden byte a byte).
+- **H2.4** conversión `toBytes(s):byte[]` / `fromBytes(b:byte[]):string`
+  (copia defensiva; string y byte[] comparten layout I8).
+- **H2.5** stdlib recompilada (13 módulos), docs (HEAP_LAYOUT §6, MOD_FORMAT
+  §5, BUILTINS) y debugger (`readStringIfPossible`) actualizados.
+- **Decisión clave** (usuario): índice por codepoint + bytes crudos vía
+  `string↔byte[]` (no `byteAt` en el string). El contenedor `.mod` NO cambió.
+- **Gaps registrados (pre-existentes, NO de H2)**: (a) la VM C implementa solo
+  un *subset* de builtins — IO filesystem (`pathBasename`…) y algunos de Math
+  son Java-VM-only; si se portan a C, los de string deben respetar codepoint;
+  (b) los arrays no exponen longitud al usuario (`len`/`.length`) — solo
+  for-each; afecta a la ergonomía de `byte[]`; (c) el disassembler (`Disasm`)
+  aún detecta literales con la heurística vieja (codepoints) → degrada a "no
+  detectados", el disasm de opcodes no se ve afectado; (d) la stdlib **embebida
+  en firmware** (Pico/ESP32) sigue con literales viejos → re-embeber al tocar
+  firmware. Candidatos a backlog de robustez/paridad.
 
 **Por qué este orden** (no es "robustez después"): H1 y H2 cambian la VM y
 *añaden tipos de objeto nuevos* (I64/F64/byte[], string-UTF-8). Hacer el GC

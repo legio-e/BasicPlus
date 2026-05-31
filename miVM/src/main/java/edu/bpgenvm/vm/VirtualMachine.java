@@ -4259,23 +4259,24 @@ public class VirtualMachine {
     public String readStringIfPossible(int ref) {
         try {
             if (ref <= 0 || ref + 4 > memory.length) return "@" + Integer.toHexString(ref);
-            int len = readInt32(ref);
-            if (len < 0 || len > 65536) return "@" + Integer.toHexString(ref);  // sanity
-            int end = ref + 4 + len * 4;
+            int nbytes = readInt32(ref);                       // H2: length en bytes (UTF-8)
+            if (nbytes < 0 || nbytes > 65536) return "@" + Integer.toHexString(ref);  // sanity
+            int end = ref + 4 + nbytes;
             if (end > memory.length) return "@" + Integer.toHexString(ref);
-            StringBuilder sb = new StringBuilder(len + 2);
+            byte[] buf = new byte[nbytes];
+            System.arraycopy(memory, ref + 4, buf, 0, nbytes);
+            String s = new String(buf, java.nio.charset.StandardCharsets.UTF_8);
+            StringBuilder sb = new StringBuilder(s.length() + 2);
             sb.append('"');
-            for (int i = 0; i < len; i++) {
-                int cp = readInt32(ref + 4 + i * 4);
-                if (cp < 0 || cp > 0x10FFFF) { sb.append('?'); continue; }
+            for (int i = 0; i < s.length(); ) {
+                int cp = s.codePointAt(i);
+                i += Character.charCount(cp);
                 if (cp == '"') sb.append("\\\"");
                 else if (cp == '\\') sb.append("\\\\");
                 else if (cp == '\n') sb.append("\\n");
                 else if (cp == '\r') sb.append("\\r");
                 else if (cp == '\t') sb.append("\\t");
-                else if (cp >= 0x20 && cp < 0x7F) sb.append((char) cp);
-                else if (cp <= 0xFFFF) sb.append((char) cp);
-                else sb.append(new String(Character.toChars(cp)));
+                else sb.appendCodePoint(cp);
             }
             sb.append('"');
             return sb.toString();

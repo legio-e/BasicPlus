@@ -158,7 +158,12 @@ Esto deja la cadena de herencia navegable cross-module por
 - Constantes (`const X: integer := 42` → 4 bytes con el valor).
 - Globals (`var g: T` → tamaño según `T`).
 - Class descriptors (ver §8).
-- String literals (lay-out de arrays de chars).
+- String literals: `[u32 byte_len BE][bytes UTF-8]` (V2 H2). Hasta V1 era
+  `[u32 cp_count][i32 codepoint]×N`; ahora son bytes UTF-8 (≈4× más compacto
+  para ASCII). Es solo un cambio de **codificación del contenido** del símbolo
+  (dato), no de la estructura del contenedor. El layout coincide con un heap
+  string `TYPE_ARRAY_I8` (sin el tag), así que `LEA_GLOBAL` empuja la dirección
+  y el string se usa in-situ.
 
 El loader inyecta el bloque entero en memoria a partir de
 `dataStart = moduleBase + extTableSize`. Los offsets dentro del bloque

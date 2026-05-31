@@ -1,0 +1,13 @@
+module StdTest
+
+    // H2.5: revalida la stdlib recompilada (import cross-module) + paso de
+    // UTF-8 por intrínsecos de string (IO.path*). Rutas con é y í.
+    import IO
+
+    function Main()
+        print "base =", IO.pathBasename("/ruta/café.txt")  // café.txt
+        print "ext  =", IO.pathExtension("café.txt")        // txt
+        print "par  =", IO.pathParent("/río/x")             // /río
+    end Main
+
+end StdTest
