@@ -526,6 +526,7 @@ public class VirtualMachine {
     private static final int TYPE_ARRAY_I32 = 2;   // también f32 (4 bytes, opaco)
     private static final int TYPE_ARRAY_REF = 3;   // futuro: array de refs a objetos
     private static final int TYPE_OBJECT    = 4;   // instancia de clase; user_ref → class_ptr
+    private static final int TYPE_ARRAY_I64 = 5;   // H1.2 (V2): array de long, 8 bytes/elem
 
     /*
      * Layout del class descriptor (en data block, apuntado por header+4 del objeto):
@@ -938,6 +939,7 @@ public class VirtualMachine {
             case TYPE_ARRAY_I8:  return 1;
             case TYPE_ARRAY_I16: return 2;
             case TYPE_ARRAY_I32: return 4;
+            case TYPE_ARRAY_I64: return 8;   // H1.2 (V2)
             case TYPE_ARRAY_REF: return 4;
             default: throw new RuntimeException("Tipo de heap desconocido: " + type);
         }
@@ -1297,6 +1299,15 @@ public class VirtualMachine {
         mem[addr + 1] = (byte) (v >> 16);
         mem[addr + 2] = (byte) (v >>  8);
         mem[addr + 3] = (byte) v;
+    }
+    // H1.2 (V2): long i64 big-endian (high word en addr, low en addr+4).
+    private static long readI64(byte[] mem, int addr) {
+        return ((long) readI32(mem, addr) << 32)
+             | (readI32(mem, addr + 4) & 0xFFFFFFFFL);
+    }
+    private static void writeI64(byte[] mem, int addr, long v) {
+        writeI32(mem, addr,     (int) (v >>> 32));
+        writeI32(mem, addr + 4, (int)  v);
     }
 
     /**
@@ -1702,6 +1713,17 @@ public class VirtualMachine {
                     sp = targetCallerSP;
 
                     writeI32(mem, sp, returnValue); sp += 4;
+                    break;
+                }
+                case 0x90: { // LRET — H1.2 (V2): return value de 8 bytes (long)
+                    int paramsCount = mem[pc] & 0xFF; pc++;
+                    sp -= 8; long retL = readI64(mem, sp);
+                    int pcAnt = readI32(mem, bp - 12);
+                    int bpAnt = readI32(mem, bp - 8);
+                    int csAnt = readI32(mem, bp - 4);
+                    int targetCallerSP = bp - 12 - (paramsCount * 4);
+                    pc = pcAnt; bp = bpAnt; cs = csAnt; sp = targetCallerSP;
+                    writeI64(mem, sp, retL); sp += 8;
                     break;
                 }
 
@@ -2261,6 +2283,183 @@ public class VirtualMachine {
                 }
                 case 0x59: { // PRINT_NL
                     programOut.newline();
+                    break;
+                }
+
+                // ---- H1.2 (V2): long (i64). 8 bytes / 2 slots. ----
+                case 0x71: { // LPUSH
+                    long v = readI64(mem, pc); pc += 8;
+                    writeI64(mem, sp, v); sp += 8;
+                    break;
+                }
+                case 0x72: { // LADD
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, a + b); sp += 8; break;
+                }
+                case 0x73: { // LSUB
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, a - b); sp += 8; break;
+                }
+                case 0x74: { // LMUL
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, a * b); sp += 8; break;
+                }
+                case 0x75: { // LDIV
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    if (b == 0) { tc.sp = sp; throwBpRuntimeError(tc, "División por cero"); }
+                    writeI64(mem, sp, a / b); sp += 8; break;
+                }
+                case 0x76: { // LMOD
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    if (b == 0) { tc.sp = sp; throwBpRuntimeError(tc, "Módulo por cero"); }
+                    writeI64(mem, sp, a % b); sp += 8; break;
+                }
+                case 0x77: { // LNEG
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, -a); sp += 8; break;
+                }
+                case 0x78: { // LBAND
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, a & b); sp += 8; break;
+                }
+                case 0x79: { // LBOR
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, a | b); sp += 8; break;
+                }
+                case 0x7A: { // LBXOR
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, a ^ b); sp += 8; break;
+                }
+                case 0x7B: { // LBNOT
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, ~a); sp += 8; break;
+                }
+                case 0x7C: { // LSHL
+                    sp -= 8; long n = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, a << (n & 63)); sp += 8; break;
+                }
+                case 0x7D: { // LSHR_S
+                    sp -= 8; long n = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, a >> (n & 63)); sp += 8; break;
+                }
+                case 0x7E: { // LSHR_U
+                    sp -= 8; long n = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI64(mem, sp, a >>> (n & 63)); sp += 8; break;
+                }
+                case 0x7F: { // LEQ
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI32(mem, sp, a == b ? 1 : 0); sp += 4; break;
+                }
+                case 0x80: { // LNEQ
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI32(mem, sp, a != b ? 1 : 0); sp += 4; break;
+                }
+                case 0x81: { // LLT
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI32(mem, sp, a <  b ? 1 : 0); sp += 4; break;
+                }
+                case 0x82: { // LLE
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI32(mem, sp, a <= b ? 1 : 0); sp += 4; break;
+                }
+                case 0x83: { // LGT
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI32(mem, sp, a >  b ? 1 : 0); sp += 4; break;
+                }
+                case 0x84: { // LGE
+                    sp -= 8; long b = readI64(mem, sp);
+                    sp -= 8; long a = readI64(mem, sp);
+                    writeI32(mem, sp, a >= b ? 1 : 0); sp += 4; break;
+                }
+                case 0x85: { // LPRINT
+                    sp -= 8; long v = readI64(mem, sp);
+                    programOut.writeText(Long.toString(v)); programOut.newline();
+                    break;
+                }
+                case 0x86: { // LPRINT_NONL
+                    sp -= 8; long v = readI64(mem, sp);
+                    programOut.writeText(Long.toString(v));
+                    break;
+                }
+                case 0x87: { // I32_TO_I64 (sign-extend)
+                    sp -= 4; int v = readI32(mem, sp);
+                    writeI64(mem, sp, (long) v); sp += 8; break;
+                }
+                case 0x88: { // I64_TO_I32 (truncate low 32)
+                    sp -= 8; long v = readI64(mem, sp);
+                    writeI32(mem, sp, (int) v); sp += 4; break;
+                }
+                case 0x89: { // GET_LOCAL_L
+                    short soff = (short) readI16(mem, pc); pc += 2;
+                    writeI64(mem, sp, readI64(mem, bp + soff)); sp += 8;
+                    break;
+                }
+                case 0x8A: { // SET_LOCAL_L
+                    short soff = (short) readI16(mem, pc); pc += 2;
+                    sp -= 8; long v = readI64(mem, sp);
+                    writeI64(mem, bp + soff, v);
+                    break;
+                }
+                case 0x8B: { // GET_GLOBAL_L
+                    short soff = (short) readI16(mem, pc); pc += 2;
+                    writeI64(mem, sp, readI64(mem, cs + soff)); sp += 8;
+                    break;
+                }
+                case 0x8C: { // SET_GLOBAL_L
+                    short soff = (short) readI16(mem, pc); pc += 2;
+                    sp -= 8; long v = readI64(mem, sp);
+                    writeI64(mem, cs + soff, v);
+                    break;
+                }
+                case 0x8D: { // NEWARRAY_I64
+                    sp -= 4; int size = readI32(mem, sp);
+                    if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY_I64: tamaño negativo (" + size + ")"); }
+                    tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
+                    synchronized (vmLock) {
+                        int ref = heapAlloc(size * 8, TYPE_ARRAY_I64);
+                        writeI32(mem, ref, size);
+                        writeI32(mem, sp, ref); sp += 4;
+                        tc.sp = sp;
+                    }
+                    break;
+                }
+                case 0x8E: { // ALOAD_I64
+                    sp -= 4; int idx = readI32(mem, sp);
+                    sp -= 4; int ref = readI32(mem, sp);
+                    int length = readI32(mem, ref);
+                    if (idx < 0 || idx >= length) {
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "ALOAD_I64: índice fuera de rango " + idx + " (length=" + length + ")");
+                    }
+                    writeI64(mem, sp, readI64(mem, ref + 4 + idx * 8)); sp += 8;
+                    break;
+                }
+                case 0x8F: { // ASTORE_I64
+                    sp -= 8; long val = readI64(mem, sp);
+                    sp -= 4; int idx = readI32(mem, sp);
+                    sp -= 4; int ref = readI32(mem, sp);
+                    int length = readI32(mem, ref);
+                    if (idx < 0 || idx >= length) {
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "ASTORE_I64: índice fuera de rango " + idx + " (length=" + length + ")");
+                    }
+                    writeI64(mem, ref + 4 + idx * 8, val);
                     break;
                 }
 

@@ -1,0 +1,14 @@
+module ByteApp
+
+    import ByteLib
+
+    function Main()
+        var n: integer := 5
+        var b: byte[] := newByteArray(n)
+        ByteLib.fill(b, n)
+        print "checksum =", ByteLib.checksum(b, n)
+        print "b0 =", b[0]
+        print "b4 =", b[4]
+    end Main
+
+end ByteApp

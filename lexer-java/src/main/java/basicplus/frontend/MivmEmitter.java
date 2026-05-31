@@ -156,6 +156,8 @@ public final class MivmEmitter {
          *  Cuando es true, el unlock se hace contra el Mutex global del
          *  módulo. Mutuamente exclusivo con syncClassName. */
         boolean syncModule = false;
+        /** H1.2 (V2): la función devuelve long → return de 8 bytes (LRET). */
+        boolean returnsLong = false;
         FuncScope(FunctionSymbol fs, boolean returnsValue, int endLabel) {
             this.fs = fs;
             this.returnsValue = returnsValue;
@@ -502,13 +504,14 @@ public final class MivmEmitter {
 
     private void emitModuleVarDecl(VarDecl vd) {
         // Por ahora soportamos sólo declaración simple (1 nombre).
+        BpType declT = vd.type != null ? typeRefToBpType(vd.type) : null;   // H1.2
         for (DeclName dn : vd.names) {
             if (dn.isStatic()) { errors.add("var estática de clase a nivel módulo no soportada: " + dn.name); continue; }
-            // Reservamos 4 bytes en data block. El inicializador se ejecuta
-            // en el module initializer (función Fase1() en fase1.bp).
-            // Si no hay initializer en BP pero sí init expression, se podría
-            // sintetizar; por ahora confiamos en que el usuario lo asigne.
-            w.declareGlobal(dn.name);
+            // Reservamos 4 bytes (8 si es long) en data block. El inicializador
+            // se ejecuta en el module initializer; los init a nivel módulo se
+            // ignoran (L8) → el usuario asigna en código.
+            if (isLong(declT)) w.declareGlobalLong(dn.name);   // H1.2 (V2)
+            else w.declareGlobal(dn.name);
         }
         // Si la VarDecl tiene init y NO hay un init explícito en el initializer del
         // módulo, deberíamos emitir la asignación al arranque. Para simplificar,
@@ -570,6 +573,17 @@ public final class MivmEmitter {
 
     /** L10 — devuelve el opcode VM para el cast `tipoNarrow(x)` o null si
      *  el nombre no es uno de los casts. */
+    /** H1.1 (V2) — alocadores de arrays narrow → opcode NEWARRAY_* directo.
+     *  Igual que los casts (narrowCastOpFor), evitan un CALL_BUILTIN/builtin
+     *  nuevo en la VM: ésta ya implementa NEWARRAY_I8/I16. null si no aplica. */
+    private static OpCode arrayAllocOpFor(String fnName) {
+        switch (fnName) {
+            case "newByteArray": return OpCode.NEWARRAY_I8;
+            case "newLongArray": return OpCode.NEWARRAY_I64;   // H1.2 (V2)
+            default:             return null;
+        }
+    }
+
     private static OpCode narrowCastOpFor(String fnName) {
         switch (fnName) {
             case "byte":  return OpCode.I32_TO_U8;
@@ -740,10 +754,8 @@ public final class MivmEmitter {
             // (lookup en SemanticAnalyzer), no a nivel de runtime.
             w.addFunction(name, true);
 
-            // Declarar params
-            for (ParamSymbol p : fs.params) {
-                w.declareParam(p.name);
-            }
+            // Declarar params (H1.2: width-aware, long = 8 bytes)
+            declareParamsWidthAware(fs);
 
             beginFunctionScope(fs, null);
             try {
@@ -1115,7 +1127,7 @@ public final class MivmEmitter {
 
     private void emitInstanceMethod(FuncDef fn, FunctionSymbol fs) throws IOException {
         w.addMethod(fs.name);   // addMethod ya declara "this" como primer param
-        for (ParamSymbol p : fs.params) w.declareParam(p.name);
+        declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);
         try {
             for (IStmt s : fn.body) emitStmt(s);
@@ -1130,7 +1142,7 @@ public final class MivmEmitter {
         // del parser de imports (parts[len-2] = módulo).
         w.addFunction(cls.name + ".__init", false);
         w.declareParam("this");
-        for (ParamSymbol p : fs.params) w.declareParam(p.name);
+        declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);   // constructor = void
         try {
             // Si esta clase introduce __syncMutex, hay que inicializarlo
@@ -1151,7 +1163,7 @@ public final class MivmEmitter {
 
     private void emitStaticMethodFn(ClassSymbol cls, FuncDef fn, FunctionSymbol fs) throws IOException {
         w.addFunction(cls.name + "." + fs.name, fs.isPublic);
-        for (ParamSymbol p : fs.params) w.declareParam(p.name);
+        declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);
         try {
             for (IStmt s : fn.body) emitStmt(s);
@@ -1279,14 +1291,17 @@ public final class MivmEmitter {
     }
 
     private void emitLocalVarDecl(VarDecl vd) throws IOException {
+        BpType declT = vd.type != null ? typeRefToBpType(vd.type)
+                                       : (vd.init != null ? info.exprTypes.get(vd.init) : null);
         for (DeclName dn : vd.names) {
-            declareLocal(dn.name);
+            if (isLong(declT)) declareLocalLong(dn.name);   // H1.2: long = 8 bytes
+            else declareLocal(dn.name);
             if (vd.isOwner) {
                 scopeStack.peek().ownerLocals.add(dn.name);
             }
             if (vd.init != null) {
                 emitExpr(vd.init);
-                coerceToTarget(vd.init, vd.type != null ? typeRefToBpType(vd.type) : info.exprTypes.get(vd.init));
+                coerceToTarget(vd.init, declT);
                 w.emitSetLocal(dn.name);
                 // Si esta var es owner y la fuente es otra var owner local
                 // (IdentifierExpr → ParamSymbol/VarSymbol con isOwner=true),
@@ -1346,6 +1361,20 @@ public final class MivmEmitter {
         FuncScope scope = scopeStack.peek();
         if (scope.locals.add(name)) {
             w.declareLocal(name);
+        }
+    }
+
+    private void declareLocalLong(String name) {   // H1.2 (V2): local de 8 bytes
+        FuncScope scope = scopeStack.peek();
+        if (scope.locals.add(name)) {
+            w.declareLocalLong(name);
+        }
+    }
+
+    // H1.2 (V2): declara los params de fs con ancho por tipo (long = 8 bytes).
+    private void declareParamsWidthAware(FunctionSymbol fs) {
+        for (ParamSymbol p : fs.params) {
+            w.declareParam(p.name, isLong(p.type) ? 8 : 4);
         }
     }
 
@@ -1411,7 +1440,7 @@ public final class MivmEmitter {
                     emitExpr(ix.index);
                     emitExpr(a.value);
                     coerceToTarget(a.value, tType);
-                    w.emit(OpCode.ASTORE);
+                    w.emit(astoreOpFor(ix.target));   // H1.1b — ancho del elemento
                     return;
                 case PLUS_ASSIGN:
                 case MINUS_ASSIGN: {
@@ -1420,11 +1449,11 @@ public final class MivmEmitter {
                     emitExpr(ix.index);
                     emitExpr(ix.target);
                     emitExpr(ix.index);
-                    w.emit(OpCode.ALOAD);
+                    w.emit(aloadOpFor(ix.target));    // H1.1b — ancho del elemento
                     emitExpr(a.value);
                     coerceToTarget(a.value, tType);
                     emitCompoundOp(a.op, tType);
-                    w.emit(OpCode.ASTORE);
+                    w.emit(astoreOpFor(ix.target));   // H1.1b — ancho del elemento
                     return;
                 }
             }
@@ -2035,12 +2064,15 @@ public final class MivmEmitter {
     private void beginFunctionScope(FunctionSymbol fs, BpType returnTypeOverride) {
         BpType rt = (returnTypeOverride != null) ? returnTypeOverride : fs.returnType;
         boolean returnsValue = rt != null && !(rt instanceof BpType.VoidType);
+        boolean returnsLong = isLong(rt);   // H1.2 (V2): return de 8 bytes → LRET
         FuncScope scope = new FuncScope(fs, returnsValue, w.newLabel());
+        scope.returnsLong = returnsLong;
         scopeStack.push(scope);
         if (returnsValue) {
             // __result va declarada antes que cualquier local de usuario para no
             // depender de un slot fijo: se accede siempre por nombre.
-            declareLocal("__result");
+            if (returnsLong) declareLocalLong("__result");   // H1.2 (V2)
+            else declareLocal("__result");
         }
     }
 
@@ -2062,7 +2094,8 @@ public final class MivmEmitter {
         } else {
             emitInt(0);
         }
-        w.emitRet();
+        if (scope.returnsLong) w.emitLRet();   // H1.2 (V2): return de 8 bytes
+        else w.emitRet();
     }
 
     private void emitPrint(PrintStmt s) throws IOException {
@@ -2086,6 +2119,7 @@ public final class MivmEmitter {
                     case INT16:
                     case UINT16:
                                   w.emit(OpCode.PRINT_NONL); break;
+                    case LONG:    w.emit(OpCode.LPRINT_NONL); break;   // H1.2 (V2)
                     case FLOAT:   w.emit(OpCode.FPRINT_NONL); break;
                     case STRING:  w.emit(OpCode.PRINT_STR_NONL); break;
                     case BOOLEAN:
@@ -2237,6 +2271,10 @@ public final class MivmEmitter {
 
     private void emitExpr(IExpr e) throws IOException {
         if (e instanceof IntLitExpr)       emitInt((int) ((IntLitExpr) e).value);
+        else if (e instanceof LongLitExpr) {   // H1.2 (V2): LPUSH + 8 bytes
+            w.emit(OpCode.LPUSH);
+            w.emitLong(((LongLitExpr) e).value);
+        }
         else if (e instanceof FloatLitExpr) {
             w.emit(OpCode.FPUSH);
             // ModWriter no expone emitPushFloat directamente; lo escribimos a mano.
@@ -2278,8 +2316,10 @@ public final class MivmEmitter {
         emitExpr(u.operand);
         BpType t = info.exprTypes.get(u.operand);
         if ("-".equals(u.op)) {
-            if (t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.FLOAT) {
+            if (isFloat(t)) {
                 w.emit(OpCode.FNEG);
+            } else if (isLong(t)) {   // H1.2 (V2)
+                w.emit(OpCode.LNEG);
             } else {
                 w.emit(OpCode.NEG);
             }
@@ -2344,28 +2384,40 @@ public final class MivmEmitter {
         }
 
         boolean useFloat = isFloat(tl) || isFloat(tr) || isFloat(tb);
+        // H1.2 (V2): si no es float pero hay un long en juego → ops i64.
+        boolean useLong  = !useFloat && (isLong(tl) || isLong(tr) || isLong(tb));
         emitExpr(b.left);
-        if (useFloat && !isFloat(tl)) w.emit(OpCode.I2F);
+        if (useFloat) {
+            if (isLong(tl)) errors.add("mezcla long↔float no soportada todavía (llega con double en H1.3)");
+            else if (!isFloat(tl)) w.emit(OpCode.I2F);
+        } else if (useLong && !isLong(tl)) {
+            w.emit(OpCode.I32_TO_I64);
+        }
         emitExpr(b.right);
-        if (useFloat && !isFloat(tr)) w.emit(OpCode.I2F);
+        if (useFloat) {
+            if (isLong(tr)) errors.add("mezcla long↔float no soportada todavía (llega con double en H1.3)");
+            else if (!isFloat(tr)) w.emit(OpCode.I2F);
+        } else if (useLong && !isLong(tr)) {
+            w.emit(OpCode.I32_TO_I64);
+        }
 
         switch (b.op) {
-            case "+": w.emit(useFloat ? OpCode.FADD : OpCode.ADD); break;
-            case "-": w.emit(useFloat ? OpCode.FSUB : OpCode.SUB); break;
-            case "*": w.emit(useFloat ? OpCode.FMUL : OpCode.MUL); break;
-            case "/": w.emit(useFloat ? OpCode.FDIV : OpCode.DIV); break;
-            case "mod": w.emit(useFloat ? OpCode.FMOD : OpCode.MOD); break;
-            case "==": w.emit(useFloat ? OpCode.FEQ : OpCode.EQ); break;
-            case "!=": w.emit(useFloat ? OpCode.FNEQ : OpCode.NEQ); break;
-            case "<":  w.emit(useFloat ? OpCode.FLT : OpCode.LT); break;
-            case "<=": w.emit(useFloat ? OpCode.FLE : OpCode.LE); break;
-            case ">":  w.emit(useFloat ? OpCode.FGT : OpCode.GT); break;
-            case ">=": w.emit(useFloat ? OpCode.FGE : OpCode.GE); break;
-            case "&": w.emit(OpCode.BAND); break;
-            case "|": w.emit(OpCode.BOR); break;
-            case "xor": w.emit(OpCode.BXOR); break;
-            case "shl": w.emit(OpCode.SHL); break;
-            case "shr": w.emit(OpCode.SHR_S); break;
+            case "+": w.emit(useFloat ? OpCode.FADD : useLong ? OpCode.LADD : OpCode.ADD); break;
+            case "-": w.emit(useFloat ? OpCode.FSUB : useLong ? OpCode.LSUB : OpCode.SUB); break;
+            case "*": w.emit(useFloat ? OpCode.FMUL : useLong ? OpCode.LMUL : OpCode.MUL); break;
+            case "/": w.emit(useFloat ? OpCode.FDIV : useLong ? OpCode.LDIV : OpCode.DIV); break;
+            case "mod": w.emit(useFloat ? OpCode.FMOD : useLong ? OpCode.LMOD : OpCode.MOD); break;
+            case "==": w.emit(useFloat ? OpCode.FEQ : useLong ? OpCode.LEQ : OpCode.EQ); break;
+            case "!=": w.emit(useFloat ? OpCode.FNEQ : useLong ? OpCode.LNEQ : OpCode.NEQ); break;
+            case "<":  w.emit(useFloat ? OpCode.FLT : useLong ? OpCode.LLT : OpCode.LT); break;
+            case "<=": w.emit(useFloat ? OpCode.FLE : useLong ? OpCode.LLE : OpCode.LE); break;
+            case ">":  w.emit(useFloat ? OpCode.FGT : useLong ? OpCode.LGT : OpCode.GT); break;
+            case ">=": w.emit(useFloat ? OpCode.FGE : useLong ? OpCode.LGE : OpCode.GE); break;
+            case "&": w.emit(useLong ? OpCode.LBAND : OpCode.BAND); break;
+            case "|": w.emit(useLong ? OpCode.LBOR : OpCode.BOR); break;
+            case "xor": w.emit(useLong ? OpCode.LBXOR : OpCode.BXOR); break;
+            case "shl": w.emit(useLong ? OpCode.LSHL : OpCode.SHL); break;
+            case "shr": w.emit(useLong ? OpCode.LSHR_S : OpCode.SHR_S); break;
             default:
                 errors.add("operador binario no soportado: " + b.op);
         }
@@ -2461,6 +2513,22 @@ public final class MivmEmitter {
                         coerceToTarget(c.args.get(0), PrimitiveType.INTEGER);
                         try { w.emit(castOp); }
                         catch (IOException ex) { errors.add("emit " + castOp + ": " + ex.getMessage()); }
+                        return;
+                    }
+                    // H1.1 (V2) — alocadores de arrays narrow (newByteArray):
+                    // NO son CALL_BUILTIN, son un opcode NEWARRAY_* directo
+                    // (la VM ya lo implementa → cero cambio de VM). Igual
+                    // patrón que los casts L10 de arriba.
+                    OpCode arrAllocOp = arrayAllocOpFor(fs.name);
+                    if (arrAllocOp != null) {
+                        if (c.args.size() != 1) {
+                            errors.add(fs.name + "(): se esperaba 1 argumento");
+                            return;
+                        }
+                        emitExpr(c.args.get(0));
+                        coerceToTarget(c.args.get(0), PrimitiveType.INTEGER);
+                        try { w.emit(arrAllocOp); }
+                        catch (IOException ex) { errors.add("emit " + arrAllocOp + ": " + ex.getMessage()); }
                         return;
                     }
                     Builtin b = Builtin.byName(fs.name);
@@ -2619,7 +2687,53 @@ public final class MivmEmitter {
     private void emitIndexLoad(IndexExpr ix) throws IOException {
         emitExpr(ix.target);
         emitExpr(ix.index);
-        w.emit(OpCode.ALOAD);
+        w.emit(aloadOpFor(ix.target));
+    }
+
+    /**
+     * H1.1b (V2) — opcode de carga de elemento según el tipo de elemento del
+     * array. `byte`/`word`/... son almacenamiento estrecho (1-2 bytes/elem);
+     * el load extiende el valor a i32 en la pila (zero-ext para unsigned,
+     * sign-ext para signed). Si el array no es de un tipo narrow conocido,
+     * cae al ALOAD genérico de 4 bytes (comportamiento previo intacto).
+     */
+    private OpCode aloadOpFor(IExpr arrayExpr) {
+        BpType t = info.exprTypes.get(arrayExpr);
+        if (t instanceof ArrayType) {
+            BpType el = ((ArrayType) t).element;
+            if (el instanceof PrimitiveType) {
+                switch (((PrimitiveType) el).tag) {
+                    case UINT8:  return OpCode.ALOAD_U8;
+                    case INT8:   return OpCode.ALOAD_I8;
+                    case UINT16: return OpCode.ALOAD_U16;
+                    case INT16:  return OpCode.ALOAD_I16;
+                    case LONG:   return OpCode.ALOAD_I64;   // H1.2 (V2)
+                    default:     break;
+                }
+            }
+        }
+        return OpCode.ALOAD;
+    }
+
+    /**
+     * H1.1b (V2) — opcode de store de elemento según el tipo de elemento. El
+     * store trunca el i32 de la pila al ancho del elemento (idéntico para
+     * signed/unsigned: misma truncación de bits). Default: ASTORE de 4 bytes.
+     */
+    private OpCode astoreOpFor(IExpr arrayExpr) {
+        BpType t = info.exprTypes.get(arrayExpr);
+        if (t instanceof ArrayType) {
+            BpType el = ((ArrayType) t).element;
+            if (el instanceof PrimitiveType) {
+                switch (((PrimitiveType) el).tag) {
+                    case UINT8: case INT8:    return OpCode.ASTORE_I8;
+                    case UINT16: case INT16:  return OpCode.ASTORE_I16;
+                    case LONG:                return OpCode.ASTORE_I64;   // H1.2 (V2)
+                    default:                  break;
+                }
+            }
+        }
+        return OpCode.ASTORE;
     }
 
     /**
@@ -3724,6 +3838,10 @@ public final class MivmEmitter {
         return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.FLOAT;
     }
 
+    private boolean isLong(BpType t) {   // H1.2 (V2)
+        return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.LONG;
+    }
+
     private BpType typeRefToBpType(TypeRef ref) {
         // Útil mientras no haya un mapeo expuesto desde el analyzer.
         if (ref instanceof SimpleTypeRef) {
@@ -3733,6 +3851,11 @@ public final class MivmEmitter {
                 case "float":   return PrimitiveType.FLOAT;
                 case "string":  return PrimitiveType.STRING;
                 case "boolean": return PrimitiveType.BOOLEAN;
+                case "long":    return PrimitiveType.LONG;     // H1.2 (V2)
+                case "byte":    return PrimitiveType.UINT8;
+                case "int8":    return PrimitiveType.INT8;
+                case "word":    return PrimitiveType.UINT16;
+                case "int16":   return PrimitiveType.INT16;
             }
         }
         return null;
@@ -3750,6 +3873,13 @@ public final class MivmEmitter {
                 && srcT instanceof PrimitiveType
                 && ((PrimitiveType) srcT).tag == PrimitiveType.Kind.INTEGER) {
             w.emit(OpCode.I2F);
+            return;
+        }
+        // H1.2 — int/narrow → long (widening) en asignación/param/return.
+        if (pt.tag == PrimitiveType.Kind.LONG
+                && srcT instanceof PrimitiveType
+                && ((PrimitiveType) srcT).isIntegerLike()) {
+            w.emit(OpCode.I32_TO_I64);
             return;
         }
         // any primitive → string (cuando el contexto pide string, e.g. concat)

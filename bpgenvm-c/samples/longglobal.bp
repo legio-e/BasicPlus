@@ -1,0 +1,20 @@
+module LongGlobal
+
+    // H1.2b: variable long a nivel modulo (global, 8 bytes), usada entre funciones.
+
+    var counter: long
+
+    function bump(n: long)
+        counter := counter + n
+    end bump
+
+    function Main()
+        counter := 10000000000L
+        print "c0 =", counter
+        bump(5000000000L)
+        print "c1 =", counter
+        bump(1L)
+        print "c2 =", counter
+    end Main
+
+end LongGlobal

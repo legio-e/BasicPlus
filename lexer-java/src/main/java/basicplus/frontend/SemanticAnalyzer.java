@@ -262,6 +262,15 @@ public final class SemanticAnalyzer {
         // Versión llamable desde user BP (sin __): aloca int array de tamaño `size`
         // inicializado a ceros. Equivalente a __growIntArray(null, size).
         addBuiltin(s, "newIntArray",    INT_ARRAY,           new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
+        // H1.1 (V2) — byte[] first-class: aloca un byte[] (UINT8, 1 byte/elem,
+        // zero-init). El emisor lo traduce a NEWARRAY_I8 inline (la VM ya lo
+        // implementa; sin builtin nuevo). Paralelo a newIntArray.
+        BpType BYTE_ARRAY = new ArrayType(PrimitiveType.UINT8);
+        addBuiltin(s, "newByteArray",   BYTE_ARRAY,          new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
+        // H1.2 (V2) — long[]: aloca un long[] (8 bytes/elem, zero-init).
+        // El emisor lo traduce a NEWARRAY_I64 inline (la VM ya lo implementa).
+        BpType LONG_ARRAY = new ArrayType(PrimitiveType.LONG);
+        addBuiltin(s, "newLongArray",   LONG_ARRAY,          new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
         addBuiltin(s, "__charsToString", PrimitiveType.STRING, new String[]{"chars","len"},   new BpType[]{INT_ARRAY, PrimitiveType.INTEGER});
         addBuiltin(s, "charCodeAt",     PrimitiveType.INTEGER, new String[]{"s","i"},          new BpType[]{PrimitiveType.STRING, PrimitiveType.INTEGER});
 
@@ -845,6 +854,7 @@ public final class SemanticAnalyzer {
                 case "int8":    return PrimitiveType.INT8;
                 case "word":    return PrimitiveType.UINT16;
                 case "int16":   return PrimitiveType.INT16;
+                case "long":    return PrimitiveType.LONG;   // H1.2 (V2)
                 default:        return resolveNamedType(st);
             }
         }
@@ -1341,6 +1351,7 @@ public final class SemanticAnalyzer {
 
     private String exprKey(IExpr e) {
         if (e instanceof IntLitExpr)    return "int:"   + ((IntLitExpr) e).value;
+        if (e instanceof LongLitExpr)   return "long:"  + ((LongLitExpr) e).value;
         if (e instanceof FloatLitExpr)  return "float:" + ((FloatLitExpr) e).value;
         if (e instanceof StringLitExpr) return "str:"   + ((StringLitExpr) e).value;
         if (e instanceof BoolLitExpr)   return "bool:"  + ((BoolLitExpr) e).value;
@@ -1461,6 +1472,7 @@ public final class SemanticAnalyzer {
     private BpType analyzeExpr(IExpr e, Scope scope, BpType expected) {
         BpType t;
         if      (e instanceof IntLitExpr)    t = PrimitiveType.INTEGER;
+        else if (e instanceof LongLitExpr)   t = PrimitiveType.LONG;   // H1.2 (V2)
         else if (e instanceof FloatLitExpr)  t = PrimitiveType.FLOAT;
         else if (e instanceof StringLitExpr) t = PrimitiveType.STRING;
         else if (e instanceof BoolLitExpr)   t = PrimitiveType.BOOLEAN;
@@ -1882,14 +1894,17 @@ public final class SemanticAnalyzer {
                 err(b.line, b.column, "'" + b.op + "' requiere numéricos, encontrados '" + lt.display() + "' y '" + rt.display() + "'");
                 return ErrorType.INSTANCE;
             case "mod":
-                // L10 — los tipos narrow son integer-like al cargar (load auto-promote);
-                // mod opera siempre como i32 y devuelve integer.
-                if (isIntegerLike(lt) && isIntegerLike(rt)) return PrimitiveType.INTEGER;
-                err(b.line, b.column, "'mod' requiere integer");
+                // L10 — narrow son integer-like al cargar (auto-promote a i32).
+                // H1.2 — si algún operando es long, mod opera en i64 → long.
+                if ((isIntegerLike(lt) || isLong(lt)) && (isIntegerLike(rt) || isLong(rt)))
+                    return (isLong(lt) || isLong(rt)) ? PrimitiveType.LONG : PrimitiveType.INTEGER;
+                err(b.line, b.column, "'mod' requiere integer/long");
                 return ErrorType.INSTANCE;
             case "&": case "|": case "xor": case "shl": case "shr":
-                if (isIntegerLike(lt) && isIntegerLike(rt)) return PrimitiveType.INTEGER;
-                err(b.line, b.column, "'" + b.op + "' requiere integer");
+                // H1.2 — bitwise/shift en i64 si algún operando es long.
+                if ((isIntegerLike(lt) || isLong(lt)) && (isIntegerLike(rt) || isLong(rt)))
+                    return (isLong(lt) || isLong(rt)) ? PrimitiveType.LONG : PrimitiveType.INTEGER;
+                err(b.line, b.column, "'" + b.op + "' requiere integer/long");
                 return ErrorType.INSTANCE;
             case "and": case "or":
                 if (PrimitiveType.BOOLEAN.isAssignableFrom(lt) && PrimitiveType.BOOLEAN.isAssignableFrom(rt))
@@ -1920,10 +1935,18 @@ public final class SemanticAnalyzer {
         return t instanceof PrimitiveType && ((PrimitiveType) t).isIntegerLike();
     }
 
+    private static boolean isLong(BpType t) {   // H1.2 (V2)
+        return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.LONG;
+    }
+
     private static BpType promote(BpType a, BpType b) {
         boolean aIsFloat = a instanceof PrimitiveType && ((PrimitiveType) a).tag == PrimitiveType.Kind.FLOAT;
         boolean bIsFloat = b instanceof PrimitiveType && ((PrimitiveType) b).tag == PrimitiveType.Kind.FLOAT;
         if (aIsFloat || bIsFloat) return PrimitiveType.FLOAT;
+        // H1.2 — si alguno es long (y ninguno float), el resultado es long.
+        boolean aIsLong = a instanceof PrimitiveType && ((PrimitiveType) a).tag == PrimitiveType.Kind.LONG;
+        boolean bIsLong = b instanceof PrimitiveType && ((PrimitiveType) b).tag == PrimitiveType.Kind.LONG;
+        if (aIsLong || bIsLong) return PrimitiveType.LONG;
         return PrimitiveType.INTEGER;
     }
 

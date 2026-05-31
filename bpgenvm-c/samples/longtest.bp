@@ -1,0 +1,18 @@
+module LongTest
+
+    // H1.2a slice-i: literales long, aritmetica, comparaciones, mixto int+long.
+    // Todos los valores exceden 2^31 (2147483647) para probar los 64 bits.
+
+    function Main()
+        print "a   =", 3000000000L
+        print "sum =", 3000000000L + 1000000000L
+        print "mul =", 2000000L * 3000000L
+        print "neg =", -5000000000L
+        print "div =", 9000000000L / 3L
+        print "mod =", 10000000007L mod 1000L
+        print "cmp =", 10000000000L > 9999999999L
+        print "mix =", 3000000000L + 5
+        print "band=", 12884901895L & 255L
+    end Main
+
+end LongTest

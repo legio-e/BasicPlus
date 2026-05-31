@@ -1101,6 +1101,14 @@ public final class ModuleInterface {
             case "float":   return PrimitiveType.FLOAT;
             case "string":  return PrimitiveType.STRING;
             case "boolean": return PrimitiveType.BOOLEAN;
+            // H1.1 (V2) — tipos estrechos en .bpi (byte[]/word[]/int8[]/...
+            // cross-module). El serializador escribe el nombre del enum en
+            // minúsculas (typeToString: tag.name().toLowerCase()): UINT8→"uint8",
+            // UINT16→"uint16", etc. Aquí el round-trip de vuelta al singleton.
+            case "int8":    return PrimitiveType.INT8;
+            case "uint8":   return PrimitiveType.UINT8;
+            case "int16":   return PrimitiveType.INT16;
+            case "uint16":  return PrimitiveType.UINT16;
             case "any":     return BpType.AnyType.INSTANCE;
             default:
                 // L2: identificador no-primitivo → asumimos clase del mismo

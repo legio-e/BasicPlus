@@ -8,6 +8,7 @@ public enum TokenType {
 
     // ---- Literales ----
     INTEGER_LIT,
+    LONG_LIT,        // H1.2 (V2): literal long i64 con sufijo L (p.ej. 5L)
     FLOAT_LIT,
     STRING_LIT,
 
@@ -62,6 +63,9 @@ public enum TokenType {
 
     // ---- Palabras clave: tipos primitivos ----
     INTEGER, FLOAT, STRING, BOOLEAN,
+
+    // ---- H1.2 (V2): long = entero de 64 bits (i64) ----
+    LONG,
 
     // ---- Palabras clave: tipos enteros estrechos (L10) ----
     // `byte` = uint8, `int8` = signed 8-bit, `word` = uint16, `int16` =

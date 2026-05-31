@@ -1,0 +1,43 @@
+module ByteTest
+
+    // H1.1 (V2) - prueba de byte[] first-class.
+    // Verifica: newByteArray (NEWARRAY_I8), store de 1 byte (ASTORE_I8 via
+    // cast byte() y literal hex), load con zero-extend (ALOAD_U8), byte[] como
+    // parametro de funcion y zero-init.
+
+    function fillSeq(buf: byte[], n: integer)
+        var i: integer := 0
+        while i < n do
+            buf[i] := byte(i * 10)
+            i := i + 1
+        endwh
+    end fillSeq
+
+    function sumBytes(buf: byte[], n: integer): integer
+        var s: integer := 0
+        var i: integer := 0
+        while i < n do
+            s := s + buf[i]
+            i := i + 1
+        endwh
+        return s
+    end sumBytes
+
+    function Main()
+        var n: integer := 6
+        var b: byte[] := newByteArray(n)
+        print "zero-init b3 =", b[3]
+        fillSeq(b, n)
+        var i: integer := 0
+        while i < n do
+            print "b", i, "=", b[i]
+            i := i + 1
+        endwh
+        print "sum =", sumBytes(b, n)
+        b[0] := 0xFF
+        print "b0 hex =", b[0]
+        b[1] := byte(200)
+        print "b1 cast =", b[1]
+    end Main
+
+end ByteTest

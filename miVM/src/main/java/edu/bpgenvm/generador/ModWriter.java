@@ -59,6 +59,7 @@ public class ModWriter {
     private final List<CallFixup> callFixups = new ArrayList<>();
 
     private final List<String> currentParams = new ArrayList<>();
+    private final List<Integer> currentParamSizes = new ArrayList<>();  // H1.2: ancho por param (4/8)
 
     private static class LocalSlot {
         String name;
@@ -130,6 +131,7 @@ public class ModWriter {
 
     private final List<byte[]> symbolBytes = new ArrayList<>();
     private final Map<String, Integer> dataSymbolOffset = new HashMap<>();
+    private final java.util.Set<String> longGlobals = new java.util.HashSet<>();  // H1.2: globals long (8 bytes)
     private int currentNegativeOffset = 0;
 
     private int currentBytecodeSize = 0;
@@ -242,6 +244,7 @@ public class ModWriter {
         currentLabelMap = new HashMap<>();
         nextLabelId = 0;
         currentParams.clear();
+        currentParamSizes.clear();
         currentLocalSlots.clear();
         currentLocalsBytes = 0;
     }
@@ -309,6 +312,14 @@ public class ModWriter {
     public void declareGlobal(String name) {
         if (dataSymbolOffset.containsKey(name)) return;
         addConstantInt(name, 0);
+    }
+
+    // H1.2 (V2): global long = 8 bytes (zero-init). emitGet/SetGlobal detectan
+    // que es long y emiten GET_GLOBAL_L/SET_GLOBAL_L.
+    public void declareGlobalLong(String name) {
+        if (dataSymbolOffset.containsKey(name)) return;
+        registerSymbol(name, new byte[8]);
+        longGlobals.add(name);
     }
 
     /**
@@ -413,8 +424,32 @@ public class ModWriter {
 
     // --- Params y locales ---
 
-    public void declareParam(String paramName) {
-        if (!currentParams.contains(paramName)) currentParams.add(paramName);
+    public void declareParam(String paramName) { declareParam(paramName, 4); }
+
+    // H1.2 (V2): param con ancho explícito (long = 8 bytes / 2 slots).
+    public void declareParam(String paramName, int sizeBytes) {
+        if (!currentParams.contains(paramName)) {
+            currentParams.add(paramName);
+            currentParamSizes.add(sizeBytes);
+        }
+    }
+
+    // H1.2 (V2): offset (negativo, desde bp) del param `index`, width-aware:
+    //   offset = -12 - (suma de anchos de params index..fin). Para params de
+    //   4 bytes coincide con la fórmula previa -12 - 4*(n-index).
+    private int paramOffset(int index) {
+        int off = -12;
+        for (int j = index; j < currentParamSizes.size(); j++) off -= currentParamSizes.get(j);
+        return off;
+    }
+
+    // Nº de slots de 4 bytes que ocupan los params (long = 2 slots). Para
+    // params i32/ref coincide con currentParams.size() → backward-compatible
+    // con el operando que RET emitía antes.
+    private int paramSlots() {
+        int slots = 0;
+        for (int sz : currentParamSizes) slots += sz / 4;
+        return slots;
     }
 
     public void declareLocal(String localName) {
@@ -426,6 +461,20 @@ public class ModWriter {
         s.isArray = false;
         currentLocalSlots.add(s);
         currentLocalsBytes += 4;
+    }
+
+    // H1.2 (V2): local long = 8 bytes (2 slots). El frame (ENTER) crece solo
+    // porque se calcula desde currentLocalsBytes. emitGet/SetLocal detectan
+    // sizeBytes==8 y emiten GET_LOCAL_L/SET_LOCAL_L.
+    public void declareLocalLong(String localName) {
+        if (findLocalSlot(localName) != null) return;
+        LocalSlot s = new LocalSlot();
+        s.name = localName;
+        s.offsetBytes = currentLocalsBytes;
+        s.sizeBytes = 8;
+        s.isArray = false;
+        currentLocalSlots.add(s);
+        currentLocalsBytes += 8;
     }
 
     public void declareLocalArray(String localName, int length) {
@@ -847,6 +896,12 @@ public class ModWriter {
         currentBytecodeSize += 2;
     }
 
+    // H1.2 (V2): inmediato de 64 bits big-endian para LPUSH (operand IMM_I64).
+    public void emitLong(long value) throws IOException {
+        codeOut.writeLong(value);
+        currentBytecodeSize += 8;
+    }
+
     public void emitPushFloat(float v) throws IOException {
         codeOut.writeByte(OpCode.FPUSH.code);
         codeOut.writeInt(Float.floatToRawIntBits(v));
@@ -940,14 +995,26 @@ public class ModWriter {
     public void emitGetParam(String paramName) throws IOException {
         int index = currentParams.indexOf(paramName);
         if (index == -1) throw new RuntimeException("Parámetro no declarado: " + paramName);
-        int offset = -12 - (4 * (currentParams.size() - index));
+        int offset = paramOffset(index);
+        if (currentParamSizes.get(index) == 8) {   // H1.2: param long → GET_LOCAL_L
+            codeOut.writeByte(OpCode.GET_LOCAL_L.code);
+            codeOut.writeShort((short) offset);
+            currentBytecodeSize += 3;
+            return;
+        }
         emitLocalAccessOptimal(offset, OpCode.GET_LOCAL, OpCode.GET_LOCAL_S8);
     }
 
     public void emitSetParam(String paramName) throws IOException {
         int index = currentParams.indexOf(paramName);
         if (index == -1) throw new RuntimeException("Parámetro no declarado: " + paramName);
-        int offset = -12 - (4 * (currentParams.size() - index));
+        int offset = paramOffset(index);
+        if (currentParamSizes.get(index) == 8) {   // H1.2: param long → SET_LOCAL_L
+            codeOut.writeByte(OpCode.SET_LOCAL_L.code);
+            codeOut.writeShort((short) offset);
+            currentBytecodeSize += 3;
+            return;
+        }
         emitLocalAccessOptimal(offset, OpCode.SET_LOCAL, OpCode.SET_LOCAL_S8);
     }
 
@@ -955,6 +1022,12 @@ public class ModWriter {
         LocalSlot s = findLocalSlot(localName);
         if (s == null) throw new RuntimeException("Variable local no declarada: " + localName);
         if (s.isArray) throw new RuntimeException("La local '" + localName + "' es un array; usa emitLeaLocal.");
+        if (s.sizeBytes == 8) {   // H1.2: long local → GET_LOCAL_L (8 bytes)
+            codeOut.writeByte(OpCode.GET_LOCAL_L.code);
+            codeOut.writeShort((short) s.offsetBytes);
+            currentBytecodeSize += 3;
+            return;
+        }
         emitLocalAccessOptimal(s.offsetBytes, OpCode.GET_LOCAL, OpCode.GET_LOCAL_S8);
     }
 
@@ -962,6 +1035,12 @@ public class ModWriter {
         LocalSlot s = findLocalSlot(localName);
         if (s == null) throw new RuntimeException("Variable local no declarada: " + localName);
         if (s.isArray) throw new RuntimeException("La local '" + localName + "' es un array; no se puede asignar por valor.");
+        if (s.sizeBytes == 8) {   // H1.2: long local → SET_LOCAL_L (8 bytes)
+            codeOut.writeByte(OpCode.SET_LOCAL_L.code);
+            codeOut.writeShort((short) s.offsetBytes);
+            currentBytecodeSize += 3;
+            return;
+        }
         emitLocalAccessOptimal(s.offsetBytes, OpCode.SET_LOCAL, OpCode.SET_LOCAL_S8);
     }
 
@@ -973,16 +1052,26 @@ public class ModWriter {
 
     public void emitRet() throws IOException {
         codeOut.writeByte(OpCode.RET.code);
-        codeOut.writeByte((byte) currentParams.size());
+        codeOut.writeByte((byte) paramSlots());   // H1.2: slot-count (long=2), no nº params
+        currentBytecodeSize += 2;
+    }
+
+    // H1.2 (V2): RET para función que devuelve long (return value de 8 bytes).
+    // Mismo teardown que RET; el operando sigue siendo el slot-count de params.
+    public void emitLRet() throws IOException {
+        codeOut.writeByte(OpCode.LRET.code);
+        codeOut.writeByte((byte) paramSlots());
         currentBytecodeSize += 2;
     }
 
     // --- Acceso a símbolos del data block (i32) ---
 
     public void emitGetGlobal(String name) throws IOException {
+        if (longGlobals.contains(name)) { emitGlobalAccess(name, OpCode.GET_GLOBAL_L); return; }  // H1.2
         emitGlobalAccessOptimal(name, OpCode.GET_GLOBAL, OpCode.GET_GLOBAL_S8);
     }
     public void emitSetGlobal(String name) throws IOException {
+        if (longGlobals.contains(name)) { emitGlobalAccess(name, OpCode.SET_GLOBAL_L); return; }  // H1.2
         emitGlobalAccessOptimal(name, OpCode.SET_GLOBAL, OpCode.SET_GLOBAL_S8);
     }
     public void emitLeaGlobal(String name) throws IOException {

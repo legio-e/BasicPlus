@@ -188,7 +188,51 @@ public enum OpCode {
     //   desde su run(), el saved PC apunta a 0 y aquí se lee THREAD_EXIT.
     //   HALT (0x00) sigue existiendo pero termina la VM ENTERA (sólo legal
     //   en el thread main; en un worker es un error fatal).
-    THREAD_EXIT    (0x70, OperandKind.NONE);
+    THREAD_EXIT    (0x70, OperandKind.NONE),
+
+    // ============================================================
+    // H1.2 (V2) — long (i64). Tipo de 8 bytes / 2 slots. Mismo set de
+    // operaciones que i32 pero con opcodes propios. El operand stack es
+    // byte-addressed (sp = offset en bytes), así que un push de long es
+    // escribir 8 bytes y sp += 8 — natural, sin "2 slots" a nivel VM.
+    // Aritmética: pop 16 (2 longs), push 8. Comparaciones: pop 16, push 4
+    // (bool i32). Conversiones I32_TO_I64 (sign-extend) / I64_TO_I32 (trunc).
+    // GET/SET_LOCAL_L y GET/SET_GLOBAL_L mueven 8 bytes. NEWARRAY/ALOAD/
+    // ASTORE_I64 = arrays de 8 bytes/elem. LRET = return de 8 bytes (mismo
+    // teardown que RET; su operando sigue siendo el slot-count de params).
+    // ============================================================
+    LPUSH          (0x71, OperandKind.IMM_I64),
+    LADD           (0x72, OperandKind.NONE),
+    LSUB           (0x73, OperandKind.NONE),
+    LMUL           (0x74, OperandKind.NONE),
+    LDIV           (0x75, OperandKind.NONE),
+    LMOD           (0x76, OperandKind.NONE),
+    LNEG           (0x77, OperandKind.NONE),
+    LBAND          (0x78, OperandKind.NONE),
+    LBOR           (0x79, OperandKind.NONE),
+    LBXOR          (0x7A, OperandKind.NONE),
+    LBNOT          (0x7B, OperandKind.NONE),
+    LSHL           (0x7C, OperandKind.NONE),
+    LSHR_S         (0x7D, OperandKind.NONE),
+    LSHR_U         (0x7E, OperandKind.NONE),
+    LEQ            (0x7F, OperandKind.NONE),
+    LNEQ           (0x80, OperandKind.NONE),
+    LLT            (0x81, OperandKind.NONE),
+    LLE            (0x82, OperandKind.NONE),
+    LGT            (0x83, OperandKind.NONE),
+    LGE            (0x84, OperandKind.NONE),
+    LPRINT         (0x85, OperandKind.NONE),
+    LPRINT_NONL    (0x86, OperandKind.NONE),
+    I32_TO_I64     (0x87, OperandKind.NONE),
+    I64_TO_I32     (0x88, OperandKind.NONE),
+    GET_LOCAL_L    (0x89, OperandKind.SOFF_I16),
+    SET_LOCAL_L    (0x8A, OperandKind.SOFF_I16),
+    GET_GLOBAL_L   (0x8B, OperandKind.SOFF_I16),
+    SET_GLOBAL_L   (0x8C, OperandKind.SOFF_I16),
+    NEWARRAY_I64   (0x8D, OperandKind.NONE),
+    ALOAD_I64      (0x8E, OperandKind.NONE),
+    ASTORE_I64     (0x8F, OperandKind.NONE),
+    LRET           (0x90, OperandKind.IMM_U8);
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;
@@ -204,6 +248,7 @@ public enum OpCode {
     public enum OperandKind {
         NONE          (0),
         IMM_I32       (4),
+        IMM_I64       (8),
         IMM_U8        (1),
         SOFF_I8       (1),   // offset signed de 1 byte para variantes compactas
         SOFF_I16      (2),

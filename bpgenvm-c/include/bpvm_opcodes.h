@@ -132,4 +132,38 @@
 #define OP_LEA_GLOBAL_S8   0x6C
 #define OP_THREAD_EXIT     0x70
 
+/* 0x71..0x90 — H1.2 (V2): long (i64). 8 bytes / 2 slots. */
+#define OP_LPUSH           0x71
+#define OP_LADD            0x72
+#define OP_LSUB            0x73
+#define OP_LMUL            0x74
+#define OP_LDIV            0x75
+#define OP_LMOD            0x76
+#define OP_LNEG            0x77
+#define OP_LBAND           0x78
+#define OP_LBOR            0x79
+#define OP_LBXOR           0x7A
+#define OP_LBNOT           0x7B
+#define OP_LSHL            0x7C
+#define OP_LSHR_S          0x7D
+#define OP_LSHR_U          0x7E
+#define OP_LEQ             0x7F
+#define OP_LNEQ            0x80
+#define OP_LLT             0x81
+#define OP_LLE             0x82
+#define OP_LGT             0x83
+#define OP_LGE             0x84
+#define OP_LPRINT          0x85
+#define OP_LPRINT_NONL     0x86
+#define OP_I32_TO_I64      0x87
+#define OP_I64_TO_I32      0x88
+#define OP_GET_LOCAL_L     0x89
+#define OP_SET_LOCAL_L     0x8A
+#define OP_GET_GLOBAL_L    0x8B
+#define OP_SET_GLOBAL_L    0x8C
+#define OP_NEWARRAY_I64    0x8D
+#define OP_ALOAD_I64       0x8E
+#define OP_ASTORE_I64      0x8F
+#define OP_LRET            0x90
+
 #endif /* BPVM_OPCODES_H */

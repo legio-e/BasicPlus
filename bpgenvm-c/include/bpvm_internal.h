@@ -41,6 +41,7 @@
 #define BPVM_TYPE_ARRAY_I32 2
 #define BPVM_TYPE_ARRAY_REF 3
 #define BPVM_TYPE_OBJECT    4
+#define BPVM_TYPE_ARRAY_I64 5   /* H1.2 (V2): array de long, 8 bytes/elem */
 
 /* Header de objeto en heap. */
 #define BPVM_OBJ_HEADER_SIZE 8
@@ -287,6 +288,15 @@ static inline void bpvm_write_u32_be(uint8_t* p, uint32_t v) {
 }
 static inline void bpvm_write_i32_be(uint8_t* p, int32_t v) {
     bpvm_write_u32_be(p, (uint32_t) v);
+}
+/* H1.2 (V2): long i64 big-endian (high word en p, low en p+4). */
+static inline int64_t bpvm_read_i64_be(const uint8_t* p) {
+    return (int64_t)(((uint64_t) bpvm_read_u32_be(p) << 32)
+                   |  (uint64_t) bpvm_read_u32_be(p + 4));
+}
+static inline void bpvm_write_i64_be(uint8_t* p, int64_t v) {
+    bpvm_write_u32_be(p,     (uint32_t)((uint64_t) v >> 32));
+    bpvm_write_u32_be(p + 4, (uint32_t)  v);
 }
 
 /* Acceso al memory[] por dirección absoluta. Sin bounds-check en

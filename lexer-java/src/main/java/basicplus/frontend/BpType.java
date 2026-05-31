@@ -55,7 +55,8 @@ public abstract class BpType {
          */
         public enum Kind {
             INTEGER, FLOAT, STRING, BOOLEAN,
-            INT8, UINT8, INT16, UINT16
+            INT8, UINT8, INT16, UINT16,
+            LONG   // H1.2 (V2): entero de 64 bits (i64)
         }
 
         public final Kind tag;
@@ -69,6 +70,7 @@ public abstract class BpType {
         public static final PrimitiveType UINT8   = new PrimitiveType(Kind.UINT8);   // byte
         public static final PrimitiveType INT16   = new PrimitiveType(Kind.INT16);   // short
         public static final PrimitiveType UINT16  = new PrimitiveType(Kind.UINT16);  // word
+        public static final PrimitiveType LONG    = new PrimitiveType(Kind.LONG);    // i64 (H1.2)
 
         @Override public String display() {
             switch (tag) {
@@ -83,6 +85,7 @@ public abstract class BpType {
         @Override public boolean isScalar()  { return true; }
         @Override public boolean isNumeric() {
             return tag == Kind.INTEGER || tag == Kind.FLOAT
+                || tag == Kind.LONG
                 || isNarrowInteger();
         }
 
@@ -117,6 +120,13 @@ public abstract class BpType {
             if (tag == Kind.INTEGER && source instanceof PrimitiveType
                     && ((PrimitiveType) source).isNarrowInteger())
                 return true;
+            // H1.2 — int/narrow → long (widening, sin pérdida).
+            if (tag == Kind.LONG && source instanceof PrimitiveType
+                    && ((PrimitiveType) source).isIntegerLike())
+                return true;
+            // NOTA: long ↔ float se difiere a H1.3 (double), donde se añade la
+            // matriz de conversiones i32/i64/f32/f64. Hasta entonces NO es
+            // asignable (evita emitir I2F sobre un valor de 8 bytes).
             // L10 — INTEGER → estrecho: SÓLO si la fuente es a su vez
             // del mismo tipo (ya cubierto por sameAs). Cualquier otra
             // asignación necesita cast explícito y NO pasa por aquí —

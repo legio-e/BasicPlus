@@ -1,0 +1,22 @@
+module LongArr
+
+    // H1.2c: long[] — arrays de 8 bytes/elem (NEWARRAY_I64/ALOAD_I64/ASTORE_I64).
+
+    function Main()
+        var a: long[] := newLongArray(4)
+        print "zero =", a[0]
+        a[0] := 5000000000L
+        a[1] := a[0] * 2L
+        a[2] := 10000000007L
+        a[3] := a[0] + a[2]
+        var i: integer := 0
+        var sum: long := 0L
+        while i < 4 do
+            print "a", i, "=", a[i]
+            sum := sum + a[i]
+            i := i + 1
+        endwh
+        print "sum =", sum
+    end Main
+
+end LongArr

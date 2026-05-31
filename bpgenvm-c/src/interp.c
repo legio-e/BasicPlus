@@ -56,6 +56,13 @@ static void emit_int(bpvm_t* vm, int32_t v, int newline) {
     if (n > 0) emit_text(vm, buf, (size_t) n);
 }
 
+/* H1.2 (V2): print de un long (i64). %lld + cast a long long para portabilidad. */
+static void emit_long(bpvm_t* vm, int64_t v, int newline) {
+    char buf[32];
+    int n = snprintf(buf, sizeof(buf), newline ? "%lld\n" : "%lld", (long long) v);
+    if (n > 0) emit_text(vm, buf, (size_t) n);
+}
+
 static void emit_newline(bpvm_t* vm) {
     emit_text(vm, "\n", 1);
 }
@@ -486,6 +493,21 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp += 4;
             break;
         }
+        case OP_LRET: {  /* H1.2 (V2): RET con return value de 8 bytes (long). */
+            uint8_t params_count = mem[pc++];   /* slot-count de params */
+            sp -= 8; int64_t ret_val = bpvm_read_i64_be(mem + sp);
+            int32_t saved_pc = bpvm_read_i32_be(mem + bp - 12);
+            int32_t saved_bp = bpvm_read_i32_be(mem + bp - 8);
+            int32_t saved_cs = bpvm_read_i32_be(mem + bp - 4);
+            uint32_t target_caller_sp = bp - 12 - (uint32_t) params_count * 4;
+            pc = (uint32_t) saved_pc;
+            bp = (uint32_t) saved_bp;
+            cs = (uint32_t) saved_cs;
+            sp = target_caller_sp;
+            bpvm_write_i64_be(mem + sp, ret_val);
+            sp += 8;
+            break;
+        }
         case OP_ENTER: {
             uint16_t bytes = bpvm_read_u16_be(mem + pc); pc += 2;
             sp += bytes;
@@ -630,6 +652,145 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_I32_TO_U16: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
             bpvm_write_i32_be(mem + sp, v & 0xFFFF); sp += 4; break;
+        }
+
+        /* ---- H1.2 (V2): long (i64). 8 bytes / 2 slots; paridad VM Java. ---- */
+        case OP_LPUSH: {
+            int64_t v = bpvm_read_i64_be(mem + pc); pc += 8;
+            bpvm_write_i64_be(mem + sp, v); sp += 8; break;
+        }
+        case OP_LADD: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                        sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                        bpvm_write_i64_be(mem+sp, a + b); sp += 8; break; }
+        case OP_LSUB: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                        sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                        bpvm_write_i64_be(mem+sp, a - b); sp += 8; break; }
+        case OP_LMUL: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                        sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                        bpvm_write_i64_be(mem+sp, a * b); sp += 8; break; }
+        case OP_LDIV: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                        sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                        if (b == 0) {
+                            tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+                            uint32_t ref = bpvm_throw_runtime_error(vm, tc, "División por cero");
+                            if (ref && bpvm_eh_unwind(vm, tc, ref)) {
+                                pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+                                mem = vm->memory; break;
+                            }
+                            exit_status = BPVM_ERR_RUNTIME;
+                            if (yielded) *yielded = 1;
+                            goto done;
+                        }
+                        bpvm_write_i64_be(mem+sp, a / b); sp += 8; break; }
+        case OP_LMOD: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                        sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                        if (b == 0) {
+                            tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+                            uint32_t ref = bpvm_throw_runtime_error(vm, tc, "Módulo por cero");
+                            if (ref && bpvm_eh_unwind(vm, tc, ref)) {
+                                pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+                                mem = vm->memory; break;
+                            }
+                            exit_status = BPVM_ERR_RUNTIME;
+                            if (yielded) *yielded = 1;
+                            goto done;
+                        }
+                        bpvm_write_i64_be(mem+sp, a % b); sp += 8; break; }
+        case OP_LNEG: { sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                        bpvm_write_i64_be(mem+sp, -a); sp += 8; break; }
+        case OP_LBAND: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                         sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                         bpvm_write_i64_be(mem+sp, a & b); sp += 8; break; }
+        case OP_LBOR: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                        sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                        bpvm_write_i64_be(mem+sp, a | b); sp += 8; break; }
+        case OP_LBXOR: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                         sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                         bpvm_write_i64_be(mem+sp, a ^ b); sp += 8; break; }
+        case OP_LBNOT: { sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                         bpvm_write_i64_be(mem+sp, ~a); sp += 8; break; }
+        case OP_LSHL: { sp -= 8; int64_t n = bpvm_read_i64_be(mem+sp);
+                        sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                        bpvm_write_i64_be(mem+sp, (int64_t)((uint64_t) a << (n & 63))); sp += 8; break; }
+        case OP_LSHR_S: { sp -= 8; int64_t n = bpvm_read_i64_be(mem+sp);
+                          sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                          bpvm_write_i64_be(mem+sp, a >> (n & 63)); sp += 8; break; }
+        case OP_LSHR_U: { sp -= 8; int64_t n = bpvm_read_i64_be(mem+sp);
+                          sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                          bpvm_write_i64_be(mem+sp, (int64_t)((uint64_t) a >> (n & 63))); sp += 8; break; }
+        case OP_LEQ: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                       sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                       bpvm_write_i32_be(mem+sp, a == b ? 1 : 0); sp += 4; break; }
+        case OP_LNEQ: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                        sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                        bpvm_write_i32_be(mem+sp, a != b ? 1 : 0); sp += 4; break; }
+        case OP_LLT: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                       sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                       bpvm_write_i32_be(mem+sp, a <  b ? 1 : 0); sp += 4; break; }
+        case OP_LLE: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                       sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                       bpvm_write_i32_be(mem+sp, a <= b ? 1 : 0); sp += 4; break; }
+        case OP_LGT: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                       sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                       bpvm_write_i32_be(mem+sp, a >  b ? 1 : 0); sp += 4; break; }
+        case OP_LGE: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
+                       sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
+                       bpvm_write_i32_be(mem+sp, a >= b ? 1 : 0); sp += 4; break; }
+        case OP_LPRINT: { sp -= 8; int64_t v = bpvm_read_i64_be(mem+sp);
+                          emit_long(vm, v, 1); break; }
+        case OP_LPRINT_NONL: { sp -= 8; int64_t v = bpvm_read_i64_be(mem+sp);
+                               emit_long(vm, v, 0); break; }
+        case OP_I32_TO_I64: { sp -= 4; int32_t v = bpvm_read_i32_be(mem+sp);
+                              bpvm_write_i64_be(mem+sp, (int64_t) v); sp += 8; break; }
+        case OP_I64_TO_I32: { sp -= 8; int64_t v = bpvm_read_i64_be(mem+sp);
+                              bpvm_write_i32_be(mem+sp, (int32_t) v); sp += 4; break; }
+        case OP_GET_LOCAL_L: {
+            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int64_t v = bpvm_read_i64_be(mem + (uint32_t)((int32_t) bp + soff));
+            bpvm_write_i64_be(mem + sp, v); sp += 8; break;
+        }
+        case OP_SET_LOCAL_L: {
+            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            sp -= 8; int64_t v = bpvm_read_i64_be(mem + sp);
+            bpvm_write_i64_be(mem + (uint32_t)((int32_t) bp + soff), v); break;
+        }
+        case OP_GET_GLOBAL_L: {
+            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int64_t v = bpvm_read_i64_be(mem + (uint32_t)((int32_t) cs + soff));
+            bpvm_write_i64_be(mem + sp, v); sp += 8; break;
+        }
+        case OP_SET_GLOBAL_L: {
+            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            sp -= 8; int64_t v = bpvm_read_i64_be(mem + sp);
+            bpvm_write_i64_be(mem + (uint32_t)((int32_t) cs + soff), v); break;
+        }
+        case OP_NEWARRAY_I64: {
+            sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
+            if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 8, BPVM_TYPE_ARRAY_I64);
+            if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
+            bpvm_write_u32_be(mem + ref, (uint32_t) size);
+            bpvm_write_i32_be(mem + sp, (int32_t) ref); sp += 4;
+            mem = vm->memory;
+            break;
+        }
+        case OP_ALOAD_I64: {
+            sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            int64_t v = bpvm_read_i64_be(mem + ref + 4 + (uint32_t) idx * 8);
+            bpvm_write_i64_be(mem + sp, v); sp += 8;
+            break;
+        }
+        case OP_ASTORE_I64: {
+            sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
+            sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
+            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            bpvm_write_i64_be(mem + ref + 4 + (uint32_t) idx * 8, v);
+            break;
         }
 
         /* ---- F2: arrays ---- */

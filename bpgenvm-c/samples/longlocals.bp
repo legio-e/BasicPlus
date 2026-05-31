@@ -1,0 +1,27 @@
+module LongLocals
+
+    // H1.2a slice-ii: variables long LOCALES (GET/SET_LOCAL_L, 8 bytes),
+    // acumulador i64 en bucle, widening int->long en var-decl.
+
+    function Main()
+        var x: long := 5000000000L
+        var y: long := 3L
+        print "x   =", x
+        print "x*y =", x * y
+
+        var sum: long := 0L
+        var i: integer := 0
+        while i < 5 do
+            sum := sum + 1000000000L
+            i := i + 1
+        endwh
+        print "sum =", sum
+
+        var z: long := 2000000000           // int 2e9 -> long (widening, sin L)
+        print "z   =", z + 1000000000L
+
+        x := x + 1L
+        print "x++ =", x
+    end Main
+
+end LongLocals

@@ -1,0 +1,29 @@
+module LongFn
+
+    // H1.2b: params long, return long, params de ancho mixto, recursion-free 20!.
+
+    function addL(a: long, b: long): long
+        return a + b
+    end addL
+
+    function factL(n: integer): long
+        var r: long := 1L
+        var i: integer := 1
+        while i <= n do
+            r := r * i          // i (int) se promociona a long en r*i
+            i := i + 1
+        endwh
+        return r
+    end factL
+
+    function mixParam(base: long, k: integer): long
+        return base + k         // param long de 8 bytes + param int de 4 bytes
+    end mixParam
+
+    function Main()
+        print "addL   =", addL(3000000000L, 4000000000L)
+        print "fact20 =", factL(20)
+        print "mix    =", mixParam(5000000000L, 7)
+    end Main
+
+end LongFn

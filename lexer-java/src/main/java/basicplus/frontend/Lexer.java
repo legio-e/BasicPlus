@@ -118,6 +118,7 @@ public final class Lexer {
         m.put("float",    TokenType.FLOAT);
         m.put("string",   TokenType.STRING);
         m.put("boolean",  TokenType.BOOLEAN);
+        m.put("long",     TokenType.LONG);   // H1.2 (V2): entero 64-bit
         // tipos enteros estrechos (L10)
         m.put("byte",     TokenType.BYTE);
         m.put("int8",     TokenType.INT8);
@@ -383,13 +384,17 @@ public final class Lexer {
                 return new Token(TokenType.FLOAT_LIT, lex, 0.0, startLine, startColumn);
             }
         } else {
+            // H1.2 (V2): sufijo L/l tras un entero decimal → literal long (i64).
+            boolean isLong = false;
+            if (peek() == 'L' || peek() == 'l') { advance(); isLong = true; }
+            TokenType ity = isLong ? TokenType.LONG_LIT : TokenType.INTEGER_LIT;
             try {
                 long n = Long.parseLong(lex);
-                return new Token(TokenType.INTEGER_LIT, lex, n, startLine, startColumn);
+                return new Token(ity, lex, n, startLine, startColumn);
             } catch (NumberFormatException nfe) {
                 errors.add(new LexerError("literal entero inválido o fuera de rango: " + lex,
                         startLine, startColumn));
-                return new Token(TokenType.INTEGER_LIT, lex, 0L, startLine, startColumn);
+                return new Token(ity, lex, 0L, startLine, startColumn);
             }
         }
     }

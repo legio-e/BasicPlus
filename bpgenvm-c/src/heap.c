@@ -37,6 +37,7 @@ static uint32_t block_total_size(const bpvm_t* vm, uint32_t header_addr) {
     case BPVM_TYPE_ARRAY_I8:  payload = length;          break;
     case BPVM_TYPE_ARRAY_I16: payload = length * 2;      break;
     case BPVM_TYPE_ARRAY_I32: payload = length * 4;      break;
+    case BPVM_TYPE_ARRAY_I64: payload = length * 8;      break;   /* H1.2 (V2) */
     case BPVM_TYPE_ARRAY_REF: payload = length * 4;      break;
     case BPVM_TYPE_OBJECT: {
         /* length = class_ptr absoluto. Leemos num_fields del descriptor. */

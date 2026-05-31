@@ -1,0 +1,23 @@
+module ByteLib
+
+    // H1.1 cross-module: funciones con byte[] como parametro (atraviesa .bpi).
+
+    public function fill(buf: byte[], n: integer)
+        var i: integer := 0
+        while i < n do
+            buf[i] := byte(i + 1)
+            i := i + 1
+        endwh
+    end fill
+
+    public function checksum(buf: byte[], n: integer): integer
+        var s: integer := 0
+        var i: integer := 0
+        while i < n do
+            s := s + buf[i]
+            i := i + 1
+        endwh
+        return s
+    end checksum
+
+end ByteLib
