@@ -1,0 +1,27 @@
+module GcCorrect
+
+    // H3-A correctness: el GC proactivo corre AHORA a mitad de ejecución, con
+    // objetos vivos. `a` y `b` están referenciados por locals todo el rato
+    // (roots) → deben sobrevivir los ~muchos GCs disparados por la basura.
+    // Si el GC proactivo liberara algo vivo, los valores saldrían corruptos.
+
+    function Main()
+        var a: integer[] := newIntArray(5)
+        var b: integer[] := newIntArray(5)
+        a[0] := 111
+        a[4] := 444
+        b[0] := 222
+        b[4] := 555
+
+        var i: integer := 0
+        while i < 5000 do
+            var junk: integer[] := newIntArray(20)   // basura → dispara GCs proactivos
+            i := i + 1
+        endwh
+
+        print "a:", a[0], a[4]      // 111 444
+        print "b:", b[0], b[4]      // 222 555
+        print "frag:", heapFrag()
+    end Main
+
+end GcCorrect

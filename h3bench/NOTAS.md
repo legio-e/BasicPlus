@@ -112,3 +112,35 @@ Supervivientes dispersos fragmentan; el mixto no lo empeora drásticamente.
 - [ ] Implementar las 2 mejoras baratas y re-medir over-commit en el realista.
 - [ ] (opc.) Prototipo TLSF no-moving: comparar tiempos/frag vs first-fit.
 - [ ] (opc.) Premura de OOM con heap pequeño (--mem) bajo supervivientes disp.
+
+---
+
+## A implementado (VM-Java): GC proactivo por umbral + heapNext-retreat
+
+Dos mejoras MODEL-AGNOSTIC (valen igual si algún día se añade compactación):
+1. **Disparo de GC por umbral**: si el bump avanzó >= gcBumpThreshold (~1/8 del
+   heap, suelo 4 KB) desde el último GC, colecta ANTES de seguir bumpeando.
+   (`gcSafepoint()` extraído; lo usan el umbral y la ruta de OOM.)
+2. **heapNext-retreat**: si el run libre FINAL del sweep toca heapNext, baja
+   heapNext (devuelve al bump) en vez de meterlo en la free list.
+
+### Resultado (workload realista `fragreal.bp`)
+| | committed (pico) | bumpRemain | GCs a mitad |
+|---|---|---|---|
+| antes de A | 146 KB | 113 KB | 0 |
+| **con A**  | **60 KB** | 199 KB | 3 |
+
+→ **-59% de pico de heap** para el mismo workload; memoria devuelta (heapNext
+retrocedió 65052→60360).
+
+### Correctness
+- `gccorrect.bp`: 2 arrays con valores conocidos sobreviven ~4 GCs proactivos
+  (disparados por 5000 basuras) bajo SMP (workers=2): a=111/444, b=222/555 OK.
+- `utf8test` (strings en heap) idéntico tras el cambio de GC: sin regresión.
+
+### Notas
+- `gcBumpThreshold` ~1/8 del heap es un trade-off (committed bajo ↔ nº de GCs);
+  tunable, podría exponerse en BpVM.cfg para afinar por placa.
+- **Pendiente**: portar las 2 mejoras a la **VM-C** (donde la memoria MÁS importa,
+  en el MCU). Antes verificar si la VM-C ya tiene free-list+coalescing o sigue en
+  bump-sin-reuse (la nota vieja del backlog) — puede requerir más trabajo.

@@ -513,6 +513,12 @@ public class VirtualMachine {
     private int heapStart;   // = STACK_BASE, en el constructor
     private int heapNext;    // = STACK_BASE, en el constructor
     private int freeListHead = 0;          // 0 = lista vacía (no hay objetos en addr 0)
+    // H3: GC proactivo + retorno de memoria.
+    //   lastGcHeapNext  = heapNext en el último GC (mide el crecimiento de bump).
+    //   gcBumpThreshold = bump máx. desde el último GC antes de colectar
+    //                     proactivamente (evita over-commit; ~1/8 del heap).
+    private int lastGcHeapNext = 0;
+    private int gcBumpThreshold = 1 << 16;
 
     // Tag bits del header del objeto
     private static final int TAG_MARK_BIT  = 0x80000000;
@@ -833,6 +839,7 @@ public class VirtualMachine {
         this.BP         = stackBase;
         this.heapStart  = stackBase;
         this.heapNext   = stackBase;
+        this.lastGcHeapNext = stackBase;
         this.nextStackBase = stackBase + MAIN_STACK_BYTES;
 
         // memory[0] = 0x70 (opcode THREAD_EXIT). Es la sentinela de salida
@@ -921,6 +928,10 @@ public class VirtualMachine {
         this.heapStart = addr;
         this.heapNext  = addr;
         this.freeListHead = 0;
+        // H3: base del umbral de GC proactivo, fijada con el heapStart real
+        // (tras cargar el data block). Umbral ~1/8 del heap, con suelo de 4 KB.
+        this.lastGcHeapNext = addr;
+        this.gcBumpThreshold = Math.max(4096, (STACK_BASE - addr) / 8);
     }
 
     public void injectMemory(int targetAddress, byte[] data) {
@@ -992,6 +1003,12 @@ public class VirtualMachine {
                 if (myTid >= 0) parkedInHeapAlloc.remove(myTid);
             }
 
+            // H3: GC PROACTIVO por umbral de crecimiento de bump. Evita el
+            // over-commit (que el heap suba a su pico de bump antes de colectar):
+            // si el bump ha avanzado >= umbral desde el último GC, colecta ahora.
+            if (heapNext - lastGcHeapNext >= gcBumpThreshold) {
+                gcSafepoint(myTid);
+            }
             int addr = tryAllocateInner(totalSize);
             if (addr != -1) {
                 int tag = (type << TAG_TYPE_SHIFT);
@@ -1011,28 +1028,7 @@ public class VirtualMachine {
             // desactualizado y liberará objetos que aún están en uso, dejando
             // refs colgantes que se manifiestan como bytecodes basura,
             // direcciones inválidas, mutex.id corruptos, etc.
-            gcInProgress = true;
-            stopTheWorld = true;
-            if (myTid >= 0) parkedInHeapAlloc.add(myTid);
-            vmLock.notifyAll();
-            try {
-                while (anyOtherThreadRunning(myTid)) {
-                    try { vmLock.wait(); }
-                    catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException("heapAlloc interrumpido esperando safepoint");
-                    }
-                }
-                // Mundo parado: GC seguro. Nos desmarcamos de parked porque
-                // ya estamos ejecutando GC (no esperando).
-                if (myTid >= 0) parkedInHeapAlloc.remove(myTid);
-                gcLocked();
-            } finally {
-                if (myTid >= 0) parkedInHeapAlloc.remove(myTid);
-                stopTheWorld = false;
-                gcInProgress = false;
-                vmLock.notifyAll();
-            }
+            gcSafepoint(myTid);
             addr = tryAllocateInner(totalSize);
             if (addr == -1) {
                 throw new RuntimeException("Heap overflow tras GC: pido " + totalSize
@@ -1043,6 +1039,36 @@ public class VirtualMachine {
             int userRef2 = addr + 4;
             if (me != null) me.allocAnchor = userRef2;
             return userRef2;
+        }
+    }
+
+    /**
+     * Corre un GC stop-the-world (safepoint B1). DEBE invocarse con vmLock
+     * adquirido. Lo usan tanto el disparo PROACTIVO por umbral como la ruta
+     * de OOM (bump+free-list agotados).
+     */
+    private void gcSafepoint(int myTid) {
+        gcInProgress = true;
+        stopTheWorld = true;
+        if (myTid >= 0) parkedInHeapAlloc.add(myTid);
+        vmLock.notifyAll();
+        try {
+            while (anyOtherThreadRunning(myTid)) {
+                try { vmLock.wait(); }
+                catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("heapAlloc interrumpido esperando safepoint");
+                }
+            }
+            // Mundo parado: GC seguro. Nos desmarcamos de parked porque ya
+            // estamos ejecutando GC (no esperando).
+            if (myTid >= 0) parkedInHeapAlloc.remove(myTid);
+            gcLocked();
+        } finally {
+            if (myTid >= 0) parkedInHeapAlloc.remove(myTid);
+            stopTheWorld = false;
+            gcInProgress = false;
+            vmLock.notifyAll();
         }
     }
 
@@ -1246,8 +1272,13 @@ public class VirtualMachine {
             addr += size;
         }
         if (pendingFreeStart != -1) {
-            addToFreeList(pendingFreeStart, pendingFreeSize);
+            // H3: el run libre FINAL toca heapNext → retroceder heapNext
+            // (devolverlo al bump) en vez de meterlo en la free list. Recupera
+            // memoria sin compactar. (Los runs intermedios sí van a free list.)
+            heapNext = pendingFreeStart;
         }
+        // H3: base para el umbral de GC proactivo (heapNext ya retrocedido).
+        lastGcHeapNext = heapNext;
 
         int afterFreeListBytes = 0;
         {
