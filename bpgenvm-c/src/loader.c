@@ -295,6 +295,11 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
     vm->next_free_address = end_addr + 64; /* margen entre módulos */
     vm->heap_start        = vm->next_free_address;
     vm->heap_next         = vm->heap_start;
+    /* H3 (V2): init del GC con free-list + umbral, con el heap_start real. */
+    vm->free_list_head    = 0;
+    vm->last_gc_heap_next = vm->heap_next;
+    vm->gc_bump_threshold = (vm->stack_base - vm->heap_start) / 8;
+    if (vm->gc_bump_threshold < 4096) vm->gc_bump_threshold = 4096;
 
     if (main_offset >= 0 && vm->main_absolute_address == 0) {
         vm->main_absolute_address = code_start + (uint32_t) main_offset;

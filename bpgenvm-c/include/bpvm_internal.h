@@ -202,6 +202,11 @@ struct bpvm {
     uint32_t next_free_address;
     uint32_t heap_start;       /* fijado tras último módulo cargado */
     uint32_t heap_next;        /* bump del heap (F2) */
+    /* H3 (V2): GC con free-list + reuso + coalescing + retreat + disparo por
+     * umbral (espejo de la VM-Java). Bloque libre = [tag FREE][size@+4][next@+8]. */
+    uint32_t free_list_head;   /* 0 = lista vacía */
+    uint32_t last_gc_heap_next;/* heap_next en el último GC (base del umbral) */
+    uint32_t gc_bump_threshold;/* bump máx. desde el último GC antes de colectar (0 = off) */
 
     /* Módulos cargados. */
     bpvm_module_t modules[BPVM_MAX_MODULES];

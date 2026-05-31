@@ -144,3 +144,40 @@ retrocedió 65052→60360).
 - **Pendiente**: portar las 2 mejoras a la **VM-C** (donde la memoria MÁS importa,
   en el MCU). Antes verificar si la VM-C ya tiene free-list+coalescing o sigue en
   bump-sin-reuse (la nota vieja del backlog) — puede requerir más trabajo.
+
+---
+
+## A portado a la VM-C (HECHO)
+
+Hallazgo: la VM-C SÍ era **bump-sin-reuse** (la nota vieja era correcta para C).
+El sweep marcaba FREE pero NO reusaba → OOM inevitable en churn largo. Era EL
+acantilado del backlog, y estaba en el MCU (donde más duele).
+
+El port fue subir el GC de C al nivel del Java (más que copiar A), espejo de la
+VM-Java validada:
+- free-list first-fit + split (`try_allocate_inner`)
+- sweep que reconstruye la free-list COALESCIENDO runs adyacentes
+- `heap_next`-retreat (run libre final devuelto al bump)
+- disparo de GC por umbral (`gc_bump_threshold` ~1/8 del heap)
+- bloque libre = `[tag FREE][size@+4][next@+8]`; `block_total_size` con caso FREE
+- `gc_stw` extraído (umbral + OOM lo comparten)
+- campos nuevos en `struct bpvm` + init en loader.c/bpvm.c
+
+Validación (host C VM):
+- **REUSO** (churnbig): 50000 arrays = ~4.4 MB en heap de 254 KB → COMPLETA
+  ("done 50000"). Antes (bump-sin-reuse) OOM-eaba a los ~2500.
+- **CORRECTNESS** (gccorrectc): survivors intactos tras 20000 basuras (muchos
+  GCs), IDÉNTICO a la VM-Java (a=111/444, b=222/555) → paridad.
+- **NO-REGRESIÓN**: utf8test (strings UTF-8) + strops (concat/charAt/substring
+  bajo GC) idénticos.
+
+⚠️ Gotcha de build: el Makefile NO trackea dependencias de cabecera → editar
+`bpvm_internal.h` (la struct) NO recompila los .c que la incluyen → mismatch de
+layout → "PC fuera de rango". Solución: `make clean && make` tras tocar headers.
+(2ª vez que pasa, tras H1.4 → candidato a arreglar el Makefile con `-MMD -MP`.)
+
+## Estado de H3
+Decisión tomada y aplicada en AMBAS VMs: **no-moving + free-list + coalescing +
+mejoras model-agnostic (umbral + heap_next-retreat)**. Compactación diferida
+(con pinning ya diseñado) solo si un workload real exhibe la patología de
+supervivientes dispersos.

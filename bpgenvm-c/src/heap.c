@@ -31,6 +31,11 @@ static uint32_t align4(uint32_t v) {
  * el tag del header. Sirve tanto para objetos vivos como para libres. */
 static uint32_t block_total_size(const bpvm_t* vm, uint32_t header_addr) {
     uint32_t tag    = bpvm_read_u32_be(vm->memory + header_addr);
+    /* H3: bloque libre → su tamaño total (header incluido) está en +4, lo
+     * escribe add_to_free_list. No recalcular desde type/length. */
+    if (tag & BPVM_TAG_FREE_BIT) {
+        return bpvm_read_u32_be(vm->memory + header_addr + 4);
+    }
     uint32_t length = bpvm_read_u32_be(vm->memory + header_addr + 4);
     int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
     uint32_t payload;
@@ -140,36 +145,111 @@ static void gc_mark_phase(bpvm_t* vm) {
     /* 2. allocAnchor — TODO en F2.b cuando se añada el campo al thread. */
 }
 
+/* H3: añade un bloque libre [tag FREE][size@+4][next@+8] al head de la lista. */
+static void add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {
+    uint8_t* mem = vm->memory;
+    bpvm_write_u32_be(mem + addr,     BPVM_TAG_FREE_BIT);
+    bpvm_write_u32_be(mem + addr + 4, size);
+    bpvm_write_u32_be(mem + addr + 8, vm->free_list_head);
+    vm->free_list_head = addr;
+}
+
+/* H3 (V2): sweep que RECONSTRUYE la free-list coalesciendo runs de bloques
+ * libres/muertos adyacentes, y RETROCEDE heap_next si el run final lo toca
+ * (devuelve memoria al bump sin compactar). Espejo del gcLocked de la VM-Java. */
 static void gc_sweep_phase(bpvm_t* vm) {
+    uint8_t* mem = vm->memory;
+    vm->free_list_head = 0;
     uint32_t cur = vm->heap_start;
-    uint32_t freed = 0;
-    uint32_t kept  = 0;
+    uint32_t freed = 0, kept = 0;
+    uint32_t pend_start = 0, pend_size = 0;   /* 0 = sin run pendiente (heap_start>0) */
     while (cur < vm->heap_next) {
         uint32_t total = block_total_size(vm, cur);
         if (total == 0) break;
-        uint32_t tag = bpvm_read_u32_be(vm->memory + cur);
-        if (tag & BPVM_TAG_MARK_BIT) {
-            /* Vivo: quita el bit mark para la próxima ronda. */
-            tag &= ~BPVM_TAG_MARK_BIT;
-            bpvm_write_u32_be(vm->memory + cur, tag);
-            kept += total;
-        } else if (!(tag & BPVM_TAG_FREE_BIT)) {
-            /* No marcado y no ya libre: liberar. */
-            tag |= BPVM_TAG_FREE_BIT;
-            bpvm_write_u32_be(vm->memory + cur, tag);
+        uint32_t tag = bpvm_read_u32_be(mem + cur);
+        int is_free     = (tag & BPVM_TAG_FREE_BIT) != 0;
+        int is_unmarked = !is_free && !(tag & BPVM_TAG_MARK_BIT);
+        if (is_free || is_unmarked) {
+            if (pend_start == 0) { pend_start = cur; pend_size = 0; }
+            pend_size += total;
             freed += total;
+        } else {
+            /* Vivo: cierra el run pendiente y limpia el mark. */
+            if (pend_start != 0) { add_to_free_list(vm, pend_start, pend_size); pend_start = 0; }
+            tag &= ~BPVM_TAG_MARK_BIT;
+            bpvm_write_u32_be(mem + cur, tag);
+            kept += total;
         }
         cur += total;
     }
+    if (pend_start != 0) {
+        /* El run libre FINAL toca heap_next → retroceder (devolver al bump). */
+        vm->heap_next = pend_start;
+    }
+    vm->last_gc_heap_next = vm->heap_next;
     if (vm->tracing) {
-        fprintf(stderr, "[gc] kept=%" PRIu32 " freed=%" PRIu32 " heap=[%" PRIu32 "..%" PRIu32 ")\n",
-                kept, freed, vm->heap_start, vm->heap_next);
+        fprintf(stderr, "[gc] kept=%" PRIu32 " freed=%" PRIu32 " heap=[%" PRIu32 "..%" PRIu32 ") freelist=%s\n",
+                kept, freed, vm->heap_start, vm->heap_next,
+                vm->free_list_head ? "si" : "vacia");
     }
 }
 
 static void bpvm_gc(bpvm_t* vm) {
     gc_mark_phase(vm);
     gc_sweep_phase(vm);
+}
+
+/* H3: GC stop-the-world. Asume vm_lock tomado. Lo usan el disparo proactivo
+ * por umbral y la ruta de OOM. En legacy/single-worker no hay baile. */
+static void gc_stw(bpvm_t* vm) {
+    if (vm->smp) {
+        vm->smp->stop_the_world = true;
+        bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+        while (vm->smp->running_workers > 1) {
+            bpvm_platform_cond_wait(&vm->smp->sched_cond, &vm->smp->vm_lock);
+        }
+    }
+    bpvm_gc(vm);
+    if (vm->smp) {
+        vm->smp->stop_the_world = false;
+        bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+    }
+}
+
+/* H3: intenta asignar `total` bytes. Devuelve la dirección de la cabecera, o
+ * 0 si no cabe (heap_start>0 → 0 nunca es una cabecera válida). 1) free-list
+ * first-fit con split; 2) bump desde heap_next. */
+static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
+    uint8_t* mem = vm->memory;
+    uint32_t prev = 0, cur = vm->free_list_head;
+    while (cur != 0) {
+        uint32_t block_size = bpvm_read_u32_be(mem + cur + 4);
+        if (block_size >= total) {
+            uint32_t next = bpvm_read_u32_be(mem + cur + 8);
+            uint32_t remaining = block_size - total;
+            if (remaining >= BPVM_MIN_FREE_BLOCK) {
+                /* Split: usar [cur, cur+total); dejar el resto libre. */
+                uint32_t nf = cur + total;
+                bpvm_write_u32_be(mem + nf,     BPVM_TAG_FREE_BIT);
+                bpvm_write_u32_be(mem + nf + 4, remaining);
+                bpvm_write_u32_be(mem + nf + 8, next);
+                if (prev == 0) vm->free_list_head = nf;
+                else bpvm_write_u32_be(mem + prev + 8, nf);
+            } else {
+                /* Usar el bloque entero; quitarlo de la lista. */
+                if (prev == 0) vm->free_list_head = next;
+                else bpvm_write_u32_be(mem + prev + 8, next);
+            }
+            return cur;
+        }
+        prev = cur;
+        cur = bpvm_read_u32_be(mem + cur + 8);
+    }
+    /* 2) Bump. */
+    if (vm->heap_next + total > vm->stack_base) return 0;
+    uint32_t addr = vm->heap_next;
+    vm->heap_next += total;
+    return addr;
 }
 
 /* --- API pública del heap ---
@@ -188,56 +268,34 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
      * el lock es no-op. */
     bpvm_smp_lock(vm);
 
-    if (vm->heap_next + total > vm->stack_base) {
-        /* Sin espacio: correr STW GC.
-         *
-         * H2 — DANCE STW: el GC mark-phase scanea tc->sp/stack_base de
-         * TODOS los threads para encontrar roots. Si otro worker está
-         * mid-interp con tc->sp obsoleto (pendiente de sync local), el
-         * scan se pierde refs vivas → free de objetos referenciados →
-         * corrupción heap.
-         *
-         * Solución: izar `stop_the_world`, esperar a que cada worker
-         * llegue al safepoint del interp y se parquee en sched_cond.
-         * Cuando running_workers == 1 (sólo nosotros), corremos GC.
-         * Tras GC: bajamos flag y broadcast para que los workers
-         * resuman.
-         *
-         * En legacy mode no hay smp, no hay otros workers — el GC corre
-         * directo sin dance. */
-        if (vm->smp) {
-            vm->smp->stop_the_world = true;
-            bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
-            /* Esperar a que el resto de workers ceda y se parquee. */
-            while (vm->smp->running_workers > 1) {
-                bpvm_platform_cond_wait(&vm->smp->sched_cond,
-                                         &vm->smp->vm_lock);
-            }
-        }
-        bpvm_gc(vm);
-        if (vm->smp) {
-            vm->smp->stop_the_world = false;
-            bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
-        }
-        /* F2 v1: el sweep marca FREE pero no compacta — el bump pointer
-         * sigue avanzando. Si tras GC el bump todavía no cabe, OOM. */
-        if (vm->heap_next + total > vm->stack_base) {
+    /* H3 (V2): GC PROACTIVO por umbral de crecimiento de bump. Evita el
+     * over-commit (que el heap suba a su pico antes de colectar): si el bump
+     * avanzó >= umbral desde el último GC, colecta ahora. gc_stw hace el baile
+     * STW (mark scanea las pilas de todos los threads → deben estar en
+     * safepoint con tc->sp sincronizado; en legacy/single-worker no hay baile). */
+    if (vm->gc_bump_threshold != 0 &&
+        vm->heap_next - vm->last_gc_heap_next >= vm->gc_bump_threshold) {
+        gc_stw(vm);
+    }
+
+    uint32_t addr = try_allocate_inner(vm, total);
+    if (addr == 0) {
+        /* Sin sitio en free-list ni bump: STW GC y reintentar. */
+        gc_stw(vm);
+        addr = try_allocate_inner(vm, total);
+        if (addr == 0) {
             bpvm_smp_unlock(vm);
-            return 0;
+            return 0;   /* OOM real */
         }
     }
 
-    uint32_t header_addr = vm->heap_next;
-    vm->heap_next += total;
-
     uint32_t tag = ((uint32_t)(type & 0x3F)) << BPVM_TAG_TYPE_SHIFT;
-    bpvm_write_u32_be(vm->memory + header_addr, tag);
-    /* length lo escribe el caller. Pero zero-inicializamos el slot por
-     * si el caller olvida. */
-    bpvm_write_u32_be(vm->memory + header_addr + 4, 0);
+    bpvm_write_u32_be(vm->memory + addr, tag);
+    /* length lo escribe el caller; zero-inicializamos el slot por si lo olvida. */
+    bpvm_write_u32_be(vm->memory + addr + 4, 0);
 
-    uint32_t user_ref = header_addr + 4;
-    /* Zero-inicializar el resto del payload. */
+    uint32_t user_ref = addr + 4;
+    /* Zero-inicializar el resto del payload (importante al reusar free-list). */
     if (payload_bytes > 0) {
         memset(vm->memory + user_ref + 4, 0, payload_bytes);
     }

@@ -1,0 +1,22 @@
+module GcCorrectC
+
+    // H3-A (VM-C) correctness (sin heapFrag, corre en ambas VMs): 2 arrays con
+    // valores conocidos sobreviven ~muchos GCs disparados por 20000 basuras.
+
+    function Main()
+        var a: integer[] := newIntArray(5)
+        var b: integer[] := newIntArray(5)
+        a[0] := 111
+        a[4] := 444
+        b[0] := 222
+        b[4] := 555
+        var i: integer := 0
+        while i < 20000 do
+            var junk: integer[] := newIntArray(20)
+            i := i + 1
+        endwh
+        print "a", a[0], a[4]
+        print "b", b[0], b[4]
+    end Main
+
+end GcCorrectC

@@ -27,6 +27,10 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->next_free_address = BPVM_INITIAL_FREE_ADDR;
     vm->heap_start = (uint32_t) stack_base;   /* sin módulos cargados aún */
     vm->heap_next  = vm->heap_start;
+    /* H3 (V2): el loader fijará el umbral real con el heap_start tras cargar. */
+    vm->free_list_head    = 0;
+    vm->last_gc_heap_next = vm->heap_next;
+    vm->gc_bump_threshold = 0;   /* off hasta entonces */
     vm->main_absolute_address = 0;
 
     /* Pone el byte sentinela en memory[0]. */
