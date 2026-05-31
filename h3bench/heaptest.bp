@@ -1,0 +1,22 @@
+module HeapTest
+
+    // H3 smoke: verifica heapFrag()/heapMap() (diagnóstico solo VM-Java).
+    // Crea basura entre dos objetos vivos, fuerza gc() y mide.
+
+    function Main()
+        var a: integer[] := newIntArray(200)   // vivo
+        var i: integer := 0
+        var junk: integer[] := newIntArray(1)
+        while i < 50 do
+            junk := newIntArray(30)            // 49 mueren, el último queda
+            i := i + 1
+        endwh
+        var b: integer[] := newIntArray(200)   // vivo
+
+        print "antes gc:", heapFrag()
+        gc()
+        print "tras gc :", heapFrag()
+        print heapMap(80)
+    end Main
+
+end HeapTest

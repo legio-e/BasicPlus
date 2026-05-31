@@ -254,7 +254,11 @@ public enum Builtin {
     // ---- H2 (V2) — conversión string <-> byte[] (ambos TYPE_ARRAY_I8;
     //      copia defensiva por la inmutabilidad del string) ----
     TO_BYTES("toBytes"),                 // (s: string) → byte[]
-    FROM_BYTES("fromBytes");             // (b: byte[]) → string
+    FROM_BYTES("fromBytes"),             // (b: byte[]) → string
+
+    // ---- H3 — diagnóstico de heap (SOLO VM-Java; la VM C no las implementa) ----
+    HEAP_FRAG("heapFrag"),               // () → string  (resumen de fragmentación)
+    HEAP_MAP("heapMap");                 // (cols: int) → string (mapa ASCII)
 
     public final String bpName;
     public final int id;

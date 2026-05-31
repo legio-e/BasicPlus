@@ -274,6 +274,9 @@ public final class SemanticAnalyzer {
         //   fromBytes(b): string — interpreta los bytes como UTF-8.
         addBuiltin(s, "toBytes",   BYTE_ARRAY,           new String[]{"s"}, new BpType[]{PrimitiveType.STRING});
         addBuiltin(s, "fromBytes", PrimitiveType.STRING, new String[]{"b"}, new BpType[]{BYTE_ARRAY});
+        // H3 — diagnóstico de heap (SOLO VM-Java; mide fragmentación del GC).
+        addBuiltin(s, "heapFrag",  PrimitiveType.STRING, new String[]{},      new BpType[]{});
+        addBuiltin(s, "heapMap",   PrimitiveType.STRING, new String[]{"cols"}, new BpType[]{PrimitiveType.INTEGER});
         // H1.2 (V2) — long[]: aloca un long[] (8 bytes/elem, zero-init).
         // El emisor lo traduce a NEWARRAY_I64 inline (la VM ya lo implementa).
         BpType LONG_ARRAY = new ArrayType(PrimitiveType.LONG);

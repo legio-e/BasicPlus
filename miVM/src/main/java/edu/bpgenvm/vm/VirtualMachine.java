@@ -1267,6 +1267,93 @@ public class VirtualMachine {
     }
 
     // ====================================================================
+    // H3: herramientas de medición del heap (SOLO VM-Java). El GC es
+    // implementación de VM y el .mod/bytecode es idéntico → lo medido aquí
+    // transfiere conceptualmente; no se duplican en la VM C.
+    // ====================================================================
+
+    /**
+     * Recorre el heap comprometido [heapStart, heapNext) bloque a bloque
+     * (igual que el sweep) y devuelve un resumen de fragmentación.
+     *   frag = 1 - mayorHueco/totalLibre  (fragmentación EXTERNA):
+     *     0   = todo el libre en un único hueco contiguo;
+     *     →1  = libre hecho añicos en muchos huecos pequeños.
+     * El bump-remaining (reserva contigua al final del heap, aún sin
+     * comprometer) se reporta aparte: NO es fragmentación.
+     */
+    public String heapFragReport() {
+        synchronized (vmLock) {
+            int addr = heapStart;
+            long live = 0, free = 0;
+            int holes = 0, largestHole = 0, liveCount = 0;
+            while (addr < heapNext) {
+                int size = objectTotalSize(addr);
+                if (size <= 0) break;
+                if ((readInt32(addr) & TAG_FREE_BIT) != 0) {
+                    free += size; holes++;
+                    if (size > largestHole) largestHole = size;
+                } else {
+                    live += size; liveCount++;
+                }
+                addr += size;
+            }
+            int committed = heapNext - heapStart;
+            int bumpRemain = STACK_BASE - heapNext;
+            double frag = (free > 0) ? 1.0 - (double) largestHole / (double) free : 0.0;
+            double util = (committed > 0) ? (double) live / (double) committed : 0.0;
+            return String.format(java.util.Locale.ROOT,
+                "frag=%.3f util=%.3f | committed=%d vivos=%d(%dobj) libres=%d holes=%d mayorHole=%d bumpRemain=%d",
+                frag, util, committed, live, liveCount, free, holes, largestHole, bumpRemain);
+        }
+    }
+
+    /**
+     * Mapa ASCII del heap comprometido [heapStart, heapNext). Cuantiza en
+     * celdas de `cellBytes` bytes (1 char/celda): '.'=libre, '#'=lleno (todo
+     * vivo), ':'=semi (mezcla vivo/libre dentro de la celda — surge de la
+     * cuantización). Cadena partida cada `cols` columnas.
+     */
+    public String heapMap(int cols) {
+        if (cols < 8) cols = 80;
+        synchronized (vmLock) {
+            int committed = heapNext - heapStart;
+            if (committed <= 0) return "(heap vacío)";
+            // cellBytes (potencia de 2) para que el mapa quepa en <= ~30 filas.
+            int maxCells = cols * 30;
+            int cellBytes = 64;
+            while ((committed + cellBytes - 1) / cellBytes > maxCells) cellBytes <<= 1;
+            int n = (committed + cellBytes - 1) / cellBytes;
+            long[] liveInCell = new long[n];
+            int addr = heapStart;
+            while (addr < heapNext) {
+                int size = objectTotalSize(addr);
+                if (size <= 0) break;
+                if ((readInt32(addr) & TAG_FREE_BIT) == 0) {   // bloque vivo
+                    int s = addr - heapStart, e = s + size;
+                    int c0 = s / cellBytes, c1 = (e - 1) / cellBytes;
+                    for (int c = c0; c <= c1; c++) {
+                        int lo = c * cellBytes, hi = lo + cellBytes;
+                        int ov = Math.min(e, hi) - Math.max(s, lo);
+                        if (ov > 0) liveInCell[c] += ov;
+                    }
+                }
+                addr += size;
+            }
+            StringBuilder sb = new StringBuilder(n + n / cols + 96);
+            sb.append("heap[").append(heapStart).append("..").append(heapNext).append(") ")
+              .append(committed).append("B  1char=").append(cellBytes)
+              .append("B  .=libre #=lleno :=semi\n");
+            for (int c = 0; c < n; c++) {
+                int cellCap = Math.min(cellBytes, committed - c * cellBytes); // última celda parcial
+                long lv = liveInCell[c];
+                sb.append(lv == 0 ? '.' : (lv >= cellCap ? '#' : ':'));
+                if ((c + 1) % cols == 0) sb.append('\n');
+            }
+            return sb.toString();
+        }
+    }
+
+    // ====================================================================
     // Bucle principal
     // ====================================================================
 
@@ -3232,6 +3319,15 @@ public class VirtualMachine {
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = out;
                 pushTc(tc, out);
+                break;
+            }
+            case HEAP_FRAG: {           // H3: diagnóstico (solo VM-Java)
+                pushTc(tc, allocVmString(heapFragReport()));
+                break;
+            }
+            case HEAP_MAP: {            // H3: diagnóstico (solo VM-Java)
+                int cols = popTc(tc);
+                pushTc(tc, allocVmString(heapMap(cols)));
                 break;
             }
 
