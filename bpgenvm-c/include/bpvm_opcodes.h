@@ -166,4 +166,30 @@
 #define OP_ASTORE_I64      0x8F
 #define OP_LRET            0x90
 
+/* 0x91..0xA7 — H1.3 (V2): double (f64). Aritmética + conversiones; el
+ * almacenamiento de 8 bytes se reusa de long. */
+#define OP_DPUSH           0x91
+#define OP_DADD            0x92
+#define OP_DSUB            0x93
+#define OP_DMUL            0x94
+#define OP_DDIV            0x95
+#define OP_DMOD            0x96
+#define OP_DNEG            0x97
+#define OP_DEQ             0x98
+#define OP_DNEQ            0x99
+#define OP_DLT             0x9A
+#define OP_DLE             0x9B
+#define OP_DGT             0x9C
+#define OP_DGE             0x9D
+#define OP_DPRINT          0x9E
+#define OP_DPRINT_NONL     0x9F
+#define OP_I2D             0xA0
+#define OP_D2I             0xA1
+#define OP_L2D             0xA2
+#define OP_D2L             0xA3
+#define OP_F2D             0xA4
+#define OP_D2F             0xA5
+#define OP_L2F             0xA6
+#define OP_F2L             0xA7
+
 #endif /* BPVM_OPCODES_H */

@@ -131,6 +131,28 @@ static inline float bits_to_float(int32_t bits) {
 static inline int32_t float_to_bits(float f) {
     int32_t bits; memcpy(&bits, &f, 4); return bits;
 }
+/* H1.3 (V2): reinterpretación int64↔double (raw bits, sin conversión). */
+static inline double bits_to_double(int64_t bits) {
+    double d; memcpy(&d, &bits, 8); return d;
+}
+static inline int64_t double_to_bits(double d) {
+    int64_t bits; memcpy(&bits, &d, 8); return bits;
+}
+/* H1.3 (V2): formatea un double (%.15g + punto, estilo Java Double.toString
+ * para valores limpios). */
+static void emit_double(bpvm_t* vm, double v, int newline) {
+    char buf[48];
+    int n = snprintf(buf, sizeof(buf), "%.15g", v);
+    if (n <= 0) return;
+    int has_dot = 0;
+    for (int i = 0; i < n; i++) {
+        if (buf[i] == '.' || buf[i] == 'e' || buf[i] == 'E'
+                || buf[i] == 'n' || buf[i] == 'i') { has_dot = 1; break; }
+    }
+    if (!has_dot && n + 2 < (int) sizeof(buf)) { buf[n++] = '.'; buf[n++] = '0'; buf[n] = '\0'; }
+    if (newline && n + 1 < (int) sizeof(buf)) { buf[n++] = '\n'; buf[n] = '\0'; }
+    emit_text(vm, buf, (size_t) n);
+}
 
 /* Ejecuta el thread `tc` durante hasta `max_ops` opcodes o hasta que
  * el thread ceda (yield, sleep, mutex_lock contended, join, HALT,
@@ -792,6 +814,57 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             bpvm_write_i64_be(mem + ref + 4 + (uint32_t) idx * 8, v);
             break;
         }
+
+        /* ---- H1.3 (V2): double (f64). Aritmética + conversiones; paridad VM Java. ---- */
+        case OP_DPUSH: {
+            int64_t bits = bpvm_read_i64_be(mem + pc); pc += 8;
+            bpvm_write_i64_be(mem + sp, bits); sp += 8; break;
+        }
+        case OP_DADD: { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i64_be(mem+sp, double_to_bits(a + b)); sp += 8; break; }
+        case OP_DSUB: { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i64_be(mem+sp, double_to_bits(a - b)); sp += 8; break; }
+        case OP_DMUL: { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i64_be(mem+sp, double_to_bits(a * b)); sp += 8; break; }
+        case OP_DDIV: { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i64_be(mem+sp, double_to_bits(a / b)); sp += 8; break; }
+        case OP_DMOD: { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i64_be(mem+sp, double_to_bits(fmod(a, b))); sp += 8; break; }
+        case OP_DNEG: { sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i64_be(mem+sp, double_to_bits(-a)); sp += 8; break; }
+        case OP_DEQ:  { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i32_be(mem+sp, a == b ? 1 : 0); sp += 4; break; }
+        case OP_DNEQ: { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i32_be(mem+sp, a != b ? 1 : 0); sp += 4; break; }
+        case OP_DLT:  { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i32_be(mem+sp, a <  b ? 1 : 0); sp += 4; break; }
+        case OP_DLE:  { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i32_be(mem+sp, a <= b ? 1 : 0); sp += 4; break; }
+        case OP_DGT:  { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i32_be(mem+sp, a >  b ? 1 : 0); sp += 4; break; }
+        case OP_DGE:  { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        bpvm_write_i32_be(mem+sp, a >= b ? 1 : 0); sp += 4; break; }
+        case OP_DPRINT:      { sp -= 8; double v = bits_to_double(bpvm_read_i64_be(mem+sp)); emit_double(vm, v, 1); break; }
+        case OP_DPRINT_NONL: { sp -= 8; double v = bits_to_double(bpvm_read_i64_be(mem+sp)); emit_double(vm, v, 0); break; }
+        case OP_I2D: { sp -= 4; int32_t v = bpvm_read_i32_be(mem+sp); bpvm_write_i64_be(mem+sp, double_to_bits((double) v)); sp += 8; break; }
+        case OP_D2I: { sp -= 8; double d = bits_to_double(bpvm_read_i64_be(mem+sp)); bpvm_write_i32_be(mem+sp, (int32_t) d); sp += 4; break; }
+        case OP_L2D: { sp -= 8; int64_t v = bpvm_read_i64_be(mem+sp); bpvm_write_i64_be(mem+sp, double_to_bits((double) v)); sp += 8; break; }
+        case OP_D2L: { sp -= 8; double d = bits_to_double(bpvm_read_i64_be(mem+sp)); bpvm_write_i64_be(mem+sp, (int64_t) d); sp += 8; break; }
+        case OP_F2D: { sp -= 4; float f = bits_to_float(bpvm_read_i32_be(mem+sp)); bpvm_write_i64_be(mem+sp, double_to_bits((double) f)); sp += 8; break; }
+        case OP_D2F: { sp -= 8; double d = bits_to_double(bpvm_read_i64_be(mem+sp)); bpvm_write_i32_be(mem+sp, float_to_bits((float) d)); sp += 4; break; }
+        case OP_L2F: { sp -= 8; int64_t v = bpvm_read_i64_be(mem+sp); bpvm_write_i32_be(mem+sp, float_to_bits((float) v)); sp += 4; break; }
+        case OP_F2L: { sp -= 4; float f = bits_to_float(bpvm_read_i32_be(mem+sp)); bpvm_write_i64_be(mem+sp, (int64_t) f); sp += 8; break; }
 
         /* ---- F2: arrays ---- */
         case OP_NEWARRAY: {

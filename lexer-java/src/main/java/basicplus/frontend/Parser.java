@@ -333,6 +333,7 @@ public final class Parser {
             case INT16:      baseType = new SimpleTypeRef("int16",   tok.line, tok.column); advance(); break;
             case SHORT:      baseType = new SimpleTypeRef("int16",   tok.line, tok.column); advance(); break;
             case LONG:       baseType = new SimpleTypeRef("long",    tok.line, tok.column); advance(); break;   // H1.2 (V2)
+            case DOUBLE:     baseType = new SimpleTypeRef("double",  tok.line, tok.column); advance(); break;   // H1.3 (V2)
             case IDENTIFIER: {
                 String first = tok.lexeme;
                 advance();
@@ -1049,6 +1050,11 @@ public final class Parser {
                 advance();
                 long v = (tok.value instanceof Long) ? (Long) tok.value : 0L;
                 return new LongLitExpr(v, tok.line, tok.column);
+            }
+            case DOUBLE_LIT: {
+                advance();
+                double v = (tok.value instanceof Double) ? (Double) tok.value : 0.0;
+                return new DoubleLitExpr(v, tok.line, tok.column);
             }
             case STRING_LIT: {
                 advance();

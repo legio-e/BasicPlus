@@ -2463,6 +2463,111 @@ public class VirtualMachine {
                     break;
                 }
 
+                // ---- H1.3 (V2): double (f64). Aritmética + conversiones. ----
+                case 0x91: { // DPUSH
+                    long bits = readI64(mem, pc); pc += 8;
+                    writeI64(mem, sp, bits); sp += 8; break;
+                }
+                case 0x92: { // DADD
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI64(mem, sp, Double.doubleToRawLongBits(a + b)); sp += 8; break;
+                }
+                case 0x93: { // DSUB
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI64(mem, sp, Double.doubleToRawLongBits(a - b)); sp += 8; break;
+                }
+                case 0x94: { // DMUL
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI64(mem, sp, Double.doubleToRawLongBits(a * b)); sp += 8; break;
+                }
+                case 0x95: { // DDIV
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI64(mem, sp, Double.doubleToRawLongBits(a / b)); sp += 8; break;
+                }
+                case 0x96: { // DMOD
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI64(mem, sp, Double.doubleToRawLongBits(a % b)); sp += 8; break;
+                }
+                case 0x97: { // DNEG
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI64(mem, sp, Double.doubleToRawLongBits(-a)); sp += 8; break;
+                }
+                case 0x98: { // DEQ
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI32(mem, sp, a == b ? 1 : 0); sp += 4; break;
+                }
+                case 0x99: { // DNEQ
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI32(mem, sp, a != b ? 1 : 0); sp += 4; break;
+                }
+                case 0x9A: { // DLT
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI32(mem, sp, a <  b ? 1 : 0); sp += 4; break;
+                }
+                case 0x9B: { // DLE
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI32(mem, sp, a <= b ? 1 : 0); sp += 4; break;
+                }
+                case 0x9C: { // DGT
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI32(mem, sp, a >  b ? 1 : 0); sp += 4; break;
+                }
+                case 0x9D: { // DGE
+                    sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI32(mem, sp, a >= b ? 1 : 0); sp += 4; break;
+                }
+                case 0x9E: { // DPRINT
+                    sp -= 8; double v = Double.longBitsToDouble(readI64(mem, sp));
+                    programOut.writeText(Double.toString(v)); programOut.newline(); break;
+                }
+                case 0x9F: { // DPRINT_NONL
+                    sp -= 8; double v = Double.longBitsToDouble(readI64(mem, sp));
+                    programOut.writeText(Double.toString(v)); break;
+                }
+                case 0xA0: { // I2D
+                    sp -= 4; int v = readI32(mem, sp);
+                    writeI64(mem, sp, Double.doubleToRawLongBits((double) v)); sp += 8; break;
+                }
+                case 0xA1: { // D2I
+                    sp -= 8; double d = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI32(mem, sp, (int) d); sp += 4; break;
+                }
+                case 0xA2: { // L2D
+                    sp -= 8; long v = readI64(mem, sp);
+                    writeI64(mem, sp, Double.doubleToRawLongBits((double) v)); sp += 8; break;
+                }
+                case 0xA3: { // D2L
+                    sp -= 8; double d = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI64(mem, sp, (long) d); sp += 8; break;
+                }
+                case 0xA4: { // F2D
+                    sp -= 4; float f = Float.intBitsToFloat(readI32(mem, sp));
+                    writeI64(mem, sp, Double.doubleToRawLongBits((double) f)); sp += 8; break;
+                }
+                case 0xA5: { // D2F
+                    sp -= 8; double d = Double.longBitsToDouble(readI64(mem, sp));
+                    writeI32(mem, sp, Float.floatToRawIntBits((float) d)); sp += 4; break;
+                }
+                case 0xA6: { // L2F
+                    sp -= 8; long v = readI64(mem, sp);
+                    writeI32(mem, sp, Float.floatToRawIntBits((float) v)); sp += 4; break;
+                }
+                case 0xA7: { // F2L
+                    sp -= 4; float f = Float.intBitsToFloat(readI32(mem, sp));
+                    writeI64(mem, sp, (long) f); sp += 8; break;
+                }
+
                 case 0x5A: { // CALL_BUILTIN
                     int id = readI16(mem, pc) & 0xFFFF; pc += 2;
                     // Sincronizamos al ThreadContext antes de entrar al builtin:

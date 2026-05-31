@@ -271,6 +271,10 @@ public final class SemanticAnalyzer {
         // El emisor lo traduce a NEWARRAY_I64 inline (la VM ya lo implementa).
         BpType LONG_ARRAY = new ArrayType(PrimitiveType.LONG);
         addBuiltin(s, "newLongArray",   LONG_ARRAY,          new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
+        // H1.3 (V2) — double[]: aloca un double[] (8 bytes/elem, zero-init).
+        // Reusa NEWARRAY_I64 (almacenamiento opaco de 8 bytes).
+        BpType DOUBLE_ARRAY = new ArrayType(PrimitiveType.DOUBLE);
+        addBuiltin(s, "newDoubleArray", DOUBLE_ARRAY,        new String[]{"size"},          new BpType[]{PrimitiveType.INTEGER});
         addBuiltin(s, "__charsToString", PrimitiveType.STRING, new String[]{"chars","len"},   new BpType[]{INT_ARRAY, PrimitiveType.INTEGER});
         addBuiltin(s, "charCodeAt",     PrimitiveType.INTEGER, new String[]{"s","i"},          new BpType[]{PrimitiveType.STRING, PrimitiveType.INTEGER});
 
@@ -855,6 +859,7 @@ public final class SemanticAnalyzer {
                 case "word":    return PrimitiveType.UINT16;
                 case "int16":   return PrimitiveType.INT16;
                 case "long":    return PrimitiveType.LONG;   // H1.2 (V2)
+                case "double":  return PrimitiveType.DOUBLE; // H1.3 (V2)
                 default:        return resolveNamedType(st);
             }
         }
@@ -1352,6 +1357,7 @@ public final class SemanticAnalyzer {
     private String exprKey(IExpr e) {
         if (e instanceof IntLitExpr)    return "int:"   + ((IntLitExpr) e).value;
         if (e instanceof LongLitExpr)   return "long:"  + ((LongLitExpr) e).value;
+        if (e instanceof DoubleLitExpr) return "double:" + ((DoubleLitExpr) e).value;
         if (e instanceof FloatLitExpr)  return "float:" + ((FloatLitExpr) e).value;
         if (e instanceof StringLitExpr) return "str:"   + ((StringLitExpr) e).value;
         if (e instanceof BoolLitExpr)   return "bool:"  + ((BoolLitExpr) e).value;
@@ -1473,6 +1479,7 @@ public final class SemanticAnalyzer {
         BpType t;
         if      (e instanceof IntLitExpr)    t = PrimitiveType.INTEGER;
         else if (e instanceof LongLitExpr)   t = PrimitiveType.LONG;   // H1.2 (V2)
+        else if (e instanceof DoubleLitExpr) t = PrimitiveType.DOUBLE; // H1.3 (V2)
         else if (e instanceof FloatLitExpr)  t = PrimitiveType.FLOAT;
         else if (e instanceof StringLitExpr) t = PrimitiveType.STRING;
         else if (e instanceof BoolLitExpr)   t = PrimitiveType.BOOLEAN;
@@ -1894,11 +1901,10 @@ public final class SemanticAnalyzer {
                 err(b.line, b.column, "'" + b.op + "' requiere numéricos, encontrados '" + lt.display() + "' y '" + rt.display() + "'");
                 return ErrorType.INSTANCE;
             case "mod":
-                // L10 — narrow son integer-like al cargar (auto-promote a i32).
-                // H1.2 — si algún operando es long, mod opera en i64 → long.
-                if ((isIntegerLike(lt) || isLong(lt)) && (isIntegerLike(rt) || isLong(rt)))
-                    return (isLong(lt) || isLong(rt)) ? PrimitiveType.LONG : PrimitiveType.INTEGER;
-                err(b.line, b.column, "'mod' requiere integer/long");
+                // L10/H1.2/H1.3 — mod opera en el tipo promovido (i32/i64/f32/f64;
+                // float/double usan fmod). Resultado = promote(lt, rt).
+                if (lt.isNumeric() && rt.isNumeric()) return promote(lt, rt);
+                err(b.line, b.column, "'mod' requiere numéricos");
                 return ErrorType.INSTANCE;
             case "&": case "|": case "xor": case "shl": case "shr":
                 // H1.2 — bitwise/shift en i64 si algún operando es long.
@@ -1940,6 +1946,10 @@ public final class SemanticAnalyzer {
     }
 
     private static BpType promote(BpType a, BpType b) {
+        // H1.3 — torre de promoción: double > float > long > int.
+        boolean aIsDouble = a instanceof PrimitiveType && ((PrimitiveType) a).tag == PrimitiveType.Kind.DOUBLE;
+        boolean bIsDouble = b instanceof PrimitiveType && ((PrimitiveType) b).tag == PrimitiveType.Kind.DOUBLE;
+        if (aIsDouble || bIsDouble) return PrimitiveType.DOUBLE;
         boolean aIsFloat = a instanceof PrimitiveType && ((PrimitiveType) a).tag == PrimitiveType.Kind.FLOAT;
         boolean bIsFloat = b instanceof PrimitiveType && ((PrimitiveType) b).tag == PrimitiveType.Kind.FLOAT;
         if (aIsFloat || bIsFloat) return PrimitiveType.FLOAT;

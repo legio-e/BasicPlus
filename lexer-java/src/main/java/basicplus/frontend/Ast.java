@@ -539,6 +539,12 @@ public final class Ast {
         public LongLitExpr(long value, int line, int column) { super(line, column); this.value = value; }
     }
 
+    // H1.3 (V2): literal double (f64), p.ej. 1.5d / 3.14159265358979d.
+    public static final class DoubleLitExpr extends Node implements IExpr {
+        public final double value;
+        public DoubleLitExpr(double value, int line, int column) { super(line, column); this.value = value; }
+    }
+
     public static final class StringLitExpr extends Node implements IExpr {
         public final String value;
         public StringLitExpr(String value, int line, int column) { super(line, column); this.value = value; }

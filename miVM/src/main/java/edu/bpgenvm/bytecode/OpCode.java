@@ -232,7 +232,37 @@ public enum OpCode {
     NEWARRAY_I64   (0x8D, OperandKind.NONE),
     ALOAD_I64      (0x8E, OperandKind.NONE),
     ASTORE_I64     (0x8F, OperandKind.NONE),
-    LRET           (0x90, OperandKind.IMM_U8);
+    LRET           (0x90, OperandKind.IMM_U8),
+
+    // ============================================================
+    // H1.3 (V2) — double (f64). 8 bytes; REUSA el almacenamiento de 8 bytes
+    // de long (GET/SET_LOCAL_L, GET/SET_GLOBAL_L, LRET, NEWARRAY_I64/ALOAD_I64/
+    // ASTORE_I64 — opacos a 8 bytes). Solo añade aritmética f64 + la matriz
+    // de conversiones numéricas (i32/i64/f32/f64).
+    // ============================================================
+    DPUSH          (0x91, OperandKind.IMM_I64),  // 8 bytes = bits raw del f64
+    DADD           (0x92, OperandKind.NONE),
+    DSUB           (0x93, OperandKind.NONE),
+    DMUL           (0x94, OperandKind.NONE),
+    DDIV           (0x95, OperandKind.NONE),
+    DMOD           (0x96, OperandKind.NONE),
+    DNEG           (0x97, OperandKind.NONE),
+    DEQ            (0x98, OperandKind.NONE),
+    DNEQ           (0x99, OperandKind.NONE),
+    DLT            (0x9A, OperandKind.NONE),
+    DLE            (0x9B, OperandKind.NONE),
+    DGT            (0x9C, OperandKind.NONE),
+    DGE            (0x9D, OperandKind.NONE),
+    DPRINT         (0x9E, OperandKind.NONE),
+    DPRINT_NONL    (0x9F, OperandKind.NONE),
+    I2D            (0xA0, OperandKind.NONE),   // i32 → f64
+    D2I            (0xA1, OperandKind.NONE),   // f64 → i32 (trunc)
+    L2D            (0xA2, OperandKind.NONE),   // i64 → f64
+    D2L            (0xA3, OperandKind.NONE),   // f64 → i64 (trunc)
+    F2D            (0xA4, OperandKind.NONE),   // f32 → f64
+    D2F            (0xA5, OperandKind.NONE),   // f64 → f32
+    L2F            (0xA6, OperandKind.NONE),   // i64 → f32
+    F2L            (0xA7, OperandKind.NONE);   // f32 → i64 (trunc)
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;

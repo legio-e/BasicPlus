@@ -119,6 +119,7 @@ public final class Lexer {
         m.put("string",   TokenType.STRING);
         m.put("boolean",  TokenType.BOOLEAN);
         m.put("long",     TokenType.LONG);   // H1.2 (V2): entero 64-bit
+        m.put("double",   TokenType.DOUBLE); // H1.3 (V2): float 64-bit
         // tipos enteros estrechos (L10)
         m.put("byte",     TokenType.BYTE);
         m.put("int8",     TokenType.INT8);
@@ -375,6 +376,18 @@ public final class Lexer {
         }
 
         String lex = source.substring(start, pos);
+        // H1.3 (V2): sufijo d/D → literal double (f64). Aplica a entero o float
+        // (5d, 1.5d, 2e3d). Sin sufijo, un literal con punto/exponente es float (f32).
+        if (peek() == 'd' || peek() == 'D') {
+            advance();
+            try {
+                double dv = Double.parseDouble(lex);
+                return new Token(TokenType.DOUBLE_LIT, lex, dv, startLine, startColumn);
+            } catch (NumberFormatException nfe) {
+                errors.add(new LexerError("literal double inválido: " + lex, startLine, startColumn));
+                return new Token(TokenType.DOUBLE_LIT, lex, 0.0, startLine, startColumn);
+            }
+        }
         if (isFloat) {
             try {
                 double d = Double.parseDouble(lex);
