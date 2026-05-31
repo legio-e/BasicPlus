@@ -1,0 +1,14 @@
+module IdxTest
+
+    // H2.2: indexOf devuelve indice en codepoints (consistente con charAt).
+    function Main()
+        var s: string := "café con leche"
+        // codepoints: c0 a1 f2 é3 _4 c5 o6 n7 _8 l9 e10 c11 h12 e13
+        print "con =", indexOf(s, "con")   // 5
+        print "leche =", indexOf(s, "leche") // 9
+        print "x =", indexOf(s, "x")        // -1
+        print "starts =", startsWith(s, "café")  // 1
+        print "ends =", endsWith(s, "leche")      // 1
+    end Main
+
+end IdxTest

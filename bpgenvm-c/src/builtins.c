@@ -129,47 +129,8 @@ static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t d
     return out;
 }
 
-/* ---- H2 (V2): helpers UTF-8 sobre el payload de un string byte[] ---- */
-
-/* Cuenta codepoints en una secuencia UTF-8 (= nº de bytes líder). */
-static uint32_t utf8_cp_count(const uint8_t* p, uint32_t nbytes) {
-    uint32_t count = 0;
-    for (uint32_t i = 0; i < nbytes; i++)
-        if ((p[i] & 0xC0u) != 0x80u) count++;
-    return count;
-}
-
-/* Offset en bytes donde empieza el codepoint nº cp_index (0-based).
- * Devuelve nbytes si cp_index >= nº de codepoints. */
-static uint32_t utf8_byte_offset(const uint8_t* p, uint32_t nbytes, uint32_t cp_index) {
-    uint32_t i = 0, cp = 0;
-    while (i < nbytes && cp < cp_index) {
-        i++;
-        while (i < nbytes && (p[i] & 0xC0u) == 0x80u) i++;
-        cp++;
-    }
-    return i;
-}
-
-/* Decodifica el codepoint que empieza en p[0]; *adv = bytes consumidos. */
-static uint32_t utf8_decode(const uint8_t* p, uint32_t nbytes, uint32_t* adv) {
-    if (nbytes == 0) { *adv = 0; return 0; }
-    uint8_t b0 = p[0];
-    if (b0 < 0x80u)                       { *adv = 1; return b0; }
-    if ((b0 & 0xE0u) == 0xC0u && nbytes >= 2) { *adv = 2; return ((uint32_t)(b0 & 0x1Fu) << 6) | (p[1] & 0x3Fu); }
-    if ((b0 & 0xF0u) == 0xE0u && nbytes >= 3) { *adv = 3; return ((uint32_t)(b0 & 0x0Fu) << 12) | ((uint32_t)(p[1] & 0x3Fu) << 6) | (p[2] & 0x3Fu); }
-    if ((b0 & 0xF8u) == 0xF0u && nbytes >= 4) { *adv = 4; return ((uint32_t)(b0 & 0x07u) << 18) | ((uint32_t)(p[1] & 0x3Fu) << 12) | ((uint32_t)(p[2] & 0x3Fu) << 6) | (p[3] & 0x3Fu); }
-    *adv = 1; return b0;   /* byte inválido: tratar como Latin-1 */
-}
-
-/* Codifica cp en out (hasta 4 bytes). Devuelve nº de bytes escritos. */
-static uint32_t utf8_encode(uint32_t cp, uint8_t* out) {
-    if (cp < 0x80u)    { out[0] = (uint8_t) cp; return 1; }
-    if (cp < 0x800u)   { out[0] = (uint8_t)(0xC0u | (cp >> 6));  out[1] = (uint8_t)(0x80u | (cp & 0x3Fu)); return 2; }
-    if (cp < 0x10000u) { out[0] = (uint8_t)(0xE0u | (cp >> 12)); out[1] = (uint8_t)(0x80u | ((cp >> 6) & 0x3Fu));  out[2] = (uint8_t)(0x80u | (cp & 0x3Fu)); return 3; }
-    out[0] = (uint8_t)(0xF0u | (cp >> 18)); out[1] = (uint8_t)(0x80u | ((cp >> 12) & 0x3Fu));
-    out[2] = (uint8_t)(0x80u | ((cp >> 6) & 0x3Fu)); out[3] = (uint8_t)(0x80u | (cp & 0x3Fu)); return 4;
-}
+/* Helpers UTF-8 (utf8_cp_count / utf8_byte_offset / utf8_decode / utf8_encode)
+ * viven en bpvm_internal.h (fuente única compartida con el AOT). */
 
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     switch (id) {

@@ -2961,7 +2961,10 @@ public class VirtualMachine {
             case INDEX_OF: {
                 String target = readVmString(popTc(tc));
                 String s = readVmString(popTc(tc));
-                pushTc(tc, s.indexOf(target));
+                int ci = s.indexOf(target);   // índice en char units (UTF-16)
+                // H2: devolver índice en codepoints para ser consistente con
+                // charAt/charCodeAt/substring (semántica de carácter).
+                pushTc(tc, ci < 0 ? -1 : s.codePointCount(0, ci));
                 break;
             }
             case STARTS_WITH: {

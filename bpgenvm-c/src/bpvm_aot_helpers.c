@@ -114,16 +114,14 @@ static void h_print_f32(bpvm_t* vm, float v, int nl) {
     }
 }
 static void h_print_string(bpvm_t* vm, uint32_t ref, int nl) {
-    /* Replica OP_PRINT_STRING/OP_PRINT_STR_NONL del intérprete: el string
-     * es [len][cp]×len; imprime cada codepoint como char ASCII (>127 → '?'
-     * en F2 v1). */
+    /* H2 (V2): string = byte[] UTF-8 → emite los bytes directamente, sin
+     * truncar (paridad con OP_PRINT_STRING del intérprete). */
     if (ref != 0) {
-        uint32_t len = bpvm_read_u32_be(vm->memory + ref);
-        for (uint32_t i = 0; i < len; i++) {
-            uint32_t cp = bpvm_read_u32_be(vm->memory + ref + 4 + i * 4);
-            char c = (cp < 128) ? (char) cp : '?';
-            if (vm->output_cb) vm->output_cb(&c, 1, vm->output_user);
-            else fputc(c, stdout);
+        uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
+        const char* p = (const char*)(vm->memory + ref + 4);
+        if (nbytes > 0) {
+            if (vm->output_cb) vm->output_cb(p, (size_t) nbytes, vm->output_user);
+            else fwrite(p, 1, (size_t) nbytes, stdout);
         }
     }
     if (nl) {
@@ -227,74 +225,82 @@ static uint32_t h_find_module_cs(bpvm_t* vm, const char* module_name) {
     return 0;
 }
 
-/* ---------- Strings (H3 #173) ----------
- * String heap = [len:u32 BE][cp:u32 BE]×len (TYPE_ARRAY_I32). Reusan
- * bpvm_heap_alloc / bpvm_heap_alloc_string del runtime. */
+/* ---------- Strings (H3 #173, H2 V2) ----------
+ * String heap = [byte_len:u32 BE][bytes UTF-8] (TYPE_ARRAY_I8). Índice por
+ * codepoint vía helpers utf8_* (bpvm_internal.h). Reusan bpvm_heap_alloc /
+ * bpvm_heap_alloc_string del runtime. DEBEN coincidir con builtins.c. */
 static int32_t h_string_length(bpvm_t* vm, uint32_t ref) {
     if (ref == 0) return 0;
-    return (int32_t) bpvm_read_u32_be(vm->memory + ref);
+    uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
+    return (int32_t) utf8_cp_count(vm->memory + ref + 4, nbytes);
 }
 static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
     if (ref == 0) return 0;
-    uint32_t len = bpvm_read_u32_be(vm->memory + ref);
-    if (idx < 0 || (uint32_t) idx >= len) return 0;
-    return (int32_t) bpvm_read_u32_be(vm->memory + ref + 4 + (uint32_t) idx * 4);
+    uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
+    const uint8_t* p = vm->memory + ref + 4;
+    uint32_t ncp = utf8_cp_count(p, nbytes);
+    if (idx < 0 || (uint32_t) idx >= ncp) return 0;
+    uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) idx);
+    uint32_t adv; return (int32_t) utf8_decode(p + off, nbytes - off, &adv);
 }
 static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    uint32_t cp = 0;
+    uint8_t enc[4]; uint32_t enc_len = 0;
     if (ref != 0) {
-        uint32_t len = bpvm_read_u32_be(vm->memory + ref);
-        if (idx >= 0 && (uint32_t) idx < len)
-            cp = bpvm_read_u32_be(vm->memory + ref + 4 + (uint32_t) idx * 4);
+        uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
+        const uint8_t* p = vm->memory + ref + 4;
+        uint32_t ncp = utf8_cp_count(p, nbytes);
+        if (idx >= 0 && (uint32_t) idx < ncp) {
+            uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) idx);
+            uint32_t adv; uint32_t cp = utf8_decode(p + off, nbytes - off, &adv);
+            enc_len = utf8_encode(cp, enc);
+        }
     }
-    uint32_t out = bpvm_heap_alloc(vm, 4u, BPVM_TYPE_ARRAY_I32);  /* 1 cp */
+    uint32_t out = bpvm_heap_alloc(vm, enc_len, BPVM_TYPE_ARRAY_I8);
     if (out) {
-        bpvm_write_u32_be(vm->memory + out, 1u);
-        bpvm_write_u32_be(vm->memory + out + 4, cp);
+        bpvm_write_u32_be(vm->memory + out, enc_len);
+        for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
     }
     return out;
 }
 static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
-    uint32_t la = a ? bpvm_read_u32_be(vm->memory + a) : 0;
+    uint32_t la = a ? bpvm_read_u32_be(vm->memory + a) : 0;   /* bytes */
     uint32_t lb = b ? bpvm_read_u32_be(vm->memory + b) : 0;
-    uint32_t out = bpvm_heap_alloc(vm, (la + lb) * 4u, BPVM_TYPE_ARRAY_I32);
+    uint32_t out = bpvm_heap_alloc(vm, la + lb, BPVM_TYPE_ARRAY_I8);
     if (!out) return 0;
     uint8_t* mem = vm->memory;   /* F2 no compacta: a/b siguen válidos */
     bpvm_write_u32_be(mem + out, la + lb);
-    for (uint32_t i = 0; i < la; i++)
-        bpvm_write_u32_be(mem + out + 4 + i * 4, bpvm_read_u32_be(mem + a + 4 + i * 4));
-    for (uint32_t i = 0; i < lb; i++)
-        bpvm_write_u32_be(mem + out + 4 + (la + i) * 4, bpvm_read_u32_be(mem + b + 4 + i * 4));
+    for (uint32_t i = 0; i < la; i++) mem[out + 4 + i] = mem[a + 4 + i];
+    for (uint32_t i = 0; i < lb; i++) mem[out + 4 + la + i] = mem[b + 4 + i];
     return out;
 }
 static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {
     if (ref == 0) return 0;
-    uint32_t len = bpvm_read_u32_be(vm->memory + ref);
-    /* Clamp estilo BP/Java: índices fuera de rango se recortan. */
+    uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
+    const uint8_t* p = vm->memory + ref + 4;
+    uint32_t ncp = utf8_cp_count(p, nbytes);   /* índices en codepoints */
     if (from < 0) from = 0;
     if (to < 0)   to = 0;
-    if ((uint32_t) to > len) to = (int32_t) len;
+    if ((uint32_t) to > ncp) to = (int32_t) ncp;
     if (from > to) from = to;
-    uint32_t n = (uint32_t)(to - from);
-    uint32_t out = bpvm_heap_alloc(vm, n * 4u, BPVM_TYPE_ARRAY_I32);
+    uint32_t boff = utf8_byte_offset(p, nbytes, (uint32_t) from);
+    uint32_t eoff = utf8_byte_offset(p, nbytes, (uint32_t) to);
+    uint32_t n = eoff - boff;
+    uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
     if (!out) return 0;
     uint8_t* mem = vm->memory;
     bpvm_write_u32_be(mem + out, n);
-    for (uint32_t i = 0; i < n; i++)
-        bpvm_write_u32_be(mem + out + 4 + i * 4,
-                          bpvm_read_u32_be(mem + ref + 4 + ((uint32_t) from + i) * 4));
+    for (uint32_t i = 0; i < n; i++) mem[out + 4 + i] = mem[ref + 4 + boff + i];
     return out;
 }
 static int32_t h_string_eq(bpvm_t* vm, uint32_t a, uint32_t b) {
     if (a == b) return 1;              /* misma ref (incl. ambos null) */
     if (a == 0 || b == 0) return 0;
     uint8_t* mem = vm->memory;
-    uint32_t la = bpvm_read_u32_be(mem + a);
+    uint32_t la = bpvm_read_u32_be(mem + a);   /* bytes */
     uint32_t lb = bpvm_read_u32_be(mem + b);
     if (la != lb) return 0;
     for (uint32_t i = 0; i < la; i++)
-        if (bpvm_read_u32_be(mem + a + 4 + i * 4) != bpvm_read_u32_be(mem + b + 4 + i * 4))
-            return 0;
+        if (mem[a + 4 + i] != mem[b + 4 + i]) return 0;
     return 1;
 }
 static uint32_t h_string_from_cstr(bpvm_t* vm, const char* s, int32_t len) {
