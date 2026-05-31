@@ -10,6 +10,10 @@ CC      ?= gcc
 CFLAGS  ?= -std=c99 -Wall -Wextra -Wpedantic -O2 -g
 CFLAGS  += -Iinclude
 CFLAGS  += $(CFLAGS_EXTRA)
+# H3: genera ficheros .d con las dependencias de cabecera de cada .o, para que
+# editar un header (p.ej. bpvm_internal.h, la struct) recompile los .c que lo
+# incluyen. Sin esto, un cambio de struct dejaba .o desalineados (build stale).
+CFLAGS  += -MMD -MP
 
 SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/link.c src/scheduler.c src/threading.c src/exceptions.c \
@@ -40,6 +44,10 @@ build/%.o: %.c
 
 clean:
 	rm -rf build
+
+# H3: incluye los .d generados por -MMD (deps de cabecera). En el primer build
+# aún no existen → el prefijo '-' los ignora silenciosamente.
+-include $(OBJ:.o=.d)
 
 # smoke test: ejecuta el .mod indicado en MOD=... (default samples/F1.mod
 # si existe en el subdir samples/ del propio bpgenvm-c).

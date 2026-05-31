@@ -480,6 +480,40 @@ Palancas, de menos a más invasivas:
   filosofía que el AOT y el HAL: interfaz estable, implementación
   intercambiable.
 
+  **✅ DECISIÓN DE H3 — TOMADA Y APLICADA (2026-05-31).** Tras construir 2
+  herramientas (índice de fragmentación + mapa ASCII, solo VM-Java) y
+  caracterizar el baseline con workloads de estrés (ver `h3bench/NOTAS.md`), la
+  evidencia decidió:
+  - **Modelo: NO-MOVING** — free-list first-fit + split + COALESCING de huecos
+    adyacentes en cada sweep. La fragmentación patológica (frag 0.96) solo
+    aparece con muchos objetos longevos DISPERSOS; el patrón realista
+    (working-set + churn + retención acotada) NO la produce. Y el no-moving
+    evita el PINNING que el moving exigiría para las funciones native.
+  - **+ 2 mejoras model-agnostic** (valen igual si luego se añade compactación):
+    (a) disparo de GC por UMBRAL de crecimiento de bump (no solo al llenarse →
+    mata el over-commit: -59% de pico en el workload realista); (b) heap_next
+    RETREAT (el run libre final devuelve memoria al bump).
+  - **Aplicado en AMBAS VMs.** La VM-Java ya tenía free-list+coalescing → solo A.
+    La VM-C era bump-SIN-reuse (el "acantilado" → OOM en churn largo, JUSTO en el
+    MCU): se le construyó el free-list+coalescing+retreat+umbral completo.
+    Validado dual-VM (reuso: 4.4 MB en heap de 254 KB sin OOM; supervivientes
+    intactos; paridad con Java; sin regresión).
+  - **Compactación (moving): DIFERIDA** — solo si un workload REAL exhibe la
+    patología dispersa. Coste documentado: **PINNING** — una native recorre un
+    buffer crudo, así que con moving habría que poder marcar bloques
+    no-desplazables (pin-bit + pin/unpin en el thunk AOT).
+  - **El programador colabora (palanca complementaria, usuario 2026-05-31).** GC
+    robusto NO es todo: BP ya ofrece `owner` (libera determinista vía FREE_REF +
+    cascada, sin trazar el GC) y `move()`/buffers fijos (menos churn → menos
+    fragmentación). Usar arrays de tamaño fijo para datos pequeños + refs `owner`
+    descarga mucho al GC → anotar en el manual como "buenas prácticas de memoria".
+  - **Reversible** (meta-principio): el `.mod` y la interfaz alloc/roots aíslan
+    el GC del lenguaje/bytecode → si el futuro lo pide, se cambia sin recompilar
+    código de usuario.
+
+  *(El análisis moving-vs-no-moving que llevó aquí se conserva abajo como
+  registro.)*
+
   **La elección moving vs no-moving se decide AL ABRIR H3, tras estudio +
   benchmark de fragmentación — NO se pre-decide ahora.** Las opciones y su
   coste (la interfaz estable favorece la primera, pero no la impone):
