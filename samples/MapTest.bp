@@ -1,0 +1,40 @@
+module MapTest
+  import Collections
+
+  function Main()
+    var m: Collections.Map := Collections.Map()
+    m.put("banana", "amarilla")
+    m.put("manzana", "roja")
+    m.put("cereza", "roja-oscura")
+    m.put("uva", "verde")
+
+    print "size=" + intToString(m.size())
+
+    var v: string := m.get("manzana")
+    print "manzana -> " + v
+
+    print "contains uva: " + boolToString(m.containsKey("uva"))
+    print "contains kiwi: " + boolToString(m.containsKey("kiwi"))
+
+    var miss: Object := m.get("kiwi")
+    if miss == null then
+      print "kiwi -> null OK"
+    endif
+
+    m.put("uva", "morada")
+    var v2: string := m.get("uva")
+    print "uva actualizada -> " + v2
+    print "size tras update=" + intToString(m.size())
+
+    var r: boolean := m.remove("cereza")
+    print "remove cereza=" + boolToString(r) + " size=" + intToString(m.size())
+
+    var i: integer := 0
+    while i < m.size() do
+      var k: string := m.keyAt(i)
+      var vv: string := m.valueAt(i)
+      print "  [" + intToString(i) + "] " + k + " = " + vv
+      i := i + 1
+    endwh
+  end Main
+end MapTest

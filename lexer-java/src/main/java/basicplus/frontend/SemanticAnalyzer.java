@@ -870,6 +870,13 @@ public final class SemanticAnalyzer {
                 case "int16":   return PrimitiveType.INT16;
                 case "long":    return PrimitiveType.LONG;   // H1.2 (V2)
                 case "double":  return PrimitiveType.DOUBLE; // H1.3 (V2)
+                // H5 (V2) — tipo raíz universal expresable en fuente. Es el
+                // mismo `any` interno que usan List/SyncList, ahora con nombre
+                // OO. Habilita contenedores genéricos escritos en BP puro
+                // (Map). Modelo de objetos estilo Java: los primitivos se
+                // envuelven a mano (Integer(x), ...) para meterlos en
+                // contenedores. Serializa como "any" en .bpi (mismo tipo).
+                case "Object":  return AnyType.INSTANCE;
                 default:        return resolveNamedType(st);
             }
         }

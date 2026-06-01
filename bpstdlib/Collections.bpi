@@ -1,0 +1,26 @@
+bpi 6
+module Collections
+class StringComparator public extends Comparator
+  layout 0 1 - -
+  ctor()
+  method compare(a:any,b:any):integer public
+end class
+class Map public
+  layout 4 10 0000000f 00000000
+  ctor()
+  method withComparator(c:Comparator):Map public
+  method bsearch(key:any):integer public
+  method insertAt(ip:integer,key:any,val:any):void public
+  method size():integer public
+  method put(key:any,val:any):void public
+  method get(key:any):any public
+  method containsKey(key:any):boolean public
+  method remove(key:any):boolean public
+  method keyAt(i:integer):any public
+  method valueAt(i:integer):any public
+end class
+class Comparator public
+  layout 0 1 - -
+  ctor()
+  method compare(a:any,b:any):integer public
+end class

@@ -1,4 +1,106 @@
-bpi 3
+bpi 6
 module Json
+func parseJson(text:string):JsonValue public
+func parseTrueOn(r:JsonReader):JsonValue public
+func writeJson(root:JsonValue):string public
+func parseValueOn(r:JsonReader):JsonValue public
+func parseNullLitOn(r:JsonReader):JsonValue public
 func isDigitCode(c:integer):boolean public
 func hexDigit(d:integer):integer public
+func appendQuotedString(sb:StringBuilder,s:string):void public
+func parseFalseOn(r:JsonReader):JsonValue public
+func parseObjectOn(r:JsonReader):JsonValue public
+func parseHexDigitOn(r:JsonReader):integer public
+func parseStringLitOn(r:JsonReader):string public
+func writeJsonFile(path:string,root:JsonValue):void public
+func readJsonFile(path:string):JsonValue public
+func parseNumberOn(r:JsonReader):JsonValue public
+func parseArrayOn(r:JsonReader):JsonValue public
+class JsonBool public extends JsonValue
+  layout 1 16 00000000 00000000
+  ctor(value:boolean)
+  method isBool():boolean public
+  method asBool():boolean public
+  method writeTo(sb:StringBuilder):void public
+end class
+class JsonObject public extends JsonValue
+  layout 2 23 00000003 00000000
+  ctor()
+  method isObject():boolean public
+  method asObject():JsonObject public
+  method length():integer public
+  method indexOfKey(key:string):integer public
+  method put(key:string,v:JsonValue):void public
+  method find(key:string):JsonValue public
+  method has(key:string):boolean public
+  method keyAt(i:integer):string public
+  method valueAt(i:integer):JsonValue public
+  method writeTo(sb:StringBuilder):void public
+end class
+class JsonNull public extends JsonValue
+  layout 0 16 - -
+  ctor()
+  method isNull():boolean public
+  method writeTo(sb:StringBuilder):void public
+end class
+class JsonReader public
+  layout 3 4 00000001 00000000
+  ctor(text:string)
+  method peek():integer public
+  method advance():integer public
+  method expect(expected:integer):void public
+  method skipWs():void public
+end class
+class JsonInt public extends JsonValue
+  layout 1 16 00000000 00000000
+  ctor(value:integer)
+  method isNumber():boolean public
+  method isInt():boolean public
+  method asInt():integer public
+  method writeTo(sb:StringBuilder):void public
+end class
+class JsonValue public
+  layout 0 16 - -
+  ctor()
+  method isNull():boolean public
+  method isBool():boolean public
+  method isNumber():boolean public
+  method isInt():boolean public
+  method isFloat():boolean public
+  method isString():boolean public
+  method isArray():boolean public
+  method isObject():boolean public
+  method asBool():boolean public
+  method asInt():integer public
+  method asFloat():float public
+  method asString():string public
+  method asArray():JsonArray public
+  method asObject():JsonObject public
+  method writeTo(sb:StringBuilder):void public
+  method toJson():string public
+end class
+class JsonArray public extends JsonValue
+  layout 1 19 00000001 00000000
+  ctor()
+  method isArray():boolean public
+  method asArray():JsonArray public
+  method add(v:JsonValue):void public
+  method at(i:integer):JsonValue public
+  method length():integer public
+  method writeTo(sb:StringBuilder):void public
+end class
+class JsonFloat public extends JsonValue
+  layout 1 16 00000000 00000000
+  ctor(value:float)
+  method isNumber():boolean public
+  method isFloat():boolean public
+  method asFloat():float public
+  method writeTo(sb:StringBuilder):void public
+end class
+class JsonString public extends JsonValue
+  layout 1 16 00000001 00000000
+  ctor(value:string)
+  method isString():boolean public
+  method asString():string public
+  method writeTo(sb:StringBuilder):void public
+end class

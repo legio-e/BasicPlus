@@ -559,6 +559,10 @@ public final class ModuleInterface {
         // L2: tipos clase referenciables si tenemos un ClassSymbol resuelto.
         // Se serializa por nombre; el importador resuelve contra los stubs.
         if (t instanceof BpType.ClassType) return true;
+        // H5 — el tipo raíz universal (`Object`/`any`) es exportable: se
+        // serializa como "any" y el lector lo recupera (parseType case "any").
+        // Necesario para contenedores genéricos cross-module (Map.put/get...).
+        if (t instanceof BpType.AnyType) return true;
         // L-arr-export: ArrayType es exportable si su elemento lo es.
         // Permite firmas como `data: integer[]` cross-module (útil para
         // buffers de bytes en I2c/SPI, samples de ADC, etc.).
@@ -785,6 +789,7 @@ public final class ModuleInterface {
             return cls.name;
         }
         if (t instanceof BpType.UnresolvedClassRef) return ((BpType.UnresolvedClassRef) t).name;
+        if (t instanceof BpType.AnyType) return "any";   // H5 — tipo raíz universal
         return "void"; // safety net; debería haber sido descartada por isExportableType
     }
 

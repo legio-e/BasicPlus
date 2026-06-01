@@ -1328,3 +1328,53 @@ VM-Java. SÍ tiene: `strlen`, `substring`, `charAt`, `charCodeAt`,
 ceñirse al subconjunto del VM-C (lo hace `Str`). Si se quisieran esas funciones
 en el MCU, habría que implementarlas en el VM-C (trabajo de VM). No es un bug —
 es el estado conocido del "F2 subset"; anotado aquí por su impacto en H4.
+
+## BUG-4 — métodos privados rompen el slot de vtable cross-module (workaround aplicado)
+
+**Síntoma**: una clase de un módulo con **métodos privados** (no-`public`),
+usada cross-module, **falla al despachar cualquier método** (fault / "null
+receiver" / valor basura). Same-module funciona perfecto. Descubierto en H4.A.2
+(clase `Map` con helpers privados `bsearch`/`insertAt`).
+
+**Causa**: el `.bpi` exporta SOLO los métodos públicos, pero el **vtable real
+incluye los privados** (ocupan slot). El importador calcula los slots de vtable
+desde el `.bpi` (sin los privados) → **slots desalineados** → `m.size()`
+despacha a la ranura equivocada. Por eso las clases L2 (sin privados) funcionaban
+y el `Map` no.
+
+**Workaround (aplicado en `Collections`)**: declarar los helpers como `public`
+(entran en el `.bpi`, los slots cuadran). Feo (expone internals) pero funciona.
+
+**Fix propio (pendiente, compilador)**: el `.bpi` debe **incluir los métodos
+privados como reserva de slot** (marcados no-llamables) para que el importador
+numere los slots igual que el dueño; o asignar slots con un orden canónico
+estable. Beneficia a CUALQUIER clase stdlib con métodos privados. Encontrado y
+caracterizado en H4.A.2 (2026-06-01). (Nota: el síntoma inicial de "construcción
+cross-module deja campos null" era ESTE bug, no uno aparte — `Collections.Map()`
+directo funciona una vez alineados los slots.)
+
+## GAP-2 — tipos built-in (List/SyncList...) no unifican identidad cross-module
+
+**Qué**: devolver un `List` (u otro tipo built-in sintetizado) desde la API
+pública de un módulo falla en el importador: "valor de tipo 'List' no asignable
+a variable de tipo 'List'" — el `List` de la firma importada no es identidad-
+igual al `List` global del consumidor.
+
+**Implicación**: la API pública de un módulo no debe **devolver/recibir** tipos
+built-in (List, SyncList, StringBuilder, Mutex). El `Map` lo esquiva con
+accesores por índice (`keyAt(i)/valueAt(i): Object`) en vez de `keys(): List`.
+
+**Fix propio (pendiente, compilador)**: resolver los nombres built-in en firmas
+importadas a la clase sintetizada global (unificar identidad). Encontrado en
+H4.A.2 (2026-06-01).
+
+## H5 (modelo de objetos) — progreso parcial (2026-06-01)
+
+Habilitado lo MÍNIMO para el `Map` (Fase A, boxing manual):
+- **`Object`** expresable en fuente = tipo raíz universal (`AnyType` interno).
+  `resolveType` (source) + `isExportableType`/`typeToString`/`parseType` (.bpi)
+  ahora aceptan `Object`/`any`. (Cambios de compilador, pequeños.)
+- **`Map` (H4.A.2) HECHO** con claves string, comparador‑objeto, thread-safe
+  (Mutex), búsqueda binaria, paridad dual-VM. En `bpstdlib/Collections.bp`.
+- **Pendiente (siguiente paso)**: clases envoltorio `Integer`/`Long`/`Float`/
+  `Double`/`Boolean` (boxing manual) + comparadores para claves no-string.
