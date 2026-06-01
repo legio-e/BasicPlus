@@ -1,0 +1,66 @@
+// Field8Test — BUG-6: campos de instancia de 8 bytes (long/double).
+// Mezcla campos de 4 y 8 bytes para estresar el layout de slots y el
+// bitmap del GC. Debe dar idéntico en VM Java y VM C.
+module Field8Test
+
+  // a:int (slot 0), b:long (slots 1-2), c:int (slot 3),
+  // d:double (slots 4-5), e:string ref (slot 6, traza GC).
+  class Box
+    var a: integer
+    var b: long
+    var c: integer
+    var d: double
+    var e: string
+    public function Box(a: integer, b: long, c: integer, d: double, e: string)
+      this.a := a
+      this.b := b
+      this.c := c
+      this.d := d
+      this.e := e
+    end Box
+    public function getA(): integer
+      return this.a
+    end getA
+    public function getB(): long
+      return this.b
+    end getB
+    public function getC(): integer
+      return this.c
+    end getC
+    public function getD(): double
+      return this.d
+    end getD
+    public function getE(): string
+      return this.e
+    end getE
+    public function sumLongs(other: long): long
+      return this.b + other
+    end sumLongs
+    public function setB(v: long)
+      this.b := v
+    end setB
+  end Box
+
+  function Main()
+    var bigL: long := 9000000000L        // > 2^32, requiere 64 bits reales
+    var box: Box := Box(7, bigL, 42, 3.14159d, "hola")
+
+    print "a="
+    print box.getA()
+    print "b="
+    print box.getB()
+    print "c="
+    print box.getC()
+    print "d="
+    print box.getD()
+    print "e="
+    print box.getE()
+    print "b+1="
+    print box.sumLongs(1L)
+
+    // Mutación de un campo de 8 bytes tras construcción.
+    box.setB(123456789012L)
+    print "b2="
+    print box.getB()
+  end Main
+end Field8Test

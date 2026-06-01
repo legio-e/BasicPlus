@@ -2374,6 +2374,21 @@ public class VirtualMachine {
                     writeI32(mem, ref + 4 + slot * 4, val);
                     break;
                 }
+                // BUG-6: campos de instancia de 8 bytes (long/double). slot = índice
+                // de slot de 4 bytes; el valor ocupa 2 slots consecutivos en ref+4+slot*4.
+                case 0xA8: { // GET_FIELD_LONG
+                    int slot = mem[pc] & 0xFF; pc++;
+                    sp -= 4; int ref = readI32(mem, sp);
+                    writeI64(mem, sp, readI64(mem, ref + 4 + slot * 4)); sp += 8;
+                    break;
+                }
+                case 0xA9: { // SET_FIELD_LONG
+                    int slot = mem[pc] & 0xFF; pc++;
+                    sp -= 8; long val = readI64(mem, sp);
+                    sp -= 4; int ref = readI32(mem, sp);
+                    writeI64(mem, ref + 4 + slot * 4, val);
+                    break;
+                }
                 case 0x56: { // PRINT_NONL
                     sp -= 4; int v = readI32(mem, sp);
                     programOut.writeText(Integer.toString(v));

@@ -846,7 +846,8 @@ public final class MivmEmitter {
                             VarSymbol vs = (VarSymbol) cls.instanceMembers.tryLookup(dn.name);
                             if (vs != null) t = vs.type;
                             boolean isRef = isRefType(t);
-                            w.declareField(dn.name, isRef, vd.isOwner);
+                            // BUG-6: long/double = campo de 8 bytes (2 slots).
+                            w.declareField(dn.name, isRef, vd.isOwner, is8Byte(t));
                         }
                     }
                 }
@@ -953,7 +954,10 @@ public final class MivmEmitter {
         // Declarar params iguales al ctor (sin contar `this`).
         if (ctor != null) {
             for (ParamSymbol p : ctor.params) {
-                w.declareParam(p.name);
+                // BUG-6: width-aware — long/double = 8 bytes. Sin esto la
+                // factoría cross-module declaraba el param a 4 bytes y un arg
+                // long/double se corrompía al pasarlo al __init.
+                w.declareParam(p.name, is8Byte(p.type) ? 8 : 4);
             }
         }
         // returnType=AnyType para evitar dependencia de tipo: el caller
@@ -1003,7 +1007,7 @@ public final class MivmEmitter {
         w.declareParam("this");
         FunctionSymbol ctor = cls.constructor;
         for (ParamSymbol p : ctor.params) {
-            w.declareParam(p.name);
+            w.declareParam(p.name, is8Byte(p.type) ? 8 : 4);   // BUG-6: long/double = 8 bytes
         }
         FunctionSymbol synthFs = new FunctionSymbol(initName, true, false, false, null, null);
         beginFunctionScope(synthFs, null);   // void
@@ -1191,7 +1195,8 @@ public final class MivmEmitter {
 
         // 1) Backing field (con flag isOwner si la propiedad es owner; el VM
         //    libera recursivamente este campo cuando la instancia se destruye).
-        w.declareField(pd.name.name, isRef, pd.isOwner);
+        //    BUG-6: long/double = campo de 8 bytes (2 slots).
+        w.declareField(pd.name.name, isRef, pd.isOwner, is8Byte(propType));
 
         // 2) Getter (custom o auto). Devuelve el tipo de la property.
         //    Si la property es sync, envolvemos cuerpo con lock/unlock contra
@@ -2665,7 +2670,8 @@ public final class MivmEmitter {
             if (!fs.isPublic && !fs.isExternal) {
                 w.emitCall(fs.ownerClass.name + "." + fs.name);
             } else {
-                emitInvokeVirtualSmart(fs.ownerClass, fs.name, c.args.size());
+                // BUG-6: numArgs = slots de 4 bytes (long/double = 2), no nº de args.
+                emitInvokeVirtualSmart(fs.ownerClass, fs.name, argSlotCount(fs));
             }
             return;
         }
@@ -3877,6 +3883,18 @@ public final class MivmEmitter {
         return isLong(t) || isDouble(t);
     }
 
+    /** BUG-6: nº de slots de 4 bytes que ocupan los argumentos (excluye `this`).
+     *  INVOKE_VIRTUAL localiza el receptor en sp-4-numArgs*4, así que su operando
+     *  numArgs debe contar SLOTS, no argumentos: un parámetro long/double ocupa 2
+     *  slots. Para métodos all-4-byte coincide con el nº de argumentos. */
+    private int argSlotCount(FunctionSymbol fs) {
+        int slots = 0;
+        for (int i = 0; i < fs.params.size(); i++) {
+            slots += is8Byte(fs.params.get(i).type) ? 2 : 1;
+        }
+        return slots;
+    }
+
     private static boolean isNumericCastName(String n) {   // H1.3b (V2)
         return "integer".equals(n) || "long".equals(n) || "float".equals(n) || "double".equals(n);
     }
@@ -3927,7 +3945,13 @@ public final class MivmEmitter {
     private BpType typeRefToBpType(TypeRef ref) {
         // Útil mientras no haya un mapeo expuesto desde el analyzer.
         if (ref instanceof SimpleTypeRef) {
-            String n = ((SimpleTypeRef) ref).name.toLowerCase();
+            // BUG-6: case-SENSITIVE. Los primitivos se escriben en minúscula
+            // (integer/long/double/...). Tras el dekeyword, las clases pueden
+            // llamarse Long/Double/Float/Integer/Boolean/String — NO deben
+            // colisionar con el primitivo homónimo. Un .toLowerCase() aquí hacía
+            // que `var o: Long` (clase, ref de 4 bytes) se tratara como el
+            // primitivo long (8 bytes) → SET_LOCAL_L/GET_LOCAL_L corrompía la ref.
+            String n = ((SimpleTypeRef) ref).name;
             switch (n) {
                 case "integer": return PrimitiveType.INTEGER;
                 case "float":   return PrimitiveType.FLOAT;

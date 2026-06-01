@@ -1410,9 +1410,10 @@ Habilitado lo MÍNIMO para el `Map` (Fase A, boxing manual):
   `Integer` como clase). Ahora son identificadores; tipos y casts siguen
   resolviéndose por nombre. Ver Lexer.java. (Tipos estrechos byte/int8/...
   siguen reservados.)
-- **Estado**: Map con claves **string** e **Integer** ✅ dual-VM (orden
-  numérico correcto). Wrappers de 4 bytes (Integer/Boolean) cross-module ✅.
-  Long/Double/Float cross-module ❌ por **BUG-6** (abajo).
+- **Estado**: Map con claves **string**, **Integer** y **Long** ✅ dual-VM
+  (orden numérico de 64 bits correcto). Todos los wrappers
+  (Integer/Long/Double/Float/Boolean) cross-module ✅ — **BUG-6 cerrado**
+  (2026-06-01, ver abajo).
 
 ## BUG-5 — slots de vtable cross-module no cuentan la herencia (✅ ARREGLADO 2026-06-01)
 
@@ -1433,18 +1434,58 @@ métodos propios: override→mantiene slot base, nuevo→append. Replica exactam
 `ModWriter.addClass`/`addMethod`. (Base same-module; base cross-module queda
 pendiente — caso más raro.)
 
-## BUG-6 — construcción cross-module con args de 8 bytes (long/double) corrompe (ABIERTO)
+## BUG-6 — campos de instancia de 8 bytes (long/double) (✅ ARREGLADO 2026-06-01)
 
-**Síntoma**: `OtroMod.Clase(argLong)` o `(argDouble)` cross-module guarda un
-valor CORRUPTO. `Collections.Long(123456789012L)` → basura; `Double(3.5d)` →
-fault. Integer/Boolean (4 bytes) van bien → es específico de args de **8 bytes**.
+**Síntoma**: una clase con un campo `long`/`double` corrompe el valor / peta.
+`Long(123456789012L).toString()` → basura/heap-overflow, **incluso same-module**.
+Integer/Boolean (campo de 4 bytes) van bien → específico de campos de **8 bytes**.
 
-**Causa probable**: la factoría `__cls_new_<Cls>(x: long/double)` (CALL_EXT
-cross-module) no marshala bien el argumento de 8 bytes — misma familia que BUG-1
-(long/double cross-module) pero en los args del constructor/factory. A
-investigar: emisor del call a la factoría + convención de args de 8 bytes en
-CALL_EXT.
+**Causa raíz (3 problemas distintos, todos arreglados)**:
 
-**Impacto**: bloquea los envoltorios Long/Double/Float cross-module (Integer/
-Boolean OK). El Map con claves Integer funciona; con claves Long/Double no aún.
-Encontrado en H4.A.2 (2026-06-01).
+1. **Campos de instancia de 8 bytes no implementados.** El layout del objeto
+   reservaba 4 bytes/campo y `SET_FIELD`/`GET_FIELD` solo movían 4 bytes. HUECO
+   de H1.2/H1.3 (añadieron long/double a locals/params/globals/arrays pero NO a
+   los campos de objeto).
+   - **Fix**: opcodes aditivos `GET_FIELD_LONG`/`SET_FIELD_LONG` (0xA8/0xA9) en
+     `OpCode.java` + ambas VMs (rw 8 bytes en `ref+4+slot*4`).
+   - `ModWriter`: `FieldInfo` lleva `int slot` (offset de slot de 4 bytes) y
+     `boolean is8`; `declareField(...,is8)`; `nextFieldSlot` (suma de anchos,
+     long/double = 2 slots); `num_fields` del descriptor = nº de SLOTS; bitmap GC
+     indexado por slot (un campo de 8 bytes = 2 slots no-ref); `emitGetField`/
+     `emitSetField` despachan a la variante LONG según `is8`. `NEW_OBJECT` ya
+     alocaba `num_fields*4` → correcto con slots.
+   - Emisor: `declareField` en campos (849) y backing fields de property (1197)
+     pasan `is8Byte(t)`. Factorías `__cls_new_*` declaran params 8-byte
+     width-aware.
+
+2. **Paso de argumentos de 8 bytes en métodos VIRTUALES.** `INVOKE_VIRTUAL`
+   localiza `this` en `sp-4-numArgs*4`, asumiendo args de 4 bytes. Un método con
+   parámetro long/double rompía el offset → receptor null / `this` desalineado
+   (p.ej. `sumLongs(other: long)`).
+   - **Fix (solo emisor)**: `numArgs` ahora cuenta SLOTS de 4 bytes (long/double
+     = 2), vía `argSlotCount(fs)`. Ambas VMs usan `numArgs` SÓLO para localizar
+     `this`; el teardown del frame lo hace el callee. Sin cambio en las VMs.
+
+3. **Colisión clase `Long` vs primitivo `long` (secuela del dekeyword).**
+   `typeRefToBpType` hacía `.toLowerCase()` → un local `var o: Long` (clase, ref
+   de 4 bytes) se trataba como el primitivo `long` (8 bytes) → `SET_LOCAL_L`/
+   `GET_LOCAL_L` corrompía la referencia. Por eso `LongBox` (same-module)
+   funcionaba pero `Collections.Long` cross-module daba compareTo erróneo +
+   heap-overflow en el Map.
+   - **Fix**: `typeRefToBpType` case-SENSITIVE (los primitivos se escriben en
+     minúscula; las clases Capitalizadas no colisionan). Los campos ya usaban el
+     tipo del símbolo semántico (por eso el campo `v: long` iba bien); el bug
+     estaba solo en la ruta de locals.
+
+**Validación dual-VM (Java + C, paridad exacta)**: `Field8Test` (campos mixtos
+4/8 bytes + setter + método con param long), `LongCmpTest` (same-module),
+`XCmpTest` (compareTo cross-module Integer vs Long), `Wrap8Test` (wrappers
+Long/Double/Float + Map con claves Long, orden numérico de 64 bits). Regresión
+OK: StrTest, MapTest, MapNumTest (ahora con `Double(3.5)`), l2v3app, classisolation.
+
+**Pendientes menores derivados (no bloquean H4.A)**:
+- `emitCompoundOp` no maneja long/double: `+=`/`-=` sobre long/double emite
+  ADD/SUB de 4 bytes (locals/globals/fields). Raro; documentado como GAP.
+- Properties de tipo long/double (8 bytes): la ruta de setter usa un temp local
+  de 4 bytes (`__stp_*`) + `numArgs` literal 1 → truncaría. Los envoltorios usan
+  campos+métodos (no properties), así que no bloquea. Diferido.

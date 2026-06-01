@@ -1053,6 +1053,24 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             bpvm_write_i32_be(mem + ref + 4 + (uint32_t) slot * 4, v);
             break;
         }
+        /* BUG-6: campos de instancia de 8 bytes (long/double). slot = índice de
+         * slot de 4 bytes; el valor ocupa 2 slots consecutivos en ref+4+slot*4. */
+        case OP_GET_FIELD_LONG: {
+            uint8_t slot = mem[pc++];
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            int64_t v = bpvm_read_i64_be(mem + ref + 4 + (uint32_t) slot * 4);
+            bpvm_write_i64_be(mem + sp, v); sp += 8;
+            break;
+        }
+        case OP_SET_FIELD_LONG: {
+            uint8_t slot = mem[pc++];
+            sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
+            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            bpvm_write_i64_be(mem + ref + 4 + (uint32_t) slot * 4, v);
+            break;
+        }
 
         case OP_INVOKE_VIRTUAL: {
             uint8_t vt_slot = mem[pc++];

@@ -1,0 +1,54 @@
+// Wrap8Test — BUG-6 cross-module: envoltorios de 8 bytes (Long/Double/Float)
+// construidos desde OTRO módulo (Collections), con campos de 8 bytes y
+// métodos value()/compareTo()/toString(). Más un Map con claves Long.
+// Debe dar idéntico en VM Java y VM C.
+module Wrap8Test
+  import Collections
+
+  function Main()
+    // Envoltorios de 8 bytes construidos cross-module (factory + ctor con
+    // arg de 8 bytes + SET_FIELD_LONG dentro del ctor).
+    var lng: Collections.Long := Collections.Long(9000000000L)
+    print "Long.value="
+    print lng.value()
+    print "Long.toString=" + lng.toString()
+
+    var dbl: Collections.Double := Collections.Double(2.71828d)
+    print "Double.value="
+    print dbl.value()
+    print "Double.toString=" + dbl.toString()
+
+    var flt: Collections.Float := Collections.Float(1.5)
+    print "Float.toString=" + flt.toString()
+
+    // compareTo polimórfico sobre 8 bytes.
+    var a: Collections.Long := Collections.Long(100L)
+    var b: Collections.Long := Collections.Long(5000000000L)
+    print "cmp(100, 5e9)="
+    print a.compareTo(b)
+    print "cmp(5e9, 100)="
+    print b.compareTo(a)
+
+    // Map con claves Long (orden natural numérico de 64 bits).
+    var m: Collections.Map := Collections.numericMap()
+    m.put(Collections.Long(5000000000L), "cinco mil M")
+    m.put(Collections.Long(30L),         "treinta")
+    m.put(Collections.Long(9000000000L), "nueve mil M")
+    m.put(Collections.Long(100L),        "cien")
+
+    print "size="
+    print m.size()
+    print "get(9e9)=" + m.get(Collections.Long(9000000000L))
+
+    // Iteración: orden numérico de 64 bits → 30, 100, 5e9, 9e9.
+    var i: integer := 0
+    while i < m.size() do
+      var k: Collections.Long := m.keyAt(i)
+      var vv: string := m.valueAt(i)
+      print "  k="
+      print k.value()
+      print "  v=" + vv
+      i := i + 1
+    endwh
+  end Main
+end Wrap8Test

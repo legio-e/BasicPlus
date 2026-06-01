@@ -50,9 +50,9 @@ module Collections
   // Los contenedores trabajan con Object; para meter un primitivo se
   // envuelve a mano: Integer(5), Double(3.14)... Para sacarlo: .value().
   // Campos privados (no se exportan cross-module) → unboxing por método.
-  // AVISO: Integer/Boolean funcionan cross-module; Long/Double/Float aún
-  // NO (BUG-6: construcción cross-module con args de 8 bytes corrompe el
-  // valor). Sí funcionan same-module. Se arreglan al cerrar BUG-6.
+  // Integer/Long/Double/Float/Boolean funcionan same-module y cross-module
+  // (BUG-6 cerrado: campos de instancia de 8 bytes long/double + paso de
+  //  args de 8 bytes en métodos virtuales, ambas VMs en paridad).
   // -------------------------------------------------------------
 
   // Base de claves/valores ordenables. compareTo: -1 / 0 / 1.

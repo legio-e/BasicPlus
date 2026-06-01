@@ -13,7 +13,7 @@ class StringComparator public extends Comparator
   method compare(a:any,b:any):integer public
 end class
 class Double public extends Comparable
-  layout 1 3 00000000 00000000
+  layout 2 3 00000000 00000000
   ctor(x:double)
   method value():double public
   method compareTo(other:any):integer public
@@ -44,7 +44,7 @@ class NaturalComparator public extends Comparator
   method compare(a:any,b:any):integer public
 end class
 class Long public extends Comparable
-  layout 1 3 00000000 00000000
+  layout 2 3 00000000 00000000
   ctor(x:long)
   method value():long public
   method compareTo(other:any):integer public

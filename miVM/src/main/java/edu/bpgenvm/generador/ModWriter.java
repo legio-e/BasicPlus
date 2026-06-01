@@ -76,6 +76,8 @@ public class ModWriter {
         String name;
         boolean isRef;
         boolean isOwner;   // true ⇒ al liberar la instancia, liberar también este campo
+        int slot;          // BUG-6: índice de slot (4 bytes/slot) dentro de la instancia
+        boolean is8;       // BUG-6: campo de 8 bytes (long/double) → ocupa 2 slots
     }
     private static class MethodInfo {
         String simpleName;       // "hablar"
@@ -547,9 +549,15 @@ public class ModWriter {
             c.externalParent = true;
             c.externalParentQualified = parentName;   // qualifiedName
             c.parent = null;                          // sin entrada local en `classes`
+            // BUG-6: numFields = nº de SLOTS de 4 bytes del parent (un campo de
+            // 8 bytes cuenta como 2). Cada placeholder = 1 slot; un campo de 8
+            // bytes del parent se ve aquí como 2 slots no-ref consecutivos. El
+            // child nunca los lee (son __inh), sólo preservan el numbering/bitmap.
             for (int i = 0; i < externalParent.numFields; i++) {
                 FieldInfo f = new FieldInfo();
                 f.name = "__inh" + i;                 // placeholder; no usable por GET_FIELD del child
+                f.slot = i;
+                f.is8 = false;
                 int word = i >>> 5;
                 int mask = 1 << (i & 31);
                 f.isRef   = (word < externalParent.fieldBitmap.length)
@@ -580,6 +588,8 @@ public class ModWriter {
                 f.name = pf.name;
                 f.isRef = pf.isRef;
                 f.isOwner = pf.isOwner;
+                f.slot = pf.slot;     // BUG-6: preservar slot/ancho heredados
+                f.is8 = pf.is8;
                 c.fields.add(f);
             }
             for (MethodInfo pm : p.methods) {
@@ -614,8 +624,9 @@ public class ModWriter {
     /** Declara un campo en la clase abierta.
      *  @param isRef    true ⇒ el GC traza el slot.
      *  @param isOwner  true ⇒ al liberar la instancia, este campo se libera recursivamente.
+     *  @param is8      true ⇒ campo de 8 bytes (long/double): ocupa 2 slots de 4 bytes.
      */
-    public void declareField(String fieldName, boolean isRef, boolean isOwner) {
+    public void declareField(String fieldName, boolean isRef, boolean isOwner, boolean is8) {
         if (currentClass == null) {
             throw new RuntimeException("declareField fuera de una clase (¿llamada antes de addClass?)");
         }
@@ -628,12 +639,27 @@ public class ModWriter {
         f.name = fieldName;
         f.isRef = isRef;
         f.isOwner = isOwner;
+        f.is8 = is8;
+        f.slot = nextFieldSlot(currentClass);   // BUG-6: slot = suma de anchos previos
         currentClass.fields.add(f);
+    }
+
+    /** Atajo: campo de 4 bytes con owner. */
+    public void declareField(String fieldName, boolean isRef, boolean isOwner) {
+        declareField(fieldName, isRef, isOwner, false);
     }
 
     /** Atajo compatible con la API anterior (sin owner). */
     public void declareField(String fieldName, boolean isRef) {
-        declareField(fieldName, isRef, false);
+        declareField(fieldName, isRef, false, false);
+    }
+
+    /** BUG-6: índice del siguiente slot libre = slot del último campo + su ancho
+     *  (1 slot si 4 bytes, 2 slots si 8 bytes). 0 si no hay campos. */
+    private static int nextFieldSlot(ClassInfo c) {
+        if (c.fields.isEmpty()) return 0;
+        FieldInfo last = c.fields.get(c.fields.size() - 1);
+        return last.slot + (last.is8 ? 2 : 1);
     }
 
     /**
@@ -727,7 +753,10 @@ public class ModWriter {
             throw new RuntimeException("endClass sin addClass previo");
         }
         ClassInfo c = currentClass;
-        int numFields  = c.fields.size();
+        // BUG-6: num_fields es el nº de SLOTS de 4 bytes de la instancia. Un campo
+        // de 8 bytes (long/double) ocupa 2 slots, así que num_slots = suma de
+        // anchos, NO el nº de campos. NEW_OBJECT aloca num_fields*4 bytes.
+        int numFields  = nextFieldSlot(c);   // = nº total de slots de 4 bytes
         int numMethods = c.methods.size();
         int bitmapWords = (numFields + 31) >>> 5;
         int descSize = 12 + 2 * bitmapWords * 4 + numMethods * 4;
@@ -760,10 +789,13 @@ public class ModWriter {
         int[] fieldBitmap = new int[bitmapWords];
         // Owner bitmap (offset 12 + bw*4). Detecta owners para FREE_REF recursivo.
         int[] ownerBitmap = new int[bitmapWords];
-        for (int i = 0; i < numFields; i++) {
-            FieldInfo fi = c.fields.get(i);
-            if (fi.isRef)   fieldBitmap[i >>> 5] |= (1 << (i & 31));
-            if (fi.isOwner) ownerBitmap[i >>> 5] |= (1 << (i & 31));
+        // BUG-6: el bit del bitmap se indexa por SLOT (no por índice de campo).
+        // Un campo de 8 bytes ocupa 2 slots; al ser primitivo (long/double) no
+        // es ref ni owner, así que ambos slots quedan a 0 — correcto para el GC.
+        for (FieldInfo fi : c.fields) {
+            int s = fi.slot;
+            if (fi.isRef)   fieldBitmap[s >>> 5] |= (1 << (s & 31));
+            if (fi.isOwner) ownerBitmap[s >>> 5] |= (1 << (s & 31));
         }
         int fieldBitmapBase = 12;
         int ownerBitmapBase = 12 + bitmapWords * 4;
@@ -831,18 +863,19 @@ public class ModWriter {
     }
 
     public void emitGetField(String className, String fieldName) throws IOException {
-        int slot = resolveFieldSlot(className, fieldName);
-        if (slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + slot + " en " + className);
-        codeOut.writeByte(OpCode.GET_FIELD.code);
-        codeOut.writeByte((byte) slot);
+        FieldInfo f = resolveFieldInfo(className, fieldName);
+        if (f.slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + f.slot + " en " + className);
+        // BUG-6: campo de 8 bytes (long/double) → opcode ancho que lee 8 bytes.
+        codeOut.writeByte(f.is8 ? OpCode.GET_FIELD_LONG.code : OpCode.GET_FIELD.code);
+        codeOut.writeByte((byte) f.slot);
         currentBytecodeSize += 2;
     }
 
     public void emitSetField(String className, String fieldName) throws IOException {
-        int slot = resolveFieldSlot(className, fieldName);
-        if (slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + slot + " en " + className);
-        codeOut.writeByte(OpCode.SET_FIELD.code);
-        codeOut.writeByte((byte) slot);
+        FieldInfo f = resolveFieldInfo(className, fieldName);
+        if (f.slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + f.slot + " en " + className);
+        codeOut.writeByte(f.is8 ? OpCode.SET_FIELD_LONG.code : OpCode.SET_FIELD.code);
+        codeOut.writeByte((byte) f.slot);
         currentBytecodeSize += 2;
     }
 
@@ -881,13 +914,19 @@ public class ModWriter {
         currentBytecodeSize += 3;
     }
 
-    private int resolveFieldSlot(String className, String fieldName) {
+    private FieldInfo resolveFieldInfo(String className, String fieldName) {
         ClassInfo c = classes.get(className);
         if (c == null) throw new RuntimeException("Clase no declarada: " + className);
-        for (int i = 0; i < c.fields.size(); i++) {
-            if (c.fields.get(i).name.equals(fieldName)) return i;
+        for (FieldInfo f : c.fields) {
+            if (f.name.equals(fieldName)) return f;
         }
         throw new RuntimeException("Campo no encontrado en " + className + ": " + fieldName);
+    }
+
+    private int resolveFieldSlot(String className, String fieldName) {
+        // BUG-6: el slot ya no es el índice en la lista, sino el offset de slot
+        // (4 bytes/slot) acumulado, que es lo que el opcode lleva como inmediato.
+        return resolveFieldInfo(className, fieldName).slot;
     }
 
     private int resolveMethodSlot(String className, String methodSimpleName) {

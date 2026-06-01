@@ -262,7 +262,11 @@ public enum OpCode {
     F2D            (0xA4, OperandKind.NONE),   // f32 → f64
     D2F            (0xA5, OperandKind.NONE),   // f64 → f32
     L2F            (0xA6, OperandKind.NONE),   // i64 → f32
-    F2L            (0xA7, OperandKind.NONE);   // f32 → i64 (trunc)
+    F2L            (0xA7, OperandKind.NONE),   // f32 → i64 (trunc)
+    // H5/BUG-6 — campos de instancia de 8 bytes (long/double). slot(u8) =
+    // índice de slot (4 bytes/slot) del campo; r/w 8 bytes en ref+4+slot*4.
+    GET_FIELD_LONG (0xA8, OperandKind.IMM_U8), // ref=pop; push *(ref+4+slot*4) 8 bytes
+    SET_FIELD_LONG (0xA9, OperandKind.IMM_U8); // val(8)=pop; ref=pop; *(ref+4+slot*4)=val
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;

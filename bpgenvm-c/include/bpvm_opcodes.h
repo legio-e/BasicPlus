@@ -192,4 +192,10 @@
 #define OP_L2F             0xA6
 #define OP_F2L             0xA7
 
+/* 0xA8..0xA9 — BUG-6 (V2): campos de instancia de 8 bytes (long/double).
+ * slot(u8) = índice de slot de 4 bytes; el valor ocupa 2 slots consecutivos
+ * en ref+4+slot*4. Aditivos sobre la VM congelada (no cambian el .mod). */
+#define OP_GET_FIELD_LONG  0xA8
+#define OP_SET_FIELD_LONG  0xA9
+
 #endif /* BPVM_OPCODES_H */
