@@ -1,9 +1,61 @@
 bpi 6
 module Collections
+func numericMap():Map public
+func stringMap():Map public
+class Comparable public
+  layout 0 1 - -
+  ctor()
+  method compareTo(other:any):integer public
+end class
 class StringComparator public extends Comparator
   layout 0 1 - -
   ctor()
   method compare(a:any,b:any):integer public
+end class
+class Double public extends Comparable
+  layout 1 3 00000000 00000000
+  ctor(x:double)
+  method value():double public
+  method compareTo(other:any):integer public
+  method toString():string public
+end class
+class Comparator public
+  layout 0 1 - -
+  ctor()
+  method compare(a:any,b:any):integer public
+end class
+class Integer public extends Comparable
+  layout 1 3 00000000 00000000
+  ctor(x:integer)
+  method value():integer public
+  method compareTo(other:any):integer public
+  method toString():string public
+end class
+class Float public extends Comparable
+  layout 1 3 00000000 00000000
+  ctor(x:float)
+  method value():float public
+  method compareTo(other:any):integer public
+  method toString():string public
+end class
+class NaturalComparator public extends Comparator
+  layout 0 1 - -
+  ctor()
+  method compare(a:any,b:any):integer public
+end class
+class Long public extends Comparable
+  layout 1 3 00000000 00000000
+  ctor(x:long)
+  method value():long public
+  method compareTo(other:any):integer public
+  method toString():string public
+end class
+class Boolean public extends Comparable
+  layout 1 3 00000000 00000000
+  ctor(x:boolean)
+  method value():boolean public
+  method compareTo(other:any):integer public
+  method toString():string public
 end class
 class Map public
   layout 4 8 0000000f 00000000
@@ -16,9 +68,4 @@ class Map public
   method remove(key:any):boolean public
   method keyAt(i:integer):any public
   method valueAt(i:integer):any public
-end class
-class Comparator public
-  layout 0 1 - -
-  ctor()
-  method compare(a:any,b:any):integer public
 end class

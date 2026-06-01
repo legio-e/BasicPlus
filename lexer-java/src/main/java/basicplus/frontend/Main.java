@@ -1085,6 +1085,23 @@ public final class Main {
                                 cs.binaryFieldBitmap, cs.binaryOwnerBitmap);
                     }
                     int nextSlot = 0;
+                    // Herencia cross-module: si la clase extiende una base del
+                    // MISMO módulo (ya procesada antes en el .bpi — no se puede
+                    // extender una clase declarada después), sembrar sus slots
+                    // de vtable heredados. Así los métodos PROPIOS de la
+                    // subclase numeran IGUAL que el emisor: un override reusa el
+                    // slot heredado; un método nuevo se añade al final. Sin
+                    // esto, un método propio declarado antes del override
+                    // quedaba con slot desfasado → INVOKE_VIRTUAL cross-module
+                    // a la ranura equivocada (los envoltorios Integer/etc. que
+                    // extienden Comparable lo destaparon).
+                    if (cs.baseClassName != null) {
+                        Symbol.ClassSymbol baseStub = ns.classes.get(cs.baseClassName);
+                        if (baseStub != null) {
+                            stub.externalMethodSlots.putAll(baseStub.externalMethodSlots);
+                            nextSlot = baseStub.externalMethodSlots.size();
+                        }
+                    }
                     // Properties → getter (slot N) + setter (slot N+1)
                     for (ModuleInterface.PropSig p : cs.properties) {
                         Symbol.PropertySymbol psym = new Symbol.PropertySymbol(
@@ -1109,7 +1126,11 @@ public final class Main {
                         // via vtable, no via CALL_EXT. Lo que sí necesita el
                         // emisor es el slot — está en externalMethodSlots.
                         stub.instanceMembers.tryDefine(fsym);
-                        stub.externalMethodSlots.put(m.name, nextSlot++);
+                        // Override de un método heredado → mantiene su slot base
+                        // (ya sembrado). Método nuevo → siguiente slot libre.
+                        if (!stub.externalMethodSlots.containsKey(m.name)) {
+                            stub.externalMethodSlots.put(m.name, nextSlot++);
+                        }
                     }
                     // L2 v3.d — static consts públicos del .bpi. Se añaden al
                     // staticMembers del stub con literalValue para que el

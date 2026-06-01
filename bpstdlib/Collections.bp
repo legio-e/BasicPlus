@@ -46,6 +46,158 @@ module Collections
   end StringComparator
 
   // -------------------------------------------------------------
+  // Comparable + envoltorios (boxing MANUAL de primitivos).
+  // Los contenedores trabajan con Object; para meter un primitivo se
+  // envuelve a mano: Integer(5), Double(3.14)... Para sacarlo: .value().
+  // Campos privados (no se exportan cross-module) → unboxing por método.
+  // AVISO: Integer/Boolean funcionan cross-module; Long/Double/Float aún
+  // NO (BUG-6: construcción cross-module con args de 8 bytes corrompe el
+  // valor). Sí funcionan same-module. Se arreglan al cerrar BUG-6.
+  // -------------------------------------------------------------
+
+  // Base de claves/valores ordenables. compareTo: -1 / 0 / 1.
+  public class Comparable
+    public function Comparable()
+    end Comparable
+    public function compareTo(other: Object): integer
+      return 0
+    end compareTo
+  end Comparable
+
+  public class Integer extends Comparable
+    var v: integer
+    public function Integer(x: integer)
+      super()
+      this.v := x
+    end Integer
+    public function value(): integer
+      return this.v
+    end value
+    public function compareTo(other: Object): integer
+      var o: Integer := other
+      if this.v < o.v then
+        return -1
+      endif
+      if this.v > o.v then
+        return 1
+      endif
+      return 0
+    end compareTo
+    public function toString(): string
+      return intToString(this.v)
+    end toString
+  end Integer
+
+  public class Long extends Comparable
+    var v: long
+    public function Long(x: long)
+      super()
+      this.v := x
+    end Long
+    public function value(): long
+      return this.v
+    end value
+    public function compareTo(other: Object): integer
+      var o: Long := other
+      if this.v < o.v then
+        return -1
+      endif
+      if this.v > o.v then
+        return 1
+      endif
+      return 0
+    end compareTo
+    public function toString(): string
+      return Str.longToString(this.v)
+    end toString
+  end Long
+
+  public class Double extends Comparable
+    var v: double
+    public function Double(x: double)
+      super()
+      this.v := x
+    end Double
+    public function value(): double
+      return this.v
+    end value
+    public function compareTo(other: Object): integer
+      var o: Double := other
+      if this.v < o.v then
+        return -1
+      endif
+      if this.v > o.v then
+        return 1
+      endif
+      return 0
+    end compareTo
+    public function toString(): string
+      return Str.doubleToString(this.v)
+    end toString
+  end Double
+
+  public class Float extends Comparable
+    var v: float
+    public function Float(x: float)
+      super()
+      this.v := x
+    end Float
+    public function value(): float
+      return this.v
+    end value
+    public function compareTo(other: Object): integer
+      var o: Float := other
+      if this.v < o.v then
+        return -1
+      endif
+      if this.v > o.v then
+        return 1
+      endif
+      return 0
+    end compareTo
+    public function toString(): string
+      return Str.doubleToString(this.v)
+    end toString
+  end Float
+
+  public class Boolean extends Comparable
+    var v: boolean
+    public function Boolean(x: boolean)
+      super()
+      this.v := x
+    end Boolean
+    public function value(): boolean
+      return this.v
+    end value
+    public function compareTo(other: Object): integer
+      var o: Boolean := other
+      if (not this.v) and o.v then
+        return -1
+      endif
+      if this.v and (not o.v) then
+        return 1
+      endif
+      return 0
+    end compareTo
+    public function toString(): string
+      return boolToString(this.v)
+    end toString
+  end Boolean
+
+  // Comparador natural: ordena claves Comparable por su compareTo
+  // (polimórfico). Para claves boxed (Integer/Long/Double/...):
+  //   var m := Collections.Map().withComparator(Collections.NaturalComparator())
+  public class NaturalComparator extends Comparator
+    public function NaturalComparator()
+      super()
+    end NaturalComparator
+    public function compare(a: Object, b: Object): integer
+      var ca: Comparable := a
+      return ca.compareTo(b)
+    end compare
+  end NaturalComparator
+
+  // -------------------------------------------------------------
   // Map — diccionario ordenado por clave.
   // -------------------------------------------------------------
   public class Map
@@ -182,5 +334,22 @@ module Collections
     end valueAt
 
   end Map
+
+  // -------------------------------------------------------------
+  // Factories. Construyen el comparador DENTRO del módulo (donde el
+  // subtipado subclase→base funciona). Pasar una subclase de Comparator
+  // cross-module aún no va (GAP-3), así que el usuario usa estos factories
+  // en vez de Map().withComparator(miCmp) desde fuera.
+  // -------------------------------------------------------------
+
+  // Map con claves string (orden lexicográfico). = Collections.Map().
+  public function stringMap(): Map
+    return Map()
+  end stringMap
+
+  // Map con claves boxed Comparable (Integer/Long/Double/...), orden natural.
+  public function numericMap(): Map
+    return Map().withComparator(NaturalComparator())
+  end numericMap
 
 end Collections

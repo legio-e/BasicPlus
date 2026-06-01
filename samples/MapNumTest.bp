@@ -1,0 +1,32 @@
+module MapNumTest
+  import Collections
+
+  function Main()
+    // Map con claves Integer (boxing manual) + comparador natural (numérico).
+    var m: Collections.Map := Collections.numericMap()
+    m.put(Collections.Integer(30), "treinta")
+    m.put(Collections.Integer(5),  "cinco")
+    m.put(Collections.Integer(100),"cien")
+    m.put(Collections.Integer(42), "cuarentaydos")
+
+    print "size=" + intToString(m.size())
+    var v: string := m.get(Collections.Integer(42))
+    print "get(42) -> " + v
+    print "contains 5: " + boolToString(m.containsKey(Collections.Integer(5)))
+    print "contains 7: " + boolToString(m.containsKey(Collections.Integer(7)))
+
+    // Iteración en orden de clave: debe ser NUMÉRICO (5,30,42,100),
+    // no lexicográfico (que daría 100,30,42,5).
+    var i: integer := 0
+    while i < m.size() do
+      var k: Collections.Integer := m.keyAt(i)
+      var vv: string := m.valueAt(i)
+      print "  [" + intToString(i) + "] " + intToString(k.value()) + " = " + vv
+      i := i + 1
+    endwh
+
+    print "Integer(7).toString = " + Collections.Integer(7).toString()
+    print "Double(3.5).toString = " + Collections.Double(3.5d).toString()
+    print "Boolean(true).toString = " + Collections.Boolean(true).toString()
+  end Main
+end MapNumTest

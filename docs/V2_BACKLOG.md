@@ -1401,5 +1401,50 @@ Habilitado lo MÍNIMO para el `Map` (Fase A, boxing manual):
   ahora aceptan `Object`/`any`. (Cambios de compilador, pequeños.)
 - **`Map` (H4.A.2) HECHO** con claves string, comparador‑objeto, thread-safe
   (Mutex), búsqueda binaria, paridad dual-VM. En `bpstdlib/Collections.bp`.
-- **Pendiente (siguiente paso)**: clases envoltorio `Integer`/`Long`/`Float`/
-  `Double`/`Boolean` (boxing manual) + comparadores para claves no-string.
+- **Envoltorios (2026-06-01)**: `Comparable` base + `Integer`/`Long`/`Float`/
+  `Double`/`Boolean` (boxing manual: `Integer(5)`, unbox por `value()`) +
+  `NaturalComparator` (orden natural vía `compareTo` polimórfico) en
+  `Collections.bp`. Factories `Collections.stringMap()` / `numericMap()`.
+- **Dekeyword (2026-06-01)**: `integer`/`float`/`string`/`boolean`/`long`/
+  `double` ya NO son palabras reservadas (eran case-insensitive → bloqueaban
+  `Integer` como clase). Ahora son identificadores; tipos y casts siguen
+  resolviéndose por nombre. Ver Lexer.java. (Tipos estrechos byte/int8/...
+  siguen reservados.)
+- **Estado**: Map con claves **string** e **Integer** ✅ dual-VM (orden
+  numérico correcto). Wrappers de 4 bytes (Integer/Boolean) cross-module ✅.
+  Long/Double/Float cross-module ❌ por **BUG-6** (abajo).
+
+## BUG-5 — slots de vtable cross-module no cuentan la herencia (✅ ARREGLADO 2026-06-01)
+
+**Síntoma**: llamar cross-module un método PROPIO de una subclase (no heredado)
+saltaba a la ranura equivocada ("INVOKE_VIRTUAL slot N no resoluble"). Lo
+destaparon los envoltorios (`Integer extends Comparable`): `k.value()` fallaba.
+
+**Causa**: el importador (`Main.java`) calculaba el slot de cada método como
+`properties*2 + índice en el .bpi`, **sin sembrar los slots heredados de la
+base**. El `.bpi` de la subclase lista solo sus métodos propios (en orden de
+declaración), así que un método nuevo declarado antes del override quedaba con
+slot desfasado respecto a la vtable real (heredados primero, override en su slot
+base, nuevos al final).
+
+**Fix**: el importador siembra `externalMethodSlots` desde el stub de la base
+(misma familia que BUG-4), arranca `nextSlot` tras los slots heredados, y los
+métodos propios: override→mantiene slot base, nuevo→append. Replica exactamente
+`ModWriter.addClass`/`addMethod`. (Base same-module; base cross-module queda
+pendiente — caso más raro.)
+
+## BUG-6 — construcción cross-module con args de 8 bytes (long/double) corrompe (ABIERTO)
+
+**Síntoma**: `OtroMod.Clase(argLong)` o `(argDouble)` cross-module guarda un
+valor CORRUPTO. `Collections.Long(123456789012L)` → basura; `Double(3.5d)` →
+fault. Integer/Boolean (4 bytes) van bien → es específico de args de **8 bytes**.
+
+**Causa probable**: la factoría `__cls_new_<Cls>(x: long/double)` (CALL_EXT
+cross-module) no marshala bien el argumento de 8 bytes — misma familia que BUG-1
+(long/double cross-module) pero en los args del constructor/factory. A
+investigar: emisor del call a la factoría + convención de args de 8 bytes en
+CALL_EXT.
+
+**Impacto**: bloquea los envoltorios Long/Double/Float cross-module (Integer/
+Boolean OK). El Map con claves Integer funciona; con claves Long/Double no aún.
+Encontrado en H4.A.2 (2026-06-01).

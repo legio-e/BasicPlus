@@ -113,13 +113,21 @@ public final class Lexer {
         m.put("throw",    TokenType.THROW);
         // E/S
         m.put("print",    TokenType.PRINT);
-        // tipos
-        m.put("integer",  TokenType.INTEGER);
-        m.put("float",    TokenType.FLOAT);
-        m.put("string",   TokenType.STRING);
-        m.put("boolean",  TokenType.BOOLEAN);
-        m.put("long",     TokenType.LONG);   // H1.2 (V2): entero 64-bit
-        m.put("double",   TokenType.DOUBLE); // H1.3 (V2): float 64-bit
+        // tipos escalares: NO son palabras reservadas (H5 / 2026-06-01).
+        // Las keywords son case-insensitive, así que reservar `integer`
+        // bloqueaba `Integer` como nombre de clase (los envoltorios boxed
+        // estilo Java: Integer/Long/Float/Double/Boolean). Solución: que
+        // `integer`/`float`/... sean IDENTIFICADORES normales. Sigue todo
+        // funcionando porque:
+        //   - tipo `var x: integer` → parseType rama IDENTIFIER →
+        //     SimpleTypeRef("integer") → resolveType lo mapea a PrimitiveType.
+        //   - cast `integer(x)` → rama IDENTIFIER → CallExpr(Identifier
+        //     "integer") = MISMO AST que el cast keyword → el semántico/
+        //     emisor lo reconocen por nombre.
+        //   - `Integer` es un identificador DISTINTO (case-sensitive) →
+        //     queda libre como nombre de clase.
+        // (Los tipos estrechos byte/int8/word/int16/short siguen reservados
+        //  de momento; se pueden liberar igual si se necesitan como clase.)
         // tipos enteros estrechos (L10)
         m.put("byte",     TokenType.BYTE);
         m.put("int8",     TokenType.INT8);
