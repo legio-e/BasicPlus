@@ -1,0 +1,62 @@
+module StrTest
+
+  import Str
+
+  function Main()
+    print "== longToString =="
+    print Str.longToString(0)
+    print Str.longToString(42)
+    print Str.longToString(-42)
+    print Str.longToString(1000000L)
+    print Str.longToString(-1000000L)
+    print Str.longToString(9223372036854775807L)
+
+    print "== formatDouble =="
+    print Str.formatDouble(3.14159d, 2)
+    print Str.formatDouble(3.14159d, 0)
+    print Str.formatDouble(2.5d, 0)
+    print Str.formatDouble(-3.14159d, 2)
+    print Str.formatDouble(123.456d, 2)
+    print Str.formatDouble(123.456d, 1)
+    print Str.formatDouble(1.0d, 3)
+
+    print "== doubleToString =="
+    print Str.doubleToString(3.14d)
+    print Str.doubleToString(2.0d)
+    print Str.doubleToString(0.5d)
+    print Str.doubleToString(-1.25d)
+    print Str.doubleToString(100.0d)
+
+    print "== toHex =="
+    print Str.toHex(0)
+    print Str.toHex(255L)
+    print Str.toHex(4096L)
+    print Str.toHex(16L)
+    print Str.toHex(-1L)
+
+    print "== fromCharCode =="
+    print Str.fromCharCode(65)
+    print Str.fromCharCode(233)
+    print Str.fromCharCode(8364)
+
+    print "== lastIndexOf =="
+    print Str.longToString(Str.lastIndexOf("a/b/c/d", "/"))
+    print Str.longToString(Str.lastIndexOf("hello", "l"))
+    print Str.longToString(Str.lastIndexOf("abc", "x"))
+    print Str.longToString(Str.lastIndexOf("hello", ""))
+    print Str.longToString(Str.lastIndexOf("banana", "ana"))
+
+    print "== compare =="
+    print Str.longToString(Str.compare("abc", "abc"))
+    print Str.longToString(Str.compare("abc", "abd"))
+    print Str.longToString(Str.compare("abd", "abc"))
+    print Str.longToString(Str.compare("ab", "abc"))
+    print Str.longToString(Str.compare("abc", "ab"))
+
+    print "== pad =="
+    print "[" + Str.padLeft("42", 5) + "]"
+    print "[" + Str.padRight("42", 5) + "]"
+    print "[" + Str.padLeft(Str.formatDouble(3.14159d, 2), 8) + "]"
+  end Main
+
+end StrTest

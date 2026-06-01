@@ -1261,3 +1261,70 @@ alto. Recomendación: empezar por (A) (slot fijo) si se aborda.
 > host-simulador, IDE (RSTA+FlatLaf+recientes), stdlib (TCP/CAN/JSON +
 > native) y debugger. Pendiente cuando arranque v2: pasada de
 > priorización y convertir puntos en tareas.
+
+---
+
+# Bugs conocidos / a arreglar más adelante
+
+Defectos encontrados durante el desarrollo. Los que NO se arreglan en el
+momento (porque tocan VM o exceden el alcance de la tarea actual) se anotan
+aquí para abordarlos en una ronda de bugfix dedicada.
+
+## BUG-1 — `.bpi`: tipos `long`/`double` no se parseaban (✅ ARREGLADO 2026-06-01)
+
+**Síntoma**: pasar un `int` a un parámetro `long` de una función **cross-module**
+daba basura (la pila se desalineaba: 1 slot empujado donde el callee espera 2).
+`toHex(255)`, `longToString(5)`, etc. → valores corruptos. Los literales `L` y
+`long(...)` explícitos funcionaban.
+
+**Causa**: `ModuleInterface.parseType` (lector del `.bpi`) tenía casos para
+`integer/float/string/boolean/int8/uint8/int16/uint16/any` pero **faltaban `long`
+y `double`** → un parámetro `long` importado se trataba como `UnresolvedClassRef`,
+así que `coerceToTarget` (que no veía un `PrimitiveType`) no insertaba el
+widening `I32_TO_I64`. Análogo al fix de tipos estrechos de H1.1; se olvidó
+`long`/`double` (H1.2/H1.3) y nadie lo pisó hasta exportar el primer módulo
+stdlib con parámetros `long`/`double` (Str, H4.A).
+
+**Fix**: dos `case` en `parseType` (`long`→PrimitiveType.LONG, `double`→DOUBLE).
+Solo el lector `.bpi`; NO toca VM ni `.mod`. Descubierto y arreglado en H4.A.
+
+**Impacto retroactivo**: afectaba a CUALQUIER función cross-module con
+parámetro/retorno `long`/`double`. El `double` no había saltado solo porque
+los call-sites pasaban literales `d` (ya 64-bit, sin coerción).
+
+## BUG-2 — Excepciones no se atrapan cross-module (ABIERTO)
+
+**Síntoma**: un `throw RuntimeError(...)` lanzado **dentro de un módulo importado**
+NO lo atrapa el `try/catch e: RuntimeError` del módulo que lo importa → la
+excepción propaga sin atrapar y termina el programa. **Same-module SÍ atrapa**
+(verificado: `caught LOCAL ok` vs cross-module no atrapado).
+
+**Causa probable**: la identidad de clase del `RuntimeError` sintetizado **no se
+unifica entre módulos** → el match de tipo del `catch` durante el unwind falla
+(el `classPtr` del objeto lanzado no coincide con el `RuntimeError` que espera el
+catch del importador). Familia de la identidad de clase cross-module (L2).
+
+**Impacto (sistémico, no solo Str)**: afecta a TODO módulo importado que lance —
+p.ej. `Json.parseJson(textoInvalido)` lanza RuntimeError que el usuario **no
+puede atrapar** desde su programa. También a `Str.fromCharCode(cpInvalido)`.
+
+**Por qué no se arregla ahora**: toca la maquinaria de excepciones / identidad de
+clase (VM) — fuera del alcance "sin tocar VM" de H4.A. Mientras tanto, las
+funciones de H4.A se diseñan para **no lanzar cross-module** (Map.get→null,
+Stats→centinelas); `fromCharCode` mantiene el throw (error de programador, "falla
+ruidoso" hasta que se arregle esto).
+
+**Encontrado**: H4.A (2026-06-01).
+
+## GAP-1 — VM-C: subconjunto de builtins de string (conocido, por diseño F2)
+
+**Qué**: el VM-C implementa solo un subconjunto de los builtins de string del
+VM-Java. SÍ tiene: `strlen`, `substring`, `charAt`, `charCodeAt`,
+`__charsToString`, `intToString`, `parseInt`, `boolToString`, `newIntArray`,
+`StringBuilder`. **NO** tiene: `indexOf`, `upper`, `lower`, `trim`, `startsWith`,
+`endsWith`, `contains`, `replace`, `floatToString`, `parseFloat`.
+
+**Implicación**: la stdlib **en BP puro pensada para correr en el MCU** debe
+ceñirse al subconjunto del VM-C (lo hace `Str`). Si se quisieran esas funciones
+en el MCU, habría que implementarlas en el VM-C (trabajo de VM). No es un bug —
+es el estado conocido del "F2 subset"; anotado aquí por su impacto en H4.

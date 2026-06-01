@@ -1,0 +1,272 @@
+// ============================================================
+// Str.bp — utilidades de string en BasicPlus puro (H4.A).
+//
+// 100% BP: NO añade builtins ni toca la VM. Por estar escrito en BP,
+// las dos VMs (Java y C) ejecutan EL MISMO bytecode → resultado
+// idéntico por construcción (paridad gratis, verificada dual-VM).
+//
+// IMPORTANTE — subconjunto portable: el C VM (MCU) implementa solo un
+// subconjunto de builtins de string. Este módulo se ciñe a los que SÍ
+// tiene el C VM: strlen, substring, charAt, charCodeAt, __charsToString,
+// intToString, newIntArray y StringBuilder. NO usa indexOf/upper/lower/
+// trim/etc. (Java-VM-only) para no romper la paridad en el MCU.
+//
+// Uso:
+//   import Str
+//   print Str.formatDouble(3.14159, 2)      // "3.14"
+//   print Str.padLeft(Str.formatDouble(x,2), 8)   // estilo Pascal x:8:2
+//   print Str.toHex(255)                     // "ff"
+//   var c: integer := Str.compare("abc", "abd")    // -1
+//
+// Convenciones:
+//   - índices y comparación por CODEPOINT (no byte) — coherente con H2.
+//   - parse* (que devuelven tupla {err,valor}) NO están aquí: son H4.B,
+//     dependen de las tuplas.
+// ============================================================
+module Str
+
+  // -------------------------------------------------------------
+  // Helpers internos
+  // -------------------------------------------------------------
+
+  // Código ASCII del dígito hex de un nibble (0..15). minúsculas.
+  function hexDigitCode(d: integer): integer
+    if d < 10 then
+      return 48 + d                 // '0' + d
+    endif
+    return 87 + d                   // 'a' + (d - 10)
+  end hexDigitCode
+
+  // -------------------------------------------------------------
+  // Conversión long -> string (base 10)
+  // -------------------------------------------------------------
+  // Trabaja en "espacio negativo" para no desbordar con el long
+  // mínimo (que no se puede negar).
+  public function longToString(x: long): string
+    if x == 0 then
+      return "0"
+    endif
+    var neg: boolean := x < 0
+    var v: long := x
+    if not neg then
+      v := -v                       // ahora v <= 0 siempre
+    endif
+    var digits: integer[] := newIntArray(24)
+    var nd: integer := 0
+    while v < 0 do
+      var d: integer := integer(-(v mod 10))   // 0..9 (v es negativo)
+      digits[nd] := d
+      nd := nd + 1
+      v := v / 10
+    endwh
+    var sb: StringBuilder := StringBuilder()
+    if neg then
+      sb.appendChar(45)             // '-'
+    endif
+    var i: integer := nd - 1
+    while i >= 0 do
+      sb.appendChar(48 + digits[i]) // '0' + dígito
+      i := i - 1
+    endwh
+    return sb.toString()
+  end longToString
+
+  // -------------------------------------------------------------
+  // double -> string con decimales fijos (Pascal x:dec)
+  // -------------------------------------------------------------
+  // Punto fijo, SIN notación científica, redondeo al más cercano.
+  // Limitación documentada: magnitudes enormes (x * 10^dec por encima
+  // de ~9.2e18) desbordan el long de escalado.
+  public function formatDouble(x: double, dec: integer): string
+    var neg: boolean := x < 0.0
+    var ax: double := x
+    if neg then
+      ax := -ax
+    endif
+    var scale: long := 1
+    var i: integer := 0
+    while i < dec do
+      scale := scale * 10
+      i := i + 1
+    endwh
+    var scaled: long := long(ax * double(scale) + 0.5)
+    if scaled == 0 then
+      neg := false                  // evita "-0.00"
+    endif
+    var intPart: long := scaled / scale
+    var fracPart: long := scaled mod scale
+    var sb: StringBuilder := StringBuilder()
+    if neg then
+      sb.appendChar(45)             // '-'
+    endif
+    sb.appendStr(longToString(intPart))
+    if dec > 0 then
+      sb.appendChar(46)             // '.'
+      var fs: string := longToString(fracPart)
+      var pad: integer := dec - strlen(fs)
+      var k: integer := 0
+      while k < pad do
+        sb.appendChar(48)           // '0' de relleno a la izquierda
+        k := k + 1
+      endwh
+      sb.appendStr(fs)
+    endif
+    return sb.toString()
+  end formatDouble
+
+  // -------------------------------------------------------------
+  // double -> string por defecto
+  // -------------------------------------------------------------
+  // Punto fijo, sin sci, recortando ceros de cola (y el punto si
+  // queda suelto). Para control fino usa formatDouble.
+  public function doubleToString(x: double): string
+    var s: string := formatDouble(x, 6)    // dec=6 → siempre incluye '.'
+    var stop: integer := strlen(s)
+    while stop > 0 and charCodeAt(s, stop - 1) == 48 do   // quita '0'
+      stop := stop - 1
+    endwh
+    if stop > 0 and charCodeAt(s, stop - 1) == 46 then     // quita '.' suelto
+      stop := stop - 1
+    endif
+    return substring(s, 0, stop)
+  end doubleToString
+
+  // -------------------------------------------------------------
+  // long -> hex (minúsculas, sin prefijo 0x)
+  // -------------------------------------------------------------
+  // Patrón de bits de 64 bits (negativos = complemento a 2). Recorta
+  // nibbles cero a la izquierda. toHex(0) = "0".
+  public function toHex(x: long): string
+    if x == 0 then
+      return "0"
+    endif
+    var sb: StringBuilder := StringBuilder()
+    var started: boolean := false
+    var i: integer := 15
+    while i >= 0 do
+      var nib: integer := integer((x shr (i * 4)) & 15)
+      if nib != 0 or started then
+        started := true
+        sb.appendChar(hexDigitCode(nib))
+      endif
+      i := i - 1
+    endwh
+    return sb.toString()
+  end toHex
+
+  // -------------------------------------------------------------
+  // fromCharCode: un codepoint -> string de 1 carácter
+  // -------------------------------------------------------------
+  // Fuera del rango Unicode (o surrogate) -> RuntimeError (fallo del
+  // programador, no input de usuario).
+  public function fromCharCode(cp: integer): string
+    if cp < 0 or cp > 1114111 then          // 0x10FFFF
+      throw RuntimeError("fromCharCode: codepoint fuera de rango Unicode: " + intToString(cp))
+    endif
+    if cp >= 55296 and cp <= 57343 then       // D800..DFFF surrogates
+      throw RuntimeError("fromCharCode: codepoint surrogate invalido: " + intToString(cp))
+    endif
+    var sb: StringBuilder := StringBuilder()
+    sb.appendChar(cp)
+    return sb.toString()
+  end fromCharCode
+
+  // -------------------------------------------------------------
+  // lastIndexOf: última aparición de sub en s (índice codepoint)
+  // -------------------------------------------------------------
+  // -1 si no aparece. sub vacío devuelve strlen(s) (convención Java).
+  public function lastIndexOf(s: string, sub: string): integer
+    var ls: integer := strlen(s)
+    var lsub: integer := strlen(sub)
+    if lsub == 0 then
+      return ls
+    endif
+    if lsub > ls then
+      return -1
+    endif
+    var start: integer := ls - lsub
+    while start >= 0 do
+      var k: integer := 0
+      var ok: boolean := true
+      while ok and k < lsub do
+        if charCodeAt(s, start + k) != charCodeAt(sub, k) then
+          ok := false
+        endif
+        k := k + 1
+      endwh
+      if ok then
+        return start
+      endif
+      start := start - 1
+    endwh
+    return -1
+  end lastIndexOf
+
+  // -------------------------------------------------------------
+  // compare: orden lexicográfico por codepoint. -1 / 0 / 1
+  // -------------------------------------------------------------
+  // Es el comparador por defecto del Map (H4.A).
+  public function compare(a: string, b: string): integer
+    var la: integer := strlen(a)
+    var lb: integer := strlen(b)
+    var n: integer := la
+    if lb < n then
+      n := lb
+    endif
+    var i: integer := 0
+    while i < n do
+      var ca: integer := charCodeAt(a, i)
+      var cb: integer := charCodeAt(b, i)
+      if ca < cb then
+        return -1
+      endif
+      if ca > cb then
+        return 1
+      endif
+      i := i + 1
+    endwh
+    if la < lb then
+      return -1
+    endif
+    if la > lb then
+      return 1
+    endif
+    return 0
+  end compare
+
+  // -------------------------------------------------------------
+  // Justificación de campo (Pascal x:ancho)
+  // -------------------------------------------------------------
+  public function padLeft(s: string, ancho: integer): string
+    var n: integer := strlen(s)
+    if n >= ancho then
+      return s
+    endif
+    var sb: StringBuilder := StringBuilder()
+    var pad: integer := ancho - n
+    var i: integer := 0
+    while i < pad do
+      sb.appendChar(32)             // espacio
+      i := i + 1
+    endwh
+    sb.appendStr(s)
+    return sb.toString()
+  end padLeft
+
+  public function padRight(s: string, ancho: integer): string
+    var n: integer := strlen(s)
+    if n >= ancho then
+      return s
+    endif
+    var sb: StringBuilder := StringBuilder()
+    sb.appendStr(s)
+    var pad: integer := ancho - n
+    var i: integer := 0
+    while i < pad do
+      sb.appendChar(32)             // espacio
+      i := i + 1
+    endwh
+    return sb.toString()
+  end padRight
+
+end Str

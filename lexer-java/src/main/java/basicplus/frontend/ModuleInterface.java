@@ -1101,6 +1101,15 @@ public final class ModuleInterface {
             case "float":   return PrimitiveType.FLOAT;
             case "string":  return PrimitiveType.STRING;
             case "boolean": return PrimitiveType.BOOLEAN;
+            // H1.2/H1.3 (V2) — escalares de 64 bits cross-module en .bpi.
+            // Se habían omitido aquí (el serializador SÍ los escribe); sin esto
+            // un parámetro/retorno `long`/`double` importado se trataba como
+            // UnresolvedClassRef → coerceToTarget no insertaba el widening
+            // int→long → desalineación de slots. Análogo al fix de tipos
+            // estrechos (H1.1). Descubierto al exportar Str (primer módulo con
+            // parámetros long/double).
+            case "long":    return PrimitiveType.LONG;
+            case "double":  return PrimitiveType.DOUBLE;
             // H1.1 (V2) — tipos estrechos en .bpi (byte[]/word[]/int8[]/...
             // cross-module). El serializador escribe el nombre del enum en
             // minúsculas (typeToString: tag.name().toLowerCase()): UINT8→"uint8",
