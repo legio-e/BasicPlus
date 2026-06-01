@@ -1,0 +1,69 @@
+// StatsTest — ejercita Stats (H4.A.3) en ambas VMs.
+// Las dobles se imprimen vía Str.formatDouble (BP puro) para tener paridad
+// exacta Java VM ↔ C VM: el `print <double>` crudo (DPRINT) formatea distinto
+// en cada VM (Java = Double.toString; C = printf) — GAP-4, ver backlog.
+module StatsTest
+  import Stats
+  import Str
+
+  function Main()
+    // Muestra clásica: [2,4,4,4,5,5,7,9] (n=8). mean=5, var muestral=32/7,
+    // min=2 max=9 range=7 mediana=4.5.
+    var d: double[] := newDoubleArray(8)
+    d[0] := 2.0d
+    d[1] := 4.0d
+    d[2] := 4.0d
+    d[3] := 4.0d
+    d[4] := 5.0d
+    d[5] := 5.0d
+    d[6] := 7.0d
+    d[7] := 9.0d
+
+    print "sum=" + Str.formatDouble(Stats.sum(d, 0, 8), 4)
+    print "mean=" + Str.formatDouble(Stats.mean(d, 0, 8), 4)
+    print "min=" + Str.formatDouble(Stats.min(d, 0, 8), 4)
+    print "max=" + Str.formatDouble(Stats.max(d, 0, 8), 4)
+    print "range=" + Str.formatDouble(Stats.range(d, 0, 8), 4)
+    print "variance=" + Str.formatDouble(Stats.variance(d, 0, 8), 6)
+    print "stdDev=" + Str.formatDouble(Stats.stdDev(d, 0, 8), 6)
+    print "median=" + Str.formatDouble(Stats.median(d, 0, 8), 4)
+    print "p25=" + Str.formatDouble(Stats.percentile(d, 0, 8, 25.0d), 4)
+    print "p50=" + Str.formatDouble(Stats.percentile(d, 0, 8, 50.0d), 4)
+
+    // sqrt propia (Newton-Raphson).
+    print "sqrt(2)=" + Str.formatDouble(Stats.sqrtD(2.0d), 6)
+    print "sqrt(1e6)=" + Str.formatDouble(Stats.sqrtD(1000000.0d), 4)
+
+    // Slice con offset: subventana d[5..7] = [5,7,9], mean=7.
+    print "slice mean(off=5,n=3)=" + Str.formatDouble(Stats.mean(d, 5, 3), 4)
+
+    // Accumulator (streaming) sobre la misma muestra.
+    var acc: Stats.Accumulator := Stats.Accumulator()
+    var i: integer := 0
+    while i < 8 do
+      acc.add(d[i])
+      i := i + 1
+    endwh
+    print "acc.count=" + intToString(acc.count())
+    print "acc.mean=" + Str.formatDouble(acc.mean(), 4)
+    print "acc.variance=" + Str.formatDouble(acc.variance(), 6)
+    print "acc.min=" + Str.formatDouble(acc.min(), 4)
+    print "acc.max=" + Str.formatDouble(acc.max(), 4)
+
+    // Regresión lineal: y = 2x + 0 (perfecta) → slope=2, intercept=0, r=1.
+    var xs: double[] := newDoubleArray(5)
+    var ys: double[] := newDoubleArray(5)
+    var j: integer := 0
+    while j < 5 do
+      xs[j] := double(j + 1)
+      ys[j] := double((j + 1) * 2)
+      j := j + 1
+    endwh
+    print "covariance=" + Str.formatDouble(Stats.covariance(xs, 0, ys, 0, 5), 4)
+    print "correlation=" + Str.formatDouble(Stats.correlation(xs, 0, ys, 0, 5), 6)
+    var fit: Stats.LinFit := Stats.linfit(xs, 0, ys, 0, 5)
+    print "slope=" + Str.formatDouble(fit.slope(), 4)
+    print "intercept=" + Str.formatDouble(fit.intercept(), 4)
+    print "predict(6)=" + Str.formatDouble(fit.predict(6.0d), 4)
+  end Main
+end StatsTest

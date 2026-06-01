@@ -73,9 +73,12 @@ efectivamente congelada.** Lo que sigue se construye encima sin tocarla:
     * **String**, subconjunto sin tuplas: `longToString`, `doubleToString`,
       `formatDouble`, `padLeft`/`padRight`, `toHex`, `lastIndexOf`,
       `fromCharCode`, `compare` (§14b).
-    * **`Map`** (§14c) — pura BP sobre `List` + `synchronized`; usa `compare`.
-    * **`Stats`** (§14d) — pura BP; `Accumulator` (Welford) + funciones
-      sobre `double[]`; usa la clase `LinFit` mientras no haya tuplas.
+    * **`Map`** (§14c) ✅ — pura BP sobre `List` + `synchronized`; usa `compare`.
+      Claves string / Integer / Long, paridad dual-VM.
+    * **`Stats`** (§14d) ✅ — pura BP; `Accumulator` (Welford) + funciones sobre
+      slice `double[]` `(data, off, n)` + `LinFit`. `sqrt` propia (Newton).
+      Paridad dual-VM (formateando con `Str.formatDouble`; ver GAP-4). **H4.A
+      completa.**
   - **H4.B — SÍ afecta al compilador** (requiere feature de lenguaje antes):
     * **Tuplas (§2)** — prerrequisito (campos nombrados).
     * Luego los `parse*` (`parseLong`/`parseDouble`/`parseHex`) que devuelven
@@ -1086,7 +1089,14 @@ invocado por `INVOKE_VIRTUAL` (maquinaria existente) → **cero coste de VM**.
 Cero VM. **Dependencia**: `compare` de string (§14b) para el comparador
 por defecto. No depende de tuplas.
 
-## 14d. `Stats` — módulo de estadística (diseño cerrado, 2026-05-31)
+## 14d. `Stats` — módulo de estadística (✅ IMPLEMENTADO 2026-06-01)
+
+**Estado**: hecho en `bpstdlib/Stats.bp`, BP puro, paridad dual-VM (test
+`samples/StatsTest.bp`). API de slice **(data, off, n)** (decisión del usuario:
+buffer+offset+longitud — permite analizar subventanas de un buffer compartido
+sin copiar). `Accumulator` (Welford), `LinFit` (2 campos double, ejercita
+BUG-6), `sqrt` propia (Newton, paridad exacta). Centinelas en casos degenerados.
+
 
 **Qué**: funciones estadísticas. **No tiene que ser estándar** — módulo
 **adicional** (decisión del usuario).
@@ -1392,6 +1402,28 @@ accesores por índice (`keyAt(i)/valueAt(i): Object`) en vez de `keys(): List`.
 **Fix propio (pendiente, compilador)**: resolver los nombres built-in en firmas
 importadas a la clase sintetizada global (unificar identidad). Encontrado en
 H4.A.2 (2026-06-01).
+
+## GAP-4 — formateo de double/float en `print` crudo difiere entre VMs (descubierto 2026-06-01)
+
+**Qué**: `print <double>` (opcode DPRINT) y `print <float>` (FPRINT) formatean
+distinto en cada VM. Java usa `Double.toString` (repr. de ida-y-vuelta más corta,
+notación E para magnitudes grandes/pequeñas); la VM-C usa `printf` con menos
+dígitos significativos y sin notación E. Ejemplos: `4.571428571428571` (Java) vs
+`4.57142857142857` (C); `1.0E9` vs `1000000000.0`; `1.0000000000000002` vs `1.0`.
+
+**Importante**: NO es un fallo de cálculo — el `double` subyacente es BIT-IDÉNTICO
+en ambas VMs (la aritmética IEEE-64 tiene paridad exacta). Es solo el FORMATO de
+impresión. Valores "simples" (p.ej. `3.14159`, enteros pequeños) ya coinciden;
+divergen los que requieren precisión completa (~17 dígitos) o notación científica.
+
+**Workaround actual**: formatear con `Str.formatDouble(x, dec)` / `Str.doubleToString(x)`
+(BP puro → idéntico en ambas VMs). StatsTest lo usa y da paridad exacta.
+
+**Fix propio (pendiente, VM)**: alinear el formateo de DPRINT/FPRINT entre VMs.
+Opción A (preferible): la VM-C adopta repr. de ida-y-vuelta más corta tipo
+`Double.toString` (Ryū o equivalente). Opción B: ambas a un formato común
+acordado. Tarea de VM (como PR-align-vms hizo con el wire), no de stdlib.
+Encontrado en H4.A.3 (2026-06-01).
 
 ## H5 (modelo de objetos) — progreso parcial (2026-06-01)
 

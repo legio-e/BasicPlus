@@ -1,0 +1,33 @@
+bpi 6
+module Stats
+func max(data:double[],off:integer,n:integer):double public
+func linfit(xs:double[],xoff:integer,ys:double[],yoff:integer,n:integer):LinFit public
+func range(data:double[],off:integer,n:integer):double public
+func sum(data:double[],off:integer,n:integer):double public
+func covariance(xs:double[],xoff:integer,ys:double[],yoff:integer,n:integer):double public
+func sqrtD(x:double):double public
+func min(data:double[],off:integer,n:integer):double public
+func percentile(data:double[],off:integer,n:integer,p:double):double public
+func median(data:double[],off:integer,n:integer):double public
+func correlation(xs:double[],xoff:integer,ys:double[],yoff:integer,n:integer):double public
+func variance(data:double[],off:integer,n:integer):double public
+func mean(data:double[],off:integer,n:integer):double public
+func stdDev(data:double[],off:integer,n:integer):double public
+class Accumulator public
+  layout 9 7 00000000 00000000
+  ctor()
+  method add(x:double):void public
+  method count():integer public
+  method mean():double public
+  method variance():double public
+  method stdDev():double public
+  method min():double public
+  method max():double public
+end class
+class LinFit public
+  layout 4 3 00000000 00000000
+  ctor(slope:double,intercept:double)
+  method slope():double public
+  method intercept():double public
+  method predict(x:double):double public
+end class

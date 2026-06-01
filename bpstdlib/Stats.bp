@@ -1,0 +1,350 @@
+// ============================================================
+// bp — estadística para BasicPlus (H4.A.3). BP PURO, cero VM.
+//
+// Dos APIs complementarias:
+//
+//  1) Accumulator — STREAMING (algoritmo de Welford). add(x) incremental,
+//     varianza numéricamente estable, memoria ACOTADA (no guarda la muestra).
+//     Ideal para MCU / flujos largos. Expone count/mean/variance/stdDev/min/max.
+//
+//  2) Funciones sobre un SLICE de double[] — (data, off, n) opera sobre
+//     data[off .. off+n-1]. Convención buffer+offset+longitud: permite usar un
+//     mismo buffer para varias cosas y analizar subventanas sin copiar.
+//     sum/mean/min/max/range/variance/stdDev/median/percentile + covariance/
+//     correlation/linfit.
+//
+// Centinelas (sin throw cross-module): muestra vacía / degenerada → 0.0.
+//   - sum/mean/min/max/range con n<=0 → 0.0
+//   - variance/stdDev con n<2 → 0.0
+//   - correlation con varianza 0 → 0.0
+//
+// linfit devuelve (slope, intercept) vía la clase LinFit (hasta que existan
+// las tuplas). Element type = double[]; el llamante ensancha al rellenar.
+//
+// sqrt propia (Newton-Raphson en double) → autocontenido y con paridad exacta
+// Java VM ↔ C VM (solo aritmética IEEE de 64 bits).
+// ============================================================
+module Stats
+
+  // -------------------------------------------------------------
+  // Accumulator — estadística incremental (Welford). No guarda la muestra.
+  // -------------------------------------------------------------
+  public class Accumulator
+    var n:     integer
+    var meanV: double
+    var m2:    double     // suma de cuadrados de las diferencias respecto a la media
+    var minV:  double
+    var maxV:  double
+
+    public function Accumulator()
+      this.n     := 0
+      this.meanV := 0.0d
+      this.m2    := 0.0d
+      this.minV  := 0.0d
+      this.maxV  := 0.0d
+    end Accumulator
+
+    // Añade una observación. Welford: media y M2 estables online.
+    public function add(x: double)
+      this.n := this.n + 1
+      if this.n == 1 then
+        this.meanV := x
+        this.m2    := 0.0d
+        this.minV  := x
+        this.maxV  := x
+      else
+        var delta: double := x - this.meanV
+        this.meanV := this.meanV + delta / double(this.n)
+        var delta2: double := x - this.meanV
+        this.m2 := this.m2 + delta * delta2
+        if x < this.minV then
+          this.minV := x
+        endif
+        if x > this.maxV then
+          this.maxV := x
+        endif
+      endif
+    end add
+
+    public function count(): integer
+      return this.n
+    end count
+
+    public function mean(): double
+      if this.n == 0 then
+        return 0.0d
+      endif
+      return this.meanV
+    end mean
+
+    // Varianza MUESTRAL (divide por n-1). n<2 → 0.
+    public function variance(): double
+      if this.n < 2 then
+        return 0.0d
+      endif
+      return this.m2 / double(this.n - 1)
+    end variance
+
+    public function stdDev(): double
+      return sqrtD(this.variance())
+    end stdDev
+
+    public function min(): double
+      if this.n == 0 then
+        return 0.0d
+      endif
+      return this.minV
+    end min
+
+    public function max(): double
+      if this.n == 0 then
+        return 0.0d
+      endif
+      return this.maxV
+    end max
+  end Accumulator
+
+  // -------------------------------------------------------------
+  // LinFit — resultado de la regresión lineal (slope, intercept).
+  // (Migrará a tupla cuando existan; ver §2 del backlog.)
+  // -------------------------------------------------------------
+  public class LinFit
+    var slopeV:     double
+    var interceptV: double
+    public function LinFit(slope: double, intercept: double)
+      this.slopeV     := slope
+      this.interceptV := intercept
+    end LinFit
+    public function slope(): double
+      return this.slopeV
+    end slope
+    public function intercept(): double
+      return this.interceptV
+    end intercept
+    // Predicción y = slope*x + intercept.
+    public function predict(x: double): double
+      return this.slopeV * x + this.interceptV
+    end predict
+  end LinFit
+
+  // -------------------------------------------------------------
+  // sqrt en BP puro (Newton-Raphson). Paridad exacta entre VMs.
+  // -------------------------------------------------------------
+  public function sqrtD(x: double): double
+    if x <= 0.0d then
+      return 0.0d
+    endif
+    var g: double := x
+    var i: integer := 0
+    var done: boolean := false
+    while (not done) and (i < 200) do
+      var ng: double := (g + x / g) * 0.5d
+      var d: double := ng - g
+      if d < 0.0d then
+        d := -d
+      endif
+      g := ng
+      if d <= g * 0.000000000000001d then    // ~1e-15 relativo
+        done := true
+      endif
+      i := i + 1
+    endwh
+    return g
+  end sqrtD
+
+  // -------------------------------------------------------------
+  // Funciones sobre slice double[] — (data, off, n) = data[off..off+n-1].
+  // -------------------------------------------------------------
+
+  public function sum(data: double[], off: integer, n: integer): double
+    var s: double := 0.0d
+    var i: integer := 0
+    while i < n do
+      s := s + data[off + i]
+      i := i + 1
+    endwh
+    return s
+  end sum
+
+  public function mean(data: double[], off: integer, n: integer): double
+    if n <= 0 then
+      return 0.0d
+    endif
+    return sum(data, off, n) / double(n)
+  end mean
+
+  public function min(data: double[], off: integer, n: integer): double
+    if n <= 0 then
+      return 0.0d
+    endif
+    var m: double := data[off]
+    var i: integer := 1
+    while i < n do
+      if data[off + i] < m then
+        m := data[off + i]
+      endif
+      i := i + 1
+    endwh
+    return m
+  end min
+
+  public function max(data: double[], off: integer, n: integer): double
+    if n <= 0 then
+      return 0.0d
+    endif
+    var m: double := data[off]
+    var i: integer := 1
+    while i < n do
+      if data[off + i] > m then
+        m := data[off + i]
+      endif
+      i := i + 1
+    endwh
+    return m
+  end max
+
+  public function range(data: double[], off: integer, n: integer): double
+    if n <= 0 then
+      return 0.0d
+    endif
+    return max(data, off, n) - min(data, off, n)
+  end range
+
+  // Varianza MUESTRAL (n-1), dos pasadas. n<2 → 0.
+  public function variance(data: double[], off: integer, n: integer): double
+    if n < 2 then
+      return 0.0d
+    endif
+    var mu: double := mean(data, off, n)
+    var ss: double := 0.0d
+    var i: integer := 0
+    while i < n do
+      var dx: double := data[off + i] - mu
+      ss := ss + dx * dx
+      i := i + 1
+    endwh
+    return ss / double(n - 1)
+  end variance
+
+  public function stdDev(data: double[], off: integer, n: integer): double
+    return sqrtD(variance(data, off, n))
+  end stdDev
+
+  // Mediana — ordena una COPIA del slice (no muta el buffer del llamante).
+  public function median(data: double[], off: integer, n: integer): double
+    if n <= 0 then
+      return 0.0d
+    endif
+    var tmp: double[] := sortedCopy(data, off, n)
+    var mid: integer := n / 2
+    if (n mod 2) == 1 then
+      return tmp[mid]
+    endif
+    return (tmp[mid - 1] + tmp[mid]) * 0.5d
+  end median
+
+  // Percentil p∈[0,100] por interpolación lineal sobre la copia ordenada.
+  public function percentile(data: double[], off: integer, n: integer, p: double): double
+    if n <= 0 then
+      return 0.0d
+    endif
+    if p <= 0.0d then
+      return min(data, off, n)
+    endif
+    if p >= 100.0d then
+      return max(data, off, n)
+    endif
+    var tmp: double[] := sortedCopy(data, off, n)
+    if n == 1 then
+      return tmp[0]
+    endif
+    var rank: double := (p / 100.0d) * double(n - 1)
+    var lo: integer := integer(rank)        // trunca hacia 0 (rank >= 0)
+    var frac: double := rank - double(lo)
+    if lo >= (n - 1) then
+      return tmp[n - 1]
+    endif
+    return tmp[lo] + (tmp[lo + 1] - tmp[lo]) * frac
+  end percentile
+
+  // Covarianza MUESTRAL (n-1) de dos slices emparejados por índice.
+  public function covariance(xs: double[], xoff: integer, ys: double[], yoff: integer, n: integer): double
+    if n < 2 then
+      return 0.0d
+    endif
+    var mx: double := mean(xs, xoff, n)
+    var my: double := mean(ys, yoff, n)
+    var s: double := 0.0d
+    var i: integer := 0
+    while i < n do
+      s := s + (xs[xoff + i] - mx) * (ys[yoff + i] - my)
+      i := i + 1
+    endwh
+    return s / double(n - 1)
+  end covariance
+
+  // Correlación de Pearson ∈ [-1,1]. Varianza 0 → 0 (centinela).
+  public function correlation(xs: double[], xoff: integer, ys: double[], yoff: integer, n: integer): double
+    if n < 2 then
+      return 0.0d
+    endif
+    var sx: double := stdDev(xs, xoff, n)
+    var sy: double := stdDev(ys, yoff, n)
+    var denom: double := sx * sy
+    if denom <= 0.0d then
+      return 0.0d
+    endif
+    return covariance(xs, xoff, ys, yoff, n) / denom
+  end correlation
+
+  // Regresión lineal por mínimos cuadrados → LinFit(slope, intercept).
+  // slope = Sxy / Sxx ; intercept = my - slope*mx.
+  public function linfit(xs: double[], xoff: integer, ys: double[], yoff: integer, n: integer): LinFit
+    if n < 2 then
+      return LinFit(0.0d, 0.0d)
+    endif
+    var mx: double := mean(xs, xoff, n)
+    var my: double := mean(ys, yoff, n)
+    var sxy: double := 0.0d
+    var sxx: double := 0.0d
+    var i: integer := 0
+    while i < n do
+      var dx: double := xs[xoff + i] - mx
+      sxy := sxy + dx * (ys[yoff + i] - my)
+      sxx := sxx + dx * dx
+      i := i + 1
+    endwh
+    if sxx <= 0.0d then
+      return LinFit(0.0d, my)        // x constante: pendiente 0, recta horizontal
+    endif
+    var slope: double := sxy / sxx
+    var intercept: double := my - slope * mx
+    return LinFit(slope, intercept)
+  end linfit
+
+  // -------------------------------------------------------------
+  // Copia ordenada del slice (insertion sort, PRIVADA). No muta el origen.
+  // -------------------------------------------------------------
+  function sortedCopy(data: double[], off: integer, n: integer): double[]
+    var tmp: double[] := newDoubleArray(n)
+    var i: integer := 0
+    while i < n do
+      tmp[i] := data[off + i]
+      i := i + 1
+    endwh
+    // insertion sort ascendente
+    var j: integer := 1
+    while j < n do
+      var key: double := tmp[j]
+      var k: integer := j - 1
+      while (k >= 0) and (tmp[k] > key) do
+        tmp[k + 1] := tmp[k]
+        k := k - 1
+      endwh
+      tmp[k + 1] := key
+      j := j + 1
+    endwh
+    return tmp
+  end sortedCopy
+
+end Stats
