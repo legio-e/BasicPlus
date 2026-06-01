@@ -691,6 +691,23 @@ public class ModWriter {
     }
 
     /**
+     * Abre un método PRIVADO de la clase actual. A diferencia de addMethod, NO
+     * lo añade a la vtable: un método privado no se puede sobreescribir ni se
+     * llama cross-module, así que se despacha por CALL directo ("Clase.metodo")
+     * — como un super() o un método estático. Así la vtable contiene solo
+     * métodos públicos y su orden coincide con el .bpi (evita el desfase de
+     * slots cross-module, BUG-4). Registra la función llamable + "this".
+     */
+    public void addPrivateMethod(String simpleName) {
+        if (currentClass == null) {
+            throw new RuntimeException("addPrivateMethod fuera de una clase (¿antes de addClass?)");
+        }
+        String qualifiedName = currentClass.name + "." + simpleName;
+        addFunction(qualifiedName, false);   // llamable por CALL, sin slot de vtable
+        declareParam("this");
+    }
+
+    /**
      * Cierra la clase actual: serializa el class descriptor (num_fields,
      * num_methods, bitmap_words, field_bitmap, vtable) y lo registra como
      * símbolo del data block. Tras esto la clase puede usarse en emitNewObject.

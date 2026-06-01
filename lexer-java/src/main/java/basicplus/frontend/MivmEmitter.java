@@ -1127,7 +1127,15 @@ public final class MivmEmitter {
     }
 
     private void emitInstanceMethod(FuncDef fn, FunctionSymbol fs) throws IOException {
-        w.addMethod(fs.name);   // addMethod ya declara "this" como primer param
+        // BUG-4 / Opción A: solo los métodos PÚBLICOS van a la vtable (despacho
+        // virtual, sobreescribibles, visibles cross-module). Los PRIVADOS se
+        // despachan por CALL directo (ver el call-site) → fuera de la vtable,
+        // así su orden coincide con el .bpi y no hay desfase de slots.
+        if (fs.isPublic) {
+            w.addMethod(fs.name);          // vtable + función; declara "this"
+        } else {
+            w.addPrivateMethod(fs.name);   // solo función llamable; declara "this"
+        }
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);
         try {
@@ -2644,14 +2652,21 @@ public final class MivmEmitter {
                 w.emitCall(fs.ownerClass.name + "." + fs.name);
                 return;
             }
-            // Virtual dispatch via INVOKE_VIRTUAL.
-            //   push receiver, push args, INVOKE_VIRTUAL ownerClass.simpleName, nArgs
+            // Despacho. push receiver, push args.
+            //   - PÚBLICO: INVOKE_VIRTUAL por slot/nombre (polimorfismo).
+            //   - PRIVADO (no-public, no-external): CALL directo "Cls.metodo"
+            //     (BUG-4 / Opción A: no está en la vtable). El receiver ya
+            //     empujado hace de `this`, igual que super.foo().
             emitExpr(ma.target);
             for (int i = 0; i < c.args.size(); i++) {
                 emitExpr(c.args.get(i));
                 if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
             }
-            emitInvokeVirtualSmart(fs.ownerClass, fs.name, c.args.size());
+            if (!fs.isPublic && !fs.isExternal) {
+                w.emitCall(fs.ownerClass.name + "." + fs.name);
+            } else {
+                emitInvokeVirtualSmart(fs.ownerClass, fs.name, c.args.size());
+            }
             return;
         }
         errors.add("call con callee no soportado: " + c.callee.getClass().getSimpleName());

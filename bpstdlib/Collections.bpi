@@ -6,11 +6,9 @@ class StringComparator public extends Comparator
   method compare(a:any,b:any):integer public
 end class
 class Map public
-  layout 4 10 0000000f 00000000
+  layout 4 8 0000000f 00000000
   ctor()
   method withComparator(c:Comparator):Map public
-  method bsearch(key:any):integer public
-  method insertAt(ip:integer,key:any,val:any):void public
   method size():integer public
   method put(key:any,val:any):void public
   method get(key:any):any public

@@ -1329,7 +1329,7 @@ ceñirse al subconjunto del VM-C (lo hace `Str`). Si se quisieran esas funciones
 en el MCU, habría que implementarlas en el VM-C (trabajo de VM). No es un bug —
 es el estado conocido del "F2 subset"; anotado aquí por su impacto en H4.
 
-## BUG-4 — métodos privados rompen el slot de vtable cross-module (workaround aplicado)
+## BUG-4 — métodos privados rompen el slot de vtable cross-module (✅ ARREGLADO 2026-06-01, Opción A)
 
 **Síntoma**: una clase de un módulo con **métodos privados** (no-`public`),
 usada cross-module, **falla al despachar cualquier método** (fault / "null
@@ -1345,13 +1345,38 @@ y el `Map` no.
 **Workaround (aplicado en `Collections`)**: declarar los helpers como `public`
 (entran en el `.bpi`, los slots cuadran). Feo (expone internals) pero funciona.
 
-**Fix propio (pendiente, compilador)**: el `.bpi` debe **incluir los métodos
-privados como reserva de slot** (marcados no-llamables) para que el importador
-numere los slots igual que el dueño; o asignar slots con un orden canónico
-estable. Beneficia a CUALQUIER clase stdlib con métodos privados. Encontrado y
-caracterizado en H4.A.2 (2026-06-01). (Nota: el síntoma inicial de "construcción
-cross-module deja campos null" era ESTE bug, no uno aparte — `Collections.Map()`
-directo funciona una vez alineados los slots.)
+**Fix propio — DECIDIDO (usuario, 2026-06-01): OPCIÓN A — privados fuera del
+vtable.** Principio: resolver en compilación todo lo intra‑módulo; el mecanismo
+de índice/tabla (vtable slots) se reserva SOLO para lo inherentemente tardío
+(cross‑module y polimorfismo real). Concretamente:
+- **Métodos privados** (y funciones libres) → **CALL directo por offset**, NO en
+  el vtable. El compilador los resuelve (forward refs = fixup que queda colocado
+  al terminar). Son no‑virtuales (un privado no se puede sobreescribir).
+- **Métodos públicos** (potencialmente sobreescribibles) → **siguen en el
+  vtable** (polimorfismo real: `comp.compare()` con `comp: Comparator` que
+  contiene `StringComparator` necesita despacho por tipo en runtime, incluso
+  same‑module; cf. `JsonValue.writeTo`).
+- **Cross‑module** → por índice/slot del `.bpi`.
+Resultado: **vtable = solo públicos = exactamente el `.bpi`** → slots siempre
+alineados, BUG‑4 desaparece de raíz; bonus: vtables más pequeñas (bien para
+MCU). Es el modelo C++ (solo `virtual` en la vtable; público≈virtual,
+privado=directo). Toca el emisor (distinguir `this.privado()`=CALL de
+`obj.publico()`=INVOKE_VIRTUAL) + construcción de vtable + (verificar) el VM-C.
+Descartada la opción B (.bpi con privados como placeholder). Al aplicarlo:
+quitar el workaround `public` de `bsearch`/`insertAt` en `Collections.bp`.
+
+**✅ APLICADO (2026-06-01)**: `ModWriter.addPrivateMethod` (registra función
+llamable sin slot de vtable) + `emitInstanceMethod` ramifica public→`addMethod`
+/ private→`addPrivateMethod` + el call-site despacha private (no-public,
+no-external) por `CALL Cls.metodo` (receiver ya empujado = `this`, como super).
+**CERO cambios de VM** (CALL e INVOKE_VIRTUAL ya existían). `bsearch`/`insertAt`
+vueltos a privados; Map cross-module dual-VM OK. Sin regresiones: l2app
+(cross-module + sync + herencia), Json (polimorfismo `writeTo`, Java VM) y
+StrTest pasan. La vtable ahora solo lleva públicos (== `.bpi`) y adelgaza.
+
+(Nota: el síntoma inicial de "construcción cross-module deja campos null" era
+ESTE mismo bug, no uno aparte — `Collections.Map()` directo funciona una vez
+alineados los slots.)
 
 ## GAP-2 — tipos built-in (List/SyncList...) no unifican identidad cross-module
 
