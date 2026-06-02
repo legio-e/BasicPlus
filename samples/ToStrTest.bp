@@ -1,0 +1,38 @@
+// ToStrTest — H5.1.b: auto-toString polimórfico en print + null->"null".
+//  - Punto OVERRIDEA toString  -> salida determinista (paridad dual-VM).
+//  - Vacio NO overridea         -> default Object.toString = "object@<dir>"
+//    (la dirección difiere entre VMs; solo smoke, no se compara byte a byte).
+//  - ref null                   -> "null".
+module ToStrTest
+
+  class Punto
+    var x: integer
+    var y: integer
+    public function Punto(x: integer, y: integer)
+      this.x := x
+      this.y := y
+    end Punto
+    public function toString(): string
+      return "Punto(" + this.x + "," + this.y + ")"
+    end toString
+  end Punto
+
+  class Vacio
+    var n: integer
+    public function Vacio(n: integer)
+      this.n := n
+    end Vacio
+  end Vacio
+
+  function Main()
+    var p: Punto := Punto(3, 7)
+    print "p =", p          // -> Punto(3,7)   (override, paridad)
+
+    var z: Punto := null
+    print "z =", z          // -> null
+
+    var v: Vacio := Vacio(99)
+    print "v =", v          // -> object@<dir>  (default; divergente entre VMs)
+  end Main
+
+end ToStrTest

@@ -1555,10 +1555,15 @@ abstract de un plumazo, seguimos como estábamos".
     - **Hallazgo colateral (no es regresión)**: `catchnative`/`catchmutex` ya fallaban
       dual-VM en HEAD — el VM-C no integra con try/catch los throws nativos de
       ALOAD/cast-narrow/charAt/mutex (solo div0/mod0). Pendiente aparte (familia B3/BUG-2).
-  - **H5.1.b**: cuerpos por defecto reales (toString→dirección "object@<hex>" vía
-    builtin; compareTo→throw) + hacerlos invocables desde fuente.
-  - **H5.1.c**: auto-`toString` en print/concat + `null`→"null" (helper
-    `emitObjectToString` con guarda de null).
+  - ✅ **H5.1.b (parte 1)** — HECHO 2026-06-02. `toString` por defecto real =
+    `"object@" + dirección` (decimal del ref, vía INT_TO_STRING; sin builtin nuevo,
+    VM intacta). Auto-`toString` en `print` para operandos `ClassType` (helper
+    `emitObjectToStringOnStack`: INVOKE_VIRTUAL slot 0 con guarda `null`→"null").
+    `compareTo` sigue placeholder (return 0). Sample `ToStrTest` (override→paridad,
+    default→dirección, null→"null"). Regresión 13/13 dual-VM.
+  - **H5.1.c**: `compareTo` por defecto → throw (helper forward-ref `__objCompareError`
+    construye RuntimeError; emitido tras RuntimeError por orden) + `toString`/`compareTo`
+    invocables desde fuente en cualquier objeto + auto-`toString` en concat `+`.
   - **H5.1.d**: fundir/quitar `Comparable`, regresión completa, commit.
 - **equals/hashCode**: FUERA (el Map ordenado usa `compareTo == 0`).
 

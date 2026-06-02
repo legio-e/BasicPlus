@@ -2173,16 +2173,43 @@ public final class MivmEmitter {
                 }
             } else if (t instanceof EnumType) {
                 w.emit(OpCode.PRINT_NONL);
+            } else if (t instanceof ClassType) {
+                // H5.1.b — objeto: auto-toString() polimórfico (slot 0) con
+                // guarda null→"null". El ref ya está en la pila.
+                emitObjectToStringOnStack();
+                w.emit(OpCode.PRINT_STR_NONL);
             } else if (t == null || t instanceof BpType.ErrorType) {
                 // Sucede con variables de 'catch' genérico (analyzer las tipa como
                 // ErrorType). En BP los throws son típicamente strings.
                 w.emit(OpCode.PRINT_STR_NONL);
             } else {
-                // ref u otro — imprimir como int por ahora
+                // ref u otro (AnyType, etc.) — imprimir como int por ahora
                 w.emit(OpCode.PRINT_NONL);
             }
         }
         w.emit(OpCode.PRINT_NL);
+    }
+
+    /**
+     * H5.1.b — Convierte el ref de objeto del tope de pila a su representación
+     * string via {@code toString()} (slot 0 de la vtable, polimórfico), con
+     * guarda {@code null}→"null". Consume el ref y deja el string ref en pila.
+     * Reutilizable por print y, más adelante, por concatenación con `+`.
+     */
+    private void emitObjectToStringOnStack() throws IOException {
+        String tmp = "__o2s_" + (stringPoolCounter++);
+        declareLocal(tmp);
+        w.emitSetLocal(tmp);                  // guarda el ref
+        int nullL = w.newLabel();
+        int doneL = w.newLabel();
+        w.emitGetLocal(tmp);
+        w.emitJumpIfFalse(nullL);             // ref == 0 → "null"
+        w.emitGetLocal(tmp);                  // this = ref
+        w.emitInvokeVirtualBySlot(0, 0);      // toString() → string ref
+        w.emitJump(doneL);
+        w.declareLabel(nullL);
+        w.emitLeaGlobal(internString("null"));
+        w.declareLabel(doneL);
     }
 
     private void emitExprStmt(ExprStmt s) throws IOException {
@@ -2813,9 +2840,12 @@ public final class MivmEmitter {
      * "Object"): así toString/compareTo ocupan los slots 0/1 de TODA instancia
      * y INVOKE_VIRTUAL los despacha polimórficamente.
      *
-     * Cuerpos por defecto: placeholders en H5.1.a (la suite no los invoca todavía).
-     * H5.1.b los reemplaza por toString="object@<hex>" (dirección, debug) y
-     * compareTo→throw "compareTo no implementado".
+     * Cuerpos por defecto (H5.1.b):
+     *   toString  → "object@" + dirección (decimal del ref); sirve para depurar.
+     *               La dirección difiere entre VMs (aceptado por el usuario): el
+     *               output de un toString NO-overrideado no es byte-idéntico.
+     *   compareTo → placeholder (return 0) de momento; H5.1.c lo hace throw
+     *               (requiere ser invocable desde fuente para poder probarlo).
      */
     private void synthesizeObjectClass() {
         for (ITopLevelDecl d : moduleAst.defs) {
@@ -2826,11 +2856,15 @@ public final class MivmEmitter {
 
             // -------------------------- toString(): string --------------------------
             // PRIMER método → slot 0 (fijo en toda la jerarquía).
+            // __result := "object@" + intToString(this)   (this = ref = dirección heap)
             w.addMethod("toString");
             beginFunctionScope(makeSynthFs("toString", PrimitiveType.STRING), null);
             try {
-                String sym = internString("object");   // placeholder; H5.1.b → "object@<hex>"
-                w.emitLeaGlobal(sym);
+                String prefix = internString("object@");
+                w.emitLeaGlobal(prefix);                  // "object@"
+                w.emitGetParam("this");                   // ref (int)
+                emitBuiltinCall(Builtin.INT_TO_STRING);   // "<addr>"
+                emitStringConcatCall();                   // "object@<addr>"
                 w.emitSetLocal("__result");
                 emitFunctionEnd();
             } finally { scopeStack.pop(); }
@@ -2841,7 +2875,7 @@ public final class MivmEmitter {
             w.declareParam("other");
             beginFunctionScope(makeSynthFs("compareTo", PrimitiveType.INTEGER), null);
             try {
-                emitInt(0);                            // placeholder; H5.1.b → throw
+                emitInt(0);                            // placeholder; H5.1.c → throw
                 w.emitSetLocal("__result");
                 emitFunctionEnd();
             } finally { scopeStack.pop(); }
