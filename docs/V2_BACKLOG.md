@@ -11,6 +11,59 @@ dependencias con otros puntos.
 
 ---
 
+## ▶▶ PRÓXIMOS PASOS — qué sigue (orden sugerido, act. 2026-06-02)
+
+**Cerrado en V2 hasta hoy**: H1 (escalares: byte/long/double), H2 (strings UTF-8),
+H3 (GC non-moving), H4.A.3 (Stats), **Tuplas** (T1 same-module + T3 cross-module +
+T4 `Str.parse*`), **GAP-4** (print double byte-idéntico), **BUG-6** (campos de 8
+bytes), y **H5.1 a/b1/c1** (Object raíz real + `toString`/`compareTo` polimórficos,
+auto-`toString` en `print`, `compareTo` por defecto → throw).
+
+Orden recomendado: **T0 → T1** (terminar lo abierto y tapar huecos = filosofía
+"sólido, sin agujeros") y luego elegir entre T2/T3/T5 por interés. T4/T6 cuando
+toque memoria/hardware.
+
+- **T0 — Terminar H5 (a medias, lo natural a continuar)**
+  - H5.1.c-2: auto-`toString` en concatenación `+` (rama `ClassType` en
+    `coerceToString` + permitir `string + objeto` en el semántico).
+  - H5.1.d: quitar/fundir `Comparable` (los wrappers ya overridean Object).
+  - (menor) `toString`/`compareTo` sobre una clase **importada** sin override (el
+    stub `.bpi` no trae los miembros heredados de Object).
+  - H5 resto: repasar si falta algo del modelo (equals/hashCode quedó FUERA a
+    propósito; el Map ordenado usa `compareTo == 0`).
+
+- **T1 — Huecos / bugs conocidos**
+  - **Hueco VM-C catch nativo** (descubierto 2026-06-02): los throws nativos de
+    `ALOAD`/cast-narrow/`charAt`/mutex NO llegan al try/catch en la VM-C (solo
+    `div0`/`mod0`). La VM-Java los atrapa todos. Familia BUG-2.
+  - **BUG-2**: excepciones no se atrapan cross-module.
+  - **GAP-2**: tipos built-in (List/Map/...) no unifican identidad cross-module →
+    no se pueden retornar en APIs públicas entre módulos.
+  - **GAP-1**: subconjunto de builtins de string en la VM-C (por diseño; revisar).
+
+- **T2 — Lenguaje / compilador (diseño ya pensado en este doc)**
+  - §8 funciones de primera clase / callbacks + eventos.
+  - §9 interrupciones HW → eventos BP. · §10 parámetros con valor por defecto.
+  - §7 recuperación de errores del compilador (anti-cascada).
+  - Tuplas first-class + destructure a lvalues no-simples (`{ obj.x, arr[i] }:=`).
+  - Contratos = clases normales con métodos vacíos (decidido: NO interfaces/abstract).
+
+- **T3 — Stdlib / librerías**: §13 buses que faltan · §14b String (catálogo nuevo)
+  · §14 pulir existentes · §14e Compress/Archive · §15 native AOT donde se preste.
+
+- **T4 — VM / memoria / multi-MCU**: §8(VM) ahorro de memoria · §9 una imagen por
+  FAMILIA · §9b HAL formal · §10(VM) PSRAM externa · §11 host-VM como simulador.
+
+- **T5 — Tooling**: §16 **Debugger** (marcado FUNDAMENTAL) · §12 IDE usabilidad ·
+  §17 overlays `loadModule`/`unloadModule`.
+
+- **T6 — Diferido a hardware/v2 (tareas `[v2]` en la lista)**: #140 debug-on-Pico
+  real · #145 wifi-tcp (Pico 2 W) · #138 cdc-multiplex · #153 dual-core RP2350
+  (SWD) · #169/#174 AOT cross-module · #175 AOT try/catch · #161 AOT asm inline ·
+  #193 AOT helpers `byte[]`.
+
+---
+
 ## ▶ Arranque de V2 — LEER PRIMERO  *(estado al cerrar V1, 2026-05-30)*
 
 **V1 cerrada oficialmente**: tag anotado `v1.0` → commit `b92fb3f` en
