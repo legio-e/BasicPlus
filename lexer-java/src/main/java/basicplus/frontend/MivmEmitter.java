@@ -1652,13 +1652,20 @@ public final class MivmEmitter {
     }
 
     private void emitCompoundOp(AssignOpKind op, BpType tType) throws IOException {
+        boolean plus = (op == AssignOpKind.PLUS_ASSIGN);
         if (tType instanceof PrimitiveType && ((PrimitiveType) tType).tag == PrimitiveType.Kind.FLOAT) {
-            w.emit(op == AssignOpKind.PLUS_ASSIGN ? OpCode.FADD : OpCode.FSUB);
+            w.emit(plus ? OpCode.FADD : OpCode.FSUB);
+        } else if (isDouble(tType)) {
+            // BUG-6 secuela: += / -= sobre double = aritmética de 8 bytes (DADD/DSUB).
+            w.emit(plus ? OpCode.DADD : OpCode.DSUB);
+        } else if (isLong(tType)) {
+            // BUG-6 secuela: += / -= sobre long = aritmética de 8 bytes (LADD/LSUB).
+            w.emit(plus ? OpCode.LADD : OpCode.LSUB);
         } else if (tType instanceof PrimitiveType && ((PrimitiveType) tType).tag == PrimitiveType.Kind.STRING) {
-            if (op != AssignOpKind.PLUS_ASSIGN) { errors.add("operador -= no aplicable a string"); return; }
+            if (!plus) { errors.add("operador -= no aplicable a string"); return; }
             emitStringConcatCall();
         } else {
-            w.emit(op == AssignOpKind.PLUS_ASSIGN ? OpCode.ADD : OpCode.SUB);
+            w.emit(plus ? OpCode.ADD : OpCode.SUB);
         }
     }
 

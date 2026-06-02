@@ -1516,8 +1516,10 @@ Long/Double/Float + Map con claves Long, orden numérico de 64 bits). Regresión
 OK: StrTest, MapTest, MapNumTest (ahora con `Double(3.5)`), l2v3app, classisolation.
 
 **Pendientes menores derivados (no bloquean H4.A)**:
-- `emitCompoundOp` no maneja long/double: `+=`/`-=` sobre long/double emite
-  ADD/SUB de 4 bytes (locals/globals/fields). Raro; documentado como GAP.
+- `emitCompoundOp` long/double ✅ ARREGLADO (2026-06-02): `+=`/`-=` sobre
+  long/double ahora emite LADD/LSUB y DADD/DSUB (antes ADD/SUB de 4 bytes →
+  basura). Cubre local/array/campo/global. Test `samples/CompoundTest.bp`,
+  paridad dual-VM. (`+=`/`-=` son los únicos operadores compuestos del lenguaje.)
 - Properties de tipo long/double (8 bytes): la ruta de setter usa un temp local
   de 4 bytes (`__stp_*`) + `numArgs` literal 1 → truncaría. Los envoltorios usan
   campos+métodos (no properties), así que no bloquea. Diferido.

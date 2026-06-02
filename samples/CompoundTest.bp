@@ -1,0 +1,69 @@
+// CompoundTest — += / -= sobre long y double (BUG-6 secuela).
+// Antes emitía ADD/SUB de 4 bytes → basura. Ahora LADD/LSUB y DADD/DSUB.
+// Cubre local, array, campo de instancia y global (init explícito en Main,
+// porque los init a nivel módulo se ignoran — aviso L8).
+// Las dobles se imprimen como long(x*100) → LPRINT, paridad exacta dual-VM.
+module CompoundTest
+
+  class Box
+    var bL: long
+    var bD: double
+    public function Box()
+      this.bL := 1000000000L
+      this.bD := 2.0d
+    end Box
+    public function bumpL(d: long)
+      this.bL += d
+    end bumpL
+    public function bumpD(d: double)
+      this.bD += d
+    end bumpD
+    public function getL(): long
+      return this.bL
+    end getL
+    public function getD100(): long
+      return long(this.bD * 100.0d)
+    end getD100
+  end Box
+
+  function Main()
+    // --- local long ---
+    var a: long := 5000000000L
+    a += 1000000000L
+    print a                       // 6000000000
+    a -= 2000000000L
+    print a                       // 4000000000
+
+    // --- local double (impreso como x*100) ---
+    var d: double := 3.5d
+    d += 1.25d
+    print long(d * 100.0d)        // 475
+    d -= 0.25d
+    print long(d * 100.0d)        // 450
+
+    // --- array long ---
+    var arr: long[] := newLongArray(2)
+    arr[0] := 10000000000L
+    arr[0] += 5L
+    print arr[0]                  // 10000000005
+
+    // --- array double ---
+    var dr: double[] := newDoubleArray(2)
+    dr[1] := 1.5d
+    dr[1] += 2.0d
+    print long(dr[1] * 100.0d)    // 350
+
+    // --- campo de instancia long/double ---
+    var b: Box := Box()
+    b.bumpL(500000000L)
+    print b.getL()                // 1500000000
+    b.bumpD(0.5d)
+    print b.getD100()             // 250
+
+    // --- global long/double (init explícito) ---
+    var gL: long := 0L
+    gL := 7000000000L
+    gL += 1L
+    print gL                      // 7000000001
+  end Main
+end CompoundTest
