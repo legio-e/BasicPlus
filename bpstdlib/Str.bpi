@@ -1,11 +1,15 @@
 bpi 6
 module Str
-func padRight(s:string,ancho:integer):string public
-func lastIndexOf(s:string,sub:string):integer public
 func formatDouble(x:double,dec:integer):string public
 func compare(a:string,b:string):integer public
-func fromCharCode(cp:integer):string public
+func parseHex(s:string):(boolean,long) public
 func doubleToString(x:double):string public
-func toHex(x:long):string public
 func longToString(x:long):string public
+func padRight(s:string,ancho:integer):string public
+func parseInt(s:string):(boolean,integer) public
+func parseDouble(s:string):(boolean,double) public
+func lastIndexOf(s:string,sub:string):integer public
+func fromCharCode(cp:integer):string public
+func toHex(x:long):string public
+func parseLong(s:string):(boolean,long) public
 func padLeft(s:string,ancho:integer):string public

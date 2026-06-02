@@ -269,4 +269,137 @@ module Str
     return sb.toString()
   end padRight
 
+  // -------------------------------------------------------------
+  // Familia parse* — devuelven (err, valor) en vez de lanzar (T4 tuplas).
+  // err=true ⇒ entrada malformada (el valor no es válido). Estilo Go:
+  //   { err, n } := Str.parseLong("123")
+  // Sin notación científica ni chequeo de overflow (documentado). Acepta
+  // signo opcional. BP puro (charCodeAt/strlen) → paridad dual-VM.
+  // -------------------------------------------------------------
+
+  // Entero de 64 bits con signo opcional.
+  public function parseLong(s: string): (boolean, long)
+    var n: integer := strlen(s)
+    if n == 0 then
+      return (true, 0L)
+    endif
+    var i: integer := 0
+    var neg: boolean := false
+    var c0: integer := charCodeAt(s, 0)
+    if c0 == 45 then            // '-'
+      neg := true
+      i := 1
+    elseif c0 == 43 then        // '+'
+      i := 1
+    endif
+    if i >= n then
+      return (true, 0L)         // solo signo, sin dígitos
+    endif
+    var acc: long := 0L
+    while i < n do
+      var c: integer := charCodeAt(s, i)
+      if (c < 48) or (c > 57) then
+        return (true, 0L)
+      endif
+      acc := acc * 10L + long(c - 48)
+      i := i + 1
+    endwh
+    if neg then
+      acc := -acc
+    endif
+    return (false, acc)
+  end parseLong
+
+  // Entero de 32 bits — delega en parseLong y trunca (dogfooding de tuplas).
+  public function parseInt(s: string): (boolean, integer)
+    var err: boolean
+    var v: long
+    { err, v } := parseLong(s)
+    return (err, integer(v))
+  end parseInt
+
+  // Coma flotante de 64 bits: [signo] dígitos [ '.' dígitos ]. Sin exponente.
+  public function parseDouble(s: string): (boolean, double)
+    var n: integer := strlen(s)
+    if n == 0 then
+      return (true, 0.0d)
+    endif
+    var i: integer := 0
+    var neg: boolean := false
+    var c0: integer := charCodeAt(s, 0)
+    if c0 == 45 then
+      neg := true
+      i := 1
+    elseif c0 == 43 then
+      i := 1
+    endif
+    var ip: double := 0.0d
+    var sawDigit: boolean := false
+    while (i < n) and (charCodeAt(s, i) != 46) do    // parte entera (hasta '.')
+      var c: integer := charCodeAt(s, i)
+      if (c < 48) or (c > 57) then
+        return (true, 0.0d)
+      endif
+      ip := ip * 10.0d + double(c - 48)
+      sawDigit := true
+      i := i + 1
+    endwh
+    var frac: double := 0.0d
+    var scale: double := 1.0d
+    if (i < n) and (charCodeAt(s, i) == 46) then     // parte fraccionaria
+      i := i + 1
+      while i < n do
+        var c: integer := charCodeAt(s, i)
+        if (c < 48) or (c > 57) then
+          return (true, 0.0d)
+        endif
+        scale := scale * 10.0d
+        frac := frac * 10.0d + double(c - 48)
+        sawDigit := true
+        i := i + 1
+      endwh
+    endif
+    if not sawDigit then
+      return (true, 0.0d)
+    endif
+    var v: double := ip + frac / scale
+    if neg then
+      v := -v
+    endif
+    return (false, v)
+  end parseDouble
+
+  // Hexadecimal → long. Prefijo "0x"/"0X" opcional. Dígitos 0-9 a-f A-F.
+  public function parseHex(s: string): (boolean, long)
+    var n: integer := strlen(s)
+    if n == 0 then
+      return (true, 0L)
+    endif
+    var i: integer := 0
+    if (n >= 2) and (charCodeAt(s, 0) == 48) and ((charCodeAt(s, 1) == 120) or (charCodeAt(s, 1) == 88)) then
+      i := 2                   // "0x" / "0X"
+    endif
+    if i >= n then
+      return (true, 0L)
+    endif
+    var acc: long := 0L
+    while i < n do
+      var c: integer := charCodeAt(s, i)
+      var d: integer := -1
+      if (c >= 48) and (c <= 57) then
+        d := c - 48
+      elseif (c >= 97) and (c <= 102) then
+        d := (c - 97) + 10     // a-f
+      elseif (c >= 65) and (c <= 70) then
+        d := (c - 65) + 10     // A-F
+      endif
+      if d < 0 then
+        return (true, 0L)
+      endif
+      acc := acc * 16L + long(d)
+      i := i + 1
+    endwh
+    return (false, acc)
+  end parseHex
+
 end Str

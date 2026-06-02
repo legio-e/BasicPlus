@@ -349,11 +349,22 @@ pequeña (p.ej. `Stats.LinFit`) y migran a tupla sin romper a nadie.
   `info.exprTypes` (resultado de llamadas que se desempaquetan), así el módulo
   consumidor sintetiza la clase `__Tuple_<sig>` para resolver slots de GET_FIELD.
   `samples/TupLib.bp` + `samples/TupCrossTest.bp`, paridad dual-VM.
-- ⏳ **T4 (pendiente)** — la familia `parse*` (`parseLong`/`parseDouble`/`parseHex`)
-  devolviendo `(boolean err, T valor)` estilo Go. Es el motivador fuerte; va en
-  H4.B / stdlib de string.
+- ✅ **T4** — familia `parse*` en `Str.bp` (BP puro): `parseLong`/`parseInt`/
+  `parseDouble`/`parseHex` devolviendo `(boolean err, T valor)` estilo Go.
+  `parseInt` delega en `parseLong` (desempaqueta y reempaqueta tupla = dogfooding
+  same-module). Sin notación científica ni chequeo de overflow (documentado).
+  `samples/ParseTest.bp` (cross-module: `{ ok, n } := Str.parseLong(s)`), paridad
+  dual-VM. **El caso que motivó las tuplas, cerrado.**
 - Pendientes menores: tuplas first-class (almacenar/pasar) — diferido; destino de
   desempaquetado solo variables simples por ahora (lvalues field/index → futuro).
+- **AOT (`function native`) NO soporta tuplas** (anotado, sin acción — decisión
+  del usuario 2026-06-02). Las tuplas son una construcción del INTÉRPRETE (objeto
+  sintético + NEW_OBJECT/SET_FIELD/GET_FIELD); ambas VMs las ejecutan en paridad.
+  Pero el transpilador AOT-C (`AotCEmitter`) no las conoce → una `function native`
+  no puede devolver ni desempaquetar una tupla. El `.mod` de esa función corre
+  igual en el intérprete (el flag `native` solo AÑADE una versión AOT). Si algún
+  día molesta, un guard semántico ("tuplas no soportadas en function native") es
+  trivial; de momento no se añade.
 
 **Qué**: tipo producto anónimo `(a, b, c)`. Casos de uso: retorno
 múltiple de funciones, agrupación ligera sin declarar una clase.

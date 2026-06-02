@@ -1,0 +1,42 @@
+// ParseTest — familia Str.parse* (T4 tuplas): { err, valor } := Str.parseX(s).
+module ParseTest
+  import Str
+  function Main()
+    var e: boolean
+    var n: long
+    { e, n } := Str.parseLong("9000000001")
+    print "parseLong ok: " + boolToString(not e)
+    print n                                  // 9000000001
+
+    { e, n } := Str.parseLong("-42")
+    print "neg="
+    print n                                  // -42
+
+    { e, n } := Str.parseLong("12x3")
+    print "bad err=" + boolToString(e)       // true
+
+    var ei: boolean
+    var ni: integer
+    { ei, ni } := Str.parseInt("12345")
+    print "int="
+    print ni                                 // 12345
+
+    var ed: boolean
+    var d: double
+    { ed, d } := Str.parseDouble("-3.14159")
+    print "dbl ok=" + boolToString(not ed)
+    print d                                  // -3.14159
+
+    { ed, d } := Str.parseDouble("2.5.6")
+    print "dbl bad err=" + boolToString(ed)  // true
+
+    var eh: boolean
+    var h: long
+    { eh, h } := Str.parseHex("0xFF")
+    print "hexFF="
+    print h                                  // 255
+    { eh, h } := Str.parseHex("1a2b")
+    print "hex1a2b="
+    print h                                  // 6699
+  end Main
+end ParseTest
