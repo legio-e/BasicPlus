@@ -1,7 +1,7 @@
 bpi 6
 module Timer
 class Alarm public
-  layout 2 4 00000000 00000000
+  layout 2 6 00000000 00000000
   ctor(periodMs:integer)
   method check():boolean public
   method wait():void public

@@ -9,7 +9,7 @@ func startSlice(counterId:integer):void public intrinsic
 func RISING():integer public
 func BOTH():integer public
 class Counter public
-  layout 3 4 00000000 00000000
+  layout 3 6 00000000 00000000
   ctor(pin:integer,edgeKind:integer)
   staticconst FALLING:integer=1 public
   staticconst RISING:integer=0 public

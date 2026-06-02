@@ -12,7 +12,7 @@ func STANDARD():integer public
 func readBus(bus:integer,addr:integer,data:integer[],count:integer):integer public intrinsic
 func BUS0():integer public
 class Bus public
-  layout 4 3 00000000 00000000
+  layout 4 5 00000000 00000000
   ctor(id:integer,sda:integer,scl:integer,baudrate:integer)
   staticconst FAST:integer=400000 public
   staticconst STANDARD:integer=100000 public

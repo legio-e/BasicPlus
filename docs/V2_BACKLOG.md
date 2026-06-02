@@ -1540,10 +1540,23 @@ abstract de un plumazo, seguimos como estábamos".
 - **Limpieza**: con `compareTo`/`toString` en `Object`, la clase `Comparable` de
   `Collections.bp` sobra (los wrappers overridean `Object`).
 - **Plan por pasos (paridad en cada uno)**:
-  - **H5.1.a** (estructural, el gordo): `Object` raíz + reservar slots + built-in
-    descienden de él + ajustar cálculo de slots del `.bpi`. Criterio: la suite
-    actual (10/10) sigue verde dual-VM sin cambiar comportamiento.
-  - **H5.1.b**: cuerpos por defecto (toString→dirección vía builtin; compareTo→throw).
+  - ✅ **H5.1.a** (estructural, el gordo) — HECHO 2026-06-02. Clase raíz `Object`
+    sintetizada la PRIMERA (slots 0=`toString`, 1=`compareTo`); built-ins (List,
+    StringBuilder, Mutex, RuntimeError, tuplas) + toda clase de usuario sin `extends`
+    descienden de ella; cálculo de slots del importador (`Main.java`) siembra los 2
+    slots de Object para clases raíz cross-module. **Cuerpos por defecto =
+    placeholders** (toString→"object", compareTo→0; H5.1.b los hace reales).
+    `Object` sigue siendo `AnyType` como TIPO (los wrappers usan `var o:Integer:=other`).
+    Sin cambios en las VMs ni en el formato `.bpi`. Suite determinista 12/12 dual-VM.
+    - **EXCEPCIÓN Thread** (decisión del usuario): `Thread` y subclases NO descienden
+      de Object — el arranque de hilos en ambas VMs asume `run()` en slot 0
+      (`bpvm_thread_spawn`). Coste: no se puede `toString()`/`compareTo()` un Thread
+      (irrelevante). `RuntimeError` SÍ desciende (div0 valida el ciclo throw/catch).
+    - **Hallazgo colateral (no es regresión)**: `catchnative`/`catchmutex` ya fallaban
+      dual-VM en HEAD — el VM-C no integra con try/catch los throws nativos de
+      ALOAD/cast-narrow/charAt/mutex (solo div0/mod0). Pendiente aparte (familia B3/BUG-2).
+  - **H5.1.b**: cuerpos por defecto reales (toString→dirección "object@<hex>" vía
+    builtin; compareTo→throw) + hacerlos invocables desde fuente.
   - **H5.1.c**: auto-`toString` en print/concat + `null`→"null" (helper
     `emitObjectToString` con guarda de null).
   - **H5.1.d**: fundir/quitar `Comparable`, regresión completa, commit.

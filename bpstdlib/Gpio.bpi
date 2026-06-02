@@ -12,7 +12,7 @@ func PULL_DOWN():integer public
 func write(pin:integer,value:integer):void public intrinsic
 func PULL_NONE():integer public
 class Pin public
-  layout 2 7 00000000 00000000
+  layout 2 9 00000000 00000000
   ctor(num:integer,mode:integer)
   staticconst INPUT:integer=0 public
   staticconst PULL_UP:integer=1 public

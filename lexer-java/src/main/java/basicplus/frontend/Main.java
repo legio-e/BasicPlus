@@ -1095,12 +1095,25 @@ public final class Main {
                     // quedaba con slot desfasado → INVOKE_VIRTUAL cross-module
                     // a la ranura equivocada (los envoltorios Integer/etc. que
                     // extienden Comparable lo destaparon).
-                    if (cs.baseClassName != null) {
-                        Symbol.ClassSymbol baseStub = ns.classes.get(cs.baseClassName);
-                        if (baseStub != null) {
-                            stub.externalMethodSlots.putAll(baseStub.externalMethodSlots);
-                            nextSlot = baseStub.externalMethodSlots.size();
-                        }
+                    Symbol.ClassSymbol baseStub = (cs.baseClassName != null)
+                            ? ns.classes.get(cs.baseClassName) : null;
+                    if (baseStub != null) {
+                        stub.externalMethodSlots.putAll(baseStub.externalMethodSlots);
+                        nextSlot = baseStub.externalMethodSlots.size();
+                    } else if (cs.baseClassName == null) {
+                        // H5.1.a — raíz implícita Object: TODA clase de usuario
+                        // desciende de Object, cuyos 2 métodos virtuales ocupan
+                        // los slots 0 (toString) y 1 (compareTo). El emisor copia
+                        // Object como parent local, así que sus métodos propios
+                        // numeran desde 2. Sembramos esos 2 slots aquí para que
+                        // INVOKE_VIRTUAL cross-module despache a la ranura
+                        // correcta (mismo riesgo BUG-5 si se omite).
+                        // (baseClassName != null pero no hallada ⇒ base en OTRO
+                        //  módulo: comportamiento previo sin sembrar — no
+                        //  soportado plenamente, no aparece en la regresión.)
+                        stub.externalMethodSlots.put("toString", 0);
+                        stub.externalMethodSlots.put("compareTo", 1);
+                        nextSlot = 2;
                     }
                     // Properties → getter (slot N) + setter (slot N+1)
                     for (ModuleInterface.PropSig p : cs.properties) {

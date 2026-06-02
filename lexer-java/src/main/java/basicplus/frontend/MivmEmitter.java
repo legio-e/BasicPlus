@@ -240,6 +240,9 @@ public final class MivmEmitter {
         //     necesitar Mutex (por sync properties a nivel módulo).
         //     Emitidas siempre. Pequeñas; los .mods ganan ~200 bytes pero a
         //     cambio cualquier programa puede usarlas sin import explícito.
+        // H5.1.a — Object es la PRIMERA: raíz de la jerarquía de clases, el
+        //     resto la copia como parent local (vtable slots 0/1).
+        synthesizeObjectClass();
         synthesizeRuntimeErrorClass();
         synthesizeListClass();
         synthesizeOwnerListClass();
@@ -826,6 +829,12 @@ public final class MivmEmitter {
                 } else {
                     parentForModWriter = cls.baseClass.name;
                 }
+            }
+            // H5.1.a — sin base explícita ⇒ raíz Object (vtable slots 0/1 =
+            // toString/compareTo). Las clases que extienden Thread van por la
+            // rama de arriba (base = Thread) y heredan la excepción Object.
+            if (parentForModWriter == null && externalParent == null) {
+                parentForModWriter = "Object";
             }
             w.addClass(cd.name, parentForModWriter, externalParent);
 
@@ -2793,6 +2802,56 @@ public final class MivmEmitter {
      * Necesario para que `throw RuntimeError(msg)` y `catch err: RuntimeError` tengan
      * un descriptor de clase real en data block.
      */
+    /**
+     * H5.1.a — Clase raíz Object. Toda clase (de usuario o stdlib, EXCEPTO
+     * Thread y sus subclases — ver synthesizeThreadClass) desciende implícita-
+     * mente de Object, cuya vtable fija dos slots:
+     *   slot 0 = toString(): string
+     *   slot 1 = compareTo(other): integer
+     * Sin campos (numFields=0), parentOffset=0 (raíz). Se sintetiza la PRIMERA
+     * para que cualquier otra clase pueda copiarla como parent LOCAL (addClass
+     * "Object"): así toString/compareTo ocupan los slots 0/1 de TODA instancia
+     * y INVOKE_VIRTUAL los despacha polimórficamente.
+     *
+     * Cuerpos por defecto: placeholders en H5.1.a (la suite no los invoca todavía).
+     * H5.1.b los reemplaza por toString="object@<hex>" (dirección, debug) y
+     * compareTo→throw "compareTo no implementado".
+     */
+    private void synthesizeObjectClass() {
+        for (ITopLevelDecl d : moduleAst.defs) {
+            if (d instanceof ClassDef && "Object".equals(((ClassDef) d).name)) return;
+        }
+        try {
+            w.addClass("Object", null);
+
+            // -------------------------- toString(): string --------------------------
+            // PRIMER método → slot 0 (fijo en toda la jerarquía).
+            w.addMethod("toString");
+            beginFunctionScope(makeSynthFs("toString", PrimitiveType.STRING), null);
+            try {
+                String sym = internString("object");   // placeholder; H5.1.b → "object@<hex>"
+                w.emitLeaGlobal(sym);
+                w.emitSetLocal("__result");
+                emitFunctionEnd();
+            } finally { scopeStack.pop(); }
+
+            // -------------------------- compareTo(other): integer --------------------------
+            // SEGUNDO método → slot 1.
+            w.addMethod("compareTo");
+            w.declareParam("other");
+            beginFunctionScope(makeSynthFs("compareTo", PrimitiveType.INTEGER), null);
+            try {
+                emitInt(0);                            // placeholder; H5.1.b → throw
+                w.emitSetLocal("__result");
+                emitFunctionEnd();
+            } finally { scopeStack.pop(); }
+
+            w.endClass();
+        } catch (IOException e) {
+            errors.add("emit Object builtin: " + e.getMessage());
+        }
+    }
+
     private void synthesizeRuntimeErrorClass() {
         // Si el módulo del usuario ya declara su propia clase RuntimeError,
         // dejamos la suya (mayor flexibilidad). El built-in solo se inyecta
@@ -2803,7 +2862,7 @@ public final class MivmEmitter {
             }
         }
         try {
-            w.addClass("RuntimeError", null);
+            w.addClass("RuntimeError", "Object");   // H5.1.a — raíz Object (div0 valida throw/catch)
             w.declareField("msg", true);
             w.endClass();
             // B3 v2 — exportamos el descriptor para que builtins nativos
@@ -2850,7 +2909,7 @@ public final class MivmEmitter {
             if (d instanceof ClassDef && "List".equals(((ClassDef) d).name)) return;
         }
         try {
-            w.addClass("List", null);
+            w.addClass("List", "Object");   // H5.1.a — raíz Object
             w.declareField("items", true);
             w.declareField("size",  false);
             w.declareField("cap",   false);
@@ -3117,7 +3176,7 @@ public final class MivmEmitter {
             if (d instanceof ClassDef && "StringBuilder".equals(((ClassDef) d).name)) return;
         }
         try {
-            w.addClass("StringBuilder", null);
+            w.addClass("StringBuilder", "Object");   // H5.1.a — raíz Object
             // chars NO es ref a objetos (es array i32 de codepoints); GC no
             // necesita escanear su contenido como refs. Pero el SLOT chars sí
             // es ref al array → declareField(., true) para que el GC siga el
@@ -3628,7 +3687,7 @@ public final class MivmEmitter {
             if (d instanceof ClassDef && "Mutex".equals(((ClassDef) d).name)) return;
         }
         try {
-            w.addClass("Mutex", null);
+            w.addClass("Mutex", "Object");   // H5.1.a — raíz Object
             w.declareField("__mid", false);   // slot 0
 
             // -------------------------- lock() --------------------------
@@ -3971,7 +4030,7 @@ public final class MivmEmitter {
         for (java.util.Map.Entry<String, BpType.TupleType> e : tupleShapes.entrySet()) {
             String cls = e.getKey();
             BpType.TupleType tt = e.getValue();
-            w.addClass(cls, null);
+            w.addClass(cls, "Object");   // H5.1.a — raíz Object
             for (int i = 0; i < tt.elements.size(); i++) {
                 BpType el = tt.elements.get(i);
                 w.declareField("_" + i, isRefType(el), false, is8Byte(el));

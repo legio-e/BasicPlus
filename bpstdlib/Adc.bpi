@@ -3,7 +3,7 @@ module Adc
 func readChannel(ch:integer):integer public intrinsic
 func initChannel(ch:integer):integer public intrinsic
 class Channel public
-  layout 2 3 00000000 00000000
+  layout 2 5 00000000 00000000
   ctor(ch:integer)
   staticconst VREF:float=3.3 public
   staticconst CH0:integer=0 public

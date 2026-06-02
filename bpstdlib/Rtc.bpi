@@ -3,7 +3,7 @@ module Rtc
 func nowSec():integer public intrinsic
 func setNowSec(sec:integer):void public intrinsic
 class Clock public
-  layout 0 2 - -
+  layout 0 4 - -
   ctor()
   method epochSec():integer public
   method setEpochSec(sec:integer):void public

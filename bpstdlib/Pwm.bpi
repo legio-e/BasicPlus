@@ -6,7 +6,7 @@ func setFreqHz(sliceId:integer,freqHz:integer):void public intrinsic
 func stopSlice(sliceId:integer):void public intrinsic
 func startSlice(sliceId:integer):void public intrinsic
 class Slice public
-  layout 4 4 00000000 00000000
+  layout 4 6 00000000 00000000
   ctor(pin:integer,freqHz:integer)
   method setDuty(dutyPct:integer):void public
   method setFreq(freqHz:integer):void public

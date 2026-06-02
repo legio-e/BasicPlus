@@ -3,12 +3,12 @@ module Collections
 func numericMap():Map public
 func stringMap():Map public
 class Comparable public
-  layout 0 1 - -
+  layout 0 2 - -
   ctor()
   method compareTo(other:any):integer public
 end class
 class StringComparator public extends Comparator
-  layout 0 1 - -
+  layout 0 3 - -
   ctor()
   method compare(a:any,b:any):integer public
 end class
@@ -20,7 +20,7 @@ class Double public extends Comparable
   method toString():string public
 end class
 class Comparator public
-  layout 0 1 - -
+  layout 0 3 - -
   ctor()
   method compare(a:any,b:any):integer public
 end class
@@ -39,7 +39,7 @@ class Float public extends Comparable
   method toString():string public
 end class
 class NaturalComparator public extends Comparator
-  layout 0 1 - -
+  layout 0 3 - -
   ctor()
   method compare(a:any,b:any):integer public
 end class
@@ -58,7 +58,7 @@ class Boolean public extends Comparable
   method toString():string public
 end class
 class Map public
-  layout 4 8 0000000f 00000000
+  layout 4 10 0000000f 00000000
   ctor()
   method withComparator(c:Comparator):Map public
   method size():integer public
