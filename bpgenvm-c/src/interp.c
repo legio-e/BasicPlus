@@ -99,28 +99,58 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
     return bpvm_eh_unwind(vm, tc, obj) ? 1 : 2;
 }
 
-/* Formatea un float estilo Java Float.toString (que es lo que usa la VM
- * Java en FPRINT_NONL). Usa %g y limpia el trailing ".0" si es entero. */
+/* GAP-4 — formateo canónico de double/float para print. Punto fijo estilo
+ * Str.doubleToString (entero-based: escala por 1e6 a un int64, redondea, separa
+ * parte entera/decimal, recorta ceros). Magnitudes fuera del rango seguro del
+ * int64 (|x| >= 1e12 o 0 < |x| < 1e-6) → notación científica. TODO en
+ * aritmética IEEE determinista (solo *,/,+ por literales exactos + cast a
+ * int64) y %lld/%06lld para las piezas enteras → byte-idéntico a
+ * VirtualMachine.formatBpDouble (Java). NO usa %g/%f de printf sobre el float. */
+static int bpvm_format_double(char* out, double v) {
+    if (isnan(v)) { memcpy(out, "NaN", 4); return 3; }
+    if (isinf(v)) {
+        if (v > 0.0) { memcpy(out, "Infinity", 9); return 8; }
+        memcpy(out, "-Infinity", 10); return 9;
+    }
+    int neg = (v < 0.0);
+    double ax = neg ? -v : v;
+    if (ax == 0.0) { out[0] = '0'; out[1] = '\0'; return 1; }
+
+    if (ax >= 1e12 || ax < 1e-6) {
+        /* científico */
+        int e = 0;
+        double m = ax;
+        while (m >= 10.0) { m = m / 10.0; e++; }
+        while (m < 1.0)   { m = m * 10.0; e--; }
+        long long scaled = (long long) (m * 1e6 + 0.5);
+        if (scaled >= 10000000LL) { scaled = 1000000LL; e++; }
+        long long ip = scaled / 1000000LL;
+        long long fr = scaled % 1000000LL;
+        char tmp[48];
+        int n = snprintf(tmp, sizeof tmp, "%s%lld.%06lld", neg ? "-" : "", ip, fr);
+        while (n > 0 && tmp[n - 1] == '0') n--;
+        if (n > 0 && tmp[n - 1] == '.') n--;
+        tmp[n] = '\0';
+        return snprintf(out, 48, "%sE%d", tmp, e);
+    } else {
+        /* punto fijo, 6 decimales */
+        long long scaled = (long long) (ax * 1e6 + 0.5);
+        if (scaled == 0) neg = 0;               /* evita "-0" */
+        long long ip = scaled / 1000000LL;
+        long long fr = scaled % 1000000LL;
+        int n = snprintf(out, 48, "%s%lld.%06lld", neg ? "-" : "", ip, fr);
+        while (n > 0 && out[n - 1] == '0') n--;
+        if (n > 0 && out[n - 1] == '.') n--;
+        out[n] = '\0';
+        return n;
+    }
+}
+
 static void emit_float(bpvm_t* vm, float v, int newline) {
-    char buf[40];
-    /* %.7g da una representación razonable; Java's Float.toString es
-     * un poco más estricto pero para nuestros propósitos basta. */
-    int n = snprintf(buf, sizeof(buf), "%g", (double) v);
+    char buf[52];
+    int n = bpvm_format_double(buf, (double) v);
     if (n <= 0) return;
-    /* Aseguramos que tenga punto decimal — Java lo hace ("1.0" no "1"). */
-    int has_dot = 0;
-    for (int i = 0; i < n; i++) {
-        if (buf[i] == '.' || buf[i] == 'e' || buf[i] == 'E'
-                || buf[i] == 'n' /*nan*/ || buf[i] == 'i' /*inf*/) {
-            has_dot = 1; break;
-        }
-    }
-    if (!has_dot && n + 2 < (int) sizeof(buf)) {
-        buf[n++] = '.'; buf[n++] = '0'; buf[n] = '\0';
-    }
-    if (newline && n + 1 < (int) sizeof(buf)) {
-        buf[n++] = '\n'; buf[n] = '\0';
-    }
+    if (newline && n + 1 < (int) sizeof(buf)) { buf[n++] = '\n'; buf[n] = '\0'; }
     emit_text(vm, buf, (size_t) n);
 }
 
@@ -139,18 +169,12 @@ static inline double bits_to_double(int64_t bits) {
 static inline int64_t double_to_bits(double d) {
     int64_t bits; memcpy(&bits, &d, 8); return bits;
 }
-/* H1.3 (V2): formatea un double (%.15g + punto, estilo Java Double.toString
- * para valores limpios). */
+/* GAP-4: print de un double via bpvm_format_double (punto fijo + sci,
+ * byte-idéntico a la VM Java). */
 static void emit_double(bpvm_t* vm, double v, int newline) {
-    char buf[48];
-    int n = snprintf(buf, sizeof(buf), "%.15g", v);
+    char buf[52];
+    int n = bpvm_format_double(buf, v);
     if (n <= 0) return;
-    int has_dot = 0;
-    for (int i = 0; i < n; i++) {
-        if (buf[i] == '.' || buf[i] == 'e' || buf[i] == 'E'
-                || buf[i] == 'n' || buf[i] == 'i') { has_dot = 1; break; }
-    }
-    if (!has_dot && n + 2 < (int) sizeof(buf)) { buf[n++] = '.'; buf[n++] = '0'; buf[n] = '\0'; }
     if (newline && n + 1 < (int) sizeof(buf)) { buf[n++] = '\n'; buf[n] = '\0'; }
     emit_text(vm, buf, (size_t) n);
 }

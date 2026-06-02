@@ -1,0 +1,21 @@
+// DblFmtTest — GAP-4: formato canónico de print<double/float>, idéntico en
+// ambas VMs (punto fijo estilo doubleToString + científico para extremos).
+module DblFmtTest
+  function Main()
+    print 3.14159d          // 3.14159
+    print 5.0d              // 5
+    print -3.14d            // -3.14
+    print 0.5d              // 0.5
+    print 0.0d              // 0
+    print 100.0d            // 100
+    print 0.0001d           // 0.0001
+    print 1000000000.0d     // 1000000000
+    print 5000000000.0d     // 5000000000
+    print 32.0d / 7.0d      // 4.571429
+    print 1.0d / 3.0d       // 0.333333
+    print 1000000000000.0d  // 1E12  (científico)
+    print 0.0000001d        // 1E-7  (científico)
+    print 1.5               // 1.5   (float)
+    print -2.5              // -2.5  (float)
+  end Main
+end DblFmtTest

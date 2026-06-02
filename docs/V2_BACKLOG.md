@@ -1403,27 +1403,33 @@ accesores por índice (`keyAt(i)/valueAt(i): Object`) en vez de `keys(): List`.
 importadas a la clase sintetizada global (unificar identidad). Encontrado en
 H4.A.2 (2026-06-01).
 
-## GAP-4 — formateo de double/float en `print` crudo difiere entre VMs (descubierto 2026-06-01)
+## GAP-4 — formateo de double/float en `print` crudo (✅ ARREGLADO 2026-06-02)
 
-**Qué**: `print <double>` (opcode DPRINT) y `print <float>` (FPRINT) formatean
-distinto en cada VM. Java usa `Double.toString` (repr. de ida-y-vuelta más corta,
-notación E para magnitudes grandes/pequeñas); la VM-C usa `printf` con menos
-dígitos significativos y sin notación E. Ejemplos: `4.571428571428571` (Java) vs
-`4.57142857142857` (C); `1.0E9` vs `1000000000.0`; `1.0000000000000002` vs `1.0`.
+**Era**: `print <double>` (DPRINT) y `print <float>` (FPRINT) formateaban distinto
+en cada VM (Java `Double.toString` vs C `%.15g`/`%g`). El `double` era bit-idéntico;
+solo divergía el FORMATO (p.ej. `4.571428571428571` vs `4.57142857142857`; `1.0E9`
+vs `1000000000.0`).
 
-**Importante**: NO es un fallo de cálculo — el `double` subyacente es BIT-IDÉNTICO
-en ambas VMs (la aritmética IEEE-64 tiene paridad exacta). Es solo el FORMATO de
-impresión. Valores "simples" (p.ej. `3.14159`, enteros pequeños) ya coinciden;
-divergen los que requieren precisión completa (~17 dígitos) o notación científica.
+**Decisión (usuario, 2026-06-02)**: formato canónico = **punto fijo estilo
+`Str.doubleToString`** (no la repr. de Java). Ambas VMs implementan el MISMO
+algoritmo entero-based → byte-idéntico.
 
-**Workaround actual**: formatear con `Str.formatDouble(x, dec)` / `Str.doubleToString(x)`
-(BP puro → idéntico en ambas VMs). StatsTest lo usa y da paridad exacta.
+**Algoritmo (`formatBpDouble` en VirtualMachine.java == `bpvm_format_double` en
+interp.c)**: NaN→"NaN", ±Inf→"Infinity"/"-Infinity", 0→"0". Para `|x|` en
+[1e-6, 1e12): punto fijo de 6 decimales (escala por 1e6 a un int64, redondea,
+separa parte entera/decimal, recorta ceros de cola y el punto suelto). Fuera de
+ese rango (≥1e12 o <1e-6): notación científica `m.mmmmmmE±e` (normaliza el
+mantissa con *10/÷10, mismo redondeo). TODO en aritmética IEEE determinista
+(solo `*`,`/`,`+` por literales exactos + cast a int64) y `%lld`/`%06lld` para
+las piezas enteras → resultado idéntico en ambas VMs. NO usa `Double.toString`
+ni `%g`. Wirea DPRINT/DPRINT_NONL/FPRINT/FPRINT_NONL.
 
-**Fix propio (pendiente, VM)**: alinear el formateo de DPRINT/FPRINT entre VMs.
-Opción A (preferible): la VM-C adopta repr. de ida-y-vuelta más corta tipo
-`Double.toString` (Ryū o equivalente). Opción B: ambas a un formato común
-acordado. Tarea de VM (como PR-align-vms hizo con el wire), no de stdlib.
-Encontrado en H4.A.3 (2026-06-01).
+**Diferencia vs Java antiguo**: `5.0`→"5" (no "5.0"); `1e9`→"1000000000" (no
+"1.0E9"). Es el estilo `doubleToString` (decisión consciente). `Str.formatDouble`
+sigue disponible para decimales fijos controlados.
+
+**Validación**: `samples/DblFmtTest.bp`, paridad exacta dual-VM (suite 10/10).
+Encontrado en H4.A.3 (2026-06-01), arreglado 2026-06-02.
 
 ## H5 (modelo de objetos) — progreso parcial (2026-06-01)
 

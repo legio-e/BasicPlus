@@ -1428,6 +1428,59 @@ public class VirtualMachine {
         writeI32(mem, addr + 4, (int)  v);
     }
 
+    // ============================================================
+    // GAP-4 — formateo canónico de double/float para print (DPRINT/FPRINT).
+    // Punto fijo estilo Str.doubleToString (entero-based: escala por 1e6 a un
+    // long, redondea, separa parte entera/decimal, recorta ceros). Para
+    // magnitudes fuera del rango seguro del long (|x| >= 1e12 o 0 < |x| < 1e-6)
+    // cae a notación científica. TODO en aritmética IEEE determinista (solo
+    // *,/,+ por literales exactos y cast a long) → byte-idéntico al puerto C de
+    // bpvm_format_double en interp.c. No usa Double.toString ni printf.
+    // ============================================================
+    static String formatBpDouble(double v) {
+        if (Double.isNaN(v)) return "NaN";
+        if (Double.isInfinite(v)) return v > 0.0 ? "Infinity" : "-Infinity";
+        boolean neg = v < 0.0;
+        double ax = neg ? -v : v;
+        if (ax == 0.0) return "0";
+        if (ax >= 1e12 || ax < 1e-6) return formatBpSci(neg, ax);
+        return formatBpFixed(neg, ax);
+    }
+    private static String trimFixedFrac(StringBuilder sb) {
+        int stop = sb.length();
+        while (stop > 0 && sb.charAt(stop - 1) == '0') stop--;
+        if (stop > 0 && sb.charAt(stop - 1) == '.') stop--;
+        return sb.substring(0, stop);
+    }
+    // Construye "[-]INT.FFFFFF" (6 decimales, padded) a partir de un scaled = round(ax*1e6).
+    private static StringBuilder buildScaled(boolean neg, long scaled) {
+        long intPart = scaled / 1000000L;
+        long frac    = scaled % 1000000L;
+        StringBuilder sb = new StringBuilder();
+        if (neg) sb.append('-');
+        sb.append(Long.toString(intPart));
+        sb.append('.');
+        String fs = Long.toString(frac);
+        for (int k = fs.length(); k < 6; k++) sb.append('0');
+        sb.append(fs);
+        return sb;
+    }
+    private static String formatBpFixed(boolean neg, double ax) {
+        long scaled = (long) (ax * 1e6 + 0.5);
+        if (scaled == 0L) neg = false;          // evita "-0"
+        return trimFixedFrac(buildScaled(neg, scaled));
+    }
+    private static String formatBpSci(boolean neg, double ax) {
+        int e = 0;
+        double m = ax;
+        while (m >= 10.0) { m = m / 10.0; e++; }
+        while (m < 1.0)   { m = m * 10.0; e--; }
+        long scaled = (long) (m * 1e6 + 0.5);
+        if (scaled >= 10000000L) { scaled = 1000000L; e++; }   // el redondeo subió a 10.0
+        String mant = trimFixedFrac(buildScaled(neg, scaled));
+        return mant + "E" + Integer.toString(e);
+    }
+
     /**
      * Señales con las que {@link #runOnContext} indica al scheduler por qué
      * salió del bucle inner.
@@ -2162,9 +2215,9 @@ public class VirtualMachine {
                     writeI32(mem, sp, a >= b ? 1 : 0); sp += 4;
                     break;
                 }
-                case 0x35: { // FPRINT
+                case 0x35: { // FPRINT (legacy; print usa FPRINT_NONL+PRINT_NL)
                     sp -= 4; float v = Float.intBitsToFloat(readI32(mem, sp));
-                    System.out.println("VM [FPRINT]: " + v);
+                    programOut.writeText(formatBpDouble((double) v)); programOut.newline();   // GAP-4
                     break;
                 }
                 case 0x36: { // I2F
@@ -2396,7 +2449,7 @@ public class VirtualMachine {
                 }
                 case 0x57: { // FPRINT_NONL
                     sp -= 4; float v = Float.intBitsToFloat(readI32(mem, sp));
-                    programOut.writeText(Float.toString(v));
+                    programOut.writeText(formatBpDouble((double) v));   // GAP-4
                     break;
                 }
                 case 0x58: { // PRINT_STR_NONL
@@ -2652,11 +2705,11 @@ public class VirtualMachine {
                 }
                 case 0x9E: { // DPRINT
                     sp -= 8; double v = Double.longBitsToDouble(readI64(mem, sp));
-                    programOut.writeText(Double.toString(v)); programOut.newline(); break;
+                    programOut.writeText(formatBpDouble(v)); programOut.newline(); break;   // GAP-4
                 }
                 case 0x9F: { // DPRINT_NONL
                     sp -= 8; double v = Double.longBitsToDouble(readI64(mem, sp));
-                    programOut.writeText(Double.toString(v)); break;
+                    programOut.writeText(formatBpDouble(v)); break;   // GAP-4
                 }
                 case 0xA0: { // I2D
                     sp -= 4; int v = readI32(mem, sp);
