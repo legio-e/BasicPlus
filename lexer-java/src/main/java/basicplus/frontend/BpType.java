@@ -253,6 +253,39 @@ public abstract class BpType {
     }
 
     // ============================================================
+    // Tuplas — SOLO como tipo de retorno de función (retorno múltiple).
+    // No son valores de primera clase: el SemanticAnalyzer prohíbe
+    // almacenarlas/pasarlas; solo se destructuran en el acto con
+    // `{ a, b } := f()`. Internamente = objeto sintético con N campos.
+    // ============================================================
+    public static final class TupleType extends BpType {
+        public final java.util.List<BpType> elements;
+        public TupleType(java.util.List<BpType> elements) { this.elements = elements; }
+
+        @Override public String display() {
+            StringBuilder sb = new StringBuilder("(");
+            for (int i = 0; i < elements.size(); i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(elements.get(i).display());
+            }
+            return sb.append(")").toString();
+        }
+        @Override public boolean isReference() { return true; }  // ref a objeto sintético
+        @Override public boolean sameAs(BpType other) {
+            if (!(other instanceof TupleType)) return false;
+            TupleType t = (TupleType) other;
+            if (t.elements.size() != elements.size()) return false;
+            for (int i = 0; i < elements.size(); i++)
+                if (!elements.get(i).sameAs(t.elements.get(i))) return false;
+            return true;
+        }
+        @Override public boolean isAssignableFrom(BpType source) {
+            if (source instanceof ErrorType) return true;
+            return sameAs(source);
+        }
+    }
+
+    // ============================================================
     // Tipo del literal null
     // ============================================================
     public static final class NullType extends BpType {

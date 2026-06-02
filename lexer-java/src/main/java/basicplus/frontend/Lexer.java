@@ -172,8 +172,9 @@ public final class Lexer {
                 continue;
             }
 
-            // Identificador / palabra clave
-            if (isAlpha(c)) {
+            // Identificador / palabra clave. Acepta `_` como inicio (p.ej. el
+            // descarte `_` en desempaquetado de tuplas, o nombres tipo `_tmp`).
+            if (isAlpha(c) || c == '_') {
                 tokens.add(scanIdentifierOrKeyword(startLine, startColumn));
                 continue;
             }
@@ -511,6 +512,8 @@ public final class Lexer {
             case ')': return make1(TokenType.RPAREN,    ")", startLine, startColumn);
             case '[': return make1(TokenType.LBRACKET,  "[", startLine, startColumn);
             case ']': return make1(TokenType.RBRACKET,  "]", startLine, startColumn);
+            case '{': return make1(TokenType.LBRACE,    "{", startLine, startColumn);  // tuplas: { a, b } := f()
+            case '}': return make1(TokenType.RBRACE,    "}", startLine, startColumn);
             case ',': return make1(TokenType.COMMA,     ",", startLine, startColumn);
             case ';': return make1(TokenType.SEMICOLON, ";", startLine, startColumn);
             case ':': return make1(TokenType.COLON,     ":", startLine, startColumn);

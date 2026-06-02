@@ -248,6 +248,12 @@ public final class MivmEmitter {
         synthesizeMutexClass();
         synthesizeSyncListClass();
 
+        // 3a-bis) Clases de tupla `__Tuple_<sig>` para cada forma de retorno
+        //         múltiple usada en el módulo. Antes de las funciones (phase 5)
+        //         que las construyen con NEW_OBJECT.
+        collectTupleShapes();
+        synthesizeTupleClasses();
+
         // 3b) __init: corre dependencias (CALL_EXT a cada import.__init) y luego
         //     el inicializador del módulo si existe. Idempotente.
         emitInitFunction();
@@ -1286,6 +1292,7 @@ public final class MivmEmitter {
             }
         }
         if (s instanceof AssignStmt)  emitAssign((AssignStmt) s);
+        else if (s instanceof Ast.DestructAssignStmt) emitDestructAssign((Ast.DestructAssignStmt) s);
         else if (s instanceof IfStmt)       emitIf((IfStmt) s);
         else if (s instanceof WhileStmt)    emitWhile((WhileStmt) s);
         else if (s instanceof DoLoopStmt)   emitDoLoop((DoLoopStmt) s);
@@ -2332,6 +2339,7 @@ public final class MivmEmitter {
         else if (e instanceof IndexExpr)        emitIndexLoad((IndexExpr) e);
         else if (e instanceof FieldExpr)        emitFieldExpr();
         else if (e instanceof InstanceOfExpr)   emitInstanceOf((InstanceOfExpr) e);
+        else if (e instanceof Ast.TupleExpr)    emitTupleExpr((Ast.TupleExpr) e);
         else errors.add("expresión no soportada: " + e.getClass().getSimpleName());
     }
 
@@ -3903,6 +3911,137 @@ public final class MivmEmitter {
             slots += is8Byte(fs.params.get(i).type) ? 2 : 1;
         }
         return slots;
+    }
+
+    // ============================================================
+    // TUPLAS (retorno múltiple) — objeto sintético `__Tuple_<sig>` con N campos.
+    // El nombre codifica el LAYOUT (anchos/ref-ness), no los tipos exactos, así
+    // dos tuplas con misma forma comparten clase. Cero opcodes nuevos.
+    // ============================================================
+    private final java.util.LinkedHashMap<String, BpType.TupleType> tupleShapes =
+            new java.util.LinkedHashMap<>();
+
+    private static String tupleElemCode(BpType t) {
+        if (t instanceof PrimitiveType) {
+            switch (((PrimitiveType) t).tag) {
+                case LONG:    return "l";
+                case DOUBLE:  return "d";
+                case FLOAT:   return "f";
+                case BOOLEAN: return "b";
+                case STRING:  return "s";
+                default:      return "i";   // integer + estrechos → slot i32
+            }
+        }
+        return "r";   // class/array/any/Object → ref de 4 bytes (GC traza)
+    }
+    private static String tupleClassName(BpType.TupleType tt) {
+        StringBuilder sb = new StringBuilder("__Tuple_");
+        for (BpType e : tt.elements) sb.append(tupleElemCode(e));
+        return sb.toString();
+    }
+
+    /** Pre-pase: registra la forma de cada función/método que devuelve tupla. */
+    private void collectTupleShapes() {
+        for (ITopLevelDecl d : moduleAst.defs) {
+            if (d instanceof FuncDef) registerTupleIfAny((FuncDef) d);
+            else if (d instanceof ClassDef) {
+                for (ITopLevelDecl m : ((ClassDef) d).members)
+                    if (m instanceof FuncDef) registerTupleIfAny((FuncDef) m);
+            }
+        }
+    }
+    private void registerTupleIfAny(FuncDef fn) {
+        Symbol s = info.declSymbols.get(fn);
+        if (s instanceof FunctionSymbol) {
+            BpType rt = ((FunctionSymbol) s).returnType;
+            if (rt instanceof BpType.TupleType)
+                tupleShapes.put(tupleClassName((BpType.TupleType) rt), (BpType.TupleType) rt);
+        }
+    }
+
+    /** Sintetiza una clase oculta por forma de tupla usada en el módulo. */
+    private void synthesizeTupleClasses() throws IOException {
+        for (java.util.Map.Entry<String, BpType.TupleType> e : tupleShapes.entrySet()) {
+            String cls = e.getKey();
+            BpType.TupleType tt = e.getValue();
+            w.addClass(cls, null);
+            for (int i = 0; i < tt.elements.size(); i++) {
+                BpType el = tt.elements.get(i);
+                w.declareField("_" + i, isRefType(el), false, is8Byte(el));
+            }
+            w.endClass();
+        }
+    }
+
+    /** Emite la construcción de una tupla `(e1, e2, ...)` y deja su ref en pila. */
+    private void emitTupleExpr(Ast.TupleExpr te) throws IOException {
+        BpType bt = info.exprTypes.get(te);
+        if (!(bt instanceof BpType.TupleType)) { errors.add("tupla sin tipo resuelto"); return; }
+        BpType.TupleType tt = (BpType.TupleType) bt;
+        String cls = tupleClassName(tt);
+        String temp = "__tup_" + (stringPoolCounter++);
+        declareLocal(temp);
+        w.emitNewObject(cls);
+        w.emitSetLocal(temp);
+        for (int i = 0; i < te.elements.size(); i++) {
+            w.emitGetLocal(temp);
+            emitExpr(te.elements.get(i));
+            coerceToTarget(te.elements.get(i), tt.elements.get(i));
+            w.emitSetField(cls, "_" + i);
+        }
+        w.emitGetLocal(temp);   // ref de la tupla = valor de retorno
+    }
+
+    /** Emite `{ a, b, ... } := call()`: evalúa la llamada, guarda la ref y
+     *  desempaqueta cada campo en su lvalue (o lo descarta si es `_`). */
+    private void emitDestructAssign(Ast.DestructAssignStmt s) throws IOException {
+        BpType bt = info.exprTypes.get(s.value);
+        if (!(bt instanceof BpType.TupleType)) { errors.add("destructuring sin tipo tupla"); return; }
+        BpType.TupleType tt = (BpType.TupleType) bt;
+        String cls = tupleClassName(tt);
+        emitExpr(s.value);                       // ref de la tupla en pila
+        String temp = "__dst_" + (stringPoolCounter++);
+        declareLocal(temp);
+        w.emitSetLocal(temp);
+        int n = Math.min(s.targets.size(), tt.elements.size());
+        for (int i = 0; i < n; i++) {
+            IExpr tg = s.targets.get(i);
+            if (tg instanceof IdentifierExpr && "_".equals(((IdentifierExpr) tg).name)) continue;
+            w.emitGetLocal(temp);
+            w.emitGetField(cls, "_" + i);        // is8-aware → GET_FIELD_LONG si procede
+            BpType targetT = info.exprTypes.get(tg);
+            if (targetT != null) emitWiden(tt.elements.get(i), targetT);
+            storeToTupleTarget(tg);
+        }
+    }
+
+    /** Almacena el valor de la pila en el lvalue destino de un desempaquetado. */
+    private void storeToTupleTarget(IExpr tg) throws IOException {
+        if (tg instanceof IdentifierExpr) {
+            Symbol sym = info.exprSymbols.get(tg);
+            if (sym == null) { errors.add("destino de desempaquetado sin símbolo"); return; }
+            storeToSymbol(sym, ((IdentifierExpr) tg).name);
+        } else {
+            errors.add("destino de desempaquetado no soportado todavía: " + tg.getClass().getSimpleName());
+        }
+    }
+
+    /** Conversión de ensanchado entre primitivos (mismo criterio que coerceToTarget),
+     *  con tipos de origen/destino explícitos (no hay nodo IExpr de origen). */
+    private void emitWiden(BpType from, BpType to) throws IOException {
+        if (!(to instanceof PrimitiveType) || !(from instanceof PrimitiveType)) return;
+        PrimitiveType pf = (PrimitiveType) from, pt = (PrimitiveType) to;
+        if (pf.tag == pt.tag) return;
+        if (pt.tag == PrimitiveType.Kind.LONG && pf.isIntegerLike()) { w.emit(OpCode.I32_TO_I64); return; }
+        if (pt.tag == PrimitiveType.Kind.DOUBLE) {
+            if (pf.isIntegerLike())               { w.emit(OpCode.I2D); return; }
+            if (pf.tag == PrimitiveType.Kind.LONG)  { w.emit(OpCode.L2D); return; }
+            if (pf.tag == PrimitiveType.Kind.FLOAT) { w.emit(OpCode.F2D); return; }
+        }
+        if (pt.tag == PrimitiveType.Kind.FLOAT) {
+            if (pf.isIntegerLike())               { w.emit(OpCode.I2F); return; }
+            if (pf.tag == PrimitiveType.Kind.LONG)  { w.emit(OpCode.L2F); return; }
+        }
     }
 
     private static boolean isNumericCastName(String n) {   // H1.3b (V2)

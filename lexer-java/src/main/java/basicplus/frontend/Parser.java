@@ -320,6 +320,17 @@ public final class Parser {
     // ============================================================
     private TypeRef parseType() {
         Token tok = current();
+        // Tipo tupla `(T1, T2, ...)` — solo válido como tipo de retorno (lo valida
+        // el semántico). `(T)` con un solo elemento = agrupación → el tipo interno.
+        if (tok.type == TokenType.LPAREN) {
+            advance();
+            List<TypeRef> elems = new ArrayList<>();
+            elems.add(parseType());
+            while (match(TokenType.COMMA)) elems.add(parseType());
+            consume(TokenType.RPAREN, "se esperaba ')' al cerrar el tipo tupla");
+            if (elems.size() == 1) return elems.get(0);
+            return new TupleTypeRef(elems, tok.line, tok.column);
+        }
         TypeRef baseType;
         switch (tok.type) {
             case INTEGER:    baseType = new SimpleTypeRef("integer", tok.line, tok.column); advance(); break;
@@ -582,6 +593,7 @@ public final class Parser {
     private IStmt parseStmt() {
         TokenType t = current().type;
         switch (t) {
+            case LBRACE:   return parseDestructAssignStmt();   // tuplas: { a, b } := f()
             case VAR:      return parseVarDecl(false);
             case CONST:    return parseConstDecl(false);
             case IF:       return parseIfStmt();
@@ -607,6 +619,24 @@ public final class Parser {
             default:
                 return parseAssignOrCallStmt();
         }
+    }
+
+    // Desempaquetado de tupla: `{ t1, t2, ... } := call()`. Los targets son
+    // lvalues ya declarados (o `_` para descartar). >= 2 targets. El RHS es una
+    // llamada que devuelve tupla; el semántico valida aridad y tipos.
+    private IStmt parseDestructAssignStmt() {
+        Token startTok = current();
+        consume(TokenType.LBRACE, "se esperaba '{'");
+        List<IExpr> targets = new ArrayList<>();
+        if (!check(TokenType.RBRACE)) {
+            targets.add(parsePrimary());
+            while (match(TokenType.COMMA)) targets.add(parsePrimary());
+        }
+        consume(TokenType.RBRACE, "se esperaba '}' al cerrar el desempaquetado");
+        consume(TokenType.ASSIGN, "se esperaba ':=' tras '{ ... }'");
+        IExpr rhs = parseExpr();
+        consumeStmtTerminator("se esperaba ';' o salto de línea tras el desempaquetado");
+        return new DestructAssignStmt(targets, rhs, startTok.line, startTok.column);
     }
 
     private IStmt parseAssignOrCallStmt() {
@@ -874,10 +904,40 @@ public final class Parser {
         Token tok = current();
         match(TokenType.RETURN);
         IExpr val = null;
-        if (!check(TokenType.NEWLINE) && !check(TokenType.SEMICOLON) && !isAtEnd())
-            val = parseExpr();
+        if (!check(TokenType.NEWLINE) && !check(TokenType.SEMICOLON) && !isAtEnd()) {
+            // `return (e1, e2, ...)` = tupla (retorno múltiple). Solo si hay una
+            // coma de nivel superior dentro del paréntesis exterior; si no, es
+            // una simple agrupación `(expr)` que parsea parseExpr normalmente.
+            if (check(TokenType.LPAREN) && tupleListAhead()) {
+                advance();   // '('
+                List<IExpr> elems = new ArrayList<>();
+                elems.add(parseExpr());
+                while (match(TokenType.COMMA)) elems.add(parseExpr());
+                consume(TokenType.RPAREN, "se esperaba ')' al cerrar la tupla de retorno");
+                val = new TupleExpr(elems, tok.line, tok.column);
+            } else {
+                val = parseExpr();
+            }
+        }
         consumeStmtTerminator("se esperaba salto de línea tras 'return'");
         return new ReturnStmt(val, tok.line, tok.column);
+    }
+
+    /** Lookahead read-only: ¿la `(` en `pos` abre una lista con coma de nivel
+     *  superior (tupla) en vez de una agrupación `(expr)`? Cuenta profundidad
+     *  de paréntesis y de []/{} para no contar comas anidadas (f(a,b), [a,b]). */
+    private boolean tupleListAhead() {
+        int depthParen = 0, depthOther = 0;
+        for (int i = pos; i < tokens.size(); i++) {
+            TokenType t = tokens.get(i).type;
+            if (t == TokenType.LPAREN) depthParen++;
+            else if (t == TokenType.RPAREN) { depthParen--; if (depthParen == 0) return false; }
+            else if (t == TokenType.LBRACKET || t == TokenType.LBRACE) depthOther++;
+            else if (t == TokenType.RBRACKET || t == TokenType.RBRACE) depthOther--;
+            else if (t == TokenType.COMMA && depthParen == 1 && depthOther == 0) return true;
+            else if (t == TokenType.EOF) return false;
+        }
+        return false;
     }
 
     private ThrowStmt parseThrowStmt() {

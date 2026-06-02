@@ -1,0 +1,58 @@
+module TupleTest
+  function divmod(a: integer, b: integer): (integer, integer)
+    return (a / b, a mod b)
+  end divmod
+
+  function minmaxL(x: long, y: long): (long, long)
+    if x < y then
+      return (x, y)
+    endif
+    return (y, x)
+  end minmaxL
+
+  function stats(): (integer, double, string)
+    return (42, 3.5d, "hola")
+  end stats
+
+  function Main()
+    var q: integer
+    var r: integer
+    { q, r } := divmod(17, 5)
+    print "q="
+    print q
+    print "r="
+    print r
+
+    var lo: long
+    var hi: long
+    { lo, hi } := minmaxL(9000000000L, 100L)
+    print "lo="
+    print lo
+    print "hi="
+    print hi
+
+    var n: integer
+    var dd: double
+    var s: string
+    { n, dd, s } := stats()
+    print "n="
+    print n
+    print "d="
+    print dd
+    print "s="
+    print s
+
+    var only: integer
+    { only, _ } := divmod(20, 7)
+    print "only="
+    print only
+
+    var ql: long
+    var rl: long
+    { ql, rl } := divmod(100, 9)
+    print "ql="
+    print ql
+    print "rl="
+    print rl
+  end Main
+end TupleTest

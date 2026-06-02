@@ -110,6 +110,8 @@ public enum TokenType {
     RPAREN,         // )
     LBRACKET,       // [
     RBRACKET,       // ]
+    LBRACE,         // {   (tuplas: { a, b } := f())
+    RBRACE,         // }
     COMMA,          // ,
     SEMICOLON,      // ;
     COLON,          // :

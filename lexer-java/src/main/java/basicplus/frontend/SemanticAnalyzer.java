@@ -882,6 +882,11 @@ public final class SemanticAnalyzer {
         }
         if (t instanceof ArrayTypeRef)
             return new ArrayType(resolveType(((ArrayTypeRef) t).element));
+        if (t instanceof Ast.TupleTypeRef) {
+            java.util.List<BpType> elems = new java.util.ArrayList<>();
+            for (TypeRef e : ((Ast.TupleTypeRef) t).elements) elems.add(resolveType(e));
+            return new BpType.TupleType(elems);
+        }
         return ErrorType.INSTANCE;
     }
 
@@ -1114,10 +1119,16 @@ public final class SemanticAnalyzer {
         else if (s instanceof ForStmt)      analyzeFor((ForStmt) s, scope);
         else if (s instanceof TryStmt)      analyzeTry((TryStmt) s, scope);
         else if (s instanceof ReturnStmt)   analyzeReturn((ReturnStmt) s, scope);
+        else if (s instanceof Ast.DestructAssignStmt) analyzeDestructAssign((Ast.DestructAssignStmt) s, scope);
         else if (s instanceof ThrowStmt)    analyzeExpr(((ThrowStmt) s).value, scope, null);
         else if (s instanceof PrintStmt) {
             for (PrintItem it : ((PrintStmt) s).items)
-                if (it.expr != null) analyzeExpr(it.expr, scope, null);
+                if (it.expr != null) {
+                    BpType pt = analyzeExpr(it.expr, scope, null);
+                    if (pt instanceof BpType.TupleType)
+                        err(((Node) it.expr).line, ((Node) it.expr).column,
+                            "no se puede imprimir una tupla; desempaquétala con '{ ... } := ...'");
+                }
         }
         else if (s instanceof BreakStmt) {
             BreakStmt b = (BreakStmt) s;
@@ -1469,6 +1480,36 @@ public final class SemanticAnalyzer {
                 err(r.line, r.column, "falta el valor de retorno (tipo '" + currentFunction.returnType.display() + "')");
             return;
         }
+        // Tupla de retorno: `return (e1, e2, ...)`. Chequeo por elementos con
+        // coerción (int→long, etc.), no por sameAs estricto.
+        if (r.value instanceof Ast.TupleExpr) {
+            Ast.TupleExpr te = (Ast.TupleExpr) r.value;
+            if (!(currentFunction.returnType instanceof BpType.TupleType)) {
+                err(r.line, r.column, "esta función no devuelve una tupla; no uses '(a, b)' en return");
+                for (IExpr el : te.elements) analyzeExpr(el, scope, null);
+                return;
+            }
+            BpType.TupleType tt = (BpType.TupleType) currentFunction.returnType;
+            if (te.elements.size() != tt.elements.size())
+                err(r.line, r.column, "la tupla de retorno tiene " + te.elements.size()
+                        + " elementos; se esperaban " + tt.elements.size());
+            int n = Math.min(te.elements.size(), tt.elements.size());
+            for (int i = 0; i < n; i++) {
+                BpType et = analyzeExpr(te.elements.get(i), scope, tt.elements.get(i));
+                if (!tt.elements.get(i).isAssignableFrom(et) && !(et instanceof ErrorType))
+                    err(r.line, r.column, "elemento " + (i + 1) + " de la tupla: '" + et.display()
+                            + "' incompatible con '" + tt.elements.get(i).display() + "'");
+            }
+            info.exprTypes.put(te, tt);
+            return;
+        }
+        // Si el tipo de retorno es tupla pero el valor no es una tupla literal.
+        if (currentFunction.returnType instanceof BpType.TupleType) {
+            err(r.line, r.column, "debe devolver una tupla literal '(...)' de "
+                    + ((BpType.TupleType) currentFunction.returnType).elements.size() + " elementos");
+            analyzeExpr(r.value, scope, null);
+            return;
+        }
         BpType t = analyzeExpr(r.value, scope, currentFunction.returnType);
         if (currentFunction.returnType != null && !currentFunction.returnType.isAssignableFrom(t)) {
             err(r.line, r.column, "return tipo '" + t.display() + "' incompatible con declarado '" + currentFunction.returnType.display() + "'");
@@ -1478,6 +1519,35 @@ public final class SemanticAnalyzer {
             //     ahora setea currentFunction al fake del setter, así que
             //     el `return 99` de un setter pasaba por aquí sin queja).
             err(r.line, r.column, "esta función no declara tipo de retorno; no puede devolver un valor");
+        }
+    }
+
+    private static boolean isUnderscore(IExpr e) {
+        return e instanceof IdentifierExpr && "_".equals(((IdentifierExpr) e).name);
+    }
+
+    private void analyzeDestructAssign(Ast.DestructAssignStmt s, Scope scope) {
+        // El RHS debe ser una llamada que devuelve una tupla.
+        BpType rt = analyzeExpr(s.value, scope, null);
+        if (!(rt instanceof BpType.TupleType)) {
+            if (!(rt instanceof ErrorType))
+                err(s.line, s.column, "el lado derecho de '{ ... } :=' debe ser una llamada que "
+                        + "devuelve una tupla (tipo actual: '" + rt.display() + "')");
+            for (IExpr tg : s.targets) if (!isUnderscore(tg)) analyzeExpr(tg, scope, null);
+            return;
+        }
+        BpType.TupleType tt = (BpType.TupleType) rt;
+        if (s.targets.size() != tt.elements.size())
+            err(s.line, s.column, "el desempaquetado tiene " + s.targets.size()
+                    + " variables; la tupla tiene " + tt.elements.size() + " elementos");
+        int n = Math.min(s.targets.size(), tt.elements.size());
+        for (int i = 0; i < n; i++) {
+            IExpr tg = s.targets.get(i);
+            if (isUnderscore(tg)) continue;   // '_' = descartar
+            BpType targetT = analyzeExpr(tg, scope, tt.elements.get(i));
+            if (!targetT.isAssignableFrom(tt.elements.get(i)) && !(targetT instanceof ErrorType))
+                err(s.line, s.column, "variable " + (i + 1) + " del desempaquetado: no se puede "
+                        + "asignar '" + tt.elements.get(i).display() + "' a '" + targetT.display() + "'");
         }
     }
 
@@ -1514,6 +1584,15 @@ public final class SemanticAnalyzer {
         else if (e instanceof UnaryExpr)     t = analyzeUnary((UnaryExpr) e, scope);
         else if (e instanceof BinaryExpr)    t = analyzeBinary((BinaryExpr) e, scope);
         else if (e instanceof InstanceOfExpr) t = analyzeInstanceOf((InstanceOfExpr) e, scope);
+        else if (e instanceof Ast.TupleExpr) {
+            // Una tupla literal solo es válida como valor directo de `return`
+            // (lo maneja analyzeReturn). Aquí = uso indebido.
+            Ast.TupleExpr te = (Ast.TupleExpr) e;
+            for (IExpr el : te.elements) analyzeExpr(el, scope, null);
+            err(((Node) e).line, ((Node) e).column,
+                "una tupla '(a, b)' solo puede aparecer como valor de 'return'");
+            t = ErrorType.INSTANCE;
+        }
         else                                  t = ErrorType.INSTANCE;
         info.exprTypes.put(e, t);
         return t;

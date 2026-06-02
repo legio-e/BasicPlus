@@ -568,6 +568,12 @@ public final class ModuleInterface {
         // buffers de bytes en I2c/SPI, samples de ADC, etc.).
         if (t instanceof BpType.ArrayType)
             return isExportableType(((BpType.ArrayType) t).element);
+        // Tuplas (retorno múltiple): exportables si todos los elementos lo son.
+        if (t instanceof BpType.TupleType) {
+            for (BpType e : ((BpType.TupleType) t).elements)
+                if (!isExportableType(e)) return false;
+            return true;
+        }
         return false;
     }
 
@@ -790,6 +796,17 @@ public final class ModuleInterface {
         }
         if (t instanceof BpType.UnresolvedClassRef) return ((BpType.UnresolvedClassRef) t).name;
         if (t instanceof BpType.AnyType) return "any";   // H5 — tipo raíz universal
+        // Tuplas (retorno múltiple): `(t1,t2,...)`. El importador conoce así la
+        // forma para emitir el desempaquetado cross-module (T3).
+        if (t instanceof BpType.TupleType) {
+            StringBuilder sb = new StringBuilder("(");
+            java.util.List<BpType> els = ((BpType.TupleType) t).elements;
+            for (int i = 0; i < els.size(); i++) {
+                if (i > 0) sb.append(',');
+                sb.append(typeToString(els.get(i)));
+            }
+            return sb.append(')').toString();
+        }
         return "void"; // safety net; debería haber sido descartada por isExportableType
     }
 
@@ -1099,6 +1116,27 @@ public final class ModuleInterface {
                         + ": elemento de array no puede ser void: " + s);
             }
             return new BpType.ArrayType(elem);
+        }
+        // Tuplas (retorno múltiple): `(t1,t2,...)`. Split por comas de nivel
+        // superior (respeta ()/[] anidados) y parsea cada elemento.
+        if (s.startsWith("(") && s.endsWith(")")) {
+            String inner = s.substring(1, s.length() - 1);
+            java.util.List<BpType> elems = new java.util.ArrayList<>();
+            int depth = 0, start = 0;
+            for (int i = 0; i < inner.length(); i++) {
+                char c = inner.charAt(i);
+                if (c == '(' || c == '[') depth++;
+                else if (c == ')' || c == ']') depth--;
+                else if (c == ',' && depth == 0) {
+                    BpType el = parseType(file, lineNo, inner.substring(start, i).trim());
+                    if (el == null) throw new IOException(file + ":" + lineNo + ": elemento de tupla void: " + s);
+                    elems.add(el); start = i + 1;
+                }
+            }
+            BpType last = parseType(file, lineNo, inner.substring(start).trim());
+            if (last == null) throw new IOException(file + ":" + lineNo + ": elemento de tupla void: " + s);
+            elems.add(last);
+            return new BpType.TupleType(elems);
         }
         switch (s) {
             case "void":    return null;

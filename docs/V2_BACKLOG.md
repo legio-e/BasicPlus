@@ -310,6 +310,36 @@ pequeña (p.ej. `Stats.LinFit`) y migran a tupla sin romper a nadie.
 - **Contenido de `parse*`**: `err: boolean` (true = falló); el `valor` solo es
   válido si `err` es false. (Para parsear no se necesita el *por qué* del fallo.)
 
+**Diseño cerrado en charla (usuario, 2026-06-02)** — versión mínima a construir:
+- **Alcance: SOLO destructuring de retorno.** La tupla NO es valor de primera
+  clase: no se guarda suelta (`var t := f()` ❌), no se pasa como parámetro, no
+  va en colecciones, no hay `t.0`/`t.err`. Es azúcar sobre "devuelve un objeto
+  sintético y desempáquetalo en el acto". Esto supera el punto previo de "campos
+  nombrados": los nombres viven en el SITIO del unpack, no como campos accesibles.
+  Si algún día pican las tuplas first-class, se amplía sin romper nada.
+- **Sintaxis (preferida por el usuario): `{ a, b } := f()`** — asignación-unpack
+  a lvalues **ya declarados** (con su tipo). El compilador comprueba que cada
+  elemento encaja con el tipo del target (con coerción int→long, etc.) y que la
+  **aridad cuadra** (mismatch → error de compilación). Targets = lvalues en
+  general (`{ this.x, arr[i] } := f()`), no solo variables sueltas.
+  - Declarar retorno: `function f(...): (T1, T2)`; devolver: `return (a, b)`.
+  - Descartar: `_` → `{ ok, _ } := parseInt(s)`.
+  - (La variante decl+infer `var q, r := f()` queda como posible alternativa,
+    pero el usuario prefiere la de llaves con vars pre-declaradas.)
+- **Representación**: objeto sintético `__Tuple_<typesig>` (una clase oculta por
+  FORMA = aridad+tipos exactos, para que long/double vivan inline reusando los
+  campos de 8 bytes de BUG-6). `return (q,r)` = NEW_OBJECT + SET_FIELD×N + ret de
+  la ref; unpack = GET_FIELD×N. **Cero opcodes nuevos** → paridad intacta.
+- **Cross-module**: la tupla es transporte transparente (sin encapsulación); el
+  compilador conoce su forma por el `.bpi` y emite los GET_FIELD en los slots
+  correctos al desempaquetar — coherente con "el compilador resuelve el offset,
+  la VM solo lee". Así `{ ok, n } := Str.parseLong(s)` va cross-module.
+- **A verificar al implementar**: que `{ }` no choque con la sintaxis actual
+  (¿literales de array?); como un unpack siempre lleva `... } :=` detrás, se
+  desambigua con lookahead. Si hubiera conflicto serio → alternativa `(a,b) := f()`.
+- **Coste**: 1 alocación efímera por retorno múltiple (GC menor en MCU; futura
+  optimización: tupla no-escapa → stack). Aceptado.
+
 **Qué**: tipo producto anónimo `(a, b, c)`. Casos de uso: retorno
 múltiple de funciones, agrupación ligera sin declarar una clase.
 
@@ -1452,6 +1482,46 @@ Habilitado lo MÍNIMO para el `Map` (Fase A, boxing manual):
   (orden numérico de 64 bits correcto). Todos los wrappers
   (Integer/Long/Double/Float/Boolean) cross-module ✅ — **BUG-6 cerrado**
   (2026-06-01, ver abajo).
+
+### H5.1 — `Object` raíz de verdad (DISEÑO CERRADO en charla, 2026-06-02; sin construir aún)
+
+Charla de diseño con el usuario. Conclusión: H5 (de momento) = SOLO convertir
+`Object` en raíz real con polimorfismo universal. **Nada de interfaces ni
+`abstract`** — los "contratos" se hacen con clases normales de métodos
+overridables (el patrón que ya usan `Comparator`/`Comparable`, y que será el
+propio `Object`). Decisión explícita del usuario: "nos cargamos interfaces y
+abstract de un plumazo, seguimos como estábamos".
+
+- **`Object` = clase raíz real** (no solo el tipo `any`): base implícita de TODA
+  clase (sin `extends` → extends Object), con vtable de 2 slots fijos:
+  `toString(): string` (slot 0) y `compareTo(other: Object): integer` (slot 1).
+- **`toString()` default = `object@<hex>`** (la dirección/ref). Es un "poor man's
+  hashCode" para depurar. AVISO consciente: la dirección **puede diferir entre
+  VMs** (sobre todo con hilos/SMP) → ese caso concreto NO es parity-garantizado;
+  aceptado porque es salida de depuración (los objetos "de verdad" overridean
+  toString). El FORMATO (hex) sí es idéntico.
+- **`compareTo()` default = LANZA** "tipo no comparable" (no devuelve 0 → nada de
+  orden basura silencioso; estilo "falla ruidoso", anti micro-Python).
+- **Auto-`toString()`**: `print <obj>` y `"" + <obj>` (concatenación) llaman solos
+  a `obj.toString()`. `null` → imprime `"null"` (y `"" + null` → `"null"`), sin
+  crash por receiver null.
+- **Implicaciones**: built-in (List/StringBuilder/Mutex/Thread/RuntimeError/
+  wrappers…) también descienden de `Object`; los slots de método de TODAS las
+  clases se desplazan +2; recompila todo pero es **aditivo a bytecode** (sin
+  opcodes nuevos, sin tocar `.mod`) → paridad intacta. Sinergia con GAP-2: un
+  `Object` "bien conocido" con identidad única es el primer ladrillo para unificar
+  identidad de tipos built-in cross-module.
+- **Limpieza**: con `compareTo`/`toString` en `Object`, la clase `Comparable` de
+  `Collections.bp` sobra (los wrappers overridean `Object`).
+- **Plan por pasos (paridad en cada uno)**:
+  - **H5.1.a** (estructural, el gordo): `Object` raíz + reservar slots + built-in
+    descienden de él + ajustar cálculo de slots del `.bpi`. Criterio: la suite
+    actual (10/10) sigue verde dual-VM sin cambiar comportamiento.
+  - **H5.1.b**: cuerpos por defecto (toString→dirección vía builtin; compareTo→throw).
+  - **H5.1.c**: auto-`toString` en print/concat + `null`→"null" (helper
+    `emitObjectToString` con guarda de null).
+  - **H5.1.d**: fundir/quitar `Comparable`, regresión completa, commit.
+- **equals/hashCode**: FUERA (el Map ordenado usa `compareTo == 0`).
 
 ## BUG-5 — slots de vtable cross-module no cuentan la herencia (✅ ARREGLADO 2026-06-01)
 

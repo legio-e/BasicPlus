@@ -111,6 +111,16 @@ public final class Ast {
         }
     }
 
+    // Tipo tupla `(T1, T2, ...)` — solo como tipo de retorno (tuplas para
+    // retorno múltiple; no son valores de primera clase). >= 2 elementos.
+    public static final class TupleTypeRef extends TypeRef {
+        public final java.util.List<TypeRef> elements;
+        public TupleTypeRef(java.util.List<TypeRef> elements, int line, int column) {
+            super(line, column);
+            this.elements = elements;
+        }
+    }
+
     // ============================================================
     // HELPERS COMPARTIDOS
     // ============================================================
@@ -299,6 +309,19 @@ public final class Ast {
             super(line, column);
             this.target = target;
             this.op = op;
+            this.value = value;
+        }
+    }
+
+    // Desempaquetado de tupla: `{ t1, t2, ... } := call()` sobre lvalues YA
+    // declarados. Un target puede ser IdentifierExpr "_" (descartar). El value
+    // es una llamada cuyo tipo de retorno es una tupla de la misma aridad.
+    public static final class DestructAssignStmt extends Node implements IStmt {
+        public final List<IExpr> targets;
+        public final IExpr value;
+        public DestructAssignStmt(List<IExpr> targets, IExpr value, int line, int column) {
+            super(line, column);
+            this.targets = targets;
             this.value = value;
         }
     }
@@ -630,6 +653,17 @@ public final class Ast {
             super(line, column);
             this.callee = callee;
             this.args = args;
+        }
+    }
+
+    // Tupla literal `(e1, e2, ...)` — SOLO válida como valor de `return` en una
+    // función con tipo de retorno tupla. >= 2 elementos. No es valor de primera
+    // clase: el semántico rechaza usarla en cualquier otro contexto.
+    public static final class TupleExpr extends Node implements IExpr {
+        public final List<IExpr> elements;
+        public TupleExpr(List<IExpr> elements, int line, int column) {
+            super(line, column);
+            this.elements = elements;
         }
     }
 
