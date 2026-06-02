@@ -19,9 +19,16 @@ T4 `Str.parse*`), **GAP-4** (print double byte-idéntico), **BUG-6** (campos de 
 bytes), y **H5.1 a/b1/c1** (Object raíz real + `toString`/`compareTo` polimórficos,
 auto-`toString` en `print`, `compareTo` por defecto → throw).
 
-Orden recomendado: **T0 → T1** (terminar lo abierto y tapar huecos = filosofía
-"sólido, sin agujeros") y luego elegir entre T2/T3/T5 por interés. T4/T6 cuando
-toque memoria/hardware.
+**Secuencia acordada con el usuario (2026-06-02)**:
+**T0 → T1 → IDE → Debugger → el resto, paso a paso.**
+1. **T0** — terminar H5 (lo que está caliente).
+2. **T1** — tapar huecos/bugs (filosofía "sólido, sin agujeros").
+3. **IDE** (T5 §12) — "está algo abandonado y necesita puesta al día". Primer
+   paso del IDE = **descomponerlo en tareas concretas** (revisar el estado real
+   del IDE y listar mejoras) y LUEGO desarrollarlas una a una.
+4. **Debugger** (T5 §16, FUNDAMENTAL) — retomarlo una vez el IDE esté al día.
+5. **El resto** (T2 lenguaje, T3 stdlib, T4 VM/memoria, T6 hardware) — sin orden
+   fijo, por interés/necesidad. Queda mucho: paso a paso.
 
 - **T0 — Terminar H5 (a medias, lo natural a continuar)**
   - H5.1.c-2: auto-`toString` en concatenación `+` (rama `ClassType` en
