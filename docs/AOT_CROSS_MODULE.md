@@ -180,3 +180,63 @@ La discusión original encontró 3 escollos:
 Con esos 3 escollos resueltos, **#169 vuelve a ser viable y limpio**.
 No urge para v1, pero si surge hueco después de H2+H4, es ataque
 mucho más enfocado que cuando lo deferimos.
+
+## 8. El opcode-puente native → BP  *(apunte del usuario, 2026-06-02)*
+
+**Problema recurrente** (nos ha mordido varias veces): una función
+**native** (AOT, código C compilado) **no puede llamar a una función BP
+interpretada**. Casos donde aparece:
+- native que necesita devolver/usar **tuplas** (el constructor de tupla es
+  BP: NEW_OBJECT + SET_FIELD).
+- native → **método** de objeto (#174): el dispatch virtual es BP.
+- el caso "target BP interpretado" de **#169** (§3-paso-4, §5): hoy
+  restringido a "ambos lados AOT" justo por no tener esta pieza.
+- cualquier helper de stdlib que quiera ser native pero llamar a otra
+  función BP.
+
+**Diagnóstico del usuario** (correcto): si desde el código native
+"saltamos" a ejecutar la función BP, al hacer `RET` la VM creería que
+sigue dentro de una función BP (restauraría pc/bp/cs del frame del
+*caller BP imaginario*) y **no sabría volver al mundo native**.
+
+**Solución propuesta — un opcode-puente entre los dos mundos.** Es la
+misma idea que §3-paso-4 ("return sentinel") pero hecha explícita como
+**opcode dedicado**, no como PC mágica. Mecánica:
+
+1. El código native, para llamar a la función BP `f`, invoca un helper de
+   runtime `aot_call_bp(vm, tc, f_abs_addr, args…)`.
+2. El helper **monta un frame BP** para `f` en el stack del `tc`, pero
+   pone como dirección de retorno guardada un **sentinela = el opcode-
+   puente** (p.ej. `OP_NATIVE_RETURN`, en una celda conocida del code/heap).
+3. El helper corre un **bucle de intérprete anidado** desde `f.pc`.
+4. Cuando `f` hace `RET`, restaura pc = sentinela → el dispatch encuentra
+   `OP_NATIVE_RETURN` → **rompe el bucle anidado** y devuelve el control
+   (y el valor de retorno, leído del stack BP) al helper, que lo entrega
+   a la función native C. **El opcode es el puente.**
+
+**Precedente que lo valida** (ya en el código): `bpvm_thread_spawn`
+(threading.c) arranca `run()` con un frame falso cuyo pc/bp/cs guardados
+apuntan a `memory[0]`, donde vive un sentinela `THREAD_EXIT`; al volver
+`run()`, ese sentinela termina el hilo limpiamente sin tumbar la VM. El
+puente native→BP **generaliza ese patrón**: en vez de "terminar hilo", el
+sentinela significa "volver al `aot_call_bp` que inició la interpretación
+anidada".
+
+**Consideraciones al implementarlo**:
+- **Re-entrancia**: el bucle anidado corre sobre el MISMO `tc`. Cadenas
+  native→BP→native→BP anidan sub-bucles, cada uno acotado por su
+  sentinela. Hay que asegurar que el inner loop del intérprete es
+  re-entrante (estado por-tc, no estáticos globales del loop).
+- **Excepciones / boundary setjmp (#186)**: si la `f` BP lanza y no hay
+  handler dentro de la sub-llamada, el throw debe propagar **a través**
+  del frame native hasta un try/catch BP exterior. Componer con el
+  `setjmp`/`longjmp` de #186 (que ya cruza native↔BP para faults).
+- **Aditivo**: opcode nuevo ⇒ no rompe el contenedor `.mod` (mismo
+  criterio que GET_FIELD_LONG, etc.). Solo lo emite/usa el runtime; el
+  compilador no genera `OP_NATIVE_RETURN` en código de usuario.
+- **Solo VM-C / paridad**: el gap es del mundo AOT, que es C-VM/MCU. La
+  VM-Java interpreta los cuerpos `function native` como BP normal, así que
+  allí native→BP "ya funciona" — la paridad se mantiene.
+
+**Desbloquea**: el caso BP-target de #169, #174 (métodos desde native),
+y tuplas/objetos devueltos desde native. Es la pieza runtime que faltaba.
