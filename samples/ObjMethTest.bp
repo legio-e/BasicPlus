@@ -1,0 +1,35 @@
+// ObjMethTest — H5.1.c: toString()/compareTo() invocables desde fuente en
+// CUALQUIER objeto (heredados de Object), y compareTo por defecto -> throw.
+module ObjMethTest
+
+  class Punto
+    var x: integer
+    var y: integer
+    public function Punto(x: integer, y: integer)
+      this.x := x
+      this.y := y
+    end Punto
+    public function toString(): string
+      return "Punto(" + this.x + "," + this.y + ")"
+    end toString
+    // NO sobrescribe compareTo -> usa el de Object (lanza).
+  end Punto
+
+  function Main()
+    var p: Punto := Punto(1, 2)
+
+    // toString() invocable desde fuente (resuelve al override, slot 0).
+    var s: string := p.toString()
+    print "s =", s
+
+    // compareTo por defecto -> throw, atrapable como RuntimeError BP.
+    var q: Punto := Punto(3, 4)
+    try
+      var c: integer := p.compareTo(q)
+      print "no deberia llegar:", c
+    catch e: RuntimeError
+      print "compareTo lanzo:", e.msg
+    endtry
+  end Main
+
+end ObjMethTest

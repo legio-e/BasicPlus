@@ -1561,9 +1561,17 @@ abstract de un plumazo, seguimos como estábamos".
     `emitObjectToStringOnStack`: INVOKE_VIRTUAL slot 0 con guarda `null`→"null").
     `compareTo` sigue placeholder (return 0). Sample `ToStrTest` (override→paridad,
     default→dirección, null→"null"). Regresión 13/13 dual-VM.
-  - **H5.1.c**: `compareTo` por defecto → throw (helper forward-ref `__objCompareError`
-    construye RuntimeError; emitido tras RuntimeError por orden) + `toString`/`compareTo`
-    invocables desde fuente en cualquier objeto + auto-`toString` en concat `+`.
+  - ✅ **H5.1.c (parte 1)** — HECHO 2026-06-02. `toString`/`compareTo` invocables
+    desde fuente en CUALQUIER objeto: el semántico inyecta los `FunctionSymbol` en
+    cada `ClassSymbol` local que no los declare (sin nodo AST ⇒ NO se exportan al
+    `.bpi`, slots cross-module intactos); el emisor despacha por slot 0/1.
+    `compareTo` por defecto → throw: helper forward-ref `__objCompareError` (construye
+    RuntimeError + THROW), emitido tras RuntimeError. Sample `ObjMethTest`
+    (`p.toString()`→override, `p.compareTo(q)`→throw atrapado). Regresión 14/14 dual-VM.
+    Limitación: invocar toString/compareTo sobre una clase importada SIN override aún
+    no resuelve (el stub `.bpi` no trae los miembros heredados) — pendiente.
+  - **H5.1.c (parte 2)**: auto-`toString` en concat `+` (rama `ClassType` en
+    `coerceToString` + permitir `string + objeto` en el semántico).
   - **H5.1.d**: fundir/quitar `Comparable`, regresión completa, commit.
 - **equals/hashCode**: FUERA (el Map ordenado usa `compareTo == 0`).
 

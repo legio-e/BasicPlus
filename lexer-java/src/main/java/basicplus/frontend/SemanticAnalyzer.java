@@ -820,6 +820,27 @@ public final class SemanticAnalyzer {
                     resolveDefTypes(m, cls);
             }
         }
+
+        // H5.1.c — toda clase de usuario hereda toString()/compareTo() de Object.
+        // Inyectamos los FunctionSymbol (sin nodo AST) si la clase no los declara,
+        // para que sean invocables desde fuente. NO se exportan al .bpi
+        // (extractClass recorre astNode.members, no instanceMembers), así que el
+        // cálculo de slots cross-module no se ve afectado. El emisor los despacha
+        // por slot 0/1 de la vtable (INVOKE_VIRTUAL polimórfico).
+        for (Symbol s : module.members.getSymbols()) {
+            if (!(s instanceof ClassSymbol)) continue;
+            ClassSymbol cls = (ClassSymbol) s;
+            if (cls.isExternal) continue;
+            if (cls.instanceMembers.tryLookup("toString") == null) {
+                cls.instanceMembers.tryDefine(makeMethod(
+                        "toString", cls, PrimitiveType.STRING, new String[]{}, new BpType[]{}));
+            }
+            if (cls.instanceMembers.tryLookup("compareTo") == null) {
+                cls.instanceMembers.tryDefine(makeMethod(
+                        "compareTo", cls, PrimitiveType.INTEGER,
+                        new String[]{"other"}, new BpType[]{AnyType.INSTANCE}));
+            }
+        }
     }
 
     private void resolveDefTypes(ITopLevelDecl def, ClassSymbol owner) {

@@ -244,6 +244,9 @@ public final class MivmEmitter {
         //     resto la copia como parent local (vtable slots 0/1).
         synthesizeObjectClass();
         synthesizeRuntimeErrorClass();
+        // H5.1.c — helper del compareTo por defecto (throw). Tras RuntimeError
+        // porque construye uno (emitNewObject exige el descriptor ya registrado).
+        synthesizeObjectCompareErrorHelper();
         synthesizeListClass();
         synthesizeOwnerListClass();
         synthesizeStringBuilderClass();
@@ -2875,14 +2878,54 @@ public final class MivmEmitter {
             w.declareParam("other");
             beginFunctionScope(makeSynthFs("compareTo", PrimitiveType.INTEGER), null);
             try {
-                emitInt(0);                            // placeholder; H5.1.c → throw
-                w.emitSetLocal("__result");
+                // Por defecto lanza: comparar objetos sin override es un error de
+                // programación que debe salir a la luz (no devolver "iguales").
+                w.emitCall("__objCompareError");       // forward-ref; construye RuntimeError + THROW
+                w.emitSetLocal("__result");            // cola inalcanzable (el throw no retorna)
                 emitFunctionEnd();
             } finally { scopeStack.pop(); }
 
             w.endClass();
         } catch (IOException e) {
             errors.add("emit Object builtin: " + e.getMessage());
+        }
+    }
+
+    /**
+     * H5.1.c — Helper del {@code compareTo} por defecto de Object: construye un
+     * RuntimeError y lo lanza. Es una función LIBRE (sin slot de vtable), emitida
+     * DESPUÉS de synthesizeRuntimeErrorClass para que emitNewObject("RuntimeError")
+     * encuentre el descriptor ya registrado. Object.compareTo la invoca por
+     * forward-ref ({@code emitCall} se resuelve en link, como __strconcat).
+     */
+    private void synthesizeObjectCompareErrorHelper() {
+        for (ITopLevelDecl d : moduleAst.defs) {
+            if (d instanceof ClassDef && "Object".equals(((ClassDef) d).name)) return;
+        }
+        try {
+            w.addFunction("__objCompareError", false);
+            beginFunctionScope(makeSynthFs("__objCompareError", PrimitiveType.INTEGER), null);
+            try {
+                String re   = "__oce_re";
+                String disc = "__oce_disc";
+                declareLocal(re);
+                declareLocal(disc);
+                w.emitNewObject("RuntimeError");
+                w.emitSetLocal(re);
+                w.emitGetLocal(re);                    // this
+                w.emitLeaGlobal(internString(
+                        "compareTo() no implementado: la clase no sobrescribe Object.compareTo"));
+                w.emitCall("RuntimeError.__init");     // __init(this, msg)
+                w.emitSetLocal(disc);                  // descarta el retorno de __init
+                w.emitGetLocal(re);
+                w.emitThrow();
+                // Cola inalcanzable pero válida (la función declara retorno integer).
+                emitInt(0);
+                w.emitSetLocal("__result");
+                emitFunctionEnd();
+            } finally { scopeStack.pop(); }
+        } catch (IOException e) {
+            errors.add("emit __objCompareError: " + e.getMessage());
         }
     }
 
