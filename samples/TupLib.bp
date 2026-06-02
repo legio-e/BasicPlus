@@ -1,0 +1,14 @@
+// TupLib — librería de ejemplo que devuelve tuplas (retorno múltiple), para
+// probar tuplas cross-module. Importada por TupCrossTest.bp.
+module TupLib
+  public function divmod(a: integer, b: integer): (integer, integer)
+    return (a / b, a mod b)
+  end divmod
+  // patrón "err + valor" estilo parse*: signo separado de magnitud.
+  public function splitSign(x: long): (boolean, long)
+    if x < 0L then
+      return (true, -x)
+    endif
+    return (false, x)
+  end splitSign
+end TupLib

@@ -3940,7 +3940,11 @@ public final class MivmEmitter {
         return sb.toString();
     }
 
-    /** Pre-pase: registra la forma de cada función/método que devuelve tupla. */
+    /** Pre-pase: registra la forma de cada tupla usada en el módulo, tanto en el
+     *  lado productor (funciones que la devuelven) como consumidor (llamadas que
+     *  se desempaquetan, incl. cross-module: la forma viene del .bpi importado).
+     *  Sintetizar la clase en CUALQUIER módulo que la toque es seguro: es un
+     *  contenedor transparente con layout determinista por su firma. */
     private void collectTupleShapes() {
         for (ITopLevelDecl d : moduleAst.defs) {
             if (d instanceof FuncDef) registerTupleIfAny((FuncDef) d);
@@ -3949,6 +3953,9 @@ public final class MivmEmitter {
                     if (m instanceof FuncDef) registerTupleIfAny((FuncDef) m);
             }
         }
+        for (BpType t : info.exprTypes.values())
+            if (t instanceof BpType.TupleType)
+                tupleShapes.put(tupleClassName((BpType.TupleType) t), (BpType.TupleType) t);
     }
     private void registerTupleIfAny(FuncDef fn) {
         Symbol s = info.declSymbols.get(fn);

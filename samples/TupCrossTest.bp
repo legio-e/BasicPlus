@@ -1,0 +1,18 @@
+// TupCrossTest — desempaqueta tuplas devueltas por otro módulo (TupLib).
+// Paridad dual-VM. (Compilar TupLib primero; ejecutar con TupLib.mod junto.)
+module TupCrossTest
+  import TupLib
+  function Main()
+    var q: integer
+    var r: integer
+    { q, r } := TupLib.divmod(23, 4)
+    print "q=" + intToString(q)        // 5
+    print "r=" + intToString(r)        // 3
+    var neg: boolean
+    var mag: long
+    { neg, mag } := TupLib.splitSign(-9000000000L)
+    print "neg=" + boolToString(neg)   // true
+    print "mag="
+    print mag                          // 9000000000
+  end Main
+end TupCrossTest

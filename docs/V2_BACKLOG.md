@@ -340,6 +340,21 @@ pequeña (p.ej. `Stats.LinFit`) y migran a tupla sin romper a nadie.
 - **Coste**: 1 alocación efímera por retorno múltiple (GC menor en MCU; futura
   optimización: tupla no-escapa → stack). Aceptado.
 
+**Estado de implementación (2026-06-02)**:
+- ✅ **T1 (same-module)** — commit `c833d85`. lexer (`{}`, `_`-led ids), AST
+  (TupleTypeRef/TupleExpr/DestructAssignStmt), BpType.TupleType, parser, semántico,
+  emisor (`__Tuple_<sig>` + emitTupleExpr/emitDestructAssign/emitWiden), .bpi.
+  `samples/TupleTest.bp`, paridad dual-VM. Regresión 11/11.
+- ✅ **T3 (cross-module)** — `collectTupleShapes` también registra formas desde
+  `info.exprTypes` (resultado de llamadas que se desempaquetan), así el módulo
+  consumidor sintetiza la clase `__Tuple_<sig>` para resolver slots de GET_FIELD.
+  `samples/TupLib.bp` + `samples/TupCrossTest.bp`, paridad dual-VM.
+- ⏳ **T4 (pendiente)** — la familia `parse*` (`parseLong`/`parseDouble`/`parseHex`)
+  devolviendo `(boolean err, T valor)` estilo Go. Es el motivador fuerte; va en
+  H4.B / stdlib de string.
+- Pendientes menores: tuplas first-class (almacenar/pasar) — diferido; destino de
+  desempaquetado solo variables simples por ahora (lvalues field/index → futuro).
+
 **Qué**: tipo producto anónimo `(a, b, c)`. Casos de uso: retorno
 múltiple de funciones, agrupación ligera sin declarar una clase.
 
