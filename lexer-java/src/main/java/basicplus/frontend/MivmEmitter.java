@@ -1228,7 +1228,8 @@ public final class MivmEmitter {
         // 3) Setter (custom o auto). Es void.
         String setterSimple = "set" + capitalize(pd.name.name);
         w.addMethod(setterSimple);
-        w.declareParam("__val");
+        // BUG-6: el valor de una property long/double ocupa 8 bytes en el param.
+        w.declareParam("__val", is8Byte(propType) ? 8 : 4);
         FunctionSymbol setterFs = new FunctionSymbol(setterSimple, pd.isPublic, false, false, cls, null);
         beginFunctionScope(setterFs, null);
         currentPropertyField = pd.name.name;
@@ -1236,8 +1237,9 @@ public final class MivmEmitter {
         try {
             if (pd.isSync) emitSyncLock(cls.name);
             if (pd.setter != null) {
-                // Alias el param al nombre que el usuario escribió.
-                declareLocal(pd.setter.paramName);
+                // Alias el param al nombre que el usuario escribió (BUG-6: 8 bytes si long/double).
+                if (is8Byte(propType)) declareLocalLong(pd.setter.paramName);
+                else declareLocal(pd.setter.paramName);
                 w.emitGetParam("__val");
                 w.emitSetLocal(pd.setter.paramName);
                 for (IStmt s : pd.setter.body) emitStmt(s);
@@ -1574,7 +1576,8 @@ public final class MivmEmitter {
                         emitExpr(ma.target);
                         emitExpr(a.value);
                         coerceToTarget(a.value, tType);
-                        emitInvokeVirtualSmart(ps.ownerClass, setter, 1);
+                        // BUG-6: numArgs = slots (long/double = 2).
+                        emitInvokeVirtualSmart(ps.ownerClass, setter, is8Byte(tType) ? 2 : 1);
                         declareLocal("__discard");
                         w.emitSetLocal("__discard");
                         // El FREE del valor anterior lo hace el propio setter
@@ -1591,7 +1594,7 @@ public final class MivmEmitter {
                         emitExpr(a.value);
                         coerceToTarget(a.value, tType);
                         emitCompoundOp(a.op, tType);
-                        emitInvokeVirtualSmart(ps.ownerClass, setter, 1);
+                        emitInvokeVirtualSmart(ps.ownerClass, setter, is8Byte(tType) ? 2 : 1);
                         declareLocal("__discard");
                         w.emitSetLocal("__discard");
                         return;
@@ -4105,13 +4108,15 @@ public final class MivmEmitter {
                 return;
             }
             if (ps.isStatic) { errors.add("property estática no soportada: " + name); return; }
-            // Pila: ..., val. Necesitamos this, val para INVOKE_VIRTUAL setX, 1.
+            // Pila: ..., val. Necesitamos this, val para INVOKE_VIRTUAL setX.
+            // BUG-6: si la property es long/double, el temp y el numArgs son de 8 bytes / 2 slots.
+            boolean ps8 = is8Byte(ps.type);
             String temp = "__stp_" + (stringPoolCounter++);
-            declareLocal(temp);
+            if (ps8) declareLocalLong(temp); else declareLocal(temp);
             w.emitSetLocal(temp);
             w.emitGetParam("this");
             w.emitGetLocal(temp);
-            emitInvokeVirtualSmart(ps.ownerClass, "set" + capitalize(ps.name), 1);
+            emitInvokeVirtualSmart(ps.ownerClass, "set" + capitalize(ps.name), ps8 ? 2 : 1);
             declareLocal("__discard");
             w.emitSetLocal("__discard");
         } else if (sym instanceof ConstSymbol) {

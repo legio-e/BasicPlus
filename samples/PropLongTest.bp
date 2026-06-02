@@ -1,0 +1,39 @@
+// PropLongTest — properties de tipo long/double (BUG-6 secuela).
+// Antes: "INVOKE_VIRTUAL slot no resoluble" (numArgs del setter no contaba el
+// arg de 8 bytes) + truncación del param/temp. Ahora setter __val de 8 bytes,
+// numArgs = slots, y los call-sites pasan 2 para long/double.
+// Doubles impresas como long(x*100) → LPRINT, paridad exacta dual-VM.
+module PropLongTest
+
+  class Sensor
+    public property reading: long := 0L          // auto getter/setter
+    public property scale: double := 1.0d
+    // property con setter custom (ejercita el alias del param de 8 bytes y
+    // `field := <long>`). get implícito.
+    public property offset: long := 0L
+      set(v)
+        field := v * 2L                          // dobla al guardar
+      endset
+    endprop
+  end Sensor
+
+  function Main()
+    var s: Sensor := Sensor()
+
+    // auto long
+    s.reading := 5000000000L
+    print s.reading                              // 5000000000
+    s.reading += 100L
+    print s.reading                              // 5000000100
+
+    // auto double
+    s.scale := 3.25d
+    print long(s.scale * 100.0d)                 // 325
+    s.scale += 0.75d
+    print long(s.scale * 100.0d)                 // 400
+
+    // custom setter long (dobla)
+    s.offset := 21L
+    print s.offset                               // 42
+  end Main
+end PropLongTest

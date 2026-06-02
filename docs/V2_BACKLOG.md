@@ -1520,6 +1520,11 @@ OK: StrTest, MapTest, MapNumTest (ahora con `Double(3.5)`), l2v3app, classisolat
   long/double ahora emite LADD/LSUB y DADD/DSUB (antes ADD/SUB de 4 bytes →
   basura). Cubre local/array/campo/global. Test `samples/CompoundTest.bp`,
   paridad dual-VM. (`+=`/`-=` son los únicos operadores compuestos del lenguaje.)
-- Properties de tipo long/double (8 bytes): la ruta de setter usa un temp local
-  de 4 bytes (`__stp_*`) + `numArgs` literal 1 → truncaría. Los envoltorios usan
-  campos+métodos (no properties), así que no bloquea. Diferido.
+- Properties de tipo long/double (8 bytes) ✅ ARREGLADO (2026-06-02): daba
+  "INVOKE_VIRTUAL slot no resoluble" (el call-site del setter pasaba `numArgs`
+  literal 1 → un valor de 8 bytes desalineaba la localización de `this`) +
+  truncación del param/temp. Ahora: setter `__val` declarado 8 bytes, alias del
+  param custom 8 bytes, temp `__stp_*` 8 bytes, y los 3 call-sites del setter
+  pasan slots (`is8Byte ? 2 : 1`). El getter ya devolvía bien (`__result`
+  width-aware). Test `samples/PropLongTest.bp` (auto + setter custom + compound),
+  paridad dual-VM.
