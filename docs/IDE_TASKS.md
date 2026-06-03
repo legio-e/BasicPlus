@@ -17,7 +17,11 @@ Inventario base: `BpIde/` Swing (Java 1.8, GUI builder NetBeans). Componentes:
   `.form` ata parte del código al GUI builder; decidir si se mantiene el builder
   o se pasa a layout a mano para poder trocear.
 
-- **IDE-2 — Look & Feel del SO**. Hoy usa el L&F por defecto de Java (Metal).
+- 🔬 **IDE-2 — Look & Feel del SO** — HECHO 2026-06-03 (pendiente confirmar visual).
+  El `main()` generado FORZABA "Metal"; ahora `setLookAndFeel(getSystemLookAndFeel
+  ClassName())` (Windows/GTK/Aqua) antes de crear la ventana. Build OK.
+
+- **IDE-2 (orig) — Look & Feel del SO**. Hoy usa el L&F por defecto de Java (Metal).
   Cambiar a `UIManager.setLookAndFeel(getSystemLookAndFeelClassName())` (Windows/
   GTK/Aqua según SO), fijándolo en el arranque ANTES de crear `FrmMain`. Revisar
   HiDPI de paso. Coste: bajo.
