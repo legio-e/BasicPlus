@@ -91,6 +91,11 @@ public final class AotMain {
                 return;
             }
 
+            // #211 — avisos no fatales (llamadas native→BP que pierden AOT).
+            for (String wmsg : emitter.getWarnings()) {
+                System.out.println("-- aviso AOT: " + wmsg);
+            }
+
             if (csrc.isEmpty()) {
                 System.out.println("(módulo " + module.name + " no tiene funciones `native` — sin emisión)");
                 return;

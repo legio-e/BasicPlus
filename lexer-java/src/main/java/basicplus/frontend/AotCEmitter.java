@@ -55,6 +55,22 @@ public final class AotCEmitter {
     /** Tabla nombre → FuncDef para resolver firma desde CallExpr. */
     private final java.util.Map<String, Ast.FuncDef> nativeFuncDefs = new java.util.HashMap<>();
 
+    /** #211 — Tabla nombre → FuncDef de TODAS las funciones del módulo
+     *  (native y BP normales). Permite que una `native` que llama a una
+     *  función BP del mismo módulo resuelva su firma y emita la llamada-
+     *  puente (vm->aot_helpers->call_bp_i32) en vez de abortar. */
+    private final java.util.Map<String, Ast.FuncDef> allFuncDefs = new java.util.HashMap<>();
+
+    /** #211 — Avisos no fatales recogidos durante la emisión (p.ej. una
+     *  llamada native→BP que cruza al intérprete y pierde la velocidad
+     *  AOT). El caller (Main/AotMain) los imprime tras emitModule. */
+    private final List<String> warnings = new ArrayList<>();
+    public List<String> getWarnings() { return warnings; }
+
+    /** #211 — nombre de la función AOT que se está emitiendo (para mensajes
+     *  de aviso). Fijado al inicio de cada emitFunction. */
+    private String currentFuncName = "?";
+
     /** Contador para nombres únicos en for-loops (avoid colisión de
      *  __end/__step entre fors anidados). */
     private int forCounter = 0;
@@ -192,6 +208,7 @@ public final class AotCEmitter {
         for (Ast.ITopLevelDecl d : module.defs) {
             if (d instanceof Ast.FuncDef) {
                 Ast.FuncDef f = (Ast.FuncDef) d;
+                allFuncDefs.put(f.name.name, f);   /* #211 — TODAS, para call_bp */
                 if (f.isNative && !f.isIntrinsic) {
                     nativeFuncs.add(f);
                     nativeFuncNames.add(f.name.name);
@@ -296,6 +313,7 @@ public final class AotCEmitter {
     // ==================== Función AOT ====================
 
     private void emitFunction(Ast.FuncDef f) {
+        currentFuncName = f.name.name;   /* #211 — para mensajes de aviso */
         String fname = "aot_" + moduleName + "_" + f.name.name;
         String cRet  = cType(f.returnType);
         w.print("static " + cRet + " " + fname + "(struct bpvm* vm");
@@ -889,10 +907,20 @@ public final class AotCEmitter {
             if (emitBuiltinCall(name, c.args)) return;
 
             if (!nativeFuncNames.contains(name)) {
+                /* #211 — ¿es una función BP del mismo módulo? Entonces NO
+                 * abortamos: emitimos la llamada-puente native→BP
+                 * (vm->aot_helpers->call_bp_i32), que ejecuta su cuerpo
+                 * interpretado. Antes esto era un error duro. */
+                Ast.FuncDef target = allFuncDefs.get(name);
+                if (target != null) {
+                    emitBridgeCall(name, target, c);
+                    return;
+                }
                 throw new UnsupportedAotException(
-                    "AOT: call a función no-native '" + name + "' (line " + c.line + "). "
-                    + "Para AOT v1 todas las funciones llamadas deben ser native del mismo módulo "
-                    + "o un builtin AOT-soportado (now, charAt, charCodeAt, substring, intToString).");
+                    "AOT: call a función desconocida '" + name + "' (line " + c.line + "). "
+                    + "Debe ser native o BP del mismo módulo, o un builtin AOT-soportado "
+                    + "(now, charAt, charCodeAt, substring, intToString). "
+                    + "Cross-module sigue pendiente (#169).");
             }
 
             /* C call directo a otra función native del mismo módulo.
@@ -908,6 +936,69 @@ public final class AotCEmitter {
         }
         throw new UnsupportedAotException(
             "AOT: expression no soportada: " + e.getClass().getSimpleName());
+    }
+
+    /** #211 — emite una llamada native→BP usando el puente call_bp_i32.
+     *  La función BP destino corre en el INTÉRPRETE (pierde la velocidad
+     *  AOT — de ahí el aviso). v1: solo firmas i32-compatibles
+     *  (integer/boolean/string/array; el return también). float/long/
+     *  double/void → error claro (marshalling distinto, pendiente). */
+    private void emitBridgeCall(String name, Ast.FuncDef target, Ast.CallExpr c) {
+        if (!isBridgeI32Type(target.returnType)) {
+            throw new UnsupportedAotException(
+                "AOT: call native→BP a '" + name + "' (line " + c.line + "): el puente v1 "
+                + "solo soporta retorno i32 (integer/boolean/string/array); "
+                + "float/long/double/void → pendiente.");
+        }
+        for (Ast.Param p : target.params) {
+            if (!isBridgeI32Type(p.type)) {
+                throw new UnsupportedAotException(
+                    "AOT: call native→BP a '" + name + "' (line " + c.line + "): el puente v1 "
+                    + "solo soporta params i32; el param '" + p.name + "' no lo es. "
+                    + "Tipos mixtos → pendiente.");
+            }
+        }
+        if (c.args.size() != target.params.size()) {
+            throw new UnsupportedAotException(
+                "AOT: call native→BP a '" + name + "' (line " + c.line + "): "
+                + c.args.size() + " args pero '" + name + "' espera "
+                + target.params.size() + ".");
+        }
+
+        /* Aviso de rendimiento (P-aot-call-bp-emit, apunte del usuario). */
+        warnings.add("la función native '" + currentFuncName + "' llama a la función BP "
+            + "interpretada '" + name + "' (línea " + c.line + "). Esa llamada cruza al "
+            + "intérprete por el puente native→BP y NO se acelera por AOT. Para máximo "
+            + "rendimiento, declara '" + name + "' también como native.");
+
+        /* call_bp_i32(vm, find_function(vm,"Mod.name"), (int32_t[]){args...}, n).
+         * El compound literal C99 vive en el bloque envolvente — válido como
+         * argumento de la llamada. find_function resuelve el nombre cada vez
+         * (scan barato; cachear en static es una mejora futura, pero el coste
+         * del puente domina). */
+        String qualified = moduleName + "." + name;
+        w.print("vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, \""
+            + qualified + "\"), ");
+        int n = c.args.size();
+        if (n == 0) {
+            w.print("(const int32_t*) 0, 0)");
+            return;
+        }
+        w.print("(int32_t[]){ ");
+        for (int i = 0; i < n; i++) {
+            if (i > 0) w.print(", ");
+            emitExpr(c.args.get(i));
+        }
+        w.print(" }, " + n + ")");
+    }
+
+    /** #211 — ¿el tipo se representa como un i32 de 4 bytes que el puente
+     *  call_bp_i32 puede marshallar tal cual? (integer/boolean/string/array
+     *  → cType int32_t). float/long/double/void → no. */
+    private boolean isBridgeI32Type(Ast.TypeRef t) {
+        if (t == null) return false;   /* void */
+        try { return "int32_t".equals(cType(t)); }
+        catch (UnsupportedAotException e) { return false; }
     }
 
     private String cBinaryOp(String bpOp) {

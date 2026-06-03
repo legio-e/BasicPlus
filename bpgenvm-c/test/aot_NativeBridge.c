@@ -1,11 +1,14 @@
 /*
  * test/aot_NativeBridge.c — thunk AOT ESCRITO A MANO (prueba de P-aot-call-bp).
  *
- * Vive en test/ (no en samples/out/, que está gitignored) porque NO es
- * autogenerado: hace el papel del código que AotCEmitter emitirá para
- * `native function compute` una vez cableado el follow-up (#211). Lo
- * interesante es `compute`: en vez de replicar la lógica, DELEGA en la función
- * BP interpretada `helper` a través del puente native→BP
+ * Vive en test/ (no en samples/out/, que está gitignored) como FIXTURE ESTABLE
+ * del test C (make test-callbp), trackeado en git. Desde #211 AotCEmitter
+ * genera un thunk EQUIVALENTE automáticamente al compilar `native function
+ * compute` (puedes verlo con: AotMain NativeBridge.bp out). Este se mantiene a
+ * mano para que el test no dependa de re-ejecutar el frontend Java.
+ *
+ * Lo interesante es `compute`: en vez de replicar la lógica, DELEGA en la
+ * función BP interpretada `helper` a través del puente native→BP
  * (vm->aot_helpers->call_bp_i32). Es decir, código native (este .o compilado)
  * llamando a una función BP que corre en el intérprete.
  *

@@ -253,25 +253,36 @@ paridad byte-idéntica VM-Java (compute interpretado) == VM-C (compute via
 thunk→puente→helper). Restricción v1: la función BP llamada no debe ceder al
 scheduler (sleep/mutex-contended/join); bloqueo mid-puente bajo SMP → v2.
 
-**Compile-time — PENDIENTE (cableado AotCEmitter).** Hoy la validación AOT
-del frontend (#178) ABORTA con error cuando una `native function` llama a una
-función no-native ("AOT: call a función no-native 'X'"). Con el puente eso ya
-NO es ilegal. El follow-up:
+**Compile-time — HECHO (#211, 2026-06-03).** Antes la validación AOT del
+frontend (#178) ABORTABA con error cuando una `native function` llamaba a una
+función no-native. Ya NO: AotCEmitter detecta que el destino es una función BP
+del mismo módulo y emite la llamada-puente en vez de la llamada C directa:
 
-1. Relajar esa validación de **error → permitido**: AotCEmitter emite
-   `vm->aot_helpers->call_bp_i32(...)` (con `find_function` cacheado en un
-   `static`, §4 Opción A) en vez de una llamada C directa, marshalling de args
-   incluido.
-2. **Emitir un WARNING (apunte del usuario, 2026-06-03):** cada llamada
-   native→BP cruza al intérprete por el puente y **NO se beneficia de la
-   velocidad AOT**. El compilador debe avisar para que el usuario sea
-   consciente de la pérdida de rendimiento y pueda decidir hacer también
-   `native` a la función llamada. Texto sugerido:
+```c
+vm->aot_helpers->call_bp_i32(vm,
+    vm->aot_helpers->find_function(vm, "Mod.helper"),
+    (int32_t[]){ arg0, arg1 }, 2)
+```
 
-   > AVISO: la función native 'compute' llama a la función BP interpretada
-   > 'helper' (línea 25). Esa llamada cruza al intérprete por el puente
-   > native→BP y NO se acelera por AOT. Para máximo rendimiento, declara
-   > 'helper' también como native.
+(compound literal C99 para el array de args; `find_function` resuelve el
+nombre — cachear en un `static` por call-site es una mejora futura, pero el
+coste del puente domina). native→native sigue emitiendo la llamada C directa.
 
-   Es un WARNING, no un error: la llamada es correcta y a veces deseada
-   (tuplas, métodos, helpers que no compensa portar a native).
+Y emite el **WARNING (apunte del usuario)** — cada native→BP cruza al
+intérprete y NO se acelera por AOT:
+
+```
+-- aviso AOT: la función native 'compute' llama a la función BP interpretada
+   'helper' (línea 30). Esa llamada cruza al intérprete por el puente
+   native→BP y NO se acelera por AOT. Para máximo rendimiento, declara
+   'helper' también como native.
+```
+
+Es WARNING, no error: la llamada es correcta y a veces deseada (tuplas,
+métodos, helpers que no compensa portar a native).
+
+**Límites v1 de #211** (siguen `[v2]`): solo firmas i32-compatibles
+(integer/boolean/string/array; float/long/double/void → error claro); solo
+**mismo módulo** (cross-module native→BP necesita resolver el callee
+`Mod.func` — hoy se rechaza como method-call); y native→**método** (#174)
+necesita además un helper de dispatch virtual sobre call_bp.

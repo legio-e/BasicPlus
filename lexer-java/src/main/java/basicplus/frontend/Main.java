@@ -509,6 +509,11 @@ public final class Main {
             // runtime que la validación no necesita verificar.
             emitter.setOmitRegisterFunc(true);
             String csrc = emitter.emitModule(module);
+            // #211 — avisos no fatales (p.ej. llamada native→BP que pierde
+            // la velocidad AOT). Se imprimen como avisos del compilador.
+            for (String wmsg : emitter.getWarnings()) {
+                System.out.println("-- aviso AOT: " + wmsg);
+            }
             // csrc puede estar vacío si no hay nativas — ya filtrado arriba,
             // así que aquí esperamos algo. Si no, raro pero no error.
             if (csrc == null) return null;
