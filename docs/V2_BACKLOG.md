@@ -1089,6 +1089,35 @@ default cuando haya PSRAM; escalón 2 solo guiado por profiling. Y como
 8 MB de heap hace casi irrelevante el GC-reuse, esto desactiva en gran
 parte la presión de #8 para placas con PSRAM.
 
+## 10b. Vehículo de prueba de #9/#10: Adafruit Metro RP2350 (RP2350B + 8 MB PSRAM)
+
+**Hardware (comprado por el usuario, 2026-06-03; NO es para ahora).** Tarjeta
+Adafruit Metro RP2350 con **RP2350B**: el MISMO die que el RP2350A de la Pico 2
+(mismo doble Cortex-M33, misma ISA, misma SRAM interna 520 KB) pero en QFN-80 →
+**48 GPIO bondeados** en vez de 30. Además **8 MB de PSRAM** por QSPI. Es el
+banco de pruebas ideal porque:
+
+- **#9 (una imagen por familia)** — RP2350A↔B es el caso *intra-familia* perfecto:
+  el binario ARM **puede ser idéntico** (mismo silicio). Lo único que varía es
+  config de placa (rango de GPIO 0-47 vs 0-29, pin del LED, flash, ¿PSRAM?), que
+  ya enrutamos por `/sys/device.json` (#134). Probar el MISMO `.uf2` en Pico 2 y
+  Metro valida el descubrimiento-de-capacidades-en-runtime. (Límite del concepto:
+  una imagen por FAMILIA; cross-familia vs ESP32 sigue siendo build aparte — otra
+  ISA, ya separado en H4.)
+- **#10 (PSRAM)** — 8 MB reales para probar el escalón 1 (buffer del VM entero en
+  PSRAM, cero cambios de VM) y **medir** la ralentización por QSPI+caché XIP con
+  la bench-suite (#164).
+
+**Pasos cuando se retome (HW, sin turno fijo):**
+1. Compilar/arrancar el firmware RP2350 actual en el Metro (confirmar VM corre
+   Hello.mod en el B — probablemente casi directo).
+2. Probar **el mismo `.uf2`** en Pico 2 **y** Metro, con specifics de placa leídos
+   de `/sys/device.json` (no horneados por `PICO_BOARD`).
+3. Levantar la PSRAM, poner el heap del VM ahí (escalón 1 de #10) y **medir**.
+
+Enlaza con: #9, #9b (HAL formal), #10, #134 (device.json), #147 (ESP32 = otra
+familia).
+
 ---
 
 # Host VM (PC) + IDE
