@@ -19,15 +19,21 @@ T4 `Str.parse*`), **GAP-4** (print double byte-idéntico), **BUG-6** (campos de 
 bytes), y **H5.1 a/b1/c1** (Object raíz real + `toString`/`compareTo` polimórficos,
 auto-`toString` en `print`, `compareTo` por defecto → throw).
 
-**Secuencia acordada con el usuario (2026-06-02)**:
-**T0 → T1 → IDE → Debugger → el resto, paso a paso.**
+**Secuencia acordada con el usuario (2026-06-02, act. 2026-06-03)**:
+**T0 → T1 → IDE → H6 (Debugger) → el resto, paso a paso.**
 1. ✅ **T0** — terminar H5. HECHO 2026-06-03: H5.1 a/b1/c1/c2 + decisión d
    (`Comparable` retenido). Modelo Object cerrado.
-2. **T1** — tapar huecos/bugs (filosofía "sólido, sin agujeros"). ◀ EN CURSO.
-3. **IDE** (T5 §12) — "está algo abandonado y necesita puesta al día". Primer
-   paso del IDE = **descomponerlo en tareas concretas** (revisar el estado real
-   del IDE y listar mejoras) y LUEGO desarrollarlas una a una.
-4. **Debugger** (T5 §16, FUNDAMENTAL) — retomarlo una vez el IDE esté al día.
+2. **T1** — tapar huecos/bugs (filosofía "sólido, sin agujeros"). En curso/ad-hoc.
+3. ✅ **IDE** (T5 §12) — puesta al día HECHA 2026-06-03: editor RSyntaxTextArea
+   (resaltado + folding), L&F nativo, recientes (ficheros+proyectos), upload
+   recuerda dir. Pendiente sin prisa: IDE-1 (reorg de FrmMain) + find/replace.
+3b. **AOT desde native** (frontera native↔BP, 2026-06-03) — tapados muchos
+   agujeros con paridad byte-idéntica: puente runtime (#210), native→BP
+   same-module (#211) y cross-module (#169), throw con mensaje (#175), método
+   público (#174). Cola acotada: #212 (AotMain imports), #213 (#175b throw
+   clase usuario + try/catch en native), #174 resto (privado/super/no-i32).
+4. **H6 — Debugger** (antes "Debugger", T5 §16, FUNDAMENTAL) — la fase grande
+   que queda tras el IDE. ◀ SIGUIENTE.
 5. **El resto** (T2 lenguaje, T3 stdlib, T4 VM/memoria, T6 hardware) — sin orden
    fijo, por interés/necesidad. Queda mucho: paso a paso.
 
@@ -95,7 +101,7 @@ auto-`toString` en `print`, `compareTo` por defecto → throw).
 - **T4 — VM / memoria / multi-MCU**: §8(VM) ahorro de memoria · §9 una imagen por
   FAMILIA · §9b HAL formal · §10(VM) PSRAM externa · §11 host-VM como simulador.
 
-- **T5 — Tooling**: §16 **Debugger** (marcado FUNDAMENTAL) · §12 IDE usabilidad ·
+- **T5 — Tooling**: §16 **H6 — Debugger** (marcado FUNDAMENTAL) · §12 IDE usabilidad ·
   §17 overlays `loadModule`/`unloadModule`.
 
 - **T6 — Diferido a hardware/v2 (tareas `[v2]` en la lista)**: #140 debug-on-Pico
@@ -1365,7 +1371,7 @@ split, format) son los mayores beneficiados — son string-heavy. O sea:
 terminar #173 desbloquea native en la parte de stdlib que más lo
 aprovecha. Anotado para encadenar.
 
-## 16. Debugger — FUNDAMENTAL
+## 16. H6 — Debugger — FUNDAMENTAL
 
 El usuario lo subraya: el debugger es core, no accesorio.
 
