@@ -30,7 +30,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method
 
 all: $(BIN)
 
@@ -108,4 +108,22 @@ test-throwmsg: $(LIBOBJ)
 	    $(LIBOBJ) -o $(THROW_BIN) $(LDFLAGS); \
 	  echo "--- throw msg computado native->BP (esperado: 10, caught: valor negativo: -3, fin) ---"; \
 	  (cd samples && ../$(THROW_BIN) ThrowMsg.mod); \
+	fi
+
+# #174 (mitad-VM) — native invoca un MÉTODO virtual de un objeto vía
+# call_method_i32 (despacho por vtable). test/aot_MethodCall.c es un thunk a
+# mano con el slot hard-coded (la mitad-compilador, que pondría el slot, es
+# #174b). Salida byte-idéntica a la VM-Java.
+METHOD_BIN = build/test_method.exe
+test-method: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/MethodCall.mod ]; then \
+	  echo "(skip test-method: falta samples/MethodCall.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/MethodCall.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_method.c test/aot_MethodCall.c \
+	    $(LIBOBJ) -o $(METHOD_BIN) $(LDFLAGS); \
+	  echo "--- método virtual desde native (esperado: [Box.getDoubled] v= 5, 11) ---"; \
+	  (cd samples && ../$(METHOD_BIN) MethodCall.mod); \
 	fi

@@ -145,6 +145,15 @@ struct aot_helpers_v1 {
      * BP). NO retorna. Para `throw RuntimeError("lit")` se sigue usando
      * throw_runtime con el literal directo (sin alocar el string). */
     void (*throw_str)(struct bpvm* vm, uint32_t msg_ref);
+
+    /* #174 (mitad-VM) — despacho VIRTUAL de un método público desde native.
+     * `this_ref` = receptor; `slot` = índice de vtable (lo da el compilador);
+     * args/retorno i32 (incl. refs). La VM resuelve obj→class→vtable[slot]
+     * (con fallback al padre) y corre el cuerpo BP por el puente con `this_ref`
+     * como arg0. NO requiere que el método esté exportado. call_method_i32 vive
+     * en interp.c. */
+    int32_t (*call_method_i32)(struct bpvm* vm, uint32_t this_ref, int slot,
+                               const int32_t* args, int nargs);
 };
 
 /* Tabla v1 instanciada en el runtime con los punteros a las funciones

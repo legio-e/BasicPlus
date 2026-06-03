@@ -507,4 +507,12 @@ bpvm_aot_callctx_t* bpvm_aot_callctx(void);
 int32_t bpvm_aot_call_bp_i32(struct bpvm* vm, uint32_t target_abs,
                              const int32_t* args, int nargs);
 
+/* P-aot-methods (#174, mitad-VM). Despacho VIRTUAL de un método público desde
+ * native: resuelve la dirección vía la vtable de la clase REAL de `this_ref`
+ * (slot dado por el compilador) y corre el cuerpo BP por el puente con
+ * `this_ref` como arg0. Devuelve el retorno (4 bytes). NO requiere que el
+ * método esté exportado. v1: solo args/retorno i32 (incl. refs). */
+int32_t bpvm_aot_call_method_i32(struct bpvm* vm, uint32_t this_ref, int slot,
+                                 const int32_t* args, int nargs);
+
 #endif /* BPVM_INTERNAL_H */

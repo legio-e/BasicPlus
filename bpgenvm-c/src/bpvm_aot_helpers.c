@@ -390,4 +390,6 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     .call_bp_i32         = bpvm_aot_call_bp_i32,
     /* #175 — throw con mensaje computado. */
     .throw_str           = h_throw_str,
+    /* #174 (mitad-VM) — despacho virtual desde native. Vive en interp.c. */
+    .call_method_i32     = bpvm_aot_call_method_i32,
 };

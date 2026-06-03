@@ -1,0 +1,36 @@
+// MethodCall.bp — prueba de #174 (mitad-VM): código native invoca un MÉTODO
+// público de un objeto (despacho virtual) vía vm->aot_helpers->call_method_i32.
+//
+// `useBox` se deja como función BP normal (el compilador aún NO sabe emitir
+// call_method — esa es la mitad-compilador, #174b). El test registra un thunk
+// AOT a mano que hace el papel del código native: recibe el Box y llama a
+// getDoubled() por la vtable (slot conocido) + 1. La VM-Java interpreta useBox
+// como BP normal (INVOKE_VIRTUAL).
+//
+// Paridad esperada (VM-Java == VM-C):
+//   [Box.getDoubled] v=5
+//   11
+
+module MethodCall
+
+  class Box
+    var v: integer
+    public function Box(x: integer)
+      this.v := x
+    end Box
+    public function getDoubled(): integer
+      print "[Box.getDoubled] v=", this.v
+      return this.v * 2
+    end getDoubled
+  end Box
+
+  function useBox(b: Box): integer
+    return b.getDoubled() + 1
+  end useBox
+
+  function Main()
+    var box: Box := Box(5)
+    print useBox(box)
+  end Main
+
+end MethodCall

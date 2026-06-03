@@ -129,6 +129,16 @@ auto-`toString` en `print`, `compareTo` por defecto → throw).
   DENTRO de native (pila de boundaries setjmp). El caso común "native lanza, BP
   caza" ya funciona. Ver §8.3.
 
+- **Método desde native — MITAD-VM HECHA (#174, 2026-06-03).** Helper
+  `call_method_i32(this, slot, args)` = paseo vtable de OP_INVOKE_VIRTUAL +
+  puente con `this` como arg0. native puede invocar un método PÚBLICO de un
+  objeto (despacho virtual). Paridad byte-idéntica (`make test-method`). No
+  requiere exportar el método (la vtable lo lleva). Hallazgo: solo el público
+  es tractable (en vtable); el privado/`super` no tiene asidero runtime. FALTA
+  la MITAD-COMPILADOR (#174b): que AotCEmitter ponga el slot real — decisión
+  A (replicar, frágil) vs B (fuente única en el modelo semántico, robusto). Ver
+  §8.4.
+
 ---
 
 ## ▶ Arranque de V2 — LEER PRIMERO  *(estado al cerrar V1, 2026-05-30)*

@@ -330,3 +330,31 @@ paridad byte-idéntica (`make test-throwmsg`).
   PILA de boundaries setjmp por-worker (hoy el fault-slot de #186 es uno solo) y
   bindear la excepción a la variable del catch en C. El caso "native lanza, BP
   caza" (el común) ya funciona vía el boundary existente.
+
+### 8.4 Método desde native — despacho virtual (#174 mitad-VM, 2026-06-03)
+
+native puede invocar un **método público** de un objeto. La pieza VM está hecha:
+helper `call_method_i32(vm, this_ref, slot, args, nargs)` = réplica del paseo
+vtable de `OP_INVOKE_VIRTUAL` (obj→class_ptr→vtable[slot]→cs+offset, con fallback
+al padre) + el puente con `this_ref` como arg0. **No requiere que el método esté
+exportado** — la vtable del objeto lleva el offset. Probado con thunk a mano
+(slot hard-coded, verificado con el disassembler) y paridad byte-idéntica
+(`make test-method`: native useBox → Box.getDoubled() vía vtable).
+
+**Por qué el público es el caso tractable (y el privado NO):** los métodos NUNCA
+se exportan (`ModWriter.addMethod` → `addFunction(qn, false)`). El **público**
+está en la vtable → alcanzable en runtime desde el objeto con solo el slot. El
+**privado** no está en la vtable NI exportado: su dirección es un offset relativo
+que solo `ModWriter` conoce (lo hornea en el `CALL`) → sin asidero en runtime.
+Por eso `find_function("Cls.metodo")` falla y el caso privado queda aparte.
+
+**Pendiente de #174 (mitad-compilador, #174b):** AotCEmitter debe poner el
+**slot** real del método al emitir `obj.metodo(args)` → la decisión aplazada:
+- **A)** replicar el cálculo de slots de `ModWriter` (Object=0/1, herencia,
+  override, properties, privados-fuera-de-vtable) → frágil, riesgo de divergencia
+  silenciosa → rompe paridad.
+- **B)** fuente única: `ModWriter` escribe el slot resuelto en el `ClassSymbol`/
+  `SemanticInfo`, y **ambos** emisores lo leen → robusto, pero toca el modelo.
+
+El caso **privado/`super`** desde native (sin asidero runtime) necesitaría
+exportar métodos o exponer su offset — decisión separada, menor prioridad.

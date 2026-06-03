@@ -110,44 +110,23 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
     return bpvm_eh_unwind(vm, tc, obj) ? 1 : 2;
 }
 
-/* P-aot-call-bp — puente native→BP. Contrato en bpvm_internal.h, diseño en
- * docs/AOT_CROSS_MODULE.md §8. Lo invoca un thunk AOT vía
- * vm->aot_helpers->call_bp_i32. Mecánica:
- *   1. Recupera el contexto del worker (tc + punteros a los registros sp/bp
- *      VIVOS del intérprete exterior), fijado por aot_call_guarded.
- *   2. Monta un frame BP sobre el stack de tc (igual que OP_CALL) pero con
- *      saved_pc = celda del sentinela OP_NATIVE_RETURN.
- *   3. Corre bpvm_interp_run_quantum ANIDADO sobre el mismo tc hasta que el
- *      status sea BPVM_NATIVE_RETURN (la función BP hizo RET → pc cayó en el
- *      sentinela, con el valor de retorno ya en el top).
- *   4. Lee el retorno, restaura los registros del intérprete exterior (vía
- *      los punteros del contexto) y lo devuelve a la función native C.
- * Errores → throw_runtime (longjmp al boundary de #186 que armó el thunk). */
-int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
-                             const int32_t* args, int nargs) {
-    bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
-    bpvm_thread_t* tc = cc ? cc->tc : NULL;
-    if (!tc || target_abs == 0) {
-        vm->aot_helpers->throw_runtime(vm,
-            "call_bp: contexto AOT inválido o función destino no encontrada");
-        return 0;   /* inalcanzable: throw_runtime hace longjmp */
-    }
-
+/* P-aot-call-bp — NÚCLEO del puente native→BP. Monta un frame BP sobre el
+ * stack de tc (igual que OP_CALL, pero saved_pc = celda del sentinela
+ * OP_NATIVE_RETURN), corre bpvm_interp_run_quantum ANIDADO hasta que el status
+ * sea BPVM_NATIVE_RETURN (la función BP hizo RET → pc cayó en el sentinela con
+ * el retorno en el top), lee el retorno (4 bytes) y restaura los registros del
+ * intérprete exterior (vía cc->sp_p/bp_p). Para métodos, args[0] = this.
+ * Restricción v1: la función BP no debe ceder al scheduler ni terminar el
+ * thread. Errores → throw_runtime (longjmp al boundary de #186). cc/tc ya
+ * validados por el caller. */
+static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
+                                   bpvm_aot_callctx_t* cc,
+                                   uint32_t target_cs, uint32_t target_abs,
+                                   const int32_t* args, int nargs) {
     uint8_t* mem = vm->memory;
     uint32_t sp = *cc->sp_p;        /* registros vivos del intérprete exterior */
     uint32_t bp = *cc->bp_p;
-    uint32_t caller_cs = tc->cs;    /* fijado por el hijack de OP_CALL */
-
-    /* cs del módulo dueño de target_abs (para que sus CALL/globals resuelvan).
-     * Por defecto el mismo módulo que el caller (caso native→BP intra-módulo). */
-    uint32_t target_cs = caller_cs;
-    for (int i = 0; i < vm->module_count; i++) {
-        const bpvm_module_t* m = &vm->modules[i];
-        if (target_abs >= m->code_start && target_abs < m->end_addr) {
-            target_cs = m->code_start;
-            break;
-        }
-    }
+    uint32_t caller_cs = tc->cs;
 
     /* Frame falso (réplica exacta de OP_CALL): args, luego saved pc/bp/cs. */
     for (int i = 0; i < nargs; i++) {
@@ -162,34 +141,111 @@ int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
     tc->pc = target_abs;
     tc->cs = target_cs;
 
-    /* Bucle anidado hasta el sentinela. Restricción v1: la función BP no debe
-     * ceder al scheduler (sleep/mutex contended/join) ni terminar el thread.
-     * Un quantum agotado (RUNNABLE, status OK) simplemente continúa. */
     for (;;) {
         int y = 0;
         bpvm_status_t st = bpvm_interp_run_quantum(vm, tc, 1 << 24, &y);
         if (st == BPVM_NATIVE_RETURN) break;
         if (st == BPVM_OK && tc->status == BPVM_THREAD_RUNNABLE) {
-            continue;   /* quantum agotado: seguir interpretando la función BP */
+            continue;   /* quantum agotado: seguir interpretando */
         }
         /* Bloqueo, terminación o error no soportado por el puente v1. */
         tc->cs = caller_cs;
         vm->aot_helpers->throw_runtime(vm,
-            "call_bp: la función BP cedió/falló (no soportado por el puente v1)");
+            "call_bp/call_method: la función BP cedió/falló (no soportado por el puente v1)");
         return 0;   /* inalcanzable */
     }
 
-    /* Valor de retorno en el top; restaurar los registros del intérprete
-     * exterior vía los punteros del contexto. tc->bp ya volvió al bp del
-     * caller (el RET de la función BP lo restauró desde saved_bp). */
     uint32_t rsp = tc->sp;
     int32_t result = bpvm_read_i32_be(vm->memory + rsp - 4);
-    rsp -= 4;
-    *cc->sp_p = rsp;
-    *cc->bp_p = tc->bp;
+    *cc->sp_p = rsp - 4;
+    *cc->bp_p = tc->bp;             /* == bp del caller (restaurado por el RET) */
     tc->cs = caller_cs;
     tc->status = BPVM_THREAD_RUNNING;   /* restaura invariante del quantum exterior */
     return result;
+}
+
+/* P-aot-call-bp — puente native→función BP. Contrato en bpvm_internal.h, diseño
+ * en docs/AOT_CROSS_MODULE.md §8. Lo invoca un thunk AOT vía
+ * vm->aot_helpers->call_bp_i32. Deriva el CS del módulo dueño de target_abs y
+ * delega en bridge_run_bp_frame. */
+int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
+                             const int32_t* args, int nargs) {
+    bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+    bpvm_thread_t* tc = cc ? cc->tc : NULL;
+    if (!tc || target_abs == 0) {
+        vm->aot_helpers->throw_runtime(vm,
+            "call_bp: contexto AOT inválido o función destino no encontrada");
+        return 0;   /* inalcanzable: throw_runtime hace longjmp */
+    }
+    /* cs del módulo dueño de target_abs (para sus CALL/globals). Por defecto el
+     * mismo módulo que el caller (native→BP intra-módulo). */
+    uint32_t target_cs = tc->cs;
+    for (int i = 0; i < vm->module_count; i++) {
+        const bpvm_module_t* m = &vm->modules[i];
+        if (target_abs >= m->code_start && target_abs < m->end_addr) {
+            target_cs = m->code_start;
+            break;
+        }
+    }
+    return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, args, nargs);
+}
+
+/* P-aot-methods (#174, mitad-VM) — despacho VIRTUAL de un método público desde
+ * native. Réplica del paseo vtable de OP_INVOKE_VIRTUAL (con fallback al padre)
+ * para resolver la dirección del método según la clase REAL de `this_ref`, y
+ * luego el puente con `this_ref` como arg0. El compilador provee `slot` (índice
+ * de vtable); la VM hace obj→class_ptr→vtable[slot]→cs+offset. NO requiere que
+ * el método esté exportado (la vtable lo lleva). Contrato en bpvm_internal.h. */
+int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
+                                 const int32_t* args, int nargs) {
+    bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+    bpvm_thread_t* tc = cc ? cc->tc : NULL;
+    if (!tc) {
+        vm->aot_helpers->throw_runtime(vm, "call_method: contexto AOT inválido");
+        return 0;
+    }
+    if (this_ref == 0) {
+        vm->aot_helpers->throw_runtime(vm, "call_method: receptor null");
+        return 0;
+    }
+    uint8_t* mem = vm->memory;
+    /* Paseo vtable con fallback al padre — idéntico a OP_INVOKE_VIRTUAL. */
+    uint32_t desc = (uint32_t) bpvm_read_i32_be(mem + this_ref);
+    int32_t  method_off = -1;
+    uint32_t target_cs  = 0;
+    for (;;) {
+        uint16_t bw    = bpvm_read_u16_be(mem + desc + BPVM_CLS_OFF_BITMAP_WORDS);
+        uint16_t nmeth = bpvm_read_u16_be(mem + desc + BPVM_CLS_OFF_NUM_METHODS);
+        uint32_t vt_base = desc + BPVM_CLS_OFF_FIELD_BITMAP + 2u * (uint32_t) bw * 4u;
+        if (slot >= 0 && (uint32_t) slot < nmeth) {
+            int32_t off = bpvm_read_i32_be(mem + vt_base + (uint32_t) slot * 4);
+            if (off != -1) {
+                method_off = off;
+                target_cs  = bpvm_get_cs_for_data_addr(vm, desc);
+                break;
+            }
+        }
+        int32_t parent_off = bpvm_read_i32_be(mem + desc + BPVM_CLS_OFF_PARENT_OFF);
+        if (parent_off == 0) {
+            vm->aot_helpers->throw_runtime(vm,
+                "call_method: slot no resoluble en la jerarquía de clases");
+            return 0;
+        }
+        uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, desc);
+        desc = (uint32_t)((int32_t) cur_cs + parent_off);
+    }
+    uint32_t target_abs = target_cs + (uint32_t) method_off;
+
+    /* args con `this` como arg0. Cap defensivo (los métodos rara vez tienen >16). */
+    int32_t buf[1 + 16];
+    int total = nargs + 1;
+    if (nargs < 0 || total > (int)(sizeof(buf) / sizeof(buf[0]))) {
+        vm->aot_helpers->throw_runtime(vm, "call_method: demasiados argumentos (max 16)");
+        return 0;
+    }
+    buf[0] = (int32_t) this_ref;
+    for (int i = 0; i < nargs; i++) buf[1 + i] = args[i];
+    return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, buf, total);
 }
 
 /* BUG-7 — Lanza un RuntimeError BP desde un opcode del intérprete (no-native):
