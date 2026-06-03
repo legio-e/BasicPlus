@@ -24,6 +24,14 @@
             <artifactId>purejavacomm</artifactId>
             <version>1.0.5</version>
         </dependency>
+        <!-- IDE puesta al día — editor moderno: resaltado por TokenMaker,
+             números de línea, find/replace, current-line, folding (base).
+             3.3.4 = línea 3.x compatible con Java 8. -->
+        <dependency>
+            <groupId>com.fifesoft</groupId>
+            <artifactId>rsyntaxtextarea</artifactId>
+            <version>3.3.4</version>
+        </dependency>
     </dependencies>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

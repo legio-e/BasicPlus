@@ -36,8 +36,11 @@ import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
-import javax.swing.JTextPane;
 import javax.swing.KeyStroke;
+import org.fife.ui.rsyntaxtextarea.AbstractTokenMakerFactory;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rsyntaxtextarea.TokenMakerFactory;
+import org.fife.ui.rtextarea.RTextScrollPane;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -62,7 +65,7 @@ public class FrmMain extends javax.swing.JFrame
     /** Editor con syntax highlighting del tab ACTIVO. Se actualiza desde
      *  el ChangeListener de jTabbedPane1 cuando el usuario cambia de tab.
      *  Todas las acciones (save, compile, debug, run) operan sobre este. */
-    private JTextPane editorArea;
+    private RSyntaxTextArea editorArea;
     /** TextArea de salida del proceso (Consola). */
     private JTextArea consolaArea;
     /** Lista observable de errores; única fuente de verdad para la tabla y para futuros consumers. */
@@ -75,10 +78,10 @@ public class FrmMain extends javax.swing.JFrame
      *  componente (JScrollPane) porque los tabs pueden reordenarse,
      *  insertar/quitar y los índices no son estables. */
     private static final class OpenFile {
-        final JTextPane editor;
+        final RSyntaxTextArea editor;
         final JScrollPane scroll;
         Path file;        // null = buffer sin guardar (p.ej. tab inicial)
-        OpenFile(JTextPane editor, JScrollPane scroll, Path file) {
+        OpenFile(RSyntaxTextArea editor, JScrollPane scroll, Path file) {
             this.editor = editor; this.scroll = scroll; this.file = file;
         }
     }
@@ -311,12 +314,18 @@ public class FrmMain extends javax.swing.JFrame
         setSize(1100, 720);
         setLocationRelativeTo(null);
 
+        // -- RSyntaxTextArea: registrar el TokenMaker de BP UNA vez, antes de
+        //    crear ningún editor. El estilo "text/bp" lo usa newEditorPane(). --
+        AbstractTokenMakerFactory atmf =
+                (AbstractTokenMakerFactory) TokenMakerFactory.getDefaultInstance();
+        atmf.putMapping("text/bp", "com.mycompany.bpide.BpTokenMaker");
+
         // -- Editor inicial: tab "(sin abrir)" reciclable.
         //    El primer openFileInEditor() reusará este tab si su Path
         //    sigue siendo null (no se le ha cargado nada todavía).
         //    Los siguientes ficheros crean tabs nuevos. --
         editorArea = newEditorPane();
-        JScrollPane initialScroll = new JScrollPane(editorArea);
+        JScrollPane initialScroll = new RTextScrollPane(editorArea);
         jTabbedPane1.addTab("(sin abrir)", initialScroll);
         OpenFile initial = new OpenFile(editorArea, initialScroll, null);
         openFiles.put(initialScroll, initial);
@@ -772,10 +781,15 @@ public class FrmMain extends javax.swing.JFrame
      * listener instalados. Usado por openFileInEditor() para cada tab
      * nuevo. El tab inicial también lo crea con este método.
      */
-    private JTextPane newEditorPane() {
-        JTextPane ed = new JTextPane();
+    private RSyntaxTextArea newEditorPane() {
+        RSyntaxTextArea ed = new RSyntaxTextArea();
+        ed.setSyntaxEditingStyle("text/bp");        // resaltado BP (BpTokenMaker)
+        ed.setCodeFoldingEnabled(true);             // plegado (IDE-5); fold parser → siguiente paso
         ed.setFont(new Font("Consolas", Font.PLAIN, 13));
-        BpSyntaxHighlighter.install(ed);
+        ed.setTabSize(2);
+        ed.setTabsEmulated(true);                   // tabs → espacios
+        ed.setAntiAliasingEnabled(true);
+        ed.setHighlightCurrentLine(true);
         ed.addCaretListener(e -> {
             // Solo actualizamos la status bar si este es el editor activo.
             if (ed == editorArea) updateCaretStatus();
@@ -863,8 +877,8 @@ public class FrmMain extends javax.swing.JFrame
         // Si quedamos sin tabs, abrimos uno vacío para no dejar al usuario
         // sin editor donde escribir.
         if (jTabbedPane1.getTabCount() == 0) {
-            JTextPane ed = newEditorPane();
-            JScrollPane sc = new JScrollPane(ed);
+            RSyntaxTextArea ed = newEditorPane();
+            JScrollPane sc = new RTextScrollPane(ed);
             jTabbedPane1.addTab("(sin abrir)", sc);
             openFiles.put(sc, new OpenFile(ed, sc, null));
             installTabCloseButton(sc, "(sin abrir)");
@@ -917,10 +931,10 @@ public class FrmMain extends javax.swing.JFrame
                 jTabbedPane1.setSelectedComponent(recycle.scroll);
             } else {
                 // 3) tab nuevo
-                JTextPane ed = newEditorPane();
+                RSyntaxTextArea ed = newEditorPane();
                 ed.setText(content);
                 ed.setCaretPosition(0);
-                JScrollPane sc = new JScrollPane(ed);
+                JScrollPane sc = new RTextScrollPane(ed);
                 String title = file.getFileName().toString();
                 jTabbedPane1.addTab(title, sc);
                 openFiles.put(sc, new OpenFile(ed, sc, file));
@@ -1092,8 +1106,8 @@ public class FrmMain extends javax.swing.JFrame
         debug.toggleBreakpoint(currentFile.getFileName().toString(), line);
     }
 
-    /** Devuelve la línea 1-based del caret en un JTextPane. */
-    private int caretLine(JTextPane tp) {
+    /** Devuelve la línea 1-based del caret en el editor. */
+    private int caretLine(RSyntaxTextArea tp) {
         Element root = tp.getDocument().getDefaultRootElement();
         int caret = tp.getCaretPosition();
         return root.getElementIndex(caret) + 1;
