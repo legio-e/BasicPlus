@@ -33,8 +33,11 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->gc_bump_threshold = 0;   /* off hasta entonces */
     vm->main_absolute_address = 0;
 
-    /* Pone el byte sentinela en memory[0]. */
+    /* Pone los bytes sentinela en la región reservada:
+     *   memory[0] = THREAD_EXIT (fin de Thread.run / hilo)
+     *   memory[1] = NATIVE_RETURN (retorno del puente native→BP) */
     memory[0] = BPVM_SENTINEL_THREAD_EXIT;
+    memory[BPVM_SENTINEL_NATIVE_RETURN_ADDR] = BPVM_SENTINEL_NATIVE_RETURN;
 
     /* Thread main: región fija MAIN_STACK_BYTES a partir de stack_base. */
     bpvm_thread_t* main_tc = &vm->threads[0];
@@ -314,6 +317,7 @@ const char* bpvm_status_str(bpvm_status_t s) {
     case BPVM_ERR_DIV_BY_ZERO:    return "división por cero";
     case BPVM_ERR_NULL_RECEIVER:  return "INVOKE_VIRTUAL sobre null";
     case BPVM_ERR_RUNTIME:        return "RuntimeError BP no atrapado";
+    case BPVM_NATIVE_RETURN:      return "native-return (interno)";
     default:                       return "?";
     }
 }

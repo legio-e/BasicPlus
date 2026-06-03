@@ -16,7 +16,8 @@
 
 #include "bpvm_internal.h"
 #include "bpvm_opcodes.h"
-#include "aot_registry.h"   /* H3 #160: hijack BP→AOT en OP_CALL/CALL_EXT */
+#include "aot_registry.h"        /* H3 #160: hijack BP→AOT en OP_CALL/CALL_EXT */
+#include "bpvm_aot_helpers.h"    /* P-aot-call-bp: struct aot_helpers_v1 completa */
 
 #include "bpvm_comm.h"
 
@@ -88,15 +89,107 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
                             bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp) {
     bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
     int prev_armed = f->armed;   /* leaf natives: siempre 0; defensivo si anidaran */
+    /* P-aot-call-bp: publica el contexto del puente native→BP por si el thunk
+     * llama a vm->aot_helpers->call_bp_i32 (necesita tc + los registros sp/bp
+     * vivos del intérprete). Save/restore para soportar anidamiento
+     * native→BP→native. prev_cc/prev_armed se fijan ANTES del setjmp y no se
+     * mutan después → seguros tras el longjmp (no requieren volatile). */
+    bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+    bpvm_aot_callctx_t prev_cc = *cc;
+    cc->tc = tc; cc->sp_p = sp; cc->bp_p = bp;
     if (setjmp(f->buf) == 0) {
         f->armed = 1;
         aot(vm, sp, bp);
         f->armed = prev_armed;
+        *cc = prev_cc;
         return 0;
     }
     f->armed = prev_armed;
+    *cc = prev_cc;
     uint32_t obj = bpvm_throw_runtime_error(vm, tc, f->msg);
     return bpvm_eh_unwind(vm, tc, obj) ? 1 : 2;
+}
+
+/* P-aot-call-bp — puente native→BP. Contrato en bpvm_internal.h, diseño en
+ * docs/AOT_CROSS_MODULE.md §8. Lo invoca un thunk AOT vía
+ * vm->aot_helpers->call_bp_i32. Mecánica:
+ *   1. Recupera el contexto del worker (tc + punteros a los registros sp/bp
+ *      VIVOS del intérprete exterior), fijado por aot_call_guarded.
+ *   2. Monta un frame BP sobre el stack de tc (igual que OP_CALL) pero con
+ *      saved_pc = celda del sentinela OP_NATIVE_RETURN.
+ *   3. Corre bpvm_interp_run_quantum ANIDADO sobre el mismo tc hasta que el
+ *      status sea BPVM_NATIVE_RETURN (la función BP hizo RET → pc cayó en el
+ *      sentinela, con el valor de retorno ya en el top).
+ *   4. Lee el retorno, restaura los registros del intérprete exterior (vía
+ *      los punteros del contexto) y lo devuelve a la función native C.
+ * Errores → throw_runtime (longjmp al boundary de #186 que armó el thunk). */
+int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
+                             const int32_t* args, int nargs) {
+    bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+    bpvm_thread_t* tc = cc ? cc->tc : NULL;
+    if (!tc || target_abs == 0) {
+        vm->aot_helpers->throw_runtime(vm,
+            "call_bp: contexto AOT inválido o función destino no encontrada");
+        return 0;   /* inalcanzable: throw_runtime hace longjmp */
+    }
+
+    uint8_t* mem = vm->memory;
+    uint32_t sp = *cc->sp_p;        /* registros vivos del intérprete exterior */
+    uint32_t bp = *cc->bp_p;
+    uint32_t caller_cs = tc->cs;    /* fijado por el hijack de OP_CALL */
+
+    /* cs del módulo dueño de target_abs (para que sus CALL/globals resuelvan).
+     * Por defecto el mismo módulo que el caller (caso native→BP intra-módulo). */
+    uint32_t target_cs = caller_cs;
+    for (int i = 0; i < vm->module_count; i++) {
+        const bpvm_module_t* m = &vm->modules[i];
+        if (target_abs >= m->code_start && target_abs < m->end_addr) {
+            target_cs = m->code_start;
+            break;
+        }
+    }
+
+    /* Frame falso (réplica exacta de OP_CALL): args, luego saved pc/bp/cs. */
+    for (int i = 0; i < nargs; i++) {
+        bpvm_write_i32_be(mem + sp, args[i]); sp += 4;
+    }
+    bpvm_write_i32_be(mem + sp, (int32_t) BPVM_SENTINEL_NATIVE_RETURN_ADDR); sp += 4;
+    bpvm_write_i32_be(mem + sp, (int32_t) bp);        sp += 4;
+    bpvm_write_i32_be(mem + sp, (int32_t) caller_cs); sp += 4;
+
+    tc->sp = sp;
+    tc->bp = sp;
+    tc->pc = target_abs;
+    tc->cs = target_cs;
+
+    /* Bucle anidado hasta el sentinela. Restricción v1: la función BP no debe
+     * ceder al scheduler (sleep/mutex contended/join) ni terminar el thread.
+     * Un quantum agotado (RUNNABLE, status OK) simplemente continúa. */
+    for (;;) {
+        int y = 0;
+        bpvm_status_t st = bpvm_interp_run_quantum(vm, tc, 1 << 24, &y);
+        if (st == BPVM_NATIVE_RETURN) break;
+        if (st == BPVM_OK && tc->status == BPVM_THREAD_RUNNABLE) {
+            continue;   /* quantum agotado: seguir interpretando la función BP */
+        }
+        /* Bloqueo, terminación o error no soportado por el puente v1. */
+        tc->cs = caller_cs;
+        vm->aot_helpers->throw_runtime(vm,
+            "call_bp: la función BP cedió/falló (no soportado por el puente v1)");
+        return 0;   /* inalcanzable */
+    }
+
+    /* Valor de retorno en el top; restaurar los registros del intérprete
+     * exterior vía los punteros del contexto. tc->bp ya volvió al bp del
+     * caller (el RET de la función BP lo restauró desde saved_bp). */
+    uint32_t rsp = tc->sp;
+    int32_t result = bpvm_read_i32_be(vm->memory + rsp - 4);
+    rsp -= 4;
+    *cc->sp_p = rsp;
+    *cc->bp_p = tc->bp;
+    tc->cs = caller_cs;
+    tc->status = BPVM_THREAD_RUNNING;   /* restaura invariante del quantum exterior */
+    return result;
 }
 
 /* BUG-7 — Lanza un RuntimeError BP desde un opcode del intérprete (no-native):
@@ -290,6 +383,20 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_THREAD_EXIT:
             /* THREAD_EXIT: termina sólo este thread. */
             tc->status = BPVM_THREAD_TERMINATED;
+            if (yielded) *yielded = 1;
+            goto done;
+
+        case OP_NATIVE_RETURN:
+            /* P-aot-call-bp — sentinela del puente native→BP. Se alcanza
+             * cuando la función BP llamada por bpvm_aot_call_bp_* hace RET:
+             * su saved_pc falso = BPVM_SENTINEL_NATIVE_RETURN_ADDR, así que
+             * pc cae aquí con el valor de retorno ya empujado en el top.
+             * NO terminamos el thread: salimos del quantum con un status
+             * dedicado para que el helper rompa su bucle anidado y lea el
+             * resultado. El thread queda RUNNABLE (sigue vivo). */
+            tc->status = BPVM_THREAD_RUNNABLE;
+            tc->pc = pc; tc->sp = sp; tc->bp = bp; tc->cs = cs;
+            exit_status = BPVM_NATIVE_RETURN;
             if (yielded) *yielded = 1;
             goto done;
 

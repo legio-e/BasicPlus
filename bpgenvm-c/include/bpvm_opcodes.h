@@ -198,4 +198,14 @@
 #define OP_GET_FIELD_LONG  0xA8
 #define OP_SET_FIELD_LONG  0xA9
 
+/* 0xAA — Puente native→BP (P-aot-call-bp, docs/AOT_CROSS_MODULE.md §8).
+ * Opcode-SENTINELA: NUNCA lo emite el compilador en código de usuario. Vive
+ * en una celda conocida (BPVM_SENTINEL_NATIVE_RETURN_ADDR) y se alcanza solo
+ * cuando una función BP llamada vía bpvm_aot_call_bp_* hace RET: su saved_pc
+ * falso apunta a esta celda, el dispatch encuentra OP_NATIVE_RETURN y rompe
+ * el bucle de intérprete anidado para devolver el control al helper C. Mismo
+ * patrón que THREAD_EXIT (0x70). Solo VM-C (el mundo AOT); la VM-Java
+ * interpreta los cuerpos `function native` como BP normal. */
+#define OP_NATIVE_RETURN   0xAA
+
 #endif /* BPVM_OPCODES_H */

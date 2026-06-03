@@ -103,6 +103,14 @@ auto-`toString` en `print`, `compareTo` por defecto → throw).
   (SWD) · #169/#174 AOT cross-module · #175 AOT try/catch · #161 AOT asm inline ·
   #193 AOT helpers `byte[]`.
 
+- **Puente native→BP — RUNTIME HECHO (#210, 2026-06-03).** `OP_NATIVE_RETURN`
+  (0xAA) + `bpvm_aot_call_bp_i32` permiten que código native (AOT) llame a
+  funciones BP interpretadas. Probado con paridad byte-idéntica Java/C
+  (`make test-callbp`). Es la pieza runtime que faltaba para el caso BP-target
+  de #169, para #174 (métodos desde native) y para devolver tuplas desde
+  native. Falta el cableado del compilador (#211: AotCEmitter emite `call_bp`
+  + WARNING de pérdida de rendimiento). Ver `docs/AOT_CROSS_MODULE.md` §8/§8.1.
+
 ---
 
 ## ▶ Arranque de V2 — LEER PRIMERO  *(estado al cerrar V1, 2026-05-30)*

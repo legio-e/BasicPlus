@@ -1,0 +1,38 @@
+// NativeBridge.bp — prueba del puente native→BP (P-aot-call-bp, §8).
+//
+// `helper` y `compute` son funciones BP normales. La gracia está en el lado C:
+// el test (test_callbp.c + aot_NativeBridge.c) registra un thunk AOT a mano
+// para `compute` que REEMPLAZA su cuerpo y DELEGA en `helper()` a través del
+// puente vm->aot_helpers->call_bp_i32 — es decir, código native (máquina, el
+// thunk) llamando a una función BP INTERPRETADA. Ese thunk hace el papel del
+// código que AotCEmitter emitiría para `native function compute`; mantener
+// compute como BP normal evita por ahora la validación AOT del compilador (que
+// aún no sabe emitir call_bp — ese cableado es el follow-up).
+//
+// `helper` imprime una línea para demostrar que el intérprete ANIDADO ejecuta
+// opcodes BP (incluido print) con el orden de salida correcto.
+//
+// Paridad esperada (byte-idéntica VM-Java [compute interpretado] ==
+// VM-C [compute via thunk→puente→helper]):
+//   [helper BP] recibe 5
+//   compute(5) = 54
+//   [helper BP] recibe 8
+//   compute(8) = 84
+
+module NativeBridge
+
+function helper(x: integer): integer
+    print("[helper BP] recibe " + x)
+    return x * 10 + 3
+end
+
+function compute(n: integer): integer
+    return helper(n) + 1
+end
+
+function main()
+    print("compute(5) = " + compute(5))
+    print("compute(8) = " + compute(8))
+end
+
+end NativeBridge

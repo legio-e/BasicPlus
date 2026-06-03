@@ -175,6 +175,7 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 | 0x6B | `SET_GLOBAL_S8` | `i8` soff | `( v -- )` | |
 | 0x6C | `LEA_GLOBAL_S8` | `i8` soff | `( -- addr )` | |
 | 0x70 | `THREAD_EXIT` | — | `( -- )` | Termina el thread actual sin tumbar la VM. Único byte legal después de un RET de un worker: el saved-pc apunta a `memory[0]` y allí está este byte. |
+| 0xAA | `NATIVE_RETURN` | — | `( -- )` | **Sentinela del puente native→BP (P-aot-call-bp), solo VM-C.** NUNCA lo emite el compilador en código de usuario. Vive en `memory[1]`. Cuando una función BP llamada por `bpvm_aot_call_bp_*` (código native invocando a una función BP interpretada) hace RET, su saved-pc falso apunta aquí: el dispatch ejecuta este byte, sale del bucle de intérprete anidado con status interno `BPVM_NATIVE_RETURN` y devuelve el control al helper C. Mismo patrón que THREAD_EXIT. Ver `docs/AOT_CROSS_MODULE.md` §8. |
 
 ---
 
@@ -298,7 +299,9 @@ Tamaño total de la instrucción = 1 (opcode) + tamaño del operando.
 ## Codes no asignados
 
 `0x4F .. 0x50` asignados (I32_TO_I16, I32_TO_U16). 
-`0x6D .. 0x6F`, `0x71 .. 0xFF` libres para futuras extensiones.
+`0x6D .. 0x6F` libres. `0x71 .. 0xFF` mayormente libres salvo los opcodes
+aditivos V2 (long/double en `0x80..0xA9` — ver `bpvm_opcodes.h`) y el
+sentinela `0xAA` `NATIVE_RETURN` (arriba).
 
 Si una implementación encuentra un opcode no listado, debe fallar con
 "Opcode no implementado: 0x%02X en PC %d" — coherente con la VM Java.

@@ -121,6 +121,23 @@ struct aot_helpers_v1 {
     uint32_t (*string_from_cstr)(struct bpvm* vm, const char* s, int32_t len);
     /* int → string decimal. Para format ("x = " + i) desde native. */
     uint32_t (*int_to_string)(struct bpvm* vm, int32_t v);
+
+    /* --- Puente native→BP (P-aot-call-bp, §8) -----------------------
+     * Permiten que código native (AOT) invoque funciones BP INTERPRETADAS:
+     * tuplas (constructor BP), métodos (dispatch virtual BP), helpers BP de
+     * otro módulo (#169 caso BP-target), etc.
+     *
+     * find_function: resuelve un nombre cualificado ("Modulo.func") a su
+     *   dirección absoluta en memoria, o 0 si no existe. El thunk lo resuelve
+     *   UNA vez y lo cachea en un static (patrón §4 Opción A).
+     * call_bp_i32: llama a la función BP en `target_abs` con `nargs` args de
+     *   4 bytes y devuelve su retorno de 4 bytes (i32 o ref). Ver
+     *   bpvm_aot_call_bp_i32 (interp.c) para la mecánica del frame falso +
+     *   bucle anidado + sentinela. Restricción v1: el target no debe ceder al
+     *   scheduler. */
+    uint32_t (*find_function)(struct bpvm* vm, const char* qualified);
+    int32_t  (*call_bp_i32)(struct bpvm* vm, uint32_t target_abs,
+                            const int32_t* args, int nargs);
 };
 
 /* Tabla v1 instanciada en el runtime con los punteros a las funciones

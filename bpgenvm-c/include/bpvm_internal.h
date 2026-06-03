@@ -57,6 +57,14 @@
 /* Bytes sentinela en memory[0] — vea HEAP_LAYOUT.md §1. */
 #define BPVM_SENTINEL_THREAD_EXIT 0x70
 
+/* Sentinela del puente native→BP (P-aot-call-bp): byte OP_NATIVE_RETURN en
+ * memory[1]. El helper bpvm_aot_call_bp_* monta un frame BP con saved_pc
+ * apuntando a esta dirección; cuando la función BP llamada hace RET, el
+ * dispatch ejecuta este byte y rompe el bucle anidado. Ambos viven en la
+ * región reservada [0, BPVM_INITIAL_FREE_ADDR). */
+#define BPVM_SENTINEL_NATIVE_RETURN      0xAA
+#define BPVM_SENTINEL_NATIVE_RETURN_ADDR 1u
+
 /* Máximo de módulos cargables simultáneamente.
    F1 no carga deps, así que 8 sobra. F3+ puede crecer si hace falta. */
 #define BPVM_MAX_MODULES 16
@@ -470,5 +478,33 @@ typedef struct {
 
 /* Devuelve el slot de fault del worker actual (TLS en host). */
 bpvm_aot_fault_t* bpvm_aot_fault_slot(void);
+
+/* ---- P-aot-call-bp: contexto del puente native→BP ----
+ * Cuando el intérprete divierte a un thunk AOT (OP_CALL/OP_CALL_EXT hijack),
+ * fija este contexto POR WORKER con el `tc` activo y los punteros a los
+ * registros sp/bp VIVOS del intérprete (los que el thunk muta). Así el helper
+ * bpvm_aot_call_bp_*, invocado desde DENTRO del thunk, alcanza `tc` y los
+ * registros sin cambiar el ABI del thunk (que NO recibe tc → no rompe .mdn).
+ * Mismo razonamiento POR-WORKER que el fault-slot (#186): solo hay un native
+ * activo por worker a la vez. tc==NULL ⇒ no estamos dentro de un thunk. */
+typedef struct {
+    bpvm_thread_t* tc;      /* thread cuyo stack usa el puente */
+    uint32_t*      sp_p;    /* &sp local del intérprete (in/out) */
+    uint32_t*      bp_p;    /* &bp local del intérprete (in/out) */
+} bpvm_aot_callctx_t;
+
+/* Contexto AOT del worker actual (TLS en host). */
+bpvm_aot_callctx_t* bpvm_aot_callctx(void);
+
+/* Puente native→BP (docs/AOT_CROSS_MODULE.md §8). Llamado desde un thunk AOT
+ * (vía vm->aot_helpers->call_bp_i32): monta un frame BP para la función en
+ * `target_abs`, empuja `nargs` args de 4 bytes, corre un bucle de intérprete
+ * ANIDADO sobre el mismo tc hasta que la función hace RET (saved_pc =
+ * sentinela OP_NATIVE_RETURN), y devuelve su valor de retorno (4 bytes).
+ * Restricción v1: la función BP llamada debe completar sin ceder al scheduler
+ * (sin sleep/mutex-contended/join). Si lo hace, o si target_abs es inválido,
+ * lanza un RuntimeError BP vía el boundary de #186. */
+int32_t bpvm_aot_call_bp_i32(struct bpvm* vm, uint32_t target_abs,
+                             const int32_t* args, int nargs);
 
 #endif /* BPVM_INTERNAL_H */

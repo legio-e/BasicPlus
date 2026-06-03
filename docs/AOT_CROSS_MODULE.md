@@ -240,3 +240,38 @@ anidada".
 
 **Desbloquea**: el caso BP-target de #169, #174 (métodos desde native),
 y tuplas/objetos devueltos desde native. Es la pieza runtime que faltaba.
+
+### 8.1 Estado (P-aot-call-bp) y el WARNING de rendimiento
+
+**Runtime — HECHO.** El puente está implementado y probado en la VM-C:
+`OP_NATIVE_RETURN` (0xAA) + sentinela en `mem[1]`, contexto AOT por-worker
+(TLS, espejo del fault-slot de #186), y `bpvm_aot_call_bp_i32` (frame falso +
+`run_quantum` anidado). Expuesto en la tabla `aot_helpers_v1` como
+`find_function` + `call_bp_i32`. Prueba manual: `samples/NativeBridge.bp` +
+thunk a mano (`samples/out/aot_NativeBridge.c`) + `test/test_callbp.c` →
+paridad byte-idéntica VM-Java (compute interpretado) == VM-C (compute via
+thunk→puente→helper). Restricción v1: la función BP llamada no debe ceder al
+scheduler (sleep/mutex-contended/join); bloqueo mid-puente bajo SMP → v2.
+
+**Compile-time — PENDIENTE (cableado AotCEmitter).** Hoy la validación AOT
+del frontend (#178) ABORTA con error cuando una `native function` llama a una
+función no-native ("AOT: call a función no-native 'X'"). Con el puente eso ya
+NO es ilegal. El follow-up:
+
+1. Relajar esa validación de **error → permitido**: AotCEmitter emite
+   `vm->aot_helpers->call_bp_i32(...)` (con `find_function` cacheado en un
+   `static`, §4 Opción A) en vez de una llamada C directa, marshalling de args
+   incluido.
+2. **Emitir un WARNING (apunte del usuario, 2026-06-03):** cada llamada
+   native→BP cruza al intérprete por el puente y **NO se beneficia de la
+   velocidad AOT**. El compilador debe avisar para que el usuario sea
+   consciente de la pérdida de rendimiento y pueda decidir hacer también
+   `native` a la función llamada. Texto sugerido:
+
+   > AVISO: la función native 'compute' llama a la función BP interpretada
+   > 'helper' (línea 25). Esa llamada cruza al intérprete por el puente
+   > native→BP y NO se acelera por AOT. Para máximo rendimiento, declara
+   > 'helper' también como native.
+
+   Es un WARNING, no un error: la llamada es correcta y a veces deseada
+   (tuplas, métodos, helpers que no compensa portar a native).

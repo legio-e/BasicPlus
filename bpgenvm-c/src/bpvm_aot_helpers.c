@@ -35,6 +35,15 @@ bpvm_aot_fault_t* bpvm_aot_fault_slot(void) {
     return &g_aot_fault;
 }
 
+/* P-aot-call-bp: contexto del puente native→BP, por worker (mismo
+ * razonamiento TLS que el fault-slot). Lo fija aot_call_guarded (interp.c)
+ * alrededor de cada thunk; tc==NULL fuera de un thunk. */
+static BPVM_AOT_TLS bpvm_aot_callctx_t g_aot_callctx;
+
+bpvm_aot_callctx_t* bpvm_aot_callctx(void) {
+    return &g_aot_callctx;
+}
+
 /* ---------- I/O memoria big-endian ----------
  * Estos están como static inline en bpvm_internal.h — necesitamos
  * un wrapper extern para tenerlos en la tabla. Mismas semánticas. */
@@ -225,6 +234,21 @@ static uint32_t h_find_module_cs(bpvm_t* vm, const char* module_name) {
     return 0;
 }
 
+/* ---- Puente native→BP (P-aot-call-bp) ----
+ * find_function: resuelve un nombre cualificado a su dirección absoluta vía
+ * la tabla global de símbolos (la misma que usa bpvm_aot_register_by_name).
+ * Devuelve 0 si no existe. El thunk lo llama UNA vez y cachea el resultado.
+ * (call_bp_i32 vive en interp.c — necesita las convenciones de frame.) */
+static uint32_t h_find_function(bpvm_t* vm, const char* qualified) {
+    if (!vm || !qualified) return 0;
+    for (int i = 0; i < vm->symbol_count; i++) {
+        if (strcmp(vm->symbols[i].name, qualified) == 0) {
+            return vm->symbols[i].abs_addr;
+        }
+    }
+    return 0;
+}
+
 /* ---------- Strings (H3 #173, H2 V2) ----------
  * String heap = [byte_len:u32 BE][bytes UTF-8] (TYPE_ARRAY_I8). Índice por
  * codepoint vía helpers utf8_* (bpvm_internal.h). Reusan bpvm_heap_alloc /
@@ -345,4 +369,7 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     .string_eq           = h_string_eq,
     .string_from_cstr    = h_string_from_cstr,
     .int_to_string       = h_int_to_string,
+    /* Puente native→BP (P-aot-call-bp). call_bp_i32 vive en interp.c. */
+    .find_function       = h_find_function,
+    .call_bp_i32         = bpvm_aot_call_bp_i32,
 };

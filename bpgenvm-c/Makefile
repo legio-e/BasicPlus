@@ -30,7 +30,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke
+.PHONY: all clean smoke test-callbp
 
 all: $(BIN)
 
@@ -56,3 +56,22 @@ smoke: $(BIN)
 	@if [ ! -f "$(MOD)" ]; then echo "(skip smoke: $(MOD) no existe)"; else \
 	  echo "--- ejecutando $(MOD) ---"; \
 	  ./$(BIN) "$(MOD)"; fi
+
+# P-aot-call-bp — test del puente native→BP. Compila el driver + el thunk a
+# mano contra los .o de la lib y corre NativeBridge.mod. La salida debe ser
+# byte-idéntica a la de la VM-Java (compute via thunk→puente→helper vs
+# compute interpretado). Ver test/test_callbp.c.
+CALLBP_BIN = build/test_callbp.exe
+LIBOBJ = $(SRC:%.c=build/%.o)
+test-callbp: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/NativeBridge.mod ]; then \
+	  echo "(skip test-callbp: falta samples/NativeBridge.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/NativeBridge.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_callbp.c test/aot_NativeBridge.c \
+	    $(LIBOBJ) -o $(CALLBP_BIN) $(LDFLAGS); \
+	  echo "--- puente native->BP (esperado: helper BP, 54, helper BP, 84, status=OK) ---"; \
+	  ./$(CALLBP_BIN) samples/NativeBridge.mod; \
+	fi

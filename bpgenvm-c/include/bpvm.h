@@ -40,7 +40,12 @@ typedef enum {
     BPVM_ERR_STACK_OVERFLOW,
     BPVM_ERR_DIV_BY_ZERO,
     BPVM_ERR_NULL_RECEIVER,  /* INVOKE_VIRTUAL sobre 0 — F3+ */
-    BPVM_ERR_RUNTIME         /* RuntimeError BP no atrapado */
+    BPVM_ERR_RUNTIME,        /* RuntimeError BP no atrapado */
+    BPVM_NATIVE_RETURN       /* sentinela interno del puente native→BP
+                              * (P-aot-call-bp): solo lo produce
+                              * OP_NATIVE_RETURN dentro de un bucle anidado
+                              * de bpvm_aot_call_bp_*; nunca escapa a
+                              * bpvm_run. No es un error. */
 } bpvm_status_t;
 
 /*
