@@ -33,6 +33,14 @@ Inventario base: `BpIde/` Swing (Java 1.8, GUI builder NetBeans). Componentes:
   Reusar el mismo `IdePrefs` (clave de last-dir, quizá separada "lastUploadDir").
   Coste: bajo.
 
+- ✅ **Editor → RSyntaxTextArea** (HECHO 2026-06-03, confirmado por el usuario:
+  "resalta native"). Sustituido el editor casero; `BpTokenMaker` con keywords del
+  Lexer + tipos V2; `RTextScrollPane` (números de línea); current-line; bracket-match.
+  Commit del increment + jar reconstruido. `BpSyntaxHighlighter.java` queda borrable.
+
+- ✅ **IDE-6 — Resaltado al día** (HECHO con el swap a RSyntaxTextArea). `native` +
+  `long/double/byte/word/short/int8/int16` ahora se resaltan.
+
 - **IDE-5 — Code folding en el editor** (plegar/minimizar funciones y clases).
   El editor hoy es básico (`BpSyntaxHighlighter`, 212 L sobre un JTextComponent).
   El folding en Swing puro es trabajo; valorar `RSyntaxTextArea` (soporta folding,
