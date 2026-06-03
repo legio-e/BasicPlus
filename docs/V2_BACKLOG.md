@@ -21,8 +21,9 @@ auto-`toString` en `print`, `compareTo` por defecto → throw).
 
 **Secuencia acordada con el usuario (2026-06-02)**:
 **T0 → T1 → IDE → Debugger → el resto, paso a paso.**
-1. **T0** — terminar H5 (lo que está caliente).
-2. **T1** — tapar huecos/bugs (filosofía "sólido, sin agujeros").
+1. ✅ **T0** — terminar H5. HECHO 2026-06-03: H5.1 a/b1/c1/c2 + decisión d
+   (`Comparable` retenido). Modelo Object cerrado.
+2. **T1** — tapar huecos/bugs (filosofía "sólido, sin agujeros"). ◀ EN CURSO.
 3. **IDE** (T5 §12) — "está algo abandonado y necesita puesta al día". Primer
    paso del IDE = **descomponerlo en tareas concretas** (revisar el estado real
    del IDE y listar mejoras) y LUEGO desarrollarlas una a una.
@@ -1636,7 +1637,26 @@ abstract de un plumazo, seguimos como estábamos".
     `coerceToString` → `emitObjectToStringOnStack` (mismo helper que print, con
     guarda null→"null"). Funciona objeto a izquierda y derecha. Sample
     `ConcatObjTest`. Regresión 15/15 dual-VM.
-  - **H5.1.d**: fundir/quitar `Comparable`, regresión completa, commit.
+  - ✅ **H5.1.d — DECISIÓN: `Comparable` se RETIENE** (2026-06-03). Tras analizarlo:
+    `Comparable` ya no es NECESARIA para `compareTo` (Object la da en slot 1), pero
+    eliminarla limpiamente exige **dispatch de `toString`/`compareTo` sobre un
+    receptor de tipo `any`/`Object`** — `NaturalComparator` hace `var ca: Comparable
+    := a; ca.compareTo(b)` para que el emisor resuelva el slot 1; con `a: Object`
+    (=AnyType) el emisor no tiene clase de la que sacar el slot (mismo límite que la
+    nota de H5.1.c-1). `Comparable` es un contrato con nombre, inofensivo, y la
+    jerarquía `Integer → Comparable → Object` es limpia (compareTo siempre slot 1).
+    Quitarla = nueva feature semántica + churn en Collections + riesgo en el orden
+    del Map, a cambio de ~7 líneas. **No compensa.** Se queda.
+  - 🔭 **Futuro (si hace falta) — métodos de Object sobre receptor `any`**:
+    permitir `anyVal.toString()` / `anyVal.compareTo(x)` con receptor `any`/`Object`.
+    Requiere un `ClassSymbol` sintético "Object" en el semántico (solo para
+    member-lookup; el TIPO `Object` sigue siendo AnyType) → el emisor ya resuelve
+    `INVOKE_VIRTUAL` slot 0/1 vía la clase Object sintetizada en el .mod. Esto
+    también cierra el límite cross-module de H5.1.c-1. Item independiente.
+
+  **⇒ H5.1 COMPLETO** (a/b1/c1/c2 + decisión d). El modelo Object está cerrado:
+  raíz universal, `toString`/`compareTo` polimórficos, auto-`toString` en print y
+  concat, `compareTo` por defecto lanza, todo en paridad dual-VM.
 - **equals/hashCode**: FUERA (el Map ordenado usa `compareTo == 0`).
 
 ## BUG-5 — slots de vtable cross-module no cuentan la herencia (✅ ARREGLADO 2026-06-01)
