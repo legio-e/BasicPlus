@@ -135,6 +135,18 @@ static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t d
 /* Helpers UTF-8 (utf8_cp_count / utf8_byte_offset / utf8_decode / utf8_encode)
  * viven en bpvm_internal.h (fuente única compartida con el AOT). */
 
+/* BUG-7b — Lanza un RuntimeError BP atrapable desde un builtin nativo. Como el
+ * dispatcher de OP_CALL_BUILTIN re-sincroniza pc/sp/bp/cs desde `tc` al volver:
+ *   - ATRAPADO: eh_unwind dejó tc->pc en el handler (+empujó el ref), thread
+ *     sigue RUNNING ⇒ devolvemos BPVM_OK y el intérprete continúa en el catch.
+ *   - NO atrapado: eh_unwind dejó el thread TERMINATED ⇒ devolvemos
+ *     BPVM_ERR_RUNTIME y el dispatcher termina el quantum con error.
+ * tc->cs ya está fijado por el dispatcher (lo necesita throw_runtime_error). */
+static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
+    uint32_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+    return (ref && bpvm_eh_unwind(vm, tc, ref)) ? BPVM_OK : BPVM_ERR_RUNTIME;
+}
+
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     switch (id) {
 
@@ -203,11 +215,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
             const uint8_t* p = vm->memory + ref + 4;
             uint32_t ncp = utf8_cp_count(p, nbytes);
-            if (i >= 0 && (uint32_t) i < ncp) {
-                uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) i);
-                uint32_t adv; uint32_t cp = utf8_decode(p + off, nbytes - off, &adv);
-                enc_len = utf8_encode(cp, enc);   /* re-codifica a UTF-8 (antes de alocar) */
+            if (i < 0 || (uint32_t) i >= ncp) {
+                /* BUG-7b — idx fuera de rango → RuntimeError atrapable (paridad VM-Java). */
+                char em[96];
+                snprintf(em, sizeof em, "charAt: idx fuera de rango %d (len=%d)", i, (int) ncp);
+                return builtin_throw(vm, tc, em);
             }
+            uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) i);
+            uint32_t adv; uint32_t cp = utf8_decode(p + off, nbytes - off, &adv);
+            enc_len = utf8_encode(cp, enc);   /* re-codifica a UTF-8 (antes de alocar) */
         }
         /* Alocamos un string UTF-8 de 1 codepoint (enc_len bytes). */
         uint32_t out = bpvm_heap_alloc(vm, enc_len, BPVM_TYPE_ARRAY_I8);
@@ -422,10 +438,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         bpvm_bp_mutex_t* m = &vm->mutexes[mid];
         if (m->owner_tid == tc->id) {
-            fprintf(stderr, "[bpvm-c] mutex_lock: re-entrada tid=%" PRId32 " (no soportado)\n",
-                    tc->id);
-            push_i32(vm, tc, 0);
-            return BPVM_ERR_RUNTIME;
+            /* BUG-7b — reentrada → RuntimeError atrapable (paridad VM-Java). */
+            char em[96];
+            snprintf(em, sizeof em, "mutex.lock: re-entrada por mismo thread tid=%d (los Mutex no son reentrantes)",
+                     (int) tc->id);
+            return builtin_throw(vm, tc, em);
         }
         if (m->owner_tid < 0) {
             m->owner_tid = tc->id;
@@ -453,10 +470,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         bpvm_bp_mutex_t* m = &vm->mutexes[mid];
         if (m->owner_tid != tc->id) {
-            fprintf(stderr, "[bpvm-c] mutex_unlock: tid=%" PRId32 " intenta soltar mutex owned por %" PRId32 "\n",
-                    tc->id, m->owner_tid);
-            push_i32(vm, tc, 0);
-            return BPVM_ERR_RUNTIME;
+            /* BUG-7b — unlock por no-propietario → RuntimeError atrapable (paridad VM-Java). */
+            char em[96];
+            snprintf(em, sizeof em, "mutex.unlock: thread %d no es propietario (owner=%d)",
+                     (int) tc->id, (int) m->owner_tid);
+            return builtin_throw(vm, tc, em);
         }
         /* Si hay waiters, traspasamos la propiedad al primero. */
         int next = bpvm_mutex_pop_waiter(vm, mid);

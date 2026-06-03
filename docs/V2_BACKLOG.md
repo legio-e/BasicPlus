@@ -41,9 +41,21 @@ auto-`toString` en `print`, `compareTo` por defecto → throw).
     propósito; el Map ordenado usa `compareTo == 0`).
 
 - **T1 — Huecos / bugs conocidos**
-  - **BUG-7 — Hueco VM-C catch nativo** (descubierto 2026-06-02; CAUSA RAÍZ
-    diagnosticada 2026-06-03). Los throws nativos de `ALOAD`/cast-narrow/`charAt`
-    NO llegan al try/catch en la VM-C (solo `div0`/`mod0`). La VM-Java los atrapa.
+  - ✅ **BUG-7 — Hueco VM-C catch nativo** (descubierto 2026-06-02; ARREGLADO
+    2026-06-03). Los throws nativos de `ALOAD`/cast-narrow/`charAt`/mutex ahora
+    llegan al try/catch en la VM-C (antes solo `div0`/`mod0`). catchnative +
+    catchmutex en **paridad dual-VM** con mensajes byte-exactos. Regresión 17/17.
+    - **interp.c**: helper `interp_throw_rt(&regs)` (mismo baile que div0); 10
+      sitios ALOAD/ASTORE OOB + 4 casts narrow (I32_TO_*) ahora lanzan
+      RuntimeError atrapable (antes terminaban / truncaban en silencio). Macro
+      `BPVM_RT_THROW` con `snprintf` del mensaje EXACTO de Java.
+    - **builtins.c**: helper `builtin_throw()` (throw+unwind; el dispatcher de
+      OP_CALL_BUILTIN re-sincroniza regs ⇒ caught→sigue en el catch, uncaught→
+      termina). charAt OOR + Mutex.lock reentrada + Mutex.unlock no-propietario.
+    - Pendiente menor: los "mid inválido" internos de mutex siguen terminando
+      (no user-triggerable, no testeados); convertirlos es trivial si hace falta.
+    - **(histórico) Causa raíz**: `div0`/`mod0` hacían throw+unwind; los demás
+      sitios sólo `exit_status=BPVM_ERR_RUNTIME; goto done` o truncaban.
     - **Causa**: `div0`/`mod0` (interp.c:296,722) hacen el baile completo —
       `tc->sp=sp;…` (sync regs) → `bpvm_throw_runtime_error` → `bpvm_eh_unwind` →
       si atrapado, restaura pc/sp/bp/cs/mem y `break` (sigue en el catch); si no,

@@ -99,6 +99,33 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
     return bpvm_eh_unwind(vm, tc, obj) ? 1 : 2;
 }
 
+/* BUG-7 — Lanza un RuntimeError BP desde un opcode del intérprete (no-native):
+ * sincroniza los registros, construye el error y desenrolla por el eh_stack.
+ * Devuelve 1 si fue ATRAPADO (restaura los registros locales vía punteros; el
+ * caller hace `break` para seguir en el catch), 0 si NO (el caller fija
+ * exit_status + goto done). Es el mismo baile que div0/mod0, factorizado para
+ * los chequeos de bounds de arrays y de rango de casts narrow. */
+static int interp_throw_rt(bpvm_t* vm, bpvm_thread_t* tc,
+                           uint32_t* sp, uint32_t* bp, uint32_t* pc, uint32_t* cs,
+                           uint8_t** mem, const char* msg) {
+    tc->sp = *sp; tc->bp = *bp; tc->pc = *pc; tc->cs = *cs;
+    uint32_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+    if (ref && bpvm_eh_unwind(vm, tc, ref)) {
+        *pc = tc->pc; *sp = tc->sp; *bp = tc->bp; *cs = tc->cs;
+        *mem = vm->memory;
+        return 1;
+    }
+    return 0;
+}
+
+/* Azúcar para los call-sites: formatea el mensaje EXACTO (paridad con VM-Java),
+ * lanza, y si se atrapa `break` (sigue el switch en el catch); si no, termina.
+ * Es un bloque-llave (no do/while) para que `break` rompa el switch del intérprete. */
+#define BPVM_RT_THROW(...) \
+    { char _em[128]; snprintf(_em, sizeof _em, __VA_ARGS__); \
+      if (interp_throw_rt(vm, tc, &sp, &bp, &pc, &cs, &mem, _em)) break; \
+      exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done; }
+
 /* GAP-4 — formateo canónico de double/float para print. Punto fijo estilo
  * Str.doubleToString (entero-based: escala por 1e6 a un int64, redondea, separa
  * parte entera/decimal, recorta ceros). Magnitudes fuera del rango seguro del
@@ -684,20 +711,24 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 en F1; F5 lo añade) ---- */
         case OP_I32_TO_I8: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
+            if (v < -128 || v > 127) BPVM_RT_THROW("I32_TO_I8: valor fuera de rango %d", v);
             int32_t r = (int32_t)(int8_t)(v & 0xFF);
             bpvm_write_i32_be(mem + sp, r); sp += 4; break;
         }
         case OP_I32_TO_U8: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
+            if (v < 0 || v > 255) BPVM_RT_THROW("I32_TO_U8: valor fuera de rango %d", v);
             bpvm_write_i32_be(mem + sp, v & 0xFF); sp += 4; break;
         }
         case OP_I32_TO_I16: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
+            if (v < -32768 || v > 32767) BPVM_RT_THROW("I32_TO_I16: valor fuera de rango %d", v);
             int32_t r = (int32_t)(int16_t)(v & 0xFFFF);
             bpvm_write_i32_be(mem + sp, r); sp += 4; break;
         }
         case OP_I32_TO_U16: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
+            if (v < 0 || v > 65535) BPVM_RT_THROW("I32_TO_U16: valor fuera de rango %d", v);
             bpvm_write_i32_be(mem + sp, v & 0xFFFF); sp += 4; break;
         }
 
@@ -825,7 +856,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I64: índice fuera de rango %d (length=%d)", idx, (int) length);
             int64_t v = bpvm_read_i64_be(mem + ref + 4 + (uint32_t) idx * 8);
             bpvm_write_i64_be(mem + sp, v); sp += 8;
             break;
@@ -835,7 +866,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I64: índice fuera de rango %d (length=%d)", idx, (int) length);
             bpvm_write_i64_be(mem + ref + 4 + (uint32_t) idx * 8, v);
             break;
         }
@@ -924,9 +955,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) {
-                exit_status = BPVM_ERR_RUNTIME; goto done;
-            }
+            if (idx < 0 || (uint32_t) idx >= length)
+                BPVM_RT_THROW("ALOAD: índice fuera de rango %d (length=%d)", idx, (int) length);
             int32_t v = bpvm_read_i32_be(mem + ref + 4 + (uint32_t) idx * 4);
             bpvm_write_i32_be(mem + sp, v); sp += 4;
             break;
@@ -936,9 +966,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) {
-                exit_status = BPVM_ERR_RUNTIME; goto done;
-            }
+            if (idx < 0 || (uint32_t) idx >= length)
+                BPVM_RT_THROW("ASTORE: índice fuera de rango %d (length=%d)", idx, (int) length);
             bpvm_write_i32_be(mem + ref + 4 + (uint32_t) idx * 4, v);
             break;
         }
@@ -952,7 +981,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I8: idx fuera de rango %d (len=%d)", idx, (int) length);
             int8_t v = (int8_t) mem[ref + 4 + (uint32_t) idx];
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -961,7 +990,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_U8: idx fuera de rango %d (len=%d)", idx, (int) length);
             uint8_t v = mem[ref + 4 + (uint32_t) idx];
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -970,7 +999,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I16: idx fuera de rango %d (len=%d)", idx, (int) length);
             int16_t v = bpvm_read_i16_be(mem + ref + 4 + (uint32_t) idx * 2);
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -979,7 +1008,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_U16: idx fuera de rango %d (len=%d)", idx, (int) length);
             uint16_t v = bpvm_read_u16_be(mem + ref + 4 + (uint32_t) idx * 2);
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -989,7 +1018,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I8: idx fuera de rango %d (len=%d)", idx, (int) length);
             mem[ref + 4 + (uint32_t) idx] = (uint8_t)(v & 0xFF);
             break;
         }
@@ -998,7 +1027,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) { exit_status = BPVM_ERR_RUNTIME; goto done; }
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I16: idx fuera de rango %d (len=%d)", idx, (int) length);
             int16_t v16 = (int16_t)(v & 0xFFFF);
             bpvm_write_u32_be(mem + ref + 4 + (uint32_t) idx * 2, 0); /* unused */
             mem[ref + 4 + (uint32_t) idx * 2]     = (uint8_t)((v16 >> 8) & 0xFF);
