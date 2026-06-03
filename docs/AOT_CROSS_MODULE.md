@@ -356,5 +356,17 @@ Por eso `find_function("Cls.metodo")` falla y el caso privado queda aparte.
 - **B)** fuente única: `ModWriter` escribe el slot resuelto en el `ClassSymbol`/
   `SemanticInfo`, y **ambos** emisores lo leen → robusto, pero toca el modelo.
 
+**DECISIÓN (2026-06-03): B.** El principio que la dicta (apunte del usuario):
+*lo inmutable lo bakea el compilador; lo mutable lo resuelve la VM en runtime.*
+El **slot es inmutable** (forma estática de la clase, no cambia en runtime) → su
+sitio es compile-time; no se inventa resolución runtime (eso es para lo
+*mutable*: la dirección real del método, que ya resuelve `call_method_i32`).
+Entre las dos formas compile-time: A duplica el algoritmo de slots y divergiría
+en silencio (rompe paridad); B mantiene UNA fuente de verdad — `ModWriter` ya
+calcula `m.slot`, basta exponerlo (vía `ClassSymbol`/`SemanticInfo`) y que
+AotCEmitter lo lea, sin recalcular. (Opción C descartada: resolver nombre→slot
+en runtime exigiría guardar nombres de método en el descriptor de clase = cambio
+de formato `.mod` + RAM, para resolver algo que ya es inmutable.)
+
 El caso **privado/`super`** desde native (sin asidero runtime) necesitaría
 exportar métodos o exponer su offset — decisión separada, menor prioridad.
