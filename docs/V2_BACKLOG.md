@@ -41,9 +41,30 @@ auto-`toString` en `print`, `compareTo` por defecto → throw).
     propósito; el Map ordenado usa `compareTo == 0`).
 
 - **T1 — Huecos / bugs conocidos**
-  - **Hueco VM-C catch nativo** (descubierto 2026-06-02): los throws nativos de
-    `ALOAD`/cast-narrow/`charAt`/mutex NO llegan al try/catch en la VM-C (solo
-    `div0`/`mod0`). La VM-Java los atrapa todos. Familia BUG-2.
+  - **BUG-7 — Hueco VM-C catch nativo** (descubierto 2026-06-02; CAUSA RAÍZ
+    diagnosticada 2026-06-03). Los throws nativos de `ALOAD`/cast-narrow/`charAt`
+    NO llegan al try/catch en la VM-C (solo `div0`/`mod0`). La VM-Java los atrapa.
+    - **Causa**: `div0`/`mod0` (interp.c:296,722) hacen el baile completo —
+      `tc->sp=sp;…` (sync regs) → `bpvm_throw_runtime_error` → `bpvm_eh_unwind` →
+      si atrapado, restaura pc/sp/bp/cs/mem y `break` (sigue en el catch); si no,
+      `exit_status=BPVM_ERR_RUNTIME; goto done`. En cambio:
+      - **ALOAD/ASTORE OOB** (interp.c:828,838,928,940,955,964,… ~12 sitios):
+        hacen sólo `exit_status=BPVM_ERR_RUNTIME; goto done` (terminan sin throw).
+      - **Cast narrow OOR** (I32_TO_U8/I8/I16/U16, interp.c:685-702): TRUNCAN en
+        silencio (sin check). Comentario "sin runtime check… F5 lo añade" — quedó
+        pendiente. Java lanza "Ixx_TO_Uyy: valor fuera de rango N".
+      - **charAt OOR** (builtins.c): falta el throw.
+    - **Fix**: helper `throw_rt(vm, tc, &sp,&bp,&pc,&cs,&mem, msg)` que hace el
+      baile y devuelve 1 (atrapado → `break`) / 0 (→ `goto done`). Call-sites:
+      `snprintf` del mensaje EXACTO de Java + `if (throw_rt(...)) break; else
+      {exit_status=…; goto done;}`. Mensajes byte-exactos (de la salida de
+      catchnative): `"ALOAD: índice fuera de rango %d (length=%u)"`,
+      `"I32_TO_U8: valor fuera de rango %d"`, `"charAt: idx fuera de rango %d
+      (len=%u)"` (+ variantes I8/I16/U16/ASTORE/ALOAD_* leyendo el string exacto
+      del VM-Java). Tras el fix: catchnative + catchmutex deben dar paridad.
+    - **Nota cast-narrow**: hacer que la VM-C lance en OOR es un cambio de
+      comportamiento (hoy trunca) — pero es lo que el comentario "F5 lo añade"
+      ya preveía y lo que hace Java; alinear es correcto.
   - **BUG-2**: excepciones no se atrapan cross-module.
   - **GAP-2**: tipos built-in (List/Map/...) no unifican identidad cross-module →
     no se pueden retornar en APIs públicas entre módulos.
