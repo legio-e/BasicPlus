@@ -4298,6 +4298,12 @@ public final class MivmEmitter {
      *  origen es primitivo (int / float / bool). Si ya es string o no es primitivo,
      *  lo deja como está. */
     private void coerceToString(BpType src) throws IOException {
+        // H5.1.c-2 — objeto en concatenación `+`: auto-toString() polimórfico
+        // (slot 0) con guarda null→"null". Mismo helper que usa print.
+        if (src instanceof ClassType) {
+            emitObjectToStringOnStack();
+            return;
+        }
         if (!(src instanceof PrimitiveType)) return;
         switch (((PrimitiveType) src).tag) {
             case STRING: return;

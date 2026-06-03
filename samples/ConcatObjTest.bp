@@ -1,0 +1,24 @@
+// ConcatObjTest — H5.1.c-2: auto-toString de objetos en concatenación `+`.
+module ConcatObjTest
+
+  class Punto
+    var x: integer
+    var y: integer
+    public function Punto(x: integer, y: integer)
+      this.x := x
+      this.y := y
+    end Punto
+    public function toString(): string
+      return "P(" + this.x + "," + this.y + ")"
+    end toString
+  end Punto
+
+  function Main()
+    var p: Punto := Punto(5, 9)
+    print "izq: " + p          // objeto a la derecha
+    print p + " :der"          // objeto a la izquierda
+    var z: Punto := null
+    print "nulo: " + z         // null -> "null"
+  end Main
+
+end ConcatObjTest

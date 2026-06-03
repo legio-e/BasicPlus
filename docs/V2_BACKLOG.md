@@ -1630,8 +1630,12 @@ abstract de un plumazo, seguimos como estábamos".
     (`p.toString()`→override, `p.compareTo(q)`→throw atrapado). Regresión 14/14 dual-VM.
     Limitación: invocar toString/compareTo sobre una clase importada SIN override aún
     no resuelve (el stub `.bpi` no trae los miembros heredados) — pendiente.
-  - **H5.1.c (parte 2)**: auto-`toString` en concat `+` (rama `ClassType` en
-    `coerceToString` + permitir `string + objeto` en el semántico).
+  - ✅ **H5.1.c (parte 2)** — HECHO 2026-06-03. auto-`toString` en concat `+`.
+    Resultó emitter-only: el semántico ya tipa `string + X` → string (analyzeBinary
+    no comprueba el otro operando); solo faltaba la rama `ClassType` en
+    `coerceToString` → `emitObjectToStringOnStack` (mismo helper que print, con
+    guarda null→"null"). Funciona objeto a izquierda y derecha. Sample
+    `ConcatObjTest`. Regresión 15/15 dual-VM.
   - **H5.1.d**: fundir/quitar `Comparable`, regresión completa, commit.
 - **equals/hashCode**: FUERA (el Map ordenado usa `compareTo == 0`).
 
