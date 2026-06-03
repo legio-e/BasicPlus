@@ -84,6 +84,22 @@ static void h_throw_runtime(bpvm_t* vm, const char* msg) {
     if (msg) fprintf(stderr, "[aot] throw_runtime sin boundary: %s\n", msg);
 }
 
+/* #175 — throw con mensaje COMPUTADO: el AOT pasa un string-handle BP (objeto
+ * heap TYPE_ARRAY_I8 UTF-8) en vez de un literal C. Leemos sus bytes y
+ * reusamos el camino de throw_runtime (construir RuntimeError + longjmp al
+ * boundary de #186). NO retorna. */
+static void h_throw_str(bpvm_t* vm, uint32_t msg_ref) {
+    char buf[128];
+    uint32_t n = 0;
+    if (msg_ref != 0) {
+        n = bpvm_read_u32_be(vm->memory + msg_ref);
+        if (n > sizeof(buf) - 1) n = (uint32_t)(sizeof(buf) - 1);
+        memcpy(buf, vm->memory + msg_ref + 4, n);
+    }
+    buf[n] = '\0';
+    h_throw_runtime(vm, buf);   /* no retorna (longjmp al boundary) */
+}
+
 /* ---------- Heap / GC ----------
  * Stubs por ahora — el AOT que use estos slots tiene que activar
  * via flag de capabilities en el .mdn. La fase A no los necesita. */
@@ -372,4 +388,6 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     /* Puente native→BP (P-aot-call-bp). call_bp_i32 vive en interp.c. */
     .find_function       = h_find_function,
     .call_bp_i32         = bpvm_aot_call_bp_i32,
+    /* #175 — throw con mensaje computado. */
+    .throw_str           = h_throw_str,
 };

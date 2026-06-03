@@ -649,28 +649,48 @@ public final class AotCEmitter {
      *  (v2, junto a #174). En ese caso lanzamos UnsupportedAotException y
      *  el módulo cae a bytecode interpretado (donde sí funciona). */
     private void emitThrowStmt(Ast.ThrowStmt ts) {
+        /* Fast path: throw RuntimeError("literal") → throw_runtime con el
+         * cstring directo (sin alocar string en el heap). */
         String lit = runtimeErrorLiteral(ts.value);
-        if (lit == null) {
-            throw new UnsupportedAotException(
-                "AOT: en native solo se soporta `throw RuntimeError(\"literal\")` "
-                + "(mensaje no-literal o clase de usuario = v2). line " + ts.line);
+        if (lit != null) {
+            byte[] bytes = lit.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            indent();
+            w.println("vm->aot_helpers->throw_runtime(vm, \"" + cEscapeBytes(bytes) + "\");");
+            return;
         }
-        byte[] bytes = lit.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        indent();
-        w.println("vm->aot_helpers->throw_runtime(vm, \"" + cEscapeBytes(bytes) + "\");");
+        /* #175 — throw RuntimeError(<expr string>) con mensaje COMPUTADO
+         * (p.ej. "x = " + n). Emitimos el string-handle BP y throw_str lo lee.
+         * AotCEmitter ya sabe emitir concats/ops de string (#173). */
+        Ast.IExpr arg = runtimeErrorArg(ts.value);
+        if (arg != null && isStringExpr(arg)) {
+            indent();
+            w.print("vm->aot_helpers->throw_str(vm, ");
+            emitExpr(arg);
+            w.println(");");
+            return;
+        }
+        throw new UnsupportedAotException(
+            "AOT: en native `throw` solo soporta RuntimeError(string) "
+            + "(clase de usuario y try/catch dentro de native = pendiente #175b). line "
+            + ts.line);
     }
 
     /** Devuelve el literal del mensaje si {@code value} es exactamente
      *  {@code RuntimeError("literal")}, o null si no matchea el subset v1. */
     private static String runtimeErrorLiteral(Ast.IExpr value) {
+        Ast.IExpr arg = runtimeErrorArg(value);
+        if (arg instanceof Ast.StringLitExpr) return ((Ast.StringLitExpr) arg).value;
+        return null;
+    }
+
+    /** Devuelve el único argumento de {@code RuntimeError(arg)} si {@code value}
+     *  es exactamente esa construcción, o null en otro caso. #175. */
+    private static Ast.IExpr runtimeErrorArg(Ast.IExpr value) {
         if (!(value instanceof Ast.CallExpr)) return null;
         Ast.CallExpr call = (Ast.CallExpr) value;
-        String name = calleeSimpleName(call.callee);
-        if (!"RuntimeError".equals(name)) return null;
+        if (!"RuntimeError".equals(calleeSimpleName(call.callee))) return null;
         if (call.args == null || call.args.size() != 1) return null;
-        Ast.IExpr arg = call.args.get(0);
-        if (!(arg instanceof Ast.StringLitExpr)) return null;
-        return ((Ast.StringLitExpr) arg).value;
+        return call.args.get(0);
     }
 
     /** Nombre simple del callee de una llamada: el identificador, o el

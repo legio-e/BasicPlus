@@ -1,0 +1,34 @@
+// ThrowMsg.bp — prueba de #175: `throw RuntimeError(<mensaje COMPUTADO>)` desde
+// una función native, cazado por un try/catch BP.
+//
+// #186 ya soportaba `throw RuntimeError("literal")`. #175 añade el mensaje
+// computado: AotCEmitter emite el string-handle BP y vm->aot_helpers->throw_str
+// lo lee, construye el RuntimeError con ese mensaje y hace longjmp al boundary
+// (propaga al try/catch BP). La VM-Java interpreta compute como BP normal.
+//
+// Paridad esperada (VM-Java == VM-C):
+//   10
+//   caught: valor negativo: -3
+//   fin
+
+module ThrowMsg
+
+    native function checkRange(n: integer): integer
+        if n < 0 then
+            throw RuntimeError("valor negativo: " + n)
+        endif
+        return n * 2
+    end checkRange
+
+    function Main()
+        print checkRange(5)
+        try
+            var x: integer := checkRange(-3)
+            print x
+        catch e: RuntimeError
+            print "caught: " + e.msg
+        endtry
+        print "fin"
+    end Main
+
+end ThrowMsg

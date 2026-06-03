@@ -138,6 +138,13 @@ struct aot_helpers_v1 {
     uint32_t (*find_function)(struct bpvm* vm, const char* qualified);
     int32_t  (*call_bp_i32)(struct bpvm* vm, uint32_t target_abs,
                             const int32_t* args, int nargs);
+
+    /* #175 — throw con mensaje COMPUTADO desde native. Recibe un string-handle
+     * BP (objeto heap UTF-8) en vez de un literal C; construye un RuntimeError
+     * con ese mensaje y hace longjmp al boundary de #186 (propaga a try/catch
+     * BP). NO retorna. Para `throw RuntimeError("lit")` se sigue usando
+     * throw_runtime con el literal directo (sin alocar el string). */
+    void (*throw_str)(struct bpvm* vm, uint32_t msg_ref);
 };
 
 /* Tabla v1 instanciada en el runtime con los punteros a las funciones

@@ -120,6 +120,15 @@ auto-`toString` en `print`, `compareTo` por defecto → throw).
   el `--compile` del frontend sí los valida) · native→native fast-path ·
   intrínsecos cross-module · métodos (#174) · tipos mixtos. Ver §8.2.
 
+- **throw desde native con mensaje computado — HECHO (#175 parcial,
+  2026-06-03).** #186 ya cazaba `throw RuntimeError("literal")`; #175 añade
+  `throw RuntimeError("x = " + n)`: AotCEmitter emite el string-handle y el
+  helper `throw_str` lo lee + construye el RuntimeError + longjmp al boundary.
+  Paridad byte-idéntica (`make test-throwmsg`). Pendiente de #175 (#175b,
+  `[v2]`): throw de clase de usuario (construir objeto en native) y try/catch
+  DENTRO de native (pila de boundaries setjmp). El caso común "native lanza, BP
+  caza" ya funciona. Ver §8.3.
+
 ---
 
 ## ▶ Arranque de V2 — LEER PRIMERO  *(estado al cerrar V1, 2026-05-30)*

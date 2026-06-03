@@ -30,7 +30,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg
 
 all: $(BIN)
 
@@ -91,4 +91,21 @@ test-xmodule: $(LIBOBJ)
 	    $(LIBOBJ) -o $(XMOD_BIN) $(LDFLAGS); \
 	  echo "--- puente native->BP cross-module (esperado: triple 5, 16, triple 8, 25, OK) ---"; \
 	  (cd samples && ../$(XMOD_BIN) BridgeApp.mod); \
+	fi
+
+# #175 — throw RuntimeError(<msg computado>) desde native, cazado por try/catch
+# BP. test/aot_ThrowMsg.c es un SNAPSHOT del .c que genera AotCEmitter (usa
+# throw_str con el string-handle computado). Salida byte-idéntica a la VM-Java.
+THROW_BIN = build/test_throwmsg.exe
+test-throwmsg: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/ThrowMsg.mod ]; then \
+	  echo "(skip test-throwmsg: falta samples/ThrowMsg.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/ThrowMsg.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_throwmsg.c test/aot_ThrowMsg.c \
+	    $(LIBOBJ) -o $(THROW_BIN) $(LDFLAGS); \
+	  echo "--- throw msg computado native->BP (esperado: 10, caught: valor negativo: -3, fin) ---"; \
+	  (cd samples && ../$(THROW_BIN) ThrowMsg.mod); \
 	fi

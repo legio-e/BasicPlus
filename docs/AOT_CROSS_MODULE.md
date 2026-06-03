@@ -312,3 +312,21 @@ módulo); paridad byte-idéntica Java/C (`make test-xmodule`).
   target aunque sea AOT; detectar el thunk del target y llamarlo directo es una
   optimización pendiente.
 - **Intrínsecos cross-module** y **métodos de instancia** (#174) desde native.
+
+### 8.3 throw desde native — mensaje computado (#175 parcial, 2026-06-03)
+
+#186 ya soportaba `throw RuntimeError("literal")` (→ `throw_runtime` con cstring
+directo). #175 añade el **mensaje computado**: `throw RuntimeError("x = " + n)`
+→ AotCEmitter emite el string-handle BP (concat/int_to_string, #173) y el helper
+`throw_str(vm, msg_ref)` lee sus bytes, construye el RuntimeError y hace longjmp
+al boundary de #186 (propaga al try/catch BP). Probado: `samples/ThrowMsg.bp`,
+paridad byte-idéntica (`make test-throwmsg`).
+
+**Pendiente de #175 (#175b, sigue `[v2]`):**
+- **throw de clase de usuario** (`throw MiError(...)`): exige construir el objeto
+  en native (NEW_OBJECT + __init = frontera native↔intérprete) → compone con la
+  construcción de objetos en native (#174-adyacente). Hoy solo RuntimeError.
+- **try/catch DENTRO de native**: el native cazaría su propio throw. Necesita una
+  PILA de boundaries setjmp por-worker (hoy el fault-slot de #186 es uno solo) y
+  bindear la excepción a la variable del catch en C. El caso "native lanza, BP
+  caza" (el común) ya funciona vía el boundary existente.
