@@ -45,6 +45,12 @@ public class BpFoldParser implements FoldParser {
         "endprop", "endget", "endset"
     ));
 
+    /** Modificadores que pueden PRECEDER a un abridor de bloque y hay que
+     *  saltar: `public final native function ...`, `public class ...`, etc. */
+    private static final Set<String> MODIFIERS = new HashSet<>(Arrays.asList(
+        "public", "final", "sync", "intrinsic", "native", "owner"
+    ));
+
     @Override
     public List<Fold> getFolds(RSyntaxTextArea textArea) {
         List<Fold> folds = new ArrayList<>();
@@ -60,7 +66,7 @@ public class BpFoldParser implements FoldParser {
                 String text = textArea.getText(lineStart, lineEnd - lineStart);
 
                 int ws = leadingWhitespace(text);
-                String word = firstWord(text, ws);
+                String word = significantWord(text, ws);   // salta modificadores
                 if (word.isEmpty()) continue;
                 int wordOffset = lineStart + ws;
 
@@ -98,19 +104,22 @@ public class BpFoldParser implements FoldParser {
         return i;
     }
 
-    /** Primera palabra (identificador) tras la sangría; "" si la línea es un
+    /** Primera palabra "significativa" tras la sangría, SALTANDO modificadores
+     *  (public/final/sync/intrinsic/native/owner) que pueden preceder a un
+     *  abridor de bloque (p.ej. `public native function`). "" si la línea es un
      *  comentario `//` o no empieza por identificador. */
-    private static String firstWord(String s, int from) {
+    private static String significantWord(String s, int from) {
         int n = s.length();
-        if (from + 1 < n && s.charAt(from) == '/' && s.charAt(from + 1) == '/') {
-            return "";
+        int p = from;
+        while (p < n) {
+            if (p + 1 < n && s.charAt(p) == '/' && s.charAt(p + 1) == '/') return "";
+            int start = p;
+            while (p < n && (Character.isLetterOrDigit(s.charAt(p)) || s.charAt(p) == '_')) p++;
+            if (p == start) return "";              // no es identificador
+            String w = s.substring(start, p);
+            if (!MODIFIERS.contains(w)) return w;    // primera no-modificador
+            while (p < n && (s.charAt(p) == ' ' || s.charAt(p) == '\t')) p++;  // saltar a la siguiente
         }
-        int i = from;
-        while (i < n) {
-            char c = s.charAt(i);
-            if (Character.isLetterOrDigit(c) || c == '_') i++;
-            else break;
-        }
-        return s.substring(from, i);
+        return "";
     }
 }
