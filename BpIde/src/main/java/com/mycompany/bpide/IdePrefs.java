@@ -46,6 +46,29 @@ public final class IdePrefs {
      *  .mod compilados vs los .bp fuente. */
     public String lastUploadDir;
 
+    /** IDE-3 — Recientes: ficheros .bp abiertos y proyectos .bpbuild abiertos.
+     *  Más-reciente-primero, sin duplicados, cap MAX_RECENT. Se persisten como
+     *  un string con entradas separadas por '\n' (los paths no llevan newline). */
+    public java.util.List<String> recentFiles    = new java.util.ArrayList<>();
+    public java.util.List<String> recentProjects = new java.util.ArrayList<>();
+    public static final int MAX_RECENT = 8;
+
+    /** Inserta `path` al frente de `list` (dedup + cap a `max`). */
+    public static void pushRecent(java.util.List<String> list, String path, int max) {
+        if (path == null || path.isEmpty()) return;
+        list.remove(path);
+        list.add(0, path);
+        while (list.size() > max) list.remove(list.size() - 1);
+    }
+
+    /** Parte un string "a\nb\nc" en lista (ignora vacíos). Inverso de String.join. */
+    private static java.util.List<String> splitRecent(String s) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (s == null || s.isEmpty()) return out;
+        for (String p : s.split("\n")) if (!p.isEmpty()) out.add(p);
+        return out;
+    }
+
     private static final String FILENAME = ".bpide-prefs";
 
     /** Ruta canónica del fichero de prefs: $HOME/.bpide-prefs.
@@ -102,6 +125,8 @@ public final class IdePrefs {
             if (p.vmHost  != null && p.vmHost.isEmpty())  p.vmHost  = null;
             if (p.lastDir != null && p.lastDir.isEmpty()) p.lastDir = null;
             if (p.lastUploadDir != null && p.lastUploadDir.isEmpty()) p.lastUploadDir = null;
+            p.recentFiles    = splitRecent(Json.getString(m, "recentFiles", null));
+            p.recentProjects = splitRecent(Json.getString(m, "recentProjects", null));
         } catch (Throwable t) {
             System.err.println("[IdePrefs] no se pudo leer " + f.toAbsolutePath()
                     + ": " + t.getMessage());
@@ -117,6 +142,8 @@ public final class IdePrefs {
         m.put("vmPort",  (long) vmPort);
         m.put("lastDir", lastDir == null ? "" : lastDir);
         m.put("lastUploadDir", lastUploadDir == null ? "" : lastUploadDir);
+        m.put("recentFiles",    String.join("\n", recentFiles));
+        m.put("recentProjects", String.join("\n", recentProjects));
         StringBuilder sb = new StringBuilder();
         sb.append('{');
         boolean first = true;

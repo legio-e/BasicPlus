@@ -118,6 +118,9 @@ public class FrmMain extends javax.swing.JFrame
     private javax.swing.JTree projectTree;
     /** Modelo del árbol; lo reconstruimos al cargar/refrescar el proyecto. */
     private javax.swing.tree.DefaultTreeModel projectTreeModel;
+    /** IDE-3 — submenús de recientes: ficheros .bp (en File) y proyectos (en Project). */
+    private javax.swing.JMenu recentFilesMenu;
+    private javax.swing.JMenu recentProjectsMenu;
     /** FP4 — panel inferior izquierdo: ficheros remotos del dispositivo Pico. */
     private PicoExplorer picoExplorer;
 
@@ -425,9 +428,12 @@ public class FrmMain extends javax.swing.JFrame
             }
         });
 
-        // -- Menú File: Load / Save. --
+        // -- Menú File: Load / Save / Recent Files. --
         jMenuItem1.addActionListener(e -> onLoad());
         jMenuItem2.addActionListener(e -> onSave());
+        recentFilesMenu = new javax.swing.JMenu("Recent Files");
+        jMenu1.insert(recentFilesMenu, 2);   // Load, Save, [Recent], sep, Exit
+        rebuildRecentFilesMenu();
 
         // -- Menú Project: New Project, Open Project, Close Project. --
         setupProjectMenu();
@@ -529,6 +535,9 @@ public class FrmMain extends javax.swing.JFrame
         miEndpoint.addActionListener(e -> onConfigureVmEndpoint());
         menuProject.add(miNew);
         menuProject.add(miOpen);
+        recentProjectsMenu = new javax.swing.JMenu("Recent Projects");
+        menuProject.add(recentProjectsMenu);
+        rebuildRecentProjectsMenu();
         menuProject.addSeparator();
         menuProject.add(miClose);
         menuProject.addSeparator();
@@ -536,6 +545,48 @@ public class FrmMain extends javax.swing.JFrame
         // Insertar entre File y Edit. El JMenuBar tiene File, Edit, Run; queremos
         // File, Project, Edit, Run.
         jMenuBar1.add(menuProject, 1);
+    }
+
+    // ---- IDE-3: submenús de recientes (ficheros .bp y proyectos .bpbuild) ----
+
+    /** Reconstruye un submenú de recientes desde una lista de paths. Cada
+     *  entrada abre el fichero/proyecto; al final, "Clear". */
+    private void rebuildRecentMenu(javax.swing.JMenu menu, java.util.List<String> paths, boolean isProject) {
+        menu.removeAll();
+        if (paths.isEmpty()) {
+            JMenuItem empty = new JMenuItem("(vacío)");
+            empty.setEnabled(false);
+            menu.add(empty);
+            return;
+        }
+        int i = 1;
+        for (String p : paths) {
+            final java.nio.file.Path path = java.nio.file.Paths.get(p);
+            JMenuItem item = new JMenuItem(i + "  " + path.getFileName());
+            item.setToolTipText(p);
+            item.addActionListener(e -> {
+                if (isProject) loadProjectFrom(path);
+                else           openFileInEditor(path);
+            });
+            menu.add(item);
+            i++;
+        }
+        menu.addSeparator();
+        JMenuItem clear = new JMenuItem("Clear");
+        clear.addActionListener(e -> {
+            IdePrefs pr = IdePrefs.load();
+            if (isProject) { pr.recentProjects.clear(); pr.save(); rebuildRecentProjectsMenu(); }
+            else           { pr.recentFiles.clear();    pr.save(); rebuildRecentFilesMenu(); }
+        });
+        menu.add(clear);
+    }
+
+    private void rebuildRecentFilesMenu() {
+        rebuildRecentMenu(recentFilesMenu, IdePrefs.load().recentFiles, false);
+    }
+
+    private void rebuildRecentProjectsMenu() {
+        rebuildRecentMenu(recentProjectsMenu, IdePrefs.load().recentProjects, true);
     }
 
     /** A2.6 — Diálogo simple para configurar host:port de la VM remota.
@@ -685,6 +736,11 @@ public class FrmMain extends javax.swing.JFrame
             this.currentProjectFile = bpbuild;
             refreshProjectTree();
             setTitle("BpIde — " + bpbuild.getFileName());
+            // IDE-3 — registrar en "Recent Projects".
+            IdePrefs prP = IdePrefs.load();
+            IdePrefs.pushRecent(prP.recentProjects, bpbuild.toAbsolutePath().toString(), IdePrefs.MAX_RECENT);
+            prP.save();
+            rebuildRecentProjectsMenu();
         } catch (java.io.IOException ex) {
             javax.swing.JOptionPane.showMessageDialog(this,
                     "Error cargando proyecto:\n" + ex.getMessage(),
@@ -938,6 +994,11 @@ public class FrmMain extends javax.swing.JFrame
             // si el tab ya estaba seleccionado (es el único). Sin esto,
             // el primer Load no actualiza currentFile y compile falla.
             refreshActiveTab();
+            // IDE-3 — registrar en "Recent Files".
+            IdePrefs prF = IdePrefs.load();
+            IdePrefs.pushRecent(prF.recentFiles, file.toAbsolutePath().toString(), IdePrefs.MAX_RECENT);
+            prF.save();
+            rebuildRecentFilesMenu();
         } catch (java.io.IOException ex) {
             javax.swing.JOptionPane.showMessageDialog(this,
                     "No se pudo abrir " + file + ": " + ex.getMessage(),

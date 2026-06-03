@@ -26,9 +26,17 @@ Inventario base: `BpIde/` Swing (Java 1.8, GUI builder NetBeans). Componentes:
   GTK/Aqua según SO), fijándolo en el arranque ANTES de crear `FrmMain`. Revisar
   HiDPI de paso. Coste: bajo.
 
-- **IDE-3 — Recientes en menú File**. Hoy File = Load / Save / Exit. Añadir lista
-  de "últimos cargados" (Recent Files) persistida en `IdePrefs` (ya guarda prefs;
-  reutilizar). Submenú con N entradas + "Clear recent". Coste: bajo-medio.
+- **IDE-3 — Recientes (ficheros .bp Y proyectos)**. Hoy File = Load / Save / Exit;
+  Project = New / Open / Close. Añadir DOS listas de recientes persistidas en
+  `IdePrefs`: **Recent files** (submenú en File, alimentado por openFileInEditor) y
+  **Recent projects** (submenú en Project, alimentado por onOpenProject/onNewProject;
+  el proyecto es un `.bpbuild` → `currentProjectFile`). Dedup + más-reciente-primero
+  + cap N + "Clear". (Requisito ampliado por el usuario 2026-06-03: también projects.)
+  Coste: medio.
+  🔬 HECHO 2026-06-03 (pendiente confirmar visual): `IdePrefs.recentFiles`/
+  `recentProjects` (newline-joined, cap 8, dedup); submenú "Recent Files" en File
+  (hook en openFileInEditor) y "Recent Projects" en Project (hook en loadProjectFrom);
+  cada uno con "Clear". Compila OK.
 
 - **IDE-4 — `PicoExplorer` upload recuerda el último directorio**. Al hacer
   "upload" en la ventana del dispositivo, el `JFileChooser` no recuerda la carpeta
@@ -36,6 +44,8 @@ Inventario base: `BpIde/` Swing (Java 1.8, GUI builder NetBeans). Componentes:
   `PicoExplorer`, distinto del de Load (que sí lo recuerda — #119/N-ide-last-dir).
   Reusar el mismo `IdePrefs` (clave de last-dir, quizá separada "lastUploadDir").
   Coste: bajo.
+  ✅ HECHO + CONFIRMADO 2026-06-03 ("todo OK"): `IdePrefs.lastUploadDir` +
+  `PicoExplorer.onUpload` arranca/guarda en esa carpeta.
 
 - ✅ **Editor → RSyntaxTextArea** (HECHO 2026-06-03, confirmado por el usuario:
   "resalta native"). Sustituido el editor casero; `BpTokenMaker` con keywords del
