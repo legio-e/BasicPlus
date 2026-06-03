@@ -134,6 +134,68 @@ public abstract class Symbol {
             }
             return null;
         }
+
+        /** #174b — slot de vtable por nombre de método/accesor PÚBLICO (o -1).
+         *  Memoizado en {@link #methodSlots}. AotCEmitter lo lee para emitir
+         *  call_method_i32; MivmEmitter lo verifica contra ModWriter (cross-check
+         *  en emitInvokeVirtualSmart) — si divergen, error ruidoso de compilación. */
+        public java.util.Map<String, Integer> methodSlots;   // null = no computado
+
+        public int slotOf(String methodName) {
+            ensureMethodSlots();
+            Integer s = methodSlots.get(methodName);
+            return s == null ? -1 : s;
+        }
+
+        /** Computa el mapa nombre→slot replicando FIELMENTE el orden de
+         *  ModWriter/emitClassDef: Object root (toString=0, compareTo=1) →
+         *  heredados del padre → accesores get/set de properties públicas de
+         *  instancia → métodos públicos de instancia (no ctor, no static), todo
+         *  en orden de declaración del AST; un override reusa el slot heredado.
+         *  Privados/estáticos NO entran (no virtuales). Clase externa: usa
+         *  externalMethodSlots (sembrado desde el .bpi). */
+        private void ensureMethodSlots() {
+            if (methodSlots != null) return;
+            if (isExternal) { methodSlots = externalMethodSlots; return; }
+            java.util.Map<String, Integer> m = new java.util.LinkedHashMap<>();
+            int nextSlot;
+            if (baseClass != null) {
+                baseClass.ensureMethodSlots();
+                m.putAll(baseClass.methodSlots);
+                nextSlot = (baseClass.isExternal && baseClass.binaryLayout != null)
+                         ? baseClass.binaryLayout.numMethods
+                         : m.size();
+            } else {
+                // Raíz implícita Object: slots 0/1 = toString/compareTo.
+                m.put("toString", 0);
+                m.put("compareTo", 1);
+                nextSlot = 2;
+            }
+            if (astNode != null && astNode.members != null) {
+                // Properties públicas de instancia PRIMERO (get/set), orden de decl.
+                for (Ast.ITopLevelDecl d : astNode.members) {
+                    if (!(d instanceof Ast.PropertyDef)) continue;
+                    Ast.PropertyDef pd = (Ast.PropertyDef) d;
+                    if (!pd.isPublic) continue;
+                    if (pd.name != null && pd.name.isStatic()) continue;
+                    String nm = pd.name.name;
+                    String cap = Character.toUpperCase(nm.charAt(0)) + nm.substring(1);
+                    m.put("get" + cap, nextSlot++);
+                    m.put("set" + cap, nextSlot++);
+                }
+                // Métodos públicos de instancia (no ctor, no static), orden de decl.
+                for (Ast.ITopLevelDecl d : astNode.members) {
+                    if (!(d instanceof Ast.FuncDef)) continue;
+                    Ast.FuncDef fn = (Ast.FuncDef) d;
+                    Symbol s = instanceMembers.tryLookup(fn.name.name);
+                    if (!(s instanceof FunctionSymbol)) continue;
+                    FunctionSymbol fs = (FunctionSymbol) s;
+                    if (!fs.isPublic || fs.isStatic || fs.isConstructor) continue;
+                    if (!m.containsKey(fn.name.name)) m.put(fn.name.name, nextSlot++);
+                }
+            }
+            methodSlots = m;
+        }
     }
 
     // ============================================================

@@ -24,7 +24,7 @@ module MethodCall
     end getDoubled
   end Box
 
-  function useBox(b: Box): integer
+  native function useBox(b: Box): integer
     return b.getDoubled() + 1
   end useBox
 

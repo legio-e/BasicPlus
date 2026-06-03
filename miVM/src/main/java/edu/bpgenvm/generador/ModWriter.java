@@ -938,6 +938,19 @@ public class ModWriter {
         throw new RuntimeException("Método no encontrado en " + className + ": " + methodSimpleName);
     }
 
+    /** #174b — slot de vtable de un método, o -1 si la clase/método no existe.
+     *  Versión no-lanzante para el cross-check del frontend: AotCEmitter computa
+     *  el slot por su cuenta (ClassSymbol.slotOf) y MivmEmitter lo verifica contra
+     *  esta, que es la autoridad del layout del .mod. */
+    public int methodSlotOrMinus1(String className, String methodSimpleName) {
+        ClassInfo c = classes.get(className);
+        if (c == null) return -1;
+        for (MethodInfo m : c.methods) {
+            if (m.simpleName.equals(methodSimpleName)) return m.slot;
+        }
+        return -1;
+    }
+
     // --- Emisiones de instrucciones simples ---
 
     public void emit(OpCode op) throws IOException {

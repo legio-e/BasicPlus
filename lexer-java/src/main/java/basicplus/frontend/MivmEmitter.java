@@ -2749,6 +2749,17 @@ public final class MivmEmitter {
             }
             w.emitInvokeVirtualBySlot(slot, nArgs);
         } else {
+            // #174b cross-check: el slot que AotCEmitter computará (ClassSymbol.slotOf)
+            // DEBE coincidir con el que ModWriter usa para el .mod (la autoridad).
+            // Si divergen → error ruidoso AQUÍ (nunca rotura silenciosa de paridad
+            // en el AOT). Es la red de seguridad de la decisión B.
+            int feSlot = cls.slotOf(methodName);
+            int mwSlot = w.methodSlotOrMinus1(cls.name, methodName);
+            if (feSlot >= 0 && mwSlot >= 0 && feSlot != mwSlot) {
+                errors.add("BUG interno #174b: slot divergente para " + cls.name + "."
+                        + methodName + " (frontend=" + feSlot + ", ModWriter=" + mwSlot
+                        + ") — revisar ClassSymbol.ensureMethodSlots");
+            }
             w.emitInvokeVirtual(cls.name, methodName, nArgs);
         }
     }

@@ -356,6 +356,21 @@ Por eso `find_function("Cls.metodo")` falla y el caso privado queda aparte.
 - **B)** fuente única: `ModWriter` escribe el slot resuelto en el `ClassSymbol`/
   `SemanticInfo`, y **ambos** emisores lo leen → robusto, pero toca el modelo.
 
+**HECHO (#174b, 2026-06-03) con la opción B.** `ClassSymbol.slotOf(metodo)`
+computa el slot replicando el orden de ModWriter (Object 0/1 → heredados →
+accesores get/set de properties públicas → métodos públicos, en orden de
+declaración, override reusa) — memoizado. AotCEmitter emite, para
+`obj.metodo()` público, `vm->aot_helpers->call_method_i32(vm, <this>, slot,
+args, n)`. **Cross-check** en `MivmEmitter.emitInvokeVirtualSmart`: el slot del
+frontend debe igualar el de `ModWriter` (`methodSlotOrMinus1`) en cada
+`INVOKE_VIRTUAL` local → si divergen, error de compilación ruidoso (la red de
+seguridad que distingue B de A). Verificado: cross-check no dispara en ningún
+sample OO (properties/herencia incluidas); paridad byte-idéntica (`make
+test-method`: native useBox → Box.getDoubled() slot 2 auto-generado). `cType`/
+read/writeHelper mapean clase/enum → `int32_t` (handle 4 bytes). Pendiente:
+método privado/`super`/estático desde native (no virtuales, sin asidero) y
+firmas no-i32.
+
 **DECISIÓN (2026-06-03): B.** El principio que la dicta (apunte del usuario):
 *lo inmutable lo bakea el compilador; lo mutable lo resuelve la VM en runtime.*
 El **slot es inmutable** (forma estática de la clase, no cambia en runtime) → su

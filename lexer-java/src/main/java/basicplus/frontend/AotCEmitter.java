@@ -922,10 +922,21 @@ public final class AotCEmitter {
                             "AOT: intrínseco cross-module '" + fs.externalQualifiedName()
                             + "' (line " + c.line + ") no soportado en native todavía.");
                     }
+                    /* #174b — método PÚBLICO de instancia (virtual) sobre un
+                     * receptor: despacho por vtable vía call_method_i32 con el
+                     * slot que computa el frontend (ClassSymbol.slotOf, decisión
+                     * B). Privado/super/estático van por el throw de abajo (no
+                     * virtuales → sin asidero, pendientes). */
+                    if (fs.ownerClass != null && !fs.isStatic && fs.isPublic
+                            && !(ma.target instanceof Ast.SuperExpr)) {
+                        emitVirtualMethodCall(fs, ma, c);
+                        return;
+                    }
                 }
                 throw new UnsupportedAotException(
                     "AOT: method call '" + ma.member + "' no soportado todavía (line "
-                    + c.line + ") — pendiente #174 (dispatch virtual) / static / construcción.");
+                    + c.line + ") — solo método público (virtual); privado/super/"
+                    + "estático/construcción pendientes.");
             }
 
             if (!(c.callee instanceof Ast.IdentifierExpr)) {
@@ -1025,6 +1036,55 @@ public final class AotCEmitter {
                 + c.args.size() + " args pero espera " + fs.params.size() + ".");
         }
         emitCallBpEmission(qn, c.args, c.line, "la función BP cross-module '" + qn + "'");
+    }
+
+    /** #174b — emite una llamada a método PÚBLICO de instancia (virtual) desde
+     *  native vía call_method_i32. El slot lo computa el frontend
+     *  (ClassSymbol.slotOf) y MivmEmitter lo verifica contra ModWriter. La VM
+     *  hace el paseo vtable (obj→class→vtable[slot]) según la clase REAL del
+     *  receptor → polimorfismo correcto. v1: firmas i32 (params + retorno). */
+    private void emitVirtualMethodCall(Symbol.FunctionSymbol fs, Ast.MemberAccessExpr ma, Ast.CallExpr c) {
+        if (!isBridgeI32Type(fs.returnType)) {
+            throw new UnsupportedAotException(
+                "AOT: método native→BP '" + fs.name + "' (line " + c.line + "): el puente v1 "
+                + "solo soporta retorno i32; float/long/double/void → pendiente.");
+        }
+        for (Symbol.ParamSymbol p : fs.params) {
+            if (!isBridgeI32Type(p.type)) {
+                throw new UnsupportedAotException(
+                    "AOT: método native→BP '" + fs.name + "' (line " + c.line + "): el puente v1 "
+                    + "solo soporta params i32; tipos mixtos → pendiente.");
+            }
+        }
+        int slot = (fs.ownerClass != null) ? fs.ownerClass.slotOf(fs.name) : -1;
+        if (slot < 0) {
+            throw new UnsupportedAotException(
+                "AOT: no se pudo resolver el slot de vtable de '" + fs.name + "' (line "
+                + c.line + ").");
+        }
+        if (c.args.size() != fs.params.size()) {
+            throw new UnsupportedAotException(
+                "AOT: método '" + fs.name + "' (line " + c.line + "): " + c.args.size()
+                + " args pero espera " + fs.params.size() + ".");
+        }
+        warnings.add("la función native '" + currentFuncName + "' invoca el método público '"
+            + fs.name + "' (línea " + c.line + "). Esa llamada cruza al intérprete por el "
+            + "puente native→BP (dispatch virtual) y NO se acelera por AOT.");
+        /* call_method_i32(vm, <this>, slot, (int32_t[]){args...}, n). */
+        w.print("vm->aot_helpers->call_method_i32(vm, ");
+        emitExpr(ma.target);   // receptor (this)
+        w.print(", " + slot + ", ");
+        int n = c.args.size();
+        if (n == 0) {
+            w.print("(const int32_t*) 0, 0)");
+            return;
+        }
+        w.print("(int32_t[]){ ");
+        for (int i = 0; i < n; i++) {
+            if (i > 0) w.print(", ");
+            emitExpr(c.args.get(i));
+        }
+        w.print(" }, " + n + ")");
     }
 
     /** Emisión común del puente: aviso + call_bp_i32(vm, find_function(qn),
@@ -1169,16 +1229,16 @@ public final class AotCEmitter {
                 case "integer": return "int32_t";
                 case "float":   return "float";
                 case "boolean": return "int32_t";   /* bool como i32 0/1 */
-                case "string":  return "int32_t";   /* #171: handle al heap.
-                                                       Ops sobre strings
-                                                       siguen pendientes en
-                                                       #173 — esto sólo
-                                                       habilita pass-through
-                                                       a builtins (p.ej.
-                                                       print_string). */
-                default:
+                case "string":  return "int32_t";   /* #171: handle al heap. */
+                case "long": case "double":
+                    /* 8 bytes: no soportado en signature de native v1. */
                     throw new UnsupportedAotException(
-                        "AOT: tipo '" + n + "' no soportado en signature");
+                        "AOT: tipo '" + n + "' (8 bytes) no soportado en signature de native");
+                default:
+                    /* #174b — clase/enum/any: ref u valor de 4 bytes → handle i32.
+                     * (El análisis semántico ya validó el tipo, así que un nombre
+                     * desconocido no llega aquí.) */
+                    return "int32_t";
             }
         }
         if (t instanceof Ast.ArrayTypeRef) {
@@ -1200,6 +1260,12 @@ public final class AotCEmitter {
                     return "read_i32_be";
                 case "float":
                     return "read_f32_be";
+                case "long": case "double":
+                    throw new UnsupportedAotException(
+                        "AOT: tipo '" + n + "' (8 bytes) no soportado en thunk native");
+                default:
+                    /* #174b — clase/enum/any: handle/valor i32. */
+                    return "read_i32_be";
             }
         }
         if (t instanceof Ast.ArrayTypeRef) {
@@ -1220,6 +1286,12 @@ public final class AotCEmitter {
                     return "write_i32_be";
                 case "float":
                     return "write_f32_be";
+                case "long": case "double":
+                    throw new UnsupportedAotException(
+                        "AOT: tipo '" + n + "' (8 bytes) no soportado en thunk native");
+                default:
+                    /* #174b — clase/enum/any: handle/valor i32. */
+                    return "write_i32_be";
             }
         }
         if (t instanceof Ast.ArrayTypeRef) {

@@ -2,8 +2,11 @@
  * test/aot_MethodCall.c — thunk AOT a mano para #174 (mitad-VM). Hace el papel
  * del código native de `useBox`, que invoca el MÉTODO público getDoubled() de
  * un objeto Box vía vm->aot_helpers->call_method_i32 (despacho virtual por
- * vtable). El compilador aún NO emite call_method (eso es #174b); aquí el slot
- * va hard-coded (verificado con el disassembler: getDoubled = slot 2).
+ * vtable). Desde #174b AotCEmitter genera un thunk EQUIVALENTE al compilar
+ * `native function useBox` (verás `call_method_i32(vm, b, 2, ...)` con
+ * AotMain). Este se mantiene a mano como FIXTURE del test C, con el slot
+ * hard-coded (getDoubled = slot 2, verificado con el disassembler), para que
+ * `make test-method` no dependa de re-ejecutar el frontend Java.
  *
  * Lo NUEVO que prueba (runtime): código native despachando un método virtual
  * según la clase real del receptor (obj→class→vtable[slot]→cs+offset) + el

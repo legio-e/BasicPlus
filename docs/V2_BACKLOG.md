@@ -139,6 +139,16 @@ auto-`toString` en `print`, `compareTo` por defecto → throw).
   A (replicar, frágil) vs B (fuente única en el modelo semántico, robusto). Ver
   §8.4.
 
+- **Método desde native — COMPLETO (#174, mitad-compilador #174b hecha,
+  2026-06-03).** Opción B: `ClassSymbol.slotOf` computa el slot (orden de
+  ModWriter, memoizado), AotCEmitter emite `call_method_i32(this, slot, args)`
+  para `obj.metodo()` público, con **cross-check** contra ModWriter en cada
+  INVOKE_VIRTUAL local (divergencia → error ruidoso). Cross-check no dispara en
+  ningún OO sample; paridad byte-idéntica (`make test-method`). Una `native
+  function` ya puede invocar métodos públicos de objetos (OO desde native).
+  Pendiente (`[v2]`): privado/`super`/estático desde native (no virtuales) y
+  firmas no-i32. Ver §8.4.
+
 ---
 
 ## ▶ Arranque de V2 — LEER PRIMERO  *(estado al cerrar V1, 2026-05-30)*
