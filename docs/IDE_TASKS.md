@@ -17,9 +17,9 @@ Inventario base: `BpIde/` Swing (Java 1.8, GUI builder NetBeans). Componentes:
   `.form` ata parte del código al GUI builder; decidir si se mantiene el builder
   o se pasa a layout a mano para poder trocear.
 
-- 🔬 **IDE-2 — Look & Feel del SO** — HECHO 2026-06-03 (pendiente confirmar visual).
+- ✅ **IDE-2 — Look & Feel del SO** — HECHO + CONFIRMADO 2026-06-03 ("todo OK").
   El `main()` generado FORZABA "Metal"; ahora `setLookAndFeel(getSystemLookAndFeel
-  ClassName())` (Windows/GTK/Aqua) antes de crear la ventana. Build OK.
+  ClassName())` (Windows/GTK/Aqua) antes de crear la ventana.
 
 - **IDE-2 (orig) — Look & Feel del SO**. Hoy usa el L&F por defecto de Java (Metal).
   Cambiar a `UIManager.setLookAndFeel(getSystemLookAndFeelClassName())` (Windows/
@@ -45,7 +45,8 @@ Inventario base: `BpIde/` Swing (Java 1.8, GUI builder NetBeans). Componentes:
 - ✅ **IDE-6 — Resaltado al día** (HECHO con el swap a RSyntaxTextArea). `native` +
   `long/double/byte/word/short/int8/int16` ahora se resaltan.
 
-- 🔬 **IDE-5 — Code folding** — IMPLEMENTADO 2026-06-03 (pendiente confirmar visual).
+- ✅ **IDE-5 — Code folding** — HECHO + CONFIRMADO 2026-06-03 ("todo OK", incl.
+  el fix de `native function`/`public ...`).
   `BpFoldParser` registrado para `text/bp`: abridores (function/class/if/while/for/
   switch/try/parallel/property/get/set/module/...) vs cerradores (end/endif/endwh/
   endsw/next/endtry/endpar/endprop/endget/endset), patrón puntero+getParent() como

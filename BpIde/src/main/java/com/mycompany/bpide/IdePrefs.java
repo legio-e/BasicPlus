@@ -41,6 +41,11 @@ public final class IdePrefs {
      *  usuario no tenga que navegar de nuevo cada vez. */
     public String lastDir;
 
+    /** IDE-4 — Última carpeta usada en el "Upload…" del PicoExplorer. Separada
+     *  de lastDir (Load/Save de .bp) porque suelen ser carpetas distintas: los
+     *  .mod compilados vs los .bp fuente. */
+    public String lastUploadDir;
+
     private static final String FILENAME = ".bpide-prefs";
 
     /** Ruta canónica del fichero de prefs: $HOME/.bpide-prefs.
@@ -93,8 +98,10 @@ public final class IdePrefs {
             p.vmHost  = Json.getString(m, "vmHost", null);
             p.vmPort  = (int) Json.getLong(m, "vmPort", 0);
             p.lastDir = Json.getString(m, "lastDir", null);
+            p.lastUploadDir = Json.getString(m, "lastUploadDir", null);
             if (p.vmHost  != null && p.vmHost.isEmpty())  p.vmHost  = null;
             if (p.lastDir != null && p.lastDir.isEmpty()) p.lastDir = null;
+            if (p.lastUploadDir != null && p.lastUploadDir.isEmpty()) p.lastUploadDir = null;
         } catch (Throwable t) {
             System.err.println("[IdePrefs] no se pudo leer " + f.toAbsolutePath()
                     + ": " + t.getMessage());
@@ -109,6 +116,7 @@ public final class IdePrefs {
         m.put("vmHost",  vmHost  == null ? "" : vmHost);
         m.put("vmPort",  (long) vmPort);
         m.put("lastDir", lastDir == null ? "" : lastDir);
+        m.put("lastUploadDir", lastUploadDir == null ? "" : lastUploadDir);
         StringBuilder sb = new StringBuilder();
         sb.append('{');
         boolean first = true;

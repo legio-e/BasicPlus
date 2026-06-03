@@ -633,12 +633,24 @@ public final class PicoExplorer extends JPanel {
     private void onUpload() {
         if (!isConnected()) return;
         final Backend b = this.backend;
+        // IDE-4 — arrancar el chooser en la última carpeta de upload usada.
+        IdePrefs prefs = IdePrefs.load();
         JFileChooser fc = new JFileChooser();
+        if (prefs.lastUploadDir != null) {
+            File d = new File(prefs.lastUploadDir);
+            if (d.isDirectory()) fc.setCurrentDirectory(d);
+        }
         fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
                 ".mod files", "mod"));
         if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
         File f = fc.getSelectedFile();
         if (f == null) return;
+        // Recordar la carpeta para la próxima vez.
+        File parent = f.getParentFile();
+        if (parent != null) {
+            prefs.lastUploadDir = parent.getAbsolutePath();
+            prefs.save();
+        }
         // Sube a /app/<name> por convención (relevante en Pico; en VM
         // Java es un path arbitrario dentro del workdir).
         String remote = toAppPath(f.getName());
