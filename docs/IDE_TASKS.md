@@ -41,7 +41,14 @@ Inventario base: `BpIde/` Swing (Java 1.8, GUI builder NetBeans). Componentes:
 - ✅ **IDE-6 — Resaltado al día** (HECHO con el swap a RSyntaxTextArea). `native` +
   `long/double/byte/word/short/int8/int16` ahora se resaltan.
 
-- **IDE-5 — Code folding en el editor** (plegar/minimizar funciones y clases).
+- 🔬 **IDE-5 — Code folding** — IMPLEMENTADO 2026-06-03 (pendiente confirmar visual).
+  `BpFoldParser` registrado para `text/bp`: abridores (function/class/if/while/for/
+  switch/try/parallel/property/get/set/module/...) vs cerradores (end/endif/endwh/
+  endsw/next/endtry/endpar/endprop/endget/endset), patrón puntero+getParent() como
+  CurlyFoldParser; primera-palabra de línea, ignora `//` y blancos; descarta bloques
+  de 1 línea. Build OK. **Probar**: deben salir flechas de plegado en el gutter.
+
+- **IDE-5 (orig) — Code folding en el editor** (plegar/minimizar funciones y clases).
   El editor hoy es básico (`BpSyntaxHighlighter`, 212 L sobre un JTextComponent).
   El folding en Swing puro es trabajo; valorar `RSyntaxTextArea` (soporta folding,
   números de línea, etc. de serie) como base del editor. Decisión: ¿mejorar el

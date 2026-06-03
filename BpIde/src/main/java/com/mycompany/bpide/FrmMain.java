@@ -40,6 +40,7 @@ import javax.swing.KeyStroke;
 import org.fife.ui.rsyntaxtextarea.AbstractTokenMakerFactory;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.TokenMakerFactory;
+import org.fife.ui.rsyntaxtextarea.folding.FoldParserManager;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
@@ -319,6 +320,8 @@ public class FrmMain extends javax.swing.JFrame
         AbstractTokenMakerFactory atmf =
                 (AbstractTokenMakerFactory) TokenMakerFactory.getDefaultInstance();
         atmf.putMapping("text/bp", "com.mycompany.bpide.BpTokenMaker");
+        // IDE-5 — folding por bloques de BP (function/class/if/while/try/...).
+        FoldParserManager.get().addFoldParserMapping("text/bp", new BpFoldParser());
 
         // -- Editor inicial: tab "(sin abrir)" reciclable.
         //    El primer openFileInEditor() reusará este tab si su Path
