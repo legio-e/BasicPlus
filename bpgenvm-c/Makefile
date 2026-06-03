@@ -30,7 +30,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke test-callbp
+.PHONY: all clean smoke test-callbp test-xmodule
 
 all: $(BIN)
 
@@ -74,4 +74,21 @@ test-callbp: $(LIBOBJ)
 	    $(LIBOBJ) -o $(CALLBP_BIN) $(LDFLAGS); \
 	  echo "--- puente native->BP (esperado: helper BP, 54, helper BP, 84, status=OK) ---"; \
 	  ./$(CALLBP_BIN) samples/NativeBridge.mod; \
+	fi
+
+# #169 — test del puente native->BP CROSS-MODULE. compute (native, BridgeApp)
+# llama a triple (BP, BridgeLib) por el puente con nombre cualificado. El loader
+# auto-carga BridgeLib.mod vía discover_deps. Salida byte-idéntica a la VM-Java.
+XMOD_BIN = build/test_xmodule.exe
+test-xmodule: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/BridgeApp.mod ]; then \
+	  echo "(skip test-xmodule: falta samples/BridgeApp.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/BridgeApp.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_xmodule.c test/aot_BridgeApp.c \
+	    $(LIBOBJ) -o $(XMOD_BIN) $(LDFLAGS); \
+	  echo "--- puente native->BP cross-module (esperado: triple 5, 16, triple 8, 25, OK) ---"; \
+	  (cd samples && ../$(XMOD_BIN) BridgeApp.mod); \
 	fi

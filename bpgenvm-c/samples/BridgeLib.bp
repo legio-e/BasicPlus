@@ -1,0 +1,12 @@
+// BridgeLib.bp — módulo dependencia para la prueba cross-module de #169.
+// `triple` es una función BP pública (exportada en la .bpi) que será llamada
+// desde código native de OTRO módulo (BridgeApp) a través del puente.
+
+module BridgeLib
+
+public function triple(x: integer): integer
+    print("[BridgeLib.triple] " + x)
+    return x * 3
+end
+
+end BridgeLib

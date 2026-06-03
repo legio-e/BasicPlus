@@ -882,18 +882,30 @@ public final class AotCEmitter {
         if (e instanceof Ast.CallExpr) {
             Ast.CallExpr c = (Ast.CallExpr) e;
 
-            /* Method calls (obj.method(args)) requieren vtable dispatch
-             * o resolución de tipo del target — pendiente en #174. Por
-             * ahora rechazamos limpiamente. Nota: BP no permite
-             * `arr.length()` sobre `integer[]` (los arrays primitivos
-             * no tienen métodos), así que ese caso no llega aquí desde
-             * código BP válido — solo cuando lleguen llamadas a métodos
-             * de clase. */
             if (c.callee instanceof Ast.MemberAccessExpr) {
                 Ast.MemberAccessExpr ma = (Ast.MemberAccessExpr) c.callee;
+                /* #169 — llamada cross-module `Mod.func(args)`: el símbolo
+                 * resuelto del callee es una FunctionSymbol externa a nivel
+                 * módulo. La emitimos por el puente call_bp con el nombre
+                 * cualificado; el runtime resuelve la dirección y el CS del
+                 * módulo destino. (Intrínsecos cross-module y métodos de
+                 * instancia [dispatch virtual, #174] siguen pendientes.) */
+                Symbol callSym = (semInfo != null) ? semInfo.exprSymbols.get(c.callee) : null;
+                if (callSym instanceof Symbol.FunctionSymbol) {
+                    Symbol.FunctionSymbol fs = (Symbol.FunctionSymbol) callSym;
+                    if (fs.isExternal && !fs.isIntrinsic && fs.ownerClass == null) {
+                        emitCrossModuleBridgeCall(fs, c);
+                        return;
+                    }
+                    if (fs.isExternal && fs.isIntrinsic) {
+                        throw new UnsupportedAotException(
+                            "AOT: intrínseco cross-module '" + fs.externalQualifiedName()
+                            + "' (line " + c.line + ") no soportado en native todavía.");
+                    }
+                }
                 throw new UnsupportedAotException(
                     "AOT: method call '" + ma.member + "' no soportado todavía (line "
-                    + c.line + ") — pendiente #174 (dispatch virtual).");
+                    + c.line + ") — pendiente #174 (dispatch virtual) / static / construcción.");
             }
 
             if (!(c.callee instanceof Ast.IdentifierExpr)) {
@@ -965,21 +977,48 @@ public final class AotCEmitter {
                 + target.params.size() + ".");
         }
 
-        /* Aviso de rendimiento (P-aot-call-bp-emit, apunte del usuario). */
-        warnings.add("la función native '" + currentFuncName + "' llama a la función BP "
-            + "interpretada '" + name + "' (línea " + c.line + "). Esa llamada cruza al "
-            + "intérprete por el puente native→BP y NO se acelera por AOT. Para máximo "
-            + "rendimiento, declara '" + name + "' también como native.");
+        emitCallBpEmission(moduleName + "." + name, c.args, c.line,
+            "la función BP interpretada '" + name + "'. Para máximo rendimiento, "
+            + "declara '" + name + "' también como native");
+    }
 
-        /* call_bp_i32(vm, find_function(vm,"Mod.name"), (int32_t[]){args...}, n).
-         * El compound literal C99 vive en el bloque envolvente — válido como
-         * argumento de la llamada. find_function resuelve el nombre cada vez
-         * (scan barato; cachear en static es una mejora futura, pero el coste
-         * del puente domina). */
-        String qualified = moduleName + "." + name;
+    /** #169 — emite una llamada cross-module native→BP (`Mod.func(args)`) por
+     *  el puente. La firma viene de la FunctionSymbol externa (.bpi del módulo
+     *  dueño). El runtime resuelve la dirección y el CS del módulo destino. */
+    private void emitCrossModuleBridgeCall(Symbol.FunctionSymbol fs, Ast.CallExpr c) {
+        String qn = fs.externalQualifiedName();
+        if (!isBridgeI32Type(fs.returnType)) {
+            throw new UnsupportedAotException(
+                "AOT: call native→BP cross-module a '" + qn + "' (line " + c.line + "): el puente "
+                + "v1 solo soporta retorno i32; float/long/double/void → pendiente.");
+        }
+        for (Symbol.ParamSymbol p : fs.params) {
+            if (!isBridgeI32Type(p.type)) {
+                throw new UnsupportedAotException(
+                    "AOT: call native→BP cross-module a '" + qn + "' (line " + c.line + "): el puente "
+                    + "v1 solo soporta params i32; tipos mixtos → pendiente.");
+            }
+        }
+        if (c.args.size() != fs.params.size()) {
+            throw new UnsupportedAotException(
+                "AOT: call cross-module a '" + qn + "' (line " + c.line + "): "
+                + c.args.size() + " args pero espera " + fs.params.size() + ".");
+        }
+        emitCallBpEmission(qn, c.args, c.line, "la función BP cross-module '" + qn + "'");
+    }
+
+    /** Emisión común del puente: aviso + call_bp_i32(vm, find_function(qn),
+     *  (int32_t[]){args...}, n). El compound literal C99 vive en el bloque
+     *  envolvente — válido como argumento. find_function resuelve el nombre
+     *  cada vez (scan barato; cachear en static es mejora futura, pero el coste
+     *  del puente domina). */
+    private void emitCallBpEmission(String qualified, List<Ast.IExpr> args, int line, String targetDesc) {
+        warnings.add("la función native '" + currentFuncName + "' llama a " + targetDesc
+            + " (línea " + line + "). Esa llamada cruza al intérprete por el puente "
+            + "native→BP y NO se acelera por AOT.");
         w.print("vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, \""
             + qualified + "\"), ");
-        int n = c.args.size();
+        int n = args.size();
         if (n == 0) {
             w.print("(const int32_t*) 0, 0)");
             return;
@@ -987,7 +1026,7 @@ public final class AotCEmitter {
         w.print("(int32_t[]){ ");
         for (int i = 0; i < n; i++) {
             if (i > 0) w.print(", ");
-            emitExpr(c.args.get(i));
+            emitExpr(args.get(i));
         }
         w.print(" }, " + n + ")");
     }
@@ -999,6 +1038,20 @@ public final class AotCEmitter {
         if (t == null) return false;   /* void */
         try { return "int32_t".equals(cType(t)); }
         catch (UnsupportedAotException e) { return false; }
+    }
+
+    /** #169 — variante BpType (firma de una FunctionSymbol cross-module).
+     *  i32 = integer/boolean/string/narrow-int + refs (array/clase).
+     *  float/long/double/void → no. */
+    private boolean isBridgeI32Type(BpType t) {
+        if (t == null) return false;   /* void */
+        if (t instanceof PrimitiveType) {
+            switch (((PrimitiveType) t).tag) {
+                case FLOAT: case LONG: case DOUBLE: return false;
+                default: return true;   /* integer/string/boolean/narrow → i32 */
+            }
+        }
+        return true;   /* ArrayType / ClassType / ref → handle i32 de 4 bytes */
     }
 
     private String cBinaryOp(String bpOp) {

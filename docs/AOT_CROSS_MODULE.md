@@ -281,8 +281,34 @@ intérprete y NO se acelera por AOT:
 Es WARNING, no error: la llamada es correcta y a veces deseada (tuplas,
 métodos, helpers que no compensa portar a native).
 
-**Límites v1 de #211** (siguen `[v2]`): solo firmas i32-compatibles
-(integer/boolean/string/array; float/long/double/void → error claro); solo
-**mismo módulo** (cross-module native→BP necesita resolver el callee
-`Mod.func` — hoy se rechaza como method-call); y native→**método** (#174)
-necesita además un helper de dispatch virtual sobre call_bp.
+**Límites v1 de #211**: solo firmas i32-compatibles (integer/boolean/string/
+array; float/long/double/void → error claro).
+
+### 8.2 Cross-module native→BP — HECHO (#169 parcial, 2026-06-03)
+
+AotCEmitter reconoce `Mod.func(args)` (callee MemberAccessExpr cuyo símbolo
+resuelto es una `FunctionSymbol` externa a nivel módulo) y emite la misma
+llamada-puente con el nombre cualificado de `externalQualifiedName()`:
+
+```c
+vm->aot_helpers->call_bp_i32(vm,
+    vm->aot_helpers->find_function(vm, "BridgeLib.triple"),
+    (int32_t[]){ n }, 1)
+```
+
+En runtime, `find_function` resuelve el símbolo cross-module en `vm->symbols`
+(el loader auto-cargó la dependencia vía `discover_deps`), y el puente deriva
+el CS del módulo destino a partir de la dirección absoluta. Probado:
+`samples/BridgeApp.bp` (native `compute`) → `BridgeLib.triple` (BP, otro
+módulo); paridad byte-idéntica Java/C (`make test-xmodule`).
+
+**Pendiente de #169** (sigue `[v2]`):
+- **AotMain/build_mdn no resuelve imports** → la herramienta standalone que
+  genera el `.c`/`.mdn` aún no puede emitir thunks cross-module (sí lo valida
+  el `--compile` del frontend, que resuelve imports). El `loadImportsForAnalyzer`
+  de `Main` está acoplado a su `ctx`/recursión; falta refactor para reusarlo en
+  AotMain. (Tarea de follow-up.)
+- **native→native cross-module fast-path** (§5): hoy el puente interpreta el
+  target aunque sea AOT; detectar el thunk del target y llamarlo directo es una
+  optimización pendiente.
+- **Intrínsecos cross-module** y **métodos de instancia** (#174) desde native.

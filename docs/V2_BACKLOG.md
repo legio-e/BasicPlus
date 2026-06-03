@@ -108,10 +108,17 @@ auto-`toString` en `print`, `compareTo` por defecto → throw).
   emitiendo `call_bp_i32` + AVISO de rendimiento + validación relajada
   (compilador). Una `native function` YA puede llamar a una función BP del
   mismo módulo; paridad byte-idéntica Java/C (`make test-callbp`). **Cierra el
-  caso BP-target intra-módulo de #169.** Pendiente (`[v2]`): tipos mixtos
-  (solo i32 por ahora), cross-module native→BP, y #174 (métodos desde native =
-  call_bp + dispatch virtual). Tuplas desde native: ya posibles vía call_bp al
-  constructor BP. Ver `docs/AOT_CROSS_MODULE.md` §8/§8.1.
+  caso BP-target intra-módulo de #169.** Tuplas desde native: ya posibles vía
+  call_bp al constructor BP. Ver `docs/AOT_CROSS_MODULE.md` §8/§8.1.
+
+- **Cross-module native→BP — HECHO (#169 parcial, 2026-06-03).** AotCEmitter
+  reconoce `Mod.func(args)` y emite el puente con el nombre cualificado; el
+  runtime resuelve el símbolo cross-module y deriva el CS del módulo destino.
+  Paridad byte-idéntica (`make test-xmodule`: BridgeApp.compute native →
+  BridgeLib.triple BP). Pendiente de #169 (`[v2]`): AotMain/build_mdn no
+  resuelve imports (la herramienta standalone aún no genera thunks cross-module;
+  el `--compile` del frontend sí los valida) · native→native fast-path ·
+  intrínsecos cross-module · métodos (#174) · tipos mixtos. Ver §8.2.
 
 ---
 

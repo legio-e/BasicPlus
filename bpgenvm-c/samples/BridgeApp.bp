@@ -1,0 +1,28 @@
+// BridgeApp.bp — prueba CROSS-MODULE del puente native→BP (#169).
+//
+// `compute` es `native` y llama a `BridgeLib.triple` — una función BP de OTRO
+// módulo. Desde #169 AotCEmitter emite la llamada-puente call_bp con el nombre
+// cualificado "BridgeLib.triple"; el runtime resuelve su dirección (vm->symbols)
+// y el CS del módulo destino. Aviso de rendimiento incluido.
+//
+// Paridad esperada (VM-Java [compute interpretado] == VM-C [compute via
+// thunk→puente→BridgeLib.triple]):
+//   [BridgeLib.triple] 5
+//   compute(5) = 16
+//   [BridgeLib.triple] 8
+//   compute(8) = 25
+
+module BridgeApp
+
+import BridgeLib
+
+native function compute(n: integer): integer
+    return BridgeLib.triple(n) + 1
+end
+
+function main()
+    print("compute(5) = " + compute(5))
+    print("compute(8) = " + compute(8))
+end
+
+end BridgeApp
