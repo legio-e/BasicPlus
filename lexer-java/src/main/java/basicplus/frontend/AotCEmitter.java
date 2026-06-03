@@ -892,7 +892,7 @@ public final class AotCEmitter {
                 throw new UnsupportedAotException(
                     "AOT: call a función no-native '" + name + "' (line " + c.line + "). "
                     + "Para AOT v1 todas las funciones llamadas deben ser native del mismo módulo "
-                    + "o un builtin soportado (now, len).");
+                    + "o un builtin AOT-soportado (now, charAt, charCodeAt, substring, intToString).");
             }
 
             /* C call directo a otra función native del mismo módulo.
