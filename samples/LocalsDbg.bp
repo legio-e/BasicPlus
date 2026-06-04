@@ -1,11 +1,14 @@
-// LocalsDbg.bp — H6.a.1: verificar la sección `vars` del .dbg.
-// Ejercita params, locales i32, un local long y un iterador de bucle.
+// LocalsDbg.bp — H6.a.1/H6.a.2: verificar la sección `vars` del .dbg.
+// Ejercita params, locales i32, long, double, string, boolean y un iterador.
 // Sin imports para poder compilarlo aislado.
 module LocalsDbg
 
   public function suma(n: integer, base: integer): integer
     var total: integer := base
     var big: long := 100L
+    var ratio: double := 1.5d
+    var msg: string := "hola"
+    var ok: boolean := true
     for i := 1 to n do
       total := total + i
     next i

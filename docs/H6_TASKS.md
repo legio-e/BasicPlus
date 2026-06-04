@@ -55,12 +55,20 @@ nombres de variables locales/params por función → slot. Para mostrar locales
     `LOCALS_REPLY.named[]` resuelve `bp+offset` por nombre → BpvmClient/DebugSession
     `getNamedLocals()` → IDE `LocalsTableModel` muestra `Nombre | Offset | Valor`.
     Verificado end-to-end con `samples/LocalsDbg.bp` (suma: n,base,total,big(8B),i).
-    - **Pendiente (H6.a.2, fase 2)**: el `.dbg` v1 NO lleva el **tipo BP**
-      (ModWriter solo conoce ancho 4/8/array). Por eso refs (string/objeto) se
-      muestran como su i32 (handle), long/double 8B como patrón de bits crudo.
-      Fase 2: añadir tipo por var (lo aporta MivmEmitter desde SemanticInfo) →
-      render correcto (string vía READ_STRING, double vía longBitsToDouble,
-      objeto/array vía INSPECT). El formato `vars` ya reserva sitio (line tail).
+  - **H6.a.2 — tipos en `vars`** ✅ HECHO (2026-06-04). El `.dbg` v3 gana una 5ª
+    columna por var = **tag de tipo BP** (`integer·long·float·double·string·
+    boolean·ref·"?"`). Lo aporta MivmEmitter (`varDbgTypeTag(BpType)`) al declarar
+    params/locales (ModWriter lo almacena en el slot). El parser de ModuleManager
+    lo lee (5º campo opcional; tolera `.dbg` de 4 cols). DebugServer produce un
+    `display` ya renderizado por tipo en `LOCALS_REPLY.named[]`: string→texto
+    (vía `readStringIfPossible`), double→`longBitsToDouble`, float→`intBitsToFloat`,
+    boolean→true/false, ref→`@handle`, array local→`[len=N]`. El IDE muestra
+    `Nombre | Tipo | Valor | Offset`. Verificado: `.dbg` inspeccionado (big=long,
+    ratio=double, msg=string, ok=boolean) + NamedLocalsDbgTest comprueba los tipos.
+    - **Pendiente (H6.a.3, fase 3)**: inspección PROFUNDA de objeto/array (campos
+      de un `ref`, elementos de un array) — hoy se muestran como `@handle`. Reusar
+      INSPECT. El render del `display` lo hace hoy la VM-Java (tiene heap+`.dbg`);
+      para el device (#140) el host hará esa traducción sobre bytes crudos.
   - (posibles, según interés) watch de expresiones, breakpoints condicionales
     (EVAL ya existe como base), mejor render de objetos/arrays.
 - **(b) Debugger del DEVICE** (#140) — la pieza grande siguiente, ya con el

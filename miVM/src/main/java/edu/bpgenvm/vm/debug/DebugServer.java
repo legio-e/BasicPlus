@@ -672,23 +672,49 @@ public final class DebugServer implements AutoCloseable {
                 if (!first) sb.append(',');
                 first = false;
                 // long/double i64 big-endian: high word en offset, low en offset+4
-                // (idéntico a VirtualMachine.readI64). Para double, `value` es el
-                // patrón de bits IEEE-754 crudo; la reinterpretación por tipo es
-                // fase 2 (este .dbg v1 solo lleva nombre+offset+ancho, no el tipo).
+                // (idéntico a VirtualMachine.readI64).
                 long value = (v.sizeBytes == 8)
                         ? ((long) ctx.readLocal(v.offset) << 32)
                           | ((long) ctx.readLocal(v.offset + 4) & 0xFFFFFFFFL)
                         : ctx.readLocal(v.offset);
+                String display = renderLocalDisplay(v, value);   // H6.a.2: render por tipo
                 sb.append("{\"name\":").append(Json.quote(v.name));
                 sb.append(",\"offset\":").append(v.offset);
                 sb.append(",\"size\":").append(v.sizeBytes);
                 sb.append(",\"isArray\":").append(v.isArray);
+                sb.append(",\"type\":").append(Json.quote(v.type));
                 sb.append(",\"value\":").append(value);
+                sb.append(",\"display\":").append(Json.quote(display));
                 sb.append('}');
             }
         }
         sb.append("]");
         sendReply(id, "LOCALS_REPLY", sb.toString());
+    }
+
+    /**
+     * H6.a.2 — renderiza un local a texto legible según su tipo BP (del .dbg v3).
+     * El host tiene el .dbg + acceso al heap, así que produce el `display` listo
+     * (regla de oro: la traducción simbólica la hace el host). `value` es el i32
+     * del slot, o el i64 big-endian combinado si el slot es de 8 bytes.
+     */
+    private String renderLocalDisplay(ModuleManager.LocalVarDescriptor v, long value) {
+        if (v.isArray) return "array[len=" + value + "]";   // array local inline: el slot guarda la longitud
+        switch (v.type) {
+            case "integer": return Integer.toString((int) value);
+            case "long":    return Long.toString(value);
+            case "float":   return Float.toString(Float.intBitsToFloat((int) value));
+            case "double":  return Double.toString(Double.longBitsToDouble(value));
+            case "boolean": return (value != 0) ? "true" : "false";
+            case "string": {
+                if (value == 0) return "null";
+                String s = null;
+                try { s = vm.readStringIfPossible((int) value); } catch (Throwable ignored) { }
+                return (s != null) ? ("\"" + s + "\"") : ("@" + value);
+            }
+            case "ref":     return (value == 0) ? "null" : ("@" + value);
+            default:        return Long.toString(value);   // "?" / desconocido → valor crudo
+        }
     }
 
     private void sendStackReply(long id) {

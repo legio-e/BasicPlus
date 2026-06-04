@@ -377,11 +377,38 @@ public final class MivmEmitter {
                 sb.append("func ").append(e.getKey()).append(' ').append(start).append('\n');
                 for (ModWriter.VarDebugInfo v : e.getValue()) {
                     sb.append(v.name).append(' ').append(v.offset).append(' ')
-                      .append(v.sizeBytes).append(' ').append(v.isArray ? 1 : 0).append('\n');
+                      .append(v.sizeBytes).append(' ').append(v.isArray ? 1 : 0)
+                      .append(' ').append(v.typeTag)   // H6.a.2: tag de tipo BP (5ª col)
+                      .append('\n');
                 }
             }
         }
         Files.write(dbgOut, sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /**
+     * H6.a.2 — tag de tipo BP para la sección `vars` del `.dbg`. El debugger lo
+     * usa para renderizar el valor (string→texto, double→f64, boolean→true/false,
+     * ref→@handle). Tags canónicos que entiende DebugServer:
+     *   integer · long · float · double · string · boolean · ref · "?"
+     * Los enteros estrechos (byte/word/int8/int16) → integer (la VM opera en i32);
+     * los enums son int-backed → integer; las clases/arrays(heap) → ref.
+     */
+    private static String varDbgTypeTag(BpType t) {
+        if (t instanceof PrimitiveType) {
+            switch (((PrimitiveType) t).tag) {
+                case INTEGER: case INT8: case UINT8: case INT16: case UINT16: return "integer";
+                case LONG:    return "long";
+                case FLOAT:   return "float";
+                case DOUBLE:  return "double";
+                case STRING:  return "string";
+                case BOOLEAN: return "boolean";
+            }
+        }
+        if (t instanceof EnumType)  return "integer";   // enum respaldado por int
+        if (t instanceof ClassType) return "ref";       // handle de objeto
+        if (t instanceof ArrayType) return "ref";       // handle de array en heap (locales inline → isArray)
+        return "?";                                     // any / desconocido → valor crudo
     }
 
     /** Tag corto del tipo para .dbg properties. null si no se puede inspeccionar. */
@@ -997,7 +1024,7 @@ public final class MivmEmitter {
                 // BUG-6: width-aware — long/double = 8 bytes. Sin esto la
                 // factoría cross-module declaraba el param a 4 bytes y un arg
                 // long/double se corrompía al pasarlo al __init.
-                w.declareParam(p.name, is8Byte(p.type) ? 8 : 4);
+                w.declareParam(p.name, is8Byte(p.type) ? 8 : 4, varDbgTypeTag(p.type));
             }
         }
         // returnType=AnyType para evitar dependencia de tipo: el caller
@@ -1047,7 +1074,7 @@ public final class MivmEmitter {
         w.declareParam("this");
         FunctionSymbol ctor = cls.constructor;
         for (ParamSymbol p : ctor.params) {
-            w.declareParam(p.name, is8Byte(p.type) ? 8 : 4);   // BUG-6: long/double = 8 bytes
+            w.declareParam(p.name, is8Byte(p.type) ? 8 : 4, varDbgTypeTag(p.type));   // BUG-6: long/double = 8 bytes
         }
         FunctionSymbol synthFs = new FunctionSymbol(initName, true, false, false, null, null);
         beginFunctionScope(synthFs, null);   // void
@@ -1350,9 +1377,10 @@ public final class MivmEmitter {
     private void emitLocalVarDecl(VarDecl vd) throws IOException {
         BpType declT = vd.type != null ? typeRefToBpType(vd.type)
                                        : (vd.init != null ? info.exprTypes.get(vd.init) : null);
+        String declTag = varDbgTypeTag(declT);               // H6.a.2: tag para el .dbg
         for (DeclName dn : vd.names) {
-            if (is8Byte(declT)) declareLocalLong(dn.name);   // H1.2/H1.3: long/double = 8 bytes
-            else declareLocal(dn.name);
+            if (is8Byte(declT)) declareLocalLong(dn.name, declTag);   // H1.2/H1.3: long/double = 8 bytes
+            else declareLocal(dn.name, declTag);
             if (vd.isOwner) {
                 scopeStack.peek().ownerLocals.add(dn.name);
             }
@@ -1414,24 +1442,30 @@ public final class MivmEmitter {
         w.emitSetLocal(cd.name.name);
     }
 
-    private void declareLocal(String name) {
+    private void declareLocal(String name) { declareLocal(name, (String) null); }
+
+    // H6.a.2: variante con tag de tipo BP para el .dbg.
+    private void declareLocal(String name, String typeTag) {
         FuncScope scope = scopeStack.peek();
         if (scope.locals.add(name)) {
-            w.declareLocal(name);
+            w.declareLocal(name, typeTag);
         }
     }
 
-    private void declareLocalLong(String name) {   // H1.2 (V2): local de 8 bytes
+    private void declareLocalLong(String name) { declareLocalLong(name, (String) null); }
+
+    private void declareLocalLong(String name, String typeTag) {   // H1.2 (V2): local de 8 bytes
         FuncScope scope = scopeStack.peek();
         if (scope.locals.add(name)) {
-            w.declareLocalLong(name);
+            w.declareLocalLong(name, typeTag);
         }
     }
 
     // H1.2 (V2): declara los params de fs con ancho por tipo (long = 8 bytes).
+    // H6.a.2: además pasa el tag de tipo BP para el .dbg.
     private void declareParamsWidthAware(FunctionSymbol fs) {
         for (ParamSymbol p : fs.params) {
-            w.declareParam(p.name, is8Byte(p.type) ? 8 : 4);   // H1.2/H1.3: long/double
+            w.declareParam(p.name, is8Byte(p.type) ? 8 : 4, varDbgTypeTag(p.type));
         }
     }
 
@@ -1783,7 +1817,7 @@ public final class MivmEmitter {
         if (s.range instanceof ForNumericRange) {
             ForNumericRange r = (ForNumericRange) s.range;
             // i := from
-            declareLocal(s.iteratorName);
+            declareLocal(s.iteratorName, "integer");   // H6.a.2: iterador numérico = integer
             emitExpr(r.from);
             w.emitSetLocal(s.iteratorName);
             // pre-compute end (puede ser una expresión arbitraria)
@@ -1833,7 +1867,10 @@ public final class MivmEmitter {
             declareLocal(arrLocal);
             declareLocal(idxLocal);
             declareLocal(endLocal);
-            declareLocal(s.iteratorName);
+            // H6.a.2: tag del iterador = tipo de elemento del iterable.
+            BpType itElem = info.exprTypes.get(r.iterable);
+            declareLocal(s.iteratorName,
+                    (itElem instanceof ArrayType) ? varDbgTypeTag(((ArrayType) itElem).element) : null);
 
             emitExpr(r.iterable);
             w.emitSetLocal(arrLocal);

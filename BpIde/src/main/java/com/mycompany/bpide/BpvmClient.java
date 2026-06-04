@@ -530,9 +530,14 @@ public final class BpvmClient implements AutoCloseable {
         public final int     size;
         public final boolean isArray;
         public final int     offset;
-        public NamedLocal(String name, long value, int size, boolean isArray, int offset) {
+        public final String  type;     // H6.a.2: tag de tipo BP (integer/long/.../ref/"?")
+        public final String  display;  // H6.a.2: texto ya renderizado por la VM
+        public NamedLocal(String name, long value, int size, boolean isArray, int offset,
+                          String type, String display) {
             this.name = name; this.value = value; this.size = size;
             this.isArray = isArray; this.offset = offset;
+            this.type = (type != null ? type : "?");
+            this.display = (display != null ? display : Long.toString(value));
         }
     }
 
@@ -555,7 +560,9 @@ public final class BpvmClient implements AutoCloseable {
                     Json.getLong(m, "value", 0),
                     (int) Json.getLong(m, "size", 4),
                     Json.getBool(m, "isArray", false),
-                    (int) Json.getLong(m, "offset", 0)));
+                    (int) Json.getLong(m, "offset", 0),
+                    Json.getString(m, "type", "?"),
+                    Json.getString(m, "display", null)));
         }
         return out;
     }

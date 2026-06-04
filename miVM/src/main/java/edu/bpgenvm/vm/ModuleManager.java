@@ -215,8 +215,10 @@ public class ModuleManager {
         public final int     offset;     // con signo, relativo a bp: <0 param, >=0 local
         public final int     sizeBytes;  // 4 (i32/ref) · 8 (long/double) · 4+len*4 (array)
         public final boolean isArray;
-        public LocalVarDescriptor(String name, int offset, int sizeBytes, boolean isArray) {
-            this.name = name; this.offset = offset; this.sizeBytes = sizeBytes; this.isArray = isArray;
+        public final String  type;       // H6.a.2: tag de tipo BP (integer/long/float/double/string/boolean/ref/"?")
+        public LocalVarDescriptor(String name, int offset, int sizeBytes, boolean isArray, String type) {
+            this.name = name; this.offset = offset; this.sizeBytes = sizeBytes;
+            this.isArray = isArray; this.type = (type != null ? type : "?");
         }
     }
 
@@ -688,13 +690,15 @@ public class ModuleManager {
                         continue;
                     }
                     if (curFv != null) {
-                        // "<varName> <signedOffset> <sizeBytes> <isArray:0|1>"
+                        // "<varName> <signedOffset> <sizeBytes> <isArray:0|1> [<typeTag>]"
+                        // El 5º campo (typeTag) es opcional: .dbg v3 pre-H6.a.2 trae 4.
                         String[] t = line.trim().split("\\s+");
-                        if (t.length == 4) {
+                        if (t.length >= 4) {
                             try {
+                                String typeTag = (t.length >= 5) ? t[4] : "?";
                                 curFv.vars.add(new LocalVarDescriptor(
                                         t[0], Integer.parseInt(t[1]),
-                                        Integer.parseInt(t[2]), t[3].equals("1")));
+                                        Integer.parseInt(t[2]), t[3].equals("1"), typeTag));
                             } catch (NumberFormatException ignored) { }
                         }
                     }

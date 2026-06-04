@@ -60,6 +60,7 @@ public class ModWriter {
 
     private final List<String> currentParams = new ArrayList<>();
     private final List<Integer> currentParamSizes = new ArrayList<>();  // H1.2: ancho por param (4/8)
+    private final List<String> currentParamTypes = new ArrayList<>();   // H6.a.2: tag de tipo BP (null=desconocido)
 
     private static class LocalSlot {
         String name;
@@ -67,6 +68,7 @@ public class ModWriter {
         int sizeBytes;
         boolean isArray;
         int arrayLength;
+        String typeTag;   // H6.a.2: tag de tipo BP para el .dbg (null=desconocido)
     }
     private final List<LocalSlot> currentLocalSlots = new ArrayList<>();
     private int currentLocalsBytes = 0;
@@ -83,8 +85,10 @@ public class ModWriter {
         public final int offset;      // con signo, relativo a bp
         public final int sizeBytes;   // 4 (i32/ref) · 8 (long/double) · 4+len*4 (array)
         public final boolean isArray;
-        public VarDebugInfo(String name, int offset, int sizeBytes, boolean isArray) {
-            this.name = name; this.offset = offset; this.sizeBytes = sizeBytes; this.isArray = isArray;
+        public final String typeTag;  // H6.a.2: tag de tipo BP (null/"?" = desconocido)
+        public VarDebugInfo(String name, int offset, int sizeBytes, boolean isArray, String typeTag) {
+            this.name = name; this.offset = offset; this.sizeBytes = sizeBytes;
+            this.isArray = isArray; this.typeTag = (typeTag != null ? typeTag : "?");
         }
     }
 
@@ -272,6 +276,7 @@ public class ModWriter {
         nextLabelId = 0;
         currentParams.clear();
         currentParamSizes.clear();
+        currentParamTypes.clear();
         currentLocalSlots.clear();
         currentLocalsBytes = 0;
     }
@@ -290,11 +295,12 @@ public class ModWriter {
         for (int i = 0; i < currentParams.size(); i++) {
             String pn = currentParams.get(i);
             if (pn.startsWith("__")) continue;
-            vars.add(new VarDebugInfo(pn, paramOffset(i), currentParamSizes.get(i), false));
+            String tag = (i < currentParamTypes.size()) ? currentParamTypes.get(i) : null;
+            vars.add(new VarDebugInfo(pn, paramOffset(i), currentParamSizes.get(i), false, tag));
         }
         for (LocalSlot s : currentLocalSlots) {
             if (s.name.startsWith("__")) continue;
-            vars.add(new VarDebugInfo(s.name, s.offsetBytes, s.sizeBytes, s.isArray));
+            vars.add(new VarDebugInfo(s.name, s.offsetBytes, s.sizeBytes, s.isArray, s.typeTag));
         }
         if (!vars.isEmpty()) functionVarsDbg.put(funcName, vars);
     }
@@ -484,13 +490,17 @@ public class ModWriter {
 
     // --- Params y locales ---
 
-    public void declareParam(String paramName) { declareParam(paramName, 4); }
+    public void declareParam(String paramName) { declareParam(paramName, 4, null); }
 
     // H1.2 (V2): param con ancho explícito (long = 8 bytes / 2 slots).
-    public void declareParam(String paramName, int sizeBytes) {
+    public void declareParam(String paramName, int sizeBytes) { declareParam(paramName, sizeBytes, null); }
+
+    // H6.a.2: param con tag de tipo BP para el .dbg (null = desconocido).
+    public void declareParam(String paramName, int sizeBytes, String typeTag) {
         if (!currentParams.contains(paramName)) {
             currentParams.add(paramName);
             currentParamSizes.add(sizeBytes);
+            currentParamTypes.add(typeTag);
         }
     }
 
@@ -512,27 +522,35 @@ public class ModWriter {
         return slots;
     }
 
-    public void declareLocal(String localName) {
+    public void declareLocal(String localName) { declareLocal(localName, null); }
+
+    // H6.a.2: local i32/ref con tag de tipo BP para el .dbg (null = desconocido).
+    public void declareLocal(String localName, String typeTag) {
         if (findLocalSlot(localName) != null) return;
         LocalSlot s = new LocalSlot();
         s.name = localName;
         s.offsetBytes = currentLocalsBytes;
         s.sizeBytes = 4;
         s.isArray = false;
+        s.typeTag = typeTag;
         currentLocalSlots.add(s);
         currentLocalsBytes += 4;
     }
 
+    public void declareLocalLong(String localName) { declareLocalLong(localName, null); }
+
     // H1.2 (V2): local long = 8 bytes (2 slots). El frame (ENTER) crece solo
     // porque se calcula desde currentLocalsBytes. emitGet/SetLocal detectan
     // sizeBytes==8 y emiten GET_LOCAL_L/SET_LOCAL_L.
-    public void declareLocalLong(String localName) {
+    // H6.a.2: typeTag distingue long vs double (ambos 8 bytes) en el .dbg.
+    public void declareLocalLong(String localName, String typeTag) {
         if (findLocalSlot(localName) != null) return;
         LocalSlot s = new LocalSlot();
         s.name = localName;
         s.offsetBytes = currentLocalsBytes;
         s.sizeBytes = 8;
         s.isArray = false;
+        s.typeTag = typeTag;
         currentLocalSlots.add(s);
         currentLocalsBytes += 8;
     }

@@ -58,14 +58,19 @@ class NamedLocalsDbgTest {
         assertTrue(names.containsAll(java.util.Arrays.asList("n", "base", "total", "big", "i")),
                 "faltan vars; vi " + names);
 
-        // 'big' es long → 8 bytes. 'n'/'base' son params (offset negativo).
+        // 'big' es long → 8 bytes + tipo "long". 'n'/'base' son params (offset<0).
         assertNotNull(big);
         assertEquals(8, big.sizeBytes, "big:long debe ocupar 8 bytes");
+        assertEquals("long", big.type, "big debe etiquetarse como long");   // H6.a.2
         for (ModuleManager.LocalVarDescriptor v : fv.vars) {
-            if (v.name.equals("n") || v.name.equals("base"))
+            if (v.name.equals("n") || v.name.equals("base")) {
                 assertTrue(v.offset < 0, v.name + " es param → offset<0, vi " + v.offset);
-            if (v.name.equals("total") || v.name.equals("i"))
+                assertEquals("integer", v.type, v.name + " debe ser integer");   // H6.a.2
+            }
+            if (v.name.equals("total") || v.name.equals("i")) {
                 assertTrue(v.offset >= 0, v.name + " es local → offset>=0, vi " + v.offset);
+                assertEquals("integer", v.type, v.name + " debe ser integer");   // H6.a.2
+            }
         }
     }
 }

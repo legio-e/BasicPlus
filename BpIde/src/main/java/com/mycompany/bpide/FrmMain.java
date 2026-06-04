@@ -2144,10 +2144,10 @@ public class FrmMain extends javax.swing.JFrame
         private boolean hasNames() { return !named.isEmpty(); }
 
         @Override public int getRowCount() { return hasNames() ? named.size() : values.length; }
-        @Override public int getColumnCount() { return 3; }
+        @Override public int getColumnCount() { return hasNames() ? 4 : 3; }
         @Override public String getColumnName(int c) {
             return hasNames()
-                ? new String[]{"Nombre", "Offset (bp+)", "Valor"}[c]
+                ? new String[]{"Nombre", "Tipo", "Valor", "Offset (bp+)"}[c]
                 : new String[]{"Slot", "Offset (bp+)", "Valor (i32)"}[c];
         }
         @Override public boolean isCellEditable(int r, int c) { return false; }
@@ -2157,9 +2157,9 @@ public class FrmMain extends javax.swing.JFrame
                 BpvmClient.NamedLocal nl = named.get(r);
                 switch (c) {
                     case 0: return nl.name;
-                    case 1: return nl.offset;
-                    case 2: return nl.isArray ? ("array[len=" + nl.value + "]")
-                                              : Long.toString(nl.value);
+                    case 1: return nl.type;
+                    case 2: return nl.display;   // H6.a.2: ya renderizado por tipo en la VM
+                    case 3: return nl.offset;
                     default: return null;
                 }
             }

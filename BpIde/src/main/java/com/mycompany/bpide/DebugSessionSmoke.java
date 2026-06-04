@@ -60,9 +60,8 @@ public final class DebugSessionSmoke {
                                 + " frames=" + frames.size()
                                 + " props=" + props.size());
                         for (BpvmClient.NamedLocal nl : named) {
-                            System.out.println("    " + nl.name + " = "
-                                    + (nl.isArray ? ("array[len=" + nl.value + "]")
-                                                  : Long.toString(nl.value))
+                            System.out.println("    " + nl.name + ": " + nl.type + " = "
+                                    + nl.display
                                     + "  (bp+" + nl.offset + ", " + nl.size + "B)");
                         }
                         // Continue tras procesar.
