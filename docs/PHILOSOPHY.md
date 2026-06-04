@@ -237,6 +237,65 @@ Esta separación cumple dos objetivos:
 
 ---
 
+## La cascada de verificación: VM-Java → VM-C → VM-Pico
+
+Tenemos tres implementaciones de la VM y las desarrollamos **siempre en el
+mismo orden**: primero Java, luego C (host), luego Pico (firmware). No es
+casualidad que funcione tan bien — es una **cascada de tamices**, donde cada
+VM corre en un entorno estrictamente **más restringido** que la anterior:
+
+- **VM-Java** — el entorno más rico: GC, memoria ~ilimitada, el mejor tooling
+  y debugger. Es la **implementación de referencia**. Caza barato los bugs de
+  **lógica y semántica** (despacho virtual, herencia, scheduler, try/catch…).
+- **VM-C (host)** — el *mismo* algoritmo bajo las reglas de C: memoria manual,
+  buffers fijos, big-endian explícito, sin GC del lenguaje host. Hereda la
+  lógica ya probada en Java y caza los bugs de **portabilidad y representación**.
+  Su contrato es la invariante central del proyecto: **stdout byte-idéntico**
+  al de la VM-Java para el mismo `.mod`.
+- **VM-Pico (firmware)** — C + las restricciones del micro: RAM ajustada,
+  FreeRTOS, flash, transporte serie. Para cuando llegamos aquí, la lógica y la
+  portabilidad ya están probadas dos veces; sólo queda lo **genuinamente
+  hardware** (integración con el SO embebido y el transporte).
+
+La consecuencia operativa, que hemos comprobado una y otra vez:
+
+> **Lo que no funciona en Java tampoco funcionará en C; lo que no funciona en C
+> tampoco funcionará en la Pico.** Cada capa es un superconjunto de las
+> restricciones de la siguiente.
+
+Por eso el orden Java→C→Pico ordena los bugs de **más baratos de cazar** a
+**más caros**. Probar en la Pico es lo más costoso (flashear, cable, iterar a
+ciegas); al llegar allí queremos tener garantías altas y reservar la placa para
+validar sólo lo que *de verdad* es específico del hardware.
+
+**Regla práctica**: ninguna feature de la VM se prueba primero en la Pico.
+Se valida en Java, luego en C (con diff de stdout contra Java), y sólo entonces
+se lleva al firmware.
+
+### Extensión al debugger: paridad de *wire*
+
+La misma disciplina aplica al protocolo de debug. La VM-Java (`DebugServer`,
+A1) es la referencia del wire; la VM-C `--listen` debe producir un wire
+**equivalente** para la misma secuencia de comandos, igual que iguala el stdout.
+
+Matiz importante (la **regla de oro de H6**): la VM-Java está *fusionada*
+(runtime + host, tiene el `.dbg`), mientras que la VM-C/Pico es **device puro**
+(trabaja en pc/sp/bp/memoria cruda, sin `.dbg`). Por eso los mensajes que
+cargan símbolos (p.ej. `BP_HIT` con `file`/`line`, o `serverName`) **difieren a
+propósito**: el device los omite y el host (IDE) los rellena con el `.dbg` que
+él tiene. La paridad de wire es entonces:
+
+- **byte-idéntica** para lo agnóstico de rol (sobre todo `OUTPUT` = el stdout
+  del programa, que es la paridad de siempre);
+- **equivalente en comportamiento** para el control (mismos breakpoints
+  alcanzados en los mismos puntos lógicos, mismos valores de locales), con los
+  campos simbólicos como diferencia documentada device↔host.
+
+Así el debugger del device se prueba en desktop (VM-C) antes de tocar la Pico,
+y en la placa sólo validamos que el **transporte serie** mueve esos mismos bytes.
+
+---
+
 ## Lo que NO somos
 
 - **No somos un lenguaje de sistemas**. No vamos a competir con C
