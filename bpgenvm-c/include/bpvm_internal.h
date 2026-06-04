@@ -167,6 +167,11 @@ struct bpvm_thread {
      * respecto a este valor, acotando la frecuencia a sentencias BP. */
     int  last_debug_line;
 
+    /* H6.b — single-step: si !=0, el intérprete pausa tras ejecutar el
+     * próximo opcode (lo setea el pause_cb al devolver BPVM_DBG_STEP).
+     * Vive en el tc para sobrevivir entre quantums del scheduler SMP. */
+    int  dbg_step;
+
     /* H2 — Worker ID que actualmente está ejecutando el interp sobre
      * este tc. -1 = libre (puede ser pickeado). Sólo se modifica bajo
      * vm_lock. El scheduler usa esta flag (NO tc->status) para decidir
@@ -199,6 +204,10 @@ typedef struct {
 /* H3 #158 — forward del struct de helpers para código AOT. Definido
  * en src/bpvm_aot_helpers.h; lo referenciamos sólo por puntero aquí. */
 struct aot_helpers_v1;
+
+/* H6.b — máximo de breakpoints simultáneos. Tabla fija (sin malloc). 32 es
+ * holgado para un debugger y barato en RAM en el MCU. */
+#define BPVM_MAX_BREAKPOINTS 32
 
 struct bpvm {
     /* Buffer del caller. */
@@ -268,6 +277,16 @@ struct bpvm {
     bpvm_debug_hook_t   debug_hook;
     bpvm_pc_to_line_t   debug_pc_to_line;
     void*               debug_user;
+
+    /* H6.b — Debugger del device: breakpoints por pc + pausa/continue/step.
+     * Coste hot-path cuando pause_cb==NULL: un único null-check por opcode
+     * (igual que debug_hook). Tabla fija (sin malloc → MCU-friendly). */
+    bpvm_pause_cb_t     pause_cb;
+    void*               pause_user;
+    volatile int        pause_requested;   /* PAUSE async (otro thread/task) */
+    struct { uint32_t pc; int id; } breakpoints[BPVM_MAX_BREAKPOINTS];
+    int                 bp_active;          /* nº de slots con id!=0 */
+    int                 bp_next_id;         /* allocador de ids (>=1) */
 
     /* H2 — Estado SMP (workers + comm task + locks). NULL = modo
      * single-worker legacy (F4 v1, scheduler.c). Cuando no-NULL, la

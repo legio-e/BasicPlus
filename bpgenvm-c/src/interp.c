@@ -421,6 +421,28 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             }
         }
 
+        /* H6.b — Pausa del debugger POR PC (breakpoint / pausa pedida /
+         * single-step). Regla de oro: el core sólo compara pc; el host
+         * traduce línea→pc. Coste cuando NO hay pause_cb: un null-check.
+         * Cuando lo hay pero no hay step/pausa/breakpoints: dos lecturas.
+         * El pause_cb BLOQUEA (lo provee el embedder) y devuelve la acción;
+         * `break` rompe el for(;;) → cae en `done:` (status TERMINATED). */
+        if (vm->pause_cb != NULL) {
+            int hit = tc->dbg_step || vm->pause_requested;
+            if (!hit && vm->bp_active > 0) {
+                for (int i = 0; i < BPVM_MAX_BREAKPOINTS; i++)
+                    if (vm->breakpoints[i].id != 0 && vm->breakpoints[i].pc == pc) { hit = 1; break; }
+            }
+            if (hit) {
+                vm->pause_requested = 0;
+                tc->dbg_step = 0;
+                tc->pc = pc; tc->sp = sp; tc->bp = bp; tc->cs = cs;   /* sync para inspección */
+                bpvm_dbg_action_t act = vm->pause_cb(vm, tc, pc, vm->pause_user);
+                if (act == BPVM_DBG_STOP) { exit_status = BPVM_DBG_STOPPED; break; }
+                if (act == BPVM_DBG_STEP) tc->dbg_step = 1;
+            }
+        }
+
         uint8_t op = mem[pc++];
         switch (op) {
 

@@ -280,6 +280,80 @@ int bpvm_thread_id(const bpvm_thread_t* tc) {
     return tc ? (int) tc->id : -1;
 }
 
+/* ============================================================ */
+/*  H6.b — Debugger del device: API de breakpoints + pausa.     */
+/* ============================================================ */
+
+void bpvm_set_pause_cb(bpvm_t* vm, bpvm_pause_cb_t cb, void* user) {
+    if (!vm) return;
+    vm->pause_cb   = cb;
+    vm->pause_user = user;
+}
+
+int bpvm_debug_add_breakpoint(bpvm_t* vm, uint32_t pc) {
+    if (!vm) return -1;
+    /* Idempotente por pc: si ya existe, devuelve su id. */
+    for (int i = 0; i < BPVM_MAX_BREAKPOINTS; i++)
+        if (vm->breakpoints[i].id != 0 && vm->breakpoints[i].pc == pc)
+            return vm->breakpoints[i].id;
+    /* Buscar slot libre (id==0). */
+    for (int i = 0; i < BPVM_MAX_BREAKPOINTS; i++) {
+        if (vm->breakpoints[i].id == 0) {
+            int id = ++vm->bp_next_id;
+            vm->breakpoints[i].pc = pc;
+            vm->breakpoints[i].id = id;
+            vm->bp_active++;
+            return id;
+        }
+    }
+    return -1;   /* tabla llena */
+}
+
+bool bpvm_debug_clear_breakpoint(bpvm_t* vm, int bp_id) {
+    if (!vm || bp_id <= 0) return false;
+    for (int i = 0; i < BPVM_MAX_BREAKPOINTS; i++) {
+        if (vm->breakpoints[i].id == bp_id) {
+            vm->breakpoints[i].id = 0;
+            vm->breakpoints[i].pc = 0;
+            vm->bp_active--;
+            return true;
+        }
+    }
+    return false;
+}
+
+void bpvm_debug_clear_breakpoints(bpvm_t* vm) {
+    if (!vm) return;
+    for (int i = 0; i < BPVM_MAX_BREAKPOINTS; i++) {
+        vm->breakpoints[i].id = 0;
+        vm->breakpoints[i].pc = 0;
+    }
+    vm->bp_active = 0;
+}
+
+int bpvm_debug_list_breakpoints(bpvm_t* vm, uint32_t* out_pcs, int* out_ids, int max) {
+    if (!vm) return 0;
+    int n = 0;
+    for (int i = 0; i < BPVM_MAX_BREAKPOINTS && n < max; i++) {
+        if (vm->breakpoints[i].id != 0) {
+            if (out_pcs) out_pcs[n] = vm->breakpoints[i].pc;
+            if (out_ids) out_ids[n] = vm->breakpoints[i].id;
+            n++;
+        }
+    }
+    return n;
+}
+
+void bpvm_debug_request_pause(bpvm_t* vm) {
+    if (!vm) return;
+    vm->pause_requested = 1;
+}
+
+uint32_t bpvm_thread_pc(const bpvm_thread_t* tc) { return tc ? tc->pc : 0; }
+uint32_t bpvm_thread_sp(const bpvm_thread_t* tc) { return tc ? tc->sp : 0; }
+uint32_t bpvm_thread_bp(const bpvm_thread_t* tc) { return tc ? tc->bp : 0; }
+uint32_t bpvm_thread_cs(const bpvm_thread_t* tc) { return tc ? tc->cs : 0; }
+
 void bpvm_destroy(bpvm_t* vm) {
     if (!vm) return;
     /* Liberar módulos cargados. */
@@ -318,6 +392,7 @@ const char* bpvm_status_str(bpvm_status_t s) {
     case BPVM_ERR_NULL_RECEIVER:  return "INVOKE_VIRTUAL sobre null";
     case BPVM_ERR_RUNTIME:        return "RuntimeError BP no atrapado";
     case BPVM_NATIVE_RETURN:      return "native-return (interno)";
+    case BPVM_DBG_STOPPED:        return "detenido por el debugger";
     default:                       return "?";
     }
 }

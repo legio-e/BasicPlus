@@ -30,7 +30,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method test-debug
 
 all: $(BIN)
 
@@ -126,4 +126,19 @@ test-method: $(LIBOBJ)
 	    $(LIBOBJ) -o $(METHOD_BIN) $(LDFLAGS); \
 	  echo "--- método virtual desde native (esperado: [Box.getDoubled] v= 5, 11) ---"; \
 	  (cd samples && ../$(METHOD_BIN) MethodCall.mod); \
+	fi
+
+# H6.b.1 — núcleo portable del debugger (breakpoints por pc + pausa/step/stop).
+# Inyecta un pause_cb (sin wire ni hardware) y verifica step/breakpoint/stop +
+# list/clear. DBGMOD = cualquier .mod sin deps externas (default Arith.mod).
+DEBUG_BIN = build/test_debug.exe
+DBGMOD   ?= samples/Arith.mod
+test-debug: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f "$(DBGMOD)" ]; then \
+	  echo "(skip test-debug: falta $(DBGMOD))"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_debug.c $(LIBOBJ) -o $(DEBUG_BIN) $(LDFLAGS); \
+	  echo "--- núcleo debugger VM-C (esperado: OK al final) ---"; \
+	  (cd samples && ../$(DEBUG_BIN) $(notdir $(DBGMOD))); \
 	fi

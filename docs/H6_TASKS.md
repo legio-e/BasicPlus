@@ -71,12 +71,41 @@ nombres de variables locales/params por función → slot. Para mostrar locales
       para el device (#140) el host hará esa traducción sobre bytes crudos.
   - (posibles, según interés) watch de expresiones, breakpoints condicionales
     (EVAL ya existe como base), mejor render de objetos/arrays.
-- **(b) Debugger del DEVICE** (#140) — la pieza grande siguiente, ya con el
-  `.dbg` completo: host-tiene-el-`.dbg`, device-en-pc sobre el wire. Aquí la
-  regla de oro se gana el sueldo. Diferida a después de (a).
+- **(b) Debugger del DEVICE** (#140) — la pieza grande. Regla de oro: el device
+  trabaja SOLO en pc/sp/bp/memoria cruda; el host (IDE) tiene el `.dbg` y traduce
+  (línea↔pc, slot/dir→nombre). Por eso los breakpoints son **por pc** (el IDE
+  convierte línea→pc) y LOCALS = frame crudo del device + resolución en el IDE.
+
+  **Inventario (2026-06-04)**: ✅ hook #139 (fronteras de línea, fire-and-forget),
+  ✅ plumbing wire/JSON (`wire_v1.c`) + cola de salida. ❌ ningún comando de debug
+  en `repl_v1.c`, ❌ sin registro de breakpoints, ❌ sin pausa/bloqueo, ❌ sin
+  BP_HIT, ❌ build host = batch puro (sin `--listen`).
+
+  Decomposición (decidida: empezar por el núcleo portable):
+  - **H6.b.1 — núcleo portable** ✅ HECHO (2026-06-04, #215). En el core C
+    (`bpvm.c`/`interp.c`/headers): registro de breakpoints POR PC (add/clear/list/
+    idempotente, tabla fija de 32, MCU-friendly), máquina pausa/continue/step en el
+    inner loop de `bpvm_interp_run_quantum`, y **bloqueo inyectado** vía
+    `bpvm_pause_cb_t` (el embedder lo provee: condvar en host / cola FreeRTOS en
+    Pico). `BPVM_DBG_STOP` aborta (status `BPVM_DBG_STOPPED`). Accessors
+    `bpvm_thread_pc/sp/bp/cs` para que el embedder reporte el frame crudo. Coste
+    hot-path cuando `pause_cb==NULL`: un null-check (cero impacto en paridad).
+    Test C `test/test_debug.c` (`make test-debug`): step + breakpoint-por-pc +
+    stop + list/clear, sin wire ni hardware. Verificado + 0 regresión (Arith
+    normal + native bridge intactos).
+  - **H6.b.2 — transporte** (PENDIENTE, decisión próxima): o bien un servidor wire
+    en el build de host C (`bpgenvm --listen`, depurar en desktop como A1) o bien
+    directo al firmware Pico (tasks FreeRTOS: separar intérprete del RX/comm +
+    BP_HIT por serie). El pause_cb del embedder envía BP_HIT (pc/sp/bp crudos),
+    bloquea esperando continue/step/stop, y traduce comandos de debug del wire a
+    add/clear-breakpoint + request_pause.
+  - **H6.b.3 — IDE resuelve símbolos sobre device crudo**: cuando el runtime es
+    una VM-C (host o Pico), el IDE aplica el `.dbg` que tiene (functionForPc +
+    vars de H6.a) sobre los reads crudos del device → locales por nombre, igual
+    que hoy hace la VM-Java pero del lado del IDE.
 
 ## Próximo paso concreto
-**H6.a.1 — locales por nombre**: (1) extender el writer del `.dbg` con la tabla
-var→slot por función; (2) cargarla en `ModuleManager`; (3) resolver nombres en
-`sendLocalsReply`/IDE. Additivo, dual-VM-safe (el `.mod` no cambia; la VM-C lo
-ignora). Empezar leyendo el formato exacto del `.dbg` y el writer en ModWriter.
+**H6.b.2 — transporte del debugger del device**: elegir host-wire-server vs Pico
+y conectar el `pause_cb` (BP_HIT + bloqueo + comandos) al wire v1. El núcleo
+(#215) ya expone todo lo necesario: breakpoints por pc, request_pause, accessors
+de frame, y `BPVM_DBG_STOPPED`.

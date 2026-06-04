@@ -22,6 +22,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>   /* H6.b — bool en la API pública (bpvm_debug_clear_breakpoint) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,11 +42,13 @@ typedef enum {
     BPVM_ERR_DIV_BY_ZERO,
     BPVM_ERR_NULL_RECEIVER,  /* INVOKE_VIRTUAL sobre 0 — F3+ */
     BPVM_ERR_RUNTIME,        /* RuntimeError BP no atrapado */
-    BPVM_NATIVE_RETURN       /* sentinela interno del puente native→BP
+    BPVM_NATIVE_RETURN,      /* sentinela interno del puente native→BP
                               * (P-aot-call-bp): solo lo produce
                               * OP_NATIVE_RETURN dentro de un bucle anidado
                               * de bpvm_aot_call_bp_*; nunca escapa a
                               * bpvm_run. No es un error. */
+    BPVM_DBG_STOPPED         /* H6.b — el debugger abortó la ejecución
+                              * (pause_cb devolvió BPVM_DBG_STOP). */
 } bpvm_status_t;
 
 /*
@@ -212,6 +215,68 @@ void bpvm_set_debug_hook(bpvm_t* vm,
  * pida (sp/bp/cs para frame walking, status para join, etc.).
  */
 int bpvm_thread_id(const bpvm_thread_t* tc);
+
+/* ============================================================ */
+/*  H6.b — Debugger del device: breakpoints por pc + pausa.     */
+/* ============================================================ */
+/*
+ * REGLA DE ORO (H6): el device trabaja SÓLO en pc/direcciones; el host
+ * (IDE) tiene el `.dbg` y hace toda la traducción simbólica (línea↔pc,
+ * slot/dir→nombre). Por eso los breakpoints aquí son POR PC ABSOLUTO: el
+ * host convierte línea→pc y registra el pc; el core sólo compara.
+ *
+ * El "transporte" (servidor wire en host C, o tasks FreeRTOS en la Pico)
+ * NO vive en el core: el embedder inyecta un bpvm_pause_cb_t que bloquea
+ * como pueda (condvar / cola) y devuelve la acción siguiente. El core es
+ * portable y agnóstico del transporte.
+ */
+
+/* Acción que el embedder devuelve desde el pause-callback. */
+typedef enum {
+    BPVM_DBG_CONTINUE = 0,   /* reanuda hasta el próximo breakpoint/pausa */
+    BPVM_DBG_STEP     = 1,   /* ejecuta UNA instrucción y vuelve a pausar  */
+    BPVM_DBG_STOP     = 2     /* aborta la ejecución (status BPVM_DBG_STOPPED) */
+} bpvm_dbg_action_t;
+
+/*
+ * Pause-callback: lo llama el intérprete cuando alcanza una condición de
+ * pausa (pc en un breakpoint, pausa pedida, o paso completado). El embedder
+ * DEBE bloquear aquí (enviar BP_HIT al host, esperar continue/step/stop) y
+ * devolver la acción. `tc` está sincronizado (pc/sp/bp/cs) para inspección;
+ * NO mutar pc/sp/bp/cs (edit-and-continue diferido). `pc` = pc actual.
+ */
+typedef bpvm_dbg_action_t (*bpvm_pause_cb_t)(bpvm_t* vm, bpvm_thread_t* tc,
+                                              uint32_t pc, void* user);
+
+/* Instala/desinstala (NULL) el pause-callback. THREAD-UNSAFE: llamar antes
+ * de bpvm_run(). Cuando es NULL el inner loop sólo paga un null-check. */
+void bpvm_set_pause_cb(bpvm_t* vm, bpvm_pause_cb_t cb, void* user);
+
+/* Registra un breakpoint en el pc absoluto dado. Devuelve un bpId>0, o
+ * -1 si la tabla está llena. Idempotente por pc (si ya existe, devuelve su id). */
+int  bpvm_debug_add_breakpoint(bpvm_t* vm, uint32_t pc);
+
+/* Borra el breakpoint con el bpId dado. true si existía. */
+bool bpvm_debug_clear_breakpoint(bpvm_t* vm, int bp_id);
+
+/* Borra todos los breakpoints. */
+void bpvm_debug_clear_breakpoints(bpvm_t* vm);
+
+/* Vuelca los breakpoints activos en los buffers del caller (pc + id en
+ * paralelo, hasta `max`). Devuelve cuántos hay. Cualquiera de los punteros
+ * puede ser NULL si sólo interesa el conteo. */
+int  bpvm_debug_list_breakpoints(bpvm_t* vm, uint32_t* out_pcs, int* out_ids, int max);
+
+/* Pide una pausa asíncrona: el intérprete romperá en el próximo opcode.
+ * Pensado para llamarse desde otro thread/task (el de RX del wire). */
+void bpvm_debug_request_pause(bpvm_t* vm);
+
+/* Accessors del frame para el embedder (reporta pc/sp/bp/cs crudos en
+ * BP_HIT; el host resuelve nombres con el `.dbg`). */
+uint32_t bpvm_thread_pc(const bpvm_thread_t* tc);
+uint32_t bpvm_thread_sp(const bpvm_thread_t* tc);
+uint32_t bpvm_thread_bp(const bpvm_thread_t* tc);
+uint32_t bpvm_thread_cs(const bpvm_thread_t* tc);
 
 /*
  * Libera la estructura de control. NO toca el `memory[]` que pasó el
