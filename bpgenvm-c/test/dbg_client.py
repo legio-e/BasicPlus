@@ -79,8 +79,36 @@ def main():
         rr, _ = w.recv_until("RUN_REPLY")
         bh, _ = w.recv_until("BP_HIT")
         pcs = [bh["pc"]]
-        print("BP_HIT pc=%s sp=%s bp=%s" % (bh.get("pc"), bh.get("sp"), bh.get("bp")))
         if "sp" not in bh or "bp" not in bh: fails.append("BP_HIT sin sp/bp (frame crudo)")
+        # avanza algunos steps hasta entrar en un frame con locales (sp>bp), para
+        # que el cross-check READ_INT==LOCALS[0] ejerza de verdad.
+        for k in range(20):
+            if bh.get("sp", 0) > bh.get("bp", 0): break
+            w.send({"type": "STEP", "id": 30 + k}); bh, _ = w.recv_until("BP_HIT"); pcs.append(bh["pc"])
+        print("BP_HIT pc=%s sp=%s bp=%s" % (bh.get("pc"), bh.get("sp"), bh.get("bp")))
+        bp0, sp0 = bh.get("bp"), bh.get("sp")
+
+        # 4b) Inspección CRUDA mientras pausados (H6.b.2.c): LOCALS/STACK/READ_INT.
+        w.send({"type": "LOCALS", "id": 41}); loc, _ = w.recv_until("LOCALS_REPLY")
+        locals_arr = loc.get("locals", [])
+        exp = (sp0 - bp0) // 4 if (sp0 is not None and bp0 is not None) else -1
+        if len(locals_arr) != exp: fails.append(f"LOCALS len {len(locals_arr)} != (sp-bp)/4 {exp}")
+        print("LOCALS:", locals_arr)
+
+        w.send({"type": "STACK", "id": 42}); stk, _ = w.recv_until("STACK_REPLY")
+        frames = stk.get("frames", [])
+        if len(frames) < 1: fails.append("STACK sin frames")
+        print("STACK frames:", frames)
+
+        # READ_INT en bp+0 debe coincidir con LOCALS[0] (cross-check del wire crudo).
+        if locals_arr:
+            w.send({"type": "READ_INT", "id": 43, "addr": bp0}); ri, _ = w.recv_until("READ_INT_REPLY")
+            if ri.get("value") != locals_arr[0]:
+                fails.append(f"READ_INT(bp) {ri.get('value')} != LOCALS[0] {locals_arr[0]}")
+
+        # READ_STRING(0) debe devolver cadena vacía (ref nula), sin colgarse.
+        w.send({"type": "READ_STRING", "id": 44, "ref": 0}); rs, _ = w.recv_until("READ_STRING_REPLY")
+        if rs.get("value", None) is None: fails.append("READ_STRING sin 'value'")
 
         # 5) SET_BP en un pc conocido (ejercita el comando)
         w.send({"type": "SET_BP", "id": 5, "pc": pcs[0]})

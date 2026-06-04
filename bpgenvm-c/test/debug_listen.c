@@ -21,6 +21,8 @@
  */
 
 #include "bpvm.h"
+#include "bpvm_internal.h"   /* H6.b.2.c: bpvm_mem_read_i32/u32 + tc->stack_base
+                              * (host trusted, igual que hará el repl del Pico) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,6 +60,11 @@ typedef struct {
     pthread_cond_t  ccmd;
     int             cmd;            /* acción pendiente o -1 */
     int             session;        /* id de sesión (1 tras RUN) */
+    /* H6.b.2.c — snapshot del frame pausado (válido mientras paused==1; el
+     * worker está bloqueado en pause_cb, así que la memoria no muta). El reader
+     * lo usa para LOCALS/STACK. Protegido por cmtx. */
+    int             paused;
+    uint32_t        pf_pc, pf_sp, pf_bp, pf_cs, pf_sbase;
 } server_t;
 
 /* ---- envío de líneas JSON (thread-safe) ---- */
@@ -121,6 +128,13 @@ static bpvm_dbg_action_t pause_cb(bpvm_t* vm, bpvm_thread_t* tc,
                                   uint32_t pc, void* user) {
     (void) vm;
     server_t* s = (server_t*) user;
+    /* snapshot del frame para LOCALS/STACK/READ mientras estamos pausados */
+    pthread_mutex_lock(&s->cmtx);
+    s->pf_pc = pc; s->pf_sp = bpvm_thread_sp(tc); s->pf_bp = bpvm_thread_bp(tc);
+    s->pf_cs = bpvm_thread_cs(tc); s->pf_sbase = tc->stack_base;
+    s->paused = 1;
+    pthread_mutex_unlock(&s->cmtx);
+
     char buf[256];
     int n = snprintf(buf, sizeof buf,
         "{\"type\":\"BP_HIT\",\"session\":%d,\"tid\":%d,"
@@ -134,6 +148,7 @@ static bpvm_dbg_action_t pause_cb(bpvm_t* vm, bpvm_thread_t* tc,
     while (s->cmd < 0)
         pthread_cond_wait(&s->ccmd, &s->cmtx);
     int act = s->cmd;
+    s->paused = 0;
     pthread_mutex_unlock(&s->cmtx);
     return (bpvm_dbg_action_t) act;
 }
@@ -261,6 +276,81 @@ int main(int argc, char** argv) {
                 post_cmd(&s, BPVM_DBG_STEP);
             } else if (!strcmp(type, "STOP") || !strcmp(type, "KILL")) {
                 post_cmd(&s, BPVM_DBG_STOP);
+            } else if (!strcmp(type, "READ_INT")) {
+                /* lee un i32 en una dirección absoluta cruda */
+                long addr = json_int(line, "addr", -1);
+                int32_t v = (addr >= 0) ? bpvm_mem_read_i32(vm, (uint32_t) addr) : 0;
+                char rep[96]; int n = snprintf(rep, sizeof rep,
+                    "{\"type\":\"READ_INT_REPLY\",\"id\":%ld,\"value\":%d}", id, v);
+                send_line(&s, rep, n);
+            } else if (!strcmp(type, "READ_STRING")) {
+                /* string heap = [byte_len:u32 BE][bytes UTF-8]; ref 0 = "" */
+                long ref = json_int(line, "ref", 0);
+                char rep[1200];
+                int off = snprintf(rep, sizeof rep,
+                    "{\"type\":\"READ_STRING_REPLY\",\"id\":%ld,\"value\":\"", id);
+                if (ref > 0) {
+                    uint32_t blen = bpvm_mem_read_u32(vm, (uint32_t) ref);
+                    const uint8_t* b = vm->memory + ref + 4;
+                    for (uint32_t i = 0; i < blen && off < (int)sizeof rep - 8; i++) {
+                        unsigned char c = b[i];
+                        if (c == '"' || c == '\\') { rep[off++] = '\\'; rep[off++] = (char) c; }
+                        else if (c == '\n')        { rep[off++] = '\\'; rep[off++] = 'n'; }
+                        else if (c == '\t')        { rep[off++] = '\\'; rep[off++] = 't'; }
+                        else if (c >= 0x20)          rep[off++] = (char) c;  /* incl. UTF-8 >=0x80 */
+                    }
+                }
+                off += snprintf(rep + off, sizeof rep - off, "\"}");
+                send_line(&s, rep, off);
+            } else if (!strcmp(type, "LOCALS")) {
+                /* i32 crudos entre bp y sp del frame pausado (por índice; el host
+                 * resuelve nombres con el .dbg). Sólo válido si estamos pausados. */
+                pthread_mutex_lock(&s.cmtx);
+                int p = s.paused; uint32_t bp = s.pf_bp, sp = s.pf_sp;
+                pthread_mutex_unlock(&s.cmtx);
+                if (!p) {
+                    char rep[96]; int n = snprintf(rep, sizeof rep,
+                        "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"INTERNAL_ERROR\","
+                        "\"message\":\"no pausado\"}", id);
+                    send_line(&s, rep, n);
+                } else {
+                    char rep[2048];
+                    int off = snprintf(rep, sizeof rep,
+                        "{\"type\":\"LOCALS_REPLY\",\"id\":%ld,\"locals\":[", id);
+                    int nl = (sp > bp) ? (int) ((sp - bp) / 4) : 0;
+                    for (int i = 0; i < nl && off < (int)sizeof rep - 24; i++)
+                        off += snprintf(rep + off, sizeof rep - off, "%s%d",
+                                        i ? "," : "", bpvm_mem_read_i32(vm, bp + i * 4));
+                    off += snprintf(rep + off, sizeof rep - off, "]}");
+                    send_line(&s, rep, off);
+                }
+            } else if (!strcmp(type, "STACK")) {
+                /* walk de frames: saved pc en bp-12, saved bp en bp-8 (= Java). */
+                pthread_mutex_lock(&s.cmtx);
+                int p = s.paused; uint32_t cbp = s.pf_bp, cpc = s.pf_pc, sb = s.pf_sbase;
+                pthread_mutex_unlock(&s.cmtx);
+                if (!p) {
+                    char rep[96]; int n = snprintf(rep, sizeof rep,
+                        "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"INTERNAL_ERROR\","
+                        "\"message\":\"no pausado\"}", id);
+                    send_line(&s, rep, n);
+                } else {
+                    char rep[1600];
+                    int off = snprintf(rep, sizeof rep,
+                        "{\"type\":\"STACK_REPLY\",\"id\":%ld,\"frames\":[", id);
+                    int first = 1, safety = 0;
+                    while (cbp > sb && safety < 256 && off < (int)sizeof rep - 48) {
+                        off += snprintf(rep + off, sizeof rep - off, "%s[%u,%u]",
+                                        first ? "" : ",", cpc, cbp);
+                        first = 0;
+                        cpc = bpvm_mem_read_u32(vm, cbp - 12);
+                        cbp = bpvm_mem_read_u32(vm, cbp - 8);
+                        safety++;
+                    }
+                    off += snprintf(rep + off, sizeof rep - off, "%s[%u,%u]]}",
+                                    first ? "" : ",", cpc, cbp);   /* frame raíz */
+                    send_line(&s, rep, off);
+                }
             } else {
                 char rep[160]; int n = snprintf(rep, sizeof rep,
                     "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"UNSUPPORTED\","

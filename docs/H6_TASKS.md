@@ -112,8 +112,16 @@ nombres de variables locales/params por función → slot. Para mostrar locales
       Python (`test/dbg_client.py`, `make test-listen`): HELLO_REPLY(bpvm-c) →
       PAUSE → RUN → BP_HIT(pc,sp,bp) → SET_BP → STEP×2 → CONTINUE → 14×OUTPUT +
       EXITED(OK). Build limpio.
-      - **Pendiente (H6.b.2.c)**: LOCALS/STACK/READ_INT/READ_STRING sobre el wire
-        (lecturas de memoria cruda que el IDE usará para resolver símbolos).
+    - **H6.b.2.c — inspección cruda por wire** ✅ HECHO (2026-06-04). El server
+      añade `READ_INT{addr}`, `READ_STRING{ref}`, `LOCALS`, `STACK` (sólo válidos
+      mientras pausado: el worker está bloqueado en pause_cb → el frame no muta).
+      LOCALS = i32 crudos entre bp y sp POR ÍNDICE; STACK = walk de frames
+      (saved pc en bp-12, saved bp en bp-8, = Java); el host resolverá nombres con
+      el `.dbg` (H6.b.3). Usa `bpvm_mem_read_i32/u32` + `tc->stack_base` vía
+      `bpvm_internal.h` (host trusted; no toca el core → 0 riesgo de paridad).
+      Verificado (`make test-listen`): en pc=1923 (sp>bp) LOCALS=[0],
+      READ_INT(bp)==LOCALS[0] (cross-check), STACK con frame, READ_STRING(0)="".
+      - **Pendiente (H6.b.3)**: el IDE resuelve símbolos sobre estos reads crudos.
   - **H6.b.3 — IDE resuelve símbolos sobre device crudo**: cuando el runtime es
     una VM-C (host o Pico), el IDE aplica el `.dbg` que tiene (functionForPc +
     vars de H6.a) sobre los reads crudos del device → locales por nombre, igual
