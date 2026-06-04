@@ -30,7 +30,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method test-debug test-debug-mt
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method test-debug test-debug-mt test-listen
 
 all: $(BIN)
 
@@ -155,4 +155,23 @@ test-debug-mt: $(LIBOBJ)
 	  $(CC) $(CFLAGS) -Isrc test/test_debug_mt.c $(LIBOBJ) -o $(DEBUGMT_BIN) $(LDFLAGS); \
 	  echo "--- pausa/resume cruzando threads (esperado: OK al final) ---"; \
 	  (cd samples && ../$(DEBUGMT_BIN) $(notdir $(DBGMOD))); \
+	fi
+
+# H6.b.2.b — servidor wire del debugger en host (stand-in de la Pico, sin HW).
+# Compila bpvm_dbgserver (TCP + wire-v1 device-role) y lo conduce con un cliente
+# Python que verifica HELLO/PING/PAUSE/RUN/BP_HIT/SET_BP/STEP/CONTINUE/EXITED.
+LISTEN_BIN  = build/bpvm_dbgserver.exe
+DBG_LDFLAGS = $(LDFLAGS)
+ifeq ($(OS),Windows_NT)
+  DBG_LDFLAGS += -lws2_32
+endif
+PYTHON ?= python
+test-listen: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f "$(DBGMOD)" ]; then \
+	  echo "(skip test-listen: falta $(DBGMOD))"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/debug_listen.c $(LIBOBJ) -o $(LISTEN_BIN) $(DBG_LDFLAGS); \
+	  echo "--- wire debugger host (cliente Python) ---"; \
+	  $(PYTHON) test/dbg_client.py "$(abspath $(LISTEN_BIN))" "$(notdir $(DBGMOD))" samples; \
 	fi

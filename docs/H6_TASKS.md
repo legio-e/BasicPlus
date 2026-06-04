@@ -102,12 +102,18 @@ nombres de variables locales/params por función → slot. Para mostrar locales
       necesita el server host y que mapea al Pico (task intérprete bloquea, task
       comm alimenta comandos). Test `test/test_debug_mt.c` (`make test-debug-mt`):
       worker pausa 5× y el controlador reanuda → status OK. Sin sockets ni HW.
-    - **H6.b.2.b — sockets + wire JSON** (PENDIENTE): `bpgenvm --listen <port>`,
-      TCP accept + reader thread que parsea wire-v1 (HELLO/SET_BP-por-pc/CLR_BP/
-      CONTINUE/STEP/PAUSE/LOCALS/STACK/READ_INT/READ_STRING) y traduce a las
-      primitivas del núcleo (#215) + el canal de threads (#216). El pause_cb
-      envía BP_HIT (pc/sp/bp crudos) por el socket. Verificable con el BpvmClient
-      del IDE (connectRemote) o un cliente Python. Winsock en Windows.
+    - **H6.b.2.b — sockets + wire JSON** ✅ HECHO (2026-06-04). Servidor wire host
+      `bpvm_dbgserver <port> <mod>` (`test/debug_listen.c`, portable Winsock/POSIX):
+      TCP accept de 1 cliente, thread READER parsea wire-v1 line-JSON, thread
+      WORKER corre `bpvm_run`. El `pause_cb` envía `BP_HIT` (pc/sp/bp/cs CRUDOS,
+      rol device — sin file/line) y bloquea vía el canal #216; `output_cb` →
+      `OUTPUT`; al terminar → `EXITED`. Comandos: HELLO/PING/PAUSE/RUN/SET_BP-por-pc/
+      CLR_BP/CONTINUE/STEP/STOP. Verificado end-to-end SIN hardware con un cliente
+      Python (`test/dbg_client.py`, `make test-listen`): HELLO_REPLY(bpvm-c) →
+      PAUSE → RUN → BP_HIT(pc,sp,bp) → SET_BP → STEP×2 → CONTINUE → 14×OUTPUT +
+      EXITED(OK). Build limpio.
+      - **Pendiente (H6.b.2.c)**: LOCALS/STACK/READ_INT/READ_STRING sobre el wire
+        (lecturas de memoria cruda que el IDE usará para resolver símbolos).
   - **H6.b.3 — IDE resuelve símbolos sobre device crudo**: cuando el runtime es
     una VM-C (host o Pico), el IDE aplica el `.dbg` que tiene (functionForPc +
     vars de H6.a) sobre los reads crudos del device → locales por nombre, igual
