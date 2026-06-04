@@ -71,6 +71,23 @@ public class ModWriter {
     private final List<LocalSlot> currentLocalSlots = new ArrayList<>();
     private int currentLocalsBytes = 0;
 
+    /**
+     * H6.a.1 — descriptor de una variable (param o local) de una función, para
+     * el `.dbg`. {@code offset} es el desplazamiento (con signo) desde {@code bp}:
+     * negativo = param (debajo de bp/saved-regs), positivo = local. El host suma
+     * {@code bp + offset} para leer el slot y mostrar la variable por nombre. NO
+     * altera el {@code .mod}.
+     */
+    public static final class VarDebugInfo {
+        public final String name;
+        public final int offset;      // con signo, relativo a bp
+        public final int sizeBytes;   // 4 (i32/ref) · 8 (long/double) · 4+len*4 (array)
+        public final boolean isArray;
+        public VarDebugInfo(String name, int offset, int sizeBytes, boolean isArray) {
+            this.name = name; this.offset = offset; this.sizeBytes = sizeBytes; this.isArray = isArray;
+        }
+    }
+
     // --- Soporte de clases ---
     private static class FieldInfo {
         String name;
@@ -142,6 +159,13 @@ public class ModWriter {
     private final Map<String, Integer> functionEnterOperandPos = new HashMap<>();
     private final Map<String, Integer> functionLocalsBytesMap = new HashMap<>();
 
+    // H6.a.1 (.dbg v3) — info de depuración de variables por función:
+    // params + locales user-visible (los sintéticos `__*` se filtran). El .mod
+    // NO cambia; esto se vuelca al .dbg separado para que el host resuelva
+    // locales por nombre. LinkedHashMap conserva el orden de declaración de
+    // funciones para un .dbg estable y diffeable.
+    private final Map<String, List<VarDebugInfo>> functionVarsDbg = new java.util.LinkedHashMap<>();
+
     private final List<JumpFixup> pendingJumps = new ArrayList<>();
 
     public static class CallFixup {
@@ -200,6 +224,7 @@ public class ModWriter {
         callFixups.clear();
         functionEnterOperandPos.clear();
         functionLocalsBytesMap.clear();
+        functionVarsDbg.clear();
         functionLabelMaps.clear();
         pendingJumps.clear();
         classes.clear();
@@ -251,10 +276,40 @@ public class ModWriter {
         currentLocalsBytes = 0;
     }
 
+    /**
+     * H6.a.1 — captura el mapa var→offset de la función {@code funcName} (la que
+     * tiene el scope cargado AHORA) para el `.dbg`. Debe llamarse ANTES de
+     * {@link #clearFunctionScope()}. Filtra los temporales sintéticos del
+     * compilador (prefijo {@code __}) para no ensuciar el panel de variables;
+     * conserva params (incluido {@code this}), locales y los iteradores de bucle
+     * (que usan el nombre de origen del usuario).
+     */
+    private void captureFunctionVarsDbg(String funcName) {
+        if (funcName == null) return;
+        List<VarDebugInfo> vars = new ArrayList<>();
+        for (int i = 0; i < currentParams.size(); i++) {
+            String pn = currentParams.get(i);
+            if (pn.startsWith("__")) continue;
+            vars.add(new VarDebugInfo(pn, paramOffset(i), currentParamSizes.get(i), false));
+        }
+        for (LocalSlot s : currentLocalSlots) {
+            if (s.name.startsWith("__")) continue;
+            vars.add(new VarDebugInfo(s.name, s.offsetBytes, s.sizeBytes, s.isArray));
+        }
+        if (!vars.isEmpty()) functionVarsDbg.put(funcName, vars);
+    }
+
+    /** H6.a.1 — vars (params+locales) por función para el `.dbg`. Solo lectura. */
+    public Map<String, List<VarDebugInfo>> getFunctionVarsDebug() { return functionVarsDbg; }
+
+    /** H6.a.1 — relPc de inicio (OP_ENTER) de la función, o null si no existe. */
+    public Integer getFunctionStartRel(String name) { return functionAddresses.get(name); }
+
     public void addFunction(String name, boolean isPublic) {
         if (lastFunctionName != null) {
             functionLocalsBytesMap.put(lastFunctionName, currentLocalsBytes);
             functionLabelMaps.put(lastFunctionName, currentLabelMap);
+            captureFunctionVarsDbg(lastFunctionName);
         }
 
         functionAddresses.put(name, currentBytecodeSize);
@@ -1575,6 +1630,7 @@ public class ModWriter {
         if (lastFunctionName != null) {
             functionLocalsBytesMap.put(lastFunctionName, currentLocalsBytes);
             functionLabelMaps.put(lastFunctionName, currentLabelMap);
+            captureFunctionVarsDbg(lastFunctionName);
         }
 
         importOut.writeInt(externalFunctions.size());

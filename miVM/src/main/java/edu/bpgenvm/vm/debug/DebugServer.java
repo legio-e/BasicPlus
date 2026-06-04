@@ -658,6 +658,36 @@ public final class DebugServer implements AutoCloseable {
             sb.append(ctx.readLocal(i * 4));
         }
         sb.append("]");
+        // H6.a.1 — locales POR NOMBRE: si el .dbg v3 del módulo trae la tabla
+        // var→offset de la función que contiene el pc actual, resolvemos cada
+        // variable (params + locales) a {name, offset, value, size, isArray}.
+        // El IDE muestra "x = 5" en vez del array crudo. Si no hay .dbg v3,
+        // `named` queda vacío y el cliente cae al array `locals` por índice.
+        ModuleManager mm = vm.getModuleManager();
+        ModuleManager.FunctionVars fv = (mm != null) ? mm.functionForPc(ctx.absPc) : null;
+        sb.append(",\"named\":[");
+        if (fv != null) {
+            boolean first = true;
+            for (ModuleManager.LocalVarDescriptor v : fv.vars) {
+                if (!first) sb.append(',');
+                first = false;
+                // long/double i64 big-endian: high word en offset, low en offset+4
+                // (idéntico a VirtualMachine.readI64). Para double, `value` es el
+                // patrón de bits IEEE-754 crudo; la reinterpretación por tipo es
+                // fase 2 (este .dbg v1 solo lleva nombre+offset+ancho, no el tipo).
+                long value = (v.sizeBytes == 8)
+                        ? ((long) ctx.readLocal(v.offset) << 32)
+                          | ((long) ctx.readLocal(v.offset + 4) & 0xFFFFFFFFL)
+                        : ctx.readLocal(v.offset);
+                sb.append("{\"name\":").append(Json.quote(v.name));
+                sb.append(",\"offset\":").append(v.offset);
+                sb.append(",\"size\":").append(v.sizeBytes);
+                sb.append(",\"isArray\":").append(v.isArray);
+                sb.append(",\"value\":").append(value);
+                sb.append('}');
+            }
+        }
+        sb.append("]");
         sendReply(id, "LOCALS_REPLY", sb.toString());
     }
 

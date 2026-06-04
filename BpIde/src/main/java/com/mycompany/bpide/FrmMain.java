@@ -1125,10 +1125,11 @@ public class FrmMain extends javax.swing.JFrame
             if (e instanceof edu.bpgenvm.vm.debug.PausedEvent) {
                 edu.bpgenvm.vm.debug.PausedEvent pe = (edu.bpgenvm.vm.debug.PausedEvent) e;
                 int[] locals = debug.getLocals(2000);
+                List<BpvmClient.NamedLocal> named = debug.getNamedLocals(2000);   // H6.a.1
                 List<int[]> frames = debug.getStackFrames(2000);
                 List<edu.bpgenvm.vm.ModuleManager.PropertyView> props =
                         debug.getModuleProperties(2000);
-                SwingUtilities.invokeLater(() -> onDebugPaused(pe, locals, frames, props));
+                SwingUtilities.invokeLater(() -> onDebugPaused(pe, locals, named, frames, props));
             } else if (e instanceof edu.bpgenvm.vm.debug.ResumedEvent) {
                 SwingUtilities.invokeLater(this::onDebugResumed);
             } else if (e instanceof edu.bpgenvm.vm.debug.ExitedEvent) {
@@ -1198,6 +1199,7 @@ public class FrmMain extends javax.swing.JFrame
      *  reader del BpvmClient — aquí NO se hace I/O. */
     private void onDebugPaused(edu.bpgenvm.vm.debug.PausedEvent pe,
                                int[] locals,
+                               List<BpvmClient.NamedLocal> named,
                                List<int[]> frames,
                                List<edu.bpgenvm.vm.ModuleManager.PropertyView> props) {
         // Highlight de línea actual (amarillo).
@@ -1218,7 +1220,7 @@ public class FrmMain extends javax.swing.JFrame
                 }
             } catch (Exception ex) { /* ignore */ }
         }
-        localsModel.update(locals);
+        localsModel.update(locals, named);
         modulePropsModel.update(props);
         // Call Stack: hoy mostramos PC raw — describePc requiere el
         // ModuleManager in-process; cuando la VM corre como subproceso ya
@@ -1241,7 +1243,7 @@ public class FrmMain extends javax.swing.JFrame
             hl.removeHighlight(pausedLineHighlight);
             pausedLineHighlight = null;
         }
-        localsModel.update(new int[0]);
+        localsModel.update(new int[0], java.util.Collections.emptyList());
         modulePropsModel.update(java.util.Collections.emptyList());
         stackModel.update(java.util.Collections.emptyList(),
                           java.util.Collections.emptyList());
@@ -2136,15 +2138,31 @@ public class FrmMain extends javax.swing.JFrame
 
     /** Modelo: slots locales del frame actual mostrados como i32 crudos. */
     private static final class LocalsTableModel extends AbstractTableModel {
-        private int[] values = new int[0];
-        @Override public int getRowCount() { return values.length; }
+        private int[] values = new int[0];                       // crudo (fallback)
+        private java.util.List<BpvmClient.NamedLocal> named =     // H6.a.1
+                java.util.Collections.emptyList();
+        private boolean hasNames() { return !named.isEmpty(); }
+
+        @Override public int getRowCount() { return hasNames() ? named.size() : values.length; }
         @Override public int getColumnCount() { return 3; }
         @Override public String getColumnName(int c) {
-            return new String[]{"Slot", "Offset (bp+)", "Valor (i32)"}[c];
+            return hasNames()
+                ? new String[]{"Nombre", "Offset (bp+)", "Valor"}[c]
+                : new String[]{"Slot", "Offset (bp+)", "Valor (i32)"}[c];
         }
         @Override public boolean isCellEditable(int r, int c) { return false; }
-        @Override public Class<?> getColumnClass(int c) { return Integer.class; }
+        @Override public Class<?> getColumnClass(int c) { return Object.class; }
         @Override public Object getValueAt(int r, int c) {
+            if (hasNames()) {
+                BpvmClient.NamedLocal nl = named.get(r);
+                switch (c) {
+                    case 0: return nl.name;
+                    case 1: return nl.offset;
+                    case 2: return nl.isArray ? ("array[len=" + nl.value + "]")
+                                              : Long.toString(nl.value);
+                    default: return null;
+                }
+            }
             switch (c) {
                 case 0: return r;
                 case 1: return r * 4;
@@ -2152,8 +2170,11 @@ public class FrmMain extends javax.swing.JFrame
                 default: return null;
             }
         }
-        void update(int[] vs) {
-            this.values = vs;
+        /** H6.a.1: si `named` no está vacío, se muestra por nombre; si no, cae
+         *  al array crudo `vs` (módulos sin .dbg v3). */
+        void update(int[] vs, java.util.List<BpvmClient.NamedLocal> nm) {
+            this.values = (vs != null) ? vs : new int[0];
+            this.named  = (nm != null) ? nm : java.util.Collections.emptyList();
             fireTableDataChanged();
         }
     }

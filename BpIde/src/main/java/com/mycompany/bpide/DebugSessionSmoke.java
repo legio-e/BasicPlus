@@ -51,12 +51,20 @@ public final class DebugSessionSmoke {
                         System.out.println("PAUSE " + n + " line=" + pe.line + " tid=" + pe.tid);
                         // Queries durante pausa.
                         int[] locals = debug.getLocals(2000);
+                        List<BpvmClient.NamedLocal> named = debug.getNamedLocals(2000);  // H6.a.1
                         List<int[]> frames = debug.getStackFrames(2000);
                         List<ModuleManager.PropertyView> props =
                                 debug.getModuleProperties(2000);
                         System.out.println("  locals=" + locals.length
+                                + " named=" + named.size()
                                 + " frames=" + frames.size()
                                 + " props=" + props.size());
+                        for (BpvmClient.NamedLocal nl : named) {
+                            System.out.println("    " + nl.name + " = "
+                                    + (nl.isArray ? ("array[len=" + nl.value + "]")
+                                                  : Long.toString(nl.value))
+                                    + "  (bp+" + nl.offset + ", " + nl.size + "B)");
+                        }
                         // Continue tras procesar.
                         new Thread(() -> {
                             try { Thread.sleep(50); } catch (InterruptedException ignored) {}

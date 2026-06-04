@@ -518,6 +518,48 @@ public final class BpvmClient implements AutoCloseable {
         return out;
     }
 
+    /**
+     * H6.a.1 — un local resuelto por NOMBRE (vía el .dbg v3 que tiene el host).
+     * {@code value} es el i32 en bp+offset (o el i64 combinado, big-endian, si
+     * {@code size==8}). Para arrays, {@code value} es la longitud (el slot
+     * guarda la longitud; los elementos van inline a partir de bp+offset+4).
+     */
+    public static final class NamedLocal {
+        public final String  name;
+        public final long    value;
+        public final int     size;
+        public final boolean isArray;
+        public final int     offset;
+        public NamedLocal(String name, long value, int size, boolean isArray, int offset) {
+            this.name = name; this.value = value; this.size = size;
+            this.isArray = isArray; this.offset = offset;
+        }
+    }
+
+    /**
+     * Locales del thread pausado resueltos por NOMBRE. Vacío si el módulo no
+     * trae sección `vars` en su .dbg (formato < v3): el caller cae a
+     * {@link #getLocals}. NO modifica el .mod ni requiere nada del device.
+     */
+    public List<NamedLocal> getNamedLocals(long timeoutMs) throws IOException {
+        Map<String, Object> resp = sendRequest("LOCALS", null, null, timeoutMs);
+        List<Object> named = Json.getList(resp, "named");
+        List<NamedLocal> out = new ArrayList<>();
+        if (named == null) return out;
+        for (Object o : named) {
+            if (!(o instanceof Map)) continue;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) o;
+            out.add(new NamedLocal(
+                    Json.getString(m, "name", "?"),
+                    Json.getLong(m, "value", 0),
+                    (int) Json.getLong(m, "size", 4),
+                    Json.getBool(m, "isArray", false),
+                    (int) Json.getLong(m, "offset", 0)));
+        }
+        return out;
+    }
+
     /** Stack frames como pares [pc, bp]. */
     public List<int[]> getStackFrames(long timeoutMs) throws IOException {
         Map<String, Object> resp = sendRequest("STACK", null, null, timeoutMs);

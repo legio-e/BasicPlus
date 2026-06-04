@@ -202,6 +202,32 @@ public class ModuleManager {
         // csOff (offset relativo a CS del backing global). El debugger las
         // usa para mostrarlas en el panel de variables.
         java.util.List<PropertyDescriptor> properties;
+        // Vars por función (.dbg v3 — H6.a.1). TreeMap<startRelPc, FunctionVars>
+        // para localizar, vía floorEntry, la función que contiene un relPc dado.
+        // El debugger lo usa para mostrar locales por nombre. null si el .dbg
+        // no trae sección `vars` (formato < v3).
+        java.util.TreeMap<Integer, FunctionVars> functionVars;
+    }
+
+    /** Descriptor de una variable local/param (.dbg v3) para el debugger. */
+    public static final class LocalVarDescriptor {
+        public final String  name;
+        public final int     offset;     // con signo, relativo a bp: <0 param, >=0 local
+        public final int     sizeBytes;  // 4 (i32/ref) · 8 (long/double) · 4+len*4 (array)
+        public final boolean isArray;
+        public LocalVarDescriptor(String name, int offset, int sizeBytes, boolean isArray) {
+            this.name = name; this.offset = offset; this.sizeBytes = sizeBytes; this.isArray = isArray;
+        }
+    }
+
+    /** Vars (params + locales) de una función (.dbg v3) para el debugger. */
+    public static final class FunctionVars {
+        public final String name;
+        public final int    startRelPc;
+        public final java.util.List<LocalVarDescriptor> vars = new java.util.ArrayList<>();
+        public FunctionVars(String name, int startRelPc) {
+            this.name = name; this.startRelPc = startRelPc;
+        }
     }
 
     /** Info de una property pública de módulo, leída del .dbg. */
@@ -561,6 +587,25 @@ public class ModuleManager {
     }
 
     /**
+     * H6.a.1 — Devuelve la {@link FunctionVars} (vars del .dbg v3) cuya función
+     * contiene el PC absoluto dado, o null si el módulo no trae sección `vars`
+     * o el PC no cae en ninguna función conocida. Usa la misma lógica de
+     * pertenencia a módulo que {@link #getLineForPc} y un floor lookup por
+     * relPc de inicio de función (las funciones son contiguas en el código).
+     */
+    public FunctionVars functionForPc(int pc) {
+        for (ModuleMetadata meta : loadedModules) {
+            if (pc >= meta.codeStart && pc < meta.endAddress) {
+                if (meta.functionVars == null) return null;
+                int relPc = pc - meta.codeStart;
+                Map.Entry<Integer, FunctionVars> e = meta.functionVars.floorEntry(relPc);
+                return (e != null) ? e.getValue() : null;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Devuelve el path al .bp original para un PC absoluto, o null si el
      * módulo no tiene .dbg cargado o el PC no cae en ningún módulo.
      */
@@ -612,18 +657,49 @@ public class ModuleManager {
             String line;
             boolean inLines = false;
             boolean inProps = false;
+            boolean inVars  = false;
             java.util.TreeMap<Integer, Integer> map = new java.util.TreeMap<>();
             java.util.List<PropertyDescriptor> props = new java.util.ArrayList<>();
+            java.util.TreeMap<Integer, FunctionVars> fvMap = new java.util.TreeMap<>();
+            FunctionVars curFv = null;
             while ((line = br.readLine()) != null) {
                 if (line.isEmpty()) continue;
-                if (line.startsWith("module ")) { inLines = false; inProps = false; continue; }
+                if (line.startsWith("module ")) { inLines = false; inProps = false; inVars = false; continue; }
                 if (line.startsWith("source ")) {
                     meta.sourcePath = line.substring("source ".length()).trim();
-                    inLines = false; inProps = false;
+                    inLines = false; inProps = false; inVars = false;
                     continue;
                 }
-                if (line.equals("lines"))      { inLines = true; inProps = false; continue; }
-                if (line.equals("properties")) { inLines = false; inProps = true;  continue; }
+                if (line.equals("lines"))      { inLines = true;  inProps = false; inVars = false; continue; }
+                if (line.equals("properties")) { inLines = false; inProps = true;  inVars = false; continue; }
+                if (line.equals("vars"))       { inLines = false; inProps = false; inVars = true;  curFv = null; continue; }
+                if (inVars) {
+                    if (line.startsWith("func ")) {
+                        // "func <qualifiedName> <startRelPc>"
+                        String[] t = line.substring("func ".length()).trim().split("\\s+");
+                        curFv = null;
+                        if (t.length >= 2) {
+                            try {
+                                int start = Integer.parseInt(t[1]);
+                                curFv = new FunctionVars(t[0], start);
+                                fvMap.put(start, curFv);
+                            } catch (NumberFormatException ignored) { }
+                        }
+                        continue;
+                    }
+                    if (curFv != null) {
+                        // "<varName> <signedOffset> <sizeBytes> <isArray:0|1>"
+                        String[] t = line.trim().split("\\s+");
+                        if (t.length == 4) {
+                            try {
+                                curFv.vars.add(new LocalVarDescriptor(
+                                        t[0], Integer.parseInt(t[1]),
+                                        Integer.parseInt(t[2]), t[3].equals("1")));
+                            } catch (NumberFormatException ignored) { }
+                        }
+                    }
+                    continue;
+                }
                 if (inLines) {
                     int sp = line.indexOf(' ');
                     if (sp <= 0) continue;
@@ -646,6 +722,7 @@ public class ModuleManager {
             }
             if (!map.isEmpty()) meta.lineMap = map;
             if (!props.isEmpty()) meta.properties = props;
+            if (!fvMap.isEmpty()) meta.functionVars = fvMap;
         } catch (IOException ignored) {
             // .dbg corrupto o ilegible: silencioso, sin info de depuración.
         }

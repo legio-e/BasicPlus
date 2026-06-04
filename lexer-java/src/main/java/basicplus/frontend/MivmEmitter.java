@@ -332,7 +332,7 @@ public final class MivmEmitter {
         // backing global). El runtime la usa para que el debugger del IDE
         // muestre las properties públicas del módulo en el panel de
         // variables sin ejecutar BP code (lee bytes directos del data block).
-        sb.append("dbg 2\n");
+        sb.append("dbg 3\n");
         sb.append("module ").append(moduleAst.name).append('\n');
         if (sourcePath != null && !sourcePath.isEmpty()) {
             sb.append("source ").append(sourcePath).append('\n');
@@ -358,6 +358,28 @@ public final class MivmEmitter {
             if (csOff == null) continue;
             if (!wroteHeader) { sb.append("properties\n"); wroteHeader = true; }
             sb.append(pd.name.name).append(' ').append(typeStr).append(' ').append(csOff).append('\n');
+        }
+        // Sección vars (.dbg v3 — H6.a.1): por función, params + locales
+        // user-visible (los temporales sintéticos `__*` los filtra ModWriter).
+        // Permite al host resolver locales por nombre. Formato:
+        //   vars
+        //   func <qualifiedName> <startRelPc>
+        //   <varName> <signedOffset> <sizeBytes> <isArray:0|1>
+        // <signedOffset> es relativo a bp: negativo = param, positivo = local.
+        // El .mod NO cambia; la VM-C ignora el .dbg por completo.
+        java.util.Map<String, java.util.List<ModWriter.VarDebugInfo>> fvars = w.getFunctionVarsDebug();
+        if (fvars != null && !fvars.isEmpty()) {
+            boolean wroteVarsHeader = false;
+            for (java.util.Map.Entry<String, java.util.List<ModWriter.VarDebugInfo>> e : fvars.entrySet()) {
+                Integer start = w.getFunctionStartRel(e.getKey());
+                if (start == null) continue;          // función sin dirección (no debería ocurrir)
+                if (!wroteVarsHeader) { sb.append("vars\n"); wroteVarsHeader = true; }
+                sb.append("func ").append(e.getKey()).append(' ').append(start).append('\n');
+                for (ModWriter.VarDebugInfo v : e.getValue()) {
+                    sb.append(v.name).append(' ').append(v.offset).append(' ')
+                      .append(v.sizeBytes).append(' ').append(v.isArray ? 1 : 0).append('\n');
+                }
+            }
         }
         Files.write(dbgOut, sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }

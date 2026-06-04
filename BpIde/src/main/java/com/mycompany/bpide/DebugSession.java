@@ -150,6 +150,18 @@ public final class DebugSession {
         }
     }
 
+    /** H6.a.1 — locales por nombre del thread pausado (.dbg v3). Lista vacía si
+     *  no hay cliente, no hay pausa, o el módulo no trae sección `vars`. */
+    public List<BpvmClient.NamedLocal> getNamedLocals(long timeoutMs) {
+        BpvmClient c = this.client;
+        if (c == null) return java.util.Collections.emptyList();
+        try { return c.getNamedLocals(timeoutMs); }
+        catch (IOException ex) {
+            System.err.println("[DebugSession] getNamedLocals falló: " + ex.getMessage());
+            return java.util.Collections.emptyList();
+        }
+    }
+
     public List<int[]> getStackFrames(long timeoutMs) {
         BpvmClient c = this.client;
         if (c == null) return java.util.Collections.emptyList();
