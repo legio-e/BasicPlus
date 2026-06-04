@@ -30,7 +30,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method test-debug
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method test-debug test-debug-mt
 
 all: $(BIN)
 
@@ -141,4 +141,18 @@ test-debug: $(LIBOBJ)
 	  $(CC) $(CFLAGS) -Isrc test/test_debug.c $(LIBOBJ) -o $(DEBUG_BIN) $(LDFLAGS); \
 	  echo "--- núcleo debugger VM-C (esperado: OK al final) ---"; \
 	  (cd samples && ../$(DEBUG_BIN) $(notdir $(DBGMOD))); \
+	fi
+
+# H6.b.2.a — pausa/resume del debugger cruzando threads (corazón del server
+# host, sin sockets). El intérprete corre en un thread y bloquea en el pause_cb;
+# el thread controlador inyecta STEP/CONTINUE por mutex+cond. Ver test_debug_mt.c.
+DEBUGMT_BIN = build/test_debug_mt.exe
+test-debug-mt: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f "$(DBGMOD)" ]; then \
+	  echo "(skip test-debug-mt: falta $(DBGMOD))"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_debug_mt.c $(LIBOBJ) -o $(DEBUGMT_BIN) $(LDFLAGS); \
+	  echo "--- pausa/resume cruzando threads (esperado: OK al final) ---"; \
+	  (cd samples && ../$(DEBUGMT_BIN) $(notdir $(DBGMOD))); \
 	fi

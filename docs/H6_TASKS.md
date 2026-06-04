@@ -93,12 +93,21 @@ nombres de variables locales/params por función → slot. Para mostrar locales
     Test C `test/test_debug.c` (`make test-debug`): step + breakpoint-por-pc +
     stop + list/clear, sin wire ni hardware. Verificado + 0 regresión (Arith
     normal + native bridge intactos).
-  - **H6.b.2 — transporte** (PENDIENTE, decisión próxima): o bien un servidor wire
-    en el build de host C (`bpgenvm --listen`, depurar en desktop como A1) o bien
-    directo al firmware Pico (tasks FreeRTOS: separar intérprete del RX/comm +
-    BP_HIT por serie). El pause_cb del embedder envía BP_HIT (pc/sp/bp crudos),
-    bloquea esperando continue/step/stop, y traduce comandos de debug del wire a
-    add/clear-breakpoint + request_pause.
+  - **H6.b.2 — transporte** (DECIDIDO: servidor wire en host C, depurable en
+    desktop como A1; el firmware Pico reusa la misma lógica de pause_cb después).
+    - **H6.b.2.a — pausa/resume cruzando threads** ✅ HECHO (2026-06-04, #216).
+      El corazón socket-free: el intérprete corre en un thread; el pause_cb
+      (embedder, pthreads) BLOQUEA en una cond var mientras un thread controlador
+      inyecta CONTINUE/STEP/STOP por mutex+cond — sin deadlock. Patrón que
+      necesita el server host y que mapea al Pico (task intérprete bloquea, task
+      comm alimenta comandos). Test `test/test_debug_mt.c` (`make test-debug-mt`):
+      worker pausa 5× y el controlador reanuda → status OK. Sin sockets ni HW.
+    - **H6.b.2.b — sockets + wire JSON** (PENDIENTE): `bpgenvm --listen <port>`,
+      TCP accept + reader thread que parsea wire-v1 (HELLO/SET_BP-por-pc/CLR_BP/
+      CONTINUE/STEP/PAUSE/LOCALS/STACK/READ_INT/READ_STRING) y traduce a las
+      primitivas del núcleo (#215) + el canal de threads (#216). El pause_cb
+      envía BP_HIT (pc/sp/bp crudos) por el socket. Verificable con el BpvmClient
+      del IDE (connectRemote) o un cliente Python. Winsock en Windows.
   - **H6.b.3 — IDE resuelve símbolos sobre device crudo**: cuando el runtime es
     una VM-C (host o Pico), el IDE aplica el `.dbg` que tiene (functionForPc +
     vars de H6.a) sobre los reads crudos del device → locales por nombre, igual
