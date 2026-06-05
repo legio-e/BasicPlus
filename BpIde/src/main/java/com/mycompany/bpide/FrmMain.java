@@ -1133,8 +1133,15 @@ public class FrmMain extends javax.swing.JFrame
                 final List<BpvmClient.NamedLocal> named =
                         named0.isEmpty() ? resolveDeviceNamedLocals(pe) : named0;
                 List<int[]> frames = debug.getStackFrames(2000);
+                // MODULE_PROPERTIES es extensión Java-only (la VM-C / Pico no la
+                // soporta: el pause_cb del device responde UNSUPPORTED). La
+                // pedimos SÓLO cuando el server manda `named[]` (= VM-Java); si
+                // `named0` viene vacío es device-role → la saltamos para no
+                // disparar el error "no valido en pausa".
                 List<edu.bpgenvm.vm.ModuleManager.PropertyView> props =
-                        debug.getModuleProperties(2000);
+                        named0.isEmpty()
+                            ? java.util.Collections.emptyList()
+                            : debug.getModuleProperties(2000);
                 SwingUtilities.invokeLater(() -> onDebugPaused(pe, locals, named, frames, props));
             } else if (e instanceof edu.bpgenvm.vm.debug.ResumedEvent) {
                 SwingUtilities.invokeLater(this::onDebugResumed);
