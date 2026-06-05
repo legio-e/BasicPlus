@@ -123,9 +123,22 @@ nombres de variables locales/params por función → slot. Para mostrar locales
       READ_INT(bp)==LOCALS[0] (cross-check), STACK con frame, READ_STRING(0)="".
       - **Pendiente (H6.b.3)**: el IDE resuelve símbolos sobre estos reads crudos.
   - **H6.b.3 — IDE resuelve símbolos sobre device crudo**: cuando el runtime es
-    una VM-C (host o Pico), el IDE aplica el `.dbg` que tiene (functionForPc +
-    vars de H6.a) sobre los reads crudos del device → locales por nombre, igual
-    que hoy hace la VM-Java pero del lado del IDE.
+    una VM-C (host o Pico), el host aplica el `.dbg` que tiene sobre los reads
+    crudos del device → locales por nombre, igual que hoy hace la VM-Java pero
+    del lado del host.
+    - **H6.b.3.a — capa de resolución (host)** ✅ HECHO (2026-06-04, #217).
+      `DbgFile` (lector standalone del `.dbg`: `lineForRelPc` + `functionForRelPc`,
+      reusa `ModuleManager.FunctionVars/LocalVarDescriptor`) + `DeviceFrameResolver`
+      (dado relPc=pc-cs + bp + un `MemReader`=READ_INT/READ_STRING del wire,
+      produce locales {nombre,tipo,valor,display} + línea; render por tipo del
+      lado host). Pura, sin GUI ni sockets. Test `DeviceResolveTest` con
+      `samples/LocalsDbg.dbg`: en relPc(línea 10) → función suma con
+      n/base=integer, big=long(100), ratio=double(1.5), msg=string("hola"),
+      ok=boolean(true), i=integer. (Parser `.dbg` duplicado a propósito vs
+      ModuleManager — read-only, menos riesgo que refactorizar lo load-bearing.)
+    - **H6.b.3.b — cableado al IDE** (PENDIENTE, con el IDE cerrado): BpvmClient
+      device-path (BP_HIT lleva cs → relPc = pc - cs; LOCALS via READ_INT por var)
+      + FrmMain usa `DeviceFrameResolver`. Habilita el diff-oráculo wire Java↔C.
 
 ## Próximo paso concreto
 **H6.b.2 — transporte del debugger del device**: elegir host-wire-server vs Pico
