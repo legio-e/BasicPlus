@@ -269,12 +269,18 @@ public final class BpvmClient implements AutoCloseable {
         private final InputStream delegate;
         SerialBlockingInputStream(InputStream d) { this.delegate = d; }
         @Override public int read() throws IOException {
+            int transient_ = 0;
             while (!closed) {
                 int c;
                 try { c = delegate.read(); }
                 catch (IOException ioe) {
                     if (closed) return -1;
                     throw ioe;
+                }
+                catch (RuntimeException re) {
+                    if (closed) return -1;
+                    transient_ = handleSerialFail(re, transient_);
+                    continue;
                 }
                 if (c >= 0) return c;
                 // -1: timeout en purejavacomm (NO EOF real). Reintentar.
@@ -283,12 +289,18 @@ public final class BpvmClient implements AutoCloseable {
         }
         @Override public int read(byte[] b, int off, int len) throws IOException {
             if (len == 0) return 0;
+            int transient_ = 0;
             while (!closed) {
                 int r;
                 try { r = delegate.read(b, off, len); }
                 catch (IOException ioe) {
                     if (closed) return -1;
                     throw ioe;
+                }
+                catch (RuntimeException re) {
+                    if (closed) return -1;
+                    transient_ = handleSerialFail(re, transient_);
+                    continue;
                 }
                 if (r > 0) return r;
                 if (r == 0) continue;
@@ -298,6 +310,37 @@ public final class BpvmClient implements AutoCloseable {
         }
         @Override public int available() throws IOException { return delegate.available(); }
         @Override public void close() throws IOException { delegate.close(); }
+    }
+
+    /**
+     * purejavacomm/jtermios lanza una RuntimeException ({@code jtermios.windows.
+     * JTermiosImpl$Fail}) cuando el {@code select()} del puerto falla. En Windows
+     * eso ocurre a veces de forma ESPÚREA con el device sano (race en el wait del
+     * handle), no sólo cuando el puerto muere. Antes el primer fallo mataba el
+     * reader y abortaba el RUN. Aquí lo tratamos como transitorio: pequeño sleep
+     * + reintento, hasta un tope; pasado el tope (puerto realmente caído)
+     * propagamos como IOException para un cierre limpio.
+     *
+     * @return el contador de fallos consecutivos incrementado.
+     * @throws IOException si supera el tope o la excepción no es de jtermios.
+     */
+    private int handleSerialFail(RuntimeException re, int consecutive) throws IOException {
+        String cn = re.getClass().getName();
+        boolean jtermios = cn.contains("jtermios") || cn.contains("JTermios");
+        if (!jtermios || consecutive >= 200) {   // ~2s de fallos seguidos ⇒ puerto caído
+            throw new IOException("lectura serie falló ("
+                    + re.getClass().getSimpleName() + "): " + re.getMessage(), re);
+        }
+        if (consecutive == 0) {
+            diag("[BpvmClient] select() serie falló (jtermios); reintentando — "
+                    + re.getMessage());
+        }
+        try { Thread.sleep(10); }
+        catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrumpido durante reintento serie", ie);
+        }
+        return consecutive + 1;
     }
 
     /** Variante con stdlibDir explícito: se pasa como --stdlibDir al
