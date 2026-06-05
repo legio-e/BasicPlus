@@ -157,9 +157,21 @@ nombres de variables locales/params por función → slot. Para mostrar locales
         la tabla de Variables. Aditivo y gated: la ruta Java-VM (que sí manda
         `named[]`) queda intacta. El panel de Variables muestra ahora locales por
         nombre/tipo también al depurar una VM-C remota (TCP endpoint A2.6).
-      - **Pendiente**: el port del `pause_cb` al firmware Pico (#140, requiere
-        HW); "Debug on Pico" sobre serie sigue mostrando el diálogo de "no
-        implementado" hasta ese port.
+      - **Port a Pico — firmware (#140)** ✅ IMPLEMENTADO + compile-checked
+        (2026-06-05, ARM `bpvm_pico.uf2` enlaza). `pico/repl_v1.c`: `pico_pause_cb`
+        (snapshot frame → BP_HIT → mini-loop sirviendo READ_INT/READ_STRING/
+        LOCALS/STACK/SET_BP/CLR_BP/CONTINUE/STEP/STOP inline hasta reanudar, en la
+        misma task del REPL = camino single-thread, sin cond-var) + lista de
+        breakpoints pendientes (la vm se crea por-RUN: SET_BP/PAUSE pre-RUN se
+        acumulan y se aplican en `handle_run`) + capability "DEBUG" en HELLO. Misma
+        lógica que el server host `debug_listen.c` (verificada por dbg_client.py +
+        el oráculo Java↔C). Bajo build SMP, `handle_run` fuerza `bpvm_run`
+        single-thread en debug (el pause_cb lee USB → sólo seguro en la task del
+        REPL).
+      - **Pendiente**: (a) flash + test en placa (no verificable sin HW);
+        (b) ruta IDE "Debug on Pico" sobre serie (connectSerial + breakpoints por
+        pc vía .dbg + reusar `resolveDeviceNamedLocals`) — hoy el menú aún muestra
+        "no implementado".
 
 ## Próximo paso concreto
 **H6.b.2 — transporte del debugger del device**: elegir host-wire-server vs Pico
