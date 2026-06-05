@@ -136,9 +136,21 @@ nombres de variables locales/params por función → slot. Para mostrar locales
       n/base=integer, big=long(100), ratio=double(1.5), msg=string("hola"),
       ok=boolean(true), i=integer. (Parser `.dbg` duplicado a propósito vs
       ModuleManager — read-only, menos riesgo que refactorizar lo load-bearing.)
-    - **H6.b.3.b — cableado al IDE** (PENDIENTE, con el IDE cerrado): BpvmClient
-      device-path (BP_HIT lleva cs → relPc = pc - cs; LOCALS via READ_INT por var)
-      + FrmMain usa `DeviceFrameResolver`. Habilita el diff-oráculo wire Java↔C.
+    - **H6.b.3.b — cableado al IDE** ✅ NÚCLEO HECHO (2026-06-05). `BpvmClient`:
+      (a) reconcilia el `pc` del BP_HIT device→`absPc` (la VM-C manda `pc`, la
+      VM-Java `absPc`); (b) `resolveDeviceFrame(dbg, ev)` envuelve
+      `READ_INT`/`READ_STRING` del wire como `MemReader` y llama
+      `DeviceFrameResolver` con `relPc = absPc - cs`; (c) `setBreakpointPc(pc)`
+      y `requestPause()` (API device-oriented: el host convierte línea→pc con el
+      `.dbg`). **Oráculo Java↔C** verificado por `DeviceWireOracleSmoke`: cliente
+      REAL del IDE ↔ VM-C (`bpvm_dbgserver`) ↔ `.dbg` host → en BP_HIT de la
+      línea 10 de `suma` resuelve los 8 locales POR NOMBRE Y TIPO
+      (n/base/total=integer, big=long, ratio=double, msg=string, ok=boolean,
+      i=integer), idéntico a la VM-Java. Es la cascada Java→C→Pico ejercida
+      end-to-end sobre el debugger, sin HW.
+      - **Pendiente**: consumir `resolveDeviceFrame` desde la GUI de FrmMain
+        cuando el backend activo es device-role (sólo cableado visual, el
+        mecanismo ya está probado); + el port del `pause_cb` al firmware Pico.
 
 ## Próximo paso concreto
 **H6.b.2 — transporte del debugger del device**: elegir host-wire-server vs Pico

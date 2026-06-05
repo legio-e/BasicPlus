@@ -33,7 +33,9 @@ package com.mycompany.bpide;
 import edu.bpgenvm.util.Json;
 import edu.bpgenvm.util.WireFraming;
 import edu.bpgenvm.vm.ModuleManager;
+import edu.bpgenvm.vm.debug.DbgFile;
 import edu.bpgenvm.vm.debug.DebugListener;
+import edu.bpgenvm.vm.debug.DeviceFrameResolver;
 import edu.bpgenvm.vm.debug.ExceptionEvent;
 import edu.bpgenvm.vm.debug.ExitedEvent;
 import edu.bpgenvm.vm.debug.PausedEvent;
@@ -417,6 +419,23 @@ public final class BpvmClient implements AutoCloseable {
         sendOneShot("CLR_BP", "", null);
     }
 
+    /**
+     * H6.b.3.b — breakpoint por PC absoluto, para depurar una VM device-role
+     * (server C / Pico) que NO conoce símbolos: el host convierte línea→pc con
+     * el {@code .dbg} (pc = relPc + cs) y manda el pc crudo. Devuelve el bpId
+     * que asigna el device (>0), o &lt;=0 si falló.
+     */
+    public int setBreakpointPc(int pc, long timeoutMs) throws IOException {
+        Map<String, Object> resp = sendRequest("SET_BP", "\"pc\":" + pc, null, timeoutMs);
+        return (int) Json.getLong(resp, "bpId", -1);
+    }
+
+    /** H6.b.3.b — pide al device pausar en el próximo opcode (async). El BP_HIT
+     *  llega por el event listener. Fire-and-forget. */
+    public void requestPause() {
+        sendOneShot("PAUSE", "", null);
+    }
+
     /** A2.3 — Ordena al daemon arrancar el módulo `module`. Fire-and-forget:
      *  el EXITED event es la confirmación del fin de ejecución. */
     public void runModule(String module) {
@@ -565,6 +584,41 @@ public final class BpvmClient implements AutoCloseable {
                     Json.getString(m, "display", null)));
         }
         return out;
+    }
+
+    /**
+     * H6.b.3.b — resuelve el frame de una VM <b>device-role</b> (server wire
+     * de la VM-C, o el Pico) a locales POR NOMBRE usando el {@code .dbg} que
+     * tiene el host. Es la regla de oro de H6: el device sólo reporta pc/bp/cs
+     * CRUDOS (en {@code ev}); aquí leemos cada variable en bp+offset vía
+     * {@code READ_INT}/{@code READ_STRING} del wire y la renderizamos por tipo,
+     * del lado del host.
+     *
+     * <p>Complementa a {@link #getNamedLocals}: aquélla sirve cuando el server
+     * mismo manda la sección {@code named[]} (VM-Java, que tiene el .dbg
+     * cargado); ésta sirve cuando el server es un device que NO conoce símbolos
+     * y sólo expone memoria cruda.</p>
+     *
+     * @param dbg el {@code .dbg} del módulo en ejecución (cargado en el host).
+     * @param ev  el evento pausado (BP_HIT/STEP_DONE): lleva absPc, cs y bp.
+     * @return el frame resuelto (función + línea + locales por nombre).
+     */
+    public DeviceFrameResolver.Frame resolveDeviceFrame(DbgFile dbg, PausedEvent ev,
+                                                        long timeoutMs) {
+        int relPc = ev.absPc - ev.cs;
+        DeviceFrameResolver.MemReader reader = new DeviceFrameResolver.MemReader() {
+            @Override public int readI32(int addr) {
+                try { return readMemoryInt(addr, timeoutMs); }
+                catch (IOException e) { return 0; }
+            }
+            @Override public String readString(int ref) {
+                try {
+                    String s = readStringIfPossible(ref, timeoutMs);
+                    return (s == null || s.isEmpty()) ? null : s;
+                } catch (IOException e) { return null; }
+            }
+        };
+        return DeviceFrameResolver.resolve(dbg, relPc, ev.bp, reader);
     }
 
     /** Stack frames como pares [pc, bp]. */
@@ -979,7 +1033,10 @@ public final class BpvmClient implements AutoCloseable {
                 }
                 PausedEvent e = new PausedEvent(
                         (int) Json.getLong(m, "tid", 0),
-                        (int) Json.getLong(m, "absPc", 0),
+                        // H6.b.3.b: la VM-C device-role emite el pc absoluto como
+                        // `pc` (la VM-Java lo manda como `absPc`). Aceptamos ambos
+                        // para que relPc = absPc - cs salga bien con cualquier device.
+                        (int) Json.getLong(m, "absPc", Json.getLong(m, "pc", 0)),
                         line,
                         file,
                         (int) Json.getLong(m, "bp", 0),
