@@ -1125,7 +1125,13 @@ public class FrmMain extends javax.swing.JFrame
             if (e instanceof edu.bpgenvm.vm.debug.PausedEvent) {
                 edu.bpgenvm.vm.debug.PausedEvent pe = (edu.bpgenvm.vm.debug.PausedEvent) e;
                 int[] locals = debug.getLocals(2000);
-                List<BpvmClient.NamedLocal> named = debug.getNamedLocals(2000);   // H6.a.1
+                List<BpvmClient.NamedLocal> named0 = debug.getNamedLocals(2000);   // H6.a.1
+                // H6.b.3.b — si el server es DEVICE-role (VM-C / Pico) no manda la
+                // sección `named[]`; el host resuelve los nombres con el .dbg que
+                // tiene (regla de oro de H6). Aditivo y gated: sólo cuando `named`
+                // viene vacío y hay un .dbg de device cargado para esta sesión.
+                final List<BpvmClient.NamedLocal> named =
+                        named0.isEmpty() ? resolveDeviceNamedLocals(pe) : named0;
                 List<int[]> frames = debug.getStackFrames(2000);
                 List<edu.bpgenvm.vm.ModuleManager.PropertyView> props =
                         debug.getModuleProperties(2000);
@@ -1136,6 +1142,39 @@ public class FrmMain extends javax.swing.JFrame
                 SwingUtilities.invokeLater(this::onDebugResumed);
             }
         });
+    }
+
+    /** H6.b.3.b — `.dbg` del módulo en depuración cuando la sesión es contra una
+     *  VM DEVICE-role (VM-C host / Pico): el server no manda símbolos, así que el
+     *  host los resuelve con esto. null = sesión Java-VM (manda `named[]`) o sin
+     *  .dbg. Lo fija {@link #runOnVmRemote} al hacer attach y lo limpia al detach. */
+    private volatile edu.bpgenvm.vm.debug.DbgFile deviceDbg;
+
+    /** H6.b.3.b — resuelve los locales POR NOMBRE de un frame DEVICE-role usando
+     *  el {@link #deviceDbg} que el host tiene, vía
+     *  {@link BpvmClient#resolveDeviceFrame}. Convierte
+     *  {@code DeviceFrameResolver.Local} → {@link BpvmClient.NamedLocal} para
+     *  alimentar el MISMO modelo de la tabla de Variables. Devuelve [] si no hay
+     *  sesión device, .dbg, o no resuelve (el caller cae al array crudo). */
+    private List<BpvmClient.NamedLocal> resolveDeviceNamedLocals(
+            edu.bpgenvm.vm.debug.PausedEvent pe) {
+        edu.bpgenvm.vm.debug.DbgFile dbg = this.deviceDbg;
+        BpvmClient c = debug.client();
+        if (dbg == null || c == null) return java.util.Collections.emptyList();
+        try {
+            edu.bpgenvm.vm.debug.DeviceFrameResolver.Frame f =
+                    c.resolveDeviceFrame(dbg, pe, 2000);
+            if (f == null || f.locals.isEmpty()) return java.util.Collections.emptyList();
+            List<BpvmClient.NamedLocal> out = new java.util.ArrayList<>(f.locals.size());
+            for (edu.bpgenvm.vm.debug.DeviceFrameResolver.Local l : f.locals) {
+                int size = ("long".equals(l.type) || "double".equals(l.type)) ? 8 : 4;
+                out.add(new BpvmClient.NamedLocal(
+                        l.name, l.value, size, /*isArray*/ false, l.offset, l.type, l.display));
+            }
+            return out;
+        } catch (Throwable t) {
+            return java.util.Collections.emptyList();
+        }
     }
 
     /** Crea un JMenuItem con accelerator y listener. */
@@ -1826,13 +1865,21 @@ public class FrmMain extends javax.swing.JFrame
                 publish.accept("[ide] subidos " + nUploaded + " ficheros\n");
 
                 if (pauseInitially) {
+                    // H6.b.3.b — precarga el .dbg del módulo principal (host-side)
+                    // por si el server es device-role (VM-C / Pico) y no manda la
+                    // sección named[]: entonces resolveDeviceNamedLocals lo usa.
+                    // Inocuo en sesiones Java-VM (named[] no viene vacío).
+                    String base = mainModName.endsWith(".mod")
+                            ? mainModName.substring(0, mainModName.length() - 4) : mainModName;
+                    this.deviceDbg = edu.bpgenvm.vm.debug.DbgFile.load(
+                            outDir.resolve(base + ".dbg").toString());
                     debug.attach(client);
                 }
                 try {
                     client.runModule(mainModName);
                     client.waitForExit();
                 } finally {
-                    if (pauseInitially) debug.detach();
+                    if (pauseInitially) { debug.detach(); this.deviceDbg = null; }
                 }
             } catch (Throwable t) {
                 publish.accept("[VM error] " + t.getMessage() + "\n");

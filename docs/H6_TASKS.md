@@ -148,9 +148,18 @@ nombres de variables locales/params por función → slot. Para mostrar locales
       (n/base/total=integer, big=long, ratio=double, msg=string, ok=boolean,
       i=integer), idéntico a la VM-Java. Es la cascada Java→C→Pico ejercida
       end-to-end sobre el debugger, sin HW.
-      - **Pendiente**: consumir `resolveDeviceFrame` desde la GUI de FrmMain
-        cuando el backend activo es device-role (sólo cableado visual, el
-        mecanismo ya está probado); + el port del `pause_cb` al firmware Pico.
+      - **GUI cableada** (2026-06-05): el listener de pausa de FrmMain, si
+        `getNamedLocals()` viene vacío (= server device-role sin símbolos), cae
+        a `resolveDeviceNamedLocals(pe)` → `BpvmClient.resolveDeviceFrame` con el
+        `.dbg` que el host precarga al hacer `debug.attach` (campo `deviceDbg`,
+        cargado del outDir local; limpiado en detach). Convierte
+        `DeviceFrameResolver.Local` → `NamedLocal` y alimenta el MISMO modelo de
+        la tabla de Variables. Aditivo y gated: la ruta Java-VM (que sí manda
+        `named[]`) queda intacta. El panel de Variables muestra ahora locales por
+        nombre/tipo también al depurar una VM-C remota (TCP endpoint A2.6).
+      - **Pendiente**: el port del `pause_cb` al firmware Pico (#140, requiere
+        HW); "Debug on Pico" sobre serie sigue mostrando el diálogo de "no
+        implementado" hasta ese port.
 
 ## Próximo paso concreto
 **H6.b.2 — transporte del debugger del device**: elegir host-wire-server vs Pico
