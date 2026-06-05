@@ -74,6 +74,13 @@ public abstract class AbstractBpvmBackend implements Backend {
         return client != null && client.isHandshakeDone();
     }
 
+    /** H6.b.3.b — expone el {@link BpvmClient} subyacente para que el IDE
+     *  pueda engancharle una {@code DebugSession} ("Debug on Pico") sobre el
+     *  MISMO transporte ya conectado (serie o TCP), en lugar de abrir una
+     *  segunda conexión al puerto (que es de acceso único). null si no hay
+     *  conexión activa. */
+    public BpvmClient debugClient() { return client; }
+
     @Override public void close() {
         if (client != null) {
             client.close();

@@ -212,6 +212,14 @@ public final class PicoExplorer extends JPanel {
     /** ¿Hay conexión activa al dispositivo? */
     public boolean isConnected() { return backend != null && backend.isConnected(); }
 
+    /** H6.b.3.b — el {@link BpvmClient} de la conexión activa (serie/TCP) para
+     *  que "Debug on Pico" le enganche una DebugSession sobre el MISMO puerto
+     *  (acceso único). null si el backend no es BpvmClient-based o sin conexión. */
+    public BpvmClient debugClient() {
+        return (backend instanceof AbstractBpvmBackend)
+                ? ((AbstractBpvmBackend) backend).debugClient() : null;
+    }
+
     /** Helper UI: muestra el card correcto del CardLayout. */
     private void showCard(String name) {
         ((CardLayout) endpointPanel.getLayout()).show(endpointPanel, name);
@@ -242,6 +250,16 @@ public final class PicoExplorer extends JPanel {
      *  a /app/ con skip-if-same-size. */
     public void uploadAndRun(File modFile, java.util.List<File> depMods,
                              java.util.Set<String> libDepNames) {
+        uploadAndRun(modFile, depMods, libDepNames, null);
+    }
+
+    /** H6.b.3.b — variante "Debug on Pico": si {@code debugHook} != null, tras
+     *  subir los ficheros NO ejecuta en bloqueante; cede el {@link BpvmClient}
+     *  ya conectado al hook (en EDT), que arranca la sesión de debug por
+     *  eventos (PAUSE/RUN/STEP/locals). Con null = comportamiento normal (run). */
+    public void uploadAndRun(File modFile, java.util.List<File> depMods,
+                             java.util.Set<String> libDepNames,
+                             java.util.function.Consumer<BpvmClient> debugHook) {
         if (!isConnected()) {
             if (outputSink != null) outputSink.accept(
                     "[Explorer] no conectado — pulsa Connect primero");
@@ -375,13 +393,25 @@ public final class PicoExplorer extends JPanel {
                     }
                 }
             }
-            // 3) Ejecutar el principal.
+            // 3) Ejecutar el principal — salvo en modo DEBUG, donde cedemos el
+            //    client ya conectado a la sesión de debug, que conduce
+            //    PAUSE/RUN/STEP por eventos (no bloqueante).
+            if (debugHook != null) {
+                final BpvmClient dc = debugClient();
+                SwingUtilities.invokeLater(() -> debugHook.accept(dc));
+                return "(debug)";
+            }
             return b.run(remoteName, line -> {
                 if (outputSink != null) {
                     SwingUtilities.invokeLater(() -> outputSink.accept(line));
                 }
             });
         }, statusStr -> {
+            if ("(debug)".equals(statusStr)) {
+                status.setText("Debug: sesión iniciada");
+                onRefresh();
+                return;
+            }
             if (outputSink != null) {
                 outputSink.accept("[Explorer] VM finished: " + statusStr);
             }

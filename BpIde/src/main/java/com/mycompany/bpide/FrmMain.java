@@ -1671,21 +1671,97 @@ public class FrmMain extends javax.swing.JFrame
      * cortocircuitar y pasar `waitClient=true`.
      */
     private void doDebugOnPico() {
-        String msg =
-            "Debug on Pico todavía no está implementado en el firmware.\n\n" +
-            "El firmware del RP2350 expone una REPL sobre USB CDC con\n" +
-            "comandos para subir y ejecutar módulos, pero no soporta\n" +
-            "aún el protocolo de debug (breakpoints, step, locals).\n\n" +
-            "Mientras tanto, para depurar BasicPlus puedes:\n\n" +
-            "  • Usar Run → Debug Run (Shift+F5) sobre el mismo .bp.\n" +
-            "    La VM Java local soporta breakpoints, step over/into/out,\n" +
-            "    inspección de variables y call stack.\n\n" +
-            "  • Cuando la lógica esté verificada, lanzar Run on Pico\n" +
-            "    para ejecutarla sobre el hardware real.\n\n" +
-            "Hito pendiente: protocolo debug sobre USB CDC en el firmware.";
-        JOptionPane.showMessageDialog(this, msg,
-                "Debug on Pico — no implementado todavía",
-                JOptionPane.INFORMATION_MESSAGE);
+        if (editorArea.getText().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Editor vacío. Carga o escribe un fichero primero.",
+                    "Aviso", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (picoExplorer == null || !picoExplorer.isConnected()) {
+            JOptionPane.showMessageDialog(this,
+                    "Conecta primero el dispositivo desde el panel Pico\n" +
+                    "(ventana inferior izquierda → Connect).",
+                    "Pico no conectado", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        onSave();
+        if (currentFile == null) return;
+
+        consolaArea.setText("");
+        errors.clear();
+
+        final Path bpFile;
+        final Path outDir;
+        if (currentProject != null) {
+            bpFile = java.nio.file.Paths.get(currentProject.sourceDir,
+                    currentProject.main + ".bp");
+            outDir = java.nio.file.Paths.get(currentProject.outDir);
+        } else {
+            bpFile = currentFile;
+            outDir = bpFile.getParent().resolve("out");
+        }
+
+        new SwingWorker<Boolean, String>() {
+            Path modPath = null;
+            String base = null;
+            @Override
+            protected Boolean doInBackground() {
+                publish("== compilando " + bpFile.getFileName() + " para Debug on Pico ==\n");
+                boolean ok = invokeWithCapture(() ->
+                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm"),
+                        this::publish);
+                if (!ok) { publish("== compilación falló ==\n"); return false; }
+                base = inferModuleName(bpFile);
+                modPath = outDir.resolve(base + ".mod");
+                if (!Files.isRegularFile(modPath)) {
+                    publish("== no se encontró " + modPath.getFileName() + " ==\n");
+                    return false;
+                }
+                publish("== compilación OK: " + modPath.getFileName() + " ==\n");
+                return true;
+            }
+            @Override
+            protected void process(List<String> chunks) {
+                for (String s : chunks) { appendConsola(s); parseAndAddError(s); }
+            }
+            @Override
+            protected void done() {
+                try {
+                    if (!Boolean.TRUE.equals(get()) || modPath == null) return;
+                    // .dbg para resolver locales por nombre en el device (regla de oro H6).
+                    deviceDbg = edu.bpgenvm.vm.debug.DbgFile.load(
+                            outDir.resolve(base + ".dbg").toString());
+                    if (deviceDbg == null) {
+                        appendConsola("[debug] aviso: no hay " + base + ".dbg; locales saldrán crudos\n");
+                    }
+                    // Deps (igual que Run on Pico): stdlib core → /lib, resto → /app.
+                    java.util.List<java.io.File> deps = resolveDeviceDeps(bpFile, outDir);
+                    java.util.Set<String> libDeps = new java.util.HashSet<>();
+                    for (java.io.File d : deps) {
+                        String n = d.getName();
+                        String mod = n.endsWith(".mod") ? n.substring(0, n.length() - 4) : n;
+                        if (EMBEDDED_CORE_MODS.contains(mod)) libDeps.add(n);
+                    }
+                    final String remoteMain = "/app/" + base + ".mod";
+                    appendConsola("[debug] subiendo + enganchando sesión de debug en la Pico...\n");
+                    // uploadAndRun con debugHook: sube los ficheros y, en vez de
+                    // ejecutar en bloqueante, cede el client serie ya conectado.
+                    picoExplorer.uploadAndRun(modPath.toFile(), deps, libDeps, client -> {
+                        if (client == null) {
+                            appendConsola("[debug] no se pudo obtener el client serie\n");
+                            return;
+                        }
+                        debug.attach(client);            // el listener (onDebugPaused) ya está puesto
+                        client.requestPause();           // rompe en el 1er opcode → BP_HIT(cs)
+                        client.runModule(remoteMain);    // arranca; cada pausa pinta locales por nombre
+                        appendConsola("[debug] sesión activa — Continue/Step desde el menú Debug.\n"
+                                + "[debug] (breakpoints por línea en el device: pendiente — pc=relPc+cs)\n");
+                    });
+                } catch (Exception ex) {
+                    appendConsola("[debug] error: " + ex.getMessage() + "\n");
+                }
+            }
+        }.execute();
     }
 
     /** Nombres de módulos stdlib core que ya están pre-instalados en el
