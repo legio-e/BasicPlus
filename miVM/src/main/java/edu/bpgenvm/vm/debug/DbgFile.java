@@ -49,6 +49,17 @@ public final class DbgFile {
         return (e != null) ? e.getValue() : -1;
     }
 
+    /** H6.b.3.b — inversa de {@link #lineForRelPc}: el relPc MÁS BAJO cuya línea
+     *  origen es {@code line}, o -1 si esa línea no tiene código. Lo usa el IDE
+     *  para poner breakpoints por línea en un device (pc = relPc + cs). El mapa
+     *  está ordenado por relPc ascendente, así que el primer match es el menor. */
+    public int relPcForLine(int line) {
+        for (Map.Entry<Integer, Integer> e : lineMap.entrySet()) {
+            if (e.getValue() == line) return e.getKey();
+        }
+        return -1;
+    }
+
     /** Función (con sus vars) que contiene el relPc, o null. */
     public ModuleManager.FunctionVars functionForRelPc(int relPc) {
         Map.Entry<Integer, ModuleManager.FunctionVars> e = funcs.floorEntry(relPc);

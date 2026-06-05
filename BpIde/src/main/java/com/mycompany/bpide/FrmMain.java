@@ -1124,6 +1124,19 @@ public class FrmMain extends javax.swing.JFrame
         debug.addListener(e -> {
             if (e instanceof edu.bpgenvm.vm.debug.PausedEvent) {
                 edu.bpgenvm.vm.debug.PausedEvent pe = (edu.bpgenvm.vm.debug.PausedEvent) e;
+                // H6.b.3.b — 1ª pausa de una sesión DEVICE (pausa de entrada):
+                // capturamos cs y aplicamos los breakpoints del editor como pc
+                // (pc = relPc + cs). Si hay alguno, CONTINUE (run-to-breakpoint)
+                // sin pintar la entrada; si no, caemos a mostrar la pausa inicial.
+                if (deviceDbg != null && !deviceEntryHandled) {
+                    deviceEntryHandled = true;
+                    deviceCs = pe.cs;
+                    int applied = applyDeviceBreakpoints(debug.client(), pe.cs);
+                    if (applied > 0) {
+                        debug.sendCommand(edu.bpgenvm.vm.debug.StepCommand.CONTINUE);
+                        return;
+                    }
+                }
                 int[] locals = debug.getLocals(2000);
                 List<BpvmClient.NamedLocal> named0 = debug.getNamedLocals(2000);   // H6.a.1
                 // H6.b.3.b — si el server es DEVICE-role (VM-C / Pico) no manda la
@@ -1156,6 +1169,32 @@ public class FrmMain extends javax.swing.JFrame
      *  host los resuelve con esto. null = sesión Java-VM (manda `named[]`) o sin
      *  .dbg. Lo fija {@link #runOnVmRemote} al hacer attach y lo limpia al detach. */
     private volatile edu.bpgenvm.vm.debug.DbgFile deviceDbg;
+
+    /** H6.b.3.b — `cs` (code start) del device, capturado del 1er BP_HIT de la
+     *  sesión. Necesario para traducir línea→pc (pc = relPc + cs). */
+    private volatile int deviceCs = 0;
+    /** H6.b.3.b — true cuando ya se procesó la pausa de ENTRADA de la sesión
+     *  device (capturado cs + aplicados los breakpoints del editor). */
+    private volatile boolean deviceEntryHandled = false;
+
+    /** H6.b.3.b — aplica los breakpoints del editor (del fichero en depuración)
+     *  al device como SET_BP por pc = relPc + cs, traduciendo línea→relPc con el
+     *  {@link #deviceDbg}. Devuelve cuántos se aplicaron. Single-module: sólo los
+     *  breakpoints del .bp actual (multi-módulo necesitaría el .dbg+cs de cada uno). */
+    private int applyDeviceBreakpoints(BpvmClient client, int cs) {
+        if (deviceDbg == null || client == null) return 0;
+        String fname = (currentFile != null) ? currentFile.getFileName().toString() : null;
+        int n = 0;
+        for (int i = 0; i < debug.breakpoints().size(); i++) {
+            Breakpoint bp = debug.breakpoints().get(i);
+            if (fname != null && !bp.file.equals(fname)) continue;
+            int relPc = deviceDbg.relPcForLine(bp.line);
+            if (relPc < 0) continue;
+            try { client.setBreakpointPc(relPc + cs, 2000); n++; }
+            catch (java.io.IOException ignored) {}
+        }
+        return n;
+    }
 
     /** H6.b.3.b — resuelve los locales POR NOMBRE de un frame DEVICE-role usando
      *  el {@link #deviceDbg} que el host tiene, vía
@@ -1738,6 +1777,8 @@ public class FrmMain extends javax.swing.JFrame
                     // .dbg para resolver locales por nombre en el device (regla de oro H6).
                     deviceDbg = edu.bpgenvm.vm.debug.DbgFile.load(
                             outDir.resolve(base + ".dbg").toString());
+                    deviceEntryHandled = false;   // nueva sesión: re-procesar la pausa de entrada
+                    deviceCs = 0;
                     if (deviceDbg == null) {
                         appendConsola("[debug] aviso: no hay " + base + ".dbg; locales saldrán crudos\n");
                     }
@@ -1761,8 +1802,8 @@ public class FrmMain extends javax.swing.JFrame
                         debug.attach(client);            // el listener (onDebugPaused) ya está puesto
                         client.requestPause();           // rompe en el 1er opcode → BP_HIT(cs)
                         client.runModule(remoteMain);    // arranca; cada pausa pinta locales por nombre
-                        appendConsola("[debug] sesión activa — Continue/Step desde el menú Debug.\n"
-                                + "[debug] (breakpoints por línea en el device: pendiente — pc=relPc+cs)\n");
+                        appendConsola("[debug] sesión activa. Breakpoints del editor → run-to-breakpoint;"
+                                + " si no hay, pausa en la entrada. Continue/Step en el menú Debug.\n");
                     });
                 } catch (Exception ex) {
                     appendConsola("[debug] error: " + ex.getMessage() + "\n");
