@@ -111,6 +111,17 @@
                                         <exclude>META-INF/*.RSA</exclude>
                                     </excludes>
                                 </filter>
+                                <filter>
+                                    <!-- #218: el frontend empaqueta su PROPIA copia de miVM
+                                         (edu.bpgenvm). Excluimos esas clases de la copia del
+                                         frontend para que vengan SOLO del dep edu:bpgenvm
+                                         (fresco) y un cambio en la VM no quede sombreado por
+                                         una copia stale en el fat-jar del IDE. -->
+                                    <artifact>basicplus:basicplus-frontend</artifact>
+                                    <excludes>
+                                        <exclude>edu/bpgenvm/**</exclude>
+                                    </excludes>
+                                </filter>
                             </filters>
                         </configuration>
                     </execution>
