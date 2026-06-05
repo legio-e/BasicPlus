@@ -408,8 +408,11 @@ public final class PicoExplorer extends JPanel {
             });
         }, statusStr -> {
             if ("(debug)".equals(statusStr)) {
-                status.setText("Debug: sesión iniciada");
-                onRefresh();
+                // Sesión de debug: el device queda PAUSADO esperando comandos de
+                // debug. NO hacemos onRefresh() — haría un LIST y el pause_cb del
+                // firmware respondería UNSUPPORTED ("no valido en pausa"). El árbol
+                // de ficheros se refresca al detach/fin de la sesión.
+                status.setText("Debug: sesión iniciada (device pausado)");
                 return;
             }
             if (outputSink != null) {
