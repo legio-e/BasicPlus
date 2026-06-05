@@ -92,28 +92,44 @@ static int find_free_slot(void) {
 
 /* Compacta el buffer de datos eliminando huecos. Re-asigna offsets.
  *
- * BUG #111 (resuelto aquí): la versión anterior declaraba
- *   uint8_t tmp[FS_DATA_SIZE]
- * como local — eso son 128 KB en el stack de vm_task (que solo tiene
- * 16 KB). Stack overflow garantizado al primer PUT-overwrite (la
- * función se llama cuando ya existía un fichero con ese nombre).
- * El overflow corrompía memoria adyacente y mataba la USB CDC.
+ * IN-PLACE, sin buffer temporal. Procesa los ficheros vivos en orden de
+ * offset ASCENDENTE y mueve cada uno a su posición compactada, que es
+ * SIEMPRE <= su offset actual (sólo quitamos huecos previos). Como
+ * dst <= src, memmove() es overlap-safe. Único coste de stack: un array
+ * de índices de FS_MAX_FILES ints (~cientos de bytes).
  *
- * Fix: hacer tmp `static` — mismo coste de RAM (en BSS en lugar de
- * stack) pero sin la trampa. El BSS adicional (128 KB) es aceptable
- * con 520 KB SRAM totales y deja al fs operando incluso bajo
- * presión de stack alta. */
+ * Historia (#111): la versión original usaba `uint8_t tmp[FS_DATA_SIZE]`
+ * LOCAL (128 KB en el stack de vm_task de 16 KB) → stack overflow al
+ * primer PUT-overwrite → corrupción + USB CDC muerta. El fix intermedio
+ * lo hizo `static` (128 KB en BSS), pero eso devoraba RAM: con los tres
+ * buffers de 128 KB (s_data + s_vm_buffer + este tmp) el heap C quedaba
+ * en ~28 KB y CUALQUIER malloc durante un RUN hacía panic("Out of
+ * memory"). Esta versión in-place no necesita buffer y recupera ~128 KB
+ * de heap, sin reintroducir el stack overflow de #111. */
 static void compact(void) {
-    uint32_t cursor = 0;
-    static uint8_t tmp[FS_DATA_SIZE];
-    for (int i = 0; i < FS_MAX_FILES; i++) {
-        if (s_entries[i].size == 0) continue;
-        cursor = fs_align_up(cursor);
-        memcpy(tmp + cursor, s_data + s_entries[i].offset, s_entries[i].size);
-        s_entries[i].offset = cursor;
-        cursor += s_entries[i].size;
+    int idx[FS_MAX_FILES];
+    int n = 0;
+    for (int i = 0; i < FS_MAX_FILES; i++)
+        if (s_entries[i].size != 0) idx[n++] = i;
+    /* insertion sort de idx por offset ascendente (n es pequeño). */
+    for (int a = 1; a < n; a++) {
+        int key = idx[a];
+        uint32_t ko = s_entries[key].offset;
+        int b = a - 1;
+        while (b >= 0 && s_entries[idx[b]].offset > ko) { idx[b + 1] = idx[b]; b--; }
+        idx[b + 1] = key;
     }
-    memcpy(s_data, tmp, cursor);
+    uint32_t cursor = 0;
+    for (int k = 0; k < n; k++) {
+        int e = idx[k];
+        uint32_t c = fs_align_up(cursor);
+        if (c != s_entries[e].offset) {
+            /* c (dst) <= offset (src) garantizado ⇒ memmove overlap-safe. */
+            memmove(s_data + c, s_data + s_entries[e].offset, s_entries[e].size);
+        }
+        s_entries[e].offset = c;
+        cursor = c + s_entries[e].size;
+    }
     s_data_used = cursor;
 }
 
