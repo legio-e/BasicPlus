@@ -244,9 +244,11 @@ public final class MivmEmitter {
         //     resto la copia como parent local (vtable slots 0/1).
         synthesizeObjectClass();
         synthesizeRuntimeErrorClass();
-        // H5.1.c — helper del compareTo por defecto (throw). Tras RuntimeError
-        // porque construye uno (emitNewObject exige el descriptor ya registrado).
-        synthesizeObjectCompareErrorHelper();
+        // NOTA: synthesizeObjectCompareErrorHelper() se emite MÁS ABAJO, tras la
+        // fase 4b (clases del usuario), no aquí. Construye un RuntimeError y
+        // emitNewObject exige el descriptor ya registrado; si el usuario define
+        // su PROPIA clase RuntimeError, el builtin no se sintetiza y la del
+        // usuario sólo queda registrada tras la fase 4b. Ver allí.
         synthesizeListClass();
         synthesizeOwnerListClass();
         synthesizeStringBuilderClass();
@@ -281,6 +283,15 @@ public final class MivmEmitter {
         for (ITopLevelDecl d : moduleAst.defs) {
             if (d instanceof ClassDef) emitClassDef((ClassDef) d);
         }
+
+        // 4c) H5.1.c — helper del compareTo por defecto de Object (construye y
+        //     lanza un RuntimeError). DEBE ir tras la fase 4b: emitNewObject
+        //     ("RuntimeError") exige el descriptor ya registrado, y cuando el
+        //     usuario define su propia clase RuntimeError ésta sólo queda
+        //     registrada al emitir las clases de usuario (el builtin se omite).
+        //     Es función libre (Object.compareTo la llama por forward-ref,
+        //     resuelto en link), así que su posición no afecta a sus llamadores.
+        synthesizeObjectCompareErrorHelper();
 
         // 5) Funciones del módulo (initializer + Main del usuario + libres).
         for (ITopLevelDecl d : moduleAst.defs) {
@@ -2964,9 +2975,12 @@ public final class MivmEmitter {
     /**
      * H5.1.c — Helper del {@code compareTo} por defecto de Object: construye un
      * RuntimeError y lo lanza. Es una función LIBRE (sin slot de vtable), emitida
-     * DESPUÉS de synthesizeRuntimeErrorClass para que emitNewObject("RuntimeError")
-     * encuentre el descriptor ya registrado. Object.compareTo la invoca por
-     * forward-ref ({@code emitCall} se resuelve en link, como __strconcat).
+     * DESPUÉS de la fase 4b (clases del usuario) para que emitNewObject(
+     * "RuntimeError") encuentre el descriptor ya registrado — tanto el builtin
+     * como el RuntimeError que el usuario pueda definir (en cuyo caso el builtin
+     * se omite y la clase del usuario sólo queda registrada tras la fase 4b).
+     * Object.compareTo la invoca por forward-ref ({@code emitCall} se resuelve en
+     * link, como __strconcat).
      */
     private void synthesizeObjectCompareErrorHelper() {
         for (ITopLevelDecl d : moduleAst.defs) {
