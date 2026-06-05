@@ -937,8 +937,32 @@ public final class BpvmClient implements AutoCloseable {
                 }
                 handleMessage(m);
             }
-        } catch (IOException e) {
-            if (!closed) diag("[BpvmClient] readLoop terminó: " + e.getMessage());
+        } catch (Throwable e) {
+            // purejavacomm/jtermios lanza una RuntimeException (JTermiosImpl$Fail)
+            // cuando el select() del puerto serie falla — típico si el device se
+            // desconecta o se REINICIA a mitad de un RUN (la USB CDC cae). Antes
+            // sólo capturábamos IOException, así que ese caso mataba el hilo lector
+            // con un stack trace crudo y dejaba los requests pendientes colgados.
+            // Lo tratamos como fin de conexión: log claro + (en el finally) fallar
+            // los pending para que sus callers no se queden esperando.
+            if (!closed) diag("[BpvmClient] readLoop terminó ("
+                    + e.getClass().getSimpleName() + "): " + e.getMessage()
+                    + " — conexión con la VM/device perdida (¿reinicio del device?)");
+        } finally {
+            // Falla cualquier request pendiente para no colgar a sus callers,
+            // pase lo que pase (IOException, JTermios$Fail, close()).
+            java.util.List<CompletableFuture<Map<String, Object>>> toFail;
+            synchronized (pendingLock) {
+                toFail = new ArrayList<>(pendingRequests.values());
+                pendingRequests.clear();
+            }
+            if (!toFail.isEmpty()) {
+                IOException ex = new IOException(
+                        "conexión con la VM/device perdida (reader detenido)");
+                for (CompletableFuture<Map<String, Object>> f : toFail) {
+                    f.completeExceptionally(ex);
+                }
+            }
         }
     }
 
