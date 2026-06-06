@@ -70,9 +70,10 @@ compatibles) — verificado: Hello, T y Debug on Pico corren en Metro. Pero no e
   desde `/sys/board.json` (datos de placa: name, ledPin, neopixelPin, psramCsPin,
   gpioCount). `board_desc_init()` en boot tras `fs_init`; `Pico.board` lee el
   name del descriptor. Plantillas en `pico/boards/` (pico2.json, metro-rp2350b.json
-  minimal + README con el esquema). Default sin board.json: variante B permisiva
-  (lo afinará el sondeo de PSRAM en H7.2). **Falta cablear validación de rango
-  (H7.3.b) y exponer caps en BP (H7.3.c).**
+  minimal + README con el esquema). Default sin board.json: variante **A (30
+  GPIO)** — seguro mientras el build sea target `pico2` (evita panic del SDK al
+  tocar pines 30-47); H7.1 lo sube al pasar a target B, H7.2 lo hace dinámico
+  por sondeo de PSRAM. ✅ Validación (H7.3.b) y caps en BP (H7.3.c) ya hechos.
 - **H7.3.b — stdlib HW board-aware.** ✅ HECHO (2026-06-06) para Gpio. El
   constructor `Gpio.Pin(num, mode)` valida `num` contra `Pico.gpioCount()` y
   lanza `RuntimeError` si está fuera de rango: `Gpio.Pin(47)` OK en Metro

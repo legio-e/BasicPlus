@@ -47,13 +47,16 @@ void board_desc_init(void) {
     memset(d, 0, sizeof *d);
 
     /*
-     * Default sin board.json: variante 'B' (superset permisivo). El binario
-     * se compila para RP2350B; en una placa A los GPIO 30-47 simplemente no
-     * existen (escrituras inocuas). H7.2 afinará este default por sondeo de
-     * PSRAM (presente → perfil B, ausente → perfil A).
+     * Default sin board.json: variante 'A' (30 GPIO). Es el default SEGURO
+     * mientras el firmware se compile para el target `pico2` (el SDK sólo
+     * conoce 30 GPIO): si defaulteáramos a 'B' (48), un Gpio.Pin(40) pasaría
+     * la validación BP pero gpio_init(40) panicaría en el SDK. Cuando H7.1
+     * cambie el target a RP2350B podremos subir el default, y H7.2 lo hará
+     * dinámico por sondeo de PSRAM (presente → B, ausente → A). Una placa B
+     * declara su variante en /sys/board.json (boards/metro-rp2350b.json).
      */
     strncpy(d->name, "rp2350-generic", sizeof d->name - 1);
-    apply_variant_caps(d, 'B');
+    apply_variant_caps(d, 'A');
     d->led_pin       = -1;   /* lo declara la placa */
     d->neopixel_pin  = -1;   /* peculiar de cada placa */
     /* psram_cs_pin lo deja apply_variant_caps (default por variante). */

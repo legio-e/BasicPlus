@@ -7,8 +7,10 @@ no en el código: un fichero `board.json` que se sube al FS del dispositivo como
 `../board_desc.c`).
 
 Estos ficheros son **plantillas**: súbelas a `/sys/board.json` en la placa
-correspondiente (vía PicoExplorer/PUT). Sin `/sys/board.json` el firmware usa los
-defaults por variante (hoy: variante `B` permisiva — ver nota abajo).
+correspondiente (vía PicoExplorer/PUT). Sin `/sys/board.json` el firmware
+defaultea a variante **`A` (30 GPIO)** — el default seguro mientras el build
+sea para el target `pico2` (el SDK sólo conoce 30 GPIO). Una placa B declara su
+variante en su `board.json`. H7.2 hará el default dinámico (sondeo de PSRAM).
 
 ## Dos capas
 
