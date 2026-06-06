@@ -35,16 +35,22 @@ dejarla para cuando lo demás esté.
 
 ---
 
-## H7.1 — Board target propio del Metro
-Hoy flasheamos el `.uf2` de `pico2` y **funciona** (mismo MCU, boot2/flash
-compatibles) — verificado: Hello, T y Debug on Pico corren en Metro. Pero no es
-"lo correcto":
-- La pico-sdk actual NO trae board header del Metro RP2350. Opciones: crear uno
-  propio (`adafruit_metro_rp2350.h`), o usar uno cercano (`pimoroni_pico_plus2_rp2350`
-  / genérico RP2350B) con overrides (flash 16 MB, pin del NeoPixel, CS de PSRAM).
-- `PICO_BOARD` se selecciona en `bpgenvm-c/pico/CMakeLists.txt` (default `pico2`).
-- **Hecho parcial**: baseline de ejecución confirmado (2026-06-05). Falta el
-  target board correcto.
+## H7.1 — Board target genérico RP2350B  ✅ (build hecho 2026-06-06; falta smoke HW)
+Decisión: en vez de un header atado a una placa concreta, un header **genérico
+RP2350B** que es un clon de `pico2.h` con el único cambio `PICO_RP2350A 0` →
+`NUM_BANK0_GPIOS = 48`. Lo board-specific (NeoPixel, CS de PSRAM, LED) NO se
+hornea: vive en `/sys/board.json`. Una imagen para Pico 2 (A: pines 30-47 no-op
+inocuo) y Metro/cualquier RP2350B.
+- `bpgenvm-c/pico/sdk_board/bp_rp2350b.h` (header nuevo). Flash/boot2 idénticos a
+  pico2 (4MB + W25Q080) — combinación ya verificada arrancando en el Metro.
+- `CMakeLists.txt`: `PICO_BOARD_HEADER_DIRS += sdk_board`, default `PICO_BOARD`
+  ahora `bp_rp2350b`. Reconfigura + compila/linka limpio (cmake confirma
+  "Using board configuration from .../bp_rp2350b.h").
+- La SDK confirmó: `#if PICO_RP2350A` → 30 GPIO, `#else` → 48. Dato útil: el CS de
+  PSRAM es board-specific incluso entre placas B (Pimoroni Plus2 = GP47, WeAct
+  RP2350B = GP0) → confirma que `psramCsPin` va en board.json.
+- **Falta**: smoke en HW (arranca en Pico 2 y Metro; Gpio.Pin(40) ya válido en
+  Metro sin panic). Precondición de H7.2.a (CS de PSRAM en GP47 = pin B-only).
 
 ## H7.2 — PSRAM + redistribución del mapa de memoria
 - **H7.2.a — detección + init de PSRAM** (QMI/XIP, APS6404 8 MB en el Metro).

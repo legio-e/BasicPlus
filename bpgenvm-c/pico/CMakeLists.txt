@@ -19,8 +19,13 @@ cmake_minimum_required(VERSION 3.13)
 if (NOT DEFINED PICO_PLATFORM)
     set(PICO_PLATFORM "rp2350")
 endif()
+# H7.1 — board target GENÉRICO RP2350B (48 GPIO) por defecto. Header propio en
+# sdk_board/bp_rp2350b.h (clon de pico2 con PICO_RP2350A=0). UNA imagen para
+# Pico 2 (RP2350A: pines 30-47 no-op inocuo) y Metro/cualquier RP2350B (48 GPIO
+# reales). Lo board-specific (NeoPixel, CS de PSRAM, LED) NO va aquí: /sys/board.json.
+list(APPEND PICO_BOARD_HEADER_DIRS "${CMAKE_CURRENT_LIST_DIR}/sdk_board")
 if (NOT DEFINED PICO_BOARD)
-    set(PICO_BOARD "pico2")
+    set(PICO_BOARD "bp_rp2350b")
 endif()
 
 # Importamos FREERTOS_KERNEL_PATH del entorno si no se ha pasado por -D.
