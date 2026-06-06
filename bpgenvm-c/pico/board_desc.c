@@ -112,18 +112,23 @@ void board_desc_init(void) {
     log_printf("flash: %u bytes (%u MB)", d->flash_bytes,
                d->flash_bytes / (1024u * 1024u));
 
-    /* --- H7.2.a: sondeo de PSRAM. OPT-IN: sólo si board.json declaró psramCsPin
-     * (psram_cs_pin>=0). Sin él no se sondea — el sondeo QMI es boot-crítico. --- */
+    /* --- H7.2.a/b: sondeo + habilitación de PSRAM. OPT-IN: sólo si board.json
+     * declaró psramCsPin (psram_cs_pin>=0). detect → enable QPI → auto-test RW;
+     * psram_present sólo si los TRES pasan (= PSRAM USABLE para el heap). --- */
     if (d->psram_cs_pin >= 0) {
         size_t sz = psram_detect_init(d->psram_cs_pin);
-        if (sz > 0) {
+        unsigned mb = (unsigned)(sz / (1024u * 1024u));
+        if (sz == 0) {
+            log_printf("psram: no detectada en GP%d", d->psram_cs_pin);
+        } else if (!psram_enable_xip()) {
+            log_printf("psram: detectada (%u MB) pero enable QPI FALLO", mb);
+        } else if (!psram_rw_selftest(sz)) {
+            log_printf("psram: detectada (%u MB) + QPI, pero RW test FALLO", mb);
+        } else {
             d->psram_present = 1;
             d->psram_bytes   = (unsigned) sz;
-            log_printf("psram: %u bytes (%u MB) detectada @ GP%d",
-                       (unsigned) sz, (unsigned)(sz / (1024u * 1024u)),
-                       d->psram_cs_pin);
-        } else {
-            log_printf("psram: no detectada en GP%d", d->psram_cs_pin);
+            log_printf("psram: %u MB usable @ GP%d (QPI + RW OK, ventana 0x%08x)",
+                       mb, d->psram_cs_pin, (unsigned) PSRAM_XIP_BASE);
         }
     } else {
         log_printf("psram: no sondeada (board.json sin psramCsPin)");

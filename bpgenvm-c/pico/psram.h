@@ -17,11 +17,21 @@
  * aquí (mapeada en QPI). La usará H7.2.b para los buffers grandes. */
 #define PSRAM_XIP_BASE 0x11000000u
 
-/* DETECTA la PSRAM en `cs_pin` (H7.2.a): enruta cs_pin a XIP_CS1, sondea el chip
+/* H7.2.a — DETECTA la PSRAM en `cs_pin`: enruta cs_pin a XIP_CS1, sondea el chip
  * (reset + read-ID) y devuelve el tamaño en bytes (0 si el KGD no es el de
- * APS6404, o cs_pin < 0). SÓLO detección: NO reconfigura la ventana M1 ni pasa a
- * QPI (eso es para USAR la PSRAM → H7.2.b). Seguro: esperas acotadas (nunca
+ * APS6404, o cs_pin < 0). SÓLO detección. Seguro: esperas acotadas (nunca
  * cuelga), restaura el XIP siempre y la función del pin si no detecta. */
 size_t psram_detect_init(int cs_pin);
+
+/* H7.2.b — HABILITA la PSRAM para usarla como memoria: reset + QPI + configura
+ * la ventana M1 (read 0xEB / write 0x38) y la mapea ESCRIBIBLE en PSRAM_XIP_BASE.
+ * Llamar tras psram_detect_init() con éxito (el pin ya está enrutado). Devuelve
+ * 1 si OK, 0 si algún paso QMI no responde (timeout) — y restaura el XIP. */
+int psram_enable_xip(void);
+
+/* H7.2.b — AUTO-TEST: escribe/lee patrones repartidos por la PSRAM (mapeada en
+ * PSRAM_XIP_BASE tras psram_enable_xip). Devuelve 1 si el camino de datos es
+ * fiable, 0 si no. Gate antes de confiarle el heap de la VM. */
+int psram_rw_selftest(size_t size);
 
 #endif /* BP_PSRAM_H */
