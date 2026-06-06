@@ -618,6 +618,13 @@ Minimalismo: cada feature nueva tiene que ganarse su sitio.
 
 ## 5. Interfaces a nivel de clase (programación por contrato)
 
+> **❌ DESCARTADO (usuario, 2026-06-06).** No se harán interfaces de clase. El
+> polimorfismo por herencia simple (L2 v3) cubre el caso OO habitual; para
+> "callback/contrato" se usará el patrón **objeto-callback** (una clase concreta
+> con el método esperado) o, si hiciera falta, **función-valor** (§8 Fase A).
+> Esto NO cambia §6 (seguimos SIN herencia múltiple, por su complejidad propia,
+> ya no "porque las interfaces lo cubren").
+
 **Qué**: interfaces Java-style sobre clases — `interface Drawable` con
 firmas de método (sin cuerpo); `class Circle implements Drawable,
 Comparable`. Una variable puede tiparse como la interfaz y despachar al
