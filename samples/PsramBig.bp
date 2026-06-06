@@ -1,0 +1,27 @@
+// PsramBig.bp — demuestra el heap en PSRAM (H7.2.b).
+// Aloca un array de 1.000.000 de enteros = 4 MB: imposible en los 128 KB de
+// SRAM del Pico, pero cabe de sobra en los 8 MB de PSRAM del Metro.
+// En Metro: "PSRAM OK ...". En Pico: RuntimeError por falta de memoria.
+module PsramBig
+
+  function Main()
+    var n: integer := 1000000
+    print "Alocando " + intToString(n) + " enteros (" + intToString(n * 4 / 1024) + " KB)..."
+    var a: integer[] := newIntArray(n)
+
+    var i: integer := 0
+    while i < n do
+      a[i] := i
+      i := i + 1
+    endwh
+
+    // Verifica integridad en los extremos y el centro (lo que la caché no
+    // puede enmascarar a la vez por estar muy separados).
+    if a[0] == 0 and a[n / 2] == n / 2 and a[n - 1] == n - 1 then
+      print "PSRAM OK: array de 4 MB escrito y verificado en heap externo"
+    else
+      print "FALLO de integridad en el heap PSRAM"
+    endif
+  end Main
+
+end PsramBig
