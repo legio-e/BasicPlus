@@ -67,17 +67,25 @@ inocuo) y Metro/cualquier RP2350B.
   metro-rp2350b.json (psramCsPin:47) loguea `psram: 8388608 bytes (8 MB)
   detectada @ GP47` y arranca bien. Sondeo OPT-IN (sólo si board.json declara
   psramCsPin) + a prueba de cuelgues (timeouts + restaura XIP) tras un primer
-  intento que colgaba el boot. **La PSRAM aún no se USA** → H7.2.b.
-- **H7.2.b — buffers grandes como punteros runtime.** Hoy `s_vm_buffer[128KB]`
-  y `s_data[128KB]` (FS) son arrays estáticos en SRAM interna. Convertirlos a
-  PUNTEROS elegidos en boot: PSRAM si la hay (regiones grandes), SRAM interna si
-  no (los arrays actuales). El resto del firmware igual.
-- **H7.2.c — mapa de memoria configurable.** Con PSRAM: heap VM de MBs (honrar
-  `memorySize` de BpVM.cfg hasta el tope PSRAM) + FS mayor. Sin PSRAM: layout
-  actual. Una tabla de tamaños por presencia-de-PSRAM.
-- **H7.2.d — verificación.** Pico (sin PSRAM) y Metro (con PSRAM): paridad de
-  salida; un programa que reviente los 128 KB en Pico y corra en Metro; el
-  debugger sigue funcionando en ambas.
+  intento que colgaba el boot. ✅ Además H7.2.b paso 1: `psram_enable_xip` (QPI +
+  ventana M1 escribible) + `psram_rw_selftest`; `psram_present` sólo si los tres
+  (detect+QPI+RW) pasan = PSRAM USABLE. Verificado en HW (RW OK).
+- **H7.2.b — buffers grandes como punteros runtime.** ✅ **HECHO + VERIFICADO EN
+  HW** (Metro, 2026-06-06). `s_vm_buffer` pasa de array estático de 128 KB a
+  PUNTERO elegido en boot: `s_sram_buffer` (SRAM, fallback) por defecto, o la
+  ventana PSRAM (`0x11000000`, `psram_bytes`) si la PSRAM es USABLE. `repl_v1`
+  usa el puntero+tamaño runtime. Verificado: `samples/PsramBig.bp` aloca un array
+  de 4 MB (1M enteros), lo llena y verifica → "PSRAM OK" en Metro (heap 8 MB),
+  `RuntimeError`/OOM en Pico (128 KB) — misma imagen. Falta (opcional): mover
+  también `s_data` (FS) → eso se cubre mejor en H7.2.e (flash 16 MB).
+- **H7.2.c — mapa de memoria configurable.** PENDIENTE (refinamiento): hoy el
+  heap PSRAM usa el `psram_bytes` completo (8 MB). Honrar `memorySize` de
+  BpVM.cfg hasta el tope PSRAM. Sin PSRAM: layout actual.
+- **H7.2.d — verificación.** ✅ Metro (PSRAM, PsramBig OK) + el mismo binario en
+  Pico (sin PSRAM, layout 128 KB). Falta confirmar PsramBig→OOM en Pico real y el
+  debugger en ambas.
+- **H7.2.e — flash 16 MB (#229).** Detección de flash por JEDEC ✅ (INFO muestra
+  16 MB en Metro / 4 MB en Pico). Falta el FS flash-backed grande.
 
 ## H7.3 — RP2350B: más pines y periféricos
 - **H7.3.a — descriptor de placa en runtime.** ✅ HECHO (2026-06-06). RP2350A
