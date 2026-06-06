@@ -43,8 +43,8 @@
 #include <string.h>
 
 /* Buffer VM compartido (declarado en main.c). */
-extern uint8_t s_vm_buffer[];
-extern const uint32_t s_vm_buffer_size;
+extern uint8_t* s_vm_buffer;          /* H7.2.b: SRAM interna o ventana PSRAM */
+extern uint32_t s_vm_buffer_size;
 
 #ifndef BPVM_PICO_BUILD_DATE
 #define BPVM_PICO_BUILD_DATE  __DATE__ " " __TIME__

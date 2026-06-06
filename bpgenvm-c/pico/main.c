@@ -20,6 +20,7 @@
 #include "embedded_mods.h"
 #include "fs.h"
 #include "board_desc.h"
+#include "psram.h"
 #include "repl.h"
 #include "log.h"
 #include "bench.h"
@@ -41,8 +42,12 @@
 /* Buffer estático de la VM. 128 KB sobra para Hello.bp y deja sitio para
  * varios módulos. */
 #define VM_BUFFER_SIZE   (128 * 1024)
-uint8_t s_vm_buffer[VM_BUFFER_SIZE] __attribute__((aligned(8)));
-const uint32_t s_vm_buffer_size = VM_BUFFER_SIZE;
+/* H7.2.b — el heap de la VM es un PUNTERO elegido en boot: SRAM interna por
+ * defecto (este array), o la ventana PSRAM (MBs) si hay PSRAM usable. El buffer
+ * SRAM sigue existiendo como fallback (Pico sin PSRAM). */
+static uint8_t s_sram_buffer[VM_BUFFER_SIZE] __attribute__((aligned(8)));
+uint8_t* s_vm_buffer      = s_sram_buffer;
+uint32_t s_vm_buffer_size = VM_BUFFER_SIZE;
 
 /* --- LED on-board (GP25 en Pico 2 igual que Pico 1) -------------- */
 #ifndef PICO_DEFAULT_LED_PIN
@@ -715,8 +720,24 @@ static void vm_task(void* arg) {
                fs_file_count(), (unsigned) fs_used_bytes());
 
     /* H7.3: descriptor de placa — caps por variante (A/B) + override de
-     * /sys/board.json. Tras fs_init para poder leer el board.json del FS. */
+     * /sys/board.json. Tras fs_init para poder leer el board.json del FS.
+     * Sondea/habilita la PSRAM (si board.json declara psramCsPin). */
     board_desc_init();
+
+    /* H7.2.b — si hay PSRAM USABLE (detectada + QPI + RW test OK), el heap de la
+     * VM pasa de los 128 KB de SRAM interna a la ventana PSRAM (MBs). El resto
+     * del firmware no cambia: sólo de dónde sale s_vm_buffer. Sin PSRAM (Pico)
+     * se queda en s_sram_buffer. */
+    if (board_desc()->psram_present && board_desc()->psram_bytes >= (1u << 20)) {
+        s_vm_buffer      = (uint8_t*) (uintptr_t) PSRAM_XIP_BASE;
+        s_vm_buffer_size = board_desc()->psram_bytes;
+        log_printf("vm: heap en PSRAM %u MB @ 0x%08x",
+                   (unsigned)(s_vm_buffer_size / (1024u * 1024u)),
+                   (unsigned) PSRAM_XIP_BASE);
+    } else {
+        log_printf("vm: heap en SRAM interna %u KB",
+                   (unsigned)(s_vm_buffer_size / 1024u));
+    }
 
     /* Stdlib pre-instalada en /lib/, Hello en /app/. La resolución de
      * imports en cmd_run busca también en estos directorios además del
