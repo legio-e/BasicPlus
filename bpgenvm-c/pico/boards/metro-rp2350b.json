@@ -1,4 +1,5 @@
 {
   "name": "metro-rp2350b",
-  "variant": "B"
+  "variant": "B",
+  "psramCsPin": 47
 }

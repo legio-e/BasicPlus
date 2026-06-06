@@ -32,7 +32,10 @@ static void apply_variant_caps(board_desc_t* d, char variant) {
         d->pio_count    = 3;
         d->pwm_slices   = 12;
         d->adc_channels = 8;
-        d->psram_cs_pin = 47;   /* default Adafruit RP2350B (a confirmar) */
+        d->psram_cs_pin = -1;   /* NO asumimos CS de PSRAM por variante: el
+                                 * sondeo QMI es boot-crítico, así que es OPT-IN
+                                 * explícito — sólo se sondea si board.json
+                                 * declara psramCsPin (Metro/Pimoroni: 47). */
     } else {                    /* 'A' por defecto */
         d->variant      = 'A';
         d->gpio_count   = 30;   /* RP2350A (QFN-60), Pico 2 */
@@ -90,20 +93,21 @@ void board_desc_init(void) {
         log_printf("board: sin /sys/board.json, uso defaults por variante");
     }
 
-    /* --- H7.2.a: sondeo de PSRAM en el CS declarado (board.json / variante) --- */
+    /* --- H7.2.a: sondeo de PSRAM. OPT-IN: sólo si board.json declaró psramCsPin
+     * (psram_cs_pin>=0). Sin él no se sondea — el sondeo QMI es boot-crítico. --- */
     if (d->psram_cs_pin >= 0) {
         size_t sz = psram_detect_init(d->psram_cs_pin);
         if (sz > 0) {
             d->psram_present = 1;
             d->psram_bytes   = (unsigned) sz;
-            log_printf("psram: %u bytes (%u MB) @ GP%d, mapeada en 0x%08x",
+            log_printf("psram: %u bytes (%u MB) detectada @ GP%d",
                        (unsigned) sz, (unsigned)(sz / (1024u * 1024u)),
-                       d->psram_cs_pin, (unsigned) PSRAM_XIP_BASE);
+                       d->psram_cs_pin);
         } else {
             log_printf("psram: no detectada en GP%d", d->psram_cs_pin);
         }
     } else {
-        log_printf("psram: no sondeada (sin psramCsPin)");
+        log_printf("psram: no sondeada (board.json sin psramCsPin)");
     }
 
     log_printf("board: %s variant=%c gpio=%d pio=%d pwm=%d adc=%d led=%d npx=%d psramCs=%d psram=%uMB",

@@ -17,13 +17,11 @@
  * aquí (mapeada en QPI). La usará H7.2.b para los buffers grandes. */
 #define PSRAM_XIP_BASE 0x11000000u
 
-/* Detecta e inicializa la PSRAM en `cs_pin`:
- *   - Enruta cs_pin a la función XIP_CS1.
- *   - Sondea el chip (reset + read-ID); si el KGD no es el de APS6404 → no hay.
- *   - Si hay, lo pasa a QPI y configura la ventana M1 (read 0xEB / write 0x38)
- *     + XIP escribible.
- * Devuelve el tamaño en bytes (0 si no hay PSRAM o cs_pin < 0). Idempotente y
- * seguro: si algo falla, restaura el XIP y devuelve 0 (el device arranca igual). */
+/* DETECTA la PSRAM en `cs_pin` (H7.2.a): enruta cs_pin a XIP_CS1, sondea el chip
+ * (reset + read-ID) y devuelve el tamaño en bytes (0 si el KGD no es el de
+ * APS6404, o cs_pin < 0). SÓLO detección: NO reconfigura la ventana M1 ni pasa a
+ * QPI (eso es para USAR la PSRAM → H7.2.b). Seguro: esperas acotadas (nunca
+ * cuelga), restaura el XIP siempre y la función del pin si no detecta. */
 size_t psram_detect_init(int cs_pin);
 
 #endif /* BP_PSRAM_H */
