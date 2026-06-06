@@ -1,0 +1,17 @@
+// Repro de cascada SEMÁNTICA: una función llamada con nº de args incorrecto,
+// cuyo resultado se reutiliza varias veces (mide si checkArgs envenena).
+module CascadeSem
+
+  function add(a: integer, b: integer): integer
+    return a + b
+  end add
+
+  function Main()
+    var x: integer := add(1)       // <-- error real: faltan args
+    var y: integer := x + 1
+    var z: integer := y + x
+    var w: integer := z * y
+    print w
+  end Main
+
+end CascadeSem

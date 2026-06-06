@@ -1,0 +1,8 @@
+// Cascada por TIPO inexistente usado varias veces (mide dedup de tipos).
+// 'Widget' no existe; antes daba 3 errores, ahora debe dar 1.
+module CascadeType
+
+  function f(a: Widget, b: Widget, c: Widget)
+  end f
+
+end CascadeType

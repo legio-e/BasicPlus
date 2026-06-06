@@ -1,0 +1,11 @@
+// Cascada por variable INDEFINIDA usada varias veces (mide dedup).
+module CascadeUndef
+
+  function Main()
+    print foo
+    var y: integer := foo + 1
+    var z: integer := foo * 2
+    print foo
+  end Main
+
+end CascadeUndef

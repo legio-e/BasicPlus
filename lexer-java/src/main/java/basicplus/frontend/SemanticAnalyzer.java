@@ -35,6 +35,19 @@ public final class SemanticAnalyzer {
     private final SemanticInfo info = new SemanticInfo();
     private ModuleSymbol module;
 
+    /**
+     * Anti-cascada: nombres ya reportados como "identificador no resuelto"
+     * (se reporta 1 sola vez por nombre; los usos siguientes se silencian y
+     * propagan ErrorType). Per-instancia = per-módulo.
+     */
+    private final java.util.Set<String> reportedUnresolved = new java.util.HashSet<>();
+
+    /**
+     * Anti-cascada: tipos ya reportados como "no encontrado" (1 vez por nombre).
+     * Un tipo mal escrito usado en N declaraciones daba N errores; ahora 1.
+     */
+    private final java.util.Set<String> reportedUnknownType = new java.util.HashSet<>();
+
     // ---------- Estado del recorrido (pase 3) ----------
     private ClassSymbol currentClass;
     private FunctionSymbol currentFunction;
@@ -926,7 +939,8 @@ public final class SemanticAnalyzer {
                 if (cand instanceof ClassSymbol) return new ClassType((ClassSymbol) cand);
                 if (cand instanceof EnumSymbol)  return new EnumType((EnumSymbol) cand);
             }
-            err(st.line, st.column, "tipo cualificado '" + st.name + "' no encontrado");
+            if (reportedUnknownType.add(st.name))
+                err(st.line, st.column, "tipo cualificado '" + st.name + "' no encontrado");
             return ErrorType.INSTANCE;
         }
         Symbol sym = module.members.resolve(st.name);
@@ -958,7 +972,8 @@ public final class SemanticAnalyzer {
             return new ClassType((ClassSymbol) fromImports);
         if (fromImports instanceof EnumSymbol)
             return new EnumType((EnumSymbol) fromImports);
-        err(st.line, st.column, "tipo '" + st.name + "' no encontrado");
+        if (reportedUnknownType.add(st.name))
+            err(st.line, st.column, "tipo '" + st.name + "' no encontrado");
         return ErrorType.INSTANCE;
     }
 
@@ -1732,7 +1747,9 @@ public final class SemanticAnalyzer {
             sym = moduleSym;
         }
         if (sym == null) {
-            err(id.line, id.column, "identificador no resuelto: '" + id.name + "'");
+            // Anti-cascada: reportar cada nombre no resuelto UNA vez.
+            if (reportedUnresolved.add(id.name))
+                err(id.line, id.column, "identificador no resuelto: '" + id.name + "'");
             return ErrorType.INSTANCE;
         }
         info.exprSymbols.put(id, sym);
@@ -2022,6 +2039,10 @@ public final class SemanticAnalyzer {
     private BpType analyzeBinary(BinaryExpr b, Scope scope) {
         BpType lt = analyzeExpr(b.left,  scope, null);
         BpType rt = analyzeExpr(b.right, scope, null);
+        // Anti-cascada (poisoning): si un operando ya es <error>, el error real
+        // ya se reportó aguas arriba. No re-reportamos un "incompatible" espurio;
+        // propagamos ErrorType en silencio.
+        if (lt instanceof ErrorType || rt instanceof ErrorType) return ErrorType.INSTANCE;
         switch (b.op) {
             case "+":
                 if (isString(lt) || isString(rt)) return PrimitiveType.STRING;

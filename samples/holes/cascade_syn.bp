@@ -1,0 +1,16 @@
+// Repro de cascada por error de SINTAXIS (falta 'then').
+// Un único error real; medir cuántos diagnósticos se emiten.
+module CascadeSyn
+
+  function Main()
+    var a: integer := 1
+    if a > 0            // <-- falta 'then' (1 error real)
+      print "hola"
+    endif
+    var b: integer := 2
+    var c: integer := b + a
+    var d: integer := c * 2
+    print d
+  end Main
+
+end CascadeSyn

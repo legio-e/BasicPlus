@@ -1,0 +1,12 @@
+// Cascada por TIPO inexistente + métodos sobre objeto de tipo desconocido.
+module CascadeBadType
+
+  function Main()
+    var a: Widget := makeWidget()
+    var b: integer := a.size()
+    var c: integer := b + a.count()
+    var d: integer := c + a.size()
+    print d
+  end Main
+
+end CascadeBadType

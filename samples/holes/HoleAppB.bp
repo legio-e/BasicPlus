@@ -1,0 +1,17 @@
+// BUG-2 repro — app: intenta atrapar la excepción de usuario CROSS-MODULE.
+// Esperado (bug): el catch NO casa → la excepción se escapa / no se atrapa.
+module HoleAppB
+
+  import HoleLibA
+
+  function Main()
+    try
+      HoleLibA.boom()
+      print "FAIL: no debería llegar aquí"
+    catch e: HoleLibA.MyError
+      print "OK: atrapado MyError cross-module"
+    endtry
+    print "fin"
+  end Main
+
+end HoleAppB

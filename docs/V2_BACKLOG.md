@@ -672,6 +672,15 @@ Anotar como escalón posterior, solo si hace falta.
 
 ## 7. Compilador: recuperación de errores (anti-cascada)
 
+> **✅ HECHO (parcial) — 2026-06-06 (#232).** Medido con repros en
+> `samples/holes/`: 1 typo de variable usado 4× daba **6** errores → ahora **1**;
+> un tipo inexistente usado 3× daba 3 → **1**. Dos arreglos quirúrgicos en
+> `SemanticAnalyzer.java`: (b-poisoning) `analyzeBinary` propaga `ErrorType` en
+> silencio si un operando ya es `<error>` (no re-reporta "incompatible" espurio);
+> (c-dedup) "identificador no resuelto" y "tipo no encontrado" se reportan 1 vez
+> por nombre. Regresión OK (narrowtypes_errors sigue en 7; samples válidos en 0).
+> **Falta (a-parser)**: reforzar `synchronize()` en más fronteras + cap "y N más".
+
 **Qué**: que un error no genere una cascada de errores espurios — el
 problema de usabilidad #1 del compilador hoy.
 

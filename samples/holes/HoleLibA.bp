@@ -1,0 +1,16 @@
+// BUG-2 repro — librería: define una clase de excepción de usuario y la lanza.
+module HoleLibA
+
+  public class MyError
+    public var msg_: string
+    public function MyError(m: string)
+      this.msg_ := m
+    end MyError
+  end MyError
+
+  // Lanza la excepción de usuario desde DENTRO de este módulo.
+  public function boom()
+    throw MyError("desde LibA")
+  end boom
+
+end HoleLibA
