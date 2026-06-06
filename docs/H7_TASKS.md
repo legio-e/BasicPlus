@@ -5,6 +5,40 @@ Dedicada casi en exclusiva a la **Adafruit Metro RP2350** (chip **RP2350B**,
 8 MB PSRAM, 48 GPIO), pero abre temas que sirven a todo el proyecto. Mismo
 método: **inventario → decidir alcance → tareas, una a una.**
 
+---
+
+## ✅ H7 CERRADO (2026-06-06) — nota: EXCELENTE
+
+H7 se da por **cerrado**. Todos los hitos previstos quedaron **verificados en
+hardware** sobre la Adafruit Metro RP2350B:
+
+- **H7.1** — imagen **genérica RP2350B** (48 GPIO, un solo binario que arranca en
+  Pico 2 y en Metro).
+- **H7.2.a/b** — **PSRAM** APS6404 8 MB detectada @ GP47 + **heap de la VM
+  reubicado a PSRAM** (`PsramBig.bp`: array de 4 MB escrito y verificado en heap
+  externo). Opt-in por `psramCsPin` en board.json.
+- **H7.3** — **stdlib HW board-aware** (capa chip↔placa, `/sys/board.json`): el
+  MISMO binario reporta `30/A` o `48/B` según el dato de placa.
+- **H7.4** — **NeoPixel WS2812**: primera infra **PIO** + clase OO
+  `Neopixel.Strip` (`NeoDemo.bp` cicla el LED onboard por R/G/B desde BasicPlus).
+- **Extra** — botón **INFO** en el IDE + **detección de flash JEDEC** (Metro: 16 MB).
+
+La tesis **"imágenes genéricas, placas por datos"** quedó demostrada de punta a
+punta: un usuario puede declarar su placa en `board.json` y usarla sin recompilar,
+sin estar limitado a placas oficiales.
+
+### Desacoplado de H7 → backlog general (sin urgencia)
+Lo que quedaba pendiente **NO** bloquea el cierre de H7; pasa a backlog suelto:
+- Mapa de memoria de la VM configurable por `BpVM.cfg` (`memorySize`) — tarea #225.
+- FS grande aprovechando la flash de 16 MB del Metro — tarea #229.
+- IDE: doble clic en fichero del micro → ver/editar — tarea #231.
+- Bug menor: lectura de temperatura (~412 °C) en el panel INFO.
+
+> Lo de abajo es el detalle histórico de la fase (inventario y tareas). Se
+> conserva como registro; el estado real es el de este banner.
+
+---
+
 ## Principios de arquitectura (decisiones, usuario 2026-06-05)
 
 > **1. Un solo firmware para Pico y Metro.** El mismo binario debe arrancar y
