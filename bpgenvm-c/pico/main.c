@@ -21,6 +21,7 @@
 #include "fs.h"
 #include "board_desc.h"
 #include "psram.h"
+#include "neopixel.h"
 #include "repl.h"
 #include "log.h"
 #include "bench.h"
@@ -737,6 +738,20 @@ static void vm_task(void* arg) {
     } else {
         log_printf("vm: heap en SRAM interna %u KB",
                    (unsigned)(s_vm_buffer_size / 1024u));
+    }
+
+    /* H7.4.a — test del driver NeoPixel: si la placa declara neopixelPin, enciende
+     * el LED onboard en verde tenue al boot. Valida la 1ª infra PIO de forma
+     * visible antes de la clase BP (H7.4.b). Sin neopixelPin (Pico) → no-op. */
+    if (board_desc()->neopixel_pin >= 0) {
+        if (neopixel_init(board_desc()->neopixel_pin)) {
+            uint32_t verde = (8u << 16);   /* GRB: g=8 (tenue), r=0, b=0 */
+            neopixel_show(board_desc()->neopixel_pin, &verde, 1);
+            log_printf("neopixel: onboard @ GP%d verde tenue (test H7.4.a)",
+                       board_desc()->neopixel_pin);
+        } else {
+            log_printf("neopixel: init FALLO en GP%d", board_desc()->neopixel_pin);
+        }
     }
 
     /* Stdlib pre-instalada en /lib/, Hello en /app/. La resolución de

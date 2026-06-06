@@ -1,5 +1,7 @@
 {
   "name": "metro-rp2350b",
   "variant": "B",
-  "psramCsPin": 47
+  "psramCsPin": 47,
+  "ledPin": 23,
+  "neopixelPin": 25
 }

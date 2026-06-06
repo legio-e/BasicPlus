@@ -121,6 +121,7 @@ add_executable(bpvm_pico
     # va embebido.
     board_desc.c    # H7.3: descriptor de placa (variante A/B + /sys/board.json)
     psram.c         # H7.2.a: detección + init de PSRAM (QMI CS1, APS6404)
+    neopixel.c      # H7.4: driver WS2812 (NeoPixel) vía PIO
     fs.c            # FP2 step 1+3: filesystem RAM + persistencia flash
     repl.c          # FP2 step 2: REPL sobre USB CDC (protocolo texto legacy)
     repl_v1.c       # H1 fase A: dispatcher wire BPVM v1 JSON
@@ -135,6 +136,11 @@ add_executable(bpvm_pico
     embedded_bench_mdn.c     # H3 #158 fase C v2: blob .mdn limpio (124 bytes)
     ${BPVM_C_SRC}
 )
+
+# H7.4 — ensambla el programa PIO del WS2812 (NeoPixel) que trae la pico-sdk
+# (pico_status_led/ws2812.pio, BSD) con pioasm → genera ws2812.pio.h en el build,
+# que incluye neopixel.c. Así no escribimos el ensamblador PIO a mano.
+pico_generate_pio_header(bpvm_pico ${PICO_SDK_PATH}/src/rp2_common/pico_status_led/ws2812.pio)
 
 # H3 #158 fase B — compilar el AOT generado como position-independent.
 # Esto es el paso preparatorio para extraer .text al .mdn. Si la
@@ -163,6 +169,7 @@ target_link_libraries(bpvm_pico PRIVATE
     pico_unique_id       # Pico.uniqueId() — flash chip ID
     hardware_flash       # FP2 step 3: erase/program de la región del FS
     hardware_sync        # save_and_disable_interrupts/restore_interrupts
+    hardware_pio         # H7.4: NeoPixel WS2812 vía PIO
     # NOTA: NO añadir pico_flash — rompió USB CDC en FP2-fail. Para el
     # lockout dual-core (#153) usamos pico_multicore directamente (abajo),
     # NO pico_flash.
