@@ -19,6 +19,7 @@
 #include "bpvm.h"
 #include "embedded_mods.h"
 #include "fs.h"
+#include "board_desc.h"
 #include "repl.h"
 #include "log.h"
 #include "bench.h"
@@ -463,7 +464,9 @@ static void pico_pico_unique_id_impl(char* buf, size_t len) {
 }
 
 static void pico_pico_board_name_impl(char* buf, size_t len) {
-    const char* name = "pico2";
+    /* H7.3: el nombre lo da el descriptor de placa (board_desc_init lo fija
+     * desde la variante por defecto o desde /sys/board.json). */
+    const char* name = board_desc()->name;
     size_t n = strlen(name);
     if (len == 0) return;
     if (n > len - 1) n = len - 1;
@@ -703,6 +706,10 @@ static void vm_task(void* arg) {
     fs_init();
     log_printf("fs_init: %d ficheros, %u bytes",
                fs_file_count(), (unsigned) fs_used_bytes());
+
+    /* H7.3: descriptor de placa — caps por variante (A/B) + override de
+     * /sys/board.json. Tras fs_init para poder leer el board.json del FS. */
+    board_desc_init();
 
     /* Stdlib pre-instalada en /lib/, Hello en /app/. La resolución de
      * imports en cmd_run busca también en estos directorios además del

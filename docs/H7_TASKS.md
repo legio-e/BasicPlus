@@ -20,6 +20,14 @@ método: **inventario → decidir alcance → tareas, una a una.**
 > en Metro (48 GPIO) y error en Pico (30 GPIO).
 >
 > **4. Todo HW nuevo es clase OO** (política P-hw-class-policy, #123).
+>
+> **5. Separación CHIP ↔ PLACA** (matiz usuario 2026-06-06). Dos capas:
+> - **CHIP (variante A/B)**: caps que dependen del microcontrolador (gpioCount,
+>   nº PIO/PWM/ADC). De una TABLA built-in por variante. El core del firmware NO
+>   conoce "Metro"/"Pico", sólo variantes RP2350A/B.
+> - **PLACA**: lo board-specific (LED, NeoPixel, CS de la PSRAM…) vive en DATOS:
+>   `/sys/board.json`. El NeoPixel es de la Metro, **no** del RP2350 → va aquí,
+>   no en el firmware. Una placa distinta = otro board.json, sin recompilar.
 
 El **orden de las tareas es flexible** (improvisamos según ganas/bloqueos). La
 PSRAM (H7.2) es el premio gordo pero la más arriesgada/HW-gated → razonable
@@ -56,9 +64,15 @@ compatibles) — verificado: Hello, T y Debug on Pico corren en Metro. Pero no e
   debugger sigue funcionando en ambas.
 
 ## H7.3 — RP2350B: más pines y periféricos
-- **H7.3.a — descriptor de placa en runtime.** RP2350A (30 GPIO, Pico 2) vs
-  RP2350B (48 GPIO, Metro). Detectar/declarar la variante y exponer sus límites
-  (gpioCount, nº PWM slices, ADC channels, PIO/SM, etc.).
+- **H7.3.a — descriptor de placa en runtime.** ✅ HECHO (2026-06-06). RP2350A
+  (30 GPIO, Pico 2) vs RP2350B (48 GPIO, Metro). `board_desc.{h,c}`: struct
+  `board_desc_t` + tabla de caps por variante (`apply_variant_caps`) + override
+  desde `/sys/board.json` (datos de placa: name, ledPin, neopixelPin, psramCsPin,
+  gpioCount). `board_desc_init()` en boot tras `fs_init`; `Pico.board` lee el
+  name del descriptor. Plantillas en `pico/boards/` (pico2.json, metro-rp2350b.json
+  minimal + README con el esquema). Default sin board.json: variante B permisiva
+  (lo afinará el sondeo de PSRAM en H7.2). **Falta cablear validación de rango
+  (H7.3.b) y exponer caps en BP (H7.3.c).**
 - **H7.3.b — stdlib HW board-aware.** Gpio/Pwm/Adc/Spi/Uart/Pio respetan los
   límites de la placa (validación de rango por board). `Gpio.Pin(47)` OK en
   Metro, error en Pico.
@@ -88,6 +102,8 @@ de timing exacto). **Es la primera infraestructura PIO del firmware.**
 
 ## Estado
 - **H7.1**: baseline confirmado (Metro corre el firmware pico2); falta board target.
+- **H7.3.a**: ✅ descriptor de placa (chip↔placa) + board.json + tabla de variantes.
+  Firmware compila/linka (BSS sin cambio relevante). Falta validación + BP (H7.3.b/c).
 - Resto: por arrancar. Orden flexible.
 
 ## Decisiones abiertas
