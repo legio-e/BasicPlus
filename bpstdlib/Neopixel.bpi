@@ -1,0 +1,13 @@
+bpi 6
+module Neopixel
+func __npInit(pin:integer):void public intrinsic
+func __npShow(pin:integer,grb:integer[],count:integer):void public intrinsic
+class Strip public
+  layout 3 7 00000004 00000000
+  ctor(pin:integer,count:integer)
+  method setPixel(i:integer,r:integer,g:integer,b:integer):void public
+  method setColor(r:integer,g:integer,b:integer):void public
+  method clear():void public
+  method show():void public
+  method count():integer public
+end class

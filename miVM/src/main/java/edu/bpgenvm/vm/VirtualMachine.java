@@ -4157,6 +4157,19 @@ public class VirtualMachine {
                 pushTc(tc, 30);
                 break;
             }
+            case NEOPIXEL_INIT: {
+                /* device-only (PIO). Host: no-op — descarta args. */
+                popTc(tc);            /* pin */
+                pushTc(tc, 0);
+                break;
+            }
+            case NEOPIXEL_SHOW: {
+                popTc(tc);            /* count */
+                popTc(tc);            /* grbRef */
+                popTc(tc);            /* pin */
+                pushTc(tc, 0);
+                break;
+            }
             case PICO_UPTIME_MS: {
                 /* Sirve algo útil en host: ms del proceso JVM. */
                 pushTc(tc, (int) System.currentTimeMillis());

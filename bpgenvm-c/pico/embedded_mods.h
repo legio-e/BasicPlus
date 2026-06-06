@@ -40,6 +40,8 @@ extern const uint8_t       wdt_mod[];
 extern const unsigned int  wdt_mod_len;
 extern const uint8_t       timer_mod[];
 extern const unsigned int  timer_mod_len;
+extern const uint8_t       neopixel_mod[];
+extern const unsigned int  neopixel_mod_len;
 
 #ifdef __cplusplus
 }

@@ -22,6 +22,7 @@
 #include "board_desc.h"
 #include "psram.h"
 #include "neopixel.h"
+#include "bpvm_neopixel.h"
 #include "repl.h"
 #include "log.h"
 #include "bench.h"
@@ -97,6 +98,16 @@ static const bpvm_gpio_backend_t s_pico_gpio_backend = {
     .pull  = pico_gpio_pull_impl,
     .write = pico_gpio_write_impl,
     .read  = pico_gpio_read_impl,
+};
+
+/* --- Backend NeoPixel (WS2812 vía PIO, H7.4) -------------------- */
+static int  pico_np_init_impl(int pin) { return neopixel_init(pin) ? 1 : 0; }
+static void pico_np_show_impl(int pin, const uint32_t* grb, int count) {
+    neopixel_show(pin, grb, count);
+}
+static const bpvm_neopixel_backend_t s_pico_neopixel_backend = {
+    .init = pico_np_init_impl,
+    .show = pico_np_show_impl,
 };
 
 /* --- Backend I2C del Pico SDK ----------------------------------- */
@@ -806,6 +817,10 @@ static void vm_task(void* arg) {
         fs_put("/lib/Timer.mod", timer_mod, timer_mod_len);
         log_printf("stdlib: /lib/Timer.mod installed (%u bytes)", timer_mod_len);
     }
+    if (fs_get("/lib/Neopixel.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Neopixel.mod", neopixel_mod, neopixel_mod_len);
+        log_printf("stdlib: /lib/Neopixel.mod installed (%u bytes)", neopixel_mod_len);
+    }
     /* Drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO se
      * pre-instalan aquí — los sube el IDE como deps al hacer Run a
      * /app/ o a root, da igual: la resolución encuentra ambos. */
@@ -924,6 +939,7 @@ int main(void) {
     bpvm_pico_set_backend(&s_pico_pico_backend);
     bpvm_adc_set_backend(&s_pico_adc_backend);
     bpvm_wdt_set_backend(&s_pico_wdt_backend);
+    bpvm_neopixel_set_backend(&s_pico_neopixel_backend);   /* H7.4 */
     /* Rtc en Pico usa el stub portable (bpvm_platform_now_ms + offset).
      * Cuando reset, el offset = 0 → epochSec devuelve segundos desde
      * boot. El IDE envía TIME <epochsec> al conectar y el comando

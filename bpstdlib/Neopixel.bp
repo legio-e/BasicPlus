@@ -1,0 +1,82 @@
+// ============================================================
+// Neopixel.bp — LEDs direccionables WS2812 / NeoPixel (H7.4).
+//
+// LED RGB de 1 hilo (sin reloj): el bit se codifica por duración de
+// pulso (~800 kHz). En el RP2350 se maneja por PIO; el firmware trae
+// el driver (neopixel.c) y aquí está la clase OO.
+//
+// El buffer de píxeles vive en BP (un integer[] con el color GRB
+// empaquetado por píxel). show() lo empuja al hardware de una vez.
+//
+// Uso:
+//   import Neopixel
+//   var tira: Neopixel.Strip := Neopixel.Strip(25, 1)   // pin, nº píxeles
+//   tira.setPixel(0, 0, 0, 40)   // azul tenue (r, g, b 0..255)
+//   tira.show()
+//   tira.setColor(20, 0, 0)      // todos rojo
+//   tira.show()
+//   tira.clear()
+//   tira.show()
+// ============================================================
+module Neopixel
+
+  // Intrínsecos internos (mapean a builtins nativos). El firmware Pico
+  // los implementa vía PIO; en host/VM Java son no-op.
+  //   __npInit(pin): reclama PIO+SM y carga el programa WS2812.
+  //   __npShow(pin, grb, count): empuja `count` palabras GRB de `grb`.
+  public intrinsic function __npInit(pin: integer)
+  public intrinsic function __npShow(pin: integer, grb: integer[], count: integer)
+
+  // ----------------------------------------------------------
+  // Clase Strip — una tira (o un único LED, con count=1).
+  // ----------------------------------------------------------
+  public class Strip
+
+    public var pin_: integer      // GPIO de datos
+    public var n_:   integer      // número de píxeles
+    public var px_:  integer[]    // color GRB empaquetado por píxel
+
+    // Constructor: configura el pin para WS2812 y reserva el buffer.
+    public function Strip(pin: integer, count: integer)
+      this.pin_ := pin
+      this.n_   := count
+      this.px_  := newIntArray(count)
+      __npInit(pin)
+    end Strip
+
+    // Color de un píxel (r, g, b en 0..255). Se guarda como GRB, el
+    // orden que espera el WS2812 (el firmware lo manda tal cual).
+    public function setPixel(i: integer, r: integer, g: integer, b: integer)
+      if i >= 0 and i < this.n_ then
+        this.px_[i] := (g * 65536) + (r * 256) + b
+      endif
+    end setPixel
+
+    // Pinta TODOS los píxeles del mismo color.
+    public function setColor(r: integer, g: integer, b: integer)
+      var c: integer := (g * 65536) + (r * 256) + b
+      var i: integer := 0
+      while i < this.n_ do
+        this.px_[i] := c
+        i := i + 1
+      endwh
+    end setColor
+
+    // Apaga todos (no aplica hasta show()).
+    public function clear()
+      this.setColor(0, 0, 0)
+    end clear
+
+    // Vuelca el buffer al hardware (lo hace visible).
+    public function show()
+      __npShow(this.pin_, this.px_, this.n_)
+    end show
+
+    // Número de píxeles de la tira.
+    public function count(): integer
+      return this.n_
+    end count
+
+  end Strip
+
+end Neopixel

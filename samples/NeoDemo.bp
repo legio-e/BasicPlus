@@ -1,0 +1,31 @@
+// NeoDemo.bp — demo del NeoPixel onboard (H7.4.b).
+// Cicla el LED por rojo/verde/azul unas cuantas veces y lo apaga.
+// En el Metro el NeoPixel onboard está en GP25 (ver board.json).
+module NeoDemo
+
+  import Neopixel
+
+  function Main()
+    var px: Neopixel.Strip := Neopixel.Strip(25, 1)
+    print "NeoPixel @ GP25: ciclo R/G/B"
+
+    var n: integer := 0
+    while n < 3 do
+      px.setColor(40, 0, 0)   // rojo (tenue)
+      px.show()
+      sleep(400)
+      px.setColor(0, 40, 0)   // verde
+      px.show()
+      sleep(400)
+      px.setColor(0, 0, 40)   // azul
+      px.show()
+      sleep(400)
+      n := n + 1
+    endwh
+
+    px.clear()
+    px.show()
+    print "fin del ciclo NeoPixel"
+  end Main
+
+end NeoDemo

@@ -262,7 +262,11 @@ public enum Builtin {
 
     // ---- H7.3 — board-aware (RP2350A/B). El device lo resuelve desde el
     //      board_desc (variante/board.json); host = perfil RP2350A. ----
-    PICO_GPIO_COUNT("__picoGpioCount");  // () → integer (GPIO de la variante)
+    PICO_GPIO_COUNT("__picoGpioCount"),  // () → integer (GPIO de la variante)
+
+    // ---- H7.4 — NeoPixel WS2812 (device-only vía PIO; no-op en host) ----
+    NEOPIXEL_INIT("__npInit"),           // (pin) → void
+    NEOPIXEL_SHOW("__npShow");            // (pin, grb: int[], count) → void
 
     public final String bpName;
     public final int id;

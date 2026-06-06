@@ -18,7 +18,7 @@ CFLAGS  += -MMD -MP
 SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/link.c src/scheduler.c src/threading.c src/exceptions.c \
           src/platform_pthread.c src/gpio.c src/i2c.c src/spi.c src/uart.c \
-          src/pulse.c src/pwm.c src/pico.c src/rtc.c src/adc.c src/wdt.c \
+          src/pulse.c src/pwm.c src/pico.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
           src/aot_registry.c src/bpvm_aot_helpers.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c
 LDFLAGS = -lpthread

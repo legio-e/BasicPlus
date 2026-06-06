@@ -19,6 +19,7 @@
 #include "bpvm_pulse.h"
 #include "bpvm_pwm.h"
 #include "bpvm_pico.h"
+#include "bpvm_neopixel.h"
 #include "bpvm_rtc.h"
 #include "bpvm_adc.h"
 #include "bpvm_wdt.h"
@@ -109,7 +110,10 @@ enum {
      * no los implementa. Hueco intencional para mantener el id alineado al
      * ordinal del enum Builtin.java. */
     /* H7.3 — board-aware (RP2350A/B): GPIO de la variante desde board_desc. */
-    BUILTIN_PICO_GPIO_COUNT  = 123
+    BUILTIN_PICO_GPIO_COUNT  = 123,
+    /* H7.4 — NeoPixel WS2812 (device-only; no-op en host). */
+    BUILTIN_NEOPIXEL_INIT    = 124,
+    BUILTIN_NEOPIXEL_SHOW    = 125
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -828,6 +832,28 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_PICO_GPIO_COUNT: {
         push_i32(vm, tc, (int32_t) bpvm_pico_gpio_count());
+        return BPVM_OK;
+    }
+    case BUILTIN_NEOPIXEL_INIT: {
+        /* __npInit(pin): void */
+        int pin = pop_i32(vm, tc);
+        bpvm_neopixel_init(pin);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_NEOPIXEL_SHOW: {
+        /* __npShow(pin, grb: integer[], count): void — empuja count palabras
+         * GRB del array (mismo layout que I2C/SPI: ref+4 = primer i32 BE). */
+        int count = pop_i32(vm, tc);
+        uint32_t grbRef = (uint32_t) pop_i32(vm, tc);
+        int pin = pop_i32(vm, tc);
+        static uint32_t s_npbuf[256];           /* single-worker: estático OK */
+        int n = count < 0 ? 0 : (count > 256 ? 256 : count);
+        for (int i = 0; i < n; i++) {
+            s_npbuf[i] = (uint32_t) bpvm_read_i32_be(vm->memory + grbRef + 4 + i * 4);
+        }
+        bpvm_neopixel_show(pin, s_npbuf, n);
+        push_i32(vm, tc, 0);
         return BPVM_OK;
     }
     case BUILTIN_PICO_UPTIME_MS: {
