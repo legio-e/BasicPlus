@@ -8,6 +8,7 @@
 #include "fs.h"
 #include "json_min.h"
 #include "log.h"
+#include "psram.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -38,7 +39,9 @@ static void apply_variant_caps(board_desc_t* d, char variant) {
         d->pio_count    = 3;
         d->pwm_slices   = 12;
         d->adc_channels = 4;
-        d->psram_cs_pin = 0;    /* default Adafruit RP2350A (a confirmar) */
+        d->psram_cs_pin = -1;   /* la mayoría de placas A no llevan PSRAM; las
+                                 * que sí (CS=GP0) lo declaran en board.json. Así
+                                 * un Pico no sondea GP0 (que es UART TX). */
     }
 }
 
@@ -87,9 +90,26 @@ void board_desc_init(void) {
         log_printf("board: sin /sys/board.json, uso defaults por variante");
     }
 
-    log_printf("board: %s variant=%c gpio=%d pio=%d pwm=%d adc=%d led=%d npx=%d psramCs=%d",
+    /* --- H7.2.a: sondeo de PSRAM en el CS declarado (board.json / variante) --- */
+    if (d->psram_cs_pin >= 0) {
+        size_t sz = psram_detect_init(d->psram_cs_pin);
+        if (sz > 0) {
+            d->psram_present = 1;
+            d->psram_bytes   = (unsigned) sz;
+            log_printf("psram: %u bytes (%u MB) @ GP%d, mapeada en 0x%08x",
+                       (unsigned) sz, (unsigned)(sz / (1024u * 1024u)),
+                       d->psram_cs_pin, (unsigned) PSRAM_XIP_BASE);
+        } else {
+            log_printf("psram: no detectada en GP%d", d->psram_cs_pin);
+        }
+    } else {
+        log_printf("psram: no sondeada (sin psramCsPin)");
+    }
+
+    log_printf("board: %s variant=%c gpio=%d pio=%d pwm=%d adc=%d led=%d npx=%d psramCs=%d psram=%uMB",
                d->name, d->variant, d->gpio_count, d->pio_count, d->pwm_slices,
-               d->adc_channels, d->led_pin, d->neopixel_pin, d->psram_cs_pin);
+               d->adc_channels, d->led_pin, d->neopixel_pin, d->psram_cs_pin,
+               d->psram_bytes / (1024u * 1024u));
 }
 
 const board_desc_t* board_desc(void) { return &s_board; }

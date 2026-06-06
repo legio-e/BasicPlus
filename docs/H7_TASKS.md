@@ -53,11 +53,18 @@ inocuo) y Metro/cualquier RP2350B.
   Metro sin panic). Precondición de H7.2.a (CS de PSRAM en GP47 = pin B-only).
 
 ## H7.2 — PSRAM + redistribución del mapa de memoria
-- **H7.2.a — detección + init de PSRAM** (QMI/XIP, APS6404 8 MB en el Metro).
-  ⚠️ La pico-sdk actual no trae soporte psram → o actualizar la SDK (fork
-  Adafruit / pico-sdk reciente con `pico_sram`/psram) o init manual por
-  registros QMI + chip-select. HW-gated. Sondear presencia al boot (sin PSRAM →
-  no-op).
+- **H7.2.a — detección + init de PSRAM** ✅ (build hecho 2026-06-06; falta HW).
+  Confirmado: la pico-sdk NO trae driver psram → init manual QMI. `psram.{h,c}`:
+  `psram_detect_init(cs_pin)` portado de SparkFun (BSD-3, sfe_psram.c) — enruta
+  cs_pin a `XIP_CS1`, sondea APS6404 (reset 0x66/0x99 + read-ID 0x9F → KGD 0x5D,
+  densidad→tamaño), y si hay PSRAM la pasa a QPI + mapea la ventana M1 escribible
+  en `0x11000000`. Corre desde RAM (`__no_inline_not_in_flash_func`) con IRQs off
+  (el direct-mode suspende el XIP). Salvaguardas: timeouts implícitos por BUSY,
+  restaura XIP siempre, y restaura la función del pin si no detecta (no rompe un
+  Pico). `board_desc_init` sondea `psram_cs_pin` (de board.json/variante) y
+  rellena `psram_present`/`psram_bytes`; default A → cs=-1 (no sondea GP0=UART).
+  Logueado en boot. **Falta**: HW (Metro con metro-rp2350b.json → variante B →
+  cs=47 → debe loguear "psram: 8MB @ GP47"; Pico → "no sondeada").
 - **H7.2.b — buffers grandes como punteros runtime.** Hoy `s_vm_buffer[128KB]`
   y `s_data[128KB]` (FS) son arrays estáticos en SRAM interna. Convertirlos a
   PUNTEROS elegidos en boot: PSRAM si la hay (regiones grandes), SRAM interna si
