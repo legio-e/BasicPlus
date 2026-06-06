@@ -2314,7 +2314,19 @@ public final class MivmEmitter {
         // prueba primero. Queremos que el primer catch del source (handlerLabels[0])
         // sea el primero en probarse, así que emitimos del último al primero.
         for (int i = N - 1; i >= 0; i--) {
-            w.emitTryBegin(handlerLabels[i], s.catches.get(i).exceptionType);
+            CatchClause cc0 = s.catches.get(i);
+            ClassSymbol exc = info.catchClassSymbols.get(cc0);
+            if (exc != null && exc.isExternal) {
+                // BUG-2 — clase de excepción cross-module: TRY_BEGIN_EXT con el
+                // nombre cualificado; el clsOff i32 se parcha en link-time.
+                StringBuilder qn = new StringBuilder();
+                if (exc.externalLibrary != null && !exc.externalLibrary.isEmpty())
+                    qn.append(exc.externalLibrary).append('.');
+                qn.append(exc.externalModule).append('.').append(exc.name);
+                w.emitTryBeginExt(handlerLabels[i], qn.toString());
+            } else {
+                w.emitTryBegin(handlerLabels[i], cc0.exceptionType);
+            }
         }
 
         TryFrame bodyFrame = new TryFrame(finallyBody, N);

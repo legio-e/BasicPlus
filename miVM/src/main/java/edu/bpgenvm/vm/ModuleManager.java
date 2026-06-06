@@ -252,6 +252,8 @@ public class ModuleManager {
         // (parentAbs - childAbs), siguiendo la convención CS-relative de
         // la VM. Si está vacía, no hay clases con padre cross-module.
         java.util.List<ClassFixupEntry> classFixups = new java.util.ArrayList<>();
+        // BUG-2 — fixups de clsOff de TRY_BEGIN_EXT (catch cross-module).
+        java.util.List<EhClassFixupEntry> ehClassFixups = new java.util.ArrayList<>();
     }
 
     /** Fixup de parentOff: el child está en `moduleCodeStart + childCsOff` (en
@@ -261,6 +263,15 @@ public class ModuleManager {
         String childClassName;
         int childCsOff;           // offset del child descriptor relativo al CS de su módulo (negativo)
         String parentQualified;   // p.ej. "L2Lib.Counter"
+    }
+
+    /** BUG-2 — fixup del operando clsOff de un TRY_BEGIN_EXT. El operando i32
+     *  vive en `moduleCodeStart + codeOff`; se parcha con (parentAbs - CS) para
+     *  que `cs + clsOff` apunte al descriptor de la clase de excepción del otro
+     *  módulo (resuelto vía globalSymbolTable por nombre cualificado). */
+    private static class EhClassFixupEntry {
+        int codeOff;              // offset del operando i32 relativo al code block del módulo
+        String parentQualified;   // p.ej. "HoleLibA.MyError"
     }
 
     public ModuleManager(VirtualMachine vm) {
@@ -417,6 +428,7 @@ public class ModuleManager {
             }
             // B3 v2 — subsección opcional de data symbol exports.
             java.util.List<ClassFixupEntry> moduleClassFixups = new java.util.ArrayList<>();
+            java.util.List<EhClassFixupEntry> moduleEhClassFixups = new java.util.ArrayList<>();
             if (expIn.available() > 0) {
                 int dataExpCount = expIn.readInt();
                 for (int i = 0; i < dataExpCount; i++) {
@@ -444,6 +456,16 @@ public class ModuleManager {
                         fx.childCsOff = expIn.readInt();
                         fx.parentQualified = expIn.readUTF();
                         moduleClassFixups.add(fx);
+                    }
+                    // BUG-2 — §4.4 eh-class fixups (catch cross-module).
+                    if (expIn.available() > 0) {
+                        int ehCount = expIn.readInt();
+                        for (int i = 0; i < ehCount; i++) {
+                            EhClassFixupEntry fx = new EhClassFixupEntry();
+                            fx.codeOff = expIn.readInt();
+                            fx.parentQualified = expIn.readUTF();
+                            moduleEhClassFixups.add(fx);
+                        }
                     }
                 }
             }
@@ -485,6 +507,7 @@ public class ModuleManager {
             task.moduleCodeStart = codeStart;
             task.requiredImports = imports;
             task.classFixups = moduleClassFixups;
+            task.ehClassFixups = moduleEhClassFixups;
             pendingLinks.add(task);
 
             nextFreeAddress = meta.endAddress + 64;
@@ -521,6 +544,17 @@ public class ModuleManager {
                 int parentOff = parentAbs - task.moduleCodeStart;  // CS-relative al CS del child
                 // CLS_OFF_PARENT_OFF = 8 (layout del descriptor; ver ModWriter.endClass)
                 vm.writeInt32(childAbs + 8, parentOff);
+            }
+            // BUG-2 — parcha el clsOff i32 de cada TRY_BEGIN_EXT (catch cross-module)
+            // con la dirección CS-relative del descriptor de la clase de excepción.
+            for (EhClassFixupEntry fx : task.ehClassFixups) {
+                Integer parentAbs = globalSymbolTable.get(fx.parentQualified);
+                if (parentAbs == null) {
+                    throw new RuntimeException("BUG-2 eh-fixup: clase de excepción no resuelta '"
+                            + fx.parentQualified + "'");
+                }
+                int clsOff = parentAbs - task.moduleCodeStart;  // cs + clsOff = descriptor
+                vm.writeInt32(task.moduleCodeStart + fx.codeOff, clsOff);
             }
         }
         vm.setPC(mainAbsoluteAddress);

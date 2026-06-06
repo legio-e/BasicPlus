@@ -1481,6 +1481,18 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                          (int32_t) cs, expected_cls);
             break;
         }
+        case OP_TRY_BEGIN_EXT: {
+            /* BUG-2 — como TRY_BEGIN pero cls_off es i32 (catch cross-module). */
+            uint32_t instr_addr = pc - 1;
+            int32_t handler_rel = bpvm_read_i32_be(mem + pc); pc += 4;
+            int32_t cls_off     = bpvm_read_i32_be(mem + pc); pc += 4;
+            int32_t handler_pc  = (int32_t) instr_addr + handler_rel;
+            int32_t expected_cls = (cls_off == 0) ? 0
+                                   : (int32_t)((int32_t) cs + cls_off);
+            bpvm_eh_push(tc, handler_pc, (int32_t) sp, (int32_t) bp,
+                         (int32_t) cs, expected_cls);
+            break;
+        }
         case OP_TRY_END: {
             bpvm_eh_pop(tc);
             break;

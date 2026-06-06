@@ -132,6 +132,21 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
             bpvm_write_i32_be(vm->memory + child_abs + BPVM_CLS_OFF_PARENT_OFF,
                               parent_off_rel);
         }
+
+        /* BUG-2 — parcha el clsOff i32 de los TRY_BEGIN_EXT (catch cross-module). */
+        for (int k = 0; k < m->eh_class_fixup_count; k++) {
+            bpvm_eh_class_fixup_t* fx = &m->eh_class_fixups[k];
+            uint32_t parent_abs = bpvm_link_lookup(vm, fx->parent_qualified);
+            if (parent_abs == 0) {
+                fprintf(stderr, "[bpvm-c link] BUG-2 eh-fixup: clase de excepción"
+                        " '%s' no resuelta (módulo='%s')\n",
+                        fx->parent_qualified, m->name);
+                return BPVM_ERR_RUNTIME;
+            }
+            int32_t cls_off = (int32_t)(parent_abs - m->code_start);
+            bpvm_write_i32_be(vm->memory + m->code_start + (uint32_t) fx->code_off,
+                              cls_off);
+        }
     }
     return BPVM_OK;
 }

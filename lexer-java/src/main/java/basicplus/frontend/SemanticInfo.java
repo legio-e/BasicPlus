@@ -23,6 +23,11 @@ public final class SemanticInfo {
     /** Símbolo declarado por un nodo de declaración. */
     public final Map<Ast.Node, Symbol> declSymbols = new IdentityHashMap<>();
 
+    /** BUG-2 — ClassSymbol resuelto del tipo de cada cláusula catch (puede ser
+     *  cross-module). El emisor lo usa para decidir TRY_BEGIN (local) vs
+     *  TRY_BEGIN_EXT (cross-module). Key = CatchClause. */
+    public final Map<Ast.CatchClause, Symbol.ClassSymbol> catchClassSymbols = new IdentityHashMap<>();
+
     /** Módulo procesado (símbolo raíz). */
     public Symbol.ModuleSymbol module;
 

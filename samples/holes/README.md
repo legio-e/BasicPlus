@@ -22,10 +22,16 @@ Arreglo (en `SemanticAnalyzer.java`): (a) `analyzeBinary` propaga `ErrorType`
 en silencio si un operando ya es `<error>` (poisoning); (b) dedup por nombre
 de "identificador no resuelto" y "tipo no encontrado".
 
-## BUG-2 — excepciones cross-module — ⏳ PENDIENTE (siguiente)
-- `HoleLibA.bp`: define `class MyError` y la lanza (`throw MyError(...)`). Compila.
-- `HoleAppB.bp`: `import HoleLibA` + `catch e: HoleLibA.MyError`. **No compila**:
-  el parser no acepta un tipo cualificado `Mod.Clase` en la cabecera del `catch`.
-  Detrás (análisis): aunque parseara, la identidad de clase cross-module no
-  casaría en runtime (solo `RuntimeError` se resuelve por nombre exportado).
-- Bonus menor: `Mod.Clase` no resuelve ni dentro del propio `Mod`.
+## BUG-2 — excepciones cross-module — ✅ TAPADO (#233)
+- `HoleLibA.bp`: define `class MyError` y la lanza (`throw MyError(...)`).
+- `HoleAppB.bp`: `import HoleLibA` + `catch e: HoleLibA.MyError` → **atrapa OK**.
+  Salida en AMBAS VMs (byte-idéntica): `OK: atrapado MyError cross-module` / `fin`.
+
+Arreglo: opcode **aditivo** `TRY_BEGIN_EXT` (0xAB) — el `TRY_BEGIN` local (i16) no
+cambia, así que los `.mod`/firmware existentes siguen válidos (sin bump de MAGIC).
+Capas: parser acepta `Mod.Clase` en el `catch`; el semántico lo resuelve
+(local / importado / auto-cualificado) vía `resolveCatchClass`; el emisor emite
+`TRY_BEGIN_EXT` con `clsOff` i32 parcheado en link-time (`ehClassFixups`, §4.4 de
+la sección exports) con la dirección del descriptor de la clase cross-module;
+ambas VMs decodifican el i32 y ambos linkers parchean por nombre cualificado.
+Bonus: `Mod.Clase` ahora también resuelve dentro del propio `Mod`.

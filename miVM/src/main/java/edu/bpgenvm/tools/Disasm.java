@@ -435,6 +435,16 @@ public class Disasm {
                 return String.format("handler=%+d (-> @%d), catch=%s",
                         rel, absHnd, catchPart);
             }
+            case TRY_HANDLER_I32_I32: {
+                /* TRY_BEGIN_EXT — handler offset (i32) | cs_off (i32, cross-module). */
+                int rel    = (int) (raw >> 32);
+                int csOff  = (int)  raw;
+                int absHnd = instAddr + rel;
+                String catchPart = (csOff == 0) ? "any"
+                        : String.format("class@CS%+d", csOff);
+                return String.format("handler=%+d (-> @%d), catch=%s [ext]",
+                        rel, absHnd, catchPart);
+            }
             default:
                 return "?";
         }

@@ -289,6 +289,30 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
                     }
                 }
             }
+            /* 4.4 eh-class fixups opcional (BUG-2 — catch cross-module). */
+            if (exp_off + 4 <= exports_size) {
+                uint32_t ehcount = bpvm_read_u32_be(exp_buf + exp_off); exp_off += 4;
+                if (ehcount > 0) {
+                    mod->eh_class_fixups = (bpvm_eh_class_fixup_t*) calloc(ehcount,
+                                          sizeof(bpvm_eh_class_fixup_t));
+                    if (!mod->eh_class_fixups) return BPVM_ERR_OOM;
+                    for (uint32_t i = 0; i < ehcount; i++) {
+                        if (exp_off + 4 > exports_size) break;
+                        int32_t code_off = bpvm_read_i32_be(exp_buf + exp_off); exp_off += 4;
+                        uint16_t plen = bpvm_read_u16_be(exp_buf + exp_off); exp_off += 2;
+                        char pqual[128]; size_t pl = plen < sizeof(pqual) - 1
+                                                     ? plen : sizeof(pqual) - 1;
+                        memcpy(pqual, exp_buf + exp_off, pl); pqual[pl] = '\0';
+                        exp_off += plen;
+                        bpvm_eh_class_fixup_t* fx = &mod->eh_class_fixups[mod->eh_class_fixup_count++];
+                        fx->code_off = code_off;
+                        size_t pnl = strlen(pqual);
+                        if (pnl >= sizeof(fx->parent_qualified)) pnl = sizeof(fx->parent_qualified) - 1;
+                        memcpy(fx->parent_qualified, pqual, pnl);
+                        fx->parent_qualified[pnl] = '\0';
+                    }
+                }
+            }
         }
     }
 

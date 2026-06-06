@@ -150,6 +150,36 @@ Esto deja la cadena de herencia navegable cross-module por
 `isDescendantOf` e `INVOKE_VIRTUAL` (que usan
 `moduleManager.getCSForDataAddr` para saber qué CS sumar).
 
+### 4.4 Sub-sección de eh-class fixups (opcional — BUG-2)
+
+Presente sólo si quedan bytes después de leer 4.3. Si 4.4 está pero 4.3
+no, **4.3 debe escribirse con count=0** (marcador, igual que 4.2→4.3).
+Parchea el operando `clsOff` (i32) de cada `TRY_BEGIN_EXT` (0xAB) usado para
+un `catch` de una clase de excepción definida en OTRO módulo.
+
+```
+eh_class_fixups ::= count:i32  eh_entry*
+
+eh_entry ::= codeOffset:i32  parentQualified:UTF
+```
+
+- `codeOffset`: offset del operando `clsOff` (i32) a parchear, relativo al
+  `codeStart` de este módulo (positivo; dentro del code block).
+- `parentQualified`: nombre cualificado de la clase de excepción en
+  `globalSymbolTable`, e.g. `"HoleLibA.MyError"`.
+
+Aplicación en `linkAll` (tras resolver imports y class fixups):
+
+```
+for each eh_fixup:
+    parentAbs = globalSymbolTable[parentQualified]
+    clsOff    = parentAbs - moduleCodeStart        // CS-relative
+    writeI32(moduleCodeStart + codeOffset, clsOff) // parchea el operando
+```
+
+En runtime `TRY_BEGIN_EXT` computa `expectedClass = cs + clsOff = parentAbs`,
+de modo que `isDescendantOf` casa el `catch` con la clase del otro módulo.
+
 ---
 
 ## 5. Sección DATA

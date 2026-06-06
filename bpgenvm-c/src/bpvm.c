@@ -364,6 +364,7 @@ void bpvm_destroy(bpvm_t* vm) {
             free(m->imports);
         }
         free(m->class_fixups);
+        free(m->eh_class_fixups);
     }
     /* Liberar EH stacks y mutex waiters. */
     for (int i = 0; i < vm->thread_count; i++) {

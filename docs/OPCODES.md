@@ -152,6 +152,7 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 | 0x59 | `PRINT_NL` | — | `( -- )` | Newline solo. |
 | 0x5A | `CALL_BUILTIN` | `u16` id | `( args -- result )` | Despacha al builtin con id `id` (ver `BUILTINS.md`). Cada builtin define su stack effect específico. |
 | 0x5B | `TRY_BEGIN` | `i32` handlerRel, `i16` clsOff | `( -- )` | Push entry al `handlerStack`: `{ handlerPc = pc + handlerRel, savedSp, savedBp, savedCs, expectedClass = (clsOff==0 ? 0 : cs+clsOff) }`. Si `clsOff == 0`, catch atrapa cualquier ref/excepción. |
+| 0xAB | `TRY_BEGIN_EXT` | `i32` handlerRel, `i32` clsOff | `( -- )` | BUG-2 — igual que `TRY_BEGIN` pero `clsOff` es **i32**, alcanzando el descriptor de una clase de excepción de OTRO módulo (catch cross-module). El `clsOff` lo PARCHA el linker (`ehClassFixups`, MOD_FORMAT §4.4) por nombre cualificado. **Aditivo**: `TRY_BEGIN` (i16) no cambia → `.mod` existentes válidos. |
 | 0x5C | `TRY_END` | — | `( -- )` | Pop top del `handlerStack`. Cierre normal del try (sin excepción). |
 | 0x5D | `THROW` | — | `( ref -- )` | Pop `ref`. Si `ref == 0` → RuntimeError "throw null". Busca un handler en `handlerStack` cuya `expectedClass` matchee (= 0 o `isDescendantOf(class(ref), expected)`). Si encuentra: restaura sp/bp/cs/pc desde la entry, pop la pila a esa entry, push `ref` al sp restaurado (el catch lo recibe en local 0). Si no encuentra: BpThreadFault con stack trace BP. |
 | 0x5E | `INSTANCEOF` | `i16` csOff | `( ref -- 1|0 )` | `expected = cs + csOff`. Si `ref == 0` → push 0. Sino, sube por `parent_offset` desde `mem[ref]` (con `getCSForDataAddr` para cross-module) y push 1 si encuentra `expected`. |
@@ -291,6 +292,7 @@ acaba en algún descriptor sin parent (parentOff == 0).
 | IMM_F32 | 4 | FPUSH |
 | SLOT_NUMARGS_U8U8 | 2 | INVOKE_VIRTUAL (slot u8, numArgs u8) |
 | TRY_HANDLER_I32_I16 | 6 | TRY_BEGIN (handlerRel i32, clsOff i16) |
+| TRY_HANDLER_I32_I32 | 8 | TRY_BEGIN_EXT (handlerRel i32, clsOff i32) |
 
 Tamaño total de la instrucción = 1 (opcode) + tamaño del operando.
 

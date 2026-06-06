@@ -931,6 +931,12 @@ public final class SemanticAnalyzer {
         if (dot >= 0) {
             String alias = st.name.substring(0, dot);
             String simple = st.name.substring(dot + 1);
+            // BUG-2 bonus: auto-nombre 'Mod.Cls' dentro del propio módulo Mod.
+            if (module != null && alias.equals(module.name)) {
+                Symbol local = module.members.resolve(simple);
+                if (local instanceof ClassSymbol) return new ClassType((ClassSymbol) local);
+                if (local instanceof EnumSymbol)  return new EnumType((EnumSymbol) local);
+            }
             Symbol nsSym = module.members.resolve(alias);
             if (nsSym instanceof Symbol.ImportedNamespaceSymbol) {
                 Symbol.ImportedNamespaceSymbol ns = (Symbol.ImportedNamespaceSymbol) nsSym;
@@ -1491,9 +1497,11 @@ public final class SemanticAnalyzer {
             if (cl.varName != null) {
                 BpType excT = null;
                 if (cl.exceptionType != null) {
-                    Symbol sym = module.members.resolve(cl.exceptionType);
-                    if (sym instanceof ClassSymbol) excT = new ClassType((ClassSymbol) sym);
-                    else {
+                    ClassSymbol csym = resolveCatchClass(cl.exceptionType);
+                    if (csym != null) {
+                        excT = new ClassType(csym);
+                        info.catchClassSymbols.put(cl, csym);   // BUG-2: el emisor decide local vs ext
+                    } else {
                         err(cl.line, cl.column, "tipo de excepción '" + cl.exceptionType + "' no es una clase");
                         excT = ErrorType.INSTANCE;
                     }
@@ -1505,6 +1513,29 @@ public final class SemanticAnalyzer {
             analyzeBody(cl.body, inner);
         }
         if (tr.finallyBody != null) analyzeBody(tr.finallyBody, new Scope("finally", scope));
+    }
+
+    /** BUG-2 — resuelve el tipo de un catch: local ('MyError'), importado
+     *  ('Mod.MyError') o auto-cualificado ('Mod.MyError' dentro del propio Mod).
+     *  Devuelve el ClassSymbol, o null si no resuelve a una clase. */
+    private ClassSymbol resolveCatchClass(String name) {
+        int dot = name.indexOf('.');
+        if (dot >= 0) {
+            String alias  = name.substring(0, dot);
+            String simple = name.substring(dot + 1);
+            if (module != null && alias.equals(module.name)) {
+                Symbol local = module.members.resolve(simple);
+                return (local instanceof ClassSymbol) ? (ClassSymbol) local : null;
+            }
+            Symbol nsSym = module.members.resolve(alias);
+            if (nsSym instanceof Symbol.ImportedNamespaceSymbol) {
+                Symbol cand = ((Symbol.ImportedNamespaceSymbol) nsSym).classes.get(simple);
+                return (cand instanceof ClassSymbol) ? (ClassSymbol) cand : null;
+            }
+            return null;
+        }
+        Symbol sym = module.members.resolve(name);
+        return (sym instanceof ClassSymbol) ? (ClassSymbol) sym : null;
     }
 
     private void analyzeReturn(ReturnStmt r, Scope scope) {

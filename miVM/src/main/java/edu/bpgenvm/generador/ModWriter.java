@@ -132,6 +132,16 @@ public class ModWriter {
     }
     private final List<ClassFixup> classFixups = new ArrayList<>();
 
+    /** BUG-2 — fixup que el linker aplica al OPERANDO clsOff de un TRY_BEGIN_EXT
+     *  cuyo tipo de catch vive cross-module. codeOff = offset (relativo al code
+     *  block) del i32 clsOff a parchear; parentQualified = nombre cualificado del
+     *  descriptor de clase exportado por su módulo (e.g. "HoleLibA.MyError"). */
+    private static class EhClassFixup {
+        int codeOff;
+        String parentQualified;
+    }
+    private final List<EhClassFixup> ehClassFixups = new ArrayList<>();
+
     // --- Soporte de properties ---
     private enum PropertyScope { MODULE, INSTANCE, STATIC }
 
@@ -1345,6 +1355,34 @@ public class ModWriter {
         emitTryBegin(handlerLabel, null);
     }
 
+    /**
+     * BUG-2 — Emite TRY_BEGIN_EXT handler_rel(i32) + expected_class_cs_off(i32).
+     * Para atrapar una clase de excepción definida en OTRO módulo. El clsOff se
+     * emite como 0 (placeholder) y se PARCHA en link-time vía ehClassFixups
+     * (resuelto por nombre cualificado en la global symbol table), igual que
+     * classFixups parchea parentOff. Aditivo: no toca el TRY_BEGIN local (i16).
+     */
+    public void emitTryBeginExt(int handlerLabel, String qualifiedClassName) throws IOException {
+        Integer addr = currentLabelMap.get(handlerLabel);
+        if (addr == null) throw new RuntimeException("Etiqueta no existe: " + handlerLabel);
+        int instrAddr = currentBytecodeSize;
+        codeOut.writeByte(OpCode.TRY_BEGIN_EXT.code);
+        if (addr != UNDECLARED) {
+            codeOut.writeInt(addr - instrAddr);
+        } else {
+            pendingJumps.add(new JumpFixup(lastFunctionName, handlerLabel, instrAddr, currentBytecodeSize + 1));
+            codeOut.writeInt(0);
+        }
+        // clsOff i32: placeholder 0; el operando está en instrAddr+5 (tras opcode
+        // + handler i32). Lo parcha el linker resolviendo qualifiedClassName.
+        EhClassFixup fx = new EhClassFixup();
+        fx.codeOff = instrAddr + 5;
+        fx.parentQualified = qualifiedClassName;
+        ehClassFixups.add(fx);
+        codeOut.writeInt(0);
+        currentBytecodeSize += 9;
+    }
+
     public void emitInstanceOf(String className) throws IOException {
         Integer csOff = dataSymbolOffset.get(className);
         if (csOff == null) throw new RuntimeException("Clase '" + className + "' no declarada para INSTANCEOF");
@@ -1715,7 +1753,8 @@ public class ModWriter {
         // L2 v3 — si hay classFixups, la subsección de data exports tiene
         // que existir aunque sea vacía, para que el loader sepa dónde
         // empieza la subsección de fixups (la detecta por bytes remanentes).
-        boolean writeDataExports = !exportDataSymbols.isEmpty() || !classFixups.isEmpty();
+        boolean writeDataExports = !exportDataSymbols.isEmpty() || !classFixups.isEmpty()
+                || !ehClassFixups.isEmpty();
         if (writeDataExports) {
             exportOut.writeInt(exportDataSymbols.size());
             for (String name : exportDataSymbols) {
@@ -1726,11 +1765,23 @@ public class ModWriter {
         // L2 v3 — subsección de class fixups: parejas (childClassName,
         // parentQualifiedName). El loader resuelve parentQualifiedName en
         // globalSymbolTable y parcha parentOff del descriptor del child.
-        if (!classFixups.isEmpty()) {
+        // BUG-2 — si hay ehClassFixups pero NO classFixups, escribimos esta
+        // subsección con count=0 para que el loader la encuentre y avance a §4.4.
+        if (!classFixups.isEmpty() || !ehClassFixups.isEmpty()) {
             exportOut.writeInt(classFixups.size());
             for (ClassFixup fx : classFixups) {
                 exportOut.writeUTF(fx.childClassName);
                 exportOut.writeInt(dataSymbolOffset.get(fx.childClassName));
+                exportOut.writeUTF(fx.parentQualified);
+            }
+        }
+        // BUG-2 — §4.4 eh-class fixups: parchea el clsOff i32 de los
+        // TRY_BEGIN_EXT con la dirección CS-relative de la clase de excepción
+        // cross-module (resuelta por nombre cualificado en globalSymbolTable).
+        if (!ehClassFixups.isEmpty()) {
+            exportOut.writeInt(ehClassFixups.size());
+            for (EhClassFixup fx : ehClassFixups) {
+                exportOut.writeInt(fx.codeOff);
                 exportOut.writeUTF(fx.parentQualified);
             }
         }

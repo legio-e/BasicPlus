@@ -2772,6 +2772,20 @@ public class VirtualMachine {
                     ehExpectedClass  = expectedClassPtr;
                     break;
                 }
+                case 0xAB: { // TRY_BEGIN_EXT (BUG-2): clsOff i32 (catch cross-module)
+                    int instrAddr = currentPC;
+                    int relOff = readI32(mem, pc); pc += 4;
+                    int expectedCsOff = readI32(mem, pc); pc += 4;
+                    int newHandlerPc = instrAddr + relOff;
+                    int expectedClassPtr = (expectedCsOff != 0) ? (cs + expectedCsOff) : 0;
+                    handlerStack.push(new int[]{ehHandlerPc, ehSavedSp, ehSavedBp, ehSavedCs, ehExpectedClass});
+                    ehHandlerPc      = newHandlerPc;
+                    ehSavedSp        = sp;
+                    ehSavedBp        = bp;
+                    ehSavedCs        = cs;
+                    ehExpectedClass  = expectedClassPtr;
+                    break;
+                }
                 case 0x5C: { // TRY_END
                     int[] prev = handlerStack.pop();
                     ehHandlerPc     = prev[0];

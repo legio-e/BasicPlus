@@ -208,4 +208,11 @@
  * interpreta los cuerpos `function native` como BP normal. */
 #define OP_NATIVE_RETURN   0xAA
 
+/* 0xAB — BUG-2 (V2): TRY_BEGIN_EXT. Variante cross-module de TRY_BEGIN: el
+ * operando es handler_rel:i32 + cls_off:i32 (en vez de i16). El cls_off lo
+ * parchea el linker (eh_class_fixups) con la dirección CS-relative del
+ * descriptor de la clase de excepción definida en OTRO módulo. Aditivo: el
+ * TRY_BEGIN local (i16) NO cambia, así que los .mod existentes siguen válidos. */
+#define OP_TRY_BEGIN_EXT   0xAB
+
 #endif /* BPVM_OPCODES_H */

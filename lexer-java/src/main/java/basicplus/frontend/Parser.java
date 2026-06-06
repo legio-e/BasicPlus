@@ -882,8 +882,12 @@ public final class Parser {
             if (check(TokenType.IDENTIFIER)) {
                 varName = current().lexeme;
                 advance();
-                if (match(TokenType.COLON))
+                if (match(TokenType.COLON)) {
                     excType = consumeIdentifier("tipo de la excepción tras ':'");
+                    // BUG-2 — tipo cualificado cross-module: catch e: Mod.Clase
+                    while (match(TokenType.DOT))
+                        excType = excType + "." + consumeIdentifier("clase tras '.' en el tipo del 'catch'");
+                }
             }
             consumeStmtTerminator("se esperaba salto de línea tras la cabecera del 'catch'");
             List<IStmt> cb = parseBody(TokenType.CATCH, TokenType.FINALLY, TokenType.ENDTRY);

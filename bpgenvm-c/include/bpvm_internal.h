@@ -85,6 +85,14 @@ typedef struct {
     char     parent_qualified[128];
 } bpvm_class_fixup_t;
 
+/* BUG-2 — eh-class fixup. Parchea el operando clsOff (i32) de un TRY_BEGIN_EXT,
+ * que vive en code_start + code_off, con (parent_abs - code_start) para que
+ * cs+clsOff apunte al descriptor de la clase de excepción de otro módulo. */
+typedef struct {
+    int32_t  code_off;           /* offset del operando i32 relativo al code block */
+    char     parent_qualified[128];
+} bpvm_eh_class_fixup_t;
+
 typedef struct {
     char     library[64];      /* "" si no hay */
     char     name[64];
@@ -106,6 +114,10 @@ typedef struct {
     /* L2 v3 — class fixups del módulo. */
     bpvm_class_fixup_t* class_fixups;
     int                 class_fixup_count;
+
+    /* BUG-2 — eh-class fixups (catch cross-module). */
+    bpvm_eh_class_fixup_t* eh_class_fixups;
+    int                    eh_class_fixup_count;
 } bpvm_module_t;
 
 /* Tabla global de símbolos exportados (F3). */

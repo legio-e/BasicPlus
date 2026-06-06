@@ -142,6 +142,9 @@ public enum OpCode {
     TRY_BEGIN      (0x5B, OperandKind.TRY_HANDLER_I32_I16),
     TRY_END        (0x5C, OperandKind.NONE),
     THROW          (0x5D, OperandKind.NONE),
+    // BUG-2 — TRY_BEGIN cross-module: clase esperada por offset i32 (parcheado
+    //   en link-time vía ehClassFixups; alcanza descriptores de otros módulos).
+    TRY_BEGIN_EXT  (0xAB, OperandKind.TRY_HANDLER_I32_I32),
 
     // --- Type check: pop ref; push 1 si ref es instancia de la clase indicada
     //   (su class_ptr está en la cadena de herencia hasta la esperada); 0 si no.
@@ -295,7 +298,9 @@ public enum OpCode {
         IMM_F32       (4),
         SLOT_NUMARGS_U8U8 (2),
         // i32 (handler offset relativo al PC del TRY_BEGIN) + i16 (cs_off de clase, 0=any)
-        TRY_HANDLER_I32_I16 (6);
+        TRY_HANDLER_I32_I16 (6),
+        // BUG-2 — i32 (handler offset) + i32 (cs_off de clase cross-module)
+        TRY_HANDLER_I32_I32 (8);
 
         public final int bytes;
         OperandKind(int bytes) { this.bytes = bytes; }
