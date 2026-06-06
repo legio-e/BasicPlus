@@ -135,12 +135,14 @@ public class MainOOP {
             // ====== Test GC preciso: a1.nombre debe sobrevivir vía el bitmap ======
             w.emitLeaGlobal("tag_gc"); w.emit(OpCode.PRINT_STRING);
 
-            // tmpName = nuevo array dinámico en heap con chars [O, O, P, S]
-            push(w, 4); w.emit(OpCode.NEWARRAY); w.emitSetLocal("tmpName");
-            w.emitGetLocal("tmpName"); push(w, 0); push(w, 'O'); w.emit(OpCode.ASTORE);
-            w.emitGetLocal("tmpName"); push(w, 1); push(w, 'O'); w.emit(OpCode.ASTORE);
-            w.emitGetLocal("tmpName"); push(w, 2); push(w, 'P'); w.emit(OpCode.ASTORE);
-            w.emitGetLocal("tmpName"); push(w, 3); push(w, 'S'); w.emit(OpCode.ASTORE);
+            // tmpName = string UTF-8 dinámico en heap "OOPS" (H2: string = byte[]
+            // TYPE_ARRAY_I8). Antes usaba NEWARRAY/ASTORE (i32 codepoints), que
+            // PRINT_STRING ahora lee como UTF-8 y truncaba a "O".
+            push(w, 4); w.emit(OpCode.NEWARRAY_I8); w.emitSetLocal("tmpName");
+            w.emitGetLocal("tmpName"); push(w, 0); push(w, 'O'); w.emit(OpCode.ASTORE_I8);
+            w.emitGetLocal("tmpName"); push(w, 1); push(w, 'O'); w.emit(OpCode.ASTORE_I8);
+            w.emitGetLocal("tmpName"); push(w, 2); push(w, 'P'); w.emit(OpCode.ASTORE_I8);
+            w.emitGetLocal("tmpName"); push(w, 3); push(w, 'S'); w.emit(OpCode.ASTORE_I8);
 
             // a1 = nuevo Animal(peso=99, nombre=tmpName)  -- reasignamos a1 para descartar el viejo
             w.emitNewObject("Animal"); w.emitSetLocal("a1");

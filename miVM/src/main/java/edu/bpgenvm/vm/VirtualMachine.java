@@ -2215,9 +2215,11 @@ public class VirtualMachine {
                     writeI32(mem, sp, a >= b ? 1 : 0); sp += 4;
                     break;
                 }
-                case 0x35: { // FPRINT (legacy; print usa FPRINT_NONL+PRINT_NL)
+                case 0x35: { // FPRINT (legacy demo-only; print real usa FPRINT_NONL+PRINT_NL)
                     sp -= 4; float v = Float.intBitsToFloat(readI32(mem, sp));
-                    programOut.writeText(formatBpDouble((double) v)); programOut.newline();   // GAP-4
+                    // Debug verboso, simétrico con PRINT (0x03). Demo-only: los .mod
+                    // compilados usan 0x57 (FPRINT_NONL); no afecta a la paridad dual-VM.
+                    System.out.println("VM [FPRINT]: " + formatBpDouble((double) v));
                     break;
                 }
                 case 0x36: { // I2F
