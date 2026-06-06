@@ -9,9 +9,23 @@
 #include "json_min.h"
 #include "log.h"
 #include "psram.h"
+#include "hardware/flash.h"   /* flash_do_cmd (JEDEC ID, XIP-safe) */
 
 #include <stdint.h>
 #include <string.h>
+
+/* Tamaño de la flash QSPI leyendo su JEDEC ID (0x9F). El 3er byte de respuesta
+ * es la capacidad como log2(bytes): 0x15=2MB, 0x16=4MB, 0x17=8MB, 0x18=16MB.
+ * flash_do_cmd corre desde RAM y hace el XIP-suspend de forma segura (es el
+ * mismo primitivo que usa flash_get_unique_id). 0 si el byte no es plausible. */
+static unsigned detect_flash_bytes(void) {
+    uint8_t tx[4] = { 0x9Fu, 0, 0, 0 };
+    uint8_t rx[4] = { 0 };
+    flash_do_cmd(tx, rx, 4);
+    uint8_t cap = rx[3];
+    if (cap < 0x10u || cap > 0x1Bu) return 0;   /* 64KB..2GB: fuera = sospechoso */
+    return 1u << cap;
+}
 
 static board_desc_t s_board;
 
@@ -92,6 +106,11 @@ void board_desc_init(void) {
     } else {
         log_printf("board: sin /sys/board.json, uso defaults por variante");
     }
+
+    /* --- Tamaño de flash (JEDEC). Seguro (flash_do_cmd hace XIP-suspend). --- */
+    d->flash_bytes = detect_flash_bytes();
+    log_printf("flash: %u bytes (%u MB)", d->flash_bytes,
+               d->flash_bytes / (1024u * 1024u));
 
     /* --- H7.2.a: sondeo de PSRAM. OPT-IN: sólo si board.json declaró psramCsPin
      * (psram_cs_pin>=0). Sin él no se sondea — el sondeo QMI es boot-crítico. --- */

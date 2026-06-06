@@ -75,6 +75,7 @@ public final class PicoExplorer extends JPanel {
     private final JButton btnLog     = new JButton("Log");
     private final JButton btnLogClr  = new JButton("Clr Log");
     private final JButton btnReset   = new JButton("Reset");
+    private final JButton btnInfo    = new JButton("Info");
 
     /** Raíz del árbol. user object = String "Pico" en la raíz, String
      *  con el nombre del segmento en cada carpeta, RemoteFile en las
@@ -127,6 +128,7 @@ public final class PicoExplorer extends JPanel {
         row2.add(btnLog);
         row2.add(btnLogClr);
         row2.add(btnReset);
+        row2.add(btnInfo);
 
         toolbar.add(rowBackend);
         toolbar.add(row1);
@@ -201,6 +203,7 @@ public final class PicoExplorer extends JPanel {
         btnLog.addActionListener(e -> onLog());
         btnLogClr.addActionListener(e -> onLogClear());
         btnReset.addActionListener(e -> onReset());
+        btnInfo.addActionListener(e -> onInfo());
 
         refreshPorts();
         setConnectedUI(false);
@@ -469,6 +472,7 @@ public final class PicoExplorer extends JPanel {
         btnLog.setEnabled(connected);
         btnLogClr.setEnabled(connected);
         btnReset.setEnabled(connected);
+        btnInfo.setEnabled(connected);
     }
 
     /* ============================================================ */
@@ -805,6 +809,72 @@ public final class PicoExplorer extends JPanel {
                 });
     }
 
+    /** H7 / #230 — botón INFO: micro, flash, RAM y PSRAM del dispositivo. */
+    private void onInfo() {
+        if (!isConnected()) return;
+        final BpvmClient dc = debugClient();
+        if (dc == null) {
+            JOptionPane.showMessageDialog(this,
+                    "INFO no disponible para este backend.",
+                    "Device INFO", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        final Backend b = this.backend;
+        runAsync(() -> dc.getInfo(4000), m -> {
+            if (m == null) { status.setText("INFO sin respuesta"); return; }
+            JTextArea area = new JTextArea(formatInfo(m));
+            area.setEditable(false);
+            area.setFont(new Font("Consolas", Font.PLAIN, 12));
+            JOptionPane.showMessageDialog(this, new JScrollPane(area),
+                    "Device INFO — " + b.displayName(), JOptionPane.PLAIN_MESSAGE);
+        });
+    }
+
+    /** Formatea el Map del INFO_REPLY (H7: micro/flash/RAM/PSRAM). */
+    private static String formatInfo(java.util.Map<String, Object> m) {
+        StringBuilder sb = new StringBuilder();
+        String variant = istr(m, "variant");
+        sb.append("Micro       : ").append(istr(m, "boardName"));
+        if (!variant.isEmpty()) sb.append("  (RP2350").append(variant).append(")");
+        sb.append('\n');
+        sb.append("Serial      : ").append(istr(m, "uniqueId")).append('\n');
+        long hz = ilong(m, "cpuFreqHz");
+        if (hz > 0) sb.append("CPU         : ").append(hz / 1_000_000L).append(" MHz\n");
+        long mtc = ilong(m, "tempMilliC");
+        if (mtc != 0) sb.append("Temp        : ")
+                        .append(String.format(java.util.Locale.US, "%.1f", mtc / 1000.0))
+                        .append(" °C\n");
+        sb.append("GPIO        : ").append(ilong(m, "gpioCount")).append('\n');
+        sb.append("PIO/PWM/ADC : ").append(ilong(m, "pioCount")).append(" / ")
+          .append(ilong(m, "pwmSlices")).append(" / ").append(ilong(m, "adcChannels")).append('\n');
+        sb.append("Flash       : ").append(human(ilong(m, "flashBytes"))).append('\n');
+        sb.append("SRAM        : ").append(human(ilong(m, "sramBytes"))).append('\n');
+        long ps = ilong(m, "psramBytes");
+        sb.append("PSRAM       : ").append(ps > 0 ? human(ps) : "(ninguna)").append('\n');
+        sb.append("FS          : ").append(human(ilong(m, "fsUsedBytes"))).append(" / ")
+          .append(human(ilong(m, "fsTotalBytes"))).append('\n');
+        long up = ilong(m, "uptimeMs");
+        if (up > 0) sb.append("Uptime      : ").append(up / 1000L).append(" s\n");
+        return sb.toString();
+    }
+
+    private static String istr(java.util.Map<String, Object> m, String k) {
+        Object v = m.get(k);
+        return v == null ? "" : v.toString();
+    }
+    private static long ilong(java.util.Map<String, Object> m, String k) {
+        Object v = m.get(k);
+        if (v instanceof Number) return ((Number) v).longValue();
+        try { return v == null ? 0 : Long.parseLong(v.toString().trim()); }
+        catch (NumberFormatException e) { return 0; }
+    }
+    private static String human(long bytes) {
+        if (bytes <= 0) return "0";
+        if (bytes >= 1024L * 1024L) return (bytes / (1024L * 1024L)) + " MB";
+        if (bytes >= 1024L)         return (bytes / 1024L) + " KB";
+        return bytes + " B";
+    }
+
     /* ============================================================
      * Helpers para ejecutar ops en background y resolver en EDT.
      * ============================================================ */
@@ -846,5 +916,6 @@ public final class PicoExplorer extends JPanel {
         btnLog.setEnabled(enabled && connected);
         btnLogClr.setEnabled(enabled && connected);
         btnReset.setEnabled(enabled && connected);
+        btnInfo.setEnabled(enabled && connected);
     }
 }

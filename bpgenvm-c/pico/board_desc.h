@@ -33,6 +33,9 @@ typedef struct {
     /* --- Rellenado por H7.2 (sondeo PSRAM); 0 por ahora --- */
     int      psram_present;
     unsigned psram_bytes;
+
+    /* --- Detectado al boot (JEDEC ID de la flash; 0 si falla) --- */
+    unsigned flash_bytes;   /* 4 MB Pico 2 / 16 MB Metro, etc. */
 } board_desc_t;
 
 /* Inicializa el descriptor: defaults por variante + override de

@@ -29,6 +29,7 @@
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* inspect deps en handle_run */
 #include "bpvm_pico.h"       /* INFO: uniqueId/boardName/temp/freq/uptime */
+#include "board_desc.h"      /* INFO: variante/gpio/flash/psram del board_desc */
 #include "bpvm_rtc.h"        /* TIME: set epoch */
 #include "aot_registry.h"    /* H3 #160: bpvm_aot_clear */
 
@@ -689,6 +690,25 @@ static void handle_info(long id, const json_obj_t* obj) {
                                              (size_t) off, "fsTotalBytes", fsTotal);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "fsUsedBytes", fsUsed);
+    /* H7 — descriptor de placa: variante, caps del chip, flash y PSRAM. */
+    const board_desc_t* bd = board_desc();
+    char variant[2]; variant[0] = bd->variant; variant[1] = '\0';
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                               (size_t) off, "variant", variant);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "gpioCount", bd->gpio_count);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "pioCount", bd->pio_count);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "pwmSlices", bd->pwm_slices);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "adcChannels", bd->adc_channels);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "flashBytes", (long) bd->flash_bytes);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "sramBytes", 520L * 1024L);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "psramBytes", (long) bd->psram_bytes);
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
                                           (size_t) off);
     if (off < 0) {
