@@ -169,6 +169,7 @@ public final class Intrinsics {
         register("Pico.tempC",     w -> emitBuiltin(w, Builtin.PICO_TEMP_C));
         register("Pico.cpuFreqHz", w -> emitBuiltin(w, Builtin.PICO_CPU_FREQ_HZ));
         register("Pico.uptimeMs",  w -> emitBuiltin(w, Builtin.PICO_UPTIME_MS));
+        register("Pico.gpioCount", w -> emitBuiltin(w, Builtin.PICO_GPIO_COUNT));
         register("Pico.setCpuFreqMHzRaw",
                                    w -> emitBuiltin(w, Builtin.PICO_SET_CPU_FREQ_MHZ));
 

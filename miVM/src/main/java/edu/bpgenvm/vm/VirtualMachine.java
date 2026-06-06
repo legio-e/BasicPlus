@@ -4151,6 +4151,12 @@ public class VirtualMachine {
                 pushTc(tc, 0);   /* host: no aplica */
                 break;
             }
+            case PICO_GPIO_COUNT: {
+                /* host: perfil RP2350A (30 GPIO). En el device el firmware
+                 * lo resuelve desde board_desc (variante / board.json). */
+                pushTc(tc, 30);
+                break;
+            }
             case PICO_UPTIME_MS: {
                 /* Sirve algo útil en host: ms del proceso JVM. */
                 pushTc(tc, (int) System.currentTimeMillis());

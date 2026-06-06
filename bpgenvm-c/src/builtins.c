@@ -104,7 +104,12 @@ enum {
     BUILTIN_WDT_DISABLE      = 118,
     /* H2 (V2) — conversión string <-> byte[] (ambos TYPE_ARRAY_I8). */
     BUILTIN_TO_BYTES         = 119,
-    BUILTIN_FROM_BYTES       = 120
+    BUILTIN_FROM_BYTES       = 120,
+    /* 121/122 = HEAP_FRAG/HEAP_MAP: diagnósticos SÓLO de la VM-Java; la VM C
+     * no los implementa. Hueco intencional para mantener el id alineado al
+     * ordinal del enum Builtin.java. */
+    /* H7.3 — board-aware (RP2350A/B): GPIO de la variante desde board_desc. */
+    BUILTIN_PICO_GPIO_COUNT  = 123
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -819,6 +824,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_PICO_CPU_FREQ_HZ: {
         push_i32(vm, tc, (int32_t) bpvm_pico_cpu_freq_hz());
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_GPIO_COUNT: {
+        push_i32(vm, tc, (int32_t) bpvm_pico_gpio_count());
         return BPVM_OK;
     }
     case BUILTIN_PICO_UPTIME_MS: {

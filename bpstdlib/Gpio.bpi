@@ -1,12 +1,12 @@
 bpi 6
 module Gpio
 func init(pin:integer,mode:integer):void public intrinsic
-func pull(pin:integer,pullMode:integer):void public intrinsic
 func read(pin:integer):integer public intrinsic
 func INPUT():integer public
 func HIGH():integer public
 func PULL_UP():integer public
 func OUTPUT():integer public
+func pull(pin:integer,pullMode:integer):void public intrinsic
 func LOW():integer public
 func PULL_DOWN():integer public
 func write(pin:integer,value:integer):void public intrinsic

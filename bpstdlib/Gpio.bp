@@ -19,6 +19,10 @@
 // ============================================================
 module Gpio
 
+  // H7.3 — board-aware: el constructor Gpio.Pin valida el número de
+  // pin contra Pico.gpioCount() (30 en RP2350A/Pico, 48 en RP2350B/Metro).
+  import Pico
+
   // Configura el modo del pin (entrada o salida).
   // Llamar UNA vez por pin antes de read/write.
   public intrinsic function init(pin: integer, mode: integer)
@@ -96,7 +100,13 @@ module Gpio
     public var mode: integer    // INPUT (0) u OUTPUT (1)
 
     // Constructor: configura el pin en el modo indicado.
+    // H7.3 — valida el rango contra la placa: Gpio.Pin(47) es válido en
+    // Metro (RP2350B, 48 GPIO) y error en Pico (RP2350A, 30 GPIO).
     public function Pin(num: integer, mode: integer)
+      if num < 0 or num >= Pico.gpioCount() then
+        var msg: string := "Gpio.Pin: pin " + intToString(num) + " fuera de rango (0.." + intToString(Pico.gpioCount() - 1) + ")"
+        throw RuntimeError(msg)
+      endif
       this.num  := num
       this.mode := mode
       init(num, mode)

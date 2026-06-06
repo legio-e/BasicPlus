@@ -495,6 +495,12 @@ static int pico_pico_uptime_ms_impl(void) {
     return (int) to_ms_since_boot(get_absolute_time());
 }
 
+/* H7.3 — board-aware: nº de GPIO desde el descriptor de placa (variante
+ * RP2350A=30 / RP2350B=48, u override de /sys/board.json). */
+static int pico_pico_gpio_count_impl(void) {
+    return board_desc()->gpio_count;
+}
+
 /* setCpuFreqMHz — cambia el clk_sys del RP2350.
  *
  * `set_sys_clock_khz(khz, required=false)` busca la combinación de PLL
@@ -571,6 +577,7 @@ static const bpvm_pico_backend_t s_pico_pico_backend = {
     .cpuFreqHz     = pico_pico_cpu_freq_hz_impl,
     .uptimeMs      = pico_pico_uptime_ms_impl,
     .setCpuFreqMHz = pico_pico_set_cpu_freq_mhz_impl,
+    .gpioCount     = pico_pico_gpio_count_impl,
 };
 
 /* ============================ Adc ============================ */

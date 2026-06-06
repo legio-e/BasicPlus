@@ -258,7 +258,11 @@ public enum Builtin {
 
     // ---- H3 — diagnóstico de heap (SOLO VM-Java; la VM C no las implementa) ----
     HEAP_FRAG("heapFrag"),               // () → string  (resumen de fragmentación)
-    HEAP_MAP("heapMap");                 // (cols: int) → string (mapa ASCII)
+    HEAP_MAP("heapMap"),                 // (cols: int) → string (mapa ASCII)
+
+    // ---- H7.3 — board-aware (RP2350A/B). El device lo resuelve desde el
+    //      board_desc (variante/board.json); host = perfil RP2350A. ----
+    PICO_GPIO_COUNT("__picoGpioCount");  // () → integer (GPIO de la variante)
 
     public final String bpName;
     public final int id;

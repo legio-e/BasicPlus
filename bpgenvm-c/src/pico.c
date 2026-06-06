@@ -70,6 +70,15 @@ int bpvm_pico_uptime_ms(void) {
     return 0;
 }
 
+int bpvm_pico_gpio_count(void) {
+    if (g_backend && g_backend->gpioCount) {
+        return g_backend->gpioCount();
+    }
+    /* Stub host: perfil RP2350A (30 GPIO) — igual que el default antiguo
+     * de Pico.GPIO_COUNT(). El device lo resuelve desde board_desc. */
+    return 30;
+}
+
 int bpvm_pico_set_cpu_freq_mhz(int mhz) {
     if (g_backend && g_backend->setCpuFreqMHz) {
         return g_backend->setCpuFreqMHz(mhz);

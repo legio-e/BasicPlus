@@ -73,11 +73,18 @@ compatibles) — verificado: Hello, T y Debug on Pico corren en Metro. Pero no e
   minimal + README con el esquema). Default sin board.json: variante B permisiva
   (lo afinará el sondeo de PSRAM en H7.2). **Falta cablear validación de rango
   (H7.3.b) y exponer caps en BP (H7.3.c).**
-- **H7.3.b — stdlib HW board-aware.** Gpio/Pwm/Adc/Spi/Uart/Pio respetan los
-  límites de la placa (validación de rango por board). `Gpio.Pin(47)` OK en
-  Metro, error en Pico.
-- **H7.3.c — exponer en BP** (`Pico.board` / `Mcu.gpioCount` / capacidades) para
-  que el programa se adapte a la placa.
+- **H7.3.b — stdlib HW board-aware.** ✅ HECHO (2026-06-06) para Gpio. El
+  constructor `Gpio.Pin(num, mode)` valida `num` contra `Pico.gpioCount()` y
+  lanza `RuntimeError` si está fuera de rango: `Gpio.Pin(47)` OK en Metro
+  (48 GPIO), error en Pico (30). Verificado en host (ambas VMs rechazan pin 47
+  en perfil 30). **Pendiente**: extender a Pwm/Adc/Spi/Uart/Pio si se quiere.
+- **H7.3.c — exponer en BP.** ✅ HECHO (2026-06-06). Nuevo intrínseco
+  `Pico.gpioCount()` (builtin 123, lo resuelve el firmware desde board_desc) +
+  `Pico.variant()` (deriva "A"/"B" en BP puro, sin builtin propio).
+  `Pico.GPIO_COUNT()` delega en `gpioCount()` → board-aware automático.
+  **Paridad dual-VM verificada** (`gpioCount=30 / variant=A / GPIO_COUNT=30`
+  byte-idéntico en VM Java y VM-C host). `Pico.board` ya salía del descriptor
+  (H7.3.a). Sample: `samples/BoardTest.bp`.
 
 ## H7.4 — NeoPixel (WS2812): protocolo nuevo vía PIO
 La Metro lleva un **NeoPixel (WS2812)** onboard — LED RGB direccionable por un
@@ -102,8 +109,10 @@ de timing exacto). **Es la primera infraestructura PIO del firmware.**
 
 ## Estado
 - **H7.1**: baseline confirmado (Metro corre el firmware pico2); falta board target.
-- **H7.3.a**: ✅ descriptor de placa (chip↔placa) + board.json + tabla de variantes.
-  Firmware compila/linka (BSS sin cambio relevante). Falta validación + BP (H7.3.b/c).
+- **H7.3**: ✅ COMPLETO (a+b+c). Descriptor de placa (chip↔placa) + board.json +
+  tabla de variantes (a); validación de rango GPIO en Gpio.Pin (b); intrínseco
+  gpioCount + variant() expuestos en BP, paridad dual-VM verificada (c). Firmware
+  compila/linka. Falta sólo (opcional) extender validación a otros periféricos.
 - Resto: por arrancar. Orden flexible.
 
 ## Decisiones abiertas

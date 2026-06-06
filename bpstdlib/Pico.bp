@@ -51,6 +51,24 @@ module Pico
   // BP que detecte el wrap.
   public intrinsic function uptimeMs(): integer
 
+  // ---- Board-aware (H7.3) ----
+  // Número de GPIO disponibles en la PLACA. Lo resuelve el firmware
+  // desde el board_desc (variante RP2350A=30 / RP2350B=48, u override
+  // de /sys/board.json). En la VM Java (host) devuelve 30 (perfil A).
+  // GPIO_COUNT() delega aquí para que sea board-aware automáticamente.
+  public intrinsic function gpioCount(): integer
+
+  // Variante del chip como string ("A" / "B"), derivada de gpioCount()
+  // — no necesita su propio intrínseco. RP2350A bondea 30 GPIO, RP2350B
+  // 48; el umbral 40 los separa con holgura.
+  public function variant(): string
+    if gpioCount() >= 40 then
+      return "B"
+    else
+      return "A"
+    endif
+  end variant
+
   // Frecuencia máxima soportada en MHz para setCpuFreqMHz().
   //
   // Conservador: el RP2350 nominal es 150 MHz; con voltaje core
@@ -122,8 +140,11 @@ module Pico
     return 2
   end UART_BUSES
 
+  // Board-aware desde H7.3: delega en el intrínseco gpioCount() (lo
+  // resuelve el firmware por variante / board.json). 30 en host/RP2350A,
+  // 48 en RP2350B (Metro).
   public function GPIO_COUNT(): integer
-    return 30
+    return gpioCount()
   end GPIO_COUNT
 
   // ADC externos disponibles (GP26..GP29). El canal 4 está

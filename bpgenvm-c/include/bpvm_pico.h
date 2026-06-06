@@ -43,6 +43,9 @@ typedef struct {
      * soportado por la board. Devuelve 1 si se aplicó, 0 si falló
      * (la PLL no soporta esa frecuencia incluso después de clamp). */
     int   (*setCpuFreqMHz)(int mhz);
+    /* H7.3 — board-aware: nº de GPIO de la placa (lo da el board_desc:
+     * 30 RP2350A / 48 RP2350B, u override de /sys/board.json). */
+    int   (*gpioCount)(void);
 } bpvm_pico_backend_t;
 
 void bpvm_pico_set_backend(const bpvm_pico_backend_t* backend);
@@ -54,6 +57,7 @@ float bpvm_pico_temp_c(void);
 int   bpvm_pico_cpu_freq_hz(void);
 int   bpvm_pico_uptime_ms(void);
 int   bpvm_pico_set_cpu_freq_mhz(int mhz);
+int   bpvm_pico_gpio_count(void);
 
 #ifdef __cplusplus
 }

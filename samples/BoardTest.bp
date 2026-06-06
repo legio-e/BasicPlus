@@ -1,0 +1,15 @@
+// H7.3 — verificación board-aware (paridad dual-VM en host).
+// Solo el intrínseco gpioCount + la derivación variant() + la constante
+// que delega: sin stubs HW ni excepciones, para un diff sin ruido.
+// En host ambas VMs deben dar 30 / A / 30 byte-idénticos.
+module BoardTest
+
+  import Pico
+
+  function Main()
+    print "gpioCount=" + intToString(Pico.gpioCount())
+    print "variant=" + Pico.variant()
+    print "GPIO_COUNT=" + intToString(Pico.GPIO_COUNT())
+  end Main
+
+end BoardTest
