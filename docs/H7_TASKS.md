@@ -49,8 +49,8 @@ inocuo) y Metro/cualquier RP2350B.
 - La SDK confirmó: `#if PICO_RP2350A` → 30 GPIO, `#else` → 48. Dato útil: el CS de
   PSRAM es board-specific incluso entre placas B (Pimoroni Plus2 = GP47, WeAct
   RP2350B = GP0) → confirma que `psramCsPin` va en board.json.
-- **Falta**: smoke en HW (arranca en Pico 2 y Metro; Gpio.Pin(40) ya válido en
-  Metro sin panic). Precondición de H7.2.a (CS de PSRAM en GP47 = pin B-only).
+- ✅ **VERIFICADO EN HW** (Metro, 2026-06-06): el build genérico B arranca bien.
+  Precondición de H7.2.a (CS de PSRAM en GP47 = pin B-only) cumplida.
 
 ## H7.2 — PSRAM + redistribución del mapa de memoria
 - **H7.2.a — detección + init de PSRAM** ✅ (build hecho 2026-06-06; falta HW).
@@ -63,8 +63,11 @@ inocuo) y Metro/cualquier RP2350B.
   restaura XIP siempre, y restaura la función del pin si no detecta (no rompe un
   Pico). `board_desc_init` sondea `psram_cs_pin` (de board.json/variante) y
   rellena `psram_present`/`psram_bytes`; default A → cs=-1 (no sondea GP0=UART).
-  Logueado en boot. **Falta**: HW (Metro con metro-rp2350b.json → variante B →
-  cs=47 → debe loguear "psram: 8MB @ GP47"; Pico → "no sondeada").
+  Logueado en boot. ✅ **VERIFICADO EN HW** (Metro, 2026-06-06): con
+  metro-rp2350b.json (psramCsPin:47) loguea `psram: 8388608 bytes (8 MB)
+  detectada @ GP47` y arranca bien. Sondeo OPT-IN (sólo si board.json declara
+  psramCsPin) + a prueba de cuelgues (timeouts + restaura XIP) tras un primer
+  intento que colgaba el boot. **La PSRAM aún no se USA** → H7.2.b.
 - **H7.2.b — buffers grandes como punteros runtime.** Hoy `s_vm_buffer[128KB]`
   y `s_data[128KB]` (FS) son arrays estáticos en SRAM interna. Convertirlos a
   PUNTEROS elegidos en boot: PSRAM si la hay (regiones grandes), SRAM interna si
