@@ -186,7 +186,12 @@ public abstract class BpType {
 
         @Override
         public boolean sameAs(BpType other) {
-            return other instanceof ClassType && ((ClassType) other).cls == cls;
+            if (other instanceof ClassType) return ((ClassType) other).cls == cls;
+            // GAP-2 — cross-module: el otro lado puede ser una referencia de clase
+            // sin resolver (leída del .bpi por nombre). Igual si el nombre coincide.
+            if (other instanceof UnresolvedClassRef)
+                return ((UnresolvedClassRef) other).name.equals(cls.name);
+            return false;
         }
 
         @Override
@@ -194,6 +199,13 @@ public abstract class BpType {
             if (source instanceof ErrorType) return true;
             if (source instanceof NullType)  return true;
             if (source instanceof AnyType)   return true;   // escape hatch para stdlib
+            // GAP-2 — cross-module: un valor cuyo tipo es "una clase de otro
+            // módulo" llega como UnresolvedClassRef (referencia por nombre del
+            // .bpi, sin símbolo local). Asignable si el nombre coincide con el
+            // tipo local. Cubre built-in (List/Map/SyncList/…) y clases de
+            // usuario retornadas/pasadas cross-module.
+            if (source instanceof UnresolvedClassRef)
+                return ((UnresolvedClassRef) source).name.equals(cls.name);
             if (!(source instanceof ClassType)) return false;
             // Subclase asignable a base
             Symbol.ClassSymbol cur = ((ClassType) source).cls;

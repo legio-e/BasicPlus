@@ -35,3 +35,19 @@ Capas: parser acepta `Mod.Clase` en el `catch`; el semántico lo resuelve
 la sección exports) con la dirección del descriptor de la clase cross-module;
 ambas VMs decodifican el i32 y ambos linkers parchean por nombre cualificado.
 Bonus: `Mod.Clase` ahora también resuelve dentro del propio `Mod`.
+
+## GAP-2 — tipos built-in cross-module — ✅ TAPADO (#236)
+- `HoleLibD.bp`: `public function makeList(): List` (devuelve un `List`).
+- `HoleAppD.bp`: `var l: List := HoleLibD.makeList()` → **compila y corre**.
+  Salida en AMBAS VMs (byte-idéntica): `length = 3`.
+
+Antes: `error: valor de tipo 'List' no asignable a variable de tipo 'List'`. Los
+built-in (List/Map/SyncList…) se sintetizan idénticos por módulo, pero el tipo de
+retorno de una función importada cruza vía el `.bpi` como `UnresolvedClassRef`
+(clase referida por nombre, sin símbolo local), y `ClassType.isAssignableFrom`
+sólo aceptaba `ClassType` → lo rechazaba (asimetría: `UnresolvedClassRef` era laxo
+en su dirección, `ClassType` no reciprocaba). Fix solo-semántico en
+`BpType.ClassType`: acepta un `UnresolvedClassRef` del mismo nombre — general,
+cubre built-in Y clases de usuario retornadas/pasadas cross-module. El runtime ya
+funcionaba (síntesis idéntica = mismos slots; `INVOKE_VIRTUAL` usa el class_ptr
+del receiver).

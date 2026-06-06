@@ -1,0 +1,13 @@
+// GAP-2 repro — librería: ¿se puede RETORNAR un tipo built-in sintetizado
+// (List) desde un módulo público para usarlo en otro?
+module HoleLibD
+
+  public function makeList(): List
+    var l: List := List()
+    l.add(10)
+    l.add(20)
+    l.add(30)
+    return l
+  end makeList
+
+end HoleLibD

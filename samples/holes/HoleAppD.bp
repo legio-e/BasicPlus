@@ -1,0 +1,13 @@
+// GAP-2 repro — app: recibe un List cross-module y lo usa.
+// Esperado (bug GAP-2): la identidad de List no unifica entre módulos →
+// puede fallar en compile (tipo no asignable) o en runtime (vtable/identidad).
+module HoleAppD
+
+  import HoleLibD
+
+  function Main()
+    var l: List := HoleLibD.makeList()
+    print "length =", l.length()
+  end Main
+
+end HoleAppD
