@@ -110,10 +110,15 @@ de timing exacto). **Es la primera infraestructura PIO del firmware.**
 
 ## Estado
 - **H7.1**: baseline confirmado (Metro corre el firmware pico2); falta board target.
-- **H7.3**: ✅ COMPLETO (a+b+c). Descriptor de placa (chip↔placa) + board.json +
-  tabla de variantes (a); validación de rango GPIO en Gpio.Pin (b); intrínseco
-  gpioCount + variant() expuestos en BP, paridad dual-VM verificada (c). Firmware
-  compila/linka. Falta sólo (opcional) extender validación a otros periféricos.
+- **H7.3**: ✅ COMPLETO (a+b+c) + **VERIFICADO EN HW** (Metro, 2026-06-06).
+  Descriptor de placa (chip↔placa) + board.json + tabla de variantes (a);
+  validación de rango GPIO en Gpio.Pin (b); intrínseco gpioCount + variant()
+  expuestos en BP, paridad dual-VM verificada (c). En la Metro: sin board.json →
+  `30/A`; con `boards/metro-rp2350b.json` como `/sys/board.json` → `48/B`. El
+  MISMO binario reporta una u otra cosa según el dato de placa → la abstracción
+  chip↔placa funciona end-to-end. Falta sólo (opcional) extender validación a
+  otros periféricos. **OJO**: usar pines 30-47 de verdad necesita H7.1 (el build
+  target `pico2` del SDK panicaría en gpio_init de pines ≥30).
 - Resto: por arrancar. Orden flexible.
 
 ## Decisiones abiertas
