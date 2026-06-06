@@ -116,12 +116,15 @@ La Metro lleva un **NeoPixel (WS2812)** onboard — LED RGB direccionable por un
 protocolo **1-wire de timing crítico** (~800 kHz, bits por duración de pulso).
 NO lo tenemos: hay que añadirlo, y en RP2350 se hace con **PIO** (state machine
 de timing exacto). **Es la primera infraestructura PIO del firmware.**
-- **H7.4.a — driver WS2812 en firmware.** Programa PIO + SM para el WS2812
-  (basado en el ejemplo `ws2812` de pico-examples). Primera infra PIO reusable.
-- **H7.4.b — clase BP `Neopixel`** (OO): `Neopixel.Strip(pin, count)` con
-  `setPixel(i, r, g, b)` / `setColor(r,g,b)` / `brightness` / `show` / `clear`.
-  Backend intrínseco que llama al driver PIO. Sample de diagnosis (arco iris,
-  blink RGB).
+- **H7.4.a — driver WS2812 en firmware.** ✅ COMPLETO + **VERIFICADO EN HW**
+  (Metro, 2026-06-06: NeoPixel onboard GP25 en verde al boot). Programa PIO + SM
+  para el WS2812 (basado en `ws2812.pio` del SDK). Primera infra PIO reusable.
+- **H7.4.b — clase BP `Neopixel`** (OO): ✅ COMPLETO + **VERIFICADO EN HW**
+  (Metro, 2026-06-06: `samples/NeoDemo.bp` cicla R/G/B desde BP). `Neopixel.Strip(pin, count)`
+  con `setPixel(i, r, g, b)` / `setColor(r,g,b)` / `show` / `clear` / `count`. Buffer
+  GRB en BP (`integer[]`); `show()` lo empuja vía intrínsecos `__npInit`/`__npShow`
+  → builtins 124/125 → backend firmware → driver PIO. Cadena multi-VM completa
+  (no-op en host/VM Java). Commit `510b574`.
 - Abre: PIO como recurso general (futuros protocolos: más NeoPixels, DHT,
   servos por timing, etc.).
 
@@ -143,6 +146,17 @@ de timing exacto). **Es la primera infraestructura PIO del firmware.**
   chip↔placa funciona end-to-end. Falta sólo (opcional) extender validación a
   otros periféricos. **OJO**: usar pines 30-47 de verdad necesita H7.1 (el build
   target `pico2` del SDK panicaría en gpio_init de pines ≥30).
+- **H7.1**: ✅ COMPLETO + **VERIFICADO EN HW** (build genérico RP2350B, 48 GPIO,
+  una sola imagen para Pico 2 y Metro).
+- **H7.2.a/b**: ✅ COMPLETO + **VERIFICADO EN HW** (PSRAM APS6404 8 MB detectada @
+  GP47, heap de la VM reubicado a PSRAM; `samples/PsramBig.bp` escribió+verificó un
+  array de 4 MB en heap externo). Opt-in vía `psramCsPin` en board.json.
+- **H7.4**: ✅ COMPLETO (a+b) + **VERIFICADO EN HW** (Metro, 2026-06-06). Driver
+  WS2812 vía PIO (1ª infra PIO) + clase OO `Neopixel.Strip`; `samples/NeoDemo.bp`
+  cicla el NeoPixel onboard por R/G/B desde BasicPlus. Cualquier placa con su
+  `neopixelPin` en board.json lo usa igual.
+- **IDE INFO + flash JEDEC**: ✅ botón INFO (micro/flash/RAM/PSRAM) + detección de
+  flash (Metro: 16 MB W25Q128). Falta corregir lectura de temperatura (~412°C).
 - Resto: por arrancar. Orden flexible.
 
 ## Decisiones abiertas
