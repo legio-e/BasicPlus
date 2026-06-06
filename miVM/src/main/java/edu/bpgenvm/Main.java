@@ -370,7 +370,7 @@ public class Main {
         out.println("  bpgenvm -d <fichero.mod>        desensambla y vuelca a stdout");
         out.println("  bpgenvm --disasm <fichero.mod>  alias largo de -d");
         out.println("  bpgenvm -t | --trace            trace per-instrucción (default off)");
-        out.println("  bpgenvm --workers=N             N workers Java en paralelo (default 2)");
+        out.println("  bpgenvm --workers=N             N workers SMP en paralelo (default 1; >1 experimental: race B1)");
         out.println("  bpgenvm --config <archivo>      configuración JSON (BpVM.cfg)");
         out.println("  bpgenvm --no-config             ignora cualquier BpVM.cfg auto-descubierto");
         out.println("  bpgenvm --listen <puerto>       arranca servidor de debug TCP+JSON");

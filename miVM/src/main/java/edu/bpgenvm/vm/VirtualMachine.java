@@ -271,8 +271,16 @@ public class VirtualMachine {
      */
     private final ThreadLocal<ThreadContext> currentTcLocal = new ThreadLocal<>();
     private volatile boolean vmShutdown = false;
-    /** Número de workers Java en paralelo (cores físicos simulados). Default 2. */
-    private int numWorkers = 2;
+    /**
+     * Número de workers Java en paralelo (cores físicos simulados). Default 1:
+     * un único flujo de ejecución BP, igual que la VM-C del device (single-core).
+     * Así la VM-Java es SEGURA de fábrica — la race B1 (corrupción worker↔worker)
+     * necesita paralelismo REAL (workers≥2) y con 1 worker no aparece (medido:
+     * w1=0% siempre). workers>1 activa SMP (opt-in vía --workers=N): da speedup
+     * pero arrastra B1, cuyo fix se acopla al dual-core RP2350 (v2). Ver
+     * docs/PENDIENTES.md §B1.
+     */
+    private int numWorkers = 1;
     public void setNumWorkers(int n) { this.numWorkers = Math.max(1, n); }
     public int getNumWorkers() { return numWorkers; }
 

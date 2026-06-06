@@ -92,6 +92,40 @@ class_ptr de RuntimeError al cargar el módulo en lugar de buscarlo
 por nombre en cada throw (pero eso requeriría persistencia del
 class_ptr).
 
+### B1 — caracterización v2 + decisión (2026-06-06)
+**Acotado con barrido paramétrico (`--workers` × heap chico/grande vía `--config`)
++ dumps `BPVM_B1_DIAG=1`:**
+- **GC-INDEPENDIENTE**: con heap de 64 MB y **0 GCs medidos**, w2 sigue fallando
+  ~25 % y w4 100 % (misma firma). Refuta la hipótesis "es el GC". El heap chico
+  (100 % fallo) solo *amplifica* (GC constante añade un use-after-free con firma
+  distinta `Dirección X no cae en data block`).
+- **Es PARALELISMO REAL**: w1=**0 %** siempre; w2≈25 %; w4=**100 %**. Escala con
+  workers físicos. Con 1 worker (cooperativo, = modelo del device) NO aparece.
+- **Firma**: corrupción del estado de ejecución de un thread (`pc`/`bp` → "HALT en
+  PC basura", "INVOKE_VIRTUAL null receiver"). Dump GC-free: mutex `owner=2` con
+  tid=2 RUNNABLE y tid=1 RUNNING petando → race worker↔worker, no del GC.
+- **Descartados LEYENDO el código (todos correctos)**: claim del scheduler
+  atómico (`pickNextRunnableTc`+`status=RUNNING` bajo el mismo `vmLock`);
+  `currentThread`/`currentThreadId` compartidos son solo inspección de debugger
+  (la ejecución usa variantes per-tc); `MUTEX_LOCK` cede por-opcode
+  (`yieldRequested` se chequea al inicio de cada opcode) + hand-off directo
+  correcto; guardado de `tc.pc/sp/bp/cs` en el `finally` de `runOnContext` en
+  TODA salida. ⇒ el bug es una data race sutil en `mem[]` compartido bajo
+  paralelismo real, NO en los sitios obvios.
+
+**Decisión (usuario, 2026-06-06)**: B1 solo muerde con paralelismo REAL
+(workers≥2 en el host de desarrollo, o el futuro **dual-core RP2350**). El device
+single-core es **inmune** (= caso w1=0 %; el `heap_stress` cross-thread lo
+confirmó en placa). Por tanto:
+- **La VM-Java pasa a `numWorkers=1` por defecto** (igual que el device → segura
+  de fábrica). El SMP queda **opt-in** (`--workers=N`), documentado como
+  experimental.
+- **El fix de B1 se ACOPLA al dual-core (v2)**: cuando se enciendan los 2 núcleos
+  del RP2350 habrá que resolverlo (probable foco: protección de `mem[]` o de la
+  pila por-thread bajo ejecución simultánea). Hasta entonces, bancado y bien
+  caracterizado. Repros: `samples/synclisttest.bp` con `--workers=2/4` + configs
+  de heap en `samples/holes/` (regenerables).
+
 ### B3 v2 — `try/catch e: RuntimeError` para errores de mutex (cerrado)
 **Estado**: cerrado. El código BP ya atrapa errores nativos de mutex.
 
