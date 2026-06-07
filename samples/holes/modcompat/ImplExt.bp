@@ -1,0 +1,8 @@
+module ImplExt implements IExt
+  public function foo(): integer
+    return 1
+  end foo
+  public function bar(): integer
+    return 2
+  end bar
+end ImplExt

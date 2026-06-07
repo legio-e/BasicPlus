@@ -858,6 +858,10 @@ public final class ModuleInterface {
             int[] clsBinFieldBitmap = new int[0], clsBinOwnerBitmap = new int[0];
             // L2 v3.d — static consts del bloque class.
             List<ConstSig> clsStaticConsts = new ArrayList<>();
+            // N6 — si el .bpi es de una versión MÁS NUEVA que CURRENT_VERSION, lo
+            // leemos best-effort (forward-compat): saltamos las directivas que este
+            // compilador no conoce, en lugar de abortar. El formato .bpi es aditivo.
+            boolean tolerant = false;
 
             while ((line = br.readLine()) != null) {
                 lineNo++;
@@ -871,9 +875,12 @@ public final class ModuleInterface {
                     try { ver = Integer.parseInt(trimmed.substring(4).trim()); }
                     catch (NumberFormatException ex) {
                         throw new IOException(file + ":" + lineNo + ": versión .bpi inválida"); }
-                    if (ver < MIN_SUPPORTED_VERSION || ver > CURRENT_VERSION)
-                        throw new IOException(file + ": versión .bpi no soportada: " + ver +
-                                " (soportadas " + MIN_SUPPORTED_VERSION + ".." + CURRENT_VERSION + ")");
+                    if (ver < MIN_SUPPORTED_VERSION)
+                        throw new IOException(file + ": .bpi v" + ver + " demasiado antiguo (este "
+                            + "compilador soporta v" + MIN_SUPPORTED_VERSION + ".." + CURRENT_VERSION
+                            + "). Regenéralo desde su fuente .bp.");
+                    // N6 — versión más nueva: no abortamos; leemos best-effort.
+                    tolerant = ver > CURRENT_VERSION;
                     sawHeader = true;
                     continue;
                 }
@@ -949,7 +956,9 @@ public final class ModuleInterface {
                         clsBinOwnerBitmap = parseHexInts(tok[3]);
                         continue;
                     }
-                    throw new IOException(file + ":" + lineNo + ": directiva no reconocida en class: " + trimmed);
+                    if (tolerant) continue;   // N6: .bpi más nuevo → salta directiva de class desconocida
+                    throw new IOException(file + ":" + lineNo + ": directiva no reconocida en class: '"
+                        + trimmed + "'. ¿.bpi corrupto o de versión incompatible? Regenéralo desde su .bp.");
                 }
 
                 if (trimmed.startsWith("library ")) {
@@ -994,9 +1003,11 @@ public final class ModuleInterface {
                     clsCtorParams = null;          // null = sin ctor de usuario
                     clsProps   = new ArrayList<>();
                     clsMethods = new ArrayList<>();
-                } else {
-                    throw new IOException(file + ":" + lineNo + ": directiva no reconocida: " + trimmed);
+                } else if (!tolerant) {
+                    throw new IOException(file + ":" + lineNo + ": directiva no reconocida: '" + trimmed
+                        + "'. ¿.bpi corrupto o de versión incompatible? Regenéralo desde su .bp.");
                 }
+                // tolerant (.bpi más nuevo): la directiva desconocida se ignora (forward-compat).
             }
             if (!sawHeader)
                 throw new IOException(file + ": fichero vacío o sin cabecera bpi");

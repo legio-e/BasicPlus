@@ -1,0 +1,3 @@
+module interface IExt extends IBase
+  public function bar(): integer
+end IExt

@@ -660,10 +660,20 @@ blocking — 8 items con 20ms entre cada uno).
 (`waiters` list por SyncList + `notifyOne` al `add`) para evitar el
 spin-poll de 1ms. Para v1 es suficiente; el spin a 1ms es invisible.
 
-### N6 — Sin migración para `.bpi` v1
-E2 ya regenera v2 → v3 cuando hay `.bp` fuente. Pero si llega un `.bpi` sin
-`.bp` correspondiente (distribuciones), el reader peta con "directiva no
-reconocida". Falta o un fallback de lectura tolerante o un mensaje guía claro.
+### N6 — `.bpi` tolerante + compatibilidad de módulos (✅ HECHO 2026-06-07)
+Dos capas:
+- **Formato `.bpi`** (`ModuleInterface.readFrom`): si el `.bpi` es de una versión
+  de FORMATO más nueva que `CURRENT_VERSION` → lectura **best-effort** (salta las
+  directivas que no conoce; forward-compat aditivo). Versión soportada con directiva
+  desconocida (corrupción/foránea) → **error claro** ("directiva no reconocida …
+  Regenéralo desde su .bp"). Demasiado antigua (`< MIN_SUPPORTED`) → mensaje claro.
+- **Compatibilidad de interfaz de módulo** (`Main.loadImportsForAnalyzer`): ya
+  existía vía `import Interfaz:Impl` + herencia (`module interface … extends`) +
+  `implSatisfies`: un impl que cumple la interfaz pedida **o una que la extiende**
+  (más nuevo/superset) = compatible; si solo cumple una ancestra (más antiguo) =
+  incompatible. **N6 lo hizo FATAL**: el import incompatible ahora **aborta** (no
+  produce un `.mod` roto), con mensaje "necesitas un módulo igual o más nuevo que
+  implemente '<I>'". Sample de regresión: `samples/holes/modcompat/`.
 
 ### N7 — BpIde: errores vs avisos
 La introducción de L8 emite *avisos* del semántico. La tabla de errores del

@@ -1,0 +1,7 @@
+// Necesita IExt; provee ImplBase (implements solo IBase) = MÁS ANTIGUO → incompatible.
+module UseBad
+  import IExt:ImplBase
+  function main()
+    print "x"
+  end main
+end UseBad

@@ -325,7 +325,14 @@ public final class Main {
 
             // 2) Cargar .bpi disponibles en el analizador.
             SemanticAnalyzer analyzer = new SemanticAnalyzer();
+            int impErrsBefore = ctx.totalErrors;
             loadImportsForAnalyzer(module, src, ctx, analyzer, depth + 1);
+            // N6 — un import incompatible/erróneo (interfaz no satisfecha, impl
+            // ausente, binding mal usado) es FATAL: no producimos un .mod roto.
+            if (ctx.totalErrors > impErrsBefore) {
+                indent(depth); System.err.println("compilación abortada por imports incompatibles en " + srcAbs.getFileName());
+                return false;
+            }
 
             // 2b) Si `module X implements Lib.Iface` (módulo concreto) o
             //     `module interface X extends Lib.Parent` (interfaz hija):
@@ -987,6 +994,7 @@ public final class Main {
                         indent(depth); System.err.printf(
                             "-- error: '%s' no es una interfaz; no admite ':%s' --%n",
                             joinPath(imp.path), imp.boundImpl);
+                        ctx.totalErrors++;   // N6: fatal
                         continue;
                     }
                     Path implBpiPath = resolveImplBpi(imp.boundImpl, imp.fromPath, module, importerDir, ctx);
@@ -994,6 +1002,7 @@ public final class Main {
                         indent(depth); System.err.printf(
                             "-- error: no se encuentra .bpi del impl '%s' --%n",
                             imp.boundImpl);
+                        ctx.totalErrors++;   // N6: fatal
                         continue;
                     }
                     ModuleInterface implBpi = ModuleInterface.readFrom(implBpiPath);
@@ -1001,6 +1010,7 @@ public final class Main {
                         indent(depth); System.err.printf(
                             "-- error: '%s' es una interfaz, no puede ser impl bindeado --%n",
                             imp.boundImpl);
+                        ctx.totalErrors++;   // N6: fatal
                         continue;
                     }
                     // El impl puede implementar la interfaz pedida directamente
@@ -1009,8 +1019,10 @@ public final class Main {
                     // implementa LogApiV2 que extiende LogApi.
                     if (!implSatisfies(implBpi, joinPath(imp.path), importerSrc, ctx, depth)) {
                         indent(depth); System.err.printf(
-                            "-- error: '%s' no implementa '%s' (directa o transitivamente; declara %s) --%n",
-                            imp.boundImpl, joinPath(imp.path), implBpi.implementsName);
+                            "-- error: '%s' no implementa '%s' (directa o transitivamente; declara %s). "
+                            + "Necesitas un módulo igual o más nuevo que implemente '%s'. --%n",
+                            imp.boundImpl, joinPath(imp.path), implBpi.implementsName, joinPath(imp.path));
+                        ctx.totalErrors++;   // N6: fatal
                         continue;
                     }
                     implLibrary = implBpi.library;
@@ -1022,6 +1034,7 @@ public final class Main {
                     indent(depth); System.err.printf(
                         "-- error: '%s' es una interfaz; requiere `import %s:<Impl>` --%n",
                         joinPath(imp.path), alias);
+                    ctx.totalErrors++;   // N6: fatal
                     continue;
                 }
 

@@ -1,0 +1,7 @@
+// Necesita IBase; provee ImplExt (implements IExt extends IBase) = MÁS NUEVO → compatible.
+module UseOK
+  import IBase:ImplExt
+  function main()
+    print "ok"
+  end main
+end UseOK

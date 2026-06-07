@@ -98,7 +98,7 @@ TLS…).
 
 ### Consolidación (tapar agujeros) — transversal
 Anti-cascada del parser (§7a) ✅ · GAP-1 (subset de
-builtins de la VM-C) · N6 (`.bpi` tolerante para distribuciones sin `.bp`) ·
+builtins de la VM-C) · N6 (`.bpi` tolerante + compat. de módulos) ✅ ·
 L3/L5/L6 (limitaciones menores: decidir in/out) · flecos H7 (#225 mapa de memoria
 configurable por PSRAM, #229 FS grande del Metro) · bug temperatura ~412 °C ·
 flecos del split IDE↔VM (A1: *Stop* real, `describePc` remoto; A2: multi-run en el

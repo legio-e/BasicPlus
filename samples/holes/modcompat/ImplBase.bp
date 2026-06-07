@@ -1,0 +1,5 @@
+module ImplBase implements IBase
+  public function foo(): integer
+    return 1
+  end foo
+end ImplBase
