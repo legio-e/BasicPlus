@@ -43,6 +43,18 @@ void stm32_wire_send_error(long id, const char* code, const char* message);
 /* {"type":"FATAL","code":"<code>","message":"<msg>"} */
 void stm32_wire_send_fatal(const char* code, const char* message);
 
+/* Lee exactamente `n` bytes raw (tras un mensaje JSON con "bulk":n). 0 OK,
+ * -1 si se estanca (timeout). Usa el getchar rápido → sigue 115200. */
+int  stm32_wire_recv_bulk(uint8_t* buf, size_t n);
+
+/* Escribe `n` bytes raw (sin separador). Para GET_REPLY tras el send_line. */
+void stm32_wire_send_bulk(const uint8_t* data, size_t n);
+
+/* Escapa el contenido de un string JSON (`src`,`srclen`) en `dst`
+ * (null-terminated). Devuelve longitud escrita o -1 si no cabe. Escapa
+ * " \ \n \r \t y los control < 0x20; UTF-8 (>=0x80) pasa tal cual. */
+int  stm32_wire_json_escape(const char* src, size_t srclen, char* dst, size_t dstmax);
+
 #ifdef __cplusplus
 }
 #endif

@@ -83,3 +83,60 @@ void stm32_wire_send_fatal(const char* code, const char* message) {
         "{\"type\":\"FATAL\",\"code\":\"%s\",\"message\":\"%s\"}", code, message);
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);
 }
+
+int stm32_wire_recv_bulk(uint8_t* buf, size_t n) {
+    size_t got = 0;
+    uint32_t last = HAL_GetTick();
+    while (got < n) {
+        int c = stm32_wire_getchar();
+        if (c < 0) {
+            if (HAL_GetTick() - last >= 3000U) return -1;   /* bulk estancado */
+            continue;
+        }
+        last = HAL_GetTick();
+        buf[got++] = (uint8_t) c;
+    }
+    return 0;
+}
+
+void stm32_wire_send_bulk(const uint8_t* data, size_t n) {
+    size_t off = 0;
+    while (off < n) {
+        size_t chunk = n - off;
+        if (chunk > 0xFFFFU) chunk = 0xFFFFU;   /* HAL usa uint16 len */
+        HAL_UART_Transmit(wire_uart(), (uint8_t*) (data + off),
+                          (uint16_t) chunk, HAL_MAX_DELAY);
+        off += chunk;
+    }
+}
+
+int stm32_wire_json_escape(const char* src, size_t srclen, char* dst, size_t dstmax) {
+    size_t o = 0;
+    for (size_t i = 0; i < srclen; i++) {
+        unsigned char c = (unsigned char) src[i];
+        const char* esc = NULL;
+        char tmp[8];
+        switch (c) {
+            case '"':  esc = "\\\""; break;
+            case '\\': esc = "\\\\"; break;
+            case '\n': esc = "\\n";  break;
+            case '\r': esc = "\\r";  break;
+            case '\t': esc = "\\t";  break;
+            default:
+                if (c < 0x20U) { snprintf(tmp, sizeof(tmp), "\\u%04x", c); esc = tmp; }
+                break;
+        }
+        if (esc) {
+            size_t l = strlen(esc);
+            if (o + l >= dstmax) return -1;
+            memcpy(dst + o, esc, l);
+            o += l;
+        } else {
+            if (o + 1 >= dstmax) return -1;
+            dst[o++] = (char) c;   /* ASCII imprimible y bytes UTF-8 tal cual */
+        }
+    }
+    if (o >= dstmax) return -1;
+    dst[o] = '\0';
+    return (int) o;
+}
