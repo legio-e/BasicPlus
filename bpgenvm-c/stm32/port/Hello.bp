@@ -1,0 +1,10 @@
+// Hello.bp — primer módulo que corre la VM BasicPlus en el STM32U575 (H9.1.2).
+// Salida esperada (byte-idéntica en VM-Java, VM-C host y STM32):
+//   Hola desde STM32 (BasicPlus VM)
+//   42
+module Hello
+  function main()
+    print "Hola desde STM32 (BasicPlus VM)"
+    print intToString(40 + 2)
+  end main
+end Hello
