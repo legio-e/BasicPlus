@@ -298,6 +298,13 @@ static void dispatch(int first_char) {
 }
 
 void stm32_repl_run(void) {
+    /* FIFO RX/TX (8 bytes): absorbe el hueco de procesado entre la línea JSON
+     * y los bytes bulk que la siguen → PUT fiable aunque la CPU vaya lenta.
+     * (El fix definitivo del timing es subir el reloj a 160 MHz.) */
+    HAL_UARTEx_SetTxFifoThreshold(&hcom_uart[COM1], UART_TXFIFO_THRESHOLD_1_8);
+    HAL_UARTEx_SetRxFifoThreshold(&hcom_uart[COM1], UART_RXFIFO_THRESHOLD_1_8);
+    HAL_UARTEx_EnableFifoMode(&hcom_uart[COM1]);
+
     stm32_wire_send_cstr("=== bpvm-stm32 REPL (wire v1) listo ===");
 
     uint32_t last_blink = HAL_GetTick();
