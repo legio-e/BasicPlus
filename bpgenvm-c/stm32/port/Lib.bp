@@ -1,0 +1,6 @@
+// Lib.bp — módulo de prueba para la resolución de imports en STM32 (H9.2.c).
+module Lib
+  public function triple(n: integer): integer
+    return n * 3
+  end triple
+end Lib

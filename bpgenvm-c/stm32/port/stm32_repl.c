@@ -16,6 +16,7 @@
 #include "stm32_fs.h"
 #include "json_min.h"
 #include "bpvm.h"
+#include "bpvm_internal.h"   /* vm->modules[].{name,imports,import_count} para deps */
 
 #include "main.h"
 #include "stm32u5xx_nucleo.h"   /* BSP_LED_Toggle, LED_GREEN */
@@ -222,13 +223,25 @@ static void emit_exited(long session, const char* status, int code, uint32_t ms)
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);
 }
 
+/* Resuelve un nombre de módulo en el FS: prueba name, /app/name, /lib/name
+ * (el IDE sube las deps a /lib). 0 OK, -1 no está. */
+static int stm32_fs_resolve(const char* name, const uint8_t** data, uint32_t* size) {
+    if (fs_get(name, data, size) == 0) return 0;
+    char p[80];
+    snprintf(p, sizeof(p), "/app/%s", name);
+    if (fs_get(p, data, size) == 0) return 0;
+    snprintf(p, sizeof(p), "/lib/%s", name);
+    if (fs_get(p, data, size) == 0) return 0;
+    return -1;
+}
+
 static void handle_run(long id, json_obj_t* obj) {
     char path[64];
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
         stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
     }
     const uint8_t* data; uint32_t size;
-    if (fs_get(path, &data, &size) != 0) {
+    if (stm32_fs_resolve(path, &data, &size) != 0) {
         stm32_wire_send_error(id, "NOT_FOUND", "no existe"); return;
     }
 
@@ -247,6 +260,42 @@ static void handle_run(long id, json_obj_t* obj) {
 
     uint32_t t0 = HAL_GetTick();
     bpvm_status_t st = bpvm_load_mod_buffer(vm, data, size, path);
+
+    /* Resolución iterativa de imports (mirror del handle_run de la Pico): por
+     * cada módulo cargado, por cada import, carga <owner>.mod del FS si aún no
+     * está. Hasta 4 pasadas (deps de deps). bpvm_run() enlaza todo al arrancar
+     * (bpvm_link_all interno), así que basta con cargar main + deps. */
+    for (int pass = 0; st == BPVM_OK && pass < 4; pass++) {
+        int loaded_any = 0;
+        int n_before = vm->module_count;
+        for (int mi = 0; mi < n_before && st == BPVM_OK; mi++) {
+            bpvm_module_t* m = &vm->modules[mi];
+            for (int k = 0; k < m->import_count; k++) {
+                const char* imp = m->imports[k];
+                if (!imp || !imp[0]) continue;
+                char owner[40]; size_t ol = 0;
+                while (imp[ol] && imp[ol] != '.' && ol < sizeof(owner) - 1) {
+                    owner[ol] = imp[ol]; ol++;
+                }
+                owner[ol] = '\0';
+                if (!owner[0]) continue;
+                int already = 0;
+                for (int j = 0; j < vm->module_count; j++) {
+                    if (strcmp(vm->modules[j].name, owner) == 0) { already = 1; break; }
+                }
+                if (already) continue;
+                char fname[48];
+                snprintf(fname, sizeof(fname), "%s.mod", owner);
+                const uint8_t* dep; uint32_t dep_size;
+                if (stm32_fs_resolve(fname, &dep, &dep_size) != 0) continue; /* falta → fallará en RUN */
+                bpvm_status_t ds = bpvm_load_mod_buffer(vm, dep, dep_size, owner);
+                if (ds != BPVM_OK) { st = ds; break; }
+                loaded_any = 1;
+            }
+        }
+        if (!loaded_any) break;
+    }
+
     if (st == BPVM_OK) st = bpvm_run(vm);
     uint32_t dt = HAL_GetTick() - t0;
 

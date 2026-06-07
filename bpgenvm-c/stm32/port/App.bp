@@ -1,0 +1,12 @@
+// App.bp — importa Lib → prueba la resolución de dependencias en el RUN del
+// STM32 (H9.2.c). El IDE sube Lib.mod + App.mod; el RUN carga ambos del FS.
+// Salida esperada (idéntica en VM-Java, VM-C host y STM32):
+//   imports OK en STM32
+//   42
+module App
+  import Lib
+  function main()
+    print "imports OK en STM32"
+    print intToString(Lib.triple(14))
+  end main
+end App
