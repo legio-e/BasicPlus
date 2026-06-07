@@ -79,8 +79,9 @@ Clave del ahorro: por ser ARM Cortex-M (**Thumb-2**) como la Pico, se reutiliza
 — justo lo que el ESP32 (Xtensa) **no** pudo. Se reescribe la capa
 *vendor-specific*: drivers/HAL, clock tree (RCC), flash/FS, USB-CDC. **STM32 sería
 la 2ª familia con AOT.** La diversidad de STM32 (F4/F7/H7/G4/L4/U5…) asciende a
-**parte de H9** la formalización del HAL / imagen-por-familia (§9b VM). Tendrá su
-propio `docs/H9_TASKS.md` al arrancar.
+**parte de H9** la formalización del HAL / imagen-por-familia (§9b VM). Detalle y
+plan por hitos: **`docs/H9_TASKS.md`** (arrancado 2026-06-07; andamiaje =
+CubeIDE/CubeMX + injerto de la VM, transporte USART/VCP, single-core).
 
 ### H10 — Librería estándar: ajuste + ampliación
 Segunda pasada sobre la stdlib (la primera fue H4). **Ajustar** lo existente
