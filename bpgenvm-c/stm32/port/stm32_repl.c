@@ -296,10 +296,47 @@ static void handle_run(long id, json_obj_t* obj) {
         if (!loaded_any) break;
     }
 
-    if (st == BPVM_OK) st = bpvm_run(vm);
-    uint32_t dt = HAL_GetTick() - t0;
+    /* Guard anti-hard-fault: ¿quedó algún import sin resolver (dep que no está
+     * en el FS)? En bare-metal un CALL_EXT no resuelto puede COLGAR el micro
+     * (en el host es error limpio). Mejor un error claro sin ejecutar. */
+    char missing[40] = {0};
+    if (st == BPVM_OK) {
+        for (int mi = 0; mi < vm->module_count && !missing[0]; mi++) {
+            bpvm_module_t* m = &vm->modules[mi];
+            for (int k = 0; k < m->import_count && !missing[0]; k++) {
+                const char* imp = m->imports[k];
+                if (!imp || !imp[0]) continue;
+                char owner[40]; size_t ol = 0;
+                while (imp[ol] && imp[ol] != '.' && ol < sizeof(owner) - 1) {
+                    owner[ol] = imp[ol]; ol++;
+                }
+                owner[ol] = '\0';
+                if (!owner[0]) continue;
+                int found = 0;
+                for (int j = 0; j < vm->module_count; j++)
+                    if (strcmp(vm->modules[j].name, owner) == 0) { found = 1; break; }
+                if (!found) strncpy(missing, owner, sizeof(missing) - 1);
+            }
+        }
+    }
 
-    emit_exited(session, (st == BPVM_OK) ? "OK" : "RUNTIME_ERROR", (int) st, dt);
+    uint32_t dt = 0;
+    if (st == BPVM_OK && !missing[0]) {
+        st = bpvm_run(vm);          /* enlaza (bpvm_link_all) + ejecuta */
+        dt = HAL_GetTick() - t0;
+    }
+
+    if (missing[0]) {
+        char buf[160];
+        int n = snprintf(buf, sizeof(buf),
+            "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
+            "\"exitCode\":-2,\"elapsedMs\":0,"
+            "\"errorMessage\":\"falta el modulo %s en el FS (stdlib no embebida)\"}",
+            session, missing);
+        if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    } else {
+        emit_exited(session, (st == BPVM_OK) ? "OK" : "RUNTIME_ERROR", (int) st, dt);
+    }
     bpvm_destroy(vm);
 }
 
