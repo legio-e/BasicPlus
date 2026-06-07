@@ -115,7 +115,11 @@ static void dispatch(int first_char) {
         HAL_Delay(50);
         NVIC_SystemReset();
     } else {
-        stm32_wire_send_error(id, "UNSUPPORTED", "not implemented (H9.2.a)");
+        /* Incluye el type en el mensaje → si el connect falla en un mensaje no
+         * implementado, el error del IDE dice exactamente cuál (diagnóstico). */
+        char msg[96];
+        snprintf(msg, sizeof(msg), "type '%s' no implementado (H9.2.a)", type);
+        stm32_wire_send_error(id, "UNSUPPORTED", msg);
     }
 }
 
