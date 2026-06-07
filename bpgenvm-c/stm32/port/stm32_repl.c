@@ -75,6 +75,16 @@ static void handle_df(long id) {
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);
 }
 
+/* LOG es una feature de log de firmware (en Pico la sirve log.c). En STM32
+ * aún no hay log persistente → devolvemos texto vacío para no romper al IDE
+ * (que puede pedirlo al conectar). */
+static void handle_log_dump(long id) {
+    char buf[96];
+    int n = snprintf(buf, sizeof(buf),
+        "{\"type\":\"LOG_DUMP_REPLY\",\"id\":%ld,\"text\":\"\"}", id);
+    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+}
+
 static void dispatch(int first_char) {
     int len = stm32_wire_recv_line(first_char, s_line, sizeof(s_line));
     if (len == -2) return;   /* línea estancada (byte perdido): silencio; el IDE reintenta */
@@ -98,6 +108,8 @@ static void dispatch(int first_char) {
     else if (strcmp(type, "TIME")  == 0) reply_empty("TIME_REPLY", id);
     else if (strcmp(type, "LIST")  == 0) handle_list(id);
     else if (strcmp(type, "DF")    == 0) handle_df(id);
+    else if (strcmp(type, "LOG_DUMP")  == 0) handle_log_dump(id);
+    else if (strcmp(type, "LOG_CLEAR") == 0) reply_empty("LOG_CLEAR_REPLY", id);
     else if (strcmp(type, "RESET") == 0) {
         reply_empty("RESET_REPLY", id);
         HAL_Delay(50);
