@@ -1,0 +1,14 @@
+# === Proyecto STM32CubeIDE — Nucleo-U575ZI-Q (H9) ===
+# Se versiona lo que CUESTA (la integración): .ioc, .project/.cproject (linked
+# folders al core + exclude de platform_pthread.c), main.c, linkers, Core/.
+# Se ignora lo REGENERABLE/voluminoso:
+
+# Salida de build de CubeIDE (~58 MB, se regenera al compilar)
+Nucleo_u575b/Nucleo_u575b/Debug/
+Nucleo_u575b/Nucleo_u575b/Release/
+
+# HAL + CMSIS + BSP que CubeMX copia desde el .ioc (~9 MB de código de ST).
+# Para reconstruirlo en un checkout limpio: abrir Nucleo_u575b.ioc en CubeMX
+# (o CubeIDE) -> Generate Code. Toolchain de referencia: STM32CubeIDE 2.1.1,
+# arm-none-eabi-gcc 14.3.1, pack STM32Cube_FW_U5 (versión en el .ioc).
+Nucleo_u575b/Nucleo_u575b/Drivers/
