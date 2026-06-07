@@ -1700,11 +1700,14 @@ public final class SemanticAnalyzer {
             info.exprTypes.put(te, tt);
             return;
         }
-        // Si el tipo de retorno es tupla pero el valor no es una tupla literal.
+        // H8.2 — tupla de retorno NO-literal: `return t` (var de tipo tupla) o
+        // `return f()` (llamada que devuelve tupla). Permitido si el tipo del valor
+        // es una tupla asignable al retorno declarado (la tupla es first-class).
         if (currentFunction.returnType instanceof BpType.TupleType) {
-            err(r.line, r.column, "debe devolver una tupla literal '(...)' de "
-                    + ((BpType.TupleType) currentFunction.returnType).elements.size() + " elementos");
-            analyzeExpr(r.value, scope, null);
+            BpType t = analyzeExpr(r.value, scope, currentFunction.returnType);
+            if (!currentFunction.returnType.isAssignableFrom(t) && !(t instanceof ErrorType))
+                err(r.line, r.column, "return tipo '" + t.display() + "' incompatible con declarado '"
+                        + currentFunction.returnType.display() + "'");
             return;
         }
         BpType t = analyzeExpr(r.value, scope, currentFunction.returnType);

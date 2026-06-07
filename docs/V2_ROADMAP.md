@@ -46,7 +46,7 @@ B1 caracterizado + mitigado (1 worker por defecto).
 
 | Apartado | Qué | Estado |
 |---|---|---|
-| H8 | Ampliación de lenguaje (default params, tuplas first-class) | ◀ en curso |
+| H8 | Ampliación de lenguaje (default params ✅, tuplas first-class ✅) | ✅ (cajón abierto) |
 | H9 | 3ª familia: **STM32** (ref. Nucleo-U575ZI-Q) | pendiente |
 | H10 | Librería estándar: **ajuste + ampliación** | pendiente |
 | H11 | **TCP/IP**: cliente simple (empezar) | pendiente |
@@ -57,12 +57,14 @@ B1 caracterizado + mitigado (1 worker por defecto).
 ## 3. Apartados restantes en detalle
 
 ### H8 — Ampliación de lenguaje
-Incremental, en paralelo con la consolidación. **H8.1 parámetros por defecto:
-✅ HECHO (2026-06-07)** — sintaxis `:=`, sustitución en el llamante (cero coste de
-VM), `.bpi` v7 expone los defaults; funciones/métodos/ctores, same+cross-module,
-paridad dual-VM. Siguiente: **H8.2 tuplas first-class** (guardar en var / pasar
-como parámetro / lvalues no-simples; hoy solo destructuring de retorno). Detalle:
-`docs/H8_TASKS.md`. *(§8 callbacks y §9 eventos van a V3.)*
+Incremental, en paralelo con la consolidación. **H8.1 (parámetros por defecto) y
+H8.2 (tuplas first-class): ✅ HECHO (2026-06-07).** H8.1: sintaxis `:=`, sustitución
+en el llamante, `.bpi` v7 expone los defaults. H8.2: tupla como valor de primera
+clase (guardar en var, pasar como parámetro, `return` de tupla almacenada,
+colecciones) + destructuring a lvalues no-simples (`arr[i]`, `obj.x`). Ambas: cero
+coste de VM, funciones/métodos/ctores, same+cross-module, paridad dual-VM. H8 sigue
+como **cajón abierto** (pueden entrar más temas). Detalle: `docs/H8_TASKS.md`.
+*(§8 callbacks y §9 eventos van a V3.)*
 
 ### H9 — Tercera familia: STM32
 "Otras plataformas = **STM32**" (foco, no dispersión). **Referencia: Nucleo-U575ZI-Q**

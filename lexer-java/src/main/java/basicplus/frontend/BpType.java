@@ -293,6 +293,7 @@ public abstract class BpType {
         }
         @Override public boolean isAssignableFrom(BpType source) {
             if (source instanceof ErrorType) return true;
+            if (source instanceof AnyType) return true;   // H8.2: leer una tupla de una colección (any); estructural, sin check runtime (cf. L1)
             return sameAs(source);
         }
     }

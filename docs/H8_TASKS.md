@@ -11,7 +11,7 @@ paridad dual-VM (miVM Java ↔ bpgenvm-c C) byte-idéntica en todo lo que toque 
 
 ## Orden acordado (usuario, 2026-06-06)
 1. **H8.1 — §10 Parámetros por defecto** ✅ **HECHO (2026-06-07)**.
-2. **H8.2 — §2 Tuplas first-class** ◀ siguiente.
+2. **H8.2 — §2 Tuplas first-class** ✅ **HECHO (2026-06-07)**.
 3. (se irá ampliando…)
 
 ---
@@ -43,6 +43,18 @@ paridad dual-VM (miVM Java ↔ bpgenvm-c C) byte-idéntica en todo lo que toque 
   importada).
 
 ## H8.2 — Tuplas first-class
+> **✅ HECHO (2026-06-07).** La tupla es ahora **valor de primera clase**: guardar en
+> una var (`var t: (integer,string) := f()`), pasarla como parámetro, **devolver** una
+> tupla almacenada (`return t`), y leerla de **colecciones** (`any`→tupla). Además,
+> **destructuring a lvalues no-simples**: `{ arr[i], obj.x } := f()`. Implementación
+> mínima (el grueso ya existía de T1/T3): relajar `analyzeReturn` (return no-literal),
+> `TupleType.isAssignableFrom(any)`, y extender `storeToTupleTarget` (índice/campo/
+> property, reusando el cableado de `emitAssign`). **Cero opcodes nuevos / cero coste
+> de VM**; paridad dual-VM byte-idéntica. Las tuplas LITERALES `(a,b)` siguen solo en
+> `return` (decisión de parser: evita la ambigüedad con `( )`). Sample:
+> `samples/TupleFirstClass.bp`. Regresión OK (T1/T3 byte-idénticos, narrowtypes 7,
+> cascada 1, suite miVM 34/34).
+
 **Ref**: `docs/V2_BACKLOG.md §2`. Hoy hecho: T1 (destructuring de retorno same-module),
 T3 (cross-module), T4 (familia `Str.parse*`).
 - **Qué falta**: que la tupla sea **valor de primera clase** — guardarla en una var

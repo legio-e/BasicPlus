@@ -1,0 +1,76 @@
+// H8.2 — tuplas first-class: guardar en var, pasar como parámetro, devolver una
+// tupla almacenada, destructuring a lvalues no-simples (arr[i], obj.x) y colecciones.
+module TupleFC
+
+  class Point
+    public var x: integer
+    public var y: integer
+    public function Point()
+      this.x := 0
+      this.y := 0
+    end Point
+  end Point
+
+  function pair(): (integer, string)
+    return (42, "hi")
+  end pair
+
+  function coords(): (integer, integer)
+    return (10, 20)
+  end coords
+
+  // guardar una tupla en una var y destructurarla DESDE la var
+  function fStoreVar(): string
+    var t: (integer, string) := pair()
+    var n: integer := 0
+    var s: string := ""
+    { n, s } := t
+    return s + "/" + intToString(n)
+  end fStoreVar
+
+  // tupla como parámetro
+  function useTuple(t: (integer, string)): integer
+    var n: integer := 0
+    var s: string := ""
+    { n, s } := t
+    return n
+  end useTuple
+
+  // devolver una tupla ALMACENADA (no literal)
+  function passthrough(): (integer, string)
+    var t: (integer, string) := pair()
+    return t
+  end passthrough
+
+  function main()
+    print fStoreVar()                       // hi/42
+
+    var t: (integer, string) := pair()
+    print intToString(useTuple(t))          // 42  (var-tupla como argumento)
+
+    var n2: integer := 0
+    var s2: string := ""
+    { n2, s2 } := passthrough()             // destructurar una tupla devuelta
+    print s2                                 // hi
+
+    // destructuring a lvalues no-simples: índice de array
+    var arr: integer[] := newIntArray(2)
+    { arr[0], arr[1] } := coords()
+    print intToString(arr[0] + arr[1])      // 30
+
+    // ... y campos de objeto
+    var p: Point := Point()
+    { p.x, p.y } := coords()
+    print intToString(p.x + p.y)            // 30
+
+    // colecciones: meter una tupla y recuperarla (any -> tupla)
+    var lst: List := List()
+    lst.add(pair())
+    var t3: (integer, string) := lst.get(0)
+    var n3: integer := 0
+    var s3: string := ""
+    { n3, s3 } := t3
+    print s3 + intToString(n3)              // hi42
+  end main
+
+end TupleFC

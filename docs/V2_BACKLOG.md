@@ -501,8 +501,12 @@ pequeña (p.ej. `Stats.LinFit`) y migran a tupla sin romper a nadie.
   same-module). Sin notación científica ni chequeo de overflow (documentado).
   `samples/ParseTest.bp` (cross-module: `{ ok, n } := Str.parseLong(s)`), paridad
   dual-VM. **El caso que motivó las tuplas, cerrado.**
-- Pendientes menores: tuplas first-class (almacenar/pasar) — diferido; destino de
-  desempaquetado solo variables simples por ahora (lvalues field/index → futuro).
+- ✅ **Tuplas first-class — HECHO (H8.2, 2026-06-07)**: guardar en var, pasar como
+  parámetro, `return` de tupla almacenada, leer de colecciones (any→tupla); y
+  destructuring a lvalues no-simples (`arr[i]`, `obj.x`). Cero coste de VM (objeto
+  sintético + reescritura); paridad dual-VM. Las tuplas LITERALES siguen solo en
+  `return` (decisión de parser: evita la ambigüedad con `( )`). Sample:
+  `samples/TupleFirstClass.bp`.
 - **AOT (`function native`) NO soporta tuplas** (anotado, sin acción — decisión
   del usuario 2026-06-02). Las tuplas son una construcción del INTÉRPRETE (objeto
   sintético + NEW_OBJECT/SET_FIELD/GET_FIELD); ambas VMs las ejecutan en paridad.

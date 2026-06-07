@@ -4246,23 +4246,72 @@ public final class MivmEmitter {
         for (int i = 0; i < n; i++) {
             IExpr tg = s.targets.get(i);
             if (tg instanceof IdentifierExpr && "_".equals(((IdentifierExpr) tg).name)) continue;
+            BpType targetT = info.exprTypes.get(tg);
+            BpType vt = (targetT != null) ? targetT : tt.elements.get(i);
+            // Extrae el elemento (con ensanchado) a un temp; luego lo guarda en el lvalue.
+            String valLocal = "__de_" + (stringPoolCounter++);
+            declareLocal(valLocal);
             w.emitGetLocal(temp);
             w.emitGetField(cls, "_" + i);        // is8-aware → GET_FIELD_LONG si procede
-            BpType targetT = info.exprTypes.get(tg);
             if (targetT != null) emitWiden(tt.elements.get(i), targetT);
-            storeToTupleTarget(tg);
+            w.emitSetLocal(valLocal);
+            storeToTupleTarget(tg, valLocal, vt);
         }
     }
 
-    /** Almacena el valor de la pila en el lvalue destino de un desempaquetado. */
-    private void storeToTupleTarget(IExpr tg) throws IOException {
+    /** H8.2 — almacena el valor (alojado en el local `valLocal`) en el lvalue destino
+     *  de un desempaquetado: variable simple, índice de array (arr[i]), o campo /
+     *  property de objeto (obj.x). Reusa el mismo cableado que `emitAssign`. */
+    private void storeToTupleTarget(IExpr tg, String valLocal, BpType vt) throws IOException {
         if (tg instanceof IdentifierExpr) {
             Symbol sym = info.exprSymbols.get(tg);
             if (sym == null) { errors.add("destino de desempaquetado sin símbolo"); return; }
+            w.emitGetLocal(valLocal);
             storeToSymbol(sym, ((IdentifierExpr) tg).name);
-        } else {
-            errors.add("destino de desempaquetado no soportado todavía: " + tg.getClass().getSimpleName());
+            return;
         }
+        if (tg instanceof IndexExpr) {
+            IndexExpr ix = (IndexExpr) tg;
+            emitExpr(ix.target);
+            emitExpr(ix.index);
+            w.emitGetLocal(valLocal);
+            w.emit(astoreOpFor(ix.target));       // ancho del elemento (H1.1b)
+            return;
+        }
+        if (tg instanceof MemberAccessExpr) {
+            MemberAccessExpr ma = (MemberAccessExpr) tg;
+            Symbol mSym = info.exprSymbols.get(ma);
+            if (mSym instanceof PropertySymbol) {
+                PropertySymbol ps = (PropertySymbol) mSym;
+                if (ps.ownerClass == null) {                 // property de módulo
+                    w.emitGetLocal(valLocal);
+                    if (ps.isExternal) w.emitCallExt(buildExternalAccessorName(ps, true), ps.externalFromPath);
+                    else               w.emitCall(moduleSetterName(ps.name));
+                    declareLocal("__discard"); w.emitSetLocal("__discard");
+                } else {                                     // property de clase (instancia)
+                    emitExpr(ma.target);
+                    w.emitGetLocal(valLocal);
+                    emitInvokeVirtualSmart(ps.ownerClass, "set" + capitalize(ps.name), is8Byte(vt) ? 2 : 1);
+                    declareLocal("__discard"); w.emitSetLocal("__discard");
+                }
+                return;
+            }
+            if (mSym instanceof VarSymbol) {
+                VarSymbol v = (VarSymbol) mSym;
+                if (v.isStatic) {
+                    w.emitGetLocal(valLocal);
+                    w.emitSetGlobal(v.ownerClass.name + "." + v.name);
+                } else {
+                    emitExpr(ma.target);
+                    w.emitGetLocal(valLocal);
+                    emitSetFieldAuto(v.ownerClass.name, v.name);
+                }
+                return;
+            }
+            errors.add("destino de desempaquetado (member) no soportado: " + ma.member);
+            return;
+        }
+        errors.add("destino de desempaquetado no soportado: " + tg.getClass().getSimpleName());
     }
 
     /** Conversión de ensanchado entre primitivos (mismo criterio que coerceToTarget),
