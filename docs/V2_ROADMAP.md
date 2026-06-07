@@ -112,6 +112,13 @@ single-core es inmune).
 - **Doble-clic** en un fichero del micro → ver/editar (#231).
 - **Pulido pendiente** (de `V2_BACKLOG`, sin prisa): find/replace en el editor y
   reorganización de `FrmMain` (IDE-1).
+- **Configurar la plataforma de destino (el micro)**: necesaria para compilar las
+  `function native` — el AOT genera código para una ISA concreta (Thumb-2 en
+  RP2350/STM32, Xtensa en ESP32, host en PC). El IDE debe permitir elegir el target
+  y pasárselo al pipeline AOT. (Más relevante con H9/STM32.)
+- **Seleccionar la versión de la librería estándar**: hoy hay una (`bpstdlib/`); en
+  el futuro habrá v1, v2, … El IDE debe permitir elegir contra qué versión se
+  compila/enlaza (vía `stdlibDir` / `.bpi`). (Liga con H10.)
 
 ### H13 — Documentación y cierre (la puerta final)
 Manual de usuario al día con V2 · doc técnica de internals (base hecha:
