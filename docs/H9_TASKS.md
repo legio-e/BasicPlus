@@ -98,7 +98,7 @@ linka cada build**, no por compilación condicional.
 > Integración CubeIDE: *Source Location ▸ Link Folder* para `src` + `stm32/port`.
 > FreeRTOS + wire-v1 (`Run on STM32`) → H9.2.
 
-### H9.2 — Wire v1 + REPL sobre USART → **"Run on STM32"** ✅ HECHO (2026-06-07)  *(= H4.3)*
+### H9.2 — Wire v1 + REPL sobre USART → **"Run on STM32"** ⚠️ PARCIAL (2026-06-07)  *(= H4.3)*
 Subir `.mod`, ejecutar, stream de salida. El IDE distingue por
 `serverName="bpvm-stm32"` en el `HELLO_REPLY`.
 
@@ -111,10 +111,23 @@ Subir `.mod`, ejecutar, stream de salida. El IDE distingue por
 > **Cero cambios en el IDE** (su `SerialBackend` ya es genérico). Lecciones del
 > camino: `HAL_UART_Receive` era demasiado lenta (→ lectura directa de registro);
 > el bulk a 4 MHz necesitaba el FIFO del USART.
-> **Pendiente (H9.2.c)**: resolución de `import` en RUN (cargar deps del FS) —
-> hoy corre programas de **solo-builtins**; los que importan stdlib llegan
-> después. **Reloj**: 4 MHz basta para el wire (con FIFO); **160 MHz** queda
-> para la *velocidad* de la VM, no es urgente.
+> **Estado al cierre (jornada 1)**: **H9.2.a (conectar) sólido.** El upload+RUN
+> FUNCIONA pero es **intermitente a 4 MHz**: la transferencia *bulk* del PUT hace
+> overrun en el hueco línea-JSON→bytes (el FIFO de 8B es justito) → a veces
+> "fallo en future"/FATAL (🔴). **H9.2.c (imports)** se implementó pero se
+> **revirtió** a RUN de un módulo por estabilidad — código guardado en `f42611a`.
+> LEDs de diagnóstico: 🟢 vivo, 🔵 ejecutando, 🔴 error (commit `6943992`).
+>
+> **PRÓXIMA SESIÓN — en este orden:**
+> 1. **Reloj a 160 MHz** (CubeMX ▸ Clock Configuration) → el hueco del bulk se
+>    reduce 40× → upload+RUN **sólido**. Es la causa raíz de la intermitencia de
+>    hoy (overrun de HELLO y del bulk). **Lo primero.**
+> 2. **Embeber la stdlib core** en el firmware (IO/Math/Gpio… pre-instalados en
+>    `/lib` al boot, como `EMBEDDED_CORE_MODS` de la Pico) → el IDE la da por
+>    presente; sin esto, los programas con stdlib fallan ("falta IO.mod").
+> 3. **Re-aplicar H9.2.c** (imports, desde `f42611a`) + verificar con `App`/`Lib`.
+> 4. Luego **H9.4 (GPIO)**.
+> Si tras 160 MHz el bulk siguiera fallando: RX por interrupción + ring buffer.
 
 ### H9.3 — FS persistente en flash interna  *(= H4.4)*
 `fs.c` sobre HAL FLASH; región al final de los 2 MB (~132 KB o menos). PUT desde
