@@ -1,5 +1,12 @@
 # BasicPlus — guía general del proyecto
 
+> **V1 CERRADA (2026-06-07).** Los 4 hitos (H1–H4: comunicaciones, dual-core,
+> AOT, ESP32-S3) están completos; ESP32-S3 end-to-end fue la condición de cierre
+> (tarea #147). Este documento queda como **brújula histórica de v1**; el ciclo
+> en curso es **V2** (su organización vive en su propia brújula). Aviso de
+> alcance: la familia "Linux embedded" listada en §6 ("más familias MCU") queda
+> **fuera** del proyecto — ver el *sobre de plataformas* en `docs/PHILOSOPHY.md`.
+
 > **Documento de orientación.** Captura dónde estamos, dónde vamos y
 > qué hitos quedan antes de cerrar la **versión 1**. No es spec de
 > implementación; es la brújula. Cuando se añadan ideas nuevas, van
