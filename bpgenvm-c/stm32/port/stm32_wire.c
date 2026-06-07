@@ -78,6 +78,7 @@ void stm32_wire_send_error(long id, const char* code, const char* message) {
 }
 
 void stm32_wire_send_fatal(const char* code, const char* message) {
+    BSP_LED_On(LED_RED);   /* señal de error: rojo encendido hasta el reset */
     char buf[256];
     int n = snprintf(buf, sizeof(buf),
         "{\"type\":\"FATAL\",\"code\":\"%s\",\"message\":\"%s\"}", code, message);
