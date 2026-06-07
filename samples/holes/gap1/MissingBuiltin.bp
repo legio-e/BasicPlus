@@ -1,0 +1,18 @@
+// MissingBuiltin.bp — GAP-1: un builtin fuera del subconjunto de la VM-C
+// (aquí sqrt, id 19) ya NO crashea con BAD_OPCODE: lanza un RuntimeError BP
+// ATRAPABLE. En la VM-Java sqrt existe (imprime el valor); en la VM-C se
+// atrapa el error y el programa continúa con normalidad.
+//   VM-C  → "atrapado: builtin 19 no soportado en esta VM (subconjunto C)"
+//           "sigue vivo"
+//   Java  → "1.4142135"   (sqrt sí existe)
+//           "sigue vivo"
+module MissingBuiltin
+  function main()
+    try
+      print floatToString(sqrt(2.0))
+    catch e: RuntimeError
+      print "atrapado:", e.msg
+    endtry
+    print "sigue vivo"
+  end main
+end MissingBuiltin

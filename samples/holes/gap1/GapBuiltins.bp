@@ -1,0 +1,14 @@
+// GapBuiltins.bp — GAP-1: numéricas enteras byte-idénticas en ambas VMs.
+// abs/min/max (ids 16/17/18) portadas a la VM-C. Aritmética int32 pura →
+// paridad garantizada por construcción (sin riesgo de ULP como las float).
+// Salida esperada (IDÉNTICA en VM-Java y VM-C): 7 / 7 / 3 / 9 / -5 / -2
+module GapBuiltins
+  function main()
+    print intToString(abs(-7))
+    print intToString(abs(7))
+    print intToString(min(3, 9))
+    print intToString(max(3, 9))
+    print intToString(min(-5, -2))
+    print intToString(max(-5, -2))
+  end main
+end GapBuiltins

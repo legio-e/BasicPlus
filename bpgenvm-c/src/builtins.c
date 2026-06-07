@@ -35,6 +35,10 @@ enum {
     BUILTIN_BOOL_TO_STRING  = 5,
     BUILTIN_SUBSTRING       = 9,   /* #173: substring(s, start, end) */
     BUILTIN_CHAR_AT         = 14,
+    /* Numéricas enteras (V2/GAP-1) — byte-exactas, sin riesgo de paridad float. */
+    BUILTIN_ABS             = 16,
+    BUILTIN_MIN             = 17,
+    BUILTIN_MAX             = 18,
     BUILTIN_NOW             = 34,
     BUILTIN_SLEEP           = 35,
     BUILTIN_GC              = 43,
@@ -164,6 +168,31 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t nbytes = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
         uint32_t ncp = (ref == 0) ? 0 : utf8_cp_count(vm->memory + ref + 4, nbytes);
         push_i32(vm, tc, (int32_t) ncp);   /* H2: longitud en codepoints */
+        return BPVM_OK;
+    }
+
+    /* GAP-1 — Numéricas enteras (ids 16..18). Byte-exactas con la VM-Java:
+     * sólo aritmética int32, sin libm, así que la paridad es por construcción
+     * (a diferencia de sqrt/sin/cos, donde Java Math vs C libm podrían diferir
+     * en el último ULP y romper el stdout byte-idéntico). */
+    case BUILTIN_ABS: {
+        int32_t x = pop_i32(vm, tc);
+        /* Math.abs(INT_MIN) = INT_MIN (overflow). Vía unsigned para evitar el
+         * UB de negar INT_MIN y casar exactamente con la VM-Java. */
+        int32_t r = (x < 0) ? (int32_t) (0u - (uint32_t) x) : x;
+        push_i32(vm, tc, r);
+        return BPVM_OK;
+    }
+    case BUILTIN_MIN: {
+        int32_t b = pop_i32(vm, tc);   /* pop b primero, luego a (orden VM-Java) */
+        int32_t a = pop_i32(vm, tc);
+        push_i32(vm, tc, (a < b) ? a : b);
+        return BPVM_OK;
+    }
+    case BUILTIN_MAX: {
+        int32_t b = pop_i32(vm, tc);
+        int32_t a = pop_i32(vm, tc);
+        push_i32(vm, tc, (a > b) ? a : b);
         return BPVM_OK;
     }
 
@@ -911,8 +940,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
 
-    default:
-        fprintf(stderr, "[bpvm-c] builtin id=%d no implementado (F2 subset)\n", id);
-        return BPVM_ERR_BAD_OPCODE;
+    default: {
+        /* GAP-1: builtin fuera del subconjunto de esta VM-C. En vez de abortar
+         * la VM con BAD_OPCODE (crash duro, no diagnosticable desde BP), lanzamos
+         * un RuntimeError BP *atrapable*: el programa puede capturarlo con
+         * try/catch o terminar con un mensaje claro. Fallo limpio. */
+        char msg[96];
+        snprintf(msg, sizeof(msg),
+                 "builtin %d no soportado en esta VM (subconjunto C)", id);
+        return builtin_throw(vm, tc, msg);
+    }
     }
 }

@@ -199,8 +199,53 @@ Convención general:
 > **Nota de paridad C/Java:** la VM C (host/MCU) implementa solo un *subset* de
 > builtins. Los intrínsecos de filesystem de IO (`pathBasename`… ids 64..76) y
 > algunos de Math NO están en ese subset → solo corren en la VM Java. Si se
-> portan a la C, los de string deben respetar la semántica por codepoint. Gap
-> pre-existente, no introducido por H2.
+> portan a la C, los de string deben respetar la semántica por codepoint. Ver
+> **§ Paridad VM-C (GAP-1)** para la clasificación completa y el fallo limpio.
+
+---
+
+## Paridad VM-C — subconjunto de builtins (GAP-1)
+
+> *2026-06-07.* La VM-C (`bpgenvm-c`, host + MCU) implementa **un subconjunto**
+> de los builtins de la VM-Java. No es un bug: es alcance (el device no necesita
+> el filesystem del PC ni los diagnósticos del heap de Java). GAP-1 **acota y
+> endurece** ese subconjunto en tres frentes:
+
+**1. Fallo limpio (lo importante).** Un builtin fuera del subconjunto ya **no**
+aborta la VM con `BAD_OPCODE` (crash duro, no diagnosticable). El `default` del
+dispatcher (`builtins.c`) lanza ahora un **`RuntimeError` BP atrapable**:
+
+    RuntimeError: builtin <id> no soportado en esta VM (subconjunto C)
+
+— capturable con `try/catch e: RuntimeError`; si no se atrapa, termina el thread
+con un mensaje claro (status `RuntimeError BP no atrapado`, exit 10), nunca un
+crash silencioso.
+
+**2. Portados byte-exactos.** Las numéricas **enteras** `abs`/`min`/`max`
+(ids 16/17/18) se portan a la VM-C. Aritmética `int32` pura → **paridad
+byte-idéntica por construcción** (incl. `abs(INT_MIN)=INT_MIN`, vía `unsigned`).
+
+**3. Caveat de paridad float (por qué NO se portan en masa).** Los builtins de
+**coma flotante** (`sqrt`, `sin`, `cos`, `pow`, `log`…) NO se portan a la ligera:
+`java.lang.Math` y la `libm` de C pueden diferir en el **último ULP** → el
+`floatToString` resultante imprimiría dígitos distintos → **rompería el stdout
+byte-idéntico**, invariante central del proyecto dual-VM. Portarlos exige
+verificar la igualdad bit-a-bit del resultado (o compartir implementación):
+trabajo de **H10**.
+
+### Clasificación
+
+| Clase | Builtins (ejemplos) | En VM-C |
+|---|---|---|
+| **Núcleo portado** | `strlen`/`substring`/`charAt`/`charCodeAt` (UTF-8), `intToString`/`parseInt`/`boolToString`, `abs`/`min`/`max`, `now`/`sleep`/`gc`, `move` + helpers de array, threading (`__threadStart`/`Join`/`yield`) + Mutex, `toBytes`/`fromBytes` | ✅ sí |
+| **HW (device)** | Gpio/I2c/Spi/Uart/Pwm/Adc/Rtc/Wdt/Pulse/Pico/NeoPixel (ids 78..125) | ✅ sí (no-op donde no aplica) |
+| **Portables diferidos** | float/math (`sqrt`…`tan`, `pow`, `log*`, `exp`, `pi`/`e`, `floor`/`ceil`/`round`, `random*`, `parseFloat`/`floatToString`); string avanzados (`upper`/`lower`/`trim`/`indexOf`/`startsWith`/`endsWith`/`contains`/`replace`/`split`); Math `__*` (`asin`…`gamma`, `sign`, `factorial`) | ❌ → fallo limpio (H10) |
+| **Host-only (PC)** | IO filesystem (`readFile`…`listDir`, `__path*`, `__mkdir`…) ids 37..42, 64..76; `input`; `__prompt` (77) | ❌ por diseño (el MCU no tiene FS de PC ni IDE) |
+| **Java-only (diagnóstico)** | `heapFrag`/`heapMap` (121/122) | ❌ intencional (herramientas de la VM-Java) |
+
+> Diferido ≠ imposible. Portar un builtin **float** exige respetar el caveat de
+> paridad (arriba). Portar uno de **string** exige semántica **por codepoint**
+> (los strings son `byte[]` UTF-8 desde H2).
 
 ---
 
