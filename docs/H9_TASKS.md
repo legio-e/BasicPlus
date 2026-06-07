@@ -98,9 +98,23 @@ linka cada build**, no por compilación condicional.
 > Integración CubeIDE: *Source Location ▸ Link Folder* para `src` + `stm32/port`.
 > FreeRTOS + wire-v1 (`Run on STM32`) → H9.2.
 
-### H9.2 — Wire v1 + REPL sobre USART → **"Run on STM32"** en el IDE  *(= H4.3)*
+### H9.2 — Wire v1 + REPL sobre USART → **"Run on STM32"** ✅ HECHO (2026-06-07)  *(= H4.3)*
 Subir `.mod`, ejecutar, stream de salida. El IDE distingue por
 `serverName="bpvm-stm32"` en el `HELLO_REPLY`.
+
+> **✅ Resultado**: el **dev-loop completo** funciona — compilar BP en el IDE →
+> PUT del `.mod` (bulk) → RUN → la salida del programa llega al IDE
+> (`hola pico` / `exit 0`). Bare-metal single-thread (super-bucle REPL), wire-v1
+> por el **VCP del ST-LINK**. En `bpgenvm-c/stm32/port/`: `stm32_repl.c`
+> (handlers), `stm32_wire.c` (framing + RX rápida por registro + **FIFO 8B**
+> para el bulk), `stm32_fs.c` (FS en RAM), `json_min.c` (copia portable).
+> **Cero cambios en el IDE** (su `SerialBackend` ya es genérico). Lecciones del
+> camino: `HAL_UART_Receive` era demasiado lenta (→ lectura directa de registro);
+> el bulk a 4 MHz necesitaba el FIFO del USART.
+> **Pendiente (H9.2.c)**: resolución de `import` en RUN (cargar deps del FS) —
+> hoy corre programas de **solo-builtins**; los que importan stdlib llegan
+> después. **Reloj**: 4 MHz basta para el wire (con FIFO); **160 MHz** queda
+> para la *velocidad* de la VM, no es urgente.
 
 ### H9.3 — FS persistente en flash interna  *(= H4.4)*
 `fs.c` sobre HAL FLASH; región al final de los 2 MB (~132 KB o menos). PUT desde
