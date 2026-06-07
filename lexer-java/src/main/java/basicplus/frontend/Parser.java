@@ -22,6 +22,12 @@ public final class Parser {
     private final List<ParserError> errors = new ArrayList<>();
     private int pos = 0;
 
+    // §7a — recuperación de errores (panic-mode): tras señalar un error, se
+    // suprimen los errores DERIVADOS hasta que el parser se recupera (inicio de
+    // la siguiente sentencia/declaración, o un synchronize()). Mata las cascadas.
+    private boolean panicMode = false;
+    private static final int MAX_ERRORS = 50;   // cap de diagnósticos de sintaxis
+
     /**
      * True mientras estamos parseando un `module interface X ... end X`.
      * En este modo, las funciones se declaran sólo con su firma — sin cuerpo
@@ -121,6 +127,7 @@ public final class Parser {
         while (!isAtEnd() && !check(TokenType.END)) {
             skipNewlines();
             if (isAtEnd() || check(TokenType.END)) break;
+            panicMode = false;                  // §7a: cada declaración parte "limpia"
             ITopLevelDecl def = parseDefStmt();
             if (def != null) defs.add(def);
             skipNewlines();
@@ -511,6 +518,7 @@ public final class Parser {
         while (!isAtEnd() && !check(TokenType.END)) {
             skipNewlines();
             if (isAtEnd() || check(TokenType.END)) break;
+            panicMode = false;                  // §7a: cada miembro de clase parte "limpio"
             ITopLevelDecl m = parseDefStmt();
             if (m != null) members.add(m);
             skipNewlines();
@@ -594,6 +602,7 @@ public final class Parser {
     }
 
     private IStmt parseStmt() {
+        panicMode = false;                      // §7a: cada sentencia parte "limpia"
         TokenType t = current().type;
         switch (t) {
             case LBRACE:   return parseDestructAssignStmt();   // tuplas: { a, b } := f()
@@ -1294,6 +1303,13 @@ public final class Parser {
         if (match(TokenType.SEMICOLON)) return;
         if (isAtEnd()) return;
         error(msg);
+        // §7a: hay basura tras la sentencia (típicamente el resto de una
+        // expresión rota). La descartamos hasta el fin de línea para NO
+        // re-parsearla como otra sentencia y emitir un error derivado. Paramos
+        // también en terminadores de bloque (end/endif/...) para no comernos el
+        // cierre de la función o bloque que viene a continuación.
+        while (!isAtEnd() && !check(TokenType.NEWLINE) && !isBlockTerminator(current().type)) advance();
+        skipNewlines();
     }
 
     private void skipNewlines() {
@@ -1301,8 +1317,15 @@ public final class Parser {
     }
 
     private void error(String message) {
+        if (panicMode) return;                 // §7a: error derivado del anterior → suprimido
+        panicMode = true;
         Token t = current();
-        errors.add(new ParserError(message, t.line, t.column));
+        if (errors.size() < MAX_ERRORS) {
+            errors.add(new ParserError(message, t.line, t.column));
+        } else if (errors.size() == MAX_ERRORS) {
+            errors.add(new ParserError("… demasiados errores de sintaxis; se omiten los restantes", t.line, t.column));
+        }
+        // size > MAX_ERRORS: se suprime en silencio.
     }
 
     /**
@@ -1355,6 +1378,7 @@ public final class Parser {
      * sentencia siguiente (p. ej. `return`, `if`).
      */
     private void synchronize() {
+        panicMode = false;                      // §7a: punto de recuperación → vuelve a reportar
         while (!isAtEnd() && !EXPR_SYNC_TOKENS.contains(current().type)) {
             advance();
         }
@@ -1381,6 +1405,7 @@ public final class Parser {
      * balance ad-hoc en modo pánico.
      */
     private void synchronizeToFunctionEnd() {
+        panicMode = false;                      // §7a: punto de recuperación → vuelve a reportar
         while (!isAtEnd() && !check(TokenType.END)) {
             advance();
         }

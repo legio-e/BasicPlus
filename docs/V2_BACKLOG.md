@@ -690,7 +690,13 @@ Anotar como escalón posterior, solo si hace falta.
 > silencio si un operando ya es `<error>` (no re-reporta "incompatible" espurio);
 > (c-dedup) "identificador no resuelto" y "tipo no encontrado" se reportan 1 vez
 > por nombre. Regresión OK (narrowtypes_errors sigue en 7; samples válidos en 0).
-> **Falta (a-parser)**: reforzar `synchronize()` en más fronteras + cap "y N más".
+> **✅ a-parser HECHO (§7a, 2026-06-07)**: **panic-mode** — tras un `error()` se
+> suprimen los diagnósticos DERIVADOS hasta recuperar (reset al inicio de cada
+> sentencia/declaración y en `synchronize()`); `consumeStmtTerminator` descarta la
+> basura tras una sentencia rota hasta fin de línea (parando en terminadores de
+> bloque, para no comerse el `end`); cap de 50. Probe `samples/holes/parser_cascade.bp`:
+> el doble reporte de `endif` y el residuo de expresiones rotas desaparecen; errores
+> en sentencias/funciones distintas se siguen reportando. **§7 completo.**
 
 **Qué**: que un error no genere una cascada de errores espurios — el
 problema de usabilidad #1 del compilador hoy.

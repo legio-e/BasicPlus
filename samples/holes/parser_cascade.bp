@@ -1,0 +1,36 @@
+// §7a — regresión anti-cascada del parser. Cada función provoca UNA situación;
+// con panic-mode cada una debe dar el MÍNIMO de diagnósticos (no cascada), y
+// errores en sentencias/funciones DISTINTAS deben seguir reportándose.
+module PCascade
+
+  // (A) falta ')' en una llamada  -> 1 error
+  function eParen()
+    var x: integer := foo(1, 2
+    print x
+  end eParen
+
+  // (B) falta 'endif'  -> 1 error (antes 2: endif + terminador derivado)
+  function eEndif()
+    if x > 0 then
+      print "hi"
+    print "bye"
+  end eEndif
+
+  // (C) expresión rota con varios tokens basura  -> 1 error (no N)
+  function eExpr()
+    var y: integer := 1 + * 2 + (3
+    print y
+  end eExpr
+
+  // (D) DOS sentencias rotas distintas  -> 2 errores (no se sobre-suprime)
+  function eTwo()
+    var a: integer := foo(1
+    var b: integer := bar(2
+    print a
+  end eTwo
+
+  function main()
+    print "ok"
+  end main
+
+end PCascade

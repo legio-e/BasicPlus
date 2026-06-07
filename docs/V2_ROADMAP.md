@@ -97,7 +97,7 @@ Pico 2 W CYW43+lwIP; tarea #145). **V3 lo retoma y amplía** (servidor, más API
 TLS…).
 
 ### Consolidación (tapar agujeros) — transversal
-Anti-cascada del parser (§7a, la mitad que falta de #232) · GAP-1 (subset de
+Anti-cascada del parser (§7a) ✅ · GAP-1 (subset de
 builtins de la VM-C) · N6 (`.bpi` tolerante para distribuciones sin `.bp`) ·
 L3/L5/L6 (limitaciones menores: decidir in/out) · flecos H7 (#225 mapa de memoria
 configurable por PSRAM, #229 FS grande del Metro) · bug temperatura ~412 °C ·

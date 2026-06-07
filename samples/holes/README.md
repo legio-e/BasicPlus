@@ -22,6 +22,23 @@ Arreglo (en `SemanticAnalyzer.java`): (a) `analyzeBinary` propaga `ErrorType`
 en silencio si un operando ya es `<error>` (poisoning); (b) dedup por nombre
 de "identificador no resuelto" y "tipo no encontrado".
 
+## Cascada del parser — ✅ TAPADO (§7a)
+La otra mitad de la cascada (#232 hizo la semántica). Un error de sintaxis no debe
+generar derivados; el parser recupera y sigue.
+
+| Repro (`parser_cascade.bp`) | Qué prueba | Errores |
+|---|---|---|
+| (A) `foo(1, 2` | falta `)` | 1 |
+| (B) falta `endif` | antes 2 (endif + terminador) → **1** |
+| (C) `1 + * 2 + (3` | expresión rota, sin residuo re-parseado → **1** |
+| (D) dos `var := foo(1` | sentencias distintas → **2** (no se sobre-suprime) |
+
+Arreglo (en `Parser.java`): **panic-mode** — tras `error()` se suprimen los
+diagnósticos DERIVADOS (`panicMode`), reseteando al inicio de cada
+sentencia/declaración y en `synchronize()`; `consumeStmtTerminator` descarta la
+basura tras una sentencia rota hasta fin de línea (parando en terminadores de
+bloque, para no comerse el `end`); cap de 50 errores.
+
 ## BUG-2 — excepciones cross-module — ✅ TAPADO (#233)
 - `HoleLibA.bp`: define `class MyError` y la lanza (`throw MyError(...)`).
 - `HoleAppB.bp`: `import HoleLibA` + `catch e: HoleLibA.MyError` → **atrapa OK**.
