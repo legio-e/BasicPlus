@@ -5,9 +5,10 @@
  * main.c). RX por polling directo del registro (sin ISR ni NVIC → cero
  * cambios en el .ioc); TX por HAL_UART_Transmit.
  *
- * Nota de robustez: usamos HAL_UART_Receive con timeout 0 (lectura NO
- * bloqueante de 1 byte) y limpiamos ORE en caso de overrun, para no atascar
- * la recepción. Portable entre versiones de HAL (no toca flags por nombre).
+ * Nota de robustez: RX por lectura DIRECTA del registro (flag RXNE + RDR),
+ * NO con HAL_UART_Receive() — su overhead (lock + máquina de estados + tick
+ * por byte) a 4 MHz no seguía 115200 baud → overrun, se perdía el '\n' y el
+ * REPL se colgaba en recv_line. Limpiamos ORE por si un burst nos adelanta.
  */
 #include "stm32_wire.h"
 
@@ -21,15 +22,14 @@ static UART_HandleTypeDef* wire_uart(void) { return &hcom_uart[COM1]; }
 
 int stm32_wire_getchar(void) {
     UART_HandleTypeDef* h = wire_uart();
-    uint8_t c;
-    HAL_StatusTypeDef st = HAL_UART_Receive(h, &c, 1, 0);   /* timeout 0 = no bloquea */
-    if (st == HAL_OK) return (int) c;
-    if (st == HAL_ERROR) {
-        /* overrun u otro error de RX: limpiar para no atascar el flujo. */
+    /* Overrun: límpialo para no bloquear la RX si un burst nos adelantó. */
+    if (__HAL_UART_GET_FLAG(h, UART_FLAG_ORE)) {
         __HAL_UART_CLEAR_OREFLAG(h);
-        h->ErrorCode = HAL_UART_ERROR_NONE;
     }
-    return -1;   /* HAL_TIMEOUT (sin byte) o error ya limpiado */
+    if (__HAL_UART_GET_FLAG(h, UART_FLAG_RXNE)) {
+        return (int) (uint8_t) (h->Instance->RDR & 0xFFU);
+    }
+    return -1;
 }
 
 void stm32_wire_write(const char* buf, size_t len) {
@@ -43,9 +43,16 @@ int stm32_wire_recv_line(int first_char, char* buf, size_t max) {
         if (n < max) buf[n++] = (char) first_char;
         else return -1;
     }
+    uint32_t last = HAL_GetTick();
     for (;;) {
         int c = stm32_wire_getchar();
-        if (c < 0) continue;            /* poll hasta que llegue */
+        if (c < 0) {
+            /* Anti-cuelgue: si la línea se estanca (byte perdido), abortar en
+             * vez de girar para siempre — el REPL sigue vivo, el IDE reintenta. */
+            if (HAL_GetTick() - last >= 300U) return -2;
+            continue;
+        }
+        last = HAL_GetTick();
         if (c == '\n') return (int) n;  /* fin de línea */
         if (c == '\r') continue;        /* tolerar CRLF */
         if (n >= max) return -1;        /* overflow */

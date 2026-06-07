@@ -77,7 +77,8 @@ static void handle_df(long id) {
 
 static void dispatch(int first_char) {
     int len = stm32_wire_recv_line(first_char, s_line, sizeof(s_line));
-    if (len < 0) { stm32_wire_send_fatal("PROTOCOL_ERROR", "line too long"); return; }
+    if (len == -2) return;   /* línea estancada (byte perdido): silencio; el IDE reintenta */
+    if (len < 0)  { stm32_wire_send_fatal("PROTOCOL_ERROR", "line too long"); return; }
 
     json_obj_t obj;
     if (json_parse(s_line, (size_t) len, &obj) != 0) {

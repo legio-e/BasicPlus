@@ -27,7 +27,8 @@ void stm32_wire_write(const char* buf, size_t len);
 
 /* Lee una línea JSON hasta '\n' (sin eco). `first_char` = char ya
  * consumido por el dispatcher (p.ej. '{'), o -1. Devuelve la longitud
- * (sin '\n', sin null), o -1 si excede `max`. Tolera '\r' (CRLF). */
+ * (sin '\n', sin null); -1 si excede `max`; -2 si la línea se estanca
+ * (timeout ~300ms sin bytes → byte perdido). Tolera '\r' (CRLF). */
 int  stm32_wire_recv_line(int first_char, char* buf, size_t max);
 
 /* Escribe `data` + '\n' (un mensaje JSON). */
