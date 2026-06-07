@@ -10,15 +10,27 @@ Método de siempre: **inventario → decidir alcance → tareas, una a una**, co
 paridad dual-VM (miVM Java ↔ bpgenvm-c C) byte-idéntica en todo lo que toque la VM.
 
 ## Orden acordado (usuario, 2026-06-06)
-1. **H8.1 — §10 Parámetros por defecto** ◀ primero.
-2. **H8.2 — §2 Tuplas first-class**.
+1. **H8.1 — §10 Parámetros por defecto** ✅ **HECHO (2026-06-07)**.
+2. **H8.2 — §2 Tuplas first-class** ◀ siguiente.
 3. (se irá ampliando…)
 
 ---
 
 ## H8.1 — Parámetros con valor por defecto
+> **✅ HECHO (2026-06-07).** Sintaxis **`:=`** (no `=`: BP no tiene `=` simple, solo
+> `==` y `:=`; además `:=` es consistente con `var y: integer := 10`). Implementado
+> como **reescritura de AST en el llamante** (`SemanticAnalyzer.checkArgs` anexa el
+> literal default a los argumentos omitidos) → **CERO cambios en emisor y VM**;
+> paridad dual-VM byte-idéntica por construcción. Cubre **funciones, métodos y
+> constructores**, same-module y **cross-module** (`.bpi` **v7** expone los defaults).
+> Validación: literal constante + asignable al tipo + regla "los defaults van al
+> final" + guard de tipos estrechos. Samples: `samples/DefaultParams.bp`,
+> `DefApp.bp`/`DefLib.bp` (cross-module), `DefaultParamsClass.bp` (método+ctor),
+> `DefaultParamsBad.bp` (negativos). Regresión OK (narrowtypes 7, cascada 1, suite
+> miVM 34/34).
+
 **Ref**: `docs/V2_BACKLOG.md §10`. Diseño ya cerrado.
-- **Qué**: `function f(x: integer, y: integer = 10)` y poder omitir `y` en la llamada.
+- **Qué**: `function f(x: integer, y: integer := 10)` y poder omitir `y` en la llamada.
 - **Alcance**: **solo defaults CONSTANTES** (literales/const) — "con constantes es
   suficiente"; no expresiones arbitrarias (evita decidir contexto de evaluación).
 - **Mecanismo**: sustitución **en el LLAMANTE** (modelo C++) → **CERO coste de VM**

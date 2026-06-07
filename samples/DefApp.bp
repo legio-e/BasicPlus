@@ -1,0 +1,15 @@
+// H8.1 — usa DefLib OMITIENDO argumentos con valor por defecto (cross-module).
+// El compilador rellena los defaults leidos del .bpi de DefLib.
+module DefApp
+
+  import DefLib
+
+  function Main()
+    print intToString(DefLib.add(5))         // 15  (b por defecto = 10, cross-module)
+    print intToString(DefLib.add(5, 100))    // 105
+    print DefLib.label("hi")                  // [hi]  (prefix y suffix por defecto)
+    print DefLib.label("hi", "<")             // <hi]  (suffix por defecto)
+    print DefLib.label("hi", "<", ">")        // <hi>
+  end Main
+
+end DefApp

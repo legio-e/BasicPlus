@@ -271,6 +271,8 @@ public abstract class Symbol {
     // ============================================================
     public static final class ParamSymbol extends Symbol {
         public BpType type;
+        /** H8.1 — valor por defecto (expresión literal constante normalizada), o null. */
+        public Ast.IExpr defaultExpr;
         public ParamSymbol(String name, int line, int column) { super(name, line, column); }
     }
 

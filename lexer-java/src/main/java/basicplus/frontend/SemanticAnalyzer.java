@@ -516,6 +516,132 @@ public final class SemanticAnalyzer {
         return null;
     }
 
+    // ============================================================
+    // H8.1 — Parámetros por defecto: validación + helpers de literal
+    // ============================================================
+
+    /** Valida y normaliza los valores por defecto de los parámetros de una función:
+     *  deben ser literales constantes asignables al tipo del parámetro, y todos los
+     *  que tengan default deben ir AL FINAL. Cada default válido se normaliza a una
+     *  expresión literal reconstruida desde su valor (misma forma local/cross-module). */
+    private void resolveParamDefaults(FunctionSymbol fs, FuncDef f) {
+        boolean seenDefault = false;
+        for (int i = 0; i < fs.params.size(); i++) {
+            ParamSymbol ps = fs.params.get(i);
+            IExpr raw = ps.defaultExpr;
+            if (raw == null) {
+                if (seenDefault) {
+                    Node nn = (i < f.params.size()) ? (Node) f.params.get(i) : (Node) f;
+                    err(nn.line, nn.column, "el parámetro '" + ps.name
+                        + "' sin valor por defecto no puede ir tras uno con valor por defecto");
+                }
+                continue;
+            }
+            seenDefault = true;
+            Node rawNode = (Node) raw;
+            BpType natTy = literalNaturalType(raw);
+            if (natTy == null) {
+                err(rawNode.line, rawNode.column, "el valor por defecto del parámetro '"
+                    + ps.name + "' debe ser una constante literal");
+                ps.defaultExpr = null;
+                continue;
+            }
+            BpType pt = ps.type;
+            if (pt instanceof PrimitiveType && ((PrimitiveType) pt).isNarrowInteger()) {
+                err(rawNode.line, rawNode.column, "valor por defecto en parámetro de tipo estrecho ('"
+                    + pt.display() + "') no soportado todavía");
+                ps.defaultExpr = null;
+                continue;
+            }
+            if (pt != null && !pt.isAssignableFrom(natTy)) {
+                err(rawNode.line, rawNode.column, "valor por defecto del parámetro '" + ps.name
+                    + "': '" + natTy.display() + "' no asignable a '" + pt.display() + "'");
+                ps.defaultExpr = null;
+                continue;
+            }
+            ps.defaultExpr = literalExprFromValue(constLiteralValue(raw), pt, rawNode.line, rawNode.column);
+        }
+    }
+
+    /** Tipo natural de una expresión literal constante (int/long/float/double/string/
+     *  boolean, con paréntesis y unario `-` opcionales), o null si no es una. */
+    private static BpType literalNaturalType(IExpr e) {
+        while (e instanceof ParenExpr) e = ((ParenExpr) e).inner;
+        if (e instanceof UnaryExpr) {
+            UnaryExpr u = (UnaryExpr) e;
+            if ("-".equals(u.op)) {
+                BpType inner = literalNaturalType(u.operand);
+                return (inner != null && inner.isNumeric()) ? inner : null;
+            }
+            return null;
+        }
+        if (e instanceof IntLitExpr)    return PrimitiveType.INTEGER;
+        if (e instanceof LongLitExpr)   return PrimitiveType.LONG;
+        if (e instanceof FloatLitExpr)  return PrimitiveType.FLOAT;
+        if (e instanceof DoubleLitExpr) return PrimitiveType.DOUBLE;
+        if (e instanceof StringLitExpr) return PrimitiveType.STRING;
+        if (e instanceof BoolLitExpr)   return PrimitiveType.BOOLEAN;
+        return null;
+    }
+
+    /** Valor (Long/Double/String/Boolean) de un literal constante, o null. */
+    static Object constLiteralValue(IExpr e) {
+        while (e instanceof ParenExpr) e = ((ParenExpr) e).inner;
+        if (e instanceof UnaryExpr) {
+            UnaryExpr u = (UnaryExpr) e;
+            if ("-".equals(u.op)) {
+                Object v = constLiteralValue(u.operand);
+                if (v instanceof Long)   return -((Long) v);
+                if (v instanceof Double) return -((Double) v);
+            }
+            return null;
+        }
+        if (e instanceof IntLitExpr)    return ((IntLitExpr) e).value;
+        if (e instanceof LongLitExpr)   return ((LongLitExpr) e).value;
+        if (e instanceof FloatLitExpr)  return ((FloatLitExpr) e).value;
+        if (e instanceof DoubleLitExpr) return ((DoubleLitExpr) e).value;
+        if (e instanceof StringLitExpr) return ((StringLitExpr) e).value;
+        if (e instanceof BoolLitExpr)   return ((BoolLitExpr) e).value;
+        return null;
+    }
+
+    /** Reconstruye una expresión literal desde su valor, con la forma adecuada al
+     *  tipo del parámetro (para emitir igual que un literal escrito a mano). */
+    static IExpr literalExprFromValue(Object v, BpType paramType, int line, int col) {
+        PrimitiveType.Kind k = (paramType instanceof PrimitiveType) ? ((PrimitiveType) paramType).tag : null;
+        if (v instanceof Long) {
+            long lv = (Long) v;
+            return (k == PrimitiveType.Kind.LONG) ? new LongLitExpr(lv, line, col)
+                                                  : new IntLitExpr(lv, line, col);
+        }
+        if (v instanceof Double) {
+            double dv = (Double) v;
+            return (k == PrimitiveType.Kind.DOUBLE) ? new DoubleLitExpr(dv, line, col)
+                                                    : new FloatLitExpr(dv, line, col);
+        }
+        if (v instanceof String)  return new StringLitExpr((String) v, line, col);
+        if (v instanceof Boolean) return new BoolLitExpr((Boolean) v, line, col);
+        return new IntLitExpr(0, line, col);
+    }
+
+    /** Clona una expresión literal constante con la posición dada (para inyectarla
+     *  como argumento en un call-site sin compartir el nodo entre llamadas). */
+    private static IExpr cloneConstExpr(IExpr e, int line, int col) {
+        if (e instanceof IntLitExpr)    return new IntLitExpr(((IntLitExpr) e).value, line, col);
+        if (e instanceof LongLitExpr)   return new LongLitExpr(((LongLitExpr) e).value, line, col);
+        if (e instanceof FloatLitExpr)  return new FloatLitExpr(((FloatLitExpr) e).value, line, col);
+        if (e instanceof DoubleLitExpr) return new DoubleLitExpr(((DoubleLitExpr) e).value, line, col);
+        if (e instanceof StringLitExpr) return new StringLitExpr(((StringLitExpr) e).value, line, col);
+        if (e instanceof BoolLitExpr)   return new BoolLitExpr(((BoolLitExpr) e).value, line, col);
+        if (e instanceof UnaryExpr) {
+            UnaryExpr u = (UnaryExpr) e;
+            return new UnaryExpr(u.op, cloneConstExpr(u.operand, line, col), line, col);
+        }
+        if (e instanceof ParenExpr)
+            return new ParenExpr(cloneConstExpr(((ParenExpr) e).inner, line, col), line, col);
+        return e;
+    }
+
     private static void addBuiltin(Scope s, String name, BpType returnType,
                                     String[] paramNames, BpType[] paramTypes) {
         FunctionSymbol fn = new FunctionSymbol(name, true, false, true, null, null);
@@ -728,8 +854,11 @@ public final class SemanticAnalyzer {
             err(f.line, f.column, "'intrinsic' implica visibilidad pública — añade 'public'");
         FunctionSymbol sym = new FunctionSymbol(f.name.name, f.isPublic, f.isFinal, isStatic, owner, f);
         sym.isIntrinsic = f.isIntrinsic;
-        for (Param p : f.params)
-            sym.params.add(new ParamSymbol(p.name, p.line, p.column));
+        for (Param p : f.params) {
+            ParamSymbol psym = new ParamSymbol(p.name, p.line, p.column);
+            psym.defaultExpr = p.defaultValue;   // H8.1: crudo aquí; se valida/normaliza al resolver tipos
+            sym.params.add(psym);
+        }
         if (!scope.tryDefine(sym))
             err(f.line, f.column, "nombre duplicado: '" + f.name.name + "' en " + scope.tag);
         info.declSymbols.put(f, sym);
@@ -880,6 +1009,7 @@ public final class SemanticAnalyzer {
                 for (int i = 0; i < f.params.size(); i++)
                     fs.params.get(i).type = resolveType(f.params.get(i).type);
                 if (f.returnType != null) fs.returnType = resolveType(f.returnType);
+                resolveParamDefaults(fs, f);   // H8.1
             }
         } else if (def instanceof PropertyDef) {
             PropertyDef p = (PropertyDef) def;
@@ -2023,6 +2153,19 @@ public final class SemanticAnalyzer {
     }
 
     private void checkArgs(int line, int col, List<ParamSymbol> ps, List<IExpr> args, Scope scope) {
+        // H8.1 — sustitución en el llamante: rellena los args finales omitidos con el
+        // valor por defecto de su parámetro (clon del literal). Idempotente: tras
+        // rellenar, args.size() == ps.size(), así que re-ejecutar no vuelve a añadir.
+        if (args.size() < ps.size()) {
+            boolean allDefaulted = true;
+            for (int i = args.size(); i < ps.size(); i++)
+                if (ps.get(i).defaultExpr == null) { allDefaulted = false; break; }
+            if (allDefaulted) {
+                int provided = args.size();
+                for (int i = provided; i < ps.size(); i++)
+                    args.add(cloneConstExpr(ps.get(i).defaultExpr, line, col));
+            }
+        }
         if (ps.size() != args.size())
             err(line, col, "número de argumentos incorrecto: se esperaban " + ps.size() + ", se pasaron " + args.size());
         int n = Math.min(ps.size(), args.size());

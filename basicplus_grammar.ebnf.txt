@@ -137,7 +137,7 @@ func_def    ::= [ 'final' ] 'function' decl_name '(' [ params ] ')' [ ':' type ]
                 'end' [ decl_name ] NEWLINE ;
 
 params      ::= param { ',' param } ;
-param       ::= name ':' type ;
+param       ::= name ':' type [ ':=' literal ] ;   (* H8.1: valor por defecto constante; los params con default van al final *)
 
 return_stmt ::= 'return' [ expr ] NEWLINE ;
 

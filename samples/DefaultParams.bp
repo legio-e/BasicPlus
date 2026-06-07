@@ -1,0 +1,42 @@
+// H8.1 — parámetros con valor por defecto (same-module).
+// Sintaxis: `nombre: tipo := <literal>`. Sustitución en el llamante.
+module DefaultParams
+
+function add(a: integer, b: integer := 10): integer
+  return a + b
+end add
+
+function label(text: string, prefix: string := "[", suffix: string := "]"): string
+  return prefix + text + suffix
+end label
+
+function flag(name: string, on: boolean := true): string
+  if on then
+    return name + "=ON"
+  endif
+  return name + "=OFF"
+end flag
+
+function countdown(n: integer := 3): string
+  var s: string := ""
+  var i: integer := n
+  while i > 0 do
+    s := s + intToString(i)
+    i := i - 1
+  endwh
+  return s
+end countdown
+
+function main()
+  print intToString(add(5))            // 15  (b por defecto = 10)
+  print intToString(add(5, 100))       // 105 (b explícito)
+  print label("hi")                    // [hi]
+  print label("hi", "<")               // <hi]  (suffix por defecto)
+  print label("hi", "<", ">")          // <hi>
+  print flag("power")                  // power=ON
+  print flag("debug", false)           // debug=OFF
+  print countdown()                    // 321
+  print countdown(5)                   // 54321
+end main
+
+end DefaultParams

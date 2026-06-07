@@ -1,0 +1,13 @@
+// H8.1 — biblioteca con valores por defecto, para verificar la exposicion
+// cross-module a traves del .bpi (v7). Las funciones son public.
+module DefLib
+
+  public function add(a: integer, b: integer := 10): integer
+    return a + b
+  end add
+
+  public function label(text: string, prefix: string := "[", suffix: string := "]"): string
+    return prefix + text + suffix
+  end label
+
+end DefLib

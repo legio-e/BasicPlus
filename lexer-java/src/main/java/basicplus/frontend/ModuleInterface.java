@@ -66,7 +66,7 @@ import java.util.Map;
 public final class ModuleInterface {
 
     /** Versión mínima del .bpi que sabemos leer (cuando se sube, lo bumpamos). */
-    public static final int CURRENT_VERSION = 6;   // v6: ClassSig.layout (L2 v3)
+    public static final int CURRENT_VERSION = 7;   // v7: H8.1 valores por defecto de params
     public static final int MIN_SUPPORTED_VERSION = 1;
 
     public String library = "";
@@ -115,7 +115,12 @@ public final class ModuleInterface {
     public static final class ParamSig {
         public final String name;
         public final BpType type;
-        public ParamSig(String name, BpType type) { this.name = name; this.type = type; }
+        /** H8.1 — valor por defecto (Long/Double/String/Boolean) o null si no tiene. */
+        public final Object defaultValue;
+        public ParamSig(String name, BpType type) { this(name, type, null); }
+        public ParamSig(String name, BpType type, Object defaultValue) {
+            this.name = name; this.type = type; this.defaultValue = defaultValue;
+        }
     }
 
     /** Constante pública de tipo primitivo con valor literal conocido. */
@@ -252,7 +257,7 @@ public final class ModuleInterface {
                     continue;
                 }
                 List<ParamSig> ps = new ArrayList<>(fs.params.size());
-                for (ParamSymbol p : fs.params) ps.add(new ParamSig(p.name, p.type));
+                for (ParamSymbol p : fs.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
                 iface.functions.add(new FuncSig(fs.name, true, fs.isStatic, fs.isIntrinsic, ps, fs.returnType));
                 continue;
             }
@@ -342,7 +347,7 @@ public final class ModuleInterface {
                 return null;
             }
             ctorParams = new ArrayList<>();
-            for (ParamSymbol p : ctor.params) ctorParams.add(new ParamSig(p.name, p.type));
+            for (ParamSymbol p : ctor.params) ctorParams.add(new ParamSig(p.name, p.type, paramDefault(p)));
         }
 
         // ---- Properties + métodos en orden de declaración del AST ----
@@ -383,7 +388,7 @@ public final class ModuleInterface {
                         continue;
                     }
                     List<ParamSig> ps = new ArrayList<>(fsym.params.size());
-                    for (ParamSymbol p : fsym.params) ps.add(new ParamSig(p.name, p.type));
+                    for (ParamSymbol p : fsym.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
                     methods.add(new FuncSig(fsym.name, true, false, ps, fsym.returnType));
                 }
             }
@@ -598,8 +603,7 @@ public final class ModuleInterface {
                 sb.append("func ").append(f.name).append('(');
                 for (int i = 0; i < f.params.size(); i++) {
                     if (i > 0) sb.append(',');
-                    ParamSig p = f.params.get(i);
-                    sb.append(p.name).append(':').append(typeToString(p.type));
+                    appendParam(sb, f.params.get(i));
                 }
                 sb.append("):").append(typeToString(f.returnType));
                 if (f.isPublic) sb.append(" public");
@@ -649,8 +653,7 @@ public final class ModuleInterface {
                     cs.append("  ctor(");
                     for (int i = 0; i < c.ctorParams.size(); i++) {
                         if (i > 0) cs.append(',');
-                        ParamSig p = c.ctorParams.get(i);
-                        cs.append(p.name).append(':').append(typeToString(p.type));
+                        appendParam(cs, c.ctorParams.get(i));
                     }
                     cs.append(')');
                     pw.println(cs.toString());
@@ -668,8 +671,7 @@ public final class ModuleInterface {
                     sb.append("  method ").append(m.name).append('(');
                     for (int i = 0; i < m.params.size(); i++) {
                         if (i > 0) sb.append(',');
-                        ParamSig p = m.params.get(i);
-                        sb.append(p.name).append(':').append(typeToString(p.type));
+                        appendParam(sb, m.params.get(i));
                     }
                     sb.append("):").append(typeToString(m.returnType));
                     sb.append(" public");
@@ -737,10 +739,20 @@ public final class ModuleInterface {
                     catch (NumberFormatException ex) {
                         throw new IOException(file + ":" + lineNo + ": entero inválido: " + s);
                     }
+                case LONG:
+                    try { return Long.parseLong(s); }
+                    catch (NumberFormatException ex) {
+                        throw new IOException(file + ":" + lineNo + ": long inválido: " + s);
+                    }
                 case FLOAT:
                     try { return Double.parseDouble(s); }
                     catch (NumberFormatException ex) {
                         throw new IOException(file + ":" + lineNo + ": float inválido: " + s);
+                    }
+                case DOUBLE:
+                    try { return Double.parseDouble(s); }
+                    catch (NumberFormatException ex) {
+                        throw new IOException(file + ":" + lineNo + ": double inválido: " + s);
                     }
                 case BOOLEAN:
                     if ("true".equals(s))  return Boolean.TRUE;
@@ -768,6 +780,17 @@ public final class ModuleInterface {
             }
         }
         throw new IOException(file + ":" + lineNo + ": tipo no soportado para const literal: " + type.display());
+    }
+
+    /** H8.1 — escribe "name:type" y, si tiene valor por defecto, "=<literal>". */
+    private static void appendParam(StringBuilder sb, ParamSig p) {
+        sb.append(p.name).append(':').append(typeToString(p.type));
+        if (p.defaultValue != null) sb.append('=').append(encodeLiteral(p.defaultValue));
+    }
+
+    /** H8.1 — valor por defecto de un ParamSymbol como literal serializable, o null. */
+    private static Object paramDefault(ParamSymbol p) {
+        return (p.defaultExpr == null) ? null : SemanticAnalyzer.constLiteralValue(p.defaultExpr);
     }
 
     private static String typeToString(BpType t) {
@@ -893,10 +916,10 @@ public final class ModuleInterface {
                         continue;
                     }
                     if (trimmed.startsWith("ctor(") || trimmed.startsWith("ctor (")) {
-                        String body = trimmed.substring(trimmed.indexOf('(') + 1);
-                        int rp = body.indexOf(')');
+                        int lp = trimmed.indexOf('(');
+                        int rp = matchParen(trimmed, lp);
                         if (rp < 0) throw new IOException(file + ":" + lineNo + ": ctor sin ')'");
-                        clsCtorParams = parseParamList(file, lineNo, body.substring(0, rp));
+                        clsCtorParams = parseParamList(file, lineNo, trimmed.substring(lp + 1, rp));
                         continue;
                     }
                     if (trimmed.startsWith("prop ")) {
@@ -991,16 +1014,76 @@ public final class ModuleInterface {
     private static List<ParamSig> parseParamList(Path file, int lineNo, String paramsRaw) throws IOException {
         List<ParamSig> params = new ArrayList<>();
         if (paramsRaw == null || paramsRaw.trim().isEmpty()) return params;
-        for (String pTok : paramsRaw.split(",")) {
+        for (String pTok : splitTopLevel(paramsRaw, ',')) {
             pTok = pTok.trim();
+            if (pTok.isEmpty()) continue;
             int colon = pTok.indexOf(':');
             if (colon < 0)
                 throw new IOException(file + ":" + lineNo + ": param mal formado: '" + pTok + "'");
             String pname = pTok.substring(0, colon).trim();
-            String ptype = pTok.substring(colon + 1).trim();
-            params.add(new ParamSig(pname, parseType(file, lineNo, ptype)));
+            String rest  = pTok.substring(colon + 1).trim();
+            // H8.1 — valor por defecto opcional: `tipo=<literal>`. El '=' a nivel
+            // superior (fuera de comillas/paréntesis) separa el tipo del default.
+            int eq = indexOfTopLevel(rest, '=');
+            String ptype = (eq < 0) ? rest : rest.substring(0, eq).trim();
+            String pdef  = (eq < 0) ? null : rest.substring(eq + 1).trim();
+            BpType pty = parseType(file, lineNo, ptype);
+            Object dval = (pdef == null) ? null : decodeLiteral(pty, pdef, file, lineNo);
+            params.add(new ParamSig(pname, pty, dval));
         }
         return params;
+    }
+
+    /** Divide 's' por 'sep' a nivel superior, respetando "..." y (...)/[...] anidados. */
+    private static List<String> splitTopLevel(String s, char sep) {
+        List<String> out = new ArrayList<>();
+        int depth = 0; boolean inStr = false, esc = false; int start = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (inStr) {
+                if (esc) esc = false;
+                else if (c == '\\') esc = true;
+                else if (c == '"') inStr = false;
+            } else if (c == '"') inStr = true;
+            else if (c == '(' || c == '[') depth++;
+            else if (c == ')' || c == ']') depth--;
+            else if (c == sep && depth == 0) { out.add(s.substring(start, i)); start = i + 1; }
+        }
+        out.add(s.substring(start));
+        return out;
+    }
+
+    /** Primer índice de 'ch' a nivel superior (fuera de "..." y (...)/[...]), o -1. */
+    private static int indexOfTopLevel(String s, char ch) {
+        int depth = 0; boolean inStr = false, esc = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (inStr) {
+                if (esc) esc = false;
+                else if (c == '\\') esc = true;
+                else if (c == '"') inStr = false;
+            } else if (c == '"') inStr = true;
+            else if (c == '(' || c == '[') depth++;
+            else if (c == ')' || c == ']') depth--;
+            else if (c == ch && depth == 0) return i;
+        }
+        return -1;
+    }
+
+    /** Índice del ')' que cierra el '(' en 'open', respetando "..." y anidación. */
+    private static int matchParen(String s, int open) {
+        int depth = 0; boolean inStr = false, esc = false;
+        for (int i = open; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (inStr) {
+                if (esc) esc = false;
+                else if (c == '\\') esc = true;
+                else if (c == '"') inStr = false;
+            } else if (c == '"') inStr = true;
+            else if (c == '(') depth++;
+            else if (c == ')') { depth--; if (depth == 0) return i; }
+        }
+        return -1;
     }
 
     private static PropSig parseProp(Path file, int lineNo, String body) throws IOException {
@@ -1061,7 +1144,7 @@ public final class ModuleInterface {
 
     private static FuncSig parseFunc(Path file, int lineNo, String body) throws IOException {
         int lp = body.indexOf('(');
-        int rp = body.indexOf(')', lp + 1);
+        int rp = (lp < 0) ? -1 : matchParen(body, lp);
         if (lp < 0 || rp < 0)
             throw new IOException(file + ":" + lineNo + ": func mal formada (faltan paréntesis)");
         String name = body.substring(0, lp).trim();
@@ -1091,18 +1174,7 @@ public final class ModuleInterface {
             }
         }
 
-        List<ParamSig> params = new ArrayList<>();
-        if (!paramsRaw.isEmpty()) {
-            for (String pTok : paramsRaw.split(",")) {
-                pTok = pTok.trim();
-                int colon = pTok.indexOf(':');
-                if (colon < 0)
-                    throw new IOException(file + ":" + lineNo + ": param mal formado: '" + pTok + "'");
-                String pname = pTok.substring(0, colon).trim();
-                String ptype = pTok.substring(colon + 1).trim();
-                params.add(new ParamSig(pname, parseType(file, lineNo, ptype)));
-            }
-        }
+        List<ParamSig> params = parseParamList(file, lineNo, paramsRaw);
 
         return new FuncSig(name, isPublic, isStatic, isIntrinsic, params, ret);
     }

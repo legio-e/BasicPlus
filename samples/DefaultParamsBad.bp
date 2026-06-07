@@ -1,0 +1,23 @@
+// H8.1 — casos NEGATIVOS: el compilador debe rechazar estos defaults.
+module DefaultParamsBad
+
+  // (1) default no constante: referencia a otro parámetro.
+  function f1(a: integer, b: integer := a): integer
+    return a + b
+  end f1
+
+  // (2) regla "trailing": un parámetro sin default tras uno con default.
+  function f2(a: integer := 1, b: integer): integer
+    return a + b
+  end f2
+
+  // (3) tipo incompatible: string como default de un integer.
+  function f3(a: integer := "hola"): integer
+    return a
+  end f3
+
+  function Main()
+    print "x"
+  end Main
+
+end DefaultParamsBad

@@ -57,9 +57,10 @@ B1 caracterizado + mitigado (1 worker por defecto).
 ## 3. Apartados restantes en detalle
 
 ### H8 — Ampliación de lenguaje
-Incremental, en paralelo con la consolidación. Orden: **H8.1 parámetros por
-defecto** (defaults constantes, sustitución en el llamante = cero coste de VM,
-`.bpi` expone los defaults) → **H8.2 tuplas first-class** (guardar en var / pasar
+Incremental, en paralelo con la consolidación. **H8.1 parámetros por defecto:
+✅ HECHO (2026-06-07)** — sintaxis `:=`, sustitución en el llamante (cero coste de
+VM), `.bpi` v7 expone los defaults; funciones/métodos/ctores, same+cross-module,
+paridad dual-VM. Siguiente: **H8.2 tuplas first-class** (guardar en var / pasar
 como parámetro / lvalues no-simples; hoy solo destructuring de retorno). Detalle:
 `docs/H8_TASKS.md`. *(§8 callbacks y §9 eventos van a V3.)*
 

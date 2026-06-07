@@ -427,7 +427,10 @@ public final class Parser {
         String n = consumeIdentifier("nombre del parámetro");
         consume(TokenType.COLON, "se esperaba ':' tras el nombre del parámetro");
         TypeRef t = parseType();
-        return new Param(n, t, tok.line, tok.column);
+        // H8.1 — valor por defecto opcional: `nombre: tipo := <literal>`
+        IExpr def = null;
+        if (match(TokenType.ASSIGN)) def = parseExpr();
+        return new Param(n, t, def, tok.line, tok.column);
     }
 
     // ============================================================

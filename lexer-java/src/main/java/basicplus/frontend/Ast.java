@@ -138,10 +138,15 @@ public final class Ast {
     public static final class Param extends Node {
         public final String name;
         public final TypeRef type;
+        public final IExpr defaultValue;   // H8.1: valor por defecto (literal const) o null
         public Param(String name, TypeRef type, int line, int column) {
+            this(name, type, null, line, column);
+        }
+        public Param(String name, TypeRef type, IExpr defaultValue, int line, int column) {
             super(line, column);
             this.name = name;
             this.type = type;
+            this.defaultValue = defaultValue;
         }
     }
 

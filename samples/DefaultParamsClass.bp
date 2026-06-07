@@ -1,0 +1,27 @@
+// H8.1 — defaults en CONSTRUCTOR y MÉTODO de clase (same-module).
+module DefaultParamsClass
+
+  class Box
+    public var w: integer
+    public var h: integer
+
+    public function Box(w: integer, h: integer := 1)
+      this.w := w
+      this.h := h
+    end Box
+
+    public function area(scale: integer := 1): integer
+      return this.w * this.h * scale
+    end area
+  end Box
+
+  function Main()
+    var b: Box := Box(5)            // h por defecto = 1
+    print intToString(b.area())     // 5*1*1 = 5
+    print intToString(b.area(10))   // 5*1*10 = 50
+    var b2: Box := Box(5, 3)        // h = 3 explícito
+    print intToString(b2.area())    // 5*3*1 = 15
+    print intToString(b2.area(2))   // 5*3*2 = 30
+  end Main
+
+end DefaultParamsClass
