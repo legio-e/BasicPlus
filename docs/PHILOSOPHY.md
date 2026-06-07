@@ -28,6 +28,75 @@ con sintaxis sencilla y un debugger usable.**
 
 ---
 
+## El sobre de plataformas: microcontroladores de 32 bits, sin SO
+
+"Portable a múltiples dispositivos" necesita una frontera explícita, o acabamos
+diseñando para todo y sirviendo bien a nada. El **sobre** (envelope) de hardware
+es: **microcontroladores de 32 bits que se ejecutan sin sistema operativo
+tradicional** — bare-metal o sobre un RTOS (FreeRTOS). Del más humilde al más
+potente.
+
+**El techo es arquitectónico, no de tamaño.** Lo único que deja un dispositivo
+fuera es:
+
+- **64 bits.** El modelo de memoria de la VM es plano y direccionado a 32 bits
+  (las direcciones se manejan como `i32` / `writeInt32`): los 32 bits están
+  *cocidos* en el runtime. El espacio de direcciones de 32 bits (4 GB) da
+  headroom de sobra; ver abajo.
+- **SO tradicional / Linux embebido.** El criterio limpio es *¿quién es el
+  runtime?* En lo nuestro **el firmware ES el programa + la VM**; en Linux **el
+  SO es el runtime y la app es un proceso** — construyes una *imagen de SO*
+  (Yocto/Buildroot), no un firmware, sobre otra clase de placa (SoC + DRAM +
+  eMMC). El marcador técnico de la raya es **MMU + DRAM externa + un bootloader
+  que carga un SO**. MPU sin MMU = dentro; MMU + SO = fuera (uClinux también
+  fuera: sigue siendo Linux).
+
+"No 64 bits" y "no Linux embebido" caen casi en la misma raya dibujada desde dos
+lados: en este nicho, lo 64-bit suele ser un Cortex-A con MMU corriendo Linux.
+
+**Sin tope por arriba dentro del sobre.** Un MCU 32-bit potente **no es un caso
+borde: es núcleo.** Los micros más capaces ya traen 1 MB+ de SRAM interna; la
+PSRAM por ~5 $ ya es de 16 MB y vendrá de 32; las frecuencias van de ~100 MHz a
+~1 GHz (crossover tipo i.MX RT / Cortex-M7). Todo eso entra holgado en el espacio
+de 32 bits y **no tiene límite superior por nuestra parte**. La VM toma el tamaño
+de memoria por **configuración por-dispositivo** (`memorySize` / `stackBase`); el
+default de 512 KB es comodidad de host, y el build de cada device fija su RAM real.
+
+**La restricción que manda es el piso, no el techo: diseñar para el pequeño.** Si
+optimizamos asumiendo recursos grandes, **hacemos sufrir al dispositivo pequeño**
+— que es justo nuestro caso de uso. Por eso:
+
+- El **dispositivo pequeño es el objetivo de diseño**; lo grande es **headroom
+  opcional, nunca requisito**.
+- Las features deben **correr en el baseline y escalar** con los recursos, no
+  **exigirlos**. PSRAM, pantallas/LVGL, heaps grandes = opt-in según la capacidad
+  del device (de ahí, p.ej., las **dos imágenes de V3**: con y sin LVGL).
+- Frugalidad por defecto (GC, colecciones, strings). Mantener honesto el baseline
+  implica probar también con configuraciones de memoria pequeñas, no sólo el
+  default cómodo.
+
+**Target ≠ host.** La paridad dual-VM se *ejecuta* en un PC de 64 bits (JVM +
+VM-C compilada para PC): eso es **banco de pruebas (host)**, no un objetivo. El
+target siempre es el MCU de 32 bits — que algo "corra en un PC de 64 bits" para
+desarrollar no convierte 64-bit en plataforma soportada.
+
+| Zona | Qué entra / criterio |
+|---|---|
+| **Dentro (núcleo)** | Toda la clase MCU 32-bit sin SO, del Cortex-M0+ humilde al crossover ~1 GHz con 16–32 MB de PSRAM. Ejemplos (no normativos): Cortex-M0+/M4/M33/M55 (RP2040, RP2350B, STM32, nRF52/53), Xtensa (ESP32/S2/S3), RV32 (ESP32-C3/C6, RISC-V futuro), i.MX RT (alto de gama) |
+| **Zona difusa** | Silicio dual-capaz (puede correr Linux pero lo usamos bare-metal/RTOS) → lo resuelve "quién es el runtime": bare-metal/RTOS = dentro |
+| **Fuera (arriba)** | MMU + DRAM + imagen de SO (Linux embebido): Cortex-A (Raspberry Pi, Allwinner…), 64-bit, SOs de escritorio como *target* |
+| **Fuera (abajo)** | 8-bit (AVR, PIC16/18) y 16-bit (MSP430, PIC24/dsPIC): no pueden hospedar el modelo de VM de 32 bits |
+
+Este sobre **ratifica** lo que ya tenemos (VM-C sin-SO, memoria plana, asignación
+por-config), **acota** el surface de HW (buses, GPIO, PSRAM…) sin asumir
+POSIX / FS-de-SO / sockets-de-SO, **enmarca V3** (GUIs pequeñas en pantallas
+pequeñas) y **da público a la documentación**: "graba un firmware en un MCU de
+32 bits y programa en BP". Evoluciona *por arriba sin tocar la raya* (más RAM /
+MHz / PSRAM entran solos); sólo se revisaría si cambiara la arquitectura base del
+nicho.
+
+---
+
 ## Posición frente a las alternativas
 
 ### vs. Java
