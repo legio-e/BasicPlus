@@ -81,13 +81,22 @@ linka cada build**, no por compilación condicional.
 
 ## 4. Hitos
 
-### H9.1 — Esqueleto + Hello por VCP  *(= H4.1 del ESP32)*
+### H9.1 — Esqueleto + Hello por VCP ✅ HECHO (2026-06-07)  *(= H4.1 del ESP32)*
 - **H9.1.0 (entorno)**: proyecto CubeIDE para Nucleo-U575ZI-Q con FreeRTOS +
   USART(VCP). Smoke = LED blink / `printf` por VCP, flasheado OK. *De-risk del
   toolchain + flasheo antes de injertar nada.*
 - **H9.1.1**: injertar `src/` + `include/` → **compila** para M33 (link OK).
-- **H9.1.2**: `platform_freertos` STM32 + sink USART + `Hello.mod` embebido →
-  **"Hello" sale por el VCP**.
+- **H9.1.2**: `platform_stm32.c` (bare-metal, **sin FreeRTOS** — el single-thread
+  no lo necesita) + sink USART + `Hello.mod` embebido → **"Hello" sale por el VCP**.
+
+> **✅ Resultado (2026-06-07)**: la VM corre en el U575. `Hola desde STM32
+> (BasicPlus VM)` / `42` salen por el VCP, **byte-idénticos** a la VM-Java y a la
+> VM-C host → **paridad triple-VM**. Glue: `bpgenvm-c/stm32/port/`
+> (`platform_stm32.c` + `bpvm_app.c` + `hello_mod.c`); el core `src/` se heredó
+> **intacto** (solo se excluyó `platform_pthread.c`, host-only). El análisis de la
+> superficie de port se validó en la práctica: capa vendor mínima, paridad gratis.
+> Integración CubeIDE: *Source Location ▸ Link Folder* para `src` + `stm32/port`.
+> FreeRTOS + wire-v1 (`Run on STM32`) → H9.2.
 
 ### H9.2 — Wire v1 + REPL sobre USART → **"Run on STM32"** en el IDE  *(= H4.3)*
 Subir `.mod`, ejecutar, stream de salida. El IDE distingue por
