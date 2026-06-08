@@ -33,6 +33,18 @@ uint32_t fs_total_bytes(void);
 uint32_t fs_used_bytes(void);
 void     fs_format(void);
 
+/* --- Persistencia en flash interna (H9.3) --- */
+
+/* Vuelca el FS (arena + tabla) a la región reservada de flash. Best-effort:
+ * si falla, el próximo fs_load lo detecta (magic) y arranca con FS vacío.
+ * Llamar tras cada mutación que deba sobrevivir al reset (PUT/DEL/FORMAT). */
+void fs_save(void);
+
+/* Restaura el FS desde flash al boot. Salta las entradas /lib/ (las re-instala
+ * el firmware embebido → sin desincronización de stdlib). 0 si cargó algo,
+ * -1 si la flash está vacía/corrupta (FS queda vacío). */
+int  fs_load(void);
+
 #ifdef __cplusplus
 }
 #endif

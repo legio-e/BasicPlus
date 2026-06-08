@@ -157,6 +157,7 @@ static void handle_del(long id, json_obj_t* obj) {
         stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
     }
     if (fs_del(path) != 0) { stm32_wire_send_error(id, "NOT_FOUND", "no existe"); return; }
+    if (strncmp(path, "/lib/", 5) != 0) fs_save();   /* /lib se re-provee al boot */
     reply_empty("DEL_REPLY", id);
 }
 
@@ -187,6 +188,10 @@ static void handle_put(long id, json_obj_t* obj) {
     if (fs_put(path, s_put_buf, (uint32_t) bulk) != 0) {
         stm32_wire_send_error(id, "NO_SPACE", "FS lleno"); return;
     }
+    /* Persistir sólo lo que sobrevive al reset de forma útil: /lib lo re-instala
+     * el embebido al boot, así que un PUT a /lib (el IDE lo hace cada Run) no
+     * necesita flash → evita un erase+program por ejecución. */
+    if (strncmp(path, "/lib/", 5) != 0) fs_save();
     reply_empty("PUT_REPLY", id);
 }
 
@@ -197,6 +202,7 @@ static void handle_format(long id, json_obj_t* obj) {
         stm32_wire_send_error(id, "MISSING_CONFIRM", "confirm:\"YES\""); return;
     }
     fs_format();
+    fs_save();                       /* H9.3: persistir el formateo (FS vacío) */
     reply_empty("FORMAT_REPLY", id);
 }
 
@@ -381,11 +387,15 @@ static void dispatch(int first_char) {
 }
 
 void stm32_repl_run(void) {
-    /* H9.4 — backends de HW (GPIO + info de MCU) y stdlib core pre-instalada
-     * en /lib, antes de atender el wire: así el primer RUN ya resuelve imports
-     * de stdlib y controla pines reales. */
-    stm32_hw_register();
+    /* H9.3 — restaura el FS persistido (los ficheros de /app sobreviven al
+     * reset). /lib NO se restaura aquí: lo re-instala el embebido a continuación
+     * (stdlib siempre fresca del firmware actual). */
+    fs_load();
+    /* H9.4 — stdlib core embebida en /lib + backends de HW (GPIO + info de MCU),
+     * antes de atender el wire: el primer RUN ya resuelve imports y controla
+     * pines reales. */
     stm32_mods_install();
+    stm32_hw_register();
 
     /* FIFO RX/TX (8 bytes): absorbe el hueco de procesado entre la línea JSON
      * y los bytes bulk que la siguen → PUT fiable aunque la CPU vaya lenta.

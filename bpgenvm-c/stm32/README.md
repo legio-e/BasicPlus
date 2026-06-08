@@ -42,7 +42,13 @@ CubeMX no la pise.
   (`stm32_repl.c`) + FS en RAM (`stm32_fs.c`) + `json_min.c` → **"Run on STM32"**
   con resolución de imports. **Requiere 160 MHz** (a 4 MHz el bulk del PUT
   desborda la RX del USART).
-- **H9.3** — `fs` sobre **HAL FLASH** interna (región al final de los 2 MB).
+- **H9.3** (✅ pendiente placa) — **FS persistente** en flash interna
+  (`stm32_fs.c`: `fs_save`/`fs_load`). Región = últimos **128 KB** (`0x081E0000`),
+  reservados en el `.ld` (FLASH 1920 KB + `FS_FLASH`) → disjunta del programa.
+  Auto-persist en PUT/DEL/FORMAT (los PUT a `/lib` no persisten). Al boot
+  restaura `/app`; `/lib` lo re-instala el embebido. Borra por páginas (8 KB),
+  programa quad-words (16 B), banco/página por `DUALBANK`, ICACHE off (sin tocar
+  IRQs → timeouts HAL intactos).
 - **H9.4** (parcial ✅) — **stdlib core embebida** (`stm32_mods.c`, generado por
   `scripts/regen_stm32_mods.sh`): pre-instala IO/Math/Gpio/Pico/… en `/lib` al
   boot (como `EMBEDDED_CORE_MODS` de la Pico) → los programas que importan stdlib
@@ -75,4 +81,6 @@ heartbeat lo retoma.
   a **160 MHz**.
 - **H9.4 (parcial) ✅** — stdlib core embebida + backend GPIO/Pico → `Blink.bp`
   controla el LED verde desde BasicPlus (**✅ verificado en placa 2026-06-08**).
+- **H9.3 ✅ (pendiente placa)** — FS persistente en flash interna: subir a `/app`
+  sobrevive al reset. Verificar: subir, resetear, comprobar que sigue.
 - Siguiente: UART/I2C/SPI/ADC/PWM (uno a uno) y H9.5 (AOT en STM32).

@@ -124,9 +124,27 @@ Subir `.mod`, ejecutar, stream de salida. El IDE distingue por
 >
 > **Siguiente → hecho en H9.4** (embeber stdlib + GPIO).
 
-### H9.3 — FS persistente en flash interna  *(= H4.4)*
-`fs.c` sobre HAL FLASH; región al final de los 2 MB (~132 KB o menos). PUT desde
-el IDE persiste y sobrevive al reset.
+### H9.3 — FS persistente en flash interna  *(= H4.4)*  · 🟡 HECHO (2026-06-08, falta verificar en placa)
+
+`stm32_fs.c` gana `fs_save()`/`fs_load()` sobre la **HAL FLASH** del U575:
+- **Región**: últimos **128 KB** de la flash (`0x081E0000..0x08200000`), reservados
+  en el `.ld` (FLASH 2048→1920 KB + región `FS_FLASH`). **Disjunta del programa**
+  ⇒ un fallo de escritura nunca corrompe el firmware (peor caso: pierdes el FS).
+- **Layout**: header (magic `BPFS` + version + count + arena_used) + tabla en la
+  1ª página (8 KB); arena cruda a partir de +8 KB. Borra por páginas de 8 KB,
+  programa en quad-words (16 B); banco/página detectados en runtime
+  (`FLASH->OPTR & DUALBANK`). ICACHE off durante la escritura; **sin** desactivar
+  IRQs (el bus se para solo en cada op → no rompe los timeouts de la HAL).
+- **Auto-persist**: PUT/DEL (fuera de `/lib`) y FORMAT vuelcan el FS. Los PUT a
+  `/lib` (el IDE sube ahí cada Run) **no** persisten → cero flash por ejecución.
+- **Boot**: `fs_load()` restaura **/app** (salta `/lib`, que re-instala el
+  embebido → stdlib siempre fresca, sin skew tras actualizar firmware). Magic/
+  version inválidos (flash borrada) → FS vacío.
+
+> Sintaxis verificada (gcc + stub HAL). **Pendiente (placa)**: subir un fichero a
+> `/app`, **resetear**, y comprobar que sigue ahí (el explorador del IDE lo lista)
+> y se ejecuta sin re-subir. Con esto, H9 queda a falta de los *stretch* (AOT,
+> L496).
 
 ### H9.4 — stdlib embebida + Backend GPIO  *(= H4.5)*  · ✅ HECHO (2026-06-08, verificado en placa)
 

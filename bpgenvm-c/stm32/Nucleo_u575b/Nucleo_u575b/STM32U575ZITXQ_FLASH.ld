@@ -43,11 +43,16 @@ _Min_Heap_Size = 0x4000;	/* required amount of heap  */
 _Min_Stack_Size = 0x1000;	/* required amount of stack */
 
 /* Memories definition */
+/* H9.3: los últimos 128 KB de la flash (FS_FLASH) se reservan para el FS
+ * persistente (stm32_fs.c). FLASH se acorta a 1920 KB para que el enlazador
+ * NUNCA coloque código/datos ahí → un fallo de escritura del FS no puede
+ * corromper el programa (regiones disjuntas). */
 MEMORY
 {
   RAM	(xrw)	: ORIGIN = 0x20000000,	LENGTH = 768K
   SRAM4	(xrw)	: ORIGIN = 0x28000000,	LENGTH = 16K
-  FLASH	(rx)	: ORIGIN = 0x08000000,	LENGTH = 2048K
+  FLASH	(rx)	: ORIGIN = 0x08000000,	LENGTH = 1920K
+  FS_FLASH (r)	: ORIGIN = 0x081E0000,	LENGTH = 128K   /* FS persistente; sin secciones */
 }
 
 /* Sections */
