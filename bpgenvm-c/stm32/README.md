@@ -38,10 +38,20 @@ CubeMX no la pise.
   `../pico/platform_freertos.c`, con `now`→`HAL_GetTick`/`DWT_CYCCNT`; + **sink de
   salida por USART** (el VCP del ST-LINK); + **`Hello.mod` embebido** (array C vía
   `xxd -i`) → "Hello" sale por el VCP.
-- **H9.2** — RX `wire_v1` sobre USART + `repl_v1` (heredado) → **"Run on STM32"**.
+- **H9.2** ✅ — RX `wire_v1` sobre USART (`stm32_wire.c`) + REPL bare-metal
+  (`stm32_repl.c`) + FS en RAM (`stm32_fs.c`) + `json_min.c` → **"Run on STM32"**
+  con resolución de imports. **Requiere 160 MHz** (a 4 MHz el bulk del PUT
+  desborda la RX del USART).
 - **H9.3** — `fs` sobre **HAL FLASH** interna (región al final de los 2 MB).
-- **H9.4** — backends `gpio/uart/i2c/spi/adc/pwm` sobre HAL de ST (registro en
-  runtime con `bpvm_*_set_backend`).
+- **H9.4** (parcial ✅) — **stdlib core embebida** (`stm32_mods.c`, generado por
+  `scripts/regen_stm32_mods.sh`): pre-instala IO/Math/Gpio/Pico/… en `/lib` al
+  boot (como `EMBEDDED_CORE_MODS` de la Pico) → los programas que importan stdlib
+  resuelven sin uploads. **Backend GPIO + info de MCU** (`gpio_stm32.c`,
+  `stm32_hw_register`): `init/pull/write/read` sobre `HAL_GPIO_*` y `gpioCount/
+  cpuFreqHz/uptimeMs/uniqueId/boardName` sobre la HAL.
+  **Modelo de pin** (plano): `pin = (puerto<<4) | bit`, puerto 0=A..7=H →
+  PA5=5, PB7=23 (LED azul), PC7=39 (LED verde), PG2=98 (LED rojo).
+  Pendiente: UART/I2C/SPI/ADC/PWM (uno a uno).
 - **H9.5** — AOT Thumb-2 (`.mdn`) reutilizando el `AotCEmitter` (ARM→ARM).
 
 ## Single-core ("diseñar para el piso")
@@ -50,6 +60,19 @@ El U575 es **Cortex-M33 single-core** ⇒ `bpvm_run` (no `bpvm_run_smp`). Se
 `FreeRTOSConfig`: `configNUMBER_OF_CORES=1`, `configCPU_CLOCK_HZ=160000000`,
 tick 1000 Hz.
 
+## LEDs de diagnóstico (firmware)
+- 🟢 **verde** (PC7) — heartbeat: parpadea ~2 Hz entre RUNs = vivo (congelado = colgado).
+- 🔵 **azul** (PB7) — encendido mientras un programa se ejecuta (RUN en curso).
+- 🔴 **rojo** (PG2) — error serio (FATAL del wire, o RUN que falló).
+
+Durante un RUN el heartbeat se pausa (el super-bucle está bloqueado), así que un
+programa que controle el LED verde lo hace sin interferencia; al terminar, el
+heartbeat lo retoma.
+
 ## Estado
-H9.1.0 (entorno ✅ + smoke LED/VCP) en curso. Falta del usuario tras el smoke:
-qué `huartX` es el VCP, y confirmar estructura estándar del proyecto CubeIDE.
+- **H9.1 ✅** — la VM corre en el U575 (Hello por VCP, paridad triple-VM).
+- **H9.2 ✅** — dev-loop completo: conectar + subir + ejecutar + imports, sólido
+  a **160 MHz**.
+- **H9.4 (parcial) ✅** — stdlib core embebida + backend GPIO/Pico → `Blink.bp`
+  parpadea el LED verde desde BasicPlus (verificado en host VM-C; pendiente placa).
+- Siguiente: probar `Blink.bp` en placa; luego UART/I2C/SPI/ADC/PWM y H9.5 (AOT).

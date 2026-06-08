@@ -1,0 +1,33 @@
+// Blink.bp — H9.4: parpadea el LED VERDE (PC7) del Nucleo-U575ZI-Q desde
+// BasicPlus, controlando el GPIO real vía el backend HAL del STM32.
+//
+// Modelo de pin del backend STM32: pin = (puerto<<4) | bit, con puerto
+// 0=A, 1=B, 2=C, ...  El LED verde de la placa es PC7 → (2<<4)|7 = 39.
+//
+// Usamos la API raw de Gpio (init/write) — no la clase Pin — para no
+// depender de Pico.gpioCount() (en el host-stub vale 30, así que Pin(39)
+// daría "fuera de rango"; en la placa el backend reporta 128 y Pin(39) vale).
+//
+// Observable en placa: el LED verde da 6 parpadeos (~0,4 s on / 0,4 s off);
+// al terminar, el heartbeat del firmware retoma el verde.
+// Salida (idéntica en VM-Java, VM-C host y STM32):
+//   blink: LED verde (PC7), 6 parpadeos
+//   blink: fin
+module Blink
+  import Gpio
+
+  function main()
+    var GREEN: integer := 39          // PC7 = (C=2)<<4 | 7
+    Gpio.init(GREEN, Gpio.OUTPUT())
+    print "blink: LED verde (PC7), 6 parpadeos"
+    var i: integer := 0
+    while i < 6 do
+      Gpio.write(GREEN, Gpio.HIGH())
+      sleep(400)
+      Gpio.write(GREEN, Gpio.LOW())
+      sleep(400)
+      i := i + 1
+    endwh
+    print "blink: fin"
+  end main
+end Blink

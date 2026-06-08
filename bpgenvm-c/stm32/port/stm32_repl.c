@@ -1,19 +1,23 @@
 /*
- * stm32_repl.c — REPL wire v1 bare-metal (H9.2).
+ * stm32_repl.c — REPL wire v1 bare-metal (H9.2 / H9.4).
  *
  * H9.2.a: HELLO/INFO/TIME/PING/RESET + LIST/DF/LOG → el IDE conecta.
  * H9.2.b: + FS en RAM (PUT/GET/DEL/STAT/LIST real/DF real/MKDIR/FORMAT) y
  *         RUN (carga el .mod del FS, lo ejecuta, hace streaming de OUTPUT y
  *         emite EXITED) → "Run on STM32" completo.
+ * H9.2.c: RUN resuelve imports (carga <owner>.mod del FS, ≤4 pasadas) + guard.
+ * H9.4:   al boot registra los backends de HW (GPIO + info de MCU) y
+ *         pre-instala la stdlib core en /lib (stm32_mods_install) → los
+ *         programas que importan stdlib resuelven y controlan pines reales.
  *
  * Single-thread, sin FreeRTOS. La salida del programa BP se reenvía como
  * eventos OUTPUT (bytes verbatim, escapados a JSON → paridad de contenido).
- * Limitación MVP: RUN carga UN módulo (sin resolución de imports todavía);
- * programas con `import` llegan en un paso posterior.
  */
 #include "stm32_repl.h"
 #include "stm32_wire.h"
 #include "stm32_fs.h"
+#include "stm32_mods.h"     /* stdlib core embebida (pre-install /lib) */
+#include "gpio_stm32.h"     /* stm32_hw_register (backends GPIO + Pico) */
 #include "json_min.h"
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* vm->modules[].{name,imports,import_count} para deps */
@@ -377,6 +381,12 @@ static void dispatch(int first_char) {
 }
 
 void stm32_repl_run(void) {
+    /* H9.4 — backends de HW (GPIO + info de MCU) y stdlib core pre-instalada
+     * en /lib, antes de atender el wire: así el primer RUN ya resuelve imports
+     * de stdlib y controla pines reales. */
+    stm32_hw_register();
+    stm32_mods_install();
+
     /* FIFO RX/TX (8 bytes): absorbe el hueco de procesado entre la línea JSON
      * y los bytes bulk que la siguen → PUT fiable aunque la CPU vaya lenta.
      * (El fix definitivo del timing es subir el reloj a 160 MHz.) */

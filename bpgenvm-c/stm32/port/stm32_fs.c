@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#define FS_MAX_FILES   24
+#define FS_MAX_FILES   40   /* 13 stdlib core en /lib + módulos de app + holgura */
 #define FS_NAME_MAX    64
 #define FS_ARENA_SIZE  (96u * 1024u)
 

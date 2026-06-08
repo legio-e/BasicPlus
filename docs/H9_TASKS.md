@@ -119,20 +119,48 @@ Subir `.mod`, ejecutar, stream de salida. El IDE distingue por
 > **Dev-loop completo en la 3ª familia: conectar + subir + ejecutar + imports,
 > sólido.** LEDs: 🟢 vivo · 🔵 ejecutando · 🔴 error.
 > **Requisito de placa**: correr a **160 MHz** (4 MHz no aguanta el bulk).
+> El `main.c` quedó cableado a `stm32_repl_run()` + reloj a 160 MHz (PLL desde
+> MSI, FLASH_LATENCY_4, VOS1).
 >
-> **Siguiente:**
-> 1. **Embeber la stdlib core** en el firmware (IO/Math/Gpio… pre-instalados en
->    `/lib` al boot, como `EMBEDDED_CORE_MODS` de la Pico) → desbloquea los
->    programas que importan stdlib (el IDE la da por presente en el device).
-> 2. **H9.4 (GPIO)** — backend HAL + parpadear un LED desde BP.
+> **Siguiente → hecho en H9.4** (embeber stdlib + GPIO).
 
 ### H9.3 — FS persistente en flash interna  *(= H4.4)*
 `fs.c` sobre HAL FLASH; región al final de los 2 MB (~132 KB o menos). PUT desde
 el IDE persiste y sobrevive al reset.
 
-### H9.4 — Backend GPIO + extensión de periféricos  *(= H4.5)*
-GPIO (parpadear LED) + IDE sube las deps de stdlib que falten. Luego extender
-UART / I2C / SPI / ADC / PWM (uno a uno, con prueba en placa cada uno).
+### H9.4 — stdlib embebida + Backend GPIO  *(= H4.5)*  · 🟡 PARCIAL (2026-06-08, falta verificar en placa)
+
+**1) stdlib core embebida.** `stm32_mods.c` (GENERADO por
+`scripts/regen_stm32_mods.sh` desde `bpstdlib/*.mod`) trae los 13 módulos de
+`EMBEDDED_CORE_MODS` del IDE (Math, IO, Gpio, I2c, Spi, Uart, Pulse, Pwm, Pico,
+Rtc, Adc, Wdt, Timer) como arrays C; `stm32_mods_install()` los pre-instala en
+`/lib` del FS al boot (idempotente), como la Pico. Desbloquea los programas que
+importan stdlib (el IDE da esos módulos por presentes y NO los sube). `FS_MAX_FILES`
+24→40 para los 13 + módulos de app. *(IO/Math son intrínsecos puros, pero se
+embeben igual para que su `import` resuelva sin sorpresas.)*
+
+**2) Backend GPIO + info de MCU** (`gpio_stm32.c`, registrado por
+`stm32_hw_register()` al boot):
+- GPIO `init/pull/write/read` sobre `HAL_GPIO_*`. **Pin plano**
+  `pin = (puerto<<4)|bit` (puerto 0=A..7=H) → PC7=39 (verde), PB7=23 (azul),
+  PG2=98 (rojo). Caché de modo/pull por pin para que `pull()` no pise el modo.
+- Backend `Pico` (info de MCU): `gpioCount()`→128 (8 puertos × 16, así la clase
+  `Gpio.Pin` acepta cualquier pin de la placa), `cpuFreqHz`→`SystemCoreClock`,
+  `uptimeMs`→`HAL_GetTick`, `uniqueId`→UID, `boardName`→"nucleo-u575zi".
+
+**Demo `Blink.bp`** (en `stm32/port/`): `import Gpio`, API raw
+`Gpio.init/write` sobre el LED verde (pin 39). Usa la API raw (no la clase `Pin`)
+para ser **verificable en host**: el stub host de `Pico.gpioCount()` vale 30, así
+que `Pin(39)` daría "fuera de rango" en host (en la placa el backend reporta 128).
+
+> **✅ Verificado en host VM-C**: compila (`main` reconocido como entry), enlaza
+> `Gpio`+`Pico`, ejecuta el bucle de 6 e invoca la fachada GPIO (`init pin=39
+> OUTPUT`, 6× `write HIGH/LOW`). La salida del programa (`blink: …`) es la misma
+> que verá el IDE en placa; las líneas `[gpio]` son el stub del host (en placa el
+> backend conduce la HAL en silencio → LED verde parpadea 6×).
+>
+> **Pendiente (placa)**: reflashear y confirmar que `Blink.bp` parpadea el verde.
+> Luego: UART/I2C/SPI/ADC/PWM (uno a uno, con prueba en placa cada uno).
 
 ### H9.5 — AOT en STM32  *(diferenciador vs ESP32)*
 `.mdn` Thumb-2 reutiliza el `AotCEmitter` existente (ARM→ARM). Validar
