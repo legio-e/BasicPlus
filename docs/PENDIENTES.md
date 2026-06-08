@@ -348,6 +348,32 @@ la sintaxis del cast (decisión de diseño) y el typecheck del store
 - **Narrow globals pendiente**. Mismo motivo — el data block tendría
   `addConstantInt8`/`Int16` y los accesores serían `GET_GLOBAL_I8`/etc.
 
+### L11 — File I/O desde BP no implementado en la VM-C (device) ⛏️ PENDIENTE (H10)
+
+Los builtins `readFile` / `writeFile` / `appendFile` / `fileExists` existen en la
+**VM-Java** (host) pero **NO en la VM-C** (Pico / ESP32 / STM32): un programa BP
+no puede leer/escribir ficheros del FS del device desde su propio código. Hoy el
+FS sólo se toca por el wire (PUT/GET desde el IDE).
+
+**Es la pieza base de varias cosas de H10** (descubierto al diseñar el log de
+usuario): con file I/O en el device, `Log.bp` es un wrapper puro-BP sobre
+`appendFile` (log persistente, visible por el explorador/GET del IDE, sin
+necesidad de display ni de un builtin de log especial), y la descompresión puede
+leer/escribir ficheros directamente.
+
+**Plan (poco a poco):**
+1. Implementar los 4 builtins en la VM-C con una **fachada de FS portable**
+   (patrón gpio/i2c): `bpvm_fs_read/write/append/exists` + backend por plataforma
+   (host = FS real de libc; Pico = `fs.c`; STM32 = `stm32_fs.c` + persistir;
+   ESP32 = su FS). Sandbox de rutas al FS del device (p.ej. `/app`, `/log`).
+2. **Paridad** con la VM-Java (mismos paths y semántica). Verificar host VM-C ↔
+   VM-Java byte-idéntico.
+3. Encima: `Log.bp` (niveles + timestamp sobre `appendFile`) y la descompresión
+   por ficheros.
+
+> Otro "agujero" del lenguaje, en la línea de tapar pre-existentes. No urgente;
+> se aborda incremental.
+
 ---
 
 ## ✅ Cerrado en sesiones recientes — anotaciones
