@@ -359,10 +359,16 @@ FS sólo se toca por el wire (PUT/GET desde el IDE).
 > fachada portable `bpvm_fs` (`include/bpvm_fs.h`, `src/fs_facade.c`) + backend
 > **host** libc (`src/fs_host.c`, registrado en `test/main.c`). **Paridad
 > byte-idéntica host VM-C ↔ VM-Java** verificada (`samples/FileTest.bp`:
-> write/append/read/exists/overwrite). **Falta**: backends de placa (Pico
-> `fs_get/fs_put`, STM32 `stm32_fs`, ESP32) — los flashea el usuario; y las
-> variantes binarias `readFileBytes`/`writeFileBytes` (`byte[]`) para la
-> descompresión.
+> write/append/read/exists/overwrite).
+>
+> **✅ Backends de placa STM32 (`stm32_fs.c`) y Pico (`fs.c`) cableados** sobre
+> `fs_get/fs_put` (+ persisten con `fs_save`/`fs_save_to_flash` → sobreviven al
+> reset, salvo `/lib`). append copia a un scratch de 8 KB. Verificado en sintaxis
+> (gcc + stub HAL); el firmware lo flashea el usuario (no testeable en host).
+> **Falta**: backend ESP32, y las variantes binarias `readFileBytes`/
+> `writeFileBytes` (`byte[]`) para la descompresión. Nota: persistir en cada
+> escritura es lento (erase+program) → un log con muchos appends querrá una capa
+> de buffer/flush por encima.
 
 **Es la pieza base de varias cosas de H10** (descubierto al diseñar el log de
 usuario): con file I/O en el device, `Log.bp` es un wrapper puro-BP sobre

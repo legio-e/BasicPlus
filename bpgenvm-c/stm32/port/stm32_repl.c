@@ -396,6 +396,7 @@ void stm32_repl_run(void) {
      * pines reales. */
     stm32_mods_install();
     stm32_hw_register();
+    stm32_fs_register_bpvm();   /* #247 — readFile/writeFile/... sobre el FS */
 
     /* FIFO RX/TX (8 bytes): absorbe el hueco de procesado entre la línea JSON
      * y los bytes bulk que la siguen → PUT fiable aunque la CPU vaya lenta.

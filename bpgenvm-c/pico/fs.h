@@ -88,6 +88,10 @@ int      fs_file_count(void);
 /* Devuelve un literal con el mensaje de error. */
 const char* fs_status_str(fs_status_t s);
 
+/* Registra este FS como backend de file I/O de BP (readFile/writeFile/
+ * appendFile/fileExists, #247). Llamar una vez al boot. */
+void fs_register_bpvm(void);
+
 #ifdef __cplusplus
 }
 #endif

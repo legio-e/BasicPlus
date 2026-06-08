@@ -45,6 +45,10 @@ void fs_save(void);
  * -1 si la flash está vacía/corrupta (FS queda vacío). */
 int  fs_load(void);
 
+/* Registra este FS como backend de file I/O de BP (readFile/writeFile/
+ * appendFile/fileExists, #247). Llamar una vez al boot. */
+void stm32_fs_register_bpvm(void);
+
 #ifdef __cplusplus
 }
 #endif

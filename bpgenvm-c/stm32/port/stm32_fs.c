@@ -3,6 +3,7 @@
  * Borrar compacta el arena (reclama espacio) → re-subir no crece sin fin.
  */
 #include "stm32_fs.h"
+#include "bpvm_fs.h"   /* backend de file I/O para los builtins (#247) */
 
 #include "main.h"     /* HAL FLASH/ICACHE + CMSIS (FLASH_BASE, FLASH->OPTR) */
 #include <string.h>
@@ -226,4 +227,62 @@ int fs_load(void) {
         fs_put(tbl[i].name, data + tbl[i].off, tbl[i].size);
     }
     return 0;
+}
+
+/* ============================================================
+ * Backend de file I/O para BP (#247): conecta readFile/writeFile/appendFile/
+ * fileExists (builtins de la VM-C) a este FS. Paths literales (p.ej.
+ * "/app/data.txt"). Las escrituras persisten (fs_save) → sobreviven al reset
+ * (salvo /lib, que re-provee el embebido al boot). append: copia el fichero a
+ * un scratch, concatena y reescribe (cap = FS_BP_SCRATCH; ficheros mayores →
+ * error). Nota: persistir en cada escritura es ~150 ms (erase+program); para
+ * un log con muchos appends conviene una capa de buffer/flush por encima.
+ * ============================================================ */
+
+#define FS_BP_SCRATCH  (8u * 1024u)
+static uint8_t s_bpfs_scratch[FS_BP_SCRATCH];
+
+static int stm32_bpfs_stat(const char* path, uint32_t* size) {
+    const uint8_t* d; uint32_t sz;
+    if (fs_get(path, &d, &sz) != 0) return -1;
+    if (size) *size = sz;
+    return 0;
+}
+
+static long stm32_bpfs_read(const char* path, uint8_t* dst, uint32_t cap) {
+    const uint8_t* d; uint32_t sz;
+    if (fs_get(path, &d, &sz) != 0) return -1;
+    uint32_t n = (sz < cap) ? sz : cap;
+    if (n > 0) memcpy(dst, d, n);
+    return (long) n;
+}
+
+static int stm32_bpfs_write(const char* path, const uint8_t* data, uint32_t len, int append) {
+    int rc;
+    if (append) {
+        const uint8_t* old; uint32_t oldsz;
+        if (fs_get(path, &old, &oldsz) == 0) {
+            if ((uint64_t) oldsz + len > FS_BP_SCRATCH) return -1;   /* no cabe */
+            memcpy(s_bpfs_scratch, old, oldsz);                       /* copia ANTES de fs_put */
+            if (len > 0) memcpy(s_bpfs_scratch + oldsz, data, len);
+            rc = fs_put(path, s_bpfs_scratch, oldsz + len);
+        } else {
+            rc = fs_put(path, data, len);                             /* fichero nuevo */
+        }
+    } else {
+        rc = fs_put(path, data, len);
+    }
+    if (rc != 0) return -1;
+    fs_save();   /* persiste; /lib no se restaura al boot (lo re-embebe el firmware) */
+    return 0;
+}
+
+static const bpvm_fs_backend_t s_stm32_fs_backend = {
+    .stat  = stm32_bpfs_stat,
+    .read  = stm32_bpfs_read,
+    .write = stm32_bpfs_write,
+};
+
+void stm32_fs_register_bpvm(void) {
+    bpvm_fs_set_backend(&s_stm32_fs_backend);
 }

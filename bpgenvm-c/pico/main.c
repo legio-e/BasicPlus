@@ -940,6 +940,7 @@ int main(void) {
     bpvm_adc_set_backend(&s_pico_adc_backend);
     bpvm_wdt_set_backend(&s_pico_wdt_backend);
     bpvm_neopixel_set_backend(&s_pico_neopixel_backend);   /* H7.4 */
+    fs_register_bpvm();                                    /* #247 — file I/O desde BP */
     /* Rtc en Pico usa el stub portable (bpvm_platform_now_ms + offset).
      * Cuando reset, el offset = 0 → epochSec devuelve segundos desde
      * boot. El IDE envía TIME <epochsec> al conectar y el comando
