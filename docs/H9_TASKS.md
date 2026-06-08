@@ -128,7 +128,7 @@ Subir `.mod`, ejecutar, stream de salida. El IDE distingue por
 `fs.c` sobre HAL FLASH; región al final de los 2 MB (~132 KB o menos). PUT desde
 el IDE persiste y sobrevive al reset.
 
-### H9.4 — stdlib embebida + Backend GPIO  *(= H4.5)*  · 🟡 PARCIAL (2026-06-08, falta verificar en placa)
+### H9.4 — stdlib embebida + Backend GPIO  *(= H4.5)*  · ✅ HECHO (2026-06-08, verificado en placa)
 
 **1) stdlib core embebida.** `stm32_mods.c` (GENERADO por
 `scripts/regen_stm32_mods.sh` desde `bpstdlib/*.mod`) trae los 13 módulos de
@@ -153,14 +153,19 @@ embeben igual para que su `import` resuelva sin sorpresas.)*
 para ser **verificable en host**: el stub host de `Pico.gpioCount()` vale 30, así
 que `Pin(39)` daría "fuera de rango" en host (en la placa el backend reporta 128).
 
-> **✅ Verificado en host VM-C**: compila (`main` reconocido como entry), enlaza
-> `Gpio`+`Pico`, ejecuta el bucle de 6 e invoca la fachada GPIO (`init pin=39
-> OUTPUT`, 6× `write HIGH/LOW`). La salida del programa (`blink: …`) es la misma
-> que verá el IDE en placa; las líneas `[gpio]` son el stub del host (en placa el
-> backend conduce la HAL en silencio → LED verde parpadea 6×).
+> **✅ Verificado en host VM-C y en placa (2026-06-08)**: compila (`main` como
+> entry), enlaza `Gpio`+`Pico` y conduce la fachada GPIO. En host las líneas
+> `[gpio]` son el stub; en placa el backend conduce la HAL y el LED verde sigue el
+> patrón del programa. El demo usa un patrón **inconfundible vs el heartbeat**
+> (verde fijo 2 s / apagado 1.5 s / 6 rápidos) narrado por el wire → se ve sin
+> ambigüedad que manda el programa. El IDE sube `Gpio.mod` a `/lib` (import directo)
+> y el device resuelve `Pico` desde la stdlib embebida. **HW controlado desde
+> BasicPlus en la 3ª familia.**
 >
-> **Pendiente (placa)**: reflashear y confirmar que `Blink.bp` parpadea el verde.
-> Luego: UART/I2C/SPI/ADC/PWM (uno a uno, con prueba en placa cada uno).
+> Diagnóstico de LEDs del firmware: 🟢 verde heartbeat (lo toma el programa en un
+> RUN) · 🔵 azul = RUN en curso · 🔴 rojo = error.
+>
+> Siguiente: UART/I2C/SPI/ADC/PWM (uno a uno, con prueba en placa cada uno).
 
 ### H9.5 — AOT en STM32  *(diferenciador vs ESP32)*
 `.mdn` Thumb-2 reutiliza el `AotCEmitter` existente (ARM→ARM). Validar

@@ -74,5 +74,5 @@ heartbeat lo retoma.
 - **H9.2 ✅** — dev-loop completo: conectar + subir + ejecutar + imports, sólido
   a **160 MHz**.
 - **H9.4 (parcial) ✅** — stdlib core embebida + backend GPIO/Pico → `Blink.bp`
-  parpadea el LED verde desde BasicPlus (verificado en host VM-C; pendiente placa).
-- Siguiente: probar `Blink.bp` en placa; luego UART/I2C/SPI/ADC/PWM y H9.5 (AOT).
+  controla el LED verde desde BasicPlus (**✅ verificado en placa 2026-06-08**).
+- Siguiente: UART/I2C/SPI/ADC/PWM (uno a uno) y H9.5 (AOT en STM32).
