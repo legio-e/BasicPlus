@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module Stats
 func max(data:double[],off:integer,n:integer):double public
 func linfit(xs:double[],xoff:integer,ys:double[],yoff:integer,n:integer):LinFit public
@@ -23,6 +23,23 @@ class Accumulator public
   method stdDev():double public
   method min():double public
   method max():double public
+end class
+class LinReg public
+  layout 11 15 00000000 00000000
+  ctor()
+  method clearData():void public
+  method addPoint(x:double,y:double):void public
+  method subPoint(x:double,y:double):void public
+  method addData(dataX:double[],dataY:double[],n:integer):void public
+  method count():integer public
+  method meanX():double public
+  method meanY():double public
+  method slope():double public
+  method intercept():double public
+  method r():double public
+  method stdDevX():double public
+  method stdDevY():double public
+  method predict(x:double):double public
 end class
 class LinFit public
   layout 4 5 00000000 00000000

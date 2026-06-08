@@ -65,5 +65,30 @@ module StatsTest
     print "slope=" + Str.formatDouble(fit.slope(), 4)
     print "intercept=" + Str.formatDouble(fit.intercept(), 4)
     print "predict(6)=" + Str.formatDouble(fit.predict(6.0d), 4)
+
+    // LinReg — regresión lineal streaming reversible sobre la misma muestra (y=2x).
+    var lr: Stats.LinReg := Stats.LinReg()
+    lr.addData(xs, ys, 5)
+    print "lr.count=" + intToString(lr.count())
+    print "lr.slope=" + Str.formatDouble(lr.slope(), 4)
+    print "lr.intercept=" + Str.formatDouble(lr.intercept(), 4)
+    print "lr.r=" + Str.formatDouble(lr.r(), 6)
+    print "lr.sx=" + Str.formatDouble(lr.stdDevX(), 6)
+    print "lr.sy=" + Str.formatDouble(lr.stdDevY(), 6)
+    print "lr.predict(6)=" + Str.formatDouble(lr.predict(6.0d), 4)
+    // subPoint: añade un outlier y quítalo → vuelve a y=2x.
+    lr.addPoint(100.0d, 0.0d)
+    lr.subPoint(100.0d, 0.0d)
+    print "lr.slope(tras sub)=" + Str.formatDouble(lr.slope(), 4)
+
+    // Caso con ordenada B != 0: (0,1)(1,3)(2,5) → y = 2x + 1.
+    var lr2: Stats.LinReg := Stats.LinReg()
+    lr2.addPoint(0.0d, 1.0d)
+    lr2.addPoint(1.0d, 3.0d)
+    lr2.addPoint(2.0d, 5.0d)
+    print "lr2.slope=" + Str.formatDouble(lr2.slope(), 4)
+    print "lr2.intercept=" + Str.formatDouble(lr2.intercept(), 4)
+    lr2.clearData()
+    print "lr2.count(tras clear)=" + intToString(lr2.count())
   end Main
 end StatsTest

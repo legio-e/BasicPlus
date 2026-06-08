@@ -1,170 +1,526 @@
-dbg 2
+dbg 3
 module Stats
 source C:\lenguajes\pm\bpstdlib\Stats.bp
 lines
-1504 49
-1520 50
-1536 51
-1544 52
-1558 53
-1566 54
-1579 56
-1591 57
-1612 58
-1624 59
-1642 60
-1656 61
-1669 63
-1683 64
-1706 70
-1727 74
-1743 75
-1765 77
-1786 82
-1802 83
-1824 85
-1858 89
-1885 93
-1901 94
-1923 96
-1944 100
-1960 101
-1982 103
-2003 40
-2013 41
-2027 42
-2041 43
-2055 44
-2128 119
-2149 122
-2170 126
-2201 115
-2209 116
-2288 134
-2306 135
-2328 137
-2334 138
-2342 139
-2350 140
-2383 141
-2407 142
-2417 143
-2435 144
-2447 146
-2453 147
-2475 148
-2488 150
-2503 152
-2522 160
-2534 161
-2542 162
-2554 163
-2572 164
-2586 166
-2605 170
-2619 171
-2641 173
-2676 177
-2690 178
-2712 180
-2722 181
-2730 182
-2742 183
-2762 184
-2781 186
-2795 188
-2814 192
-2828 193
-2850 195
-2860 196
-2868 197
-2880 198
-2900 199
-2919 201
-2933 203
-2952 207
-2966 208
-2988 210
-3033 215
-3047 216
-3069 218
-3086 219
-3098 220
-3106 221
-3118 222
-3136 223
-3150 224
-3164 226
-3194 230
-3229 235
-3243 236
-3265 238
-3282 239
-3294 240
-3314 241
-3334 243
-3381 248
-3395 249
-3417 251
-3435 252
-3462 254
-3480 255
-3507 257
-3524 258
-3538 259
-3560 261
-3587 262
-3594 263
-3605 264
-3623 265
-3649 267
-3698 272
-3712 273
-3734 275
-3751 276
-3768 277
-3780 278
-3788 279
-3800 280
-3838 281
-3852 283
-3882 288
-3896 289
-3918 291
-3935 292
-3952 293
-3962 294
-3980 295
-4002 297
-4042 303
-4056 304
-4107 306
-4124 307
-4141 308
-4153 309
-4165 310
-4173 311
-4185 312
-4203 313
-4229 314
-4243 315
-4257 317
-4275 318
-4320 320
-4330 321
-4344 322
-4386 329
-4393 330
-4401 331
-4413 332
-4431 333
-4445 336
-4453 337
-4465 338
-4475 339
-4487 340
-4527 341
-4547 342
-4561 344
-4577 345
-4592 347
+1464 53
+1480 54
+1496 55
+1504 56
+1518 57
+1526 58
+1539 60
+1551 61
+1572 62
+1584 63
+1602 64
+1616 65
+1629 67
+1643 68
+1666 74
+1687 78
+1703 79
+1725 81
+1746 86
+1762 87
+1784 89
+1818 93
+1845 97
+1861 98
+1883 100
+1904 104
+1920 105
+1942 107
+1963 44
+1973 45
+1987 46
+2001 47
+2015 48
+2088 144
+2098 145
+2112 146
+2126 147
+2140 148
+2154 149
+2178 154
+2194 155
+2208 156
+2222 157
+2240 158
+2258 159
+2286 164
+2302 165
+2312 167
+2328 168
+2342 169
+2356 170
+2374 171
+2392 172
+2420 181
+2428 182
+2440 183
+2463 184
+2487 190
+2508 195
+2524 196
+2546 198
+2574 203
+2590 204
+2612 206
+2640 211
+2656 212
+2678 214
+2687 215
+2711 216
+2729 217
+2751 219
+2775 220
+2798 225
+2814 226
+2836 228
+2872 233
+2888 234
+2910 236
+2919 237
+2943 238
+2967 239
+3014 240
+3036 242
+3060 243
+3092 248
+3108 249
+3130 251
+3139 252
+3163 253
+3181 254
+3203 256
+3240 261
+3256 262
+3278 264
+3287 265
+3311 266
+3329 267
+3351 269
+3388 274
+3421 134
+3431 135
+3445 136
+3459 137
+3473 138
+3487 139
+3560 290
+3581 293
+3602 297
+3633 286
+3641 287
+3760 305
+3778 306
+3800 308
+3806 309
+3814 310
+3822 311
+3855 312
+3879 313
+3889 314
+3907 315
+3919 317
+3925 318
+3947 319
+3960 321
+3975 323
+3994 331
+4006 332
+4014 333
+4026 334
+4044 335
+4058 337
+4077 341
+4091 342
+4113 344
+4148 348
+4162 349
+4184 351
+4194 352
+4202 353
+4214 354
+4234 355
+4253 357
+4267 359
+4286 363
+4300 364
+4322 366
+4332 367
+4340 368
+4352 369
+4372 370
+4391 372
+4405 374
+4424 378
+4438 379
+4460 381
+4505 386
+4519 387
+4541 389
+4558 390
+4570 391
+4578 392
+4590 393
+4608 394
+4622 395
+4636 397
+4666 401
+4701 406
+4715 407
+4737 409
+4754 410
+4766 411
+4786 412
+4806 414
+4853 419
+4867 420
+4889 422
+4907 423
+4934 425
+4952 426
+4979 428
+4996 429
+5010 430
+5032 432
+5059 433
+5066 434
+5077 435
+5095 436
+5121 438
+5170 443
+5184 444
+5206 446
+5223 447
+5240 448
+5252 449
+5260 450
+5272 451
+5310 452
+5324 454
+5354 459
+5368 460
+5390 462
+5407 463
+5424 464
+5434 465
+5452 466
+5474 468
+5514 474
+5528 475
+5579 477
+5596 478
+5613 479
+5625 480
+5637 481
+5645 482
+5657 483
+5675 484
+5701 485
+5715 486
+5729 488
+5747 489
+5792 491
+5802 492
+5816 493
+5858 500
+5865 501
+5873 502
+5885 503
+5903 504
+5917 507
+5925 508
+5937 509
+5947 510
+5959 511
+5999 512
+6019 513
+6033 515
+6049 516
+6064 518
+vars
+func Object.toString 0
+this -16 4 0 ?
+func Object.compareTo 25
+this -20 4 0 ?
+other -16 4 0 ?
+func RuntimeError.__init 41
+this -20 4 0 ?
+msg -16 4 0 ?
+func List.add 59
+this -20 4 0 ?
+item -16 4 0 ?
+func List.get 149
+this -20 4 0 ?
+idx -16 4 0 ?
+func List.set 169
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func List.length 191
+this -16 4 0 ?
+func List.remove 207
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 313
+this -16 4 0 ?
+func OwnerList.removeAndFree 356
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 486
+this -16 4 0 ?
+func StringBuilder.appendChar 507
+this -20 4 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 597
+this -20 4 0 ?
+s -16 4 0 ?
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 668
+this -20 4 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 693
+this -16 4 0 ?
+func StringBuilder.length 717
+this -16 4 0 ?
+func StringBuilder.__init 733
+this -16 4 0 ?
+func Thread.run 774
+this -16 4 0 ?
+func Thread.start 784
+this -16 4 0 ?
+func Thread.join 803
+this -16 4 0 ?
+func Thread.__init 822
+this -20 4 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 850
+this -16 4 0 ?
+func Mutex.unlock 869
+this -16 4 0 ?
+func Mutex.__init 888
+this -16 4 0 ?
+func SyncList.add 906
+this -20 4 0 ?
+item -16 4 0 ?
+func SyncList.remove 952
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.get 998
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.set 1042
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func SyncList.length 1091
+this -16 4 0 ?
+func SyncList.pop 1132
+this -16 4 0 ?
+func SyncList.popBlocking 1243
+this -16 4 0 ?
+func SyncList.__init 1370
+this -16 4 0 ?
+func Accumulator.add 1461
+this -24 4 0 ?
+x -20 8 0 double
+delta 0 8 0 double
+delta2 8 8 0 double
+func Accumulator.count 1663
+this -16 4 0 ?
+func Accumulator.mean 1684
+this -16 4 0 ?
+func Accumulator.variance 1743
+this -16 4 0 ?
+func Accumulator.stdDev 1815
+this -16 4 0 ?
+func Accumulator.min 1842
+this -16 4 0 ?
+func Accumulator.max 1901
+this -16 4 0 ?
+func Accumulator.__init 1960
+this -16 4 0 ?
+func __cls_init_Accumulator 2067
+this -16 4 0 ?
+func LinReg.clearData 2085
+this -16 4 0 ?
+func LinReg.addPoint 2175
+this -32 4 0 ?
+x -28 8 0 double
+y -20 8 0 double
+func LinReg.subPoint 2283
+this -32 4 0 ?
+x -28 8 0 double
+y -20 8 0 double
+func LinReg.addData 2417
+this -28 4 0 ?
+dataX -24 4 0 ref
+dataY -20 4 0 ref
+n -16 4 0 integer
+i 0 4 0 integer
+func LinReg.count 2484
+this -16 4 0 ?
+func LinReg.meanX 2505
+this -16 4 0 ?
+func LinReg.meanY 2571
+this -16 4 0 ?
+func LinReg.slope 2637
+this -16 4 0 ?
+nn 8 8 0 double
+sxx 16 8 0 double
+sxy 24 8 0 double
+func LinReg.intercept 2795
+this -16 4 0 ?
+func LinReg.r 2869
+this -16 4 0 ?
+nn 8 8 0 double
+sxx 16 8 0 double
+syy 24 8 0 double
+sxy 32 8 0 double
+func LinReg.stdDevX 3089
+this -16 4 0 ?
+nn 8 8 0 double
+sxx 16 8 0 double
+func LinReg.stdDevY 3237
+this -16 4 0 ?
+nn 8 8 0 double
+syy 16 8 0 double
+func LinReg.predict 3385
+this -24 4 0 ?
+x -20 8 0 double
+func LinReg.__init 3418
+this -16 4 0 ?
+func __cls_init_LinReg 3539
+this -16 4 0 ?
+func LinFit.slope 3557
+this -16 4 0 ?
+func LinFit.intercept 3578
+this -16 4 0 ?
+func LinFit.predict 3599
+this -24 4 0 ?
+x -20 8 0 double
+func LinFit.__init 3630
+this -32 4 0 ?
+slope -28 8 0 double
+intercept -20 8 0 double
+func __cls_new_LinFit 3656
+slope -28 8 0 double
+intercept -20 8 0 double
+func __cls_init_LinFit 3693
+this -32 4 0 ?
+slope -28 8 0 double
+intercept -20 8 0 double
+func sqrtD 3757
+x -20 8 0 double
+g 8 8 0 double
+i 16 4 0 integer
+done 20 4 0 boolean
+ng 24 8 0 double
+d 32 8 0 double
+func sum 3991
+data -24 4 0 ref
+off -20 4 0 integer
+n -16 4 0 integer
+s 8 8 0 double
+i 16 4 0 integer
+func mean 4074
+data -24 4 0 ref
+off -20 4 0 integer
+n -16 4 0 integer
+func min 4145
+data -24 4 0 ref
+off -20 4 0 integer
+n -16 4 0 integer
+m 8 8 0 double
+i 16 4 0 integer
+func max 4283
+data -24 4 0 ref
+off -20 4 0 integer
+n -16 4 0 integer
+m 8 8 0 double
+i 16 4 0 integer
+func range 4421
+data -24 4 0 ref
+off -20 4 0 integer
+n -16 4 0 integer
+func variance 4502
+data -24 4 0 ref
+off -20 4 0 integer
+n -16 4 0 integer
+mu 8 8 0 double
+ss 16 8 0 double
+i 24 4 0 integer
+dx 28 8 0 double
+func stdDev 4663
+data -24 4 0 ref
+off -20 4 0 integer
+n -16 4 0 integer
+func median 4698
+data -24 4 0 ref
+off -20 4 0 integer
+n -16 4 0 integer
+tmp 8 4 0 ?
+mid 12 4 0 integer
+func percentile 4850
+data -32 4 0 ref
+off -28 4 0 integer
+n -24 4 0 integer
+p -20 8 0 double
+tmp 8 4 0 ?
+rank 12 8 0 double
+lo 20 4 0 integer
+frac 24 8 0 double
+func covariance 5167
+xs -32 4 0 ref
+xoff -28 4 0 integer
+ys -24 4 0 ref
+yoff -20 4 0 integer
+n -16 4 0 integer
+mx 8 8 0 double
+my 16 8 0 double
+s 24 8 0 double
+i 32 4 0 integer
+func correlation 5351
+xs -32 4 0 ref
+xoff -28 4 0 integer
+ys -24 4 0 ref
+yoff -20 4 0 integer
+n -16 4 0 integer
+sx 8 8 0 double
+sy 16 8 0 double
+denom 24 8 0 double
+func linfit 5511
+xs -32 4 0 ref
+xoff -28 4 0 integer
+ys -24 4 0 ref
+yoff -20 4 0 integer
+n -16 4 0 integer
+mx 12 8 0 double
+my 20 8 0 double
+sxy 28 8 0 double
+sxx 36 8 0 double
+i 44 4 0 integer
+dx 48 8 0 double
+slope 64 8 0 double
+intercept 72 8 0 double
+func sortedCopy 5855
+data -24 4 0 ref
+off -20 4 0 integer
+n -16 4 0 integer
+tmp 4 4 0 ?
+i 8 4 0 integer
+j 12 4 0 integer
+key 16 8 0 double
+k 24 4 0 integer
+func __strconcat 6080
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 4 0 ?
+i 12 4 0 ?

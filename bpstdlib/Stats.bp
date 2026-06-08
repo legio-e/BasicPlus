@@ -7,6 +7,10 @@
 //     varianza numéricamente estable, memoria ACOTADA (no guarda la muestra).
 //     Ideal para MCU / flujos largos. Expone count/mean/variance/stdDev/min/max.
 //
+//  1b) LinReg — REGRESIÓN LINEAL streaming y reversible. Acumula N/ΣX/ΣY/ΣXY/
+//     ΣX²/ΣY² (no guarda la muestra); addPoint/subPoint/addData/clearData.
+//     Expone slope(A)/intercept(B)/r/stdDevX/stdDevY/predict.
+//
 //  2) Funciones sobre un SLICE de double[] — (data, off, n) opera sobre
 //     data[off .. off+n-1]. Convención buffer+offset+longitud: permite usar un
 //     mismo buffer para varias cosas y analizar subventanas sin copiar.
@@ -103,6 +107,173 @@ module Stats
       return this.maxV
     end max
   end Accumulator
+
+  // -------------------------------------------------------------
+  // LinReg — regresión lineal por mínimos cuadrados, STREAMING y reversible.
+  //
+  // No guarda la muestra: sólo acumula N, ΣX, ΣY, ΣXY, ΣX² y ΣY². Por eso es
+  // O(1) en memoria y permite QUITAR un punto (subPoint) — algo que Welford
+  // (ver Accumulator) no hace. Devuelve los coeficientes de y = A·x + B
+  // (slope/intercept), la r de Pearson, y las desviaciones típicas muestrales
+  // (n-1) de x e y.
+  //
+  // Método de sumas de cuadrados ("estilo calculadora"): para N enorme o
+  // valores extremos es menos estable numéricamente que Welford; para datos
+  // normales de un MCU va sobrado. Centinelas (sin throw): muestra degenerada
+  // (n<2, o x/y constantes) → 0.0.
+  // -------------------------------------------------------------
+  public class LinReg
+    var nObs:  integer
+    var sumX:  double
+    var sumY:  double
+    var sumXY: double
+    var sumX2: double
+    var sumY2: double
+
+    public function LinReg()
+      this.nObs  := 0
+      this.sumX  := 0.0d
+      this.sumY  := 0.0d
+      this.sumXY := 0.0d
+      this.sumX2 := 0.0d
+      this.sumY2 := 0.0d
+    end LinReg
+
+    // Pone todos los acumuladores a 0.
+    public function clearData()
+      this.nObs  := 0
+      this.sumX  := 0.0d
+      this.sumY  := 0.0d
+      this.sumXY := 0.0d
+      this.sumX2 := 0.0d
+      this.sumY2 := 0.0d
+    end clearData
+
+    // Acumula un punto (x, y).
+    public function addPoint(x: double, y: double)
+      this.nObs  := this.nObs + 1
+      this.sumX  := this.sumX + x
+      this.sumY  := this.sumY + y
+      this.sumXY := this.sumXY + x * y
+      this.sumX2 := this.sumX2 + x * x
+      this.sumY2 := this.sumY2 + y * y
+    end addPoint
+
+    // Quita un punto (x, y) previamente añadido. n<=0 → no hace nada.
+    public function subPoint(x: double, y: double)
+      if this.nObs <= 0 then
+        return
+      endif
+      this.nObs  := this.nObs - 1
+      this.sumX  := this.sumX - x
+      this.sumY  := this.sumY - y
+      this.sumXY := this.sumXY - x * y
+      this.sumX2 := this.sumX2 - x * x
+      this.sumY2 := this.sumY2 - y * y
+    end subPoint
+
+    // Acumula un array de pares: dataX[i] con dataY[i]. Recorre dataX, así que
+    // dataY debe ser al menos igual de largo.
+    // Acumula n pares dataX[i]/dataY[i]. n explícito (convención de Stats: BP
+    // no tiene longitud de array en superficie, y el for-in dentro de un método
+    // de clase aún no es fiable — ver backlog).
+    public function addData(dataX: double[], dataY: double[], n: integer)
+      var i: integer := 0
+      while i < n do
+        this.addPoint(dataX[i], dataY[i])
+        i := i + 1
+      endwh
+    end addData
+
+    // Nº de puntos acumulados.
+    public function count(): integer
+      return this.nObs
+    end count
+
+    // Media de x. n<=0 → 0.
+    public function meanX(): double
+      if this.nObs <= 0 then
+        return 0.0d
+      endif
+      return this.sumX / double(this.nObs)
+    end meanX
+
+    // Media de y. n<=0 → 0.
+    public function meanY(): double
+      if this.nObs <= 0 then
+        return 0.0d
+      endif
+      return this.sumY / double(this.nObs)
+    end meanY
+
+    // Pendiente A de y = A·x + B (mínimos cuadrados). n<2 o x constante → 0.
+    public function slope(): double
+      if this.nObs < 2 then
+        return 0.0d
+      endif
+      var nn:  double := double(this.nObs)
+      var sxx: double := this.sumX2 - this.sumX * this.sumX / nn
+      if sxx <= 0.0d then
+        return 0.0d
+      endif
+      var sxy: double := this.sumXY - this.sumX * this.sumY / nn
+      return sxy / sxx
+    end slope
+
+    // Ordenada en el origen B de y = A·x + B.
+    public function intercept(): double
+      if this.nObs <= 0 then
+        return 0.0d
+      endif
+      return this.meanY() - this.slope() * this.meanX()
+    end intercept
+
+    // Coeficiente de correlación de Pearson r ∈ [-1, 1]. Degenerado → 0.
+    public function r(): double
+      if this.nObs < 2 then
+        return 0.0d
+      endif
+      var nn:  double := double(this.nObs)
+      var sxx: double := this.sumX2 - this.sumX * this.sumX / nn
+      var syy: double := this.sumY2 - this.sumY * this.sumY / nn
+      if (sxx <= 0.0d) or (syy <= 0.0d) then
+        return 0.0d
+      endif
+      var sxy: double := this.sumXY - this.sumX * this.sumY / nn
+      return sxy / sqrtD(sxx * syy)
+    end r
+
+    // Desviación típica MUESTRAL (n-1) de x. n<2 → 0.
+    public function stdDevX(): double
+      if this.nObs < 2 then
+        return 0.0d
+      endif
+      var nn:  double := double(this.nObs)
+      var sxx: double := this.sumX2 - this.sumX * this.sumX / nn
+      if sxx <= 0.0d then
+        return 0.0d
+      endif
+      return sqrtD(sxx / double(this.nObs - 1))
+    end stdDevX
+
+    // Desviación típica MUESTRAL (n-1) de y. n<2 → 0.
+    public function stdDevY(): double
+      if this.nObs < 2 then
+        return 0.0d
+      endif
+      var nn:  double := double(this.nObs)
+      var syy: double := this.sumY2 - this.sumY * this.sumY / nn
+      if syy <= 0.0d then
+        return 0.0d
+      endif
+      return sqrtD(syy / double(this.nObs - 1))
+    end stdDevY
+
+    // Predicción y = A·x + B con los coeficientes actuales.
+    public function predict(x: double): double
+      return this.slope() * x + this.intercept()
+    end predict
+  end LinReg
 
   // -------------------------------------------------------------
   // LinFit — resultado de la regresión lineal (slope, intercept).
