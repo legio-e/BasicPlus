@@ -124,7 +124,7 @@ Subir `.mod`, ejecutar, stream de salida. El IDE distingue por
 >
 > **Siguiente → hecho en H9.4** (embeber stdlib + GPIO).
 
-### H9.3 — FS persistente en flash interna  *(= H4.4)*  · 🟡 HECHO (2026-06-08, falta verificar en placa)
+### H9.3 — FS persistente en flash interna  *(= H4.4)*  · ✅ HECHO (2026-06-08, verificado en placa)
 
 `stm32_fs.c` gana `fs_save()`/`fs_load()` sobre la **HAL FLASH** del U575:
 - **Región**: últimos **128 KB** de la flash (`0x081E0000..0x08200000`), reservados
@@ -141,10 +141,10 @@ Subir `.mod`, ejecutar, stream de salida. El IDE distingue por
   embebido → stdlib siempre fresca, sin skew tras actualizar firmware). Magic/
   version inválidos (flash borrada) → FS vacío.
 
-> Sintaxis verificada (gcc + stub HAL). **Pendiente (placa)**: subir un fichero a
-> `/app`, **resetear**, y comprobar que sigue ahí (el explorador del IDE lo lista)
-> y se ejecuta sin re-subir. Con esto, H9 queda a falta de los *stretch* (AOT,
-> L496).
+> **✅ Verificado en placa (2026-06-08)**: un fichero subido a `/app` sobrevive al
+> reset y se ejecuta sin re-subir. Con esto el **U575 cumple el criterio de cierre
+> completo** (§5.1): Run + imports + GPIO real + FS persistente + paridad. Solo
+> quedan los *stretch* (H9.5 AOT, H9.6 L496), diferidos.
 
 ### H9.4 — stdlib embebida + Backend GPIO  *(= H4.5)*  · ✅ HECHO (2026-06-08, verificado en placa)
 
@@ -195,12 +195,17 @@ imagen-por-familia (§9b de la VM).
 
 ## 5. "H9 cerrada" cuando
 
-1. **U575 end-to-end**: compilar BP en el IDE → **Run on STM32** → corre en placa,
-   salida por VCP, **FS persistente**, **GPIO real**, y **paridad byte-idéntica**
-   con la VM-Java para los samples de prueba.
-2. *(stretch)* **AOT validado** en el U575.
-3. *(stretch)* **L496ZG** corriendo el mismo firmware-base como prueba de
-   generalización del HAL.
+1. **U575 end-to-end** ✅ **CUMPLIDO (2026-06-08)**: compilar BP en el IDE →
+   **Run on STM32** → corre en placa, salida por VCP, **FS persistente**,
+   **GPIO real**, y **paridad byte-idéntica** con la VM-Java. *(H9.1+H9.2+H9.4+H9.3
+   verificados en placa.)*
+2. *(stretch, diferido)* **AOT validado** en el U575 (H9.5).
+3. *(stretch, diferido)* **L496ZG** corriendo el mismo firmware-base como prueba
+   de generalización del HAL (H9.6).
+
+> **Estado (2026-06-08)**: el **núcleo de H9 está cerrado** (criterio 1). Los
+> stretch (AOT, L496) quedan aparcados — se retoman cuando toque. Próximo foco:
+> H10 (stdlib, retoques ligeros) o tapar agujeros sueltos.
 
 Candidata a ser **el hito de cierre de V2** (como el ESP32 cerró v1).
 

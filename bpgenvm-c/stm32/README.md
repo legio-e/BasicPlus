@@ -81,6 +81,7 @@ heartbeat lo retoma.
   a **160 MHz**.
 - **H9.4 (parcial) ✅** — stdlib core embebida + backend GPIO/Pico → `Blink.bp`
   controla el LED verde desde BasicPlus (**✅ verificado en placa 2026-06-08**).
-- **H9.3 ✅ (pendiente placa)** — FS persistente en flash interna: subir a `/app`
-  sobrevive al reset. Verificar: subir, resetear, comprobar que sigue.
-- Siguiente: UART/I2C/SPI/ADC/PWM (uno a uno) y H9.5 (AOT en STM32).
+- **H9.3 ✅ (verificado en placa 2026-06-08)** — FS persistente en flash interna:
+  un fichero subido a `/app` sobrevive al reset.
+- **Núcleo de H9 cerrado**: el U575 corre end-to-end (Run + imports + GPIO real +
+  FS persistente + paridad). *Stretch diferidos*: H9.5 (AOT), H9.6 (L496).
