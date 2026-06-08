@@ -1,33 +1,39 @@
-// Blink.bp — H9.4: parpadea el LED VERDE (PC7) del Nucleo-U575ZI-Q desde
-// BasicPlus, controlando el GPIO real vía el backend HAL del STM32.
+// Blink.bp — H9.4: controla el LED VERDE (PC7 = pin 39) desde BasicPlus.
 //
-// Modelo de pin del backend STM32: pin = (puerto<<4) | bit, con puerto
-// 0=A, 1=B, 2=C, ...  El LED verde de la placa es PC7 → (2<<4)|7 = 39.
+// El firmware tiene un "heartbeat" que parpadea el verde ~2 Hz ENTRE
+// ejecuciones. Para que se note que aquí manda el PROGRAMA, el patrón es
+// DELIBERADAMENTE distinto de ese heartbeat (verde fijo 2 s, apagado, y luego
+// rápidos) — el heartbeat nunca aguanta encendido ni apagado tanto rato.
+// Durante el RUN el heartbeat se pausa, así que lo que ves es esto, y cada
+// fase va narrada por el wire para poder correlacionarla con el LED.
 //
-// Usamos la API raw de Gpio (init/write) — no la clase Pin — para no
-// depender de Pico.gpioCount() (en el host-stub vale 30, así que Pin(39)
-// daría "fuera de rango"; en la placa el backend reporta 128 y Pin(39) vale).
-//
-// Observable en placa: el LED verde da 6 parpadeos (~0,4 s on / 0,4 s off);
-// al terminar, el heartbeat del firmware retoma el verde.
-// Salida (idéntica en VM-Java, VM-C host y STM32):
-//   blink: LED verde (PC7), 6 parpadeos
-//   blink: fin
+// Pin plano del backend STM32: pin = (puerto<<4)|bit → PC7 = (C=2)<<4|7 = 39.
+// (PB7=23 es el azul, PG2=98 el rojo, por si quieres probar otro.)
 module Blink
   import Gpio
 
   function main()
-    var GREEN: integer := 39          // PC7 = (C=2)<<4 | 7
+    var GREEN: integer := 39
     Gpio.init(GREEN, Gpio.OUTPUT())
-    print "blink: LED verde (PC7), 6 parpadeos"
+
+    print "1) verde FIJO 2 s  (el heartbeat nunca aguanta tanto)"
+    Gpio.write(GREEN, Gpio.HIGH())
+    sleep(2000)
+
+    print "2) verde APAGADO 1.5 s  (sin parpadeo = lo controla el programa)"
+    Gpio.write(GREEN, Gpio.LOW())
+    sleep(1500)
+
+    print "3) 6 parpadeos rapidos"
     var i: integer := 0
     while i < 6 do
       Gpio.write(GREEN, Gpio.HIGH())
-      sleep(400)
+      sleep(150)
       Gpio.write(GREEN, Gpio.LOW())
-      sleep(400)
+      sleep(150)
       i := i + 1
     endwh
-    print "blink: fin"
+
+    print "fin  (ahora el heartbeat retoma el verde)"
   end main
 end Blink
