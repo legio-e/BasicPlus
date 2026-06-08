@@ -1,0 +1,17 @@
+// FileTest.bp — H10/#247: ejercita el file I/O (readFile/writeFile/appendFile/
+// fileExists) en la VM-C con paridad con la VM-Java. Salida determinista.
+module FileTest
+  function main()
+    var path: string := "fileio_test.txt"
+    print "exists antes=" + boolToString(fileExists(path))
+    writeFile(path, "hola")
+    appendFile(path, " mundo")
+    var content: string := readFile(path)
+    print "content=[" + content + "]"
+    print "len=" + intToString(strlen(content))
+    print "exists=" + boolToString(fileExists(path))
+    print "exists(no)=" + boolToString(fileExists("no_existe_xyz.txt"))
+    writeFile(path, "XY")          // overwrite (trunca)
+    print "tras overwrite=[" + readFile(path) + "]"
+  end main
+end FileTest

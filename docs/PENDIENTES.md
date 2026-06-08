@@ -348,12 +348,21 @@ la sintaxis del cast (decisión de diseño) y el typecheck del store
 - **Narrow globals pendiente**. Mismo motivo — el data block tendría
   `addConstantInt8`/`Int16` y los accesores serían `GET_GLOBAL_I8`/etc.
 
-### L11 — File I/O desde BP no implementado en la VM-C (device) ⛏️ PENDIENTE (H10)
+### L11 — File I/O desde BP en la VM-C 🟡 EN CURSO (H10): host ✓, falta device
 
 Los builtins `readFile` / `writeFile` / `appendFile` / `fileExists` existen en la
 **VM-Java** (host) pero **NO en la VM-C** (Pico / ESP32 / STM32): un programa BP
 no puede leer/escribir ficheros del FS del device desde su propio código. Hoy el
 FS sólo se toca por el wire (PUT/GET desde el IDE).
+
+> **✅ Hecho (2026-06-08)**: los 4 builtins de texto (ids 38..41) en la VM-C +
+> fachada portable `bpvm_fs` (`include/bpvm_fs.h`, `src/fs_facade.c`) + backend
+> **host** libc (`src/fs_host.c`, registrado en `test/main.c`). **Paridad
+> byte-idéntica host VM-C ↔ VM-Java** verificada (`samples/FileTest.bp`:
+> write/append/read/exists/overwrite). **Falta**: backends de placa (Pico
+> `fs_get/fs_put`, STM32 `stm32_fs`, ESP32) — los flashea el usuario; y las
+> variantes binarias `readFileBytes`/`writeFileBytes` (`byte[]`) para la
+> descompresión.
 
 **Es la pieza base de varias cosas de H10** (descubierto al diseñar el log de
 usuario): con file I/O en el device, `Log.bp` es un wrapper puro-BP sobre

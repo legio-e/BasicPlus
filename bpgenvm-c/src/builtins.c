@@ -24,6 +24,7 @@
 #include "bpvm_adc.h"
 #include "bpvm_wdt.h"
 #include "bpvm_uart.h"
+#include "bpvm_fs.h"
 
 /* IDs estables (= ordinal del enum Builtin Java). Sólo los que F2
  * implementa; los demás devuelven BAD_OPCODE para que el caller sepa
@@ -39,6 +40,11 @@ enum {
     BUILTIN_ABS             = 16,
     BUILTIN_MIN             = 17,
     BUILTIN_MAX             = 18,
+    /* File I/O (V2/H10/#247) — paridad con enum Builtin Java (ids 38..41). */
+    BUILTIN_READ_FILE       = 38,
+    BUILTIN_WRITE_FILE      = 39,
+    BUILTIN_APPEND_FILE     = 40,
+    BUILTIN_FILE_EXISTS     = 41,
     BUILTIN_NOW             = 34,
     BUILTIN_SLEEP           = 35,
     BUILTIN_GC              = 43,
@@ -225,6 +231,61 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         long v = strtol(p, NULL, 10);
         push_i32(vm, tc, (int32_t) v);
+        return BPVM_OK;
+    }
+
+    /* File I/O (H10/#247) — puente sobre la fachada bpvm_fs (backend libc en
+     * host, fs_get/fs_put en device). Paridad con la VM-Java: lee/escribe los
+     * bytes del string BP (UTF-8) tal cual; errores → RuntimeError atrapable.
+     * El path se lee a un buffer C; el contenido se escribe/lee directo desde
+     * el heap (cualquier tamaño). */
+    case BUILTIN_READ_FILE: {
+        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        char path[512];
+        read_bp_string(vm, pref, path, sizeof(path));
+        uint32_t size = 0;
+        if (bpvm_fs_stat(path, &size) != 0) {
+            char em[576];
+            snprintf(em, sizeof(em), "readFile('%s'): no se pudo abrir", path);
+            return builtin_throw(vm, tc, em);
+        }
+        uint32_t ref = bpvm_heap_alloc(vm, size, BPVM_TYPE_ARRAY_I8);
+        if (ref == 0) return builtin_throw(vm, tc, "readFile: sin memoria");
+        bpvm_write_u32_be(vm->memory + ref, size);
+        if (size > 0) {
+            long n = bpvm_fs_read(path, vm->memory + ref + 4, size);
+            if (n < 0 || (uint32_t) n != size) {
+                char em[576];
+                snprintf(em, sizeof(em), "readFile('%s'): error de lectura", path);
+                return builtin_throw(vm, tc, em);
+            }
+        }
+        push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_WRITE_FILE:
+    case BUILTIN_APPEND_FILE: {
+        int append = (id == BUILTIN_APPEND_FILE);
+        uint32_t cref = (uint32_t) pop_i32(vm, tc);   /* content (empujado el último) */
+        uint32_t pref = (uint32_t) pop_i32(vm, tc);   /* path */
+        char path[512];
+        read_bp_string(vm, pref, path, sizeof(path));
+        uint32_t clen = (cref == 0) ? 0 : bpvm_read_u32_be(vm->memory + cref);
+        const uint8_t* cdata = (cref == 0) ? NULL : (vm->memory + cref + 4);
+        if (bpvm_fs_write(path, cdata, clen, append) != 0) {
+            char em[576];
+            snprintf(em, sizeof(em), "%s('%s'): error de escritura",
+                     append ? "appendFile" : "writeFile", path);
+            return builtin_throw(vm, tc, em);
+        }
+        push_i32(vm, tc, 0);   /* void → dummy */
+        return BPVM_OK;
+    }
+    case BUILTIN_FILE_EXISTS: {
+        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        char path[512];
+        read_bp_string(vm, pref, path, sizeof(path));
+        push_i32(vm, tc, bpvm_fs_exists(path) ? 1 : 0);
         return BPVM_OK;
     }
 

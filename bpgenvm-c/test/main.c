@@ -15,6 +15,7 @@
  */
 
 #include "bpvm.h"
+#include "bpvm_fs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -109,6 +110,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     bpvm_set_tracing(vm, trace);
+    bpvm_fs_register_host();   /* file I/O sobre libc (host) */
 
     debug_trace_state_t dbg_state = { 0, debug_print, 0 };
     if (debug_trace) {

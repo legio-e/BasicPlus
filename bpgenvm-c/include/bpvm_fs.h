@@ -1,0 +1,51 @@
+/*
+ * bpvm_fs.h — fachada de file I/O para la VM C (H10 / #247).
+ *
+ * Los builtins readFile/writeFile/appendFile/fileExists (src/builtins.c)
+ * delegan en el backend registrado por la plataforma:
+ *   - host (test/main.c): backend libc (bpvm_fs_register_host) → FS real.
+ *   - device (Pico/STM32/ESP32): backend sobre el FS del firmware
+ *     (fs_get/fs_put), registrado en el main de cada placa.
+ * Sin backend, las operaciones fallan limpio (-1/0) y el builtin lanza un
+ * RuntimeError BP atrapable — mismo comportamiento que un builtin no soportado.
+ *
+ * Mismo patrón que bpvm_gpio.h: tabla de punteros + set_backend + funciones
+ * efectivas con fallback.
+ */
+#ifndef BPVM_FS_H
+#define BPVM_FS_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct {
+    /* 0 + *size si el fichero existe; -1 si no. */
+    int  (*stat)(const char* path, uint32_t* size);
+    /* lee hasta `cap` bytes en `dst`; devuelve nº de bytes leídos, o -1. */
+    long (*read)(const char* path, uint8_t* dst, uint32_t cap);
+    /* escribe `len` bytes; append!=0 → al final (crea si no existe). 0 / -1. */
+    int  (*write)(const char* path, const uint8_t* data, uint32_t len, int append);
+} bpvm_fs_backend_t;
+
+/* Registra el backend (una vez al boot). */
+void bpvm_fs_set_backend(const bpvm_fs_backend_t* backend);
+
+/* Funciones efectivas (sin backend → fallo limpio). */
+int  bpvm_fs_stat  (const char* path, uint32_t* size);
+long bpvm_fs_read  (const char* path, uint8_t* dst, uint32_t cap);
+int  bpvm_fs_write (const char* path, const uint8_t* data, uint32_t len, int append);
+int  bpvm_fs_exists(const char* path);   /* 1 / 0 */
+
+/* Backend host (libc). Implementado en fs_host.c (host-only); el firmware
+ * registra el suyo (fs_get/fs_put). */
+void bpvm_fs_register_host(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* BPVM_FS_H */
