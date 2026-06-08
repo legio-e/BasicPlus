@@ -361,15 +361,27 @@ usuario): con file I/O en el device, `Log.bp` es un wrapper puro-BP sobre
 necesidad de display ni de un builtin de log especial), y la descompresión puede
 leer/escribir ficheros directamente.
 
+**Más ligero de lo que parece**: en el device los primitivos YA existen. El
+firmware lee su config en C — p.ej. `pico/board_desc.c` hace
+`fs_get("/sys/board.json", &data, &size)` + `json_parse` (`json_min`) +
+`json_get_str`. O sea: `fs_get`/`fs_put` (lectura/escritura del FS) y el parser
+JSON ya están en cada placa; sólo NO están expuestos a BP. ⇒ los builtins son un
+**puente fino** sobre `fs_get`/`fs_put`, no una implementación desde cero.
+
 **Plan (poco a poco):**
-1. Implementar los 4 builtins en la VM-C con una **fachada de FS portable**
-   (patrón gpio/i2c): `bpvm_fs_read/write/append/exists` + backend por plataforma
-   (host = FS real de libc; Pico = `fs.c`; STM32 = `stm32_fs.c` + persistir;
-   ESP32 = su FS). Sandbox de rutas al FS del device (p.ej. `/app`, `/log`).
-2. **Paridad** con la VM-Java (mismos paths y semántica). Verificar host VM-C ↔
+1. Builtins en la VM-C con **fachada de FS portable** (patrón gpio/i2c):
+   `bpvm_fs_read/write/append/exists` → backend por plataforma que llama al
+   `fs_get`/`fs_put` EXISTENTE (host = libc; Pico = `fs.c`; STM32 = `stm32_fs.c`
+   + persistir; ESP32 = su FS). Sandbox de rutas (p.ej. `/app`, `/log`).
+2. **Variante binaria** `readFileBytes(path): byte[]` / `writeFileBytes(path,
+   byte[])`: el FS es byte-oriented (`fs_get` da `const uint8_t*`), así que el
+   `byte[]` encaja directo — y es lo que necesita la **descompresión** (un fichero
+   comprimido es binario; el `readFile`→`string` del host hace `new String(bytes)`,
+   lossy para binario). El `byte[]` es de hecho el primitivo más natural.
+3. **Paridad** con la VM-Java (mismos paths/semántica). Verificar host VM-C ↔
    VM-Java byte-idéntico.
-3. Encima: `Log.bp` (niveles + timestamp sobre `appendFile`) y la descompresión
-   por ficheros.
+4. Encima: `Log.bp` (niveles + timestamp sobre `appendFile`) y la descompresión
+   (leer comprimido → `byte[]`, descomprimir, escribir).
 
 > Otro "agujero" del lenguaje, en la línea de tapar pre-existentes. No urgente;
 > se aborda incremental.
