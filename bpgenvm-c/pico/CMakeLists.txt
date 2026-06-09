@@ -74,6 +74,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/interp.c
     ${BPVM_C_ROOT}/src/heap.c
     ${BPVM_C_ROOT}/src/builtins.c
+    ${BPVM_C_ROOT}/src/fs_facade.c           # #247: facade file I/O (readFile/writeFile/appendFile/fileExists)
     ${BPVM_C_ROOT}/src/link.c
     ${BPVM_C_ROOT}/src/scheduler.c
     ${BPVM_C_ROOT}/src/threading.c
