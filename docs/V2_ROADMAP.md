@@ -47,10 +47,10 @@ B1 caracterizado + mitigado (1 worker por defecto).
 | Apartado | Qué | Estado |
 |---|---|---|
 | H8 | Ampliación de lenguaje (default params ✅, tuplas first-class ✅) | ✅ (cajón abierto) |
-| H9 | 3ª familia: **STM32** (ref. Nucleo-U575ZI-Q) | pendiente |
-| H10 | Librería estándar: **ajuste + ampliación** | pendiente |
-| H11 | **TCP/IP**: cliente simple (empezar) | pendiente |
-| H12 | **Consolidación del IDE** (consola MS-DOS + doble-clic + pulido) — hacia el final | pendiente |
+| H9 | 3ª familia: **STM32** (ref. Nucleo-U575ZI-Q) | ✅ núcleo cerrado (Run+imports+GPIO+FS persistente+paridad); *stretch* AOT/L496 diferidos |
+| H10 | Librería estándar: **ajuste + ampliación** | 🟡 parcial — LinReg ✅, file I/O en VM-C ✅; resto (log, descompresión, byte[]…) **poco a poco / diferido** |
+| H11 | **TCP/IP**: cliente simple (empezar) | ⏸️ **diferido al final** (probablemente V3) |
+| H12 | **Consolidación del IDE** (consola MS-DOS + doble-clic + pulido) | 🟡 **en curso** — empezando por la **línea de comandos** (consola) |
 | H13 | **Documentación y cierre** (docs doble + publicación) — puerta final | pendiente |
 | — | **Consolidación** (tapar agujeros) — transversal | en curso |
 
