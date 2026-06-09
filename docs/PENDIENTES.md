@@ -401,6 +401,27 @@ JSON ya están en cada placa; sólo NO están expuestos a BP. ⇒ los builtins s
 > Otro "agujero" del lenguaje, en la línea de tapar pre-existentes. No urgente;
 > se aborda incremental.
 
+### L12 — Base común `Exception` para todas las excepciones (pendiente, tarea #248)
+Hoy NO hay base común: el frontend sintetiza `RuntimeError` aislado
+(`class RuntimeError { var msg }`, msg en slot 0) y las excepciones de usuario son
+clases cualesquiera (p.ej. `MyError { var msg_ }`), con campos/orden arbitrarios. El
+`catch e: X` casa por `instanceof X`, sea X la clase que sea.
+
+**Pendiente:** introducir una base `Exception` de la que desciendan TODAS las
+excepciones, **incluido `RuntimeError`**, con `msg` en el slot 0 (heredado por todos).
+
+Motiva:
+- modelo uniforme (`catch e: Exception` caza todo; `e.msg` siempre disponible);
+- desbloquea **parity-safe** la opción 1 de #213 (throw de clase de usuario desde
+  native): con base común + msg en slot 0, el atajo "construir + poner slot 0 = msg"
+  es correcto por construcción para cualquier excepción, sin tener que ejecutar el
+  constructor real desde native (que hoy es otro gap — `new_object` es stub en AOT).
+
+Toca: síntesis del frontend (`Exception` + `RuntimeError extends Exception`),
+analizador (catch/throw/instanceof), **paridad dual-VM** (miVM ↔ VM-C), posiblemente
+la `.bpi` de la base. Es una decisión de modelo de lenguaje → con cuidado, con samples
++ paridad. (Anotado a petición de Eduardo, 2026-06-09; desbloquea #213 opción 1.)
+
 ---
 
 ## ✅ Cerrado en sesiones recientes — anotaciones
