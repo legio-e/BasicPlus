@@ -285,8 +285,10 @@ va aquí. Algunas ideas que ya tenemos:
 Estas tasks están en el backlog como `pending` pero NO son blockers de
 v1. Se hacen "cuando haya hueco" entre las grandes:
 
-- **#161** `P-aot-asm-inline` — reescribir helpers críticos en ARM
-  asm inline. Ganancia probable ×1.3-1.5 en hot path.
+- ~~**#161** `P-aot-asm-inline` — reescribir helpers críticos en ARM
+  asm inline.~~ **ELIMINADO (V2, 2026-06-09):** asm a mano por ISA no escala con
+  la cantidad de micros; el AOT genera C portable y deja la optimización por
+  target al compilador de C. (Ni V2 ni V3.)
 - **#163** `P-mod-disasm` — disassembler de `.mod` para diagnóstico.
   Útil pero el debugger de H1 cubrirá lo importante.
 - **#169** `P-aot-cross-module-call` — llamadas native → native entre

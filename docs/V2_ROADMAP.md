@@ -162,9 +162,13 @@ Tras cerrar V2: solo bug fixes / docs / samples; toda feature nueva → V3.
 - **→ V3** (`docs/V3_IDEAS.md`): GUI gráfica (LVGL), dual-core (#153) + fix de B1,
   eventos (§9), callbacks / función-valor (§8), TCP/IP ampliado.
 - **→ backlog "cuando haya hueco"** (no condicionan el cierre): refinamientos AOT
-  (#161/#169/#193/#212/#213), comms extra (#138 CDC-mux, #145 WiFi más allá del
-  cliente simple), packaging (§9/§9b/§11 VM: imagen por familia, HAL formal,
-  host-VM como simulador).
+  (#169/#212/#213; #193 ✅ hecho 2026-06-09), comms extra (#138 CDC-mux, #145 WiFi
+  más allá del cliente simple), packaging (§9/§9b/§11 VM: imagen por familia, HAL
+  formal, host-VM como simulador).
+- **#161 (AOT en asm inline) ELIMINADO** (2026-06-09 — ni V2 ni V3): el AOT genera
+  **C** como capa de abstracción portable; reescribir a mano en asm por ISA
+  (Thumb-2/Xtensa/RISC-V…) no escala con la cantidad de micros y rompe justo esa
+  portabilidad. El optimizador de C de cada target es quien exprime su ISA.
 
 ## 7. Próximo paso
 

@@ -106,8 +106,10 @@ auto-`toString` en `print`, `compareTo` por defecto → throw).
 
 - **T6 — Diferido a hardware/v2 (tareas `[v2]` en la lista)**: #140 debug-on-Pico
   real · #145 wifi-tcp (Pico 2 W) · #138 cdc-multiplex · #153 dual-core RP2350
-  (SWD) · #169/#174 AOT cross-module · #175 AOT try/catch · #161 AOT asm inline ·
-  #193 AOT helpers `byte[]`.
+  (SWD) · #169/#174 AOT cross-module · #175 AOT try/catch ·
+  #193 AOT helpers `byte[]` ✅ HECHO (2026-06-09). **#161 (AOT asm inline)
+  ELIMINADO** — asm a mano por ISA no escala; el AOT genera C portable (ver
+  V2_ROADMAP §6).
 
 - **Puente native→BP — HECHO (#210 runtime + #211 compilador, 2026-06-03).**
   `OP_NATIVE_RETURN` (0xAA) + `bpvm_aot_call_bp_i32` (runtime) y AotCEmitter
