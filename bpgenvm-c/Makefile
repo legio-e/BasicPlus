@@ -112,6 +112,24 @@ test-xmodule: $(LIBOBJ)
 	  (cd samples && ../$(XMOD_BIN) BridgeApp.mod); \
 	fi
 
+# #212 — AotMain resuelve imports: una native (XmodNat.compute) llama a Helper.dbl
+# (BP, OTRO módulo) por el puente, con la llamada cross-module emitida AUTOMÁTICAMENTE
+# (AotMain carga la .bpi del import → símbolo external → AotCEmitter enruta el puente).
+# El loader auto-carga Helper.mod vía discover_deps. Salida byte-idéntica a la VM-Java.
+XMODNAT_BIN = build/test_xmodnat.exe
+test-xmodnat: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/XmodNat.mod ]; then \
+	  echo "(skip test-xmodnat: falta samples/XmodNat.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/XmodNat.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_xmodnat.c test/aot_XmodNat.c \
+	    $(LIBOBJ) -o $(XMODNAT_BIN) $(LDFLAGS); \
+	  echo "--- AOT cross-module #212 (esperado: compute(5) = 11, OK) ---"; \
+	  (cd samples && ../$(XMODNAT_BIN) XmodNat.mod); \
+	fi
+
 # #175 — throw RuntimeError(<msg computado>) desde native, cazado por try/catch
 # BP. test/aot_ThrowMsg.c es un SNAPSHOT del .c que genera AotCEmitter (usa
 # throw_str con el string-handle computado). Salida byte-idéntica a la VM-Java.

@@ -1,0 +1,15 @@
+// XmodNat — #212: una `function native` que llama a una función de OTRO módulo
+// (Helper.dbl). Antes AotMain no resolvía el import → "AOT no soportado". Ahora
+// resuelve la .bpi y el AotCEmitter enruta la llamada por el puente call_bp.
+// Esperado: compute(5) = 11  (Helper.dbl(5)=10, +1).
+module XmodNat
+  import Helper
+
+  native function compute(x: integer): integer
+    return Helper.dbl(x) + 1
+  end compute
+
+  function Main()
+    print "compute(5) =", compute(5)
+  end Main
+end XmodNat

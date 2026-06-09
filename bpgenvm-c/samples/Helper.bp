@@ -1,0 +1,6 @@
+// Helper — librería trivial importada por XmodNat (#212 cross-module AOT).
+module Helper
+  public function dbl(x: integer): integer
+    return x + x
+  end dbl
+end Helper

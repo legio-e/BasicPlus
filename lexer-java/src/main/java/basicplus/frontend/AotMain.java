@@ -75,6 +75,20 @@ public final class AotMain {
             //     solo emite; los exprTypes de las expresiones locales del
             //     cuerpo native se rellenan igualmente.
             SemanticAnalyzer analyzer = new SemanticAnalyzer();
+            // #212 — resolver imports: cargar las .bpi de los módulos importados en
+            // el analizador, igual que Main.compileFull. Sin esto AotMain analizaba
+            // en aislamiento y una llamada `Mod.func()` desde native no resolvía a
+            // símbolo external → AotCEmitter la rechazaba ("AOT no soportado"). Con
+            // el import resuelto, el emisor la enruta por el puente call_bp
+            // (emitCrossModuleBridgeCall, #169). Las .bpi de las deps deben existir
+            // (ya compiladas); las que falten se avisan y se omiten.
+            try {
+                Main.Ctx ctx = new Main.Ctx();
+                ctx.outDir = outDir;
+                Main.loadImportsForAnalyzer(module, src, ctx, analyzer, 0);
+            } catch (Exception impEx) {
+                System.err.println("aviso: imports no resueltos del todo: " + impEx.getMessage());
+            }
             SemanticInfo info = analyzer.analyze(module);
 
             // 3. Emit AOT

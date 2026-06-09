@@ -945,7 +945,10 @@ public final class Main {
         }
     }
 
-    private static void loadImportsForAnalyzer(Ast.ModuleNode module, Path importerSrc, Ctx ctx,
+    // Package-private (#212): AotMain lo reutiliza para resolver imports antes de
+    // emitir AOT, igual que compileFull aquí. Carga las .bpi disponibles en el
+    // analizador (no compila deps; deben existir ya).
+    static void loadImportsForAnalyzer(Ast.ModuleNode module, Path importerSrc, Ctx ctx,
                                                SemanticAnalyzer analyzer, int depth) throws IOException {
         if (module.imports == null || module.imports.isEmpty()) return;
         Path importerDir = importerSrc.toAbsolutePath().getParent();
