@@ -71,6 +71,11 @@ public class FrmMain extends javax.swing.JFrame
     private JTextArea consolaArea;
     /** Lista observable de errores; única fuente de verdad para la tabla y para futuros consumers. */
     private final ObservableList<CompileError> errors = new ObservableList<>();
+    /** H12 — consola/línea de comandos bajo la salida (input + prompt + historial). */
+    private javax.swing.JTextField consoleInput;
+    private javax.swing.JLabel consolePromptLabel;
+    private final java.util.List<String> consoleHistory = new java.util.ArrayList<>();
+    private int consoleHistIdx = 0;
     /** Fichero del tab ACTIVO. Igual que editorArea, se actualiza desde el
      *  ChangeListener. null si el tab activo todavía no se ha guardado. */
     private Path currentFile = null;
@@ -360,6 +365,46 @@ public class FrmMain extends javax.swing.JFrame
         jPanel2.setLayout(new BorderLayout());
         jPanel2.add(new JScrollPane(consolaArea), BorderLayout.CENTER);
 
+        // -- H12: línea de comandos (consola) bajo la salida. --
+        consolePromptLabel = new javax.swing.JLabel(" / > ");
+        consolePromptLabel.setFont(new Font("Consolas", Font.PLAIN, 12));
+        consoleInput = new javax.swing.JTextField();
+        consoleInput.setFont(new Font("Consolas", Font.PLAIN, 12));
+        javax.swing.JPanel consoleInputPanel = new javax.swing.JPanel(new BorderLayout());
+        consoleInputPanel.add(consolePromptLabel, BorderLayout.WEST);
+        consoleInputPanel.add(consoleInput, BorderLayout.CENTER);
+        jPanel2.add(consoleInputPanel, BorderLayout.PAGE_END);
+        consoleInput.addActionListener(e -> {
+            String text = consoleInput.getText();
+            consoleInput.setText("");
+            if (!text.trim().isEmpty()) consoleHistory.add(text);
+            consoleHistIdx = consoleHistory.size();
+            if (picoExplorer != null) {
+                picoExplorer.executeConsoleCommand(text);
+                consolePromptLabel.setText(" " + picoExplorer.consolePrompt());
+            }
+        });
+        consoleInput.addKeyListener(new java.awt.event.KeyAdapter() {
+            @Override public void keyPressed(java.awt.event.KeyEvent ke) {
+                if (ke.getKeyCode() == KeyEvent.VK_UP) {
+                    if (!consoleHistory.isEmpty() && consoleHistIdx > 0) {
+                        consoleHistIdx--;
+                        consoleInput.setText(consoleHistory.get(consoleHistIdx));
+                    }
+                    ke.consume();
+                } else if (ke.getKeyCode() == KeyEvent.VK_DOWN) {
+                    if (!consoleHistory.isEmpty() && consoleHistIdx < consoleHistory.size() - 1) {
+                        consoleHistIdx++;
+                        consoleInput.setText(consoleHistory.get(consoleHistIdx));
+                    } else {
+                        consoleHistIdx = consoleHistory.size();
+                        consoleInput.setText("");
+                    }
+                    ke.consume();
+                }
+            }
+        });
+
         // -- Errores: bindeamos un ErrorTableModel a la ObservableList. --
         ErrorTableModel errorTableModel = new ErrorTableModel(errors);
         jTable1.setModel(errorTableModel);
@@ -508,6 +553,9 @@ public class FrmMain extends javax.swing.JFrame
                 consolaArea.setCaretPosition(consolaArea.getDocument().getLength());
             }
         });
+        // H12 — la consola usa el backend del explorador; cls limpia la consolaArea.
+        picoExplorer.setClearSink(() -> { if (consolaArea != null) consolaArea.setText(""); });
+        if (consolePromptLabel != null) consolePromptLabel.setText(" " + picoExplorer.consolePrompt());
         jSplitPane2.setBottomComponent(picoExplorer);
     }
 

@@ -57,6 +57,10 @@ public final class PicoExplorer extends JPanel {
     /** Sink al que mandar el output de RUN. Lo enchufa FrmMain a la consola. */
     private Consumer<String> outputSink;
 
+    /** H12 — consola: directorio actual + callback para limpiar la consola (cls). */
+    private String consoleCwd = "/";
+    private Runnable clearSink;
+
     /* --- UI components ----------------------------------------- */
     private final JRadioButton rbSerial = new JRadioButton("Pico (serial v1)", true);
     private final JRadioButton rbVm     = new JRadioButton("VM Java (TCP v1)");
@@ -214,6 +218,131 @@ public final class PicoExplorer extends JPanel {
 
     /** ¿Hay conexión activa al dispositivo? */
     public boolean isConnected() { return backend != null && backend.isConnected(); }
+
+    /* ============================================================
+     * H12 — Consola de comandos (línea de comandos estilo terminal).
+     * La UI (JTextField + prompt) vive en FrmMain; aquí la lógica: parser +
+     * dispatch sobre el backend conectado + estado de directorio (cwd). El
+     * output va al outputSink (la consolaArea). Comandos:
+     *   dir [ruta] · cd <ruta> · run <fich> · del <fich> · mem · save · log ·
+     *   reset · cls · help
+     * (type/mkdir/get llegarán al ampliar la interfaz Backend.)
+     * ============================================================ */
+
+    /** FrmMain enchufa aquí el "limpiar consola" (comando cls). */
+    public void setClearSink(Runnable r) { this.clearSink = r; }
+
+    /** Prompt actual: ruta del device + "> ". */
+    public String consolePrompt() { return consoleCwd + "> "; }
+
+    /** Emite una línea a la consola de forma segura desde cualquier hilo. */
+    private void emitLine(String s) {
+        if (outputSink != null) {
+            SwingUtilities.invokeLater(() -> outputSink.accept(s));
+        }
+    }
+
+    /** Normaliza un path absoluto: colapsa // y resuelve . / .. */
+    private static String normalizePath(String p) {
+        java.util.Deque<String> st = new java.util.ArrayDeque<>();
+        for (String seg : p.split("/")) {
+            if (seg.isEmpty() || seg.equals(".")) continue;
+            if (seg.equals("..")) { if (!st.isEmpty()) st.removeLast(); continue; }
+            st.addLast(seg);
+        }
+        if (st.isEmpty()) return "/";
+        StringBuilder sb = new StringBuilder();
+        for (String seg : st) sb.append('/').append(seg);
+        return sb.toString();
+    }
+
+    /** Resuelve un argumento de path contra el cwd (absoluto si empieza por /). */
+    private String resolvePath(String arg) {
+        if (arg == null || arg.isEmpty()) return consoleCwd;
+        if (arg.startsWith("/")) return normalizePath(arg);
+        String base = consoleCwd.endsWith("/") ? consoleCwd : consoleCwd + "/";
+        return normalizePath(base + arg);
+    }
+
+    /** Ejecuta una línea de comandos. Eco + dispatch; las ops de I/O van a un
+     *  hilo de fondo (no bloquear el EDT). cd/cls/help son síncronos. */
+    public void executeConsoleCommand(String rawLine) {
+        String line = (rawLine == null) ? "" : rawLine.trim();
+        emitLine(consoleCwd + "> " + line);                 // eco estilo terminal
+        if (line.isEmpty()) return;
+
+        String[] parts = line.split("\\s+", 2);
+        String cmd = parts[0].toLowerCase();
+        String arg = (parts.length > 1) ? parts[1].trim() : "";
+
+        switch (cmd) {
+            case "help": case "?":
+                emitLine("  comandos: dir [ruta] · cd <ruta> · run <fich> · del <fich> · mem · save · log · reset · cls · help");
+                emitLine("  (type/mkdir/get llegaran al ampliar el backend)");
+                return;
+            case "cls":
+                if (clearSink != null) SwingUtilities.invokeLater(clearSink);
+                return;
+            case "cd":
+                consoleCwd = arg.isEmpty() ? "/" : resolvePath(arg);
+                return;                                     // el prompt lo refresca FrmMain
+            default:
+                break;
+        }
+
+        if (!isConnected()) { emitLine("  no conectado — pulsa Connect."); return; }
+
+        final String fcmd = cmd, farg = arg, fcwd = consoleCwd;
+        new Thread(() -> {
+            try {
+                switch (fcmd) {
+                    case "dir": {
+                        java.util.List<Backend.Entry> all = backend.list();
+                        String base = fcwd.equals("/") ? "/" : fcwd + "/";
+                        int n = 0;
+                        for (Backend.Entry e : all) {
+                            String nm = e.name.startsWith("/") ? e.name : "/" + e.name;
+                            String rel;
+                            if (fcwd.equals("/")) rel = nm.substring(1);
+                            else if (nm.startsWith(base)) rel = nm.substring(base.length());
+                            else continue;                  // fuera del cwd
+                            emitLine(String.format("  %-32s %10d", rel + (e.isDir ? "/" : ""), e.size));
+                            n++;
+                        }
+                        emitLine("  " + n + " entrada(s).");
+                        break;
+                    }
+                    case "del":
+                        if (farg.isEmpty()) { emitLine("  uso: del <fichero>"); break; }
+                        backend.del(resolvePath(farg));
+                        emitLine("  borrado: " + resolvePath(farg));
+                        break;
+                    case "run":
+                        if (farg.isEmpty()) { emitLine("  uso: run <fichero>"); break; }
+                        emitLine("  (" + backend.run(resolvePath(farg), this::emitLine) + ")");
+                        break;
+                    case "mem": case "df":
+                        emitLine(backend.mem());
+                        break;
+                    case "save":
+                        backend.save();
+                        emitLine("  FS guardado en flash.");
+                        break;
+                    case "log":
+                        emitLine(backend.log());
+                        break;
+                    case "reset":
+                        backend.reset();
+                        emitLine("  reset enviado.");
+                        break;
+                    default:
+                        emitLine("  comando no reconocido: '" + fcmd + "' (prueba 'help').");
+                }
+            } catch (Exception ex) {
+                emitLine("  error: " + ex.getMessage());
+            }
+        }, "bpconsole").start();
+    }
 
     /** H6.b.3.b — el {@link BpvmClient} de la conexión activa (serie/TCP) para
      *  que "Debug on Pico" le enganche una DebugSession sobre el MISMO puerto
