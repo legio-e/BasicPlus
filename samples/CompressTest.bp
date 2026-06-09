@@ -1,0 +1,24 @@
+// CompressTest — verifica Compress.decompress (LZSS) con un stream hecho a mano.
+// El stream descomprime a "ABABAB" (6 bytes): 2 literales + 1 match solapado
+// (dist=2, len=4). Esperado:  n = 6   /   out = ABABAB
+module CompressTest
+  import Compress
+
+  function Main()
+    var c: byte[] := newByteArray(9)
+    c[0] := byte(0)        // tamaño original (u32 BE) = 6
+    c[1] := byte(0)
+    c[2] := byte(0)
+    c[3] := byte(6)
+    c[4] := byte(3)        // flags 0b011: tok0=lit, tok1=lit, tok2=match
+    c[5] := byte(65)       // 'A'
+    c[6] := byte(66)       // 'B'
+    c[7] := byte(0)        // match b0
+    c[8] := byte(17)       // match b1 (0x11): off=1 → dist=2, len=1+3=4
+
+    var dst: byte[] := newByteArray(6)
+    var n: integer := Compress.decompress(c, 9, dst, 6)
+    print "n =", n
+    print "out =", fromBytes(dst)
+  end Main
+end CompressTest

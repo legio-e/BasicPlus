@@ -1,0 +1,83 @@
+// Compress.bp — descompresión LZSS (H10). Solo DESCOMPRIME (el compresor es una
+// herramienta de host, no va en la stdlib).
+//
+// Formato (nuestro framing LZSS, lineage LHA/ARC — pre-ZIP, bajo consumo):
+//   [0..3]  tamaño original (u32 big-endian)
+//   luego, en grupos de 8 tokens precedidos por 1 byte de FLAGS (bit b, LSB→MSB):
+//     bit = 1  → LITERAL: el siguiente byte se copia tal cual.
+//     bit = 0  → MATCH: 2 bytes  b0,b1  →  off = (b0 shl 4) + (b1 shr 4)  [12 bits]
+//                length = (b1 mod 16) + 3   [3..18];  distancia = off + 1  [1..4096].
+//                Copia `length` bytes desde salida[op - distancia] (puede solapar).
+//
+// RAM mínima: la "ventana" es el propio buffer de salida — no hay diccionario.
+// El cuerpo son SOLO copias byte→byte + aritmética entera → compila también como
+// `native` sin tocar nada (sin cast byte(), que el AOT aún no soporta).
+module Compress
+
+  // Descomprime `srcLen` bytes de `src` en `dst` (capacidad `dstCap`).
+  // Devuelve el nº de bytes escritos, o -1 si dst no cabe / stream corrupto.
+  public function decompress(src: byte[], srcLen: integer, dst: byte[], dstCap: integer): integer
+    if srcLen < 4 then
+      return -1
+    endif
+    var outSize: integer := (src[0] shl 24) + (src[1] shl 16) + (src[2] shl 8) + src[3]
+    if outSize < 0 then
+      return -1
+    endif
+    if outSize > dstCap then
+      return -1
+    endif
+
+    var ip: integer := 4
+    var op: integer := 0
+    while op < outSize do
+      if ip >= srcLen then
+        return -1
+      endif
+      var flags: integer := src[ip]
+      ip := ip + 1
+
+      var b: integer := 0
+      while b < 8 do
+        if op >= outSize then
+          return op
+        endif
+        if ((flags shr b) mod 2) == 1 then
+          // literal
+          if ip >= srcLen then
+            return -1
+          endif
+          dst[op] := src[ip]
+          ip := ip + 1
+          op := op + 1
+        else
+          // match: 2 bytes
+          if (ip + 1) >= srcLen then
+            return -1
+          endif
+          var b0: integer := src[ip]
+          var b1: integer := src[ip + 1]
+          ip := ip + 2
+          var off:  integer := (b0 shl 4) + (b1 shr 4)
+          var leng: integer := (b1 mod 16) + 3
+          var dist: integer := off + 1
+          if dist > op then
+            return -1
+          endif
+          var k: integer := 0
+          while k < leng do
+            if op >= outSize then
+              return op
+            endif
+            dst[op] := dst[op - dist]
+            op := op + 1
+            k := k + 1
+          endwh
+        endif
+        b := b + 1
+      endwh
+    endwh
+    return op
+  end decompress
+
+end Compress

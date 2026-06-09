@@ -1,0 +1,156 @@
+dbg 3
+module Compress
+source C:\lenguajes\pm\bpstdlib\Compress.bp
+lines
+1504 20
+1518 21
+1537 23
+1597 24
+1611 25
+1630 27
+1642 28
+1661 31
+1669 32
+1677 33
+1689 34
+1701 35
+1720 37
+1730 38
+1742 40
+1750 41
+1764 42
+1776 43
+1792 45
+1816 47
+1828 48
+1847 50
+1861 51
+1873 52
+1890 55
+1908 56
+1927 58
+1937 59
+1953 60
+1965 61
+1987 62
+2005 63
+2017 64
+2029 65
+2048 67
+2056 68
+2068 69
+2080 70
+2096 72
+2114 73
+2126 74
+2140 77
+2158 80
+vars
+func Object.toString 0
+this -16 4 0 ?
+func Object.compareTo 25
+this -20 4 0 ?
+other -16 4 0 ?
+func RuntimeError.__init 41
+this -20 4 0 ?
+msg -16 4 0 ?
+func List.add 59
+this -20 4 0 ?
+item -16 4 0 ?
+func List.get 149
+this -20 4 0 ?
+idx -16 4 0 ?
+func List.set 169
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func List.length 191
+this -16 4 0 ?
+func List.remove 207
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 313
+this -16 4 0 ?
+func OwnerList.removeAndFree 356
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 486
+this -16 4 0 ?
+func StringBuilder.appendChar 507
+this -20 4 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 597
+this -20 4 0 ?
+s -16 4 0 ?
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 668
+this -20 4 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 693
+this -16 4 0 ?
+func StringBuilder.length 717
+this -16 4 0 ?
+func StringBuilder.__init 733
+this -16 4 0 ?
+func Thread.run 774
+this -16 4 0 ?
+func Thread.start 784
+this -16 4 0 ?
+func Thread.join 803
+this -16 4 0 ?
+func Thread.__init 822
+this -20 4 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 850
+this -16 4 0 ?
+func Mutex.unlock 869
+this -16 4 0 ?
+func Mutex.__init 888
+this -16 4 0 ?
+func SyncList.add 906
+this -20 4 0 ?
+item -16 4 0 ?
+func SyncList.remove 952
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.get 998
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.set 1042
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func SyncList.length 1091
+this -16 4 0 ?
+func SyncList.pop 1132
+this -16 4 0 ?
+func SyncList.popBlocking 1243
+this -16 4 0 ?
+func SyncList.__init 1370
+this -16 4 0 ?
+func decompress 1501
+src -28 4 0 ref
+srcLen -24 4 0 integer
+dst -20 4 0 ref
+dstCap -16 4 0 integer
+outSize 4 4 0 integer
+ip 8 4 0 integer
+op 12 4 0 integer
+flags 16 4 0 integer
+b 20 4 0 integer
+b0 24 4 0 integer
+b1 28 4 0 integer
+off 32 4 0 integer
+leng 36 4 0 integer
+dist 40 4 0 integer
+k 44 4 0 integer
+func __strconcat 2174
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 4 0 ?
+i 12 4 0 ?
