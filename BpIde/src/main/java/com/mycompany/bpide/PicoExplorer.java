@@ -74,6 +74,7 @@ public final class PicoExplorer extends JPanel {
     private final JButton btnUpload  = new JButton("Upload…");
     private final JButton btnRun     = new JButton("Run");
     private final JButton btnGet     = new JButton("Download…");
+    private final JButton btnEdit    = new JButton("Edit");
     private final JButton btnDelete  = new JButton("Delete");
     private final JButton btnSave    = new JButton("Save");
     private final JButton btnLog     = new JButton("Log");
@@ -127,6 +128,7 @@ public final class PicoExplorer extends JPanel {
         row2.add(btnUpload);
         row2.add(btnRun);
         row2.add(btnGet);
+        row2.add(btnEdit);
         row2.add(btnDelete);
         row2.add(btnSave);
         row2.add(btnLog);
@@ -174,8 +176,13 @@ public final class PicoExplorer extends JPanel {
         });
         fileTree.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2 && getSelectedEntry() != null) {
-                    onRun();
+                if (e.getClickCount() == 2) {
+                    Backend.Entry sel = getSelectedEntry();
+                    if (sel == null) return;
+                    // .mod = ejecutable → run (como siempre); cualquier
+                    // otro fichero (config, log, .txt…) → ver/editar.
+                    if (sel.name.toLowerCase().endsWith(".mod")) onRun();
+                    else onEdit();
                 }
             }
         });
@@ -202,6 +209,7 @@ public final class PicoExplorer extends JPanel {
         btnUpload.addActionListener(e -> onUpload());
         btnRun.addActionListener(e -> onRun());
         btnGet.addActionListener(e -> onDownload());
+        btnEdit.addActionListener(e -> onEdit());
         btnDelete.addActionListener(e -> onDelete());
         btnSave.addActionListener(e -> onSave());
         btnLog.addActionListener(e -> onLog());
@@ -224,9 +232,10 @@ public final class PicoExplorer extends JPanel {
      * La UI (JTextField + prompt) vive en FrmMain; aquí la lógica: parser +
      * dispatch sobre el backend conectado + estado de directorio (cwd). El
      * output va al outputSink (la consolaArea). Comandos:
-     *   dir [ruta] · cd <ruta> · run <fich> · del <fich> · mem · save · log ·
-     *   reset · cls · help
-     * (type/mkdir/get llegarán al ampliar la interfaz Backend.)
+     *   dir [ruta] · cd <ruta> · type <fich> · edit <fich> · run <fich> ·
+     *   del <fich> · mem · save · log · reset · cls · help
+     * (type=ver, edit=ver/editar en ventana; ambos sobre Backend.get/put.
+     *  mkdir aún no está en la interfaz Backend.)
      * ============================================================ */
 
     /** FrmMain enchufa aquí el "limpiar consola" (comando cls). */
@@ -277,8 +286,10 @@ public final class PicoExplorer extends JPanel {
 
         switch (cmd) {
             case "help": case "?":
-                emitLine("  comandos: dir [ruta] · cd <ruta> · run <fich> · del <fich> · mem · save · log · reset · cls · help");
-                emitLine("  (type/mkdir/get llegaran al ampliar el backend)");
+                emitLine("  comandos: dir [ruta] · cd <ruta> · type <fich> · edit <fich> · run <fich> · del <fich>");
+                emitLine("            mem · save · log · reset · cls · help");
+                emitLine("  type=volcar fichero a la consola · edit=ver/editar en ventana");
+                emitLine("  (doble-clic en el árbol: .mod ejecuta, el resto abre el editor)");
                 return;
             case "cls":
                 if (clearSink != null) SwingUtilities.invokeLater(clearSink);
@@ -310,6 +321,35 @@ public final class PicoExplorer extends JPanel {
                             n++;
                         }
                         emitLine("  " + n + " entrada(s).");
+                        break;
+                    }
+                    case "type": case "cat": {
+                        if (farg.isEmpty()) { emitLine("  uso: type <fichero>"); break; }
+                        String p = resolvePath(farg);
+                        byte[] data = backend.get(p);
+                        if (data.length > 32768) {
+                            emitLine("  " + p + ": " + data.length + " bytes — demasiado "
+                                    + "grande para 'type'. Usa 'edit' o Download.");
+                            break;
+                        }
+                        String[] lns = new String(data,
+                                java.nio.charset.StandardCharsets.UTF_8).split("\\R", -1);
+                        int cap = Math.min(lns.length, 400);
+                        for (int i = 0; i < cap; i++) emitLine("  " + lns[i]);
+                        if (cap < lns.length) emitLine("  … (" + (lns.length - cap) + " líneas más)");
+                        emitLine("  (" + data.length + " bytes)");
+                        break;
+                    }
+                    case "edit": {
+                        if (farg.isEmpty()) { emitLine("  uso: edit <fichero>"); break; }
+                        String p = resolvePath(farg);
+                        byte[] data = backend.get(p);
+                        SwingUtilities.invokeLater(() -> {
+                            Window owner = SwingUtilities.getWindowAncestor(this);
+                            new DeviceFileEditor(owner, backend, p, data, this::onRefresh)
+                                    .setVisible(true);
+                        });
+                        emitLine("  abriendo editor: " + p);
                         break;
                     }
                     case "del":
@@ -601,6 +641,7 @@ public final class PicoExplorer extends JPanel {
         btnUpload.setEnabled(connected);
         btnRun.setEnabled(connected);
         btnGet.setEnabled(connected);
+        btnEdit.setEnabled(connected);
         btnDelete.setEnabled(connected);
         btnSave.setEnabled(connected);
         btnLog.setEnabled(connected);
@@ -880,6 +921,29 @@ public final class PicoExplorer extends JPanel {
                 + out.getName() + " (" + n + " bytes)"));
     }
 
+    /** H12 / #231 — abre el fichero seleccionado en una ventana visor-editor.
+     *  Lee el contenido con get() en hilo de fondo y, ya en el EDT, abre el
+     *  DeviceFileEditor. Texto (config, log, .txt…) editable y reescribible
+     *  con put(); binario (.mod…) en volcado hex de solo lectura. Al guardar
+     *  refresca el árbol (el tamaño puede cambiar). */
+    private void onEdit() {
+        if (!isConnected()) return;
+        final Backend b = this.backend;
+        Backend.Entry sel = getSelectedEntry();
+        if (sel == null) {
+            status.setText("Selecciona un fichero (hoja) para ver/editar");
+            return;
+        }
+        final String path = sel.name;
+        status.setText("Abriendo " + path + "...");
+        runAsync(() -> b.get(path), data -> {
+            Window owner = SwingUtilities.getWindowAncestor(this);
+            new DeviceFileEditor(owner, b, path, data, this::onRefresh)
+                    .setVisible(true);
+            status.setText("Ver/editar " + path + " (" + data.length + " bytes)");
+        });
+    }
+
     private void onDelete() {
         if (!isConnected()) return;
         final Backend b = this.backend;
@@ -1045,6 +1109,7 @@ public final class PicoExplorer extends JPanel {
         btnUpload.setEnabled(enabled && connected);
         btnRun.setEnabled(enabled && connected);
         btnGet.setEnabled(enabled && connected);
+        btnEdit.setEnabled(enabled && connected);
         btnDelete.setEnabled(enabled && connected);
         btnSave.setEnabled(enabled && connected);
         btnLog.setEnabled(enabled && connected);

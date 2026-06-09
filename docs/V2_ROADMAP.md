@@ -50,7 +50,7 @@ B1 caracterizado + mitigado (1 worker por defecto).
 | H9 | 3ª familia: **STM32** (ref. Nucleo-U575ZI-Q) | ✅ núcleo cerrado (Run+imports+GPIO+FS persistente+paridad); *stretch* AOT/L496 diferidos |
 | H10 | Librería estándar: **ajuste + ampliación** | 🟡 parcial — LinReg ✅, file I/O en VM-C ✅; resto (log, descompresión, byte[]…) **poco a poco / diferido** |
 | H11 | **TCP/IP**: cliente simple (empezar) | ⏸️ **diferido al final** (probablemente V3) |
-| H12 | **Consolidación del IDE** (consola MS-DOS + doble-clic + pulido) | 🟡 **en curso** — empezando por la **línea de comandos** (consola) |
+| H12 | **Consolidación del IDE** (consola MS-DOS + doble-clic + pulido) | 🟡 **en curso** — línea de comandos ✅ · ver/editar ficheros del device (#231) ✅ (a probar en placa) |
 | H13 | **Documentación y cierre** (docs doble + publicación) — puerta final | pendiente |
 | — | **Consolidación** (tapar agujeros) — transversal | en curso |
 
@@ -111,7 +111,10 @@ single-core es inmune).
 - **Consola estilo MS-DOS**: añadir una **línea de input** en la pestaña de consola
   para `dir` / `cd` / ejecutar un módulo, etc. (la salida se queda como está). La
   mayor parte ya existe en la comunicación.
-- **Doble-clic** en un fichero del micro → ver/editar (#231).
+- **Doble-clic** en un fichero del micro → ver/editar (#231). ✅ *(a probar en placa)*
+  Doble-clic: `.mod` ejecuta, el resto abre `DeviceFileEditor` (texto editable
+  + `put`; binario en volcado hex de solo lectura). También botón **Edit** y
+  comandos de consola `type`/`edit`. Reusa `Backend.get/put` (ya existían).
 - **Pulido pendiente** (de `V2_BACKLOG`, sin prisa): find/replace en el editor y
   reorganización de `FrmMain` (IDE-1).
 - **Configurar la plataforma de destino (el micro)**: necesaria para compilar las
