@@ -922,6 +922,15 @@ void vApplicationGetPassiveIdleTaskMemory(StaticTask_t **ppxTCB,
 int main(void) {
     led_init();
     stdio_init_all();
+    /* CRÍTICO para el wire v1: el stdout del Pico SDK trae la traducción
+     * CRLF ACTIVADA por defecto (PICO_STDIO_DEFAULT_CRLF=1), que inserta un
+     * '\r' antes de cada '\n'. Es inocua para las líneas JSON y la salida de
+     * RUN (el cliente descarta '\r'), pero CORROMPE el bulk binario: en un
+     * GET, cada 0x0A del fichero se transmite como 0x0D 0x0A, el cliente lee
+     * sólo los `bulk` bytes declarados y el fichero llega TRUNCADO (se destapó
+     * al añadir ver/editar ficheros del device, #231). El protocolo es 8-bit
+     * limpio y pone sus propios '\n' → desactivamos la traducción. */
+    stdio_set_translate_crlf(&stdio_usb, false);
 
     /* Log persistente: carga el snapshot anterior antes de pisarlo con
      * mensajes del boot actual. */
