@@ -145,6 +145,36 @@ public final class AotCEmitter {
             && ((PrimitiveType) t).tag == PrimitiveType.Kind.INTEGER;
     }
 
+    /** #193 — ancho del elemento del array `arr` para elegir el helper AOT.
+     *  Devuelve "u8"/"i8" para byte[] (uint8/int8), "i32" para el resto
+     *  (incl. tipo desconocido → comportamiento previo). */
+    private String arrElemKind(Ast.IExpr arr) {
+        if (semInfo != null) {
+            BpType t = semInfo.exprTypes.get(arr);
+            if (t instanceof ArrayType) {
+                BpType el = ((ArrayType) t).element;
+                if (el instanceof PrimitiveType) {
+                    switch (((PrimitiveType) el).tag) {
+                        case UINT8: return "u8";
+                        case INT8:  return "i8";
+                        default: break;
+                    }
+                }
+            }
+        }
+        return "i32";
+    }
+    /** Nombre del helper de carga de elemento según el ancho del array. */
+    private String arrLoadFn(Ast.IExpr arr) {
+        return "array_load_" + arrElemKind(arr);
+    }
+    /** Nombre del helper de store de elemento. byte[] (u8/i8) → array_store_i8
+     *  (el store trunca; signed/unsigned es el mismo opcode). */
+    private String arrStoreFn(Ast.IExpr arr) {
+        String k = arrElemKind(arr);
+        return ("u8".equals(k) || "i8".equals(k)) ? "array_store_i8" : "array_store_i32";
+    }
+
     /** #173 — emite un operando de concat como string-handle. Si ya es
      *  string, tal cual; si es integer, lo convierte con int_to_string
      *  (cubre el patrón típico `"x = " + n`). Otros tipos mixtos
@@ -531,7 +561,7 @@ public final class AotCEmitter {
                 Ast.IndexExpr ix = (Ast.IndexExpr) a.target;
                 indent();
                 if (a.op == Ast.AssignOpKind.ASSIGN) {
-                    w.print("vm->aot_helpers->array_store_i32(vm, ");
+                    w.print("vm->aot_helpers->" + arrStoreFn(ix.target) + "(vm, ");
                     emitExpr(ix.target);
                     w.print(", ");
                     emitExpr(ix.index);
@@ -541,11 +571,11 @@ public final class AotCEmitter {
                 } else {
                     /* a[i] += v  →  store(a, i, load(a, i) + v) */
                     String binOp = (a.op == Ast.AssignOpKind.PLUS_ASSIGN) ? "+" : "-";
-                    w.print("vm->aot_helpers->array_store_i32(vm, ");
+                    w.print("vm->aot_helpers->" + arrStoreFn(ix.target) + "(vm, ");
                     emitExpr(ix.target);
                     w.print(", ");
                     emitExpr(ix.index);
-                    w.print(", vm->aot_helpers->array_load_i32(vm, ");
+                    w.print(", vm->aot_helpers->" + arrLoadFn(ix.target) + "(vm, ");
                     emitExpr(ix.target);
                     w.print(", ");
                     emitExpr(ix.index);
@@ -892,7 +922,7 @@ public final class AotCEmitter {
         if (e instanceof Ast.IndexExpr) {
             /* a[i] — lectura de array via helper. v1: solo integer[]. */
             Ast.IndexExpr ix = (Ast.IndexExpr) e;
-            w.print("vm->aot_helpers->array_load_i32(vm, ");
+            w.print("vm->aot_helpers->" + arrLoadFn(ix.target) + "(vm, ");
             emitExpr(ix.target);
             w.print(", ");
             emitExpr(ix.index);

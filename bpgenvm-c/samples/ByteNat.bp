@@ -1,0 +1,37 @@
+// ByteNat — #193: native function sobre byte[] (load u8 + store i8 sin cast).
+module ByteNat
+
+  // load_u8 (lee bytes 0-255) — suma todos.
+  native function sumBytes(data: byte[], n: integer): integer
+    var total: integer := 0
+    var i: integer := 0
+    while i < n do
+      total := total + data[i]
+      i := i + 1
+    endwh
+    return total
+  end sumBytes
+
+  // load_u8 + store_i8 — copia byte→byte (sin cast: ambos son byte).
+  native function copyBytes(src: byte[], dst: byte[], n: integer)
+    var i: integer := 0
+    while i < n do
+      dst[i] := src[i]
+      i := i + 1
+    endwh
+  end copyBytes
+
+  function Main()
+    var s: byte[] := newByteArray(5)
+    s[0] := byte(10)
+    s[1] := byte(20)
+    s[2] := byte(30)
+    s[3] := byte(40)
+    s[4] := byte(50)
+
+    var d: byte[] := newByteArray(5)
+    copyBytes(s, d, 5)                  // native: load_u8 src + store_i8 dst
+    print "sum =", sumBytes(d, 5)       // native: load_u8 → 150
+  end Main
+
+end ByteNat

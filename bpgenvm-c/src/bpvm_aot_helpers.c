@@ -220,6 +220,49 @@ static int32_t h_array_length(bpvm_t* vm, uint32_t ref) {
     return (int32_t) bpvm_read_u32_be(vm->memory + ref);
 }
 
+/* #193 — arrays narrow de 1 byte (BP byte[]). Layout: [length:u32 BE][b0][b1]...
+ * Mismo bounds/extensión que OP_ALOAD_I8/OP_ALOAD_U8/OP_ASTORE_I8 del intérprete
+ * (interp.c): load_i8 extiende con signo, load_u8 con cero, store_i8 trunca. */
+static int32_t h_array_load_i8(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    if (ref == 0) {
+        if (vm) bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_i8: null array");
+        return 0;
+    }
+    uint8_t* mem = vm->memory;
+    uint32_t length = bpvm_read_u32_be(mem + ref);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_i8: index out of bounds");
+        return 0;
+    }
+    return (int32_t)(int8_t) mem[ref + 4 + (uint32_t) idx];   /* sign-extend */
+}
+static int32_t h_array_load_u8(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    if (ref == 0) {
+        if (vm) bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_u8: null array");
+        return 0;
+    }
+    uint8_t* mem = vm->memory;
+    uint32_t length = bpvm_read_u32_be(mem + ref);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_u8: index out of bounds");
+        return 0;
+    }
+    return (int32_t)(uint8_t) mem[ref + 4 + (uint32_t) idx];  /* zero-extend */
+}
+static void h_array_store_i8(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
+    if (ref == 0) {
+        if (vm) bpvm_aot_helpers_v1.throw_runtime(vm, "array_store_i8: null array");
+        return;
+    }
+    uint8_t* mem = vm->memory;
+    uint32_t length = bpvm_read_u32_be(mem + ref);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v1.throw_runtime(vm, "array_store_i8: index out of bounds");
+        return;
+    }
+    mem[ref + 4 + (uint32_t) idx] = (uint8_t)(v & 0xFF);      /* truncate */
+}
+
 /* ---------- Builtins (H3 #168) ----------
  * Wrappers de los OP_CALL_BUILTIN más usados, callables como C
  * directo desde código AOT. */
@@ -392,4 +435,8 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     .throw_str           = h_throw_str,
     /* #174 (mitad-VM) — despacho virtual desde native. Vive en interp.c. */
     .call_method_i32     = bpvm_aot_call_method_i32,
+    /* #193 — arrays narrow de 1 byte (byte[]). */
+    .array_load_i8       = h_array_load_i8,
+    .array_load_u8       = h_array_load_u8,
+    .array_store_i8      = h_array_store_i8,
 };

@@ -77,6 +77,24 @@ test-callbp: $(LIBOBJ)
 	  ./$(CALLBP_BIN) samples/NativeBridge.mod; \
 	fi
 
+# #193 — test de los helpers AOT byte[] (array_load_u8 / array_store_i8). Compila
+# el driver + el thunk snapshot contra los .o de la lib y corre ByteNat.mod. La
+# salida (sum = 150) debe ser byte-idéntica a la de la VM-Java (sumBytes/copyBytes
+# native vs interpretado). Ver test/test_bytenat.c.
+BYTENAT_BIN = build/test_bytenat.exe
+test-bytenat: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/ByteNat.mod ]; then \
+	  echo "(skip test-bytenat: falta samples/ByteNat.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/ByteNat.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_bytenat.c test/aot_ByteNat.c \
+	    $(LIBOBJ) -o $(BYTENAT_BIN) $(LDFLAGS); \
+	  echo "--- helpers AOT byte[] #193 (esperado: sum = 150, status=OK) ---"; \
+	  ./$(BYTENAT_BIN) samples/ByteNat.mod; \
+	fi
+
 # #169 — test del puente native->BP CROSS-MODULE. compute (native, BridgeApp)
 # llama a triple (BP, BridgeLib) por el puente con nombre cualificado. El loader
 # auto-carga BridgeLib.mod vía discover_deps. Salida byte-idéntica a la VM-Java.

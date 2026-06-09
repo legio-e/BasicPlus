@@ -154,6 +154,15 @@ struct aot_helpers_v1 {
      * en interp.c. */
     int32_t (*call_method_i32)(struct bpvm* vm, uint32_t this_ref, int slot,
                                const int32_t* args, int nargs);
+
+    /* #193 — arrays narrow de 1 byte (BP `byte[]`). Mismo layout/bounds que
+     * OP_ALOAD_I8/OP_ALOAD_U8/OP_ASTORE_I8 del intérprete (paridad): el load_i8
+     * extiende con signo a i32, load_u8 con cero, store_i8 trunca a 1 byte.
+     * Para procesar bytes (descompresión, parsers binarios) desde código native
+     * sin caer al helper i32 (que leería 4 bytes/elemento — incorrecto). */
+    int32_t (*array_load_i8)(struct bpvm* vm, uint32_t ref, int32_t idx);
+    int32_t (*array_load_u8)(struct bpvm* vm, uint32_t ref, int32_t idx);
+    void    (*array_store_i8)(struct bpvm* vm, uint32_t ref, int32_t idx, int32_t v);
 };
 
 /* Tabla v1 instanciada en el runtime con los punteros a las funciones
