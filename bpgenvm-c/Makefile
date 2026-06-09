@@ -31,7 +31,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench
 
 all: $(BIN)
 
@@ -111,6 +111,26 @@ test-compressnat: $(LIBOBJ)
 	    $(LIBOBJ) -o $(COMPRESSNAT_BIN) $(LDFLAGS); \
 	  echo "--- AOT LZSS native #240 (esperado: n = 6 / out = ABABAB, status=OK) ---"; \
 	  ./$(COMPRESSNAT_BIN) samples/CompressNat.mod; \
+	fi
+
+# #240 — benchmark LZSS interpretado vs native sobre el MISMO CompressBench.mod.
+# Corre la ruta INTERPRETADA (bpgenvm-c.exe) y la NATIVE (test_compressbench.exe,
+# que registra el thunk AOT) y muestra ambas. checksum debe coincidir; elapsed_ms
+# es lo que comparamos. Ver test/test_compressbench.c y samples/CompressBench.bp.
+COMPRESSBENCH_BIN = build/test_compressbench.exe
+test-compressbench: $(LIBOBJ) $(BIN)
+	@mkdir -p build
+	@if [ ! -f samples/CompressBench.mod ]; then \
+	  echo "(skip test-compressbench: falta samples/CompressBench.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/CompressBench.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_compressbench.c test/aot_CompressBench.c \
+	    $(LIBOBJ) -o $(COMPRESSBENCH_BIN) $(LDFLAGS); \
+	  echo "=== LZSS #240 — INTERPRETADO (VM-C) ==="; \
+	  ./$(BIN) samples/CompressBench.mod 2>/dev/null | grep -E "outSize|iters|n =|checksum|elapsed_ms"; \
+	  echo "=== LZSS #240 — NATIVE (AOT) ==="; \
+	  ./$(COMPRESSBENCH_BIN) samples/CompressBench.mod 2>/dev/null | grep -E "outSize|iters|n =|checksum|elapsed_ms"; \
 	fi
 
 # #169 — test del puente native->BP CROSS-MODULE. compute (native, BridgeApp)

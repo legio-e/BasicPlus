@@ -1,0 +1,145 @@
+// CompressBench — #240: benchmark de Compress.decompress (LZSS), interpretado vs native.
+// `decompress` es idéntica a bpstdlib/Compress.bp pero marcada `native` (AOT la
+// traduce a C). makeStream() sintetiza en BP un stream LZSS válido (8 literales de
+// semilla + matches dist=8/len=18 repetidos) que estresa la ruta de match (el bucle
+// caliente real). El mismo .mod se corre:
+//   - VM-C interp   : ./bpgenvm-c.exe CompressBench.mod
+//   - VM-C native   : ./build/test_compressbench.exe CompressBench.mod  (registra thunk AOT)
+//   - VM-Java       : java -cp miVM/target/classes edu.bpgenvm.Main CompressBench.mod
+// checksum debe ser idéntico en las tres rutas (paridad); solo elapsed_ms varía.
+module CompressBench
+
+  // === idéntica a bpstdlib/Compress.bp, marcada native ===
+  native function decompress(src: byte[], srcLen: integer, dst: byte[], dstCap: integer): integer
+    if srcLen < 4 then
+      return -1
+    endif
+    var outSize: integer := (src[0] shl 24) + (src[1] shl 16) + (src[2] shl 8) + src[3]
+    if outSize < 0 then
+      return -1
+    endif
+    if outSize > dstCap then
+      return -1
+    endif
+
+    var ip: integer := 4
+    var op: integer := 0
+    while op < outSize do
+      if ip >= srcLen then
+        return -1
+      endif
+      var flags: integer := src[ip]
+      ip := ip + 1
+
+      var b: integer := 0
+      while b < 8 do
+        if op >= outSize then
+          return op
+        endif
+        if ((flags shr b) mod 2) == 1 then
+          if ip >= srcLen then
+            return -1
+          endif
+          dst[op] := src[ip]
+          ip := ip + 1
+          op := op + 1
+        else
+          if (ip + 1) >= srcLen then
+            return -1
+          endif
+          var b0: integer := src[ip]
+          var b1: integer := src[ip + 1]
+          ip := ip + 2
+          var off:  integer := (b0 shl 4) + (b1 shr 4)
+          var leng: integer := (b1 mod 16) + 3
+          var dist: integer := off + 1
+          if dist > op then
+            return -1
+          endif
+          var k: integer := 0
+          while k < leng do
+            if op >= outSize then
+              return op
+            endif
+            dst[op] := dst[op - dist]
+            op := op + 1
+            k := k + 1
+          endwh
+        endif
+        b := b + 1
+      endwh
+    endwh
+    return op
+  end decompress
+
+  // Construye un stream LZSS que descomprime a `outSize` bytes:
+  //   header u32 BE + 1 grupo de 8 literales (semilla 1..8) + grupos de 8 matches
+  //   (b0=0x00, b1=0x7F -> dist=8, len=18). Salida = patrón 1..8 repetido.
+  // NO es native (usa byte()); corre interpretada en el setup, fuera del cronómetro.
+  function makeStream(outSize: integer): byte[]
+    var nGroups: integer := ((outSize - 8) + 143) / 144
+    if nGroups < 0 then
+      nGroups := 0
+    endif
+    var srcLen: integer := 4 + 1 + 8 + nGroups * 17
+    var s: byte[] := newByteArray(srcLen)
+    s[0] := byte((outSize shr 24) mod 256)
+    s[1] := byte((outSize shr 16) mod 256)
+    s[2] := byte((outSize shr 8) mod 256)
+    s[3] := byte(outSize mod 256)
+    s[4] := byte(255)                 // flags 0xFF: 8 literales
+    var i: integer := 0
+    while i < 8 do
+      s[5 + i] := byte(i + 1)         // semilla 1..8
+      i := i + 1
+    endwh
+    var pos: integer := 13            // 4 + 1 + 8
+    var g: integer := 0
+    while g < nGroups do
+      s[pos] := byte(0)               // flags 0x00: 8 matches
+      pos := pos + 1
+      var t: integer := 0
+      while t < 8 do
+        s[pos]     := byte(0)         // b0 = 0x00
+        s[pos + 1] := byte(127)       // b1 = 0x7F -> dist=8, len=18
+        pos := pos + 2
+        t := t + 1
+      endwh
+      g := g + 1
+    endwh
+    return s
+  end makeStream
+
+  function Main()
+    var outSize: integer := 8192
+    var iters:   integer := 2000
+
+    var s: byte[] := makeStream(outSize)
+    var srcLen: integer := len(s)
+    var dst: byte[] := newByteArray(outSize)
+
+    var n: integer := decompress(s, srcLen, dst, outSize)   // warmup (fuera del cronómetro)
+
+    var ini: integer := now()
+    var k: integer := 0
+    while k < iters do
+      n := decompress(s, srcLen, dst, outSize)
+      k := k + 1
+    endwh
+    var fin: integer := now()
+
+    var sum: integer := 0
+    var i: integer := 0
+    while i < outSize do
+      sum := sum + dst[i]
+      i := i + 1
+    endwh
+
+    print "outSize =", outSize
+    print "iters =", iters
+    print "n =", n
+    print "checksum =", sum
+    print "elapsed_ms =", (fin - ini)
+  end Main
+
+end CompressBench
