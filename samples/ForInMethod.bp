@@ -1,0 +1,72 @@
+// ForInMethod — regresión de task_cf2a924b.
+//
+// El bug real era de COMPILACIÓN: una llamada this.metodo() a un método hermano
+// declarado MÁS ABAJO en la clase (referencia forward) hacía petar al emisor con
+// "Método no encontrado", porque la tabla de métodos se rellenaba a medida que se
+// emitían los cuerpos (el callee aún-no-emitido no estaba). El for-in solo lo
+// destapaba porque su cuerpo llama a un helper. Fix: pre-registrar los slots de
+// vtable de todos los métodos antes de emitir cuerpos.
+//
+// Cubre integer[] y double[] (el caso de Stats.LinReg), con el helper declarado
+// DESPUÉS del que lo llama, y dentro de un for-in. Debe imprimir:
+//   int total = 60
+//   dbl total = 6.6
+module ForInMethod
+
+  // --- integer[] ---
+  class IntBox
+    var total: integer
+    public function IntBox()
+      this.total := 0
+    end IntBox
+    public function addAll(arr: integer[])
+      for v in arr do
+        this.addOne(v)        // forward: addOne se declara más abajo
+      next v
+    end addAll
+    public function addOne(v: integer)
+      this.total := this.total + v
+    end addOne
+    public function getTotal(): integer
+      return this.total
+    end getTotal
+  end IntBox
+
+  // --- double[] (patrón exacto de Stats.LinReg.addData) ---
+  class DblBox
+    var total: double
+    public function DblBox()
+      this.total := 0.0d
+    end DblBox
+    public function addAll(arr: double[])
+      for x in arr do
+        this.addOne(x)        // forward + double
+      next x
+    end addAll
+    public function addOne(x: double)
+      this.total := this.total + x
+    end addOne
+    public function getTotal(): double
+      return this.total
+    end getTotal
+  end DblBox
+
+  function Main()
+    var b: IntBox := IntBox()
+    var di: integer[] := newIntArray(3)
+    di[0] := 10
+    di[1] := 20
+    di[2] := 30
+    b.addAll(di)
+    print "int total =", b.getTotal()
+
+    var d: DblBox := DblBox()
+    var dd: double[] := newDoubleArray(3)
+    dd[0] := 1.1d
+    dd[1] := 2.2d
+    dd[2] := 3.3d
+    d.addAll(dd)
+    print "dbl total =", d.getTotal()
+  end Main
+
+end ForInMethod

@@ -800,6 +800,34 @@ public class ModWriter {
     }
 
     /**
+     * Pre-registra el slot de vtable de un método PÚBLICO sin abrir todavía su
+     * sección de código. Permite resolver referencias forward: un método que
+     * llama a otro declarado MÁS ABAJO en la misma clase (this.otro()). El
+     * emisor llama a declareMethodSlot para todos los métodos de la clase antes
+     * de emitir ningún cuerpo; luego addMethod, al encontrar el slot ya
+     * registrado, lo reutiliza (su bucle pone slot!=-1) en vez de asignar uno
+     * nuevo — así el layout del vtable es idéntico al orden de declaración.
+     * Mismo criterio de override que addMethod. (Fix task_cf2a924b.)
+     */
+    public void declareMethodSlot(String simpleName) {
+        if (currentClass == null) {
+            throw new RuntimeException("declareMethodSlot fuera de una clase (¿antes de addClass?)");
+        }
+        String qualifiedName = currentClass.name + "." + simpleName;
+        for (MethodInfo m : currentClass.methods) {
+            if (m.simpleName.equals(simpleName)) {
+                m.qualifiedName = qualifiedName;   // override: el vtable apunta al child
+                return;
+            }
+        }
+        MethodInfo m = new MethodInfo();
+        m.simpleName = simpleName;
+        m.qualifiedName = qualifiedName;
+        m.slot = currentClass.methods.size();
+        currentClass.methods.add(m);
+    }
+
+    /**
      * Abre un método PRIVADO de la clase actual. A diferencia de addMethod, NO
      * lo añade a la vtable: un método privado no se puede sobreescribir ni se
      * llama cross-module, así que se despacha por CALL directo ("Clase.metodo")

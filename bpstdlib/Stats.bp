@@ -174,9 +174,10 @@ module Stats
 
     // Acumula un array de pares: dataX[i] con dataY[i]. Recorre dataX, así que
     // dataY debe ser al menos igual de largo.
-    // Acumula n pares dataX[i]/dataY[i]. n explícito (convención de Stats: BP
-    // no tiene longitud de array en superficie, y el for-in dentro de un método
-    // de clase aún no es fiable — ver backlog).
+    // Acumula los primeros n pares dataX[i]/dataY[i]. n explícito a propósito:
+    // permite acumular un prefijo cuando el array es más largo que los datos
+    // (convención de Stats). El for-in dentro de un método de clase ya es fiable
+    // (task_cf2a924b arreglado), pero aquí queremos el control de n.
     public function addData(dataX: double[], dataY: double[], n: integer)
       var i: integer := 0
       while i < n do

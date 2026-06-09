@@ -939,6 +939,23 @@ public final class MivmEmitter {
                 }
             }
 
+            // Pre-pasada: registra los slots de vtable de TODOS los métodos
+            // públicos de instancia ANTES de emitir ningún cuerpo, para que una
+            // llamada this.m() a un método declarado más abajo (referencia
+            // forward) resuelva su slot. Sin esto el orden de emisión obligaba a
+            // declarar el callee antes que el caller (bug task_cf2a924b). Las
+            // accesoras de property ya se registraron arriba, así que los slots
+            // de los métodos normales quedan a continuación, en orden de
+            // declaración — layout de vtable idéntico al anterior.
+            for (ITopLevelDecl m : cd.members) {
+                if (m instanceof FuncDef) {
+                    FuncDef fn = (FuncDef) m;
+                    FunctionSymbol fs = (FunctionSymbol) info.declSymbols.get(fn);
+                    if (fs == null || fs.isStatic || fs.isConstructor || !fs.isPublic) continue;
+                    w.declareMethodSlot(fs.name);
+                }
+            }
+
             // Métodos de instancia (no constructores, no estáticos) vía addMethod.
             for (ITopLevelDecl m : cd.members) {
                 if (m instanceof FuncDef) {
@@ -1880,8 +1897,16 @@ public final class MivmEmitter {
             declareLocal(endLocal);
             // H6.a.2: tag del iterador = tipo de elemento del iterable.
             BpType itElem = info.exprTypes.get(r.iterable);
-            declareLocal(s.iteratorName,
-                    (itElem instanceof ArrayType) ? varDbgTypeTag(((ArrayType) itElem).element) : null);
+            BpType forinElem = (itElem instanceof ArrayType) ? ((ArrayType) itElem).element : null;
+            String forinTag = (forinElem != null) ? varDbgTypeTag(forinElem) : null;
+            // task_cf2a924b (Bug B): la variable de bucle debe declararse con el
+            // ANCHO del elemento. long/double = 8 bytes; si se declara de 4 (como
+            // antes) un `for x in double[]` dejaba x medio inicializado y
+            // descuadraba locales/pila — p.ej. this.metodo(x) dentro del bucle leía
+            // un receiver null ("INVOKE_VIRTUAL sobre null"). Narrow (byte/word)
+            // se extiende a i32 en el ALOAD → local de 4 bytes, correcto.
+            if (is8Byte(forinElem)) declareLocalLong(s.iteratorName, forinTag);
+            else declareLocal(s.iteratorName, forinTag);
 
             emitExpr(r.iterable);
             w.emitSetLocal(arrLocal);
@@ -1899,10 +1924,11 @@ public final class MivmEmitter {
             w.emit(OpCode.LT);
             w.emitJumpIfFalse(end);
 
-            // n := __arr[__idx]
+            // n := __arr[__idx] — ALOAD width-aware (ALOAD_I64 para long/double,
+            // ALOAD_I8/U8/I16/U16 para narrow); emitSetLocal usa el ancho del local.
             w.emitGetLocal(arrLocal);
             w.emitGetLocal(idxLocal);
-            w.emit(OpCode.ALOAD);
+            w.emit(aloadOpFor(r.iterable));
             w.emitSetLocal(s.iteratorName);
 
             loopStack.push(new LoopLabels(top, end));
