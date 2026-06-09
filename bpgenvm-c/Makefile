@@ -31,7 +31,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method test-debug test-debug-mt test-listen
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat
 
 all: $(BIN)
 
@@ -93,6 +93,24 @@ test-bytenat: $(LIBOBJ)
 	    $(LIBOBJ) -o $(BYTENAT_BIN) $(LDFLAGS); \
 	  echo "--- helpers AOT byte[] #193 (esperado: sum = 150, status=OK) ---"; \
 	  ./$(BYTENAT_BIN) samples/ByteNat.mod; \
+	fi
+
+# #240 — Compress.decompress (LZSS) en variante NATIVE. Compila el thunk AOT
+# (byte[] + shl/shr/mod, helpers array_load_u8 / array_store_i8) y corre
+# CompressNat.mod. La salida (n = 6 / out = ABABAB) debe ser byte-idéntica a la
+# VM-Java y a la versión plain-BP de bpstdlib/Compress.bp. Ver test/test_compressnat.c.
+COMPRESSNAT_BIN = build/test_compressnat.exe
+test-compressnat: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/CompressNat.mod ]; then \
+	  echo "(skip test-compressnat: falta samples/CompressNat.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/CompressNat.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_compressnat.c test/aot_CompressNat.c \
+	    $(LIBOBJ) -o $(COMPRESSNAT_BIN) $(LDFLAGS); \
+	  echo "--- AOT LZSS native #240 (esperado: n = 6 / out = ABABAB, status=OK) ---"; \
+	  ./$(COMPRESSNAT_BIN) samples/CompressNat.mod; \
 	fi
 
 # #169 — test del puente native->BP CROSS-MODULE. compute (native, BridgeApp)

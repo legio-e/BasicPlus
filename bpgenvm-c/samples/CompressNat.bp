@@ -1,0 +1,93 @@
+// CompressNat — #240: variante NATIVE de Compress.decompress (LZSS).
+// Cuerpo idéntico a bpstdlib/Compress.bp pero marcado `native`: el AOT lo
+// traduce a C (solo copias byte->byte + aritmética entera, sin cast byte()).
+// Main (interpretado) construye el mismo stream hecho a mano que CompressTest
+// y debe imprimir, byte-idéntico a la VM-Java:   n = 6   /   out = ABABAB
+module CompressNat
+
+  // LZSS: [u32 BE tamaño original] + grupos de 8 tokens (1 byte de FLAGS):
+  //   bit=1 literal (1 byte) ; bit=0 match (2 bytes: off 12b + len 4b [3..18]).
+  // La ventana es el propio buffer de salida (sin diccionario, RAM mínima).
+  native function decompress(src: byte[], srcLen: integer, dst: byte[], dstCap: integer): integer
+    if srcLen < 4 then
+      return -1
+    endif
+    var outSize: integer := (src[0] shl 24) + (src[1] shl 16) + (src[2] shl 8) + src[3]
+    if outSize < 0 then
+      return -1
+    endif
+    if outSize > dstCap then
+      return -1
+    endif
+
+    var ip: integer := 4
+    var op: integer := 0
+    while op < outSize do
+      if ip >= srcLen then
+        return -1
+      endif
+      var flags: integer := src[ip]
+      ip := ip + 1
+
+      var b: integer := 0
+      while b < 8 do
+        if op >= outSize then
+          return op
+        endif
+        if ((flags shr b) mod 2) == 1 then
+          // literal
+          if ip >= srcLen then
+            return -1
+          endif
+          dst[op] := src[ip]
+          ip := ip + 1
+          op := op + 1
+        else
+          // match: 2 bytes
+          if (ip + 1) >= srcLen then
+            return -1
+          endif
+          var b0: integer := src[ip]
+          var b1: integer := src[ip + 1]
+          ip := ip + 2
+          var off:  integer := (b0 shl 4) + (b1 shr 4)
+          var leng: integer := (b1 mod 16) + 3
+          var dist: integer := off + 1
+          if dist > op then
+            return -1
+          endif
+          var k: integer := 0
+          while k < leng do
+            if op >= outSize then
+              return op
+            endif
+            dst[op] := dst[op - dist]
+            op := op + 1
+            k := k + 1
+          endwh
+        endif
+        b := b + 1
+      endwh
+    endwh
+    return op
+  end decompress
+
+  function Main()
+    var c: byte[] := newByteArray(9)
+    c[0] := byte(0)        // tamaño original (u32 BE) = 6
+    c[1] := byte(0)
+    c[2] := byte(0)
+    c[3] := byte(6)
+    c[4] := byte(3)        // flags 0b011: tok0=lit, tok1=lit, tok2=match
+    c[5] := byte(65)       // 'A'
+    c[6] := byte(66)       // 'B'
+    c[7] := byte(0)        // match b0
+    c[8] := byte(17)       // match b1 (0x11): off=1 -> dist=2, len=1+3=4
+
+    var dst: byte[] := newByteArray(6)
+    var n: integer := decompress(c, 9, dst, 6)
+    print "n =", n
+    print "out =", fromBytes(dst)
+  end Main
+
+end CompressNat
