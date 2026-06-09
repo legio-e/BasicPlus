@@ -48,7 +48,7 @@ B1 caracterizado + mitigado (1 worker por defecto).
 |---|---|---|
 | H8 | Ampliación de lenguaje (default params ✅, tuplas first-class ✅) | ✅ (cajón abierto) |
 | H9 | 3ª familia: **STM32** (ref. Nucleo-U575ZI-Q) | ✅ núcleo cerrado (Run+imports+GPIO+FS persistente+paridad); *stretch* AOT/L496 diferidos |
-| H10 | Librería estándar: **ajuste + ampliación** | 🟡 parcial — LinReg ✅, file I/O en VM-C ✅; resto (log, descompresión, byte[]…) **poco a poco / diferido** |
+| H10 | Librería estándar: **ajuste + ampliación** | 🟡 parcial — LinReg ✅, file I/O en VM-C ✅, **descompresión LZSS ✅** (`Compress.decompress` BP + native, paridad 3-bandas, ~30× native); resto (log, compresor/Archive, byte[]…) **poco a poco / diferido** |
 | H11 | **TCP/IP**: cliente simple (empezar) | ⏸️ **diferido al final** (probablemente V3) |
 | H12 | **Consolidación del IDE** (consola MS-DOS + doble-clic + pulido) | 🟡 **en curso** — línea de comandos ✅ · ver/editar ficheros del device (#231) ✅ verificado en Pico |
 | H13 | **Documentación y cierre** (docs doble + publicación) — puerta final | pendiente |

@@ -1416,6 +1416,30 @@ sobre el códec. No depende de tuplas ni de nada nuevo del lenguaje.
 **Planificación (usuario, 2026-05-31)**: más adelante, **sin turno asignado**
 — posterior a H4 (H4 = lo ya hablado).
 
+**ESTADO (2026-06-09) — códec de descompresión LZSS ✅ (1ª entrega de #240)**:
+- **`bpstdlib/Compress.bp`** → `public function decompress(src: byte[], srcLen,
+  dst: byte[], dstCap): integer` (bytes escritos, o -1). **Refinamiento sobre el
+  diseño**: API de **buffers provistos por el llamante** (no `decompress(byte[]):
+  byte[]`) → RAM acotada, cero `malloc` en el códec, coherente con C0. **Solo
+  descomprime**: el **compresor es herramienta de host** (decisión del usuario,
+  esta sesión), fuera de la stdlib.
+- **Formato** (nuestro framing LZSS, familia LHA/heatshrink): `[u32 BE tamaño
+  original]` + grupos de 8 tokens con 1 byte de FLAGS (bit=1 literal 1 byte,
+  bit=0 match 2 bytes: off 12b + len 4b [3..18], dist 1..4096). La ventana es el
+  propio buffer de salida (sin diccionario). Cuerpo = solo copias byte→byte +
+  aritmética entera ⇒ **AOT-able sin cast `byte()`**.
+- **Variante `native`** (`bgenvm-c/samples/CompressNat.bp`) traducida por AotCEmitter
+  (lecturas `array_load_u8`, escrituras `array_store_i8`, #193). **Paridad a 3
+  bandas** sobre el mismo .mod: VM-Java interp = VM-C interp = VM-C native
+  (`n=6/out=ABABAB`).
+- **Benchmark** (`CompressBench.bp`, `make test-compressbench`): outSize=8192,
+  iters=2000 → **interp 1142 ms vs native 38 ms (~30×)**, `checksum=36864`
+  idéntico en las tres rutas. `make test-compressnat` cubre la corrección e2e.
+- **Pendiente** (sin turno): compresor (host tool primero; quizá luego en BP/native),
+  contenedor multi-archivo `Archive` (BP puro sobre el códec), y **entrada en el
+  manual** de usuario (→ H13). El códec encaja con file I/O (#247) para
+  comprimir/descomprimir ficheros del FS.
+
 ## 15. Funciones native (AOT) en stdlib donde se preste
 
 Donde una función de stdlib sea hot y AOT-able, marcarla `function
