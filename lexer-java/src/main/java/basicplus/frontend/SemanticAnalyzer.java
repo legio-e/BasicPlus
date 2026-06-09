@@ -2149,10 +2149,44 @@ public final class SemanticAnalyzer {
             return (fn.returnType != null) ? fn.returnType : VoidType.INSTANCE;
         }
 
+        // len(x): intrínseco global type-directed (azúcar estilo Python). Sólo si
+        // el usuario NO definió su propia función `len` (entonces target seguiría
+        // null aquí y la suya habría ganado arriba). Tipa a integer y valida que
+        // el arg tenga longitud (array, string, o clase con length()/size()). La
+        // bajada por tipo la hace MivmEmitter — cero coste de VM.
+        if (target == null && ce.callee instanceof IdentifierExpr
+                && ((IdentifierExpr) ce.callee).name.equals("len")) {
+            BpType at = ce.args.isEmpty() ? null : analyzeExpr(ce.args.get(0), scope, null);
+            for (int i = 1; i < ce.args.size(); i++) analyzeExpr(ce.args.get(i), scope, null);
+            if (ce.args.size() != 1)
+                err(ce.line, ce.column, "len(): se esperaba 1 argumento");
+            else if (!isLennable(at))
+                err(ce.line, ce.column, "len(): no aplica a '"
+                        + (at != null ? at.display() : "?")
+                        + "' (sólo arrays, string, o clases con length()/size())");
+            return PrimitiveType.INTEGER;
+        }
+
         for (IExpr a : ce.args) analyzeExpr(a, scope, null);
         if (target == null && ce.callee instanceof IdentifierExpr)
             err(ce.line, ce.column, "no se puede llamar a '" + ((IdentifierExpr) ce.callee).name + "'");
         return ErrorType.INSTANCE;
+    }
+
+    /** len() — true si el tipo tiene longitud: array, string, o una clase con un
+     *  método length() o size() (p. ej. List/Map). ErrorType pasa para no
+     *  encadenar diagnósticos cuando el arg ya falló. */
+    private boolean isLennable(BpType t) {
+        if (t == null) return false;
+        if (t instanceof ErrorType) return true;
+        if (t instanceof ArrayType) return true;
+        if (t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING) return true;
+        if (t instanceof ClassType) {
+            ClassType ct = (ClassType) t;
+            return ct.cls.lookupInstance("length") instanceof FunctionSymbol
+                || ct.cls.lookupInstance("size")   instanceof FunctionSymbol;
+        }
+        return false;
     }
 
     private void checkArgs(int line, int col, List<ParamSymbol> ps, List<IExpr> args, Scope scope) {

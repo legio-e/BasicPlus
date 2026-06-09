@@ -2672,6 +2672,17 @@ public final class MivmEmitter {
             emitNumericConversion(info.exprTypes.get(c.args.get(0)), ((IdentifierExpr) c.callee).name);
             return;
         }
+        // len(x) — intrínseco global type-directed (azúcar estilo Python). El
+        // usuario puede shadowear con su propia función `len`: en ese caso el
+        // analyzer le asigna símbolo (exprSymbols != null) y caemos al camino
+        // normal de abajo.
+        if (c.callee instanceof IdentifierExpr
+                && ((IdentifierExpr) c.callee).name.equals("len")
+                && c.args.size() == 1
+                && info.exprSymbols.get(c.callee) == null) {
+            emitLenIntrinsic(c);
+            return;
+        }
         // Caso 1: callee es IdentifierExpr → función top-level o construction.
         if (c.callee instanceof IdentifierExpr) {
             Symbol sym = info.exprSymbols.get(c.callee);
@@ -2841,6 +2852,36 @@ public final class MivmEmitter {
             return;
         }
         errors.add("call con callee no soportado: " + c.callee.getClass().getSimpleName());
+    }
+
+    /**
+     * len(x) — intrínseco global, bajada type-directed (cero coste de VM: baja a
+     * ops que ya existen y están en paridad dual-VM):
+     *   array  → ALEN
+     *   string → CALL_BUILTIN STRLEN (longitud en codepoints)
+     *   clase con length()/size() (List/Map…) → INVOKE_VIRTUAL al método.
+     */
+    private void emitLenIntrinsic(CallExpr c) throws IOException {
+        IExpr arg = c.args.get(0);
+        emitExpr(arg);
+        BpType t = info.exprTypes.get(arg);
+        if (t instanceof ArrayType) {
+            w.emit(OpCode.ALEN);
+        } else if (t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING) {
+            w.emit(OpCode.CALL_BUILTIN);
+            w.emitShort((short) Builtin.STRLEN.id);
+        } else if (t instanceof ClassType) {
+            ClassType ct = (ClassType) t;
+            String m = (ct.cls.lookupInstance("length") instanceof FunctionSymbol) ? "length"
+                     : (ct.cls.lookupInstance("size")   instanceof FunctionSymbol) ? "size" : null;
+            if (m == null) {
+                errors.add("len(): la clase '" + ct.cls.name + "' no tiene length() ni size()");
+                return;
+            }
+            emitInvokeVirtualSmart(ct.cls, m, 0);
+        } else {
+            errors.add("len(): no aplica a '" + (t != null ? t.display() : "?") + "'");
+        }
     }
 
     /**

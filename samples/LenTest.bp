@@ -1,0 +1,30 @@
+// LenTest — len() intrínseco global, type-directed (azúcar estilo Python).
+// Funciona con string (codepoints), arrays (cualquier ancho) y colecciones
+// con length()/size() (List). Baja a STRLEN / ALEN / método — cero VM nuevo.
+// Esperado:
+//   len str  = 5
+//   len arr  = 3
+//   len dbl  = 4
+//   len list = 2
+module LenTest
+
+  function Main()
+    var s: string := "hello"
+    print "len str  =", len(s)
+
+    var a: integer[] := newIntArray(3)
+    a[0] := 10
+    a[1] := 20
+    a[2] := 30
+    print "len arr  =", len(a)
+
+    var d: double[] := newDoubleArray(4)
+    print "len dbl  =", len(d)
+
+    var lst: List := List()
+    lst.add("uno")
+    lst.add("dos")
+    print "len list =", len(lst)
+  end Main
+
+end LenTest
