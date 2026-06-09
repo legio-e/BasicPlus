@@ -316,11 +316,16 @@ public final class PicoExplorer extends JPanel {
                         if (farg.isEmpty()) { emitLine("  uso: del <fichero>"); break; }
                         backend.del(resolvePath(farg));
                         emitLine("  borrado: " + resolvePath(farg));
+                        SwingUtilities.invokeLater(this::onRefresh);   // el árbol refleja el borrado
                         break;
-                    case "run":
+                    case "run": {
                         if (farg.isEmpty()) { emitLine("  uso: run <fichero>"); break; }
-                        emitLine("  (" + backend.run(resolvePath(farg), this::emitLine) + ")");
+                        // conveniencia: 'run Blink' = 'run Blink.mod' (los ejecutables son .mod)
+                        String mod = farg.endsWith(".mod") ? farg : farg + ".mod";
+                        emitLine("  (" + backend.run(resolvePath(mod), this::emitLine) + ")");
+                        SwingUtilities.invokeLater(this::onRefresh);   // run puede crear ficheros
                         break;
+                    }
                     case "mem": case "df":
                         emitLine(backend.mem());
                         break;
