@@ -233,19 +233,24 @@ de la clase hija + redeclaración de métodos.
 - Class types cross-module en signatures de método (e.g. parámetro
   `OtraMod.OtraClase`): no se resuelve hoy.
 
-### L3 — Métodos de clase sin forward references
-**Impacto**: dos métodos de la misma clase no pueden llamarse mutuamente si
-están declarados en cualquier orden. Encontrado al portar `Json.bp` — solución
-fue convertirlos en funciones módulo.
+### L3 — Métodos de clase sin forward references ✅ CERRADO (2026-06-09, de rebote)
+**Era**: dos métodos de la misma clase no podían llamarse mutuamente si estaban
+declarados en cualquier orden (resolución de slots eager en `emitClassDef`).
 
-**Causa**: resolución de slots eager en `MivmEmitter.emitClassDef`.
+**Cerrado** al arreglar el "Bug A" del for-in-en-método: pre-pass en
+`MivmEmitter.emitClassDef` que registra los slots de vtable de TODOS los métodos
+públicos (`ModWriter.declareMethodSlot`) antes de emitir los cuerpos. Verificado
+2026-06-10 (`ping()`↔`pong()` mutuamente recursivos declarados en orden inverso →
+funciona byte-idéntico en ambas VMs).
 
-### L4 — `get` y `set` son palabras reservadas
-**Impacto**: no puedes nombrar un método de usuario `get` ni `set`. Bloqueó la
-implementación natural de `JsonArray.get(idx)` — tuvimos que renombrar a `at`.
+### L4 — `get` y `set` son palabras reservadas ✅ CERRADO (tarea #56)
+**Era**: no podías nombrar un método de usuario `get`/`set` (bloqueó
+`JsonArray.get(idx)` → renombrado a `at`).
 
-**Fix**: hacer que `get`/`set` sean contextuales (sólo reservadas dentro de
-`property`). Cambio en el lexer + parser.
+**Cerrado**: `get`/`set` son contextuales (solo reservadas dentro de `property`).
+Verificado 2026-06-10: un método de clase `get(idx)` compila y corre en ambas VMs.
+(`Json.bp` mantiene `at()` por compatibilidad; podría ganar un alias `get()` si
+apetece.)
 
 ### L5 — Sin expresiones multi-línea
 **Impacto**: una expresión partida en varias líneas falla en el parser. Forzosamente
