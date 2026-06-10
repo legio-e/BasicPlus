@@ -484,9 +484,89 @@ analizador (catch/throw/instanceof), **paridad dual-VM** (miVM ↔ VM-C), posibl
 la `.bpi` de la base. Es una decisión de modelo de lenguaje → con cuidado, con samples
 + paridad. (Anotado a petición de Eduardo, 2026-06-09; desbloquea #213 opción 1.)
 
+#### L13 — concat `string + long/double` (pendiente, descubierto en L8 v2)
+No hay builtin long→string / double→string: H1.2/H1.3 implementaron el print
+de long/double con opcodes dedicados (LPRINT/DPRINT con formateo canónico
+GAP-4) pero NO la coerción a string del concat. `"x = " + unLong` emitía
+código corrupto (8 bytes en la pila donde CONCAT espera una ref de 4) → fault
+en runtime. Hoy es ERROR de compilación claro ("imprime el valor por separado
+o conviértelo antes").
+
+**Para cerrarlo**: builtins `LONG_TO_STRING` + `DOUBLE_TO_STRING` (ids nuevos)
+en `miVM/bytecode/Builtin.java` + `VirtualMachine` + `bpgenvm-c/src/builtins.c`
+(reusar el formateo canónico GAP-4 para paridad byte-idéntica del double), y
+los dos `case` en `MivmEmitter.coerceToString` (quitar la guarda del
+emitBinary). Revisar de paso los tipos narrow en concat (¿llegan como UINT8
+a coerceToString o el semántico los ensancha a INTEGER?). Tarea pequeña,
+paridad-sensible.
+
 ---
 
 ## ✅ Cerrado en sesiones recientes — anotaciones
+
+### L8 v2 — inits de módulo HORNEADOS en el data block + const arreglada + array de tamaño fijo ✅ (2026-06-10, tarea #255)
+
+Tres piezas con la misma maquinaria (el .mod NO cambia de formato; las VMs NO
+se tocan — todo es frontend + ModWriter):
+
+**1. BUG const de módulo (string/long/double/bool/negativas).** Solo las const
+int/float-literal se horneaban; el resto caía a un "global a cero que asignará
+el initializer" — y NADIE asignaba (una const no es asignable). `const S :=
+"hola"` compilaba sin avisos y al usarla: miVM PETABA (lee ref 0 como string →
+pide 1.8 GB → heap overflow) y la VM-C imprimía vacío — divergencia dual-VM.
+Fix: `ConstSymbol.literalValue` se rellena también para las const LOCALES
+(antes solo las importadas de .bpi) y `loadFromSymbol`/`emitMemberAccess` las
+INLINAN width-aware (PUSH/FPUSH/LPUSH/DPUSH/LEA del literal interned). De
+paso: `emitConstLiteral` truncaba un const long/double importado a int/float
+(bug latente cross-module) → ahora el tipo del símbolo decide el opcode. Una
+const de módulo con init NO-literal ahora es ERROR claro (antes 0 silencioso).
+Las const int/float siguen materializando su data symbol (compat con la
+convención de offsets #172 del AOT — que ya NO cuenta las bool).
+
+**2. var de módulo con init literal → valor horneado.** `var x: integer := 5`
+ya NO ignora el init: el valor va en el slot del data block de la imagen .mod
+(int/narrow/bool 4B; float 4B; long/double 8B big-endian — mismo orden que
+writeI64). String: el literal queda interned en el data block y el `__init`
+sintético asigna la ref (LEA + SET_GLOBAL — la dirección es de load-time, no
+horneable); la var sigue siendo reasignable. El aviso L8 queda SOLO para init
+no-literal (expresiones → función inicializadora, como siempre).
+
+**3. `var buf: tipo[N]` de módulo = array de TAMAÑO FIJO en el data block.**
+La sintaxis `integer[10]` ya parseaba (ArrayTypeRef.size) pero nadie la
+consumía. Ahora a nivel módulo: símbolo `[u32 N][elems empaquetados]` — la
+MISMA forma que un array heap visto desde el user_ref (HEAP_LAYOUT §2), así
+que ALOAD/ASTORE/len/pasar-como-`tipo[]` funcionan tal cual. Leer la var =
+LEA de la dirección (como un literal string); binding FIJA (reasignar = error
+semántico; sus elementos sí se escriben); init literal opcional
+`:= [a, b, ...]` (resto a cero). Solo elementos primitivos (int/float/long/
+double/bool/narrow): el GC no escanea el data block → refs ahí serían
+invisibles para mark. Cero heap — buffers estáticos estilo C para embebido.
+En native (AOT #172) los fixed arrays NO entran en moduleVarOffsets → error
+claro si se referencian (mejora natural futura: ref = mem+cs+off).
+Locales/campos de clase con `[N]` siguen ignorando el tamaño (pendiente).
+
+Sample + paridad byte-idéntica ambas VMs: `samples/ModInit.bp`.
+
+**4. Remate de verificación cruzada (misma sesión).** `const` ya NO es
+asignable — error semántico en cualquier ámbito, `:=`/`+=`/`-=` incluidos
+(antes compilaba sin diagnóstico y el emisor escribía el slot; tras el
+inline habría sido además un store a símbolo inexistente). Las const
+LOCALES de función estaban rotas de raíz: leerlas emitía `GET_GLOBAL` de
+un símbolo que no existe → RuntimeException del ModWriter al compilar
+(`ConstSymbol.isLocal` nuevo). Ahora: literal → inline como las de módulo;
+no-literal → slot local width-aware de única asignación (long/double = 8
+bytes; antes el `SET_LOCAL` de 4 habría desbalanceado la pila). Y el
+`.bpi` exporta la MISMA noción de literal que compila (`literalValueOf`
+delega en `constLiteralValue`): consts públicas negativas, parentizadas y
+long/double ahora viajan e inlinan cross-module (verificado ambas VMs:
+`ConstKinds`/`ConstUse` — int, -7, (5), 2.5, float-desde-int, long,
+double, bool, string, "", locales y k=I+NEG idénticos miVM ↔ VM-C).
+
+**GAP descubierto de regalo:** la concatenación `string + long/double` NUNCA
+existió (no hay builtin de conversión; H1.2/H1.3 cubrieron print con opcodes
+propios) y corrompía la pila (8 bytes donde CONCAT espera ref de 4) → fault
+en runtime. Ahora es ERROR de compilación claro. Implementarla = entrada
+nueva abajo (LONG_TO_STRING/DOUBLE_TO_STRING en ambas VMs).
 
 ### #213 — P-aot-try-catch-b: throw de clase de usuario desde native ✅ (2026-06-10); try/catch DENTRO de native → diferido con motivo
 
@@ -988,6 +1068,21 @@ anterior.
 
 Tipos mostrados: `integer`, `boolean`, `float`, `string` (entrecomillada con
 escapes mínimos), `ref` (clases, se muestra como `@<addr-hex>`).
+
+### N17 — const de CLASE con init no-literal: crash latente del emisor (pendiente, descubierto en L8 v2)
+Una const de clase con valor LITERAL funciona (se inlina vía `literalValue`,
+igual que las de módulo). Pero el error semántico de L8 v2 solo cubre nivel
+módulo (`ownerClass == null`): una const de clase con init no-literal deja
+`literalValue = null` y su lectura emite `GET_GLOBAL "Cls.K"` — un símbolo
+que NADIE declara → RuntimeException del ModWriter ("Símbolo de datos no
+declarado"), no un diagnóstico limpio. Decidir: extender el error semántico
+a clases (coherente con módulo) o materializar backing + asignación en
+`Cls.__init`.
+
+De paso: `const C := Color.RED` a nivel módulo (valor de enum, conocido en
+compilación) cae hoy en el error "requiere literal" — mejora natural:
+inlinearlo desde `EnumSymbol.values`, como ya hace `emitMemberAccess` con
+`Enum.NAME` en expresiones.
 
 ---
 

@@ -288,6 +288,11 @@ public abstract class Symbol {
          *  salir de scope o al reasignarse. Solo válido si type es ClassType. */
         public boolean isOwner;
         public BpType type;
+        /** L8 v2 — var de módulo `tipo[N]`: array de tamaño fijo HORNEADO en
+         *  el data block ([len][elems], binding fija — leer la var es LEA de
+         *  la dirección del símbolo; no hay slot de ref y no es reasignable).
+         *  -1 = var normal. */
+        public int fixedArraySize = -1;
 
         public VarSymbol(String name, boolean isPublic, boolean isStatic,
                          ClassSymbol owner, boolean isLocal, int line, int column) {
@@ -304,6 +309,9 @@ public abstract class Symbol {
         public final boolean isStatic;
         public final ClassSymbol ownerClass;
         public BpType type;
+        /** L8 v2 — true si está declarada en un cuerpo de función: cuando su
+         *  init no es literal vive en un slot LOCAL (no hay símbolo global). */
+        public boolean isLocal;
         /**
          * Valor literal compilado cuando se conoce en tiempo de compilación
          * (típicamente importadas desde un .bpi). Tipos: Long, Double, String,

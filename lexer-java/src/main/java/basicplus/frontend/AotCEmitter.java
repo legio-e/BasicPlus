@@ -1471,9 +1471,12 @@ public final class AotCEmitter {
                 }
             } else if (d instanceof Ast.ConstDecl) {
                 Ast.ConstDecl cd = (Ast.ConstDecl) d;
+                // L8 v2 — convención actualizada de MivmEmitter: SOLO las const
+                // int/float-literal materializan data symbol (compat); bool/
+                // string/long/double/negativas se inlinan en cada uso y ya NO
+                // ocupan slot. Contarlas aquí descuadraría todos los offsets.
                 if (cd.value instanceof Ast.IntLitExpr
-                        || cd.value instanceof Ast.FloatLitExpr
-                        || cd.value instanceof Ast.BoolLitExpr) {
+                        || cd.value instanceof Ast.FloatLitExpr) {
                     moduleVarOffsets.put(cd.name.name, nextOffset);
                     nextOffset -= 4;
                 }

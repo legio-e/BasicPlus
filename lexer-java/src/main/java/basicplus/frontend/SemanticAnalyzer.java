@@ -999,12 +999,39 @@ public final class SemanticAnalyzer {
         } else if (def instanceof VarDecl) {
             VarDecl v = (VarDecl) def;
             BpType t = resolveType(v.type);
+            // L8 v2 — var de módulo `tipo[N]` (N literal entero > 0): array de
+            // TAMAÑO FIJO horneado en el data block del .mod ([len][elems],
+            // binding fija, elementos escribibles). Solo elementos primitivos:
+            // el GC no escanea el data block, así que un array de refs ahí
+            // sería invisible para mark (use-after-free). Locales y campos de
+            // clase con `[N]` siguen como hasta ahora (tamaño ignorado).
+            Integer fixedN = null;
+            if (owner == null && v.type instanceof ArrayTypeRef
+                    && ((ArrayTypeRef) v.type).size != null) {
+                ArrayTypeRef at = (ArrayTypeRef) v.type;
+                Object n = constLiteralValue(at.size);
+                if (!(n instanceof Long) || (Long) n <= 0) {
+                    err(at.line, at.column,
+                        "el tamaño de un array de módulo debe ser un literal entero > 0");
+                } else if (!isBakeableArrayElement(t)) {
+                    err(at.line, at.column,
+                        "array de tamaño fijo a nivel módulo solo admite elementos primitivos "
+                        + "(integer/float/long/double/boolean/byte/word/int8/int16); "
+                        + "string o clases necesitan heap (el GC no ve el data block)");
+                } else {
+                    fixedN = (int) (long) (Long) n;
+                }
+            }
             for (DeclName n : v.names) {
                 Symbol sym;
                 if (owner == null) sym = module.members.resolve(n.name);
                 else sym = n.isStatic() ? owner.staticMembers.resolve(n.name)
                                          : owner.instanceMembers.resolve(n.name);
-                if (sym instanceof VarSymbol) ((VarSymbol) sym).type = t;
+                if (sym instanceof VarSymbol) {
+                    ((VarSymbol) sym).type = t;
+                    if (fixedN != null && !n.isStatic())
+                        ((VarSymbol) sym).fixedArraySize = fixedN;
+                }
             }
         } else if (def instanceof FuncDef) {
             FuncDef f = (FuncDef) def;
@@ -1157,6 +1184,18 @@ public final class SemanticAnalyzer {
                 && !acceptsNarrowFromLiteral(cs.type, t, c.value))
             err(c.line, c.column, narrowAssignErrorMessage(cs.type, t, c.value,
                     "valor de tipo '" + t.display() + "' no asignable a const de tipo '" + cs.type.display() + "'"));
+        // L8 v2 — el valor literal viaja en el símbolo y el emisor lo INLINA en
+        // cada uso (mismo mecanismo que las const importadas de .bpi). Antes,
+        // una const de módulo string/long/double/bool caía a un global a CERO
+        // que nadie asignaba (miVM petaba al leerla como string; VM-C imprimía
+        // vacío — divergencia). Un init no-literal a nivel módulo nunca
+        // funcionó → ahora es error claro en vez de 0 silencioso.
+        cs.literalValue = constLiteralValue(c.value);
+        if (cs.literalValue == null && cs.ownerClass == null) {
+            err(c.line, c.column, "const a nivel módulo requiere un valor literal "
+                    + "(entero/float/long/double/boolean/string, '-' opcional); para un valor "
+                    + "calculado usa una var asignada en la función inicializadora del módulo");
+        }
     }
 
     private void analyzeVarInit(VarDecl v) {
@@ -1164,23 +1203,75 @@ public final class SemanticAnalyzer {
         Symbol sym = info.declSymbols.get(v);
         BpType t = (sym instanceof VarSymbol) ? ((VarSymbol) sym).type : null;
         BpType got = analyzeExpr(v.init, null, t);
+        // L8 v2 — array de TAMAÑO FIJO de módulo: el init es un inicializador
+        // de COMPILE-TIME (se hornea elemento a elemento en el data block),
+        // no un valor runtime — la asignabilidad de tipos array no aplica
+        // (p.ej. [1,2,250] es integer[] pero hornea perfectamente en byte[4]).
+        // validateFixedArrayInit hace la validación correcta por elemento.
+        if (sym instanceof VarSymbol && ((VarSymbol) sym).fixedArraySize >= 0) {
+            validateFixedArrayInit(v, (VarSymbol) sym);
+            return;
+        }
         if (t != null && !t.isAssignableFrom(got)
                 && !acceptsNarrowFromLiteral(t, got, v.init))
             err(v.line, v.column, narrowAssignErrorMessage(t, got, v.init,
                     "valor de tipo '" + got.display() + "' no asignable a var de tipo '" + t.display() + "'"));
         if (t != null && t.isScalar() && got instanceof NullType)
             err(v.line, v.column, "no se puede asignar 'null' a un tipo escalar '" + t.display() + "'");
-        // L8: el inicializador de una var/static a NIVEL MÓDULO se ignora hoy
-        //     (no se emite código de asignación). Avisamos al usuario para que
-        //     mueva la asignación a la función inicializadora del módulo.
-        //     Vars locales y campos de instancia/static de clase no se ven
-        //     afectados (esos sí se inicializan).
+        // L8 v2 — init de var a NIVEL MÓDULO:
+        //   - literal escalar/string (con '-' opcional) → se HORNEA en el data
+        //     block del .mod (string: ref asignada por __init). Sin aviso.
+        //   - array de tamaño fijo `tipo[N] := [literales]` → elementos
+        //     horneados (resto a cero). Validación aquí.
+        //   - cualquier otra expresión → se ignora como siempre + aviso
+        //     (asignar en la función inicializadora del módulo).
+        // Vars locales y campos de instancia/static de clase no cambian.
         if (sym instanceof VarSymbol) {
             VarSymbol vs = (VarSymbol) sym;
             if (vs.ownerClass == null && !vs.isLocal) {
-                warn(v.line, v.column, "inicializador de var a nivel módulo se ignora; "
-                        + "mueve la asignación a la función inicializadora del módulo");
+                if (constLiteralValue(v.init) == null) {
+                    warn(v.line, v.column, "inicializador de var a nivel módulo se ignora si no es "
+                            + "un literal; mueve la asignación a la función inicializadora del módulo");
+                }
             }
+        }
+    }
+
+    /** L8 v2 — `var t: tipo[N] := [...]` de módulo: el init debe ser un array
+     *  literal con TODOS los elementos literales (numéricos o boolean según el
+     *  tipo) y longitud <= N; las posiciones restantes quedan a cero. */
+    private void validateFixedArrayInit(VarDecl v, VarSymbol vs) {
+        if (!(v.init instanceof ArrayLitExpr)) {
+            err(v.line, v.column, "el init de un array de tamaño fijo de módulo debe ser un "
+                    + "array literal [a, b, ...] con elementos literales");
+            return;
+        }
+        ArrayLitExpr lit = (ArrayLitExpr) v.init;
+        if (lit.elements.size() > vs.fixedArraySize) {
+            err(v.line, v.column, "el array literal tiene " + lit.elements.size()
+                    + " elementos pero el tamaño declarado es " + vs.fixedArraySize);
+            return;
+        }
+        for (IExpr e : lit.elements) {
+            Object val = constLiteralValue(e);
+            if (val == null || val instanceof String) {
+                err(((Ast.Node) e).line, ((Ast.Node) e).column,
+                    "los elementos del init de un array fijo de módulo deben ser "
+                    + "literales numéricos o boolean (se hornean en el .mod)");
+                return;
+            }
+        }
+    }
+
+    /** L8 v2 — ¿tipo de elemento horneable en el data block? Primitivos sí;
+     *  string/clases/refs NO (necesitan heap visible para el GC). */
+    private static boolean isBakeableArrayElement(BpType t) {
+        if (!(t instanceof ArrayType)) return false;
+        BpType el = ((ArrayType) t).element;
+        if (!(el instanceof PrimitiveType)) return false;
+        switch (((PrimitiveType) el).tag) {
+            case STRING: return false;
+            default:     return true;
         }
     }
 
@@ -1398,6 +1489,11 @@ public final class SemanticAnalyzer {
         BpType t = (declared != null) ? declared : got;
         ConstSymbol sym = new ConstSymbol(c.name.name, false, false, null, c.line, c.column);
         sym.type = t;
+        sym.isLocal = true;
+        // L8 v2 — si el init es literal, el emisor lo inlina en cada lectura
+        // (mismo mecanismo que las const de módulo); si no, la const vive en
+        // un slot local de única asignación.
+        sym.literalValue = constLiteralValue(c.value);
         if (!scope.tryDefine(sym))
             err(c.line, c.column, "const duplicada: '" + c.name.name + "'");
         if (declared != null && !declared.isAssignableFrom(got)
@@ -1421,6 +1517,25 @@ public final class SemanticAnalyzer {
 
         if (a.target instanceof FieldExpr && !insideSetter)
             err(a.line, a.column, "'field' solo puede usarse dentro de get/set");
+
+        // L8 v2 — un array de tamaño fijo de módulo tiene binding FIJA (vive
+        // horneado en el data block, no hay slot de ref que reasignar).
+        // Sus ELEMENTOS sí son escribibles (buf[i] := x).
+        if (a.target instanceof IdentifierExpr) {
+            Symbol ts = info.exprSymbols.get(a.target);
+            if (ts instanceof VarSymbol && ((VarSymbol) ts).fixedArraySize >= 0)
+                err(a.line, a.column, "'" + ((VarSymbol) ts).name + "' es un array de tamaño "
+                        + "fijo de módulo: no es reasignable (escribe en sus elementos)");
+        }
+
+        // L8 v2 — una const no es asignable en ningún ámbito. Además el emisor
+        // mivm ya no le materializa slot (el valor viaja inlined), así que un
+        // store generaría una referencia a un símbolo inexistente.
+        if (a.target instanceof IdentifierExpr || a.target instanceof MemberAccessExpr) {
+            Symbol ts = info.exprSymbols.get(a.target);
+            if (ts instanceof ConstSymbol)
+                err(a.line, a.column, "'" + ts.name + "' es una const: no se puede asignar");
+        }
 
         if (a.op == AssignOpKind.PLUS_ASSIGN || a.op == AssignOpKind.MINUS_ASSIGN) {
             boolean ok = (lhsT.isNumeric() && rhsT.isNumeric())

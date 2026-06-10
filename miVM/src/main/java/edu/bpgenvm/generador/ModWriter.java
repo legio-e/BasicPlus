@@ -395,6 +395,30 @@ public class ModWriter {
         longGlobals.add(name);
     }
 
+    /** L8 v2 — global long/double con valor HORNEADO en el data block (mismo
+     *  orden que writeI64 de la VM: word alto BE + word bajo BE). Para double,
+     *  el caller pasa Double.doubleToRawLongBits(). */
+    public int addConstantLong(String name, long value) {
+        byte[] b = new byte[8];
+        writeIntInBuf(b, 0, (int) (value >>> 32));
+        writeIntInBuf(b, 4, (int) value);
+        int off = registerSymbol(name, b);
+        longGlobals.add(name);   // lecturas/escrituras via GET/SET_GLOBAL_L
+        return off;
+    }
+
+    /** L8 v2 — array de long/double horneado: [u32 len][elems de 8 bytes BE].
+     *  Misma forma que un array heap TYPE_ARRAY_I64 visto desde el user_ref. */
+    public int addConstantArrayLong(String name, long[] values) {
+        byte[] b = new byte[4 + values.length * 8];
+        writeIntInBuf(b, 0, values.length);
+        for (int i = 0; i < values.length; i++) {
+            writeIntInBuf(b, 4 + i * 8,     (int) (values[i] >>> 32));
+            writeIntInBuf(b, 4 + i * 8 + 4, (int)  values[i]);
+        }
+        return registerSymbol(name, b);
+    }
+
     /**
      * Devuelve el offset (relativo al CS del módulo) de un símbolo del data
      * block ya registrado. Sirve para emitir info de debug (.dbg) que el

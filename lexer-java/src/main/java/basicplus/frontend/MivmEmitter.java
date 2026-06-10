@@ -75,6 +75,11 @@ public final class MivmEmitter {
     private final Map<String, String> stringPool = new HashMap<>();
     private int stringPoolCounter = 0;
 
+    /** L8 v2 — vars string de módulo con init literal: pares
+     *  {nombreVar, símbolo del literal interned}. El __init sintético emite
+     *  LEA literal + SET_GLOBAL var (la dirección es de load-time). */
+    private final List<String[]> pendingStrVarInits = new ArrayList<>();
+
     /** Track de qué helpers inyectamos para no repetirlos. */
     private final Set<String> emittedHelpers = new HashSet<>();
 
@@ -471,6 +476,16 @@ public final class MivmEmitter {
             w.emitPushInt(1);
             w.emitSetGlobal("__initialized");
 
+            // L8 v2 — vars string de módulo con init literal: el LITERAL vive
+            // horneado en el data block (interned), pero la var guarda una REF
+            // y la dirección solo se conoce al cargar → se asigna aquí (LEA +
+            // SET_GLOBAL). El usuario no escribe nada; la var sigue siendo
+            // reasignable después.
+            for (String[] p : pendingStrVarInits) {
+                w.emitLeaGlobal(p[1]);
+                w.emitSetGlobal(p[0]);
+            }
+
             // Inicializar mutex compartido para sync properties de módulo, si
             // las hay. Se hace ANTES de las dependencias por simetría con la
             // inicialización de un objeto: lo nuestro primero, luego cascada.
@@ -576,20 +591,149 @@ public final class MivmEmitter {
     // ============================================================
 
     private void emitModuleVarDecl(VarDecl vd) {
-        // Por ahora soportamos sólo declaración simple (1 nombre).
         BpType declT = vd.type != null ? typeRefToBpType(vd.type) : null;   // H1.2
         for (DeclName dn : vd.names) {
             if (dn.isStatic()) { errors.add("var estática de clase a nivel módulo no soportada: " + dn.name); continue; }
-            // Reservamos 4 bytes (8 si es long) en data block. El inicializador
-            // se ejecuta en el module initializer; los init a nivel módulo se
-            // ignoran (L8) → el usuario asigna en código.
-            if (is8Byte(declT)) w.declareGlobalLong(dn.name);   // H1.2/H1.3: long/double 8 bytes
+
+            Symbol msym = (info.module != null) ? info.module.members.tryLookup(dn.name) : null;
+            VarSymbol vs = (msym instanceof VarSymbol) ? (VarSymbol) msym : null;
+
+            // L8 v2 — array de TAMAÑO FIJO `tipo[N]`: la var ES el array,
+            // horneado en el data block como [u32 N][elems] — la misma forma
+            // que un array heap visto desde el user_ref (HEAP_LAYOUT §2), así
+            // que ALOAD/ASTORE/len operan tal cual. Leer la var = LEA de la
+            // dirección del símbolo (binding fija; el semántico bloquea la
+            // reasignación). Cero heap, cero código de arranque.
+            if (vs != null && vs.fixedArraySize >= 0) {
+                emitFixedModuleArray(vs, vd);
+                continue;
+            }
+
+            // L8 v2 — init LITERAL: el valor va HORNEADO en el slot del data
+            // block (cero código de arranque). Para string, el literal queda
+            // interned en el data block y __init asigna la REF (la dirección
+            // es de load-time, no horneable) — la var sigue reasignable.
+            // Cualquier otro init se ignora como siempre (aviso L8).
+            BpType t = (declT != null) ? declT : (vs != null ? vs.type : null);
+            Object lit = (vd.init != null) ? SemanticAnalyzer.constLiteralValue(vd.init) : null;
+            if (lit != null && bakeModuleVarInit(dn.name, t, lit)) continue;
+
+            // Sin init horneable: slot a cero, 4 bytes (8 si long/double).
+            if (is8Byte(t)) w.declareGlobalLong(dn.name);   // H1.2/H1.3
             else w.declareGlobal(dn.name);
         }
-        // Si la VarDecl tiene init y NO hay un init explícito en el initializer del
-        // módulo, deberíamos emitir la asignación al arranque. Para simplificar,
-        // dejamos que el initializer haga el trabajo (es la convención que sigue
-        // JvmEmitter y los fase1/fase2 lo respetan).
+    }
+
+    /** L8 v2 — hornea el init literal de una var de módulo en su slot del
+     *  data block. Devuelve false si la combinación tipo/literal no es
+     *  horneable (el caller declara el slot a cero, comportamiento clásico). */
+    private boolean bakeModuleVarInit(String name, BpType t, Object lit) {
+        PrimitiveType.Kind k = (t instanceof PrimitiveType) ? ((PrimitiveType) t).tag : null;
+        if (k == null) {   // sin tipo declarado ni inferido: deducir del literal
+            if (lit instanceof Long)         k = PrimitiveType.Kind.INTEGER;
+            else if (lit instanceof Double)  k = PrimitiveType.Kind.FLOAT;
+            else if (lit instanceof Boolean) k = PrimitiveType.Kind.BOOLEAN;
+            else if (lit instanceof String)  k = PrimitiveType.Kind.STRING;
+            else return false;
+        }
+        switch (k) {
+            case STRING:
+                if (!(lit instanceof String)) return false;
+                w.declareGlobal(name);   // slot de la REF; __init la asigna
+                pendingStrVarInits.add(new String[]{ name, internString((String) lit) });
+                return true;
+            case LONG:
+                w.addConstantLong(name, litAsLong(lit));
+                return true;
+            case DOUBLE:
+                w.addConstantLong(name, Double.doubleToRawLongBits(litAsDouble(lit)));
+                return true;
+            case FLOAT:
+                w.addConstantFloat(name, (float) litAsDouble(lit));
+                return true;
+            case BOOLEAN:
+                w.addConstantInt(name, (lit instanceof Boolean && (Boolean) lit) ? 1 : 0);
+                return true;
+            default:
+                // integer + narrow (byte/word/int8/int16): slot de 4 bytes con
+                // el valor (los stores posteriores ya truncan al ancho).
+                if (!(lit instanceof Number)) return false;
+                w.addConstantInt(name, (int) litAsLong(lit));
+                return true;
+        }
+    }
+
+    /** L8 v2 — data symbol [u32 N][elems empaquetados al ancho del elemento]
+     *  de un array fijo de módulo. Los literales del init (validados por el
+     *  semántico) rellenan el principio; el resto queda a cero. */
+    private void emitFixedModuleArray(VarSymbol vs, VarDecl vd) {
+        int n = vs.fixedArraySize;
+        BpType el = (vs.type instanceof ArrayType) ? ((ArrayType) vs.type).element : null;
+        PrimitiveType.Kind k = (el instanceof PrimitiveType)
+                ? ((PrimitiveType) el).tag : PrimitiveType.Kind.INTEGER;
+        List<IExpr> elems = (vd.init instanceof ArrayLitExpr)
+                ? ((ArrayLitExpr) vd.init).elements : java.util.Collections.<IExpr>emptyList();
+        try {
+            switch (k) {
+                case UINT8: case INT8: {
+                    byte[] v = new byte[n];
+                    for (int i = 0; i < elems.size(); i++)
+                        v[i] = (byte) litAsLong(SemanticAnalyzer.constLiteralValue(elems.get(i)));
+                    w.addConstantArrayInt8(vs.name, v);
+                    break;
+                }
+                case UINT16: case INT16: {
+                    short[] v = new short[n];
+                    for (int i = 0; i < elems.size(); i++)
+                        v[i] = (short) litAsLong(SemanticAnalyzer.constLiteralValue(elems.get(i)));
+                    w.addConstantArrayInt16(vs.name, v);
+                    break;
+                }
+                case LONG: {
+                    long[] v = new long[n];
+                    for (int i = 0; i < elems.size(); i++)
+                        v[i] = litAsLong(SemanticAnalyzer.constLiteralValue(elems.get(i)));
+                    w.addConstantArrayLong(vs.name, v);
+                    break;
+                }
+                case DOUBLE: {
+                    long[] v = new long[n];
+                    for (int i = 0; i < elems.size(); i++)
+                        v[i] = Double.doubleToRawLongBits(litAsDouble(SemanticAnalyzer.constLiteralValue(elems.get(i))));
+                    w.addConstantArrayLong(vs.name, v);
+                    break;
+                }
+                case FLOAT: {
+                    float[] v = new float[n];
+                    for (int i = 0; i < elems.size(); i++)
+                        v[i] = (float) litAsDouble(SemanticAnalyzer.constLiteralValue(elems.get(i)));
+                    w.addConstantArrayFloat(vs.name, v);
+                    break;
+                }
+                default: {   // INTEGER / BOOLEAN: 4 bytes por elemento
+                    int[] v = new int[n];
+                    for (int i = 0; i < elems.size(); i++)
+                        v[i] = (int) litAsLong(SemanticAnalyzer.constLiteralValue(elems.get(i)));
+                    w.addConstantArray(vs.name, v);
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            errors.add("array fijo de módulo '" + vs.name + "': " + e.getMessage());
+        }
+    }
+
+    /** Literal (Long/Double/Boolean de constLiteralValue) → long. */
+    private static long litAsLong(Object lit) {
+        if (lit instanceof Number)  return ((Number) lit).longValue();
+        if (lit instanceof Boolean) return ((Boolean) lit) ? 1 : 0;
+        return 0;
+    }
+
+    /** Literal numérico → double. */
+    private static double litAsDouble(Object lit) {
+        if (lit instanceof Number) return ((Number) lit).doubleValue();
+        return 0.0;
     }
 
     private void emitModuleConstDecl(ConstDecl cd) {
@@ -597,9 +741,14 @@ public final class MivmEmitter {
             errors.add("const estática de clase a nivel módulo no soportada: " + cd.name.name);
             return;
         }
-        // Para constantes con valor literal conocido (int/float), las dejamos
-        // en data block ya inicializadas. Para otras, declaramos como global
-        // y dejamos al initializer asignar.
+        // L8 v2 — las const de módulo con valor literal se INLINAN en cada uso
+        // (loadFromSymbol/emitMemberAccess leen ConstSymbol.literalValue, el
+        // mismo mecanismo que las const importadas de .bpi). Mantenemos el data
+        // symbol de int/float-literal por compatibilidad (debug, convención de
+        // offsets #172); el resto de tipos ya NO materializa símbolo. El
+        // antiguo fallback "global a cero asignado por el initializer" era
+        // mentira (nadie asignaba) → string/long/double/bool leían 0/basura;
+        // hoy un init no-literal es error semántico.
         BpType t = info.exprTypes.get(cd.value);
         if (t instanceof PrimitiveType) {
             PrimitiveType pt = (PrimitiveType) t;
@@ -612,8 +761,7 @@ public final class MivmEmitter {
                 return;
             }
         }
-        // Fallback: global mutable, asignado por el initializer.
-        w.declareGlobal(cd.name.name);
+        // Sin símbolo: el valor viaja inlined en cada uso.
     }
 
     // ============================================================
@@ -1563,8 +1711,17 @@ public final class MivmEmitter {
     }
 
     private void emitLocalConstDecl(ConstDecl cd) throws IOException {
-        declareLocal(cd.name.name);
+        Symbol s = info.declSymbols.get(cd);
+        ConstSymbol cs = (s instanceof ConstSymbol) ? (ConstSymbol) s : null;
+        // Literal: las lecturas lo inlinan (literalValue) — ni slot ni store.
+        if (cs != null && cs.literalValue != null) return;
+        // No-literal: slot local de única asignación, width-aware (un long en
+        // slot de 4 bytes desbalancearía la pila en el SET_LOCAL).
+        BpType t = (cs != null && cs.type != null) ? cs.type : info.exprTypes.get(cd.value);
+        if (is8Byte(t)) declareLocalLong(cd.name.name, varDbgTypeTag(t));
+        else declareLocal(cd.name.name, varDbgTypeTag(t));
         emitExpr(cd.value);
+        coerceToTarget(cd.value, t);
         w.emitSetLocal(cd.name.name);
     }
 
@@ -2654,6 +2811,16 @@ public final class MivmEmitter {
                           || (tr instanceof PrimitiveType && ((PrimitiveType) tr).tag == PrimitiveType.Kind.STRING);
 
         if ("+".equals(b.op) && stringOp) {
+            // GAP descubierto en L8 v2: no hay builtin long/double→string, así
+            // que el concat corrompía la pila (8 bytes donde CONCAT espera una
+            // ref de 4). Error claro hasta que existan LONG_TO_STRING /
+            // DOUBLE_TO_STRING en ambas VMs. Workaround: print por separado.
+            if (isLong(tl) || isDouble(tl) || isLong(tr) || isDouble(tr)) {
+                errors.add("concatenación string + long/double no soportada aún "
+                        + "(línea " + b.line + "): falta el builtin de conversión; "
+                        + "imprime el valor por separado o conviértelo antes");
+                return;
+            }
             emitExpr(b.left);
             coerceToString(tl);
             emitExpr(b.right);
@@ -4188,11 +4355,12 @@ public final class MivmEmitter {
         }
         Symbol mSym = info.exprSymbols.get(ma);
 
-        // Const cross-module con valor literal conocido: inlinar.
+        // Const cross-module con valor literal conocido: inlinar (width-aware:
+        // long/double importadas emiten LPUSH/DPUSH, no truncan a 4 bytes).
         if (mSym instanceof ConstSymbol) {
             ConstSymbol c = (ConstSymbol) mSym;
             if (c.literalValue != null) {
-                emitConstLiteral(c.literalValue);
+                emitConstLiteral(c);
                 return;
             }
         }
@@ -4251,6 +4419,32 @@ public final class MivmEmitter {
      * Inlinea un literal cuyo valor proviene de una const importada (.bpi).
      * El valor llega como Long/Double/String/Boolean.
      */
+    /** L8 v2 — inline width-aware: el TIPO del símbolo decide el opcode
+     *  (LPUSH/DPUSH de 8 bytes para long/double; FPUSH para float). La
+     *  variante (Object) de abajo no distingue ancho y truncaba un long
+     *  importado a int — esta es la entrada preferente. */
+    private void emitConstLiteral(ConstSymbol c) throws IOException {
+        Object v = c.literalValue;
+        PrimitiveType.Kind k = (c.type instanceof PrimitiveType) ? ((PrimitiveType) c.type).tag : null;
+        if (v instanceof Number) {
+            if (k == PrimitiveType.Kind.LONG) {
+                w.emit(OpCode.LPUSH);
+                w.emitLong(((Number) v).longValue());
+                return;
+            }
+            if (k == PrimitiveType.Kind.DOUBLE) {
+                w.emit(OpCode.DPUSH);
+                w.emitLong(Double.doubleToRawLongBits(((Number) v).doubleValue()));
+                return;
+            }
+            if (k == PrimitiveType.Kind.FLOAT) {
+                w.emitPushFloat(((Number) v).floatValue());
+                return;
+            }
+        }
+        emitConstLiteral(v);   // integer/narrow/bool/string (y fallback sin tipo)
+    }
+
     private void emitConstLiteral(Object v) throws IOException {
         if (v instanceof Long || v instanceof Integer) {
             emitInt(((Number) v).intValue());
@@ -4621,6 +4815,11 @@ public final class MivmEmitter {
         switch (((PrimitiveType) src).tag) {
             case STRING: return;
             case INTEGER:
+            // L8 v2 — narrow (byte/word/int8/int16): en la pila ya viajan
+            // ensanchados a i32 (ALOAD_U8/I8/U16/I16 y GET_GLOBAL extienden),
+            // así que INT_TO_STRING los convierte tal cual. Sin este case el
+            // concat dejaba basura (sin conversión) → string vacío/corrupto.
+            case UINT8: case INT8: case UINT16: case INT16:
                 w.emit(OpCode.CALL_BUILTIN);
                 w.emitShort((short) Builtin.INT_TO_STRING.id);
                 break;
@@ -4641,7 +4840,13 @@ public final class MivmEmitter {
         } else if (sym instanceof VarSymbol) {
             VarSymbol v = (VarSymbol) sym;
             if (v.isLocal) w.emitGetLocal(v.name);
-            else if (v.ownerClass == null) w.emitGetGlobal(v.name);
+            else if (v.ownerClass == null) {
+                // L8 v2 — array de tamaño fijo: la var ES el array en el data
+                // block; su "valor" es la DIRECCIÓN del símbolo (LEA), igual
+                // que un literal string. ALOAD/len operan sobre ella tal cual.
+                if (v.fixedArraySize >= 0) w.emitLeaGlobal(v.name);
+                else w.emitGetGlobal(v.name);
+            }
             else if (v.isStatic) w.emitGetGlobal(v.ownerClass.name + "." + v.name);
             else {
                 // Campo de instancia con implicit this (estamos en un método de la clase).
@@ -4669,6 +4874,19 @@ public final class MivmEmitter {
             emitInvokeVirtualSmart(ps.ownerClass, "get" + capitalize(ps.name), 0);
         } else if (sym instanceof ConstSymbol) {
             ConstSymbol c = (ConstSymbol) sym;
+            // L8 v2 — valor literal conocido: INLINE (PUSH/LPUSH/DPUSH/LEA),
+            // el mismo camino que las const importadas de .bpi. Cubre lo que
+            // el data symbol nunca cubrió (string/long/double/bool/negativos).
+            if (c.literalValue != null) {
+                emitConstLiteral(c);
+                return;
+            }
+            if (c.isLocal) {
+                // const local con init no-literal: valor de única asignación
+                // en su slot local (emitLocalConstDecl).
+                w.emitGetLocal(c.name);
+                return;
+            }
             if (c.ownerClass != null && c.isStatic) {
                 w.emitGetGlobal(c.ownerClass.name + "." + c.name);
             } else {
@@ -4687,7 +4905,15 @@ public final class MivmEmitter {
         } else if (sym instanceof VarSymbol) {
             VarSymbol v = (VarSymbol) sym;
             if (v.isLocal) w.emitSetLocal(v.name);
-            else if (v.ownerClass == null) w.emitSetGlobal(v.name);
+            else if (v.ownerClass == null) {
+                // L8 v2 — defensa: el semántico ya bloquea reasignar un array
+                // de tamaño fijo (no hay slot que escribir).
+                if (v.fixedArraySize >= 0) {
+                    errors.add("array de tamaño fijo de módulo no reasignable: " + v.name);
+                    return;
+                }
+                w.emitSetGlobal(v.name);
+            }
             else if (v.isStatic) w.emitSetGlobal(v.ownerClass.name + "." + v.name);
             else {
                 // Campo de instancia con implicit this. Pila: ..., val. Necesitamos ref, val.
@@ -4731,7 +4957,9 @@ public final class MivmEmitter {
             declareLocal("__discard");
             w.emitSetLocal("__discard");
         } else if (sym instanceof ConstSymbol) {
-            w.emitSetGlobal(sym.name);
+            // El semántico rechaza asignar a const; si llegamos aquí es un bug
+            // del frontend (las const ya no materializan slot escribible).
+            errors.add("interno: store a const '" + sym.name + "'");
         } else {
             errors.add("símbolo no soportado en store: " + sym.getClass().getSimpleName());
         }

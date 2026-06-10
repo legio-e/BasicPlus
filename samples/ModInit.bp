@@ -1,0 +1,111 @@
+// ModInit.bp — L8 v2: inits de módulo HORNEADOS en el data block del .mod.
+//
+// 1) var de módulo con init LITERAL → el valor va en el slot del data block
+//    (cero código de arranque). String: el literal vive interned y __init
+//    asigna la ref — la var sigue siendo reasignable.
+// 2) const de módulo → el valor literal se INLINA en cada uso (mismo
+//    mecanismo que las const importadas via .bpi). Cubre string/long/double/
+//    bool/negativos, que antes caían a un global a CERO (bug: miVM petaba
+//    con const string; VM-C imprimía vacío — divergencia).
+// 3) var tipo[N] → array de TAMAÑO FIJO horneado como [len][elems] (forma
+//    idéntica a un array heap visto desde el ref). Binding fija (no
+//    reasignable), elementos escribibles, sin heap. Init literal opcional
+//    (resto a cero).
+//
+// Paridad esperada (VM-Java == VM-C, byte a byte): ver bloque al final.
+
+module ModInit
+
+  // --- vars con init literal horneado ---
+  var x: integer := 5
+  var f: float := 1.25
+  var b: byte := 200
+  var ok: boolean := true
+  var lv: long := 4000000000L
+  var dv: double := 2.5d
+  var saludo: string := "hola desde el data block"
+
+  // --- consts inlinadas ---
+  const K := 42
+  const NEG := -7
+  const PI: float := 3.5
+  const MSG := "const string viva"
+  const KL := 5000000000L
+  const KD := 1.5d
+  const KB := false
+
+  // --- arrays de tamaño fijo ---
+  var tabla: integer[4] := [10, 20, 30]      // [3] queda a 0
+  var fbuf: float[2] := [0.5, 1.5]
+  var bytes: byte[4] := [1, 2, 250, 255]
+  var buf: integer[8]                        // todo a cero, se escribe abajo
+
+  function suma(a: integer[]): integer
+    var s: integer := 0
+    for i := 0 to len(a) - 1 do
+      s := s + a[i]
+    next i
+    return s
+  end suma
+
+  function Main()
+    print "x = " + x
+    print f                              // float: concat string+float es miVM-only (GAP-1)
+    print "b = " + b
+    print "ok = " + ok
+    print lv
+    print dv
+    print "saludo = " + saludo
+    saludo := "reasignada"               // la var string sigue siendo mutable
+    print "saludo2 = " + saludo
+
+    print "K = " + K
+    print "NEG = " + NEG
+    print PI
+    print "MSG = " + MSG
+    print KL
+    print KD
+    print "KB = " + KB
+
+    print "tabla = " + tabla[0] + "," + tabla[1] + "," + tabla[2] + "," + tabla[3]
+    print "len(tabla) = " + len(tabla)
+    print fbuf[0]
+    print fbuf[1]
+    print "bytes = " + bytes[0] + "," + bytes[1] + "," + bytes[2] + "," + bytes[3]
+
+    buf[0] := 100
+    buf[7] := 700
+    tabla[3] := 40                        // elementos escribibles
+    print "buf = " + buf[0] + "," + buf[1] + "," + buf[7]
+    print "suma(tabla) = " + suma(tabla)  // array fijo pasa como integer[]
+    print "suma(buf) = " + suma(buf)
+    print "fin"
+  end Main
+
+end ModInit
+
+// Salida esperada (ambas VMs):
+//   x = 5
+//   1.25
+//   b = 200
+//   ok = true
+//   4000000000
+//   2.5
+//   saludo = hola desde el data block
+//   saludo2 = reasignada
+//   K = 42
+//   NEG = -7
+//   3.5
+//   MSG = const string viva
+//   5000000000
+//   1.5
+//   KB = false
+//   tabla = 10,20,30,0
+//   len(tabla) = 4
+//   0.5
+//   1.5
+//   bytes = 1,2,250,255
+//   buf = 100,0,700
+//   suma(tabla) = 100
+//   suma(buf) = 800
+//   fin

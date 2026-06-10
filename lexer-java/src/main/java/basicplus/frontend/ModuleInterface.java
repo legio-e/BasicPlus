@@ -538,11 +538,11 @@ public final class ModuleInterface {
     }
 
     private static Object literalValueOf(Ast.IExpr e) {
-        if (e instanceof Ast.IntLitExpr)    return ((Ast.IntLitExpr) e).value;
-        if (e instanceof Ast.FloatLitExpr)  return ((Ast.FloatLitExpr) e).value;
-        if (e instanceof Ast.StringLitExpr) return ((Ast.StringLitExpr) e).value;
-        if (e instanceof Ast.BoolLitExpr)   return ((Ast.BoolLitExpr) e).value;
-        return null;
+        // Delegado en el semántico: misma noción de "literal" (incluye '-'
+        // unario, paréntesis y los anchos long/double) que valida
+        // analyzeConstInit y que el emisor inlina — así el .bpi exporta
+        // exactamente lo que compila localmente.
+        return SemanticAnalyzer.constLiteralValue(e);
     }
 
     /** Devuelve null si la firma es serializable, o un String con la razón si no. */
