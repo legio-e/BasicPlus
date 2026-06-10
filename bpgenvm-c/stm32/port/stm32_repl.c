@@ -349,7 +349,13 @@ static void handle_run(long id, json_obj_t* obj) {
             snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
             const uint8_t* mdn_data; uint32_t mdn_size;
             if (stm32_fs_resolve(mdn_path, &mdn_data, &mdn_size) != 0) continue;
-            bpvm_load_mdn(vm, mdn_data, (size_t) mdn_size);
+            int mrc = bpvm_load_mdn(vm, mdn_data, (size_t) mdn_size);
+            /* Visible en la consola del IDE: sin esto, un fallo de carga
+             * (p.ej. buffer desalineado) caía a interpretado EN SILENCIO. */
+            char mmsg[96];
+            int mn = snprintf(mmsg, sizeof(mmsg), "[AOT] %s %s (rc=%d)\n",
+                              mdn_path, (mrc == 0) ? "OK" : "FALLO -> interpretado", mrc);
+            if (mn > 0) v1_output_sink(mmsg, (size_t) mn, NULL);
         }
     }
 

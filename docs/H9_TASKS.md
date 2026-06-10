@@ -189,7 +189,22 @@ que `Pin(39)` daría "fuera de rango" en host (en la placa el backend reporta 12
 `.mdn` Thumb-2 reutiliza el `AotCEmitter` existente (ARM→ARM). Validar
 `fib_native` en placa.
 
-> **🟡 LADO HOST LISTO (2026-06-10)** — falta solo CubeIDE + smoke en placa:
+> **✅ VALIDADO EN PLACA (2026-06-10)** — CompressBench (10 iters × 8 KB LZSS)
+> en el U575: **interpretado 5125 ms → native 113 ms = ~45×**, checksum 36864
+> idéntico (paridad), y SIN invalidación de ICACHE (el código ejecuta desde SRAM
+> por el S-bus; el ICACHE del U5 solo cachea la ruta de flash — confirmado).
+> **STM32 = 2ª familia con AOT.**
+>
+> Tropiezo encontrado y arreglado por el camino: el FS del STM32 no alineaba los
+> ficheros en el arena, y el loader .mdn zero-copy exige data 4-aligned (Thumb-2)
+> → con el buffer desalineado devolvía MDN_ERR_TRUNCATED y el RUN caía a
+> interpretado EN SILENCIO (mismo elapsed que sin .mdn). Fix doble: (a)
+> `stm32_fs.c` alinea inicio + span reservado a 4 (como el FS v4 del Pico;
+> fs_load reconstruye al boot → un FS persistido viejo queda realineado solo), y
+> (b) el hook de stm32_repl reporta `[AOT] <mdn> OK/FALLO (rc=N)` por el wire →
+> visible en la consola del IDE, nunca más un fallback mudo.
+>
+> *(Histórico del plan original:)*
 > - **`mdn_loader.c` compartido**: movido de `pico/` a `src/` (+ header a
 >   `include/`). Es zero-copy y 100% portable; las trazas van por el hook débil
 >   `bpvm_mdn_log` (no-op por defecto — el Pico da la impl fuerte sobre su log

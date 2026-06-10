@@ -23,6 +23,16 @@ static uint8_t    s_arena[FS_ARENA_SIZE];
 static uint32_t   s_arena_used = 0;
 static fs_entry_t s_files[FS_MAX_FILES];
 
+/* H9.5 — cada fichero ARRANCA 4-aligned en el arena: el loader .mdn zero-copy
+ * lo exige (código Thumb-2 ejecutado in-place desde el buffer del FS; con data
+ * desalineado devuelve MDN_ERR_TRUNCATED y el RUN cae a interpretado). El span
+ * reservado se redondea a 4 y del/compact mueven por el span reservado, así la
+ * alineación de los ficheros posteriores se preserva. fs_load reconstruye el
+ * arena al boot vía fs_put, así que un FS persistido pre-alineación queda
+ * realineado automáticamente al primer arranque. (El FS del Pico hace lo mismo
+ * desde su v4.) */
+#define FS_ALIGN4(x) (((x) + 3u) & ~3u)
+
 static fs_entry_t* find(const char* name) {
     for (int i = 0; i < FS_MAX_FILES; i++) {
         if (s_files[i].used && strcmp(s_files[i].name, name) == 0) {
@@ -36,7 +46,10 @@ int fs_del(const char* name) {
     fs_entry_t* e = find(name);
     if (!e) return -1;
     uint32_t hole_off = e->off;
-    uint32_t hole_len = e->size;
+    uint32_t hole_len = FS_ALIGN4(e->size);   /* span reservado (alineado) */
+    /* Guarda defensiva: una entrada legado (pre-alineación) pudo reservar solo
+     * size — no comernos los primeros bytes del siguiente fichero. */
+    if (hole_off + hole_len > s_arena_used) hole_len = s_arena_used - hole_off;
     /* Compacta: mueve todo lo que hay detrás del hueco hacia delante. */
     uint32_t tail = s_arena_used - (hole_off + hole_len);
     if (tail > 0) {
@@ -57,7 +70,11 @@ int fs_put(const char* name, const uint8_t* data, uint32_t size) {
     if (!name || name[0] == '\0' || strlen(name) >= FS_NAME_MAX) return -1;
     /* Sobreescritura: borra el viejo (compacta) y vuelve a añadir al final. */
     fs_del(name);
-    if (s_arena_used + size > FS_ARENA_SIZE) return -1;   /* sin espacio */
+    /* H9.5 — inicio 4-aligned (tolera una cola legado desalineada) + span
+     * reservado redondeado a 4. Ver nota en FS_ALIGN4. */
+    uint32_t off = FS_ALIGN4(s_arena_used);
+    uint32_t rsv = FS_ALIGN4(size);
+    if (off + rsv > FS_ARENA_SIZE) return -1;   /* sin espacio */
     /* Busca slot libre. */
     fs_entry_t* slot = NULL;
     for (int i = 0; i < FS_MAX_FILES; i++) {
@@ -65,13 +82,13 @@ int fs_put(const char* name, const uint8_t* data, uint32_t size) {
     }
     if (!slot) return -1;   /* demasiados ficheros */
 
-    slot->off  = s_arena_used;
+    slot->off  = off;
     slot->size = size;
     strncpy(slot->name, name, FS_NAME_MAX - 1);
     slot->name[FS_NAME_MAX - 1] = '\0';
     slot->used = 1;
-    if (size > 0 && data) memcpy(&s_arena[slot->off], data, size);
-    s_arena_used += size;
+    if (size > 0 && data) memcpy(&s_arena[off], data, size);
+    s_arena_used = off + rsv;
     return 0;
 }
 
