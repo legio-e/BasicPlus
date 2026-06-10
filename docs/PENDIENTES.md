@@ -365,10 +365,19 @@ FS sólo se toca por el wire (PUT/GET desde el IDE).
 > `fs_get/fs_put` (+ persisten con `fs_save`/`fs_save_to_flash` → sobreviven al
 > reset, salvo `/lib`). append copia a un scratch de 8 KB. Verificado en sintaxis
 > (gcc + stub HAL); el firmware lo flashea el usuario (no testeable en host).
-> **Falta**: backend ESP32, y las variantes binarias `readFileBytes`/
-> `writeFileBytes` (`byte[]`) para la descompresión. Nota: persistir en cada
-> escritura es lento (erase+program) → un log con muchos appends querrá una capa
-> de buffer/flush por encima.
+> **✅ Variantes binarias `readFileBytes`/`writeFileBytes` (`byte[]`) hechas
+> (2026-06-10)**: builtins 126/127 (al final del enum, sin desplazar ids), VM-Java
+> + VM-C. Binario sin pérdidas (NUL/>127/UTF-8 inválido) — la VM-Java NO pasa por
+> `String` (a diferencia de `readFile`). En la VM-C comparten cuerpo con
+> `readFile`/`writeFile` (el heap ya guarda `TYPE_ARRAY_I8` crudo). Paridad
+> byte-idéntica host VM-C ↔ VM-Java verificada: `samples/FileBytesTest.bp`
+> (round-trip NUL/0xFF/0x80) y `samples/CompressFileTest.bp` (escribe blob LZSS →
+> relee `byte[]` → `Compress.decompress` → "ABABAB"). Es justo lo que pedía la
+> **descompresión** (#240): un comprimido es binario y `readFile→string` lo corrompe.
+>
+> **Falta**: backend ESP32 (el host/Pico/STM32 ya tienen FS cableado). Nota:
+> persistir en cada escritura es lento (erase+program) → un log con muchos appends
+> querrá una capa de buffer/flush por encima.
 
 **Es la pieza base de varias cosas de H10** (descubierto al diseñar el log de
 usuario): con file I/O en el device, `Log.bp` es un wrapper puro-BP sobre

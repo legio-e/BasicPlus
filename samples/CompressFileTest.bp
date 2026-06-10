@@ -1,0 +1,30 @@
+// CompressFileTest.bp — H10 #247+#240: el bucle completo de descompresión desde FS.
+// Escribe un stream LZSS comprimido a un fichero (writeFileBytes), lo relee crudo
+// (readFileBytes — un readFile->string lo corromparía por el NUL del header) y lo
+// descomprime (Compress.decompress). Paridad byte-idéntica VM-C host <-> VM-Java.
+// Esperado:  n = 6   /   out = ABABAB
+module CompressFileTest
+  import Compress
+
+  function main()
+    // mismo stream hecho a mano que CompressTest: descomprime a "ABABAB"
+    var c: byte[] := newByteArray(9)
+    c[0] := byte(0)        // tamaño original (u32 BE) = 6
+    c[1] := byte(0)
+    c[2] := byte(0)
+    c[3] := byte(6)
+    c[4] := byte(3)        // flags 0b011: lit, lit, match
+    c[5] := byte(65)       // 'A'
+    c[6] := byte(66)       // 'B'
+    c[7] := byte(0)        // match b0
+    c[8] := byte(17)       // match b1 (0x11): dist=2, len=4
+
+    writeFileBytes("blob.lz", c)            // persiste el comprimido (binario, con NUL)
+    var rd: byte[] := readFileBytes("blob.lz")  // relee crudo
+
+    var dst: byte[] := newByteArray(6)
+    var n: integer := Compress.decompress(rd, len(rd), dst, 6)
+    print "n =", n
+    print "out =", fromBytes(dst)
+  end main
+end CompressFileTest

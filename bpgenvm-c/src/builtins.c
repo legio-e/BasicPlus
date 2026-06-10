@@ -123,7 +123,12 @@ enum {
     BUILTIN_PICO_GPIO_COUNT  = 123,
     /* H7.4 — NeoPixel WS2812 (device-only; no-op en host). */
     BUILTIN_NEOPIXEL_INIT    = 124,
-    BUILTIN_NEOPIXEL_SHOW    = 125
+    BUILTIN_NEOPIXEL_SHOW    = 125,
+    /* H10/#247 — file I/O binario (byte[]). Mismo cuerpo que READ_FILE/WRITE_FILE
+     * (heap TYPE_ARRAY_I8, bytes crudos sin pasar por string); el frontend los
+     * tipa byte[]. Ids al final, alineados con el enum Builtin.java (126/127). */
+    BUILTIN_READ_FILE_BYTES  = 126,
+    BUILTIN_WRITE_FILE_BYTES = 127
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -239,7 +244,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * bytes del string BP (UTF-8) tal cual; errores → RuntimeError atrapable.
      * El path se lee a un buffer C; el contenido se escribe/lee directo desde
      * el heap (cualquier tamaño). */
-    case BUILTIN_READ_FILE: {
+    case BUILTIN_READ_FILE:
+    case BUILTIN_READ_FILE_BYTES: {   /* #247: idéntico — los bytes ya son crudos en heap */
         uint32_t pref = (uint32_t) pop_i32(vm, tc);
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
@@ -264,6 +270,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_WRITE_FILE:
+    case BUILTIN_WRITE_FILE_BYTES:    /* #247: idéntico — escribe los bytes crudos del array */
     case BUILTIN_APPEND_FILE: {
         int append = (id == BUILTIN_APPEND_FILE);
         uint32_t cref = (uint32_t) pop_i32(vm, tc);   /* content (empujado el último) */

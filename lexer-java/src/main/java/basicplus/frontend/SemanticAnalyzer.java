@@ -287,6 +287,10 @@ public final class SemanticAnalyzer {
         //   fromBytes(b): string — interpreta los bytes como UTF-8.
         addBuiltin(s, "toBytes",   BYTE_ARRAY,           new String[]{"s"}, new BpType[]{PrimitiveType.STRING});
         addBuiltin(s, "fromBytes", PrimitiveType.STRING, new String[]{"b"}, new BpType[]{BYTE_ARRAY});
+        // #247 — file I/O BINARIO (byte[] crudo, sin pérdidas): lo que necesita la
+        // descompresión (un fichero comprimido es binario; readFile→string es lossy).
+        addBuiltin(s, "readFileBytes",  BYTE_ARRAY,        new String[]{"path"},        new BpType[]{PrimitiveType.STRING});
+        addBuiltin(s, "writeFileBytes", VoidType.INSTANCE, new String[]{"path","data"}, new BpType[]{PrimitiveType.STRING, BYTE_ARRAY});
         // H3 — diagnóstico de heap (SOLO VM-Java; mide fragmentación del GC).
         addBuiltin(s, "heapFrag",  PrimitiveType.STRING, new String[]{},      new BpType[]{});
         addBuiltin(s, "heapMap",   PrimitiveType.STRING, new String[]{"cols"}, new BpType[]{PrimitiveType.INTEGER});

@@ -1,0 +1,41 @@
+// FileBytesTest.bp — H10/#247: readFileBytes / writeFileBytes BINARIO sin pérdidas.
+// Escribe bytes "difíciles" (NUL, 0xFF, 0x80 — que un readFile->string mutaría) y los
+// relee crudos. Salida determinista; paridad byte-idéntica VM-C host <-> VM-Java.
+// Esperado:  len = 6   /   sum = 658   /   matches = 6
+module FileBytesTest
+  function main()
+    var path: string := "bytes_test.bin"
+    var data: byte[] := newByteArray(6)
+    data[0] := byte(0)      // NUL  — un string lo cortaría en C / replacement en Java
+    data[1] := byte(255)    // 0xFF
+    data[2] := byte(65)     // 'A'
+    data[3] := byte(128)    // 0x80 — byte alto suelto (UTF-8 inválido)
+    data[4] := byte(10)     // '\n'
+    data[5] := byte(200)    // 0xC8
+    writeFileBytes(path, data)
+
+    var rd: byte[] := readFileBytes(path)
+    print "len =", len(rd)
+
+    var sum: integer := 0
+    var i: integer := 0
+    while i < len(rd) do
+      sum := sum + rd[i]
+      i := i + 1
+    endwh
+    print "sum =", sum
+
+    // cuenta posiciones idénticas (evita <>): debe ser 6
+    var matches: integer := 0
+    if len(rd) == 6 then
+      var j: integer := 0
+      while j < 6 do
+        if rd[j] == data[j] then
+          matches := matches + 1
+        endif
+        j := j + 1
+      endwh
+    endif
+    print "matches =", matches
+  end main
+end FileBytesTest

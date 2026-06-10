@@ -266,7 +266,15 @@ public enum Builtin {
 
     // ---- H7.4 — NeoPixel WS2812 (device-only vía PIO; no-op en host) ----
     NEOPIXEL_INIT("__npInit"),           // (pin) → void
-    NEOPIXEL_SHOW("__npShow");            // (pin, grb: int[], count) → void
+    NEOPIXEL_SHOW("__npShow"),            // (pin, grb: int[], count) → void
+
+    // ---- H10/#247 — file I/O BINARIO (byte[]). Mismos bytes en heap que
+    //      readFile/writeFile (TYPE_ARRAY_I8), pero el frontend los tipa byte[]
+    //      y la VM-Java NO los pasa por String → binario sin pérdidas (NUL, >127,
+    //      UTF-8 inválido). Es lo que necesita la descompresión (#240). Ids al
+    //      FINAL (126/127) para no desplazar ordinales existentes. ----
+    READ_FILE_BYTES("readFileBytes"),    // (path: string)              → byte[]
+    WRITE_FILE_BYTES("writeFileBytes");  // (path: string, data: byte[]) → void
 
     public final String bpName;
     public final int id;

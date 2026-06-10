@@ -108,6 +108,8 @@ Convención general:
 | 40 | `appendFile` | `(path, content: string)` | `void` | Append. RTErr sandbox. |
 | 41 | `fileExists` | `(path: string)` | `bool` | RTErr sandbox. |
 | 42 | `listDir` | `(path: string)` | `string[]` | Nombres de los entries (no recursivo). RTErr si no es dir. |
+| 126 | `readFileBytes` | `(path: string)` | `byte[]` | Lee fichero entero como `byte[]` crudo (binario sin pérdidas: NUL/>127/UTF-8 inválido). #247. |
+| 127 | `writeFileBytes` | `(path, data: byte[])` | `void` | Escribe los bytes crudos del `byte[]` (sobreescribe). #247. |
 
 ## 43 — Debug
 

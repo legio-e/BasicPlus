@@ -3354,6 +3354,40 @@ public class VirtualMachine {
                 pushTc(tc, java.nio.file.Files.exists(sandboxPath(tc, path)) ? 1 : 0);
                 break;
             }
+            case READ_FILE_BYTES: {
+                // #247 binario: copia cruda a un byte[] (TYPE_ARRAY_I8), SIN pasar
+                // por String → preserva NUL/>127/UTF-8 inválido (a diferencia de
+                // readFile, que decodifica UTF-8 y es lossy para binario).
+                String path = readVmString(popTc(tc));
+                try {
+                    byte[] data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
+                    int ref = heapAlloc(data.length, TYPE_ARRAY_I8);
+                    writeInt32(ref, data.length);
+                    System.arraycopy(data, 0, memory, ref + 4, data.length);
+                    ThreadContext me = currentTcLocal.get();
+                    if (me != null) me.allocAnchor = ref;   // ancla GC (ver allocVmString)
+                    pushTc(tc, ref);
+                } catch (java.io.IOException e) {
+                    throwBpRuntimeError(tc, "readFileBytes('" + path + "'): " + e.getMessage());
+                }
+                break;
+            }
+            case WRITE_FILE_BYTES: {
+                // #247 binario: escribe los bytes crudos del byte[] (TYPE_ARRAY_I8),
+                // SIN pasar por String. Args: (path, data) → data empujado el último.
+                int dataRef = popTc(tc);
+                String path = readVmString(popTc(tc));
+                int n = (dataRef == 0) ? 0 : readInt32(dataRef);
+                byte[] out = new byte[n];
+                System.arraycopy(memory, dataRef + 4, out, 0, n);
+                try {
+                    java.nio.file.Files.write(sandboxPath(tc, path), out);
+                } catch (java.io.IOException e) {
+                    throwBpRuntimeError(tc, "writeFileBytes('" + path + "'): " + e.getMessage());
+                }
+                pushTc(tc, 0); // dummy (void)
+                break;
+            }
             case GC: {
                 gc();
                 pushTc(tc, 0);  // void → dummy
