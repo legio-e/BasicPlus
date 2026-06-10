@@ -31,6 +31,7 @@ void app_main(void)
     printf("[boot] consola/logs = USB-Serial-JTAG | wire v1 = UART0 @115200\n");
 
     fs_init();
+    fs_register_bpvm();    /* #247 — file I/O desde BP sobre este FS */
     esp32_hw_register();   /* backends de HW (GPIO, …) */
     wire_v1_uart_init();
 

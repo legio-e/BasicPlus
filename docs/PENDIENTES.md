@@ -375,9 +375,17 @@ FS sólo se toca por el wire (PUT/GET desde el IDE).
 > relee `byte[]` → `Compress.decompress` → "ABABAB"). Es justo lo que pedía la
 > **descompresión** (#240): un comprimido es binario y `readFile→string` lo corrompe.
 >
-> **Falta**: backend ESP32 (el host/Pico/STM32 ya tienen FS cableado). Nota:
-> persistir en cada escritura es lento (erase+program) → un log con muchos appends
-> querrá una capa de buffer/flush por encima.
+> **✅ Backend ESP32 cableado (2026-06-10)**: `fs_ram.c::fs_register_bpvm()` (mismo
+> patrón que pico/fs.c sobre `fs_get`/`fs_put`, API idéntica), llamado tras
+> `fs_init()` en `app_main`. Bloque verificado en sintaxis (gcc `-fsyntax-only`
+> contra el ABI real de `bpvm_fs.h`); lo flashea el usuario (no testeable en host,
+> sin ESP-IDF aquí). Con esto **las 3 familias (Pico/STM32/ESP32) + host** exponen
+> file I/O a BP. Nota: persistir en cada escritura es lento (erase+program) → un log
+> con muchos appends querrá una capa de buffer/flush por encima.
+>
+> ⇒ **#247 esencialmente cerrado**: builtins de texto + binarios en VM-C, backends
+> de las 3 placas + host, paridad host verificada. Queda solo el smoke en placa
+> (lo hace el usuario al flashear).
 
 **Es la pieza base de varias cosas de H10** (descubierto al diseñar el log de
 usuario): con file I/O en el device, `Log.bp` es un wrapper puro-BP sobre

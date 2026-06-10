@@ -16,7 +16,7 @@ idf_component_register(
         "../../src/interp.c"
         "../../src/heap.c"
         "../../src/builtins.c"
-        "../../src/fs_facade.c"        # #247: facade file I/O (stub -1 sin backend ESP32 aún)
+        "../../src/fs_facade.c"        # #247: facade file I/O (backend ESP32 = fs_ram.c::fs_register_bpvm)
         "../../src/link.c"
         "../../src/scheduler.c"
         "../../src/threading.c"

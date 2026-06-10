@@ -13,6 +13,7 @@
  *   datos concatenados en el mismo orden que las entries
  */
 #include "fs.h"
+#include "bpvm_fs.h"   /* backend de file I/O para los builtins (#247) */
 
 #include "esp_partition.h"
 #include "esp_log.h"
@@ -231,4 +232,60 @@ const char* fs_status_str(fs_status_t s) {
         case FS_ERR_INVALID:         return "invalid";
         default:                     return "unknown";
     }
+}
+
+/* ============================================================
+ * Backend de file I/O para BP (#247): conecta readFile/writeFile/appendFile/
+ * fileExists + readFileBytes/writeFileBytes (builtins VM-C) a este FS. Paths
+ * literales (p.ej. "/app/x.txt"). Las escrituras persisten a flash
+ * (fs_save_to_flash). append: copia el fichero a un scratch, concatena y reescribe
+ * (cap = FS_BP_SCRATCH). Mismo patrón que pico/fs.c (API fs_get/fs_put idéntica).
+ * ============================================================ */
+
+#define FS_BP_SCRATCH  (8u * 1024u)
+static uint8_t s_bpfs_scratch[FS_BP_SCRATCH];
+
+static int esp32_bpfs_stat(const char* path, uint32_t* size) {
+    const uint8_t* d; uint32_t sz;
+    if (fs_get(path, &d, &sz) != FS_OK) return -1;
+    if (size) *size = sz;
+    return 0;
+}
+
+static long esp32_bpfs_read(const char* path, uint8_t* dst, uint32_t cap) {
+    const uint8_t* d; uint32_t sz;
+    if (fs_get(path, &d, &sz) != FS_OK) return -1;
+    uint32_t n = (sz < cap) ? sz : cap;
+    if (n > 0) memcpy(dst, d, n);
+    return (long) n;
+}
+
+static int esp32_bpfs_write(const char* path, const uint8_t* data, uint32_t len, int append) {
+    fs_status_t rc;
+    if (append) {
+        const uint8_t* old; uint32_t oldsz;
+        if (fs_get(path, &old, &oldsz) == FS_OK) {
+            if ((uint64_t) oldsz + len > FS_BP_SCRATCH) return -1;   /* no cabe */
+            memcpy(s_bpfs_scratch, old, oldsz);                       /* copia ANTES de fs_put */
+            if (len > 0) memcpy(s_bpfs_scratch + oldsz, data, len);
+            rc = fs_put(path, s_bpfs_scratch, oldsz + len);
+        } else {
+            rc = fs_put(path, data, len);                             /* fichero nuevo */
+        }
+    } else {
+        rc = fs_put(path, data, len);
+    }
+    if (rc != FS_OK) return -1;
+    fs_save_to_flash();   /* persiste (sobrevive al reset) */
+    return 0;
+}
+
+static const bpvm_fs_backend_t s_esp32_fs_backend = {
+    .stat  = esp32_bpfs_stat,
+    .read  = esp32_bpfs_read,
+    .write = esp32_bpfs_write,
+};
+
+void fs_register_bpvm(void) {
+    bpvm_fs_set_backend(&s_esp32_fs_backend);
 }
