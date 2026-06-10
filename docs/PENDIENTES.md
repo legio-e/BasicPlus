@@ -402,9 +402,10 @@ FS sólo se toca por el wire (PUT/GET desde el IDE).
 > file I/O a BP. Nota: persistir en cada escritura es lento (erase+program) → un log
 > con muchos appends querrá una capa de buffer/flush por encima.
 >
-> ⇒ **#247 esencialmente cerrado**: builtins de texto + binarios en VM-C, backends
-> de las 3 placas + host, paridad host verificada. Queda solo el smoke en placa
-> (lo hace el usuario al flashear).
+> ⇒ **#247 CERRADO (2026-06-10)**: builtins de texto + binarios en VM-C, backends
+> de las 3 placas + host, paridad host verificada, y **smoke en placa STM32 ✓**
+> (FileTest + FileBytesTest en el U575: `len=6/sum=658/matches=6`, exit 0 —
+> idéntico al host). Pico/ESP32 quedan para el siguiente reflash de cada una.
 
 **Es la pieza base de varias cosas de H10** (descubierto al diseñar el log de
 usuario): con file I/O en el device, `Log.bp` es un wrapper puro-BP sobre
