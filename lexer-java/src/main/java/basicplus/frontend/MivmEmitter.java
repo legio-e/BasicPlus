@@ -243,7 +243,8 @@ public final class MivmEmitter {
         // H5.1.a — Object es la PRIMERA: raíz de la jerarquía de clases, el
         //     resto la copia como parent local (vtable slots 0/1).
         synthesizeObjectClass();
-        synthesizeRuntimeErrorClass();
+        // #248: RuntimeError ya NO se sintetiza per-módulo — vive en Core (stdlib)
+        // y llega via import implícito + maquinaria cross-module L2 v3.
         // NOTA: synthesizeObjectCompareErrorHelper() se emite MÁS ABAJO, tras la
         // fase 4b (clases del usuario), no aquí. Construye un RuntimeError y
         // emitNewObject exige el descriptor ya registrado; si el usuario define
@@ -3180,6 +3181,17 @@ public final class MivmEmitter {
         }
     }
 
+
+    /** Helper: emite CALL_BUILTIN <id>. */
+    private void emitBuiltinCall(Builtin b) {
+        try {
+            w.emit(OpCode.CALL_BUILTIN);
+            w.emitShort((short) b.id);
+        } catch (IOException e) {
+            errors.add("emit CALL_BUILTIN(" + b.name() + "): " + e.getMessage());
+        }
+    }
+
     /**
      * H5.1.c — Helper del {@code compareTo} por defecto de Object: lanza el
      * RuntimeError NATIVO de la VM (builtin THROW_RTE, #248) con mensaje claro.
@@ -3189,8 +3201,7 @@ public final class MivmEmitter {
      * #248: antes construía un RuntimeError LOCAL (NEW_OBJECT + __init + THROW),
      * lo que obligaba a que TODO módulo llevara el descriptor de RuntimeError.
      * Con el throw nativo, el módulo no depende de ninguna clase de excepción
-     * (y cuando la VM resuelva Core.RuntimeError global, el error será de la
-     * clase única de Core automáticamente).
+     * (la VM resuelve Core.RuntimeError global, con fallback a copias legado).
      */
     private void synthesizeObjectCompareErrorHelper() {
         for (ITopLevelDecl d : moduleAst.defs) {
@@ -3210,52 +3221,6 @@ public final class MivmEmitter {
             } finally { scopeStack.pop(); }
         } catch (IOException e) {
             errors.add("emit __objCompareError: " + e.getMessage());
-        }
-    }
-
-    private void synthesizeRuntimeErrorClass() {
-        // Si el módulo del usuario ya declara su propia clase RuntimeError,
-        // dejamos la suya (mayor flexibilidad). El built-in solo se inyecta
-        // como fallback.
-        for (ITopLevelDecl d : moduleAst.defs) {
-            if (d instanceof ClassDef && "RuntimeError".equals(((ClassDef) d).name)) {
-                return;
-            }
-        }
-        try {
-            w.addClass("RuntimeError", "Object");   // H5.1.a — raíz Object (div0 valida throw/catch)
-            w.declareField("msg", true);
-            w.endClass();
-            // B3 v2 — exportamos el descriptor para que builtins nativos
-            // del VM puedan instanciar RuntimeError sin parsear el data
-            // block. Nombre convencional: `__cls_RuntimeError`.
-            w.exportDataSymbol("RuntimeError");
-
-            w.addFunction("RuntimeError.__init", false);
-            w.declareParam("this");
-            w.declareParam("msg");
-            FunctionSymbol synth = new FunctionSymbol("__init", false, false, false, null, null);
-            beginFunctionScope(synth, null);  // void
-            try {
-                w.emitGetParam("this");
-                w.emitGetParam("msg");
-                w.emitSetField("RuntimeError", "msg");
-                emitFunctionEnd();
-            } finally {
-                scopeStack.pop();
-            }
-        } catch (IOException e) {
-            errors.add("emit RuntimeError builtin: " + e.getMessage());
-        }
-    }
-
-    /** Helper: emite CALL_BUILTIN <id>. */
-    private void emitBuiltinCall(Builtin b) {
-        try {
-            w.emit(OpCode.CALL_BUILTIN);
-            w.emitShort((short) b.id);
-        } catch (IOException e) {
-            errors.add("emit CALL_BUILTIN(" + b.name() + "): " + e.getMessage());
         }
     }
 

@@ -123,6 +123,17 @@ public final class SemanticAnalyzer {
                     "el alias de import '" + ns.name + "' colisiona con una declaración local");
             }
         }
+        // #248 — alias sin cualificar de las clases de Core: `RuntimeError(...)`
+        // y `catch e: Exception` se escriben igual que siempre, resolviendo a
+        // las clases ÚNICAS de Core (stubs del .bpi). tryDefine cede ante una
+        // clase local homónima del usuario (compat #220).
+        for (Symbol.ImportedNamespaceSymbol ns : preloadedImports) {
+            if (!"Core".equals(ns.moduleName)) continue;
+            Symbol exc = ns.classes.get("Exception");
+            Symbol rte = ns.classes.get("RuntimeError");
+            if (exc != null) module.members.tryDefine(exc);
+            if (rte != null) module.members.tryDefine(rte);
+        }
     }
 
     // ============================================================
@@ -139,23 +150,10 @@ public final class SemanticAnalyzer {
         if (BUILTIN_SCOPE_CACHE != null) return BUILTIN_SCOPE_CACHE;
         Scope s = new Scope("builtin", null);
 
-        // class RuntimeError
-        ClassSymbol rt = new ClassSymbol("RuntimeError", true, null, null, 0, 0);
-        FunctionSymbol rtCtor = new FunctionSymbol("RuntimeError", true, false, false, rt, null);
-        ParamSymbol msg = new ParamSymbol("msg", 0, 0);
-        msg.type = PrimitiveType.STRING;
-        rtCtor.params.add(msg);
-        rtCtor.returnType = null;
-        rtCtor.isConstructor = true;
-        rt.constructor = rtCtor;
-        rt.instanceMembers.tryDefine(rtCtor);
-        // Field público `msg: string` — la clase sintetizada por MivmEmitter
-        // lo expone (set en el constructor); aquí lo declaramos también
-        // para que `catch e: RuntimeError ... print e.msg` typechee.
-        VarSymbol rtMsg = new VarSymbol("msg", true, false, rt, false, 0, 0);
-        rtMsg.type = PrimitiveType.STRING;
-        rt.instanceMembers.tryDefine(rtMsg);
-        s.tryDefine(rt);
+        // #248 — RuntimeError ya NO se sintetiza aquí: vive en Core (stdlib) y
+        // llega como stub via el `import Core` implícito (injectImports lo
+        // aliasa sin cualificar). Así hay UNA clase real por VM en lugar de
+        // una copia por módulo.
 
         // input(): string
         FunctionSymbol input = new FunctionSymbol("input", true, false, true, null, null);
@@ -962,6 +960,9 @@ public final class SemanticAnalyzer {
         for (Symbol s : module.members.getSymbols()) {
             if (s instanceof ClassSymbol) {
                 ClassSymbol cls = (ClassSymbol) s;
+                // #248: los stubs aliasados de Core (Exception/RuntimeError) son
+                // externos sin AST — nada que resolver aquí.
+                if (cls.isExternal || cls.astNode == null) continue;
                 for (ITopLevelDecl m : cls.astNode.members)
                     resolveDefTypes(m, cls);
             }
@@ -1126,6 +1127,8 @@ public final class SemanticAnalyzer {
         for (Symbol s : module.members.getSymbols()) {
             if (s instanceof ClassSymbol) {
                 ClassSymbol cls = (ClassSymbol) s;
+                // #248: stubs aliasados de Core — externos, sin AST ni cuerpos.
+                if (cls.isExternal || cls.astNode == null) continue;
                 checkOverridesAndFinal(cls);
                 for (ITopLevelDecl m : cls.astNode.members)
                     bodyForDef(m, cls);
@@ -1300,7 +1303,21 @@ public final class SemanticAnalyzer {
         else if (s instanceof TryStmt)      analyzeTry((TryStmt) s, scope);
         else if (s instanceof ReturnStmt)   analyzeReturn((ReturnStmt) s, scope);
         else if (s instanceof Ast.DestructAssignStmt) analyzeDestructAssign((Ast.DestructAssignStmt) s, scope);
-        else if (s instanceof ThrowStmt)    analyzeExpr(((ThrowStmt) s).value, scope, null);
+        else if (s instanceof ThrowStmt) {
+            // #248 — solo se lanzan instancias de Exception (o descendientes).
+            ThrowStmt th = (ThrowStmt) s;
+            BpType thrown = analyzeExpr(th.value, scope, null);
+            if (thrown instanceof ClassType) {
+                ClassSymbol tcls = ((ClassType) thrown).cls;
+                if (!descendsFromException(tcls)) {
+                    err(th.line, th.column, "solo se puede lanzar una excepción: '"
+                        + tcls.name + "' no desciende de Exception (#248)");
+                }
+            } else if (!(thrown instanceof ErrorType) && !(thrown instanceof AnyType)) {
+                err(th.line, th.column,
+                    "solo se puede lanzar una instancia de Exception (#248)");
+            }
+        }
         else if (s instanceof PrintStmt) {
             for (PrintItem it : ((PrintStmt) s).items)
                 if (it.expr != null) {
@@ -1637,6 +1654,11 @@ public final class SemanticAnalyzer {
                 if (cl.exceptionType != null) {
                     ClassSymbol csym = resolveCatchClass(cl.exceptionType);
                     if (csym != null) {
+                        // #248 — toda excepción desciende de Exception (Core).
+                        if (!descendsFromException(csym)) {
+                            err(cl.line, cl.column, "la clase de un catch debe descender de "
+                                + "Exception: '" + cl.exceptionType + "' no lo hace (#248)");
+                        }
                         excT = new ClassType(csym);
                         info.catchClassSymbols.put(cl, csym);   // BUG-2: el emisor decide local vs ext
                     } else {
@@ -1651,6 +1673,19 @@ public final class SemanticAnalyzer {
             analyzeBody(cl.body, inner);
         }
         if (tr.finallyBody != null) analyzeBody(tr.finallyBody, new Scope("finally", scope));
+    }
+
+    /** #248 — true si la clase desciende de Exception (por NOMBRE en la cadena
+     *  de bases, que con Core es la clase única; una clase local llamada
+     *  Exception del usuario también vale — sombra deliberada). */
+    private static boolean descendsFromException(ClassSymbol cls) {
+        ClassSymbol c = cls;
+        int guard = 0;
+        while (c != null && guard++ < 64) {
+            if ("Exception".equals(c.name)) return true;
+            c = c.baseClass;
+        }
+        return false;
     }
 
     /** BUG-2 — resuelve el tipo de un catch: local ('MyError'), importado

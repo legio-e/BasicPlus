@@ -1,17 +1,129 @@
-dbg 2
+dbg 3
 module Pwm
 source C:\lenguajes\pm\bpstdlib\Pwm.bp
 lines
-1504 84
-1512 85
-1541 92
-1549 93
-1573 99
-1594 104
-1615 71
-1623 72
-1631 73
-1641 74
-1655 75
-1671 76
-1696 77
+1452 84
+1460 85
+1489 92
+1497 93
+1521 99
+1542 104
+1563 71
+1571 72
+1579 73
+1589 74
+1603 75
+1619 76
+1644 77
+vars
+func Object.toString 0
+this -16 4 0 ?
+func Object.compareTo 25
+this -20 4 0 ?
+other -16 4 0 ?
+func List.add 41
+this -20 4 0 ?
+item -16 4 0 ?
+func List.get 131
+this -20 4 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func List.length 173
+this -16 4 0 ?
+func List.remove 189
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 295
+this -16 4 0 ?
+func OwnerList.removeAndFree 338
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 468
+this -16 4 0 ?
+func StringBuilder.appendChar 489
+this -20 4 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 579
+this -20 4 0 ?
+s -16 4 0 ?
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 650
+this -20 4 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 675
+this -16 4 0 ?
+func StringBuilder.length 699
+this -16 4 0 ?
+func StringBuilder.__init 715
+this -16 4 0 ?
+func Thread.run 756
+this -16 4 0 ?
+func Thread.start 766
+this -16 4 0 ?
+func Thread.join 785
+this -16 4 0 ?
+func Thread.__init 804
+this -20 4 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 832
+this -16 4 0 ?
+func Mutex.unlock 851
+this -16 4 0 ?
+func Mutex.__init 870
+this -16 4 0 ?
+func SyncList.add 888
+this -20 4 0 ?
+item -16 4 0 ?
+func SyncList.remove 934
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.get 980
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.set 1024
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func SyncList.length 1073
+this -16 4 0 ?
+func SyncList.pop 1114
+this -16 4 0 ?
+func SyncList.popBlocking 1225
+this -16 4 0 ?
+func SyncList.__init 1352
+this -16 4 0 ?
+func Slice.setDuty 1449
+this -20 4 0 ?
+dutyPct -16 4 0 integer
+func Slice.setFreq 1486
+this -20 4 0 ?
+freqHz -16 4 0 integer
+func Slice.start 1518
+this -16 4 0 ?
+func Slice.stop 1539
+this -16 4 0 ?
+func Slice.__init 1560
+this -24 4 0 ?
+pin -20 4 0 integer
+freqHz -16 4 0 integer
+msg 0 4 0 string
+func __cls_new_Slice 1663
+pin -20 4 0 integer
+freqHz -16 4 0 integer
+func __cls_init_Slice 1700
+this -24 4 0 ?
+pin -20 4 0 integer
+freqHz -16 4 0 integer
+func __strconcat 1746
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 4 0 ?
+i 12 4 0 ?

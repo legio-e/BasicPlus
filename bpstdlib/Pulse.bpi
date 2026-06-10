@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module Pulse
 func resetSlice(counterId:integer):void public intrinsic
 func initSlice(pin:integer,edgeKind:integer):integer public intrinsic
@@ -18,4 +18,12 @@ class Counter public
   method stop():void public
   method value():integer public
   method reset():void public
+end class
+class RuntimeError public extends Core.Exception
+  layout 1 4 00000001 00000000
+  ctor(m:string)
+end class
+class Exception public
+  layout 1 4 00000001 00000000
+  ctor(m:string)
 end class

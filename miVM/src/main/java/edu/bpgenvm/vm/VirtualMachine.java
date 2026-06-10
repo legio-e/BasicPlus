@@ -759,7 +759,11 @@ public class VirtualMachine {
         if (mm == null) {
             throw new BpThreadFault(message);
         }
-        Integer classPtrBox = mm.resolveExportInModule(tc.cs, "RuntimeError");
+        // #248 — primero la clase ÚNICA de Core (jerarquía Object -> Exception
+        // -> RuntimeError). Fallback: la copia per-módulo legado (mods viejos),
+        // resuelta contra el cs del thread.
+        Integer classPtrBox = mm.resolveGlobal("Core.RuntimeError");
+        if (classPtrBox == null) classPtrBox = mm.resolveExportInModule(tc.cs, "RuntimeError");
         if (classPtrBox == null) {
             // El módulo del thread actual no exportó RuntimeError (es un
             // .mod antiguo emitido antes de B3 v2, o un caso degenerado).

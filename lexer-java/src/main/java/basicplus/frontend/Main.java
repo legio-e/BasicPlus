@@ -326,6 +326,7 @@ public final class Main {
             // 2) Cargar .bpi disponibles en el analizador.
             SemanticAnalyzer analyzer = new SemanticAnalyzer();
             int impErrsBefore = ctx.totalErrors;
+            injectImplicitCoreImport(module);   // #248 — lazy: solo si usa excepciones
             loadImportsForAnalyzer(module, src, ctx, analyzer, depth + 1);
             // N6 — un import incompatible/erróneo (interfaz no satisfecha, impl
             // ausente, binding mal usado) es FATAL: no producimos un .mod roto.
@@ -1339,6 +1340,98 @@ public final class Main {
                 }
             }
         }
+    }
+
+    /** #248 — import Core implícito (lazy): si el módulo usa try/throw o nombra
+     *  Exception/RuntimeError en un catch, y no es Core ni ya lo importa,
+     *  inyecta `import Core` sintético al AST. Así RuntimeError/Exception
+     *  resuelven a las clases ÚNICAS de Core (stubs del .bpi, aliasadas sin
+     *  cualificar por injectImports) y los módulos sin excepciones no ganan
+     *  ninguna dependencia. */
+    static void injectImplicitCoreImport(Ast.ModuleNode module) {
+        if (module == null || "Core".equals(module.name)) return;
+        if (module.imports != null) {
+            for (Ast.ImportNode imp : module.imports) {
+                if (imp.path != null && !imp.path.isEmpty()
+                        && "Core".equals(imp.path.get(imp.path.size() - 1))) return;
+            }
+        }
+        if (!usesExceptions(module)) return;
+        if (module.imports == null) return;   // defensivo: el parser siempre crea la lista
+        java.util.List<String> p = new java.util.ArrayList<>();
+        p.add("Core");
+        module.imports.add(new Ast.ImportNode(p, null, module.line, module.column));
+    }
+
+    /** #248 — ¿el módulo usa excepciones? try/throw en cualquier cuerpo
+     *  (funciones libres, métodos, accesores de property), o un tipo llamado
+     *  Exception/RuntimeError en firmas o declaraciones. */
+    private static boolean usesExceptions(Ast.ModuleNode module) {
+        for (Ast.ITopLevelDecl d : module.defs) {
+            if (declUsesExceptions(d)) return true;
+        }
+        return false;
+    }
+
+    private static boolean declUsesExceptions(Ast.ITopLevelDecl d) {
+        if (d instanceof Ast.FuncDef) {
+            Ast.FuncDef f = (Ast.FuncDef) d;
+            if (typeNamesException(f.returnType)) return true;
+            for (Ast.Param p : f.params) if (typeNamesException(p.type)) return true;
+            return stmtsUseExceptions(f.body);
+        }
+        if (d instanceof Ast.VarDecl)     return typeNamesException(((Ast.VarDecl) d).type);
+        if (d instanceof Ast.PropertyDef) {
+            Ast.PropertyDef pd = (Ast.PropertyDef) d;
+            if (typeNamesException(pd.type)) return true;
+            if (pd.getter != null && stmtsUseExceptions(pd.getter.body)) return true;
+            if (pd.setter != null && stmtsUseExceptions(pd.setter.body)) return true;
+            return false;
+        }
+        if (d instanceof Ast.ClassDef) {
+            Ast.ClassDef cd = (Ast.ClassDef) d;
+            if ("Exception".equals(cd.baseClass) || "RuntimeError".equals(cd.baseClass)) return true;
+            for (Ast.ITopLevelDecl m : cd.members) if (declUsesExceptions(m)) return true;
+            return false;
+        }
+        return false;
+    }
+
+    private static boolean typeNamesException(Ast.TypeRef t) {
+        if (!(t instanceof Ast.SimpleTypeRef)) return false;
+        String n = ((Ast.SimpleTypeRef) t).name;
+        return "Exception".equals(n) || "RuntimeError".equals(n);
+    }
+
+    private static boolean stmtsUseExceptions(java.util.List<Ast.IStmt> body) {
+        if (body == null) return false;
+        for (Ast.IStmt s : body) {
+            if (s instanceof Ast.ThrowStmt || s instanceof Ast.TryStmt) return true;
+            if (s instanceof Ast.IfStmt) {
+                Ast.IfStmt i = (Ast.IfStmt) s;
+                if (stmtsUseExceptions(i.then_.body)) return true;
+                for (Ast.IfClause c : i.elseIfs) if (stmtsUseExceptions(c.body)) return true;
+                if (i.else_ != null && stmtsUseExceptions(i.else_)) return true;
+            } else if (s instanceof Ast.WhileStmt) {
+                if (stmtsUseExceptions(((Ast.WhileStmt) s).body)) return true;
+            } else if (s instanceof Ast.ForStmt) {
+                if (stmtsUseExceptions(((Ast.ForStmt) s).body)) return true;
+            } else if (s instanceof Ast.DoLoopStmt) {
+                if (stmtsUseExceptions(((Ast.DoLoopStmt) s).body)) return true;
+            } else if (s instanceof Ast.SwitchStmt) {
+                Ast.SwitchStmt sw = (Ast.SwitchStmt) s;
+                for (Ast.CaseClause c : sw.cases) if (stmtsUseExceptions(c.body)) return true;
+                if (sw.defaultBody != null && stmtsUseExceptions(sw.defaultBody)) return true;
+            } else if (s instanceof Ast.ParallelStmt) {
+                Ast.ParallelStmt ps = (Ast.ParallelStmt) s;
+                for (Ast.ParallelBranch c : ps.branches)
+                    if (stmtsUseExceptions(c.body)) return true;
+                if (ps.defaultBody != null && stmtsUseExceptions(ps.defaultBody)) return true;
+            } else if (s instanceof Ast.VarDecl) {
+                if (typeNamesException(((Ast.VarDecl) s).type)) return true;
+            }
+        }
+        return false;
     }
 
     /** #248 — localiza la ClassSymbol de una base cross-module de un stub

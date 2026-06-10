@@ -1,0 +1,8 @@
+// ExcNativeLib.bp — #248: fault NATIVO (div0) dentro de la lib. Usada por
+// ExcNativeTest.bp para verificar el catch cross-module de errores nativos.
+module ExcNativeLib
+  public function boom(): integer
+    var z: integer := 0
+    return 10 / z
+  end boom
+end ExcNativeLib

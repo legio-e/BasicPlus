@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module Str
 func formatDouble(x:double,dec:integer):string public
 func compare(a:string,b:string):integer public
@@ -13,3 +13,11 @@ func fromCharCode(cp:integer):string public
 func toHex(x:long):string public
 func parseLong(s:string):(boolean,long) public
 func padLeft(s:string,ancho:integer):string public
+class RuntimeError public extends Core.Exception
+  layout 1 4 00000001 00000000
+  ctor(m:string)
+end class
+class Exception public
+  layout 1 4 00000001 00000000
+  ctor(m:string)
+end class

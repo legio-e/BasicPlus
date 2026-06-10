@@ -1,17 +1,127 @@
-dbg 2
+dbg 3
 module Pulse
 source C:\lenguajes\pm\bpstdlib\Pulse.bp
 lines
-1504 98
-1525 104
-1546 111
-1570 116
-1591 86
-1599 87
-1607 88
-1621 89
-1637 90
-1662 91
-1762 51
-1783 54
-1804 57
+1452 98
+1473 104
+1494 111
+1518 116
+1539 86
+1547 87
+1555 88
+1569 89
+1585 90
+1610 91
+1715 51
+1736 54
+1757 57
+vars
+func Object.toString 0
+this -16 4 0 ?
+func Object.compareTo 25
+this -20 4 0 ?
+other -16 4 0 ?
+func List.add 41
+this -20 4 0 ?
+item -16 4 0 ?
+func List.get 131
+this -20 4 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func List.length 173
+this -16 4 0 ?
+func List.remove 189
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 295
+this -16 4 0 ?
+func OwnerList.removeAndFree 338
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 468
+this -16 4 0 ?
+func StringBuilder.appendChar 489
+this -20 4 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 579
+this -20 4 0 ?
+s -16 4 0 ?
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 650
+this -20 4 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 675
+this -16 4 0 ?
+func StringBuilder.length 699
+this -16 4 0 ?
+func StringBuilder.__init 715
+this -16 4 0 ?
+func Thread.run 756
+this -16 4 0 ?
+func Thread.start 766
+this -16 4 0 ?
+func Thread.join 785
+this -16 4 0 ?
+func Thread.__init 804
+this -20 4 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 832
+this -16 4 0 ?
+func Mutex.unlock 851
+this -16 4 0 ?
+func Mutex.__init 870
+this -16 4 0 ?
+func SyncList.add 888
+this -20 4 0 ?
+item -16 4 0 ?
+func SyncList.remove 934
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.get 980
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.set 1024
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func SyncList.length 1073
+this -16 4 0 ?
+func SyncList.pop 1114
+this -16 4 0 ?
+func SyncList.popBlocking 1225
+this -16 4 0 ?
+func SyncList.__init 1352
+this -16 4 0 ?
+func Counter.start 1449
+this -16 4 0 ?
+func Counter.stop 1470
+this -16 4 0 ?
+func Counter.value 1491
+this -16 4 0 ?
+func Counter.reset 1515
+this -16 4 0 ?
+func Counter.__init 1536
+this -24 4 0 ?
+pin -20 4 0 integer
+edgeKind -16 4 0 integer
+msg 0 4 0 string
+func __cls_new_Counter 1629
+pin -20 4 0 integer
+edgeKind -16 4 0 integer
+func __cls_init_Counter 1666
+this -24 4 0 ?
+pin -20 4 0 integer
+edgeKind -16 4 0 integer
+func __strconcat 1775
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 4 0 ?
+i 12 4 0 ?

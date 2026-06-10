@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module Pico
 func SPI_BUSES():integer public
 func setCpuFreqMHz(mhz:integer):boolean public

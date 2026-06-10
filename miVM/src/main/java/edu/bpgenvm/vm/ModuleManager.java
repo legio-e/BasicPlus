@@ -116,6 +116,12 @@ public class ModuleManager {
      *  null si no existe. Usado por builtins nativos para instanciar
      *  RuntimeError. Acepta tanto la forma cualificada (`Mod.symName`)
      *  como un símbolo dentro del módulo cuyo `cs` se pasa. */
+    /** #248 — lookup directo en la tabla global de símbolos por nombre ya
+     *  cualificado (p.ej. "Core.RuntimeError"). null si no está. */
+    public Integer resolveGlobal(String qualifiedName) {
+        return globalSymbolTable.get(qualifiedName);
+    }
+
     public Integer resolveExportInModule(int cs, String simpleName) {
         // Buscar el módulo cuyo codeStart == cs.
         for (ModuleMetadata m : loadedModules) {

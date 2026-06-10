@@ -1,20 +1,129 @@
-dbg 2
+dbg 3
 module Adc
 source C:\lenguajes\pm\bpstdlib\Adc.bp
 lines
-1504 66
-1528 71
-1539 72
-1571 78
-1585 79
-1606 81
-1614 82
-1622 83
-1634 84
-1649 85
-1663 87
-1686 56
-1694 57
-1705 58
-1721 59
-1746 60
+1452 66
+1476 71
+1487 72
+1519 78
+1533 79
+1554 81
+1562 82
+1570 83
+1582 84
+1597 85
+1611 87
+1634 56
+1642 57
+1653 58
+1669 59
+1694 60
+vars
+func Object.toString 0
+this -16 4 0 ?
+func Object.compareTo 25
+this -20 4 0 ?
+other -16 4 0 ?
+func List.add 41
+this -20 4 0 ?
+item -16 4 0 ?
+func List.get 131
+this -20 4 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func List.length 173
+this -16 4 0 ?
+func List.remove 189
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 295
+this -16 4 0 ?
+func OwnerList.removeAndFree 338
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 468
+this -16 4 0 ?
+func StringBuilder.appendChar 489
+this -20 4 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 579
+this -20 4 0 ?
+s -16 4 0 ?
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 650
+this -20 4 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 675
+this -16 4 0 ?
+func StringBuilder.length 699
+this -16 4 0 ?
+func StringBuilder.__init 715
+this -16 4 0 ?
+func Thread.run 756
+this -16 4 0 ?
+func Thread.start 766
+this -16 4 0 ?
+func Thread.join 785
+this -16 4 0 ?
+func Thread.__init 804
+this -20 4 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 832
+this -16 4 0 ?
+func Mutex.unlock 851
+this -16 4 0 ?
+func Mutex.__init 870
+this -16 4 0 ?
+func SyncList.add 888
+this -20 4 0 ?
+item -16 4 0 ?
+func SyncList.remove 934
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.get 980
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.set 1024
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func SyncList.length 1073
+this -16 4 0 ?
+func SyncList.pop 1114
+this -16 4 0 ?
+func SyncList.popBlocking 1225
+this -16 4 0 ?
+func SyncList.__init 1352
+this -16 4 0 ?
+func Channel.read 1449
+this -16 4 0 ?
+func Channel.readVolts 1473
+this -16 4 0 ?
+raw 4 4 0 integer
+func Channel.readAvg 1516
+this -20 4 0 ?
+n -16 4 0 integer
+sum 4 4 0 integer
+i 8 4 0 integer
+func Channel.__init 1631
+this -20 4 0 ?
+ch -16 4 0 integer
+msg 0 4 0 string
+func __cls_new_Channel 1713
+ch -16 4 0 integer
+func __cls_init_Channel 1747
+this -20 4 0 ?
+ch -16 4 0 integer
+func __strconcat 1790
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 4 0 ?
+i 12 4 0 ?

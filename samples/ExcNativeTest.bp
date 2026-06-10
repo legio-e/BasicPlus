@@ -1,0 +1,38 @@
+// ExcNativeTest.bp — #248: un fault nativo (div0) ocurrido DENTRO de otro
+// módulo se caza aquí — antes de #248 esto divergía (miVM lo cazaba de chiripa
+// por un cs rancio; la VM-C no lo cazaba). Ahora ambas VMs construyen LA clase
+// única Core.RuntimeError → identidad por puntero → catch correcto.
+// También: estilo sin cualificar (alias de Core) y catch por base Exception.
+// Esperado:
+//   cazada: División por cero
+//   rte: estilo de siempre
+//   base caza nativo: División por cero
+//   fin
+module ExcNativeTest
+  import ExcNativeLib
+
+  function main()
+    try
+      var r: integer := ExcNativeLib.boom()
+      print "no debería llegar:", r
+    catch e: RuntimeError
+      print "cazada:", e.msg
+    endtry
+
+    try
+      throw RuntimeError("estilo de siempre")
+    catch e2: RuntimeError
+      print "rte:", e2.msg
+    endtry
+
+    try
+      var z: integer := 0
+      var k: integer := 5 / z
+      print k
+    catch e3: Exception
+      print "base caza nativo:", e3.msg
+    endtry
+
+    print "fin"
+  end main
+end ExcNativeTest

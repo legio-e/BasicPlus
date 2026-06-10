@@ -438,7 +438,29 @@ JSON ya están en cada placa; sólo NO están expuestos a BP. ⇒ los builtins s
 > Otro "agujero" del lenguaje, en la línea de tapar pre-existentes. No urgente;
 > se aborda incremental.
 
-### L12 — Base común `Exception` para todas las excepciones (pendiente, tarea #248)
+### L12 — Base común `Exception` ✅ NÚCLEO HECHO (2026-06-10, #248) — falta provisioning embebido
+
+> **Hecho**: jerarquía `Object -> Exception -> RuntimeError | resto`, con UNA
+> clase real por VM (`bpstdlib/Core.bp`, property `msg` en slot 0) en lugar de
+> N copias per-módulo. `import Core` IMPLÍCITO y lazy (solo si el módulo usa
+> try/throw o nombra Exception/RuntimeError) + alias sin cualificar (el código
+> de siempre — `throw RuntimeError(...)`, `catch e: RuntimeError`, `e.msg` —
+> se escribe igual). Enforcement: throw/catch deben descender de Exception.
+> Los throws NATIVOS de ambas VMs resuelven `Core.RuntimeError` global primero
+> (fallback a la copia legado de .mods viejos → compat). Builtin THROW_RTE (128)
+> para el compareTo por defecto de Object (sin dep de Core en módulos sin
+> excepciones). **Arregla el bug de paridad descubierto**: un fault nativo
+> (div0) en el módulo A cazado en B — antes miVM lo cazaba de chiripa (tc.cs
+> rancio) y la VM-C no lo cazaba; ahora ambas, byte-idéntico
+> (samples/ExcNativeTest.bp, ExcCatchTest.bp). stdlib regenerada (Adc, Gpio,
+> Pulse, Pwm, Str ahora dependen de Core).
+>
+> **Falta**: (a) embeber Core.mod en la stdlib de los 3 firmwares (xxd -i +
+> pre-install /lib — mientras tanto el IDE auto-sube Core.mod como dep y los
+> .mods viejos funcionan via fallback); (b) #213 (throw de clase usuario desde
+> native) que esto desbloquea.
+
+#### (histórico) L12 — Base común `Exception` para todas las excepciones (pendiente, tarea #248)
 Hoy NO hay base común: el frontend sintetiza `RuntimeError` aislado
 (`class RuntimeError { var msg }`, msg en slot 0) y las excepciones de usuario son
 clases cualesquiera (p.ej. `MyError { var msg_ }`), con campos/orden arbitrarios. El

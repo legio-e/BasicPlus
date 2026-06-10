@@ -106,6 +106,11 @@ uint32_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
      * symbol "<lib>.<mod>.RuntimeError" / "<mod>.RuntimeError" — la
      * global symbol table del linker ya las tiene registradas. */
     uint32_t class_ptr = 0;
+    /* #248 — primero la clase ÚNICA de Core (Object -> Exception ->
+     * RuntimeError). Los fallbacks de abajo cubren .mods legado con copia
+     * per-módulo. */
+    class_ptr = bpvm_link_lookup(vm, "Core.RuntimeError");
+    if (class_ptr) goto have_class;
     /* Probamos primero el módulo del cs actual. */
     for (int i = 0; i < vm->module_count; i++) {
         const bpvm_module_t* m = &vm->modules[i];
@@ -130,6 +135,7 @@ uint32_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
             class_ptr = bpvm_link_lookup(vm, qual);
         }
     }
+have_class:
     if (!class_ptr) {
         /* Sin RuntimeError disponible — caller debe usar BpThreadFault
          * equivalente (= terminar thread). Aquí imprimimos al menos. */
