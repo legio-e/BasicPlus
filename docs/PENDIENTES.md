@@ -460,8 +460,8 @@ JSON ya están en cada placa; sólo NO están expuestos a BP. ⇒ los builtins s
 > primero + 4 blobs stdlib refrescados); ESP32 no embebe stdlib (auto-upload
 > del IDE ✓). Core NO se añadió a EMBEDDED_CORE_MODS del IDE a propósito: así
 > el IDE lo sube como dep y funciona también con firmwares SIN reflashear.
-> **Falta**: reflash de placas cuando toque, y #213 (throw de clase usuario
-> desde native) que esto desbloquea.
+> **Falta**: reflash de placas cuando toque. #213 (throw de clase usuario
+> desde native) quedó cerrado el mismo día — ver anotación más abajo.
 
 #### (histórico) L12 — Base común `Exception` para todas las excepciones (pendiente, tarea #248)
 Hoy NO hay base común: el frontend sintetiza `RuntimeError` aislado
@@ -487,6 +487,42 @@ la `.bpi` de la base. Es una decisión de modelo de lenguaje → con cuidado, co
 ---
 
 ## ✅ Cerrado en sesiones recientes — anotaciones
+
+### #213 — P-aot-try-catch-b: throw de clase de usuario desde native ✅ (2026-06-10); try/catch DENTRO de native → diferido con motivo
+
+**Parte 1 — `throw MyExc(args)` desde native: HECHO.** La instancia NO se
+construye en C: AotCEmitter emite `throw_ref(call_bp_i32(find_function(
+"Owner.__cls_new_MyExc"), {args}))` — la factory cross-module de L2 (la misma
+que usa un módulo importador para `new`) corre el ctor REAL en el intérprete,
+incluido `super()` a Core.Exception, y el ref viaja por el nuevo helper
+`throw_ref` → `pending_ref` del fault slot → longjmp al boundary de
+`aot_call_guarded` → `eh_unwind`, igual que un throw BP. Piezas:
+
+- VM-C: slot `throw_ref` al FINAL de `aot_helpers_v1` (disciplina ABI .mdn),
+  campo `pending_ref` en `bpvm_aot_fault_t`, boundary usa el ref pendiente si
+  != 0 (si 0, construye RuntimeError con msg — paths #186/#175 intactos).
+- Frontend: `emitThrowStmt` caso general — construcción `Cls(args)` → factory
+  (exige clase public + ctor con firma i32 del puente v1); expresión de tipo
+  clase ya construida (p.ej. param) → `throw_ref` directo del handle.
+- GC-safe: el thunk corre dentro del dispatch del intérprete (sin safepoint
+  entre la factory y el unwind) → el ref no puede ser recolectado.
+- Test: `bpgenvm-c/samples/ThrowUser.bp` + snapshot `test/aot_ThrowUser.c` +
+  `make test-throwuser`. Paridad 3-way byte-idéntica (miVM / VM-C interp /
+  VM-C AOT): `10` / `caught: valor negativo (valor=-7)` / `fin`, status=OK.
+  Requiere Core.mod junto al .mod (RangoError extiende Exception).
+
+**Parte 2 — try/catch DENTRO de native: DIFERIDO (decisión, no bug).** El
+código `.mdn` no puede llamar `setjmp`: el contrato del formato es CERO
+relocations externas (todo acceso al runtime via `vm->aot_helpers`), y un
+`jmp_buf` local del native no sobrevive a los longjmp de los helpers sin un
+refactor mayor (locals del native movidos a un context-struct + helper
+`eh_native_try(vm, body_fn, ctx)` que haga el setjmp DEL LADO del runtime).
+Coste alto, beneficio marginal: el throw HACIA FUERA ya funciona completo
+(RuntimeError #186/#175 + clases de usuario #213) y el workaround es trivial
+— envolver la LLAMADA al native en try/catch BP. El compilador lo explica
+así tal cual (mensaje específico para TryStmt en native, con workaround).
+Si algún caso real lo exige, retomar con el diseño de arriba (cabe en una
+sesión: helper nuevo al final del struct + emisión de closures de bloque).
 
 ### BpVM.cfg — fichero de configuración JSON (cerrado)
 Soporta:

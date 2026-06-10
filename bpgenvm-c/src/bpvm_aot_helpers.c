@@ -100,6 +100,20 @@ static void h_throw_str(bpvm_t* vm, uint32_t msg_ref) {
     h_throw_runtime(vm, buf);   /* no retorna (longjmp al boundary) */
 }
 
+/* #213 — throw de excepción YA construida (clase de usuario via factory).
+ * Mismo viaje que h_throw_runtime pero sin mensaje: el boundary lee
+ * pending_ref y lo propaga por el eh_stack. NO retorna. */
+static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
+    (void) vm;
+    bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
+    if (f->armed) {
+        f->pending_ref = exc_ref;
+        f->msg[0] = 0;
+        longjmp(f->buf, 1);   /* no retorna */
+    }
+    fprintf(stderr, "[aot] throw_ref sin boundary (ref=%u)\n", exc_ref);
+}
+
 /* ---------- Heap / GC ----------
  * Stubs por ahora — el AOT que use estos slots tiene que activar
  * via flag de capabilities en el .mdn. La fase A no los necesita. */
@@ -439,4 +453,6 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     .array_load_i8       = h_array_load_i8,
     .array_load_u8       = h_array_load_u8,
     .array_store_i8      = h_array_store_i8,
+    /* #213 — throw de excepción construida (clase de usuario desde native). */
+    .throw_ref           = h_throw_ref,
 };

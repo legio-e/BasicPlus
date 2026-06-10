@@ -505,6 +505,10 @@ typedef struct {
     jmp_buf      buf;        /* destino del longjmp = boundary del interp */
     char         msg[128];   /* mensaje del fault, copiado por throw_runtime */
     volatile int armed;      /* 1 entre setjmp y fin del thunk */
+    /* #213 — ref de una excepción YA construida (throw_ref desde native, p.ej.
+     * una clase de usuario creada via factory __cls_new_* por el puente). El
+     * boundary la propaga tal cual en vez de construir un RuntimeError. */
+    volatile uint32_t pending_ref;
 } bpvm_aot_fault_t;
 
 /* Devuelve el slot de fault del worker actual (TLS en host). */

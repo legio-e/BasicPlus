@@ -31,7 +31,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench
 
 all: $(BIN)
 
@@ -183,6 +183,27 @@ test-throwmsg: $(LIBOBJ)
 	    $(LIBOBJ) -o $(THROW_BIN) $(LDFLAGS); \
 	  echo "--- throw msg computado native->BP (esperado: 10, caught: valor negativo: -3, fin) ---"; \
 	  (cd samples && ../$(THROW_BIN) ThrowMsg.mod); \
+	fi
+
+# #213 — throw de CLASE DE USUARIO desde native, cazado por try/catch BP con
+# la clase del usuario. La instancia se construye en el INTÉRPRETE: el thunk
+# cruza el puente call_bp_i32 a la factory ThrowUser.__cls_new_RangoError
+# (corre el ctor real, incluido super() a Core.Exception) y throw_ref propaga
+# el ref por pending_ref del boundary → eh_unwind. test/aot_ThrowUser.c es un
+# SNAPSHOT del .c que genera AotCEmitter. Necesita Core.mod junto al .mod
+# (RangoError extiende Core.Exception). Salida byte-idéntica a la VM-Java.
+THROWUSER_BIN = build/test_throwuser.exe
+test-throwuser: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/ThrowUser.mod ]; then \
+	  echo "(skip test-throwuser: falta samples/ThrowUser.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/ThrowUser.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_throwuser.c test/aot_ThrowUser.c \
+	    $(LIBOBJ) -o $(THROWUSER_BIN) $(LDFLAGS); \
+	  echo "--- throw clase de usuario native->BP (esperado: 10, caught: valor negativo (valor=-7), fin) ---"; \
+	  (cd samples && ../$(THROWUSER_BIN) ThrowUser.mod); \
 	fi
 
 # #174 (mitad-VM) — native invoca un MÉTODO virtual de un objeto vía

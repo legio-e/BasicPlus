@@ -660,6 +660,21 @@ public final class AotCEmitter {
             emitThrowStmt((Ast.ThrowStmt) s);
             return;
         }
+        if (s instanceof Ast.TryStmt) {
+            /* #213 parte 2 — DIFERIDO con motivo: el código .mdn no puede
+             * llamar setjmp (cero relocations externas — todo acceso al
+             * runtime va via vm->aot_helpers, y un jmp_buf local del native
+             * no sobrevive al longjmp del helper sin un refactor de locals
+             * a context-struct + helper eh_native_try). El throw HACIA fuera
+             * sí funciona (#186/#175/#213): envuelve la LLAMADA al native
+             * en try/catch BP. */
+            throw new UnsupportedAotException(
+                "AOT: try/catch DENTRO de una función native no está soportado "
+                + "(#213: .mdn no puede usar setjmp). Workaround: envuelve la "
+                + "LLAMADA al native en try/catch BP — los throw del native "
+                + "(RuntimeError o clases de usuario) sí se cazan ahí. line "
+                + ((Ast.Node) s).line);
+        }
         throw new UnsupportedAotException(
             "AOT: statement no soportado: " + s.getClass().getSimpleName()
             + " (line " + ((Ast.Node) s).line + ")");
@@ -673,11 +688,18 @@ public final class AotCEmitter {
      *  el eh_stack hasta el try/catch BP que envuelva la llamada (o
      *  termina el thread). El native NO construye el objeto.
      *
-     *  v1 SOLO acepta `throw RuntimeError(<string literal>)`. Un mensaje
-     *  no-literal (string runtime) o una clase de usuario != RuntimeError
-     *  exigiría construir un objeto en native = frontera native↔intérprete
-     *  (v2, junto a #174). En ese caso lanzamos UnsupportedAotException y
-     *  el módulo cae a bytecode interpretado (donde sí funciona). */
+     *  #213 — clases de usuario: `throw MyExc(args)` tampoco construye el
+     *  objeto en native. Cruza el puente call_bp_i32 a la factory
+     *  cross-module `Owner.__cls_new_MyExc` (la misma que usa un módulo
+     *  importador para `new` — corre el ctor REAL en el intérprete) y el
+     *  ref resultante viaja por throw_ref → boundary → eh_unwind, igual
+     *  que un throw BP normal. Requiere clase public (la factory solo se
+     *  sintetiza para public) y ctor con firma i32 (límite v1 del puente).
+     *  Lo que NO soporta esta fase: try/catch DENTRO de native (.mdn no
+     *  puede llamar setjmp — cero relocations externas; necesitaría
+     *  helpers eh_native_try + locals en context struct, diferido). En los
+     *  casos no soportados lanzamos UnsupportedAotException y el módulo
+     *  cae a bytecode interpretado (donde sí funciona). */
     private void emitThrowStmt(Ast.ThrowStmt ts) {
         /* Fast path: throw RuntimeError("literal") → throw_runtime con el
          * cstring directo (sin alocar string en el heap). */
@@ -699,10 +721,83 @@ public final class AotCEmitter {
             w.println(");");
             return;
         }
+        /* #213 — throw de CLASE DE USUARIO. La instancia se construye en el
+         * intérprete (factory cross-module via puente); aquí solo viaja el ref. */
+        BpType t = (semInfo != null) ? semInfo.exprTypes.get(ts.value) : null;
+        if (t instanceof BpType.ClassType) {
+            Symbol.ClassSymbol cls = ((BpType.ClassType) t).cls;
+            if (ts.value instanceof Ast.CallExpr
+                    && cls.name.equals(calleeSimpleName(((Ast.CallExpr) ts.value).callee))) {
+                emitThrowUserClass((Ast.CallExpr) ts.value, cls, ts.line);
+                return;
+            }
+            /* Ref ya construida (param de tipo clase, llamada que devuelve la
+             * excepción, ...) → throw_ref directo del handle i32. Si emitExpr
+             * no sabe emitir la expresión, su UnsupportedAotException hace el
+             * fallback a interpretado, como siempre. */
+            indent();
+            w.print("vm->aot_helpers->throw_ref(vm, (uint32_t) (");
+            emitExpr(ts.value);
+            w.println("));");
+            return;
+        }
         throw new UnsupportedAotException(
-            "AOT: en native `throw` solo soporta RuntimeError(string) "
-            + "(clase de usuario y try/catch dentro de native = pendiente #175b). line "
+            "AOT: en native `throw` soporta RuntimeError(string) y clases de "
+            + "usuario public que desciendan de Exception "
+            + "(try/catch DENTRO de native = pendiente #175b). line "
             + ts.line);
+    }
+
+    /** #213 — `throw MyExc(args)` desde native. La construcción NO se hace en
+     *  C: cruzamos al intérprete via call_bp_i32 → factory cross-module
+     *  `Owner.__cls_new_MyExc(args)` (corre el ctor real), y throw_ref deja el
+     *  ref en el fault slot + longjmp al boundary, que lo propaga por
+     *  eh_unwind. GC-safe: el thunk corre dentro del dispatch del intérprete
+     *  (sin safepoint intermedio), así que el ref no puede ser recolectado
+     *  entre la factory y el unwind. Validamos contra la firma REAL de la
+     *  factory = ctor PROPIO de la clase (igual que synthesizeCrossModuleFactory). */
+    private void emitThrowUserClass(Ast.CallExpr c, Symbol.ClassSymbol cls, int line) {
+        if (!cls.isPublic) {
+            throw new UnsupportedAotException(
+                "AOT: `throw " + cls.name + "(...)` en native (line " + line + ") necesita "
+                + "que la clase sea public: la instancia se construye via la factory "
+                + "cross-module __cls_new_" + cls.name + ", que solo se sintetiza para "
+                + "clases public. Declárala `public class` o quita native.");
+        }
+        Symbol.FunctionSymbol ctor = cls.constructor;
+        int expected = (ctor != null) ? ctor.params.size() : 0;
+        if (c.args.size() != expected) {
+            throw new UnsupportedAotException(
+                "AOT: `throw " + cls.name + "(...)` (line " + line + "): " + c.args.size()
+                + " args pero la factory __cls_new_" + cls.name + " espera " + expected
+                + " (firma del ctor propio de la clase).");
+        }
+        if (ctor != null) {
+            for (Symbol.ParamSymbol p : ctor.params) {
+                if (!isBridgeI32Type(p.type)) {
+                    throw new UnsupportedAotException(
+                        "AOT: `throw " + cls.name + "(...)` (line " + line + "): el puente v1 "
+                        + "solo soporta params i32 (integer/boolean/string/ref); el param '"
+                        + p.name + "' del ctor no lo es. float/long/double → pendiente.");
+                }
+            }
+        }
+        StringBuilder qn = new StringBuilder();
+        if (cls.isExternal) {
+            if (cls.externalLibrary != null && !cls.externalLibrary.isEmpty())
+                qn.append(cls.externalLibrary).append('.');
+            qn.append(cls.externalModule);
+        } else {
+            qn.append(moduleName);
+        }
+        qn.append(".__cls_new_").append(cls.name);
+
+        indent();
+        w.print("vm->aot_helpers->throw_ref(vm, (uint32_t) ");
+        emitCallBpEmission(qn.toString(), c.args, line,
+            "la factory de '" + cls.name + "' (la instancia del throw se construye "
+            + "en el intérprete)");
+        w.println(");");
     }
 
     /** Devuelve el literal del mensaje si {@code value} es exactamente

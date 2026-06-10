@@ -99,6 +99,7 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
     cc->tc = tc; cc->sp_p = sp; cc->bp_p = bp;
     if (setjmp(f->buf) == 0) {
         f->armed = 1;
+        f->pending_ref = 0;   /* #213: estado fresco por invocación */
         aot(vm, sp, bp);
         f->armed = prev_armed;
         *cc = prev_cc;
@@ -106,7 +107,16 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
     }
     f->armed = prev_armed;
     *cc = prev_cc;
-    uint32_t obj = bpvm_throw_runtime_error(vm, tc, f->msg);
+    /* #213 — si el native dejó una excepción YA construida (throw_ref de una
+     * clase de usuario via factory), propagarla tal cual; si no, construir el
+     * RuntimeError clásico con el mensaje del fault-slot. */
+    uint32_t obj;
+    if (f->pending_ref != 0) {
+        obj = f->pending_ref;
+        f->pending_ref = 0;
+    } else {
+        obj = bpvm_throw_runtime_error(vm, tc, f->msg);
+    }
     return bpvm_eh_unwind(vm, tc, obj) ? 1 : 2;
 }
 

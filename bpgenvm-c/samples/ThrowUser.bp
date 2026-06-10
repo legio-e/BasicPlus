@@ -1,0 +1,49 @@
+// ThrowUser.bp — prueba de #213: `throw <ClaseDeUsuario>(args)` desde una
+// función native, cazado por un try/catch BP con la clase del usuario.
+//
+// La instancia NO se construye en C: el thunk AOT cruza el puente call_bp_i32
+// a la factory cross-module ThrowUser.__cls_new_RangoError (corre el ctor
+// REAL en el intérprete, incluido el super(m) a Core.Exception) y throw_ref
+// deja el ref en el fault slot + longjmp al boundary, que lo propaga por
+// eh_unwind igual que un throw BP normal. Requiere clase public (la factory
+// solo se sintetiza para public).
+//
+// Paridad esperada (VM-Java == VM-C interpretada == VM-C AOT):
+//   10
+//   caught: valor negativo (valor=-7)
+//   fin
+
+module ThrowUser
+
+  public class RangoError extends Exception
+    var valor: integer
+
+    public function RangoError(m: string, v: integer)
+      super(m)
+      this.valor := v
+    end RangoError
+
+    public function getValor(): integer
+      return this.valor
+    end getValor
+  end RangoError
+
+  native function checkRange(n: integer): integer
+    if n < 0 then
+      throw RangoError("valor negativo", n)
+    endif
+    return n * 2
+  end checkRange
+
+  function Main()
+    print checkRange(5)
+    try
+      var x: integer := checkRange(-7)
+      print x
+    catch e: RangoError
+      print "caught: " + e.msg + " (valor=" + e.getValor() + ")"
+    endtry
+    print "fin"
+  end Main
+
+end ThrowUser

@@ -163,6 +163,13 @@ struct aot_helpers_v1 {
     int32_t (*array_load_i8)(struct bpvm* vm, uint32_t ref, int32_t idx);
     int32_t (*array_load_u8)(struct bpvm* vm, uint32_t ref, int32_t idx);
     void    (*array_store_i8)(struct bpvm* vm, uint32_t ref, int32_t idx, int32_t v);
+
+    /* #213 — throw de una excepción YA CONSTRUIDA (ref de objeto heap, p.ej.
+     * una clase de usuario creada con call_bp_i32 a su factory __cls_new_*).
+     * Deja el ref pendiente en el fault-slot y hace longjmp al boundary de
+     * #186, que lo propaga TAL CUAL por el eh_stack BP (sin construir un
+     * RuntimeError). NO retorna. Como siempre: slot nuevo AL FINAL. */
+    void (*throw_ref)(struct bpvm* vm, uint32_t exc_ref);
 };
 
 /* Tabla v1 instanciada en el runtime con los punteros a las funciones
