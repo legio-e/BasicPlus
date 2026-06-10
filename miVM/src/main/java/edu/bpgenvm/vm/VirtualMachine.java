@@ -3388,6 +3388,14 @@ public class VirtualMachine {
                 pushTc(tc, 0); // dummy (void)
                 break;
             }
+            case THROW_RTE: {
+                // #248 — lanza el RuntimeError nativo de la VM con el mensaje
+                // dado (mismo path que div0/null deref → atrapable con
+                // try/catch BP). No retorna.
+                String msg = readVmString(popTc(tc));
+                throwBpRuntimeError(tc, msg);
+                break;   // unreachable: throwBpRuntimeError siempre lanza
+            }
             case GC: {
                 gc();
                 pushTc(tc, 0);  // void → dummy

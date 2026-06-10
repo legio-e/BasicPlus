@@ -3181,14 +3181,16 @@ public final class MivmEmitter {
     }
 
     /**
-     * H5.1.c — Helper del {@code compareTo} por defecto de Object: construye un
-     * RuntimeError y lo lanza. Es una función LIBRE (sin slot de vtable), emitida
-     * DESPUÉS de la fase 4b (clases del usuario) para que emitNewObject(
-     * "RuntimeError") encuentre el descriptor ya registrado — tanto el builtin
-     * como el RuntimeError que el usuario pueda definir (en cuyo caso el builtin
-     * se omite y la clase del usuario sólo queda registrada tras la fase 4b).
-     * Object.compareTo la invoca por forward-ref ({@code emitCall} se resuelve en
-     * link, como __strconcat).
+     * H5.1.c — Helper del {@code compareTo} por defecto de Object: lanza el
+     * RuntimeError NATIVO de la VM (builtin THROW_RTE, #248) con mensaje claro.
+     * Es una función LIBRE (sin slot de vtable); Object.compareTo la invoca por
+     * forward-ref ({@code emitCall} se resuelve en link, como __strconcat).
+     *
+     * #248: antes construía un RuntimeError LOCAL (NEW_OBJECT + __init + THROW),
+     * lo que obligaba a que TODO módulo llevara el descriptor de RuntimeError.
+     * Con el throw nativo, el módulo no depende de ninguna clase de excepción
+     * (y cuando la VM resuelva Core.RuntimeError global, el error será de la
+     * clase única de Core automáticamente).
      */
     private void synthesizeObjectCompareErrorHelper() {
         for (ITopLevelDecl d : moduleAst.defs) {
@@ -3198,19 +3200,9 @@ public final class MivmEmitter {
             w.addFunction("__objCompareError", false);
             beginFunctionScope(makeSynthFs("__objCompareError", PrimitiveType.INTEGER), null);
             try {
-                String re   = "__oce_re";
-                String disc = "__oce_disc";
-                declareLocal(re);
-                declareLocal(disc);
-                w.emitNewObject("RuntimeError");
-                w.emitSetLocal(re);
-                w.emitGetLocal(re);                    // this
                 w.emitLeaGlobal(internString(
                         "compareTo() no implementado: la clase no sobrescribe Object.compareTo"));
-                w.emitCall("RuntimeError.__init");     // __init(this, msg)
-                w.emitSetLocal(disc);                  // descarta el retorno de __init
-                w.emitGetLocal(re);
-                w.emitThrow();
+                emitBuiltinCall(Builtin.THROW_RTE);    // no retorna
                 // Cola inalcanzable pero válida (la función declara retorno integer).
                 emitInt(0);
                 w.emitSetLocal("__result");

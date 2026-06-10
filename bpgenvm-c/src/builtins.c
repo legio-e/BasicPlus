@@ -128,7 +128,8 @@ enum {
      * (heap TYPE_ARRAY_I8, bytes crudos sin pasar por string); el frontend los
      * tipa byte[]. Ids al final, alineados con el enum Builtin.java (126/127). */
     BUILTIN_READ_FILE_BYTES  = 126,
-    BUILTIN_WRITE_FILE_BYTES = 127
+    BUILTIN_WRITE_FILE_BYTES = 127,
+    BUILTIN_THROW_RTE        = 128   /* #248: lanza RuntimeError nativo (msg) */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -294,6 +295,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         read_bp_string(vm, pref, path, sizeof(path));
         push_i32(vm, tc, bpvm_fs_exists(path) ? 1 : 0);
         return BPVM_OK;
+    }
+
+    case BUILTIN_THROW_RTE: {
+        /* #248 — lanza el RuntimeError NATIVO de la VM con el mensaje dado
+         * (mismo path que div0/null deref → atrapable con try/catch BP).
+         * Lo usa el compareTo por defecto de Object para no depender del
+         * descriptor local de RuntimeError. No retorna valor. */
+        uint32_t mref = (uint32_t) pop_i32(vm, tc);
+        char msg[256];
+        read_bp_string(vm, mref, msg, sizeof(msg));
+        return builtin_throw(vm, tc, msg);
     }
 
     case BUILTIN_CHAR_CODE_AT: {

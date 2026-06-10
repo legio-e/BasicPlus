@@ -274,7 +274,15 @@ public enum Builtin {
     //      UTF-8 inválido). Es lo que necesita la descompresión (#240). Ids al
     //      FINAL (126/127) para no desplazar ordinales existentes. ----
     READ_FILE_BYTES("readFileBytes"),    // (path: string)              → byte[]
-    WRITE_FILE_BYTES("writeFileBytes");  // (path: string, data: byte[]) → void
+    WRITE_FILE_BYTES("writeFileBytes"),  // (path: string, data: byte[]) → void
+
+    // ---- #248 — id 128, al FINAL. ----
+    THROW_RTE("__throwRte");             // (msg: string) → no retorna; lanza el
+                                         //   RuntimeError NATIVO de la VM (mismo
+                                         //   path que div0/null deref). Lo usa el
+                                         //   compareTo por defecto de Object para
+                                         //   no depender del descriptor local de
+                                         //   RuntimeError (que #248 retira).
 
     public final String bpName;
     public final int id;

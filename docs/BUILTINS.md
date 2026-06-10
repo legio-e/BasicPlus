@@ -278,6 +278,24 @@ trabajo de **H10**.
 
 ---
 
+## 128 — `__throwRte(msg: string)` → no retorna  *(#248)*
+
+Lanza el **RuntimeError nativo** de la VM con el mensaje dado — exactamente el
+mismo path que los faults nativos (división por cero, null deref, índice fuera
+de rango): construye el objeto RuntimeError, escribe `msg` en el slot 0 y hace
+unwind hacia el handler BP más cercano (`try/catch e: RuntimeError`). Si no hay
+handler, el thread termina con el error.
+
+Uso interno: el `compareTo` por defecto de `Object` lo llama para señalar
+"compareTo() no implementado" sin que cada módulo dependa del descriptor local
+de RuntimeError (que #248 retira en favor de la clase única `Core.RuntimeError`).
+Cualquier código BP puede llamarlo también.
+
+- VM-Java: `case THROW_RTE` → `throwBpRuntimeError(tc, msg)`.
+- VM-C: `case BUILTIN_THROW_RTE` → `builtin_throw(vm, tc, msg)`.
+
+---
+
 ## Próximos builtins propuestos (no asignados todavía)
 
 - **`__threadCurrent()` → Thread**: devuelve el Thread BP del thread
