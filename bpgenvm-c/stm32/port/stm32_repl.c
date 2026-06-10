@@ -96,7 +96,12 @@ static void handle_list(long id, json_obj_t* obj) {
         if (fs_entry(i, &name, &size) != 0) continue;
         if (plen > 0 && strncmp(name, prefix, plen) != 0) continue;
         const char* rel = name + plen;             /* basename tras el prefijo */
-        if (*rel == '/') rel++;
+        /* Solo recortar la '/' del resto cuando HAY prefijo. Con LIST("")
+         * (el del árbol del IDE) hay que devolver el nombre COMPLETO tal
+         * cual está guardado ("/app/X.mod") — como hace el Pico — o el
+         * DEL/GET del árbol mandan el path sin barra y find() exacto da
+         * NOT_FOUND. */
+        if (plen > 0 && *rel == '/') rel++;
         int w = snprintf(buf + o, sizeof(buf) - o,
             "%s{\"name\":\"%s\",\"size\":%lu,\"isDir\":false,\"mtime\":0}",
             first ? "" : ",", rel, (unsigned long) size);
