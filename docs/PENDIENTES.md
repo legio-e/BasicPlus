@@ -455,10 +455,13 @@ JSON ya están en cada placa; sólo NO están expuestos a BP. ⇒ los builtins s
 > (samples/ExcNativeTest.bp, ExcCatchTest.bp). stdlib regenerada (Adc, Gpio,
 > Pulse, Pwm, Str ahora dependen de Core).
 >
-> **Falta**: (a) embeber Core.mod en la stdlib de los 3 firmwares (xxd -i +
-> pre-install /lib — mientras tanto el IDE auto-sube Core.mod como dep y los
-> .mods viejos funcionan via fallback); (b) #213 (throw de clase usuario desde
-> native) que esto desbloquea.
+> **Provisioning hecho (mismo día)**: Core.mod embebido en Pico (core_mod.c +
+> pre-install /lib, .uf2 reconstruido) y STM32 (regen_stm32_mods.sh con Core
+> primero + 4 blobs stdlib refrescados); ESP32 no embebe stdlib (auto-upload
+> del IDE ✓). Core NO se añadió a EMBEDDED_CORE_MODS del IDE a propósito: así
+> el IDE lo sube como dep y funciona también con firmwares SIN reflashear.
+> **Falta**: reflash de placas cuando toque, y #213 (throw de clase usuario
+> desde native) que esto desbloquea.
 
 #### (histórico) L12 — Base común `Exception` para todas las excepciones (pendiente, tarea #248)
 Hoy NO hay base común: el frontend sintetiza `RuntimeError` aislado

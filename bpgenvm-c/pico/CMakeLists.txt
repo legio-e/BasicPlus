@@ -106,6 +106,7 @@ set(BPVM_C_SRC
 add_executable(bpvm_pico
     main.c
     hello_mod.c
+    core_mod.c      # #248: Core (Exception/RuntimeError) embebido
     gpio_mod.c      # stdlib core pre-instalada
     i2c_mod.c       # stdlib core pre-instalada
     spi_mod.c       # stdlib core pre-instalada

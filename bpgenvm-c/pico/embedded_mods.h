@@ -18,6 +18,10 @@ extern const unsigned int  hello_mod_len;
 /* Stdlib pre-instalada (Gpio, Math, IO en su día) — se carga al FS al
  * boot si no está ya persistida. Permite que `import Gpio` en un .bp
  * compilado e instalado a la Pico resuelva sin uploads manuales. */
+/* #248 — Core: Exception/RuntimeError únicas (base de todas las excepciones).
+ * Va PRIMERO en el install: todo módulo con try/throw depende de él. */
+extern const uint8_t       core_mod[];
+extern const unsigned int  core_mod_len;
 extern const uint8_t       gpio_mod[];
 extern const unsigned int  gpio_mod_len;
 extern const uint8_t       i2c_mod[];

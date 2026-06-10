@@ -773,6 +773,10 @@ static void vm_task(void* arg) {
      * NO persistimos automáticamente a flash — el FORMAT borra apps
      * pero la stdlib resurge en el siguiente reboot desde la imagen. */
     const uint8_t* dummy; uint32_t dummy_sz;
+    if (fs_get("/lib/Core.mod", &dummy, &dummy_sz) != FS_OK) {
+        fs_put("/lib/Core.mod", core_mod, core_mod_len);
+        log_printf("stdlib: /lib/Core.mod installed (%u bytes)", core_mod_len);
+    }
     if (fs_get("/lib/Gpio.mod", &dummy, &dummy_sz) != FS_OK) {
         fs_put("/lib/Gpio.mod", gpio_mod, gpio_mod_len);
         log_printf("stdlib: /lib/Gpio.mod installed (%u bytes)", gpio_mod_len);

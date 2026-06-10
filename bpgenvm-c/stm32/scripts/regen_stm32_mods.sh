@@ -23,7 +23,7 @@ OUT="$HERE/../port/stm32_mods.c"
 
 # Mismo conjunto que EMBEDDED_CORE_MODS en el IDE. Nombre tal cual (la
 # resolución de imports busca "<Module>.mod" preservando mayúsculas).
-MODS=(Math IO Gpio I2c Spi Uart Pulse Pwm Pico Rtc Adc Wdt Timer)
+MODS=(Core Math IO Gpio I2c Spi Uart Pulse Pwm Pico Rtc Adc Wdt Timer)
 
 for m in "${MODS[@]}"; do
     if [ ! -f "$STDLIB/$m.mod" ]; then
