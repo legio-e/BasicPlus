@@ -1,0 +1,63 @@
+// MultiVarTest.bp — mejora ergonómica: varios grupos nombre(s):tipo[:=init] en
+// una sola sentencia `var`, separados por coma:
+//     var i: integer, r: double
+// Cada grupo desazucara a su propio VarDecl (mismo bytecode que dos `var`).
+// Convive con el multi-nombre clásico (`var a, b: integer`) sin ambigüedad:
+// las comas de nombres van ANTES del ':', la de grupo va tras el tipo/init.
+// Esperado:
+//   i = 7
+//   r100 = 350
+//   s = hola
+//   a+b = 30
+//   c = 5
+//   g = 11
+//   f = 42
+module MultiVarTest
+
+  // nivel módulo: dos globals en una línea
+  var g: integer, gd: double
+
+  class Caja
+    // fields de clase en una línea
+    var f: integer, peso: double
+
+    public function Caja()
+      this.f := 42
+      this.peso := 1.5d
+    end Caja
+
+    public function getF(): integer
+      return this.f
+    end getF
+  end Caja
+
+  function main()
+    // grupos simples
+    var i: integer, r: double
+    i := 7
+    r := 3.5d
+    print "i =", i
+    print "r100 =", long(r * 100.0d)
+
+    // grupos con init propio + tipos mezclados
+    var s: string := "hola", n: integer := 3
+    print "s =", s
+
+    // multi-nombre + grupo en la misma sentencia
+    var a, b: integer, c: integer := 5
+    a := 10
+    b := 20
+    print "a+b =", a + b
+    print "c =", c
+
+    // global declarado multi-grupo
+    g := 11
+    print "g =", g
+
+    // field de clase declarado multi-grupo (privado → via getter)
+    var caja: Caja := Caja()
+    print "f =", caja.getF()
+
+    if n == 3 then print "" + intToString(n - 3)   // usa n para no dejarla muerta
+  end main
+end MultiVarTest

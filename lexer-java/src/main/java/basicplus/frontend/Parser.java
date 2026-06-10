@@ -130,6 +130,7 @@ public final class Parser {
             panicMode = false;                  // §7a: cada declaración parte "limpia"
             ITopLevelDecl def = parseDefStmt();
             if (def != null) defs.add(def);
+            drainPendingVarDecls(defs);         // var multi-grupo a nivel módulo
             skipNewlines();
         }
 
@@ -276,10 +277,42 @@ public final class Parser {
         return new ConstDecl(isPublic, name, type, value, tok.line, tok.column);
     }
 
+    /** Grupos extra (2..N) de una sentencia `var` multi-grupo, pendientes de que
+     *  el caller los drene a su lista de sentencias/declaraciones justo detrás
+     *  del primero (drainPendingVarDecls). */
+    private final List<VarDecl> pendingVarDecls = new ArrayList<>();
+
+    /** Drena los VarDecl extra de un `var` multi-grupo en la lista del caller.
+     *  VarDecl implementa IStmt e ITopLevelDecl, así que sirve en ambos contextos. */
+    private void drainPendingVarDecls(List<? super VarDecl> out) {
+        if (!pendingVarDecls.isEmpty()) {
+            out.addAll(pendingVarDecls);
+            pendingVarDecls.clear();
+        }
+    }
+
+    /** var_decl ::= 'var' group ( ',' group )*
+     *  group    ::= ['owner'] name (',' name)* ':' type [':=' init]
+     *
+     *  Mejora ergonómica: varios grupos nombre(s):tipo[:=init] en una sola
+     *  sentencia — `var i: integer, r: double := 1.5d, s: string`. Sin
+     *  ambigüedad con el multi-nombre (`var a, b: integer`): esas comas van
+     *  ANTES del ':', la de grupo va después del tipo/init. Cada grupo
+     *  desazucara a su propio VarDecl (cero impacto en semántico/emisores);
+     *  el primero se devuelve y el resto va a pendingVarDecls. */
     private VarDecl parseVarDecl(boolean isPublic) {
-        Token tok = current();
         match(TokenType.VAR);
-        boolean isOwner = match(TokenType.OWNER);   // `var owner x: T := ...`
+        VarDecl first = parseVarGroup(isPublic);
+        while (match(TokenType.COMMA)) {
+            pendingVarDecls.add(parseVarGroup(isPublic));
+        }
+        consumeStmtTerminator("se esperaba ';' o salto de línea tras la declaración");
+        return first;
+    }
+
+    private VarDecl parseVarGroup(boolean isPublic) {
+        Token tok = current();
+        boolean isOwner = match(TokenType.OWNER);   // `var owner x: T := ...` (por grupo)
         List<DeclName> names = new ArrayList<>();
         names.add(parseDeclName());
         while (match(TokenType.COMMA)) names.add(parseDeclName());
@@ -287,7 +320,6 @@ public final class Parser {
         TypeRef type = parseType();
         IExpr init = null;
         if (match(TokenType.ASSIGN)) init = parseExpr();
-        consumeStmtTerminator("se esperaba ';' o salto de línea tras la declaración");
         return new VarDecl(isPublic, isOwner, names, type, init, tok.line, tok.column);
     }
 
@@ -521,6 +553,7 @@ public final class Parser {
             panicMode = false;                  // §7a: cada miembro de clase parte "limpio"
             ITopLevelDecl m = parseDefStmt();
             if (m != null) members.add(m);
+            drainPendingVarDecls(members);      // var multi-grupo (fields)
             skipNewlines();
         }
         consume(TokenType.END, "se esperaba 'end' al final de la clase");
@@ -578,6 +611,7 @@ public final class Parser {
             if (isBlockTerminator(current().type)) break;
             IStmt s = parseStmt();
             if (s != null) stmts.add(s);
+            drainPendingVarDecls(stmts);    // var multi-grupo → un VarDecl por grupo
         }
         return stmts;
     }
@@ -692,6 +726,7 @@ public final class Parser {
             IStmt stmt = parseStmt();
             List<IStmt> body = new ArrayList<>();
             if (stmt != null) body.add(stmt);
+            drainPendingVarDecls(body);     // var multi-grupo
             IfClause thenClause = new IfClause(cond, body, tok.line, tok.column);
             return new IfStmt(thenClause, new ArrayList<IfClause>(), null, true, tok.line, tok.column);
         }
@@ -816,6 +851,7 @@ public final class Parser {
             IStmt stmt = parseStmt();
             List<IStmt> body = new ArrayList<>();
             if (stmt != null) body.add(stmt);
+            drainPendingVarDecls(body);     // var multi-grupo
             return new WhileStmt(cond, body, true, tok.line, tok.column);
         }
 
@@ -867,6 +903,7 @@ public final class Parser {
             IStmt stmt = parseStmt();
             List<IStmt> body = new ArrayList<>();
             if (stmt != null) body.add(stmt);
+            drainPendingVarDecls(body);     // var multi-grupo
             return new ForStmt(iter, range, body, true, tok.line, tok.column);
         }
 
@@ -1379,6 +1416,7 @@ public final class Parser {
      */
     private void synchronize() {
         panicMode = false;                      // §7a: punto de recuperación → vuelve a reportar
+        pendingVarDecls.clear();                // var multi-grupo: no recolocar grupos tras un error
         while (!isAtEnd() && !EXPR_SYNC_TOKENS.contains(current().type)) {
             advance();
         }
