@@ -264,11 +264,17 @@ tiene parser propio, no afectado). Paréntesis sin cerrar → el parser da su er
 normal (el clamp a 0 del `)` suelto evita tragar NEWLINEs del resto del fichero).
 Sample: `samples/MultiLineTest.bp` (paridad dual-VM byte-idéntica).
 
-### L6 — `static property` de clase no soportada
-**Estado**: marcado como TODO en `MivmEmitter`.
-```
-errors.add("property estática no soportada todavía: " + ...);
-```
+### L6 — `static property` de clase ✅ CERRADO (2026-06-10)
+**Era**: TODO en `MivmEmitter` ("property estática no soportada todavía").
+
+**Cerrado**: backing = global cualificado `Cls.__prop_x` (width-aware: long/double
+de 8 bytes), accesores = funciones cualificadas `Cls.__prop_get_x`/`__prop_set_x`
+emitidas tras `endClass` (como los métodos estáticos). `field` en accesores custom
+resuelve al backing (reusa el mecanismo de property de módulo). Acceso cualificado
+`Cls.prop` (convención de los static members) en lectura, asignación, compound
+`+=`/`-=` y destino de desempaquetado de tuplas. Init se ignora con warning (como
+L8). Limitaciones v1 (error claro): `sync static property` y acceso cross-module.
+Sample: `samples/StaticPropTest.bp` (7 casos, paridad dual-VM byte-idéntica).
 
 ### L7 — `owner`/`final` no aplican a property de módulo
 **Decisión**: documentada. `owner` requiere semántica de FREE_REF cascada que

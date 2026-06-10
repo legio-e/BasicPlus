@@ -1216,10 +1216,14 @@ public final class SemanticAnalyzer {
             if (ps.type != null && !ps.type.isAssignableFrom(t))
                 err(p.line, p.column, "valor inicial de tipo '" + t.display() + "' no asignable a propiedad '" + ps.type.display() + "'");
             // L8: el init de una property a NIVEL MÓDULO se ignora hoy.
-            //     (Propiedades de clase se inicializan vía constructor.)
+            //     (Propiedades de instancia se inicializan vía constructor.)
+            // L6: ídem para static property de clase (backing global, arranca a 0).
             if (ps.ownerClass == null) {
                 warn(p.line, p.column, "inicializador de property a nivel módulo se ignora; "
                         + "asigna el valor en la función inicializadora del módulo");
+            } else if (ps.isStatic) {
+                warn(p.line, p.column, "inicializador de static property se ignora; "
+                        + "asigna el valor en el inicializador del módulo o en una función estática");
             }
         }
         if (p.getter != null) {

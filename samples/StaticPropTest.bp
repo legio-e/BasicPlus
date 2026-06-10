@@ -1,0 +1,75 @@
+// StaticPropTest.bp — L6: static property de clase.
+// Backing = global cualificado Cls.__prop_x; accesores = funciones cualificadas
+// Cls.__prop_get_x / Cls.__prop_set_x (emitidas tras endClass, como los métodos
+// estáticos). Cubre: auto get/set, setter custom (con `field`), getter custom,
+// compound +=, acceso cualificado (Counter.total), acceso sin cualificar desde
+// método estático y desde método de instancia, y tipo long (8 bytes).
+// Esperado:
+//   total = 7
+//   total tras += = 10
+//   doble = 84
+//   fmt = [3]
+//   desde estático = 11
+//   desde instancia = 12
+//   big = 6000000000
+module StaticPropTest
+
+  class Counter
+    var dummy: integer                       // field de instancia (convive)
+
+    public property Counter.total: integer  // auto get/set → backing global
+
+    // setter custom: dobla al guardar (field = backing global cualificado)
+    public property Counter.doubled: integer
+      set(v)
+        field := v * 2
+      endset
+    endprop
+
+    // getter custom: formatea (lee field = backing de fmtN)
+    public property Counter.fmtN: integer
+      get
+        return field
+      endget
+    endprop
+
+    // static property long (backing de 8 bytes)
+    public property Counter.big: long
+
+    public function Counter.bumpStatic()     // método estático (acceso cualificado,
+      Counter.total := Counter.total + 1     // como los static vars: Cls.x)
+    end Counter.bumpStatic
+
+    public function Counter()                // ctor
+      this.dummy := 0
+    end Counter
+
+    public function bumpFromInstance()       // método de instancia: acceso al static
+      Counter.total := Counter.total + 1
+    end bumpFromInstance
+  end Counter
+
+  function main()
+    Counter.total := 7
+    print "total =", Counter.total
+
+    Counter.total += 3                       // compound sobre static property
+    print "total tras += =", Counter.total
+
+    Counter.doubled := 42                    // setter custom
+    print "doble =", Counter.doubled
+
+    Counter.fmtN := 3                        // getter custom (set auto)
+    print "fmt = [" + intToString(Counter.fmtN) + "]"
+
+    Counter.bumpStatic()                     // 10 + 1
+    print "desde estático =", Counter.total
+
+    var c: Counter := Counter()
+    c.bumpFromInstance()                     // 11 + 1
+    print "desde instancia =", Counter.total
+
+    Counter.big := 6000000000L               // long (8 bytes)
+    print "big =", Counter.big
+  end main
+end StaticPropTest

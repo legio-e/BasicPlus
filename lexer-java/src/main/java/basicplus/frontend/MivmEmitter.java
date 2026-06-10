@@ -669,6 +669,12 @@ public final class MivmEmitter {
     static String moduleGetterName(String propName)  { return MODULE_PROP_GET_PREFIX     + propName; }
     static String moduleSetterName(String propName)  { return MODULE_PROP_SET_PREFIX     + propName; }
 
+    // L6 — static property de clase: backing global cualificado + accesores como
+    // funciones cualificadas (mismo naming-space que los static methods `Cls.f`).
+    static String staticBackingName(String clsName, String propName) { return clsName + ".__prop_" + propName; }
+    static String staticGetterName(String clsName, String propName)  { return clsName + ".__prop_get_" + propName; }
+    static String staticSetterName(String clsName, String propName)  { return clsName + ".__prop_set_" + propName; }
+
     /** Construye el qualified name de un accesor externo (`lib.Mod.__prop_get_x`). */
     private static String buildExternalAccessorName(PropertySymbol ps, boolean setter) {
         StringBuilder sb = new StringBuilder();
@@ -859,6 +865,12 @@ public final class MivmEmitter {
                 if (s instanceof VarSymbol) {
                     VarSymbol v = (VarSymbol) s;
                     w.declareGlobal(cd.name + "." + v.name);
+                } else if (s instanceof PropertySymbol) {
+                    // L6 — backing de static property: global cualificado, width-aware.
+                    PropertySymbol ps = (PropertySymbol) s;
+                    String backing = staticBackingName(cd.name, ps.name);
+                    if (is8Byte(ps.type)) w.declareGlobalLong(backing);
+                    else w.declareGlobal(backing);
                 }
             }
 
@@ -933,8 +945,10 @@ public final class MivmEmitter {
 
             // Properties PRIMERO (backing field + getter + setter), antes de los
             // métodos normales que pueden invocar getX/setX por su nombre.
+            // L6: las static properties NO van aquí (no son fields/métodos de
+            // instancia) — se emiten tras endClass como funciones cualificadas.
             for (ITopLevelDecl m : cd.members) {
-                if (m instanceof PropertyDef) {
+                if (m instanceof PropertyDef && !((PropertyDef) m).name.isStatic()) {
                     emitPropertyDef(cls, (PropertyDef) m);
                 }
             }
@@ -996,6 +1010,15 @@ public final class MivmEmitter {
                     if (fs == null) continue;
                     if (fs.isConstructor) { emitConstructorFn(cls, fn, fs); hasUserCtor = true; }
                     else if (fs.isStatic) emitStaticMethodFn(cls, fn, fs);
+                }
+            }
+
+            // 3b) L6 — static properties: accesores como funciones cualificadas
+            //     (Cls.__prop_get_x / Cls.__prop_set_x) sobre el backing global
+            //     pre-declarado en el paso 1.
+            for (ITopLevelDecl m : cd.members) {
+                if (m instanceof PropertyDef && ((PropertyDef) m).name.isStatic()) {
+                    emitStaticPropertyAccessors(cls, (PropertyDef) m);
                 }
             }
 
@@ -1282,7 +1305,8 @@ public final class MivmEmitter {
     private void emitPropertyDef(ClassSymbol cls, PropertyDef pd) throws IOException {
         PropertySymbol ps = (PropertySymbol) info.declSymbols.get(pd);
         if (ps != null && ps.isStatic) {
-            errors.add("property estática no soportada todavía: " + cls.name + "." + pd.name.name);
+            // L6: las static properties se emiten en emitStaticPropertyAccessors
+            // (tras endClass) — el loop de properties de instancia ya las filtra.
             return;
         }
         BpType propType = (ps != null) ? ps.type : (pd.type != null ? typeRefToBpType(pd.type) : null);
@@ -1347,6 +1371,79 @@ public final class MivmEmitter {
             if (pd.isSync) emitSyncUnlock(cls.name);
             emitFunctionEnd();
         } finally { currentPropertyField = null; scopeStack.pop(); }
+    }
+
+    /**
+     * L6 — Accesores de una static property de clase, emitidos como funciones
+     * cualificadas (`Cls.__prop_get_x` / `Cls.__prop_set_x`) DESPUÉS de endClass,
+     * igual que los métodos estáticos. El backing es el global cualificado
+     * `Cls.__prop_x` (pre-declarado width-aware en el paso 1 de emitClassDef,
+     * junto a las static vars). Dentro de un accesor custom, `field` resuelve al
+     * backing global (reusa currentModulePropertyBacking, el mecanismo de las
+     * properties de módulo). El init (si lo hay) se ignora como en módulo (L8):
+     * el global arranca a 0/null.
+     *
+     * Limitación v1: `sync static property` no soportada (error claro) — el mutex
+     * compartido de módulo no se inicializa para clases, y el de instancia no
+     * existe sin `this`.
+     */
+    private void emitStaticPropertyAccessors(ClassSymbol cls, PropertyDef pd) {
+        try {
+            if (pd.isSync) {
+                errors.add("sync static property no soportada todavía: "
+                        + cls.name + "." + pd.name.name);
+                return;
+            }
+            PropertySymbol psym = (PropertySymbol) info.declSymbols.get(pd);
+            BpType propType = (psym != null && psym.type != null) ? psym.type
+                            : (pd.type != null ? typeRefToBpType(pd.type) : null);
+            boolean p8 = is8Byte(propType);
+
+            String backing = staticBackingName(cls.name, pd.name.name);
+            String getter  = staticGetterName(cls.name, pd.name.name);
+            String setter  = staticSetterName(cls.name, pd.name.name);
+
+            // ---- Getter ----
+            w.addFunction(getter, pd.isPublic);
+            FunctionSymbol gfs = new FunctionSymbol(getter, pd.isPublic, false, false, null, null);
+            gfs.returnType = propType;
+            beginFunctionScope(gfs, propType);
+            currentModulePropertyBacking = backing;
+            try {
+                if (pd.getter != null) {
+                    for (IStmt s : pd.getter.body) emitStmt(s);
+                } else {
+                    // auto-getter: __result := Cls.__prop_<name>
+                    w.emitGetGlobal(backing);
+                    w.emitSetLocal("__result");
+                }
+                emitFunctionEnd();
+            } finally { currentModulePropertyBacking = null; scopeStack.pop(); }
+
+            // ---- Setter ----
+            w.addFunction(setter, pd.isPublic);
+            w.declareParam("__val", p8 ? 8 : 4);
+            FunctionSymbol sfs = new FunctionSymbol(setter, pd.isPublic, false, false, null, null);
+            beginFunctionScope(sfs, null);
+            currentModulePropertyBacking = backing;
+            try {
+                if (pd.setter != null) {
+                    if (p8) declareLocalLong(pd.setter.paramName);
+                    else declareLocal(pd.setter.paramName);
+                    w.emitGetParam("__val");
+                    w.emitSetLocal(pd.setter.paramName);
+                    for (IStmt s : pd.setter.body) emitStmt(s);
+                } else {
+                    // auto-setter: Cls.__prop_<name> := __val
+                    w.emitGetParam("__val");
+                    w.emitSetGlobal(backing);
+                }
+                emitFunctionEnd();
+            } finally { currentModulePropertyBacking = null; scopeStack.pop(); }
+        } catch (IOException e) {
+            errors.add("error emitiendo static property '" + cls.name + "."
+                    + pd.name.name + "': " + e.getMessage());
+        }
     }
 
     private static String capitalize(String s) {
@@ -1666,6 +1763,38 @@ public final class MivmEmitter {
                             } else {
                                 w.emitCall(moduleSetterName(ps.name));
                             }
+                            declareLocal("__discard");
+                            w.emitSetLocal("__discard");
+                            return;
+                        }
+                    }
+                }
+                // ---------- L6: static property de clase ----------
+                if (ps.isStatic) {
+                    if (ps.isExternal) {
+                        errors.add("static property cross-module no soportada (v1): "
+                                + ps.ownerClass.name + "." + ps.name);
+                        return;
+                    }
+                    String sGet = staticGetterName(ps.ownerClass.name, ps.name);
+                    String sSet = staticSetterName(ps.ownerClass.name, ps.name);
+                    switch (a.op) {
+                        case ASSIGN: {
+                            emitExpr(a.value);
+                            coerceToTarget(a.value, tType);
+                            w.emitCall(sSet);
+                            declareLocal("__discard");
+                            w.emitSetLocal("__discard");
+                            return;
+                        }
+                        case PLUS_ASSIGN:
+                        case MINUS_ASSIGN: {
+                            // val := getter() op rhs; setter(val)
+                            w.emitCall(sGet);
+                            emitExpr(a.value);
+                            coerceToTarget(a.value, tType);
+                            emitCompoundOp(a.op, tType);
+                            w.emitCall(sSet);
                             declareLocal("__discard");
                             w.emitSetLocal("__discard");
                             return;
@@ -4122,6 +4251,17 @@ public final class MivmEmitter {
                 }
                 return;
             }
+            // L6 — static property: Cls.prop lee via CALL al getter cualificado
+            // (el target es el NOMBRE de la clase, no una instancia — no se evalúa).
+            if (ps.isStatic) {
+                if (ps.isExternal) {
+                    errors.add("static property cross-module no soportada (v1): "
+                            + ps.ownerClass.name + "." + ps.name);
+                    return;
+                }
+                w.emitCall(staticGetterName(ps.ownerClass.name, ps.name));
+                return;
+            }
             emitExpr(ma.target);
             emitInvokeVirtualSmart(ps.ownerClass, "get" + capitalize(ps.name), 0);
             return;
@@ -4355,6 +4495,10 @@ public final class MivmEmitter {
                     if (ps.isExternal) w.emitCallExt(buildExternalAccessorName(ps, true), ps.externalFromPath);
                     else               w.emitCall(moduleSetterName(ps.name));
                     declareLocal("__discard"); w.emitSetLocal("__discard");
+                } else if (ps.isStatic) {                    // L6: static property
+                    w.emitGetLocal(valLocal);
+                    w.emitCall(staticSetterName(ps.ownerClass.name, ps.name));
+                    declareLocal("__discard"); w.emitSetLocal("__discard");
                 } else {                                     // property de clase (instancia)
                     emitExpr(ma.target);
                     w.emitGetLocal(valLocal);
@@ -4559,7 +4703,11 @@ public final class MivmEmitter {
                 }
                 return;
             }
-            if (ps.isStatic) { errors.add("property estática no soportada: " + name); return; }
+            if (ps.isStatic) {
+                // L6: CALL al getter cualificado (sin this).
+                w.emitCall(staticGetterName(ps.ownerClass.name, ps.name));
+                return;
+            }
             w.emitGetParam("this");
             emitInvokeVirtualSmart(ps.ownerClass, "get" + capitalize(ps.name), 0);
         } else if (sym instanceof ConstSymbol) {
@@ -4607,7 +4755,13 @@ public final class MivmEmitter {
                 w.emitSetLocal("__discard");
                 return;
             }
-            if (ps.isStatic) { errors.add("property estática no soportada: " + name); return; }
+            if (ps.isStatic) {
+                // L6: pila ..., val → CALL al setter cualificado (consume val).
+                w.emitCall(staticSetterName(ps.ownerClass.name, ps.name));
+                declareLocal("__discard");
+                w.emitSetLocal("__discard");
+                return;
+            }
             // Pila: ..., val. Necesitamos this, val para INVOKE_VIRTUAL setX.
             // BUG-6: si la property es long/double, el temp y el numArgs son de 8 bytes / 2 slots.
             boolean ps8 = is8Byte(ps.type);
