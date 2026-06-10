@@ -396,7 +396,21 @@ public final class Main {
             if ("mivm".equals(ctx.backend)) {
                 emitMivmMod(module, info, ctx, depth, srcAbs);
             } else {
-                emitJvmClass(module, info, ctx, depth);
+                try {
+                    emitJvmClass(module, info, ctx, depth);
+                } catch (RuntimeException jvmEx) {
+                    // #248 — el backend JVM (legacy, el por defecto sin flag) no
+                    // conoce L2 v3 (clases/super cross-module) y petaba con NPE.
+                    // Error claro en vez de stack trace: el producto dual-VM es
+                    // el backend mivm.
+                    indent(depth); System.err.println(
+                        "error: el backend 'jvm' (legacy) no soporta este módulo ("
+                        + jvmEx.getClass().getSimpleName()
+                        + (jvmEx.getMessage() != null ? ": " + jvmEx.getMessage() : "")
+                        + ") — compila con --backend=mivm");
+                    ctx.totalErrors++;
+                    return false;
+                }
                 return true;
             }
             writeInterfaceFile(module, info, ctx, depth);
@@ -957,6 +971,10 @@ public final class Main {
         // pass tras crearlos todos. La resolución intra-ns se sigue haciendo
         // inline en el primer pass.
         java.util.List<Symbol.ImportedNamespaceSymbol> loadedNs = new java.util.ArrayList<>();
+        // #248 — stubs de clase cuya base vive en OTRO módulo importado
+        // (`extends Core.Exception`): {ns, stub, ClassSig}. Se resuelven en el
+        // post-pass, cuando todos los namespaces están cargados.
+        java.util.List<Object[]> pendingCrossBase = new java.util.ArrayList<>();
         for (Ast.ImportNode imp : module.imports) {
             String alias = imp.path.get(imp.path.size() - 1);
             String library = libraryFromImportPath(imp);
@@ -1118,9 +1136,13 @@ public final class Main {
                     // quedaba con slot desfasado → INVOKE_VIRTUAL cross-module
                     // a la ranura equivocada (los envoltorios Integer/etc. que
                     // extienden Comparable lo destaparon).
+                    boolean deferSlots = false;   // base en OTRO módulo → post-pass
                     Symbol.ClassSymbol baseStub = (cs.baseClassName != null)
                             ? ns.classes.get(cs.baseClassName) : null;
                     if (baseStub != null) {
+                        // #248 — enlazar la base también para el LOOKUP de
+                        // miembros heredados (e.msg sobre el stub hijo).
+                        stub.baseClass = baseStub;
                         stub.externalMethodSlots.putAll(baseStub.externalMethodSlots);
                         nextSlot = baseStub.externalMethodSlots.size();
                     } else if (cs.baseClassName == null) {
@@ -1131,12 +1153,18 @@ public final class Main {
                         // numeran desde 2. Sembramos esos 2 slots aquí para que
                         // INVOKE_VIRTUAL cross-module despache a la ranura
                         // correcta (mismo riesgo BUG-5 si se omite).
-                        // (baseClassName != null pero no hallada ⇒ base en OTRO
-                        //  módulo: comportamiento previo sin sembrar — no
-                        //  soportado plenamente, no aparece en la regresión.)
                         stub.externalMethodSlots.put("toString", 0);
                         stub.externalMethodSlots.put("compareTo", 1);
                         nextSlot = 2;
+                    } else {
+                        // #248 (cerraba el gap anotado de #44): base en OTRO
+                        // módulo (`extends Core.Exception`). Aquí su ns puede no
+                        // estar cargado aún → difiere baseClass + siembra de
+                        // slots al post-pass L2 v3.e, con todos los ns presentes.
+                        // Sin esto los métodos propios numeraban desde 0 →
+                        // INVOKE_VIRTUAL a la ranura equivocada (getCode → toString).
+                        deferSlots = true;
+                        pendingCrossBase.add(new Object[]{ns, stub, cs});
                     }
                     // Properties → getter (slot N) + setter (slot N+1)
                     for (ModuleInterface.PropSig p : cs.properties) {
@@ -1144,9 +1172,11 @@ public final class Main {
                                 p.name, true, false, false, stub, null);
                         psym.type = p.type;
                         stub.instanceMembers.tryDefine(psym);
-                        String capName = Character.toUpperCase(p.name.charAt(0)) + p.name.substring(1);
-                        stub.externalMethodSlots.put("get" + capName, nextSlot++);
-                        stub.externalMethodSlots.put("set" + capName, nextSlot++);
+                        if (!deferSlots) {
+                            String capName = Character.toUpperCase(p.name.charAt(0)) + p.name.substring(1);
+                            stub.externalMethodSlots.put("get" + capName, nextSlot++);
+                            stub.externalMethodSlots.put("set" + capName, nextSlot++);
+                        }
                     }
                     // Methods en orden de declaración
                     for (ModuleInterface.FuncSig m : cs.methods) {
@@ -1166,7 +1196,7 @@ public final class Main {
                         stub.instanceMembers.tryDefine(fsym);
                         // Override de un método heredado → mantiene su slot base
                         // (ya sembrado). Método nuevo → siguiente slot libre.
-                        if (!stub.externalMethodSlots.containsKey(m.name)) {
+                        if (!deferSlots && !stub.externalMethodSlots.containsKey(m.name)) {
                             stub.externalMethodSlots.put(m.name, nextSlot++);
                         }
                     }
@@ -1232,6 +1262,57 @@ public final class Main {
             }
         }
 
+        // #248 — post-pass de bases cross-module: enlaza stub.baseClass y
+        // siembra la vtable (slots heredados + propios) de los stubs cuya base
+        // vive en otro namespace. Iterativo por si hay cadenas (A.X extends
+        // B.Y extends C.Z): una pasada por nivel, hasta no progresar.
+        if (!pendingCrossBase.isEmpty()) {
+            java.util.List<Object[]> pend = new java.util.ArrayList<>(pendingCrossBase);
+            for (int round = 0; !pend.isEmpty() && round < 8; round++) {
+                boolean progress = false;
+                java.util.Iterator<Object[]> it = pend.iterator();
+                while (it.hasNext()) {
+                    Object[] e = it.next();
+                    Symbol.ImportedNamespaceSymbol ownNs = (Symbol.ImportedNamespaceSymbol) e[0];
+                    Symbol.ClassSymbol stub = (Symbol.ClassSymbol) e[1];
+                    ModuleInterface.ClassSig cs = (ModuleInterface.ClassSig) e[2];
+                    Symbol.ClassSymbol base = findImportedClass(cs.baseClassName, ownNs, loadedNs);
+                    if (base == null) {
+                        if (round == 7) {
+                            indent(depth); System.err.printf(
+                                "-- aviso: base cross-module '%s' de la clase importada '%s.%s' no resuelta"
+                                + " (¿falta el import de su módulo?) — vtable incompleta --%n",
+                                cs.baseClassName, ownNs.moduleName, cs.name);
+                        }
+                        continue;
+                    }
+                    // Si la base es a su vez pendiente y aún no sembrada, espera
+                    // a la siguiente ronda (sus slots todavía no están).
+                    boolean baseStillPending = false;
+                    for (Object[] p2 : pend) {
+                        if (p2[1] == base) { baseStillPending = true; break; }
+                    }
+                    if (baseStillPending) continue;
+                    stub.baseClass = base;
+                    stub.externalMethodSlots.putAll(base.externalMethodSlots);
+                    int next = base.externalMethodSlots.size();
+                    for (ModuleInterface.PropSig p : cs.properties) {
+                        String capName = Character.toUpperCase(p.name.charAt(0)) + p.name.substring(1);
+                        stub.externalMethodSlots.put("get" + capName, next++);
+                        stub.externalMethodSlots.put("set" + capName, next++);
+                    }
+                    for (ModuleInterface.FuncSig m : cs.methods) {
+                        if (!stub.externalMethodSlots.containsKey(m.name)) {
+                            stub.externalMethodSlots.put(m.name, next++);
+                        }
+                    }
+                    it.remove();
+                    progress = true;
+                }
+                if (!progress) break;
+            }
+        }
+
         // L2 v3.e — post-pass: resuelve UnresolvedClassRef con nombre dotted
         // (e.g. `L2Lib.Counter`) contra otros namespaces ya cargados. Hace
         // esta pasada DESPUÉS del loop principal para que todos los ns estén
@@ -1258,6 +1339,41 @@ public final class Main {
                 }
             }
         }
+    }
+
+    /** #248 — localiza la ClassSymbol de una base cross-module de un stub
+     *  importado. `name` puede venir sin punto (clase del PROPIO ns — raro
+     *  aquí, pero seguro) o dotted (`Core.Exception`, `Lib.Mod.Cls`): el
+     *  último segmento es la clase y el prefijo casa contra el alias o el
+     *  qualified name de cada namespace cargado. */
+    private static Symbol.ClassSymbol findImportedClass(
+            String name,
+            Symbol.ImportedNamespaceSymbol ownNs,
+            java.util.List<Symbol.ImportedNamespaceSymbol> allNs) {
+        if (name == null || name.isEmpty()) return null;
+        int lastDot = name.lastIndexOf('.');
+        if (lastDot < 0) {
+            Symbol.ClassSymbol own = ownNs.classes.get(name);
+            if (own != null) return own;
+            for (Symbol.ImportedNamespaceSymbol candidate : allNs) {
+                Symbol.ClassSymbol cls = candidate.classes.get(name);
+                if (cls != null) return cls;
+            }
+            return null;
+        }
+        String modPart = name.substring(0, lastDot);
+        String clsPart = name.substring(lastDot + 1);
+        for (Symbol.ImportedNamespaceSymbol candidate : allNs) {
+            String full = candidate.library.isEmpty()
+                    ? candidate.moduleName
+                    : candidate.library + "." + candidate.moduleName;
+            if (full.equals(modPart) || candidate.moduleName.equals(modPart)
+                    || candidate.name.equals(modPart)) {
+                Symbol.ClassSymbol cls = candidate.classes.get(clsPart);
+                if (cls != null) return cls;
+            }
+        }
+        return null;
     }
 
     /** L2 v3.e — resuelve un UnresolvedClassRef contra TODOS los namespaces

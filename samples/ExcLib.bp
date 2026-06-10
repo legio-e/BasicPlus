@@ -1,0 +1,27 @@
+// ExcLib.bp — #248 fase 1: librería con excepción de USUARIO que extiende
+// Core.Exception (cross-module) con campo propio, más un throw del
+// Core.RuntimeError real. Usada por ExcCatchTest.bp.
+module ExcLib
+  import Core
+
+  public class MyError extends Core.Exception
+    var code: integer
+
+    public function MyError(m: string, c: integer)
+      super(m)
+      this.code := c
+    end MyError
+
+    public function getCode(): integer
+      return this.code
+    end getCode
+  end MyError
+
+  public function boomMy()
+    throw MyError("fallo de usuario", 42)
+  end boomMy
+
+  public function boomRte()
+    throw Core.RuntimeError("rte manual desde lib")
+  end boomRte
+end ExcLib

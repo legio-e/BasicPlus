@@ -1,0 +1,36 @@
+// Core.bp — núcleo del modelo de excepciones (#248).
+//
+// Jerarquía decidida (2026-06-10): Object -> Exception -> RuntimeError | resto.
+// UNA sola clase real en toda la VM (identidad por puntero único, cross-module
+// via la maquinaria L2 v3: factory __cls_new_*, TRY_BEGIN_EXT, extends/instanceof
+// cross-module) — sustituye a las copias per-módulo sintetizadas por el emitter.
+//
+// INVARIANTE de layout: `msg` es el PRIMER miembro de Exception → backing field
+// en el SLOT 0 de toda excepción (RuntimeError no añade campos; las clases de
+// usuario heredan msg en 0 y añaden los suyos después). Los throws nativos de
+// las VMs (div0, null deref, OOB...) construyen RuntimeError escribiendo
+// slot 0 = msgRef directamente, sin ejecutar el constructor — ese atajo es
+// correcto POR CONSTRUCCIÓN gracias a este invariante (y es lo que desbloquea
+// #213: throw de clases de usuario desde native).
+module Core
+
+  // Base de TODAS las excepciones. `msg` como property pública: el backing
+  // field queda en slot 0 y los accesores viajan en la .bpi (los fields raw
+  // no se exportan cross-module — decisión #143).
+  public class Exception
+    public property msg: string
+
+    public function Exception(m: string)
+      this.msg := m
+    end Exception
+  end Exception
+
+  // Errores nativos de la VM (división por cero, null deref, índice fuera de
+  // rango, faults de native/AOT...). Sin campos propios: msg queda en slot 0.
+  public class RuntimeError extends Exception
+    public function RuntimeError(m: string)
+      super(m)
+    end RuntimeError
+  end RuntimeError
+
+end Core

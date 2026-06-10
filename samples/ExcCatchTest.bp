@@ -1,0 +1,39 @@
+// ExcCatchTest.bp — #248 fase 1: jerarquía Object -> Exception -> RuntimeError |
+// excepciones de usuario, con UNA clase real (Core) y catch cross-module por
+// puntero único (maquinaria L2 v3: factory, TRY_BEGIN_EXT, extends/instanceof).
+// Cubre además el fix del gap #44: base cross-module de una clase IMPORTADA
+// (slots de vtable con cadena completa + lookup de miembros heredados e2.msg).
+// Esperado:
+//   base caza MyError: fallo de usuario
+//   exacta caza MyError: fallo de usuario code = 42
+//   base caza RuntimeError: rte manual desde lib
+//   fin
+module ExcCatchTest
+  import Core
+  import ExcLib
+
+  function main()
+    // 1) excepción de usuario cazada por su BASE cross-module
+    try
+      ExcLib.boomMy()
+    catch e: Core.Exception
+      print "base caza MyError:", e.msg
+    endtry
+
+    // 2) la misma, cazada por su tipo exacto: miembro heredado (msg) + propio (code)
+    try
+      ExcLib.boomMy()
+    catch e2: ExcLib.MyError
+      print "exacta caza MyError:", e2.msg, "code =", e2.getCode()
+    endtry
+
+    // 3) RuntimeError de Core lanzado en la lib, cazado aquí como Exception
+    try
+      ExcLib.boomRte()
+    catch e3: Core.Exception
+      print "base caza RuntimeError:", e3.msg
+    endtry
+
+    print "fin"
+  end main
+end ExcCatchTest
