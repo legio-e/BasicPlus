@@ -21,6 +21,8 @@
 #include "json_min.h"
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* vm->modules[].{name,imports,import_count} para deps */
+#include "mdn_loader.h"      /* H9.5: overlay AOT .mdn desde el FS (loader compartido) */
+#include "aot_registry.h"    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
 
 #include "main.h"
 #include "stm32u5xx_nucleo.h"   /* BSP_LED_Toggle, LED_GREEN */
@@ -320,6 +322,29 @@ static void handle_run(long id, json_obj_t* obj) {
                     if (strcmp(vm->modules[j].name, owner) == 0) { found = 1; break; }
                 if (!found) strncpy(missing, owner, sizeof(missing) - 1);
             }
+        }
+    }
+
+    /* H9.5 — overlay AOT: para cada módulo cargado, si el FS tiene su
+     * <Modulo>.mdn (PIC Thumb-2 de build_mdn.sh — mismo -mcpu=cortex-m33
+     * que el RP2350, la U575 es el mismo core), registra sus thunks
+     * zero-copy apuntando al buffer del FS (RAM, dirección estable durante
+     * el RUN). El registry AOT es GLOBAL → clear antes de cada RUN para no
+     * arrastrar thunks de una sesión anterior (buffers FS ya movidos).
+     * Tolerante: sin .mdn o rc != OK → se ejecuta interpretado, sin más.
+     * Nota U575: el código ejecuta desde SRAM (S-bus); el ICACHE del U5
+     * cachea la ruta de flash (C-bus), así que no hace falta invalidación
+     * — confirmar en placa con el primer smoke (fib_native). */
+    bpvm_aot_clear();
+    if (st == BPVM_OK && !missing[0]) {
+        for (int mi = 0; mi < vm->module_count; mi++) {
+            const char* mname = vm->modules[mi].name;
+            if (!mname || !mname[0]) continue;
+            char mdn_path[48];
+            snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
+            const uint8_t* mdn_data; uint32_t mdn_size;
+            if (stm32_fs_resolve(mdn_path, &mdn_data, &mdn_size) != 0) continue;
+            bpvm_load_mdn(vm, mdn_data, (size_t) mdn_size);
         }
     }
 

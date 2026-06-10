@@ -23,12 +23,17 @@
 #include "mdn_loader.h"
 #include "mdn_format.h"
 #include "aot_registry.h"
-#include "log.h"
 
 #include "bpvm.h"
 
 #include <stdint.h>
 #include <string.h>
+
+/* H9.5 — el loader es compartido entre ports (Pico, STM32, ...). Las trazas
+ * van por bpvm_mdn_log, débil no-op aquí: el Pico da una implementación
+ * fuerte sobre su log persistente (pico/aot_funcs.c); el STM32 (wire-only)
+ * se queda con el silencio. Así el fichero no depende de ningún log.h. */
+__attribute__((weak)) void bpvm_mdn_log(const char* fmt, ...) { (void) fmt; }
 
 /* El FS pinea cada fichero 4-aligned (fs.c v4), así que data viene
  * ya correctamente alineado para Thumb-2. NO necesitamos staging.
@@ -47,7 +52,7 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
      * también vienen alineados por el compilador. Si llega misaligned,
      * es bug del caller. */
     if (((uintptr_t) data) & 0x3u) {
-        log_printf("MDN: ABORT — data %p no alineado a 4 (FS v4 debería garantizar)",
+        bpvm_mdn_log("MDN: ABORT — data %p no alineado a 4 (FS v4 debería garantizar)",
                    (const void*) data);
         return MDN_ERR_TRUNCATED;
     }
@@ -78,11 +83,11 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
         if (rc == 0) {
             registered++;
         } else {
-            log_printf("MDN: skip '%s' rc=%d (symbol no en .mod?)",
+            bpvm_mdn_log("MDN: skip '%s' rc=%d (symbol no en .mod?)",
                        syms[i].name, rc);
         }
     }
-    log_printf("MDN: %d/%u thunks registrados, %u code bytes (zero-copy)",
+    bpvm_mdn_log("MDN: %d/%u thunks registrados, %u code bytes (zero-copy)",
                registered, (unsigned) h->sym_count, (unsigned) h->code_size);
     return MDN_OK;
 }

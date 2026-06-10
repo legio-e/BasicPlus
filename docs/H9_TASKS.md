@@ -189,6 +189,32 @@ que `Pin(39)` daría "fuera de rango" en host (en la placa el backend reporta 12
 `.mdn` Thumb-2 reutiliza el `AotCEmitter` existente (ARM→ARM). Validar
 `fib_native` en placa.
 
+> **🟡 LADO HOST LISTO (2026-06-10)** — falta solo CubeIDE + smoke en placa:
+> - **`mdn_loader.c` compartido**: movido de `pico/` a `src/` (+ header a
+>   `include/`). Es zero-copy y 100% portable; las trazas van por el hook débil
+>   `bpvm_mdn_log` (no-op por defecto — el Pico da la impl fuerte sobre su log
+>   persistente en `pico/aot_funcs.c`; el STM32, wire-only, queda en silencio).
+>   El host también lo compila (check permanente); firmware Pico recompilado OK.
+> - **Hook en `stm32_repl.c`**: tras cargar módulo + deps y antes de `bpvm_run`,
+>   busca `<Modulo>.mdn` en el FS (name → /app → /lib, igual que los .mod) y
+>   registra los thunks. `bpvm_aot_clear()` antes de cada RUN (registry global).
+>   Typecheckeado contra los headers reales (gcc -fsyntax-only).
+> - **El `.mdn` ya es compatible**: `pico/build_mdn.sh` compila PIC Thumb-2 con
+>   `-mcpu=cortex-m33` — la U575 es el MISMO core que el RP2350. Sin cambios.
+> - **Nota ICACHE U5**: el código ejecuta desde SRAM (S-bus); el ICACHE del U575
+>   cachea la ruta de flash (C-bus) → no debería hacer falta invalidación.
+>   Confirmar en placa con el primer smoke.
+>
+> **Pasos del usuario (CubeIDE):**
+> 1. Añadir `bpgenvm-c/src/mdn_loader.c` al proyecto (junto a aot_registry.c).
+>    Si `aot_registry.h`/`mdn_format.h` no resuelven, añadir `bpgenvm-c/src` a
+>    los include paths (ya debería estar — aot_registry.c compila).
+> 2. (Pendiente previo) añadir también `src/fs_facade.c` (#247).
+> 3. Rebuild + flash.
+> 4. Smoke: `build_mdn.sh` de un módulo con `native function` (p.ej. fib) →
+>    subir `<Mod>.mod` + `<Mod>.mdn` al FS del U575 → RUN → comparar tiempo
+>    con/sin .mdn (en el Pico fue ~30x en LZSS, ~10x en fib).
+
 ### H9.6 — 2ª placa STM32 (Nucleo-L496ZG, M4/L4)
 Prueba *barata* de que la capa HAL generaliza entre familias STM32. Formaliza la
 imagen-por-familia (§9b de la VM).

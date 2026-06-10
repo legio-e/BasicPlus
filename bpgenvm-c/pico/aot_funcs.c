@@ -24,7 +24,22 @@
 #include "mdn_loader.h"
 #include "embedded_bench_mdn.h"
 
+#include <stdarg.h>
+#include <stdio.h>
+
 extern void aot_Bench_register(struct bpvm* vm);
+
+/* H9.5 — implementación FUERTE del hook de trazas del mdn_loader (que es
+ * weak no-op en src/mdn_loader.c, ahora compartido entre ports): en el Pico
+ * las trazas van al log persistente. */
+void bpvm_mdn_log(const char* fmt, ...) {
+    char buf[160];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    log_printf("%s", buf);
+}
 
 void aot_funcs_register(struct bpvm* vm) {
     /* Stage 1: AOT linkado-estático del firmware. */

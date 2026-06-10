@@ -13,8 +13,8 @@
  * Para .mdn cargado desde FS, el caller debe asegurar que el buffer
  * del FS no se mueva mientras los thunks estén activos.
  */
-#ifndef BPVM_PICO_MDN_LOADER_H
-#define BPVM_PICO_MDN_LOADER_H
+#ifndef BPVM_MDN_LOADER_H
+#define BPVM_MDN_LOADER_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -47,6 +47,12 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size);
  * de RAM extra que resetear. Mantenidos por compat con callers. */
 void   bpvm_mdn_reset(void);
 size_t bpvm_mdn_used_bytes(void);
+
+/* H9.5 — hook de trazas del loader, débil (no-op por defecto): un port puede
+ * dar una implementación fuerte para ver el detalle de la carga (el Pico la
+ * enruta a su log persistente; el STM32, wire-only, usa el default silencioso).
+ * El loader funciona igual sin logging — los códigos de retorno mandan. */
+void bpvm_mdn_log(const char* fmt, ...);
 
 #ifdef __cplusplus
 }
