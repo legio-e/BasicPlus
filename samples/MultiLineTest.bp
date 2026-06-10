@@ -1,0 +1,56 @@
+// MultiLineTest.bp — L5: continuación implícita de línea dentro de ( ) y [ ].
+// Una expresión/llamada/firma puede partirse en varias líneas mientras haya
+// paréntesis o corchetes abiertos (estilo Python). Los comentarios al final de
+// una línea continuada también valen.
+// Esperado:
+//   suma = 60
+//   ok = true
+//   x = 7
+//   arr[1] = 9
+//   msg = hola mundo largo
+module MultiLineTest
+
+  // firma partida en varias líneas
+  function suma3(a: integer,
+                 b: integer,
+                 c: integer): integer
+    return a + b + c
+  end suma3
+
+  function main()
+    // llamada con argumentos en varias líneas (+ comentario en medio)
+    var s: integer := suma3(10,
+                            20,    // el del medio
+                            30)
+    print "suma =", s
+
+    // condición parentizada multi-línea con operadores lógicos
+    var a: integer := 5
+    var b: integer := 7
+    var ok: boolean := (a < b and
+                        b < 10 and
+                        a > 0)
+    print "ok =", ok
+
+    // expresión aritmética larga partida
+    var x: integer := (1 + 2 + 3 +
+                       4 + 5 +
+                       6) / 3
+    print "x =", x
+
+    // subscript [ ] partido en varias líneas (lvalue y rvalue)
+    var arr: integer[] := newIntArray(3)
+    arr[
+      1
+    ] := 9
+    print "arr[1] =", arr[
+      1
+    ]
+
+    // concatenación de strings partida
+    var msg: string := ("hola" + " " +
+                        "mundo" + " " +
+                        "largo")
+    print "msg =", msg
+  end main
+end MultiLineTest

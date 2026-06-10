@@ -157,6 +157,10 @@ public final class Lexer {
     // ============================================================
     public List<Token> tokenize() {
         List<Token> tokens = new ArrayList<>();
+        // L5 — continuación implícita de línea: profundidad de ( ) y [ ] abiertos.
+        // Mientras depth > 0 los NEWLINE se consumen pero NO se emiten (estilo
+        // Python), así una expresión/llamada/firma puede partirse en varias líneas.
+        int groupDepth = 0;
 
         while (true) {
             skipInlineWhitespaceAndComments();
@@ -166,9 +170,10 @@ public final class Lexer {
             int startColumn = column;
             char c = peek();
 
-            // Newline significativo
+            // Newline significativo (salvo dentro de paréntesis/corchetes — L5)
             if (c == '\r' || c == '\n') {
-                tokens.add(scanNewline(startLine, startColumn));
+                Token nl = scanNewline(startLine, startColumn);
+                if (groupDepth == 0) tokens.add(nl);
                 continue;
             }
 
@@ -194,6 +199,14 @@ public final class Lexer {
             // Operadores y signos
             Token op = scanOperator(startLine, startColumn);
             if (op != null) {
+                // L5 — track de profundidad para la continuación implícita. El
+                // clamp a 0 con ')' suelto evita que un typo trague NEWLINEs del
+                // resto del fichero (el parser dará su error normal).
+                if (op.type == TokenType.LPAREN || op.type == TokenType.LBRACKET) {
+                    groupDepth++;
+                } else if (op.type == TokenType.RPAREN || op.type == TokenType.RBRACKET) {
+                    if (groupDepth > 0) groupDepth--;
+                }
                 tokens.add(op);
                 continue;
             }

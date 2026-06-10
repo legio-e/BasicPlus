@@ -252,9 +252,17 @@ Verificado 2026-06-10: un método de clase `get(idx)` compila y corre en ambas V
 (`Json.bp` mantiene `at()` por compatibilidad; podría ganar un alias `get()` si
 apetece.)
 
-### L5 — Sin expresiones multi-línea
-**Impacto**: una expresión partida en varias líneas falla en el parser. Forzosamente
-una línea. Pena con `throw RuntimeError("mensaje largo\n con contexto")`.
+### L5 — Sin expresiones multi-línea ✅ CERRADO (2026-06-10)
+**Era**: una expresión partida en varias líneas fallaba en el parser.
+
+**Cerrado**: continuación implícita de línea estilo Python — el lexer lleva la
+profundidad de `(` `)` `[` `]` abiertos y, mientras sea > 0, consume los NEWLINE
+sin emitirlos. Funciona para llamadas, condiciones parentizadas, aritmética,
+subscripts y firmas de función; los comentarios `//` al final de una línea
+continuada también valen. Cambio de ~10 líneas en `Lexer.tokenize()` (el `.bpi`
+tiene parser propio, no afectado). Paréntesis sin cerrar → el parser da su error
+normal (el clamp a 0 del `)` suelto evita tragar NEWLINEs del resto del fichero).
+Sample: `samples/MultiLineTest.bp` (paridad dual-VM byte-idéntica).
 
 ### L6 — `static property` de clase no soportada
 **Estado**: marcado como TODO en `MivmEmitter`.
