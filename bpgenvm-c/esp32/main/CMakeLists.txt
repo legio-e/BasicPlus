@@ -46,4 +46,6 @@ idf_component_register(
         esp_driver_uart
         esp_partition
         esp_driver_gpio
+        spi_flash        # INFO: esp_flash_get_size (flash real montada)
+        esp_hw_support   # INFO: esp_mac.h (uniqueId desde efuse)
 )

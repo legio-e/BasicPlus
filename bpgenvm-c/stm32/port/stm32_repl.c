@@ -66,11 +66,16 @@ static void handle_info(long id) {
     /* N-stm32-info — el diálogo INFO del IDE (PicoExplorer.formatInfo) lee el
      * MISMO set de campos que manda la Pico; antes solo enviábamos 7 (y
      * "tempC" en vez de "tempMilliC") → el diálogo salía medio vacío.
-     * Valores del NUCLEO-U575ZI-Q: flash 2 MB (sufijo ZI), SRAM 768 KB,
-     * sin PSRAM. gpioCount=114 (I/Os del encapsulado de 144 pines);
-     * pio/pwmSlices/adcChannels son conceptos RP2350 → 0. tempMilliC=0
-     * (el diálogo oculta la línea; el sensor interno queda para más
-     * adelante). FLASH_SIZE real del registro por si montan otra variante. */
+     * Valores del NUCLEO-U575ZI-Q (datasheet DS13737): flash 2 MB (sufijo
+     * ZI), SRAM 768 KB, sin PSRAM. gpioCount=114 (I/Os del LQFP144).
+     * pioCount=0 (PIO es RP2350-only). pwmSlices=9: timers con salida PWM
+     * (TIM1/TIM8 avanzados + TIM2/3/4/5/15/16/17 GP; los 4 LPTIM aparte).
+     * adcChannels=20 (ADC1 14-bit, "up to 20 multiplexed channels"; hay
+     * además un ADC4 12-bit con 19 canales externos). Son datos del CHIP:
+     * los backends BP de Pwm/Adc en STM32 aún no están cableados (H9 doc).
+     * tempMilliC=0 (el diálogo oculta la línea; el sensor interno queda
+     * para más adelante). FLASH_SIZE real del registro por si montan otra
+     * variante. */
     uint32_t u0 = *(volatile uint32_t*) (UID_BASE + 0U);
     uint32_t u1 = *(volatile uint32_t*) (UID_BASE + 4U);
     uint32_t u2 = *(volatile uint32_t*) (UID_BASE + 8U);
@@ -81,7 +86,7 @@ static void handle_info(long id) {
         "\"uniqueId\":\"%08lX%08lX%08lX\","
         "\"boardName\":\"%s\",\"cpuFreqHz\":%lu,\"uptimeMs\":%lu,"
         "\"tempMilliC\":0,"
-        "\"gpioCount\":114,\"pioCount\":0,\"pwmSlices\":0,\"adcChannels\":0,"
+        "\"gpioCount\":114,\"pioCount\":0,\"pwmSlices\":9,\"adcChannels\":20,"
         "\"flashBytes\":%lu,\"sramBytes\":%lu,\"psramBytes\":0,"
         "\"fsTotalBytes\":%lu,\"fsUsedBytes\":%lu}",
         id, (unsigned long) u2, (unsigned long) u1, (unsigned long) u0,

@@ -70,6 +70,6 @@ public final class BpvmBackend extends AbstractBpvmBackend {
     }
 
     @Override public String log() throws IOException {
-        throw new IOException("LOG_DUMP no soportado en VM Java (solo Pico)");
+        throw new IOException("LOG_DUMP no soportado en VM Java (solo placa)");
     }
 }

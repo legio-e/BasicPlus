@@ -27,7 +27,7 @@ public final class SerialBackend extends AbstractBpvmBackend {
      *  lo dejamos a 115200 por inercia y para herramientas externas. */
     private static final int DEFAULT_BAUD = 115200;
 
-    @Override public String displayName() { return "Pico (serial v1)"; }
+    @Override public String displayName() { return "Placa (serial v1)"; }
 
     @Override protected void openTransport(String endpoint, BpvmClient c) throws IOException {
         c.connectSerial(endpoint, DEFAULT_BAUD);

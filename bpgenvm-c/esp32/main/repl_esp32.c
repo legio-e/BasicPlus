@@ -24,6 +24,9 @@
 #include "freertos/task.h"
 #include "esp_system.h"      /* esp_restart */
 #include "esp_timer.h"       /* uptime */
+#include "esp_mac.h"         /* INFO: uniqueId desde la MAC de efuse */
+#include "esp_flash.h"       /* INFO: tamaño real de la flash montada */
+#include "esp_heap_caps.h"   /* INFO: PSRAM mapeada (0 si el módulo no trae) */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -84,14 +87,40 @@ err:
 }
 
 static void handle_info(long id, const json_obj_t* obj) {
+    /* Mismo arreglo que en stm32_repl.c: el diálogo INFO del IDE
+     * (PicoExplorer.formatInfo) lee el set completo de campos; antes solo
+     * mandábamos 5 → diálogo medio vacío. Datos del CHIP ESP32-S3
+     * (datasheet): 45 GPIOs (0-21 y 26-48), sin PIO (el RMT no es
+     * comparable), PWM = 8 canales LEDC, ADC = 20 canales (ADC1+ADC2,
+     * GPIO1..20), SRAM interna 512 KB. Flash y PSRAM se miden en runtime
+     * (dependen del módulo montado). Los backends BP de Pwm/Adc en ESP32
+     * aún no están cableados (solo GPIO) — esto describe el hardware.
+     * tempMilliC=0: el diálogo oculta la línea (sensor interno, futuro). */
     (void) obj;
     long uptime  = (long)(esp_timer_get_time() / 1000LL);
     long fsTotal = (long) fs_total_bytes();
     long fsUsed  = (long) fs_used_bytes();
+    uint8_t mac[6] = {0};
+    esp_efuse_mac_get_default(mac);
+    char uid[16];
+    snprintf(uid, sizeof(uid), "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    uint32_t flash_bytes = 0;
+    if (esp_flash_get_size(NULL, &flash_bytes) != ESP_OK) flash_bytes = 0;
+    long psram_bytes = (long) heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
     int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "INFO_REPLY", id);
     if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "boardName", "esp32s3");
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "uniqueId", uid);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "cpuFreqHz", 240000000L);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "uptimeMs", uptime);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "tempMilliC", 0);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "gpioCount", 45);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "pioCount", 0);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "pwmSlices", 8);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "adcChannels", 20);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "flashBytes", (long) flash_bytes);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "sramBytes", 512L * 1024L);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "psramBytes", psram_bytes);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fsTotalBytes", fsTotal);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fsUsedBytes", fsUsed);
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);

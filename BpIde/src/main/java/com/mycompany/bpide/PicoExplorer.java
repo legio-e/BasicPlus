@@ -810,11 +810,11 @@ public final class PicoExplorer extends JPanel {
     }
 
     private TreePath keyToTreePath(String key) {
-        // key es del estilo "/Pico/lib/Math.mod" — descender desde root.
+        // key es del estilo "/Placa/lib/Math.mod" — descender desde root.
         String[] segs = key.split("/");
         DefaultMutableTreeNode cur = rootNode;
         TreePath tp = new TreePath(cur);
-        // segs[0] = "", segs[1] = "Pico" (root), segs[2..] = niños.
+        // segs[0] = "", segs[1] = label del root, segs[2..] = niños.
         for (int i = 2; i < segs.length; i++) {
             DefaultMutableTreeNode next = findChildByLabel(cur, segs[i]);
             if (next == null) return null;
