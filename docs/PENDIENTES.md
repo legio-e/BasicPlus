@@ -533,6 +533,18 @@ Análisis (2026-06-11):
   ya devuelve `boardName` (+ variant/flash/psram) → mapear contra el árbol
   micros/ y ofrecer "detectado: Pico2 (rp2350A) — ¿usar como target del
   proyecto?". Gratis sobre lo que ya existe.
+- **Por qué imagen única — el caso de uso que la justifica** (Eduardo,
+  2026-06-11): el precio es conocido (sin fichero de config la imagen asume
+  el perfil conservador y desaprovecha recursos de la placa); la ventaja
+  que lo paga: *prototipas en una placa de evaluación (p. ej. un Nucleo
+  STM32 cuyo micro no es exactamente el que quieres), lo pruebas TODO, y
+  cuando fabricas tu propia placa con el micro que querías, todo funciona
+  — misma imagen, misma serie, solo cambia el fichero de config de placa.*
+  El salto eval-board → PCB propia se vuelve trivial. La lección técnica
+  del RP2350 (2026-06-11) aplica a toda familia: las decisiones por
+  variante van en RUNTIME contra el board_desc/config, nunca con macros de
+  compile-time del SDK/HAL (en la imagen genérica compilan para un solo
+  package y rompen el resto en silencio).
 Tarea grande — trocear cuando se retome (¿v2 post-cierre?).
 
 #### N-ide-new-file — File → New en el IDE (pendiente, H12)
