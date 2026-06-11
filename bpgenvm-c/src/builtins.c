@@ -45,6 +45,10 @@ enum {
     BUILTIN_WRITE_FILE      = 39,
     BUILTIN_APPEND_FILE     = 40,
     BUILTIN_FILE_EXISTS     = 41,
+    /* #240 (logger) — gestión de ficheros via IO.bp. */
+    BUILTIN_REMOVE_FILE     = 71,
+    BUILTIN_RENAME          = 72,
+    BUILTIN_FILE_SIZE       = 74,
     BUILTIN_NOW             = 34,
     BUILTIN_SLEEP           = 35,
     BUILTIN_GC              = 43,
@@ -294,6 +298,54 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         push_i32(vm, tc, bpvm_fs_exists(path) ? 1 : 0);
+        return BPVM_OK;
+    }
+
+    /* #240 (logger) — gestión de ficheros (IO.removeFile/rename/fileSize).
+     * Mismos contratos que la VM-Java; backend sin la op → RuntimeError
+     * atrapable (los firmwares la añaden en su próximo build). */
+    case BUILTIN_REMOVE_FILE: {
+        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        char path[512];
+        read_bp_string(vm, pref, path, sizeof(path));
+        if (bpvm_fs_remove(path) != 0) {
+            char em[576];
+            snprintf(em, sizeof(em), "removeFile('%s'): error al borrar", path);
+            return builtin_throw(vm, tc, em);
+        }
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_RENAME: {
+        uint32_t tref = (uint32_t) pop_i32(vm, tc);   /* to (empujado el último) */
+        uint32_t fref = (uint32_t) pop_i32(vm, tc);   /* from */
+        char from[512], to[512];
+        read_bp_string(vm, fref, from, sizeof(from));
+        read_bp_string(vm, tref, to, sizeof(to));
+        if (bpvm_fs_rename(from, to) != 0) {
+            char em[1100];
+            snprintf(em, sizeof(em), "rename('%s' -> '%s'): error al renombrar", from, to);
+            return builtin_throw(vm, tc, em);
+        }
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_FILE_SIZE: {
+        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        char path[512];
+        read_bp_string(vm, pref, path, sizeof(path));
+        uint32_t sz = 0;
+        if (bpvm_fs_stat(path, &sz) != 0) {
+            char em[576];
+            snprintf(em, sizeof(em), "fileSize('%s'): no se pudo leer el tamaño", path);
+            return builtin_throw(vm, tc, em);
+        }
+        if (sz > 0x7FFFFFFFu) {
+            char em[576];
+            snprintf(em, sizeof(em), "fileSize('%s'): tamaño > 2GB no representable en integer", path);
+            return builtin_throw(vm, tc, em);
+        }
+        push_i32(vm, tc, (int32_t) sz);
         return BPVM_OK;
     }
 

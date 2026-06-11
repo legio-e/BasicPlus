@@ -1,0 +1,154 @@
+dbg 3
+module Log
+source C:\lenguajes\pm\bpstdlib\Log.bp
+lines
+1488 54
+1521 62
+1530 63
+1536 64
+1544 65
+1563 70
+1579 75
+1595 80
+1611 86
+1627 91
+1643 97
+1672 101
+1701 105
+1730 109
+1759 115
+1771 116
+1781 119
+1811 120
+1819 121
+1857 124
+1866 125
+1874 126
+1884 128
+1892 129
+1901 130
+1921 131
+1950 135
+1958 136
+2008 139
+2027 146
+2038 147
+2057 148
+vars
+func Object.toString 0
+this -16 4 0 ?
+func Object.compareTo 25
+this -20 4 0 ?
+other -16 4 0 ?
+func List.add 41
+this -20 4 0 ?
+item -16 4 0 ?
+func List.get 131
+this -20 4 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func List.length 173
+this -16 4 0 ?
+func List.remove 189
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 295
+this -16 4 0 ?
+func OwnerList.removeAndFree 338
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 468
+this -16 4 0 ?
+func StringBuilder.appendChar 489
+this -20 4 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 579
+this -20 4 0 ?
+s -16 4 0 ?
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 650
+this -20 4 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 675
+this -16 4 0 ?
+func StringBuilder.length 699
+this -16 4 0 ?
+func StringBuilder.__init 715
+this -16 4 0 ?
+func Thread.run 756
+this -16 4 0 ?
+func Thread.start 766
+this -16 4 0 ?
+func Thread.join 785
+this -16 4 0 ?
+func Thread.__init 804
+this -20 4 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 832
+this -16 4 0 ?
+func Mutex.unlock 851
+this -16 4 0 ?
+func Mutex.__init 870
+this -16 4 0 ?
+func SyncList.add 888
+this -20 4 0 ?
+item -16 4 0 ?
+func SyncList.remove 934
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.get 980
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.set 1024
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func SyncList.length 1073
+this -16 4 0 ?
+func SyncList.pop 1114
+this -16 4 0 ?
+func SyncList.popBlocking 1225
+this -16 4 0 ?
+func SyncList.__init 1352
+this -16 4 0 ?
+func setFile 1518
+p -16 4 0 string
+func setLevel 1560
+n -16 4 0 integer
+func setConsole 1576
+b -16 4 0 boolean
+func setFileEnabled 1592
+b -16 4 0 boolean
+func setTimestamp 1608
+b -16 4 0 boolean
+func setMaxSize 1624
+n -16 4 0 integer
+func debug 1640
+msg -16 4 0 string
+func info 1669
+msg -16 4 0 string
+func warn 1698
+msg -16 4 0 string
+func error 1727
+msg -16 4 0 string
+func escribe 1756
+nivel -24 4 0 integer
+etiqueta -20 4 0 string
+msg -16 4 0 string
+linea 0 4 0 string
+e 8 4 0 ?
+func rotaSiHaceFalta 2024
+entrante -16 4 0 integer
+func __strconcat 2094
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 4 0 ?
+i 12 4 0 ?

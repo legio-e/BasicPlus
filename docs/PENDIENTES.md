@@ -504,6 +504,29 @@ paridad-sensible.
 
 ## ✅ Cerrado en sesiones recientes — anotaciones
 
+### #240 (parcial) — Log.bp: logger de aplicación ✅ (2026-06-11)
+
+`bpstdlib/Log.bp`, BP puro sobre los builtins de file I/O (#247). Niveles
+DEBUG/INFO/WARN/ERROR (consts inlinadas), salida a consola y/o fichero,
+rotación por tamaño a `<ruta>.old`, thread-safe (Mutex de módulo), y a prueba
+de fallos: si el append al fichero falla (FS lleno, op no soportada en un
+firmware viejo...), avisa UNA vez y degrada a solo-consola — un logger nunca
+tumba la aplicación. Sin timestamps por defecto (salida determinista para la
+paridad); `setTimestamp(true)` añade uptime en ms.
+
+Por debajo hubo que completar el subconjunto VM-C: builtins REMOVE_FILE (71),
+RENAME (72) y FILE_SIZE (74) sobre la facade del FS (`bpvm_fs_remove/rename`,
+slots nuevos AL FINAL del backend struct — los backends viejos compilan sin
+tocar). Host completo; backends de los TRES firmwares actualizados en fuente
+(pico get+put+del con scratch; stm32 ídem; esp32 con fs_delete) → los recoge
+el próximo build/reflash de cada placa. En un firmware sin reflashear, la
+rotación falla limpio y el logger degrada (por diseño).
+
+Sample + paridad byte-idéntica: `samples/LogTest.bp` (incluye volcado del
+fichero por stdout para que el diff verifique también lo escrito).
+**Falta de #240**: revisar el resto de la stdlib (2ª pasada de ajuste) — el
+logger era la pieza grande que esperaba al file I/O.
+
 ### L8 v2 — inits de módulo HORNEADOS en el data block + const arreglada + array de tamaño fijo ✅ (2026-06-10, tarea #255)
 
 Tres piezas con la misma maquinaria (el .mod NO cambia de formato; las VMs NO

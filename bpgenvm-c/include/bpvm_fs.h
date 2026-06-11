@@ -29,6 +29,14 @@ typedef struct {
     long (*read)(const char* path, uint8_t* dst, uint32_t cap);
     /* escribe `len` bytes; append!=0 → al final (crea si no existe). 0 / -1. */
     int  (*write)(const char* path, const uint8_t* data, uint32_t len, int append);
+    /* #240 — ops opcionales (NULL → el builtin lanza "no soportado" limpio).
+     * Campos AL FINAL: los backends existentes usan designated initializers
+     * y los dejan a NULL sin tocarse. */
+    /* borra el fichero. 0 / -1. */
+    int  (*remove)(const char* path);
+    /* renombra/mueve; si `to` existe lo SOBREESCRIBE (semántica de la VM-Java:
+     * REPLACE_EXISTING). 0 / -1. */
+    int  (*rename)(const char* from, const char* to);
 } bpvm_fs_backend_t;
 
 /* Registra el backend (una vez al boot). */
@@ -39,6 +47,8 @@ int  bpvm_fs_stat  (const char* path, uint32_t* size);
 long bpvm_fs_read  (const char* path, uint8_t* dst, uint32_t cap);
 int  bpvm_fs_write (const char* path, const uint8_t* data, uint32_t len, int append);
 int  bpvm_fs_exists(const char* path);   /* 1 / 0 */
+int  bpvm_fs_remove(const char* path);                    /* #240: 0 / -1 */
+int  bpvm_fs_rename(const char* from, const char* to);    /* #240: 0 / -1 */
 
 /* Backend host (libc). Implementado en fs_host.c (host-only); el firmware
  * registra el suyo (fs_get/fs_put). */

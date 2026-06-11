@@ -1,0 +1,153 @@
+// ============================================================
+// Log.bp — logger de aplicación para BP (#240 H10).
+//
+// Registro de incidencias a consola y/o fichero, con niveles y
+// rotación simple por tamaño. BP puro sobre los builtins de file
+// I/O (#247): funciona igual en el PC (ambas VMs) y en las placas
+// (el fichero persiste en el FS de flash del micro).
+//
+// Uso típico:
+//   import Log
+//   Log.setFile("app.log")        // opcional (default: app.log)
+//   Log.setLevel(Log.DEBUG)       // opcional (default: INFO)
+//   Log.info("arranque ok")
+//   Log.error("sensor no responde: " + intToString(code))
+//
+// Decisiones:
+//   - Sin timestamps por defecto (salida determinista — la paridad
+//     dual-VM se verifica con diff). setTimestamp(true) añade el
+//     uptime en ms via now(); para hora real, componla en el mensaje
+//     con Rtc.Clock.
+//   - Si una escritura al fichero falla (FS lleno, sin FS...), el
+//     logger avisa UNA vez por consola y sigue solo a consola: un
+//     logger nunca debe tumbar la aplicación.
+//   - Rotación: si el fichero superaría maxBytes, se renombra a
+//     <ruta>.old (sobreescribiendo el .old anterior) y se empieza
+//     limpio. Dos ficheros como mucho — pensado para flash pequeña.
+//   - Thread-safe: un Mutex de módulo serializa las escrituras.
+//
+// Nota de rendimiento en placa: cada append persiste a flash (en la
+// Pico ~50 ms con el FS actual). Para registrar a alta frecuencia,
+// sube maxBytes y registra solo lo importante.
+// ============================================================
+module Log
+  import IO
+
+  // Niveles (de menos a más severo). Se inlinan en cada uso (L8 v2).
+  public const DEBUG := 0
+  public const INFO  := 1
+  public const WARN  := 2
+  public const ERROR := 3
+
+  // Configuración (defaults horneados en el data block — L8 v2).
+  var nivelMin: integer := 1          // INFO
+  var ruta: string := "app.log"
+  var aConsola: boolean := true
+  var aFichero: boolean := true
+  var conTiempo: boolean := false
+  var maxBytes: integer := 16384
+
+  var mtx: Mutex
+
+  // Initializer del módulo (lo llama __init una sola vez).
+  function Log()
+    mtx := Mutex()
+  end Log
+
+  // ---- Configuración ----
+
+  // Fichero destino. Reactiva el fichero si se había desactivado
+  // (por setFileEnabled(false) o por un fallo de escritura).
+  public function setFile(p: string)
+    mtx.lock()
+    ruta := p
+    aFichero := true
+    mtx.unlock()
+  end setFile
+
+  // Nivel mínimo que se registra (Log.DEBUG .. Log.ERROR).
+  public function setLevel(n: integer)
+    nivelMin := n
+  end setLevel
+
+  // Activa/desactiva la copia por consola (print). Default: on.
+  public function setConsole(b: boolean)
+    aConsola := b
+  end setConsole
+
+  // Activa/desactiva la escritura a fichero. Default: on.
+  public function setFileEnabled(b: boolean)
+    aFichero := b
+  end setFileEnabled
+
+  // Prefija cada línea con el uptime en ms (now()). Default: off
+  // (mantiene la salida determinista).
+  public function setTimestamp(b: boolean)
+    conTiempo := b
+  end setTimestamp
+
+  // Tamaño máximo del fichero antes de rotar a <ruta>.old.
+  public function setMaxSize(n: integer)
+    maxBytes := n
+  end setMaxSize
+
+  // ---- Registro ----
+
+  public function debug(msg: string)
+    escribe(0, "DEBUG", msg)
+  end debug
+
+  public function info(msg: string)
+    escribe(1, "INFO ", msg)
+  end info
+
+  public function warn(msg: string)
+    escribe(2, "WARN ", msg)
+  end warn
+
+  public function error(msg: string)
+    escribe(3, "ERROR", msg)
+  end error
+
+  // ---- Implementación ----
+
+  function escribe(nivel: integer, etiqueta: string, msg: string)
+    if nivel < nivelMin then
+      return
+    endif
+
+    var linea: string := "[" + etiqueta + "] " + msg
+    if conTiempo then
+      linea := "[" + intToString(now()) + "ms] " + linea
+    endif
+
+    mtx.lock()
+    if aConsola then
+      print linea
+    endif
+    if aFichero then
+      try
+        rotaSiHaceFalta(strlen(linea) + 1)
+        appendFile(ruta, linea + "\n")
+      catch e: RuntimeError
+        // FS lleno, sin soporte, ruta inválida... — avisa una vez y
+        // degrada a solo-consola. setFile() lo reactiva.
+        aFichero := false
+        print "[Log] no se pudo escribir '" + ruta + "' (" + e.msg + "); sigo solo por consola"
+      endtry
+    endif
+    mtx.unlock()
+  end escribe
+
+  // Rotación: si el fichero + la línea entrante supera maxBytes,
+  // renombra a <ruta>.old (machacando el .old anterior) y empieza
+  // limpio. Llamar con mtx tomado.
+  function rotaSiHaceFalta(entrante: integer)
+    if fileExists(ruta) then
+      if IO.fileSize(ruta) + entrante > maxBytes then
+        IO.rename(ruta, ruta + ".old")
+      endif
+    endif
+  end rotaSiHaceFalta
+
+end Log

@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module IO
 func pathJoin(a:string,b:string):string public intrinsic
 func pathParent(p:string):string public intrinsic

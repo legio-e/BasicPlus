@@ -1,0 +1,77 @@
+// LogTest.bp — #240: ejercita el módulo Log (niveles, filtro, fichero,
+// rotación, degradación) con salida DETERMINISTA (sin timestamps).
+//
+// Paridad esperada: VM-Java == VM-C byte a byte, incluido el volcado del
+// fichero por stdout (readFile) — así el diff de stdout verifica también
+// el contenido escrito en el FS.
+
+module LogTest
+  import IO
+  import Log
+
+  function Main()
+    // Estado limpio (puede quedar de una ejecución anterior).
+    if fileExists("logtest.log") then
+      IO.removeFile("logtest.log")
+    endif
+    if fileExists("logtest.log.old") then
+      IO.removeFile("logtest.log.old")
+    endif
+
+    Log.setFile("logtest.log")
+
+    // 1) Niveles y filtro (default INFO: debug no sale).
+    Log.debug("esto NO debe verse (nivel default INFO)")
+    Log.info("arranque ok")
+    Log.warn("temperatura alta: " + intToString(81))
+    Log.error("sensor 3 no responde")
+
+    Log.setLevel(Log.DEBUG)
+    Log.debug("ahora si se ve el debug")
+
+    Log.setLevel(Log.WARN)
+    Log.info("filtrada: NO debe verse")
+    Log.warn("esta si pasa el filtro WARN")
+
+    // 2) Solo a fichero (consola off).
+    Log.setConsole(false)
+    Log.setLevel(Log.INFO)
+    Log.info("solo al fichero, sin eco en consola")
+    Log.setConsole(true)
+
+    // 3) Volcado del fichero: el diff de stdout verifica el contenido.
+    print "---- contenido de logtest.log ----"
+    print readFile("logtest.log")
+    print "----"
+
+    // 4) Rotación: con maxBytes minúsculo, la siguiente línea rota.
+    Log.setMaxSize(40)
+    Log.setConsole(false)
+    Log.info("linea que fuerza la rotacion del fichero")
+    Log.setConsole(true)
+    print "rotado (.old existe) = " + boolToString(fileExists("logtest.log.old"))
+    print "nuevo log = [" + readFile("logtest.log") + "]"
+
+    print "fin"
+  end Main
+end LogTest
+
+// Salida esperada (ambas VMs, byte a byte):
+//   [INFO ] arranque ok
+//   [WARN ] temperatura alta: 81
+//   [ERROR] sensor 3 no responde
+//   [DEBUG] ahora si se ve el debug
+//   [WARN ] esta si pasa el filtro WARN
+//   ---- contenido de logtest.log ----
+//   [INFO ] arranque ok
+//   [WARN ] temperatura alta: 81
+//   [ERROR] sensor 3 no responde
+//   [DEBUG] ahora si se ve el debug
+//   [WARN ] esta si pasa el filtro WARN
+//   [INFO ] solo al fichero, sin eco en consola
+//
+//   ----
+//   rotado (.old existe) = true
+//   nuevo log = [[INFO ] linea que fuerza la rotacion del fichero
+//   ]
+//   fin

@@ -387,10 +387,32 @@ static int pico_bpfs_write(const char* path, const uint8_t* data, uint32_t len, 
     return 0;
 }
 
+/* #240 (logger) — borrado y rename (rotación del log). rename = get+put+del
+ * sobre el scratch (el FS no tiene rename nativo); sobreescribe el destino,
+ * como la VM-Java (REPLACE_EXISTING). */
+static int pico_bpfs_remove(const char* path) {
+    if (fs_del(path) != FS_OK) return -1;
+    fs_save_to_flash();
+    return 0;
+}
+
+static int pico_bpfs_rename(const char* from, const char* to) {
+    const uint8_t* d; uint32_t sz;
+    if (fs_get(from, &d, &sz) != FS_OK) return -1;
+    if (sz > FS_BP_SCRATCH) return -1;
+    memcpy(s_bpfs_scratch, d, sz);            /* copia ANTES de fs_put */
+    if (fs_put(to, s_bpfs_scratch, sz) != FS_OK) return -1;
+    fs_del(from);
+    fs_save_to_flash();
+    return 0;
+}
+
 static const bpvm_fs_backend_t s_pico_fs_backend = {
-    .stat  = pico_bpfs_stat,
-    .read  = pico_bpfs_read,
-    .write = pico_bpfs_write,
+    .stat   = pico_bpfs_stat,
+    .read   = pico_bpfs_read,
+    .write  = pico_bpfs_write,
+    .remove = pico_bpfs_remove,
+    .rename = pico_bpfs_rename,
 };
 
 void fs_register_bpvm(void) {

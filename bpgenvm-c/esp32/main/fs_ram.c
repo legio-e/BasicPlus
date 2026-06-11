@@ -280,10 +280,29 @@ static int esp32_bpfs_write(const char* path, const uint8_t* data, uint32_t len,
     return 0;
 }
 
+/* #240 (logger) — borrado y rename (rotación del log). rename = get+put+delete
+ * sobre el scratch (el FS no tiene rename nativo); sobreescribe el destino,
+ * como la VM-Java (REPLACE_EXISTING). fs_delete/fs_put ya auto-persisten. */
+static int esp32_bpfs_remove(const char* path) {
+    return (fs_delete(path) == FS_OK) ? 0 : -1;
+}
+
+static int esp32_bpfs_rename(const char* from, const char* to) {
+    const uint8_t* d; uint32_t sz;
+    if (fs_get(from, &d, &sz) != FS_OK) return -1;
+    if (sz > FS_BP_SCRATCH) return -1;
+    memcpy(s_bpfs_scratch, d, sz);            /* copia ANTES de fs_put */
+    if (fs_put(to, s_bpfs_scratch, sz) != FS_OK) return -1;
+    fs_delete(from);
+    return 0;
+}
+
 static const bpvm_fs_backend_t s_esp32_fs_backend = {
-    .stat  = esp32_bpfs_stat,
-    .read  = esp32_bpfs_read,
-    .write = esp32_bpfs_write,
+    .stat   = esp32_bpfs_stat,
+    .read   = esp32_bpfs_read,
+    .write  = esp32_bpfs_write,
+    .remove = esp32_bpfs_remove,
+    .rename = esp32_bpfs_rename,
 };
 
 void fs_register_bpvm(void) {

@@ -32,3 +32,14 @@ int bpvm_fs_exists(const char* path) {
     uint32_t sz = 0;
     return (bpvm_fs_stat(path, &sz) == 0) ? 1 : 0;
 }
+
+/* #240 — ops opcionales del backend (logger: rotación y limpieza). */
+int bpvm_fs_remove(const char* path) {
+    if (g_fs && g_fs->remove) return g_fs->remove(path);
+    return -1;
+}
+
+int bpvm_fs_rename(const char* from, const char* to) {
+    if (g_fs && g_fs->rename) return g_fs->rename(from, to);
+    return -1;
+}

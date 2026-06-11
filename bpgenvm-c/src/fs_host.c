@@ -38,10 +38,26 @@ static int host_write(const char* path, const uint8_t* data, uint32_t len, int a
     return 0;
 }
 
+/* #240 — borrado y rename para el logger (rotación y limpieza). */
+static int host_remove(const char* path) {
+    return (remove(path) == 0) ? 0 : -1;
+}
+
+static int host_rename(const char* from, const char* to) {
+    /* Semántica de la VM-Java (REPLACE_EXISTING): en Windows rename() falla
+     * si el destino existe — lo borramos antes (en POSIX rename ya
+     * sobreescribe y el remove previo es inocuo). */
+    FILE* f = fopen(to, "rb");
+    if (f) { fclose(f); remove(to); }
+    return (rename(from, to) == 0) ? 0 : -1;
+}
+
 static const bpvm_fs_backend_t s_host_fs = {
-    .stat  = host_stat,
-    .read  = host_read,
-    .write = host_write,
+    .stat   = host_stat,
+    .read   = host_read,
+    .write  = host_write,
+    .remove = host_remove,
+    .rename = host_rename,
 };
 
 void bpvm_fs_register_host(void) {

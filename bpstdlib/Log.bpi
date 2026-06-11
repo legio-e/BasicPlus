@@ -1,0 +1,24 @@
+bpi 7
+module Log
+func error(msg:string):void public
+func setMaxSize(n:integer):void public
+func setLevel(n:integer):void public
+func setFileEnabled(b:boolean):void public
+func setTimestamp(b:boolean):void public
+func info(msg:string):void public
+func setConsole(b:boolean):void public
+func debug(msg:string):void public
+func warn(msg:string):void public
+func setFile(p:string):void public
+const INFO:integer=1 public
+const ERROR:integer=3 public
+const DEBUG:integer=0 public
+const WARN:integer=2 public
+class RuntimeError public extends Core.Exception
+  layout 1 4 00000001 00000000
+  ctor(m:string)
+end class
+class Exception public
+  layout 1 4 00000001 00000000
+  ctor(m:string)
+end class
