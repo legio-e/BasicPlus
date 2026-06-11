@@ -74,6 +74,7 @@ BpIde/.bpide-prefs
 # Build artefacts del firmware Pico y de bpgenvm-c
 # ============================================================
 bpgenvm-c/pico/build/
+bpgenvm-c/pico/build-pico2/
 bpgenvm-c/pico/mdn_build/
 bpgenvm-c/build/
 bpgenvm-c/samples/*.mod

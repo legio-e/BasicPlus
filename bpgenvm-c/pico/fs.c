@@ -391,7 +391,7 @@ static int pico_bpfs_write(const char* path, const uint8_t* data, uint32_t len, 
  * sobre el scratch (el FS no tiene rename nativo); sobreescribe el destino,
  * como la VM-Java (REPLACE_EXISTING). */
 static int pico_bpfs_remove(const char* path) {
-    if (fs_del(path) != FS_OK) return -1;
+    if (fs_delete(path) != FS_OK) return -1;
     fs_save_to_flash();
     return 0;
 }
@@ -402,7 +402,7 @@ static int pico_bpfs_rename(const char* from, const char* to) {
     if (sz > FS_BP_SCRATCH) return -1;
     memcpy(s_bpfs_scratch, d, sz);            /* copia ANTES de fs_put */
     if (fs_put(to, s_bpfs_scratch, sz) != FS_OK) return -1;
-    fs_del(from);
+    fs_delete(from);
     fs_save_to_flash();
     return 0;
 }
