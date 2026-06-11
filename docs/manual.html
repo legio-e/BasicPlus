@@ -1069,7 +1069,19 @@ nums[<span class="num">0</span>] := <span class="num">42</span>
   <li><code>finally</code> se ejecuta siempre (con o sin excepción).</li>
   <li><code>throw expr</code> lanza el valor. Si es una clase, su class_ptr
       se usa para el match de <code>catch</code> tipado.</li>
-  <li><code>RuntimeError</code> está siempre disponible (la sintetiza el emisor).</li>
+  <li>Todas las excepciones descienden de <code>Exception</code> (con su
+      property <code>msg</code>), que vive en el módulo estándar <code>Core</code>
+      junto a <code>RuntimeError</code>. El <code>import Core</code> es IMPLÍCITO:
+      basta usar <code>try</code>/<code>throw</code> o nombrar
+      <code>Exception</code>/<code>RuntimeError</code> para tenerlos disponibles.</li>
+  <li>Una excepción de usuario es una clase que extiende
+      <code>Exception</code> (hereda <code>msg</code>; añade los campos que
+      quieras). <code>throw</code> y el <code>catch</code> tipado exigen clases
+      que desciendan de <code>Exception</code>.</li>
+  <li>Los errores nativos de la VM (división por cero, referencia nula,
+      índice fuera de rango, fallos en funciones <code>native</code>...) se
+      lanzan como <code>RuntimeError</code> y se cazan igual, da igual el módulo
+      donde ocurran.</li>
   <li>Una excepción no atrapada termina la VM mostrando un stack trace
       con el nombre simbólico de cada frame.</li>
 </ul>
