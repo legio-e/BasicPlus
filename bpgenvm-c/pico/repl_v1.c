@@ -699,8 +699,11 @@ static void handle_info(long id, const json_obj_t* obj) {
                                              (size_t) off, "gpioCount", bd->gpio_count);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "pioCount", bd->pio_count);
+    /* PWM en SALIDAS, no slices: cada slice tiene 2 canales (A/B) → 24
+     * en RP2350, que es la cifra que anuncian las placas. El campo del
+     * wire conserva el nombre histórico "pwmSlices". */
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "pwmSlices", bd->pwm_slices);
+                                             (size_t) off, "pwmSlices", bd->pwm_slices * 2);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "adcChannels", bd->adc_channels);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),

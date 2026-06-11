@@ -440,7 +440,11 @@ static const bpvm_pwm_backend_t s_pico_pwm_backend = {
  * Identificación: pico_get_unique_board_id_string() escribe los
  *   8 bytes del flash chip ID como string ASCII de 16 hex chars.
  *
- * Temperatura interna: ADC canal 4 conectado al sensor del die.
+ * Temperatura interna: el sensor del die va al ÚLTIMO canal del ADC
+ *   (ADC_TEMPERATURE_CHANNEL_NUM del SDK): input 4 en RP2350A (QFN-60)
+ *   pero input 8 en RP2350B (QFN-80), donde los inputs 0-7 son los
+ *   GPIO40-47. Con el 4 hardcodeado, en el Metro se leía el GPIO44
+ *   flotante y salían "grados" absurdos.
  *   Fórmula de conversión del datasheet:
  *     T_C = 27 - (V_ADC - 0.706) / 0.001721
  *   donde V_ADC = raw * 3.3 / 4095.
@@ -493,7 +497,8 @@ static void pico_pico_board_name_impl(char* buf, size_t len) {
 
 static float pico_pico_temp_c_impl(void) {
     ensure_adc_inited();
-    adc_select_input(4);   /* canal 4 = sensor de temperatura */
+    /* Último canal = sensor del die (4 en RP2350A, 8 en RP2350B). */
+    adc_select_input(ADC_TEMPERATURE_CHANNEL_NUM);
     /* Promediamos 8 muestras para reducir ruido del ADC. */
     uint32_t acc = 0;
     for (int i = 0; i < 8; i++) acc += adc_read();
@@ -602,25 +607,32 @@ static const bpvm_pico_backend_t s_pico_pico_backend = {
 #include "bpvm_adc.h"
 #include "hardware/adc.h"   /* ya incluido para tempC pero idempotente */
 
-static int s_adc_chan_inited[4] = { 0, 0, 0, 0 };   /* CH0..CH3 */
+/* Canales ADC externos según variante (el último canal del mux es el
+ * sensor de temperatura): RP2350A = 4 (GPIO26-29), RP2350B = 8
+ * (GPIO40-47). ADC_BASE_PIN y NUM_ADC_CHANNELS los define el SDK por
+ * variante — con el 26 hardcodeado, en el Metro (B) se configuraba un
+ * GPIO digital y se leía otro pin. Adc.bp sigue limitando a 0..3 en BP
+ * (subset común a ambas variantes; ampliarlo a 8 queda anotado). */
+#define ADC_EXT_CHANNELS ((int) NUM_ADC_CHANNELS - 1)
+static int s_adc_chan_inited[8] = { 0 };   /* máx. externos (RP2350B) */
 
 static int pico_adc_init_channel_impl(int ch) {
-    if (ch < 0 || ch > 3) return -1;
+    if (ch < 0 || ch >= ADC_EXT_CHANNELS) return -1;
     if (!s_adc_chan_inited[ch]) {
         /* ensure_adc_inited() (más arriba) ya hace adc_init() la
          * primera vez que tempC se usa. Lo replicamos aquí por si
          * Adc.Channel se usa SIN haber tocado Pico.tempC antes. El
          * SDK es idempotente. */
         ensure_adc_inited();
-        adc_gpio_init(26 + ch);   /* CH0=GP26, CH1=GP27, CH2=GP28, CH3=GP29 */
+        adc_gpio_init((uint) ADC_BASE_PIN + (uint) ch);
         s_adc_chan_inited[ch] = 1;
     }
-    return 26 + ch;
+    return (int) ADC_BASE_PIN + ch;
 }
 
 static int pico_adc_read_channel_impl(int ch) {
-    if (ch < 0 || ch > 3) return -1;
-    adc_select_input(ch);
+    if (ch < 0 || ch >= ADC_EXT_CHANNELS) return -1;
+    adc_select_input((uint) ch);
     return (int) adc_read();
 }
 

@@ -68,8 +68,10 @@ static void handle_info(long id) {
      * "tempC" en vez de "tempMilliC") → el diálogo salía medio vacío.
      * Valores del NUCLEO-U575ZI-Q (datasheet DS13737): flash 2 MB (sufijo
      * ZI), SRAM 768 KB, sin PSRAM. gpioCount=114 (I/Os del LQFP144).
-     * pioCount=0 (PIO es RP2350-only). pwmSlices=9: timers con salida PWM
-     * (TIM1/TIM8 avanzados + TIM2/3/4/5/15/16/17 GP; los 4 LPTIM aparte).
+     * pioCount=0 (PIO es RP2350-only). pwmSlices=28 — el campo lleva
+     * SALIDAS PWM, como en los otros ports (Pico 24, ESP32 8): TIM1/TIM8
+     * avanzados (4+4) + TIM2/3/4/5 GP (4×4) + TIM15 (2) + TIM16/17 (1+1),
+     * sin contar complementarias ni los 4 LPTIM.
      * adcChannels=20 (ADC1 14-bit, "up to 20 multiplexed channels"; hay
      * además un ADC4 12-bit con 19 canales externos). Son datos del CHIP:
      * los backends BP de Pwm/Adc en STM32 aún no están cableados (H9 doc).
@@ -86,7 +88,7 @@ static void handle_info(long id) {
         "\"uniqueId\":\"%08lX%08lX%08lX\","
         "\"boardName\":\"%s\",\"cpuFreqHz\":%lu,\"uptimeMs\":%lu,"
         "\"tempMilliC\":0,"
-        "\"gpioCount\":114,\"pioCount\":0,\"pwmSlices\":9,\"adcChannels\":20,"
+        "\"gpioCount\":114,\"pioCount\":0,\"pwmSlices\":28,\"adcChannels\":20,"
         "\"flashBytes\":%lu,\"sramBytes\":%lu,\"psramBytes\":0,"
         "\"fsTotalBytes\":%lu,\"fsUsedBytes\":%lu}",
         id, (unsigned long) u2, (unsigned long) u1, (unsigned long) u0,

@@ -598,6 +598,16 @@ Notas de diseño:
 - IDE: botón Stop en toolbar/menú activo durante Run on device (y Run
   local); BpvmClient/SerialBackend envían el comando.
 
+#### P-adc-8ch — Adc.bp limitado a 4 canales en placas RP2350B (pendiente, 2026-06-11)
+Al arreglar el INFO del Metro (temp en canal equivocado, ADC base pin) quedó
+esto: el backend C ya es variante-aware (`ADC_BASE_PIN`/`NUM_ADC_CHANNELS`
+del SDK: A = 4 canales GPIO26-29, B = 8 canales GPIO40-47), pero **Adc.bp
+valida `0..3` en BP** — subset común y correcto en ambas variantes, pero en
+una RP2350B los canales 4-7 quedan inaccesibles desde BP. Ampliar requiere
+exponer el nº de canales por placa (p. ej. `Pico.adcChannels()` intrínseco,
+como `gpioCount()` de H7.3) y validar contra eso. Pequeño; encaja con
+M-micros-tree (#258, datos por placa).
+
 ---
 
 ## ✅ Cerrado en sesiones recientes — anotaciones
