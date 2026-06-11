@@ -15,7 +15,12 @@ Estado: `pendiente` / `parcial` / `cerrado` / `descartado`.
 
 ## 🔴 Bugs en curso (afectan corrección)
 
-### B1 — VM scheduler / GC race bajo contención (parcial, mejor pass-rate)
+> **Estado 2026-06-12**: NO quedan bugs de corrección abiertos. B1 quedó
+> caracterizado y mitigado (VM-Java a 1 worker por defecto, #235 — match
+> con el device single-core); el dual-core RP2350 es v2 (#153, con SWD).
+> Las entradas siguientes se conservan como historial de la investigación.
+
+### B1 — VM scheduler / GC race bajo contención (caracterizado + mitigado; historial)
 **Síntoma**: ~5-10 % de corridas con paralelismo intenso (`SyncListTest` y similares)
 terminan con corrupción puntual: `INVOKE_VIRTUAL` sobre `null`, "Dirección 0",
 opcode `0xA6`, `mutex.lock re-entrada` con valores inverosímiles.
@@ -367,12 +372,20 @@ la sintaxis del cast (decisión de diseño) y el typecheck del store
 - **Narrow globals pendiente**. Mismo motivo — el data block tendría
   `addConstantInt8`/`Int16` y los accesores serían `GET_GLOBAL_I8`/etc.
 
-### L11 — File I/O desde BP en la VM-C 🟡 EN CURSO (H10): host ✓, falta device
+### L11 — File I/O desde BP en la VM-C ✅ CERRADO (H10, 2026-06-11)
 
-Los builtins `readFile` / `writeFile` / `appendFile` / `fileExists` existen en la
-**VM-Java** (host) pero **NO en la VM-C** (Pico / ESP32 / STM32): un programa BP
-no puede leer/escribir ficheros del FS del device desde su propio código. Hoy el
-FS sólo se toca por el wire (PUT/GET desde el IDE).
+> **Cierre**: host con IO.bp COMPLETO (read/write/append/exists + remove/
+> rename/fileSize + mkdir/rmdir/copyFile/isDirectory/lastModified, builtins
+> sobre la facade `bpvm_fs`). Device: los TRES firmwares llevan en fuente
+> read/write/append/exists/remove/rename (lo que necesita el logger); el
+> resto (mkdir/copy/...) queda a NULL → RuntimeError atrapable, POR DISEÑO
+> (FS plano sin directorios). Paridad: FileOpsTest + LogTest byte-idénticas.
+
+(Texto original del pendiente, para contexto:) Los builtins `readFile` /
+`writeFile` / `appendFile` / `fileExists` existían en la **VM-Java** (host)
+pero **NO en la VM-C** (Pico / ESP32 / STM32): un programa BP no podía
+leer/escribir ficheros del FS del device desde su propio código; el FS sólo
+se tocaba por el wire (PUT/GET desde el IDE).
 
 > **✅ Hecho (2026-06-08)**: los 4 builtins de texto (ids 38..41) en la VM-C +
 > fachada portable `bpvm_fs` (`include/bpvm_fs.h`, `src/fs_facade.c`) + backend
@@ -438,7 +451,7 @@ JSON ya están en cada placa; sólo NO están expuestos a BP. ⇒ los builtins s
 > Otro "agujero" del lenguaje, en la línea de tapar pre-existentes. No urgente;
 > se aborda incremental.
 
-### L12 — Base común `Exception` ✅ NÚCLEO HECHO (2026-06-10, #248) — falta provisioning embebido
+### L12 — Base común `Exception` ✅ CERRADO (2026-06-10/11, #248 — núcleo + Core.mod embebido en los 3 firmwares, #254)
 
 > **Hecho**: jerarquía `Object -> Exception -> RuntimeError | resto`, con UNA
 > clase real por VM (`bpstdlib/Core.bp`, property `msg` en slot 0) en lugar de
@@ -547,24 +560,22 @@ Análisis (2026-06-11):
   package y rompen el resto en silencio).
 Tarea grande — trocear cuando se retome (¿v2 post-cierre?).
 
-#### N-ide-new-file — File → New en el IDE (pendiente, H12)
-Hoy solo existe "New Project..."; no hay forma de crear un FICHERO nuevo
-(los tabs nacen de Load). Añadir File → New: buffer vacío + Save As.
+#### N-ide-new-file — File → New en el IDE ✅ CERRADO (H12, 2026-06-11, verificado)
+Pedido: hoy solo existía "New Project...". Hecho: File → New (primer ítem
+del menú), buffer vacío con título "(nuevo)" y Save As al guardar.
 
-#### N-ide-resources — carpeta resources/ del proyecto (pendiente, H12)
-El Run sube SOLO los .mod del Output (+ .mdn siblings + deps stdlib que
-falten). Añadir convención: `resources/` en el proyecto cuyo contenido
-(cualquier tipo de fichero) se copia al micro en el upload (a /app o a la
-ruta relativa que indique la subcarpeta). Necesario para datos de la app:
-tablas, configs, html, etc. Reusar el skip-if-same-size (N110) para no
-resubir.
+#### N-ide-resources — carpeta resources/ del proyecto ✅ CERRADO (H12, 2026-06-11, verificado)
+Pedido: que el Run copie al micro los ficheros de datos de la app. Hecho:
+`resources/` en el proyecto (New Project la crea; nodo en el árbol con
+doble-clic para abrir) → se sube a `/app/<ruta relativa>` en cada Run con
+skip-if-same-size (N110); "Add File to Resources..." copia ficheros
+existentes (fuentes, imágenes, tablas...). Ciclo completo verificado por
+Eduardo en placa.
 
-#### N-ide-rename-generic — quitar "Pico" de la UI (pendiente, H12)
-Renombrar en la INTERFAZ todo lo que diga "Pico" por algo genérico
-("Placa" / "Micro" / "Device"): título del panel explorer, menús
-(Run/Debug on ...), mensajes "[Pico ...]"/"[Explorer]". Las clases internas
-(PicoExplorer, PicoClient) pueden renombrarse después sin prisa — primero
-lo visible. Ya hay 4 placas de 3 familias; el nombre se quedó pequeño.
+#### N-ide-rename-generic — quitar "Pico" de la UI ✅ CERRADO (H12, 2026-06-11)
+Hecho en todo lo visible: panel "Placa", "Run/Debug on Device", mensajes
+"[Placa ...]", radio "Placa (serial v1)", título del INFO. Las clases
+internas (PicoExplorer, PicoClient) se quedan con su nombre — solo código.
 
 #### P-autorun — fichero "auto" para arranque autónomo (pendiente, 2026-06-11)
 Un fichero de TEXTO en el FS del device (propuesta: `/sys/auto.txt`) cuyo
