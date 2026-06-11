@@ -292,7 +292,7 @@ static int interp_throw_rt(bpvm_t* vm, bpvm_thread_t* tc,
  * aritmética IEEE determinista (solo *,/,+ por literales exactos + cast a
  * int64) y %lld/%06lld para las piezas enteras → byte-idéntico a
  * VirtualMachine.formatBpDouble (Java). NO usa %g/%f de printf sobre el float. */
-static int bpvm_format_double(char* out, double v) {
+int bpvm_format_double(char* out, double v) {   /* L13: lo usa builtins.c */
     if (isnan(v)) { memcpy(out, "NaN", 4); return 3; }
     if (isinf(v)) {
         if (v > 0.0) { memcpy(out, "Infinity", 9); return 8; }

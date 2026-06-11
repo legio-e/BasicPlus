@@ -2811,16 +2811,6 @@ public final class MivmEmitter {
                           || (tr instanceof PrimitiveType && ((PrimitiveType) tr).tag == PrimitiveType.Kind.STRING);
 
         if ("+".equals(b.op) && stringOp) {
-            // GAP descubierto en L8 v2: no hay builtin long/double→string, así
-            // que el concat corrompía la pila (8 bytes donde CONCAT espera una
-            // ref de 4). Error claro hasta que existan LONG_TO_STRING /
-            // DOUBLE_TO_STRING en ambas VMs. Workaround: print por separado.
-            if (isLong(tl) || isDouble(tl) || isLong(tr) || isDouble(tr)) {
-                errors.add("concatenación string + long/double no soportada aún "
-                        + "(línea " + b.line + "): falta el builtin de conversión; "
-                        + "imprime el valor por separado o conviértelo antes");
-                return;
-            }
             emitExpr(b.left);
             coerceToString(tl);
             emitExpr(b.right);
@@ -4826,6 +4816,17 @@ public final class MivmEmitter {
             case FLOAT:
                 w.emit(OpCode.CALL_BUILTIN);
                 w.emitShort((short) Builtin.FLOAT_TO_STRING.id);
+                break;
+            // L13 — long/double: builtins de 8 bytes con formateo canónico
+            // GAP-4 (double) / decimal (long). Antes no existían y el concat
+            // corrompía la pila.
+            case LONG:
+                w.emit(OpCode.CALL_BUILTIN);
+                w.emitShort((short) Builtin.LONG_TO_STRING.id);
+                break;
+            case DOUBLE:
+                w.emit(OpCode.CALL_BUILTIN);
+                w.emitShort((short) Builtin.DOUBLE_TO_STRING.id);
                 break;
             case BOOLEAN:
                 w.emit(OpCode.CALL_BUILTIN);

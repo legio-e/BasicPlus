@@ -49,6 +49,10 @@ enum {
     BUILTIN_REMOVE_FILE     = 71,
     BUILTIN_RENAME          = 72,
     BUILTIN_FILE_SIZE       = 74,
+    /* L13 — concat string + float/long/double (formateo canónico GAP-4). */
+    BUILTIN_FLOAT_TO_STRING  = 4,
+    BUILTIN_LONG_TO_STRING   = 129,
+    BUILTIN_DOUBLE_TO_STRING = 130,
     BUILTIN_NOW             = 34,
     BUILTIN_SLEEP           = 35,
     BUILTIN_GC              = 43,
@@ -216,6 +220,42 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t v = pop_i32(vm, tc);
         char buf[32];
         int n = snprintf(buf, sizeof(buf), "%" PRId32, v);
+        uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
+        push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+
+    /* L13 — coerciones a string del concat. float/double usan el formateo
+     * canónico GAP-4 (bpvm_format_double, el mismo de FPRINT/DPRINT) →
+     * byte-idéntico a la VM-Java, y `"" + x` == `print x` siempre. */
+    case BUILTIN_FLOAT_TO_STRING: {
+        int32_t bits = pop_i32(vm, tc);
+        float x;
+        memcpy(&x, &bits, 4);
+        char buf[64];
+        int n = bpvm_format_double(buf, (double) x);
+        uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
+        push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_LONG_TO_STRING: {
+        uint32_t lo = (uint32_t) pop_i32(vm, tc);
+        uint32_t hi = (uint32_t) pop_i32(vm, tc);
+        int64_t v = (int64_t) (((uint64_t) hi << 32) | lo);
+        char buf[32];
+        int n = snprintf(buf, sizeof(buf), "%" PRId64, v);
+        uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
+        push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_DOUBLE_TO_STRING: {
+        uint32_t lo = (uint32_t) pop_i32(vm, tc);
+        uint32_t hi = (uint32_t) pop_i32(vm, tc);
+        uint64_t bits = ((uint64_t) hi << 32) | lo;
+        double v;
+        memcpy(&v, &bits, 8);
+        char buf[64];
+        int n = bpvm_format_double(buf, v);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
         push_i32(vm, tc, (int32_t) ref);
         return BPVM_OK;

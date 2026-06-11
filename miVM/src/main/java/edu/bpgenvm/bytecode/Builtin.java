@@ -277,12 +277,18 @@ public enum Builtin {
     WRITE_FILE_BYTES("writeFileBytes"),  // (path: string, data: byte[]) → void
 
     // ---- #248 — id 128, al FINAL. ----
-    THROW_RTE("__throwRte");             // (msg: string) → no retorna; lanza el
+    THROW_RTE("__throwRte"),             // (msg: string) → no retorna; lanza el
                                          //   RuntimeError NATIVO de la VM (mismo
                                          //   path que div0/null deref). Lo usa el
                                          //   compareTo por defecto de Object para
                                          //   no depender del descriptor local de
                                          //   RuntimeError (que #248 retira).
+
+    // ---- L13 — ids 129/130: concat string + long/double. ----
+    LONG_TO_STRING("__longToString"),    // (v: long)   → string (decimal)
+    DOUBLE_TO_STRING("__doubleToString");// (v: double) → string (formateo
+                                         //   canónico GAP-4 — el mismo de
+                                         //   DPRINT, byte-idéntico en C)
 
     public final String bpName;
     public final int id;

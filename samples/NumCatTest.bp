@@ -1,0 +1,52 @@
+// NumCatTest.bp — L13: concat `string + long/double/float` (builtins
+// LONG_TO_STRING/DOUBLE_TO_STRING nuevos + FLOAT_TO_STRING portado a la VM-C
+// y unificado al formateo canónico GAP-4 en ambas VMs).
+//
+// Invariante demostrado: `"" + x` produce EXACTAMENTE lo mismo que `print x`
+// para float/double (mismo formateador), y todo byte-idéntico entre VMs.
+
+module NumCatTest
+
+  function Main()
+    var lv: long := 4000000000L
+    var dv: double := 2.5d
+    var fv: float := 1.25
+
+    print "lv = " + lv
+    print "dv = " + dv
+    print "fv = " + fv
+
+    // negativos y 64 bits de verdad
+    print "neg = " + (0L - 5000000000L)
+    print "big = " + 123456789012345L
+
+    // mezcla en una sola expresión
+    print "mix = " + lv + " / " + dv + " / " + fv
+
+    // canónico GAP-4: 6 decimales, ceros recortados
+    var t: double := 0.333333333d
+    print "t = " + t
+    var c: double := 1.5d
+    print "c = " + c
+
+    // coherencia concat vs print (mismo formateador)
+    print dv
+    print fv
+
+    print "fin"
+  end Main
+
+end NumCatTest
+
+// Salida esperada (ambas VMs, byte a byte):
+//   lv = 4000000000
+//   dv = 2.5
+//   fv = 1.25
+//   neg = -5000000000
+//   big = 123456789012345
+//   mix = 4000000000 / 2.5 / 1.25
+//   t = 0.333333
+//   c = 1.5
+//   2.5
+//   1.25
+//   fin

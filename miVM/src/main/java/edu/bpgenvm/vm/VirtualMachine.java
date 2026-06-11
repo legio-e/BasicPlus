@@ -3150,7 +3150,24 @@ public class VirtualMachine {
             }
             case FLOAT_TO_STRING: {
                 float x = Float.intBitsToFloat(popTc(tc));
-                pushTc(tc, allocVmString(Float.toString(x)));
+                // L13 — formateo canónico GAP-4 (el mismo que FPRINT), no
+                // Float.toString: así `"" + f` y `print f` dan SIEMPRE lo
+                // mismo, y el puerto C es byte-idéntico.
+                pushTc(tc, allocVmString(formatBpDouble((double) x)));
+                break;
+            }
+            case LONG_TO_STRING: {   // L13 — concat string + long
+                int lo = popTc(tc);
+                int hi = popTc(tc);
+                long v = ((long) hi << 32) | (lo & 0xFFFFFFFFL);
+                pushTc(tc, allocVmString(Long.toString(v)));
+                break;
+            }
+            case DOUBLE_TO_STRING: {   // L13 — concat string + double (GAP-4)
+                int lo = popTc(tc);
+                int hi = popTc(tc);
+                double v = Double.longBitsToDouble(((long) hi << 32) | (lo & 0xFFFFFFFFL));
+                pushTc(tc, allocVmString(formatBpDouble(v)));
                 break;
             }
             case BOOL_TO_STRING: {

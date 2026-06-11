@@ -484,21 +484,18 @@ analizador (catch/throw/instanceof), **paridad dual-VM** (miVM ↔ VM-C), posibl
 la `.bpi` de la base. Es una decisión de modelo de lenguaje → con cuidado, con samples
 + paridad. (Anotado a petición de Eduardo, 2026-06-09; desbloquea #213 opción 1.)
 
-#### L13 — concat `string + long/double` (pendiente, descubierto en L8 v2)
-No hay builtin long→string / double→string: H1.2/H1.3 implementaron el print
-de long/double con opcodes dedicados (LPRINT/DPRINT con formateo canónico
-GAP-4) pero NO la coerción a string del concat. `"x = " + unLong` emitía
-código corrupto (8 bytes en la pila donde CONCAT espera una ref de 4) → fault
-en runtime. Hoy es ERROR de compilación claro ("imprime el valor por separado
-o conviértelo antes").
-
-**Para cerrarlo**: builtins `LONG_TO_STRING` + `DOUBLE_TO_STRING` (ids nuevos)
-en `miVM/bytecode/Builtin.java` + `VirtualMachine` + `bpgenvm-c/src/builtins.c`
-(reusar el formateo canónico GAP-4 para paridad byte-idéntica del double), y
-los dos `case` en `MivmEmitter.coerceToString` (quitar la guarda del
-emitBinary). Revisar de paso los tipos narrow en concat (¿llegan como UINT8
-a coerceToString o el semántico los ensancha a INTEGER?). Tarea pequeña,
-paridad-sensible.
+#### L13 — concat `string + long/double` ✅ CERRADO (2026-06-11)
+Builtins nuevos al final del catálogo: `__longToString` (129, decimal i64) y
+`__doubleToString` (130, **formateo canónico GAP-4** — el mismo de DPRINT →
+`"" + d` == `print d` siempre, byte-idéntico entre VMs). De paso:
+FLOAT_TO_STRING (4) portado a la VM-C y **unificado en ambas VMs** al
+formateador GAP-4 (antes la VM-Java usaba `Float.toString` en el concat y el
+canónico en print — podían diferir entre sí con >6 decimales; ahora no).
+`coerceToString` emite los nuevos cases (long/double) y la guarda temporal
+del emitBinary se retiró. Los narrow en concat ya se habían arreglado en la
+sesión del logger (van como i32 → INT_TO_STRING). Sample + paridad:
+`samples/NumCatTest.bp`. bpvm_format_double se exportó de interp.c para que
+builtins.c lo reuse (decl en bpvm_internal.h).
 
 ---
 

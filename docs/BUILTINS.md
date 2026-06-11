@@ -296,6 +296,26 @@ Cualquier código BP puede llamarlo también.
 
 ---
 
+## 129 — `__longToString(v: long)` → string  *(L13)*
+
+Decimal con signo de un i64 (8 bytes en pila). Lo emite `coerceToString`
+para el concat `string + long` — antes no existía y el concat corrompía la
+pila. VM-Java: `Long.toString`. VM-C: `%PRId64` (idéntico para todo valor).
+
+## 130 — `__doubleToString(v: double)` → string  *(L13)*
+
+Conversión a string con el **formateo canónico GAP-4** (el mismo de DPRINT:
+punto fijo a 6 decimales con ceros recortados; científica fuera de rango) —
+byte-idéntico entre VMs y, deliberadamente, idéntico a `print v`. Lo emite
+`coerceToString` para el concat `string + double`.
+
+> L13 también portó **FLOAT_TO_STRING (4)** a la VM-C y lo unificó en ambas
+> VMs al formateador GAP-4 (antes la VM-Java usaba `Float.toString`, así que
+> `"" + f` y `print f` podían diferir ENTRE SÍ para valores de más de 6
+> decimales).
+
+---
+
 ## Próximos builtins propuestos (no asignados todavía)
 
 - **`__threadCurrent()` → Thread**: devuelve el Thread BP del thread

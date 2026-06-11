@@ -437,6 +437,11 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type);
 uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len);
 void     bpvm_heap_gc(bpvm_t* vm);
 
+/* interp.c — GAP-4: formateo canónico de double/float (byte-idéntico a
+ * VirtualMachine.formatBpDouble). L13: también lo usan los builtins
+ * FLOAT/DOUBLE_TO_STRING del concat. Devuelve la longitud escrita. */
+int bpvm_format_double(char* out, double v);
+
 /* builtins.c (F2) */
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id);
 
