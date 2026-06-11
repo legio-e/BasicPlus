@@ -37,6 +37,17 @@ typedef struct {
     /* renombra/mueve; si `to` existe lo SOBREESCRIBE (semántica de la VM-Java:
      * REPLACE_EXISTING). 0 / -1. */
     int  (*rename)(const char* from, const char* to);
+    /* #240 (2ª pasada) — resto de IO.bp; opcionales como remove/rename. */
+    /* crea el directorio (e intermedios); ok si ya existe. 0 / -1. */
+    int  (*mkdir)(const char* path);
+    /* borra el directorio SOLO si está vacío. 0 / -1. */
+    int  (*rmdir)(const char* path);
+    /* copia from → to sobreescribiendo. 0 / -1. */
+    int  (*copy)(const char* from, const char* to);
+    /* 1 si path es un directorio existente; 0 en otro caso. */
+    int  (*isdir)(const char* path);
+    /* mtime en ms epoch (puede truncarse a i32 arriba); -1 si error. */
+    long long (*mtime_ms)(const char* path);
 } bpvm_fs_backend_t;
 
 /* Registra el backend (una vez al boot). */
@@ -49,6 +60,11 @@ int  bpvm_fs_write (const char* path, const uint8_t* data, uint32_t len, int app
 int  bpvm_fs_exists(const char* path);   /* 1 / 0 */
 int  bpvm_fs_remove(const char* path);                    /* #240: 0 / -1 */
 int  bpvm_fs_rename(const char* from, const char* to);    /* #240: 0 / -1 */
+int  bpvm_fs_mkdir (const char* path);                    /* #240 2ª: 0 / -1 */
+int  bpvm_fs_rmdir (const char* path);                    /* #240 2ª: 0 / -1 */
+int  bpvm_fs_copy  (const char* from, const char* to);    /* #240 2ª: 0 / -1 */
+int  bpvm_fs_isdir (const char* path);                    /* #240 2ª: 1 / 0 */
+long long bpvm_fs_mtime_ms(const char* path);             /* #240 2ª: ms / -1 */
 
 /* Backend host (libc). Implementado en fs_host.c (host-only); el firmware
  * registra el suyo (fs_get/fs_put). */

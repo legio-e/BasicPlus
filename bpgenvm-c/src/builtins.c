@@ -49,6 +49,12 @@ enum {
     BUILTIN_REMOVE_FILE     = 71,
     BUILTIN_RENAME          = 72,
     BUILTIN_FILE_SIZE       = 74,
+    /* #240 (2ª pasada) — resto de IO.bp. */
+    BUILTIN_MKDIR           = 69,
+    BUILTIN_RMDIR           = 70,
+    BUILTIN_COPY_FILE       = 73,
+    BUILTIN_IS_DIRECTORY    = 75,
+    BUILTIN_LAST_MODIFIED   = 76,
     /* L13 — concat string + float/long/double (formateo canónico GAP-4). */
     BUILTIN_FLOAT_TO_STRING  = 4,
     BUILTIN_LONG_TO_STRING   = 129,
@@ -386,6 +392,67 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, em);
         }
         push_i32(vm, tc, (int32_t) sz);
+        return BPVM_OK;
+    }
+
+    /* #240 (2ª pasada) — resto de IO.bp. En device los backends pueden no
+     * implementarlos (FS plano sin directorios) → RuntimeError atrapable. */
+    case BUILTIN_MKDIR: {
+        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        char path[512];
+        read_bp_string(vm, pref, path, sizeof(path));
+        if (bpvm_fs_mkdir(path) != 0) {
+            char em[576];
+            snprintf(em, sizeof(em), "mkdir('%s'): no se pudo crear", path);
+            return builtin_throw(vm, tc, em);
+        }
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_RMDIR: {
+        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        char path[512];
+        read_bp_string(vm, pref, path, sizeof(path));
+        if (bpvm_fs_rmdir(path) != 0) {
+            char em[576];
+            snprintf(em, sizeof(em), "rmdir('%s'): no se pudo borrar (¿no vacío?)", path);
+            return builtin_throw(vm, tc, em);
+        }
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_COPY_FILE: {
+        uint32_t tref = (uint32_t) pop_i32(vm, tc);   /* to (empujado el último) */
+        uint32_t fref = (uint32_t) pop_i32(vm, tc);   /* from */
+        char from[512], to[512];
+        read_bp_string(vm, fref, from, sizeof(from));
+        read_bp_string(vm, tref, to, sizeof(to));
+        if (bpvm_fs_copy(from, to) != 0) {
+            char em[1100];
+            snprintf(em, sizeof(em), "copyFile('%s' -> '%s'): error al copiar", from, to);
+            return builtin_throw(vm, tc, em);
+        }
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_IS_DIRECTORY: {
+        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        char path[512];
+        read_bp_string(vm, pref, path, sizeof(path));
+        push_i32(vm, tc, bpvm_fs_isdir(path) ? 1 : 0);   /* sin throw, como Java */
+        return BPVM_OK;
+    }
+    case BUILTIN_LAST_MODIFIED: {
+        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        char path[512];
+        read_bp_string(vm, pref, path, sizeof(path));
+        long long ms = bpvm_fs_mtime_ms(path);
+        if (ms < 0) {
+            char em[576];
+            snprintf(em, sizeof(em), "lastModified('%s'): no se pudo leer", path);
+            return builtin_throw(vm, tc, em);
+        }
+        push_i32(vm, tc, (int32_t) (ms & 0x7FFFFFFFLL));   /* truncado como Java */
         return BPVM_OK;
     }
 

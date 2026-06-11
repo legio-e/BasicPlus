@@ -43,3 +43,29 @@ int bpvm_fs_rename(const char* from, const char* to) {
     if (g_fs && g_fs->rename) return g_fs->rename(from, to);
     return -1;
 }
+
+/* #240 (2ª pasada) — resto de IO.bp. */
+int bpvm_fs_mkdir(const char* path) {
+    if (g_fs && g_fs->mkdir) return g_fs->mkdir(path);
+    return -1;
+}
+
+int bpvm_fs_rmdir(const char* path) {
+    if (g_fs && g_fs->rmdir) return g_fs->rmdir(path);
+    return -1;
+}
+
+int bpvm_fs_copy(const char* from, const char* to) {
+    if (g_fs && g_fs->copy) return g_fs->copy(from, to);
+    return -1;
+}
+
+int bpvm_fs_isdir(const char* path) {
+    if (g_fs && g_fs->isdir) return g_fs->isdir(path);
+    return 0;
+}
+
+long long bpvm_fs_mtime_ms(const char* path) {
+    if (g_fs && g_fs->mtime_ms) return g_fs->mtime_ms(path);
+    return -1;
+}

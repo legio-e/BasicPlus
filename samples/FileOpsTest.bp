@@ -1,0 +1,52 @@
+// FileOpsTest.bp — #240 2ª pasada: mkdir/rmdir/copyFile/isDirectory/
+// lastModified portados a la VM-C host (antes "builtin no soportado").
+// Salida determinista (lastModified solo se comprueba > 0).
+//
+// Paridad esperada (VM-Java == VM-C host, byte a byte):
+//   isDir(antes) = false
+//   isDir(despues) = true
+//   isDir(fichero) = false
+//   copia = [contenido original]
+//   mtime>0 = true
+//   rmdir tras limpiar: ok
+//   borrado = false
+//   fin
+
+module FileOpsTest
+  import IO
+
+  function Main()
+    // Estado limpio de ejecuciones anteriores.
+    if fileExists("fops_dir/copia.txt") then
+      IO.removeFile("fops_dir/copia.txt")
+    endif
+    if IO.isDirectory("fops_dir") then
+      IO.rmdir("fops_dir")
+    endif
+    if fileExists("fops_orig.txt") then
+      IO.removeFile("fops_orig.txt")
+    endif
+
+    print "isDir(antes) = " + boolToString(IO.isDirectory("fops_dir"))
+    IO.mkdir("fops_dir")
+    print "isDir(despues) = " + boolToString(IO.isDirectory("fops_dir"))
+
+    writeFile("fops_orig.txt", "contenido original")
+    print "isDir(fichero) = " + boolToString(IO.isDirectory("fops_orig.txt"))
+
+    IO.copyFile("fops_orig.txt", "fops_dir/copia.txt")
+    print "copia = [" + readFile("fops_dir/copia.txt") + "]"
+
+    var mt: integer := IO.lastModified("fops_orig.txt")
+    print "mtime>0 = " + boolToString(mt > 0)
+
+    // rmdir exige vacío: limpiar y borrar.
+    IO.removeFile("fops_dir/copia.txt")
+    IO.rmdir("fops_dir")
+    print "rmdir tras limpiar: ok"
+    print "borrado = " + boolToString(IO.isDirectory("fops_dir"))
+
+    IO.removeFile("fops_orig.txt")
+    print "fin"
+  end Main
+end FileOpsTest
