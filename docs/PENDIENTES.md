@@ -528,6 +528,11 @@ Análisis (2026-06-11):
 - **Target por proyecto**: campo en BpProject/BpBuild ("target":
   "raspberrypi-rp2350/rp2350A/Pico2") → el IDE elige imagen a flashear,
   config a aplicar y toolchain/flags del AOT (.mdn) al compilar native.
+- **Detección automática del micro** (idea de Eduardo, 2026-06-11): si el
+  usuario no sabe qué placa tiene, el IDE pregunta por el wire — el INFO
+  ya devuelve `boardName` (+ variant/flash/psram) → mapear contra el árbol
+  micros/ y ofrecer "detectado: Pico2 (rp2350A) — ¿usar como target del
+  proyecto?". Gratis sobre lo que ya existe.
 Tarea grande — trocear cuando se retome (¿v2 post-cierre?).
 
 #### N-ide-new-file — File → New en el IDE (pendiente, H12)

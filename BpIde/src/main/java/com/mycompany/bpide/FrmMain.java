@@ -473,11 +473,14 @@ public class FrmMain extends javax.swing.JFrame
             }
         });
 
-        // -- Menú File: Load / Save / Recent Files. --
+        // -- Menú File: New / Load / Save / Recent Files. --
+        JMenuItem miNewFile = new JMenuItem("New");   // H12 (#259)
+        miNewFile.addActionListener(e -> onNewFile());
+        jMenu1.insert(miNewFile, 0);
         jMenuItem1.addActionListener(e -> onLoad());
         jMenuItem2.addActionListener(e -> onSave());
         recentFilesMenu = new javax.swing.JMenu("Recent Files");
-        jMenu1.insert(recentFilesMenu, 2);   // Load, Save, [Recent], sep, Exit
+        jMenu1.insert(recentFilesMenu, 3);   // New, Load, Save, [Recent], sep, Exit
         rebuildRecentFilesMenu();
 
         // -- Menú Project: New Project, Open Project, Close Project. --
@@ -492,7 +495,7 @@ public class FrmMain extends javax.swing.JFrame
         miRun.addActionListener(e -> doRun(true));
         jMenu3.add(miRun);
 
-        JMenuItem miRunOnPico = new JMenuItem("Run on Pico");
+        JMenuItem miRunOnPico = new JMenuItem("Run on Device");
         miRunOnPico.addActionListener(e -> doRunOnPico());
         jMenu3.add(miRunOnPico);
 
@@ -1111,7 +1114,7 @@ public class FrmMain extends javax.swing.JFrame
         // Menú Debug con sus items y atajos.
         JMenu menuDebug = new JMenu("Debug");
         JMenuItem miDebugRun    = mi("Debug",            KeyEvent.VK_F5,  KeyEvent.SHIFT_DOWN_MASK,  e -> doDebug());
-        JMenuItem miDebugOnPico = new JMenuItem("Debug on Pico");
+        JMenuItem miDebugOnPico = new JMenuItem("Debug on Device");
         miDebugOnPico.addActionListener(e -> doDebugOnPico());
         JMenuItem miContinue    = mi("Continue",         KeyEvent.VK_F5,  0,                         e -> debug.sendCommand(StepCommand.CONTINUE));
         JMenuItem miStepOver    = mi("Step Over",        KeyEvent.VK_F10, 0,                         e -> debug.sendCommand(StepCommand.STEP_OVER));
@@ -1528,6 +1531,45 @@ public class FrmMain extends javax.swing.JFrame
     }
 
     /**
+     * H12 (#260) — recoge <projectDir>/resources/** como pares
+     * (ruta remota → fichero local). Remoto = "/app/<ruta relativa>" con
+     * separadores '/'. Vacío si no hay proyecto abierto o no existe la
+     * carpeta. Lo consume uploadAndRun, que sube con skip-if-same-size.
+     */
+    private java.util.Map<String, java.io.File> collectProjectResources() {
+        java.util.Map<String, java.io.File> out = new java.util.LinkedHashMap<>();
+        if (currentProjectFile == null) return out;
+        java.nio.file.Path rdir = currentProjectFile.getParent().resolve("resources");
+        if (!java.nio.file.Files.isDirectory(rdir)) return out;
+        try (java.util.stream.Stream<java.nio.file.Path> st = java.nio.file.Files.walk(rdir)) {
+            st.filter(java.nio.file.Files::isRegularFile).forEach(p -> {
+                String rel = rdir.relativize(p).toString().replace('\\', '/');
+                out.put("/app/" + rel, p.toFile());
+            });
+        } catch (IOException ex) {
+            appendConsola("[resources] error leyendo " + rdir + ": " + ex.getMessage() + "\n");
+        }
+        return out;
+    }
+
+    /**
+     * H12 (#259) — File → New: tab nuevo con buffer vacío y sin Path
+     * asociado. onSave ya cubre el caso file == null pidiendo destino con
+     * el chooser (Save As) — el mismo estado que el tab "(sin abrir)"
+     * inicial, así que el resto del IDE no necesita cambios.
+     */
+    private void onNewFile() {
+        RSyntaxTextArea ed = newEditorPane();
+        JScrollPane sc = new RTextScrollPane(ed);
+        String title = "(nuevo)";
+        jTabbedPane1.addTab(title, sc);
+        openFiles.put(sc, new OpenFile(ed, sc, null));
+        installTabCloseButton(sc, title);
+        jTabbedPane1.setSelectedComponent(sc);
+        refreshActiveTab();
+    }
+
+    /**
      * File → Save: escribe al fichero del tab activo. Si el tab no tiene
      * Path asociado (buffer nuevo sin guardar), pide uno con JFileChooser
      * y lo asocia al OpenFile del tab. Actualiza el título del tab.
@@ -1651,9 +1693,9 @@ public class FrmMain extends javax.swing.JFrame
         }
         if (picoExplorer == null || !picoExplorer.isConnected()) {
             JOptionPane.showMessageDialog(this,
-                    "Conecta primero el dispositivo desde el panel Pico\n" +
+                    "Conecta primero la placa desde el panel inferior\n" +
                     "(ventana inferior izquierda → Connect).",
-                    "Pico no conectado", JOptionPane.WARNING_MESSAGE);
+                    "Placa no conectada", JOptionPane.WARNING_MESSAGE);
             return;
         }
         onSave();
@@ -1677,7 +1719,7 @@ public class FrmMain extends javax.swing.JFrame
             Path modPath = null;
             @Override
             protected Boolean doInBackground() {
-                publish("== compilando " + bpFile.getFileName() + " para Pico ==\n");
+                publish("== compilando " + bpFile.getFileName() + " para la placa ==\n");
                 boolean ok = invokeWithCapture(() ->
                         basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm"),
                         this::publish);
@@ -1726,7 +1768,15 @@ public class FrmMain extends javax.swing.JFrame
                                         + "\n");
                             }
                         }
-                        picoExplorer.uploadAndRun(modPath.toFile(), deps, libDeps);
+                        // H12 (#260) — resources/ del proyecto al device.
+                        java.util.Map<String, java.io.File> resources =
+                                collectProjectResources();
+                        if (!resources.isEmpty()) {
+                            appendConsola("[resources] " + resources.size()
+                                    + " fichero(s) de resources/ a subir\n");
+                        }
+                        picoExplorer.uploadAndRun(modPath.toFile(), deps, libDeps,
+                                null, resources);
                     }
                 } catch (Exception ex) {
                     appendConsola("[ide] error: " + ex.getMessage() + "\n");
@@ -1773,9 +1823,9 @@ public class FrmMain extends javax.swing.JFrame
         }
         if (picoExplorer == null || !picoExplorer.isConnected()) {
             JOptionPane.showMessageDialog(this,
-                    "Conecta primero el dispositivo desde el panel Pico\n" +
+                    "Conecta primero la placa desde el panel inferior\n" +
                     "(ventana inferior izquierda → Connect).",
-                    "Pico no conectado", JOptionPane.WARNING_MESSAGE);
+                    "Placa no conectada", JOptionPane.WARNING_MESSAGE);
             return;
         }
         onSave();
@@ -1800,7 +1850,7 @@ public class FrmMain extends javax.swing.JFrame
             String base = null;
             @Override
             protected Boolean doInBackground() {
-                publish("== compilando " + bpFile.getFileName() + " para Debug on Pico ==\n");
+                publish("== compilando " + bpFile.getFileName() + " para Debug on Device ==\n");
                 boolean ok = invokeWithCapture(() ->
                         basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm"),
                         this::publish);
@@ -1839,7 +1889,7 @@ public class FrmMain extends javax.swing.JFrame
                         if (EMBEDDED_CORE_MODS.contains(mod)) libDeps.add(n);
                     }
                     final String remoteMain = "/app/" + base + ".mod";
-                    appendConsola("[debug] subiendo + enganchando sesión de debug en la Pico...\n");
+                    appendConsola("[debug] subiendo + enganchando sesión de debug en la placa...\n");
                     // uploadAndRun con debugHook: sube los ficheros y, en vez de
                     // ejecutar en bloqueante, cede el client serie ya conectado.
                     picoExplorer.uploadAndRun(modPath.toFile(), deps, libDeps, client -> {
@@ -1852,7 +1902,7 @@ public class FrmMain extends javax.swing.JFrame
                         client.runModule(remoteMain);    // arranca; cada pausa pinta locales por nombre
                         appendConsola("[debug] sesión activa. Breakpoints del editor → run-to-breakpoint;"
                                 + " si no hay, pausa en la entrada. Continue/Step en el menú Debug.\n");
-                    });
+                    }, collectProjectResources());   // H12 (#260)
                 } catch (Exception ex) {
                     appendConsola("[debug] error: " + ex.getMessage() + "\n");
                 }

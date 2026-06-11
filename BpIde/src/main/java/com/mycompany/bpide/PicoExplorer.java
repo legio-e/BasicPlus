@@ -62,7 +62,7 @@ public final class PicoExplorer extends JPanel {
     private Runnable clearSink;
 
     /* --- UI components ----------------------------------------- */
-    private final JRadioButton rbSerial = new JRadioButton("Pico (serial v1)", true);
+    private final JRadioButton rbSerial = new JRadioButton("Placa (serial v1)", true);
     private final JRadioButton rbVm     = new JRadioButton("VM Java (TCP v1)");
     private final JComboBox<String> portCombo = new JComboBox<>();
     private final JTextField endpointField = new JTextField("localhost:7332", 16);
@@ -85,7 +85,7 @@ public final class PicoExplorer extends JPanel {
     /** Raíz del árbol. user object = String "Pico" en la raíz, String
      *  con el nombre del segmento en cada carpeta, RemoteFile en las
      *  hojas. */
-    private final DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode("Pico");
+    private final DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode("Placa");
     private final DefaultTreeModel treeModel = new DefaultTreeModel(rootNode);
     private final JTree fileTree = new JTree(treeModel);
     private final JLabel status = new JLabel("Disconnected");
@@ -430,13 +430,23 @@ public final class PicoExplorer extends JPanel {
         uploadAndRun(modFile, depMods, libDepNames, null);
     }
 
-    /** H6.b.3.b — variante "Debug on Pico": si {@code debugHook} != null, tras
-     *  subir los ficheros NO ejecuta en bloqueante; cede el {@link BpvmClient}
-     *  ya conectado al hook (en EDT), que arranca la sesión de debug por
-     *  eventos (PAUSE/RUN/STEP/locals). Con null = comportamiento normal (run). */
+    /** H6.b.3.b — variante "Debug on Device": si {@code debugHook} != null,
+     *  tras subir los ficheros NO ejecuta en bloqueante; cede el
+     *  {@link BpvmClient} ya conectado al hook (en EDT), que arranca la
+     *  sesión de debug por eventos. Con null = comportamiento normal (run). */
     public void uploadAndRun(File modFile, java.util.List<File> depMods,
                              java.util.Set<String> libDepNames,
                              java.util.function.Consumer<BpvmClient> debugHook) {
+        uploadAndRun(modFile, depMods, libDepNames, debugHook, null);
+    }
+
+    /** H12 (#260) — variante con resources: pares (ruta remota → fichero
+     *  local) de la carpeta resources/ del proyecto, de cualquier tipo. Se
+     *  suben con skip-if-same-size, como las deps. */
+    public void uploadAndRun(File modFile, java.util.List<File> depMods,
+                             java.util.Set<String> libDepNames,
+                             java.util.function.Consumer<BpvmClient> debugHook,
+                             java.util.Map<String, File> resourceFiles) {
         if (!isConnected()) {
             if (outputSink != null) outputSink.accept(
                     "[Explorer] no conectado — pulsa Connect primero");
@@ -452,6 +462,8 @@ public final class PicoExplorer extends JPanel {
                 ? depMods : java.util.Collections.emptyList();
         final java.util.Set<String> libNames = (libDepNames != null)
                 ? libDepNames : java.util.Collections.emptySet();
+        final java.util.Map<String, File> resources = (resourceFiles != null)
+                ? resourceFiles : java.util.Collections.emptyMap();
         final Backend b = this.backend;
         status.setText("Compile&Run: uploading "
                 + (deps.size() + 1) + " file(s)...");
@@ -522,6 +534,32 @@ public final class PicoExplorer extends JPanel {
                                     "[Explorer] subido AOT " + depMdnRemote + " ("
                                     + depMdn.length() + " bytes)"));
                         }
+                    }
+                }
+            }
+            // 1c) H12 (#260) — resources/ del proyecto: ficheros arbitrarios a
+            //     su ruta remota (/app/<rel>), con skip-if-same-size.
+            for (java.util.Map.Entry<String, File> res : resources.entrySet()) {
+                final String rRemote = res.getKey();
+                final File rFile = res.getValue();
+                Long rsz = remote.get(rRemote);
+                if (rsz != null && rsz == rFile.length()) {
+                    if (outputSink != null) {
+                        SwingUtilities.invokeLater(() -> outputSink.accept(
+                                "[Explorer] " + rRemote + " ya en FS (" + rFile.length()
+                                + " bytes), salto PUT"));
+                    }
+                } else {
+                    if (rsz != null) {
+                        try { b.del(rRemote); }
+                        catch (java.io.IOException delErr) { /* tolerable */ }
+                    }
+                    byte[] rData = Files.readAllBytes(rFile.toPath());
+                    b.put(rRemote, rData);
+                    if (outputSink != null) {
+                        SwingUtilities.invokeLater(() -> outputSink.accept(
+                                "[Explorer] subido resource " + rRemote + " ("
+                                + rFile.length() + " bytes)"));
                     }
                 }
             }
@@ -1093,7 +1131,7 @@ public final class PicoExplorer extends JPanel {
                     Throwable cause = e.getCause() != null ? e.getCause() : e;
                     status.setText("ERROR: " + cause.getMessage());
                     if (outputSink != null) {
-                        outputSink.accept("[Pico ERROR] " + cause.getMessage());
+                        outputSink.accept("[Placa ERROR] " + cause.getMessage());
                     }
                 } finally {
                     setActionButtonsEnabled(true);
