@@ -579,16 +579,20 @@ public class FrmMain extends javax.swing.JFrame
         JMenuItem miNew   = new JMenuItem("New Project...");
         JMenuItem miOpen  = new JMenuItem("Open Project...");
         JMenuItem miClose = new JMenuItem("Close Project");
+        JMenuItem miAddRes = new JMenuItem("Add File to Resources...");   // H12 (#260)
         JMenuItem miEndpoint = new JMenuItem("VM Endpoint...");
         miNew.addActionListener(e -> onNewProject());
         miOpen.addActionListener(e -> onOpenProject());
         miClose.addActionListener(e -> onCloseProject());
+        miAddRes.addActionListener(e -> onAddFileToResources());
         miEndpoint.addActionListener(e -> onConfigureVmEndpoint());
         menuProject.add(miNew);
         menuProject.add(miOpen);
         recentProjectsMenu = new javax.swing.JMenu("Recent Projects");
         menuProject.add(recentProjectsMenu);
         rebuildRecentProjectsMenu();
+        menuProject.addSeparator();
+        menuProject.add(miAddRes);
         menuProject.addSeparator();
         menuProject.add(miClose);
         menuProject.addSeparator();
@@ -712,6 +716,9 @@ public class FrmMain extends javax.swing.JFrame
             return;
         }
         outDir.mkdirs();
+        // H12 (#260) — resources/: ficheros de datos (fuentes, imágenes,
+        // tablas...) que el Run on Device sube al micro como /app/<rel>.
+        new java.io.File(dir, "resources").mkdirs();
 
         // Scaffolding del .bp principal.
         java.io.File mainBp = new java.io.File(srcDir, name + ".bp");
@@ -820,6 +827,27 @@ public class FrmMain extends javax.swing.JFrame
                 new javax.swing.tree.DefaultMutableTreeNode(new ProjectNode("Sources", null));
         addFilesUnder(sources, srcDir, ".bp");
         root.add(sources);
+
+        // Resources — H12 (#260): cualquier fichero, recursivo; el label
+        // muestra la ruta relativa ("img/logo.png"). Al micro van como
+        // /app/<rel> en el Run on Device.
+        if (currentProjectFile != null) {
+            java.nio.file.Path rdir = currentProjectFile.getParent().resolve("resources");
+            javax.swing.tree.DefaultMutableTreeNode resNode =
+                    new javax.swing.tree.DefaultMutableTreeNode(new ProjectNode("Resources", null));
+            if (java.nio.file.Files.isDirectory(rdir)) {
+                try (java.util.stream.Stream<java.nio.file.Path> s = java.nio.file.Files.walk(rdir)) {
+                    s.filter(java.nio.file.Files::isRegularFile)
+                     .sorted()
+                     .forEach(p -> {
+                         String rel = rdir.relativize(p).toString().replace('\\', '/');
+                         resNode.add(new javax.swing.tree.DefaultMutableTreeNode(
+                                 new ProjectNode(rel, null)));
+                     });
+                } catch (java.io.IOException ignored) { }
+            }
+            root.add(resNode);
+        }
 
         // Output
         java.nio.file.Path outDir = java.nio.file.Paths.get(currentProject.outDir);
@@ -1528,6 +1556,43 @@ public class FrmMain extends javax.swing.JFrame
         File chosen = fc.getSelectedFile();
         rememberLastDir(chosen.getParentFile());
         openFileInEditor(chosen.toPath());
+    }
+
+    /**
+     * H12 (#260) — Project → Add File to Resources...: copia ficheros
+     * existentes (multi-selección, cualquier tipo: fuentes, imágenes,
+     * tablas...) a <projectDir>/resources/. Crea la carpeta si falta y
+     * refresca el árbol. Sobreescribe si ya existía uno con ese nombre.
+     */
+    private void onAddFileToResources() {
+        if (currentProjectFile == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Abre un proyecto primero (Project → Open Project...).",
+                    "Sin proyecto", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        JFileChooser fc = new JFileChooser();
+        fc.setDialogTitle("Ficheros a copiar a resources/");
+        fc.setMultiSelectionEnabled(true);
+        File initial = initialChooserDir();
+        if (initial != null) fc.setCurrentDirectory(initial);
+        if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        java.nio.file.Path rdir = currentProjectFile.getParent().resolve("resources");
+        try {
+            java.nio.file.Files.createDirectories(rdir);
+            for (File f : fc.getSelectedFiles()) {
+                java.nio.file.Files.copy(f.toPath(), rdir.resolve(f.getName()),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                appendConsola("[resources] añadido " + f.getName() + "\n");
+            }
+            rememberLastDir(fc.getSelectedFiles().length > 0
+                    ? fc.getSelectedFiles()[0].getParentFile() : null);
+            refreshProjectTree();
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "No se pudo copiar a resources/: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**

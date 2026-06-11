@@ -1,0 +1,3 @@
+Fichero de ejemplo de resources/.
+Todo lo que pongas en esta carpeta (fuentes, imagenes, tablas...)
+se sube al micro como /app/<ruta> al hacer Run on Device.
