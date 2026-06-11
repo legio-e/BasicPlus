@@ -622,8 +622,35 @@ rotación falla limpio y el logger degrada (por diseño).
 
 Sample + paridad byte-idéntica: `samples/LogTest.bp` (incluye volcado del
 fichero por stdout para que el diff verifique también lo escrito).
-**Falta de #240**: revisar el resto de la stdlib (2ª pasada de ajuste) — el
-logger era la pieza grande que esperaba al file I/O.
+
+### #240 (cierre) — 2ª pasada de la stdlib ✅ (2026-06-11)
+
+Repaso de los 4 módulos puros (Collections, Stats, Str, Compress):
+
+- **Barrido de paridad**: los 8 samples de stdlib existentes (CompressTest,
+  MapNumTest, MapTest, ParseTest, StatsTest, StrTest, Wrap8Test, XCmpTest)
+  recompilados con el frontend actual y verificados byte a byte en ambas
+  VMs — 8/8 OK. (CompressFileTest necesita entorno con fichero; el camino
+  común lo cubre CompressTest.)
+- **Coherencia Str ↔ L13**: `Str.longToString`/`Str.doubleToString` producen
+  EXACTAMENTE la misma salida que el concat con builtins (GAP-4 se modeló
+  sobre Str). Verificado empíricamente en ambas VMs y anotado en la cabecera
+  de las funciones; el valor añadido que queda en Str es
+  `formatDouble(x, dec)` (elegir decimales) y los parsers.
+- **Compress decompress-only ES diseño**: LZSS con compresor como herramienta
+  de host (documentado en su cabecera). No se amplía.
+- **IO.bp COMPLETO en la VM-C host**: faltaban mkdir/rmdir/copyFile/
+  isDirectory/lastModified (eran "builtin no soportado"). Portados como
+  builtins 69/70/73/75/76 sobre la facade del FS (slots opcionales AL FINAL
+  del struct, mismo patrón que remove/rename): mkdir recursivo ok-si-existe,
+  rmdir solo-vacío, copy sobreescribe (REPLACE_EXISTING), isDirectory sin
+  throw (1/0), lastModified en ms truncado a i32. `fs_host.c` es host-only →
+  `#ifdef _WIN32`/POSIX permitido. **En device quedan a NULL** → RuntimeError
+  atrapable: el FS de los firmwares es plano (sin directorios), mkdir/rmdir/
+  isDirectory no aplican; copy se podría añadir en una sesión de placa si
+  surge la necesidad. Paridad: `samples/FileOpsTest.bp` byte-idéntica.
+
+Con esto #240 (H10) queda **cerrado**.
 
 ### L8 v2 — inits de módulo HORNEADOS en el data block + const arreglada + array de tamaño fijo ✅ (2026-06-10, tarea #255)
 
