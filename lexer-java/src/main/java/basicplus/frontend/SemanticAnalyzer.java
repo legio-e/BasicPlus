@@ -51,6 +51,9 @@ public final class SemanticAnalyzer {
     // ---------- Estado del recorrido (pase 3) ----------
     private ClassSymbol currentClass;
     private FunctionSymbol currentFunction;
+    /** L8 v3 — true mientras se analiza el cuerpo de una `function native`
+     *  (el AotCEmitter no genera arrays fijos locales → error honesto). */
+    private boolean currentFunctionIsNative = false;
     private boolean insideGetter;
     private boolean insideSetter;
     /**
@@ -1021,6 +1024,17 @@ public final class SemanticAnalyzer {
                 } else {
                     fixedN = (int) (long) (Long) n;
                 }
+            } else if (owner != null && v.type instanceof ArrayTypeRef
+                    && ((ArrayTypeRef) v.type).size != null) {
+                // L8 v3 — campo de clase `tipo[N]`: NO soportado todavía (el
+                // constructor tendría que inyectar la alocación). Antes se
+                // ignoraba el [N] en silencio y el campo quedaba como ref
+                // basura. Error honesto + alternativa.
+                ArrayTypeRef at = (ArrayTypeRef) v.type;
+                err(at.line, at.column,
+                    "array de tamaño fijo no soportado como campo de clase; "
+                    + "declara 'tipo[]' e inicialízalo en el constructor "
+                    + "(p. ej. newIntArray/newByteArray/newLongArray)");
             }
             for (DeclName n : v.names) {
                 Symbol sym;
@@ -1242,7 +1256,7 @@ public final class SemanticAnalyzer {
      *  tipo) y longitud <= N; las posiciones restantes quedan a cero. */
     private void validateFixedArrayInit(VarDecl v, VarSymbol vs) {
         if (!(v.init instanceof ArrayLitExpr)) {
-            err(v.line, v.column, "el init de un array de tamaño fijo de módulo debe ser un "
+            err(v.line, v.column, "el init de un array de tamaño fijo debe ser un "
                     + "array literal [a, b, ...] con elementos literales");
             return;
         }
@@ -1256,8 +1270,8 @@ public final class SemanticAnalyzer {
             Object val = constLiteralValue(e);
             if (val == null || val instanceof String) {
                 err(((Ast.Node) e).line, ((Ast.Node) e).column,
-                    "los elementos del init de un array fijo de módulo deben ser "
-                    + "literales numéricos o boolean (se hornean en el .mod)");
+                    "los elementos del init de un array fijo deben ser "
+                    + "literales numéricos o boolean");
                 return;
             }
         }
@@ -1281,6 +1295,8 @@ public final class SemanticAnalyzer {
         FunctionSymbol fs = (FunctionSymbol) s;
 
         FunctionSymbol save = currentFunction;
+        boolean saveNative = currentFunctionIsNative;
+        currentFunctionIsNative = f.isNative;   // L8 v3: guard de T[N] en native
         currentFunction = fs;
         Scope localScope = new Scope("locals", currentClass == null ? module.members : null);
 
@@ -1298,6 +1314,7 @@ public final class SemanticAnalyzer {
         analyzeBody(f.body, localScope);
 
         currentFunction = save;
+        currentFunctionIsNative = saveNative;
     }
 
     private void analyzeProperty(PropertyDef p) {
@@ -1438,6 +1455,31 @@ public final class SemanticAnalyzer {
 
     private void analyzeLocalVarDecl(VarDecl v, Scope scope) {
         BpType t = resolveType(v.type);
+        // L8 v3 — local `tipo[N]` (N literal entero > 0): array HEAP de N
+        // elementos a cero (el alloc zero-inicializa en ambas VMs), con
+        // binding fija como el de módulo (la var no es reasignable; sus
+        // elementos sí). Antes el [N] se ignoraba EN SILENCIO y la ref
+        // quedaba sin inicializar (divergencia dual-VM).
+        Integer fixedN = null;
+        if (v.type instanceof ArrayTypeRef && ((ArrayTypeRef) v.type).size != null) {
+            ArrayTypeRef at = (ArrayTypeRef) v.type;
+            Object n = constLiteralValue(at.size);
+            if (!(n instanceof Long) || (Long) n <= 0) {
+                err(at.line, at.column,
+                    "el tamaño de un array fijo debe ser un literal entero > 0");
+            } else if (!isBakeableArrayElement(t)) {
+                err(at.line, at.column,
+                    "array de tamaño fijo solo admite elementos primitivos "
+                    + "(integer/float/long/double/boolean/byte/word/int8/int16); "
+                    + "para string o clases usa 'tipo[]'");
+            } else if (currentFunctionIsNative) {
+                err(at.line, at.column,
+                    "array de tamaño fijo local no soportado en función native "
+                    + "(el emisor AOT no lo genera); usa newIntArray/newByteArray/newLongArray");
+            } else {
+                fixedN = (int) (long) (Long) n;
+            }
+        }
         if (v.isOwner && !(t instanceof ClassType)) {
             err(v.line, v.column, "'var owner' requiere un tipo clase; '"
                     + t.display() + "' no lo es");
@@ -1448,12 +1490,22 @@ public final class SemanticAnalyzer {
             VarSymbol sym = new VarSymbol(n.name, false, false, null, true, n.line, n.column);
             sym.type = t;
             sym.isOwner = v.isOwner;
+            if (fixedN != null) sym.fixedArraySize = fixedN;
             if (!scope.tryDefine(sym))
                 err(n.line, n.column, "variable duplicada en este scope: '" + n.name + "'");
             if (!info.declSymbols.containsKey(v)) info.declSymbols.put(v, sym);
         }
         if (v.init != null) {
             BpType got = analyzeExpr(v.init, scope, t);
+            // L8 v3 — init de array fijo: literal validado POR ELEMENTO
+            // (longitud <= N, resto a cero), igual que a nivel módulo; la
+            // asignabilidad general de arrays no aplica ([1,2,250] es
+            // integer[] pero entra perfectamente en byte[4]).
+            if (fixedN != null) {
+                Symbol fs = info.declSymbols.get(v);
+                if (fs instanceof VarSymbol) validateFixedArrayInit(v, (VarSymbol) fs);
+                return;
+            }
             if (!t.isAssignableFrom(got)
                     && !acceptsNarrowFromLiteral(t, got, v.init))
                 err(v.line, v.column, narrowAssignErrorMessage(t, got, v.init,
@@ -1525,7 +1577,7 @@ public final class SemanticAnalyzer {
             Symbol ts = info.exprSymbols.get(a.target);
             if (ts instanceof VarSymbol && ((VarSymbol) ts).fixedArraySize >= 0)
                 err(a.line, a.column, "'" + ((VarSymbol) ts).name + "' es un array de tamaño "
-                        + "fijo de módulo: no es reasignable (escribe en sus elementos)");
+                        + "fijo: no es reasignable (escribe en sus elementos)");
         }
 
         // L8 v2 — una const no es asignable en ningún ámbito. Además el emisor

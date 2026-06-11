@@ -1652,6 +1652,38 @@ public final class MivmEmitter {
         BpType declT = vd.type != null ? typeRefToBpType(vd.type)
                                        : (vd.init != null ? info.exprTypes.get(vd.init) : null);
         String declTag = varDbgTypeTag(declT);               // H6.a.2: tag para el .dbg
+        // L8 v3 — local `tipo[N]`: array HEAP de N elementos. NEWARRAY_* deja
+        // los elementos a cero (el alloc zero-inicializa en ambas VMs), así
+        // que un init literal parcial solo escribe sus k primeros elementos.
+        // El semántico ya validó N, el tipo de elemento y el literal, y
+        // bloquea reasignar la var (binding fija, como el de módulo).
+        Integer fixedN = localFixedArraySize(vd);
+        if (fixedN != null) {
+            // OJO: typeRefToBpType solo resuelve SimpleTypeRef (devuelve null
+            // para arrays) — el tipo de ELEMENTO sale del VarSymbol que ya
+            // resolvió el semántico.
+            Symbol ds = info.declSymbols.get(vd);
+            BpType vt = (ds instanceof VarSymbol) ? ((VarSymbol) ds).type : declT;
+            BpType el = (vt instanceof ArrayType) ? ((ArrayType) vt).element : null;
+            java.util.List<IExpr> elems = (vd.init instanceof ArrayLitExpr)
+                    ? ((ArrayLitExpr) vd.init).elements
+                    : java.util.Collections.<IExpr>emptyList();
+            for (DeclName dn : vd.names) {
+                declareLocal(dn.name, declTag);
+                emitInt(fixedN);
+                w.emit(newarrayOpForElement(el));
+                w.emitSetLocal(dn.name);
+                for (int i = 0; i < elems.size(); i++) {
+                    IExpr e = elems.get(i);
+                    w.emitGetLocal(dn.name);
+                    emitInt(i);
+                    emitExpr(e);
+                    coerceToTarget(e, el);                 // p.ej. 1 → 1L en long[N]
+                    w.emit(astoreOpForElement(el));
+                }
+            }
+            return;
+        }
         for (DeclName dn : vd.names) {
             if (is8Byte(declT)) declareLocalLong(dn.name, declTag);   // H1.2/H1.3: long/double = 8 bytes
             else declareLocal(dn.name, declTag);
@@ -3257,19 +3289,47 @@ public final class MivmEmitter {
      */
     private OpCode astoreOpFor(IExpr arrayExpr) {
         BpType t = info.exprTypes.get(arrayExpr);
-        if (t instanceof ArrayType) {
-            BpType el = ((ArrayType) t).element;
-            if (el instanceof PrimitiveType) {
-                switch (((PrimitiveType) el).tag) {
-                    case UINT8: case INT8:    return OpCode.ASTORE_I8;
-                    case UINT16: case INT16:  return OpCode.ASTORE_I16;
-                    case LONG:                return OpCode.ASTORE_I64;   // H1.2 (V2)
-                    case DOUBLE:              return OpCode.ASTORE_I64;   // H1.3 (V2)
-                    default:                  break;
-                }
+        if (t instanceof ArrayType) return astoreOpForElement(((ArrayType) t).element);
+        return OpCode.ASTORE;
+    }
+
+    /** Variante de {@link #astoreOpFor} cuando ya se conoce el tipo de
+     *  ELEMENTO (L8 v3: arrays fijos locales, sin expr de contexto). */
+    private OpCode astoreOpForElement(BpType el) {
+        if (el instanceof PrimitiveType) {
+            switch (((PrimitiveType) el).tag) {
+                case UINT8: case INT8:    return OpCode.ASTORE_I8;
+                case UINT16: case INT16:  return OpCode.ASTORE_I16;
+                case LONG:                return OpCode.ASTORE_I64;   // H1.2 (V2)
+                case DOUBLE:              return OpCode.ASTORE_I64;   // H1.3 (V2)
+                default:                  break;
             }
         }
         return OpCode.ASTORE;
+    }
+
+    /** L8 v3 — opcode de alocación según el ancho del elemento (espejo de
+     *  astoreOpForElement; todos zero-inicializan en ambas VMs). */
+    private OpCode newarrayOpForElement(BpType el) {
+        if (el instanceof PrimitiveType) {
+            switch (((PrimitiveType) el).tag) {
+                case UINT8: case INT8:    return OpCode.NEWARRAY_I8;
+                case UINT16: case INT16:  return OpCode.NEWARRAY_I16;
+                case LONG: case DOUBLE:   return OpCode.NEWARRAY_I64;
+                default:                  break;
+            }
+        }
+        return OpCode.NEWARRAY;
+    }
+
+    /** L8 v3 — N del `tipo[N]` de una declaración LOCAL, o null si no es un
+     *  array de tamaño fijo válido (el semántico ya diagnosticó los inválidos). */
+    private static Integer localFixedArraySize(VarDecl vd) {
+        if (!(vd.type instanceof ArrayTypeRef)) return null;
+        ArrayTypeRef at = (ArrayTypeRef) vd.type;
+        if (at.size == null) return null;
+        Object n = SemanticAnalyzer.constLiteralValue(at.size);
+        return (n instanceof Long && (Long) n > 0) ? (int) (long) (Long) n : null;
     }
 
     /**

@@ -1,0 +1,67 @@
+// LocalArrTest.bp — L8 v3: arrays de tamaño fijo LOCALES (`var buf: tipo[N]`
+// dentro de una función). Semántica: array HEAP de N elementos a cero
+// (zero-init garantizado por el alloc en ambas VMs), binding fija (la var no
+// es reasignable; sus elementos sí), init literal opcional con longitud <= N
+// (el resto queda a cero). Antes el [N] se ignoraba EN SILENCIO y la ref
+// quedaba sin inicializar (divergencia dual-VM: Java escribía a ciegas, C
+// petaba con ASTORE fuera de rango).
+//
+// Paridad esperada (VM-Java == VM-C host, byte a byte):
+//   suma integer[10] = 45
+//   suma via funcion = 45
+//   bytes = 1,2,250,0  len=4
+//   words = 1000,2000,0  len=3
+//   int16 = -5,-300,0
+//   longs = 5,4000000000,0  len=3
+//   dobles = 1.5,0  len=2
+//   fin
+module LocalArrTest
+
+  function suma2(a: integer[]): integer
+    var s: integer := 0
+    for n in a do
+      s += n
+    next n
+    return s
+  end suma2
+
+  function Main()
+    // Sin init: N elementos a cero; len() e iteración funcionan.
+    var nums: integer[10]
+    for i := 0 to len(nums) - 1 do
+      nums[i] := i
+    next i
+    var suma: integer := 0
+    for n in nums do
+      suma += n
+    next n
+    print "suma integer[10] = " + intToString(suma)
+
+    // El array local es un array normal del heap: se pasa como tipo[].
+    print "suma via funcion = " + intToString(suma2(nums))
+
+    // Anchos estrechos con init parcial: el resto queda a cero.
+    var bytes: byte[4] := [1, 2, 250]
+    print ("bytes = " + bytes[0] + "," + bytes[1] + "," + bytes[2] + ","
+        + bytes[3] + "  len=" + intToString(len(bytes)))
+
+    var words: word[3] := [1000, 2000]
+    print ("words = " + words[0] + "," + words[1] + "," + words[2]
+        + "  len=" + intToString(len(words)))
+
+    // int16 con negativos: el load extiende el signo.
+    var neg: int16[3] := [-5, -300]
+    print "int16 = " + neg[0] + "," + neg[1] + "," + neg[2]
+
+    // 8 bytes por elemento: el literal entero corto se ensancha a long.
+    var longs: long[3] := [5, 4000000000L]
+    print ("longs = " + longs[0] + "," + longs[1] + "," + longs[2]
+        + "  len=" + intToString(len(longs)))
+
+    var dobles: double[2] := [1.5d]
+    print ("dobles = " + dobles[0] + "," + dobles[1]
+        + "  len=" + intToString(len(dobles)))
+
+    print "fin"
+  end Main
+end LocalArrTest

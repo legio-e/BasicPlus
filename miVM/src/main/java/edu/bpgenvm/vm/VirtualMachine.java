@@ -1026,6 +1026,12 @@ public class VirtualMachine {
                 int tag = (type << TAG_TYPE_SHIFT);
                 writeInt32(addr, tag);
                 int userRef = addr + 4;
+                // Paridad con la VM-C (heap.c): zero-init de length slot +
+                // payload. CRÍTICO al reusar bloques del free-list — sin esto
+                // NEWARRAY/newIntArray()/NEW_OBJECT sobre un bloque reciclado
+                // devuelven el contenido del objeto anterior (la VM-C hace
+                // memset SIEMPRE; aquí faltaba).
+                java.util.Arrays.fill(memory, userRef, userRef + 4 + payloadBytes, (byte) 0);
                 // Ancla GC: el ref vuelve al caller que aún tiene que
                 // publicarlo (write a stack/field) sin lock. Si entre
                 // medias otro worker dispara GC, scanRegion ve este ancla
@@ -1049,6 +1055,8 @@ public class VirtualMachine {
             int tag = (type << TAG_TYPE_SHIFT);
             writeInt32(addr, tag);
             int userRef2 = addr + 4;
+            // Mismo zero-init que la ruta sin GC (paridad VM-C).
+            java.util.Arrays.fill(memory, userRef2, userRef2 + 4 + payloadBytes, (byte) 0);
             if (me != null) me.allocAnchor = userRef2;
             return userRef2;
         }

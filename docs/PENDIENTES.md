@@ -726,6 +726,38 @@ Repaso de los 4 módulos puros (Collections, Stats, Str, Compress):
 
 Con esto #240 (H10) queda **cerrado**.
 
+### L8 v3 — arrays de tamaño fijo LOCALES + zero-init del heap VM-Java ✅ (2026-06-12)
+
+Apareció verificando hechos para el manual (H13): un local `var buf: tipo[N]`
+**compilaba en silencio con código roto** — el semántico ignoraba la `[N]`
+(deuda anotada en L8 v2) y la var quedaba como ref de array SIN inicializar.
+Divergencia dual-VM de libro: la VM-Java escribía a ciegas sobre memoria baja
+y `len()` devolvía basura; la VM-C chequeaba el header y petaba
+(`ASTORE: índice fuera de rango (length=0)`).
+
+Decisión de Eduardo: "hay que solucionarlo" → implementados sobre HEAP:
+
+- **Local `tipo[N]`** = array heap de N elementos a cero, binding fija (no
+  reasignable, como el de módulo), init literal opcional por elemento con
+  longitud <= N (el resto queda a cero). Elementos primitivos (mismas reglas
+  que módulo). Solo frontend: PUSH N + NEWARRAY_{,I8,I16,I64} según ancho +
+  stores del literal (con widening int→long/double). Cero cambios de VM/.mod.
+- **Campo de clase `tipo[N]`**: error honesto (antes también silencioso-roto);
+  el constructor tendría que inyectar la alocación → anotado para v2.
+- **`tipo[N]` local en `function native`**: error honesto (el AotCEmitter no
+  lo genera); alternativa newIntArray/newByteArray/newLongArray.
+- **GAP de paridad en el heap VM-Java** (descubierto de rebote): `heapAlloc`
+  NO zero-inicializaba el payload — la VM-C hace memset SIEMPRE (heap.c). Un
+  NEWARRAY/newIntArray()/NEW_OBJECT sobre un bloque reciclado del free-list
+  devolvía el contenido del objeto anterior en Java. Arreglado con fill en
+  las dos rutas de éxito de heapAlloc (espejo exacto de la VM-C).
+
+Sample + paridad byte-idéntica: `samples/LocalArrTest.bp` (todos los anchos,
+init parcial con cola a cero, len, for-in, paso como `tipo[]`). Regresión
+7/7 (ModInit/NumCatTest/Field8Test/LenTest/MapTest/StrTest/ExcCatchTest) +
+suite miVM verde. Bonus para el manual: la sintaxis del cast es `integer(x)`
+(no `int(x)`) y la de native es `native function` (no `function native`).
+
 ### L8 v2 — inits de módulo HORNEADOS en el data block + const arreglada + array de tamaño fijo ✅ (2026-06-10, tarea #255)
 
 Tres piezas con la misma maquinaria (el .mod NO cambia de formato; las VMs NO
