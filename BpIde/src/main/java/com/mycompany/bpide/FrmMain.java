@@ -538,7 +538,21 @@ public class FrmMain extends javax.swing.JFrame
                     if (last instanceof ProjectNode) {
                         ProjectNode pn = (ProjectNode) last;
                         if (pn.openableFile != null) {
-                            openFileInEditor(pn.openableFile);
+                            // H12 (#260) — los resources pueden ser binarios
+                            // (imágenes, fuentes): texto → editor del IDE;
+                            // el resto → aplicación del sistema.
+                            if (looksLikeTextFile(pn.openableFile)) {
+                                openFileInEditor(pn.openableFile);
+                            } else {
+                                try {
+                                    java.awt.Desktop.getDesktop()
+                                            .open(pn.openableFile.toFile());
+                                } catch (Exception ex) {
+                                    appendConsola("[ide] no se pudo abrir "
+                                            + pn.openableFile.getFileName()
+                                            + ": " + ex.getMessage() + "\n");
+                                }
+                            }
                         }
                     }
                 }
@@ -560,6 +574,17 @@ public class FrmMain extends javax.swing.JFrame
         picoExplorer.setClearSink(() -> { if (consolaArea != null) consolaArea.setText(""); });
         if (consolePromptLabel != null) consolePromptLabel.setText(" " + picoExplorer.consolePrompt());
         jSplitPane2.setBottomComponent(picoExplorer);
+    }
+
+    /** H12 (#260) — ¿el fichero parece de texto (editable en el IDE)? Por
+     *  extensión; lo que no esté en la lista se abre con la app del sistema. */
+    private static boolean looksLikeTextFile(java.nio.file.Path p) {
+        String n = p.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+        return n.endsWith(".bp") || n.endsWith(".txt") || n.endsWith(".json")
+            || n.endsWith(".csv") || n.endsWith(".md") || n.endsWith(".cfg")
+            || n.endsWith(".xml") || n.endsWith(".html") || n.endsWith(".htm")
+            || n.endsWith(".log") || n.endsWith(".ini") || n.endsWith(".bpi")
+            || n.endsWith(".bpbuild") || n.endsWith(".bpproject");
     }
 
     /** Userdata adjunta a cada nodo del JTree: label visible + path opcional
@@ -841,8 +866,10 @@ public class FrmMain extends javax.swing.JFrame
                      .sorted()
                      .forEach(p -> {
                          String rel = rdir.relativize(p).toString().replace('\\', '/');
+                         // Doble clic abre: texto en el editor, binario con
+                         // la app del sistema (lo decide el mouse handler).
                          resNode.add(new javax.swing.tree.DefaultMutableTreeNode(
-                                 new ProjectNode(rel, null)));
+                                 new ProjectNode(rel, p)));
                      });
                 } catch (java.io.IOException ignored) { }
             }
