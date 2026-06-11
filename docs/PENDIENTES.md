@@ -608,6 +608,57 @@ exponer el nº de canales por placa (p. ej. `Pico.adcChannels()` intrínseco,
 como `gpioCount()` de H7.3) y validar contra eso. Pequeño; encaja con
 M-micros-tree (#258, datos por placa).
 
+#### H11 — TCP/IP: cliente simple (pendiente; investigación 2026-06-11, tarea #241)
+
+**Estado actual: cero sockets visibles desde BP.** TCP existe solo como
+infraestructura: el wire IDE↔VM-Java ya corre sobre TCP (`DebugServer
+--listen`), el host VM-C tiene server de debug TCP (`test/debug_listen.c`),
+el firmware tiene el transporte abstraído (#137) y el IDE el endpoint
+configurable (A2.6). Nada de eso lo ve un programa BP.
+
+**Diseño propuesto (fase host):**
+- API BP OO (política HW=clases): módulo `Net.bp`, clase `Net.Tcp`:
+  `connect(host, port, timeoutMs): boolean`, `send(data: byte[]): integer`,
+  `recv(max, timeoutMs): byte[]`, `close()` + azúcar string encima
+  (`sendStr`/`recvLine`; UTF-8 ya resuelto en H2). `recv` SIEMPRE con
+  timeout — sin recv infinito: en host los workers son threads reales,
+  pero en device bloquearían el worker FreeRTOS entero.
+- Builtins nuevos AL FINAL del enum (orden estable): TCP_CONNECT=131,
+  TCP_SEND=132, TCP_RECV=133, TCP_CLOSE=134; handle = int en tabla de la
+  VM (como mutex/threads).
+- VM-Java: `java.net.Socket` + `setSoTimeout`. VM-C: facade `bpvm_net.h`
+  (struct backend con slots opcionales, NULL → RuntimeError atrapable —
+  patrón fs/gpio); host-only `net_host.c` (#ifdef _WIN32 Winsock2/
+  WSAStartup vs POSIX). STM32 U575: sin red → NULL siempre.
+- Paridad: sample contra echo-server local determinista (mini server que
+  levanta el harness); respuestas fijas → stdout byte-idéntico. Sample
+  "con entorno" como CompressFileTest.
+
+**Pico 2 W (P-pico-wifi-tcp #145):**
+- HW: CYW43439 (WiFi por SPI/PIO interno; el LED de la W cuelga del CYW43
+  → `cyw43_arch_gpio_put`, no GPIO25). Board `pico2_w` presente en el SDK.
+- SDK local: `pico_cyw43_arch` trae integración FreeRTOS
+  (`arch_freertos.h`) → usar `pico_cyw43_arch_lwip_sys_freertos`
+  (NO_SYS=0, API de sockets de lwIP), que encaja con el firmware actual.
+  **OJO: los submódulos `lib/cyw43-driver` y `lib/lwip` del pico-sdk están
+  VACÍOS** → `git submodule update --init lib/cyw43-driver lib/lwip` antes
+  de compilar.
+- Config WiFi: `/sys/wifi.json` `{ssid, pass, country}` — patrón
+  P-cfg-device; se sube/edita desde el IDE (doble-clic ya edita ficheros
+  del micro). Al boot, si existe → `cyw43_arch_init_with_country` +
+  `enable_sta_mode` + `wifi_connect_timeout_ms`, SIN bloquear la comm
+  task (USB siempre vivo — misma regla que P-autorun).
+- RAM: cyw43+lwIP son decenas de KB y la Pico 2 W no tiene PSRAM →
+  revisar mapa de memoria (s_vm_buffer) al integrarlo.
+- ESP32-S3 tiene WiFi nativo (esp_wifi + sockets lwIP en IDF) → el mismo
+  backend Net sale casi gratis después.
+- Premio final (v2): wire v1 sobre TCP → "Run on Device" por WiFi sin
+  cable; el transporte ya está abstraído (#137) y el endpoint es
+  configurable (A2.6).
+
+**Orden propuesto**: H11.a API + host + paridad → H11.b WiFi al boot con
+wifi.json (Pico 2 W) → H11.c backend Net sobre lwIP → (v2) wire por WiFi.
+
 ---
 
 ## ✅ Cerrado en sesiones recientes — anotaciones
