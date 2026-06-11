@@ -600,8 +600,9 @@ Notas de diseño:
 
 #### P-adc-8ch — Adc.bp limitado a 4 canales en placas RP2350B (pendiente, 2026-06-11)
 Al arreglar el INFO del Metro (temp en canal equivocado, ADC base pin) quedó
-esto: el backend C ya es variante-aware (`ADC_BASE_PIN`/`NUM_ADC_CHANNELS`
-del SDK: A = 4 canales GPIO26-29, B = 8 canales GPIO40-47), pero **Adc.bp
+esto: el backend C ya es variante-aware EN RUNTIME (board_desc()->variant,
+de /sys/board.json — imagen unica: las macros del SDK no valen; A = 4
+canales GPIO26-29, B = 8 canales GPIO40-47), pero **Adc.bp
 valida `0..3` en BP** — subset común y correcto en ambas variantes, pero en
 una RP2350B los canales 4-7 quedan inaccesibles desde BP. Ampliar requiere
 exponer el nº de canales por placa (p. ej. `Pico.adcChannels()` intrínseco,

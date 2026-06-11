@@ -440,11 +440,15 @@ static const bpvm_pwm_backend_t s_pico_pwm_backend = {
  * Identificación: pico_get_unique_board_id_string() escribe los
  *   8 bytes del flash chip ID como string ASCII de 16 hex chars.
  *
- * Temperatura interna: el sensor del die va al ÚLTIMO canal del ADC
- *   (ADC_TEMPERATURE_CHANNEL_NUM del SDK): input 4 en RP2350A (QFN-60)
- *   pero input 8 en RP2350B (QFN-80), donde los inputs 0-7 son los
- *   GPIO40-47. Con el 4 hardcodeado, en el Metro se leía el GPIO44
- *   flotante y salían "grados" absurdos.
+ * Temperatura interna: el sensor del die va al ÚLTIMO canal del mux ADC,
+ *   y su índice depende de la VARIANTE del chip: input 4 en RP2350A
+ *   (QFN-60) pero input 8 en RP2350B (QFN-80), donde los inputs 0-7 son
+ *   los GPIO40-47. Con el 4 hardcodeado, en el Metro se leía el GPIO44
+ *   flotante y salían "grados" absurdos. Como la imagen es ÚNICA
+ *   (bp_rp2350b genérico, decisión 2026-06-06), la variante se decide en
+ *   RUNTIME con board_desc() — las macros del SDK (NUM_ADC_CHANNELS,
+ *   ADC_BASE_PIN, ADC_TEMPERATURE_CHANNEL_NUM) compilan aquí SIEMPRE como
+ *   package B y en un Pico 2 seleccionarían un input inexistente.
  *   Fórmula de conversión del datasheet:
  *     T_C = 27 - (V_ADC - 0.706) / 0.001721
  *   donde V_ADC = raw * 3.3 / 4095.
@@ -497,8 +501,8 @@ static void pico_pico_board_name_impl(char* buf, size_t len) {
 
 static float pico_pico_temp_c_impl(void) {
     ensure_adc_inited();
-    /* Último canal = sensor del die (4 en RP2350A, 8 en RP2350B). */
-    adc_select_input(ADC_TEMPERATURE_CHANNEL_NUM);
+    /* Último canal del mux = sensor del die; por variante en runtime. */
+    adc_select_input(board_desc()->variant == 'B' ? 8u : 4u);
     /* Promediamos 8 muestras para reducir ruido del ADC. */
     uint32_t acc = 0;
     for (int i = 0; i < 8; i++) acc += adc_read();
@@ -607,31 +611,35 @@ static const bpvm_pico_backend_t s_pico_pico_backend = {
 #include "bpvm_adc.h"
 #include "hardware/adc.h"   /* ya incluido para tempC pero idempotente */
 
-/* Canales ADC externos según variante (el último canal del mux es el
- * sensor de temperatura): RP2350A = 4 (GPIO26-29), RP2350B = 8
- * (GPIO40-47). ADC_BASE_PIN y NUM_ADC_CHANNELS los define el SDK por
- * variante — con el 26 hardcodeado, en el Metro (B) se configuraba un
- * GPIO digital y se leía otro pin. Adc.bp sigue limitando a 0..3 en BP
- * (subset común a ambas variantes; ampliarlo a 8 queda anotado). */
-#define ADC_EXT_CHANNELS ((int) NUM_ADC_CHANNELS - 1)
+/* Canales ADC externos según VARIANTE, decidida en RUNTIME (board_desc):
+ * RP2350A = 4 (GPIO26-29, sensor en input 4), RP2350B = 8 (GPIO40-47,
+ * sensor en input 8). Imagen única → NO usar ADC_BASE_PIN /
+ * NUM_ADC_CHANNELS del SDK (en este build genérico son siempre los del
+ * package B): con el 26 hardcodeado el Metro configuraba un GPIO digital
+ * y leía otro pin. bd->adc_channels ya trae 4/8 por variante. Adc.bp
+ * sigue limitando a 0..3 en BP (subset común; ampliar = P-adc-8ch). */
 static int s_adc_chan_inited[8] = { 0 };   /* máx. externos (RP2350B) */
 
+static int adc_base_gpio(void) {
+    return board_desc()->variant == 'B' ? 40 : 26;
+}
+
 static int pico_adc_init_channel_impl(int ch) {
-    if (ch < 0 || ch >= ADC_EXT_CHANNELS) return -1;
+    if (ch < 0 || ch >= board_desc()->adc_channels) return -1;
     if (!s_adc_chan_inited[ch]) {
         /* ensure_adc_inited() (más arriba) ya hace adc_init() la
          * primera vez que tempC se usa. Lo replicamos aquí por si
          * Adc.Channel se usa SIN haber tocado Pico.tempC antes. El
          * SDK es idempotente. */
         ensure_adc_inited();
-        adc_gpio_init((uint) ADC_BASE_PIN + (uint) ch);
+        adc_gpio_init((uint)(adc_base_gpio() + ch));
         s_adc_chan_inited[ch] = 1;
     }
-    return (int) ADC_BASE_PIN + ch;
+    return adc_base_gpio() + ch;
 }
 
 static int pico_adc_read_channel_impl(int ch) {
-    if (ch < 0 || ch >= ADC_EXT_CHANNELS) return -1;
+    if (ch < 0 || ch >= board_desc()->adc_channels) return -1;
     adc_select_input((uint) ch);
     return (int) adc_read();
 }
