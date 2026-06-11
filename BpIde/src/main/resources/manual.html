@@ -320,7 +320,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Estructura</td>
       <td><code>module</code> <code>end</code> <code>import</code> <code>library</code> <code>from</code> <code>interface</code> <code>implements</code></td></tr>
   <tr><td>Declaraciones</td>
-      <td><code>const</code> <code>var</code> <code>function</code> <code>class</code> <code>extends</code> <code>enum</code>
+      <td><code>const</code> <code>var</code> <code>function</code> <code>native</code> <code>class</code> <code>extends</code> <code>enum</code>
           <code>property</code> <code>get</code> <code>set</code> <code>endprop</code> <code>endget</code> <code>endset</code></td></tr>
   <tr><td>Visibilidad / mods</td>
       <td><code>public</code> <code>final</code> <code>owner</code> <code>sync</code></td></tr>
@@ -329,7 +329,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Control flujo</td>
       <td><code>if</code> <code>then</code> <code>else</code> <code>elseif</code> <code>endif</code>
           <code>while</code> <code>do</code> <code>endwh</code>
-          <code>for</code> <code>to</code> <code>step</code> <code>next</code>
+          <code>for</code> <code>to</code> <code>step</code> <code>in</code> <code>next</code>
           <code>switch</code> <code>case</code> <code>default</code> <code>endsw</code>
           <code>parallel</code> <code>endpar</code>
           <code>break</code> <code>continue</code> <code>return</code></td></tr>
@@ -348,11 +348,26 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <table>
   <tr><th>Tipo</th><th>Ejemplos</th></tr>
   <tr><td>Integer</td><td><code>0</code> <code>42</code> <code>-7</code> <code>0xFF</code></td></tr>
-  <tr><td>Float</td><td><code>3.14</code> <code>1.0e-3</code></td></tr>
-  <tr><td>String</td><td><code>"hola"</code> con escapes <code>\n \t \" \\</code></td></tr>
+  <tr><td>Long</td><td><code>123L</code> <code>4000000000L</code> — sufijo <code>L</code>/<code>l</code> sobre un entero decimal</td></tr>
+  <tr><td>Float</td><td><code>3.14</code> <code>1.0e-3</code> — sin sufijo, un literal con punto o exponente es <code>float</code> (f32)</td></tr>
+  <tr><td>Double</td><td><code>1.5d</code> <code>5d</code> <code>2e3d</code> — sufijo <code>d</code>/<code>D</code> sobre un entero o float</td></tr>
+  <tr><td>String</td><td><code>"hola"</code> con escapes <code>\n \t \r \" \\ \0</code></td></tr>
   <tr><td>Boolean</td><td><code>true</code> <code>false</code></td></tr>
   <tr><td>Null</td><td><code>null</code> (sólo para referencias: clases y arrays)</td></tr>
 </table>
+
+<h3 id="multilinea">3.5 Continuación de línea</h3>
+<p>
+  El salto de línea termina la sentencia, <strong>salvo dentro de paréntesis
+  o corchetes abiertos</strong>: ahí el salto no es significativo y la
+  expresión continúa en la línea siguiente. Para partir una expresión larga,
+  enciérrala en <code>( )</code>:
+</p>
+<pre><code><span class="kw">print</span> (<span class="str">"total = "</span> + intToString(a)
+    + <span class="str">" / "</span> + intToString(b))      <span class="comment">// OK: dentro de ( )</span>
+
+<span class="kw">var</span> v: <span class="type">integer</span>[] := [<span class="num">1</span>, <span class="num">2</span>,
+                       <span class="num">3</span>, <span class="num">4</span>]          <span class="comment">// OK: dentro de [ ]</span></code></pre>
 
 <!-- =========================================================== -->
 <h2 id="tipos">4. Tipos</h2>
@@ -361,14 +376,46 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <table>
   <tr><th>Tipo</th><th>Rango / detalle</th></tr>
   <tr><td><code>integer</code></td><td>Entero 32 bits con signo (-2³¹..2³¹-1)</td></tr>
+  <tr><td><code>long</code></td><td>Entero 64 bits con signo. Literal con sufijo <code>L</code>: <code>4000000000L</code></td></tr>
   <tr><td><code>float</code></td><td>IEEE-754 32 bits</td></tr>
-  <tr><td><code>string</code></td><td>Inmutable, secuencia de code points (i32 por carácter)</td></tr>
+  <tr><td><code>double</code></td><td>IEEE-754 64 bits. Literal con sufijo <code>d</code>: <code>1.5d</code></td></tr>
+  <tr><td><code>byte</code></td><td>Entero estrecho sin signo, 8 bits (0..255)</td></tr>
+  <tr><td><code>int8</code></td><td>Entero estrecho con signo, 8 bits (-128..127)</td></tr>
+  <tr><td><code>word</code></td><td>Entero estrecho sin signo, 16 bits (0..65535)</td></tr>
+  <tr><td><code>int16</code></td><td>Entero estrecho con signo, 16 bits (-32768..32767). <code>short</code> es alias de <code>int16</code></td></tr>
+  <tr><td><code>string</code></td><td>Inmutable; internamente UTF-8, indexación y <code>len()</code> por <em>code point</em> (<code>len("héllo") = 5</code>)</td></tr>
   <tr><td><code>boolean</code></td><td><code>true</code> / <code>false</code></td></tr>
 </table>
 <p>
-  Promoción automática <code>integer → float</code> en operaciones mixtas y
-  asignación. No hay coerción <code>float → integer</code> implícita
-  (usar <code>floor</code>, <code>ceil</code>, <code>round</code>).
+  Los tipos <strong>estrechos</strong> (<code>byte</code>/<code>int8</code>/
+  <code>word</code>/<code>int16</code>) son tipos de <em>almacenamiento</em>:
+  en arrays y campos ocupan 1-2 bytes por elemento; en la pila y en
+  expresiones operan como <code>integer</code> (la lectura extiende con o sin
+  signo según el tipo). Asignar un literal fuera de rango es error de
+  compilación con el rango exacto en el mensaje.
+</p>
+<h4>4.1.1 Promoción y casts</h4>
+<p>
+  En operaciones mixtas y asignación hay <strong>promoción automática al tipo
+  más ancho</strong>: <code>integer → long → float → double</code> (los
+  estrechos suben primero a <code>integer</code>). La dirección contraria
+  NUNCA es implícita: estrechar requiere un <strong>cast explícito</strong>
+  con la sintaxis de llamada del tipo destino:
+</p>
+<pre><code><span class="kw">var</span> d: <span class="type">double</span> := <span class="num">3.9d</span>
+<span class="kw">var</span> i: <span class="type">integer</span> := integer(d)     <span class="comment">// 3 — trunca hacia cero (integer(-3.9d) = -3)</span>
+<span class="kw">var</span> L: <span class="type">long</span>    := long(i)        <span class="comment">// widening explícito también disponible</span>
+<span class="kw">var</span> f: <span class="type">float</span>   := float(L)
+<span class="kw">var</span> b: <span class="type">byte</span>    := byte(i)        <span class="comment">// valida el RANGO en runtime:</span>
+                                  <span class="comment">// fuera de 0..255 lanza RuntimeError (atrapable)</span></code></pre>
+<p>
+  Los casts numéricos son <code>integer(x)</code>, <code>long(x)</code>,
+  <code>float(x)</code>, <code>double(x)</code> y los estrechos
+  <code>byte(x)</code>, <code>int8(x)</code>, <code>word(x)</code>,
+  <code>int16(x)</code>. <code>integer(x)</code> sobre un float/double
+  <em>trunca hacia cero</em>; para redondear usa <code>floor</code>,
+  <code>ceil</code> o <code>round</code>. El cast de un literal fuera del
+  rango del tipo destino se rechaza en compilación.
 </p>
 
 <h3 id="arrays">4.2 Arrays</h3>
@@ -381,29 +428,39 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <h4>4.2.1 Arrays de tamaño fijo &nbsp;<code>T[N]</code></h4>
 <p>
-  El tamaño se conoce en tiempo de compilación. El espacio se reserva
-  <strong>en línea</strong>, no en el heap, junto al ámbito donde se declara:
+  El tamaño es un <strong>literal entero &gt; 0</strong> conocido en
+  compilación, y los elementos son <strong>primitivos</strong> (enteros,
+  estrechos, <code>long</code>, <code>float</code>, <code>double</code>,
+  <code>boolean</code> — para <code>string</code> o clases usa
+  <code>T[]</code>). La variable <em>ES</em> el array: tiene
+  <strong>binding fija</strong> (no se puede reasignar; sus elementos sí
+  son escribibles). Dónde vive depende del ámbito:
 </p>
 <table>
   <tr><th>Ámbito</th><th>Dónde vive</th></tr>
-  <tr><td>Local de función</td><td>En el stack frame de la función (BP+offset).</td></tr>
-  <tr><td>Global de módulo</td><td>En el data block del <code>.mod</code> (CS+offset).</td></tr>
-  <tr><td>Constante de módulo (con literal)</td><td>En el data block, valores inmutables.</td></tr>
+  <tr><td>Global de módulo</td><td>Horneado en el data block del <code>.mod</code> (incluido el init literal): cero heap y cero código de arranque.</td></tr>
+  <tr><td>Local de función</td><td>Array del heap de N elementos, alocado a cero al entrar la declaración. Gestionado por el GC como cualquier array.</td></tr>
+  <tr><td>Campo de clase</td><td><strong>No soportado</strong> (error de compilación): declara <code>T[]</code> e inicialízalo en el constructor con <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.</td></tr>
 </table>
-<pre><code><span class="comment">// Local: 10 enteros reservados en el frame (40 bytes en stack)</span>
-<span class="kw">var</span> nums: <span class="type">integer</span>[<span class="num">10</span>]
-nums[<span class="num">0</span>] := <span class="num">42</span>
-<span class="kw">print</span> nums[<span class="num">0</span>]
+<pre><code><span class="comment">// Módulo: horneado en el data block; el init literal puede ser más corto</span>
+<span class="comment">// que N — el resto queda a cero. [1,2,250] entra en byte[4] (se valida</span>
+<span class="comment">// elemento a elemento, no por asignabilidad de arrays).</span>
+<span class="kw">var</span> tabla: <span class="type">integer</span>[<span class="num">4</span>] := [<span class="num">10</span>, <span class="num">20</span>, <span class="num">30</span>]   <span class="comment">// → 10,20,30,0</span>
+<span class="kw">var</span> mascara: <span class="type">byte</span>[<span class="num">4</span>] := [<span class="num">1</span>, <span class="num">2</span>, <span class="num">250</span>]
 
-<span class="comment">// Global: el data block del módulo guarda el array entero</span>
-<span class="kw">var</span> tabla: <span class="type">integer</span>[<span class="num">256</span>]            <span class="comment">// fuera de cualquier función</span>
-
-<span class="comment">// Constante con valor literal: data block, inmutable</span>
-<span class="kw">public const</span> PRIMOS: <span class="type">integer</span>[] := [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>, <span class="num">11</span>]</code></pre>
+<span class="kw">function</span> Main()
+  <span class="comment">// Local: N elementos a cero en el heap; len() e iteración funcionan</span>
+  <span class="kw">var</span> buf: <span class="type">byte</span>[<span class="num">64</span>]                    <span class="comment">// buffer típico de I2C/SPI</span>
+  buf[<span class="num">0</span>] := <span class="num">42</span>
+  <span class="kw">print</span> len(buf)                       <span class="comment">// 64</span>
+  <span class="comment">// buf := otra    ← error: binding fija (escribe en sus elementos)</span>
+<span class="kw">end</span> Main</code></pre>
 <p>
-  Sin asignación inicial, los elementos parten a cero / null. El array
-  fijo NO se libera porque no vive en el heap; desaparece con su frame /
-  módulo.
+  El array fijo local es un array normal del heap: se puede pasar a una
+  función que reciba <code>T[]</code> y desaparece vía GC cuando deja de
+  referenciarse. El de módulo vive en el data block y no se libera nunca.
+  No existen <em>const</em> arrays: una <code>const</code> de módulo solo
+  admite literales primitivos (ver <a href="#const">§5.2</a>).
 </p>
 
 <h4>4.2.2 Arrays de tamaño variable &nbsp;<code>T[]</code></h4>
@@ -419,11 +476,15 @@ nums[<span class="num">0</span>] := <span class="num">42</span>
 <span class="kw">var</span> partes: <span class="type">string</span>[] := split(<span class="str">"a,b,c"</span>, <span class="str">","</span>)
 <span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)</code></pre>
 <p>
-  La VM usa tres tipos físicos en el heap según el ancho del elemento:
-  <code>TYPE_ARRAY_I8</code>, <code>TYPE_ARRAY_I16</code>,
-  <code>TYPE_ARRAY_I32</code> (también vale para floats: 4 bytes opacos), y
+  La VM usa cinco tipos físicos en el heap según el ancho del elemento:
+  <code>TYPE_ARRAY_I8</code> (byte/int8 y strings UTF-8),
+  <code>TYPE_ARRAY_I16</code> (word/int16),
+  <code>TYPE_ARRAY_I32</code> (integer; también floats, 4 bytes opacos),
+  <code>TYPE_ARRAY_I64</code> (long/double, 8 bytes por elemento) y
   <code>TYPE_ARRAY_REF</code> (4 bytes, refs a objetos, escaneado por el
-  GC). El array lleva su propia longitud como primer slot.
+  GC). El array lleva su propia longitud como primer slot. En los anchos
+  estrechos, la lectura extiende el valor a i32 (con o sin signo según el
+  tipo) y la escritura trunca al ancho del elemento.
 </p>
 
 <h4>4.2.3 Acceso e iteración</h4>
@@ -482,17 +543,34 @@ nums[<span class="num">0</span>] := <span class="num">42</span>
 <h3 id="var">5.1 <code>var</code></h3>
 <pre><code><span class="kw">var</span> nombre: <span class="type">string</span>
 <span class="kw">var</span> edad:   <span class="type">integer</span> := <span class="num">30</span>
+<span class="kw">var</span> total:  <span class="type">long</span> := <span class="num">0L</span>
+<span class="kw">var</span> media:  <span class="type">double</span>
 <span class="kw">var</span> x, y, z: <span class="type">integer</span>                  <span class="comment">// múltiples nombres</span>
-<span class="kw">var</span> pts: <span class="type">integer</span>[<span class="num">100</span>]                  <span class="comment">// array local</span>
+<span class="kw">var</span> pts: <span class="type">integer</span>[<span class="num">100</span>]                  <span class="comment">// array fijo (§4.2.1)</span>
 <span class="kw">var</span> p: Punto := Punto(<span class="num">3</span>, <span class="num">4</span>)             <span class="comment">// ref a clase</span></code></pre>
+<p>
+  A nivel de módulo, una <code>var</code> con init <strong>literal</strong>
+  (numérico/boolean/string) queda <em>horneada</em> en el data block del
+  <code>.mod</code>: no genera código de arranque y la variable sigue siendo
+  reasignable. Un init de módulo no-literal se ignora con un aviso —
+  asígnalo en la función inicializadora del módulo (la función con el mismo
+  nombre que el módulo).
+</p>
 
 <h3 id="const">5.2 <code>const</code></h3>
 <pre><code><span class="kw">public const</span> PI: <span class="type">float</span> := <span class="num">3.14159</span>
-<span class="kw">const</span> SALUDO: <span class="type">string</span> := <span class="str">"hola"</span></code></pre>
+<span class="kw">public const</span> MAX_MS: <span class="type">long</span> := <span class="num">86400000L</span>
+<span class="kw">const</span> SALUDO: <span class="type">string</span> := <span class="str">"hola"</span>
+<span class="kw">const</span> DEBUG: <span class="type">boolean</span> := <span class="kw">false</span>
+<span class="kw">const</span> MIN: <span class="type">integer</span> := -<span class="num">40</span>             <span class="comment">// '-' sobre literal, OK</span></code></pre>
 <p>
-  Las constantes públicas con valor literal viajan en el <code>.bpi</code> y
-  los importadores las inlinean. Las consts de tipo no-primitivo deben
-  inicializarse en el initializer del módulo.
+  Una <code>const</code> de módulo exige un <strong>literal primitivo</strong>
+  (integer/float/long/double/boolean/string, con <code>-</code> opcional) —
+  el valor se inlinea en cada uso, no ocupa slot, y las públicas viajan en el
+  <code>.bpi</code> para que los importadores también las inlineen. Para un
+  valor calculado o de tipo no-primitivo usa una <code>var</code> asignada en
+  la función inicializadora del módulo. No es asignable en ningún ámbito y no
+  existen const arrays (<a href="#arrays">§4.2.1</a>).
 </p>
 
 <h3 id="var-owner">5.3 <code>var owner</code></h3>
