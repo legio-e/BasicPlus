@@ -497,6 +497,58 @@ sesión del logger (van como i32 → INT_TO_STRING). Sample + paridad:
 `samples/NumCatTest.bp`. bpvm_format_double se exportó de interp.c para que
 builtins.c lo reuse (decl en bpvm_internal.h).
 
+#### M-micros-tree — árbol de familias/micros/placas + target por proyecto (pendiente, 2026-06-11)
+Eduardo creó `micros/` con la estructura familia → micro → placa:
+```
+micros/raspberrypi-rp2350/          ← FAMILIA: aquí vive la IMAGEN compartida
+  rp2350A/                          ← MICRO: fichero de config del chip
+    Pico2/  Pico2_W/                ← PLACA: fichero de config de la placa
+  rp2350B/
+    Metro/
+micros/espressif_esp32/Esp32-S3/
+```
+La idea: una sola imagen por familia cubre N micros y M placas; nosotros
+generamos la imagen y probamos algunas placas, los usuarios aportan ficheros
+de config para el resto. Desde el IDE se selecciona el micro/placa del
+PROYECTO y, al compilar, las funciones `native` generan código para ESE
+target.
+
+Análisis (2026-06-11):
+- **RP2350**: PROBADO — A y B comparten imagen; board_desc distingue
+  (variant, gpio, psram). Es el modelo a generalizar.
+- **ESP32**: "familia" tiene que ser por ISA/serie: S3 (Xtensa LX7) ≠ C3
+  (RISC-V) ≠ clásico (LX6) → imágenes DISTINTAS. Dentro de S3, las variantes
+  de módulo (flash/PSRAM) sí comparten imagen.
+- **STM32**: por serie (U5) plausible — mismo Cortex-M33; los matices son
+  linker script y clocks por chip. Dentro de la misma línea (U575/U585)
+  imagen única con detección runtime (FLASHSIZE_BASE ya se lee).
+- **Config de placa** (JSON): alimentaría un board_desc DATA-DRIVEN
+  (gpioCount, periféricos, pines, psram...) — hoy en la Pico está compilado
+  (board_desc_t). El INFO del IDE y la stdlib board-aware leerían de ahí.
+- **Target por proyecto**: campo en BpProject/BpBuild ("target":
+  "raspberrypi-rp2350/rp2350A/Pico2") → el IDE elige imagen a flashear,
+  config a aplicar y toolchain/flags del AOT (.mdn) al compilar native.
+Tarea grande — trocear cuando se retome (¿v2 post-cierre?).
+
+#### N-ide-new-file — File → New en el IDE (pendiente, H12)
+Hoy solo existe "New Project..."; no hay forma de crear un FICHERO nuevo
+(los tabs nacen de Load). Añadir File → New: buffer vacío + Save As.
+
+#### N-ide-resources — carpeta resources/ del proyecto (pendiente, H12)
+El Run sube SOLO los .mod del Output (+ .mdn siblings + deps stdlib que
+falten). Añadir convención: `resources/` en el proyecto cuyo contenido
+(cualquier tipo de fichero) se copia al micro en el upload (a /app o a la
+ruta relativa que indique la subcarpeta). Necesario para datos de la app:
+tablas, configs, html, etc. Reusar el skip-if-same-size (N110) para no
+resubir.
+
+#### N-ide-rename-generic — quitar "Pico" de la UI (pendiente, H12)
+Renombrar en la INTERFAZ todo lo que diga "Pico" por algo genérico
+("Placa" / "Micro" / "Device"): título del panel explorer, menús
+(Run/Debug on ...), mensajes "[Pico ...]"/"[Explorer]". Las clases internas
+(PicoExplorer, PicoClient) pueden renombrarse después sin prisa — primero
+lo visible. Ya hay 4 placas de 3 familias; el nombre se quedó pequeño.
+
 #### P-autorun — fichero "auto" para arranque autónomo (pendiente, 2026-06-11)
 Un fichero de TEXTO en el FS del device (propuesta: `/sys/auto.txt`) cuyo
 contenido es la ruta del módulo a arrancar (p.ej. `/app/MiApp.mod`). Al boot,

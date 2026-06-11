@@ -63,17 +63,30 @@ static void handle_hello(long id) {
 }
 
 static void handle_info(long id) {
+    /* N-stm32-info — el diálogo INFO del IDE (PicoExplorer.formatInfo) lee el
+     * MISMO set de campos que manda la Pico; antes solo enviábamos 7 (y
+     * "tempC" en vez de "tempMilliC") → el diálogo salía medio vacío.
+     * Valores del NUCLEO-U575ZI-Q: flash 2 MB (sufijo ZI), SRAM 768 KB,
+     * sin PSRAM. gpioCount=114 (I/Os del encapsulado de 144 pines);
+     * pio/pwmSlices/adcChannels son conceptos RP2350 → 0. tempMilliC=0
+     * (el diálogo oculta la línea; el sensor interno queda para más
+     * adelante). FLASH_SIZE real del registro por si montan otra variante. */
     uint32_t u0 = *(volatile uint32_t*) (UID_BASE + 0U);
     uint32_t u1 = *(volatile uint32_t*) (UID_BASE + 4U);
     uint32_t u2 = *(volatile uint32_t*) (UID_BASE + 8U);
-    char buf[320];
+    unsigned long flash_bytes = (unsigned long) (*(volatile uint16_t*) FLASHSIZE_BASE) * 1024UL;
+    char buf[512];
     int n = snprintf(buf, sizeof(buf),
         "{\"type\":\"INFO_REPLY\",\"id\":%ld,"
         "\"uniqueId\":\"%08lX%08lX%08lX\","
-        "\"boardName\":\"%s\",\"cpuFreqHz\":%lu,\"uptimeMs\":%lu,\"tempC\":0,"
+        "\"boardName\":\"%s\",\"cpuFreqHz\":%lu,\"uptimeMs\":%lu,"
+        "\"tempMilliC\":0,"
+        "\"gpioCount\":114,\"pioCount\":0,\"pwmSlices\":0,\"adcChannels\":0,"
+        "\"flashBytes\":%lu,\"sramBytes\":%lu,\"psramBytes\":0,"
         "\"fsTotalBytes\":%lu,\"fsUsedBytes\":%lu}",
         id, (unsigned long) u2, (unsigned long) u1, (unsigned long) u0,
         BOARD_NAME, (unsigned long) SystemCoreClock, (unsigned long) HAL_GetTick(),
+        flash_bytes, 768UL * 1024UL,
         (unsigned long) fs_total_bytes(), (unsigned long) fs_used_bytes());
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);
 }
