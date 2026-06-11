@@ -497,6 +497,50 @@ sesión del logger (van como i32 → INT_TO_STRING). Sample + paridad:
 `samples/NumCatTest.bp`. bpvm_format_double se exportó de interp.c para que
 builtins.c lo reuse (decl en bpvm_internal.h).
 
+#### P-autorun — fichero "auto" para arranque autónomo (pendiente, 2026-06-11)
+Un fichero de TEXTO en el FS del device (propuesta: `/sys/auto.txt`) cuyo
+contenido es la ruta del módulo a arrancar (p.ej. `/app/MiApp.mod`). Al boot,
+tras instalar la stdlib embebida y ARRANCAR LA COMM TASK, el firmware mira si
+existe; si sí, carga y ejecuta ese módulo como si llegara un RUN por el wire.
+Eso convierte cualquier placa en un dispositivo autónomo de verdad (hasta
+ahora todo arranque pasa por el IDE).
+
+Decisiones de diseño anotadas:
+- Fichero separado (no un campo de device.json): se crea/borra/edita
+  trivialmente desde el explorer del IDE (doble clic ya funciona) — y
+  borrarlo ES una de las vías de escape.
+- ORDEN del boot importa: comm task primero, autorun después — el wire debe
+  quedar siempre respondiendo aunque la app esté corriendo (en la Pico ya es
+  así por arquitectura: comm en core 0, VM en core 1; en STM32/ESP32 son
+  tasks FreeRTOS separadas).
+- Aplica a los 3 firmwares. El host no lo necesita (.bpproject ya hace ese
+  papel).
+- Nice-to-have IDE: botón "establecer como autorun" en el explorer (escribe
+  el auto.txt con la ruta del .mod seleccionado).
+- DEPENDENCIA de seguridad: hacerlo junto con (o después de) P-run-stop —
+  sin forma de parar el programa, un autorun con bucle infinito que sature
+  la VM podría estorbar los uploads (ver entrada siguiente).
+
+#### P-run-stop — interrumpir desde el IDE un programa en marcha (pendiente, 2026-06-11)
+Comando STOP en el wire v1 + botón Stop en el IDE: aborta el programa BP en
+ejecución en el device (y en el daemon local) sin reiniciar la placa. Es la
+red de seguridad del autorun (P-autorun): si el arranque automático te
+bloquea, Stop → subes los cambios → listo.
+
+Notas de diseño:
+- La comm task ya recibe mientras la VM corre (arquitectura SMP/tasks) — el
+  comando llega siempre; falta el mecanismo de parada limpio.
+- Mecanismo: flag de stop chequeado en los safepoints del intérprete (la
+  infraestructura existe: hook de breakpoints #139 + pausa/resume del
+  debugger H6.b.2.a). Stop = terminar TODOS los threads BP ordenadamente y
+  volver al estado idle del REPL (la limpieza entre runs ya existe, N107),
+  respondiendo un ack por el wire.
+- Distinto de la PAUSA del debugger (suspende, reanudable) y del RESET
+  tipado (PR-7c, reinicia el estado): Stop termina el programa, la VM y el
+  FS quedan vivos.
+- IDE: botón Stop en toolbar/menú activo durante Run on device (y Run
+  local); BpvmClient/SerialBackend envían el comando.
+
 ---
 
 ## ✅ Cerrado en sesiones recientes — anotaciones
