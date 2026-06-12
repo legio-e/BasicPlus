@@ -1,0 +1,43 @@
+// ============================================================
+// TcpEchoTest.bp — H11 (#241): cliente TCP simple contra un echo
+// server local determinista (lo levanta el harness test_net.c, o
+// `test_net serve 30` para la pasada de paridad dual-VM).
+//
+// Salida esperada (byte-idéntica miVM / VM-C host):
+//   conectado
+//   eco: hola eco
+//   eco: BasicPlus en red
+//   timeout-len: 0
+//   tras-close: false
+//   fin
+// ============================================================
+module TcpEchoTest
+
+  import Net
+
+  function main()
+    var c: Net.Tcp := Net.Tcp()
+    if c.connect("127.0.0.1", 47391, 2000) then
+      print "conectado"
+    else
+      print "no conectado"
+      return
+    endif
+
+    c.sendStr("hola eco")
+    print "eco:", c.recvStr(64, 2000)
+
+    c.sendStr("BasicPlus en red")
+    print "eco:", c.recvStr(64, 2000)
+
+    // El server solo responde a lo que recibe: sin tráfico, el recv
+    // agota su timeout y devuelve un byte[] vacío.
+    var t: byte[] := c.recv(16, 120)
+    print "timeout-len:", len(t)
+
+    c.close()
+    print "tras-close:", c.isOpen()
+    print "fin"
+  end main
+
+end TcpEchoTest

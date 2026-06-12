@@ -1,0 +1,95 @@
+// ============================================================
+// Net.bp — módulo stdlib de red: cliente TCP simple (H11, #241).
+//
+// Las funciones tcp* son `intrinsic`: el compilador inlina
+// CALL_BUILTIN 131..134 en el call-site. La implementación:
+//
+//   - VM Java (PC):      java.net.Socket (siempre disponible).
+//   - VM C host:         sockets del SO via fachada bpvm_net
+//                        (Winsock2 en Windows, POSIX en el resto).
+//   - Firmwares:         SIN backend por ahora (H11.b/c traerán
+//                        lwIP en Pico 2 W / ESP32-S3). Cualquier
+//                        operación lanza RuntimeError ATRAPABLE
+//                        "Net: sin red en esta plataforma".
+//
+// Contrato (paridad dual-VM byte-idéntica):
+//   - El fallo de CONEXIÓN es un resultado NORMAL (connect devuelve
+//     false), no una excepción: rechazo, timeout y DNS fallido se
+//     tratan igual.
+//   - recv SIEMPRE lleva timeout (en device un recv infinito
+//     bloquearía el worker entero). Timeout → byte[] vacío.
+//   - El peer cerrando la conexión (FIN) o un error de red en
+//     send/recv → RuntimeError atrapable.
+//
+// Política HW=clases: la forma recomendada es la clase Net.Tcp.
+// ============================================================
+module Net
+
+  // -------- Intrínsecos de bajo nivel (handle = integer) --------
+
+  // Conecta a host:port. timeoutMs <= 0 → 5000. Devuelve un handle
+  // >= 1, o 0 si no se pudo conectar (resultado normal, no error).
+  public intrinsic function tcpConnect(host: string, port: integer, timeoutMs: integer): integer
+
+  // Envía TODOS los bytes del array. Devuelve los bytes enviados
+  // (== len(data)). Conexión rota/handle inválido → RuntimeError.
+  public intrinsic function tcpSend(h: integer, data: byte[]): integer
+
+  // Lee hasta `max` bytes (tope 65536) esperando como máximo
+  // timeoutMs (<= 0 → 1 ms). Timeout → byte[] vacío. El peer cerró →
+  // RuntimeError "Net.recv: conexión cerrada por el peer".
+  public intrinsic function tcpRecv(h: integer, max: integer, timeoutMs: integer): byte[]
+
+  // Cierra el handle. Tolerante: handle inválido = no-op.
+  public intrinsic function tcpClose(h: integer)
+
+  // -------- Clase OO (forma recomendada) --------
+
+  public class Tcp
+
+    public var h: integer   // handle de la conexión; 0 = no conectada
+
+    public function Tcp()
+      this.h := 0
+    end Tcp
+
+    // Conecta. Devuelve true si la conexión quedó establecida.
+    public function connect(host: string, port: integer, timeoutMs: integer): boolean
+      this.h := tcpConnect(host, port, timeoutMs)
+      return this.h != 0
+    end connect
+
+    public function isOpen(): boolean
+      return this.h != 0
+    end isOpen
+
+    // Envía bytes crudos. Devuelve los bytes enviados.
+    public function send(data: byte[]): integer
+      return tcpSend(this.h, data)
+    end send
+
+    // Azúcar: envía un string como sus bytes UTF-8.
+    public function sendStr(s: string): integer
+      return tcpSend(this.h, toBytes(s))
+    end sendStr
+
+    // Lee hasta max bytes con timeout. Vacío = no llegó nada a tiempo.
+    public function recv(max: integer, timeoutMs: integer): byte[]
+      return tcpRecv(this.h, max, timeoutMs)
+    end recv
+
+    // Azúcar: lee y decodifica como UTF-8 ("" = timeout).
+    public function recvStr(max: integer, timeoutMs: integer): string
+      return fromBytes(tcpRecv(this.h, max, timeoutMs))
+    end recvStr
+
+    public function close()
+      if this.h != 0 then
+        tcpClose(this.h)
+        this.h := 0
+      endif
+    end close
+
+  end Tcp
+
+end Net

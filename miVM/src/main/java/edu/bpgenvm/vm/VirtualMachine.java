@@ -339,6 +339,15 @@ public class VirtualMachine {
     private final java.util.concurrent.atomic.AtomicLong nextPromptId =
             new java.util.concurrent.atomic.AtomicLong(1);
 
+    /** H11 (#241) — sockets TCP del módulo Net. handle (int ≥ 1) → Socket.
+     *  Tabla concurrente: los workers BP son threads reales y dos pueden
+     *  abrir/cerrar a la vez. Espejo de la tabla de handles de net_host.c
+     *  en la VM-C (BP nunca ve el fd/SOCKET del SO). */
+    private final java.util.Map<Integer, java.net.Socket> netSockets =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicInteger netNextHandle =
+            new java.util.concurrent.atomic.AtomicInteger(1);
+
     /** Sender hacia el cliente IDE. Cableado por Main cuando hay --listen.
      *  Si está a null, el builtin PROMPT lanza RuntimeError BP (modo
      *  headless: no hay supervisor que muestre el form). */
@@ -3203,6 +3212,96 @@ public class VirtualMachine {
                 int hi = popTc(tc);
                 double v = Double.longBitsToDouble(((long) hi << 32) | (lo & 0xFFFFFFFFL));
                 pushTc(tc, allocVmString(formatBpDouble(v)));
+                break;
+            }
+
+            // ---- H11 (#241) — cliente TCP simple (módulo Net). Paridad con la
+            // VM-C: el fallo de CONEXIÓN es un resultado normal (handle 0 →
+            // boolean false en Net.Tcp.connect); los errores de send/recv sobre
+            // una conexión establecida son RuntimeError ATRAPABLE con el MISMO
+            // mensaje que la VM-C. recv siempre con timeout (contrato H11). ----
+            case TCP_CONNECT: {
+                int timeoutMs = popTc(tc);
+                int port      = popTc(tc);
+                String host   = readVmString(popTc(tc));
+                int handle = 0;
+                try {
+                    java.net.Socket s = new java.net.Socket();
+                    s.connect(new java.net.InetSocketAddress(host, port),
+                              timeoutMs > 0 ? timeoutMs : 5000);
+                    s.setTcpNoDelay(true);
+                    handle = netNextHandle.getAndIncrement();
+                    netSockets.put(handle, s);
+                } catch (Exception e) {
+                    handle = 0;   // rechazo/timeout/DNS: resultado normal, no error
+                }
+                pushTc(tc, handle);
+                break;
+            }
+            case TCP_SEND: {
+                int dataRef = popTc(tc);
+                int h       = popTc(tc);
+                java.net.Socket s = netSockets.get(h);
+                if (s == null) {
+                    throwBpRuntimeError(tc, "Net.send: conexión cerrada o inválida");
+                    break;
+                }
+                int n = (dataRef == 0) ? 0 : readInt32(dataRef);
+                try {
+                    if (n > 0) {
+                        s.getOutputStream().write(memory, dataRef + 4, n);
+                        s.getOutputStream().flush();
+                    }
+                    pushTc(tc, n);
+                } catch (java.io.IOException e) {
+                    throwBpRuntimeError(tc, "Net.send: conexión cerrada o inválida");
+                }
+                break;
+            }
+            case TCP_RECV: {
+                int timeoutMs = popTc(tc);
+                int max       = popTc(tc);
+                int h         = popTc(tc);
+                if (max < 0) max = 0;
+                if (max > 65536) max = 65536;          // tope sano por llamada
+                java.net.Socket s = netSockets.get(h);
+                if (s == null) {
+                    throwBpRuntimeError(tc, "Net.recv: error de red");
+                    break;
+                }
+                int n = 0;
+                byte[] buf = new byte[max];
+                try {
+                    // setSoTimeout(0) = infinito: clamp a 1 ms — recv SIEMPRE
+                    // con timeout (en device bloquearía el worker entero).
+                    s.setSoTimeout(timeoutMs > 0 ? timeoutMs : 1);
+                    if (max > 0) {
+                        n = s.getInputStream().read(buf, 0, max);
+                        if (n < 0) {
+                            throwBpRuntimeError(tc, "Net.recv: conexión cerrada por el peer");
+                            break;
+                        }
+                    }
+                } catch (java.net.SocketTimeoutException te) {
+                    n = 0;                              // timeout → byte[] vacío
+                } catch (java.io.IOException e) {
+                    throwBpRuntimeError(tc, "Net.recv: error de red");
+                    break;
+                }
+                int ref = heapAlloc(n, TYPE_ARRAY_I8);
+                writeInt32(ref, n);
+                if (n > 0) System.arraycopy(buf, 0, memory, ref + 4, n);
+                ThreadContext me = currentTcLocal.get();
+                if (me != null) me.allocAnchor = ref;   // ancla GC
+                pushTc(tc, ref);
+                break;
+            }
+            case TCP_CLOSE: {
+                int h = popTc(tc);
+                java.net.Socket s = netSockets.remove(h);
+                if (s != null) {
+                    try { s.close(); } catch (java.io.IOException ignored) { }
+                }
                 break;
             }
             case BOOL_TO_STRING: {

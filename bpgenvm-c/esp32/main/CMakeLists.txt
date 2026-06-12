@@ -17,6 +17,7 @@ idf_component_register(
         "../../src/heap.c"
         "../../src/builtins.c"
         "../../src/fs_facade.c"        # #247: facade file I/O (backend ESP32 = fs_ram.c::fs_register_bpvm)
+        "../../src/net.c"              # H11 (#241): facade Net — sin backend hasta H11.c (lwIP) → RuntimeError atrapable
         "../../src/link.c"
         "../../src/scheduler.c"
         "../../src/threading.c"

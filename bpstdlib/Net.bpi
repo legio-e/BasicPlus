@@ -1,0 +1,17 @@
+bpi 7
+module Net
+func tcpRecv(h:integer,max:integer,timeoutMs:integer):uint8[] public intrinsic
+func tcpClose(h:integer):void public intrinsic
+func tcpConnect(host:string,port:integer,timeoutMs:integer):integer public intrinsic
+func tcpSend(h:integer,data:uint8[]):integer public intrinsic
+class Tcp public
+  layout 1 9 00000000 00000000
+  ctor()
+  method connect(host:string,port:integer,timeoutMs:integer):boolean public
+  method isOpen():boolean public
+  method send(data:uint8[]):integer public
+  method sendStr(s:string):integer public
+  method recv(max:integer,timeoutMs:integer):uint8[] public
+  method recvStr(max:integer,timeoutMs:integer):string public
+  method close():void public
+end class

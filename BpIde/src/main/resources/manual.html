@@ -242,6 +242,7 @@
     <li class="sub"><a href="#stdlib-collections">13.26 Collections</a></li>
     <li class="sub"><a href="#stdlib-stats">13.27 Stats</a></li>
     <li class="sub"><a href="#stdlib-compress">13.28 Compress</a></li>
+    <li class="sub"><a href="#stdlib-net">13.29 Net</a></li>
 
     <li class="group"><a href="#concurrencia">14. Concurrencia</a></li>
     <li class="sub"><a href="#conc-modelo">14.1 Modelo de ejecución</a></li>
@@ -2489,6 +2490,39 @@ edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num"
 <span class="comment">// n = bytes descomprimidos en dst; -1 si el destino no cabe
 // o los datos están corruptos (sin excepciones)</span></code></pre>
 
+<h3 id="stdlib-net">13.29 <code>Net</code></h3>
+<p>
+  Cliente TCP simple (H11). Disponible en <strong>PC</strong> (ambas VMs:
+  sockets del SO); en los micros <em>todavía no hay backend de red</em>
+  (Pico 2 W y ESP32-S3 llegarán con lwIP) — allí cualquier operación lanza
+  un <code>RuntimeError</code> <em>atrapable</em>
+  («<code>Net: sin red en esta plataforma</code>»).
+</p>
+<pre><code><span class="kw">import</span> Net
+
+<span class="kw">var</span> c: Net.Tcp := Net.Tcp()
+<span class="kw">if</span> c.connect(<span class="str">"192.168.1.50"</span>, <span class="num">7000</span>, <span class="num">2000</span>) <span class="kw">then</span>   <span class="comment">// timeout en ms</span>
+  c.sendStr(<span class="str">"hola"</span>)                  <span class="comment">// también send(data: byte[])</span>
+  <span class="kw">var</span> resp: <span class="type">string</span> := c.recvStr(<span class="num">256</span>, <span class="num">1000</span>)  <span class="comment">// "" = timeout</span>
+  print resp
+  c.close()
+<span class="kw">endif</span></code></pre>
+<p>Contrato (idéntico en ambas VMs):</p>
+<ul>
+  <li><code>connect(host, port, timeoutMs): boolean</code> — el fallo de
+      conexión (rechazo, timeout, DNS) es un resultado <em>normal</em>:
+      devuelve <code>false</code>, no lanza.</li>
+  <li><code>recv(max, timeoutMs): byte[]</code> / <code>recvStr</code> —
+      <strong>siempre con timeout</strong> (en un micro un recv infinito
+      bloquearía el worker entero). Timeout → <code>byte[]</code> vacío /
+      <code>""</code>. El peer cerró → <code>RuntimeError</code> atrapable.</li>
+  <li><code>send(data: byte[]): integer</code> / <code>sendStr(s)</code> —
+      envía todo o lanza <code>RuntimeError</code> (conexión rota).</li>
+  <li><code>isOpen()</code>, <code>close()</code> (tolerante). También hay
+      funciones de módulo de bajo nivel (<code>Net.tcpConnect/tcpSend/
+      tcpRecv/tcpClose</code>) con handle entero.</li>
+</ul>
+
 <!-- =========================================================== -->
 <h2 id="concurrencia">14. Concurrencia</h2>
 <p>
@@ -2994,8 +3028,9 @@ igual que el device).</p>
       — despachar native→native directo, sin re-entrar al intérprete —
       tiene el diseño cerrado en <code>docs/AOT_CROSS_MODULE.md</code> (v3).
       Dentro del mismo módulo ya es llamada C directa.</li>
-  <li>TCP/IP desde BP (cliente simple) — en preparación (H11); WiFi en
-      la Pico 2 W a continuación.</li>
+  <li>Red en los micros: el cliente TCP (módulo <code>Net</code>, §13.29)
+      funciona en PC; en Pico 2 W / ESP32-S3 falta el backend WiFi+lwIP
+      (H11.b/c, v3) — hoy allí lanza RuntimeError atrapable.</li>
   <li><code>owner</code> / <code>final</code> no aplican a property de
       módulo.</li>
   <li><code>Mutex</code> no reentrante; sin <code>Semaphore</code> /

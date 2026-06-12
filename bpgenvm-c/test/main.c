@@ -16,6 +16,7 @@
 
 #include "bpvm.h"
 #include "bpvm_fs.h"
+#include "bpvm_net.h"   /* H11 — registro del backend TCP del host */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -111,6 +112,7 @@ int main(int argc, char** argv) {
     }
     bpvm_set_tracing(vm, trace);
     bpvm_fs_register_host();   /* file I/O sobre libc (host) */
+    bpvm_net_register_host();  /* H11 — sockets TCP del SO (host) */
 
     debug_trace_state_t dbg_state = { 0, debug_print, 0 };
     if (debug_trace) {

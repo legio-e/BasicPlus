@@ -75,6 +75,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/heap.c
     ${BPVM_C_ROOT}/src/builtins.c
     ${BPVM_C_ROOT}/src/fs_facade.c           # #247: facade file I/O (readFile/writeFile/appendFile/fileExists)
+    ${BPVM_C_ROOT}/src/net.c                 # H11 (#241): facade Net — sin backend hasta H11.b/c → RuntimeError atrapable
     ${BPVM_C_ROOT}/src/link.c
     ${BPVM_C_ROOT}/src/scheduler.c
     ${BPVM_C_ROOT}/src/threading.c

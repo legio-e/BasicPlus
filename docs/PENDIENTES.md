@@ -673,7 +673,27 @@ exponer el nº de canales por placa (p. ej. `Pico.adcChannels()` intrínseco,
 como `gpioCount()` de H7.3) y validar contra eso. Pequeño; encaja con
 M-micros-tree (#258, datos por placa).
 
-#### H11 — TCP/IP: cliente simple (pendiente; investigación 2026-06-11, tarea #241)
+#### H11 — TCP/IP: cliente simple — H11.a (host) 🟢 IMPLEMENTADA Y VERIFICADA (2026-06-13)
+
+**H11.a hecha tal cual el diseño de abajo**: builtins 131-134 (TCP_CONNECT/
+SEND/RECV/CLOSE) en ambas VMs; fachada `bpvm_net.h` + `net.c` (los 3
+firmwares la compilan: sin backend → RuntimeError ATRAPABLE "Net: sin red
+en esta plataforma") + `net_host.c` (Winsock2/POSIX, connect no-bloqueante
+con timeout real via select, recv via SO_RCVTIMEO con clamp a 1 ms,
+tabla de handles propia — BP nunca ve el SOCKET del SO); `bpstdlib/Net.bp`
+(intrínsecos tcp* + clase `Net.Tcp` con connect→boolean / send / sendStr /
+recv / recvStr / isOpen / close). Verificación: `make test-net` PASS
+(echo server en thread propio) y **paridad dual-VM byte-idéntica** con
+`test_net serve` + samples/TcpEchoTest.mod en ambas VMs. Manual §13.29.
+Pendiente de H11: las fases b/c de abajo (WiFi/lwIP en placa, v3 → #145).
+
+**Bug de frontend cazado de rebote**: `a <> b` (desigualdad Modula-style,
+NO existe en BP — es `!=`) CUELGA el compilador (loop infinito tras
+"Procesando", hay que matar el java). Anotado como N-frontend-neq-hang:
+convertirlo en error de sintaxis con sugerencia ("¿querías !=?") o al
+menos no colgar. Pequeño, candidato a hueco suelto.
+
+#### H11 — diseño original (investigación 2026-06-11, tarea #241)
 
 **Estado actual: cero sockets visibles desde BP.** TCP existe solo como
 infraestructura: el wire IDE↔VM-Java ya corre sobre TCP (`DebugServer

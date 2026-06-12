@@ -286,9 +286,15 @@ public enum Builtin {
 
     // ---- L13 — ids 129/130: concat string + long/double. ----
     LONG_TO_STRING("__longToString"),    // (v: long)   → string (decimal)
-    DOUBLE_TO_STRING("__doubleToString");// (v: double) → string (formateo
+    DOUBLE_TO_STRING("__doubleToString"),// (v: double) → string (formateo
                                          //   canónico GAP-4 — el mismo de
                                          //   DPRINT, byte-idéntico en C)
+
+    // ---- H11 (#241) — ids 131-134: cliente TCP simple (módulo Net). ----
+    TCP_CONNECT("__tcpConnect"),         // (host, port, timeoutMs) → handle (0 = no conectado)
+    TCP_SEND("__tcpSend"),               // (h, data: byte[]) → n enviados; error → RuntimeError
+    TCP_RECV("__tcpRecv"),               // (h, max, timeoutMs) → byte[] (vacío = timeout)
+    TCP_CLOSE("__tcpClose");             // (h) → void, tolerante
 
     public final String bpName;
     public final int id;

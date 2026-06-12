@@ -14,6 +14,7 @@
 #include <stdlib.h>
 
 #include "bpvm_gpio.h"
+#include "bpvm_net.h"    /* H11 (#241) — cliente TCP */
 #include "bpvm_i2c.h"
 #include "bpvm_spi.h"
 #include "bpvm_pulse.h"
@@ -59,6 +60,11 @@ enum {
     BUILTIN_FLOAT_TO_STRING  = 4,
     BUILTIN_LONG_TO_STRING   = 129,
     BUILTIN_DOUBLE_TO_STRING = 130,
+    /* H11 (#241) — cliente TCP simple via fachada bpvm_net. */
+    BUILTIN_TCP_CONNECT      = 131,
+    BUILTIN_TCP_SEND         = 132,
+    BUILTIN_TCP_RECV         = 133,
+    BUILTIN_TCP_CLOSE        = 134,
     BUILTIN_NOW             = 34,
     BUILTIN_SLEEP           = 35,
     BUILTIN_GC              = 43,
@@ -272,6 +278,68 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         const char* s = v ? "true" : "false";
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
         push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+
+    /* H11 (#241) — cliente TCP simple. Puente sobre la fachada bpvm_net
+     * (backend sockets del SO en host; NULL en firmwares hasta H11.b/c).
+     * Sin backend → RuntimeError ATRAPABLE (paridad con la VM-Java, que
+     * siempre tiene java.net). El fallo de CONEXIÓN es un resultado
+     * normal (handle 0 → boolean false en Net.Tcp.connect); los errores
+     * de send/recv sobre una conexión establecida sí son RuntimeError. */
+    case BUILTIN_TCP_CONNECT: {
+        int32_t timeout_ms = pop_i32(vm, tc);
+        int32_t port       = pop_i32(vm, tc);
+        uint32_t href      = (uint32_t) pop_i32(vm, tc);
+        if (!bpvm_net_available()) {
+            return builtin_throw(vm, tc, "Net: sin red en esta plataforma");
+        }
+        char host[256];
+        read_bp_string(vm, href, host, sizeof(host));
+        int h = bpvm_net_connect(host, (int) port, (int) timeout_ms);
+        push_i32(vm, tc, (int32_t) h);          /* 0 = no conectado */
+        return BPVM_OK;
+    }
+    case BUILTIN_TCP_SEND: {
+        uint32_t dref = (uint32_t) pop_i32(vm, tc);   /* data: byte[] */
+        int32_t  h    = pop_i32(vm, tc);
+        if (!bpvm_net_available()) {
+            return builtin_throw(vm, tc, "Net: sin red en esta plataforma");
+        }
+        uint32_t len = (dref == 0) ? 0 : bpvm_read_u32_be(vm->memory + dref);
+        const uint8_t* data = (dref == 0) ? NULL : (vm->memory + dref + 4);
+        int n = (len == 0) ? 0 : bpvm_net_send((int) h, data, (int) len);
+        if (n < 0) return builtin_throw(vm, tc, "Net.send: conexión cerrada o inválida");
+        push_i32(vm, tc, (int32_t) n);
+        return BPVM_OK;
+    }
+    case BUILTIN_TCP_RECV: {
+        int32_t timeout_ms = pop_i32(vm, tc);
+        int32_t max        = pop_i32(vm, tc);
+        int32_t h          = pop_i32(vm, tc);
+        if (!bpvm_net_available()) {
+            return builtin_throw(vm, tc, "Net: sin red en esta plataforma");
+        }
+        if (max < 0) max = 0;
+        if (max > 65536) max = 65536;            /* tope sano por llamada */
+        uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) max, BPVM_TYPE_ARRAY_I8);
+        if (ref == 0) return builtin_throw(vm, tc, "Net.recv: sin memoria");
+        int n = (max == 0) ? 0
+              : bpvm_net_recv((int) h, vm->memory + ref + 4, (int) max,
+                               (int) timeout_ms);
+        if (n == BPVM_NET_CLOSED) {
+            return builtin_throw(vm, tc, "Net.recv: conexión cerrada por el peer");
+        }
+        if (n < 0) return builtin_throw(vm, tc, "Net.recv: error de red");
+        /* n==0 (timeout) → byte[] vacío. La longitud del array puede ser
+         * menor que el payload alocado (mismo patrón que READ_FILE). */
+        bpvm_write_u32_be(vm->memory + ref, (uint32_t) n);
+        push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_TCP_CLOSE: {
+        int32_t h = pop_i32(vm, tc);
+        bpvm_net_close((int) h);                 /* tolerante, sin backend = no-op */
         return BPVM_OK;
     }
 

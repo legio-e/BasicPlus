@@ -118,6 +118,14 @@ public final class Intrinsics {
         register("Gpio.write",      w -> emitBuiltin(w, Builtin.GPIO_WRITE));
         register("Gpio.read",       w -> emitBuiltin(w, Builtin.GPIO_READ));
 
+        // ---- Net (H11 #241 — cliente TCP simple) ----
+        // Nombres tcp* para no colisionar con los métodos connect/send/
+        // recv/close de la clase Net.Tcp (misma convención que I2c.Bus).
+        register("Net.tcpConnect",  w -> emitBuiltin(w, Builtin.TCP_CONNECT));
+        register("Net.tcpSend",     w -> emitBuiltin(w, Builtin.TCP_SEND));
+        register("Net.tcpRecv",     w -> emitBuiltin(w, Builtin.TCP_RECV));
+        register("Net.tcpClose",    w -> emitBuiltin(w, Builtin.TCP_CLOSE));
+
         // ---- I2C ----
         // Intrínsecos I2c — nombres internos sufijados con "Bus" para
         // no colisionar con los métodos init/write/read de I2c.Bus.

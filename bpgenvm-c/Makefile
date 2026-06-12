@@ -21,7 +21,8 @@ SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/pulse.c src/pwm.c src/pico.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
-          src/fs_facade.c src/fs_host.c
+          src/fs_facade.c src/fs_host.c \
+          src/net.c src/net_host.c
 LDFLAGS = -lpthread
 TEST    = test/main.c
 OBJ     = $(SRC:%.c=build/%.o) build/test/main.o
@@ -29,9 +30,10 @@ BIN     = build/bpgenvm-c
 
 ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
+  LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net
 
 all: $(BIN)
 
@@ -172,6 +174,23 @@ test-xmodnat: $(LIBOBJ)
 # tope de 50 ms. Tres fases: bucle infinito con bpvm_run, ídem con
 # bpvm_run_smp(1), y programa DORMIDO (sleepSec(3600)) que debe morir
 # en << 2 s gracias al tope de las esperas.
+# H11 (#241) — cliente TCP de BP contra echo server local (thread propio).
+# `make test-net` = self-test; `build/test_net.exe serve N` = solo el server,
+# para la pasada de paridad dual-VM (Java y C contra el mismo server).
+NET_BIN = build/test_net.exe
+test-net: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/TcpEchoTest.mod ]; then \
+	  echo "(skip test-net: falta samples/TcpEchoTest.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/TcpEchoTest.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_net.c \
+	    $(LIBOBJ) -o $(NET_BIN) $(LDFLAGS); \
+	  echo "--- TCP echo H11 (esperado: conectado / 2 ecos / timeout-len: 0 / fin, PASS) ---"; \
+	  ./$(NET_BIN) samples/TcpEchoTest.mod ../bpstdlib/Net.mod ../bpstdlib/Core.mod; \
+	fi
+
 KILL_BIN = build/test_kill.exe
 test-kill: $(LIBOBJ)
 	@mkdir -p build
