@@ -260,6 +260,9 @@
     <li class="group"><a href="#artefactos">16. Artefactos en disco</a></li>
     <li class="sub"><a href="#mod">16.1 .mod</a></li>
     <li class="sub"><a href="#bpi">16.2 .bpi</a></li>
+    <li class="sub"><a href="#dbg">16.3 .dbg</a></li>
+    <li class="sub"><a href="#mdn">16.4 .mdn</a></li>
+    <li class="sub"><a href="#proyecto">16.5 .bpbuild / .bpproject</a></li>
 
     <li class="group"><a href="#pendientes">17. Pendientes / no soportado</a></li>
   </ul>
@@ -2869,25 +2872,72 @@ objeto compartido</code></pre>
 [data block]                  dataSize      strings, constantes, class descriptors
 [code]                        codeSize      bytecode</pre>
 
-<h3 id="bpi">16.2 <code>.bpi</code> (interface textual, v2)</h3>
-<pre>bpi 2
+<h3 id="bpi">16.2 <code>.bpi</code> (interface textual, v6)</h3>
+<pre>bpi 6
 library com.example
 module Util
 interface true                <span class="comment">// sólo si module interface</span>
 extends com.example.Base      <span class="comment">// sólo si interface hija</span>
 implements com.example.LogApi <span class="comment">// sólo en módulo concreto</span>
 func suma(a:integer,b:integer):integer public
-func saludar(nombre:string):string public
+func label(text:string,prefix:string="["):string public  <span class="comment">// defaults viajan</span>
 const PI:float=3.14159 public
-const VERSION:string="1.0" public
 enum Color public
   ROJO=0
   VERDE=1
-end enum</pre>
+end enum
+class Punto public extends Base   <span class="comment">// clases completas (L2 v3)</span>
+  layout 2 5 - -                  <span class="comment">// nº fields / tamaño vtable / owner masks</span>
+  ctor(x:integer,y:integer)
+  method modulo():double public
+  prop x:integer public
+end class</pre>
 <p>
-  Soporta tipos primitivos (<code>integer/float/string/boolean</code>) +
-  <code>void</code> en signatures. Tipos compuestos (clases, arrays no
-  primitivos) NO se exportan todavía en <code>.bpi</code>.
+  El <code>.bpi</code> v6 exporta funciones (con defaults), consts
+  (inlineadas en el importador), enums, arrays de primitivos, tuplas en
+  signatures, y <strong>clases completas</strong> (layout, constructor,
+  métodos, properties, herencia — incluso cross-module). Todos los tipos
+  primitivos del lenguaje (incl. <code>long</code>/<code>double</code>/
+  estrechos) valen en signatures. Es regenerable: si la versión en disco
+  es vieja, el compilador lo rehace desde el fuente.
+</p>
+
+<h3 id="dbg">16.3 <code>.dbg</code> (info de depuración, v3)</h3>
+<pre>dbg 3
+module Str
+source C:\...\Str.bp
+lines
+1474 34          <span class="comment">// offset de bytecode → línea de fuente</span>
+...
+vars ...         <span class="comment">// nombre de variable → slot del frame (por función)</span></pre>
+<p>
+  Generado junto al <code>.mod</code>. Lo consume el debugger del IDE para
+  breakpoints por línea y para mostrar locales por nombre — tanto contra la
+  VM local como contra el device (mismo formato).
+</p>
+
+<h3 id="mdn">16.4 <code>.mdn</code> (overlay AOT)</h3>
+<p>
+  Código máquina Thumb-2 de las <code>native function</code> de un módulo
+  (ver <a href="#funciones-native">§8.3</a>). Es <strong>aditivo</strong>:
+  el <code>.mod</code> siempre lleva el bytecode; si el runtime encuentra
+  <code>&lt;Modulo&gt;.mdn</code> y es de su arquitectura, registra esas
+  funciones como nativas (carga zero-copy, datos alineados a 4). Si no,
+  todo corre interpretado. El IDE lo sube a la placa junto al
+  <code>.mod</code>.
+</p>
+
+<h3 id="proyecto">16.5 <code>.bpbuild</code> / <code>.bpproject</code> (JSON)</h3>
+<pre><span class="comment">// App.bpbuild — entrada del COMPILADOR (y del IDE):</span>
+{ "sourceDir": "src", "outDir": "out", "main": "App", "dependencies": [] }
+
+<span class="comment">// App.bpproject — entrada de la VM para ejecutar:</span>
+{ "main": "out/App.mod", "modulePaths": ["out"] }</pre>
+<p>
+  <code>lexer-java --project App.bpbuild</code> compila el árbol completo;
+  <code>bpgenvm App.bpproject</code> lo ejecuta. El IDE usa el
+  <code>.bpbuild</code> como definición de proyecto (árbol Sources /
+  Resources / Output / Dependencies).
 </p>
 
 <!-- =========================================================== -->
@@ -2932,7 +2982,9 @@ igual que el device).</p>
 <hr>
 <p style="color:var(--fg-muted); font-size:0.85em">
   BasicPlus reference manual — generado al hilo del desarrollo.
-  Frontend: <code>lexer-java</code> · VM: <code>miVM</code> · Format <code>.mod</code> v5 / <code>.bpi</code> v2.
+  Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) y
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / STM32) ·
+  Formatos <code>.mod</code> v5 / <code>.bpi</code> v6.
 </p>
 
 </main>
