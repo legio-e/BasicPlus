@@ -107,6 +107,16 @@ defs_stmt ::= [ 'public' ] ( const_decl
                             | class_def
                             | enum_def ) ;
 
+(* REGLA SEMÁNTICA — visibilidad de las VARIABLES (estado real V2):
+
+   Las variables NO pueden ser públicas de verdad: una var de módulo
+   nunca se exporta al .bpi aunque lleve 'public' (el compilador hoy lo
+   acepta y lo IGNORA en silencio — candidato a warning, v3). La
+   superficie pública de un módulo son const, property, function,
+   class y enum. Para exponer estado mutable: property.
+   Excepción: los miembros ESTÁTICOS de clase ('public var Clase.x',
+   ver clases) sí son accesibles desde otros módulos.               *)
+
 
 (* ========================= LIBRERÍAS ========================= *)
 
@@ -163,6 +173,14 @@ class_def ::= 'class' name [ 'extends' name ] NEWLINE
               'end' [ name ] NEWLINE ;
 
 member    ::= [ 'public' ] ( const_decl | var_decl | property_def | func_def ) ;
+
+(* REGLA SEMÁNTICA — 'public' en CAMPOS de instancia (estado real V2):
+
+   'public var' en un campo da acceso obj.campo desde fuera de la
+   clase SOLO dentro del mismo módulo. Los campos NUNCA se exportan al
+   .bpi (decisión OO #143): desde otro módulo, la superficie de una
+   clase son sus métodos y properties. Los miembros estáticos
+   ('public var Clase.x') sí son accesibles cross-module.           *)
 
 (* CONSTRUCTORES (regla semántica, no sintáctica):
 

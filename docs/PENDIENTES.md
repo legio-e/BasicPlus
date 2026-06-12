@@ -701,6 +701,12 @@ NO existe en BP — es `!=`) CUELGA el compilador (loop infinito tras
 convertirlo en error de sintaxis con sugerencia ("¿querías !=?") o al
 menos no colgar. Pequeño, candidato a hueco suelto.
 
+**N-pubvar-warn (v3)**: `public var` a nivel módulo se acepta y se IGNORA
+en silencio (la var no se exporta al .bpi — verificado 2026-06-13 con el
+probe PubVar.bp revisando la gramática con Eduardo). Debería avisar como
+hace L8 con los inits ignorados: "public en var de módulo no exporta —
+usa property/const". La gramática EBNF ya documenta la regla semántica.
+
 #### H11 — diseño original (investigación 2026-06-11, tarea #241)
 
 **Estado actual: cero sockets visibles desde BP.** TCP existe solo como
