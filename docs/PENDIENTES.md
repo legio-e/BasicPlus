@@ -601,7 +601,13 @@ Decisiones de diseño anotadas:
   sin forma de parar el programa, un autorun con bucle infinito que sature
   la VM podría estorbar los uploads (ver entrada siguiente).
 
-#### P-run-stop — interrumpir desde el IDE un programa en marcha 🟢 IMPLEMENTADO (2026-06-13) — falta verificación en placa
+#### P-run-stop — interrumpir desde el IDE un programa en marcha ✅ VERIFICADO EN PLACA (2026-06-13)
+Verificación de Eduardo en RP2350 con Fibo (.mod + .mdn AOT subido):
+`stop` en consola → "Stop: KILL enviado a la placa" → "VM finished:
+exit 130 (terminado por KILL)", placa viva sin reset. Vías en el IDE:
+menú Run → Stop (Ctrl+F2) y comando de consola `kill`/`stop` (añadido
+tras la prueba: era el gesto natural). ESP32/STM32: fuente completa,
+queda el rebuild+flash de Eduardo cuando toque.
 El comando del wire resultó existir desde el día uno: **KILL** (v1 §6.3, con
 status `KILLED` ya declarado en el spec) — el IDE lo enviaba, el server Java
 lo respondía a medias y los firmwares lo rechazaban. Ahora es real de punta
