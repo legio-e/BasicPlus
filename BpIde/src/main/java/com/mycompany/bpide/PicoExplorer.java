@@ -472,10 +472,15 @@ public final class PicoExplorer extends JPanel {
             // #256 — escenario "attach" (programa arrancado por autorun u
             // otra sesión): ningún run() local va a consumir el EXITED del
             // kill, así que sin esto el éxito y el fracaso se ven IGUAL
-            // (consola muda). Listener efímero que pinta el cierre.
+            // (consola muda). Listener efímero que pinta el cierre y
+            // recarga el árbol (la placa vuelve a atender FILES: el
+            // connect-time refresh había chocado con el BUSY).
             if (b instanceof AbstractBpvmBackend
                     && !((AbstractBpvmBackend) b).isRunActive()) {
-                ((AbstractBpvmBackend) b).onNextExited(this::emitLine);
+                ((AbstractBpvmBackend) b).onNextExited(line -> {
+                    emitLine(line);
+                    SwingUtilities.invokeLater(this::onRefresh);
+                });
             }
             b.kill();
             emitLine("[Explorer] Stop: KILL enviado a la placa");

@@ -576,7 +576,22 @@ Hecho en todo lo visible: panel "Placa", "Run/Debug on Device", mensajes
 "[Placa ...]", radio "Placa (serial v1)", título del INFO. Las clases
 internas (PicoExplorer, PicoClient) se quedan con su nombre — solo código.
 
-#### P-autorun — arranque autónomo desde /sys/auto.txt 🟢 IMPLEMENTADO (2026-06-13) — falta verificación en placa
+#### P-autorun — arranque autónomo desde /sys/auto.txt ✅ VERIFICADO EN PLACA (2026-06-13)
+Verificación de Eduardo en Pico 2: `autorun app/Blink` → reset → Blink
+arranca solo al boot → el IDE CONECTA con el run vivo (HELLO en caliente)
+→ `stop` lo mata → `dir` responde (placa viva, sin reset). El "stop no
+funciona" inicial era solo FALTA DE FEEDBACK (en attach nadie pintaba el
+EXITED) — jar 16:02: muestra "[Placa] programa abortado: exit 130",
+BUSY amigable al conectar ocupada, y auto-refresh del árbol tras el kill.
+
+La verificación destapó (y cerró) un bug LATENTE de boot que existía
+desde H7.3: ver post-mortem JEDEC en commit "fix(#256): boot del Pico
+moria con FS persistido". Resumen: flash_do_cmd del JEDEC sin IRQs off +
+tick de FreeRTOS con handler en flash = hard fault determinista cuya
+fase dependía del contenido del FS; el primer save real del FS (el
+auto-save del comando autorun) lo activó. Cuatro imágenes de diagnóstico
+(control/FS-virgen/PEEK) para triangularlo en placa. Gracia de 2 s antes
+del autorun (enumeración USB tranquila) como cinturón adicional.
 `/sys/auto.txt` (primera línea = ruta del módulo, p.ej. `/app/MiApp.mod`):
 al boot, tras FS + stdlib + wire listos, el firmware lo ejecuta por el MISMO
 camino que un RUN del wire (sesión + OUTPUT + poll + EXITED), sin RUN_REPLY
