@@ -287,8 +287,9 @@ public final class PicoExplorer extends JPanel {
         switch (cmd) {
             case "help": case "?":
                 emitLine("  comandos: dir [ruta] · cd <ruta> · type <fich> · edit <fich> · run <fich> · del <fich>");
-                emitLine("            mem · save · log · reset · cls · help");
+                emitLine("            kill · mem · save · log · reset · cls · help");
                 emitLine("  type=volcar fichero a la consola · edit=ver/editar en ventana");
+                emitLine("  kill=aborta el programa en ejecución (también menú Run → Stop, Ctrl+F2)");
                 emitLine("  (doble-clic en el árbol: .mod ejecuta, el resto abre el editor)");
                 return;
             case "cls":
@@ -366,6 +367,12 @@ public final class PicoExplorer extends JPanel {
                         SwingUtilities.invokeLater(this::onRefresh);   // run puede crear ficheros
                         break;
                     }
+                    case "kill": case "stop":
+                        // P-run-stop (#257) — el run en curso (otro hilo
+                        // bpconsole o el pipeline Run on Device) desbloquea
+                        // al llegar su EXITED con status KILLED.
+                        killRunning();
+                        break;
                     case "mem": case "df":
                         emitLine(backend.mem());
                         break;
