@@ -37,5 +37,10 @@ void app_main(void)
 
     printf("[boot] REPL wire v1 escuchando en UART0. Conecta el IDE al puerto del bridge.\n");
 
+    /* P-autorun (#256) — si /sys/auto.txt existe, arranca la app antes
+     * del REPL. El wire ya está vivo y el poll del run atiende
+     * HELLO/KILL: el IDE puede conectar y parar la app en cualquier
+     * momento. */
+    repl_esp32_autorun();
     repl_esp32_run();   /* no retorna */
 }

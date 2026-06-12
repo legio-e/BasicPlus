@@ -298,13 +298,16 @@ static void send_exited(long session, const char* status, int exit_code,
     if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
 }
 
-/* P-run-stop (#257) — poll de KILL durante el run (la VM lo invoca entre
- * quanta). Mismo patrón que el firmware Pico: consume líneas sin
- * bloquear; KILL → ack diferido + devuelve 1 (BPVM_KILLED); cualquier
- * otra request en-run → BUSY diferido. Los acks los envía handle_run
- * tras parar la VM (orden: KILL_REPLY/BUSY → EXITED). */
+/* P-run-stop (#257) + P-autorun (#256) — wire durante el run (la VM
+ * invoca el poll entre quanta, en la MISMA task que corre bpvm_run —
+ * aquí no hay comm task, así que el poll puede responder directamente
+ * sin riesgo de entrelazado):
+ *   KILL  → ack diferido (KILL_REPLY tras parar, antes del EXITED) +
+ *           devuelve 1 (BPVM_KILLED).
+ *   HELLO → HELLO_REPLY inmediato — el IDE puede conectarse con un
+ *           (auto)run en marcha y ofrecer Stop.
+ *   otra  → error BUSY inmediato. */
 static long s_kill_ack_id = -1;
-static long s_busy_id     = -1;
 
 static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
     (void) vm; (void) user;
@@ -318,26 +321,34 @@ static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
     json_get_str(&obj, "type", type, sizeof(type));
     long rid = json_get_long(&obj, "id", 0);
     if (strcmp(type, "KILL") == 0) { s_kill_ack_id = rid; return 1; }
-    s_busy_id = rid;
+    if (strcmp(type, "HELLO") == 0) { handle_hello(rid, &obj); return 0; }
+    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
     return 0;
 }
 
-static void handle_run(long id, const json_obj_t* obj) {
-    char path[FS_NAME_LEN];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'"); return;
-    }
+/* Núcleo del RUN — compartido entre el comando RUN del wire (id >= 0)
+ * y el autorun de boot (#256, id < 0). Con id < 0 no hay cliente: sin
+ * RUN_REPLY y errores de resolución a la consola (USB-Serial-JTAG).
+ * Lo demás (sesión, OUTPUT, poll, EXITED) es idéntico. */
+static void run_module_path(const char* path, long id) {
     if (s_active_session != 0) {
-        wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso"); return;
+        if (id >= 0) wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
+        else         printf("[autorun] BUSY — ignorado\n");
+        return;
     }
 
     const uint8_t* data; uint32_t size;
     fs_status_t fs_s = v1_get_resolve(path, &data, &size);
-    if (fs_s != FS_OK) { const char* c; const char* m; map_fs_status(fs_s, &c, &m); wire_v1_send_error(id, c, m); return; }
+    if (fs_s != FS_OK) {
+        const char* c; const char* m; map_fs_status(fs_s, &c, &m);
+        if (id >= 0) wire_v1_send_error(id, c, m);
+        else         printf("[autorun] %s: %s — REPL normal\n", path, m);
+        return;
+    }
 
     long session = s_next_session++;
     s_active_session = session;
-    {   /* RUN_REPLY con session antes de ejecutar. */
+    if (id >= 0) {   /* RUN_REPLY con session antes de ejecutar. */
         int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "RUN_REPLY", id);
         if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "session", session);
         if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
@@ -392,20 +403,15 @@ static void handle_run(long id, const json_obj_t* obj) {
     /* Ejecutar. NO AOT en Xtensa (el .mdn es ARM). bpvm_run single-thread
      * (el SMP en ESP32 es H4.2+, no necesario para H4.3). */
     s_kill_ack_id = -1;
-    s_busy_id     = -1;
     bpvm_set_poll(vm, esp32_run_poll_cb, NULL);   /* P-run-stop (#257) */
 
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     bpvm_status_t rs = bpvm_run(vm);
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
 
-    /* P-run-stop — acks diferidos del poll, ANTES del EXITED. */
+    /* P-run-stop — ack diferido del KILL, ANTES del EXITED. */
     bpvm_set_poll(vm, NULL, NULL);
     if (s_kill_ack_id >= 0) { wire_v1_send_reply_empty("KILL_REPLY", s_kill_ack_id); s_kill_ack_id = -1; }
-    if (s_busy_id >= 0) {
-        wire_v1_send_error(s_busy_id, "BUSY", "ejecución en curso: solo se atiende KILL");
-        s_busy_id = -1;
-    }
 
     const char* status_str = (rs == BPVM_OK)     ? "OK"
                            : (rs == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR";
@@ -415,6 +421,37 @@ static void handle_run(long id, const json_obj_t* obj) {
 
     bpvm_destroy(vm);
     s_active_session = 0;
+}
+
+static void handle_run(long id, const json_obj_t* obj) {
+    char path[FS_NAME_LEN];
+    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+        wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'"); return;
+    }
+    run_module_path(path, id);
+}
+
+/* P-autorun (#256) — si existe /sys/auto.txt, ejecuta el módulo de su
+ * primera línea por el mismo camino que un RUN del wire. app_main lo
+ * llama tras fs_init + wire init, antes del bucle REPL. El poll del
+ * run atiende HELLO/KILL → la placa nunca queda sorda. */
+void repl_esp32_autorun(void) {
+    const uint8_t* data; uint32_t size;
+    if (fs_get("/sys/auto.txt", &data, &size) != FS_OK) return;
+
+    char path[FS_NAME_LEN];
+    size_t n = 0, i = 0;
+    while (i < size && (data[i] == ' ' || data[i] == '\t')) i++;
+    while (i < size && data[i] != '\n' && data[i] != '\r'
+           && n + 1 < sizeof(path)) {
+        path[n++] = (char) data[i++];
+    }
+    while (n > 0 && (path[n - 1] == ' ' || path[n - 1] == '\t')) n--;
+    path[n] = '\0';
+    if (n == 0) { printf("[autorun] /sys/auto.txt vacío — REPL normal\n"); return; }
+    printf("[autorun] %s\n", path);
+    run_module_path(path, -1);
+    printf("[autorun] terminado — REPL normal\n");
 }
 
 /* ====================== Dispatcher ====================== */

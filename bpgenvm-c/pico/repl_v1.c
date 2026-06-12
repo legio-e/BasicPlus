@@ -805,6 +805,10 @@ typedef struct {
  * algún momento separamos stderr del programa. */
 static void v1_output_sink(const char* data, size_t len, void* user) {
     v1_sink_ctx_t* ctx = (v1_sink_ctx_t*) user;
+    /* #256 — la línea OUTPUT se construye con varios fputs/fprintf:
+     * el lock cubre la línea ENTERA para que el poll (HELLO/BUSY en-run)
+     * no pueda intercalar su reply a mitad. */
+    wire_v1_tx_lock();
     fputs("{\"type\":\"OUTPUT\",\"session\":", stdout);
     fprintf(stdout, "%ld,\"stream\":\"stdout\",\"data\":\"", ctx->session);
     for (size_t i = 0; i < len; i++) {
@@ -826,6 +830,7 @@ static void v1_output_sink(const char* data, size_t len, void* user) {
     }
     fputs("\"}\n", stdout);
     fflush(stdout);
+    wire_v1_tx_unlock();
 }
 
 /* Mapea bpvm_status_t a (status_str, exitCode) del wire v1. */
@@ -845,20 +850,28 @@ static void map_vm_status(bpvm_status_t rs, const char** status, int* exit_code)
 }
 
 /* ============================================================ */
-/* P-run-stop (#257) — KILL durante la ejecución.                */
+/* P-run-stop (#257) + P-autorun (#256) — wire durante el run.   */
 /*                                                               */
-/* La VM invoca este poll ENTRE quanta (bpvm_set_poll). Lee el   */
-/* wire sin bloquear; si llega una línea completa la consume:    */
-/*   KILL  → marca el ack pendiente y devuelve 1 (BPVM_KILLED)   */
-/*   otra  → marca un BUSY pendiente (durante el run solo se     */
-/*           atiende KILL)                                       */
-/* OJO: NO respondemos por el wire AQUÍ — la comm task está      */
-/* escribiendo OUTPUTs y dos escritores se entrelazarían. Los    */
-/* acks pendientes los envía handle_run tras parar la VM, justo  */
-/* ANTES del EXITED (orden: KILL_REPLY → EXITED).                */
+/* La VM invoca este poll ENTRE quanta (bpvm_set_poll), en la    */
+/* task coordinadora (la misma que llamó a handle_run — la VM    */
+/* corre en el worker). Lee el wire sin bloquear; si llega una   */
+/* línea completa la consume:                                    */
+/*   KILL  → marca el ack pendiente y devuelve 1 (BPVM_KILLED).  */
+/*           El KILL_REPLY sale tras parar la VM, antes del      */
+/*           EXITED (orden estable para el cliente).             */
+/*   HELLO → HELLO_REPLY inmediato. Es la pieza que permite al   */
+/*           IDE CONECTARSE con un (auto)run en marcha y ofrecer */
+/*           Stop (#256: sin esto, un autorun infinito dejaría   */
+/*           la placa inalcanzable salvo reflash).               */
+/*   otra  → error BUSY inmediato (hasta #256 era diferido a fin */
+/*           de run: el explorer se comía el timeout).           */
+/* Las replies en caliente son seguras: cada línea del wire es   */
+/* atómica por el tx_lock (#256) — la comm task con sus OUTPUTs  */
+/* y este poll ya no pueden entrelazarse. s_reply_buf también es */
+/* seguro: su dueño (esta misma task) está bloqueado en bpvm_run */
+/* mientras el poll corre.                                       */
 /* ============================================================ */
 static long s_kill_ack_id = -1;   /* id del KILL recibido en-run, o -1 */
-static long s_busy_id     = -1;   /* id de otra request en-run, o -1  */
 
 static int pico_run_poll_cb(bpvm_t* vm, void* user) {
     (void) vm; (void) user;
@@ -875,18 +888,23 @@ static int pico_run_poll_cb(bpvm_t* vm, void* user) {
         s_kill_ack_id = rid;
         return 1;                              /* → BPVM_KILLED */
     }
-    s_busy_id = rid;                           /* responde tras el run */
+    if (strcmp(type, "HELLO") == 0) {
+        handle_hello(rid, &obj);               /* attach en caliente */
+        return 0;
+    }
+    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
     return 0;
 }
 
-static void handle_run(long id, const json_obj_t* obj) {
-    char path[FS_NAME_LEN];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'");
-        return;
-    }
+/* Núcleo del RUN — compartido entre el comando RUN del wire (id >= 0)
+ * y el autorun de boot (#256, id < 0). Con id < 0 no hay cliente: se
+ * omite el RUN_REPLY y los errores de resolución van al log persistente
+ * en vez de al wire. Todo lo demás (sesión, OUTPUT events, poll de
+ * KILL/HELLO, EXITED) es idéntico — un autorun ES un run normal. */
+static void run_module_path(const char* path, long id) {
     if (s_active_session != 0) {
-        wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
+        if (id >= 0) wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
+        else         log_printf("autorun: BUSY (sesión activa) — ignorado");
         return;
     }
 
@@ -896,7 +914,8 @@ static void handle_run(long id, const json_obj_t* obj) {
     if (fs_s != FS_OK) {
         const char* code; const char* msg;
         map_fs_status(fs_s, &code, &msg);
-        wire_v1_send_error(id, code, msg);
+        if (id >= 0) wire_v1_send_error(id, code, msg);
+        else         log_printf("autorun: %s: %s — REPL normal", path, msg);
         return;
     }
 
@@ -905,7 +924,7 @@ static void handle_run(long id, const json_obj_t* obj) {
      *    y empieza a esperar OUTPUT events. */
     long session = s_next_session++;
     s_active_session = session;
-    {
+    if (id >= 0) {
         int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
                                       "RUN_REPLY", id);
         if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
@@ -1050,10 +1069,10 @@ static void handle_run(long id, const json_obj_t* obj) {
     }
 
     /* P-run-stop (#257) — poll del wire entre quanta para poder atender
-     * KILL. Solo en runs normales: en modo debug el pause_cb ya es el
-     * dueño del USB (dos lectores se robarían bytes). */
+     * KILL (y desde #256, HELLO/BUSY en caliente). Solo en runs normales:
+     * en modo debug el pause_cb ya es el dueño del USB (dos lectores se
+     * robarían bytes). */
     s_kill_ack_id = -1;
-    s_busy_id     = -1;
     if (!debugging) bpvm_set_poll(vm, pico_run_poll_cb, NULL);
 
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
@@ -1074,17 +1093,11 @@ static void handle_run(long id, const json_obj_t* obj) {
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
     log_printf("RUN/v1 %s finished: %s", path, bpvm_status_str(rs));
 
-    /* P-run-stop — acks diferidos del poll (la comm task ya paró: somos
-     * el único escritor). Orden: KILL_REPLY/BUSY → EXITED. */
+    /* P-run-stop — ack diferido del KILL. Orden: KILL_REPLY → EXITED. */
     bpvm_set_poll(vm, NULL, NULL);
     if (s_kill_ack_id >= 0) {
         wire_v1_send_reply_empty("KILL_REPLY", s_kill_ack_id);
         s_kill_ack_id = -1;
-    }
-    if (s_busy_id >= 0) {
-        wire_v1_send_error(s_busy_id, "BUSY",
-                            "ejecución en curso: solo se atiende KILL");
-        s_busy_id = -1;
     }
 
     /* 6. Emit EXITED. */
@@ -1114,6 +1127,50 @@ static void handle_run(long id, const json_obj_t* obj) {
     s_dbg_vm = NULL;
     s_pending_bp_n = 0;
     s_pause_initial = 0;
+}
+
+static void handle_run(long id, const json_obj_t* obj) {
+    char path[FS_NAME_LEN];
+    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+        wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'");
+        return;
+    }
+    run_module_path(path, id);
+}
+
+/* ============================================================ */
+/* P-autorun (#256) — arranque autónomo desde /sys/auto.txt.     */
+/*                                                               */
+/* main.c lo invoca tras FS + stdlib + board, justo ANTES del    */
+/* repl_run() — el wire ya está operativo y el poll del run      */
+/* atiende HELLO/KILL, así que la placa nunca queda sorda: el    */
+/* IDE puede conectarse con el autorun corriendo y pararlo.      */
+/* Formato del fichero: primera línea = ruta del módulo (p.ej.   */
+/* "/app/MiApp.mod"); espacios y CR/LF tolerados; vacío o ruta   */
+/* inexistente → log + REPL normal (nunca un boot-loop).         */
+/* Vías de escape: Stop en el IDE → borrar /sys/auto.txt         */
+/* (comando `autorun off` de la consola) → reset.                */
+/* ============================================================ */
+void repl_v1_autorun(void) {
+    const uint8_t* data; uint32_t size;
+    if (fs_get("/sys/auto.txt", &data, &size) != FS_OK) return;  /* sin autorun */
+
+    char path[FS_NAME_LEN];
+    size_t n = 0, i = 0;
+    while (i < size && (data[i] == ' ' || data[i] == '\t')) i++;
+    while (i < size && data[i] != '\n' && data[i] != '\r'
+           && n + 1 < sizeof(path)) {
+        path[n++] = (char) data[i++];
+    }
+    while (n > 0 && (path[n - 1] == ' ' || path[n - 1] == '\t')) n--;
+    path[n] = '\0';
+    if (n == 0) {
+        log_printf("autorun: /sys/auto.txt vacío — REPL normal");
+        return;
+    }
+    log_printf("autorun: %s", path);
+    run_module_path(path, -1);
+    log_printf("autorun: terminado — REPL normal");
 }
 
 /* ============================================================ */

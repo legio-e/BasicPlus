@@ -49,8 +49,15 @@ int wire_v1_recv_line(int first_char_already_read,
  * todos. Devuelve N si OK, -1 si N excede buf_max. */
 int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max);
 
+/* P-autorun (#256) — mutex de transmisión del wire. Cada línea enviada
+ * por wire_v1_send_* es atómica frente a otros escritores (comm task con
+ * OUTPUTs vs poll contestando HELLO/BUSY en-run). Un escritor que emita
+ * una línea POR PARTES (v1_output_sink) debe envolverla en lock/unlock. */
+void wire_v1_tx_lock(void);
+void wire_v1_tx_unlock(void);
+
 /* Escribe `len` bytes a stdout, seguidos de '\n', y hace fflush.
- * Llamar UNA vez por mensaje JSON. */
+ * Llamar UNA vez por mensaje JSON. Línea atómica (tx_lock). */
 void wire_v1_send_line(const char* data, size_t len);
 
 /* Variante de conveniencia: escribe una C-string entera. */

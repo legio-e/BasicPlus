@@ -287,9 +287,11 @@ public final class PicoExplorer extends JPanel {
         switch (cmd) {
             case "help": case "?":
                 emitLine("  comandos: dir [ruta] · cd <ruta> · type <fich> · edit <fich> · run <fich> · del <fich>");
-                emitLine("            kill · mem · save · log · reset · cls · help");
+                emitLine("            kill · autorun [fich|off] · mem · save · log · reset · cls · help");
                 emitLine("  type=volcar fichero a la consola · edit=ver/editar en ventana");
                 emitLine("  kill=aborta el programa en ejecución (también menú Run → Stop, Ctrl+F2)");
+                emitLine("  autorun=app que arranca al boot (/sys/auto.txt); con la app corriendo");
+                emitLine("          el IDE puede conectar y pararla con kill");
                 emitLine("  (doble-clic en el árbol: .mod ejecuta, el resto abre el editor)");
                 return;
             case "cls":
@@ -373,6 +375,45 @@ public final class PicoExplorer extends JPanel {
                         // al llegar su EXITED con status KILLED.
                         killRunning();
                         break;
+                    case "autorun": {
+                        // P-autorun (#256) — gestiona /sys/auto.txt del device.
+                        //   autorun           → muestra el actual
+                        //   autorun <fich>    → lo establece (conveniencia .mod)
+                        //   autorun off       → lo borra
+                        if (farg.isEmpty()) {
+                            try {
+                                String cur = new String(backend.get("/sys/auto.txt"),
+                                        java.nio.charset.StandardCharsets.UTF_8).trim();
+                                emitLine("  autorun actual: " + cur);
+                            } catch (Exception nf) {
+                                emitLine("  no hay autorun (no existe /sys/auto.txt)");
+                            }
+                            break;
+                        }
+                        if (farg.equalsIgnoreCase("off")) {
+                            backend.del("/sys/auto.txt");
+                            // Persistir el borrado: sin SAVE, la copia en flash
+                            // de la Pico resucitaría el autorun al siguiente boot.
+                            try { backend.save(); } catch (Exception ignored) { }
+                            emitLine("  autorun desactivado (/sys/auto.txt borrado)");
+                            SwingUtilities.invokeLater(this::onRefresh);
+                            break;
+                        }
+                        String mod = farg.endsWith(".mod") ? farg : farg + ".mod";
+                        String p = resolvePath(mod);
+                        backend.put("/sys/auto.txt",
+                                (p + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        emitLine("  autorun establecido: " + p);
+                        // En la Pico el PUT va al FS RAM: sin SAVE, el reset
+                        // se lo come. Persistimos aquí mismo (best effort —
+                        // VM Java y ESP32/STM32 persisten solos en el PUT).
+                        try { backend.save(); emitLine("  FS guardado en flash."); }
+                        catch (Exception ignored) { }
+                        emitLine("  (arrancará al reiniciar la placa — prueba con 'reset';");
+                        emitLine("   para pararlo: 'kill'; para quitarlo: 'autorun off')");
+                        SwingUtilities.invokeLater(this::onRefresh);
+                        break;
+                    }
                     case "mem": case "df":
                         emitLine(backend.mem());
                         break;

@@ -2829,29 +2829,60 @@ objeto compartido</code></pre>
   con anotaciones (nombre de función, sección, jumps con destino).
 </p>
 
-<h3 id="cli-mcu">15.4 Ejecución en microcontroladores (Pico / ESP32-S3)</h3>
+<h3 id="cli-mcu">15.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / STM32)</h3>
 <p>
-  Desde el IDE, <em>Run on Pico</em> ejecuta el módulo en un MCU conectado
+  Desde el IDE, <em>Run on Device</em> ejecuta el módulo en un MCU conectado
   por puerto serie (protocolo «wire v1»): el IDE sube el <code>.mod</code>
   (y las deps que falten — la stdlib a <code>/lib</code>, los drivers a
   <code>/app</code>), lo ejecuta y muestra la salida. Los ficheros
-  persisten en el FS del dispositivo entre reinicios.
+  persisten en el FS del dispositivo entre reinicios. Un programa en
+  ejecución se aborta con <em>Run → Stop</em> (Ctrl+F2) o el comando
+  <code>kill</code> de la consola, sin reiniciar la placa.
 </p>
 <table>
   <tr><th>MCU</th><th>Notas</th></tr>
-  <tr><td>Raspberry Pi Pico 2 (RP2350)</td>
-      <td>Wire v1 por USB-CDC. Funciones <code>native</code> aceleradas
-          por AOT (ver §8.1).</td></tr>
+  <tr><td>RP2350 (Pico 2 / Metro RP2350)</td>
+      <td>Wire v1 por USB-CDC; imagen de firmware única para ambas placas
+          (la variante se decide en runtime con <code>/sys/board.json</code>).
+          Funciones <code>native</code> aceleradas por AOT.</td></tr>
   <tr><td>ESP32-S3 (Xtensa)</td>
       <td>Wire v1 por UART0 (puerto del bridge USB-UART); consola/logs por
           el USB nativo (USB-Serial-JTAG). FS persistente en partición
           dedicada. <code>native</code> interpretada (sin AOT en Xtensa).</td></tr>
+  <tr><td>STM32 (ref. Nucleo-U575ZI-Q)</td>
+      <td>Wire v1 por el VCP del ST-LINK; FS persistente en los últimos
+          128 KB de la flash interna. <code>native</code> acelerada por AOT
+          (mismo Cortex-M33 que el RP2350).</td></tr>
 </table>
 <p>
   El <strong>lenguaje y el bytecode son idénticos</strong> en todas las
-  plataformas (PC, Pico, ESP32): el mismo <code>.mod</code> corre en
-  cualquiera. Sólo difieren la capa de backend de hardware (GPIO, I²C,
+  plataformas (PC, RP2350, ESP32, STM32): el mismo <code>.mod</code> corre
+  en cualquiera. Sólo difieren la capa de backend de hardware (GPIO, I²C,
   SPI…) y la aceleración AOT, que es específica de arquitectura.
+</p>
+
+<h4 id="cli-autorun">Arranque autónomo (<code>/sys/auto.txt</code>)</h4>
+<p>
+  Si el FS del dispositivo contiene <code>/sys/auto.txt</code>, el firmware
+  ejecuta al arrancar el módulo indicado en su primera línea (p.ej.
+  <code>/app/MiApp.mod</code>) — la placa funciona como dispositivo autónomo,
+  sin IDE. La forma cómoda de gestionarlo es el comando de consola
+  <code>autorun</code>:
+</p>
+<pre>
+/&gt; autorun MiApp        ← escribe /sys/auto.txt y lo persiste a flash
+/&gt; autorun              ← muestra el autorun actual
+/&gt; autorun off          ← lo desactiva (borra el fichero)
+</pre>
+<p>
+  El arranque autónomo es seguro por diseño: el puerto serie sigue
+  atendido <em>mientras</em> la app corre, así que el IDE puede conectarse
+  a una placa con un autorun en marcha (aunque sea un bucle infinito),
+  pararlo con <code>kill</code> y retirarlo con <code>autorun off</code> —
+  nunca hace falta reflashear. Si la ruta no existe o el programa termina,
+  el firmware sigue al REPL normal (no hay bucles de arranque). La misma
+  salvedad del Stop aplica aquí: una <code>native function</code> larga no
+  es interrumpible hasta volver al intérprete.
 </p>
 
 <!-- =========================================================== -->

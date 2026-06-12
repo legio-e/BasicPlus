@@ -6,6 +6,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h"
 #include "pico/stdlib.h"
 
 #include <stdio.h>
@@ -55,10 +56,37 @@ int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
 
 /* ===================== Escritura ===================== */
 
+/* P-autorun (#256) — mutex de línea del wire.
+ *
+ * Hasta #256 el wire tenía un único escritor en cada momento (REPL task
+ * en idle; comm task durante un run SMP, con los acks del poll DIFERIDOS
+ * a después del run precisamente para no entrelazarse). Para poder
+ * CONECTARSE a la placa con un autorun corriendo, el poll necesita
+ * contestar HELLO/BUSY en caliente — es decir, dos escritores
+ * concurrentes (comm task con OUTPUTs + poll con replies). FreeRTOS es
+ * single-core (configNUMBER_OF_CORES=1) pero con preemption: un mutex
+ * por LÍNEA mantiene la atomicidad. Coste en el caso común: un take/give
+ * sin contención por línea.
+ *
+ * Lazy init seguro: la primera escritura ocurre en vm_task (boot, sin
+ * comm task viva todavía) — no hay carrera de creación. */
+static SemaphoreHandle_t s_wire_tx_mutex = NULL;
+
+void wire_v1_tx_lock(void) {
+    if (s_wire_tx_mutex == NULL) s_wire_tx_mutex = xSemaphoreCreateMutex();
+    if (s_wire_tx_mutex != NULL) xSemaphoreTake(s_wire_tx_mutex, portMAX_DELAY);
+}
+
+void wire_v1_tx_unlock(void) {
+    if (s_wire_tx_mutex != NULL) xSemaphoreGive(s_wire_tx_mutex);
+}
+
 void wire_v1_send_line(const char* data, size_t len) {
+    wire_v1_tx_lock();
     fwrite(data, 1, len, stdout);
     fputc('\n', stdout);
     fflush(stdout);
+    wire_v1_tx_unlock();
 }
 
 void wire_v1_send_cstr(const char* cstr) {
@@ -66,8 +94,13 @@ void wire_v1_send_cstr(const char* cstr) {
 }
 
 void wire_v1_send_bulk(const uint8_t* data, size_t n) {
+    /* Nota #256: el par línea-de-tamaño + bulk NO es atómico bajo el
+     * mutex, pero los comandos FILES nunca conviven con un run (BUSY),
+     * así que no hay con quién entrelazarse. El lock es por higiene. */
+    wire_v1_tx_lock();
     fwrite(data, 1, n, stdout);
     fflush(stdout);
+    wire_v1_tx_unlock();
 }
 
 /* ===================== Builders JSON ===================== */

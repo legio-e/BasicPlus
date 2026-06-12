@@ -576,29 +576,39 @@ Hecho en todo lo visible: panel "Placa", "Run/Debug on Device", mensajes
 "[Placa ...]", radio "Placa (serial v1)", título del INFO. Las clases
 internas (PicoExplorer, PicoClient) se quedan con su nombre — solo código.
 
-#### P-autorun — fichero "auto" para arranque autónomo (pendiente, 2026-06-11)
-Un fichero de TEXTO en el FS del device (propuesta: `/sys/auto.txt`) cuyo
-contenido es la ruta del módulo a arrancar (p.ej. `/app/MiApp.mod`). Al boot,
-tras instalar la stdlib embebida y ARRANCAR LA COMM TASK, el firmware mira si
-existe; si sí, carga y ejecuta ese módulo como si llegara un RUN por el wire.
-Eso convierte cualquier placa en un dispositivo autónomo de verdad (hasta
-ahora todo arranque pasa por el IDE).
+#### P-autorun — arranque autónomo desde /sys/auto.txt 🟢 IMPLEMENTADO (2026-06-13) — falta verificación en placa
+`/sys/auto.txt` (primera línea = ruta del módulo, p.ej. `/app/MiApp.mod`):
+al boot, tras FS + stdlib + wire listos, el firmware lo ejecuta por el MISMO
+camino que un RUN del wire (sesión + OUTPUT + poll + EXITED), sin RUN_REPLY
+y con errores a log/LED. Al terminar (OK/KILLED/error) → REPL normal; ruta
+mala o fichero vacío → log y REPL (nunca boot-loop). Los 3 firmwares.
 
-Decisiones de diseño anotadas:
-- Fichero separado (no un campo de device.json): se crea/borra/edita
-  trivialmente desde el explorer del IDE (doble clic ya funciona) — y
-  borrarlo ES una de las vías de escape.
-- ORDEN del boot importa: comm task primero, autorun después — el wire debe
-  quedar siempre respondiendo aunque la app esté corriendo (en la Pico ya es
-  así por arquitectura: comm en core 0, VM en core 1; en STM32/ESP32 son
-  tasks FreeRTOS separadas).
-- Aplica a los 3 firmwares. El host no lo necesita (.bpproject ya hace ese
-  papel).
-- Nice-to-have IDE: botón "establecer como autorun" en el explorer (escribe
-  el auto.txt con la ruta del .mod seleccionado).
-- DEPENDENCIA de seguridad: hacerlo junto con (o después de) P-run-stop —
-  sin forma de parar el programa, un autorun con bucle infinito que sature
-  la VM podría estorbar los uploads (ver entrada siguiente).
+**La pieza clave — attach en caliente**: el poll del run (#257) ahora
+contesta `HELLO` con HELLO_REPLY real y el resto con BUSY inmediato (antes
+diferido a fin de run → el connect se comía el timeout). Sin esto, un
+autorun infinito dejaba la placa inalcanzable salvo reflash; con esto, el
+IDE conecta con la app corriendo → `kill` → `autorun off`. En la Pico exigió
+un **mutex de línea en el wire TX** (`wire_v1_tx_lock`): la comm task escribe
+OUTPUTs y el poll ahora también escribe — FreeRTOS single-core con preemption,
+una línea = una sección crítica. El sink OUTPUT (multi-fputs) va entero bajo
+el lock. ESP32/STM32: poll y output en la misma task → replies directas.
+Los acks BUSY diferidos murieron en los 3; el KILL_REPLY sigue diferido
+(orden estable KILL_REPLY → EXITED).
+
+IDE: comando de consola `autorun [fich|off]` — escribe/borra /sys/auto.txt
+y **persiste a flash** (save best-effort: sin él, el FS RAM de la Pico
+pierde el fichero — o resucita el borrado — en el reset).
+
+Receta de escape (documentada en manual §15.4): conectar → `kill` →
+`autorun off` → `reset`. Limitación heredada del Stop: una native larga no
+es interrumpible hasta volver al intérprete.
+
+Bonus de la sesión: el build ESP32 llevaba roto en silencio desde los
+cambios recientes del core — 15 format strings `%d/%u` sobre int32_t/uint32_t
+(en Xtensa son long; pasada PRI_-macros) + la fachada `bpvm_neopixel.c` sin
+compilar en su CMakeLists (undefined reference). Compila limpio de nuevo.
+Verificación pendiente (Eduardo): flashear uf2 14:53, `autorun Blink`,
+`reset`, ver la app arrancar sola, conectar en caliente, `kill`.
 
 #### P-run-stop — interrumpir desde el IDE un programa en marcha ✅ VERIFICADO EN PLACA (2026-06-13)
 Verificación de Eduardo en RP2350 con Fibo (.mod + .mdn AOT subido):

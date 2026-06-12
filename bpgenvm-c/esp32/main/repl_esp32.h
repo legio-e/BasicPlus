@@ -19,6 +19,12 @@ void wire_v1_uart_init(void);
  * No retorna. Llamar tras fs_init() + wire_v1_uart_init(). */
 void repl_esp32_run(void);
 
+/* P-autorun (#256) — ejecuta el módulo de /sys/auto.txt (si existe)
+ * antes de entrar al REPL. Bloquea hasta que el programa termina o lo
+ * matan por el wire (el poll atiende HELLO/KILL durante el run).
+ * Llamar UNA vez, tras wire_v1_uart_init() y antes de repl_esp32_run. */
+void repl_esp32_autorun(void);
+
 #ifdef __cplusplus
 }
 #endif

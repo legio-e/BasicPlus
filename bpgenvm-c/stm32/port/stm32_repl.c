@@ -260,12 +260,14 @@ static void emit_exited(long session, const char* status, int code, uint32_t ms)
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);
 }
 
-/* P-run-stop (#257) — poll de KILL durante el run (la VM lo invoca entre
- * quanta via bpvm_set_poll). Mismo patrón que Pico/ESP32: consume líneas
- * sin bloquear; KILL → ack diferido + 1 (BPVM_KILLED); otra request →
- * BUSY diferido. Los acks salen tras parar la VM, antes del EXITED. */
+/* P-run-stop (#257) + P-autorun (#256) — wire durante el run (la VM
+ * invoca el poll entre quanta; bare-metal single-thread → el poll puede
+ * responder directamente):
+ *   KILL  → ack diferido (KILL_REPLY tras parar, antes del EXITED) + 1.
+ *   HELLO → HELLO_REPLY inmediato — el IDE puede conectarse con un
+ *           (auto)run en marcha y ofrecer Stop.
+ *   otra  → error BUSY inmediato. */
 static long s_kill_ack_id = -1;
-static long s_busy_id     = -1;
 
 static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
     (void) vm; (void) user;
@@ -279,7 +281,8 @@ static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
     json_get_str(&obj, "type", type, sizeof(type));
     long rid = json_get_long(&obj, "id", 0);
     if (strcmp(type, "KILL") == 0) { s_kill_ack_id = rid; return 1; }
-    s_busy_id = rid;
+    if (strcmp(type, "HELLO") == 0) { handle_hello(rid); return 0; }
+    stm32_wire_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL");
     return 0;
 }
 
@@ -295,19 +298,21 @@ static int stm32_fs_resolve(const char* name, const uint8_t** data, uint32_t* si
     return -1;
 }
 
-static void handle_run(long id, json_obj_t* obj) {
-    char path[64];
-    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
-        stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
-    }
+/* Núcleo del RUN — compartido entre el comando RUN del wire (id >= 0)
+ * y el autorun de boot (#256, id < 0). Con id < 0 no hay cliente: sin
+ * RUN_REPLY, y una ruta inexistente enciende el LED rojo (el idioma de
+ * diagnóstico de este port) en vez de mandar un error al vacío. */
+static void run_module_path(const char* path, long id) {
     const uint8_t* data; uint32_t size;
     if (stm32_fs_resolve(path, &data, &size) != 0) {
-        stm32_wire_send_error(id, "NOT_FOUND", "no existe"); return;
+        if (id >= 0) stm32_wire_send_error(id, "NOT_FOUND", "no existe");
+        else         BSP_LED_On(LED_RED);            /* autorun: ruta mala */
+        return;
     }
 
     long session = ++s_session;
     s_run_session = session;
-    { /* RUN_REPLY con la sesión, ANTES de ejecutar */
+    if (id >= 0) { /* RUN_REPLY con la sesión, ANTES de ejecutar */
         char buf[80];
         int n = snprintf(buf, sizeof(buf),
             "{\"type\":\"RUN_REPLY\",\"id\":%ld,\"session\":%ld}", id, session);
@@ -402,22 +407,17 @@ static void handle_run(long id, json_obj_t* obj) {
         }
     }
 
-    /* P-run-stop (#257) — poll de KILL entre quanta. */
+    /* P-run-stop (#257) — poll del wire entre quanta (KILL/HELLO/BUSY). */
     s_kill_ack_id = -1;
-    s_busy_id     = -1;
     if (st == BPVM_OK && !missing[0]) bpvm_set_poll(vm, stm32_run_poll_cb, NULL);
 
     if (st == BPVM_OK && !missing[0]) st = bpvm_run(vm);
     BSP_LED_Off(LED_BLUE);
     uint32_t dt = HAL_GetTick() - t0;
 
-    /* P-run-stop — acks diferidos del poll, antes del EXITED. */
+    /* P-run-stop — ack diferido del KILL, antes del EXITED. */
     bpvm_set_poll(vm, NULL, NULL);
     if (s_kill_ack_id >= 0) { reply_empty("KILL_REPLY", s_kill_ack_id); s_kill_ack_id = -1; }
-    if (s_busy_id >= 0) {
-        stm32_wire_send_error(s_busy_id, "BUSY", "ejecución en curso: solo se atiende KILL");
-        s_busy_id = -1;
-    }
 
     if (missing[0]) {
         BSP_LED_On(LED_RED);
@@ -436,6 +436,34 @@ static void handle_run(long id, json_obj_t* obj) {
                     (st == BPVM_KILLED) ? 130 : (int) st, dt);
     }
     bpvm_destroy(vm);
+}
+
+static void handle_run(long id, json_obj_t* obj) {
+    char path[64];
+    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+        stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
+    }
+    run_module_path(path, id);
+}
+
+/* P-autorun (#256) — si existe /sys/auto.txt, ejecuta el módulo de su
+ * primera línea por el mismo camino que un RUN del wire. El poll del
+ * run atiende HELLO/KILL → el IDE puede conectar y parar la app. */
+static void autorun_boot(void) {
+    const uint8_t* data; uint32_t size;
+    if (fs_get("/sys/auto.txt", &data, &size) != 0) return;   /* sin autorun */
+
+    char path[64];
+    size_t n = 0, i = 0;
+    while (i < size && (data[i] == ' ' || data[i] == '\t')) i++;
+    while (i < size && data[i] != '\n' && data[i] != '\r'
+           && n + 1 < sizeof(path)) {
+        path[n++] = (char) data[i++];
+    }
+    while (n > 0 && (path[n - 1] == ' ' || path[n - 1] == '\t')) n--;
+    path[n] = '\0';
+    if (n == 0) return;                                        /* vacío */
+    run_module_path(path, -1);
 }
 
 /* ---- dispatch ---- */
@@ -505,6 +533,10 @@ void stm32_repl_run(void) {
     HAL_UARTEx_EnableFifoMode(&hcom_uart[COM1]);
 
     stm32_wire_send_cstr("=== bpvm-stm32 REPL (wire v1) listo ===");
+
+    /* P-autorun (#256) — el wire ya está vivo: si la app de auto.txt se
+     * queda en bucle, el IDE puede conectar (HELLO) y matarla (KILL). */
+    autorun_boot();
 
     uint32_t last_blink = HAL_GetTick();
     for (;;) {

@@ -32,6 +32,14 @@ extern "C" {
  * de despachar. */
 void repl_v1_handle_request(int first_char);
 
+/* P-autorun (#256) — si existe /sys/auto.txt, ejecuta el módulo que
+ * indica (primera línea) por el mismo camino que un RUN del wire:
+ * sesión + OUTPUT events + poll (HELLO/KILL atendidos en caliente) +
+ * EXITED. Bloquea hasta que el programa termina (o lo matan); después
+ * el llamante entra al REPL normal. Sin fichero / vacío / ruta mala →
+ * log y retorno inmediato. Llamar UNA vez al boot, antes de repl_run. */
+void repl_v1_autorun(void);
+
 #ifdef __cplusplus
 }
 #endif

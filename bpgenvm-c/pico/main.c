@@ -24,6 +24,7 @@
 #include "neopixel.h"
 #include "bpvm_neopixel.h"
 #include "repl.h"
+#include "repl_v1.h"   /* P-autorun (#256) */
 #include "log.h"
 #include "bench.h"
 #include "bpvm_gpio.h"
@@ -870,6 +871,12 @@ static void vm_task(void* arg) {
      * al REPL y un "no conecta" es problema de USB/conexión, no de boot. */
     led_set(0);
 #endif
+    /* P-autorun (#256) — si /sys/auto.txt existe, arranca la app ANTES
+     * de entrar al REPL. El orden que pide el diseño (comm siempre
+     * antes) se cumple solo: el wire ya está vivo y el poll del run
+     * atiende HELLO/KILL, así que el IDE puede conectar y parar la app
+     * aunque sea un bucle infinito. */
+    repl_v1_autorun();
     repl_run();
     (void) run_vm_once;  /* silenciar unused warning */
 }
