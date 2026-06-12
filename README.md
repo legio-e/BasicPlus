@@ -147,6 +147,8 @@ ESP-IDF, STM32CubeIDE); ver `bpgenvm-c/{pico,esp32,stm32}/`.
 ## Documentación
 
 - **[Inicio rápido](docs/QUICKSTART.md)** — de cero a blink, por plataforma.
+- **[Instalar el firmware](docs/INSTALAR_FIRMWARE.md)** — flashear la VM en
+  cada micro (imagen precompilada o compilada por ti).
 - **[Manual del lenguaje](docs/manual.html)** — léxico, tipos, clases,
   módulos, excepciones, concurrencia, biblioteca estándar, CLI y artefactos.
 - [Filosofía del proyecto](docs/PHILOSOPHY.md) — qué es y qué no quiere ser.

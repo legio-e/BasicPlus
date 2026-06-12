@@ -44,20 +44,10 @@ programa en marcha.
 **Una sola imagen de firmware vale para las dos placas** — la variante
 del chip, los pines y la PSRAM se detectan en runtime.
 
-**Flashear** (la vía BOOTSEL de toda la vida):
-
-1. Compila el firmware (una vez; ver `bpgenvm-c/pico/README.md` para los
-   prerequisitos: pico-sdk, FreeRTOS-Kernel, toolchain ARM):
-
-   ```sh
-   cd bpgenvm-c/pico && mkdir -p build && cd build
-   cmake -G Ninja -DPICO_BOARD=bp_rp2350b \
-         -DFREERTOS_KERNEL_PATH=<ruta>/FreeRTOS-Kernel ..
-   ninja bpvm_pico
-   ```
-
-2. Mantén pulsado **BOOTSEL** al conectar el USB → aparece la unidad
-   `RPI-RP2` → copia `build/bpvm_pico.uf2` → la placa rebota sola.
+**Flashear**: BOOTSEL pulsado al conectar el USB → unidad `RPI-RP2` →
+copia `bpvm_pico.uf2` → la placa rebota sola con la VM dentro. Dónde
+conseguir/compilar la imagen y el caso Metro:
+[INSTALAR_FIRMWARE](INSTALAR_FIRMWARE.md).
 
 **Primer programa desde el IDE**:
 
@@ -93,12 +83,10 @@ habilita los 48 GPIO, el NeoPixel y los 8 MB de PSRAM como heap.
 IDE) va por el **bridge UART0**; el USB nativo (USB-Serial-JTAG) es solo
 consola de logs. Detalle en `bpgenvm-c/esp32/README.md`.
 
-```sh
-# Entorno ESP-IDF (v6.x) y build + flash
-cd bpgenvm-c/esp32
-idf.py build
-idf.py -p <puerto-del-bridge> flash
-```
+**Flashear**: con la imagen fusionada de la release y `esptool`
+(`pip install esptool`) es un comando — ver
+[INSTALAR_FIRMWARE](INSTALAR_FIRMWARE.md) (también la vía `idf.py` si
+compilas tú).
 
 Después: IDE → Connect al puerto del bridge → mismo flujo que en la Pico
 (Run on Device, consola, autorun). En el ESP32 las `native function`
@@ -109,14 +97,13 @@ backend (llegará con lwIP).
 
 ## 4. STM32 (Nucleo-U575ZI-Q)
 
-El port se integra en un proyecto **STM32CubeIDE** (la guía paso a paso,
-con los include-paths y la carpeta enlazada del core, está en
-`bpgenvm-c/stm32/port/README.md`).
+**Flashear**: lo más simple es arrastrar el `.bin` a la unidad USB del
+ST-LINK (`NOD_U575ZI`); alternativas y compilación propia (CubeIDE) en
+[INSTALAR_FIRMWARE](INSTALAR_FIRMWARE.md).
 
-1. Compila y flashea desde CubeIDE (el ST-LINK de la Nucleo).
-2. El wire sale por el **VCP del ST-LINK** — el mismo cable USB.
-3. IDE → Connect a ese COM → Run on Device / consola / autorun, igual
-   que en las otras placas. AOT activo (mismo Cortex-M33 que el RP2350).
+El wire sale por el **VCP del ST-LINK** — el mismo cable USB. IDE →
+Connect a ese COM → Run on Device / consola / autorun, igual que en las
+otras placas. AOT activo (mismo Cortex-M33 que el RP2350).
 
 ---
 
