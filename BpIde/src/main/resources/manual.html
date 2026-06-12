@@ -190,14 +190,16 @@
     <li class="sub"><a href="#parallel">7.6 parallel / endpar</a></li>
 
     <li class="group"><a href="#funciones">8. Funciones</a></li>
-    <li class="sub"><a href="#funciones-native">8.1 Funciones native (AOT)</a></li>
+    <li class="sub"><a href="#defaults">8.1 Parámetros con valor por defecto</a></li>
+    <li class="sub"><a href="#tuplas">8.2 Tuplas (retorno múltiple)</a></li>
+    <li class="sub"><a href="#funciones-native">8.3 Funciones native (AOT)</a></li>
     <li class="group"><a href="#clases">9. Clases</a></li>
     <li class="sub"><a href="#campos">9.1 Campos</a></li>
     <li class="sub"><a href="#metodos">9.2 Métodos</a></li>
     <li class="sub"><a href="#ctor">9.3 Constructor</a></li>
     <li class="sub"><a href="#herencia">9.4 Herencia</a></li>
     <li class="sub"><a href="#props">9.5 Properties</a></li>
-    <li class="sub"><a href="#static">9.6 static / final</a></li>
+    <li class="sub"><a href="#static">9.6 Miembros estáticos / final</a></li>
     <li class="sub"><a href="#fields-owner">9.7 Fields owner</a></li>
 
     <li class="group"><a href="#modulos">10. Módulos</a></li>
@@ -733,7 +735,58 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <li>Sólo retorno con <code>return [valor]</code>. Sin retorno explícito, void.</li>
 </ul>
 
-<h3 id="funciones-native">8.1 Funciones <code>native</code> (AOT)</h3>
+<h3 id="defaults">8.1 Parámetros con valor por defecto</h3>
+<pre><code><span class="kw">public function</span> <span class="fn">label</span>(text: <span class="type">string</span>, prefix: <span class="type">string</span> := <span class="str">"["</span>, suffix: <span class="type">string</span> := <span class="str">"]"</span>): <span class="type">string</span>
+  <span class="kw">return</span> prefix + text + suffix
+<span class="kw">end</span> label
+
+label(<span class="str">"hola"</span>)              <span class="comment">// "[hola]"</span>
+label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>)         <span class="comment">// "&lt;hola]"</span>
+label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span class="str">"&gt;"</span>)    <span class="comment">// "&lt;hola&gt;"</span></code></pre>
+<p>
+  Un parámetro con <code>:= valor</code> es opcional en la llamada. Reglas:
+</p>
+<ul>
+  <li>El valor por defecto debe ser un <strong>literal constante</strong>
+      (numérico, string, boolean).</li>
+  <li>Los parámetros con default van <strong>al final</strong> de la lista;
+      los argumentos se rellenan por posición.</li>
+  <li>El default se <em>sustituye en el llamante</em> en compilación (cero
+      coste en la VM) y viaja en el <code>.bpi</code>: funciona igual al
+      llamar funciones de otra librería.</li>
+</ul>
+
+<h3 id="tuplas">8.2 Tuplas (retorno múltiple)</h3>
+<pre><code><span class="comment">// Una función puede devolver VARIOS valores: tipo tupla (T1, T2, ...)</span>
+<span class="kw">function</span> <span class="fn">divmod</span>(a: <span class="type">integer</span>, b: <span class="type">integer</span>): (<span class="type">integer</span>, <span class="type">integer</span>)
+  <span class="kw">return</span> (a / b, a <span class="kw">mod</span> b)
+<span class="kw">end</span> divmod
+
+<span class="comment">// Desempaquetado con { ... } := sobre lvalues ya declarados</span>
+<span class="kw">var</span> q: <span class="type">integer</span> := <span class="num">0</span>
+<span class="kw">var</span> r: <span class="type">integer</span> := <span class="num">0</span>
+{ q, r } := divmod(<span class="num">17</span>, <span class="num">5</span>)        <span class="comment">// q=3, r=2</span></code></pre>
+<p>
+  Las tuplas son <strong>first-class</strong>: además de desempaquetarse al
+  vuelo, se pueden guardar en una variable, pasar como parámetro y devolver
+  almacenadas. Los destinos del desempaquetado pueden ser lvalues
+  cualesquiera, no solo variables:
+</p>
+<pre><code><span class="kw">var</span> t: (<span class="type">integer</span>, <span class="type">string</span>) := pair()   <span class="comment">// guardar la tupla</span>
+{ n, s } := t                          <span class="comment">// ... y desempaquetar después</span>
+
+{ arr[<span class="num">0</span>], arr[<span class="num">1</span>] } := coords()        <span class="comment">// a elementos de array</span>
+{ p.x, p.y } := coords()               <span class="comment">// a campos de objeto</span>
+
+lista.add(pair())                      <span class="comment">// entran en colecciones via any</span>
+<span class="kw">var</span> t2: (<span class="type">integer</span>, <span class="type">string</span>) := lista.get(<span class="num">0</span>)</code></pre>
+<p>
+  Una tupla no se imprime directamente (<code>print t</code> es error):
+  desempaquétala primero. Los receptores del <code>{ ... } :=</code> deben
+  existir ya (no declara variables).
+</p>
+
+<h3 id="funciones-native">8.3 Funciones <code>native</code> (AOT)</h3>
 <p>
   Una función marcada <code>native function</code> es candidata a
   <strong>compilación AOT</strong> (Ahead-Of-Time): además del bytecode
@@ -759,8 +812,11 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <li><strong>Comportamiento por plataforma</strong>:
     <table>
       <tr><th>Plataforma</th><th>Función <code>native</code></th></tr>
-      <tr><td>Raspberry Pi Pico 2 (RP2350, ARM Cortex-M33)</td>
+      <tr><td>Raspberry Pi Pico 2 / Metro (RP2350, ARM Cortex-M33)</td>
           <td>Acelerada por AOT (≈40–90× en kernels enteros).</td></tr>
+      <tr><td>STM32 (Nucleo-U575, ARM Cortex-M33)</td>
+          <td>Acelerada por AOT — mismo <code>.mdn</code> Thumb-2
+              (≈45× medido en un kernel LZSS en placa).</td></tr>
       <tr><td>ESP32-S3 (Xtensa LX7)</td>
           <td>Interpretada — misma semántica, sin speedup. El <code>.mdn</code>
               es código ARM; el AOT para Xtensa es trabajo futuro.</td></tr>
@@ -769,13 +825,21 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
     </table>
   </li>
   <li><strong>Subset soportado</strong>: funciones hoja sobre primitivos,
-      <code>integer[]</code>, <code>string</code>, variables de módulo y
-      builtins (<code>print</code>, <code>now</code>, …). Un fallo en
-      runtime (índice fuera de rango, referencia null) o un
+      arrays (<code>integer[]</code>, <code>byte[]</code>, …),
+      <code>string</code>, variables de módulo y builtins
+      (<code>print</code>, <code>now</code>, …). Un fallo en runtime
+      (índice fuera de rango, referencia null) o un
       <code>throw RuntimeError("…")</code> dentro de la native se propaga
       al <code>try/catch</code> BP que envuelva la llamada. Lo que aún NO
       cabe (llamar métodos de objetos, <code>try/catch</code> dentro de la
-      native) cae a bytecode interpretado automáticamente.</li>
+      native) cae a bytecode interpretado automáticamente. Los arrays
+      fijos locales <code>tipo[N]</code> no están soportados dentro de una
+      native (error de compilación): usa
+      <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.</li>
+  <li><strong>Llamar funciones BP normales desde una native</strong> es
+      posible (el puente existe), pero cruza de vuelta al intérprete: lo
+      ganado en velocidad se pierde en cada cruce. El compilador lo detecta
+      y emite un <strong>warning de rendimiento</strong>.</li>
 </ul>
 
 <!-- =========================================================== -->
@@ -799,6 +863,14 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <code>var</code> dentro de la clase declara un campo de instancia.
   Visibilidad <code>public</code> opcional. Acceso por <code>this.campo</code>
   desde dentro; <code>obj.campo</code> desde fuera (sólo si es público).
+</p>
+<p>
+  Un campo NO admite array de tamaño fijo <code>tipo[N]</code> (error de
+  compilación): declara <code>tipo[]</code> e inicialízalo en el constructor
+  con <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
+  Los campos no se exportan en el <code>.bpi</code> — son privados del
+  módulo dueño por diseño OO; expón una <code>property</code> si hace falta
+  acceso cross-module.
 </p>
 
 <h3 id="metodos">9.2 Métodos</h3>
@@ -836,7 +908,12 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <span class="kw">end</span> Perro</code></pre>
 <p>
   Herencia simple. <code>super.metodo(args)</code> invoca explícitamente al
-  método del padre dentro de un override.
+  método del padre dentro de un override. La herencia funciona también
+  <strong>cross-module</strong>: la clase base puede venir de otra librería
+  importada (vtable, <code>super(...)</code>, <code>instanceof</code> y
+  estáticos incluidos). <code>x instanceof Foo</code> comprueba el tipo
+  dinámico en runtime (incluida la jerarquía de
+  <a href="#excepciones"><code>Exception</code></a>).
 </p>
 
 <h3 id="props">9.5 Properties</h3>
@@ -973,12 +1050,37 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
       función inicializadora del módulo para fijar el valor inicial.</li>
 </ul>
 
-<h3 id="static">9.6 <code>static</code> / <code>final</code></h3>
+<h3 id="static">9.6 Miembros estáticos / <code>final</code></h3>
 <p>
-  <code>static</code> en una variable de clase: campo a nivel clase, no de
-  instancia. <code>final</code> en clase: no extensible; en método: no
-  overridable. (En BP el modificador es <code>final</code> antes de
-  <code>function</code> o <code>class</code>.)
+  En BP no hay keyword <code>static</code>: un miembro es estático cuando se
+  declara <strong>con el nombre cualificado por la clase</strong>
+  (<code>Clase.miembro</code>) dentro del cuerpo de la clase. Vale para
+  <code>const</code>, <code>var</code>, <code>property</code> y
+  <code>function</code>:
+</p>
+<pre><code><span class="kw">public class</span> Counter
+  <span class="kw">public const</span> Counter.MAX: <span class="type">integer</span> := <span class="num">100</span>   <span class="comment">// const estática</span>
+  <span class="kw">public var</span> Counter.viva: <span class="type">integer</span>            <span class="comment">// var estática</span>
+
+  <span class="kw">public property</span> Counter.total: <span class="type">integer</span>     <span class="comment">// property estática (get/set auto;</span>
+                                               <span class="comment">// admite get/set custom con `field`)</span>
+
+  <span class="kw">public function</span> Counter.bump()               <span class="comment">// método estático</span>
+    Counter.total := Counter.total + <span class="num">1</span>
+  <span class="kw">end</span> Counter.bump
+<span class="kw">end</span> Counter
+
+<span class="comment">// Acceso SIEMPRE cualificado, sin instancia — también desde métodos
+// de instancia y desde otros módulos (viajan en el .bpi):</span>
+Counter.total := <span class="num">7</span>
+Counter.total += <span class="num">3</span>
+Counter.bump()</code></pre>
+<p>
+  El estado estático vive como global del módulo dueño (uno por clase, no
+  por instancia); los tipos de 8 bytes (<code>long</code>/<code>double</code>)
+  funcionan igual. <code>final</code> en clase: no extensible; en método: no
+  overridable (el modificador va antes de <code>function</code> o
+  <code>class</code>).
 </p>
 
 <h3 id="fields-owner">9.7 Fields owner</h3>
