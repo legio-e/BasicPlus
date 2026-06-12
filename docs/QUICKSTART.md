@@ -1,0 +1,128 @@
+# BasicPlus — inicio rápido
+
+De cero a un LED parpadeando (o un "hola" por consola) en pocos minutos,
+por plataforma. Para el detalle fino de cada port: los README de
+`bpgenvm-c/pico`, `bpgenvm-c/esp32` y `bpgenvm-c/stm32`.
+
+---
+
+## 1. PC (sin placa) — 5 minutos
+
+Requisitos: JDK 8+, Maven, GCC (MinGW en Windows), `make`.
+
+```sh
+# Toolchain (compilador + VM Java) y VM C de host
+mvn -f miVM/pom.xml install
+mvn -f lexer-java/pom.xml install
+cd bpgenvm-c && make && cd ..
+
+# Compilar y ejecutar el blink en AMBAS VMs (en PC los GPIO loggean)
+java -jar lexer-java/target/basicplus-frontend.jar samples/blink.bp \
+     --compile samples --backend=mivm
+java -jar miVM/target/bpgenvm-1.0.jar samples/Blink.mod
+bpgenvm-c/build/bpgenvm-c samples/Blink.mod
+```
+
+Si las dos salidas no son idénticas, eso es un bug nuestro: la paridad
+dual-VM es el invariante del proyecto.
+
+**El IDE** (recomendado para todo lo que sigue):
+
+```sh
+mvn -f BpIde/pom.xml package
+java -jar BpIde/target/BpIde-1.0-SNAPSHOT-shaded.jar
+```
+
+Abre `samples/blink.bp`, botón **Compile**, menú **Run** — la salida
+aparece en la consola inferior. **Run → Stop (Ctrl+F2)** aborta un
+programa en marcha.
+
+---
+
+## 2. Raspberry Pi Pico 2 / Adafruit Metro RP2350
+
+**Una sola imagen de firmware vale para las dos placas** — la variante
+del chip, los pines y la PSRAM se detectan en runtime.
+
+**Flashear** (la vía BOOTSEL de toda la vida):
+
+1. Compila el firmware (una vez; ver `bpgenvm-c/pico/README.md` para los
+   prerequisitos: pico-sdk, FreeRTOS-Kernel, toolchain ARM):
+
+   ```sh
+   cd bpgenvm-c/pico && mkdir -p build && cd build
+   cmake -G Ninja -DPICO_BOARD=bp_rp2350b \
+         -DFREERTOS_KERNEL_PATH=<ruta>/FreeRTOS-Kernel ..
+   ninja bpvm_pico
+   ```
+
+2. Mantén pulsado **BOOTSEL** al conectar el USB → aparece la unidad
+   `RPI-RP2` → copia `build/bpvm_pico.uf2` → la placa rebota sola.
+
+**Primer programa desde el IDE**:
+
+1. Abre el IDE → panel inferior (*Explorer*) → selecciona el puerto COM
+   de la placa → **Connect**. Verás el árbol de ficheros del micro
+   (`/lib` con la stdlib, `/app`, `/sys`).
+2. Abre `samples/blink.bp` → **Run on Device**. El IDE sube el `.mod`
+   (y las dependencias que falten) y el LED parpadea. La salida del
+   programa llega a la consola.
+3. En la consola del Explorer: `help` lista los comandos (`dir`, `run`,
+   `kill`, `autorun`, `log`, `save`, `reset`…).
+
+**Hacerlo autónomo**: con tu programa ya en la placa,
+
+```
+/> autorun Blink      ← escribe /sys/auto.txt y lo persiste
+/> reset
+```
+
+A partir de ahí la placa arranca tu programa sola al enchufarla, sin PC.
+El IDE puede conectarse igualmente con el programa corriendo: `kill` lo
+para, `autorun off` lo retira. Nunca hace falta reflashear.
+
+**Metro RP2350 (variante B)**: sube un `/sys/board.json` declarando la
+placa (variante, ledPin, neopixelPin, psramCsPin) — con él, el firmware
+habilita los 48 GPIO, el NeoPixel y los 8 MB de PSRAM como heap.
+
+---
+
+## 3. ESP32-S3
+
+¡Ojo con los **dos puertos USB** de la DevKit! El **wire** (lo que usa el
+IDE) va por el **bridge UART0**; el USB nativo (USB-Serial-JTAG) es solo
+consola de logs. Detalle en `bpgenvm-c/esp32/README.md`.
+
+```sh
+# Entorno ESP-IDF (v6.x) y build + flash
+cd bpgenvm-c/esp32
+idf.py build
+idf.py -p <puerto-del-bridge> flash
+```
+
+Después: IDE → Connect al puerto del bridge → mismo flujo que en la Pico
+(Run on Device, consola, autorun). En el ESP32 las `native function`
+corren interpretadas (el AOT es ARM) y el módulo `Net` aún no tiene
+backend (llegará con lwIP).
+
+---
+
+## 4. STM32 (Nucleo-U575ZI-Q)
+
+El port se integra en un proyecto **STM32CubeIDE** (la guía paso a paso,
+con los include-paths y la carpeta enlazada del core, está en
+`bpgenvm-c/stm32/port/README.md`).
+
+1. Compila y flashea desde CubeIDE (el ST-LINK de la Nucleo).
+2. El wire sale por el **VCP del ST-LINK** — el mismo cable USB.
+3. IDE → Connect a ese COM → Run on Device / consola / autorun, igual
+   que en las otras placas. AOT activo (mismo Cortex-M33 que el RP2350).
+
+---
+
+## ¿Y ahora qué?
+
+- **[Manual del lenguaje](manual.html)** — la referencia completa.
+- `samples/` — ejemplos: GPIO OO, I²C/SPI/UART, threads, excepciones,
+  tuplas, `native` AOT, TCP…
+- `docs/PENDIENTES.md` — el backlog vivo y honesto del proyecto.
