@@ -2957,8 +2957,12 @@ igual que el device).</p>
       alternativa: <code>tipo[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
   <li>AOT para Xtensa (ESP32-S3) — el <code>.mdn</code> es Thumb-2
       (RP2350 y STM32 sí aceleran).</li>
-  <li>Llamada native→native entre módulos sin pasar por el intérprete
-      (diseño cerrado en <code>docs/AOT_CROSS_MODULE.md</code>; v3).</li>
+  <li>Mejora de rendimiento (no de funcionalidad): la llamada de una
+      <code>native</code> a una función de OTRO módulo ya funciona, pero
+      cruza por el puente del intérprete (el compilador avisa). La mejora
+      — despachar native→native directo, sin re-entrar al intérprete —
+      tiene el diseño cerrado en <code>docs/AOT_CROSS_MODULE.md</code> (v3).
+      Dentro del mismo módulo ya es llamada C directa.</li>
   <li>TCP/IP desde BP (cliente simple) — en preparación (H11); WiFi en
       la Pico 2 W a continuación.</li>
   <li><code>owner</code> / <code>final</code> no aplican a property de

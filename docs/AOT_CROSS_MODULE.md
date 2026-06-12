@@ -1,5 +1,11 @@
 # AOT — llamadas cross-module (#169)
 
+> **Encuadre (2026-06-12): esto es una MEJORA de rendimiento, no
+> funcionalidad pendiente.** Las llamadas native→externa YA funcionan
+> vía el puente del intérprete (#210/#211/#212), con warning del
+> compilador en el call-site. "Lo importante es que funcione; que vaya
+> rápido es un premio" — Eduardo. Diferido a v3.
+
 Diseño consensuado para resucitar #169 P-aot-cross-module-call.
 Captura el insight clave: **el trabajo de compilación es el mismo
 que para llamadas BP→BP entre módulos.** Solo hace falta una pieza

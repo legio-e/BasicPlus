@@ -880,6 +880,27 @@ así tal cual (mensaje específico para TryStmt en native, con workaround).
 Si algún caso real lo exige, retomar con el diseño de arriba (cabe en una
 sesión: helper nuevo al final del struct + emisión de closures de bloque).
 
+### #169 — P-aot-cross-module-call: MEJORA de rendimiento, no funcionalidad (v3)
+
+**Funciona HOY** (decisión Eduardo 2026-06-12: "lo importante es que
+funcione; que vaya rápido es un premio"):
+
+- native → native del MISMO módulo: llamada C directa (velocidad plena).
+- native → función de OTRO módulo (sea BP o native): por el puente
+  `call_bp_i32` con nombre cualificado (#210/#211/#212) — el runtime
+  resuelve la dirección y despacha vía intérprete; si el destino tiene
+  thunk AOT su cuerpo corre nativo, pero cada llamada paga el round-trip.
+  El compilador emite WARNING de rendimiento en el call-site.
+
+**La mejora (v3)**: trampolín `call_external` en el runtime — en el cruce
+de módulos, mirar si el destino tiene thunk registrado e invocarlo DIRECTO
+sin re-entrar al bucle del intérprete. Diseño cerrado en
+`docs/AOT_CROSS_MODULE.md` (la resolución compile-time es la misma que ya
+hace MivmEmitter con las `.bpi`; solo falta la pieza runtime, opción A:
+caché de dirección por call-site, lazy via `find_external`). Caso de uso
+raro (los kernels calientes viven en un módulo) → coste/beneficio bajo
+para el cierre de V2.
+
 ### BpVM.cfg — fichero de configuración JSON (cerrado)
 Soporta:
 - `memorySize` (bytes totales del array `memory`).
