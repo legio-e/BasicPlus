@@ -194,6 +194,7 @@ bpvm_status_t bpvm_load_mod(bpvm_t* vm, const char* path) {
 
 bpvm_status_t bpvm_run(bpvm_t* vm) {
     if (!vm) return BPVM_ERR_BAD_PC;
+    vm->kill_requested = 0;   /* P-run-stop: los re-runs no nacen muertos */
     /* F3 — resolver imports y aplicar class fixups antes de ejecutar. */
     bpvm_status_t ls = bpvm_link_all(vm);
     if (ls != BPVM_OK) return ls;
@@ -228,6 +229,7 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
 bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     if (!vm) return BPVM_ERR_BAD_PC;
     if (n_workers < 1) n_workers = 1;
+    vm->kill_requested = 0;   /* P-run-stop: los re-runs no nacen muertos */
     bpvm_status_t ls = bpvm_link_all(vm);
     if (ls != BPVM_OK) return ls;
     if (vm->main_absolute_address == 0) return BPVM_ERR_BAD_PC;
@@ -250,6 +252,7 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     if (bpvm_smp_init(vm, n_workers) != 0) return BPVM_ERR_OOM;
     int rc = bpvm_scheduler_run_smp(vm);
     bpvm_smp_destroy(vm);
+    if (vm->kill_requested) return BPVM_KILLED;   /* P-run-stop */
     return rc == 0 ? BPVM_OK : BPVM_ERR_RUNTIME;
 }
 
@@ -283,6 +286,22 @@ int bpvm_thread_id(const bpvm_thread_t* tc) {
 /* ============================================================ */
 /*  H6.b — Debugger del device: API de breakpoints + pausa.     */
 /* ============================================================ */
+
+/* P-run-stop (#257) — KILL cooperativo. */
+void bpvm_set_poll(bpvm_t* vm, bpvm_poll_cb_t cb, void* user) {
+    if (!vm) return;
+    vm->poll_cb   = cb;
+    vm->poll_user = user;
+}
+
+void bpvm_request_kill(bpvm_t* vm) {
+    if (!vm) return;
+    vm->kill_requested = 1;
+}
+
+int bpvm_kill_requested(const bpvm_t* vm) {
+    return vm ? vm->kill_requested : 0;
+}
 
 void bpvm_set_pause_cb(bpvm_t* vm, bpvm_pause_cb_t cb, void* user) {
     if (!vm) return;
@@ -394,6 +413,7 @@ const char* bpvm_status_str(bpvm_status_t s) {
     case BPVM_ERR_RUNTIME:        return "RuntimeError BP no atrapado";
     case BPVM_NATIVE_RETURN:      return "native-return (interno)";
     case BPVM_DBG_STOPPED:        return "detenido por el debugger";
+    case BPVM_KILLED:             return "terminado por KILL";
     default:                       return "?";
     }
 }

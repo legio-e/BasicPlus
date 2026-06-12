@@ -260,6 +260,29 @@ static void emit_exited(long session, const char* status, int code, uint32_t ms)
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);
 }
 
+/* P-run-stop (#257) — poll de KILL durante el run (la VM lo invoca entre
+ * quanta via bpvm_set_poll). Mismo patrón que Pico/ESP32: consume líneas
+ * sin bloquear; KILL → ack diferido + 1 (BPVM_KILLED); otra request →
+ * BUSY diferido. Los acks salen tras parar la VM, antes del EXITED. */
+static long s_kill_ack_id = -1;
+static long s_busy_id     = -1;
+
+static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
+    (void) vm; (void) user;
+    int c = stm32_wire_getchar();
+    if (c < 0) return 0;
+    int n = stm32_wire_recv_line(c, s_line, sizeof(s_line));
+    if (n < 0) return 0;                      /* rota/estancada: descartar */
+    json_obj_t obj;
+    if (json_parse(s_line, (size_t) n, &obj) != 0) return 0;
+    char type[24] = {0};
+    json_get_str(&obj, "type", type, sizeof(type));
+    long rid = json_get_long(&obj, "id", 0);
+    if (strcmp(type, "KILL") == 0) { s_kill_ack_id = rid; return 1; }
+    s_busy_id = rid;
+    return 0;
+}
+
 /* Resuelve un nombre de módulo en el FS: prueba name, /app/name, /lib/name
  * (el IDE sube las deps a /lib). 0 OK, -1 no está. */
 static int stm32_fs_resolve(const char* name, const uint8_t** data, uint32_t* size) {
@@ -379,9 +402,22 @@ static void handle_run(long id, json_obj_t* obj) {
         }
     }
 
+    /* P-run-stop (#257) — poll de KILL entre quanta. */
+    s_kill_ack_id = -1;
+    s_busy_id     = -1;
+    if (st == BPVM_OK && !missing[0]) bpvm_set_poll(vm, stm32_run_poll_cb, NULL);
+
     if (st == BPVM_OK && !missing[0]) st = bpvm_run(vm);
     BSP_LED_Off(LED_BLUE);
     uint32_t dt = HAL_GetTick() - t0;
+
+    /* P-run-stop — acks diferidos del poll, antes del EXITED. */
+    bpvm_set_poll(vm, NULL, NULL);
+    if (s_kill_ack_id >= 0) { reply_empty("KILL_REPLY", s_kill_ack_id); s_kill_ack_id = -1; }
+    if (s_busy_id >= 0) {
+        stm32_wire_send_error(s_busy_id, "BUSY", "ejecución en curso: solo se atiende KILL");
+        s_busy_id = -1;
+    }
 
     if (missing[0]) {
         BSP_LED_On(LED_RED);
@@ -393,8 +429,11 @@ static void handle_run(long id, json_obj_t* obj) {
             session, missing);
         if (n > 0) stm32_wire_send_line(buf, (size_t) n);
     } else {
-        if (st != BPVM_OK) BSP_LED_On(LED_RED);   /* rojo = el programa falló */
-        emit_exited(session, (st == BPVM_OK) ? "OK" : "RUNTIME_ERROR", (int) st, dt);
+        if (st != BPVM_OK && st != BPVM_KILLED) BSP_LED_On(LED_RED);
+        emit_exited(session,
+                    (st == BPVM_OK)     ? "OK"
+                  : (st == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR",
+                    (st == BPVM_KILLED) ? 130 : (int) st, dt);
     }
     bpvm_destroy(vm);
 }
@@ -429,6 +468,10 @@ static void dispatch(int first_char) {
     else if (strcmp(type, "MKDIR")     == 0) reply_empty("MKDIR_REPLY", id);
     else if (strcmp(type, "FORMAT")    == 0) handle_format(id, &obj);
     else if (strcmp(type, "RUN")       == 0) handle_run(id, &obj);
+    /* P-run-stop (#257) — KILL en idle: nada que matar (el útil llega
+     * DURANTE un RUN y lo atiende stm32_run_poll_cb). */
+    else if (strcmp(type, "KILL")      == 0)
+        stm32_wire_send_error(id, "NO_SESSION", "no hay programa en ejecución");
     else if (strcmp(type, "LOG_DUMP")  == 0) handle_log_dump(id);
     else if (strcmp(type, "LOG_CLEAR") == 0) reply_empty("LOG_CLEAR_REPLY", id);
     else if (strcmp(type, "RESET")     == 0) {

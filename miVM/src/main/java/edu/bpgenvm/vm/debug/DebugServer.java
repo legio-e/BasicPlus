@@ -246,7 +246,9 @@ public final class DebugServer implements AutoCloseable {
                 long elapsed = activeSessionStartMs > 0
                         ? System.currentTimeMillis() - activeSessionStartMs
                         : 0;
-                String status = (e.exitCode == 0) ? "OK" : "RUNTIME_ERROR";
+                String status = (e.exitCode == 0)   ? "OK"
+                              : (e.exitCode == 130) ? "KILLED"     // P-run-stop
+                                                    : "RUNTIME_ERROR";
                 StringBuilder sb = new StringBuilder(128);
                 sb.append("{\"type\":\"EXITED\",\"session\":").append(sess)
                   .append(",\"status\":\"").append(status).append('"')
@@ -476,6 +478,11 @@ public final class DebugServer implements AutoCloseable {
                                 + " no existe (activa=" + activeSession + ")");
                         break;
                     }
+                    // P-run-stop (#257) — kill REAL: la VM termina en el
+                    // siguiente safepoint aunque esté corriendo a toda
+                    // velocidad. El STOP del controller cubre además el
+                    // caso "pausada en el hook del debugger".
+                    vm.requestKill();
                     controller.sendCommand(StepCommand.STOP);
                     this.stepInProgress = false;
                     sendReply(id, "KILL_REPLY", "");

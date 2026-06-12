@@ -601,25 +601,36 @@ Decisiones de diseño anotadas:
   sin forma de parar el programa, un autorun con bucle infinito que sature
   la VM podría estorbar los uploads (ver entrada siguiente).
 
-#### P-run-stop — interrumpir desde el IDE un programa en marcha (pendiente, 2026-06-11)
-Comando STOP en el wire v1 + botón Stop en el IDE: aborta el programa BP en
-ejecución en el device (y en el daemon local) sin reiniciar la placa. Es la
-red de seguridad del autorun (P-autorun): si el arranque automático te
-bloquea, Stop → subes los cambios → listo.
+#### P-run-stop — interrumpir desde el IDE un programa en marcha 🟢 IMPLEMENTADO (2026-06-13) — falta verificación en placa
+El comando del wire resultó existir desde el día uno: **KILL** (v1 §6.3, con
+status `KILLED` ya declarado en el spec) — el IDE lo enviaba, el server Java
+lo respondía a medias y los firmwares lo rechazaban. Ahora es real de punta
+a punta:
 
-Notas de diseño:
-- La comm task ya recibe mientras la VM corre (arquitectura SMP/tasks) — el
-  comando llega siempre; falta el mecanismo de parada limpio.
-- Mecanismo: flag de stop chequeado en los safepoints del intérprete (la
-  infraestructura existe: hook de breakpoints #139 + pausa/resume del
-  debugger H6.b.2.a). Stop = terminar TODOS los threads BP ordenadamente y
-  volver al estado idle del REPL (la limpieza entre runs ya existe, N107),
-  respondiendo un ack por el wire.
-- Distinto de la PAUSA del debugger (suspende, reanudable) y del RESET
-  tipado (PR-7c, reinicia el estado): Stop termina el programa, la VM y el
-  FS quedan vivos.
-- IDE: botón Stop en toolbar/menú activo durante Run on device (y Run
-  local); BpvmClient/SerialBackend envían el comando.
+- **VM-C (core)**: KILL cooperativo — `bpvm_set_poll(cb)` (el scheduler lo
+  invoca ENTRE quanta, nunca a mitad de opcode) + `bpvm_request_kill()`
+  (cualquier task) + status `BPVM_KILLED`. Con poll instalado, las esperas
+  del scheduler se topean a 50 ms → un programa DORMIDO también muere.
+  El flag se limpia al entrar a bpvm_run* (re-runs limpios). Test host
+  `make test-kill`: 3/3 PASS (bucle single 0 ms, bucle SMP 0 ms, dormido
+  1 h → muerto en 1.1 s).
+- **Firmwares (3)**: poll del wire durante el RUN que consume líneas sin
+  bloquear — KILL → ack diferido + kill; otra request → BUSY diferido (los
+  acks salen tras parar la VM, ANTES del EXITED, porque la comm task del
+  Pico escribe OUTPUTs y dos escritores se entrelazarían). EXITED con
+  status=KILLED / exitCode=130 (128+SIGINT). KILL en idle → NO_SESSION.
+  En modo debug NO se instala el poll (el pause_cb es el dueño del USB).
+- **VM-Java**: `requestKill()` — mismo safepoint por-opcode que
+  stopTheWorld + shutdown coordinado del WorkerLoop (notifyAll despierta
+  sleeps/joins); DebugServer.KILL ahora mata de verdad (antes solo servía
+  con la VM pausada en el hook); EXITED status KILLED. Suite 34/34 verde.
+- **IDE**: Run → **Stop** (Ctrl+F2) — mata el run local (daemon) o el de
+  la placa (Backend.kill() → KILL por la conexión del Explorer).
+
+Falta: prueba en placa (Pico .uf2 listo de 05:13; ESP32/STM32 compilan en
+tu lado) y el e2e del daemon local desde el IDE. nativa: una `native
+function` larga no es interrumpible hasta volver al intérprete (sin quanta
+dentro del .mdn) — documentado. Es la red de seguridad de P-autorun.
 
 #### P-adc-8ch — Adc.bp limitado a 4 canales en placas RP2350B (pendiente, 2026-06-11)
 Al arreglar el INFO del Metro (temp en canal equivocado, ADC base pin) quedó

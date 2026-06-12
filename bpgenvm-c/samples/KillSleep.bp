@@ -1,0 +1,10 @@
+// KillSleep.bp — P-run-stop (#257): programa DORMIDO para probar que el
+// KILL también llega cuando no hay ningún thread RUNNABLE (el scheduler
+// limita sus esperas a 50 ms cuando hay poll_cb instalado).
+module KillSleep
+  function Main()
+    print "durmiendo"
+    sleepSec(3600)
+    print "nunca llega"
+  end Main
+end KillSleep

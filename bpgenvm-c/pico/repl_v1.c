@@ -34,6 +34,7 @@
 #include "aot_registry.h"    /* H3 #160: bpvm_aot_clear */
 
 #include "pico/bootrom.h"    /* reset_usb_boot (BOOTSEL) */
+#include "pico/stdlib.h"     /* getchar_timeout_us (poll de KILL, #257) */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -832,10 +833,50 @@ static void map_vm_status(bpvm_status_t rs, const char** status, int* exit_code)
     if (rs == BPVM_OK) {
         *status    = "OK";
         *exit_code = 0;
+    } else if (rs == BPVM_KILLED) {
+        /* P-run-stop (#257) — abortado por KILL del IDE. exitCode 130
+         * (convención 128+SIGINT); el cliente lo distingue de un error. */
+        *status    = "KILLED";
+        *exit_code = 130;
     } else {
         *status    = "RUNTIME_ERROR";
         *exit_code = (int) rs;
     }
+}
+
+/* ============================================================ */
+/* P-run-stop (#257) — KILL durante la ejecución.                */
+/*                                                               */
+/* La VM invoca este poll ENTRE quanta (bpvm_set_poll). Lee el   */
+/* wire sin bloquear; si llega una línea completa la consume:    */
+/*   KILL  → marca el ack pendiente y devuelve 1 (BPVM_KILLED)   */
+/*   otra  → marca un BUSY pendiente (durante el run solo se     */
+/*           atiende KILL)                                       */
+/* OJO: NO respondemos por el wire AQUÍ — la comm task está      */
+/* escribiendo OUTPUTs y dos escritores se entrelazarían. Los    */
+/* acks pendientes los envía handle_run tras parar la VM, justo  */
+/* ANTES del EXITED (orden: KILL_REPLY → EXITED).                */
+/* ============================================================ */
+static long s_kill_ack_id = -1;   /* id del KILL recibido en-run, o -1 */
+static long s_busy_id     = -1;   /* id de otra request en-run, o -1  */
+
+static int pico_run_poll_cb(bpvm_t* vm, void* user) {
+    (void) vm; (void) user;
+    int c = getchar_timeout_us(0);
+    if (c < 0) return 0;                      /* nada pendiente */
+    int n = wire_v1_recv_line(c, s_line_buf, sizeof(s_line_buf));
+    if (n < 0) return 0;                      /* línea rota: descartar */
+    json_obj_t obj;
+    if (json_parse(s_line_buf, (size_t) n, &obj) != 0) return 0;
+    char type[24] = {0};
+    json_get_str(&obj, "type", type, sizeof(type));
+    long rid = json_get_long(&obj, "id", 0);
+    if (strcmp(type, "KILL") == 0) {
+        s_kill_ack_id = rid;
+        return 1;                              /* → BPVM_KILLED */
+    }
+    s_busy_id = rid;                           /* responde tras el run */
+    return 0;
 }
 
 static void handle_run(long id, const json_obj_t* obj) {
@@ -1008,6 +1049,13 @@ static void handle_run(long id, const json_obj_t* obj) {
                    s_pending_bp_n, s_pause_initial);
     }
 
+    /* P-run-stop (#257) — poll del wire entre quanta para poder atender
+     * KILL. Solo en runs normales: en modo debug el pause_cb ya es el
+     * dueño del USB (dos lectores se robarían bytes). */
+    s_kill_ack_id = -1;
+    s_busy_id     = -1;
+    if (!debugging) bpvm_set_poll(vm, pico_run_poll_cb, NULL);
+
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     log_printf("RUN/v1 %s session=%ld", path, session);
     bpvm_status_t rs;
@@ -1025,6 +1073,19 @@ static void handle_run(long id, const json_obj_t* obj) {
 #endif
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
     log_printf("RUN/v1 %s finished: %s", path, bpvm_status_str(rs));
+
+    /* P-run-stop — acks diferidos del poll (la comm task ya paró: somos
+     * el único escritor). Orden: KILL_REPLY/BUSY → EXITED. */
+    bpvm_set_poll(vm, NULL, NULL);
+    if (s_kill_ack_id >= 0) {
+        wire_v1_send_reply_empty("KILL_REPLY", s_kill_ack_id);
+        s_kill_ack_id = -1;
+    }
+    if (s_busy_id >= 0) {
+        wire_v1_send_error(s_busy_id, "BUSY",
+                            "ejecución en curso: solo se atiende KILL");
+        s_busy_id = -1;
+    }
 
     /* 6. Emit EXITED. */
     const char* status_str; int exit_code;
@@ -1142,13 +1203,12 @@ void repl_v1_handle_request(int first_char) {
                                          wire_v1_send_reply_empty("PAUSE_REPLY", id); return; }
     if (strcmp(type, "SET_BP")   == 0) { dbg_set_bp(id, &obj);      return; }
     if (strcmp(type, "CLR_BP")   == 0) { dbg_clr_bp(id, &obj);      return; }
-    /* KILL: requeriría interrumpir bpvm_run desde otra task. La VM C
-     * actual no expone un mecanismo de cancelación; #136 (arch-tasks)
-     * lo desbloqueará al separar VM y REPL en tasks independientes.
-     * Por ahora rechazamos limpiamente. */
+    /* P-run-stop (#257) — KILL en idle: no hay nada que matar. El KILL
+     * útil llega DURANTE un RUN y lo atiende pico_run_poll_cb (la VM
+     * polea el wire entre quanta y termina con BPVM_KILLED). */
     if (strcmp(type, "KILL")     == 0) {
-        wire_v1_send_error(id, "UNSUPPORTED",
-                            "KILL no soportado todavía en el firmware Pico");
+        wire_v1_send_error(id, "NO_SESSION",
+                            "no hay programa en ejecución");
         return;
     }
     /* PROMPT_RESPONSE: el builtin IO.prompt() aún no está implementado

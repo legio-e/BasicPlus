@@ -102,12 +102,24 @@ static void worker_loop(void* raw) {
     free(arg);
 
     for (;;) {
+        /* P-run-stop (#257) — poll cooperativo del transporte ENTRE quanta
+         * (fuera del lock; con 1 worker es exactamente entre quanta). */
+        if (vm->poll_cb != NULL && vm->poll_cb(vm, vm->poll_user) != 0)
+            vm->kill_requested = 1;
+
         /* ------- Scheduler decision bajo vm_lock ------- */
         bpvm_thread_t* tc = NULL;
         int tc_idx = -1;
         bpvm_platform_mutex_lock(&smp->vm_lock);
         for (;;) {
             if (smp->shutdown) {
+                bpvm_platform_mutex_unlock(&smp->vm_lock);
+                return;
+            }
+            /* P-run-stop — KILL: shutdown coordinado de todos los workers. */
+            if (vm->kill_requested) {
+                smp->shutdown = true;
+                bpvm_platform_cond_broadcast(&smp->sched_cond);
                 bpvm_platform_mutex_unlock(&smp->vm_lock);
                 return;
             }
@@ -131,13 +143,29 @@ static void worker_loop(void* raw) {
                 bpvm_platform_mutex_unlock(&smp->vm_lock);
                 return;
             }
-            /* Esperar próximo wake o signal. */
+            /* P-run-stop — sin RUNNABLE: poll del transporte fuera del
+             * lock antes de esperar (un programa dormido también tiene
+             * que poder morir). */
+            if (vm->poll_cb != NULL) {
+                bpvm_platform_mutex_unlock(&smp->vm_lock);
+                if (vm->poll_cb(vm, vm->poll_user) != 0)
+                    vm->kill_requested = 1;
+                bpvm_platform_mutex_lock(&smp->vm_lock);
+                if (vm->kill_requested) continue;   /* el head hace shutdown */
+            }
+            /* Esperar próximo wake o signal. Con poll_cb, tope de 50 ms. */
             int64_t earliest = earliest_wake_locked(vm);
             int64_t now = bpvm_platform_now_ms();
             if (earliest == INT64_MAX) {
-                bpvm_platform_cond_wait(&smp->sched_cond, &smp->vm_lock);
+                if (vm->poll_cb != NULL) {
+                    bpvm_platform_cond_timed_wait(&smp->sched_cond,
+                                                   &smp->vm_lock, 50);
+                } else {
+                    bpvm_platform_cond_wait(&smp->sched_cond, &smp->vm_lock);
+                }
             } else {
                 int dt = (int)(earliest - now);
+                if (vm->poll_cb != NULL && dt > 50) dt = 50;
                 if (dt > 0) {
                     bpvm_platform_cond_timed_wait(&smp->sched_cond,
                                                    &smp->vm_lock, dt);

@@ -298,6 +298,30 @@ static void send_exited(long session, const char* status, int exit_code,
     if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
 }
 
+/* P-run-stop (#257) — poll de KILL durante el run (la VM lo invoca entre
+ * quanta). Mismo patrón que el firmware Pico: consume líneas sin
+ * bloquear; KILL → ack diferido + devuelve 1 (BPVM_KILLED); cualquier
+ * otra request en-run → BUSY diferido. Los acks los envía handle_run
+ * tras parar la VM (orden: KILL_REPLY/BUSY → EXITED). */
+static long s_kill_ack_id = -1;
+static long s_busy_id     = -1;
+
+static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
+    (void) vm; (void) user;
+    int c = wire_v1_try_getchar();
+    if (c < 0) return 0;
+    int n = wire_v1_recv_line(c, s_line_buf, sizeof(s_line_buf));
+    if (n < 0) return 0;
+    json_obj_t obj;
+    if (json_parse(s_line_buf, (size_t) n, &obj) != 0) return 0;
+    char type[24] = {0};
+    json_get_str(&obj, "type", type, sizeof(type));
+    long rid = json_get_long(&obj, "id", 0);
+    if (strcmp(type, "KILL") == 0) { s_kill_ack_id = rid; return 1; }
+    s_busy_id = rid;
+    return 0;
+}
+
 static void handle_run(long id, const json_obj_t* obj) {
     char path[FS_NAME_LEN];
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
@@ -367,12 +391,25 @@ static void handle_run(long id, const json_obj_t* obj) {
 
     /* Ejecutar. NO AOT en Xtensa (el .mdn es ARM). bpvm_run single-thread
      * (el SMP en ESP32 es H4.2+, no necesario para H4.3). */
+    s_kill_ack_id = -1;
+    s_busy_id     = -1;
+    bpvm_set_poll(vm, esp32_run_poll_cb, NULL);   /* P-run-stop (#257) */
+
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     bpvm_status_t rs = bpvm_run(vm);
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
 
-    const char* status_str = (rs == BPVM_OK) ? "OK" : "RUNTIME_ERROR";
-    int exit_code = (rs == BPVM_OK) ? 0 : (int) rs;
+    /* P-run-stop — acks diferidos del poll, ANTES del EXITED. */
+    bpvm_set_poll(vm, NULL, NULL);
+    if (s_kill_ack_id >= 0) { wire_v1_send_reply_empty("KILL_REPLY", s_kill_ack_id); s_kill_ack_id = -1; }
+    if (s_busy_id >= 0) {
+        wire_v1_send_error(s_busy_id, "BUSY", "ejecución en curso: solo se atiende KILL");
+        s_busy_id = -1;
+    }
+
+    const char* status_str = (rs == BPVM_OK)     ? "OK"
+                           : (rs == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR";
+    int exit_code = (rs == BPVM_OK) ? 0 : (rs == BPVM_KILLED) ? 130 : (int) rs;
     send_exited(session, status_str, exit_code, (long) dt,
                 (rs == BPVM_OK) ? NULL : bpvm_status_str(rs));
 
@@ -423,6 +460,12 @@ static void handle_request(const char* line, int len) {
     if (strcmp(type, "PUT")   == 0) { handle_put(id, &obj, s_put_buf, bulk_size); return; }
     if (strcmp(type, "DEL")   == 0) { handle_del(id, &obj);   return; }
     if (strcmp(type, "RUN")   == 0) { handle_run(id, &obj);   return; }
+    /* P-run-stop (#257) — KILL en idle: nada que matar (el KILL útil llega
+     * DURANTE un RUN y lo atiende esp32_run_poll_cb). */
+    if (strcmp(type, "KILL")  == 0) {
+        wire_v1_send_error(id, "NO_SESSION", "no hay programa en ejecución");
+        return;
+    }
 
     wire_v1_send_error(id, "UNSUPPORTED", "type no implementado en el firmware ESP32");
 }

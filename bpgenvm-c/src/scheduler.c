@@ -81,6 +81,13 @@ static int64_t earliest_wake(const bpvm_t* vm) {
 bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
     int last_idx = -1;
     while (any_alive(vm)) {
+        /* P-run-stop (#257) — KILL cooperativo: el poll_cb (si hay) mira
+         * el transporte ENTRE quanta; kill_requested termina la ejecución
+         * limpiamente (paramos entre opcodes → heap/FS consistentes). */
+        if (vm->poll_cb != NULL && vm->poll_cb(vm, vm->poll_user) != 0)
+            vm->kill_requested = 1;
+        if (vm->kill_requested) return BPVM_KILLED;
+
         /* 1) Despierta sleeps expirados + joins completados. */
         wake_expired_sleeps(vm, bpvm_platform_now_ms());
         wake_completed_joins(vm);
@@ -98,6 +105,9 @@ bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
             }
             int64_t now = bpvm_platform_now_ms();
             int dt = (int)(earliest - now);
+            /* P-run-stop: con poll_cb instalado, tope de 50 ms para poder
+             * atender un KILL aunque todos los threads BP duerman. */
+            if (vm->poll_cb != NULL && dt > 50) dt = 50;
             if (dt > 0) bpvm_platform_thread_sleep_ms(dt);
             continue;
         }

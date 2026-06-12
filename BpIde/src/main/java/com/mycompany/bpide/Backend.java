@@ -73,6 +73,11 @@ public interface Backend extends AutoCloseable {
      *  "ERROR …", etc.) para mostrar al usuario. */
     String run(String path, Consumer<String> lineSink) throws IOException;
 
+    /** P-run-stop (#257) — aborta el programa en ejecución (KILL por el
+     *  wire). El run() en curso desbloquea al llegar el EXITED (status
+     *  KILLED). Si no hay nada corriendo, el peer responde NO_SESSION. */
+    void kill() throws IOException;
+
     // ---- Info / housekeeping (algunos backends devuelven UNSUPPORTED) ----
 
     /** Stats de memoria/FS en formato libre, una línea, para status bar. */

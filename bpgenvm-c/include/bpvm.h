@@ -47,8 +47,12 @@ typedef enum {
                               * OP_NATIVE_RETURN dentro de un bucle anidado
                               * de bpvm_aot_call_bp_*; nunca escapa a
                               * bpvm_run. No es un error. */
-    BPVM_DBG_STOPPED         /* H6.b — el debugger abortó la ejecución
+    BPVM_DBG_STOPPED,        /* H6.b — el debugger abortó la ejecución
                               * (pause_cb devolvió BPVM_DBG_STOP). */
+    BPVM_KILLED              /* P-run-stop (#257) — ejecución abortada por
+                              * bpvm_request_kill() / poll_cb (KILL del wire).
+                              * Parada limpia ENTRE opcodes: heap y FS quedan
+                              * consistentes; la VM puede recargar y re-correr. */
 } bpvm_status_t;
 
 /*
@@ -270,6 +274,31 @@ int  bpvm_debug_list_breakpoints(bpvm_t* vm, uint32_t* out_pcs, int* out_ids, in
 /* Pide una pausa asíncrona: el intérprete romperá en el próximo opcode.
  * Pensado para llamarse desde otro thread/task (el de RX del wire). */
 void bpvm_debug_request_pause(bpvm_t* vm);
+
+/* ============================================================ */
+/*  P-run-stop (#257) — KILL cooperativo.                        */
+/* ============================================================ */
+
+/* Callback de polling: el scheduler lo invoca ENTRE quanta (nunca a mitad
+ * de opcode) y, con tope de ~50 ms, también mientras todos los threads BP
+ * duermen. Pensado para mirar el transporte del wire sin bloquear: si ve
+ * un KILL, responde el ack y devuelve != 0 → la VM termina con
+ * BPVM_KILLED. Devolver 0 = seguir ejecutando. */
+typedef int (*bpvm_poll_cb_t)(bpvm_t* vm, void* user);
+
+/* Instala/desinstala (NULL) el poll-callback. THREAD-UNSAFE: llamar antes
+ * de bpvm_run(). Sin callback el scheduler solo paga un null-check. */
+void bpvm_set_poll(bpvm_t* vm, bpvm_poll_cb_t cb, void* user);
+
+/* Pide terminar la ejecución (desde el propio poll_cb o desde OTRA task,
+ * p. ej. la de RX de un transporte TCP). bpvm_run/bpvm_run_smp devuelven
+ * en cuanto los workers cruzan el siguiente safepoint. El flag se limpia
+ * al entrar en bpvm_run* (los re-runs no nacen muertos). */
+void bpvm_request_kill(bpvm_t* vm);
+
+/* True si la última ejecución terminó por KILL (útil cuando el status se
+ * pierde por el camino, p. ej. bpvm_run_smp). */
+int  bpvm_kill_requested(const bpvm_t* vm);
 
 /* Accessors del frame para el embedder (reporta pc/sp/bp/cs crudos en
  * BP_HIT; el host resuelve nombres con el `.dbg`). */

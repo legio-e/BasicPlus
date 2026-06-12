@@ -31,7 +31,7 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill
 
 all: $(BIN)
 
@@ -166,6 +166,24 @@ test-xmodnat: $(LIBOBJ)
 	    $(LIBOBJ) -o $(XMODNAT_BIN) $(LDFLAGS); \
 	  echo "--- AOT cross-module #212 (esperado: compute(5) = 11, OK) ---"; \
 	  (cd samples && ../$(XMODNAT_BIN) XmodNat.mod); \
+	fi
+
+# P-run-stop (#257) — KILL cooperativo: poll_cb entre quanta + esperas con
+# tope de 50 ms. Tres fases: bucle infinito con bpvm_run, ídem con
+# bpvm_run_smp(1), y programa DORMIDO (sleepSec(3600)) que debe morir
+# en << 2 s gracias al tope de las esperas.
+KILL_BIN = build/test_kill.exe
+test-kill: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/KillLoop.mod ] || [ ! -f samples/KillSleep.mod ]; then \
+	  echo "(skip test-kill: faltan samples/KillLoop.mod / KillSleep.mod — regenéralos con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/KillLoop.bp --compile samples --backend=mivm  (ídem KillSleep))"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_kill.c \
+	    $(LIBOBJ) -o $(KILL_BIN) $(LDFLAGS); \
+	  echo "--- KILL cooperativo (esperado: 3x 'terminado por KILL ... PASS') ---"; \
+	  (cd samples && ../$(KILL_BIN) KillLoop.mod KillSleep.mod); \
 	fi
 
 # #175 — throw RuntimeError(<msg computado>) desde native, cazado por try/catch

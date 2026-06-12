@@ -245,6 +245,23 @@ public class VirtualMachine {
      */
     private volatile boolean stopTheWorld = false;
 
+    /** P-run-stop (#257) — KILL: termina TODO el programa ordenadamente en
+     *  el siguiente safepoint (el mismo check por-opcode que stopTheWorld).
+     *  Lo levanta el DebugServer al recibir KILL del IDE. A diferencia de
+     *  la PAUSA (reanudable) o del RESET, el kill termina la ejecución;
+     *  el proceso/daemon reporta EXITED con exitCode 130. */
+    private volatile boolean killRequested = false;
+
+    /** Pide terminar la ejecución; despierta a los workers parqueados para
+     *  que el shutdown no espere a un sleep/join largo. Seguro desde
+     *  cualquier thread (el del DebugServer incluido). */
+    public void requestKill() {
+        killRequested = true;
+        synchronized (vmLock) { vmLock.notifyAll(); }
+    }
+
+    public boolean isKillRequested() { return killRequested; }
+
     /**
      * True mientras un worker está orquestando un GC stop-the-world. Otros
      * workers que entren a heapAlloc deben esperar a que se ponga a false
@@ -1572,6 +1589,14 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         while (true) {
                             if (vmShutdown) return;
+                            // P-run-stop (#257) — KILL: shutdown coordinado
+                            // de todos los workers (los threads BP cesan
+                            // entre opcodes; heap consistente).
+                            if (killRequested) {
+                                vmShutdown = true;
+                                vmLock.notifyAll();
+                                return;
+                            }
                             // Si otro worker pidió GC stop-the-world, parquea
                             // aquí antes de coger nuevo thread.
                             if (stopTheWorld) {
@@ -1770,7 +1795,9 @@ public class VirtualMachine {
             // nuestra cache local (pc/sp/bp/cs) al ThreadContext y
             // pedimos yield. La WorkerLoop, al volver, parquea hasta
             // que stopTheWorld vuelva a false.
-            if (stopTheWorld) {
+            // P-run-stop (#257): killRequested usa el MISMO safepoint —
+            // el worker cede aquí y la WorkerLoop hace el shutdown.
+            if (stopTheWorld || killRequested) {
                 tc.pc = currentPC; tc.sp = sp; tc.bp = bp; tc.cs = cs;
                 tc.yieldRequested = true;
                 break;

@@ -1,0 +1,11 @@
+// KillLoop.bp — P-run-stop (#257): bucle infinito para probar el KILL
+// cooperativo (test/test_kill.c). Sin el KILL, no termina nunca.
+module KillLoop
+  function Main()
+    print "arrancado"
+    var i: integer := 0
+    while true do
+      i := i + 1
+    endwh
+  end Main
+end KillLoop

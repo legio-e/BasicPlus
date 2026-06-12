@@ -300,6 +300,13 @@ struct bpvm {
     int                 bp_active;          /* nº de slots con id!=0 */
     int                 bp_next_id;         /* allocador de ids (>=1) */
 
+    /* P-run-stop (#257) — KILL cooperativo. poll_cb (opcional) se invoca
+     * desde el scheduler ENTRE quanta; kill_requested puede setearlo el
+     * propio poll_cb o cualquier otra task (bpvm_request_kill). */
+    bpvm_poll_cb_t      poll_cb;
+    void*               poll_user;
+    volatile int        kill_requested;
+
     /* H2 — Estado SMP (workers + comm task + locks). NULL = modo
      * single-worker legacy (F4 v1, scheduler.c). Cuando no-NULL, la
      * VM corre con scheduler_smp.c. Allocated by bpvm_smp_init(). */

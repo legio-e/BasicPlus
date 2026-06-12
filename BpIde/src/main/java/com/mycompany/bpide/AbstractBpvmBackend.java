@@ -117,6 +117,15 @@ public abstract class AbstractBpvmBackend implements Backend {
 
     // ---- RUN — idéntico en ambos backends ----
 
+    /** P-run-stop (#257) — manda KILL por el wire. El run() en curso (otro
+     *  thread) desbloquea cuando el peer emite el EXITED con status KILLED.
+     *  Si no hay programa corriendo, el peer responde NO_SESSION (one-shot:
+     *  no esperamos la respuesta — aparecerá como diagnóstico). */
+    @Override public void kill() throws IOException {
+        require();
+        client.sendCommand(edu.bpgenvm.vm.debug.StepCommand.STOP);
+    }
+
     /**
      * Lanza `path` en el peer. Acumula los chunks OUTPUT hasta encontrar
      * `\n` y emite cada línea completa (sin el \n) al `lineSink` — el
@@ -178,7 +187,7 @@ public abstract class AbstractBpvmBackend implements Backend {
 
         client.runModule(path);
         try {
-            return done.get(RUN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            return done.get(RUN_TIMEOUT_MS, TimeUnit.MILLISECONDS);   // ← kill() desbloquea vía EXITED
         } catch (TimeoutException te) {
             throw new IOException("timeout esperando EXITED del programa");
         } catch (InterruptedException ie) {

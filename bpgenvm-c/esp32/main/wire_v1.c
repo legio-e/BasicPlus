@@ -61,6 +61,14 @@ static int wire_read_byte(int ms) {
     return (n == 1) ? (int) b : -1;
 }
 
+/* P-run-stop (#257) — variante NO bloqueante (0 ticks) para el poll de
+ * KILL que la VM invoca entre quanta durante un RUN. */
+int wire_v1_try_getchar(void) {
+    uint8_t b;
+    int n = uart_read_bytes(WIRE_UART, &b, 1, 0);
+    return (n == 1) ? (int) b : -1;
+}
+
 int wire_v1_recv_line(int first_char_already_read, char* buf, size_t buf_max) {
     size_t n = 0;
     if (first_char_already_read >= 0) {

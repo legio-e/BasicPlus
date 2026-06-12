@@ -44,6 +44,11 @@ extern "C" {
 int wire_v1_recv_line(int first_char_already_read,
                        char* buf, size_t buf_max);
 
+/* P-run-stop (#257) — lectura NO bloqueante de un byte del wire.
+ * Devuelve el byte o -1 si no hay nada pendiente. La usa el poll de
+ * KILL que la VM invoca entre quanta durante un RUN. */
+int wire_v1_try_getchar(void);
+
 /* Lee exactamente N bytes raw desde stdin. Usado tras un mensaje
  * con campo "bulk":N. Bloquea (con vTaskDelay 5ms) hasta tener
  * todos. Devuelve N si OK, -1 si N excede buf_max. */

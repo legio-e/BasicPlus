@@ -495,6 +495,13 @@ public class FrmMain extends javax.swing.JFrame
         miRun.addActionListener(e -> doRun(true));
         jMenu3.add(miRun);
 
+        // P-run-stop (#257) — aborta el programa en ejecución (local o
+        // placa) sin reiniciar nada: manda KILL por el wire.
+        JMenuItem miStop = new JMenuItem("Stop");
+        miStop.setAccelerator(KeyStroke.getKeyStroke("ctrl F2"));
+        miStop.addActionListener(e -> onStopRun());
+        jMenu3.add(miStop);
+
         JMenuItem miRunOnPico = new JMenuItem("Run on Device");
         miRunOnPico.addActionListener(e -> doRunOnPico());
         jMenu3.add(miRunOnPico);
@@ -2117,6 +2124,7 @@ public class FrmMain extends javax.swing.JFrame
             publish.accept("[ide] workdir temporal: " + workdir + "\n");
 
             try (BpvmClient client = new BpvmClient()) {
+                activeRunClient = client;   // P-run-stop (#257): visible para Stop
                 client.setDiagSink(s -> publish.accept("[vm] " + s + "\n"));
                 client.setOutputSink(publish::accept);
                 // N20 — IO.prompt(spec) del programa BP abre un JDialog
@@ -2197,6 +2205,8 @@ public class FrmMain extends javax.swing.JFrame
                 }
             } catch (Throwable t) {
                 publish.accept("[VM error] " + t.getMessage() + "\n");
+            } finally {
+                activeRunClient = null;     // P-run-stop (#257)
             }
         } catch (java.io.IOException ie) {
             publish.accept("[IDE error creando workdir] " + ie.getMessage() + "\n");
@@ -2204,6 +2214,29 @@ public class FrmMain extends javax.swing.JFrame
             if (workdir != null) {
                 deleteRecursively(workdir);
             }
+        }
+    }
+
+    /** P-run-stop (#257) — cliente del run LOCAL en curso (daemon VM-Java),
+     *  o null. Lo setea runOnVmRemote mientras vive la sesión; el Stop del
+     *  menú lo usa para mandar KILL. Para runs en placa, el Stop delega en
+     *  PicoExplorer.killRunning() (conexión serie del explorer). */
+    private volatile BpvmClient activeRunClient;
+
+    /** P-run-stop (#257) — acción del menú Run → Stop. */
+    private void onStopRun() {
+        BpvmClient c = activeRunClient;
+        try {
+            if (c != null) {
+                c.sendCommand(edu.bpgenvm.vm.debug.StepCommand.STOP);  // → KILL
+                consolaArea.append("[ide] Stop: KILL enviado a la VM local\n");
+            } else if (picoExplorer != null) {
+                picoExplorer.killRunning();
+            } else {
+                consolaArea.append("[ide] Stop: no hay ejecución en curso\n");
+            }
+        } catch (Exception ex) {
+            consolaArea.append("[ide] Stop falló: " + ex.getMessage() + "\n");
         }
     }
 

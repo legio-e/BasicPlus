@@ -335,6 +335,10 @@ public class Main {
         try {
             loader.executeRootModule(runMod, moduleName);
             vm.run();
+            if (vm.isKillRequested()) {        // P-run-stop (#257)
+                exitCode = 130;                // convención 128+SIGINT
+                exitReason = "killed";
+            }
         } catch (Throwable t) {
             exitCode = 1;
             exitReason = t.getClass().getSimpleName() + ": " + t.getMessage();

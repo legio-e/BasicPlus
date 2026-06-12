@@ -411,6 +411,23 @@ public final class PicoExplorer extends JPanel {
      * local no tenía path, así los .mod de usuario quedan agrupados en
      * /app y se distinguen de la stdlib en /lib.
      */
+    /** P-run-stop (#257) — aborta el programa que corre en la placa: manda
+     *  KILL por la conexión activa. El uploadAndRun en curso desbloquea al
+     *  llegar el EXITED (status KILLED). Sin conexión, solo avisa. */
+    public void killRunning() {
+        Backend b = this.backend;
+        if (b == null || !b.isConnected()) {
+            emitLine("[Explorer] Stop: no hay placa conectada");
+            return;
+        }
+        try {
+            b.kill();
+            emitLine("[Explorer] Stop: KILL enviado a la placa");
+        } catch (Exception ex) {
+            emitLine("[Explorer] Stop falló: " + ex.getMessage());
+        }
+    }
+
     public void uploadAndRun(File modFile) {
         uploadAndRun(modFile, java.util.Collections.emptyList());
     }
