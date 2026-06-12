@@ -125,7 +125,7 @@ confirmó en placa). Por tanto:
 - **La VM-Java pasa a `numWorkers=1` por defecto** (igual que el device → segura
   de fábrica). El SMP queda **opt-in** (`--workers=N`), documentado como
   experimental.
-- **El fix de B1 se ACOPLA al dual-core (v2)**: cuando se enciendan los 2 núcleos
+- **El fix de B1 se ACOPLA al dual-core (v3)**: cuando se enciendan los 2 núcleos
   del RP2350 habrá que resolverlo (probable foco: protección de `mem[]` o de la
   pila por-thread bajo ejecución simultánea). Hasta entonces, bancado y bien
   caracterizado. Repros: `samples/synclisttest.bp` con `--workers=2/4` + configs
@@ -558,7 +558,7 @@ Análisis (2026-06-11):
   variante van en RUNTIME contra el board_desc/config, nunca con macros de
   compile-time del SDK/HAL (en la imagen genérica compilan para un solo
   package y rompen el resto en silencio).
-Tarea grande — trocear cuando se retome (¿v2 post-cierre?).
+Tarea grande — trocear cuando se retome (v3, post-cierre de V2).
 
 #### N-ide-new-file — File → New en el IDE ✅ CERRADO (H12, 2026-06-11, verificado)
 Pedido: hoy solo existía "New Project...". Hecho: File → New (primer ítem
@@ -692,7 +692,7 @@ configurable (A2.6). Nada de eso lo ve un programa BP.
   configurable (A2.6).
 
 **Orden propuesto**: H11.a API + host + paridad → H11.b WiFi al boot con
-wifi.json (Pico 2 W) → H11.c backend Net sobre lwIP → (v2) wire por WiFi.
+wifi.json (Pico 2 W) → H11.c backend Net sobre lwIP → (v3) wire por WiFi.
 
 ---
 
@@ -765,7 +765,7 @@ Decisión de Eduardo: "hay que solucionarlo" → implementados sobre HEAP:
   que módulo). Solo frontend: PUSH N + NEWARRAY_{,I8,I16,I64} según ancho +
   stores del literal (con widening int→long/double). Cero cambios de VM/.mod.
 - **Campo de clase `tipo[N]`**: error honesto (antes también silencioso-roto);
-  el constructor tendría que inyectar la alocación → anotado para v2.
+  el constructor tendría que inyectar la alocación → anotado para v3.
 - **`tipo[N]` local en `function native`**: error honesto (el AotCEmitter no
   lo genera); alternativa newIntArray/newByteArray/newLongArray.
 - **GAP de paridad en el heap VM-Java** (descubierto de rebote): `heapAlloc`
