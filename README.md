@@ -153,6 +153,8 @@ ESP-IDF, STM32CubeIDE); ver `bpgenvm-c/{pico,esp32,stm32}/`.
   módulos, excepciones, concurrencia.
 - **[Referencia](docs/referencia.html)** — biblioteca estándar completa,
   línea de comandos y artefactos en disco.
+- **[Guía del IDE](docs/guia-ide.html)** — la ventana, proyectos, Run/Stop,
+  el explorador de la placa, la consola del micro y el depurador.
 - **[Basic Plus desde dentro](docs/bp-desde-dentro.html)** — la arquitectura:
   compilador, bytecode, las dos VMs, GC, AOT y firmwares.
 - [Filosofía del proyecto](docs/PHILOSOPHY.md) — qué es y qué no quiere ser.

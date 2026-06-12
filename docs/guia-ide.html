@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>BasicPlus — Guía del IDE</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    font-size: 0.92rem;
+  }
+  nav.toc h2 {
+    margin: 0 0 .5rem 0;
+    font-size: 0.95rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav.toc ul { list-style: none; padding-left: 0; margin: 0 0 1rem 0; }
+  nav.toc li { margin: 0.1rem 0; }
+  nav.toc a {
+    color: var(--fg);
+    text-decoration: none;
+    display: block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+  nav.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+  nav.toc .group { margin-top: 0.8rem; }
+  nav.toc .sub { padding-left: 0.8rem; font-size: 0.85rem; color: var(--fg-muted); }
+
+  main {
+    padding: 2rem 3rem 6rem;
+    max-width: 900px;
+  }
+  h1 {
+    color: var(--accent);
+    margin-top: 0;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+  }
+  h2 {
+    color: var(--accent);
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 { margin-top: 1.8rem; color: #333; }
+  h4 { margin-top: 1.2rem; color: var(--fg-muted); }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.4;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.88em;
+  }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .note p:first-child, .warn p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 1.5rem; }
+  }
+</style>
+<style>
+  main img { max-width: 100%; border: 1px solid var(--border); border-radius: 4px; margin: 0.5em 0 1em; }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+  <h2>Contenido</h2>
+  <ul>
+    <li><a href="#arrancar">1. Arrancar el IDE</a></li>
+    <li><a href="#ventana">2. La ventana</a></li>
+    <li><a href="#proyectos">3. Proyectos</a></li>
+    <li><a href="#compilar">4. Editar y compilar</a></li>
+    <li><a href="#ejecutar">5. Ejecutar (y parar)</a></li>
+    <li><a href="#placa">6. Conectarse a la placa</a></li>
+    <li><a href="#consola">7. La consola del micro</a></li>
+    <li><a href="#info">8. INFO del dispositivo</a></li>
+    <li><a href="#debug">9. Depurar</a></li>
+    <li><a href="#autorun">10. Dispositivo autónomo</a></li>
+  </ul>
+  <h2>Volúmenes</h2>
+  <ul>
+    <li><a href="manual.html">Manual del lenguaje</a></li>
+    <li><a href="referencia.html">Referencia</a></li>
+    <li><a href="bp-desde-dentro.html">Basic Plus desde dentro</a></li>
+  </ul>
+</nav>
+<main>
+
+<h1>BasicPlus — Guía del IDE</h1>
+<p style="color:var(--fg-muted)">
+  BpIde es el entorno de desarrollo de BasicPlus: editor, compilador,
+  ejecución local y remota, explorador de la placa y depurador — en un
+  único jar sin instalación.
+</p>
+
+<h2 id="arrancar">1. Arrancar el IDE</h2>
+<pre><code>java -jar BpIde-1.0-SNAPSHOT-shaded.jar</code></pre>
+<p>
+  No hay instalador ni configuración previa: el jar lleva dentro el
+  compilador, el cliente de la VM y este manual (<strong>Help →
+  Manual</strong>, F1).
+</p>
+
+<h2 id="ventana">2. La ventana</h2>
+<p><img src="img/ide-vacio.png" alt="BpIde recién abierto, sin proyecto"></p>
+<p>Cuatro zonas:</p>
+<ul>
+  <li><strong>Árbol del proyecto</strong> (arriba-izquierda): fuentes,
+      recursos, salida compilada y dependencias del proyecto abierto.</li>
+  <li><strong>Editor</strong> (arriba-derecha): pestañas con resaltado de
+      sintaxis BP; la línea actual queda marcada y la posición se ve en
+      la barra de estado.</li>
+  <li><strong>Explorador de la placa</strong> (abajo-izquierda): el
+      selector de backend (<em>Placa serial</em> o <em>VM Java por
+      TCP</em>), el puerto, el botón Connect y — una vez conectado — el
+      árbol de ficheros del micro con su botonera.</li>
+  <li><strong>Consola y depuración</strong> (abajo-derecha): pestañas
+      <em>Consola</em>, <em>Errores</em>, <em>Variables</em>,
+      <em>Properties módulo</em>, <em>Call Stack</em> y
+      <em>Breakpoints</em>. Abajo, el prompt <code>/ &gt;</code> de la
+      consola de comandos del micro (§7).</li>
+</ul>
+
+<h2 id="proyectos">3. Proyectos</h2>
+<p><img src="img/ide-proyecto.png" alt="Proyecto abierto y placa conectada"></p>
+<p>
+  <strong>Project → New Project</strong> crea la estructura estándar;
+  <strong>File → New</strong> añade ficheros sueltos. Un proyecto se
+  describe en su <code>.bpbuild</code>/<code>.bpproject</code> (JSON,
+  ver la <a href="referencia.html#artefactos">referencia §16</a>) y se
+  organiza en:
+</p>
+<ul>
+  <li><strong>Sources</strong> — los <code>.bp</code> del proyecto
+      (en la captura: <code>App.bp</code> y <code>Util.bp</code>).</li>
+  <li><strong>Resources</strong> — ficheros de datos que el Run copia
+      al micro tal cual (configuraciones, tablas…).</li>
+  <li><strong>Output</strong> — lo que produce el compilador:
+      <code>.mod</code> (bytecode) y <code>.bpi</code> (interfaces).</li>
+  <li><strong>Dependencies</strong> — módulos importados resueltos.</li>
+</ul>
+
+<h2 id="compilar">4. Editar y compilar</h2>
+<p>
+  <strong>Run → Compile</strong> compila el fichero o el proyecto;
+  los diagnósticos aparecen en la pestaña <strong>Errores</strong>
+  separando errores de avisos. El compilador corta las cascadas: un
+  error de sintaxis no produce cincuenta mensajes fantasma.
+</p>
+
+<h2 id="ejecutar">5. Ejecutar (y parar)</h2>
+<ul>
+  <li><strong>Run → Run</strong>: ejecuta en el PC, sobre la VM Java
+      (daemon local). La salida del programa llega a la Consola.</li>
+  <li><strong>Run → Run on Device</strong>: sube el <code>.mod</code> a
+      la placa conectada (con las dependencias que falten y los
+      resources del proyecto) y lo ejecuta allí; la salida vuelve en
+      vivo a la Consola.</li>
+  <li><strong>Run → Stop</strong> (Ctrl+F2): aborta el programa en
+      marcha — local o en placa — sin reiniciar nada. En la placa es un
+      KILL cooperativo: la VM muere limpia y el micro sigue
+      respondiendo.</li>
+</ul>
+
+<h2 id="placa">6. Conectarse a la placa</h2>
+<p>
+  En el Explorador: elige backend <em>Placa (serial v1)</em>, el puerto
+  COM del micro y pulsa <strong>Connect</strong>. El árbol muestra el
+  filesystem interno del dispositivo:
+</p>
+<ul>
+  <li><code>/app</code> — tus programas (<code>.mod</code> subidos).</li>
+  <li><code>/lib</code> — la biblioteca estándar embebida en el
+      firmware (se reinstala sola en cada arranque).</li>
+  <li><code>/sys</code> — configuración: <code>board.json</code>
+      (identidad de la placa), <code>device.json</code>,
+      <code>auto.txt</code> (autorun, §10).</li>
+</ul>
+<p>
+  La botonera opera sobre el fichero seleccionado:
+  <em>Refresh</em>, <em>Upload</em>, <em>Run</em>, <em>Download</em>,
+  <em>Edit</em> (abre un editor sobre el fichero del micro — también con
+  doble clic), <em>Delete</em>, <em>Save</em> (persiste el FS a flash),
+  <em>Log</em>/<em>Clr Log</em> (el log persistente del firmware),
+  <em>Reset</em> e <em>Info</em> (§8). La barra inferior del panel
+  resume el FS: ficheros, bytes usados y libres.
+</p>
+<p>
+  El mismo panel sirve para la <em>VM Java (TCP v1)</em>: apuntas a un
+  daemon local o remoto y obtienes el mismo árbol y los mismos botones —
+  el protocolo es idéntico.
+</p>
+
+<h2 id="consola">7. La consola del micro</h2>
+<p>
+  El prompt <code>/ &gt;</code> bajo la Consola habla directamente con
+  el dispositivo conectado. <code>help</code> lista los comandos:
+</p>
+<pre><code>dir [ruta] · cd &lt;ruta&gt; · type &lt;fich&gt; · edit &lt;fich&gt; · run &lt;fich&gt; · del &lt;fich&gt;
+kill · autorun [fich|off] · mem · save · log · reset · cls · help</code></pre>
+<p>
+  Dos de ellos merecen subrayado: <code>kill</code> aborta el programa
+  en ejecución (equivale a Run → Stop) y <code>autorun</code> gestiona
+  el arranque autónomo (§10). Si conectas con un programa corriendo, el
+  explorador avisará «placa ocupada» — <code>kill</code> recupera el
+  control.
+</p>
+
+<h2 id="info">8. INFO del dispositivo</h2>
+<p><img src="img/ide-info.png" alt="Diálogo Device INFO de una Metro RP2350"></p>
+<p>
+  El botón <strong>Info</strong> interroga al firmware. En la captura,
+  una Adafruit Metro RP2350: el micro y su variante (RP2350B detectada
+  en runtime vía <code>board.json</code> — 48 GPIO, 24 salidas PWM, 8
+  canales ADC), el serial único, la frecuencia y temperatura, la flash
+  real medida por JEDEC (16 MB), la SRAM, la PSRAM detectada y
+  autoprobada (8 MB, usada como heap de la VM), la ocupación del FS y
+  el uptime.
+</p>
+
+<h2 id="debug">9. Depurar</h2>
+<p>
+  El depurador funciona igual contra la VM local y <em>dentro del
+  micro</em> (Debug on Device):
+</p>
+<ul>
+  <li><strong>F9</strong> — poner/quitar breakpoint en la línea.</li>
+  <li><strong>Debug → Debug</strong> / <strong>Debug on
+      Device</strong> — arranca en modo depuración.</li>
+  <li><strong>F10</strong> step over · <strong>F11</strong> step into ·
+      <strong>Shift+F11</strong> step out ·
+      <strong>Ctrl+F5</strong> stop.</li>
+  <li>En pausa: <em>Variables</em> (locales por nombre),
+      <em>Properties módulo</em>, <em>Call Stack</em> y la lista de
+      <em>Breakpoints</em>.</li>
+</ul>
+
+<h2 id="autorun">10. Dispositivo autónomo</h2>
+<p>
+  Con tu programa ya en la placa: <code>autorun MiApp</code> en la
+  consola (escribe <code>/sys/auto.txt</code> y lo persiste) y
+  <code>reset</code>. A partir de ahí el micro arranca tu programa solo,
+  sin PC. El IDE puede conectarse igualmente con el programa corriendo:
+  <code>kill</code> lo para y <code>autorun off</code> lo retira —
+  nunca hace falta reflashear. Detalle completo en el
+  <a href="QUICKSTART.md">inicio rápido</a>.
+</p>
+
+<hr>
+<p style="color:var(--fg-muted); font-size:0.85em">
+  Guía del IDE BasicPlus — capturas de Eduardo sobre una Metro RP2350,
+  generada al hilo del cierre de V2.
+</p>
+
+</main>
+</div>
+</body>
+</html>
