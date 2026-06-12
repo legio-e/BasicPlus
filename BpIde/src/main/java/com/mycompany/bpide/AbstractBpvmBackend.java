@@ -126,6 +126,34 @@ public abstract class AbstractBpvmBackend implements Backend {
         client.sendCommand(edu.bpgenvm.vm.debug.StepCommand.STOP);
     }
 
+    /** #256 — true mientras un run() de ESTE backend está en vuelo (su
+     *  event listener es el dueño del EXITED y ya lo muestra). false en el
+     *  escenario "attach": el programa lo arrancó la placa (autorun) y el
+     *  EXITED de un kill no lo consume nadie — el caller puede pedir
+     *  mostrarlo con {@link #onNextExited}. */
+    public boolean isRunActive() { return runActive; }
+    private volatile boolean runActive;
+
+    /** #256 — listener efímero para el escenario attach: muestra el primer
+     *  EXITED que llegue (el del kill) por el sink y se autodesinstala.
+     *  Un run() posterior lo pisa sin conflicto (setEventListener). */
+    public void onNextExited(Consumer<String> sink) {
+        BpvmClient c = this.client;
+        if (c == null) return;
+        c.setEventListener(ev -> {
+            if (ev instanceof edu.bpgenvm.vm.debug.ExitedEvent) {
+                edu.bpgenvm.vm.debug.ExitedEvent e =
+                        (edu.bpgenvm.vm.debug.ExitedEvent) ev;
+                if (sink != null) {
+                    sink.accept("[Placa] programa abortado: exit " + e.exitCode
+                            + (e.reason == null || e.reason.isEmpty()
+                               ? "" : " (" + e.reason + ")"));
+                }
+                c.setEventListener(null);
+            }
+        });
+    }
+
     /**
      * Lanza `path` en el peer. Acumula los chunks OUTPUT hasta encontrar
      * `\n` y emite cada línea completa (sin el \n) al `lineSink` — el
@@ -137,6 +165,7 @@ public abstract class AbstractBpvmBackend implements Backend {
      */
     @Override public String run(String path, Consumer<String> lineSink) throws IOException {
         require();
+        runActive = true;                                    // #256 — ver isRunActive()
         final StringBuilder lineBuf = new StringBuilder();
         final CompletableFuture<String> done = new CompletableFuture<>();
 
@@ -196,6 +225,7 @@ public abstract class AbstractBpvmBackend implements Backend {
         } catch (java.util.concurrent.ExecutionException ee) {
             throw new IOException("fallo en RUN", ee.getCause());
         } finally {
+            runActive = false;                               // #256
             client.setOutputSink(null);
             client.setEventListener(null);
         }

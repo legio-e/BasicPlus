@@ -469,6 +469,14 @@ public final class PicoExplorer extends JPanel {
             return;
         }
         try {
+            // #256 — escenario "attach" (programa arrancado por autorun u
+            // otra sesión): ningún run() local va a consumir el EXITED del
+            // kill, así que sin esto el éxito y el fracaso se ven IGUAL
+            // (consola muda). Listener efímero que pinta el cierre.
+            if (b instanceof AbstractBpvmBackend
+                    && !((AbstractBpvmBackend) b).isRunActive()) {
+                ((AbstractBpvmBackend) b).onNextExited(this::emitLine);
+            }
             b.kill();
             emitLine("[Explorer] Stop: KILL enviado a la placa");
         } catch (Exception ex) {
@@ -1194,9 +1202,22 @@ public final class PicoExplorer extends JPanel {
                     if (onSuccess != null) onSuccess.accept(result);
                 } catch (Exception e) {
                     Throwable cause = e.getCause() != null ? e.getCause() : e;
-                    status.setText("ERROR: " + cause.getMessage());
-                    if (outputSink != null) {
-                        outputSink.accept("[Placa ERROR] " + cause.getMessage());
+                    String msg = cause.getMessage() == null ? "" : cause.getMessage();
+                    // #256 — un BUSY aquí no es un fallo: la placa está
+                    // ejecutando un programa (p.ej. un autorun) y durante un
+                    // run solo atiende HELLO/KILL. Mensaje accionable en vez
+                    // del error crudo del wire.
+                    if (msg.contains("BUSY")) {
+                        status.setText("placa ocupada (programa en ejecución)");
+                        if (outputSink != null) {
+                            outputSink.accept("[Placa] ocupada ejecutando un programa "
+                                    + "— 'kill' para abortarlo y recuperar el control");
+                        }
+                    } else {
+                        status.setText("ERROR: " + msg);
+                        if (outputSink != null) {
+                            outputSink.accept("[Placa ERROR] " + msg);
+                        }
                     }
                 } finally {
                     setActionButtonsEnabled(true);
