@@ -37,6 +37,7 @@ idf_component_register(
         "../../src/rtc.c"
         "../../src/adc.c"
         "../../src/wdt.c"
+        "../../src/bpvm_neopixel.c"   # fachada no-op sin backend (H7.4)
     INCLUDE_DIRS
         "."
         "../../include"

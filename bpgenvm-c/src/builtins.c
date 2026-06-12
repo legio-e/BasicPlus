@@ -495,7 +495,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             if (i < 0 || (uint32_t) i >= ncp) {
                 /* BUG-7b — idx fuera de rango → RuntimeError atrapable (paridad VM-Java). */
                 char em[96];
-                snprintf(em, sizeof em, "charAt: idx fuera de rango %d (len=%d)", i, (int) ncp);
+                snprintf(em, sizeof em, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i, (int) ncp);
                 return builtin_throw(vm, tc, em);
             }
             uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) i);

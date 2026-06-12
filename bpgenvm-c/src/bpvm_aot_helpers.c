@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
+#include <inttypes.h>
 
 /* ---------- #186: slot de fault por worker ----------
  * Ver bpvm_internal.h para el diseño. En host hay N workers pthread →
@@ -111,7 +112,7 @@ static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
         f->msg[0] = 0;
         longjmp(f->buf, 1);   /* no retorna */
     }
-    fprintf(stderr, "[aot] throw_ref sin boundary (ref=%u)\n", exc_ref);
+    fprintf(stderr, "[aot] throw_ref sin boundary (ref=%" PRIu32 ")\n", exc_ref);
 }
 
 /* ---------- Heap / GC ----------

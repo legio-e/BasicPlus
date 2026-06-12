@@ -906,24 +906,24 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 en F1; F5 lo añade) ---- */
         case OP_I32_TO_I8: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v < -128 || v > 127) BPVM_RT_THROW("I32_TO_I8: valor fuera de rango %d", v);
+            if (v < -128 || v > 127) BPVM_RT_THROW("I32_TO_I8: valor fuera de rango %" PRId32, v);
             int32_t r = (int32_t)(int8_t)(v & 0xFF);
             bpvm_write_i32_be(mem + sp, r); sp += 4; break;
         }
         case OP_I32_TO_U8: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v < 0 || v > 255) BPVM_RT_THROW("I32_TO_U8: valor fuera de rango %d", v);
+            if (v < 0 || v > 255) BPVM_RT_THROW("I32_TO_U8: valor fuera de rango %" PRId32 "", v);
             bpvm_write_i32_be(mem + sp, v & 0xFF); sp += 4; break;
         }
         case OP_I32_TO_I16: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v < -32768 || v > 32767) BPVM_RT_THROW("I32_TO_I16: valor fuera de rango %d", v);
+            if (v < -32768 || v > 32767) BPVM_RT_THROW("I32_TO_I16: valor fuera de rango %" PRId32 "", v);
             int32_t r = (int32_t)(int16_t)(v & 0xFFFF);
             bpvm_write_i32_be(mem + sp, r); sp += 4; break;
         }
         case OP_I32_TO_U16: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v < 0 || v > 65535) BPVM_RT_THROW("I32_TO_U16: valor fuera de rango %d", v);
+            if (v < 0 || v > 65535) BPVM_RT_THROW("I32_TO_U16: valor fuera de rango %" PRId32 "", v);
             bpvm_write_i32_be(mem + sp, v & 0xFFFF); sp += 4; break;
         }
 
@@ -1051,7 +1051,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I64: índice fuera de rango %d (length=%d)", idx, (int) length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I64: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
             int64_t v = bpvm_read_i64_be(mem + ref + 4 + (uint32_t) idx * 8);
             bpvm_write_i64_be(mem + sp, v); sp += 8;
             break;
@@ -1061,7 +1061,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I64: índice fuera de rango %d (length=%d)", idx, (int) length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I64: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
             bpvm_write_i64_be(mem + ref + 4 + (uint32_t) idx * 8, v);
             break;
         }
@@ -1151,7 +1151,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length)
-                BPVM_RT_THROW("ALOAD: índice fuera de rango %d (length=%d)", idx, (int) length);
+                BPVM_RT_THROW("ALOAD: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
             int32_t v = bpvm_read_i32_be(mem + ref + 4 + (uint32_t) idx * 4);
             bpvm_write_i32_be(mem + sp, v); sp += 4;
             break;
@@ -1162,7 +1162,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length)
-                BPVM_RT_THROW("ASTORE: índice fuera de rango %d (length=%d)", idx, (int) length);
+                BPVM_RT_THROW("ASTORE: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
             bpvm_write_i32_be(mem + ref + 4 + (uint32_t) idx * 4, v);
             break;
         }
@@ -1176,7 +1176,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I8: idx fuera de rango %d (len=%d)", idx, (int) length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I8: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             int8_t v = (int8_t) mem[ref + 4 + (uint32_t) idx];
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -1185,7 +1185,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_U8: idx fuera de rango %d (len=%d)", idx, (int) length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_U8: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             uint8_t v = mem[ref + 4 + (uint32_t) idx];
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -1194,7 +1194,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I16: idx fuera de rango %d (len=%d)", idx, (int) length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I16: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             int16_t v = bpvm_read_i16_be(mem + ref + 4 + (uint32_t) idx * 2);
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -1203,7 +1203,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_U16: idx fuera de rango %d (len=%d)", idx, (int) length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_U16: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             uint16_t v = bpvm_read_u16_be(mem + ref + 4 + (uint32_t) idx * 2);
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -1213,7 +1213,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I8: idx fuera de rango %d (len=%d)", idx, (int) length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I8: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             mem[ref + 4 + (uint32_t) idx] = (uint8_t)(v & 0xFF);
             break;
         }
@@ -1222,7 +1222,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I16: idx fuera de rango %d (len=%d)", idx, (int) length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I16: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             int16_t v16 = (int16_t)(v & 0xFFFF);
             bpvm_write_u32_be(mem + ref + 4 + (uint32_t) idx * 2, 0); /* unused */
             mem[ref + 4 + (uint32_t) idx * 2]     = (uint8_t)((v16 >> 8) & 0xFF);
