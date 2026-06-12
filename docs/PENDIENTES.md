@@ -17,7 +17,7 @@ Estado: `pendiente` / `parcial` / `cerrado` / `descartado`.
 
 > **Estado 2026-06-12**: NO quedan bugs de corrección abiertos. B1 quedó
 > caracterizado y mitigado (VM-Java a 1 worker por defecto, #235 — match
-> con el device single-core); el dual-core RP2350 es v2 (#153, con SWD).
+> con el device single-core); el dual-core RP2350 es v3 (#153, con SWD).
 > Las entradas siguientes se conservan como historial de la investigación.
 
 ### B1 — VM scheduler / GC race bajo contención (caracterizado + mitigado; historial)
@@ -292,8 +292,7 @@ re-entrada, el usuario debe usar un patrón diferente (e.g. flag + condvar).
 
 ### L10 — Tipos enteros estrechos (cerrado v1)
 **Estado**: cerrado v1 — locales + casts. Faltan los layouts compactos
-(narrow arrays + narrow globals) que se anotan como follow-up. El lenguaje hoy sólo reconoce `integer`, `float`,
-`string`, `boolean` (en `Lexer.KEYWORDS` y `BpType.PrimitiveType.Kind`).
+(narrow arrays + narrow globals) que se anotan como follow-up.
 
 **Lo que ya existe a bajo nivel** (no expuesto a BP source):
 - Opcodes: `NEWARRAY_I8`, `NEWARRAY_I16`, `ALOAD_I8/U8/I16/U16`,
