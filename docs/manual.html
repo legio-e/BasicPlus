@@ -2892,28 +2892,41 @@ end enum</pre>
 
 <!-- =========================================================== -->
 <h2 id="pendientes">17. Pendientes / no soportado</h2>
+<p style="color:var(--fg-muted)">Estado al cierre de V2 (junio 2026). Lo
+que estaba aquí y ya se hizo: clases/properties en <code>.bpi</code>
+(cross-module completo), tipos cualificados <code>Mod.Clase</code>,
+<code>Collections.Map</code>, fichero de proyecto, y el safepoint
+stop-the-world del GC (la VM-Java corre además a 1 worker por defecto,
+igual que el device).</p>
 <ul>
-  <li>Tipos compuestos en <code>.bpi</code> (clases, arrays no primitivos,
-      properties) — cross-library hoy se limita a funciones, consts y enums
-      con tipos primitivos.</li>
-  <li><code>Map&lt;K,V&gt;</code> y otras estructuras en stdlib.</li>
-  <li>Versionado explícito de contratos (cubierto pragmáticamente con
-      <code>extends</code>).</li>
-  <li>Genéricos / type parameters en clases del usuario.</li>
-  <li>TypeRef cualificado en BP (<code>var c: Mod.Color</code>).</li>
-  <li>Fichero de proyecto (<code>.bpproj</code>) para multi-impl coexistente
-      en outDir con resolución a runtime.</li>
-  <li>JVM backend para cross-library / interfaces (sólo el backend mivm los
-      soporta hoy).</li>
-  <li>Owners en caminos de excepción (algunos paths de throw saltan free).</li>
-  <li><strong>Concurrencia &mdash; safepoint para GC stop-the-world</strong>:
-      hoy <code>gc()</code> lee <code>tc.sp</code> de workers en vuelo. Bajo
-      presión de heap con paralelismo intenso pueden no marcarse refs vivas
-      a medio opcode. Ver <a href="#conc-gc">§14.4</a>.</li>
-  <li>Mutex reentrante / <code>Semaphore</code> / <code>Channel</code> en stdlib.</li>
+  <li><code>try/catch</code> DENTRO de una <code>native function</code>
+      (lanzar desde la native y atrapar FUERA sí funciona): el
+      <code>.mdn</code> no embebe setjmp; diferido con diseño anotado.</li>
+  <li>Array de tamaño fijo <code>tipo[N]</code> como campo de clase y
+      dentro de una <code>native function</code> (error de compilación con
+      alternativa: <code>tipo[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
+  <li>AOT para Xtensa (ESP32-S3) — el <code>.mdn</code> es Thumb-2
+      (RP2350 y STM32 sí aceleran).</li>
+  <li>Llamada native→native entre módulos sin pasar por el intérprete
+      (diseño cerrado en <code>docs/AOT_CROSS_MODULE.md</code>; v2).</li>
+  <li>TCP/IP desde BP (cliente simple) — en preparación (H11); WiFi en
+      la Pico 2 W a continuación.</li>
+  <li><code>owner</code> / <code>final</code> no aplican a property de
+      módulo.</li>
+  <li><code>Mutex</code> no reentrante; sin <code>Semaphore</code> /
+      <code>Channel</code> en stdlib.</li>
+  <li>Owners en caminos de excepción (algunos paths de throw saltan el
+      free determinístico).</li>
   <li>Closures sobre locales del encerrador en cuerpos de <code>case</code>
       del statement <code>parallel</code> (hoy sólo se ven stdlib + módulo
       no-globals — ver <a href="#conc-encapsulacion">§14.3</a>).</li>
+  <li><code>Adc</code>: en placas RP2350B (48 GPIO) los canales 4-7 aún no
+      se exponen en BP (subset común 0..3; el backend ya los soporta).</li>
+  <li>Dual-core en placa (la VM SMP corre single-core en device; el
+      dual-core RP2350 queda para v2, con depuración SWD).</li>
+  <li>Genéricos / type parameters en clases del usuario.</li>
+  <li>Versionado explícito de contratos de librería (cubierto
+      pragmáticamente con <code>extends</code>).</li>
 </ul>
 
 <hr>
