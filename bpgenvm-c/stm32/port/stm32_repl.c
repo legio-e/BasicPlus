@@ -393,7 +393,7 @@ static void run_module_path(const char* path, long id) {
         for (int mi = 0; mi < vm->module_count; mi++) {
             const char* mname = vm->modules[mi].name;
             if (!mname || !mname[0]) continue;
-            char mdn_path[48];
+            char mdn_path[72];   /* name[64] + ".mdn" + NUL: sin -Wformat-truncation */
             snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
             const uint8_t* mdn_data; uint32_t mdn_size;
             if (stm32_fs_resolve(mdn_path, &mdn_data, &mdn_size) != 0) continue;

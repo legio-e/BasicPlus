@@ -18,6 +18,15 @@
  */
 #include "bpvm_net.h"
 
+/* Guard de plataforma: este fichero SOLO tiene sentido en un host con
+ * sockets del SO. En bare-metal (ARM none-eabi del STM32, Xtensa) la
+ * unidad de traducción queda reducida a un register no-op — así se
+ * mantiene el invariante del port STM32 ("todo src/ compila bare-metal;
+ * solo se excluye platform_pthread.c") y la carpeta enlazada de CubeIDE
+ * no necesita exclusiones nuevas. Pico/ESP32 ni siquiera lo compilan
+ * (sus CMakeLists solo listan net.c, la fachada). */
+#if defined(_WIN32) || defined(__unix__) || defined(__APPLE__)
+
 #include <string.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -221,3 +230,9 @@ static const bpvm_net_backend_t s_host_net = {
 void bpvm_net_register_host(void) {
     bpvm_net_set_backend(&s_host_net);
 }
+
+#else  /* bare-metal: sin sockets del SO — register no-op */
+
+void bpvm_net_register_host(void) { }
+
+#endif /* host con sockets del SO */
