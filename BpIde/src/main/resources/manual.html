@@ -236,6 +236,12 @@
     <li class="sub"><a href="#stdlib-wdt">13.20 Wdt</a></li>
     <li class="sub"><a href="#stdlib-timer">13.21 Timer</a></li>
     <li class="sub"><a href="#stdlib-hw-policy">13.22 Política HW = clase OO</a></li>
+    <li class="sub"><a href="#stdlib-neopixel">13.23 Neopixel</a></li>
+    <li class="sub"><a href="#stdlib-log">13.24 Log</a></li>
+    <li class="sub"><a href="#stdlib-str">13.25 Str</a></li>
+    <li class="sub"><a href="#stdlib-collections">13.26 Collections</a></li>
+    <li class="sub"><a href="#stdlib-stats">13.27 Stats</a></li>
+    <li class="sub"><a href="#stdlib-compress">13.28 Compress</a></li>
 
     <li class="group"><a href="#concurrencia">14. Concurrencia</a></li>
     <li class="sub"><a href="#conc-modelo">14.1 Modelo de ejecución</a></li>
@@ -1448,9 +1454,14 @@ sb.appendInt(<span class="num">42</span>)
   <span class="kw">print</span> e.msg
 <span class="kw">endtry</span></code></pre>
 <p>
-  Clase base de errores. Un campo <code>msg: string</code>. La sintetiza el
-  emisor en todo módulo. Si declaras tu propia <code>class RuntimeError</code>
-  en tu módulo, la tuya prevalece.
+  Error nativo de la VM (índice fuera de rango, null, división por cero,
+  builtin fallido...) y también lanzable a mano. Vive en el módulo
+  <code>Core</code> junto a su base <code>Exception</code> (property
+  <code>msg: string</code>); el <code>import Core</code> es implícito —
+  el código de siempre (<code>throw RuntimeError("…")</code>,
+  <code>catch e: RuntimeError</code>, <code>e.msg</code>) se escribe igual.
+  Las excepciones propias extienden <code>Exception</code> (ver
+  <a href="#excepciones">§11</a>).
 </p>
 
 <h3 id="stdlib-thread">13.7 <code>Thread</code></h3>
@@ -1597,6 +1608,14 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   <code>import IO</code>. Todas las funciones son <code>intrinsic</code>.
   Las funciones de path NO acceden al disco — sólo manipulan la string.
   Las que sí acceden lanzan <code>RuntimeError</code> atrapable si fallan.
+</p>
+<p>
+  <strong>En placa</strong>: el FS del firmware es plano (sin directorios) —
+  <code>readFile</code>/<code>writeFile</code>/<code>appendFile</code>/
+  <code>fileExists</code>/<code>removeFile</code>/<code>rename</code>/<code>fileSize</code>
+  funcionan; <code>mkdir</code>/<code>rmdir</code>/<code>copyFile</code>/
+  <code>isDirectory</code>/<code>lastModified</code> lanzan
+  <code>RuntimeError</code> atrapable.
 </p>
 <p>
   Hay aparte un <code>IO.prompt(spec)</code> que pide al IDE conectado
@@ -2324,6 +2343,148 @@ port.write(tx, <span class="num">4</span>)
   <tr><td><code>Pico</code></td><td><em>(funcs + consts)</em></td>
       <td><em>Info MCU singleton sin recursos — excepción documentada</em></td></tr>
 </table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-neopixel">13.23 <code>Neopixel</code></h3>
+<p>
+  Tira de LEDs WS2812 ("NeoPixel") conducida por la PIO del RP2350
+  (Pico 2 / Metro; en otras familias el constructor lanza
+  <code>RuntimeError</code>). Patrón framebuffer: los <code>set*</code>
+  escriben en memoria y <code>show()</code> vuelca la tira entera.
+</p>
+<pre><code><span class="kw">import</span> Neopixel
+
+<span class="kw">var</span> tira: Neopixel.Strip := Neopixel.Strip(<span class="num">15</span>, <span class="num">8</span>)   <span class="comment">// pin, nº de LEDs</span>
+tira.setColor(<span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>)            <span class="comment">// todo apagado</span>
+tira.setPixel(<span class="num">0</span>, <span class="num">32</span>, <span class="num">0</span>, <span class="num">0</span>)        <span class="comment">// LED 0 en rojo suave</span>
+tira.show()</code></pre>
+<table>
+  <tr><th>Método</th><th>Descripción</th></tr>
+  <tr><td><code>Strip(pin, count)</code></td><td>Constructor: pin de datos + nº de LEDs.</td></tr>
+  <tr><td><code>setPixel(i, r, g, b)</code></td><td>Color de un LED (0..255 por canal).</td></tr>
+  <tr><td><code>setColor(r, g, b)</code></td><td>Mismo color para toda la tira.</td></tr>
+  <tr><td><code>clear()</code></td><td>Todo a 0 (no hace show).</td></tr>
+  <tr><td><code>show()</code></td><td>Vuelca el framebuffer a la tira.</td></tr>
+  <tr><td><code>count(): integer</code></td><td>Nº de LEDs.</td></tr>
+</table>
+
+<h3 id="stdlib-log">13.24 <code>Log</code></h3>
+<p>
+  Logger de aplicación en BP puro sobre el file I/O de <code>IO</code>:
+  niveles, salida a consola y/o fichero, rotación por tamaño y thread-safe
+  (Mutex interno). <strong>A prueba de fallos</strong>: si el fichero falla
+  (FS lleno, op no soportada), avisa UNA vez y degrada a solo-consola —
+  un logger nunca tumba la aplicación.
+</p>
+<pre><code><span class="kw">import</span> Log
+
+Log.setLevel(Log.DEBUG)            <span class="comment">// por defecto INFO</span>
+Log.setFile(<span class="str">"app.log"</span>)             <span class="comment">// por defecto "app.log"</span>
+Log.info(<span class="str">"arrancando"</span>)             <span class="comment">// → [INFO ] arrancando</span>
+Log.warn(<span class="str">"bateria baja"</span>)
+Log.error(<span class="str">"sensor no responde"</span>)</code></pre>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>debug/info/warn/error(msg)</code></td>
+      <td>Emite una línea <code>[NIVEL] msg</code> si <code>nivel >= setLevel</code>.</td></tr>
+  <tr><td><code>setLevel(n)</code></td>
+      <td>Nivel mínimo: consts <code>Log.DEBUG/INFO/WARN/ERROR</code> (0..3). Por defecto INFO.</td></tr>
+  <tr><td><code>setFile(p)</code></td><td>Ruta del fichero de log.</td></tr>
+  <tr><td><code>setConsole(b)</code> / <code>setFileEnabled(b)</code></td>
+      <td>Activa/desactiva cada salida (por defecto ambas on).</td></tr>
+  <tr><td><code>setMaxSize(n)</code></td>
+      <td>Rotación: al superar n bytes, el fichero pasa a <code>&lt;ruta&gt;.old</code> y empieza otro (16 KB por defecto).</td></tr>
+  <tr><td><code>setTimestamp(b)</code></td>
+      <td>Antepone el uptime en ms (off por defecto — salida determinista).</td></tr>
+</table>
+
+<h3 id="stdlib-str">13.25 <code>Str</code></h3>
+<p>
+  Utilidades de string en BP puro. Los parsers devuelven una
+  <strong>tupla</strong> <code>(ok, valor)</code> — sin excepciones por
+  formato:
+</p>
+<pre><code><span class="kw">import</span> Str
+
+<span class="kw">var</span> ok: <span class="type">boolean</span> := <span class="kw">false</span>
+<span class="kw">var</span> v: <span class="type">integer</span> := <span class="num">0</span>
+{ ok, v } := Str.parseInt(<span class="str">"123"</span>)
+<span class="kw">if</span> ok <span class="kw">then</span> <span class="kw">print</span> v <span class="kw">endif</span>
+
+<span class="kw">print</span> Str.formatDouble(<span class="num">3.14159d</span>, <span class="num">2</span>)   <span class="comment">// "3.14"</span>
+<span class="kw">print</span> Str.padLeft(<span class="str">"7"</span>, <span class="num">3</span>)             <span class="comment">// "  7"</span></code></pre>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>formatDouble(x, dec): string</code></td>
+      <td>Redondeado a <code>dec</code> decimales.</td></tr>
+  <tr><td><code>longToString(x)</code> / <code>doubleToString(x)</code></td>
+      <td>Idénticas al concat <code>"" + x</code> (se mantienen por compatibilidad y para componer).</td></tr>
+  <tr><td><code>toHex(x: long): string</code></td><td>Hexadecimal sin prefijo.</td></tr>
+  <tr><td><code>fromCharCode(cp): string</code></td><td>String de 1 code point.</td></tr>
+  <tr><td><code>lastIndexOf(s, sub): integer</code></td><td>Última aparición (-1 si no está).</td></tr>
+  <tr><td><code>compare(a, b): integer</code></td><td>&lt;0 / 0 / &gt;0 (orden por code points).</td></tr>
+  <tr><td><code>padLeft(s, ancho)</code> / <code>padRight(s, ancho)</code></td><td>Relleno con espacios.</td></tr>
+  <tr><td><code>parseInt/parseLong/parseDouble/parseHex(s): (boolean, T)</code></td>
+      <td>Tupla <code>(ok, valor)</code>; <code>ok=false</code> si el formato no es válido.</td></tr>
+</table>
+
+<h3 id="stdlib-collections">13.26 <code>Collections</code></h3>
+<p>
+  Mapa ordenado + infraestructura de comparación en BP puro. Como los
+  primitivos no son objetos, vienen wrappers <code>Integer</code>/
+  <code>Long</code>/<code>Double</code>/<code>Float</code>/<code>Boolean</code>
+  (con <code>value()</code> y <code>compareTo</code>) para usarlos como
+  claves/valores.
+</p>
+<pre><code><span class="kw">import</span> Collections
+
+<span class="kw">var</span> edades: Collections.Map := Collections.stringMap()
+edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num">30</span>))
+<span class="kw">var</span> w: Collections.Integer := edades.get(<span class="str">"ana"</span>)
+<span class="kw">print</span> w.value()                          <span class="comment">// 30</span></code></pre>
+<table>
+  <tr><th>API</th><th>Descripción</th></tr>
+  <tr><td><code>stringMap()</code> / <code>numericMap()</code></td>
+      <td>Factorías: Map con comparador de strings / numérico.</td></tr>
+  <tr><td><code>Map.put/get/containsKey/remove</code></td>
+      <td>Operaciones básicas; <code>get</code> devuelve <code>null</code> si no está.</td></tr>
+  <tr><td><code>Map.size()</code>, <code>keyAt(i)</code>, <code>valueAt(i)</code></td>
+      <td>Iteración por índice, en el ORDEN del comparador (mapa ordenado:
+          búsqueda binaria por dentro). Thread-safe (Mutex interno).</td></tr>
+  <tr><td><code>Comparator</code> / <code>Comparable</code></td>
+      <td>Clases base para orden propio (<code>Map.withComparator(c)</code>).</td></tr>
+</table>
+
+<h3 id="stdlib-stats">13.27 <code>Stats</code></h3>
+<p>
+  Estadística incremental en BP puro (double): pensada para flujos de
+  medidas de sensores sin guardar el histórico.
+</p>
+<table>
+  <tr><th>Clase</th><th>API</th></tr>
+  <tr><td><code>Accumulator</code></td>
+      <td><code>add(x)</code>, <code>count()</code>, <code>mean()</code>,
+          <code>variance()</code>, <code>stdDev()</code>, <code>min()</code>,
+          <code>max()</code> — acumulación online.</td></tr>
+  <tr><td><code>LinReg</code></td>
+      <td><code>addPoint(x, y)</code> / <code>subPoint(x, y)</code> (ventana
+          deslizante), <code>addData(xs, ys, n)</code>, <code>slope()</code>,
+          <code>intercept()</code>, <code>r()</code>,
+          <code>predict(x)</code> — regresión lineal incremental.</td></tr>
+</table>
+
+<h3 id="stdlib-compress">13.28 <code>Compress</code></h3>
+<p>
+  Descompresor LZSS en BP puro, para desplegar datos comprimidos en la
+  flash del micro (tablas, recursos). <strong>Solo descompresión por
+  diseño</strong>: el compresor es una herramienta de host.
+</p>
+<pre><code><span class="kw">import</span> Compress
+
+<span class="kw">var</span> dst: <span class="type">byte</span>[] := newByteArray(<span class="num">8192</span>)
+<span class="kw">var</span> n: <span class="type">integer</span> := Compress.decompress(src, len(src), dst, len(dst))
+<span class="comment">// n = bytes descomprimidos en dst; -1 si el destino no cabe
+// o los datos están corruptos (sin excepciones)</span></code></pre>
 
 <!-- =========================================================== -->
 <h2 id="concurrencia">14. Concurrencia</h2>
