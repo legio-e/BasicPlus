@@ -150,7 +150,9 @@ ESP-IDF, STM32CubeIDE); ver `bpgenvm-c/{pico,esp32,stm32}/`.
 - **[Instalar el firmware](docs/INSTALAR_FIRMWARE.md)** — flashear la VM en
   cada micro (imagen precompilada o compilada por ti).
 - **[Manual del lenguaje](docs/manual.html)** — léxico, tipos, clases,
-  módulos, excepciones, concurrencia, biblioteca estándar, CLI y artefactos.
+  módulos, excepciones, concurrencia.
+- **[Referencia](docs/referencia.html)** — biblioteca estándar completa,
+  línea de comandos y artefactos en disco.
 - [Filosofía del proyecto](docs/PHILOSOPHY.md) — qué es y qué no quiere ser.
 - Especificaciones: [formato .mod](docs/MOD_FORMAT.md),
   [opcodes](docs/OPCODES.md), [layout del heap](docs/HEAP_LAYOUT.md),

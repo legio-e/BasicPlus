@@ -109,7 +109,8 @@ otras placas. AOT activo (mismo Cortex-M33 que el RP2350).
 
 ## ¿Y ahora qué?
 
-- **[Manual del lenguaje](manual.html)** — la referencia completa.
+- **[Manual del lenguaje](manual.html)** y **[Referencia](referencia.html)**
+  (stdlib, CLI, artefactos) — la documentación completa.
 - `samples/` — ejemplos: GPIO OO, I²C/SPI/UART, threads, excepciones,
   tuplas, `native` AOT, TCP…
 - `docs/PENDIENTES.md` — el backlog vivo y honesto del proyecto.

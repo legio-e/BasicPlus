@@ -1138,19 +1138,26 @@ public class FrmMain extends javax.swing.JFrame
     private void showManual() {
         try {
             if (cachedManualPath == null || !Files.isRegularFile(cachedManualPath)) {
-                try (InputStream in = getClass().getResourceAsStream("/manual.html")) {
-                    if (in == null) {
-                        JOptionPane.showMessageDialog(this,
-                                "manual.html no encontrado en los resources del jar.",
-                                "Error", JOptionPane.ERROR_MESSAGE);
-                        return;
+                // H13 — el manual son DOS volúmenes enlazados entre sí
+                // (manual.html = lenguaje, referencia.html = stdlib/CLI/
+                // artefactos): hay que extraer ambos al MISMO directorio
+                // para que los href relativos funcionen en el navegador.
+                Path tmpDir = Files.createTempDirectory("bpide-help-");
+                tmpDir.toFile().deleteOnExit();
+                for (String name : new String[]{"manual.html", "referencia.html"}) {
+                    try (InputStream in = getClass().getResourceAsStream("/" + name)) {
+                        if (in == null) {
+                            JOptionPane.showMessageDialog(this,
+                                    name + " no encontrado en los resources del jar.",
+                                    "Error", JOptionPane.ERROR_MESSAGE);
+                            return;
+                        }
+                        Path out = tmpDir.resolve(name);
+                        Files.copy(in, out, StandardCopyOption.REPLACE_EXISTING);
+                        out.toFile().deleteOnExit();
                     }
-                    Path tmpDir = Files.createTempDirectory("bpide-help-");
-                    tmpDir.toFile().deleteOnExit();
-                    cachedManualPath = tmpDir.resolve("manual.html");
-                    Files.copy(in, cachedManualPath, StandardCopyOption.REPLACE_EXISTING);
-                    cachedManualPath.toFile().deleteOnExit();
                 }
+                cachedManualPath = tmpDir.resolve("manual.html");
             }
             if (Desktop.isDesktopSupported()
                     && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
