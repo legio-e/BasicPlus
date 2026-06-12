@@ -2,6 +2,17 @@
    Gramática EBNF del lenguaje BASICPLUS
    Estilo: BASIC moderno con clases, funciones, errores y librerías
 
+   *** NOTA (junio 2026) ***
+   Esta es la gramática de la FASE DE DISEÑO (v1, mayo 2026) y se
+   conserva como documento de diseño. La FUENTE DE VERDAD del lenguaje
+   implementado es docs/manual.html (+ docs/referencia.html). La V2
+   añadió cosas que esta gramática NO refleja: long y double (literales
+   123L / 1.5d), tipos estrechos (byte, word, short, int8, int16),
+   arrays locales de tamaño fijo (tipo[N]), tuplas, parámetros con
+   valor por defecto, expresiones multilínea, `native function` (AOT),
+   statics por nombre cualificado y la jerarquía Exception/RuntimeError.
+   Refresco completo de la gramática: anotado para v3 (docs).
+
    Notación:
      rule ::= expression ;        definición de regla
      e1 e2                        secuencia
@@ -677,23 +688,31 @@ NEWLINE     ::= '\n' | '\r\n' ;
      and, or, not, xor, mod, shl, shr                                  *)
 
 
-(* ========================= ROADMAP V2 (deferido) =========================
+(* ================ ROADMAP del diseño — estado a junio 2026 ================
 
-   Estas características se han discutido pero quedan pendientes para
-   una versión más avanzada del lenguaje. No están en la gramática actual.
+   Lista de la fase de diseño, actualizada con lo que la V2 entregó.
+   Lo implementado está descrito en docs/manual.html; lo pendiente
+   queda como ideas para v3.
 
+   HECHO en V2:
+   ✓ Alias de import:                 import Modulo as Alias
+   ✓ Tuplas y retornos múltiples:     function divmod(): (integer, integer)
+                                      con destructuring { a, b } := f()
+   ✓ Asignaciones compuestas:         *=, /=, mod=  (además de += y -=)
+   ✓ Lectura de entrada estándar:     input() + IO.prompt (formulario
+                                      desde el IDE)
+   ~ Mapas/diccionarios:              como CLASE de stdlib (Collections),
+                                      no como sintaxis nativa Map<K,V>
+
+   IDEAS para v3 (no en el lenguaje):
    - Interpolación de strings:        "Hola $nombre"  o  "Hola ${expr}"
-   - Alias de import:                 import IO.Console as IO
    - Type aliases:                    type Edad = integer
-   - Tuplas y retornos múltiples:     function divmod(): (integer, integer)
    - Lambdas y funciones como valor:  var f := (x: integer) => x * 2
-   - Mapas/diccionarios nativos:      var m: Map<string, integer> := {...}
    - Genéricos:                       List<integer>, Map<K, V>
    - Interfaces / clases abstractas
-   - Asignaciones compuestas extra:   *=, /=, mod=, &=, |=, xor=, shl=, shr=
+   - Asignaciones compuestas bitwise: &=, |=, xor=, shl=, shr=
    - Operador 'in' como expresión booleana fuera del 'for'
    - Rangos en switch:                case 1..5
-   - Lectura de entrada estándar (input/readln)
 
    ============================================================ *)
 
