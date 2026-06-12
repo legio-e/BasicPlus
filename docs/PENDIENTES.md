@@ -636,8 +636,10 @@ Verificación de Eduardo en RP2350 con Fibo (.mod + .mdn AOT subido):
 `stop` en consola → "Stop: KILL enviado a la placa" → "VM finished:
 exit 130 (terminado por KILL)", placa viva sin reset. Vías en el IDE:
 menú Run → Stop (Ctrl+F2) y comando de consola `kill`/`stop` (añadido
-tras la prueba: era el gesto natural). ESP32/STM32: fuente completa,
-queda el rebuild+flash de Eduardo cuando toque.
+tras la prueba: era el gesto natural). STM32: ✅ recompilado y grabado
+por Eduardo (2026-06-13, imagen con KILL + autorun + fachada Net — el
+rebuild destapó y cerró el fix del guard de net_host.c). ESP32: imagen
+compilada (bpvm_esp32_merged.bin lista), queda el flasheo de Eduardo.
 El comando del wire resultó existir desde el día uno: **KILL** (v1 §6.3, con
 status `KILLED` ya declarado en el spec) — el IDE lo enviaba, el server Java
 lo respondía a medias y los firmwares lo rechazaban. Ahora es real de punta
