@@ -1,5 +1,11 @@
 # Backlog de BasicPlus — pendientes y mejoras
 
+> **🧊 CODE FREEZE V2 (decisión Eduardo, 2026-06-13).** El código de la
+> V2 está CERRADO: no se añade nada más. Solo se arreglan BUGS si
+> aparecen; cualquier otra cosa (mejoras, features, flecos como
+> P-adc-8ch o N-frontend-neq-hang) va a **v3**. Lo único que queda de
+> V2 es **H13 — documentación y publicación**.
+
 Documento vivo. Actualizar cuando se cierre un item o se descubra uno nuevo.
 
 Convención de IDs:
