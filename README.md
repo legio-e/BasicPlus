@@ -171,6 +171,8 @@ long/double, strings UTF-8, tuplas, defaults, static properties, herencia
 cross-module completa, file I/O, logger, autorun, Stop, cliente TCP y un
 IDE consolidado. Solo se aceptan correcciones de bugs; todo lo demás va a v3.
 
+Detalle completo de lo que trae esta entrega: **[notas de versión](docs/RELEASES.md)**.
+
 ## Licencia
 
 [MIT](LICENSE). Hecho con cariño, dos placas en la mesa y memoria de los
