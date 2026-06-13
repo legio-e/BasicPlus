@@ -54,6 +54,13 @@ public final class PicoExplorer extends JPanel {
      *  Pico/VM-Java; null mientras no haya conexión. */
     private Backend backend;
 
+    /** N-skip-put-by-hash: CRC32 de los bytes que subimos a cada ruta remota
+     *  en ESTA conexión. El skip-if-same-size (#110) servía .mod rancios
+     *  cuando una edición no cambiaba el tamaño; ahora el skip se confirma
+     *  por contenido. Se vacía al (re)conectar. */
+    private final java.util.Map<String,Long> sentCrc =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     /** Sink al que mandar el output de RUN. Lo enchufa FrmMain a la consola. */
     private Consumer<String> outputSink;
 
@@ -518,9 +525,40 @@ public final class PicoExplorer extends JPanel {
         uploadAndRun(modFile, depMods, libDepNames, debugHook, null);
     }
 
+    /** CRC32 de un buffer, como long (para confirmar contenido idéntico
+     *  antes de saltarse un PUT). */
+    private static long crc32(byte[] data) {
+        java.util.zip.CRC32 c = new java.util.zip.CRC32();
+        c.update(data);
+        return c.getValue();
+    }
+
+    /** N-skip-put-by-hash: sube `file` a `remote` salvo que YA esté allí con
+     *  el MISMO contenido. El #110 miraba solo el tamaño y servía módulos
+     *  rancios cuando una edición no lo cambiaba; ahora confirmamos por CRC32
+     *  de lo último subido en esta conexión (sentCrc). DEL-before-PUT se
+     *  conserva (#111). @return true si (re)subió; false si lo saltó. */
+    private boolean putIfChanged(Backend b, File file, String remote,
+                                 Long deviceSize) throws java.io.IOException {
+        byte[] data = Files.readAllBytes(file.toPath());
+        long crc = crc32(data);
+        Long sent = sentCrc.get(remote);
+        if (deviceSize != null && deviceSize.longValue() == data.length
+                && sent != null && sent.longValue() == crc) {
+            return false;
+        }
+        if (deviceSize != null) {
+            try { b.del(remote); }
+            catch (java.io.IOException delErr) { /* tolerable */ }
+        }
+        b.put(remote, data);
+        sentCrc.put(remote, crc);
+        return true;
+    }
+
     /** H12 (#260) — variante con resources: pares (ruta remota → fichero
      *  local) de la carpeta resources/ del proyecto, de cualquier tipo. Se
-     *  suben con skip-if-same-size, como las deps. */
+     *  suben con skip-if-idéntico (tamaño + CRC32), como las deps. */
     public void uploadAndRun(File modFile, java.util.List<File> depMods,
                              java.util.Set<String> libDepNames,
                              java.util.function.Consumer<BpvmClient> debugHook,
@@ -564,8 +602,9 @@ public final class PicoExplorer extends JPanel {
             }
 
             // 1) Subir deps primero (drivers).
-            //    skip-if-same-size + DEL-before-overwrite por economía
-            //    (evita reescritura de flash innecesaria en Pico).
+            //    skip-if-IDÉNTICO (tamaño + CRC32, vía putIfChanged) +
+            //    DEL-before-overwrite por economía (evita reescritura de
+            //    flash innecesaria en Pico).
             for (File dep : deps) {
                 // stdlib core → /lib (como en la Pico); driver/app → /app.
                 boolean isLib = libNames.contains(dep.getName());
@@ -579,83 +618,50 @@ public final class PicoExplorer extends JPanel {
                         SwingUtilities.invokeLater(() -> outputSink.accept(
                                 "[Explorer] " + depRemote + " pre-instalada, salto PUT"));
                     }
-                } else if (!isLib && sz != null && sz == dep.length()) {
-                    if (outputSink != null) {
+                } else {
+                    boolean up = putIfChanged(b, dep, depRemote, sz);
+                    if (!up && outputSink != null) {
                         SwingUtilities.invokeLater(() -> outputSink.accept(
                                 "[Explorer] " + depRemote + " ya en FS (" + dep.length()
-                                + " bytes), salto PUT"));
+                                + " bytes, contenido idéntico), salto PUT"));
                     }
-                } else {
-                    if (sz != null) {
-                        try { b.del(depRemote); }
-                        catch (java.io.IOException delErr) { /* tolerable */ }
-                    }
-                    byte[] depData = Files.readAllBytes(dep.toPath());
-                    b.put(depRemote, depData);
                 }
                 // Si el dep tiene .mdn alongside, subirlo también.
                 File depMdn = mdnSiblingOf(dep);
                 if (depMdn != null && depMdn.isFile()) {
                     String depMdnRemote = toAppPath(depMdn.getName());
-                    Long mz = remote.get(depMdnRemote);
-                    if (mz != null && mz == depMdn.length()) {
-                        // skip
-                    } else {
-                        if (mz != null) {
-                            try { b.del(depMdnRemote); }
-                            catch (java.io.IOException delErr) { /* tolerable */ }
-                        }
-                        byte[] mdnData = Files.readAllBytes(depMdn.toPath());
-                        b.put(depMdnRemote, mdnData);
-                        if (outputSink != null) {
-                            SwingUtilities.invokeLater(() -> outputSink.accept(
-                                    "[Explorer] subido AOT " + depMdnRemote + " ("
-                                    + depMdn.length() + " bytes)"));
-                        }
+                    boolean up = putIfChanged(b, depMdn, depMdnRemote, remote.get(depMdnRemote));
+                    if (up && outputSink != null) {
+                        SwingUtilities.invokeLater(() -> outputSink.accept(
+                                "[Explorer] subido AOT " + depMdnRemote + " ("
+                                + depMdn.length() + " bytes)"));
                     }
                 }
             }
             // 1c) H12 (#260) — resources/ del proyecto: ficheros arbitrarios a
-            //     su ruta remota (/app/<rel>), con skip-if-same-size.
+            //     su ruta remota (/app/<rel>), con skip-if-idéntico.
             for (java.util.Map.Entry<String, File> res : resources.entrySet()) {
                 final String rRemote = res.getKey();
                 final File rFile = res.getValue();
-                Long rsz = remote.get(rRemote);
-                if (rsz != null && rsz == rFile.length()) {
-                    if (outputSink != null) {
-                        SwingUtilities.invokeLater(() -> outputSink.accept(
-                                "[Explorer] " + rRemote + " ya en FS (" + rFile.length()
-                                + " bytes), salto PUT"));
-                    }
-                } else {
-                    if (rsz != null) {
-                        try { b.del(rRemote); }
-                        catch (java.io.IOException delErr) { /* tolerable */ }
-                    }
-                    byte[] rData = Files.readAllBytes(rFile.toPath());
-                    b.put(rRemote, rData);
-                    if (outputSink != null) {
+                boolean up = putIfChanged(b, rFile, rRemote, remote.get(rRemote));
+                if (outputSink != null) {
+                    if (up) {
                         SwingUtilities.invokeLater(() -> outputSink.accept(
                                 "[Explorer] subido resource " + rRemote + " ("
                                 + rFile.length() + " bytes)"));
+                    } else {
+                        SwingUtilities.invokeLater(() -> outputSink.accept(
+                                "[Explorer] " + rRemote + " ya en FS (" + rFile.length()
+                                + " bytes, contenido idéntico), salto PUT"));
                     }
                 }
             }
-            // 2) Subir el módulo principal solo si difiere.
-            Long mainSz = remote.get(remoteName);
-            if (mainSz != null && mainSz == modFile.length()) {
-                if (outputSink != null) {
-                    SwingUtilities.invokeLater(() -> outputSink.accept(
-                            "[Explorer] " + remoteName + " ya en FS (" + modFile.length()
-                            + " bytes), salto PUT"));
-                }
-            } else {
-                if (mainSz != null) {
-                    try { b.del(remoteName); }
-                    catch (java.io.IOException delErr) { /* tolerable */ }
-                }
-                byte[] data = Files.readAllBytes(modFile.toPath());
-                b.put(remoteName, data);
+            // 2) Subir el módulo principal solo si su CONTENIDO difiere.
+            boolean upMain = putIfChanged(b, modFile, remoteName, remote.get(remoteName));
+            if (!upMain && outputSink != null) {
+                SwingUtilities.invokeLater(() -> outputSink.accept(
+                        "[Explorer] " + remoteName + " ya en FS (" + modFile.length()
+                        + " bytes, contenido idéntico), salto PUT"));
             }
             // 2b) Si hay .mdn alongside del .mod, subirlo también (H3 #158
             //     fase D). El firmware al hacer RUN escanea el FS por
@@ -665,25 +671,11 @@ public final class PicoExplorer extends JPanel {
             File mdnFile = mdnSiblingOf(modFile);
             if (mdnFile != null && mdnFile.isFile()) {
                 String mdnRemote = toAppPath(mdnFile.getName());
-                Long mdnSz = remote.get(mdnRemote);
-                if (mdnSz != null && mdnSz == mdnFile.length()) {
-                    if (outputSink != null) {
-                        SwingUtilities.invokeLater(() -> outputSink.accept(
-                                "[Explorer] " + mdnRemote + " ya en FS ("
-                                + mdnFile.length() + " bytes), salto PUT"));
-                    }
-                } else {
-                    if (mdnSz != null) {
-                        try { b.del(mdnRemote); }
-                        catch (java.io.IOException delErr) { /* tolerable */ }
-                    }
-                    byte[] mdnData = Files.readAllBytes(mdnFile.toPath());
-                    b.put(mdnRemote, mdnData);
-                    if (outputSink != null) {
-                        SwingUtilities.invokeLater(() -> outputSink.accept(
-                                "[Explorer] subido AOT " + mdnRemote + " ("
-                                + mdnFile.length() + " bytes)"));
-                    }
+                boolean up = putIfChanged(b, mdnFile, mdnRemote, remote.get(mdnRemote));
+                if (up && outputSink != null) {
+                    SwingUtilities.invokeLater(() -> outputSink.accept(
+                            "[Explorer] subido AOT " + mdnRemote + " ("
+                            + mdnFile.length() + " bytes)"));
                 }
             }
             // 3) Ejecutar el principal — salvo en modo DEBUG, donde cedemos el
@@ -793,6 +785,7 @@ public final class PicoExplorer extends JPanel {
             return hello;
         }, hello -> {
             this.backend = b;
+            sentCrc.clear();   // nueva conexión → cache de subidas limpia
             setConnectedUI(true);
             status.setText(endpoint + " — " + hello);
             onRefresh();
