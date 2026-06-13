@@ -15,9 +15,9 @@ module Bme688Demo
   import Bme688
 
   function Main()
-    // Pines del puerto STEMMA QT de la Metro RP2350.
-    // AJUSTAR si el scan no encuentra nada. El BME688 (5046)
-    // responde en 0x77 (por defecto) o 0x76.
+    // Puerto STEMMA QT de la Metro RP2350 = I2C0, SDA=GP20, SCL=GP21
+    // (confirmado con el pinout de Adafruit). El BME688 (5046)
+    // responde en 0x77 (por defecto) o 0x76 — el scan lo confirma.
     var bus: I2c.Bus := I2c.Bus(0, 20, 21, I2c.FAST())
 
     print "Escaneando bus I2C..."
