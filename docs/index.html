@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BasicPlus — Documentación</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 3rem 2rem 6rem;
+  }
+
+  header.hero { text-align: center; margin-bottom: 2.5rem; }
+  header.hero h1 {
+    font-size: 3rem;
+    color: var(--accent);
+    margin: 0 0 0.3rem;
+    letter-spacing: -0.02em;
+  }
+  header.hero .tagline {
+    font-size: 1.15rem;
+    color: var(--fg-muted);
+    max-width: 640px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+  .badges {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .badge {
+    font-size: 0.78rem;
+    background: var(--accent-bg);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    font-weight: 600;
+  }
+
+  h2 {
+    color: var(--accent);
+    margin-top: 3rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--border);
+    font-size: 1.4rem;
+  }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.45;
+  }
+  pre code { background: transparent; padding: 0; font-size: 0.88em; }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { text-align: left; padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin: 1.2rem 0;
+  }
+  a.card {
+    display: block;
+    text-decoration: none;
+    color: var(--fg);
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.1rem;
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+  }
+  a.card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 14px rgba(42,111,191,0.12);
+    transform: translateY(-2px);
+  }
+  a.card .t { font-weight: 700; color: var(--accent); display: block; margin-bottom: 0.25rem; }
+  a.card .d { font-size: 0.9rem; color: var(--fg-muted); line-height: 1.45; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1.2rem 0;
+    border-radius: 4px;
+    font-size: 0.95rem;
+  }
+  .note p:first-child { margin-top: 0; }
+  .note p:last-child { margin-bottom: 0; }
+
+  ul.specs { list-style: none; padding-left: 0; margin: 1rem 0; columns: 2; }
+  ul.specs li { margin: 0.3rem 0; break-inside: avoid; }
+
+  footer {
+    margin-top: 3.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--fg-muted);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  @media (max-width: 600px) {
+    header.hero h1 { font-size: 2.2rem; }
+    ul.specs { columns: 1; }
+    main { padding: 2rem 1.2rem 4rem; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header class="hero">
+  <h1>BasicPlus</h1>
+  <p class="tagline">
+    Un lenguaje de propósito general para microcontroladores de 32 bits:
+    sintaxis BASIC moderna, orientación a objetos y un depurador de primera
+    clase. Compila a bytecode que corre <strong>idéntico</strong> en el PC y
+    en el micro.
+  </p>
+  <div class="badges">
+    <span class="badge">V2 · código congelado</span>
+    <span class="badge">RP2350 · ESP32-S3 · STM32</span>
+    <span class="badge">Dos VMs · una salida byte-idéntica</span>
+    <span class="badge">MIT</span>
+  </div>
+</header>
+
+<p>
+  El mismo programa que depuras en tu sobremesa parpadea después un LED en una
+  Raspberry Pi Pico 2, un ESP32-S3 o un STM32 — sin recompilar, sin
+  <code>#ifdef</code>, sin sorpresas. En un PC sin GPIO los builtins de
+  hardware loggean por la consola; en la placa mueven pines de verdad. El
+  bytecode es el mismo byte a byte.
+</p>
+
+<pre><code><span class="comment">// blink.bp — parpadea el LED on-board de la Pico (GP25) con el API OO.</span>
+<span class="kw">module</span> Blink
+  <span class="kw">import</span> Gpio
+
+  <span class="kw">function</span> <span class="fn">Main</span>()
+    <span class="kw">var</span> led: Gpio.<span class="type">Pin</span> := Gpio.<span class="type">Pin</span>(<span class="num">25</span>, Gpio.<span class="type">Pin</span>.OUTPUT)
+    <span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">0</span>
+    <span class="kw">while</span> i &lt; <span class="num">100</span> <span class="kw">do</span>
+      led.on()
+      sleep(<span class="num">300</span>)
+      led.off()
+      sleep(<span class="num">300</span>)
+      i := i + <span class="num">1</span>
+    <span class="kw">endwh</span>
+    <span class="kw">print</span> <span class="str">"Blink terminado"</span>
+  <span class="kw">end</span> Main
+<span class="kw">end</span> Blink</code></pre>
+
+<h2>Empezar</h2>
+<div class="cards">
+  <a class="card" href="QUICKSTART.md">
+    <span class="t">Inicio rápido →</span>
+    <span class="d">De cero a blink, plataforma por plataforma: compilar, ejecutar en el PC y subir a la placa.</span>
+  </a>
+  <a class="card" href="INSTALAR_FIRMWARE.md">
+    <span class="t">Instalar el firmware →</span>
+    <span class="d">Flashear la VM en cada micro (imagen precompilada o compilada por ti): Pico/Metro, ESP32-S3, STM32.</span>
+  </a>
+</div>
+
+<h2>El lenguaje y las herramientas</h2>
+<div class="cards">
+  <a class="card" href="manual.html">
+    <span class="t">Manual del lenguaje →</span>
+    <span class="d">Léxico, tipos, clases, módulos, excepciones, concurrencia y funciones <code>native</code> (AOT).</span>
+  </a>
+  <a class="card" href="referencia.html">
+    <span class="t">Referencia →</span>
+    <span class="d">La biblioteca estándar completa, la línea de comandos y los artefactos en disco (<code>.mod</code>, <code>.bpi</code>, <code>.mdn</code>…).</span>
+  </a>
+  <a class="card" href="guia-ide.html">
+    <span class="t">Guía del IDE →</span>
+    <span class="d">La ventana, los proyectos, Run/Stop, el explorador de la placa, la consola del micro y el depurador.</span>
+  </a>
+</div>
+
+<h2>Por dentro</h2>
+<div class="cards">
+  <a class="card" href="bp-desde-dentro.html">
+    <span class="t">Basic Plus desde dentro →</span>
+    <span class="d">La arquitectura contada de principio a fin: compilador, bytecode, las dos VMs, el GC, el AOT y los firmwares.</span>
+  </a>
+  <a class="card" href="PHILOSOPHY.md">
+    <span class="t">Filosofía del proyecto →</span>
+    <span class="d">Qué es BasicPlus y qué no quiere ser.</span>
+  </a>
+  <a class="card" href="PENDIENTES.md">
+    <span class="t">Backlog vivo →</span>
+    <span class="d">El diario honesto del proyecto: lo hecho, lo diferido a v3 y por qué.</span>
+  </a>
+</div>
+
+<p style="margin-top:1.2rem">Especificaciones de bajo nivel:</p>
+<ul class="specs">
+  <li>→ <a href="MOD_FORMAT.md">Formato <code>.mod</code></a> — la spec binaria del bytecode.</li>
+  <li>→ <a href="opcodes.html">Opcodes</a> (<a href="OPCODES.md">.md</a>) — semántica de cada instrucción.</li>
+  <li>→ <a href="HEAP_LAYOUT.md">Layout del heap</a> — el <code>memory[]</code> en runtime.</li>
+  <li>→ <a href="BUILTINS.md">Builtins</a> — catálogo de <code>CALL_BUILTIN</code>.</li>
+  <li>→ <a href="BPVM_WIRE_PROTOCOL.md">Protocolo wire</a> — el JSON por línea PC↔placa.</li>
+</ul>
+
+<h2>Plataformas</h2>
+<table>
+  <tr><th>Plataforma</th><th>Transporte</th><th>Notas</th></tr>
+  <tr>
+    <td>PC (Windows/Linux/macOS)</td>
+    <td>—</td>
+    <td>Ambas VMs; daemon TCP para el IDE.</td>
+  </tr>
+  <tr>
+    <td>Raspberry Pi <strong>Pico 2</strong> y Adafruit <strong>Metro RP2350</strong></td>
+    <td>USB-CDC</td>
+    <td>Una <strong>imagen única</strong> para ambas placas: variante (A/B), pines y PSRAM se deciden en <em>runtime</em> (<code>/sys/board.json</code>). AOT activo.</td>
+  </tr>
+  <tr>
+    <td><strong>ESP32-S3</strong> (Xtensa LX7)</td>
+    <td>UART0</td>
+    <td>FS persistente en partición dedicada; consola por USB nativo. <code>native</code> interpretada (sin AOT en Xtensa).</td>
+  </tr>
+  <tr>
+    <td><strong>STM32</strong> (ref. Nucleo-U575ZI-Q)</td>
+    <td>VCP del ST-LINK</td>
+    <td>FS en flash interna; AOT activo (mismo Cortex-M33 que el RP2350).</td>
+  </tr>
+</table>
+<p>
+  En todas: REPL «wire v1» con subida de ficheros y RUN remoto,
+  <strong>Stop</strong> (KILL cooperativo sin resetear la placa),
+  <strong>autorun</strong> (<code>/sys/auto.txt</code> arranca tu programa al
+  encender, y el IDE puede conectarse en caliente) y debug on-device con
+  breakpoints.
+</p>
+
+<div class="note">
+  <p><strong>El nombre.</strong> BasicPlus es un homenaje al
+  <strong>BASIC-PLUS de Digital Equipment Corporation</strong>, el dialecto
+  estructurado que corría bajo RSTS/E en los PDP-11 en los años 70 y 80 —
+  aquel BASIC con el que se escribieron sistemas completos y aprendió a
+  programar una generación. La misma idea (un lenguaje sencillo de leer que
+  no te trata como a un principiante) trasplantada al hardware pequeño de hoy.</p>
+</div>
+
+<footer>
+  BasicPlus — documentación generada al hilo del desarrollo.
+  Frontend <code>lexer-java</code> · VMs <code>miVM</code> (Java) y
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / STM32) · IDE
+  <code>BpIde</code>. Licencia MIT.
+</footer>
+
+</main>
+</body>
+</html>
