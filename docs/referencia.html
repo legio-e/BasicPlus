@@ -554,8 +554,12 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   Hay aparte un <code>IO.prompt(spec)</code> que pide al IDE conectado
   que renderice un formulario y devuelve el JSON con la respuesta del
   usuario (ver <a href="#stdlib-funcs">§13.1</a>: la primitiva BLOQUEA
-  el thread BP hasta respuesta). Sin IDE conectado lanza
-  <code>RuntimeError</code>.
+  el thread BP hasta respuesta). <strong>Solo en la VM Java (PC)</strong>:
+  el formulario lo dibuja el IDE, así que <code>IO.prompt</code> es una
+  utilidad de desarrollo. En los micros (VM-C, subconjunto C) no está y
+  lanza <code>RuntimeError</code> atrapable — igual que sin IDE conectado.
+  Envuélvelo en <code>try/catch</code> si el programa ha de correr
+  también en placa.
 </p>
 <pre><code><span class="kw">import</span> IO
 

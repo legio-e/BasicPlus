@@ -240,8 +240,22 @@
 <p>
   <strong>Run → Compile</strong> compila el fichero o el proyecto;
   los diagnósticos aparecen en la pestaña <strong>Errores</strong>
-  separando errores de avisos. El compilador corta las cascadas: un
-  error de sintaxis no produce cincuenta mensajes fantasma.
+  con su fichero, línea, columna, tipo (léxico / sintáctico /
+  semántico) y mensaje, separando errores de avisos. Doble clic en una
+  fila salta a esa posición en el editor.
+</p>
+<p><img src="img/ide-errores.png" alt="Pestaña Errores con varios diagnósticos"></p>
+<p>
+  El compilador <strong>no se detiene en el primer error</strong> ni se
+  ahoga en cascadas: se recupera a nivel de sentencia/función y sigue,
+  de modo que una sola pasada saca a la luz errores reales de todo el
+  módulo. En la captura conviven un error léxico+sintáctico (un
+  <code>=</code> donde iba <code>:=</code> — el lenguaje usa
+  <code>:=</code> para asignar) y, en otra función más abajo, un
+  identificador no declarado: el fallo de la primera no oculta el de la
+  segunda. Las cascadas espurias se podan (un operando ya erróneo no
+  genera errores derivados) y, si hubiera muchísimos, se recortan con
+  un «y N más».
 </p>
 
 <h2 id="ejecutar">5. Ejecutar (y parar)</h2>
@@ -257,6 +271,20 @@
       KILL cooperativo: la VM muere limpia y el micro sigue
       respondiendo.</li>
 </ul>
+<p>
+  Si el programa pide datos al usuario con <code>IO.prompt</code>, el
+  IDE despliega un formulario y la ejecución se pausa hasta que lo
+  rellenas: campos de texto, numéricos, casillas y desplegables según
+  lo que el programa declare.
+</p>
+<p><img src="img/ide-prompt.png" alt="Formulario de IO.prompt desplegado durante un Run"></p>
+<p class="note">
+  <code>IO.prompt</code> es una utilidad de desarrollo de la VM Java
+  (PC): el formulario lo dibuja el IDE. En los micros no está disponible
+  — allí <code>IO.prompt</code> lanza un <code>RuntimeError</code>
+  atrapable, así que envuélvelo en <code>try/catch</code> si tu programa
+  ha de correr también en placa.
+</p>
 
 <h2 id="placa">6. Conectarse a la placa</h2>
 <p>
@@ -330,6 +358,15 @@ kill · autorun [fich|off] · mem · save · log · reset · cls · help</code><
       <em>Properties módulo</em>, <em>Call Stack</em> y la lista de
       <em>Breakpoints</em>.</li>
 </ul>
+<p><img src="img/ide-debug.png" alt="Depurador pausado en un breakpoint, con la pestaña Variables"></p>
+<p>
+  En la captura, la ejecución está detenida: la línea con breakpoint
+  aparece marcada, la línea actual resaltada, y la pestaña
+  <em>Variables</em> muestra los locales por nombre con su tipo y valor
+  en ese instante (aquí <code>led</code> y <code>i</code> dentro del
+  bucle). El recorrido es idéntico depurando en la VM local o sobre el
+  propio micro.
+</p>
 
 <h2 id="autorun">10. Dispositivo autónomo</h2>
 <p>
