@@ -821,6 +821,21 @@ lista.add(pair())                      <span class="comment">// entran en colecc
       posible (el puente existe), pero cruza de vuelta al intérprete: lo
       ganado en velocidad se pierde en cada cruce. El compilador lo detecta
       y emite un <strong>warning de rendimiento</strong>.</li>
+  <li><strong>Cómo se genera el <code>.mdn</code></strong>: hoy la
+      compilación AOT es un <strong>paso de línea de comandos aparte</strong>,
+      no la hace el IDE. El IDE produce el <code>.mod</code> (bytecode) y
+      <em>valida</em> que la native sea compilable AOT, pero el overlay
+      <code>.mdn</code> lo genera el script <code>build_mdn.sh</code>
+      (<code>AotMain</code> emite C → <code>arm-none-eabi-gcc</code>
+      compila Thumb-2 PIC → <code>MdnPack</code> empaqueta). Necesitas el
+      <strong>toolchain ARM bare-metal</strong>
+      (<code>arm-none-eabi-gcc</code>, p. ej. el <em>Arm GNU Toolchain</em>)
+      instalado; el script lo busca en el <code>PATH</code> o en la variable
+      de entorno <code>GCC</code>
+      (<code>GCC=/ruta/arm-none-eabi-gcc ./build_mdn.sh …</code>). Como el
+      <code>.mdn</code> es opcional y aditivo, si no lo generas el programa
+      sigue corriendo (interpretado). <em>Integrar este paso en el IDE,
+      con detección/configuración del toolchain, está previsto para v3.</em></li>
 </ul>
 
 <!-- =========================================================== -->

@@ -1788,6 +1788,17 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   todo corre interpretado. El IDE lo sube a la placa junto al
   <code>.mod</code>.
 </p>
+<p>
+  <strong>Generación (CLI, fuera del IDE)</strong>: el <code>.mdn</code> lo
+  produce el script <code>build_mdn.sh</code> en tres pasos —
+  <code>AotMain</code> emite C, <code>arm-none-eabi-gcc</code> lo compila a
+  Thumb-2 PIC, y <code>MdnPack</code> lo empaqueta. Requiere el toolchain
+  ARM bare-metal (<code>arm-none-eabi-gcc</code>) en el <code>PATH</code> o
+  en la variable de entorno <code>GCC</code>. El IDE <em>no</em> ejecuta este
+  paso: sólo genera el <code>.mod</code> y valida que la native sea
+  compilable AOT. Integrar la compilación native en el IDE (con
+  detección/configuración del toolchain) está previsto para v3.
+</p>
 
 <h3 id="proyecto">16.5 <code>.bpbuild</code> / <code>.bpproject</code> (JSON)</h3>
 <pre><span class="comment">// App.bpbuild — entrada del COMPILADOR (y del IDE):</span>

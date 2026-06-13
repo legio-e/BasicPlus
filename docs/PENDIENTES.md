@@ -988,6 +988,31 @@ caché de dirección por call-site, lazy via `find_external`). Caso de uso
 raro (los kernels calientes viven en un módulo) → coste/beneficio bajo
 para el cierre de V2.
 
+### N-ide-aot-button — compilación native integrada en el IDE [v3]
+
+**Hoy (V2)**: el AOT es un paso de CLI aparte. El IDE genera el `.mod` y
+valida que la native sea compilable AOT, pero el overlay `.mdn` lo produce
+`bpgenvm-c/pico/build_mdn.sh` a mano: `AotMain` emite C → `arm-none-eabi-gcc`
+compila Thumb-2 PIC → `MdnPack` empaqueta. El script localiza el toolchain
+ARM por `PATH` o por la variable de entorno `GCC`. Documentado en
+manual §8.3 y referencia §16.4.
+
+**La mejora (v3)** (Eduardo 2026-06-13: *"para un usuario es incómodo tener
+que compilar aparte las funciones native"*): que el IDE haga el `.mdn` como
+parte del Run/Build —
+
+- Botón/checkbox "Compilar native (AOT)" en el menú Run o en el `.bpbuild`.
+- Detección/configuración del toolchain ARM (`arm-none-eabi-gcc`): el IDE
+  lo busca en el `PATH`, recuerda la ruta en preferencias y avisa con un
+  mensaje claro si falta (con enlace a la descarga del *Arm GNU Toolchain*),
+  en vez de fallar en silencio.
+- Toolchain/flags **por target** del proyecto: enlaza con #258
+  (target por proyecto) — la familia del micro elige el triple y las flags
+  (`-mcpu=cortex-m33 -mthumb …`). ESP32-S3 (Xtensa) no tiene AOT hoy → el
+  IDE lo grisearía.
+- Sigue siendo aditivo: si el toolchain no está o el usuario no lo pide,
+  se sube solo el `.mod` (interpretado), como ahora.
+
 ### BpVM.cfg — fichero de configuración JSON (cerrado)
 Soporta:
 - `memorySize` (bytes totales del array `memory`).
