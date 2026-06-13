@@ -85,8 +85,22 @@ distinta** → banco de pruebas ideal para que el GUI sea de verdad cross-family
 por encima, no). **Empezar por uno** — el **STM32F769I-DISCO** (4" táctil DSI +
 16 MB SDRAM) es el mejor candidato — y, si va bien, **ampliar al resto**: misma
 mecánica que el despliegue de micros en V2 (Pico → ESP32 → STM32). Alimenta el
-#258 (árbol familia/micro/placa). *(Listar aquí los kits concretos cuando se
-confirmen.)*
+#258 (árbol familia/micro/placa).
+
+**Kits por familia (confirmados por Eduardo, 13-jun):**
+- **ST** — **STM32F769I-DISCO**: 4" táctil DSI + 16 MB SDRAM. *Cabeza de puente.*
+- **Espressif** — **kit ESP32-P4 con pantalla incluida** (MIPI-DSI). OJO: el P4
+  es **RISC-V**, familia distinta del ESP32-S3 (Xtensa) de V2 → es un *port
+  nuevo* de firmware (target ESP-IDF propio, imagen distinta — ya anotado para
+  #258), pero gran plataforma LVGL (Espressif empuja LVGL + `esp_lvgl_port`).
+- **Raspberry / RP** — **Metro RP2350 + puerto HSTX → placa DVI de Adafruit**:
+  salida a un **monitor DVI/HDMI** (estilo PicoDVI/HSTX), no un TFT pegado.
+  Modelo de "pantalla externa"; LVGL lo trata igual (framebuffer → flush).
+
+Tres **transportes de display distintos** (DSI / MIPI-DSI / HSTX-DVI) bajo un
+mismo `Gui.*` = prueba cross-family fuerte. El asiento de la abstracción son los
+dos callbacks de LVGL: *flush* (al display de cada placa) + *read* (táctil). Lo
+que cambia por kit son esos dos; el API y los widgets, no.
 
 ### Orden de trabajo (la senda que ya funcionó: VM-Java → VM-C → VM-micro)
 
@@ -99,10 +113,10 @@ luego portar a la VM-C de host, luego al micro. Aplicada al GUI:
    la VM-Java NO se "migra"** (es headless, hoy no tiene GUI) — se le *añade* un
    backend `Gui.*` nuevo, en JavaFX o Swing según el bake-off; el intérprete no
    se toca. El único *migrar* de verdad es el **IDE** (Swing→JavaFX).
-   **[BIFURCACIÓN ABIERTA, decide Eduardo]** IDE: ¿migración prerequisito duro, o
-   diferida/oportunista? Recomendación: **diferida** — el IDE ya funciona;
-   migrar "por si acaso" es coste/riesgo sin beneficio inmediato; se justifica
-   solo si se quiere el mismo toolkit para un preview/diseñador de GUI embebido.
+   **[DECIDIDO 13-jun: NO migrar de momento]** El IDE se queda en **Swing** — ya
+   funciona y migrar "por si acaso" es trabajo evitable (Eduardo: "todo lo que
+   sea ahorrar trabajo, bienvenido"). Se reconsidera solo si más adelante hace
+   falta el mismo toolkit para un preview/diseñador de GUI embebido en el IDE.
 1. **miVM (Java)**: definir el API `Gui.*` + modelo de eventos. El upcall aquí es
    trivial (Java llama a su propio intérprete, sin JNI) → el sitio más barato
    para fijar la semántica del API y los eventos, con debugger.
