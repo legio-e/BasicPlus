@@ -1,0 +1,388 @@
+dbg 3
+module Bme688
+source C:\lenguajes\pm\bpdevices\Bme688.bp
+lines
+1452 91
+1466 92
+1488 94
+1507 98
+1521 99
+1543 101
+1562 106
+1601 107
+1635 111
+1662 112
+1686 113
+1718 117
+1747 118
+1767 119
+1792 127
+1811 128
+1822 129
+1838 130
+1854 131
+1872 133
+1888 134
+1897 135
+1906 136
+1927 141
+1938 142
+1949 143
+1971 144
+1998 145
+2009 146
+2031 147
+2058 148
+2069 149
+2091 150
+2118 151
+2140 158
+2170 159
+2206 160
+2226 161
+2256 162
+2292 163
+2312 164
+2348 165
+2384 166
+2404 167
+2424 168
+2460 169
+2496 170
+2510 171
+2546 172
+2582 173
+2602 174
+2622 175
+2642 176
+2656 177
+2676 178
+2696 179
+2732 180
+2752 181
+2772 182
+2808 186
+2827 187
+2846 188
+2865 189
+2882 190
+2901 191
+2930 197
+2949 198
+2960 199
+2968 200
+2982 201
+3026 202
+3037 203
+3051 204
+3065 206
+3076 207
+3098 208
+3148 209
+3198 210
+3226 211
+3260 212
+3278 213
+3304 214
+3330 215
+3364 222
+3378 223
+3402 224
+3416 225
+3433 226
+3454 231
+3495 232
+3529 233
+3556 234
+3568 235
+3599 239
+3627 240
+3654 241
+3681 242
+3714 243
+3762 244
+3795 245
+3812 246
+3827 247
+3861 248
+3888 249
+3911 250
+3927 251
+3958 252
+4008 254
+4020 256
+4039 260
+4057 261
+4102 262
+4181 263
+4200 264
+4219 265
+4245 266
+4263 267
+4280 269
+4298 270
+4315 272
+4334 278
+4346 279
+4358 280
+4370 281
+4382 282
+4396 283
+4418 285
+4453 290
+4459 291
+4473 292
+4486 294
+4515 295
+4554 296
+4573 297
+4598 298
+4613 299
+4704 300
+4729 307
+4737 308
+4749 309
+4795 310
+4812 312
+4830 313
+4861 315
+4897 318
+4921 319
+4939 320
+4956 322
+4974 323
+4991 325
+5015 330
+5036 333
+5057 336
+5078 339
+5099 342
+5120 345
+5141 348
+5162 351
+5183 354
+5204 357
+5222 84
+5230 85
+5238 86
+vars
+func Object.toString 0
+this -16 4 0 ?
+func Object.compareTo 25
+this -20 4 0 ?
+other -16 4 0 ?
+func List.add 41
+this -20 4 0 ?
+item -16 4 0 ?
+func List.get 131
+this -20 4 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func List.length 173
+this -16 4 0 ?
+func List.remove 189
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 295
+this -16 4 0 ?
+func OwnerList.removeAndFree 338
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 468
+this -16 4 0 ?
+func StringBuilder.appendChar 489
+this -20 4 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 579
+this -20 4 0 ?
+s -16 4 0 ?
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 650
+this -20 4 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 675
+this -16 4 0 ?
+func StringBuilder.length 699
+this -16 4 0 ?
+func StringBuilder.__init 715
+this -16 4 0 ?
+func Thread.run 756
+this -16 4 0 ?
+func Thread.start 766
+this -16 4 0 ?
+func Thread.join 785
+this -16 4 0 ?
+func Thread.__init 804
+this -20 4 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 832
+this -16 4 0 ?
+func Mutex.unlock 851
+this -16 4 0 ?
+func Mutex.__init 870
+this -16 4 0 ?
+func SyncList.add 888
+this -20 4 0 ?
+item -16 4 0 ?
+func SyncList.remove 934
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.get 980
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.set 1024
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func SyncList.length 1073
+this -16 4 0 ?
+func SyncList.pop 1114
+this -16 4 0 ?
+func SyncList.popBlocking 1225
+this -16 4 0 ?
+func SyncList.__init 1352
+this -16 4 0 ?
+func Sensor.s8 1449
+this -20 4 0 ?
+v -16 4 0 integer
+func Sensor.s16 1504
+this -20 4 0 ?
+v -16 4 0 integer
+func Sensor.writeReg 1559
+this -24 4 0 ?
+reg -20 4 0 integer
+val -16 4 0 integer
+b 0 4 0 ?
+func Sensor.readRegs 1632
+this -28 4 0 ?
+reg -24 4 0 integer
+buf -20 4 0 ref
+n -16 4 0 integer
+p 0 4 0 ?
+func Sensor.readReg 1715
+this -20 4 0 ?
+reg -16 4 0 integer
+buf 4 4 0 ?
+func Sensor.begin 1789
+this -16 4 0 ?
+func Sensor.readCalibration 1924
+this -16 4 0 ?
+c 0 4 0 ?
+b1 4 4 0 ?
+b2 12 4 0 ?
+b3 16 4 0 ?
+func Sensor.injectCalibration 2137
+this -20 4 0 ?
+c -16 4 0 ref
+func Sensor.configure 2805
+this -16 4 0 ?
+rh 4 4 0 integer
+func Sensor.measure 2927
+this -16 4 0 ?
+tries 4 4 0 integer
+status 8 4 0 integer
+d 12 4 0 ?
+adcPres 16 4 0 integer
+adcTemp 20 4 0 integer
+adcHum 24 4 0 integer
+adcGas 28 4 0 integer
+gasRange 32 4 0 integer
+func Sensor.computeFromRaw 3361
+this -36 4 0 ?
+rawT -32 4 0 integer
+rawP -28 4 0 integer
+rawH -24 4 0 integer
+rawGas -20 4 0 integer
+gasRange -16 4 0 integer
+func Sensor.compTemp 3451
+this -20 4 0 ?
+adc -16 4 0 integer
+var1 8 8 0 double
+dd 16 8 0 double
+var2 24 8 0 double
+func Sensor.compPress 3596
+this -20 4 0 ?
+adc -16 4 0 integer
+var1 8 8 0 double
+var2 16 8 0 double
+p 24 8 0 double
+v3a 32 8 0 double
+v3b 40 8 0 double
+pp 48 8 0 double
+v3c 56 8 0 double
+func Sensor.compHum 4036
+this -20 4 0 ?
+adc -16 4 0 integer
+tc 8 8 0 double
+var1 16 8 0 double
+var2 24 8 0 double
+var3 32 8 0 double
+var4 40 8 0 double
+h 48 8 0 double
+func Sensor.compGasHigh 4331
+this -24 4 0 ?
+adc -20 4 0 integer
+gasRange -16 4 0 integer
+v1 8 4 0 integer
+v2 12 4 0 integer
+func Sensor.calcResHeat 4450
+this -24 4 0 ?
+target -20 4 0 integer
+amb -16 4 0 integer
+t 4 4 0 integer
+var1 8 8 0 double
+var2 16 8 0 double
+var3 24 8 0 double
+var4 32 8 0 double
+var5 40 8 0 double
+res 48 4 0 integer
+func Sensor.calcIaq 4726
+this -16 4 0 ?
+hum 4 8 0 double
+humScore 12 8 0 double
+gasScore 20 8 0 double
+func Sensor.temperature 5012
+this -16 4 0 ?
+func Sensor.pressure 5033
+this -16 4 0 ?
+func Sensor.humidity 5054
+this -16 4 0 ?
+func Sensor.gas 5075
+this -16 4 0 ?
+func Sensor.airIndex 5096
+this -16 4 0 ?
+func Sensor.chipID 5117
+this -16 4 0 ?
+func Sensor.variantID 5138
+this -16 4 0 ?
+func Sensor.gasIsValid 5159
+this -16 4 0 ?
+func Sensor.heaterStable 5180
+this -16 4 0 ?
+func Sensor.setGasBaseline 5201
+this -24 4 0 ?
+b -20 8 0 double
+func Sensor.__init 5219
+this -24 4 0 ?
+bus -20 4 0 ref
+addr -16 4 0 integer
+func __cls_new_Sensor 5259
+bus -20 4 0 ref
+addr -16 4 0 integer
+func __cls_init_Sensor 5296
+this -24 4 0 ?
+bus -20 4 0 ref
+addr -16 4 0 integer
+func __strconcat 5342
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 4 0 ?
+i 12 4 0 ?

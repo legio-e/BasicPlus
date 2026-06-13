@@ -1,0 +1,47 @@
+// ============================================================
+// Bme688Parity.bp — test de paridad dual-VM de la matemática de
+// compensación del BME688, SIN hardware.
+//
+// Inyecta una calibración sintética (42 bytes) y valores crudos
+// fijos, corre las fórmulas (double + int + bitwise + casts +
+// clase cross-module) e imprime. La salida DEBE ser byte-idéntica
+// en miVM (Java) y en bpgenvm-c (C). Si difiere, hay un bug de
+// codegen o de paridad — justo lo que buscamos antes de publicar.
+// ============================================================
+module Bme688Parity
+  import I2c
+  import Bme688
+
+  function dump(s: Bme688.Sensor, label: string, rawT: integer, rawP: integer, rawH: integer, rawGas: integer, gasRange: integer)
+    s.computeFromRaw(rawT, rawP, rawH, rawGas, gasRange)
+    print "== ", label, " =="
+    print "  T   = ", s.temperature()
+    print "  P   = ", s.pressure()
+    print "  HR  = ", s.humidity()
+    print "  gas = ", s.gas()
+    print "  IAQ = ", s.airIndex()
+  end dump
+
+  function Main()
+    var bus: I2c.Bus := I2c.Bus(0, 20, 21, I2c.FAST())
+    var s: Bme688.Sensor := Bme688.Sensor(bus, 0x77)
+    s.setGasBaseline(50000.0d)
+
+    // Calibración sintética de 42 bytes (orden del array de
+    // coeficientes Bosch). Elegida para que par_t2/p2/p5/p8/p9/
+    // h7/gh1/gh2 salgan con signo y par_p1 sea grande (rama de
+    // presión activa).
+    var c: integer[] := [ 0x84, 0x67, 0x03, 0x00, 0xA0, 0x8C, 0xFC, 0xD6, 0x58, 0x00,
+                          0x58, 0x1B, 0x9C, 0xFF, 0x0F, 0x1E, 0x00, 0x00, 0x04, 0xF7,
+                          0x3C, 0xF6, 0x1E, 0x3F, 0x20, 0x2D, 0x00, 0x2D, 0x14, 0x78,
+                          0x9C, 0x90, 0x65, 0x78, 0xEC, 0xE2, 0x12, 0x32, 0x00, 0x10,
+                          0x00, 0x00 ]
+    s.injectCalibration(c)
+
+    print "BME688 compensacion (sintetica) — debe coincidir byte a byte en ambas VMs"
+    dump(s, "set A", 510000, 410000, 25000, 600, 2)
+    dump(s, "set B", 480000, 415000, 30000, 700, 4)
+    dump(s, "set C", 525000, 405000, 18000, 450, 1)
+  end Main
+
+end Bme688Parity

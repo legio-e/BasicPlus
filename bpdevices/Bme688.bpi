@@ -1,0 +1,33 @@
+bpi 7
+module Bme688
+class Sensor public
+  layout 44 29 00000001|00000000 00000000|00000000
+  ctor(bus:I2c.Bus,addr:integer)
+  method s8(v:integer):integer public
+  method s16(v:integer):integer public
+  method writeReg(reg:integer,val:integer):void public
+  method readRegs(reg:integer,buf:integer[],n:integer):void public
+  method readReg(reg:integer):integer public
+  method begin():boolean public
+  method readCalibration():void public
+  method injectCalibration(c:integer[]):void public
+  method configure():void public
+  method measure():void public
+  method computeFromRaw(rawT:integer,rawP:integer,rawH:integer,rawGas:integer,gasRange:integer):void public
+  method compTemp(adc:integer):double public
+  method compPress(adc:integer):double public
+  method compHum(adc:integer):double public
+  method compGasHigh(adc:integer,gasRange:integer):double public
+  method calcResHeat(target:integer,amb:integer):integer public
+  method calcIaq():integer public
+  method temperature():double public
+  method pressure():double public
+  method humidity():double public
+  method gas():double public
+  method airIndex():integer public
+  method chipID():integer public
+  method variantID():integer public
+  method gasIsValid():boolean public
+  method heaterStable():boolean public
+  method setGasBaseline(b:double):void public
+end class
