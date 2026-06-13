@@ -1,0 +1,26 @@
+// BusBug.bp — repro MÍNIMO del Bug 3, con migas de pan para correr EN LA PICO 2.
+//
+// Objetivo: bisecar dónde muere el camino OO (clase I2c.Bus cross-module):
+//   - si imprime "1" pero no "2"  → muere en el CTOR (NEW_OBJECT cross-module
+//     via factory + initBus dentro del constructor).
+//   - si imprime "3" pero no "4"  → muere en el MÉTODO bus.read (INVOKE_VIRTUAL
+//     cross-module + leer this.id + builtin readBus).
+//   - si imprime "4" y "5"        → el camino OO FUNCIONA en la Pico; entonces
+//     el crash necesita algo que I2cScanOO tiene y esto no (scan, for-in,
+//     concat de string en hex2, try/catch cross-module) → bisecamos eso.
+//
+// Cableado real del sensor en la Pico 2: bus 0, SDA=GP20, SCL=GP21, addr 0x76
+// (donde el BMP280 ACK-ea), para que el read golpee un dispositivo PRESENTE.
+module BusBug
+  import I2c
+  function Main()
+    print "1: inicio"
+    var bus: I2c.Bus := I2c.Bus(0, 20, 21, 100000)
+    print "2: ctor ok"
+    var buf: integer[] := [7]
+    print "3: array ok  buf[0]=", buf[0]
+    var rc: integer := bus.read(0x76, buf, 1)
+    print "4: read ok  rc=", rc, "  buf[0]=", buf[0]
+    print "5: fin"
+  end Main
+end BusBug

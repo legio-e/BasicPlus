@@ -2060,15 +2060,19 @@ public class FrmMain extends javax.swing.JFrame
 
         java.util.List<Path> searchDirs = new java.util.ArrayList<>();
         if (outDir != null) searchDirs.add(outDir);
+        Path stdlibPath = null;
         try {
             edu.bpgenvm.config.VmConfig cfg =
                     edu.bpgenvm.config.VmConfig.loadDefaultFor(bpFile);
             if (cfg.devicesDir != null && !cfg.devicesDir.isEmpty())
                 searchDirs.add(java.nio.file.Paths.get(cfg.devicesDir));
-            if (cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty())
-                searchDirs.add(java.nio.file.Paths.get(cfg.stdlibDir));
+            if (cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
+                stdlibPath = java.nio.file.Paths.get(cfg.stdlibDir);
+                searchDirs.add(stdlibPath);
+            }
         } catch (Throwable ignored) { }
         if (bpFile.getParent() != null) searchDirs.add(bpFile.getParent());
+        final Path stdlibFirst = stdlibPath;   // para resolución core-first
 
         // Resolvemos TODOS los imports, incluidos los stdlib core. Antes
         // se saltaban asumiéndolos embebidos en el firmware; pero eso solo
@@ -2079,7 +2083,21 @@ public class FrmMain extends javax.swing.JFrame
         // para ambos targets sin asumir nada. (EMBEDDED_CORE_MODS se queda
         // como referencia documental de qué mods suele traer un firmware.)
         for (String imp : imports) {
-            for (Path dir : searchDirs) {
+            // BUGFIX (2026-06-13): la stdlib CORE se resuelve desde bpstdlib
+            // (stdlibDir) ANTES que outDir. Un X.mod rancio en outDir (de un
+            // compile viejo) tiene un layout de vtable de clase incompatible con
+            // la app recién compilada → en un método OO cross-module el
+            // INVOKE_VIRTUAL apunta a un slot inexistente → RuntimeError en el
+            // device (cazado con I2c.Bus.read: outDir tenía una I2c.mod de mayo
+            // que ensombrecía la fresca de bpstdlib). Para drivers de usuario
+            // seguimos con outDir primero (iterar sin tocar bpstdlib).
+            java.util.List<Path> order = searchDirs;
+            if (stdlibFirst != null && EMBEDDED_CORE_MODS.contains(imp)) {
+                order = new java.util.ArrayList<>();
+                order.add(stdlibFirst);
+                order.addAll(searchDirs);   // el break corta en el 1º; dup inocuo
+            }
+            for (Path dir : order) {
                 Path candidate = dir.resolve(imp + ".mod");
                 if (Files.isRegularFile(candidate)) {
                     result.add(candidate.toFile());

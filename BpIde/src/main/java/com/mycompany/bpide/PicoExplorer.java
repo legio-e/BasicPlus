@@ -611,27 +611,29 @@ public final class PicoExplorer extends JPanel {
                 String depRemote = isLib ? ("/lib/" + dep.getName())
                                          : toAppPath(dep.getName());
                 Long sz = remote.get(depRemote);
-                if (isLib && sz != null) {
-                    // stdlib ya en /lib (embebida del firmware o subida
-                    // antes) → NO la pisamos; es la compatible.
-                    if (outputSink != null) {
-                        SwingUtilities.invokeLater(() -> outputSink.accept(
-                                "[Explorer] " + depRemote + " pre-instalada, salto PUT"));
-                    }
-                } else {
-                    boolean up = putIfChanged(b, dep, depRemote, sz);
-                    if (!up && outputSink != null) {
-                        SwingUtilities.invokeLater(() -> outputSink.accept(
-                                "[Explorer] " + depRemote + " ya en FS (" + dep.length()
-                                + " bytes, contenido idéntico), salto PUT"));
-                    }
+                // ANTES: para stdlib en /lib confiábamos en la copia
+                // "pre-instalada" (embebida del firmware) y saltábamos el PUT.
+                // PELIGRO (bug cazado 2026-06-13): si el blob embebido viene de
+                // un frontend ANTERIOR, su layout de vtable de clase no casa con
+                // la app recién compilada → `INVOKE_VIRTUAL slot N no resoluble`
+                // → RuntimeError en CUALQUIER método OO de stdlib (I2c.Bus,
+                // Spi.Bus, Uart.Port, Rtc.Clock, ...). Top-level se salvaba
+                // (resuelve por índice de función), por eso el bug era sutil.
+                // AHORA: /lib pasa por el MISMO content-check (CRC32) que la app,
+                // de modo que la copia en FS siempre case con lo que compiló la
+                // app, auto-curando blobs embebidos rancios sin reflashear.
+                boolean up = putIfChanged(b, dep, depRemote, sz);
+                if (!up && outputSink != null) {
+                    SwingUtilities.invokeLater(() -> outputSink.accept(
+                            "[Explorer] " + depRemote + " ya en FS (" + dep.length()
+                            + " bytes, contenido idéntico), salto PUT"));
                 }
                 // Si el dep tiene .mdn alongside, subirlo también.
                 File depMdn = mdnSiblingOf(dep);
                 if (depMdn != null && depMdn.isFile()) {
                     String depMdnRemote = toAppPath(depMdn.getName());
-                    boolean up = putIfChanged(b, depMdn, depMdnRemote, remote.get(depMdnRemote));
-                    if (up && outputSink != null) {
+                    boolean upMdn = putIfChanged(b, depMdn, depMdnRemote, remote.get(depMdnRemote));
+                    if (upMdn && outputSink != null) {
                         SwingUtilities.invokeLater(() -> outputSink.accept(
                                 "[Explorer] subido AOT " + depMdnRemote + " ("
                                 + depMdn.length() + " bytes)"));
