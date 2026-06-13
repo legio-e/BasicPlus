@@ -243,6 +243,46 @@ no se apuntala con prisa ya metidos en el pozo. El bug JEDEC de esta sesión ("n
 enumera, no sé por qué", resuelto con 4 capturas y triangulación) se habría
 señalado solo: *"murió tras el primer save del FS"*.
 
+### Pagar doble: fiabilidad en campo (V3)
+
+Más allá del bring-up, la miga de pan sirve al dispositivo desplegado:
+- **Distinguir "morí arrancando" de "estaba corriendo y peté".** Un flag "sano"
+  que se marca al llegar a RUNNING estable; un fallo lo borra y anota el PC. Al
+  rearrancar sabes si el bug fue de bring-up (etapa X) o de runtime (crash con la
+  VM ya en marcha) — dos bichos distintos.
+- **Contador de reset → guardia anti-bucle del autorun.** Si la miga cuenta "5
+  resets en 10 s", el firmware detecta bucle de crash y cae a **modo seguro**: NO
+  relanza la app que peta, espera al IDE. Hace robusto el "dispositivo autónomo"
+  de V2 (autorun + Stop).
+
+### Investigación pendiente (V3): qué sobrevive en cada familia
+
+Hallazgo (web + a confirmar en placa, 13-jun): el **RP2350 tiene dominio
+always-on** (POWMAN: `BOOT[0..3]`, `watchdog->scratch[0..7]`) y **la SRAM no se
+borra en reset** → sobrevive a reset/sleep. PERO **no parece tener un dominio con
+backup de pila** estilo VBAT: el "always-on" es "siempre encendido *mientras el
+chip tiene alimentación*". → **quitar la alimentación lo borra, y una pila de
+botón probablemente NO ayuda en la Pico2/Metro** (no hay pin de backup como en
+STM32). La pila de botón es cosa de **STM32** (VBAT + BKPxR/BKPSRAM reales).
+*Implicación:* en RP2350, para que la miga sobreviva a un reset manual, usar
+**reset templado** (RUN/watchdog/soft), no quitar la alimentación; si se quita,
+el único recurso es el **log en flash** (sí sobrevive a power-off).
+
+Matriz de test a rellenar en placa (V3):
+
+| Tipo de reset | ¿sobrevive scratch / BOOT / noinit-RAM? |
+|---|---|
+| soft reset (`watchdog_reboot`) | esperado SÍ |
+| timeout del watchdog | esperado SÍ (para eso existen los scratch) |
+| pin RUN / botón de reset | **a comprobar** (puede ser más "duro") |
+| power cycle (quitar alimentación) | esperado NO |
+| + pila de botón | RP2350: probablemente no aplica · STM32: SÍ |
+
+Probe mínima (V3): firmware que escribe un magic + contador en scratch/noinit-RAM,
+provoca cada tipo de reset y reporta si el magic sobrevivió. Cierra el diseño del
+facade `bpvm_port_crumb_*` por familia. **Nada de esto es V2** (freeze): es diseño
+e investigación para V3.
+
 ## Infraestructura que el GUI arrastra (movida desde V2)
 
 - **Dual-core** (#153): un núcleo a lo gráfico para un rendimiento equilibrado.
