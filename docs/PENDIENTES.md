@@ -701,6 +701,19 @@ NO existe en BP — es `!=`) CUELGA el compilador (loop infinito tras
 convertirlo en error de sintaxis con sugerencia ("¿querías !=?") o al
 menos no colgar. Pequeño, candidato a hueco suelto.
 
+**N-parse-recover-semantic ✅ ARREGLADO (2026-06-13)**: cuando había un
+error de PARSEO, el compilador abortaba ANTES del análisis semántico y se
+tragaba errores reales de otras funciones (Eduardo: dos errores de la
+misma línea por un `ms=-ms`, mientras una `j` no declarada en otra
+función pasaba inadvertida). El parser ya se recupera a nivel
+statement/función (#115/#116), así que ahora Main.java corre igualmente
+el análisis semántico sobre el AST recuperado para REPORTAR esos errores
+(protegido con try/catch; nunca genera .mod tras un error de parseo).
+Verificado: el caso de Eduardo da ahora 3 diagnósticos en una pasada
+(léxico+sintáctico del `=` + semántico `identificador no resuelto: 'j'`).
+Nota: el doble mensaje léxico+sintáctico del `=` mal puesto es de fases
+distintas (carácter ilegal vs estructura) — se deja, ambos apuntan bien.
+
 **N-pubvar-warn (v3)**: `public var` a nivel módulo se acepta y se IGNORA
 en silencio (la var no se exporta al .bpi — verificado 2026-06-13 con el
 probe PubVar.bp revisando la gramática con Eduardo). Debería avisar como

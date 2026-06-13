@@ -304,6 +304,36 @@ public final class Main {
             if (parsed == null) return false;
             if (!parsed.lexer.getErrors().isEmpty() || !parsed.parser.getErrors().isEmpty()) {
                 ctx.totalErrors += parsed.lexer.getErrors().size() + parsed.parser.getErrors().size();
+                // N-parse-recover-semantic — el parser se recupera a nivel
+                // sentencia/función (synchronize / synchronizeToFunctionEnd),
+                // así que tras un error de parseo suele quedar un AST
+                // utilizable. Corremos el análisis semántico sobre él PARA
+                // REPORTAR MÁS ERRORES REALES (p.ej. una variable no declarada
+                // en una función que sí parseó), en vez de ocultarlos
+                // abortando. El error de sintaxis queda contenido en su
+                // función por el recovery; el resto del módulo se analiza.
+                // NUNCA generamos .mod tras un error de parseo. Protegido: un
+                // AST parcial podría hacer petar al analyzer o a la carga de
+                // imports → si algo falla, nos quedamos con los de parseo.
+                if (parsed.module != null) {
+                    try {
+                        SemanticAnalyzer recAnalyzer = new SemanticAnalyzer();
+                        injectImplicitCoreImport(parsed.module);
+                        if (parsed.module.imports != null) {
+                            for (Ast.ImportNode imp : parsed.module.imports) {
+                                try { ensureInterfaceForImport(imp, src, ctx, depth + 1); }
+                                catch (Exception ignored) { /* import irresoluble: lo marcará el análisis */ }
+                            }
+                        }
+                        loadImportsForAnalyzer(parsed.module, src, ctx, recAnalyzer, depth + 1);
+                        SemanticInfo recInfo = recAnalyzer.analyze(parsed.module);
+                        if (depth == 0) printSemantics(recInfo, parsed.module);
+                        ctx.totalErrors += countSemErrors(recInfo);
+                    } catch (RuntimeException ignored) {
+                        // AST demasiado roto para un análisis fiable: bastan
+                        // los errores de parseo ya reportados.
+                    }
+                }
                 indent(depth); System.err.println("compilación abortada por errores de parseo en " + srcAbs.getFileName());
                 return false;
             }
