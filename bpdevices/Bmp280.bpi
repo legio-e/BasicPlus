@@ -1,0 +1,18 @@
+bpi 7
+module Bmp280
+class Sensor public
+  layout 21 14 00000000 00000000
+  ctor(busId:integer,addr:integer)
+  method s16(v:integer):integer public
+  method writeReg(reg:integer,val:integer):void public
+  method readRegs(reg:integer,buf:integer[],n:integer):void public
+  method readReg(reg:integer):integer public
+  method begin():boolean public
+  method readCalibration():void public
+  method measure():void public
+  method compTemp(adc:integer):double public
+  method compPress(adc:integer):double public
+  method temperature():double public
+  method pressure():double public
+  method chipID():integer public
+end class
