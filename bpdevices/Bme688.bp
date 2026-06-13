@@ -22,21 +22,26 @@
 // Uso (en placa):
 //   import I2c
 //   import Bme688
-//   var bus: I2c.Bus    := I2c.Bus(0, 20, 21, I2c.FAST())
-//   var s:   Bme688.Sensor := Bme688.Sensor(bus, 0x77)
+//   I2c.init(0, 20, 21, 100000)               // bus 0, SDA=GP20, SCL=GP21
+//   var s: Bme688.Sensor := Bme688.Sensor(0, 0x76)   // (busId, addr)
 //   if s.begin() then
 //     s.measure()
 //     print "T=", s.temperature(), "C  HR=", s.humidity(), "%"
 //     print "P=", s.pressure(), "hPa  gas=", s.gas(), "ohm  IAQ~", s.airIndex()
 //   endif
+//
+// NOTA: el driver usa las FUNCIONES top-level I2c.* (no los métodos de
+// I2c.Bus), porque pasar un array a un método de clase cross-module hoy
+// revienta en la VM del micro (bug conocido, a arreglar). Direcciones del
+// BME680/688: 0x76 o 0x77.
 // ============================================================
 module Bme688
   import I2c
 
   public class Sensor
     // ---- conexión ----
-    public var bus:  I2c.Bus
-    public var addr: integer
+    public var busId: integer
+    public var addr:  integer
     public var chip: integer
     public var variant: integer
 
@@ -80,9 +85,9 @@ module Bme688
     // baseline de gas (Ω en "aire limpio") para el índice IAQ
     public var gasBaseline: double
 
-    public function Sensor(bus: I2c.Bus, addr: integer)
-      this.bus  := bus
-      this.addr := addr
+    public function Sensor(busId: integer, addr: integer)
+      this.busId := busId
+      this.addr  := addr
       this.gasBaseline := 50000.0d
     end Sensor
 
@@ -104,13 +109,13 @@ module Bme688
     // ================= acceso a registros =================
     public function writeReg(reg: integer, val: integer)
       var b: integer[] := [reg, val]
-      this.bus.write(this.addr, b, 2)
+      I2c.write(this.busId, this.addr, b, 2)
     end writeReg
 
     public function readRegs(reg: integer, buf: integer[], n: integer)
       var p: integer[] := [reg]
-      this.bus.write(this.addr, p, 1)
-      this.bus.read(this.addr, buf, n)
+      I2c.write(this.busId, this.addr, p, 1)
+      I2c.read(this.busId, this.addr, buf, n)
     end readRegs
 
     public function readReg(reg: integer): integer

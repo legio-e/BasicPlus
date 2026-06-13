@@ -1,45 +1,50 @@
 // ============================================================
-// Bme688Demo.bp — demo en placa del sensor Bosch BME688
-// (Adafruit 5046, STEMMA QT) sobre la Metro RP2350.
+// Bme688Demo.bp — demo en placa del sensor Bosch BME688/BME680
+// (Adafruit 5046 o módulo BME680) por I2C, sobre la Metro RP2350.
 //
 // Lee temperatura, humedad, presión y resistencia de gas (VOC) +
 // un índice IAQ aproximado, en bucle. Recordatorio: el BME688 NO
 // mide CO2; el IAQ es una heurística, no BSEC.
 //
-// El bucle es infinito A PROPÓSITO: sirve para probar el Stop del
-// IDE / comando kill y el autorun (/sys/auto.txt). El Stop lo
-// corta limpiamente sin resetear la placa.
+// Usa las FUNCIONES top-level I2c.* (init/scan) y el driver Bme688,
+// que internamente también usa top-level — NO los métodos de
+// I2c.Bus (que hoy revientan al pasar un array a un método de clase
+// cross-module en la VM del micro; bug conocido, a arreglar aparte).
+//
+// El bucle es infinito a propósito: prueba el Stop del IDE / kill.
 // ============================================================
 module Bme688Demo
   import I2c
   import Bme688
 
   function Main()
-    // Puerto STEMMA QT de la Metro RP2350 = I2C0, SDA=GP20, SCL=GP21
-    // (confirmado con el pinout de Adafruit). El BME688 (5046)
-    // responde en 0x77 (por defecto) o 0x76 — el scan lo confirma.
-    var bus: I2c.Bus := I2c.Bus(0, 20, 21, I2c.FAST())
+    // Bus 0, SDA=GP20, SCL=GP21 (donde está cableado el sensor).
+    var BUS: integer := 0
+    var SDA: integer := 20
+    var SCL: integer := 21
+    I2c.init(BUS, SDA, SCL, 100000)
 
     print "Escaneando bus I2C..."
-    var devs: integer[] := bus.scan()
+    var devs: integer[] := I2c.scan(BUS)
     var i: integer := 0
     while i < len(devs) do
       print "  dispositivo I2C (dec) = ", devs[i]
       i := i + 1
     endwh
 
-    var s: Bme688.Sensor := Bme688.Sensor(bus, 0x77)
+    // El BME680/688 responde en 0x76 (118) o 0x77 (119).
+    var s: Bme688.Sensor := Bme688.Sensor(BUS, 0x76)
     if s.begin() then
-      print "BME688 OK: chip (dec)=", s.chipID(), " variante (dec)=", s.variantID()
-      print "(gas = VOC; IAQ aproximado 0..100, mayor = aire mas limpio; NO es CO2)"
+      print "BME OK: chip (dec)=", s.chipID(), " variante (dec)=", s.variantID()
+      print "(variante 0 = BME680, 1 = BME688; gas = VOC; IAQ aproximado, NO es CO2)"
       while true do
         s.measure()
         print "T=", s.temperature(), "C  HR=", s.humidity(), "%  P=", s.pressure(), "hPa"
-        print "   gas=", s.gas(), "ohm  IAQ~", s.airIndex(), "  valido=", s.gasIsValid(), " heater=", s.heaterStable()
+        print "   gas=", s.gas(), "ohm  IAQ~", s.airIndex()
         sleep(2000)
       endwh
     else
-      print "BME688 no encontrado (chip dec=", s.chipID(), "). Revisa pines/direccion del scan."
+      print "BME no encontrado en 0x76 (chip dec=", s.chipID(), "). Prueba 0x77 o revisa el scan."
     endif
   end Main
 

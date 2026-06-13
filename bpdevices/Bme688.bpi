@@ -1,8 +1,8 @@
 bpi 7
 module Bme688
 class Sensor public
-  layout 44 29 00000001|00000000 00000000|00000000
-  ctor(bus:I2c.Bus,addr:integer)
+  layout 44 29 00000000|00000000 00000000|00000000
+  ctor(busId:integer,addr:integer)
   method s8(v:integer):integer public
   method s16(v:integer):integer public
   method writeReg(reg:integer,val:integer):void public
