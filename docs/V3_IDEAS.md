@@ -289,6 +289,43 @@ provoca cada tipo de reset y reporta si el magic sobrevivió. Cierra el diseño 
 facade `bpvm_port_crumb_*` por familia. **Nada de esto es V2** (freeze): es diseño
 e investigación para V3.
 
+### Cómo encoger el rojo/ámbar (análisis 13-jun — "el tamaño del rojo = coste de migrar")
+
+Principio: casi cada caja roja es **lógica portable + un primitivo de silicio**.
+Separándolos, la lógica sube a verde y el rojo queda en un puñado de funciones.
+
+| Caja hoy | Veredicto |
+|---|---|
+| Comms (framing) ámbar | framing del wire v1 = lógica de bytes → **VERDE**; rojo = `read_bytes`/`write_bytes` (ya casi en `comm_common`) |
+| FS facade ámbar + Flash backend rojo | lógica del FS (árbol /sys //lib //app, ops) → **VERDE**; rojo = *block device* `read`/`prog`/`erase` (estilo littlefs) |
+| Arranque rojo | la *secuencia* por etapas → **VERDE** (mismo state-machine que la observabilidad de §6); rojo = primitivas `clocks_init`/`mem_init` |
+| Memoria rojo | heap+GC ya **VERDE**; rojo = `port_get_heap(&size)`; el *tamaño* = **DATO** (BpVM.cfg) |
+| Periféricos backend rojo | pokes de registros = rojo irreductible; pines/nº GPIO/bus = **DATO** (board.json) |
+| Transporte rojo | ya mínimo (2 funcs); no sube (es el HW) |
+| Port FreeRTOS rojo | **un** fichero para todos los FreeRTOS (ya es el modelo) + capa **ARM-CM común** |
+| AOT / .mdn ámbar | depende de la ISA (ARM), no de la placa; está bien donde está |
+
+Tres mecanismos:
+1. **Sacar lógica común al núcleo** (rojo→verde): comms, FS, boot, memoria — separar
+   lógica del primitivo. Arriba portable; abajo una lista corta de funciones.
+2. **Variación en DATO, no código** (rojo/ámbar → fichero, fuera del código): el
+   `board_desc` data-driven hace que una Pico vs una Metro sea un JSON, no un `#ifdef`
+   ni un build distinto (#258/#134/#225 — "una imagen por familia").
+3. **Compartir por ARQUITECTURA, no por placa** (rojo→ámbar compartido): RP2350 y
+   STM32 son ambos Cortex-M33 → comparten Thumb-2/AOT, AAPCS, port ARM de FreeRTOS,
+   NVIC/SysTick/fault. Mucho "rojo" de STM32 y RP2350 es código ARM común → capa
+   por-arquitectura. El rojo por-vendor queda en: relojes, controlador de flash,
+   USB/UART, controlador de memoria, pin mux.
+
+**Irreductiblemente rojo** (honestidad): init de relojes (RCC/PLL/QMI), pokes de
+periféricos, init de PSRAM/SDRAM, primitivo de transporte. Pequeños y acotados — el
+objetivo es que el rojo sea "toca estos registros para este chip", y nada más.
+
+**Métrica:** "reducir el rojo" = **hacer `bpvm_port.h` más corto**. El largo del
+contrato *es* el coste de portar. **ROI:** abstraer ahora ahorra en cada port después
+(merece la pena con 3+ ports y el P4 RISC-V en camino); para un concern de un solo
+port, no. Mover el FS a block-device cambia comportamiento → la **paridad** lo cubre.
+
 ## Infraestructura que el GUI arrastra (movida desde V2)
 
 - **Dual-core** (#153): un núcleo a lo gráfico para un rendimiento equilibrado.
