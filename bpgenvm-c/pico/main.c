@@ -123,14 +123,22 @@ static void pico_i2c_init_impl(int bus, int sda, int scl, int baud) {
     gpio_pull_up((uint) sda);
     gpio_pull_up((uint) scl);
 }
+/* Timeout en vez de bloqueante puro: un dispositivo ausente o un bus
+ * atascado devuelve error limpio (-1) en lugar de colgar/abortar el
+ * periférico, que en el RP2350 podía tumbar el run (RuntimeError no
+ * atrapable). Imprescindible para que I2c.scan() tolere direcciones
+ * vacías. Holgura: 2 ms fijos + 1 ms/byte (a 100 kHz un byte son ~0,2 ms,
+ * así que no hay falsos timeouts con un dispositivo real). */
 static int pico_i2c_write_impl(int bus, int addr, const uint8_t* data, size_t n) {
     i2c_inst_t* inst = i2c_inst_for(bus);
-    int r = i2c_write_blocking(inst, (uint8_t) addr, data, n, false);
+    int r = i2c_write_timeout_us(inst, (uint8_t) addr, data, n, false,
+                                 (uint) (2000u + 1000u * n));
     return (r < 0) ? -1 : r;
 }
 static int pico_i2c_read_impl(int bus, int addr, uint8_t* data, size_t n) {
     i2c_inst_t* inst = i2c_inst_for(bus);
-    int r = i2c_read_blocking(inst, (uint8_t) addr, data, n, false);
+    int r = i2c_read_timeout_us(inst, (uint8_t) addr, data, n, false,
+                                (uint) (2000u + 1000u * n));
     return (r < 0) ? -1 : r;
 }
 static const bpvm_i2c_backend_t s_pico_i2c_backend = {
