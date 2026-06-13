@@ -77,6 +77,40 @@ generaliza.
    GUI = feature de clase PSRAM/SDRAM (F769I-DISCO 4" táctil + 16 MB SDRAM ya
    disponible; Metro + PSRAM).
 
+### Kits gráficos disponibles (validación cross-family)
+
+Eduardo tiene **varios kits con pantalla, cada uno de una familia de fabricante
+distinta** → banco de pruebas ideal para que el GUI sea de verdad cross-family
+(lo que cambia por placa es el driver de display/táctil; el API `Gui.*` y LVGL
+por encima, no). **Empezar por uno** — el **STM32F769I-DISCO** (4" táctil DSI +
+16 MB SDRAM) es el mejor candidato — y, si va bien, **ampliar al resto**: misma
+mecánica que el despliegue de micros en V2 (Pico → ESP32 → STM32). Alimenta el
+#258 (árbol familia/micro/placa). *(Listar aquí los kits concretos cuando se
+confirmen.)*
+
+### Orden de trabajo (la senda que ya funcionó: VM-Java → VM-C → VM-micro)
+
+Metodología de V1/V2: probar primero en Java (iteración rápida + debugger),
+luego portar a la VM-C de host, luego al micro. Aplicada al GUI:
+
+0. **(Decisión previa) Bake-off Swing vs JavaFX** para el backend Java del GUI —
+   barato, decide con evidencia. JavaFX parte con ventaja (scene graph *retained*
+   ≈ árbol de LVGL → más fácil mantener la paridad de comportamiento). **Matiz:
+   la VM-Java NO se "migra"** (es headless, hoy no tiene GUI) — se le *añade* un
+   backend `Gui.*` nuevo, en JavaFX o Swing según el bake-off; el intérprete no
+   se toca. El único *migrar* de verdad es el **IDE** (Swing→JavaFX).
+   **[BIFURCACIÓN ABIERTA, decide Eduardo]** IDE: ¿migración prerequisito duro, o
+   diferida/oportunista? Recomendación: **diferida** — el IDE ya funciona;
+   migrar "por si acaso" es coste/riesgo sin beneficio inmediato; se justifica
+   solo si se quiere el mismo toolkit para un preview/diseñador de GUI embebido.
+1. **miVM (Java)**: definir el API `Gui.*` + modelo de eventos. El upcall aquí es
+   trivial (Java llama a su propio intérprete, sin JNI) → el sitio más barato
+   para fijar la semántica del API y los eventos, con debugger.
+2. **VM-C host**: LVGL + simulador SDL; aquí el upcall C→BP de verdad
+   (generalizar `call_bp` #210). Arranca la paridad de comportamiento miVM↔VM-C.
+3. **VM-micro**: LVGL sobre el TFT — Discovery primero (driver display+táctil,
+   SDRAM, dual-core #153); luego ampliar a los demás kits (cross-family).
+
 ### Disciplina / coste
 
 - `Gui.*` **pequeño** (mínimo común que LVGL y el backend Java puedan honrar) —
