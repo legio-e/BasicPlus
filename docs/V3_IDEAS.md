@@ -169,6 +169,12 @@ luego portar a la VM-C de host, luego al micro. Aplicada al GUI:
 > rollout de kits gráficos** (3 bring-ups nuevos, uno RISC-V). Charla 13-jun.
 > Meta-regla del proyecto: *analizar → programar*; esto es "analizar el análisis".
 
+**Cuándo hacerlo (timing en el orden de trabajo §1):** justo **antes de bajar a la
+fase VM-micro** (paso 3). En la fase Java (miVM) NO hace falta — el debugger lo ve
+todo; en VM-C host, casi tampoco. Es en el **descenso al micro** donde gana su
+sueldo (Eduardo, 13-jun: "para la parte gráfica en Java no hace falta; en los
+micros, toda ayuda es bienvenida"). Construirlo justo entonces, no antes.
+
 ### Estado de partida (medido, no impresión)
 
 El **núcleo es ya independiente de la máquina**: **0 `#ifdef` de plataforma** en
