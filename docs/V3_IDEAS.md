@@ -162,6 +162,87 @@ luego portar a la VM-C de host, luego al micro. Aplicada al GUI:
   Workstream propio, independiente del lenguaje/VM.
 - Horizonte (stretch): un **diseñador visual de GUI** en el IDE que emita BP.
 
+## 6. Portabilidad (núcleo + capa de port) y observabilidad de bring-up
+
+> Tema fundacional y cross-cutting: abarata cada port nuevo y ataca el "momento
+> oscuro" (el micro no arranca y no se ve por qué). **Habilitador directo del
+> rollout de kits gráficos** (3 bring-ups nuevos, uno RISC-V). Charla 13-jun.
+> Meta-regla del proyecto: *analizar → programar*; esto es "analizar el análisis".
+
+### Estado de partida (medido, no impresión)
+
+El **núcleo es ya independiente de la máquina**: **0 `#ifdef` de plataforma** en
+interp/bpvm/loader/link/heap/builtins/exceptions/scheduler/threading/mdn_loader
+(grep 13-jun). Habla solo con **facades finos**, patrón `bpvm_platform.h` (handles
+opacos, backend elegido al enlazar: `platform_pthread.c` host / `platform_freertos.c`
+micro). Ya hay facade de: threading+tiempo, comms (`bpvm_comm.h` + `comm_common.c`),
+FS (`bpvm_fs.h`), net (`bpvm_net.h`), periféricos. **El host (PC) es un port más**
+(`*_host.c`) → el *port de referencia*, depurable.
+
+### Lo que falta de la capa de port
+
+- **Boot + provisión de memoria** es el único concern SIN facade — vive ad-hoc en
+  cada `main.c`/`board_desc`, y no es casualidad que sea ahí donde duele el
+  bring-up. → darle el mismo trato (un `bpvm_boot.h`/`bpvm_mem.h` fino).
+- **`PORTING.md` + esqueleto de port**: "para un micro nuevo, implementa estos
+  facades + un `board_desc`". Convierte el coste por port en una checklist
+  decreciente (objetivo: esfuerzo de migración cada vez menor).
+- **Test de conformidad de port**: valida cada facade ANTES de arrancar la VM.
+- Regla: **traer todo en el host primero** (donde se ve); en el micro solo difiere
+  la capa de port → si falla en micro y va en host, el bug está en el port
+  (pequeño), no en el núcleo (grande, probado).
+
+### Observabilidad de bring-up — "ver dentro del momento oscuro"
+
+Causa raíz del black-box: lo que necesitas para depurar (las comms) es justo la
+parte difícil de portar → pez que se muerde la cola. Escalera de diagnóstico,
+**complementaria al log de flash** (que ya es útil), ordenada por *qué sobrevive*:
+
+| Mecanismo | Sobrevive a | Coste | Para qué |
+|---|---|---|---|
+| LED / código de parpadeo | (solo en vivo) | 1 pin | señal mínima de etapa; limitado |
+| UART de debug 1-vía (levantada la 1ª) | (solo en vivo) | 1 pin, sin USB/FS | *ojos* aunque USB/FS/VM rotos |
+| **Miga de pan en RAM de backup/RTC** | **reset + cuelgue** | ~8 words | "¿dónde morí?" legible al rearrancar |
+| Backup VBAT (STM32) | reset + power-off | pila | idem, sobrevive a apagón |
+| Log en flash | reset + power-off + historia | FS arriba | la historia completa, por el wire |
+
+- **Boot por etapas con checkpoint**: `RESET → RELOJES → SRAM → PSRAM/SDRAM → FS →
+  TRANSPORTE → VM_CARGADA → RUNNING`. Cada etapa escribe su id en la miga de pan;
+  al colgarse, la última marca = dónde murió.
+- **La miga de pan (idea de Eduardo, 13-jun): RAM de backup del RTC.** Casi todos
+  los micros tienen un RTC con RAM/registros en el dominio always-on que sobreviven
+  a reset y a cuelgue. Mismo facade, backend POR FAMILIA:
+  - **STM32**: registros de backup (`RTC->BKPxR`) y/o BKPSRAM — dominio VBAT,
+    sobrevive incluso a power-off con pila.
+  - **RP2350**: `watchdog->scratch[0..7]` (8 words always-on; el bootrom ya los usa
+    para el motivo de reboot) — sobrevive a reset; o SRAM con magic number.
+  - **ESP32 (S3/P4)**: RTC slow memory (`RTC_NOINIT_ATTR`) — sobrevive a reset y
+    deep-sleep.
+  Contrato universal satisfacible: ~8 × 32-bit (magic + etapa + causa/PC del fallo
+  + contador de reset).
+- **Combo matador para los CUELGUES: miga de pan + watchdog.** Un cuelgue silencioso
+  (ni LED ni log ayudan) → el WDT resetea → al rearrancar, la miga dice "colgué en la
+  etapa X". Convierte un cuelgue mudo en un reboot con causa.
+- **Por qué refuerza el log, no lo sustituye** (Eduardo): el log necesita el FS
+  arriba (driver de flash OK) → en un bug de boot temprano o del propio flash (¡el
+  bug JEDEC!) el log está ciego justo cuando más lo necesitas. La miga de pan no
+  necesita NADA (ni FS ni flash, solo escribir un registro) → cubre exactamente la
+  ventana pre-FS que el log no alcanza. Log = historia rica; miga = último suspiro
+  instantáneo, legible aunque no funcione nada más. Son complementarios.
+- **SWD/JTAG** como verdad absoluta (openocd/gdb por placa) + `HardFault_Handler`
+  mínimo que vuelca PC/causa a la miga antes de resetear.
+- **Self-test de port**: en un port nuevo, lo PRIMERO — test de RAM/PSRAM/flash/
+  loopback del transporte por la UART de debug, antes de la VM. Separa "HW/init
+  mal" de "lógica de VM mal".
+
+### Síntesis: observabilidad DENTRO del contrato de port
+
+`bpvm_port_boot_stage(id)` + `bpvm_port_crumb_*()` como parte del contrato,
+enrutados a LED + UART de debug + RAM de backup. Un port nuevo **nace con ojos**,
+no se apuntala con prisa ya metidos en el pozo. El bug JEDEC de esta sesión ("no
+enumera, no sé por qué", resuelto con 4 capturas y triangulación) se habría
+señalado solo: *"murió tras el primer save del FS"*.
+
 ## Infraestructura que el GUI arrastra (movida desde V2)
 
 - **Dual-core** (#153): un núcleo a lo gráfico para un rendimiento equilibrado.
