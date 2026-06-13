@@ -1590,13 +1590,21 @@ public final class SemanticAnalyzer {
         }
 
         if (a.op == AssignOpKind.PLUS_ASSIGN || a.op == AssignOpKind.MINUS_ASSIGN) {
-            boolean ok = (lhsT.isNumeric() && rhsT.isNumeric())
-                    || (a.op == AssignOpKind.PLUS_ASSIGN
-                        && lhsT instanceof PrimitiveType && ((PrimitiveType) lhsT).tag == PrimitiveType.Kind.STRING
-                        && rhsT instanceof PrimitiveType && ((PrimitiveType) rhsT).tag == PrimitiveType.Kind.STRING);
-            if (!ok) {
-                String opStr = a.op == AssignOpKind.PLUS_ASSIGN ? "+=" : "-=";
-                err(a.line, a.column, "operandos incompatibles para '" + opStr + "': '" + lhsT.display() + "' y '" + rhsT.display() + "'");
+            // Anti-cascada (#232): si un operando ya es <error> (p.ej. el target
+            // es un identificador no resuelto), el error real ya se reportó
+            // aguas arriba. No emitimos un "incompatible" espurio — que además
+            // filtraría el tipo interno '<error>' al usuario. La rama ':=' de
+            // abajo ya está cubierta por ErrorType.isAssignableFrom; aquí el
+            // chequeo usa isNumeric() directo, así que la guarda es explícita.
+            if (!(lhsT instanceof ErrorType) && !(rhsT instanceof ErrorType)) {
+                boolean ok = (lhsT.isNumeric() && rhsT.isNumeric())
+                        || (a.op == AssignOpKind.PLUS_ASSIGN
+                            && lhsT instanceof PrimitiveType && ((PrimitiveType) lhsT).tag == PrimitiveType.Kind.STRING
+                            && rhsT instanceof PrimitiveType && ((PrimitiveType) rhsT).tag == PrimitiveType.Kind.STRING);
+                if (!ok) {
+                    String opStr = a.op == AssignOpKind.PLUS_ASSIGN ? "+=" : "-=";
+                    err(a.line, a.column, "operandos incompatibles para '" + opStr + "': '" + lhsT.display() + "' y '" + rhsT.display() + "'");
+                }
             }
         } else {
             if (rhsT instanceof NullType && lhsT.isScalar())

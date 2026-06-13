@@ -714,6 +714,16 @@ Verificado: el caso de Eduardo da ahora 3 diagnósticos en una pasada
 Nota: el doble mensaje léxico+sintáctico del `=` mal puesto es de fases
 distintas (carácter ilegal vs estructura) — se deja, ambos apuntan bien.
 
+**N-compound-assign-poison ✅ ARREGLADO (2026-06-13)**: de rebote del
+anterior, `j += 1` con `j` no declarada daba DOS errores: el real
+("no resuelto: j") + una cascada "operandos incompatibles para '+=':
+'<error>' y 'integer'" que encima FILTRABA el tipo interno `<error>`.
+El poisoning de #232 cubría los operadores binarios pero no la rama
+`+=`/`-=` del compound-assign (usa isNumeric() directo). Fix: misma
+guarda — si un operando es ErrorType, no se emite el "incompatible".
+Verificado: `j += 1` → 1 error; `s += 1` (string+=integer real) sigue
+detectándose. La rama `:=` ya estaba cubierta por isAssignableFrom.
+
 **N-pubvar-warn (v3)**: `public var` a nivel módulo se acepta y se IGNORA
 en silencio (la var no se exporta al .bpi — verificado 2026-06-13 con el
 probe PubVar.bp revisando la gramática con Eduardo). Debería avisar como
