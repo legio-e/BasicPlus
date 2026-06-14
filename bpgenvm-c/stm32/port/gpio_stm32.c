@@ -25,6 +25,7 @@
 
 #include "bpvm_gpio.h"
 #include "bpvm_pico.h"
+#include "bpvm_spi.h"
 
 #include "main.h"   /* HAL + CMSIS (GPIOA.., UID_BASE, SystemCoreClock) */
 
@@ -173,8 +174,111 @@ static const bpvm_pico_backend_t s_pico_backend = {
     .gpioCount     = stm32_gpio_count_impl,
 };
 
+/* ===================== SPI (H15.1) =====================================
+ * Backend SPI sobre la HAL. MODELO ACTUAL (MVP): CubeMX ya inicializo
+ * SPI1/SPI2 al boot (hspi1/hspi2 globales); aqui (re)ajustamos formato +
+ * baud y ASIGNAMOS los pines que el usuario pasa en el .bp (dinamico: el
+ * programa elige los pines). bus 0 -> SPI1, bus 1 -> SPI2 (ambos AF5). El
+ * CS lo gestiona el usuario por GPIO, igual que en la Pico.
+ *
+ * Reloj de SPI = SYSCLK (160 MHz, segun el MspInit de CubeMX) -> el
+ * prescaler se elige del baud pedido.
+ *
+ * [v3 "lo correcto"] que crear el objeto ACTIVE el periferico + clock y
+ * asigne pines, sin depender del init de CubeMX en el boot.
+ */
+extern SPI_HandleTypeDef hspi1;
+extern SPI_HandleTypeDef hspi2;
+
+static SPI_HandleTypeDef* spi_handle(int bus) {
+    switch (bus) {
+        case 0: return &hspi1;   /* SPI1 */
+        case 1: return &hspi2;   /* SPI2 */
+        default: return NULL;
+    }
+}
+
+/* Configura un pin (modelo plano puerto<<4|bit) en Alternate Function. */
+static void cfg_af_pin(int pin, uint8_t af) {
+    int idx = pin >> 4;
+    int bit = pin & 0x0F;
+    GPIO_TypeDef* port = port_of(idx);
+    if (!port) return;
+    enable_port_clk(idx);
+    GPIO_InitTypeDef g = {0};
+    g.Pin       = (uint32_t) (1u << bit);
+    g.Mode      = GPIO_MODE_AF_PP;
+    g.Pull      = GPIO_NOPULL;
+    g.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    g.Alternate = af;
+    HAL_GPIO_Init(port, &g);
+}
+
+/* Prescaler SPI que da la mayor frecuencia <= baud desde SYSCLK (160 MHz). */
+static uint32_t spi_prescaler_for(int baud) {
+    uint32_t fclk     = 160000000u;
+    uint32_t div[8]   = { 2, 4, 8, 16, 32, 64, 128, 256 };
+    uint32_t code[8]  = {
+        SPI_BAUDRATEPRESCALER_2,   SPI_BAUDRATEPRESCALER_4,
+        SPI_BAUDRATEPRESCALER_8,   SPI_BAUDRATEPRESCALER_16,
+        SPI_BAUDRATEPRESCALER_32,  SPI_BAUDRATEPRESCALER_64,
+        SPI_BAUDRATEPRESCALER_128, SPI_BAUDRATEPRESCALER_256
+    };
+    int i;
+    for (i = 0; i < 8; i++) {
+        if (baud > 0 && (fclk / div[i]) <= (uint32_t) baud) return code[i];
+    }
+    return SPI_BAUDRATEPRESCALER_256;   /* baud muy bajo -> lo mas lento */
+}
+
+static void stm32_spi_init_impl(int bus, int sck, int mosi, int miso,
+                                int baudrate, int mode) {
+    SPI_HandleTypeDef* h = spi_handle(bus);
+    if (!h) return;
+    /* (re)ajusta formato + baud sobre el handle que CubeMX dejo inicializado */
+    h->Init.DataSize          = SPI_DATASIZE_8BIT;
+    h->Init.CLKPolarity       = (mode & 0x2) ? SPI_POLARITY_HIGH : SPI_POLARITY_LOW;
+    h->Init.CLKPhase          = (mode & 0x1) ? SPI_PHASE_2EDGE   : SPI_PHASE_1EDGE;
+    h->Init.NSS               = SPI_NSS_SOFT;
+    h->Init.BaudRatePrescaler = spi_prescaler_for(baudrate);
+    HAL_SPI_Init(h);
+    /* asigna los pines que pidio el usuario (AF5 para SPI1/SPI2) */
+    cfg_af_pin(sck,  GPIO_AF5_SPI1);
+    cfg_af_pin(mosi, GPIO_AF5_SPI1);
+    cfg_af_pin(miso, GPIO_AF5_SPI1);
+}
+
+static int stm32_spi_write_impl(int bus, const uint8_t* data, size_t n) {
+    SPI_HandleTypeDef* h = spi_handle(bus);
+    if (!h) return -1;
+    return (HAL_SPI_Transmit(h, (uint8_t*) data, (uint16_t) n, 1000) == HAL_OK)
+           ? (int) n : -1;
+}
+
+static int stm32_spi_read_impl(int bus, uint8_t* data, size_t n) {
+    SPI_HandleTypeDef* h = spi_handle(bus);
+    if (!h) return -1;
+    return (HAL_SPI_Receive(h, data, (uint16_t) n, 1000) == HAL_OK)
+           ? (int) n : -1;
+}
+
+static int stm32_spi_transfer_impl(int bus, const uint8_t* tx, uint8_t* rx, size_t n) {
+    SPI_HandleTypeDef* h = spi_handle(bus);
+    if (!h) return -1;
+    return (HAL_SPI_TransmitReceive(h, (uint8_t*) tx, rx, (uint16_t) n, 1000) == HAL_OK)
+           ? (int) n : -1;
+}
+
+static const bpvm_spi_backend_t s_spi_backend = {
+    .init     = stm32_spi_init_impl,
+    .write    = stm32_spi_write_impl,
+    .read     = stm32_spi_read_impl,
+    .transfer = stm32_spi_transfer_impl,
+};
+
 void stm32_hw_register(void) {
     bpvm_gpio_set_backend(&s_gpio_backend);
     bpvm_pico_set_backend(&s_pico_backend);
-    /* I2C/SPI/UART/PWM/ADC: añadir sus backends HAL aquí cuando toque. */
+    bpvm_spi_set_backend(&s_spi_backend);   /* H15.1 */
+    /* I2C/UART/PWM/ADC: añadir sus backends HAL aquí cuando toque. */
 }
