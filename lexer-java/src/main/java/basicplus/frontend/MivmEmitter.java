@@ -1148,6 +1148,11 @@ public final class MivmEmitter {
             // (vía globalSymbolTable) y parche parentOff del child.
             if (cd.isPublic) {
                 w.exportDataSymbol(cd.name);
+                // Robustez ABI: además del descriptor, exporta un marker por
+                // (método, slot) de la vtable efectiva. El importador valida por
+                // nombre que el método sigue en el slot que horneó (ver
+                // ModWriter.exportVtableMarkers + el lado importador).
+                w.exportVtableMarkers(cd.name);
             }
 
             // 3) Constructores y métodos estáticos como funciones normales.

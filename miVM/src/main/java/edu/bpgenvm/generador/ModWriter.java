@@ -356,6 +356,35 @@ public class ModWriter {
         exportDataSymbols.add(name);
     }
 
+    /** Robustez ABI (anti-desfase de vtable cross-module): exporta un símbolo
+     *  MARCADOR por cada (método, slot) de la vtable EFECTIVA de la clase
+     *  pública. El offset es el del propio descriptor (su VALOR es irrelevante:
+     *  el marker solo existe para que el linker lo resuelva POR NOMBRE). Un
+     *  importador que horneó `INVOKE_VIRTUAL slot S` de `C.m` importa "C.m#S";
+     *  si la .mod en runtime tiene `m` en otro slot (reordenó/quitó), el símbolo
+     *  no resuelve → error claro en vez de misdispatch silencioso. Compat hacia
+     *  adelante: añadir métodos al FINAL no mueve los markers viejos, así una app
+     *  compilada contra una versión anterior sigue resolviendo (modelo JRE: una
+     *  versión nueva es superconjunto append-only de la anterior). Llamar tras
+     *  exportDataSymbol(className). */
+    public void exportVtableMarkers(String className) {
+        ClassInfo ci = classes.get(className);
+        if (ci == null) return;
+        Integer descOff = dataSymbolOffset.get(className);
+        if (descOff == null) return;   // el descriptor debe registrarse/exportarse antes
+        for (MethodInfo m : ci.methods) {
+            if (m.simpleName == null || m.simpleName.isEmpty()) continue;
+            // Separador '#' (no '.') entre clase/método/slot: el nombre LOCAL no
+            // lleva puntos, así el cualificado (modulo.local) tiene un solo punto
+            // y la resolución de imports deriva el módulo sin ambigüedad.
+            String marker = className + "#" + m.simpleName + "#" + m.slot;
+            if (!dataSymbolOffset.containsKey(marker)) {
+                dataSymbolOffset.put(marker, descOff);
+                exportDataSymbols.add(marker);
+            }
+        }
+    }
+
     private int registerSymbol(String name, byte[] bytes) {
         requireUnique(name);
         int size = bytes.length;
