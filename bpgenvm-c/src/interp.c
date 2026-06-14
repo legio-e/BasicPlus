@@ -292,6 +292,20 @@ static int interp_throw_rt(bpvm_t* vm, bpvm_thread_t* tc,
  * aritmética IEEE determinista (solo *,/,+ por literales exactos + cast a
  * int64) y %lld/%06lld para las piezas enteras → byte-idéntico a
  * VirtualMachine.formatBpDouble (Java). NO usa %g/%f de printf sobre el float. */
+/* int64 no-negativo -> decimal en buf (sin '\0'); zero-pad a la izquierda hasta
+ * min_width. Sustituye a %lld de snprintf: el newlib-nano de algunos firmwares
+ * (p.ej. STM32) NO incluye el soporte de long long en printf y %lld saldria como
+ * "ld" literal. Manual = portable y byte-identico en todas las plataformas. */
+static int u64_dec(char* buf, unsigned long long v, int min_width) {
+    char tmp[24];
+    int t = 0;
+    do { tmp[t++] = (char) ('0' + (int) (v % 10ULL)); v /= 10ULL; } while (v > 0ULL);
+    while (t < min_width) tmp[t++] = '0';
+    int n = 0;
+    while (t > 0) buf[n++] = tmp[--t];
+    return n;
+}
+
 int bpvm_format_double(char* out, double v) {   /* L13: lo usa builtins.c */
     if (isnan(v)) { memcpy(out, "NaN", 4); return 3; }
     if (isinf(v)) {
@@ -313,7 +327,12 @@ int bpvm_format_double(char* out, double v) {   /* L13: lo usa builtins.c */
         long long ip = scaled / 1000000LL;
         long long fr = scaled % 1000000LL;
         char tmp[48];
-        int n = snprintf(tmp, sizeof tmp, "%s%lld.%06lld", neg ? "-" : "", ip, fr);
+        int n = 0;
+        if (neg) tmp[n++] = '-';
+        n += u64_dec(tmp + n, (unsigned long long) ip, 0);
+        tmp[n++] = '.';
+        n += u64_dec(tmp + n, (unsigned long long) fr, 6);
+        tmp[n] = '\0';
         while (n > 0 && tmp[n - 1] == '0') n--;
         if (n > 0 && tmp[n - 1] == '.') n--;
         tmp[n] = '\0';
@@ -324,7 +343,12 @@ int bpvm_format_double(char* out, double v) {   /* L13: lo usa builtins.c */
         if (scaled == 0) neg = 0;               /* evita "-0" */
         long long ip = scaled / 1000000LL;
         long long fr = scaled % 1000000LL;
-        int n = snprintf(out, 48, "%s%lld.%06lld", neg ? "-" : "", ip, fr);
+        int n = 0;
+        if (neg) out[n++] = '-';
+        n += u64_dec(out + n, (unsigned long long) ip, 0);
+        out[n++] = '.';
+        n += u64_dec(out + n, (unsigned long long) fr, 6);
+        out[n] = '\0';
         while (n > 0 && out[n - 1] == '0') n--;
         if (n > 0 && out[n - 1] == '.') n--;
         out[n] = '\0';
