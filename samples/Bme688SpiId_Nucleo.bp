@@ -20,8 +20,8 @@ module Bme688SpiIdNucleo
   function main()
     print "--- BME688 chip_id por SPI (H15.1 Nucleo, SPI1) ---"
 
-    // bus 0 = SPI1. Pines: SCK=PA5(5), MOSI=PA7(7), MISO=PA6(6).
-    var bus: Spi.Bus := Spi.Bus(Spi.BUS0(), 5, 7, 6, Spi.MHZ_1(), Spi.Bus.MODE0)
+    // bus 1 = SPI1. Pines: SCK=PA5(5), MOSI=PA7(7), MISO=PA6(6).
+    var bus: Spi.Bus := Spi.Bus(1, 5, 7, 6, Spi.MHZ_1(), Spi.Bus.MODE0)
     var cs: Gpio.Pin := Gpio.Pin(22, Gpio.Pin.OUTPUT)   // PB6
     cs.on()
     sleep(10)

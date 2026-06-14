@@ -26,6 +26,7 @@
 #include "bpvm_gpio.h"
 #include "bpvm_pico.h"
 #include "bpvm_spi.h"
+#include "bpvm_uart.h"
 
 #include "main.h"   /* HAL + CMSIS (GPIOA.., UID_BASE, SystemCoreClock) */
 
@@ -189,11 +190,14 @@ static const bpvm_pico_backend_t s_pico_backend = {
  */
 extern SPI_HandleTypeDef hspi1;
 extern SPI_HandleTypeDef hspi2;
+extern SPI_HandleTypeDef hspi3;
 
+/* bus N -> SPIn  (numero de bus = numero de instancia HW, igual que la Pico). */
 static SPI_HandleTypeDef* spi_handle(int bus) {
     switch (bus) {
-        case 0: return &hspi1;   /* SPI1 */
-        case 1: return &hspi2;   /* SPI2 */
+        case 1: return &hspi1;   /* SPI1 */
+        case 2: return &hspi2;   /* SPI2 */
+        case 3: return &hspi3;   /* SPI3 */
         default: return NULL;
     }
 }
@@ -242,10 +246,11 @@ static void stm32_spi_init_impl(int bus, int sck, int mosi, int miso,
     h->Init.NSS               = SPI_NSS_SOFT;
     h->Init.BaudRatePrescaler = spi_prescaler_for(baudrate);
     HAL_SPI_Init(h);
-    /* asigna los pines que pidio el usuario (AF5 para SPI1/SPI2) */
-    cfg_af_pin(sck,  GPIO_AF5_SPI1);
-    cfg_af_pin(mosi, GPIO_AF5_SPI1);
-    cfg_af_pin(miso, GPIO_AF5_SPI1);
+    /* asigna los pines que pidio el usuario (SPI1/2 = AF5, SPI3 = AF6) */
+    uint8_t af = (bus == 3) ? GPIO_AF6_SPI3 : GPIO_AF5_SPI1;
+    cfg_af_pin(sck,  af);
+    cfg_af_pin(mosi, af);
+    cfg_af_pin(miso, af);
 }
 
 static int stm32_spi_write_impl(int bus, const uint8_t* data, size_t n) {
@@ -276,9 +281,96 @@ static const bpvm_spi_backend_t s_spi_backend = {
     .transfer = stm32_spi_transfer_impl,
 };
 
+/* ===================== UART (H15.1) ====================================
+ * Igual que SPI: CubeMX inicializo las instancias al boot (huart4/huart3
+ * globales); aqui (re)ajustamos baud/formato y asignamos los pines del .bp.
+ * bus 0 -> UART4 (AF8; pines tipicos PA0/PA1 = A0/A1 del header Arduino),
+ * bus 1 -> USART3 (AF7).  El VCP del ST-LINK usa USART1 -> NO se toca.
+ *
+ * read(timeout): HAL_UART_Receive devuelve TIMEOUT si no completa n bytes a
+ * tiempo; los recibidos = n - RxXferCount. available(): no soportado en el MVP
+ * (-1, segun el contrato del header) -> usar read con timeout.
+ */
+extern UART_HandleTypeDef huart2;
+extern UART_HandleTypeDef huart3;
+extern UART_HandleTypeDef huart4;
+extern UART_HandleTypeDef huart5;
+
+/* bus N -> USARTn/UARTn (numero de bus = instancia HW). USART1 = VCP -> no se expone. */
+static UART_HandleTypeDef* uart_handle(int bus) {
+    switch (bus) {
+        case 2: return &huart2;   /* USART2 (AF7) */
+        case 3: return &huart3;   /* USART3 (AF7) */
+        case 4: return &huart4;   /* UART4  (AF8) */
+        case 5: return &huart5;   /* UART5  (AF8) */
+        default: return NULL;
+    }
+}
+
+static void stm32_uart_init_impl(int bus, int tx, int rx, int baudrate,
+                                 int data_bits, int stop_bits, int parity) {
+    UART_HandleTypeDef* h = uart_handle(bus);
+    if (!h) return;
+    h->Init.BaudRate = (uint32_t) baudrate;
+    /* En STM32 el WordLength CUENTA el bit de paridad: 8 datos sin paridad = 8B;
+     * 8 datos + paridad = 9B. */
+    if (parity != 0) {
+        h->Init.WordLength = UART_WORDLENGTH_9B;
+    } else if (data_bits == 7) {
+        h->Init.WordLength = UART_WORDLENGTH_7B;
+    } else {
+        h->Init.WordLength = UART_WORDLENGTH_8B;
+    }
+    h->Init.StopBits = (stop_bits == 2) ? UART_STOPBITS_2 : UART_STOPBITS_1;
+    h->Init.Parity   = (parity == 1) ? UART_PARITY_ODD
+                     : (parity == 2) ? UART_PARITY_EVEN
+                                     : UART_PARITY_NONE;
+    h->Init.Mode = UART_MODE_TX_RX;
+    HAL_UART_Init(h);
+    /* FIFO RX (8 bytes): sin el, el RX en polling pierde por overrun los bytes
+     * que llegan en rafaga (un loopback de 4 bytes solo capturaba el primero).
+     * CubeMX lo deja deshabilitado por defecto; lo habilitamos aqui. */
+    HAL_UARTEx_SetTxFifoThreshold(h, UART_TXFIFO_THRESHOLD_1_8);
+    HAL_UARTEx_SetRxFifoThreshold(h, UART_RXFIFO_THRESHOLD_1_8);
+    HAL_UARTEx_EnableFifoMode(h);
+    uint8_t af = (bus == 2 || bus == 3) ? GPIO_AF7_USART3 : GPIO_AF8_UART4;
+    cfg_af_pin(tx, af);
+    cfg_af_pin(rx, af);
+}
+
+static int stm32_uart_write_impl(int bus, const uint8_t* data, size_t n) {
+    UART_HandleTypeDef* h = uart_handle(bus);
+    if (!h) return -1;
+    return (HAL_UART_Transmit(h, (uint8_t*) data, (uint16_t) n, 1000) == HAL_OK)
+           ? (int) n : -1;
+}
+
+static int stm32_uart_read_impl(int bus, uint8_t* data, size_t n, int timeout_ms) {
+    UART_HandleTypeDef* h = uart_handle(bus);
+    if (!h) return -1;
+    uint32_t to = (timeout_ms <= 0) ? HAL_MAX_DELAY : (uint32_t) timeout_ms;
+    HAL_StatusTypeDef st = HAL_UART_Receive(h, data, (uint16_t) n, to);
+    if (st == HAL_OK) return (int) n;
+    if (st == HAL_TIMEOUT) return (int) ((uint16_t) n - h->RxXferCount);  /* bytes recibidos */
+    return -1;
+}
+
+static int stm32_uart_available_impl(int bus) {
+    (void) bus;
+    return -1;   /* MVP: no soportado (contrato del header) -> usar read con timeout */
+}
+
+static const bpvm_uart_backend_t s_uart_backend = {
+    .init      = stm32_uart_init_impl,
+    .write     = stm32_uart_write_impl,
+    .read      = stm32_uart_read_impl,
+    .available = stm32_uart_available_impl,
+};
+
 void stm32_hw_register(void) {
     bpvm_gpio_set_backend(&s_gpio_backend);
     bpvm_pico_set_backend(&s_pico_backend);
-    bpvm_spi_set_backend(&s_spi_backend);   /* H15.1 */
-    /* I2C/UART/PWM/ADC: añadir sus backends HAL aquí cuando toque. */
+    bpvm_spi_set_backend(&s_spi_backend);     /* H15.1 */
+    bpvm_uart_set_backend(&s_uart_backend);   /* H15.1 */
+    /* I2C/PWM/ADC: añadir sus backends HAL aquí cuando toque. */
 }

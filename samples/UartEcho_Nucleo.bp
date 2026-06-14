@@ -1,0 +1,42 @@
+// UartEcho_Nucleo.bp — H15.1: loopback UART en la Nucleo-U575ZI-Q (bus 0 = UART4).
+//
+// Numeracion logica del chip: pin = puerto*16 + bit.  PA0 = 0, PA1 = 1.
+// Cableado: un JUMPER entre PA0 (TX) y PA1 (RX) — son A0/A1 del header Arduino.
+//   UART4: TX -> PA0 (0),  RX -> PA1 (1).   @115200 8N1.
+//
+// Envia "Hola" y lo lee de vuelta por el loopback. Sin jumper: recibidos=0
+// (timeout 2 s) — tambien valido como "no crash". El eco real exige el puente.
+module UartEchoNucleo
+  import Uart
+
+  function main()
+    print "--- UART loopback (H15.1 Nucleo, UART4 PA0/PA1) ---"
+
+    // bus 4 = UART4. TX=PA0(0), RX=PA1(1). 8 datos, 1 stop, sin paridad.
+    Uart.init(4, 0, 1, Uart.BAUD_115200(), 8, 1, Uart.PARITY_NONE())
+
+    var msg: integer[] := [0x48, 0x6F, 0x6C, 0x61]   // "Hola"
+    print "[1] write 4 bytes ->", Uart.write(4, msg, 4)
+
+    var rx: integer[] := newIntArray(8)
+    // leemos hasta 8 (no 4) para capturar "Hola" aunque llegue un 0xFF de
+    // arranque delante (glitch tipico del RX al configurar el pin).
+    var n: integer := Uart.read(4, rx, 8, 2000)
+    print "[2] recibidos =", n
+
+    var i: integer := 0
+    while i < n do
+      print "  byte[", i, "] =", rx[i]
+      i := i + 1
+    endwh
+
+    if n >= 4 then
+      print "RESULT: OK -- eco recibido (UART del STM32 funcionando)"
+    else
+      print "RESULT: sin eco -- revisa el jumper PA0<->PA1 (recibidos:", n, ")"
+    endif
+
+    print "--- fin ---"
+  end main
+
+end UartEchoNucleo

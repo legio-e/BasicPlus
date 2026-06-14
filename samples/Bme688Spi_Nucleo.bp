@@ -388,8 +388,8 @@ module Bme688SpiNucleo
   function Main()
     print "--- BME688 por SPI: lecturas reales (H15.1 Nucleo, SPI1) ---"
 
-    // SPI1: SCK=PA5(5), MOSI=PA7(7), MISO=PA6(6). CS=PB6(22).
-    var bus: Spi.Bus := Spi.Bus(Spi.BUS0(), 5, 7, 6, Spi.MHZ_1(), Spi.Bus.MODE0)
+    // bus 1 = SPI1: SCK=PA5(5), MOSI=PA7(7), MISO=PA6(6). CS=PB6(22).
+    var bus: Spi.Bus := Spi.Bus(1, 5, 7, 6, Spi.MHZ_1(), Spi.Bus.MODE0)
     var cs: Gpio.Pin := Gpio.Pin(22, Gpio.Pin.OUTPUT)
     cs.on()
     sleep(10)
