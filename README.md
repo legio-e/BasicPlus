@@ -99,6 +99,31 @@ remoto, **Stop** (KILL cooperativo sin resetear la placa), **autorun**
 verdad, y el IDE puede conectarse en caliente y recuperar el control) y
 debug on-device con breakpoints.
 
+## Verificado en hardware real
+
+No es solo teoría de sobremesa: la pila completa se ha ejercitado en silicio.
+En una **Raspberry Pi Pico 2 / Pico 2 W** (RP2350) se ha validado de punta a
+punta —desde el IDE, con *Run on Device* y el **mismo bytecode** que corre en
+el PC— toda la escalera de hardware:
+
+| Subsistema | Prueba en placa | |
+|---|---|:--:|
+| Ejecución / OO | clases stdlib cross-module despachando en el micro | ✅ |
+| GPIO | LED parpadeando (`Gpio.Pin`) | ✅ |
+| I2C | sensor real BMP280 (T/P) + escaneo de bus | ✅ |
+| SPI | BME688 por SPI: `chip_id` + lecturas T/HR/P/gas con paginación de memoria | ✅ |
+| UART | loopback, eco de bytes | ✅ |
+| PWM + contador | 1 kHz / 500 Hz contados por hardware, < 0.1 % de error | ✅ |
+| ADC | temperatura interna del chip (23.9 °C) | ✅ |
+| RTC | reloj monotónico + recalibración | ✅ |
+| Watchdog | feed / timeout / disable | ✅ |
+| Timers | alarmas hardware (polling, sincronizado, cronómetro) | ✅ |
+
+Las otras familias —**Metro RP2350B**, **ESP32-S3**, **STM32**— comparten ese
+núcleo de VM y arrancan, ejecutan y se comunican con el IDE; la pasada
+exhaustiva de periféricos en cada una está documentada en el
+**[plan de test en hardware](docs/H14_TEST_PLAN.md)**.
+
 ## El IDE
 
 `BpIde` (Swing, un único jar): editor con pestañas, compilación con

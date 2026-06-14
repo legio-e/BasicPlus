@@ -1,15 +1,15 @@
 // PulseTest.bp — verifica el contador de pulsos hardware del Pico 2
 // generando pulsos por software desde otro pin puenteado.
 //
-// Cableado (ruta A):
-//   GP10 (Gpio.Pin OUTPUT) ─── puente físico ─── GP11 (Pulse.Counter)
+// Cableado: GP10 (Gpio.Pin OUTPUT) ─── puente físico ─── GP13 (Pulse.Counter)
 //
-// GP11 es canal B del slice PWM 5 del RP2350 → puede contar pulsos
+// GP13 es canal B del slice PWM 6 del RP2350 → puede contar pulsos
 // en modo "input-gate edge counting" sin coste de CPU.
 //
 // GP10 se conduce como GPIO normal por software (bit-bang) — no usa
-// el slice 5 como PWM, así que no hay conflicto. Cuando luego
-// queramos probar PWM real, hay que mover el puente a GP12↔GP11.
+// ningún slice como PWM, así que no hay conflicto. Para validar el PWM
+// generando los pulsos por hardware (en vez de bit-bang), usa
+// samples/PwmTest.bp: PWM en GP10 → counter en GP13, el MISMO puente.
 //
 // Lo que valida este sample:
 //   1. El hook bpvm_pulse_init devuelve el slice (>= 0).

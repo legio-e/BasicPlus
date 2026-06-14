@@ -1,0 +1,426 @@
+// ============================================================
+// Bme688Spi.bp — T2 del peldaño SPI de H14 (test en placa).
+//
+// Lecturas REALES del BME688 por SPI: temperatura, humedad,
+// presion y resistencia de gas (VOC) + indice IAQ aproximado.
+//
+// Self-contained a proposito: solo importa Spi + Gpio (el mismo
+// camino de deps que valido T1). La matematica de compensacion es
+// COPIA VERBATIM del driver I2C bpdevices/Bme688.bp (que ya tiene
+// paridad dual-VM byte-identica); aqui lo unico nuevo es el
+// TRANSPORTE SPI con paginacion de memoria del BME68x.
+//
+// Paginacion BME68x por SPI (lo que NO tiene el I2C):
+//   - la direccion SPI es de 7 bits → la memoria se parte en 2
+//     paginas, seleccionadas por el bit 4 del registro 0x73:
+//        bit4 = 0 → se accede a los registros 0x80..0xFF (pagina alta)
+//        bit4 = 1 → se accede a los registros 0x00..0x7F (pagina baja)
+//   - lectura  = enviar (reg | 0x80) y clockear N bytes
+//   - escritura= enviar (reg & 0x7F) seguido del valor
+//   - el registro 0x73 es accesible desde cualquier pagina (lo usa
+//     el propio SensorAPI de Bosch para conmutar).
+//
+// Cableado (Pico 2, SPI0) — IDENTICO a T1:
+//   SCK→GP2(4)  SDI(MOSI)→GP3(5)  SDO(MISO)→GP4(6)  CS→GP5(7)
+//   VIN→3V3(36)  GND→GND
+//
+// NOTA host: el backend SPI del PC es un stub que devuelve ceros →
+// begin() vera chip_id=0 y reportara "no se pudo iniciar". Es lo
+// correcto sin sensor; las lecturas reales solo salen EN PLACA.
+// ============================================================
+module Bme688Spi
+  import Spi
+  import Gpio
+
+  public class Sensor
+    // ---- conexion SPI ----
+    public var bus:     Spi.Bus
+    public var cs:      Gpio.Pin
+    public var pageBit: integer    // bit4 de 0x73 que creemos activo; 2 = desconocido
+    public var chip:    integer
+    public var variant: integer
+
+    // ---- coeficientes de calibracion (uso interno) ----
+    public var par_t1: integer
+    public var par_t2: integer
+    public var par_t3: integer
+    public var par_p1: integer
+    public var par_p2: integer
+    public var par_p3: integer
+    public var par_p4: integer
+    public var par_p5: integer
+    public var par_p6: integer
+    public var par_p7: integer
+    public var par_p8: integer
+    public var par_p9: integer
+    public var par_p10: integer
+    public var par_h1: integer
+    public var par_h2: integer
+    public var par_h3: integer
+    public var par_h4: integer
+    public var par_h5: integer
+    public var par_h6: integer
+    public var par_h7: integer
+    public var par_gh1: integer
+    public var par_gh2: integer
+    public var par_gh3: integer
+    public var res_heat_val: integer
+    public var res_heat_range: integer
+
+    // estado intermedio (t_fine) + resultados
+    public var tFine:    double
+    public var tempC:    double
+    public var pressHpa: double
+    public var humPct:   double
+    public var gasOhm:   double
+    public var iaq:      integer
+    public var gasValid: boolean
+    public var heatStab: boolean
+
+    public var gasBaseline: double
+
+    public function Sensor(bus: Spi.Bus, cs: Gpio.Pin)
+      this.bus := bus
+      this.cs  := cs
+      this.pageBit := 2            // desconocido → fuerza el primer set de pagina
+      this.gasBaseline := 50000.0d
+    end Sensor
+
+    // ================= transporte SPI + paginacion =================
+    // Lectura cruda de 1 registro SIN tocar la pagina (para 0x73).
+    public function rawRead(reg: integer): integer
+      var tx: integer[] := [reg | 0x80, 0x00]
+      var rx: integer[] := newIntArray(2)
+      this.cs.off()
+      var n: integer := this.bus.transfer(tx, rx, 2)
+      this.cs.on()
+      return rx[1] & 0xFF
+    end rawRead
+
+    // Escritura cruda de 1 registro SIN tocar la pagina (para 0x73).
+    public function rawWrite(reg: integer, val: integer)
+      var tx: integer[] := [reg & 0x7F, val & 0xFF]
+      var rx: integer[] := newIntArray(2)
+      this.cs.off()
+      var n: integer := this.bus.transfer(tx, rx, 2)
+      this.cs.on()
+    end rawWrite
+
+    // Asegura que la pagina de memoria es la correcta para `reg`.
+    public function setPage(reg: integer)
+      var want: integer := 0            // registros altos (>0x7F): bit4=0
+      if reg <= 0x7F then
+        want := 1                       // registros bajos: bit4=1
+      endif
+      if want == this.pageBit then
+        return
+      endif
+      var st: integer := this.rawRead(0x73)
+      var nv: integer := st & 0xEF      // limpia bit4 (0x10)
+      if want == 1 then
+        nv := nv | 0x10
+      endif
+      this.rawWrite(0x73, nv)
+      this.pageBit := want
+    end setPage
+
+    public function writeReg(reg: integer, val: integer)
+      this.setPage(reg)
+      this.rawWrite(reg, val)
+    end writeReg
+
+    public function readReg(reg: integer): integer
+      this.setPage(reg)
+      return this.rawRead(reg)
+    end readReg
+
+    // Lectura multi-byte con auto-incremento (igual que el burst I2C).
+    public function readRegs(reg: integer, buf: integer[], n: integer)
+      this.setPage(reg)
+      var tx: integer[] := newIntArray(n + 1)
+      tx[0] := reg | 0x80
+      var i: integer := 0
+      while i < n do
+        tx[i + 1] := 0x00
+        i := i + 1
+      endwh
+      var rx: integer[] := newIntArray(n + 1)
+      this.cs.off()
+      var got: integer := this.bus.transfer(tx, rx, n + 1)
+      this.cs.on()
+      i := 0
+      while i < n do
+        buf[i] := rx[i + 1] & 0xFF
+        i := i + 1
+      endwh
+    end readRegs
+
+    // ================= helpers de signo (verbatim) =================
+    public function s8(v: integer): integer
+      if v > 127 then
+        return v - 256
+      endif
+      return v
+    end s8
+
+    public function s16(v: integer): integer
+      if v > 32767 then
+        return v - 65536
+      endif
+      return v
+    end s16
+
+    // ================= arranque (verbatim, sobre SPI) =================
+    public function begin(): boolean
+      this.writeReg(0xE0, 0xB6)        // soft reset
+      sleep(5)
+      this.chip := this.readReg(0xD0)
+      if this.chip != 0x61 then
+        return false
+      endif
+      this.variant := this.readReg(0xF0)   // 0x01 = BME688 (high gas)
+      this.readCalibration()
+      this.configure()
+      return true
+    end begin
+
+    public function readCalibration()
+      // 42 bytes en 3 bloques: 0x8A(23) + 0xE1(14) + 0x00(5)
+      var c: integer[] := newIntArray(42)
+      var b1: integer[] := newIntArray(23)
+      this.readRegs(0x8A, b1, 23)
+      move(b1, c, 0, 0, 23)
+      var b2: integer[] := newIntArray(14)
+      this.readRegs(0xE1, b2, 14)
+      move(b2, c, 0, 23, 14)
+      var b3: integer[] := newIntArray(5)
+      this.readRegs(0x00, b3, 5)
+      move(b3, c, 0, 37, 5)
+      this.injectCalibration(c)
+    end readCalibration
+
+    public function injectCalibration(c: integer[])
+      this.par_t1 := c[31] | (c[32] shl 8)
+      this.par_t2 := this.s16(c[0] | (c[1] shl 8))
+      this.par_t3 := this.s8(c[2])
+      this.par_p1 := c[4] | (c[5] shl 8)
+      this.par_p2 := this.s16(c[6] | (c[7] shl 8))
+      this.par_p3 := this.s8(c[8])
+      this.par_p4 := this.s16(c[10] | (c[11] shl 8))
+      this.par_p5 := this.s16(c[12] | (c[13] shl 8))
+      this.par_p6 := this.s8(c[15])
+      this.par_p7 := this.s8(c[14])
+      this.par_p8 := this.s16(c[18] | (c[19] shl 8))
+      this.par_p9 := this.s16(c[20] | (c[21] shl 8))
+      this.par_p10 := c[22]
+      this.par_h1 := (c[25] shl 4) | (c[24] & 0x0F)
+      this.par_h2 := (c[23] shl 4) | (c[24] shr 4)
+      this.par_h3 := this.s8(c[26])
+      this.par_h4 := this.s8(c[27])
+      this.par_h5 := this.s8(c[28])
+      this.par_h6 := c[29]
+      this.par_h7 := this.s8(c[30])
+      this.par_gh1 := this.s8(c[35])
+      this.par_gh2 := this.s16(c[33] | (c[34] shl 8))
+      this.par_gh3 := this.s8(c[36])
+      this.res_heat_val := this.s8(c[37])
+      this.res_heat_range := (c[39] & 0x30) shr 4
+    end injectCalibration
+
+    public function configure()
+      this.writeReg(0x72, 0x02)            // ctrl_hum: osrs_h = x2
+      this.writeReg(0x75, 0x08)            // config: filtro IIR tamano 3
+      var rh: integer := this.calcResHeat(320, 25)
+      this.writeReg(0x5A, rh)              // res_heat_0 (target 320 C)
+      this.writeReg(0x64, 0x59)            // gas_wait_0 = 100 ms
+      this.writeReg(0x71, 0x20)            // ctrl_gas_1: run_gas=1, nb_conv=0
+    end configure
+
+    // ================= medida (verbatim, sobre SPI) =================
+    public function measure()
+      this.writeReg(0x74, 0x8D)            // forzado: osrs_t=x8, osrs_p=x4, mode=forced
+      sleep(250)
+      var tries: integer := 0
+      var status: integer := this.readReg(0x1D)
+      while ((status & 0x80) == 0) and (tries < 10) do
+        sleep(10)
+        status := this.readReg(0x1D)
+        tries := tries + 1
+      endwh
+      var d: integer[] := newIntArray(17)
+      this.readRegs(0x1D, d, 17)
+      var adcPres: integer := (d[2] shl 12) | (d[3] shl 4) | (d[4] shr 4)
+      var adcTemp: integer := (d[5] shl 12) | (d[6] shl 4) | (d[7] shr 4)
+      var adcHum:  integer := (d[8] shl 8) | d[9]
+      var adcGas:  integer := (d[15] shl 2) | (d[16] shr 6)
+      var gasRange: integer := d[16] & 0x0F
+      this.gasValid := (d[16] & 0x20) != 0
+      this.heatStab := (d[16] & 0x10) != 0
+      this.computeFromRaw(adcTemp, adcPres, adcHum, adcGas, gasRange)
+    end measure
+
+    public function computeFromRaw(rawT: integer, rawP: integer, rawH: integer, rawGas: integer, gasRange: integer)
+      this.tempC    := this.compTemp(rawT)
+      this.pressHpa := this.compPress(rawP) / 100.0d
+      this.humPct   := this.compHum(rawH)
+      this.gasOhm   := this.compGasHigh(rawGas, gasRange)
+      this.iaq      := this.calcIaq()
+    end computeFromRaw
+
+    // ================= compensacion (double, verbatim) =================
+    public function compTemp(adc: integer): double
+      var var1: double := ((double(adc) / 16384.0d) - (double(this.par_t1) / 1024.0d)) * double(this.par_t2)
+      var dd: double := (double(adc) / 131072.0d) - (double(this.par_t1) / 8192.0d)
+      var var2: double := (dd * dd) * (double(this.par_t3) * 16.0d)
+      this.tFine := var1 + var2
+      return this.tFine / 5120.0d
+    end compTemp
+
+    public function compPress(adc: integer): double
+      var var1: double := (this.tFine / 2.0d) - 64000.0d
+      var var2: double := (var1 * var1) * (double(this.par_p6) / 131072.0d)
+      var2 := var2 + (var1 * double(this.par_p5) * 2.0d)
+      var2 := (var2 / 4.0d) + (double(this.par_p4) * 65536.0d)
+      var1 := ((((double(this.par_p3) * var1 * var1) / 16384.0d) + (double(this.par_p2) * var1)) / 524288.0d)
+      var1 := (1.0d + (var1 / 32768.0d)) * double(this.par_p1)
+      var p: double := 1048576.0d - double(adc)
+      if integer(var1) != 0 then
+        p := ((p - (var2 / 4096.0d)) * 6250.0d) / var1
+        var v3a: double := (double(this.par_p9) * p * p) / 2147483648.0d
+        var v3b: double := p * (double(this.par_p8) / 32768.0d)
+        var pp: double := p / 256.0d
+        var v3c: double := (pp * pp * pp) * (double(this.par_p10) / 131072.0d)
+        p := p + ((v3a + v3b + v3c + (double(this.par_p7) * 128.0d)) / 16.0d)
+      else
+        p := 0.0d
+      endif
+      return p
+    end compPress
+
+    public function compHum(adc: integer): double
+      var tc: double := this.tFine / 5120.0d
+      var var1: double := double(adc) - ((double(this.par_h1) * 16.0d) + ((double(this.par_h3) / 2.0d) * tc))
+      var var2: double := var1 * ((double(this.par_h2) / 262144.0d) * (1.0d + ((double(this.par_h4) / 16384.0d) * tc) + ((double(this.par_h5) / 1048576.0d) * tc * tc)))
+      var var3: double := double(this.par_h6) / 16384.0d
+      var var4: double := double(this.par_h7) / 2097152.0d
+      var h: double := var2 + ((var3 + (var4 * tc)) * var2 * var2)
+      if h > 100.0d then
+        h := 100.0d
+      endif
+      if h < 0.0d then
+        h := 0.0d
+      endif
+      return h
+    end compHum
+
+    public function compGasHigh(adc: integer, gasRange: integer): double
+      var v1: integer := 262144 shr gasRange
+      var v2: integer := adc - 512
+      v2 := v2 * 3
+      v2 := 4096 + v2
+      if v2 == 0 then
+        return 0.0d
+      endif
+      return (1000000.0d * double(v1)) / double(v2)
+    end compGasHigh
+
+    public function calcResHeat(target: integer, amb: integer): integer
+      var t: integer := target
+      if t > 400 then
+        t := 400
+      endif
+      var var1: double := (double(this.par_gh1) / 16.0d) + 49.0d
+      var var2: double := ((double(this.par_gh2) / 32768.0d) * 0.0005d) + 0.00235d
+      var var3: double := double(this.par_gh3) / 1024.0d
+      var var4: double := var1 * (1.0d + (var2 * double(t)))
+      var var5: double := var4 + (var3 * double(amb))
+      var res: integer := integer(3.4d * ((var5 * (4.0d / (4.0d + double(this.res_heat_range))) * (1.0d / (1.0d + (double(this.res_heat_val) * 0.002d)))) - 25.0d))
+      return res & 0xFF
+    end calcResHeat
+
+    public function calcIaq(): integer
+      var hum: double := this.humPct
+      var humScore: double := 0.0d
+      if (hum >= 38.0d) and (hum <= 42.0d) then
+        humScore := 25.0d
+      else
+        if hum < 38.0d then
+          humScore := 25.0d * (hum / 38.0d)
+        else
+          humScore := 25.0d * ((100.0d - hum) / 58.0d)
+        endif
+      endif
+      var gasScore: double := 75.0d * (this.gasOhm / this.gasBaseline)
+      if gasScore > 75.0d then
+        gasScore := 75.0d
+      endif
+      if gasScore < 0.0d then
+        gasScore := 0.0d
+      endif
+      return integer(humScore + gasScore)
+    end calcIaq
+
+    // ================= getters =================
+    public function temperature(): double
+      return this.tempC
+    end temperature
+    public function pressure(): double
+      return this.pressHpa
+    end pressure
+    public function humidity(): double
+      return this.humPct
+    end humidity
+    public function gas(): double
+      return this.gasOhm
+    end gas
+    public function airIndex(): integer
+      return this.iaq
+    end airIndex
+    public function chipID(): integer
+      return this.chip
+    end chipID
+    public function variantID(): integer
+      return this.variant
+    end variantID
+    public function gasIsValid(): boolean
+      return this.gasValid
+    end gasIsValid
+    public function heaterStable(): boolean
+      return this.heatStab
+    end heaterStable
+
+  end Sensor
+
+  // ============================================================
+  function Main()
+    print "--- BME688 por SPI: lecturas reales (H14 T2) ---"
+
+    var bus: Spi.Bus := Spi.Bus(Spi.BUS0(), 2, 3, 4, Spi.MHZ_1(), Spi.Bus.MODE0)
+    var cs: Gpio.Pin := Gpio.Pin(5, Gpio.Pin.OUTPUT)
+    cs.on()
+    sleep(10)
+
+    var s: Sensor := Sensor(bus, cs)
+
+    if s.begin() == false then
+      print "RESULT: FAIL -- begin() no arranco (chip_id =", s.chipID(), ", esperado 97)"
+      print "--- fin ---"
+      return
+    endif
+
+    print "chip_id =", s.chipID(), " variant =", s.variantID(), " (esperado 97, 1)"
+    print "Calentando el sensor de gas (las primeras lecturas se estabilizan)..."
+
+    var k: integer := 0
+    while k < 6 do
+      s.measure()
+      print "[", k, "] T=", s.temperature(), "C  HR=", s.humidity(), "%  P=", s.pressure(), "hPa  gas=", s.gas(), "ohm  IAQ~", s.airIndex(), "  gasOK=", s.gasIsValid(), " heater=", s.heaterStable()
+      sleep(1000)
+      k := k + 1
+    endwh
+
+    print "RESULT: OK -- lecturas reales del BME688 por SPI"
+    print "--- fin ---"
+  end Main
+
+end Bme688Spi

@@ -173,6 +173,7 @@
     <span class="badge">V2 · código congelado</span>
     <span class="badge">RP2350 · ESP32-S3 · STM32</span>
     <span class="badge">Dos VMs · una salida byte-idéntica</span>
+    <span class="badge">Probado en hardware real</span>
     <span class="badge">MIT</span>
   </div>
 </header>
@@ -290,6 +291,33 @@
   <strong>autorun</strong> (<code>/sys/auto.txt</code> arranca tu programa al
   encender, y el IDE puede conectarse en caliente) y debug on-device con
   breakpoints.
+</p>
+
+<h2>Verificado en hardware real</h2>
+<p>
+  No es solo teoría de sobremesa: la pila completa se ha ejercitado en silicio.
+  En una <strong>Raspberry Pi Pico 2 / Pico 2 W</strong> (RP2350) se validó de
+  punta a punta —desde el IDE, con <em>Run on Device</em> y el <strong>mismo
+  bytecode</strong> que corre en el PC— toda la escalera de hardware:
+</p>
+<table>
+  <tr><th>Subsistema</th><th>Prueba en placa</th></tr>
+  <tr><td>Ejecución / OO</td><td>clases stdlib cross-module despachando en el micro ✅</td></tr>
+  <tr><td>GPIO</td><td>LED parpadeando (<code>Gpio.Pin</code>) ✅</td></tr>
+  <tr><td>I2C</td><td>sensor real BMP280 (T/P) + escaneo de bus ✅</td></tr>
+  <tr><td>SPI</td><td>BME688 por SPI: <code>chip_id</code> + lecturas T/HR/P/gas con paginación de memoria ✅</td></tr>
+  <tr><td>UART</td><td>loopback, eco de bytes ✅</td></tr>
+  <tr><td>PWM + contador</td><td>1 kHz / 500 Hz contados por hardware, &lt; 0.1 % de error ✅</td></tr>
+  <tr><td>ADC</td><td>temperatura interna del chip (23.9 °C) ✅</td></tr>
+  <tr><td>RTC</td><td>reloj monotónico + recalibración ✅</td></tr>
+  <tr><td>Watchdog</td><td>feed / timeout / disable ✅</td></tr>
+  <tr><td>Timers</td><td>alarmas hardware (polling, sincronizado, cronómetro) ✅</td></tr>
+</table>
+<p>
+  Las otras familias —<strong>Metro RP2350B</strong>, <strong>ESP32-S3</strong>,
+  <strong>STM32</strong>— comparten ese núcleo de VM y arrancan, ejecutan y se
+  comunican con el IDE; la pasada exhaustiva de periféricos por placa está en
+  curso.
 </p>
 
 <div class="note">

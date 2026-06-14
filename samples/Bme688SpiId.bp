@@ -1,0 +1,65 @@
+// ============================================================
+// Bme688SpiId.bp — T1 del peldaño SPI de H14 (test en placa).
+//
+// Lee el registro chip_id (0xD0) del BME688 por SPI y verifica que
+// responde 0x61. Es el test de CONTROL del bus SPI: si esto pasa,
+// el bus SPI habla de verdad con un device real. NO lee el sensor
+// (eso es T2, que necesita paginacion de memoria del BME68x).
+//
+// Cableado (Pico 2, SPI0):
+//
+//   BME688 (Adafruit 5046)   Pico 2     pin fisico
+//   ----------------------   --------   ----------
+//   SCK                      GP2        4
+//   SDI (MOSI)               GP3        5
+//   SDO (MISO)               GP4        6
+//   CS                       GP5        7
+//   VIN                      3V3 (OUT)  36
+//   GND                      GND        3/8/...
+//
+// Protocolo de lectura BME68x por SPI:
+//   - byte de control = direccion con bit7=1 (READ). 0xD0 ya lo trae.
+//   - chip_id (0xD0) cae en la pagina de memoria por defecto al
+//     arrancar, asi que NO hay que conmutar pagina (eso es cosa de T2).
+//   - el CS lo gestiona el usuario por GPIO (la clase Spi.Bus no lo toca).
+//
+// NOTA host: en PC el backend SPI es un stub que loggea; leera 0 →
+// dara FAIL. El OK real solo se ve EN PLACA con el sensor cableado.
+// ============================================================
+module Bme688SpiId
+  import Spi
+  import Gpio
+
+  function Main()
+    print "--- BME688 chip_id por SPI (H14 T1) ---"
+
+    // Bus SPI0: SCK=GP2, MOSI=GP3, MISO=GP4, 1 MHz, modo 0.
+    var bus: Spi.Bus := Spi.Bus(Spi.BUS0(), 2, 3, 4, Spi.MHZ_1(), Spi.Bus.MODE0)
+
+    // CS en GP5, en reposo HIGH (inactivo).
+    var cs: Gpio.Pin := Gpio.Pin(5, Gpio.Pin.OUTPUT)
+    cs.on()
+    sleep(10)
+
+    // Lectura full-duplex de 1 registro:
+    //   tx[0] = 0xD0 (control: read chip_id) → rx[0] = basura
+    //   tx[1] = 0x00 (dummy para clockear)   → rx[1] = chip_id
+    var tx: integer[] := [0xD0, 0x00]
+    var rx: integer[] := newIntArray(2)
+
+    cs.off()
+    var n: integer := bus.transfer(tx, rx, 2)
+    cs.on()
+
+    var chip: integer := rx[1] & 0xFF
+    print "chip_id =", chip, " (esperado 97 = 0x61)"
+
+    if chip == 0x61 then
+      print "RESULT: OK  -- el bus SPI habla con el BME688"
+    else
+      print "RESULT: FAIL -- revisa cableado / CS / modo (leido:", chip, ")"
+    endif
+
+    print "--- fin ---"
+  end Main
+end Bme688SpiId

@@ -74,6 +74,13 @@ todo lo nuevo va a v3.
   no filtrar tipos internos a los diagnósticos.
 - **Paridad dual-VM byte-idéntica** verificada en cada feature que toca la VM.
 
+**Verificado en hardware real**
+- La escalera de hardware completa —GPIO, I2C (sensor BMP280), SPI (sensor
+  BME688 con paginación de memoria), UART, PWM + contador, ADC, RTC, watchdog
+  y timers— validada **en placa** sobre Raspberry Pi Pico 2 / Pico 2 W, con el
+  mismo bytecode que corre en el PC. Las demás familias comparten ese núcleo de
+  VM; la pasada exhaustiva de periféricos por placa continúa.
+
 ### Artefactos de la release
 
 | Artefacto | Para | Cómo se instala |
