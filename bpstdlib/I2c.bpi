@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module I2c
 func initBus(bus:integer,sda:integer,scl:integer,baudrate:integer):void public intrinsic
 func writeBus(bus:integer,addr:integer,data:integer[],count:integer):integer public intrinsic

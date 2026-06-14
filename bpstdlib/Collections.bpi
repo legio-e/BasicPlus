@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module Collections
 func numericMap():Map public
 func stringMap():Map public

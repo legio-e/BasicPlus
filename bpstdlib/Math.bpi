@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module Math
 func tan(x:float):float public intrinsic
 func ln(x:float):float public intrinsic

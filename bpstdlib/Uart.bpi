@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module Uart
 func init(bus:integer,tx:integer,rx:integer,baudrate:integer,dataBits:integer,stopBits:integer,parity:integer):void public
 func read(bus:integer,data:integer[],count:integer,timeoutMs:integer):integer public

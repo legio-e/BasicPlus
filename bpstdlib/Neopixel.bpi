@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module Neopixel
 func __npInit(pin:integer):void public intrinsic
 func __npShow(pin:integer,grb:integer[],count:integer):void public intrinsic

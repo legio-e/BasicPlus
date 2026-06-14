@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module Spi
 func init(bus:integer,sck:integer,mosi:integer,miso:integer,baudrate:integer,mode:integer):void public
 func read(bus:integer,data:integer[],count:integer):integer public

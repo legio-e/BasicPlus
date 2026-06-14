@@ -1,19 +1,127 @@
-dbg 2
+dbg 3
 module Timer
 source C:\lenguajes\pm\bpstdlib\Timer.bp
 lines
-1504 75
-1510 76
-1524 77
-1540 78
-1554 79
-1577 82
-1595 84
-1616 93
-1628 94
-1642 95
-1656 97
-1680 104
-1704 110
-1735 64
-1743 65
+1446 75
+1452 76
+1466 77
+1482 78
+1496 79
+1519 82
+1537 84
+1558 93
+1570 94
+1584 95
+1598 97
+1622 104
+1646 110
+1677 64
+1685 65
+vars
+func Object.toString 0
+this -16 4 0 ?
+func Object.compareTo 25
+this -20 4 0 ?
+other -16 4 0 ?
+func List.add 41
+this -20 4 0 ?
+item -16 4 0 ?
+func List.get 131
+this -20 4 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func List.length 173
+this -16 4 0 ?
+func List.remove 189
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 295
+this -16 4 0 ?
+func OwnerList.removeAndFree 338
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 468
+this -16 4 0 ?
+func StringBuilder.appendChar 489
+this -20 4 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 579
+this -20 4 0 ?
+s -16 4 0 ?
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 650
+this -20 4 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 675
+this -16 4 0 ?
+func StringBuilder.length 699
+this -16 4 0 ?
+func StringBuilder.__init 715
+this -16 4 0 ?
+func Thread.run 756
+this -16 4 0 ?
+func Thread.start 766
+this -16 4 0 ?
+func Thread.join 785
+this -16 4 0 ?
+func Thread.__init 804
+this -20 4 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 832
+this -16 4 0 ?
+func Mutex.unlock 851
+this -16 4 0 ?
+func Mutex.__init 870
+this -16 4 0 ?
+func SyncList.add 888
+this -20 4 0 ?
+item -16 4 0 ?
+func SyncList.remove 934
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.get 980
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.set 1024
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func SyncList.length 1073
+this -16 4 0 ?
+func SyncList.pop 1114
+this -16 4 0 ?
+func SyncList.popBlocking 1225
+this -16 4 0 ?
+func SyncList.__init 1352
+this -16 4 0 ?
+func Alarm.check 1443
+this -16 4 0 ?
+cur 4 4 0 integer
+func Alarm.wait 1555
+this -16 4 0 ?
+rem 0 4 0 integer
+func Alarm.reset 1619
+this -16 4 0 ?
+func Alarm.since 1643
+this -16 4 0 ?
+func Alarm.__init 1674
+this -20 4 0 ?
+periodMs -16 4 0 integer
+func __cls_new_Alarm 1704
+periodMs -16 4 0 integer
+func __cls_init_Alarm 1738
+this -20 4 0 ?
+periodMs -16 4 0 integer
+func __strconcat 1781
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 4 0 ?
+i 12 4 0 ?

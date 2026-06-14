@@ -1,4 +1,4 @@
-bpi 6
+bpi 7
 module Wdt
 func disableRaw():void public intrinsic
 func feedRaw():void public intrinsic

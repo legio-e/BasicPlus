@@ -1,31 +1,18 @@
 dbg 3
-module Spi
-source C:\lenguajes\pm\bpstdlib\Spi.bp
+module Net
+source C:\lenguajes\pm\bpstdlib\Net.bp
 lines
-1446 156
-1476 161
-1506 166
-1539 145
-1547 146
-1555 147
-1563 148
-1571 149
-1579 150
-1587 151
-1728 54
-1762 58
-1790 62
-1818 66
-1849 71
-1870 74
-1891 77
-1912 80
-1933 83
-1954 86
-1975 90
-1996 93
-2017 96
-2038 99
+1446 58
+1463 59
+1490 63
+1517 68
+1544 73
+1574 78
+1604 83
+1637 87
+1653 88
+1664 89
+1689 53
 vars
 func Object.toString 0
 this -16 4 0 ?
@@ -109,63 +96,34 @@ func SyncList.popBlocking 1225
 this -16 4 0 ?
 func SyncList.__init 1352
 this -16 4 0 ?
-func Bus.write 1443
-this -24 4 0 ?
-data -20 4 0 ref
-count -16 4 0 integer
-func Bus.read 1473
-this -24 4 0 ?
-data -20 4 0 ref
-count -16 4 0 integer
-func Bus.transfer 1503
+func Tcp.connect 1443
 this -28 4 0 ?
-tx -24 4 0 ref
-rx -20 4 0 ref
-count -16 4 0 integer
-func Bus.__init 1536
-this -40 4 0 ?
-id -36 4 0 integer
-sck -32 4 0 integer
-mosi -28 4 0 integer
-miso -24 4 0 integer
-baudrate -20 4 0 integer
-mode -16 4 0 integer
-func __cls_new_Bus 1618
-id -36 4 0 integer
-sck -32 4 0 integer
-mosi -28 4 0 integer
-miso -24 4 0 integer
-baudrate -20 4 0 integer
-mode -16 4 0 integer
-func __cls_init_Bus 1667
-this -40 4 0 ?
-id -36 4 0 integer
-sck -32 4 0 integer
-mosi -28 4 0 integer
-miso -24 4 0 integer
-baudrate -20 4 0 integer
-mode -16 4 0 integer
-func init 1725
-bus -36 4 0 integer
-sck -32 4 0 integer
-mosi -28 4 0 integer
-miso -24 4 0 integer
-baudrate -20 4 0 integer
-mode -16 4 0 integer
-func write 1759
-bus -24 4 0 integer
-data -20 4 0 ref
-count -16 4 0 integer
-func read 1787
-bus -24 4 0 integer
-data -20 4 0 ref
-count -16 4 0 integer
-func transfer 1815
-bus -28 4 0 integer
-tx -24 4 0 ref
-rx -20 4 0 ref
-count -16 4 0 integer
-func __strconcat 2056
+host -24 4 0 string
+port -20 4 0 integer
+timeoutMs -16 4 0 integer
+func Tcp.isOpen 1487
+this -16 4 0 ?
+func Tcp.send 1514
+this -20 4 0 ?
+data -16 4 0 ref
+func Tcp.sendStr 1541
+this -20 4 0 ?
+s -16 4 0 string
+func Tcp.recv 1571
+this -24 4 0 ?
+max -20 4 0 integer
+timeoutMs -16 4 0 integer
+func Tcp.recvStr 1601
+this -24 4 0 ?
+max -20 4 0 integer
+timeoutMs -16 4 0 integer
+func Tcp.close 1634
+this -16 4 0 ?
+func Tcp.__init 1686
+this -16 4 0 ?
+func __cls_init_Tcp 1737
+this -16 4 0 ?
+func __strconcat 1777
 a -20 4 0 ?
 b -16 4 0 ?
 la 0 4 0 ?
