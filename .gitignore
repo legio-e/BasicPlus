@@ -89,3 +89,28 @@ samples/out/
 lexer-java/*.mdn
 lexer-java/*.o
 lexer-java/aotout/
+
+# ============================================================
+# samples/ — outputs de compilación (la fuente son los .bp;
+# .mod/.bpi/.dbg/.mdn se recompilan). NOTA: bpstdlib/ SÍ se versiona.
+# ============================================================
+samples/*.mod
+samples/*.bpi
+samples/*.dbg
+samples/*.mdn
+
+# .mod sueltos de demos ad-hoc en la raíz del repo
+/*.mod
+
+# Scratch temporal
+/Temp/
+
+# CMake in-source del firmware Pico + outputs de build STM32
+bpgenvm-c/pico/CMakeCache.txt
+bpgenvm-c/pico/CMakeFiles/
+bpgenvm-c/stm32/**/*.bpi
+bpgenvm-c/stm32/**/*.dbg
+
+# Logs de samples (LogTest, etc.)
+samples/*.log
+samples/*.log.old
