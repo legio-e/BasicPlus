@@ -1,0 +1,72 @@
+// OoSmoke.bp — control de OO PURO (sin hardware): clases de usuario,
+// herencia, super(...), despacho virtual e instanceof.
+//
+// Aísla la maquinaria OO de la VM del backend de hardware: si esto corre
+// igual en host y en el micro, el despacho de métodos (vtables) y la
+// jerarquía de clases funcionan en ese silicio independientemente de
+// qué periféricos tenga su firmware. Útil como peldaño "OO" de H14 en
+// cualquier placa (no necesita pines ni cableado).
+module OoSmoke
+
+  public class Shape
+    public var name: string
+    public function Shape(n: string)
+      this.name := n
+    end Shape
+    public function area(): double
+      return 0.0d
+    end area
+    public function describe(): string
+      return this.name
+    end describe
+  end Shape
+
+  public class Circle extends Shape
+    public var r: double
+    public function Circle(radius: double)
+      super("circulo")
+      this.r := radius
+    end Circle
+    public function area(): double
+      return 3.141592653589793d * this.r * this.r
+    end area
+  end Circle
+
+  public class Square extends Shape
+    public var side: double
+    public function Square(s: double)
+      super("cuadrado")
+      this.side := s
+    end Square
+    public function area(): double
+      return this.side * this.side
+    end area
+  end Square
+
+  function main()
+    print "--- OO smoke: clases / herencia / virtual / instanceof ---"
+
+    var c: Shape := Circle(2.0d)
+    var s: Shape := Square(3.0d)
+
+    // describe() es heredado de Shape; area() despacha virtual al hijo.
+    print c.describe(), " area =", c.area(), " (esperado ~12.566)"
+    print s.describe(), " area =", s.area(), " (esperado 9.0)"
+
+    // instanceof: c apunta dinamicamente a un Circle.
+    if c instanceof Shape then
+      print "OK: c instanceof Shape"
+    endif
+    if c instanceof Circle then
+      print "OK: c instanceof Circle"
+    endif
+    if c instanceof Square then
+      print "FALLO: c NO deberia ser Square"
+    else
+      print "OK: c no es Square"
+    endif
+
+    print "--- fin ---"
+  end main
+
+end OoSmoke

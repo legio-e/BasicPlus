@@ -46,9 +46,9 @@ Estado: ✅ pasa · ⬜ pendiente · — n/a · 🔌 necesita HW/cableado extern
 
 | Peldaño | Pico 2 W (RP2350A) | Metro (RP2350B) | ESP32-S3 | STM32 |
 |---|---|---|---|---|
-| 1 Ejecución | ✅ | ⬜ | ⬜ | ⬜ |
-| 2 OO | ✅¹ | ⬜ | ⬜ | ⬜ |
-| 3a blink (GPIO) | ✅⁴ | ⬜ | ⬜ | ⬜ |
+| 1 Ejecución | ✅ | ⬜ | ⬜ | ✅ |
+| 2 OO | ✅¹ | ⬜ | ⬜ | ✅⁷ |
+| 3a blink (GPIO) | ✅⁴ | ⬜ | ⬜ | ✅⁸ |
 | 3b I2C | ✅² | ⬜ | — | — |
 | 3c SPI | ✅✅³ | ⬜ | — | — |
 | 3d UART | ✅⁵ | ⬜ | — | — |
@@ -61,6 +61,8 @@ Estado: ✅ pasa · ⬜ pendiente · — n/a · 🔌 necesita HW/cableado extern
 ⁴ `blink.bp` en Pico 2 (LED GP25) ✓; en Pico 2 W el LED está en el CYW43 → GPIO out validado por el CS del SPI.
 ⁵ `uartecho` loopback GP0↔GP1: eco "Hola UART" correcto (+ 0xFF de arranque, ver Hallazgos).
 ⁶ `PicoInfo` (ADC/tempC 23.9 °C real), `RtcDemo` (Rtc.Clock), `TimerBlink` (Timer.Alarm), `WdtTest` (Wdt.Timer), `PwmTest` (Pwm.Slice).
+⁷ STM32: `OoSmoke` (OO puro) + `Gpio.Pin` (OO cross-module) — sin skew.
+⁸ STM32: LED verde PC7=39 vía `Gpio.Pin` (`samples/BlinkStm32.bp`). Las filas 3b–3f en STM32 no aplican: backend HAL no portado aún [v3].
 
 ## Estado: tanda Pico 2 / Pico 2 W COMPLETA ✅ (2026-06-14)
 
@@ -84,12 +86,28 @@ Estado: ✅ pasa · ⬜ pendiente · — n/a · 🔌 necesita HW/cableado extern
 Wdt.Timer, Pwm.Slice, Pulse.Counter (+ ADC interno vía Pico.tempC). Solo falta **Neopixel**
 (es del Metro).
 
+## Estado: tanda STM32 (Nucleo-U575ZI-Q) ✅ (2026-06-14)
+
+**4/4 de lo que el firmware STM32 soporta hoy** (núcleo VM + GPIO; los buses HAL aún sin
+portar). En placa, vía IDE (Run on Device):
+
+| Sample | Resultado en placa | Valida |
+|---|---|---|
+| `T.bp` | `Hola mundo`, exit 0 | ejecución de la VM en Cortex-M33 |
+| `OoSmoke.bp` | áreas + instanceof OK | OO puro (clases/herencia/`super`/virtual/`instanceof`) |
+| `PicoInfo.bp` | `nucleo-u575zi`, serial 4230500D…, 160 MHz, gpioCount 128 | info MCU board-aware |
+| `BlinkStm32.bp` | LED verde PC7 + prints | backend GPIO + **OO cross-module `Gpio.Pin` sin skew** |
+
+Modelo de pin STM32: `pin=(puerto<<4)|bit`, A=0..H=7 (PC7=39 verde, PB7=23 azul, PG2=98 rojo).
+
 ### Pendiente (otras tandas)
 
-- ⬜ **Metro RP2350B**: replicar la escalera + deltas PSRAM / NeoPixel onboard / 48 GPIO.
-- ⬜ **ESP32-S3 / STM32**: T1 smoke (boot + FS + VM core + OO). (Boot/VM/wire/GPIO ya
-  verificados en H4/H9; falta la pasada de escalera.)
-- ⬜ **OO puro** sin HW (`OoSmoke`): opcional (el dispatch ya está ultra-validado).
+- ⬜ **Metro RP2350B**: comparte firmware con la Pico → replicar la escalera + deltas
+  PSRAM / NeoPixel onboard / 48 GPIO.
+- ⬜ **ESP32-S3**: T1 smoke. **APLAZADO ~2-3 días** (sin pines libres en la placa actual;
+  Eduardo pedirá una de repuesto).
+- 🔵 **STM32 buses** (I2C/SPI/UART/PWM/ADC): portar los backends HAL = **feature [v3]**,
+  fuera del *freeze*. `OoSmoke` queda listo para reusar en cualquier placa.
 
 ## Cableados
 
@@ -122,3 +140,9 @@ Wdt.Timer, Pwm.Slice, Pulse.Counter (+ ADC interno vía Pico.tempC). Solo falta 
   cross-module revienta en la VM del micro"): ese bug está **cerrado** — BusBug
   (`bus.read`, 1 array) y Bme688Spi (`bus.transfer`, 2 arrays) corren exit 0 en placa.
   El driver podría limpiarse a métodos OO (v3).
+- 🔌 **STM32 (Nucleo) — alcance del firmware**: el backend de HW solo trae **GPIO + info
+  de MCU**; I2C/SPI/UART/PWM/ADC no portados [v3]. `Pico.tempC()`=0 (sensor no cableado) y
+  las constantes de capacidad (`I2C_BUSES`=2, `PWM_SLICES`=12…) son del módulo `Pico`
+  genérico del RP2350, **no** del U575 (su `Stm32.bp` propio sería v3). Lo board-aware real
+  (boardName / uniqueId / cpuFreqHz / gpioCount) sí refleja el U575. La 1ª prueba de OO
+  cross-module en STM32 (`Gpio.Pin`) pasó **sin skew** → blobs stdlib del STM32 sanos.

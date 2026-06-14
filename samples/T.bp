@@ -1,0 +1,7 @@
+module T
+
+  public function main(arg:string)
+    print "Hola mundo"
+  end main
+
+end T
