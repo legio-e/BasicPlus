@@ -1169,6 +1169,13 @@ void repl_v1_autorun(void) {
         return;
     }
     log_printf("autorun: %s", path);
+    /* Gracia de arranque: el camino del RUN hace log_flush (erase de
+     * flash con IRQs off) y la app puede tocar flash también — si eso
+     * coincide con la ENUMERACIÓN USB del host, Windows da el puerto
+     * por muerto ("dispositivo desconocido"). 2 s dejan a TinyUSB
+     * terminar la enumeración antes de arrancar. Boots sin auto.txt
+     * no pagan nada (return arriba). */
+    vTaskDelay(pdMS_TO_TICKS(2000));
     run_module_path(path, -1);
     log_printf("autorun: terminado — REPL normal");
 }
