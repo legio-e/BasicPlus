@@ -27,6 +27,7 @@
 #include "bpvm_pico.h"
 #include "bpvm_spi.h"
 #include "bpvm_uart.h"
+#include "bpvm_i2c.h"
 
 #include "main.h"   /* HAL + CMSIS (GPIOA.., UID_BASE, SystemCoreClock) */
 
@@ -367,10 +368,96 @@ static const bpvm_uart_backend_t s_uart_backend = {
     .available = stm32_uart_available_impl,
 };
 
+/* ===================== I2C (H15.2) =====================================
+ * Backend I2C sobre la HAL. Igual que SPI/UART: CubeMX inicializo I2C1..4
+ * al boot (hi2c1..hi2c4; 100 kHz, 7-bit) y aqui reasignamos los pines que
+ * pide el .bp. bus N -> I2Cn. En el U5 TODAS las instancias I2C usan AF4.
+ *
+ * OPEN-DRAIN, no push-pull: a diferencia de SPI/UART, las lineas I2C
+ * (SDA/SCL) solo tiran a 0 y flotan a 1 -> se configuran AF_OD y necesitan
+ * pull-ups EXTERNAS a VDD (4k7 tipico). Normalmente ya las trae el modulo
+ * del sensor (los breakouts BMP280 GY-* y Adafruit las llevan). NO usamos el
+ * pull-up interno del STM32 (~40k): demasiado debil para el tiempo de
+ * subida de un bus I2C fiable -> mejor externas, como hace CubeMX (NOPULL).
+ *
+ * Direccion: el contrato del backend usa addr de 7 bits (igual que el SDK
+ * del Pico); la HAL de ST la quiere desplazada a 8 bits -> addr << 1.
+ *
+ * Baud: MVP usa el Timing de CubeMX (100 kHz). Cambiarlo exige recalcular
+ * el registro TIMINGR (no trivial); 100 kHz cubre el BMP280 y casi todo.
+ */
+extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hi2c2;
+extern I2C_HandleTypeDef hi2c3;
+extern I2C_HandleTypeDef hi2c4;
+
+/* bus N -> I2Cn (numero de bus = instancia HW, igual que SPI/UART/Pico). */
+static I2C_HandleTypeDef* i2c_handle(int bus) {
+    switch (bus) {
+        case 1: return &hi2c1;
+        case 2: return &hi2c2;
+        case 3: return &hi2c3;
+        case 4: return &hi2c4;
+        default: return NULL;
+    }
+}
+
+/* Igual que cfg_af_pin pero OPEN-DRAIN y sin pull interno (para I2C). */
+static void cfg_af_pin_od(int pin, uint8_t af) {
+    int idx = pin >> 4;
+    int bit = pin & 0x0F;
+    GPIO_TypeDef* port = port_of(idx);
+    if (!port) return;
+    enable_port_clk(idx);
+    GPIO_InitTypeDef g = {0};
+    g.Pin       = (uint32_t) (1u << bit);
+    g.Mode      = GPIO_MODE_AF_OD;       /* open-drain (bus I2C) */
+    g.Pull      = GPIO_NOPULL;           /* pull-ups EXTERNAS (modulo / 4k7) */
+    g.Speed     = GPIO_SPEED_FREQ_LOW;   /* I2C 100k/400k: LOW basta (= CubeMX) */
+    g.Alternate = af;
+    HAL_GPIO_Init(port, &g);
+}
+
+static void stm32_i2c_init_impl(int bus, int sda, int scl, int baudrate) {
+    I2C_HandleTypeDef* h = i2c_handle(bus);
+    if (!h) return;
+    (void) baudrate;   /* MVP: Timing de CubeMX (100 kHz) -- ver cabecera */
+    /* El handle ya esta inicializado (HAL_I2C_Init en el boot); solo
+     * (re)asignamos los pines del usuario. AF4 para toda instancia I2C. */
+    cfg_af_pin_od(sda, GPIO_AF4_I2C1);
+    cfg_af_pin_od(scl, GPIO_AF4_I2C1);
+}
+
+static int stm32_i2c_write_impl(int bus, int addr, const uint8_t* data, size_t n) {
+    I2C_HandleTypeDef* h = i2c_handle(bus);
+    if (!h) return -1;
+    /* Timeout corto: un device ausente responde NAK enseguida (no agota el
+     * timeout), asi I2c.scan() recorre 0x08..0x77 sin colgarse; el timeout
+     * solo cubre un bus electricamente atascado. */
+    HAL_StatusTypeDef st = HAL_I2C_Master_Transmit(h, (uint16_t) (addr << 1),
+                                                   (uint8_t*) data, (uint16_t) n, 100);
+    return (st == HAL_OK) ? (int) n : -1;
+}
+
+static int stm32_i2c_read_impl(int bus, int addr, uint8_t* data, size_t n) {
+    I2C_HandleTypeDef* h = i2c_handle(bus);
+    if (!h) return -1;
+    HAL_StatusTypeDef st = HAL_I2C_Master_Receive(h, (uint16_t) (addr << 1),
+                                                  data, (uint16_t) n, 100);
+    return (st == HAL_OK) ? (int) n : -1;
+}
+
+static const bpvm_i2c_backend_t s_i2c_backend = {
+    .init  = stm32_i2c_init_impl,
+    .write = stm32_i2c_write_impl,
+    .read  = stm32_i2c_read_impl,
+};
+
 void stm32_hw_register(void) {
     bpvm_gpio_set_backend(&s_gpio_backend);
     bpvm_pico_set_backend(&s_pico_backend);
     bpvm_spi_set_backend(&s_spi_backend);     /* H15.1 */
     bpvm_uart_set_backend(&s_uart_backend);   /* H15.1 */
-    /* I2C/PWM/ADC: añadir sus backends HAL aquí cuando toque. */
+    bpvm_i2c_set_backend(&s_i2c_backend);     /* H15.2 */
+    /* PWM/ADC/Rtc/Wdt: paridad no critica; anadir su backend HAL cuando toque. */
 }

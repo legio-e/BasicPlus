@@ -1,0 +1,41 @@
+// Bmp280Read_Nucleo.bp — H15.2: lecturas reales de T y P del BME280/BMP280
+// por I2C en la Nucleo-U575ZI-Q (bus 2 = I2C2), usando el driver Bmp280.
+//
+// Cableado (I2C2 = AF4, igual que Bmp280Id_Nucleo):
+//   sensor SDA -> PF0 = 80     SCL -> PF1 = 81
+//   sensor VIN -> 3V3          GND -> GND
+//   pull-ups: del modulo (o 4k7 de SDA/SCL a 3V3).
+//
+// El driver Bmp280 usa las funciones top-level I2c.* con numero de bus.
+// Acepta chip 0x58 (BMP280) y 0x60 (BME280); en el BME280 lee T+P (la
+// humedad necesitaria un driver aparte). begin() lee 24 bytes de
+// calibracion -> prueba transferencias I2C multi-byte de verdad.
+module Bmp280ReadNucleo
+  import I2c
+  import Bmp280
+
+  function main()
+    print "--- BME280/BMP280 T+P por I2C (H15.2 Nucleo, bus 2 = I2C2) ---"
+
+    // bus 2 = I2C2.  SDA=PF0(80), SCL=PF1(81).  100 kHz.
+    I2c.init(2, 80, 81, 100000)
+
+    var s: Bmp280.Sensor := Bmp280.Sensor(2, 0x76)
+    if s.begin() then
+      print "sensor OK: chip_id (dec) =", s.chipID(), "(96=0x60 BME280 / 88=0x58 BMP280)"
+      var i: integer := 0
+      while i < 5 do
+        s.measure()
+        print "  T =", s.temperature(), "C    P =", s.pressure(), "hPa"
+        sleep(1000)
+        i := i + 1
+      endwh
+      print "RESULT: OK -- lecturas reales del sensor por I2C (STM32)"
+    else
+      print "RESULT: FAIL -- no responde en 0x76 (chip leido:", s.chipID(), "); prueba 0x77"
+    endif
+
+    print "--- fin ---"
+  end main
+
+end Bmp280ReadNucleo

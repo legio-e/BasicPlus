@@ -1,0 +1,79 @@
+// Bmp280Id_Nucleo.bp — H15.2: chip_id del BMP280 por I2C en la
+// Nucleo-U575ZI-Q. Primer test del backend I2C del STM32 (bus 2 = I2C2).
+//
+// Numeracion de pin del STM32 (logica del chip): pin = puerto*16 + bit
+//   (puerto: A=0, B=1, C=2, ... F=5 ).  PF0 = 80,  PF1 = 81.
+//
+// Cableado (I2C2 = AF4, pines accesibles en el morpho de la Nucleo):
+//   BMP280 SDA -> PF0 = 80
+//   BMP280 SCL -> PF1 = 81
+//   BMP280 VIN -> 3V3        GND -> GND
+//   BMP280 SDO -> GND (addr 0x76) o 3V3 (addr 0x77)
+//
+// OJO ETHERNET: la U575ZI-Q lleva PHY Ethernet y en la Nucleo-144 varios
+// pines van al PHY por solder bridge de fabrica:  PC1=RMII_MDC, PG13=RMII_TXD0.
+// Por eso EVITAMOS PC0/PC1 (bus 3) y PG13/PG14 (bus 1 default de CubeMX) y
+// usamos PF0/PF1 (I2C2), que estan libres.
+//
+// IMPORTANTE: I2C es open-drain -> necesita PULL-UPS a 3V3 (4k7 tipico). La
+// mayoria de modulos BMP280 (GY-* / Adafruit) ya las traen; si el tuyo no,
+// anade 4k7 de SDA->3V3 y de SCL->3V3.
+//
+// Otros buses (cambia 1er arg + pines).  [E]=tocado por Ethernet, evitar:
+//   bus 1 = I2C1 -> PG13=109 [E] / PG14=110            (PG13 = Ethernet!)
+//   bus 2 = I2C2 -> PF0=80 (SDA) / PF1=81 (SCL)        (este sample, libre)
+//   bus 3 = I2C3 -> PC1=33 [E] / PC0=32                (PC1 = Ethernet!)
+//   bus 4 = I2C4 -> PF15=95 (SDA) / PF14=94 (SCL)      (libre)
+//
+// Lee el registro chip_id (0xD0) -> BMP280 = 0x58 (88), BME280 = 0x60 (96).
+module Bmp280IdNucleo
+  import I2c
+
+  // Apunta al registro chip_id (0xD0) y lee 1 byte. -1 si el sensor no ACKea.
+  function leerChip(bus: I2c.Bus, addr: integer): integer
+    var reg: integer[] := [0xD0]
+    bus.write(addr, reg, 1)
+    var rx: integer[] := newIntArray(1)
+    var n: integer := bus.read(addr, rx, 1)
+    if n < 1 then
+      return -1
+    endif
+    return rx[0] & 0xFF
+  end leerChip
+
+  function main()
+    print "--- BMP280 chip_id por I2C (H15.2 Nucleo, bus 2 = I2C2) ---"
+
+    // bus 2 = I2C2.  SDA=PF0(80), SCL=PF1(81).  100 kHz (STANDARD).
+    var bus: I2c.Bus := I2c.Bus(2, 80, 81, I2c.Bus.STANDARD)
+
+    print "[1] scan del bus I2C (0x08..0x77)..."
+    var devs: integer[] := bus.scan()
+    var i: integer := 0
+    while i < len(devs) do
+      print "   device en addr (dec) =", devs[i]
+      i := i + 1
+    endwh
+    if len(devs) == 0 then
+      print "   (ninguno respondio) -- revisa cableado y pull-ups"
+    endif
+
+    // chip_id en 0x76 (SDO->GND); si no responde, probamos 0x77 (SDO->VDD).
+    var addr: integer := 0x76
+    var chip: integer := leerChip(bus, addr)
+    if (chip != 0x58) and (chip != 0x60) then
+      addr := 0x77
+      chip := leerChip(bus, addr)
+    endif
+
+    print "[2] addr =", addr, "chip_id =", chip, "(88=0x58 BMP280 / 96=0x60 BME280)"
+    if (chip == 0x58) or (chip == 0x60) then
+      print "RESULT: OK  -- el bus I2C del STM32 habla con el BMP280/BME280"
+    else
+      print "RESULT: FAIL -- revisa cableado / pull-ups / addr (leido:", chip, ")"
+    endif
+
+    print "--- fin ---"
+  end main
+
+end Bmp280IdNucleo
