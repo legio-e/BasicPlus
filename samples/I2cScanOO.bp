@@ -4,7 +4,7 @@
 // funciones top-level. Mismo backend nativo; el código BP es solo
 // más conciso porque no arrastra el `bus` en cada llamada.
 //
-// Pinout: bus1 con SDA=GP2, SCL=GP3 (ajusta si tienes otro cableado).
+// Pinout: bus0 con SDA=GP20, SCL=GP21 (ajusta si tienes otro cableado).
 module I2cScanOO
 
   import I2c
@@ -13,9 +13,9 @@ module I2cScanOO
     // Nota: hoy las public var de las clases no se exportan cross-
     // module (issue #143), así que printamos los valores que sabemos
     // desde el call-site en vez de leerlos de bus.id / bus.sda / etc.
-    var BUS_ID: integer := I2c.BUS1()
-    var SDA: integer := 2
-    var SCL: integer := 3
+    var BUS_ID: integer := I2c.BUS0()
+    var SDA: integer := 20
+    var SCL: integer := 21
     var bus: I2c.Bus := I2c.Bus(BUS_ID, SDA, SCL, I2c.Bus.STANDARD)
 
     print "Escaneando bus", BUS_ID, "(SDA=GP", SDA, ", SCL=GP", SCL, ")..."
