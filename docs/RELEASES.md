@@ -78,8 +78,12 @@ todo lo nuevo va a v3.
 - La escalera de hardware completa —GPIO, I2C (sensor BMP280), SPI (sensor
   BME688 con paginación de memoria), UART, PWM + contador, ADC, RTC, watchdog
   y timers— validada **en placa** sobre Raspberry Pi Pico 2 / Pico 2 W, con el
-  mismo bytecode que corre en el PC. Las demás familias comparten ese núcleo de
-  VM; la pasada exhaustiva de periféricos por placa continúa.
+  mismo bytecode que corre en el PC.
+- En el **STM32** (Nucleo-U575ZI-Q), validados en placa con sensores reales los
+  **cuatro buses críticos**: GPIO, SPI (BME688), UART (loopback) e I2C (BME280);
+  los periféricos no críticos (PWM/ADC/RTC/WDT) existen en la API, con backend
+  STM32 para v3. **Metro RP2350B** y **ESP32-S3** comparten el mismo núcleo de
+  VM; su pasada exhaustiva de periféricos por placa continúa.
 
 ### Artefactos de la release
 

@@ -119,10 +119,13 @@ el PC— toda la escalera de hardware:
 | Watchdog | feed / timeout / disable | ✅ |
 | Timers | alarmas hardware (polling, sincronizado, cronómetro) | ✅ |
 
-Las otras familias —**Metro RP2350B**, **ESP32-S3**, **STM32**— comparten ese
-núcleo de VM y arrancan, ejecutan y se comunican con el IDE; la pasada
-exhaustiva de periféricos en cada una está documentada en el
-**[plan de test en hardware](docs/H14_TEST_PLAN.md)**.
+En el **STM32** (Nucleo-U575ZI-Q) se han validado además en placa, con sensores
+reales, los **cuatro buses críticos**: GPIO, **SPI** (BME688), **UART** (loopback)
+e **I2C** (BME280, T/P). Los periféricos no críticos (PWM/ADC/RTC/WDT) existen en
+la API y se ejecutan, pero su backend en STM32 queda para v3. **Metro RP2350B** y
+**ESP32-S3** comparten el mismo núcleo de VM y arrancan, ejecutan y se comunican
+con el IDE; la pasada exhaustiva de periféricos de cada familia está documentada
+en el **[plan de test en hardware](docs/H14_TEST_PLAN.md)**.
 
 ## El IDE
 

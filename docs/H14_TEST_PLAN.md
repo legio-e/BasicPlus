@@ -42,17 +42,17 @@ dónde mirar. Orden de menor a mayor complejidad:
 
 ## Matriz placa × peldaño
 
-Estado: ✅ pasa · ⬜ pendiente · — n/a · 🔌 necesita HW/cableado externo
+Estado: ✅ pasa · ⬜ pendiente · — n/a · 🔌 necesita HW/cableado externo · 🔵 API existe pero sin backend HW (stub)
 
 | Peldaño | Pico 2 W (RP2350A) | Metro (RP2350B) | ESP32-S3 | STM32 |
 |---|---|---|---|---|
 | 1 Ejecución | ✅ | ⬜ | ⬜ | ✅ |
 | 2 OO | ✅¹ | ⬜ | ⬜ | ✅⁷ |
 | 3a blink (GPIO) | ✅⁴ | ⬜ | ⬜ | ✅⁸ |
-| 3b I2C | ✅² | ⬜ | — | — |
-| 3c SPI | ✅✅³ | ⬜ | — | — |
-| 3d UART | ✅⁵ | ⬜ | — | — |
-| 3e timers | ✅⁶ | ⬜ | — | — |
+| 3b I2C | ✅² | ⬜ | — | ✅⁹ |
+| 3c SPI | ✅✅³ | ⬜ | — | ✅⁹ |
+| 3d UART | ✅⁵ | ⬜ | — | ✅⁹ |
+| 3e timers | ✅⁶ | ⬜ | — | 🔵⁹ |
 | 3f Pulse | ✅³ | — | — | — |
 
 ¹ vía BusBug (I2c.Bus.read, array cross-module). OO puro sin HW (`OoSmoke`) = opcional.
@@ -62,7 +62,8 @@ Estado: ✅ pasa · ⬜ pendiente · — n/a · 🔌 necesita HW/cableado extern
 ⁵ `uartecho` loopback GP0↔GP1: eco "Hola UART" correcto (+ 0xFF de arranque, ver Hallazgos).
 ⁶ `PicoInfo` (ADC/tempC 23.9 °C real), `RtcDemo` (Rtc.Clock), `TimerBlink` (Timer.Alarm), `WdtTest` (Wdt.Timer), `PwmTest` (Pwm.Slice).
 ⁷ STM32: `OoSmoke` (OO puro) + `Gpio.Pin` (OO cross-module) — sin skew.
-⁸ STM32: LED verde PC7=39 vía `Gpio.Pin` (`samples/BlinkStm32.bp`). Las filas 3b–3f en STM32 no aplican: backend HAL no portado aún [v3].
+⁸ STM32: LED verde PC7=39 vía `Gpio.Pin` (`samples/BlinkStm32.bp`).
+⁹ STM32 (H15, 14-jun): SPI (`Bme688Spi_Nucleo`, BME688 T/HR/P), UART (`UartEcho_Nucleo`, loopback PA0↔PA1), I2C (`Bmp280Read_Nucleo`, BME280 T/P) — backend HAL real, bus = nº de instancia. 🔵 PWM/ADC/Rtc/Wdt: el API BP existe y corre, pero sin backend HAL (stub); no críticos [v3].
 
 ## Estado: tanda Pico 2 / Pico 2 W COMPLETA ✅ (2026-06-14)
 
@@ -86,10 +87,10 @@ Estado: ✅ pasa · ⬜ pendiente · — n/a · 🔌 necesita HW/cableado extern
 Wdt.Timer, Pwm.Slice, Pulse.Counter (+ ADC interno vía Pico.tempC). Solo falta **Neopixel**
 (es del Metro).
 
-## Estado: tanda STM32 (Nucleo-U575ZI-Q) ✅ (2026-06-14)
+## Estado: tanda STM32 (Nucleo-U575ZI-Q) ✅ (2026-06-14) — H15 cerrado
 
-**4/4 de lo que el firmware STM32 soporta hoy** (núcleo VM + GPIO; los buses HAL aún sin
-portar). En placa, vía IDE (Run on Device):
+**Núcleo VM + GPIO + los 4 buses críticos (Pin/SPI/UART/I2C) en HW real.** En placa, vía IDE
+(Run on Device):
 
 | Sample | Resultado en placa | Valida |
 |---|---|---|
@@ -97,8 +98,12 @@ portar). En placa, vía IDE (Run on Device):
 | `OoSmoke.bp` | áreas + instanceof OK | OO puro (clases/herencia/`super`/virtual/`instanceof`) |
 | `PicoInfo.bp` | `nucleo-u575zi`, serial 4230500D…, 160 MHz, gpioCount 128 | info MCU board-aware |
 | `BlinkStm32.bp` | LED verde PC7 + prints | backend GPIO + **OO cross-module `Gpio.Pin` sin skew** |
+| `Bme688SpiId/Spi_Nucleo.bp` | chip_id 0x61 + T/HR/P reales | **bus SPI** (SPI1, AF5) |
+| `UartEcho_Nucleo.bp` | loopback "Hola" (PA0↔PA1) | **bus UART** (UART4, AF8, FIFO RX) |
+| `Bmp280Id/Read_Nucleo.bp` | BME280 chip 0x60, T=28.6 °C, P=1005.6 hPa | **bus I2C** (I2C2, AF4, open-drain) |
 
 Modelo de pin STM32: `pin=(puerto<<4)|bit`, A=0..H=7 (PC7=39 verde, PB7=23 azul, PG2=98 rojo).
+Convención de bus = nº de instancia HW (bus 1=SPI1/I2C1, bus 4=UART4…), igual que la Pico.
 
 ### Pendiente (otras tandas)
 
@@ -106,8 +111,8 @@ Modelo de pin STM32: `pin=(puerto<<4)|bit`, A=0..H=7 (PC7=39 verde, PB7=23 azul,
   PSRAM / NeoPixel onboard / 48 GPIO.
 - ⬜ **ESP32-S3**: T1 smoke. **APLAZADO ~2-3 días** (sin pines libres en la placa actual;
   Eduardo pedirá una de repuesto).
-- 🔵 **STM32 buses** (I2C/SPI/UART/PWM/ADC): portar los backends HAL = **feature [v3]**,
-  fuera del *freeze*. `OoSmoke` queda listo para reusar en cualquier placa.
+- 🔵 **STM32 no-críticos** (PWM/ADC/Rtc/Wdt): el API BP existe y corre, pero **sin backend HAL
+  en STM32 (stub)** — decisión de Eduardo (solo usa Pin/SPI/UART/I2C). Portarlos = **[v3]**.
 
 ## Cableados
 
@@ -140,9 +145,14 @@ Modelo de pin STM32: `pin=(puerto<<4)|bit`, A=0..H=7 (PC7=39 verde, PB7=23 azul,
   cross-module revienta en la VM del micro"): ese bug está **cerrado** — BusBug
   (`bus.read`, 1 array) y Bme688Spi (`bus.transfer`, 2 arrays) corren exit 0 en placa.
   El driver podría limpiarse a métodos OO (v3).
-- 🔌 **STM32 (Nucleo) — alcance del firmware**: el backend de HW solo trae **GPIO + info
-  de MCU**; I2C/SPI/UART/PWM/ADC no portados [v3]. `Pico.tempC()`=0 (sensor no cableado) y
-  las constantes de capacidad (`I2C_BUSES`=2, `PWM_SLICES`=12…) son del módulo `Pico`
-  genérico del RP2350, **no** del U575 (su `Stm32.bp` propio sería v3). Lo board-aware real
-  (boardName / uniqueId / cpuFreqHz / gpioCount) sí refleja el U575. La 1ª prueba de OO
-  cross-module en STM32 (`Gpio.Pin`) pasó **sin skew** → blobs stdlib del STM32 sanos.
+- 🔌 **STM32 (Nucleo) — alcance del firmware (H15)**: el backend de HW trae **GPIO + info de
+  MCU + SPI/UART/I2C** (los 4 buses críticos, en HW real); PWM/ADC/Rtc/Wdt quedan en **stub**
+  (API existe, sin backend HAL) [v3]. `Pico.tempC()`=0 (sensor no cableado) y las constantes de
+  capacidad (`I2C_BUSES`=2, `PWM_SLICES`=12…) son del módulo `Pico` genérico del RP2350, **no**
+  del U575 (su `Stm32.bp` propio sería v3). Lo board-aware real (boardName / uniqueId /
+  cpuFreqHz / gpioCount) sí refleja el U575.
+- 🐟 **STM32 I2C — pines y Ethernet (H15)**: en la Nucleo-144 (la U575ZI lleva PHY Ethernet)
+  varios pines van al PHY por *solder bridge* de fábrica (`PC1`=RMII_MDC, `PG13`=RMII_TXD0). Un
+  `I2c.scan()` vacío con un device presente apunta a **pin secuestrado por Ethernet**, no solo a
+  pull-ups. Solución: I2C2 en `PF0`/`PF1` (libre). Recordatorio: I2C es open-drain y necesita
+  pull-ups externas (las del módulo); las internas del STM32 (~40 k) son demasiado débiles.
