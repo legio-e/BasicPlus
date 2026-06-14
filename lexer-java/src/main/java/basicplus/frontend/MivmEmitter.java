@@ -3221,6 +3221,15 @@ public final class MivmEmitter {
                 return;
             }
             w.emitInvokeVirtualBySlot(slot, nArgs);
+            // Robustez ABI (etapa 2): requiere el marker del dueño
+            // "Modulo.Clase#metodo#slot" para que el linker valide POR NOMBRE que
+            // el método sigue en ESE slot. Si el dueño lo movió (reordenó/quitó),
+            // el marker no existe → error de link claro en vez de misdispatch.
+            // Compat hacia adelante: añadir métodos al final no mueve los markers.
+            if (cls.externalModule != null && !cls.externalModule.isEmpty()) {
+                String marker = cls.externalModule + "." + cls.name + "#" + methodName + "#" + slot;
+                w.requireExternalSymbol(marker, fromPathFor(marker));
+            }
         } else {
             // #174b cross-check: el slot que AotCEmitter computará (ClassSymbol.slotOf)
             // DEBE coincidir con el que ModWriter usa para el .mod (la autoridad).

@@ -1191,6 +1191,27 @@ public class ModWriter {
         currentBytecodeSize += 3;
     }
 
+    /** Robustez ABI — declara que este módulo REQUIERE un símbolo externo de
+     *  DATOS, SIN emitir ningún opcode (no es una llamada). El linker lo
+     *  resuelve por nombre como cualquier import; si no resuelve, error. Lo usa
+     *  el importador para los markers de vtable "Modulo.Clase#metodo#slot": si el
+     *  método dejó de estar en ese slot (el dueño reordenó/quitó), el marker no
+     *  existe → fallo de link claro en vez de misdispatch silencioso. La entrada
+     *  ext que ocupa no la referencia ningún CALL_EXT. */
+    public void requireExternalSymbol(String qualifiedName, String fromPath) {
+        String fp = (fromPath == null) ? "" : fromPath;
+        for (ExternalRef er : externalFunctions) {
+            if (er.name.equals(qualifiedName)) {
+                if (!er.fromPath.equals(fp)) {
+                    throw new RuntimeException("Inconsistencia de fromPath para import '"
+                            + qualifiedName + "': '" + er.fromPath + "' vs '" + fp + "'");
+                }
+                return;   // ya declarado
+            }
+        }
+        externalFunctions.add(new ExternalRef(qualifiedName, fp));
+    }
+
     // --- Acceso a params y locales escalares ---
 
     /**
