@@ -17,8 +17,8 @@ Pre-requisitos técnicos YA resueltos: `.mod` skew (3 familias canónicas vía
   - STM32:     STM32CubeIDE → `bpvm_stm32.bin`  ← **obligatorio**: `stm32_mods.c` cambió (skew)
 - [ ] **BpIde shaded jar**: el IDE empaqueta su copia del frontend → `install` de
       `miVM` + `lexer-java` y luego `package` de `BpIde` (ver memoria
-      `rebuild-bpide-fatjar-tras-frontend`). OJO: el pom marca `1.0-SNAPSHOT`; o lo
-      subes a `2.0` (`mvn versions:set`) o aceptas ese nombre en el artefacto.
+      `rebuild-bpide-fatjar-tras-frontend`). El pom de `BpIde` ya está en `2.0`
+      → el jar sale `BpIde-2.0.jar` (el shade reemplaza el principal, sin classifier).
 
 ## 2 · Repositorio (lo hace Eduardo)
 

@@ -89,7 +89,7 @@ todo lo nuevo va a v3.
 
 | Artefacto | Para | Cómo se instala |
 |---|---|---|
-| `BpIde-1.0-SNAPSHOT-shaded.jar` | El IDE (PC) | `java -jar …` (requiere JDK 8+) |
+| `BpIde-2.0.jar` | El IDE (PC) | `java -jar …` (requiere JDK 8+) |
 | `bpvm_pico.uf2` | Pico 2 **y** Metro RP2350 | BOOTSEL + copiar el `.uf2` |
 | `bpvm_esp32_merged.bin` | ESP32-S3 | `esptool write_flash 0x0 …` |
 | `bpvm_stm32.bin` | STM32 Nucleo-U575 | copiar al disco del ST-LINK / STM32CubeProgrammer |
