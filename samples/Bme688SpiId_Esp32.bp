@@ -1,0 +1,45 @@
+// Bme688SpiId_Esp32.bp — H16: chip_id del BME688 por SPI en el ESP32-S3
+// (bus 2 = SPI2 / FSPI). Primer test del backend SPI del ESP32.
+//
+// En el ESP32 el numero de pin ES el numero de GPIO. Convencion bus = instancia:
+//   bus 0/1 = SPI de la flash (reservados). Usa bus 2 (SPI2) o 3 (SPI3).
+//
+// Cableado (pines naturales del FSPI; ajusta si tu modulo los usa para flash):
+//   BME688 SCK -> GPIO12      SDI(MOSI) -> GPIO11
+//   BME688 SDO(MISO) -> GPIO13   CS -> GPIO10 (GPIO libre, lo gestiona Gpio.Pin)
+//   BME688 VIN -> 3V3         GND -> GND
+//
+// Lee el registro chip_id (0xD0) por SPI -> debe responder 0x61 (97).
+// (Mismo protocolo que el T1 de Pico/STM32; aqui valida el backend SPI del ESP32.)
+module Bme688SpiIdEsp32
+  import Spi
+  import Gpio
+
+  function main()
+    print "--- BME688 chip_id por SPI (H16 ESP32-S3, bus 2 = SPI2) ---"
+
+    // bus 2 = SPI2. SCK=GPIO12, MOSI=GPIO11, MISO=GPIO13.
+    var bus: Spi.Bus := Spi.Bus(2, 12, 11, 13, Spi.MHZ_1(), Spi.Bus.MODE0)
+    var cs: Gpio.Pin := Gpio.Pin(10, Gpio.Pin.OUTPUT)   // CS = GPIO10
+    cs.on()
+    sleep(10)
+
+    var tx: integer[] := [0xD0, 0x00]   // 0xD0 = read chip_id; dummy
+    var rx: integer[] := newIntArray(2)
+
+    cs.off()
+    var n: integer := bus.transfer(tx, rx, 2)
+    cs.on()
+
+    var chip: integer := rx[1] & 0xFF
+    print "chip_id =", chip, " (esperado 97 = 0x61)"
+    if chip == 0x61 then
+      print "RESULT: OK  -- el bus SPI del ESP32 habla con el BME688"
+    else
+      print "RESULT: FAIL -- revisa cableado / CS / modo (leido:", chip, ")"
+    endif
+
+    print "--- fin ---"
+  end main
+
+end Bme688SpiIdEsp32

@@ -1,0 +1,67 @@
+// Bmp280Id_Esp32.bp — H16: chip_id del BME280/BMP280 por I2C en el ESP32-S3
+// (bus 0 = I2C0). Primer test del backend I2C del ESP32 (driver i2c_master).
+//
+// En el ESP32 el numero de pin ES el numero de GPIO. Convencion bus = instancia:
+//   bus 0 = I2C0, bus 1 = I2C1.
+//
+// Cableado (GPIO libres del S3; ajusta a tu placa):
+//   sensor SDA -> GPIO8     SCL -> GPIO9
+//   sensor VIN -> 3V3       GND -> GND
+//   sensor SDO -> GND (addr 0x76) o 3V3 (addr 0x77)
+//
+// I2C es open-drain -> necesita PULL-UPS a 3V3. El backend activa el pull-up
+// interno del ESP32 como red de seguridad, pero lo ideal son las del modulo
+// (4k7); la mayoria de GY-BME/BMP280 las traen.
+//
+// Lee el registro chip_id (0xD0) -> BMP280 = 0x58 (88), BME280 = 0x60 (96).
+module Bmp280IdEsp32
+  import I2c
+
+  // Apunta al registro chip_id (0xD0) y lee 1 byte. -1 si el sensor no ACKea.
+  function leerChip(bus: I2c.Bus, addr: integer): integer
+    var reg: integer[] := [0xD0]
+    bus.write(addr, reg, 1)
+    var rx: integer[] := newIntArray(1)
+    var n: integer := bus.read(addr, rx, 1)
+    if n < 1 then
+      return -1
+    endif
+    return rx[0] & 0xFF
+  end leerChip
+
+  function main()
+    print "--- BME280/BMP280 chip_id por I2C (H16 ESP32-S3, bus 0 = I2C0) ---"
+
+    // bus 0 = I2C0. SDA=GPIO8, SCL=GPIO9. 100 kHz (STANDARD).
+    var bus: I2c.Bus := I2c.Bus(0, 8, 9, I2c.Bus.STANDARD)
+
+    print "[1] scan del bus I2C (0x08..0x77)..."
+    var devs: integer[] := bus.scan()
+    var i: integer := 0
+    while i < len(devs) do
+      print "   device en addr (dec) =", devs[i]
+      i := i + 1
+    endwh
+    if len(devs) == 0 then
+      print "   (ninguno respondio) -- revisa cableado y pull-ups"
+    endif
+
+    // chip_id en 0x76 (SDO->GND); si no responde, probamos 0x77 (SDO->VDD).
+    var addr: integer := 0x76
+    var chip: integer := leerChip(bus, addr)
+    if (chip != 0x58) and (chip != 0x60) then
+      addr := 0x77
+      chip := leerChip(bus, addr)
+    endif
+
+    print "[2] addr =", addr, "chip_id =", chip, "(88=0x58 BMP280 / 96=0x60 BME280)"
+    if (chip == 0x58) or (chip == 0x60) then
+      print "RESULT: OK  -- el bus I2C del ESP32 habla con el BMP280/BME280"
+    else
+      print "RESULT: FAIL -- revisa cableado / pull-ups / addr (leido:", chip, ")"
+    endif
+
+    print "--- fin ---"
+  end main
+
+end Bmp280IdEsp32

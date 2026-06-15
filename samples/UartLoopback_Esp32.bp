@@ -1,0 +1,41 @@
+// UartLoopback_Esp32.bp — H16: loopback UART en el ESP32-S3 (bus 1 = UART1).
+//
+// En el ESP32 el numero de pin ES el numero de GPIO. Convencion bus = instancia:
+//   bus 0 = UART0 -> RESERVADO (es el wire del IDE). Usa bus 1 (UART1) o 2 (UART2).
+// Cableado: un JUMPER entre GPIO17 (TX) y GPIO18 (RX).  @115200 8N1.
+//   GPIO17/18 son pines libres del S3 (no strapping, no flash, no USB, no UART0).
+//
+// Envia "Hola" y lo lee de vuelta por el loopback. Sin jumper: recibidos=0
+// (timeout 2 s) -- tambien valido como "no crash". El eco real exige el puente.
+module UartLoopbackEsp32
+  import Uart
+
+  function main()
+    print "--- UART loopback (H16 ESP32-S3, bus 1 = UART1, GPIO17/18) ---"
+
+    // bus 1 = UART1. TX=GPIO17, RX=GPIO18. 8 datos, 1 stop, sin paridad.
+    Uart.init(1, 17, 18, Uart.BAUD_115200(), 8, 1, Uart.PARITY_NONE())
+
+    var msg: integer[] := [0x48, 0x6F, 0x6C, 0x61]   // "Hola"
+    print "[1] write 4 bytes ->", Uart.write(1, msg, 4)
+
+    var rx: integer[] := newIntArray(8)
+    var n: integer := Uart.read(1, rx, 8, 2000)
+    print "[2] recibidos =", n
+
+    var i: integer := 0
+    while i < n do
+      print "  byte[", i, "] =", rx[i]
+      i := i + 1
+    endwh
+
+    if n >= 4 then
+      print "RESULT: OK -- eco recibido (UART del ESP32 funcionando)"
+    else
+      print "RESULT: sin eco -- revisa el jumper GPIO17<->GPIO18 (recibidos:", n, ")"
+    endif
+
+    print "--- fin ---"
+  end main
+
+end UartLoopbackEsp32

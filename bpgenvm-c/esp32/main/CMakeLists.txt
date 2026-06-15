@@ -49,6 +49,8 @@ idf_component_register(
         esp_driver_uart
         esp_partition
         esp_driver_gpio
+        esp_driver_spi   # H16: backend SPI (spi_master)
+        esp_driver_i2c   # H16: backend I2C (i2c_master, IDF v6)
         spi_flash        # INFO: esp_flash_get_size (flash real montada)
         esp_hw_support   # INFO: esp_mac.h (uniqueId desde efuse)
 )
