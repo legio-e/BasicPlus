@@ -16,6 +16,7 @@
 #include "fs.h"
 #include "repl_esp32.h"
 #include "hw_esp32.h"
+#include "esp32_mods.h"
 
 /* Buffer caller-provided de la VM. NO static — repl_esp32.c lo referencia
  * como extern (igual convención que repl_v1.c en la Pico). */
@@ -32,7 +33,8 @@ void app_main(void)
 
     fs_init();
     fs_register_bpvm();    /* #247 — file I/O desde BP sobre este FS */
-    esp32_hw_register();   /* backends de HW (GPIO, …) */
+    esp32_mods_install();  /* stdlib core embebida -> /lib (if-absent), como STM32/Pico */
+    esp32_hw_register();   /* backends de HW (GPIO, pico/info) */
     wire_v1_uart_init();
 
     printf("[boot] REPL wire v1 escuchando en UART0. Conecta el IDE al puerto del bridge.\n");

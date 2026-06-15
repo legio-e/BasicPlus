@@ -9,6 +9,7 @@ idf_component_register(
         "fs_ram.c"
         "repl_esp32.c"
         "gpio_esp32.c"
+        "esp32_mods.c"
         "json_min.c"
         # --- core VM (portable C99) ---
         "../../src/bpvm.c"

@@ -1,0 +1,42 @@
+// GpioLoopback_Esp32.bp — H14: test de GPIO (out + in) en el ESP32-S3 por
+// loopback, sin depender de un LED (las DevKitC-S3 llevan un WS2812 RGB que
+// no responde a un nivel digital simple).
+//
+// Cableado: un JUMPER entre GPIO4 y GPIO5.
+//   GPIO4 = salida (OUTPUT), GPIO5 = entrada (INPUT).
+// En el ESP32 el numero de pin ES el numero de GPIO (GPIO4 -> 4).
+// Pines seguros y libres (no strapping, no flash/PSRAM, no USB, no UART0).
+//
+// Escribe 1 y 0 en GPIO4 y los lee de vuelta por GPIO5. Sin jumper: la
+// entrada flota y el test marca FAIL (tambien valido como "no crash").
+module GpioLoopbackEsp32
+  import Gpio
+
+  function main()
+    print "--- GPIO loopback (H14 ESP32-S3: GPIO4 -> GPIO5) ---"
+    print "    jumper entre GPIO4 (OUT) y GPIO5 (IN)"
+
+    var out: Gpio.Pin := Gpio.Pin(4, Gpio.Pin.OUTPUT)
+    var inp: Gpio.Pin := Gpio.Pin(5, Gpio.Pin.INPUT)
+
+    out.on()              // GPIO4 = 1
+    sleep(5)
+    var hi: integer := inp.value()
+
+    out.off()             // GPIO4 = 0
+    sleep(5)
+    var lo: integer := inp.value()
+
+    print "  OUT=1 -> IN leyo", hi, "(esperado 1)"
+    print "  OUT=0 -> IN leyo", lo, "(esperado 0)"
+
+    if (hi == 1) and (lo == 0) then
+      print "RESULT: OK -- GPIO out+in verificados (jumper GPIO4<->GPIO5)"
+    else
+      print "RESULT: FAIL -- revisa el jumper GPIO4<->GPIO5 (hi:", hi, " lo:", lo, ")"
+    endif
+
+    print "--- fin ---"
+  end main
+
+end GpioLoopbackEsp32
