@@ -42,7 +42,7 @@ Pre-requisitos técnicos YA resueltos: `.mod` skew (3 familias canónicas vía
 - [ ] Tag `v2.0` sobre el commit publicado.
 - [ ] Cuerpo de la release = contenido de `docs/RELEASES.md`.
 - [ ] Adjuntar binarios: `bpvm_pico.uf2`, `bpvm_esp32_merged.bin`, `bpvm_stm32.bin`,
-      `BpIde-*-shaded.jar`.
+      `BpIde-2.0.jar`.
 
 ## Pendientes menores (no bloquean la publicación; → v3)
 
