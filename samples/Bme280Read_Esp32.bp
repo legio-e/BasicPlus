@@ -1,0 +1,218 @@
+// ============================================================
+// Bme280Read_Esp32.bp — H16: lecturas reales T / Humedad / Presion del
+// BME280 por I2C en el ESP32-S3 (bus 0 = I2C0).
+//
+// El sensor de Eduardo da chip_id 0x60 = BME280 (= BMP280 + humedad). La
+// base T+P es la del driver Bmp280 (ya verificada en STM32); aqui se anade
+// la HUMEDAD: calibracion H (dig_H1..H6) + ctrl_hum + formula de
+// compensacion de Bosch (BME280 datasheet, version double).
+//
+// Cableado (mismo que el chip_id, no hay que recablear):
+//   SDA -> GPIO8     SCL -> GPIO9     VIN -> 3V3   GND -> GND   SDO -> GND (0x76)
+// ============================================================
+module Bme280ReadEsp32
+  import I2c
+
+  public class Sensor
+    public var bus:  I2c.Bus
+    public var addr: integer
+    public var chip: integer
+
+    // calibracion T/P (igual que Bmp280)
+    public var t1: integer
+    public var t2: integer
+    public var t3: integer
+    public var p1: integer
+    public var p2: integer
+    public var p3: integer
+    public var p4: integer
+    public var p5: integer
+    public var p6: integer
+    public var p7: integer
+    public var p8: integer
+    public var p9: integer
+    // calibracion de humedad (BME280)
+    public var h1: integer
+    public var h2: integer
+    public var h3: integer
+    public var h4: integer
+    public var h5: integer
+    public var h6: integer
+
+    public var tFine:    double
+    public var tempC:    double
+    public var pressHpa: double
+    public var humPct:   double
+
+    public function Sensor(bus: I2c.Bus, addr: integer)
+      this.bus  := bus
+      this.addr := addr
+    end Sensor
+
+    public function s8(v: integer): integer
+      if v > 127 then
+        return v - 256
+      endif
+      return v
+    end s8
+
+    public function s16(v: integer): integer
+      if v > 32767 then
+        return v - 65536
+      endif
+      return v
+    end s16
+
+    public function writeReg(reg: integer, val: integer)
+      var b: integer[] := [reg, val]
+      this.bus.write(this.addr, b, 2)
+    end writeReg
+
+    public function readRegs(reg: integer, buf: integer[], n: integer)
+      var p: integer[] := [reg]
+      this.bus.write(this.addr, p, 1)
+      this.bus.read(this.addr, buf, n)
+    end readRegs
+
+    public function readReg(reg: integer): integer
+      var buf: integer[] := [0]
+      this.readRegs(reg, buf, 1)
+      return buf[0]
+    end readReg
+
+    // reset, chip id (0x58/0x60), calibracion, config (ctrl_hum ANTES de ctrl_meas).
+    public function begin(): boolean
+      this.writeReg(0xE0, 0xB6)        // soft reset
+      sleep(5)
+      this.chip := this.readReg(0xD0)
+      if (this.chip != 0x58) and (this.chip != 0x60) then
+        return false
+      endif
+      this.readCalibration()
+      this.writeReg(0xF2, 0x01)         // ctrl_hum: osrs_h x1 (ANTES de 0xF4)
+      this.writeReg(0xF5, 0x00)         // config: standby 0.5ms, filtro off
+      this.writeReg(0xF4, 0x27)         // ctrl_meas: osrs_t x1, osrs_p x1, modo normal
+      sleep(50)
+      return true
+    end begin
+
+    public function readCalibration()
+      var c: integer[] := newIntArray(24)
+      this.readRegs(0x88, c, 24)
+      this.t1 := c[0] | (c[1] shl 8)
+      this.t2 := this.s16(c[2]  | (c[3]  shl 8))
+      this.t3 := this.s16(c[4]  | (c[5]  shl 8))
+      this.p1 := c[6] | (c[7] shl 8)
+      this.p2 := this.s16(c[8]  | (c[9]  shl 8))
+      this.p3 := this.s16(c[10] | (c[11] shl 8))
+      this.p4 := this.s16(c[12] | (c[13] shl 8))
+      this.p5 := this.s16(c[14] | (c[15] shl 8))
+      this.p6 := this.s16(c[16] | (c[17] shl 8))
+      this.p7 := this.s16(c[18] | (c[19] shl 8))
+      this.p8 := this.s16(c[20] | (c[21] shl 8))
+      this.p9 := this.s16(c[22] | (c[23] shl 8))
+      // humedad: H1 en 0xA1; H2..H6 en 0xE1..0xE7
+      this.h1 := this.readReg(0xA1)
+      var e: integer[] := newIntArray(7)
+      this.readRegs(0xE1, e, 7)
+      this.h2 := this.s16(e[0] | (e[1] shl 8))
+      this.h3 := e[2]
+      this.h4 := this.s16((e[3] shl 4) | (e[4] & 0x0F))
+      this.h5 := this.s16((e[5] shl 4) | (e[4] shr 4))
+      this.h6 := this.s8(e[6])
+    end readCalibration
+
+    public function measure()
+      var d: integer[] := newIntArray(8)
+      this.readRegs(0xF7, d, 8)         // P[0..2] T[3..5] H[6..7]
+      var adcP: integer := (d[0] shl 12) | (d[1] shl 4) | (d[2] shr 4)
+      var adcT: integer := (d[3] shl 12) | (d[4] shl 4) | (d[5] shr 4)
+      var adcH: integer := (d[6] shl 8) | d[7]
+      this.tempC    := this.compTemp(adcT)
+      this.pressHpa := this.compPress(adcP) / 100.0d
+      this.humPct   := this.compHum(adcH)
+    end measure
+
+    public function compTemp(adc: integer): double
+      var var1: double := ((double(adc) / 16384.0d) - (double(this.t1) / 1024.0d)) * double(this.t2)
+      var dd: double := (double(adc) / 131072.0d) - (double(this.t1) / 8192.0d)
+      var var2: double := (dd * dd) * double(this.t3)
+      this.tFine := var1 + var2
+      return this.tFine / 5120.0d
+    end compTemp
+
+    public function compPress(adc: integer): double
+      var var1: double := (this.tFine / 2.0d) - 64000.0d
+      var var2: double := (var1 * var1) * (double(this.p6) / 32768.0d)
+      var2 := var2 + (var1 * double(this.p5) * 2.0d)
+      var2 := (var2 / 4.0d) + (double(this.p4) * 65536.0d)
+      var1 := (((double(this.p3) * var1 * var1) / 524288.0d) + (double(this.p2) * var1)) / 524288.0d
+      var1 := (1.0d + (var1 / 32768.0d)) * double(this.p1)
+      if var1 == 0.0d then
+        return 0.0d
+      endif
+      var p: double := 1048576.0d - double(adc)
+      p := ((p - (var2 / 4096.0d)) * 6250.0d) / var1
+      var pv1: double := (double(this.p9) * p * p) / 2147483648.0d
+      var pv2: double := (p * double(this.p8)) / 32768.0d
+      p := p + ((pv1 + pv2 + double(this.p7)) / 16.0d)
+      return p
+    end compPress
+
+    // Compensacion de humedad del BME280 (Bosch, version double).
+    public function compHum(adc: integer): double
+      var vH: double := this.tFine - 76800.0d
+      vH := (double(adc) - ((double(this.h4) * 64.0d) + ((double(this.h5) / 16384.0d) * vH))) * ((double(this.h2) / 65536.0d) * (1.0d + ((double(this.h6) / 67108864.0d) * vH * (1.0d + ((double(this.h3) / 67108864.0d) * vH)))))
+      vH := vH * (1.0d - ((double(this.h1) * vH) / 524288.0d))
+      if vH > 100.0d then
+        vH := 100.0d
+      endif
+      if vH < 0.0d then
+        vH := 0.0d
+      endif
+      return vH
+    end compHum
+
+    public function temperature(): double
+      return this.tempC
+    end temperature
+    public function pressure(): double
+      return this.pressHpa
+    end pressure
+    public function humidity(): double
+      return this.humPct
+    end humidity
+    public function chipID(): integer
+      return this.chip
+    end chipID
+  end Sensor
+
+  // ============================================================
+  function main()
+    print "--- BME280 T/H/P por I2C (H16 ESP32-S3, bus 0 = I2C0) ---"
+
+    // bus 0 = I2C0. SDA=GPIO8, SCL=GPIO9.
+    var bus: I2c.Bus := I2c.Bus(0, 8, 9, I2c.Bus.STANDARD)
+    var s: Sensor := Sensor(bus, 0x76)
+
+    if s.begin() == false then
+      print "RESULT: FAIL -- begin() no arranco (chip =", s.chipID(), ", esperado 96/88)"
+      print "--- fin ---"
+      return
+    endif
+
+    print "sensor OK: chip (dec) =", s.chipID(), "(96=0x60 BME280)"
+
+    var i: integer := 0
+    while i < 5 do
+      s.measure()
+      print "  T =", s.temperature(), "C   HR =", s.humidity(), "%   P =", s.pressure(), "hPa"
+      sleep(1000)
+      i := i + 1
+    endwh
+
+    print "RESULT: OK -- lecturas reales T/H/P del BME280 por I2C (ESP32)"
+    print "--- fin ---"
+  end main
+
+end Bme280ReadEsp32
