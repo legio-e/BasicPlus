@@ -83,7 +83,8 @@ cd bpgenvm-c/samples
 java -jar ../../lexer-java/target/basicplus-frontend.jar Hello.bp --compile . --backend=mivm
 cd ../pico
 xxd -i -n hello_mod ../samples/Hello.mod | sed '1s/.*/const uint8_t hello_mod[] = {/; $s/.*/const unsigned int hello_mod_len = & /' > hello_mod.c
-# (o usa scripts/regen_embedded_mods.sh, pendiente)
+# La stdlib embebida (core/gpio/i2c/...) -> scripts/regen_pico_mods.sh,
+# o ../scripts/regen_all_mods.sh para regenerar las 3 familias de un tiro.
 ```
 
 ## Estructura
