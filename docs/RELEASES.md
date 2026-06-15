@@ -79,11 +79,11 @@ todo lo nuevo va a v3.
   BME688 con paginación de memoria), UART, PWM + contador, ADC, RTC, watchdog
   y timers— validada **en placa** sobre Raspberry Pi Pico 2 / Pico 2 W, con el
   mismo bytecode que corre en el PC.
-- En el **STM32** (Nucleo-U575ZI-Q), validados en placa con sensores reales los
-  **cuatro buses críticos**: GPIO, SPI (BME688), UART (loopback) e I2C (BME280);
-  los periféricos no críticos (PWM/ADC/RTC/WDT) existen en la API, con backend
-  STM32 para v3. **Metro RP2350B** y **ESP32-S3** comparten el mismo núcleo de
-  VM; su pasada exhaustiva de periféricos por placa continúa.
+- En el **STM32** (Nucleo-U575ZI-Q) y el **ESP32-S3** (DevKitC), validados en placa
+  con sensores reales los **cuatro buses críticos**: GPIO, SPI (BME688), UART (loopback)
+  e I2C (BME280) — las **tres familias a la par**. En ambas, los periféricos no críticos
+  (PWM/ADC/RTC/WDT) existen en la API y se ejecutan, con backend HW para v3. El **Metro
+  RP2350B** comparte la imagen de firmware con la Pico.
 
 ### Artefactos de la release
 

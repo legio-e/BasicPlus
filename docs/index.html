@@ -316,11 +316,12 @@
 <p>
   En el <strong>STM32</strong> (Nucleo-U575ZI-Q) se validaron además en placa, con
   sensores reales, los <strong>cuatro buses críticos</strong>: GPIO, <strong>SPI</strong>
-  (BME688), <strong>UART</strong> (loopback) e <strong>I2C</strong> (BME280, T/P); los
-  periféricos no críticos (PWM/ADC/RTC/WDT) existen en la API y se ejecutan, pero su
-  backend en STM32 queda para v3. <strong>Metro RP2350B</strong> y <strong>ESP32-S3</strong>
-  comparten el mismo núcleo de VM y arrancan, ejecutan y se comunican con el IDE; la pasada
-  exhaustiva de periféricos por placa está en curso.
+  (BME688), <strong>UART</strong> (loopback) e <strong>I2C</strong> (BME280, T/P). Y en el
+  <strong>ESP32-S3</strong> (DevKitC) se validaron en placa esos <strong>mismos cuatro buses</strong>
+  con sensores reales (BME688 por SPI, BME280 por I2C, loopbacks de GPIO y UART) — las
+  <strong>tres familias quedan a la par</strong>. En STM32 y ESP32, los periféricos no críticos
+  (PWM/ADC/RTC/WDT) existen en la API y se ejecutan, pero su backend queda para v3. El
+  <strong>Metro RP2350B</strong> comparte la imagen de firmware con la Pico.
 </p>
 
 <div class="note">

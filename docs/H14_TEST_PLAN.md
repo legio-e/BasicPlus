@@ -46,13 +46,13 @@ Estado: ✅ pasa · ⬜ pendiente · — n/a · 🔌 necesita HW/cableado extern
 
 | Peldaño | Pico 2 W (RP2350A) | Metro (RP2350B) | ESP32-S3 | STM32 |
 |---|---|---|---|---|
-| 1 Ejecución | ✅ | ⬜ | ⬜ | ✅ |
-| 2 OO | ✅¹ | ⬜ | ⬜ | ✅⁷ |
-| 3a blink (GPIO) | ✅⁴ | ⬜ | ⬜ | ✅⁸ |
-| 3b I2C | ✅² | ⬜ | — | ✅⁹ |
-| 3c SPI | ✅✅³ | ⬜ | — | ✅⁹ |
-| 3d UART | ✅⁵ | ⬜ | — | ✅⁹ |
-| 3e timers | ✅⁶ | ⬜ | — | 🔵⁹ |
+| 1 Ejecución | ✅ | ⬜ | ✅ | ✅ |
+| 2 OO | ✅¹ | ⬜ | ✅¹⁰ | ✅⁷ |
+| 3a blink (GPIO) | ✅⁴ | ⬜ | ✅¹⁰ | ✅⁸ |
+| 3b I2C | ✅² | ⬜ | ✅¹⁰ | ✅⁹ |
+| 3c SPI | ✅✅³ | ⬜ | ✅¹⁰ | ✅⁹ |
+| 3d UART | ✅⁵ | ⬜ | ✅¹⁰ | ✅⁹ |
+| 3e timers | ✅⁶ | ⬜ | 🔵¹⁰ | 🔵⁹ |
 | 3f Pulse | ✅³ | — | — | — |
 
 ¹ vía BusBug (I2c.Bus.read, array cross-module). OO puro sin HW (`OoSmoke`) = opcional.
@@ -64,6 +64,7 @@ Estado: ✅ pasa · ⬜ pendiente · — n/a · 🔌 necesita HW/cableado extern
 ⁷ STM32: `OoSmoke` (OO puro) + `Gpio.Pin` (OO cross-module) — sin skew.
 ⁸ STM32: LED verde PC7=39 vía `Gpio.Pin` (`samples/BlinkStm32.bp`).
 ⁹ STM32 (H15, 14-jun): SPI (`Bme688Spi_Nucleo`, BME688 T/HR/P), UART (`UartEcho_Nucleo`, loopback PA0↔PA1), I2C (`Bmp280Read_Nucleo`, BME280 T/P) — backend HAL real, bus = nº de instancia. 🔵 PWM/ADC/Rtc/Wdt: el API BP existe y corre, pero sin backend HAL (stub); no críticos [v3].
+¹⁰ ESP32-S3 (H16, 15-jun): GPIO (`GpioLoopback_Esp32`, jumper GPIO4↔5), SPI (`Bme688SpiId/Spi_Esp32`, BME688 chip_id + T/HR/P/gas), UART (`UartLoopback_Esp32`, loopback GPIO17↔18), I2C (`Bmp280Id_Esp32` + `Bme280Read_Esp32`, BME280 T/H/P) — backends ESP-IDF, bus = nº de instancia (UART0=wire, SPI0/1=flash, reservados). 🔵 PWM/ADC/Rtc/Wdt = stub (no críticos) [v3].
 
 ## Estado: tanda Pico 2 / Pico 2 W COMPLETA ✅ (2026-06-14)
 
@@ -105,14 +106,35 @@ Wdt.Timer, Pwm.Slice, Pulse.Counter (+ ADC interno vía Pico.tempC). Solo falta 
 Modelo de pin STM32: `pin=(puerto<<4)|bit`, A=0..H=7 (PC7=39 verde, PB7=23 azul, PG2=98 rojo).
 Convención de bus = nº de instancia HW (bus 1=SPI1/I2C1, bus 4=UART4…), igual que la Pico.
 
+## Estado: tanda ESP32-S3 (DevKitC) ✅ (2026-06-15) — H16 cerrado
+
+**Núcleo VM + GPIO + los 4 buses críticos (Pin/SPI/UART/I2C) en HW real.** Era la familia menos
+rodada: la 1ª placa (Touch-LCD-4.3) no tenía pines libres, así que el GPIO no se había podido
+validar hasta esta DevKitC. En placa, vía IDE:
+
+| Sample | Resultado en placa | Valida |
+|---|---|---|
+| `T.bp` | `Hola mundo`, exit 0 | ejecución de la VM en Xtensa LX7 |
+| `OoSmoke.bp` | áreas + instanceof OK | OO puro |
+| `PicoInfo.bp` | `esp32s3-devkitc`, MAC 98A316…, 240 MHz, gpioCount 45 | info MCU board-aware |
+| `GpioLoopback_Esp32.bp` | OUT=1→IN 1, OUT=0→IN 0 | **GPIO** out+in (jumper GPIO4↔5) |
+| `Bme688SpiId/Spi_Esp32.bp` | chip_id 0x61 + T≈29/HR≈53/P≈1007/gas | **bus SPI** (SPI2, GPIO10-13) |
+| `UartLoopback_Esp32.bp` | eco "Hola" (loopback GPIO17↔18) | **bus UART** (UART1) |
+| `Bmp280Id/Bme280Read_Esp32.bp` | BME280 chip 0x60, T≈27/HR≈53/P≈1006 | **bus I2C** (I2C0, `i2c_master`) |
+
+Dos gaps de firmware cazados y tapados (commit `b055458`): el ESP32 **no embebía la stdlib** (solo
+`hello_mod`) y el IDE no sube deps transitivas → se embebió como en STM32/Pico (`esp32_mods.c`); y
+faltaba el **backend `pico`** (info real). Los buses, en `df3134b`/`a425293`. En IDF v6 el driver
+I2C legacy ya no existe → `i2c_master` con device-handle *on-demand*. En el ESP32 el pin = nº de GPIO.
+
 ### Pendiente (otras tandas)
 
 - ⬜ **Metro RP2350B**: comparte firmware con la Pico → replicar la escalera + deltas
-  PSRAM / NeoPixel onboard / 48 GPIO.
-- ⬜ **ESP32-S3**: T1 smoke. **APLAZADO ~2-3 días** (sin pines libres en la placa actual;
-  Eduardo pedirá una de repuesto).
-- 🔵 **STM32 no-críticos** (PWM/ADC/Rtc/Wdt): el API BP existe y corre, pero **sin backend HAL
-  en STM32 (stub)** — decisión de Eduardo (solo usa Pin/SPI/UART/I2C). Portarlos = **[v3]**.
+  PSRAM / NeoPixel onboard / 48 GPIO. (Única familia sin tanda dedicada; la Pico cubre el grueso
+  al compartir la imagen de firmware.)
+- 🔵 **No-críticos en STM32 y ESP32** (PWM/ADC/Rtc/Wdt): el API BP existe y corre, pero **sin
+  backend HW (stub)** en esas dos familias — decisión de Eduardo (solo usa Pin/SPI/UART/I2C).
+  Portarlos = **[v3]**.
 
 ## Cableados
 
