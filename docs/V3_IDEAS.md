@@ -29,6 +29,18 @@
 > **Esto PRECISA y prevalece sobre lo que sigue** (redactado antes con
 > "backends de render intercambiables" genéricos + bake-off Swing/JavaFX).
 
+> **TRANSPORTE PANTALLA↔MICRO — encuadre (16-jun, charla H2).** Ortogonal al
+> contrato `Gui.*` (que NO tiene ni un pin — correcto). LVGL rasteriza a un
+> framebuffer y habla con el panel por DOS callbacks: **`flush(area, pixels)`**
+> (envía la región al display — *aquí vive el transporte*: SPI / RGB-paralelo /
+> MIPI-DSI / HSTX-DVI) y **`read_touch() → (x,y,pulsado)`** (táctil). Eso es lo
+> ÚNICO que cambia entre placas. Arquitectura = el patrón de los buses: facade
+> **`bpvm_display`** (flush+read) + **config por placa** (`board.json`:
+> transporte, pines, resolución, timings, color, rotación = DATO, no código) +
+> reuso por **TIPO de transporte** (un backend por SPI/RGB/DSI/DVI, no uno por
+> panel → principio 5). En el HOST no existe (se blittea a una ventana del SO);
+> aparece SOLO en la fase micro (H4+). Por eso H2 (el contrato) cierra sin tocarlo.
+
 ### Decisión de arquitectura: un API `Gui.*`, varios backends de render
 
 El contrato BP (`Gui.Screen`, `Gui.Button`, `Gui.Label`, eventos…) se define

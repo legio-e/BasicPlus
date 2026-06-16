@@ -1,0 +1,159 @@
+// ============================================================
+// Gui.bp — ARMAZÓN del API gráfico de BasicPlus (V3, hito H2).
+//
+// Contrato OO ÚNICO, idéntico en las 3 VMs (igual que I2c/Spi/Uart):
+// el programa BP ve estas clases; cada VM las cumple por debajo con
+// su backend — LVGL en la VM-C (host SDL y micro TFT), Java puro en
+// miVM. NUNCA un puente JNI. La paridad se verifica por volcado del
+// árbol de widgets, no por píxeles (docs/V3_ROADMAP.md §3).
+//
+// Subconjunto mínimo destilado de un proyecto LVGL real
+// (GM2_Pantalla_V01): Obj / Screen / Panel / Label / Button, con
+// align + estilos básicos + onClick. Suficiente para una app sencilla;
+// se amplía (Switch/Slider/Image/Style/flex...) en tandas posteriores.
+//
+// *** ARMAZÓN: los cuerpos son STUBS. La conexión con el backend
+// (builtins GUI + upcall C->BP) llega en H3+. Aquí solo se fija el
+// CONTRATO: qué clases, qué jerarquía, qué firmas, qué eventos. ***
+// ============================================================
+module Gui
+
+  // ----------------------------------------------------------
+  // Color — RGB empaquetado 0xRRGGBB.  Ej.: Gui.Color(0xFF0000) = rojo.
+  // ----------------------------------------------------------
+  public class Color
+    public var rgb: integer
+    public function Color(rgb: integer)
+      this.rgb := rgb
+    end Color
+  end Color
+
+  // ----------------------------------------------------------
+  // Align — anclas de posición (subconjunto del ALIGN de LVGL).
+  // Uso: w.align(Gui.Align.CENTER, 0, 0)
+  // ----------------------------------------------------------
+  public class Align
+    public const Align.TOP_LEFT:     integer := 0
+    public const Align.TOP_MID:      integer := 1
+    public const Align.TOP_RIGHT:    integer := 2
+    public const Align.LEFT_MID:     integer := 3
+    public const Align.CENTER:       integer := 4
+    public const Align.RIGHT_MID:    integer := 5
+    public const Align.BOTTOM_LEFT:  integer := 6
+    public const Align.BOTTOM_MID:   integer := 7
+    public const Align.BOTTOM_RIGHT: integer := 8
+  end Align
+
+  // ----------------------------------------------------------
+  // Obj — base de TODO widget. Aporta el handle opaco al objeto
+  // nativo (lo asigna el backend) y las operaciones comunes.
+  // ----------------------------------------------------------
+  public class Obj
+    // Handle al objeto nativo (puntero LVGL en C / id en Java). 0 = sin crear.
+    public var handle: integer
+
+    public function setWidth(w: integer)
+      // STUB H3: __gui_set_width(this.handle, w)
+    end setWidth
+
+    public function setHeight(h: integer)
+      // STUB H3: __gui_set_height(this.handle, h)
+    end setHeight
+
+    public function setSize(w: integer, h: integer)
+      // STUB H3
+    end setSize
+
+    // Ancla el widget dentro de su padre.  a = Gui.Align.*
+    public function align(a: integer, dx: integer, dy: integer)
+      // STUB H3: __gui_align(this.handle, a, dx, dy)
+    end align
+
+    public function setBgColor(c: Color)
+      // STUB H3: __gui_set_bg_color(this.handle, c.rgb)
+    end setBgColor
+
+    public function clean()
+      // STUB H3
+    end clean
+
+    public function delete()
+      // STUB H3
+    end delete
+
+    // ------ Evento de click ------
+    // El backend lo invoca (upcall C->BP) al pulsar el widget. Por
+    // defecto no hace nada: el usuario SUBCLASEA el widget y reescribe
+    // onClick (dispatch virtual, sin tocar el lenguaje).
+    public function onClick()
+      // vacío por defecto; override en subclase
+    end onClick
+  end Obj
+
+  // ----------------------------------------------------------
+  // Screen — pantalla raíz. El backend la entrega ya montada
+  // (display + táctil inicializados por placa); el programa solo
+  // cuelga widgets de ella.
+  // ----------------------------------------------------------
+  public class Screen extends Obj
+    public function Screen()
+      // STUB H3: this.handle := __gui_screen_active()
+    end Screen
+
+    public function load()
+      // STUB H3: __gui_screen_load(this.handle)
+    end load
+  end Screen
+
+  // ----------------------------------------------------------
+  // Panel — contenedor simple (lv.obj). Agrupa widgets.
+  // ----------------------------------------------------------
+  public class Panel extends Obj
+    public function Panel(parent: Obj)
+      // STUB H3: this.handle := __gui_create_obj(parent.handle)
+    end Panel
+  end Panel
+
+  // ----------------------------------------------------------
+  // Label — texto.
+  // ----------------------------------------------------------
+  public class Label extends Obj
+    public function Label(parent: Obj, text: string)
+      // STUB H3: this.handle := __gui_create_label(parent.handle); setText(text)
+    end Label
+
+    public function setText(t: string)
+      // STUB H3: __gui_label_set_text(this.handle, t)
+    end setText
+
+    public function setTextColor(c: Color)
+      // STUB H3
+    end setTextColor
+
+    // font: id de fuente (será Gui.Font en 2ª tanda; por ahora un int).
+    public function setFont(font: integer)
+      // STUB H3
+    end setFont
+  end Label
+
+  // ----------------------------------------------------------
+  // Button — botón clicable. Suele llevar un Label dentro; el
+  // constructor con texto lo gestiona (como el addBoton del proyecto).
+  // Reacciona reescribiendo onClick (heredado de Obj).
+  // ----------------------------------------------------------
+  public class Button extends Obj
+    public function Button(parent: Obj, text: string)
+      // STUB H3: this.handle := __gui_create_button(parent.handle); label hijo
+    end Button
+  end Button
+
+  // ----------------------------------------------------------
+  // run — lazo de eventos. Bloquea: refresca el render y entrega los
+  // eventos a los onClick (vía upcall). El backend por placa implementa
+  // el bucle real (lv_timer_handler en el micro / repaint en Java).
+  // ----------------------------------------------------------
+  public function run()
+    // STUB H3
+  end run
+
+end Gui
