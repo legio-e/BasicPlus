@@ -13,6 +13,22 @@
 
 ## 1. GUI gráfica (objetivo cabecera)
 
+> **DECISIÓN CONSOLIDADA — H0 de V3 (16-jun-2026, charla Eduardo + Claude).**
+> El GUI se modela EXACTAMENTE como los buses (I2C/SPI/UART): un contrato
+> `Gui.*` (subconjunto reducido de la API de LVGL) **idéntico en las 3 VMs**,
+> con backend por plataforma — **VM-C (host+micro) → LVGL**; **miVM → Java puro
+> reimplementando ese subconjunto** (NO un puente JNI Java↔LVGL: descartado por
+> dependencia/caja negra, choca con el stack propio). **Paridad de
+> comportamiento**, hecha OPERATIVA con un **volcado textual del árbol de
+> widgets** que las 3 VMs emiten byte-idéntico → la verificación cruzada
+> sobrevive, ahora sobre el *modelo de la UI* en vez del `print` (los píxeles
+> quedan fuera: LVGL y Java rasterizan distinto y ahí nunca hubo paridad).
+> Eventos por **upcall C→BP** (generalizar `call_bp` #210). Orden de trabajo:
+> miVM → VM-C host (LVGL+SDL) → micro (LVGL+TFT). Dial para H1: cuánto del
+> *layout* vive en la capa portable BP (cuanto más, más idéntico el volcado).
+> **Esto PRECISA y prevalece sobre lo que sigue** (redactado antes con
+> "backends de render intercambiables" genéricos + bake-off Swing/JavaFX).
+
 ### Decisión de arquitectura: un API `Gui.*`, varios backends de render
 
 El contrato BP (`Gui.Screen`, `Gui.Button`, `Gui.Label`, eventos…) se define
