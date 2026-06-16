@@ -1,0 +1,4 @@
+catch div0: División por cero
+catch manual: fallo manual
+catch any: any-class
+fin OK

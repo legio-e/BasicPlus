@@ -1,0 +1,11 @@
+bpi 7
+module Core
+class RuntimeError public extends Exception
+  layout 1 4 00000001 00000000
+  ctor(m:string)
+end class
+class Exception public
+  layout 1 4 00000001 00000000
+  ctor(m:string)
+  prop msg:string public
+end class
