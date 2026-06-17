@@ -1,0 +1,38 @@
+// GuiDemo.bp — primer programa GUI de BasicPlus (V3, H3).
+//
+// Construye una pantalla con titulo, un panel y un boton; vuelca el arbol
+// de widgets (la PARIDAD se mide sobre este modelo, no sobre pixeles) y
+// arranca el lazo de eventos.
+//
+//   - Sin pantalla (headless / CI): run() vuelve sin bloquear; veras el dump.
+//   - Con pantalla: aparece la ventana Swing; cierrala para terminar.
+//
+// El contrato Gui.* es identico en las 3 VMs (Swing en miVM, LVGL en VM-C).
+module GuiDemo
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    scr.setBgColor(Gui.Color(0x102030))
+
+    var titulo: Gui.Label := Gui.Label(scr, "BasicPlus GUI")
+    titulo.setTextColor(Gui.Color(0xFFFFFF))
+    titulo.setFont(24)
+    titulo.align(Gui.Align.TOP_MID, 0, 10)
+
+    var panel: Gui.Panel := Gui.Panel(scr)
+    panel.setSize(200, 80)
+    panel.setBgColor(Gui.Color(0x303848))
+    panel.align(Gui.Align.CENTER, 0, 0)
+
+    var boton: Gui.Button := Gui.Button(scr, "Pulsame")
+    boton.setSize(120, 40)
+    boton.align(Gui.Align.BOTTOM_MID, 0, -20)
+
+    print "== arbol de widgets =="
+    print Gui.__guiDumpTree()
+
+    Gui.run()
+  end Main
+
+end GuiDemo

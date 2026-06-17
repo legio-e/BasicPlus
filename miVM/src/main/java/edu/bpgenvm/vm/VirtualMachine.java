@@ -35,6 +35,7 @@ package edu.bpgenvm.vm;
  */
 import edu.bpgenvm.bytecode.Builtin;
 import edu.bpgenvm.bytecode.OpCode;
+import edu.bpgenvm.gui.GuiBackend;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -343,6 +344,10 @@ public class VirtualMachine {
      *  Tabla concurrente: los workers BP son threads reales y dos pueden
      *  abrir/cerrar a la vez. Espejo de la tabla de handles de net_host.c
      *  en la VM-C (BP nunca ve el fd/SOCKET del SO). */
+    // Backend grafico (V3 GUI, H3). Sin estado hasta el primer __gui*; la
+    // ventana Swing se abre en __guiRun. Inofensivo si el programa no usa GUI.
+    private final GuiBackend gui = new GuiBackend();
+
     private final java.util.Map<Integer, java.net.Socket> netSockets =
             new java.util.concurrent.ConcurrentHashMap<>();
     private final java.util.concurrent.atomic.AtomicInteger netNextHandle =
@@ -3304,6 +3309,32 @@ public class VirtualMachine {
                 }
                 break;
             }
+
+            // ---- H3 (V3) — GUI: delegan en GuiBackend (Swing). Los void hacen
+            //      pushTc(tc, 0) (dummy ret); los demas empujan su resultado.
+            //      Orden de pop: ultimo arg en top (igual que el resto). ----
+            case GUI_SCREEN_ACTIVE: { pushTc(tc, gui.screenActive()); break; }
+            case GUI_CREATE_OBJ:    { int p = popTc(tc); pushTc(tc, gui.createObj(p));    break; }
+            case GUI_CREATE_LABEL:  { int p = popTc(tc); pushTc(tc, gui.createLabel(p));  break; }
+            case GUI_CREATE_BUTTON: { int p = popTc(tc); pushTc(tc, gui.createButton(p)); break; }
+            case GUI_SET_TEXT: {
+                int t = popTc(tc); int hnd = popTc(tc);
+                gui.setText(hnd, readVmString(t)); pushTc(tc, 0); break;
+            }
+            case GUI_SET_WIDTH:  { int w  = popTc(tc); int hnd = popTc(tc); gui.setWidth(hnd, w);   pushTc(tc, 0); break; }
+            case GUI_SET_HEIGHT: { int hh = popTc(tc); int hnd = popTc(tc); gui.setHeight(hnd, hh); pushTc(tc, 0); break; }
+            case GUI_ALIGN: {
+                int dy = popTc(tc); int dx = popTc(tc); int a = popTc(tc); int hnd = popTc(tc);
+                gui.align(hnd, a, dx, dy); pushTc(tc, 0); break;
+            }
+            case GUI_SET_BG_COLOR:   { int rgb = popTc(tc); int hnd = popTc(tc); gui.setBgColor(hnd, rgb);   pushTc(tc, 0); break; }
+            case GUI_SET_TEXT_COLOR: { int rgb = popTc(tc); int hnd = popTc(tc); gui.setTextColor(hnd, rgb); pushTc(tc, 0); break; }
+            case GUI_SET_FONT:       { int f   = popTc(tc); int hnd = popTc(tc); gui.setFont(hnd, f);        pushTc(tc, 0); break; }
+            case GUI_CLEAN:       { int hnd = popTc(tc); gui.clean(hnd);      pushTc(tc, 0); break; }
+            case GUI_DELETE:      { int hnd = popTc(tc); gui.delete(hnd);     pushTc(tc, 0); break; }
+            case GUI_SCREEN_LOAD: { int hnd = popTc(tc); gui.screenLoad(hnd); pushTc(tc, 0); break; }
+            case GUI_RUN:       { gui.run(); pushTc(tc, 0); break; }
+            case GUI_DUMP_TREE: { pushTc(tc, allocVmString(gui.dumpTree())); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));
