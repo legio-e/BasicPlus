@@ -196,5 +196,24 @@ public final class Intrinsics {
         register("Wdt.enableRaw", w -> emitBuiltin(w, Builtin.WDT_ENABLE));
         register("Wdt.feedRaw",   w -> emitBuiltin(w, Builtin.WDT_FEED));
         register("Wdt.disableRaw", w -> emitBuiltin(w, Builtin.WDT_DISABLE));
+
+        // ---- Gui (V3 H3) — armazón gráfico. Internos __gui* llamados por los
+        //      métodos de las clases Gui.* (Obj/Screen/Panel/Label/Button). ----
+        register("Gui.__guiScreenActive", w -> emitBuiltin(w, Builtin.GUI_SCREEN_ACTIVE));
+        register("Gui.__guiCreateObj",    w -> emitBuiltin(w, Builtin.GUI_CREATE_OBJ));
+        register("Gui.__guiCreateLabel",  w -> emitBuiltin(w, Builtin.GUI_CREATE_LABEL));
+        register("Gui.__guiCreateButton", w -> emitBuiltin(w, Builtin.GUI_CREATE_BUTTON));
+        register("Gui.__guiSetText",      w -> emitBuiltin(w, Builtin.GUI_SET_TEXT));
+        register("Gui.__guiSetWidth",     w -> emitBuiltin(w, Builtin.GUI_SET_WIDTH));
+        register("Gui.__guiSetHeight",    w -> emitBuiltin(w, Builtin.GUI_SET_HEIGHT));
+        register("Gui.__guiAlign",        w -> emitBuiltin(w, Builtin.GUI_ALIGN));
+        register("Gui.__guiSetBgColor",   w -> emitBuiltin(w, Builtin.GUI_SET_BG_COLOR));
+        register("Gui.__guiSetTextColor", w -> emitBuiltin(w, Builtin.GUI_SET_TEXT_COLOR));
+        register("Gui.__guiSetFont",      w -> emitBuiltin(w, Builtin.GUI_SET_FONT));
+        register("Gui.__guiClean",        w -> emitBuiltin(w, Builtin.GUI_CLEAN));
+        register("Gui.__guiDelete",       w -> emitBuiltin(w, Builtin.GUI_DELETE));
+        register("Gui.__guiScreenLoad",   w -> emitBuiltin(w, Builtin.GUI_SCREEN_LOAD));
+        register("Gui.__guiRun",          w -> emitBuiltin(w, Builtin.GUI_RUN));
+        register("Gui.__guiDumpTree",     w -> emitBuiltin(w, Builtin.GUI_DUMP_TREE));
     }
 }

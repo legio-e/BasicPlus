@@ -294,7 +294,28 @@ public enum Builtin {
     TCP_CONNECT("__tcpConnect"),         // (host, port, timeoutMs) → handle (0 = no conectado)
     TCP_SEND("__tcpSend"),               // (h, data: byte[]) → n enviados; error → RuntimeError
     TCP_RECV("__tcpRecv"),               // (h, max, timeoutMs) → byte[] (vacío = timeout)
-    TCP_CLOSE("__tcpClose");             // (h) → void, tolerante
+    TCP_CLOSE("__tcpClose"),             // (h) → void, tolerante
+
+    // ---- H3 (V3) — GUI (módulo Gui). Las clases Gui.* son bindings sobre un
+    //      `handle` (id del lv_obj). El render/transporte vive en el backend
+    //      (Swing en miVM, LVGL en VM-C); estos builtins son la frontera
+    //      BP↔backend. Ids al FINAL (aditivo, principio 7 — no mueven los V2). ----
+    GUI_SCREEN_ACTIVE("__guiScreenActive"),  // () → id de la pantalla raíz
+    GUI_CREATE_OBJ("__guiCreateObj"),        // (parent) → id  (Panel/contenedor)
+    GUI_CREATE_LABEL("__guiCreateLabel"),    // (parent) → id
+    GUI_CREATE_BUTTON("__guiCreateButton"),  // (parent) → id
+    GUI_SET_TEXT("__guiSetText"),            // (id, s: string) → void
+    GUI_SET_WIDTH("__guiSetWidth"),          // (id, w) → void
+    GUI_SET_HEIGHT("__guiSetHeight"),        // (id, h) → void
+    GUI_ALIGN("__guiAlign"),                 // (id, align, dx, dy) → void
+    GUI_SET_BG_COLOR("__guiSetBgColor"),     // (id, rgb) → void
+    GUI_SET_TEXT_COLOR("__guiSetTextColor"), // (id, rgb) → void
+    GUI_SET_FONT("__guiSetFont"),            // (id, fontId) → void
+    GUI_CLEAN("__guiClean"),                 // (id) → void
+    GUI_DELETE("__guiDelete"),               // (id) → void
+    GUI_SCREEN_LOAD("__guiScreenLoad"),      // (id) → void
+    GUI_RUN("__guiRun"),                     // () → void; lazo de eventos (bloquea)
+    GUI_DUMP_TREE("__guiDumpTree");          // () → string; volcado del árbol (paridad)
 
     public final String bpName;
     public final int id;
