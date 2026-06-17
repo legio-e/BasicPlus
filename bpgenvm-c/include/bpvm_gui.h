@@ -23,12 +23,16 @@ int  bpvm_gui_create_obj(int parent);
 int  bpvm_gui_create_label(int parent);
 int  bpvm_gui_create_button(int parent);
 
-/* Configuración (sólo lo que afecta al dumpTree: texto + geometría/anclaje).
- * Color y fuente son render-only → no tienen entrada aquí (no-op en H4.1). */
+/* Configuración. Texto + geometría/anclaje afectan al dumpTree (modelo). Color y
+ * fuente son render-only: no-op en el modelo (no tocan el dump) y, bajo BPVM_LVGL,
+ * aplican estilo al lv_obj. */
 void bpvm_gui_set_text(int handle, const char* s);
 void bpvm_gui_set_width(int handle, int w);
 void bpvm_gui_set_height(int handle, int h);
 void bpvm_gui_align(int handle, int a, int dx, int dy);
+void bpvm_gui_set_bg_color(int handle, uint32_t rgb);
+void bpvm_gui_set_text_color(int handle, uint32_t rgb);
+void bpvm_gui_set_font(int handle, int font_id);
 void bpvm_gui_clean(int handle);
 void bpvm_gui_delete(int handle);
 
@@ -42,5 +46,12 @@ uint32_t bpvm_gui_next_click(void);
 /* Vuelca el árbol de widgets a un buffer recién malloc'd (el caller hace free).
  * Devuelve la longitud en bytes (sin el '\0'). Byte-idéntico a miVM. */
 size_t bpvm_gui_dump_tree(char** out);
+
+#ifdef BPVM_LVGL
+/* H4.2 — render real (LVGL v9 + SDL). pump = una iteración del lazo
+ * (lv_timer_handler + delay); window_open = false cuando el usuario cierra. */
+void bpvm_gui_lvgl_pump(void);
+int  bpvm_gui_lvgl_window_open(void);
+#endif
 
 #endif /* BPVM_GUI_H */

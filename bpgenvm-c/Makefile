@@ -24,16 +24,30 @@ SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/fs_facade.c src/fs_host.c \
           src/net.c src/net_host.c
 
-# V3/H4 — backend GUI. Eje de FEATURE (build-time), no de placa: dos imágenes,
-# con y sin GUI (las dos del micro). GUI=1 (default host) incluye src/gui.c +
-# -DBPVM_GUI; GUI=0 deja la VM lean → los builtins GUI caen al "no implementado".
-GUI ?= 1
+# Paths de las deps GUI vendorizadas (third_party/, gitignored; ver su README).
+LVGL_DIR  = third_party/lvgl
+SDL2_DIR  = third_party/SDL2/x86_64-w64-mingw32
+LVGL_INC  = -I$(LVGL_DIR) -Iinclude -DLV_CONF_INCLUDE_SIMPLE -I$(SDL2_DIR)/include
+
+# V3/H4 — backend GUI. Dos ejes de FEATURE (build-time), no de placa:
+#   GUI=1 (default): contrato Gui.* (modelo + dumpTree). GUI=0 -> VM lean (los
+#                    builtins GUI caen al "no implementado", como un micro sin-GUI).
+#   LVGL=1:          ademas, render real LVGL v9 + ventana SDL en host (implica GUI).
+GUI  ?= 1
+LVGL ?= 0
+ifeq ($(LVGL),1)
+  GUI := 1
+  CFLAGS += -DBPVM_LVGL $(LVGL_INC)
+endif
 ifeq ($(GUI),1)
   CFLAGS += -DBPVM_GUI
   SRC    += src/gui.c
 endif
 
 LDFLAGS = -lpthread
+ifeq ($(LVGL),1)
+  LDFLAGS += build/liblvgl.a -L$(SDL2_DIR)/lib -lSDL2
+endif
 TEST    = test/main.c
 OBJ     = $(SRC:%.c=build/%.o) build/test/main.o
 BIN     = build/bpgenvm-c
@@ -50,6 +64,24 @@ all: $(BIN)
 $(BIN): $(OBJ)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(OBJ) -o $@ $(LDFLAGS)
+
+# H4.2 — con LVGL=1 el binario necesita la lib de LVGL (compilada una vez, flags
+# relajados) y SDL2.dll junto al exe. El `find` va en la receta (shell Unix), no
+# en $(shell ...) (que en w64devkit resuelve al find.exe de Windows).
+ifeq ($(LVGL),1)
+$(BIN): build/liblvgl.a build/SDL2.dll
+build/liblvgl.a:
+	@mkdir -p build/lvgl
+	@echo "[lvgl] compilando fuentes de LVGL (una vez, ~1 min)..."
+	@for f in $$(find $(LVGL_DIR)/src -name '*.c'); do \
+	   o=build/lvgl/$$(echo "$$f" | tr '/' '_').o; \
+	   $(CC) -std=gnu11 -O2 $(LVGL_INC) -c "$$f" -o "$$o" || exit 1; \
+	 done
+	ar rcs $@ build/lvgl/*.o
+build/SDL2.dll:
+	@mkdir -p build
+	cp $(SDL2_DIR)/bin/SDL2.dll $@
+endif
 
 build/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -323,9 +355,7 @@ test-listen: $(LIBOBJ)
 # Compila las 311 fuentes de LVGL (flags relajados, sin -Wpedantic) + el driver SDL
 # + el smoke, enlaza SDL2 y abre una ventana. Valida el cimiento de build ANTES de
 # integrar LVGL en gui.c. SDL2.dll se copia junto al exe.
-LVGL_DIR  = third_party/lvgl
-SDL2_DIR  = third_party/SDL2/x86_64-w64-mingw32
-LVGL_INC  = -I$(LVGL_DIR) -Iinclude -DLV_CONF_INCLUDE_SIMPLE -I$(SDL2_DIR)/include
+# LVGL_DIR/SDL2_DIR/LVGL_INC se definen arriba (sección backend GUI).
 # OJO: el `find` va en la RECETA (shell Unix), no en $(shell ...) (que en este
 # w64devkit resuelve al find.exe de Windows/System32 → lista vacía).
 gui-smoke:

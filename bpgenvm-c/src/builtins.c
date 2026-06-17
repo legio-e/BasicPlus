@@ -392,31 +392,42 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int dy = pop_i32(vm, tc); int dx = pop_i32(vm, tc); int a = pop_i32(vm, tc); int h = pop_i32(vm, tc);
         bpvm_gui_align(h, a, dx, dy); push_i32(vm, tc, 0); return BPVM_OK;
     }
-    case BUILTIN_GUI_SET_BG_COLOR:   { pop_i32(vm, tc); pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }  /* render-only */
-    case BUILTIN_GUI_SET_TEXT_COLOR: { pop_i32(vm, tc); pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }  /* render-only */
-    case BUILTIN_GUI_SET_FONT:       { pop_i32(vm, tc); pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }  /* render-only */
+    /* Color/fuente: render-only. En modelo-only son no-op (no tocan el dump);
+     * bajo BPVM_LVGL aplican estilo al lv_obj. Se enrutan a gui.c en ambos casos. */
+    case BUILTIN_GUI_SET_BG_COLOR:   { uint32_t rgb = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_bg_color(h, rgb);   push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_SET_TEXT_COLOR: { uint32_t rgb = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_text_color(h, rgb); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_SET_FONT:       { int f = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_font(h, f); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_CLEAN:       { int h = pop_i32(vm, tc); bpvm_gui_clean(h);  push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_DELETE:      { int h = pop_i32(vm, tc); bpvm_gui_delete(h); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SCREEN_LOAD: { pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }   /* una sola pantalla por ahora */
     case BUILTIN_GUI_RUN: {
-        /* Bombeo headless (modelo-only): drena los clics inyectados y, por cada
-         * uno, hace el upcall onClick via Gui.__guiDispatch(objptr) — simétrico
-         * a invokeGuiDispatch de miVM. Sin LVGL no hay ventana ni clics reales;
-         * los sintéticos (__guiClick) bastan para la paridad. El lazo bloqueante
-         * con ventana real es H4.2. */
+        /* Lazo de eventos. Resuelve por NOMBRE la función BP Gui.__guiDispatch y
+         * dispara onClick por el upcall (simétrico a invokeGuiDispatch de miVM).
+         * Con LVGL: bombea la ventana SDL hasta cerrarla, drenando clics reales +
+         * sintéticos. Sin LVGL (modelo-only/arnés): drena los inyectados y vuelve. */
         uint32_t dispatch = 0;
         for (int i = 0; i < vm->symbol_count; i++) {
             if (strcmp(vm->symbols[i].name, "Gui.__guiDispatch") == 0) {
                 dispatch = vm->symbols[i].abs_addr; break;
             }
         }
-        uint32_t objptr;
-        while ((objptr = bpvm_gui_next_click()) != 0) {
-            if (dispatch) {
-                int32_t a = (int32_t) objptr;
-                bpvm_call_bp_from_builtin(vm, tc, dispatch, &a, 1);
-            }
+#ifdef BPVM_LVGL
+        /* Ventana real: bombea LVGL+SDL hasta que el usuario la cierra. Cada vuelta
+         * drena los clics encolados (sintéticos + reales del cb de LVGL, mismo hilo)
+         * y dispara onClick por el upcall, antes de renderizar el siguiente frame. */
+        for (;;) {
+            uint32_t objptr;
+            while ((objptr = bpvm_gui_next_click()) != 0)
+                if (dispatch) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, dispatch, &a, 1); }
+            if (!bpvm_gui_lvgl_window_open()) break;
+            bpvm_gui_lvgl_pump();
         }
+#else
+        /* Modelo-only (headless): drena los clics inyectados y vuelve (paridad). */
+        uint32_t objptr;
+        while ((objptr = bpvm_gui_next_click()) != 0)
+            if (dispatch) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, dispatch, &a, 1); }
+#endif
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
