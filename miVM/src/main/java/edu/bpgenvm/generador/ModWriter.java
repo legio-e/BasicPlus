@@ -680,8 +680,10 @@ public class ModWriter {
         c.name = name;
         if (externalParent != null) {
             // Parent vive en otro módulo: pre-popular placeholders para el slot
-            // numbering, registrar fixup, y NO copiar nombres (no los conocemos
-            // todos del .bpi v6 inicial; v7 podría exponerlos para override).
+            // numbering y registrar fixup. Los nombres de método heredados SÍ se
+            // copian (vía externalParent.methodNames, derivado del externalMethodSlots
+            // del stub) para que el override cross-module reutilice el slot heredado
+            // en vez de apilar uno nuevo (fix L2 v3).
             c.externalParent = true;
             c.externalParentQualified = parentName;   // qualifiedName
             c.parent = null;                          // sin entrada local en `classes`
@@ -704,7 +706,15 @@ public class ModWriter {
             }
             for (int i = 0; i < externalParent.numMethods; i++) {
                 MethodInfo m = new MethodInfo();
-                m.simpleName = "__inh" + i;
+                // Si conocemos el nombre real del método heredado lo usamos, así
+                // addMethod del child detecta el override por nombre y reutiliza
+                // este slot. Si no, placeholder __inhN. En ambos casos
+                // qualifiedName=null ⇒ vt[slot]=-1 (heredado) salvo override.
+                String inhName = (externalParent.methodNames != null
+                                  && i < externalParent.methodNames.length
+                                  && externalParent.methodNames[i] != null)
+                        ? externalParent.methodNames[i] : ("__inh" + i);
+                m.simpleName = inhName;
                 m.qualifiedName = null;               // placeholder: vt[slot] = -1
                 m.slot = i;
                 c.methods.add(m);
@@ -748,12 +758,23 @@ public class ModWriter {
         public final int numMethods;
         public final int[] fieldBitmap;
         public final int[] ownerBitmap;
+        /** L2 v3 (fix override cross-module): nombre simple del método en cada
+         *  slot heredado (índice = slot), o null si se desconoce. Permite que
+         *  addMethod/declareMethodSlot del child detecte el override por nombre
+         *  y reutilice el slot heredado en vez de apilar uno nuevo. */
+        public final String[] methodNames;
         public ExternalParentLayout(int numFields, int numMethods,
                                     int[] fieldBitmap, int[] ownerBitmap) {
+            this(numFields, numMethods, fieldBitmap, ownerBitmap, null);
+        }
+        public ExternalParentLayout(int numFields, int numMethods,
+                                    int[] fieldBitmap, int[] ownerBitmap,
+                                    String[] methodNames) {
             this.numFields = numFields;
             this.numMethods = numMethods;
             this.fieldBitmap = fieldBitmap != null ? fieldBitmap : new int[0];
             this.ownerBitmap = ownerBitmap != null ? ownerBitmap : new int[0];
+            this.methodNames = methodNames;
         }
     }
 

@@ -1047,9 +1047,20 @@ public final class MivmEmitter {
                         qname.append(cls.baseClass.externalLibrary).append('.');
                     qname.append(cls.baseClass.externalModule).append('.').append(cls.baseClass.name);
                     parentForModWriter = qname.toString();
+                    // Fix override cross-module: pasamos los nombres de método
+                    // heredados (slot→nombre, del externalMethodSlots del stub) para
+                    // que el override reutilice el slot heredado en vez de apilar.
+                    String[] mNames = new String[layout.numMethods];
+                    if (cls.baseClass.externalMethodSlots != null) {
+                        for (java.util.Map.Entry<String, Integer> me
+                                : cls.baseClass.externalMethodSlots.entrySet()) {
+                            int sl = me.getValue();
+                            if (sl >= 0 && sl < mNames.length) mNames[sl] = me.getKey();
+                        }
+                    }
                     externalParent = new edu.bpgenvm.generador.ModWriter.ExternalParentLayout(
                             layout.numFields, layout.numMethods,
-                            layout.fieldBitmap, layout.ownerBitmap);
+                            layout.fieldBitmap, layout.ownerBitmap, mNames);
                 } else {
                     parentForModWriter = cls.baseClass.name;
                 }
