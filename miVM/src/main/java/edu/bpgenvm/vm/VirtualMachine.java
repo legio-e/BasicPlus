@@ -348,6 +348,11 @@ public class VirtualMachine {
     // ventana Swing se abre en __guiRun. Inofensivo si el programa no usa GUI.
     private final GuiBackend gui = new GuiBackend();
 
+    // H3.4 — cache de la entrada de la funcion BP Gui.__guiDispatch (resuelta
+    // por nombre la 1a vez). -2 = sin resolver; -1 = no encontrada (Gui no cargado).
+    private int guiDispatchPc = -2;
+    private int guiDispatchCs = 0;
+
     private final java.util.Map<Integer, java.net.Socket> netSockets =
             new java.util.concurrent.ConcurrentHashMap<>();
     private final java.util.concurrent.atomic.AtomicInteger netNextHandle =
@@ -3333,8 +3338,13 @@ public class VirtualMachine {
             case GUI_CLEAN:       { int hnd = popTc(tc); gui.clean(hnd);      pushTc(tc, 0); break; }
             case GUI_DELETE:      { int hnd = popTc(tc); gui.delete(hnd);     pushTc(tc, 0); break; }
             case GUI_SCREEN_LOAD: { int hnd = popTc(tc); gui.screenLoad(hnd); pushTc(tc, 0); break; }
-            case GUI_RUN:       { gui.run(); pushTc(tc, 0); break; }
+            case GUI_RUN:       { guiEventLoop(tc); pushTc(tc, 0); break; }
             case GUI_DUMP_TREE: { pushTc(tc, allocVmString(gui.dumpTree())); break; }
+            case GUI_BIND_CLICK: {
+                int self = popTc(tc); int hnd = popTc(tc);
+                gui.bindClick(hnd, self); pushTc(tc, 0); break;
+            }
+            case GUI_CLICK:     { int obj = popTc(tc); gui.injectClick(obj); pushTc(tc, 0); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));
@@ -4686,6 +4696,79 @@ public class VirtualMachine {
     private int popTc(ThreadContext tc) {
         tc.sp -= 4;
         return readInt32(tc.sp);
+    }
+
+    // ============================================================
+    // H3.4 — Upcall de eventos GUI (modelo de INTERRUPCION)
+    // ============================================================
+
+    /**
+     * Cuerpo del builtin __guiRun: el lazo de eventos. El EDT de Swing publica
+     * los clics en una cola (gui.takeEvent); ESTE worker — el que llamó a
+     * __guiRun — los saca y ejecuta el handler onClick como llamada ANIDADA
+     * sobre su propio tc, igual que una CPU atendiendo una IRQ entre
+     * instrucciones. Termina al cerrarse la ventana (EVENT_CLOSE). El bytecode
+     * BP corre SIEMPRE en este worker; el EDT nunca ejecuta BP.
+     */
+    private void guiEventLoop(ThreadContext tc) {
+        gui.start();
+        while (true) {
+            int objptr = gui.takeEvent();   // objptr del widget pulsado, o EVENT_CLOSE
+            if (objptr == edu.bpgenvm.gui.GuiBackend.EVENT_CLOSE || killRequested) break;
+            if (objptr != 0) invokeGuiDispatch(tc, objptr);
+        }
+    }
+
+    /**
+     * Llama (anidado) a la función BP Gui.__guiDispatch(self), cuyo cuerpo es
+     * self.onClick() — dispatch virtual que el COMPILADOR resuelve por nombre
+     * (respeta el override del usuario; la VM no conoce ningún slot). Resuelve
+     * la entrada de la función por nombre (resolveGlobal, cacheada) y monta un
+     * frame de llamada con PC de retorno centinela = 0 (mem[0] = THREAD_EXIT)
+     * para cerrar el run anidado, como hace THREAD_START. La pila de Java
+     * preserva el contexto del lazo exterior; aquí restauramos tc.* al volver.
+     */
+    private void invokeGuiDispatch(ThreadContext tc, int objptr) {
+        if (guiDispatchPc == -2) {   // resolver una sola vez
+            Integer pcBox = (moduleManager != null)
+                    ? moduleManager.resolveGlobal("Gui.__guiDispatch") : null;
+            if (pcBox == null) {
+                guiDispatchPc = -1;
+            } else {
+                guiDispatchPc = pcBox;
+                guiDispatchCs = moduleManager.getModuleBaseFromPC(pcBox);
+            }
+        }
+        if (guiDispatchPc < 0) return;   // Gui no cargado / sin dispatcher
+
+        int base = tc.sp;
+        int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
+        ThreadStatus savedStatus = tc.status;
+        boolean savedYield = tc.yieldRequested;
+        // Frame de __guiDispatch(self): [self, savedPC=0(centinela), savedBP, savedCS],
+        // con bp tras ellos (convención de CALL/INVOKE_VIRTUAL).
+        writeInt32(base,      objptr);     // arg: self (objptr)
+        writeInt32(base + 4,  0);          // saved PC = 0 → mem[0] = THREAD_EXIT
+        writeInt32(base + 8,  savedBp);    // saved BP (valor sano; se restaura abajo)
+        writeInt32(base + 12, savedCs);    // saved CS
+        tc.bp = base + 16;
+        tc.sp = base + 16;
+        tc.pc = guiDispatchPc;
+        tc.cs = guiDispatchCs;
+        tc.yieldRequested = false;
+        try {
+            runOnContext(tc);   // corre __guiDispatch → self.onClick() hasta el centinela
+        } catch (Throwable t) {
+            // Un handler que lanza no debe tumbar el lazo GUI: lo reportamos.
+            System.err.println("[gui onClick] " + t);
+        } finally {
+            tc.sp = base;            // descarta el frame de onClick
+            tc.bp = savedBp;
+            tc.cs = savedCs;
+            tc.pc = savedPc;
+            tc.status = savedStatus; // el centinela THREAD_EXIT lo puso TERMINATED
+            tc.yieldRequested = savedYield;
+        }
     }
 
     public void writeInt32(int addr, int value) {

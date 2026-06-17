@@ -92,6 +92,66 @@ generaliza.
 - El mismo upcall sirve a HW (interrupción→handler), timers y red: **§8/§9 es la
   pieza foundational de V3 y el GUI es su primer cliente.**
 
+### Upcall en miVM (H3.4) — decisión 17-jun: modelo de INTERRUPCIÓN
+
+> **DECISIÓN — upcall `onClick` en la VM-Java (17-jun, charla Eduardo + Claude).**
+> En miVM el upcall NO es "otro hilo entra a la VM" — eso sería el bug clásico:
+> BP corriendo en el EDT de Swing y en el worker a la vez sobre el mismo `mem[]`.
+> Es una **INTERRUPCIÓN** (encuadre de Eduardo):
+>
+> - El `ActionListener` de Swing (hilo **EDT**) **no ejecuta BP**: solo **publica**
+>   "pulsado el handle H" en una cola y hace `notify`. Como levantar un bit de IRQ
+>   pendiente. Es el ÚNICO cruce entre hilos (cola + lock); `mem[]`/`tc` solo los
+>   toca el worker.
+> - El worker BP, aparcado dentro del builtin `__guiRun` (que ES el lazo de
+>   eventos), despierta, saca el handle y ejecuta `onClick` **como llamada
+>   anidada** sobre la pila de su propio `tc`; al `RET` vuelve al lazo (RTI).
+>   `onClick` corre SIEMPRE en el worker, jamás en el EDT.
+> - Más seguro que una ISR real: el flujo principal (`Main`) no está a medias de
+>   una instrucción, está aparcado en UN punto conocido (`run()`). La reentrancia
+>   sale gratis: el `pc/sp/bp/cs` del `runOnContext` exterior viven como locales
+>   de Java → la pila de llamadas de Java ES el "salvado de contexto" de la IRQ.
+>
+> **Mecanismo — la VM NO conoce ningún slot (refinado 17-jun, a instancia de
+> Eduardo).** Fijar el slot de `onClick` por posición es frágil: depende de la
+> herencia (los slots 0/1 del `Object` raíz), del orden de declaración y de las
+> properties (sus accesores también ocupan vtable). En su lugar, **el compilador
+> resuelve `onClick` por nombre**: `Gui` añade una función normal
+> `public function __guiDispatch(self: Obj)` cuyo cuerpo es `self.onClick()` — el
+> compilador la emite como `INVOKE_VIRTUAL` con el slot CORRECTO (override +
+> herencia respetados, sea cual sea el layout). La VM resuelve la ENTRADA de esa
+> función por NOMBRE (`resolveGlobal("Gui.__guiDispatch")`, igual que resuelve
+> `Core.RuntimeError`; las funciones de módulo están en `globalSymbolTable`,
+> ModuleManager.java:426) y la llama **anidada** pasándole el `objptr`, con **PC
+> de retorno centinela = 0** (`mem[0]`=`THREAD_EXIT`, técnica de `THREAD_START`)
+> para cerrar el run. **Cero opcodes nuevos, cero slots hardcodeados.** Un único
+> builtin nuevo, `__guiBindClick(handle, self)`, registra `handle→objptr`.
+>
+> **Slot vacío / sin handler** (Eduardo): como el dispatch es `self.onClick()`
+> puro, un widget que NO reescribe `onClick` ejecuta el `onClick` no-op heredado
+> de `Gui.Obj` → un clic no hace nada (correcto). No hay número de slot que
+> mantener ni caso de "slot ausente": lo resuelve el compilador como cualquier
+> otra llamada a método virtual.
+>
+> **¿Una función o varias? → UNA por widget** (el `onClick` virtual). Coherente con
+> la decisión OO ya tomada ("subclasea y reescribe `onClick`"): un objeto, un
+> método, un slot. La multiplicidad se hace DENTRO del handler (el `onClick` llama
+> a lo que quiera). NO una lista de listeners estilo Swing/`lv_obj_add_event_cb` —
+> más maquinaria y choca con el modelo OO. Si algún día se quiere, se añade
+> ADITIVAMENTE encima (`addClickListener`) sin romper el override. En el borde
+> VM↔backend también es **un** punto de entrada: el backend llama a un único
+> `dispatchClick(handle)` de la VM.
+>
+> **Disciplina (la que la analogía predice):** el handler debe ser **corto y no
+> bloqueante**, como una ISR. Con 1 worker, un `onClick` que duerma, espere un
+> `Mutex` o llame a otro `run()` colgaría el bombeo. Suficiente para H3; se
+> revisita si hiciera falta.
+>
+> **Binding:** el backend mantiene `handle → objptr`; el ctor de cada widget
+> registra su `this` tras crear el handle. (Fino, pendiente: tratar esos objptr
+> como raíces de GC, o confiar en que el programa BP mantiene viva la referencia
+> durante `run()` — para H3, los widgets viven en locales de `Main`.)
+
 ### Camino crítico
 
 1. **Upcall C→BP robusto** (generalizar `call_bp`; serializar contra el lazo de

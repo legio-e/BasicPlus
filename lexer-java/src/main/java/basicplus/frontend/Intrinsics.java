@@ -215,5 +215,9 @@ public final class Intrinsics {
         register("Gui.__guiScreenLoad",   w -> emitBuiltin(w, Builtin.GUI_SCREEN_LOAD));
         register("Gui.__guiRun",          w -> emitBuiltin(w, Builtin.GUI_RUN));
         register("Gui.__guiDumpTree",     w -> emitBuiltin(w, Builtin.GUI_DUMP_TREE));
+        // H3.4 — eventos. __guiDispatch NO va aquí: es función BP normal (cuerpo
+        // self.onClick()); la VM la llama por nombre al pulsar.
+        register("Gui.__guiBindClick",    w -> emitBuiltin(w, Builtin.GUI_BIND_CLICK));
+        register("Gui.__guiClick",        w -> emitBuiltin(w, Builtin.GUI_CLICK));
     }
 }

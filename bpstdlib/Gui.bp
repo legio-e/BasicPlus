@@ -89,10 +89,17 @@ module Gui
     end onClick
   end Obj
 
+  // ---- Eventos (upcall). __guiBindClick registra el objeto BP dueño del handle;
+  //      al pulsar, la VM llama por NOMBRE a __guiDispatch(self) → self.onClick().
+  //      __guiClick inyecta un clic sintetico (diagnostico / pruebas headless). ----
+  public intrinsic function __guiBindClick(handle: integer, self: Obj)
+  public intrinsic function __guiClick(w: Obj)
+
   // ---- Screen — pantalla raíz (la entrega el backend ya montada). ----
   public class Screen extends Obj
     public function Screen()
       this.handle := __guiScreenActive()
+      __guiBindClick(this.handle, this)
     end Screen
     public function load()
       __guiScreenLoad(this.handle)
@@ -103,6 +110,7 @@ module Gui
   public class Panel extends Obj
     public function Panel(parent: Obj)
       this.handle := __guiCreateObj(parent.handle)
+      __guiBindClick(this.handle, this)
     end Panel
   end Panel
 
@@ -111,6 +119,7 @@ module Gui
     public function Label(parent: Obj, text: string)
       this.handle := __guiCreateLabel(parent.handle)
       __guiSetText(this.handle, text)
+      __guiBindClick(this.handle, this)
     end Label
 
     public function setText(t: string)
@@ -131,9 +140,17 @@ module Gui
   public class Button extends Obj
     public function Button(parent: Obj, text: string)
       this.handle := __guiCreateButton(parent.handle)
+      __guiBindClick(this.handle, this)
       var lbl: Label := Label(this, text)
     end Button
   end Button
+
+  // ---- Dispatch del upcall: la VM llama aqui (por NOMBRE, resolveGlobal) al
+  //      pulsar un widget. self.onClick() es una llamada virtual normal — el
+  //      compilador resuelve el slot, asi que respeta el override del usuario. ----
+  public function __guiDispatch(self: Obj)
+    self.onClick()
+  end __guiDispatch
 
   // ---- run — lazo de eventos (bloquea: refresca y entrega los onClick). ----
   public function run()

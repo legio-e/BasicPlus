@@ -1,0 +1,44 @@
+// GuiClickDemo.bp — upcall de eventos (V3, H3.4).
+//
+// Subclasea Gui.Button y reescribe onClick. Un clic (real, o sintetico via
+// __guiClick) hace que la VM llame POR NOMBRE a Gui.__guiDispatch(self) ->
+// self.onClick() (dispatch virtual: corre el override del usuario), que cambia
+// el texto de un label. Verificable headless comparando el dumpTree
+// antes/despues del clic.
+module GuiClickDemo
+  import Gui
+
+  class MyButton extends Gui.Button
+    public var target: Gui.Label
+    public function MyButton(parent: Gui.Obj, text: string, target: Gui.Label)
+      super(parent, text)
+      this.target := target
+    end MyButton
+
+    // Override del onClick heredado de Gui.Obj. La VM lo invoca al pulsar.
+    public function onClick()
+      print "[onClick] override ejecutado"
+      this.target.setText("PULSADO")
+    end onClick
+  end MyButton
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var lbl: Gui.Label := Gui.Label(scr, "esperando")
+    lbl.align(Gui.Align.TOP_MID, 0, 10)
+
+    var btn: MyButton := MyButton(scr, "Pulsame", lbl)
+    btn.align(Gui.Align.CENTER, 0, 0)
+
+    print "== antes del clic =="
+    print Gui.__guiDumpTree()
+
+    Gui.__guiClick(btn)          // simula un clic sobre el widget (verificable headless)
+    Gui.run()                    // bombea el evento: dispatch onClick -> cambia el label
+
+    print "== despues del clic =="
+    print Gui.__guiDumpTree()
+  end Main
+
+end GuiClickDemo

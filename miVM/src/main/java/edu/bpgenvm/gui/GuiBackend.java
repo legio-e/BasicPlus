@@ -46,6 +46,15 @@ public final class GuiBackend {
     private final Map<Integer, Node> nodes = new HashMap<>();
     private int nextHandle = 1;
 
+    // H3.4 — upcall de eventos. handleToObj: handle del widget → objptr del
+    // objeto BP dueño (lo registra __guiBindClick). `events` es el "bit de IRQ
+    // pendiente": el EDT de Swing mete ahí el handle pulsado (o EVENT_CLOSE al
+    // cerrar la ventana) y el worker BP lo saca en el lazo de __guiRun. Es el
+    // único punto entre hilos; el EDT nunca ejecuta bytecode BP.
+    public static final int EVENT_CLOSE = -1;
+    private final java.util.concurrent.BlockingQueue<Integer> events =
+            new java.util.concurrent.LinkedBlockingQueue<>();
+
     // ---- Creación ----
 
     /** Pantalla raíz (lazy). Devuelve su handle. */
@@ -142,12 +151,40 @@ public final class GuiBackend {
         n.comp.setBounds(x + n.dx, y + n.dy, w, h);
     }
 
-    // ---- Lazo de eventos: muestra la ventana y bloquea hasta cerrarla ----
-    public void run() {
+    // ---- Eventos (upcall): bind del objeto BP + cola EDT→worker ----
+
+    /** Engancha el listener de clic de Swing al widget `handle`. El listener
+     *  SOLO encola el objptr del objeto BP dueño (no ejecuta BP; eso lo hace el
+     *  worker en el lazo de __guiRun). La cola lleva objptrs — lo que el dispatch
+     *  necesita, ya resuelto en el momento del clic. */
+    public void bindClick(int handle, int objptr) {
+        Node n = nodes.get(handle);
+        if (n == null) return;
+        if (n.comp instanceof JButton) {
+            ((JButton) n.comp).addActionListener(e -> events.offer(objptr));
+        } else {
+            n.comp.addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override public void mouseClicked(java.awt.event.MouseEvent e) { events.offer(objptr); }
+            });
+        }
+    }
+
+    /** Inyecta un clic sintetico sobre el objeto BP `objptr` (diagnostico /
+     *  pruebas; verificable headless). */
+    public void injectClick(int objptr) { events.offer(objptr); }
+
+    // ---- Lazo de eventos: la ventana se muestra aquí; el BOMBEO lo hace la VM
+    //      (que es quien sabe ejecutar BP) sacando eventos con takeEvent(). ----
+
+    /** Muestra la ventana (NO bloquea). En headless encola EVENT_CLOSE para que
+     *  el lazo de __guiRun drene los clics inyectados y termine sin bloquear. */
+    public void start() {
         if (screenHandle == 0) screenActive();
         final Node root = nodes.get(screenHandle);
-        final Object lock = new Object();
-        final boolean[] closed = { false };
+        if (java.awt.GraphicsEnvironment.isHeadless()) {
+            events.offer(EVENT_CLOSE);
+            return;
+        }
         try {
             SwingUtilities.invokeAndWait(() -> {
                 frame = new JFrame("BasicPlus GUI");
@@ -160,15 +197,21 @@ public final class GuiBackend {
                 frame.setLocationRelativeTo(null);
                 frame.addWindowListener(new java.awt.event.WindowAdapter() {
                     @Override public void windowClosed(java.awt.event.WindowEvent e) {
-                        synchronized (lock) { closed[0] = true; lock.notifyAll(); }
+                        events.offer(EVENT_CLOSE);
                     }
                 });
                 frame.setVisible(true);
             });
-            synchronized (lock) { while (!closed[0]) lock.wait(); }
         } catch (Exception e) {
-            // headless (CI) o interrumpido: no hay ventana → vuelve sin bloquear.
+            events.offer(EVENT_CLOSE);   // no se pudo crear ventana → no bloquear
         }
+    }
+
+    /** Saca el siguiente evento del lazo: objptr del widget pulsado, o
+     *  EVENT_CLOSE. Bloquea hasta que haya uno (lo alimenta el EDT, o injectClick). */
+    public int takeEvent() {
+        try { return events.take(); }
+        catch (InterruptedException ie) { Thread.currentThread().interrupt(); return EVENT_CLOSE; }
     }
 
     // ---- Volcado del árbol (paridad de comportamiento; NO píxeles) ----

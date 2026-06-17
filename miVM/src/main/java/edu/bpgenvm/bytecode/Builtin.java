@@ -315,7 +315,13 @@ public enum Builtin {
     GUI_DELETE("__guiDelete"),               // (id) → void
     GUI_SCREEN_LOAD("__guiScreenLoad"),      // (id) → void
     GUI_RUN("__guiRun"),                     // () → void; lazo de eventos (bloquea)
-    GUI_DUMP_TREE("__guiDumpTree");          // () → string; volcado del árbol (paridad)
+    GUI_DUMP_TREE("__guiDumpTree"),          // () → string; volcado del árbol (paridad)
+
+    // H3.4 — eventos (upcall). BIND_CLICK registra handle→objptr; CLICK inyecta
+    // un clic sintetico (diagnostico/pruebas). El dispatch onClick lo hace la VM
+    // llamando por NOMBRE a la funcion BP Gui.__guiDispatch (no es builtin).
+    GUI_BIND_CLICK("__guiBindClick"),        // (handle, self) → void
+    GUI_CLICK("__guiClick");                 // (handle) → void; clic sintetico
 
     public final String bpName;
     public final int id;
