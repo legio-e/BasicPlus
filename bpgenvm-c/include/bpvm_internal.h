@@ -554,6 +554,12 @@ bpvm_aot_callctx_t* bpvm_aot_callctx(void);
 int32_t bpvm_aot_call_bp_i32(struct bpvm* vm, uint32_t target_abs,
                              const int32_t* args, int nargs);
 
+/* H4 — puente builtin→función BP (upcall de eventos GUI). Como
+ * bpvm_aot_call_bp_i32 pero desde un builtin (registros vivos en tc->sp/bp).
+ * Ver interp.c. */
+int32_t bpvm_call_bp_from_builtin(bpvm_t* vm, bpvm_thread_t* tc,
+                                  uint32_t target_abs, const int32_t* args, int nargs);
+
 /* P-aot-methods (#174, mitad-VM). Despacho VIRTUAL de un método público desde
  * native: resuelve la dirección vía la vtable de la clase REAL de `this_ref`
  * (slot dado por el compilador) y corre el cuerpo BP por el puente con

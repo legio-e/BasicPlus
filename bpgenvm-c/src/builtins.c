@@ -26,6 +26,9 @@
 #include "bpvm_wdt.h"
 #include "bpvm_uart.h"
 #include "bpvm_fs.h"
+#ifdef BPVM_GUI
+#include "bpvm_gui.h"   /* V3 / H4 — backend GUI (modelo). Sólo en el build con GUI. */
+#endif
 
 /* IDs estables (= ordinal del enum Builtin Java). Sólo los que F2
  * implementa; los demás devuelven BAD_OPCODE para que el caller sepa
@@ -149,7 +152,28 @@ enum {
      * tipa byte[]. Ids al final, alineados con el enum Builtin.java (126/127). */
     BUILTIN_READ_FILE_BYTES  = 126,
     BUILTIN_WRITE_FILE_BYTES = 127,
-    BUILTIN_THROW_RTE        = 128   /* #248: lanza RuntimeError nativo (msg) */
+    BUILTIN_THROW_RTE        = 128,  /* #248: lanza RuntimeError nativo (msg) */
+    /* V3 / H4 — GUI (modelo de comportamiento + dumpTree). Ids 135..152 =
+     * ordinal del enum Builtin Java. Sólo se despachan en el build con BPVM_GUI;
+     * sin él caen al default (= micro sin-GUI). */
+    BUILTIN_GUI_SCREEN_ACTIVE = 135,
+    BUILTIN_GUI_CREATE_OBJ    = 136,
+    BUILTIN_GUI_CREATE_LABEL  = 137,
+    BUILTIN_GUI_CREATE_BUTTON = 138,
+    BUILTIN_GUI_SET_TEXT      = 139,
+    BUILTIN_GUI_SET_WIDTH     = 140,
+    BUILTIN_GUI_SET_HEIGHT    = 141,
+    BUILTIN_GUI_ALIGN         = 142,
+    BUILTIN_GUI_SET_BG_COLOR  = 143,
+    BUILTIN_GUI_SET_TEXT_COLOR = 144,
+    BUILTIN_GUI_SET_FONT      = 145,
+    BUILTIN_GUI_CLEAN         = 146,
+    BUILTIN_GUI_DELETE        = 147,
+    BUILTIN_GUI_SCREEN_LOAD   = 148,
+    BUILTIN_GUI_RUN           = 149,
+    BUILTIN_GUI_DUMP_TREE     = 150,
+    BUILTIN_GUI_BIND_CLICK    = 151,
+    BUILTIN_GUI_CLICK         = 152
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -342,6 +366,82 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         bpvm_net_close((int) h);                 /* tolerante, sin backend = no-op */
         return BPVM_OK;
     }
+
+#ifdef BPVM_GUI
+    /* ---- V3 / H4.1 — GUI (modelo de comportamiento; paridad por dumpTree).
+     * Sólo en el build con GUI. Convención (confirmada por disasm): todo builtin
+     * GUI deja UN valor en pila — void → 0 (el emisor lo guarda), valor → result.
+     * Orden de pop: último arg en top (igual que el resto). Color/fuente son
+     * render-only → no afectan al dump (no-op aquí; LVGL los honrará en H4.2). */
+    case BUILTIN_GUI_SCREEN_ACTIVE: { push_i32(vm, tc, bpvm_gui_screen_active()); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_OBJ:    { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_obj(p));    return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_LABEL:  { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_label(p));  return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_BUTTON: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_button(p)); return BPVM_OK; }
+    case BUILTIN_GUI_SET_TEXT: {
+        uint32_t tref = (uint32_t) pop_i32(vm, tc);
+        int handle = pop_i32(vm, tc);
+        char buf[1024];
+        read_bp_string(vm, tref, buf, sizeof(buf));
+        bpvm_gui_set_text(handle, buf);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_GUI_SET_WIDTH:  { int w = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_width(h, w);  push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_SET_HEIGHT: { int v = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_height(h, v); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_ALIGN: {
+        int dy = pop_i32(vm, tc); int dx = pop_i32(vm, tc); int a = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        bpvm_gui_align(h, a, dx, dy); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_SET_BG_COLOR:   { pop_i32(vm, tc); pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }  /* render-only */
+    case BUILTIN_GUI_SET_TEXT_COLOR: { pop_i32(vm, tc); pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }  /* render-only */
+    case BUILTIN_GUI_SET_FONT:       { pop_i32(vm, tc); pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }  /* render-only */
+    case BUILTIN_GUI_CLEAN:       { int h = pop_i32(vm, tc); bpvm_gui_clean(h);  push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_DELETE:      { int h = pop_i32(vm, tc); bpvm_gui_delete(h); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_SCREEN_LOAD: { pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }   /* una sola pantalla por ahora */
+    case BUILTIN_GUI_RUN: {
+        /* Bombeo headless (modelo-only): drena los clics inyectados y, por cada
+         * uno, hace el upcall onClick via Gui.__guiDispatch(objptr) — simétrico
+         * a invokeGuiDispatch de miVM. Sin LVGL no hay ventana ni clics reales;
+         * los sintéticos (__guiClick) bastan para la paridad. El lazo bloqueante
+         * con ventana real es H4.2. */
+        uint32_t dispatch = 0;
+        for (int i = 0; i < vm->symbol_count; i++) {
+            if (strcmp(vm->symbols[i].name, "Gui.__guiDispatch") == 0) {
+                dispatch = vm->symbols[i].abs_addr; break;
+            }
+        }
+        uint32_t objptr;
+        while ((objptr = bpvm_gui_next_click()) != 0) {
+            if (dispatch) {
+                int32_t a = (int32_t) objptr;
+                bpvm_call_bp_from_builtin(vm, tc, dispatch, &a, 1);
+            }
+        }
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_GUI_DUMP_TREE: {
+        char* buf = NULL;
+        size_t n = bpvm_gui_dump_tree(&buf);
+        uint32_t ref = bpvm_heap_alloc_string(vm, buf ? buf : "", n);
+        free(buf);
+        push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_GUI_BIND_CLICK: {
+        uint32_t self = (uint32_t) pop_i32(vm, tc);
+        int handle = pop_i32(vm, tc);
+        bpvm_gui_bind_click(handle, self);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_GUI_CLICK: {
+        uint32_t obj = (uint32_t) pop_i32(vm, tc);
+        bpvm_gui_inject_click(obj);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+#endif /* BPVM_GUI */
 
     case BUILTIN_PARSE_INT: {
         uint32_t ref = (uint32_t) pop_i32(vm, tc);

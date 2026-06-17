@@ -200,6 +200,39 @@ int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
     return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, args, nargs);
 }
 
+/* H4 — puente BUILTIN→función BP (upcall de eventos GUI). Como bpvm_aot_call_bp_i32
+ * pero el caller es un builtin, no código AOT: los registros vivos son tc->sp/tc->bp
+ * (OP_CALL_BUILTIN los sincronizó). Monta un cc local sobre ellos, delega en
+ * bridge_run_bp_frame y RESTAURA tc->sp al valor previo — descarta el frame y el
+ * retorno (el handler onClick es void). target_abs lo resuelve el caller por nombre
+ * (vm->symbols). Restricción v1: la función BP no debe ceder al scheduler. */
+int32_t bpvm_call_bp_from_builtin(bpvm_t* vm, bpvm_thread_t* tc,
+                                  uint32_t target_abs, const int32_t* args, int nargs) {
+    if (target_abs == 0) return 0;
+    uint32_t target_cs = tc->cs;
+    for (int i = 0; i < vm->module_count; i++) {
+        const bpvm_module_t* m = &vm->modules[i];
+        if (target_abs >= m->code_start && target_abs < m->end_addr) {
+            target_cs = m->code_start; break;
+        }
+    }
+    /* El dispatcher de OP_CALL_BUILTIN RE-LEE tc->pc/sp/bp/cs al volver del
+     * builtin; bridge_run_bp_frame deja tc->pc en el sentinela y tc->sp/bp en el
+     * frame anidado. Guardamos el punto de retorno del builtin y lo restauramos
+     * (igual que invokeGuiDispatch en miVM, que salva pc/bp/cs/sp). */
+    uint32_t saved_pc = tc->pc, saved_cs = tc->cs;
+    uint32_t base = tc->sp;
+    uint32_t sp = tc->sp, bp = tc->bp;
+    bpvm_aot_callctx_t cc;
+    cc.tc = tc; cc.sp_p = &sp; cc.bp_p = &bp;
+    int32_t r = bridge_run_bp_frame(vm, tc, &cc, target_cs, target_abs, args, nargs);
+    tc->sp = base;       /* descarta el frame de la llamada + el retorno (void) */
+    tc->bp = bp;         /* bridge restauró bp del caller vía cc->bp_p */
+    tc->pc = saved_pc;   /* CRÍTICO: el dispatcher re-lee tc->pc tras el builtin */
+    tc->cs = saved_cs;
+    return r;
+}
+
 /* P-aot-methods (#174, mitad-VM) — despacho VIRTUAL de un método público desde
  * native. Réplica del paseo vtable de OP_INVOKE_VIRTUAL (con fallback al padre)
  * para resolver la dirección del método según la clase REAL de `this_ref`, y

@@ -23,6 +23,16 @@ SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
           src/fs_facade.c src/fs_host.c \
           src/net.c src/net_host.c
+
+# V3/H4 — backend GUI. Eje de FEATURE (build-time), no de placa: dos imágenes,
+# con y sin GUI (las dos del micro). GUI=1 (default host) incluye src/gui.c +
+# -DBPVM_GUI; GUI=0 deja la VM lean → los builtins GUI caen al "no implementado".
+GUI ?= 1
+ifeq ($(GUI),1)
+  CFLAGS += -DBPVM_GUI
+  SRC    += src/gui.c
+endif
+
 LDFLAGS = -lpthread
 TEST    = test/main.c
 OBJ     = $(SRC:%.c=build/%.o) build/test/main.o
