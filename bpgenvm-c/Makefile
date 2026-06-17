@@ -43,7 +43,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net gui-smoke
 
 all: $(BIN)
 
@@ -318,3 +318,19 @@ test-listen: $(LIBOBJ)
 	  echo "--- wire debugger host (cliente Python) ---"; \
 	  $(PYTHON) test/dbg_client.py "$(abspath $(LISTEN_BIN))" "$(notdir $(DBGMOD))" samples; \
 	fi
+
+# H4.2 — smoke de toolchain LVGL v9 + SDL2 (vendorizados en third_party/, gitignored).
+# Compila las 311 fuentes de LVGL (flags relajados, sin -Wpedantic) + el driver SDL
+# + el smoke, enlaza SDL2 y abre una ventana. Valida el cimiento de build ANTES de
+# integrar LVGL en gui.c. SDL2.dll se copia junto al exe.
+LVGL_DIR  = third_party/lvgl
+SDL2_DIR  = third_party/SDL2/x86_64-w64-mingw32
+LVGL_INC  = -I$(LVGL_DIR) -Iinclude -DLV_CONF_INCLUDE_SIMPLE -I$(SDL2_DIR)/include
+# OJO: el `find` va en la RECETA (shell Unix), no en $(shell ...) (que en este
+# w64devkit resuelve al find.exe de Windows/System32 → lista vacía).
+gui-smoke:
+	@mkdir -p build
+	$(CC) -std=gnu11 -O2 $(LVGL_INC) test/gui_smoke.c $$(find $(LVGL_DIR)/src -name '*.c') \
+	  -L$(SDL2_DIR)/lib -lSDL2 -o build/gui_smoke.exe
+	cp $(SDL2_DIR)/bin/SDL2.dll build/
+	./build/gui_smoke.exe

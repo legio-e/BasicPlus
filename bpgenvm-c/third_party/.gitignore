@@ -1,0 +1,5 @@
+/SDL2/
+/lvgl/
+*.tar.gz
+*.tgz
+*.zip
