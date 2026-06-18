@@ -295,7 +295,11 @@ static const bpvm_spi_backend_t s_spi_backend = {
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart3;
 extern UART_HandleTypeDef huart4;
-extern UART_HandleTypeDef huart5;
+#if defined(BPVM_BOARD_DK2)
+extern UART_HandleTypeDef huart6;   /* DK2: USART6 (el U575 no lo tiene) */
+#else
+extern UART_HandleTypeDef huart5;   /* Nucleo: UART5 (la DK2 no lo tiene) */
+#endif
 
 /* bus N -> USARTn/UARTn (numero de bus = instancia HW). USART1 = VCP -> no se expone. */
 static UART_HandleTypeDef* uart_handle(int bus) {
@@ -303,7 +307,11 @@ static UART_HandleTypeDef* uart_handle(int bus) {
         case 2: return &huart2;   /* USART2 (AF7) */
         case 3: return &huart3;   /* USART3 (AF7) */
         case 4: return &huart4;   /* UART4  (AF8) */
-        case 5: return &huart5;   /* UART5  (AF8) */
+#if defined(BPVM_BOARD_DK2)
+        case 6: return &huart6;   /* DK2: USART6 */
+#else
+        case 5: return &huart5;   /* Nucleo: UART5 (AF8) */
+#endif
         default: return NULL;
     }
 }
@@ -388,16 +396,20 @@ static const bpvm_uart_backend_t s_uart_backend = {
  */
 extern I2C_HandleTypeDef hi2c1;
 extern I2C_HandleTypeDef hi2c2;
-extern I2C_HandleTypeDef hi2c3;
+#if !defined(BPVM_BOARD_DK2)
+extern I2C_HandleTypeDef hi2c3;   /* solo Nucleo (la DK2 expone I2C1/I2C2) */
 extern I2C_HandleTypeDef hi2c4;
+#endif
 
 /* bus N -> I2Cn (numero de bus = instancia HW, igual que SPI/UART/Pico). */
 static I2C_HandleTypeDef* i2c_handle(int bus) {
     switch (bus) {
         case 1: return &hi2c1;
         case 2: return &hi2c2;
+#if !defined(BPVM_BOARD_DK2)
         case 3: return &hi2c3;
         case 4: return &hi2c4;
+#endif
         default: return NULL;
     }
 }

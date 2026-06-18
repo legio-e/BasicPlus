@@ -12,3 +12,13 @@ Nucleo_u575b/Nucleo_u575b/Release/
 # (o CubeIDE) -> Generate Code. Toolchain de referencia: STM32CubeIDE 2.1.1,
 # arm-none-eabi-gcc 14.3.1, pack STM32Cube_FW_U5 (versión en el .ioc).
 Nucleo_u575b/Nucleo_u575b/Drivers/
+
+# === Proyecto STM32CubeIDE — STM32U5G9J-DK2 (H5) ===
+# Mismo criterio que el Nucleo: se versiona la integración (.ioc, .project/
+# .cproject, main.c, linkers, Core/); se ignora lo regenerable/voluminoso.
+# NOTA: el `.project` lo ignora el .gitignore RAÍZ (regla genérica de Eclipse),
+# así que se commitea con `git add -f` (lleva los linkedResources a port/src).
+Discovery_u5g9j/Discovery_u5g9j/Debug/
+Discovery_u5g9j/Discovery_u5g9j/Release/
+Discovery_u5g9j/Discovery_u5g9j/Drivers/
+Discovery_u5g9j/Discovery_u5g9j/EWARM/

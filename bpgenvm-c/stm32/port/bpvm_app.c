@@ -16,7 +16,7 @@
 #include "bpvm.h"
 
 #include "main.h"               /* HAL */
-#include "stm32u5xx_nucleo.h"   /* BSP: hcom_uart[], COM1 */
+#include "board.h"              /* placa: BOARD_WIRE_UART */
 
 #include <string.h>
 
@@ -35,12 +35,12 @@ static uint8_t s_vm_mem[BPVM_MEM_SIZE];
 /* Salida del programa BP (cada PRINT_* de la VM) → VCP. Bytes verbatim. */
 static void uart_output_cb(const char* s, size_t len, void* user) {
     (void) user;
-    HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*) s, (uint16_t) len, HAL_MAX_DELAY);
+    HAL_UART_Transmit(BOARD_WIRE_UART, (uint8_t*) s, (uint16_t) len, HAL_MAX_DELAY);
 }
 
 /* Texto propio del firmware (banners/diagnóstico), con CRLF para el terminal. */
 static void fw_puts(const char* s) {
-    HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t*) s, (uint16_t) strlen(s), HAL_MAX_DELAY);
+    HAL_UART_Transmit(BOARD_WIRE_UART, (uint8_t*) s, (uint16_t) strlen(s), HAL_MAX_DELAY);
 }
 
 void bpvm_app_run_hello(void) {

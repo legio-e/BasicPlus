@@ -221,6 +221,118 @@ luego portar a la VM-C de host, luego al micro. Aplicada al GUI:
 - Dial de diseño: cuanta más lógica de **layout** viva en BP portable, más
   paridad de comportamiento (a cambio de aprovechar menos el layout de LVGL).
 
+### H5 — bring-up del GUI en el micro: DK2 (análisis 18-jun, a refinar)
+
+**Cabeza de puente = STM32U5G9J-DK2** (la placa que tiene Eduardo), **no** el
+F769I-DISCO que insinuaba el plan del 13-jun. Motivo: la DK2 es **misma familia U5
+(Cortex-M33)** que el Nucleo-U575 de V2 → todo el `port/` STM32 (wire v1, FS, REPL,
+GPIO, mods embebidos, platform) y el AOT Thumb-2 (#251) se reusan casi tal cual; el
+F7 sería rehacer el port de cero. Camino más barato (principio 5).
+
+**Specs DK2 (data brief ST):** 5″ **800×480**, panel **RGB 24-bit por LTDC** (NO
+MIPI-DSI), **táctil capacitivo** (I²C), STM32U5G9ZJ con **3 MB SRAM + 4 MB flash
+on-chip**, GPU2D **NeoChrom** + LTDC, OSPI flash, STLINK-V3EC, USB-C HS. **SIN
+PSRAM** (esa es la DK1). → Un framebuffer 800×480@16bpp ≈ **750 KB cabe en SRAM
+interna**; doble buffer 16bpp (~1.5 MB) también. No hace falta RAM externa para el
+GUI — justo por eso ST vende el U5G9 como MCU "de pantalla". El #225/PSRAM no
+aplica; el mapa de memoria es de SRAM interna.
+
+**Lo que se reusa (el premio de haber hecho H4 en host primero):** el contrato
+`Gui.*`, el modelo `gui.c`+dumpTree (paridad byte-idéntica), el render bajo
+`BPVM_LVGL`, el upcall onClick y la matriz de 3 builds (lean/GUI/LVGL) — **todo**.
+El micro solo cambia el *pegamento display+táctil*: en vez de
+`lv_sdl_window_create`+`lv_sdl_mouse`, LVGL se cuelga de **LTDC (framebuffer en
+SRAM) + táctil I²C**.
+
+**Lo nuevo (el trabajo real):**
+1. Board target DK2 (proyecto CubeMX propio): reloj, linker 4MB/3MB, VCP UART,
+   LEDs, **mapa de memoria** (framebuffer en SRAM). = #258 hecho concreto: 2º
+   target STM32 conviviendo con el Nucleo.
+2. Driver display: init LTDC (CubeMX) + display LVGL (draw buf + flush_cb → fb).
+3. Táctil: controlador I²C → indev LVGL → alimenta el MISMO upcall click→onClick.
+4. Facade **`bpvm_display`** (flush/read), diferida desde H2: aterriza aquí; en
+   `port/`, impl LTDC en el dir de la DK2, reusable por SPI/DSI/DVI.
+5. Eje de build `BPVM_GUI`/`BPVM_LVGL` (ya en el Makefile del host) llevado al
+   firmware CubeIDE; liblvgl para Thumb-2.
+
+**Descomposición (bottom-up, verificar cada capa — la senda de siempre):**
+- **H5.0 — base del DK2, SIN GUI.** El firmware VM lean corriendo en la DK2: board
+  target + reloj + wire VCP + LED + stdlib embebida. Éxito = "Run on Device" en la
+  DK2, Hello.mod imprime por el wire igual que el U575. Prueba el reuso del port U5
+  y el board target ANTES de tocar pantalla.
+  - *Aperitivo (experimento de Eduardo):* flashear el `.elf` del U575 en la DK2 como
+    diagnóstico de 5 min — ver qué sobrevive. Esperado: reloj/VCP/LED difieren →
+    casi mudo, pero mide el hueco. 1er sospechoso si cuelga: el reloj.
+- **H5.1 — display (LTDC + LVGL, sin táctil).** `GuiClickDemo` RENDERIZANDO en el
+  panel de 5″ (clic sintético `__guiClick` para ver el label cambiar, como headless).
+  dumpTree sigue byte-idéntico (el modelo no cambia).
+- **H5.2 — táctil.** I²C → indev LVGL → upcall. Éxito = tocar el botón real →
+  onClick → label cambia (análogo a "Eduardo pulsó el botón SDL → onClick").
+- **H5.3 — cierre.** Mapa de memoria documentado y holgado; 3 builds compilan para
+  la DK2; paridad verde; check on-device. Cierra el tramo micro del camino crítico
+  GUI → alimenta la "2ª parte de H0" (alcance).
+
+**Decisiones a refinar con Eduardo:**
+1. **Proyecto CubeMX nuevo** (`stm32/U5g9_dk2/`) en paralelo al `Nucleo_u575b/`,
+   generado para la placa exacta (ST trae la DK2 en CubeMX con LTDC/táctil/OSPI ya
+   cableados). NO retrofitear el proyecto Nucleo.
+2. **CubeMX/BSP para el init, pero el pegamento LVGL es NUESTRO** (flush_cb, indev,
+   facade `bpvm_display`) — principio 6 (envolvemos LVGL, no nos casamos). **NO
+   TouchGFX** (el default de ST); seguimos con nuestra LVGL v9.2.2 vendorizada →
+   paridad con el host.
+3. **Framebuffer simple primero:** un buffer en SRAM, 16bpp (RGB565), refresh
+   parcial, render software. Optimizar después (doble buffer, NeoChrom/GPU2D, 24bpp)
+   solo si hace falta. Piso barato.
+4. **Mapa de memoria:** 3 MB. Repartir framebuffer (~750 KB) + draw buf LVGL + heap
+   VM (¿subir de 128 KB?) + FS + stacks. Mapa explícito de entrada.
+
+**Fuera de alcance de H5** (disciplina): rollout cross-family (ESP32-P4 RISC-V,
+Metro+DVI) — después, y en parte V4 (lo decide la "2ª parte de H0"); aceleración
+NeoChrom — optimización, no bring-up; árbol #258 data-driven completo — H5 añade un
+2º target hardcoded, generalizar puede esperar.
+
+### H5.1 — display (LTDC+LVGL en la DK2): diseño (18-jun, a refinar)
+
+**El gran hallazgo:** en `gui.c`, bajo `BPVM_LVGL`, el código que crea/actualiza
+los `lv_obj` (label/button/align/text…) es **independiente de plataforma** → se
+reusa TAL CUAL en el micro. Lo único atado a SDL son **3 funciones**:
+`lvgl_ensure_init` (ventana SDL + ratón), `bpvm_gui_lvgl_pump`
+(`lv_timer_handler`+`SDL_Delay`) y `bpvm_gui_lvgl_window_open`. Esa es justo la
+costura del **backend de display** (la facade `bpvm_display` de H2): H5.1 =
+sustituir SDL por **LTDC** en esas 3; el resto del render ya está.
+
+**Lo nuevo (micro):**
+- **Framebuffer en SRAM** (~750 KB a RGB565, array estático; cabe de sobra en los
+  3 MB; el LTDC del U5 hace DMA desde SRAM interna).
+- **Display LVGL por API cruda** (`lv_display_create` + draw buffer + `flush_cb`
+  que copia la zona sucia al framebuffer) — en host lo envuelve
+  `lv_sdl_window_create`; aquí a mano (hay ejemplos de ST).
+- **Cablear la capa LTDC** al framebuffer: CubeMX la dejó con `FBStartAdress=0` y
+  RGB888 → fijar nuestra dirección + formato + enable.
+- **Tick** = `HAL_GetTick`; **pump** = `lv_timer_handler`.
+- **Build:** LVGL vendorizada como carpeta fuente enlazada (como `port`/`src`) +
+  `lv_conf.h` propio del micro (LV_COLOR_DEPTH 16, sin SDL, DMA2D off de momento)
+  + símbolos `-DBPVM_GUI -DBPVM_LVGL`.
+
+**Decisiones a refinar:**
+1. **Color: RGB565 (16bpp, ~750 KB).** Piso amigable; la paridad es por dumpTree,
+   NO por píxeles → el host sigue a 32bpp y el micro a 16bpp sin romper nada.
+   Reconfigurar la capa LTDC (CubeMX la puso RGB888).
+2. **Costura backend:** factorizar las 3 funciones SDL de `gui.c` a un backend de
+   display (host=SDL / micro=LTDC); el código de widgets sigue COMPARTIDO. Es
+   `bpvm_display` (flush ahora; read=táctil en H5.2).
+3. **LVGL en CubeIDE:** carpeta fuente enlazada + `lv_conf.h` del micro (vs
+   liblvgl.a prebuild). Enlazada = consistente con port/src.
+4. **Alcance H5.1 = solo render, sin táctil.** Éxito = `GuiClickDemo` dibujándose
+   en el panel de 5″ + un `__guiClick` sintético que cambia el label (visible).
+   Táctil GT911 = H5.2.
+5. **Lazo GUI_RUN en el micro:** `lv_timer_handler` + tick + drenar cola de clics
+   → upcall, **y** sondear el wire (KILL/HELLO) para que el IDE pueda parar (como
+   `stm32_run_poll_cb`).
+
+**Fuera de H5.1:** táctil (H5.2), aceleración DMA2D/GPU2D (optim.), doble
+buffer/tear-free (optim.).
+
 ## 2. Lenguaje (se mantiene; "eventos y poco más")
 
 - §8 callbacks / función-valor (`CALL_INDIRECT`) — opcional, ver arriba.

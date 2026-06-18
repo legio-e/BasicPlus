@@ -25,13 +25,13 @@
 #include "aot_registry.h"    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
 
 #include "main.h"
-#include "stm32u5xx_nucleo.h"   /* BSP_LED_Toggle, LED_GREEN */
+#include "board.h"              /* placa: BOARD_WIRE_UART, BOARD_NAME, BOARD_SRAM_BYTES, BOARD_LED_* */
 
 #include <string.h>
 #include <stdio.h>
 
 #define SERVER_NAME "bpvm-stm32"
-#define BOARD_NAME  "nucleo-u575zi"
+/* BOARD_NAME, BOARD_SRAM_BYTES y los BOARD_LED_* los provee board.h (por placa). */
 
 /* Buffers estáticos (NO en stack: el stack C del micro es pequeño). */
 static char    s_line[WIRE_LINE_MAX];
@@ -93,7 +93,7 @@ static void handle_info(long id) {
         "\"fsTotalBytes\":%lu,\"fsUsedBytes\":%lu}",
         id, (unsigned long) u2, (unsigned long) u1, (unsigned long) u0,
         BOARD_NAME, (unsigned long) SystemCoreClock, (unsigned long) HAL_GetTick(),
-        flash_bytes, 768UL * 1024UL,
+        flash_bytes, BOARD_SRAM_BYTES,
         (unsigned long) fs_total_bytes(), (unsigned long) fs_used_bytes());
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);
 }
@@ -306,7 +306,7 @@ static void run_module_path(const char* path, long id) {
     const uint8_t* data; uint32_t size;
     if (stm32_fs_resolve(path, &data, &size) != 0) {
         if (id >= 0) stm32_wire_send_error(id, "NOT_FOUND", "no existe");
-        else         BSP_LED_On(LED_RED);            /* autorun: ruta mala */
+        else         BOARD_LED_ERR_ON();            /* autorun: ruta mala */
         return;
     }
 
@@ -320,11 +320,11 @@ static void run_module_path(const char* path, long id) {
     }
 
     bpvm_t* vm = bpvm_init(s_vm_mem, sizeof(s_vm_mem), 0);
-    if (!vm) { BSP_LED_On(LED_RED); emit_exited(session, "INTERNAL_ERROR", -1, 0); return; }
+    if (!vm) { BOARD_LED_ERR_ON(); emit_exited(session, "INTERNAL_ERROR", -1, 0); return; }
     bpvm_set_output(vm, v1_output_sink, NULL);
 
     uint32_t t0 = HAL_GetTick();
-    BSP_LED_On(LED_BLUE);                         /* azul = ejecutando un programa */
+    BOARD_LED_RUN_ON();                           /* LED RUN = ejecutando un programa */
     bpvm_status_t st = bpvm_load_mod_buffer(vm, data, size, path);
 
     /* Resolución iterativa de imports: por cada módulo cargado y cada import,
@@ -412,7 +412,7 @@ static void run_module_path(const char* path, long id) {
     if (st == BPVM_OK && !missing[0]) bpvm_set_poll(vm, stm32_run_poll_cb, NULL);
 
     if (st == BPVM_OK && !missing[0]) st = bpvm_run(vm);
-    BSP_LED_Off(LED_BLUE);
+    BOARD_LED_RUN_OFF();
     uint32_t dt = HAL_GetTick() - t0;
 
     /* P-run-stop — ack diferido del KILL, antes del EXITED. */
@@ -420,7 +420,7 @@ static void run_module_path(const char* path, long id) {
     if (s_kill_ack_id >= 0) { reply_empty("KILL_REPLY", s_kill_ack_id); s_kill_ack_id = -1; }
 
     if (missing[0]) {
-        BSP_LED_On(LED_RED);
+        BOARD_LED_ERR_ON();
         char buf[160];
         int n = snprintf(buf, sizeof(buf),
             "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
@@ -429,7 +429,7 @@ static void run_module_path(const char* path, long id) {
             session, missing);
         if (n > 0) stm32_wire_send_line(buf, (size_t) n);
     } else {
-        if (st != BPVM_OK && st != BPVM_KILLED) BSP_LED_On(LED_RED);
+        if (st != BPVM_OK && st != BPVM_KILLED) BOARD_LED_ERR_ON();
         emit_exited(session,
                     (st == BPVM_OK)     ? "OK"
                   : (st == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR",
@@ -528,9 +528,9 @@ void stm32_repl_run(void) {
     /* FIFO RX/TX (8 bytes): absorbe el hueco de procesado entre la línea JSON
      * y los bytes bulk que la siguen → PUT fiable aunque la CPU vaya lenta.
      * (El fix definitivo del timing es subir el reloj a 160 MHz.) */
-    HAL_UARTEx_SetTxFifoThreshold(&hcom_uart[COM1], UART_TXFIFO_THRESHOLD_1_8);
-    HAL_UARTEx_SetRxFifoThreshold(&hcom_uart[COM1], UART_RXFIFO_THRESHOLD_1_8);
-    HAL_UARTEx_EnableFifoMode(&hcom_uart[COM1]);
+    HAL_UARTEx_SetTxFifoThreshold(BOARD_WIRE_UART, UART_TXFIFO_THRESHOLD_1_8);
+    HAL_UARTEx_SetRxFifoThreshold(BOARD_WIRE_UART, UART_RXFIFO_THRESHOLD_1_8);
+    HAL_UARTEx_EnableFifoMode(BOARD_WIRE_UART);
 
     stm32_wire_send_cstr("=== bpvm-stm32 REPL (wire v1) listo ===");
 
@@ -546,7 +546,7 @@ void stm32_repl_run(void) {
         uint32_t now = HAL_GetTick();
         if (now - last_blink >= 500U) {     /* heartbeat */
             last_blink = now;
-            BSP_LED_Toggle(LED_GREEN);
+            BOARD_LED_BEAT_TOGGLE();
         }
     }
 }

@@ -6,6 +6,7 @@
 #include "bpvm_fs.h"   /* backend de file I/O para los builtins (#247) */
 
 #include "main.h"     /* HAL FLASH/ICACHE + CMSIS (FLASH_BASE, FLASH->OPTR) */
+#include "board.h"    /* BOARD_FS_FLASH_ADDR (región FS reservada, por placa) */
 #include <string.h>
 
 #define FS_MAX_FILES   40   /* 13 stdlib core en /lib + módulos de app + holgura */
@@ -145,7 +146,7 @@ void fs_format(void) {
  * HAL_GetTick); sí la ICACHE, para no servir datos rancios tras escribir.
  * ============================================================ */
 
-#define FS_FLASH_ADDR   0x081E0000u          /* últimos 128 KB de 2 MB */
+#define FS_FLASH_ADDR   BOARD_FS_FLASH_ADDR   /* región FS reservada (por placa, ver board.h) */
 #define FS_REGION_SIZE  (128u * 1024u)
 #define FS_HDR_BYTES    0x2000u              /* 1 página (8 KB): header + tabla */
 #define FS_MAGIC        0x42504653u          /* 'BPFS' */
