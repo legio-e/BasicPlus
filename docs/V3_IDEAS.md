@@ -18,8 +18,13 @@ Con H5 cerrado (GUI interactiva en silicio real), Eduardo fija el **alcance de V
 
 - **H6 — Controles GUI (cierra la parte gráfica).** Añadir los **widgets más
   comunes de LVGL** en las **3 VMs** (miVM + VM-C + STM32). Alcance DELIBERADO:
-  **~60–70 % de LVGL — "lo más interesante, NO todo LVGL".** Desarrollo en la DK2,
-  paridad por dumpTree. Con esto la parte gráfica queda terminada.
+  **~60–70 % de LVGL — "lo más interesante, NO todo LVGL".** **Criterio candidato
+  de selección (Eduardo):** los controles **comunes a Swing ∩ LVGL** — garantiza
+  que ambos backends (Swing en miVM, LVGL en VM-C/micro) los pintan → sin huecos
+  de paridad, y acota a controles estándar bien entendidos (cae cerca del 60-70 %).
+  Se afina al arrancar H6, con algún juicio en los bordes (p.ej. `arc`/`roller`/
+  `msgbox` de LVGL sin equivalente Swing directo, y viceversa). Desarrollo en la
+  DK2, paridad por dumpTree. Con esto la parte gráfica queda terminada.
 - **Repaso estilo V2:** lenguaje + librerías estándar + IDE — pulir/ampliar según
   lo que pida el uso (como los hitos de consolidación de V2).
 - **TCP/IP:** ampliar — **WiFi/lwIP en placa** (#145, marcado [v3]) + lo que falte
