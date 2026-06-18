@@ -39,6 +39,46 @@ static uint8_t s_drawbuf[LTDC_PANEL_W * DRAW_LINES * 2] __attribute__((aligned(4
 
 extern LTDC_HandleTypeDef hltdc;   /* CubeMX MX_LTDC_Init */
 extern TIM_HandleTypeDef  htim3;   /* CubeMX MX_TIM3_Init — CH4 = retro (BL_CTRL / PE6) */
+extern I2C_HandleTypeDef  hi2c2;   /* CubeMX MX_I2C2_Init — bus del táctil GT911 (PF0/PF1) */
+
+/* ===== Táctil GT911 (H5.2) =====
+ * Datos del BSP de ST (stm32u5g9j_discovery_ts.h + gt911_reg.h): GT911 en I²C2,
+ * dirección 0xBA (8-bit), registros de 16 bits. Secuencia de lectura: estado en
+ * 0x814E (bit7 = frame listo, bits 3:0 = nº de puntos); punto 1 en 0x8150
+ * (XL,XH,YL,YH → x=XH<<8|XL, y=YH<<8|YL); luego ACK escribiendo 0 en 0x814E para
+ * que el GT911 prepare el siguiente frame. INT en PE5 (no se usa: leemos por
+ * polling desde el read_cb que LVGL llama en lv_timer_handler). */
+#define GT911_ADDR       0xBAU
+#define GT911_STAT_REG   0x814EU
+#define GT911_P1_XL_REG  0x8150U
+
+static int32_t s_tx = 0, s_ty = 0;   /* último punto (LVGL lo quiere también en RELEASED) */
+static int     s_tpressed = 0;
+
+static void gt911_read_cb(lv_indev_t* indev, lv_indev_data_t* data) {
+    (void) indev;
+    uint8_t st = 0;
+    if (HAL_I2C_Mem_Read(&hi2c2, GT911_ADDR, GT911_STAT_REG, I2C_MEMADD_SIZE_16BIT,
+                         &st, 1, 10) == HAL_OK && (st & 0x80U)) {
+        if ((st & 0x0FU) >= 1U) {                      /* hay al menos un punto */
+            uint8_t d[4];
+            if (HAL_I2C_Mem_Read(&hi2c2, GT911_ADDR, GT911_P1_XL_REG,
+                                 I2C_MEMADD_SIZE_16BIT, d, 4, 10) == HAL_OK) {
+                s_tx = (int32_t) (d[0] | (d[1] << 8));
+                s_ty = (int32_t) (d[2] | (d[3] << 8));
+                s_tpressed = 1;
+            }
+        } else {
+            s_tpressed = 0;
+        }
+        uint8_t zero = 0;                              /* ACK: prepara el siguiente frame */
+        HAL_I2C_Mem_Write(&hi2c2, GT911_ADDR, GT911_STAT_REG, I2C_MEMADD_SIZE_16BIT,
+                          &zero, 1, 10);
+    }
+    data->point.x = s_tx;
+    data->point.y = s_ty;
+    data->state = s_tpressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+}
 
 /* Copia la zona renderizada (RGB565) al framebuffer, fila a fila. */
 static void ltdc_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
@@ -81,12 +121,25 @@ void bpvm_gui_disp_init(int w, int h) {
     lv_display_set_flush_cb(disp, ltdc_flush_cb);
     lv_display_set_buffers(disp, s_drawbuf, NULL, sizeof(s_drawbuf),
                            LV_DISPLAY_RENDER_MODE_PARTIAL);
-    /* (Sin indev: el táctil GT911 es H5.2; en H5.1 el clic es sintético.) */
+
+    /* Táctil GT911 → indev de puntero. LVGL enruta el toque al widget bajo el
+     * dedo → su evento de clic → lvgl_click_cb → bpvm_gui_inject_click → upcall
+     * onClick. Es EXACTAMENTE el mismo camino que el clic sintético del host,
+     * ahora disparado por un dedo real sobre el panel. */
+    lv_indev_t* touch = lv_indev_create();
+    lv_indev_set_type(touch, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(touch, gt911_read_cb);
 }
 
 void bpvm_gui_disp_pump(void) {
+    /* Procesa timers/render de LVGL y DUERME hasta la próxima IRQ (__WFI): el
+     * SysTick (1 ms) marca el ritmo del lazo y la IRQ de RX despierta al instante
+     * si llega un byte. El RX entra por IRQ→ring (stm32_wire.c, DK2), NO por
+     * sondeo, así que el KILL durante Gui.run() no se pierde aunque durmamos entre
+     * frames — y no giramos al 100% de CPU. lv_timer_handler se auto-regula por
+     * lv_tick (no re-renderiza de más). */
     lv_timer_handler();
-    HAL_Delay(5);
+    __WFI();
 }
 
 /* H5.1: sin "ventana que cerrar"; Gui.run() corre hasta reset. El KILL por el

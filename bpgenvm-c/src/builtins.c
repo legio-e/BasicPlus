@@ -419,6 +419,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint32_t objptr;
             while ((objptr = bpvm_gui_next_click()) != 0)
                 if (dispatch) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, dispatch, &a, 1); }
+            /* P-run-stop (#257) — KILL durante Gui.run(): el scheduler no corre
+             * quanta mientras este builtin bombea, así que poleamos el wire aquí
+             * mismo (el MISMO poll_cb que el scheduler usa entre quanta). Al romper
+             * caemos al push+return de abajo → el quantum termina → el scheduler ve
+             * kill_requested y devuelve BPVM_KILLED (parada limpia entre opcodes). */
+            if (vm->poll_cb != NULL && vm->poll_cb(vm, vm->poll_user) != 0)
+                vm->kill_requested = 1;
+            if (vm->kill_requested) break;
             if (!bpvm_gui_lvgl_window_open()) break;
             bpvm_gui_lvgl_pump();
         }

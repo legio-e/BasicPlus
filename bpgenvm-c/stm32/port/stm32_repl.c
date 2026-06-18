@@ -532,6 +532,15 @@ void stm32_repl_run(void) {
     HAL_UARTEx_SetRxFifoThreshold(BOARD_WIRE_UART, UART_RXFIFO_THRESHOLD_1_8);
     HAL_UARTEx_EnableFifoMode(BOARD_WIRE_UART);
 
+#if defined(BPVM_BOARD_DK2)
+    /* DK2 (V3/H5.2) — RX por IRQ → ring: la FIFO de 8B (≈700µs) no basta cuando
+     * el lazo deja el UART sin sondear ms (bombeo de LVGL en Gui.run()) y se
+     * perdían los primeros bytes del KILL. Con la IRQ drenando a un ring de 256B,
+     * getchar() no pierde nada y el GUI puede dormir entre frames (__WFI). Tras
+     * EnableFifoMode para que RXFNE refleje la FIFO ya activa. */
+    stm32_wire_rx_irq_enable();
+#endif
+
     stm32_wire_send_cstr("=== bpvm-stm32 REPL (wire v1) listo ===");
 
     /* P-autorun (#256) — el wire ya está vivo: si la app de auto.txt se

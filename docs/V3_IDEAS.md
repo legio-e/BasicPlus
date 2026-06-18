@@ -333,6 +333,44 @@ sustituir SDL por **LTDC** en esas 3; el resto del render ya está.
 **Fuera de H5.1:** táctil (H5.2), aceleración DMA2D/GPU2D (optim.), doble
 buffer/tear-free (optim.).
 
+### H5.2 — táctil GT911 + KILL en `Gui.run()` + wire RX por IRQ (18-jun, HECHO en placa)
+
+`GuiClickDemo` en la DK2 con **dedo real** → `onClick`, y **Stop (Ctrl+F2) mata el
+GUI** sin reset. Tres piezas:
+
+1. **Táctil GT911 → indev LVGL.** Datos sacados del **BSP de ST** (no del PDF):
+   `Drivers/BSP/STM32U5G9J-DK2/stm32u5g9j_discovery_ts.{c,h}` + `Components/gt911/`
+   en el repo CubeU5 1.8.0 del disco → **GT911 en I²C2** (`hi2c2`, PF0/PF1),
+   dirección **0xBA** (8-bit; 0x5D en 7-bit), registros de 16 bits: estado en
+   **0x814E** (bit7 = frame listo, bits3:0 = nº puntos), punto 1 en **0x8150**
+   (XL,XH,YL,YH). **Coords directas**: `GT911_MAX_X/Y_LENGTH = 800/480` +
+   `Orientation = TS_SWAP_NONE` → la fórmula del BSP es identidad, el GT911 ya
+   reporta 0..799/0..479 = rango del display. `read_cb` por **polling** sobre
+   `hi2c2` (HAL_I2C_Mem_Read; ACK escribiendo 0 en 0x814E); INT (PE5) NO se usa.
+   Indev pointer → el toque entra por el MISMO camino que el clic sintético
+   (`lvgl_click_cb` → `inject_click` → upcall). Reusamos el protocolo de ST ligado
+   a nuestro `hi2c2`, sin arrastrar el BSP. Todo en `port/gui_display_ltdc.c`.
+2. **KILL durante `Gui.run()`.** El scheduler no corre quanta mientras el builtin
+   `GUI_RUN` bombea, así que su lazo (`builtins.c`) **polea `vm->poll_cb` entre
+   frames** (el mismo del scheduler); al recibir KILL rompe → push+return →
+   `BPVM_KILLED` limpio.
+3. **Wire RX por IRQ → ring (la pieza grande; idea de Eduardo).** El RX del wire
+   STM32 era **lectura directa del registro, sin buffer software**: si el lazo no
+   sondea >~700µs (la FIFO HW son 8B) se pierden bytes por overrun. El bombeo de
+   LVGL deja el UART sin atender varios ms → se perdían los primeros bytes del KILL
+   (la FIFO ya estaba activada y NO bastaba — 8B≈700µs ≪ hueco de ms). Fix: la
+   **IRQ de RX del USART1** (DK2) drena la FIFO a un **ring de 256B** (SPSC
+   monocore); `getchar` lee del ring → no se pierde nada aunque el lazo no sondee.
+   Robustece **TODO el wire** (PUT/RUN/bulk), no solo el GUI. El pump del GUI ahora
+   **duerme con `__WFI`** (sin busy-spin). Todo bajo `#if BPVM_BOARD_DK2`
+   (`stm32_wire.c/.h`, `stm32_repl.c`, `board.h`, `it.c` del proyecto); Nucleo
+   intacto (path directo). **Lección:** el wire STM32 era el único port sin buffer
+   de entrada (Pico = USB CDC bufferizado; ESP32 = driver UART con ring). Para el
+   próximo port STM32 con tráfico a ráfagas: RX por IRQ+ring desde el principio.
+
+**Fuera de H5.2:** ring por IRQ en el Nucleo (cuando toque), GET (TX) por IRQ
+(no hace falta hoy), bajar la latencia del Stop por debajo del SysTick.
+
 ## 2. Lenguaje (se mantiene; "eventos y poco más")
 
 - §8 callbacks / función-valor (`CALL_INDIRECT`) — opcional, ver arriba.

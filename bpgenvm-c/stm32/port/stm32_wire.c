@@ -20,6 +20,50 @@
 
 static UART_HandleTypeDef* wire_uart(void) { return BOARD_WIRE_UART; }
 
+#if defined(BPVM_BOARD_DK2)
+/* ===== RX por IRQ + ring (DK2, V3/H5.2) =====
+ * La lectura directa del registro (#else) no tiene buffer software: si el lazo
+ * no sondea durante >~700µs (la FIFO HW son 8 bytes) se pierden bytes por
+ * overrun. Eso mataba el KILL durante Gui.run() — el bombeo de LVGL deja el UART
+ * sin atender varios ms. Aquí la IRQ de RX del USART1 drena la FIFO a un ring de
+ * 256B en cuanto llega cada byte, independiente de lo que haga el lazo principal:
+ * getchar() saca del ring y no se pierde nada (mientras el ring no desborde;
+ * 256B ≈ 5 líneas de comando, y el consumidor de bulk drena en continuo).
+ * SPSC monocore: la ISR es el único productor (head), getchar el único consumidor
+ * (tail); índices uint16 alineados → acceso atómico en M33, volatile basta. */
+#define RX_RING_SZ 256u
+static volatile uint8_t  s_rx_ring[RX_RING_SZ];
+static volatile uint16_t s_rx_head = 0;   /* productor: la ISR  */
+static volatile uint16_t s_rx_tail = 0;   /* consumidor: getchar */
+
+void stm32_wire_rx_drain(void) {
+    UART_HandleTypeDef* h = wire_uart();
+    if (__HAL_UART_GET_FLAG(h, UART_FLAG_ORE)) __HAL_UART_CLEAR_OREFLAG(h);
+    while (__HAL_UART_GET_FLAG(h, UART_FLAG_RXNE)) {        /* RXFNE con FIFO on */
+        uint8_t b = (uint8_t) (h->Instance->RDR & 0xFFU);
+        uint16_t nh = (uint16_t) ((s_rx_head + 1u) % RX_RING_SZ);
+        if (nh != s_rx_tail) { s_rx_ring[s_rx_head] = b; s_rx_head = nh; }
+        /* ring lleno → descartar (no debería pasar con tráfico de comandos) */
+    }
+}
+
+void stm32_wire_rx_irq_enable(void) {
+    UART_HandleTypeDef* h = wire_uart();
+    HAL_NVIC_EnableIRQ(BOARD_WIRE_IRQn);        /* NVIC (CubeMX ya fijó prioridad) */
+    __HAL_UART_ENABLE_IT(h, UART_IT_RXNE);      /* = RXFNE con FIFO → IRQ al llegar byte */
+}
+
+int stm32_wire_getchar(void) {
+    if (s_rx_tail != s_rx_head) {
+        uint8_t b = s_rx_ring[s_rx_tail];
+        s_rx_tail = (uint16_t) ((s_rx_tail + 1u) % RX_RING_SZ);
+        return (int) b;
+    }
+    return -1;
+}
+
+#else  /* ---- resto de placas STM32: RX directo del registro (sin cambios) ---- */
+
 int stm32_wire_getchar(void) {
     UART_HandleTypeDef* h = wire_uart();
     /* Overrun: límpialo para no bloquear la RX si un burst nos adelantó. */
@@ -31,6 +75,8 @@ int stm32_wire_getchar(void) {
     }
     return -1;
 }
+
+#endif
 
 void stm32_wire_write(const char* buf, size_t len) {
     if (len == 0) return;

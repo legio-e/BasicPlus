@@ -22,6 +22,7 @@
 
 extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10) */
 #define BOARD_WIRE_UART         (&huart1)
+#define BOARD_WIRE_IRQn         USART1_IRQn  /* IRQ de RX → ring (V3/H5.2) */
 #define BOARD_NAME              "u5g9j-dk2"
 #define BOARD_SRAM_BYTES        (3008UL * 1024UL)   /* SRAM interna contigua (linker) */
 #define BOARD_FS_FLASH_ADDR     0x083E0000u          /* últimos 128 KB de 4 MB (reservados en el .ld) */
