@@ -11,6 +11,31 @@
   lenguaje tal cual.
 - **Objetivo cabecera: una librería GUI.** No el único, pero el que manda.
 
+## Mapa de hitos V3 (H0 — definido 18-jun-2026)
+
+Con H5 cerrado (GUI interactiva en silicio real), Eduardo fija el **alcance de V3**
+— la "2ª parte de H0" que estaba aplazada hasta cerrar el GUI:
+
+- **H6 — Controles GUI (cierra la parte gráfica).** Añadir los **widgets más
+  comunes de LVGL** en las **3 VMs** (miVM + VM-C + STM32). Alcance DELIBERADO:
+  **~60–70 % de LVGL — "lo más interesante, NO todo LVGL".** Desarrollo en la DK2,
+  paridad por dumpTree. Con esto la parte gráfica queda terminada.
+- **Repaso estilo V2:** lenguaje + librerías estándar + IDE — pulir/ampliar según
+  lo que pida el uso (como los hitos de consolidación de V2).
+- **TCP/IP:** ampliar — **WiFi/lwIP en placa** (#145, marcado [v3]) + lo que falte
+  de `Net`. (+ "quizá algún tema más".)
+- **Hardware:** soporte a **alguna plataforma/familia adicional**.
+- **Bugs (transversal):** ir tapándolos según aparezcan.
+- **Cierre de V3:** capítulo de **repesca** de los widgets que no entraron en H6 +
+  **rollout cross-family en bloque** (GUI en los kits con pantalla; un kit a fondo
+  primero, pruebas en placa de todos juntas y al final) + docs/publicación.
+
+**Filosofía (Eduardo):** el GUI fue eficiente → queda holgura para varias cosas,
+pero **no inflar** — añadir lo valioso y parar a tiempo; lo que sobre se deja para
+**V4**. "Un buen fin, no arrastrarse." Orden de los bloques intermedios: flexible
+(H6 primero, cierre al final); numeración formal H6/H7/… al pasar esto a
+`V3_ROADMAP`.
+
 ## 1. GUI gráfica (objetivo cabecera)
 
 > **DECISIÓN CONSOLIDADA — H0 de V3 (16-jun-2026, charla Eduardo + Claude).**
