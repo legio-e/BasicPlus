@@ -1863,7 +1863,12 @@ public class FrmMain extends javax.swing.JFrame
                             String n = d.getName();
                             String mod = n.endsWith(".mod")
                                     ? n.substring(0, n.length() - 4) : n;
-                            if (EMBEDDED_CORE_MODS.contains(mod)) libDeps.add(n);
+                            // Gui es stdlib (vive en /lib con las demás) aunque el
+                            // firmware aún NO la embeba; el resto de la stdlib core
+                            // ya está en EMBEDDED_CORE_MODS. (Se sube igual con
+                            // content-check; /lib solo elige la carpeta destino.)
+                            if (EMBEDDED_CORE_MODS.contains(mod) || "Gui".equals(mod))
+                                libDeps.add(n);
                         }
                         if (!deps.isEmpty()) {
                             appendConsola("[deps] " + deps.size()

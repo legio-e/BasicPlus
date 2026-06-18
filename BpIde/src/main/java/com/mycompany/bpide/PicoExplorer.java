@@ -680,6 +680,20 @@ public final class PicoExplorer extends JPanel {
                             + mdnFile.length() + " bytes)"));
                 }
             }
+            // 2c) Refrescar el árbol del FS AQUÍ — tras subir, ANTES de ejecutar.
+            //     Si el programa es GUI (Gui.run() no retorna) el wire queda
+            //     OCUPADO y el onRefresh() del done-callback (tras b.run()) no
+            //     llega nunca. Esta es la única ventana con el wire libre. El
+            //     LIST es síncrono (mismo hilo, wire libre); el repintado al EDT.
+            try {
+                final java.util.List<Backend.Entry> postFs = b.list();
+                SwingUtilities.invokeLater(() -> {
+                    rebuildTree(postFs);
+                    status.setText(postFs.size() + " files (tras subir)");
+                });
+            } catch (java.io.IOException refErr) {
+                // best-effort: si el LIST falla, seguimos al run igual.
+            }
             // 3) Ejecutar el principal — salvo en modo DEBUG, donde cedemos el
             //    client ya conectado a la sesión de debug, que conduce
             //    PAUSE/RUN/STEP por eventos (no bloqueante).
