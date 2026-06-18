@@ -371,6 +371,33 @@ GUI** sin reset. Tres piezas:
 **Fuera de H5.2:** ring por IRQ en el Nucleo (cuando toque), GET (TX) por IRQ
 (no hace falta hoy), bajar la latencia del Stop por debajo del SysTick.
 
+### H5.3 — cierre del tramo H5 (18-jun, HECHO)
+
+H5 cerrado: la GUI interactiva corre en la DK2 (render + táctil + KILL), verificada
+en placa por Eduardo. Cierre:
+
+- **Mapa de RAM (SRAM 3008 KB) — holgado:** framebuffer RGB565 800×480 = 750 KB ·
+  drawbuf parcial (48 líneas) = 75 KB · pool LVGL (`LV_MEM_SIZE`) = 64 KB · heap
+  VM (`s_vm_mem`) = 128 KB · arena FS en RAM = 96 KB · stack = 16 KB · ring RX +
+  varios < 1 KB → **~1.1 MB usados, ~1.9 MB libres (63 %)**. Sitio de sobra para
+  doble-buffer/tear-free o GUIs más ricas (optim. futura). Flash: el firmware LVGL
+  entra en los 3968 KB de código (compila+flashea+corre); FS en los últimos 128 KB
+  (`BOARD_FS_FLASH_ADDR`).
+- **Las 3 builds compilan** (chequeo anti-podredumbre del camino sin-GUI, en el
+  host de referencia): `make` (lean) · `make GUI=1` (modelo) · `make LVGL=1`
+  (render) → las tres OK. En el micro la DK2 corre la build LVGL; lean/GUI se
+  ejercitan en el host para que no se pudran.
+- **Estrategia de aquí en adelante (decisión de Eduardo, 18-jun):** seguir a fondo
+  en la DK2; el **rollout cross-family** (probar en placa otros kits) se hace en
+  BLOQUE y más adelante, NO por feature — si no, no se termina nunca. El código se
+  mantiene correcto para todas las familias (`#if BPVM_BOARD_*`), pero la prueba
+  física se difiere.
+
+**H5 = objetivo cabecera de V3 cumplido:** misma `Gui.*` byte-idéntica en las 3 VMs
+y, en silicio real, se pinta + responde al dedo + se para limpio. Siguiente
+inflexión: **"2ª parte de H0"** (alcance de V3 + mapa de hitos), aplazada hasta
+cerrar el GUI — ahora toca.
+
 ## 2. Lenguaje (se mantiene; "eventos y poco más")
 
 - §8 callbacks / función-valor (`CALL_INDIRECT`) — opcional, ver arriba.
