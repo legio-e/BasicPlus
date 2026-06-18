@@ -1,0 +1,199 @@
+dbg 3
+module Gui
+source C:\lenguajes\pm\bpstdlib\Gui.bp
+lines
+1446 36
+1539 58
+1563 62
+1587 66
+1601 67
+1625 71
+1655 75
+1681 79
+1702 83
+1753 105
+1774 101
+1782 102
+1855 112
+1868 113
+1947 126
+1971 130
+1997 134
+2021 120
+2034 121
+2048 122
+2133 142
+2146 143
+2160 144
+2282 152
+2301 157
+vars
+func Object.toString 0
+this -16 4 0 ?
+func Object.compareTo 25
+this -20 4 0 ?
+other -16 4 0 ?
+func List.add 41
+this -20 4 0 ?
+item -16 4 0 ?
+func List.get 131
+this -20 4 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func List.length 173
+this -16 4 0 ?
+func List.remove 189
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 295
+this -16 4 0 ?
+func OwnerList.removeAndFree 338
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 468
+this -16 4 0 ?
+func StringBuilder.appendChar 489
+this -20 4 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 579
+this -20 4 0 ?
+s -16 4 0 ?
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 650
+this -20 4 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 675
+this -16 4 0 ?
+func StringBuilder.length 699
+this -16 4 0 ?
+func StringBuilder.__init 715
+this -16 4 0 ?
+func Thread.run 756
+this -16 4 0 ?
+func Thread.start 766
+this -16 4 0 ?
+func Thread.join 785
+this -16 4 0 ?
+func Thread.__init 804
+this -20 4 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 832
+this -16 4 0 ?
+func Mutex.unlock 851
+this -16 4 0 ?
+func Mutex.__init 870
+this -16 4 0 ?
+func SyncList.add 888
+this -20 4 0 ?
+item -16 4 0 ?
+func SyncList.remove 934
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.get 980
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.set 1024
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func SyncList.length 1073
+this -16 4 0 ?
+func SyncList.pop 1114
+this -16 4 0 ?
+func SyncList.popBlocking 1225
+this -16 4 0 ?
+func SyncList.__init 1352
+this -16 4 0 ?
+func Color.__init 1443
+this -20 4 0 ?
+rgb -16 4 0 integer
+func __cls_new_Color 1461
+rgb -16 4 0 integer
+func __cls_init_Color 1495
+this -20 4 0 ?
+rgb -16 4 0 integer
+func Obj.setWidth 1536
+this -20 4 0 ?
+w -16 4 0 integer
+func Obj.setHeight 1560
+this -20 4 0 ?
+h -16 4 0 integer
+func Obj.setSize 1584
+this -24 4 0 ?
+w -20 4 0 integer
+h -16 4 0 integer
+func Obj.align 1622
+this -28 4 0 ?
+a -24 4 0 integer
+dx -20 4 0 integer
+dy -16 4 0 integer
+func Obj.setBgColor 1652
+this -20 4 0 ?
+c -16 4 0 ref
+func Obj.clean 1678
+this -16 4 0 ?
+func Obj.delete 1699
+this -16 4 0 ?
+func Obj.onClick 1720
+this -16 4 0 ?
+func Screen.load 1750
+this -16 4 0 ?
+func Screen.__init 1771
+this -16 4 0 ?
+func __cls_init_Screen 1834
+this -16 4 0 ?
+func Panel.__init 1852
+this -20 4 0 ?
+parent -16 4 0 ref
+func __cls_new_Panel 1889
+parent -16 4 0 ref
+func __cls_init_Panel 1923
+this -20 4 0 ?
+parent -16 4 0 ref
+func Label.setText 1944
+this -20 4 0 ?
+t -16 4 0 string
+func Label.setTextColor 1968
+this -20 4 0 ?
+c -16 4 0 ref
+func Label.setFont 1994
+this -20 4 0 ?
+font -16 4 0 integer
+func Label.__init 2018
+this -24 4 0 ?
+parent -20 4 0 ref
+text -16 4 0 string
+func __cls_new_Label 2069
+parent -20 4 0 ref
+text -16 4 0 string
+func __cls_init_Label 2106
+this -24 4 0 ?
+parent -20 4 0 ref
+text -16 4 0 string
+func Button.__init 2130
+this -24 4 0 ?
+parent -20 4 0 ref
+text -16 4 0 string
+lbl 4 4 0 ?
+func __cls_new_Button 2196
+parent -20 4 0 ref
+text -16 4 0 string
+func __cls_init_Button 2233
+this -24 4 0 ?
+parent -20 4 0 ref
+text -16 4 0 string
+func __guiDispatch 2279
+self -16 4 0 ref
+func __strconcat 2314
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 4 0 ?
+i 12 4 0 ?

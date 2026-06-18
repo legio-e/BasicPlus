@@ -48,10 +48,17 @@ uint32_t bpvm_gui_next_click(void);
 size_t bpvm_gui_dump_tree(char** out);
 
 #ifdef BPVM_LVGL
-/* H4.2 — render real (LVGL v9 + SDL). pump = una iteración del lazo
- * (lv_timer_handler + delay); window_open = false cuando el usuario cierra. */
+/* H4.2 — render real (LVGL v9). pump = una iteración del lazo (lv_timer_handler
+ * + delay); window_open = false cuando el usuario cierra. */
 void bpvm_gui_lvgl_pump(void);
 int  bpvm_gui_lvgl_window_open(void);
+
+/* H5.1 — backend de display (lo provee la PLATAFORMA; gui.c lo llama tras
+ * lv_init()): host = SDL (src/gui_display_sdl.c), micro = LTDC (port/). El resto
+ * del render —creación de widgets— es portable y vive en gui.c. */
+void bpvm_gui_disp_init(int w, int h);   /* tick + display + (host) input/cierre */
+void bpvm_gui_disp_pump(void);           /* lv_timer_handler + ceder CPU */
+int  bpvm_gui_disp_is_open(void);        /* host: ventana abierta; micro: 1 si corre */
 #endif
 
 #endif /* BPVM_GUI_H */

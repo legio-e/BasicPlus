@@ -27,7 +27,14 @@
  *====================*/
 
 /*Color depth: 1 (I1), 8 (L8), 16 (RGB565), 24 (RGB888), 32 (XRGB8888)*/
+/* Board-aware (V3/H5.1): los builds STM32 HAL (micro, p.ej. DK2) usan RGB565
+ * (panel LTDC); el host (SDL) usa XRGB8888. USE_HAL_DRIVER lo define CubeMX en
+ * todo proyecto STM32; el host no lo define. */
+#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2)
+#define LV_COLOR_DEPTH 16
+#else
 #define LV_COLOR_DEPTH 32
+#endif
 
 /*=========================
    STDLIB WRAPPER SETTINGS
@@ -961,7 +968,12 @@
  *==================*/
 
 /*Use SDL to open window on PC and handle mouse and keyboard*/
+/* Board-aware: el micro STM32 (USE_HAL_DRIVER) pinta por LTDC, sin SDL. */
+#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2)
+#define LV_USE_SDL              0
+#else
 #define LV_USE_SDL              1
+#endif
 #if LV_USE_SDL
     #define LV_SDL_INCLUDE_PATH     <SDL2/SDL.h>
     #define LV_SDL_RENDER_MODE      LV_DISPLAY_RENDER_MODE_DIRECT   /*LV_DISPLAY_RENDER_MODE_DIRECT is recommended for best performance*/

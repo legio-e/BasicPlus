@@ -42,5 +42,10 @@
 			<type>2</type>
 			<location>C:/lenguajes/pm/bpgenvm-c/src</location>
 		</link>
+		<link>
+			<name>lvgl</name>
+			<type>2</type>
+			<location>C:/lenguajes/pm/bpgenvm-c/third_party/lvgl/src</location>
+		</link>
 	</linkedResources>
 </projectDescription>

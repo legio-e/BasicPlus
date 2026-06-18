@@ -38,6 +38,7 @@ LVGL ?= 0
 ifeq ($(LVGL),1)
   GUI := 1
   CFLAGS += -DBPVM_LVGL $(LVGL_INC)
+  SRC    += src/gui_display_sdl.c   # backend de display SDL (host); el micro usa LTDC (port/)
 endif
 ifeq ($(GUI),1)
   CFLAGS += -DBPVM_GUI

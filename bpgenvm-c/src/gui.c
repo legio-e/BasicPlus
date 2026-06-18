@@ -17,10 +17,11 @@
 #include <stdio.h>
 
 #ifdef BPVM_LVGL
-#define SDL_MAIN_HANDLED
-#include <SDL2/SDL.h>
 #include "lvgl.h"
-#include <stdint.h>     /* intptr_t */
+#include <stdint.h>     /* intptr_t (lvgl_click_cb) */
+/* El backend de display (ventana/tick/cierre) lo provee la plataforma vía
+ * bpvm_gui_disp_* — host = SDL (src/gui_display_sdl.c), micro = LTDC (port/).
+ * Aquí no se toca SDL: el render de widgets es portable. */
 #endif
 
 #define GUI_MAX_NODES 512
@@ -81,28 +82,13 @@ static const lv_align_t ALIGN_MAP[9] = {
     LV_ALIGN_BOTTOM_LEFT, LV_ALIGN_BOTTOM_MID, LV_ALIGN_BOTTOM_RIGHT
 };
 
-static int          g_lvgl_inited  = 0;
-static volatile int g_window_closed = 0;
-
-/* Watch de eventos SDL: marca el cierre de ventana SIN consumir el evento (LVGL
- * sigue recibiendo el ratón). Evita depender de internals de lv_sdl. */
-static int SDLCALL lvgl_watch(void* ud, SDL_Event* e) {
-    (void) ud;
-    if (e->type == SDL_QUIT ||
-        (e->type == SDL_WINDOWEVENT && e->window.event == SDL_WINDOWEVENT_CLOSE))
-        g_window_closed = 1;
-    return 1;   /* 1 = no filtrar (el evento sigue su curso) */
-}
+static int g_lvgl_inited = 0;
 
 static void lvgl_ensure_init(void) {
     if (g_lvgl_inited) return;
     g_lvgl_inited = 1;
-    SDL_SetMainReady();
-    lv_init();
-    lv_tick_set_cb(SDL_GetTicks);
-    lv_sdl_window_create(GUI_SCREEN_W, GUI_SCREEN_H);
-    lv_sdl_mouse_create();
-    SDL_AddEventWatch(lvgl_watch, NULL);
+    lv_init();                                       /* core LVGL (portable) */
+    bpvm_gui_disp_init(GUI_SCREEN_W, GUI_SCREEN_H);  /* tick + display + input (plataforma) */
 }
 
 /* Callback de clic LVGL: encola el objptr del objeto BP dueño (user_data). NO
@@ -118,8 +104,8 @@ static lv_obj_t* parent_lv(int parent) {
     return lv_screen_active();
 }
 
-void bpvm_gui_lvgl_pump(void)        { lv_timer_handler(); SDL_Delay(16); }
-int  bpvm_gui_lvgl_window_open(void) { return g_lvgl_inited && !g_window_closed; }
+void bpvm_gui_lvgl_pump(void)        { bpvm_gui_disp_pump(); }
+int  bpvm_gui_lvgl_window_open(void) { return g_lvgl_inited && bpvm_gui_disp_is_open(); }
 
 #endif /* BPVM_LVGL */
 
