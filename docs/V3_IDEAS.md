@@ -465,8 +465,24 @@ valor/estado por nodo → la paridad cubre los nuevos widgets.
 
 **Orden de implementación:** la BASE primero (`Component` + geometría + refresh +
 onChange + dumpTree) en **miVM (Swing)** y verificar por dumpTree → VM-C (host) →
-micro; LUEGO los widgets encima. Set de widgets: ver "Mapa de hitos V3 / H6"
-(Tier 1 ∩ Swing-LVGL + arc/led).
+micro; LUEGO los widgets encima.
+
+**Set de H6 — CERRADO (19-jun):**
+- **Widgets:** label, button, panel, checkbox, switch, slider, bar, dropdown, list,
+  table, tabview, textarea, spinbox, image, msgbox + **led** + **keyboard** (ata a
+  textarea; en host el teclado físico vale).
+- **Scroll:** capacidad de `Component`, propiedad `scrollDir` = NONE/HOR/VER/BOTH,
+  **default NONE** — lo controla el programador, NO AUTO.
+- **Fuentes:** catálogo baked de 6 — SMALL 14 / NORMAL 18 / LARGE 28 / TITLE 40
+  (regulares Montserrat, ya prebuilt en la LVGL vendorizada) + NORMAL_BOLD 18 /
+  TITLE_BOLD 40 (LVGL NO trae negrita → convertir Montserrat-Bold UNA vez, offline).
+  Swing espeja por id. Texto enorme / fuente extra → runtime (`tiny_ttf`), repesca.
+- **Imágenes:** PNG desde archivos/resources en runtime (`lodepng` + puente del FS;
+  ambos vendorizados, hoy off) — iconos/logos pequeños (poca RAM). Botón con icono =
+  `Button` + `Image` hijo (composición; no hace falta `imagebutton`). Sub-tanda al
+  FINAL del tramo. JPG → repesca.
+- **Repesca:** radio, calendar, arc, roller, chart, scale, buttonmatrix, spinner,
+  imagebutton, tileview, win, menu, line, canvas, span, anim/lottie, JPG, fuentes runtime.
 
 ## 2. Lenguaje (se mantiene; "eventos y poco más")
 
