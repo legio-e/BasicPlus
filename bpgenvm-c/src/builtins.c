@@ -173,7 +173,18 @@ enum {
     BUILTIN_GUI_RUN           = 149,
     BUILTIN_GUI_DUMP_TREE     = 150,
     BUILTIN_GUI_BIND_CLICK    = 151,
-    BUILTIN_GUI_CLICK         = 152
+    BUILTIN_GUI_CLICK         = 152,
+    /* H6 — geometría (backend=verdad) + scroll (opt-in) + refresh. Ids = ordinal
+     * del enum Builtin Java (idénticos en ambas VMs; aditivo). */
+    BUILTIN_GUI_SET_X          = 153,
+    BUILTIN_GUI_GET_X          = 154,
+    BUILTIN_GUI_SET_Y          = 155,
+    BUILTIN_GUI_GET_Y          = 156,
+    BUILTIN_GUI_GET_WIDTH      = 157,
+    BUILTIN_GUI_GET_HEIGHT     = 158,
+    BUILTIN_GUI_SET_SCROLL_DIR = 159,
+    BUILTIN_GUI_GET_SCROLL_DIR = 160,
+    BUILTIN_GUI_REFRESH        = 161
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -460,6 +471,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
+    /* H6 — geometría (backend = verdad) + scroll (opt-in) + refresh. */
+    case BUILTIN_GUI_SET_X:  { int v = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_x(h, v); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_GET_X:  { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_x(h)); return BPVM_OK; }
+    case BUILTIN_GUI_SET_Y:  { int v = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_y(h, v); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_GET_Y:  { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_y(h)); return BPVM_OK; }
+    case BUILTIN_GUI_GET_WIDTH:  { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_width(h));  return BPVM_OK; }
+    case BUILTIN_GUI_GET_HEIGHT: { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_height(h)); return BPVM_OK; }
+    case BUILTIN_GUI_SET_SCROLL_DIR: { int d = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_scroll_dir(h, d); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_GET_SCROLL_DIR: { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_scroll_dir(h)); return BPVM_OK; }
+    case BUILTIN_GUI_REFRESH: { int h = pop_i32(vm, tc); bpvm_gui_refresh(h); push_i32(vm, tc, 0); return BPVM_OK; }
 #endif /* BPVM_GUI */
 
     case BUILTIN_PARSE_INT: {

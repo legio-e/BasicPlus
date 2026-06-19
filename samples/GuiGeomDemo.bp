@@ -1,0 +1,21 @@
+// GuiGeomDemo.bp — H6 base: geometría explícita (x/y/width/height como
+// propiedades) + scroll opt-in. Verifica el camino NUEVO de Component (que
+// GuiClickDemo no toca, pues usa align). Paridad por dumpTree: el panel sale
+// con `pos=10,20` (no align) y `scroll=2` (VER).
+module GuiGeomDemo
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var p: Gui.Panel := Gui.Panel(scr)
+    p.x := 10
+    p.y := 20
+    p.width := 100
+    p.height := 50
+    p.scrollDir := Gui.ScrollDir.VER
+
+    print Gui.__guiDumpTree()
+  end Main
+
+end GuiGeomDemo

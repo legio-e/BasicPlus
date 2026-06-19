@@ -30,6 +30,17 @@ void bpvm_gui_set_text(int handle, const char* s);
 void bpvm_gui_set_width(int handle, int w);
 void bpvm_gui_set_height(int handle, int h);
 void bpvm_gui_align(int handle, int a, int dx, int dy);
+/* H6 — geometría explícita (x,y), scroll (opt-in), refresh. Geometría/scroll
+ * afectan al dump (modelo); refresh es render-only. */
+void bpvm_gui_set_x(int handle, int x);
+int  bpvm_gui_get_x(int handle);
+void bpvm_gui_set_y(int handle, int y);
+int  bpvm_gui_get_y(int handle);
+int  bpvm_gui_get_width(int handle);
+int  bpvm_gui_get_height(int handle);
+void bpvm_gui_set_scroll_dir(int handle, int dir);
+int  bpvm_gui_get_scroll_dir(int handle);
+void bpvm_gui_refresh(int handle);
 void bpvm_gui_set_bg_color(int handle, uint32_t rgb);
 void bpvm_gui_set_text_color(int handle, uint32_t rgb);
 void bpvm_gui_set_font(int handle, int font_id);

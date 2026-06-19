@@ -34,7 +34,10 @@ typedef struct {
     const char* type;       /* "screen" | "panel" | "label" | "button" */
     int         parent;     /* handle del padre (0 = raíz) */
     int         w, h;       /* -1 = auto */
+    int         x, y;       /* posición explícita (cuando pos_set) */
+    int         pos_set;    /* 1 → x,y mandan; 0 → align manda */
     int         align, dx, dy;
+    int         scroll;     /* ScrollDir: 0=NONE 1=HOR 2=VER 3=BOTH (default NONE) */
     char*       text;       /* malloc; NULL/"" = sin texto */
     uint32_t    objptr;     /* objeto BP dueño (bind_click), 0 = ninguno */
 #ifdef BPVM_LVGL
@@ -63,7 +66,8 @@ static int create_node(const char* type, int parent) {
     if (g_node_count >= GUI_MAX_NODES) return 0;
     gui_node* n = &g_nodes[g_node_count++];
     n->used = 1; n->handle = g_next_handle++; n->type = type; n->parent = parent;
-    n->w = -1; n->h = -1; n->align = 0; n->dx = 0; n->dy = 0;
+    n->w = -1; n->h = -1; n->x = 0; n->y = 0; n->pos_set = 0;
+    n->align = 0; n->dx = 0; n->dy = 0; n->scroll = 0;
     n->text = NULL; n->objptr = 0;
 #ifdef BPVM_LVGL
     n->lv = NULL;
@@ -170,9 +174,81 @@ void bpvm_gui_set_height(int handle, int h) {
 }
 void bpvm_gui_align(int handle, int a, int dx, int dy) {
     gui_node* n = node_for(handle); if (!n) return;
-    n->align = a; n->dx = dx; n->dy = dy;
+    n->align = a; n->dx = dx; n->dy = dy; n->pos_set = 0;
 #ifdef BPVM_LVGL
     if (n->lv && a >= 0 && a < 9) lv_obj_align(n->lv, ALIGN_MAP[a], dx, dy);
+#endif
+}
+
+/* H6 — geometría explícita (x,y) + scroll (opt-in) + refresh. El backend es la
+ * verdad; el dump usa la geometría AUTORADA (pos explícita o align), nunca los
+ * píxeles computados (que difieren por backend para tamaños auto). */
+void bpvm_gui_set_x(int handle, int x) {
+    gui_node* n = node_for(handle); if (!n) return;
+    n->x = x; n->pos_set = 1;
+#ifdef BPVM_LVGL
+    if (n->lv) lv_obj_set_x(n->lv, x);
+#endif
+}
+int bpvm_gui_get_x(int handle) {
+    gui_node* n = node_for(handle); if (!n) return 0;
+    if (n->pos_set) return n->x;
+#ifdef BPVM_LVGL
+    if (n->lv) return lv_obj_get_x(n->lv);
+#endif
+    return 0;
+}
+void bpvm_gui_set_y(int handle, int y) {
+    gui_node* n = node_for(handle); if (!n) return;
+    n->y = y; n->pos_set = 1;
+#ifdef BPVM_LVGL
+    if (n->lv) lv_obj_set_y(n->lv, y);
+#endif
+}
+int bpvm_gui_get_y(int handle) {
+    gui_node* n = node_for(handle); if (!n) return 0;
+    if (n->pos_set) return n->y;
+#ifdef BPVM_LVGL
+    if (n->lv) return lv_obj_get_y(n->lv);
+#endif
+    return 0;
+}
+int bpvm_gui_get_width(int handle) {
+    gui_node* n = node_for(handle); if (!n) return 0;
+    if (n->w >= 0) return n->w;
+#ifdef BPVM_LVGL
+    if (n->lv) return lv_obj_get_width(n->lv);
+#endif
+    return 0;
+}
+int bpvm_gui_get_height(int handle) {
+    gui_node* n = node_for(handle); if (!n) return 0;
+    if (n->h >= 0) return n->h;
+#ifdef BPVM_LVGL
+    if (n->lv) return lv_obj_get_height(n->lv);
+#endif
+    return 0;
+}
+void bpvm_gui_set_scroll_dir(int handle, int dir) {
+    gui_node* n = node_for(handle); if (!n) return;
+    n->scroll = dir;
+#ifdef BPVM_LVGL
+    if (n->lv) {
+        lv_dir_t d = (dir == 1) ? LV_DIR_HOR : (dir == 2) ? LV_DIR_VER
+                   : (dir == 3) ? LV_DIR_ALL : LV_DIR_NONE;
+        lv_obj_set_scroll_dir(n->lv, d);
+        lv_obj_set_scrollbar_mode(n->lv, dir != 0 ? LV_SCROLLBAR_MODE_AUTO : LV_SCROLLBAR_MODE_OFF);
+    }
+#endif
+}
+int bpvm_gui_get_scroll_dir(int handle) {
+    gui_node* n = node_for(handle); return n ? n->scroll : 0;
+}
+void bpvm_gui_refresh(int handle) {
+#ifdef BPVM_LVGL
+    gui_node* n = node_for(handle); if (n && n->lv) lv_obj_invalidate(n->lv);
+#else
+    (void) handle;
 #endif
 }
 
@@ -257,9 +333,16 @@ static void dump_node(char** buf, size_t* len, size_t* cap, int handle, int dept
         buf_append(buf, len, cap, "\"", 1);
     }
     char tmp[96];
-    int k = snprintf(tmp, sizeof(tmp), " [%dx%d align=%d +%d,%d]\n",
-                     n->w, n->h, n->align, n->dx, n->dy);
+    int k = snprintf(tmp, sizeof(tmp), " [%dx%d", n->w, n->h);
     if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
+    if (n->pos_set) k = snprintf(tmp, sizeof(tmp), " pos=%d,%d", n->x, n->y);
+    else            k = snprintf(tmp, sizeof(tmp), " align=%d +%d,%d", n->align, n->dx, n->dy);
+    if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
+    if (n->scroll != 0) {
+        k = snprintf(tmp, sizeof(tmp), " scroll=%d", n->scroll);
+        if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
+    }
+    buf_append(buf, len, cap, "]\n", 2);
     for (int i = 0; i < g_node_count; i++)
         if (g_nodes[i].used && g_nodes[i].parent == handle)
             dump_node(buf, len, cap, g_nodes[i].handle, depth + 1);
