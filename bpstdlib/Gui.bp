@@ -1,11 +1,14 @@
 // ============================================================
 // Gui.bp — API gráfico de BasicPlus (V3). Contrato OO ÚNICO, idéntico en
 // las 3 VMs; cada VM lo cumple con su backend — Swing en miVM, LVGL en la
-// VM-C (host SDL y micro TFT). Las clases son BINDINGS sobre un `handle`
-// (id del lv_obj). Las llamadas a la VM van por funciones `intrinsic`
-// (inline → CALL_BUILTIN); la VM es quien llama a LVGL/Swing.
-// Subconjunto mínimo (Obj/Screen/Panel/Label/Button + align + onClick),
-// destilado de un proyecto LVGL real. Se amplía en tandas posteriores.
+// VM-C (host SDL y micro TFT). Las clases son BINDINGS sobre un `lvglId`
+// (id del objeto espejo, lo asigna el MODELO → idéntico en las 3 VMs). Las
+// llamadas a la VM van por funciones `intrinsic` (inline → CALL_BUILTIN);
+// la VM es quien llama a LVGL/Swing.
+//
+// Jerarquía (V3/H6): Object (lenguaje) -> Component (base visual) -> widgets.
+// Norma: todo desciende de Object (sin `extends` → implícito); sin variables
+// públicas (lo público es `property`, #143).
 // ============================================================
 module Gui
 
@@ -17,12 +20,23 @@ module Gui
   public intrinsic function __guiCreateLabel(parent: integer): integer
   public intrinsic function __guiCreateButton(parent: integer): integer
   public intrinsic function __guiSetText(handle: integer, t: string)
+  // Geometría: x/y/width/height — backend = verdad (get/set → intrínsecos).
+  public intrinsic function __guiSetX(handle: integer, x: integer)
+  public intrinsic function __guiGetX(handle: integer): integer
+  public intrinsic function __guiSetY(handle: integer, y: integer)
+  public intrinsic function __guiGetY(handle: integer): integer
   public intrinsic function __guiSetWidth(handle: integer, w: integer)
+  public intrinsic function __guiGetWidth(handle: integer): integer
   public intrinsic function __guiSetHeight(handle: integer, h: integer)
+  public intrinsic function __guiGetHeight(handle: integer): integer
   public intrinsic function __guiAlign(handle: integer, a: integer, dx: integer, dy: integer)
+  // Scroll: opt-in (NONE/HOR/VER/BOTH); default NONE en el backend.
+  public intrinsic function __guiSetScrollDir(handle: integer, dir: integer)
+  public intrinsic function __guiGetScrollDir(handle: integer): integer
   public intrinsic function __guiSetBgColor(handle: integer, rgb: integer)
   public intrinsic function __guiSetTextColor(handle: integer, rgb: integer)
   public intrinsic function __guiSetFont(handle: integer, fontId: integer)
+  public intrinsic function __guiRefresh(handle: integer)
   public intrinsic function __guiClean(handle: integer)
   public intrinsic function __guiDelete(handle: integer)
   public intrinsic function __guiScreenLoad(handle: integer)
@@ -50,109 +64,183 @@ module Gui
     public const Align.BOTTOM_RIGHT: integer := 8
   end Align
 
-  // ---- Obj — base de TODO widget: el handle opaco + operaciones comunes. ----
-  public class Obj
-    public var handle: integer    // id del lv_obj (lo asigna el backend). 0 = sin crear.
+  // ---- ScrollDir — dirección de scroll (opt-in; default NONE). ----
+  public class ScrollDir
+    public const ScrollDir.NONE: integer := 0
+    public const ScrollDir.HOR:  integer := 1
+    public const ScrollDir.VER:  integer := 2
+    public const ScrollDir.BOTH: integer := 3
+  end ScrollDir
 
-    public function setWidth(w: integer)
-      __guiSetWidth(this.handle, w)
-    end setWidth
+  // ---- Component — base de TODO widget. Desciende de Object (sin `extends`).
+  //      Mantiene el objeto BP en paralelo al del backend (lv_obj / JComponent)
+  //      vía lvglId, y la geometría / apariencia / eventos comunes. ----
+  public class Component
+    // id del objeto espejo (lo asigna el modelo en el constructor del widget).
+    // 0 = sin crear. Auto-property: el backing field queda privado en su slot.
+    public property lvglId: integer
 
-    public function setHeight(h: integer)
-      __guiSetHeight(this.handle, h)
-    end setHeight
+    // -- Geometría (común: LVGL set_pos/size · Swing setBounds). El backend es
+    //    la verdad: get/set llaman a los intrínsecos, sin backing field BP. --
+    public property x: integer
+      get
+        return __guiGetX(this.lvglId)
+      endget
+      set(v)
+        __guiSetX(this.lvglId, v)
+      endset
+    endprop
+    public property y: integer
+      get
+        return __guiGetY(this.lvglId)
+      endget
+      set(v)
+        __guiSetY(this.lvglId, v)
+      endset
+    endprop
+    public property width: integer
+      get
+        return __guiGetWidth(this.lvglId)
+      endget
+      set(v)
+        __guiSetWidth(this.lvglId, v)
+      endset
+    endprop
+    public property height: integer
+      get
+        return __guiGetHeight(this.lvglId)
+      endget
+      set(v)
+        __guiSetHeight(this.lvglId, v)
+      endset
+    endprop
 
+    // -- Scroll: lo controla el programador (default NONE). --
+    public property scrollDir: integer
+      get
+        return __guiGetScrollDir(this.lvglId)
+      endget
+      set(v)
+        __guiSetScrollDir(this.lvglId, v)
+      endset
+    endprop
+
+    // -- Conveniencias de geometría --
+    public function setPos(px: integer, py: integer)
+      __guiSetX(this.lvglId, px)
+      __guiSetY(this.lvglId, py)
+    end setPos
     public function setSize(w: integer, h: integer)
-      __guiSetWidth(this.handle, w)
-      __guiSetHeight(this.handle, h)
+      __guiSetWidth(this.lvglId, w)
+      __guiSetHeight(this.lvglId, h)
     end setSize
-
+    public function setBounds(px: integer, py: integer, w: integer, h: integer)
+      __guiSetX(this.lvglId, px)
+      __guiSetY(this.lvglId, py)
+      __guiSetWidth(this.lvglId, w)
+      __guiSetHeight(this.lvglId, h)
+    end setBounds
+    // align — azúcar: el backend calcula x,y desde el ancla + offset.
     public function align(a: integer, dx: integer, dy: integer)
-      __guiAlign(this.handle, a, dx, dy)
+      __guiAlign(this.lvglId, a, dx, dy)
     end align
 
     public function setBgColor(c: Color)
-      __guiSetBgColor(this.handle, c.rgb)
+      __guiSetBgColor(this.lvglId, c.rgb)
     end setBgColor
 
-    public function clean()
-      __guiClean(this.handle)
-    end clean
+    // refresh — invalidar para repintar (Swing repaint / LVGL lv_obj_invalidate).
+    public function refresh()
+      __guiRefresh(this.lvglId)
+    end refresh
 
+    public function clean()
+      __guiClean(this.lvglId)
+    end clean
     public function delete()
-      __guiDelete(this.handle)
+      __guiDelete(this.lvglId)
     end delete
 
-    // Click. El backend lo invoca (upcall) al pulsar; por defecto no hace
-    // nada. El usuario SUBCLASEA el widget y reescribe onClick.
+    // Eventos (upcall). El backend los dispara: al pulsar → onClick; al cambiar
+    // de valor → onChange. Por defecto no hacen nada; el usuario SUBCLASEA el
+    // widget y reescribe el que necesite.
     public function onClick()
     end onClick
-  end Obj
+    public function onChange()
+    end onChange
+  end Component
 
   // ---- Eventos (upcall). __guiBindClick registra el objeto BP dueño del handle;
-  //      al pulsar, la VM llama por NOMBRE a __guiDispatch(self) → self.onClick().
-  //      __guiClick inyecta un clic sintetico (diagnostico / pruebas headless). ----
-  public intrinsic function __guiBindClick(handle: integer, self: Obj)
-  public intrinsic function __guiClick(w: Obj)
+  //      al pulsar/cambiar, la VM llama por NOMBRE a __guiDispatch(self) →
+  //      self.onClick() o a __guiDispatchChange(self) → self.onChange() según el
+  //      tipo de evento. __guiClick inyecta un clic sintético (diagnóstico). ----
+  public intrinsic function __guiBindClick(handle: integer, self: Component)
+  public intrinsic function __guiClick(w: Component)
 
   // ---- Screen — pantalla raíz (la entrega el backend ya montada). ----
-  public class Screen extends Obj
+  public class Screen extends Component
     public function Screen()
-      this.handle := __guiScreenActive()
-      __guiBindClick(this.handle, this)
+      this.lvglId := __guiScreenActive()
+      __guiBindClick(this.lvglId, this)
     end Screen
     public function load()
-      __guiScreenLoad(this.handle)
+      __guiScreenLoad(this.lvglId)
     end load
   end Screen
 
   // ---- Panel — contenedor simple (agrupa widgets). ----
-  public class Panel extends Obj
-    public function Panel(parent: Obj)
-      this.handle := __guiCreateObj(parent.handle)
-      __guiBindClick(this.handle, this)
+  public class Panel extends Component
+    public function Panel(parent: Component)
+      this.lvglId := __guiCreateObj(parent.lvglId)
+      __guiBindClick(this.lvglId, this)
     end Panel
   end Panel
 
   // ---- Label — texto. ----
-  public class Label extends Obj
-    public function Label(parent: Obj, text: string)
-      this.handle := __guiCreateLabel(parent.handle)
-      __guiSetText(this.handle, text)
-      __guiBindClick(this.handle, this)
+  public class Label extends Component
+    public function Label(parent: Component, text: string)
+      this.lvglId := __guiCreateLabel(parent.lvglId)
+      __guiSetText(this.lvglId, text)
+      __guiBindClick(this.lvglId, this)
     end Label
 
     public function setText(t: string)
-      __guiSetText(this.handle, t)
+      __guiSetText(this.lvglId, t)
     end setText
 
     public function setTextColor(c: Color)
-      __guiSetTextColor(this.handle, c.rgb)
+      __guiSetTextColor(this.lvglId, c.rgb)
     end setTextColor
 
     public function setFont(font: integer)
-      __guiSetFont(this.handle, font)
+      __guiSetFont(this.lvglId, font)
     end setFont
   end Label
 
-  // ---- Button — botón clicable. Lleva un Label hijo con el texto (como el
-  //      addBoton del proyecto de referencia). Reacciona reescribiendo onClick. ----
-  public class Button extends Obj
-    public function Button(parent: Obj, text: string)
-      this.handle := __guiCreateButton(parent.handle)
-      __guiBindClick(this.handle, this)
+  // ---- Button — botón clicable. Lleva un Label hijo con el texto. Reacciona
+  //      reescribiendo onClick. (Botón con icono = Image hijo, futura tanda.) ----
+  public class Button extends Component
+    public function Button(parent: Component, text: string)
+      this.lvglId := __guiCreateButton(parent.lvglId)
+      __guiBindClick(this.lvglId, this)
       var lbl: Label := Label(this, text)
     end Button
   end Button
 
-  // ---- Dispatch del upcall: la VM llama aqui (por NOMBRE, resolveGlobal) al
-  //      pulsar un widget. self.onClick() es una llamada virtual normal — el
-  //      compilador resuelve el slot, asi que respeta el override del usuario. ----
-  public function __guiDispatch(self: Obj)
+  // ---- Dispatch del upcall: la VM llama aquí (por NOMBRE, resolveGlobal) al
+  //      pulsar/cambiar un widget. self.onClick()/onChange() son llamadas
+  //      virtuales normales — el compilador resuelve el slot, así que respeta
+  //      el override del usuario. Dos dispatchers (sin rama en BP): la VM elige
+  //      según el tipo de evento. ----
+  public function __guiDispatch(self: Component)
     self.onClick()
   end __guiDispatch
 
-  // ---- run — lazo de eventos (bloquea: refresca y entrega los onClick). ----
+  public function __guiDispatchChange(self: Component)
+    self.onChange()
+  end __guiDispatchChange
+
+  // ---- run — lazo de eventos (bloquea: refresca y entrega los onClick/onChange). ----
   public function run()
     __guiRun()
   end run

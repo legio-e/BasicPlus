@@ -321,7 +321,19 @@ public enum Builtin {
     // un clic sintetico (diagnostico/pruebas). El dispatch onClick lo hace la VM
     // llamando por NOMBRE a la funcion BP Gui.__guiDispatch (no es builtin).
     GUI_BIND_CLICK("__guiBindClick"),        // (handle, self) → void
-    GUI_CLICK("__guiClick");                 // (handle) → void; clic sintetico
+    GUI_CLICK("__guiClick"),                 // (handle) → void; clic sintetico
+
+    // V3/H6 — geometría (backend = la verdad: get/set → intrínsecos), scroll
+    // (opt-in, default NONE) y refresh (invalidar). Ids al final (aditivo).
+    GUI_SET_X("__guiSetX"),                  // (id, x) → void
+    GUI_GET_X("__guiGetX"),                  // (id) → x
+    GUI_SET_Y("__guiSetY"),                  // (id, y) → void
+    GUI_GET_Y("__guiGetY"),                  // (id) → y
+    GUI_GET_WIDTH("__guiGetWidth"),          // (id) → w
+    GUI_GET_HEIGHT("__guiGetHeight"),        // (id) → h
+    GUI_SET_SCROLL_DIR("__guiSetScrollDir"), // (id, dir) → void
+    GUI_GET_SCROLL_DIR("__guiGetScrollDir"), // (id) → dir
+    GUI_REFRESH("__guiRefresh");             // (id) → void
 
     public final String bpName;
     public final int id;

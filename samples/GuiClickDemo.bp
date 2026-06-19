@@ -10,12 +10,12 @@ module GuiClickDemo
 
   class MyButton extends Gui.Button
     public var target: Gui.Label
-    public function MyButton(parent: Gui.Obj, text: string, target: Gui.Label)
+    public function MyButton(parent: Gui.Component, text: string, target: Gui.Label)
       super(parent, text)
       this.target := target
     end MyButton
 
-    // Override del onClick heredado de Gui.Obj. La VM lo invoca al pulsar.
+    // Override del onClick heredado de Gui.Component. La VM lo invoca al pulsar.
     public function onClick()
       print "[onClick] override ejecutado"
       this.target.setText("PULSADO")

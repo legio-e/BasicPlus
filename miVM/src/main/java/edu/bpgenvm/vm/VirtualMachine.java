@@ -352,6 +352,8 @@ public class VirtualMachine {
     // por nombre la 1a vez). -2 = sin resolver; -1 = no encontrada (Gui no cargado).
     private int guiDispatchPc = -2;
     private int guiDispatchCs = 0;
+    private int guiDispatchChangePc = -2;   // V3/H6 — dispatcher de onChange (resuelto 1 vez)
+    private int guiDispatchChangeCs = 0;
 
     private final java.util.Map<Integer, java.net.Socket> netSockets =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -3345,6 +3347,16 @@ public class VirtualMachine {
                 gui.bindClick(hnd, self); pushTc(tc, 0); break;
             }
             case GUI_CLICK:     { int obj = popTc(tc); gui.injectClick(obj); pushTc(tc, 0); break; }
+            // V3/H6 — geometría (backend = verdad) + scroll (opt-in) + refresh.
+            case GUI_SET_X:  { int v = popTc(tc); int hnd = popTc(tc); gui.setX(hnd, v); pushTc(tc, 0); break; }
+            case GUI_GET_X:  { int hnd = popTc(tc); pushTc(tc, gui.getX(hnd)); break; }
+            case GUI_SET_Y:  { int v = popTc(tc); int hnd = popTc(tc); gui.setY(hnd, v); pushTc(tc, 0); break; }
+            case GUI_GET_Y:  { int hnd = popTc(tc); pushTc(tc, gui.getY(hnd)); break; }
+            case GUI_GET_WIDTH:  { int hnd = popTc(tc); pushTc(tc, gui.getWidth(hnd));  break; }
+            case GUI_GET_HEIGHT: { int hnd = popTc(tc); pushTc(tc, gui.getHeight(hnd)); break; }
+            case GUI_SET_SCROLL_DIR: { int d = popTc(tc); int hnd = popTc(tc); gui.setScrollDir(hnd, d); pushTc(tc, 0); break; }
+            case GUI_GET_SCROLL_DIR: { int hnd = popTc(tc); pushTc(tc, gui.getScrollDir(hnd)); break; }
+            case GUI_REFRESH: { int hnd = popTc(tc); gui.refresh(hnd); pushTc(tc, 0); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));
@@ -4713,9 +4725,10 @@ public class VirtualMachine {
     private void guiEventLoop(ThreadContext tc) {
         gui.start();
         while (true) {
-            int objptr = gui.takeEvent();   // objptr del widget pulsado, o EVENT_CLOSE
+            int[] ev = gui.takeEvent();     // {objptr, kind}; objptr==EVENT_CLOSE para cerrar
+            int objptr = ev[0], kind = ev[1];
             if (objptr == edu.bpgenvm.gui.GuiBackend.EVENT_CLOSE || killRequested) break;
-            if (objptr != 0) invokeGuiDispatch(tc, objptr);
+            if (objptr != 0) invokeGuiDispatch(tc, objptr, kind);
         }
     }
 
@@ -4728,18 +4741,21 @@ public class VirtualMachine {
      * para cerrar el run anidado, como hace THREAD_START. La pila de Java
      * preserva el contexto del lazo exterior; aquí restauramos tc.* al volver.
      */
-    private void invokeGuiDispatch(ThreadContext tc, int objptr) {
-        if (guiDispatchPc == -2) {   // resolver una sola vez
-            Integer pcBox = (moduleManager != null)
+    private void invokeGuiDispatch(ThreadContext tc, int objptr, int kind) {
+        if (guiDispatchPc == -2) {   // resolver una sola vez (ambos dispatchers)
+            Integer pcClick = (moduleManager != null)
                     ? moduleManager.resolveGlobal("Gui.__guiDispatch") : null;
-            if (pcBox == null) {
-                guiDispatchPc = -1;
-            } else {
-                guiDispatchPc = pcBox;
-                guiDispatchCs = moduleManager.getModuleBaseFromPC(pcBox);
-            }
+            if (pcClick == null) { guiDispatchPc = -1; }
+            else { guiDispatchPc = pcClick; guiDispatchCs = moduleManager.getModuleBaseFromPC(pcClick); }
+            Integer pcChange = (moduleManager != null)
+                    ? moduleManager.resolveGlobal("Gui.__guiDispatchChange") : null;
+            if (pcChange == null) { guiDispatchChangePc = -1; }
+            else { guiDispatchChangePc = pcChange; guiDispatchChangeCs = moduleManager.getModuleBaseFromPC(pcChange); }
         }
-        if (guiDispatchPc < 0) return;   // Gui no cargado / sin dispatcher
+        // V3/H6 — elige dispatcher por tipo de evento: click → onClick, change → onChange.
+        int dispPc = (kind == edu.bpgenvm.gui.GuiBackend.KIND_CHANGE) ? guiDispatchChangePc : guiDispatchPc;
+        int dispCs = (kind == edu.bpgenvm.gui.GuiBackend.KIND_CHANGE) ? guiDispatchChangeCs : guiDispatchCs;
+        if (dispPc < 0) return;   // Gui no cargado / sin dispatcher
 
         int base = tc.sp;
         int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;

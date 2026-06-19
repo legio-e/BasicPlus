@@ -3,49 +3,67 @@ module Gui
 func __guiAlign(handle:integer,a:integer,dx:integer,dy:integer):void public intrinsic
 func __guiSetWidth(handle:integer,w:integer):void public intrinsic
 func __guiSetFont(handle:integer,fontId:integer):void public intrinsic
+func __guiDispatchChange(self:Component):void public
 func run():void public
 func __guiSetHeight(handle:integer,h:integer):void public intrinsic
 func __guiCreateLabel(parent:integer):integer public intrinsic
+func __guiGetHeight(handle:integer):integer public intrinsic
 func __guiRun():void public intrinsic
 func __guiSetText(handle:integer,t:string):void public intrinsic
+func __guiGetY(handle:integer):integer public intrinsic
+func __guiGetX(handle:integer):integer public intrinsic
 func __guiSetTextColor(handle:integer,rgb:integer):void public intrinsic
+func __guiSetX(handle:integer,x:integer):void public intrinsic
 func __guiSetBgColor(handle:integer,rgb:integer):void public intrinsic
+func __guiSetY(handle:integer,y:integer):void public intrinsic
 func __guiDumpTree():string public intrinsic
+func __guiGetWidth(handle:integer):integer public intrinsic
+func __guiRefresh(handle:integer):void public intrinsic
 func __guiCreateButton(parent:integer):integer public intrinsic
 func __guiCreateObj(parent:integer):integer public intrinsic
+func __guiGetScrollDir(handle:integer):integer public intrinsic
 func __guiClean(handle:integer):void public intrinsic
-func __guiClick(w:Obj):void public intrinsic
+func __guiClick(w:Component):void public intrinsic
 func __guiDelete(handle:integer):void public intrinsic
 func __guiScreenActive():integer public intrinsic
 func __guiScreenLoad(handle:integer):void public intrinsic
-func __guiBindClick(handle:integer,self:Obj):void public intrinsic
-func __guiDispatch(self:Obj):void public
-class Screen public extends Obj
-  layout 1 11 00000000 00000000
+func __guiBindClick(handle:integer,self:Component):void public intrinsic
+func __guiDispatch(self:Component):void public
+func __guiSetScrollDir(handle:integer,dir:integer):void public intrinsic
+class Screen public extends Component
+  layout 6 25 00000000 00000000
   ctor()
   method load():void public
 end class
-class Label public extends Obj
-  layout 1 13 00000000 00000000
-  ctor(parent:Obj,text:string)
+class Label public extends Component
+  layout 6 27 00000000 00000000
+  ctor(parent:Component,text:string)
   method setText(t:string):void public
   method setTextColor(c:Color):void public
   method setFont(font:integer):void public
 end class
-class Button public extends Obj
-  layout 1 10 00000000 00000000
-  ctor(parent:Obj,text:string)
+class Button public extends Component
+  layout 6 24 00000000 00000000
+  ctor(parent:Component,text:string)
 end class
-class Obj public
-  layout 1 10 00000000 00000000
-  method setWidth(w:integer):void public
-  method setHeight(h:integer):void public
+class Component public
+  layout 6 24 00000000 00000000
+  prop lvglId:integer public
+  prop x:integer public
+  prop y:integer public
+  prop width:integer public
+  prop height:integer public
+  prop scrollDir:integer public
+  method setPos(px:integer,py:integer):void public
   method setSize(w:integer,h:integer):void public
+  method setBounds(px:integer,py:integer,w:integer,h:integer):void public
   method align(a:integer,dx:integer,dy:integer):void public
   method setBgColor(c:Color):void public
+  method refresh():void public
   method clean():void public
   method delete():void public
   method onClick():void public
+  method onChange():void public
 end class
 class Align public
   layout 0 2 - -
@@ -63,7 +81,14 @@ class Color public
   layout 1 2 00000000 00000000
   ctor(rgb:integer)
 end class
-class Panel public extends Obj
-  layout 1 10 00000000 00000000
-  ctor(parent:Obj)
+class Panel public extends Component
+  layout 6 24 00000000 00000000
+  ctor(parent:Component)
+end class
+class ScrollDir public
+  layout 0 2 - -
+  staticconst VER:integer=2 public
+  staticconst HOR:integer=1 public
+  staticconst NONE:integer=0 public
+  staticconst BOTH:integer=3 public
 end class

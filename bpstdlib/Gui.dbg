@@ -2,31 +2,47 @@ dbg 3
 module Gui
 source C:\lenguajes\pm\bpstdlib\Gui.bp
 lines
-1446 36
-1539 58
-1563 62
-1587 66
-1601 67
-1625 71
-1655 75
-1681 79
-1702 83
-1753 105
-1774 101
-1782 102
-1855 112
-1868 113
-1947 126
-1971 130
-1997 134
-2021 120
-2034 121
-2048 122
-2133 142
-2146 143
-2160 144
-2282 152
-2301 157
+1446 50
+1593 87
+1624 90
+1649 95
+1680 98
+1705 103
+1736 106
+1761 111
+1792 114
+1817 121
+1848 124
+1873 130
+1888 131
+1913 134
+1928 135
+1953 138
+1968 139
+1983 140
+1998 141
+2023 145
+2054 149
+2081 154
+2103 158
+2125 161
+2187 187
+2209 183
+2221 184
+2295 194
+2313 195
+2393 208
+2418 212
+2445 216
+2470 202
+2488 203
+2503 204
+2589 224
+2607 225
+2622 226
+2744 236
+2763 240
+2782 245
 vars
 func Object.toString 0
 this -16 4 0 ?
@@ -118,79 +134,118 @@ rgb -16 4 0 integer
 func __cls_init_Color 1495
 this -20 4 0 ?
 rgb -16 4 0 integer
-func Obj.setWidth 1536
+func Component.getLvglId 1556
+this -16 4 0 ?
+func Component.setLvglId 1572
 this -20 4 0 ?
-w -16 4 0 integer
-func Obj.setHeight 1560
+func Component.getX 1590
+this -16 4 0 ?
+func Component.setX 1615
 this -20 4 0 ?
-h -16 4 0 integer
-func Obj.setSize 1584
+v 0 4 0 ?
+func Component.getY 1646
+this -16 4 0 ?
+func Component.setY 1671
+this -20 4 0 ?
+v 0 4 0 ?
+func Component.getWidth 1702
+this -16 4 0 ?
+func Component.setWidth 1727
+this -20 4 0 ?
+v 0 4 0 ?
+func Component.getHeight 1758
+this -16 4 0 ?
+func Component.setHeight 1783
+this -20 4 0 ?
+v 0 4 0 ?
+func Component.getScrollDir 1814
+this -16 4 0 ?
+func Component.setScrollDir 1839
+this -20 4 0 ?
+v 0 4 0 ?
+func Component.setPos 1870
+this -24 4 0 ?
+px -20 4 0 integer
+py -16 4 0 integer
+func Component.setSize 1910
 this -24 4 0 ?
 w -20 4 0 integer
 h -16 4 0 integer
-func Obj.align 1622
+func Component.setBounds 1950
+this -32 4 0 ?
+px -28 4 0 integer
+py -24 4 0 integer
+w -20 4 0 integer
+h -16 4 0 integer
+func Component.align 2020
 this -28 4 0 ?
 a -24 4 0 integer
 dx -20 4 0 integer
 dy -16 4 0 integer
-func Obj.setBgColor 1652
+func Component.setBgColor 2051
 this -20 4 0 ?
 c -16 4 0 ref
-func Obj.clean 1678
+func Component.refresh 2078
 this -16 4 0 ?
-func Obj.delete 1699
+func Component.clean 2100
 this -16 4 0 ?
-func Obj.onClick 1720
+func Component.delete 2122
 this -16 4 0 ?
-func Screen.load 1750
+func Component.onClick 2144
 this -16 4 0 ?
-func Screen.__init 1771
+func Component.onChange 2154
 this -16 4 0 ?
-func __cls_init_Screen 1834
+func Screen.load 2184
 this -16 4 0 ?
-func Panel.__init 1852
+func Screen.__init 2206
+this -16 4 0 ?
+func __cls_init_Screen 2274
+this -16 4 0 ?
+func Panel.__init 2292
 this -20 4 0 ?
 parent -16 4 0 ref
-func __cls_new_Panel 1889
+func __cls_new_Panel 2335
 parent -16 4 0 ref
-func __cls_init_Panel 1923
+func __cls_init_Panel 2369
 this -20 4 0 ?
 parent -16 4 0 ref
-func Label.setText 1944
+func Label.setText 2390
 this -20 4 0 ?
 t -16 4 0 string
-func Label.setTextColor 1968
+func Label.setTextColor 2415
 this -20 4 0 ?
 c -16 4 0 ref
-func Label.setFont 1994
+func Label.setFont 2442
 this -20 4 0 ?
 font -16 4 0 integer
-func Label.__init 2018
+func Label.__init 2467
 this -24 4 0 ?
 parent -20 4 0 ref
 text -16 4 0 string
-func __cls_new_Label 2069
+func __cls_new_Label 2525
 parent -20 4 0 ref
 text -16 4 0 string
-func __cls_init_Label 2106
+func __cls_init_Label 2562
 this -24 4 0 ?
 parent -20 4 0 ref
 text -16 4 0 string
-func Button.__init 2130
+func Button.__init 2586
 this -24 4 0 ?
 parent -20 4 0 ref
 text -16 4 0 string
 lbl 4 4 0 ?
-func __cls_new_Button 2196
+func __cls_new_Button 2658
 parent -20 4 0 ref
 text -16 4 0 string
-func __cls_init_Button 2233
+func __cls_init_Button 2695
 this -24 4 0 ?
 parent -20 4 0 ref
 text -16 4 0 string
-func __guiDispatch 2279
+func __guiDispatch 2741
 self -16 4 0 ref
-func __strconcat 2314
+func __guiDispatchChange 2760
+self -16 4 0 ref
+func __strconcat 2795
 a -20 4 0 ?
 b -16 4 0 ?
 la 0 4 0 ?
