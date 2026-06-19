@@ -351,7 +351,13 @@ public enum Builtin {
 
     // H6 widgets — spinbox (entero+rango como slider) + led (indicador on/off).
     GUI_CREATE_SPINBOX("__guiCreateSpinbox"),   // (parent) → id
-    GUI_CREATE_LED("__guiCreateLed");           // (parent) → id
+    GUI_CREATE_LED("__guiCreateLed"),           // (parent) → id
+
+    // H6 widgets — dropdown (opciones + índice sel.) + textarea (texto editable).
+    GUI_CREATE_DROPDOWN("__guiCreateDropdown"), // (parent) → id
+    GUI_SET_OPTIONS("__guiSetOptions"),         // (id, "a\nb\nc") → void
+    GUI_CREATE_TEXTAREA("__guiCreateTextarea"), // (parent) → id
+    GUI_GET_TEXT("__guiGetText");               // (id) → string
 
     public final String bpName;
     public final int id;

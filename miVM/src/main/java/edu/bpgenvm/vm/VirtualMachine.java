@@ -3371,6 +3371,10 @@ public class VirtualMachine {
             case GUI_SET_RANGE: { int mx = popTc(tc); int mn = popTc(tc); int hnd = popTc(tc); gui.setRange(hnd, mn, mx); pushTc(tc, 0); break; }
             case GUI_CREATE_SPINBOX: { int p = popTc(tc); pushTc(tc, gui.createSpinbox(p)); break; }
             case GUI_CREATE_LED:     { int p = popTc(tc); pushTc(tc, gui.createLed(p)); break; }
+            case GUI_CREATE_DROPDOWN: { int p = popTc(tc); pushTc(tc, gui.createDropdown(p)); break; }
+            case GUI_SET_OPTIONS: { int o = popTc(tc); int hnd = popTc(tc); gui.setOptions(hnd, readVmString(o)); pushTc(tc, 0); break; }
+            case GUI_CREATE_TEXTAREA: { int p = popTc(tc); pushTc(tc, gui.createTextarea(p)); break; }
+            case GUI_GET_TEXT: { int hnd = popTc(tc); pushTc(tc, allocVmString(gui.getText(hnd))); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));

@@ -32,6 +32,11 @@ module Gui
   public intrinsic function __guiSetValue(handle: integer, v: integer)
   public intrinsic function __guiGetValue(handle: integer): integer
   public intrinsic function __guiSetRange(handle: integer, mn: integer, mx: integer)
+  // Selección/entrada: dropdown (opciones \n-separadas + índice) y textarea (texto).
+  public intrinsic function __guiCreateDropdown(parent: integer): integer
+  public intrinsic function __guiSetOptions(handle: integer, opts: string)
+  public intrinsic function __guiCreateTextarea(parent: integer): integer
+  public intrinsic function __guiGetText(handle: integer): string
   // Geometría: x/y/width/height — backend = verdad (get/set → intrínsecos).
   public intrinsic function __guiSetX(handle: integer, x: integer)
   public intrinsic function __guiGetX(handle: integer): integer
@@ -371,6 +376,46 @@ module Gui
       endset
     endprop
   end Led
+
+  // ---- Dropdown — lista desplegable. Opciones \n-separadas (setOptions); el
+  //      índice elegido se lee/escribe con `selected` y el cambio dispara onChange. ----
+  public class Dropdown extends Component
+    public function Dropdown(parent: Component)
+      this.lvglId := __guiCreateDropdown(parent.lvglId)
+      __guiBindClick(this.lvglId, this)
+    end Dropdown
+
+    public function setOptions(opts: string)
+      __guiSetOptions(this.lvglId, opts)
+    end setOptions
+
+    public property selected: integer
+      get
+        return __guiGetValue(this.lvglId)
+      endget
+      set(v)
+        __guiSetValue(this.lvglId, v)
+      endset
+    endprop
+  end Dropdown
+
+  // ---- Textarea — campo de texto editable. El contenido se lee/escribe con
+  //      `text`; la edición dispara onChange. ----
+  public class Textarea extends Component
+    public function Textarea(parent: Component)
+      this.lvglId := __guiCreateTextarea(parent.lvglId)
+      __guiBindClick(this.lvglId, this)
+    end Textarea
+
+    public property text: string
+      get
+        return __guiGetText(this.lvglId)
+      endget
+      set(v)
+        __guiSetText(this.lvglId, v)
+      endset
+    endprop
+  end Textarea
 
   // ---- Dispatch del upcall: la VM llama aquí (por NOMBRE, resolveGlobal) al
   //      pulsar/cambiar un widget. self.onClick()/onChange() son llamadas

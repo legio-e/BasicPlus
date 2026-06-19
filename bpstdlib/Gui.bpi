@@ -1,12 +1,14 @@
 bpi 7
 module Gui
 func __guiAlign(handle:integer,a:integer,dx:integer,dy:integer):void public intrinsic
+func __guiCreateDropdown(parent:integer):integer public intrinsic
 func __guiSetWidth(handle:integer,w:integer):void public intrinsic
 func __guiSetFont(handle:integer,fontId:integer):void public intrinsic
 func __guiDispatchChange(self:Component):void public
 func run():void public
 func __guiSetHeight(handle:integer,h:integer):void public intrinsic
 func __guiCreateLabel(parent:integer):integer public intrinsic
+func __guiSetOptions(handle:integer,opts:string):void public intrinsic
 func __guiCreateSlider(parent:integer):integer public intrinsic
 func __guiGetY(handle:integer):integer public intrinsic
 func __guiGetX(handle:integer):integer public intrinsic
@@ -23,6 +25,7 @@ func __guiBindClick(handle:integer,self:Component):void public intrinsic
 func __guiSetScrollDir(handle:integer,dir:integer):void public intrinsic
 func __guiCreateSpinbox(parent:integer):integer public intrinsic
 func __guiCreateSwitch(parent:integer):integer public intrinsic
+func __guiCreateTextarea(parent:integer):integer public intrinsic
 func __guiSetValue(handle:integer,v:integer):void public intrinsic
 func __guiGetHeight(handle:integer):integer public intrinsic
 func __guiChange(w:Component):void public intrinsic
@@ -42,6 +45,7 @@ func __guiScreenLoad(handle:integer):void public intrinsic
 func __guiDispatch(self:Component):void public
 func __guiCreateBar(parent:integer):integer public intrinsic
 func __guiCreateLed(parent:integer):integer public intrinsic
+func __guiGetText(handle:integer):string public intrinsic
 class Label public extends Component
   layout 6 27 00000000 00000000
   ctor(parent:Component,text:string)
@@ -81,6 +85,12 @@ class Color public
   layout 1 2 00000000 00000000
   ctor(rgb:integer)
 end class
+class Dropdown public extends Component
+  layout 7 27 00000000 00000000
+  ctor(parent:Component)
+  prop selected:integer public
+  method setOptions(opts:string):void public
+end class
 class ScrollDir public
   layout 0 2 - -
   staticconst VER:integer=2 public
@@ -98,6 +108,11 @@ class Screen public extends Component
   layout 6 25 00000000 00000000
   ctor()
   method load():void public
+end class
+class Textarea public extends Component
+  layout 7 26 00000040 00000000
+  ctor(parent:Component)
+  prop text:string public
 end class
 class Toggle public extends Component
   layout 7 26 00000000 00000000

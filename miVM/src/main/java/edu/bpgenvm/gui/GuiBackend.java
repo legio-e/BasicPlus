@@ -118,6 +118,15 @@ public final class GuiBackend {
         Node n = nodes.get(h); if (n != null) n.hasValue = true;
         return h;
     }
+    public int createDropdown(int parent) {
+        int h = create("dropdown", new JComboBox<String>(), parent);
+        Node n = nodes.get(h); if (n != null) n.hasValue = true;   // value = índice seleccionado
+        return h;
+    }
+    public int createTextarea(int parent) {
+        // Texto editable: el contenido (n.text) es la verdad; NO es value-widget (sin val=).
+        return create("textarea", new JTextArea(), parent);
+    }
 
     private int create(String type, JComponent comp, int parent) {
         int h = nextHandle++;
@@ -139,7 +148,30 @@ public final class GuiBackend {
         n.text = s;
         if (n.comp instanceof JLabel)  ((JLabel)  n.comp).setText(s);
         else if (n.comp instanceof AbstractButton) ((AbstractButton) n.comp).setText(s); // JButton + JCheckBox
+        else if (n.comp instanceof javax.swing.text.JTextComponent) {
+            // textarea: setText programático dispara el DocumentListener → suprimir.
+            n.suppressEvents = true;
+            try { ((javax.swing.text.JTextComponent) n.comp).setText(s); }
+            finally { n.suppressEvents = false; }
+        }
         relayout(n);
+    }
+    // dropdown: opciones \n-separadas (modelo del JComboBox). getText = contenido (textarea) u opciones.
+    public void setOptions(int handle, String opts) {
+        Node n = nodes.get(handle); if (n == null) return;
+        n.text = (opts != null) ? opts : "";
+        if (n.comp instanceof JComboBox) {
+            @SuppressWarnings("unchecked")
+            JComboBox<String> cb = (JComboBox<String>) n.comp;
+            n.suppressEvents = true;
+            try {
+                cb.removeAllItems();
+                if (!n.text.isEmpty()) for (String o : n.text.split("\n", -1)) cb.addItem(o);
+            } finally { n.suppressEvents = false; }
+        }
+    }
+    public String getText(int handle) {
+        Node n = nodes.get(handle); return n != null ? n.text : "";
     }
     // Geometría — backend = la verdad. x/y explícitos (posSet) o vía align.
     public void setWidth(int handle, int w)  { Node n = nodes.get(handle); if (n != null) { n.w = w; relayout(n); } }
@@ -205,6 +237,10 @@ public final class GuiBackend {
             if (n.comp instanceof JSlider)           ((JSlider) n.comp).setValue(cv);
             else if (n.comp instanceof JProgressBar) ((JProgressBar) n.comp).setValue(cv);
             else if (n.comp instanceof JSpinner)     ((JSpinner) n.comp).setValue(Integer.valueOf(cv));
+            else if (n.comp instanceof JComboBox) {  // dropdown: value = índice seleccionado
+                JComboBox<?> cb = (JComboBox<?>) n.comp;
+                if (cv >= 0 && cv < cb.getItemCount()) cb.setSelectedIndex(cv);
+            }
             // led (JLabel) y demás: el modelo (n.value) es la verdad; sin widget que tocar.
         } finally {
             n.suppressEvents = false;
@@ -299,6 +335,26 @@ public final class GuiBackend {
             sp.addChangeListener(e -> {
                 n.value = ((Integer) sp.getValue()).intValue();
                 if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
+            });
+        } else if (n.comp instanceof JComboBox) {
+            // Dropdown: la selección es CHANGE; n.value = índice elegido.
+            @SuppressWarnings("unchecked")
+            JComboBox<String> cb = (JComboBox<String>) n.comp;
+            cb.addActionListener(e -> {
+                n.value = cb.getSelectedIndex();
+                if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
+            });
+        } else if (n.comp instanceof javax.swing.text.JTextComponent) {
+            // Textarea: la edición es CHANGE; n.text = contenido.
+            javax.swing.text.JTextComponent jtc = (javax.swing.text.JTextComponent) n.comp;
+            jtc.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+                private void changed() {
+                    n.text = jtc.getText();
+                    if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
+                }
+                public void insertUpdate(javax.swing.event.DocumentEvent e)  { changed(); }
+                public void removeUpdate(javax.swing.event.DocumentEvent e)  { changed(); }
+                public void changedUpdate(javax.swing.event.DocumentEvent e) { changed(); }
             });
         } else if (n.comp instanceof JButton) {
             ((JButton) n.comp).addActionListener(e -> events.offer(new int[]{objptr, KIND_CLICK}));

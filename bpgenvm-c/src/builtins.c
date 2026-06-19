@@ -200,7 +200,12 @@ enum {
     BUILTIN_GUI_SET_RANGE       = 171,
     /* H6 widgets — spinbox (entero+rango) + led (indicador on/off). */
     BUILTIN_GUI_CREATE_SPINBOX  = 172,
-    BUILTIN_GUI_CREATE_LED      = 173
+    BUILTIN_GUI_CREATE_LED      = 173,
+    /* H6 widgets — dropdown (opciones + índice) + textarea (texto editable). */
+    BUILTIN_GUI_CREATE_DROPDOWN = 174,
+    BUILTIN_GUI_SET_OPTIONS     = 175,
+    BUILTIN_GUI_CREATE_TEXTAREA = 176,
+    BUILTIN_GUI_GET_TEXT        = 177
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -514,6 +519,19 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_SET_RANGE:     { int mx = pop_i32(vm, tc); int mn = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_range(h, mn, mx); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_CREATE_SPINBOX: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_spinbox(p)); return BPVM_OK; }
     case BUILTIN_GUI_CREATE_LED:     { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_led(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_DROPDOWN: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_dropdown(p)); return BPVM_OK; }
+    case BUILTIN_GUI_SET_OPTIONS: {
+        uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        char buf[512]; read_bp_string(vm, ref, buf, sizeof(buf));
+        bpvm_gui_set_options(h, buf); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_CREATE_TEXTAREA: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_textarea(p)); return BPVM_OK; }
+    case BUILTIN_GUI_GET_TEXT: {
+        int h = pop_i32(vm, tc);
+        const char* s = bpvm_gui_get_text(h);
+        uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
+        push_i32(vm, tc, (int32_t) ref); return BPVM_OK;
+    }
 #endif /* BPVM_GUI */
 
     case BUILTIN_PARSE_INT: {

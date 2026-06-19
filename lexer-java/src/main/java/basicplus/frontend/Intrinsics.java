@@ -244,5 +244,10 @@ public final class Intrinsics {
         // H6 widgets — spinbox + led.
         register("Gui.__guiCreateSpinbox",  w -> emitBuiltin(w, Builtin.GUI_CREATE_SPINBOX));
         register("Gui.__guiCreateLed",      w -> emitBuiltin(w, Builtin.GUI_CREATE_LED));
+        // H6 widgets — dropdown + textarea.
+        register("Gui.__guiCreateDropdown", w -> emitBuiltin(w, Builtin.GUI_CREATE_DROPDOWN));
+        register("Gui.__guiSetOptions",     w -> emitBuiltin(w, Builtin.GUI_SET_OPTIONS));
+        register("Gui.__guiCreateTextarea", w -> emitBuiltin(w, Builtin.GUI_CREATE_TEXTAREA));
+        register("Gui.__guiGetText",        w -> emitBuiltin(w, Builtin.GUI_GET_TEXT));
     }
 }

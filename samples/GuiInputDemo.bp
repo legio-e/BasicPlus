@@ -1,0 +1,36 @@
+// GuiInputDemo.bp — H6 tanda 4: dropdown + textarea (entrada/selección).
+//
+// dropdown: opciones \n-separadas (setOptions) + índice `selected`; el cambio
+//           de selección dispara onChange.
+// textarea: contenido editable por la propiedad `text`; la edición dispara onChange.
+module GuiInputDemo
+  import Gui
+
+  class MyDrop extends Gui.Dropdown
+    public function MyDrop(parent: Gui.Component)
+      super(parent)
+    end MyDrop
+
+    public function onChange()
+      print "[dropdown] seleccion cambiada"
+    end onChange
+  end MyDrop
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var dd: MyDrop := MyDrop(scr)
+    dd.setOptions("Rojo\nVerde\nAzul")
+    dd.selected := 2
+
+    var ta: Gui.Textarea := Gui.Textarea(scr)
+    ta.text := "hola"
+
+    print "== widgets =="
+    print Gui.__guiDumpTree()
+
+    Gui.__guiChange(dd)          // simula el cambio de selección
+    Gui.run()
+  end Main
+
+end GuiInputDemo

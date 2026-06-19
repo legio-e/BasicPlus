@@ -121,6 +121,13 @@ static void lvgl_change_cb(lv_event_t* e) {
                 g_nodes[i].value = lv_slider_get_value(g_nodes[i].lv);
             else if (strcmp(g_nodes[i].type, "spinbox") == 0)
                 g_nodes[i].value = lv_spinbox_get_value(g_nodes[i].lv);
+            else if (strcmp(g_nodes[i].type, "dropdown") == 0)
+                g_nodes[i].value = (int) lv_dropdown_get_selected(g_nodes[i].lv);
+            else if (strcmp(g_nodes[i].type, "textarea") == 0) {
+                const char* t = lv_textarea_get_text(g_nodes[i].lv);   /* refleja el contenido en el modelo */
+                free(g_nodes[i].text); g_nodes[i].text = NULL;
+                if (t) { size_t L = strlen(t); g_nodes[i].text = (char*) malloc(L + 1); if (g_nodes[i].text) memcpy(g_nodes[i].text, t, L + 1); }
+            }
             else  /* checkbox, toggle: estado CHECKED (0/1) */
                 g_nodes[i].value = lv_obj_has_state(g_nodes[i].lv, LV_STATE_CHECKED) ? 1 : 0;
             break;
@@ -223,6 +230,21 @@ int bpvm_gui_create_led(int parent) {
 #endif
     return h;
 }
+int bpvm_gui_create_dropdown(int parent) {
+    int h = create_node("dropdown", parent);
+    gui_node* n = node_for(h); if (n) n->has_value = 1;   /* value = índice seleccionado */
+#ifdef BPVM_LVGL
+    if (n) n->lv = lv_dropdown_create(parent_lv(parent));
+#endif
+    return h;
+}
+int bpvm_gui_create_textarea(int parent) {
+    int h = create_node("textarea", parent);   /* texto editable: NO value-widget (sin val=) */
+#ifdef BPVM_LVGL
+    gui_node* n = node_for(h); if (n) n->lv = lv_textarea_create(parent_lv(parent));
+#endif
+    return h;
+}
 
 void bpvm_gui_set_text(int handle, const char* s) {
     gui_node* n = node_for(handle); if (!n) return;
@@ -231,7 +253,20 @@ void bpvm_gui_set_text(int handle, const char* s) {
 #ifdef BPVM_LVGL
     if (n->lv && strcmp(n->type, "label") == 0)    lv_label_set_text(n->lv, s ? s : "");
     if (n->lv && strcmp(n->type, "checkbox") == 0) lv_checkbox_set_text(n->lv, s ? s : "");
+    if (n->lv && strcmp(n->type, "textarea") == 0) lv_textarea_set_text(n->lv, s ? s : "");
 #endif
+}
+/* dropdown: opciones \n-separadas (guardadas en n->text, igual que LVGL). */
+void bpvm_gui_set_options(int handle, const char* opts) {
+    gui_node* n = node_for(handle); if (!n) return;
+    free(n->text); n->text = NULL;
+    if (opts) { size_t L = strlen(opts); n->text = (char*) malloc(L + 1); if (n->text) memcpy(n->text, opts, L + 1); }
+#ifdef BPVM_LVGL
+    if (n->lv && strcmp(n->type, "dropdown") == 0) lv_dropdown_set_options(n->lv, opts ? opts : "");
+#endif
+}
+const char* bpvm_gui_get_text(int handle) {
+    gui_node* n = node_for(handle); return (n && n->text) ? n->text : "";
 }
 void bpvm_gui_set_width(int handle, int w) {
     gui_node* n = node_for(handle); if (!n) return;
@@ -356,6 +391,7 @@ void bpvm_gui_set_value(int handle, int v) {
         else if (strcmp(n->type, "bar") == 0)     lv_bar_set_value(n->lv, cv, LV_ANIM_OFF);
         else if (strcmp(n->type, "spinbox") == 0) lv_spinbox_set_value(n->lv, cv);
         else if (strcmp(n->type, "led") == 0)     { if (cv) lv_led_on(n->lv); else lv_led_off(n->lv); }
+        else if (strcmp(n->type, "dropdown") == 0) lv_dropdown_set_selected(n->lv, (uint16_t) cv);
     }
 #endif
 }
@@ -406,7 +442,7 @@ void bpvm_gui_bind_click(int handle, uint32_t objptr) {
     n->objptr = objptr;
 #ifdef BPVM_LVGL
     if (n->lv) {
-        if (n->has_value)   /* value-widget: el toggle del usuario es CHANGE, no click */
+        if (n->has_value || strcmp(n->type, "textarea") == 0)  /* value-widget o texto: CHANGE */
             lv_obj_add_event_cb(n->lv, lvgl_change_cb, LV_EVENT_VALUE_CHANGED, (void*) (intptr_t) objptr);
         else
             lv_obj_add_event_cb(n->lv, lvgl_click_cb, LV_EVENT_CLICKED, (void*) (intptr_t) objptr);
