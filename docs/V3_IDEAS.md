@@ -428,6 +428,46 @@ y, en silicio real, se pinta + responde al dedo + se para limpio. Siguiente
 inflexión: **"2ª parte de H0"** (alcance de V3 + mapa de hitos), aplazada hasta
 cerrar el GUI — ahora toca.
 
+### H6 — modelo de objetos + `Component` (diseño, 19-jun)
+
+Antes de los widgets se fija la JERARQUÍA (Eduardo: la estructura antes que los
+controles, para no rehacerla):
+
+**`Object` (lenguaje) → `Component` (base visual, nuestra) → controles (widgets).**
+
+- **`Object`** = base UNIVERSAL del lenguaje, **implícita** (clase sin `extends`
+  mapea a `java/lang/Object` en `JvmEmitter`; `Object` es tipo usable — Collections;
+  Core.bp: "Object → Exception → …"). **Norma: todo desciende de Object salvo
+  `Thread`.** NO creamos `Gui.Object`: `Component` simplemente no escribe `extends`
+  → cae bajo Object, como `Exception`.
+- **`Component`** = base de TODO widget; reemplaza al `Obj` actual
+  (`Screen/Panel/Label/Button` → `extends Component`; GuiClickDemo igual). Contrato:
+  - **`lvglId`** (property) — id del objeto espejo (lv_obj / JComponent). **Lo asigna
+    el MODELO** (contador `g_next_handle` en gui.c / ídem miVM) → idéntico en las 3
+    VMs → seguro para paridad. Renombra el `handle` de hoy.
+  - Geometría como **propiedades** `x, y, width, height` — denominador común
+    (LVGL `set_pos`/`set_size` · Swing `setBounds`); el set empuja al backend; el
+    MODELO es la verdad del `dumpTree` (que gana x,y,w,h → la paridad cubre la
+    geometría, hoy solo cubre `align`). `align(ancla,dx,dy)` = azúcar que calcula x,y.
+  - `setBgColor(c)` · **`refresh()`** (= Swing `repaint` / LVGL `lv_obj_invalidate`;
+    render-only → no toca el modelo → no afecta paridad; los setters ya
+    auto-repintan, refresh es el "forzar redibujo" explícito) · `clean()` · `delete()`.
+  - Eventos: `onClick()` + **`onChange()`** (nuevo), override-ables (upcall).
+- **Norma reforzada (#143): sin variables públicas** — lo público es **`property`**
+  (el backing field queda privado en su slot; en la .bpi viajan solo los accesores).
+  El `Obj.handle` de hoy era `public var` → el refactor lo corrige.
+
+**Modelo de eventos (para los widgets de valor):** se generaliza el dispatch del
+upcall — `__guiDispatch(self, kind)` con `kind ∈ {CLICK, CHANGE}` → `onClick()` o
+`onChange()`. El handler lee el valor con getters (`getValue()`/`getText()`/
+`getSelected()`/`isChecked()`), NO por el upcall. El `dumpTree` gana un campo
+valor/estado por nodo → la paridad cubre los nuevos widgets.
+
+**Orden de implementación:** la BASE primero (`Component` + geometría + refresh +
+onChange + dumpTree) en **miVM (Swing)** y verificar por dumpTree → VM-C (host) →
+micro; LUEGO los widgets encima. Set de widgets: ver "Mapa de hitos V3 / H6"
+(Tier 1 ∩ Swing-LVGL + arc/led).
+
 ## 2. Lenguaje (se mantiene; "eventos y poco más")
 
 - §8 callbacks / función-valor (`CALL_INDIRECT`) — opcional, ver arriba.
