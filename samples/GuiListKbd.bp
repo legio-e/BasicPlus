@@ -1,0 +1,37 @@
+// GuiListKbd.bp — H6 tanda 5: list + keyboard.
+//
+// list: lista de ítems \n-separados (setItems) + índice `selected`; el cambio de
+//       selección dispara onChange.
+// keyboard: teclado en pantalla atado a un Textarea (attach); cableado render-only.
+module GuiListKbd
+  import Gui
+
+  class MyList extends Gui.ListBox
+    public function MyList(parent: Gui.Component)
+      super(parent)
+    end MyList
+
+    public function onChange()
+      print "[list] item seleccionado"
+    end onChange
+  end MyList
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var lst: MyList := MyList(scr)
+    lst.setItems("Uno\nDos\nTres\nCuatro")
+    lst.selected := 2
+
+    var ta: Gui.Textarea := Gui.Textarea(scr)
+    var kb: Gui.Keyboard := Gui.Keyboard(scr)
+    kb.attach(ta)
+
+    print "== widgets =="
+    print Gui.__guiDumpTree()
+
+    Gui.__guiChange(lst)         // simula la selección de un ítem
+    Gui.run()
+  end Main
+
+end GuiListKbd

@@ -37,6 +37,10 @@ module Gui
   public intrinsic function __guiSetOptions(handle: integer, opts: string)
   public intrinsic function __guiCreateTextarea(parent: integer): integer
   public intrinsic function __guiGetText(handle: integer): string
+  // Lista (ítems \n-sep + índice; reusa setOptions/value) y teclado en pantalla.
+  public intrinsic function __guiCreateList(parent: integer): integer
+  public intrinsic function __guiCreateKeyboard(parent: integer): integer
+  public intrinsic function __guiKeyboardSetTextarea(handle: integer, ta: integer)
   // Geometría: x/y/width/height — backend = verdad (get/set → intrínsecos).
   public intrinsic function __guiSetX(handle: integer, x: integer)
   public intrinsic function __guiGetX(handle: integer): integer
@@ -416,6 +420,42 @@ module Gui
       endset
     endprop
   end Textarea
+
+  // ---- ListBox — lista vertical de ítems seleccionables. Ítems \n-separados
+  //      (setItems); el índice elegido se lee/escribe con `selected` y el cambio
+  //      de selección dispara onChange. (Mismo modelo que Dropdown, render vertical;
+  //      se llama ListBox porque `List` es un tipo built-in de colecciones.) ----
+  public class ListBox extends Component
+    public function ListBox(parent: Component)
+      this.lvglId := __guiCreateList(parent.lvglId)
+      __guiBindClick(this.lvglId, this)
+    end ListBox
+
+    public function setItems(items: string)
+      __guiSetOptions(this.lvglId, items)
+    end setItems
+
+    public property selected: integer
+      get
+        return __guiGetValue(this.lvglId)
+      endget
+      set(v)
+        __guiSetValue(this.lvglId, v)
+      endset
+    endprop
+  end ListBox
+
+  // ---- Keyboard — teclado en pantalla. Se ata a un Textarea con attach(); las
+  //      teclas editan ese campo (que es quien dispara su onChange). ----
+  public class Keyboard extends Component
+    public function Keyboard(parent: Component)
+      this.lvglId := __guiCreateKeyboard(parent.lvglId)
+    end Keyboard
+
+    public function attach(ta: Component)
+      __guiKeyboardSetTextarea(this.lvglId, ta.lvglId)
+    end attach
+  end Keyboard
 
   // ---- Dispatch del upcall: la VM llama aquí (por NOMBRE, resolveGlobal) al
   //      pulsar/cambiar un widget. self.onClick()/onChange() son llamadas

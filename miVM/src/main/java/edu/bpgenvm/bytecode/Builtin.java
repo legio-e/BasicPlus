@@ -357,7 +357,12 @@ public enum Builtin {
     GUI_CREATE_DROPDOWN("__guiCreateDropdown"), // (parent) → id
     GUI_SET_OPTIONS("__guiSetOptions"),         // (id, "a\nb\nc") → void
     GUI_CREATE_TEXTAREA("__guiCreateTextarea"), // (parent) → id
-    GUI_GET_TEXT("__guiGetText");               // (id) → string
+    GUI_GET_TEXT("__guiGetText"),               // (id) → string
+
+    // H6 widgets — list (ítems + índice, reusa options/value) + keyboard.
+    GUI_CREATE_LIST("__guiCreateList"),         // (parent) → id
+    GUI_CREATE_KEYBOARD("__guiCreateKeyboard"), // (parent) → id
+    GUI_KEYBOARD_SET_TEXTAREA("__guiKeyboardSetTextarea"); // (id, taId) → void
 
     public final String bpName;
     public final int id;

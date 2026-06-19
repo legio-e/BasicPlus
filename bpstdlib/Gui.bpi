@@ -10,6 +10,7 @@ func __guiSetHeight(handle:integer,h:integer):void public intrinsic
 func __guiCreateLabel(parent:integer):integer public intrinsic
 func __guiSetOptions(handle:integer,opts:string):void public intrinsic
 func __guiCreateSlider(parent:integer):integer public intrinsic
+func __guiCreateKeyboard(parent:integer):integer public intrinsic
 func __guiGetY(handle:integer):integer public intrinsic
 func __guiGetX(handle:integer):integer public intrinsic
 func __guiSetX(handle:integer,x:integer):void public intrinsic
@@ -21,9 +22,11 @@ func __guiCreateCheckbox(parent:integer):integer public intrinsic
 func __guiClean(handle:integer):void public intrinsic
 func __guiDelete(handle:integer):void public intrinsic
 func __guiScreenActive():integer public intrinsic
+func __guiCreateList(parent:integer):integer public intrinsic
 func __guiBindClick(handle:integer,self:Component):void public intrinsic
 func __guiSetScrollDir(handle:integer,dir:integer):void public intrinsic
 func __guiCreateSpinbox(parent:integer):integer public intrinsic
+func __guiKeyboardSetTextarea(handle:integer,ta:integer):void public intrinsic
 func __guiCreateSwitch(parent:integer):integer public intrinsic
 func __guiCreateTextarea(parent:integer):integer public intrinsic
 func __guiSetValue(handle:integer,v:integer):void public intrinsic
@@ -98,6 +101,12 @@ class ScrollDir public
   staticconst NONE:integer=0 public
   staticconst BOTH:integer=3 public
 end class
+class ListBox public extends Component
+  layout 7 27 00000000 00000000
+  ctor(parent:Component)
+  prop selected:integer public
+  method setItems(items:string):void public
+end class
 class Slider public extends Component
   layout 7 27 00000000 00000000
   ctor(parent:Component)
@@ -137,6 +146,11 @@ class Component public
   method delete():void public
   method onClick():void public
   method onChange():void public
+end class
+class Keyboard public extends Component
+  layout 6 25 00000000 00000000
+  ctor(parent:Component)
+  method attach(ta:Component):void public
 end class
 class Led public extends Component
   layout 7 28 00000000 00000000

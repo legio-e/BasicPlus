@@ -127,6 +127,16 @@ public final class GuiBackend {
         // Texto editable: el contenido (n.text) es la verdad; NO es value-widget (sin val=).
         return create("textarea", new JTextArea(), parent);
     }
+    public int createList(int parent) {
+        int h = create("list", new JList<String>(new DefaultListModel<String>()), parent);
+        Node n = nodes.get(h); if (n != null) n.hasValue = true;   // value = índice seleccionado
+        return h;
+    }
+    public int createKeyboard(int parent) {
+        // Teclado en pantalla: placeholder en miVM (el cableado a un textarea es render-only).
+        return create("keyboard", new JPanel(null), parent);
+    }
+    public void keyboardSetTextarea(int handle, int taHandle) { /* render-only (LVGL); no-op en el modelo */ }
 
     private int create(String type, JComponent comp, int parent) {
         int h = nextHandle++;
@@ -168,6 +178,13 @@ public final class GuiBackend {
                 cb.removeAllItems();
                 if (!n.text.isEmpty()) for (String o : n.text.split("\n", -1)) cb.addItem(o);
             } finally { n.suppressEvents = false; }
+        } else if (n.comp instanceof JList) {
+            @SuppressWarnings("unchecked")
+            JList<String> jl = (JList<String>) n.comp;
+            DefaultListModel<String> m = new DefaultListModel<>();
+            if (!n.text.isEmpty()) for (String o : n.text.split("\n", -1)) m.addElement(o);
+            n.suppressEvents = true;
+            try { jl.setModel(m); } finally { n.suppressEvents = false; }
         }
     }
     public String getText(int handle) {
@@ -240,6 +257,10 @@ public final class GuiBackend {
             else if (n.comp instanceof JComboBox) {  // dropdown: value = índice seleccionado
                 JComboBox<?> cb = (JComboBox<?>) n.comp;
                 if (cv >= 0 && cv < cb.getItemCount()) cb.setSelectedIndex(cv);
+            }
+            else if (n.comp instanceof JList) {       // list: value = índice seleccionado
+                JList<?> jl = (JList<?>) n.comp;
+                if (cv >= 0 && cv < jl.getModel().getSize()) jl.setSelectedIndex(cv);
             }
             // led (JLabel) y demás: el modelo (n.value) es la verdad; sin widget que tocar.
         } finally {
@@ -355,6 +376,15 @@ public final class GuiBackend {
                 public void insertUpdate(javax.swing.event.DocumentEvent e)  { changed(); }
                 public void removeUpdate(javax.swing.event.DocumentEvent e)  { changed(); }
                 public void changedUpdate(javax.swing.event.DocumentEvent e) { changed(); }
+            });
+        } else if (n.comp instanceof JList) {
+            // List: la selección de un ítem es CHANGE; n.value = índice.
+            JList<?> jl = (JList<?>) n.comp;
+            jl.addListSelectionListener(e -> {
+                if (!e.getValueIsAdjusting()) {
+                    n.value = jl.getSelectedIndex();
+                    if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
+                }
             });
         } else if (n.comp instanceof JButton) {
             ((JButton) n.comp).addActionListener(e -> events.offer(new int[]{objptr, KIND_CLICK}));

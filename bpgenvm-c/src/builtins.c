@@ -205,7 +205,11 @@ enum {
     BUILTIN_GUI_CREATE_DROPDOWN = 174,
     BUILTIN_GUI_SET_OPTIONS     = 175,
     BUILTIN_GUI_CREATE_TEXTAREA = 176,
-    BUILTIN_GUI_GET_TEXT        = 177
+    BUILTIN_GUI_GET_TEXT        = 177,
+    /* H6 widgets — list (ítems + índice) + keyboard. */
+    BUILTIN_GUI_CREATE_LIST     = 178,
+    BUILTIN_GUI_CREATE_KEYBOARD = 179,
+    BUILTIN_GUI_KEYBOARD_SET_TEXTAREA = 180
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -532,6 +536,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
         push_i32(vm, tc, (int32_t) ref); return BPVM_OK;
     }
+    case BUILTIN_GUI_CREATE_LIST:     { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_list(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_KEYBOARD: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_keyboard(p)); return BPVM_OK; }
+    case BUILTIN_GUI_KEYBOARD_SET_TEXTAREA: { int ta = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_keyboard_set_textarea(h, ta); push_i32(vm, tc, 0); return BPVM_OK; }
 #endif /* BPVM_GUI */
 
     case BUILTIN_PARSE_INT: {

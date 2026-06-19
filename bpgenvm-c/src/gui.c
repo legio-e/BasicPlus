@@ -135,6 +135,17 @@ static void lvgl_change_cb(lv_event_t* e) {
     bpvm_gui_inject_change(objptr);
 }
 
+/* Click en un botón de un lv_list: fija el índice seleccionado en el modelo de la
+ * LISTA (user_data = objptr de la lista) y encola un CHANGE sobre ella. */
+static void lvgl_list_btn_cb(lv_event_t* e) {
+    uint32_t list_objptr = (uint32_t) (intptr_t) lv_event_get_user_data(e);
+    lv_obj_t* btn = (lv_obj_t*) lv_event_get_target(e);
+    int idx = (int) lv_obj_get_index(btn);
+    for (int i = 0; i < g_node_count; i++)
+        if (g_nodes[i].used && g_nodes[i].objptr == list_objptr) { g_nodes[i].value = idx; break; }
+    bpvm_gui_inject_change(list_objptr);
+}
+
 static lv_obj_t* parent_lv(int parent) {
     gui_node* p = node_for(parent);
     if (p && p->lv) return p->lv;
@@ -245,6 +256,29 @@ int bpvm_gui_create_textarea(int parent) {
 #endif
     return h;
 }
+int bpvm_gui_create_list(int parent) {
+    int h = create_node("list", parent);
+    gui_node* n = node_for(h); if (n) n->has_value = 1;   /* value = índice seleccionado */
+#ifdef BPVM_LVGL
+    if (n) n->lv = lv_list_create(parent_lv(parent));
+#endif
+    return h;
+}
+int bpvm_gui_create_keyboard(int parent) {
+    int h = create_node("keyboard", parent);   /* sin estado en el modelo (se ata a un textarea) */
+#ifdef BPVM_LVGL
+    gui_node* n = node_for(h); if (n) n->lv = lv_keyboard_create(parent_lv(parent));
+#endif
+    return h;
+}
+void bpvm_gui_keyboard_set_textarea(int handle, int ta_handle) {
+#ifdef BPVM_LVGL
+    gui_node* n = node_for(handle); gui_node* ta = node_for(ta_handle);
+    if (n && n->lv && ta && ta->lv) lv_keyboard_set_textarea(n->lv, ta->lv);
+#else
+    (void) handle; (void) ta_handle;   /* render-only: el teclado físico edita el textarea */
+#endif
+}
 
 void bpvm_gui_set_text(int handle, const char* s) {
     gui_node* n = node_for(handle); if (!n) return;
@@ -263,6 +297,22 @@ void bpvm_gui_set_options(int handle, const char* opts) {
     if (opts) { size_t L = strlen(opts); n->text = (char*) malloc(L + 1); if (n->text) memcpy(n->text, opts, L + 1); }
 #ifdef BPVM_LVGL
     if (n->lv && strcmp(n->type, "dropdown") == 0) lv_dropdown_set_options(n->lv, opts ? opts : "");
+    else if (n->lv && strcmp(n->type, "list") == 0) {
+        lv_obj_clean(n->lv);   /* quita los botones previos */
+        if (opts && *opts) {
+            const char* p = opts;
+            while (*p) {
+                const char* nl = strchr(p, '\n');
+                size_t len = nl ? (size_t)(nl - p) : strlen(p);
+                char item[128]; if (len >= sizeof(item)) len = sizeof(item) - 1;
+                memcpy(item, p, len); item[len] = '\0';
+                lv_obj_t* btn = lv_list_add_button(n->lv, NULL, item);
+                lv_obj_add_event_cb(btn, lvgl_list_btn_cb, LV_EVENT_CLICKED, (void*) (intptr_t) n->objptr);
+                if (!nl) break;
+                p = nl + 1;
+            }
+        }
+    }
 #endif
 }
 const char* bpvm_gui_get_text(int handle) {

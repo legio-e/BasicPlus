@@ -249,5 +249,9 @@ public final class Intrinsics {
         register("Gui.__guiSetOptions",     w -> emitBuiltin(w, Builtin.GUI_SET_OPTIONS));
         register("Gui.__guiCreateTextarea", w -> emitBuiltin(w, Builtin.GUI_CREATE_TEXTAREA));
         register("Gui.__guiGetText",        w -> emitBuiltin(w, Builtin.GUI_GET_TEXT));
+        // H6 widgets — list + keyboard.
+        register("Gui.__guiCreateList",     w -> emitBuiltin(w, Builtin.GUI_CREATE_LIST));
+        register("Gui.__guiCreateKeyboard", w -> emitBuiltin(w, Builtin.GUI_CREATE_KEYBOARD));
+        register("Gui.__guiKeyboardSetTextarea", w -> emitBuiltin(w, Builtin.GUI_KEYBOARD_SET_TEXTAREA));
     }
 }
