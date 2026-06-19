@@ -26,6 +26,8 @@ int  bpvm_gui_create_checkbox(int parent);
 int  bpvm_gui_create_switch(int parent);
 int  bpvm_gui_create_slider(int parent);
 int  bpvm_gui_create_bar(int parent);
+int  bpvm_gui_create_spinbox(int parent);
+int  bpvm_gui_create_led(int parent);
 
 /* Configuración. Texto + geometría/anclaje afectan al dumpTree (modelo). Color y
  * fuente son render-only: no-op en el modelo (no tocan el dump) y, bajo BPVM_LVGL,

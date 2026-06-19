@@ -241,5 +241,8 @@ public final class Intrinsics {
         register("Gui.__guiSetValue",       w -> emitBuiltin(w, Builtin.GUI_SET_VALUE));
         register("Gui.__guiGetValue",       w -> emitBuiltin(w, Builtin.GUI_GET_VALUE));
         register("Gui.__guiSetRange",       w -> emitBuiltin(w, Builtin.GUI_SET_RANGE));
+        // H6 widgets — spinbox + led.
+        register("Gui.__guiCreateSpinbox",  w -> emitBuiltin(w, Builtin.GUI_CREATE_SPINBOX));
+        register("Gui.__guiCreateLed",      w -> emitBuiltin(w, Builtin.GUI_CREATE_LED));
     }
 }

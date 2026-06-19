@@ -106,6 +106,18 @@ public final class GuiBackend {
         Node n = nodes.get(h); if (n != null) n.hasValue = true;
         return h;
     }
+    public int createSpinbox(int parent) {
+        int h = create("spinbox", new JSpinner(new SpinnerNumberModel(0, 0, 100, 1)), parent);
+        Node n = nodes.get(h); if (n != null) n.hasValue = true;
+        return h;
+    }
+    public int createLed(int parent) {
+        // Indicador (solo salida): un JLabel sirve de placeholder; el modelo (value)
+        // es la verdad para el dump. No se enlaza evento.
+        int h = create("led", new JLabel(), parent);
+        Node n = nodes.get(h); if (n != null) n.hasValue = true;
+        return h;
+    }
 
     private int create(String type, JComponent comp, int parent) {
         int h = nextHandle++;
@@ -192,6 +204,8 @@ public final class GuiBackend {
         try {
             if (n.comp instanceof JSlider)           ((JSlider) n.comp).setValue(cv);
             else if (n.comp instanceof JProgressBar) ((JProgressBar) n.comp).setValue(cv);
+            else if (n.comp instanceof JSpinner)     ((JSpinner) n.comp).setValue(Integer.valueOf(cv));
+            // led (JLabel) y demás: el modelo (n.value) es la verdad; sin widget que tocar.
         } finally {
             n.suppressEvents = false;
         }
@@ -209,6 +223,8 @@ public final class GuiBackend {
                 JSlider s = (JSlider) n.comp; s.setMinimum(mn); s.setMaximum(mx); s.setValue(n.value);
             } else if (n.comp instanceof JProgressBar) {
                 JProgressBar b = (JProgressBar) n.comp; b.setMinimum(mn); b.setMaximum(mx); b.setValue(n.value);
+            } else if (n.comp instanceof JSpinner) {
+                ((JSpinner) n.comp).setModel(new SpinnerNumberModel(n.value, mn, mx, 1));
             }
         } finally {
             n.suppressEvents = false;
@@ -275,6 +291,13 @@ public final class GuiBackend {
             JSlider s = (JSlider) n.comp;
             s.addChangeListener(e -> {
                 n.value = s.getValue();
+                if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
+            });
+        } else if (n.hasValue && n.comp instanceof JSpinner) {
+            // Spinbox: el cambio de valor es CHANGE.
+            JSpinner sp = (JSpinner) n.comp;
+            sp.addChangeListener(e -> {
+                n.value = ((Integer) sp.getValue()).intValue();
                 if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
             });
         } else if (n.comp instanceof JButton) {

@@ -21,6 +21,7 @@ func __guiDelete(handle:integer):void public intrinsic
 func __guiScreenActive():integer public intrinsic
 func __guiBindClick(handle:integer,self:Component):void public intrinsic
 func __guiSetScrollDir(handle:integer,dir:integer):void public intrinsic
+func __guiCreateSpinbox(parent:integer):integer public intrinsic
 func __guiCreateSwitch(parent:integer):integer public intrinsic
 func __guiSetValue(handle:integer,v:integer):void public intrinsic
 func __guiGetHeight(handle:integer):integer public intrinsic
@@ -40,6 +41,7 @@ func __guiClick(w:Component):void public intrinsic
 func __guiScreenLoad(handle:integer):void public intrinsic
 func __guiDispatch(self:Component):void public
 func __guiCreateBar(parent:integer):integer public intrinsic
+func __guiCreateLed(parent:integer):integer public intrinsic
 class Label public extends Component
   layout 6 27 00000000 00000000
   ctor(parent:Component,text:string)
@@ -56,6 +58,12 @@ class Checkbox public extends Component
   ctor(parent:Component,text:string)
   prop checked:boolean public
   method setText(t:string):void public
+end class
+class Spinbox public extends Component
+  layout 7 27 00000000 00000000
+  ctor(parent:Component)
+  prop value:integer public
+  method setRange(mn:integer,mx:integer):void public
 end class
 class Align public
   layout 0 2 - -
@@ -114,6 +122,13 @@ class Component public
   method delete():void public
   method onClick():void public
   method onChange():void public
+end class
+class Led public extends Component
+  layout 7 28 00000000 00000000
+  ctor(parent:Component)
+  prop value:integer public
+  method on():void public
+  method off():void public
 end class
 class Panel public extends Component
   layout 6 24 00000000 00000000

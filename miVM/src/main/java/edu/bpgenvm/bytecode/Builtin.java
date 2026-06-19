@@ -347,7 +347,11 @@ public enum Builtin {
     GUI_CREATE_BAR("__guiCreateBar"),           // (parent) → id
     GUI_SET_VALUE("__guiSetValue"),             // (id, int) → void (clampa al rango)
     GUI_GET_VALUE("__guiGetValue"),             // (id) → int
-    GUI_SET_RANGE("__guiSetRange");             // (id, min, max) → void
+    GUI_SET_RANGE("__guiSetRange"),             // (id, min, max) → void
+
+    // H6 widgets — spinbox (entero+rango como slider) + led (indicador on/off).
+    GUI_CREATE_SPINBOX("__guiCreateSpinbox"),   // (parent) → id
+    GUI_CREATE_LED("__guiCreateLed");           // (parent) → id
 
     public final String bpName;
     public final int id;

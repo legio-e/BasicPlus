@@ -119,7 +119,9 @@ static void lvgl_change_cb(lv_event_t* e) {
         if (g_nodes[i].used && g_nodes[i].objptr == objptr && g_nodes[i].lv) {
             if (strcmp(g_nodes[i].type, "slider") == 0)
                 g_nodes[i].value = lv_slider_get_value(g_nodes[i].lv);
-            else  /* checkbox, switch: estado CHECKED (0/1) */
+            else if (strcmp(g_nodes[i].type, "spinbox") == 0)
+                g_nodes[i].value = lv_spinbox_get_value(g_nodes[i].lv);
+            else  /* checkbox, toggle: estado CHECKED (0/1) */
                 g_nodes[i].value = lv_obj_has_state(g_nodes[i].lv, LV_STATE_CHECKED) ? 1 : 0;
             break;
         }
@@ -202,6 +204,22 @@ int bpvm_gui_create_bar(int parent) {
     gui_node* n = node_for(h); if (n) n->has_value = 1;
 #ifdef BPVM_LVGL
     if (n) { n->lv = lv_bar_create(parent_lv(parent)); lv_bar_set_range(n->lv, n->rmin, n->rmax); }
+#endif
+    return h;
+}
+int bpvm_gui_create_spinbox(int parent) {
+    int h = create_node("spinbox", parent);
+    gui_node* n = node_for(h); if (n) n->has_value = 1;
+#ifdef BPVM_LVGL
+    if (n) { n->lv = lv_spinbox_create(parent_lv(parent)); lv_spinbox_set_range(n->lv, n->rmin, n->rmax); }
+#endif
+    return h;
+}
+int bpvm_gui_create_led(int parent) {
+    int h = create_node("led", parent);
+    gui_node* n = node_for(h); if (n) n->has_value = 1;
+#ifdef BPVM_LVGL
+    if (n) n->lv = lv_led_create(parent_lv(parent));
 #endif
     return h;
 }
@@ -334,8 +352,10 @@ void bpvm_gui_set_value(int handle, int v) {
     n->value = cv;
 #ifdef BPVM_LVGL
     if (n->lv) {
-        if (strcmp(n->type, "slider") == 0)   lv_slider_set_value(n->lv, cv, LV_ANIM_OFF);
-        else if (strcmp(n->type, "bar") == 0) lv_bar_set_value(n->lv, cv, LV_ANIM_OFF);
+        if (strcmp(n->type, "slider") == 0)       lv_slider_set_value(n->lv, cv, LV_ANIM_OFF);
+        else if (strcmp(n->type, "bar") == 0)     lv_bar_set_value(n->lv, cv, LV_ANIM_OFF);
+        else if (strcmp(n->type, "spinbox") == 0) lv_spinbox_set_value(n->lv, cv);
+        else if (strcmp(n->type, "led") == 0)     { if (cv) lv_led_on(n->lv); else lv_led_off(n->lv); }
     }
 #endif
 }
@@ -350,6 +370,7 @@ void bpvm_gui_set_range(int handle, int mn, int mx) {
     if (n->lv) {
         if (strcmp(n->type, "slider") == 0) { lv_slider_set_range(n->lv, mn, mx); lv_slider_set_value(n->lv, n->value, LV_ANIM_OFF); }
         else if (strcmp(n->type, "bar") == 0) { lv_bar_set_range(n->lv, mn, mx); lv_bar_set_value(n->lv, n->value, LV_ANIM_OFF); }
+        else if (strcmp(n->type, "spinbox") == 0) { lv_spinbox_set_range(n->lv, mn, mx); lv_spinbox_set_value(n->lv, n->value); }
     }
 #endif
 }

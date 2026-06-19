@@ -197,7 +197,10 @@ enum {
     BUILTIN_GUI_CREATE_BAR      = 168,
     BUILTIN_GUI_SET_VALUE       = 169,
     BUILTIN_GUI_GET_VALUE       = 170,
-    BUILTIN_GUI_SET_RANGE       = 171
+    BUILTIN_GUI_SET_RANGE       = 171,
+    /* H6 widgets — spinbox (entero+rango) + led (indicador on/off). */
+    BUILTIN_GUI_CREATE_SPINBOX  = 172,
+    BUILTIN_GUI_CREATE_LED      = 173
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -509,6 +512,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_SET_VALUE:     { int v = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_value(h, v); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_GET_VALUE:     { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_value(h)); return BPVM_OK; }
     case BUILTIN_GUI_SET_RANGE:     { int mx = pop_i32(vm, tc); int mn = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_range(h, mn, mx); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_SPINBOX: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_spinbox(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_LED:     { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_led(p)); return BPVM_OK; }
 #endif /* BPVM_GUI */
 
     case BUILTIN_PARSE_INT: {

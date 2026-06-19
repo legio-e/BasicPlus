@@ -1,0 +1,36 @@
+// GuiLedSpin.bp — H6 tanda 3: spinbox + led.
+//
+// spinbox: entero en rango con +/- (como Slider); el cambio dispara onChange.
+// led:     indicador on/off (solo salida); on()/off() o `value` 0/1.
+// Verificable headless por dumpTree (cada uno sale con `val=N`).
+module GuiLedSpin
+  import Gui
+
+  class MySpin extends Gui.Spinbox
+    public function MySpin(parent: Gui.Component)
+      super(parent)
+    end MySpin
+
+    public function onChange()
+      print "[spinbox] cambió"
+    end onChange
+  end MySpin
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var sp: MySpin := MySpin(scr)
+    sp.setRange(0, 50)
+    sp.value := 30
+
+    var ld: Gui.Led := Gui.Led(scr)
+    ld.on()
+
+    print "== widgets =="
+    print Gui.__guiDumpTree()
+
+    Gui.__guiChange(sp)          // simula el cambio del spinbox
+    Gui.run()
+  end Main
+
+end GuiLedSpin

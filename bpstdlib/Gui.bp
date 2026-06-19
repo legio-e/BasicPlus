@@ -27,6 +27,8 @@ module Gui
   public intrinsic function __guiCreateSwitch(parent: integer): integer
   public intrinsic function __guiCreateSlider(parent: integer): integer
   public intrinsic function __guiCreateBar(parent: integer): integer
+  public intrinsic function __guiCreateSpinbox(parent: integer): integer
+  public intrinsic function __guiCreateLed(parent: integer): integer
   public intrinsic function __guiSetValue(handle: integer, v: integer)
   public intrinsic function __guiGetValue(handle: integer): integer
   public intrinsic function __guiSetRange(handle: integer, mn: integer, mx: integer)
@@ -323,6 +325,52 @@ module Gui
       endset
     endprop
   end Bar
+
+  // ---- Spinbox — campo numérico con +/- (entero en rango). Como Slider pero
+  //      con teclado/botones; el cambio dispara onChange; `value` + setRange. ----
+  public class Spinbox extends Component
+    public function Spinbox(parent: Component)
+      this.lvglId := __guiCreateSpinbox(parent.lvglId)
+      __guiBindClick(this.lvglId, this)
+    end Spinbox
+
+    public function setRange(mn: integer, mx: integer)
+      __guiSetRange(this.lvglId, mn, mx)
+    end setRange
+
+    public property value: integer
+      get
+        return __guiGetValue(this.lvglId)
+      endget
+      set(v)
+        __guiSetValue(this.lvglId, v)
+      endset
+    endprop
+  end Spinbox
+
+  // ---- Led — indicador luminoso (encendido/apagado). Solo salida: no interactúa
+  //      (sin onChange ni bind). `value` 0/1 (off/on); on()/off() de conveniencia. ----
+  public class Led extends Component
+    public function Led(parent: Component)
+      this.lvglId := __guiCreateLed(parent.lvglId)
+    end Led
+
+    public function on()
+      __guiSetValue(this.lvglId, 1)
+    end on
+    public function off()
+      __guiSetValue(this.lvglId, 0)
+    end off
+
+    public property value: integer
+      get
+        return __guiGetValue(this.lvglId)
+      endget
+      set(v)
+        __guiSetValue(this.lvglId, v)
+      endset
+    endprop
+  end Led
 
   // ---- Dispatch del upcall: la VM llama aquí (por NOMBRE, resolveGlobal) al
   //      pulsar/cambiar un widget. self.onClick()/onChange() son llamadas
