@@ -1,0 +1,35 @@
+// GuiCheckDemo.bp — H6 widget #1: checkbox + evento onChange.
+//
+// Subclasa Gui.Checkbox y reescribe onChange (lo dispara el toggle, real o
+// sintético vía __guiChange). El estado se lee/escribe con la propiedad
+// `checked`. Verificable headless por dumpTree (el checkbox sale con `val=N`).
+module GuiCheckDemo
+  import Gui
+
+  class MyCheck extends Gui.Checkbox
+    public function MyCheck(parent: Gui.Component, text: string)
+      super(parent, text)
+    end MyCheck
+
+    public function onChange()
+      print "[onChange] toggled"
+    end onChange
+  end MyCheck
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var cb: MyCheck := MyCheck(scr, "Activar")
+    cb.checked := true
+
+    print "== antes =="
+    print Gui.__guiDumpTree()
+
+    Gui.__guiChange(cb)          // simula un toggle (verificable headless)
+    Gui.run()                    // bombea: dispatch onChange
+
+    print "== despues =="
+    print Gui.__guiDumpTree()
+  end Main
+
+end GuiCheckDemo

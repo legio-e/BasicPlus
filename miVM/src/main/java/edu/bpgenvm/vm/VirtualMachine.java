@@ -3357,6 +3357,11 @@ public class VirtualMachine {
             case GUI_SET_SCROLL_DIR: { int d = popTc(tc); int hnd = popTc(tc); gui.setScrollDir(hnd, d); pushTc(tc, 0); break; }
             case GUI_GET_SCROLL_DIR: { int hnd = popTc(tc); pushTc(tc, gui.getScrollDir(hnd)); break; }
             case GUI_REFRESH: { int hnd = popTc(tc); gui.refresh(hnd); pushTc(tc, 0); break; }
+            // H6 widgets — checkbox.
+            case GUI_CREATE_CHECKBOX: { int p = popTc(tc); pushTc(tc, gui.createCheckbox(p)); break; }
+            case GUI_SET_CHECKED: { int v = popTc(tc); int hnd = popTc(tc); gui.setChecked(hnd, v != 0); pushTc(tc, 0); break; }
+            case GUI_GET_CHECKED: { int hnd = popTc(tc); pushTc(tc, gui.getChecked(hnd) ? 1 : 0); break; }
+            case GUI_CHANGE: { int obj = popTc(tc); gui.injectChange(obj); pushTc(tc, 0); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));
@@ -4761,22 +4766,24 @@ public class VirtualMachine {
         int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
         ThreadStatus savedStatus = tc.status;
         boolean savedYield = tc.yieldRequested;
-        // Frame de __guiDispatch(self): [self, savedPC=0(centinela), savedBP, savedCS],
-        // con bp tras ellos (convención de CALL/INVOKE_VIRTUAL).
+        // Frame del dispatcher(self): [self, savedPC=0(centinela), savedBP, savedCS],
+        // con bp tras ellos (convención de CALL/INVOKE_VIRTUAL). Según `kind`,
+        // dispPc/dispCs apuntan a __guiDispatch (click→onClick) o a
+        // __guiDispatchChange (change→onChange).
         writeInt32(base,      objptr);     // arg: self (objptr)
         writeInt32(base + 4,  0);          // saved PC = 0 → mem[0] = THREAD_EXIT
         writeInt32(base + 8,  savedBp);    // saved BP (valor sano; se restaura abajo)
         writeInt32(base + 12, savedCs);    // saved CS
         tc.bp = base + 16;
         tc.sp = base + 16;
-        tc.pc = guiDispatchPc;
-        tc.cs = guiDispatchCs;
+        tc.pc = dispPc;
+        tc.cs = dispCs;
         tc.yieldRequested = false;
         try {
-            runOnContext(tc);   // corre __guiDispatch → self.onClick() hasta el centinela
+            runOnContext(tc);   // corre el dispatcher → self.onClick()/onChange() hasta el centinela
         } catch (Throwable t) {
             // Un handler que lanza no debe tumbar el lazo GUI: lo reportamos.
-            System.err.println("[gui onClick] " + t);
+            System.err.println("[gui dispatch] " + t);
         } finally {
             tc.sp = base;            // descarta el frame de onClick
             tc.bp = savedBp;

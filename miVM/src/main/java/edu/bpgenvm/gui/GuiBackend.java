@@ -43,6 +43,9 @@ public final class GuiBackend {
         boolean posSet = false;     // true → x,y mandan; false → align manda
         int align = TOP_LEFT, dx = 0, dy = 0;
         int scroll = 0;             // ScrollDir: 0=NONE 1=HOR 2=VER 3=BOTH (default NONE)
+        boolean hasValue = false;   // true en value-widgets (checkbox, slider, ...)
+        boolean suppressEvents = false;  // setChecked/setValue programático: no emitir onChange (paridad LVGL)
+        int value = 0;              // valor actual (checkbox: 0/1)
         String text = "";
         Node(int handle, String type, JComponent comp, int parent) {
             this.handle = handle; this.type = type; this.comp = comp; this.parent = parent;
@@ -82,6 +85,11 @@ public final class GuiBackend {
     public int createObj(int parent)    { return create("panel",  new JPanel(null), parent); }
     public int createLabel(int parent)  { return create("label",  new JLabel(),     parent); }
     public int createButton(int parent) { return create("button", new JButton(),    parent); }
+    public int createCheckbox(int parent) {
+        int h = create("checkbox", new JCheckBox(), parent);
+        Node n = nodes.get(h); if (n != null) n.hasValue = true;
+        return h;
+    }
 
     private int create(String type, JComponent comp, int parent) {
         int h = nextHandle++;
@@ -102,7 +110,7 @@ public final class GuiBackend {
         Node n = nodes.get(handle); if (n == null) return;
         n.text = s;
         if (n.comp instanceof JLabel)  ((JLabel)  n.comp).setText(s);
-        else if (n.comp instanceof JButton) ((JButton) n.comp).setText(s);
+        else if (n.comp instanceof AbstractButton) ((AbstractButton) n.comp).setText(s); // JButton + JCheckBox
         relayout(n);
     }
     // Geometría — backend = la verdad. x/y explícitos (posSet) o vía align.
@@ -140,6 +148,23 @@ public final class GuiBackend {
     public void refresh(int handle) {
         // Invalidar → repintar (espejo de lv_obj_invalidate). Solo render.
         Node n = nodes.get(handle); if (n != null) n.comp.repaint();
+    }
+    // Value-widgets (checkbox por ahora): el estado vive en n.value (modelo = verdad).
+    public void setChecked(int handle, boolean v) {
+        Node n = nodes.get(handle); if (n == null) return;
+        n.value = v ? 1 : 0;
+        // setSelected dispara el ItemListener síncronamente; lo silenciamos para
+        // que el cambio PROGRAMÁTICO no emita onChange (LVGL tampoco lo hace —
+        // solo la interacción del usuario). El modelo (n.value) ya está fijado.
+        n.suppressEvents = true;
+        try {
+            if (n.comp instanceof AbstractButton) ((AbstractButton) n.comp).setSelected(v);
+        } finally {
+            n.suppressEvents = false;
+        }
+    }
+    public boolean getChecked(int handle) {
+        Node n = nodes.get(handle); return n != null && n.value != 0;
     }
     public void clean(int handle) {
         Node n = nodes.get(handle); if (n == null) return;
@@ -190,7 +215,13 @@ public final class GuiBackend {
     public void bindClick(int handle, int objptr) {
         Node n = nodes.get(handle);
         if (n == null) return;
-        if (n.comp instanceof JButton) {
+        if (n.comp instanceof JCheckBox) {
+            // Value-widget: el toggle es CHANGE (no click). Actualiza el modelo + encola.
+            ((JCheckBox) n.comp).addItemListener(e -> {
+                n.value = ((JCheckBox) n.comp).isSelected() ? 1 : 0;
+                if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
+            });
+        } else if (n.comp instanceof JButton) {
             ((JButton) n.comp).addActionListener(e -> events.offer(new int[]{objptr, KIND_CLICK}));
         } else {
             n.comp.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -202,6 +233,8 @@ public final class GuiBackend {
     /** Inyecta un clic sintetico sobre el objeto BP `objptr` (diagnostico /
      *  pruebas; verificable headless). */
     public void injectClick(int objptr) { events.offer(new int[]{objptr, KIND_CLICK}); }
+    /** Inyecta un cambio de valor sintético (diagnóstico headless). */
+    public void injectChange(int objptr) { events.offer(new int[]{objptr, KIND_CHANGE}); }
 
     // ---- Lazo de eventos: la ventana se muestra aquí; el BOMBEO lo hace la VM
     //      (que es quien sabe ejecutar BP) sacando eventos con takeEvent(). ----
@@ -260,6 +293,7 @@ public final class GuiBackend {
         if (n.posSet) sb.append(" pos=").append(n.x).append(",").append(n.y);
         else sb.append(" align=").append(n.align).append(" +").append(n.dx).append(",").append(n.dy);
         if (n.scroll != 0) sb.append(" scroll=").append(n.scroll);
+        if (n.hasValue) sb.append(" val=").append(n.value);
         sb.append("]\n");
         for (int c : n.children) dump(sb, c, depth + 1);
     }

@@ -184,7 +184,13 @@ enum {
     BUILTIN_GUI_GET_HEIGHT     = 158,
     BUILTIN_GUI_SET_SCROLL_DIR = 159,
     BUILTIN_GUI_GET_SCROLL_DIR = 160,
-    BUILTIN_GUI_REFRESH        = 161
+    BUILTIN_GUI_REFRESH        = 161,
+    /* H6 — checkbox (1er value-widget): create + checked + el inyector __guiChange
+     * que cierra el camino onChange (kind=CHANGE). Ids = ordinal del enum Java. */
+    BUILTIN_GUI_CREATE_CHECKBOX = 162,
+    BUILTIN_GUI_SET_CHECKED     = 163,
+    BUILTIN_GUI_GET_CHECKED     = 164,
+    BUILTIN_GUI_CHANGE          = 165
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -412,24 +418,24 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_DELETE:      { int h = pop_i32(vm, tc); bpvm_gui_delete(h); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SCREEN_LOAD: { pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }   /* una sola pantalla por ahora */
     case BUILTIN_GUI_RUN: {
-        /* Lazo de eventos. Resuelve por NOMBRE la función BP Gui.__guiDispatch y
-         * dispara onClick por el upcall (simétrico a invokeGuiDispatch de miVM).
-         * Con LVGL: bombea la ventana SDL hasta cerrarla, drenando clics reales +
-         * sintéticos. Sin LVGL (modelo-only/arnés): drena los inyectados y vuelve. */
-        uint32_t dispatch = 0;
+        /* Lazo de eventos. Resuelve por NOMBRE los dos dispatchers BP:
+         * Gui.__guiDispatch (click→onClick) y Gui.__guiDispatchChange (change→
+         * onChange). Cada evento drenado lleva su `kind` y elige el dispatcher
+         * (simétrico a invokeGuiDispatch de miVM). Con LVGL: bombea la ventana SDL
+         * hasta cerrarla, drenando eventos reales + sintéticos. Sin LVGL
+         * (modelo-only/arnés): drena los inyectados y vuelve. */
+        uint32_t disp_click = 0, disp_change = 0;
         for (int i = 0; i < vm->symbol_count; i++) {
-            if (strcmp(vm->symbols[i].name, "Gui.__guiDispatch") == 0) {
-                dispatch = vm->symbols[i].abs_addr; break;
-            }
+            if      (strcmp(vm->symbols[i].name, "Gui.__guiDispatch")       == 0) disp_click  = vm->symbols[i].abs_addr;
+            else if (strcmp(vm->symbols[i].name, "Gui.__guiDispatchChange") == 0) disp_change = vm->symbols[i].abs_addr;
         }
 #ifdef BPVM_LVGL
-        /* Ventana real: bombea LVGL+SDL hasta que el usuario la cierra. Cada vuelta
-         * drena los clics encolados (sintéticos + reales del cb de LVGL, mismo hilo)
-         * y dispara onClick por el upcall, antes de renderizar el siguiente frame. */
         for (;;) {
-            uint32_t objptr;
-            while ((objptr = bpvm_gui_next_click()) != 0)
-                if (dispatch) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, dispatch, &a, 1); }
+            uint32_t objptr; int kind;
+            while ((objptr = bpvm_gui_next_event(&kind)) != 0) {
+                uint32_t d = (kind == 1) ? disp_change : disp_click;
+                if (d) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, d, &a, 1); }
+            }
             /* P-run-stop (#257) — KILL durante Gui.run(): el scheduler no corre
              * quanta mientras este builtin bombea, así que poleamos el wire aquí
              * mismo (el MISMO poll_cb que el scheduler usa entre quanta). Al romper
@@ -442,10 +448,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             bpvm_gui_lvgl_pump();
         }
 #else
-        /* Modelo-only (headless): drena los clics inyectados y vuelve (paridad). */
-        uint32_t objptr;
-        while ((objptr = bpvm_gui_next_click()) != 0)
-            if (dispatch) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, dispatch, &a, 1); }
+        /* Modelo-only (headless): drena los eventos inyectados y vuelve (paridad). */
+        uint32_t objptr; int kind;
+        while ((objptr = bpvm_gui_next_event(&kind)) != 0) {
+            uint32_t d = (kind == 1) ? disp_change : disp_click;
+            if (d) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, d, &a, 1); }
+        }
 #endif
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -481,6 +489,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_SET_SCROLL_DIR: { int d = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_scroll_dir(h, d); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_GET_SCROLL_DIR: { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_scroll_dir(h)); return BPVM_OK; }
     case BUILTIN_GUI_REFRESH: { int h = pop_i32(vm, tc); bpvm_gui_refresh(h); push_i32(vm, tc, 0); return BPVM_OK; }
+    /* H6 — checkbox (1er value-widget). set_checked es programático (no emite
+     * onChange); __guiChange inyecta un CHANGE sintético (= toggle del usuario). */
+    case BUILTIN_GUI_CREATE_CHECKBOX: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_checkbox(p)); return BPVM_OK; }
+    case BUILTIN_GUI_SET_CHECKED:     { int v = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_checked(h, v); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_GET_CHECKED:     { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_checked(h)); return BPVM_OK; }
+    case BUILTIN_GUI_CHANGE:          { uint32_t obj = (uint32_t) pop_i32(vm, tc); bpvm_gui_inject_change(obj); push_i32(vm, tc, 0); return BPVM_OK; }
 #endif /* BPVM_GUI */
 
     case BUILTIN_PARSE_INT: {

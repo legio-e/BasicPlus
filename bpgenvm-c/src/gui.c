@@ -38,6 +38,8 @@ typedef struct {
     int         pos_set;    /* 1 → x,y mandan; 0 → align manda */
     int         align, dx, dy;
     int         scroll;     /* ScrollDir: 0=NONE 1=HOR 2=VER 3=BOTH (default NONE) */
+    int         has_value;  /* 1 en value-widgets (checkbox, slider, ...) */
+    int         value;      /* estado del value-widget (checkbox: 0/1) — modelo = verdad */
     char*       text;       /* malloc; NULL/"" = sin texto */
     uint32_t    objptr;     /* objeto BP dueño (bind_click), 0 = ninguno */
 #ifdef BPVM_LVGL
@@ -50,10 +52,12 @@ static int      g_node_count = 0;
 static int      g_screen = 0;
 static int      g_next_handle = 1;
 
-/* Cola circular de clics (objptrs): la alimentan __guiClick (sintético) y, bajo
- * LVGL, el callback de clic real; la drena el bombeo de GUI_RUN. */
-static uint32_t g_clicks[GUI_MAX_NODES];
-static int      g_click_head = 0, g_click_tail = 0;
+/* Cola circular de eventos {objptr, kind}: la alimentan __guiClick/__guiChange
+ * (sintéticos) y, bajo LVGL, los callbacks reales; la drena el bombeo de GUI_RUN.
+ * kind: 0=CLICK 1=CHANGE (paridad con GuiBackend.KIND_* de miVM). */
+static uint32_t g_ev_obj[GUI_MAX_NODES];
+static int      g_ev_kind[GUI_MAX_NODES];
+static int      g_ev_head = 0, g_ev_tail = 0;
 
 static gui_node* node_for(int handle) {
     if (handle <= 0) return NULL;
@@ -68,6 +72,7 @@ static int create_node(const char* type, int parent) {
     n->used = 1; n->handle = g_next_handle++; n->type = type; n->parent = parent;
     n->w = -1; n->h = -1; n->x = 0; n->y = 0; n->pos_set = 0;
     n->align = 0; n->dx = 0; n->dy = 0; n->scroll = 0;
+    n->has_value = 0; n->value = 0;
     n->text = NULL; n->objptr = 0;
 #ifdef BPVM_LVGL
     n->lv = NULL;
@@ -100,6 +105,21 @@ static void lvgl_ensure_init(void) {
 static void lvgl_click_cb(lv_event_t* e) {
     uint32_t objptr = (uint32_t) (intptr_t) lv_event_get_user_data(e);
     bpvm_gui_inject_click(objptr);
+}
+
+/* Callback de cambio de valor (checkbox/slider/...): refleja el estado del
+ * widget en el modelo (n->value) y encola un CHANGE. Solo la interacción del
+ * usuario lo dispara; los cambios programáticos (lv_obj_add_state desde
+ * set_checked) NO emiten VALUE_CHANGED en LVGL — igual que la supresión de
+ * miVM, así onChange se comporta idéntico en las dos VMs. */
+static void lvgl_change_cb(lv_event_t* e) {
+    uint32_t objptr = (uint32_t) (intptr_t) lv_event_get_user_data(e);
+    for (int i = 0; i < g_node_count; i++)
+        if (g_nodes[i].used && g_nodes[i].objptr == objptr && g_nodes[i].lv) {
+            g_nodes[i].value = lv_obj_has_state(g_nodes[i].lv, LV_STATE_CHECKED) ? 1 : 0;
+            break;
+        }
+    bpvm_gui_inject_change(objptr);
 }
 
 static lv_obj_t* parent_lv(int parent) {
@@ -149,13 +169,22 @@ int bpvm_gui_create_button(int parent) {
 #endif
     return h;
 }
+int bpvm_gui_create_checkbox(int parent) {
+    int h = create_node("checkbox", parent);
+    gui_node* n = node_for(h); if (n) n->has_value = 1;
+#ifdef BPVM_LVGL
+    if (n) n->lv = lv_checkbox_create(parent_lv(parent));
+#endif
+    return h;
+}
 
 void bpvm_gui_set_text(int handle, const char* s) {
     gui_node* n = node_for(handle); if (!n) return;
     free(n->text); n->text = NULL;
     if (s) { size_t L = strlen(s); n->text = (char*) malloc(L + 1); if (n->text) memcpy(n->text, s, L + 1); }
 #ifdef BPVM_LVGL
-    if (n->lv && strcmp(n->type, "label") == 0) lv_label_set_text(n->lv, s ? s : "");
+    if (n->lv && strcmp(n->type, "label") == 0)    lv_label_set_text(n->lv, s ? s : "");
+    if (n->lv && strcmp(n->type, "checkbox") == 0) lv_checkbox_set_text(n->lv, s ? s : "");
 #endif
 }
 void bpvm_gui_set_width(int handle, int w) {
@@ -252,6 +281,23 @@ void bpvm_gui_refresh(int handle) {
 #endif
 }
 
+/* H6 value-widgets (checkbox por ahora): el estado vive en n->value (modelo =
+ * verdad). El set programático NO emite onChange (LVGL no dispara VALUE_CHANGED
+ * en lv_obj_add_state) — paridad con la supresión de miVM. */
+void bpvm_gui_set_checked(int handle, int v) {
+    gui_node* n = node_for(handle); if (!n) return;
+    n->value = v ? 1 : 0;
+#ifdef BPVM_LVGL
+    if (n->lv) {
+        if (v) lv_obj_add_state(n->lv, LV_STATE_CHECKED);
+        else   lv_obj_remove_state(n->lv, LV_STATE_CHECKED);
+    }
+#endif
+}
+int bpvm_gui_get_checked(int handle) {
+    gui_node* n = node_for(handle); return n ? (n->value != 0) : 0;
+}
+
 /* Color/fuente: NO afectan al dump (render-only) → no-op en modelo-only; bajo
  * LVGL aplican estilo al lv_obj. */
 void bpvm_gui_set_bg_color(int handle, uint32_t rgb) {
@@ -282,8 +328,12 @@ void bpvm_gui_bind_click(int handle, uint32_t objptr) {
     gui_node* n = node_for(handle); if (!n) return;
     n->objptr = objptr;
 #ifdef BPVM_LVGL
-    if (n->lv)
-        lv_obj_add_event_cb(n->lv, lvgl_click_cb, LV_EVENT_CLICKED, (void*) (intptr_t) objptr);
+    if (n->lv) {
+        if (n->has_value)   /* value-widget: el toggle del usuario es CHANGE, no click */
+            lv_obj_add_event_cb(n->lv, lvgl_change_cb, LV_EVENT_VALUE_CHANGED, (void*) (intptr_t) objptr);
+        else
+            lv_obj_add_event_cb(n->lv, lvgl_click_cb, LV_EVENT_CLICKED, (void*) (intptr_t) objptr);
+    }
 #endif
 }
 void bpvm_gui_clean(int handle) {
@@ -301,16 +351,19 @@ void bpvm_gui_delete(int handle) {
 #endif
 }
 
-/* ---- Cola de clics ---- */
-void bpvm_gui_inject_click(uint32_t objptr) {
-    int nt = (g_click_tail + 1) % GUI_MAX_NODES;
-    if (nt == g_click_head) return;
-    g_clicks[g_click_tail] = objptr; g_click_tail = nt;
+/* ---- Cola de eventos {objptr, kind} ---- */
+static void ev_push(uint32_t objptr, int kind) {
+    int nt = (g_ev_tail + 1) % GUI_MAX_NODES;
+    if (nt == g_ev_head) return;          /* cola llena: descarta (como offer() de miVM) */
+    g_ev_obj[g_ev_tail] = objptr; g_ev_kind[g_ev_tail] = kind; g_ev_tail = nt;
 }
-uint32_t bpvm_gui_next_click(void) {
-    if (g_click_head == g_click_tail) return 0;
-    uint32_t v = g_clicks[g_click_head];
-    g_click_head = (g_click_head + 1) % GUI_MAX_NODES;
+void bpvm_gui_inject_click(uint32_t objptr)  { ev_push(objptr, 0); }
+void bpvm_gui_inject_change(uint32_t objptr) { ev_push(objptr, 1); }
+uint32_t bpvm_gui_next_event(int* kind_out) {
+    if (g_ev_head == g_ev_tail) { if (kind_out) *kind_out = 0; return 0; }
+    uint32_t v = g_ev_obj[g_ev_head];
+    if (kind_out) *kind_out = g_ev_kind[g_ev_head];
+    g_ev_head = (g_ev_head + 1) % GUI_MAX_NODES;
     return v;
 }
 
@@ -340,6 +393,10 @@ static void dump_node(char** buf, size_t* len, size_t* cap, int handle, int dept
     if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
     if (n->scroll != 0) {
         k = snprintf(tmp, sizeof(tmp), " scroll=%d", n->scroll);
+        if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
+    }
+    if (n->has_value) {
+        k = snprintf(tmp, sizeof(tmp), " val=%d", n->value);
         if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
     }
     buf_append(buf, len, cap, "]\n", 2);

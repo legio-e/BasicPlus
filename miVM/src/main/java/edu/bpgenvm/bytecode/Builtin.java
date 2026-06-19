@@ -333,7 +333,13 @@ public enum Builtin {
     GUI_GET_HEIGHT("__guiGetHeight"),        // (id) → h
     GUI_SET_SCROLL_DIR("__guiSetScrollDir"), // (id, dir) → void
     GUI_GET_SCROLL_DIR("__guiGetScrollDir"), // (id) → dir
-    GUI_REFRESH("__guiRefresh");             // (id) → void
+    GUI_REFRESH("__guiRefresh"),             // (id) → void
+
+    // H6 widgets — checkbox (1er value-widget): create + checked + change.
+    GUI_CREATE_CHECKBOX("__guiCreateCheckbox"), // (parent) → id
+    GUI_SET_CHECKED("__guiSetChecked"),         // (id, bool) → void
+    GUI_GET_CHECKED("__guiGetChecked"),         // (id) → bool
+    GUI_CHANGE("__guiChange");                  // (id) → void; cambio sintético
 
     public final String bpName;
     public final int id;

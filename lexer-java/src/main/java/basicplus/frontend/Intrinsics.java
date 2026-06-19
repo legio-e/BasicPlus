@@ -229,5 +229,10 @@ public final class Intrinsics {
         register("Gui.__guiSetScrollDir", w -> emitBuiltin(w, Builtin.GUI_SET_SCROLL_DIR));
         register("Gui.__guiGetScrollDir", w -> emitBuiltin(w, Builtin.GUI_GET_SCROLL_DIR));
         register("Gui.__guiRefresh",      w -> emitBuiltin(w, Builtin.GUI_REFRESH));
+        // H6 widgets — checkbox.
+        register("Gui.__guiCreateCheckbox", w -> emitBuiltin(w, Builtin.GUI_CREATE_CHECKBOX));
+        register("Gui.__guiSetChecked",     w -> emitBuiltin(w, Builtin.GUI_SET_CHECKED));
+        register("Gui.__guiGetChecked",     w -> emitBuiltin(w, Builtin.GUI_GET_CHECKED));
+        register("Gui.__guiChange",         w -> emitBuiltin(w, Builtin.GUI_CHANGE));
     }
 }

@@ -19,7 +19,10 @@ module Gui
   public intrinsic function __guiCreateObj(parent: integer): integer
   public intrinsic function __guiCreateLabel(parent: integer): integer
   public intrinsic function __guiCreateButton(parent: integer): integer
+  public intrinsic function __guiCreateCheckbox(parent: integer): integer
   public intrinsic function __guiSetText(handle: integer, t: string)
+  public intrinsic function __guiSetChecked(handle: integer, v: boolean)
+  public intrinsic function __guiGetChecked(handle: integer): boolean
   // Geometría: x/y/width/height — backend = verdad (get/set → intrínsecos).
   public intrinsic function __guiSetX(handle: integer, x: integer)
   public intrinsic function __guiGetX(handle: integer): integer
@@ -176,6 +179,7 @@ module Gui
   //      tipo de evento. __guiClick inyecta un clic sintético (diagnóstico). ----
   public intrinsic function __guiBindClick(handle: integer, self: Component)
   public intrinsic function __guiClick(w: Component)
+  public intrinsic function __guiChange(w: Component)   // cambio de valor sintético (diagnóstico)
 
   // ---- Screen — pantalla raíz (la entrega el backend ya montada). ----
   public class Screen extends Component
@@ -226,6 +230,29 @@ module Gui
       var lbl: Label := Label(this, text)
     end Button
   end Button
+
+  // ---- Checkbox — casilla on/off con etiqueta. El toggle dispara onChange
+  //      (override-able); el estado se lee/escribe con la propiedad `checked`. ----
+  public class Checkbox extends Component
+    public function Checkbox(parent: Component, text: string)
+      this.lvglId := __guiCreateCheckbox(parent.lvglId)
+      __guiSetText(this.lvglId, text)
+      __guiBindClick(this.lvglId, this)
+    end Checkbox
+
+    public function setText(t: string)
+      __guiSetText(this.lvglId, t)
+    end setText
+
+    public property checked: boolean
+      get
+        return __guiGetChecked(this.lvglId)
+      endget
+      set(v)
+        __guiSetChecked(this.lvglId, v)
+      endset
+    endprop
+  end Checkbox
 
   // ---- Dispatch del upcall: la VM llama aquí (por NOMBRE, resolveGlobal) al
   //      pulsar/cambiar un widget. self.onClick()/onChange() son llamadas

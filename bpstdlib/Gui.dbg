@@ -2,47 +2,53 @@ dbg 3
 module Gui
 source C:\lenguajes\pm\bpstdlib\Gui.bp
 lines
-1446 50
-1593 87
-1624 90
-1649 95
-1680 98
-1705 103
-1736 106
-1761 111
-1792 114
-1817 121
-1848 124
-1873 130
-1888 131
-1913 134
-1928 135
-1953 138
-1968 139
-1983 140
-1998 141
-2023 145
-2054 149
-2081 154
-2103 158
-2125 161
-2187 187
-2209 183
-2221 184
-2295 194
-2313 195
-2393 208
-2418 212
-2445 216
-2470 202
-2488 203
-2503 204
-2589 224
-2607 225
-2622 226
-2744 236
-2763 240
-2782 245
+1446 53
+1593 90
+1624 93
+1649 98
+1680 101
+1705 106
+1736 109
+1761 114
+1792 117
+1817 124
+1848 127
+1873 133
+1888 134
+1913 137
+1928 138
+1953 141
+1968 142
+1983 143
+1998 144
+2023 148
+2054 152
+2081 157
+2103 161
+2125 164
+2187 191
+2209 187
+2221 188
+2295 198
+2313 199
+2393 212
+2418 216
+2445 220
+2470 206
+2488 207
+2503 208
+2589 228
+2607 229
+2622 230
+2722 249
+2753 252
+2778 244
+2803 238
+2821 239
+2836 240
+2944 263
+2963 267
+2982 272
 vars
 func Object.toString 0
 this -16 4 0 ?
@@ -241,11 +247,30 @@ func __cls_init_Button 2695
 this -24 4 0 ?
 parent -20 4 0 ref
 text -16 4 0 string
-func __guiDispatch 2741
+func Checkbox.getChecked 2719
+this -16 4 0 ?
+func Checkbox.setChecked 2744
+this -20 4 0 ?
+v 0 4 0 ?
+func Checkbox.setText 2775
+this -20 4 0 ?
+t -16 4 0 string
+func Checkbox.__init 2800
+this -24 4 0 ?
+parent -20 4 0 ref
+text -16 4 0 string
+func __cls_new_Checkbox 2858
+parent -20 4 0 ref
+text -16 4 0 string
+func __cls_init_Checkbox 2895
+this -24 4 0 ?
+parent -20 4 0 ref
+text -16 4 0 string
+func __guiDispatch 2941
 self -16 4 0 ref
-func __guiDispatchChange 2760
+func __guiDispatchChange 2960
 self -16 4 0 ref
-func __strconcat 2795
+func __strconcat 2995
 a -20 4 0 ?
 b -16 4 0 ?
 la 0 4 0 ?

@@ -22,6 +22,7 @@ int  bpvm_gui_screen_active(void);
 int  bpvm_gui_create_obj(int parent);
 int  bpvm_gui_create_label(int parent);
 int  bpvm_gui_create_button(int parent);
+int  bpvm_gui_create_checkbox(int parent);
 
 /* Configuración. Texto + geometría/anclaje afectan al dumpTree (modelo). Color y
  * fuente son render-only: no-op en el modelo (no tocan el dump) y, bajo BPVM_LVGL,
@@ -41,18 +42,23 @@ int  bpvm_gui_get_height(int handle);
 void bpvm_gui_set_scroll_dir(int handle, int dir);
 int  bpvm_gui_get_scroll_dir(int handle);
 void bpvm_gui_refresh(int handle);
+/* H6 value-widgets (checkbox): estado en el modelo (n->value = verdad). */
+void bpvm_gui_set_checked(int handle, int v);
+int  bpvm_gui_get_checked(int handle);
 void bpvm_gui_set_bg_color(int handle, uint32_t rgb);
 void bpvm_gui_set_text_color(int handle, uint32_t rgb);
 void bpvm_gui_set_font(int handle, int font_id);
 void bpvm_gui_clean(int handle);
 void bpvm_gui_delete(int handle);
 
-/* Eventos. bind asocia el objeto BP dueño del widget; inject encola un clic
- * sintético (diagnóstico / pruebas headless); next saca el siguiente objptr
- * (0 = cola vacía) — lo drena el bombeo de GUI_RUN. */
+/* Eventos {objptr, kind}. bind asocia el objeto BP dueño del widget; inject_click/
+ * inject_change encolan un evento sintético (diagnóstico / pruebas headless);
+ * next_event saca el siguiente {objptr, kind} (objptr 0 = cola vacía) y escribe
+ * kind en *kind_out (0=CLICK 1=CHANGE) — lo drena el bombeo de GUI_RUN. */
 void     bpvm_gui_bind_click(int handle, uint32_t objptr);
 void     bpvm_gui_inject_click(uint32_t objptr);
-uint32_t bpvm_gui_next_click(void);
+void     bpvm_gui_inject_change(uint32_t objptr);
+uint32_t bpvm_gui_next_event(int* kind_out);
 
 /* Vuelca el árbol de widgets a un buffer recién malloc'd (el caller hace free).
  * Devuelve la longitud en bytes (sin el '\0'). Byte-idéntico a miVM. */

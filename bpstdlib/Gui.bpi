@@ -8,6 +8,7 @@ func run():void public
 func __guiSetHeight(handle:integer,h:integer):void public intrinsic
 func __guiCreateLabel(parent:integer):integer public intrinsic
 func __guiGetHeight(handle:integer):integer public intrinsic
+func __guiChange(w:Component):void public intrinsic
 func __guiRun():void public intrinsic
 func __guiSetText(handle:integer,t:string):void public intrinsic
 func __guiGetY(handle:integer):integer public intrinsic
@@ -15,11 +16,14 @@ func __guiGetX(handle:integer):integer public intrinsic
 func __guiSetTextColor(handle:integer,rgb:integer):void public intrinsic
 func __guiSetX(handle:integer,x:integer):void public intrinsic
 func __guiSetBgColor(handle:integer,rgb:integer):void public intrinsic
+func __guiSetChecked(handle:integer,v:boolean):void public intrinsic
 func __guiSetY(handle:integer,y:integer):void public intrinsic
 func __guiDumpTree():string public intrinsic
+func __guiGetChecked(handle:integer):boolean public intrinsic
 func __guiGetWidth(handle:integer):integer public intrinsic
 func __guiRefresh(handle:integer):void public intrinsic
 func __guiCreateButton(parent:integer):integer public intrinsic
+func __guiCreateCheckbox(parent:integer):integer public intrinsic
 func __guiCreateObj(parent:integer):integer public intrinsic
 func __guiGetScrollDir(handle:integer):integer public intrinsic
 func __guiClean(handle:integer):void public intrinsic
@@ -45,6 +49,12 @@ end class
 class Button public extends Component
   layout 6 24 00000000 00000000
   ctor(parent:Component,text:string)
+end class
+class Checkbox public extends Component
+  layout 7 27 00000000 00000000
+  ctor(parent:Component,text:string)
+  prop checked:boolean public
+  method setText(t:string):void public
 end class
 class Component public
   layout 6 24 00000000 00000000
