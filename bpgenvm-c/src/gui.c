@@ -38,8 +38,9 @@ typedef struct {
     int         pos_set;    /* 1 → x,y mandan; 0 → align manda */
     int         align, dx, dy;
     int         scroll;     /* ScrollDir: 0=NONE 1=HOR 2=VER 3=BOTH (default NONE) */
-    int         has_value;  /* 1 en value-widgets (checkbox, slider, ...) */
-    int         value;      /* estado del value-widget (checkbox: 0/1) — modelo = verdad */
+    int         has_value;  /* 1 en value-widgets (checkbox, switch, slider, bar, ...) */
+    int         value;      /* estado del value-widget (checkbox/switch: 0/1; slider/bar: entero) */
+    int         rmin, rmax; /* rango de value-widgets enteros (clamp); default 0..100 */
     char*       text;       /* malloc; NULL/"" = sin texto */
     uint32_t    objptr;     /* objeto BP dueño (bind_click), 0 = ninguno */
 #ifdef BPVM_LVGL
@@ -72,7 +73,7 @@ static int create_node(const char* type, int parent) {
     n->used = 1; n->handle = g_next_handle++; n->type = type; n->parent = parent;
     n->w = -1; n->h = -1; n->x = 0; n->y = 0; n->pos_set = 0;
     n->align = 0; n->dx = 0; n->dy = 0; n->scroll = 0;
-    n->has_value = 0; n->value = 0;
+    n->has_value = 0; n->value = 0; n->rmin = 0; n->rmax = 100;
     n->text = NULL; n->objptr = 0;
 #ifdef BPVM_LVGL
     n->lv = NULL;
@@ -116,7 +117,10 @@ static void lvgl_change_cb(lv_event_t* e) {
     uint32_t objptr = (uint32_t) (intptr_t) lv_event_get_user_data(e);
     for (int i = 0; i < g_node_count; i++)
         if (g_nodes[i].used && g_nodes[i].objptr == objptr && g_nodes[i].lv) {
-            g_nodes[i].value = lv_obj_has_state(g_nodes[i].lv, LV_STATE_CHECKED) ? 1 : 0;
+            if (strcmp(g_nodes[i].type, "slider") == 0)
+                g_nodes[i].value = lv_slider_get_value(g_nodes[i].lv);
+            else  /* checkbox, switch: estado CHECKED (0/1) */
+                g_nodes[i].value = lv_obj_has_state(g_nodes[i].lv, LV_STATE_CHECKED) ? 1 : 0;
             break;
         }
     bpvm_gui_inject_change(objptr);
@@ -174,6 +178,30 @@ int bpvm_gui_create_checkbox(int parent) {
     gui_node* n = node_for(h); if (n) n->has_value = 1;
 #ifdef BPVM_LVGL
     if (n) n->lv = lv_checkbox_create(parent_lv(parent));
+#endif
+    return h;
+}
+int bpvm_gui_create_switch(int parent) {
+    int h = create_node("toggle", parent);
+    gui_node* n = node_for(h); if (n) n->has_value = 1;
+#ifdef BPVM_LVGL
+    if (n) n->lv = lv_switch_create(parent_lv(parent));
+#endif
+    return h;
+}
+int bpvm_gui_create_slider(int parent) {
+    int h = create_node("slider", parent);
+    gui_node* n = node_for(h); if (n) n->has_value = 1;
+#ifdef BPVM_LVGL
+    if (n) { n->lv = lv_slider_create(parent_lv(parent)); lv_slider_set_range(n->lv, n->rmin, n->rmax); }
+#endif
+    return h;
+}
+int bpvm_gui_create_bar(int parent) {
+    int h = create_node("bar", parent);
+    gui_node* n = node_for(h); if (n) n->has_value = 1;
+#ifdef BPVM_LVGL
+    if (n) { n->lv = lv_bar_create(parent_lv(parent)); lv_bar_set_range(n->lv, n->rmin, n->rmax); }
 #endif
     return h;
 }
@@ -296,6 +324,34 @@ void bpvm_gui_set_checked(int handle, int v) {
 }
 int bpvm_gui_get_checked(int handle) {
     gui_node* n = node_for(handle); return n ? (n->value != 0) : 0;
+}
+
+/* Value-widgets enteros (slider/bar): n->value clampado a [rmin,rmax] (igual en
+ * las 2 VMs → el dump coincide). set programático no emite onChange. */
+void bpvm_gui_set_value(int handle, int v) {
+    gui_node* n = node_for(handle); if (!n) return;
+    int cv = v < n->rmin ? n->rmin : (v > n->rmax ? n->rmax : v);
+    n->value = cv;
+#ifdef BPVM_LVGL
+    if (n->lv) {
+        if (strcmp(n->type, "slider") == 0)   lv_slider_set_value(n->lv, cv, LV_ANIM_OFF);
+        else if (strcmp(n->type, "bar") == 0) lv_bar_set_value(n->lv, cv, LV_ANIM_OFF);
+    }
+#endif
+}
+int bpvm_gui_get_value(int handle) {
+    gui_node* n = node_for(handle); return n ? n->value : 0;
+}
+void bpvm_gui_set_range(int handle, int mn, int mx) {
+    gui_node* n = node_for(handle); if (!n) return;
+    n->rmin = mn; n->rmax = mx;
+    if (n->value < mn) n->value = mn; else if (n->value > mx) n->value = mx;   /* re-clampa */
+#ifdef BPVM_LVGL
+    if (n->lv) {
+        if (strcmp(n->type, "slider") == 0) { lv_slider_set_range(n->lv, mn, mx); lv_slider_set_value(n->lv, n->value, LV_ANIM_OFF); }
+        else if (strcmp(n->type, "bar") == 0) { lv_bar_set_range(n->lv, mn, mx); lv_bar_set_value(n->lv, n->value, LV_ANIM_OFF); }
+    }
+#endif
 }
 
 /* Color/fuente: NO afectan al dump (render-only) → no-op en modelo-only; bajo

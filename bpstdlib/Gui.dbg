@@ -2,53 +2,66 @@ dbg 3
 module Gui
 source C:\lenguajes\pm\bpstdlib\Gui.bp
 lines
-1446 53
-1593 90
-1624 93
-1649 98
-1680 101
-1705 106
-1736 109
-1761 114
-1792 117
-1817 124
-1848 127
-1873 133
-1888 134
-1913 137
-1928 138
-1953 141
-1968 142
-1983 143
-1998 144
-2023 148
-2054 152
-2081 157
-2103 161
-2125 164
-2187 191
-2209 187
-2221 188
-2295 198
-2313 199
-2393 212
-2418 216
-2445 220
-2470 206
-2488 207
-2503 208
-2589 228
-2607 229
-2622 230
-2722 249
-2753 252
-2778 244
-2803 238
-2821 239
-2836 240
-2944 263
-2963 267
-2982 272
+1446 60
+1593 97
+1624 100
+1649 105
+1680 108
+1705 113
+1736 116
+1761 121
+1792 124
+1817 131
+1848 134
+1873 140
+1888 141
+1913 144
+1928 145
+1953 148
+1968 149
+1983 150
+1998 151
+2023 155
+2054 159
+2081 164
+2103 168
+2125 171
+2187 198
+2209 194
+2221 195
+2295 205
+2313 206
+2393 219
+2418 223
+2445 227
+2470 213
+2488 214
+2503 215
+2589 235
+2607 236
+2622 237
+2722 256
+2753 259
+2778 251
+2803 245
+2821 246
+2836 247
+2922 275
+2953 278
+2978 269
+2996 270
+3076 298
+3107 301
+3132 293
+3160 288
+3178 289
+3258 319
+3289 322
+3314 314
+3342 310
+3447 333
+3466 337
+3485 342
 vars
 func Object.toString 0
 this -16 4 0 ?
@@ -266,11 +279,58 @@ func __cls_init_Checkbox 2895
 this -24 4 0 ?
 parent -20 4 0 ref
 text -16 4 0 string
-func __guiDispatch 2941
+func Toggle.getChecked 2919
+this -16 4 0 ?
+func Toggle.setChecked 2944
+this -20 4 0 ?
+v 0 4 0 ?
+func Toggle.__init 2975
+this -20 4 0 ?
+parent -16 4 0 ref
+func __cls_new_Toggle 3018
+parent -16 4 0 ref
+func __cls_init_Toggle 3052
+this -20 4 0 ?
+parent -16 4 0 ref
+func Slider.getValue 3073
+this -16 4 0 ?
+func Slider.setValue 3098
+this -20 4 0 ?
+v 0 4 0 ?
+func Slider.setRange 3129
+this -24 4 0 ?
+mn -20 4 0 integer
+mx -16 4 0 integer
+func Slider.__init 3157
+this -20 4 0 ?
+parent -16 4 0 ref
+func __cls_new_Slider 3200
+parent -16 4 0 ref
+func __cls_init_Slider 3234
+this -20 4 0 ?
+parent -16 4 0 ref
+func Bar.getValue 3255
+this -16 4 0 ?
+func Bar.setValue 3280
+this -20 4 0 ?
+v 0 4 0 ?
+func Bar.setRange 3311
+this -24 4 0 ?
+mn -20 4 0 integer
+mx -16 4 0 integer
+func Bar.__init 3339
+this -20 4 0 ?
+parent -16 4 0 ref
+func __cls_new_Bar 3367
+parent -16 4 0 ref
+func __cls_init_Bar 3401
+this -20 4 0 ?
+parent -16 4 0 ref
+func __guiDispatch 3444
 self -16 4 0 ref
-func __guiDispatchChange 2960
+func __guiDispatchChange 3463
 self -16 4 0 ref
-func __strconcat 2995
+func __strconcat 3498
 a -20 4 0 ?
 b -16 4 0 ?
 la 0 4 0 ?

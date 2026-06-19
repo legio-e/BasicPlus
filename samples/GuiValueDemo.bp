@@ -1,0 +1,41 @@
+// GuiValueDemo.bp — H6 tanda 2: switch + slider + bar (value-widgets).
+//
+// switch: booleano (como checkbox sin etiqueta), estado por `checked`.
+// slider: entero en rango, dispara onChange (override-able); el backend clampa.
+// bar:    barra de progreso, solo lectura (sin onChange).
+// Verificable headless por dumpTree (cada uno sale con `val=N`).
+module GuiValueDemo
+  import Gui
+
+  class MySlider extends Gui.Slider
+    public function MySlider(parent: Gui.Component)
+      super(parent)
+    end MySlider
+
+    public function onChange()
+      print "[slider] cambió"
+    end onChange
+  end MySlider
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var sw: Gui.Toggle := Gui.Toggle(scr)
+    sw.checked := true
+
+    var sl: MySlider := MySlider(scr)
+    sl.setRange(0, 200)
+    sl.value := 150
+
+    var pb: Gui.Bar := Gui.Bar(scr)
+    pb.setRange(0, 10)
+    pb.value := 7
+
+    print "== widgets =="
+    print Gui.__guiDumpTree()
+
+    Gui.__guiChange(sl)          // simula el arrastre del slider (verificable headless)
+    Gui.run()                    // bombea: dispatch onChange
+  end Main
+
+end GuiValueDemo

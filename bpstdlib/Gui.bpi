@@ -7,38 +7,39 @@ func __guiDispatchChange(self:Component):void public
 func run():void public
 func __guiSetHeight(handle:integer,h:integer):void public intrinsic
 func __guiCreateLabel(parent:integer):integer public intrinsic
+func __guiCreateSlider(parent:integer):integer public intrinsic
+func __guiGetY(handle:integer):integer public intrinsic
+func __guiGetX(handle:integer):integer public intrinsic
+func __guiSetX(handle:integer,x:integer):void public intrinsic
+func __guiSetChecked(handle:integer,v:boolean):void public intrinsic
+func __guiSetY(handle:integer,y:integer):void public intrinsic
+func __guiDumpTree():string public intrinsic
+func __guiCreateButton(parent:integer):integer public intrinsic
+func __guiCreateCheckbox(parent:integer):integer public intrinsic
+func __guiClean(handle:integer):void public intrinsic
+func __guiDelete(handle:integer):void public intrinsic
+func __guiScreenActive():integer public intrinsic
+func __guiBindClick(handle:integer,self:Component):void public intrinsic
+func __guiSetScrollDir(handle:integer,dir:integer):void public intrinsic
+func __guiCreateSwitch(parent:integer):integer public intrinsic
+func __guiSetValue(handle:integer,v:integer):void public intrinsic
 func __guiGetHeight(handle:integer):integer public intrinsic
 func __guiChange(w:Component):void public intrinsic
 func __guiRun():void public intrinsic
 func __guiSetText(handle:integer,t:string):void public intrinsic
-func __guiGetY(handle:integer):integer public intrinsic
-func __guiGetX(handle:integer):integer public intrinsic
+func __guiSetRange(handle:integer,mn:integer,mx:integer):void public intrinsic
 func __guiSetTextColor(handle:integer,rgb:integer):void public intrinsic
-func __guiSetX(handle:integer,x:integer):void public intrinsic
 func __guiSetBgColor(handle:integer,rgb:integer):void public intrinsic
-func __guiSetChecked(handle:integer,v:boolean):void public intrinsic
-func __guiSetY(handle:integer,y:integer):void public intrinsic
-func __guiDumpTree():string public intrinsic
+func __guiGetValue(handle:integer):integer public intrinsic
 func __guiGetChecked(handle:integer):boolean public intrinsic
 func __guiGetWidth(handle:integer):integer public intrinsic
 func __guiRefresh(handle:integer):void public intrinsic
-func __guiCreateButton(parent:integer):integer public intrinsic
-func __guiCreateCheckbox(parent:integer):integer public intrinsic
 func __guiCreateObj(parent:integer):integer public intrinsic
 func __guiGetScrollDir(handle:integer):integer public intrinsic
-func __guiClean(handle:integer):void public intrinsic
 func __guiClick(w:Component):void public intrinsic
-func __guiDelete(handle:integer):void public intrinsic
-func __guiScreenActive():integer public intrinsic
 func __guiScreenLoad(handle:integer):void public intrinsic
-func __guiBindClick(handle:integer,self:Component):void public intrinsic
 func __guiDispatch(self:Component):void public
-func __guiSetScrollDir(handle:integer,dir:integer):void public intrinsic
-class Screen public extends Component
-  layout 6 25 00000000 00000000
-  ctor()
-  method load():void public
-end class
+func __guiCreateBar(parent:integer):integer public intrinsic
 class Label public extends Component
   layout 6 27 00000000 00000000
   ctor(parent:Component,text:string)
@@ -55,6 +56,45 @@ class Checkbox public extends Component
   ctor(parent:Component,text:string)
   prop checked:boolean public
   method setText(t:string):void public
+end class
+class Align public
+  layout 0 2 - -
+  staticconst TOP_LEFT:integer=0 public
+  staticconst CENTER:integer=4 public
+  staticconst RIGHT_MID:integer=5 public
+  staticconst TOP_MID:integer=1 public
+  staticconst BOTTOM_RIGHT:integer=8 public
+  staticconst LEFT_MID:integer=3 public
+  staticconst TOP_RIGHT:integer=2 public
+  staticconst BOTTOM_MID:integer=7 public
+  staticconst BOTTOM_LEFT:integer=6 public
+end class
+class Color public
+  layout 1 2 00000000 00000000
+  ctor(rgb:integer)
+end class
+class ScrollDir public
+  layout 0 2 - -
+  staticconst VER:integer=2 public
+  staticconst HOR:integer=1 public
+  staticconst NONE:integer=0 public
+  staticconst BOTH:integer=3 public
+end class
+class Slider public extends Component
+  layout 7 27 00000000 00000000
+  ctor(parent:Component)
+  prop value:integer public
+  method setRange(mn:integer,mx:integer):void public
+end class
+class Screen public extends Component
+  layout 6 25 00000000 00000000
+  ctor()
+  method load():void public
+end class
+class Toggle public extends Component
+  layout 7 26 00000000 00000000
+  ctor(parent:Component)
+  prop checked:boolean public
 end class
 class Component public
   layout 6 24 00000000 00000000
@@ -75,30 +115,13 @@ class Component public
   method onClick():void public
   method onChange():void public
 end class
-class Align public
-  layout 0 2 - -
-  staticconst TOP_LEFT:integer=0 public
-  staticconst CENTER:integer=4 public
-  staticconst RIGHT_MID:integer=5 public
-  staticconst TOP_MID:integer=1 public
-  staticconst BOTTOM_RIGHT:integer=8 public
-  staticconst LEFT_MID:integer=3 public
-  staticconst TOP_RIGHT:integer=2 public
-  staticconst BOTTOM_MID:integer=7 public
-  staticconst BOTTOM_LEFT:integer=6 public
-end class
-class Color public
-  layout 1 2 00000000 00000000
-  ctor(rgb:integer)
-end class
 class Panel public extends Component
   layout 6 24 00000000 00000000
   ctor(parent:Component)
 end class
-class ScrollDir public
-  layout 0 2 - -
-  staticconst VER:integer=2 public
-  staticconst HOR:integer=1 public
-  staticconst NONE:integer=0 public
-  staticconst BOTH:integer=3 public
+class Bar public extends Component
+  layout 7 27 00000000 00000000
+  ctor(parent:Component)
+  prop value:integer public
+  method setRange(mn:integer,mx:integer):void public
 end class

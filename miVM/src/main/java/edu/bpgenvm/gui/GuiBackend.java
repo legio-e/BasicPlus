@@ -43,9 +43,10 @@ public final class GuiBackend {
         boolean posSet = false;     // true → x,y mandan; false → align manda
         int align = TOP_LEFT, dx = 0, dy = 0;
         int scroll = 0;             // ScrollDir: 0=NONE 1=HOR 2=VER 3=BOTH (default NONE)
-        boolean hasValue = false;   // true en value-widgets (checkbox, slider, ...)
+        boolean hasValue = false;   // true en value-widgets (checkbox, switch, slider, bar, ...)
         boolean suppressEvents = false;  // setChecked/setValue programático: no emitir onChange (paridad LVGL)
-        int value = 0;              // valor actual (checkbox: 0/1)
+        int value = 0;              // valor actual (checkbox/switch: 0/1; slider/bar: entero)
+        int rmin = 0, rmax = 100;   // rango de value-widgets enteros (clamp); default LVGL/Swing 0..100
         String text = "";
         Node(int handle, String type, JComponent comp, int parent) {
             this.handle = handle; this.type = type; this.comp = comp; this.parent = parent;
@@ -87,6 +88,21 @@ public final class GuiBackend {
     public int createButton(int parent) { return create("button", new JButton(),    parent); }
     public int createCheckbox(int parent) {
         int h = create("checkbox", new JCheckBox(), parent);
+        Node n = nodes.get(h); if (n != null) n.hasValue = true;
+        return h;
+    }
+    public int createSwitch(int parent) {
+        int h = create("toggle", new JToggleButton(), parent);
+        Node n = nodes.get(h); if (n != null) n.hasValue = true;
+        return h;
+    }
+    public int createSlider(int parent) {
+        int h = create("slider", new JSlider(0, 100, 0), parent);
+        Node n = nodes.get(h); if (n != null) n.hasValue = true;
+        return h;
+    }
+    public int createBar(int parent) {
+        int h = create("bar", new JProgressBar(0, 100), parent);
         Node n = nodes.get(h); if (n != null) n.hasValue = true;
         return h;
     }
@@ -166,6 +182,38 @@ public final class GuiBackend {
     public boolean getChecked(int handle) {
         Node n = nodes.get(handle); return n != null && n.value != 0;
     }
+    // Value-widgets enteros (slider/bar): n.value clampado a [rmin,rmax] (igual en
+    // las 2 VMs → el dump coincide). El set programático no emite onChange.
+    public void setValue(int handle, int v) {
+        Node n = nodes.get(handle); if (n == null) return;
+        int cv = v < n.rmin ? n.rmin : (v > n.rmax ? n.rmax : v);
+        n.value = cv;
+        n.suppressEvents = true;
+        try {
+            if (n.comp instanceof JSlider)           ((JSlider) n.comp).setValue(cv);
+            else if (n.comp instanceof JProgressBar) ((JProgressBar) n.comp).setValue(cv);
+        } finally {
+            n.suppressEvents = false;
+        }
+    }
+    public int getValue(int handle) {
+        Node n = nodes.get(handle); return n != null ? n.value : 0;
+    }
+    public void setRange(int handle, int mn, int mx) {
+        Node n = nodes.get(handle); if (n == null) return;
+        n.rmin = mn; n.rmax = mx;
+        if (n.value < mn) n.value = mn; else if (n.value > mx) n.value = mx;   // re-clampa
+        n.suppressEvents = true;
+        try {
+            if (n.comp instanceof JSlider) {
+                JSlider s = (JSlider) n.comp; s.setMinimum(mn); s.setMaximum(mx); s.setValue(n.value);
+            } else if (n.comp instanceof JProgressBar) {
+                JProgressBar b = (JProgressBar) n.comp; b.setMinimum(mn); b.setMaximum(mx); b.setValue(n.value);
+            }
+        } finally {
+            n.suppressEvents = false;
+        }
+    }
     public void clean(int handle) {
         Node n = nodes.get(handle); if (n == null) return;
         if (n.comp instanceof Container) ((Container) n.comp).removeAll();
@@ -210,15 +258,23 @@ public final class GuiBackend {
 
     /** Engancha el listener de Swing al widget `handle`. El listener SOLO encola
      *  {objptr, kind} (no ejecuta BP; eso lo hace el worker en el lazo de
-     *  __guiRun). De momento solo clic (KIND_CLICK); los widgets de valor
-     *  añadirán KIND_CHANGE en su tanda. */
+     *  __guiRun). Value-widgets → KIND_CHANGE (toggle booleano o arrastre);
+     *  el resto → KIND_CLICK. El set PROGRAMÁTICO no emite (n.suppressEvents). */
     public void bindClick(int handle, int objptr) {
         Node n = nodes.get(handle);
         if (n == null) return;
-        if (n.comp instanceof JCheckBox) {
-            // Value-widget: el toggle es CHANGE (no click). Actualiza el modelo + encola.
-            ((JCheckBox) n.comp).addItemListener(e -> {
-                n.value = ((JCheckBox) n.comp).isSelected() ? 1 : 0;
+        if (n.hasValue && n.comp instanceof AbstractButton) {
+            // Toggle booleano (checkbox, switch): el cambio es CHANGE.
+            AbstractButton b = (AbstractButton) n.comp;
+            b.addItemListener(e -> {
+                n.value = b.isSelected() ? 1 : 0;
+                if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
+            });
+        } else if (n.hasValue && n.comp instanceof JSlider) {
+            // Slider: el arrastre es CHANGE. n.value = valor (ya clampado por el rango).
+            JSlider s = (JSlider) n.comp;
+            s.addChangeListener(e -> {
+                n.value = s.getValue();
                 if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
             });
         } else if (n.comp instanceof JButton) {

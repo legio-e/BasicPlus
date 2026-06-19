@@ -3362,6 +3362,13 @@ public class VirtualMachine {
             case GUI_SET_CHECKED: { int v = popTc(tc); int hnd = popTc(tc); gui.setChecked(hnd, v != 0); pushTc(tc, 0); break; }
             case GUI_GET_CHECKED: { int hnd = popTc(tc); pushTc(tc, gui.getChecked(hnd) ? 1 : 0); break; }
             case GUI_CHANGE: { int obj = popTc(tc); gui.injectChange(obj); pushTc(tc, 0); break; }
+            // H6 widgets — switch + slider + bar (value-widgets enteros).
+            case GUI_CREATE_SWITCH: { int p = popTc(tc); pushTc(tc, gui.createSwitch(p)); break; }
+            case GUI_CREATE_SLIDER: { int p = popTc(tc); pushTc(tc, gui.createSlider(p)); break; }
+            case GUI_CREATE_BAR:    { int p = popTc(tc); pushTc(tc, gui.createBar(p)); break; }
+            case GUI_SET_VALUE: { int v = popTc(tc); int hnd = popTc(tc); gui.setValue(hnd, v); pushTc(tc, 0); break; }
+            case GUI_GET_VALUE: { int hnd = popTc(tc); pushTc(tc, gui.getValue(hnd)); break; }
+            case GUI_SET_RANGE: { int mx = popTc(tc); int mn = popTc(tc); int hnd = popTc(tc); gui.setRange(hnd, mn, mx); pushTc(tc, 0); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));

@@ -23,6 +23,9 @@ int  bpvm_gui_create_obj(int parent);
 int  bpvm_gui_create_label(int parent);
 int  bpvm_gui_create_button(int parent);
 int  bpvm_gui_create_checkbox(int parent);
+int  bpvm_gui_create_switch(int parent);
+int  bpvm_gui_create_slider(int parent);
+int  bpvm_gui_create_bar(int parent);
 
 /* Configuración. Texto + geometría/anclaje afectan al dumpTree (modelo). Color y
  * fuente son render-only: no-op en el modelo (no tocan el dump) y, bajo BPVM_LVGL,
@@ -45,6 +48,9 @@ void bpvm_gui_refresh(int handle);
 /* H6 value-widgets (checkbox): estado en el modelo (n->value = verdad). */
 void bpvm_gui_set_checked(int handle, int v);
 int  bpvm_gui_get_checked(int handle);
+void bpvm_gui_set_value(int handle, int v);
+int  bpvm_gui_get_value(int handle);
+void bpvm_gui_set_range(int handle, int mn, int mx);
 void bpvm_gui_set_bg_color(int handle, uint32_t rgb);
 void bpvm_gui_set_text_color(int handle, uint32_t rgb);
 void bpvm_gui_set_font(int handle, int font_id);

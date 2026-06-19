@@ -190,7 +190,14 @@ enum {
     BUILTIN_GUI_CREATE_CHECKBOX = 162,
     BUILTIN_GUI_SET_CHECKED     = 163,
     BUILTIN_GUI_GET_CHECKED     = 164,
-    BUILTIN_GUI_CHANGE          = 165
+    BUILTIN_GUI_CHANGE          = 165,
+    /* H6 widgets — switch + slider + bar (value-widgets enteros). */
+    BUILTIN_GUI_CREATE_SWITCH   = 166,
+    BUILTIN_GUI_CREATE_SLIDER   = 167,
+    BUILTIN_GUI_CREATE_BAR      = 168,
+    BUILTIN_GUI_SET_VALUE       = 169,
+    BUILTIN_GUI_GET_VALUE       = 170,
+    BUILTIN_GUI_SET_RANGE       = 171
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -495,6 +502,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_SET_CHECKED:     { int v = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_checked(h, v); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_GET_CHECKED:     { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_checked(h)); return BPVM_OK; }
     case BUILTIN_GUI_CHANGE:          { uint32_t obj = (uint32_t) pop_i32(vm, tc); bpvm_gui_inject_change(obj); push_i32(vm, tc, 0); return BPVM_OK; }
+    /* H6 — switch + slider + bar (value-widgets enteros; el backend clampa al rango). */
+    case BUILTIN_GUI_CREATE_SWITCH: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_switch(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_SLIDER: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_slider(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_BAR:    { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_bar(p)); return BPVM_OK; }
+    case BUILTIN_GUI_SET_VALUE:     { int v = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_value(h, v); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_GET_VALUE:     { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_value(h)); return BPVM_OK; }
+    case BUILTIN_GUI_SET_RANGE:     { int mx = pop_i32(vm, tc); int mn = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_range(h, mn, mx); push_i32(vm, tc, 0); return BPVM_OK; }
 #endif /* BPVM_GUI */
 
     case BUILTIN_PARSE_INT: {

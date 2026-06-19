@@ -234,5 +234,12 @@ public final class Intrinsics {
         register("Gui.__guiSetChecked",     w -> emitBuiltin(w, Builtin.GUI_SET_CHECKED));
         register("Gui.__guiGetChecked",     w -> emitBuiltin(w, Builtin.GUI_GET_CHECKED));
         register("Gui.__guiChange",         w -> emitBuiltin(w, Builtin.GUI_CHANGE));
+        // H6 widgets — switch + slider + bar (value-widgets enteros).
+        register("Gui.__guiCreateSwitch",   w -> emitBuiltin(w, Builtin.GUI_CREATE_SWITCH));
+        register("Gui.__guiCreateSlider",   w -> emitBuiltin(w, Builtin.GUI_CREATE_SLIDER));
+        register("Gui.__guiCreateBar",      w -> emitBuiltin(w, Builtin.GUI_CREATE_BAR));
+        register("Gui.__guiSetValue",       w -> emitBuiltin(w, Builtin.GUI_SET_VALUE));
+        register("Gui.__guiGetValue",       w -> emitBuiltin(w, Builtin.GUI_GET_VALUE));
+        register("Gui.__guiSetRange",       w -> emitBuiltin(w, Builtin.GUI_SET_RANGE));
     }
 }

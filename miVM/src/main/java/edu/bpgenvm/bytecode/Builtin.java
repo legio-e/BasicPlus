@@ -339,7 +339,15 @@ public enum Builtin {
     GUI_CREATE_CHECKBOX("__guiCreateCheckbox"), // (parent) → id
     GUI_SET_CHECKED("__guiSetChecked"),         // (id, bool) → void
     GUI_GET_CHECKED("__guiGetChecked"),         // (id) → bool
-    GUI_CHANGE("__guiChange");                  // (id) → void; cambio sintético
+    GUI_CHANGE("__guiChange"),                  // (id) → void; cambio sintético
+
+    // H6 widgets — value-widgets enteros (switch booleano + slider/bar enteros).
+    GUI_CREATE_SWITCH("__guiCreateSwitch"),     // (parent) → id
+    GUI_CREATE_SLIDER("__guiCreateSlider"),     // (parent) → id
+    GUI_CREATE_BAR("__guiCreateBar"),           // (parent) → id
+    GUI_SET_VALUE("__guiSetValue"),             // (id, int) → void (clampa al rango)
+    GUI_GET_VALUE("__guiGetValue"),             // (id) → int
+    GUI_SET_RANGE("__guiSetRange");             // (id, min, max) → void
 
     public final String bpName;
     public final int id;

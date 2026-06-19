@@ -23,6 +23,13 @@ module Gui
   public intrinsic function __guiSetText(handle: integer, t: string)
   public intrinsic function __guiSetChecked(handle: integer, v: boolean)
   public intrinsic function __guiGetChecked(handle: integer): boolean
+  // Value-widgets enteros (slider, bar, ...): valor + rango (el backend clampa).
+  public intrinsic function __guiCreateSwitch(parent: integer): integer
+  public intrinsic function __guiCreateSlider(parent: integer): integer
+  public intrinsic function __guiCreateBar(parent: integer): integer
+  public intrinsic function __guiSetValue(handle: integer, v: integer)
+  public intrinsic function __guiGetValue(handle: integer): integer
+  public intrinsic function __guiSetRange(handle: integer, mn: integer, mx: integer)
   // Geometría: x/y/width/height — backend = verdad (get/set → intrínsecos).
   public intrinsic function __guiSetX(handle: integer, x: integer)
   public intrinsic function __guiGetX(handle: integer): integer
@@ -253,6 +260,69 @@ module Gui
       endset
     endprop
   end Checkbox
+
+  // ---- Toggle — interruptor on/off (booleano, como Checkbox pero sin etiqueta;
+  //      "switch" en LVGL — pero `switch` es palabra reservada del lenguaje). El
+  //      toggle dispara onChange; el estado se lee/escribe con `checked`. ----
+  public class Toggle extends Component
+    public function Toggle(parent: Component)
+      this.lvglId := __guiCreateSwitch(parent.lvglId)
+      __guiBindClick(this.lvglId, this)
+    end Toggle
+
+    public property checked: boolean
+      get
+        return __guiGetChecked(this.lvglId)
+      endget
+      set(v)
+        __guiSetChecked(this.lvglId, v)
+      endset
+    endprop
+  end Toggle
+
+  // ---- Slider — deslizador de valor entero en un rango. El arrastre dispara
+  //      onChange; el estado se lee/escribe con `value` (el backend lo clampa
+  //      al rango fijado con setRange; por defecto 0..100). ----
+  public class Slider extends Component
+    public function Slider(parent: Component)
+      this.lvglId := __guiCreateSlider(parent.lvglId)
+      __guiBindClick(this.lvglId, this)
+    end Slider
+
+    public function setRange(mn: integer, mx: integer)
+      __guiSetRange(this.lvglId, mn, mx)
+    end setRange
+
+    public property value: integer
+      get
+        return __guiGetValue(this.lvglId)
+      endget
+      set(v)
+        __guiSetValue(this.lvglId, v)
+      endset
+    endprop
+  end Slider
+
+  // ---- Bar — barra de progreso (SOLO lectura: muestra un valor, no interactúa
+  //      → sin onChange ni bind). estado por `value` (clampado al rango). ----
+  public class Bar extends Component
+    public function Bar(parent: Component)
+      this.lvglId := __guiCreateBar(parent.lvglId)
+    end Bar
+
+    public function setRange(mn: integer, mx: integer)
+      __guiSetRange(this.lvglId, mn, mx)
+    end setRange
+
+    public property value: integer
+      get
+        return __guiGetValue(this.lvglId)
+      endget
+      set(v)
+        __guiSetValue(this.lvglId, v)
+      endset
+    endprop
+  end Bar
 
   // ---- Dispatch del upcall: la VM llama aquí (por NOMBRE, resolveGlobal) al
   //      pulsar/cambiar un widget. self.onClick()/onChange() son llamadas
