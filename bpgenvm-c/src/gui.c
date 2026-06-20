@@ -12,6 +12,7 @@
  * (build modelo-only / headless / arnés), todo lo de LVGL desaparece.
  */
 #include "bpvm_gui.h"
+#include "bpvm_fs.h"     /* lectura de PNG portable (host libc + device RAM-FS) */
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -401,20 +402,19 @@ int bpvm_gui_image_load_file(int id, const char* path) {
     a->path = (char*) malloc(L + 1);
     if (a->path) { if (path) memcpy(a->path, path, L); a->path[L] = '\0'; }
     a->w = 0; a->h = 0; a->loaded = 0;
-    FILE* f = fopen(path ? path : "", "rb");
-    if (f) {
-        unsigned char b[24];
-        size_t n = fread(b, 1, sizeof(b), f);
-        fclose(f);
-        if (n >= 24
-            && b[0] == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G'
-            && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) {
-            a->w = (int) (((uint32_t) b[16] << 24) | ((uint32_t) b[17] << 16)
-                        | ((uint32_t) b[18] << 8)  |  (uint32_t) b[19]);
-            a->h = (int) (((uint32_t) b[20] << 24) | ((uint32_t) b[21] << 16)
-                        | ((uint32_t) b[22] << 8)  |  (uint32_t) b[23]);
-            a->loaded = 1;
-        }
+    /* Lee el header por el FS facade (portable): en host = libc, en placa = RAM-FS.
+     * Solo el IHDR (24 bytes) para sacar dimensiones; el decode de píxeles (lodepng)
+     * es aparte. */
+    unsigned char b[24];
+    long n = bpvm_fs_read(path ? path : "", b, sizeof(b));
+    if (n >= 24
+        && b[0] == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G'
+        && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) {
+        a->w = (int) (((uint32_t) b[16] << 24) | ((uint32_t) b[17] << 16)
+                    | ((uint32_t) b[18] << 8)  |  (uint32_t) b[19]);
+        a->h = (int) (((uint32_t) b[20] << 24) | ((uint32_t) b[21] << 16)
+                    | ((uint32_t) b[22] << 8)  |  (uint32_t) b[23]);
+        a->loaded = 1;
     }
     a->version++;   /* (re)carga: el asset cambió → los ImageView lo recargarán */
     return a->loaded;
