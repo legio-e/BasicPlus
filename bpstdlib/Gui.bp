@@ -208,6 +208,12 @@ module Gui
       __guiSetBgColor(this.lvglId, c.rgb)
     end setBgColor
 
+    // Color del texto. Vale para cualquier widget con texto (label, botón…):
+    // en LVGL el text_color se hereda, así que en un botón colorea su label hijo.
+    public function setTextColor(c: Color)
+      __guiSetTextColor(this.lvglId, c.rgb)
+    end setTextColor
+
     // refresh — invalidar para repintar (Swing repaint / LVGL lv_obj_invalidate).
     public function refresh()
       __guiRefresh(this.lvglId)
@@ -267,10 +273,6 @@ module Gui
     public function setText(t: string)
       __guiSetText(this.lvglId, t)
     end setText
-
-    public function setTextColor(c: Color)
-      __guiSetTextColor(this.lvglId, c.rgb)
-    end setTextColor
 
     public function setFont(font: integer)
       __guiSetFont(this.lvglId, font)

@@ -1,0 +1,43 @@
+// GuiColorDemo.bp — demo de color (setBgColor / setTextColor).
+//
+// Color = Gui.Color(0xRRGGBB). setBgColor/setTextColor son de Component, así que
+// valen para cualquier widget; aquí, una paleta de botones con fondo distinto y
+// el texto en blanco/negro según contraste. El color es render-only (no sale en
+// el dumpTree): se ve en la pantalla LVGL, no en el modelo.
+//
+// mkBtn devuelve el botón y se guarda en un local de Main: así los objetos BP
+// siguen vivos durante Gui.run() (un toque busca el objeto por su puntero).
+module GuiColorDemo
+  import Gui
+
+  function mkBtn(parent: Gui.Component, text: string, x: integer, y: integer,
+                 bg: integer, fg: integer): Gui.Button
+    var b: Gui.Button := Gui.Button(parent, text)
+    b.setBounds(x, y, 215, 58)
+    b.setBgColor(Gui.Color(bg))
+    b.setTextColor(Gui.Color(fg))
+    return b
+  end mkBtn
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var title: Gui.Label := Gui.Label(scr, "Paleta de colores")
+    title.align(Gui.Align.TOP_MID, 0, 8)
+
+    // 2 columnas x 4 filas. fg = texto (blanco sobre oscuro, negro sobre claro).
+    var b1: Gui.Button := mkBtn(scr, "Rojo",      15,  40, 0xD00000, 0xFFFFFF)
+    var b2: Gui.Button := mkBtn(scr, "Verde",    250,  40, 0x00A000, 0xFFFFFF)
+    var b3: Gui.Button := mkBtn(scr, "Azul",      15, 105, 0x1040E0, 0xFFFFFF)
+    var b4: Gui.Button := mkBtn(scr, "Naranja",  250, 105, 0xF08000, 0x000000)
+    var b5: Gui.Button := mkBtn(scr, "Amarillo",  15, 170, 0xFFD000, 0x000000)
+    var b6: Gui.Button := mkBtn(scr, "Cian",     250, 170, 0x00C0C0, 0x000000)
+    var b7: Gui.Button := mkBtn(scr, "Violeta",   15, 235, 0x9030C0, 0xFFFFFF)
+    var b8: Gui.Button := mkBtn(scr, "Gris",     250, 235, 0x707070, 0xFFFFFF)
+
+    print "== widgets =="
+    print Gui.__guiDumpTree()
+    Gui.run()
+  end Main
+
+end GuiColorDemo
