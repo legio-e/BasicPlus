@@ -59,6 +59,42 @@ Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.
 
 ## ⚙️ Compilador / lenguaje (ampliación selectiva — "eventos y poco más")
 
+### H7 — 2 cambios de lenguaje (Eduardo, 20-jun; para esa tarde)
+
+- **Operador `^` de potencia** — `x^2` = x al cuadrado. Token `^` **LIBRE** (en BP
+  el XOR es la keyword `xor`, no `^` → sin colisión). **Toca:** lexer (token nuevo),
+  parser (binario, **asociativo por la DERECHA** y de **precedencia ALTA** — por
+  encima de `*` y del unario menos: `-x^2` ⇒ `-(x^2)`, `2^3^2` ⇒ `2^(3^2)`),
+  semántico (tipos/resultado), emisores (MivmEmitter + AotCEmitter + JvmEmitter) y
+  **las 2 VMs byte-idéntico**.
+  - **Cómputo por tipos (encargo de Eduardo):** `float ^ integer` → **multiplicación
+    repetida** / exponenciación por cuadrados (exacto y **parity-safe**; exponente
+    negativo ⇒ `1/x^|n|`). `float ^ float` → **`exp(n·ln(x))`** (dominio x>0; `ln`
+    indefinido para x≤0 → decidir error vs NaN). `int^int` → decidir (mult repetida;
+    ¿overflow a long?). Resultado: `float^*` ⇒ float.
+  - **RIESGO DE PARIDAD (el grande):** el camino `float^float` usa transcendentales —
+    `Math.exp/log` (Java) vs `exp/log` (C) pueden diferir en el último ULP ⇒ resultado
+    NO byte-idéntico. El camino `float^integer` (mult) SÍ es byte-idéntico. Mitigación
+    a probar: computar en **double y estrechar a float32** (las diferencias de ULP en
+    double suelen desaparecer al redondear a float) y **verificar con el arnés de
+    paridad**. **Ya existe el builtin `POW`** (expuesto vía `Math.pow`): revisar su
+    impl/paridad actual; `^` float^float puede **bajar a él** si es byte-idéntico en
+    ambas VMs. Aditivo (principio 7): opcode nuevo (p.ej. `POW_F`/`POW_I`) o reuso de POW.
+
+- **`eval("expresión")` — evaluador de expresiones en runtime, estilo BASIC
+  (LIMITADO y SEGURO).** NO es el `eval` de Python (sin código arbitrario, sin acceso
+  a variables/funciones) → **seguro por construcción** (gramática cerrada). Ampliable
+  poco a poco en versiones futuras.
+  - **Alcance inicial:** solo operaciones básicas (`+ - * /`, paréntesis, números;
+    y `^` cuando exista). Nada sofisticado.
+  - **Toca:** builtin `eval(s)` en las 2 VMs → cada VM lleva un **mini-parser de
+    expresiones** (descenso recursivo) con resultado **byte-idéntico** (misma
+    aritmética y mismo tipo numérico). Superficie de paridad NUEVA (un evaluador en
+    Java + otro en C) → mantenerlos alineados; el grueso (aritmética) es parity-safe.
+  - **Decidir:** tipo de retorno (¿double/float?), error de sintaxis ⇒ ¿RuntimeError
+    BP cazable? **Futuro (NO ahora):** variables/funciones/llamadas, siempre dentro de
+    una gramática cerrada (jamás el modelo Python ilimitado).
+
 - **#169 — AOT cross-module sin puente del intérprete** (MEJORA de rendimiento;
   hoy FUNCIONA vía `call_bp` + warning). Diseño en `AOT_CROSS_MODULE.md`.
 - **Layout compacto de narrow** (L10 follow-up): `byte[]`/`int16[]` y globales
