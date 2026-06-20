@@ -1,0 +1,10 @@
+// ResetCause.bp — muestra la causa del último reinicio del MCU (H10).
+//
+// Tras un reset por watchdog mostrará "watchdog (IWDG)"; en un arranque
+// normal "power-on/brown-out" o "pin (NRST)"; en la VM Java (host) "unknown".
+module ResetCause
+  import Pico
+  function Main()
+    print "Causa del ultimo reset: " + Pico.resetCause()
+  end Main
+end ResetCause

@@ -20,8 +20,9 @@
 
 static UART_HandleTypeDef* wire_uart(void) { return BOARD_WIRE_UART; }
 
-#if defined(BPVM_BOARD_DK2)
-/* ===== RX por IRQ + ring (DK2, V3/H5.2) =====
+#if defined(BOARD_WIRE_IRQn)
+/* ===== RX por IRQ + ring — STM32 con BOARD_WIRE_IRQn (DK2, Nucleo… V3/H5.2, H10) =====
+ * La placa opta al ring definiendo BOARD_WIRE_IRQn en board.h (antes era DK2-only).
  * La lectura directa del registro (#else) no tiene buffer software: si el lazo
  * no sondea durante >~700µs (la FIFO HW son 8 bytes) se pierden bytes por
  * overrun. Eso mataba el KILL durante Gui.run() — el bombeo de LVGL deja el UART
@@ -49,7 +50,13 @@ void stm32_wire_rx_drain(void) {
 
 void stm32_wire_rx_irq_enable(void) {
     UART_HandleTypeDef* h = wire_uart();
-    HAL_NVIC_EnableIRQ(BOARD_WIRE_IRQn);        /* NVIC (CubeMX ya fijó prioridad) */
+#if defined(BOARD_WIRE_IRQ_PRIO)
+    /* Placa cuyo USART del wire NO lo gestiona CubeMX (Nucleo: USART1 lo inicia el
+     * BSP, no está en el .ioc) → fijamos aquí la prioridad NVIC. El DK2 no define
+     * BOARD_WIRE_IRQ_PRIO: respeta la que ya fijó CubeMX en el .ioc. */
+    HAL_NVIC_SetPriority(BOARD_WIRE_IRQn, BOARD_WIRE_IRQ_PRIO, 0);
+#endif
+    HAL_NVIC_EnableIRQ(BOARD_WIRE_IRQn);        /* NVIC */
     __HAL_UART_ENABLE_IT(h, UART_IT_RXNE);      /* = RXFNE con FIFO → IRQ al llegar byte */
 }
 

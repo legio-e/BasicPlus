@@ -532,16 +532,22 @@ void stm32_repl_run(void) {
     HAL_UARTEx_SetRxFifoThreshold(BOARD_WIRE_UART, UART_RXFIFO_THRESHOLD_1_8);
     HAL_UARTEx_EnableFifoMode(BOARD_WIRE_UART);
 
-#if defined(BPVM_BOARD_DK2)
-    /* DK2 (V3/H5.2) — RX por IRQ → ring: la FIFO de 8B (≈700µs) no basta cuando
-     * el lazo deja el UART sin sondear ms (bombeo de LVGL en Gui.run()) y se
-     * perdían los primeros bytes del KILL. Con la IRQ drenando a un ring de 256B,
-     * getchar() no pierde nada y el GUI puede dormir entre frames (__WFI). Tras
-     * EnableFifoMode para que RXFNE refleje la FIFO ya activa. */
+#if defined(BOARD_WIRE_IRQn)
+    /* RX por IRQ → ring (V3/H5.2 DK2; H10 también Nucleo). La FIFO de 8B (≈700µs)
+     * no basta cuando el lazo deja el UART sin sondear ms (bombeo de LVGL en
+     * Gui.run()) y se perdían los primeros bytes del KILL. Con la IRQ drenando a un
+     * ring de 256B, getchar() no pierde nada y el GUI puede dormir entre frames
+     * (__WFI). Tras EnableFifoMode para que RXFNE refleje la FIFO ya activa.
+     * La placa opta definiendo BOARD_WIRE_IRQn en board.h. */
     stm32_wire_rx_irq_enable();
 #endif
 
     stm32_wire_send_cstr("=== bpvm-stm32 REPL (wire v1) listo ===");
+    {   /* H10 — causa del último reset (diagnóstico; revela WDT/soft/power-on). */
+        char rc[64];
+        snprintf(rc, sizeof(rc), "reset cause: %s", stm32_reset_cause());
+        stm32_wire_send_cstr(rc);
+    }
 
     /* P-autorun (#256) — el wire ya está vivo: si la app de auto.txt se
      * queda en bucle, el IDE puede conectar (HELLO) y matarla (KILL). */

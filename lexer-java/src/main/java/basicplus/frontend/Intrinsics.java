@@ -178,6 +178,7 @@ public final class Intrinsics {
         register("Pico.cpuFreqHz", w -> emitBuiltin(w, Builtin.PICO_CPU_FREQ_HZ));
         register("Pico.uptimeMs",  w -> emitBuiltin(w, Builtin.PICO_UPTIME_MS));
         register("Pico.gpioCount", w -> emitBuiltin(w, Builtin.PICO_GPIO_COUNT));
+        register("Pico.resetCause", w -> emitBuiltin(w, Builtin.PICO_RESET_CAUSE));  // H10
         // H7.4 — NeoPixel WS2812 (internos de la clase Neopixel.Strip)
         register("Neopixel.__npInit", w -> emitBuiltin(w, Builtin.NEOPIXEL_INIT));
         register("Neopixel.__npShow", w -> emitBuiltin(w, Builtin.NEOPIXEL_SHOW));

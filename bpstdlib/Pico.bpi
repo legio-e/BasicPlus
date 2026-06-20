@@ -13,6 +13,7 @@ func cpuFreqHz():integer public intrinsic
 func I2C_BUSES():integer public
 func variant():string public
 func MIN_CPU_MHZ():integer public
+func resetCause():string public intrinsic
 func tempC():float public intrinsic
 func uniqueId():string public intrinsic
 func uptimeMs():integer public intrinsic

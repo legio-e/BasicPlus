@@ -79,6 +79,14 @@ int bpvm_pico_gpio_count(void) {
     return 30;
 }
 
+const char* bpvm_pico_reset_cause(void) {
+    if (g_backend && g_backend->resetCause) {
+        return g_backend->resetCause();
+    }
+    /* Host / backend sin impl: no hay causa de reset de MCU. */
+    return "unknown";
+}
+
 int bpvm_pico_set_cpu_freq_mhz(int mhz) {
     if (g_backend && g_backend->setCpuFreqMHz) {
         return g_backend->setCpuFreqMHz(mhz);

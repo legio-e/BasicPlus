@@ -237,7 +237,9 @@ enum {
     BUILTIN_GUI_TEXTAREA_SET_READONLY = 198,
     BUILTIN_GUI_TEXTAREA_GET_READONLY = 199,
     /* H7 — eval("expr"): calculadora de constantes (id 200). */
-    BUILTIN_EVAL = 200
+    BUILTIN_EVAL = 200,
+    /* H10 — Pico.resetCause(): causa del último reset como string (id 201). */
+    BUILTIN_PICO_RESET_CAUSE = 201
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -1503,6 +1505,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[32];
         bpvm_pico_board_name(buf, sizeof(buf));
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, strlen(buf));
+        push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_RESET_CAUSE: {   /* H10 — causa del último reset (string) */
+        const char* s = bpvm_pico_reset_cause();
+        uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
         push_i32(vm, tc, (int32_t) ref);
         return BPVM_OK;
     }

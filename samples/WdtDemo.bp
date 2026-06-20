@@ -1,0 +1,31 @@
+// WdtDemo.bp — prueba del watchdog (IWDG) en la placa (H10).
+//
+//  1) Crea un watchdog de 3 s y lo alimenta 5 veces (1/s) -> sigue vivo.
+//  2) Deja de alimentar -> el IWDG expira y la placa RESETEA en ~3 s.
+//
+// Tras el reset la placa arranca limpia: el IWDG es software-start (un reset
+// del chip lo apaga hasta el siguiente Wdt.Timer), asi que NO hay bucle de
+// reset. Veras en la consola los 5 "feed", el aviso, y a los ~3 s la serie
+// se cae (reset). Eso confirma el watchdog.
+module WdtDemo
+  import Wdt
+
+  function Main()
+    print "WDT: creando watchdog de 3000 ms"
+    var w: Wdt.Timer := Wdt.Timer(3000)
+
+    print "Alimentando 5 veces (1/s) -- debe seguir vivo:"
+    var i: integer := 0
+    while i < 5 do
+      sleep(1000)
+      w.feed()
+      print "  feed " + intToString(i + 1) + " -- vivo"
+      i := i + 1
+    endwh
+
+    print "Dejo de alimentar: la placa deberia RESETEAR en ~3 s..."
+    while true do
+      sleep(1000)        // sin feed -> el IWDG expira y resetea el chip
+    endwh
+  end Main
+end WdtDemo

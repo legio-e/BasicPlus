@@ -28,8 +28,13 @@
 #include "bpvm_spi.h"
 #include "bpvm_uart.h"
 #include "bpvm_i2c.h"
+#include "bpvm_wdt.h"
 
 #include "main.h"   /* HAL + CMSIS (GPIOA.., UID_BASE, SystemCoreClock) */
+#include "board.h"  /* BOARD_HAS_ADC_TEMP y demás capacidades de placa */
+#if defined(BOARD_HAS_ADC_TEMP)
+#include "stm32u5xx_ll_adc.h"   /* __LL_ADC_CALC_* + constantes de calibración del die */
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -157,9 +162,58 @@ static void stm32_board_name_impl(char* buf, size_t len) {
     }
 }
 
-static float stm32_temp_c_impl(void) {
-    return 0.0f;   /* sensor interno no cableado en el MVP */
+#if defined(BOARD_HAS_ADC_TEMP)
+/* ── Temperatura del die por ADC1 (H10) ──────────────────────────────────────
+ * CubeMX inicializa hadc1 (14-bit, scan off, 1 conversión) pero NO genera ni la
+ * calibración ni un ConfigChannel (el sensor queda como canal interno disponible,
+ * sin rank). Aquí: calibramos una vez (lazy) y leemos en single-shot el sensor de
+ * temperatura, corrigiendo el VDDA real con VREFINT. La conversión usa los macros
+ * de fábrica __LL_ADC_CALC_* (TS_CAL1/CAL2 y VREFINT_CAL del die, en flash). */
+extern ADC_HandleTypeDef hadc1;
+
+static int s_adc_calibrated = 0;
+
+/* Single-shot de un canal interno (TEMPSENSOR / VREFINT). Devuelve raw o -1. */
+static int stm32_adc_read_internal(uint32_t channel) {
+    ADC_ChannelConfTypeDef c = {0};
+    c.Channel      = channel;
+    c.Rank         = ADC_REGULAR_RANK_1;
+    c.SamplingTime = ADC_SAMPLETIME_814CYCLES;  /* canales internos → muestreo largo */
+    c.SingleDiff   = ADC_SINGLE_ENDED;
+    c.OffsetNumber = ADC_OFFSET_NONE;
+    c.Offset       = 0;
+    if (HAL_ADC_ConfigChannel(&hadc1, &c) != HAL_OK) return -1;
+    HAL_Delay(1);                               /* arranque del sensor/buffer (TSEN/VREFEN) */
+    if (HAL_ADC_Start(&hadc1) != HAL_OK) return -1;
+    int raw = -1;
+    if (HAL_ADC_PollForConversion(&hadc1, 50) == HAL_OK)
+        raw = (int) HAL_ADC_GetValue(&hadc1);
+    HAL_ADC_Stop(&hadc1);
+    return raw;
 }
+
+static float stm32_temp_c_impl(void) {
+    if (!s_adc_calibrated) {
+        /* Calibración de offset (CubeMX no la generó); deja el ADC listo. */
+        if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK)
+            return 0.0f;
+        s_adc_calibrated = 1;
+    }
+    /* VDDA real vía VREFINT; si falla, 3.3 V nominales. */
+    uint32_t vdda_mv = 3300u;
+    int vref = stm32_adc_read_internal(ADC_CHANNEL_VREFINT);
+    if (vref > 0)
+        vdda_mv = __LL_ADC_CALC_VREFANALOG_VOLTAGE(ADC1, (uint32_t) vref, LL_ADC_RESOLUTION_14B);
+    int ts = stm32_adc_read_internal(ADC_CHANNEL_TEMPSENSOR);
+    if (ts < 0) return 0.0f;
+    int32_t t = __LL_ADC_CALC_TEMPERATURE(ADC1, vdda_mv, (uint32_t) ts, LL_ADC_RESOLUTION_14B);
+    return (float) t;
+}
+#else
+static float stm32_temp_c_impl(void) {
+    return 0.0f;   /* placa sin BOARD_HAS_ADC_TEMP: sensor no disponible */
+}
+#endif
 
 static int stm32_set_cpu_freq_mhz_impl(int mhz) {
     (void) mhz;
@@ -174,6 +228,7 @@ static const bpvm_pico_backend_t s_pico_backend = {
     .uptimeMs      = stm32_uptime_ms_impl,
     .setCpuFreqMHz = stm32_set_cpu_freq_mhz_impl,
     .gpioCount     = stm32_gpio_count_impl,
+    .resetCause    = stm32_reset_cause,     /* H10 — causa del último reset */
 };
 
 /* ===================== SPI (H15.1) =====================================
@@ -465,11 +520,102 @@ static const bpvm_i2c_backend_t s_i2c_backend = {
     .read  = stm32_i2c_read_impl,
 };
 
+/* ===================== WDT (IWDG) — H10 ====================================
+ * Watchdog independiente por REGISTROS (CMSIS, sin HAL ni CubeMX): así es
+ * autocontenido — no necesita IWDG en el .ioc (que metería un MX_IWDG_Init
+ * arrancándolo en el BOOT, a ~512 ms → bucle de reset) ni HAL_IWDG_MODULE_ENABLED;
+ * funciona igual en Nucleo y DK2 y sobrevive a regeneraciones. Contador de 12 bits
+ * sobre el LSI (~32 kHz), prescaler /4../1024; al expirar resetea el chip.
+ *
+ * timeout(ms) → (PR, RLR):  cuentas = ms·LSI/1000/div ; RLR = cuentas−1 ≤ 4095.
+ * Elegimos el divisor más pequeño que entre (mejor resolución).
+ * Rango ≈ 0.1 ms … 131 s.  PR: 0=/4,1=/8,…,6=/256,7=/512,8=/1024.
+ *
+ * LIMITACIÓN HW vs RP2350: el IWDG NO se puede PARAR una vez arrancado → disable()
+ * es el mejor esfuerzo (reprograma al timeout máximo ~131 s y refresca); sigue
+ * vivo. Para un sleep muy largo, no lo actives hasta necesitarlo. */
+#define STM32_LSI_HZ        32000u    /* LSI nominal; el IWDG es impreciso de por sí */
+#define STM32_IWDG_RLR_MAX  4095u
+#define IWDG_KR_WRITE       0x5555u   /* desbloquea PR/RLR */
+#define IWDG_KR_REFRESH     0xAAAAu   /* recarga el contador */
+#define IWDG_KR_START       0xCCCCu   /* arranca el IWDG (y el LSI) */
+
+static int s_wdt_on = 0;
+
+/* timeout(ms) → código de prescaler PR (0..8) y reload RLR (0..4095). */
+static void stm32_iwdg_calc(uint32_t ms, uint32_t* pr, uint32_t* reload) {
+    uint32_t div = 4u;
+    for (uint32_t code = 0u; code <= 8u; code++, div <<= 1) {
+        uint32_t counts = (ms * (STM32_LSI_HZ / 1000u)) / div;   /* ms·32/div */
+        if (counts == 0u) counts = 1u;
+        if (counts <= (STM32_IWDG_RLR_MAX + 1u)) {
+            *pr = code; *reload = counts - 1u; return;
+        }
+    }
+    *pr = 8u; *reload = STM32_IWDG_RLR_MAX;     /* timeout enorme → tope (/1024) */
+}
+
+/* Reprograma PR/RLR (con el IWDG ya arrancado) y recarga el contador. */
+static void stm32_iwdg_program(uint32_t ms) {
+    uint32_t pr, reload;
+    stm32_iwdg_calc(ms, &pr, &reload);
+    IWDG->KR  = IWDG_KR_WRITE;                  /* desbloquear PR/RLR */
+    IWDG->PR  = pr;
+    IWDG->RLR = reload;
+    uint32_t guard = 200000u;                   /* anti-cuelgue si el LSI fallara */
+    while ((IWDG->SR & (IWDG_SR_PVU | IWDG_SR_RVU)) && --guard) { }
+    IWDG->KR  = IWDG_KR_REFRESH;                /* cargar el contador */
+}
+
+static void stm32_wdt_enable_impl(int timeoutMs) {
+    if (timeoutMs < 1) timeoutMs = 1;
+    IWDG->KR = IWDG_KR_START;                   /* arrancar (enciende el LSI) ANTES de programar */
+    stm32_iwdg_program((uint32_t) timeoutMs);
+    s_wdt_on = 1;
+}
+
+static void stm32_wdt_feed_impl(void) {
+    if (s_wdt_on) IWDG->KR = IWDG_KR_REFRESH;
+}
+
+static void stm32_wdt_disable_impl(void) {
+    /* No se puede parar el IWDG: mejor esfuerzo = timeout máximo + refresco. */
+    if (s_wdt_on) stm32_iwdg_program(131000u);
+}
+
+static const bpvm_wdt_backend_t s_wdt_backend = {
+    .enable  = stm32_wdt_enable_impl,
+    .feed    = stm32_wdt_feed_impl,
+    .disable = stm32_wdt_disable_impl,
+};
+
+/* ===================== Causa de reset — H10 ================================
+ * Decodifica RCC->CSR (flags de la última causa de reset). Se lee/latchea UNA
+ * vez —la 1ª llamada limpia los flags con RMVF— para que el valor sirva tanto
+ * en el boot (print de diagnóstico) como, más adelante, desde BP. Prioridad:
+ * causas específicas antes que PIN/power, que suelen co-activarse. */
+const char* stm32_reset_cause(void) {
+    static const char* s_cause = NULL;
+    if (s_cause) return s_cause;
+    uint32_t csr = RCC->CSR;
+    RCC->CSR |= RCC_CSR_RMVF;                  /* limpiar para el próximo reset */
+    if      (csr & RCC_CSR_IWDGRSTF) s_cause = "watchdog (IWDG)";
+    else if (csr & RCC_CSR_WWDGRSTF) s_cause = "window-watchdog (WWDG)";
+    else if (csr & RCC_CSR_SFTRSTF)  s_cause = "software";
+    else if (csr & RCC_CSR_LPWRRSTF) s_cause = "low-power";
+    else if (csr & RCC_CSR_BORRSTF)  s_cause = "power-on/brown-out";
+    else if (csr & RCC_CSR_PINRSTF)  s_cause = "pin (NRST)";
+    else if (csr & RCC_CSR_OBLRSTF)  s_cause = "option-byte-loader";
+    else                             s_cause = "desconocido";
+    return s_cause;
+}
+
 void stm32_hw_register(void) {
     bpvm_gpio_set_backend(&s_gpio_backend);
     bpvm_pico_set_backend(&s_pico_backend);
     bpvm_spi_set_backend(&s_spi_backend);     /* H15.1 */
     bpvm_uart_set_backend(&s_uart_backend);   /* H15.1 */
     bpvm_i2c_set_backend(&s_i2c_backend);     /* H15.2 */
-    /* PWM/ADC/Rtc/Wdt: paridad no critica; anadir su backend HAL cuando toque. */
+    bpvm_wdt_set_backend(&s_wdt_backend);     /* H10 — watchdog IWDG */
+    /* PWM/Rtc: anadir su backend HAL cuando toque (ADC temp ya en stm32_temp_c_impl). */
 }

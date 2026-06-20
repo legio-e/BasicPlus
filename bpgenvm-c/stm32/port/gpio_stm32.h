@@ -12,6 +12,10 @@ extern "C" {
  * una vez al boot, después de inicializar la HAL/BSP. */
 void stm32_hw_register(void);
 
+/* H10 — causa del último reset (decodifica RCC->CSR). Se latchea en la 1ª
+ * llamada (que limpia los flags), así sirve en el boot y luego desde BP. */
+const char* stm32_reset_cause(void);
+
 #ifdef __cplusplus
 }
 #endif

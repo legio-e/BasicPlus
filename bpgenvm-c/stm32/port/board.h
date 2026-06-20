@@ -40,9 +40,21 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
 
 #include "stm32u5xx_nucleo.h"              /* hcom_uart[], COM1, BSP_LED_* */
 #define BOARD_WIRE_UART         (&hcom_uart[COM1])
+/* H10 — RX por IRQ+ring también aquí (antes DK2-only). COM1 = USART1 (ver
+ * stm32u5xx_nucleo.h: COM1_UART==USART1). OJO: en la Nucleo USART1 lo gestiona el
+ * BSP (BSP_COM_Init), NO está en el .ioc → no hay handler ni prioridad de CubeMX.
+ * Por eso definimos BOARD_WIRE_IRQ_PRIO: stm32_wire_rx_irq_enable() fija la
+ * prioridad NVIC y habilita la IRQ él mismo. El USART1_IRQHandler (que llama a
+ * stm32_wire_rx_drain) se añade a mano en Core/Src/stm32u5xx_it.c. */
+#define BOARD_WIRE_IRQn         USART1_IRQn
+#define BOARD_WIRE_IRQ_PRIO     5            /* 0=máx … 15=mín; > SysTick, sin FreeRTOS */
 #define BOARD_NAME              "nucleo-u575zi"
 #define BOARD_SRAM_BYTES        (768UL * 1024UL)
 #define BOARD_FS_FLASH_ADDR     0x081E0000u          /* últimos 128 KB de 2 MB (.ld limita código a 1920 KB) */
+/* H10 — ADC1 habilitado en CubeMX (hadc1) con el canal interno del sensor de
+ * temperatura → stm32_temp_c_impl() lee la temperatura del die por ADC. La DK2
+ * aún no lo define (sigue con el stub) hasta que se habilite ADC1 en su .ioc. */
+#define BOARD_HAS_ADC_TEMP      1
 
 #define BOARD_LED_ERR_ON()      BSP_LED_On(LED_RED)
 #define BOARD_LED_RUN_ON()      BSP_LED_On(LED_BLUE)

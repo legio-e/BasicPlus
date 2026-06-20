@@ -58,6 +58,13 @@ module Pico
   // GPIO_COUNT() delega aquí para que sea board-aware automáticamente.
   public intrinsic function gpioCount(): integer
 
+  // ---- Causa del último reset (H10) ----
+  // Devuelve por qué se reinició el MCU como string: "watchdog (IWDG)",
+  // "power-on/brown-out", "software", "pin (NRST)", "low-power", ... En la
+  // VM Java (host) devuelve "unknown" (un PC no tiene causa de reset de MCU).
+  // Útil para diagnosticar reinicios inesperados (p.ej. un watchdog que saltó).
+  public intrinsic function resetCause(): string
+
   // Variante del chip como string ("A" / "B"), derivada de gpioCount()
   // — no necesita su propio intrínseco. RP2350A bondea 30 GPIO, RP2350B
   // 48; el umbral 40 los separa con holgura.

@@ -397,7 +397,10 @@ public enum Builtin {
 
     // H7 — eval("expr"): calculadora de constantes (descenso recursivo, evalúa
     // sobre la marcha; + - * / paréntesis y unario; sin variables/funciones). id 200.
-    EVAL("eval");                                      // (s: string) → float
+    EVAL("eval"),                                      // (s: string) → float
+
+    // H10 — Pico.resetCause(): causa del último reset como string. id 201.
+    PICO_RESET_CAUSE("__picoResetCause");              // () → string
 
     public final String bpName;
     public final int id;

@@ -4497,6 +4497,10 @@ public class VirtualMachine {
                 pushTc(tc, allocVmString("host"));
                 break;
             }
+            case PICO_RESET_CAUSE: {   // H10 — en host no hay causa de reset de MCU
+                pushTc(tc, allocVmString("unknown"));
+                break;
+            }
             case PICO_TEMP_C: {
                 pushTc(tc, Float.floatToRawIntBits(25.0f));
                 break;
