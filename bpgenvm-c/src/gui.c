@@ -438,11 +438,21 @@ int bpvm_gui_image_load_file(int id, const char* path) {
     a->path = (char*) malloc(L + 1);
     if (a->path) { if (path) memcpy(a->path, path, L); a->path[L] = '\0'; }
     a->w = 0; a->h = 0; a->loaded = 0;
+    /* Resuelve la ruta: prueba tal cual; si un nombre SIMPLE no existe, reintenta
+     * en /app (donde el IDE sube los resources del proyecto) → loadFile("logo.png")
+     * funciona igual en host (cwd) y en placa (/app). El dump guarda la ruta pedida. */
+    const char* rpath = path ? path : "";
+    char alt[300];
+    uint32_t probe = 0;
+    if (bpvm_fs_stat(rpath, &probe) != 0 && rpath[0] != '\0' && rpath[0] != '/') {
+        snprintf(alt, sizeof(alt), "/app/%s", rpath);
+        if (bpvm_fs_stat(alt, &probe) == 0) rpath = alt;
+    }
     /* Lee el header por el FS facade (portable): en host = libc, en placa = RAM-FS.
      * Solo el IHDR (24 bytes) para sacar dimensiones; el decode de píxeles (lodepng)
      * es aparte. */
     unsigned char b[24];
-    long n = bpvm_fs_read(path ? path : "", b, sizeof(b));
+    long n = bpvm_fs_read(rpath, b, sizeof(b));
     if (n >= 24
         && b[0] == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G'
         && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) {
@@ -459,9 +469,9 @@ int bpvm_gui_image_load_file(int id, const char* path) {
     lv_memzero(&a->dsc, sizeof(a->dsc));
     if (a->loaded) {
         uint32_t sz = 0;
-        if (bpvm_fs_stat(path ? path : "", &sz) == 0 && sz > 0
+        if (bpvm_fs_stat(rpath, &sz) == 0 && sz > 0
             && (a->png_data = (uint8_t*) malloc(sz)) != NULL
-            && bpvm_fs_read(path, a->png_data, sz) == (long) sz) {
+            && bpvm_fs_read(rpath, a->png_data, sz) == (long) sz) {
             a->dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
             a->dsc.header.cf    = LV_COLOR_FORMAT_RAW;   /* encoded: el decoder resuelve el formato real */
             a->dsc.header.w     = (uint32_t) a->w;
