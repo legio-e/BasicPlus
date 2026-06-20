@@ -102,16 +102,15 @@ Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.
   chocan con identificadores. Aplica a decimal/hex/binario/float (todos pasan por
   `scanNumber`). No afecta a nada más (ni .mod, ni VMs).
 
-- **Continuación de línea** (Eduardo, 20-jun; **decisión pendiente — su duda era "qué
-  operador"**). La continuación IMPLÍCITA dentro de `()`/`[]` YA existe (#249/L5) →
-  hoy una expresión larga se parte envolviéndola en paréntesis. Falta el caso fuera de
-  corchetes. Opciones: **(A) operador colgante** — si la línea acaba en operador
-  binario / coma / `:=` / `.` / `and`/`or`, continúa, SIN carácter especial (extiende
-  la misma supresión de newline de #249; lo más ergonómico, y responde literalmente a
-  "qué operador": ninguno). **(B) `\` final** explícito (limpio: no choca con el `_`
-  separador ni con el escape de strings, que solo aplica dentro de comillas). **NO usar
-  `_` final** (estilo VB) — se solaparía visualmente con el separador nuevo. Recomendado:
-  (A); (B) si se prefiere marcador explícito.
+- **Continuación de línea — DECIDIDO: (A) operador colgante** (Eduardo, 20-jun). La
+  continuación IMPLÍCITA dentro de `()`/`[]` YA existe (#249/L5); para el resto, **si la
+  línea termina en un operador binario / coma / `:=` / `.` / `and`/`or` (un "token
+  continuador"), la sentencia continúa en la siguiente — SIN carácter especial**
+  (estilo Kotlin/Go). **Implementación:** extiende la MISMA supresión de newline de
+  #249 — al fin de línea, mirar el último token significativo; si es un continuador, no
+  emitir el terminador de sentencia. Definir el conjunto exacto de tokens-continuadores
+  (operadores binarios + `,` + `.` + `:=`/`=` + `and`/`or`/`xor`/`mod`/`shl`/`shr` + el
+  `^` nuevo). Descartados `\` final y `_` final (este chocaría con el separador nuevo).
 
 - **#169 — AOT cross-module sin puente del intérprete** (MEJORA de rendimiento;
   hoy FUNCIONA vía `call_bp` + warning). Diseño en `AOT_CROSS_MODULE.md`.
@@ -122,6 +121,10 @@ Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.
 - **N-pubvar-warn**: `public var` de módulo se ignora en silencio → avisar
   ("usa property/const"). La gramática ya documenta la regla.
 - **N5 v2 / condvar real** en `SyncList` (hoy spin-poll de 1 ms).
+- **Strings multilínea** (Eduardo, 20-jun: *"estaría bien, pero no urgente"*) — **NO
+  para H7**; futura mejora de lenguaje. Literal de cadena que abarca varias líneas
+  (triple comilla u otra sintaxis a decidir), útil para JSON/plantillas embebidas.
+  Junto con interpolación de strings, candidatas a una tanda de lenguaje posterior.
 
 ## 🛠️ IDE / herramientas
 
