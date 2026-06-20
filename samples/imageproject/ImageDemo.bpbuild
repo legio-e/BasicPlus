@@ -1,0 +1,14 @@
+// ImageDemo.bpbuild — proyecto de demostración de imagen (H6 tanda 9).
+//   imageproject/
+//     ImageDemo.bpbuild     (este fichero)
+//     src/
+//       ImageDemo.bp        (módulo main; import Gui se resuelve de la stdlib)
+//     resources/
+//       testimg.png         (sube al device como /app/testimg.png en el Run)
+//     out/                  (.mod y .bpi generados aquí)
+{
+  "sourceDir":    "src",
+  "outDir":       "out",
+  "main":         "ImageDemo",
+  "dependencies": []
+}

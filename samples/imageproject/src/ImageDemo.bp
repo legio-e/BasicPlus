@@ -1,0 +1,39 @@
+// ImageDemo.bp — demo de imagen como PROYECTO (H6 tanda 9, FINAL).
+//
+// A diferencia de samples/GuiImageDemo.bp (fichero suelto), esto es un proyecto
+// con su carpeta resources/: el IDE sube resources/testimg.png al device como
+// /app/testimg.png en el Run, y loadFile("testimg.png") lo encuentra (el firmware
+// prueba el nombre tal cual y, si falla, en /app/).
+//
+// Gui.Image es el BITMAP (loadFile, width/height); Gui.ImageView es el CONTROL
+// que lo muestra (setImage). Varias ImageView comparten una misma Image (ahorro
+// de memoria). refresh() recarga en el control SOLO si el asset cambió desde la
+// última vez (version-stamp): 'reloads' cuenta las recargas reales.
+module ImageDemo
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var img: Gui.Image := Gui.Image()
+    var ok: boolean := img.loadFile("testimg.png")
+    print "cargada = " + boolToString(ok)
+    print "dims    = " + intToString(img.width()) + "x" + intToString(img.height())
+
+    // Dos vistas comparten el MISMO asset (una sola imagen en memoria).
+    var v1: Gui.ImageView := Gui.ImageView(scr)
+    v1.setImage(img)
+    v1.align(Gui.Align.TOP_MID, 0, 40)
+    var v2: Gui.ImageView := Gui.ImageView(scr)
+    v2.setImage(img)
+    v2.align(Gui.Align.TOP_MID, 0, 140)
+
+    print "== widgets =="
+    print Gui.__guiDumpTree()
+
+    v1.refresh()
+    v2.refresh()
+    Gui.run()
+  end Main
+
+end ImageDemo
