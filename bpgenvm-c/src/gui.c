@@ -180,7 +180,18 @@ static void lvgl_list_btn_cb(lv_event_t* e) {
     lv_obj_t* btn = (lv_obj_t*) lv_event_get_target(e);
     int idx = (int) lv_obj_get_index(btn);
     for (int i = 0; i < g_node_count; i++)
-        if (g_nodes[i].used && g_nodes[i].objptr == list_objptr) { g_nodes[i].value = idx; break; }
+        if (g_nodes[i].used && g_nodes[i].objptr == list_objptr) {
+            g_nodes[i].value = idx;
+            /* msgbox: pulsar un botón del footer CIERRA el diálogo (UX estándar;
+             * el onChange ya recibió 'result' = idx). La LISTA no se cierra: ahí
+             * el clic es selección de ítem. close_async = borrado diferido, seguro
+             * desde el propio callback del botón (que se destruye con el msgbox). */
+            if (strcmp(g_nodes[i].type, "msgbox") == 0 && g_nodes[i].lv) {
+                lv_msgbox_close_async(g_nodes[i].lv);
+                g_nodes[i].lv = NULL;
+            }
+            break;
+        }
     bpvm_gui_inject_change(list_objptr);
 }
 
