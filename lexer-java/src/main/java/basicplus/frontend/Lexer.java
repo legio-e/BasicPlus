@@ -331,18 +331,19 @@ public final class Lexer {
     private Token scanNumber(int startLine, int startColumn) {
         int start = pos;
 
-        // Hex: 0x... | 0X...
+        // Hex: 0x... | 0X...   ('_' separador entre dígitos: 0xDEAD_BEEF)
         if (peek() == '0' && (peek(1) == 'x' || peek(1) == 'X')) {
             advance(); advance(); // consume 0x
             int hexStart = pos;
-            while (!isAtEnd() && isHexDigit(peek())) advance();
+            while (!isAtEnd() && (isHexDigit(peek())
+                    || (peek() == '_' && pos > hexStart && isHexDigit(peek(1))))) advance();
             String hexLex = source.substring(start, pos);
             if (pos == hexStart) {
                 errors.add(new LexerError("literal hexadecimal vacío después de '0x'", startLine, startColumn));
                 return new Token(TokenType.INTEGER_LIT, hexLex, 0L, startLine, startColumn);
             }
             try {
-                long val = Long.parseLong(hexLex.substring(2), 16);
+                long val = Long.parseLong(hexLex.substring(2).replace("_", ""), 16);
                 return new Token(TokenType.INTEGER_LIT, hexLex, val, startLine, startColumn);
             } catch (NumberFormatException nfe) {
                 errors.add(new LexerError("literal hexadecimal inválido o fuera de rango: " + hexLex,
@@ -351,18 +352,19 @@ public final class Lexer {
             }
         }
 
-        // Bin: 0b... | 0B...
+        // Bin: 0b... | 0B...   ('_' separador entre dígitos: 0b1111_0000)
         if (peek() == '0' && (peek(1) == 'b' || peek(1) == 'B')) {
             advance(); advance(); // consume 0b
             int binStart = pos;
-            while (!isAtEnd() && isBinDigit(peek())) advance();
+            while (!isAtEnd() && (isBinDigit(peek())
+                    || (peek() == '_' && pos > binStart && isBinDigit(peek(1))))) advance();
             String binLex = source.substring(start, pos);
             if (pos == binStart) {
                 errors.add(new LexerError("literal binario vacío después de '0b'", startLine, startColumn));
                 return new Token(TokenType.INTEGER_LIT, binLex, 0L, startLine, startColumn);
             }
             try {
-                long val = Long.parseLong(binLex.substring(2), 2);
+                long val = Long.parseLong(binLex.substring(2).replace("_", ""), 2);
                 return new Token(TokenType.INTEGER_LIT, binLex, val, startLine, startColumn);
             } catch (NumberFormatException nfe) {
                 errors.add(new LexerError("literal binario inválido o fuera de rango: " + binLex,
@@ -371,8 +373,9 @@ public final class Lexer {
             }
         }
 
-        // Decimal — parte entera
-        while (!isAtEnd() && isDigit(peek())) advance();
+        // Decimal — parte entera   ('_' separador entre dígitos: 1_000_000)
+        while (!isAtEnd() && (isDigit(peek())
+                || (peek() == '_' && pos > start && isDigit(peek(1))))) advance();
 
         boolean isFloat = false;
 
@@ -381,7 +384,8 @@ public final class Lexer {
         if (peek() == '.' && isDigit(peek(1))) {
             isFloat = true;
             advance(); // '.'
-            while (!isAtEnd() && isDigit(peek())) advance();
+            while (!isAtEnd() && (isDigit(peek())
+                    || (peek() == '_' && isDigit(peek(1))))) advance();
         }
 
         // Exponente opcional: e[+-]?digit+
@@ -390,20 +394,23 @@ public final class Lexer {
             advance(); // 'e'
             if (peek() == '+' || peek() == '-') advance();
             int expStart = pos;
-            while (!isAtEnd() && isDigit(peek())) advance();
+            while (!isAtEnd() && (isDigit(peek())
+                    || (peek() == '_' && pos > expStart && isDigit(peek(1))))) advance();
             if (pos == expStart) {
                 errors.add(new LexerError("exponente sin dígitos en literal float",
                         startLine, startColumn));
             }
         }
 
+        // El '_' es separador visual (1_000); el lexema lo conserva (display) pero
+        // se descarta (.replace) antes de parsear el valor numérico.
         String lex = source.substring(start, pos);
         // H1.3 (V2): sufijo d/D → literal double (f64). Aplica a entero o float
         // (5d, 1.5d, 2e3d). Sin sufijo, un literal con punto/exponente es float (f32).
         if (peek() == 'd' || peek() == 'D') {
             advance();
             try {
-                double dv = Double.parseDouble(lex);
+                double dv = Double.parseDouble(lex.replace("_", ""));
                 return new Token(TokenType.DOUBLE_LIT, lex, dv, startLine, startColumn);
             } catch (NumberFormatException nfe) {
                 errors.add(new LexerError("literal double inválido: " + lex, startLine, startColumn));
@@ -412,7 +419,7 @@ public final class Lexer {
         }
         if (isFloat) {
             try {
-                double d = Double.parseDouble(lex);
+                double d = Double.parseDouble(lex.replace("_", ""));
                 return new Token(TokenType.FLOAT_LIT, lex, d, startLine, startColumn);
             } catch (NumberFormatException nfe) {
                 errors.add(new LexerError("literal float inválido: " + lex, startLine, startColumn));
@@ -424,7 +431,7 @@ public final class Lexer {
             if (peek() == 'L' || peek() == 'l') { advance(); isLong = true; }
             TokenType ity = isLong ? TokenType.LONG_LIT : TokenType.INTEGER_LIT;
             try {
-                long n = Long.parseLong(lex);
+                long n = Long.parseLong(lex.replace("_", ""));
                 return new Token(ity, lex, n, startLine, startColumn);
             } catch (NumberFormatException nfe) {
                 errors.add(new LexerError("literal entero inválido o fuera de rango: " + lex,

@@ -1,0 +1,22 @@
+// H7NumSep.bp — H7: separador '_' en literales numéricos (Python-style).
+// El '_' es separador visual entre dígitos; el valor es idéntico a sin él.
+// Cubre todas las rutas del scanner: decimal, hex, binario, long, fracción,
+// double (sufijo d) y exponente.
+module H7NumSep
+  function Main()
+    var dec: integer := 1_000_000        // 1000000
+    var hex: integer := 0xDE_AD          // 57005
+    var bin: integer := 0b1111_0000      // 240
+    var lng: long    := 2_000_000L       // 2000000
+    var f:   float   := 1_234.5          // 1234.5
+    var d:   double  := 9_999.5d         // 9999.5
+    var ex:  float   := 1_0e2            // 1000.0 (parte entera '_' + exponente)
+    print "dec=" + intToString(dec)
+    print "hex=" + intToString(hex)
+    print "bin=" + intToString(bin)
+    print "lng=" + intToString(integer(lng))
+    print "flt=" + floatToString(f)
+    print "dbl=" + floatToString(float(d))
+    print "exp=" + floatToString(ex)
+  end Main
+end H7NumSep
