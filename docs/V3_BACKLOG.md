@@ -80,6 +80,14 @@ Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.
     paridad**. **Ya existe el builtin `POW`** (expuesto vía `Math.pow`): revisar su
     impl/paridad actual; `^` float^float puede **bajar a él** si es byte-idéntico en
     ambas VMs. Aditivo (principio 7): opcode nuevo (p.ej. `POW_F`/`POW_I`) o reuso de POW.
+  - **HECHO (20-jun, commit `7a426af`):** `^` en el INTÉRPRETE (ambas VMs, dual-VM
+    byte-idéntico) con IPOW/LPOW/DPOW (0xAC/0xAD/0xAE). **PENDIENTE — `^` en AOT/native**
+    (Eduardo 20-jun: "dejarlo y anotar", retomar con el AOT): `AotCEmitter` no emite `^`
+    → una `native function` con `^` **ABORTA la compilación** (el `native` exige AOT-able).
+    El camino .mod (interpretado) funciona perfecto. Fix futuro: helpers
+    `aot_ipow/aot_lpow/aot_dpow` (misma lógica que los opcodes) + emisión en AotCEmitter,
+    O degradar AOT no-soportado a interpretado (best-effort) en vez de abortar. Mismo
+    hueco para el backend JVM (JvmEmitter).
 
 - **`eval("expresión")` — evaluador de expresiones en runtime, estilo BASIC
   (LIMITADO y SEGURO).** NO es el `eval` de Python (sin código arbitrario, sin acceso
