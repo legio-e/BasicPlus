@@ -1,27 +1,32 @@
 // GuiFontDemo.bp — H6 (fuentes): catálogo de tamaños vía Component.fontSize.
 //
-// fontSize fija el tamaño de texto del componente (0 = por defecto, no aparece
-// en el dump). El backend mapea px → fuente del catálogo (Montserrat en placa,
-// derive en Swing); el modelo guarda el px pedido → el dump muestra font=N.
+// fontSize fija el tamaño de texto del componente. El backend mapea px → fuente
+// del catálogo (Montserrat en placa, derive en Swing); el modelo guarda el px
+// pedido → el dump muestra font=N. Nota: la Montserrat built-in de LVGL llega a
+// 48 y solo trae ASCII (sin ñ/acentos → harían falta fuentes generadas aparte).
 module GuiFontDemo
   import Gui
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
 
-    var a: Gui.Label := Gui.Label(scr, "Pequeno")
+    var a: Gui.Label := Gui.Label(scr, "12 px")
     a.fontSize := 12
-    a.align(Gui.Align.TOP_MID, 0, 30)
-    var b: Gui.Label := Gui.Label(scr, "Normal")      // sin fontSize -> por defecto
-    b.align(Gui.Align.TOP_MID, 0, 80)
-    var c: Gui.Label := Gui.Label(scr, "Grande")
+    a.align(Gui.Align.TOP_MID, 0, 15)
+
+    var b: Gui.Label := Gui.Label(scr, "20 px")
+    b.fontSize := 20
+    b.align(Gui.Align.TOP_MID, 0, 55)
+
+    var c: Gui.Label := Gui.Label(scr, "28 px")
     c.fontSize := 28
-    c.align(Gui.Align.TOP_MID, 0, 130)
+    c.align(Gui.Align.TOP_MID, 0, 105)
 
-    print "fontSize a = " + intToString(a.fontSize)
-    print "fontSize b = " + intToString(b.fontSize)
-    print "fontSize c = " + intToString(c.fontSize)
+    var d: Gui.Label := Gui.Label(scr, "48 px")
+    d.fontSize := 48
+    d.align(Gui.Align.TOP_MID, 0, 175)
 
+    print "fontSizes: " + intToString(a.fontSize) + " " + intToString(b.fontSize) + " " + intToString(c.fontSize) + " " + intToString(d.fontSize)
     print "== widgets =="
     print Gui.__guiDumpTree()
     Gui.run()
