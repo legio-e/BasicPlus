@@ -1,6 +1,7 @@
 bpi 7
 module Gui
 func __guiAlign(handle:integer,a:integer,dx:integer,dy:integer):void public intrinsic
+func __guiTextareaGetReadonly(handle:integer):integer public intrinsic
 func __guiCreateDropdown(parent:integer):integer public intrinsic
 func __guiSetWidth(handle:integer,w:integer):void public intrinsic
 func __guiSetFont(handle:integer,fontId:integer):void public intrinsic
@@ -33,6 +34,7 @@ func __guiDelete(handle:integer):void public intrinsic
 func __guiScreenActive():integer public intrinsic
 func __guiCreateList(parent:integer):integer public intrinsic
 func __guiBindClick(handle:integer,self:Component):void public intrinsic
+func __guiTextareaSetReadonly(handle:integer,ro:integer):void public intrinsic
 func __guiCreateTable(parent:integer):integer public intrinsic
 func __guiSetScrollDir(handle:integer,dir:integer):void public intrinsic
 func __guiCreateSpinbox(parent:integer):integer public intrinsic
@@ -166,9 +168,10 @@ class Screen public extends Component
   method load():void public
 end class
 class Textarea public extends Component
-  layout 8 28 00000080 00000000
+  layout 9 30 00000080 00000000
   ctor(parent:Component)
   prop text:string public
+  prop readOnly:boolean public
 end class
 class Toggle public extends Component
   layout 8 28 00000000 00000000

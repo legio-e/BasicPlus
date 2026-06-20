@@ -55,6 +55,7 @@ public final class GuiBackend {
         int renderedVersion = 0;    // imageview: versión del asset ya renderizada (version-stamp)
         int reloads = 0;            // imageview: nº de recargas reales (prueba la optimización)
         int fontSize = 0;           // tamaño de fuente en px (0 = por defecto); el dump lo refleja
+        boolean readOnly = false;   // textarea: solo lectura (sin cursor, no editable)
         String text = "";
         Node(int handle, String type, JComponent comp, int parent) {
             this.handle = handle; this.type = type; this.comp = comp; this.parent = parent;
@@ -284,6 +285,15 @@ public final class GuiBackend {
         }
     }
     public int getFontSize(int handle) { Node n = nodes.get(handle); return (n == null) ? 0 : n.fontSize; }
+    // ---- Textarea read-only: sin cursor, no editable. ----
+    public void setReadonly(int handle, int ro) {
+        Node n = nodes.get(handle); if (n == null) return;
+        n.readOnly = (ro != 0);
+        if (n.comp instanceof javax.swing.text.JTextComponent) {
+            ((javax.swing.text.JTextComponent) n.comp).setEditable(!n.readOnly);
+        }
+    }
+    public int getReadonly(int handle) { Node n = nodes.get(handle); return (n != null && n.readOnly) ? 1 : 0; }
 
     private int create(String type, JComponent comp, int parent) {
         int h = nextHandle++;
@@ -637,6 +647,7 @@ public final class GuiBackend {
             sb.append(" reloads=").append(n.reloads);
         }
         if (n.fontSize != 0) sb.append(" font=").append(n.fontSize);
+        if (n.readOnly) sb.append(" ro");
         sb.append("]\n");
         for (int c : n.children) dump(sb, c, depth + 1);
     }

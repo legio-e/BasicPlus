@@ -26,6 +26,7 @@ module GuiInputDemo
 
     var ta: Gui.Textarea := Gui.Textarea(scr)
     ta.text := "hola"
+    ta.readOnly := true                 // solo lectura: sin cursor (no hay teclado aquí)
     ta.align(Gui.Align.TOP_MID, 0, 110)
 
     print "== widgets =="

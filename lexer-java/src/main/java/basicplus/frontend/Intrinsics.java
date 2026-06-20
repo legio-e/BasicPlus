@@ -275,5 +275,8 @@ public final class Intrinsics {
         // H6 — fuente (catálogo de tamaños).
         register("Gui.__guiSetFontSize",       w -> emitBuiltin(w, Builtin.GUI_SET_FONT_SIZE));
         register("Gui.__guiGetFontSize",       w -> emitBuiltin(w, Builtin.GUI_GET_FONT_SIZE));
+        // H6 — textarea read-only.
+        register("Gui.__guiTextareaSetReadonly", w -> emitBuiltin(w, Builtin.GUI_TEXTAREA_SET_READONLY));
+        register("Gui.__guiTextareaGetReadonly", w -> emitBuiltin(w, Builtin.GUI_TEXTAREA_GET_READONLY));
     }
 }

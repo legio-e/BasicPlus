@@ -48,6 +48,7 @@ typedef struct {
     int         rendered_version; /* imageview: versión del asset ya renderizada (version-stamp) */
     int         reloads;    /* imageview: nº de recargas reales (prueba la optimización) */
     int         font_size;  /* tamaño de fuente en px (0 = por defecto); el dump lo refleja */
+    int         readonly;   /* textarea: solo lectura (sin cursor, no editable) */
     char*       text;       /* malloc; NULL/"" = sin texto */
     uint32_t    objptr;     /* objeto BP dueño (bind_click), 0 = ninguno */
 #ifdef BPVM_LVGL
@@ -107,7 +108,7 @@ static int create_node(const char* type, int parent) {
     n->has_value = 0; n->value = 0; n->rmin = 0; n->rmax = 100;
     n->trows = 0; n->tcols = 0; n->cells = NULL;
     n->img_asset = 0; n->rendered_version = 0; n->reloads = 0;
-    n->font_size = 0;
+    n->font_size = 0; n->readonly = 0;
     n->text = NULL; n->objptr = 0;
 #ifdef BPVM_LVGL
     n->lv = NULL;
@@ -524,6 +525,26 @@ int bpvm_gui_get_font_size(int handle) {
     gui_node* n = node_for(handle);
     return n ? n->font_size : 0;
 }
+/* ---- Textarea read-only: sin cursor, no editable (display de solo lectura). ---- */
+void bpvm_gui_textarea_set_readonly(int handle, int ro) {
+    gui_node* n = node_for(handle); if (!n) return;
+    n->readonly = ro ? 1 : 0;
+#ifdef BPVM_LVGL
+    if (n->lv) {
+        if (n->readonly) {
+            lv_obj_remove_flag(n->lv, LV_OBJ_FLAG_CLICKABLE);          /* no foco → no edita */
+            lv_obj_set_style_opa(n->lv, LV_OPA_TRANSP, LV_PART_CURSOR); /* oculta el cursor */
+        } else {
+            lv_obj_add_flag(n->lv, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_set_style_opa(n->lv, LV_OPA_COVER, LV_PART_CURSOR);
+        }
+    }
+#endif
+}
+int bpvm_gui_textarea_get_readonly(int handle) {
+    gui_node* n = node_for(handle);
+    return n ? n->readonly : 0;
+}
 /* botones del msgbox \n-sep: render-only (LVGL crea el footer); en el modelo no-op. */
 void bpvm_gui_set_buttons(int handle, const char* labels) {
 #ifdef BPVM_LVGL
@@ -860,6 +881,7 @@ static void dump_node(char** buf, size_t* len, size_t* cap, int handle, int dept
         k = snprintf(tmp, sizeof(tmp), " font=%d", n->font_size);
         if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
     }
+    if (n->readonly) buf_append(buf, len, cap, " ro", 3);
     buf_append(buf, len, cap, "]\n", 2);
     for (int i = 0; i < g_node_count; i++)
         if (g_nodes[i].used && g_nodes[i].parent == handle)

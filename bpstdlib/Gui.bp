@@ -37,6 +37,8 @@ module Gui
   public intrinsic function __guiSetOptions(handle: integer, opts: string)
   public intrinsic function __guiCreateTextarea(parent: integer): integer
   public intrinsic function __guiGetText(handle: integer): string
+  public intrinsic function __guiTextareaSetReadonly(handle: integer, ro: integer)
+  public intrinsic function __guiTextareaGetReadonly(handle: integer): integer
   // Lista (ítems \n-sep + índice; reusa setOptions/value) y teclado en pantalla.
   public intrinsic function __guiCreateList(parent: integer): integer
   public intrinsic function __guiCreateKeyboard(parent: integer): integer
@@ -453,6 +455,21 @@ module Gui
       endget
       set(v)
         __guiSetText(this.lvglId, v)
+      endset
+    endprop
+
+    // readOnly: muestra el texto sin cursor y no editable (para inputbox de solo
+    // lectura; un textarea sin teclado con cursor confunde). true = solo lectura.
+    public property readOnly: boolean
+      get
+        return __guiTextareaGetReadonly(this.lvglId) != 0
+      endget
+      set(v)
+        if v then
+          __guiTextareaSetReadonly(this.lvglId, 1)
+        else
+          __guiTextareaSetReadonly(this.lvglId, 0)
+        endif
       endset
     endprop
   end Textarea

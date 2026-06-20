@@ -2,119 +2,123 @@ dbg 3
 module Gui
 source C:\lenguajes\pm\bpstdlib\Gui.bp
 lines
-1446 96
-1593 133
-1624 136
-1649 141
-1680 144
-1705 149
-1736 152
-1761 157
-1792 160
-1817 167
-1848 170
-1873 178
-1904 181
-1929 187
-1944 188
-1969 191
-1984 192
-2009 195
-2024 196
-2039 197
-2054 198
-2079 202
-2110 206
-2137 211
-2159 215
-2181 218
-2243 245
-2265 241
-2277 242
-2351 252
-2369 253
-2449 266
-2474 270
-2501 274
-2526 260
-2544 261
-2559 262
-2645 282
-2663 283
-2678 284
-2778 303
-2809 306
-2834 298
-2859 292
-2877 293
-2892 294
-2978 322
-3009 325
-3034 316
-3052 317
-3132 345
-3163 348
-3188 340
-3216 335
-3234 336
-3314 366
-3345 369
-3370 361
-3398 357
-3481 388
-3512 391
-3537 383
-3565 378
-3583 379
-3663 412
-3694 415
-3719 404
-3746 407
-3773 400
-3856 434
-3887 437
-3912 429
-3937 424
-3955 425
-4035 452
-4066 455
-4091 446
-4109 447
-4189 476
-4220 479
-4245 471
-4270 466
-4288 467
-4368 492
-4396 488
-4479 515
-4510 518
-4535 509
-4560 503
-4578 504
-4593 505
-4679 529
-4756 548
-4787 551
-4812 543
-4860 538
-4878 539
-4958 565
-4986 569
-5017 573
-5048 561
-5165 592
-5199 597
-5224 600
-5249 587
-5320 614
-5348 620
-5360 621
-5382 609
-5400 610
-5502 631
-5521 635
-5540 640
+1446 98
+1593 135
+1624 138
+1649 143
+1680 146
+1705 151
+1736 154
+1761 159
+1792 162
+1817 169
+1848 172
+1873 180
+1904 183
+1929 189
+1944 190
+1969 193
+1984 194
+2009 197
+2024 198
+2039 199
+2054 200
+2079 204
+2110 208
+2137 213
+2159 217
+2181 220
+2243 247
+2265 243
+2277 244
+2351 254
+2369 255
+2449 268
+2474 272
+2501 276
+2526 262
+2544 263
+2559 264
+2645 284
+2663 285
+2678 286
+2778 305
+2809 308
+2834 300
+2859 294
+2877 295
+2892 296
+2978 324
+3009 327
+3034 318
+3052 319
+3132 347
+3163 350
+3188 342
+3216 337
+3234 338
+3314 368
+3345 371
+3370 363
+3398 359
+3481 390
+3512 393
+3537 385
+3565 380
+3583 381
+3663 414
+3694 417
+3719 406
+3746 409
+3773 402
+3856 436
+3887 439
+3912 431
+3937 426
+3955 427
+4035 454
+4066 457
+4091 465
+4128 468
+4136 469
+4158 471
+4185 448
+4203 449
+4283 493
+4314 496
+4339 488
+4364 483
+4382 484
+4462 509
+4490 505
+4573 532
+4604 535
+4629 526
+4654 520
+4672 521
+4687 522
+4773 546
+4850 565
+4881 568
+4906 560
+4954 555
+4972 556
+5052 582
+5080 586
+5111 590
+5142 578
+5259 609
+5293 614
+5318 617
+5343 604
+5414 631
+5442 637
+5454 638
+5476 626
+5494 627
+5596 648
+5615 652
+5634 657
 vars
 func Object.toString 0
 this -16 4 0 ?
@@ -439,138 +443,143 @@ this -16 4 0 ?
 func Textarea.setText 4057
 this -20 4 0 ?
 v 0 4 0 ?
-func Textarea.__init 4088
-this -20 4 0 ?
-parent -16 4 0 ref
-func __cls_new_Textarea 4131
-parent -16 4 0 ref
-func __cls_init_Textarea 4165
-this -20 4 0 ?
-parent -16 4 0 ref
-func ListBox.getSelected 4186
+func Textarea.getReadOnly 4088
 this -16 4 0 ?
-func ListBox.setSelected 4211
+func Textarea.setReadOnly 4119
 this -20 4 0 ?
 v 0 4 0 ?
-func ListBox.setItems 4242
+func Textarea.__init 4182
+this -20 4 0 ?
+parent -16 4 0 ref
+func __cls_new_Textarea 4225
+parent -16 4 0 ref
+func __cls_init_Textarea 4259
+this -20 4 0 ?
+parent -16 4 0 ref
+func ListBox.getSelected 4280
+this -16 4 0 ?
+func ListBox.setSelected 4305
+this -20 4 0 ?
+v 0 4 0 ?
+func ListBox.setItems 4336
 this -20 4 0 ?
 items -16 4 0 string
-func ListBox.__init 4267
+func ListBox.__init 4361
 this -20 4 0 ?
 parent -16 4 0 ref
-func __cls_new_ListBox 4310
+func __cls_new_ListBox 4404
 parent -16 4 0 ref
-func __cls_init_ListBox 4344
+func __cls_init_ListBox 4438
 this -20 4 0 ?
 parent -16 4 0 ref
-func Keyboard.attach 4365
+func Keyboard.attach 4459
 this -20 4 0 ?
 ta -16 4 0 ref
-func Keyboard.__init 4393
+func Keyboard.__init 4487
 this -20 4 0 ?
 parent -16 4 0 ref
-func __cls_new_Keyboard 4421
+func __cls_new_Keyboard 4515
 parent -16 4 0 ref
-func __cls_init_Keyboard 4455
+func __cls_init_Keyboard 4549
 this -20 4 0 ?
 parent -16 4 0 ref
-func Msgbox.getResult 4476
+func Msgbox.getResult 4570
 this -16 4 0 ?
-func Msgbox.setResult 4501
+func Msgbox.setResult 4595
 this -20 4 0 ?
 v 0 4 0 ?
-func Msgbox.setButtons 4532
+func Msgbox.setButtons 4626
 this -20 4 0 ?
 labels -16 4 0 string
-func Msgbox.__init 4557
+func Msgbox.__init 4651
 this -24 4 0 ?
 parent -20 4 0 ref
 message -16 4 0 string
-func __cls_new_Msgbox 4615
+func __cls_new_Msgbox 4709
 parent -20 4 0 ref
 message -16 4 0 string
-func __cls_init_Msgbox 4652
+func __cls_init_Msgbox 4746
 this -24 4 0 ?
 parent -20 4 0 ref
 message -16 4 0 string
-func TabPage.__init 4676
+func TabPage.__init 4770
 this -20 4 0 ?
 pageId -16 4 0 integer
-func __cls_new_TabPage 4698
+func __cls_new_TabPage 4792
 pageId -16 4 0 integer
-func __cls_init_TabPage 4732
+func __cls_init_TabPage 4826
 this -20 4 0 ?
 pageId -16 4 0 integer
-func Tabview.getActive 4753
+func Tabview.getActive 4847
 this -16 4 0 ?
-func Tabview.setActive 4778
+func Tabview.setActive 4872
 this -20 4 0 ?
 v 0 4 0 ?
-func Tabview.addTab 4809
+func Tabview.addTab 4903
 this -20 4 0 ?
 name -16 4 0 string
-func Tabview.__init 4857
+func Tabview.__init 4951
 this -20 4 0 ?
 parent -16 4 0 ref
-func __cls_new_Tabview 4900
+func __cls_new_Tabview 4994
 parent -16 4 0 ref
-func __cls_init_Tabview 4934
+func __cls_init_Tabview 5028
 this -20 4 0 ?
 parent -16 4 0 ref
-func Table.setGrid 4955
+func Table.setGrid 5049
 this -24 4 0 ?
 rows -20 4 0 integer
 cols -16 4 0 integer
-func Table.setCell 4983
+func Table.setCell 5077
 this -28 4 0 ?
 row -24 4 0 integer
 col -20 4 0 integer
 text -16 4 0 string
-func Table.getCell 5014
+func Table.getCell 5108
 this -24 4 0 ?
 row -20 4 0 integer
 col -16 4 0 integer
-func Table.__init 5045
+func Table.__init 5139
 this -20 4 0 ?
 parent -16 4 0 ref
-func __cls_new_Table 5073
+func __cls_new_Table 5167
 parent -16 4 0 ref
-func __cls_init_Table 5107
+func __cls_init_Table 5201
 this -20 4 0 ?
 parent -16 4 0 ref
-func Image.getAssetId 5128
+func Image.getAssetId 5222
 this -16 4 0 ?
-func Image.setAssetId 5144
+func Image.setAssetId 5238
 this -20 4 0 ?
-func Image.loadFile 5162
+func Image.loadFile 5256
 this -20 4 0 ?
 path -16 4 0 string
-func Image.width 5196
+func Image.width 5290
 this -16 4 0 ?
-func Image.height 5221
+func Image.height 5315
 this -16 4 0 ?
-func Image.__init 5246
+func Image.__init 5340
 this -16 4 0 ?
-func __cls_init_Image 5299
+func __cls_init_Image 5393
 this -16 4 0 ?
-func ImageView.setImage 5317
+func ImageView.setImage 5411
 this -20 4 0 ?
 img -16 4 0 ref
-func ImageView.refresh 5345
+func ImageView.refresh 5439
 this -16 4 0 ?
-func ImageView.__init 5379
+func ImageView.__init 5473
 this -20 4 0 ?
 parent -16 4 0 ref
-func __cls_new_ImageView 5422
+func __cls_new_ImageView 5516
 parent -16 4 0 ref
-func __cls_init_ImageView 5456
+func __cls_init_ImageView 5550
 this -20 4 0 ?
 parent -16 4 0 ref
-func __guiDispatch 5499
+func __guiDispatch 5593
 self -16 4 0 ref
-func __guiDispatchChange 5518
+func __guiDispatchChange 5612
 self -16 4 0 ref
-func __strconcat 5553
+func __strconcat 5647
 a -20 4 0 ?
 b -16 4 0 ?
 la 0 4 0 ?

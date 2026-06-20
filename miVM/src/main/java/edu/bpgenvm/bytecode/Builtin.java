@@ -389,7 +389,11 @@ public enum Builtin {
 
     // H6 — fuente: tamaño de texto por componente (catálogo de fuentes).
     GUI_SET_FONT_SIZE("__guiSetFontSize"),            // (handle, px) → void
-    GUI_GET_FONT_SIZE("__guiGetFontSize");            // (handle) → px
+    GUI_GET_FONT_SIZE("__guiGetFontSize"),            // (handle) → px
+
+    // H6 — textarea read-only (sin cursor, no editable).
+    GUI_TEXTAREA_SET_READONLY("__guiTextareaSetReadonly"), // (handle, ro) → void
+    GUI_TEXTAREA_GET_READONLY("__guiTextareaGetReadonly"); // (handle) → int
 
     public final String bpName;
     public final int id;

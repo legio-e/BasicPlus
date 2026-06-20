@@ -3395,6 +3395,8 @@ public class VirtualMachine {
             case GUI_IMAGEVIEW_REFRESH: { int view = popTc(tc); gui.imageViewRefresh(view); pushTc(tc, 0); break; }
             case GUI_SET_FONT_SIZE: { int px = popTc(tc); int h = popTc(tc); gui.setFontSize(h, px); pushTc(tc, 0); break; }
             case GUI_GET_FONT_SIZE: { int h = popTc(tc); pushTc(tc, gui.getFontSize(h)); break; }
+            case GUI_TEXTAREA_SET_READONLY: { int ro = popTc(tc); int h = popTc(tc); gui.setReadonly(h, ro); pushTc(tc, 0); break; }
+            case GUI_TEXTAREA_GET_READONLY: { int h = popTc(tc); pushTc(tc, gui.getReadonly(h)); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));

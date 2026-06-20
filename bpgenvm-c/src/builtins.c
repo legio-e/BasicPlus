@@ -231,7 +231,10 @@ enum {
     BUILTIN_GUI_IMAGEVIEW_REFRESH = 195,
     /* H6 — fuente: tamaño de texto por componente (catálogo). */
     BUILTIN_GUI_SET_FONT_SIZE = 196,
-    BUILTIN_GUI_GET_FONT_SIZE = 197
+    BUILTIN_GUI_GET_FONT_SIZE = 197,
+    /* H6 — textarea read-only (sin cursor, no editable). */
+    BUILTIN_GUI_TEXTAREA_SET_READONLY = 198,
+    BUILTIN_GUI_TEXTAREA_GET_READONLY = 199
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -614,6 +617,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_GET_FONT_SIZE: {
         int h = pop_i32(vm, tc);
         push_i32(vm, tc, bpvm_gui_get_font_size(h)); return BPVM_OK;
+    }
+    case BUILTIN_GUI_TEXTAREA_SET_READONLY: {
+        int ro = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        bpvm_gui_textarea_set_readonly(h, ro); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_TEXTAREA_GET_READONLY: {
+        int h = pop_i32(vm, tc);
+        push_i32(vm, tc, bpvm_gui_textarea_get_readonly(h)); return BPVM_OK;
     }
 #endif /* BPVM_GUI */
 

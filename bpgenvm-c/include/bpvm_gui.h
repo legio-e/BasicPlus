@@ -52,6 +52,8 @@ void bpvm_gui_imageview_set_image(int view, int img);
 void bpvm_gui_imageview_refresh(int view);
 void bpvm_gui_set_font_size(int handle, int px);
 int  bpvm_gui_get_font_size(int handle);
+void bpvm_gui_textarea_set_readonly(int handle, int ro);
+int  bpvm_gui_textarea_get_readonly(int handle);
 
 /* Configuración. Texto + geometría/anclaje afectan al dumpTree (modelo). Color y
  * fuente son render-only: no-op en el modelo (no tocan el dump) y, bajo BPVM_LVGL,
