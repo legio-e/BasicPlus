@@ -58,7 +58,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net gui-smoke
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -365,3 +365,12 @@ gui-smoke:
 	  -L$(SDL2_DIR)/lib -lSDL2 -o build/gui_smoke.exe
 	cp $(SDL2_DIR)/bin/SDL2.dll build/
 	./build/gui_smoke.exe
+
+# H6 (image) — verificación HEADLESS del decode (lodepng): SIN abrir ventana,
+# valida que el decoder reconoce el lv_image_dsc_t en RAM (src VARIABLE) y saca
+# las dimensiones del PNG → la cadena que en placa pinta los píxeles. Necesita
+# liblvgl.a (con LV_USE_LODEPNG=1) y SDL2.dll: úsalo como `make LVGL=1 gui-imgdecode`.
+gui-imgdecode: build/liblvgl.a build/SDL2.dll
+	$(CC) -std=gnu11 -O2 $(LVGL_INC) test/gui_imgdecode.c build/liblvgl.a \
+	  -L$(SDL2_DIR)/lib -lSDL2 -o build/gui_imgdecode.exe
+	./build/gui_imgdecode.exe ../bpstdlib/testimg.png

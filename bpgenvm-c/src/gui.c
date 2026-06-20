@@ -76,6 +76,10 @@ typedef struct {
     int   w, h;     /* dimensiones intrínsecas del PNG (0 si no cargado) */
     int   loaded;
     int   version;  /* sube en cada load_file: el ImageView recarga si cambió */
+#ifdef BPVM_LVGL
+    uint8_t*       png_data;  /* fichero PNG completo en RAM (malloc) para el decoder */
+    lv_image_dsc_t dsc;       /* descriptor LVGL (src VARIABLE) → lv_image_set_src */
+#endif
 } gui_image;
 static gui_image g_images[GUI_MAX_IMAGES];
 static int       g_image_count = 0;
@@ -126,6 +130,7 @@ static void lvgl_ensure_init(void) {
     if (g_lvgl_inited) return;
     g_lvgl_inited = 1;
     lv_init();                                       /* core LVGL (portable) */
+    lv_lodepng_init();                               /* decoder PNG (image / Gui.Image) */
     bpvm_gui_disp_init(GUI_SCREEN_W, GUI_SCREEN_H);  /* tick + display + input (plataforma) */
 }
 
@@ -391,6 +396,10 @@ int bpvm_gui_image_new(void) {
     int id = g_image_count + 1;          /* id 1-based = índice+1 */
     gui_image* a = &g_images[g_image_count++];
     a->used = 1; a->path = NULL; a->w = 0; a->h = 0; a->loaded = 0; a->version = 0;
+#ifdef BPVM_LVGL
+    a->png_data = NULL;
+    lv_memzero(&a->dsc, sizeof(a->dsc));
+#endif
     return id;
 }
 /* Carga un PNG: saca width/height del header IHDR (sin decoder). Devuelve 1 si
@@ -416,6 +425,28 @@ int bpvm_gui_image_load_file(int id, const char* path) {
                     | ((uint32_t) b[22] << 8)  |  (uint32_t) b[23]);
         a->loaded = 1;
     }
+#ifdef BPVM_LVGL
+    /* Para renderizar: lee el PNG ENTERO a RAM y monta un lv_image_dsc_t (src
+     * VARIABLE) que el decoder lodepng decodifica al asignarlo con set_src. */
+    free(a->png_data); a->png_data = NULL;
+    lv_memzero(&a->dsc, sizeof(a->dsc));
+    if (a->loaded) {
+        uint32_t sz = 0;
+        if (bpvm_fs_stat(path ? path : "", &sz) == 0 && sz > 0
+            && (a->png_data = (uint8_t*) malloc(sz)) != NULL
+            && bpvm_fs_read(path, a->png_data, sz) == (long) sz) {
+            a->dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+            a->dsc.header.cf    = LV_COLOR_FORMAT_RAW;   /* encoded: el decoder resuelve el formato real */
+            a->dsc.header.w     = (uint32_t) a->w;
+            a->dsc.header.h     = (uint32_t) a->h;
+            a->dsc.data         = a->png_data;
+            a->dsc.data_size    = sz;
+        } else {
+            free(a->png_data); a->png_data = NULL;
+            a->loaded = 0;   /* no se pudo leer entero → no renderizable */
+        }
+    }
+#endif
     a->version++;   /* (re)carga: el asset cambió → los ImageView lo recargarán */
     return a->loaded;
 }
@@ -446,8 +477,12 @@ void bpvm_gui_imageview_refresh(int view) {
     gui_image* a = image_for(n->img_asset);
     int cur = a ? a->version : 0;
     if (cur != n->rendered_version) {
-        n->rendered_version = cur;   /* (en device: re-decode + lv_image_set_src) */
+        n->rendered_version = cur;
         n->reloads++;
+#ifdef BPVM_LVGL
+        /* recarga real: el decoder lodepng decodifica el PNG del descriptor. */
+        if (n->lv && a && a->loaded) lv_image_set_src(n->lv, &a->dsc);
+#endif
     }
 }
 /* botones del msgbox \n-sep: render-only (LVGL crea el footer); en el modelo no-op. */

@@ -777,8 +777,9 @@
     #define LV_FS_ARDUINO_SD_LETTER '\0'     /*Set an upper cased letter on which the drive will accessible (e.g. 'A')*/
 #endif
 
-/*LODEPNG decoder library*/
-#define LV_USE_LODEPNG 0
+/*LODEPNG decoder library — image (Gui.Image) en V3/H6: decodifica PNG desde un
+ *lv_image_dsc_t en RAM (src VARIABLE), sin FS driver.*/
+#define LV_USE_LODEPNG 1
 
 /*PNG decoder(libpng) library*/
 #define LV_USE_LIBPNG 0
