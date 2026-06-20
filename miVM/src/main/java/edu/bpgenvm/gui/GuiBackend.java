@@ -47,6 +47,8 @@ public final class GuiBackend {
         boolean suppressEvents = false;  // setChecked/setValue programático: no emitir onChange (paridad LVGL)
         int value = 0;              // valor actual (checkbox/switch: 0/1; slider/bar: entero)
         int rmin = 0, rmax = 100;   // rango de value-widgets enteros (clamp); default LVGL/Swing 0..100
+        int trows = 0, tcols = 0;   // table: dimensiones de la rejilla
+        String[] cells = null;      // table: celdas row-major (trows*tcols)
         String text = "";
         Node(int handle, String type, JComponent comp, int parent) {
             this.handle = handle; this.type = type; this.comp = comp; this.parent = parent;
@@ -170,6 +172,34 @@ public final class GuiBackend {
             if (tp.getTabCount() > 0) tp.setTitleAt(tp.getTabCount() - 1, name);
         }
         return h;
+    }
+    public int createTable(int parent) {
+        // Placeholder JPanel en miVM; las celdas (n.cells) son la verdad del dump.
+        return create("table", new JPanel(null), parent);
+    }
+    public void tableSetGrid(int handle, int rows, int cols) {
+        Node n = nodes.get(handle); if (n == null) return;
+        if (rows < 0) rows = 0;
+        if (cols < 0) cols = 0;
+        String[] nc = new String[rows * cols];
+        for (int i = 0; i < nc.length; i++) nc[i] = "";
+        if (n.cells != null) {   // conserva las celdas que sigan en rango
+            for (int r = 0; r < rows && r < n.trows; r++)
+                for (int c = 0; c < cols && c < n.tcols; c++)
+                    nc[r * cols + c] = n.cells[r * n.tcols + c];
+        }
+        n.trows = rows; n.tcols = cols; n.cells = nc;
+    }
+    public void tableSetCell(int handle, int row, int col, String text) {
+        Node n = nodes.get(handle); if (n == null || n.cells == null) return;
+        if (row < 0 || row >= n.trows || col < 0 || col >= n.tcols) return;
+        n.cells[row * n.tcols + col] = (text != null) ? text : "";
+    }
+    public String tableGetCell(int handle, int row, int col) {
+        Node n = nodes.get(handle); if (n == null || n.cells == null) return "";
+        if (row < 0 || row >= n.trows || col < 0 || col >= n.tcols) return "";
+        String s = n.cells[row * n.tcols + col];
+        return s != null ? s : "";
     }
 
     private int create(String type, JComponent comp, int parent) {
@@ -504,6 +534,14 @@ public final class GuiBackend {
         else sb.append(" align=").append(n.align).append(" +").append(n.dx).append(",").append(n.dy);
         if (n.scroll != 0) sb.append(" scroll=").append(n.scroll);
         if (n.hasValue) sb.append(" val=").append(n.value);
+        if (n.cells != null) {   // table: dimensiones + celdas row-major (|-sep)
+            sb.append(" grid=").append(n.trows).append("x").append(n.tcols).append(" \"");
+            for (int i = 0; i < n.cells.length; i++) {
+                if (i > 0) sb.append("|");
+                sb.append(n.cells[i] != null ? n.cells[i] : "");
+            }
+            sb.append("\"");
+        }
         sb.append("]\n");
         for (int c : n.children) dump(sb, c, depth + 1);
     }

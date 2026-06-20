@@ -1,0 +1,30 @@
+// GuiTableDemo.bp — H6 tanda 8: table (rejilla de celdas filas×columnas).
+//
+// setGrid(filas,cols) fija el tamaño; setCell(f,c,txt)/getCell(f,c) acceden a
+// cada celda. Widget de solo-datos (sin onChange en este subconjunto). El dump
+// muestra grid=FxC y las celdas (row-major, |-sep) → paridad del modelo.
+module GuiTableDemo
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var t: Gui.Table := Gui.Table(scr)
+    t.setGrid(2, 3)
+    t.setCell(0, 0, "Nombre")
+    t.setCell(0, 1, "Edad")
+    t.setCell(0, 2, "Ciudad")
+    t.setCell(1, 0, "Ana")
+    t.setCell(1, 1, "33")
+    t.setCell(1, 2, "Vigo")
+
+    print "celda(1,0) = " + t.getCell(1, 0)
+    print "celda(0,2) = " + t.getCell(0, 2)
+    print "fuera      = [" + t.getCell(5, 5) + "]"     // fuera de rango -> ""
+
+    print "== widgets =="
+    print Gui.__guiDumpTree()
+    Gui.run()
+  end Main
+
+end GuiTableDemo

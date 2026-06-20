@@ -39,6 +39,10 @@ int  bpvm_gui_create_msgbox(int parent);
 void bpvm_gui_set_buttons(int handle, const char* labels);
 int  bpvm_gui_create_tabview(int parent);
 int  bpvm_gui_tabview_add_tab(int handle, const char* name);
+int  bpvm_gui_create_table(int parent);
+void bpvm_gui_table_set_grid(int handle, int rows, int cols);
+void bpvm_gui_table_set_cell(int handle, int row, int col, const char* text);
+const char* bpvm_gui_table_get_cell(int handle, int row, int col);
 
 /* Configuración. Texto + geometría/anclaje afectan al dumpTree (modelo). Color y
  * fuente son render-only: no-op en el modelo (no tocan el dump) y, bajo BPVM_LVGL,

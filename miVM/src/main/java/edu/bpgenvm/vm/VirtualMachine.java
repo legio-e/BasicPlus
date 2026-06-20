@@ -3382,6 +3382,10 @@ public class VirtualMachine {
             case GUI_SET_BUTTONS: { int lbls = popTc(tc); int hnd = popTc(tc); gui.setButtons(hnd, readVmString(lbls)); pushTc(tc, 0); break; }
             case GUI_CREATE_TABVIEW: { int p = popTc(tc); pushTc(tc, gui.createTabview(p)); break; }
             case GUI_TABVIEW_ADD_TAB: { int nm = popTc(tc); int hnd = popTc(tc); pushTc(tc, gui.tabviewAddTab(hnd, readVmString(nm))); break; }
+            case GUI_CREATE_TABLE: { int p = popTc(tc); pushTc(tc, gui.createTable(p)); break; }
+            case GUI_TABLE_SET_GRID: { int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); gui.tableSetGrid(hnd, r, c); pushTc(tc, 0); break; }
+            case GUI_TABLE_SET_CELL: { int t = popTc(tc); int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); gui.tableSetCell(hnd, r, c, readVmString(t)); pushTc(tc, 0); break; }
+            case GUI_TABLE_GET_CELL: { int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); pushTc(tc, allocVmString(gui.tableGetCell(hnd, r, c))); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));

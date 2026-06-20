@@ -370,7 +370,13 @@ public enum Builtin {
 
     // H6 widgets — tabview (pestañas; addTab devuelve el handle de la página).
     GUI_CREATE_TABVIEW("__guiCreateTabview"),   // (parent) → id
-    GUI_TABVIEW_ADD_TAB("__guiTabviewAddTab");  // (id, name) → pageId
+    GUI_TABVIEW_ADD_TAB("__guiTabviewAddTab"),  // (id, name) → pageId
+
+    // H6 widgets — table (rejilla de celdas filas×columnas).
+    GUI_CREATE_TABLE("__guiCreateTable"),       // (parent) → id
+    GUI_TABLE_SET_GRID("__guiTableSetGrid"),    // (id, rows, cols) → void
+    GUI_TABLE_SET_CELL("__guiTableSetCell"),    // (id, row, col, text) → void
+    GUI_TABLE_GET_CELL("__guiTableGetCell");    // (id, row, col) → string
 
     public final String bpName;
     public final int id;

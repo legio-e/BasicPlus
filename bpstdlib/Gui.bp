@@ -47,6 +47,11 @@ module Gui
   // Tabview: pestañas; addTab crea una página (handle) que se envuelve en TabPage.
   public intrinsic function __guiCreateTabview(parent: integer): integer
   public intrinsic function __guiTabviewAddTab(handle: integer, name: string): integer
+  // Table: rejilla de celdas (filas×columnas) de texto.
+  public intrinsic function __guiCreateTable(parent: integer): integer
+  public intrinsic function __guiTableSetGrid(handle: integer, rows: integer, cols: integer)
+  public intrinsic function __guiTableSetCell(handle: integer, row: integer, col: integer, text: string)
+  public intrinsic function __guiTableGetCell(handle: integer, row: integer, col: integer): string
   // Geometría: x/y/width/height — backend = verdad (get/set → intrínsecos).
   public intrinsic function __guiSetX(handle: integer, x: integer)
   public intrinsic function __guiGetX(handle: integer): integer
@@ -522,6 +527,27 @@ module Gui
       endset
     endprop
   end Tabview
+
+  // ---- Table — rejilla de celdas de texto (filas×columnas). setGrid fija el
+  //      tamaño; setCell/getCell acceden a cada celda. (Solo datos; sin onChange
+  //      en este subconjunto — la edición/selección de celda sería repesca.) ----
+  public class Table extends Component
+    public function Table(parent: Component)
+      this.lvglId := __guiCreateTable(parent.lvglId)
+    end Table
+
+    public function setGrid(rows: integer, cols: integer)
+      __guiTableSetGrid(this.lvglId, rows, cols)
+    end setGrid
+
+    public function setCell(row: integer, col: integer, text: string)
+      __guiTableSetCell(this.lvglId, row, col, text)
+    end setCell
+
+    public function getCell(row: integer, col: integer): string
+      return __guiTableGetCell(this.lvglId, row, col)
+    end getCell
+  end Table
 
   // ---- Dispatch del upcall: la VM llama aquí (por NOMBRE, resolveGlobal) al
   //      pulsar/cambiar un widget. self.onClick()/onChange() son llamadas

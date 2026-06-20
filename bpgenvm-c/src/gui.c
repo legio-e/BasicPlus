@@ -41,6 +41,8 @@ typedef struct {
     int         has_value;  /* 1 en value-widgets (checkbox, switch, slider, bar, ...) */
     int         value;      /* estado del value-widget (checkbox/switch: 0/1; slider/bar: entero) */
     int         rmin, rmax; /* rango de value-widgets enteros (clamp); default 0..100 */
+    int         trows, tcols; /* table: dimensiones de la rejilla */
+    char**      cells;      /* table: celdas row-major (trows*tcols), cada una malloc o NULL */
     char*       text;       /* malloc; NULL/"" = sin texto */
     uint32_t    objptr;     /* objeto BP dueño (bind_click), 0 = ninguno */
 #ifdef BPVM_LVGL
@@ -74,6 +76,7 @@ static int create_node(const char* type, int parent) {
     n->w = -1; n->h = -1; n->x = 0; n->y = 0; n->pos_set = 0;
     n->align = 0; n->dx = 0; n->dy = 0; n->scroll = 0;
     n->has_value = 0; n->value = 0; n->rmin = 0; n->rmax = 100;
+    n->trows = 0; n->tcols = 0; n->cells = NULL;
     n->text = NULL; n->objptr = 0;
 #ifdef BPVM_LVGL
     n->lv = NULL;
@@ -308,6 +311,54 @@ int bpvm_gui_tabview_add_tab(int handle, const char* name) {
     if (tv && tv->lv) n->lv = lv_tabview_add_tab(tv->lv, name ? name : "");
 #endif
     return h;
+}
+/* ---- Table — rejilla de celdas de texto (filas×columnas). ---- */
+int bpvm_gui_create_table(int parent) {
+    int h = create_node("table", parent);
+#ifdef BPVM_LVGL
+    gui_node* n = node_for(h); if (n) n->lv = lv_table_create(parent_lv(parent));
+#endif
+    return h;
+}
+void bpvm_gui_table_set_grid(int handle, int rows, int cols) {
+    gui_node* n = node_for(handle); if (!n) return;
+    if (rows < 0) rows = 0;
+    if (cols < 0) cols = 0;
+    int total = rows * cols; if (total < 1) total = 1;
+    char** nc = (char**) calloc((size_t) total, sizeof(char*));
+    if (!nc) return;
+    if (n->cells) {   /* conserva las celdas que sigan en rango y libera el resto */
+        for (int r = 0; r < n->trows; r++) {
+            for (int c = 0; c < n->tcols; c++) {
+                char* old = n->cells[r * n->tcols + c];
+                if (r < rows && c < cols) nc[r * cols + c] = old;
+                else free(old);
+            }
+        }
+        free(n->cells);
+    }
+    n->trows = rows; n->tcols = cols; n->cells = nc;
+#ifdef BPVM_LVGL
+    if (n->lv) { lv_table_set_row_cnt(n->lv, rows); lv_table_set_col_cnt(n->lv, cols); }
+#endif
+}
+void bpvm_gui_table_set_cell(int handle, int row, int col, const char* text) {
+    gui_node* n = node_for(handle); if (!n || !n->cells) return;
+    if (row < 0 || row >= n->trows || col < 0 || col >= n->tcols) return;
+    int idx = row * n->tcols + col;
+    free(n->cells[idx]);
+    size_t L = text ? strlen(text) : 0;
+    n->cells[idx] = (char*) malloc(L + 1);
+    if (n->cells[idx]) { if (text) memcpy(n->cells[idx], text, L); n->cells[idx][L] = '\0'; }
+#ifdef BPVM_LVGL
+    if (n->lv) lv_table_set_cell_value(n->lv, row, col, text ? text : "");
+#endif
+}
+const char* bpvm_gui_table_get_cell(int handle, int row, int col) {
+    gui_node* n = node_for(handle); if (!n || !n->cells) return "";
+    if (row < 0 || row >= n->trows || col < 0 || col >= n->tcols) return "";
+    const char* s = n->cells[row * n->tcols + col];
+    return s ? s : "";
 }
 /* botones del msgbox \n-sep: render-only (LVGL crea el footer); en el modelo no-op. */
 void bpvm_gui_set_buttons(int handle, const char* labels) {
@@ -614,6 +665,17 @@ static void dump_node(char** buf, size_t* len, size_t* cap, int handle, int dept
     if (n->has_value) {
         k = snprintf(tmp, sizeof(tmp), " val=%d", n->value);
         if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
+    }
+    if (n->cells) {   /* table: dimensiones + celdas row-major (|-sep) */
+        k = snprintf(tmp, sizeof(tmp), " grid=%dx%d \"", n->trows, n->tcols);
+        if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
+        int total = n->trows * n->tcols;
+        for (int i = 0; i < total; i++) {
+            if (i > 0) buf_append(buf, len, cap, "|", 1);
+            const char* cv = n->cells[i] ? n->cells[i] : "";
+            buf_append(buf, len, cap, cv, strlen(cv));
+        }
+        buf_append(buf, len, cap, "\"", 1);
     }
     buf_append(buf, len, cap, "]\n", 2);
     for (int i = 0; i < g_node_count; i++)

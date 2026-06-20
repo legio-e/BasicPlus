@@ -259,5 +259,10 @@ public final class Intrinsics {
         // H6 widgets — tabview.
         register("Gui.__guiCreateTabview",  w -> emitBuiltin(w, Builtin.GUI_CREATE_TABVIEW));
         register("Gui.__guiTabviewAddTab",  w -> emitBuiltin(w, Builtin.GUI_TABVIEW_ADD_TAB));
+        // H6 widgets — table.
+        register("Gui.__guiCreateTable",    w -> emitBuiltin(w, Builtin.GUI_CREATE_TABLE));
+        register("Gui.__guiTableSetGrid",   w -> emitBuiltin(w, Builtin.GUI_TABLE_SET_GRID));
+        register("Gui.__guiTableSetCell",   w -> emitBuiltin(w, Builtin.GUI_TABLE_SET_CELL));
+        register("Gui.__guiTableGetCell",   w -> emitBuiltin(w, Builtin.GUI_TABLE_GET_CELL));
     }
 }

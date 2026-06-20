@@ -23,13 +23,16 @@ func __guiCreateButton(parent:integer):integer public intrinsic
 func __guiCreateCheckbox(parent:integer):integer public intrinsic
 func __guiClean(handle:integer):void public intrinsic
 func __guiTabviewAddTab(handle:integer,name:string):integer public intrinsic
+func __guiTableGetCell(handle:integer,row:integer,col:integer):string public intrinsic
 func __guiDelete(handle:integer):void public intrinsic
 func __guiScreenActive():integer public intrinsic
 func __guiCreateList(parent:integer):integer public intrinsic
 func __guiBindClick(handle:integer,self:Component):void public intrinsic
+func __guiCreateTable(parent:integer):integer public intrinsic
 func __guiSetScrollDir(handle:integer,dir:integer):void public intrinsic
 func __guiCreateSpinbox(parent:integer):integer public intrinsic
 func __guiKeyboardSetTextarea(handle:integer,ta:integer):void public intrinsic
+func __guiTableSetGrid(handle:integer,rows:integer,cols:integer):void public intrinsic
 func __guiCreateSwitch(parent:integer):integer public intrinsic
 func __guiCreateTextarea(parent:integer):integer public intrinsic
 func __guiSetValue(handle:integer,v:integer):void public intrinsic
@@ -43,6 +46,7 @@ func __guiSetTextColor(handle:integer,rgb:integer):void public intrinsic
 func __guiSetBgColor(handle:integer,rgb:integer):void public intrinsic
 func __guiGetValue(handle:integer):integer public intrinsic
 func __guiGetChecked(handle:integer):boolean public intrinsic
+func __guiTableSetCell(handle:integer,row:integer,col:integer,text:string):void public intrinsic
 func __guiGetWidth(handle:integer):integer public intrinsic
 func __guiRefresh(handle:integer):void public intrinsic
 func __guiCreateObj(parent:integer):integer public intrinsic
@@ -166,6 +170,13 @@ class Component public
   method delete():void public
   method onClick():void public
   method onChange():void public
+end class
+class Table public extends Component
+  layout 6 27 00000000 00000000
+  ctor(parent:Component)
+  method setGrid(rows:integer,cols:integer):void public
+  method setCell(row:integer,col:integer,text:string):void public
+  method getCell(row:integer,col:integer):string public
 end class
 class Keyboard public extends Component
   layout 6 25 00000000 00000000

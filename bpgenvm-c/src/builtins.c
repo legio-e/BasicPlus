@@ -215,7 +215,12 @@ enum {
     BUILTIN_GUI_SET_BUTTONS     = 182,
     /* H6 widgets — tabview (pestañas; addTab devuelve el handle de la página). */
     BUILTIN_GUI_CREATE_TABVIEW  = 183,
-    BUILTIN_GUI_TABVIEW_ADD_TAB = 184
+    BUILTIN_GUI_TABVIEW_ADD_TAB = 184,
+    /* H6 widgets — table (rejilla de celdas filas×columnas). */
+    BUILTIN_GUI_CREATE_TABLE    = 185,
+    BUILTIN_GUI_TABLE_SET_GRID  = 186,
+    BUILTIN_GUI_TABLE_SET_CELL  = 187,
+    BUILTIN_GUI_TABLE_GET_CELL  = 188
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -556,6 +561,23 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
         char buf[128]; read_bp_string(vm, ref, buf, sizeof(buf));
         push_i32(vm, tc, bpvm_gui_tabview_add_tab(h, buf)); return BPVM_OK;
+    }
+    case BUILTIN_GUI_CREATE_TABLE: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_table(p)); return BPVM_OK; }
+    case BUILTIN_GUI_TABLE_SET_GRID: {
+        int cols = pop_i32(vm, tc); int rows = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        bpvm_gui_table_set_grid(h, rows, cols); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_TABLE_SET_CELL: {
+        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        int col = pop_i32(vm, tc); int row = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        char buf[256]; read_bp_string(vm, ref, buf, sizeof(buf));
+        bpvm_gui_table_set_cell(h, row, col, buf); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_TABLE_GET_CELL: {
+        int col = pop_i32(vm, tc); int row = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        const char* s = bpvm_gui_table_get_cell(h, row, col);
+        uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
+        push_i32(vm, tc, (int32_t) ref); return BPVM_OK;
     }
 #endif /* BPVM_GUI */
 
