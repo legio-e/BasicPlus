@@ -173,7 +173,10 @@ public final class Lexer {
             // Newline significativo (salvo dentro de paréntesis/corchetes — L5)
             if (c == '\r' || c == '\n') {
                 Token nl = scanNewline(startLine, startColumn);
-                if (groupDepth == 0) tokens.add(nl);
+                // L5 + H7 — además del groupDepth, suprime el NEWLINE si la línea
+                // acaba en un token CONTINUADOR (operador colgante): la sentencia
+                // sigue en la línea siguiente, sin carácter de continuación.
+                if (groupDepth == 0 && !endsWithContinuer(tokens)) tokens.add(nl);
                 continue;
             }
 
@@ -220,6 +223,25 @@ public final class Lexer {
 
         tokens.add(new Token(TokenType.EOF, "", null, line, column));
         return tokens;
+    }
+
+    // H7 — "operador colgante": una línea que termina en uno de estos tokens
+    // CONTINÚA en la siguiente (el NEWLINE no se emite como terminador). Son
+    // tokens que NO pueden cerrar una sentencia: esperan un operando/elemento a
+    // la derecha. NO se incluyen ':' (etiquetas case / tipos), ';' ni cierres.
+    private static final java.util.EnumSet<TokenType> CONTINUERS = java.util.EnumSet.of(
+            TokenType.PLUS, TokenType.MINUS, TokenType.STAR, TokenType.SLASH,
+            TokenType.EQ, TokenType.NEQ, TokenType.LT, TokenType.GT, TokenType.LE, TokenType.GE,
+            TokenType.BAR, TokenType.AMP,
+            TokenType.AND, TokenType.OR, TokenType.XOR, TokenType.MOD,
+            TokenType.SHL, TokenType.SHR, TokenType.INSTANCEOF, TokenType.NOT,
+            TokenType.ASSIGN, TokenType.PLUS_ASSIGN, TokenType.MINUS_ASSIGN,
+            TokenType.COMMA, TokenType.DOT);
+
+    /** ¿La última línea acabó en un token continuador? (operador colgante, H7) */
+    private boolean endsWithContinuer(java.util.List<Token> tokens) {
+        if (tokens.isEmpty()) return false;
+        return CONTINUERS.contains(tokens.get(tokens.size() - 1).type);
     }
 
     // ============================================================

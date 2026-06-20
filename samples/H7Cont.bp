@@ -1,0 +1,20 @@
+// H7Cont.bp — H7: continuación de línea por OPERADOR COLGANTE.
+// Si una línea termina en un operador (binario/comparación/lógico), ':=' o ',',
+// la sentencia continúa en la siguiente, sin carácter especial.
+module H7Cont
+  function Main()
+    // suma partida por '+' colgante
+    var total: integer := 10 +
+                          20 +
+                          30
+    // condición partida por 'and' colgante (con > y < dentro)
+    var flag: boolean := total > 50 and
+                         total < 100
+    // ':=' colgante
+    var x: integer :=
+        42
+    print "total=" + intToString(total)
+    print "flag=" + boolToString(flag)
+    print "x=" + intToString(x)
+  end Main
+end H7Cont
