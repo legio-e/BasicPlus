@@ -1,9 +1,10 @@
 // GuiMsgDemo.bp — H6 tanda 6: msgbox (aviso ASÍNCRONO).
 //
-// Diálogo NO modal: muestra un mensaje + botones; al pulsar un botón dispara
-// onChange y `result` = índice pulsado. Asíncrono a propósito (un modal bloqueante
-// colgaría el GUI; ver V3_BACKLOG: GUI-blocking-from-event).
-// Aquí simulamos el botón pulsado con result:=1 + __guiChange (verificable headless).
+// Diálogo NO modal: muestra un mensaje + un botón; al pulsarlo dispara onChange,
+// `result` = índice del botón pulsado, y la ventana se cierra. Para un aviso
+// basta UN botón (lo habitual): pulsar = enterado = cerrar. Asíncrono a propósito
+// (un modal bloqueante colgaría el GUI; ver V3_BACKLOG: GUI-blocking-from-event).
+// Aquí simulamos la pulsación con result:=0 + __guiChange (verificable headless).
 module GuiMsgDemo
   import Gui
 
@@ -21,12 +22,12 @@ module GuiMsgDemo
     var scr: Gui.Screen := Gui.Screen()
 
     var mb: MiAviso := MiAviso(scr, "Operacion completada")
-    mb.setButtons("OK\nCancelar")
+    mb.setButtons("OK")          // un aviso: con un botón basta (al pulsar, se cierra)
 
     print "== antes =="
     print Gui.__guiDumpTree()
 
-    mb.result := 1               // simula que se pulsó el botón 1
+    mb.result := 0               // simula que se pulsó OK (botón 0)
     Gui.__guiChange(mb)
     Gui.run()
 
