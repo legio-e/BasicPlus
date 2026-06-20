@@ -95,6 +95,24 @@ Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.
     BP cazable? **Futuro (NO ahora):** variables/funciones/llamadas, siempre dentro de
     una gramática cerrada (jamás el modelo Python ilimitado).
 
+- **Separador `_` en literales numéricos** (Eduardo, 20-jun) — `100_000`,
+  `0xDEAD_BEEF`, `0b1111_0000`, `1_000.5`, `2_000L`. **SOLO el scanner**
+  (`Lexer.scanNumber`): consumir `_` únicamente si va **entre dígitos** (dígito antes
+  y después) y descartarlo antes de `parseLong`/`parseDouble` → así `_100`/`100_` no
+  chocan con identificadores. Aplica a decimal/hex/binario/float (todos pasan por
+  `scanNumber`). No afecta a nada más (ni .mod, ni VMs).
+
+- **Continuación de línea** (Eduardo, 20-jun; **decisión pendiente — su duda era "qué
+  operador"**). La continuación IMPLÍCITA dentro de `()`/`[]` YA existe (#249/L5) →
+  hoy una expresión larga se parte envolviéndola en paréntesis. Falta el caso fuera de
+  corchetes. Opciones: **(A) operador colgante** — si la línea acaba en operador
+  binario / coma / `:=` / `.` / `and`/`or`, continúa, SIN carácter especial (extiende
+  la misma supresión de newline de #249; lo más ergonómico, y responde literalmente a
+  "qué operador": ninguno). **(B) `\` final** explícito (limpio: no choca con el `_`
+  separador ni con el escape de strings, que solo aplica dentro de comillas). **NO usar
+  `_` final** (estilo VB) — se solaparía visualmente con el separador nuevo. Recomendado:
+  (A); (B) si se prefiere marcador explícito.
+
 - **#169 — AOT cross-module sin puente del intérprete** (MEJORA de rendimiento;
   hoy FUNCIONA vía `call_bp` + warning). Diseño en `AOT_CROSS_MODULE.md`.
 - **Layout compacto de narrow** (L10 follow-up): `byte[]`/`int16[]` y globales
