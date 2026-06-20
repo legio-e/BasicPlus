@@ -2729,6 +2729,38 @@ public class VirtualMachine {
                     sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));
                     writeI64(mem, sp, Double.doubleToRawLongBits(a * b)); sp += 8; break;
                 }
+                case 0xAC: { // IPOW — i32 base ^ i32 exp (exp. por cuadrados; exp<0 -> error)
+                    sp -= 4; int e = readI32(mem, sp);
+                    sp -= 4; int base = readI32(mem, sp);
+                    if (e < 0) { tc.sp = sp; throwBpRuntimeError(tc, "exponente negativo en potencia entera"); }
+                    int r = 1, bb = base;
+                    while (e > 0) { if ((e & 1) != 0) r *= bb; bb *= bb; e >>= 1; }
+                    writeI32(mem, sp, r); sp += 4; break;
+                }
+                case 0xAD: { // LPOW — i64 base ^ i64 exp
+                    sp -= 8; long e = readI64(mem, sp);
+                    sp -= 8; long base = readI64(mem, sp);
+                    if (e < 0) { tc.sp = sp; throwBpRuntimeError(tc, "exponente negativo en potencia entera"); }
+                    long r = 1L, bb = base;
+                    while (e > 0) { if ((e & 1L) != 0) r *= bb; bb *= bb; e >>= 1; }
+                    writeI64(mem, sp, r); sp += 8; break;
+                }
+                case 0xAE: { // DPOW — f64 base ^ f64 exp. Exponente entero (incl. x^2 float)
+                    // -> exp. por cuadrados en f64 (parity-safe); fraccionario -> exp(e*ln base).
+                    // MISMA lógica byte-a-byte que bpvm_dpow() en la VM-C (interp.c).
+                    sp -= 8; double e = Double.longBitsToDouble(readI64(mem, sp));
+                    sp -= 8; double base = Double.longBitsToDouble(readI64(mem, sp));
+                    double res;
+                    if (e == Math.floor(e) && !Double.isInfinite(e) && Math.abs(e) <= 1024.0) {
+                        long n = (long) e; boolean neg = n < 0; if (neg) n = -n;
+                        double r = 1.0, bb = base;
+                        while (n > 0) { if ((n & 1L) != 0) r *= bb; bb *= bb; n >>= 1; }
+                        res = neg ? 1.0 / r : r;
+                    } else {
+                        res = Math.exp(e * Math.log(base));
+                    }
+                    writeI64(mem, sp, Double.doubleToRawLongBits(res)); sp += 8; break;
+                }
                 case 0x95: { // DDIV
                     sp -= 8; double b = Double.longBitsToDouble(readI64(mem, sp));
                     sp -= 8; double a = Double.longBitsToDouble(readI64(mem, sp));

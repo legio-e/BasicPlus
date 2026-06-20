@@ -1105,10 +1105,25 @@ public final class Parser {
     private IExpr parseUnary() {
         if (check(TokenType.MINUS)) {
             Token op = current(); advance();
-            IExpr inner = parsePrimary();
+            IExpr inner = parsePower();
             return new UnaryExpr("-", inner, op.line, op.column);
         }
-        return parsePrimary();
+        return parsePower();
+    }
+
+    // H7 — potencia '^': más fuerte que '* /', ASOCIATIVA POR LA DERECHA. La base
+    // es un 'primary'; el RHS es un 'unary' → (1) permite el unario en el exponente
+    // (2^-3) y (2) da la asociatividad derecha vía unary→power (a^b^c = a^(b^c)).
+    // El menos unario queda por FUERA (parseUnary llama a parsePower) → -x^2 =
+    // -(x^2), la convención matemática.
+    private IExpr parsePower() {
+        IExpr base = parsePrimary();
+        if (check(TokenType.CARET)) {
+            Token op = current(); advance();
+            IExpr exp = parseUnary();
+            return new BinaryExpr("^", base, exp, op.line, op.column);
+        }
+        return base;
     }
 
     /** primary ::= atom { '.' (call | name) | '[' expr ']' } */

@@ -2488,6 +2488,23 @@ public final class SemanticAnalyzer {
                 if (lt.isNumeric() && rt.isNumeric()) return promote(lt, rt);
                 err(b.line, b.column, "'mod' requiere numéricos");
                 return ErrorType.INSTANCE;
+            case "^":
+                // H7 — potencia. base y exp ENTEROS (int/long) → resultado entero
+                // (IPOW/LPOW, exacto). En cuanto hay float/double → resultado
+                // float (o double si alguno es double): DPOW. El tipo resultado
+                // codifica el camino para el emisor (int/long=enteros, float/double=DPOW).
+                if (lt.isNumeric() && rt.isNumeric()) {
+                    boolean baseInt = isIntegerLike(lt) || isLong(lt);
+                    boolean expInt  = isIntegerLike(rt) || isLong(rt);
+                    if (baseInt && expInt)
+                        return (isLong(lt) || isLong(rt)) ? PrimitiveType.LONG : PrimitiveType.INTEGER;
+                    boolean anyDouble =
+                            (lt instanceof PrimitiveType && ((PrimitiveType) lt).tag == PrimitiveType.Kind.DOUBLE)
+                         || (rt instanceof PrimitiveType && ((PrimitiveType) rt).tag == PrimitiveType.Kind.DOUBLE);
+                    return anyDouble ? PrimitiveType.DOUBLE : PrimitiveType.FLOAT;
+                }
+                err(b.line, b.column, "'^' requiere numéricos, encontrados '" + lt.display() + "' y '" + rt.display() + "'");
+                return ErrorType.INSTANCE;
             case "&": case "|": case "xor": case "shl": case "shr":
                 // H1.2 — bitwise/shift en i64 si algún operando es long.
                 if ((isIntegerLike(lt) || isLong(lt)) && (isIntegerLike(rt) || isLong(rt)))

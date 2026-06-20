@@ -1137,6 +1137,43 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_DMUL: { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
                         sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
                         bpvm_write_i64_be(mem+sp, double_to_bits(a * b)); sp += 8; break; }
+        case OP_IPOW: { sp -= 4; int32_t e = bpvm_read_i32_be(mem+sp);
+                        sp -= 4; int32_t base = bpvm_read_i32_be(mem+sp);
+                        if (e < 0) {
+                            tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+                            uint32_t ref = bpvm_throw_runtime_error(vm, tc, "exponente negativo en potencia entera");
+                            if (ref && bpvm_eh_unwind(vm, tc, ref)) { pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs; mem = vm->memory; break; }
+                            exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done;
+                        }
+                        int32_t r = 1, bb = base;
+                        while (e > 0) { if (e & 1) r *= bb; bb *= bb; e >>= 1; }
+                        bpvm_write_i32_be(mem+sp, r); sp += 4; break; }
+        case OP_LPOW: { sp -= 8; int64_t e = bpvm_read_i64_be(mem+sp);
+                        sp -= 8; int64_t base = bpvm_read_i64_be(mem+sp);
+                        if (e < 0) {
+                            tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+                            uint32_t ref = bpvm_throw_runtime_error(vm, tc, "exponente negativo en potencia entera");
+                            if (ref && bpvm_eh_unwind(vm, tc, ref)) { pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs; mem = vm->memory; break; }
+                            exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done;
+                        }
+                        int64_t r = 1, bb = base;
+                        while (e > 0) { if (e & 1) r *= bb; bb *= bb; e >>= 1; }
+                        bpvm_write_i64_be(mem+sp, r); sp += 8; break; }
+        case OP_DPOW: { sp -= 8; double e = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        sp -= 8; double base = bits_to_double(bpvm_read_i64_be(mem+sp));
+                        /* MISMA lógica byte-a-byte que VirtualMachine.java case 0xAE (DPOW):
+                         * exponente entero (incl. x^2) -> cuadrados en f64 (parity-safe),
+                         * fraccionario -> exp(e*ln base). */
+                        double res;
+                        if (e == floor(e) && !isinf(e) && fabs(e) <= 1024.0) {
+                            int64_t n = (int64_t) e; int neg = (n < 0); if (neg) n = -n;
+                            double r = 1.0, bb = base;
+                            while (n > 0) { if (n & 1) r *= bb; bb *= bb; n >>= 1; }
+                            res = neg ? 1.0 / r : r;
+                        } else {
+                            res = exp(e * log(base));
+                        }
+                        bpvm_write_i64_be(mem+sp, double_to_bits(res)); sp += 8; break; }
         case OP_DDIV: { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
                         sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
                         bpvm_write_i64_be(mem+sp, double_to_bits(a / b)); sp += 8; break; }

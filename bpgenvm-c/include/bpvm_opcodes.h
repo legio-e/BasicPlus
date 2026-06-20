@@ -215,4 +215,12 @@
  * TRY_BEGIN local (i16) NO cambia, así que los .mod existentes siguen válidos. */
 #define OP_TRY_BEGIN_EXT   0xAB
 
+/* 0xAC-0xAE — H7: operador potencia '^'. IPOW/LPOW: exponenciación por cuadrados
+ * en i32/i64 (exacto; exponente < 0 -> RuntimeError). DPOW: exponente entero ->
+ * cuadrados en f64 (parity-safe, incl. x^2 float); fraccionario -> exp(e*ln base).
+ * Ids 0xAC-0xAE: libres en AMBAS VMs (0xAA=NATIVE_RETURN solo VM-C, 0xAB=TRY_EXT). */
+#define OP_IPOW            0xAC
+#define OP_LPOW            0xAD
+#define OP_DPOW            0xAE
+
 #endif /* BPVM_OPCODES_H */

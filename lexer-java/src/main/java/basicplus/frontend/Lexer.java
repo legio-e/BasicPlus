@@ -230,7 +230,7 @@ public final class Lexer {
     // tokens que NO pueden cerrar una sentencia: esperan un operando/elemento a
     // la derecha. NO se incluyen ':' (etiquetas case / tipos), ';' ni cierres.
     private static final java.util.EnumSet<TokenType> CONTINUERS = java.util.EnumSet.of(
-            TokenType.PLUS, TokenType.MINUS, TokenType.STAR, TokenType.SLASH,
+            TokenType.PLUS, TokenType.MINUS, TokenType.STAR, TokenType.SLASH, TokenType.CARET,
             TokenType.EQ, TokenType.NEQ, TokenType.LT, TokenType.GT, TokenType.LE, TokenType.GE,
             TokenType.BAR, TokenType.AMP,
             TokenType.AND, TokenType.OR, TokenType.XOR, TokenType.MOD,
@@ -546,6 +546,7 @@ public final class Lexer {
             case '-': return make1(TokenType.MINUS,     "-", startLine, startColumn);
             case '*': return make1(TokenType.STAR,      "*", startLine, startColumn);
             case '/': return make1(TokenType.SLASH,     "/", startLine, startColumn);
+            case '^': return make1(TokenType.CARET,     "^", startLine, startColumn);  // potencia (H7)
             case '|': return make1(TokenType.BAR,       "|", startLine, startColumn);
             case '&': return make1(TokenType.AMP,       "&", startLine, startColumn);
             case '<': return make1(TokenType.LT,        "<", startLine, startColumn);

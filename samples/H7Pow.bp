@@ -1,0 +1,14 @@
+// H7Pow.bp — H7: operador potencia '^'.
+// int^int e int por mult (exacto); float^int por cuadrados; float^float por exp·ln.
+// Precedencia: '^' más fuerte que '*'; right-assoc; unario por fuera (-x^2 = -(x^2)).
+module H7Pow
+  function Main()
+    print "i="   + intToString(2 ^ 10)        // 1024  (int^int, IPOW)
+    print "f="   + floatToString(2.0 ^ 10)     // 1024.0 (float^int, cuadrados f64)
+    print "sq="  + floatToString(4.0 ^ 0.5)    // 2.0   (float^float, exp·ln)
+    print "neg=" + floatToString(2.0 ^ -2)     // 0.25  (exponente negativo)
+    print "ra="  + intToString(2 ^ 2 ^ 3)      // 256   (right-assoc: 2^(2^3))
+    print "pr="  + intToString(2 * 3 ^ 2)      // 18    ('^' más fuerte que '*')
+    print "un="  + intToString(-2 ^ 2)         // -4    (-(2^2))
+  end Main
+end H7Pow

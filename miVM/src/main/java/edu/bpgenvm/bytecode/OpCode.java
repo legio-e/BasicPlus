@@ -269,7 +269,13 @@ public enum OpCode {
     // H5/BUG-6 — campos de instancia de 8 bytes (long/double). slot(u8) =
     // índice de slot (4 bytes/slot) del campo; r/w 8 bytes en ref+4+slot*4.
     GET_FIELD_LONG (0xA8, OperandKind.IMM_U8), // ref=pop; push *(ref+4+slot*4) 8 bytes
-    SET_FIELD_LONG (0xA9, OperandKind.IMM_U8); // val(8)=pop; ref=pop; *(ref+4+slot*4)=val
+    SET_FIELD_LONG (0xA9, OperandKind.IMM_U8), // val(8)=pop; ref=pop; *(ref+4+slot*4)=val
+    // H7 — potencia '^'. IPOW/LPOW: exponenciación por cuadrados en i32/i64
+    // (exacto; exponente < 0 → RuntimeError). DPOW: exponente entero → cuadrados
+    // en f64 (parity-safe, incl. x^2 float); fraccionario → exp(exp*ln(base)).
+    IPOW           (0xAC, OperandKind.NONE),   // i32 base, i32 exp → i32
+    LPOW           (0xAD, OperandKind.NONE),   // i64 base, i64 exp → i64
+    DPOW           (0xAE, OperandKind.NONE);   // f64 base, f64 exp → f64
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;

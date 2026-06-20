@@ -2851,6 +2851,28 @@ public final class MivmEmitter {
         }
     }
 
+    // H7 — potencia '^'. El tipo resultado (tb, del semántico) elige el camino:
+    // float/double → DPOW (cuadrados en f64 si el exponente es entero —incl. x^2
+    // float—, exp·ln si es fraccionario), estrechando a f32 si tb es float;
+    // long → LPOW; int → IPOW (ambos exponenciación por cuadrados entera, exacta).
+    // Coercionamos cada operando al tipo que espera el opcode.
+    private void emitPow(BinaryExpr b, BpType tl, BpType tr, BpType tb) throws IOException {
+        if (isDouble(tb) || isFloat(tb)) {
+            emitExpr(b.left);  promoteNumeric(tl, true, false, false);   // → double
+            emitExpr(b.right); promoteNumeric(tr, true, false, false);   // → double
+            w.emit(OpCode.DPOW);
+            if (isFloat(tb)) w.emit(OpCode.D2F);                         // f64 → f32
+        } else if (isLong(tb)) {
+            emitExpr(b.left);  promoteNumeric(tl, false, false, true);   // → long
+            emitExpr(b.right); promoteNumeric(tr, false, false, true);   // → long
+            w.emit(OpCode.LPOW);
+        } else {
+            emitExpr(b.left);  promoteNumeric(tl, false, false, false);  // → int
+            emitExpr(b.right); promoteNumeric(tr, false, false, false);  // → int
+            w.emit(OpCode.IPOW);
+        }
+    }
+
     private void emitBinary(BinaryExpr b) throws IOException {
         BpType tl = info.exprTypes.get(b.left);
         BpType tr = info.exprTypes.get(b.right);
@@ -2901,6 +2923,13 @@ public final class MivmEmitter {
         }
         if ("or".equals(b.op) || "or else".equals(b.op)) {
             emitShortCircuitOr(b);
+            return;
+        }
+
+        // H7 — potencia '^': tipado/cómputo propios (camino entero vs float), no
+        // entra en la torre de promoción genérica de abajo.
+        if ("^".equals(b.op)) {
+            emitPow(b, tl, tr, tb);
             return;
         }
 

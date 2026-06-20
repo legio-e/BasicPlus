@@ -104,6 +104,7 @@ public enum TokenType {
     MINUS,          // -
     STAR,           // *
     SLASH,          // /
+    CARET,          // ^   (potencia, H7 — right-assoc, más fuerte que * /)
     BAR,            // |
     AMP,            // &
     LPAREN,         // (
