@@ -128,6 +128,8 @@ static void lvgl_change_cb(lv_event_t* e) {
                 free(g_nodes[i].text); g_nodes[i].text = NULL;
                 if (t) { size_t L = strlen(t); g_nodes[i].text = (char*) malloc(L + 1); if (g_nodes[i].text) memcpy(g_nodes[i].text, t, L + 1); }
             }
+            else if (strcmp(g_nodes[i].type, "tabview") == 0)
+                g_nodes[i].value = (int) lv_tabview_get_tab_active(g_nodes[i].lv);
             else  /* checkbox, toggle: estado CHECKED (0/1) */
                 g_nodes[i].value = lv_obj_has_state(g_nodes[i].lv, LV_STATE_CHECKED) ? 1 : 0;
             break;
@@ -284,6 +286,26 @@ int bpvm_gui_create_msgbox(int parent) {
     gui_node* n = node_for(h); if (n) n->has_value = 1;   /* value = botón pulsado */
 #ifdef BPVM_LVGL
     if (n) n->lv = lv_msgbox_create(parent_lv(parent));
+#endif
+    return h;
+}
+int bpvm_gui_create_tabview(int parent) {
+    int h = create_node("tabview", parent);
+    gui_node* n = node_for(h); if (n) n->has_value = 1;   /* value = pestaña activa */
+#ifdef BPVM_LVGL
+    if (n) n->lv = lv_tabview_create(parent_lv(parent));
+#endif
+    return h;
+}
+/* añade una pestaña; la página es un nodo hijo (nombre en text) cuyo handle se
+ * devuelve para envolverlo en un TabPage (BP) y usarlo como parent. */
+int bpvm_gui_tabview_add_tab(int handle, const char* name) {
+    int h = create_node("tabpage", handle);
+    gui_node* n = node_for(h); if (!n) return h;
+    if (name) { size_t L = strlen(name); n->text = (char*) malloc(L + 1); if (n->text) memcpy(n->text, name, L + 1); }
+#ifdef BPVM_LVGL
+    gui_node* tv = node_for(handle);
+    if (tv && tv->lv) n->lv = lv_tabview_add_tab(tv->lv, name ? name : "");
 #endif
     return h;
 }
@@ -472,6 +494,7 @@ void bpvm_gui_set_value(int handle, int v) {
         else if (strcmp(n->type, "spinbox") == 0) lv_spinbox_set_value(n->lv, cv);
         else if (strcmp(n->type, "led") == 0)     { if (cv) lv_led_on(n->lv); else lv_led_off(n->lv); }
         else if (strcmp(n->type, "dropdown") == 0) lv_dropdown_set_selected(n->lv, (uint16_t) cv);
+        else if (strcmp(n->type, "tabview") == 0)  lv_tabview_set_active(n->lv, (uint32_t) cv, LV_ANIM_OFF);
     }
 #endif
 }

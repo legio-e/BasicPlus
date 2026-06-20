@@ -37,6 +37,8 @@ int  bpvm_gui_create_keyboard(int parent);
 void bpvm_gui_keyboard_set_textarea(int handle, int ta_handle);
 int  bpvm_gui_create_msgbox(int parent);
 void bpvm_gui_set_buttons(int handle, const char* labels);
+int  bpvm_gui_create_tabview(int parent);
+int  bpvm_gui_tabview_add_tab(int handle, const char* name);
 
 /* Configuración. Texto + geometría/anclaje afectan al dumpTree (modelo). Color y
  * fuente son render-only: no-op en el modelo (no tocan el dump) y, bajo BPVM_LVGL,

@@ -145,6 +145,32 @@ public final class GuiBackend {
         return h;
     }
     public void setButtons(int handle, String labels) { /* botones = render LVGL; no-op en el modelo */ }
+    public int createTabview(int parent) {
+        int h = create("tabview", new JTabbedPane(), parent);
+        Node n = nodes.get(h); if (n != null) n.hasValue = true;   // value = pestaña activa
+        return h;
+    }
+    public int tabviewAddTab(int handle, String name) {
+        // La página (JPanel) se añade al JTabbedPane vía create(); el nombre va en el
+        // nodo (dump) y, si se puede, como título de la pestaña. Al añadir la 1ª
+        // pestaña, JTabbedPane auto-selecciona el índice 0 y dispara su ChangeListener;
+        // eso NO es un onChange del usuario (VM-C no lo emite) → lo silenciamos.
+        Node tv = nodes.get(handle);
+        boolean prevSuppress = (tv != null) && tv.suppressEvents;
+        if (tv != null) tv.suppressEvents = true;
+        int h;
+        try {
+            h = create("tabpage", new JPanel(null), handle);
+        } finally {
+            if (tv != null) tv.suppressEvents = prevSuppress;
+        }
+        Node n = nodes.get(h); if (n != null) n.text = name;
+        if (tv != null && tv.comp instanceof JTabbedPane) {
+            JTabbedPane tp = (JTabbedPane) tv.comp;
+            if (tp.getTabCount() > 0) tp.setTitleAt(tp.getTabCount() - 1, name);
+        }
+        return h;
+    }
 
     private int create(String type, JComponent comp, int parent) {
         int h = nextHandle++;
@@ -270,6 +296,10 @@ public final class GuiBackend {
                 JList<?> jl = (JList<?>) n.comp;
                 if (cv >= 0 && cv < jl.getModel().getSize()) jl.setSelectedIndex(cv);
             }
+            else if (n.comp instanceof JTabbedPane) { // tabview: value = pestaña activa
+                JTabbedPane tp = (JTabbedPane) n.comp;
+                if (cv >= 0 && cv < tp.getTabCount()) tp.setSelectedIndex(cv);
+            }
             // led (JLabel) y demás: el modelo (n.value) es la verdad; sin widget que tocar.
         } finally {
             n.suppressEvents = false;
@@ -393,6 +423,13 @@ public final class GuiBackend {
                     n.value = jl.getSelectedIndex();
                     if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
                 }
+            });
+        } else if (n.comp instanceof JTabbedPane) {
+            // Tabview: el cambio de pestaña activa es CHANGE; n.value = índice activo.
+            JTabbedPane tp = (JTabbedPane) n.comp;
+            tp.addChangeListener(e -> {
+                n.value = tp.getSelectedIndex();
+                if (!n.suppressEvents) events.offer(new int[]{objptr, KIND_CHANGE});
             });
         } else if (n.comp instanceof JButton) {
             ((JButton) n.comp).addActionListener(e -> events.offer(new int[]{objptr, KIND_CLICK}));

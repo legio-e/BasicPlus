@@ -256,5 +256,8 @@ public final class Intrinsics {
         // H6 widgets — msgbox.
         register("Gui.__guiCreateMsgbox",   w -> emitBuiltin(w, Builtin.GUI_CREATE_MSGBOX));
         register("Gui.__guiSetButtons",     w -> emitBuiltin(w, Builtin.GUI_SET_BUTTONS));
+        // H6 widgets — tabview.
+        register("Gui.__guiCreateTabview",  w -> emitBuiltin(w, Builtin.GUI_CREATE_TABVIEW));
+        register("Gui.__guiTabviewAddTab",  w -> emitBuiltin(w, Builtin.GUI_TABVIEW_ADD_TAB));
     }
 }

@@ -366,7 +366,11 @@ public enum Builtin {
 
     // H6 widgets — msgbox (aviso async: mensaje + botones, resultado por onChange).
     GUI_CREATE_MSGBOX("__guiCreateMsgbox"),     // (parent) → id
-    GUI_SET_BUTTONS("__guiSetButtons");         // (id, "Si\nNo") → void
+    GUI_SET_BUTTONS("__guiSetButtons"),         // (id, "Si\nNo") → void
+
+    // H6 widgets — tabview (pestañas; addTab devuelve el handle de la página).
+    GUI_CREATE_TABVIEW("__guiCreateTabview"),   // (parent) → id
+    GUI_TABVIEW_ADD_TAB("__guiTabviewAddTab");  // (id, name) → pageId
 
     public final String bpName;
     public final int id;

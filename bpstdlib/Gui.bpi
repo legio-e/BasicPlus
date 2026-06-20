@@ -9,6 +9,7 @@ func run():void public
 func __guiSetHeight(handle:integer,h:integer):void public intrinsic
 func __guiCreateLabel(parent:integer):integer public intrinsic
 func __guiSetOptions(handle:integer,opts:string):void public intrinsic
+func __guiCreateTabview(parent:integer):integer public intrinsic
 func __guiCreateSlider(parent:integer):integer public intrinsic
 func __guiCreateKeyboard(parent:integer):integer public intrinsic
 func __guiSetButtons(handle:integer,labels:string):void public intrinsic
@@ -21,6 +22,7 @@ func __guiDumpTree():string public intrinsic
 func __guiCreateButton(parent:integer):integer public intrinsic
 func __guiCreateCheckbox(parent:integer):integer public intrinsic
 func __guiClean(handle:integer):void public intrinsic
+func __guiTabviewAddTab(handle:integer,name:string):integer public intrinsic
 func __guiDelete(handle:integer):void public intrinsic
 func __guiScreenActive():integer public intrinsic
 func __guiCreateList(parent:integer):integer public intrinsic
@@ -102,12 +104,22 @@ class Dropdown public extends Component
   prop selected:integer public
   method setOptions(opts:string):void public
 end class
+class Tabview public extends Component
+  layout 7 27 00000000 00000000
+  ctor(parent:Component)
+  prop active:integer public
+  method addTab(name:string):Component public
+end class
 class ScrollDir public
   layout 0 2 - -
   staticconst VER:integer=2 public
   staticconst HOR:integer=1 public
   staticconst NONE:integer=0 public
   staticconst BOTH:integer=3 public
+end class
+class TabPage public extends Component
+  layout 6 24 00000000 00000000
+  ctor(pageId:integer)
 end class
 class ListBox public extends Component
   layout 7 27 00000000 00000000

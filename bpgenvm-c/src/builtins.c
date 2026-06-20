@@ -212,7 +212,10 @@ enum {
     BUILTIN_GUI_KEYBOARD_SET_TEXTAREA = 180,
     /* H6 widgets — msgbox (aviso async: mensaje + botones). */
     BUILTIN_GUI_CREATE_MSGBOX   = 181,
-    BUILTIN_GUI_SET_BUTTONS     = 182
+    BUILTIN_GUI_SET_BUTTONS     = 182,
+    /* H6 widgets — tabview (pestañas; addTab devuelve el handle de la página). */
+    BUILTIN_GUI_CREATE_TABVIEW  = 183,
+    BUILTIN_GUI_TABVIEW_ADD_TAB = 184
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -547,6 +550,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
         char buf[256]; read_bp_string(vm, ref, buf, sizeof(buf));
         bpvm_gui_set_buttons(h, buf); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_CREATE_TABVIEW: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_tabview(p)); return BPVM_OK; }
+    case BUILTIN_GUI_TABVIEW_ADD_TAB: {
+        uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        char buf[128]; read_bp_string(vm, ref, buf, sizeof(buf));
+        push_i32(vm, tc, bpvm_gui_tabview_add_tab(h, buf)); return BPVM_OK;
     }
 #endif /* BPVM_GUI */
 
