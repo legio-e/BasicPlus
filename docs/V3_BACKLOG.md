@@ -59,7 +59,13 @@ Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.
 
 ## ⚙️ Compilador / lenguaje (ampliación selectiva — "eventos y poco más")
 
-### H7 — 2 cambios de lenguaje (Eduardo, 20-jun; para esa tarde)
+### H7 — HECHO (20-jun): 4 cambios de lenguaje, dual-VM byte-idéntico
+
+**Cerrado**: operador `^` (`7a426af`), `eval` (`e73b329`), separador `_` (`7caaea4`),
+continuación de línea por operador colgante (`dcc95bd`). compat GATE + suites verdes;
+IDE reempaquetado. **`^` y `eval` necesitan reflash** para la DK2 (tocan las VMs); el
+separador y la continuación son solo frontend. **`^` en native/AOT: diferido** (ver
+nota en el bullet del operador). Detalle de diseño original abajo (se conserva):
 
 - **Operador `^` de potencia** — `x^2` = x al cuadrado. Token `^` **LIBRE** (en BP
   el XOR es la keyword `xor`, no `^` → sin colisión). **Toca:** lexer (token nuevo),
