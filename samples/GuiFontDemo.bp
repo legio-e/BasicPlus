@@ -18,8 +18,8 @@ module GuiFontDemo
     b.fontSize := 20
     b.align(Gui.Align.TOP_MID, 0, 55)
 
-    var c: Gui.Label := Gui.Label(scr, "28 px")
-    c.fontSize := 28
+    var c: Gui.Label := Gui.Label(scr, "32 px")
+    c.fontSize := 32
     c.align(Gui.Align.TOP_MID, 0, 105)
 
     var d: Gui.Label := Gui.Label(scr, "48 px")
