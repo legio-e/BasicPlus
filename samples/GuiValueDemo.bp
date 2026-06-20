@@ -22,14 +22,17 @@ module GuiValueDemo
 
     var sw: Gui.Toggle := Gui.Toggle(scr)
     sw.checked := true
+    sw.align(Gui.Align.TOP_MID, 0, 20)
 
     var sl: MySlider := MySlider(scr)
     sl.setRange(0, 200)
     sl.value := 150
+    sl.align(Gui.Align.TOP_MID, 0, 90)
 
     var pb: Gui.Bar := Gui.Bar(scr)
     pb.setRange(0, 10)
     pb.value := 7
+    pb.align(Gui.Align.TOP_MID, 0, 160)
 
     print "== widgets =="
     print Gui.__guiDumpTree()
