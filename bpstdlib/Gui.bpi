@@ -6,8 +6,10 @@ func __guiSetWidth(handle:integer,w:integer):void public intrinsic
 func __guiSetFont(handle:integer,fontId:integer):void public intrinsic
 func __guiDispatchChange(self:Component):void public
 func run():void public
+func __guiImageViewRefresh(view:integer):void public intrinsic
 func __guiSetHeight(handle:integer,h:integer):void public intrinsic
 func __guiCreateLabel(parent:integer):integer public intrinsic
+func __guiImageNew():integer public intrinsic
 func __guiSetOptions(handle:integer,opts:string):void public intrinsic
 func __guiCreateTabview(parent:integer):integer public intrinsic
 func __guiCreateSlider(parent:integer):integer public intrinsic
@@ -21,7 +23,9 @@ func __guiSetY(handle:integer,y:integer):void public intrinsic
 func __guiDumpTree():string public intrinsic
 func __guiCreateButton(parent:integer):integer public intrinsic
 func __guiCreateCheckbox(parent:integer):integer public intrinsic
+func __guiImageViewSetImage(view:integer,image:integer):void public intrinsic
 func __guiClean(handle:integer):void public intrinsic
+func __guiImageWidth(handle:integer):integer public intrinsic
 func __guiTabviewAddTab(handle:integer,name:string):integer public intrinsic
 func __guiTableGetCell(handle:integer,row:integer,col:integer):string public intrinsic
 func __guiDelete(handle:integer):void public intrinsic
@@ -35,6 +39,7 @@ func __guiKeyboardSetTextarea(handle:integer,ta:integer):void public intrinsic
 func __guiTableSetGrid(handle:integer,rows:integer,cols:integer):void public intrinsic
 func __guiCreateSwitch(parent:integer):integer public intrinsic
 func __guiCreateTextarea(parent:integer):integer public intrinsic
+func __guiImageLoadFile(handle:integer,path:string):integer public intrinsic
 func __guiSetValue(handle:integer,v:integer):void public intrinsic
 func __guiGetHeight(handle:integer):integer public intrinsic
 func __guiChange(w:Component):void public intrinsic
@@ -52,8 +57,10 @@ func __guiRefresh(handle:integer):void public intrinsic
 func __guiCreateObj(parent:integer):integer public intrinsic
 func __guiGetScrollDir(handle:integer):integer public intrinsic
 func __guiClick(w:Component):void public intrinsic
+func __guiCreateImageView(parent:integer):integer public intrinsic
 func __guiScreenLoad(handle:integer):void public intrinsic
 func __guiDispatch(self:Component):void public
+func __guiImageHeight(handle:integer):integer public intrinsic
 func __guiCreateBar(parent:integer):integer public intrinsic
 func __guiCreateLed(parent:integer):integer public intrinsic
 func __guiGetText(handle:integer):string public intrinsic
@@ -63,6 +70,14 @@ class Label public extends Component
   method setText(t:string):void public
   method setTextColor(c:Color):void public
   method setFont(font:integer):void public
+end class
+class Image public
+  layout 1 7 00000000 00000000
+  ctor()
+  prop assetId:integer public
+  method loadFile(path:string):boolean public
+  method width():integer public
+  method height():integer public
 end class
 class Button public extends Component
   layout 6 24 00000000 00000000
@@ -79,6 +94,12 @@ class Spinbox public extends Component
   ctor(parent:Component)
   prop value:integer public
   method setRange(mn:integer,mx:integer):void public
+end class
+class ImageView public extends Component
+  layout 6 25 00000000 00000000
+  ctor(parent:Component)
+  method setImage(img:Image):void public
+  method refresh():void public
 end class
 class Msgbox public extends Component
   layout 7 27 00000000 00000000

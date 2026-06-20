@@ -220,7 +220,15 @@ enum {
     BUILTIN_GUI_CREATE_TABLE    = 185,
     BUILTIN_GUI_TABLE_SET_GRID  = 186,
     BUILTIN_GUI_TABLE_SET_CELL  = 187,
-    BUILTIN_GUI_TABLE_GET_CELL  = 188
+    BUILTIN_GUI_TABLE_GET_CELL  = 188,
+    /* H6 widgets — image (asset separado del control que lo muestra). */
+    BUILTIN_GUI_IMAGE_NEW        = 189,
+    BUILTIN_GUI_IMAGE_LOAD_FILE  = 190,
+    BUILTIN_GUI_IMAGE_WIDTH      = 191,
+    BUILTIN_GUI_IMAGE_HEIGHT     = 192,
+    BUILTIN_GUI_CREATE_IMAGEVIEW = 193,
+    BUILTIN_GUI_IMAGEVIEW_SET_IMAGE = 194,
+    BUILTIN_GUI_IMAGEVIEW_REFRESH = 195
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -578,6 +586,23 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         const char* s = bpvm_gui_table_get_cell(h, row, col);
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
         push_i32(vm, tc, (int32_t) ref); return BPVM_OK;
+    }
+    case BUILTIN_GUI_IMAGE_NEW: { push_i32(vm, tc, bpvm_gui_image_new()); return BPVM_OK; }
+    case BUILTIN_GUI_IMAGE_LOAD_FILE: {
+        uint32_t ref = (uint32_t) pop_i32(vm, tc); int id = pop_i32(vm, tc);
+        char buf[512]; read_bp_string(vm, ref, buf, sizeof(buf));
+        push_i32(vm, tc, bpvm_gui_image_load_file(id, buf)); return BPVM_OK;
+    }
+    case BUILTIN_GUI_IMAGE_WIDTH:  { int id = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_image_width(id));  return BPVM_OK; }
+    case BUILTIN_GUI_IMAGE_HEIGHT: { int id = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_image_height(id)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_IMAGEVIEW: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_imageview(p)); return BPVM_OK; }
+    case BUILTIN_GUI_IMAGEVIEW_SET_IMAGE: {
+        int img = pop_i32(vm, tc); int view = pop_i32(vm, tc);
+        bpvm_gui_imageview_set_image(view, img); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_IMAGEVIEW_REFRESH: {
+        int view = pop_i32(vm, tc);
+        bpvm_gui_imageview_refresh(view); push_i32(vm, tc, 0); return BPVM_OK;
     }
 #endif /* BPVM_GUI */
 

@@ -3386,6 +3386,13 @@ public class VirtualMachine {
             case GUI_TABLE_SET_GRID: { int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); gui.tableSetGrid(hnd, r, c); pushTc(tc, 0); break; }
             case GUI_TABLE_SET_CELL: { int t = popTc(tc); int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); gui.tableSetCell(hnd, r, c, readVmString(t)); pushTc(tc, 0); break; }
             case GUI_TABLE_GET_CELL: { int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); pushTc(tc, allocVmString(gui.tableGetCell(hnd, r, c))); break; }
+            case GUI_IMAGE_NEW: { pushTc(tc, gui.imageNew()); break; }
+            case GUI_IMAGE_LOAD_FILE: { int p = popTc(tc); int id = popTc(tc); pushTc(tc, gui.imageLoadFile(id, readVmString(p))); break; }
+            case GUI_IMAGE_WIDTH: { int id = popTc(tc); pushTc(tc, gui.imageWidth(id)); break; }
+            case GUI_IMAGE_HEIGHT: { int id = popTc(tc); pushTc(tc, gui.imageHeight(id)); break; }
+            case GUI_CREATE_IMAGEVIEW: { int p = popTc(tc); pushTc(tc, gui.createImageView(p)); break; }
+            case GUI_IMAGEVIEW_SET_IMAGE: { int img = popTc(tc); int view = popTc(tc); gui.imageViewSetImage(view, img); pushTc(tc, 0); break; }
+            case GUI_IMAGEVIEW_REFRESH: { int view = popTc(tc); gui.imageViewRefresh(view); pushTc(tc, 0); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));

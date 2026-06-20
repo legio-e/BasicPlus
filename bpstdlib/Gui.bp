@@ -52,6 +52,16 @@ module Gui
   public intrinsic function __guiTableSetGrid(handle: integer, rows: integer, cols: integer)
   public intrinsic function __guiTableSetCell(handle: integer, row: integer, col: integer, text: string)
   public intrinsic function __guiTableGetCell(handle: integer, row: integer, col: integer): string
+  // Image: asset (bitmap) cargado de archivo, separado del control que lo muestra.
+  public intrinsic function __guiImageNew(): integer
+  public intrinsic function __guiImageLoadFile(handle: integer, path: string): integer
+  public intrinsic function __guiImageWidth(handle: integer): integer
+  public intrinsic function __guiImageHeight(handle: integer): integer
+  public intrinsic function __guiCreateImageView(parent: integer): integer
+  public intrinsic function __guiImageViewSetImage(view: integer, image: integer)
+  // refresh: recarga la imagen en el control SOLO si el asset cambió desde la
+  // última vez (version-stamp en el backend); si no, no-op (evita re-decodificar).
+  public intrinsic function __guiImageViewRefresh(view: integer)
   // Geometría: x/y/width/height — backend = verdad (get/set → intrínsecos).
   public intrinsic function __guiSetX(handle: integer, x: integer)
   public intrinsic function __guiGetX(handle: integer): integer
@@ -548,6 +558,54 @@ module Gui
       return __guiTableGetCell(this.lvglId, row, col)
     end getCell
   end Table
+
+  // ---- Image — el bitmap en memoria (cargado de archivo una vez con loadFile).
+  //      NO es un Component: es un asset, no está en el árbol de widgets. Varias
+  //      ImageView pueden compartir la misma Image (ahorra memoria). El decode
+  //      real de píxeles es del backend (Swing ImageIO / LVGL+lodepng); en host
+  //      el modelo saca width/height del header del PNG (sin decoder). ----
+  public class Image
+    // id del asset en el registro del backend. 0 = sin crear.
+    public property assetId: integer
+
+    public function Image()
+      this.assetId := __guiImageNew()
+    end Image
+
+    // Carga un PNG desde archivo. true si la cabecera es válida.
+    public function loadFile(path: string): boolean
+      return __guiImageLoadFile(this.assetId, path) != 0
+    end loadFile
+
+    // Dimensiones intrínsecas del PNG (0 si no cargado).
+    public function width(): integer
+      return __guiImageWidth(this.assetId)
+    end width
+    public function height(): integer
+      return __guiImageHeight(this.assetId)
+    end height
+  end Image
+
+  // ---- ImageView — control visual que muestra una Image (asignada con
+  //      setImage). Component normal (geometría, scroll, onClick). Varias
+  //      ImageView pueden apuntar a la misma Image. ----
+  public class ImageView extends Component
+    public function ImageView(parent: Component)
+      this.lvglId := __guiCreateImageView(parent.lvglId)
+      __guiBindClick(this.lvglId, this)
+    end ImageView
+
+    public function setImage(img: Image)
+      __guiImageViewSetImage(this.lvglId, img.assetId)
+    end setImage
+
+    // refresh: recarga la imagen SOLO si el asset cambió (loadFile la actualizó
+    // o se asignó otra Image). Si no hay cambios, no recarga — solo invalida.
+    public function refresh()
+      __guiImageViewRefresh(this.lvglId)
+      __guiRefresh(this.lvglId)
+    end refresh
+  end ImageView
 
   // ---- Dispatch del upcall: la VM llama aquí (por NOMBRE, resolveGlobal) al
   //      pulsar/cambiar un widget. self.onClick()/onChange() son llamadas

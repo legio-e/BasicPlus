@@ -264,5 +264,13 @@ public final class Intrinsics {
         register("Gui.__guiTableSetGrid",   w -> emitBuiltin(w, Builtin.GUI_TABLE_SET_GRID));
         register("Gui.__guiTableSetCell",   w -> emitBuiltin(w, Builtin.GUI_TABLE_SET_CELL));
         register("Gui.__guiTableGetCell",   w -> emitBuiltin(w, Builtin.GUI_TABLE_GET_CELL));
+        // H6 widgets — image (asset + ImageView).
+        register("Gui.__guiImageNew",          w -> emitBuiltin(w, Builtin.GUI_IMAGE_NEW));
+        register("Gui.__guiImageLoadFile",     w -> emitBuiltin(w, Builtin.GUI_IMAGE_LOAD_FILE));
+        register("Gui.__guiImageWidth",        w -> emitBuiltin(w, Builtin.GUI_IMAGE_WIDTH));
+        register("Gui.__guiImageHeight",       w -> emitBuiltin(w, Builtin.GUI_IMAGE_HEIGHT));
+        register("Gui.__guiCreateImageView",   w -> emitBuiltin(w, Builtin.GUI_CREATE_IMAGEVIEW));
+        register("Gui.__guiImageViewSetImage", w -> emitBuiltin(w, Builtin.GUI_IMAGEVIEW_SET_IMAGE));
+        register("Gui.__guiImageViewRefresh",  w -> emitBuiltin(w, Builtin.GUI_IMAGEVIEW_REFRESH));
     }
 }

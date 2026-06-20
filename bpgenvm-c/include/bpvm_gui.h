@@ -43,6 +43,13 @@ int  bpvm_gui_create_table(int parent);
 void bpvm_gui_table_set_grid(int handle, int rows, int cols);
 void bpvm_gui_table_set_cell(int handle, int row, int col, const char* text);
 const char* bpvm_gui_table_get_cell(int handle, int row, int col);
+int  bpvm_gui_image_new(void);
+int  bpvm_gui_image_load_file(int id, const char* path);
+int  bpvm_gui_image_width(int id);
+int  bpvm_gui_image_height(int id);
+int  bpvm_gui_create_imageview(int parent);
+void bpvm_gui_imageview_set_image(int view, int img);
+void bpvm_gui_imageview_refresh(int view);
 
 /* Configuración. Texto + geometría/anclaje afectan al dumpTree (modelo). Color y
  * fuente son render-only: no-op en el modelo (no tocan el dump) y, bajo BPVM_LVGL,

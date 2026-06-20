@@ -43,6 +43,9 @@ typedef struct {
     int         rmin, rmax; /* rango de value-widgets enteros (clamp); default 0..100 */
     int         trows, tcols; /* table: dimensiones de la rejilla */
     char**      cells;      /* table: celdas row-major (trows*tcols), cada una malloc o NULL */
+    int         img_asset;  /* imageview: id del asset Image asignado (0 = ninguno) */
+    int         rendered_version; /* imageview: versión del asset ya renderizada (version-stamp) */
+    int         reloads;    /* imageview: nº de recargas reales (prueba la optimización) */
     char*       text;       /* malloc; NULL/"" = sin texto */
     uint32_t    objptr;     /* objeto BP dueño (bind_click), 0 = ninguno */
 #ifdef BPVM_LVGL
@@ -62,6 +65,26 @@ static uint32_t g_ev_obj[GUI_MAX_NODES];
 static int      g_ev_kind[GUI_MAX_NODES];
 static int      g_ev_head = 0, g_ev_tail = 0;
 
+/* Registro de assets Image (bitmap cargado de archivo). NO son nodos: viven
+ * aparte y se comparten entre ImageView. En host el modelo solo guarda ruta +
+ * dimensiones (del header PNG); el decode real (lodepng) es del device. */
+#define GUI_MAX_IMAGES 64
+typedef struct {
+    int   used;
+    char* path;     /* malloc; NULL/"" = sin ruta */
+    int   w, h;     /* dimensiones intrínsecas del PNG (0 si no cargado) */
+    int   loaded;
+    int   version;  /* sube en cada load_file: el ImageView recarga si cambió */
+} gui_image;
+static gui_image g_images[GUI_MAX_IMAGES];
+static int       g_image_count = 0;
+
+static gui_image* image_for(int id) {
+    if (id <= 0 || id > g_image_count) return NULL;
+    gui_image* a = &g_images[id - 1];
+    return a->used ? a : NULL;
+}
+
 static gui_node* node_for(int handle) {
     if (handle <= 0) return NULL;
     for (int i = 0; i < g_node_count; i++)
@@ -77,6 +100,7 @@ static int create_node(const char* type, int parent) {
     n->align = 0; n->dx = 0; n->dy = 0; n->scroll = 0;
     n->has_value = 0; n->value = 0; n->rmin = 0; n->rmax = 100;
     n->trows = 0; n->tcols = 0; n->cells = NULL;
+    n->img_asset = 0; n->rendered_version = 0; n->reloads = 0;
     n->text = NULL; n->objptr = 0;
 #ifdef BPVM_LVGL
     n->lv = NULL;
@@ -359,6 +383,72 @@ const char* bpvm_gui_table_get_cell(int handle, int row, int col) {
     if (row < 0 || row >= n->trows || col < 0 || col >= n->tcols) return "";
     const char* s = n->cells[row * n->tcols + col];
     return s ? s : "";
+}
+/* ---- Image — asset (bitmap) separado del control que lo muestra. ---- */
+int bpvm_gui_image_new(void) {
+    if (g_image_count >= GUI_MAX_IMAGES) return 0;
+    int id = g_image_count + 1;          /* id 1-based = índice+1 */
+    gui_image* a = &g_images[g_image_count++];
+    a->used = 1; a->path = NULL; a->w = 0; a->h = 0; a->loaded = 0; a->version = 0;
+    return id;
+}
+/* Carga un PNG: saca width/height del header IHDR (sin decoder). Devuelve 1 si
+ * la cabecera PNG es válida, 0 si no (no encontrado / no es PNG). */
+int bpvm_gui_image_load_file(int id, const char* path) {
+    gui_image* a = image_for(id); if (!a) return 0;
+    free(a->path);
+    size_t L = path ? strlen(path) : 0;
+    a->path = (char*) malloc(L + 1);
+    if (a->path) { if (path) memcpy(a->path, path, L); a->path[L] = '\0'; }
+    a->w = 0; a->h = 0; a->loaded = 0;
+    FILE* f = fopen(path ? path : "", "rb");
+    if (f) {
+        unsigned char b[24];
+        size_t n = fread(b, 1, sizeof(b), f);
+        fclose(f);
+        if (n >= 24
+            && b[0] == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G'
+            && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) {
+            a->w = (int) (((uint32_t) b[16] << 24) | ((uint32_t) b[17] << 16)
+                        | ((uint32_t) b[18] << 8)  |  (uint32_t) b[19]);
+            a->h = (int) (((uint32_t) b[20] << 24) | ((uint32_t) b[21] << 16)
+                        | ((uint32_t) b[22] << 8)  |  (uint32_t) b[23]);
+            a->loaded = 1;
+        }
+    }
+    a->version++;   /* (re)carga: el asset cambió → los ImageView lo recargarán */
+    return a->loaded;
+}
+int bpvm_gui_image_width(int id)  { gui_image* a = image_for(id); return a ? a->w : 0; }
+int bpvm_gui_image_height(int id) { gui_image* a = image_for(id); return a ? a->h : 0; }
+int bpvm_gui_create_imageview(int parent) {
+    int h = create_node("imageview", parent);
+#ifdef BPVM_LVGL
+    gui_node* n = node_for(h); if (n) n->lv = lv_image_create(parent_lv(parent));
+#endif
+    return h;
+}
+void bpvm_gui_imageview_set_image(int view, int img) {
+    gui_node* n = node_for(view); if (!n) return;
+    if (n->img_asset != img) {   /* cambia de imagen → forzar recarga en el próximo refresh */
+        n->img_asset = img;
+        n->rendered_version = 0;
+    }
+    /* El src real LVGL (lv_image_set_src con un lv_image_dsc_t decodificado por
+     * lodepng) es trabajo del lote de dispositivo; en host el modelo (img_asset)
+     * es la verdad del dump. */
+}
+/* refresh: recarga solo si el asset cambió desde la última vez (version-stamp).
+ * Si no cambió, no hace nada (no re-decodifica). reloads cuenta las recargas
+ * reales — es el observable que prueba la optimización en el dump. */
+void bpvm_gui_imageview_refresh(int view) {
+    gui_node* n = node_for(view); if (!n) return;
+    gui_image* a = image_for(n->img_asset);
+    int cur = a ? a->version : 0;
+    if (cur != n->rendered_version) {
+        n->rendered_version = cur;   /* (en device: re-decode + lv_image_set_src) */
+        n->reloads++;
+    }
 }
 /* botones del msgbox \n-sep: render-only (LVGL crea el footer); en el modelo no-op. */
 void bpvm_gui_set_buttons(int handle, const char* labels) {
@@ -676,6 +766,21 @@ static void dump_node(char** buf, size_t* len, size_t* cap, int handle, int dept
             buf_append(buf, len, cap, cv, strlen(cv));
         }
         buf_append(buf, len, cap, "\"", 1);
+    }
+    if (strcmp(n->type, "imageview") == 0) {   /* imageview: asset asignado (ruta + dims) + recargas */
+        if (n->img_asset != 0) {
+            gui_image* a = image_for(n->img_asset);
+            const char* p = (a && a->path) ? a->path : "";
+            int iw = a ? a->w : 0, ih = a ? a->h : 0;
+            buf_append(buf, len, cap, " img=\"", 6);
+            buf_append(buf, len, cap, p, strlen(p));
+            k = snprintf(tmp, sizeof(tmp), "\" %dx%d", iw, ih);
+            if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
+        } else {
+            buf_append(buf, len, cap, " img=<none>", 11);
+        }
+        k = snprintf(tmp, sizeof(tmp), " reloads=%d", n->reloads);
+        if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
     }
     buf_append(buf, len, cap, "]\n", 2);
     for (int i = 0; i < g_node_count; i++)

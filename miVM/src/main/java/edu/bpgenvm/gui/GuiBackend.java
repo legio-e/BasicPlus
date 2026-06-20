@@ -16,6 +16,8 @@ package edu.bpgenvm.gui;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +51,9 @@ public final class GuiBackend {
         int rmin = 0, rmax = 100;   // rango de value-widgets enteros (clamp); default LVGL/Swing 0..100
         int trows = 0, tcols = 0;   // table: dimensiones de la rejilla
         String[] cells = null;      // table: celdas row-major (trows*tcols)
+        int imgAsset = 0;           // imageview: id del asset Image asignado (0 = ninguno)
+        int renderedVersion = 0;    // imageview: versión del asset ya renderizada (version-stamp)
+        int reloads = 0;            // imageview: nº de recargas reales (prueba la optimización)
         String text = "";
         Node(int handle, String type, JComponent comp, int parent) {
             this.handle = handle; this.type = type; this.comp = comp; this.parent = parent;
@@ -60,6 +65,19 @@ public final class GuiBackend {
     private int screenW = 480, screenH = 320;     // tamaño por defecto (configurable)
     private final Map<Integer, Node> nodes = new HashMap<>();
     private int nextHandle = 1;
+
+    /** Un asset de imagen (bitmap) cargado de archivo. NO es un Node: vive en su
+     *  propio registro y puede compartirse entre varias ImageView. En host el
+     *  modelo solo necesita ruta + dimensiones (del header PNG); el render real
+     *  (ImageIO) es opcional/aparte. */
+    private static final class ImageAsset {
+        String path = "";
+        int w = 0, h = 0;
+        boolean loaded = false;
+        int version = 0;   // sube en cada loadFile: el ImageView recarga si cambió
+    }
+    private final Map<Integer, ImageAsset> images = new HashMap<>();
+    private int nextImageId = 1;
 
     // Upcall de eventos. handle del widget → objptr del objeto BP dueño (lo
     // registra __guiBindClick). `events` es el "bit de IRQ pendiente": el EDT de
@@ -200,6 +218,59 @@ public final class GuiBackend {
         if (row < 0 || row >= n.trows || col < 0 || col >= n.tcols) return "";
         String s = n.cells[row * n.tcols + col];
         return s != null ? s : "";
+    }
+    // ---- Image: asset (bitmap) separado del control que lo muestra. ----
+    public int imageNew() {
+        int id = nextImageId++;
+        images.put(id, new ImageAsset());
+        return id;
+    }
+    // Carga un PNG: saca width/height del header IHDR (sin decoder). Devuelve 1
+    // si la cabecera PNG es válida, 0 si no (no encontrado / no es PNG).
+    public int imageLoadFile(int id, String path) {
+        ImageAsset a = images.get(id); if (a == null) return 0;
+        a.path = (path != null) ? path : "";
+        a.w = 0; a.h = 0; a.loaded = false;
+        try (InputStream in = new FileInputStream(a.path)) {
+            byte[] b = new byte[24];
+            int n = 0;
+            while (n < 24) { int r = in.read(b, n, 24 - n); if (r < 0) break; n += r; }
+            if (n >= 24
+                && (b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G'
+                && (b[4] & 0xFF) == 0x0D && (b[5] & 0xFF) == 0x0A
+                && (b[6] & 0xFF) == 0x1A && (b[7] & 0xFF) == 0x0A) {
+                a.w = ((b[16] & 0xFF) << 24) | ((b[17] & 0xFF) << 16) | ((b[18] & 0xFF) << 8) | (b[19] & 0xFF);
+                a.h = ((b[20] & 0xFF) << 24) | ((b[21] & 0xFF) << 16) | ((b[22] & 0xFF) << 8) | (b[23] & 0xFF);
+                a.loaded = true;
+            }
+        } catch (Exception e) { /* no encontrado / ilegible → loaded=false */ }
+        a.version++;   // (re)carga: el asset cambió → los ImageView lo recargarán
+        return a.loaded ? 1 : 0;
+    }
+    public int imageWidth(int id)  { ImageAsset a = images.get(id); return (a == null) ? 0 : a.w; }
+    public int imageHeight(int id) { ImageAsset a = images.get(id); return (a == null) ? 0 : a.h; }
+    public int createImageView(int parent) {
+        // Placeholder JLabel en miVM; el asset asignado (n.imgAsset) es la verdad del dump.
+        return create("imageview", new JLabel(), parent);
+    }
+    public void imageViewSetImage(int viewHandle, int imgId) {
+        Node n = nodes.get(viewHandle); if (n == null) return;
+        if (n.imgAsset != imgId) {   // cambia de imagen → forzar recarga en el próximo refresh
+            n.imgAsset = imgId;
+            n.renderedVersion = 0;
+        }
+    }
+    // refresh: recarga solo si el asset cambió desde la última vez (version-stamp).
+    // Si no cambió, no hace nada (no re-decodifica). reloads cuenta las recargas
+    // reales — es el observable que prueba la optimización en el dump.
+    public void imageViewRefresh(int viewHandle) {
+        Node n = nodes.get(viewHandle); if (n == null) return;
+        ImageAsset a = images.get(n.imgAsset);
+        int cur = (a != null) ? a.version : 0;
+        if (cur != n.renderedVersion) {
+            n.renderedVersion = cur;   // (en device: re-decode + lv_image_set_src)
+            n.reloads++;
+        }
     }
 
     private int create(String type, JComponent comp, int parent) {
@@ -541,6 +612,17 @@ public final class GuiBackend {
                 sb.append(n.cells[i] != null ? n.cells[i] : "");
             }
             sb.append("\"");
+        }
+        if (n.type.equals("imageview")) {   // imageview: asset asignado (ruta + dims) + recargas
+            if (n.imgAsset != 0) {
+                ImageAsset a = images.get(n.imgAsset);
+                String p = (a != null) ? a.path : "";
+                int iw = (a != null) ? a.w : 0, ih = (a != null) ? a.h : 0;
+                sb.append(" img=\"").append(p).append("\" ").append(iw).append("x").append(ih);
+            } else {
+                sb.append(" img=<none>");
+            }
+            sb.append(" reloads=").append(n.reloads);
         }
         sb.append("]\n");
         for (int c : n.children) dump(sb, c, depth + 1);

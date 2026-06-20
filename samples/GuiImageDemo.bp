@@ -1,0 +1,42 @@
+// GuiImageDemo.bp — H6 tanda 9 (FINAL): image (asset + control, separados).
+//
+// Gui.Image es el BITMAP (loadFile, width/height); Gui.ImageView es el CONTROL
+// que lo muestra (setImage). Varias ImageView pueden compartir una misma Image
+// (ahorro de memoria). refresh() recarga la imagen en el control SOLO si el
+// asset cambió desde la última vez (version-stamp): 'reloads' cuenta las
+// recargas reales → un refresh sin cambios NO recarga (la optimización).
+module GuiImageDemo
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var img: Gui.Image := Gui.Image()
+    var ok: boolean := img.loadFile("testimg.png")
+    print "cargada = " + boolToString(ok)
+    print "dims    = " + intToString(img.width()) + "x" + intToString(img.height())
+
+    // Dos vistas comparten el MISMO asset (una sola imagen en memoria).
+    var v1: Gui.ImageView := Gui.ImageView(scr)
+    v1.setImage(img)
+    var v2: Gui.ImageView := Gui.ImageView(scr)
+    v2.setImage(img)
+
+    print "== tras setImage (sin refresh) =="
+    print Gui.__guiDumpTree()
+
+    v1.refresh()        // 1a vez: el asset cambio desde 'nunca' -> recarga (reloads=1)
+    v1.refresh()        // sin cambios -> NO recarga (reloads sigue 1)
+    print "== tras 2x refresh de v1 (la 2a no recarga) =="
+    print Gui.__guiDumpTree()
+
+    img.loadFile("testimg.png")   // recarga el asset -> sube la version
+    v1.refresh()        // el asset cambio -> recarga (reloads=2)
+    v2.refresh()        // v2 nunca habia refrescado -> recarga (reloads=1)
+    print "== tras recargar el asset + refresh de ambas =="
+    print Gui.__guiDumpTree()
+
+    Gui.run()
+  end Main
+
+end GuiImageDemo

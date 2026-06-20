@@ -376,7 +376,16 @@ public enum Builtin {
     GUI_CREATE_TABLE("__guiCreateTable"),       // (parent) → id
     GUI_TABLE_SET_GRID("__guiTableSetGrid"),    // (id, rows, cols) → void
     GUI_TABLE_SET_CELL("__guiTableSetCell"),    // (id, row, col, text) → void
-    GUI_TABLE_GET_CELL("__guiTableGetCell");    // (id, row, col) → string
+    GUI_TABLE_GET_CELL("__guiTableGetCell"),    // (id, row, col) → string
+
+    // H6 widgets — image (asset separado del control que lo muestra).
+    GUI_IMAGE_NEW("__guiImageNew"),                   // () → assetId
+    GUI_IMAGE_LOAD_FILE("__guiImageLoadFile"),        // (assetId, path) → int(bool)
+    GUI_IMAGE_WIDTH("__guiImageWidth"),               // (assetId) → int
+    GUI_IMAGE_HEIGHT("__guiImageHeight"),             // (assetId) → int
+    GUI_CREATE_IMAGEVIEW("__guiCreateImageView"),     // (parent) → id
+    GUI_IMAGEVIEW_SET_IMAGE("__guiImageViewSetImage"),// (viewId, assetId) → void
+    GUI_IMAGEVIEW_REFRESH("__guiImageViewRefresh");   // (viewId) → void (recarga si cambió)
 
     public final String bpName;
     public final int id;
