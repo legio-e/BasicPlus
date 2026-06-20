@@ -9,6 +9,24 @@
 
 ---
 
+## 🗺️ Mapa de hitos (post-H7, Eduardo 20-jun)
+
+H6 (widgets GUI, en la DK2) ✅ · H7 (lenguaje: `^`, `eval`, separador `_`, continuación) ✅.
+Orden siguiente:
+- **H8 — librería estándar** (revisión/ampliación). *Anotado; SE SALTA por ahora.*
+- **H9 — revisión del IDE** (cosillas a mejorar). *Anotado; SE SALTA por ahora.*
+- **H10 — paridad HW del STM32 + reset-cause (ACTIVO):**
+  - (a) Implementar en STM32 (HAL U5) las clases de control de HW que existen para Pico/ESP32
+    pero **NO** para STM32: **I2C** (`I2c.Bus`), **ADC** (`Adc.Channel`), **PWM** (`Pwm.Slice`),
+    **Timer** (`Timer.Alarm`), **WDT** (`Wdt.Timer`), **RTC** (`Rtc.Clock`), **pulse-counter**,
+    **Neopixel**… (UART + SPI ya hechos en H15). **Primero en la Nucleo-U575** (placa STM32 de V2).
+  - (b) **Reset-cause vía RAM retenida**: usar la backup SRAM / registros que sobreviven al
+    reset para guardar una "miga de pan" (causa del último reset: watchdog / hardfault / power /
+    KILL…) y reportarla en el boot. Liga con la observabilidad de bring-up (V3_IDEAS §6).
+  - (c) Al terminar, **portar el desarrollo a la Discovery DK2** (misma familia U5).
+
+(GUI en pausa ≥1 semana tras cerrar H6 en la DK2.)
+
 ## 🎨 GUI (objetivo cabecera)
 
 El camino crítico —upcall C→BP → `Gui.*` en miVM → VM-C host (LVGL+SDL) →
