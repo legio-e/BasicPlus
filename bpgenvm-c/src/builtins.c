@@ -228,7 +228,10 @@ enum {
     BUILTIN_GUI_IMAGE_HEIGHT     = 192,
     BUILTIN_GUI_CREATE_IMAGEVIEW = 193,
     BUILTIN_GUI_IMAGEVIEW_SET_IMAGE = 194,
-    BUILTIN_GUI_IMAGEVIEW_REFRESH = 195
+    BUILTIN_GUI_IMAGEVIEW_REFRESH = 195,
+    /* H6 — fuente: tamaño de texto por componente (catálogo). */
+    BUILTIN_GUI_SET_FONT_SIZE = 196,
+    BUILTIN_GUI_GET_FONT_SIZE = 197
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -603,6 +606,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_IMAGEVIEW_REFRESH: {
         int view = pop_i32(vm, tc);
         bpvm_gui_imageview_refresh(view); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_SET_FONT_SIZE: {
+        int px = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        bpvm_gui_set_font_size(h, px); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_GET_FONT_SIZE: {
+        int h = pop_i32(vm, tc);
+        push_i32(vm, tc, bpvm_gui_get_font_size(h)); return BPVM_OK;
     }
 #endif /* BPVM_GUI */
 

@@ -272,5 +272,8 @@ public final class Intrinsics {
         register("Gui.__guiCreateImageView",   w -> emitBuiltin(w, Builtin.GUI_CREATE_IMAGEVIEW));
         register("Gui.__guiImageViewSetImage", w -> emitBuiltin(w, Builtin.GUI_IMAGEVIEW_SET_IMAGE));
         register("Gui.__guiImageViewRefresh",  w -> emitBuiltin(w, Builtin.GUI_IMAGEVIEW_REFRESH));
+        // H6 — fuente (catálogo de tamaños).
+        register("Gui.__guiSetFontSize",       w -> emitBuiltin(w, Builtin.GUI_SET_FONT_SIZE));
+        register("Gui.__guiGetFontSize",       w -> emitBuiltin(w, Builtin.GUI_GET_FONT_SIZE));
     }
 }

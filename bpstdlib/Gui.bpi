@@ -17,6 +17,7 @@ func __guiCreateKeyboard(parent:integer):integer public intrinsic
 func __guiSetButtons(handle:integer,labels:string):void public intrinsic
 func __guiGetY(handle:integer):integer public intrinsic
 func __guiGetX(handle:integer):integer public intrinsic
+func __guiGetFontSize(handle:integer):integer public intrinsic
 func __guiSetX(handle:integer,x:integer):void public intrinsic
 func __guiSetChecked(handle:integer,v:boolean):void public intrinsic
 func __guiSetY(handle:integer,y:integer):void public intrinsic
@@ -46,6 +47,7 @@ func __guiChange(w:Component):void public intrinsic
 func __guiCreateMsgbox(parent:integer):integer public intrinsic
 func __guiRun():void public intrinsic
 func __guiSetText(handle:integer,t:string):void public intrinsic
+func __guiSetFontSize(handle:integer,px:integer):void public intrinsic
 func __guiSetRange(handle:integer,mn:integer,mx:integer):void public intrinsic
 func __guiSetTextColor(handle:integer,rgb:integer):void public intrinsic
 func __guiSetBgColor(handle:integer,rgb:integer):void public intrinsic
@@ -65,7 +67,7 @@ func __guiCreateBar(parent:integer):integer public intrinsic
 func __guiCreateLed(parent:integer):integer public intrinsic
 func __guiGetText(handle:integer):string public intrinsic
 class Label public extends Component
-  layout 6 27 00000000 00000000
+  layout 7 29 00000000 00000000
   ctor(parent:Component,text:string)
   method setText(t:string):void public
   method setTextColor(c:Color):void public
@@ -80,29 +82,29 @@ class Image public
   method height():integer public
 end class
 class Button public extends Component
-  layout 6 24 00000000 00000000
+  layout 7 26 00000000 00000000
   ctor(parent:Component,text:string)
 end class
 class Checkbox public extends Component
-  layout 7 27 00000000 00000000
+  layout 8 29 00000000 00000000
   ctor(parent:Component,text:string)
   prop checked:boolean public
   method setText(t:string):void public
 end class
 class Spinbox public extends Component
-  layout 7 27 00000000 00000000
+  layout 8 29 00000000 00000000
   ctor(parent:Component)
   prop value:integer public
   method setRange(mn:integer,mx:integer):void public
 end class
 class ImageView public extends Component
-  layout 6 25 00000000 00000000
+  layout 7 27 00000000 00000000
   ctor(parent:Component)
   method setImage(img:Image):void public
   method refresh():void public
 end class
 class Msgbox public extends Component
-  layout 7 27 00000000 00000000
+  layout 8 29 00000000 00000000
   ctor(parent:Component,message:string)
   prop result:integer public
   method setButtons(labels:string):void public
@@ -124,13 +126,13 @@ class Color public
   ctor(rgb:integer)
 end class
 class Dropdown public extends Component
-  layout 7 27 00000000 00000000
+  layout 8 29 00000000 00000000
   ctor(parent:Component)
   prop selected:integer public
   method setOptions(opts:string):void public
 end class
 class Tabview public extends Component
-  layout 7 27 00000000 00000000
+  layout 8 29 00000000 00000000
   ctor(parent:Component)
   prop active:integer public
   method addTab(name:string):Component public
@@ -143,44 +145,45 @@ class ScrollDir public
   staticconst BOTH:integer=3 public
 end class
 class TabPage public extends Component
-  layout 6 24 00000000 00000000
+  layout 7 26 00000000 00000000
   ctor(pageId:integer)
 end class
 class ListBox public extends Component
-  layout 7 27 00000000 00000000
+  layout 8 29 00000000 00000000
   ctor(parent:Component)
   prop selected:integer public
   method setItems(items:string):void public
 end class
 class Slider public extends Component
-  layout 7 27 00000000 00000000
+  layout 8 29 00000000 00000000
   ctor(parent:Component)
   prop value:integer public
   method setRange(mn:integer,mx:integer):void public
 end class
 class Screen public extends Component
-  layout 6 25 00000000 00000000
+  layout 7 27 00000000 00000000
   ctor()
   method load():void public
 end class
 class Textarea public extends Component
-  layout 7 26 00000040 00000000
+  layout 8 28 00000080 00000000
   ctor(parent:Component)
   prop text:string public
 end class
 class Toggle public extends Component
-  layout 7 26 00000000 00000000
+  layout 8 28 00000000 00000000
   ctor(parent:Component)
   prop checked:boolean public
 end class
 class Component public
-  layout 6 24 00000000 00000000
+  layout 7 26 00000000 00000000
   prop lvglId:integer public
   prop x:integer public
   prop y:integer public
   prop width:integer public
   prop height:integer public
   prop scrollDir:integer public
+  prop fontSize:integer public
   method setPos(px:integer,py:integer):void public
   method setSize(w:integer,h:integer):void public
   method setBounds(px:integer,py:integer,w:integer,h:integer):void public
@@ -193,30 +196,30 @@ class Component public
   method onChange():void public
 end class
 class Table public extends Component
-  layout 6 27 00000000 00000000
+  layout 7 29 00000000 00000000
   ctor(parent:Component)
   method setGrid(rows:integer,cols:integer):void public
   method setCell(row:integer,col:integer,text:string):void public
   method getCell(row:integer,col:integer):string public
 end class
 class Keyboard public extends Component
-  layout 6 25 00000000 00000000
+  layout 7 27 00000000 00000000
   ctor(parent:Component)
   method attach(ta:Component):void public
 end class
 class Led public extends Component
-  layout 7 28 00000000 00000000
+  layout 8 30 00000000 00000000
   ctor(parent:Component)
   prop value:integer public
   method on():void public
   method off():void public
 end class
 class Panel public extends Component
-  layout 6 24 00000000 00000000
+  layout 7 26 00000000 00000000
   ctor(parent:Component)
 end class
 class Bar public extends Component
-  layout 7 27 00000000 00000000
+  layout 8 29 00000000 00000000
   ctor(parent:Component)
   prop value:integer public
   method setRange(mn:integer,mx:integer):void public

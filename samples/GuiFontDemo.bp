@@ -1,0 +1,27 @@
+// GuiFontDemo.bp — H6 (fuentes): catálogo de tamaños vía Component.fontSize.
+//
+// fontSize fija el tamaño de texto del componente (0 = por defecto, no aparece
+// en el dump). El backend mapea px → fuente del catálogo (Montserrat en placa,
+// derive en Swing); el modelo guarda el px pedido → el dump muestra font=N.
+module GuiFontDemo
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var a: Gui.Label := Gui.Label(scr, "Pequeno")
+    a.fontSize := 12
+    var b: Gui.Label := Gui.Label(scr, "Normal")      // sin fontSize -> por defecto
+    var c: Gui.Label := Gui.Label(scr, "Grande")
+    c.fontSize := 28
+
+    print "fontSize a = " + intToString(a.fontSize)
+    print "fontSize b = " + intToString(b.fontSize)
+    print "fontSize c = " + intToString(c.fontSize)
+
+    print "== widgets =="
+    print Gui.__guiDumpTree()
+    Gui.run()
+  end Main
+
+end GuiFontDemo

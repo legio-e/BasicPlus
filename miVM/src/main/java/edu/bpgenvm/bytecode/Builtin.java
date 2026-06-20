@@ -385,7 +385,11 @@ public enum Builtin {
     GUI_IMAGE_HEIGHT("__guiImageHeight"),             // (assetId) → int
     GUI_CREATE_IMAGEVIEW("__guiCreateImageView"),     // (parent) → id
     GUI_IMAGEVIEW_SET_IMAGE("__guiImageViewSetImage"),// (viewId, assetId) → void
-    GUI_IMAGEVIEW_REFRESH("__guiImageViewRefresh");   // (viewId) → void (recarga si cambió)
+    GUI_IMAGEVIEW_REFRESH("__guiImageViewRefresh"),   // (viewId) → void (recarga si cambió)
+
+    // H6 — fuente: tamaño de texto por componente (catálogo de fuentes).
+    GUI_SET_FONT_SIZE("__guiSetFontSize"),            // (handle, px) → void
+    GUI_GET_FONT_SIZE("__guiGetFontSize");            // (handle) → px
 
     public final String bpName;
     public final int id;

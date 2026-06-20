@@ -62,6 +62,10 @@ module Gui
   // refresh: recarga la imagen en el control SOLO si el asset cambió desde la
   // última vez (version-stamp en el backend); si no, no-op (evita re-decodificar).
   public intrinsic function __guiImageViewRefresh(view: integer)
+  // Fuente: tamaño en px del texto del componente (0 = la fuente por defecto).
+  // El backend mapea px → fuente disponible (LVGL Montserrat / Swing derive).
+  public intrinsic function __guiSetFontSize(handle: integer, px: integer)
+  public intrinsic function __guiGetFontSize(handle: integer): integer
   // Geometría: x/y/width/height — backend = verdad (get/set → intrínsecos).
   public intrinsic function __guiSetX(handle: integer, x: integer)
   public intrinsic function __guiGetX(handle: integer): integer
@@ -164,6 +168,17 @@ module Gui
       endget
       set(v)
         __guiSetScrollDir(this.lvglId, v)
+      endset
+    endprop
+
+    // -- Fuente: tamaño en px del texto (0 = por defecto). El backend mapea al
+    //    tamaño disponible más cercano (catálogo Montserrat en placa). --
+    public property fontSize: integer
+      get
+        return __guiGetFontSize(this.lvglId)
+      endget
+      set(v)
+        __guiSetFontSize(this.lvglId, v)
       endset
     endprop
 

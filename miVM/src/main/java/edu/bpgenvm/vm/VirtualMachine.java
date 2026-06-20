@@ -3393,6 +3393,8 @@ public class VirtualMachine {
             case GUI_CREATE_IMAGEVIEW: { int p = popTc(tc); pushTc(tc, gui.createImageView(p)); break; }
             case GUI_IMAGEVIEW_SET_IMAGE: { int img = popTc(tc); int view = popTc(tc); gui.imageViewSetImage(view, img); pushTc(tc, 0); break; }
             case GUI_IMAGEVIEW_REFRESH: { int view = popTc(tc); gui.imageViewRefresh(view); pushTc(tc, 0); break; }
+            case GUI_SET_FONT_SIZE: { int px = popTc(tc); int h = popTc(tc); gui.setFontSize(h, px); pushTc(tc, 0); break; }
+            case GUI_GET_FONT_SIZE: { int h = popTc(tc); pushTc(tc, gui.getFontSize(h)); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));

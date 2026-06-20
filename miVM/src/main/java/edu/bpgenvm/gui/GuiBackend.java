@@ -54,6 +54,7 @@ public final class GuiBackend {
         int imgAsset = 0;           // imageview: id del asset Image asignado (0 = ninguno)
         int renderedVersion = 0;    // imageview: versión del asset ya renderizada (version-stamp)
         int reloads = 0;            // imageview: nº de recargas reales (prueba la optimización)
+        int fontSize = 0;           // tamaño de fuente en px (0 = por defecto); el dump lo refleja
         String text = "";
         Node(int handle, String type, JComponent comp, int parent) {
             this.handle = handle; this.type = type; this.comp = comp; this.parent = parent;
@@ -272,6 +273,17 @@ public final class GuiBackend {
             n.reloads++;
         }
     }
+    // ---- Fuente: tamaño de texto por componente (catálogo). El modelo guarda el
+    //      px pedido (lo refleja el dump); el render deriva la fuente Swing. ----
+    public void setFontSize(int handle, int px) {
+        Node n = nodes.get(handle); if (n == null) return;
+        n.fontSize = px;
+        if (n.comp != null && px > 0) {
+            java.awt.Font f = n.comp.getFont();
+            if (f != null) n.comp.setFont(f.deriveFont((float) px));
+        }
+    }
+    public int getFontSize(int handle) { Node n = nodes.get(handle); return (n == null) ? 0 : n.fontSize; }
 
     private int create(String type, JComponent comp, int parent) {
         int h = nextHandle++;
@@ -624,6 +636,7 @@ public final class GuiBackend {
             }
             sb.append(" reloads=").append(n.reloads);
         }
+        if (n.fontSize != 0) sb.append(" font=").append(n.fontSize);
         sb.append("]\n");
         for (int c : n.children) dump(sb, c, depth + 1);
     }

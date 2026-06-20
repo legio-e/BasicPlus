@@ -47,6 +47,7 @@ typedef struct {
     int         img_asset;  /* imageview: id del asset Image asignado (0 = ninguno) */
     int         rendered_version; /* imageview: versión del asset ya renderizada (version-stamp) */
     int         reloads;    /* imageview: nº de recargas reales (prueba la optimización) */
+    int         font_size;  /* tamaño de fuente en px (0 = por defecto); el dump lo refleja */
     char*       text;       /* malloc; NULL/"" = sin texto */
     uint32_t    objptr;     /* objeto BP dueño (bind_click), 0 = ninguno */
 #ifdef BPVM_LVGL
@@ -106,6 +107,7 @@ static int create_node(const char* type, int parent) {
     n->has_value = 0; n->value = 0; n->rmin = 0; n->rmax = 100;
     n->trows = 0; n->tcols = 0; n->cells = NULL;
     n->img_asset = 0; n->rendered_version = 0; n->reloads = 0;
+    n->font_size = 0;
     n->text = NULL; n->objptr = 0;
 #ifdef BPVM_LVGL
     n->lv = NULL;
@@ -185,6 +187,25 @@ static lv_obj_t* parent_lv(int parent) {
     gui_node* p = node_for(parent);
     if (p && p->lv) return p->lv;
     return lv_screen_active();
+}
+
+/* Mapea px → fuente Montserrat disponible (catálogo de lv_conf.h). Sin match
+ * exacto → la default (14). Mantener sincronizado con LV_FONT_MONTSERRAT_* del conf. */
+static const lv_font_t* font_for_px(int px) {
+    switch (px) {
+        case 12: return &lv_font_montserrat_12;
+        case 14: return &lv_font_montserrat_14;
+        case 16: return &lv_font_montserrat_16;
+        case 18: return &lv_font_montserrat_18;
+        case 20: return &lv_font_montserrat_20;
+        case 24: return &lv_font_montserrat_24;
+        case 28: return &lv_font_montserrat_28;
+        case 32: return &lv_font_montserrat_32;
+        case 36: return &lv_font_montserrat_36;
+        case 40: return &lv_font_montserrat_40;
+        case 48: return &lv_font_montserrat_48;
+        default: return &lv_font_montserrat_14;
+    }
 }
 
 void bpvm_gui_lvgl_pump(void)        { bpvm_gui_disp_pump(); }
@@ -484,6 +505,19 @@ void bpvm_gui_imageview_refresh(int view) {
         if (n->lv && a && a->loaded) lv_image_set_src(n->lv, &a->dsc);
 #endif
     }
+}
+/* ---- Fuente: tamaño de texto por componente (catálogo). El modelo guarda el px
+ *      pedido (lo refleja el dump); bajo LVGL aplica la fuente del catálogo. ---- */
+void bpvm_gui_set_font_size(int handle, int px) {
+    gui_node* n = node_for(handle); if (!n) return;
+    n->font_size = px;
+#ifdef BPVM_LVGL
+    if (n->lv && px > 0) lv_obj_set_style_text_font(n->lv, font_for_px(px), 0);
+#endif
+}
+int bpvm_gui_get_font_size(int handle) {
+    gui_node* n = node_for(handle);
+    return n ? n->font_size : 0;
 }
 /* botones del msgbox \n-sep: render-only (LVGL crea el footer); en el modelo no-op. */
 void bpvm_gui_set_buttons(int handle, const char* labels) {
@@ -815,6 +849,10 @@ static void dump_node(char** buf, size_t* len, size_t* cap, int handle, int dept
             buf_append(buf, len, cap, " img=<none>", 11);
         }
         k = snprintf(tmp, sizeof(tmp), " reloads=%d", n->reloads);
+        if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
+    }
+    if (n->font_size != 0) {
+        k = snprintf(tmp, sizeof(tmp), " font=%d", n->font_size);
         if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
     }
     buf_append(buf, len, cap, "]\n", 2);
