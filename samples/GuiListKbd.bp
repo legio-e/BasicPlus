@@ -19,11 +19,16 @@ module GuiListKbd
   function Main()
     var scr: Gui.Screen := Gui.Screen()
 
+    // Lista a la izquierda, textarea arriba a la derecha; el teclado (kb) se
+    // auto-coloca abajo (lv_keyboard) → no hace falta posicionarlo.
     var lst: MyList := MyList(scr)
     lst.setItems("Uno\nDos\nTres\nCuatro")
     lst.selected := 2
+    lst.setBounds(5, 5, 180, 120)
 
     var ta: Gui.Textarea := Gui.Textarea(scr)
+    ta.setBounds(195, 5, 270, 50)
+
     var kb: Gui.Keyboard := Gui.Keyboard(scr)
     kb.attach(ta)
 

@@ -11,9 +11,12 @@ module GuiFontDemo
 
     var a: Gui.Label := Gui.Label(scr, "Pequeno")
     a.fontSize := 12
+    a.align(Gui.Align.TOP_MID, 0, 30)
     var b: Gui.Label := Gui.Label(scr, "Normal")      // sin fontSize -> por defecto
+    b.align(Gui.Align.TOP_MID, 0, 80)
     var c: Gui.Label := Gui.Label(scr, "Grande")
     c.fontSize := 28
+    c.align(Gui.Align.TOP_MID, 0, 130)
 
     print "fontSize a = " + intToString(a.fontSize)
     print "fontSize b = " + intToString(b.fontSize)

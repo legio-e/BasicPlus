@@ -22,9 +22,11 @@ module GuiLedSpin
     var sp: MySpin := MySpin(scr)
     sp.setRange(0, 50)
     sp.value := 30
+    sp.align(Gui.Align.TOP_MID, 0, 30)
 
     var ld: Gui.Led := Gui.Led(scr)
     ld.on()
+    ld.align(Gui.Align.TOP_MID, 0, 120)
 
     print "== widgets =="
     print Gui.__guiDumpTree()

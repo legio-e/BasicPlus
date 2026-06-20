@@ -22,9 +22,11 @@ module GuiInputDemo
     var dd: MyDrop := MyDrop(scr)
     dd.setOptions("Rojo\nVerde\nAzul")
     dd.selected := 2
+    dd.align(Gui.Align.TOP_MID, 0, 30)
 
     var ta: Gui.Textarea := Gui.Textarea(scr)
     ta.text := "hola"
+    ta.align(Gui.Align.TOP_MID, 0, 110)
 
     print "== widgets =="
     print Gui.__guiDumpTree()

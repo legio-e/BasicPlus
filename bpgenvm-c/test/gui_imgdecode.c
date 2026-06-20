@@ -27,8 +27,8 @@ int main(int argc, char** argv) {
     lv_image_dsc_t dsc; lv_memzero(&dsc, sizeof(dsc));
     dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
     dsc.header.cf    = LV_COLOR_FORMAT_RAW;
-    dsc.header.w     = 8;
-    dsc.header.h     = 4;
+    dsc.header.w     = 64;
+    dsc.header.h     = 48;
     dsc.data         = buf;
     dsc.data_size    = (uint32_t) sz;
 
@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     lv_result_t r = lv_image_decoder_get_info(&dsc, &h);
     printf("decoder_get_info: r=%d  w=%d h=%d cf=%d\n", (int) r, (int) h.w, (int) h.h, (int) h.cf);
 
-    int ok = (r == LV_RESULT_OK && h.w == 8 && h.h == 4);
+    int ok = (r == LV_RESULT_OK && h.w == 64 && h.h == 48);
     printf("%s\n", ok ? "IMG DECODE OK" : "IMG DECODE FAIL");
     return ok ? 0 : 2;
 }
