@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <string.h>
+#include <math.h>       /* H7 — NAN para eval() */
 #include <stdlib.h>
 
 #include "bpvm_gpio.h"
@@ -234,7 +235,9 @@ enum {
     BUILTIN_GUI_GET_FONT_SIZE = 197,
     /* H6 — textarea read-only (sin cursor, no editable). */
     BUILTIN_GUI_TEXTAREA_SET_READONLY = 198,
-    BUILTIN_GUI_TEXTAREA_GET_READONLY = 199
+    BUILTIN_GUI_TEXTAREA_GET_READONLY = 199,
+    /* H7 — eval("expr"): calculadora de constantes (id 200). */
+    BUILTIN_EVAL = 200
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -277,6 +280,61 @@ static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* ms
     return (ref && bpvm_eh_unwind(vm, tc, ref)) ? BPVM_OK : BPVM_ERR_RUNTIME;
 }
 
+/* H7 — calculadora de constantes para eval(). Descenso recursivo que evalúa
+ * SOBRE LA MARCHA (sin AST): + - * / paréntesis y unario sobre literales. Réplica
+ * byte-a-byte del EvalCalc de miVM (VirtualMachine.java): mismas operaciones double
+ * + parseo numérico MANUAL (no strtod) para garantizar paridad. Error -> NaN. */
+typedef struct { const char* s; int pos; int len; int err; } evalcalc_t;
+static double ec_expr(evalcalc_t* c);
+static void ec_ws(evalcalc_t* c) {
+    while (c->pos < c->len && (c->s[c->pos] == ' ' || c->s[c->pos] == '\t')) c->pos++;
+}
+static double ec_number(evalcalc_t* c) {
+    ec_ws(c);
+    double v = 0; int any = 0;
+    while (c->pos < c->len && c->s[c->pos] >= '0' && c->s[c->pos] <= '9') { v = v * 10 + (c->s[c->pos] - '0'); c->pos++; any = 1; }
+    if (c->pos < c->len && c->s[c->pos] == '.') {
+        c->pos++; double sc = 1;
+        while (c->pos < c->len && c->s[c->pos] >= '0' && c->s[c->pos] <= '9') { v = v * 10 + (c->s[c->pos] - '0'); sc *= 10; c->pos++; any = 1; }
+        v = v / sc;
+    }
+    if (!any) c->err = 1;
+    return v;
+}
+static double ec_factor(evalcalc_t* c) {
+    ec_ws(c);
+    if (c->pos >= c->len) { c->err = 1; return 0; }
+    char ch = c->s[c->pos];
+    if (ch == '-') { c->pos++; return -ec_factor(c); }
+    if (ch == '+') { c->pos++; return ec_factor(c); }
+    if (ch == '(') {
+        c->pos++; double v = ec_expr(c); ec_ws(c);
+        if (c->pos < c->len && c->s[c->pos] == ')') c->pos++; else c->err = 1;
+        return v;
+    }
+    return ec_number(c);
+}
+static double ec_term(evalcalc_t* c) {
+    double v = ec_factor(c); ec_ws(c);
+    while (c->pos < c->len && (c->s[c->pos] == '*' || c->s[c->pos] == '/')) {
+        char op = c->s[c->pos++]; double r = ec_factor(c); v = (op == '*') ? v * r : v / r; ec_ws(c);
+    }
+    return v;
+}
+static double ec_expr(evalcalc_t* c) {
+    double v = ec_term(c); ec_ws(c);
+    while (c->pos < c->len && (c->s[c->pos] == '+' || c->s[c->pos] == '-')) {
+        char op = c->s[c->pos++]; double r = ec_term(c); v = (op == '+') ? v + r : v - r; ec_ws(c);
+    }
+    return v;
+}
+static double bpvm_eval_calc(const char* s, int len) {
+    evalcalc_t c; c.s = s; c.pos = 0; c.len = len; c.err = 0;
+    double v = ec_expr(&c); ec_ws(&c);
+    if (c.pos != c.len) c.err = 1;
+    return c.err ? NAN : v;
+}
+
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     switch (id) {
 
@@ -285,6 +343,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t nbytes = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
         uint32_t ncp = (ref == 0) ? 0 : utf8_cp_count(vm->memory + ref + 4, nbytes);
         push_i32(vm, tc, (int32_t) ncp);   /* H2: longitud en codepoints */
+        return BPVM_OK;
+    }
+
+    case BUILTIN_EVAL: {   /* H7 — eval("expr") -> float (calc. de constantes) */
+        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        char buf[256];
+        size_t n = read_bp_string(vm, ref, buf, sizeof(buf));
+        double v = bpvm_eval_calc(buf, (int) n);
+        union { float f; int32_t i; } u; u.f = (float) v;
+        push_i32(vm, tc, u.i);
         return BPVM_OK;
     }
 

@@ -200,6 +200,12 @@ public final class SemanticAnalyzer {
         addBuiltin(s, "floatToString", PrimitiveType.STRING, new String[]{"x"}, new BpType[]{PrimitiveType.FLOAT});
         addBuiltin(s, "boolToString",  PrimitiveType.STRING, new String[]{"b"}, new BpType[]{PrimitiveType.BOOLEAN});
 
+        // ---- H7 — eval("expr"): calculadora de constantes (+ - * / paréntesis,
+        //      unario). Evalúa sobre la marcha (sin AST). Devuelve FLOAT, consistente
+        //      con todo el Math (sin/cos/sqrt/exp/ln son float); calcula en double por
+        //      dentro y estrecha al final. Error de sintaxis -> NaN. ----
+        addBuiltin(s, "eval", PrimitiveType.FLOAT, new String[]{"expr"}, new BpType[]{PrimitiveType.STRING});
+
         // ---- Strings ----
         addBuiltin(s, "upper",  PrimitiveType.STRING,  new String[]{"s"},                  new BpType[]{PrimitiveType.STRING});
         addBuiltin(s, "lower",  PrimitiveType.STRING,  new String[]{"s"},                  new BpType[]{PrimitiveType.STRING});

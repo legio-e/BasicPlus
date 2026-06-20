@@ -393,7 +393,11 @@ public enum Builtin {
 
     // H6 — textarea read-only (sin cursor, no editable).
     GUI_TEXTAREA_SET_READONLY("__guiTextareaSetReadonly"), // (handle, ro) → void
-    GUI_TEXTAREA_GET_READONLY("__guiTextareaGetReadonly"); // (handle) → int
+    GUI_TEXTAREA_GET_READONLY("__guiTextareaGetReadonly"), // (handle) → int
+
+    // H7 — eval("expr"): calculadora de constantes (descenso recursivo, evalúa
+    // sobre la marcha; + - * / paréntesis y unario; sin variables/funciones). id 200.
+    EVAL("eval");                                      // (s: string) → float
 
     public final String bpName;
     public final int id;

@@ -1,0 +1,13 @@
+// H7Eval.bp — H7: eval("expr") = calculadora de constantes.
+// Evalúa expresiones constantes sobre la marcha: + - * / paréntesis y unario.
+// Devuelve float. Precedencia normal (* / más fuerte que + -); izquierda.
+module H7Eval
+  function Main()
+    print "a=" + floatToString(eval("2+3*4"))           // 14
+    print "b=" + floatToString(eval("(2+3)*4"))         // 20
+    print "c=" + floatToString(eval("10/4"))            // 2.5
+    print "d=" + floatToString(eval("1.5 + 2.5"))       // 4
+    print "e=" + floatToString(eval("-3 + 10"))         // 7
+    print "f=" + floatToString(eval("2 * (3 + 4) - 1")) // 13
+  end Main
+end H7Eval

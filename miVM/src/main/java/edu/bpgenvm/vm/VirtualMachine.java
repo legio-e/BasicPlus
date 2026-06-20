@@ -3231,6 +3231,14 @@ public class VirtualMachine {
                 pushTc(tc, Float.floatToRawIntBits((float) Double.parseDouble(s.trim())));
                 break;
             }
+            case EVAL: {
+                // H7 — calculadora de constantes (descenso recursivo, evalúa sobre la
+                // marcha; sin AST). Computa en double, devuelve float. Lógica byte-a-byte
+                // idéntica a bpvm_eval_calc() de la VM-C (builtins.c). Error -> NaN.
+                String s = readVmString(popTc(tc));
+                pushTc(tc, Float.floatToRawIntBits((float) EvalCalc.run(s)));
+                break;
+            }
             case INT_TO_STRING: {
                 int n = popTc(tc);
                 pushTc(tc, allocVmString(Integer.toString(n)));
@@ -4888,6 +4896,65 @@ public class VirtualMachine {
     public int readMemoryInt(int addr) {
         if (addr < 0 || addr + 4 > memory.length) return 0;
         return readInt32(addr);
+    }
+
+    /**
+     * H7 — calculadora de constantes para el builtin eval(). Descenso recursivo
+     * que evalúa SOBRE LA MARCHA (sin AST ni bytecode): + - * / paréntesis y
+     * unario sobre literales numéricos. Computa en double. Error de sintaxis ->
+     * NaN. Réplica byte-a-byte de bpvm_eval_calc() de la VM-C (builtins.c): mismas
+     * operaciones double + parseo numérico MANUAL (no Double.parseDouble) para no
+     * depender de la librería y garantizar paridad.
+     */
+    private static final class EvalCalc {
+        private final String s; private int pos; private boolean err;
+        private EvalCalc(String s) { this.s = s; }
+        static double run(String s) {
+            EvalCalc c = new EvalCalc(s);
+            double v = c.expr(); c.ws();
+            if (c.pos != s.length()) c.err = true;
+            return c.err ? Double.NaN : v;
+        }
+        private void ws() { while (pos < s.length() && (s.charAt(pos) == ' ' || s.charAt(pos) == '\t')) pos++; }
+        private double expr() {
+            double v = term(); ws();
+            while (pos < s.length() && (s.charAt(pos) == '+' || s.charAt(pos) == '-')) {
+                char op = s.charAt(pos++); double r = term(); v = (op == '+') ? v + r : v - r; ws();
+            }
+            return v;
+        }
+        private double term() {
+            double v = factor(); ws();
+            while (pos < s.length() && (s.charAt(pos) == '*' || s.charAt(pos) == '/')) {
+                char op = s.charAt(pos++); double r = factor(); v = (op == '*') ? v * r : v / r; ws();
+            }
+            return v;
+        }
+        private double factor() {
+            ws();
+            if (pos >= s.length()) { err = true; return 0; }
+            char c = s.charAt(pos);
+            if (c == '-') { pos++; return -factor(); }
+            if (c == '+') { pos++; return factor(); }
+            if (c == '(') {
+                pos++; double v = expr(); ws();
+                if (pos < s.length() && s.charAt(pos) == ')') pos++; else err = true;
+                return v;
+            }
+            return number();
+        }
+        private double number() {
+            ws();
+            double v = 0; boolean any = false;
+            while (pos < s.length() && s.charAt(pos) >= '0' && s.charAt(pos) <= '9') { v = v * 10 + (s.charAt(pos) - '0'); pos++; any = true; }
+            if (pos < s.length() && s.charAt(pos) == '.') {
+                pos++; double sc = 1;
+                while (pos < s.length() && s.charAt(pos) >= '0' && s.charAt(pos) <= '9') { v = v * 10 + (s.charAt(pos) - '0'); sc *= 10; pos++; any = true; }
+                v = v / sc;
+            }
+            if (!any) err = true;
+            return v;
+        }
     }
 
     /**
