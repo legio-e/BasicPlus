@@ -293,7 +293,12 @@ int bpvm_gui_create_led(int parent) {
     int h = create_node("led", parent);
     gui_node* n = node_for(h); if (n) n->has_value = 1;
 #ifdef BPVM_LVGL
-    if (n) n->lv = lv_led_create(parent_lv(parent));
+    if (n) {
+        n->lv = lv_led_create(parent_lv(parent));
+        /* lv_led pinta un "glow" (shadow escalado por el brillo, ver lv_led.c);
+         * shadow_width=0 en el estilo lo anula (0*brillo=0) → LED de borde nítido. */
+        lv_obj_set_style_shadow_width(n->lv, 0, 0);
+    }
 #endif
     return h;
 }

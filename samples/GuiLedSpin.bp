@@ -1,8 +1,8 @@
 // GuiLedSpin.bp — H6 tanda 3: spinbox + led.
 //
-// spinbox: entero en rango con +/- (como Slider); el cambio dispara onChange.
+// spinbox: entero en rango. En táctil un lv_spinbox pelado solo deja mover el
+//          cursor; los botones +/- (StepBtn) lo hacen usable ajustando value.
 // led:     indicador on/off (solo salida); on()/off() o `value` 0/1.
-// Verificable headless por dumpTree (cada uno sale con `val=N`).
 module GuiLedSpin
   import Gui
 
@@ -16,6 +16,23 @@ module GuiLedSpin
     end onChange
   end MySpin
 
+  // Botón +/- que ajusta un spinbox por su propiedad value (con clamp al rango).
+  class StepBtn extends Gui.Button
+    var box: Gui.Spinbox
+    var delta: integer
+
+    public function StepBtn(parent: Gui.Component, text: string, target: Gui.Spinbox, paso: integer)
+      super(parent, text)
+      this.box := target
+      this.delta := paso
+    end StepBtn
+
+    public function onClick()
+      this.box.value := this.box.value + this.delta
+      print "[spinbox] = " + intToString(this.box.value)
+    end onClick
+  end StepBtn
+
   function Main()
     var scr: Gui.Screen := Gui.Screen()
 
@@ -24,14 +41,19 @@ module GuiLedSpin
     sp.value := 30
     sp.align(Gui.Align.TOP_MID, 0, 30)
 
+    var minus: StepBtn := StepBtn(scr, "-5", sp, -5)
+    minus.align(Gui.Align.TOP_MID, -70, 90)
+    var plus: StepBtn := StepBtn(scr, "+5", sp, 5)
+    plus.align(Gui.Align.TOP_MID, 70, 90)
+
     var ld: Gui.Led := Gui.Led(scr)
     ld.on()
-    ld.align(Gui.Align.TOP_MID, 0, 120)
+    ld.align(Gui.Align.TOP_MID, 0, 170)
 
     print "== widgets =="
     print Gui.__guiDumpTree()
 
-    Gui.__guiChange(sp)          // simula el cambio del spinbox
+    Gui.__guiChange(sp)          // simula el cambio del spinbox (headless)
     Gui.run()
   end Main
 
