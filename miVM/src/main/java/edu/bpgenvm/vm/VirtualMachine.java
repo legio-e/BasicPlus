@@ -3378,6 +3378,8 @@ public class VirtualMachine {
             case GUI_CREATE_LIST: { int p = popTc(tc); pushTc(tc, gui.createList(p)); break; }
             case GUI_CREATE_KEYBOARD: { int p = popTc(tc); pushTc(tc, gui.createKeyboard(p)); break; }
             case GUI_KEYBOARD_SET_TEXTAREA: { int ta = popTc(tc); int hnd = popTc(tc); gui.keyboardSetTextarea(hnd, ta); pushTc(tc, 0); break; }
+            case GUI_CREATE_MSGBOX: { int p = popTc(tc); pushTc(tc, gui.createMsgbox(p)); break; }
+            case GUI_SET_BUTTONS: { int lbls = popTc(tc); int hnd = popTc(tc); gui.setButtons(hnd, readVmString(lbls)); pushTc(tc, 0); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
                 pushTc(tc, allocVmString(v != 0 ? "true" : "false"));

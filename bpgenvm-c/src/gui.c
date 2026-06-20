@@ -279,6 +279,35 @@ void bpvm_gui_keyboard_set_textarea(int handle, int ta_handle) {
     (void) handle; (void) ta_handle;   /* render-only: el teclado físico edita el textarea */
 #endif
 }
+int bpvm_gui_create_msgbox(int parent) {
+    int h = create_node("msgbox", parent);
+    gui_node* n = node_for(h); if (n) n->has_value = 1;   /* value = botón pulsado */
+#ifdef BPVM_LVGL
+    if (n) n->lv = lv_msgbox_create(parent_lv(parent));
+#endif
+    return h;
+}
+/* botones del msgbox \n-sep: render-only (LVGL crea el footer); en el modelo no-op. */
+void bpvm_gui_set_buttons(int handle, const char* labels) {
+#ifdef BPVM_LVGL
+    gui_node* n = node_for(handle); if (!n || !n->lv) return;
+    if (strcmp(n->type, "msgbox") == 0 && labels && *labels) {
+        const char* p = labels;
+        while (*p) {
+            const char* nl = strchr(p, '\n');
+            size_t len = nl ? (size_t)(nl - p) : strlen(p);
+            char lbl[64]; if (len >= sizeof(lbl)) len = sizeof(lbl) - 1;
+            memcpy(lbl, p, len); lbl[len] = '\0';
+            lv_obj_t* btn = lv_msgbox_add_footer_button(n->lv, lbl);
+            lv_obj_add_event_cb(btn, lvgl_list_btn_cb, LV_EVENT_CLICKED, (void*) (intptr_t) n->objptr);
+            if (!nl) break;
+            p = nl + 1;
+        }
+    }
+#else
+    (void) handle; (void) labels;
+#endif
+}
 
 void bpvm_gui_set_text(int handle, const char* s) {
     gui_node* n = node_for(handle); if (!n) return;
@@ -288,6 +317,7 @@ void bpvm_gui_set_text(int handle, const char* s) {
     if (n->lv && strcmp(n->type, "label") == 0)    lv_label_set_text(n->lv, s ? s : "");
     if (n->lv && strcmp(n->type, "checkbox") == 0) lv_checkbox_set_text(n->lv, s ? s : "");
     if (n->lv && strcmp(n->type, "textarea") == 0) lv_textarea_set_text(n->lv, s ? s : "");
+    if (n->lv && strcmp(n->type, "msgbox") == 0)   lv_msgbox_add_text(n->lv, s ? s : "");
 #endif
 }
 /* dropdown: opciones \n-separadas (guardadas en n->text, igual que LVGL). */

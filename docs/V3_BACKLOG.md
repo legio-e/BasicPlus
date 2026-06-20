@@ -16,6 +16,18 @@ portabilidad → micro → cross-family— se detallará en los hitos H1+ (ver
 `V3_ROADMAP.md` §6 y la decisión consolidada en `V3_IDEAS.md` §1). Las tareas
 concretas se crean al arrancar cada hito.
 
+- **GUI-blocking-from-event — ejecutar trabajo largo / diálogo modal con respuesta
+  desde un handler de evento sin congelar el GUI** (Eduardo, 20-jun). Raíz: el
+  upcall (`onClick`/`onChange`) corre en el worker que TAMBIÉN bombea el GUI
+  (modelo ISR); si el handler bloquea, en LVGL/micro (un solo hilo) es **deadlock**
+  (nadie procesa el toque que cerraría el modal / nadie repinta). Dos casos:
+  (a) **proceso largo** desde un evento → seguramente `Thread` aparte + marshalling
+  del resultado/repintado al pump del GUI (el GUI es single-thread en LVGL); (b)
+  **diálogo modal síncrono** (`if confirmar("¿Borrar?") then …` en línea) → o el
+  mismo patrón async-con-callback (ya cubierto por Msgbox+botones+`onChange`), o un
+  **bombeo anidado** re-entrante en la llamada (más complejo, re-entrancia). Diseñar
+  con calma; NO bloquea H6 (Msgbox-aviso es asíncrono y suficiente para H6).
+
 ## 🛡️ Arnés de no-regresión V2→V3 (montar PRIMERO)
 
 Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.

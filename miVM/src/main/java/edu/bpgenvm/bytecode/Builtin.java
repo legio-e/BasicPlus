@@ -362,7 +362,11 @@ public enum Builtin {
     // H6 widgets — list (ítems + índice, reusa options/value) + keyboard.
     GUI_CREATE_LIST("__guiCreateList"),         // (parent) → id
     GUI_CREATE_KEYBOARD("__guiCreateKeyboard"), // (parent) → id
-    GUI_KEYBOARD_SET_TEXTAREA("__guiKeyboardSetTextarea"); // (id, taId) → void
+    GUI_KEYBOARD_SET_TEXTAREA("__guiKeyboardSetTextarea"), // (id, taId) → void
+
+    // H6 widgets — msgbox (aviso async: mensaje + botones, resultado por onChange).
+    GUI_CREATE_MSGBOX("__guiCreateMsgbox"),     // (parent) → id
+    GUI_SET_BUTTONS("__guiSetButtons");         // (id, "Si\nNo") → void
 
     public final String bpName;
     public final int id;

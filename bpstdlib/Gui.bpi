@@ -11,6 +11,7 @@ func __guiCreateLabel(parent:integer):integer public intrinsic
 func __guiSetOptions(handle:integer,opts:string):void public intrinsic
 func __guiCreateSlider(parent:integer):integer public intrinsic
 func __guiCreateKeyboard(parent:integer):integer public intrinsic
+func __guiSetButtons(handle:integer,labels:string):void public intrinsic
 func __guiGetY(handle:integer):integer public intrinsic
 func __guiGetX(handle:integer):integer public intrinsic
 func __guiSetX(handle:integer,x:integer):void public intrinsic
@@ -32,6 +33,7 @@ func __guiCreateTextarea(parent:integer):integer public intrinsic
 func __guiSetValue(handle:integer,v:integer):void public intrinsic
 func __guiGetHeight(handle:integer):integer public intrinsic
 func __guiChange(w:Component):void public intrinsic
+func __guiCreateMsgbox(parent:integer):integer public intrinsic
 func __guiRun():void public intrinsic
 func __guiSetText(handle:integer,t:string):void public intrinsic
 func __guiSetRange(handle:integer,mn:integer,mx:integer):void public intrinsic
@@ -71,6 +73,12 @@ class Spinbox public extends Component
   ctor(parent:Component)
   prop value:integer public
   method setRange(mn:integer,mx:integer):void public
+end class
+class Msgbox public extends Component
+  layout 7 27 00000000 00000000
+  ctor(parent:Component,message:string)
+  prop result:integer public
+  method setButtons(labels:string):void public
 end class
 class Align public
   layout 0 2 - -

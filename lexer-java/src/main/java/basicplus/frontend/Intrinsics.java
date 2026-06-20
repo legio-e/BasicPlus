@@ -253,5 +253,8 @@ public final class Intrinsics {
         register("Gui.__guiCreateList",     w -> emitBuiltin(w, Builtin.GUI_CREATE_LIST));
         register("Gui.__guiCreateKeyboard", w -> emitBuiltin(w, Builtin.GUI_CREATE_KEYBOARD));
         register("Gui.__guiKeyboardSetTextarea", w -> emitBuiltin(w, Builtin.GUI_KEYBOARD_SET_TEXTAREA));
+        // H6 widgets — msgbox.
+        register("Gui.__guiCreateMsgbox",   w -> emitBuiltin(w, Builtin.GUI_CREATE_MSGBOX));
+        register("Gui.__guiSetButtons",     w -> emitBuiltin(w, Builtin.GUI_SET_BUTTONS));
     }
 }

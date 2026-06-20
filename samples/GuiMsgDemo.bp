@@ -1,0 +1,37 @@
+// GuiMsgDemo.bp — H6 tanda 6: msgbox (aviso ASÍNCRONO).
+//
+// Diálogo NO modal: muestra un mensaje + botones; al pulsar un botón dispara
+// onChange y `result` = índice pulsado. Asíncrono a propósito (un modal bloqueante
+// colgaría el GUI; ver V3_BACKLOG: GUI-blocking-from-event).
+// Aquí simulamos el botón pulsado con result:=1 + __guiChange (verificable headless).
+module GuiMsgDemo
+  import Gui
+
+  class MiAviso extends Gui.Msgbox
+    public function MiAviso(parent: Gui.Component, msg: string)
+      super(parent, msg)
+    end MiAviso
+
+    public function onChange()
+      print "[msgbox] boton pulsado"
+    end onChange
+  end MiAviso
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var mb: MiAviso := MiAviso(scr, "Operacion completada")
+    mb.setButtons("OK\nCancelar")
+
+    print "== antes =="
+    print Gui.__guiDumpTree()
+
+    mb.result := 1               // simula que se pulsó el botón 1
+    Gui.__guiChange(mb)
+    Gui.run()
+
+    print "== despues =="
+    print Gui.__guiDumpTree()
+  end Main
+
+end GuiMsgDemo

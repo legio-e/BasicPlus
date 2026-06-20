@@ -41,6 +41,9 @@ module Gui
   public intrinsic function __guiCreateList(parent: integer): integer
   public intrinsic function __guiCreateKeyboard(parent: integer): integer
   public intrinsic function __guiKeyboardSetTextarea(handle: integer, ta: integer)
+  // Msgbox (aviso): mensaje (setText) + botones \n-sep; el botón pulsado → value.
+  public intrinsic function __guiCreateMsgbox(parent: integer): integer
+  public intrinsic function __guiSetButtons(handle: integer, labels: string)
   // Geometría: x/y/width/height — backend = verdad (get/set → intrínsecos).
   public intrinsic function __guiSetX(handle: integer, x: integer)
   public intrinsic function __guiGetX(handle: integer): integer
@@ -456,6 +459,33 @@ module Gui
       __guiKeyboardSetTextarea(this.lvglId, ta.lvglId)
     end attach
   end Keyboard
+
+  // ---- Msgbox — aviso (diálogo NO modal). Mensaje + botones; al pulsar un botón
+  //      dispara onChange y `result` = índice pulsado. Es ASÍNCRONO a propósito: un
+  //      modal bloqueante colgaría el GUI (el handler corre en el mismo hilo que
+  //      bombea; en LVGL single-thread = deadlock). El modal síncrono y "proceso
+  //      largo desde evento" están pendientes (ver V3_BACKLOG: GUI-blocking-from-event). ----
+  public class Msgbox extends Component
+    public function Msgbox(parent: Component, message: string)
+      this.lvglId := __guiCreateMsgbox(parent.lvglId)
+      __guiSetText(this.lvglId, message)
+      __guiBindClick(this.lvglId, this)
+    end Msgbox
+
+    public function setButtons(labels: string)
+      __guiSetButtons(this.lvglId, labels)
+    end setButtons
+
+    // Índice del botón pulsado (válido tras dispararse onChange).
+    public property result: integer
+      get
+        return __guiGetValue(this.lvglId)
+      endget
+      set(v)
+        __guiSetValue(this.lvglId, v)
+      endset
+    endprop
+  end Msgbox
 
   // ---- Dispatch del upcall: la VM llama aquí (por NOMBRE, resolveGlobal) al
   //      pulsar/cambiar un widget. self.onClick()/onChange() son llamadas

@@ -209,7 +209,10 @@ enum {
     /* H6 widgets — list (ítems + índice) + keyboard. */
     BUILTIN_GUI_CREATE_LIST     = 178,
     BUILTIN_GUI_CREATE_KEYBOARD = 179,
-    BUILTIN_GUI_KEYBOARD_SET_TEXTAREA = 180
+    BUILTIN_GUI_KEYBOARD_SET_TEXTAREA = 180,
+    /* H6 widgets — msgbox (aviso async: mensaje + botones). */
+    BUILTIN_GUI_CREATE_MSGBOX   = 181,
+    BUILTIN_GUI_SET_BUTTONS     = 182
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -539,6 +542,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_CREATE_LIST:     { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_list(p)); return BPVM_OK; }
     case BUILTIN_GUI_CREATE_KEYBOARD: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_keyboard(p)); return BPVM_OK; }
     case BUILTIN_GUI_KEYBOARD_SET_TEXTAREA: { int ta = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_keyboard_set_textarea(h, ta); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_MSGBOX: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_msgbox(p)); return BPVM_OK; }
+    case BUILTIN_GUI_SET_BUTTONS: {
+        uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        char buf[256]; read_bp_string(vm, ref, buf, sizeof(buf));
+        bpvm_gui_set_buttons(h, buf); push_i32(vm, tc, 0); return BPVM_OK;
+    }
 #endif /* BPVM_GUI */
 
     case BUILTIN_PARSE_INT: {

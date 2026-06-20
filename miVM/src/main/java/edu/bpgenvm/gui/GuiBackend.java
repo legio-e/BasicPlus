@@ -137,6 +137,14 @@ public final class GuiBackend {
         return create("keyboard", new JPanel(null), parent);
     }
     public void keyboardSetTextarea(int handle, int taHandle) { /* render-only (LVGL); no-op en el modelo */ }
+    public int createMsgbox(int parent) {
+        // Aviso (no modal): placeholder JPanel en miVM; el modelo (text=mensaje,
+        // value=botón pulsado) es la verdad. Los botones reales se pintan en LVGL.
+        int h = create("msgbox", new JPanel(null), parent);
+        Node n = nodes.get(h); if (n != null) n.hasValue = true;
+        return h;
+    }
+    public void setButtons(int handle, String labels) { /* botones = render LVGL; no-op en el modelo */ }
 
     private int create(String type, JComponent comp, int parent) {
         int h = nextHandle++;
