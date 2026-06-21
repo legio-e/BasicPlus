@@ -31,6 +31,7 @@
 #include "bpvm_wdt.h"
 #include "bpvm_rtc.h"
 #include "bpvm_pwm.h"
+#include "bpvm_pulse.h"
 
 #include "main.h"   /* HAL + CMSIS (GPIOA.., UID_BASE, SystemCoreClock) */
 #include "board.h"  /* BOARD_HAS_ADC_TEMP y demás capacidades de placa */
@@ -769,6 +770,7 @@ typedef struct {
 static const pwm_map_t s_pwm_map[] = {
     { (2 << 4) | 7, TIM3, TIM_CHANNEL_2, GPIO_AF2_TIM3 },  /* PC7 — LED verde */
     { (1 << 4) | 7, TIM4, TIM_CHANNEL_2, GPIO_AF2_TIM4 },  /* PB7 — LED azul  */
+    { (2 << 4) | 8, TIM3, TIM_CHANNEL_3, GPIO_AF2_TIM3 },  /* PC8 — pin de cabecera (fuente PWM para probar el contador) */
 };
 #define PWM_SLICE_N    ((int)(sizeof(s_pwm_map) / sizeof(s_pwm_map[0])))
 #define PWM_ARR        999u   /* 1000 pasos → resolución de duty 0.1% */
@@ -852,6 +854,94 @@ static const bpvm_pwm_backend_t s_pwm_backend = {
     .stop    = stm32_pwm_stop_impl,
 };
 
+/* ===================== Pulse counter — H10 ================================
+ * Cuenta flancos HW en un pin sin coste de CPU: un timer en "external clock
+ * mode 1" usa su entrada TI1 como reloj del contador, así que CNT avanza con
+ * cada flanco del pin (no con el reloj del sistema). Tabla pin → (timer, AF).
+ * HOY: PC6 = TIM8_CH1 / TI1 (AF3). El contador es de 16 bits (0..65535), como
+ * en el RP2350; para más cuentas, ventana más corta o reset()+acumular en BP.
+ * Bonus sobre el RP2350: soporta BOTH (ambos flancos) — el SDK del Pico no.
+ * counterId = índice en la tabla. NO uses TIM3/TIM4 (los ocupa el PWM): el
+ * modo reloj-externo es de todo el timer, no por canal. */
+typedef struct {
+    int          pin;     /* pin BP = (puerto<<4)|bit */
+    TIM_TypeDef* inst;    /* TIM8 */
+    uint8_t      af;      /* GPIO_AFx_TIMy */
+} pulse_map_t;
+
+static const pulse_map_t s_pulse_map[] = {
+    { (2 << 4) | 6, TIM8, GPIO_AF3_TIM8 },   /* PC6 — TIM8_CH1 (TI1) */
+};
+#define PULSE_N    ((int)(sizeof(s_pulse_map) / sizeof(s_pulse_map[0])))
+
+static TIM_HandleTypeDef s_pulse_htim[PULSE_N];
+static int               s_pulse_on[PULSE_N];
+
+/* edgeKind BP (0=RISING,1=FALLING,2=BOTH) → polaridad del reloj TIx de la HAL. */
+static uint32_t pulse_edge_to_polarity(int edgeKind) {
+    switch (edgeKind) {
+        case 1:  return TIM_CLOCKPOLARITY_FALLING;
+        case 2:  return TIM_CLOCKPOLARITY_BOTHEDGE;
+        default: return TIM_CLOCKPOLARITY_RISING;
+    }
+}
+
+static int stm32_pulse_init_impl(int pin, int edgeKind) {
+    int idx = -1;
+    for (int i = 0; i < PULSE_N; i++) if (s_pulse_map[i].pin == pin) { idx = i; break; }
+    if (idx < 0) return -1;   /* pin sin entrada de timer en la tabla */
+
+    if (s_pulse_map[idx].inst == TIM8) __HAL_RCC_TIM8_CLK_ENABLE();
+
+    TIM_HandleTypeDef* h = &s_pulse_htim[idx];
+    h->Instance               = s_pulse_map[idx].inst;
+    h->Init.Prescaler         = 0;
+    h->Init.CounterMode       = TIM_COUNTERMODE_UP;
+    h->Init.Period            = 0xFFFFu;     /* 16-bit: cuenta 0..65535 */
+    h->Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
+    h->Init.RepetitionCounter = 0;           /* timer avanzado (TIM8) */
+    h->Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+    if (HAL_TIM_Base_Init(h) != HAL_OK) return -1;
+
+    /* External clock mode 1: el contador se alimenta de los flancos de TI1. */
+    TIM_ClockConfigTypeDef clk = {0};
+    clk.ClockSource    = TIM_CLOCKSOURCE_TI1;
+    clk.ClockPolarity  = pulse_edge_to_polarity(edgeKind);
+    clk.ClockPrescaler = TIM_CLOCKPRESCALER_DIV1;
+    clk.ClockFilter    = 0;
+    if (HAL_TIM_ConfigClockSource(h, &clk) != HAL_OK) return -1;
+
+    cfg_af_pin(pin, s_pulse_map[idx].af);   /* pin → AF del timer (entrada TI1) */
+    __HAL_TIM_SET_COUNTER(h, 0);
+    s_pulse_on[idx] = 1;
+    return idx;   /* counterId */
+}
+
+static void stm32_pulse_start_impl(int counterId) {
+    if (counterId >= 0 && counterId < PULSE_N && s_pulse_on[counterId])
+        HAL_TIM_Base_Start(&s_pulse_htim[counterId]);   /* CEN=1 → cuenta flancos */
+}
+static void stm32_pulse_stop_impl(int counterId) {
+    if (counterId >= 0 && counterId < PULSE_N && s_pulse_on[counterId])
+        HAL_TIM_Base_Stop(&s_pulse_htim[counterId]);    /* CEN=0; CNT se conserva */
+}
+static int stm32_pulse_value_impl(int counterId) {
+    if (counterId < 0 || counterId >= PULSE_N || !s_pulse_on[counterId]) return 0;
+    return (int) __HAL_TIM_GET_COUNTER(&s_pulse_htim[counterId]);
+}
+static void stm32_pulse_reset_impl(int counterId) {
+    if (counterId >= 0 && counterId < PULSE_N && s_pulse_on[counterId])
+        __HAL_TIM_SET_COUNTER(&s_pulse_htim[counterId], 0);
+}
+
+static const bpvm_pulse_backend_t s_pulse_backend = {
+    .init  = stm32_pulse_init_impl,
+    .start = stm32_pulse_start_impl,
+    .stop  = stm32_pulse_stop_impl,
+    .value = stm32_pulse_value_impl,
+    .reset = stm32_pulse_reset_impl,
+};
+
 void stm32_hw_register(void) {
     bpvm_gpio_set_backend(&s_gpio_backend);
     bpvm_pico_set_backend(&s_pico_backend);
@@ -864,5 +954,5 @@ void stm32_hw_register(void) {
     bpvm_rtc_set_backend(&s_rtc_backend);     /* H10 — RTC HW (hora sobrevive al reset) */
 #endif
     bpvm_pwm_set_backend(&s_pwm_backend);     /* H10 — PWM por timer (LEDs verde/azul) */
-    /* PWM/Rtc: anadir su backend HAL cuando toque (ADC temp ya en stm32_temp_c_impl). */
+    bpvm_pulse_set_backend(&s_pulse_backend); /* H10 — contador de pulsos (TIM8/TI1 en PC6) */
 }

@@ -1,0 +1,68 @@
+// PulseDemo.bp — verifica el contador de pulsos de la Nucleo (H10).
+//
+// Cableado: PUENTE  PC8 (salida PWM)  <--->  PC6 (entrada contador).
+//   PWM      = PC8 = (2<<4)|8 = 40   (TIM3_CH3)
+//   contador = PC6 = (2<<4)|6 = 38   (TIM8_CH1 / TI1)
+//
+// Idea (igual que PwmTest.bp, con pines Nucleo): genera PWM a una frecuencia
+// conocida en PC8 y cuenta los flancos durante una ventana de tiempo conocida
+// en PC6. Si la frecuencia medida coincide con la pedida, el contador funciona.
+//
+// PC8 es un pin de cabecera (sin LED) → no hay parpadeo visible: la prueba se
+// mide por el conteo impreso. Tras la demo, un reset devuelve los pines a su
+// función normal.
+//
+// Tolerancia: ±2% por el clkdiv del PWM + jitter de los sleep BP entre
+// start/stop del contador.
+
+module PulseDemo
+  import Pwm
+  import Pulse
+
+  function Main()
+    print "--- Contador de pulsos (PC7 PWM -> puente -> PC6 contador) ---"
+    print "Comprueba el puente PC8 <-> PC6."
+
+    var p: Pwm.Slice     := Pwm.Slice(40, 1000)               // PC8, 1 kHz
+    var c: Pulse.Counter := Pulse.Counter(38, Pulse.RISING()) // PC6
+
+    // Test 1: 1 kHz x 1 s = ~1000 flancos
+    print ""
+    print "Test 1: PWM 1 kHz, duty 50%, ventana 1 s"
+    p.setDuty(50)
+    c.reset()
+    c.start()
+    p.start()
+    sleep(1000)
+    p.stop()
+    c.stop()
+    print "  esperado ~1000  contado:", c.value()
+
+    // Test 2: cambio a 500 Hz en caliente
+    print "Test 2: cambio a 500 Hz, ventana 1 s"
+    p.setFreq(500)
+    p.setDuty(50)
+    c.reset()
+    c.start()
+    p.start()
+    sleep(1000)
+    p.stop()
+    c.stop()
+    print "  esperado ~500   contado:", c.value()
+
+    // Test 3: ventana corta (200 ms) a 1 kHz
+    print "Test 3: PWM 1 kHz, ventana 200 ms"
+    p.setFreq(1000)
+    p.setDuty(50)
+    c.reset()
+    c.start()
+    p.start()
+    sleep(200)
+    p.stop()
+    c.stop()
+    print "  esperado ~200   contado:", c.value()
+
+    print "--- fin ---"
+  end Main
+
+end PulseDemo
