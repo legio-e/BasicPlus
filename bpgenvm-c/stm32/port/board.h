@@ -26,6 +26,15 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
 #define BOARD_NAME              "u5g9j-dk2"
 #define BOARD_SRAM_BYTES        (3008UL * 1024UL)   /* SRAM interna contigua (linker) */
 #define BOARD_FS_FLASH_ADDR     0x083E0000u          /* últimos 128 KB de 4 MB (reservados en el .ld) */
+/* H10 — RTC HW: la DK2 YA lo tiene habilitado en su CubeMX (hrtc) con reloj LSE 32768
+ * (cristal real → más preciso que el LSI de la Nucleo; el default 127/255 da 1 Hz) →
+ * backend RTC activo, sin tocar CubeMX. (ADC1 aún NO está en su .ioc → BOARD_HAS_ADC_TEMP
+ * se añade al habilitarlo, si no el build peta por hadc1 indefinido.) */
+#define BOARD_HAS_RTC           1
+/* H10 — ADC1 habilitado en el CubeMX de la DK2 (hadc1) con el canal interno del sensor
+ * de temperatura → stm32_temp_c_impl() lee la temp del die por ADC (igual que la Nucleo;
+ * la implementación es board-agnóstica, solo necesita hadc1 a 14-bit). */
+#define BOARD_HAS_ADC_TEMP      1
 
 /* LEDs de usuario (etiquetas del .ioc): RED_LED=PD2, GREEN_LED=PD4. Solo dos →
  * verde = vivo/ejecutando + heartbeat, rojo = error. Activo-alto (SET=encendido);

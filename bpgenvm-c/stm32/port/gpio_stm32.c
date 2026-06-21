@@ -160,7 +160,9 @@ static void stm32_unique_id_impl(char* buf, size_t len) {
 
 static void stm32_board_name_impl(char* buf, size_t len) {
     if (buf && len > 0) {
-        strncpy(buf, "nucleo-u575zi", len - 1);
+        /* BOARD_NAME viene de board.h por placa (nucleo-u575zi / u5g9j-dk2). Antes
+         * estaba hardcodeado a la Nucleo → mal en la DK2 (Pico.boardName()). */
+        strncpy(buf, BOARD_NAME, len - 1);
         buf[len - 1] = '\0';
     }
 }
