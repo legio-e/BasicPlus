@@ -21,6 +21,7 @@
 #include "json_min.h"
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* vm->modules[].{name,imports,import_count} para deps */
+#include "bpvm_rtc.h"        /* H10 — TIME aplica la hora al RTC (bpvm_rtc_set_now_ms) */
 #include "mdn_loader.h"      /* H9.5: overlay AOT .mdn desde el FS (loader compartido) */
 #include "aot_registry.h"    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
 
@@ -486,7 +487,11 @@ static void dispatch(int first_char) {
     if      (strcmp(type, "HELLO")     == 0) handle_hello(id);
     else if (strcmp(type, "INFO")      == 0) handle_info(id);
     else if (strcmp(type, "PING")      == 0) reply_empty("PONG", id);
-    else if (strcmp(type, "TIME")      == 0) reply_empty("TIME_REPLY", id);
+    else if (strcmp(type, "TIME")      == 0) {   /* H10 — aplica la hora al RTC HW */
+        long epochSec = json_get_long(&obj, "epochSec", -1);
+        if (epochSec >= 0) bpvm_rtc_set_now_ms((int64_t) epochSec * 1000LL);
+        reply_empty("TIME_REPLY", id);
+    }
     else if (strcmp(type, "LIST")      == 0) handle_list(id, &obj);
     else if (strcmp(type, "STAT")      == 0) handle_stat(id, &obj);
     else if (strcmp(type, "DF")        == 0) handle_df(id);

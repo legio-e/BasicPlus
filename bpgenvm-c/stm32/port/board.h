@@ -55,6 +55,10 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
  * temperatura → stm32_temp_c_impl() lee la temperatura del die por ADC. La DK2
  * aún no lo define (sigue con el stub) hasta que se habilite ADC1 en su .ioc. */
 #define BOARD_HAS_ADC_TEMP      1
+/* H10 — RTC HW habilitado en CubeMX (hrtc, reloj LSI) → la hora la lleva el
+ * periférico RTC (sobrevive al reset; con LSI deriva, sin LSE poblado). La DK2
+ * usa el stub software hasta que se habilite RTC en su .ioc. */
+#define BOARD_HAS_RTC           1
 
 #define BOARD_LED_ERR_ON()      BSP_LED_On(LED_RED)
 #define BOARD_LED_RUN_ON()      BSP_LED_On(LED_BLUE)

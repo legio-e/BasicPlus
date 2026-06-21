@@ -29,6 +29,7 @@
 #include "bpvm_uart.h"
 #include "bpvm_i2c.h"
 #include "bpvm_wdt.h"
+#include "bpvm_rtc.h"
 
 #include "main.h"   /* HAL + CMSIS (GPIOA.., UID_BASE, SystemCoreClock) */
 #include "board.h"  /* BOARD_HAS_ADC_TEMP y demás capacidades de placa */
@@ -684,6 +685,72 @@ const char* stm32_reset_cause(void) {
     return s_cause;
 }
 
+#if defined(BOARD_HAS_RTC)
+/* ===================== RTC HW — H10 =========================================
+ * Reloj de calendario sobre el periférico RTC (CubeMX: hrtc, reloj LSI ~32 kHz).
+ * La hora SOBREVIVE al reset (dominio backup; con VBAT/pila, al power-off).
+ * Contrato BP = epoch ms (UTC) → convertimos a/desde fecha+hora del RTC. OJO:
+ * con LSI deriva (~±%, no es cristal); para precisión, poblar el LSE. */
+extern RTC_HandleTypeDef hrtc;
+
+/* días desde 1970-01-01 ↔ (año, mes[1-12], día) — algoritmo civil (Hinnant). */
+static long rtc_days_from_civil(long y, unsigned m, unsigned d) {
+    y -= (m <= 2);
+    long era = (y >= 0 ? y : y - 399) / 400;
+    unsigned yoe = (unsigned)(y - era * 400);
+    unsigned doy = (153u * (m + (m > 2 ? -3u : 9u)) + 2u) / 5u + d - 1u;
+    unsigned doe = yoe * 365u + yoe / 4u - yoe / 100u + doy;
+    return era * 146097L + (long)doe - 719468L;
+}
+static void rtc_civil_from_days(long z, int* y, unsigned* m, unsigned* d) {
+    z += 719468L;
+    long era = (z >= 0 ? z : z - 146096) / 146097;
+    unsigned doe = (unsigned)(z - era * 146097L);
+    unsigned yoe = (doe - doe / 1460u + doe / 36524u - doe / 146096u) / 365u;
+    long yy = (long)yoe + era * 400L;
+    unsigned doy = doe - (365u * yoe + yoe / 4u - yoe / 100u);
+    unsigned mp = (5u * doy + 2u) / 153u;
+    *d = doy - (153u * mp + 2u) / 5u + 1u;
+    *m = mp + (mp < 10u ? 3u : -9u);
+    *y = (int)(yy + (*m <= 2));
+}
+
+static int64_t stm32_rtc_now_ms(void) {
+    RTC_TimeTypeDef t; RTC_DateTypeDef d;
+    HAL_RTC_GetTime(&hrtc, &t, RTC_FORMAT_BIN);   /* GetTime ANTES de GetDate (bloqueo del shadow) */
+    HAL_RTC_GetDate(&hrtc, &d, RTC_FORMAT_BIN);
+    long days = rtc_days_from_civil(2000 + (int)d.Year, d.Month, d.Date);  /* RTC Year = año−2000 */
+    int64_t secs = (int64_t)days * 86400 + t.Hours * 3600 + t.Minutes * 60 + t.Seconds;
+    return secs * 1000;
+}
+
+static void stm32_rtc_set_now_ms(int64_t epoch_ms) {
+    int64_t secs = epoch_ms / 1000;
+    if (secs < 0) secs = 0;
+    long days = (long)(secs / 86400);
+    int rem = (int)(secs % 86400);
+    int y; unsigned m, dd;
+    rtc_civil_from_days(days, &y, &m, &dd);
+    if (y < 2000) y = 2000;   /* el RTC guarda el año 0..99 desde 2000 */
+    RTC_DateTypeDef d = {0};
+    d.Year    = (uint8_t)(y - 2000);
+    d.Month   = (uint8_t)m;
+    d.Date    = (uint8_t)dd;
+    d.WeekDay = (uint8_t)(((days + 3) % 7) + 1);   /* 1970-01-01 = jueves; 1=lun..7=dom */
+    RTC_TimeTypeDef t = {0};
+    t.Hours   = (uint8_t)(rem / 3600);
+    t.Minutes = (uint8_t)((rem % 3600) / 60);
+    t.Seconds = (uint8_t)(rem % 60);
+    HAL_RTC_SetTime(&hrtc, &t, RTC_FORMAT_BIN);
+    HAL_RTC_SetDate(&hrtc, &d, RTC_FORMAT_BIN);
+}
+
+static const bpvm_rtc_backend_t s_rtc_backend = {
+    .nowMs    = stm32_rtc_now_ms,
+    .setNowMs = stm32_rtc_set_now_ms,
+};
+#endif /* BOARD_HAS_RTC */
+
 void stm32_hw_register(void) {
     bpvm_gpio_set_backend(&s_gpio_backend);
     bpvm_pico_set_backend(&s_pico_backend);
@@ -692,5 +759,8 @@ void stm32_hw_register(void) {
     bpvm_i2c_set_backend(&s_i2c_backend);     /* H15.2 */
     bpvm_wdt_set_backend(&s_wdt_backend);     /* H10 — watchdog IWDG */
     stm32_breadcrumb_init();                  /* H10 — breadcrumb RAM retenida (TAMP) */
+#if defined(BOARD_HAS_RTC)
+    bpvm_rtc_set_backend(&s_rtc_backend);     /* H10 — RTC HW (hora sobrevive al reset) */
+#endif
     /* PWM/Rtc: anadir su backend HAL cuando toque (ADC temp ya en stm32_temp_c_impl). */
 }
