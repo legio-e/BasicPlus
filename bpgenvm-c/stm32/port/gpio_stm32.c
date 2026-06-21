@@ -832,9 +832,13 @@ typedef struct {
 } pwm_map_t;
 
 static const pwm_map_t s_pwm_map[] = {
+#if defined(BPVM_BOARD_DK2)
+    { (1 << 4) | 8, TIM16, TIM_CHANNEL_1, GPIO_AF14_TIM16 },  /* PB8 — CN1 pin 12 (PWM; TIM16 libre) */
+#else
     { (2 << 4) | 7, TIM3, TIM_CHANNEL_2, GPIO_AF2_TIM3 },  /* PC7 — LED verde */
     { (1 << 4) | 7, TIM4, TIM_CHANNEL_2, GPIO_AF2_TIM4 },  /* PB7 — LED azul  */
     { (2 << 4) | 8, TIM3, TIM_CHANNEL_3, GPIO_AF2_TIM3 },  /* PC8 — pin de cabecera (fuente PWM para probar el contador) */
+#endif
 };
 #define PWM_SLICE_N    ((int)(sizeof(s_pwm_map) / sizeof(s_pwm_map[0])))
 #define PWM_ARR        999u   /* 1000 pasos → resolución de duty 0.1% */
@@ -862,8 +866,9 @@ static int stm32_pwm_init_impl(int pin, int freqHz) {
     for (int i = 0; i < PWM_SLICE_N; i++) if (s_pwm_map[i].pin == pin) { idx = i; break; }
     if (idx < 0) return -1;   /* pin sin canal de timer en la tabla */
 
-    if (s_pwm_map[idx].inst == TIM3) __HAL_RCC_TIM3_CLK_ENABLE();
-    else                             __HAL_RCC_TIM4_CLK_ENABLE();
+    if      (s_pwm_map[idx].inst == TIM3)  __HAL_RCC_TIM3_CLK_ENABLE();
+    else if (s_pwm_map[idx].inst == TIM16) __HAL_RCC_TIM16_CLK_ENABLE();  /* PWM de la DK2 */
+    else                                   __HAL_RCC_TIM4_CLK_ENABLE();
 
     TIM_HandleTypeDef* h = &s_pwm_htim[idx];
     h->Instance           = s_pwm_map[idx].inst;
@@ -922,19 +927,25 @@ static const bpvm_pwm_backend_t s_pwm_backend = {
  * Cuenta flancos HW en un pin sin coste de CPU: un timer en "external clock
  * mode 1" usa su entrada TI1 como reloj del contador, así que CNT avanza con
  * cada flanco del pin (no con el reloj del sistema). Tabla pin → (timer, AF).
- * HOY: PC6 = TIM8_CH1 / TI1 (AF3). El contador es de 16 bits (0..65535), como
- * en el RP2350; para más cuentas, ventana más corta o reset()+acumular en BP.
- * Bonus sobre el RP2350: soporta BOTH (ambos flancos) — el SDK del Pico no.
- * counterId = índice en la tabla. NO uses TIM3/TIM4 (los ocupa el PWM): el
- * modo reloj-externo es de todo el timer, no por canal. */
+ * Por placa (tabla abajo): Nucleo PC6=TIM8_CH1/TI1; DK2 PB7=TIM4_CH2/TI2. El
+ * contador es de 16 bits (0..65535), como en el RP2350; para más cuentas, ventana
+ * más corta o reset()+acumular en BP. Bonus sobre el RP2350: soporta BOTH (ambos
+ * flancos) — el SDK del Pico no. counterId = índice en la tabla. El modo reloj-
+ * externo toma TODO el timer (no por canal) → el contador NO debe compartir timer
+ * con el PWM de la placa. */
 typedef struct {
-    int          pin;     /* pin BP = (puerto<<4)|bit */
-    TIM_TypeDef* inst;    /* TIM8 */
-    uint8_t      af;      /* GPIO_AFx_TIMy */
+    int          pin;        /* pin BP = (puerto<<4)|bit */
+    TIM_TypeDef* inst;       /* TIM8 (Nucleo) / TIM4 (DK2) */
+    uint8_t      af;         /* GPIO_AFx_TIMy */
+    uint32_t     clk_source; /* TIM_CLOCKSOURCE_TI1 (CH1) o _TI2 (CH2) */
 } pulse_map_t;
 
 static const pulse_map_t s_pulse_map[] = {
-    { (2 << 4) | 6, TIM8, GPIO_AF3_TIM8 },   /* PC6 — TIM8_CH1 (TI1) */
+#if defined(BPVM_BOARD_DK2)
+    { (1 << 4) | 7, TIM4, GPIO_AF2_TIM4, TIM_CLOCKSOURCE_TI2 },  /* PB7 — CN1 pin 10, TIM4_CH2 (TI2) */
+#else
+    { (2 << 4) | 6, TIM8, GPIO_AF3_TIM8, TIM_CLOCKSOURCE_TI1 },  /* PC6 — TIM8_CH1 (TI1) */
+#endif
 };
 #define PULSE_N    ((int)(sizeof(s_pulse_map) / sizeof(s_pulse_map[0])))
 
@@ -955,7 +966,8 @@ static int stm32_pulse_init_impl(int pin, int edgeKind) {
     for (int i = 0; i < PULSE_N; i++) if (s_pulse_map[i].pin == pin) { idx = i; break; }
     if (idx < 0) return -1;   /* pin sin entrada de timer en la tabla */
 
-    if (s_pulse_map[idx].inst == TIM8) __HAL_RCC_TIM8_CLK_ENABLE();
+    if      (s_pulse_map[idx].inst == TIM8) __HAL_RCC_TIM8_CLK_ENABLE();
+    else if (s_pulse_map[idx].inst == TIM4) __HAL_RCC_TIM4_CLK_ENABLE();   /* contador de la DK2 */
 
     TIM_HandleTypeDef* h = &s_pulse_htim[idx];
     h->Instance               = s_pulse_map[idx].inst;
@@ -967,9 +979,10 @@ static int stm32_pulse_init_impl(int pin, int edgeKind) {
     h->Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
     if (HAL_TIM_Base_Init(h) != HAL_OK) return -1;
 
-    /* External clock mode 1: el contador se alimenta de los flancos de TI1. */
+    /* External clock mode 1: el contador se alimenta de los flancos de la entrada
+     * TIx del pin (TI1=CH1 o TI2=CH2, según la tabla). */
     TIM_ClockConfigTypeDef clk = {0};
-    clk.ClockSource    = TIM_CLOCKSOURCE_TI1;
+    clk.ClockSource    = s_pulse_map[idx].clk_source;
     clk.ClockPolarity  = pulse_edge_to_polarity(edgeKind);
     clk.ClockPrescaler = TIM_CLOCKPRESCALER_DIV1;
     clk.ClockFilter    = 0;

@@ -1,0 +1,65 @@
+// PulseDemo_Dk2.bp — verifica el contador de pulsos de la Discovery DK2 (H10).
+//
+// Cableado: PUENTE  PB8 (salida PWM)  <--->  PB7 (entrada contador).
+//   En el conector "Spare GPIO" CN1 (40 pines): PB8 = pin 12, PB7 = pin 10.
+//   PWM      = PB8 = (1<<4)|8 = 24   (TIM16_CH1)
+//   contador = PB7 = (1<<4)|7 = 23   (TIM4_CH2 / TI2)
+//
+// Igual que PulseDemo.bp (Nucleo) pero con los pines de la DK2. Genera PWM a una
+// frecuencia conocida en PB8 y cuenta los flancos en PB7; si la frecuencia medida
+// coincide con la pedida, el contador funciona.
+//
+// PB8/PB7 son pines de cabecera (sin LED) → la prueba se mide por el conteo.
+// Tolerancia ±2% por el clkdiv del PWM + jitter de los sleep BP.
+
+module PulseDemo_Dk2
+  import Pwm
+  import Pulse
+
+  function Main()
+    print "--- Contador de pulsos DK2 (PB8 PWM -> puente -> PB7 contador) ---"
+    print "Comprueba el puente CN1: pin 12 (PB8) <-> pin 10 (PB7)."
+
+    var p: Pwm.Slice     := Pwm.Slice(24, 1000)               // PB8, 1 kHz
+    var c: Pulse.Counter := Pulse.Counter(23, Pulse.RISING()) // PB7
+
+    // Test 1: 1 kHz x 1 s = ~1000 flancos
+    print ""
+    print "Test 1: PWM 1 kHz, duty 50%, ventana 1 s"
+    p.setDuty(50)
+    c.reset()
+    c.start()
+    p.start()
+    sleep(1000)
+    p.stop()
+    c.stop()
+    print "  esperado ~1000  contado:", c.value()
+
+    // Test 2: cambio a 500 Hz en caliente
+    print "Test 2: cambio a 500 Hz, ventana 1 s"
+    p.setFreq(500)
+    p.setDuty(50)
+    c.reset()
+    c.start()
+    p.start()
+    sleep(1000)
+    p.stop()
+    c.stop()
+    print "  esperado ~500   contado:", c.value()
+
+    // Test 3: ventana corta (200 ms) a 1 kHz
+    print "Test 3: PWM 1 kHz, ventana 200 ms"
+    p.setFreq(1000)
+    p.setDuty(50)
+    c.reset()
+    c.start()
+    p.start()
+    sleep(200)
+    p.stop()
+    c.stop()
+    print "  esperado ~200   contado:", c.value()
+
+    print "--- fin ---"
+  end Main
+
+end PulseDemo_Dk2
