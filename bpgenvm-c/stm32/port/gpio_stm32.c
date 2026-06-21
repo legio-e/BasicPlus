@@ -309,30 +309,17 @@ static const bpvm_pico_backend_t s_pico_backend = {
 };
 
 /* ===================== SPI (H15.1) =====================================
- * Backend SPI sobre la HAL. MODELO ACTUAL (MVP): CubeMX ya inicializo
- * SPI1/SPI2 al boot (hspi1/hspi2 globales); aqui (re)ajustamos formato +
- * baud y ASIGNAMOS los pines que el usuario pasa en el .bp (dinamico: el
- * programa elige los pines). bus 0 -> SPI1, bus 1 -> SPI2 (ambos AF5). El
- * CS lo gestiona el usuario por GPIO, igual que en la Pico.
- *
- * Reloj de SPI = SYSCLK (160 MHz, segun el MspInit de CubeMX) -> el
- * prescaler se elige del baud pedido.
- *
- * [v3 "lo correcto"] que crear el objeto ACTIVE el periferico + clock y
- * asigne pines, sin depender del init de CubeMX en el boot.
+ * Backend SPI sobre la HAL. v3 AUTO-CONFIG (HECHO): el constructor activa el
+ * periferico + clock + pines del .bp (handles propios), SIN depender del init de
+ * CubeMX en el boot -> el bus NO reserva pines (los elige el programa). bus N ->
+ * SPIn (SPI1/2 = AF5, SPI3 = AF6). El CS lo gestiona el usuario por GPIO, igual
+ * que en la Pico. Reloj de SPI = SYSCLK (160 MHz) -> el prescaler se elige del
+ * baud pedido.
  */
-extern SPI_HandleTypeDef hspi1;
-extern SPI_HandleTypeDef hspi2;
-extern SPI_HandleTypeDef hspi3;
+static SPI_HandleTypeDef s_spi[3];   /* handles propios (v3); [0]=SPI1 [1]=SPI2 [2]=SPI3 */
 
-/* bus N -> SPIn  (numero de bus = numero de instancia HW, igual que la Pico). */
 static SPI_HandleTypeDef* spi_handle(int bus) {
-    switch (bus) {
-        case 1: return &hspi1;   /* SPI1 */
-        case 2: return &hspi2;   /* SPI2 */
-        case 3: return &hspi3;   /* SPI3 */
-        default: return NULL;
-    }
+    return (bus >= 1 && bus <= 3) ? &s_spi[bus - 1] : NULL;
 }
 
 /* Configura un pin (modelo plano puerto<<4|bit) en Alternate Function. */
@@ -372,12 +359,36 @@ static void stm32_spi_init_impl(int bus, int sck, int mosi, int miso,
                                 int baudrate, int mode) {
     SPI_HandleTypeDef* h = spi_handle(bus);
     if (!h) return;
-    /* (re)ajusta formato + baud sobre el handle que CubeMX dejo inicializado */
+    SPI_TypeDef* inst;
+    switch (bus) {                                 /* instancia + clock (antes MspInit de CubeMX) */
+        case 1: inst = SPI1; __HAL_RCC_SPI1_CLK_ENABLE(); break;
+        case 2: inst = SPI2; __HAL_RCC_SPI2_CLK_ENABLE(); break;
+        case 3: inst = SPI3; __HAL_RCC_SPI3_CLK_ENABLE(); break;
+        default: return;
+    }
+    /* init COMPLETO (los 21 campos que ponia CubeMX); maestro, 8 bit, NSS soft. */
+    h->Instance               = inst;
+    h->Init.Mode              = SPI_MODE_MASTER;
+    h->Init.Direction         = SPI_DIRECTION_2LINES;
     h->Init.DataSize          = SPI_DATASIZE_8BIT;
     h->Init.CLKPolarity       = (mode & 0x2) ? SPI_POLARITY_HIGH : SPI_POLARITY_LOW;
     h->Init.CLKPhase          = (mode & 0x1) ? SPI_PHASE_2EDGE   : SPI_PHASE_1EDGE;
     h->Init.NSS               = SPI_NSS_SOFT;
     h->Init.BaudRatePrescaler = spi_prescaler_for(baudrate);
+    h->Init.FirstBit          = SPI_FIRSTBIT_MSB;
+    h->Init.TIMode            = SPI_TIMODE_DISABLE;
+    h->Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
+    h->Init.CRCPolynomial     = 0x7;
+    h->Init.NSSPMode          = SPI_NSS_PULSE_ENABLE;
+    h->Init.NSSPolarity       = SPI_NSS_POLARITY_LOW;
+    h->Init.FifoThreshold     = SPI_FIFO_THRESHOLD_01DATA;
+    h->Init.MasterSSIdleness        = SPI_MASTER_SS_IDLENESS_00CYCLE;
+    h->Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
+    h->Init.MasterReceiverAutoSusp  = SPI_MASTER_RX_AUTOSUSP_DISABLE;
+    h->Init.MasterKeepIOState       = SPI_MASTER_KEEP_IO_STATE_DISABLE;
+    h->Init.IOSwap            = SPI_IO_SWAP_DISABLE;
+    h->Init.ReadyMasterManagement   = SPI_RDY_MASTER_MANAGEMENT_INTERNALLY;
+    h->Init.ReadyPolarity     = SPI_RDY_POLARITY_HIGH;
     HAL_SPI_Init(h);
     /* asigna los pines que pidio el usuario (SPI1/2 = AF5, SPI3 = AF6) */
     uint8_t af = (bus == 3) ? GPIO_AF6_SPI3 : GPIO_AF5_SPI1;
@@ -415,35 +426,27 @@ static const bpvm_spi_backend_t s_spi_backend = {
 };
 
 /* ===================== UART (H15.1) ====================================
- * Igual que SPI: CubeMX inicializo las instancias al boot (huart4/huart3
- * globales); aqui (re)ajustamos baud/formato y asignamos los pines del .bp.
- * bus 0 -> UART4 (AF8; pines tipicos PA0/PA1 = A0/A1 del header Arduino),
- * bus 1 -> USART3 (AF7).  El VCP del ST-LINK usa USART1 -> NO se toca.
+ * Igual que SPI (v3 auto-config): handles propios; el constructor activa
+ * periferico + clock + pines del .bp, SIN CubeMX -> no se reservan pines en el
+ * boot. bus N -> USARTn/UARTn (USART2/3/6 = AF7, UART4/5 = AF8); el chip decide
+ * cuantas (via #ifdef del CMSIS). El VCP del ST-LINK usa USART1 -> NO se toca.
  *
  * read(timeout): HAL_UART_Receive devuelve TIMEOUT si no completa n bytes a
  * tiempo; los recibidos = n - RxXferCount. available(): no soportado en el MVP
  * (-1, segun el contrato del header) -> usar read con timeout.
  */
-extern UART_HandleTypeDef huart2;
-extern UART_HandleTypeDef huart3;
-extern UART_HandleTypeDef huart4;
-#if defined(BPVM_BOARD_DK2)
-extern UART_HandleTypeDef huart6;   /* DK2: USART6 (el U575 no lo tiene) */
-#else
-extern UART_HandleTypeDef huart5;   /* Nucleo: UART5 (la DK2 no lo tiene) */
-#endif
+static UART_HandleTypeDef s_uart[7];   /* handles propios (v3); indexado por nº de bus (2..6) */
 
-/* bus N -> USARTn/UARTn (numero de bus = instancia HW). USART1 = VCP -> no se expone. */
 static UART_HandleTypeDef* uart_handle(int bus) {
-    switch (bus) {
-        case 2: return &huart2;   /* USART2 (AF7) */
-        case 3: return &huart3;   /* USART3 (AF7) */
-        case 4: return &huart4;   /* UART4  (AF8) */
-#if defined(BPVM_BOARD_DK2)
-        case 6: return &huart6;   /* DK2: USART6 */
-#else
-        case 5: return &huart5;   /* Nucleo: UART5 (AF8) */
+    switch (bus) {                   /* expone las instancias que tenga el chip (#ifdef del CMSIS) */
+        case 2: case 3: case 4:
+#ifdef UART5
+        case 5:
 #endif
+#ifdef USART6
+        case 6:
+#endif
+            return &s_uart[bus];
         default: return NULL;
     }
 }
@@ -452,7 +455,21 @@ static void stm32_uart_init_impl(int bus, int tx, int rx, int baudrate,
                                  int data_bits, int stop_bits, int parity) {
     UART_HandleTypeDef* h = uart_handle(bus);
     if (!h) return;
-    h->Init.BaudRate = (uint32_t) baudrate;
+    USART_TypeDef* inst;
+    switch (bus) {                                 /* instancia + clock (antes MspInit de CubeMX) */
+        case 2: inst = USART2; __HAL_RCC_USART2_CLK_ENABLE(); break;
+        case 3: inst = USART3; __HAL_RCC_USART3_CLK_ENABLE(); break;
+        case 4: inst = UART4;  __HAL_RCC_UART4_CLK_ENABLE();  break;
+#ifdef UART5
+        case 5: inst = UART5;  __HAL_RCC_UART5_CLK_ENABLE();  break;
+#endif
+#ifdef USART6
+        case 6: inst = USART6; __HAL_RCC_USART6_CLK_ENABLE(); break;
+#endif
+        default: return;
+    }
+    h->Instance      = inst;
+    h->Init.BaudRate = (uint32_t) baudrate;        /* el HAL calcula el BRR del reloj vivo */
     /* En STM32 el WordLength CUENTA el bit de paridad: 8 datos sin paridad = 8B;
      * 8 datos + paridad = 9B. */
     if (parity != 0) {
@@ -466,7 +483,12 @@ static void stm32_uart_init_impl(int bus, int tx, int rx, int baudrate,
     h->Init.Parity   = (parity == 1) ? UART_PARITY_ODD
                      : (parity == 2) ? UART_PARITY_EVEN
                                      : UART_PARITY_NONE;
-    h->Init.Mode = UART_MODE_TX_RX;
+    h->Init.Mode           = UART_MODE_TX_RX;
+    h->Init.HwFlowCtl      = UART_HWCONTROL_NONE;
+    h->Init.OverSampling   = UART_OVERSAMPLING_16;
+    h->Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+    h->Init.ClockPrescaler = UART_PRESCALER_DIV1;
+    h->AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
     HAL_UART_Init(h);
     /* FIFO RX (8 bytes): sin el, el RX en polling pierde por overrun los bytes
      * que llegan en rafaga (un loopback de 4 bytes solo capturaba el primero).
@@ -474,7 +496,8 @@ static void stm32_uart_init_impl(int bus, int tx, int rx, int baudrate,
     HAL_UARTEx_SetTxFifoThreshold(h, UART_TXFIFO_THRESHOLD_1_8);
     HAL_UARTEx_SetRxFifoThreshold(h, UART_RXFIFO_THRESHOLD_1_8);
     HAL_UARTEx_EnableFifoMode(h);
-    uint8_t af = (bus == 2 || bus == 3) ? GPIO_AF7_USART3 : GPIO_AF8_UART4;
+    uint8_t af = (bus == 2 || bus == 3 || bus == 6) ? GPIO_AF7_USART3   /* USART2/3/6 = AF7 */
+                                                    : GPIO_AF8_UART4;  /* UART4/5 = AF8 */
     cfg_af_pin(tx, af);
     cfg_af_pin(rx, af);
 }
@@ -509,9 +532,10 @@ static const bpvm_uart_backend_t s_uart_backend = {
 };
 
 /* ===================== I2C (H15.2) =====================================
- * Backend I2C sobre la HAL. Igual que SPI/UART: CubeMX inicializo I2C1..4
- * al boot (hi2c1..hi2c4; 100 kHz, 7-bit) y aqui reasignamos los pines que
- * pide el .bp. bus N -> I2Cn. En el U5 TODAS las instancias I2C usan AF4.
+ * Backend I2C sobre la HAL. Igual que SPI/UART (v3 auto-config): handles
+ * propios; el constructor activa periferico + clock + pines (100 kHz, 7-bit),
+ * SIN CubeMX. bus N -> I2Cn (el chip decide cuantas, via #ifdef; U575=1..4,
+ * U5G9=1..6). En el U5 TODAS las instancias I2C usan AF4.
  *
  * OPEN-DRAIN, no push-pull: a diferencia de SPI/UART, las lineas I2C
  * (SDA/SCL) solo tiran a 0 y flotan a 1 -> se configuran AF_OD y necesitan
@@ -526,22 +550,28 @@ static const bpvm_uart_backend_t s_uart_backend = {
  * Baud: MVP usa el Timing de CubeMX (100 kHz). Cambiarlo exige recalcular
  * el registro TIMINGR (no trivial); 100 kHz cubre el BMP280 y casi todo.
  */
-extern I2C_HandleTypeDef hi2c1;
-extern I2C_HandleTypeDef hi2c2;
-#if !defined(BPVM_BOARD_DK2)
-extern I2C_HandleTypeDef hi2c3;   /* solo Nucleo (la DK2 expone I2C1/I2C2) */
-extern I2C_HandleTypeDef hi2c4;
-#endif
+/* v3 "lo correcto": handles PROPIOS; init completo en el constructor, sin
+ * MX_I2Cn_Init de CubeMX -> los pines no se reservan en el boot. bus N -> I2Cn.
+ * OJO DK2: I2C2 lo usa el TACTIL (GT911) via CubeMX -> en la DK2 NO uses el bus 2
+ * desde BP (chocaria con el tactil). */
+static I2C_HandleTypeDef s_i2c[7];   /* indexado por nº de bus (1..6) */
 
-/* bus N -> I2Cn (numero de bus = instancia HW, igual que SPI/UART/Pico). */
 static I2C_HandleTypeDef* i2c_handle(int bus) {
-    switch (bus) {
-        case 1: return &hi2c1;
-        case 2: return &hi2c2;
-#if !defined(BPVM_BOARD_DK2)
-        case 3: return &hi2c3;
-        case 4: return &hi2c4;
+    switch (bus) {                   /* expone las instancias que tenga el chip (#ifdef del CMSIS) */
+        case 1: case 2:
+#ifdef I2C3
+        case 3:
 #endif
+#ifdef I2C4
+        case 4:
+#endif
+#ifdef I2C5
+        case 5:
+#endif
+#ifdef I2C6
+        case 6:
+#endif
+            return &s_i2c[bus];
         default: return NULL;
     }
 }
@@ -565,9 +595,41 @@ static void cfg_af_pin_od(int pin, uint8_t af) {
 static void stm32_i2c_init_impl(int bus, int sda, int scl, int baudrate) {
     I2C_HandleTypeDef* h = i2c_handle(bus);
     if (!h) return;
-    (void) baudrate;   /* MVP: Timing de CubeMX (100 kHz) -- ver cabecera */
-    /* El handle ya esta inicializado (HAL_I2C_Init en el boot); solo
-     * (re)asignamos los pines del usuario. AF4 para toda instancia I2C. */
+    (void) baudrate;   /* MVP: 100 kHz fijo (TIMINGR de abajo) -- ver cabecera */
+    I2C_TypeDef* inst;
+    switch (bus) {                                 /* instancia + clock (antes MspInit de CubeMX) */
+        case 1: inst = I2C1; __HAL_RCC_I2C1_CLK_ENABLE(); break;
+        case 2: inst = I2C2; __HAL_RCC_I2C2_CLK_ENABLE(); break;
+#ifdef I2C3
+        case 3: inst = I2C3; __HAL_RCC_I2C3_CLK_ENABLE(); break;
+#endif
+#ifdef I2C4
+        case 4: inst = I2C4; __HAL_RCC_I2C4_CLK_ENABLE(); break;
+#endif
+#ifdef I2C5
+        case 5: inst = I2C5; __HAL_RCC_I2C5_CLK_ENABLE(); break;
+#endif
+#ifdef I2C6
+        case 6: inst = I2C6; __HAL_RCC_I2C6_CLK_ENABLE(); break;
+#endif
+        default: return;
+    }
+    /* init COMPLETO (antes CubeMX). TIMINGR = 100 kHz @ kernel 160 MHz; CubeMX usa
+     * el mismo valor en I2C1-4 (PCLK1=PCLK3, todos los APB /1). I2C5/6 (solo U5G9)
+     * asumen igual kernel clock -> verificar en placa si se usan. */
+    h->Instance              = inst;
+    h->Init.Timing           = 0x30909DEC;
+    h->Init.OwnAddress1      = 0;
+    h->Init.AddressingMode   = I2C_ADDRESSINGMODE_7BIT;
+    h->Init.DualAddressMode  = I2C_DUALADDRESS_DISABLE;
+    h->Init.OwnAddress2      = 0;
+    h->Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+    h->Init.GeneralCallMode  = I2C_GENERALCALL_DISABLE;
+    h->Init.NoStretchMode    = I2C_NOSTRETCH_DISABLE;
+    HAL_I2C_Init(h);
+    HAL_I2CEx_ConfigAnalogFilter(h, I2C_ANALOGFILTER_ENABLE);
+    HAL_I2CEx_ConfigDigitalFilter(h, 0);
+    /* pines del usuario: OPEN-DRAIN, AF4 (toda instancia I2C en el U5) */
     cfg_af_pin_od(sda, GPIO_AF4_I2C1);
     cfg_af_pin_od(scl, GPIO_AF4_I2C1);
 }
