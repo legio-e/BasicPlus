@@ -169,6 +169,14 @@ nota en el bullet del operador). Detalle de diseño original abajo (se conserva)
 - **describePc remoto** (el call-stack del debugger muestra `PC=<n>`; falta
   `req: describePc(pc)` en el wire) · **multi-run en el daemon** (hoy 1
   ejecución/proceso) · **aprovisionamiento del device** (subir stdlib/`BpVM.cfg`).
+- **Ver el diagnóstico de reset desde el IDE (H10 → IDE)** *(idea de Eduardo, 21-jun)*:
+  mostrar en el botón **INFO** (o un comando/panel "Diagnóstico") la **causa del último
+  reset** + **boot count** + el **rastro de migas** (`markAt(0)` = causa original).
+  La fontanería del runtime YA está hecha en H10 (builtins `Pico.resetCause`/`bootCount`/
+  `markCount`/`markAt`, ids 201-205; verificados en placa). Falta solo el lado IDE: que
+  el reply de `INFO` del wire (`BpvmClient.requestInfo` → Map; el handler INFO del
+  firmware) incluya esos campos y el panel los pinte → diagnosticar un cuelgue de campo
+  **sin escribir un .bp**. Encaja con la "observabilidad de bring-up" (más abajo).
 
 ## 🧱 Portabilidad / multi-micro
 
