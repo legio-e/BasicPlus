@@ -1,0 +1,39 @@
+// PwmDemo.bp — fade de los LEDs verde y azul de la Nucleo por PWM (H10).
+//
+// PWM por timer HW. Pines (convención BP = (puerto<<4)|bit; C=2, B=1):
+//   verde = PC7 = 39  (TIM3_CH2)     azul = PB7 = 23  (TIM4_CH2)
+// El rojo (PG2) no tiene canal de timer en el U575 → no se puede PWM.
+// OJO: mientras corre, verde/azul dejan de ser LEDs de ESTADO del firmware;
+// tras la demo quedan apagados (un reset los devuelve a su función de estado).
+module PwmDemo
+  import Pwm
+  function Main()
+    var verde: Pwm.Slice := Pwm.Slice(39, 1000)   // PC7, 1 kHz
+    var azul:  Pwm.Slice := Pwm.Slice(23, 1000)   // PB7, 1 kHz
+
+    print "Fade verde<->azul, 3 ciclos (deberias ver el brillo subir y bajar)..."
+    var ciclo: integer := 0
+    var d: integer := 0
+    while ciclo < 3 do
+      d := 0
+      while d <= 100 do
+        verde.setDuty(d)
+        azul.setDuty(100 - d)
+        sleep(20)
+        d := d + 4
+      endwh
+      d := 100
+      while d >= 0 do
+        verde.setDuty(d)
+        azul.setDuty(100 - d)
+        sleep(20)
+        d := d - 4
+      endwh
+      ciclo := ciclo + 1
+    endwh
+
+    verde.setDuty(0)
+    azul.setDuty(0)
+    print "Fin."
+  end Main
+end PwmDemo

@@ -30,6 +30,7 @@
 #include "bpvm_i2c.h"
 #include "bpvm_wdt.h"
 #include "bpvm_rtc.h"
+#include "bpvm_pwm.h"
 
 #include "main.h"   /* HAL + CMSIS (GPIOA.., UID_BASE, SystemCoreClock) */
 #include "board.h"  /* BOARD_HAS_ADC_TEMP y demás capacidades de placa */
@@ -751,6 +752,106 @@ static const bpvm_rtc_backend_t s_rtc_backend = {
 };
 #endif /* BOARD_HAS_RTC */
 
+/* ===================== PWM — H10 ===========================================
+ * PWM por timer HW. Tabla pin → (timer, canal, AF) de los pines soportados.
+ * HOY: LEDs de la Nucleo verde PC7=TIM3_CH2 y azul PB7=TIM4_CH2 (rojo PG2 no
+ * tiene canal de timer → no entra). Self-config (sin CubeMX): initSlice arranca
+ * el timer (PSC/ARR para la freq, ARR=999 → 1000 pasos de duty) + pone el pin
+ * en AF + canal PWM. setDuty = CCR % (PWM1, activo-alto = LED active-high).
+ * OJO: al poner el pin en AF, deja de ser el LED de estado del firmware. */
+typedef struct {
+    int          pin;       /* pin BP = (puerto<<4)|bit */
+    TIM_TypeDef* inst;      /* TIM3 / TIM4 */
+    uint32_t     channel;   /* TIM_CHANNEL_x */
+    uint8_t      af;        /* GPIO_AFx_TIMy */
+} pwm_map_t;
+
+static const pwm_map_t s_pwm_map[] = {
+    { (2 << 4) | 7, TIM3, TIM_CHANNEL_2, GPIO_AF2_TIM3 },  /* PC7 — LED verde */
+    { (1 << 4) | 7, TIM4, TIM_CHANNEL_2, GPIO_AF2_TIM4 },  /* PB7 — LED azul  */
+};
+#define PWM_SLICE_N    ((int)(sizeof(s_pwm_map) / sizeof(s_pwm_map[0])))
+#define PWM_ARR        999u   /* 1000 pasos → resolución de duty 0.1% */
+
+static TIM_HandleTypeDef s_pwm_htim[PWM_SLICE_N];
+static int               s_pwm_on[PWM_SLICE_N];
+
+/* Reloj de los timers de APB1 (TIM3/TIM4): PCLK1, ×2 si el divisor APB1 ≠ 1. */
+static uint32_t pwm_timer_clk(void) {
+    RCC_ClkInitTypeDef clk; uint32_t lat;
+    HAL_RCC_GetClockConfig(&clk, &lat);
+    uint32_t p = HAL_RCC_GetPCLK1Freq();
+    return (clk.APB1CLKDivider == RCC_HCLK_DIV1) ? p : p * 2u;
+}
+
+static uint32_t pwm_psc_for(int freqHz) {
+    if (freqHz < 1) freqHz = 1;
+    uint32_t div = (uint32_t) freqHz * (PWM_ARR + 1u);
+    uint32_t psc = pwm_timer_clk() / (div ? div : 1u);
+    return (psc > 0u) ? (psc - 1u) : 0u;
+}
+
+static int stm32_pwm_init_impl(int pin, int freqHz) {
+    int idx = -1;
+    for (int i = 0; i < PWM_SLICE_N; i++) if (s_pwm_map[i].pin == pin) { idx = i; break; }
+    if (idx < 0) return -1;   /* pin sin canal de timer en la tabla */
+
+    if (s_pwm_map[idx].inst == TIM3) __HAL_RCC_TIM3_CLK_ENABLE();
+    else                             __HAL_RCC_TIM4_CLK_ENABLE();
+
+    TIM_HandleTypeDef* h = &s_pwm_htim[idx];
+    h->Instance           = s_pwm_map[idx].inst;
+    h->Init.Prescaler     = pwm_psc_for(freqHz);
+    h->Init.CounterMode   = TIM_COUNTERMODE_UP;
+    h->Init.Period        = PWM_ARR;
+    h->Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    h->Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+    if (HAL_TIM_PWM_Init(h) != HAL_OK) return -1;
+
+    TIM_OC_InitTypeDef oc = {0};
+    oc.OCMode     = TIM_OCMODE_PWM1;
+    oc.Pulse      = 0;                       /* duty 0 inicial */
+    oc.OCPolarity = TIM_OCPOLARITY_HIGH;
+    oc.OCFastMode = TIM_OCFAST_DISABLE;
+    if (HAL_TIM_PWM_ConfigChannel(h, &oc, s_pwm_map[idx].channel) != HAL_OK) return -1;
+
+    cfg_af_pin(pin, s_pwm_map[idx].af);      /* pin → AF del timer (pisa el GPIO de estado) */
+    HAL_TIM_PWM_Start(h, s_pwm_map[idx].channel);
+    s_pwm_on[idx] = 1;
+    return idx;   /* sliceId */
+}
+
+static void stm32_pwm_set_duty_impl(int sliceId, int pin, int dutyPct) {
+    (void) pin;
+    if (sliceId < 0 || sliceId >= PWM_SLICE_N || !s_pwm_on[sliceId]) return;
+    if (dutyPct < 0) dutyPct = 0;
+    if (dutyPct > 100) dutyPct = 100;
+    uint32_t ccr = (PWM_ARR + 1u) * (uint32_t) dutyPct / 100u;
+    __HAL_TIM_SET_COMPARE(&s_pwm_htim[sliceId], s_pwm_map[sliceId].channel, ccr);
+}
+
+static void stm32_pwm_set_freq_impl(int sliceId, int freqHz) {
+    if (sliceId < 0 || sliceId >= PWM_SLICE_N || !s_pwm_on[sliceId]) return;
+    __HAL_TIM_SET_PRESCALER(&s_pwm_htim[sliceId], pwm_psc_for(freqHz));
+}
+
+static void stm32_pwm_start_impl(int sliceId) {
+    if (sliceId >= 0 && sliceId < PWM_SLICE_N && s_pwm_on[sliceId])
+        HAL_TIM_PWM_Start(&s_pwm_htim[sliceId], s_pwm_map[sliceId].channel);
+}
+static void stm32_pwm_stop_impl(int sliceId) {
+    if (sliceId >= 0 && sliceId < PWM_SLICE_N && s_pwm_on[sliceId])
+        HAL_TIM_PWM_Stop(&s_pwm_htim[sliceId], s_pwm_map[sliceId].channel);
+}
+
+static const bpvm_pwm_backend_t s_pwm_backend = {
+    .init    = stm32_pwm_init_impl,
+    .setFreq = stm32_pwm_set_freq_impl,
+    .setDuty = stm32_pwm_set_duty_impl,
+    .start   = stm32_pwm_start_impl,
+    .stop    = stm32_pwm_stop_impl,
+};
+
 void stm32_hw_register(void) {
     bpvm_gpio_set_backend(&s_gpio_backend);
     bpvm_pico_set_backend(&s_pico_backend);
@@ -762,5 +863,6 @@ void stm32_hw_register(void) {
 #if defined(BOARD_HAS_RTC)
     bpvm_rtc_set_backend(&s_rtc_backend);     /* H10 — RTC HW (hora sobrevive al reset) */
 #endif
+    bpvm_pwm_set_backend(&s_pwm_backend);     /* H10 — PWM por timer (LEDs verde/azul) */
     /* PWM/Rtc: anadir su backend HAL cuando toque (ADC temp ya en stm32_temp_c_impl). */
 }
