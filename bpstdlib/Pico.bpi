@@ -1,16 +1,20 @@
 bpi 7
 module Pico
 func SPI_BUSES():integer public
+func setMark(code:integer):void public intrinsic
+func bootCount():integer public intrinsic
 func setCpuFreqMHz(mhz:integer):boolean public
 func gpioCount():integer public intrinsic
 func PWM_SLICES():integer public
 func MAX_CPU_MHZ():integer public
 func UART_BUSES():integer public
 func GPIO_COUNT():integer public
+func markAt(i:integer):integer public intrinsic
 func ADC_CHANNELS():integer public
 func boardName():string public intrinsic
 func cpuFreqHz():integer public intrinsic
 func I2C_BUSES():integer public
+func markCount():integer public intrinsic
 func variant():string public
 func MIN_CPU_MHZ():integer public
 func resetCause():string public intrinsic

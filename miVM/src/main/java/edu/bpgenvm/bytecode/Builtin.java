@@ -400,7 +400,13 @@ public enum Builtin {
     EVAL("eval"),                                      // (s: string) → float
 
     // H10 — Pico.resetCause(): causa del último reset como string. id 201.
-    PICO_RESET_CAUSE("__picoResetCause");              // () → string
+    PICO_RESET_CAUSE("__picoResetCause"),             // () → string
+
+    // H10 — breadcrumb en RAM retenida (migas que sobreviven al reset). ids 202-205.
+    PICO_SET_MARK("__picoSetMark"),                   // (code: integer) → void
+    PICO_MARK_COUNT("__picoMarkCount"),               // () → integer
+    PICO_MARK_AT("__picoMarkAt"),                     // (i: integer) → integer
+    PICO_BOOT_COUNT("__picoBootCount");               // () → integer
 
     public final String bpName;
     public final int id;

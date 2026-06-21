@@ -4501,6 +4501,24 @@ public class VirtualMachine {
                 pushTc(tc, allocVmString("unknown"));
                 break;
             }
+            case PICO_SET_MARK: {      // H10 — breadcrumb (host: sin RAM retenida)
+                popTc(tc);             // descarta el code
+                pushTc(tc, 0);
+                break;
+            }
+            case PICO_MARK_COUNT: {
+                pushTc(tc, 0);         // host: sin trail
+                break;
+            }
+            case PICO_MARK_AT: {
+                popTc(tc);             // descarta i
+                pushTc(tc, 0);
+                break;
+            }
+            case PICO_BOOT_COUNT: {
+                pushTc(tc, 1);         // host: el proceso = 1 arranque
+                break;
+            }
             case PICO_TEMP_C: {
                 pushTc(tc, Float.floatToRawIntBits(25.0f));
                 break;

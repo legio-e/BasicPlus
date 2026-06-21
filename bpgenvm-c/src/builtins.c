@@ -239,7 +239,12 @@ enum {
     /* H7 — eval("expr"): calculadora de constantes (id 200). */
     BUILTIN_EVAL = 200,
     /* H10 — Pico.resetCause(): causa del último reset como string (id 201). */
-    BUILTIN_PICO_RESET_CAUSE = 201
+    BUILTIN_PICO_RESET_CAUSE = 201,
+    /* H10 — breadcrumb en RAM retenida: migas que sobreviven al reset (202-205). */
+    BUILTIN_PICO_SET_MARK   = 202,   /* setMark(code): deja una miga */
+    BUILTIN_PICO_MARK_COUNT = 203,   /* markCount(): nº de migas del trail previo */
+    BUILTIN_PICO_MARK_AT    = 204,   /* markAt(i): i-ésima (0=origen pegajoso) */
+    BUILTIN_PICO_BOOT_COUNT = 205    /* bootCount(): arranques desde power-on */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -1512,6 +1517,25 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         const char* s = bpvm_pico_reset_cause();
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
         push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_SET_MARK: {      /* H10 — breadcrumb: deja una miga */
+        int32_t code = pop_i32(vm, tc);
+        bpvm_pico_set_mark((int) code);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_MARK_COUNT: {    /* H10 — nº de migas del trail previo */
+        push_i32(vm, tc, (int32_t) bpvm_pico_mark_count());
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_MARK_AT: {       /* H10 — i-ésima miga (0 = origen) */
+        int32_t i = pop_i32(vm, tc);
+        push_i32(vm, tc, (int32_t) bpvm_pico_mark_at((int) i));
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_BOOT_COUNT: {    /* H10 — arranques desde power-on */
+        push_i32(vm, tc, (int32_t) bpvm_pico_boot_count());
         return BPVM_OK;
     }
     case BUILTIN_PICO_TEMP_C: {

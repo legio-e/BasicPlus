@@ -49,6 +49,14 @@ typedef struct {
     /* H10 — causa del último reset como string ("watchdog (IWDG)", "power-on",
      * "software", "pin (NRST)", ...). NULL → el accesor devuelve "unknown". */
     const char* (*resetCause)(void);
+    /* H10 — breadcrumb en RAM retenida (migas que sobreviven al reset):
+     * setMark deja una miga; markCount/markAt leen el trail de ANTES del reset
+     * (markAt(0) = 1ª marca pegajosa = causa original); bootCount = nº arranques.
+     * NULL → stubs (0 / 0 / 1) — sin RAM retenida no hay diagnóstico de reset. */
+    void (*setMark)(int code);
+    int  (*markCount)(void);
+    int  (*markAt)(int i);
+    int  (*bootCount)(void);
 } bpvm_pico_backend_t;
 
 void bpvm_pico_set_backend(const bpvm_pico_backend_t* backend);
@@ -62,6 +70,10 @@ int   bpvm_pico_uptime_ms(void);
 int   bpvm_pico_set_cpu_freq_mhz(int mhz);
 int   bpvm_pico_gpio_count(void);
 const char* bpvm_pico_reset_cause(void);   /* H10 — causa del último reset */
+void bpvm_pico_set_mark(int code);         /* H10 — breadcrumb: deja una miga */
+int  bpvm_pico_mark_count(void);           /* H10 — nº migas del trail previo */
+int  bpvm_pico_mark_at(int i);             /* H10 — i-ésima miga (0 = origen) */
+int  bpvm_pico_boot_count(void);           /* H10 — arranques desde power-on */
 
 #ifdef __cplusplus
 }

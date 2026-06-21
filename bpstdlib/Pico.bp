@@ -65,6 +65,27 @@ module Pico
   // Útil para diagnosticar reinicios inesperados (p.ej. un watchdog que saltó).
   public intrinsic function resetCause(): string
 
+  // ---- Breadcrumb en RAM retenida (H10) ----
+  // "Migas" que sobreviven al reset (registros de backup del MCU). La app deja
+  // marcas (setMark) por fases; tras un reset inesperado se lee el rastro que
+  // llevó al fallo. Útil contra cascadas de errores: markAt(0) es SIEMPRE la
+  // causa ORIGINAL (1ª marca, pegajosa); el resto son las últimas N. En la VM
+  // Java (host) no hay RAM retenida → setMark no-op, markCount=0, bootCount=1.
+  //
+  //   Pico.setMark(10)                  // antes de cada fase arriesgada
+  //   ...
+  //   // tras un reset, al arrancar:
+  //   var n: integer := Pico.markCount()
+  //   var i: integer := 0
+  //   while i < n do
+  //     print "  miga " + intToString(i) + ": " + intToString(Pico.markAt(i))
+  //     i := i + 1
+  //   endwh
+  public intrinsic function setMark(code: integer)
+  public intrinsic function markCount(): integer
+  public intrinsic function markAt(i: integer): integer
+  public intrinsic function bootCount(): integer
+
   // Variante del chip como string ("A" / "B"), derivada de gpioCount()
   // — no necesita su propio intrínseco. RP2350A bondea 30 GPIO, RP2350B
   // 48; el umbral 40 los separa con holgura.

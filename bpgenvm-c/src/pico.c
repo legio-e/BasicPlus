@@ -87,6 +87,26 @@ const char* bpvm_pico_reset_cause(void) {
     return "unknown";
 }
 
+void bpvm_pico_set_mark(int code) {
+    if (g_backend && g_backend->setMark) g_backend->setMark(code);
+    /* Host: no-op (sin RAM retenida). */
+}
+
+int bpvm_pico_mark_count(void) {
+    if (g_backend && g_backend->markCount) return g_backend->markCount();
+    return 0;   /* host: sin trail */
+}
+
+int bpvm_pico_mark_at(int i) {
+    if (g_backend && g_backend->markAt) return g_backend->markAt(i);
+    return 0;   /* host: sin trail */
+}
+
+int bpvm_pico_boot_count(void) {
+    if (g_backend && g_backend->bootCount) return g_backend->bootCount();
+    return 1;   /* host: el proceso = 1 "arranque" */
+}
+
 int bpvm_pico_set_cpu_freq_mhz(int mhz) {
     if (g_backend && g_backend->setCpuFreqMHz) {
         return g_backend->setCpuFreqMHz(mhz);
