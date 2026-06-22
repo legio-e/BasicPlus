@@ -1,0 +1,11 @@
+# ESP32-P4-Function-EV-Board, silicon rev v1.0 (tirada temprana).
+#
+# Sin esto, ESP-IDF v6.0.1 compila para v3.x y el flash falla con
+# "bootloader requires chip revision in range [v3.0-v3.99]". Targeteamos
+# las P4 < v3 (queda Min v0.0 / Max v1.99 → encaja v1.0). Ver memoria
+# esp32-p4-bringup. NO usar --force (v1.x y v3.x no comparten imagen).
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_0=y
+
+# Holgura de stack para app_main.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
