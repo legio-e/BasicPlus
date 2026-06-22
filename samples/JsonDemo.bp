@@ -1,0 +1,61 @@
+// JsonDemo.bp — ejercita la librería Json de la stdlib (parse/serialize/roundtrip,
+// pretty-print y los accesores de conveniencia). Sirve para verificar paridad
+// dual-VM (miVM Java vs VM-C host) byte-idéntica.
+module JsonDemo
+
+  import Json
+
+  function Main()
+    // 1) construcción manual del árbol
+    print "--- construcción ---"
+    var root: Json.JsonObject := Json.JsonObject()
+    root.put("name",    Json.JsonString("Alice"))
+    root.put("age",     Json.JsonInt(30))
+    root.put("active",  Json.JsonBool(true))
+    root.put("score",   Json.JsonFloat(3.14))
+    root.put("address", Json.JsonNull())
+    var likes: Json.JsonArray := Json.JsonArray()
+    likes.add(Json.JsonString("java"))
+    likes.add(Json.JsonString("basicplus"))
+    root.put("likes", likes)
+    print "  build OK"
+
+    // 2) serialización compacta
+    print "--- writeJson (compacto) ---"
+    print Json.writeJson(root)
+
+    // 3) pretty-print (indentado)
+    print "--- writeJsonPretty ---"
+    print Json.writeJsonPretty(root)
+
+    // 4) roundtrip: serializar -> parsear -> re-serializar
+    print "--- roundtrip ---"
+    var src: string := Json.writeJson(root)
+    var v:   Json.JsonValue := Json.parseJson(src)
+    print "  re-serializado: " + Json.writeJson(v)
+
+    // 5) accesores de conveniencia sobre el objeto parseado
+    print "--- accesores ---"
+    var o: Json.JsonObject := v.asObject()
+    print "  name    = " + o.getString("name")
+    print "  age     = " + intToString(o.getInt("age"))
+    print "  active  = " + boolToString(o.getBool("active"))
+    print "  score   = " + floatToString(o.getFloat("score"))
+    print "  likes0  = " + o.getArray("likes").at(0).asString()
+    print "  missing = " + o.getStringOr("nope", "(default)")
+    print "  ageOr   = " + intToString(o.getIntOr("age", -1))
+
+    // 6) escapes roundtrip
+    print "--- escapes ---"
+    var weird: Json.JsonObject := Json.JsonObject()
+    weird.put("quote",   Json.JsonString("She said \"hi\""))
+    weird.put("newline", Json.JsonString("a\nb"))
+    weird.put("tab",     Json.JsonString("col1\tcol2"))
+    var rendered: string := Json.writeJson(weird)
+    print "  rendered:  " + rendered
+    print "  roundtrip: " + Json.writeJson(Json.parseJson(rendered))
+
+    print "--- fin ---"
+  end Main
+
+end JsonDemo

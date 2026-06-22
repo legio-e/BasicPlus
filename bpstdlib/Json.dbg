@@ -1,351 +1,803 @@
-dbg 2
+dbg 3
 module Json
-source C:\lenguajes\pm\samples\Json.bp
+source C:\lenguajes\pm\bpstdlib\Json.bp
 lines
-1434 44
-1455 47
-1476 50
-1497 53
-1518 56
-1539 59
-1560 62
-1581 65
-1602 71
-1626 72
-1647 75
-1671 76
-1692 79
-1716 80
-1737 83
-1761 84
-1780 87
-1804 88
-1825 91
-1849 92
-1880 101
-1903 102
-1915 103
-1996 112
-2017 115
-2039 109
-2109 126
-2130 129
-2151 132
-2161 133
-2178 135
-2200 122
-2211 123
-2284 147
-2305 150
-2326 153
-2347 156
-2371 143
-2382 144
-2455 167
-2476 170
-2497 173
-2518 176
-2545 163
-2556 164
-2629 187
-2650 190
-2671 193
-2697 183
-2708 184
-2781 206
-2802 210
-2821 214
-2845 218
-2872 222
-2896 226
-2910 227
-2921 228
-2929 229
-2941 230
-2955 231
-2974 233
-2988 234
-3000 235
-3014 237
-3038 201
-3049 202
-3133 256
-3154 260
-3173 264
-3197 271
-3208 272
-3216 273
-3228 274
-3242 275
-3260 276
-3276 278
-3290 280
-3312 284
-3324 285
-3338 286
-3360 288
-3394 289
-3418 294
-3430 295
-3444 296
-3462 298
-3489 302
-3520 306
-3534 307
-3555 311
-3582 315
-3596 316
-3607 317
-3615 318
-3627 319
-3641 320
-3660 322
-3674 323
-3690 324
-3704 325
-3718 326
-3730 327
-3744 329
-3768 250
-3779 251
-3804 252
-3888 350
-3904 351
-3923 353
-3952 357
-3961 358
-3977 359
-3996 363
-4005 364
-4017 365
-4113 370
-4121 371
-4130 372
-4146 373
-4159 375
-4175 376
-4264 377
-4285 379
-4306 344
-4314 345
-4324 346
-4400 392
-4414 393
-4423 394
-4431 395
-4443 396
-4455 397
-4469 398
-4483 399
-4516 401
-4530 402
-4563 404
-4577 405
-4610 407
-4624 408
-4657 410
-4671 411
-4704 413
-4718 414
-4751 416
-4765 417
-4798 419
-4812 420
-4826 421
-4840 422
-4854 423
-4872 424
-4884 425
-4901 426
-4923 428
-4935 430
-4950 432
-4974 436
-4988 437
-5010 439
-5035 443
-5073 444
-5091 446
-5112 455
-5121 456
-5130 457
-5144 458
-5165 460
-5179 461
-5200 463
-5214 464
-5255 466
-5269 467
-5290 469
-5304 470
-5325 472
-5339 473
-5360 475
-5384 479
-5398 480
-5412 481
-5426 482
-5440 483
-5481 487
-5495 488
-5509 489
-5523 490
-5537 491
-5551 492
-5592 496
-5606 497
-5620 498
-5634 499
-5648 500
-5684 504
-5693 505
-5731 506
-5753 508
-5791 509
-5813 511
-5851 512
-5873 514
-5908 515
-5929 519
-5943 520
-5966 521
-5974 522
-5983 523
-5999 524
-6028 526
-6044 527
-6060 528
-6074 529
-6101 531
-6110 532
-6124 533
-6157 535
-6190 537
-6223 539
-6256 541
-6289 543
-6322 545
-6355 547
-6388 549
-6396 550
-6404 551
-6418 552
-6439 553
-6453 555
-6470 557
-6518 560
-6533 563
-6555 567
-6563 568
-6571 569
-6588 570
-6609 572
-6658 573
-6676 575
-6693 576
-6701 577
-6717 578
-6766 579
-6789 582
-6798 583
-6837 584
-6845 585
-6861 586
-6870 587
-6909 588
-6930 590
-6979 591
-7002 594
-7021 595
-7029 596
-7068 598
-7110 602
-7124 603
-7147 604
-7156 605
-7173 606
-7189 607
-7205 609
-7213 610
-7222 611
-7233 612
-7245 613
-7254 614
-7263 615
-7277 616
-7293 617
-7321 619
-7337 620
-7350 622
-7390 625
-7409 629
-7423 630
-7446 631
-7455 632
-7472 633
-7488 634
-7504 636
-7512 637
-7521 638
-7530 639
-7541 640
-7550 641
-7564 642
-7575 643
-7590 644
-7599 645
-7608 646
-7622 647
-7657 649
-7673 650
-7686 652
-7726 655
-7745 663
-7771 664
-7780 665
-7791 666
-7800 667
-7816 668
-7858 670
-7877 674
-7899 678
-7926 682
-7951 695
-7956 696
-7979 697
-8014 698
-8051 699
-8088 700
-8125 701
-8157 702
-8180 703
-8212 704
-8244 705
-8259 706
-8264 707
-8286 708
-8311 709
-8336 710
-8369 713
-8374 714
-8384 717
-8389 718
-8400 719
-8411 720
-8430 721
-8448 725
-8453 726
-8471 727
-8489 728
-8507 729
-8520 730
-8536 731
-8552 734
-8557 735
-8580 736
-8615 737
-8650 738
-8685 739
-8696 740
-8709 741
-8720 742
+1452 44
+1473 47
+1494 50
+1515 53
+1536 56
+1557 59
+1578 62
+1599 65
+1620 71
+1627 72
+1648 75
+1655 76
+1676 79
+1683 80
+1704 83
+1711 84
+1730 87
+1737 88
+1758 91
+1765 92
+1796 101
+1819 102
+1831 103
+1912 112
+1933 115
+1955 109
+2025 126
+2046 129
+2067 132
+2077 133
+2094 135
+2116 122
+2127 123
+2200 147
+2221 150
+2242 153
+2263 156
+2287 143
+2298 144
+2371 167
+2392 170
+2413 173
+2434 176
+2461 163
+2472 164
+2545 187
+2566 190
+2587 193
+2613 183
+2624 184
+2697 206
+2718 210
+2737 214
+2761 218
+2788 222
+2812 226
+2826 227
+2837 228
+2845 229
+2857 230
+2871 231
+2890 233
+2904 234
+2916 235
+2930 237
+2954 201
+2965 202
+3049 256
+3070 260
+3089 264
+3113 271
+3124 272
+3132 273
+3144 274
+3158 275
+3176 276
+3192 278
+3206 280
+3228 284
+3240 285
+3254 286
+3276 288
+3310 289
+3334 294
+3346 295
+3360 296
+3378 298
+3405 302
+3436 306
+3450 307
+3471 311
+3498 317
+3510 318
+3524 319
+3552 321
+3571 326
+3599 329
+3627 332
+3655 335
+3683 338
+3711 341
+3739 346
+3751 347
+3765 348
+3781 350
+3793 351
+3809 353
+3831 356
+3843 357
+3857 358
+3873 360
+3885 361
+3901 363
+3923 366
+3935 367
+3949 368
+3965 370
+3977 371
+3993 373
+4015 376
+4027 377
+4041 378
+4057 380
+4069 381
+4085 383
+4107 387
+4121 388
+4132 389
+4140 390
+4152 391
+4166 392
+4185 394
+4199 395
+4215 396
+4229 397
+4243 398
+4255 399
+4269 401
+4293 250
+4304 251
+4329 252
+4413 422
+4429 423
+4448 425
+4477 429
+4486 430
+4502 431
+4521 435
+4530 436
+4542 437
+4621 442
+4629 443
+4638 444
+4654 445
+4667 447
+4683 448
+4772 449
+4793 451
+4814 416
+4822 417
+4832 418
+4930 464
+4944 465
+4953 466
+4961 467
+4973 468
+4985 469
+4999 470
+5013 471
+5046 473
+5060 474
+5093 476
+5107 477
+5140 479
+5154 480
+5187 482
+5201 483
+5234 485
+5248 486
+5281 488
+5295 489
+5328 491
+5342 492
+5356 493
+5370 494
+5384 495
+5402 496
+5414 497
+5431 498
+5453 500
+5465 502
+5480 504
+5504 508
+5518 509
+5540 511
+5565 515
+5603 516
+5621 518
+5642 527
+5651 528
+5660 529
+5674 530
+5695 532
+5709 533
+5730 535
+5744 536
+5785 538
+5799 539
+5820 541
+5834 542
+5855 544
+5869 545
+5890 547
+5914 551
+5928 552
+5942 553
+5956 554
+5970 555
+6011 559
+6025 560
+6039 561
+6053 562
+6067 563
+6081 564
+6122 568
+6136 569
+6150 570
+6164 571
+6178 572
+6214 576
+6223 577
+6261 578
+6283 580
+6321 581
+6343 583
+6381 584
+6403 586
+6421 587
+6442 591
+6456 592
+6479 593
+6487 594
+6496 595
+6512 596
+6524 598
+6540 599
+6556 600
+6570 601
+6597 603
+6606 604
+6620 605
+6653 607
+6686 609
+6719 611
+6752 613
+6785 615
+6818 617
+6851 619
+6884 621
+6892 622
+6900 623
+6914 624
+6935 625
+6949 627
+6966 629
+6997 632
+7012 635
+7034 639
+7042 640
+7050 641
+7067 642
+7088 644
+7137 645
+7155 647
+7172 648
+7180 649
+7196 650
+7245 651
+7268 654
+7277 655
+7316 656
+7324 657
+7340 658
+7349 659
+7388 660
+7409 662
+7458 663
+7481 666
+7500 667
+7508 668
+7547 670
+7589 674
+7603 675
+7626 676
+7635 677
+7652 678
+7668 679
+7684 681
+7692 682
+7701 683
+7712 684
+7724 685
+7733 686
+7742 687
+7756 688
+7772 689
+7800 691
+7816 692
+7829 694
+7852 697
+7871 701
+7885 702
+7908 703
+7917 704
+7934 705
+7950 706
+7966 708
+7974 709
+7983 710
+7992 711
+8003 712
+8012 713
+8026 714
+8037 715
+8052 716
+8061 717
+8070 718
+8084 719
+8119 721
+8135 722
+8148 724
+8171 727
+8190 735
+8216 736
+8225 737
+8236 738
+8245 739
+8261 740
+8286 742
+8305 746
+8327 752
+8350 753
+8369 754
+8391 758
+8399 759
+8411 760
+8425 761
+8439 762
+8463 767
+8474 768
+8483 769
+8492 770
+8506 771
+8523 773
+8537 774
+8551 775
+8559 776
+8571 777
+8591 778
+8611 779
+8623 780
+8652 781
+8670 782
+8689 784
+8703 785
+8718 787
+8732 788
+8762 791
+8771 792
+8780 793
+8794 794
+8811 796
+8825 797
+8839 798
+8847 799
+8859 800
+8879 801
+8908 802
+8926 803
+8945 805
+8959 806
+8973 808
+8987 809
+9006 812
+9028 817
+9055 821
+vars
+func Object.toString 0
+this -16 4 0 ?
+func Object.compareTo 25
+this -20 4 0 ?
+other -16 4 0 ?
+func List.add 41
+this -20 4 0 ?
+item -16 4 0 ?
+func List.get 131
+this -20 4 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func List.length 173
+this -16 4 0 ?
+func List.remove 189
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 295
+this -16 4 0 ?
+func OwnerList.removeAndFree 338
+this -20 4 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 468
+this -16 4 0 ?
+func StringBuilder.appendChar 489
+this -20 4 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 579
+this -20 4 0 ?
+s -16 4 0 ?
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 650
+this -20 4 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 675
+this -16 4 0 ?
+func StringBuilder.length 699
+this -16 4 0 ?
+func StringBuilder.__init 715
+this -16 4 0 ?
+func Thread.run 756
+this -16 4 0 ?
+func Thread.start 766
+this -16 4 0 ?
+func Thread.join 785
+this -16 4 0 ?
+func Thread.__init 804
+this -20 4 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 832
+this -16 4 0 ?
+func Mutex.unlock 851
+this -16 4 0 ?
+func Mutex.__init 870
+this -16 4 0 ?
+func SyncList.add 888
+this -20 4 0 ?
+item -16 4 0 ?
+func SyncList.remove 934
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.get 980
+this -20 4 0 ?
+idx -16 4 0 ?
+func SyncList.set 1024
+this -24 4 0 ?
+idx -20 4 0 ?
+item -16 4 0 ?
+func SyncList.length 1073
+this -16 4 0 ?
+func SyncList.pop 1114
+this -16 4 0 ?
+func SyncList.popBlocking 1225
+this -16 4 0 ?
+func SyncList.__init 1352
+this -16 4 0 ?
+func JsonValue.isNull 1449
+this -16 4 0 ?
+func JsonValue.isBool 1470
+this -16 4 0 ?
+func JsonValue.isNumber 1491
+this -16 4 0 ?
+func JsonValue.isInt 1512
+this -16 4 0 ?
+func JsonValue.isFloat 1533
+this -16 4 0 ?
+func JsonValue.isString 1554
+this -16 4 0 ?
+func JsonValue.isArray 1575
+this -16 4 0 ?
+func JsonValue.isObject 1596
+this -16 4 0 ?
+func JsonValue.asBool 1617
+this -16 4 0 ?
+func JsonValue.asInt 1645
+this -16 4 0 ?
+func JsonValue.asFloat 1673
+this -16 4 0 ?
+func JsonValue.asString 1701
+this -16 4 0 ?
+func JsonValue.asArray 1727
+this -16 4 0 ?
+func JsonValue.asObject 1755
+this -16 4 0 ?
+func JsonValue.writeTo 1783
+this -20 4 0 ?
+sb -16 4 0 ref
+func JsonValue.toJson 1793
+this -16 4 0 ?
+sb 4 4 0 ?
+func JsonValue.__init 1850
+this -16 4 0 ?
+func __cls_init_JsonValue 1891
+this -16 4 0 ?
+func JsonNull.isNull 1909
+this -16 4 0 ?
+func JsonNull.writeTo 1930
+this -20 4 0 ?
+sb -16 4 0 ref
+func JsonNull.__init 1952
+this -16 4 0 ?
+func __cls_init_JsonNull 2004
+this -16 4 0 ?
+func JsonBool.isBool 2022
+this -16 4 0 ?
+func JsonBool.asBool 2043
+this -16 4 0 ?
+func JsonBool.writeTo 2064
+this -20 4 0 ?
+sb -16 4 0 ref
+func JsonBool.__init 2113
+this -20 4 0 ?
+value -16 4 0 boolean
+func __cls_new_JsonBool 2142
+value -16 4 0 boolean
+func __cls_init_JsonBool 2176
+this -20 4 0 ?
+value -16 4 0 boolean
+func JsonInt.isNumber 2197
+this -16 4 0 ?
+func JsonInt.isInt 2218
+this -16 4 0 ?
+func JsonInt.asInt 2239
+this -16 4 0 ?
+func JsonInt.writeTo 2260
+this -20 4 0 ?
+sb -16 4 0 ref
+func JsonInt.__init 2284
+this -20 4 0 ?
+value -16 4 0 integer
+func __cls_new_JsonInt 2313
+value -16 4 0 integer
+func __cls_init_JsonInt 2347
+this -20 4 0 ?
+value -16 4 0 integer
+func JsonFloat.isNumber 2368
+this -16 4 0 ?
+func JsonFloat.isFloat 2389
+this -16 4 0 ?
+func JsonFloat.asFloat 2410
+this -16 4 0 ?
+func JsonFloat.writeTo 2431
+this -20 4 0 ?
+sb -16 4 0 ref
+func JsonFloat.__init 2458
+this -20 4 0 ?
+value -16 4 0 float
+func __cls_new_JsonFloat 2487
+value -16 4 0 float
+func __cls_init_JsonFloat 2521
+this -20 4 0 ?
+value -16 4 0 float
+func JsonString.isString 2542
+this -16 4 0 ?
+func JsonString.asString 2563
+this -16 4 0 ?
+func JsonString.writeTo 2584
+this -20 4 0 ?
+sb -16 4 0 ref
+func JsonString.__init 2610
+this -20 4 0 ?
+value -16 4 0 string
+func __cls_new_JsonString 2639
+value -16 4 0 string
+func __cls_init_JsonString 2673
+this -20 4 0 ?
+value -16 4 0 string
+func JsonArray.isArray 2694
+this -16 4 0 ?
+func JsonArray.asArray 2715
+this -16 4 0 ?
+func JsonArray.add 2734
+this -20 4 0 ?
+v -16 4 0 ref
+func JsonArray.at 2758
+this -20 4 0 ?
+i -16 4 0 integer
+func JsonArray.length 2785
+this -16 4 0 ?
+func JsonArray.writeTo 2809
+this -20 4 0 ?
+sb -16 4 0 ref
+n 4 4 0 integer
+i 8 4 0 integer
+v 12 4 0 ?
+func JsonArray.__init 2951
+this -16 4 0 ?
+func __cls_init_JsonArray 3028
+this -16 4 0 ?
+func JsonObject.isObject 3046
+this -16 4 0 ?
+func JsonObject.asObject 3067
+this -16 4 0 ?
+func JsonObject.length 3086
+this -16 4 0 ?
+func JsonObject.indexOfKey 3110
+this -20 4 0 ?
+key -16 4 0 string
+n 4 4 0 integer
+i 8 4 0 integer
+kw 12 4 0 ?
+func JsonObject.put 3225
+this -24 4 0 ?
+key -20 4 0 string
+v -16 4 0 ref
+idx 0 4 0 integer
+func JsonObject.find 3331
+this -20 4 0 ?
+key -16 4 0 string
+idx 4 4 0 integer
+func JsonObject.has 3402
+this -20 4 0 ?
+key -16 4 0 string
+func JsonObject.keyAt 3433
+this -20 4 0 ?
+i -16 4 0 integer
+kw 4 4 0 ?
+func JsonObject.valueAt 3468
+this -20 4 0 ?
+i -16 4 0 integer
+func JsonObject.req 3495
+this -20 4 0 ?
+key -16 4 0 string
+v 4 4 0 ?
+func JsonObject.getString 3568
+this -20 4 0 ?
+key -16 4 0 string
+func JsonObject.getInt 3596
+this -20 4 0 ?
+key -16 4 0 string
+func JsonObject.getFloat 3624
+this -20 4 0 ?
+key -16 4 0 string
+func JsonObject.getBool 3652
+this -20 4 0 ?
+key -16 4 0 string
+func JsonObject.getObject 3680
+this -20 4 0 ?
+key -16 4 0 string
+func JsonObject.getArray 3708
+this -20 4 0 ?
+key -16 4 0 string
+func JsonObject.getStringOr 3736
+this -24 4 0 ?
+key -20 4 0 string
+def -16 4 0 string
+v 4 4 0 ?
+func JsonObject.getIntOr 3828
+this -24 4 0 ?
+key -20 4 0 string
+def -16 4 0 integer
+v 4 4 0 ?
+func JsonObject.getFloatOr 3920
+this -24 4 0 ?
+key -20 4 0 string
+def -16 4 0 float
+v 4 4 0 ?
+func JsonObject.getBoolOr 4012
+this -24 4 0 ?
+key -20 4 0 string
+def -16 4 0 boolean
+v 4 4 0 ?
+func JsonObject.writeTo 4104
+this -20 4 0 ?
+sb -16 4 0 ref
+n 4 4 0 integer
+i 8 4 0 integer
+kw 12 4 0 ?
+v 16 4 0 ?
+func JsonObject.__init 4290
+this -16 4 0 ?
+func __cls_init_JsonObject 4392
+this -16 4 0 ?
+func JsonReader.peek 4410
+this -16 4 0 ?
+func JsonReader.advance 4474
+this -16 4 0 ?
+c 4 4 0 integer
+func JsonReader.expect 4518
+this -20 4 0 ?
+expected -16 4 0 integer
+c 0 4 0 integer
+func JsonReader.skipWs 4618
+this -16 4 0 ?
+done 0 4 0 boolean
+c 4 4 0 integer
+func JsonReader.__init 4811
+this -20 4 0 ?
+text -16 4 0 string
+func __cls_new_JsonReader 4850
+text -16 4 0 string
+func __cls_init_JsonReader 4884
+this -20 4 0 ?
+text -16 4 0 string
+func appendQuotedString 4927
+sb -20 4 0 ref
+s -16 4 0 string
+n 4 4 0 integer
+i 8 4 0 integer
+c 12 4 0 integer
+hi 16 4 0 integer
+lo 20 4 0 integer
+func hexDigit 5501
+d -16 4 0 integer
+func isDigitCode 5562
+c -16 4 0 integer
+func parseValueOn 5639
+r -16 4 0 ref
+c 8 4 0 integer
+func parseTrueOn 5911
+r -16 4 0 ref
+func parseFalseOn 6008
+r -16 4 0 ref
+func parseNullLitOn 6119
+r -16 4 0 ref
+func parseHexDigitOn 6211
+r -16 4 0 ref
+c 4 4 0 integer
+func parseStringLitOn 6439
+r -16 4 0 ref
+sb 8 4 0 ?
+done 20 4 0 boolean
+c 24 4 0 integer
+esc 28 4 0 integer
+u 32 4 0 integer
+k 36 4 0 integer
+func parseNumberOn 7031
+r -16 4 0 ref
+startPos 4 4 0 integer
+isF 8 4 0 boolean
+pc 12 4 0 integer
+sign 16 4 0 integer
+numStr 20 4 0 string
+func parseArrayOn 7586
+r -16 4 0 ref
+arr 8 4 0 ?
+done 20 4 0 boolean
+v 24 4 0 ?
+c 28 4 0 integer
+func parseObjectOn 7868
+r -16 4 0 ref
+obj 8 4 0 ?
+done 20 4 0 boolean
+key 24 4 0 string
+v 28 4 0 ?
+c 32 4 0 integer
+func parseJson 8187
+text -16 4 0 string
+r 4 4 0 ?
+v 20 4 0 ?
+func writeJson 8302
+root -16 4 0 ref
+func writeJsonPretty 8324
+root -16 4 0 ref
+sb 4 4 0 ?
+func jsonIndent 8388
+sb -20 4 0 ref
+depth -16 4 0 integer
+i 0 4 0 integer
+func prettyOn 8460
+sb -24 4 0 ref
+v -20 4 0 ref
+depth -16 4 0 integer
+o 0 4 0 ?
+n 4 4 0 integer
+i 12 4 0 integer
+a 16 4 0 ?
+m 20 4 0 integer
+j 24 4 0 integer
+func readJsonFile 9025
+path -16 4 0 string
+func writeJsonFile 9052
+path -20 4 0 string
+root -16 4 0 ref
+func __strconcat 9077
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 4 0 ?
+i 12 4 0 ?
+func __strequals 9210
+a -20 4 0 ?
+b -16 4 0 ?
+la 0 4 0 ?
+i 4 4 0 ?

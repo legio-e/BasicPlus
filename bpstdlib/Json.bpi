@@ -1,6 +1,7 @@
-bpi 6
+bpi 7
 module Json
 func parseJson(text:string):JsonValue public
+func writeJsonPretty(root:JsonValue):string public
 func parseTrueOn(r:JsonReader):JsonValue public
 func writeJson(root:JsonValue):string public
 func parseValueOn(r:JsonReader):JsonValue public
@@ -17,14 +18,14 @@ func readJsonFile(path:string):JsonValue public
 func parseNumberOn(r:JsonReader):JsonValue public
 func parseArrayOn(r:JsonReader):JsonValue public
 class JsonBool public extends JsonValue
-  layout 1 16 00000000 00000000
+  layout 1 18 00000000 00000000
   ctor(value:boolean)
   method isBool():boolean public
   method asBool():boolean public
   method writeTo(sb:StringBuilder):void public
 end class
 class JsonObject public extends JsonValue
-  layout 2 23 00000003 00000000
+  layout 2 36 00000003 00000000
   ctor()
   method isObject():boolean public
   method asObject():JsonObject public
@@ -35,16 +36,31 @@ class JsonObject public extends JsonValue
   method has(key:string):boolean public
   method keyAt(i:integer):string public
   method valueAt(i:integer):JsonValue public
+  method req(key:string):JsonValue public
+  method getString(key:string):string public
+  method getInt(key:string):integer public
+  method getFloat(key:string):float public
+  method getBool(key:string):boolean public
+  method getObject(key:string):JsonObject public
+  method getArray(key:string):JsonArray public
+  method getStringOr(key:string,def:string):string public
+  method getIntOr(key:string,def:integer):integer public
+  method getFloatOr(key:string,def:float):float public
+  method getBoolOr(key:string,def:boolean):boolean public
   method writeTo(sb:StringBuilder):void public
 end class
+class RuntimeError public extends Core.Exception
+  layout 1 4 00000001 00000000
+  ctor(m:string)
+end class
 class JsonNull public extends JsonValue
-  layout 0 16 - -
+  layout 0 18 - -
   ctor()
   method isNull():boolean public
   method writeTo(sb:StringBuilder):void public
 end class
 class JsonReader public
-  layout 3 4 00000001 00000000
+  layout 3 6 00000001 00000000
   ctor(text:string)
   method peek():integer public
   method advance():integer public
@@ -52,7 +68,7 @@ class JsonReader public
   method skipWs():void public
 end class
 class JsonInt public extends JsonValue
-  layout 1 16 00000000 00000000
+  layout 1 18 00000000 00000000
   ctor(value:integer)
   method isNumber():boolean public
   method isInt():boolean public
@@ -60,7 +76,7 @@ class JsonInt public extends JsonValue
   method writeTo(sb:StringBuilder):void public
 end class
 class JsonValue public
-  layout 0 16 - -
+  layout 0 18 - -
   ctor()
   method isNull():boolean public
   method isBool():boolean public
@@ -79,8 +95,12 @@ class JsonValue public
   method writeTo(sb:StringBuilder):void public
   method toJson():string public
 end class
+class Exception public
+  layout 1 4 00000001 00000000
+  ctor(m:string)
+end class
 class JsonArray public extends JsonValue
-  layout 1 19 00000001 00000000
+  layout 1 21 00000001 00000000
   ctor()
   method isArray():boolean public
   method asArray():JsonArray public
@@ -90,7 +110,7 @@ class JsonArray public extends JsonValue
   method writeTo(sb:StringBuilder):void public
 end class
 class JsonFloat public extends JsonValue
-  layout 1 16 00000000 00000000
+  layout 1 18 00000000 00000000
   ctor(value:float)
   method isNumber():boolean public
   method isFloat():boolean public
@@ -98,7 +118,7 @@ class JsonFloat public extends JsonValue
   method writeTo(sb:StringBuilder):void public
 end class
 class JsonString public extends JsonValue
-  layout 1 16 00000001 00000000
+  layout 1 18 00000001 00000000
   ctor(value:string)
   method isString():boolean public
   method asString():string public

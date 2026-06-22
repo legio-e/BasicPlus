@@ -311,6 +311,78 @@ module Json
       return this.values.get(i)
     end valueAt
 
+    // --- accesores de conveniencia (ergonomía) ---
+    // req(): devuelve el valor de la clave o lanza si falta.
+    public function req(key: string): JsonValue
+      var v: JsonValue := this.find(key)
+      if v == null then
+        throw RuntimeError("Json: falta la clave '" + key + "'")
+      endif
+      return v
+    end req
+
+    // Estrictos: lanzan si la clave falta (req) o el tipo no cuadra (asXxx).
+    public function getString(key: string): string
+      return this.req(key).asString()
+    end getString
+    public function getInt(key: string): integer
+      return this.req(key).asInt()
+    end getInt
+    public function getFloat(key: string): float
+      return this.req(key).asFloat()
+    end getFloat
+    public function getBool(key: string): boolean
+      return this.req(key).asBool()
+    end getBool
+    public function getObject(key: string): JsonObject
+      return this.req(key).asObject()
+    end getObject
+    public function getArray(key: string): JsonArray
+      return this.req(key).asArray()
+    end getArray
+
+    // Con valor por defecto si la clave falta o el tipo no cuadra.
+    public function getStringOr(key: string, def: string): string
+      var v: JsonValue := this.find(key)
+      if v == null then
+        return def
+      endif
+      if not v.isString() then
+        return def
+      endif
+      return v.asString()
+    end getStringOr
+    public function getIntOr(key: string, def: integer): integer
+      var v: JsonValue := this.find(key)
+      if v == null then
+        return def
+      endif
+      if not v.isInt() then
+        return def
+      endif
+      return v.asInt()
+    end getIntOr
+    public function getFloatOr(key: string, def: float): float
+      var v: JsonValue := this.find(key)
+      if v == null then
+        return def
+      endif
+      if not v.isFloat() then
+        return def
+      endif
+      return v.asFloat()
+    end getFloatOr
+    public function getBoolOr(key: string, def: boolean): boolean
+      var v: JsonValue := this.find(key)
+      if v == null then
+        return def
+      endif
+      if not v.isBool() then
+        return def
+      endif
+      return v.asBool()
+    end getBoolOr
+
     public function writeTo(sb: StringBuilder)
       sb.appendChar(123)        // '{'
       var n: integer := this.keys.length()
@@ -674,6 +746,73 @@ module Json
     return root.toJson()
   end writeJson
 
+  // Serializa con indentación legible (2 espacios por nivel) — útil para
+  // ficheros de configuración / diseño editables a mano.
+  public function writeJsonPretty(root: JsonValue): string
+    var sb: StringBuilder := StringBuilder()
+    prettyOn(sb, root, 0)
+    return sb.toString()
+  end writeJsonPretty
+
+  function jsonIndent(sb: StringBuilder, depth: integer)
+    var i: integer := 0
+    while i < depth do
+      sb.appendChar(32)
+      sb.appendChar(32)
+      i := i + 1
+    endwh
+  end jsonIndent
+
+  function prettyOn(sb: StringBuilder, v: JsonValue, depth: integer)
+    if v.isObject() then
+      var o: JsonObject := v.asObject()
+      var n: integer := o.length()
+      if n == 0 then
+        sb.appendStr("{}")
+      else
+        sb.appendChar(123)            // '{'
+        sb.appendChar(10)
+        var i: integer := 0
+        while i < n do
+          jsonIndent(sb, depth + 1)
+          appendQuotedString(sb, o.keyAt(i))
+          sb.appendStr(": ")
+          prettyOn(sb, o.valueAt(i), depth + 1)
+          if i < n - 1 then
+            sb.appendChar(44)         // ','
+          endif
+          sb.appendChar(10)
+          i := i + 1
+        endwh
+        jsonIndent(sb, depth)
+        sb.appendChar(125)            // '}'
+      endif
+    elseif v.isArray() then
+      var a: JsonArray := v.asArray()
+      var m: integer := a.length()
+      if m == 0 then
+        sb.appendStr("[]")
+      else
+        sb.appendChar(91)             // '['
+        sb.appendChar(10)
+        var j: integer := 0
+        while j < m do
+          jsonIndent(sb, depth + 1)
+          prettyOn(sb, a.at(j), depth + 1)
+          if j < m - 1 then
+            sb.appendChar(44)
+          endif
+          sb.appendChar(10)
+          j := j + 1
+        endwh
+        jsonIndent(sb, depth)
+        sb.appendChar(93)             // ']'
+      endif
+    else
+      v.writeTo(sb)                   // escalar: reusa la forma compacta
+    endif
+  end prettyOn
+
   public function readJsonFile(path: string): JsonValue
     return parseJson(readFile(path))
   end readJsonFile
@@ -681,65 +820,5 @@ module Json
   public function writeJsonFile(path: string, root: JsonValue)
     writeFile(path, root.toJson())
   end writeJsonFile
-
-  // -------------------------------------------------------------------
-  // Smoke test integrado: ejecuta el módulo standalone para verificar
-  // parse + serialize + roundtrip + acceso al árbol.
-  // -------------------------------------------------------------------
-  // ==================================================================
-  // Smoke test: construcción manual, serialización, parseo, roundtrip
-  // y acceso por campo tras parseo (todo end-to-end).
-  // ==================================================================
-  function main(arg: string)
-    // 1) Construcción manual: completo y profundo.
-    print "--- construcción manual ---"
-    var root: JsonObject := JsonObject()
-    root.put("name",   JsonString("Alice"))
-    root.put("age",    JsonInt(30))
-    root.put("active", JsonBool(true))
-    root.put("score",  JsonFloat(3.14))
-    root.put("address", JsonNull())
-    var likes: JsonArray := JsonArray()
-    likes.add(JsonString("java"))
-    likes.add(JsonString("basicplus"))
-    root.put("likes", likes)
-    print "  build OK"
-    print "  name=" + root.find("name").asString()
-    print "  age=" + intToString(root.find("age").asInt())
-    print "  score=" + floatToString(root.find("score").asFloat())
-    print "  likes[0]=" + root.find("likes").asArray().at(0).asString()
-
-    // 2) Serialización del árbol manual a JSON.
-    print "--- writeJson ---"
-    print writeJson(root)
-
-    // 3) Roundtrip: serializar → parsear → re-serializar.
-    print "--- roundtrip ---"
-    var src: string := writeJson(root)
-    var v: JsonValue := parseJson(src)
-    print "  parseado isObject=" + boolToString(v.isObject())
-    print "  re-serializado: " + writeJson(v)
-
-    // 3b) acceso por campo tras parseo (necesita string-equality por
-    //     contenido en find/indexOfKey, no por ref).
-    print "--- acceso campo tras parseo ---"
-    var pname: string := v.asObject().find("name").asString()
-    var page:  integer := v.asObject().find("age").asInt()
-    var pact:  boolean := v.asObject().find("active").asBool()
-    print "  name   = " + pname
-    print "  age    = " + intToString(page)
-    print "  active = " + boolToString(pact)
-
-    // 4) Parseo de strings con escapes.
-    print "--- escapes ---"
-    var weird: JsonObject := JsonObject()
-    weird.put("quote",   JsonString("She said \"hi\""))
-    weird.put("newline", JsonString("a\nb"))
-    weird.put("tab",     JsonString("col1\tcol2"))
-    var rendered: string := writeJson(weird)
-    print "  rendered: " + rendered
-    var back: JsonValue := parseJson(rendered)
-    print "  roundtrip: " + writeJson(back)
-  end main
 
 end Json
