@@ -102,6 +102,13 @@ Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.
   verificada en host** — al hacerlo se cerró un gap: `parseFloat` (builtin 2) portado
   a la VM-C (`strtod`→f32; antes era "portable diferido" de H10). Pendiente: embeber
   en firmware (tanda de placa); futuro UI-via-Json (mapear al árbol Component, NO V3).
+- **Freq (escrito 22-jun; VERIFICACIÓN EN PLACA pendiente).** `bpstdlib/Freq.bp`:
+  `Freq.Meter` (frecuencímetro por conteo de flancos sobre `Pulse.Counter`) —
+  `measureHz(windowMs)` / `measureHzAvg(windowMs, n)` / `maxHz(windowMs)` (techo por
+  contador 16-bit). Sample `samples/FreqDemo_Dk2.bp` (mismo puente PB8→PB7 que
+  PulseDemo_Dk2 → correr directo en la DK2). Compila dual-VM; **falta correr en placa**
+  (necesita pulsos HW). Futuro: alta frecuencia por **input-capture** (medir el periodo
+  entre flancos) → necesita backend HW de timer en modo IC (firmware).
 
 ## ⚙️ Compilador / lenguaje (ampliación selectiva — "eventos y poco más")
 

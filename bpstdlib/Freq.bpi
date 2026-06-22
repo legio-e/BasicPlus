@@ -1,0 +1,13 @@
+bpi 7
+module Freq
+func FALLING():integer public
+func RISING():integer public
+func BOTH():integer public
+class Meter public
+  layout 3 6 00000004 00000000
+  ctor(pin:integer,edge:integer)
+  method measureHz(windowMs:integer):integer public
+  method measureHzAvg(windowMs:integer,samples:integer):integer public
+  method maxHz(windowMs:integer):integer public
+  method close():void public
+end class

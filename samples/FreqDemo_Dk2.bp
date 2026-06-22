@@ -1,0 +1,56 @@
+// FreqDemo_Dk2.bp — prueba del frecuencímetro (Freq.Meter) en la Discovery DK2.
+//
+// Reusa el MISMO cableado que PulseDemo_Dk2:
+//   PUENTE  PB8 (salida PWM)  <--->  PB7 (entrada frecuencímetro).
+//   En el conector "Spare GPIO" CN1 (40 pines): PB8 = pin 12, PB7 = pin 10.
+//     PWM           = PB8 = (1<<4)|8 = 24   (TIM16_CH1)
+//     frecuencímetro = PB7 = (1<<4)|7 = 23  (TIM4_CH2 / TI2)
+//
+// Genera PWM a una frecuencia conocida en PB8 y mide la frecuencia en PB7
+// contando flancos en una ventana. Si la medida coincide con la pedida, el
+// frecuencímetro funciona. Tolerancia ±2% (clkdiv del PWM + jitter de sleep BP).
+//
+// NOTA: necesita la placa real (pulsos de verdad). En host no da números válidos.
+
+module FreqDemo_Dk2
+  import Pwm
+  import Freq
+
+  function Main()
+    print "--- Frecuencímetro DK2 (PB8 PWM -> puente -> PB7) ---"
+    print "Comprueba el puente CN1: pin 12 (PB8) <-> pin 10 (PB7)."
+
+    var p: Pwm.Slice  := Pwm.Slice(24, 1000)               // PB8, 1 kHz
+    var m: Freq.Meter := Freq.Meter(23, Freq.RISING())     // PB7
+
+    print "Tope medible con ventana 1 s:", m.maxHz(1000), "Hz (contador 16-bit)"
+
+    // Test 1: 1 kHz, ventana 1 s
+    print ""
+    print "Test 1: PWM 1 kHz, ventana 1 s"
+    p.setDuty(50)
+    p.start()
+    print "  esperado ~1000  medido:", m.measureHz(1000), "Hz"
+
+    // Test 2: 500 Hz en caliente, ventana 1 s
+    print "Test 2: PWM 500 Hz, ventana 1 s"
+    p.setFreq(500)
+    p.setDuty(50)
+    print "  esperado ~500   medido:", m.measureHz(1000), "Hz"
+
+    // Test 3: promedio de 3 ventanas de 200 ms a 500 Hz (menos jitter)
+    print "Test 3: 500 Hz, promedio 3 x 200 ms"
+    print "  esperado ~500   medido:", m.measureHzAvg(200, 3), "Hz"
+
+    // Test 4: 2 kHz, ventana corta 100 ms (frecuencia más alta)
+    print "Test 4: PWM 2 kHz, ventana 100 ms"
+    p.setFreq(2000)
+    p.setDuty(50)
+    print "  esperado ~2000  medido:", m.measureHz(100), "Hz"
+
+    p.stop()
+    m.close()
+    print "--- fin ---"
+  end Main
+
+end FreqDemo_Dk2

@@ -1,0 +1,108 @@
+// ============================================================
+// Freq.bp — frecuencímetro por conteo de flancos.
+//
+// Mide la frecuencia de una señal contando los flancos que llegan
+// a un pin durante una ventana de tiempo conocida (gate time):
+//
+//     frecuencia (Hz) = flancos contados / ventana (s)
+//
+// Se apoya en Pulse.Counter (contador de flancos por hardware, sin
+// coste de CPU). El pin debe cumplir la misma restricción que
+// Pulse.Counter (canal contador del HW; ver Pulse.bp).
+//
+// LÍMITE: el contador HW es de 16 bits (0..65535). Por encima la
+// cuenta desborda y la lectura es errónea. Para frecuencias altas
+// usa una ventana más corta — `maxHz(windowMs)` te dice el techo
+// medible con esa ventana. Compromiso del gate time:
+//   - ventana larga  → más resolución a baja frecuencia, más lento.
+//   - ventana corta  → mide frecuencias más altas, menos resolución.
+//
+// Medida de ALTA frecuencia por captura de entrada (medir el
+// PERIODO entre flancos en vez de contar) = pendiente: necesita un
+// backend HW de input-capture (timer en modo IC) — futuro.
+//
+// Uso típico:
+//
+//   import Freq
+//   var m: Freq.Meter := Freq.Meter(11, Freq.RISING())
+//   var hz: integer := m.measureHz(1000)     // ventana de 1 s
+//   print "frecuencia:", hz, "Hz"
+//
+// NOTA: requiere hardware real (pulsos en el pin) para dar números
+// válidos — la verificación de verdad es en placa.
+// ============================================================
+module Freq
+
+  import Pulse
+
+  // ---- Constantes de flanco (= las de Pulse, re-expuestas para que
+  //      baste `import Freq`) ----
+  public function RISING(): integer
+    return 0
+  end RISING
+  public function FALLING(): integer
+    return 1
+  end FALLING
+  public function BOTH(): integer
+    return 2
+  end BOTH
+
+  // ============================================================
+  // Clase Meter — frecuencímetro sobre un Pulse.Counter.
+  // ============================================================
+  public class Meter
+
+    public var pin:  integer
+    public var edge: integer
+    var counter: Pulse.Counter
+
+    // Configura el contador en el pin/flanco dados. Lanza
+    // RuntimeError (vía Pulse.Counter) si el pin no es válido.
+    public function Meter(pin: integer, edge: integer)
+      this.pin     := pin
+      this.edge    := edge
+      this.counter := Pulse.Counter(pin, edge)
+    end Meter
+
+    // Mide la frecuencia (Hz) contando flancos durante `windowMs`
+    // milisegundos. Patrón gate: pone a cero, cuenta la ventana,
+    // para y lee (igual que PulseDemo). Devuelve flancos/segundo.
+    public function measureHz(windowMs: integer): integer
+      this.counter.reset()
+      this.counter.start()
+      sleep(windowMs)
+      this.counter.stop()
+      var n: integer := this.counter.value()
+      return (n * 1000) / windowMs
+    end measureHz
+
+    // Promedia `samples` medidas de `windowMs` cada una (reduce el
+    // jitter de los sleep BP). samples < 1 se trata como 1.
+    public function measureHzAvg(windowMs: integer, samples: integer): integer
+      var s: integer := samples
+      if s < 1 then
+        s := 1
+      endif
+      var sum: integer := 0
+      var i:   integer := 0
+      while i < s do
+        sum := sum + this.measureHz(windowMs)
+        i := i + 1
+      endwh
+      return sum / s
+    end measureHzAvg
+
+    // Frecuencia máxima medible con esa ventana antes de desbordar
+    // el contador de 16 bits. Por encima, usa una ventana menor.
+    public function maxHz(windowMs: integer): integer
+      return (65535 * 1000) / windowMs
+    end maxHz
+
+    // Libera el contador (deja el slice disponible para PWM, etc.).
+    public function close()
+      this.counter.stop()
+    end close
+
+  end Meter
+
+end Freq
