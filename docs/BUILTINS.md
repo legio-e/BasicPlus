@@ -239,9 +239,9 @@ trabajo de **H10**.
 
 | Clase | Builtins (ejemplos) | En VM-C |
 |---|---|---|
-| **Núcleo portado** | `strlen`/`substring`/`charAt`/`charCodeAt` (UTF-8), `intToString`/`parseInt`/`boolToString`, `abs`/`min`/`max`, `now`/`sleep`/`gc`, `move` + helpers de array, threading (`__threadStart`/`Join`/`yield`) + Mutex, `toBytes`/`fromBytes` | ✅ sí |
+| **Núcleo portado** | `strlen`/`substring`/`charAt`/`charCodeAt` (UTF-8), `intToString`/`parseInt`/`parseFloat`/`floatToString`/`boolToString`, `abs`/`min`/`max`, `now`/`sleep`/`gc`, `move` + helpers de array, threading (`__threadStart`/`Join`/`yield`) + Mutex, `toBytes`/`fromBytes` | ✅ sí |
 | **HW (device)** | Gpio/I2c/Spi/Uart/Pwm/Adc/Rtc/Wdt/Pulse/Pico/NeoPixel (ids 78..125) | ✅ sí (no-op donde no aplica) |
-| **Portables diferidos** | float/math (`sqrt`…`tan`, `pow`, `log*`, `exp`, `pi`/`e`, `floor`/`ceil`/`round`, `random*`, `parseFloat`/`floatToString`); string avanzados (`upper`/`lower`/`trim`/`indexOf`/`startsWith`/`endsWith`/`contains`/`replace`/`split`); Math `__*` (`asin`…`gamma`, `sign`, `factorial`) | ❌ → fallo limpio (H10) |
+| **Portables diferidos** | float/math (`sqrt`…`tan`, `pow`, `log*`, `exp`, `pi`/`e`, `floor`/`ceil`/`round`, `random*`); string avanzados (`upper`/`lower`/`trim`/`indexOf`/`startsWith`/`endsWith`/`contains`/`replace`/`split`); Math `__*` (`asin`…`gamma`, `sign`, `factorial`) | ❌ → fallo limpio (H10) |
 | **Host-only (PC)** | IO filesystem (`readFile`…`listDir`, `__path*`, `__mkdir`…) ids 37..42, 64..76; `input`; `__prompt` (77) | ❌ por diseño (el MCU no tiene FS de PC ni IDE) |
 | **Java-only (diagnóstico)** | `heapFrag`/`heapMap` (121/122) | ❌ intencional (herramientas de la VM-Java) |
 

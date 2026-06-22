@@ -45,6 +45,16 @@ concretas se crean al arrancar cada hito.
   mismo patrón async-con-callback (ya cubierto por Msgbox+botones+`onChange`), o un
   **bombeo anidado** re-entrante en la llamada (más complejo, re-entrancia). Diseñar
   con calma; NO bloquea H6 (Msgbox-aviso es asíncrono y suficiente para H6).
+  **Refinamiento (Eduardo, 21-jun) — la ERGONOMÍA es la clave:** el caso (a) debe
+  resolverse con una **llamada sencilla async** (estilo Swing `invokeLater`/`SwingWorker`):
+  el usuario NO crea ni arranca el Thread — escribe algo como `async(tarea)` dentro del
+  `onClick` y **BP lo gestiona por debajo** (crea/arranca/limpia el hilo). Y un
+  `invokeLater(closure)` que marshale de vuelta al hilo del GUI para repintar/actualizar
+  widgets con seguridad (reusa la cola de eventos del upcall). Objetivo: que programar la
+  GUI sea AMIGABLE, no un infierno de threads manuales. **Decisión de diseño clave:** ¿tiene
+  BP valores-función/closures? Si NO, la API usaría objetos estilo Runnable (clase con `run()`
+  override-able, como `onClick`); si se añaden closures, `async(() -> …)`. → **REPESCA del
+  GUI** (no pertenece a ninguna H).
 
 ## 🛡️ Arnés de no-regresión V2→V3 (montar PRIMERO)
 
@@ -71,9 +81,27 @@ Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.
   TCP host) ✅ en V2; queda **H11.b** (WiFi al boot con `/sys/wifi.json`) +
   **H11.c** (backend `Net` sobre lwIP), y de premio el wire v1 sobre TCP ("Run on
   Device" sin cable). Diseño en `HECHO_V2.md` (H11) + `WIFI_TCP_REFLECTION.md`.
-- **Compresión `deflate`-lite** (LZSS → LZ77+Huffman) y/o formato Archive
-  multi-fichero. **Aditivo**: `Compress.deflate` nuevo, sin tocar `decompress`
-  (LZSS) — hay código V2 que depende (principio 7).
+- **Compresión (CORE hecho, 22-jun).** `Compress.decompress` (LZSS) ✅ V2 +
+  **`Compress.compress` (LZSS) ✅** (mismo framing, round-trip verificado en host,
+  commit `53bbd7b`). Pendiente:
+  - **`compress` native — PENDIENTE, depende de "AOT — casts"** (sección Compilador).
+    Hoy corre INTERPRETADO (necesita `byte()` chequeado y el AOT no emite casts). Es la
+    dirección rara (comprimir para guardar/enviar) → interpretado vale; `decompress` sí
+    es native-able (solo copia byte→byte).
+  - **Multi-fichero / Archive — DIFERIDO por complejidad** (Eduardo gateó "si no es muy
+    complejo"). El códec es buffer-a-buffer (dst + capacidad); un packer multi-entrada en
+    BP puro pide o un builder OO con estado o colecciones (List&lt;byte[]&gt;) → cruza el
+    "thin container". Retomar si surge necesidad real (p.ej. empaquetar recursos GUI).
+  - **Futuro `deflate`-lite** (LZSS → +Huffman). Aditivo, sin tocar `decompress`
+    (hay código V2 que depende — principio 7).
+- **Json (CORE hecho, 22-jun).** `samples/Json.bp` (librería completa: jerarquía
+  JsonValue, parser recursivo, serializador, escapes) promovido a `bpstdlib/Json.bp`
+  (commit `48220e4`) + ergonomía: `writeJsonPretty` (indentado) + getters
+  `getString/getInt/getFloat/getBool/getObject/getArray` y `getXxxOr(key, def)` en
+  JsonObject. Smoke test → `samples/JsonDemo.bp`. **Paridad dual-VM byte-idéntica
+  verificada en host** — al hacerlo se cerró un gap: `parseFloat` (builtin 2) portado
+  a la VM-C (`strtod`→f32; antes era "portable diferido" de H10). Pendiente: embeber
+  en firmware (tanda de placa); futuro UI-via-Json (mapear al árbol Component, NO V3).
 
 ## ⚙️ Compilador / lenguaje (ampliación selectiva — "eventos y poco más")
 
@@ -144,6 +172,14 @@ nota en el bullet del operador). Detalle de diseño original abajo (se conserva)
   (operadores binarios + `,` + `.` + `:=`/`=` + `and`/`or`/`xor`/`mod`/`shl`/`shr` + el
   `^` nuevo). Descartados `\` final y `_` final (este chocaría con el separador nuevo).
 
+- **AOT — casts (`byte()`/`int()`/`float()`/`long()`/`double()`) — PENDIENTE; repaso
+  del AOT en la fase IDE** (Eduardo, 22-jun). El `AotCEmitter` **no maneja NINGÚN nodo
+  cast** → cualquier función con un cast cae a interpretado (verificado: 0 coincidencias
+  de cast/conversión en `AotCEmitter.java`). **Bloquea `compress` native** (`byte()`
+  chequeado 0..255) y todo `native` con conversiones. Fix: emitir el narrowing/conversión
+  en C (para `byte()`, i32→u8 con la semántica chequeada de `I32_TO_U8`; el helper de
+  store a `byte[]` ya existe, #193). Mismo paraguas que `^` en AOT (arriba) → cuando
+  toque el IDE, **repaso del AOT de una pasada**.
 - **#169 — AOT cross-module sin puente del intérprete** (MEJORA de rendimiento;
   hoy FUNCIONA vía `call_bp` + warning). Diseño en `AOT_CROSS_MODULE.md`.
 - **Layout compacto de narrow** (L10 follow-up): `byte[]`/`int16[]` y globales

@@ -37,6 +37,7 @@
 enum {
     BUILTIN_STRLEN          = 0,
     BUILTIN_PARSE_INT       = 1,
+    BUILTIN_PARSE_FLOAT     = 2,   /* string -> float (f32); strtod, parity-safe */
     BUILTIN_INT_TO_STRING   = 3,
     BUILTIN_BOOL_TO_STRING  = 5,
     BUILTIN_SUBSTRING       = 9,   /* #173: substring(s, start, end) */
@@ -715,6 +716,24 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         long v = strtol(p, NULL, 10);
         push_i32(vm, tc, (int32_t) v);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_PARSE_FLOAT: {   /* string -> float (f32). Espejo de parseInt pero con
+                                   * strtod: (float)strtod == (float)Double.parseDouble
+                                   * (f32 correctamente redondeado) -> paridad con miVM. */
+        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        char buf[64];
+        read_bp_string(vm, ref, buf, sizeof(buf));
+        /* trim simple (igual que parseInt) */
+        char* p = buf; while (*p == ' ' || *p == '\t') p++;
+        char* end = p + strlen(p);
+        while (end > p && (end[-1] == ' ' || end[-1] == '\n' || end[-1] == '\r' || end[-1] == '\t')) {
+            *--end = '\0';
+        }
+        union { float f; int32_t i; } u;
+        u.f = (float) strtod(p, NULL);
+        push_i32(vm, tc, u.i);
         return BPVM_OK;
     }
 
