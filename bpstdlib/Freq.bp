@@ -17,9 +17,14 @@
 //   - ventana larga  → más resolución a baja frecuencia, más lento.
 //   - ventana corta  → mide frecuencias más altas, menos resolución.
 //
-// Medida de ALTA frecuencia por captura de entrada (medir el
-// PERIODO entre flancos en vez de contar) = pendiente: necesita un
-// backend HW de input-capture (timer en modo IC) — futuro.
+// MEJORAS FUTURAS (NO V3):
+//   - Combinar dos contadores de 16 bits -> 32 bits (cascada de
+//     timers) para un techo mucho mayor SIN acortar la ventana.
+//   - Frecuencias < 1 Hz y mayor precisión: medir el PERIODO entre
+//     flancos por captura de entrada (timer en modo input-capture),
+//     freq = 1/periodo. El conteo por ventana ya cubre bien la ALTA
+//     frecuencia; el periodo cubre el extremo BAJO/sub-Hz y la
+//     precisión. Necesita backend HW (firmware).
 //
 // Uso típico:
 //

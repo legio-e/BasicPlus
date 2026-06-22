@@ -107,9 +107,12 @@ Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.
   `measureHz(windowMs)` / `measureHzAvg(windowMs, n)` / `maxHz(windowMs)` (techo por
   contador 16-bit). Sample `samples/FreqDemo_Dk2.bp` (puente PB8→PB7). **Verificado en
   la DK2** (sin reflash — el firmware ya tenía el pulse backend; el IDE subió las deps):
-  1 kHz→1000, 500 Hz→500 (avg 501), 2 kHz/100 ms→2000. Futuro: alta frecuencia por
-  **input-capture** (medir el periodo entre flancos) → necesita backend HW de timer en
-  modo IC (firmware).
+  1 kHz→1000, 500 Hz→500 (avg 501), 2 kHz/100 ms→2000. **Mejoras futuras (NO V3, idea de
+  Eduardo 22-jun):** (a) combinar **dos contadores de 16 bits → 32 bits** (cascada de
+  timers) → techo mucho mayor sin acortar la ventana, menos overflow; (b) **frecuencias
+  < 1 Hz** y más precisión vía **input-capture** (medir el periodo entre flancos,
+  freq = 1/periodo) — el conteo por ventana ya cubre bien la ALTA frecuencia, el periodo
+  cubre el extremo BAJO/sub-Hz; necesita backend HW (timer en modo IC, firmware).
 
 ## ⚙️ Compilador / lenguaje (ampliación selectiva — "eventos y poco más")
 
