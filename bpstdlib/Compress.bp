@@ -80,4 +80,91 @@ module Compress
     return op
   end decompress
 
+  // Comprime `srcLen` bytes de `src` en `dst` (capacidad `dstCap`) con el MISMO
+  // framing LZSS que lee decompress(). Devuelve el nº de bytes escritos, o -1 si
+  // dst no cabe. Buscador de coincidencias naive (ventana <= 4096, longitud 3..18);
+  // el cuerpo es aritmética entera + acceso a byte[] (SIN cast byte()) → compila
+  // también como `native` para velocidad, igual que decompress.
+  public function compress(src: byte[], srcLen: integer, dst: byte[], dstCap: integer): integer
+    if dstCap < 4 then
+      return -1
+    endif
+    // cabecera: tamaño original (u32 big-endian)
+    dst[0] := byte((srcLen shr 24) mod 256)
+    dst[1] := byte((srcLen shr 16) mod 256)
+    dst[2] := byte((srcLen shr 8) mod 256)
+    dst[3] := byte(srcLen mod 256)
+    var op: integer := 4
+
+    var ip: integer := 0
+    while ip < srcLen do
+      // reserva el byte de FLAGS del grupo (se rellena al cerrar el grupo)
+      if op >= dstCap then
+        return -1
+      endif
+      var flagsPos: integer := op
+      var flags:    integer := 0
+      op := op + 1
+
+      var t: integer := 0
+      while t < 8 and ip < srcLen do
+        // mejor coincidencia en la ventana [max(0, ip-4096) .. ip-1]
+        var minPos: integer := ip - 4096
+        if minPos < 0 then
+          minPos := 0
+        endif
+        var maxLen: integer := srcLen - ip
+        if maxLen > 18 then
+          maxLen := 18
+        endif
+
+        var bestLen:  integer := 0
+        var bestDist: integer := 0
+        if maxLen >= 3 then
+          var cand: integer := ip - 1
+          while cand >= minPos do
+            var l: integer := 0
+            while l < maxLen and src[cand + l] == src[ip + l] do
+              l := l + 1
+            endwh
+            if l > bestLen then
+              bestLen  := l
+              bestDist := ip - cand
+              if l == maxLen then
+                cand := minPos    // ya no se puede mejorar → corta tras este
+              endif
+            endif
+            cand := cand - 1
+          endwh
+        endif
+
+        if bestLen >= 3 then
+          // MATCH (bit de flag = 0): off = dist-1 (12 bits), len-3 (4 bits)
+          var off: integer := bestDist - 1
+          if (op + 1) >= dstCap then
+            return -1
+          endif
+          dst[op]     := byte(off shr 4)
+          dst[op + 1] := byte(((off mod 16) shl 4) + (bestLen - 3))
+          op := op + 2
+          ip := ip + bestLen
+        else
+          // LITERAL (bit de flag = 1)
+          flags := flags + (1 shl t)
+          if op >= dstCap then
+            return -1
+          endif
+          dst[op] := src[ip]
+          op := op + 1
+          ip := ip + 1
+        endif
+        t := t + 1
+      endwh
+
+      dst[flagsPos] := byte(flags)
+    endwh
+
+    return op
+  end compress
+
 end Compress

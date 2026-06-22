@@ -1,0 +1,69 @@
+// CompressRoundTrip.bp — verifica el compresor LZSS nuevo: comprimir → descomprimir
+// debe devolver EXACTAMENTE el original. Corre en host (cualquier VM).
+module CompressRoundTrip
+
+  import Compress
+
+  function check(label: string, src: byte[], n: integer)
+    var cap:  integer := n + 64 + (n / 8) + 8   // margen (peor caso: todo literal)
+    var comp: byte[]  := newByteArray(cap)
+    var clen: integer := Compress.compress(src, n, comp, cap)
+    if clen < 0 then
+      print label, ": FALLO (compress -1, dst no cabe)"
+      return
+    endif
+
+    var back: byte[]  := newByteArray(n)
+    var blen: integer := Compress.decompress(comp, clen, back, n)
+
+    var ok: boolean := (blen == n)
+    var j: integer := 0
+    while ok and j < n do
+      if back[j] != src[j] then
+        ok := false
+      endif
+      j := j + 1
+    endwh
+
+    if ok then
+      print label, ": OK   ", n, "->", clen, "bytes  (ratio", (clen * 100) / n, "%)"
+    else
+      print label, ": FALLO (round-trip != original; blen=", blen, ")"
+    endif
+  end check
+
+  function Main()
+    // 1) muy compresible: patrón que se repite cada 16
+    var n1: integer := 512
+    var a: byte[] := newByteArray(n1)
+    var i: integer := 0
+    while i < n1 do
+      a[i] := byte(i mod 16)
+      i := i + 1
+    endwh
+    check("repetitivo", a, n1)
+
+    // 2) run de un solo byte (match solapado, dist=1)
+    var n2: integer := 300
+    var b: byte[] := newByteArray(n2)
+    i := 0
+    while i < n2 do
+      b[i] := 65          // 'A' x300
+      i := i + 1
+    endwh
+    check("run-AAAA  ", b, n2)
+
+    // 3) poco compresible: pseudo-aleatorio (ejercita literales)
+    var n3: integer := 256
+    var c: byte[] := newByteArray(n3)
+    i := 0
+    while i < n3 do
+      c[i] := byte((i * 73 + 31) mod 256)
+      i := i + 1
+    endwh
+    check("pseudo-rnd", c, n3)
+
+    print "--- fin ---"
+  end Main
+
+end CompressRoundTrip

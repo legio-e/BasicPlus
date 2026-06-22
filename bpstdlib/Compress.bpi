@@ -1,3 +1,4 @@
 bpi 7
 module Compress
 func decompress(src:uint8[],srcLen:integer,dst:uint8[],dstCap:integer):integer public
+func compress(src:uint8[],srcLen:integer,dst:uint8[],dstCap:integer):integer public

@@ -45,6 +45,59 @@ lines
 2090 74
 2104 77
 2122 80
+2141 89
+2155 90
+2174 93
+2199 94
+2224 95
+2249 96
+2268 97
+2276 99
+2284 100
+2296 102
+2308 103
+2327 105
+2333 106
+2341 107
+2353 109
+2361 110
+2397 112
+2409 113
+2423 114
+2436 116
+2446 117
+2460 118
+2473 121
+2481 122
+2489 123
+2503 124
+2515 125
+2527 126
+2535 127
+2585 128
+2599 130
+2611 131
+2617 132
+2627 133
+2639 134
+2655 137
+2675 141
+2689 143
+2701 144
+2719 145
+2738 147
+2755 148
+2794 149
+2806 150
+2821 153
+2837 154
+2849 155
+2868 157
+2882 158
+2894 159
+2906 161
+2921 164
+2935 167
 vars
 func Object.toString 0
 this -16 4 0 ?
@@ -144,7 +197,24 @@ off 32 4 0 integer
 leng 36 4 0 integer
 dist 40 4 0 integer
 k 44 4 0 integer
-func __strconcat 2138
+func compress 2138
+src -28 4 0 ref
+srcLen -24 4 0 integer
+dst -20 4 0 ref
+dstCap -16 4 0 integer
+op 4 4 0 integer
+ip 8 4 0 integer
+flagsPos 12 4 0 integer
+flags 16 4 0 integer
+t 20 4 0 integer
+minPos 24 4 0 integer
+maxLen 28 4 0 integer
+bestLen 32 4 0 integer
+bestDist 36 4 0 integer
+cand 40 4 0 integer
+l 44 4 0 integer
+off 48 4 0 integer
+func __strconcat 2951
 a -20 4 0 ?
 b -16 4 0 ?
 la 0 4 0 ?
