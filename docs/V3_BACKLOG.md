@@ -81,6 +81,14 @@ Instrumental del principio 7 (`V3_ROADMAP.md` §4): la red antes del trapecio.
   TCP host) ✅ en V2; queda **H11.b** (WiFi al boot con `/sys/wifi.json`) +
   **H11.c** (backend `Net` sobre lwIP), y de premio el wire v1 sobre TCP ("Run on
   Device" sin cable). Diseño en `HECHO_V2.md` (H11) + `WIFI_TCP_REFLECTION.md`.
+- **Servidor TCP (`listen`/`accept`) — APLAZADO; se retoma con la Ethernet del ESP32-P4**
+  (decisión Eduardo, 22-jun). El cliente `Net.Tcp` ✅ V2 (H11.a); falta el lado servidor
+  (builtins listen/accept + `Net.Listener` + thread-por-conexión + server de prueba en PC).
+  **Estrategia: desacoplar TCP/IP de WiFi.** Al arrancar el ESP32-P4 se valida primero su
+  **Ethernet** (puerto físico, IP fija — liga con la idea del log-Ethernet del P4); si va
+  bien, se retoma la librería TCP sobre ese transporte cableado. WiFi (#145) queda aparte
+  (otras connotaciones: lwIP-sobre-WiFi, credenciales…). Cierra la tanda de stdlib de
+  esta sesión (Compress ✅ / Json ✅ / Freq ✅ en placa).
 - **Compresión (CORE hecho, 22-jun).** `Compress.decompress` (LZSS) ✅ V2 +
   **`Compress.compress` (LZSS) ✅** (mismo framing, round-trip verificado en host,
   commit `53bbd7b`). Pendiente:
