@@ -1,0 +1,44 @@
+// OOTestP4.bp — VM.2b.3: OO + excepciones en RISC-V, IMPORTANDO Core.
+// Al compilar trae el import implícito de Core (Object base, RuntimeError).
+// En la placa, el loader debe resolver Core desde /lib (bucle de imports).
+// Ejercita: clase, herencia, dispatch virtual (override), constructor+super,
+// throw/catch, e.msg, concat de strings.
+module OOTestP4
+
+  class Animal
+    var nombre: string
+    public function Animal(n: string)
+      this.nombre := n
+    end Animal
+    public function sonido(): string
+      return "..."
+    end sonido
+    public function describe(): string
+      return this.nombre + " hace " + this.sonido()
+    end describe
+  end Animal
+
+  class Perro extends Animal
+    public function Perro(n: string)
+      super(n)
+    end Perro
+    public function sonido(): string
+      return "guau"
+    end sonido
+  end Perro
+
+  function Main()
+    print "== OOTestP4: OO + excepciones en RISC-V =="
+    var a: Animal := Animal("bicho")
+    var p: Perro  := Perro("Toby")
+    print a.describe()                 // bicho hace ...
+    print p.describe()                 // Toby hace guau   (dispatch virtual)
+    try
+      throw RuntimeError("boom de prueba")
+    catch e: RuntimeError
+      print "excepcion capturada:", e.msg
+    endtry
+    print "== fin OOTestP4 =="
+  end Main
+
+end OOTestP4

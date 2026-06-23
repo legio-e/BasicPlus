@@ -29,6 +29,7 @@
 #include "bpvm.h"            /* núcleo de la VM-C (C99 portable) */
 #include "fs.h"              /* FS-RAM (VM.2b, reutilizado del S3) */
 #include "p4_mods.h"         /* stdlib embebida (Core fresco) -> /lib */
+#include "bpvm_internal.h"   /* vm->modules/imports para resolver deps del FS */
 
 static const char *TAG = "bpvm_p4";
 
@@ -151,10 +152,57 @@ static void fs_selftest(void)
     net_logf("[p4] === FS self-test fin ===");
 }
 
-/* ---- Ejecuta el Hello.mod embebido en la VM-C, salida → TCP+consola ---- */
+/* ---- VM.2b.3: resuelve imports de los módulos cargados desde /lib (bucle de
+   punto fijo, réplica de repl_esp32/Pico) ---- */
+static fs_status_t res_get(const char *name, const uint8_t **d, uint32_t *sz)
+{
+    fs_status_t s = fs_get(name, d, sz);
+    if (s == FS_OK) return s;
+    char p[FS_NAME_LEN];
+    snprintf(p, sizeof(p), "/lib/%s", name);
+    return fs_get(p, d, sz);
+}
+
+static int resolve_imports(bpvm_t *vm)
+{
+    for (int pass = 0; pass < 6; pass++) {
+        int loaded_any = 0;
+        int n_before = vm->module_count;
+        for (int mi = 0; mi < n_before; mi++) {
+            bpvm_module_t *m = &vm->modules[mi];
+            for (int k = 0; k < m->import_count; k++) {
+                const char *imp = m->imports[k];
+                if (!imp || !imp[0]) continue;
+                char owner[40]; size_t ol = 0;
+                while (imp[ol] && imp[ol] != '.' && ol < sizeof(owner) - 1) { owner[ol] = imp[ol]; ol++; }
+                owner[ol] = '\0';
+                if (!owner[0]) continue;
+                int already = 0;
+                for (int j = 0; j < vm->module_count; j++)
+                    if (strcmp(vm->modules[j].name, owner) == 0) { already = 1; break; }
+                if (already) continue;
+                char fname[48];
+                snprintf(fname, sizeof(fname), "%s.mod", owner);
+                const uint8_t *dep; uint32_t dep_sz;
+                if (res_get(fname, &dep, &dep_sz) != FS_OK) {
+                    net_logf("[p4] import '%s' NO resuelto (%s)", owner, fname);
+                    continue;
+                }
+                bpvm_status_t ds = bpvm_load_mod_buffer(vm, dep, dep_sz, owner);
+                net_logf("[p4] import '%s' -> %s (%u B)", owner, bpvm_status_str(ds), (unsigned) dep_sz);
+                if (ds != BPVM_OK) return -1;
+                loaded_any = 1;
+            }
+        }
+        if (!loaded_any) break;
+    }
+    return 0;
+}
+
+/* ---- Carga el módulo embebido (resolviendo imports del FS) y lo ejecuta ---- */
 static void run_vm_hello(void)
 {
-    net_logf("[p4] === VM.2a: modulo de prueba embebido (%u bytes) ===",
+    net_logf("[p4] === VM.2b.3: app OO embebida (%u bytes), imports desde /lib ===",
              hello_mod_len);
 
     bpvm_t *vm = bpvm_init(s_vm_mem, VM_MEM_SIZE, 0);
@@ -163,16 +211,23 @@ static void run_vm_hello(void)
 
     bpvm_set_output(vm, vm_out_cb, NULL);
 
-    bpvm_status_t st = bpvm_load_mod_buffer(vm, hello_mod, hello_mod_len, "StressP4");
+    bpvm_status_t st = bpvm_load_mod_buffer(vm, hello_mod, hello_mod_len, "OOTestP4");
     net_logf("[p4] load_mod_buffer -> %s", bpvm_status_str(st));
+    if (st != BPVM_OK) { bpvm_destroy(vm); return; }
 
-    if (st == BPVM_OK) {
-        net_logf("[p4] --- salida de la VM ---");
-        st = bpvm_run(vm);
-        net_logf("[p4] --- fin VM, status=%s ---", bpvm_status_str(st));
+    net_logf("[p4] resolviendo imports desde /lib...");
+    if (resolve_imports(vm) != 0) {
+        net_logf("[p4] ERROR resolviendo imports");
+        bpvm_destroy(vm);
+        return;
     }
+
+    net_logf("[p4] --- salida de la VM ---");
+    st = bpvm_run(vm);
+    net_logf("[p4] --- fin VM, status=%s ---", bpvm_status_str(st));
+
     bpvm_destroy(vm);
-    net_logf("[p4] === VM destruida. Si has leido el Hello, VM.1 OK ===");
+    net_logf("[p4] === VM destruida (VM.2b.3 OK si has leido el OO) ===");
 }
 
 static void tcp_log_task(void *arg)
