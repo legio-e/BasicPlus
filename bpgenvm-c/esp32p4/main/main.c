@@ -28,6 +28,7 @@
 
 #include "bpvm.h"            /* núcleo de la VM-C (C99 portable) */
 #include "fs.h"              /* FS-RAM (VM.2b, reutilizado del S3) */
+#include "p4_mods.h"         /* stdlib embebida (Core fresco) -> /lib */
 
 static const char *TAG = "bpvm_p4";
 
@@ -192,6 +193,10 @@ static void tcp_log_task(void *arg)
             net_logf("[p4] TCP conectado a %s:%d", SERVER_IP, SERVER_PORT);
 
             fs_selftest();           /* VM.2b.1: FS en RISC-V (RAM), aislado */
+            net_logf("[p4] === VM.2b.2: instalar stdlib en /lib ===");
+            esp32p4_mods_install();
+            net_logf("[p4] FS tras instalar (%d ficheros):", fs_file_count());
+            fs_list(fs_list_log_cb, NULL);
             run_vm_hello();          /* <-- ejecutar la VM-C */
 
             /* heartbeats para confirmar que el firmware sigue vivo tras la VM */
