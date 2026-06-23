@@ -1,0 +1,15 @@
+// HelloP4.bp — primer .mod que ejecuta la VM-C en el ESP32-P4.
+// La salida sale por el canal de log TCP (pc_logserver.py en el PC).
+// Ejercita: print de string, bucle while, aritmética entera, print de int.
+module HelloP4
+  function Main()
+    print "Hola desde la VM-C en el ESP32-P4 - BasicPlus vive en RISC-V!"
+    var s: integer := 0
+    var i: integer := 1
+    while i <= 10 do
+      s := s + i
+      i := i + 1
+    endwh
+    print "suma 1..10 =", s
+  end Main
+end HelloP4
