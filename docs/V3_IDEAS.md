@@ -718,6 +718,60 @@ prueba socket+framing+reconnect) → 3b FILES (PUT/GET sube un .mod) → 3c TERM
 (RUN/OUTPUT/EXITED/KILL = "Run on P4"). El código es una pieza (dispatcher
 probado); se valida en ese orden porque HELLO ya ejercita todo el I/O nuevo.
 
+### Fase gráficos P4 (diseño 23-jun, Eduardo + Claude + 2 agentes de análisis)
+
+Eduardo recorta la fase HW: **gráficos primero** (lo más duro), el resto (GPIO/I2C/SPI
+backends) espera. **MVP = un botón táctil** en pantalla vía el stack GUI portable
+(`Gui.*` BP → LVGL). "Hay que gestionar la RAM" → PSRAM obligatoria.
+
+**Reutilización (clave): el ~95% del stack GUI ya existe y es portable.**
+- `src/gui.c` (modelo de widgets + cola de eventos) + builtins GUI (135-205) +
+  `bpstdlib/Gui.bp` (Component→Button/Label/...) + **LVGL vendorizado**
+  (`third_party/lvgl` v9.2.2) → se reutilizan TAL CUAL.
+- Costura de plataforma MÍNIMA (`include/bpvm_gui.h`): 3 funciones por placa —
+  `bpvm_gui_disp_init(w,h)` / `bpvm_gui_disp_pump()` / `bpvm_gui_disp_is_open()`.
+  Referencia a imitar: `stm32/port/gui_display_ltdc.c` (DK2: LTDC + GT911 + LVGL
+  flush). Para el P4 = un `gui_display_dsi.c` análogo.
+- `Gui.run()` (builtins.c) ya hace pump (lv_timer_handler) + drena eventos + sondea
+  KILL del wire → reutilizable.
+
+**Específico del P4 (EV-board, confirmado por research + Eduardo):**
+- Panel **EK79007 @ 1024×600**, **MIPI-DSI 2-lane @ 1000 Mbps** (conector FPC 22-pin,
+  confirmado por Eduardo). La BSP por defecto asume el OTRO panel ILI9881C 1280×800 →
+  forzar `CONFIG_BSP_LCD_TYPE_1024_600`.
+- Táctil **GT911** por I2C (**SDA=GPIO7, SCL=GPIO8**, addr 0x5D, RST/INT=NC vía
+  expansor I/O). Mismo chip que la DK2 → protocolo reutilizable.
+- **PSRAM 32 MB** para el framebuffer (1024×600×2 ≈ 1.2 MB, no cabe en 768 KB SRAM).
+  sdkconfig: `CONFIG_SPIRAM=y` + `CONFIG_SPIRAM_MODE_HEX=y` + `CONFIG_SPIRAM_SPEED_200M=y`
+  (P4 = HEX 200 MHz; NO octal/quad). DPHY necesita **LDO ch3 @ 2500 mV** antes del bus DSI.
+- Componentes gestionados: `espressif/esp_lcd_ek79007` + `espressif/esp_lcd_touch_gt911`.
+- **Decisión: LVGL A MANO (NO `esp_lvgl_port`).** El port de Espressif corre LVGL en su
+  task con lock/unlock; nuestro `Gui.run()` maneja LVGL él mismo (lv_timer_handler en el
+  pump) → incompatible. Usamos los DRIVERS esp_lcd del panel+táctil, pero cableamos LVGL
+  nosotros (igual que el LTDC del STM32), con el LVGL vendorizado (paridad de versión) como
+  componente IDF nuevo del P4.
+
+**⚠️ RIESGO a vigilar: PSRAM@200M vs RMII (Ethernet).** En el P4 ambos tiran del MPLL →
+conflicto documentado (esp-idf #18377). Nuestro wire/log van por Ethernet. Salidas: RMII en
+clock-IN (el PHY da el reloj), o PSRAM más lenta, o **desacoplar** — el MVP del botón NO
+necesita el wire (app embebida + logs por consola). Se sondea en G2 y se decide ahí.
+
+**Escalera (de-risk como en Ethernet: validar con el ejemplo OFICIAL antes de integrar):**
+- **G1 — validar el display con el ejemplo oficial** (Eduardo corre
+  `esp-idf/examples/peripherals/lcd/mipi_dsi`, EK79007 1024×600). CERO código nuestro →
+  confirma panel+DPHY+PSRAM+backlight en SU placa (igual que `ethernet/basic` validó la red).
+- **G2** — PSRAM en NUESTRO firmware (sdkconfig + verificar 32 MB; sondear si Ethernet
+  sobrevive → decide el riesgo de arriba).
+- **G3** — panel DSI + relleno de color (replicar la config del ejemplo).
+- **G4** — LVGL vendorizado sobre el panel (lv_display + flush_cb → draw_bitmap, buffers en PSRAM).
+- **G5** — táctil GT911 → lv_indev.
+- **G6** — costura BP (`gui_display_dsi.c`) + **botón embebido** = el botón `Gui.*` de BP en
+  pantalla reaccionando al toque. 🎯 "un botón funciona" en RISC-V.
+- **G7 (luego)** — integración con el wire (coexistencia PSRAM↔Ethernet → el IDE maneja el GUI).
+
+**Logs del bring-up:** consola USB-Serial-JTAG (`idf.py monitor`); si la PSRAM tumba
+Ethernet, el TCP cae pero la consola sigue. El MVP no depende del wire.
+
 ## Infraestructura que el GUI arrastra (movida desde V2)
 
 - **Dual-core** (#153): un núcleo a lo gráfico para un rendimiento equilibrado.
