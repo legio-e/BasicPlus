@@ -7,6 +7,7 @@ idf_component_register(
         "main.c"
         "p4_mods.c"
         "wire_v1_tcp.c"                       # VM.3: capa de I/O del wire v1 sobre TCP (sockets lwIP)
+        "p4_board_id.c"                       # VM.3 pulido: identidad de placa esp32p4 (override fuerte de repl_board_id)
         "../../esp32/main/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
         "../../esp32/main/json_min.c"         # VM.3: parser JSON del wire (C portable)
         "../../esp32/main/platform_esp32.c"

@@ -43,6 +43,28 @@ static char    s_reply_buf[2048];
 #define V1_PUT_BUF_SIZE  (16 * 1024)
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
 
+/* Identidad de placa para INFO/HELLO. Por defecto = ESP32-S3; una placa la
+ * cambia con repl_set_board_id() (p.ej. el P4 desde p4_board_id.c).
+ *
+ * NB: NO usamos weak/strong. En ESP-IDF cada componente es un .a y el linker
+ * solo tira del .o del override si algo referencia su símbolo; con la def débil
+ * ya satisfecha, el .o "fuerte" no se enlazaba y el override se ignoraba (salía
+ * esp32s3 en el P4). El setter explícito lo evita: main referencia la función
+ * de install -> el .o se enlaza, y la llamada fija el puntero. */
+static const repl_board_id_t s_default_board = {
+    "esp32s3",        /* board_name   */
+    "bpvm-esp32",     /* server_name  */
+    240000000L,       /* cpu_freq_hz  */
+    45,               /* gpio_count   */
+    0,                /* pio_count    */
+    8,                /* pwm_slices   */
+    20,               /* adc_channels */
+    512L * 1024L,     /* sram_bytes   */
+};
+static const repl_board_id_t *s_board_id = &s_default_board;
+
+void repl_set_board_id(const repl_board_id_t *id) { if (id) s_board_id = id; }
+
 /* ---- fs_status_t → (code, message) v1 ---- */
 static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
     switch (s) {
@@ -67,7 +89,7 @@ static void handle_hello(long id, const json_obj_t* obj) {
     if (off < 0) goto err;
     off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "protoVersion", 1);
     if (off < 0) goto err;
-    off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "serverName", "bpvm-esp32");
+    off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "serverName", s_board_id->server_name);
     if (off < 0) goto err;
     off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "serverBuild", ESP32_BUILD_DATE);
     if (off < 0) goto err;
@@ -108,18 +130,19 @@ static void handle_info(long id, const json_obj_t* obj) {
     uint32_t flash_bytes = 0;
     if (esp_flash_get_size(NULL, &flash_bytes) != ESP_OK) flash_bytes = 0;
     long psram_bytes = (long) heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    const repl_board_id_t *bid = s_board_id;
     int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "INFO_REPLY", id);
-    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "boardName", "esp32s3");
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "boardName", bid->board_name);
     if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "uniqueId", uid);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "cpuFreqHz", 240000000L);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "cpuFreqHz", bid->cpu_freq_hz);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "uptimeMs", uptime);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "tempMilliC", 0);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "gpioCount", 45);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "pioCount", 0);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "pwmSlices", 8);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "adcChannels", 20);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "gpioCount", bid->gpio_count);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "pioCount", bid->pio_count);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "pwmSlices", bid->pwm_slices);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "adcChannels", bid->adc_channels);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "flashBytes", (long) flash_bytes);
-    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "sramBytes", 512L * 1024L);
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "sramBytes", bid->sram_bytes);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "psramBytes", psram_bytes);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fsTotalBytes", fsTotal);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fsUsedBytes", fsUsed);

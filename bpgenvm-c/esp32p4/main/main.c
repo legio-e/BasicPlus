@@ -34,6 +34,7 @@
 #include "p4_mods.h"          /* stdlib embebida (Core fresco) -> /lib */
 #include "repl_esp32.h"       /* dispatcher wire v1 REUTILIZADO (agnóstico transporte) */
 #include "wire_v1_tcp.h"      /* servidor del wire sobre TCP (capa de I/O del P4) */
+#include "p4_board_id.h"      /* identidad de placa esp32p4 para INFO/HELLO */
 
 static const char *TAG = "bpvm_p4";
 
@@ -165,6 +166,7 @@ static void wire_task(void *arg)
     net_logf("[p4] FS+stdlib listos: %s, %d ficheros, %u B libres",
              fs_status_str(r), fs_file_count(), (unsigned) fs_free_bytes());
 
+    p4_install_board_id();       /* INFO/HELLO reportan esp32p4 (no el default S3) */
     wire_v1_tcp_server_init(WIRE_PORT);
     net_logf("[p4] VM.3: esperando al IDE en *:%d (backend 'VM (TCP v1)' -> 192.168.2.2:%d)",
              WIRE_PORT, WIRE_PORT);

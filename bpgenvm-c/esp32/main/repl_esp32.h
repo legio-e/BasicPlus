@@ -25,6 +25,24 @@ void repl_esp32_run(void);
  * Llamar UNA vez, tras wire_v1_uart_init() y antes de repl_esp32_run. */
 void repl_esp32_autorun(void);
 
+/* Identidad de la placa para INFO/HELLO (solo informativo del wire). Por
+ * defecto = ESP32-S3; una placa instala la suya con repl_set_board_id() ANTES
+ * de arrancar el REPL (p.ej. el ESP32-P4 en p4_board_id.c). No tocar el default
+ * = el binario del S3 no cambia. */
+typedef struct {
+    const char *board_name;    /* INFO.boardName    */
+    const char *server_name;   /* HELLO.serverName  */
+    long cpu_freq_hz;
+    long gpio_count;
+    long pio_count;
+    long pwm_slices;
+    long adc_channels;
+    long sram_bytes;
+} repl_board_id_t;
+
+/* Fija la identidad reportada por INFO/HELLO. Idempotente; id NULL se ignora. */
+void repl_set_board_id(const repl_board_id_t *id);
+
 #ifdef __cplusplus
 }
 #endif
