@@ -119,7 +119,7 @@ static void got_ip_handler(void *arg, esp_event_base_t base,
 /* ---- Ejecuta el Hello.mod embebido en la VM-C, salida → TCP+consola ---- */
 static void run_vm_hello(void)
 {
-    net_logf("[p4] === VM-C bring-up VM.1: Hello.mod embebido (%u bytes) ===",
+    net_logf("[p4] === VM.2a: modulo de prueba embebido (%u bytes) ===",
              hello_mod_len);
 
     bpvm_t *vm = bpvm_init(s_vm_mem, VM_MEM_SIZE, 0);
@@ -128,7 +128,7 @@ static void run_vm_hello(void)
 
     bpvm_set_output(vm, vm_out_cb, NULL);
 
-    bpvm_status_t st = bpvm_load_mod_buffer(vm, hello_mod, hello_mod_len, "HelloP4");
+    bpvm_status_t st = bpvm_load_mod_buffer(vm, hello_mod, hello_mod_len, "StressP4");
     net_logf("[p4] load_mod_buffer -> %s", bpvm_status_str(st));
 
     if (st == BPVM_OK) {

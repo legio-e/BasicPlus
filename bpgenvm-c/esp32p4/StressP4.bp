@@ -1,0 +1,48 @@
+// StressP4.bp — VM.2a: estresa el INTÉRPRETE en RISC-V sin tocar FS ni comms.
+// Autocontenido (sin imports → carga de un solo buffer). Ejercita:
+//   recursión, arrays int[] (alloc + index), aritmética entera, float (FPU),
+//   concatenación de strings (heap). La salida sale por el log TCP.
+// El host (miVM) da el "golden" para comparar byte a byte con el P4.
+module StressP4
+
+  function fact(n: integer): integer
+    if n <= 1 then
+      return 1
+    endif
+    return n * fact(n - 1)
+  end fact
+
+  function Main()
+    print "== StressP4: intérprete en RISC-V =="
+
+    // recursión
+    print "fact(6) =", fact(6)                 // 720
+
+    // array int[] (alloc + store + load)
+    var a: integer[] := newIntArray(8)
+    var i: integer := 0
+    while i < 8 do
+      a[i] := i * i
+      i := i + 1
+    endwh
+    var sum: integer := 0
+    i := 0
+    while i < 8 do
+      sum := sum + a[i]
+      i := i + 1
+    endwh
+    print "suma de cuadrados 0..7 =", sum       // 140
+
+    // float (FPU)
+    var f: float := 3.5
+    var g: float := f * 2.0 + 1.0               // 8.0
+    print "float 3.5*2+1 =", g
+
+    // strings (heap + concat)
+    var msg: string := "Basic" + "Plus" + " en " + "RISC-V"
+    print "concat:", msg
+
+    print "== fin StressP4 =="
+  end Main
+
+end StressP4
