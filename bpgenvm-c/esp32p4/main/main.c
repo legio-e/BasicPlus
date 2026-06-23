@@ -27,6 +27,7 @@
 #include "lwip/inet.h"
 
 #include "bpvm.h"            /* núcleo de la VM-C (C99 portable) */
+#include "fs.h"              /* FS-RAM (VM.2b, reutilizado del S3) */
 
 static const char *TAG = "bpvm_p4";
 
@@ -116,6 +117,39 @@ static void got_ip_handler(void *arg, esp_event_base_t base,
     ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&e->ip_info.ip));
 }
 
+/* ---- VM.2b.1: autotest del FS (RAM), aislado — init/put/get/list por log ---- */
+static int fs_list_log_cb(const char *name, uint32_t size, void *user)
+{
+    (void) user;
+    net_logf("[p4]   FS file: %s (%u bytes)", name, (unsigned) size);
+    return 0;
+}
+
+static void fs_selftest(void)
+{
+    net_logf("[p4] === VM.2b.1: FS self-test (RAM) ===");
+    fs_status_t r = fs_init();
+    net_logf("[p4] fs_init -> %s (files=%d, libre=%u B)",
+             fs_status_str(r), fs_file_count(), (unsigned) fs_free_bytes());
+
+    const char *txt = "Hola FS en RISC-V";
+    r = fs_put("/test.txt", (const uint8_t *) txt, (uint32_t) strlen(txt));
+    net_logf("[p4] fs_put /test.txt (%u B) -> %s",
+             (unsigned) strlen(txt), fs_status_str(r));
+
+    const uint8_t *d = NULL; uint32_t sz = 0;
+    r = fs_get("/test.txt", &d, &sz);
+    if (r == FS_OK && d)
+        net_logf("[p4] fs_get /test.txt -> %u B: '%.*s'",
+                 (unsigned) sz, (int) sz, (const char *) d);
+    else
+        net_logf("[p4] fs_get -> %s", fs_status_str(r));
+
+    net_logf("[p4] fs_list (%d ficheros):", fs_file_count());
+    fs_list(fs_list_log_cb, NULL);
+    net_logf("[p4] === FS self-test fin ===");
+}
+
 /* ---- Ejecuta el Hello.mod embebido en la VM-C, salida → TCP+consola ---- */
 static void run_vm_hello(void)
 {
@@ -157,7 +191,8 @@ static void tcp_log_task(void *arg)
             s_sock = sock;
             net_logf("[p4] TCP conectado a %s:%d", SERVER_IP, SERVER_PORT);
 
-            run_vm_hello();          /* <-- el hito: ejecutar la VM-C */
+            fs_selftest();           /* VM.2b.1: FS en RISC-V (RAM), aislado */
+            run_vm_hello();          /* <-- ejecutar la VM-C */
 
             /* heartbeats para confirmar que el firmware sigue vivo tras la VM */
             int n = 0;

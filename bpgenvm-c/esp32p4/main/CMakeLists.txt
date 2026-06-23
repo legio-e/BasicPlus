@@ -7,6 +7,7 @@ idf_component_register(
         "main.c"
         "hello_mod.c"
         "../../esp32/main/platform_esp32.c"
+        "../../esp32/main/fs_ram.c"          # VM.2b: FS en RAM (reutilizado del S3)
         # --- núcleo VM (portable C99) ---
         "../../src/bpvm.c"
         "../../src/loader.c"
@@ -40,10 +41,12 @@ idf_component_register(
         "."
         "../../include"
         "../../src"
+        "../../esp32/main"
     REQUIRES
         esp_eth
         esp_netif
         esp_event
         esp_timer
         lwip
+        esp_partition
 )
