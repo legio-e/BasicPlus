@@ -1,13 +1,17 @@
 /*
- * BasicPlus — ESP32-P4: port de la VM-C (hito VM.1).
+ * BasicPlus — ESP32-P4: VM.3 — "Run on P4" desde el IDE (wire v1 sobre TCP).
  *
- * Sobre el bring-up de red ya verificado (Ethernet IP101 + IP estática
- * 192.168.2.2 + cliente TCP a 192.168.2.1:5555), AHORA arrancamos el
- * núcleo de la VM-C y ejecutamos un Hello.mod EMBEBIDO. La salida de la
- * VM (y los checkpoints del arranque) salen por DOS canales:
- *   - TCP  → pc_logserver.py en el PC (canal de log que pidió Eduardo).
- *   - consola USB-Serial-JTAG → idf.py monitor.
- * Instrumentado a tope: si algo peta, lo vemos en vivo por el log.
+ * Sobre el bring-up de red (Ethernet IP101 + IP estática 192.168.2.2) y la
+ * VM-C ya verificada en RISC-V (VM.1/VM.2), el P4 pasa de ejecutar un módulo
+ * EMBEBIDO a ser un TARGET de desarrollo: levanta un SERVIDOR del wire BPVM v1
+ * sobre TCP y el IDE (backend "VM (TCP v1)") sube/ejecuta apps arbitrarias.
+ *
+ * Dos canales TCP, independientes:
+ *   - P4 -> PC 192.168.2.1:5555  (cliente)  = log de bring-up (net_logf), para
+ *     ver el lado servidor con pc_logserver.py por si hay líos de comms.
+ *   - IDE -> P4 *:3333           (servidor) = wire v1 (HELLO/PUT/RUN/KILL...).
+ *     El dispatcher es repl_esp32.c REUTILIZADO TAL CUAL (agnóstico del
+ *     transporte); el I/O de bytes va por wire_v1_tcp.c (sockets lwIP).
  *
  * Compila/flashea Eduardo (idf.py). sdkconfig.defaults trae el fix de
  * revisión de silicon v1.0.
@@ -26,32 +30,32 @@
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
 
-#include "bpvm.h"            /* núcleo de la VM-C (C99 portable) */
-#include "fs.h"              /* FS-RAM (VM.2b, reutilizado del S3) */
-#include "p4_mods.h"         /* stdlib embebida (Core fresco) -> /lib */
-#include "bpvm_internal.h"   /* vm->modules/imports para resolver deps del FS */
+#include "fs.h"               /* FS-RAM (VM.2b) + fs_register_bpvm (#247) */
+#include "p4_mods.h"          /* stdlib embebida (Core fresco) -> /lib */
+#include "repl_esp32.h"       /* dispatcher wire v1 REUTILIZADO (agnóstico transporte) */
+#include "wire_v1_tcp.h"      /* servidor del wire sobre TCP (capa de I/O del P4) */
 
 static const char *TAG = "bpvm_p4";
 
 #define SERVER_IP    "192.168.2.1"
-#define SERVER_PORT  5555
+#define SERVER_PORT  5555           /* log de bring-up (P4 cliente -> PC) */
+#define WIRE_PORT    3333           /* wire v1 (IDE cliente -> P4 servidor) */
 #define LINK_UP_BIT  BIT0
 
-/* Hello.mod embebido (hello_mod.c, autogenerado). */
-extern const uint8_t       hello_mod[];
-extern const unsigned int  hello_mod_len;
-
-/* Memoria de la VM (caller-provided). 128 KiB en RAM interna — de sobra
- * para el Hello; los programas grandes irán a PSRAM más adelante. */
+/* Memoria de la VM (caller-provided). repl_esp32.c la referencia como extern
+ * (misma convención que el S3): NO static. 128 KiB en RAM interna — los
+ * programas grandes irán a PSRAM más adelante. */
 #define VM_MEM_SIZE  (128 * 1024)
-static uint8_t s_vm_mem[VM_MEM_SIZE];
+uint8_t        s_vm_buffer[VM_MEM_SIZE];
+const uint32_t s_vm_buffer_size = VM_MEM_SIZE;
 
 static EventGroupHandle_t s_events;
-static int s_sock = -1;     /* socket conectado (lo usa el output de la VM) */
+static int s_sock = -1;     /* socket del canal de log (lo usa net_logf) */
 
-/* Log instrumentado: a consola (idf.py monitor) Y al socket TCP. El caller
- * NO pone '\n' final; lo añade esta función para el lado TCP. */
-static void net_logf(const char *fmt, ...)
+/* Log instrumentado: a consola (idf.py monitor) Y al socket TCP de log. El
+ * caller NO pone '\n' final; lo añade esta función para el lado TCP. NO static:
+ * wire_v1_tcp.c lo usa por extern para trazar accept/disconnect/errores. */
+void net_logf(const char *fmt, ...)
 {
     char buf[200];
     va_list ap;
@@ -65,16 +69,7 @@ static void net_logf(const char *fmt, ...)
     if (s_sock >= 0) send(s_sock, buf, n, 0);
 }
 
-/* Callback de salida de la VM (OPs de print) → consola + TCP, crudo. */
-static void vm_out_cb(const char *s, size_t len, void *user)
-{
-    (void) user;
-    if (len == 0) return;
-    printf("%.*s", (int) len, s);
-    if (s_sock >= 0) send(s_sock, s, len, 0);
-}
-
-/* ---- Ethernet (misma init verificada: IP101 / RMII, pines EV board) ---- */
+/* ---- Ethernet (init verificada en bring-up: IP101 / RMII, pines EV board) ---- */
 static esp_err_t eth_init(esp_eth_handle_t *out)
 {
     eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
@@ -97,6 +92,7 @@ static esp_err_t eth_init(esp_eth_handle_t *out)
 static void eth_event_handler(void *arg, esp_event_base_t base,
                               int32_t id, void *data)
 {
+    (void) arg; (void) base; (void) data;
     switch (id) {
     case ETHERNET_EVENT_CONNECTED:
         ESP_LOGI(TAG, "Ethernet Link Up");
@@ -115,123 +111,17 @@ static void eth_event_handler(void *arg, esp_event_base_t base,
 static void got_ip_handler(void *arg, esp_event_base_t base,
                            int32_t id, void *data)
 {
+    (void) arg; (void) base; (void) id;
     ip_event_got_ip_t *e = (ip_event_got_ip_t *) data;
     ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&e->ip_info.ip));
 }
 
-/* ---- VM.2b.1: autotest del FS (RAM), aislado — init/put/get/list por log ---- */
-static int fs_list_log_cb(const char *name, uint32_t size, void *user)
-{
-    (void) user;
-    net_logf("[p4]   FS file: %s (%u bytes)", name, (unsigned) size);
-    return 0;
-}
-
-static void fs_selftest(void)
-{
-    net_logf("[p4] === VM.2b.1: FS self-test (RAM) ===");
-    fs_status_t r = fs_init();
-    net_logf("[p4] fs_init -> %s (files=%d, libre=%u B)",
-             fs_status_str(r), fs_file_count(), (unsigned) fs_free_bytes());
-
-    const char *txt = "Hola FS en RISC-V";
-    r = fs_put("/test.txt", (const uint8_t *) txt, (uint32_t) strlen(txt));
-    net_logf("[p4] fs_put /test.txt (%u B) -> %s",
-             (unsigned) strlen(txt), fs_status_str(r));
-
-    const uint8_t *d = NULL; uint32_t sz = 0;
-    r = fs_get("/test.txt", &d, &sz);
-    if (r == FS_OK && d)
-        net_logf("[p4] fs_get /test.txt -> %u B: '%.*s'",
-                 (unsigned) sz, (int) sz, (const char *) d);
-    else
-        net_logf("[p4] fs_get -> %s", fs_status_str(r));
-
-    net_logf("[p4] fs_list (%d ficheros):", fs_file_count());
-    fs_list(fs_list_log_cb, NULL);
-    net_logf("[p4] === FS self-test fin ===");
-}
-
-/* ---- VM.2b.3: resuelve imports de los módulos cargados desde /lib (bucle de
-   punto fijo, réplica de repl_esp32/Pico) ---- */
-static fs_status_t res_get(const char *name, const uint8_t **d, uint32_t *sz)
-{
-    fs_status_t s = fs_get(name, d, sz);
-    if (s == FS_OK) return s;
-    char p[FS_NAME_LEN];
-    snprintf(p, sizeof(p), "/lib/%s", name);
-    return fs_get(p, d, sz);
-}
-
-static int resolve_imports(bpvm_t *vm)
-{
-    for (int pass = 0; pass < 6; pass++) {
-        int loaded_any = 0;
-        int n_before = vm->module_count;
-        for (int mi = 0; mi < n_before; mi++) {
-            bpvm_module_t *m = &vm->modules[mi];
-            for (int k = 0; k < m->import_count; k++) {
-                const char *imp = m->imports[k];
-                if (!imp || !imp[0]) continue;
-                char owner[40]; size_t ol = 0;
-                while (imp[ol] && imp[ol] != '.' && ol < sizeof(owner) - 1) { owner[ol] = imp[ol]; ol++; }
-                owner[ol] = '\0';
-                if (!owner[0]) continue;
-                int already = 0;
-                for (int j = 0; j < vm->module_count; j++)
-                    if (strcmp(vm->modules[j].name, owner) == 0) { already = 1; break; }
-                if (already) continue;
-                char fname[48];
-                snprintf(fname, sizeof(fname), "%s.mod", owner);
-                const uint8_t *dep; uint32_t dep_sz;
-                if (res_get(fname, &dep, &dep_sz) != FS_OK) {
-                    net_logf("[p4] import '%s' NO resuelto (%s)", owner, fname);
-                    continue;
-                }
-                bpvm_status_t ds = bpvm_load_mod_buffer(vm, dep, dep_sz, owner);
-                net_logf("[p4] import '%s' -> %s (%u B)", owner, bpvm_status_str(ds), (unsigned) dep_sz);
-                if (ds != BPVM_OK) return -1;
-                loaded_any = 1;
-            }
-        }
-        if (!loaded_any) break;
-    }
-    return 0;
-}
-
-/* ---- Carga el módulo embebido (resolviendo imports del FS) y lo ejecuta ---- */
-static void run_vm_hello(void)
-{
-    net_logf("[p4] === VM.2b.3: app OO embebida (%u bytes), imports desde /lib ===",
-             hello_mod_len);
-
-    bpvm_t *vm = bpvm_init(s_vm_mem, VM_MEM_SIZE, 0);
-    if (!vm) { net_logf("[p4] ERROR bpvm_init (mem=%d)", VM_MEM_SIZE); return; }
-    net_logf("[p4] bpvm_init OK (mem=%d KiB)", VM_MEM_SIZE / 1024);
-
-    bpvm_set_output(vm, vm_out_cb, NULL);
-
-    bpvm_status_t st = bpvm_load_mod_buffer(vm, hello_mod, hello_mod_len, "OOTestP4");
-    net_logf("[p4] load_mod_buffer -> %s", bpvm_status_str(st));
-    if (st != BPVM_OK) { bpvm_destroy(vm); return; }
-
-    net_logf("[p4] resolviendo imports desde /lib...");
-    if (resolve_imports(vm) != 0) {
-        net_logf("[p4] ERROR resolviendo imports");
-        bpvm_destroy(vm);
-        return;
-    }
-
-    net_logf("[p4] --- salida de la VM ---");
-    st = bpvm_run(vm);
-    net_logf("[p4] --- fin VM, status=%s ---", bpvm_status_str(st));
-
-    bpvm_destroy(vm);
-    net_logf("[p4] === VM destruida (VM.2b.3 OK si has leido el OO) ===");
-}
-
+/* ---- Canal de log de bring-up: P4 cliente -> pc_logserver.py:5555 ----
+ * Solo diagnóstico (el wire lleva la salida de los programas al IDE). Si el PC
+ * no escucha, reintenta; el firmware funciona igual sin él. */
 static void tcp_log_task(void *arg)
 {
+    (void) arg;
     xEventGroupWaitBits(s_events, LINK_UP_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
     vTaskDelay(pdMS_TO_TICKS(500));
 
@@ -243,31 +133,46 @@ static void tcp_log_task(void *arg)
         dest.sin_port = htons(SERVER_PORT);
         dest.sin_addr.s_addr = inet_addr(SERVER_IP);
 
-        if (connect(sock, (struct sockaddr *)&dest, sizeof(dest)) == 0) {
+        if (connect(sock, (struct sockaddr *) &dest, sizeof(dest)) == 0) {
             s_sock = sock;
-            net_logf("[p4] TCP conectado a %s:%d", SERVER_IP, SERVER_PORT);
-
-            fs_selftest();           /* VM.2b.1: FS en RISC-V (RAM), aislado */
-            net_logf("[p4] === VM.2b.2: instalar stdlib en /lib ===");
-            esp32p4_mods_install();
-            net_logf("[p4] FS tras instalar (%d ficheros):", fs_file_count());
-            fs_list(fs_list_log_cb, NULL);
-            run_vm_hello();          /* <-- ejecutar la VM-C */
-
-            /* heartbeats para confirmar que el firmware sigue vivo tras la VM */
+            net_logf("[p4] canal de log conectado a %s:%d (bring-up)", SERVER_IP, SERVER_PORT);
             int n = 0;
             while (1) {
                 net_logf("[p4] idle %d uptime=%lld ms", n++,
                          (long long)(esp_timer_get_time() / 1000));
-                vTaskDelay(pdMS_TO_TICKS(3000));
-                int probe = send(sock, "", 0, 0);
-                if (probe < 0) break;
+                vTaskDelay(pdMS_TO_TICKS(5000));
+                if (send(sock, "", 0, 0) < 0) break;   /* detecta caída del log */
             }
             s_sock = -1;
         }
         close(sock);
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
+}
+
+/* ---- Servidor del wire v1: la VM corre AQUÍ (stack holgado). ----
+ * Prepara FS + stdlib (independiente del canal de log), abre el socket de
+ * escucha y entra al bucle del REPL reutilizado. No retorna. */
+static void wire_task(void *arg)
+{
+    (void) arg;
+    xEventGroupWaitBits(s_events, LINK_UP_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
+
+    /* FS + stdlib listos ANTES de aceptar al IDE (no dependen del PC log). */
+    fs_status_t r = fs_init();
+    fs_register_bpvm();          /* #247: file I/O desde BP sobre este FS */
+    esp32p4_mods_install();      /* Core fresco -> /lib (if-absent) */
+    net_logf("[p4] FS+stdlib listos: %s, %d ficheros, %u B libres",
+             fs_status_str(r), fs_file_count(), (unsigned) fs_free_bytes());
+
+    wire_v1_tcp_server_init(WIRE_PORT);
+    net_logf("[p4] VM.3: esperando al IDE en *:%d (backend 'VM (TCP v1)' -> 192.168.2.2:%d)",
+             WIRE_PORT, WIRE_PORT);
+
+    /* /sys/auto.txt si existiera (no en P4 todavía) + bucle del REPL. El
+     * accept/reconnect vive dentro de wire_v1_recv_line (wire_v1_tcp.c). */
+    repl_esp32_autorun();
+    repl_esp32_run();            /* no retorna */
 }
 
 void app_main(void)
@@ -298,8 +203,11 @@ void app_main(void)
                                                &got_ip_handler, NULL));
     ESP_ERROR_CHECK(esp_eth_start(eth_handle));
 
-    /* La VM corre dentro de esta task → stack holgado (16 KiB). */
-    xTaskCreate(tcp_log_task, "tcp_log", 16384, NULL, 5, NULL);
+    /* Canal de log (diagnóstico) — stack pequeño, no corre la VM. */
+    xTaskCreate(tcp_log_task, "tcp_log", 4096, NULL, 5, NULL);
+    /* Servidor del wire — la VM corre dentro: stack holgado (16 KiB). */
+    xTaskCreate(wire_task, "wire_v1", 16384, NULL, 5, NULL);
 
-    ESP_LOGI(TAG, "P4 VM.1: IP 192.168.2.2 -> log/VM por %s:%d", SERVER_IP, SERVER_PORT);
+    ESP_LOGI(TAG, "P4 VM.3: IP 192.168.2.2 | log %s:%d | wire v1 TCP *:%d",
+             SERVER_IP, SERVER_PORT, WIRE_PORT);
 }

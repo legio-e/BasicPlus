@@ -677,6 +677,47 @@ contrato *es* el coste de portar. **ROI:** abstraer ahora ahorra en cada port de
 (merece la pena con 3+ ports y el P4 RISC-V en camino); para un concern de un solo
 port, no. Mover el FS a block-device cambia comportamiento → la **paridad** lo cubre.
 
+### VM.3 — wire v1 sobre TCP en el P4 (diseño 23-jun, charla Eduardo + Claude)
+
+Tras VM.1/VM.2 (la VM-C completa corre en RISC-V), el P4 deja de ejecutar un
+módulo embebido y pasa a **target de desarrollo**: el IDE sube y ejecuta apps
+por red. Es la 2ª zona de riesgo de Eduardo (comms; *"entre FS y comunicaciones
+es donde aparecieron problemas"*) → se hace por sub-pasos.
+
+**El diseño confirma en placa la tesis del "rojo/ámbar" (tabla §6, fila Comms):**
+*el framing del wire v1 es lógica de bytes portable (VERDE); lo único específico
+del transporte son `read_bytes`/`write_bytes` (rojo, mínimo).* La migración lo
+demuestra de forma tajante:
+
+- **`repl_esp32.c` se reutiliza TAL CUAL** (compilado en el build del P4): todo
+  el dispatcher — HELLO/INFO/PUT/GET/LIST/DEL/RUN/KILL, resolución de deps desde
+  /lib, OUTPUT/EXITED, poll de KILL — es agnóstico del transporte. CERO cambios.
+- **Lo único nuevo: `esp32p4/main/wire_v1_tcp.c`** — implementa la misma API
+  `wire_v1.h` (6 funcs de I/O de bytes + builders JSON) sobre **sockets lwIP**.
+  El P4 es **servidor** (el IDE conecta a `192.168.2.2:3333`); el S3/Pico eran
+  esclavos sobre UART/USB-CDC.
+- **Truco clave:** el `accept()`/reconnect vive **dentro de `wire_v1_recv_line`**
+  → el bucle `repl_esp32_run()` (recv_line→dispatch) funciona idéntico, sin
+  enterarse de conexiones/caídas. En el camino "poll" de un RUN no se re-acepta
+  (una caída no cuelga la VM). Builders JSON = copia de `wire_v1.c` (misma
+  política deliberada S3↔Pico: "cada firmware lleva su copia para no acoplar los
+  transportes").
+- **Lado IDE: cero código** para el hito funcional — `BpvmBackend` ("VM (TCP v1)")
+  ya habla wire v1 sobre socket; basta apuntarlo a `192.168.2.2:3333`.
+
+**Compromiso conocido:** al reutilizar `repl_esp32.c` verbatim, INFO/HELLO
+reportan identidad "esp32s3" (cosmético). Se arregla en el **sub-paso de pulido**
+(parametrizar identidad de placa + target "ESP32-P4" dedicado en el IDE), que
+toca el S3 y se re-verifica aparte — NO ahora, para no desestabilizar la placa
+que funciona. *Backlog de de-dup:* extraer un `wire_dispatch` compartido por
+firmwares es tentador, pero el repo eligió a propósito duplicar por placa
+(boards independientes); se deja como limpieza post-V3.
+
+**Sub-pasos (verificación escalonada sobre UN flasheo):** 3a META (HELLO/INFO —
+prueba socket+framing+reconnect) → 3b FILES (PUT/GET sube un .mod) → 3c TERMINAL
+(RUN/OUTPUT/EXITED/KILL = "Run on P4"). El código es una pieza (dispatcher
+probado); se valida en ese orden porque HELLO ya ejercita todo el I/O nuevo.
+
 ## Infraestructura que el GUI arrastra (movida desde V2)
 
 - **Dual-core** (#153): un núcleo a lo gráfico para un rendimiento equilibrado.

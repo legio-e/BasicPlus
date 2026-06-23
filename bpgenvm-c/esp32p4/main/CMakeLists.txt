@@ -5,8 +5,10 @@
 idf_component_register(
     SRCS
         "main.c"
-        "hello_mod.c"
         "p4_mods.c"
+        "wire_v1_tcp.c"                       # VM.3: capa de I/O del wire v1 sobre TCP (sockets lwIP)
+        "../../esp32/main/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
+        "../../esp32/main/json_min.c"         # VM.3: parser JSON del wire (C portable)
         "../../esp32/main/platform_esp32.c"
         "../../esp32/main/fs_ram.c"          # VM.2b: FS en RAM (reutilizado del S3)
         # --- núcleo VM (portable C99) ---
@@ -50,4 +52,6 @@ idf_component_register(
         esp_timer
         lwip
         esp_partition
+        spi_flash        # INFO (repl_esp32): esp_flash_get_size (flash real montada)
+        esp_hw_support   # INFO (repl_esp32): esp_mac.h (uniqueId desde efuse)
 )
