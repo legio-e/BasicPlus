@@ -114,3 +114,12 @@ bpgenvm-c/stm32/**/*.dbg
 # Logs de samples (LogTest, etc.)
 samples/*.log
 samples/*.log.old
+
+# ============================================================
+# Scratch de bring-up gráfico del ESP32-P4 (ejemplos IDF/BSP +
+# sus managed_components/ y build/ = miles de ficheros descargados).
+# 100% regenerable, NO va al repo. El firmware REAL es bpgenvm-c/esp32p4/.
+# ============================================================
+bpgenvm-c/esp32p4_mipi_dsi/
+bpgenvm-c/esp32p4_bsp_button/
+bpgenvm-c/esp32p4_lvgl_test/
