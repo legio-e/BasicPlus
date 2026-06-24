@@ -58,6 +58,14 @@ public final class BpBuild {
     /** Path absoluto al .bpbuild de origen (informativo). */
     public String sourcePath;
 
+    /** AOT (H12): si true, al subir al device el IDE compila las funciones
+     *  `function native` del proyecto a un `.mdn` nativo y lo sube junto al
+     *  `.mod`. Si false (default), todo se interpreta — el .mod es suficiente. */
+    public boolean aotEnabled = false;
+    /** Target de la compilación AOT. "arm" = Cortex-M33 (RP2350 + STM32: mismo
+     *  .mdn PIC para ambos). Futuro (V4): "esp32" (Xtensa / RISC-V). */
+    public String aotTarget = "arm";
+
     /**
      * Carga y valida un .bpbuild desde disco. Lanza IOException si:
      *   - el JSON está malformado;
@@ -129,6 +137,19 @@ public final class BpBuild {
                 // cada entry al resolver imports y la descarta si no aplica.
                 b.dependencies.add(resolved.toString());
             }
+        }
+
+        // aot: opcional, objeto { "enabled": bool, "target": string }
+        Object aotVal = map.get("aot");
+        if (aotVal != null) {
+            if (!(aotVal instanceof Map))
+                throw new IOException(file + ": 'aot' debe ser un objeto JSON {}");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> aot = (Map<String, Object>) aotVal;
+            Object en = aot.get("enabled");
+            if (en instanceof Boolean) b.aotEnabled = (Boolean) en;
+            Object tg = aot.get("target");
+            if (tg instanceof String && !((String) tg).isEmpty()) b.aotTarget = ((String) tg).trim();
         }
         return b;
     }

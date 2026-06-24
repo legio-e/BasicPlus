@@ -46,6 +46,16 @@ public final class IdePrefs {
      *  .mod compilados vs los .bp fuente. */
     public String lastUploadDir;
 
+    /** AOT (H12) — ruta del compilador ARM (arm-none-eabi-gcc) en ESTA máquina.
+     *  Null/empty = autodetect (PATH + ubicación estándar del instalador Arm).
+     *  Per-máquina: el toolchain se instala en sitios distintos en cada PC, por
+     *  eso va en prefs y no en el .bpbuild del proyecto (que es portable). */
+    public String aotGccPath;
+    /** AOT (H12) — raíz de bpgenvm-c en ESTA máquina, para los includes que gcc
+     *  necesita al compilar aot_&lt;Mod&gt;.c (-I &lt;dir&gt;/include -I &lt;dir&gt;/src).
+     *  Null/empty = autodetect. */
+    public String aotBpgenvmDir;
+
     /** IDE-3 — Recientes: ficheros .bp abiertos y proyectos .bpbuild abiertos.
      *  Más-reciente-primero, sin duplicados, cap MAX_RECENT. Se persisten como
      *  un string con entradas separadas por '\n' (los paths no llevan newline). */
@@ -122,9 +132,13 @@ public final class IdePrefs {
             p.vmPort  = (int) Json.getLong(m, "vmPort", 0);
             p.lastDir = Json.getString(m, "lastDir", null);
             p.lastUploadDir = Json.getString(m, "lastUploadDir", null);
+            p.aotGccPath = Json.getString(m, "aotGccPath", null);
+            p.aotBpgenvmDir = Json.getString(m, "aotBpgenvmDir", null);
             if (p.vmHost  != null && p.vmHost.isEmpty())  p.vmHost  = null;
             if (p.lastDir != null && p.lastDir.isEmpty()) p.lastDir = null;
             if (p.lastUploadDir != null && p.lastUploadDir.isEmpty()) p.lastUploadDir = null;
+            if (p.aotGccPath != null && p.aotGccPath.isEmpty()) p.aotGccPath = null;
+            if (p.aotBpgenvmDir != null && p.aotBpgenvmDir.isEmpty()) p.aotBpgenvmDir = null;
             p.recentFiles    = splitRecent(Json.getString(m, "recentFiles", null));
             p.recentProjects = splitRecent(Json.getString(m, "recentProjects", null));
         } catch (Throwable t) {
@@ -142,6 +156,8 @@ public final class IdePrefs {
         m.put("vmPort",  (long) vmPort);
         m.put("lastDir", lastDir == null ? "" : lastDir);
         m.put("lastUploadDir", lastUploadDir == null ? "" : lastUploadDir);
+        m.put("aotGccPath", aotGccPath == null ? "" : aotGccPath);
+        m.put("aotBpgenvmDir", aotBpgenvmDir == null ? "" : aotBpgenvmDir);
         m.put("recentFiles",    String.join("\n", recentFiles));
         m.put("recentProjects", String.join("\n", recentProjects));
         StringBuilder sb = new StringBuilder();

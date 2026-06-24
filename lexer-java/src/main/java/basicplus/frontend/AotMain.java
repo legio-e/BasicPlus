@@ -47,84 +47,96 @@ public final class AotMain {
         Path src = Paths.get(positional.get(0));
         Path outDir = (positional.size() >= 2) ? Paths.get(positional.get(1)) : Paths.get(".");
         try {
-            String source = new String(Files.readAllBytes(src), StandardCharsets.UTF_8);
-
-            // 1. Lex
-            Lexer lex = new Lexer(source);
-            List<Token> tokens = lex.tokenize();
-
-            // 2. Parse
-            Parser parser = new Parser(tokens);
-            Ast.ModuleNode module = parser.parseModule();
-            if (!parser.getErrors().isEmpty()) {
-                System.err.println("Errores de parseo:");
-                for (ParserError e : parser.getErrors()) {
-                    System.err.println("  " + e);
-                }
-                System.exit(1);
-            }
-            if (module == null) {
-                System.err.println("parseModule devolvió null");
-                System.exit(1);
-            }
-
-            // 2.5 Análisis semántico (#173): el emisor necesita
-            //     info.exprTypes para saber el tipo de cada expresión y
-            //     distinguir ops de string (concat `+`, `==`) de las
-            //     numéricas. No abortamos por errores semánticos — AotMain
-            //     solo emite; los exprTypes de las expresiones locales del
-            //     cuerpo native se rellenan igualmente.
-            SemanticAnalyzer analyzer = new SemanticAnalyzer();
-            // #212 — resolver imports: cargar las .bpi de los módulos importados en
-            // el analizador, igual que Main.compileFull. Sin esto AotMain analizaba
-            // en aislamiento y una llamada `Mod.func()` desde native no resolvía a
-            // símbolo external → AotCEmitter la rechazaba ("AOT no soportado"). Con
-            // el import resuelto, el emisor la enruta por el puente call_bp
-            // (emitCrossModuleBridgeCall, #169). Las .bpi de las deps deben existir
-            // (ya compiladas); las que falten se avisan y se omiten.
-            try {
-                Main.Ctx ctx = new Main.Ctx();
-                ctx.outDir = outDir;
-                Main.loadImportsForAnalyzer(module, src, ctx, analyzer, 0);
-            } catch (Exception impEx) {
-                System.err.println("aviso: imports no resueltos del todo: " + impEx.getMessage());
-            }
-            SemanticInfo info = analyzer.analyze(module);
-
-            // 3. Emit AOT
-            AotCEmitter emitter = new AotCEmitter(module.name);
-            emitter.setSemanticInfo(info);
-            emitter.setOmitRegisterFunc(mdnMode);
-            String csrc;
-            try {
-                csrc = emitter.emitModule(module);
-            } catch (AotCEmitter.UnsupportedAotException ex) {
-                System.err.println("AOT no soportado para " + module.name + ":");
-                System.err.println("  " + ex.getMessage());
-                System.exit(3);
-                return;
-            }
-
+            AotResult r = emitAotC(src, outDir, mdnMode);
             // #211 — avisos no fatales (llamadas native→BP que pierden AOT).
-            for (String wmsg : emitter.getWarnings()) {
+            for (String wmsg : r.warnings) {
                 System.out.println("-- aviso AOT: " + wmsg);
             }
-
-            if (csrc.isEmpty()) {
-                System.out.println("(módulo " + module.name + " no tiene funciones `native` — sin emisión)");
+            if (r.cFile == null) {
+                System.out.println("(módulo " + r.moduleName + " no tiene funciones `native` — sin emisión)");
                 return;
             }
-
-            // 4. Escribir
-            Files.createDirectories(outDir);
-            Path outFile = outDir.resolve("aot_" + module.name + ".c");
-            Files.write(outFile, csrc.getBytes(StandardCharsets.UTF_8));
-            System.out.println("emitido: " + outFile);
-            System.out.println(csrc.length() + " bytes, "
-                + csrc.split("\n").length + " líneas");
+            System.out.println("emitido: " + r.cFile);
+        } catch (AotCEmitter.UnsupportedAotException ex) {
+            System.err.println("AOT no soportado: " + ex.getMessage());
+            System.exit(3);
+        } catch (ParseFailedException ex) {
+            System.err.println(ex.getMessage());
+            System.exit(1);
         } catch (IOException e) {
             System.err.println("Error de E/S: " + e.getMessage());
             System.exit(1);
         }
+    }
+
+    /** Resultado de la emisión AOT: el `.c` generado (null si el módulo no tiene
+     *  funciones `native`), el nombre del módulo y los avisos no fatales. */
+    public static final class AotResult {
+        public final Path cFile;
+        public final String moduleName;
+        public final List<String> warnings;
+        AotResult(Path cFile, String moduleName, List<String> warnings) {
+            this.cFile = cFile; this.moduleName = moduleName; this.warnings = warnings;
+        }
+    }
+
+    /** El `.bp` no parsea (no debería ocurrir si el `.mod` ya compiló). */
+    public static final class ParseFailedException extends Exception {
+        ParseFailedException(String m) { super(m); }
+    }
+
+    /**
+     * Lexa + parsea + analiza un `.bp` y emite `aot_&lt;Module&gt;.c` en outDir.
+     * REUTILIZABLE desde el CLI (main) y desde el IDE (compilación AOT automática,
+     * H12) — sin System.exit, devuelve/lanza para que el caller decida.
+     *
+     * @return AotResult con cFile=null si el módulo no tiene funciones `native`.
+     * @throws AotCEmitter.UnsupportedAotException si alguna native no es AOT-able.
+     * @throws ParseFailedException               si el `.bp` no parsea.
+     * @throws IOException                        error de lectura/escritura.
+     */
+    public static AotResult emitAotC(Path src, Path outDir, boolean mdnMode)
+            throws IOException, AotCEmitter.UnsupportedAotException, ParseFailedException {
+        String source = new String(Files.readAllBytes(src), StandardCharsets.UTF_8);
+
+        // 1. Lex + 2. Parse.
+        Lexer lex = new Lexer(source);
+        List<Token> tokens = lex.tokenize();
+        Parser parser = new Parser(tokens);
+        Ast.ModuleNode module = parser.parseModule();
+        if (!parser.getErrors().isEmpty() || module == null) {
+            StringBuilder sb = new StringBuilder("Errores de parseo en " + src + ":");
+            for (ParserError e : parser.getErrors()) sb.append("\n  ").append(e);
+            throw new ParseFailedException(sb.toString());
+        }
+
+        // 2.5 Semántico + resolución de imports (igual que Main.compileFull): sin
+        //     esto una llamada `Mod.func()` desde native no resuelve a símbolo
+        //     external y AotCEmitter la rechazaría. Las .bpi de las deps deben
+        //     existir (ya compiladas); las que falten se avisan y se omiten (#212).
+        SemanticAnalyzer analyzer = new SemanticAnalyzer();
+        try {
+            Main.Ctx ctx = new Main.Ctx();
+            ctx.outDir = outDir;
+            Main.loadImportsForAnalyzer(module, src, ctx, analyzer, 0);
+        } catch (Exception impEx) {
+            System.err.println("aviso: imports no resueltos del todo: " + impEx.getMessage());
+        }
+        SemanticInfo info = analyzer.analyze(module);
+
+        // 3. Emit AOT (lanza UnsupportedAotException si alguna native no es AOT-able).
+        AotCEmitter emitter = new AotCEmitter(module.name);
+        emitter.setSemanticInfo(info);
+        emitter.setOmitRegisterFunc(mdnMode);
+        String csrc = emitter.emitModule(module);
+
+        if (csrc.isEmpty()) {
+            return new AotResult(null, module.name, emitter.getWarnings());  // sin funciones native
+        }
+        // 4. Escribir aot_<Module>.c.
+        Files.createDirectories(outDir);
+        Path outFile = outDir.resolve("aot_" + module.name + ".c");
+        Files.write(outFile, csrc.getBytes(StandardCharsets.UTF_8));
+        return new AotResult(outFile, module.name, emitter.getWarnings());
     }
 }

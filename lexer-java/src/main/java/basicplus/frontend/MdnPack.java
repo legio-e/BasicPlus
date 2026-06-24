@@ -47,24 +47,48 @@ public final class MdnPack {
             System.err.println("Uso: MdnPack <input.o> <output.mdn> <ModuleName>");
             System.exit(2);
         }
-        Path inPath  = Paths.get(args[0]);
-        Path outPath = Paths.get(args[1]);
-        String moduleName = args[2];
+        try {
+            PackResult r = pack(Paths.get(args[0]), Paths.get(args[1]), args[2]);
+            System.out.println("emitido: " + args[1]);
+            System.out.println("  code:    " + r.codeBytes + " bytes");
+            System.out.println("  symbols: " + r.symbols);
+        } catch (PackException ex) {
+            System.err.println(ex.getMessage());
+            System.exit(3);
+        }
+    }
+
+    /** Resultado del empaquetado (para logging). */
+    public static final class PackResult {
+        public final int codeBytes;
+        public final int symbols;
+        PackResult(int codeBytes, int symbols) { this.codeBytes = codeBytes; this.symbols = symbols; }
+    }
+
+    /** El `.o` no es empaquetable (sin sección .text o sin thunks del módulo). */
+    public static final class PackException extends Exception {
+        PackException(String m) { super(m); }
+    }
+
+    /**
+     * Empaqueta un `.o` (arm-none-eabi-gcc -fpic) en un `.mdn`. REUTILIZABLE desde
+     * el CLI (main) y desde el IDE (compilación AOT automática, H12) — sin
+     * System.exit; lanza PackException con un mensaje claro en caso de error.
+     */
+    public static PackResult pack(Path inPath, Path outPath, String moduleName)
+            throws IOException, PackException {
         byte[] elf = Files.readAllBytes(inPath);
 
         ElfFile f = ElfFile.parse(elf);
         byte[] code = f.getSectionBytes(".text");
         if (code == null) {
-            System.err.println("ELF sin sección .text — ¿gcc -ffunction-sections?");
-            System.err.println("Disponibles: " + f.sectionNames());
-            System.exit(3);
+            throw new PackException("ELF sin sección .text — ¿gcc -ffunction-sections? "
+                    + "Disponibles: " + f.sectionNames());
         }
 
-        // Símbolos exportados: aquellos cuyo nombre empieza por "thunk_<Module>_".
-        // En Thumb-2 el bit 0 del valor del símbolo indica "modo Thumb"
-        // (no es parte del offset). Lo limpiamos aquí — el loader del
-        // firmware re-añade `| 1u` cuando construye la dirección final
-        // del thunk para llamarlo.
+        // Símbolos exportados: nombre que empieza por "thunk_<Module>_". En Thumb-2
+        // el bit 0 del valor indica "modo Thumb" (no es parte del offset): lo
+        // limpiamos; el loader del firmware re-añade `| 1u` al construir la dirección.
         String prefix = "thunk_" + moduleName + "_";
         int textIdx = f.findSectionIndex(".text");
         List<Symbol> exports = new ArrayList<>();
@@ -75,18 +99,17 @@ public final class MdnPack {
             String funcName = s.name.substring(prefix.length());
             String qualified = moduleName + "." + funcName;
             if (qualified.length() >= MDN_NAME_MAX) {
-                System.err.println("Nombre muy largo: '" + qualified + "'");
-                System.exit(4);
+                throw new PackException("Nombre muy largo: '" + qualified + "'");
             }
             int byteOff = ((int) s.value) & ~1;
             exports.add(new Symbol(qualified, byteOff, s.shndx));
         }
 
         if (exports.isEmpty()) {
-            System.err.println("No se encontraron símbolos thunk_" + moduleName + "_*");
-            System.err.println("Disponibles: ");
-            for (Symbol s : f.symbols()) System.err.println("  " + s.name);
-            System.exit(5);
+            StringBuilder sb = new StringBuilder(
+                    "No se encontraron símbolos thunk_" + moduleName + "_* — disponibles:");
+            for (Symbol s : f.symbols()) sb.append("\n  ").append(s.name);
+            throw new PackException(sb.toString());
         }
 
         // Construir .mdn — header LE + symbol table + code bytes.
@@ -112,14 +135,7 @@ public final class MdnPack {
         out.write(code);
 
         Files.write(outPath, out.toByteArray());
-        System.out.println("emitido: " + outPath);
-        System.out.println("  code:    " + code.length + " bytes");
-        System.out.println("  symbols: " + exports.size());
-        for (Symbol s : exports) {
-            System.out.println("    " + s.name + " @ offset 0x"
-                + Integer.toHexString(s.value));
-        }
-        System.out.println("  total:   " + out.size() + " bytes");
+        return new PackResult(code.length, exports.size());
     }
 
     /* ====================================================

@@ -780,11 +780,13 @@ public class FrmMain extends javax.swing.JFrame
         JMenuItem miClose = new JMenuItem("Close Project");
         JMenuItem miAddRes = new JMenuItem("Add File to Resources...");   // H12 (#260)
         JMenuItem miEndpoint = new JMenuItem("VM Endpoint...");
+        JMenuItem miAot = new JMenuItem("AOT (toolchain)...");      // H12 Bloque B
         miNew.addActionListener(e -> onNewProject());
         miOpen.addActionListener(e -> onOpenProject());
         miClose.addActionListener(e -> onCloseProject());
         miAddRes.addActionListener(e -> onAddFileToResources());
         miEndpoint.addActionListener(e -> onConfigureVmEndpoint());
+        miAot.addActionListener(e -> onConfigureAot());
         menuProject.add(miNew);
         menuProject.add(miOpen);
         recentProjectsMenu = new javax.swing.JMenu("Recent Projects");
@@ -796,6 +798,7 @@ public class FrmMain extends javax.swing.JFrame
         menuProject.add(miClose);
         menuProject.addSeparator();
         menuProject.add(miEndpoint);
+        menuProject.add(miAot);
         // Insertar entre File y Edit. El JMenuBar tiene File, Edit, Run; queremos
         // File, Project, Edit, Run.
         jMenuBar1.add(menuProject, 1);
@@ -886,6 +889,75 @@ public class FrmMain extends javax.swing.JFrame
                 + (prefs.vmHost == null ? "local (spawn)" : prefs.vmHost + ":" + prefs.vmPort) + "\n");
     }
 
+    /** H12 Bloque B — Ajustes del toolchain AOT (per-máquina). El compilador ARM
+     *  (arm-none-eabi-gcc) y la raíz de bpgenvm-c se guardan en IdePrefs; dejarlos
+     *  vacíos = autodetectar. El enable/target de AOT es POR PROYECTO y vive en el
+     *  `.bpbuild` (sección "aot") — aquí sólo se muestra como información. */
+    private void onConfigureAot() {
+        IdePrefs prefs = IdePrefs.load();
+
+        javax.swing.JTextField tfGcc = new javax.swing.JTextField(
+                prefs.aotGccPath != null ? prefs.aotGccPath : "", 30);
+        javax.swing.JTextField tfBpg = new javax.swing.JTextField(
+                prefs.aotBpgenvmDir != null ? prefs.aotBpgenvmDir : "", 30);
+
+        javax.swing.JButton btnDetGcc = new javax.swing.JButton("Detectar");
+        btnDetGcc.addActionListener(e -> tfGcc.setText(AotBuild.autodetectArmGcc()));
+        javax.swing.JButton btnDetBpg = new javax.swing.JButton("Detectar");
+        btnDetBpg.addActionListener(e -> {
+            java.nio.file.Path hint = (currentProject != null && currentProject.outDir != null)
+                    ? java.nio.file.Paths.get(currentProject.outDir) : null;
+            String d = AotBuild.autodetectBpgenvm(hint);
+            tfBpg.setText(d != null ? d : "");
+            if (d == null) appendConsola("[ide] AOT: no encontré bpgenvm-c automáticamente.\n");
+        });
+
+        javax.swing.JPanel panel = new javax.swing.JPanel(new java.awt.GridBagLayout());
+        java.awt.GridBagConstraints c = new java.awt.GridBagConstraints();
+        c.insets = new java.awt.Insets(3, 3, 3, 3);
+        c.anchor = java.awt.GridBagConstraints.WEST;
+
+        String estado;
+        if (currentProject == null) {
+            estado = "(sin proyecto abierto)";
+        } else {
+            estado = (currentProject.aotEnabled ? "ON" : "OFF")
+                    + ", target " + currentProject.aotTarget;
+        }
+        c.gridx = 0; c.gridy = 0; c.gridwidth = 3;
+        panel.add(new javax.swing.JLabel("AOT del proyecto: " + estado
+                + "   (edítalo en el .bpbuild)"), c);
+        c.gridwidth = 1;
+
+        c.gridx = 0; c.gridy = 1; panel.add(new javax.swing.JLabel("arm-none-eabi-gcc:"), c);
+        c.gridx = 1; c.gridy = 1; c.fill = java.awt.GridBagConstraints.HORIZONTAL; c.weightx = 1;
+        panel.add(tfGcc, c); c.fill = java.awt.GridBagConstraints.NONE; c.weightx = 0;
+        c.gridx = 2; c.gridy = 1; panel.add(btnDetGcc, c);
+
+        c.gridx = 0; c.gridy = 2; panel.add(new javax.swing.JLabel("raíz de bpgenvm-c:"), c);
+        c.gridx = 1; c.gridy = 2; c.fill = java.awt.GridBagConstraints.HORIZONTAL; c.weightx = 1;
+        panel.add(tfBpg, c); c.fill = java.awt.GridBagConstraints.NONE; c.weightx = 0;
+        c.gridx = 2; c.gridy = 2; panel.add(btnDetBpg, c);
+
+        c.gridx = 0; c.gridy = 3; c.gridwidth = 3;
+        panel.add(new javax.swing.JLabel(
+                "<html><i>Vacío = autodetectar. Target \"arm\" = Cortex-M33 (RP2350 + STM32).</i></html>"), c);
+
+        int res = javax.swing.JOptionPane.showConfirmDialog(this, panel,
+                "Ajustes AOT (toolchain ARM)", javax.swing.JOptionPane.OK_CANCEL_OPTION,
+                javax.swing.JOptionPane.PLAIN_MESSAGE);
+        if (res != javax.swing.JOptionPane.OK_OPTION) return;
+
+        String gcc = tfGcc.getText().trim();
+        String bpg = tfBpg.getText().trim();
+        prefs.aotGccPath    = gcc.isEmpty() ? null : gcc;
+        prefs.aotBpgenvmDir = bpg.isEmpty() ? null : bpg;
+        prefs.save();
+        appendConsola("[ide] AOT toolchain: gcc="
+                + (prefs.aotGccPath == null ? "(auto)" : prefs.aotGccPath)
+                + ", bpgenvm=" + (prefs.aotBpgenvmDir == null ? "(auto)" : prefs.aotBpgenvmDir) + "\n");
+    }
+
     /** Pregunta al usuario: directorio del proyecto + nombre. Crea estructura:
      *  <projectDir>/<name>.bpbuild + src/<name>.bp + out/. */
     private void onNewProject() {
@@ -942,7 +1014,11 @@ public class FrmMain extends javax.swing.JFrame
             pw.println("  \"sourceDir\":    \"src\",");
             pw.println("  \"outDir\":       \"out\",");
             pw.println("  \"main\":         \"" + name + "\",");
-            pw.println("  \"dependencies\": []");
+            pw.println("  \"dependencies\": [],");
+            pw.println("  // AOT (H12): si enabled=true, al hacer \"Run on Device\" las");
+            pw.println("  // funciones `function native` se compilan a .mdn nativo y se");
+            pw.println("  // suben con el .mod. target \"arm\" = Cortex-M33 (RP2350/STM32).");
+            pw.println("  \"aot\":          { \"enabled\": false, \"target\": \"arm\" }");
             pw.println("}");
         } catch (java.io.IOException ex) {
             javax.swing.JOptionPane.showMessageDialog(this,
@@ -2007,6 +2083,10 @@ public class FrmMain extends javax.swing.JFrame
                     return false;
                 }
                 publish("== compilación OK: " + modPath.getFileName() + " ==\n");
+                // H12 Bloque B — AOT automático: si el proyecto lo pide, compilar
+                // las funciones `native` a .mdn (PicoExplorer las sube alongside
+                // del .mod). En este hilo de fondo: gcc es un subproceso.
+                runAotPass(outDir, this::publish);
                 return true;
             }
             @Override
@@ -2061,6 +2141,32 @@ public class FrmMain extends javax.swing.JFrame
                 }
             }
         }.execute();
+    }
+
+    /**
+     * H12 Bloque B — pase AOT opcional antes de subir al device. Si el proyecto
+     * activo tiene aot.enabled, compila sus funciones `function native` a `.mdn`
+     * (vía {@link AotBuild}); PicoExplorer los sube alongside del `.mod`.
+     *
+     * Se llama desde el hilo de fondo del SwingWorker — gcc es un subproceso, no
+     * debe correr en el EDT. NUNCA aborta el Run: si el toolchain falta o un
+     * native no es AOT-able, avisa por consola y el módulo se ejecuta
+     * interpretado (el `.mod` siempre se generó). Sólo aplica en modo proyecto.
+     */
+    private void runAotPass(Path outDir, java.util.function.Consumer<String> log) {
+        if (currentProject == null || !currentProject.aotEnabled) return;
+        Path sourceDir  = java.nio.file.Paths.get(currentProject.sourceDir);
+        Path projectDir = java.nio.file.Paths.get(currentProject.projectDir);
+        log.accept("== AOT: compilando funciones native (target "
+                + currentProject.aotTarget + ") ==\n");
+        AotBuild.Result r = AotBuild.buildProject(sourceDir, outDir, projectDir,
+                currentProject.aotTarget, IdePrefs.load(), msg -> log.accept(msg + "\n"));
+        if (!r.mdnFiles.isEmpty()) {
+            log.accept("== AOT: " + r.mdnFiles.size()
+                    + " .mdn generado(s) — se suben junto al .mod ==\n");
+        } else if (!r.toolchainMissing) {
+            log.accept("== AOT: sin funciones native que compilar ==\n");
+        }
     }
 
     /**
