@@ -1,0 +1,52 @@
+module Fibo
+
+	// Versión interpretada — siempre disponible.
+	function fibo(n:integer):integer
+		if n <= 1 then
+			return n
+		else
+			return fibo(n-1) + fibo(n-2)
+		endif
+	end fibo
+
+	// Versión AOT — si Fibo.mdn está en el FS del device (lo sube el IDE
+	// alongside del .mod cuando aot.enabled=true), el registry hijack en
+	// OP_CALL salta al thunk Thumb-2 zero-copy en RAM. Si no, cae al
+	// interpretado (degrade grácil).
+	native function fiboNative(n:integer):integer
+		if n <= 1 then
+			return n
+		else
+			return fiboNative(n-1) + fiboNative(n-2)
+		endif
+	end fiboNative
+
+	function Main(arg: string)
+		var ini, fin: float
+		var i, total: integer
+
+		// --- No-Native ---
+		ini := now()
+		i := 0
+		total := 0
+		while i < 5 do
+			total := total + fibo(30)
+			i := i + 1
+		endwh
+		fin := now()
+		print "fibo(30)*5      no-native:", (fin - ini)*0.001, "s  total =", total
+
+		// --- Native ---
+		ini := now()
+		i := 0
+		total := 0
+		while i < 5 do
+			total := total + fiboNative(30)
+			i := i + 1
+		endwh
+		fin := now()
+		print "fiboNative(30)*5    native:", (fin - ini)*0.001, "s  total =", total
+
+	end Main
+
+end Fibo

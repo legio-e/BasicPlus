@@ -1,0 +1,12 @@
+// Proyecto de prueba del AOT automático desde el IDE (H12 Bloque B).
+// Abrir con Project -> Open Project..., conectar la placa (Pico/STM32) y
+// pulsar "Run on Device". Con aot.enabled=true el IDE compila fiboNative
+// a Fibo.mdn (nativo ARM) y lo sube junto al Fibo.mod -> en placa la línea
+// "native" debe ir mucho más rápida que la "no-native".
+{
+  "sourceDir":    "src",
+  "outDir":       "out",
+  "main":         "Fibo",
+  "dependencies": [],
+  "aot":          { "enabled": true, "target": "arm" }
+}
