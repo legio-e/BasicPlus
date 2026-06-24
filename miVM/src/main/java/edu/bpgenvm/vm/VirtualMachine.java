@@ -4912,16 +4912,14 @@ public class VirtualMachine {
      */
     private void invokeHandlerByName(ThreadContext tc, int ownerRef, String name, int sender) {
         if (moduleManager == null) return;
-        if (ownerRef == 0) {
-            throwBpRuntimeError(tc, "Gui.Form: owner nulo al invocar el handler '" + name + "'");
-            return;
-        }
+        if (ownerRef == 0) return;                          // sin ventana → ignorar
         int classPtr = readInt32(ownerRef);                 // header en ref-4; class_ptr en ref+0
         int moduleCs = moduleManager.getCSForDataAddr(classPtr);
         Integer pc = moduleManager.resolveExportInModule(moduleCs, name);
         if (pc == null) {
-            throwBpRuntimeError(tc, "Gui.Form: no existe el handler público '" + name
-                    + "' en el módulo de la ventana");
+            // H13 (decisión de Eduardo): handler no implementado → IGNORAR (sin
+            // excepción). El aviso se da UNA vez al cargar el form (Gui.Window),
+            // no en cada pulsación: ni spam ni tumbar el GUI por un form a medias.
             return;
         }
         int cs = moduleManager.getModuleBaseFromPC(pc);

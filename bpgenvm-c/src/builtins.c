@@ -245,7 +245,9 @@ enum {
     BUILTIN_PICO_SET_MARK   = 202,   /* setMark(code): deja una miga */
     BUILTIN_PICO_MARK_COUNT = 203,   /* markCount(): nº de migas del trail previo */
     BUILTIN_PICO_MARK_AT    = 204,   /* markAt(i): i-ésima (0=origen pegajoso) */
-    BUILTIN_PICO_BOOT_COUNT = 205    /* bootCount(): arranques desde power-on */
+    BUILTIN_PICO_BOOT_COUNT = 205,   /* bootCount(): arranques desde power-on */
+    /* H13 (V3) — Forms: call-by-name del handler (host, name, sender) → void. */
+    BUILTIN_GUI_INVOKE_BY_NAME = 206
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -286,6 +288,36 @@ static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t d
 static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
     uint32_t ref = bpvm_throw_runtime_error(vm, tc, msg);
     return (ref && bpvm_eh_unwind(vm, tc, ref)) ? BPVM_OK : BPVM_ERR_RUNTIME;
+}
+
+/* H13 (V3) — Forms: resuelve una función PÚBLICA por nombre SIMPLE en el módulo
+ * dueño del objeto `host` (su class_ptr vive en el data block de ese módulo).
+ * Espejo de invokeHandlerByName de miVM (getCSForDataAddr + resolveExportInModule).
+ * Devuelve la dirección absoluta o 0 si no existe. */
+static uint32_t bpvm_resolve_handler(bpvm_t* vm, uint32_t host, const char* simple) {
+    if (host == 0) return 0;
+    uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + host);
+    const bpvm_module_t* m = NULL;
+    for (int i = 0; i < vm->module_count; i++) {
+        const bpvm_module_t* mm = &vm->modules[i];
+        if (class_ptr >= mm->data_start && class_ptr < mm->data_start + mm->data_size) {
+            m = mm; break;
+        }
+    }
+    if (m == NULL) return 0;
+    char qual[200];
+    if (m->library[0] != '\0')
+        snprintf(qual, sizeof(qual), "%s.%s.%s", m->library, m->name, simple);
+    else
+        snprintf(qual, sizeof(qual), "%s.%s", m->name, simple);
+    for (int i = 0; i < vm->symbol_count; i++)
+        if (strcmp(vm->symbols[i].name, qual) == 0) return vm->symbols[i].abs_addr;
+    if (m->library[0] != '\0') {   /* fallback: clave corta name.simple */
+        snprintf(qual, sizeof(qual), "%s.%s", m->name, simple);
+        for (int i = 0; i < vm->symbol_count; i++)
+            if (strcmp(vm->symbols[i].name, qual) == 0) return vm->symbols[i].abs_addr;
+    }
+    return 0;
 }
 
 /* H7 — calculadora de constantes para eval(). Descenso recursivo que evalúa
@@ -584,6 +616,27 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t ref = bpvm_heap_alloc_string(vm, buf ? buf : "", n);
         free(buf);
         push_i32(vm, tc, (int32_t) ref);
+        return BPVM_OK;
+    }
+    case BUILTIN_GUI_INVOKE_BY_NAME: {
+        /* H13 — Forms: resuelve `name` como función pública del módulo de `host`
+         * (la ventana) y la invoca con `sender` como arg0. Args: host, name, sender.
+         * Espejo de GUI_INVOKE_BY_NAME en miVM. */
+        uint32_t sender   = (uint32_t) pop_i32(vm, tc);
+        uint32_t name_ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t host     = (uint32_t) pop_i32(vm, tc);
+        char nm[128];
+        read_bp_string(vm, name_ref, nm, sizeof(nm));
+        uint32_t target = bpvm_resolve_handler(vm, host, nm);
+        if (target == 0) {
+            /* H13 (decisión de Eduardo): handler no implementado → IGNORAR (sin
+             * excepción). El aviso se da una vez al cargar el form (Gui.Window). */
+            push_i32(vm, tc, 0);
+            return BPVM_OK;
+        }
+        int32_t a = (int32_t) sender;
+        bpvm_call_bp_from_builtin(vm, tc, target, &a, 1);
+        push_i32(vm, tc, 0);
         return BPVM_OK;
     }
     case BUILTIN_GUI_BIND_CLICK: {
