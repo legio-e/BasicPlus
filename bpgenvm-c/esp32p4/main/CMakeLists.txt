@@ -59,4 +59,5 @@ idf_component_register(
         esp_lcd          # G3: MIPI-DSI (esp_lcd_new_dsi_bus + panel ops)
         esp_driver_ledc  # G3: PWM del backlight (GPIO26)
         lvgl             # G4: LVGL 9.2.2 vendorizada (via EXTRA_COMPONENT_DIRS)
+        esp_driver_i2c   # G5: bus I2C del táctil GT911 (i2c_new_master_bus)
 )

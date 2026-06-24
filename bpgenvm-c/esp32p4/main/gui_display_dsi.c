@@ -23,6 +23,10 @@
 #include "lvgl.h"               /* G4: LVGL 9.2.2 vendorizada (componente IDF) */
 #include "freertos/FreeRTOS.h"  /* G4: vTaskDelay en el bombeo */
 #include "freertos/task.h"
+#include "driver/i2c_master.h"   /* G5: bus I2C del táctil (driver nuevo) */
+#include "esp_lcd_panel_io.h"    /* G5: esp_lcd_new_panel_io_i2c */
+#include "esp_lcd_touch.h"       /* G5: esp_lcd_touch_* (read_data / get_coordinates) */
+#include "esp_lcd_touch_gt911.h" /* G5: driver GT911 */
 
 static const char *TAG = "p4_gfx";
 
@@ -180,6 +184,100 @@ static void p4_lv_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_m
     lv_display_flush_ready(disp);
 }
 
+/* -------------------- G5: táctil GT911 @0x14 (I2C SDA=GPIO7/SCL=GPIO8) -------------------- */
+#define TOUCH_I2C_SDA   7
+#define TOUCH_I2C_SCL   8
+#define TOUCH_I2C_PORT  0
+
+static esp_lcd_touch_handle_t s_tp = NULL;
+static int32_t s_tp_x = 0, s_tp_y = 0;   /* último punto (LVGL lo quiere también en RELEASED) */
+
+/* Intenta abrir el GT911 en una dirección concreta. Devuelve el handle o NULL (sin
+ * abortar). flags mirror_x/y = 1 como el BSP, para que el toque cuadre con el panel. */
+static esp_lcd_touch_handle_t p4_touch_try(i2c_master_bus_handle_t bus, uint16_t addr)
+{
+    esp_lcd_panel_io_handle_t tp_io = NULL;
+    esp_lcd_panel_io_i2c_config_t tp_io_cfg = ESP_LCD_TOUCH_IO_I2C_GT911_CONFIG();
+    tp_io_cfg.dev_addr = addr;
+    if (esp_lcd_new_panel_io_i2c(bus, &tp_io_cfg, &tp_io) != ESP_OK) return NULL;
+
+    esp_lcd_touch_config_t tp_cfg = {
+        .x_max        = LCD_H_RES,
+        .y_max        = LCD_V_RES,
+        .rst_gpio_num = -1,
+        .int_gpio_num = -1,
+        .levels = { .reset = 0, .interrupt = 0 },
+        .flags  = { .swap_xy = 0, .mirror_x = 1, .mirror_y = 1 },
+    };
+    esp_lcd_touch_handle_t tp = NULL;
+    if (esp_lcd_touch_new_i2c_gt911(tp_io, &tp_cfg, &tp) != ESP_OK) {
+        esp_lcd_panel_io_del(tp_io);   /* limpia el io fallido antes de reintentar */
+        return NULL;
+    }
+    ESP_LOGI(TAG, "GT911 init OK en 0x%02X (I2C SDA=%d SCL=%d)", addr, TOUCH_I2C_SDA, TOUCH_I2C_SCL);
+    return tp;
+}
+
+/* Bus I2C nuevo + GT911. La dirección la fija el pin INT (NC en esta placa) durante
+ * el reset por GPIO27 -> sale 0x14 o 0x5D de forma no determinista. Probamos AMBAS.
+ * Si ninguna responde, NO abortamos: seguimos sin táctil (el botón se ve, no reacciona). */
+static esp_lcd_touch_handle_t p4_touch_init(void)
+{
+    i2c_master_bus_handle_t i2c_bus = NULL;
+    i2c_master_bus_config_t bus_cfg = {
+        .clk_source                   = I2C_CLK_SRC_DEFAULT,
+        .sda_io_num                   = TOUCH_I2C_SDA,
+        .scl_io_num                   = TOUCH_I2C_SCL,
+        .i2c_port                     = TOUCH_I2C_PORT,
+        .flags.enable_internal_pullup = true,
+    };
+    ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &i2c_bus));
+
+    /* El GT911 comparte el reset con el panel (GPIO27) y tarda ~100-200 ms en
+     * responder por I2C tras ese reset. Lo sondeábamos ~10 ms después -> "i2c
+     * transaction failed". (El BSP no fallaba porque su arranque metía de sobra esa
+     * demora antes de tocar el táctil.) HW idéntico al de ayer -> era esto, no la
+     * dirección. */
+    vTaskDelay(pdMS_TO_TICKS(200));
+
+    esp_lcd_touch_handle_t tp = p4_touch_try(i2c_bus, ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS_BACKUP); /* 0x14 */
+    if (!tp) {
+        ESP_LOGW(TAG, "GT911 no respondió en 0x14; probando 0x5D...");
+        tp = p4_touch_try(i2c_bus, ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS);                            /* 0x5D */
+    }
+    if (!tp) ESP_LOGE(TAG, "GT911 no responde en 0x14 ni 0x5D (revisar FPC/cableado del táctil)");
+    return tp;
+}
+
+/* read_cb del lv_indev: sondea el GT911 y entrega el punto a LVGL (igual camino que
+ * el táctil del STM32). LVGL lo llama dentro de lv_timer_handler. */
+static void p4_lv_touch_read(lv_indev_t *indev, lv_indev_data_t *data)
+{
+    (void) indev;
+    uint16_t x = 0, y = 0;
+    uint8_t  cnt = 0;
+    esp_lcd_touch_read_data(s_tp);
+    bool pressed = esp_lcd_touch_get_coordinates(s_tp, &x, &y, NULL, &cnt, 1);
+    if (pressed && cnt > 0) {
+        s_tp_x = x;
+        s_tp_y = y;
+        data->state = LV_INDEV_STATE_PRESSED;
+    } else {
+        data->state = LV_INDEV_STATE_RELEASED;
+    }
+    data->point.x = s_tp_x;
+    data->point.y = s_tp_y;
+}
+
+/* Clic del botón -> actualiza la etiqueta: prueba VISIBLE de que el toque llega. */
+static void p4_btn_clicked(lv_event_t *e)
+{
+    lv_obj_t *label = (lv_obj_t *) lv_event_get_user_data(e);
+    static int n = 0;
+    n++;
+    lv_label_set_text_fmt(label, "Tocado %d", n);
+}
+
 void p4_gfx_lvgl_test(void)
 {
     p4_dsi_panel_init();
@@ -205,10 +303,22 @@ void p4_gfx_lvgl_test(void)
     lv_obj_set_size(btn, 320, 110);
     lv_obj_center(btn);
     lv_obj_t *lbl = lv_label_create(btn);
-    lv_label_set_text(lbl, "BasicPlus  G4");
+    lv_label_set_text(lbl, "Tocame");
     lv_obj_center(lbl);
+    lv_obj_add_event_cb(btn, p4_btn_clicked, LV_EVENT_CLICKED, lbl);  /* G5: clic -> etiqueta */
 
-    ESP_LOGI(TAG, "G4: LVGL %d.%d.%d + widget OK (LV_COLOR_DEPTH=%d). Bombeando...",
+    /* G5 — táctil: GT911 -> lv_indev de puntero. LVGL enruta el toque al widget bajo
+     * el dedo -> su evento CLICKED -> p4_btn_clicked. */
+    s_tp = p4_touch_init();
+    if (s_tp != NULL) {
+        lv_indev_t *indev = lv_indev_create();
+        lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+        lv_indev_set_read_cb(indev, p4_lv_touch_read);
+    } else {
+        ESP_LOGW(TAG, "sin tactil: el boton se mostrara pero no reaccionara");
+    }
+
+    ESP_LOGI(TAG, "G5: LVGL %d.%d.%d + boton TACTIL OK (LV_COLOR_DEPTH=%d). Bombeando...",
              LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH, (int) LV_COLOR_DEPTH);
 
     /* Bombeo de LVGL en este task (main); el wire corre en su propio task en

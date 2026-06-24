@@ -5,3 +5,4 @@
 # para paridad con host/STM32 (NO la lvgl/lvgl del registro).
 dependencies:
   espressif/esp_lcd_ek79007: "^1.0.0"
+  espressif/esp_lcd_touch_gt911: "^1.2.0"   # G5: táctil (trae esp_lcd_touch)

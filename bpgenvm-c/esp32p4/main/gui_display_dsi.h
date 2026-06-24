@@ -10,8 +10,8 @@
  * Si se ve roja: DSI + EK79007 + backlight + PSRAM OK en nuestro firmware. */
 void p4_gfx_smoke_test(void);
 
-/* G4 — LVGL 9.2.2: panel (reutilizado de G3) + lv_display + un botón con label.
- * Bucle infinito de bombeo (NO retorna). Aún sin táctil (G5). */
+/* G4/G5 — LVGL: panel (de G3) + lv_display + botón con label + táctil GT911 como
+ * lv_indev (el botón reacciona al dedo). Bucle infinito de bombeo (NO retorna). */
 void p4_gfx_lvgl_test(void);
 
 #endif /* GUI_DISPLAY_DSI_H */
