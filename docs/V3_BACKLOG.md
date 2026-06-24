@@ -47,12 +47,69 @@ Nucleo+DK2), stdlib Compress/Json/Freq (core), P4 completa (VM + G1-G6 gráficos
 - **Pausa de flasheo** tras el maratón del P4 → el trabajo inmediato debería evitar reflashear
   (docs / IDE host-side / AOT host).
 
+### Plan de cierre de V3 — ORDEN (24-jun, visto bueno de Eduardo)
+
+**NO se añaden más features a V3.** Solo queda ejecutar, en este orden (lo de PC primero —
+venimos de un atracón de flashes; el P4-HW, flash-intensivo, cuando se recarguen pilas):
+
+**Numeración de hitos** — V3 reinicia su propia serie. Hechos: H1–H7; **H8** (stdlib) = núcleo
+✅ (Compress/Json/Freq), resto→V4; **H10** (HW STM32) ✅; **H11 = ESP32-P4 / familia RISC-V** ✅
+(VM + gráficos G1-G6 — etiqueta retro para anclar la serie). **H8 y H9 eran los diferidos** del
+mapa post-H7; **H9 (revisión del IDE) se materializa AHORA** dentro del cierre. Los 6 pasos del
+cierre = **H12…H17** (1=H12 · 2=H13 · 3=H14 · 4=H15 · 5=H16 · 6=H17):
+
+1. **(H12) IDE Fase 1** *(PC, sin flasheo)* — (a) comodidad del editor: comentar/indentar + barra de
+   botones + fix del árbol remoto cortado; (b) AOT automático (ARM: RP2350+STM32): config
+   por-proyecto + detección toolchain + pipeline detect→C→gcc→.mdn→subir + degrade a interpretado
+   con warning.
+2. **Forms (la "ventana")** *(PC)* — (a) cargador `Gui.Form.load` (JSON→árbol Component, binding
+   por nombre) + esquema del form; (b) IDE Fase 2: editar forms desde el IDE (+ candidato: repaso
+   AOT-casts).
+3. **P4 HW completo** *(flasheo intensivo → cuando se recarguen pilas)* — backends GPIO/I2C/SPI/
+   ADC/PWM/UART en el firmware del P4 (estilo S3).
+4. **Tapar huecos** — bugs conocidos + INFO/causa-de-reset en el IDE + pulidos sueltos del backlog.
+5. **Documentación** — documentar (usuario + interno).
+6. **Finalización (estilo V2, = H14)** — batería de PRUEBAS en dispositivos reales para asegurar
+   que todo funciona; los bugs que aparezcan, se arreglan; + la **publicación del cierre** (V3 ha
+   ido en LOCAL todo el tiempo, repo público congelado en V2 → publicar V3 es la decisión del final).
+
+Orden flexible donde las piezas son independientes (cargador ↔ AOT intercambiables; el P4-HW puede
+adelantarse en cuanto haya ganas de flashear).
+
+### V4 — fuera de V3 (Eduardo, 24-jun)
+
+**Tema de V4: consolidar + mejorar rendimiento** (un poco como fue V2), **además de lo diferido**:
+AOT en ESP32 (Xtensa/RISC-V), servidor TCP (`Net.Listener`), **diseñador visual de forms drag&drop**,
+preview de forms en PC (si no se cuela antes), rollout de gráficos a más kits, dual-core RP2350 (#153),
+`deflate`-lite, multi-fichero/Archive, IDE multiplataforma (jSerialComm), strings multilínea + interpolación,
+AOT cross-module (#169). **El alcance de V3 queda CERRADO** ("y ya nada más").
+
 ## 🎨 GUI (objetivo cabecera)
 
 El camino crítico —upcall C→BP → `Gui.*` en miVM → VM-C host (LVGL+SDL) →
 portabilidad → micro → cross-family— se detallará en los hitos H1+ (ver
 `V3_ROADMAP.md` §6 y la decisión consolidada en `V3_IDEAS.md` §1). Las tareas
 concretas se crean al arrancar cada hito.
+
+- **Ventana = módulo + form JSON (diseño de UI por JSON) — concepto clave de V3 (charla 24-jun).**
+  Una "ventana" se define con DOS ficheros: el **módulo** (`.bp`, el código) + un **form**
+  (NUEVO: fichero **JSON** con el árbol de Componentes). El módulo, en su init, **carga el
+  JSON y construye la ventana dinámicamente** → diseñar la UI desde el PC sin reprobar en el
+  device. Encaja con lo hecho: modelo `Component` (H6) = el árbol; `Json.bp` = el parser;
+  GuiBackend Swing de miVM = preview en el PC casi de regalo. **Alcance (Eduardo):**
+  - **FUNDAMENTAL (V3): el cargador runtime** `Gui.Form.load(json)` — BP portable,
+    byte-idéntico en los 3 silicios; recorre el árbol y crea los `Gui.*`. Implementación:
+    dispatch tipo→constructor + propiedad→setter por **switch** (BP no tiene reflexión; el
+    set de widgets es acotado → manejable).
+  - **MEJOR (V3 si cabe): editar los forms desde el IDE** (editor de form / JSON asistido).
+  - **PARA NOTA (puede ir a V4): preview en el PC** — y OJO: es **más barato de lo que parece**,
+    porque el cargador es BP y miVM ya pinta en Swing → "preview" ≈ *correr el form en miVM
+    dentro del IDE*. El diseñador visual drag&drop completo = V4.
+  - **Binding evento↔código: por NOMBRE** (el form nombra el widget; el código hace
+    `form.get("btnOk")` + handler/subclase). `onClick:"handler"` por-nombre = azúcar futuro.
+    Modelo "diseñador + code-behind" (Qt/Android/NetBeans), conviviendo con el modo imperativo.
+  - Form = **JSON soberano** (NO el XML privado de LVGL); mapea a nuestro árbol Component.
+    Diseñar el esquema con anidación desde el principio.
 
 - **GUI-blocking-from-event — ejecutar trabajo largo / diálogo modal con respuesta
   desde un handler de evento sin congelar el GUI** (Eduardo, 20-jun). Raíz: el
@@ -234,6 +291,27 @@ nota en el bullet del operador). Detalle de diseño original abajo (se conserva)
   Junto con interpolación de strings, candidatas a una tanda de lenguaje posterior.
 
 ## 🛠️ IDE / herramientas
+
+### Fase 1 del IDE — comodidad + AOT automático (decidida 24-jun; host-Java, SIN reflasheo de firmware)
+
+El usuario es quien más toca el IDE → comodidad + que el AOT "just works".
+
+**AOT automático desde el IDE:**
+- Targets Fase 1 = **ARM: RP2350/Pico + STM32**. **ESP32 (S3/P4) → V4** (port del loader `.mdn` a Xtensa/RISC-V).
+- **Elección de target POR PROYECTO** (sección `aot` en `.bpbuild`: `enabled`/`target`/`optLevel`/`flags`).
+- Rutas de toolchain **por máquina** (IdePrefs: auto-detect PATH + carpetas estándar + override) + **panel Settings→AOT** (extensible para "lo que vaya surgiendo").
+- Pipeline (FrmMain `doRunOnDevice` ~1765): detectar `function native` → `AotCEmitter` (Java in-IDE) → gcc del target (ProcessBuilder) → `MdnPack` (Java) → subir `.mdn` con el `.mod`.
+- **Native NO AOT-able → WARNING + continúa interpretado (NO aborta).** "Para eso el `.mod` siempre se genera" (Eduardo).
+
+**Comodidad del editor/IDE (peticiones de Eduardo, usuario diario):**
+- **Comentar/descomentar** (toggle del prefijo de comentario BP sobre línea/selección).
+- **Indentar/des-indentar** (Tab / Shift-Tab sobre selección).
+- **Árbol de archivos remotos se CORTA con muchos módulos** → fix de scroll/layout (PicoExplorer).
+- **Barra de botones superior (toolbar)** con las funciones más habituales.
+
+**Fase 2 del IDE (más adelante, "algún añadido más"):** TBD. Candidato fuerte: **repaso del AOT de una pasada** (casts `byte()/int()…` + `^` en native → más funciones AOT-ables). (AOT ESP32 = V4.)
+
+---
 
 - **N-ide-aot-button — AOT integrado en el IDE**: hoy el `.mdn` se compila por CLI
   aparte; que el Run/Build lo haga, con detección del toolchain ARM y flags por
