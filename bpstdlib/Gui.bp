@@ -242,6 +242,11 @@ module Gui
   public intrinsic function __guiBindClick(handle: integer, self: Component)
   public intrinsic function __guiClick(w: Component)
   public intrinsic function __guiChange(w: Component)   // cambio de valor sintético (diagnóstico)
+  // H13 — Forms: call-by-name del handler. Resuelve `name` como función PÚBLICA
+  // del módulo al que pertenece `host` (la ventana) y la invoca con `sender`
+  // (el widget que disparó) como arg0. La usa el dispatch de eventos de Gui.Window.
+  // (Param `host`, no `owner`: `owner` es palabra clave del lenguaje — RAII.)
+  public intrinsic function __guiInvokeByName(host: Object, name: string, sender: Object)
 
   // ---- Screen — pantalla raíz (la entrega el backend ya montada). ----
   public class Screen extends Component

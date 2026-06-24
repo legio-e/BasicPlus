@@ -64,6 +64,7 @@ func __guiClick(w:Component):void public intrinsic
 func __guiCreateImageView(parent:integer):integer public intrinsic
 func __guiScreenLoad(handle:integer):void public intrinsic
 func __guiDispatch(self:Component):void public
+func __guiInvokeByName(host:any,name:string,sender:any):void public intrinsic
 func __guiImageHeight(handle:integer):integer public intrinsic
 func __guiCreateBar(parent:integer):integer public intrinsic
 func __guiCreateLed(parent:integer):integer public intrinsic

@@ -3387,6 +3387,17 @@ public class VirtualMachine {
                 gui.bindClick(hnd, self); pushTc(tc, 0); break;
             }
             case GUI_CLICK:     { int obj = popTc(tc); gui.injectClick(obj); pushTc(tc, 0); break; }
+            // H13 (V3) — Forms: call-by-name del handler. Resuelve `name` como
+            // función pública del módulo de `owner` (la ventana) y la invoca con
+            // `sender` como arg0. Los args se apilan owner, name, sender.
+            case GUI_INVOKE_BY_NAME: {
+                int sender  = popTc(tc);
+                int nameRef = popTc(tc);
+                int ownerRef = popTc(tc);
+                invokeHandlerByName(tc, ownerRef, readVmString(nameRef), sender);
+                pushTc(tc, 0);
+                break;
+            }
             // V3/H6 — geometría (backend = verdad) + scroll (opt-in) + refresh.
             case GUI_SET_X:  { int v = popTc(tc); int hnd = popTc(tc); gui.setX(hnd, v); pushTc(tc, 0); break; }
             case GUI_GET_X:  { int hnd = popTc(tc); pushTc(tc, gui.getX(hnd)); break; }
@@ -4887,6 +4898,54 @@ public class VirtualMachine {
             tc.cs = savedCs;
             tc.pc = savedPc;
             tc.status = savedStatus; // el centinela THREAD_EXIT lo puso TERMINATED
+            tc.yieldRequested = savedYield;
+        }
+    }
+
+    /**
+     * H13 (V3) — call-by-name de un handler de Forms. Resuelve `name` como
+     * función pública del MÓDULO al que pertenece `ownerRef` (la ventana) y la
+     * invoca ANIDADA con `sender` como arg0. Mismo patrón de frame que
+     * invokeGuiDispatch ([arg, PC=0 centinela, BP, CS] + runOnContext hasta el
+     * centinela THREAD_EXIT en mem[0]). Lanza RuntimeError BP si el handler no
+     * existe (typo en el .win) para que el error sea claro y no silencioso.
+     */
+    private void invokeHandlerByName(ThreadContext tc, int ownerRef, String name, int sender) {
+        if (moduleManager == null) return;
+        if (ownerRef == 0) {
+            throwBpRuntimeError(tc, "Gui.Form: owner nulo al invocar el handler '" + name + "'");
+            return;
+        }
+        int classPtr = readInt32(ownerRef);                 // header en ref-4; class_ptr en ref+0
+        int moduleCs = moduleManager.getCSForDataAddr(classPtr);
+        Integer pc = moduleManager.resolveExportInModule(moduleCs, name);
+        if (pc == null) {
+            throwBpRuntimeError(tc, "Gui.Form: no existe el handler público '" + name
+                    + "' en el módulo de la ventana");
+            return;
+        }
+        int cs = moduleManager.getModuleBaseFromPC(pc);
+        int base = tc.sp;
+        int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
+        ThreadStatus savedStatus = tc.status;
+        boolean savedYield = tc.yieldRequested;
+        writeInt32(base,      sender);   // arg0 = sender (el widget que disparó el evento)
+        writeInt32(base + 4,  0);        // saved PC = 0 → mem[0] = THREAD_EXIT (centinela)
+        writeInt32(base + 8,  savedBp);
+        writeInt32(base + 12, savedCs);
+        tc.bp = base + 16;
+        tc.sp = base + 16;
+        tc.pc = pc;
+        tc.cs = cs;
+        tc.yieldRequested = false;
+        try {
+            runOnContext(tc);
+        } finally {
+            tc.sp = base;
+            tc.bp = savedBp;
+            tc.cs = savedCs;
+            tc.pc = savedPc;
+            tc.status = savedStatus;
             tc.yieldRequested = savedYield;
         }
     }

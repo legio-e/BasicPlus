@@ -224,6 +224,8 @@ public final class Intrinsics {
         // self.onClick()); la VM la llama por nombre al pulsar.
         register("Gui.__guiBindClick",    w -> emitBuiltin(w, Builtin.GUI_BIND_CLICK));
         register("Gui.__guiClick",        w -> emitBuiltin(w, Builtin.GUI_CLICK));
+        // H13 — Forms: call-by-name del handler (owner, name: string, sender) → void.
+        register("Gui.__guiInvokeByName", w -> emitBuiltin(w, Builtin.GUI_INVOKE_BY_NAME));
         // H6 — geometría (backend = verdad) + scroll (opt-in) + refresh.
         register("Gui.__guiSetX",         w -> emitBuiltin(w, Builtin.GUI_SET_X));
         register("Gui.__guiGetX",         w -> emitBuiltin(w, Builtin.GUI_GET_X));

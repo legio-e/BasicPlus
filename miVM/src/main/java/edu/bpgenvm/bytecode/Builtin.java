@@ -406,7 +406,14 @@ public enum Builtin {
     PICO_SET_MARK("__picoSetMark"),                   // (code: integer) → void
     PICO_MARK_COUNT("__picoMarkCount"),               // () → integer
     PICO_MARK_AT("__picoMarkAt"),                     // (i: integer) → integer
-    PICO_BOOT_COUNT("__picoBootCount");               // () → integer
+    PICO_BOOT_COUNT("__picoBootCount"),               // () → integer
+
+    // H13 (V3) — Forms: dispatch de evento por NOMBRE. Resuelve la función
+    // pública `name` en el MÓDULO de `owner` (la ventana) y la llama con
+    // `sender` como arg0. Es el call-by-name de los handlers del .win (que son
+    // funciones de módulo); reutiliza resolveExportInModule + el frame anidado
+    // del upcall. id 206.
+    GUI_INVOKE_BY_NAME("__guiInvokeByName");           // (owner, name: string, sender) → void
 
     public final String bpName;
     public final int id;
