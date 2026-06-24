@@ -40,7 +40,9 @@ extern const uint32_t s_vm_buffer_size;
 
 static char    s_line_buf[WIRE_V1_LINE_MAX];
 static char    s_reply_buf[2048];
-#define V1_PUT_BUF_SIZE  (16 * 1024)
+#ifndef V1_PUT_BUF_SIZE
+#define V1_PUT_BUF_SIZE  (16 * 1024)   /* placas con más RAM lo suben por -D (P4 = 64 KB) */
+#endif
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
 
 /* Identidad de placa para INFO/HELLO. Por defecto = ESP32-S3; una placa la

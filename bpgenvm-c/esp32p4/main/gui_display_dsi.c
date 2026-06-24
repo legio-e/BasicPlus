@@ -27,6 +27,7 @@
 #include "esp_lcd_panel_io.h"    /* G5: esp_lcd_new_panel_io_i2c */
 #include "esp_lcd_touch.h"       /* G5: esp_lcd_touch_* (read_data / get_coordinates) */
 #include "esp_lcd_touch_gt911.h" /* G5: driver GT911 */
+#include "bpvm_gui.h"            /* G6: contrato de la costura bpvm_gui_disp_* */
 
 static const char *TAG = "p4_gfx";
 
@@ -277,6 +278,53 @@ static void p4_btn_clicked(lv_event_t *e)
     n++;
     lv_label_set_text_fmt(label, "Tocado %d", n);
 }
+
+/* ===================== G6 — costura de display para BasicPlus =====================
+ * Implementa el contrato bpvm_gui_disp_* (bpvm_gui.h) que gui.c llama tras lv_init().
+ * Reaprovecha el panel (G3) + el táctil (G5). El tamaño físico lo fija el panel
+ * (1024x600), NO el modelo (gui.c pasa 480x320 lógicos; la paridad es por árbol). */
+void bpvm_gui_disp_init(int w, int h)
+{
+    (void) w; (void) h;
+    p4_dsi_panel_init();
+    p4_backlight_on();
+
+    lv_tick_set_cb(p4_lv_tick_ms);
+    s_lv_disp = lv_display_create(LCD_H_RES, LCD_V_RES);
+    lv_display_set_flush_cb(s_lv_disp, p4_lv_flush);
+
+    size_t buf_px   = (size_t) LCD_H_RES * 120;     /* draw buffer parcial en PSRAM */
+    void  *draw_buf = heap_caps_malloc(buf_px * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+    if (draw_buf == NULL) { ESP_LOGE(TAG, "sin PSRAM para el draw buffer de LVGL"); return; }
+    lv_display_set_buffers(s_lv_disp, draw_buf, NULL, buf_px * sizeof(uint16_t),
+                           LV_DISPLAY_RENDER_MODE_PARTIAL);
+
+    s_tp = p4_touch_init();
+    if (s_tp != NULL) {
+        lv_indev_t *indev = lv_indev_create();
+        lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+        lv_indev_set_read_cb(indev, p4_lv_touch_read);
+    } else {
+        ESP_LOGW(TAG, "sin tactil: la GUI se vera pero no reaccionara");
+    }
+    ESP_LOGI(TAG, "GUI display listo: %dx%d, LVGL %d.%d.%d, LV_COLOR_DEPTH=%d",
+             LCD_H_RES, LCD_V_RES, LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
+             LVGL_VERSION_PATCH, (int) LV_COLOR_DEPTH);
+}
+
+void bpvm_gui_disp_pump(void)
+{
+    /* Una iteración del lazo LVGL. La llama Gui.run() (builtins.c) entre frames; ese
+     * mismo lazo polea vm->poll_cb para el KILL. Cedemos SIEMPRE >=1 tick (a 100 Hz
+     * pdMS_TO_TICKS(<10)=0 -> vTaskDelay(0) no cede a IDLE0 -> TWDT). */
+    uint32_t idle_ms = lv_timer_handler();
+    if (idle_ms > 50) idle_ms = 50;
+    TickType_t ticks = pdMS_TO_TICKS(idle_ms);
+    if (ticks == 0) ticks = 1;
+    vTaskDelay(ticks);
+}
+
+int bpvm_gui_disp_is_open(void) { return 1; }   /* micro: corre hasta KILL/reset */
 
 void p4_gfx_lvgl_test(void)
 {

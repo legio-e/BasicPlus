@@ -971,8 +971,8 @@
  *==================*/
 
 /*Use SDL to open window on PC and handle mouse and keyboard*/
-/* Board-aware: el micro STM32 (USE_HAL_DRIVER) pinta por LTDC, sin SDL. */
-#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2)
+/* Board-aware: los micros (STM32 via LTDC, ESP32-P4 via MIPI-DSI) pintan sin SDL. */
+#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4)
 #define LV_USE_SDL              0
 #else
 #define LV_USE_SDL              1

@@ -208,14 +208,15 @@ void app_main(void)
 
     /* Canal de log (diagnóstico) — stack pequeño, no corre la VM. */
     xTaskCreate(tcp_log_task, "tcp_log", 4096, NULL, 5, NULL);
-    /* Servidor del wire — la VM corre dentro: stack holgado (16 KiB). */
-    xTaskCreate(wire_task, "wire_v1", 16384, NULL, 5, NULL);
+    /* Servidor del wire — la VM corre dentro y, con Gui.run(), también el render
+     * LVGL → stack holgado (32 KiB). */
+    xTaskCreate(wire_task, "wire_v1", 32768, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "P4 VM.3: IP 192.168.2.2 | log %s:%d | wire v1 TCP *:%d",
              SERVER_IP, SERVER_PORT, WIRE_PORT);
 
-    /* G4 — display + LVGL: panel DSI + backlight + un botón LVGL (bombeo en este
-     * task; el wire sigue sirviendo en su propio task). Reutiliza el panel de G3.
-     * NO retorna (bucle de GUI). La PSRAM ya está arriba (antes de app_main). */
-    p4_gfx_lvgl_test();
+    /* G6 — la GUI la dirige BasicPlus: cuando un .mod usa Gui.*, gui.c hace lv_init()
+     * + bpvm_gui_disp_init() (costura en gui_display_dsi.c) y Gui.run() bombea, todo
+     * dentro del VM (wire_task). El panel/táctil arrancan en ese momento; app_main
+     * solo deja red + tasks listas. (p4_gfx_lvgl_test/smoke quedan de diagnóstico.) */
 }

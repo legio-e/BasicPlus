@@ -19,6 +19,7 @@ idf_component_register(
         "../../src/interp.c"
         "../../src/heap.c"
         "../../src/builtins.c"
+        "../../src/gui.c"                     # G6: modelo GUI + widgets LVGL (Gui.* de BasicPlus)
         "../../src/fs_facade.c"
         "../../src/net.c"
         "../../src/link.c"
