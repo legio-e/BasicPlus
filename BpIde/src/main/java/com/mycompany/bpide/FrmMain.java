@@ -516,6 +516,167 @@ public class FrmMain extends javax.swing.JFrame
 
         setupDebug();
         setupHelp();
+        setupToolbar();   // H12: barra de botones (archivos · ejecución · edición)
+
+        // H12 — el árbol del micro (PicoExplorer, abajo-izquierda) se quedaba corto:
+        // el split vertical daba 400 px fijos al árbol del proyecto (arriba) y no tenía
+        // resizeWeight, así que al PicoExplorer (con su barra de 3 filas) le quedaban
+        // pocas líneas. Repartimos a favor del PicoExplorer y dejamos que CREZCA al
+        // redimensionar/maximizar (resizeWeight = parte del alto EXTRA que se lleva el de
+        // arriba; 0.2 → 80% al PicoExplorer). En invokeLater para que la PROPORCIÓN del
+        // divisor use el tamaño real de la ventana ya realizada.
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            jSplitPane2.setResizeWeight(0.2);
+            jSplitPane2.setDividerLocation(0.35);   // arranque: proyecto 35% / micro 65%
+        });
+    }
+
+    // ================================================================
+    // H12 — Barra de botones (toolbar) + acciones de edición.
+    //   Izquierda = archivos/proyecto · Centro = ejecución · Derecha = edición
+    //   (los de edición actúan sobre las líneas de la SELECCIÓN del editor activo).
+    // ================================================================
+
+    private void setupToolbar() {
+        javax.swing.JToolBar tb = new javax.swing.JToolBar();
+        tb.setFloatable(false);
+        tb.setBorder(javax.swing.BorderFactory.createEmptyBorder(4, 6, 4, 6));
+
+        // -- Izquierda: archivos / proyecto.
+        group(tb, toolButton("Load",       "Abrir fichero",   e -> onLoad()),
+                  toolButton("Save",       "Guardar fichero", e -> onSave()),
+                  toolButton("New",        "Nuevo fichero",   e -> onNewFile()),
+                  toolButton("Open Proj.", "Abrir proyecto",  e -> onOpenProject()));
+
+        tb.add(javax.swing.Box.createHorizontalGlue());
+
+        // -- Centro: ejecución.
+        group(tb, toolButton("Compile",       "Compilar",            e -> doRun(false)),
+                  toolButton("Run",           "Ejecutar (VM local)", e -> doRun(true)),
+                  toolButton("Run on Device", "Ejecutar en placa",   e -> doRunOnPico()),
+                  toolButton("Debug",         "Depurar",             e -> doDebug()),
+                  toolButton("Stop",          "Parar (Ctrl+F2)",     e -> onStopRun()));
+
+        tb.add(javax.swing.Box.createHorizontalGlue());
+
+        // -- Derecha: edición (sobre la selección).
+        group(tb, toolButton("Indent",    "Indentar selección",     e -> editIndentSelection(true)),
+                  toolButton("Dedent",    "Des-indentar selección", e -> editIndentSelection(false)),
+                  toolButton("Comment",   "Comentar selección",     e -> editCommentSelection(true)),
+                  toolButton("Uncomment", "Descomentar selección",  e -> editCommentSelection(false)));
+
+        getContentPane().add(tb, java.awt.BorderLayout.PAGE_START);
+    }
+
+    /** Añade los componentes a la barra con una pequeña separación entre ellos. */
+    private void group(javax.swing.JToolBar tb, javax.swing.JComponent... items) {
+        for (int i = 0; i < items.length; i++) {
+            if (i > 0) tb.add(javax.swing.Box.createHorizontalStrut(6));
+            tb.add(items[i]);
+        }
+    }
+
+    private javax.swing.JButton toolButton(String text, String tip,
+                                           java.awt.event.ActionListener action) {
+        RoundToolButton b = new RoundToolButton(text);
+        b.setToolTipText(tip);
+        b.setBackground(new java.awt.Color(214, 223, 237));
+        b.addActionListener(action);
+        return b;
+    }
+
+    /** Botón de toolbar con esquinas REDONDEADAS (el L&F por defecto las pinta
+     *  rectas): pinta él mismo el fondo redondeado + un borde sutil + feedback al
+     *  pulsar/hover. */
+    private static final class RoundToolButton extends javax.swing.JButton {
+        private static final int ARC = 12;
+        RoundToolButton(String text) {
+            super(text);
+            setContentAreaFilled(false);   // el fondo lo pintamos nosotros
+            setFocusPainted(false);
+            setFocusable(false);           // no robar el foco al editor
+            setRolloverEnabled(true);
+            setBorder(javax.swing.BorderFactory.createEmptyBorder(4, 11, 4, 11)); // padding del texto
+        }
+        @Override protected void paintComponent(java.awt.Graphics g) {
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                                java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            java.awt.Color base = getBackground();
+            java.awt.Color fill = base;
+            if (getModel().isArmed()) {
+                fill = base.darker();                       // pulsado
+            } else if (getModel().isRollover()) {
+                fill = new java.awt.Color(                  // hover (un poco más claro)
+                        Math.min(255, base.getRed()   + 14),
+                        Math.min(255, base.getGreen() + 14),
+                        Math.min(255, base.getBlue()  + 14));
+            }
+            int w = getWidth(), h = getHeight();
+            g2.setColor(fill);
+            g2.fillRoundRect(0, 0, w - 1, h - 1, ARC, ARC);
+            g2.setColor(new java.awt.Color(150, 165, 190));   // borde sutil
+            g2.drawRoundRect(0, 0, w - 1, h - 1, ARC, ARC);
+            g2.dispose();
+            super.paintComponent(g);   // el texto encima
+        }
+    }
+
+    /** Indenta (add=true) o des-indenta (add=false) las líneas que abarca la
+     *  selección del editor activo (o la línea del cursor si no hay selección). */
+    private void editIndentSelection(boolean add) {
+        final String UNIT = "    ";   // 4 espacios
+        javax.swing.text.Document doc = editorArea.getDocument();
+        javax.swing.text.Element root = doc.getDefaultRootElement();
+        int selStart = editorArea.getSelectionStart();
+        int selEnd   = editorArea.getSelectionEnd();
+        int first = root.getElementIndex(selStart);
+        int last  = root.getElementIndex(Math.max(selStart, selEnd - 1));
+        try {
+            for (int ln = last; ln >= first; ln--) {   // de abajo arriba: no desplaza offsets de arriba
+                javax.swing.text.Element line = root.getElement(ln);
+                int ls = line.getStartOffset();
+                String txt = doc.getText(ls, line.getEndOffset() - 1 - ls);
+                if (add) {
+                    doc.insertString(ls, UNIT, null);
+                } else {
+                    int rm = 0;
+                    if (txt.startsWith("\t")) rm = 1;
+                    else while (rm < UNIT.length() && rm < txt.length() && txt.charAt(rm) == ' ') rm++;
+                    if (rm > 0) doc.remove(ls, rm);
+                }
+            }
+        } catch (javax.swing.text.BadLocationException ex) { /* no-op */ }
+        editorArea.requestFocusInWindow();
+    }
+
+    /** Comenta (comment=true) o descomenta (comment=false) con `//` las líneas que
+     *  abarca la selección. Comentar inserta `// ` ante el primer no-blanco (respeta
+     *  la indentación); descomentar quita el primer `//` y un espacio si lo sigue. */
+    private void editCommentSelection(boolean comment) {
+        javax.swing.text.Document doc = editorArea.getDocument();
+        javax.swing.text.Element root = doc.getDefaultRootElement();
+        int selStart = editorArea.getSelectionStart();
+        int selEnd   = editorArea.getSelectionEnd();
+        int first = root.getElementIndex(selStart);
+        int last  = root.getElementIndex(Math.max(selStart, selEnd - 1));
+        try {
+            for (int ln = last; ln >= first; ln--) {
+                javax.swing.text.Element line = root.getElement(ln);
+                int ls = line.getStartOffset();
+                String txt = doc.getText(ls, line.getEndOffset() - 1 - ls);
+                int i = 0;
+                while (i < txt.length() && Character.isWhitespace(txt.charAt(i))) i++;
+                if (comment) {
+                    if (i >= txt.length()) continue;   // línea en blanco: no comentar
+                    doc.insertString(ls + i, "// ", null);
+                } else if (i + 1 < txt.length() && txt.charAt(i) == '/' && txt.charAt(i + 1) == '/') {
+                    int rm = (i + 2 < txt.length() && txt.charAt(i + 2) == ' ') ? 3 : 2;
+                    doc.remove(ls + i, rm);
+                }
+            }
+        } catch (javax.swing.text.BadLocationException ex) { /* no-op */ }
+        editorArea.requestFocusInWindow();
     }
 
     // ================================================================
