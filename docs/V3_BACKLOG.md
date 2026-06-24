@@ -303,11 +303,14 @@ El usuario es quien más toca el IDE → comodidad + que el AOT "just works".
 - Pipeline (FrmMain `doRunOnDevice` ~1765): detectar `function native` → `AotCEmitter` (Java in-IDE) → gcc del target (ProcessBuilder) → `MdnPack` (Java) → subir `.mdn` con el `.mod`.
 - **Native NO AOT-able → WARNING + continúa interpretado (NO aborta).** "Para eso el `.mod` siempre se genera" (Eduardo).
 
-**Comodidad del editor/IDE (peticiones de Eduardo, usuario diario):**
-- **Comentar/descomentar** (toggle del prefijo de comentario BP sobre línea/selección).
-- **Indentar/des-indentar** (Tab / Shift-Tab sobre selección).
-- **Árbol de archivos remotos se CORTA con muchos módulos** → fix de scroll/layout (PicoExplorer).
-- **Barra de botones superior (toolbar)** con las funciones más habituales.
+**Comodidad del editor/IDE ✅ HECHA (commit `85ceb7d`, verificada por Eduardo 24-jun):**
+- ✅ **Barra de botones superior** (FrmMain): izq archivos/proyecto · centro ejecución · der
+  edición; botones redondeados (RoundToolButton) + separación + feedback.
+- ✅ **Comentar/descomentar** con `//` (respeta indentación) y **Indentar/des-indentar**
+  (4 esp / tab) sobre la SELECCIÓN. (Atajos de teclado Ctrl-/ · Tab/Shift-Tab = pendiente fácil.)
+- ✅ **Árbol del micro (PicoExplorer) que se cortaba** → jSplitPane2 con resizeWeight 0.2 +
+  divisor al 35% → se lleva el grueso del alto y crece al maximizar.
+- **FALTA de H12 = Bloque B: AOT automático desde el IDE** (ver arriba).
 
 **Fase 2 del IDE (más adelante, "algún añadido más"):** TBD. Candidato fuerte: **repaso del AOT de una pasada** (casts `byte()/int()…` + `^` en native → más funciones AOT-ables). (AOT ESP32 = V4.)
 
