@@ -310,7 +310,10 @@ El usuario es quien más toca el IDE → comodidad + que el AOT "just works".
   (4 esp / tab) sobre la SELECCIÓN. (Atajos de teclado Ctrl-/ · Tab/Shift-Tab = pendiente fácil.)
 - ✅ **Árbol del micro (PicoExplorer) que se cortaba** → jSplitPane2 con resizeWeight 0.2 +
   divisor al 35% → se lleva el grueso del alto y crece al maximizar.
-**Bloque B = AOT automático desde el IDE ✅ HECHO (commit `c65d915`, 24-jun; pendiente verificar en placa):**
+**Bloque B = AOT automático desde el IDE ✅ HECHO + VERIFICADO EN PLACA (commit `c65d915`, 24-jun;
+proyecto de prueba `samples/aottest`):** Run on Device de `Fibo` desde el IDE → compiló →
+`[aot] Fibo.mdn ✓ (1 thunk, 68 B)` → subió `.mod`+`.mdn` → en placa **`fiboNative(30)*5` = 1.095 s
+vs `fibo(30)*5` interpretado = 104.15 s → ~95× speedup**, `total` idéntico (4160200), exit 0.
 - ✅ **B1 — refactor a métodos invocables:** `AotMain.emitAotC(src,outDir,mdn)` y
   `MdnPack.pack(o,mdn,mod)` (sin `System.exit`; el CLI sigue funcionando igual).
 - ✅ **B2 — config:** sección `aot` { `enabled`, `target` } en `.bpbuild` (por proyecto, parser
