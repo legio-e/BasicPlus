@@ -310,7 +310,23 @@ El usuario es quien más toca el IDE → comodidad + que el AOT "just works".
   (4 esp / tab) sobre la SELECCIÓN. (Atajos de teclado Ctrl-/ · Tab/Shift-Tab = pendiente fácil.)
 - ✅ **Árbol del micro (PicoExplorer) que se cortaba** → jSplitPane2 con resizeWeight 0.2 +
   divisor al 35% → se lleva el grueso del alto y crece al maximizar.
-- **FALTA de H12 = Bloque B: AOT automático desde el IDE** (ver arriba).
+**Bloque B = AOT automático desde el IDE ✅ HECHO (commit `c65d915`, 24-jun; pendiente verificar en placa):**
+- ✅ **B1 — refactor a métodos invocables:** `AotMain.emitAotC(src,outDir,mdn)` y
+  `MdnPack.pack(o,mdn,mod)` (sin `System.exit`; el CLI sigue funcionando igual).
+- ✅ **B2 — config:** sección `aot` { `enabled`, `target` } en `.bpbuild` (por proyecto, parser
+  en `BpBuild`); `aotGccPath` + `aotBpgenvmDir` en `IdePrefs` (por máquina; vacío = autodetect).
+- ✅ **B3 — pipeline + wiring:** `AotBuild` (nuevo) hace emit→`arm-none-eabi-gcc`→`MdnPack`
+  por cada módulo con `native` bajo `sourceDir`; intermedios `.c/.o` a **`<projectDir>/target/`**
+  (decisión de Eduardo), `.mdn` final a `outDir` (PicoExplorer ya lo sube). Flags fijos del
+  target `arm` = Cortex-M33, idénticos a `build_mdn.sh`. Autodetect de gcc y de bpgenvm-c.
+  Llamado desde `runAotPass()` en `doRunOnPico`, en el hilo de fondo (gcc es subproceso).
+  Plantilla de New Project incluye la sección `aot`.
+- ✅ **B4 — UI:** menú **Project → "AOT (toolchain)…"**: edita gcc + raíz bpgenvm-c con botones
+  *Detectar*; muestra el estado AOT del proyecto activo.
+- ✅ **Degrade grácil:** native no AOT-able / sin toolchain / gcc-error → WARNING en consola y se
+  ejecuta interpretado; **nunca aborta el Run** (el `.mod` siempre se genera).
+- *(Nota: la elección `optLevel`/`flags` por proyecto del diseño quedó fuera — sólo `enabled`/`target`;
+  ampliable en V4 si hace falta.)*
 
 **Fase 2 del IDE (más adelante, "algún añadido más"):** TBD. Candidato fuerte: **repaso del AOT de una pasada** (casts `byte()/int()…` + `^` en native → más funciones AOT-ables). (AOT ESP32 = V4.)
 
