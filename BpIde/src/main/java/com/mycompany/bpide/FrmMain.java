@@ -373,6 +373,12 @@ public class FrmMain extends javax.swing.JFrame
         javax.swing.JPanel consoleInputPanel = new javax.swing.JPanel(new BorderLayout());
         consoleInputPanel.add(consolePromptLabel, BorderLayout.WEST);
         consoleInputPanel.add(consoleInput, BorderLayout.CENTER);
+        // H12 — botón Clear a mano (la salida se acumula); limpia la consola.
+        javax.swing.JButton btnClearConsole = new javax.swing.JButton("Clear");
+        btnClearConsole.setToolTipText("Limpiar la consola");
+        btnClearConsole.setFocusable(false);
+        btnClearConsole.addActionListener(e -> consolaArea.setText(""));
+        consoleInputPanel.add(btnClearConsole, BorderLayout.EAST);
         jPanel2.add(consoleInputPanel, BorderLayout.PAGE_END);
         consoleInput.addActionListener(e -> {
             String text = consoleInput.getText();
