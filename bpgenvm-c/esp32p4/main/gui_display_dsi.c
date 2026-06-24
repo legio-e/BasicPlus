@@ -19,6 +19,10 @@
 #include "driver/ledc.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"          /* G4: tick de LVGL (ms) */
+#include "lvgl.h"               /* G4: LVGL 9.2.2 vendorizada (componente IDF) */
+#include "freertos/FreeRTOS.h"  /* G4: vTaskDelay en el bombeo */
+#include "freertos/task.h"
 
 static const char *TAG = "p4_gfx";
 
@@ -149,4 +153,77 @@ void p4_gfx_smoke_test(void)
     ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, 0, LCD_H_RES, LCD_V_RES, fb));
     ESP_LOGI(TAG, "G3: ROJO volcado. Pantalla roja => DSI+EK79007+backlight+PSRAM OK en nuestro firmware");
     /* fb se queda vivo a propósito (el draw del DPI puede ser asíncrono). */
+}
+
+/* ============================ G4 — LVGL 9.2.2 ============================
+ * Prueba de LVGL en NUESTRO firmware: panel (reutilizado de G3) + lv_display con
+ * flush vía esp_lcd_panel_draw_bitmap + un botón con label. Sin táctil todavía
+ * (G5 añade el GT911 como lv_indev). La costura portable bpvm_gui_disp_*
+ * (bpvm_gui.h, bajo BPVM_LVGL) se cablea en G6 junto a gui.c; aquí va una prueba
+ * autónoma para validar el toolchain LVGL + el render.
+ *
+ * Color: LVGL con LV_COLOR_DEPTH 16 produce RGB565 nativo (lo activa BPVM_BOARD_P4
+ * en include/lv_conf.h); el panel lo escanea igual que el 0xF800 del smoke test. */
+static lv_display_t *s_lv_disp = NULL;
+
+static uint32_t p4_lv_tick_ms(void)
+{
+    return (uint32_t) (esp_timer_get_time() / 1000);
+}
+
+/* Vuelca la zona renderizada (RGB565) al framebuffer del panel DPI. Sin DMA2D el
+ * draw_bitmap copia por CPU de forma síncrona -> flush_ready justo después. */
+static void p4_lv_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
+{
+    esp_lcd_panel_draw_bitmap(s_panel, area->x1, area->y1,
+                              area->x2 + 1, area->y2 + 1, px_map);
+    lv_display_flush_ready(disp);
+}
+
+void p4_gfx_lvgl_test(void)
+{
+    p4_dsi_panel_init();
+    p4_backlight_on();
+
+    lv_init();
+    lv_tick_set_cb(p4_lv_tick_ms);
+
+    s_lv_disp = lv_display_create(LCD_H_RES, LCD_V_RES);
+    lv_display_set_flush_cb(s_lv_disp, p4_lv_flush);
+
+    /* Buffer de dibujo PARCIAL de LVGL en PSRAM (120 líneas ~ 240 KB). */
+    size_t buf_px   = (size_t) LCD_H_RES * 120;
+    void  *draw_buf = heap_caps_malloc(buf_px * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+    if (draw_buf == NULL) { ESP_LOGE(TAG, "sin PSRAM para el draw buffer de LVGL"); return; }
+    lv_display_set_buffers(s_lv_disp, draw_buf, NULL, buf_px * sizeof(uint16_t),
+                           LV_DISPLAY_RENDER_MODE_PARTIAL);
+
+    /* UI: fondo azul + un botón centrado con etiqueta. */
+    lv_obj_t *scr = lv_screen_active();
+    lv_obj_set_style_bg_color(scr, lv_color_hex(0x10384f), LV_PART_MAIN);
+    lv_obj_t *btn = lv_button_create(scr);
+    lv_obj_set_size(btn, 320, 110);
+    lv_obj_center(btn);
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, "BasicPlus  G4");
+    lv_obj_center(lbl);
+
+    ESP_LOGI(TAG, "G4: LVGL %d.%d.%d + widget OK (LV_COLOR_DEPTH=%d). Bombeando...",
+             LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH, (int) LV_COLOR_DEPTH);
+
+    /* Bombeo de LVGL en este task (main); el wire corre en su propio task en
+     * paralelo. G6 moverá esto a Gui.run() de BP. LVGL NO es thread-safe: por
+     * ahora SOLO este task lo toca.
+     *
+     * OJO (causa del TWDT del 1er intento): vTaskDelay(pdMS_TO_TICKS(5)) con
+     * FreeRTOS a 100 Hz = 0 ticks -> vTaskDelay(0) NO bloquea (solo cede a prio>=),
+     * así que IDLE0 (prio 0) nunca corría en CPU0 y saltaba el watchdog. Hay que
+     * ceder SIEMPRE >=1 tick. */
+    for (;;) {
+        uint32_t idle_ms = lv_timer_handler();   /* ms hasta el próximo timer LVGL */
+        if (idle_ms > 50) idle_ms = 50;          /* cap (cubre LV_NO_TIMER_READY = UINT32_MAX) */
+        TickType_t ticks = pdMS_TO_TICKS(idle_ms);
+        if (ticks == 0) ticks = 1;               /* CLAVE: >=1 tick -> IDLE0 corre -> sin TWDT */
+        vTaskDelay(ticks);
+    }
 }

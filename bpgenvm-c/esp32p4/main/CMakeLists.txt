@@ -58,4 +58,5 @@ idf_component_register(
         esp_hw_support   # INFO (repl_esp32): esp_mac.h (uniqueId desde efuse)
         esp_lcd          # G3: MIPI-DSI (esp_lcd_new_dsi_bus + panel ops)
         esp_driver_ledc  # G3: PWM del backlight (GPIO26)
+        lvgl             # G4: LVGL 9.2.2 vendorizada (via EXTRA_COMPONENT_DIRS)
 )

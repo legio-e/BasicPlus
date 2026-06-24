@@ -1,0 +1,10 @@
+# Tabla de particiones — firmware BasicPlus ESP32-P4 (V3, flash 16 MB).
+# App holgada (4 MB: VM-C + LVGL + AOT con margen) + "bpfs" para el FS persistente
+# (los .mod subidos por el wire). El firmware busca la partición por nombre "bpfs";
+# sin ella, FS solo en RAM. Misma estructura que el firmware del S3 (esp32/).
+#
+# Name,     Type, SubType,  Offset,    Size,     Flags
+nvs,        data, nvs,      0x9000,    0x6000,
+phy_init,   data, phy,      0xf000,    0x1000,
+factory,    app,  factory,  0x10000,   0x400000,
+bpfs,       data, 0x40,     0x410000,  0x200000,

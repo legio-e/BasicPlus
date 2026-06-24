@@ -27,10 +27,10 @@
  *====================*/
 
 /*Color depth: 1 (I1), 8 (L8), 16 (RGB565), 24 (RGB888), 32 (XRGB8888)*/
-/* Board-aware (V3/H5.1): los builds STM32 HAL (micro, p.ej. DK2) usan RGB565
- * (panel LTDC); el host (SDL) usa XRGB8888. USE_HAL_DRIVER lo define CubeMX en
- * todo proyecto STM32; el host no lo define. */
-#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2)
+/* Board-aware (V3): los micros con panel RGB565 (STM32 DK2 via LTDC; ESP32-P4 via
+ * MIPI-DSI) usan 16 bpp; el host (SDL) usa XRGB8888. USE_HAL_DRIVER lo define CubeMX
+ * en todo proyecto STM32; BPVM_BOARD_P4 lo define el build del P4; el host ninguno. */
+#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4)
 #define LV_COLOR_DEPTH 16
 #else
 #define LV_COLOR_DEPTH 32

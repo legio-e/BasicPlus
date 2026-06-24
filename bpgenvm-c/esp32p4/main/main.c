@@ -214,8 +214,8 @@ void app_main(void)
     ESP_LOGI(TAG, "P4 VM.3: IP 192.168.2.2 | log %s:%d | wire v1 TCP *:%d",
              SERVER_IP, SERVER_PORT, WIRE_PORT);
 
-    /* G3 — display: panel DSI + backlight + ROJO a pantalla completa. Independiente
-     * del wire (que sigue sirviendo en paralelo). La PSRAM ya está arriba (se
-     * inicializa antes de app_main). */
-    p4_gfx_smoke_test();
+    /* G4 — display + LVGL: panel DSI + backlight + un botón LVGL (bombeo en este
+     * task; el wire sigue sirviendo en su propio task). Reutiliza el panel de G3.
+     * NO retorna (bucle de GUI). La PSRAM ya está arriba (antes de app_main). */
+    p4_gfx_lvgl_test();
 }

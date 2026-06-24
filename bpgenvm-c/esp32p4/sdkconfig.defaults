@@ -10,9 +10,18 @@ CONFIG_ESP32P4_REV_MIN_0=y
 # Holgura de stack para app_main.
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
-# G2 — PSRAM 32 MB (HEX, 200 MHz) para el framebuffer del display. Misma config
-# que el ejemplo oficial mipi_dsi del P4. OJO: posible conflicto con el reloj RMII
-# de Ethernet (ambos tiran del MPLL, esp-idf #18377) — se observa en este flasheo.
+# G2 — PSRAM 32 MB (HEX, 200 MHz) para el framebuffer del display. Misma config que
+# el ejemplo oficial mipi_dsi del P4. PSRAM@200M y el RMII de Ethernet COEXISTEN en
+# placa (el conflicto del MPLL #18377 no nos afecta — verificado).
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_HEX=y
 CONFIG_SPIRAM_SPEED_200M=y
+
+# G4 — la flash REAL es de 16 MB (el chip), no 2 MB. Sin esto IDF compila para 2 MB:
+# la imagen con LVGL no cabe en el app de 1 MB de la tabla single-app, y avisa
+# "Detected size(16384k) larger than image header(2048k)". Tabla a medida
+# (partitions.csv): app de 4 MB + bpfs (FS persistente). Espeja el firmware del S3.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
