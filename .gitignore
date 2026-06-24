@@ -123,3 +123,8 @@ samples/*.log.old
 bpgenvm-c/esp32p4_mipi_dsi/
 bpgenvm-c/esp32p4_bsp_button/
 bpgenvm-c/esp32p4_lvgl_test/
+
+# Firmware REAL del P4: componentes descargados + lock (idf.py los regenera;
+# el manifiesto idf_component.yml SÍ se versiona). Igual que el firmware del S3.
+bpgenvm-c/esp32p4/managed_components/
+bpgenvm-c/esp32p4/dependencies.lock

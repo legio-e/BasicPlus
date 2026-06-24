@@ -35,6 +35,7 @@
 #include "repl_esp32.h"       /* dispatcher wire v1 REUTILIZADO (agnóstico transporte) */
 #include "wire_v1_tcp.h"      /* servidor del wire sobre TCP (capa de I/O del P4) */
 #include "p4_board_id.h"      /* identidad de placa esp32p4 para INFO/HELLO */
+#include "gui_display_dsi.h"  /* G3: display MIPI-DSI (panel + backlight + rojo) */
 
 static const char *TAG = "bpvm_p4";
 
@@ -212,4 +213,9 @@ void app_main(void)
 
     ESP_LOGI(TAG, "P4 VM.3: IP 192.168.2.2 | log %s:%d | wire v1 TCP *:%d",
              SERVER_IP, SERVER_PORT, WIRE_PORT);
+
+    /* G3 — display: panel DSI + backlight + ROJO a pantalla completa. Independiente
+     * del wire (que sigue sirviendo en paralelo). La PSRAM ya está arriba (se
+     * inicializa antes de app_main). */
+    p4_gfx_smoke_test();
 }

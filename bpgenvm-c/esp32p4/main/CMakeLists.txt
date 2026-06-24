@@ -8,6 +8,7 @@ idf_component_register(
         "p4_mods.c"
         "wire_v1_tcp.c"                       # VM.3: capa de I/O del wire v1 sobre TCP (sockets lwIP)
         "p4_board_id.c"                       # VM.3 pulido: identidad de placa esp32p4 (override fuerte de repl_board_id)
+        "gui_display_dsi.c"                   # G3: display MIPI-DSI (panel EK79007 + backlight LEDC)
         "../../esp32/main/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
         "../../esp32/main/json_min.c"         # VM.3: parser JSON del wire (C portable)
         "../../esp32/main/platform_esp32.c"
@@ -55,4 +56,6 @@ idf_component_register(
         esp_partition
         spi_flash        # INFO (repl_esp32): esp_flash_get_size (flash real montada)
         esp_hw_support   # INFO (repl_esp32): esp_mac.h (uniqueId desde efuse)
+        esp_lcd          # G3: MIPI-DSI (esp_lcd_new_dsi_bus + panel ops)
+        esp_driver_ledc  # G3: PWM del backlight (GPIO26)
 )

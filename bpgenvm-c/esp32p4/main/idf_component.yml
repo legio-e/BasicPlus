@@ -1,0 +1,7 @@
+# Componentes gestionados del firmware del ESP32-P4.
+# Gráficos (G3+): driver del panel EK79007 por MIPI-DSI. Trae esp_lcd_mipi_dsi.
+# El táctil GT911 (esp_lcd_touch_gt911) se añadirá en G5. LVGL NO va aquí: usamos
+# nuestra copia vendorizada (third_party/lvgl 9.2.2) vía EXTRA_COMPONENT_DIRS (G4),
+# para paridad con host/STM32 (NO la lvgl/lvgl del registro).
+dependencies:
+  espressif/esp_lcd_ek79007: "^1.0.0"

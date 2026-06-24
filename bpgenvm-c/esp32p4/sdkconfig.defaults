@@ -9,3 +9,10 @@ CONFIG_ESP32P4_REV_MIN_0=y
 
 # Holgura de stack para app_main.
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# G2 — PSRAM 32 MB (HEX, 200 MHz) para el framebuffer del display. Misma config
+# que el ejemplo oficial mipi_dsi del P4. OJO: posible conflicto con el reloj RMII
+# de Ethernet (ambos tiran del MPLL, esp-idf #18377) — se observa en este flasheo.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_HEX=y
+CONFIG_SPIRAM_SPEED_200M=y
