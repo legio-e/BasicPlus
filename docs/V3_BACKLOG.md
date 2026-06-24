@@ -84,6 +84,32 @@ preview de forms en PC (si no se cuela antes), rollout de gráficos a más kits,
 `deflate`-lite, multi-fichero/Archive, IDE multiplataforma (jSerialComm), strings multilínea + interpolación,
 AOT cross-module (#169). **El alcance de V3 queda CERRADO** ("y ya nada más").
 
+**PACK + lectura de SD (nuevas prestaciones V4, charla 24-jun):**
+- **PACK = XIP de bytecode.** Un "pack" es como un ZIP **sin comprimir** (un TAR): cabecera +
+  directorio `{nombre, offset, tamaño}` + blobs concatenados (módulos compilados, código alineado
+  4 B). Se graba **entero en una región de flash propia, APARTE del FS**. **Objetivo: ahorrar RAM.**
+  Hoy cargar un módulo = copiar el `.mod` entero a RAM; el grueso es el **código** (opcodes), que es
+  **solo-lectura**. Como la flash está mapeada en memoria (RP2350 `0x10000000`, STM32 `0x08000000`,
+  ESP32 vía `mmap`), el intérprete lee `code[pc]` **directo de flash** y NO lo copia. **El módulo SÍ
+  va a RAM** (globales mutables + tablas), **su código NO** (se ejecuta en sitio / XIP). Clave en
+  micros pequeños, donde el recurso escaso es la RAM (la flash sobra) — enlaza con "cosas increíbles
+  en micros de ~1 $".
+  - **Alcance (Eduardo): Fase 1 y basta — "con que funcione".** Solo el `code[]` en flash; el resto
+    (pool de constantes, tablas, globales) en RAM como hoy. (Fase 2 hipotética, NO objetivo = pool de
+    constantes también en flash con interning perezoso de strings — ojo GC.)
+  - Simetría con el `.mdn`: ese YA es XIP para código **nativo**; PACK lo extiende al **bytecode**.
+    Unidad desplegable unificada = pack con `.mod` (+ `.mdn` opcional). Cold path interpretado desde
+    flash, hot path AOT nativo.
+  - Grabado por el IDE ("Burn Pack" sobre el wire = borra+escribe la región, mini-flasheo). Orden de
+    resolución de `import`: FS → pack → embebido. **Regalo:** la **stdlib como pack** → actualizar
+    `Gui` sin reflashear firmware (justo el dolor de V3).
+  - Aviso: leer de flash es un pelín más lento que de SRAM (lo tapa la cache XIP de cada chip + los
+    bucles calientes van por AOT).
+- **Lectura de SD.** Almacenamiento masivo removible (datos/assets/logs). **NO se puede XIP** (es
+  dispositivo de bloques, no mapeado) → de la SD se **carga a RAM** como un archivo normal, o sirve
+  para **transportar** packs que luego se graban en flash. Complementa al PACK (tier de capacidad),
+  no compite. (Probable clase OO estilo `Sd.Card`/`Sd.File`, por la política "HW nuevo = clase".)
+
 ## 🎨 GUI (objetivo cabecera)
 
 El camino crítico —upcall C→BP → `Gui.*` en miVM → VM-C host (LVGL+SDL) →
