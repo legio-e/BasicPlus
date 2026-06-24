@@ -27,6 +27,26 @@ Orden siguiente:
 
 (GUI en pausa ≥1 semana tras cerrar H6 en la DK2.)
 
+## ✅ Estado y decisiones de cierre de V3 (24-jun)
+
+**Buque insignia HECHO:** GUI de BasicPlus, MISMO bytecode, en 3 silicios (Java host ·
+ARM/STM32-DK2 · RISC-V/ESP32-P4). Las dos columnas (DK2 + confirmación P4) en pie → V3 en
+**fase de cierre** (rematar + tapar agujeros + documentar). Cerrado además: H10 (HW STM32
+Nucleo+DK2), stdlib Compress/Json/Freq (core), P4 completa (VM + G1-G6 gráficos + Ethernet/wire).
+
+**Decisiones (Eduardo, 24-jun):**
+- **P4 = placa BP COMPLETA (HW al 100 %) → DENTRO de V3.** Motivo de peso: hay **pantallas
+  con P4 integrado, baratas → candidatas reales para proyectos**; por eso la P4 debe hacerlo
+  TODO, no solo gráficos. Portar los backends HW del firmware P4 (GPIO/I2C/SPI/ADC/PWM/UART…
+  hoy **stubs**), al estilo S3 (ESP-IDF). **NO ahora** (atracón de flashes) — más adelante.
+- **TCP server (por la Ethernet del P4): APLAZADO** (sin decidir; aplazar no es grave). La
+  Ethernet del P4 ya funciona → desbloqueado técnicamente, pero no prioritario.
+- **Rollout de gráficos a otros kits: solo equipos con recursos de sobra (flash/RAM/pines);
+  NO prioritario.** La pantalla con S3 "podría caber pero me da igual" → no se persigue.
+  DK2 + P4 son las plataformas gráficas de V3.
+- **Pausa de flasheo** tras el maratón del P4 → el trabajo inmediato debería evitar reflashear
+  (docs / IDE host-side / AOT host).
+
 ## 🎨 GUI (objetivo cabecera)
 
 El camino crítico —upcall C→BP → `Gui.*` en miVM → VM-C host (LVGL+SDL) →
