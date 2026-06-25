@@ -247,7 +247,11 @@ enum {
     BUILTIN_PICO_MARK_AT    = 204,   /* markAt(i): i-ésima (0=origen pegajoso) */
     BUILTIN_PICO_BOOT_COUNT = 205,   /* bootCount(): arranques desde power-on */
     /* H13 (V3) — Forms: call-by-name del handler (host, name, sender) → void. */
-    BUILTIN_GUI_INVOKE_BY_NAME = 206
+    BUILTIN_GUI_INVOKE_BY_NAME = 206,
+    /* H13.1 (V3) — Forms Camino A: dispatch del handler por SLOT de vtable
+     * (win, slot, sender) → void. El handler es un MÉTODO de la ventana cuyo slot
+     * horneó el IDE en el .win (resuelto vía .bpi/slotOf). */
+    BUILTIN_GUI_INVOKE_BY_SLOT = 207
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -636,6 +640,39 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         int32_t a = (int32_t) sender;
         bpvm_call_bp_from_builtin(vm, tc, target, &a, 1);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_GUI_INVOKE_BY_SLOT: {
+        /* H13.1 — Forms Camino A: invoca el MÉTODO de la ventana en vtable[slot]
+         * (slot horneado por el IDE). Args: win, slot, sender. Espejo de
+         * invokeHandlerBySlot en miVM: paseo de vtable con fallback al padre
+         * (idéntico a OP_INVOKE_VIRTUAL) → bridge con [this=win, sender] como
+         * locals 0/1. slot < 0 o no resoluble → IGNORA (sin excepción). */
+        uint32_t sender = (uint32_t) pop_i32(vm, tc);
+        int32_t  slot   = pop_i32(vm, tc);
+        uint32_t win    = (uint32_t) pop_i32(vm, tc);
+        if (win == 0 || slot < 0) { push_i32(vm, tc, 0); return BPVM_OK; }
+        uint8_t* mem = vm->memory;
+        uint32_t desc = (uint32_t) bpvm_read_i32_be(mem + win);
+        int32_t  method_off = -1;
+        uint32_t target_cs  = 0;
+        for (;;) {
+            uint16_t bw    = bpvm_read_u16_be(mem + desc + BPVM_CLS_OFF_BITMAP_WORDS);
+            uint16_t nmeth = bpvm_read_u16_be(mem + desc + BPVM_CLS_OFF_NUM_METHODS);
+            uint32_t vt_base = desc + BPVM_CLS_OFF_FIELD_BITMAP + 2u * (uint32_t) bw * 4u;
+            if ((uint32_t) slot < nmeth) {
+                int32_t off = bpvm_read_i32_be(mem + vt_base + (uint32_t) slot * 4);
+                if (off != -1) { method_off = off; target_cs = bpvm_get_cs_for_data_addr(vm, desc); break; }
+            }
+            int32_t parent_off = bpvm_read_i32_be(mem + desc + BPVM_CLS_OFF_PARENT_OFF);
+            if (parent_off == 0) { push_i32(vm, tc, 0); return BPVM_OK; }  /* no resoluble → ignora */
+            uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, desc);
+            desc = (uint32_t) ((int32_t) cur_cs + parent_off);
+        }
+        uint32_t target_abs = target_cs + (uint32_t) method_off;
+        int32_t a2[2]; a2[0] = (int32_t) win; a2[1] = (int32_t) sender;
+        bpvm_call_bp_from_builtin(vm, tc, target_abs, a2, 2);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }

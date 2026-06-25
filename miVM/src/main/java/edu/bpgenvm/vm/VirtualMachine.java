@@ -3398,6 +3398,16 @@ public class VirtualMachine {
                 pushTc(tc, 0);
                 break;
             }
+            // H13.1 (V3) — Forms Camino A: dispatch por SLOT (handler = método de la
+            // ventana, slot horneado por el IDE en el .win). Args apilados: win, slot, sender.
+            case GUI_INVOKE_BY_SLOT: {
+                int sender = popTc(tc);
+                int slot   = popTc(tc);
+                int winRef = popTc(tc);
+                invokeHandlerBySlot(tc, winRef, slot, sender);
+                pushTc(tc, 0);
+                break;
+            }
             // V3/H6 — geometría (backend = verdad) + scroll (opt-in) + refresh.
             case GUI_SET_X:  { int v = popTc(tc); int hnd = popTc(tc); gui.setX(hnd, v); pushTc(tc, 0); break; }
             case GUI_GET_X:  { int hnd = popTc(tc); pushTc(tc, gui.getX(hnd)); break; }
@@ -4935,6 +4945,49 @@ public class VirtualMachine {
         tc.sp = base + 16;
         tc.pc = pc;
         tc.cs = cs;
+        tc.yieldRequested = false;
+        try {
+            runOnContext(tc);
+        } finally {
+            tc.sp = base;
+            tc.bp = savedBp;
+            tc.cs = savedCs;
+            tc.pc = savedPc;
+            tc.status = savedStatus;
+            tc.yieldRequested = savedYield;
+        }
+    }
+
+    /**
+     * H13.1 (V3) — Forms Camino A: invoca (anidado) un MÉTODO de la ventana por
+     * su SLOT de vtable (que el IDE horneó en el .win, resuelto vía .bpi/slotOf).
+     * Resuelve la dirección absoluta en vtable[slot] del class_ptr de `winRef`
+     * (idéntico a como THREAD_START resuelve run()) y monta el frame de método
+     * [this=win, sender, savedPC=0 (centinela), savedBP, savedCS]. Mismo patrón de
+     * upcall anidado que invokeHandlerByName. slot < 0 (handler ausente) → ignora.
+     */
+    private void invokeHandlerBySlot(ThreadContext tc, int winRef, int slot, int sender) {
+        if (winRef == 0 || slot < 0) return;            // sin ventana / handler ausente → ignorar
+        int classPtr   = readInt32(winRef);
+        int targetCS   = moduleManager.getCSForDataAddr(classPtr);
+        int bitmapW    = readInt16(classPtr + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
+        int vtableBase = classPtr + CLS_OFF_FIELD_BITMAP + 2 * bitmapW * 4;
+        int methodOff  = readInt32(vtableBase + slot * 4);
+        int methodPc   = targetCS + methodOff;
+        int base = tc.sp;
+        int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
+        ThreadStatus savedStatus = tc.status;
+        boolean savedYield = tc.yieldRequested;
+        // Frame de método: [this=win, sender, savedPC=0, savedBP, savedCS], bp tras ellos.
+        writeInt32(base,      winRef);   // local0 = this (la ventana)
+        writeInt32(base + 4,  sender);   // local1 = sender (el widget que disparó)
+        writeInt32(base + 8,  0);        // saved PC = 0 → mem[0] = THREAD_EXIT (centinela)
+        writeInt32(base + 12, savedBp);
+        writeInt32(base + 16, savedCs);
+        tc.bp = base + 20;
+        tc.sp = base + 20;
+        tc.pc = methodPc;
+        tc.cs = targetCS;
         tc.yieldRequested = false;
         try {
             runOnContext(tc);

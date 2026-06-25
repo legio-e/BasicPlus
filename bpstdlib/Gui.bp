@@ -247,6 +247,11 @@ module Gui
   // (el widget que disparó) como arg0. La usa el dispatch de eventos de Gui.Window.
   // (Param `host`, no `owner`: `owner` es palabra clave del lenguaje — RAII.)
   public intrinsic function __guiInvokeByName(host: Object, name: string, sender: Object)
+  // H13.1 — Forms Camino A: dispatch del handler por SLOT de vtable. `win` es la
+  // ventana, `slot` el índice de vtable del método handler (lo hornea el IDE en el
+  // .win, resuelto vía .bpi/slotOf), `sender` el widget que disparó. Handler =
+  // MÉTODO de la ventana. slot < 0 (handler ausente) → se ignora.
+  public intrinsic function __guiInvokeBySlot(win: Object, slot: integer, sender: Object)
 
   // ---- Screen — pantalla raíz (la entrega el backend ya montada). ----
   public class Screen extends Component

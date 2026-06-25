@@ -413,7 +413,13 @@ public enum Builtin {
     // `sender` como arg0. Es el call-by-name de los handlers del .win (que son
     // funciones de módulo); reutiliza resolveExportInModule + el frame anidado
     // del upcall. id 206.
-    GUI_INVOKE_BY_NAME("__guiInvokeByName");           // (owner, name: string, sender) → void
+    GUI_INVOKE_BY_NAME("__guiInvokeByName"),           // (owner, name: string, sender) → void
+
+    // H13.1 (V3) — Forms Camino A: dispatch de evento por SLOT de vtable. Igual
+    // que GUI_INVOKE_BY_NAME pero el handler es un MÉTODO de la ventana cuyo slot
+    // ya horneó el IDE en el .win (resuelto vía .bpi/slotOf). Lee vtable[slot] del
+    // class_ptr de `win` y monta el frame de método [this=win, sender, ...]. id 207.
+    GUI_INVOKE_BY_SLOT("__guiInvokeBySlot");           // (win, slot: integer, sender) → void
 
     public final String bpName;
     public final int id;

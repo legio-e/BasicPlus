@@ -129,6 +129,15 @@ para rechazar pantallas rancias si los slots se mueven al recompilar.
   con `ClassSymbol.slotOf`, #174b); para una clase importada solo falta tomar el slot del `.bpi` (ClassSig).
   → Forms (Camino A) y AOT-cross-module se apoyan en el MISMO cimiento; conviene dejar el `slotOf`
   cross-module sólido (verificar que el `ClassSymbol` importado lo lleva poblado).
+- **Progreso H13.1 (25-jun):** **paso 1 ✅** keystone confirmado — el `.bpi` codifica el orden de vtable +
+  `layout numMethods` (Window=30) y `ClassSymbol.ensureMethodSlots` ya calcula slots con base externa
+  (= L2 v3.a verificada); el IDE puede hornear reusando `slotOf` **sin tocar `.bpi`/`.mod`**. **Paso 2 ✅**
+  primitiva `Gui.__guiInvokeBySlot(win, slot, sender)` (builtin id 207) en **ambas VMs**: paseo de vtable con
+  fallback al padre (idéntico a `INVOKE_VIRTUAL`) + frame de método `[this=win, sender]`; reusa la maquinaria de
+  `invokeHandlerByName` (miVM) / `bpvm_call_bp_from_builtin` (VM-C). **Paridad dual-VM verificada** (despacho a
+  método en slot conocido → byte-idéntico). Pendiente: **paso 3** loader (`__bindEvents` guarda el slot;
+  `onClick/onChange` → `__guiInvokeBySlot`), **paso 4** el IDE hornea el slot en el `.win`, **paso 5** sample +
+  paridad end-to-end.
 
 ## 🎨 GUI (objetivo cabecera)
 
