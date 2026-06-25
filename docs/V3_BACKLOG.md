@@ -135,9 +135,14 @@ para rechazar pantallas rancias si los slots se mueven al recompilar.
   primitiva `Gui.__guiInvokeBySlot(win, slot, sender)` (builtin id 207) en **ambas VMs**: paseo de vtable con
   fallback al padre (idéntico a `INVOKE_VIRTUAL`) + frame de método `[this=win, sender]`; reusa la maquinaria de
   `invokeHandlerByName` (miVM) / `bpvm_call_bp_from_builtin` (VM-C). **Paridad dual-VM verificada** (despacho a
-  método en slot conocido → byte-idéntico). Pendiente: **paso 3** loader (`__bindEvents` guarda el slot;
-  `onClick/onChange` → `__guiInvokeBySlot`), **paso 4** el IDE hornea el slot en el `.win`, **paso 5** sample +
-  paridad end-to-end.
+  método en slot conocido → byte-idéntico). **Paso 3 ✅** loader en `Gui.bp`: Component con campos
+  `__win`/`__slotClic`/`__slotChange` + `__bindEvents`; `onClick/onChange` → `__guiInvokeBySlot`; clase `Window`
+  + `load(.win)` (devuelve el raíz) + `buildForm`/`makeWidget`/`applyCommon` (privadas) + `import Json`.
+  **Verificado end-to-end dual-VM** (FormTest: `.win` con `clicSlot` horneado a mano = 30 → `MyForm.onOk`,
+  "ok-pulsado" byte-idéntico en miVM y VM-C → valida loader+binding+dispatch+slot de un tirón). Pendiente:
+  **paso 4** el IDE hornea el slot en el `.win` (resuelve handler→slot vía el compilador empaquetado; OJO: la
+  clase ventana debe ser `public` para que su método→slot salga en el `.bpi`), **paso 5** sample pulido +
+  paridad + rebuild de blobs (fat-jar IDE + Gui.{mod,bpi} + firmwares).
 
 ## 🎨 GUI (objetivo cabecera)
 

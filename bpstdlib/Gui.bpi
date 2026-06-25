@@ -2,15 +2,50 @@ bpi 7
 module Gui
 func __guiAlign(handle:integer,a:integer,dx:integer,dy:integer):void public intrinsic
 func __guiTextareaGetReadonly(handle:integer):integer public intrinsic
-func __guiCreateDropdown(parent:integer):integer public intrinsic
 func __guiSetWidth(handle:integer,w:integer):void public intrinsic
+func __guiSetHeight(handle:integer,h:integer):void public intrinsic
+func __guiImageNew():integer public intrinsic
+func __guiSetX(handle:integer,x:integer):void public intrinsic
+func __guiSetChecked(handle:integer,v:boolean):void public intrinsic
+func __guiSetY(handle:integer,y:integer):void public intrinsic
+func __guiCreateCheckbox(parent:integer):integer public intrinsic
+func __guiClean(handle:integer):void public intrinsic
+func __guiImageWidth(handle:integer):integer public intrinsic
+func buildForm(node:Json.JsonObject,parent:Component,win:Window):Component public
+func __guiTableGetCell(handle:integer,row:integer,col:integer):string public intrinsic
+func __guiDelete(handle:integer):void public intrinsic
+func __guiScreenActive():integer public intrinsic
+func __guiCreateTable(parent:integer):integer public intrinsic
+func __guiSetScrollDir(handle:integer,dir:integer):void public intrinsic
+func __guiCreateSpinbox(parent:integer):integer public intrinsic
+func __guiKeyboardSetTextarea(handle:integer,ta:integer):void public intrinsic
+func __guiCreateSwitch(parent:integer):integer public intrinsic
+func __guiCreateTextarea(parent:integer):integer public intrinsic
+func __guiImageLoadFile(handle:integer,path:string):integer public intrinsic
+func __guiSetValue(handle:integer,v:integer):void public intrinsic
+func __guiCreateMsgbox(parent:integer):integer public intrinsic
+func __guiRun():void public intrinsic
+func __guiSetText(handle:integer,t:string):void public intrinsic
+func __guiSetFontSize(handle:integer,px:integer):void public intrinsic
+func __guiSetTextColor(handle:integer,rgb:integer):void public intrinsic
+func __guiSetBgColor(handle:integer,rgb:integer):void public intrinsic
+func __guiGetValue(handle:integer):integer public intrinsic
+func __guiGetChecked(handle:integer):boolean public intrinsic
+func __guiCreateObj(parent:integer):integer public intrinsic
+func __guiGetScrollDir(handle:integer):integer public intrinsic
+func __guiClick(w:Component):void public intrinsic
+func __guiCreateImageView(parent:integer):integer public intrinsic
+func __guiScreenLoad(handle:integer):void public intrinsic
+func __guiInvokeByName(host:any,name:string,sender:any):void public intrinsic
+func __guiCreateBar(parent:integer):integer public intrinsic
+func __guiCreateLed(parent:integer):integer public intrinsic
+func __guiGetText(handle:integer):string public intrinsic
+func __guiCreateDropdown(parent:integer):integer public intrinsic
 func __guiSetFont(handle:integer,fontId:integer):void public intrinsic
 func __guiDispatchChange(self:Component):void public
 func run():void public
 func __guiImageViewRefresh(view:integer):void public intrinsic
-func __guiSetHeight(handle:integer,h:integer):void public intrinsic
 func __guiCreateLabel(parent:integer):integer public intrinsic
-func __guiImageNew():integer public intrinsic
 func __guiSetOptions(handle:integer,opts:string):void public intrinsic
 func __guiCreateTabview(parent:integer):integer public intrinsic
 func __guiCreateSlider(parent:integer):integer public intrinsic
@@ -19,62 +54,23 @@ func __guiSetButtons(handle:integer,labels:string):void public intrinsic
 func __guiGetY(handle:integer):integer public intrinsic
 func __guiGetX(handle:integer):integer public intrinsic
 func __guiGetFontSize(handle:integer):integer public intrinsic
-func __guiSetX(handle:integer,x:integer):void public intrinsic
-func __guiSetChecked(handle:integer,v:boolean):void public intrinsic
-func __guiSetY(handle:integer,y:integer):void public intrinsic
 func __guiDumpTree():string public intrinsic
 func __guiCreateButton(parent:integer):integer public intrinsic
-func __guiCreateCheckbox(parent:integer):integer public intrinsic
 func __guiImageViewSetImage(view:integer,image:integer):void public intrinsic
-func __guiClean(handle:integer):void public intrinsic
-func __guiImageWidth(handle:integer):integer public intrinsic
 func __guiTabviewAddTab(handle:integer,name:string):integer public intrinsic
-func __guiTableGetCell(handle:integer,row:integer,col:integer):string public intrinsic
-func __guiDelete(handle:integer):void public intrinsic
-func __guiScreenActive():integer public intrinsic
 func __guiCreateList(parent:integer):integer public intrinsic
 func __guiBindClick(handle:integer,self:Component):void public intrinsic
 func __guiTextareaSetReadonly(handle:integer,ro:integer):void public intrinsic
-func __guiCreateTable(parent:integer):integer public intrinsic
-func __guiSetScrollDir(handle:integer,dir:integer):void public intrinsic
-func __guiCreateSpinbox(parent:integer):integer public intrinsic
-func __guiKeyboardSetTextarea(handle:integer,ta:integer):void public intrinsic
 func __guiTableSetGrid(handle:integer,rows:integer,cols:integer):void public intrinsic
-func __guiCreateSwitch(parent:integer):integer public intrinsic
-func __guiCreateTextarea(parent:integer):integer public intrinsic
-func __guiImageLoadFile(handle:integer,path:string):integer public intrinsic
-func __guiSetValue(handle:integer,v:integer):void public intrinsic
 func __guiGetHeight(handle:integer):integer public intrinsic
 func __guiChange(w:Component):void public intrinsic
-func __guiCreateMsgbox(parent:integer):integer public intrinsic
-func __guiRun():void public intrinsic
-func __guiSetText(handle:integer,t:string):void public intrinsic
-func __guiSetFontSize(handle:integer,px:integer):void public intrinsic
 func __guiSetRange(handle:integer,mn:integer,mx:integer):void public intrinsic
-func __guiSetTextColor(handle:integer,rgb:integer):void public intrinsic
-func __guiSetBgColor(handle:integer,rgb:integer):void public intrinsic
-func __guiGetValue(handle:integer):integer public intrinsic
-func __guiGetChecked(handle:integer):boolean public intrinsic
 func __guiTableSetCell(handle:integer,row:integer,col:integer,text:string):void public intrinsic
 func __guiGetWidth(handle:integer):integer public intrinsic
 func __guiRefresh(handle:integer):void public intrinsic
-func __guiCreateObj(parent:integer):integer public intrinsic
-func __guiGetScrollDir(handle:integer):integer public intrinsic
-func __guiClick(w:Component):void public intrinsic
-func __guiCreateImageView(parent:integer):integer public intrinsic
-func __guiScreenLoad(handle:integer):void public intrinsic
+func __guiInvokeBySlot(win:any,slot:integer,sender:any):void public intrinsic
 func __guiDispatch(self:Component):void public
-func __guiInvokeByName(host:any,name:string,sender:any):void public intrinsic
 func __guiImageHeight(handle:integer):integer public intrinsic
-func __guiCreateBar(parent:integer):integer public intrinsic
-func __guiCreateLed(parent:integer):integer public intrinsic
-func __guiGetText(handle:integer):string public intrinsic
-class Label public extends Component
-  layout 7 29 00000000 00000000
-  ctor(parent:Component,text:string)
-  method setText(t:string):void public
-  method setFont(font:integer):void public
-end class
 class Image public
   layout 1 7 00000000 00000000
   ctor()
@@ -84,29 +80,11 @@ class Image public
   method height():integer public
 end class
 class Button public extends Component
-  layout 7 27 00000000 00000000
+  layout 10 28 00000000 00000000
   ctor(parent:Component,text:string)
-end class
-class Checkbox public extends Component
-  layout 8 30 00000000 00000000
-  ctor(parent:Component,text:string)
-  prop checked:boolean public
-  method setText(t:string):void public
-end class
-class Spinbox public extends Component
-  layout 8 30 00000000 00000000
-  ctor(parent:Component)
-  prop value:integer public
-  method setRange(mn:integer,mx:integer):void public
-end class
-class ImageView public extends Component
-  layout 7 28 00000000 00000000
-  ctor(parent:Component)
-  method setImage(img:Image):void public
-  method refresh():void public
 end class
 class Msgbox public extends Component
-  layout 8 30 00000000 00000000
+  layout 11 31 00000000 00000000
   ctor(parent:Component,message:string)
   prop result:integer public
   method setButtons(labels:string):void public
@@ -123,18 +101,14 @@ class Align public
   staticconst BOTTOM_MID:integer=7 public
   staticconst BOTTOM_LEFT:integer=6 public
 end class
-class Color public
-  layout 1 2 00000000 00000000
-  ctor(rgb:integer)
-end class
 class Dropdown public extends Component
-  layout 8 30 00000000 00000000
+  layout 11 31 00000000 00000000
   ctor(parent:Component)
   prop selected:integer public
   method setOptions(opts:string):void public
 end class
 class Tabview public extends Component
-  layout 8 30 00000000 00000000
+  layout 11 31 00000000 00000000
   ctor(parent:Component)
   prop active:integer public
   method addTab(name:string):Component public
@@ -147,39 +121,84 @@ class ScrollDir public
   staticconst BOTH:integer=3 public
 end class
 class TabPage public extends Component
-  layout 7 27 00000000 00000000
+  layout 10 28 00000000 00000000
   ctor(pageId:integer)
 end class
 class ListBox public extends Component
-  layout 8 30 00000000 00000000
+  layout 11 31 00000000 00000000
   ctor(parent:Component)
   prop selected:integer public
   method setItems(items:string):void public
 end class
+class Textarea public extends Component
+  layout 12 32 00000400 00000000
+  ctor(parent:Component)
+  prop text:string public
+  prop readOnly:boolean public
+end class
+class Window public extends Component
+  layout 10 30 00000000 00000000
+  ctor()
+  method load(path:string):Component public
+  method destroy():void public
+end class
+class Table public extends Component
+  layout 10 31 00000000 00000000
+  ctor(parent:Component)
+  method setGrid(rows:integer,cols:integer):void public
+  method setCell(row:integer,col:integer,text:string):void public
+  method getCell(row:integer,col:integer):string public
+end class
+class Panel public extends Component
+  layout 10 28 00000000 00000000
+  ctor(parent:Component)
+end class
+class Label public extends Component
+  layout 10 30 00000000 00000000
+  ctor(parent:Component,text:string)
+  method setText(t:string):void public
+  method setFont(font:integer):void public
+end class
+class Checkbox public extends Component
+  layout 11 31 00000000 00000000
+  ctor(parent:Component,text:string)
+  prop checked:boolean public
+  method setText(t:string):void public
+end class
+class Spinbox public extends Component
+  layout 11 31 00000000 00000000
+  ctor(parent:Component)
+  prop value:integer public
+  method setRange(mn:integer,mx:integer):void public
+end class
+class ImageView public extends Component
+  layout 10 29 00000000 00000000
+  ctor(parent:Component)
+  method setImage(img:Image):void public
+  method refresh():void public
+end class
+class Color public
+  layout 1 2 00000000 00000000
+  ctor(rgb:integer)
+end class
 class Slider public extends Component
-  layout 8 30 00000000 00000000
+  layout 11 31 00000000 00000000
   ctor(parent:Component)
   prop value:integer public
   method setRange(mn:integer,mx:integer):void public
 end class
 class Screen public extends Component
-  layout 7 28 00000000 00000000
+  layout 10 29 00000000 00000000
   ctor()
   method load():void public
 end class
-class Textarea public extends Component
-  layout 9 31 00000080 00000000
-  ctor(parent:Component)
-  prop text:string public
-  prop readOnly:boolean public
-end class
 class Toggle public extends Component
-  layout 8 29 00000000 00000000
+  layout 11 30 00000000 00000000
   ctor(parent:Component)
   prop checked:boolean public
 end class
 class Component public
-  layout 7 27 00000000 00000000
+  layout 10 28 00000000 00000000
   prop lvglId:integer public
   prop x:integer public
   prop y:integer public
@@ -196,34 +215,24 @@ class Component public
   method refresh():void public
   method clean():void public
   method delete():void public
+  method __bindEvents(win:any,slotClic:integer,slotChange:integer):void public
   method onClick():void public
   method onChange():void public
 end class
-class Table public extends Component
-  layout 7 30 00000000 00000000
-  ctor(parent:Component)
-  method setGrid(rows:integer,cols:integer):void public
-  method setCell(row:integer,col:integer,text:string):void public
-  method getCell(row:integer,col:integer):string public
-end class
 class Keyboard public extends Component
-  layout 7 28 00000000 00000000
+  layout 10 29 00000000 00000000
   ctor(parent:Component)
   method attach(ta:Component):void public
 end class
 class Led public extends Component
-  layout 8 31 00000000 00000000
+  layout 11 32 00000000 00000000
   ctor(parent:Component)
   prop value:integer public
   method on():void public
   method off():void public
 end class
-class Panel public extends Component
-  layout 7 27 00000000 00000000
-  ctor(parent:Component)
-end class
 class Bar public extends Component
-  layout 8 30 00000000 00000000
+  layout 11 31 00000000 00000000
   ctor(parent:Component)
   prop value:integer public
   method setRange(mn:integer,mx:integer):void public

@@ -11,6 +11,7 @@
 // públicas (lo público es `property`, #143).
 // ============================================================
 module Gui
+import Json
 
   // ---- Frontera BP↔backend: intrínsecos (inline → CALL_BUILTIN). La VM
   //      los implementa (Swing/LVGL). No los llama el usuario: usa las
@@ -226,12 +227,31 @@ module Gui
       __guiDelete(this.lvglId)
     end delete
 
+    // -- H13.1 Forms (Camino A): binding de eventos a MÉTODOS de la ventana por
+    //    SLOT de vtable. El loader (buildForm) los rellena con el slot que el IDE
+    //    horneó en el .win. __win == null → el widget NO está atado a un form (el
+    //    camino normal sigue siendo subclasear y reescribir onClick/onChange). --
+    var __win: Object            // la ventana dueña (null = sin form)
+    var __slotClic: integer      // slot del handler de clic (-1 = ninguno)
+    var __slotChange: integer    // slot del handler de change (-1 = ninguno)
+
+    // Ata los eventos de este widget a métodos de `win` por su slot de vtable.
+    // Lo llama el loader de Forms; el usuario no.
+    public function __bindEvents(win: Object, slotClic: integer, slotChange: integer)
+      this.__win := win
+      this.__slotClic := slotClic
+      this.__slotChange := slotChange
+    end __bindEvents
+
     // Eventos (upcall). El backend los dispara: al pulsar → onClick; al cambiar
-    // de valor → onChange. Por defecto no hacen nada; el usuario SUBCLASEA el
-    // widget y reescribe el que necesite.
+    // de valor → onChange. Si el widget está atado a un form, despachan al método
+    // de la ventana por su slot (sin handler → slot -1 → __guiInvokeBySlot ignora).
+    // Si no, no hacen nada y el usuario los reescribe subclaseando.
     public function onClick()
+      if this.__win != null then __guiInvokeBySlot(this.__win, this.__slotClic, this)
     end onClick
     public function onChange()
+      if this.__win != null then __guiInvokeBySlot(this.__win, this.__slotChange, this)
     end onChange
   end Component
 
@@ -668,5 +688,119 @@ module Gui
   public function run()
     __guiRun()
   end run
+
+  // ============================================================
+  // H13.1 — Forms (Camino A): una ventana = clase Window + un fichero .win (JSON
+  // con el árbol de componentes). Los handlers son MÉTODOS de la ventana; el .win
+  // los referencia por nombre y el IDE hornea su SLOT de vtable (resuelto vía
+  // .bpi/slotOf) como `clicSlot`/`changeSlot`. El loader ata cada widget a la
+  // ventana por ese slot; al disparar el evento, Component.onClick/onChange
+  // despacha con __guiInvokeBySlot. Handler ausente (slot -1) → se ignora.
+  // ============================================================
+  public class Window extends Component
+    public function Window()
+      this.lvglId := __guiCreateObj(__guiScreenActive())   // contenedor raíz propio
+      __guiBindClick(this.lvglId, this)
+    end Window
+
+    // Carga un .win (JSON), construye el árbol de widgets bajo el raíz y
+    // devuelve el widget raíz del form (útil para refrescar/inspeccionar).
+    public function load(path: string): Component
+      var root: Json.JsonValue := Json.readJsonFile(path)
+      return buildForm(root.asObject(), this, this)
+    end load
+
+    // Destruye la ventana → el backend cascadea y borra todo el subárbol.
+    public function destroy()
+      this.delete()
+    end destroy
+  end Window
+
+  // buildForm — recursivo: crea el widget del nodo, fija sus props comunes, ata sus
+  // handlers (por slot horneado) y baja a los hijos. Función de módulo PRIVADA (la
+  // recursión usa resolución por nombre con fixup tardío).
+  public function buildForm(node: Json.JsonObject, parent: Component, win: Window): Component
+    var t: string := node.getStringOr("type", "Panel")
+    var w: Component := makeWidget(t, parent, node)
+    applyCommon(w, node)
+    // Slots horneados por el IDE (-1 = sin handler). Atamos si hay alguno.
+    var slotClic: integer := node.getIntOr("clicSlot", -1)
+    var slotChange: integer := node.getIntOr("changeSlot", -1)
+    if slotClic >= 0 or slotChange >= 0 then
+      w.__bindEvents(win, slotClic, slotChange)
+    endif
+    if node.has("children") then
+      var arr: Json.JsonArray := node.getArray("children")
+      var i: integer := 0
+      while i < arr.length() do
+        var child: Json.JsonValue := arr.at(i)
+        buildForm(child.asObject(), w, win)
+        i := i + 1
+      endwh
+    endif
+    return w
+  end buildForm
+
+  // makeWidget — tipo (string) → constructor. Las props específicas del widget
+  // (text/value/checked/min/max) se fijan aquí, con el tipo concreto en mano.
+  function makeWidget(t: string, parent: Component, node: Json.JsonObject): Component
+    if t == "Panel" then
+      return Panel(parent)
+    endif
+    if t == "Label" then
+      return Label(parent, node.getStringOr("text", ""))
+    endif
+    if t == "Button" then
+      return Button(parent, node.getStringOr("text", ""))
+    endif
+    if t == "Checkbox" then
+      var cb: Checkbox := Checkbox(parent, node.getStringOr("text", ""))
+      cb.checked := node.getBoolOr("checked", false)
+      return cb
+    endif
+    if t == "Toggle" then
+      var tg: Toggle := Toggle(parent)
+      tg.checked := node.getBoolOr("checked", false)
+      return tg
+    endif
+    if t == "Slider" then
+      var sl: Slider := Slider(parent)
+      sl.setRange(node.getIntOr("min", 0), node.getIntOr("max", 100))
+      sl.value := node.getIntOr("value", 0)
+      return sl
+    endif
+    if t == "Textarea" then
+      var ta: Textarea := Textarea(parent)
+      ta.text := node.getStringOr("text", "")
+      return ta
+    endif
+    print "[Gui] aviso: widget desconocido '" + t + "' en el form (uso Panel)"
+    return Panel(parent)
+  end makeWidget
+
+  // applyCommon — props comunes (geometría/align/fuente), todas en Component.
+  function applyCommon(w: Component, node: Json.JsonObject)
+    if node.has("x") then        w.x := node.getIntOr("x", 0)
+    if node.has("y") then        w.y := node.getIntOr("y", 0)
+    if node.has("width") then    w.width := node.getIntOr("width", 0)
+    if node.has("height") then   w.height := node.getIntOr("height", 0)
+    if node.has("fontSize") then w.fontSize := node.getIntOr("fontSize", 0)
+    if node.has("align") then
+      w.align(alignFromName(node.getStringOr("align", "CENTER")), 0, 0)
+    endif
+  end applyCommon
+
+  // alignFromName — string del .win → constante de Align (default CENTER).
+  function alignFromName(a: string): integer
+    if a == "TOP_LEFT" then return 0
+    if a == "TOP_MID" then return 1
+    if a == "TOP_RIGHT" then return 2
+    if a == "LEFT_MID" then return 3
+    if a == "RIGHT_MID" then return 5
+    if a == "BOTTOM_LEFT" then return 6
+    if a == "BOTTOM_MID" then return 7
+    if a == "BOTTOM_RIGHT" then return 8
+    return 4   // CENTER
+  end alignFromName
 
 end Gui
