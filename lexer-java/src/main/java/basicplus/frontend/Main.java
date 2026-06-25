@@ -446,6 +446,11 @@ public final class Main {
             }
             writeInterfaceFile(module, info, ctx, depth);
 
+            // H13.1 (4.0) — sidecar <Módulo>.slots (JSON método→slot de cada clase
+            // pública) para que el IDE HORNEE el slot del handler en el .win (Forms
+            // Camino A). Sólo el módulo raíz: es el que compila el IDE.
+            if (depth == 0) writeSlotsFile(module, info, ctx, depth);
+
             // 5) Pasada recursiva FULL para deps con .bpi pero sin .mod.
             //    Para imports bindeados, queremos el .mod del IMPL, no de la
             //    interfaz (las interfaces no tienen .mod). Si no hay binding,
@@ -463,6 +468,58 @@ public final class Main {
         } finally {
             ctx.compilingFull.remove(srcAbs);
         }
+    }
+
+    /**
+     * H13.1 (4.0) — emite {@code <Módulo>.slots}: JSON con el método→slot de cada
+     * CLASE PÚBLICA del módulo (sólo métodos de usuario públicos de instancia: los
+     * handlers de Forms). El IDE lo lee para HORNEAR el slot en el .win (Camino A):
+     * el .win nombra el evento ("clic":"onOk"); el IDE resuelve onOk→slot con esto
+     * —autoritativo: {@link Symbol.ClassSymbol#slotOf}, el MISMO cómputo que emite
+     * INVOKE_VIRTUAL— y escribe "clicSlot":N. No se emite si el módulo no tiene
+     * clases públicas. Formato: {@code { "MiForm": { "onOk": 30, "onCancel": 31 } }}
+     */
+    private static void writeSlotsFile(Ast.ModuleNode module, SemanticInfo info, Ctx ctx, int depth) throws IOException {
+        if (info.module == null) return;
+        StringBuilder body = new StringBuilder();
+        boolean anyClass = false;
+        for (Symbol s : info.module.members.getSymbols()) {
+            if (!(s instanceof Symbol.ClassSymbol)) continue;
+            Symbol.ClassSymbol cls = (Symbol.ClassSymbol) s;
+            if (!cls.isPublic) continue;
+            StringBuilder methods = new StringBuilder();
+            boolean anyM = false;
+            // Mismo recorrido que ensureMethodSlots: métodos públicos de instancia
+            // (no ctor, no static), en orden de declaración → su slot de vtable.
+            if (cls.astNode != null && cls.astNode.members != null) {
+                for (Ast.ITopLevelDecl d : cls.astNode.members) {
+                    if (!(d instanceof Ast.FuncDef)) continue;
+                    Ast.FuncDef fn = (Ast.FuncDef) d;
+                    Symbol ms = cls.instanceMembers.tryLookup(fn.name.name);
+                    if (!(ms instanceof Symbol.FunctionSymbol)) continue;
+                    Symbol.FunctionSymbol fsym = (Symbol.FunctionSymbol) ms;
+                    if (!fsym.isPublic || fsym.isStatic || fsym.isConstructor) continue;
+                    int slot = cls.slotOf(fn.name.name);
+                    if (slot < 0) continue;
+                    if (anyM) methods.append(", ");
+                    anyM = true;
+                    methods.append(jsonStr(fn.name.name)).append(": ").append(slot);
+                }
+            }
+            if (anyClass) body.append(",");
+            anyClass = true;
+            body.append("\n  ").append(jsonStr(cls.name)).append(": { ").append(methods).append(" }");
+        }
+        if (!anyClass) return;   // módulo sin clases públicas → no emitimos sidecar
+        String json = "{" + body + "\n}\n";
+        Path out = ctx.outDir.resolve(module.name + ".slots");
+        Files.write(out, json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        indent(depth); System.out.println("slots    : " + out.getFileName());
+    }
+
+    /** Escapa un String para JSON (comilla + barra invertida). */
+    private static String jsonStr(String s) {
+        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     // ============================================================

@@ -140,9 +140,21 @@ para rechazar pantallas rancias si los slots se mueven al recompilar.
   + `load(.win)` (devuelve el raíz) + `buildForm`/`makeWidget`/`applyCommon` (privadas) + `import Json`.
   **Verificado end-to-end dual-VM** (FormTest: `.win` con `clicSlot` horneado a mano = 30 → `MyForm.onOk`,
   "ok-pulsado" byte-idéntico en miVM y VM-C → valida loader+binding+dispatch+slot de un tirón). Pendiente:
-  **paso 4** el IDE hornea el slot en el `.win` (resuelve handler→slot vía el compilador empaquetado; OJO: la
-  clase ventana debe ser `public` para que su método→slot salga en el `.bpi`), **paso 5** sample pulido +
+  **paso 4** el IDE hornea el slot en el `.win`: **4.0 ✅** el compilador emite el sidecar `<Módulo>.slots`
+  (JSON `método→slot` de las clases públicas, autoritativo vía `ClassSymbol.slotOf`) en cada `--compile` del
+  módulo raíz — verificado `FormTest.slots = { "MyForm": { "onOk": 30 } }` (coincide con el slot del paso 3);
+  falta **4.1** (el IDE lee el `.slots`, resuelve cada evento del `.win` → `clicSlot`/`changeSlot`). La clase
+  ventana es `public` (normal). **paso 5** sample pulido +
   paridad + rebuild de blobs (fat-jar IDE + Gui.{mod,bpi} + firmwares).
+- **Flujo del editor de Forms (diseño Eduardo, 25-jun):** se diseña PRIMERO el `.win` (JSON: controles +
+  eventos por nombre + clase ventana) — a menudo sin BP todavía. El IDE **scaffoldea**: escribe en el `.bp`
+  los stubs de los métodos handler que nombran los eventos del `.win` (los que falten). Proceso ITERATIVO:
+  se alterna `.win` (añadir controles+eventos) ↔ `.bp` (rellenar handlers). Al **Previsualizar**: el IDE
+  compila el `.bp`, hornea `nombre→slot` en el `.win` (Camino A) y lo ejecuta — en miVM/Swing = preview
+  instantáneo en ventana, o en device para la prueba real. **La clase ventana es `public`** (lo normal) → el
+  IDE lee su `método→slot` del `.bpi`. Editor VISUAL (arrastrar controles) = más adelante (V4 / H13.2+); por
+  ahora el `.win` se escribe a mano. El **paso 4** de H13.1 = el **horneado** (en Preview/Deploy); el
+  **scaffold** (generar stubs) es complemento ergonómico.
 
 ## 🎨 GUI (objetivo cabecera)
 
