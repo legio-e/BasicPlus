@@ -110,6 +110,26 @@ AOT cross-module (#169). **El alcance de V3 queda CERRADO** ("y ya nada más").
   para **transportar** packs que luego se graban en flash. Complementa al PACK (tier de capacidad),
   no compite. (Probable clase OO estilo `Sd.Card`/`Sd.File`, por la política "HW nuevo = clase".)
 
+**Binding de eventos de Forms — tabla nombre→slot en metadatos del `.mod` (revisar en V4, decisión 25-jun):**
+En V3/H13 los eventos se resuelven con el **Camino A**: el IDE resuelve `evento→slot` contra el `.bpi`
+(el `ClassSig` ya lleva método→slot, de L2.1) y **hornea el slot** en el `.win` desplegado → handlers =
+métodos REALES (virtuales, override-correcto) **SIN tocar el formato del `.mod`** (despacho en el device via
+`INVOKE_VIRTUAL`/`call_method_i32`). Tag de versión de layout en el `.win` (como el ABI tag de los `.mdn`)
+para rechazar pantallas rancias si los slots se mueven al recompilar.
+- **Camino B (a valorar en V4, con las optimizaciones/cambios de `.mod` ya sobre la mesa):** tabla
+  `nombre→slot` en el **descriptor de clase del `.mod`** (solo métodos `published`) para resolver en el
+  **device en carga** → permite editar/enviar pantallas sueltas sin IDE. Aditivo, **re-baselinea la
+  comprobación de emisión del compat** (como `^`/`eval` en H7).
+- **Invariante a blindar con aserción** (idea de Eduardo + chat): todo método `published` hace round-trip
+  `nombre↔slot↔nombre`, y el slot es **determinista e idéntico en las 2 VMs** (lo emite el compilador, lo
+  consumen ambas — ya se cumple por el oráculo byte-idéntico). El desajuste se caza con un check, no con la
+  memoria.
+- **Sinergia con AOT (#169):** la misma resolución `nombre→slot` vía `.bpi` desbloquea las **llamadas a
+  métodos cross-module desde native (AOT)**, hoy diferidas. El despacho AOT YA es por slot (`call_method_i32`
+  con `ClassSymbol.slotOf`, #174b); para una clase importada solo falta tomar el slot del `.bpi` (ClassSig).
+  → Forms (Camino A) y AOT-cross-module se apoyan en el MISMO cimiento; conviene dejar el `slotOf`
+  cross-module sólido (verificar que el `ClassSymbol` importado lo lleva poblado).
+
 ## 🎨 GUI (objetivo cabecera)
 
 El camino crítico —upcall C→BP → `Gui.*` en miVM → VM-C host (LVGL+SDL) →
