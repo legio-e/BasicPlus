@@ -128,10 +128,17 @@ public final class Parser {
             skipNewlines();
             if (isAtEnd() || check(TokenType.END)) break;
             panicMode = false;                  // §7a: cada declaración parte "limpia"
+            int posBefore = pos;
             ITopLevelDecl def = parseDefStmt();
             if (def != null) defs.add(def);
             drainPendingVarDecls(defs);         // var multi-grupo a nivel módulo
             skipNewlines();
+            // §7a watchdog anti-cuelgue: si la iteración no consumió ningún
+            // token, el cursor está sobre algo que parseDefStmt no sabe iniciar
+            // ni synchronize() consumir (p. ej. un terminador de bloque colgante
+            // como 'endif' a nivel módulo). Lo descartamos para garantizar
+            // progreso — sin esto el parser entraría en bucle infinito.
+            if (pos == posBefore && !isAtEnd()) advance();
         }
 
         if (!match(TokenType.END)) {
@@ -609,9 +616,14 @@ public final class Parser {
             if (isAtEnd()) break;
             if (containsType(stopAt, current().type)) break;
             if (isBlockTerminator(current().type)) break;
+            int posBefore = pos;
             IStmt s = parseStmt();
             if (s != null) stmts.add(s);
             drainPendingVarDecls(stmts);    // var multi-grupo → un VarDecl por grupo
+            // §7a watchdog anti-cuelgue (ver parseModule): un token de
+            // sincronización que no es terminador de bloque (p. ej. 'then'/'to'/
+            // 'do' sueltos en mitad del cuerpo) podría dejar parseStmt sin avanzar.
+            if (pos == posBefore && !isAtEnd()) advance();
         }
         return stmts;
     }
@@ -727,6 +739,16 @@ public final class Parser {
             List<IStmt> body = new ArrayList<>();
             if (stmt != null) body.add(stmt);
             drainPendingVarDecls(body);     // var multi-grupo
+            // El 'if' de una línea NO lleva 'endif'. Si aparece colgando, es el
+            // error típico de mezclar las dos formas (`if E then STMT endif`).
+            // Diagnóstico claro + lo consumimos para no dejar un terminador
+            // huérfano que descarrile (o cuelgue) el parseo del resto.
+            if (check(TokenType.ENDIF)) {
+                panicMode = false;          // que ESTE mensaje (el accionable) no quede suprimido
+                error("el 'if' de una línea no lleva 'endif' — quítalo, o usa la forma multilínea (salto de línea tras 'then' … 'endif')");
+                advance();                  // consume el 'endif' huérfano
+                skipNewlines();
+            }
             IfClause thenClause = new IfClause(cond, body, tok.line, tok.column);
             return new IfStmt(thenClause, new ArrayList<IfClause>(), null, true, tok.line, tok.column);
         }
@@ -852,6 +874,13 @@ public final class Parser {
             List<IStmt> body = new ArrayList<>();
             if (stmt != null) body.add(stmt);
             drainPendingVarDecls(body);     // var multi-grupo
+            // El 'while' de una línea NO lleva 'endwh' (mismo criterio que el 'if').
+            if (check(TokenType.ENDWH)) {
+                panicMode = false;
+                error("el 'while' de una línea no lleva 'endwh' — quítalo, o usa la forma multilínea (salto de línea tras 'do' … 'endwh')");
+                advance();
+                skipNewlines();
+            }
             return new WhileStmt(cond, body, true, tok.line, tok.column);
         }
 
@@ -904,6 +933,14 @@ public final class Parser {
             List<IStmt> body = new ArrayList<>();
             if (stmt != null) body.add(stmt);
             drainPendingVarDecls(body);     // var multi-grupo
+            // El 'for' de una línea NO lleva 'next' (mismo criterio que el 'if').
+            if (check(TokenType.NEXT)) {
+                panicMode = false;
+                error("el 'for' de una línea no lleva 'next' — quítalo, o usa la forma multilínea (salto de línea tras 'do' … 'next')");
+                advance();
+                if (check(TokenType.IDENTIFIER)) advance();   // 'next <iter>' opcional
+                skipNewlines();
+            }
             return new ForStmt(iter, range, body, true, tok.line, tok.column);
         }
 
