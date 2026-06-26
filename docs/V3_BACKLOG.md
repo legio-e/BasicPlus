@@ -502,3 +502,19 @@ explorer no puede borrar, hace falta el fix #1.)
 pristino; backup de la bisección en `C:\tmp\wip\gui_json_bisect\`. Commits de esta sesión:
 `15fb3ee` (resolveDeviceDeps transitivo: sube Json como dep de Gui), `6611592` (B: fallback
 /app en readFile). Repro host listo en `C:\tmp\repro_gui\` (`bpgenvm-c --mem=131072 *.mod`).
+
+### ✅ RESUELTO (26-jun)
+**Causa real:** no era "stale en device por putIfChanged" — el **IDE subía** un `Json.mod`
+RANCIO desde el `out/` del proyecto (`samples/out/Json.mod` del 18-may, 12351 B, `asObject`
+en otro slot que el #15) porque Json NO estaba en `EMBEDDED_CORE_MODS` → `resolveDeviceDeps`
+no le aplicaba la protección "stdlib-first" (que sí tenían los CORE desde el 13-jun).
+**Fix `e73c44c`:** cualquier módulo que viva en `stdlibDir` (tiene su `.bp`/`.mod` allí) se
+resuelve de bpstdlib PRIMERO → siempre el Json fresco (16519 B, `asObject#15`); el
+`putIfChanged` lo sobrescribe en el device (tamaño distinto → DEL+PUT). **Verificado en el
+P4:** los handlers de botón/checkbox disparan a los métodos de la ventana. **Pulidos `799d23d`:**
+(1) el form llena la pantalla (Gui.Window toma el tamaño del screen + `load()` hace que el
+widget raíz del `.win` llene la ventana salvo tamaño explícito); (2) `.win`/`.slots` se editan
+DENTRO del IDE (`looksLikeTextFile`). Pendiente: confirmación VISUAL del layout en placa.
+**Las 3 mejoras de robustez del plan original** (CRC device-side en LS/STAT, rutear stdlib→/lib,
+subir el detalle de linkAll al wire = "missing lib X") quedan como PULIDO OPCIONAL (no bloquean;
+el bug raíz ya no existe).
