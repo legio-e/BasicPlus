@@ -844,3 +844,46 @@ grande) y **#153** (dual-core).
   stacks (lo más caliente) en SRAM e heap en PSRAM.
 - **Reservar SIEMPRE PSRAM para los framebuffers** (doble buffer 1024×600 = 2.4 MB + margen); el
   default de la VM no debe comerse toda la PSRAM.
+
+### H18.1 — Display data-driven por board.json (2ª placa P4: Waveshare 4.3in 480×800) (diseño 26-jun)
+
+**Compra (Eduardo):** *Waveshare ESP32-P4-WIFI6 4.3inch Development Board, 480×800*. **Rol:** banco
+de validación de TODA la VM del P4 **incluido el gráfico**. **Objetivo:** flashear y que funcione a
+la 1ª (idealmente; "ya se verá lo que ocurre de verdad"). Llega en unos días — aún no se puede
+probar. **Esta placa es la FUNCIÓN FORZANTE del descriptor de board** (#258): obliga a que la
+config del display NO esté hard-codeada.
+
+**Estado hoy = TODO hard-code en `gui_display_dsi.c`:** panel **EK79007**, **1024×600**, DSI **2-lane
+@1 Gbps**, DPI 52 MHz, porches (HBP 160…), color **RGB565**, reset **GPIO27**, backlight **GPIO26**
+(LEDC), **LDO ch3**, táctil **GT911** (bus0, SDA7/SCL8). En la Waveshare 4.3" **cambia casi todo**
+(resolución 480×800, otro IC de panel, otra DSI/timing, otros pines, posible otro táctil/addr).
+
+**Diseño data-driven (pragmático, estilo BSP `esp_lcd`):**
+- `board.json` → sección `display`: `{ present, transport:"mipi-dsi", panel:"<modelo>", width,
+  height, color, dsi:{lanes,bitrate_mbps,dpi_clk_mhz}, timing:{hsync,hbp,hfp,vsync,vbp,vfp},
+  pins:{reset,backlight}, ldo_chan, backlight:{tipo,activo}, touch:{model,bus,sda,scl,addr} }`.
+- Firmware: lee `board.json` al boot (extiende `p4_board_id` / el mecanismo board.json del RP2350)
+  → elige el **driver de panel C por NOMBRE** de un registro (`ek79007`, + el de la Waveshare) +
+  aplica resolución/timing/pines/DSI/táctil del fichero.
+- **Las secuencias de init del panel (DCS) se quedan en C** (drivers por-IC, como hace `esp_lcd`):
+  es lo complejo y específico de cada chip. Lo data-driven = QUÉ panel + parámetros. (Init 100% en
+  JSON = sobre-ingeniería y frágil.)
+
+**Honestidad sobre "a la 1ª":** requiere tener el **driver del panel** + los **parámetros correctos**
+(resolución, timing, pines), que sacaremos del **demo ESP-IDF de Waveshare** cuando llegue. El PRIMER
+bring-up de un panel nuevo suele pedir iteración (timing/init); pero una vez caracterizado,
+`board.json` lo deja **permanente y reproducible** → las re-flasheadas y otras placas SÍ van a la 1ª.
+Eso es justo el valor del data-driven (y encaja con la visión portabilidad/soberanía: mismo bytecode,
+cambias `board.json` → otra placa).
+
+**Sinergia:** `board.json` unifica **memoria (H18) + periféricos (#258) + display**. Esta placa es la
+forzante de TODO el descriptor. Encaja con H18 (la Waveshare también traerá su propia PSRAM/flash →
+mismos campos de config).
+
+**Bonus (eje aparte, no de esto):** la placa trae **WiFi6** vía co-procesador **ESP32-C6** → podría
+desbloquear #145 (WiFi/TCP en placa, el server de stdlib de la visión). Nota, no objetivo aquí.
+
+**Cuando llegue:** identificar el IC del panel + pines + timing del demo ESP-IDF de Waveshare →
+portar/registrar su driver C → volcar todo a `board.json` → refactor de `gui_display_dsi.c` para leer
+de config (no constantes) → flashear y validar. Es la prueba de fuego del data-driven y del cierre
+gráfico del P4.
