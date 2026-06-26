@@ -451,3 +451,54 @@ vs `fibo(30)*5` interpretado = 104.15 s → ~95× speedup**, `total` idéntico (
 - **#138 — Multiplexar USB CDC** en streams distinguibles.
 - **P-adc-8ch**: `Adc.bp` valida `0..3`; exponer el nº de canales por placa
   (`Pico.adcChannels()`, como `gpioCount()`) para los 8 del RP2350B. Liga con #258.
+
+## 🔴 PENDIENTE ACTIVO — H13.1 Forms en P4: bloqueado por `Json.mod` RANCIO en placa (2026-06-26)
+
+**Síntoma:** formdemo / cualquier GUI cuyo Gui importe Json → en el P4 `exit 10`
+(RuntimeError MUDO). GuiColorDemo, que ANTES iba, también petó al añadir `import Json`
+a Gui (paso 3 de H13.1).
+
+**Causa raíz CONFIRMADA** (vía `idf.py monitor`, que muestra el stderr del device):
+```
+[bpvm-c link] símbolo no resuelto: 'Json.JsonValue#asObject#15' (módulo='Gui')
+```
+El `Json.mod` del FS del P4 está **rancio**: su `JsonValue.asObject` NO está en el slot 15.
+Gui.mod (compilado contra el Json.bpi actual) referencia `Json.JsonValue#asObject#15`; el
+linkAll del device no lo encuentra → `BPVM_ERR_RUNTIME`. MISMO patrón que el skew de
+`.mod` de stdlib en placa (método OO que peta en placa y no en host por `.mod` viejo).
+
+**Pruebas (todas hechas esta sesión):**
+- Bisección: Gui SIN `import Json` (loader stubbeado) → GuiColorDemo va en P4. CON Json → peta.
+- Host VM-C (incl. `--mem=131072` = los 128 KB del P4) corre GuiColorDemo Y formdemo con el
+  Gui+Json ACTUALES → bpstdlib coherente: Gui ref `#asObject#15` == Json export `#asObject#15`.
+- Descartado: slot-shift de Component, builtin 207, buffer de la VM (128 KB basta en host),
+  stack/FS por sí solos.
+
+**Por qué persiste el Json rancio:** el PUT del IDE (`PicoExplorer.putIfChanged`) salta la
+subida si `deviceSize == localSize && sentCrc[remote] == localCrc`. `sentCrc` solo sabe lo
+que ESTE IDE envió en ESTA conexión — NO el contenido REAL del device. Un Json dejado por
+una sesión/estado anterior (mismo tamaño, o nunca sobrescrito) se da por bueno. Además Json
+se rutea a /app (no /lib) → puede haber copias en ambos.
+
+**FIX (3 partes):**
+1. **Robustez del PUT contra rancio de device:** que el LS/STAT del firmware reporte un
+   **CRC/hash por fichero** y el IDE compare hash-device vs hash-local (no size+cache).
+   Interim sin tocar firmware: para deps de stdlib, DEL+PUT siempre la 1ª vez por conexión.
+2. **Rutear Json (y toda dep de stdlib) → /lib** (no /app): en `FrmMain` la decisión libDeps
+   debe mandar a /lib cualquier dep cuyo origen sea el stdlibDir (no solo EMBEDDED_CORE_MODS
+   + "Gui"). (Ya estaba a medio leer en `FrmMain.java:2108-2119`.)
+3. **Llevar el detalle de linkAll al wire del IDE** (lo pidió Eduardo: "missing lib 'X'"):
+   añadir `vm->last_error[192]` (bpvm_internal.h, tras `bool tracing;`), fijarlo en `link.c`
+   (los 3 paths de no-resuelto, ~l.112/125/141) con "falta librería 'X'" / "símbolo no
+   resuelto 'X' (¿módulo rancio?)", y que los repls (esp32 `repl_esp32.c:444`, pico, stm32)
+   lo manden en el EXITED en vez de `bpvm_status_str` genérico. Paridad en miVM. → se acabó
+   el `exit 10` mudo. (Requiere reflash.)
+
+**Workaround inmediato (sin código):** borrar el `Json.mod` del device (/app y /lib) por el
+explorer → Run formdemo → el IDE sube uno fresco → slots casan → Forms debería ir. (Si el
+explorer no puede borrar, hace falta el fix #1.)
+
+**Estado del árbol:** Gui restaurado a la versión con Json (bf46585); FormDemo sample
+pristino; backup de la bisección en `C:\tmp\wip\gui_json_bisect\`. Commits de esta sesión:
+`15fb3ee` (resolveDeviceDeps transitivo: sube Json como dep de Gui), `6611592` (B: fallback
+/app en readFile). Repro host listo en `C:\tmp\repro_gui\` (`bpgenvm-c --mem=131072 *.mod`).
