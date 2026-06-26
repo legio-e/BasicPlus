@@ -4554,6 +4554,8 @@ public class VirtualMachine {
                 pushTc(tc, 30);
                 break;
             }
+            case PICO_ADC_CHANNELS: { pushTc(tc, 4);  break; }   /* host: perfil RP2350 */
+            case PICO_PWM_SLICES:   { pushTc(tc, 12); break; }   /* host: perfil RP2350 */
             case NEOPIXEL_INIT: {
                 /* device-only (PIO). Host: no-op — descarta args. */
                 popTc(tc);            /* pin */

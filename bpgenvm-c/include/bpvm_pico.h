@@ -57,6 +57,10 @@ typedef struct {
     int  (*markCount)(void);
     int  (*markAt)(int i);
     int  (*bootCount)(void);
+    /* H14 — counts de periféricos board-aware (del board_desc / board.json):
+     * canales ADC y slices PWM de la PLACA. NULL → stub 4/12 (perfil RP2350). */
+    int  (*adcChannels)(void);
+    int  (*pwmSlices)(void);
 } bpvm_pico_backend_t;
 
 void bpvm_pico_set_backend(const bpvm_pico_backend_t* backend);
@@ -69,6 +73,8 @@ int   bpvm_pico_cpu_freq_hz(void);
 int   bpvm_pico_uptime_ms(void);
 int   bpvm_pico_set_cpu_freq_mhz(int mhz);
 int   bpvm_pico_gpio_count(void);
+int   bpvm_pico_adc_channels(void);
+int   bpvm_pico_pwm_slices(void);
 const char* bpvm_pico_reset_cause(void);   /* H10 — causa del último reset */
 void bpvm_pico_set_mark(int code);         /* H10 — breadcrumb: deja una miga */
 int  bpvm_pico_mark_count(void);           /* H10 — nº migas del trail previo */

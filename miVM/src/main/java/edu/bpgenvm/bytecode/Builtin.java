@@ -419,7 +419,13 @@ public enum Builtin {
     // que GUI_INVOKE_BY_NAME pero el handler es un MÉTODO de la ventana cuyo slot
     // ya horneó el IDE en el .win (resuelto vía .bpi/slotOf). Lee vtable[slot] del
     // class_ptr de `win` y monta el frame de método [this=win, sender, ...]. id 207.
-    GUI_INVOKE_BY_SLOT("__guiInvokeBySlot");           // (win, slot: integer, sender) → void
+    GUI_INVOKE_BY_SLOT("__guiInvokeBySlot"),           // (win, slot: integer, sender) → void
+
+    // H14 — counts de periféricos board-aware (del board_desc / board.json del
+    // device). Como gpioCount: host = perfil RP2350 (4 ADC / 12 PWM); el device
+    // los resuelve desde su descriptor. ids 208 / 209.
+    PICO_ADC_CHANNELS("__picoAdcChannels"),            // () → integer
+    PICO_PWM_SLICES("__picoPwmSlices");                // () → integer
 
     public final String bpName;
     public final int id;

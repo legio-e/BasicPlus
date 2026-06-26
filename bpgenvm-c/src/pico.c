@@ -79,6 +79,20 @@ int bpvm_pico_gpio_count(void) {
     return 30;
 }
 
+int bpvm_pico_adc_channels(void) {
+    if (g_backend && g_backend->adcChannels) {
+        return g_backend->adcChannels();
+    }
+    return 4;   /* host: perfil RP2350 (4 ADC). Device: board_desc / board.json. */
+}
+
+int bpvm_pico_pwm_slices(void) {
+    if (g_backend && g_backend->pwmSlices) {
+        return g_backend->pwmSlices();
+    }
+    return 12;  /* host: perfil RP2350 (12 PWM). Device: board_desc / board.json. */
+}
+
 const char* bpvm_pico_reset_cause(void) {
     if (g_backend && g_backend->resetCause) {
         return g_backend->resetCause();

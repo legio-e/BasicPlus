@@ -178,6 +178,8 @@ public final class Intrinsics {
         register("Pico.cpuFreqHz", w -> emitBuiltin(w, Builtin.PICO_CPU_FREQ_HZ));
         register("Pico.uptimeMs",  w -> emitBuiltin(w, Builtin.PICO_UPTIME_MS));
         register("Pico.gpioCount", w -> emitBuiltin(w, Builtin.PICO_GPIO_COUNT));
+        register("Pico.ADC_CHANNELS", w -> emitBuiltin(w, Builtin.PICO_ADC_CHANNELS));  // H14 board-aware
+        register("Pico.PWM_SLICES",   w -> emitBuiltin(w, Builtin.PICO_PWM_SLICES));     // H14 board-aware
         register("Pico.resetCause", w -> emitBuiltin(w, Builtin.PICO_RESET_CAUSE));  // H10
         register("Pico.setMark",   w -> emitBuiltin(w, Builtin.PICO_SET_MARK));      // H10 breadcrumb
         register("Pico.markCount", w -> emitBuiltin(w, Builtin.PICO_MARK_COUNT));

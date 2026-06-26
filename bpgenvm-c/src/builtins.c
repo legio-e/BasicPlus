@@ -251,7 +251,10 @@ enum {
     /* H13.1 (V3) — Forms Camino A: dispatch del handler por SLOT de vtable
      * (win, slot, sender) → void. El handler es un MÉTODO de la ventana cuyo slot
      * horneó el IDE en el .win (resuelto vía .bpi/slotOf). */
-    BUILTIN_GUI_INVOKE_BY_SLOT = 207
+    BUILTIN_GUI_INVOKE_BY_SLOT = 207,
+    /* H14 — counts de periféricos board-aware (del board_desc / board.json). */
+    BUILTIN_PICO_ADC_CHANNELS  = 208,   /* () → canales ADC de la placa */
+    BUILTIN_PICO_PWM_SLICES    = 209    /* () → slices PWM de la placa */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -1676,6 +1679,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_PICO_GPIO_COUNT: {
         push_i32(vm, tc, (int32_t) bpvm_pico_gpio_count());
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_ADC_CHANNELS: {
+        push_i32(vm, tc, (int32_t) bpvm_pico_adc_channels());
+        return BPVM_OK;
+    }
+    case BUILTIN_PICO_PWM_SLICES: {
+        push_i32(vm, tc, (int32_t) bpvm_pico_pwm_slices());
         return BPVM_OK;
     }
     case BUILTIN_NEOPIXEL_INIT: {

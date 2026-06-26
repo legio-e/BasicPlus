@@ -175,16 +175,11 @@ module Pico
     return gpioCount()
   end GPIO_COUNT
 
-  // ADC externos disponibles (GP26..GP29). El canal 4 está
-  // reservado al sensor de temperatura interno y se accede via
-  // tempC() — no se cuenta aquí.
-  public function ADC_CHANNELS(): integer
-    return 4
-  end ADC_CHANNELS
+  // Board-aware (H14): los resuelve el firmware desde su DESCRIPTOR de placa
+  // (board_desc / board.json en RP2350; p4_board_id en ESP32). En host/RP2350
+  // = perfil RP2350 (4 ADC externos GP26..29 / 12 slices PWM); en el P4 → 14/14.
+  public intrinsic function ADC_CHANNELS(): integer
 
-  // Slices PWM del RP2350. Cada slice tiene 2 canales (A y B).
-  public function PWM_SLICES(): integer
-    return 12
-  end PWM_SLICES
+  public intrinsic function PWM_SLICES(): integer
 
 end Pico

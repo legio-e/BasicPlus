@@ -58,6 +58,8 @@ static int   p4_pico_cpu_freq_hz(void)     { return 360000000; }   /* 360 MHz po
 static int   p4_pico_uptime_ms(void)       { return (int) (esp_timer_get_time() / 1000); }
 static int   p4_pico_set_cpu_freq(int mhz) { (void) mhz; return 0; } /* runtime no soportado */
 static int   p4_pico_gpio_count(void)      { return 55; }          /* GPIO0..54 */
+static int   p4_pico_adc_channels(void)    { return 14; }          /* H14: 2x SAR 12-bit, hasta 14 pines */
+static int   p4_pico_pwm_slices(void)      { return 14; }          /* H14: 8 LEDC + 6 MCPWM */
 
 static const bpvm_pico_backend_t s_p4_pico_backend = {
     .uniqueId      = p4_pico_unique_id,
@@ -67,6 +69,8 @@ static const bpvm_pico_backend_t s_p4_pico_backend = {
     .uptimeMs      = p4_pico_uptime_ms,
     .setCpuFreqMHz = p4_pico_set_cpu_freq,
     .gpioCount     = p4_pico_gpio_count,
+    .adcChannels   = p4_pico_adc_channels,   /* H14 */
+    .pwmSlices     = p4_pico_pwm_slices,      /* H14 */
 };
 
 void p4_install_board_id(void) {
