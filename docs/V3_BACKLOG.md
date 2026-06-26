@@ -95,8 +95,12 @@ adelantarse en cuanto haya ganas de flashear).
     a 1000 Hz × 1 s, "PWM->contador OK", exit 0.** Valida en HW real PCNT + LEDC + que la API
     ESP-IDF compila (el `idf.py build flash` pasó). RTC/`TIME`: compilan (misma unidad); el sync al
     conectar no se probó por separado.
-  - **Falta de pin (cuando se quiera):** `GpioLoop.bp`/`UartLoop.bp` (loopback con puente),
-    I2C/SPI con un dispositivo real. No bloquean (PWM/PCNT ya prueban el camino GPIO↔periférico).
+  - **✅ UART loopback VERIFICADO en el P4 (26-jun): `UartLoop.bp` = TX→RX puenteados → escribe
+    "Hi!\n", lee 4/4 bytes idénticos, "UART loopback OK".** Valida el backend UART (write/read) con
+    pines reales.
+  - **Falta de pin (opcional, cuando se quiera):** `GpioLoop.bp` (GPIO out→in con puente),
+    I2C/SPI con un dispositivo real. No bloquean (PWM/PCNT/UART ya prueban el camino
+    GPIO↔periférico de punta a punta).
 
 ### V4 — fuera de V3 (Eduardo, 24-jun)
 
