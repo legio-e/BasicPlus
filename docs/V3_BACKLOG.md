@@ -527,8 +527,9 @@ se rutea a /app (no /lib) → puede haber copias en ambos.
    `stm32_repl.c`) lo mandan en el EXITED (status `LINK_ERROR` + `errorMessage`); el IDE ya pinta
    `errorMessage` → sin cambios. **Verificado en host VM-C** (ambos casos) + **arnés V2 verde**.
    miVM NO necesita cambio: auto-resuelve la stdlib desde `stdlibDir`, así que el "missing lib" es
-   un problema del DEVICE (carga de su FS) — justo donde picó. Falta: el build del P4 de Eduardo
-   para confirmar el mensaje en el IDE end-to-end. → se acabó el `exit 10` mudo.
+   un problema del DEVICE (carga de su FS) — justo donde picó. **✅ VERIFICADO EN EL P4 (26-jun):**
+   el IDE muestra `exit 10 (falta la lib 'Pwm' (la usa 'PwmCount'; simbolo 'Pwm.__init'))`. → se
+   acabó el `exit 10` mudo, en hardware real.
 
 **Workaround inmediato (sin código):** borrar el `Json.mod` del device (/app y /lib) por el
 explorer → Run formdemo → el IDE sube uno fresco → slots casan → Forms debería ir. (Si el
