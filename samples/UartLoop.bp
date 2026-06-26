@@ -1,0 +1,43 @@
+// UartLoop.bp — test de loopback UART sin periféricos: TX y RX de la MISMA UART
+// PUENTEADOS con un cable (TX -> RX). Escribe 4 bytes y comprueba que los lee de
+// vuelta. Para el P4: bus 1 o 2 (el 0/consola y el wire=TCP no se tocan); TX/RX a
+// 2 pines LIBRES (evita 7,8,26,27,31,51,52).
+module UartLoop
+import Uart
+
+  // EDITA: bus libre + 2 pines LIBRES unidos con un cable (TX a RX):
+  const BUS: integer := 1
+  const TX:  integer := 20
+  const RX:  integer := 21
+
+  function main(arg: string)
+    // Port(id, tx, rx, baudrate, dataBits, stopBits, parity)
+    var p: Uart.Port := Uart.Port(BUS, TX, RX, 115200, 8, 1, Uart.Port.PARITY_NONE)
+
+    var tx: integer[] := newIntArray(4)
+    tx[0] := 72     // 'H'
+    tx[1] := 105    // 'i'
+    tx[2] := 33     // '!'
+    tx[3] := 10     // '\n'
+    var n: integer := p.write(tx, 4)
+    print "escritos " + n + " bytes"
+
+    var rx: integer[] := newIntArray(4)
+    var m: integer := p.read(rx, 4, 500)   // hasta 4 bytes o 500 ms
+    print "leidos " + m + " bytes"
+
+    var i: integer := 0
+    var ok: integer := 0
+    while i < m do
+      print "  rx[" + i + "]=" + rx[i]
+      if rx[i] == tx[i] then ok := ok + 1
+      i := i + 1
+    endwh
+
+    if m == 4 and ok == 4 then
+      print "UART loopback OK (TX->RX 4/4)"
+    else
+      print "UART loopback FALLO -- comprueba el puente TX->RX"
+    endif
+  end main
+end UartLoop

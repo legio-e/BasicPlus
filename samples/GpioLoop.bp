@@ -1,0 +1,32 @@
+// GpioLoop.bp — test de loopback GPIO sin periféricos: una salida y una entrada
+// PUENTEADAS con un cable (OUT_PIN -> IN_PIN). Escribe 1/0 en la salida y
+// comprueba que la entrada lo lee. Para el P4: evita 7,8,26,27,31,51,52 (los usa
+// el firmware: I2C táctil / backlight / reset panel / Ethernet).
+module GpioLoop
+import Gpio
+
+  // EDITA a 2 pines LIBRES de tu placa, unidos con un cable:
+  const OUT_PIN: integer := 20    // salida
+  const IN_PIN:  integer := 21    // entrada (cable de OUT_PIN a IN_PIN)
+
+  function main(arg: string)
+    var out: Gpio.Pin := Gpio.Pin(OUT_PIN, Gpio.Pin.OUTPUT)
+    var inp: Gpio.Pin := Gpio.Pin(IN_PIN,  Gpio.Pin.INPUT)
+    var ok: integer := 0
+    var i: integer := 0
+    while i < 4 do
+      out.on()
+      var hi: integer := inp.value()
+      out.off()
+      var lo: integer := inp.value()
+      print "ciclo " + i + ": out=1->in=" + hi + "  out=0->in=" + lo
+      if hi == 1 and lo == 0 then ok := ok + 1
+      i := i + 1
+    endwh
+    if ok == 4 then
+      print "GPIO loopback OK (out->in 4/4)"
+    else
+      print "GPIO loopback FALLO (" + ok + "/4) -- comprueba el puente OUT->IN"
+    endif
+  end main
+end GpioLoop
