@@ -86,6 +86,15 @@ adelantarse en cuanto haya ganas de flashear).
 - **Documentación (paso 5): incluir una AYUDA ESPECÍFICA DE GRÁFICOS** (guía del API `Gui.*`).
 - **HW del P4 (paso 3) = lo más delicado → DESPUÉS** (flasheo intensivo; sin prisa, primero
   lo de PC: huecos + docs).
+  - **Progreso (26-jun):** backends del firmware ESP32 (S3 reusado por el P4) ya están:
+    GPIO/UART/SPI/I2C + PWM (LEDC) + ADC (esp_adc) + temperatura interna (`temperature_sensor`,
+    39.4 °C en placa) + counts board-aware (ADC/PWM `Pico.*` intrínsecos, P4=14/14) + **contador
+    de pulsos (PCNT)** + **RTC (gettimeofday) con sync "TIME" del IDe** (commits `8c7e906`,
+    `b369317`, `f1bf334`, `953d7d9`, `0b3a16a`). Sample `samples/PwmCount.bp` (PWM→contador con
+    puente) listo. **SIGUE STUB:** WDT + Neopixel (no bloquean).
+  - **Falta (lo realmente delicado, de Eduardo):** `idf.py build flash` del P4 con estos backends
+    (valida la API ESP-IDF PCNT/settimeofday, no compilable aquí) + pruebas FUNCIONALES de pines:
+    `GpioLoop.bp`/`UartLoop.bp`/`PwmCount.bp` (loopback con puente), I2C/SPI con un dispositivo.
 
 ### V4 — fuera de V3 (Eduardo, 24-jun)
 
