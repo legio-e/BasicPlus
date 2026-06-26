@@ -855,8 +855,15 @@ config del display NO esté hard-codeada.
 
 **Estado hoy = TODO hard-code en `gui_display_dsi.c`:** panel **EK79007**, **1024×600**, DSI **2-lane
 @1 Gbps**, DPI 52 MHz, porches (HBP 160…), color **RGB565**, reset **GPIO27**, backlight **GPIO26**
-(LEDC), **LDO ch3**, táctil **GT911** (bus0, SDA7/SCL8). En la Waveshare 4.3" **cambia casi todo**
-(resolución 480×800, otro IC de panel, otra DSI/timing, otros pines, posible otro táctil/addr).
+(LEDC), **LDO ch3**, táctil **GT911** (bus0, SDA7/SCL8).
+
+**Refinamiento del delta (Eduardo, 26-jun):** entre las dos placas P4, lo que de verdad cambia es
+**resolución + (probablemente) pines de control**. El **DSI host** (lanes/DPHY/LDO) lo cree
+idéntico, y el **táctil** (GT911) igual o muy parecido. Matiz técnico: el **IC del panel** sí
+diferirá (el EK79007 es fijo 1024×600 → un 480×800 lleva otro controlador con **otra secuencia de
+init DCS**), pero esa es justo la pieza que el plan **aísla en C** (driver por-IC). → la superficie
+data-driven es PEQUEÑA: resolución + pines en `board.json`; DSI/táctil como **defaults compartidos**
+(override solo si hace falta); el único C nuevo = el driver de init del panel de la Waveshare.
 
 **Diseño data-driven (pragmático, estilo BSP `esp_lcd`):**
 - `board.json` → sección `display`: `{ present, transport:"mipi-dsi", panel:"<modelo>", width,
