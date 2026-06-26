@@ -58,6 +58,50 @@ public final class Json {
         return "\"" + escape(s) + "\"";
     }
 
+    /**
+     * Serializa un valor (el árbol que devuelve {@link #parse}: Map/List/String/
+     * Long/Integer/Boolean/null) a JSON compacto. Permite el round-trip
+     * parse→modificar→write (lo usa el horneado de Forms del IDE sobre el .win).
+     */
+    public static String write(Object v) {
+        StringBuilder sb = new StringBuilder();
+        writeValue(sb, v);
+        return sb.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void writeValue(StringBuilder sb, Object v) {
+        if (v == null) { sb.append("null"); return; }
+        if (v instanceof String)  { sb.append(quote((String) v)); return; }
+        if (v instanceof Boolean) { sb.append(((Boolean) v) ? "true" : "false"); return; }
+        if (v instanceof Long || v instanceof Integer
+                || v instanceof Double || v instanceof Float) { sb.append(v.toString()); return; }
+        if (v instanceof Map) {
+            sb.append('{');
+            boolean first = true;
+            for (Map.Entry<String, Object> e : ((Map<String, Object>) v).entrySet()) {
+                if (!first) sb.append(',');
+                first = false;
+                sb.append(quote(e.getKey())).append(':');
+                writeValue(sb, e.getValue());
+            }
+            sb.append('}');
+            return;
+        }
+        if (v instanceof List) {
+            sb.append('[');
+            boolean first = true;
+            for (Object e : (List<Object>) v) {
+                if (!first) sb.append(',');
+                first = false;
+                writeValue(sb, e);
+            }
+            sb.append(']');
+            return;
+        }
+        sb.append(quote(v.toString()));   // fallback defensivo
+    }
+
     // ============================================================
     // Parsing
     // ============================================================
