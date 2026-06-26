@@ -2380,8 +2380,6 @@ public class FrmMain extends javax.swing.JFrame
      */
     private java.util.List<java.io.File> resolveDeviceDeps(Path bpFile, Path outDir) {
         java.util.List<java.io.File> result = new java.util.ArrayList<>();
-        java.util.Set<String> imports = parseImports(bpFile);
-        if (imports.isEmpty()) return result;
 
         java.util.List<Path> searchDirs = new java.util.ArrayList<>();
         if (outDir != null) searchDirs.add(outDir);
@@ -2399,23 +2397,25 @@ public class FrmMain extends javax.swing.JFrame
         if (bpFile.getParent() != null) searchDirs.add(bpFile.getParent());
         final Path stdlibFirst = stdlibPath;   // para resolución core-first
 
-        // Resolvemos TODOS los imports, incluidos los stdlib core. Antes
-        // se saltaban asumiéndolos embebidos en el firmware; pero eso solo
-        // vale para la Pico. En dispositivos que NO embeben stdlib (ESP32)
-        // hay que subirlos. La decisión final de subir o no la toma
-        // uploadAndRun según lo que YA exista en el device (/lib = stdlib
-        // embebida → no se pisa; ausente → se sube a /app). Así funciona
-        // para ambos targets sin asumir nada. (EMBEDDED_CORE_MODS se queda
-        // como referencia documental de qué mods suele traer un firmware.)
-        for (String imp : imports) {
+        // Resolución TRANSITIVA (BFS sobre el grafo de imports). Un import puede
+        // tener sus propias deps — p.ej. Gui importa Json para el loader de Forms
+        // (H13.1) — y hay que subir TODAS, no solo las directas de la app. Por
+        // cada módulo: resolvemos su .mod y leemos los imports de SU .bp para
+        // encolar los suyos. (Antes solo se resolvían los imports directos del .bp
+        // de la app → faltaba Json → Gui no cargaba en el device → RuntimeError.)
+        // La decisión final de subir o no la toma uploadAndRun según lo que YA
+        // exista en el device (/lib embebida → no se pisa; ausente → se sube).
+        java.util.Set<String> visited = new java.util.LinkedHashSet<>();
+        java.util.ArrayDeque<String> queue = new java.util.ArrayDeque<>(parseImports(bpFile));
+        while (!queue.isEmpty()) {
+            String imp = queue.poll();
+            if (!visited.add(imp)) continue;   // ya procesado → evita ciclos
             // BUGFIX (2026-06-13): la stdlib CORE se resuelve desde bpstdlib
             // (stdlibDir) ANTES que outDir. Un X.mod rancio en outDir (de un
             // compile viejo) tiene un layout de vtable de clase incompatible con
             // la app recién compilada → en un método OO cross-module el
             // INVOKE_VIRTUAL apunta a un slot inexistente → RuntimeError en el
-            // device (cazado con I2c.Bus.read: outDir tenía una I2c.mod de mayo
-            // que ensombrecía la fresca de bpstdlib). Para drivers de usuario
-            // seguimos con outDir primero (iterar sin tocar bpstdlib).
+            // device (cazado con I2c.Bus.read). Drivers de usuario: outDir primero.
             java.util.List<Path> order = searchDirs;
             if (stdlibFirst != null && EMBEDDED_CORE_MODS.contains(imp)) {
                 order = new java.util.ArrayList<>();
@@ -2426,6 +2426,15 @@ public class FrmMain extends javax.swing.JFrame
                 Path candidate = dir.resolve(imp + ".mod");
                 if (Files.isRegularFile(candidate)) {
                     result.add(candidate.toFile());
+                    break;
+                }
+            }
+            // Recursión: encola los imports del .bp de ESTE módulo (p.ej. Gui.bp →
+            // import Json). Buscamos el .bp en los mismos dirs (stdlib, outDir…).
+            for (Path dir : searchDirs) {
+                Path bpCand = dir.resolve(imp + ".bp");
+                if (Files.isRegularFile(bpCand)) {
+                    queue.addAll(parseImports(bpCand));
                     break;
                 }
             }
