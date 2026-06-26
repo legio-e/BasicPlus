@@ -23,6 +23,7 @@
 #include "bpvm_pico.h"    /* H14: backend Pico.* (info real del P4 para los builtins BP) */
 #include "esp_mac.h"      /* uniqueId desde efuse */
 #include "esp_timer.h"    /* uptime */
+#include "driver/temperature_sensor.h"  /* H14: sensor de temperatura interno */
 #include <stdio.h>
 #include <string.h>
 
@@ -40,7 +41,19 @@ static void p4_pico_unique_id(char* buf, size_t len) {
 static void p4_pico_board_name(char* buf, size_t len) {
     if (buf && len > 0) { strncpy(buf, "esp32p4", len - 1); buf[len - 1] = '\0'; }
 }
-static float p4_pico_temp_c(void)          { return 0.0f; }        /* sensor no cableado (MVP) */
+/* Sensor de temperatura interno del P4 (periférico PROPIO, no ADC). Install +
+ * enable PEREZOSO en la 1ª lectura; rango -10..80 °C. */
+static temperature_sensor_handle_t s_p4_tsens = NULL;
+static float p4_pico_temp_c(void) {
+    if (s_p4_tsens == NULL) {
+        temperature_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
+        if (temperature_sensor_install(&cfg, &s_p4_tsens) != ESP_OK) return 0.0f;
+        temperature_sensor_enable(s_p4_tsens);
+    }
+    float t = 0.0f;
+    if (temperature_sensor_get_celsius(s_p4_tsens, &t) != ESP_OK) return 0.0f;
+    return t;
+}
 static int   p4_pico_cpu_freq_hz(void)     { return 360000000; }   /* 360 MHz por defecto */
 static int   p4_pico_uptime_ms(void)       { return (int) (esp_timer_get_time() / 1000); }
 static int   p4_pico_set_cpu_freq(int mhz) { (void) mhz; return 0; } /* runtime no soportado */

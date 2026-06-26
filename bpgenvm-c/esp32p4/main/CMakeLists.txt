@@ -65,4 +65,6 @@ idf_component_register(
         esp_driver_gpio  # H14: backend GPIO del P4 (driver/gpio.h)
         esp_driver_uart  # H14: backend UART del P4 (driver/uart.h)
         esp_driver_spi   # H14: backend SPI del P4 (driver/spi_master.h)
+        esp_adc          # H14: backend ADC del P4 (esp_adc oneshot)
+        esp_driver_tsens # H14: sensor de temperatura interno (Pico.tempC)
 )

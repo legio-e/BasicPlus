@@ -17,12 +17,14 @@
 #include "bpvm_spi.h"
 #include "bpvm_i2c.h"
 #include "bpvm_pwm.h"
+#include "bpvm_adc.h"
 
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "driver/spi_master.h"
 #include "driver/i2c_master.h"
-#include "driver/ledc.h"        /* H14: backend PWM */
+#include "driver/ledc.h"            /* H14: backend PWM */
+#include "esp_adc/adc_oneshot.h"    /* H14: backend ADC */
 #include "freertos/FreeRTOS.h"   /* pdMS_TO_TICKS, portMAX_DELAY */
 #include "esp_mac.h"      /* uniqueId desde la MAC de efuse */
 #include "esp_timer.h"    /* uptime */
@@ -402,6 +404,38 @@ static const bpvm_pwm_backend_t s_esp32_pwm_backend = {
     .stop    = esp32_pwm_stop_impl,
 };
 
+/* ===================== ADC (H14) =====================================
+ * Backend ADC sobre esp_adc oneshot (ADC1). El "canal" BP = canal de ADC1
+ * (0..N-1). atten 12 dB (~0..3.3 V), ancho por defecto (12 bits → raw 0..4095).
+ * La unidad se crea perezosa en el 1er initChannel. readVolts() lo convierte
+ * en BP (Adc.bp). Sin calibración de curva (raw lineal); suficiente para el MVP.
+ */
+static adc_oneshot_unit_handle_t s_adc1 = NULL;
+
+static int esp32_adc_init_channel_impl(int ch) {
+    if (!s_adc1) {
+        adc_oneshot_unit_init_cfg_t ucfg = { .unit_id = ADC_UNIT_1 };
+        if (adc_oneshot_new_unit(&ucfg, &s_adc1) != ESP_OK) return 0;
+    }
+    adc_oneshot_chan_cfg_t ccfg = {
+        .atten    = ADC_ATTEN_DB_12,
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+    };
+    return (adc_oneshot_config_channel(s_adc1, (adc_channel_t) ch, &ccfg) == ESP_OK) ? 1 : 0;
+}
+
+static int esp32_adc_read_channel_impl(int ch) {
+    if (!s_adc1) return 0;
+    int raw = 0;
+    if (adc_oneshot_read(s_adc1, (adc_channel_t) ch, &raw) != ESP_OK) return 0;
+    return raw;
+}
+
+static const bpvm_adc_backend_t s_esp32_adc_backend = {
+    .initChannel = esp32_adc_init_channel_impl,
+    .readChannel = esp32_adc_read_channel_impl,
+};
+
 void esp32_hw_register(void) {
     bpvm_gpio_set_backend(&s_esp32_gpio_backend);
     bpvm_pico_set_backend(&s_esp32_pico_backend);   /* info real (no stub host) */
@@ -409,4 +443,5 @@ void esp32_hw_register(void) {
     bpvm_spi_set_backend(&s_esp32_spi_backend);     /* H16 */
     bpvm_i2c_set_backend(&s_esp32_i2c_backend);     /* H16 */
     bpvm_pwm_set_backend(&s_esp32_pwm_backend);     /* H14 (LEDC) */
+    bpvm_adc_set_backend(&s_esp32_adc_backend);     /* H14 (esp_adc oneshot) */
 }
