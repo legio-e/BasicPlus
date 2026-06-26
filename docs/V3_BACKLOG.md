@@ -68,8 +68,10 @@ cierre = **H12…H17** (1=H12 · 2=H13 · 3=H14 · 4=H15 · 5=H16 · 6=H17):
 3. **P4 HW completo** *(flasheo intensivo → cuando se recarguen pilas)* — backends GPIO/I2C/SPI/
    ADC/PWM/UART en el firmware del P4 (estilo S3).
 4. **Tapar huecos** — bugs conocidos + INFO/causa-de-reset en el IDE + pulidos sueltos del backlog.
-5. **Documentación** — documentar (usuario + interno). **Incluir una AYUDA ESPECÍFICA DE
-   GRÁFICOS** (guía del API `Gui.*`: widgets, eventos, forms/`.win`) — pedido de Eduardo 26-jun.
+5. **Documentación** — documentar (usuario + interno). **AYUDA ESPECÍFICA DE GRÁFICOS en un
+   DOCUMENTO APARTE** (NO en manual.html): el que no usa gráficos no la necesita, el que sí
+   necesita TODOS los detalles del API `Gui.*` (widgets, eventos, color/align/fuente, forms/`.win`)
+   — decisión de Eduardo 26-jun.
 6. **Finalización (estilo V2, = H14)** — batería de PRUEBAS en dispositivos reales para asegurar
    que todo funciona; los bugs que aparezcan, se arreglan; + la **publicación del cierre** (V3 ha
    ido en LOCAL todo el tiempo, repo público congelado en V2 → publicar V3 es la decisión del final).
@@ -527,3 +529,13 @@ DENTRO del IDE (`looksLikeTextFile`). Pendiente: confirmación VISUAL del layout
 **Las 3 mejoras de robustez del plan original** (CRC device-side en LS/STAT, rutear stdlib→/lib,
 subir el detalle de linkAll al wire = "missing lib X") quedan como PULIDO OPCIONAL (no bloquean;
 el bug raíz ya no existe).
+
+### Board descriptor data-driven — ampliar a periféricos y GRÁFICOS (Eduardo, 26-jun)
+Hay **distintas variantes de P4** (y de otras familias) con diferencias en periféricos →
+los counts (ADC/PWM/…) deben salir del **descriptor de placa** (board_desc + `/sys/board.json`),
+no hardcodeados. **Paso 2d (en marcha)** cablea `ADC_CHANNELS`/`PWM_SLICES` al descriptor como
+ya hace `gpioCount()`.
+**Pendiente (MÁS ADELANTE, liga con #258):** llevar también los **GRÁFICOS** al descriptor —
+si la placa **tiene pantalla o no**, **resolución**, **pines de control**, **transporte**
+(DSI/RGB/SPI…). Hoy el P4 lo tiene hardcodeado en `gui_display_dsi.c`; debería ser data-driven
+por placa (board.json del ESP32 = parte del #258). Eduardo: "lo de los gráficos para más adelante".
