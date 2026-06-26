@@ -12,6 +12,7 @@ idf_component_register(
         "../../esp32/main/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
         "../../esp32/main/json_min.c"         # VM.3: parser JSON del wire (C portable)
         "../../esp32/main/platform_esp32.c"
+        "../../esp32/main/gpio_esp32.c"       # H14: backends HW del P4 = REÚSO del S3 (GPIO/UART/SPI/I2C, ESP-IDF estándar)
         "../../esp32/main/fs_ram.c"          # VM.2b: FS en RAM (reutilizado del S3)
         # --- núcleo VM (portable C99) ---
         "../../src/bpvm.c"
@@ -31,7 +32,7 @@ idf_component_register(
         "../../src/scheduler_smp.c"
         "../../src/comm_common.c"
         "../../src/comm_host.c"
-        # --- fachadas HW (stubs sin backend) ---
+        # --- fachadas HW (backend ESP-IDF vía gpio_esp32.c; ADC/PWM aún stub) ---
         "../../src/gpio.c"
         "../../src/i2c.c"
         "../../src/spi.c"
@@ -60,5 +61,8 @@ idf_component_register(
         esp_lcd          # G3: MIPI-DSI (esp_lcd_new_dsi_bus + panel ops)
         esp_driver_ledc  # G3: PWM del backlight (GPIO26)
         lvgl             # G4: LVGL 9.2.2 vendorizada (via EXTRA_COMPONENT_DIRS)
-        esp_driver_i2c   # G5: bus I2C del táctil GT911 (i2c_new_master_bus)
+        esp_driver_i2c   # G5: bus I2C del táctil GT911 (i2c_new_master_bus) + backend I2C BP (H14)
+        esp_driver_gpio  # H14: backend GPIO del P4 (driver/gpio.h)
+        esp_driver_uart  # H14: backend UART del P4 (driver/uart.h)
+        esp_driver_spi   # H14: backend SPI del P4 (driver/spi_master.h)
 )

@@ -36,6 +36,7 @@
 #include "wire_v1_tcp.h"      /* servidor del wire sobre TCP (capa de I/O del P4) */
 #include "p4_board_id.h"      /* identidad de placa esp32p4 para INFO/HELLO */
 #include "gui_display_dsi.h"  /* G3: display MIPI-DSI (panel + backlight + rojo) */
+#include "hw_esp32.h"         /* H14: backends HW (GPIO/UART/SPI/I2C) reusados del S3 */
 
 static const char *TAG = "bpvm_p4";
 
@@ -167,7 +168,8 @@ static void wire_task(void *arg)
     net_logf("[p4] FS+stdlib listos: %s, %d ficheros, %u B libres",
              fs_status_str(r), fs_file_count(), (unsigned) fs_free_bytes());
 
-    p4_install_board_id();       /* INFO/HELLO reportan esp32p4 (no el default S3) */
+    esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3, ESP-IDF) */
+    p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* backend del P4 (pisa el del S3) */
     wire_v1_tcp_server_init(WIRE_PORT);
     net_logf("[p4] VM.3: esperando al IDE en *:%d (backend 'VM (TCP v1)' -> 192.168.2.2:%d)",
              WIRE_PORT, WIRE_PORT);
