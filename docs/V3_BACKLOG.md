@@ -160,6 +160,15 @@ para rechazar pantallas rancias si los slots se mueven al recompilar.
   IDE lee su `método→slot` del `.bpi`. Editor VISUAL (arrastrar controles) = más adelante (V4 / H13.2+); por
   ahora el `.win` se escribe a mano. El **paso 4** de H13.1 = el **horneado** (en Preview/Deploy); el
   **scaffold** (generar stubs) es complemento ergonómico.
+- **Organización del FS de proyectos en el micro (Eduardo, 25-jun):** **B HECHO** — el `readFile` de la VM-C
+  cae a `/app/<nombre>` para paths RELATIVOS (nombre simple) cuando el directo falla (espejo del cargador de
+  imágenes en `gui.c`), así `load("main.win")` encuentra el resource que el IDE subió a `/app/`. OJO: cambio de
+  firmware → **reflash** para probarlo. **A PENDIENTE (la mejora que pide Eduardo):** cada proyecto en SU
+  carpeta `/app/<proyecto>/` (no plano), con un **directorio base por ejecución** = esa carpeta para que
+  `readFile`/`loadFile` e imports de módulos de la app resuelvan relativo a ella (como el workdir de la VM
+  host); toca IDE (paths de subida + run) + device (resolución base en los 3 firmwares). **Norma de paths
+  (Eduardo):** dentro de un proyecto los paths son RELATIVOS; ofrecer además una utilidad para convertir
+  relativo→absoluto (para quien solo pueda trabajar con paths absolutos).
 
 ## 🎨 GUI (objetivo cabecera)
 

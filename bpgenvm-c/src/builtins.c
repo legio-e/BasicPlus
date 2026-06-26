@@ -837,17 +837,31 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = (uint32_t) pop_i32(vm, tc);
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
+        char alt[600];
+        const char* rpath = path;        /* path efectivo tras el fallback /app */
         uint32_t size = 0;
-        if (bpvm_fs_stat(path, &size) != 0) {
-            char em[576];
-            snprintf(em, sizeof(em), "readFile('%s'): no se pudo abrir", path);
-            return builtin_throw(vm, tc, em);
+        if (bpvm_fs_stat(rpath, &size) != 0) {
+            /* H13.1 (B) — fallback /app para paths RELATIVOS (nombre simple): el IDE
+             * sube los resources/ del proyecto a /app/, así readFile("main.win") los
+             * encuentra (mismo criterio que el cargador de imágenes en gui.c). Sólo
+             * si el path no es absoluto. (Mejora pendiente: carpeta por proyecto
+             * /app/<proj>/ + dir-base relativo — ver V3_BACKLOG/PENDIENTES.) */
+            int resolved = 0;
+            if (path[0] != '/') {
+                snprintf(alt, sizeof(alt), "/app/%s", path);
+                if (bpvm_fs_stat(alt, &size) == 0) { rpath = alt; resolved = 1; }
+            }
+            if (!resolved) {
+                char em[576];
+                snprintf(em, sizeof(em), "readFile('%s'): no se pudo abrir", path);
+                return builtin_throw(vm, tc, em);
+            }
         }
         uint32_t ref = bpvm_heap_alloc(vm, size, BPVM_TYPE_ARRAY_I8);
         if (ref == 0) return builtin_throw(vm, tc, "readFile: sin memoria");
         bpvm_write_u32_be(vm->memory + ref, size);
         if (size > 0) {
-            long n = bpvm_fs_read(path, vm->memory + ref + 4, size);
+            long n = bpvm_fs_read(rpath, vm->memory + ref + 4, size);
             if (n < 0 || (uint32_t) n != size) {
                 char em[576];
                 snprintf(em, sizeof(em), "readFile('%s'): error de lectura", path);
