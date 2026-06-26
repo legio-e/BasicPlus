@@ -779,3 +779,68 @@ Ethernet, el TCP cae pero la consola sigue. El MVP no depende del wire.
   mitigada a 1 worker, el device single-core es inmune).
 - **Mapa de memoria configurable por PSRAM** (#225) y **FS grande** (#229):
   relevantes para framebuffers y recursos del GUI.
+
+## H18 — Aprovechar la memoria del P4 + threading no-bloqueante en GUI (diseño 26-jun, Eduardo + Claude)
+
+**Motivación (Eduardo):** "No podemos sacar una V3 con un stack de 128 KiB en una máquina con
+32 MB de RAM." El P4 usa una fracción mínima de sus recursos. Esto es **V3** (no V4): hace falta
+para que los usuarios tengan un sistema 100% operativo; avance razonable (equipo pequeño, no todo
+a la vez). Cristaliza los aparcados **#225** (mapa de memoria configurable por PSRAM), **#229** (FS
+grande) y **#153** (dual-core).
+
+### Estado de partida (medido 26-jun)
+- VM `memory[]` = **128 KiB** estáticos en SRAM interna (`main.c` `VM_MEM_SIZE`) = data + heap +
+  **stacks de TODOS los threads BP** — cada `Thread.start` reserva su stack de aquí → multi-thread
+  + GUI ahogan los 128 KiB.
+- PSRAM 32 MB: hoy solo la usa el gráfico (FB scan-out ~1.2 MB + draw buffer LVGL ~240 KB, **ambos
+  en PSRAM**). SRAM interna ~768 KB.
+- FS: **todo en RAM** (`fs_ram.c`: `s_files[]` + `s_data`), persistido a partición `bpfs` = **2 MB**.
+  Flash 16 MB: 4 app + 2 bpfs + **~10 libres**.
+- Threads: VM **1 worker** (`bpvm_run`, no `bpvm_run_smp`); BP Thread = green-threads cooperativos;
+  `scheduler_smp.c` compila pero **no se activa**.
+- GUI: 2 tasks (LVGL render ‖ VM worker) desacopladas por cola de eventos; pero `Gui.run()`
+  (`BUILTIN_GUI_RUN`, builtins.c:579) es un bucle C que **NO cede al scheduler** (lo dice su propio
+  comentario, :598) y corre el handler **síncrono** → handler largo congela y los threads BP no
+  avanzan durante el bombeo.
+
+### Decisiones (Eduardo, 26-jun)
+1. **Tamaño de la VM (RAM): configurable con default**, como Pico/Metro (BpVM.cfg / descriptor de
+   placa). La VM se mueve a **PSRAM** — receta ya probada en el Metro RP2350B (#221 heap PSRAM +
+   #224 buffers grandes a punteros-runtime), no es terreno nuevo. Default GENEROSO (varios MB).
+2. **Stacks: configurable con default.** CLAVE de rendimiento: el **render buffer de LVGL** (donde
+   la CPU pinta los píxeles = hot path) va a **SRAM interna**, NO a PSRAM. *Restricción física: el
+   FB scan-out completo (1.2 MB) NO cabe en 768 KB de SRAM → ese se queda en PSRAM (lo lee el DMA
+   del DSI, la latencia no le afecta); lo que importa para fluidez es el render buffer.* Mover la VM
+   a PSRAM (decisión 1) libera la SRAM interna que ese render buffer necesita.
+3. **FS en FLASH (OBLIGATORIO para V3).** Hoy vive entero en RAM; V3 sale con el FS en flash
+   (leer/escribir contra la partición, no copiar todo a RAM). Se puede mantener el de RAM un poco
+   más para pruebas, pero el release lleva FS-en-flash. Imágenes grandes: leerlas **mapeadas**
+   (`esp_partition_mmap`, read-only) sin cargarlas a RAM — primo de la idea PACK/XIP de bytecode.
+4. **Threading: empezar por la Opción 1 (cooperativa)** — `Gui.run()` cede al scheduler entre pumps
+   → los threads BP arrancados por un handler se interleavan; disciplina "handler corto, trabajo
+   pesado a un `Thread.start()`". Luego, **si no causa mucho trastorno, pasar la task de LVGL al 2º
+   core** (`xTaskCreatePinnedToCore`, core 1) → render desacoplado de la VM, SIN meternos en el SMP
+   completo de la VM (eso queda para más adelante). Caso de uso BP objetivo:
+   `function onProcesar()  Thread.start(tareaLarga)  end`  (arranca y vuelve; la GUI sigue viva).
+
+### Secuencia propuesta (cada fase = commit + reflash + verificar en placa)
+- **F1 — VM a PSRAM, configurable.** `s_vm_buffer` → `heap_caps_malloc(MALLOC_CAP_SPIRAM)`, tamaño
+  desde config (default amplio); `memorySize`/`stackBase` configurables (paridad con BpVM.cfg). INFO
+  / `Pico.freeMem` deben reflejar MBs, no 128 K. [firmware P4 + quizá board.json]
+- **F2 — render buffer LVGL → SRAM interna.** Draw buffer a `MALLOC_CAP_INTERNAL`; FB scan-out se
+  queda en PSRAM. Medir fluidez. [firmware P4]
+- **F3 — FS en flash.** Backend que lee/escribe la partición (no todo-en-RAM); subir `bpfs` (2 →
+  ~10 MB). Imágenes: ruta mmap read-only. [firmware P4 + quizá IDE]
+- **F4 — `Gui.run()` cooperativo.** Reestructurar `BUILTIN_GUI_RUN` para ceder al scheduler entre
+  pumps → threads BP interleavan. Sample: botón que lanza tarea larga + UI sigue respondiendo.
+  [core `gui.c`/scheduler — afecta a las 4 familias → vigilar paridad dual-VM + arnés]
+- **F5 (si sin trastorno) — LVGL al core 1.** `xTaskCreatePinnedToCore`. [firmware P4]
+
+### Riesgos / a vigilar
+- **F4 toca el núcleo de la GUI** compartido por las 4 familias (host/miVM también tienen `Gui.run`
+  sobre SDL/Swing) → el cambio "ceder al scheduler" debe ser neutral en host/miVM; mantener arnés
+  verde + paridad dual-VM.
+- **PSRAM más lenta que SRAM**: el heap de la VM en PSRAM puede costar en hot-path; medir. Si pesa,
+  stacks (lo más caliente) en SRAM e heap en PSRAM.
+- **Reservar SIEMPRE PSRAM para los framebuffers** (doble buffer 1024×600 = 2.4 MB + margen); el
+  default de la VM no debe comerse toda la PSRAM.
