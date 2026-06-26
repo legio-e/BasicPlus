@@ -19,7 +19,6 @@
 #include "bpvm_pwm.h"
 #include "bpvm_adc.h"
 #include "bpvm_pulse.h"
-#include "bpvm_rtc.h"
 
 #include "driver/gpio.h"
 #include "driver/uart.h"
@@ -28,7 +27,6 @@
 #include "driver/ledc.h"            /* H14: backend PWM */
 #include "esp_adc/adc_oneshot.h"    /* H14: backend ADC */
 #include "driver/pulse_cnt.h"       /* H14: backend contador (PCNT) */
-#include <sys/time.h>               /* H14: backend RTC (gettimeofday/settimeofday) */
 #include "freertos/FreeRTOS.h"   /* pdMS_TO_TICKS, portMAX_DELAY */
 #include "esp_mac.h"      /* uniqueId desde la MAC de efuse */
 #include "esp_timer.h"    /* uptime */
@@ -492,26 +490,17 @@ static const bpvm_pulse_backend_t s_esp32_pulse_backend = {
 };
 
 /* ===================== RTC (H14) ====================================
- * Hora de pared sobre el reloj de sistema del ESP32 (gettimeofday /
- * settimeofday). El RTC interno mantiene la hora mientras hay alimentación y
- * sobrevive al reset; NO al power-off sin pila/RTC externo. El IDE la sincroniza
- * por el comando TIME del wire (repl_esp32) al conectar.
+ * El ESP32 usa A PROPÓSITO el stub portable de src/rtc.c (NO registra backend):
+ * wall clock = reloj monotónico (bpvm_platform_now_ms, esp_timer) + offset de
+ * calibración. El IDE lo calibra por el comando TIME del wire (repl_esp32) al
+ * conectar, exactamente igual que el Pico (que también cae al stub) y que miVM
+ * → paridad garantizada y verificable en host.
+ *
+ * NO reintroducir un backend con gettimeofday/settimeofday: en el P4 (26-jun)
+ * gettimeofday NO avanzaba tras un settimeofday (quirk del time syscall de
+ * newlib según sdkconfig) → tras calibrar, el reloj se quedaba congelado. El
+ * modelo offset evita ese camino por completo y da la hora correcta.
  */
-static int64_t esp32_rtc_now_ms_impl(void) {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (int64_t) tv.tv_sec * 1000 + (int64_t) tv.tv_usec / 1000;
-}
-static void esp32_rtc_set_now_ms_impl(int64_t epoch_ms) {
-    struct timeval tv;
-    tv.tv_sec  = (time_t) (epoch_ms / 1000);
-    tv.tv_usec = (suseconds_t) ((epoch_ms % 1000) * 1000);
-    settimeofday(&tv, NULL);
-}
-static const bpvm_rtc_backend_t s_esp32_rtc_backend = {
-    .nowMs    = esp32_rtc_now_ms_impl,
-    .setNowMs = esp32_rtc_set_now_ms_impl,
-};
 
 void esp32_hw_register(void) {
     bpvm_gpio_set_backend(&s_esp32_gpio_backend);
@@ -522,5 +511,5 @@ void esp32_hw_register(void) {
     bpvm_pwm_set_backend(&s_esp32_pwm_backend);     /* H14 (LEDC) */
     bpvm_adc_set_backend(&s_esp32_adc_backend);     /* H14 (esp_adc oneshot) */
     bpvm_pulse_set_backend(&s_esp32_pulse_backend); /* H14 (PCNT) */
-    bpvm_rtc_set_backend(&s_esp32_rtc_backend);     /* H14 (gettimeofday) */
+    /* RTC: sin backend a propósito → stub portable (modelo offset). Ver arriba. */
 }
