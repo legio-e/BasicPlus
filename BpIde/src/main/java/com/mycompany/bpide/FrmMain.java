@@ -758,6 +758,7 @@ public class FrmMain extends javax.swing.JFrame
             || n.endsWith(".csv") || n.endsWith(".md") || n.endsWith(".cfg")
             || n.endsWith(".xml") || n.endsWith(".html") || n.endsWith(".htm")
             || n.endsWith(".log") || n.endsWith(".ini") || n.endsWith(".bpi")
+            || n.endsWith(".win") || n.endsWith(".slots")   // forms (JSON) → editor del IDE
             || n.endsWith(".bpbuild") || n.endsWith(".bpproject");
     }
 

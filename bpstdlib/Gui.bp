@@ -699,7 +699,10 @@ import Json
   // ============================================================
   public class Window extends Component
     public function Window()
-      this.lvglId := __guiCreateObj(__guiScreenActive())   // contenedor raíz propio
+      var scr: integer := __guiScreenActive()
+      this.lvglId := __guiCreateObj(scr)                   // contenedor raíz propio
+      this.width  := __guiGetWidth(scr)                    // ocupa toda la pantalla
+      this.height := __guiGetHeight(scr)
       __guiBindClick(this.lvglId, this)
     end Window
 
@@ -707,7 +710,14 @@ import Json
     // devuelve el widget raíz del form (útil para refrescar/inspeccionar).
     public function load(path: string): Component
       var root: Json.JsonValue := Json.readJsonFile(path)
-      return buildForm(root.asObject(), this, this)
+      var node: Json.JsonObject := root.asObject()
+      var w: Component := buildForm(node, this, this)
+      // El widget raíz ocupa toda la pantalla salvo que el .win le dé tamaño
+      // explícito → un form sin medidas llena la pantalla (no un recuadro).
+      var scr: integer := __guiScreenActive()
+      if not node.has("width") then  w.width := __guiGetWidth(scr)
+      if not node.has("height") then w.height := __guiGetHeight(scr)
+      return w
     end load
 
     // Destruye la ventana → el backend cascadea y borra todo el subárbol.
