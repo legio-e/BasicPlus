@@ -1,0 +1,44 @@
+// PwmCount.bp — auto-test PWM -> contador de pulsos, sin periféricos externos:
+// un pin genera una onda cuadrada (PWM) y OTRO pin la cuenta (PCNT), ambos
+// PUENTEADOS con un cable (PWM_PIN -> COUNT_PIN). Tras 1 s a FREQ Hz se esperan
+// ~FREQ flancos de subida. Para el P4: evita 7,8,26,27,31,51,52 (los usa el
+// firmware: I2C táctil / backlight / reset panel / Ethernet).
+module PwmCount
+import Pwm
+import Pulse
+
+  // EDITA a 2 pines LIBRES de tu placa, unidos con un cable:
+  const PWM_PIN:   integer := 20    // salida PWM
+  const COUNT_PIN: integer := 21    // entrada del contador (cable de PWM_PIN a COUNT_PIN)
+
+  const FREQ:    integer := 1000    // Hz de la onda
+  const GATE_MS: integer := 1000    // ventana de conteo (1 s)
+
+  function main(arg: string)
+    // 1) genera la onda: PWM al 50% a FREQ Hz
+    var p: Pwm.Slice := Pwm.Slice(PWM_PIN, FREQ)
+    p.setDuty(50)
+    p.start()
+
+    // 2) cuenta los flancos de subida durante GATE_MS
+    var c: Pulse.Counter := Pulse.Counter(COUNT_PIN, Pulse.Counter.RISING)
+    c.reset()
+    c.start()
+    sleep(GATE_MS)
+    c.stop()
+    p.stop()
+
+    var n:        integer := c.value()
+    var esperado: integer := FREQ * GATE_MS / 1000
+
+    print "PWM " + FREQ + " Hz x " + GATE_MS + " ms -> contados " + n + " flancos (esperado ~" + esperado + ")"
+
+    // tolerancia 10% (arranque/parada no son exactos al milisegundo)
+    var margen: integer := esperado / 10
+    if n >= esperado - margen and n <= esperado + margen then
+      print "PWM->contador OK"
+    else
+      print "PWM->contador FALLO -- comprueba el puente PWM->COUNT y los pines"
+    endif
+  end main
+end PwmCount

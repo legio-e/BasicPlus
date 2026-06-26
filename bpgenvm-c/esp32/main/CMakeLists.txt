@@ -53,6 +53,7 @@ idf_component_register(
         esp_driver_i2c   # H16: backend I2C (i2c_master, IDF v6)
         esp_driver_ledc  # H14: backend PWM (LEDC)
         esp_adc          # H14: backend ADC (esp_adc oneshot)
+        esp_driver_pcnt  # H14: backend contador de pulsos (PCNT)
         spi_flash        # INFO: esp_flash_get_size (flash real montada)
         esp_hw_support   # INFO: esp_mac.h (uniqueId desde efuse)
 )

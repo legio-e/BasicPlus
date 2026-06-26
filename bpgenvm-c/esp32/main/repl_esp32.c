@@ -19,6 +19,7 @@
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* inspección de deps en handle_run */
+#include "bpvm_rtc.h"        /* H14 — TIME del wire → RTC (bpvm_rtc_set_now_ms) */
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -522,6 +523,12 @@ static void handle_request(const char* line, int len) {
     if (strcmp(type, "PUT")   == 0) { handle_put(id, &obj, s_put_buf, bulk_size); return; }
     if (strcmp(type, "DEL")   == 0) { handle_del(id, &obj);   return; }
     if (strcmp(type, "RUN")   == 0) { handle_run(id, &obj);   return; }
+    if (strcmp(type, "TIME")  == 0) {   /* H14 — sync de hora del IDE → RTC */
+        long epochSec = json_get_long(&obj, "epochSec", -1);
+        if (epochSec >= 0) bpvm_rtc_set_now_ms((int64_t) epochSec * 1000LL);
+        wire_v1_send_reply_empty("TIME_REPLY", id);
+        return;
+    }
     /* P-run-stop (#257) — KILL en idle: nada que matar (el KILL útil llega
      * DURANTE un RUN y lo atiende esp32_run_poll_cb). */
     if (strcmp(type, "KILL")  == 0) {

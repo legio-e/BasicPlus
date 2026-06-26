@@ -18,6 +18,8 @@
 #include "bpvm_i2c.h"
 #include "bpvm_pwm.h"
 #include "bpvm_adc.h"
+#include "bpvm_pulse.h"
+#include "bpvm_rtc.h"
 
 #include "driver/gpio.h"
 #include "driver/uart.h"
@@ -25,6 +27,8 @@
 #include "driver/i2c_master.h"
 #include "driver/ledc.h"            /* H14: backend PWM */
 #include "esp_adc/adc_oneshot.h"    /* H14: backend ADC */
+#include "driver/pulse_cnt.h"       /* H14: backend contador (PCNT) */
+#include <sys/time.h>               /* H14: backend RTC (gettimeofday/settimeofday) */
 #include "freertos/FreeRTOS.h"   /* pdMS_TO_TICKS, portMAX_DELAY */
 #include "esp_mac.h"      /* uniqueId desde la MAC de efuse */
 #include "esp_timer.h"    /* uptime */
@@ -436,6 +440,79 @@ static const bpvm_adc_backend_t s_esp32_adc_backend = {
     .readChannel = esp32_adc_read_channel_impl,
 };
 
+/* ===================== CONTADOR DE PULSOS (H14) =====================
+ * Backend sobre PCNT (el periférico contador del ESP32; el P4 no tiene PIO).
+ * Cada "counter" BP = una unidad PCNT + 1 canal sobre el pin. Cuenta flancos
+ * RISING(0)/FALLING(1)/BOTH(2). Contador 16-bit con signo (±32767) — como el
+ * RP2350. Reusa el counter si se re-inicializa el MISMO pin.
+ */
+#define ESP32_PULSE_MAX 4
+static int                   s_pulse_n = 0;
+static int                   s_pulse_pin[ESP32_PULSE_MAX];
+static pcnt_unit_handle_t    s_pulse_unit[ESP32_PULSE_MAX];
+static pcnt_channel_handle_t s_pulse_chan[ESP32_PULSE_MAX];
+
+static int esp32_pulse_init_impl(int pin, int edgeKind) {
+    for (int i = 0; i < s_pulse_n; i++) {
+        if (s_pulse_pin[i] == pin) { pcnt_unit_clear_count(s_pulse_unit[i]); return i; }
+    }
+    if (s_pulse_n >= ESP32_PULSE_MAX) return -1;
+    pcnt_unit_config_t ucfg = { .high_limit = 32767, .low_limit = -32768 };
+    pcnt_unit_handle_t unit;
+    if (pcnt_new_unit(&ucfg, &unit) != ESP_OK) return -1;
+    pcnt_chan_config_t ccfg = { .edge_gpio_num = pin, .level_gpio_num = -1 };
+    pcnt_channel_handle_t chan;
+    if (pcnt_new_channel(unit, &ccfg, &chan) != ESP_OK) { pcnt_del_unit(unit); return -1; }
+    pcnt_channel_edge_action_t pos = PCNT_CHANNEL_EDGE_ACTION_HOLD;
+    pcnt_channel_edge_action_t neg = PCNT_CHANNEL_EDGE_ACTION_HOLD;
+    if (edgeKind == 1)      { neg = PCNT_CHANNEL_EDGE_ACTION_INCREASE; }   /* FALLING */
+    else if (edgeKind == 2) { pos = neg = PCNT_CHANNEL_EDGE_ACTION_INCREASE; } /* BOTH */
+    else                    { pos = PCNT_CHANNEL_EDGE_ACTION_INCREASE; }   /* RISING (0) */
+    pcnt_channel_set_edge_action(chan, pos, neg);
+    pcnt_unit_enable(unit);
+    pcnt_unit_clear_count(unit);
+    int idx = s_pulse_n++;
+    s_pulse_pin[idx] = pin; s_pulse_unit[idx] = unit; s_pulse_chan[idx] = chan;
+    return idx;
+}
+static void esp32_pulse_start_impl(int id) { if (id >= 0 && id < s_pulse_n) pcnt_unit_start(s_pulse_unit[id]); }
+static void esp32_pulse_stop_impl(int id)  { if (id >= 0 && id < s_pulse_n) pcnt_unit_stop(s_pulse_unit[id]); }
+static int  esp32_pulse_value_impl(int id) {
+    if (id < 0 || id >= s_pulse_n) return 0;
+    int c = 0; pcnt_unit_get_count(s_pulse_unit[id], &c); return c;
+}
+static void esp32_pulse_reset_impl(int id) { if (id >= 0 && id < s_pulse_n) pcnt_unit_clear_count(s_pulse_unit[id]); }
+
+static const bpvm_pulse_backend_t s_esp32_pulse_backend = {
+    .init  = esp32_pulse_init_impl,
+    .start = esp32_pulse_start_impl,
+    .stop  = esp32_pulse_stop_impl,
+    .value = esp32_pulse_value_impl,
+    .reset = esp32_pulse_reset_impl,
+};
+
+/* ===================== RTC (H14) ====================================
+ * Hora de pared sobre el reloj de sistema del ESP32 (gettimeofday /
+ * settimeofday). El RTC interno mantiene la hora mientras hay alimentación y
+ * sobrevive al reset; NO al power-off sin pila/RTC externo. El IDE la sincroniza
+ * por el comando TIME del wire (repl_esp32) al conectar.
+ */
+static int64_t esp32_rtc_now_ms_impl(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (int64_t) tv.tv_sec * 1000 + (int64_t) tv.tv_usec / 1000;
+}
+static void esp32_rtc_set_now_ms_impl(int64_t epoch_ms) {
+    struct timeval tv;
+    tv.tv_sec  = (time_t) (epoch_ms / 1000);
+    tv.tv_usec = (suseconds_t) ((epoch_ms % 1000) * 1000);
+    settimeofday(&tv, NULL);
+}
+static const bpvm_rtc_backend_t s_esp32_rtc_backend = {
+    .nowMs    = esp32_rtc_now_ms_impl,
+    .setNowMs = esp32_rtc_set_now_ms_impl,
+};
+
 void esp32_hw_register(void) {
     bpvm_gpio_set_backend(&s_esp32_gpio_backend);
     bpvm_pico_set_backend(&s_esp32_pico_backend);   /* info real (no stub host) */
@@ -444,4 +521,6 @@ void esp32_hw_register(void) {
     bpvm_i2c_set_backend(&s_esp32_i2c_backend);     /* H16 */
     bpvm_pwm_set_backend(&s_esp32_pwm_backend);     /* H14 (LEDC) */
     bpvm_adc_set_backend(&s_esp32_adc_backend);     /* H14 (esp_adc oneshot) */
+    bpvm_pulse_set_backend(&s_esp32_pulse_backend); /* H14 (PCNT) */
+    bpvm_rtc_set_backend(&s_esp32_rtc_backend);     /* H14 (gettimeofday) */
 }
