@@ -16,11 +16,13 @@
 #include "bpvm_uart.h"
 #include "bpvm_spi.h"
 #include "bpvm_i2c.h"
+#include "bpvm_pwm.h"
 
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "driver/spi_master.h"
 #include "driver/i2c_master.h"
+#include "driver/ledc.h"        /* H14: backend PWM */
 #include "freertos/FreeRTOS.h"   /* pdMS_TO_TICKS, portMAX_DELAY */
 #include "esp_mac.h"      /* uniqueId desde la MAC de efuse */
 #include "esp_timer.h"    /* uptime */
@@ -321,10 +323,90 @@ static const bpvm_i2c_backend_t s_esp32_i2c_backend = {
     .read  = esp32_i2c_read_impl,
 };
 
+/* ===================== PWM (H14) =====================================
+ * Backend PWM sobre LEDC (low-speed). El "slice" BP = un canal LEDC + su timer.
+ * Canales 2..7 y timers 0/2/3 — el canal 1 / timer 1 los usa el backlight del
+ * display (gui_display_dsi.c). freq por TIMER, duty por CANAL. Reusa el slice
+ * si se re-inicializa el MISMO pin (re-ejecución del .mod sin agotar canales).
+ */
+#define ESP32_PWM_MODE  LEDC_LOW_SPEED_MODE
+#define ESP32_PWM_MAX   6              /* canales 2..7 */
+static int s_pwm_n = 0;
+static int s_pwm_pin[ESP32_PWM_MAX];
+static int s_pwm_chan[ESP32_PWM_MAX];
+static int s_pwm_tmr[ESP32_PWM_MAX];
+static const ledc_timer_t s_pwm_free_tmr[3] = { LEDC_TIMER_0, LEDC_TIMER_2, LEDC_TIMER_3 };
+
+static int esp32_pwm_init_impl(int pin, int freqHz) {
+    int idx = -1;
+    for (int i = 0; i < s_pwm_n; i++) { if (s_pwm_pin[i] == pin) { idx = i; break; } }
+    if (idx < 0) {
+        if (s_pwm_n >= ESP32_PWM_MAX) return -1;
+        idx = s_pwm_n++;
+        s_pwm_pin[idx]  = pin;
+        s_pwm_chan[idx] = 2 + idx;                          /* canales 2..7 */
+        s_pwm_tmr[idx]  = (int) s_pwm_free_tmr[idx % 3];    /* timers 0/2/3 */
+    }
+    ledc_timer_config_t tcfg = {
+        .speed_mode      = ESP32_PWM_MODE,
+        .duty_resolution = LEDC_TIMER_13_BIT,
+        .timer_num       = (ledc_timer_t) s_pwm_tmr[idx],
+        .freq_hz         = (uint32_t) freqHz,
+        .clk_cfg         = LEDC_AUTO_CLK,
+    };
+    if (ledc_timer_config(&tcfg) != ESP_OK) return -1;
+    ledc_channel_config_t ccfg = {
+        .gpio_num   = pin,
+        .speed_mode = ESP32_PWM_MODE,
+        .channel    = (ledc_channel_t) s_pwm_chan[idx],
+        .intr_type  = LEDC_INTR_DISABLE,
+        .timer_sel  = (ledc_timer_t) s_pwm_tmr[idx],
+        .duty       = 0,
+        .hpoint     = 0,
+    };
+    if (ledc_channel_config(&ccfg) != ESP_OK) return -1;
+    return idx;   /* sliceId = índice */
+}
+
+static void esp32_pwm_set_freq_impl(int slice, int freqHz) {
+    if (slice < 0 || slice >= s_pwm_n) return;
+    ledc_set_freq(ESP32_PWM_MODE, (ledc_timer_t) s_pwm_tmr[slice], (uint32_t) freqHz);
+}
+
+static void esp32_pwm_set_duty_impl(int slice, int pin, int dutyPct) {
+    (void) pin;
+    if (slice < 0 || slice >= s_pwm_n) return;
+    if (dutyPct < 0)   dutyPct = 0;
+    if (dutyPct > 100) dutyPct = 100;
+    uint32_t maxd = (1u << 13) - 1u;               /* 13-bit */
+    uint32_t d = (maxd * (uint32_t) dutyPct) / 100u;
+    ledc_set_duty(ESP32_PWM_MODE, (ledc_channel_t) s_pwm_chan[slice], d);
+    ledc_update_duty(ESP32_PWM_MODE, (ledc_channel_t) s_pwm_chan[slice]);
+}
+
+static void esp32_pwm_start_impl(int slice) {
+    if (slice < 0 || slice >= s_pwm_n) return;
+    ledc_update_duty(ESP32_PWM_MODE, (ledc_channel_t) s_pwm_chan[slice]);
+}
+
+static void esp32_pwm_stop_impl(int slice) {
+    if (slice < 0 || slice >= s_pwm_n) return;
+    ledc_stop(ESP32_PWM_MODE, (ledc_channel_t) s_pwm_chan[slice], 0);   /* salida a 0 */
+}
+
+static const bpvm_pwm_backend_t s_esp32_pwm_backend = {
+    .init    = esp32_pwm_init_impl,
+    .setFreq = esp32_pwm_set_freq_impl,
+    .setDuty = esp32_pwm_set_duty_impl,
+    .start   = esp32_pwm_start_impl,
+    .stop    = esp32_pwm_stop_impl,
+};
+
 void esp32_hw_register(void) {
     bpvm_gpio_set_backend(&s_esp32_gpio_backend);
     bpvm_pico_set_backend(&s_esp32_pico_backend);   /* info real (no stub host) */
     bpvm_uart_set_backend(&s_esp32_uart_backend);   /* H16 */
     bpvm_spi_set_backend(&s_esp32_spi_backend);     /* H16 */
     bpvm_i2c_set_backend(&s_esp32_i2c_backend);     /* H16 */
+    bpvm_pwm_set_backend(&s_esp32_pwm_backend);     /* H14 (LEDC) */
 }
