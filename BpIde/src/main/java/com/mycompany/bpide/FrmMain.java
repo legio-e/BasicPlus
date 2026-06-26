@@ -2416,8 +2416,21 @@ public class FrmMain extends javax.swing.JFrame
             // la app recién compilada → en un método OO cross-module el
             // INVOKE_VIRTUAL apunta a un slot inexistente → RuntimeError en el
             // device (cazado con I2c.Bus.read). Drivers de usuario: outDir primero.
+            // AMPLIADO (2026-06-26): la protección stdlib-first cubría SOLO
+            // EMBEDDED_CORE_MODS → Json (dep de Gui para Forms, H13.1) quedaba
+            // fuera y el IDE subía un Json.mod RANCIO del out/ del proyecto
+            // (p.ej. samples/out/Json.mod de mayo: 12351 B, asObject en otro
+            // slot que el #15 actual) en vez del de bpstdlib → en el P4 el
+            // INVOKE_VIRTUAL cross-module no resolvía ("símbolo no resuelto
+            // 'Json.JsonValue#asObject#15'") → exit 10 mudo. Ahora CUALQUIER
+            // módulo que viva en stdlibDir (tiene su .bp/.mod allí) se resuelve
+            // de stdlibDir PRIMERO, no solo los EMBEDDED_CORE.
             java.util.List<Path> order = searchDirs;
-            if (stdlibFirst != null && EMBEDDED_CORE_MODS.contains(imp)) {
+            boolean isStdlibMod = stdlibFirst != null
+                    && (EMBEDDED_CORE_MODS.contains(imp)
+                        || Files.isRegularFile(stdlibFirst.resolve(imp + ".bp"))
+                        || Files.isRegularFile(stdlibFirst.resolve(imp + ".mod")));
+            if (isStdlibMod) {
                 order = new java.util.ArrayList<>();
                 order.add(stdlibFirst);
                 order.addAll(searchDirs);   // el break corta en el 1º; dup inocuo
