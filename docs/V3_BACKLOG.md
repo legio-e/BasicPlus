@@ -68,13 +68,22 @@ cierre = **H12…H17** (1=H12 · 2=H13 · 3=H14 · 4=H15 · 5=H16 · 6=H17):
 3. **P4 HW completo** *(flasheo intensivo → cuando se recarguen pilas)* — backends GPIO/I2C/SPI/
    ADC/PWM/UART en el firmware del P4 (estilo S3).
 4. **Tapar huecos** — bugs conocidos + INFO/causa-de-reset en el IDE + pulidos sueltos del backlog.
-5. **Documentación** — documentar (usuario + interno).
+5. **Documentación** — documentar (usuario + interno). **Incluir una AYUDA ESPECÍFICA DE
+   GRÁFICOS** (guía del API `Gui.*`: widgets, eventos, forms/`.win`) — pedido de Eduardo 26-jun.
 6. **Finalización (estilo V2, = H14)** — batería de PRUEBAS en dispositivos reales para asegurar
    que todo funciona; los bugs que aparezcan, se arreglan; + la **publicación del cierre** (V3 ha
    ido en LOCAL todo el tiempo, repo público congelado en V2 → publicar V3 es la decisión del final).
 
 Orden flexible donde las piezas son independientes (cargador ↔ AOT intercambiables; el P4-HW puede
 adelantarse en cuanto haya ganas de flashear).
+
+**Refinamientos (Eduardo, 26-jun, tras cerrar Forms en placa — H13 ✅):**
+- **Gráficos: YA HAY MÁS QUE SUFICIENTE para una 1ª versión.** La repesca de widgets (paso 4) se
+  limita a **revisar alguna cosa SIMPLE** — nada complicado.
+- **Preview de forms en miVM/Swing → V4** (confirmado; NO se cuela en V3).
+- **Documentación (paso 5): incluir una AYUDA ESPECÍFICA DE GRÁFICOS** (guía del API `Gui.*`).
+- **HW del P4 (paso 3) = lo más delicado → DESPUÉS** (flasheo intensivo; sin prisa, primero
+  lo de PC: huecos + docs).
 
 ### V4 — fuera de V3 (Eduardo, 24-jun)
 
