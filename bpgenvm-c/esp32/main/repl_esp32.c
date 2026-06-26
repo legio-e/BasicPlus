@@ -439,11 +439,14 @@ static void run_module_path(const char* path, long id) {
     bpvm_set_poll(vm, NULL, NULL);
     if (s_kill_ack_id >= 0) { wire_v1_send_reply_empty("KILL_REPLY", s_kill_ack_id); s_kill_ack_id = -1; }
 
+    const char* link_err = bpvm_link_error(vm);   /* paso 4 — "" salvo fallo de link */
     const char* status_str = (rs == BPVM_OK)     ? "OK"
-                           : (rs == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR";
+                           : (rs == BPVM_KILLED) ? "KILLED"
+                           : (link_err[0])       ? "LINK_ERROR" : "RUNTIME_ERROR";
     int exit_code = (rs == BPVM_OK) ? 0 : (rs == BPVM_KILLED) ? 130 : (int) rs;
-    send_exited(session, status_str, exit_code, (long) dt,
-                (rs == BPVM_OK) ? NULL : bpvm_status_str(rs));
+    const char* err_msg = (rs == BPVM_OK) ? NULL
+                        : (link_err[0] ? link_err : bpvm_status_str(rs));
+    send_exited(session, status_str, exit_code, (long) dt, err_msg);
 
     bpvm_destroy(vm);
     s_active_session = 0;

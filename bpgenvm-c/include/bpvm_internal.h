@@ -311,6 +311,12 @@ struct bpvm {
      * single-worker legacy (F4 v1, scheduler.c). Cuando no-NULL, la
      * VM corre con scheduler_smp.c. Allocated by bpvm_smp_init(). */
     struct bpvm_smp* smp;
+
+    /* Paso 4 (V3) — detalle legible del último fallo de link (lib/símbolo no
+     * resuelto). Lo rellena bpvm_link_all; el handler de RUN lo manda al wire
+     * en vez del exit-code mudo (antes el detalle solo iba a stderr). "" = sin
+     * error. Tamaño fijo (sin malloc → MCU-friendly). */
+    char link_error[160];
 };
 
 /* ============================================================ */

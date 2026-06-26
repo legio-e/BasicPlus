@@ -135,6 +135,10 @@ int main(int argc, char** argv) {
         printf("=== INICIANDO EJECUCION DE LA VM-C ===\n");
         s = bpvm_run(vm);
     }
+    {
+        const char* le = bpvm_link_error(vm);   /* paso 4 — detalle de lib/símbolo no resuelto */
+        if (le[0]) printf("=== ERROR DE LINK: %s ===\n", le);
+    }
     printf("=== FIN DE LA EJECUCION (status=%s) ===\n", bpvm_status_str(s));
 
     if (debug_trace) {

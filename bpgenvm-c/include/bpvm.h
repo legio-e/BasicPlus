@@ -318,6 +318,15 @@ void bpvm_destroy(bpvm_t* vm);
  */
 const char* bpvm_status_str(bpvm_status_t s);
 
+/*
+ * Paso 4 (V3) — detalle legible del último fallo de LINK (lib/símbolo
+ * cross-module no resuelto): p.ej. "falta la lib 'Json' (la usa 'Gui'; ...)".
+ * "" si no hubo fallo de link. Válido tras bpvm_run/bpvm_run_smp. Los handlers
+ * de RUN lo mandan al wire en vez del exit-code mudo (antes el detalle solo iba
+ * a stderr). NO es propietario del puntero: válido mientras viva la VM.
+ */
+const char* bpvm_link_error(const bpvm_t* vm);
+
 #ifdef __cplusplus
 }
 #endif

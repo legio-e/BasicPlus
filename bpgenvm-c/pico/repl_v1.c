@@ -1103,6 +1103,8 @@ static void run_module_path(const char* path, long id) {
     /* 6. Emit EXITED. */
     const char* status_str; int exit_code;
     map_vm_status(rs, &status_str, &exit_code);
+    const char* link_err = bpvm_link_error(vm);   /* paso 4 — "" salvo fallo de link */
+    if (link_err[0]) status_str = "LINK_ERROR";
     int off = wire_v1_msg_begin_event(s_reply_buf, sizeof(s_reply_buf), 0, "EXITED");
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "session", session);
@@ -1115,7 +1117,7 @@ static void run_module_path(const char* path, long id) {
     if (rs != BPVM_OK) {
         if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
                                                    (size_t) off, "errorMessage",
-                                                   bpvm_status_str(rs));
+                                                   link_err[0] ? link_err : bpvm_status_str(rs));
     }
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
                                           (size_t) off);

@@ -431,10 +431,20 @@ static void run_module_path(const char* path, long id) {
         if (n > 0) stm32_wire_send_line(buf, (size_t) n);
     } else {
         if (st != BPVM_OK && st != BPVM_KILLED) BOARD_LED_ERR_ON();
-        emit_exited(session,
-                    (st == BPVM_OK)     ? "OK"
-                  : (st == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR",
-                    (st == BPVM_KILLED) ? 130 : (int) st, dt);
+        const char* link_err = bpvm_link_error(vm);   /* paso 4 — "" salvo fallo de link */
+        if (link_err[0]) {
+            char buf[320];
+            int n = snprintf(buf, sizeof(buf),
+                "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"LINK_ERROR\","
+                "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"%s\"}",
+                session, (int) st, (unsigned long) dt, link_err);
+            if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+        } else {
+            emit_exited(session,
+                        (st == BPVM_OK)     ? "OK"
+                      : (st == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR",
+                        (st == BPVM_KILLED) ? 130 : (int) st, dt);
+        }
     }
     bpvm_destroy(vm);
 }

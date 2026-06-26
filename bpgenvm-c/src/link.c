@@ -93,6 +93,46 @@ uint32_t bpvm_link_lookup(const bpvm_t* vm, const char* qualified) {
     return 0;
 }
 
+/* Paso 4 (V3) — compone un mensaje legible para un símbolo cross-module no
+ * resuelto y lo guarda en vm->link_error, para que el handler de RUN lo mande
+ * al wire (antes el detalle solo iba a stderr → exit-code mudo en el IDE).
+ * Distingue "falta la lib" (el módulo dueño NO está cargado) de "lib presente
+ * pero rancia" (cargado pero sin ese símbolo/slot). `who` = módulo que la usa.
+ * El nombre de la lib = la parte antes del primer '.' del nombre cualificado
+ * (p.ej. 'Json' en 'Json.JsonValue#asObject#15'). */
+static void bpvm_link_set_error(bpvm_t* vm, const char* needed, const char* who) {
+    char lib[40];
+    size_t li = 0;
+    while (needed[li] && needed[li] != '.' && li + 1 < sizeof(lib)) {
+        lib[li] = needed[li]; li++;
+    }
+    lib[li] = '\0';
+
+    int loaded = 0;
+    if (lib[0]) {
+        for (int i = 0; i < vm->module_count; i++) {
+            if (strcmp(vm->modules[i].name, lib) == 0) { loaded = 1; break; }
+        }
+    }
+
+    if (lib[0] && !loaded) {
+        snprintf(vm->link_error, sizeof(vm->link_error),
+                 "falta la lib '%s' (la usa '%s'; simbolo '%s')", lib, who, needed);
+    } else if (lib[0]) {
+        snprintf(vm->link_error, sizeof(vm->link_error),
+                 "lib '%s' presente pero no exporta '%s' (la usa '%s'; version vieja?)",
+                 lib, needed, who);
+    } else {
+        snprintf(vm->link_error, sizeof(vm->link_error),
+                 "simbolo no resuelto '%s' (la usa '%s')", needed, who);
+    }
+}
+
+/* Paso 4 (V3) — accessor público del detalle de fallo de link (ver bpvm.h). */
+const char* bpvm_link_error(const bpvm_t* vm) {
+    return (vm && vm->link_error[0]) ? vm->link_error : "";
+}
+
 /* ---- linkAll: resuelve imports y aplica class fixups ---- */
 
 bpvm_status_t bpvm_link_all(bpvm_t* vm) {
@@ -105,12 +145,11 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
             if (!needed || !needed[0]) continue;
             uint32_t addr = bpvm_link_lookup(vm, needed);
             if (addr == 0) {
-                /* Heurística: ¿el caller usa el qualifiedName SIN library
-                 * prefix cuando el dueño no tiene library? El loader ya
-                 * registra ambas formas (con y sin prefix) — así que
-                 * lookup directo bastará. Si aún así falta, error. */
-                fprintf(stderr, "[bpvm-c link] símbolo no resuelto: '%s'"
-                        " (módulo='%s')\n", needed, m->name);
+                /* El loader registra el símbolo con y sin library-prefix, así
+                 * que un lookup directo basta; si aún así falta, es lib ausente
+                 * o rancia → mensaje claro al wire (paso 4). */
+                bpvm_link_set_error(vm, needed, m->name);
+                fprintf(stderr, "[bpvm-c link] %s\n", vm->link_error);
                 return BPVM_ERR_RUNTIME;
             }
             bpvm_write_i32_be(vm->memory + m->ext_table_addr
@@ -122,9 +161,9 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
             bpvm_class_fixup_t* fx = &m->class_fixups[k];
             uint32_t parent_abs = bpvm_link_lookup(vm, fx->parent_qualified);
             if (parent_abs == 0) {
-                fprintf(stderr, "[bpvm-c link] L2 v3 fixup: parent '%s'"
-                        " no resuelto para clase '%s' (módulo='%s')\n",
-                        fx->parent_qualified, fx->child_class_name, m->name);
+                bpvm_link_set_error(vm, fx->parent_qualified, m->name);
+                fprintf(stderr, "[bpvm-c link] L2 v3 fixup (clase '%s'): %s\n",
+                        fx->child_class_name, vm->link_error);
                 return BPVM_ERR_RUNTIME;
             }
             uint32_t child_abs = m->code_start + fx->child_cs_off;
@@ -138,9 +177,8 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
             bpvm_eh_class_fixup_t* fx = &m->eh_class_fixups[k];
             uint32_t parent_abs = bpvm_link_lookup(vm, fx->parent_qualified);
             if (parent_abs == 0) {
-                fprintf(stderr, "[bpvm-c link] BUG-2 eh-fixup: clase de excepción"
-                        " '%s' no resuelta (módulo='%s')\n",
-                        fx->parent_qualified, m->name);
+                bpvm_link_set_error(vm, fx->parent_qualified, m->name);
+                fprintf(stderr, "[bpvm-c link] BUG-2 eh-fixup: %s\n", vm->link_error);
                 return BPVM_ERR_RUNTIME;
             }
             int32_t cls_off = (int32_t)(parent_abs - m->code_start);
