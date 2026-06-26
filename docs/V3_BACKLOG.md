@@ -143,8 +143,13 @@ para rechazar pantallas rancias si los slots se mueven al recompilar.
   **paso 4** el IDE hornea el slot en el `.win`: **4.0 ✅** el compilador emite el sidecar `<Módulo>.slots`
   (JSON `método→slot` de las clases públicas, autoritativo vía `ClassSymbol.slotOf`) en cada `--compile` del
   módulo raíz — verificado `FormTest.slots = { "MyForm": { "onOk": 30 } }` (coincide con el slot del paso 3);
-  falta **4.1** (el IDE lee el `.slots`, resuelve cada evento del `.win` → `clicSlot`/`changeSlot`). La clase
-  ventana es `public` (normal). **paso 5** sample pulido +
+  **4.1 ✅** `FormBaker` (lexer-java, herramienta de build como AotMain) resuelve `nombre→slot` con el `.slots`
+  + `Json.write` para el round-trip del `.win`; el hook `FrmMain.bakeWinResources` hornea los `.win` de
+  `resources/` en el Run-on-Device antes de subir (copia temporal; el `.win` de autoría intacto). Horneado
+  VERIFICADO por CLI (`authored.win` con `"clic":"onOk"` → `clicSlot:30` → `onOk` corre); falta la prueba
+  end-to-end EN EL IDE con un proyecto de form real (device) — de Eduardo. Fat-jar reconstruido. La clase
+  ventana es `public` (normal). Hueco anotado: el Run-on-host (`doRun`) no sube `resources/` → el preview de
+  forms en miVM/Swing necesitaría eso aparte. **paso 5** sample pulido +
   paridad + rebuild de blobs (fat-jar IDE + Gui.{mod,bpi} + firmwares).
 - **Flujo del editor de Forms (diseño Eduardo, 25-jun):** se diseña PRIMERO el `.win` (JSON: controles +
   eventos por nombre + clase ventana) — a menudo sin BP todavía. El IDE **scaffoldea**: escribe en el `.bp`
