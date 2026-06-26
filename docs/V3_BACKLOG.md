@@ -99,8 +99,13 @@ adelantarse en cuanto haya ganas de flashear).
     `GpioLoop.bp` (out→in 4/4), `UartLoop.bp` (TX→RX "Hi!\n" 4/4 bytes), `PwmCount.bp` (PWM→PCNT
     999/1000), `RtcDemo.bp` (RTC avanza tras calibrar). Backends GPIO/UART/PWM/PCNT/RTC validados
     con pines reales.
-  - **Falta de pin (opcional, cuando haya un chip a mano):** I2C/SPI con un dispositivo real. NO
+  - **Falta de pin → PRUEBAS FINALES de V3 (Eduardo 26-jun):** I2C/SPI con un dispositivo real +
+    ADC leyendo un pin analógico real (la temp interna es periférico aparte, ya probada). NO
     bloquea — GPIO/UART/PWM/PCNT ya prueban el camino GPIO↔periférico de punta a punta.
+  - **WDT en el P4 → PRUEBAS FINALES (Eduardo 26-jun):** hoy es STUB en el ESP32 (el Pico tiene HW
+    watchdog y el STM32 IWDG, pero el ESP32 no registra backend). Se escribe el backend ESP-IDF
+    (esp_task_wdt o timer watchdog, mismo patrón) en el lote final de HW y se valida en placa, para
+    cerrar V3 con WDT a la par en las 3 familias.
 
 ### V4 — fuera de V3 (Eduardo, 24-jun)
 
@@ -513,12 +518,17 @@ se rutea a /app (no /lib) → puede haber copias en ambos.
 2. **Rutear Json (y toda dep de stdlib) → /lib** (no /app): en `FrmMain` la decisión libDeps
    debe mandar a /lib cualquier dep cuyo origen sea el stdlibDir (no solo EMBEDDED_CORE_MODS
    + "Gui"). (Ya estaba a medio leer en `FrmMain.java:2108-2119`.)
-3. **Llevar el detalle de linkAll al wire del IDE** (lo pidió Eduardo: "missing lib 'X'"):
-   añadir `vm->last_error[192]` (bpvm_internal.h, tras `bool tracing;`), fijarlo en `link.c`
-   (los 3 paths de no-resuelto, ~l.112/125/141) con "falta librería 'X'" / "símbolo no
-   resuelto 'X' (¿módulo rancio?)", y que los repls (esp32 `repl_esp32.c:444`, pico, stm32)
-   lo manden en el EXITED en vez de `bpvm_status_str` genérico. Paridad en miVM. → se acabó
-   el `exit 10` mudo. (Requiere reflash.)
+3. **✅ HECHO (26-jun, `48f80b9`) — "missing lib X" al wire.** `bpvm_t.link_error[160]`
+   (bpvm_internal.h) + `bpvm_link_set_error()` en `link.c` en los 3 paths de no-resuelto
+   (imports + class fixup L2v3 + eh-class fixup), distinguiendo **"falta la lib 'X'"** (dueño no
+   cargado) de **"lib 'X' presente pero no exporta 'sym' (version vieja?)"** (rancia); nombre de
+   lib derivado del símbolo cualificado. Accessor público `bpvm_link_error(vm)` (bpvm.h). Los 4
+   reporters de RUN (host `test/main.c`, esp32 `repl_esp32.c`, pico `repl_v1.c`, stm32
+   `stm32_repl.c`) lo mandan en el EXITED (status `LINK_ERROR` + `errorMessage`); el IDE ya pinta
+   `errorMessage` → sin cambios. **Verificado en host VM-C** (ambos casos) + **arnés V2 verde**.
+   miVM NO necesita cambio: auto-resuelve la stdlib desde `stdlibDir`, así que el "missing lib" es
+   un problema del DEVICE (carga de su FS) — justo donde picó. Falta: el build del P4 de Eduardo
+   para confirmar el mensaje en el IDE end-to-end. → se acabó el `exit 10` mudo.
 
 **Workaround inmediato (sin código):** borrar el `Json.mod` del device (/app y /lib) por el
 explorer → Run formdemo → el IDE sube uno fresco → slots casan → Forms debería ir. (Si el
