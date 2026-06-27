@@ -894,3 +894,58 @@ desbloquear #145 (WiFi/TCP en placa, el server de stdlib de la visión). Nota, n
 portar/registrar su driver C → volcar todo a `board.json` → refactor de `gui_display_dsi.c` para leer
 de config (no constantes) → flashear y validar. Es la prueba de fuego del data-driven y del cierre
 gráfico del P4.
+
+## H19 — Modelo de proyecto + despliegue por-proyecto con paths web-app (diseño 26-jun, Eduardo + Claude)
+
+**Motivación (Eduardo):** "Run on device" hoy lo dispara el `.bp` ABIERTO y sube todo PLANO a `/app`.
+Pero un PROYECTO real (sobre todo con GUI) es más: módulo de inicio + imports + **resources** (`.win`,
+imágenes, fuentes). Hace falta subir el **proyecto entero** (los `.mod`, no los `.bp`), a su propia
+carpeta, de forma **incremental**, y que sea **portable** (independiente de dónde se instale). El
+fichero de proyecto del PC + el del micro se diseñaron precisamente para esto. (Reformula y agranda el
+hueco "#1 `/app/<proyecto>/`" del paso 4: no es FS-folders, es **modelo de proyecto end-to-end**.)
+
+### El modelo (decisiones de Eduardo)
+- **El proyecto se diseña en el IDE:** se indica el **BP de inicio** (entry); se crean `.win`, se
+  incluyen imágenes, fuentes y demás **resources**.
+- **Dos ficheros de proyecto:** el del **PC** (completo) y, generado a la vez, el del **micro**
+  (manifest, casi igual pero **REDUCIDO** — solo lo que el runtime necesita: `name`, `entry` .mod,
+  lista de resources, **+ CRC por fichero**; sin `src/`, build, etc.).
+- **Paths = modelo WEB-APP de Java (el corazón):** TODO relativo a la **raíz del proyecto**. El BP y
+  los `.win` escriben `"images/logo.png"` / `"forms/main.win"`, **NUNCA** `/app/<proyecto>/...`. El
+  runtime resuelve contra la raíz del proyecto sea cual sea su sitio físico → **location-transparent**
+  (mismo proyecto, otra placa/nombre/carpeta, funciona sin tocar nada; como un WAR en Tomcat).
+- **Despliegue INCREMENTAL:** si el proyecto ya está en el micro, solo se actualiza lo que cambió —
+  reusa el `putIfChanged` por **CRC real del device** (paso 4 CRC) **para TODO el árbol** (no solo
+  `.mod`). Modificas una pantalla → sube solo ese `.win`. **+ borra huérfanos** (lo que ya no está en
+  el proyecto desaparece del micro) → `/app/<proyecto>/` = espejo exacto.
+- **Autorun:** `/sys/auto.txt` apunta a un **proyecto** (`/app/<proyecto>/`); su manifest elige el
+  entry. Borrar `/app/<proyecto>/` = desinstalar limpio.
+- **Fallback:** un `.bp` suelto sin proyecto (Run del fichero abierto) → modo plano actual.
+
+### Estado de partida (medido 26-jun)
+- **PC:** `.bpbuild` = proyecto del IDE (`name` + `src/` + `out/` + **`resources/`**). El horneado de
+  `.win` y la subida de `resources/` ya van (#260/H13.1). El `.bpproject` es OTRA cosa (VM: `main`
+  .mod + `modulePaths`), no el descriptor de despliegue.
+- **Skip por CRC:** `putIfChanged` ya salta por CRC real del device (paso 4) — aplica a `.mod` Y
+  resources; falta AMPLIAR el alcance a todo `/app/<proyecto>/` (LS del subárbol + orphan-delete).
+- **Micro:** NO hay manifest de proyecto en `/app`. NO hay base-dir relativo (hoy `readFile` resuelve
+  `/app/<X>` plano; `v1_get_resolve` prefija `/app/`).
+
+### Fases (propuesta)
+- **F1 — base-dir relativo en el firmware (EL ENABLER).** Al ejecutar `/app/<proyecto>/entry.mod`, el
+  firmware fija `/app/<proyecto>/` como **raíz por ejecución**; `readFile` / load de `.win` / imágenes
+  resuelven **relativo a esa raíz**; las absolutas (`/sys`, `/lib`) siguen absolutas. Es la pieza nueva
+  central (el "directorio base por ejecución"). [firmware 3 familias + `fs_facade`/repl]
+- **F2 — despliegue a `/app/<proyecto>/` + manifest + incremental.** El IDE enruta el árbol del
+  proyecto a su carpeta; escribe el manifest; `putIfChanged` (CRC) sobre TODO el árbol → solo sube lo
+  cambiado; borra huérfanos (manifest viejo vs nuevo). [IDE]
+- **F3 — diseñador de proyecto en el IDE.** Elegir el BP de inicio; gestionar resources (`.win`,
+  imágenes, fuentes); generar/actualizar el manifest del micro. (Mucho ya existe sobre `.bpbuild`.) [IDE]
+
+### Riesgos / a vigilar
+- **F1 toca la resolución de paths del FS** (3 familias + host): el base-dir debe ser neutral cuando
+  NO hay proyecto (modo plano `/app/` actual) → no romper el Run de un `.bp` suelto ni el host/miVM.
+- **`.win` con paths relativos:** confirmar que el horneado/loader de `.win` ya emite/espera rutas
+  relativas (si no, ajustarlo) para que el base-dir las resuelva.
+- Es V3 (lo necesita cualquier app GUI con resources, el caso del P4), pero es un hito IDE+firmware →
+  por fases, F1 primero.
