@@ -120,8 +120,9 @@ El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grande
     999/1000), `RtcDemo.bp` (RTC avanza tras calibrar). Backends GPIO/UART/PWM/PCNT/RTC validados
     con pines reales.
   - **Pruebas de pin con dispositivo (Eduardo 27-jun):**
-    - **I2C ✅ VERIFICADO EN EL P4** — BME280 en **bus 1** (SDA=GP20, SCL=GP21): scan ve 0x76 +
-      lectura de registro real `chip_id 0xD0 → 0x60` (`samples/Bme280IdP4.bp`). El patrón write+read
+    - **I2C ✅ VERIFICADO EN EL P4 (fuerte)** — BME280 en **bus 1** (SDA=GP20, SCL=GP21): scan ve 0x76,
+      `chip_id 0xD0→0x60` (`Bme280IdP4.bp`) Y **lectura completa T/H/P real** (`Bme280Read_Esp32.bp`:
+      30.6 °C / 44 % / 1012 hPa, estable) → calibración + medidas + compensación Bosch. El patrón write+read
       separados funciona bien en el i2c_master del IDF (el fallo inicial `write/read -1` era
       **alimentación mal puesta**, no software). ⚠️ **OJO P4: el bus 0/I2C0 lo usa la PANTALLA
       (táctil) → SIEMPRE bus 1 para periféricos** (iniciar bus 0 desde BP recrea el controlador y
