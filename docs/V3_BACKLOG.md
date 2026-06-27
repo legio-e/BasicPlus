@@ -127,9 +127,12 @@ El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grande
       **alimentación mal puesta**, no software). ⚠️ **OJO P4: el bus 0/I2C0 lo usa la PANTALLA
       (táctil) → SIEMPRE bus 1 para periféricos** (iniciar bus 0 desde BP recrea el controlador y
       le pisa el táctil). Pines libres-verificados 20/21; reservados 7,8,26,27,31,51,52.
-    - **SPI 🔜** — `samples/SpiLoop.bp` (loopback, puente MOSI20↔MISO21) o BME280-por-SPI.
-    - **ADC 🔜** — leer un pin analógico real (la temp interna ya está probada).
-    - NO bloquea — GPIO/UART/PWM/PCNT/WDT/I2C ya prueban el camino periférico de punta a punta.
+    - **SPI ✅ VERIFICADO EN EL P4 (27-jun)** — `SpiLoop.bp` loopback (puente MOSI20↔MISO21): **6/6 eco**
+      (incl. 0xA5/0xFF) en bus 2 → init SPI + SCK + MOSI/MISO + full-duplex OK.
+    - **ADC 🔜 (opcional)** — leer un pin analógico real (potenciómetro); la temp interna ya está probada
+      y el backend ADC ya está escrito. Único pin-test que falta; NO bloquea.
+    - **PASO 3 CERRADO de facto:** GPIO·UART·PWM·PCNT·RTC·WDT·I2C·SPI ✅ verificados en el P4. Solo
+      quedan el ADC-en-pin (opcional) y Neopixel (→V4).
   - **WDT en el ESP32/P4 ✅ BACKEND ESCRITO (27-jun, `4dad832`)** — `gpio_esp32.c` (reusado por S3 y
     P4) usa el **Task Watchdog Timer** (`esp_task_wdt_init`/`reconfigure` + `add(NULL)`,
     `trigger_panic=true` → panic→reboot = reset, paridad con Pico/STM32). Maneja los 2 estados de init
