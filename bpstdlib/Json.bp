@@ -638,16 +638,19 @@ module Json
   public function parseNumberOn(r: JsonReader): JsonValue
     var startPos: integer := r.pos
     var isF: boolean := false
+    var sawDigit: boolean := false
     if r.peek() == 45 then
       r.pos := r.pos + 1
     endif
     while r.pos < r.len and isDigitCode(charCodeAt(r.text, r.pos)) do
+      sawDigit := true
       r.pos := r.pos + 1
     endwh
     if r.peek() == 46 then
       isF := true
       r.pos := r.pos + 1
       while r.pos < r.len and isDigitCode(charCodeAt(r.text, r.pos)) do
+        sawDigit := true
         r.pos := r.pos + 1
       endwh
     endif
@@ -660,8 +663,17 @@ module Json
         r.pos := r.pos + 1
       endif
       while r.pos < r.len and isDigitCode(charCodeAt(r.text, r.pos)) do
+        sawDigit := true
         r.pos := r.pos + 1
       endwh
+    endif
+    // Sin ningún dígito no hay número que parsear: entrada vacía, fin
+    // inesperado, o un carácter que no abre ningún valor JSON (p. ej. un
+    // .win ausente que readFile devolvió vacío, o basura). parseInt("")
+    // divergía entre VMs (miVM lanzaba, VM-C devolvía 0 mudo) → rompía la
+    // paridad y aceptaba JSON inválido en placa. Falla limpio en AMBAS.
+    if not sawDigit then
+      throw RuntimeError("JSON: se esperaba un valor en pos " + intToString(startPos))
     endif
     var numStr: string := substring(r.text, startPos, r.pos)
     if isF then

@@ -36,11 +36,16 @@ un widget de un form por nombre) y, en general, extender clases base con subclas
 señala el sitio: `ClassSymbol.ensureMethodSlots`. Encontrado 28-jun (intento de `find()` revertido; queda
 `Component.name`, commit `6f711c1`).
 
-### B-gui-load-missing — `Window.load(".win")` con fichero ausente CUELGA el VM-C
-Si el `.win` no está donde el FS/sandbox de la VM lo busca, `Window.load` → `Json.readJsonFile` →
-`readFile` devuelve vacío y `parseJson("")` (o el wrapper) entra en bucle en vez de dar error → el VM-C
-cuelga (miVM no). Un recurso ausente debería fallar limpio, no colgar (afecta también al device si falta
-un resource). Repro: `Window.load("noexiste.win")` o un `.win` fuera del workdir. Encontrado 28-jun.
+### N-readfile-msg-skew — el mensaje de `RuntimeError` de `readFile(ausente)` difiere entre VMs
+Al abrir un fichero inexistente, **ambas** VMs lanzan `RuntimeError` (bien), pero el **texto** difiere:
+miVM `readFile('x'): x` vs VM-C `readFile('x'): no se pudo abrir`. Si un programa lo atrapa e imprime
+`e.msg`, la salida NO es byte-idéntica → roza el invariante de paridad. Contenido: alinear el wording en
+`miVM` (builtin readFile) y/o `bpgenvm-c/src/builtins.c`. Menor (sólo si se captura y se imprime el msg).
+Hallado 27-jun al cerrar B-gui-load-missing.
+*(B-gui-load-missing RESUELTO 27-jun, commit pendiente: el supuesto "cuelgue" NO se reproducía —`readFile`
+ausente lanza limpio en ambas VMs—; el problema real era que `parseJson("")`/basura divergía: VM-C devolvía
+`0` mudo. Fix en `Json.parseNumberOn`: sin dígito → `RuntimeError` claro en AMBAS VMs. Paridad byte-idéntica
+verificada.)*
 
 ### GAP-4 — formateo de `double` extremo en la VM-C: paridad rota (notación científica TODO)
 `bpvm_format_double` (`bpgenvm-c/src/interp.c:321`) es **byte-idéntico** a `VirtualMachine.formatBpDouble`
