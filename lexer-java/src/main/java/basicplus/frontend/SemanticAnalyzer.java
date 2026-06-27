@@ -1211,10 +1211,21 @@ public final class SemanticAnalyzer {
         // vacío — divergencia). Un init no-literal a nivel módulo nunca
         // funcionó → ahora es error claro en vez de 0 silencioso.
         cs.literalValue = constLiteralValue(c.value);
-        if (cs.literalValue == null && cs.ownerClass == null) {
-            err(c.line, c.column, "const a nivel módulo requiere un valor literal "
-                    + "(entero/float/long/double/boolean/string, '-' opcional); para un valor "
-                    + "calculado usa una var asignada en la función inicializadora del módulo");
+        // N17 — una const NO-LOCAL requiere un valor literal: el emisor INLINA ese
+        // literal en cada lectura. Sin literal no hay backing global declarado y la
+        // lectura emitía GET_GLOBAL "Cls.K"/"K" → RuntimeException del ModWriter
+        // ("símbolo de datos no declarado") que tumbaba el compilador. Antes el
+        // error solo cubría nivel módulo (ownerClass==null); una const de INSTANCIA
+        // de clase no-literal petaba el emisor. Ahora da diagnóstico limpio. (Una
+        // `static const` se deja a su propio camino: su acceso ya falla antes con
+        // "no tiene miembro estático".)
+        if (cs.literalValue == null && (cs.ownerClass == null || !c.name.isStatic())) {
+            String donde = (cs.ownerClass == null)
+                    ? "usa una var asignada en la función inicializadora del módulo"
+                    : "usa un campo (var) asignado en el constructor de la clase";
+            err(c.line, c.column, "una const requiere un valor literal "
+                    + "(entero/float/long/double/boolean/string, '-' opcional); "
+                    + "para un valor calculado, " + donde);
         }
     }
 

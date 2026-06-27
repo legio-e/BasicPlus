@@ -16,16 +16,6 @@
 
 ## 🔴 Bugs abiertos
 
-### N17 — `const` de CLASE con init no-literal: crash del emisor
-Una const de clase con valor **literal** funciona (se inlina). Con init
-**no-literal**, `literalValue=null` y su lectura emite `GET_GLOBAL "Cls.K"` —un
-símbolo que nadie declara→ `RuntimeException` del ModWriter, no un diagnóstico
-limpio. El error semántico de L8 solo cubre nivel módulo (`ownerClass==null`).
-Decidir: extender el error a clases, o materializar backing + asignación en
-`Cls.__init`. (De paso: `const C := Color.RED` —valor de enum, conocido en
-compilación— hoy cae en "requiere literal"; mejora natural: inlinarlo desde
-`EnumSymbol.values`.)
-
 ### B-174b — slot de vtable divergente al añadir métodos a clase base con subclases
 Añadir métodos a una clase que tiene subclases desplaza su vtable y `ClassSymbol.ensureMethodSlots`
 calcula slots distintos en el frontend y en el `ModWriter`. Síntomas: en `Component` (Gui) da
@@ -89,3 +79,7 @@ el GC mark-sweep lo recoja** (no permanente, pero las owner-semantics prometen f
   `__strconcat`…; el prefijo `__` ya está reservado — sería un check explícito).
 - **M5 — debugger: inspección de properties heredadas** (verificar que se recorre
   la cadena de herencia al inspeccionar; relacionado con N11).
+- **M6 — `const` con valor de enum (`const C := Color.RED`)** hoy da "requiere
+  literal" (el valor de enum es conocido en compilación). Mejora natural: tratarlo
+  como literal e inlinarlo desde `EnumSymbol.values`. (Sale de N17, resuelto: una
+  const de clase no-literal ya da diagnóstico limpio en vez de tumbar el emisor.)
