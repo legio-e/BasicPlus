@@ -22,6 +22,7 @@
 #include "wire_v1.h"
 #include "json_min.h"
 #include "fs.h"
+#include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "log.h"
 #include "aot_funcs.h"       /* H3 #160: registro AOT manual antes de run */
 #include "mdn_loader.h"      /* H3 #158 fase D: cargar .mdn desde FS */
@@ -332,7 +333,12 @@ static int list_cb(const char* name, uint32_t size, void* user) {
         fputc(c, stdout);
     }
     fputc('"', stdout);
-    fprintf(stdout, ",\"size\":%u,\"isDir\":false}", (unsigned) size);
+    /* paso 4 cierre — CRC del contenido (== java.util.zip.CRC32) para que el
+     * IDE salte el PUT por contenido REAL del device (fs_get = lookup barato). */
+    uint32_t crc = 0;
+    const uint8_t* d; uint32_t sz;
+    if (fs_get(name, &d, &sz) == FS_OK) crc = bpvm_crc32(d, sz);
+    fprintf(stdout, ",\"size\":%u,\"crc\":%u,\"isDir\":false}", (unsigned) size, (unsigned) crc);
     return 0;
 }
 

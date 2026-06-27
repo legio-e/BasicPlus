@@ -20,6 +20,7 @@
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* inspección de deps en handle_run */
 #include "bpvm_rtc.h"        /* H14 — TIME del wire → RTC (bpvm_rtc_set_now_ms) */
+#include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -174,16 +175,23 @@ static int list_cb(const char* name, uint32_t size, void* user) {
     /* Construimos cada entry en un buffer pequeño y la mandamos como bulk
      * raw (sin newline) — el wire en UART0 no tiene stdout. */
     list_ctx_t* ctx = (list_ctx_t*) user;
-    char e[96];
+    /* paso 4 cierre — CRC del contenido (mismo que java.util.zip.CRC32) para
+     * que el IDE salte el PUT por contenido REAL del device. fs_get es una
+     * búsqueda barata en RAM; si fallara, crc=0 (el IDE re-subirá, seguro). */
+    uint32_t crc = 0;
+    const uint8_t* d; uint32_t sz;
+    if (fs_get(name, &d, &sz) == FS_OK) crc = bpvm_crc32(d, sz);
+    char e[128];
     int o = 0;
     if (!ctx->first) e[o++] = ',';
     ctx->first = 0;
     o += snprintf(e + o, sizeof(e) - o, "{\"name\":\"");
-    for (const char* p = name; *p && o < (int) sizeof(e) - 40; p++) {
+    for (const char* p = name; *p && o < (int) sizeof(e) - 64; p++) {
         if (*p == '"' || *p == '\\') e[o++] = '\\';
         e[o++] = *p;
     }
-    o += snprintf(e + o, sizeof(e) - o, "\",\"size\":%lu,\"isDir\":false}", (unsigned long) size);
+    o += snprintf(e + o, sizeof(e) - o, "\",\"size\":%lu,\"crc\":%lu,\"isDir\":false}",
+                  (unsigned long) size, (unsigned long) crc);
     wire_v1_send_bulk((const uint8_t*) e, (size_t) o);
     return 0;
 }

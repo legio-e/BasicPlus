@@ -16,6 +16,7 @@
 #include "stm32_repl.h"
 #include "stm32_wire.h"
 #include "stm32_fs.h"
+#include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "stm32_mods.h"     /* stdlib core embebida (pre-install /lib) */
 #include "gpio_stm32.h"     /* stm32_hw_register (backends GPIO + Pico) */
 #include "json_min.h"
@@ -123,9 +124,14 @@ static void handle_list(long id, json_obj_t* obj) {
          * DEL/GET del árbol mandan el path sin barra y find() exacto da
          * NOT_FOUND. */
         if (plen > 0 && *rel == '/') rel++;
+        /* paso 4 cierre — CRC del contenido (== java.util.zip.CRC32) para el
+         * skip-PUT por contenido real del device. fs_get por el nombre COMPLETO. */
+        uint32_t crc = 0;
+        const uint8_t* fd; uint32_t fsz;
+        if (fs_get(name, &fd, &fsz) == 0) crc = bpvm_crc32(fd, fsz);
         int w = snprintf(buf + o, sizeof(buf) - o,
-            "%s{\"name\":\"%s\",\"size\":%lu,\"isDir\":false,\"mtime\":0}",
-            first ? "" : ",", rel, (unsigned long) size);
+            "%s{\"name\":\"%s\",\"size\":%lu,\"crc\":%lu,\"isDir\":false,\"mtime\":0}",
+            first ? "" : ",", rel, (unsigned long) size, (unsigned long) crc);
         if (w < 0 || (size_t) w >= sizeof(buf) - o) break;   /* no cabe más */
         o += (size_t) w;
         first = 0;
