@@ -16,11 +16,6 @@
 
 ## 🔴 Bugs abiertos
 
-### N-frontend-neq-hang — `a <> b` cuelga el compilador
-`<>` (desigualdad estilo Modula — no existe en BP, es `!=`) mete al frontend en
-un bucle infinito tras "Procesando" (hay que matar el java). → convertirlo en
-error de sintaxis con sugerencia ("¿querías `!=`?"), o al menos no colgar. Pequeño.
-
 ### N17 — `const` de CLASE con init no-literal: crash del emisor
 Una const de clase con valor **literal** funciona (se inlina). Con init
 **no-literal**, `literalValue=null` y su lectura emite `GET_GLOBAL "Cls.K"` —un

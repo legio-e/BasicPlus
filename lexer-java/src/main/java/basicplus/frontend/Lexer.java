@@ -539,6 +539,17 @@ public final class Lexer {
         if (c == '!' && n == '=') return make2(TokenType.NEQ,           "!=", startLine, startColumn);
         if (c == '<' && n == '=') return make2(TokenType.LE,            "<=", startLine, startColumn);
         if (c == '>' && n == '=') return make2(TokenType.GE,            ">=", startLine, startColumn);
+        // '<>' (desigualdad estilo Pascal/Modula/BASIC) NO existe en BP: el
+        // operador de desigualdad es '!='. Antes, '<>' se lexaba como LT+GT y
+        // el parser cascadeaba varios errores (e incluso llegó a colgar). Lo
+        // reconocemos aquí: lo emitimos como NEQ —para que el AST sea sensato y
+        // no cascadee— pero registramos UN error claro con la sugerencia.
+        if (c == '<' && n == '>') {
+            errors.add(new LexerError(
+                    "operador '<>' no válido; usa '!=' para la desigualdad", startLine, startColumn));
+            advance(); advance();
+            return new Token(TokenType.NEQ, "!=", null, startLine, startColumn);
+        }
 
         // Operadores de un carácter.
         switch (c) {
