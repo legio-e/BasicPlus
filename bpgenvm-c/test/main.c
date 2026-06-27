@@ -63,6 +63,7 @@ int main(int argc, char** argv) {
     long  debug_print = 0;
     int   smp_workers = 0;        /* 0 = single-worker legacy */
     size_t mem_size   = 512 * 1024;
+    const char* basedir = NULL;   /* H19-F1: raíz de proyecto (paths relativos) */
 
     for (int i = 1; i < argc; i++) {
         const char* a = argv[i];
@@ -82,6 +83,9 @@ int main(int argc, char** argv) {
         else if (strncmp(a, "--smp=", 6) == 0) {
             smp_workers = (int) strtol(a + 6, NULL, 10);
             if (smp_workers < 1) smp_workers = 1;
+        }
+        else if (strncmp(a, "--basedir=", 10) == 0) {
+            basedir = a + 10;        /* H19-F1: raíz de proyecto (paths relativos) */
         }
         else if (a[0] == '-')                  {
             fprintf(stderr, "Argumento desconocido: %s\n", a);
@@ -112,6 +116,7 @@ int main(int argc, char** argv) {
     }
     bpvm_set_tracing(vm, trace);
     bpvm_fs_register_host();   /* file I/O sobre libc (host) */
+    if (basedir) bpvm_fs_set_basedir(basedir);   /* H19-F1: readFile/load relativos resuelven bajo la raíz */
     bpvm_net_register_host();  /* H11 — sockets TCP del SO (host) */
 
     debug_trace_state_t dbg_state = { 0, debug_print, 0 };

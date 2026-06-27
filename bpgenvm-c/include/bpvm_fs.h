@@ -66,6 +66,22 @@ int  bpvm_fs_copy  (const char* from, const char* to);    /* #240 2ª: 0 / -1 */
 int  bpvm_fs_isdir (const char* path);                    /* #240 2ª: 1 / 0 */
 long long bpvm_fs_mtime_ms(const char* path);             /* #240 2ª: ms / -1 */
 
+/* ── H19-F1 — base-dir por ejecución (modelo de proyecto / paths web-app) ──
+ * Cuando un proyecto está activo (p.ej. "/app/<proj>"), los paths RELATIVOS de
+ * readFile / load(.win) / imágenes resuelven bajo esa raíz; los ABSOLUTOS
+ * (/sys, /lib, /app/...) NO cambian. Sin base-dir = modo plano de hoy. */
+void        bpvm_fs_set_basedir(const char* dir);   /* NULL/"" = limpiar (plano) */
+const char* bpvm_fs_basedir(void);                  /* "" si no hay proyecto */
+/* Deriva el base-dir del path de un módulo de arranque: "/app/<proj>/entry.mod"
+ * → fija "/app/<proj>"; cualquier otra cosa → modo plano. Lo llaman los repls
+ * del firmware al ejecutar un módulo (y el host si se arranca con proyecto). */
+void        bpvm_fs_set_basedir_from_module(const char* modpath);
+/* Resuelve un path de recurso BP a su ruta efectiva en el FS. Absoluto → tal
+ * cual. Relativo → (1) <basedir>/<path> si hay proyecto y existe; (2) <path>
+ * tal cual; (3) "/app/<path>" (modo plano). Escribe en out[outsz] y lo devuelve.
+ * Para los builtins de lectura de recursos (readFile, load de .win, imágenes). */
+const char* bpvm_fs_resolve(const char* path, char* out, size_t outsz);
+
 /* Backend host (libc). Implementado en fs_host.c (host-only); el firmware
  * registra el suyo (fs_get/fs_put). */
 void bpvm_fs_register_host(void);

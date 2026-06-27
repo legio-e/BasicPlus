@@ -449,16 +449,11 @@ int bpvm_gui_image_load_file(int id, const char* path) {
     a->path = (char*) malloc(L + 1);
     if (a->path) { if (path) memcpy(a->path, path, L); a->path[L] = '\0'; }
     a->w = 0; a->h = 0; a->loaded = 0;
-    /* Resuelve la ruta: prueba tal cual; si un nombre SIMPLE no existe, reintenta
-     * en /app (donde el IDE sube los resources del proyecto) → loadFile("logo.png")
-     * funciona igual en host (cwd) y en placa (/app). El dump guarda la ruta pedida. */
-    const char* rpath = path ? path : "";
+    /* H19-F1 — resuelve relativo al base-dir del proyecto (si lo hay), luego
+     * cwd/literal, luego /app (modo plano). Los absolutos no se tocan. El dump
+     * guarda la ruta pedida (path), no la resuelta. */
     char alt[300];
-    uint32_t probe = 0;
-    if (bpvm_fs_stat(rpath, &probe) != 0 && rpath[0] != '\0' && rpath[0] != '/') {
-        snprintf(alt, sizeof(alt), "/app/%s", rpath);
-        if (bpvm_fs_stat(alt, &probe) == 0) rpath = alt;
-    }
+    const char* rpath = bpvm_fs_resolve(path ? path : "", alt, sizeof(alt));
     /* Lee el header por el FS facade (portable): en host = libc, en placa = RAM-FS.
      * Solo el IHDR (24 bytes) para sacar dimensiones; el decode de píxeles (lodepng)
      * es aparte. */
@@ -808,16 +803,11 @@ int bpvm_gui_load_font(const char* path) {
     int id = ++g_font_count;                           /* 1-based; idéntico en ambas VMs */
 #ifdef BPVM_LVGL
     g_loaded_fonts[id - 1] = NULL;
-    /* Resuelve la ruta igual que las imágenes: tal cual; si un nombre SIMPLE no
-     * existe, reintenta en /app (resources del proyecto) → loadFont("x.bin") va
-     * igual en host (cwd) y en placa (/app). */
-    const char* rpath = path ? path : "";
+    /* H19-F1 — resuelve relativo al base-dir del proyecto (si lo hay), luego
+     * cwd/literal, luego /app (modo plano). Los absolutos no se tocan. */
     char alt[300];
+    const char* rpath = bpvm_fs_resolve(path ? path : "", alt, sizeof(alt));
     uint32_t sz = 0;
-    if (bpvm_fs_stat(rpath, &sz) != 0 && rpath[0] != '\0' && rpath[0] != '/') {
-        snprintf(alt, sizeof(alt), "/app/%s", rpath);
-        if (bpvm_fs_stat(alt, &sz) == 0) rpath = alt;
-    }
     if (bpvm_fs_stat(rpath, &sz) == 0 && sz > 0) {
         uint8_t* buf = (uint8_t*) malloc(sz);
         if (buf && bpvm_fs_read(rpath, buf, sz) == (long) sz)
