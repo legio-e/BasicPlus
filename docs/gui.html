@@ -544,7 +544,78 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
 
 <!-- ============================================================ -->
 <h2 id="eventos">22. Eventos y formularios</h2>
-<p class="soon">— en preparación (handlers por slot, ficheros <code>.win</code>, <code>buildForm</code>). —</p>
+<p>
+  Un <strong>formulario</strong> es una clase que extiende <code>Gui.Window</code> más un fichero
+  <code>.win</code> (JSON) que describe sus widgets. El <code>.win</code> declara la interfaz y nombra los
+  <em>handlers</em>; la clase ventana implementa esos handlers como métodos. Así el diseño (el <code>.win</code>)
+  y la lógica (los métodos) quedan separados.
+</p>
+
+<h3 id="ev-handlers">22.1 Handlers: clic y change</h3>
+<p>
+  Un widget dispara un evento al interactuar: <code>clic</code> al pulsar (botones) y <code>change</code> al
+  cambiar de valor (checkbox, slider, dropdown, lista…). En el <code>.win</code>, las claves <code>"clic"</code> y
+  <code>"change"</code> nombran el <strong>método de la ventana</strong> que se ejecuta. El método recibe el
+  widget que lo disparó (<code>sender</code>):
+</p>
+<pre><code><span class="kw">public function</span> <span class="fn">onGuardar</span>(sender: Gui.<span class="type">Component</span>)
+  <span class="kw">print</span> <span class="str">"guardando…"</span>
+<span class="kw">end</span> onGuardar</code></pre>
+
+<h3 id="ev-varios">22.2 Varios widgets, varios handlers</h3>
+<p>
+  Cada widget nombra <strong>su propio</strong> handler. Con dos botones, das a cada uno un nombre distinto y la
+  ventana tiene un método para cada uno:
+</p>
+<pre><code>{
+  "class": "MiVentana",
+  "type": "Panel",
+  "children": [
+    { "type": "Button", "text": "Guardar",  "align": "BOTTOM_LEFT",  "clic": "onGuardar"  },
+    { "type": "Button", "text": "Cancelar", "align": "BOTTOM_RIGHT", "clic": "onCancelar" }
+  ]
+}</code></pre>
+<pre><code><span class="kw">module</span> MiApp
+  <span class="kw">import</span> Gui
+
+  <span class="kw">public class</span> <span class="type">MiVentana</span> <span class="kw">extends</span> Gui.<span class="type">Window</span>
+    <span class="kw">public function</span> <span class="fn">MiVentana</span>()
+    <span class="kw">end</span> MiVentana
+
+    <span class="kw">public function</span> <span class="fn">onGuardar</span>(sender: Gui.<span class="type">Component</span>)
+      <span class="kw">print</span> <span class="str">"guardar"</span>
+    <span class="kw">end</span> onGuardar
+
+    <span class="kw">public function</span> <span class="fn">onCancelar</span>(sender: Gui.<span class="type">Component</span>)
+      <span class="kw">print</span> <span class="str">"cancelar"</span>
+    <span class="kw">end</span> onCancelar
+  <span class="kw">end</span> MiVentana
+
+  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+    <span class="kw">var</span> w: <span class="type">MiVentana</span> := <span class="fn">MiVentana</span>()
+    w.<span class="fn">load</span>(<span class="str">"main.win"</span>)     <span class="comment">// monta el árbol y ata los handlers</span>
+    Gui.<span class="fn">run</span>()
+  <span class="kw">end</span> main
+<span class="kw">end</span> MiApp</code></pre>
+<div class="note">
+  <p>El <code>"class"</code> de la raíz del <code>.win</code> debe coincidir con la clase ventana (aquí
+  <code>MiVentana</code>): así se sabe a qué clase pertenecen los handlers que nombra.</p>
+</div>
+<div class="note">
+  <p>Como el handler recibe <code>sender</code>, también puedes reutilizar <strong>un mismo</strong> handler para
+  varios widgets y distinguirlos por el que llega. Pero lo habitual y más claro es un handler por widget.</p>
+</div>
+
+<h3 id="ev-slots">22.3 De nombre a slot (transparente)</h3>
+<p>
+  Tú escribes <em>nombres</em> de método en el <code>.win</code>. Al desplegar, el IDE los traduce a la posición
+  (slot) del método en la ventana —hornea <code>"clic":"onGuardar"</code> → <code>"clicSlot": N</code>— y
+  <code>load</code> ata cada widget a su slot. Es transparente: trabajas con nombres, no con números.
+</p>
+<div class="note">
+  <p>El <code>.win</code> y sus imágenes/fuentes van en la carpeta <code>resources/</code> del proyecto; el IDE los
+  sube al dispositivo junto con el programa (ver <a href="guia-ide.html">Guía del IDE</a>).</p>
+</div>
 
 <h2 id="ejecutar">23. Ejecutar (host y placa)</h2>
 <p class="soon">— en preparación —</p>
