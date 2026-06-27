@@ -936,6 +936,15 @@ hueco "#1 `/app/<proyecto>/`" del paso 4: no es FS-folders, es **modelo de proye
   firmware fija `/app/<proyecto>/` como **raíz por ejecución**; `readFile` / load de `.win` / imágenes
   resuelven **relativo a esa raíz**; las absolutas (`/sys`, `/lib`) siguen absolutas. Es la pieza nueva
   central (el "directorio base por ejecución"). [firmware 3 familias + `fs_facade`/repl]
+  - **✅ MECANISMO HECHO + VERIFICADO EN HOST (27-jun, commit `4f34502`):** resolver compartido en
+    `fs_facade` (`bpvm_fs_set_basedir` / `bpvm_fs_set_basedir_from_module` / `bpvm_fs_resolve`); `readFile`
+    (builtins.c) + imagen/fuente (gui.c) lo usan; resolución relativo = (1) `<basedir>/<p>` si hay proyecto
+    y existe, (2) `<p>` tal cual (cwd/literal), (3) `/app/<p>` (plano). Host: flag `--basedir=<dir>`.
+    Modo plano de hoy INTACTO (3 casos verdes + `compat.sh check` verde). El código compartido ya viaja en
+    los 3 firmwares (resolver activo, basedir vacío = plano).
+  - **🔜 FALTA (firmware, al flashear):** cada repl llama `bpvm_fs_set_basedir_from_module(modpath)` al
+    ejecutar un módulo (+ limpiar al terminar). INERTE hasta F2 (hoy el IDE sube plano a `/app`, sin
+    `/app/<proj>/`) → conviene cablearlo **junto con F2**.
 - **F2 — despliegue a `/app/<proyecto>/` + manifest + incremental.** El IDE enruta el árbol del
   proyecto a su carpeta; escribe el manifest; `putIfChanged` (CRC) sobre TODO el árbol → solo sube lo
   cambiado; borra huérfanos (manifest viejo vs nuevo). [IDE]
