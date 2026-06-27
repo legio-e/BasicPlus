@@ -108,7 +108,9 @@ El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grande
     GPIO/UART/SPI/I2C + PWM (LEDC) + ADC (esp_adc) + temperatura interna (`temperature_sensor`,
     39.4 °C en placa) + counts board-aware (ADC/PWM `Pico.*` intrínsecos, P4=14/14) + **contador
     de pulsos (PCNT)** + **RTC (gettimeofday) con sync "TIME" del IDe** (commits `8c7e906`,
-    `b369317`, `f1bf334`, `953d7d9`, `0b3a16a`). **SIGUE STUB:** WDT + Neopixel (no bloquean).
+    `b369317`, `f1bf334`, `953d7d9`, `0b3a16a`). **WDT ✅ backend escrito** (`4dad832`, Task WDT;
+    pendiente prueba EN PLACA). **Neopixel → V4** (Eduardo 27-jun: "si es muy difícil, a V4 sin
+    problema, no es crítico" — en ESP32 va por RMT/led_strip, más plumbing). Ya nada bloquea.
   - **✅ VERIFICADO EN EL P4 (26-jun): `PwmCount.bp` = PWM→contador con puente → 999/1000 flancos
     a 1000 Hz × 1 s, "PWM->contador OK", exit 0.** Valida en HW real PCNT + LEDC + que la API
     ESP-IDF compila (el `idf.py build flash` pasó). RTC/`TIME`: compilan (misma unidad); el sync al
@@ -120,10 +122,13 @@ El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grande
   - **Falta de pin → PRUEBAS FINALES de V3 (Eduardo 26-jun):** I2C/SPI con un dispositivo real +
     ADC leyendo un pin analógico real (la temp interna es periférico aparte, ya probada). NO
     bloquea — GPIO/UART/PWM/PCNT ya prueban el camino GPIO↔periférico de punta a punta.
-  - **WDT en el P4 → PRUEBAS FINALES (Eduardo 26-jun):** hoy es STUB en el ESP32 (el Pico tiene HW
-    watchdog y el STM32 IWDG, pero el ESP32 no registra backend). Se escribe el backend ESP-IDF
-    (esp_task_wdt o timer watchdog, mismo patrón) en el lote final de HW y se valida en placa, para
-    cerrar V3 con WDT a la par en las 3 familias.
+  - **WDT en el ESP32/P4 ✅ BACKEND ESCRITO (27-jun, `4dad832`)** — `gpio_esp32.c` (reusado por S3 y
+    P4) usa el **Task Watchdog Timer** (`esp_task_wdt_init`/`reconfigure` + `add(NULL)`,
+    `trigger_panic=true` → panic→reboot = reset, paridad con Pico/STM32). Maneja los 2 estados de init
+    confirmados en sdkconfig (S3 init / P4 reconfigure); panic=PRINT_REBOOT en ambas. Camino BP
+    validado en host (WdtTest → "fin"). **Falta SOLO la prueba EN PLACA** (lote de reflash): `WdtTest`
+    = no resetea; `WdtDemo` = resetea ~3 s tras dejar de alimentar. Con esto, WDT a la par en las 3
+    familias. (Neopixel ESP32 → V4 por decisión de Eduardo.)
 
 ### V4 — fuera de V3 (Eduardo, 24-jun)
 

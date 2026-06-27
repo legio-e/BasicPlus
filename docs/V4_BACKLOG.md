@@ -57,6 +57,9 @@ el GC mark-sweep lo recoja** (no permanente, pero las owner-semantics prometen f
 - **#153 — Dual-core RP2350** (incluye el fix de **B1**, la race multi-worker; hoy mitigada a 1 worker).
 - **Net.Listener / servidor TCP** (`listen`/`accept`) sobre la Ethernet del P4.
 - **AOT en ESP32** (Xtensa/RISC-V — port del loader `.mdn`).
+- **Neopixel en ESP32/P4** — backend WS2812 vía **RMT** (componente `led_strip` o encoder RMT propio).
+  Hoy STUB en el ESP32 (el Pico ✅ lo hace vía PIO, #227/#228). Más plumbing que los demás periféricos
+  (encoder + timing + dependencia de componente) → diferido por Eduardo (27-jun): "no es crítico ni urgente".
 - **Rollout de gráficos a más kits** (solo equipos con recursos de sobra).
 - **IDE multiplataforma** (`purejavacomm → jSerialComm`, lanzador `.sh`).
 - **Strings multilínea + interpolación** (tanda de lenguaje).
