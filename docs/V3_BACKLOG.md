@@ -108,9 +108,9 @@ El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grande
     GPIO/UART/SPI/I2C + PWM (LEDC) + ADC (esp_adc) + temperatura interna (`temperature_sensor`,
     39.4 °C en placa) + counts board-aware (ADC/PWM `Pico.*` intrínsecos, P4=14/14) + **contador
     de pulsos (PCNT)** + **RTC (gettimeofday) con sync "TIME" del IDe** (commits `8c7e906`,
-    `b369317`, `f1bf334`, `953d7d9`, `0b3a16a`). **WDT ✅ backend escrito** (`4dad832`, Task WDT;
-    pendiente prueba EN PLACA). **Neopixel → V4** (Eduardo 27-jun: "si es muy difícil, a V4 sin
-    problema, no es crítico" — en ESP32 va por RMT/led_strip, más plumbing). Ya nada bloquea.
+    `b369317`, `f1bf334`, `953d7d9`, `0b3a16a`). **WDT ✅ VERIFICADO EN EL P4** (`4dad832`, Task WDT;
+    27-jun: WdtDemo → reset por task-watchdog y vuelve limpia). **Neopixel → V4** (Eduardo 27-jun: "si
+    es muy difícil, a V4 sin problema, no es crítico" — en ESP32 va por RMT/led_strip, más plumbing).
   - **✅ VERIFICADO EN EL P4 (26-jun): `PwmCount.bp` = PWM→contador con puente → 999/1000 flancos
     a 1000 Hz × 1 s, "PWM->contador OK", exit 0.** Valida en HW real PCNT + LEDC + que la API
     ESP-IDF compila (el `idf.py build flash` pasó). RTC/`TIME`: compilan (misma unidad); el sync al
@@ -125,10 +125,11 @@ El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grande
   - **WDT en el ESP32/P4 ✅ BACKEND ESCRITO (27-jun, `4dad832`)** — `gpio_esp32.c` (reusado por S3 y
     P4) usa el **Task Watchdog Timer** (`esp_task_wdt_init`/`reconfigure` + `add(NULL)`,
     `trigger_panic=true` → panic→reboot = reset, paridad con Pico/STM32). Maneja los 2 estados de init
-    confirmados en sdkconfig (S3 init / P4 reconfigure); panic=PRINT_REBOOT en ambas. Camino BP
-    validado en host (WdtTest → "fin"). **Falta SOLO la prueba EN PLACA** (lote de reflash): `WdtTest`
-    = no resetea; `WdtDemo` = resetea ~3 s tras dejar de alimentar. Con esto, WDT a la par en las 3
-    familias. (Neopixel ESP32 → V4 por decisión de Eduardo.)
+    confirmados en sdkconfig (S3 init / P4 reconfigure); panic=PRINT_REBOOT en ambas. **✅ VERIFICADO
+    EN EL P4 (27-jun):** `WdtTest` no resetea (feed mantiene vivo + disable apaga la vigilancia);
+    `WdtDemo` resetea ~3 s tras dejar de alimentar y el INFO reporta **`Reset : task-watchdog`** (el
+    reset-cause del paso 4 confirma la identidad del watchdog) + la placa **vuelve limpia, sin bucle**.
+    **WDT a la par en las 3 familias** (Pico HW · STM32 IWDG · ESP32 Task WDT). (Neopixel ESP32 → V4.)
 
 ### V4 — fuera de V3 (Eduardo, 24-jun)
 
