@@ -868,7 +868,7 @@
  *==================*/
 
 /*1: Enable API to take snapshot for object*/
-#define LV_USE_SNAPSHOT 0
+#define LV_USE_SNAPSHOT 1   /* captura de pantalla para documentación (F12 en el host) */
 
 /*1: Enable system monitor component*/
 #define LV_USE_SYSMON   0
