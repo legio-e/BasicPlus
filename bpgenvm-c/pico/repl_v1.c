@@ -686,6 +686,8 @@ static void handle_info(long id, const json_obj_t* obj) {
                                              (size_t) off, "cpuFreqHz", freq);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "uptimeMs", uptime);
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                               (size_t) off, "resetReason", bpvm_pico_reset_cause());
     /* tempC: el wire v1 NO soporta floats (parser del cliente rechaza
      * decimales/científica). Enviamos como entero en milidegrees → el
      * cliente divide por 1000 para mostrar con precisión de display.

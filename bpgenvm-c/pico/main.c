@@ -15,6 +15,7 @@
 #include "pico/stdlib.h"
 #include "pico/stdio_usb.h"
 #include "hardware/gpio.h"
+#include "hardware/watchdog.h"   /* paso 4 cierre — watchdog_caused_reboot (resetCause) */
 
 #include "bpvm.h"
 #include "embedded_mods.h"
@@ -605,6 +606,13 @@ static int pico_pico_set_cpu_freq_mhz_impl(int mhz) {
     return ok ? 1 : 0;
 }
 
+/* paso 4 cierre — causa del último reset. El RP2350 no expone tanta granularidad
+ * como el STM32: watchdog_caused_reboot() distingue el reset por watchdog del
+ * resto (power-on / BOOTSEL / run). Registro HW, sin RAM retenida. */
+static const char* pico_pico_reset_cause_impl(void) {
+    return watchdog_caused_reboot() ? "watchdog" : "power-on/run";
+}
+
 static const bpvm_pico_backend_t s_pico_pico_backend = {
     .uniqueId      = pico_pico_unique_id_impl,
     .boardName     = pico_pico_board_name_impl,
@@ -613,6 +621,7 @@ static const bpvm_pico_backend_t s_pico_pico_backend = {
     .uptimeMs      = pico_pico_uptime_ms_impl,
     .setCpuFreqMHz = pico_pico_set_cpu_freq_mhz_impl,
     .gpioCount     = pico_pico_gpio_count_impl,
+    .resetCause    = pico_pico_reset_cause_impl,   /* paso 4 cierre */
 };
 
 /* ============================ Adc ============================ */

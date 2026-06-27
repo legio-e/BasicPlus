@@ -20,6 +20,7 @@
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* inspección de deps en handle_run */
 #include "bpvm_rtc.h"        /* H14 — TIME del wire → RTC (bpvm_rtc_set_now_ms) */
+#include "bpvm_pico.h"       /* paso 4 cierre — bpvm_pico_reset_cause (INFO) */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 
 #include "freertos/FreeRTOS.h"
@@ -140,6 +141,7 @@ static void handle_info(long id, const json_obj_t* obj) {
     if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "uniqueId", uid);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "cpuFreqHz", bid->cpu_freq_hz);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "uptimeMs", uptime);
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "resetReason", bpvm_pico_reset_cause());
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "tempMilliC", 0);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "gpioCount", bid->gpio_count);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "pioCount", bid->pio_count);

@@ -1198,6 +1198,8 @@ public final class PicoExplorer extends JPanel {
           .append(human(ilong(m, "fsTotalBytes"))).append('\n');
         long up = ilong(m, "uptimeMs");
         if (up > 0) sb.append("Uptime      : ").append(up / 1000L).append(" s\n");
+        String reset = istr(m, "resetReason");   // paso 4 cierre — causa del último reset
+        if (!reset.isEmpty()) sb.append("Reset       : ").append(reset).append('\n');
         return sb.toString();
     }
 

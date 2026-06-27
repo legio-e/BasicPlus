@@ -89,12 +89,13 @@ static void handle_info(long id) {
         "{\"type\":\"INFO_REPLY\",\"id\":%ld,"
         "\"uniqueId\":\"%08lX%08lX%08lX\","
         "\"boardName\":\"%s\",\"cpuFreqHz\":%lu,\"uptimeMs\":%lu,"
-        "\"tempMilliC\":0,"
+        "\"tempMilliC\":0,\"resetReason\":\"%s\","
         "\"gpioCount\":114,\"pioCount\":0,\"pwmSlices\":28,\"adcChannels\":20,"
         "\"flashBytes\":%lu,\"sramBytes\":%lu,\"psramBytes\":0,"
         "\"fsTotalBytes\":%lu,\"fsUsedBytes\":%lu}",
         id, (unsigned long) u2, (unsigned long) u1, (unsigned long) u0,
         BOARD_NAME, (unsigned long) SystemCoreClock, (unsigned long) HAL_GetTick(),
+        stm32_reset_cause(),
         flash_bytes, BOARD_SRAM_BYTES,
         (unsigned long) fs_total_bytes(), (unsigned long) fs_used_bytes());
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);

@@ -21,6 +21,7 @@
 #include "repl_esp32.h"
 #include "p4_board_id.h"
 #include "bpvm_pico.h"    /* H14: backend Pico.* (info real del P4 para los builtins BP) */
+#include "hw_esp32.h"     /* paso 4 cierre: esp32_reset_cause (compartido con el S3) */
 #include "esp_mac.h"      /* uniqueId desde efuse */
 #include "esp_timer.h"    /* uptime */
 #include "driver/temperature_sensor.h"  /* H14: sensor de temperatura interno */
@@ -71,6 +72,7 @@ static const bpvm_pico_backend_t s_p4_pico_backend = {
     .gpioCount     = p4_pico_gpio_count,
     .adcChannels   = p4_pico_adc_channels,   /* H14 */
     .pwmSlices     = p4_pico_pwm_slices,      /* H14 */
+    .resetCause    = esp32_reset_cause,       /* paso 4 cierre — compartido con el S3 */
 };
 
 void p4_install_board_id(void) {

@@ -17,6 +17,10 @@ extern "C" {
  * Llamar una vez al arranque (tras bpvm/fs init, antes del REPL). */
 void esp32_hw_register(void);
 
+/* paso 4 cierre — causa del último reset (esp_reset_reason → string). La
+ * comparten el backend del S3 (gpio_esp32.c) y el del P4 (p4_board_id.c). */
+const char* esp32_reset_cause(void);
+
 #ifdef __cplusplus
 }
 #endif

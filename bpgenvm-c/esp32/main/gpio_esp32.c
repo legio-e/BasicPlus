@@ -27,6 +27,7 @@
 #include "driver/ledc.h"            /* H14: backend PWM */
 #include "esp_adc/adc_oneshot.h"    /* H14: backend ADC */
 #include "driver/pulse_cnt.h"       /* H14: backend contador (PCNT) */
+#include "esp_system.h"             /* paso 4 cierre — esp_reset_reason (causa de reset) */
 #include "freertos/FreeRTOS.h"   /* pdMS_TO_TICKS, portMAX_DELAY */
 #include "esp_mac.h"      /* uniqueId desde la MAC de efuse */
 #include "esp_timer.h"    /* uptime */
@@ -108,6 +109,25 @@ static int esp32_gpio_count_impl(void) {
     return 45;   /* GPIO utiles del ESP32-S3 (0-21, 26-48) */
 }
 
+/* paso 4 cierre — causa del último reset vía registro HW (esp_reset_reason, lo
+ * captura el ROM/bootloader; NO usa RAM retenida). No-static: lo comparte el
+ * backend del P4 (p4_board_id.c). Declarado en hw_esp32.h. */
+const char* esp32_reset_cause(void) {
+    switch (esp_reset_reason()) {
+        case ESP_RST_POWERON:   return "power-on";
+        case ESP_RST_EXT:       return "external pin";
+        case ESP_RST_SW:        return "software";
+        case ESP_RST_PANIC:     return "panic/exception";
+        case ESP_RST_INT_WDT:   return "int-watchdog";
+        case ESP_RST_TASK_WDT:  return "task-watchdog";
+        case ESP_RST_WDT:       return "watchdog";
+        case ESP_RST_DEEPSLEEP: return "deep-sleep wake";
+        case ESP_RST_BROWNOUT:  return "brown-out";
+        case ESP_RST_SDIO:      return "SDIO";
+        default:                return "unknown";
+    }
+}
+
 static const bpvm_pico_backend_t s_esp32_pico_backend = {
     .uniqueId      = esp32_unique_id_impl,
     .boardName     = esp32_board_name_impl,
@@ -116,6 +136,7 @@ static const bpvm_pico_backend_t s_esp32_pico_backend = {
     .uptimeMs      = esp32_uptime_ms_impl,
     .setCpuFreqMHz = esp32_set_cpu_freq_mhz_impl,
     .gpioCount     = esp32_gpio_count_impl,
+    .resetCause    = esp32_reset_cause,        /* paso 4 cierre */
 };
 
 /* ===================== UART (H16) =====================================
