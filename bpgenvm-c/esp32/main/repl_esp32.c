@@ -385,6 +385,10 @@ static void run_module_path(const char* path, long id) {
      * (el IDE manda la ruta cualificada). Plano (/app/X.mod o nombre suelto) →
      * sin base-dir = modo plano. Se resetea en cada run. */
     bpvm_fs_set_basedir_from_module(path);
+    /* H19-F2 diag — confirma en consola (idf.py monitor) la raíz del proyecto:
+     * con proyecto sale basedir='/app/<proj>'; en fichero-suelto basedir=''.
+     * Si esta línea NO aparece, el firmware es PRE-H19 (reflashear). */
+    printf("[run] entry='%s' basedir='%s'\n", path, bpvm_fs_basedir());
 
     const uint8_t* data; uint32_t size;
     fs_status_t fs_s = v1_get_resolve(path, &data, &size);

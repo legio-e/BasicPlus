@@ -2143,11 +2143,12 @@ public class FrmMain extends javax.swing.JFrame
                                 libDeps.add(n);
                         }
                         if (!deps.isEmpty()) {
+                            final String pfx = deviceAppPrefix();   // F2: /app/<proj> o /app
                             appendConsola("[deps] " + deps.size()
                                     + " módulo(s) a subir:\n");
                             for (java.io.File d : deps) {
                                 appendConsola("  - " + d.getName()
-                                        + (libDeps.contains(d.getName()) ? " → /lib" : " → /app")
+                                        + (libDeps.contains(d.getName()) ? " → /lib" : " → " + pfx)
                                         + "\n");
                             }
                         }
