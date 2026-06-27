@@ -119,9 +119,16 @@ El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grande
     `GpioLoop.bp` (out→in 4/4), `UartLoop.bp` (TX→RX "Hi!\n" 4/4 bytes), `PwmCount.bp` (PWM→PCNT
     999/1000), `RtcDemo.bp` (RTC avanza tras calibrar). Backends GPIO/UART/PWM/PCNT/RTC validados
     con pines reales.
-  - **Falta de pin → PRUEBAS FINALES de V3 (Eduardo 26-jun):** I2C/SPI con un dispositivo real +
-    ADC leyendo un pin analógico real (la temp interna es periférico aparte, ya probada). NO
-    bloquea — GPIO/UART/PWM/PCNT ya prueban el camino GPIO↔periférico de punta a punta.
+  - **Pruebas de pin con dispositivo (Eduardo 27-jun):**
+    - **I2C ✅ VERIFICADO EN EL P4** — BME280 en **bus 1** (SDA=GP20, SCL=GP21): scan ve 0x76 +
+      lectura de registro real `chip_id 0xD0 → 0x60` (`samples/Bme280IdP4.bp`). El patrón write+read
+      separados funciona bien en el i2c_master del IDF (el fallo inicial `write/read -1` era
+      **alimentación mal puesta**, no software). ⚠️ **OJO P4: el bus 0/I2C0 lo usa la PANTALLA
+      (táctil) → SIEMPRE bus 1 para periféricos** (iniciar bus 0 desde BP recrea el controlador y
+      le pisa el táctil). Pines libres-verificados 20/21; reservados 7,8,26,27,31,51,52.
+    - **SPI 🔜** — `samples/SpiLoop.bp` (loopback, puente MOSI20↔MISO21) o BME280-por-SPI.
+    - **ADC 🔜** — leer un pin analógico real (la temp interna ya está probada).
+    - NO bloquea — GPIO/UART/PWM/PCNT/WDT/I2C ya prueban el camino periférico de punta a punta.
   - **WDT en el ESP32/P4 ✅ BACKEND ESCRITO (27-jun, `4dad832`)** — `gpio_esp32.c` (reusado por S3 y
     P4) usa el **Task Watchdog Timer** (`esp_task_wdt_init`/`reconfigure` + `add(NULL)`,
     `trigger_panic=true` → panic→reboot = reset, paridad con Pico/STM32). Maneja los 2 estados de init
