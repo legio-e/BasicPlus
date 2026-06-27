@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>BasicPlus — Interfaz gráfica</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    font-size: 0.92rem;
+  }
+  nav.toc h2 {
+    margin: 0 0 .5rem 0;
+    font-size: 0.95rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav.toc ul { list-style: none; padding-left: 0; margin: 0 0 1rem 0; }
+  nav.toc li { margin: 0.1rem 0; }
+  nav.toc a {
+    color: var(--fg);
+    text-decoration: none;
+    display: block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+  nav.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+  nav.toc .group { margin-top: 0.8rem; }
+  nav.toc .sub { padding-left: 0.8rem; font-size: 0.85rem; color: var(--fg-muted); }
+
+  main {
+    padding: 2rem 3rem 6rem;
+    max-width: 900px;
+  }
+  h1 {
+    color: var(--accent);
+    margin-top: 0;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+  }
+  h2 {
+    color: var(--accent);
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 { margin-top: 1.8rem; color: #333; }
+  h4 { margin-top: 1.2rem; color: var(--fg-muted); }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.4;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.88em;
+  }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .note p:first-child, .warn p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+
+  figure { margin: 1.2rem 0; }
+  figure img {
+    max-width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: white;
+    display: block;
+  }
+  figcaption { color: var(--fg-muted); font-size: 0.86rem; margin-top: 0.4rem; }
+  .soon { color: var(--fg-muted); font-style: italic; }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Contenido</h2>
+  <ul>
+    <li class="group"><a href="#intro">18. Introducción</a></li>
+    <li class="sub"><a href="#intro-vms">18.1 Las tres VM</a></li>
+    <li class="sub"><a href="#intro-run">18.2 Cómo se ejecuta</a></li>
+
+    <li class="group"><a href="#conceptos">19. Conceptos</a></li>
+    <li class="sub"><a href="#conceptos-arbol">19.1 Pantalla y árbol de widgets</a></li>
+    <li class="sub"><a href="#conceptos-component">19.2 Component (base común)</a></li>
+    <li class="sub"><a href="#conceptos-layout">19.3 Layout: align, posición, tamaño</a></li>
+
+    <li class="group"><a href="#catalogo">20. Catálogo de widgets</a></li>
+    <li class="sub"><a href="#w-label-button">20.1 Etiqueta y botón</a></li>
+    <li class="sub"><a href="#w-check">20.2 Checkbox e interruptor</a></li>
+    <li class="sub"><a href="#w-value">20.3 Slider, barra y valor</a></li>
+    <li class="sub"><a href="#w-input">20.4 Entrada de texto</a></li>
+    <li class="sub"><a href="#w-table">20.5 Tabla</a></li>
+    <li class="sub"><a href="#w-tab">20.6 Pestañas</a></li>
+    <li class="sub"><a href="#w-image">20.7 Imagen</a></li>
+    <li class="sub"><a href="#w-msg">20.8 Caja de mensaje</a></li>
+    <li class="sub"><a href="#w-list">20.9 Lista y teclado</a></li>
+
+    <li class="group"><a href="#color-fuentes">21. Color y fuentes</a></li>
+    <li class="sub"><a href="#color">21.1 Color</a></li>
+    <li class="sub"><a href="#fuentes">21.2 Fuentes</a></li>
+
+    <li class="group"><a href="#dibujo">22. Dibujo y geometría</a></li>
+    <li class="group"><a href="#eventos">23. Eventos y formularios</a></li>
+    <li class="group"><a href="#ejecutar">24. Ejecutar (host y placa)</a></li>
+    <li class="group"><a href="#referencia">25. Referencia rápida Gui.*</a></li>
+  </ul>
+
+  <h2>Otros volúmenes</h2>
+  <ul>
+    <li><a href="manual.html#intro">Manual del lenguaje</a></li>
+    <li><a href="referencia.html#stdlib">Referencia / librería estándar</a></li>
+    <li><a href="guia-ide.html">Guía del IDE</a></li>
+    <li><a href="index.html">Índice de documentación</a></li>
+  </ul>
+</nav>
+<main>
+
+<h1>BasicPlus — Interfaz gráfica</h1>
+<p style="color:var(--fg-muted)">
+  Tercer volumen de la documentación de BasicPlus, dedicado a la <strong>GUI</strong>: el módulo
+  <code>Gui</code> de la librería estándar, sus widgets, los formularios y el dibujo. Complementa al
+  <a href="manual.html#intro">Manual del lenguaje</a> y a la
+  <a href="referencia.html#stdlib">Referencia de la librería estándar</a>.
+</p>
+
+<!-- ============================================================ -->
+<h2 id="intro">18. Introducción</h2>
+
+<p>
+  La interfaz gráfica de BasicPlus es un módulo más de la librería estándar: <code>Gui</code>. Un programa
+  construye un árbol de widgets (pantalla, etiquetas, botones, tablas…), engancha eventos y entra en el
+  lazo de eventos con <code>Gui.run()</code>. El mismo programa —el mismo <code>.mod</code>— se ejecuta sin
+  cambios en el PC y en el microcontrolador.
+</p>
+
+<figure>
+  <img src="img/gui/fonts-demo.png" alt="Demo de fuentes de BasicPlus en el host">
+  <figcaption>Un programa GUI de BasicPlus corriendo en el host (ventana SDL). Mismo bytecode en la placa.</figcaption>
+</figure>
+
+<h3 id="intro-vms">18.1 Las tres VM</h3>
+<p>
+  El árbol de widgets (el <em>modelo</em>) es portable y vive en el núcleo; lo que cambia es quién lo
+  <em>pinta</em>:
+</p>
+<table>
+  <tr><th>VM</th><th>Render</th><th>Dónde</th></tr>
+  <tr><td>miVM (Java)</td><td>Swing</td><td>PC — vista previa rápida desde el IDE</td></tr>
+  <tr><td>VM-C (host)</td><td>LVGL + ventana SDL</td><td>PC — idéntica al render de la placa</td></tr>
+  <tr><td>VM-C (device)</td><td>LVGL + pantalla</td><td>Microcontrolador (ESP32-P4, …)</td></tr>
+</table>
+<p>
+  Las tres ejecutan el <strong>mismo bytecode</strong> y construyen el <strong>mismo modelo</strong> de
+  widgets; la diferencia es sólo el backend de pintado. Por eso una GUI escrita y probada en el PC se sube
+  a la placa sin tocar el código (sólo, en su caso, los pines o el tamaño de pantalla).
+</p>
+<div class="note">
+  <p>El modelo se puede volcar como texto con <code>Gui.__guiDumpTree()</code>: es la fuente de verdad que
+  comparten las tres VM y la base de la paridad. A lo largo de este volumen lo usamos para mostrar la
+  estructura de cada ejemplo sin depender de una captura.</p>
+</div>
+
+<h3 id="intro-run">18.2 Cómo se ejecuta</h3>
+<ul>
+  <li><strong>Vista previa en el PC</strong> — desde el IDE, o por línea de comandos con la VM-C compilada
+      con render LVGL (<code>make&nbsp;LVGL=1</code>) y una ventana SDL.</li>
+  <li><strong>En la placa</strong> — botón <em>Run on Device</em> del IDE; sube el <code>.mod</code> y los
+      <code>resources/</code> del proyecto y lo ejecuta sobre la pantalla real. Ver la
+      <a href="guia-ide.html">Guía del IDE</a>.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="conceptos">19. Conceptos</h2>
+
+<h3 id="conceptos-arbol">19.1 Pantalla y árbol de widgets</h3>
+<p>
+  Todo cuelga de una <strong>pantalla</strong> (<code>Gui.Screen</code>), la raíz del árbol. Cada widget se
+  crea indicando su <em>padre</em>, de modo que el árbol se arma de arriba abajo. Un ejemplo mínimo:
+</p>
+<pre><code><span class="kw">module</span> Hola
+  <span class="kw">import</span> Gui
+
+  <span class="kw">function</span> <span class="fn">Main</span>()
+    <span class="kw">var</span> scr: Gui.<span class="type">Screen</span> := Gui.<span class="fn">Screen</span>()
+    <span class="kw">var</span> txt: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(scr, <span class="str">"Hola, mundo"</span>)
+    txt.<span class="fn">align</span>(Gui.Align.CENTER, <span class="num">0</span>, <span class="num">0</span>)
+    Gui.<span class="fn">run</span>()
+  <span class="kw">end</span> Main
+<span class="kw">end</span> Hola</code></pre>
+<p>El modelo resultante (<code>Gui.__guiDumpTree()</code>):</p>
+<pre><code>screen [480x320 align=0 +0,0]
+  label "Hola, mundo" [-1x-1 align=9 +0,0]</code></pre>
+<p>
+  <code>-1x-1</code> significa «tamaño automático» (el widget se ajusta a su contenido); más abajo se ve
+  cómo fijar tamaño y posición.
+</p>
+
+<h3 id="conceptos-component">19.2 Component (base común)</h3>
+<p>
+  Todos los widgets descienden de <code>Gui.Component</code> (que a su vez desciende de <code>Object</code>,
+  como todo en BasicPlus). <code>Component</code> aporta lo común a cualquier widget: texto, geometría,
+  alineación, color y fuente. Lo más usado:
+</p>
+<table>
+  <tr><th>Miembro</th><th>Para qué</th></tr>
+  <tr><td><code>align(ancla, dx, dy)</code></td><td>Coloca el widget respecto a su padre (ver 19.3).</td></tr>
+  <tr><td><code>width</code> / <code>height</code></td><td>Tamaño en píxeles (propiedades; sin fijar = automático).</td></tr>
+  <tr><td><code>fontSize</code></td><td>Tamaño de texto en px del catálogo compilado (ver 21.2).</td></tr>
+  <tr><td><code>setFont(id)</code></td><td>Aplica una fuente cargada con <code>Gui.loadFont</code> (ver 21.2).</td></tr>
+  <tr><td><code>setBgColor(c)</code> / <code>setTextColor(c)</code></td><td>Color de fondo y de texto (ver 21.1).</td></tr>
+</table>
+<div class="note">
+  <p><strong>Política OO.</strong> Igual que el resto de la librería, los widgets son clases: no hay campos
+  públicos, sino propiedades. Esto mantiene la API estable entre versiones y placas.</p>
+</div>
+
+<h3 id="conceptos-layout">19.3 Layout: align, posición, tamaño</h3>
+<p>
+  El posicionamiento es por <strong>anclas</strong> (un subconjunto del <code>ALIGN</code> de LVGL):
+  <code>align(ancla, dx, dy)</code> ancla el widget a una zona de su padre y le aplica un desplazamiento
+  <code>(dx, dy)</code> en píxeles. Anclas disponibles en <code>Gui.Align</code>:
+</p>
+<pre><code>TOP_LEFT     TOP_MID     TOP_RIGHT
+LEFT_MID     CENTER      RIGHT_MID
+BOTTOM_LEFT  BOTTOM_MID  BOTTOM_RIGHT</code></pre>
+<p>Ejemplo: una etiqueta arriba-centro, desplazada 20&nbsp;px hacia abajo, con tamaño de texto 32:</p>
+<pre><code><span class="kw">var</span> t: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(scr, <span class="str">"Título"</span>)
+t.fontSize := <span class="num">32</span>
+t.<span class="fn">align</span>(Gui.Align.TOP_MID, <span class="num">0</span>, <span class="num">20</span>)</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="catalogo">20. Catálogo de widgets</h2>
+<p>
+  Cada widget es una clase de <code>Gui</code> que desciende de <code>Component</code> (§19.2), así que hereda
+  <code>align</code>, tamaño, color y fuente. Aquí va el constructor y lo propio de cada uno; los
+  <strong>eventos</strong> (<code>onClick</code>, <code>onChange</code>) se tratan aparte en §23. Las capturas son
+  del render LVGL en el host.
+</p>
+
+<h3 id="w-label-button">20.1 Etiqueta y botón</h3>
+<p>
+  <code>Gui.Label</code> muestra texto; <code>Gui.Button</code> es un botón pulsable. Ambos toman el padre como
+  primer argumento, y el texto a continuación.
+</p>
+<figure><img src="img/gui/click.png" alt="Etiqueta y botón"><figcaption>GuiClickDemo — una etiqueta y un botón centrado.</figcaption></figure>
+<pre><code><span class="kw">var</span> lbl: Gui.<span class="type">Label</span>  := Gui.<span class="fn">Label</span>(scr, <span class="str">"esperando"</span>)
+<span class="kw">var</span> btn: Gui.<span class="type">Button</span> := Gui.<span class="fn">Button</span>(scr, <span class="str">"Púlsame"</span>)
+btn.<span class="fn">align</span>(Gui.Align.CENTER, <span class="num">0</span>, <span class="num">0</span>)</code></pre>
+
+<h3 id="w-check">20.2 Checkbox e interruptor</h3>
+<p>
+  <code>Gui.Checkbox</code> es una casilla con etiqueta; su estado está en la propiedad <code>checked</code>. El
+  interruptor <code>Gui.Toggle</code> (un on/off sin texto) se ve en §20.3.
+</p>
+<figure><img src="img/gui/check.png" alt="Checkbox"><figcaption>GuiCheckDemo — casilla marcada.</figcaption></figure>
+<pre><code><span class="kw">var</span> cb: Gui.<span class="type">Checkbox</span> := Gui.<span class="fn">Checkbox</span>(scr, <span class="str">"Activar"</span>)
+cb.checked := <span class="kw">true</span></code></pre>
+
+<h3 id="w-value">20.3 Slider, barra y valor</h3>
+<p>
+  <code>Gui.Slider</code> (deslizador editable), <code>Gui.Bar</code> (barra de progreso, solo lectura) y
+  <code>Gui.Toggle</code> (interruptor). Slider y Bar comparten <code>setRange(min,&nbsp;max)</code> y la propiedad
+  <code>value</code>.
+</p>
+<figure><img src="img/gui/value.png" alt="Toggle, slider y barra"><figcaption>GuiValueDemo — interruptor encendido, slider a 150/200 y barra a 7/10.</figcaption></figure>
+<pre><code><span class="kw">var</span> sw: Gui.<span class="type">Toggle</span> := Gui.<span class="fn">Toggle</span>(scr)
+sw.checked := <span class="kw">true</span>
+
+<span class="kw">var</span> sl: Gui.<span class="type">Slider</span> := Gui.<span class="fn">Slider</span>(scr)
+sl.<span class="fn">setRange</span>(<span class="num">0</span>, <span class="num">200</span>)
+sl.value := <span class="num">150</span>
+
+<span class="kw">var</span> pb: Gui.<span class="type">Bar</span> := Gui.<span class="fn">Bar</span>(scr)
+pb.<span class="fn">setRange</span>(<span class="num">0</span>, <span class="num">10</span>)
+pb.value := <span class="num">7</span></code></pre>
+
+<h3 id="w-input">20.4 Entrada de texto</h3>
+<p>
+  <code>Gui.Dropdown</code> es una lista desplegable (opciones separadas por <code>\n</code>, selección en
+  <code>selected</code>); <code>Gui.Textarea</code> es un campo de texto (propiedad <code>text</code>, y
+  <code>readOnly</code> para solo lectura). Para escribir hace falta un teclado (§20.9).
+</p>
+<figure><img src="img/gui/input.png" alt="Dropdown y textarea"><figcaption>GuiInputDemo — desplegable (Azul) y campo de texto.</figcaption></figure>
+<pre><code><span class="kw">var</span> dd: Gui.<span class="type">Dropdown</span> := Gui.<span class="fn">Dropdown</span>(scr)
+dd.<span class="fn">setOptions</span>(<span class="str">"Rojo\nVerde\nAzul"</span>)
+dd.selected := <span class="num">2</span>
+
+<span class="kw">var</span> ta: Gui.<span class="type">Textarea</span> := Gui.<span class="fn">Textarea</span>(scr)
+ta.text := <span class="str">"hola"</span>
+ta.readOnly := <span class="kw">true</span></code></pre>
+
+<h3 id="w-table">20.5 Tabla</h3>
+<p>
+  <code>Gui.Table</code> es una rejilla de celdas de texto: <code>setGrid(filas,&nbsp;cols)</code> la dimensiona y
+  <code>setCell</code>/<code>getCell</code> escriben y leen por <code>(fila,&nbsp;col)</code>. Fuera de rango,
+  <code>getCell</code> devuelve <code>""</code>.
+</p>
+<figure><img src="img/gui/table.png" alt="Tabla"><figcaption>GuiTableDemo — tabla 2×3 con cabecera.</figcaption></figure>
+<pre><code><span class="kw">var</span> t: Gui.<span class="type">Table</span> := Gui.<span class="fn">Table</span>(scr)
+t.<span class="fn">setGrid</span>(<span class="num">2</span>, <span class="num">3</span>)
+t.<span class="fn">setCell</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="str">"Nombre"</span>)
+t.<span class="fn">setCell</span>(<span class="num">1</span>, <span class="num">0</span>, <span class="str">"Ana"</span>)</code></pre>
+
+<h3 id="w-tab">20.6 Pestañas</h3>
+<p>
+  <code>Gui.Tabview</code> agrupa páginas en pestañas. <code>addTab("nombre")</code> crea una pestaña y devuelve su
+  página (un <code>Component</code>) sobre la que cuelgas widgets; <code>active</code> es la pestaña visible.
+</p>
+<figure><img src="img/gui/tab.png" alt="Pestañas"><figcaption>GuiTabDemo — dos pestañas, la segunda activa.</figcaption></figure>
+<pre><code><span class="kw">var</span> tv: Gui.<span class="type">Tabview</span> := Gui.<span class="fn">Tabview</span>(scr)
+<span class="kw">var</span> p1: Gui.<span class="type">Component</span> := tv.<span class="fn">addTab</span>(<span class="str">"Uno"</span>)
+<span class="kw">var</span> l1: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(p1, <span class="str">"Página 1"</span>)
+tv.active := <span class="num">1</span></code></pre>
+
+<h3 id="w-image">20.7 Imagen</h3>
+<p>
+  <code>Gui.Image</code> es el <em>asset</em> (se carga una vez con <code>loadFile</code>, formato PNG);
+  <code>Gui.ImageView</code> es el widget que lo muestra con <code>setImage</code>. Varias vistas pueden compartir el
+  mismo asset; <code>refresh()</code> recarga sólo si el asset cambió.
+</p>
+<figure><img src="img/gui/image.png" alt="Imagen"><figcaption>GuiImageDemo — dos vistas del mismo asset PNG.</figcaption></figure>
+<pre><code><span class="kw">var</span> img: Gui.<span class="type">Image</span> := Gui.<span class="fn">Image</span>()
+<span class="kw">var</span> ok: <span class="type">boolean</span> := img.<span class="fn">loadFile</span>(<span class="str">"testimg.png"</span>)   <span class="comment">// del proyecto (cwd o /app)</span>
+
+<span class="kw">var</span> v: Gui.<span class="type">ImageView</span> := Gui.<span class="fn">ImageView</span>(scr)
+v.<span class="fn">setImage</span>(img)</code></pre>
+
+<h3 id="w-msg">20.8 Caja de mensaje</h3>
+<p>
+  <code>Gui.Msgbox</code> es un diálogo modal con texto y botones (<code>setButtons</code>, etiquetas separadas por
+  <code>\n</code>). Al pulsar, <code>result</code> guarda el índice del botón.
+</p>
+<figure><img src="img/gui/msg.png" alt="Caja de mensaje"><figcaption>GuiMsgDemo — aviso con un botón OK.</figcaption></figure>
+<pre><code><span class="kw">var</span> mb: Gui.<span class="type">Msgbox</span> := Gui.<span class="fn">Msgbox</span>(scr, <span class="str">"Operación completada"</span>)
+mb.<span class="fn">setButtons</span>(<span class="str">"OK"</span>)</code></pre>
+
+<h3 id="w-list">20.9 Lista y teclado</h3>
+<p>
+  <code>Gui.ListBox</code> es una lista de ítems seleccionables (<code>setItems</code>, separados por <code>\n</code>;
+  <code>selected</code> es el índice). <code>Gui.Keyboard</code> es un teclado en pantalla que se engancha a un
+  <code>Textarea</code> con <code>attach</code> y se auto-coloca abajo. <code>setBounds(x,&nbsp;y,&nbsp;w,&nbsp;h)</code> fija
+  posición y tamaño de golpe.
+</p>
+<figure><img src="img/gui/list.png" alt="Lista y teclado"><figcaption>GuiListKbd — lista, campo de texto y teclado en pantalla.</figcaption></figure>
+<pre><code><span class="kw">var</span> lst: Gui.<span class="type">ListBox</span> := Gui.<span class="fn">ListBox</span>(scr)
+lst.<span class="fn">setItems</span>(<span class="str">"Uno\nDos\nTres"</span>)
+lst.<span class="fn">setBounds</span>(<span class="num">5</span>, <span class="num">5</span>, <span class="num">180</span>, <span class="num">140</span>)
+
+<span class="kw">var</span> ta: Gui.<span class="type">Textarea</span> := Gui.<span class="fn">Textarea</span>(scr)
+<span class="kw">var</span> kb: Gui.<span class="type">Keyboard</span> := Gui.<span class="fn">Keyboard</span>(scr)
+kb.<span class="fn">attach</span>(ta)</code></pre>
+<div class="note">
+  <p>Otros widgets del mismo patrón, no mostrados aquí: <code>Gui.Spinbox</code> (entero con flechas),
+  <code>Gui.Led</code> (indicador encendido/apagado) y <code>Gui.Panel</code> (contenedor para agrupar).</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="color-fuentes">21. Color y fuentes</h2>
+<h3 id="color">21.1 Color</h3>
+<p>
+  Un color se construye con <code>Gui.Color(0xRRGGBB)</code> (rojo-verde-azul, un byte por canal). Se aplica a
+  cualquier widget con <code>setBgColor</code> (fondo) y <code>setTextColor</code> (texto):
+</p>
+<figure><img src="img/gui/color.png" alt="Paleta de colores"><figcaption>GuiColorDemo — ocho botones con fondo y texto de color.</figcaption></figure>
+<pre><code><span class="kw">var</span> b: Gui.<span class="type">Button</span> := Gui.<span class="fn">Button</span>(scr, <span class="str">"Rojo"</span>)
+b.<span class="fn">setBgColor</span>(Gui.<span class="fn">Color</span>(<span class="num">0xD00000</span>))     <span class="comment">// fondo rojo</span>
+b.<span class="fn">setTextColor</span>(Gui.<span class="fn">Color</span>(<span class="num">0xFFFFFF</span>))   <span class="comment">// texto blanco</span></code></pre>
+<div class="note">
+  <p>Elige el color de texto según el fondo (blanco sobre oscuro, negro sobre claro) para que el contraste
+  sea legible — como en la captura.</p>
+</div>
+<h3 id="fuentes">21.2 Fuentes</h3>
+<p>Hay dos formas de elegir la fuente de un texto.</p>
+
+<h4>Catálogo compilado — por tamaño</h4>
+<p>
+  La propiedad <code>fontSize</code> de cualquier widget fija el tamaño de texto en píxeles, eligiendo del
+  catálogo de fuentes compiladas en el firmware: <strong>Montserrat</strong> en
+  <code>12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48</code> px (por defecto, 14). El valor debe coincidir con uno
+  de esos tamaños; si no, se usa la fuente por defecto.
+</p>
+<pre><code><span class="kw">var</span> t: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(scr, <span class="str">"Título"</span>)
+t.fontSize := <span class="num">32</span></code></pre>
+
+<h4>Fuentes cargadas — <code>.bin</code> en runtime</h4>
+<p>
+  Para negrita, otras familias o tamaños fuera del catálogo, se carga una fuente <code>.bin</code> (formato
+  <em>binfont</em> de LVGL, el que genera la herramienta <code>lv_font_conv</code>). <code>Gui.loadFont(ruta)</code>
+  la lee del proyecto y devuelve un id; <code>setFont(id)</code> la aplica al widget. La ruta se resuelve igual
+  que las imágenes (carpeta del proyecto en el PC, <code>resources/</code> subidos en la placa).
+</p>
+<figure><img src="img/gui/fonts-demo.png" alt="Demo de fuentes">
+  <figcaption>FontLoadDemo — por defecto (14), <code>fontSize=32</code>, y una <code>.bin</code> cargada (Montserrat 26 negrita).</figcaption></figure>
+<pre><code><span class="kw">var</span> fid: <span class="type">integer</span> := Gui.<span class="fn">loadFont</span>(<span class="str">"montserrat_26_bold.bin"</span>)
+<span class="kw">var</span> l: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(scr, <span class="str">"Texto en negrita"</span>)
+l.<span class="fn">setFont</span>(fid)</code></pre>
+<div class="warn">
+  <p><strong>Acentos y ñ.</strong> La Montserrat compilada es sólo ASCII: no trae <code>ñ</code> ni vocales
+  acentuadas. Para texto en español, genera un <code>.bin</code> incluyendo el rango Latin-1
+  (<code>lv_font_conv&nbsp;--range&nbsp;0x20-0xFF&nbsp;…</code>) y cárgalo con <code>loadFont</code>.</p>
+</div>
+<div class="note">
+  <p>La vista previa en miVM/Swing no parsea el <code>.bin</code>: el id es válido pero el texto sale con la
+  fuente por defecto. El render real de la fuente cargada se ve en el host LVGL y en la placa.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="dibujo">22. Dibujo y geometría</h2>
+<p class="soon">— en preparación —</p>
+
+<h2 id="eventos">23. Eventos y formularios</h2>
+<p class="soon">— en preparación (handlers por slot, ficheros <code>.win</code>, <code>buildForm</code>). —</p>
+
+<h2 id="ejecutar">24. Ejecutar (host y placa)</h2>
+<p class="soon">— en preparación —</p>
+
+<h2 id="referencia">25. Referencia rápida Gui.*</h2>
+<p class="soon">— en preparación (tabla método → firma de las clases públicas de <code>Gui</code>). —</p>
+
+</main>
+</div>
+</body>
+</html>
