@@ -948,6 +948,18 @@ hueco "#1 `/app/<proyecto>/`" del paso 4: no es FS-folders, es **modelo de proye
 - **F2 — despliegue a `/app/<proyecto>/` + manifest + incremental.** El IDE enruta el árbol del
   proyecto a su carpeta; escribe el manifest; `putIfChanged` (CRC) sobre TODO el árbol → solo sube lo
   cambiado; borra huérfanos (manifest viejo vs nuevo). [IDE]
+  - **✅ DE-RIESGADO (27-jun):** el FS del firmware (`fs_ram.c`/Pico/STM32) es un **almacén PLANO
+    clave→valor** (`fs_put(path,data)` con el path COMPLETO como clave; la "jerarquía" /sys /lib /app es
+    solo convención de nombres, NO hay directorios reales). → `/app/<proj>/main.win` es **una clave más**:
+    F2 **no toca el FS**, solo enruta en el IDE; el `putIfChanged`/LS/DEL ya operan sobre esas claves
+    (incremental + huérfanos = LS de las que empiezan por `/app/<proj>/` − manifest). Encaja directo con
+    el resolver de F1 (basedir `/app/<proj>` + relativo).
+  - **⚠️ Límite: `FS_NAME_LEN = 40` → clave máx. 39 chars** (incl. NUL). `/app/<proj>/<recurso>` debe
+    caber (`/app/calc/forms/main.win` = 24 ✓; nombres largos se pasan). Subir el límite = cambio de
+    formato del FS (entry = NAME_LEN+4 → migración del blob en flash) → solo si un caso real lo pide.
+  - **ACOPLO (importante):** F2.a (routing a `/app/<proj>/`) y la activación F1 del repl
+    (`set_basedir_from_module`) van **JUNTAS** — con los recursos en `/app/<proj>/` pero el repl sin fijar
+    basedir, el resolver caería al paso 3 (`/app/<rec>`) y NO los encontraría. Verificación e2e = device.
 - **F3 — diseñador de proyecto en el IDE.** Elegir el BP de inicio; gestionar resources (`.win`,
   imágenes, fuentes); generar/actualizar el manifest del micro. (Mucho ya existe sobre `.bpbuild`.) [IDE]
 
