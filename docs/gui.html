@@ -348,9 +348,10 @@ p.scrollDir := Gui.ScrollDir.VER</code></pre>
 <h2 id="catalogo">20. Catálogo de widgets</h2>
 <p>
   Cada widget es una clase de <code>Gui</code> que desciende de <code>Component</code> (§19.2), así que hereda
-  <code>align</code>, tamaño, color y fuente. Aquí va el constructor y lo propio de cada uno; los
-  <strong>eventos</strong> (<code>onClick</code>, <code>onChange</code>) se tratan aparte en §23. Las capturas son
-  del render LVGL en el host.
+  <code>align</code>, tamaño, color y fuente. Para cada uno mostramos el constructor en <strong>código BP</strong>
+  y, debajo, <strong>lo mismo en el fichero <code>.win</code> (JSON)</strong> — que es la forma habitual de
+  montar la interfaz (el diseñador de formularios; ver §22). Los <strong>eventos</strong>
+  (<code>onClick</code>, <code>onChange</code>) se tratan en §22. Las capturas son del render LVGL en el host.
 </p>
 
 <h3 id="w-label-button">20.1 Etiqueta y botón</h3>
@@ -362,6 +363,9 @@ p.scrollDir := Gui.ScrollDir.VER</code></pre>
 <pre><code><span class="kw">var</span> lbl: Gui.<span class="type">Label</span>  := Gui.<span class="fn">Label</span>(scr, <span class="str">"esperando"</span>)
 <span class="kw">var</span> btn: Gui.<span class="type">Button</span> := Gui.<span class="fn">Button</span>(scr, <span class="str">"Púlsame"</span>)
 btn.<span class="fn">align</span>(Gui.Align.CENTER, <span class="num">0</span>, <span class="num">0</span>)</code></pre>
+<p>Lo mismo en el <code>.win</code> (JSON):</p>
+<pre><code>{ "type": "Label",  "text": "esperando", "align": "TOP_MID", "y": 10 },
+{ "type": "Button", "text": "Púlsame",   "align": "CENTER", "clic": "onPulsar" }</code></pre>
 
 <h3 id="w-check">20.2 Checkbox e interruptor</h3>
 <p>
@@ -371,6 +375,8 @@ btn.<span class="fn">align</span>(Gui.Align.CENTER, <span class="num">0</span>, 
 <figure><img src="img/gui/check.png" alt="Checkbox"><figcaption>GuiCheckDemo — casilla marcada.</figcaption></figure>
 <pre><code><span class="kw">var</span> cb: Gui.<span class="type">Checkbox</span> := Gui.<span class="fn">Checkbox</span>(scr, <span class="str">"Activar"</span>)
 cb.checked := <span class="kw">true</span></code></pre>
+<p>Lo mismo en el <code>.win</code> (JSON):</p>
+<pre><code>{ "type": "Checkbox", "text": "Activar", "checked": true, "change": "onActivar" }</code></pre>
 
 <h3 id="w-value">20.3 Slider, barra y valor</h3>
 <p>
@@ -389,6 +395,10 @@ sl.value := <span class="num">150</span>
 <span class="kw">var</span> pb: Gui.<span class="type">Bar</span> := Gui.<span class="fn">Bar</span>(scr)
 pb.<span class="fn">setRange</span>(<span class="num">0</span>, <span class="num">10</span>)
 pb.value := <span class="num">7</span></code></pre>
+<p>Lo mismo en el <code>.win</code> (JSON):</p>
+<pre><code>{ "type": "Toggle", "checked": true, "align": "TOP_MID", "y": 20 },
+{ "type": "Slider", "min": 0, "max": 200, "value": 150, "align": "TOP_MID", "y": 90 },
+{ "type": "Bar",    "min": 0, "max": 10,  "value": 7,   "align": "TOP_MID", "y": 160 }</code></pre>
 
 <h3 id="w-input">20.4 Entrada de texto</h3>
 <p>
@@ -404,6 +414,9 @@ dd.selected := <span class="num">2</span>
 <span class="kw">var</span> ta: Gui.<span class="type">Textarea</span> := Gui.<span class="fn">Textarea</span>(scr)
 ta.text := <span class="str">"hola"</span>
 ta.readOnly := <span class="kw">true</span></code></pre>
+<p>Lo mismo en el <code>.win</code> (JSON; <code>readOnly</code> de momento solo por código):</p>
+<pre><code>{ "type": "Dropdown", "options": "Rojo\nVerde\nAzul", "selected": 2 },
+{ "type": "Textarea", "text": "hola" }</code></pre>
 
 <h3 id="w-table">20.5 Tabla</h3>
 <p>
@@ -416,6 +429,7 @@ ta.readOnly := <span class="kw">true</span></code></pre>
 t.<span class="fn">setGrid</span>(<span class="num">2</span>, <span class="num">3</span>)
 t.<span class="fn">setCell</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="str">"Nombre"</span>)
 t.<span class="fn">setCell</span>(<span class="num">1</span>, <span class="num">0</span>, <span class="str">"Ana"</span>)</code></pre>
+<p class="soon">En el <code>.win</code> (JSON): pendiente — la rejilla de celdas es estructura anidada (2ª fase). Por ahora, por código.</p>
 
 <h3 id="w-tab">20.6 Pestañas</h3>
 <p>
@@ -427,6 +441,7 @@ t.<span class="fn">setCell</span>(<span class="num">1</span>, <span class="num">
 <span class="kw">var</span> p1: Gui.<span class="type">Component</span> := tv.<span class="fn">addTab</span>(<span class="str">"Uno"</span>)
 <span class="kw">var</span> l1: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(p1, <span class="str">"Página 1"</span>)
 tv.active := <span class="num">1</span></code></pre>
+<p class="soon">En el <code>.win</code> (JSON): pendiente — las páginas/pestañas son estructura anidada (2ª fase). Por ahora, por código.</p>
 
 <h3 id="w-image">20.7 Imagen</h3>
 <p>
@@ -440,6 +455,7 @@ tv.active := <span class="num">1</span></code></pre>
 
 <span class="kw">var</span> v: Gui.<span class="type">ImageView</span> := Gui.<span class="fn">ImageView</span>(scr)
 v.<span class="fn">setImage</span>(img)</code></pre>
+<p class="soon">En el <code>.win</code> (JSON): pendiente — el asset y la vista necesitan referencia compartida (2ª fase). Por ahora, por código.</p>
 
 <h3 id="w-msg">20.8 Caja de mensaje</h3>
 <p>
@@ -449,6 +465,8 @@ v.<span class="fn">setImage</span>(img)</code></pre>
 <figure><img src="img/gui/msg.png" alt="Caja de mensaje"><figcaption>GuiMsgDemo — aviso con un botón OK.</figcaption></figure>
 <pre><code><span class="kw">var</span> mb: Gui.<span class="type">Msgbox</span> := Gui.<span class="fn">Msgbox</span>(scr, <span class="str">"Operación completada"</span>)
 mb.<span class="fn">setButtons</span>(<span class="str">"OK"</span>)</code></pre>
+<p>Lo mismo en el <code>.win</code> (JSON):</p>
+<pre><code>{ "type": "Msgbox", "text": "Operación completada", "buttons": "OK" }</code></pre>
 
 <h3 id="w-list">20.9 Lista y teclado</h3>
 <p>
@@ -465,6 +483,8 @@ lst.<span class="fn">setBounds</span>(<span class="num">5</span>, <span class="n
 <span class="kw">var</span> ta: Gui.<span class="type">Textarea</span> := Gui.<span class="fn">Textarea</span>(scr)
 <span class="kw">var</span> kb: Gui.<span class="type">Keyboard</span> := Gui.<span class="fn">Keyboard</span>(scr)
 kb.<span class="fn">attach</span>(ta)</code></pre>
+<p>La lista en el <code>.win</code> (JSON); el teclado, de momento, solo por código (2ª fase):</p>
+<pre><code>{ "type": "ListBox", "items": "Uno\nDos\nTres", "selected": 1 }</code></pre>
 <div class="note">
   <p>Otros widgets del mismo patrón, no mostrados aquí: <code>Gui.Spinbox</code> (entero con flechas),
   <code>Gui.Led</code> (indicador encendido/apagado) y <code>Gui.Panel</code> (contenedor para agrupar).</p>
@@ -481,6 +501,8 @@ kb.<span class="fn">attach</span>(ta)</code></pre>
 <pre><code><span class="kw">var</span> b: Gui.<span class="type">Button</span> := Gui.<span class="fn">Button</span>(scr, <span class="str">"Rojo"</span>)
 b.<span class="fn">setBgColor</span>(Gui.<span class="fn">Color</span>(<span class="num">0xD00000</span>))     <span class="comment">// fondo rojo</span>
 b.<span class="fn">setTextColor</span>(Gui.<span class="fn">Color</span>(<span class="num">0xFFFFFF</span>))   <span class="comment">// texto blanco</span></code></pre>
+<p>En el <code>.win</code> (JSON) el color va como string hex (JSON no tiene literales <code>0x</code>):</p>
+<pre><code>{ "type": "Button", "text": "Rojo", "bgColor": "0xD00000", "textColor": "0xFFFFFF" }</code></pre>
 <div class="note">
   <p>Elige el color de texto según el fondo (blanco sobre oscuro, negro sobre claro) para que el contraste
   sea legible — como en la captura.</p>
