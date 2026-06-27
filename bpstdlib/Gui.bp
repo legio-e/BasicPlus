@@ -794,6 +794,40 @@ import Json
       ta.text := node.getStringOr("text", "")
       return ta
     endif
+    if t == "Bar" then
+      var br: Bar := Bar(parent)
+      br.setRange(node.getIntOr("min", 0), node.getIntOr("max", 100))
+      br.value := node.getIntOr("value", 0)
+      return br
+    endif
+    if t == "Spinbox" then
+      var sp: Spinbox := Spinbox(parent)
+      sp.setRange(node.getIntOr("min", 0), node.getIntOr("max", 100))
+      sp.value := node.getIntOr("value", 0)
+      return sp
+    endif
+    if t == "Led" then
+      var ld: Led := Led(parent)
+      ld.value := node.getIntOr("value", 0)
+      return ld
+    endif
+    if t == "Dropdown" then
+      var dd: Dropdown := Dropdown(parent)
+      dd.setOptions(node.getStringOr("options", ""))
+      dd.selected := node.getIntOr("selected", 0)
+      return dd
+    endif
+    if t == "ListBox" then
+      var lb: ListBox := ListBox(parent)
+      lb.setItems(node.getStringOr("items", ""))
+      lb.selected := node.getIntOr("selected", 0)
+      return lb
+    endif
+    if t == "Msgbox" then
+      var mb: Msgbox := Msgbox(parent, node.getStringOr("text", ""))
+      if node.has("buttons") then mb.setButtons(node.getStringOr("buttons", "OK"))
+      return mb
+    endif
     print "[Gui] aviso: widget desconocido '" + t + "' en el form (uso Panel)"
     return Panel(parent)
   end makeWidget
@@ -805,10 +839,41 @@ import Json
     if node.has("width") then    w.width := node.getIntOr("width", 0)
     if node.has("height") then   w.height := node.getIntOr("height", 0)
     if node.has("fontSize") then w.fontSize := node.getIntOr("fontSize", 0)
+    if node.has("bgColor") then   w.setBgColor(Color(colorFromHex(node.getStringOr("bgColor", "0"))))
+    if node.has("textColor") then w.setTextColor(Color(colorFromHex(node.getStringOr("textColor", "0"))))
     if node.has("align") then
       w.align(alignFromName(node.getStringOr("align", "CENTER")), 0, 0)
     endif
   end applyCommon
+
+  // colorFromHex — "0xRRGGBB" / "RRGGBB" → entero 0xRRGGBB (0 si inválido). Para el
+  // color del .win (JSON no tiene literales hex, así que va como string). Inline para
+  // no añadir dependencia de Str a Gui; usa los globales strlen/charCodeAt.
+  function colorFromHex(s: string): integer
+    var n: integer := strlen(s)
+    var i: integer := 0
+    if (n >= 2) and (charCodeAt(s, 0) == 48) and ((charCodeAt(s, 1) == 120) or (charCodeAt(s, 1) == 88)) then
+      i := 2
+    endif
+    var acc: integer := 0
+    while i < n do
+      var c: integer := charCodeAt(s, i)
+      var d: integer := -1
+      if (c >= 48) and (c <= 57) then
+        d := c - 48
+      elseif (c >= 97) and (c <= 102) then
+        d := (c - 97) + 10
+      elseif (c >= 65) and (c <= 70) then
+        d := (c - 65) + 10
+      endif
+      if d < 0 then
+        return 0
+      endif
+      acc := acc * 16 + d
+      i := i + 1
+    endwh
+    return acc
+  end colorFromHex
 
   // alignFromName — string del .win → constante de Align (default CENTER).
   function alignFromName(a: string): integer
