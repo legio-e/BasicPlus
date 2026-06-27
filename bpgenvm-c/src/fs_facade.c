@@ -29,7 +29,20 @@ void bpvm_fs_set_basedir(const char* dir) {
 
 const char* bpvm_fs_basedir(void) { return g_basedir; }
 
+static char g_mainmod[256] = "";   /* ruta COMPLETA del módulo principal (entry) */
+
+void bpvm_fs_set_main_module_path(const char* path) {
+    if (!path || !path[0]) { g_mainmod[0] = '\0'; return; }
+    size_t n = strlen(path);
+    if (n >= sizeof(g_mainmod)) n = sizeof(g_mainmod) - 1;
+    memcpy(g_mainmod, path, n);
+    g_mainmod[n] = '\0';
+}
+
+const char* bpvm_fs_main_module_path(void) { return g_mainmod; }
+
 void bpvm_fs_set_basedir_from_module(const char* modpath) {
+    bpvm_fs_set_main_module_path(modpath);   /* guarda la ruta completa del entry */
     /* "/app/<proj>/entry.mod" → "/app/<proj>" ; cualquier otra cosa → plano. */
     if (modpath && strncmp(modpath, "/app/", 5) == 0) {
         const char* rest  = modpath + 5;             /* "<proj>/entry.mod" */

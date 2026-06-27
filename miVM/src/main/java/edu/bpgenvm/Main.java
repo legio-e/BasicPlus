@@ -329,6 +329,7 @@ public class Main {
             }
         }
         String moduleName = stripModExtension(new File(runMod).getName());
+        vm.setAppMainModulePath(runMod);   // H19 — App.mainModulePath()/mainModule()
 
         int exitCode = 0;
         String exitReason = "main returned";

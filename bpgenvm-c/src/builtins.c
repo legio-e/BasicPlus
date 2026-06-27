@@ -256,7 +256,12 @@ enum {
     BUILTIN_PICO_ADC_CHANNELS  = 208,   /* () → canales ADC de la placa */
     BUILTIN_PICO_PWM_SLICES    = 209,   /* () → slices PWM de la placa */
 
-    BUILTIN_GUI_LOAD_FONT      = 210    /* (path: string) → id de fuente (1-based); setFont(id) la aplica */
+    BUILTIN_GUI_LOAD_FONT      = 210,   /* (path: string) → id de fuente (1-based); setFont(id) la aplica */
+
+    /* H19 — introspección del proyecto en ejecución (módulo App). */
+    BUILTIN_APP_MAIN_MODULE      = 211, /* () → string: nombre del módulo principal ("Main") */
+    BUILTIN_APP_MAIN_MODULE_PATH = 212, /* () → string: ruta completa del entry ("/app/<proj>/Main.mod") */
+    BUILTIN_APP_PROJECT_PATH     = 213  /* () → string: carpeta del proyecto ("/app/<proj>"); "" si plano */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -576,6 +581,31 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_SET_TEXT_COLOR: { uint32_t rgb = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_text_color(h, rgb); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SET_FONT:       { int f = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_font(h, f); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_LOAD_FONT:      { uint32_t ref = (uint32_t) pop_i32(vm, tc); char path[256]; read_bp_string(vm, ref, path, sizeof(path)); push_i32(vm, tc, bpvm_gui_load_font(path)); return BPVM_OK; }
+
+    /* H19 — App.* introspección del proyecto en ejecución (id 211-213). */
+    case BUILTIN_APP_MAIN_MODULE: {        /* nombre del entry: basename sin ".mod" */
+        const char* p = bpvm_fs_main_module_path();
+        const char* base = strrchr(p, '/');
+        base = base ? base + 1 : p;
+        char nm[64]; size_t i = 0;
+        while (base[i] && base[i] != '.' && i + 1 < sizeof(nm)) { nm[i] = base[i]; i++; }
+        nm[i] = '\0';
+        uint32_t r = bpvm_heap_alloc_string(vm, nm, strlen(nm));
+        push_i32(vm, tc, (int32_t) r);
+        return BPVM_OK;
+    }
+    case BUILTIN_APP_MAIN_MODULE_PATH: {
+        const char* s = bpvm_fs_main_module_path();
+        uint32_t r = bpvm_heap_alloc_string(vm, s, strlen(s));
+        push_i32(vm, tc, (int32_t) r);
+        return BPVM_OK;
+    }
+    case BUILTIN_APP_PROJECT_PATH: {
+        const char* s = bpvm_fs_basedir();
+        uint32_t r = bpvm_heap_alloc_string(vm, s, strlen(s));
+        push_i32(vm, tc, (int32_t) r);
+        return BPVM_OK;
+    }
     case BUILTIN_GUI_CLEAN:       { int h = pop_i32(vm, tc); bpvm_gui_clean(h);  push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_DELETE:      { int h = pop_i32(vm, tc); bpvm_gui_delete(h); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SCREEN_LOAD: { pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }   /* una sola pantalla por ahora */

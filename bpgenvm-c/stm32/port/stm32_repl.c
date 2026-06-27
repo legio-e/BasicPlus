@@ -16,6 +16,7 @@
 #include "stm32_repl.h"
 #include "stm32_wire.h"
 #include "stm32_fs.h"
+#include "bpvm_fs.h"          /* H19 — base-dir / main module por proyecto */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "stm32_mods.h"     /* stdlib core embebida (pre-install /lib) */
 #include "gpio_stm32.h"     /* stm32_hw_register (backends GPIO + Pico) */
@@ -311,6 +312,9 @@ static int stm32_fs_resolve(const char* name, const uint8_t** data, uint32_t* si
  * RUN_REPLY, y una ruta inexistente enciende el LED rojo (el idioma de
  * diagnóstico de este port) en vez de mandar un error al vacío. */
 static void run_module_path(const char* path, long id) {
+    /* H19-F1 — fija el base-dir/main-module del proyecto si el módulo vive en
+     * /app/<proj>/ (el IDE manda la ruta cualificada). Plano → sin base-dir. */
+    bpvm_fs_set_basedir_from_module(path);
     const uint8_t* data; uint32_t size;
     if (stm32_fs_resolve(path, &data, &size) != 0) {
         if (id >= 0) stm32_wire_send_error(id, "NOT_FOUND", "no existe");

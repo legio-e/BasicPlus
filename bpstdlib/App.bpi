@@ -1,0 +1,5 @@
+bpi 7
+module App
+func mainModulePath():string public intrinsic
+func projectPath():string public intrinsic
+func mainModule():string public intrinsic

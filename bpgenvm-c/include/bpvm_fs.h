@@ -71,7 +71,12 @@ long long bpvm_fs_mtime_ms(const char* path);             /* #240 2ª: ms / -1 *
  * readFile / load(.win) / imágenes resuelven bajo esa raíz; los ABSOLUTOS
  * (/sys, /lib, /app/...) NO cambian. Sin base-dir = modo plano de hoy. */
 void        bpvm_fs_set_basedir(const char* dir);   /* NULL/"" = limpiar (plano) */
-const char* bpvm_fs_basedir(void);                  /* "" si no hay proyecto */
+const char* bpvm_fs_basedir(void);                  /* "" si no hay proyecto (= projectPath) */
+/* H19 — ruta COMPLETA del módulo principal (entry) en ejecución. App.mainModulePath()
+ * la devuelve; App.projectPath() devuelve bpvm_fs_basedir(); App.mainModule() = su
+ * nombre. La fija el host (arg .mod) o el firmware (set_basedir_from_module). */
+void        bpvm_fs_set_main_module_path(const char* path);
+const char* bpvm_fs_main_module_path(void);         /* "" si no hay módulo fijado */
 /* Deriva el base-dir del path de un módulo de arranque: "/app/<proj>/entry.mod"
  * → fija "/app/<proj>"; cualquier otra cosa → modo plano. Lo llaman los repls
  * del firmware al ejecutar un módulo (y el host si se arranca con proyecto). */

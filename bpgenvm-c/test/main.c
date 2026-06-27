@@ -117,6 +117,7 @@ int main(int argc, char** argv) {
     bpvm_set_tracing(vm, trace);
     bpvm_fs_register_host();   /* file I/O sobre libc (host) */
     if (basedir) bpvm_fs_set_basedir(basedir);   /* H19-F1: readFile/load relativos resuelven bajo la raíz */
+    bpvm_fs_set_main_module_path(path);          /* H19: App.mainModulePath() = el .mod ejecutado */
     bpvm_net_register_host();  /* H11 — sockets TCP del SO (host) */
 
     debug_trace_state_t dbg_state = { 0, debug_print, 0 };

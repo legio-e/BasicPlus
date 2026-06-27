@@ -431,7 +431,12 @@ public enum Builtin {
     // setFont(id) la aplica. El host LVGL la materializa; miVM/Swing asigna el id
     // (paridad de ids) pero no puede usar la .bin → render con la fuente por
     // defecto. No afecta al dumpTree. id 210.
-    GUI_LOAD_FONT("__guiLoadFont");                    // (path: string) → integer
+    GUI_LOAD_FONT("__guiLoadFont"),                    // (path: string) → integer
+
+    // V3 (H19) — introspección del proyecto en ejecución (módulo App). ids 211-213.
+    APP_MAIN_MODULE("__appMainModule"),                // () → string: nombre del módulo principal
+    APP_MAIN_MODULE_PATH("__appMainModulePath"),       // () → string: ruta completa del entry
+    APP_PROJECT_PATH("__appProjectPath");              // () → string: carpeta del proyecto
 
     public final String bpName;
     public final int id;

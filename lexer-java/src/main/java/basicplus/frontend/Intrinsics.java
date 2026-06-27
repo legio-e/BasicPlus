@@ -290,5 +290,10 @@ public final class Intrinsics {
         // H6 — textarea read-only.
         register("Gui.__guiTextareaSetReadonly", w -> emitBuiltin(w, Builtin.GUI_TEXTAREA_SET_READONLY));
         register("Gui.__guiTextareaGetReadonly", w -> emitBuiltin(w, Builtin.GUI_TEXTAREA_GET_READONLY));
+
+        // H19 — App.* introspección del proyecto en ejecución (ids 211-213).
+        register("App.mainModule",     w -> emitBuiltin(w, Builtin.APP_MAIN_MODULE));
+        register("App.mainModulePath", w -> emitBuiltin(w, Builtin.APP_MAIN_MODULE_PATH));
+        register("App.projectPath",    w -> emitBuiltin(w, Builtin.APP_PROJECT_PATH));
     }
 }

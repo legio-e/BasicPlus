@@ -1,0 +1,28 @@
+// ============================================================
+// App.bp — introspección del proyecto/módulo en ejecución (H19).
+//
+// Estilo `getClass().getResource()` de Java: el programa puede preguntar dónde
+// está su raíz y construir rutas de recursos explícitamente.
+//
+// Todas `intrinsic`: el compilador inlina el builtin (ids 211-213) en el
+// call-site (no hay código de usuario en el .mod). Los VALORES dependen del
+// entorno (NO son parte de la paridad byte-idéntica, como `now()` o el FS):
+//   - en placa: /app/<proyecto>/...
+//   - en host:  el .mod ejecutado + el directorio --basedir/--workdir.
+// ============================================================
+module App
+
+  // Nombre del módulo principal (entry), sin ruta ni extensión (p.ej. "Main").
+  public intrinsic function mainModule(): string
+
+  // Ruta completa del módulo principal (p.ej. "/app/calc/Main.mod").
+  public intrinsic function mainModulePath(): string
+
+  // Carpeta del proyecto en ejecución (p.ej. "/app/calc"); "" si modo plano.
+  // Úsala para construir rutas de recursos a mano:
+  //   readFile(App.projectPath() + "/datos/x.csv")
+  // (Los recursos RELATIVOS —readFile("x"), load(".win"), imágenes— ya resuelven
+  //  implícitamente bajo esta raíz; estas funciones son la vía EXPLÍCITA.)
+  public intrinsic function projectPath(): string
+
+end App

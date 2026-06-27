@@ -837,6 +837,12 @@ public class VirtualMachine {
         throw new BpExceptionPending(objRef);
     }
 
+    /** H19 — ruta del módulo principal (entry) en ejecución; la cablea Main al
+     *  cargar el .mod. App.mainModulePath()/mainModule() la usan; App.projectPath()
+     *  usa el workdir del ModuleManager. "" si no se fijó. */
+    private String appMainModulePath = "";
+    public void setAppMainModulePath(String p) { this.appMainModulePath = (p != null) ? p : ""; }
+
     /**
      * A2.1 + B3 v3 — Resuelve un path de usuario aplicando el sandbox del
      * workdir si está configurado. Si no hay workdir (legacy), el path se
@@ -3378,6 +3384,24 @@ public class VirtualMachine {
             case GUI_SET_TEXT_COLOR: { int rgb = popTc(tc); int hnd = popTc(tc); gui.setTextColor(hnd, rgb); pushTc(tc, 0); break; }
             case GUI_SET_FONT:       { int f   = popTc(tc); int hnd = popTc(tc); gui.setFont(hnd, f);        pushTc(tc, 0); break; }
             case GUI_LOAD_FONT:      { int ref = popTc(tc); pushTc(tc, gui.loadFont(readVmString(ref))); break; }
+
+            // H19 — App.* introspección del proyecto (ids 211-213).
+            case APP_MAIN_MODULE: {       // nombre del entry (basename sin extensión)
+                String p = appMainModulePath;
+                int sl = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+                String base = (sl >= 0) ? p.substring(sl + 1) : p;
+                int dot = base.indexOf('.');
+                if (dot >= 0) base = base.substring(0, dot);
+                pushTc(tc, allocVmString(base));
+                break;
+            }
+            case APP_MAIN_MODULE_PATH: { pushTc(tc, allocVmString(appMainModulePath)); break; }
+            case APP_PROJECT_PATH: {
+                ModuleManager mm = getModuleManager();
+                java.nio.file.Path wd = (mm != null) ? mm.getWorkdir() : null;
+                pushTc(tc, allocVmString(wd != null ? wd.toString() : ""));
+                break;
+            }
             case GUI_CLEAN:       { int hnd = popTc(tc); gui.clean(hnd);      pushTc(tc, 0); break; }
             case GUI_DELETE:      { int hnd = popTc(tc); gui.delete(hnd);     pushTc(tc, 0); break; }
             case GUI_SCREEN_LOAD: { int hnd = popTc(tc); gui.screenLoad(hnd); pushTc(tc, 0); break; }

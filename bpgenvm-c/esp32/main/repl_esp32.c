@@ -16,6 +16,7 @@
 #include "wire_v1.h"
 #include "json_min.h"
 #include "fs.h"
+#include "bpvm_fs.h"   /* H19-F1: base-dir por proyecto (bpvm_fs_set_basedir_from_module) */
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* inspección de deps en handle_run */
@@ -372,6 +373,11 @@ static void run_module_path(const char* path, long id) {
         else         printf("[autorun] BUSY — ignorado\n");
         return;
     }
+
+    /* H19-F1 — fija el base-dir del proyecto si el módulo vive en /app/<proj>/
+     * (el IDE manda la ruta cualificada). Plano (/app/X.mod o nombre suelto) →
+     * sin base-dir = modo plano. Se resetea en cada run. */
+    bpvm_fs_set_basedir_from_module(path);
 
     const uint8_t* data; uint32_t size;
     fs_status_t fs_s = v1_get_resolve(path, &data, &size);

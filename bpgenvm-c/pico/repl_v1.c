@@ -916,6 +916,11 @@ static void run_module_path(const char* path, long id) {
         return;
     }
 
+    /* H19-F1 — fija el base-dir del proyecto si el módulo vive en /app/<proj>/
+     * (el IDE manda la ruta cualificada). Plano (/app/X.mod o nombre suelto) →
+     * sin base-dir = modo plano. Se resetea en cada run. */
+    bpvm_fs_set_basedir_from_module(path);
+
     /* 1. Resolver el módulo principal en el FS. */
     const uint8_t* data; uint32_t size;
     fs_status_t fs_s = v1_get_resolve(path, &data, &size);
