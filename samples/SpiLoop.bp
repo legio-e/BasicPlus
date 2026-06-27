@@ -10,13 +10,16 @@
 //   bus 0/1 = SPI de la flash (reservados). Usa bus 2 (SPI2) o 3 (SPI3).
 //
 // AJUSTA SCK/MOSI/MISO a 3 GPIO libres y accesibles de tu placa.
+// (P4: 20 y 21 son libres-verificados; evita los reservados 7,8,26,27,31,51,52.
+//  SCK no se conecta a nada en el loopback, así que basta con que sea un GPIO
+//  válido no reservado.)
 module SpiLoop
   import Spi
 
   function main()
-    var SCK:  integer := 12
-    var MOSI: integer := 11
-    var MISO: integer := 13
+    var SCK:  integer := 22
+    var MOSI: integer := 20
+    var MISO: integer := 21
     var bus: Spi.Bus := Spi.Bus(2, SCK, MOSI, MISO, Spi.MHZ_1(), Spi.Bus.MODE0)
 
     print "--- SPI loopback (puente MOSI GPIO", MOSI, " <-> MISO GPIO", MISO, ") ---"
