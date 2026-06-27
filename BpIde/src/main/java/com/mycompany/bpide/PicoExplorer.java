@@ -550,6 +550,12 @@ public final class PicoExplorer extends JPanel {
      *  @return true si (re)subió; false si lo saltó. */
     private boolean putIfChanged(Backend b, File file, String remote,
                                  Long deviceSize) throws java.io.IOException {
+        if (remote.length() > 39 && outputSink != null) {   // F2: FS_NAME_LEN=40 (39 chars + NUL)
+            final String r = remote;
+            SwingUtilities.invokeLater(() -> outputSink.accept(
+                    "[Explorer] AVISO: ruta " + r.length() + " chars > 39 (FS_NAME_LEN) — "
+                    + "el device puede truncarla/rechazarla: " + r));
+        }
         byte[] data = Files.readAllBytes(file.toPath());
         long crc = crc32(data);
         Long devCrc = deviceCrcByPath.get(remote);
@@ -575,11 +581,27 @@ public final class PicoExplorer extends JPanel {
 
     /** H12 (#260) — variante con resources: pares (ruta remota → fichero
      *  local) de la carpeta resources/ del proyecto, de cualquier tipo. Se
-     *  suben con skip-if-idéntico (tamaño + CRC32), como las deps. */
+     *  suben con skip-if-idéntico (tamaño + CRC32), como las deps.
+     *  Delegado: prefijo de APP por defecto "/app" (modo fichero-suelto). */
     public void uploadAndRun(File modFile, java.util.List<File> depMods,
                              java.util.Set<String> libDepNames,
                              java.util.function.Consumer<BpvmClient> debugHook,
                              java.util.Map<String, File> resourceFiles) {
+        uploadAndRun(modFile, depMods, libDepNames, debugHook, resourceFiles, "/app");
+    }
+
+    /** H19-F2 — variante con prefijo de proyecto: {@code appPrefix} es la
+     *  carpeta del proyecto en el device ("/app/&lt;proj&gt;") o "/app" en
+     *  fichero-suelto. Los ficheros de APP (entry .mod/.mdn, deps no-lib + su
+     *  .mdn, resources) aterrizan bajo ese prefijo; las libs (core stdlib +
+     *  Gui) siguen en /lib. En modo proyecto, al final borra de
+     *  {@code appPrefix}/ las claves del device que ya no despliega (huérfanos
+     *  = LS bajo el prefijo − lo desplegado este run). */
+    public void uploadAndRun(File modFile, java.util.List<File> depMods,
+                             java.util.Set<String> libDepNames,
+                             java.util.function.Consumer<BpvmClient> debugHook,
+                             java.util.Map<String, File> resourceFiles,
+                             String appPrefix) {
         if (!isConnected()) {
             if (outputSink != null) outputSink.accept(
                     "[Explorer] no conectado — pulsa Connect primero");
@@ -590,7 +612,9 @@ public final class PicoExplorer extends JPanel {
                     "[Explorer] fichero no existe: " + modFile);
             return;
         }
-        final String remoteName = toAppPath(modFile.getName());
+        final String prefix = (appPrefix == null || appPrefix.isEmpty()) ? "/app" : appPrefix;
+        final boolean projectMode = !"/app".equals(prefix);   // F2: huérfanos sólo con proyecto
+        final String remoteName = appPath(prefix, modFile.getName());
         final java.util.List<File> deps = (depMods != null)
                 ? depMods : java.util.Collections.emptyList();
         final java.util.Set<String> libNames = (libDepNames != null)
@@ -621,6 +645,12 @@ public final class PicoExplorer extends JPanel {
             }
             this.deviceCrcByPath = remoteCrc;   // putIfChanged lo consulta por ruta
 
+            // F2 (H19) — claves bajo el prefijo del proyecto que ESTE run deja
+            // presentes (subidas O saltadas por CRC). Al final borramos del
+            // device las claves bajo prefix/ que NO estén aquí (huérfanos).
+            final java.util.Set<String> deployed = new java.util.HashSet<>();
+            deployed.add(remoteName);
+
             // 1) Subir deps primero (drivers).
             //    skip-if-IDÉNTICO (tamaño + CRC32, vía putIfChanged) +
             //    DEL-before-overwrite por economía (evita reescritura de
@@ -629,7 +659,8 @@ public final class PicoExplorer extends JPanel {
                 // stdlib core → /lib (como en la Pico); driver/app → /app.
                 boolean isLib = libNames.contains(dep.getName());
                 String depRemote = isLib ? ("/lib/" + dep.getName())
-                                         : toAppPath(dep.getName());
+                                         : appPath(prefix, dep.getName());
+                if (!isLib) deployed.add(depRemote);   // F2: bajo el prefijo del proyecto
                 Long sz = remote.get(depRemote);
                 // ANTES: para stdlib en /lib confiábamos en la copia
                 // "pre-instalada" (embebida del firmware) y saltábamos el PUT.
@@ -651,7 +682,9 @@ public final class PicoExplorer extends JPanel {
                 // Si el dep tiene .mdn alongside, subirlo también.
                 File depMdn = mdnSiblingOf(dep);
                 if (depMdn != null && depMdn.isFile()) {
-                    String depMdnRemote = toAppPath(depMdn.getName());
+                    String depMdnRemote = isLib ? toAppPath(depMdn.getName())
+                                                : appPath(prefix, depMdn.getName());
+                    if (!isLib) deployed.add(depMdnRemote);   // F2: junto a su .mod
                     boolean upMdn = putIfChanged(b, depMdn, depMdnRemote, remote.get(depMdnRemote));
                     if (upMdn && outputSink != null) {
                         SwingUtilities.invokeLater(() -> outputSink.accept(
@@ -664,6 +697,7 @@ public final class PicoExplorer extends JPanel {
             //     su ruta remota (/app/<rel>), con skip-if-idéntico.
             for (java.util.Map.Entry<String, File> res : resources.entrySet()) {
                 final String rRemote = res.getKey();
+                deployed.add(rRemote);   // F2: ya viene con el prefijo del proyecto
                 final File rFile = res.getValue();
                 boolean up = putIfChanged(b, rFile, rRemote, remote.get(rRemote));
                 if (outputSink != null) {
@@ -692,12 +726,35 @@ public final class PicoExplorer extends JPanel {
             //     interpretado normal.
             File mdnFile = mdnSiblingOf(modFile);
             if (mdnFile != null && mdnFile.isFile()) {
-                String mdnRemote = toAppPath(mdnFile.getName());
+                String mdnRemote = appPath(prefix, mdnFile.getName());
+                deployed.add(mdnRemote);   // F2
                 boolean up = putIfChanged(b, mdnFile, mdnRemote, remote.get(mdnRemote));
                 if (up && outputSink != null) {
                     SwingUtilities.invokeLater(() -> outputSink.accept(
                             "[Explorer] subido AOT " + mdnRemote + " ("
                             + mdnFile.length() + " bytes)"));
+                }
+            }
+            // 2b-bis) F2 (H19) — huérfanos: en modo proyecto, borra de prefix/
+            //   las claves que el device tiene pero este run ya no despliega
+            //   (módulos/resources quitados del proyecto). El prefijo ES el
+            //   manifest (FS plano enumerado por LS); nunca toca /lib ni otros
+            //   /app/<otro>/.
+            if (projectMode) {
+                final String pfx = prefix + "/";
+                for (String key : new java.util.ArrayList<>(remote.keySet())) {
+                    if (key.startsWith(pfx) && !deployed.contains(key)) {
+                        try {
+                            b.del(key);
+                            if (outputSink != null) {
+                                final String k = key;
+                                SwingUtilities.invokeLater(() -> outputSink.accept(
+                                        "[Explorer] huérfano borrado: " + k));
+                            }
+                        } catch (java.io.IOException delErr) {
+                            /* best-effort: si falla el DEL, seguimos */
+                        }
+                    }
                 }
             }
             // 2c) Refrescar el árbol del FS AQUÍ — tras subir, ANTES de ejecutar.
@@ -749,6 +806,13 @@ public final class PicoExplorer extends JPanel {
     private static String toAppPath(String localName) {
         if (localName.indexOf('/') >= 0) return localName;
         return "/app/" + localName;
+    }
+
+    /** F2 (H19) — como toAppPath pero con prefijo de proyecto explícito
+     *  ("/app/&lt;proj&gt;" o "/app"). Si el nombre ya trae '/', se respeta. */
+    private static String appPath(String prefix, String localName) {
+        if (localName.indexOf('/') >= 0) return localName;
+        return prefix + "/" + localName;
     }
 
     /** Para "Foo.mod" devuelve "Foo.mdn" en el mismo directorio (o null

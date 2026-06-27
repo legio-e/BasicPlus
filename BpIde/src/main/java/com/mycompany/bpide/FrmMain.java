@@ -1886,15 +1886,39 @@ public class FrmMain extends javax.swing.JFrame
      * separadores '/'. Vacío si no hay proyecto abierto o no existe la
      * carpeta. Lo consume uploadAndRun, que sube con skip-if-same-size.
      */
+    /**
+     * F2 (H19) — prefijo de despliegue en el device para el proyecto actual:
+     * "/app/&lt;proj&gt;" (proj = carpeta del .bpbuild, saneada a [A-Za-z0-9_-],
+     * cap 20) si hay proyecto abierto; "/app" en modo fichero-suelto
+     * (comportamiento histórico). Al ejecutar /app/&lt;proj&gt;/&lt;entry&gt;.mod el
+     * firmware deriva basedir=/app/&lt;proj&gt; → activa F1 (recursos + módulos
+     * base-dir-first).
+     */
+    private String deviceAppPrefix() {
+        if (currentProjectFile == null) return "/app";
+        java.nio.file.Path dir = currentProjectFile.getParent();
+        if (dir == null || dir.getFileName() == null) return "/app";
+        String raw = dir.getFileName().toString();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < raw.length() && sb.length() < 20; i++) {
+            char c = raw.charAt(i);
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                    || (c >= '0' && c <= '9') || c == '_' || c == '-') sb.append(c);
+            else sb.append('_');
+        }
+        return sb.length() == 0 ? "/app" : "/app/" + sb;
+    }
+
     private java.util.Map<String, java.io.File> collectProjectResources() {
         java.util.Map<String, java.io.File> out = new java.util.LinkedHashMap<>();
         if (currentProjectFile == null) return out;
         java.nio.file.Path rdir = currentProjectFile.getParent().resolve("resources");
         if (!java.nio.file.Files.isDirectory(rdir)) return out;
+        final String prefix = deviceAppPrefix();   // F2: /app/<proj> o /app
         try (java.util.stream.Stream<java.nio.file.Path> st = java.nio.file.Files.walk(rdir)) {
             st.filter(java.nio.file.Files::isRegularFile).forEach(p -> {
                 String rel = rdir.relativize(p).toString().replace('\\', '/');
-                out.put("/app/" + rel, p.toFile());
+                out.put(prefix + "/" + rel, p.toFile());
             });
         } catch (IOException ex) {
             appendConsola("[resources] error leyendo " + rdir + ": " + ex.getMessage() + "\n");
@@ -2139,7 +2163,7 @@ public class FrmMain extends javax.swing.JFrame
                                     + " fichero(s) de resources/ a subir\n");
                         }
                         picoExplorer.uploadAndRun(modPath.toFile(), deps, libDeps,
-                                null, resources);
+                                null, resources, deviceAppPrefix());
                     }
                 } catch (Exception ex) {
                     appendConsola("[ide] error: " + ex.getMessage() + "\n");
@@ -2320,7 +2344,7 @@ public class FrmMain extends javax.swing.JFrame
                         String mod = n.endsWith(".mod") ? n.substring(0, n.length() - 4) : n;
                         if (EMBEDDED_CORE_MODS.contains(mod)) libDeps.add(n);
                     }
-                    final String remoteMain = "/app/" + base + ".mod";
+                    final String remoteMain = deviceAppPrefix() + "/" + base + ".mod";   // F2 (H19)
                     appendConsola("[debug] subiendo + enganchando sesión de debug en la placa...\n");
                     // uploadAndRun con debugHook: sube los ficheros y, en vez de
                     // ejecutar en bloqueante, cede el client serie ya conectado.
@@ -2334,7 +2358,7 @@ public class FrmMain extends javax.swing.JFrame
                         client.runModule(remoteMain);    // arranca; cada pausa pinta locales por nombre
                         appendConsola("[debug] sesión activa. Breakpoints del editor → run-to-breakpoint;"
                                 + " si no hay, pausa en la entrada. Continue/Step en el menú Debug.\n");
-                    }, collectProjectResources());   // H12 (#260)
+                    }, collectProjectResources(), deviceAppPrefix());   // H12 (#260) + F2 (H19)
                 } catch (Exception ex) {
                     appendConsola("[debug] error: " + ex.getMessage() + "\n");
                 }

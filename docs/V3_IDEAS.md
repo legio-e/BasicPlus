@@ -980,6 +980,26 @@ hueco "#1 `/app/<proyecto>/`" del paso 4: no es FS-folders, es **modelo de proye
   - **ACOPLO (importante):** F2.a (routing a `/app/<proj>/`) y la activación F1 del repl
     (`set_basedir_from_module`) van **JUNTAS** — con los recursos en `/app/<proj>/` pero el repl sin fijar
     basedir, el resolver caería al paso 3 (`/app/<rec>`) y NO los encontraría. Verificación e2e = device.
+  - **✅ DISEÑO CONCRETO (27-jun) — implementación:** tras mapear el flujo de `doRunOnPico`→
+    `resolveDeviceDeps`/`collectProjectResources`→`PicoExplorer.uploadAndRun` (claves vía `toAppPath`):
+      1. **Prefijo:** `deviceAppPrefix()` en FrmMain → `/app/<proj>` (`<proj>` = carpeta del `.bpbuild`
+         saneada [A-Za-z0-9_-], cap 20) si hay proyecto; `/app` en fichero-suelto (idéntico a hoy).
+      2. **Routing:** `uploadAndRun` gana un arg `appPrefix`; `toAppPath(n)`→`appPath(prefix,n)` para los
+         ficheros de APP (entry `.mod`/`.mdn`, deps **no-lib** + su `.mdn`); resources con la clave
+         `prefix+"/"+rel` (en `collectProjectResources`). **Las libs NO cambian:** core stdlib + Gui →
+         `/lib` igual que hoy (el resolver de F1 cae a `/lib`); el `.mdn` de una lib se queda plano en
+         `/app` (no estorba, no se orphan-borra). RUN = `prefix/<entry>.mod` → el firmware deriva
+         `basedir=/app/<proj>` → se activan F1 (recursos) + módulos base-dir-first.
+      3. **Huérfanos = PREFIX-SCAN, NO manifest-file** (mejora sobre el plan): el set `deployed` reúne
+         TODAS las claves bajo `prefix/` que toca este run (subidas O saltadas por CRC); al final, en modo
+         proyecto, `DEL` de cada clave del LS del device que empieza por `prefix/` y no está en `deployed`.
+         El prefijo ES el manifest (el FS plano se enumera por LS) → cero estado que se desincronice;
+         nunca toca `/lib` ni otros `/app/<otro>/`. (Dos proyectos con misma carpeta colisionarían — error
+         de usuario, igual que dos ficheros iguales.)
+      4. **Guard `FS_NAME_LEN`:** si una clave supera 39 chars, aviso claro en consola (no rompe mudo).
+      5. Ambos callers (Run **y** Debug on Device) pasan el prefijo → despliegue consistente.
+      Migración: al pasar un proyecto de plano a `/app/<proj>/`, los viejos `/app/X.mod` quedan
+      (shadoweados por basedir-first, inofensivos); el entry ya nunca se ejecuta plano.
 - **F3 — diseñador de proyecto en el IDE.** Elegir el BP de inicio; gestionar resources (`.win`,
   imágenes, fuentes); generar/actualizar el manifest del micro. (Mucho ya existe sobre `.bpbuild`.) [IDE]
 
