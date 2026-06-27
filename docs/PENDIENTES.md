@@ -31,6 +31,22 @@ Decidir: extender el error a clases, o materializar backing + asignación en
 compilación— hoy cae en "requiere literal"; mejora natural: inlinarlo desde
 `EnumSymbol.values`.)
 
+### B-174b — slot de vtable divergente al añadir métodos a clase base con subclases
+Añadir métodos a una clase que tiene subclases desplaza su vtable y `ClassSymbol.ensureMethodSlots`
+calcula slots distintos en el frontend y en el `ModWriter`. Síntomas: en `Component` (Gui) da
+**error del emisor** al compilar ("slot divergente para X.setChecked frontend=37 ModWriter=29"); en
+`Window` **no** da error (no hay subclase suya en el mismo módulo) pero en **runtime el VM-C despacha
+al slot equivocado y CUELGA** (miVM lo resuelve bien). **Desbloquea:** `Gui.Window.find(name)` (localizar
+un widget de un form por nombre) y, en general, extender clases base con subclases. El propio compilador
+señala el sitio: `ClassSymbol.ensureMethodSlots`. Encontrado 28-jun (intento de `find()` revertido; queda
+`Component.name`, commit `6f711c1`).
+
+### B-gui-load-missing — `Window.load(".win")` con fichero ausente CUELGA el VM-C
+Si el `.win` no está donde el FS/sandbox de la VM lo busca, `Window.load` → `Json.readJsonFile` →
+`readFile` devuelve vacío y `parseJson("")` (o el wrapper) entra en bucle en vez de dar error → el VM-C
+cuelga (miVM no). Un recurso ausente debería fallar limpio, no colgar (afecta también al device si falta
+un resource). Repro: `Window.load("noexiste.win")` o un `.win` fuera del workdir. Encontrado 28-jun.
+
 ## 🟡 Limitaciones / decisiones documentadas del lenguaje
 
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
