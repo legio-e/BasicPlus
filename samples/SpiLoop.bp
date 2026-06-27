@@ -1,0 +1,52 @@
+// SpiLoop.bp — loopback del bus SPI: con un PUENTE entre MOSI y MISO,
+// transfer() debe devolver exactamente lo que se envía (eco). Valida el
+// backend SPI SIN necesidad de un dispositivo: confirma init del SPI,
+// generación de SCK, salida por MOSI, entrada por MISO y el full-duplex.
+//
+// CABLEADO: un solo cable puente entre el pin MOSI y el pin MISO.
+//   SCK y CS quedan al aire (no hay dispositivo que seleccionar).
+//
+// En el ESP32/P4 el nº de pin = nº de GPIO. Convención bus = instancia:
+//   bus 0/1 = SPI de la flash (reservados). Usa bus 2 (SPI2) o 3 (SPI3).
+//
+// AJUSTA SCK/MOSI/MISO a 3 GPIO libres y accesibles de tu placa.
+module SpiLoop
+  import Spi
+
+  function main()
+    var SCK:  integer := 12
+    var MOSI: integer := 11
+    var MISO: integer := 13
+    var bus: Spi.Bus := Spi.Bus(2, SCK, MOSI, MISO, Spi.MHZ_1(), Spi.Bus.MODE0)
+
+    print "--- SPI loopback (puente MOSI GPIO", MOSI, " <-> MISO GPIO", MISO, ") ---"
+
+    var tx: integer[] := [0x12, 0x34, 0x55, 0xA5, 0xFF, 0x00]
+    var rx: integer[] := newIntArray(6)
+    bus.transfer(tx, rx, 6)
+
+    var ok: integer := 0
+    var i: integer := 0
+    while i < 6 do
+      var exp: integer := tx[i] & 0xFF
+      var got: integer := rx[i] & 0xFF
+      var mark: string := "OK"
+      if got != exp then
+        mark := "DIFF"
+      else
+        ok := ok + 1
+      endif
+      print "  tx=", exp, " rx=", got, " ", mark
+      i := i + 1
+    endwh
+
+    print "Coincidencias:", ok, "/ 6"
+    if ok == 6 then
+      print "RESULT: OK -- el bus SPI hace eco (backend SPI valida)"
+    else
+      print "RESULT: FAIL -- revisa el puente MOSI<->MISO y los pines/bus"
+    endif
+    print "--- fin ---"
+  end main
+
+end SpiLoop
