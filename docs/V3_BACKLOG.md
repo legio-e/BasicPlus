@@ -87,6 +87,16 @@ cierre = **H12…H17** (1=H12 · 2=H13 · 3=H14 · 4=H15 · 5=H16 · 6=H17):
 Orden flexible donde las piezas son independientes (cargador ↔ AOT intercambiables; el P4-HW puede
 adelantarse en cuanto haya ganas de flashear).
 
+**ALCANCE V3 — acotado (Eduardo 26-jun):** **H18 (memoria) y H19 (modelo de proyecto) SE QUEDAN en
+V3** (se planteó moverlos a V4 y Eduardo dijo que NO). Regla: **acotar, no crecer sin fin**; lo que
+salga a arreglar, se arregla. Estimación **~1 semana / 10 días**; si se alarga un poco, sin problema.
+El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grandes.
+- **Verificación HW FUSIONADA** (pasos 1+3 de la lista de cierre = UN lote): reflash de confirmación
+  (CRC del PUT + reset-cause + RtcDemo) **junto con** las pruebas de pin (I2C/SPI con dispositivo).
+- **Documentación (paso 5):** hoy 2 documentos (el **lenguaje** + las **librerías estándar**); la
+  **parte gráfica = 3er documento aparte** (el que no quiera gráficos se ahorra esa doc). Es la
+  PRÓXIMA tarea al retomar. Después: ver qué documentación EXTRA necesita V3.
+
 **Refinamientos (Eduardo, 26-jun, tras cerrar Forms en placa — H13 ✅):**
 - **Gráficos: YA HAY MÁS QUE SUFICIENTE para una 1ª versión.** La repesca de widgets (paso 4) se
   limita a **revisar alguna cosa SIMPLE** — nada complicado.
