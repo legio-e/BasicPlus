@@ -19,6 +19,7 @@
 #include "bpvm_pwm.h"
 #include "bpvm_adc.h"
 #include "bpvm_pulse.h"
+#include "bpvm_wdt.h"
 
 #include "driver/gpio.h"
 #include "driver/uart.h"
@@ -28,6 +29,7 @@
 #include "esp_adc/adc_oneshot.h"    /* H14: backend ADC */
 #include "driver/pulse_cnt.h"       /* H14: backend contador (PCNT) */
 #include "esp_system.h"             /* paso 4 cierre — esp_reset_reason (causa de reset) */
+#include "esp_task_wdt.h"           /* cierre V3 — backend Wdt (Task Watchdog Timer) */
 #include "freertos/FreeRTOS.h"   /* pdMS_TO_TICKS, portMAX_DELAY */
 #include "esp_mac.h"      /* uniqueId desde la MAC de efuse */
 #include "esp_timer.h"    /* uptime */
@@ -523,6 +525,63 @@ static const bpvm_pulse_backend_t s_esp32_pulse_backend = {
  * modelo offset evita ese camino por completo y da la hora correcta.
  */
 
+/* ============================ Wdt (cierre V3) =======================
+ * Watchdog del ESP32 vía el Task Watchdog Timer (TWDT) de ESP-IDF. Vigila la
+ * task que ejecuta el código BP (la que llama a Wdt.enable): si deja de
+ * "alimentarlo" (feed) dentro del timeout, el TWDT dispara un panic que —con la
+ * config de panic por defecto (print+reboot)— RESETEA el chip, igual que el
+ * watchdog del Pico (HW) y del STM32 (IWDG). Paridad de comportamiento.
+ *
+ * Semántica (= Pico/STM32):
+ *   enable(timeoutMs): arranca/reconfigura el TWDT con ese timeout y suscribe la
+ *                      task actual; trigger_panic=true → timeout = reset.
+ *   feed():            esp_task_wdt_reset() (resetea el contador de la task).
+ *   disable():         des-suscribe la task (mejor esfuerzo; el TWDT global del
+ *                      IDF puede seguir vigilando otras tasks, lo deseable).
+ *   Si el programa BP termina SIN disable, la task deja de alimentar y el chip se
+ *   resetea — MISMO aviso de seguridad que en Pico/STM32.
+ *
+ * El IDF puede haber iniciado ya el TWDT (CONFIG_ESP_TASK_WDT_INIT): en ese caso
+ * esp_task_wdt_init devuelve ESP_ERR_INVALID_STATE y reconfiguramos.
+ * (Nota: si el sdkconfig usa un panic-handler que NO reinicia —HALT/GDBSTUB— el
+ * timeout pararía en vez de resetear; el default PRINT_REBOOT sí resetea.)
+ */
+static bool s_esp32_wdt_subscribed = false;
+
+static void esp32_wdt_enable_impl(int timeoutMs) {
+    if (timeoutMs < 1) timeoutMs = 1;
+    esp_task_wdt_config_t cfg = {
+        .timeout_ms     = (uint32_t) timeoutMs,
+        .idle_core_mask = 0,        /* solo vigilamos la task BP suscrita, no los idle */
+        .trigger_panic  = true,     /* timeout → panic → reboot (= reset Pico/STM32) */
+    };
+    esp_err_t err = esp_task_wdt_init(&cfg);
+    if (err == ESP_ERR_INVALID_STATE) {
+        esp_task_wdt_reconfigure(&cfg);     /* el IDF ya lo había iniciado al boot */
+    }
+    if (!s_esp32_wdt_subscribed && esp_task_wdt_add(NULL) == ESP_OK) {
+        s_esp32_wdt_subscribed = true;
+    }
+    esp_task_wdt_reset();
+}
+
+static void esp32_wdt_feed_impl(void) {
+    if (s_esp32_wdt_subscribed) esp_task_wdt_reset();
+}
+
+static void esp32_wdt_disable_impl(void) {
+    if (s_esp32_wdt_subscribed) {
+        esp_task_wdt_delete(NULL);
+        s_esp32_wdt_subscribed = false;
+    }
+}
+
+static const bpvm_wdt_backend_t s_esp32_wdt_backend = {
+    .enable  = esp32_wdt_enable_impl,
+    .feed    = esp32_wdt_feed_impl,
+    .disable = esp32_wdt_disable_impl,
+};
+
 void esp32_hw_register(void) {
     bpvm_gpio_set_backend(&s_esp32_gpio_backend);
     bpvm_pico_set_backend(&s_esp32_pico_backend);   /* info real (no stub host) */
@@ -532,5 +591,6 @@ void esp32_hw_register(void) {
     bpvm_pwm_set_backend(&s_esp32_pwm_backend);     /* H14 (LEDC) */
     bpvm_adc_set_backend(&s_esp32_adc_backend);     /* H14 (esp_adc oneshot) */
     bpvm_pulse_set_backend(&s_esp32_pulse_backend); /* H14 (PCNT) */
+    bpvm_wdt_set_backend(&s_esp32_wdt_backend);     /* cierre V3 — Task WDT (reset) */
     /* RTC: sin backend a propósito → stub portable (modelo offset). Ver arriba. */
 }
