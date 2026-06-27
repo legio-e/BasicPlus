@@ -1,0 +1,61 @@
+// Bme280IdP4.bp — chip_id del BME280 por I2C en el ESP32-P4, BUS 1.
+//
+// IMPORTANTE (P4): el bus 0 / I2C0 lo usa la PANTALLA (táctil) → para
+// periféricos de usuario hay que usar SIEMPRE el bus 1 / I2C1. Iniciar el
+// bus 0 desde BP recrea ese controlador y le pisa el táctil a la pantalla.
+//
+// Cableado: SDA→GPIO20, SCL→GPIO21 (libres-verificados; evita 7,8,26,27,31,51,52).
+//   VIN→3V3, GND→GND, SDO→GND (= dirección 0x76; SDO→3V3 = 0x77).
+//   I2C es open-drain → pull-ups a 3V3 (las del módulo GY-BME280, ~4k7).
+//
+// chip_id: registro 0xD0 → 0x60 (96) = BME280 · 0x58 (88) = BMP280.
+// Imprime los retornos de write/read y el byte crudo para diagnosticar.
+module Bme280IdP4
+  import I2c
+
+  function main()
+    var SDA:  integer := 20
+    var SCL:  integer := 21
+    var ADDR: integer := 0x76
+    var bus: I2c.Bus := I2c.Bus(I2c.BUS1(), SDA, SCL, I2c.Bus.STANDARD)
+
+    print "--- BME280 chip_id por I2C (P4, BUS 1, SDA=GP", SDA, " SCL=GP", SCL, ") ---"
+
+    print "[1] scan del bus..."
+    var devs: integer[] := bus.scan()
+    var i: integer := 0
+    while i < len(devs) do
+      print "   device en 0x", hex2(devs[i]), "(", devs[i], ")"
+      i := i + 1
+    endwh
+    if len(devs) == 0 then
+      print "   (nada en el bus) -- revisa cableado / pull-ups"
+    endif
+
+    print "[2] leyendo chip_id en 0x", hex2(ADDR), "..."
+    var reg: integer[] := [0xD0]
+    var wn: integer := bus.write(ADDR, reg, 1)        // apunta al registro 0xD0
+    var rx: integer[] := newIntArray(1)
+    var rn: integer := bus.read(ADDR, rx, 1)          // lee 1 byte
+    var chip: integer := rx[0] & 0xFF
+    print "   write->", wn, " read->", rn, " byte=", chip, "(0x", hex2(chip), ")"
+
+    if chip == 0x60 then
+      print "RESULT: OK -- BME280 (0x60) por I2C/bus1 en el P4"
+    elseif chip == 0x58 then
+      print "RESULT: OK -- BMP280 (0x58) por I2C/bus1 en el P4"
+    else
+      print "RESULT: ? -- chip_id inesperado. wn=", wn, " rn=", rn
+      print "   (wn=-1 -> el sensor no ACKea la escritura; rn=-1 -> falla la lectura;"
+      print "    byte=255/0 -> bus flotante: revisa pull-ups)"
+    endif
+
+    print "--- fin ---"
+  end main
+
+  function hex2(b: integer): string
+    var lut: string := "0123456789ABCDEF"
+    return charAt(lut, (b shr 4) & 0x0F) + charAt(lut, b & 0x0F)
+  end hex2
+
+end Bme280IdP4
