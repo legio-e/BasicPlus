@@ -21,7 +21,7 @@ SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/pulse.c src/pwm.c src/pico.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
-          src/fs_facade.c src/fs_host.c \
+          src/fs_facade.c src/fs_host.c src/crc32.c \
           src/net.c src/net_host.c
 
 # Paths de las deps GUI vendorizadas (third_party/, gitignored; ver su README).

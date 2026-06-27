@@ -22,6 +22,7 @@ idf_component_register(
         "../../src/builtins.c"
         "../../src/gui.c"                     # G6: modelo GUI + widgets LVGL (Gui.* de BasicPlus)
         "../../src/fs_facade.c"
+        "../../src/crc32.c"                   # paso 4 cierre: CRC del FS en LS (== java.util.zip.CRC32)
         "../../src/net.c"
         "../../src/link.c"
         "../../src/scheduler.c"
