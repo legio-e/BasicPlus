@@ -20,9 +20,17 @@ Orden siguiente:
     pero **NO** para STM32: **I2C** (`I2c.Bus`), **ADC** (`Adc.Channel`), **PWM** (`Pwm.Slice`),
     **Timer** (`Timer.Alarm`), **WDT** (`Wdt.Timer`), **RTC** (`Rtc.Clock`), **pulse-counter**,
     **Neopixel**… (UART + SPI ya hechos en H15). **Primero en la Nucleo-U575** (placa STM32 de V2).
-  - (b) **Reset-cause vía RAM retenida**: usar la backup SRAM / registros que sobreviven al
-    reset para guardar una "miga de pan" (causa del último reset: watchdog / hardfault / power /
-    KILL…) y reportarla en el boot. Liga con la observabilidad de bring-up (V3_IDEAS §6).
+  - (b) **Reset-cause** — partido en dos (Eduardo 26-jun, "hagamos a y b pasa a pendiente"):
+    - **(a) ✅ HECHO (`445a823`) — causa-de-reset por REGISTRO HW en el INFO de las 3 familias +
+      IDE.** ESP32 `esp_reset_reason`, Pico `watchdog_caused_reboot`, STM32 `RCC->CSR` (ya tenía);
+      campo `resetReason` en INFO_REPLY; el IDE pinta "Reset : <causa>". Sin RAM retenida. Falta el
+      reflash de Eduardo para el e2e.
+    - **(b) 🔜 PENDIENTE — portar el BREADCRUMB retenido** (traza de 16 + 1ª pegajosa, hoy solo
+      STM32 vía registros TAMP backup; `gpio_stm32.c` + interfaz `setMark/markAt/bootCount` del
+      backend pico, ya abstracta) a **ESP32** (`RTC_NOINIT_ATTR`) y **Pico** (sección no-init RAM;
+      sin dominio con pila → se borra en power-off, aceptable). Es la parte HW-específica
+      (almacén retenido por chip). V3 si se quiere la simetría, o V4. Liga con la observabilidad
+      de bring-up (V3_IDEAS §6).
   - (c) Al terminar, **portar el desarrollo a la Discovery DK2** (misma familia U5).
 
 (GUI en pausa ≥1 semana tras cerrar H6 en la DK2.)
