@@ -254,7 +254,9 @@ enum {
     BUILTIN_GUI_INVOKE_BY_SLOT = 207,
     /* H14 — counts de periféricos board-aware (del board_desc / board.json). */
     BUILTIN_PICO_ADC_CHANNELS  = 208,   /* () → canales ADC de la placa */
-    BUILTIN_PICO_PWM_SLICES    = 209    /* () → slices PWM de la placa */
+    BUILTIN_PICO_PWM_SLICES    = 209,   /* () → slices PWM de la placa */
+
+    BUILTIN_GUI_LOAD_FONT      = 210    /* (path: string) → id de fuente (1-based); setFont(id) la aplica */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -573,6 +575,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_SET_BG_COLOR:   { uint32_t rgb = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_bg_color(h, rgb);   push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SET_TEXT_COLOR: { uint32_t rgb = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_text_color(h, rgb); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SET_FONT:       { int f = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_font(h, f); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_LOAD_FONT:      { uint32_t ref = (uint32_t) pop_i32(vm, tc); char path[256]; read_bp_string(vm, ref, path, sizeof(path)); push_i32(vm, tc, bpvm_gui_load_font(path)); return BPVM_OK; }
     case BUILTIN_GUI_CLEAN:       { int h = pop_i32(vm, tc); bpvm_gui_clean(h);  push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_DELETE:      { int h = pop_i32(vm, tc); bpvm_gui_delete(h); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SCREEN_LOAD: { pop_i32(vm, tc); push_i32(vm, tc, 0); return BPVM_OK; }   /* una sola pantalla por ahora */

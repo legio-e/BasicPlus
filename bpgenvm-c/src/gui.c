@@ -792,9 +792,62 @@ void bpvm_gui_set_text_color(int handle, uint32_t rgb) {
     (void) handle; (void) rgb;
 #endif
 }
+/* ---- Fuentes cargadas en runtime (.bin LVGL binfont, vía loadFont). El id
+ *      (1-based) se asigna SIEMPRE (con o sin LVGL) para que la VM-C y la miVM
+ *      devuelvan ids idénticos (paridad dual-VM). Solo bajo LVGL se materializa el
+ *      lv_font_t; sin LVGL es un contador. No se resetea entre runs, igual que
+ *      g_node_count/g_image_count (estado de proceso). ---- */
+#define GUI_MAX_FONTS 32
+static int g_font_count = 0;
+#ifdef BPVM_LVGL
+static lv_font_t* g_loaded_fonts[GUI_MAX_FONTS];
+#endif
+
+int bpvm_gui_load_font(const char* path) {
+    if (g_font_count >= GUI_MAX_FONTS) return 0;      /* registro lleno */
+    int id = ++g_font_count;                           /* 1-based; idéntico en ambas VMs */
+#ifdef BPVM_LVGL
+    g_loaded_fonts[id - 1] = NULL;
+    /* Resuelve la ruta igual que las imágenes: tal cual; si un nombre SIMPLE no
+     * existe, reintenta en /app (resources del proyecto) → loadFont("x.bin") va
+     * igual en host (cwd) y en placa (/app). */
+    const char* rpath = path ? path : "";
+    char alt[300];
+    uint32_t sz = 0;
+    if (bpvm_fs_stat(rpath, &sz) != 0 && rpath[0] != '\0' && rpath[0] != '/') {
+        snprintf(alt, sizeof(alt), "/app/%s", rpath);
+        if (bpvm_fs_stat(alt, &sz) == 0) rpath = alt;
+    }
+    if (bpvm_fs_stat(rpath, &sz) == 0 && sz > 0) {
+        uint8_t* buf = (uint8_t*) malloc(sz);
+        if (buf && bpvm_fs_read(rpath, buf, sz) == (long) sz)
+            g_loaded_fonts[id - 1] = lv_binfont_create_from_buffer(buf, sz);
+        free(buf);     /* el lv_font_t copia lo que necesita; el buffer ya no hace falta */
+    }
+    if (!g_loaded_fonts[id - 1]) {
+        printf("[gui] loadFont('%s'): no se pudo cargar (id %d queda sin fuente)\n",
+               path ? path : "", id);
+        fflush(stdout);
+    }
+#else
+    (void) path;
+#endif
+    return id;
+}
+
 void bpvm_gui_set_font(int handle, int font_id) {
-    /* Fuente por tamaño llegará en una 2ª tanda; no afecta al dump. */
+    /* font_id = id devuelto por loadFont (1-based). Aplica la fuente al render del
+     * componente; NO afecta al dump (paridad con la miVM). id fuera de rango o sin
+     * fuente cargada = no-op. */
+#ifdef BPVM_LVGL
+    gui_node* n = node_for(handle);
+    if (n && n->lv && font_id >= 1 && font_id <= g_font_count) {
+        lv_font_t* f = g_loaded_fonts[font_id - 1];
+        if (f) lv_obj_set_style_text_font(n->lv, f, 0);
+    }
+#else
     (void) handle; (void) font_id;
+#endif
 }
 
 void bpvm_gui_bind_click(int handle, uint32_t objptr) {

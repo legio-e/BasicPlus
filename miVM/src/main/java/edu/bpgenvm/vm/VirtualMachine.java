@@ -3377,6 +3377,7 @@ public class VirtualMachine {
             case GUI_SET_BG_COLOR:   { int rgb = popTc(tc); int hnd = popTc(tc); gui.setBgColor(hnd, rgb);   pushTc(tc, 0); break; }
             case GUI_SET_TEXT_COLOR: { int rgb = popTc(tc); int hnd = popTc(tc); gui.setTextColor(hnd, rgb); pushTc(tc, 0); break; }
             case GUI_SET_FONT:       { int f   = popTc(tc); int hnd = popTc(tc); gui.setFont(hnd, f);        pushTc(tc, 0); break; }
+            case GUI_LOAD_FONT:      { int ref = popTc(tc); pushTc(tc, gui.loadFont(readVmString(ref))); break; }
             case GUI_CLEAN:       { int hnd = popTc(tc); gui.clean(hnd);      pushTc(tc, 0); break; }
             case GUI_DELETE:      { int hnd = popTc(tc); gui.delete(hnd);     pushTc(tc, 0); break; }
             case GUI_SCREEN_LOAD: { int hnd = popTc(tc); gui.screenLoad(hnd); pushTc(tc, 0); break; }

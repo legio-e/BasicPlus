@@ -58,12 +58,14 @@ func __guiDumpTree():string public intrinsic
 func __guiCreateButton(parent:integer):integer public intrinsic
 func __guiImageViewSetImage(view:integer,image:integer):void public intrinsic
 func __guiTabviewAddTab(handle:integer,name:string):integer public intrinsic
+func loadFont(path:string):integer public
 func __guiCreateList(parent:integer):integer public intrinsic
 func __guiBindClick(handle:integer,self:Component):void public intrinsic
 func __guiTextareaSetReadonly(handle:integer,ro:integer):void public intrinsic
 func __guiTableSetGrid(handle:integer,rows:integer,cols:integer):void public intrinsic
 func __guiGetHeight(handle:integer):integer public intrinsic
 func __guiChange(w:Component):void public intrinsic
+func __guiLoadFont(path:string):integer public intrinsic
 func __guiSetRange(handle:integer,mn:integer,mx:integer):void public intrinsic
 func __guiTableSetCell(handle:integer,row:integer,col:integer,text:string):void public intrinsic
 func __guiGetWidth(handle:integer):integer public intrinsic

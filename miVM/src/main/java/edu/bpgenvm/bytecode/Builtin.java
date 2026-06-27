@@ -425,7 +425,13 @@ public enum Builtin {
     // device). Como gpioCount: host = perfil RP2350 (4 ADC / 12 PWM); el device
     // los resuelve desde su descriptor. ids 208 / 209.
     PICO_ADC_CHANNELS("__picoAdcChannels"),            // () → integer
-    PICO_PWM_SLICES("__picoPwmSlices");                // () → integer
+    PICO_PWM_SLICES("__picoPwmSlices"),                // () → integer
+
+    // V3 (gráficos) — carga de fuente .bin (LVGL binfont) en runtime → id 1-based.
+    // setFont(id) la aplica. El host LVGL la materializa; miVM/Swing asigna el id
+    // (paridad de ids) pero no puede usar la .bin → render con la fuente por
+    // defecto. No afecta al dumpTree. id 210.
+    GUI_LOAD_FONT("__guiLoadFont");                    // (path: string) → integer
 
     public final String bpName;
     public final int id;

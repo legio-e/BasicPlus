@@ -52,6 +52,7 @@ void bpvm_gui_imageview_set_image(int view, int img);
 void bpvm_gui_imageview_refresh(int view);
 void bpvm_gui_set_font_size(int handle, int px);
 int  bpvm_gui_get_font_size(int handle);
+int  bpvm_gui_load_font(const char* path);   /* carga una fuente .bin (LVGL binfont) → id 1-based; 0 si el registro está lleno. setFont(id) la aplica. */
 void bpvm_gui_textarea_set_readonly(int handle, int ro);
 int  bpvm_gui_textarea_get_readonly(int handle);
 

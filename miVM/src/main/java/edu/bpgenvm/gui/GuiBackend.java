@@ -374,10 +374,18 @@ public final class GuiBackend {
     public void setTextColor(int handle, int rgb) {
         Node n = nodes.get(handle); if (n != null) n.comp.setForeground(new Color(rgb & 0xFFFFFF));
     }
+    // Carga de fuente en runtime (loadFont) — paridad con la VM-C. Java2D/Swing no
+    // puede parsear el .bin binfont de LVGL, así que asigna el id (1-based, MISMO
+    // contador que la VM-C → ids idénticos) y renderiza con la fuente por defecto.
+    private int loadedFontCount = 0;
+    public int loadFont(String path) {
+        // path ignorado en Swing; solo cuenta para el id (parity). No afecta al dump.
+        return ++loadedFontCount;
+    }
     public void setFont(int handle, int fontId) {
-        // fontId se interpreta como tamaño en px (Gui.Font llegará en 2ª tanda).
-        Node n = nodes.get(handle);
-        if (n != null && fontId > 0) n.comp.setFont(n.comp.getFont().deriveFont((float) fontId));
+        // fontId = id devuelto por loadFont (1-based). En Swing no tenemos la .bin →
+        // no-op (mantiene la fuente por defecto). NO afecta al dumpTree (paridad con
+        // la VM-C, donde setFont aplica al lv_obj pero no al modelo).
     }
     public void refresh(int handle) {
         // Invalidar → repintar (espejo de lv_obj_invalidate). Solo render.

@@ -1,0 +1,38 @@
+// FontLoadDemo.bp — V3 (gráficos): carga de una fuente .bin (LVGL binfont) en
+// runtime y aplicación a un widget con setFont().
+//
+// La fuente .bin se genera con lv_font_conv (mismo formato que usa MicroPython).
+// loadFont() la lee del FS del proyecto (cwd en host, /app en placa) y devuelve un
+// id; setFont(id) la aplica al texto del componente. En el host LVGL se ve la
+// fuente real; en miVM/Swing el id es válido pero el texto sale con la por defecto.
+module FontLoadDemo
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var titulo: Gui.Label := Gui.Label(scr, "Fuentes en BasicPlus")
+    titulo.align(Gui.Align.TOP_MID, 0, 10)
+
+    // Catálogo compilado: tamaño por px (ASCII Montserrat).
+    var porDefecto: Gui.Label := Gui.Label(scr, "Por defecto (14 px)")
+    porDefecto.align(Gui.Align.TOP_MID, 0, 50)
+
+    var grande: Gui.Label := Gui.Label(scr, "fontSize = 32")
+    grande.fontSize := 32
+    grande.align(Gui.Align.TOP_MID, 0, 90)
+
+    // Fuente cargada en runtime desde un .bin del proyecto.
+    var fid: integer := Gui.loadFont("montserrat_26_bold.bin")
+    print "loadFont('montserrat_26_bold.bin') -> id " + intToString(fid)
+
+    var cargada: Gui.Label := Gui.Label(scr, "Cargada .bin (26 bold)")
+    cargada.setFont(fid)
+    cargada.align(Gui.Align.TOP_MID, 0, 150)
+
+    print "== widgets =="
+    print Gui.__guiDumpTree()
+    Gui.run()
+  end Main
+
+end FontLoadDemo

@@ -85,6 +85,7 @@ import Json
   public intrinsic function __guiSetBgColor(handle: integer, rgb: integer)
   public intrinsic function __guiSetTextColor(handle: integer, rgb: integer)
   public intrinsic function __guiSetFont(handle: integer, fontId: integer)
+  public intrinsic function __guiLoadFont(path: string): integer
   public intrinsic function __guiRefresh(handle: integer)
   public intrinsic function __guiClean(handle: integer)
   public intrinsic function __guiDelete(handle: integer)
@@ -688,6 +689,15 @@ import Json
   public function run()
     __guiRun()
   end run
+
+  // ---- loadFont — carga una fuente .bin (LVGL binfont) desde el FS del proyecto
+  //      y devuelve su id (1-based). Aplícala con widget.setFont(id). La ruta se
+  //      resuelve relativa al cwd y, si no existe, en /app (resources subidos al
+  //      device). El host LVGL la dibuja; en miVM/Swing el id es válido pero el
+  //      texto sale con la fuente por defecto. 0 = registro lleno. ----
+  public function loadFont(path: string): integer
+    return __guiLoadFont(path)
+  end loadFont
 
   // ============================================================
   // H13.1 — Forms (Camino A): una ventana = clase Window + un fichero .win (JSON

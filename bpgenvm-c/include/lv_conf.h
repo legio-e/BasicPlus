@@ -756,9 +756,9 @@
 #endif
 
 /*API for memory-mapped file access. */
-#define LV_USE_FS_MEMFS 0
+#define LV_USE_FS_MEMFS 1               /* V3: habilita lv_binfont_create_from_buffer (carga de fuentes .bin desde RAM) */
 #if LV_USE_FS_MEMFS
-    #define LV_FS_MEMFS_LETTER '\0'     /*Set an upper cased letter on which the drive will accessible (e.g. 'A')*/
+    #define LV_FS_MEMFS_LETTER 'M'      /*Set an upper cased letter on which the drive will accessible (e.g. 'A')*/
 #endif
 
 /*API for LittleFs. */
