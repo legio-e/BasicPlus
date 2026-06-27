@@ -295,11 +295,18 @@ static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
     return 0;
 }
 
-/* Resuelve un nombre de módulo en el FS: prueba name, /app/name, /lib/name
- * (el IDE sube las deps a /lib). 0 OK, -1 no está. */
+/* Resuelve un nombre de módulo en el FS: prueba base-dir/name, name, /app/name,
+ * /lib/name (el IDE sube las deps a /lib). 0 OK, -1 no está. */
 static int stm32_fs_resolve(const char* name, const uint8_t** data, uint32_t* size) {
-    if (fs_get(name, data, size) == 0) return 0;
     char p[80];
+    /* H19 — base-dir del proyecto PRIMERO (carpeta del módulo principal).
+     * Plano (basedir="") o entry absoluto (name[0]=='/') → se salta. */
+    const char* bd = bpvm_fs_basedir();
+    if (bd && bd[0] && name[0] != '/') {
+        snprintf(p, sizeof(p), "%s/%s", bd, name);
+        if (fs_get(p, data, size) == 0) return 0;
+    }
+    if (fs_get(name, data, size) == 0) return 0;
     snprintf(p, sizeof(p), "/app/%s", name);
     if (fs_get(p, data, size) == 0) return 0;
     snprintf(p, sizeof(p), "/lib/%s", name);

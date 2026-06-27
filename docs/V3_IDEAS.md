@@ -942,9 +942,29 @@ hueco "#1 `/app/<proyecto>/`" del paso 4: no es FS-folders, es **modelo de proye
     y existe, (2) `<p>` tal cual (cwd/literal), (3) `/app/<p>` (plano). Host: flag `--basedir=<dir>`.
     Modo plano de hoy INTACTO (3 casos verdes + `compat.sh check` verde). El código compartido ya viaja en
     los 3 firmwares (resolver activo, basedir vacío = plano).
-  - **🔜 FALTA (firmware, al flashear):** cada repl llama `bpvm_fs_set_basedir_from_module(modpath)` al
-    ejecutar un módulo (+ limpiar al terminar). INERTE hasta F2 (hoy el IDE sube plano a `/app`, sin
-    `/app/<proj>/`) → conviene cablearlo **junto con F2**.
+  - **✅ ACTIVACIÓN FIRMWARE CABLEADA (27-jun):** los 3 repls (esp32/pico/stm32) llaman
+    `bpvm_fs_set_basedir_from_module(path)` al ejecutar un módulo → fija base-dir + main-module si el path
+    es `/app/<proj>/...`; INERTE en modo plano (no rompe el deploy de hoy). Se ejercita en placa cuando F2
+    enrute a `/app/<proj>/` (pendiente del flash de Eduardo).
+  - **✅ App.* — introspección del proyecto (idea de Eduardo, 27-jun):** builtins
+    `App.mainModule()/mainModulePath()/projectPath()` (ids 211-213, ambas VMs) + `bpstdlib/App.bp`. Estilo
+    `getClass().getResource()`: el programa pregunta su raíz y construye rutas explícitas
+    (`readFile(App.projectPath()+"/x")`), complementando la resolución IMPLÍCITA de F1. Verificado en host
+    (VM-C `--basedir` + miVM `--workdir`). `projectPath()` = base-dir (VM-C) / workdir (miVM).
+  - **✅ Orden de resolución de MÓDULOS (decisión de Eduardo, 27-jun) — "Modelo A" resuelto:** al buscar un
+    import, **empezar por el path del módulo principal**; si no está ahí, seguir el resto del path hasta la
+    stdlib. (Refina la nota previa de que "los imports no usan el base-dir": SÍ empiezan por la carpeta del
+    principal; lo que NO hacen es la búsqueda de RECURSOS de 3-tiers de F1.) Realización:
+      - **Host (VM-C + miVM): YA lo cumplía.** El host resuelve deps desde `dirname(entry)`
+        (`bpvm_load_mod`→`discover_deps(search_dir)`, bpvm.c) y miVM desde el `workdir` (= raíz del
+        proyecto). Todo co-localizado en una carpeta, sin `/lib` aparte → no hubo que tocar nada.
+      - **Firmware (los 3): cambio aplicado.** El FS plano tiene tiers `/app`+`/lib`, así que los resolvers
+        (`v1_get_resolve` pico/esp32, `stm32_fs_resolve`) ahora prueban **`<basedir>/name` PRIMERO**, luego
+        `name → /app/name → /lib/name`. Módulo suelto: `basedir=""` → se salta el candidato → idéntico a
+        hoy. Proyecto: `basedir=/app/<proj>` → un import resuelve a `/app/<proj>/Dep.mod` antes de caer a
+        `/lib` (stdlib). **INERTE hasta F2** (hoy no hay `/app/<proj>/` en el device). Guarda
+        `name[0]!='/'` para no malformar la resolución del entry (que llega absoluto). Pendiente del flash
+        de Eduardo (no compila en el shell de Claude; cambio uniforme que espeja el patrón existente).
 - **F2 — despliegue a `/app/<proyecto>/` + manifest + incremental.** El IDE enruta el árbol del
   proyecto a su carpeta; escribe el manifest; `putIfChanged` (CRC) sobre TODO el árbol → solo sube lo
   cambiado; borra huérfanos (manifest viejo vs nuevo). [IDE]

@@ -268,11 +268,18 @@ static void handle_del(long id, const json_obj_t* obj) {
 
 /* ====================== TERMINAL (RUN) ====================== */
 
-/* Resolución de módulo con paths /app/ y /lib/ (igual que Pico). */
+/* Resolución de módulo: base-dir del proyecto, luego /app/ y /lib/ (igual que Pico). */
 static fs_status_t v1_get_resolve(const char* name, const uint8_t** data_out, uint32_t* size_out) {
+    char path[FS_NAME_LEN];
+    /* H19 — base-dir del proyecto PRIMERO (carpeta del módulo principal).
+     * Plano (basedir="") o entry absoluto (name[0]=='/') → se salta. */
+    const char* bd = bpvm_fs_basedir();
+    if (bd && bd[0] && name[0] != '/') {
+        snprintf(path, sizeof(path), "%s/%s", bd, name);
+        if (fs_get(path, data_out, size_out) == FS_OK) return FS_OK;
+    }
     fs_status_t s = fs_get(name, data_out, size_out);
     if (s == FS_OK) return FS_OK;
-    char path[FS_NAME_LEN];
     snprintf(path, sizeof(path), "/app/%s", name);
     s = fs_get(path, data_out, size_out);
     if (s == FS_OK) return FS_OK;
