@@ -61,6 +61,14 @@ public final class PicoExplorer extends JPanel {
     private final java.util.Map<String,Long> sentCrc =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** paso 4 cierre — CRC32 REAL de cada fichero del device, leído del LS al
+     *  empezar cada subida (los firmwares nuevos lo reportan; los viejos no →
+     *  el mapa no tiene la entrada y putIfChanged cae al fallback tamaño+sentCrc).
+     *  Es la verdad-de-terreno: salta el PUT sólo si el contenido del device
+     *  coincide con el local, sin depender de la memoria de sesión. */
+    private volatile java.util.Map<String,Long> deviceCrcByPath =
+            java.util.Collections.emptyMap();
+
     /** Sink al que mandar el output de RUN. Lo enchufa FrmMain a la consola. */
     private Consumer<String> outputSink;
 
@@ -533,19 +541,28 @@ public final class PicoExplorer extends JPanel {
         return c.getValue();
     }
 
-    /** N-skip-put-by-hash: sube `file` a `remote` salvo que YA esté allí con
-     *  el MISMO contenido. El #110 miraba solo el tamaño y servía módulos
-     *  rancios cuando una edición no lo cambiaba; ahora confirmamos por CRC32
-     *  de lo último subido en esta conexión (sentCrc). DEL-before-PUT se
-     *  conserva (#111). @return true si (re)subió; false si lo saltó. */
+    /** Sube `file` a `remote` salvo que YA esté allí con el MISMO contenido.
+     *  paso 4 cierre — verdad-de-terreno: si el firmware reportó el CRC del
+     *  fichero en el LS (deviceCrcByPath), saltamos el PUT sólo si coincide con
+     *  el CRC local → detecta rancios de CUALQUIER fuente, no solo de lo que
+     *  subió esta sesión. Sin crc del device (firmware viejo) cae al heurístico
+     *  anterior (#110/#111: tamaño + sentCrc). DEL-before-PUT se conserva (#111).
+     *  @return true si (re)subió; false si lo saltó. */
     private boolean putIfChanged(Backend b, File file, String remote,
                                  Long deviceSize) throws java.io.IOException {
         byte[] data = Files.readAllBytes(file.toPath());
         long crc = crc32(data);
-        Long sent = sentCrc.get(remote);
-        if (deviceSize != null && deviceSize.longValue() == data.length
-                && sent != null && sent.longValue() == crc) {
-            return false;
+        Long devCrc = deviceCrcByPath.get(remote);
+        if (devCrc != null) {
+            if (devCrc.longValue() == crc) return false;   // contenido REAL del device == local
+        } else {
+            // Fallback (firmware sin crc en el LS): tamaño del device + CRC de
+            // lo último que mandó ESTA sesión.
+            Long sent = sentCrc.get(remote);
+            if (deviceSize != null && deviceSize.longValue() == data.length
+                    && sent != null && sent.longValue() == crc) {
+                return false;
+            }
         }
         if (deviceSize != null) {
             try { b.del(remote); }
@@ -588,11 +605,13 @@ public final class PicoExplorer extends JPanel {
                     + (deps.isEmpty() ? "" : " + " + deps.size() + " dep(s)"));
         }
         runAsync(() -> {
-            // 0) Sondea LS para saber qué hay ya en el FS remoto.
+            // 0) Sondea LS para saber qué hay ya en el FS remoto (tamaño + CRC real).
             java.util.Map<String, Long> remote = new java.util.HashMap<>();
+            java.util.Map<String, Long> remoteCrc = new java.util.HashMap<>();
             try {
                 for (Backend.Entry rf : b.list()) {
                     remote.put(rf.name, rf.size);
+                    if (rf.crc >= 0) remoteCrc.put(rf.name, rf.crc);   // paso 4: -1 = firmware sin crc
                 }
             } catch (java.io.IOException lsErr) {
                 if (outputSink != null) {
@@ -600,6 +619,7 @@ public final class PicoExplorer extends JPanel {
                             "[Explorer] LIST falló, subiré todo: " + lsErr.getMessage()));
                 }
             }
+            this.deviceCrcByPath = remoteCrc;   // putIfChanged lo consulta por ruta
 
             // 1) Subir deps primero (drivers).
             //    skip-if-IDÉNTICO (tamaño + CRC32, vía putIfChanged) +

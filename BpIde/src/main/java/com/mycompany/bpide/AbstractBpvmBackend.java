@@ -95,7 +95,7 @@ public abstract class AbstractBpvmBackend implements Backend {
         List<BpvmClient.RemoteFile> raw = client.listFiles("", TIMEOUT_MS);
         List<Entry> out = new ArrayList<>(raw.size());
         for (BpvmClient.RemoteFile f : raw) {
-            out.add(new Entry(f.name, f.size, f.isDirectory));
+            out.add(new Entry(f.name, f.size, f.crc, f.isDirectory));   // paso 4 cierre: propaga el CRC del device
         }
         return out;
     }

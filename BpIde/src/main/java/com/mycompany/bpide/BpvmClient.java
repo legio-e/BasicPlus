@@ -748,9 +748,10 @@ public final class BpvmClient implements AutoCloseable {
     public static final class RemoteFile {
         public final String name;
         public final long size;
+        public final long crc;          // paso 4 cierre: CRC32 del device (-1 si el firmware no lo reporta)
         public final boolean isDirectory;
-        public RemoteFile(String n, long s, boolean d) {
-            this.name = n; this.size = s; this.isDirectory = d;
+        public RemoteFile(String n, long s, long c, boolean d) {
+            this.name = n; this.size = s; this.crc = c; this.isDirectory = d;
         }
         @Override public String toString() {
             return (isDirectory ? "[D] " : "[F] ") + name
@@ -772,6 +773,7 @@ public final class BpvmClient implements AutoCloseable {
             out.add(new RemoteFile(
                     Json.getString(m, "name", ""),
                     Json.getLong(m, "size", 0),
+                    Json.getLong(m, "crc", -1),   // paso 4 cierre: -1 = firmware sin crc → fallback
                     Json.getBool(m, "isDir", false)));
         }
         return out;

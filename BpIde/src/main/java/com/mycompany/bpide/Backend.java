@@ -34,10 +34,15 @@ public interface Backend extends AutoCloseable {
     final class Entry {
         public final String name;
         public final long size;
+        public final long crc;          // paso 4 cierre: CRC32 del device (-1 = no reportado)
         public final boolean isDir;
         public Entry(String name, long size, boolean isDir) {
+            this(name, size, -1L, isDir);
+        }
+        public Entry(String name, long size, long crc, boolean isDir) {
             this.name = name;
             this.size = size;
+            this.crc = crc;
             this.isDir = isDir;
         }
         @Override public String toString() {
