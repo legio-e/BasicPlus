@@ -82,11 +82,11 @@ class Image public
   method height():integer public
 end class
 class Button public extends Component
-  layout 10 28 00000000 00000000
+  layout 11 30 00000010 00000000
   ctor(parent:Component,text:string)
 end class
 class Msgbox public extends Component
-  layout 11 31 00000000 00000000
+  layout 12 33 00000010 00000000
   ctor(parent:Component,message:string)
   prop result:integer public
   method setButtons(labels:string):void public
@@ -104,13 +104,13 @@ class Align public
   staticconst BOTTOM_LEFT:integer=6 public
 end class
 class Dropdown public extends Component
-  layout 11 31 00000000 00000000
+  layout 12 33 00000010 00000000
   ctor(parent:Component)
   prop selected:integer public
   method setOptions(opts:string):void public
 end class
 class Tabview public extends Component
-  layout 11 31 00000000 00000000
+  layout 12 33 00000010 00000000
   ctor(parent:Component)
   prop active:integer public
   method addTab(name:string):Component public
@@ -123,58 +123,58 @@ class ScrollDir public
   staticconst BOTH:integer=3 public
 end class
 class TabPage public extends Component
-  layout 10 28 00000000 00000000
+  layout 11 30 00000010 00000000
   ctor(pageId:integer)
 end class
 class ListBox public extends Component
-  layout 11 31 00000000 00000000
+  layout 12 33 00000010 00000000
   ctor(parent:Component)
   prop selected:integer public
   method setItems(items:string):void public
 end class
 class Textarea public extends Component
-  layout 12 32 00000400 00000000
+  layout 13 34 00000810 00000000
   ctor(parent:Component)
   prop text:string public
   prop readOnly:boolean public
 end class
 class Window public extends Component
-  layout 10 30 00000000 00000000
+  layout 11 32 00000010 00000000
   ctor()
   method load(path:string):Component public
   method destroy():void public
 end class
 class Table public extends Component
-  layout 10 31 00000000 00000000
+  layout 11 33 00000010 00000000
   ctor(parent:Component)
   method setGrid(rows:integer,cols:integer):void public
   method setCell(row:integer,col:integer,text:string):void public
   method getCell(row:integer,col:integer):string public
 end class
 class Panel public extends Component
-  layout 10 28 00000000 00000000
+  layout 11 30 00000010 00000000
   ctor(parent:Component)
 end class
 class Label public extends Component
-  layout 10 30 00000000 00000000
+  layout 11 32 00000010 00000000
   ctor(parent:Component,text:string)
   method setText(t:string):void public
   method setFont(font:integer):void public
 end class
 class Checkbox public extends Component
-  layout 11 31 00000000 00000000
+  layout 12 33 00000010 00000000
   ctor(parent:Component,text:string)
   prop checked:boolean public
   method setText(t:string):void public
 end class
 class Spinbox public extends Component
-  layout 11 31 00000000 00000000
+  layout 12 33 00000010 00000000
   ctor(parent:Component)
   prop value:integer public
   method setRange(mn:integer,mx:integer):void public
 end class
 class ImageView public extends Component
-  layout 10 29 00000000 00000000
+  layout 11 31 00000010 00000000
   ctor(parent:Component)
   method setImage(img:Image):void public
   method refresh():void public
@@ -184,24 +184,25 @@ class Color public
   ctor(rgb:integer)
 end class
 class Slider public extends Component
-  layout 11 31 00000000 00000000
+  layout 12 33 00000010 00000000
   ctor(parent:Component)
   prop value:integer public
   method setRange(mn:integer,mx:integer):void public
 end class
 class Screen public extends Component
-  layout 10 29 00000000 00000000
+  layout 11 31 00000010 00000000
   ctor()
   method load():void public
 end class
 class Toggle public extends Component
-  layout 11 30 00000000 00000000
+  layout 12 32 00000010 00000000
   ctor(parent:Component)
   prop checked:boolean public
 end class
 class Component public
-  layout 10 28 00000000 00000000
+  layout 11 30 00000010 00000000
   prop lvglId:integer public
+  prop name:string public
   prop x:integer public
   prop y:integer public
   prop width:integer public
@@ -222,19 +223,19 @@ class Component public
   method onChange():void public
 end class
 class Keyboard public extends Component
-  layout 10 29 00000000 00000000
+  layout 11 31 00000010 00000000
   ctor(parent:Component)
   method attach(ta:Component):void public
 end class
 class Led public extends Component
-  layout 11 32 00000000 00000000
+  layout 12 34 00000010 00000000
   ctor(parent:Component)
   prop value:integer public
   method on():void public
   method off():void public
 end class
 class Bar public extends Component
-  layout 11 31 00000000 00000000
+  layout 12 33 00000010 00000000
   ctor(parent:Component)
   prop value:integer public
   method setRange(mn:integer,mx:integer):void public

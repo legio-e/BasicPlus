@@ -130,6 +130,12 @@ import Json
     // 0 = sin crear. Auto-property: el backing field queda privado en su slot.
     public property lvglId: integer
 
+    // -- Nombre: identificador del componente para localizarlo desde el código (el
+    //    .win lo pone con "name"; vacío por defecto). Es puro BP — el backend no lo
+    //    usa. Todos los widgets lo heredan de Component. Auto-property: backing field
+    //    privado en su slot. --
+    public property name: string
+
     // -- Geometría (común: LVGL set_pos/size · Swing setBounds). El backend es
     //    la verdad: get/set llaman a los intrínsecos, sin backing field BP. --
     public property x: integer
