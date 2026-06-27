@@ -179,6 +179,7 @@
     <li class="sub"><a href="#conceptos-arbol">19.1 Pantalla y árbol de widgets</a></li>
     <li class="sub"><a href="#conceptos-component">19.2 Component (base común)</a></li>
     <li class="sub"><a href="#conceptos-layout">19.3 Layout: align, posición, tamaño</a></li>
+    <li class="sub"><a href="#conceptos-geom">19.4 Geometría explícita y Panel</a></li>
 
     <li class="group"><a href="#catalogo">20. Catálogo de widgets</a></li>
     <li class="sub"><a href="#w-label-button">20.1 Etiqueta y botón</a></li>
@@ -195,10 +196,9 @@
     <li class="sub"><a href="#color">21.1 Color</a></li>
     <li class="sub"><a href="#fuentes">21.2 Fuentes</a></li>
 
-    <li class="group"><a href="#dibujo">22. Dibujo y geometría</a></li>
-    <li class="group"><a href="#eventos">23. Eventos y formularios</a></li>
-    <li class="group"><a href="#ejecutar">24. Ejecutar (host y placa)</a></li>
-    <li class="group"><a href="#referencia">25. Referencia rápida Gui.*</a></li>
+    <li class="group"><a href="#eventos">22. Eventos y formularios</a></li>
+    <li class="group"><a href="#ejecutar">23. Ejecutar (host y placa)</a></li>
+    <li class="group"><a href="#referencia">24. Referencia rápida Gui.*</a></li>
   </ul>
 
   <h2>Otros volúmenes</h2>
@@ -214,7 +214,7 @@
 <h1>BasicPlus — Interfaz gráfica</h1>
 <p style="color:var(--fg-muted)">
   Tercer volumen de la documentación de BasicPlus, dedicado a la <strong>GUI</strong>: el módulo
-  <code>Gui</code> de la librería estándar, sus widgets, los formularios y el dibujo. Complementa al
+  <code>Gui</code> de la librería estándar, sus widgets y los formularios. Complementa al
   <a href="manual.html#intro">Manual del lenguaje</a> y a la
   <a href="referencia.html#stdlib">Referencia de la librería estándar</a>.
 </p>
@@ -323,6 +323,26 @@ BOTTOM_LEFT  BOTTOM_MID  BOTTOM_RIGHT</code></pre>
 <pre><code><span class="kw">var</span> t: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(scr, <span class="str">"Título"</span>)
 t.fontSize := <span class="num">32</span>
 t.<span class="fn">align</span>(Gui.Align.TOP_MID, <span class="num">0</span>, <span class="num">20</span>)</code></pre>
+
+<h3 id="conceptos-geom">19.4 Geometría explícita y Panel</h3>
+<p>
+  Como alternativa a <code>align</code>, un widget se posiciona y dimensiona a mano con las propiedades
+  <code>x</code>, <code>y</code>, <code>width</code>, <code>height</code> —o todo de golpe con
+  <code>setBounds(x,&nbsp;y,&nbsp;w,&nbsp;h)</code>—. Un <code>Gui.Panel</code> es un contenedor simple para agrupar
+  widgets; admite scroll opcional con <code>scrollDir</code> (<code>Gui.ScrollDir.VER</code>, <code>HOR</code> o
+  <code>NONE</code>).
+</p>
+<pre><code><span class="kw">var</span> p: Gui.<span class="type">Panel</span> := Gui.<span class="fn">Panel</span>(scr)
+p.x := <span class="num">10</span>
+p.y := <span class="num">20</span>
+p.width := <span class="num">100</span>
+p.height := <span class="num">50</span>
+p.scrollDir := Gui.ScrollDir.VER</code></pre>
+<div class="note">
+  <p><strong>BasicPlus no dibuja formas libres</strong> (líneas, círculos, canvas): la interfaz se compone con
+  widgets. Para un rectángulo de color basta un <code>Panel</code> con <code>setBgColor</code>. Un lienzo de
+  dibujo a píxel sería una ampliación futura, no está hoy.</p>
+</div>
 
 <!-- ============================================================ -->
 <h2 id="catalogo">20. Catálogo de widgets</h2>
@@ -501,16 +521,13 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
 </div>
 
 <!-- ============================================================ -->
-<h2 id="dibujo">22. Dibujo y geometría</h2>
-<p class="soon">— en preparación —</p>
-
-<h2 id="eventos">23. Eventos y formularios</h2>
+<h2 id="eventos">22. Eventos y formularios</h2>
 <p class="soon">— en preparación (handlers por slot, ficheros <code>.win</code>, <code>buildForm</code>). —</p>
 
-<h2 id="ejecutar">24. Ejecutar (host y placa)</h2>
+<h2 id="ejecutar">23. Ejecutar (host y placa)</h2>
 <p class="soon">— en preparación —</p>
 
-<h2 id="referencia">25. Referencia rápida Gui.*</h2>
+<h2 id="referencia">24. Referencia rápida Gui.*</h2>
 <p class="soon">— en preparación (tabla método → firma de las clases públicas de <code>Gui</code>). —</p>
 
 </main>
