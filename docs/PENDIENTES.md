@@ -47,6 +47,26 @@ Si el `.win` no está donde el FS/sandbox de la VM lo busca, `Window.load` → `
 cuelga (miVM no). Un recurso ausente debería fallar limpio, no colgar (afecta también al device si falta
 un resource). Repro: `Window.load("noexiste.win")` o un `.win` fuera del workdir. Encontrado 28-jun.
 
+### GAP-4 — formateo de `double` extremo en la VM-C: paridad rota (notación científica TODO)
+`bpvm_format_double` (`bpgenvm-c/src/interp.c:321`) es **byte-idéntico** a `VirtualMachine.formatBpDouble`
+(Java) en punto fijo, PERO para magnitudes `|x| >= 1e12` o `0 < |x| < 1e-6` la notación científica es un
+**TODO** (aritmética IEEE determinista + `%lld/%06lld`). Para esos doubles extremos las dos VMs podrían NO
+ser byte-idénticas → rompe el **invariante de paridad dual-VM** (raro de disparar, pero es el invariante
+sagrado del proyecto). *(Minor relacionado: `%lld` no va en newlib-nano del STM32 — hoy mitigado con helpers
+`u64_dec`; ojo si se añade `%lld` directo.)* Hallado 28-jun (auditoría).
+
+### B-gc-allocanchor — el GC no escanea la raíz `allocAnchor` (F2.b diferido)
+`gc_mark_phase` (`bpgenvm-c/src/heap.c:145`) tiene `/* allocAnchor — TODO en F2.b cuando se añada el campo
+al thread */`: el GC mark-sweep no recorre esa raíz (el campo no existe aún en `bpvm_thread_t`). Riesgo
+LATENTE: un objeto recién alocado y aún no guardado en stack/global podría recolectarse a mitad bajo presión
+de memoria/GC. No ha mordido (workloads reales OK), pero es un agujero de corrección del GC. Hallado 28-jun.
+
+### B-freeref-no-recursivo — `OP_FREE_REF` no libera en cascada los campos `owner` (F3 v1)
+`interp.c:1498`: `FREE_REF` sólo libera el objeto raíz; el TODO pide recorrer el `owner_bitmap` y liberar
+recursivamente los campos `owner`. Un árbol de objetos con dueños no se libera en cascada → **fuga hasta que
+el GC mark-sweep lo recoja** (no permanente, pero las owner-semantics prometen free determinista). Hallado
+28-jun (relacionado con L7).
+
 ## 🟡 Limitaciones / decisiones documentadas del lenguaje
 
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
