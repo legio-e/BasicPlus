@@ -512,9 +512,12 @@ una sesión/estado anterior (mismo tamaño, o nunca sobrescrito) se da por bueno
 se rutea a /app (no /lib) → puede haber copias en ambos.
 
 **FIX (3 partes):**
-1. **Robustez del PUT contra rancio de device:** que el LS/STAT del firmware reporte un
-   **CRC/hash por fichero** y el IDE compare hash-device vs hash-local (no size+cache).
-   Interim sin tocar firmware: para deps de stdlib, DEL+PUT siempre la 1ª vez por conexión.
+1. **✅ HECHO (26-jun, `ef2499a`→`d0cffd6`→`64b7839`) — CRC por fichero en el PUT.** El LS del
+   firmware reporta `"crc":<u32>` por entrada (`bpvm_crc32` = `java.util.zip.CRC32`, paridad
+   verificada) y el IDE (`putIfChanged`) salta el PUT sii el CRC REAL del device coincide con el
+   local → mata el rancio de CUALQUIER fuente, no solo de la sesión actual. Fallback al heurístico
+   anterior (tamaño+sentCrc) si el firmware no manda crc. Las 3 familias reportan crc; BpIde
+   compila + fat-jar reconstruido; falta el reflash de Eduardo para el end-to-end.
 2. **Rutear Json (y toda dep de stdlib) → /lib** (no /app): en `FrmMain` la decisión libDeps
    debe mandar a /lib cualquier dep cuyo origen sea el stdlibDir (no solo EMBEDDED_CORE_MODS
    + "Gui"). (Ya estaba a medio leer en `FrmMain.java:2108-2119`.)
