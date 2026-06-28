@@ -105,6 +105,9 @@ public final class GuiBackend {
         return h;
     }
 
+    /** ¿es `parent` un contenedor vivo? (paridad con bpvm_gui_parent_alive de la VM-C). */
+    public boolean parentAlive(int parent) { return parent > 0 && nodes.get(parent) != null; }
+
     public int createObj(int parent)    { return create("panel",  new JPanel(null), parent); }
     public int createLabel(int parent)  { return create("label",  new JLabel(),     parent); }
     public int createButton(int parent) { return create("button", new JButton(),    parent); }

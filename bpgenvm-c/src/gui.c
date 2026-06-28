@@ -99,6 +99,14 @@ static gui_node* node_for(int handle) {
     return NULL;
 }
 
+/* ¿es `parent` un contenedor vivo? Un widget (todo lo que no sea la pantalla
+ * raíz) se crea SIEMPRE bajo un contenedor existente; crear con un handle
+ * 0/no-vivo es el error "widget sin contenedor" que lanza el builtin. La misma
+ * regla y el mismo mensaje viven en miVM (GuiBackend) -> paridad. */
+int bpvm_gui_parent_alive(int parent) {
+    return node_for(parent) != NULL;
+}
+
 static int create_node(const char* type, int parent) {
     if (g_node_count >= GUI_MAX_NODES) return 0;
     gui_node* n = &g_nodes[g_node_count++];

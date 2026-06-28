@@ -304,6 +304,21 @@ static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* ms
     return (ref && bpvm_eh_unwind(vm, tc, ref)) ? BPVM_OK : BPVM_ERR_RUNTIME;
 }
 
+#ifdef BPVM_GUI
+/* V3 Forms — Crea un widget hijo: saca `parent` de la pila, valida que es un
+ * contenedor vivo (si no, lanza RuntimeError "widget sin contenedor") y empuja el
+ * handle del nuevo nodo. `mk` = la bpvm_gui_create_* del modelo. La regla y el
+ * mensaje se replican en miVM (GuiBackend) -> paridad de comportamiento. */
+static bpvm_status_t gui_make_child(bpvm_t* vm, bpvm_thread_t* tc, int (*mk)(int)) {
+    int parent = pop_i32(vm, tc);
+    if (!bpvm_gui_parent_alive(parent))
+        return builtin_throw(vm, tc,
+            "Gui: no se puede crear un widget sin un contenedor valido; crea Gui.Screen() o Gui.Window() primero");
+    push_i32(vm, tc, mk(parent));
+    return BPVM_OK;
+}
+#endif /* BPVM_GUI */
+
 /* H13 (V3) — Forms: resuelve una función PÚBLICA por nombre SIMPLE en el módulo
  * dueño del objeto `host` (su class_ptr vive en el data block de ese módulo).
  * Espejo de invokeHandlerByName de miVM (getCSForDataAddr + resolveExportInModule).
@@ -557,9 +572,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * Orden de pop: último arg en top (igual que el resto). Color/fuente son
      * render-only → no afectan al dump (no-op aquí; LVGL los honrará en H4.2). */
     case BUILTIN_GUI_SCREEN_ACTIVE: { push_i32(vm, tc, bpvm_gui_screen_active()); return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_OBJ:    { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_obj(p));    return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_LABEL:  { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_label(p));  return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_BUTTON: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_button(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_OBJ: return gui_make_child(vm, tc, bpvm_gui_create_obj);
+    case BUILTIN_GUI_CREATE_LABEL: return gui_make_child(vm, tc, bpvm_gui_create_label);
+    case BUILTIN_GUI_CREATE_BUTTON: return gui_make_child(vm, tc, bpvm_gui_create_button);
     case BUILTIN_GUI_SET_TEXT: {
         uint32_t tref = (uint32_t) pop_i32(vm, tc);
         int handle = pop_i32(vm, tc);
@@ -737,48 +752,48 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_REFRESH: { int h = pop_i32(vm, tc); bpvm_gui_refresh(h); push_i32(vm, tc, 0); return BPVM_OK; }
     /* H6 — checkbox (1er value-widget). set_checked es programático (no emite
      * onChange); __guiChange inyecta un CHANGE sintético (= toggle del usuario). */
-    case BUILTIN_GUI_CREATE_CHECKBOX: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_checkbox(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_CHECKBOX: return gui_make_child(vm, tc, bpvm_gui_create_checkbox);
     case BUILTIN_GUI_SET_CHECKED:     { int v = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_checked(h, v); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_GET_CHECKED:     { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_checked(h)); return BPVM_OK; }
     case BUILTIN_GUI_CHANGE:          { uint32_t obj = (uint32_t) pop_i32(vm, tc); bpvm_gui_inject_change(obj); push_i32(vm, tc, 0); return BPVM_OK; }
     /* H6 — switch + slider + bar (value-widgets enteros; el backend clampa al rango). */
-    case BUILTIN_GUI_CREATE_SWITCH: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_switch(p)); return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_SLIDER: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_slider(p)); return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_BAR:    { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_bar(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_SWITCH: return gui_make_child(vm, tc, bpvm_gui_create_switch);
+    case BUILTIN_GUI_CREATE_SLIDER: return gui_make_child(vm, tc, bpvm_gui_create_slider);
+    case BUILTIN_GUI_CREATE_BAR: return gui_make_child(vm, tc, bpvm_gui_create_bar);
     case BUILTIN_GUI_SET_VALUE:     { int v = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_value(h, v); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_GET_VALUE:     { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_value(h)); return BPVM_OK; }
     case BUILTIN_GUI_SET_RANGE:     { int mx = pop_i32(vm, tc); int mn = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_range(h, mn, mx); push_i32(vm, tc, 0); return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_SPINBOX: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_spinbox(p)); return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_LED:     { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_led(p)); return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_DROPDOWN: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_dropdown(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_SPINBOX: return gui_make_child(vm, tc, bpvm_gui_create_spinbox);
+    case BUILTIN_GUI_CREATE_LED: return gui_make_child(vm, tc, bpvm_gui_create_led);
+    case BUILTIN_GUI_CREATE_DROPDOWN: return gui_make_child(vm, tc, bpvm_gui_create_dropdown);
     case BUILTIN_GUI_SET_OPTIONS: {
         uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
         char buf[512]; read_bp_string(vm, ref, buf, sizeof(buf));
         bpvm_gui_set_options(h, buf); push_i32(vm, tc, 0); return BPVM_OK;
     }
-    case BUILTIN_GUI_CREATE_TEXTAREA: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_textarea(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_TEXTAREA: return gui_make_child(vm, tc, bpvm_gui_create_textarea);
     case BUILTIN_GUI_GET_TEXT: {
         int h = pop_i32(vm, tc);
         const char* s = bpvm_gui_get_text(h);
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
         push_i32(vm, tc, (int32_t) ref); return BPVM_OK;
     }
-    case BUILTIN_GUI_CREATE_LIST:     { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_list(p)); return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_KEYBOARD: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_keyboard(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_LIST: return gui_make_child(vm, tc, bpvm_gui_create_list);
+    case BUILTIN_GUI_CREATE_KEYBOARD: return gui_make_child(vm, tc, bpvm_gui_create_keyboard);
     case BUILTIN_GUI_KEYBOARD_SET_TEXTAREA: { int ta = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_keyboard_set_textarea(h, ta); push_i32(vm, tc, 0); return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_MSGBOX: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_msgbox(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_MSGBOX: return gui_make_child(vm, tc, bpvm_gui_create_msgbox);
     case BUILTIN_GUI_SET_BUTTONS: {
         uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
         char buf[256]; read_bp_string(vm, ref, buf, sizeof(buf));
         bpvm_gui_set_buttons(h, buf); push_i32(vm, tc, 0); return BPVM_OK;
     }
-    case BUILTIN_GUI_CREATE_TABVIEW: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_tabview(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_TABVIEW: return gui_make_child(vm, tc, bpvm_gui_create_tabview);
     case BUILTIN_GUI_TABVIEW_ADD_TAB: {
         uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
         char buf[128]; read_bp_string(vm, ref, buf, sizeof(buf));
         push_i32(vm, tc, bpvm_gui_tabview_add_tab(h, buf)); return BPVM_OK;
     }
-    case BUILTIN_GUI_CREATE_TABLE: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_table(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_TABLE: return gui_make_child(vm, tc, bpvm_gui_create_table);
     case BUILTIN_GUI_TABLE_SET_GRID: {
         int cols = pop_i32(vm, tc); int rows = pop_i32(vm, tc); int h = pop_i32(vm, tc);
         bpvm_gui_table_set_grid(h, rows, cols); push_i32(vm, tc, 0); return BPVM_OK;
@@ -803,7 +818,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_GUI_IMAGE_WIDTH:  { int id = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_image_width(id));  return BPVM_OK; }
     case BUILTIN_GUI_IMAGE_HEIGHT: { int id = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_image_height(id)); return BPVM_OK; }
-    case BUILTIN_GUI_CREATE_IMAGEVIEW: { int p = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_create_imageview(p)); return BPVM_OK; }
+    case BUILTIN_GUI_CREATE_IMAGEVIEW: return gui_make_child(vm, tc, bpvm_gui_create_imageview);
     case BUILTIN_GUI_IMAGEVIEW_SET_IMAGE: {
         int img = pop_i32(vm, tc); int view = pop_i32(vm, tc);
         bpvm_gui_imageview_set_image(view, img); push_i32(vm, tc, 0); return BPVM_OK;

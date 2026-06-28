@@ -18,6 +18,7 @@
 #include <stdint.h>
 
 /* Creación / pantalla raíz. Devuelven el handle (>0), 0 si overflow. */
+int  bpvm_gui_parent_alive(int parent);   /* 1 si `parent` es un contenedor vivo (error "widget sin contenedor") */
 int  bpvm_gui_screen_active(void);
 int  bpvm_gui_create_obj(int parent);
 int  bpvm_gui_create_label(int parent);
