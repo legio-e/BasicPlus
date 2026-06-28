@@ -17,6 +17,7 @@
 
 #include "esp_partition.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"   /* P4 — datos de fichero a PSRAM (libera RAM interna para LVGL) */
 
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +38,15 @@ typedef struct {
 static fs_entry_t s_files[FS_MAX_FILES];
 static uint32_t   s_used_bytes = 0;
 static const esp_partition_t* s_part = NULL;
+
+/* Aloca los datos de un fichero. Prefiere PSRAM (se leen UNA vez en la carga; el
+ * loader COPIA el .mod a la RAM interna de la VM antes de ejecutar → cero impacto
+ * en rendimiento) y así LIBERA RAM interna para LVGL. Fallback a malloc interno
+ * (S3 sin PSRAM, o PSRAM agotada). */
+static void* fs_alloc(size_t n) {
+    void* p = heap_caps_malloc(n, MALLOC_CAP_SPIRAM);
+    return p ? p : malloc(n);
+}
 
 static void clear_ram(void) {
     for (int i = 0; i < FS_MAX_FILES; i++) {
@@ -94,7 +104,7 @@ fs_status_t fs_init(void) {
 
         int slot = free_slot();
         if (slot < 0) break;
-        uint8_t* buf = (uint8_t*) malloc(size ? size : 1);
+        uint8_t* buf = (uint8_t*) fs_alloc(size ? size : 1);
         if (!buf) break;
         if (size) esp_partition_read(s_part, data_off, buf, size);
         data_off += size;
@@ -182,7 +192,7 @@ fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
         if (slot < 0) return FS_ERR_TABLE_FULL;
     }
 
-    uint8_t* buf = (uint8_t*) malloc(size ? size : 1);
+    uint8_t* buf = (uint8_t*) fs_alloc(size ? size : 1);
     if (!buf) return FS_ERR_NO_SPACE;
     if (data && size) memcpy(buf, data, size);
 
