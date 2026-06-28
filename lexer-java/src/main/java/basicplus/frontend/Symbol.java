@@ -209,6 +209,10 @@ public abstract class Symbol {
         public final List<ParamSymbol> params = new ArrayList<>();
         public BpType returnType;                    // null = void
         public boolean isConstructor;
+        /** Auto-super (modelo Java): este constructor NO escribió super() y el
+         *  padre tiene un constructor invocable sin argumentos → el emisor inyecta
+         *  la llamada implícita al __init del padre. Lo marca el SemanticAnalyzer. */
+        public boolean implicitSuper;
         public boolean isModuleInitializer;
         /** Función intrínseca: declarada sólo como signature; el emisor inlinea
          *  opcodes en cada call-site en lugar de generar CALL / CALL_EXT. El

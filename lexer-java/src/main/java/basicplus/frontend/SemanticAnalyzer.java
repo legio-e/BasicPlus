@@ -1330,6 +1330,25 @@ public final class SemanticAnalyzer {
 
         analyzeBody(f.body, localScope);
 
+        // Auto-super (modelo Java): un constructor que no llama super() explícito
+        // invoca implícitamente al constructor del padre SIN argumentos. Si el
+        // constructor del padre EXIGE argumentos, la llamada debe ser explícita →
+        // error. Si el padre no tiene constructor (NEW_OBJECT ya inicializa los
+        // campos), no hay nada que llamar.
+        if (fs.isConstructor && !seenSuperCallInCtor
+                && currentClass != null && currentClass.baseClass != null) {
+            FunctionSymbol baseCtor = currentClass.baseClass.findConstructor();
+            if (baseCtor != null) {
+                if (baseCtor.params.isEmpty()) {
+                    fs.implicitSuper = true;   // el emisor inyecta super()
+                } else {
+                    err(f.line, f.column, "el constructor de '" + currentClass.name
+                            + "' debe llamar a 'super(...)': el constructor de la clase base '"
+                            + currentClass.baseClass.name + "' requiere argumentos");
+                }
+            }
+        }
+
         currentFunction = save;
         currentFunctionIsNative = saveNative;
     }

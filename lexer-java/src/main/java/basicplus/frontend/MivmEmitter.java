@@ -1452,9 +1452,36 @@ public final class MivmEmitter {
             if (cd != null && hasOwnSyncProperty(cd) && !ancestorHasSyncProperty(cls)) {
                 emitSyncMutexInit(cls.name);
             }
+            // Auto-super (modelo Java): si el usuario no escribió super(), el
+            // compilador inyecta aquí la llamada al constructor del padre SIN
+            // argumentos (lo marcó el semántico). Va antes del cuerpo → el padre
+            // queda inicializado primero, igual que un super() escrito a mano.
+            if (fs.implicitSuper) emitImplicitSuperCall(cls);
             for (IStmt s : fn.body) emitStmt(s);
             emitFunctionEnd();
         } finally { scopeStack.pop(); }
+    }
+
+    /** Auto-super: emite la llamada implícita al constructor del padre (sin
+     *  argumentos) — equivalente a un super() escrito por el usuario. El semántico
+     *  ya garantizó que el padre tiene un constructor invocable sin args. Mismo
+     *  camino que emitSuperCall (CALL local / CALL_EXT a __cls_init_X si external),
+     *  pero sin empujar argumentos; descarta el valor de retorno del __init. */
+    private void emitImplicitSuperCall(ClassSymbol cls) throws IOException {
+        ClassSymbol parent = (cls != null) ? cls.baseClass : null;
+        if (parent == null || parent.findConstructor() == null) return;
+        w.emitGetParam("this");
+        if (parent.isExternal) {
+            StringBuilder qname = new StringBuilder();
+            if (parent.externalLibrary != null && !parent.externalLibrary.isEmpty())
+                qname.append(parent.externalLibrary).append('.');
+            qname.append(parent.externalModule).append('.').append("__cls_init_").append(parent.name);
+            w.emitCallExt(qname.toString(), parent.externalFromPath);
+        } else {
+            w.emitCall(parent.name + ".__init");
+        }
+        declareLocal("__discardSuper");
+        w.emitSetLocal("__discardSuper");
     }
 
     private void emitStaticMethodFn(ClassSymbol cls, FuncDef fn, FunctionSymbol fs) throws IOException {

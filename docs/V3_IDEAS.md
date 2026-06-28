@@ -484,6 +484,71 @@ micro; LUEGO los widgets encima.
 - **Repesca:** radio, calendar, arc, roller, chart, scale, buttonmatrix, spinner,
   imagebutton, tileview, win, menu, line, canvas, span, anim/lottie, JPG, fuentes runtime.
 
+### Modelo OO — `super()` implícito (auto-super) + bug forms P4 (diseño 28-jun, charla Eduardo + Claude)
+
+> Salió depurando por qué **formdemo cuelga en el ESP32-P4** (pantalla negra). El
+> camino fue puro [[debug-acotar-antes-de-tocar]]: descartar teorías con medición
+> antes de tocar nada.
+
+**Causa raíz (no era lo que parecía).** Ni OOM ni fuga de RAM — DESCARTADO por
+medición (`free internal = 214 KB` con el cuelgue). Es un **error de lógica del
+modelo OO**: `MainWin()` (ctor vacío de `MainWin extends Gui.Window`) **no llama
+`super()`** → `Window()` no corre → `__guiScreenActive()` nunca se llama → LVGL sin
+display → el primer widget hace `lv_obj_create(NULL)` → `LV_ASSERT_NULL` gira. En
+host es invisible (LVGL=0, el ctor de Window no pinta) → ni el host ni la paridad
+dual-VM lo destapan; solo el silicio con LVGL real.
+
+**Por qué no había salido desde V1 (3 velos):** (1) convención manual — todo el que
+hereda de un padre-con-constructor escribía `super()` a mano (Json, Collections,
+Core, demos GUI hoja, threads…); las únicas sin super heredan de `Component`, que no
+tiene constructor. (2) el compilador tiene el `super` EXPLÍCITO completo
+(`analyzeSuperCall`) pero **nunca implementó el `super` IMPLÍCITO**
+(`emitConstructorFn` solo emite el body del usuario). (3) en host el fallo es
+invisible. formdemo es el **estreno**: 1ª subclase con ctor propio que olvida
+`super` de un padre (`Window`) con init crítico — nadie subclaseó `Window` hasta el
+patrón Forms (H13.1).
+
+**El modelo OO, confirmado y coherente.** `Object` tiene DOS caras: en el sistema de
+**tipos** = `any` (techo); en **runtime** = una clase REAL **sintetizada**
+(`synthesizeObjectClass`, MivmEmitter:3414), raíz de toda vtable, que aporta
+`toString()` (slot 0, default `"object@<dir>"`) y `compareTo()` (slot 1). La
+**inicialización de campos** (poner a 0/null) la hace el opcode `NEW_OBJECT` —ese es
+el papel del "constructor de Object" de Java—, NO un `Object()` con código; el
+`__init` (constructor BP) solo existe donde la clase aporta código. Por eso
+"Component no tiene constructor" = no aporta *código*, pero su parte de Object sí se
+inicializa (vía NEW_OBJECT). Los **virtuales** ya encadenan hacia la raíz; lo que
+falta es que los **constructores** hagan lo mismo.
+
+**DECISIÓN — `super()` implícito, modelo Java (Eduardo, 28-jun).** Igual que Java:
+- Subclase con ctor que NO escribe `super()` + padre con ctor de **0 args** → el
+  compilador **inyecta `super()`** al principio.
+- Padre cuyo ctor **exige argumentos** → **error** de compilación pidiendo
+  `super(args)` explícito.
+- Padre sin constructor (Component) → no-op (NEW_OBJECT ya inicializó).
+- Quien ya escribe `super(...)` → intacto.
+Se toca **solo el compilador** (SemanticAnalyzer + `emitConstructorFn`): hornea el
+CALL al `__init` del padre en el bytecode → **las dos VMs lo ejecutan idéntico,
+paridad automática, sin tocar VMs ni firmware**. Infra ya montada: `findConstructor`
+(Symbol.java:129), `seenSuperCallInCtor`, `checkArgs`, `emitSuperCall`. Cierra el
+modelo OO como anillo al dedo (los virtuales ya lo hacían).
+
+**DECISIÓN — pantalla explícita + error "widget sin padre" (Eduardo, 28-jun).**
+Ortogonal al lenguaje, es la regla del backend GUI: la pantalla se activa con un
+**método explícito del programador** (`Gui.Screen()` / `Gui.Window()`, como hacen
+TODAS las demos que funcionan — su 1ª línea es `var s := Gui.Screen()`); crear
+cualquier widget con un **padre inválido** (0 / no vivo) = **RuntimeError claro**,
+**nada de init implícito de pantalla**. Va en el MODELO de `gui.c` (parte común) →
+salta también en el host → se caza en el PC, barato. Es **red de seguridad**
+independiente del auto-super (que arregla formdemo de raíz).
+
+**Plan / verificación.** (A) auto-super → (B) error widget-sin-padre. Porque (A)
+toca el compilador: suite miVM + recompilar TODOS los samples + paridad dual-VM
+byte-idéntica; vigilar `l2v2app` (sin super documentado) y confirmar que
+formmin/formdemo quedan solos. Aparte: limpiar las trazas de diagnóstico del
+firmware (`[gui-trace]`/`[mem]`, sdkconfig del P4) y commitear el FS→PSRAM de
+`fs_ram.c` (mejora legítima, hoy sin commitear). **V3-obvio** (arreglo del modelo
+OO, contenido, con red) — no reestructura nada.
+
 ## 2. Lenguaje (se mantiene; "eventos y poco más")
 
 - §8 callbacks / función-valor (`CALL_INDIRECT`) — opcional, ver arriba.
