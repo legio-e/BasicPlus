@@ -18,11 +18,13 @@
 #include "hw_esp32.h"
 #include "esp32_mods.h"
 
-/* Buffer caller-provided de la VM. NO static — repl_esp32.c lo referencia
- * como extern (igual convención que repl_v1.c en la Pico). */
+/* Buffer caller-provided de la VM. repl_esp32.c lo referencia como extern
+ * (PUNTERO, igual convención que repl_v1.c en la Pico/Metro y que el P4). El S3
+ * lo mantiene en SRAM interna: s_vm_buffer apunta a este array estático. */
 #define VM_BUFFER_SIZE (128 * 1024)
-uint8_t        s_vm_buffer[VM_BUFFER_SIZE];
-const uint32_t s_vm_buffer_size = VM_BUFFER_SIZE;
+static uint8_t s_sram_vm[VM_BUFFER_SIZE];
+uint8_t*       s_vm_buffer      = s_sram_vm;
+uint32_t       s_vm_buffer_size = VM_BUFFER_SIZE;
 
 void app_main(void)
 {

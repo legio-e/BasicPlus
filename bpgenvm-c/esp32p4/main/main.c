@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdlib.h>           /* abort() si la reserva PSRAM falla */
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -27,6 +28,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"   /* heap_caps_malloc: heap de la VM en PSRAM */
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
 
@@ -46,11 +48,13 @@ static const char *TAG = "bpvm_p4";
 #define LINK_UP_BIT  BIT0
 
 /* Memoria de la VM (caller-provided). repl_esp32.c la referencia como extern
- * (misma convención que el S3): NO static. 128 KiB en RAM interna — los
- * programas grandes irán a PSRAM más adelante. */
-#define VM_MEM_SIZE  (128 * 1024)
-uint8_t        s_vm_buffer[VM_MEM_SIZE];
-const uint32_t s_vm_buffer_size = VM_MEM_SIZE;
+ * (PUNTERO, misma convención que el S3 y la Pico/Metro). En el P4 el heap de la
+ * VM vive en PSRAM (32 MB in-package, HEX@200 MHz → baja penalización): se
+ * reserva en vm_buffer_init_psram() antes de arrancar las tasks. El P4 SIEMPRE
+ * lleva PSRAM (el framebuffer del display también la usa). */
+#define VM_MEM_SIZE  (2 * 1024 * 1024)   /* 2 MiB en PSRAM (antes 128 KiB SRAM) */
+uint8_t*       s_vm_buffer      = NULL;
+uint32_t       s_vm_buffer_size = 0;
 
 static EventGroupHandle_t s_events;
 static int s_sock = -1;     /* socket del canal de log (lo usa net_logf) */
@@ -180,6 +184,24 @@ static void wire_task(void *arg)
     repl_esp32_run();            /* no retorna */
 }
 
+/* Reserva el heap de la VM en PSRAM. El P4 SIEMPRE lleva PSRAM (in-package, la
+ * comparte con el framebuffer del display); si la reserva falla el firmware no es
+ * operativo → abort con mensaje claro (mejor que arrancar y colgar luego en el
+ * primer programa grande). Los firmwares sin PSRAM (S3/Pico/STM32) mantienen su
+ * buffer en SRAM; esto es board-specific del P4. */
+static void vm_buffer_init_psram(void)
+{
+    s_vm_buffer = (uint8_t*) heap_caps_malloc(VM_MEM_SIZE, MALLOC_CAP_SPIRAM);
+    if (s_vm_buffer == NULL) {
+        ESP_LOGE(TAG, "PSRAM: no se pudo reservar el heap de la VM (%u KiB) - abort",
+                 (unsigned)(VM_MEM_SIZE / 1024u));
+        abort();
+    }
+    s_vm_buffer_size = VM_MEM_SIZE;
+    ESP_LOGI(TAG, "VM heap en PSRAM: %u KiB @ %p",
+             (unsigned)(VM_MEM_SIZE / 1024u), (void*) s_vm_buffer);
+}
+
 void app_main(void)
 {
     s_events = xEventGroupCreate();
@@ -207,6 +229,9 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP,
                                                &got_ip_handler, NULL));
     ESP_ERROR_CHECK(esp_eth_start(eth_handle));
+
+    /* Heap de la VM en PSRAM — ANTES de wire_task (que hace bpvm_init). */
+    vm_buffer_init_psram();
 
     /* Canal de log (diagnóstico) — stack pequeño, no corre la VM. */
     xTaskCreate(tcp_log_task, "tcp_log", 4096, NULL, 5, NULL);

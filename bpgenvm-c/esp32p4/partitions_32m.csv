@@ -1,0 +1,11 @@
+# Tabla de particiones — firmware BasicPlus ESP32-P4, variante de flash 32 MB
+# (p.ej. la placa con pantalla integrada). SO 6 MB + "bpfs" 26 MB para el FS.
+# Para usarla, en sdkconfig: CONFIG_ESPTOOLPY_FLASHSIZE="32MB" +
+# CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_32m.csv".
+# La variante de 16 MB es partitions.csv (el default). Espeja su estructura.
+#
+# Name,     Type, SubType,  Offset,    Size,      Flags
+nvs,        data, nvs,      0x9000,    0x6000,
+phy_init,   data, phy,      0xf000,    0x1000,
+factory,    app,  factory,  0x10000,   0x600000,
+bpfs,       data, 0x40,     0x610000,  0x19F0000,

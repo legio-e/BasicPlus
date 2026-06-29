@@ -30,13 +30,27 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef ESP_PLATFORM
+#include "sdkconfig.h"   /* CONFIG_IDF_TARGET_* para el tope board-aware de abajo */
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define FS_NAME_LEN     40         /* incluyendo el NUL */
 #define FS_MAX_FILES    64                       /* antes 32, sube poco BSS (entry=48B) */
-#define FS_DATA_SIZE    (128 * 1024)             /* antes 64 KB */
+
+/* Tope del FS (mirror en RAM). El contenido se carga en RAM al boot vía fs_alloc
+ * (en ESP32 → PSRAM si la hay, fallback malloc interno). Board-aware: el ESP32-P4
+ * tiene PSRAM 32M de sobra → 2 MB holgados para .mod + recursos gráficos; el resto
+ * (S3 sin PSRAM grande, Pico/STM32) mantiene el techo en SRAM. El FS de varios MB
+ * sin mirror (on-demand desde flash, FatFs) es V4. */
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+#define FS_DATA_SIZE    (2 * 1024 * 1024)        /* P4: holgado en PSRAM */
+#else
+#define FS_DATA_SIZE    (128 * 1024)             /* resto: mirror en SRAM */
+#endif
 
 typedef enum {
     FS_OK = 0,

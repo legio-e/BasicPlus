@@ -17,6 +17,13 @@ CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_HEX=y
 CONFIG_SPIRAM_SPEED_200M=y
 
+# RAM — baja el umbral de "siempre interno" de 16 KiB (default IDF) a 2 KiB: los
+# objetos LVGL y demás allocs de 2–16 KiB pasan a PSRAM y liberan SRAM interna (la
+# escasa). La PSRAM del P4 es rápida (HEX@200) → penalización baja, ×8 más margen
+# de objetos pequeños. NB: como es un CONFIG_, sólo aplica al regenerar el
+# sdkconfig (idf.py reconfigure, o borrar el sdkconfig).
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=2048
+
 # G4 — la flash REAL es de 16 MB (el chip), no 2 MB. Sin esto IDF compila para 2 MB:
 # la imagen con LVGL no cabe en el app de 1 MB de la tabla single-app, y avisa
 # "Detected size(16384k) larger than image header(2048k)". Tabla a medida

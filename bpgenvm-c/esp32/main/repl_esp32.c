@@ -36,9 +36,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Buffer VM compartido (definido en main.c). */
-extern uint8_t s_vm_buffer[];
-extern const uint32_t s_vm_buffer_size;
+/* Buffer VM compartido (definido en main.c). Ahora PUNTERO (no array): el S3 lo
+ * apunta a un array estático en SRAM interna y el P4 a PSRAM reservada en boot.
+ * Misma convención que la Pico/Metro (repl_v1.c, H7.2.b). */
+extern uint8_t* s_vm_buffer;
+extern uint32_t s_vm_buffer_size;
 
 #define ESP32_BUILD_DATE  (__DATE__ " " __TIME__)
 
