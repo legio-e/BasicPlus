@@ -32,3 +32,9 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# #138: consola SILENCIADA. El P4-Function-EV tiene un solo puerto serie (CP210x/
+# UART0/COM14) y el wire lo usa; con la consola en UART0 se mezclaría, y en USB-JTAG
+# (sin host en esta placa) cuelga el arranque. Con NONE, UART0 queda limpio para el
+# wire y los logs de diagnóstico salen por Ethernet (net_logf → :5555).
+CONFIG_ESP_CONSOLE_NONE=y

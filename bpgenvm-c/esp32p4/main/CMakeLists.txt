@@ -2,11 +2,25 @@
 # El core (../../src) es C99 portable; la plataforma (FreeRTOS/esp_timer) se
 # reutiliza del S3 (../../esp32/main/platform_esp32.c). Las fachadas HW van
 # como stubs (sin backend todavía) — el Hello no usa HW.
+#
+# Transporte del wire (#138): UART0 por DEFECTO (imprescindible; el IDE conecta al
+# bridge USB-UART, sirve también a placas sin Ethernet). TCP/Ethernet opcional para
+# placas con PHY (ESP32-P4-Function-EV) con:  idf.py -DBPVM_P4_WIRE=tcp build
+# Convivencia simultánea de varios transportes a la vez = V4.
+if(NOT DEFINED BPVM_P4_WIRE)
+    set(BPVM_P4_WIRE "uart")  # default = wire por UART0/COM14 (#138 resuelto); Ethernet
+endif()                       # queda solo para logs. TCP completo con -DBPVM_P4_WIRE=tcp
+if(BPVM_P4_WIRE STREQUAL "tcp")
+    set(WIRE_TRANSPORT_SRC "wire_v1_tcp.c")                   # I/O del wire sobre TCP (lwIP)
+else()
+    set(WIRE_TRANSPORT_SRC "../../esp32/main/wire_v1.c")      # I/O del wire sobre UART0 (reúso del S3)
+endif()
+
 idf_component_register(
     SRCS
         "main.c"
         "p4_mods.c"
-        "wire_v1_tcp.c"                       # VM.3: capa de I/O del wire v1 sobre TCP (sockets lwIP)
+        "${WIRE_TRANSPORT_SRC}"               # VM.3: capa de I/O del wire v1 (TCP o UART0 según BPVM_P4_WIRE)
         "p4_board_id.c"                       # VM.3 pulido: identidad de placa esp32p4 (override fuerte de repl_board_id)
         "gui_display_dsi.c"                   # G3: display MIPI-DSI (panel EK79007 + backlight LEDC)
         "../../esp32/main/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
@@ -70,3 +84,8 @@ idf_component_register(
         esp_driver_tsens # H14: sensor de temperatura interno (Pico.tempC)
         esp_driver_pcnt  # H14: backend contador de pulsos (PCNT)
 )
+
+# Activa el camino TCP/Ethernet en main.c (por defecto = UART0, sin este define).
+if(BPVM_P4_WIRE STREQUAL "tcp")
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE BPVM_P4_WIRE_TCP=1)
+endif()

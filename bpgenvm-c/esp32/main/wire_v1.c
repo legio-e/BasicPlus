@@ -20,14 +20,27 @@
 
 #define WIRE_UART        UART_NUM_0
 #define WIRE_UART_BAUD   115200
-#define WIRE_RX_BUF      4096
-/* Pines por defecto de UART0 en el ESP32-S3 (U0TXD/U0RXD), cableados al
- * bridge USB-UART de la DevKitC. Hay que enrutarlos EXPLÍCITAMENTE: con
- * la consola en USB-Serial-JTAG, ESP-IDF no configura UART0 en la app,
- * así que sin uart_set_pin el periférico no queda conectado a los pines
- * → RX/TX muertos (era el motivo de que no llegara el HELLO). */
+#define WIRE_RX_BUF      8192   /* holgado para tramas largas (bulk PUT de .mod/recursos) */
+/* Pines de UART0 cableados al bridge USB-UART de la placa. Hay que enrutarlos
+ * EXPLÍCITAMENTE: con la consola en USB-Serial-JTAG, ESP-IDF no configura UART0
+ * en la app, así que sin uart_set_pin el periférico no queda conectado a los
+ * pines → RX/TX muertos (era el motivo de que no llegara el HELLO en el S3).
+ *  - S3 DevKitC: U0TXD/U0RXD del bridge = GPIO43/44 (NO son los IO_MUX default).
+ *  - P4: el bridge está en los pines IO_MUX por defecto de UART0 → NO_CHANGE (no
+ *    reenrutar; con la consola movida a USB-Serial-JTAG, UART0 queda libre).
+ *    A VERIFICAR en placa: si no llega el HELLO, fijar aquí los pines reales. */
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+/* P4: U0TXD/U0RXD por defecto del SoC = GPIO37/GPIO38, cableados al bridge
+ * USB-UART de la EV board. Hay que fijarlos EXPLÍCITAMENTE (con la consola en
+ * USB-Serial-JTAG, ESP-IDF no enruta UART0 solo → NO_CHANGE deja RX/TX muertos,
+ * que fue el fallo del handshake). Si el bridge de tu placa va por otros pines,
+ * cámbialos aquí. */
+#define WIRE_UART_TX_PIN 37
+#define WIRE_UART_RX_PIN 38
+#else
 #define WIRE_UART_TX_PIN 43
 #define WIRE_UART_RX_PIN 44
+#endif
 
 void wire_v1_uart_init(void) {
     const uart_config_t cfg = {

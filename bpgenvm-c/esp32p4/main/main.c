@@ -56,8 +56,8 @@ static const char *TAG = "bpvm_p4";
 uint8_t*       s_vm_buffer      = NULL;
 uint32_t       s_vm_buffer_size = 0;
 
-static EventGroupHandle_t s_events;
-static int s_sock = -1;     /* socket del canal de log (lo usa net_logf) */
+static EventGroupHandle_t s_events;   /* gate de Link Up (Ethernet — ambos transportes) */
+static int s_sock = -1;     /* socket del canal de log (lo usa net_logf, común) */
 
 /* Log instrumentado: a consola (idf.py monitor) Y al socket TCP de log. El
  * caller NO pone '\n' final; lo añade esta función para el lado TCP. NO static:
@@ -76,7 +76,9 @@ void net_logf(const char *fmt, ...)
     if (s_sock >= 0) send(s_sock, buf, n, 0);
 }
 
-/* ---- Ethernet (init verificada en bring-up: IP101 / RMII, pines EV board) ---- */
+/* ===== Ethernet — COMÚN a ambos transportes. En TCP lleva el wire (:3333); en
+ * UART lleva SOLO los logs (net_logf → :5555) como red de seguridad. (Init
+ * verificada en bring-up: IP101 / RMII, pines EV board.) ===== */
 static esp_err_t eth_init(esp_eth_handle_t *out)
 {
     eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
@@ -157,6 +159,7 @@ static void tcp_log_task(void *arg)
     }
 }
 
+#ifdef BPVM_P4_WIRE_TCP
 /* ---- Servidor del wire v1: la VM corre AQUÍ (stack holgado). ----
  * Prepara FS + stdlib (independiente del canal de log), abre el socket de
  * escucha y entra al bucle del REPL reutilizado. No retorna. */
@@ -184,6 +187,37 @@ static void wire_task(void *arg)
     repl_esp32_run();            /* no retorna */
 }
 
+#else   /* !BPVM_P4_WIRE_TCP — transporte por defecto */
+
+/* ===== Transporte UART0 (#138): el IDE conecta al puerto del bridge USB-UART, SIN
+ * red → sirve también a placas sin Ethernet (la nueva con pantalla). Gemelo de
+ * wire_task: mismo FS+stdlib+HW y el mismo repl_esp32_run reutilizado, pero NO
+ * espera Link Up y arranca wire_v1_uart_init en vez del servidor TCP. ===== */
+static void wire_task_uart(void *arg)
+{
+    (void) arg;
+    /* Espera Link Up (con timeout) para que net_logf (red de seguridad) llegue al
+     * PC antes de arrancar. Si la placa no tiene Ethernet, tras el timeout arranca
+     * igual (sin logs por red). */
+    xEventGroupWaitBits(s_events, LINK_UP_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(5000));
+
+    fs_status_t r = fs_init();
+    fs_register_bpvm();          /* #247: file I/O desde BP sobre este FS */
+    esp32p4_mods_install();      /* Core fresco -> /lib (if-absent) */
+    net_logf("[p4] FS+stdlib listos (UART): %s, %d ficheros, %u B libres",
+             fs_status_str(r), fs_file_count(), (unsigned) fs_free_bytes());
+
+    esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3) */
+    p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* del P4 */
+    wire_v1_uart_init();
+    net_logf("[p4] VM.3 (UART0): wire v1 por el bridge USB-UART; conecta el IDE");
+
+    repl_esp32_autorun();        /* /sys/auto.txt si existiera */
+    repl_esp32_run();            /* no retorna */
+}
+
+#endif  /* BPVM_P4_WIRE_TCP */
+
 /* Reserva el heap de la VM en PSRAM. El P4 SIEMPRE lleva PSRAM (in-package, la
  * comparte con el framebuffer del display); si la reserva falla el firmware no es
  * operativo → abort con mensaje claro (mejor que arrancar y colgar luego en el
@@ -204,8 +238,15 @@ static void vm_buffer_init_psram(void)
 
 void app_main(void)
 {
+    /* Heap de la VM en PSRAM (común a todos los transportes). */
+    vm_buffer_init_psram();
+
     s_events = xEventGroupCreate();
 
+    /* Ethernet — COMÚN: en TCP transporta el wire; en UART transporta SOLO los logs
+     * (net_logf → :5555) como red de seguridad. La placa actual tiene PHY. PENDIENTE
+     * menor (#138): para una placa SIN Ethernet, este eth_init hay que hacerlo
+     * no-fatal (hoy ESP_ERROR_CHECK abortaría); el wire UART en sí no depende de él. */
     esp_eth_handle_t eth_handle = NULL;
     ESP_ERROR_CHECK(eth_init(&eth_handle));
 
@@ -230,17 +271,19 @@ void app_main(void)
                                                &got_ip_handler, NULL));
     ESP_ERROR_CHECK(esp_eth_start(eth_handle));
 
-    /* Heap de la VM en PSRAM — ANTES de wire_task (que hace bpvm_init). */
-    vm_buffer_init_psram();
-
-    /* Canal de log (diagnóstico) — stack pequeño, no corre la VM. */
+    /* Canal de log (diagnóstico) — común a ambos transportes. */
     xTaskCreate(tcp_log_task, "tcp_log", 4096, NULL, 5, NULL);
-    /* Servidor del wire — la VM corre dentro y, con Gui.run(), también el render
-     * LVGL → stack holgado (32 KiB). */
-    xTaskCreate(wire_task, "wire_v1", 32768, NULL, 5, NULL);
 
-    ESP_LOGI(TAG, "P4 VM.3: IP 192.168.2.2 | log %s:%d | wire v1 TCP *:%d",
+#ifdef BPVM_P4_WIRE_TCP
+    /* Wire por TCP. */
+    xTaskCreate(wire_task, "wire_v1", 32768, NULL, 5, NULL);
+    ESP_LOGI(TAG, "P4 VM.3 (TCP): IP 192.168.2.2 | log %s:%d | wire v1 TCP *:%d",
              SERVER_IP, SERVER_PORT, WIRE_PORT);
+#else
+    /* Wire por UART0 (COM14) + Ethernet SOLO para logs (:5555) = red de seguridad. */
+    xTaskCreate(wire_task_uart, "wire_uart", 32768, NULL, 5, NULL);
+    ESP_LOGI(TAG, "P4 VM.3 (UART0 + Ethernet-logs): wire por COM14, logs por :5555");
+#endif
 
     /* G6 — la GUI la dirige BasicPlus: cuando un .mod usa Gui.*, gui.c hace lv_init()
      * + bpvm_gui_disp_init() (costura en gui_display_dsi.c) y Gui.run() bombea, todo
