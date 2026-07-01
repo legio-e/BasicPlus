@@ -1,0 +1,31 @@
+# Firmware VM de la Waveshare P4 4.3" — config de plataforma (de su sdkconfig.defaults).
+CONFIG_IDF_TARGET="esp32p4"
+
+# Revision de silicio: IGUAL que la Function-EV. Sin esto el flash falla por revision.
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_1=y
+
+# Flash (16MB por ahora; la placa tiene 32MB — se ampliara si el FS lo pide).
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_SPI_FLASH_SUPPORT_GD_CHIP=y
+
+# PSRAM (la usaremos para el heap de la VM y el framebuffer del display).
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_SPEED_200M=y
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+CONFIG_CACHE_L2_CACHE_256KB=y
+CONFIG_CACHE_L2_CACHE_LINE_128B=y
+
+CONFIG_IDF_EXPERIMENTAL_FEATURES=y
+
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
+
+# PASO 4: consola NONE -> UART0 LIBRE para el wire (COM15). El arranque ya se verifico
+# con consola en los pasos 0-3; ahora la señal de vida es el IDE por el wire. (Para depurar
+# el arranque, revertir a CONFIG_ESP_CONSOLE_UART_DEFAULT=y y quitar el wire temporalmente.)
+CONFIG_ESP_CONSOLE_NONE=y
+
+# PASO 3: FS persistente en la particion "bpfs" (partitions.csv).
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"

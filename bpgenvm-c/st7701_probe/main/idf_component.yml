@@ -1,0 +1,5 @@
+## Sonda ST7701 — solo el driver del panel (arrastra esp_lcd_mipi_dsi del core).
+## NO metemos el BSP de Waveshare ni LVGL: eso es lo que rompe en IDF v6.
+dependencies:
+  idf: ">=5.4"
+  espressif/esp_lcd_st7701: "*"
