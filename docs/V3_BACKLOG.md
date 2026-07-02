@@ -157,7 +157,10 @@ El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grande
 caminos (run que no bombea / KILL a media GUI) → el siguiente run hereda LVGL a medias.
 **Receta de repro pendiente (paso 1 del protocolo):** sonda headless (rotar sin `run()`) → SIN
 resetear → GuiRotDemo → 2 toques → ¿cian? Y aparte: cualquier GUI + Stop → ¿siguiente run mal?
-**Clasificación pendiente** (V3-obvio vs V4-delicado) cuando haya repro. NO bloquea `setRotation`
+**→ V4 (decisión Eduardo 2-jul):** se aparca SIN perseguir la repro; se informa como LIMITACIÓN
+CONOCIDA en la documentación (guía de gráficos, apéndice de matices: "tras un Stop durante una GUI,
+o si un programa GUI termina sin haber llamado a Gui.run(), conviene resetear la placa antes del
+siguiente run"). La receta de repro queda arriba para retomarlo en V4. NO bloquea `setRotation`
 (feature verificada: paridad host byte-idéntica + ciclo completo en placa limpia).
 
 ## 📌 Pendientes de cierre apuntados (Eduardo, 28-jun) — que NO se nos pierdan
