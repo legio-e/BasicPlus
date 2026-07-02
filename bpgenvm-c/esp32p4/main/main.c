@@ -244,35 +244,44 @@ void app_main(void)
     s_events = xEventGroupCreate();
 
     /* Ethernet — COMÚN: en TCP transporta el wire; en UART transporta SOLO los logs
-     * (net_logf → :5555) como red de seguridad. La placa actual tiene PHY. PENDIENTE
-     * menor (#138): para una placa SIN Ethernet, este eth_init hay que hacerlo
-     * no-fatal (hoy ESP_ERROR_CHECK abortaría); el wire UART en sí no depende de él. */
+     * (net_logf → :5555) como red de seguridad. B.5 (#138, 2-jul): NO-FATAL — si la
+     * placa no tiene PHY (una P4 sin Ethernet), eth_init falla y seguimos SIN red
+     * (sin logs :5555; el wire UART no depende de él). wire_task_uart ya tolera la
+     * ausencia: espera Link Up con timeout de 5 s y arranca igual. */
     esp_eth_handle_t eth_handle = NULL;
-    ESP_ERROR_CHECK(eth_init(&eth_handle));
+    esp_err_t eth_rc = eth_init(&eth_handle);
+    if (eth_rc == ESP_OK) {
+        ESP_ERROR_CHECK(esp_netif_init());
+        ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
+        esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
+        esp_netif_t *eth_netif = esp_netif_new(&cfg);
+        esp_eth_netif_glue_handle_t glue = esp_eth_new_netif_glue(eth_handle);
+        ESP_ERROR_CHECK(esp_netif_attach(eth_netif, glue));
 
-    esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
-    esp_netif_t *eth_netif = esp_netif_new(&cfg);
-    esp_eth_netif_glue_handle_t glue = esp_eth_new_netif_glue(eth_handle);
-    ESP_ERROR_CHECK(esp_netif_attach(eth_netif, glue));
+        esp_netif_dhcpc_stop(eth_netif);
+        esp_netif_ip_info_t ip = {0};
+        esp_netif_set_ip4_addr(&ip.ip,      192, 168, 2, 2);
+        esp_netif_set_ip4_addr(&ip.gw,      192, 168, 2, 1);
+        esp_netif_set_ip4_addr(&ip.netmask, 255, 255, 255, 0);
+        ESP_ERROR_CHECK(esp_netif_set_ip_info(eth_netif, &ip));
 
-    esp_netif_dhcpc_stop(eth_netif);
-    esp_netif_ip_info_t ip = {0};
-    esp_netif_set_ip4_addr(&ip.ip,      192, 168, 2, 2);
-    esp_netif_set_ip4_addr(&ip.gw,      192, 168, 2, 1);
-    esp_netif_set_ip4_addr(&ip.netmask, 255, 255, 255, 0);
-    ESP_ERROR_CHECK(esp_netif_set_ip_info(eth_netif, &ip));
+        ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID,
+                                                   &eth_event_handler, NULL));
+        ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP,
+                                                   &got_ip_handler, NULL));
+        ESP_ERROR_CHECK(esp_eth_start(eth_handle));
 
-    ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID,
-                                               &eth_event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP,
-                                               &got_ip_handler, NULL));
-    ESP_ERROR_CHECK(esp_eth_start(eth_handle));
-
-    /* Canal de log (diagnóstico) — común a ambos transportes. */
-    xTaskCreate(tcp_log_task, "tcp_log", 4096, NULL, 5, NULL);
+        /* Canal de log (diagnóstico) — común a ambos transportes. */
+        xTaskCreate(tcp_log_task, "tcp_log", 4096, NULL, 5, NULL);
+    } else {
+        ESP_LOGW(TAG, "Ethernet no disponible (%s) — sigo sin red: logs :5555 desactivados",
+                 esp_err_to_name(eth_rc));
+#ifdef BPVM_P4_WIRE_TCP
+        ESP_LOGE(TAG, "wire TCP configurado SIN Ethernet: el IDE no podra conectar "
+                      "(compila con BPVM_P4_WIRE=uart para esta placa)");
+#endif
+    }
 
 #ifdef BPVM_P4_WIRE_TCP
     /* Wire por TCP. */
