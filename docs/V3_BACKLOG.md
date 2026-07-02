@@ -331,12 +331,15 @@ para rechazar pantallas rancias si los slots se mueven al recompilar.
 - **Organización del FS de proyectos en el micro (Eduardo, 25-jun):** **B HECHO** — el `readFile` de la VM-C
   cae a `/app/<nombre>` para paths RELATIVOS (nombre simple) cuando el directo falla (espejo del cargador de
   imágenes en `gui.c`), así `load("main.win")` encuentra el resource que el IDE subió a `/app/`. OJO: cambio de
-  firmware → **reflash** para probarlo. **A PENDIENTE (la mejora que pide Eduardo):** cada proyecto en SU
-  carpeta `/app/<proyecto>/` (no plano), con un **directorio base por ejecución** = esa carpeta para que
-  `readFile`/`loadFile` e imports de módulos de la app resuelvan relativo a ella (como el workdir de la VM
-  host); toca IDE (paths de subida + run) + device (resolución base en los 3 firmwares). **Norma de paths
-  (Eduardo):** dentro de un proyecto los paths son RELATIVOS; ofrecer además una utilidad para convertir
-  relativo→absoluto (para quien solo pueda trabajar con paths absolutos).
+  firmware → **reflash** para probarlo. **A ✅ HECHO Y VERIFICADO (2-jul, en la Waveshare):** cada proyecto
+  en SU carpeta `/app/<proyecto>/` — ya estaba implementado en ambos lados (otro "backlog rancio", como
+  #169): **F1 firmware** (#268, `bpvm_fs_set_basedir_from_module`: `/app/<proj>/entry.mod` → basedir
+  `/app/<proj>`) + **F2 IDE** (`FrmMain.deviceAppPrefix()` = `/app/<proj>` con proyecto abierto, `/app`
+  plano en fichero-suelto; `uploadAndRun(prefix)` con limpieza de huérfanos). Verificado: Run-on-Device de
+  formdemo con proyecto abierto → crea `/app/formdemo/` con los .mod + main.win dentro y el form corre.
+  **Queda el flequillo de la norma de paths (Eduardo):** dentro de un proyecto los paths son RELATIVOS;
+  ofrecer además una utilidad para convertir relativo→absoluto (para quien solo pueda trabajar con
+  paths absolutos).
 
 ## 🎨 GUI (objetivo cabecera)
 
