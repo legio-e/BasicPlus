@@ -25,12 +25,12 @@ Orden siguiente:
       IDE.** ESP32 `esp_reset_reason`, Pico `watchdog_caused_reboot`, STM32 `RCC->CSR` (ya tenía);
       campo `resetReason` en INFO_REPLY; el IDE pinta "Reset : <causa>". Sin RAM retenida. Falta el
       reflash de Eduardo para el e2e.
-    - **(b) 🔜 PENDIENTE — portar el BREADCRUMB retenido** (traza de 16 + 1ª pegajosa, hoy solo
-      STM32 vía registros TAMP backup; `gpio_stm32.c` + interfaz `setMark/markAt/bootCount` del
-      backend pico, ya abstracta) a **ESP32** (`RTC_NOINIT_ATTR`) y **Pico** (sección no-init RAM;
-      sin dominio con pila → se borra en power-off, aceptable). Es la parte HW-específica
-      (almacén retenido por chip). V3 si se quiere la simetría, o V4. Liga con la observabilidad
-      de bring-up (V3_IDEAS §6).
+    - **(b) → V4 (decisión Eduardo 2-jul: "no es nada urgente ni crítico") — portar el BREADCRUMB
+      retenido** (traza de 16 + 1ª pegajosa, hoy solo STM32 vía registros TAMP backup;
+      `gpio_stm32.c` + interfaz `setMark/markAt/bootCount` del backend pico, ya abstracta) a
+      **ESP32** (`RTC_NOINIT_ATTR`) y **Pico** (sección no-init RAM; sin dominio con pila → se
+      borra en power-off, aceptable). Es simetría de diagnóstico: el reset-cause por registro HW
+      (la parte útil) ya está en las 3 familias. Liga con la observabilidad de bring-up (V3_IDEAS §6).
   - (c) Al terminar, **portar el desarrollo a la Discovery DK2** (misma familia U5).
 
 (GUI en pausa ≥1 semana tras cerrar H6 en la DK2.)
