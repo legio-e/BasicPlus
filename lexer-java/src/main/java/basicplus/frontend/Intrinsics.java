@@ -218,6 +218,7 @@ public final class Intrinsics {
         register("Gui.__guiSetTextColor", w -> emitBuiltin(w, Builtin.GUI_SET_TEXT_COLOR));
         register("Gui.__guiSetFont",      w -> emitBuiltin(w, Builtin.GUI_SET_FONT));
         register("Gui.__guiLoadFont",     w -> emitBuiltin(w, Builtin.GUI_LOAD_FONT));
+        register("Gui.__guiSetRotation",  w -> emitBuiltin(w, Builtin.GUI_SET_ROTATION));
         register("Gui.__guiClean",        w -> emitBuiltin(w, Builtin.GUI_CLEAN));
         register("Gui.__guiDelete",       w -> emitBuiltin(w, Builtin.GUI_DELETE));
         register("Gui.__guiScreenLoad",   w -> emitBuiltin(w, Builtin.GUI_SCREEN_LOAD));

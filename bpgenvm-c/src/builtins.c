@@ -261,7 +261,10 @@ enum {
     /* H19 — introspección del proyecto en ejecución (módulo App). */
     BUILTIN_APP_MAIN_MODULE      = 211, /* () → string: nombre del módulo principal ("Main") */
     BUILTIN_APP_MAIN_MODULE_PATH = 212, /* () → string: ruta completa del entry ("/app/<proj>/Main.mod") */
-    BUILTIN_APP_PROJECT_PATH     = 213  /* () → string: carpeta del proyecto ("/app/<proj>"); "" si plano */
+    BUILTIN_APP_PROJECT_PATH     = 213, /* () → string: carpeta del proyecto ("/app/<proj>"); "" si plano */
+
+    /* Orientación del display en runtime (0/90/180/270 grados). */
+    BUILTIN_GUI_SET_ROTATION     = 214  /* (deg: integer) → void */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -596,6 +599,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_SET_TEXT_COLOR: { uint32_t rgb = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_text_color(h, rgb); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SET_FONT:       { int f = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_font(h, f); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_LOAD_FONT:      { uint32_t ref = (uint32_t) pop_i32(vm, tc); char path[256]; read_bp_string(vm, ref, path, sizeof(path)); push_i32(vm, tc, bpvm_gui_load_font(path)); return BPVM_OK; }
+    case BUILTIN_GUI_SET_ROTATION:   { int deg = pop_i32(vm, tc); bpvm_gui_set_rotation(deg); push_i32(vm, tc, 0); return BPVM_OK; }
 
     /* H19 — App.* introspección del proyecto en ejecución (id 211-213). */
     case BUILTIN_APP_MAIN_MODULE: {        /* nombre del entry: basename sin ".mod" */

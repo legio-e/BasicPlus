@@ -86,6 +86,7 @@ import Json
   public intrinsic function __guiSetTextColor(handle: integer, rgb: integer)
   public intrinsic function __guiSetFont(handle: integer, fontId: integer)
   public intrinsic function __guiLoadFont(path: string): integer
+  public intrinsic function __guiSetRotation(deg: integer)
   public intrinsic function __guiRefresh(handle: integer)
   public intrinsic function __guiClean(handle: integer)
   public intrinsic function __guiDelete(handle: integer)
@@ -704,6 +705,15 @@ import Json
   public function loadFont(path: string): integer
     return __guiLoadFont(path)
   end loadFont
+
+  // ---- setRotation — orientación del display en grados: 0, 90, 180 o 270 (otros
+  //      valores se ignoran). En placa el giro lo hace el display (p.ej. panel
+  //      portrait usado apaisado con 90/270) y el táctil se ajusta solo; en el host
+  //      (miVM/Swing y VM-C/SDL) intercambia el aspecto de la pantalla. Llamable en
+  //      cualquier momento; lo natural es al principio, antes de crear widgets. ----
+  public function setRotation(deg: integer)
+    __guiSetRotation(deg)
+  end setRotation
 
   // ============================================================
   // H13.1 — Forms (Camino A): una ventana = clase Window + un fichero .win (JSON

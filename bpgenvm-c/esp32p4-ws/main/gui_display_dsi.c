@@ -226,10 +226,67 @@ static uint32_t p4_lv_tick_ms(void)
     return (uint32_t) (esp_timer_get_time() / 1000);
 }
 
+/* Orientacion del display al arrancar. El panel ST7701 es PORTRAIT nativo (480x800);
+ * con ROTATION_90 LVGL presenta 800x480 apaisado (el giro lo hace este flush por sw).
+ * Paso 1 = fijo aqui para validar la mecanica; paso 2 = exponerlo (Gui.setRotation /
+ * config) — lv_display_set_rotation es cambiable en runtime y el tactil se ajusta solo
+ * (lv_indev transforma el puntero segun la rotacion del display). */
+#define LCD_ROTATION LV_DISPLAY_ROTATION_0   /* default: portrait NATIVO (sin coste de giro);
+                                              * la app elige con Gui.setRotation(90/270) */
+
+/* Orientacion VIGENTE: arranca en LCD_ROTATION y Gui.setRotation() la cambia en
+ * caliente (bpvm_gui_disp_set_rotation). Si se llama antes de crear el display,
+ * queda como orientacion de arranque (disp_init la aplica). */
+static lv_display_rotation_t s_rotation = LCD_ROTATION;
+
+/* Buffer de giro para el flush (PSRAM, grow-only; tope = tamano del draw buffer). */
+static void  *s_rot_buf      = NULL;
+static size_t s_rot_buf_size = 0;
+
 /* Vuelca la zona renderizada (RGB565) al framebuffer del panel DPI. Sin DMA2D el
- * draw_bitmap copia por CPU de forma síncrona -> flush_ready justo después. */
+ * draw_bitmap copia por CPU de forma síncrona -> flush_ready justo después.
+ * Con rotacion != 0 gira primero por software — patron OFICIAL de los drivers LVGL
+ * (lv_linux_fbdev.c / lv_sdl_window.c): lv_draw_sw_rotate + lv_display_rotate_area;
+ * el core NO gira pixeles en 9.2, es contrato del flush. */
 static void p4_lv_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
+    lv_display_rotation_t rotation = lv_display_get_rotation(disp);
+
+    if (rotation != LV_DISPLAY_ROTATION_0) {
+        int32_t w = lv_area_get_width(area);
+        int32_t h = lv_area_get_height(area);
+        lv_color_format_t cf = lv_display_get_color_format(disp);
+        uint32_t px_size = lv_color_format_get_size(cf);
+
+        size_t buf_size = (size_t) w * h * px_size;
+        if (s_rot_buf == NULL || s_rot_buf_size < buf_size) {
+            void *nb = heap_caps_realloc(s_rot_buf, buf_size, MALLOC_CAP_SPIRAM);
+            if (nb == NULL) {
+                ESP_LOGE(TAG, "sin PSRAM para el buffer de rotacion (%u B) — frame saltado",
+                         (unsigned) buf_size);
+                lv_display_flush_ready(disp);
+                return;
+            }
+            s_rot_buf      = nb;
+            s_rot_buf_size = buf_size;
+        }
+
+        uint32_t w_stride = lv_draw_buf_width_to_stride(w, cf);
+        uint32_t h_stride = lv_draw_buf_width_to_stride(h, cf);
+        /* 90/270 giran w<->h (stride destino = h_stride); 180 mantiene (w_stride). */
+        lv_draw_sw_rotate(px_map, s_rot_buf, w, h, w_stride,
+                          (rotation == LV_DISPLAY_ROTATION_180) ? w_stride : h_stride,
+                          rotation, cf);
+        px_map = (uint8_t *) s_rot_buf;
+
+        lv_area_t rotated_area = *area;
+        lv_display_rotate_area(disp, &rotated_area);   /* area logica -> area fisica del panel */
+        esp_lcd_panel_draw_bitmap(s_panel, rotated_area.x1, rotated_area.y1,
+                                  rotated_area.x2 + 1, rotated_area.y2 + 1, px_map);
+        lv_display_flush_ready(disp);
+        return;
+    }
+
     esp_lcd_panel_draw_bitmap(s_panel, area->x1, area->y1,
                               area->x2 + 1, area->y2 + 1, px_map);
     lv_display_flush_ready(disp);
@@ -258,7 +315,10 @@ static esp_lcd_touch_handle_t p4_touch_try(i2c_master_bus_handle_t bus, uint16_t
         .rst_gpio_num = -1,
         .int_gpio_num = -1,
         .levels = { .reset = 0, .interrupt = 0 },
-        .flags  = { .swap_xy = 0, .mirror_x = 1, .mirror_y = 1 },
+        /* Waveshare portrait: GT911 SIN transformar (BSP: swap/mirror todo 0). El 1/1 heredado
+         * de la Function-EV era una rotacion de 180 grados — el boton CENTRADO de GuiClickDemo
+         * funcionaba igual (el centro es invariante), las esquinas habrian salido invertidas. */
+        .flags  = { .swap_xy = 0, .mirror_x = 0, .mirror_y = 0 },
     };
     esp_lcd_touch_handle_t tp = NULL;
     if (esp_lcd_touch_new_i2c_gt911(tp_io, &tp_cfg, &tp) != ESP_OK) {
@@ -342,6 +402,9 @@ void bpvm_gui_disp_init(int w, int h)
     lv_tick_set_cb(p4_lv_tick_ms);
     s_lv_disp = lv_display_create(LCD_H_RES, LCD_V_RES);
     lv_display_set_flush_cb(s_lv_disp, p4_lv_flush);
+    /* Orientacion: el panel es portrait nativo; con ROTATION_90 el usuario BP ve 800x480
+     * apaisado. El giro lo hace p4_lv_flush; el tactil se transforma solo (lv_indev). */
+    lv_display_set_rotation(s_lv_disp, s_rotation);
 
     size_t buf_px   = (size_t) LCD_H_RES * 120;     /* draw buffer parcial en PSRAM */
     void  *draw_buf = heap_caps_malloc(buf_px * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
@@ -357,8 +420,11 @@ void bpvm_gui_disp_init(int w, int h)
     } else {
         ESP_LOGW(TAG, "sin tactil: la GUI se vera pero no reaccionara");
     }
-    ESP_LOGI(TAG, "GUI display listo: %dx%d, LVGL %d.%d.%d, LV_COLOR_DEPTH=%d",
-             LCD_H_RES, LCD_V_RES, LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
+    ESP_LOGI(TAG, "GUI display listo: %dx%d logico (panel %dx%d, rot %d), LVGL %d.%d.%d, LV_COLOR_DEPTH=%d",
+             (int) lv_display_get_horizontal_resolution(s_lv_disp),
+             (int) lv_display_get_vertical_resolution(s_lv_disp),
+             LCD_H_RES, LCD_V_RES, (int) LCD_ROTATION,
+             LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
              LVGL_VERSION_PATCH, (int) LV_COLOR_DEPTH);
 }
 
@@ -375,6 +441,21 @@ void bpvm_gui_disp_pump(void)
 }
 
 int bpvm_gui_disp_is_open(void) { return 1; }   /* micro: corre hasta KILL/reset */
+
+/* Rotación en runtime (Gui.setRotation): este flush YA gira por sw y el táctil se
+ * transforma solo (lv_indev) — basta cambiar la rotación del display. deg llega
+ * VALIDADO de gui.c (0/90/180/270). Antes del display: queda de arranque. */
+void bpvm_gui_disp_set_rotation(int deg)
+{
+    switch (deg) {
+        case 0:   s_rotation = LV_DISPLAY_ROTATION_0;   break;
+        case 90:  s_rotation = LV_DISPLAY_ROTATION_90;  break;
+        case 180: s_rotation = LV_DISPLAY_ROTATION_180; break;
+        case 270: s_rotation = LV_DISPLAY_ROTATION_270; break;
+        default:  return;
+    }
+    if (s_lv_disp != NULL) lv_display_set_rotation(s_lv_disp, s_rotation);
+}
 
 void p4_gfx_lvgl_test(void)
 {

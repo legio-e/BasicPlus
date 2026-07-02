@@ -146,4 +146,14 @@ void bpvm_gui_disp_pump(void) {
  * wire DURANTE Gui.run() (sondear entre pumps) es pulido de H5.2. */
 int bpvm_gui_disp_is_open(void) { return 1; }
 
+/* Rotación en runtime (Gui.setRotation): el LTDC escanea un framebuffer fijo y este
+ * flush NO gira aún (se haría como en el P4-ws: lv_draw_sw_rotate en el flush).
+ * Aviso una vez y no-op. */
+void bpvm_gui_disp_set_rotation(int deg)
+{
+    (void) deg;
+    static int warned = 0;
+    if (!warned) { warned = 1; printf("[gui] setRotation: no soportado en este display (LTDC) todavia\n"); }
+}
+
 #endif /* BPVM_LVGL */

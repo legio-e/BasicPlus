@@ -29,6 +29,12 @@
 #define GUI_SCREEN_W  480
 #define GUI_SCREEN_H  320
 
+/* Aspecto lógico del screen del MODELO (paridad con screenW/H de miVM): setRotation
+ * con 90/270 lo intercambia — funcione antes o después de crear el screen, igual que
+ * GuiBackend.setRotation en la VM Java. */
+static int g_screen_w0 = GUI_SCREEN_W;
+static int g_screen_h0 = GUI_SCREEN_H;
+
 typedef struct {
     int         used;       /* 0 = libre/muerto */
     int         handle;
@@ -239,13 +245,35 @@ int bpvm_gui_screen_active(void) {
     if (g_screen != 0) return g_screen;
     int h = create_node("screen", 0);
     gui_node* n = node_for(h);
-    if (n) { n->w = GUI_SCREEN_W; n->h = GUI_SCREEN_H; }
+    if (n) { n->w = g_screen_w0; n->h = g_screen_h0; }
     g_screen = h;
 #ifdef BPVM_LVGL
     lvgl_ensure_init();
     if (n) n->lv = lv_screen_active();
 #endif
     return h;
+}
+
+/* Orientación del display: 0/90/180/270 (grados); otros valores se IGNORAN (misma
+ * regla que miVM → paridad). El giro real lo hace el display (costura disp_set_rotation:
+ * en el P4-ws lo implementa su flush, en el host SDL el propio driver LVGL; el táctil se
+ * transforma solo en lv_indev). El MODELO solo refleja el aspecto en el screen. */
+static int g_rotation = 0;
+
+void bpvm_gui_set_rotation(int deg) {
+    if (deg != 0 && deg != 90 && deg != 180 && deg != 270) return;
+    int was90 = (g_rotation == 90 || g_rotation == 270);
+    int is90  = (deg == 90  || deg == 270);
+    g_rotation = deg;
+    if (was90 != is90) {
+        int t = g_screen_w0; g_screen_w0 = g_screen_h0; g_screen_h0 = t;
+        gui_node* n = (g_screen != 0) ? node_for(g_screen) : NULL;
+        if (n) { n->w = g_screen_w0; n->h = g_screen_h0; }
+    }
+#ifdef BPVM_LVGL
+    lvgl_ensure_init();                  /* rotar implica display: init si aún no lo está */
+    bpvm_gui_disp_set_rotation(deg);
+#endif
 }
 
 int bpvm_gui_create_obj(int parent) {

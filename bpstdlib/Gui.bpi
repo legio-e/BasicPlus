@@ -12,6 +12,7 @@ func __guiCreateCheckbox(parent:integer):integer public intrinsic
 func __guiClean(handle:integer):void public intrinsic
 func __guiImageWidth(handle:integer):integer public intrinsic
 func buildForm(node:Json.JsonObject,parent:Component,win:Window):Component public
+func setRotation(deg:integer):void public
 func __guiTableGetCell(handle:integer,row:integer,col:integer):string public intrinsic
 func __guiDelete(handle:integer):void public intrinsic
 func __guiScreenActive():integer public intrinsic
@@ -62,6 +63,7 @@ func loadFont(path:string):integer public
 func __guiCreateList(parent:integer):integer public intrinsic
 func __guiBindClick(handle:integer,self:Component):void public intrinsic
 func __guiTextareaSetReadonly(handle:integer,ro:integer):void public intrinsic
+func __guiSetRotation(deg:integer):void public intrinsic
 func __guiTableSetGrid(handle:integer,rows:integer,cols:integer):void public intrinsic
 func __guiGetHeight(handle:integer):integer public intrinsic
 func __guiChange(w:Component):void public intrinsic

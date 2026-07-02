@@ -1,0 +1,37 @@
+// GuiRotProbe.bp — SONDA de bisección del cian (NO es el demo).
+//
+// Ciclo INVERSO al de GuiRotDemo: cada toque RESTA 90 (LVGL): 0 → 270 → 180 → 90 → 0.
+// Así el PRIMER toque entra a 270 DIRECTO desde 0, sin pasar por 180 — discrimina si
+// el fallo es "render en 270" o "la transición/secuencia 90→180→270".
+// Sin clic sintético: arranca visible en 0 (portrait) y cada paso lo controlas tú.
+// El print sale ANTES de girar (si tras un toque no hay print, el toque no llegó al handler).
+module GuiRotProbe
+  import Gui
+
+  class RotButton extends Gui.Button
+    var deg: integer               // rotación LVGL actual (arranca en 0)
+
+    public function RotButton(parent: Gui.Component, text: string)
+      super(parent, text)
+    end RotButton
+
+    public function onClick()
+      this.deg := (this.deg + 270) mod 360    // -90 LVGL por toque: 0→270→180→90→0
+      print "girando a (LVGL):"
+      print this.deg
+      Gui.setRotation(this.deg)
+    end onClick
+  end RotButton
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var lbl: Gui.Label := Gui.Label(scr, "sonda: ciclo inverso")
+    lbl.align(Gui.Align.TOP_MID, 0, 10)
+
+    var btn: RotButton := RotButton(scr, "Girar (inverso)")
+    btn.align(Gui.Align.CENTER, 0, 0)
+
+    Gui.run()
+  end Main
+end GuiRotProbe

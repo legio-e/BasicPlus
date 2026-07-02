@@ -54,6 +54,7 @@ void bpvm_gui_imageview_refresh(int view);
 void bpvm_gui_set_font_size(int handle, int px);
 int  bpvm_gui_get_font_size(int handle);
 int  bpvm_gui_load_font(const char* path);   /* carga una fuente .bin (LVGL binfont) → id 1-based; 0 si el registro está lleno. setFont(id) la aplica. */
+void bpvm_gui_set_rotation(int deg);         /* orientación del display: 0/90/180/270 grados; inválidos se IGNORAN (paridad miVM) */
 void bpvm_gui_textarea_set_readonly(int handle, int ro);
 int  bpvm_gui_textarea_get_readonly(int handle);
 
@@ -112,6 +113,7 @@ int  bpvm_gui_lvgl_window_open(void);
 void bpvm_gui_disp_init(int w, int h);   /* tick + display + (host) input/cierre */
 void bpvm_gui_disp_pump(void);           /* lv_timer_handler + ceder CPU */
 int  bpvm_gui_disp_is_open(void);        /* host: ventana abierta; micro: 1 si corre */
+void bpvm_gui_disp_set_rotation(int deg);/* orientación en runtime (deg validado por gui.c); sin soporte: no-op con aviso */
 #endif
 
 #endif /* BPVM_GUI_H */

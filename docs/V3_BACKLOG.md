@@ -142,6 +142,100 @@ El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grande
     reset-cause del paso 4 confirma la identidad del watchdog) + la placa **vuelve limpia, sin bucle**.
     **WDT a la par en las 3 familias** (Pico HW · STM32 IWDG · ESP32 Task WDT). (Neopixel ESP32 → V4.)
 
+## 🐞 BUG SIN DETERMINAR (2-jul, esp32p4-ws) — estado GUI residual entre ejecuciones
+
+**Síntomas observados (Waveshare, firmware ws con `Gui.setRotation`):**
+- **(1) Cian una vez:** GuiRotDemo interactivo tras haber corrido antes (sin reset) la variante
+  *headless* (setRotation(90)+(45) SIN `Gui.run()` → rotación aplicada sin renderizar jamás, exit 0).
+  Al 2º toque (entrar a 270): pantalla cian sin widgets, el handler NO llegó a imprimir, KILL sin
+  efecto visible. **Con placa reseteada NO reproduce**: el MISMO demo hace el ciclo completo
+  90→180→270→0→90 perfecto (verificado por Eduardo) → el 270/180/secuencia son inocentes; era estado.
+- **(2) Stop/KILL durante un run con GUI deja la placa mal** (Eduardo, 2-jul): tras el Stop hay que
+  resetear. (En STM32 el KILL-durante-Gui.run se pulió en H5.2; en el ws algo queda a medias.)
+
+**Hipótesis común (sin confirmar):** la limpieza del estado GUI/LVGL entre runs no cubre estos
+caminos (run que no bombea / KILL a media GUI) → el siguiente run hereda LVGL a medias.
+**Receta de repro pendiente (paso 1 del protocolo):** sonda headless (rotar sin `run()`) → SIN
+resetear → GuiRotDemo → 2 toques → ¿cian? Y aparte: cualquier GUI + Stop → ¿siguiente run mal?
+**Clasificación pendiente** (V3-obvio vs V4-delicado) cuando haya repro. NO bloquea `setRotation`
+(feature verificada: paridad host byte-idéntica + ciclo completo en placa limpia).
+
+## 📌 Pendientes de cierre apuntados (Eduardo, 28-jun) — que NO se nos pierdan
+
+Además de **documentación + cierre + subida a GitHub** (pasos 5-6 del plan), Eduardo añade
+explícitamente al alcance de cierre de V3 estos tres temas:
+
+- **Organización de la RAM + el FS + la memoria flash.** Una pasada a CÓMO se reparten los
+  recursos en cada dispositivo (sobre todo el P4: SRAM interna · 32 MB PSRAM · flash): dónde vive
+  cada cosa (heap de la VM, FS, framebuffer + draw buffer de LVGL, pool LVGL, stacks…). La parte
+  **RAM/heap** y el **FS** ya están decididas ↓.
+
+  **✅ IMPLEMENTADO Y VERIFICADO EN PLACA (29-jun, commit `afe8be3`).** Heap de la VM (`s_vm_buffer`)
+  y tope del FS del P4 → **PSRAM 2 MB** cada uno (libera ~128 KB de SRAM interna). `s_vm_buffer` pasó
+  a **puntero** en los 3 firmwares ESP32: el `repl_esp32.c` es COMPARTIDO S3/P4 y lo declaraba `extern
+  array`, así que para que el P4 use PSRAM hay que convertirlo a puntero y el S3 lo acompaña apuntando
+  a un array estático SRAM (mismo comportamiento, solo cambia la forma). `FS_DATA_SIZE` board-aware
+  (`CONFIG_IDF_TARGET_ESP32P4`→2M, resto 128K, mirror en SRAM). Re-particionado 16M (`partitions.csv`:
+  6M SO + ~10M FS) + tabla 32M nueva (`partitions_32m.csv`: 6M + 26M). LVGL `ALWAYSINTERNAL` 16K→2K.
+  **Verificado:** el P4 arranca con el heap en PSRAM (si fallara haría `abort` → no arrancaría), FS
+  re-particionado monta, formdemo corre y los handlers disparan (botón + checkbox). **PENDIENTE
+  (pulido, NO bloquea):** el tamaño es 2 MB por `#define`; hacerlo configurable por `BpVM.cfg`
+  (`memorySize`, #225/#11) requiere leer el cfg tras montar el FS (función `vm_buffer_init` que el repl
+  llame antes de `bpvm_init`). Para la 32M cuando llegue: en `sdkconfig.defaults` poner
+  `FLASHSIZE="32MB"` + `PARTITION_TABLE_CUSTOM_FILENAME="partitions_32m.csv"`. **FPS del render con el
+  umbral LVGL a 2K: a observar en placa** (si penaliza, subir el umbral a 4-8K).
+
+  **FS — DECIDIDO (charla Eduardo+Claude, 28-jun):**
+  - **Estado real del P4 (flash 16M):** `factory`=4M (el SO; firmware <4M) + `bpfs`=2M (FS) +
+    **~9.7M SIN asignar**. El FS es un **RAM-mirror** topado a `FS_DATA_SIZE`=128 KB
+    (`esp32/main/fs.h`): carga TODOS los ficheros a RAM al boot → **NO usa** los 2M de su partición.
+  - **V3 (salir del paso, a PIÑÓN — tamaños fijados por nosotros, NO configurables por el usuario;
+    sin sentido que los toque):** (1) **re-particionar 6M SO + 10M FS** en modelos de **16M** y
+    **6M SO + 26M FS** en modelos de **32M** → **dos partition tables, una por tamaño de flash**
+    (liga con #258); (2) **subir el tope del FS** (`FS_DATA_SIZE` → ~1-2M) cargando a **PSRAM**
+    (`fs_alloc` ya va a PSRAM, `ee02821`) → margen para fuentes/imágenes de apps gráficas SIN tocar
+    el modelo. Se aplica al **reflashear** → encaja con el bring-up de la placa nueva (32M, ~2-3 jul).
+  - **V4 (con el lector de SD): FS ESTÁNDAR = FatFs/VFS, el MISMO para flash interna Y SD.** El SD
+    usa formato estándar (FAT32/exFAT, GB) → un solo sistema (ESP-IDF `esp_vfs_fat`; Pico-SDK y
+    STM32-HAL también montan FatFs) → API unificada, código reusable, **compatible con PC** (sacas
+    la SD y la lees), jerarquía real, **on-demand desde flash** (no RAM-mirror → no roba PSRAM a los
+    gráficos). Aquí el FS usa de verdad los 10/26M. Enlaza con el PACK/XIP de bytecode (sección V4).
+    **Por eso NO montamos un FS casero on-demand en V3** — sería reinventar la rueda, incompatible
+    con el SD. Liga con **#225** (mapa de memoria) y **#229** (FS grande).
+
+  **RAM/heap — DECIDIDO (charla Eduardo+Claude, 28-jun):**
+  - **Mapa actual del P4:** SRAM interna ~640 KB (768 − ~128 caché L2) ~2/3 ocupada; el bloque
+    grande **movible** es el **heap de la VM `s_vm_buffer` = 128 KB en `.bss`**
+    (`esp32p4/main/main.c:51`). El framebuffer (1.2M) + draw-buffer (~240K, `gui_display_dsi.c`) + el
+    FS ya viven en **PSRAM**. PSRAM 32M (in-package, 200 MHz, RÁPIDA) ~95% libre.
+  - **DECISIÓN: mover `s_vm_buffer` a PSRAM** (deja de ser array `.bss` → `heap_caps_malloc(size,
+    MALLOC_CAP_SPIRAM)` al boot — el patrón del Metro #224). **Default 2 MB** (16× lo actual; la PSRAM
+    sobra), **CONFIGURABLE por el usuario vía `BpVM.cfg`** (`memorySize`, #225/#11). Es LA palanca de
+    "programas más grandes y complejos": de 128 KB → MB. Penalización baja por la PSRAM rápida + caché
+    L2 (el working set caliente se cachea) — dato de Eduardo.
+  - **Board-aware:** con PSRAM (P4, Metro) → heap grande en PSRAM; SIN PSRAM (Pico base, STM32, S3) →
+    heap en SRAM con su tamaño actual, como hoy. El #224 ya dejó el patrón puntero-runtime PSRAM/SRAM.
+  - **Regla de reparto (la norma):** SRAM interna = SOLO lo ultrarrápido o que no puede ir a PSRAM
+    (stacks, buffers DMA, hot-path); todo lo voluminoso → PSRAM (heap VM, FS, framebuffers).
+  - **Resultado del mapa:** SRAM pasa de ~2/3 a ~1/2 ocupada (libera 128 KB → margen para objetos
+    LVGL / red / stacks); PSRAM con el heap de 2 MB sigue ~28.5 MB libre.
+  - **Objetos LVGL → PSRAM (DECIDIDO 28-jun):** bajar `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL` de
+    **16K → 2K** (allocs <2K = SRAM; ≥2K = PSRAM) en el sdkconfig **del P4** (PSRAM rápida; el S3,
+    con PSRAM más lenta, mantiene su umbral — board-aware por sdkconfig separado). Así los widgets
+    LVGL (la mayoría 2-16K con estilos/spec_attr) caen a PSRAM ⇒ el **techo de nº de widgets pasa de
+    la SRAM (~cientos) a la PSRAM (~miles)** → GUIs mucho más ricas. El **dial es el umbral**: si el
+    render penaliza, SUBIRLO (4-8K) deja más objetos en SRAM; 1K = más agresivo. **A VERIFICAR en
+    placa: FPS del render** (caché L2 + PSRAM rápida → fluido esperado). **Stacks NO se tocan**
+    (FreeRTOS, SRAM). Aplica **al reflashear**.
+- **Comunicación USB en el P4.** Hoy el P4 habla con el IDE por **Ethernet/wire TCP**; falta la
+  vía **USB** (como Pico = USB CDC, S3 = UART/USB) para "Run on Device" por cable sin depender de
+  la red. Liga con **#138** (multiplexar USB CDC) y la abstracción de transporte (#137, ya hecha).
+- **Pantalla + P4 — NUEVA placa con pantalla integrada, LLEGA ~jue/vie 2-3 jul 2026.** Todo lo
+  gráfico sobre esa placa cuando llegue: bring-up del display, validar la pantalla, y llevar los
+  **gráficos al board descriptor data-driven** (¿hay pantalla? resolución/transporte/pines por
+  placa — ver "Board descriptor data-driven" más abajo; hoy el P4 lo tiene hardcodeado en
+  `gui_display_dsi.c`). Trabajo flash-intensivo → cuando llegue la placa.
+
 ### V4 — fuera de V3 (Eduardo, 24-jun)
 
 **Tema de V4: consolidar + mejorar rendimiento** (un poco como fue V2), **además de lo diferido**:
@@ -171,6 +265,14 @@ AOT cross-module (#169). **El alcance de V3 queda CERRADO** ("y ya nada más").
     `Gui` sin reflashear firmware (justo el dolor de V3).
   - Aviso: leer de flash es un pelín más lento que de SRAM (lo tapa la cache XIP de cada chip + los
     bucles calientes van por AOT).
+  - **Ganancia de RAM concreta (Eduardo, 28-jun) — 3ª palanca de memoria** (tras heap→PSRAM y objetos
+    LVGL→PSRAM, ver "RAM/heap" arriba): hoy el loader COPIA el `.mod` entero (code+data) a `vm->memory`
+    (loader.c:181/188); el PACK deja el **código (opcodes, solo-lectura) en flash XIP** y solo el data
+    (globales/tablas) va a RAM. La stdlib core ocupa ~30-40K de `.mod` → **libera ~20-30K** (su
+    código); **+Gui +Json ≈ +20K** → **~40-50K liberados**. DÓNDE libera depende del heap: en el P4
+    (heap en PSRAM) libera espacio del heap-PSRAM (programas con más DATOS); en **micros pequeños SIN
+    PSRAM (Pico base / STM32) libera SRAM directa** → AHÍ es donde brilla ("cosas increíbles en micros
+    de ~1$"). Las 3 palancas juntas dejan la SRAM casi entera para lo crítico.
 - **Lectura de SD.** Almacenamiento masivo removible (datos/assets/logs). **NO se puede XIP** (es
   dispositivo de bloques, no mapeado) → de la SD se **carga a RAM** como un archivo normal, o sirve
   para **transportar** packs que luego se graban en flash. Complementa al PACK (tier de capacidad),
@@ -518,7 +620,7 @@ vs `fibo(30)*5` interpretado = 104.15 s → ~95× speedup**, `total` idéntico (
 - **P-adc-8ch**: `Adc.bp` valida `0..3`; exponer el nº de canales por placa
   (`Pico.adcChannels()`, como `gpioCount()`) para los 8 del RP2350B. Liga con #258.
 
-## 🔴 PENDIENTE ACTIVO — H13.1 Forms en P4: bloqueado por `Json.mod` RANCIO en placa (2026-06-26)
+## ✅ CERRADO — H13.1 Forms en P4 (Json rancio 26-jun + cuelgue del `super()` implícito 28-jun)
 
 **Síntoma:** formdemo / cualquier GUI cuyo Gui importe Json → en el P4 `exit 10`
 (RuntimeError MUDO). GuiColorDemo, que ANTES iba, también petó al añadir `import Json`
@@ -593,6 +695,28 @@ DENTRO del IDE (`looksLikeTextFile`). Pendiente: confirmación VISUAL del layout
 **Las 3 mejoras de robustez del plan original** (CRC device-side en LS/STAT, rutear stdlib→/lib,
 subir el detalle de linkAll al wire = "missing lib X") quedan como PULIDO OPCIONAL (no bloquean;
 el bug raíz ya no existe).
+
+### ✅ CIERRE DE RAÍZ (28-jun) — el cuelgue era el `super()` implícito que faltaba
+Tras lo del Json rancio, formdemo volvió a colgar en el P4 (pantalla NEGRA, ni los handlers).
+Acotado con una traza de creación de objetos (método de Eduardo: centrar el bug antes de tocar):
+NO era OOM (214 KB internos libres) sino un **error del modelo OO** — `MainWin` (subclase de
+`Gui.Window`) con constructor vacío NO llamaba `super()`, así que `Window()` no corría → pantalla
+LVGL sin inicializar → `lv_obj_create(NULL)` cuelga. Invisible en host (LVGL=0, el ctor de Window
+no pinta) → solo lo destapó el silicio. Sobrevivió desde V1 porque todo el código que hereda
+llamaba `super()` explícito; formdemo fue el estreno de subclase-con-ctor-sin-super de un padre con
+init crítico. Fix de raíz (3 commits, solo PC, paridad dual-VM automática):
+- **auto-`super` modelo Java** (`d67907f`): el constructor del padre se ejecuta aunque no escribas
+  `super()`; error claro si exige argumentos. Cierra el modelo OO (los constructores encadenan hacia
+  la raíz igual que los virtuales `toString`/`compareTo` ya hacían). Solo SemanticAnalyzer + MivmEmitter.
+- **error "widget sin contenedor"** ambas VMs (`77c2a11`): crear un widget con contenedor 0/no-vivo →
+  RuntimeError atrapable (directiva de Eduardo: pantalla EXPLÍCITA, nada de init implícito).
+- **FS→PSRAM** (`ee02821`): datos de fichero a PSRAM → libera RAM interna para LVGL en el P4.
+**✅ VERIFICADO EN EL P4 (28-jun):** formdemo renderiza + los handlers disparan (`¡Hola desde
+onSaludar!` botón + `checkbox cambiado` change). compat.sh TODO VERDE (×2) + paridad byte-idéntica en
+cada caso + stdlib intacta. Fat-jar del IDE reconstruido (compila con auto-super). **V4:** subclase
+SIN constructor propio aún no recibe el super implícito (el caso CON ctor —el habitual— sí). El
+sdkconfig del P4 quedó con 3 toggles de diagnóstico benignos (frame-pointer/no-backtrace/bootloader-log;
+Eduardo los quita por menuconfig si quiere firmware exacto). Diseño en `V3_IDEAS.md`.
 
 ### Board descriptor data-driven — ampliar a periféricos y GRÁFICOS (Eduardo, 26-jun)
 Hay **distintas variantes de P4** (y de otras familias) con diferencias en periféricos →

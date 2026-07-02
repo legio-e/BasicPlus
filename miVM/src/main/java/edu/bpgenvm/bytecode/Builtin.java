@@ -436,7 +436,10 @@ public enum Builtin {
     // V3 (H19) — introspección del proyecto en ejecución (módulo App). ids 211-213.
     APP_MAIN_MODULE("__appMainModule"),                // () → string: nombre del módulo principal
     APP_MAIN_MODULE_PATH("__appMainModulePath"),       // () → string: ruta completa del entry
-    APP_PROJECT_PATH("__appProjectPath");              // () → string: carpeta del proyecto
+    APP_PROJECT_PATH("__appProjectPath"),              // () → string: carpeta del proyecto
+
+    // Orientación del display en runtime (id 214).
+    GUI_SET_ROTATION("__guiSetRotation");              // (deg: integer) → void; 0/90/180/270, inválidos se ignoran
 
     public final String bpName;
     public final int id;

@@ -326,6 +326,15 @@ void bpvm_gui_disp_pump(void)
 
 int bpvm_gui_disp_is_open(void) { return 1; }   /* micro: corre hasta KILL/reset */
 
+/* Rotación en runtime (Gui.setRotation): PENDIENTE en este display — el flush del
+ * EK79007 no gira aún (portar el patrón del esp32p4-ws: lv_draw_sw_rotate en el flush
+ * + buffer de giro; batch cross-family). Hasta entonces, aviso y no-op. */
+void bpvm_gui_disp_set_rotation(int deg)
+{
+    (void) deg;
+    ESP_LOGW(TAG, "setRotation: pendiente en este display (EK79007) — el flush no gira aun");
+}
+
 void p4_gfx_lvgl_test(void)
 {
     p4_dsi_panel_init();

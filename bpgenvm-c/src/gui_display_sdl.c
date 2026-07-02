@@ -98,4 +98,20 @@ void bpvm_gui_disp_pump(void) {
 
 int  bpvm_gui_disp_is_open(void) { return !g_window_closed; }
 
+/* Rotación en runtime (Gui.setRotation): el driver SDL de LVGL gira en su PROPIO flush
+ * (lv_sdl_window.c) — la ventana (el "panel físico") se queda w×h y el contenido rota
+ * dentro, igual que en placa. deg llega validado de gui.c. */
+void bpvm_gui_disp_set_rotation(int deg)
+{
+    lv_display_t *d = lv_display_get_default();
+    if (d == NULL) return;
+    switch (deg) {
+        case 0:   lv_display_set_rotation(d, LV_DISPLAY_ROTATION_0);   break;
+        case 90:  lv_display_set_rotation(d, LV_DISPLAY_ROTATION_90);  break;
+        case 180: lv_display_set_rotation(d, LV_DISPLAY_ROTATION_180); break;
+        case 270: lv_display_set_rotation(d, LV_DISPLAY_ROTATION_270); break;
+        default:  break;
+    }
+}
+
 #endif /* BPVM_LVGL */

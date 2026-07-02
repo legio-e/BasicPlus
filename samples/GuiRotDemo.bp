@@ -1,0 +1,48 @@
+// GuiRotDemo.bp — Gui.setRotation (V3): orientación del display en runtime.
+//
+// INTERACTIVO: un botón "Girar +90" rota la pantalla en cada toque (0→90→180→270→0).
+// En placa el giro real lo hace el display (p.ej. panel portrait 480x800 usado
+// apaisado) y el táctil se ajusta solo — tocar el botón tras cada giro lo demuestra.
+// En host (miVM/Swing y VM-C/SDL) 90/270 intercambian el aspecto de la pantalla.
+// Valores que no sean 0/90/180/270 se IGNORAN (misma regla en ambas VMs).
+//
+// Paridad headless: el dump muestra el screen 480x320 antes y 320x480 tras el
+// clic sintético (que rota a 90), como GuiClickDemo.
+module GuiRotDemo
+  import Gui
+
+  class RotButton extends Gui.Button
+    var deg: integer               // rotación actual (campo del botón; arranca en 0)
+
+    public function RotButton(parent: Gui.Component, text: string)
+      super(parent, text)
+    end RotButton
+
+    // Cada toque: +90 grados (y vuelta a 0 tras 270).
+    public function onClick()
+      this.deg := (this.deg + 90) mod 360
+      Gui.setRotation(this.deg)
+      print "rotacion:"
+      print this.deg
+    end onClick
+  end RotButton
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var lbl: Gui.Label := Gui.Label(scr, "toca el boton para girar")
+    lbl.align(Gui.Align.TOP_MID, 0, 10)
+
+    var btn: RotButton := RotButton(scr, "Girar +90")
+    btn.align(Gui.Align.CENTER, 0, 0)
+
+    print "== antes (0 grados) =="
+    print Gui.__guiDumpTree()
+
+    Gui.__guiClick(btn)            // clic sintético: rota a 90 (verificable headless)
+    Gui.run()                      // bombea: en placa queda vivo girando con cada toque
+
+    print "== despues (90 grados) =="
+    print Gui.__guiDumpTree()
+  end Main
+end GuiRotDemo

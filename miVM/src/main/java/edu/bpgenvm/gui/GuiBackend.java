@@ -65,6 +65,7 @@ public final class GuiBackend {
     private JFrame frame;
     private int screenHandle = 0;
     private int screenW = 480, screenH = 320;     // tamaño por defecto (configurable)
+    private int rotation = 0;                     // 0/90/180/270 (Gui.setRotation)
     private final Map<Integer, Node> nodes = new HashMap<>();
     private int nextHandle = 1;
 
@@ -103,6 +104,29 @@ public final class GuiBackend {
         nodes.put(h, n);
         screenHandle = h;
         return h;
+    }
+
+    /** Orientación del display en grados (0/90/180/270; otros se IGNORAN — misma regla
+     *  que la VM-C → paridad). En host no hay panel físico que girar: 90/270 intercambian
+     *  el ASPECTO de la pantalla (funciona antes o después de crear el screen), igual que
+     *  el display rotado en placa. Los hijos con posición absoluta no se recolocan. */
+    public void setRotation(int deg) {
+        if (deg != 0 && deg != 90 && deg != 180 && deg != 270) return;
+        boolean was90 = (rotation == 90 || rotation == 270);
+        boolean is90  = (deg == 90  || deg == 270);
+        rotation = deg;
+        if (was90 == is90) return;                       // el aspecto no cambia
+        int t = screenW; screenW = screenH; screenH = t;
+        Node scr = nodes.get(screenHandle);
+        if (scr != null) { scr.w = screenW; scr.h = screenH; }
+        if (frame != null) {
+            SwingUtilities.invokeLater(() -> {
+                Node root = nodes.get(screenHandle);
+                if (root != null) root.comp.setBounds(0, 0, screenW, screenH);
+                frame.getContentPane().setPreferredSize(new Dimension(screenW, screenH));
+                frame.pack();
+            });
+        }
     }
 
     /** ¿es `parent` un contenedor vivo? (paridad con bpvm_gui_parent_alive de la VM-C). */

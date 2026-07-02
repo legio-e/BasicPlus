@@ -3392,6 +3392,7 @@ public class VirtualMachine {
             case GUI_SET_TEXT_COLOR: { int rgb = popTc(tc); int hnd = popTc(tc); gui.setTextColor(hnd, rgb); pushTc(tc, 0); break; }
             case GUI_SET_FONT:       { int f   = popTc(tc); int hnd = popTc(tc); gui.setFont(hnd, f);        pushTc(tc, 0); break; }
             case GUI_LOAD_FONT:      { int ref = popTc(tc); pushTc(tc, gui.loadFont(readVmString(ref))); break; }
+            case GUI_SET_ROTATION:   { int deg = popTc(tc); gui.setRotation(deg); pushTc(tc, 0); break; }
 
             // H19 — App.* introspección del proyecto (ids 211-213).
             case APP_MAIN_MODULE: {       // nombre del entry (basename sin extensión)
