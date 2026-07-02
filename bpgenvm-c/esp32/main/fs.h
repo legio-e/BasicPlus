@@ -78,6 +78,13 @@ void fs_format_ram(void);
  * Durante la operación se suspenden los IRQs. */
 fs_status_t fs_save_to_flash(void);
 
+/* LOTES: suspende el auto-guardado de fs_put/fs_delete (cada uno reescribe la
+ * partición ENTERA — en la bpfs de 10 MB del P4 son ~3 s por operación). Patrón:
+ * suspend → N puts → resume(save_now=1) = UN solo save. Con save_now=0 solo
+ * reactiva (p.ej. si no hubo cambios). Lo usa esp32_mods_install (primer boot). */
+void fs_autosave_suspend(void);
+void fs_autosave_resume(int save_now);
+
 /* Itera los ficheros. `cb` recibe (name, size, user) por cada uno.
  * Si cb devuelve != 0 la iteración se aborta. */
 typedef int (*fs_list_cb_t)(const char* name, uint32_t size, void* user);

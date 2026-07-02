@@ -178,6 +178,19 @@ fs_status_t fs_get(const char* name, const uint8_t** data_out, uint32_t* size_ou
     return FS_OK;
 }
 
+/* Suspensión del auto-guardado para LOTES (p.ej. esp32_mods_install): cada
+ * fs_put/fs_delete auto-persiste borrando+reescribiendo la partición ENTERA
+ * (~3 s en la bpfs de 10 MB del P4) → los 14 puts del primer boot eran ~46 s.
+ * En lote: suspender, hacer los puts y UN solo save al final. */
+static int s_autosave_off = 0;
+
+void fs_autosave_suspend(void) { s_autosave_off = 1; }
+
+void fs_autosave_resume(int save_now) {
+    s_autosave_off = 0;
+    if (save_now) fs_save_to_flash();
+}
+
 fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
     if (!name || !name[0]) return FS_ERR_INVALID;
     if (strlen(name) >= FS_NAME_LEN) return FS_ERR_NAME_TOO_LONG;
@@ -203,7 +216,7 @@ fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
     s_files[slot].size = size;
     s_used_bytes += size;
 
-    fs_save_to_flash();   /* auto-persistir (best-effort) */
+    if (!s_autosave_off) fs_save_to_flash();   /* auto-persistir (best-effort) */
     return FS_OK;
 }
 
@@ -215,7 +228,7 @@ fs_status_t fs_delete(const char* name) {
     s_files[i].data = NULL;
     s_files[i].size = 0;
     s_files[i].name[0] = '\0';
-    fs_save_to_flash();
+    if (!s_autosave_off) fs_save_to_flash();
     return FS_OK;
 }
 

@@ -3150,10 +3150,17 @@ static const mod_entry_t s_mods[] = {
 void esp32_mods_install(void) {
     const uint8_t* d; uint32_t sz;
     unsigned n = (unsigned) (sizeof(s_mods) / sizeof(s_mods[0]));
+    unsigned installed = 0;
+    /* LOTE: sin suspender, cada fs_put auto-persiste reescribiendo la partición
+     * entera (~3 s en la bpfs de 10 MB del P4) → el primer boot tardaba ~46 s.
+     * Suspender + UN save al final lo deja en ~3 s; si no se instala nada
+     * (boots siguientes), ni siquiera se guarda. */
+    fs_autosave_suspend();
     for (unsigned i = 0; i < n; i++) {
         /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */
         if (fs_get(s_mods[i].path, &d, &sz) != 0) {
-            fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len);
+            if (fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len) == FS_OK) installed++;
         }
     }
+    fs_autosave_resume(installed > 0);
 }
