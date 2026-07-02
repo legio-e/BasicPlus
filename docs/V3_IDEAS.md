@@ -960,6 +960,15 @@ portar/registrar su driver C → volcar todo a `board.json` → refactor de `gui
 de config (no constantes) → flashear y validar. Es la prueba de fuego del data-driven y del cierre
 gráfico del P4.
 
+**Refinamiento 29-jun (charla Eduardo + Claude, tras resolver el wire UART; la placa llega MAÑANA 30-jun — Amazon adelantó un día):**
+- **Investigación Waveshare 4.3":** 480×800 IPS, MIPI-DSI 2-lane, táctil capacitivo 5-point (prob. GT911), + ESP32-C6 (WiFi6/SDIO), audio ES8311, cámara MIPI-CSI, TF, batería. **IC del panel exacto = por confirmar** (en el repo `waveshareteam/ESP32-P4-WIFI6-Touch-LCD-4.3`: carpetas firmware/examples/schematic; 5 min mañana con la placa).
+- **Hallazgo estratégico:** existe `esp32-display-support` + los drivers `esp_lcd_*` de los paneles P4 comunes (EK79007, JD9365, ST7701…) YA en el ESP Component Registry → **el catálogo de drivers se IMPORTA (`idf_component.yml`), no se escribe.** Nuestro trabajo = la capa de selección + config.
+- **Partido compile-time / runtime (LA propuesta de valor):** IDF da flexibilidad de HW con Kconfig/`.yml`, pero en COMPILE-TIME (para quien tiene el toolchain). Lo nuestro = la misma idea bajada a RUNTIME: el firmware ya compilado lee `board.json` → **el usuario edita un JSON, no toca C ni recompila.** (Filosofía de Eduardo: autonomía al programador; la mayoría no son de C — si lo fueran, usarían Arduino.)
+- **El LÍMITE es "qué CONTROLADORES", no "qué placas":** con unos pocos drivers compilados cubres la MAYORÍA de placas P4 del mercado (muchas comparten IC; solo cambian pines/res/timing = puro `board.json`). Configurar placa con un IC del catálogo = runtime/usuario (caso común, ~90%); añadir un IC nuevo = recompilar/nosotros (caso raro). Sembramos los `board.json` de las placas probadas; el usuario copia una parecida y ajusta pines.
+- **"Board activo" = propiedad del PROYECTO BP** (decisión Eduardo): el usuario elige micro + placa y se guarda en el `.bpproj` (como el target de un IDE). Selección vía **file explorer sobre la jerarquía fabricantes/micros/boards** (V3; wizard/asistente = V4, sobre-ingeniería para ahora). El `board.json` viaja al device como un **resource** en el Run-on-Device → conecta con **H19** (modelo de proyecto) + #23 (fichero de proyecto) + #260 (resources). El **micro** fija el binario (compile-time, ya flasheado); la **placa** fija el `board.json` (runtime, se sube).
+- **El 2º puerto serie: RESUELTO** (wire UART, commit `82e7c65`) — e IMPRESCINDIBLE, porque **la Waveshare NO tiene Ethernet** (Eduardo, 29-jun): solo USB/UART, el wire TCP no le sirve. → DOS cosas que suben de "menor" a **PREREQUISITO de mañana**: **(a)** `eth_init` no-fatal o condicional por `board.json` (`"ethernet":false`) — hoy `ESP_ERROR_CHECK(eth_init)` abortaría sin PHY → el firmware no arrancaría en la Waveshare; lo PRIMERO a tocar. **(b) Observabilidad sin Ethernet:** se pierde la red de seguridad (net_logf→:5555) que salvó el bring-up de hoy → 1er paso = ver qué puertos enumera la Waveshare (quizás su USB-Serial-JTAG SÍ enumera, a diferencia de la Function-EV → ahí los logs; o un 2º USB). Sin ojos no se empieza.
+- **Mañana (30-jun):** estudiar las diferencias de HW con la placa delante → confirmar IC del panel + pines del repo/esquemático → volcar a `board.json` + refactor de `gui_display_dsi.c` (struct cfg + registro `nombre→init`) → flashear y validar. Con observabilidad (Ethernet de logs) desde el minuto uno.
+
 ## H19 — Modelo de proyecto + despliegue por-proyecto con paths web-app (diseño 26-jun, Eduardo + Claude)
 
 **Motivación (Eduardo):** "Run on device" hoy lo dispara el `.bp` ABIERTO y sube todo PLANO a `/app`.
@@ -1075,3 +1084,63 @@ hueco "#1 `/app/<proyecto>/`" del paso 4: no es FS-folders, es **modelo de proye
   relativas (si no, ajustarlo) para que el base-dir las resuelva.
 - Es V3 (lo necesita cualquier app GUI con resources, el caso del P4), pero es un hito IDE+firmware →
   por fases, F1 primero.
+
+## Packs — XIP de bytecode y assets (diseño V4; charla 2-jul, Eduardo + Claude)
+
+> Refina la nota "PACK = XIP de bytecode" del V3_BACKLOG (charla 24-jun). Apuntado aquí
+> en caliente (Eduardo: "a mí se me pueden ir las ideas, hay que aprovechar cuando están
+> más o menos claras").
+
+**Qué es un pack (formulación de Eduardo, 2-jul):**
+- Un pack es un archivo que contiene **su nombre, el tamaño y N ficheros**. Cada fichero
+  lleva **tipo, tamaño y nombre**, seguido del contenido. Secuencial, en forma de lista.
+- Contenido típico: **módulos** (sin descartar otros tipos de archivo).
+- En un micro, los packs se guardan en la **flash, de forma PLANA, sin sectores**, para que
+  los archivos que contienen queden en una **dirección de memoria concreta** (flash mapeada:
+  RP2350 `0x1000_0000`, STM32 `0x0800_0000`, ESP32 vía `esp_partition_mmap`).
+- **Alineación de 4 en 4** (pack y archivos; si algo no es múltiplo de 4 se complementa).
+- En la flash caben **n packs**.
+- Direccionamiento eficiente: **`nombrePack:nombreArchivo.tipo`**.
+
+**Carga de un módulo desde pack (la clave del ahorro):**
+- Carga normal (FS→RAM): `Constantes + Variables | CS | Código` — todo a `memory[]`.
+- Carga desde pack: `Constantes + Variables | CS` a RAM y **el CÓDIGO NO se carga** — se
+  ejecuta directo de flash (XIP). Tras la carga, **fixup de la tabla de métodos públicos**:
+  las direcciones de código pasan a ser las direcciones EN FLASH.
+- El grueso de un `.mod` es el código (solo-lectura) → el ahorro de RAM va donde duele
+  (Pico 264 KB). De regalo: carga casi instantánea (no hay copia).
+
+**Extensión (Eduardo, 2-jul): ESTUDIAR meter FUENTES e IMÁGENES en packs** — ocupan mucho
+y el ahorro de RAM sería aún mayor. Matices técnicos del estudio:
+- **Imágenes RAW/RGB565**: ganancia directa — LVGL puede blitear desde la dirección mapeada
+  (src tipo variable apuntando a flash) = **cero copia a RAM**.
+- **PNG**: el fichero se ahorra RAM, pero el DECODIFICADO sigue yendo a RAM (lodepng) — la
+  ganancia es parcial. Alternativa: convertir a RAW/RGB565 al empaquetar (el pack tool).
+- **Fuentes (binfont .bin)**: hoy `lv_binfont_load` lee el fichero a RAM y construye tablas.
+  Estudiar: loader que deje los **bitmaps de glifos en flash** (o formato C-array const como
+  las Montserrat embebidas) — es donde está el volumen de una fuente.
+
+**Consideraciones de diseño (charla 2-jul):**
+1. **EL punto de fondo — modelo de direcciones del intérprete.** Hoy `pc` y todas las
+   direcciones (retornos del CS, vtables, symbol table, lo que escribe `bpvm_link_all`) son
+   offsets dentro de `memory[]`; código en flash = direcciones FUERA. Dos caminos:
+   **(a) punteros reales** (direcciones de máquina uniformes RAM/flash — rápido y limpio;
+   toca inner loop + linker + frames + debugger pc↔línea + AOT registry) o **(b) base de
+   código por módulo** (pc relativo; más contenido pero los CALL cross-module y retornos
+   mezclados piden cuidado). La formulación del fixup de la tabla de métodos apunta a (a).
+   DECIDIR ESTO PRIMERO; el resto es fontanería.
+2. **Paridad miVM**: en Java no hay flash ni punteros → miVM sigue copiando (o indexando el
+   pack como byte[]). Paridad de COMPORTAMIENTO intacta; las direcciones absolutas divergen
+   (ya divergen host↔placa) — presente en dumps del debugger.
+3. **Precedencia de resolución** (lección del "Json rancio"): con un módulo en FS Y en pack,
+   propuesta: **RAM → FS (/lib, /app) → packs** en desarrollo (lo subido manda); el boot de
+   producción arranca del pack. Regla EXPLÍCITA.
+4. **Física de flash**: "sin sectores" vale para LEER; escribir sigue borrando por sectores →
+   pack = INMUTABLE, se reemplaza entero (virtud: artefacto estable; el FS queda para lo
+   mutable). En ESP32 la región de packs alineada a **64 KB** (ventanas del mmap).
+5. **Rendimiento**: interpretar desde flash paga cache-miss (barato en RP2350/STM32 con
+   caché/prefetch; más notable en ESP32 SPI). Medir con la bench suite (benchcpu desde pack
+   vs RAM) antes de generalizar.
+6. **Sinergias**: el campo `tipo` admite `.mdn` (AOT) y assets; el PUT chunked+CRC del wire
+   ya vale para subir packs; herramienta de empaquetado natural en el IDE ("exportar proyecto
+   → pack") → **un pack = una app instalable** (buena historia de distribución).
