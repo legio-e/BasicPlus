@@ -213,6 +213,23 @@ test-xmodnat: $(LIBOBJ)
 	  (cd samples && ../$(XMODNAT_BIN) XmodNat.mod); \
 	fi
 
+# #169 — método de clase EXTERNA desde native: XMethodNat.useBox (native) llama a
+# XClassLib.Box.getDoubled() vía call_method_i32 con el slot resuelto del .bpi
+# (ClassSig/slotOf, base H13.1). El loader auto-carga XClassLib.mod vía discover_deps.
+XMETHODNAT_BIN = build/test_xmethodnat.exe
+test-xmethodnat: $(LIBOBJ)
+	@mkdir -p build
+	@if [ ! -f samples/XMethodNat.mod ]; then \
+	  echo "(skip test-xmethodnat: falta samples/XMethodNat.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/XMethodNat.bp --compile samples --backend=mivm)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_xmethodnat.c test/aot_XMethodNat.c \
+	    $(LIBOBJ) -o $(XMETHODNAT_BIN) $(LDFLAGS); \
+	  echo "--- AOT metodo de clase externa #169 (esperado: useBox = 11, OK) ---"; \
+	  (cd samples && ../$(XMETHODNAT_BIN) XMethodNat.mod); \
+	fi
+
 # P-run-stop (#257) — KILL cooperativo: poll_cb entre quanta + esperas con
 # tope de 50 ms. Tres fases: bucle infinito con bpvm_run, ídem con
 # bpvm_run_smp(1), y programa DORMIDO (sleepSec(3600)) que debe morir

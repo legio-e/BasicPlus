@@ -1,0 +1,17 @@
+// XMethodNat — #169: una `function native` llama a un MÉTODO de una clase de
+// OTRO módulo (XClassLib.Box.getDoubled). Gemelo cross-module de MethodCall.bp
+// (#174b, same-module, que SÍ va). La base slotOf/.bpi (H13.1) debería permitir
+// resolver el slot de la clase importada.
+// Esperado: useBox = 11  (getDoubled(5)=10, +1).
+module XMethodNat
+  import XClassLib
+
+  native function useBox(b: XClassLib.Box): integer
+    return b.getDoubled() + 1
+  end useBox
+
+  function Main()
+    var box: XClassLib.Box := XClassLib.Box(5)
+    print "useBox =", useBox(box)
+  end Main
+end XMethodNat

@@ -532,6 +532,15 @@ nota en el bullet del operador). Detalle de diseño original abajo (se conserva)
   toque el IDE, **repaso del AOT de una pasada**.
 - **#169 — AOT cross-module sin puente del intérprete** (MEJORA de rendimiento;
   hoy FUNCIONA vía `call_bp` + warning). Diseño en `AOT_CROSS_MODULE.md`.
+  **✅ VERIFICADO (2-jul): los MÉTODOS de clases EXTERNAS desde native también
+  FUNCIONAN ya** — la base slotOf/.bpi de H13.1 los desbloqueó de facto (el emisor
+  resuelve el slot de la clase importada vía ClassSig, `call_method_i32` despacha
+  en runtime). Probado end-to-end con paridad byte-idéntica y test de regresión:
+  `make test-xmethodnat` (samples/XClassLib.bp + XMethodNat.bp, test/aot_XMethodNat.c
+  + test_xmethodnat.c). Límites heredados del puente v1: firmas i32, solo método
+  público/virtual; construir el objeto externo DENTRO del native queda sin probar
+  (el caso de uso —recibir objeto + llamar— ✅). El "sin puente" (aceleración real)
+  sigue siendo V4.
 - **Layout compacto de narrow** (L10 follow-up): `byte[]`/`int16[]` y globales
   narrow con storage real (hoy viven como i32; la maquinaria de la VM ya existe).
 - **Fixed arrays `tipo[N]`** en campos de clase y en `native` (hoy error honesto;

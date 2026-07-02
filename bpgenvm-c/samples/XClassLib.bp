@@ -1,0 +1,15 @@
+// XClassLib — lib para el repro de #169 (métodos de clase EXTERNA desde native):
+// clase pública con método i32 (firma dentro del puente v1).
+module XClassLib
+
+  public class Box
+    var v: integer
+    public function Box(x: integer)
+      this.v := x
+    end Box
+    public function getDoubled(): integer
+      return this.v * 2
+    end getDoubled
+  end Box
+
+end XClassLib
