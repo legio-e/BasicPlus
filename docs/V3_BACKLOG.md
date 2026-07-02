@@ -247,6 +247,14 @@ preview de forms en PC (si no se cuela antes), rollout de gráficos a más kits,
 `deflate`-lite, multi-fichero/Archive, IDE multiplataforma (jSerialComm), strings multilínea + interpolación,
 AOT cross-module (#169). **El alcance de V3 queda CERRADO** ("y ya nada más").
 
+**Añadidos a V4 en el cierre (Eduardo, 2-jul):** breadcrumb retenido a ESP32/Pico (arriba, H10.b) ·
+bug del estado GUI residual entre runs en la ws (sección 🐞; se informa como limitación conocida en la
+guía de gráficos) · **rotación en STM32/LTDC** (el flush LTDC no gira; `setRotation` = aviso+no-op en la
+DK2; el flush rotatorio ya está en ws+EV) · **utilidad relativo→absoluto** (norma de paths) ·
+**`memorySize` por `BpVM.cfg` en device** (hoy `#define` 2 MB en los P4). Además, de la sesión de
+rotación: aceleración PPA del giro en P4 · logs del firmware por el wire · consolidación board-aware
+de los 2 firmwares P4.
+
 **PACK + lectura de SD (nuevas prestaciones V4, charla 24-jun):**
 - **PACK = XIP de bytecode.** Un "pack" es como un ZIP **sin comprimir** (un TAR): cabecera +
   directorio `{nombre, offset, tamaño}` + blobs concatenados (módulos compilados, código alineado
