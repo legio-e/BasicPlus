@@ -63,15 +63,25 @@ var_of() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
     done
     echo "};"
     echo ""
+    # OJO: install en LOTE (021fdbf) — sin el suspend/resume, cada fs_put
+    # auto-persiste la partición entera y el primer boot del P4 tardaba ~46 s.
+    # Si tocas esto, mantenlo idéntico al esp32_mods.c vigente.
     echo "void esp32_mods_install(void) {"
     echo "    const uint8_t* d; uint32_t sz;"
     echo "    unsigned n = (unsigned) (sizeof(s_mods) / sizeof(s_mods[0]));"
+    echo "    unsigned installed = 0;"
+    echo "    /* LOTE: sin suspender, cada fs_put auto-persiste reescribiendo la partición"
+    echo "     * entera (~3 s en la bpfs de 10 MB del P4) → el primer boot tardaba ~46 s."
+    echo "     * Suspender + UN save al final lo deja en ~3 s; si no se instala nada"
+    echo "     * (boots siguientes), ni siquiera se guarda. */"
+    echo "    fs_autosave_suspend();"
     echo "    for (unsigned i = 0; i < n; i++) {"
     echo "        /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */"
     echo "        if (fs_get(s_mods[i].path, &d, &sz) != 0) {"
-    echo "            fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len);"
+    echo "            if (fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len) == FS_OK) installed++;"
     echo "        }"
     echo "    }"
+    echo "    fs_autosave_resume(installed > 0);"
     echo "}"
 } > "$OUT"
 
