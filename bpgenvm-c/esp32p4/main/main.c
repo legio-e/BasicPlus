@@ -33,7 +33,7 @@
 #include "lwip/inet.h"
 
 #include "fs.h"               /* FS-RAM (VM.2b) + fs_register_bpvm (#247) */
-#include "p4_mods.h"          /* stdlib embebida (Core fresco) -> /lib */
+#include "esp32_mods.h"       /* stdlib embebida (14 mods, compartida con el S3) -> /lib */
 #include "repl_esp32.h"       /* dispatcher wire v1 REUTILIZADO (agnóstico transporte) */
 #include "wire_v1_tcp.h"      /* servidor del wire sobre TCP (capa de I/O del P4) */
 #include "p4_board_id.h"      /* identidad de placa esp32p4 para INFO/HELLO */
@@ -171,7 +171,7 @@ static void wire_task(void *arg)
     /* FS + stdlib listos ANTES de aceptar al IDE (no dependen del PC log). */
     fs_status_t r = fs_init();
     fs_register_bpvm();          /* #247: file I/O desde BP sobre este FS */
-    esp32p4_mods_install();      /* Core fresco -> /lib (if-absent) */
+    esp32_mods_install();        /* stdlib completa -> /lib (if-absent, save en lote) */
     net_logf("[p4] FS+stdlib listos: %s, %d ficheros, %u B libres",
              fs_status_str(r), fs_file_count(), (unsigned) fs_free_bytes());
 
@@ -203,7 +203,7 @@ static void wire_task_uart(void *arg)
 
     fs_status_t r = fs_init();
     fs_register_bpvm();          /* #247: file I/O desde BP sobre este FS */
-    esp32p4_mods_install();      /* Core fresco -> /lib (if-absent) */
+    esp32_mods_install();        /* stdlib completa -> /lib (if-absent, save en lote) */
     net_logf("[p4] FS+stdlib listos (UART): %s, %d ficheros, %u B libres",
              fs_status_str(r), fs_file_count(), (unsigned) fs_free_bytes());
 

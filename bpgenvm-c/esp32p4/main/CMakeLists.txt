@@ -19,7 +19,7 @@ endif()
 idf_component_register(
     SRCS
         "main.c"
-        "p4_mods.c"
+        "../../esp32/main/esp32_mods.c"       # P6 imagen única: stdlib embebida COMPARTIDA con el S3 (14 mods)
         "${WIRE_TRANSPORT_SRC}"               # VM.3: capa de I/O del wire v1 (TCP o UART0 según BPVM_P4_WIRE)
         "p4_board_id.c"                       # VM.3 pulido: identidad de placa esp32p4 (override fuerte de repl_board_id)
         "gui_display_dsi.c"                   # G3: display MIPI-DSI (panel EK79007 + backlight LEDC)
