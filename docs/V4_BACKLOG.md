@@ -29,8 +29,14 @@ El índice que manda; el resto del documento es el detalle que va colgando de é
    RISC-V; hoy `native` cae a interpretado en ESP32). *(La placa gráfica insignia lo merece.)*
 6. **Heap** — el frente GC/memoria: `B-gc-allocanchor` + `B-freeref-no-recursivo` (abajo) +
    fragmentación/rendimiento (las herramientas H3 ya existen) + layout compacto de narrow types.
-7. **Módulo + mdi** — *(a detallar con Eduardo al arrancar V4; apuntado verbatim — probablemente la
-   unidad módulo+metadata/nativo desplegable, liga con Pack como unidad `.mod`+`.mdn`.)*
+7. **Módulo + mdi** — **el contenido del fichero de interfaz (hoy `.bpi`) TAMBIÉN dentro del `.mod`**
+   (formulación Eduardo 3-jul): módulo AUTODESCRIPTIVO. El `.mod` crece un poco ("asumible" — la
+   interfaz son nombres+firmas; y con Packs/XIP se ahorra RAM, "en conjunto salimos ganando").
+   Beneficios que caen solos: (a) compilar contra un `.mod` sin su `.bpi`; (b) el DEVICE puede
+   resolver nombre→slot en carga = **el Camino B de forms** (nº 10) sale de aquí; (c) el Pack
+   manager puede inspeccionar qué exporta cada módulo de un pack; (d) **mata la familia de bugs de
+   DESFASE `.bpi`/`.mod`/`.slots`** (Json rancio, slots de Gui — un artefacto, una verdad); el
+   sidecar `.slots` de H13.1 queda subsumido.
 8. **2 Núcleos** — dual-core: RP2350 (#153, incluye el fix de la race B1) y el P4 (2× RISC-V 360 MHz);
    SMP real en device (hoy 1 worker).
 9. **Revisar IDE** — pase de consolidación (incluye multiplataforma jSerialComm, breadcrumb, y lo
