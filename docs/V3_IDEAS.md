@@ -1144,3 +1144,20 @@ y el ahorro de RAM sería aún mayor. Matices técnicos del estudio:
 6. **Sinergias**: el campo `tipo` admite `.mdn` (AOT) y assets; el PUT chunked+CRC del wire
    ya vale para subir packs; herramienta de empaquetado natural en el IDE ("exportar proyecto
    → pack") → **un pack = una app instalable** (buena historia de distribución).
+
+### Pack manager — la pantalla del IDE (formulación de Eduardo, 3-jul)
+
+Una **pantalla nueva del IDE** que cubre el ciclo de vida completo de los packs. Modelo de
+dos lados, como el explorer pero de packs:
+
+- **Lado PC — la biblioteca**: una **carpeta de packs en el PC** (la colección local).
+  Desde la pantalla se pueden **construir packs nuevos** (empaquetar) y **borrar antiguos**.
+- **Lado micro**: **ver los packs que hay en el micro** y **borrar** el que se quiera.
+- **El puente**: de los packs de la biblioteca, **escoger cuáles subir** al micro y
+  subirlos (selección múltiple → grabar por el wire).
+
+Notas de encaje con el diseño de arriba: la "carpeta de packs del PC" es el artefacto
+distribuible (se puede compartir/versionar fuera del IDE); "construir" = el empaquetador
+(proyecto/módulos/assets → pack, punto 6); "subir" = el Burn Pack sobre el wire (pack
+inmutable, se reemplaza entero, punto 4); "ver los del micro" pide un comando wire de
+inventario de packs (nombre + tamaño + contenido), hermano del LS del FS.

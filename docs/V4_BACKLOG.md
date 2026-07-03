@@ -17,9 +17,11 @@ El índice que manda; el resto del documento es el detalle que va colgando de é
 1. **SD** — lectura de tarjeta SD (almacenamiento masivo removible). *(Detalle abajo, junto a Pack.)*
 2. **Pack** — XIP de bytecode: código en flash sin copiar a RAM; stdlib como pack →
    actualizar `Gui` sin reflashear. *(Diseño detallado en `V3_IDEAS.md` §Packs, charla 2-jul.)*
-3. **Pack manager** — la gestión de packs: "Burn Pack" desde el IDE (grabar la región por el wire),
-   listar/inspeccionar/borrar packs del device, y el orden de resolución FS → pack → embebido. *(Nuevo
-   como ítem propio: es el tooling que hace usable el nº 2.)*
+3. **Pack manager** — **pantalla nueva del IDE** (formulación Eduardo 3-jul): dos lados, como el
+   explorer pero de packs. Lado PC = **carpeta de packs** (biblioteca local): construir packs nuevos,
+   borrar antiguos. Lado micro = ver los packs del device y borrar. El puente = **escoger cuáles
+   subir y subirlos** (Burn por el wire). Pide un comando wire de inventario de packs (hermano del
+   LS). *(Detalle en `V3_IDEAS.md` §Packs → "Pack manager".)*
 4. **Sobrecarga de funciones** — overloading en el lenguaje (misma función, firmas distintas).
    *(Nuevo; tanda de lenguaje. Toca frontend + mangling de nombres en .mod/.bpi — hoy ya existe
    `nombre#arity` en los símbolos, base a estudiar.)*
