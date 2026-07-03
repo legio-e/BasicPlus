@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BasicPlus — Documentation</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 3rem 2rem 6rem;
+  }
+
+  header.hero { text-align: center; margin-bottom: 2.5rem; }
+  header.hero h1 {
+    font-size: 3rem;
+    color: var(--accent);
+    margin: 0 0 0.3rem;
+    letter-spacing: -0.02em;
+  }
+  header.hero .tagline {
+    font-size: 1.15rem;
+    color: var(--fg-muted);
+    max-width: 640px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+  .badges {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .badge {
+    font-size: 0.78rem;
+    background: var(--accent-bg);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    font-weight: 600;
+  }
+
+  h2 {
+    color: var(--accent);
+    margin-top: 3rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--border);
+    font-size: 1.4rem;
+  }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.45;
+  }
+  pre code { background: transparent; padding: 0; font-size: 0.88em; }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { text-align: left; padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin: 1.2rem 0;
+  }
+  a.card {
+    display: block;
+    text-decoration: none;
+    color: var(--fg);
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.1rem;
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+  }
+  a.card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 14px rgba(42,111,191,0.12);
+    transform: translateY(-2px);
+  }
+  a.card .t { font-weight: 700; color: var(--accent); display: block; margin-bottom: 0.25rem; }
+  a.card .d { font-size: 0.9rem; color: var(--fg-muted); line-height: 1.45; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1.2rem 0;
+    border-radius: 4px;
+    font-size: 0.95rem;
+  }
+  .note p:first-child { margin-top: 0; }
+  .note p:last-child { margin-bottom: 0; }
+
+  ul.specs { list-style: none; padding-left: 0; margin: 1rem 0; columns: 2; }
+  ul.specs li { margin: 0.3rem 0; break-inside: avoid; }
+
+  footer {
+    margin-top: 3.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--fg-muted);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  @media (max-width: 600px) {
+    header.hero h1 { font-size: 2.2rem; }
+    ul.specs { columns: 1; }
+    main { padding: 2rem 1.2rem 4rem; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<p style="text-align:right;margin:0 0 -1rem"><a href="../index.html">🇪🇸 Español</a></p>
+<header class="hero">
+  <h1>BasicPlus</h1>
+  <p class="tagline">
+    A general-purpose language for 32-bit microcontrollers: modern BASIC
+    syntax, object orientation and a first-class debugger. It compiles to
+    bytecode that runs <strong>identically</strong> on the PC and on the
+    micro.
+  </p>
+  <div class="badges">
+    <span class="badge">V2 · code frozen</span>
+    <span class="badge">RP2350 · ESP32-S3 · STM32</span>
+    <span class="badge">Two VMs · one byte-identical output</span>
+    <span class="badge">Tested on real hardware</span>
+    <span class="badge">MIT</span>
+  </div>
+</header>
+
+<p>
+  The same program you debug on your desktop later blinks an LED on a
+  Raspberry Pi Pico 2, an ESP32-S3 or an STM32 — no recompiling, no
+  <code>#ifdef</code>, no surprises. On a PC with no GPIO the hardware
+  builtins log to the console; on the board they drive real pins. The
+  bytecode is the same, byte for byte.
+</p>
+
+<pre><code><span class="comment">// blink.bp — blinks the Pico on-board LED (GP25) using the OO API.</span>
+<span class="kw">module</span> Blink
+  <span class="kw">import</span> Gpio
+
+  <span class="kw">function</span> <span class="fn">Main</span>()
+    <span class="kw">var</span> led: Gpio.<span class="type">Pin</span> := Gpio.<span class="type">Pin</span>(<span class="num">25</span>, Gpio.<span class="type">Pin</span>.OUTPUT)
+    <span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">0</span>
+    <span class="kw">while</span> i &lt; <span class="num">100</span> <span class="kw">do</span>
+      led.on()
+      sleep(<span class="num">300</span>)
+      led.off()
+      sleep(<span class="num">300</span>)
+      i := i + <span class="num">1</span>
+    <span class="kw">endwh</span>
+    <span class="kw">print</span> <span class="str">"Blink done"</span>
+  <span class="kw">end</span> Main
+<span class="kw">end</span> Blink</code></pre>
+
+<h2>Getting started</h2>
+<div class="cards">
+  <a class="card" href="../QUICKSTART.md">
+    <span class="t">Quick start → <small>(Spanish)</small></span>
+    <span class="d">Zero to blink, platform by platform: compile, run on the PC and upload to the board.</span>
+  </a>
+  <a class="card" href="../INSTALAR_FIRMWARE.md">
+    <span class="t">Installing the firmware → <small>(Spanish)</small></span>
+    <span class="d">Flash the VM on each micro (prebuilt image or built by you): Pico/Metro, ESP32-S3, STM32.</span>
+  </a>
+</div>
+
+<h2>The language and the tools</h2>
+<div class="cards">
+  <a class="card" href="manual.html">
+    <span class="t">Language manual →</span>
+    <span class="d">Lexicon, types, classes, modules, exceptions, concurrency and <code>native</code> (AOT) functions.</span>
+  </a>
+  <a class="card" href="referencia.html">
+    <span class="t">Reference →</span>
+    <span class="d">The complete standard library, the command line and the on-disk artifacts (<code>.mod</code>, <code>.bpi</code>, <code>.mdn</code>…).</span>
+  </a>
+  <a class="card" href="gui.html">
+    <span class="t">Graphical interface →</span>
+    <span class="d">The <code>Gui</code> module: screen and widgets, layout, color and fonts, events and forms. Same bytecode on the PC and on the board.</span>
+  </a>
+  <a class="card" href="guia-ide.html">
+    <span class="t">IDE guide →</span>
+    <span class="d">The window, projects, Run/Stop, the board explorer, the micro console and the debugger.</span>
+  </a>
+</div>
+
+<h2>Under the hood</h2>
+<div class="cards">
+  <a class="card" href="../bp-desde-dentro.html">
+    <span class="t">BasicPlus from the inside → <small>(Spanish)</small></span>
+    <span class="d">The architecture told end to end: compiler, bytecode, the two VMs, the GC, AOT and the firmwares.</span>
+  </a>
+  <a class="card" href="../PHILOSOPHY.md">
+    <span class="t">Project philosophy → <small>(Spanish)</small></span>
+    <span class="d">What BasicPlus is and what it does not want to be.</span>
+  </a>
+  <a class="card" href="../PENDIENTES.md">
+    <span class="t">Living backlog → <small>(Spanish)</small></span>
+    <span class="d">The project's honest diary: what's done, what was deferred to v3 and why.</span>
+  </a>
+  <a class="card" href="../RELEASES.md">
+    <span class="t">Release notes → <small>(Spanish)</small></span>
+    <span class="d">What v2.0 brings, the downloadable artifacts and what was deferred to v3.</span>
+  </a>
+</div>
+
+<p style="margin-top:1.2rem">Low-level specs <em>(Spanish)</em>:</p>
+<ul class="specs">
+  <li>→ <a href="../MOD_FORMAT.md"><code>.mod</code> format</a> — the bytecode binary spec.</li>
+  <li>→ <a href="../opcodes.html">Opcodes</a> (<a href="../OPCODES.md">.md</a>) — the semantics of each instruction.</li>
+  <li>→ <a href="../HEAP_LAYOUT.md">Heap layout</a> — the runtime <code>memory[]</code>.</li>
+  <li>→ <a href="../BUILTINS.md">Builtins</a> — the <code>CALL_BUILTIN</code> catalog.</li>
+  <li>→ <a href="../BPVM_WIRE_PROTOCOL.md">Wire protocol</a> — the JSON-per-line PC↔board link.</li>
+</ul>
+
+<h2>Platforms</h2>
+<table>
+  <tr><th>Platform</th><th>Transport</th><th>Notes</th></tr>
+  <tr>
+    <td>PC (Windows/Linux/macOS)</td>
+    <td>—</td>
+    <td>Both VMs; TCP daemon for the IDE.</td>
+  </tr>
+  <tr>
+    <td>Raspberry Pi <strong>Pico 2</strong> and Adafruit <strong>Metro RP2350</strong></td>
+    <td>USB-CDC</td>
+    <td>A <strong>single image</strong> for both boards: variant (A/B), pins and PSRAM are decided at <em>runtime</em> (<code>/sys/board.json</code>). AOT enabled.</td>
+  </tr>
+  <tr>
+    <td><strong>ESP32-S3</strong> (Xtensa LX7)</td>
+    <td>UART0</td>
+    <td>Persistent FS on a dedicated partition; console over native USB. <code>native</code> runs interpreted (no AOT on Xtensa).</td>
+  </tr>
+  <tr>
+    <td><strong>STM32</strong> (ref. Nucleo-U575ZI-Q)</td>
+    <td>ST-LINK VCP</td>
+    <td>FS in internal flash; AOT enabled (same Cortex-M33 as the RP2350).</td>
+  </tr>
+</table>
+<p>
+  On all of them: a "wire v1" REPL with file upload and remote RUN,
+  <strong>Stop</strong> (cooperative KILL without resetting the board),
+  <strong>autorun</strong> (<code>/sys/auto.txt</code> starts your program on
+  power-up, and the IDE can attach live) and on-device debugging with
+  breakpoints.
+</p>
+
+<h2>Verified on real hardware</h2>
+<p>
+  This is not desk theory: the full stack has been exercised on silicon.
+  On a <strong>Raspberry Pi Pico 2 / Pico 2 W</strong> (RP2350) the whole
+  hardware ladder was validated end to end — from the IDE, with
+  <em>Run on Device</em>, running the <strong>same bytecode</strong> as on
+  the PC:
+</p>
+<table>
+  <tr><th>Subsystem</th><th>On-board test</th></tr>
+  <tr><td>Execution / OO</td><td>cross-module stdlib classes dispatching on the micro ✅</td></tr>
+  <tr><td>GPIO</td><td>blinking LED (<code>Gpio.Pin</code>) ✅</td></tr>
+  <tr><td>I2C</td><td>real BMP280 sensor (T/P) + bus scan ✅</td></tr>
+  <tr><td>SPI</td><td>BME688 over SPI: <code>chip_id</code> + T/RH/P/gas reads with memory paging ✅</td></tr>
+  <tr><td>UART</td><td>loopback, byte echo ✅</td></tr>
+  <tr><td>PWM + counter</td><td>1 kHz / 500 Hz counted in hardware, &lt; 0.1 % error ✅</td></tr>
+  <tr><td>ADC</td><td>chip internal temperature (23.9 °C) ✅</td></tr>
+  <tr><td>RTC</td><td>monotonic clock + recalibration ✅</td></tr>
+  <tr><td>Watchdog</td><td>feed / timeout / disable ✅</td></tr>
+  <tr><td>Timers</td><td>hardware alarms (polling, synchronized, stopwatch) ✅</td></tr>
+</table>
+<p>
+  On the <strong>STM32</strong> (Nucleo-U575ZI-Q) the <strong>four critical
+  buses</strong> were also validated on the board with real sensors: GPIO,
+  <strong>SPI</strong> (BME688), <strong>UART</strong> (loopback) and
+  <strong>I2C</strong> (BMP280, T/P). And on the <strong>ESP32-S3</strong>
+  (DevKitC) those <strong>same four buses</strong> were validated on the
+  board with real sensors (BME688 over SPI, BME280 over I2C, GPIO and UART
+  loopbacks) — the <strong>three families are on par</strong>. On STM32 and
+  ESP32 the non-critical peripherals (PWM/ADC/RTC/WDT) exist in the API and
+  execute, but their backend is scheduled for v3. The <strong>Metro
+  RP2350B</strong> shares the firmware image with the Pico.
+</p>
+
+<div class="note">
+  <p><strong>The name.</strong> BasicPlus is a homage to <strong>Digital
+  Equipment Corporation's BASIC-PLUS</strong>, the structured dialect that
+  ran under RSTS/E on the PDP-11s through the 70s and 80s — the BASIC whole
+  systems were written in, and a generation learned to program with. The
+  same idea (a language that is easy to read but doesn't treat you like a
+  beginner) transplanted to today's small hardware.</p>
+</div>
+
+<footer>
+  BasicPlus — documentation written alongside the development.
+  Frontend <code>lexer-java</code> · VMs <code>miVM</code> (Java) and
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / STM32) · IDE
+  <code>BpIde</code>. MIT license.
+</footer>
+
+</main>
+</body>
+</html>
