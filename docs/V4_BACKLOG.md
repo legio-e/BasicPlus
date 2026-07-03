@@ -10,6 +10,36 @@
 
 ---
 
+## 📋 ÍNDICE DE V4 (Eduardo, 3-jul-2026) — los 10 temas
+
+El índice que manda; el resto del documento es el detalle que va colgando de él.
+
+1. **SD** — lectura de tarjeta SD (almacenamiento masivo removible). *(Detalle abajo, junto a Pack.)*
+2. **Pack** — XIP de bytecode: código en flash sin copiar a RAM; stdlib como pack →
+   actualizar `Gui` sin reflashear. *(Diseño detallado en `V3_IDEAS.md` §Packs, charla 2-jul.)*
+3. **Pack manager** — la gestión de packs: "Burn Pack" desde el IDE (grabar la región por el wire),
+   listar/inspeccionar/borrar packs del device, y el orden de resolución FS → pack → embebido. *(Nuevo
+   como ítem propio: es el tooling que hace usable el nº 2.)*
+4. **Sobrecarga de funciones** — overloading en el lenguaje (misma función, firmas distintas).
+   *(Nuevo; tanda de lenguaje. Toca frontend + mangling de nombres en .mod/.bpi — hoy ya existe
+   `nombre#arity` en los símbolos, base a estudiar.)*
+5. **Funciones nativas RISC-V** — AOT/`native` en el ESP32-P4 (port del emisor/loader `.mdn` a
+   RISC-V; hoy `native` cae a interpretado en ESP32). *(La placa gráfica insignia lo merece.)*
+6. **Heap** — el frente GC/memoria: `B-gc-allocanchor` + `B-freeref-no-recursivo` (abajo) +
+   fragmentación/rendimiento (las herramientas H3 ya existen) + layout compacto de narrow types.
+7. **Módulo + mdi** — *(a detallar con Eduardo al arrancar V4; apuntado verbatim — probablemente la
+   unidad módulo+metadata/nativo desplegable, liga con Pack como unidad `.mod`+`.mdn`.)*
+8. **2 Núcleos** — dual-core: RP2350 (#153, incluye el fix de la race B1) y el P4 (2× RISC-V 360 MHz);
+   SMP real en device (hoy 1 worker).
+9. **Revisar IDE** — pase de consolidación (incluye multiplataforma jSerialComm, breadcrumb, y lo
+   que deje la lista de V3).
+10. **Revisar GUI** — paraguas gráfico: preview de forms en miVM/Swing, Camino B (nombre→slot en
+    .mod), campos tipados de widgets (diseño Swing/NetBeans, 28-jun), repesca de widgets simples,
+    bug estado-GUI-entre-runs, board-aware data-driven (params de panel en board.json), rotación
+    LTDC, PPA del giro, retirar `esp32p4-ws/` de referencia.
+
+---
+
 ## 🔴 Bugs delicados (movidos de `PENDIENTES.md`, 27-jun)
 
 Tres bugs que exigen tocar la maquinaria de slots/vtable o el GC → se hacen en V4
