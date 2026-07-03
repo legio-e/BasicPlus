@@ -15,6 +15,7 @@
 #include "esp_lcd_mipi_dsi.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_ek79007.h"
+#include "esp_lcd_st7701.h"      /* imagen única: 2º panel del catálogo (Waveshare 4.3") */
 #include "esp_ldo_regulator.h"
 #include "driver/ledc.h"
 #include "esp_heap_caps.h"
@@ -59,6 +60,10 @@ static esp_err_t panel_create_ek79007(esp_lcd_panel_io_handle_t dbi_io,
                                       esp_lcd_dsi_bus_handle_t dsi_bus,
                                       esp_lcd_dpi_panel_config_t *dpi_cfg,
                                       esp_lcd_panel_handle_t *out_panel);
+static esp_err_t panel_create_st7701(esp_lcd_panel_io_handle_t dbi_io,
+                                     esp_lcd_dsi_bus_handle_t dsi_bus,
+                                     esp_lcd_dpi_panel_config_t *dpi_cfg,
+                                     esp_lcd_panel_handle_t *out_panel);
 
 static const p4_panel_cfg_t PANELS[] = {
     /* EK79007 1024x600 (P4-Function-EV). Tiempos = ejemplo oficial mipi_dsi
@@ -71,6 +76,16 @@ static const p4_panel_cfg_t PANELS[] = {
       .bl_invert = 0,
       .tp_swap_xy = 0, .tp_mirror_x = 1, .tp_mirror_y = 1,
       .panel_create = panel_create_ek79007 },
+    /* ST7701 480x800 PORTRAIT (Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3). Valores del
+     * BSP de Waveshare, validados en placa por la sonda st7701_probe y el firmware
+     * esp32p4-ws. OJO: backlight de lógica INVERTIDA; táctil SIN transformar. */
+    { .name = "st7701", .hres = 480, .vres = 800,
+      .dsi_lanes = 2, .dsi_mbps = 500, .dpi_clk_mhz = 30,
+      .hsync_pw = 12, .hsync_bp = 42, .hsync_fp = 42,
+      .vsync_pw = 8,  .vsync_bp = 2,  .vsync_fp = 60,
+      .bl_invert = 1,
+      .tp_swap_xy = 0, .tp_mirror_x = 0, .tp_mirror_y = 0,
+      .panel_create = panel_create_st7701 },
 };
 
 /* Panel VIGENTE (por ahora fijo a la 1ª entrada; el paso board.json lo hará runtime). */
@@ -141,6 +156,77 @@ static esp_err_t panel_create_ek79007(esp_lcd_panel_io_handle_t dbi_io,
     ESP_ERROR_CHECK(esp_lcd_new_panel_ek79007(dbi_io, &dev_cfg, out_panel));
     ESP_ERROR_CHECK(esp_lcd_panel_reset(*out_panel));   /* pulso de reset por GPIO27 */
     ESP_ERROR_CHECK(esp_lcd_panel_init(*out_panel));
+    return ESP_OK;
+}
+
+/* Tabla de init DCS del ST7701 — COPIADA LITERAL del BSP de Waveshare (misma que la sonda
+ * st7701_probe y el firmware esp32p4-ws). El EK79007 la lleva en su driver; el ST7701
+ * la recibe en vendor_config. */
+static const st7701_lcd_init_cmd_t s_st7701_init_cmds[] = {
+    {0xFF, (uint8_t[]){0x77, 0x01, 0x00, 0x00, 0x13}, 5, 0},
+    {0xEF, (uint8_t[]){0x08}, 1, 0},
+    {0xFF, (uint8_t[]){0x77, 0x01, 0x00, 0x00, 0x10}, 5, 0},
+    {0xC0, (uint8_t[]){0x63, 0x00}, 2, 0},
+    {0xC1, (uint8_t[]){0x0D, 0x02}, 2, 0},
+    {0xC2, (uint8_t[]){0x17, 0x08}, 2, 0},
+    {0xCC, (uint8_t[]){0x10}, 1, 0},
+    {0xB0, (uint8_t[]){0x40, 0xC9, 0x94, 0x0E, 0x10, 0x05, 0x0B, 0x09, 0x08, 0x26, 0x04, 0x52, 0x10, 0x69, 0x6B, 0x69}, 16, 0},
+    {0xB1, (uint8_t[]){0x40, 0xD2, 0x98, 0x0C, 0x92, 0x07, 0x09, 0x08, 0x07, 0x25, 0x02, 0x0E, 0x0C, 0x6E, 0x78, 0x55}, 16, 0},
+    {0xFF, (uint8_t[]){0x77, 0x01, 0x00, 0x00, 0x11}, 5, 0},
+    {0xB0, (uint8_t[]){0x5D}, 1, 0},
+    {0xB1, (uint8_t[]){0x4E}, 1, 0},
+    {0xB2, (uint8_t[]){0x87}, 1, 0},
+    {0xB3, (uint8_t[]){0x80}, 1, 0},
+    {0xB5, (uint8_t[]){0x4E}, 1, 0},
+    {0xB7, (uint8_t[]){0x85}, 1, 0},
+    {0xB8, (uint8_t[]){0x21}, 1, 0},
+    {0xB9, (uint8_t[]){0x10, 0x1F}, 2, 0},
+    {0xBB, (uint8_t[]){0x03}, 1, 0},
+    {0xBC, (uint8_t[]){0x00}, 1, 0},
+    {0xC1, (uint8_t[]){0x78}, 1, 0},
+    {0xC2, (uint8_t[]){0x78}, 1, 0},
+    {0xD0, (uint8_t[]){0x88}, 1, 0},
+    {0xE0, (uint8_t[]){0x00, 0x3A, 0x02}, 3, 0},
+    {0xE1, (uint8_t[]){0x04, 0xA0, 0x00, 0xA0, 0x05, 0xA0, 0x00, 0xA0, 0x00, 0x40, 0x40}, 11, 0},
+    {0xE2, (uint8_t[]){0x30, 0x00, 0x40, 0x40, 0x32, 0xA0, 0x00, 0xA0, 0x00, 0xA0, 0x00, 0xA0, 0x00}, 13, 0},
+    {0xE3, (uint8_t[]){0x00, 0x00, 0x33, 0x33}, 4, 0},
+    {0xE4, (uint8_t[]){0x44, 0x44}, 2, 0},
+    {0xE5, (uint8_t[]){0x09, 0x2E, 0xA0, 0xA0, 0x0B, 0x30, 0xA0, 0xA0, 0x05, 0x2A, 0xA0, 0xA0, 0x07, 0x2C, 0xA0, 0xA0}, 16, 0},
+    {0xE6, (uint8_t[]){0x00, 0x00, 0x33, 0x33}, 4, 0},
+    {0xE7, (uint8_t[]){0x44, 0x44}, 2, 0},
+    {0xE8, (uint8_t[]){0x08, 0x2D, 0xA0, 0xA0, 0x0A, 0x2F, 0xA0, 0xA0, 0x04, 0x29, 0xA0, 0xA0, 0x06, 0x2B, 0xA0, 0xA0}, 16, 0},
+    {0xEB, (uint8_t[]){0x00, 0x00, 0x4E, 0x4E, 0x00, 0x00, 0x00}, 7, 0},
+    {0xEC, (uint8_t[]){0x08, 0x01}, 2, 0},
+    {0xED, (uint8_t[]){0xB0, 0x2B, 0x98, 0xA4, 0x56, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xF7, 0x65, 0x4A, 0x89, 0xB2, 0x0B}, 16, 0},
+    {0xEF, (uint8_t[]){0x08, 0x08, 0x08, 0x45, 0x3F, 0x54}, 6, 0},
+    {0xFF, (uint8_t[]){0x77, 0x01, 0x00, 0x00, 0x00}, 5, 0},
+    {0x11, (uint8_t[]){0x00}, 0, 120},   /* Sleep Out + 120 ms */
+    {0x29, (uint8_t[]){0x00}, 0, 0},     /* Display On */
+};
+
+/* Creación del ST7701 (Waveshare 4.3"): vendor cfg con la tabla DCS + new_panel +
+ * reset/init + disp_on_off — el ST7701 SÍ lo usa (cmd 0x29), a diferencia del EK79007. */
+static esp_err_t panel_create_st7701(esp_lcd_panel_io_handle_t dbi_io,
+                                     esp_lcd_dsi_bus_handle_t dsi_bus,
+                                     esp_lcd_dpi_panel_config_t *dpi_cfg,
+                                     esp_lcd_panel_handle_t *out_panel)
+{
+    st7701_vendor_config_t vendor = {
+        .init_cmds      = s_st7701_init_cmds,
+        .init_cmds_size = sizeof(s_st7701_init_cmds) / sizeof(s_st7701_init_cmds[0]),
+        .flags          = { .use_mipi_interface = 1 },
+        .mipi_config    = { .dsi_bus = dsi_bus, .dpi_config = dpi_cfg },
+    };
+    esp_lcd_panel_dev_config_t dev_cfg = {
+        .reset_gpio_num = LCD_RST_GPIO,   /* GPIO27 — reset HW del panel (como el BSP) */
+        .rgb_ele_order  = LCD_RGB_ELEMENT_ORDER_RGB,
+        .bits_per_pixel = 16,
+        .vendor_config  = &vendor,
+    };
+    ESP_ERROR_CHECK(esp_lcd_new_panel_st7701(dbi_io, &dev_cfg, out_panel));
+    ESP_ERROR_CHECK(esp_lcd_panel_reset(*out_panel));   /* pulso de reset por GPIO27 */
+    ESP_ERROR_CHECK(esp_lcd_panel_init(*out_panel));
+    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(*out_panel, true));
     return ESP_OK;
 }
 
