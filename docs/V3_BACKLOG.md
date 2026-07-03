@@ -238,6 +238,36 @@ explícitamente al alcance de cierre de V3 estos tres temas:
   **gráficos al board descriptor data-driven** (¿hay pantalla? resolución/transporte/pines por
   placa — ver "Board descriptor data-driven" más abajo; hoy el P4 lo tiene hardcodeado en
   `gui_display_dsi.c`). Trabajo flash-intensivo → cuando llegue la placa.
+  **(→ HECHO en dos tandas: bring-up ws 1-jul; catálogo+board.json = «Imagen única P4», 3-jul, abajo.)**
+
+### ✅ Imagen única ESP32-P4 (3-jul) — ÚLTIMO código de V3; CÓDIGO CERRADO
+
+**UNA imagen `esp32p4/` sirve a las DOS placas P4** (Function-EV 7" y Waveshare 4.3"), verificado
+en ambas por Eduardo. Plan incremental P0-P6 con flash por paso ("no romper nada, o romper en un
+punto concreto"):
+
+- **P0-P1** — base: la imagen del EV (con eth no-fatal `e58828e` + flush rotatorio `f6a0993`)
+  regresiona OK en EV **y arranca en la Waveshare sin PHY** (wire+T.mod OK; display negro, esperado).
+- **P2 (`5edeef9`)** — `gui_display_dsi.c` refactorizado a **CATÁLOGO de paneles** (`p4_panel_cfg_t`:
+  resolución, timings, DSI/DPI, polaridad backlight, transformación táctil, `panel_create` del IC);
+  1 entrada ek79007, cero cambio de comportamiento.
+- **P3 (`2f45e2d`)** — 2ª entrada **st7701** (dep `esp_lcd_st7701` + tabla DCS de la ws + su create
+  con `disp_on_off`); solo linka, selección fija.
+- **P4 (`494a928`)** — **selección runtime por `/sys/board.json`** clave `"display"` en
+  `p4_panel_select()` (al primer init de GUI; sin fichero/clave/valor desconocido → default
+  ek79007 con log). El panel queda fijado hasta el reset.
+- **P5 (`d7a8389`)** — **`samples/SetDisplay.bp`**: escribe el board.json desde BP (`writeFile`;
+  el fs_put del ESP32 persiste solo). En la ws: `{"display":"st7701"}` + la MISMA imagen →
+  **display+táctil+GUI OK**. Es el mecanismo de usuario → va a la guía de gráficos.
+- **P6 (`229ddd4`+`6316df5`)** — stdlib embebida **COMPARTIDA con el S3** (`esp32_mods.c`, 14 mods;
+  retira `p4_mods` solo-Core); primer boot instala en lote (~s, batching `021fdbf`). Verificado
+  en EV (INFO: FS 110 KB, boot power-on limpio). **De propina, 2 minas desactivadas:** el script
+  `regen_esp32_mods.sh` regeneraba el install SIN el batching (46 s de vuelta) → ahora lo conserva;
+  y el blob embebido de `Pico.mod` estaba RANCIO (de antes de que ADC_CHANNELS/PWM_SLICES fueran
+  intrinsic) → regenerado (único blob que cambió; `pico_mod_len` == byte-exacto el .mod actual).
+- `esp32p4-ws/` queda de REFERENCIA (retirarlo o no = decisión al final del batch; ver V4).
+- **Queda para el batch del finde:** re-flashear la ws con la imagen FINAL (P6) + regresión completa
+  en las dos P4 (la ws tiene la de P5, sin la stdlib unificada).
 
 ### V4 — fuera de V3 (Eduardo, 24-jun)
 
@@ -252,8 +282,10 @@ bug del estado GUI residual entre runs en la ws (sección 🐞; se informa como 
 guía de gráficos) · **rotación en STM32/LTDC** (el flush LTDC no gira; `setRotation` = aviso+no-op en la
 DK2; el flush rotatorio ya está en ws+EV) · **utilidad relativo→absoluto** (norma de paths) ·
 **`memorySize` por `BpVM.cfg` en device** (hoy `#define` 2 MB en los P4). Además, de la sesión de
-rotación: aceleración PPA del giro en P4 · logs del firmware por el wire · consolidación board-aware
-de los 2 firmwares P4.
+rotación: aceleración PPA del giro en P4 · logs del firmware por el wire · ~~consolidación board-aware
+de los 2 firmwares P4~~ **(HECHO 3-jul: imagen única, ver arriba)** — lo que queda a V4 de ese frente:
+**params de panel data-driven** en el board.json (panel NUEVO sin recompilar; hoy = 2 entradas de
+catálogo en C) y retirar `esp32p4-ws/` cuando el batch confirme.
 
 **PACK + lectura de SD (nuevas prestaciones V4, charla 24-jun):**
 - **PACK = XIP de bytecode.** Un "pack" es como un ZIP **sin comprimir** (un TAR): cabecera +
