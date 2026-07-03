@@ -29,6 +29,9 @@
 #include "esp_lcd_touch.h"       /* G5: esp_lcd_touch_* (read_data / get_coordinates) */
 #include "esp_lcd_touch_gt911.h" /* G5: driver GT911 */
 #include "bpvm_gui.h"            /* G6: contrato de la costura bpvm_gui_disp_* */
+#include "fs.h"                  /* imagen única: leer /sys/board.json */
+#include "json_min.h"            /* imagen única: parsear la clave "display" */
+#include <string.h>
 
 static const char *TAG = "p4_gfx";
 
@@ -37,8 +40,9 @@ static const char *TAG = "p4_gfx";
  * del catálogo (resolución, timings, velocidad DSI/DPI, polaridad del backlight,
  * transformación del táctil y la función de creación del IC). Los pines de control
  * (reset 27, backlight 26, I2C táctil 7/8) y el LDO del DPHY son IGUALES en las
- * placas conocidas y quedan comunes. Selección: hoy fija (1ª entrada); el paso
- * board.json la hará runtime. Params pin-a-pin data-driven = V4. */
+ * placas conocidas y quedan comunes. Selección: /sys/board.json {"display":"..."}
+ * en p4_panel_select(); sin fichero/clave → PANELS[0] (ek79007, la EV).
+ * Params pin-a-pin data-driven = V4. */
 typedef struct {
     const char *name;                 /* clave para /sys/board.json */
     int hres, vres;                   /* resolución física del panel */
@@ -88,8 +92,39 @@ static const p4_panel_cfg_t PANELS[] = {
       .panel_create = panel_create_st7701 },
 };
 
-/* Panel VIGENTE (por ahora fijo a la 1ª entrada; el paso board.json lo hará runtime). */
+/* Panel VIGENTE. Default = 1ª entrada (ek79007); p4_panel_select() lo cambia si
+ * /sys/board.json lo pide (se llama UNA vez, antes del primer uso de s_cfg). */
 static const p4_panel_cfg_t *s_cfg = &PANELS[0];
+
+/* Selección runtime del panel por /sys/board.json ({"display":"st7701"}). Sin
+ * fichero, sin clave o valor fuera de catálogo → queda el default (la EV no
+ * necesita configurar nada). El FS ya está montado: app_main lo inicializa antes
+ * del REPL y la GUI arranca después (lazy, al primer builtin Gui). */
+static void p4_panel_select(void)
+{
+    const uint8_t *data = NULL;
+    uint32_t       size = 0;
+    if (fs_get("/sys/board.json", &data, &size) != FS_OK || data == NULL || size == 0) {
+        ESP_LOGI(TAG, "panel: sin /sys/board.json — default %s", s_cfg->name);
+        return;
+    }
+    json_obj_t obj;
+    char       name[24] = {0};
+    if (json_parse((const char *) data, (size_t) size, &obj) != 0 ||
+        json_get_str(&obj, "display", name, sizeof name) < 0 || name[0] == '\0') {
+        ESP_LOGI(TAG, "panel: /sys/board.json sin clave \"display\" — default %s", s_cfg->name);
+        return;
+    }
+    for (size_t i = 0; i < sizeof PANELS / sizeof PANELS[0]; i++) {
+        if (strcmp(PANELS[i].name, name) == 0) {
+            s_cfg = &PANELS[i];
+            ESP_LOGI(TAG, "panel: board.json display=\"%s\" -> %dx%d", s_cfg->name, s_cfg->hres, s_cfg->vres);
+            return;
+        }
+    }
+    ESP_LOGW(TAG, "panel: display=\"%s\" NO esta en el catalogo (ek79007, st7701) — default %s",
+             name, s_cfg->name);
+}
 
 #define LDO_CHAN     3       /* LDO_VO3 -> VDD_MIPI_DPHY (igual en las placas conocidas) */
 #define LDO_MV       2500
@@ -235,6 +270,10 @@ static esp_err_t panel_create_st7701(esp_lcd_panel_io_handle_t dbi_io,
 static esp_lcd_panel_handle_t p4_dsi_panel_init(void)
 {
     if (s_panel) return s_panel;
+
+    /* Imagen única: elegir panel del catálogo ANTES de consumir s_cfg (todos los
+     * caminos —costura LVGL y tests de diagnóstico— pasan por aquí primero). */
+    p4_panel_select();
 
     /* DPHY: 2.5 V por el LDO ch3 (ANTES del bus DSI). */
     esp_ldo_channel_handle_t ldo = NULL;
