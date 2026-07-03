@@ -31,20 +31,52 @@
 
 static const char *TAG = "p4_gfx";
 
-/* Panel EK79007 1024x600, MIPI-DSI 2-lane @1000 Mbps. Tiempos = ejemplo oficial
- * (refresh 60 Hz: 48 MHz / (10+120+120+1024) / (1+20+10+600)). */
-#define LCD_H_RES    1024
-#define LCD_V_RES    600
-#define DPI_CLK_MHZ  52      /* macro EK79007_..._60HZ_CONFIG del driver (NO 48) */
-#define LCD_HSYNC    10
-#define LCD_HBP      160     /* porches del driver = 160 (yo tenía 120, del ejemplo malo) */
-#define LCD_HFP      160
-#define LCD_VSYNC    1
-#define LCD_VBP      23
-#define LCD_VFP      12
-#define DSI_LANES    2
-#define DSI_MBPS     1000
-#define LDO_CHAN     3       /* LDO_VO3 -> VDD_MIPI_DPHY */
+/* ===================== Catálogo de paneles (imagen única P4) =====================
+ * Una imagen sirve a varias placas P4: lo que cambia por panel vive en una entrada
+ * del catálogo (resolución, timings, velocidad DSI/DPI, polaridad del backlight,
+ * transformación del táctil y la función de creación del IC). Los pines de control
+ * (reset 27, backlight 26, I2C táctil 7/8) y el LDO del DPHY son IGUALES en las
+ * placas conocidas y quedan comunes. Selección: hoy fija (1ª entrada); el paso
+ * board.json la hará runtime. Params pin-a-pin data-driven = V4. */
+typedef struct {
+    const char *name;                 /* clave para /sys/board.json */
+    int hres, vres;                   /* resolución física del panel */
+    int dsi_lanes, dsi_mbps;
+    int dpi_clk_mhz;
+    int hsync_pw, hsync_bp, hsync_fp;
+    int vsync_pw, vsync_bp, vsync_fp;
+    int bl_invert;                    /* 1 = backlight de lógica INVERTIDA (Waveshare) */
+    int tp_swap_xy, tp_mirror_x, tp_mirror_y;   /* GT911 → coordenadas del panel */
+    /* Crea el panel del vendor sobre el DBI (dev cfg común: reset GPIO27, RGB565)
+     * y lo deja reseteado+inicializado. Cada IC aporta su vendor_config. */
+    esp_err_t (*panel_create)(esp_lcd_panel_io_handle_t dbi_io,
+                              esp_lcd_dsi_bus_handle_t dsi_bus,
+                              esp_lcd_dpi_panel_config_t *dpi_cfg,
+                              esp_lcd_panel_handle_t *out_panel);
+} p4_panel_cfg_t;
+
+static esp_err_t panel_create_ek79007(esp_lcd_panel_io_handle_t dbi_io,
+                                      esp_lcd_dsi_bus_handle_t dsi_bus,
+                                      esp_lcd_dpi_panel_config_t *dpi_cfg,
+                                      esp_lcd_panel_handle_t *out_panel);
+
+static const p4_panel_cfg_t PANELS[] = {
+    /* EK79007 1024x600 (P4-Function-EV). Tiempos = ejemplo oficial mipi_dsi
+     * (refresh 60 Hz); DPI 52 = macro EK79007_..._60HZ_CONFIG del driver (NO 48);
+     * porches h = 160 (los del driver). Táctil mirror 1/1 (como el BSP del kit). */
+    { .name = "ek79007", .hres = 1024, .vres = 600,
+      .dsi_lanes = 2, .dsi_mbps = 1000, .dpi_clk_mhz = 52,
+      .hsync_pw = 10, .hsync_bp = 160, .hsync_fp = 160,
+      .vsync_pw = 1,  .vsync_bp = 23,  .vsync_fp = 12,
+      .bl_invert = 0,
+      .tp_swap_xy = 0, .tp_mirror_x = 1, .tp_mirror_y = 1,
+      .panel_create = panel_create_ek79007 },
+};
+
+/* Panel VIGENTE (por ahora fijo a la 1ª entrada; el paso board.json lo hará runtime). */
+static const p4_panel_cfg_t *s_cfg = &PANELS[0];
+
+#define LDO_CHAN     3       /* LDO_VO3 -> VDD_MIPI_DPHY (igual en las placas conocidas) */
 #define LDO_MV       2500
 
 /* Reset HW del panel = GPIO27 (BSP_LCD_RST). CLAVE: el EK79007 NO arranca fiable
@@ -80,6 +112,7 @@ static void p4_backlight_on(void)
         .timer_sel  = BL_LEDC_TMR,
         .duty       = 0,
         .hpoint     = 0,
+        .flags.output_invert = s_cfg->bl_invert,   /* Waveshare: 1 (duty 1023 = ON) */
     };
     esp_err_t ec = ledc_channel_config(&ccfg);
     esp_err_t ed = ledc_set_duty(LEDC_LOW_SPEED_MODE, BL_LEDC_CH, 1023);   /* 100 % */
@@ -89,8 +122,30 @@ static void p4_backlight_on(void)
              esp_err_to_name(ed), esp_err_to_name(eu));
 }
 
-/* Inicializa DPHY (LDO) + bus DSI + panel EK79007 (RGB565) + reset/init + display
- * ON. Devuelve el handle del panel DPI (idempotente). */
+/* Creación del EK79007 (P4-Function-EV): vendor cfg mínima + new_panel + reset/init.
+ * El EK79007 no soporta disp_on_off (el BSP no lo llama); el DPI escanea tras init. */
+static esp_err_t panel_create_ek79007(esp_lcd_panel_io_handle_t dbi_io,
+                                      esp_lcd_dsi_bus_handle_t dsi_bus,
+                                      esp_lcd_dpi_panel_config_t *dpi_cfg,
+                                      esp_lcd_panel_handle_t *out_panel)
+{
+    ek79007_vendor_config_t vendor = {
+        .mipi_config = { .dsi_bus = dsi_bus, .dpi_config = dpi_cfg },
+    };
+    esp_lcd_panel_dev_config_t dev_cfg = {
+        .reset_gpio_num = LCD_RST_GPIO,   /* GPIO27 — reset HW del panel (como el BSP) */
+        .rgb_ele_order  = LCD_RGB_ELEMENT_ORDER_RGB,
+        .bits_per_pixel = 16,
+        .vendor_config  = &vendor,
+    };
+    ESP_ERROR_CHECK(esp_lcd_new_panel_ek79007(dbi_io, &dev_cfg, out_panel));
+    ESP_ERROR_CHECK(esp_lcd_panel_reset(*out_panel));   /* pulso de reset por GPIO27 */
+    ESP_ERROR_CHECK(esp_lcd_panel_init(*out_panel));
+    return ESP_OK;
+}
+
+/* Inicializa DPHY (LDO) + bus DSI + el panel del CATÁLOGO (RGB565) + reset/init.
+ * Devuelve el handle del panel DPI (idempotente). */
 static esp_lcd_panel_handle_t p4_dsi_panel_init(void)
 {
     if (s_panel) return s_panel;
@@ -100,12 +155,12 @@ static esp_lcd_panel_handle_t p4_dsi_panel_init(void)
     esp_ldo_channel_config_t ldo_cfg = { .chan_id = LDO_CHAN, .voltage_mv = LDO_MV };
     ESP_ERROR_CHECK(esp_ldo_acquire_channel(&ldo_cfg, &ldo));
 
-    /* Bus DSI (2-lane, 1 Gbps) — inicializa la DPHY. */
+    /* Bus DSI — inicializa la DPHY. Lanes/velocidad del catálogo. */
     esp_lcd_dsi_bus_handle_t dsi_bus = NULL;
     esp_lcd_dsi_bus_config_t bus_cfg = {
         .bus_id             = 0,
-        .num_data_lanes     = DSI_LANES,
-        .lane_bit_rate_mbps = DSI_MBPS,
+        .num_data_lanes     = s_cfg->dsi_lanes,
+        .lane_bit_rate_mbps = s_cfg->dsi_mbps,
     };
     ESP_ERROR_CHECK(esp_lcd_new_dsi_bus(&bus_cfg, &dsi_bus));
 
@@ -114,34 +169,23 @@ static esp_lcd_panel_handle_t p4_dsi_panel_init(void)
     esp_lcd_dbi_io_config_t dbi_cfg = { .virtual_channel = 0, .lcd_cmd_bits = 8, .lcd_param_bits = 8 };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_dbi(dsi_bus, &dbi_cfg, &dbi_io));
 
-    /* Panel DPI EK79007, RGB565 (FB ~1.2 MB en PSRAM). */
+    /* Panel DPI, RGB565 (FB en PSRAM). Resolución/timings del catálogo. */
     esp_lcd_dpi_panel_config_t dpi_cfg = {
         .virtual_channel    = 0,
         .dpi_clk_src        = MIPI_DSI_DPI_CLK_SRC_DEFAULT,
-        .dpi_clock_freq_mhz = DPI_CLK_MHZ,
+        .dpi_clock_freq_mhz = s_cfg->dpi_clk_mhz,
         .in_color_format    = LCD_COLOR_FMT_RGB565,
         .num_fbs            = 1,    /* FB interno: el draw_bitmap escribe aquí y el DPI lo escanea */
         .video_timing = {
-            .h_size = LCD_H_RES, .v_size = LCD_V_RES,
-            .hsync_pulse_width = LCD_HSYNC, .hsync_back_porch = LCD_HBP, .hsync_front_porch = LCD_HFP,
-            .vsync_pulse_width = LCD_VSYNC, .vsync_back_porch = LCD_VBP, .vsync_front_porch = LCD_VFP,
+            .h_size = s_cfg->hres, .v_size = s_cfg->vres,
+            .hsync_pulse_width = s_cfg->hsync_pw, .hsync_back_porch = s_cfg->hsync_bp, .hsync_front_porch = s_cfg->hsync_fp,
+            .vsync_pulse_width = s_cfg->vsync_pw, .vsync_back_porch = s_cfg->vsync_bp, .vsync_front_porch = s_cfg->vsync_fp,
         },
     };
-    ek79007_vendor_config_t vendor = {
-        .mipi_config = { .dsi_bus = dsi_bus, .dpi_config = &dpi_cfg },
-    };
-    esp_lcd_panel_dev_config_t dev_cfg = {
-        .reset_gpio_num = LCD_RST_GPIO,   /* GPIO27 — reset HW del panel (como el BSP) */
-        .rgb_ele_order  = LCD_RGB_ELEMENT_ORDER_RGB,
-        .bits_per_pixel = 16,
-        .vendor_config  = &vendor,
-    };
-    ESP_ERROR_CHECK(esp_lcd_new_panel_ek79007(dbi_io, &dev_cfg, &s_panel));
-    ESP_ERROR_CHECK(esp_lcd_panel_reset(s_panel));   /* pulso de reset por GPIO27 */
-    ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel));
-    /* El EK79007 no soporta disp_on_off (el BSP no lo llama); el DPI escanea tras init. */
+    ESP_ERROR_CHECK(s_cfg->panel_create(dbi_io, dsi_bus, &dpi_cfg, &s_panel));
 
-    ESP_LOGI(TAG, "panel EK79007 1024x600 RGB565 (reset GPIO%d) inicializado", LCD_RST_GPIO);
+    ESP_LOGI(TAG, "panel %s %dx%d RGB565 (reset GPIO%d) inicializado",
+             s_cfg->name, s_cfg->hres, s_cfg->vres, LCD_RST_GPIO);
     return s_panel;
 }
 
@@ -150,13 +194,13 @@ void p4_gfx_smoke_test(void)
     p4_dsi_panel_init();
     p4_backlight_on();
 
-    size_t px = (size_t) LCD_H_RES * LCD_V_RES;
+    size_t px = (size_t) s_cfg->hres * s_cfg->vres;
     uint16_t *fb = (uint16_t *) heap_caps_malloc(px * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
     if (fb == NULL) { ESP_LOGE(TAG, "sin PSRAM para el framebuffer"); return; }
     for (size_t i = 0; i < px; i++) fb[i] = 0xF800;   /* rojo en RGB565 */
 
-    ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, 0, LCD_H_RES, LCD_V_RES, fb));
-    ESP_LOGI(TAG, "G3: ROJO volcado. Pantalla roja => DSI+EK79007+backlight+PSRAM OK en nuestro firmware");
+    ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, 0, s_cfg->hres, s_cfg->vres, fb));
+    ESP_LOGI(TAG, "G3: ROJO volcado. Pantalla roja => DSI+%s+backlight+PSRAM OK en nuestro firmware", s_cfg->name);
     /* fb se queda vivo a propósito (el draw del DPI puede ser asíncrono). */
 }
 
@@ -256,12 +300,16 @@ static esp_lcd_touch_handle_t p4_touch_try(i2c_master_bus_handle_t bus, uint16_t
     if (esp_lcd_new_panel_io_i2c(bus, &tp_io_cfg, &tp_io) != ESP_OK) return NULL;
 
     esp_lcd_touch_config_t tp_cfg = {
-        .x_max        = LCD_H_RES,
-        .y_max        = LCD_V_RES,
+        .x_max        = s_cfg->hres,
+        .y_max        = s_cfg->vres,
         .rst_gpio_num = -1,
         .int_gpio_num = -1,
         .levels = { .reset = 0, .interrupt = 0 },
-        .flags  = { .swap_xy = 0, .mirror_x = 1, .mirror_y = 1 },
+        /* Transformación GT911→panel del catálogo (EV: mirror 1/1 como su BSP;
+         * Waveshare: todo 0 — su BSP no transforma). */
+        .flags  = { .swap_xy  = s_cfg->tp_swap_xy,
+                    .mirror_x = s_cfg->tp_mirror_x,
+                    .mirror_y = s_cfg->tp_mirror_y },
     };
     esp_lcd_touch_handle_t tp = NULL;
     if (esp_lcd_touch_new_i2c_gt911(tp_io, &tp_cfg, &tp) != ESP_OK) {
@@ -343,13 +391,13 @@ void bpvm_gui_disp_init(int w, int h)
     p4_backlight_on();
 
     lv_tick_set_cb(p4_lv_tick_ms);
-    s_lv_disp = lv_display_create(LCD_H_RES, LCD_V_RES);
+    s_lv_disp = lv_display_create(s_cfg->hres, s_cfg->vres);
     lv_display_set_flush_cb(s_lv_disp, p4_lv_flush);
-    /* Orientacion: landscape nativo; Gui.setRotation() la cambia en runtime (el giro
+    /* Orientacion: la nativa del panel; Gui.setRotation() la cambia en runtime (el giro
      * lo hace p4_lv_flush; el tactil se transforma solo en lv_indev). */
     lv_display_set_rotation(s_lv_disp, s_rotation);
 
-    size_t buf_px   = (size_t) LCD_H_RES * 120;     /* draw buffer parcial en PSRAM */
+    size_t buf_px   = (size_t) s_cfg->hres * 120;   /* draw buffer parcial en PSRAM */
     void  *draw_buf = heap_caps_malloc(buf_px * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
     if (draw_buf == NULL) { ESP_LOGE(TAG, "sin PSRAM para el draw buffer de LVGL"); return; }
     lv_display_set_buffers(s_lv_disp, draw_buf, NULL, buf_px * sizeof(uint16_t),
@@ -363,8 +411,8 @@ void bpvm_gui_disp_init(int w, int h)
     } else {
         ESP_LOGW(TAG, "sin tactil: la GUI se vera pero no reaccionara");
     }
-    ESP_LOGI(TAG, "GUI display listo: %dx%d, LVGL %d.%d.%d, LV_COLOR_DEPTH=%d",
-             LCD_H_RES, LCD_V_RES, LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
+    ESP_LOGI(TAG, "GUI display listo: %s %dx%d, LVGL %d.%d.%d, LV_COLOR_DEPTH=%d",
+             s_cfg->name, s_cfg->hres, s_cfg->vres, LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
              LVGL_VERSION_PATCH, (int) LV_COLOR_DEPTH);
 }
 
@@ -406,11 +454,11 @@ void p4_gfx_lvgl_test(void)
     lv_init();
     lv_tick_set_cb(p4_lv_tick_ms);
 
-    s_lv_disp = lv_display_create(LCD_H_RES, LCD_V_RES);
+    s_lv_disp = lv_display_create(s_cfg->hres, s_cfg->vres);
     lv_display_set_flush_cb(s_lv_disp, p4_lv_flush);
 
-    /* Buffer de dibujo PARCIAL de LVGL en PSRAM (120 líneas ~ 240 KB). */
-    size_t buf_px   = (size_t) LCD_H_RES * 120;
+    /* Buffer de dibujo PARCIAL de LVGL en PSRAM (120 líneas). */
+    size_t buf_px   = (size_t) s_cfg->hres * 120;
     void  *draw_buf = heap_caps_malloc(buf_px * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
     if (draw_buf == NULL) { ESP_LOGE(TAG, "sin PSRAM para el draw buffer de LVGL"); return; }
     lv_display_set_buffers(s_lv_disp, draw_buf, NULL, buf_px * sizeof(uint16_t),
