@@ -1,0 +1,20 @@
+// SetDisplay.bp — configura el panel de display del ESP32-P4 (imagen única).
+//
+// Escribe /sys/board.json en la placa con el panel elegido. Ejecutar con
+// "Run on Device" UNA vez; el siguiente programa GUI (tras reset, o si aún
+// no ha corrido ninguno desde el arranque) ya usa ese panel.
+//
+// Paneles del catálogo:
+//   "ek79007" — ESP32-P4-Function-EV, 1024x600 (default si no hay board.json)
+//   "st7701"  — Waveshare ESP32-P4 Touch-LCD-4.3", 480x800
+//
+// Para volver al default: borrar el fichero (consola del explorer: del /sys/board.json).
+module SetDisplay
+    const PANEL := "st7701"
+    
+    function main()
+        writeFile("/sys/board.json", "{\"display\":\"" + PANEL + "\"}")
+        print("escrito /sys/board.json: " + readFile("/sys/board.json"))
+    end
+
+end SetDisplay
