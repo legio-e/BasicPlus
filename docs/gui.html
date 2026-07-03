@@ -174,6 +174,7 @@
     <li class="group"><a href="#intro">18. Introducción</a></li>
     <li class="sub"><a href="#intro-vms">18.1 Las tres VM</a></li>
     <li class="sub"><a href="#intro-run">18.2 Cómo se ejecuta</a></li>
+    <li class="sub"><a href="#intro-primeros">18.3 Primeros pasos de un proyecto GUI</a></li>
 
     <li class="group"><a href="#conceptos">19. Conceptos</a></li>
     <li class="sub"><a href="#conceptos-arbol">19.1 Pantalla y árbol de widgets</a></li>
@@ -182,23 +183,34 @@
     <li class="sub"><a href="#conceptos-geom">19.4 Geometría explícita y Panel</a></li>
 
     <li class="group"><a href="#catalogo">20. Catálogo de widgets</a></li>
-    <li class="sub"><a href="#w-label-button">20.1 Etiqueta y botón</a></li>
-    <li class="sub"><a href="#w-check">20.2 Checkbox e interruptor</a></li>
-    <li class="sub"><a href="#w-value">20.3 Slider, barra y valor</a></li>
-    <li class="sub"><a href="#w-input">20.4 Entrada de texto</a></li>
-    <li class="sub"><a href="#w-table">20.5 Tabla</a></li>
-    <li class="sub"><a href="#w-tab">20.6 Pestañas</a></li>
-    <li class="sub"><a href="#w-image">20.7 Imagen</a></li>
-    <li class="sub"><a href="#w-msg">20.8 Caja de mensaje</a></li>
-    <li class="sub"><a href="#w-list">20.9 Lista y teclado</a></li>
+    <li class="sub"><a href="#w-label-button">20.1 Label y Button</a></li>
+    <li class="sub"><a href="#w-check">20.2 Checkbox</a></li>
+    <li class="sub"><a href="#w-value">20.3 Slider, Bar y Toggle</a></li>
+    <li class="sub"><a href="#w-input">20.4 Dropdown y Textarea</a></li>
+    <li class="sub"><a href="#w-table">20.5 Table</a></li>
+    <li class="sub"><a href="#w-tab">20.6 Tabview</a></li>
+    <li class="sub"><a href="#w-image">20.7 Image e ImageView</a></li>
+    <li class="sub"><a href="#w-msg">20.8 Msgbox</a></li>
+    <li class="sub"><a href="#w-list">20.9 ListBox y Keyboard</a></li>
 
     <li class="group"><a href="#color-fuentes">21. Color y fuentes</a></li>
     <li class="sub"><a href="#color">21.1 Color</a></li>
     <li class="sub"><a href="#fuentes">21.2 Fuentes</a></li>
 
     <li class="group"><a href="#eventos">22. Eventos y formularios</a></li>
+
     <li class="group"><a href="#ejecutar">23. Ejecutar (host y placa)</a></li>
+    <li class="sub"><a href="#ej-preview">23.1 Vista previa en el PC</a></li>
+    <li class="sub"><a href="#ej-host">23.2 Render real en el PC</a></li>
+    <li class="sub"><a href="#ej-placa">23.3 En la placa</a></li>
+    <li class="sub"><a href="#ej-pantalla">23.4 Pantalla del P4 y rotación</a></li>
+
     <li class="group"><a href="#referencia">24. Referencia rápida Gui.*</a></li>
+    <li class="sub"><a href="#ref-modulo">24.1 Módulo y constantes</a></li>
+    <li class="sub"><a href="#ref-component">24.2 Component (base)</a></li>
+    <li class="sub"><a href="#ref-widgets">24.3 Widgets</a></li>
+
+    <li class="group"><a href="#matices">25. Matices y limitaciones</a></li>
   </ul>
 
   <h2>Otros volúmenes</h2>
@@ -265,6 +277,50 @@
       <a href="guia-ide.html">Guía del IDE</a>.</li>
 </ul>
 
+<h3 id="intro-primeros">18.3 Primeros pasos de un proyecto GUI</h3>
+<p>
+  Hasta ahora, en BasicPlus podíamos hacer programas para pequeños dispositivos: en la mayoría de los casos,
+  <em>autómatas</em>, sin intervención de los usuarios. Un dispositivo con interfaz gráfica es casi lo
+  opuesto: la aplicación queda <strong>a la espera de la interacción del usuario</strong>, y el medio es la
+  pantalla gráfica y su táctil.
+</p>
+<p>
+  Antes de empezar la aplicación propiamente dicha hay que pensar en el <strong>hardware</strong>. Una
+  aplicación gráfica necesita una pantalla con su táctil:
+</p>
+<ul>
+  <li><strong>La pantalla</strong> — lo primero es determinar el tamaño.</li>
+  <li><strong>El microcontrolador</strong> — aquí hay decisiones importantes: hay que escoger un micro con
+      <strong>memoria RAM</strong> (cuanto más grande sea la pantalla, más RAM necesitaremos). También ayuda
+      que el micro ya traiga soporte gráfico — con <strong>DSI</strong> mejor, si la pantalla es mediana o
+      grande.</li>
+  <li><strong>Una buena opción son las pantallas que incluyen un micro</strong> — como las placas con
+      ESP32-P4 integrado que soporta esta versión (§23.4).</li>
+</ul>
+<div class="note">
+  <p>Para hacerse una idea de la RAM: solo el <em>framebuffer</em> de una pantalla de 1024×600 en color de
+  16&nbsp;bits ocupa ~1,2&nbsp;MB — más que toda la SRAM de la mayoría de micros. Por eso las placas gráficas
+  llevan <strong>PSRAM</strong> (las ESP32-P4 de referencia, 32&nbsp;MB): pantalla mediana o grande sin PSRAM,
+  mal asunto.</p>
+</div>
+<p>
+  Una vez escogido el hardware podemos empezar a <strong>diseñar la interfaz</strong>: la pantalla principal
+  y el resto de pantallas. Y por fin llegamos al código, con este orden natural:
+</p>
+<ol>
+  <li>Iniciar la aplicación con <code>main</code>, como cualquier aplicación BasicPlus.</li>
+  <li>Crear la pantalla (<code>Gui.Screen()</code>, §19.1).</li>
+  <li>Establecer la orientación, si hay que cambiar la de por defecto (<code>Gui.setRotation</code>, §23.4).</li>
+  <li>Crear la primera ventana (§22) y, a partir de ella, el resto de la aplicación.</li>
+  <li>Entrar en el lazo de eventos con <code>Gui.run()</code> — la aplicación queda esperando al usuario.</li>
+</ol>
+<p>
+  Y nada de esto hay que acertarlo a la primera: la interfaz se <strong>itera en el PC</strong> — vista previa
+  y render LVGL (§23.1–23.2) — y, cuando convence, el <em>mismo</em> <code>.mod</code> se sube a la placa. Un
+  buen punto de partida es el proyecto <code>samples/formdemo</code> (§22) o cualquiera de las demos
+  <code>Gui*</code> que acompañan a la librería.
+</p>
+
 <!-- ============================================================ -->
 <h2 id="conceptos">19. Conceptos</h2>
 
@@ -302,7 +358,7 @@
   <tr><td><code>align(ancla, dx, dy)</code></td><td>Coloca el widget respecto a su padre (ver 19.3).</td></tr>
   <tr><td><code>width</code> / <code>height</code></td><td>Tamaño en píxeles (propiedades; sin fijar = automático).</td></tr>
   <tr><td><code>fontSize</code></td><td>Tamaño de texto en px del catálogo compilado (ver 21.2).</td></tr>
-  <tr><td><code>setFont(id)</code></td><td>Aplica una fuente cargada con <code>Gui.loadFont</code> (ver 21.2).</td></tr>
+  <tr><td><code>setFont(id)</code> <em>(en <code>Label</code>)</em></td><td>Aplica a una etiqueta una fuente cargada con <code>Gui.loadFont</code> (ver 21.2).</td></tr>
   <tr><td><code>setBgColor(c)</code> / <code>setTextColor(c)</code></td><td>Color de fondo y de texto (ver 21.1).</td></tr>
 </table>
 <div class="note">
@@ -329,8 +385,8 @@ t.<span class="fn">align</span>(Gui.Align.TOP_MID, <span class="num">0</span>, <
   Como alternativa a <code>align</code>, un widget se posiciona y dimensiona a mano con las propiedades
   <code>x</code>, <code>y</code>, <code>width</code>, <code>height</code> —o todo de golpe con
   <code>setBounds(x,&nbsp;y,&nbsp;w,&nbsp;h)</code>—. Un <code>Gui.Panel</code> es un contenedor simple para agrupar
-  widgets; admite scroll opcional con <code>scrollDir</code> (<code>Gui.ScrollDir.VER</code>, <code>HOR</code> o
-  <code>NONE</code>).
+  widgets; admite scroll opcional con <code>scrollDir</code> (<code>Gui.ScrollDir.VER</code>, <code>HOR</code>,
+  <code>BOTH</code> o <code>NONE</code>).
 </p>
 <pre><code><span class="kw">var</span> p: Gui.<span class="type">Panel</span> := Gui.<span class="fn">Panel</span>(scr)
 p.x := <span class="num">10</span>
@@ -354,7 +410,7 @@ p.scrollDir := Gui.ScrollDir.VER</code></pre>
   (<code>onClick</code>, <code>onChange</code>) se tratan en §22. Las capturas son del render LVGL en el host.
 </p>
 
-<h3 id="w-label-button">20.1 Etiqueta y botón</h3>
+<h3 id="w-label-button">20.1 Label y Button</h3>
 <p>
   <code>Gui.Label</code> muestra texto; <code>Gui.Button</code> es un botón pulsable. Ambos toman el padre como
   primer argumento, y el texto a continuación.
@@ -367,7 +423,7 @@ btn.<span class="fn">align</span>(Gui.Align.CENTER, <span class="num">0</span>, 
 <pre><code>{ "type": "Label",  "text": "esperando", "align": "TOP_MID", "y": 10 },
 { "type": "Button", "text": "Púlsame",   "align": "CENTER", "clic": "onPulsar" }</code></pre>
 
-<h3 id="w-check">20.2 Checkbox e interruptor</h3>
+<h3 id="w-check">20.2 Checkbox</h3>
 <p>
   <code>Gui.Checkbox</code> es una casilla con etiqueta; su estado está en la propiedad <code>checked</code>. El
   interruptor <code>Gui.Toggle</code> (un on/off sin texto) se ve en §20.3.
@@ -378,7 +434,7 @@ cb.checked := <span class="kw">true</span></code></pre>
 <p>Lo mismo en el <code>.win</code> (JSON):</p>
 <pre><code>{ "type": "Checkbox", "text": "Activar", "checked": true, "change": "onActivar" }</code></pre>
 
-<h3 id="w-value">20.3 Slider, barra y valor</h3>
+<h3 id="w-value">20.3 Slider, Bar y Toggle</h3>
 <p>
   <code>Gui.Slider</code> (deslizador editable), <code>Gui.Bar</code> (barra de progreso, solo lectura) y
   <code>Gui.Toggle</code> (interruptor). Slider y Bar comparten <code>setRange(min,&nbsp;max)</code> y la propiedad
@@ -400,7 +456,7 @@ pb.value := <span class="num">7</span></code></pre>
 { "type": "Slider", "min": 0, "max": 200, "value": 150, "align": "TOP_MID", "y": 90 },
 { "type": "Bar",    "min": 0, "max": 10,  "value": 7,   "align": "TOP_MID", "y": 160 }</code></pre>
 
-<h3 id="w-input">20.4 Entrada de texto</h3>
+<h3 id="w-input">20.4 Dropdown y Textarea</h3>
 <p>
   <code>Gui.Dropdown</code> es una lista desplegable (opciones separadas por <code>\n</code>, selección en
   <code>selected</code>); <code>Gui.Textarea</code> es un campo de texto (propiedad <code>text</code>, y
@@ -418,7 +474,7 @@ ta.readOnly := <span class="kw">true</span></code></pre>
 <pre><code>{ "type": "Dropdown", "options": "Rojo\nVerde\nAzul", "selected": 2 },
 { "type": "Textarea", "text": "hola" }</code></pre>
 
-<h3 id="w-table">20.5 Tabla</h3>
+<h3 id="w-table">20.5 Table</h3>
 <p>
   <code>Gui.Table</code> es una rejilla de celdas de texto: <code>setGrid(filas,&nbsp;cols)</code> la dimensiona y
   <code>setCell</code>/<code>getCell</code> escriben y leen por <code>(fila,&nbsp;col)</code>. Fuera de rango,
@@ -431,7 +487,7 @@ t.<span class="fn">setCell</span>(<span class="num">0</span>, <span class="num">
 t.<span class="fn">setCell</span>(<span class="num">1</span>, <span class="num">0</span>, <span class="str">"Ana"</span>)</code></pre>
 <p class="soon">En el <code>.win</code> (JSON): pendiente — la rejilla de celdas es estructura anidada (2ª fase). Por ahora, por código.</p>
 
-<h3 id="w-tab">20.6 Pestañas</h3>
+<h3 id="w-tab">20.6 Tabview</h3>
 <p>
   <code>Gui.Tabview</code> agrupa páginas en pestañas. <code>addTab("nombre")</code> crea una pestaña y devuelve su
   página (un <code>Component</code>) sobre la que cuelgas widgets; <code>active</code> es la pestaña visible.
@@ -443,7 +499,7 @@ t.<span class="fn">setCell</span>(<span class="num">1</span>, <span class="num">
 tv.active := <span class="num">1</span></code></pre>
 <p class="soon">En el <code>.win</code> (JSON): pendiente — las páginas/pestañas son estructura anidada (2ª fase). Por ahora, por código.</p>
 
-<h3 id="w-image">20.7 Imagen</h3>
+<h3 id="w-image">20.7 Image e ImageView</h3>
 <p>
   <code>Gui.Image</code> es el <em>asset</em> (se carga una vez con <code>loadFile</code>, formato PNG);
   <code>Gui.ImageView</code> es el widget que lo muestra con <code>setImage</code>. Varias vistas pueden compartir el
@@ -457,7 +513,7 @@ tv.active := <span class="num">1</span></code></pre>
 v.<span class="fn">setImage</span>(img)</code></pre>
 <p class="soon">En el <code>.win</code> (JSON): pendiente — el asset y la vista necesitan referencia compartida (2ª fase). Por ahora, por código.</p>
 
-<h3 id="w-msg">20.8 Caja de mensaje</h3>
+<h3 id="w-msg">20.8 Msgbox</h3>
 <p>
   <code>Gui.Msgbox</code> es un diálogo modal con texto y botones (<code>setButtons</code>, etiquetas separadas por
   <code>\n</code>). Al pulsar, <code>result</code> guarda el índice del botón.
@@ -468,7 +524,7 @@ mb.<span class="fn">setButtons</span>(<span class="str">"OK"</span>)</code></pre
 <p>Lo mismo en el <code>.win</code> (JSON):</p>
 <pre><code>{ "type": "Msgbox", "text": "Operación completada", "buttons": "OK" }</code></pre>
 
-<h3 id="w-list">20.9 Lista y teclado</h3>
+<h3 id="w-list">20.9 ListBox y Keyboard</h3>
 <p>
   <code>Gui.ListBox</code> es una lista de ítems seleccionables (<code>setItems</code>, separados por <code>\n</code>;
   <code>selected</code> es el índice). <code>Gui.Keyboard</code> es un teclado en pantalla que se engancha a un
@@ -533,7 +589,7 @@ t.fontSize := <span class="num">32</span></code></pre>
 <span class="kw">var</span> l: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(scr, <span class="str">"Texto en negrita"</span>)
 l.<span class="fn">setFont</span>(fid)</code></pre>
 <div class="warn">
-  <p><strong>Acentos y ñ.</strong> La Montserrat compilada es sólo ASCII: no trae <code>ñ</code> ni vocales
+  <p><strong>Acentos y ñ.</strong> La fuente Montserrat compilada es sólo ASCII: no trae <code>ñ</code> ni vocales
   acentuadas. Para texto en español, genera un <code>.bin</code> incluyendo el rango Latin-1
   (<code>lv_font_conv&nbsp;--range&nbsp;0x20-0xFF&nbsp;…</code>) y cárgalo con <code>loadFont</code>.</p>
 </div>
@@ -618,10 +674,190 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
 </div>
 
 <h2 id="ejecutar">23. Ejecutar (host y placa)</h2>
-<p class="soon">— en preparación —</p>
+<p>
+  Una GUI de BasicPlus se puede ejecutar de tres maneras, de más rápida a más fiel: vista previa en el PC
+  (Swing), render real en el PC (LVGL) y la placa. Las tres corren el mismo <code>.mod</code>.
+</p>
 
+<h3 id="ej-preview">23.1 Vista previa en el PC (miVM / Swing)</h3>
+<p>
+  El botón <em>Run</em> del IDE ejecuta el programa en la VM Java y pinta los widgets con Swing. Es la vuelta
+  más rápida para iterar el layout y la lógica. Al ser una <em>aproximación</em> (widgets Swing, no LVGL),
+  tiene dos límites, detallados en §25: no renderiza fuentes <code>.bin</code> cargadas y no copia la carpeta
+  <code>resources/</code>, así que los formularios <code>.win</code> se prueban en la placa (o como en §23.2).
+</p>
+
+<h3 id="ej-host">23.2 Render real en el PC (VM-C + LVGL/SDL)</h3>
+<p>
+  La VM-C de host compilada con LVGL abre una ventana SDL y pinta <strong>exactamente igual que la placa</strong>
+  (misma librería, mismas fuentes). Se lanza por línea de comandos, desde una carpeta que contenga el programa
+  y sus dependencias (la carpeta <code>out/</code> del proyecto vale — el compilador deja ahí el programa y
+  los <code>.mod</code> de la stdlib que usa; copia también los <code>.win</code>/imágenes si el programa los carga):
+</p>
+<pre><code>bpgenvm-c MiApp.mod</code></pre>
+<p>Opciones útiles:</p>
+<table>
+  <tr><th>Opción</th><th>Para qué</th></tr>
+  <tr><td><code>--mem=N</code></td><td>Memoria de la VM en bytes (por defecto 512&nbsp;KiB). Útil para ensayar el presupuesto de una placa concreta.</td></tr>
+  <tr><td><code>--basedir=DIR</code></td><td>Raíz para rutas relativas (<code>readFile</code>, <code>load</code>, imágenes) si no se lanza desde la carpeta del proyecto.</td></tr>
+  <tr><td><code>--trace</code></td><td>Traza por instrucción (diagnóstico).</td></tr>
+</table>
+
+<h3 id="ej-placa">23.3 En la placa</h3>
+<p>
+  El botón <em>Run on Device</em> del IDE lo hace todo: compila, sube al dispositivo el programa, las
+  dependencias de stdlib que falten y la carpeta <code>resources/</code> del proyecto (los <code>.win</code>
+  con los handlers ya traducidos a slots, §22.3), y lo ejecuta sobre la pantalla real. Los <code>print</code>
+  salen por la consola del IDE; <em>Stop</em> (Ctrl+F2) mata la ejecución.
+</p>
+<p>
+  Para que la aplicación arranque <strong>al encender la placa</strong>, sin PC, se usa el autorun desde la
+  consola del explorer:
+</p>
+<pre><code>/&gt; autorun MiApp      (y para quitarlo:  autorun off)</code></pre>
+<div class="warn">
+  <p><strong>Tras parar una GUI con Stop, resetea la placa</strong> antes del siguiente Run: la pantalla puede
+  quedar en estado inconsistente. Es una limitación conocida de esta versión (ver §25).</p>
+</div>
+
+<h3 id="ej-pantalla">23.4 La pantalla del ESP32-P4 y la rotación</h3>
+<p>
+  El firmware del ESP32-P4 es una <strong>imagen única</strong> que sirve a distintas placas con pantalla: lleva
+  un catálogo de paneles y elige uno al arrancar la GUI leyendo la clave <code>"display"</code> de
+  <code>/sys/board.json</code>. Sin fichero (o con un valor desconocido) usa el panel por defecto.
+</p>
+<table>
+  <tr><th>Clave <code>display</code></th><th>Placa</th><th>Panel</th></tr>
+  <tr><td><code>ek79007</code> <em>(default)</em></td><td>ESP32-P4-Function-EV</td><td>7", 1024×600</td></tr>
+  <tr><td><code>st7701</code></td><td>Waveshare ESP32-P4 Touch-LCD-4.3</td><td>4.3", 480×800</td></tr>
+</table>
+<p>
+  La forma cómoda de configurarlo es el sample <code>samples/SetDisplay.bp</code>: se elige el panel en la
+  constante, <em>Run on Device</em> una vez, y listo — escribe
+  <code>{"display":"st7701"}</code> en <code>/sys/board.json</code> y el fichero persiste. El panel se decide
+  en el <strong>primer</strong> arranque de GUI tras cada reset; para volver al default basta borrar el fichero
+  (<code>del /sys/board.json</code> en la consola).
+</p>
+<p>
+  La <strong>orientación</strong> se cambia en runtime, al estilo LVGL:
+</p>
+<pre><code>Gui.<span class="fn">setRotation</span>(<span class="num">90</span>)    <span class="comment">// 0, 90, 180 o 270 grados</span></code></pre>
+<p>
+  El giro intercambia las dimensiones lógicas y el táctil se transforma solo — los <code>align</code> siguen
+  funcionando sin tocar nada. Disponible en el ESP32-P4 (ambas placas), en el host LVGL y en la vista previa
+  Swing; en la STM32 (DK2) no rota en esta versión (avisa y continúa).
+</p>
+
+<!-- ============================================================ -->
 <h2 id="referencia">24. Referencia rápida Gui.*</h2>
-<p class="soon">— en preparación (tabla método → firma de las clases públicas de <code>Gui</code>). —</p>
+<p>
+  Resumen de la superficie pública del módulo <code>Gui</code>. La semántica detallada está en las secciones
+  anteriores (catálogo §20, color y fuentes §21, formularios §22).
+</p>
+
+<h3 id="ref-modulo">24.1 Funciones del módulo y constantes</h3>
+<table>
+  <tr><th>Función</th><th>Qué hace</th></tr>
+  <tr><td><code>Gui.run()</code></td><td>Entra en el lazo de eventos; no retorna hasta cerrar la GUI. Toda GUI termina con esta llamada.</td></tr>
+  <tr><td><code>Gui.loadFont(path): integer</code></td><td>Carga una fuente <code>.bin</code> (binfont LVGL) y devuelve su id (§21.2).</td></tr>
+  <tr><td><code>Gui.setRotation(deg)</code></td><td>Orientación de la pantalla: 0, 90, 180, 270 (§23.4).</td></tr>
+  <tr><td><code>Gui.Color(rgb): Color</code></td><td>Color <code>0xRRGGBB</code> para <code>setBgColor</code>/<code>setTextColor</code> (§21.1).</td></tr>
+</table>
+<p>Constantes (clases de constantes):</p>
+<table>
+  <tr><th>Grupo</th><th>Valores</th></tr>
+  <tr><td><code>Gui.Align</code></td><td><code>TOP_LEFT · TOP_MID · TOP_RIGHT · LEFT_MID · CENTER · RIGHT_MID · BOTTOM_LEFT · BOTTOM_MID · BOTTOM_RIGHT</code></td></tr>
+  <tr><td><code>Gui.ScrollDir</code></td><td><code>NONE · HOR · VER · BOTH</code></td></tr>
+</table>
+
+<h3 id="ref-component">24.2 Component (heredado por todos los widgets)</h3>
+<table>
+  <tr><th>Miembro</th><th>Tipo</th><th>Qué hace</th></tr>
+  <tr><td><code>name</code></td><td>property string</td><td>Nombre lógico del widget (aparece en el volcado del árbol).</td></tr>
+  <tr><td><code>x</code> / <code>y</code></td><td>property integer</td><td>Posición respecto al padre, en píxeles.</td></tr>
+  <tr><td><code>width</code> / <code>height</code></td><td>property integer</td><td>Tamaño en píxeles; sin fijar = automático (se muestra <code>-1</code>).</td></tr>
+  <tr><td><code>fontSize</code></td><td>property integer</td><td>Tamaño de texto del catálogo compilado (§21.2).</td></tr>
+  <tr><td><code>scrollDir</code></td><td>property integer</td><td>Scroll del contenedor (<code>Gui.ScrollDir.*</code>).</td></tr>
+  <tr><td><code>setPos(x, y)</code> / <code>setSize(w, h)</code> / <code>setBounds(x, y, w, h)</code></td><td>función</td><td>Geometría de golpe.</td></tr>
+  <tr><td><code>align(ancla, dx, dy)</code></td><td>función</td><td>Ancla al padre + desplazamiento (§19.3).</td></tr>
+  <tr><td><code>setBgColor(c)</code> / <code>setTextColor(c)</code></td><td>función</td><td>Colores (§21.1).</td></tr>
+  <tr><td><code>refresh()</code></td><td>función</td><td>Fuerza repintado del widget.</td></tr>
+  <tr><td><code>clean()</code></td><td>función</td><td>Elimina los HIJOS del widget (él queda).</td></tr>
+  <tr><td><code>delete()</code></td><td>función</td><td>Elimina el widget (y sus hijos) del árbol.</td></tr>
+  <tr><td><code>onClick()</code> / <code>onChange()</code></td><td>función (virtual)</td><td>Sobrescribibles en una subclase: alternativa OO a los handlers del <code>.win</code> (§22).</td></tr>
+</table>
+
+<h3 id="ref-widgets">24.3 Widgets</h3>
+<table>
+  <tr><th>Clase</th><th>Constructor</th><th>Miembros propios</th></tr>
+  <tr><td><code>Screen</code></td><td><code>Screen()</code></td><td><code>load()</code> — activa esta pantalla como visible.</td></tr>
+  <tr><td><code>Panel</code></td><td><code>Panel(parent)</code></td><td>— (contenedor; todo lo hereda de <code>Component</code>).</td></tr>
+  <tr><td><code>Label</code></td><td><code>Label(parent, text)</code></td><td><code>setText(t)</code>, <code>setFont(id)</code>.</td></tr>
+  <tr><td><code>Button</code></td><td><code>Button(parent, text)</code></td><td>— (el clic llega por handler o <code>onClick</code>).</td></tr>
+  <tr><td><code>Checkbox</code></td><td><code>Checkbox(parent, text)</code></td><td><code>checked: boolean</code>, <code>setText(t)</code>.</td></tr>
+  <tr><td><code>Toggle</code></td><td><code>Toggle(parent)</code></td><td><code>checked: boolean</code>.</td></tr>
+  <tr><td><code>Slider</code></td><td><code>Slider(parent)</code></td><td><code>setRange(mn, mx)</code>, <code>value: integer</code>.</td></tr>
+  <tr><td><code>Bar</code></td><td><code>Bar(parent)</code></td><td><code>setRange(mn, mx)</code>, <code>value: integer</code>.</td></tr>
+  <tr><td><code>Spinbox</code></td><td><code>Spinbox(parent)</code></td><td><code>setRange(mn, mx)</code>, <code>value: integer</code>.</td></tr>
+  <tr><td><code>Led</code></td><td><code>Led(parent)</code></td><td><code>on()</code>, <code>off()</code>, <code>value: integer</code>.</td></tr>
+  <tr><td><code>Dropdown</code></td><td><code>Dropdown(parent)</code></td><td><code>setOptions(s)</code> (separadas por <code>\n</code>), <code>selected: integer</code>.</td></tr>
+  <tr><td><code>Textarea</code></td><td><code>Textarea(parent)</code></td><td><code>text: string</code>, <code>readOnly: boolean</code>.</td></tr>
+  <tr><td><code>ListBox</code></td><td><code>ListBox(parent)</code></td><td><code>setItems(s)</code> (separados por <code>\n</code>), <code>selected: integer</code>.</td></tr>
+  <tr><td><code>Keyboard</code></td><td><code>Keyboard(parent)</code></td><td><code>attach(textarea)</code>.</td></tr>
+  <tr><td><code>Msgbox</code></td><td><code>Msgbox(parent, msg)</code></td><td><code>setButtons(s)</code> (etiquetas por <code>\n</code>), <code>result: integer</code>.</td></tr>
+  <tr><td><code>Tabview</code></td><td><code>Tabview(parent)</code></td><td><code>addTab(nombre): Component</code>, <code>active: integer</code>.</td></tr>
+  <tr><td><code>Table</code></td><td><code>Table(parent)</code></td><td><code>setGrid(filas, cols)</code>, <code>setCell(f, c, s)</code>, <code>getCell(f, c): string</code>.</td></tr>
+  <tr><td><code>Image</code></td><td><code>Image()</code></td><td><code>loadFile(path): boolean</code>, <code>width(): integer</code>, <code>height(): integer</code>. (Asset, no widget: no tiene padre.)</td></tr>
+  <tr><td><code>ImageView</code></td><td><code>ImageView(parent)</code></td><td><code>setImage(img)</code>, <code>refresh()</code>.</td></tr>
+  <tr><td><code>Window</code></td><td><code>Window()</code></td><td><code>load(path): Component</code> — monta un <code>.win</code> y ata handlers (§22); <code>destroy()</code>.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="matices">25. Matices y limitaciones</h2>
+<p>Lo que conviene saber antes de que sorprenda. Ninguno impide trabajar; todos tienen salida.</p>
+
+<h3>Modelo de 480×320 y panel físico</h3>
+<p>
+  El árbol de widgets modela por defecto una pantalla de <strong>480×320</strong> (es lo que muestra el volcado
+  de §19.1). En la placa, LVGL pinta sobre el panel <em>real</em> (p. ej. 1024×600): los <code>align</code> se
+  calculan bien sobre el tamaño real, pero un widget que tome su tamaño del <em>modelo</em> — típicamente una
+  <code>Window</code> de formulario — puede ocupar solo una parte del panel. Si quieres que un formulario llene
+  una pantalla concreta, fija <code>width</code>/<code>height</code> explícitos en la raíz. La unificación
+  modelo↔panel llegará en una versión futura.
+</p>
+
+<h3>Vista previa Swing: aproximación</h3>
+<p>
+  El <em>Run</em> de host (miVM/Swing, §23.1) no renderiza fuentes <code>.bin</code> (usa la fuente por defecto,
+  aunque el id es válido) y no copia <code>resources/</code>, así que un formulario <code>.win</code> allí no
+  encuentra su fichero. Para ver el píxel exacto o probar forms en el PC: la VM-C con LVGL (§23.2), copiando el
+  <code>.win</code> y los assets junto al <code>.mod</code>.
+</p>
+
+<h3>Estado de la pantalla entre ejecuciones (placa)</h3>
+<p>
+  Si una GUI se corta a medias — <em>Stop</em> del IDE, o un error — la pantalla de la placa puede quedar en un
+  estado inconsistente y la siguiente ejecución comportarse raro (p. ej. colores residuales). <strong>Resetea la
+  placa</strong> y listo. Limitación conocida de esta versión; los programas que terminan normalmente no la sufren.
+</p>
+
+<h3>Fuente por defecto: solo ASCII</h3>
+<p>
+  La fuente Montserrat compilada no trae <code>ñ</code> ni acentos (§21.2): para texto en español, genera un
+  <code>.bin</code> con el rango Latin-1 y cárgalo con <code>loadFont</code>.
+</p>
+
+<h3>ESP32-P4: el bus I2C 0 es del táctil</h3>
+<p>
+  En las placas P4 con pantalla, el controlador táctil vive en el bus I2C&nbsp;0: si un programa BP abre ese bus,
+  se lo pisa. Para periféricos I2C propios usa <strong>siempre el bus 1</strong>.
+</p>
+
+<h3>Rotación en STM32 (DK2)</h3>
+<p>
+  <code>Gui.setRotation</code> gira en el ESP32-P4, en el host LVGL y en la vista previa; en la DK2 (STM32/LTDC)
+  no está implementado en esta versión — el programa sigue, con un aviso, en la orientación nativa.
+</p>
 
 </main>
 </div>
