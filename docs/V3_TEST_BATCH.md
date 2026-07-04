@@ -38,7 +38,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 
 | Placa | Firmware | Boot+INFO | Ejec/OO (paridad) | GPIO (blink) | I2C | SPI | UART | reset-cause | autorun+Stop |
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| **Pico 2** (RP2350A) | `pico` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| **Pico 2** (RP2350A) | `pico` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
 | **Metro RP2350B** | `pico` (misma img) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **ESP32-S3 DevKit** | `esp32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **STM32 Nucleo-U575** | `stm32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
@@ -125,6 +125,13 @@ commit del fix si lo hay.)_
   Mismo skew [[stdlib-mod-version-skew-oo-device]] que mordió en S3/P4. Regenerados con
   `regen_*_mods.sh` (Pico 1edb72c, STM32 9feee77); ESP32 ya fresco. El build no regenera
   el blob solo → hay que correr el regen antes de recompilar. Detectado en PC, sin gastar flash.
+
+- **Pico 2 · INFO "PWM 24" = canales, no slices** (cosmético → V4, NO regresión) — el botón
+  INFO muestra `PWM 24` (= 12 slices × 2 canales; `repl_v1.c:712` manda `pwm_slices*2` a
+  propósito) mientras el sample PicoInfo y el descriptor dicen 12 slices. Ambos correctos,
+  magnitudes distintas; la etiqueta "PWM" del IDE (`PicoExplorer.java:1255`) es ambigua.
+  No es mis-detección de placa: la Pico 2 muestra GPIO 30 + ADC 4 = variante A correcta (la
+  B daría 48/8). V4: armonizar la etiqueta ("PWM ch" o mostrar slices).
 
 - **Puerta 0 · TryCatch** — el harness daba 1 rojo (V3-Java salía vacío, "paridad
   rota"). **Causa: hueco del arnés, NO regresión del producto.** `try/catch` en V3
