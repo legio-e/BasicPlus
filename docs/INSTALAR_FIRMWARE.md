@@ -89,7 +89,7 @@ esptool.py --chip esp32s3 merge_bin -o bpvm_esp32_merged.bin \
 
 ---
 
-## ESP32-P4 (placas con pantalla) — `bpvm_esp32p4_merged.bin`
+## ESP32-P4 (placas con pantalla) — `bpvm_esp32p4_generic.bin`
 
 **Una única imagen para las placas P4 soportadas** (ESP32-P4-Function-EV de
 7" 1024×600 y Waveshare Touch-LCD de 4.3" 480×800): el panel se elige en
@@ -103,7 +103,7 @@ El wire (IDE) va por el puerto del **bridge USB-UART** de la placa.
 ### A. Imagen precompilada (esptool)
 
 ```sh
-esptool.py --chip esp32p4 -p <puerto-del-bridge> write_flash 0x0 bpvm_esp32p4_merged.bin
+esptool.py --chip esp32p4 -p <puerto-del-bridge> write_flash 0x0 bpvm_esp32p4_generic.bin
 ```
 
 ### B. Compilarla (ESP-IDF v6.x)
