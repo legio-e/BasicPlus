@@ -47,9 +47,16 @@ CORPUS="hello arith strings concat charat counter MethodCall trycatch \
 filt() { grep -vE 'INICIANDO|FIN DE|heapStart|^config:' | sed '/^[[:space:]]*$/d'; }
 
 run_vm() {  # $1=bin(.jar|.exe) $2=mod
+  # Se ejecuta DESDE el dir del .mod para que ambas VMs resuelvan las deps
+  # (p.ej. Core.mod, dep implicita de try/catch en V3 desde #248) junto al
+  # modulo raiz. La VM-C ya resuelve relativo al .mod; el CLI de la VM-Java
+  # resuelve relativo al CWD, asi que sin este cd la Java no encontraria Core.
+  # Subshell () para no alterar el CWD del propio arnes. Los binarios ($1) son
+  # rutas absolutas, siguen resolviendo desde cualquier dir.
+  local dir base; dir="$(dirname "$2")"; base="$(basename "$2")"
   case "$1" in
-    *.jar) java -jar "$1" "$2" 2>/dev/null | filt ;;
-    *)     "$1" "$2" 2>/dev/null | filt ;;
+    *.jar) ( cd "$dir" && java -jar "$1" "$base" 2>/dev/null | filt ) ;;
+    *)     ( cd "$dir" && "$1" "$base" 2>/dev/null | filt ) ;;
   esac
 }
 

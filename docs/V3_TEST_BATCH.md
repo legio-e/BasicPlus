@@ -11,9 +11,10 @@
 
 ## Puerta 0 — Paridad en el PC (gratis, ANTES de tocar placa)
 
-- [ ] `cd compat && ./compat.sh check` → **TODO VERDE**. Verifica que las VMs V3 y el
-      frontend siguen byte-idénticos a los goldens de V2 (comportamiento + ids de
-      opcode + emisión). Un rojo aquí = regresión real, y se ve sin gastar un flash.
+- [x] `cd compat && ./compat.sh check` → **TODO VERDE** (16 PASS / 0 FAIL · opcodes OK ·
+      emisión OK, 4-jul). Verifica que las VMs V3 y el frontend siguen byte-idénticos a
+      los goldens de V2 (comportamiento + ids de opcode + emisión). Un rojo aquí =
+      regresión real, y se ve sin gastar un flash.
 
 Si la Puerta 0 está verde, el riesgo de las placas baja mucho: lo que quede es
 plataforma (backend HW, boot, wire), no el núcleo.
@@ -110,7 +111,18 @@ ahora tiene la de P5, sin la stdlib unificada.
 
 ## Registro de hallazgos
 
-_(Vacío. Cada fallo: placa · peldaño · síntoma · ¿bug de V3 o de cableado/entorno? ·
+_(Cada fallo: placa · peldaño · síntoma · ¿bug de V3 o de cableado/entorno? ·
 commit del fix si lo hay.)_
 
-- …
+- **Puerta 0 · TryCatch** — el harness daba 1 rojo (V3-Java salía vacío, "paridad
+  rota"). **Causa: hueco del arnés, NO regresión del producto.** `try/catch` en V3
+  depende de `Core` (#248) y el golden `TryCatch.mod` lo referencia; la VM-C resuelve
+  `Core.mod` junto al `.mod` raíz, pero el CLI de la VM-Java lo resuelve relativo al
+  CWD, y `run_vm` lanzaba el JAR desde `compat/` (no desde el dir del `.mod` en WORK)
+  → `FileNotFoundException: Core.mod` tragado por `2>/dev/null` → stdout vacío.
+  Ejecutados directamente sobre el mismo `.mod` con Core presente, los tres (golden,
+  V3-C, V3-Java) dan salida byte-idéntica. **Fix (utillaje):** `run_vm` ejecuta ambas
+  VMs desde el dir del `.mod` (subshell). Puerta 0 → 16/16 verde. _Matiz de fondo
+  (no bloquea, → V4): las dos CLI host resuelven la ruta de las deps desde bases
+  distintas (VM-C = dir del `.mod`; VM-Java = CWD). No afecta al producto — el daemon
+  del IDE y el firmware montan las deps en su sitio y la salida es idéntica._
