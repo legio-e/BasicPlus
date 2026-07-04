@@ -38,7 +38,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 
 | Placa | Firmware | Boot+INFO | Ejec/OO (paridad) | GPIO (blink) | I2C | SPI | UART | reset-cause | autorun+Stop |
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| **Pico 2** (RP2350A) | `pico` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
+| **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | [ ] | [ ] | [ ] | [x] | [ ] |
 | **Metro RP2350B** | `pico` (misma img) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **ESP32-S3 DevKit** | `esp32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **STM32 Nucleo-U575** | `stm32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
@@ -108,12 +108,14 @@ ahora tiene la de P5, sin la stdlib unificada.
       byte-idénticos al host; **AOT** confirmado con `fibobench` (native==interpretado=4160200,
       **~99×**: 108.4 s → 1.095 s, `.mdn` auto-subido por el IDE). Pendiente Metro/Nucleo (AOT)
       + ESP32 (interpretado).
-- [ ] **CRC skip-PUT**: subir un `.mod` ya presente e idéntico → el IDE dice "contenido
-      idéntico, salto PUT" (no re-sube).
-- [ ] **missing-lib al wire**: correr algo cuya dep NO esté → el IDE resuelve/sube la lib,
-      o da error claro con el nombre.
-- [ ] **stdlib fresca en placa** (P4): tras primer boot, `Pico.mod` etc. byte-idénticos a
-      bpstdlib (skip-PUT lo confirma).
+- [x] **CRC skip-PUT**: subir un `.mod` ya presente e idéntico → el IDE dice "contenido
+      idéntico, salto PUT" (no re-sube). ✅ Pico 2 (4-jul): `Pico.mod ya en FS (2415 bytes,
+      contenido idéntico), salto PUT`.
+- [x] **missing-lib al wire**: correr algo cuya dep NO esté → el IDE resuelve/sube la lib,
+      o da error claro con el nombre. ✅ Pico 2: Blink → resolvió y subió `Gpio.mod` a /lib.
+- [x] **stdlib fresca en placa**: tras primer boot, `Pico.mod` etc. byte-idénticos a
+      bpstdlib (skip-PUT lo confirma). ✅ Pico 2: `Pico.mod` = 2415 B = el fresco (el blob
+      rancio regenerado se propagó al device; el skip-PUT por CRC lo confirma).
 
 ---
 
