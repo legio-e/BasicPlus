@@ -40,7 +40,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
 | **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [x]³ | —¹ | —¹ | —¹ | [x] | [x] |
-| **ESP32-S3 DevKit** | `esp32` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
+| **ESP32-S3 DevKit** | `esp32` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
 | **STM32 Nucleo-U575** | `stm32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 
 ¹ **I2C/SPI/UART en Pico 2 y Metro (RP2350) = diferidos** a la placa donde el cableado sea cómodo (los
@@ -123,7 +123,8 @@ ahora tiene la de P5, sin la stdlib unificada.
       **~99×**: 108.4 s → 1.095 s, `.mdn` auto-subido por el IDE). **Metro ✅ (4-jul):** ídem
       byte-idéntico + AOT ~102× (112.1 s → 1.095 s); el tramo interpretado ~3% más lento que
       la Pico 2 = firma del **heap en PSRAM** (el nativo, idéntico, apenas toca heap).
-      Pendiente Nucleo (AOT) + ESP32 (interpretado).
+      **S3 ✅ (4-jul):** H7Pow/H7Eval byte-idénticos = `^`/`eval` **interpretado en Xtensa** (sin
+      AOT) da lo mismo que host y ARM. Pendiente Nucleo (AOT).
 - [x] **CRC skip-PUT**: subir un `.mod` ya presente e idéntico → el IDE dice "contenido
       idéntico, salto PUT" (no re-sube). ✅ Pico 2 (4-jul): `Pico.mod ya en FS (2415 bytes,
       contenido idéntico), salto PUT`.
