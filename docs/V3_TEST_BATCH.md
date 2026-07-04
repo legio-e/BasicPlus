@@ -111,7 +111,7 @@ ahora tiene la de P5, sin la stdlib unificada.
 
 | Placa | Pantalla enciende | Catálogo widgets | Color/fuentes | Formulario `.win` | Táctil | Rotación | Imagen única (board.json) |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| **P4 Function-EV** (ek79007, default) | [x] | [x] | [x] | [x] | [x] | [ ]⁵ | [x] (sin json = EV) |
+| **P4 Function-EV** (ek79007, default) | [x] | [x] | [x] | [x] | [x] | [x]⁵ | [x] (sin json = EV) |
 | **Waveshare P4** (st7701) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] (`SetDisplay.bp` → st7701) |
 | **STM32 DK2** (LTDC) | [x] | [x] | [x] | —⁴ | [x] | n/a² | n/a |
 
@@ -129,7 +129,8 @@ formulario `.win` (⁴, bloqueado por FS) y GPIO/I2C/UART (diferidos). El build 
 ⁵ **P4-EV gráfico:** el P4 (firmware + AMBAS placas) se probó **a fondo en el merge P6** (Eduardo);
 hoy **re-confirmado sobre el build actual**: INFO (14/14 backend limpio) + paridad byte-idéntica +
 **FormDemo** (formulario `.win`, handlers `onSaludar`/checkbox disparan por táctil). Pantalla ek79007
-+ widgets + color + táctil OK. **Rotación** = el P4 SÍ la soporta (spot-check opcional `GuiRotDemo`).
++ widgets + color + táctil OK. **Rotación ✅** (`GuiRotDemo`: gira 90/180/270/0 al tocar; las
+dimensiones del árbol pasan de 480×320 a 320×480 = giro real — lo que el DK2/LTDC NO puede).
 **Pendiente genuino del Grupo 2: Waveshare P4** (2ª placa, `SetDisplay.bp`→st7701) = imagen única
 sobre el build FINAL (la memoria: re-flashear la Waveshare con la imagen final).
 
