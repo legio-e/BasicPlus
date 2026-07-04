@@ -41,7 +41,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 | **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
 | **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [x]³ | —¹ | —¹ | —¹ | [x] | [x] |
 | **ESP32-S3 DevKit** | `esp32` | [x] | [x] | —¹ | —¹ | —¹ | —¹ | [x] | [x] |
-| **STM32 Nucleo-U575** | `stm32` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
+| **STM32 Nucleo-U575** | `stm32` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
 
 ¹ **I2C/SPI/UART en Pico 2 y Metro (RP2350) = diferidos** a la placa donde el cableado sea cómodo (los
 buses son código compartido; basta validarlos en una placa con los cacharros a mano).
@@ -121,14 +121,15 @@ ahora tiene la de P5, sin la stdlib unificada.
 - [ ] **Imagen única P4**: la MISMA imagen sirve a las 2 placas P4 vía `/sys/board.json`.
 - [ ] **reset-cause e2e** (3 familias no-P4 + P4): forzar un reset (power-on, watchdog,
       botón) → INFO muestra la causa correcta.
-- [~] **`^` (potencia) y `eval`** en placa: correr en las ARM (Pico/Metro/Nucleo — AOT) y
+- [x] **`^` (potencia) y `eval`** en placa: correr en las ARM (Pico/Metro/Nucleo — AOT) y
       en ESP32 (interpretado) — misma salida que host. **Pico 2 ✅ (4-jul):** H7Pow/H7Eval
       byte-idénticos al host; **AOT** confirmado con `fibobench` (native==interpretado=4160200,
       **~99×**: 108.4 s → 1.095 s, `.mdn` auto-subido por el IDE). **Metro ✅ (4-jul):** ídem
       byte-idéntico + AOT ~102× (112.1 s → 1.095 s); el tramo interpretado ~3% más lento que
       la Pico 2 = firma del **heap en PSRAM** (el nativo, idéntico, apenas toca heap).
       **S3 ✅ (4-jul):** H7Pow/H7Eval byte-idénticos = `^`/`eval` **interpretado en Xtensa** (sin
-      AOT) da lo mismo que host y ARM. Pendiente Nucleo (AOT).
+      AOT) da lo mismo que host y ARM. **Nucleo ✅ (AOT ARM):** H7Pow/H7Eval byte-idénticos →
+      **las 4 placas ✅** (3 ARM por AOT + S3 interpretado, todas iguales al host).
 - [x] **CRC skip-PUT**: subir un `.mod` ya presente e idéntico → el IDE dice "contenido
       idéntico, salto PUT" (no re-sube). ✅ Pico 2 (4-jul): `Pico.mod ya en FS (2415 bytes,
       contenido idéntico), salto PUT`.
