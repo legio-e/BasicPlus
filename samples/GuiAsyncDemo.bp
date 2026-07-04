@@ -1,0 +1,60 @@
+// GuiAsyncDemo.bp — trabajo largo desde un handler SIN congelar la GUI.
+//
+// Patrón: el onClick lanza la tarea en un thread aparte (extends Thread +
+// start()) y VUELVE al instante; el pump del GUI sigue vivo. La etiqueta va
+// marcando el progreso (se repinta sola) y el botón se puede volver a pulsar
+// mientras la tarea corre. Los threads BP se entrelazan por cuantos en un
+// worker (igual en PC y en placa), así que tocar widgets desde la tarea es
+// seguro: cada operación (setText...) es atómica a nivel de cuanto.
+module GuiAsyncDemo
+  import Gui
+
+  class Contador extends Thread
+    var lbl: Gui.Label
+
+    public function Contador(l: Gui.Label)
+      super(2048)
+      this.lbl := l
+    end Contador
+
+    public function run()
+      var i: integer := 0
+      while i < 10 do
+        sleep(500)
+        i := i + 1
+        this.lbl.setText("progreso " + intToString(i) + "/10")
+      endwh
+      this.lbl.setText("hecho - pulsa otra vez")
+    end run
+  end Contador
+
+  class BtnLanzar extends Gui.Button
+    var lbl: Gui.Label
+
+    public function BtnLanzar(parent: Gui.Component, texto: string, l: Gui.Label)
+      super(parent, texto)
+      this.lbl := l
+    end BtnLanzar
+
+    public function onClick()
+      this.lbl.setText("trabajando...")
+      Contador(this.lbl).start()
+    end onClick
+  end BtnLanzar
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var titulo: Gui.Label := Gui.Label(scr, "Tarea larga sin congelar la GUI")
+    titulo.align(Gui.Align.TOP_MID, 0, 10)
+
+    var estado: Gui.Label := Gui.Label(scr, "pulsa el boton")
+    estado.fontSize := 24
+    estado.align(Gui.Align.CENTER, 0, -20)
+
+    var btn: BtnLanzar := BtnLanzar(scr, "Lanzar tarea (5 s)", estado)
+    btn.align(Gui.Align.CENTER, 0, 40)
+
+    Gui.run()
+  end Main
+end GuiAsyncDemo

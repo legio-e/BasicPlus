@@ -663,7 +663,39 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
   varios widgets y distinguirlos por el que llega. Pero lo habitual y más claro es un handler por widget.</p>
 </div>
 
-<h3 id="ev-slots">22.3 De nombre a slot (transparente)</h3>
+<h3 id="ev-async">22.3 Trabajo largo desde un evento (sin congelar la GUI)</h3>
+<p>
+  El handler de un evento corre en el mismo hilo que <em>bombea</em> la GUI: si el handler tarda
+  (cálculo largo, esperas), la pantalla se congela — no repinta ni atiende al táctil — hasta que
+  vuelve. La solución es lanzar el trabajo en un <strong>thread aparte</strong> y volver al
+  instante:
+</p>
+<pre><code><span class="kw">class</span> <span class="type">Tarea</span> <span class="kw">extends</span> <span class="type">Thread</span>
+  <span class="kw">var</span> lbl: Gui.<span class="type">Label</span>
+  <span class="kw">public function</span> <span class="fn">Tarea</span>(l: Gui.<span class="type">Label</span>)
+    <span class="kw">super</span>(<span class="num">2048</span>)
+    <span class="kw">this</span>.lbl := l
+  <span class="kw">end</span> Tarea
+  <span class="kw">public function</span> <span class="fn">run</span>()
+    <span class="comment">// ...trabajo largo; puede tocar widgets (setText...) con seguridad</span>
+    <span class="kw">this</span>.lbl.<span class="fn">setText</span>(<span class="str">"hecho"</span>)
+  <span class="kw">end</span> run
+<span class="kw">end</span> Tarea
+
+<span class="comment">// y en el onClick del botón, UNA línea:</span>
+<span class="fn">Tarea</span>(<span class="kw">this</span>.lbl).<span class="fn">start</span>()</code></pre>
+<p>
+  Los threads de BP se entrelazan por cuantos en un solo worker (igual en el PC que en la placa):
+  el handler vuelve, la GUI sigue viva, y la tarea puede <strong>actualizar widgets
+  directamente</strong> — cada operación (<code>setText</code>…) es atómica a nivel de cuanto.
+  Demo completa: <code>samples/GuiAsyncDemo.bp</code>.
+</p>
+<div class="note">
+  <p>Una llamada asíncrona directa (<code>async(…)</code>), sin declarar la clase, requiere
+  valores-función en el lenguaje y está prevista para una versión futura.</p>
+</div>
+
+<h3 id="ev-slots">22.4 De nombre a slot (transparente)</h3>
 <p>
   Tú escribes <em>nombres</em> de método en el <code>.win</code>. Al desplegar, el IDE los traduce a la posición
   (slot) del método en la ventana —hornea <code>"clic":"onGuardar"</code> → <code>"clicSlot": N</code>— y
@@ -708,7 +740,7 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
 <p>
   El botón <em>Run on Device</em> del IDE lo hace todo: compila, sube al dispositivo el programa, las
   dependencias de stdlib que falten y la carpeta <code>resources/</code> del proyecto (los <code>.win</code>
-  con los handlers ya traducidos a slots, §22.3), y lo ejecuta sobre la pantalla real. Los <code>print</code>
+  con los handlers ya traducidos a slots, §22.4), y lo ejecuta sobre la pantalla real. Los <code>print</code>
   salen por la consola del IDE; <em>Stop</em> (Ctrl+F2) mata la ejecución.
 </p>
 <p>

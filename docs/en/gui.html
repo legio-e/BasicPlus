@@ -668,7 +668,39 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
   style.</p>
 </div>
 
-<h3 id="ev-slots">22.3 From name to slot (transparent)</h3>
+<h3 id="ev-async">22.3 Long work from an event (without freezing the GUI)</h3>
+<p>
+  An event handler runs on the same thread that <em>pumps</em> the GUI: if the handler takes long
+  (heavy computation, waits), the screen freezes — no repaint, no touch handling — until it
+  returns. The solution is to launch the work on a <strong>separate thread</strong> and return
+  immediately:
+</p>
+<pre><code><span class="kw">class</span> <span class="type">Task</span> <span class="kw">extends</span> <span class="type">Thread</span>
+  <span class="kw">var</span> lbl: Gui.<span class="type">Label</span>
+  <span class="kw">public function</span> <span class="fn">Task</span>(l: Gui.<span class="type">Label</span>)
+    <span class="kw">super</span>(<span class="num">2048</span>)
+    <span class="kw">this</span>.lbl := l
+  <span class="kw">end</span> Task
+  <span class="kw">public function</span> <span class="fn">run</span>()
+    <span class="comment">// ...long work; it can touch widgets (setText...) safely</span>
+    <span class="kw">this</span>.lbl.<span class="fn">setText</span>(<span class="str">"done"</span>)
+  <span class="kw">end</span> run
+<span class="kw">end</span> Task
+
+<span class="comment">// and in the button's onClick, ONE line:</span>
+<span class="fn">Task</span>(<span class="kw">this</span>.lbl).<span class="fn">start</span>()</code></pre>
+<p>
+  BP threads interleave by quanta on a single worker (same on the PC and on the board): the
+  handler returns, the GUI stays alive, and the task can <strong>update widgets
+  directly</strong> — each operation (<code>setText</code>…) is atomic at the quantum level.
+  Full demo: <code>samples/GuiAsyncDemo.bp</code>.
+</p>
+<div class="note">
+  <p>A direct asynchronous call (<code>async(…)</code>), with no class to declare, requires
+  function values in the language and is planned for a future version.</p>
+</div>
+
+<h3 id="ev-slots">22.4 From name to slot (transparent)</h3>
 <p>
   You write method <em>names</em> in the <code>.win</code>. On deploy, the IDE translates them to the
   method's position (slot) in the window — it bakes <code>"clic":"onSave"</code> →
@@ -717,7 +749,7 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
 <p>
   The IDE's <em>Run on Device</em> button does everything: it compiles, uploads to the device the
   program, any missing stdlib dependencies and the project's <code>resources/</code> folder (the
-  <code>.win</code> files with handlers already translated to slots, §22.3), and runs it on the real
+  <code>.win</code> files with handlers already translated to slots, §22.4), and runs it on the real
   display. <code>print</code> output goes to the IDE console; <em>Stop</em> (Ctrl+F2) kills the run.
 </p>
 <p>
