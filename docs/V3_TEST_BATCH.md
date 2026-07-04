@@ -102,7 +102,7 @@ ahora tiene la de P5, sin la stdlib unificada.
 | Placa | Firmware | Boot+INFO | Ejec/OO | GPIO | I2C¹ | UART | autorun+Stop |
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|
 | **P4 Function-EV** | `esp32p4` | [x] | [x] | [ ] | [ ] | [ ] | [ ] |
-| **Waveshare P4 4.3"** | `esp32p4` (misma) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| **Waveshare P4 4.3"** | `esp32p4` (misma) | [x] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **STM32 Discovery DK2** | `stm32-dk2` | [x] | [x] | [ ] | [ ] | [ ] | [ ] |
 
 ¹ En las P4, periféricos I2C **siempre en bus 1** (el bus 0 es del táctil).
