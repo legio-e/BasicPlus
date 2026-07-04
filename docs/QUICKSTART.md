@@ -1,8 +1,11 @@
 # BasicPlus — inicio rápido
 
+> 🇬🇧 [English version](en/QUICKSTART.md)
+
 De cero a un LED parpadeando (o un "hola" por consola) en pocos minutos,
 por plataforma. Para el detalle fino de cada port: los README de
-`bpgenvm-c/pico`, `bpgenvm-c/esp32` y `bpgenvm-c/stm32`.
+`bpgenvm-c/pico`, `bpgenvm-c/esp32`, `bpgenvm-c/esp32p4` y
+`bpgenvm-c/stm32`.
 
 ---
 
@@ -98,7 +101,26 @@ backend (llegará con lwIP).
 
 ---
 
-## 4. STM32 (Nucleo-U575ZI-Q)
+## 4. ESP32-P4 (placas con pantalla)
+
+**Una sola imagen vale para las placas P4 soportadas** (ESP32-P4-Function-EV
+de 7" y Waveshare Touch-LCD de 4.3"): el panel se elige en runtime con
+`/sys/board.json` — sin fichero, arranca con el perfil de la EV.
+
+**Flashear**: con la imagen fusionada y `esptool` — ver
+[INSTALAR_FIRMWARE](INSTALAR_FIRMWARE.md). El wire (lo que usa el IDE) va
+por el puerto del **bridge USB-UART**, como en el S3.
+
+Después: IDE → Connect → mismo flujo (Run on Device, consola, autorun). Y
+**la pantalla**: los programas GUI (`import Gui`) pintan sobre el panel
+táctil — todo el detalle en la [guía de gráficos](gui.html). Para elegir
+panel en una placa que no sea la EV, ejecuta una vez
+`samples/SetDisplay.bp` ([guía §23.4](gui.html#ej-pantalla)). Las
+`native function` corren interpretadas (el AOT es ARM).
+
+---
+
+## 5. STM32 (Nucleo-U575ZI-Q)
 
 **Flashear**: lo más simple es arrastrar el `.bin` a la unidad USB del
 ST-LINK (`NOD_U575ZI`); alternativas y compilación propia (CubeIDE) en
@@ -114,6 +136,8 @@ otras placas. AOT activo (mismo Cortex-M33 que el RP2350).
 
 - **[Manual del lenguaje](manual.html)** y **[Referencia](referencia.html)**
   (stdlib, CLI, artefactos) — la documentación completa.
+- **[Interfaz gráfica](gui.html)** — la GUI en placas con pantalla
+  (ESP32-P4, STM32-DK2): widgets, color y fuentes, formularios `.win`.
 - `samples/` — ejemplos: GPIO OO, I²C/SPI/UART, threads, excepciones,
   tuplas, `native` AOT, TCP…
 - `docs/PENDIENTES.md` — el backlog vivo y honesto del proyecto.

@@ -1,5 +1,7 @@
 # Instalar el firmware BasicPlus en cada micro
 
+> 🇬🇧 [English version](en/INSTALAR_FIRMWARE.md)
+
 Cómo poner la imagen de la VM en cada placa soportada. Hay dos caminos:
 
 - **A — Imagen precompilada** (el normal): descarga el binario de la
@@ -84,6 +86,38 @@ esptool.py --chip esp32s3 merge_bin -o bpvm_esp32_merged.bin \
     0x8000 partition_table/partition-table.bin \
     0x10000 bpvm_esp32.bin
 ```
+
+---
+
+## ESP32-P4 (placas con pantalla) — `bpvm_esp32p4_merged.bin`
+
+**Una única imagen para las placas P4 soportadas** (ESP32-P4-Function-EV de
+7" 1024×600 y Waveshare Touch-LCD de 4.3" 480×800): el panel se elige en
+runtime leyendo `/sys/board.json` (clave `"display"`); sin fichero, arranca
+con el perfil de la EV. Tras flashear una placa que no sea la EV, ejecuta
+una vez `samples/SetDisplay.bp` desde el IDE para escribir la configuración
+([guía de gráficos §23.4](gui.html#ej-pantalla)).
+
+El wire (IDE) va por el puerto del **bridge USB-UART** de la placa.
+
+### A. Imagen precompilada (esptool)
+
+```sh
+esptool.py --chip esp32p4 -p <puerto-del-bridge> write_flash 0x0 bpvm_esp32p4_merged.bin
+```
+
+### B. Compilarla (ESP-IDF v6.x)
+
+```sh
+cd bpgenvm-c/esp32p4
+idf.py build
+idf.py -p <puerto-del-bridge> flash      # flashea las piezas con sus offsets
+```
+
+Para regenerar la imagen fusionada, los offsets exactos del build están en
+`build/flash_args` (`esptool.py merge_bin` con esa lista). Prerequisitos y
+notas del port (ESP-IDF v6.0.1, revisión del silicio) en
+`bpgenvm-c/esp32p4/`.
 
 ---
 
