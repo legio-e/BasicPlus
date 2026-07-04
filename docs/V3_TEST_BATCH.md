@@ -41,7 +41,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 | **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
 | **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [x]³ | —¹ | —¹ | —¹ | [x] | [x] |
 | **ESP32-S3 DevKit** | `esp32` | [x] | [x] | —¹ | —¹ | —¹ | —¹ | [x] | [x] |
-| **STM32 Nucleo-U575** | `stm32` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
+| **STM32 Nucleo-U575** | `stm32` | [x] | [x] | [ ] | —¹ | —¹ | —¹ | [x] | [x] |
 
 ¹ **I2C/SPI/UART en Pico 2 y Metro (RP2350) = diferidos** a la placa donde el cableado sea cómodo (los
 buses son código compartido; basta validarlos en una placa con los cacharros a mano).
@@ -129,7 +129,9 @@ ahora tiene la de P5, sin la stdlib unificada.
       la Pico 2 = firma del **heap en PSRAM** (el nativo, idéntico, apenas toca heap).
       **S3 ✅ (4-jul):** H7Pow/H7Eval byte-idénticos = `^`/`eval` **interpretado en Xtensa** (sin
       AOT) da lo mismo que host y ARM. **Nucleo ✅ (AOT ARM):** H7Pow/H7Eval byte-idénticos →
-      **las 4 placas ✅** (3 ARM por AOT + S3 interpretado, todas iguales al host).
+      **las 4 placas ✅** (3 ARM por AOT + S3 interpretado, todas iguales al host). Fibobench
+      AOT (native==interp): Pico ~99× · Metro ~102× · **Nucleo ~374×** — el ratio sube donde el
+      intérprete es más lento (el nativo ARM va a tope igual: ~0.2 s/`fib(30)` en las 3 ARM).
 - [x] **CRC skip-PUT**: subir un `.mod` ya presente e idéntico → el IDE dice "contenido
       idéntico, salto PUT" (no re-sube). ✅ Pico 2 (4-jul): `Pico.mod ya en FS (2415 bytes,
       contenido idéntico), salto PUT`.
