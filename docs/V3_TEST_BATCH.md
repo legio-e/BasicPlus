@@ -113,9 +113,18 @@ ahora tiene la de P5, sin la stdlib unificada.
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **P4 Function-EV** (ek79007, default) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] (sin json = EV) |
 | **Waveshare P4** (st7701) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] (`SetDisplay.bp` → st7701) |
-| **STM32 DK2** (LTDC) | [x] | [x] | [x] | [ ] | [x] | n/a² | n/a |
+| **STM32 DK2** (LTDC) | [x] | [x] | [x] | —⁴ | [x] | n/a² | n/a |
 
 ² La rotación (`Gui.setRotation`) no está en la DK2/LTDC en esta versión (avisa y sigue).
+
+⁴ **Formulario `.win` en la DK2 = bloqueado por el tamaño del FS** (96 KB no traga `Gui.mod` 31 KB
++ `Json.mod` 16 KB + stdlib sembrada ~40 KB + form). El **mecanismo de forms está verificado en el
+P4** (formdemo funciona ahí). → depende de la **sub-tarea de agrandar el FS del DK2** (registro).
+
+**DK2 CERRADA (4-jul, con salvedad):** no gráfico (Boot+INFO · paridad AOT · ADC/PWM fix · reset-cause
+`NRST`) ✅; gráfico (pantalla · widgets · color · **táctil + dispatch por slot**) ✅. Falta el
+formulario `.win` (⁴, bloqueado por FS) y GPIO/I2C/UART (diferidos). El build necesitó el fix del
+`stdio.h`. **3 temas de FS destapados** (cuelgue pico / LIST truncado / FS pequeño) → pasada de FS V4.
 
 **Muestras gráficas:** `GuiColorDemo`, `GuiClickDemo`, `GuiCheckDemo`, `GuiValueDemo`,
 `GuiTableDemo`, `GuiTabDemo`, `GuiImageDemo`, `GuiMsgDemo`, `GuiListKbd`, `FontLoadDemo`,
