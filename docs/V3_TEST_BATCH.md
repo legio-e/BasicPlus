@@ -39,7 +39,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 | Placa | Firmware | Boot+INFO | Ejec/OO (paridad) | GPIO (blink) | I2C | SPI | UART | reset-cause | autorun+Stop |
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
-| **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
+| **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [x]³ | [ ] | [ ] | [ ] | [x] | [ ] |
 | **ESP32-S3 DevKit** | `esp32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **STM32 Nucleo-U575** | `stm32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 
@@ -47,6 +47,9 @@ rebuild los recoge — no hace falta nada más por tu parte.
 buses son código compartido; basta validarlos en una placa con los cacharros a mano).
 **Pico 2 CERRADA (4-jul):** Boot+INFO · paridad `^`/`eval` · AOT (~99×) · GPIO · reset-cause
 · CRC/deps/stdlib-fresca — todo ✅.
+
+³ **GPIO de la Metro = NeoPixel** (`NeoDemo` ✅): su "LED" es el WS2812 onboard (GP25). El
+`blink.bp` de LED plano hardcodea GP25 (LED de la Pico 2) → no aplica a la Metro. Ver registro.
 
 **Notas por placa (lo que V3 cambió y conviene mirar de reojo):**
 - **Pico 2**: INFO variante A (30 GPIO). `native` acelerada (AOT ARM) → probar `^`/`eval`
@@ -147,6 +150,21 @@ commit del fix si lo hay.)_
   magnitudes distintas; la etiqueta "PWM" del IDE (`PicoExplorer.java:1255`) es ambigua.
   No es mis-detección de placa: la Pico 2 muestra GPIO 30 + ADC 4 = variante A correcta (la
   B daría 48/8). V4: armonizar la etiqueta ("PWM ch" o mostrar slices).
+
+- **Metro · Blink no enciende nada** (NO bug, → V4 board-aware LED) — `samples/blink.bp`
+  hardcodea GP25 (LED onboard de la **Pico 2**); en la **Metro GP25 es el NeoPixel**, no un
+  LED plano (su LED sería GP23, `ledPin` del board.json, "a confirmar con esquemático"). Blink
+  hace on/off del pin del NeoPixel → nada visible. Hueco de fondo: board.json declara `ledPin`
+  pero NADIE lo lee (sin `Pico.ledPin()` board-aware; el heartbeat del firmware también
+  hardcodea `PICO_DEFAULT_LED_PIN=25`) → unificación board-aware = V4. En la Metro el "LED" =
+  NeoPixel, así que **`NeoDemo` cubre el peldaño GPIO** (³ en la tabla).
+
+- **Metro · NeoDemo falló con "muchas demos cargadas" (Eduardo)** — ⚠ **ABIERTO, pendiente de
+  SÍNTOMA para reproducir.** Ahora va (tras el reset `/app` quedó vacío → FS holgado, 35/128 KB).
+  Sospecha de Eduardo: presión de RAM/FS con muchos mods en `/app` (el FS `s_data` = 128 KB en
+  SRAM). Hay que capturar QUÉ pasó al fallar (error "no space"/"table full" limpio = tope FS,
+  a lo sumo V4; vs cuelgue/reset/basura = bug real → reproducir cargando N mods sin resetear).
+  NO tocar código hasta tener el síntoma.
 
 - **Metro · `Pico.ADC_CHANNELS()` reportaba 4, no 8** (bug de V3, FIXED — pendiente reflash)
   — el intrínseco (builtin 208 → `bpvm_pico_adc_channels`) caía al **fallback fijo 4** de
