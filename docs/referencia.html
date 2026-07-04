@@ -197,7 +197,10 @@
     <li class="sub"><a href="#stdlib-stats">13.27 Stats</a></li>
     <li class="sub"><a href="#stdlib-compress">13.28 Compress</a></li>
     <li class="sub"><a href="#stdlib-net">13.29 Net</a></li>
-
+    <li class="sub"><a href="#stdlib-json">13.30 Json</a></li>
+    <li class="sub"><a href="#stdlib-freq">13.31 Freq</a></li>
+    <li class="sub"><a href="#stdlib-app">13.32 App</a></li>
+    <li class="sub"><a href="#stdlib-gui">13.33 Gui → volumen de gráficos</a></li>
 
     <li class="group"><a href="#cli">15. Compilación &amp; ejecución</a></li>
     <li class="sub"><a href="#cli-frontend">15.1 Frontend (bp → .mod)</a></li>
@@ -231,6 +234,10 @@
     <li class="group"><a href="manual.html#owner">12. Owner semantics</a></li>
     <li class="group"><a href="manual.html#concurrencia">14. Concurrencia</a></li>
     <li class="group"><a href="manual.html#pendientes">17. Pendientes / no soportado</a></li>
+  </ul>
+  <h2>Gráficos (volumen aparte)</h2>
+  <ul>
+    <li class="group"><a href="gui.html#intro">18–25. Interfaz gráfica (<code>Gui</code>)</a></li>
   </ul>
 </nav>
 <main>
@@ -267,6 +274,10 @@
           <code>import Math</code> — ver <a href="#stdlib-math">§13.9</a>.</em></td></tr>
   <tr><td>Conversión num</td>
       <td><code>floor(x)</code> <code>ceil(x)</code> <code>round(x)</code></td></tr>
+  <tr><td>Expresiones</td>
+      <td><code>eval(s)</code> — evalúa una expresión aritmética constante dada
+          como string (<code>+ - * /</code>, paréntesis y unario; precedencia
+          normal) y devuelve <code>float</code>: <code>eval("2 + 3*4")</code> = 14.0</td></tr>
   <tr><td>Tiempo</td>
       <td><code>now()</code> ms desde epoch · <code>sleep(ms)</code></td></tr>
   <tr><td>Concurrencia</td>
@@ -1458,6 +1469,92 @@ edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num"
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
+<h3 id="stdlib-json">13.30 <code>Json</code></h3>
+<p>
+  Lectura y escritura de JSON (<code>import Json</code>). El documento se modela con una
+  jerarquía de clases: <code>JsonValue</code> (base) y sus hijas <code>JsonNull</code>,
+  <code>JsonBool</code>, <code>JsonInt</code>, <code>JsonFloat</code>, <code>JsonString</code>,
+  <code>JsonArray</code> y <code>JsonObject</code>.
+</p>
+<table>
+  <tr><th>API</th><th>Descripción</th></tr>
+  <tr><td><code>Json.parseJson(s): JsonValue</code></td>
+      <td>Parsea un string JSON; lanza <code>RuntimeError</code> si es inválido.</td></tr>
+  <tr><td><code>Json.writeJson(v): string</code><br><code>Json.writeJsonPretty(v): string</code></td>
+      <td>Serializa (compacto / indentado). Un valor también se serializa con
+          <code>v.toJson()</code>.</td></tr>
+  <tr><td><code>v.isObject() … v.isNull()</code></td>
+      <td>Test de tipo polimórfico: <code>isNull isBool isInt isFloat isNumber isString
+          isArray isObject</code>.</td></tr>
+  <tr><td><code>v.asObject() … v.asString()</code></td>
+      <td>Cast con comprobación (lanza <code>RuntimeError</code> si el tipo no encaja).</td></tr>
+  <tr><td><code>JsonObject</code></td>
+      <td><code>put(clave, v)</code> · <code>has(clave)</code> ·
+          <code>getString/getInt/getFloat/getBool/getObject/getArray(clave)</code> ·
+          variantes <code>get…Or(clave, def)</code> con valor por defecto.</td></tr>
+  <tr><td><code>JsonArray</code></td>
+      <td><code>add(v)</code> · <code>at(i): JsonValue</code> · <code>length()</code>.</td></tr>
+</table>
+<pre><code><span class="kw">var</span> root: Json.<span class="type">JsonObject</span> := Json.<span class="fn">JsonObject</span>()
+root.<span class="fn">put</span>(<span class="str">"nombre"</span>, Json.<span class="fn">JsonString</span>(<span class="str">"Ana"</span>))
+root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span class="fn">JsonInt</span>(<span class="num">30</span>))
+<span class="kw">print</span> Json.<span class="fn">writeJson</span>(root)              <span class="comment">// {"nombre":"Ana","edad":30}</span>
+
+<span class="kw">var</span> v: Json.<span class="type">JsonValue</span> := Json.<span class="fn">parseJson</span>(<span class="str">"{\"ok\":true}"</span>)
+<span class="kw">print</span> boolToString(v.<span class="fn">asObject</span>().<span class="fn">getBool</span>(<span class="str">"ok"</span>))</code></pre>
+<p>
+  Ejemplo completo: <code>samples/JsonDemo.bp</code>. El cargador de formularios
+  <code>.win</code> (<a href="gui.html#eventos">guía de gráficos §22</a>) usa este módulo.
+</p>
+
+<h3 id="stdlib-freq">13.31 <code>Freq</code></h3>
+<p>
+  Frecuencímetro por conteo de flancos (<code>import Freq</code>): mide la frecuencia de la señal
+  de un pin contando los flancos que llegan durante una ventana de tiempo conocida
+  (<em>gate time</em>) — <code>Hz = flancos / ventana</code>. Se apoya en
+  <code>Pulse.Counter</code> (conteo por hardware, sin coste de CPU); el pin tiene la misma
+  restricción de canal que <code>Pulse.Counter</code> (<a href="#stdlib-pulse">§13.15</a>).
+</p>
+<table>
+  <tr><th>Miembro</th><th>Descripción</th></tr>
+  <tr><td><code>Freq.RISING() / FALLING() / BOTH()</code></td>
+      <td>Qué flanco contar.</td></tr>
+  <tr><td><code>Meter(pin, edge)</code></td>
+      <td>Crea el medidor sobre un pin.</td></tr>
+  <tr><td><code>measureHz(windowMs): integer</code></td>
+      <td>Una medida con ventana de <code>windowMs</code> ms.</td></tr>
+  <tr><td><code>measureHzAvg(windowMs, samples): integer</code></td>
+      <td>Media de <code>samples</code> medidas.</td></tr>
+  <tr><td><code>maxHz(windowMs): integer</code></td>
+      <td>Frecuencia máxima medible con esa ventana antes de desbordar el contador de
+          16 bits; por encima, usa una ventana menor.</td></tr>
+  <tr><td><code>close()</code></td>
+      <td>Libera el contador (deja el canal disponible para PWM, etc.).</td></tr>
+</table>
+
+<h3 id="stdlib-app">13.32 <code>App</code></h3>
+<p>
+  Introspección del proyecto en ejecución (<code>import App</code>), estilo
+  <code>getResource()</code> de Java: el programa puede preguntar dónde está su raíz y construir
+  rutas de recursos explícitas. Los valores dependen del entorno (en placa,
+  <code>/app/&lt;proyecto&gt;/…</code>; en host, el <code>.mod</code> ejecutado y su base-dir) —
+  como <code>now()</code> o el FS, no forman parte de la paridad byte-idéntica.
+</p>
+<table>
+  <tr><th>Función</th><th>Descripción</th></tr>
+  <tr><td><code>App.mainModule(): string</code></td><td>Nombre del módulo principal en ejecución.</td></tr>
+  <tr><td><code>App.mainModulePath(): string</code></td><td>Ruta del <code>.mod</code> ejecutado.</td></tr>
+  <tr><td><code>App.projectPath(): string</code></td><td>Raíz del proyecto (la base de las rutas relativas de <code>readFile</code>, imágenes, <code>.win</code>…).</td></tr>
+</table>
+
+<h3 id="stdlib-gui">13.33 <code>Gui</code> — volumen aparte</h3>
+<p>
+  La interfaz gráfica (pantalla y árbol de widgets, el catálogo completo, color y fuentes,
+  formularios <code>.win</code>, ejecución en host y placa) tiene su propio volumen:
+  <a href="gui.html"><strong>BasicPlus — Interfaz gráfica</strong></a> (§18–25), con la
+  referencia rápida del API <code>Gui.*</code> en <a href="gui.html#referencia">§24</a>.
+</p>
+
 <h2 id="cli">15. Compilación &amp; ejecución</h2>
 
 <h3 id="cli-frontend">15.1 Frontend</h3>
@@ -1659,7 +1756,7 @@ edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num"
   con anotaciones (nombre de función, sección, jumps con destino).
 </p>
 
-<h3 id="cli-mcu">15.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / STM32)</h3>
+<h3 id="cli-mcu">15.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / ESP32-P4 / STM32)</h3>
 <p>
   Desde el IDE, <em>Run on Device</em> ejecuta el módulo en un MCU conectado
   por puerto serie (protocolo «wire v1»): el IDE sube el <code>.mod</code>
@@ -1679,6 +1776,13 @@ edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num"
       <td>Wire v1 por UART0 (puerto del bridge USB-UART); consola/logs por
           el USB nativo (USB-Serial-JTAG). FS persistente en partición
           dedicada. <code>native</code> interpretada (sin AOT en Xtensa).</td></tr>
+  <tr><td>ESP32-P4 (RISC-V)</td>
+      <td>Wire v1 por UART (puerto del bridge USB-UART). <strong>Imagen de
+          firmware única</strong> para las placas P4 con pantalla: el panel se
+          elige en runtime con <code>/sys/board.json</code> (ver la
+          <a href="gui.html#ej-pantalla">guía de gráficos §23.4</a>). FS en
+          PSRAM persistido a flash; GUI sobre pantalla MIPI-DSI con táctil.
+          <code>native</code> interpretada (sin AOT en RISC-V).</td></tr>
   <tr><td>STM32 (ref. Nucleo-U575ZI-Q)</td>
       <td>Wire v1 por el VCP del ST-LINK; FS persistente en los últimos
           128 KB de la flash interna. <code>native</code> acelerada por AOT
@@ -1686,8 +1790,8 @@ edades.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num"
 </table>
 <p>
   El <strong>lenguaje y el bytecode son idénticos</strong> en todas las
-  plataformas (PC, RP2350, ESP32, STM32): el mismo <code>.mod</code> corre
-  en cualquiera. Sólo difieren la capa de backend de hardware (GPIO, I²C,
+  plataformas (PC, RP2350, ESP32-S3, ESP32-P4, STM32): el mismo <code>.mod</code>
+  corre en cualquiera. Sólo difieren la capa de backend de hardware (GPIO, I²C,
   SPI…) y la aceleración AOT, que es específica de arquitectura.
 </p>
 
@@ -1794,10 +1898,11 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   <code>AotMain</code> emite C, <code>arm-none-eabi-gcc</code> lo compila a
   Thumb-2 PIC, y <code>MdnPack</code> lo empaqueta. Requiere el toolchain
   ARM bare-metal (<code>arm-none-eabi-gcc</code>) en el <code>PATH</code> o
-  en la variable de entorno <code>GCC</code>. El IDE <em>no</em> ejecuta este
-  paso: sólo genera el <code>.mod</code> y valida que la native sea
-  compilable AOT. Integrar la compilación native en el IDE (con
-  detección/configuración del toolchain) está previsto para v3.
+  en la variable de entorno <code>GCC</code>. Desde v3 el IDE ejecuta este
+  paso <strong>automáticamente</strong> en <em>Run on Device</em> (placas ARM;
+  detección/configuración del toolchain en <em>Project → AOT (toolchain)…</em>,
+  instalación en la <a href="guia-ide.html#aot">Guía del IDE §5.1</a>); el
+  script queda para builds manuales o automatizados.
 </p>
 
 <h3 id="proyecto">16.5 <code>.bpbuild</code> / <code>.bpproject</code> (JSON)</h3>
@@ -1818,7 +1923,7 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
 <p style="color:var(--fg-muted); font-size:0.85em">
   BasicPlus reference manual — generado al hilo del desarrollo.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) y
-  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / STM32) ·
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) ·
   Formatos <code>.mod</code> v5 / <code>.bpi</code> v6.
 </p>
 
