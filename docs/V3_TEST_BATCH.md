@@ -41,7 +41,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 | **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
 | **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [x]³ | —¹ | —¹ | —¹ | [x] | [x] |
 | **ESP32-S3 DevKit** | `esp32` | [x] | [x] | —¹ | —¹ | —¹ | —¹ | [x] | [x] |
-| **STM32 Nucleo-U575** | `stm32` | [x] | [x] | [ ] | —¹ | —¹ | —¹ | [x] | [x] |
+| **STM32 Nucleo-U575** | `stm32` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
 
 ¹ **I2C/SPI/UART en Pico 2 y Metro (RP2350) = diferidos** a la placa donde el cableado sea cómodo (los
 buses son código compartido; basta validarlos en una placa con los cacharros a mano).
@@ -70,6 +70,16 @@ buses son código compartido; basta validarlos en una placa con los cacharros a 
   diferidos → a una sesión con cableado. El backend GPIO esp32 SÍ se ejercita (INFO=45).
 - **STM32 Nucleo**: wire por VCP del ST-LINK; AOT ARM (probar `^`/`eval`). reset-cause
   vía `RCC->CSR`.
+  **Nucleo CERRADA (4-jul):** Boot+INFO · paridad `^`/`eval` (AOT) · **ADC/PWM fix verificado**
+  (PicoInfo 20/28, pre-cargado) · fibobench AOT **~374×** · reset-cause `pin (NRST)` · GPIO
+  (`BlinkStm32`, LED verde LD1/PC7) · Stop ✅. Buses I2C/SPI/UART diferidos.
+
+> ### ✅ GRUPO 1 COMPLETO (4-jul) — 4/4 no-gráficas
+> **Pico 2 · Metro · ESP32-S3 · STM32 Nucleo** todas cerradas. Núcleo byte-idéntico al host en
+> las 4, AOT en las 3 ARM, imagen única RP2350 + PSRAM confirmadas. **Bugs cazados+arreglados:**
+> ADC/PWM board-aware en los 3 backends (pico/esp32/stm32, verificados en placa) + 3 de build.
+> **🔴 1 abierto (must-fix pre-publish):** cuelgue con `/app` lleno (sesión de repro dedicada).
+> **Pendiente de esas placas:** reflash final del pico (fix ADC + fix del cuelgue) + buses cableados.
 
 **Muestras sugeridas (no gráficas):** `Blink*`, `PicoInfo`, `GpioLoop`, `UartEcho_*`,
 `SpiLoop`, `I2cScanOO`, `Bme280*`/`Bme688*` (si hay sensor), `RtcDemo`, `PwmCount`,
