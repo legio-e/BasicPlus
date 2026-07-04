@@ -158,6 +158,15 @@ ahora tiene la de P5, sin la stdlib unificada.
 _(Cada fallo: placa · peldaño · síntoma · ¿bug de V3 o de cableado/entorno? ·
 commit del fix si lo hay.)_
 
+- **DK2 · `/app` lleno → error LIMPIO `NO_SPACE: FS lleno`** (NO cuelga) — al correr
+  `GuiColorDemo` (sube `Gui.mod`, grande, + `Json.mod`) el FS de **solo 96 KB** estaba a 84/96
+  (acumulado de todas las pruebas). **🔑 CLAVE para el cuelgue [[stdlib-mod-version-skew-oo-device]]
+  / registro arriba:** el FS del **stm32 maneja el lleno con error claro**, mientras el del
+  **pico (Metro) COLGÓ mudo** → el bug del cuelgue es del **firmware pico** (su `fs_put`/`compact`
+  bajo lleno), **NO del núcleo compartido**. Gran acotación para la sesión de repro. Nota: el FS
+  del DK2 (96 KB) es JUSTO para la GUI → hay que **limpiar `/app`** (borrar los `.mod` de prueba)
+  antes de las demos gráficas; ¿ampliar la partición FS del DK2? → V4.
+
 - **DK2 (Grupo 2) · build fallaba: `printf` sin `<stdio.h>`** — al Paso 0 del Grupo 2 (Eduardo
   recompilando el `Discovery_u5g9j` en CubeIDE), `stm32/port/gui_display_ltdc.c` no compilaba:
   el stub "setRotation no soportado en LTDC" (añadido con la rotación, 710a1f2, 2-jul) usa
