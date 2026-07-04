@@ -39,11 +39,11 @@ rebuild los recoge — no hace falta nada más por tu parte.
 | Placa | Firmware | Boot+INFO | Ejec/OO (paridad) | GPIO (blink) | I2C | SPI | UART | reset-cause | autorun+Stop |
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
-| **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [x]³ | [ ] | [ ] | [ ] | [x] | [ ] |
+| **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [x]³ | —¹ | —¹ | —¹ | [x] | [x] |
 | **ESP32-S3 DevKit** | `esp32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **STM32 Nucleo-U575** | `stm32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 
-¹ **I2C/SPI/UART en la Pico 2 = diferidos** a la placa donde el cableado sea cómodo (los
+¹ **I2C/SPI/UART en Pico 2 y Metro (RP2350) = diferidos** a la placa donde el cableado sea cómodo (los
 buses son código compartido; basta validarlos en una placa con los cacharros a mano).
 **Pico 2 CERRADA (4-jul):** Boot+INFO · paridad `^`/`eval` · AOT (~99×) · GPIO · reset-cause
 · CRC/deps/stdlib-fresca — todo ✅.
@@ -59,6 +59,9 @@ buses son código compartido; basta validarlos en una placa con los cacharros a 
   **✅ 4-jul (INFO):** RP2350B · 48 GPIO · 8 ADC · 16 MB flash · **PSRAM 8 MB** — **imagen
   única CONFIRMADA** (el MISMO `bpvm_pico.uf2` que la Pico 2; la variante la elige
   `/sys/board.json` vía `SetBoardMetro.bp`). PSRAM sondeada+habilitada en GP47.
+  **Metro CERRADA (4-jul):** + paridad `^`/`eval` + AOT ~102× (heap PSRAM) + GPIO vía NeoPixel
+  + **ADC fix verificado** (PicoInfo → `ADC channels: 8`). Buses I2C/SPI/UART diferidos; Stop =
+  mismo binario que Pico 2 (allí ✅). Hallazgo abierto: el cuelgue con `/app` lleno (registro).
 - **ESP32-S3**: wire por UART0 (bridge); consola/logs por USB nativo. `native`
   interpretada (sin AOT en Xtensa) — corre igual, sin ganancia.
 - **STM32 Nucleo**: wire por VCP del ST-LINK; AOT ARM (probar `^`/`eval`). reset-cause
@@ -172,7 +175,7 @@ commit del fix si lo hay.)_
   de Eduardo (en uso normal `/app` se limpia en el reset y el IDE lo gestiona → poco frecuente,
   pero un cuelgue-con-reset no es ideal).
 
-- **Metro · `Pico.ADC_CHANNELS()` reportaba 4, no 8** (bug de V3, FIXED — pendiente reflash)
+- **Metro · `Pico.ADC_CHANNELS()` reportaba 4, no 8** (bug de V3, ✅ FIXED + VERIFICADO en placa)
   — el intrínseco (builtin 208 → `bpvm_pico_adc_channels`) caía al **fallback fijo 4** de
   `src/pico.c` porque el backend del Pico (`pico/main.c`) registraba `.gpioCount` (board-aware,
   48 ✅) pero se dejó `.adcChannels`/`.pwmSlices` — hueco de la tanda ADC/PWM board-aware
@@ -180,8 +183,8 @@ commit del fix si lo hay.)_
   discrepancia INFO=8 vs PicoInfo=4. **Severidad baja:** la Pico 2 (variante A=4) salía bien;
   los canales ADC 4-7 de la Metro **funcionan** a nivel firmware (bounds-check contra
   `board_desc`→8), solo la API BP los ocultaba. **Fix (5º commit del batch):**
-  `.adcChannels`/`.pwmSlices = board_desc()->…` (calcado de `gpioCount`). Verificación:
-  recompilar pico + reflash Metro → `Pico.ADC_CHANNELS()` debe dar 8.
+  `.adcChannels`/`.pwmSlices = board_desc()->…` (calcado de `gpioCount`, commit 88bd7d4).
+  ✅ **Verificado 4-jul:** Metro recompilada+reflasheada → PicoInfo da `ADC channels: 8` (era 4).
 
 - **Puerta 0 · TryCatch** — el harness daba 1 rojo (V3-Java salía vacío, "paridad
   rota"). **Causa: hueco del arnés, NO regresión del producto.** `try/catch` en V3
