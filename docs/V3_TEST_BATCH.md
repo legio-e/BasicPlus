@@ -158,6 +158,13 @@ ahora tiene la de P5, sin la stdlib unificada.
 _(Cada fallo: placa · peldaño · síntoma · ¿bug de V3 o de cableado/entorno? ·
 commit del fix si lo hay.)_
 
+- **DK2 (Grupo 2) · build fallaba: `printf` sin `<stdio.h>`** — al Paso 0 del Grupo 2 (Eduardo
+  recompilando el `Discovery_u5g9j` en CubeIDE), `stm32/port/gui_display_ltdc.c` no compilaba:
+  el stub "setRotation no soportado en LTDC" (añadido con la rotación, 710a1f2, 2-jul) usa
+  `printf` pero el fichero no incluía `<stdio.h>` (el port stm32 usa `printf` retargeteado a la
+  VCP como convención). Latente porque el DK2 no se recompilaba desde entonces. Mismo patrón que
+  el `#include` que faltaba en el pico `repl_v1.c`. Fix `8c5d599` (+ sibling-check: era el único).
+
 - **Paso 0 · blobs stdlib embebidos rancios** (Pico + STM32) — al comprobar si el `.uf2`
   del 15/06 servía, se detectó que el `Pico.mod` horneado en los firmwares Pico y STM32
   era anterior al cambio ADC/PWM board-aware (26/06): `pico_mod` embebido ≠ `bpstdlib`.
