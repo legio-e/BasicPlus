@@ -103,7 +103,7 @@ ahora tiene la de P5, sin la stdlib unificada.
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|
 | **P4 Function-EV** | `esp32p4` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **Waveshare P4 4.3"** | `esp32p4` (misma) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| **STM32 Discovery DK2** | `stm32-dk2` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| **STM32 Discovery DK2** | `stm32-dk2` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] |
 
 ¹ En las P4, periféricos I2C **siempre en bus 1** (el bus 0 es del táctil).
 
