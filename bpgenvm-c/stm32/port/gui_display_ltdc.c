@@ -18,6 +18,7 @@
 #include "lvgl.h"
 #include "main.h"        /* HAL + handles hltdc / htim3 (generados por CubeMX) */
 #include "bpvm_gui.h"
+#include <stdio.h>        /* printf — aviso "setRotation no soportado en LTDC" (línea ~156) */
 #include <string.h>
 #include <stdint.h>
 
