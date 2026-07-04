@@ -146,6 +146,17 @@ commit del fix si lo hay.)_
   No es mis-detección de placa: la Pico 2 muestra GPIO 30 + ADC 4 = variante A correcta (la
   B daría 48/8). V4: armonizar la etiqueta ("PWM ch" o mostrar slices).
 
+- **Metro · `Pico.ADC_CHANNELS()` reportaba 4, no 8** (bug de V3, FIXED — pendiente reflash)
+  — el intrínseco (builtin 208 → `bpvm_pico_adc_channels`) caía al **fallback fijo 4** de
+  `src/pico.c` porque el backend del Pico (`pico/main.c`) registraba `.gpioCount` (board-aware,
+  48 ✅) pero se dejó `.adcChannels`/`.pwmSlices` — hueco de la tanda ADC/PWM board-aware
+  (953d7d9, 26/06). El firmware INFO (lee `board_desc` directo) ya daba 8 → de ahí la
+  discrepancia INFO=8 vs PicoInfo=4. **Severidad baja:** la Pico 2 (variante A=4) salía bien;
+  los canales ADC 4-7 de la Metro **funcionan** a nivel firmware (bounds-check contra
+  `board_desc`→8), solo la API BP los ocultaba. **Fix (5º commit del batch):**
+  `.adcChannels`/`.pwmSlices = board_desc()->…` (calcado de `gpioCount`). Verificación:
+  recompilar pico + reflash Metro → `Pico.ADC_CHANNELS()` debe dar 8.
+
 - **Puerta 0 · TryCatch** — el harness daba 1 rojo (V3-Java salía vacío, "paridad
   rota"). **Causa: hueco del arnés, NO regresión del producto.** `try/catch` en V3
   depende de `Core` (#248) y el golden `TryCatch.mod` lo referencia; la VM-C resuelve

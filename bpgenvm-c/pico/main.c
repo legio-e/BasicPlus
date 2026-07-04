@@ -537,6 +537,21 @@ static int pico_pico_gpio_count_impl(void) {
     return board_desc()->gpio_count;
 }
 
+/* board-aware: nº de canales ADC (RP2350A=4 / RP2350B=8, u override de
+ * /sys/board.json). Sin este cb, Pico.ADC_CHANNELS() caía al fallback 4 de
+ * src/pico.c y la Metro reportaba 4 en vez de 8 (el firmware INFO, que lee
+ * board_desc directo, ya daba 8 — de ahí la discrepancia). */
+static int pico_pico_adc_channels_impl(void) {
+    return board_desc()->adc_channels;
+}
+
+/* board-aware: nº de slices PWM (12 en ambas variantes RP2350; el descriptor
+ * es la fuente por si un board.json lo cambiara). Antes caía al fallback 12,
+ * correcto por coincidencia; ahora es explícito por simetría con el ADC. */
+static int pico_pico_pwm_slices_impl(void) {
+    return board_desc()->pwm_slices;
+}
+
 /* setCpuFreqMHz — cambia el clk_sys del RP2350.
  *
  * `set_sys_clock_khz(khz, required=false)` busca la combinación de PLL
@@ -621,6 +636,8 @@ static const bpvm_pico_backend_t s_pico_pico_backend = {
     .uptimeMs      = pico_pico_uptime_ms_impl,
     .setCpuFreqMHz = pico_pico_set_cpu_freq_mhz_impl,
     .gpioCount     = pico_pico_gpio_count_impl,
+    .adcChannels   = pico_pico_adc_channels_impl,  /* board-aware: Metro=8 (era fallback 4) */
+    .pwmSlices     = pico_pico_pwm_slices_impl,    /* board-aware (12 ambas) */
     .resetCause    = pico_pico_reset_cause_impl,   /* paso 4 cierre */
 };
 
