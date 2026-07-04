@@ -159,12 +159,18 @@ commit del fix si lo hay.)_
   hardcodea `PICO_DEFAULT_LED_PIN=25`) → unificación board-aware = V4. En la Metro el "LED" =
   NeoPixel, así que **`NeoDemo` cubre el peldaño GPIO** (³ en la tabla).
 
-- **Metro · NeoDemo falló con "muchas demos cargadas" (Eduardo)** — ⚠ **ABIERTO, pendiente de
-  SÍNTOMA para reproducir.** Ahora va (tras el reset `/app` quedó vacío → FS holgado, 35/128 KB).
-  Sospecha de Eduardo: presión de RAM/FS con muchos mods en `/app` (el FS `s_data` = 128 KB en
-  SRAM). Hay que capturar QUÉ pasó al fallar (error "no space"/"table full" limpio = tope FS,
-  a lo sumo V4; vs cuelgue/reset/basura = bug real → reproducir cargando N mods sin resetear).
-  NO tocar código hasta tener el síntoma.
+- **Metro · CUELGUE con `/app` lleno de mods** — 🔴 **BUG REAL CONFIRMADO, ABIERTO.** Síntoma
+  (Eduardo, 4-jul): con "muchas demos cargadas" en `/app`, correr `NeoDemo` **colgó la placa
+  SIN mensaje** → hubo que resetear. NO es el tope limpio del FS (`fs_put` ya devuelve
+  `FS_ERR_NO_SPACE`/`TABLE_FULL`); un cuelgue mudo = overflow/loop/corrupción no guardada.
+  Tras el reset `/app` quedó vacío (uploads RAM) → ahora NeoDemo va (FS 35/128 KB). Territorio
+  **delicado (carga de módulos / memoria bajo presión)** = por [[v4-consolidacion-v3-bugs-obvios]]
+  se trata con reproducción+tests, NO shotgun. **Plan:** reproducir en frío (con `/app` vacío,
+  subir mods 1 a 1 sin resetear + correr NeoDemo entre medias → hallar el nº y el punto exactos
+  de cuelgue: ¿upload/`compact()`? ¿link con N módulos?), LOCALIZAR, y solo entonces tocar.
+  Candidato a **sesión dedicada** (no bloquea el resto del batch). ¿Bloquea publicar? decisión
+  de Eduardo (en uso normal `/app` se limpia en el reset y el IDE lo gestiona → poco frecuente,
+  pero un cuelgue-con-reset no es ideal).
 
 - **Metro · `Pico.ADC_CHANNELS()` reportaba 4, no 8** (bug de V3, FIXED — pendiente reflash)
   — el intrínseco (builtin 208 → `bpvm_pico_adc_channels`) caía al **fallback fijo 4** de
