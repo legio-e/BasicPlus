@@ -111,6 +111,18 @@ static int esp32_gpio_count_impl(void) {
     return 45;   /* GPIO utiles del ESP32-S3 (0-21, 26-48) */
 }
 
+/* board-aware: canales ADC y slices PWM del ESP32-S3. Sin estos cb,
+ * Pico.ADC_CHANNELS()/PWM_SLICES() caían al fallback host (4/12) de src/pico.c
+ * — el INFO del wire ya daba 20/8 desde un struct aparte (repl_esp32.c), de ahí
+ * el mismatch INFO=20/8 vs PicoInfo=4/12. Valores casan con el INFO. */
+static int esp32_adc_channels_impl(void) {
+    return 20;   /* ADC1+ADC2, 10 canales cada uno */
+}
+
+static int esp32_pwm_slices_impl(void) {
+    return 8;    /* canales LEDC del S3 (coincide con el INFO) */
+}
+
 /* paso 4 cierre — causa del último reset vía registro HW (esp_reset_reason, lo
  * captura el ROM/bootloader; NO usa RAM retenida). No-static: lo comparte el
  * backend del P4 (p4_board_id.c). Declarado en hw_esp32.h. */
@@ -138,6 +150,8 @@ static const bpvm_pico_backend_t s_esp32_pico_backend = {
     .uptimeMs      = esp32_uptime_ms_impl,
     .setCpuFreqMHz = esp32_set_cpu_freq_mhz_impl,
     .gpioCount     = esp32_gpio_count_impl,
+    .adcChannels   = esp32_adc_channels_impl,  /* board-aware: 20 (era fallback 4) */
+    .pwmSlices     = esp32_pwm_slices_impl,     /* board-aware: 8 (era fallback 12) */
     .resetCause    = esp32_reset_cause,        /* paso 4 cierre */
 };
 

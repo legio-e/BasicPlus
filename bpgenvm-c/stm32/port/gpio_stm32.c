@@ -140,6 +140,18 @@ static int stm32_gpio_count_impl(void) {
     return STM32_PIN_COUNT;   /* 128: puertos A..H del U575 */
 }
 
+/* board-aware: canales ADC y slices PWM del STM32U575. Sin estos cb,
+ * Pico.ADC_CHANNELS()/PWM_SLICES() caían al fallback host (4/12) de src/pico.c
+ * — el INFO ya daba 20/28 desde un string aparte (stm32_repl.c), de ahí el
+ * mismatch. Valores casan con el INFO. */
+static int stm32_adc_channels_impl(void) {
+    return 20;   /* ADC1 14-bit, hasta 20 canales multiplexados */
+}
+
+static int stm32_pwm_slices_impl(void) {
+    return 28;   /* canales PWM/timer expuestos (coincide con el INFO) */
+}
+
 static int stm32_cpu_freq_hz_impl(void) {
     return (int) SystemCoreClock;
 }
@@ -303,6 +315,8 @@ static const bpvm_pico_backend_t s_pico_backend = {
     .uptimeMs      = stm32_uptime_ms_impl,
     .setCpuFreqMHz = stm32_set_cpu_freq_mhz_impl,
     .gpioCount     = stm32_gpio_count_impl,
+    .adcChannels   = stm32_adc_channels_impl,  /* board-aware: 20 (era fallback 4) */
+    .pwmSlices     = stm32_pwm_slices_impl,     /* board-aware: 28 (era fallback 12) */
     .resetCause    = stm32_reset_cause,        /* H10 — causa del último reset */
     .setMark       = stm32_set_mark_impl,      /* H10 — breadcrumb */
     .markCount     = stm32_mark_count_impl,
