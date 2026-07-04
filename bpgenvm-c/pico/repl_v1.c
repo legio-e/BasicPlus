@@ -22,6 +22,7 @@
 #include "wire_v1.h"
 #include "json_min.h"
 #include "fs.h"
+#include "bpvm_fs.h"          /* H19-F1: base-dir por proyecto (bpvm_fs_basedir / bpvm_fs_set_basedir_from_module) */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "log.h"
 #include "aot_funcs.h"       /* H3 #160: registro AOT manual antes de run */
