@@ -103,8 +103,11 @@ ahora tiene la de P5, sin la stdlib unificada.
 - [ ] **Imagen única P4**: la MISMA imagen sirve a las 2 placas P4 vía `/sys/board.json`.
 - [ ] **reset-cause e2e** (3 familias no-P4 + P4): forzar un reset (power-on, watchdog,
       botón) → INFO muestra la causa correcta.
-- [ ] **`^` (potencia) y `eval`** en placa: correr en las ARM (Pico/Metro/Nucleo — AOT) y
-      en ESP32 (interpretado) — misma salida que host.
+- [~] **`^` (potencia) y `eval`** en placa: correr en las ARM (Pico/Metro/Nucleo — AOT) y
+      en ESP32 (interpretado) — misma salida que host. **Pico 2 ✅ (4-jul):** H7Pow/H7Eval
+      byte-idénticos al host; **AOT** confirmado con `fibobench` (native==interpretado=4160200,
+      **~99×**: 108.4 s → 1.095 s, `.mdn` auto-subido por el IDE). Pendiente Metro/Nucleo (AOT)
+      + ESP32 (interpretado).
 - [ ] **CRC skip-PUT**: subir un `.mod` ya presente e idéntico → el IDE dice "contenido
       idéntico, salto PUT" (no re-sube).
 - [ ] **missing-lib al wire**: correr algo cuya dep NO esté → el IDE resuelve/sube la lib,
