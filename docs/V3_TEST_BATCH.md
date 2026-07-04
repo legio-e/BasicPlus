@@ -38,10 +38,15 @@ rebuild los recoge — no hace falta nada más por tu parte.
 
 | Placa | Firmware | Boot+INFO | Ejec/OO (paridad) | GPIO (blink) | I2C | SPI | UART | reset-cause | autorun+Stop |
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | [ ] | [ ] | [ ] | [x] | [ ] |
+| **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
 | **Metro RP2350B** | `pico` (misma img) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **ESP32-S3 DevKit** | `esp32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **STM32 Nucleo-U575** | `stm32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+
+¹ **I2C/SPI/UART en la Pico 2 = diferidos** a la placa donde el cableado sea cómodo (los
+buses son código compartido; basta validarlos en una placa con los cacharros a mano).
+**Pico 2 CERRADA (4-jul):** Boot+INFO · paridad `^`/`eval` · AOT (~99×) · GPIO · reset-cause
+· CRC/deps/stdlib-fresca — todo ✅.
 
 **Notas por placa (lo que V3 cambió y conviene mirar de reojo):**
 - **Pico 2**: INFO variante A (30 GPIO). `native` acelerada (AOT ARM) → probar `^`/`eval`
