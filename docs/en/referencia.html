@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BasicPlus — Reference</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    font-size: 0.92rem;
+  }
+  nav.toc h2 {
+    margin: 0 0 .5rem 0;
+    font-size: 0.95rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav.toc ul { list-style: none; padding-left: 0; margin: 0 0 1rem 0; }
+  nav.toc li { margin: 0.1rem 0; }
+  nav.toc a {
+    color: var(--fg);
+    text-decoration: none;
+    display: block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+  nav.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+  nav.toc .group { margin-top: 0.8rem; }
+  nav.toc .sub { padding-left: 0.8rem; font-size: 0.85rem; color: var(--fg-muted); }
+
+  main {
+    padding: 2rem 3rem 6rem;
+    max-width: 900px;
+  }
+  h1 {
+    color: var(--accent);
+    margin-top: 0;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+  }
+  h2 {
+    color: var(--accent);
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 { margin-top: 1.8rem; color: #333; }
+  h4 { margin-top: 1.2rem; color: var(--fg-muted); }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.4;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.88em;
+  }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .note p:first-child, .warn p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ul>
+  <ul>
+
+
+
+
+    <li class="group"><a href="#stdlib">13. Standard library</a></li>
+    <li class="sub"><a href="#stdlib-funcs">13.1 Built-in functions</a></li>
+    <li class="sub"><a href="#stdlib-list">13.2 List</a></li>
+    <li class="sub"><a href="#stdlib-ownerlist">13.3 OwnerList</a></li>
+    <li class="sub"><a href="#stdlib-synclist">13.4 SyncList</a></li>
+    <li class="sub"><a href="#stdlib-sb">13.5 StringBuilder</a></li>
+    <li class="sub"><a href="#stdlib-rterr">13.6 RuntimeError</a></li>
+    <li class="sub"><a href="#stdlib-thread">13.7 Thread</a></li>
+    <li class="sub"><a href="#stdlib-mutex">13.8 Mutex</a></li>
+    <li class="sub"><a href="#stdlib-math">13.9 Math</a></li>
+    <li class="sub"><a href="#stdlib-io">13.10 IO</a></li>
+    <li class="sub"><a href="#stdlib-gpio">13.11 Gpio</a></li>
+    <li class="sub"><a href="#stdlib-i2c">13.12 I2c</a></li>
+    <li class="sub"><a href="#stdlib-spi">13.13 Spi</a></li>
+    <li class="sub"><a href="#stdlib-uart">13.14 Uart</a></li>
+    <li class="sub"><a href="#stdlib-pulse">13.15 Pulse</a></li>
+    <li class="sub"><a href="#stdlib-pwm">13.16 Pwm</a></li>
+    <li class="sub"><a href="#stdlib-adc">13.17 Adc</a></li>
+    <li class="sub"><a href="#stdlib-pico">13.18 Pico (MCU info)</a></li>
+    <li class="sub"><a href="#stdlib-rtc">13.19 Rtc</a></li>
+    <li class="sub"><a href="#stdlib-wdt">13.20 Wdt</a></li>
+    <li class="sub"><a href="#stdlib-timer">13.21 Timer</a></li>
+    <li class="sub"><a href="#stdlib-hw-policy">13.22 HW policy = OO class</a></li>
+    <li class="sub"><a href="#stdlib-neopixel">13.23 Neopixel</a></li>
+    <li class="sub"><a href="#stdlib-log">13.24 Log</a></li>
+    <li class="sub"><a href="#stdlib-str">13.25 Str</a></li>
+    <li class="sub"><a href="#stdlib-collections">13.26 Collections</a></li>
+    <li class="sub"><a href="#stdlib-stats">13.27 Stats</a></li>
+    <li class="sub"><a href="#stdlib-compress">13.28 Compress</a></li>
+    <li class="sub"><a href="#stdlib-net">13.29 Net</a></li>
+    <li class="sub"><a href="#stdlib-json">13.30 Json</a></li>
+    <li class="sub"><a href="#stdlib-freq">13.31 Freq</a></li>
+    <li class="sub"><a href="#stdlib-app">13.32 App</a></li>
+    <li class="sub"><a href="#stdlib-gui">13.33 Gui → graphics volume</a></li>
+
+    <li class="group"><a href="#cli">15. Compilation &amp; execution</a></li>
+    <li class="sub"><a href="#cli-frontend">15.1 Frontend (bp → .mod)</a></li>
+    <li class="sub"><a href="#cli-vm">15.2 VM (bpgenvm)</a></li>
+    <li class="sub" style="padding-left:1.6em"><a href="#cli-vmproject">.bpproject (VM project)</a></li>
+    <li class="sub" style="padding-left:1.6em"><a href="#cli-bpbuild">.bpbuild (compiler / IDE project)</a></li>
+    <li class="sub"><a href="#cli-disasm">15.3 Disasm</a></li>
+    <li class="sub"><a href="#cli-mcu">15.4 Running on microcontrollers</a></li>
+
+    <li class="group"><a href="#artefactos">16. On-disk artifacts</a></li>
+    <li class="sub"><a href="#mod">16.1 .mod</a></li>
+    <li class="sub"><a href="#bpi">16.2 .bpi</a></li>
+    <li class="sub"><a href="#dbg">16.3 .dbg</a></li>
+    <li class="sub"><a href="#mdn">16.4 .mdn</a></li>
+    <li class="sub"><a href="#proyecto">16.5 .bpbuild / .bpproject</a></li>
+
+  </ul>
+  <h2>Language manual (separate volume)</h2>
+  <ul>
+    <li><a href="manual.html#intro">1. Introduction</a></li>
+    <li><a href="manual.html#hello">2. Hello world</a></li>
+    <li class="group"><a href="manual.html#lexico">3. Lexical structure</a></li>
+    <li class="group"><a href="manual.html#tipos">4. Types</a></li>
+    <li class="group"><a href="manual.html#declaraciones">5. Declarations</a></li>
+    <li class="group"><a href="manual.html#operadores">6. Operators</a></li>
+    <li class="group"><a href="manual.html#control">7. Control flow</a></li>
+    <li class="group"><a href="manual.html#funciones">8. Functions</a></li>
+    <li class="group"><a href="manual.html#clases">9. Classes</a></li>
+    <li class="group"><a href="manual.html#modulos">10. Modules</a></li>
+    <li class="group"><a href="manual.html#excepciones">11. Exceptions</a></li>
+    <li class="group"><a href="manual.html#owner">12. Owner semantics</a></li>
+    <li class="group"><a href="manual.html#concurrencia">14. Concurrency</a></li>
+    <li class="group"><a href="manual.html#pendientes">17. Pending / unsupported</a></li>
+  </ul>
+  <h2>Graphics (separate volume)</h2>
+  <ul>
+    <li class="group"><a href="gui.html#intro">18–25. Graphical interface (<code>Gui</code>)</a></li>
+  </ul>
+  <h2>Language</h2>
+  <ul>
+    <li><a href="../referencia.html">🇪🇸 Español</a></li>
+  </ul>
+</nav>
+<main>
+
+<h1>BasicPlus — Reference</h1>
+<p style="color:var(--fg-muted)">
+  Standard library, command line and on-disk artifacts.
+  The language itself is described in the
+  <a href="manual.html">language manual</a>.
+</p>
+
+<!-- =========================================================== -->
+<h2 id="stdlib">13. Standard library</h2>
+
+<h3 id="stdlib-funcs">13.1 Built-in functions</h3>
+<table>
+  <tr><th>Category</th><th>Functions</th></tr>
+  <tr><td>Conversion</td>
+      <td><code>intToString(n)</code> <code>floatToString(x)</code> <code>boolToString(b)</code>
+          <code>parseInt(s)</code> <code>parseFloat(s)</code></td></tr>
+  <tr><td>Strings</td>
+      <td><code>strlen(s)</code> <code>upper(s)</code> <code>lower(s)</code>
+          <code>trim(s)</code> <code>substring(s, start, end)</code>
+          <code>indexOf(s, target)</code> <code>startsWith(s, pre)</code>
+          <code>endsWith(s, suf)</code> <code>contains(s, sub)</code>
+          <code>charAt(s, i)</code> <code>charCodeAt(s, i)</code>
+          <code>replace(s, target, repl)</code> <code>split(s, sep)</code></td></tr>
+  <tr><td>Integer arithmetic</td>
+      <td><code>abs</code> <code>min</code> <code>max</code></td></tr>
+  <tr><td>Float arithmetic</td>
+      <td><code>sqrt</code> <code>pow</code> <code>exp</code>
+          <code>random()</code> <code>randomInt(lo, hi)</code><br>
+          <em>Trigonometry, logarithms, π, e and the rest require
+          <code>import Math</code> — see <a href="#stdlib-math">§13.9</a>.</em></td></tr>
+  <tr><td>Numeric conversion</td>
+      <td><code>floor(x)</code> <code>ceil(x)</code> <code>round(x)</code></td></tr>
+  <tr><td>Expressions</td>
+      <td><code>eval(s)</code> — evaluates a constant arithmetic expression given
+          as a string (<code>+ - * /</code>, parentheses and unary; normal
+          precedence) and returns a <code>float</code>: <code>eval("2 + 3*4")</code> = 14.0</td></tr>
+  <tr><td>Time</td>
+      <td><code>now()</code> ms since epoch · <code>sleep(ms)</code></td></tr>
+  <tr><td>Concurrency</td>
+      <td><code>yield()</code> yields the CPU to the scheduler (see
+          <a href="manual.html#concurrencia">§14</a>)</td></tr>
+  <tr><td>System</td>
+      <td><code>gc()</code> · <code>input()</code></td></tr>
+  <tr><td>File</td>
+      <td><code>readFile(path)</code> <code>writeFile(path, content)</code>
+          <code>appendFile(path, content)</code> <code>fileExists(path)</code>
+          <code>listDir(path)</code></td></tr>
+  <tr><td>Internal (stdlib)</td>
+      <td><code>__newRefArray(cap)</code> <code>__growRefArray(arr, cap)</code>
+          <code>__growIntArray(arr, cap)</code> <code>__charsToString(chars, len)</code></td></tr>
+</table>
+
+<h3 id="stdlib-list">13.2 <code>List</code></h3>
+<pre><code><span class="kw">var</span> l: List := List()
+l.add(<span class="num">10</span>)                       <span class="comment">// add(item: any)</span>
+l.add(Person(<span class="str">"Ana"</span>, <span class="num">30</span>))
+<span class="kw">var</span> p: Person := l.get(<span class="num">1</span>)      <span class="comment">// get(idx): any</span>
+l.set(<span class="num">0</span>, <span class="num">42</span>)                    <span class="comment">// set(idx, item: any)</span>
+<span class="kw">print</span> l.length()              <span class="comment">// → 2</span>
+l.remove(<span class="num">0</span>)                    <span class="comment">// shift; the item is left orphaned (eventual GC)</span></code></pre>
+<p>
+  Dynamic list of object refs. Doubles on growth. The backing
+  <code>items: integer[]</code> is a <code>TYPE_ARRAY_REF</code>, scanned
+  by the GC. <code>add</code> and <code>set</code> accept any object
+  type (via <code>any</code>); <code>get</code> returns an <code>any</code>
+  assignable to a variable of any type.
+</p>
+
+<h3 id="stdlib-ownerlist">13.3 <code>OwnerList</code></h3>
+<pre><code><span class="kw">var owner</span> ol: OwnerList := OwnerList()
+ol.add(Resource(<span class="str">"A"</span>))
+ol.add(Resource(<span class="str">"B"</span>))
+ol.removeAndFree(<span class="num">0</span>)               <span class="comment">// frees 'A' deterministically</span>
+<span class="comment">// on scope exit: frees the array AND all items (cascade of FREE_REF)</span></code></pre>
+<p>
+  Inherits from <code>List</code>. Its descriptor marks the field
+  <code>items</code> as <code>owner</code>, so when the list is freed
+  (via <code>var owner</code> or by cascade) the items are freed too.
+  Methods:
+</p>
+<ul>
+  <li><code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>, <code>remove</code>: inherited from List.</li>
+  <li><code>removeAndFree(idx)</code>: frees the object at
+      <code>items[idx]</code> before shifting the rest.
+      <code>remove(idx)</code> does not free (the original API is kept).</li>
+</ul>
+
+<h3 id="stdlib-synclist">13.4 <code>SyncList</code></h3>
+<pre><code><span class="kw">var</span> sl: SyncList := SyncList()
+sl.add(Item(<span class="num">1</span>))               <span class="comment">// atomic</span>
+sl.add(Item(<span class="num">2</span>))
+<span class="kw">var</span> n: <span class="type">integer</span> := sl.length()  <span class="comment">// atomic</span>
+<span class="kw">var</span> it: Item := sl.get(<span class="num">0</span>)    <span class="comment">// atomic</span>
+sl.remove(<span class="num">0</span>)                  <span class="comment">// atomic</span>
+<span class="kw">var</span> last: Item := sl.pop()    <span class="comment">// atomic; null if empty</span></code></pre>
+<p>
+  Inherits from <code>List</code> and adds its own per-instance
+  <code>Mutex</code> (<code>__mutex</code>). Every public operation
+  (<code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>,
+  <code>remove</code>) is wrapped with <code>lock</code>/<code>unlock</code>,
+  so it is safe to call from multiple threads without external
+  contention. Methods:
+</p>
+<ul>
+  <li><code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>,
+      <code>remove</code>: same as List, but <strong>atomic</strong>.</li>
+  <li><code>pop(): any</code>: atomically pops and returns the last element.
+      If the list is empty, returns <code>null</code>
+      (sentinel). The canonical primitive for producer/consumer queues.</li>
+</ul>
+<p>
+  <strong>Guarantee</strong>: each individual operation is serializable
+  with respect to the rest. A read never returns partial state; a
+  <code>pop</code> never duplicates or loses the last element across
+  threads.
+</p>
+<p>
+  <strong>Limit to keep in mind</strong>: SyncList guarantees atomicity
+  <em>per individual operation</em>. A compound sequence such as
+  &quot;if <code>length() &gt; 0</code> then <code>get(0)</code>&quot;
+  is NOT atomic as a block — another thread can sneak in between the two
+  calls and leave the list empty. For compound read-modify-write
+  sequences take an external <a href="#stdlib-mutex">Mutex</a> around the block,
+  or use <code>pop()</code>, which combines the check and the extraction in a
+  single atomic operation.
+</p>
+<p>
+  <strong>Implementation</strong>: SyncList extends <code>List</code> and
+  adds a <code>__mutex</code> field initialized in the constructor. Each
+  overriding method does <code>this.__mutex.lock()</code>, calls the
+  corresponding <code>List</code> method directly (without re-virtualizing)
+  and then does <code>this.__mutex.unlock()</code>. <code>pop()</code> is the
+  only new method (it does not exist in <code>List</code>).
+</p>
+
+<h3 id="stdlib-sb">13.5 <code>StringBuilder</code></h3>
+<pre><code><span class="kw">var</span> sb: StringBuilder := StringBuilder()
+sb.appendStr(<span class="str">"Hello, "</span>)
+sb.appendStr(<span class="str">"world"</span>)
+sb.appendChar(<span class="num">33</span>)                  <span class="comment">// '!'</span>
+sb.appendInt(<span class="num">42</span>)
+<span class="kw">print</span> sb.toString()              <span class="comment">// "Hello, world!42"</span>
+<span class="kw">print</span> sb.length()                <span class="comment">// → 14</span></code></pre>
+<p>
+  Constructor with no args (initial capacity 64). Automatic doubling.
+</p>
+
+<h3 id="stdlib-rterr">13.6 <code>RuntimeError</code></h3>
+<pre><code><span class="kw">throw</span> RuntimeError(<span class="str">"something failed"</span>)
+
+<span class="kw">try</span>
+  ...
+<span class="kw">catch</span> e: RuntimeError
+  <span class="kw">print</span> e.msg
+<span class="kw">endtry</span></code></pre>
+<p>
+  The VM's native error (index out of range, null, division by zero,
+  failed builtin...) and also throwable by hand. It lives in the
+  <code>Core</code> module alongside its base <code>Exception</code> (property
+  <code>msg: string</code>); the <code>import Core</code> is implicit —
+  the usual code (<code>throw RuntimeError("…")</code>,
+  <code>catch e: RuntimeError</code>, <code>e.msg</code>) is written the same way.
+  Custom exceptions extend <code>Exception</code> (see
+  <a href="manual.html#excepciones">§11</a>).
+</p>
+
+<h3 id="stdlib-thread">13.7 <code>Thread</code></h3>
+<pre><code><span class="kw">class</span> Worker <span class="kw">extends</span> Thread
+  <span class="kw">public var</span> name: <span class="type">string</span>
+  <span class="kw">public function</span> Worker(name: <span class="type">string</span>)
+    <span class="kw">super</span>(<span class="num">2048</span>)            <span class="comment">// stackSize in bytes</span>
+    <span class="kw">this</span>.name := name
+  <span class="kw">end</span> Worker
+  <span class="kw">public function</span> run()
+    <span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">0</span>
+    <span class="kw">while</span> i &lt; <span class="num">5</span> <span class="kw">do</span>
+      <span class="kw">print</span> <span class="kw">this</span>.name + <span class="str">" iter "</span> + intToString(i)
+      yield()
+      i := i + <span class="num">1</span>
+    <span class="kw">endwh</span>
+  <span class="kw">end</span> run
+<span class="kw">end</span> Worker
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> w: Thread := Worker(<span class="str">"A"</span>)
+  w.start()
+  w.join()
+<span class="kw">end</span> main</code></pre>
+<p>
+  Base class of BP threads. Synthesized by the emitter; always
+  available without an <code>import</code>. To create a thread, subclass
+  <code>Thread</code> and override <code>run()</code>. The constructor
+  takes the stack size (bytes; internal default 2&nbsp;KB for workers,
+  16&nbsp;KB for the program's main).
+</p>
+<table>
+  <tr><th>Method</th><th>Description</th></tr>
+  <tr><td><code>Thread(stackSize: integer)</code></td>
+      <td>Constructor. The subclass must call it via <code>super(N)</code>.</td></tr>
+  <tr><td><code>run()</code></td>
+      <td>Body of the thread. Overridden in the subclass. When it returns, the thread
+          ends. Slot 0 of the vtable (fixed by convention).</td></tr>
+  <tr><td><code>start()</code></td>
+      <td>Starts the thread: the VM allocates its stack region, enqueues it RUNNABLE
+          and a Java worker picks it up.</td></tr>
+  <tr><td><code>join()</code></td>
+      <td>Blocks the calling thread until <em>this</em> thread finishes.
+          If it already finished, it is a no-op.</td></tr>
+</table>
+<p>
+  Related builtins (see <a href="#stdlib-funcs">13.1</a>):
+  <code>yield()</code> (yields the CPU without finishing) and <code>sleep(ms)</code>
+  (yields + sleeps N&nbsp;ms; any other RUNNABLE thread runs meanwhile).
+  For the <code>parallel/case/default/endpar</code> sugar see
+  <a href="manual.html#parallel">§7.6</a>.
+</p>
+
+<h3 id="stdlib-mutex">13.8 <code>Mutex</code></h3>
+<pre><code><span class="kw">var</span> m: Mutex := Mutex()
+
+<span class="comment">// inside the run() of each Thread that shares the mutex:</span>
+m.lock()                <span class="comment">// blocks if held by another</span>
+<span class="comment">// critical section</span>
+m.unlock()              <span class="comment">// releases and hands off to the first waiter</span></code></pre>
+<p>
+  Non-reentrant lock to coordinate between BP threads. Synthesized by the
+  emitter; always available without an <code>import</code>. Internally the
+  instance holds an id <code>__mid</code> that points to a Java mutex of
+  the VM (<code>JavaMutex</code> under <code>vmLock</code>).
+</p>
+<table>
+  <tr><th>Method</th><th>Description</th></tr>
+  <tr><td><code>Mutex()</code></td>
+      <td>Constructor. Requests a new id from the VM (<code>__mutexCreate</code>).</td></tr>
+  <tr><td><code>lock()</code></td>
+      <td>If free, takes it. If another thread holds it, marks the current one
+          <code>BLOCKED_MUTEX</code>, adds it to the waiter queue and yields
+          the CPU. When it receives ownership, <code>lock()</code> returns
+          already holding the lock.</td></tr>
+  <tr><td><code>unlock()</code></td>
+      <td>Only legal from the owning thread; any other one raises an
+          exception. If there are waiters, the first one receives ownership
+          directly (hand-off, without re-attempt) and becomes RUNNABLE.</td></tr>
+</table>
+<p>
+  Non-reentrant: if the same thread calls <code>lock()</code> again
+  on a mutex it already holds, an exception is raised.
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-math">13.9 <code>Math</code></h3>
+<p>
+  Mathematical functions available after <code>import Math</code>. They are
+  all <code>intrinsic</code>: the <code>Math.foo(...)</code> call site
+  is translated inline to the equivalent CALL_BUILTIN — there is no
+  call overhead vs. the native operator. The implicit functions
+  (<a href="#stdlib-funcs">§13.1</a>) are not duplicated here.
+</p>
+<pre><code><span class="kw">import</span> Math
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> a: <span class="type">float</span> := Math.sin(Math.pi() / <span class="num">4.0</span>)
+  <span class="kw">print</span> a                          <span class="comment">// 0.7071...</span>
+  <span class="kw">var</span> n: <span class="type">integer</span> := Math.factorial(<span class="num">6</span>)
+  <span class="kw">print</span> n                          <span class="comment">// 720</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>pi(): float</code></td>
+      <td>Constant π ≈ 3.14159…</td></tr>
+  <tr><td><code>e(): float</code></td>
+      <td>Euler's constant ≈ 2.71828…</td></tr>
+  <tr><td><code>sin(x: float): float</code></td>
+      <td>Sine. <code>x</code> in radians.</td></tr>
+  <tr><td><code>cos(x: float): float</code></td>
+      <td>Cosine. <code>x</code> in radians.</td></tr>
+  <tr><td><code>tan(x: float): float</code></td>
+      <td>Tangent. <code>x</code> in radians.</td></tr>
+  <tr><td><code>asin(x: float): float</code></td>
+      <td>Arcsine. Domain [-1, 1] → [-π/2, π/2].</td></tr>
+  <tr><td><code>acos(x: float): float</code></td>
+      <td>Arccosine. Domain [-1, 1] → [0, π].</td></tr>
+  <tr><td><code>atan(x: float): float</code></td>
+      <td>Arctangent → (-π/2, π/2).</td></tr>
+  <tr><td><code>atan2(y: float, x: float): float</code></td>
+      <td>Angle of the vector (x, y) in (-π, π]. Splits by quadrant.</td></tr>
+  <tr><td><code>ln(x: float): float</code></td>
+      <td>Natural logarithm (base e).</td></tr>
+  <tr><td><code>log10(x: float): float</code></td>
+      <td>Base-10 logarithm.</td></tr>
+  <tr><td><code>sign(x: integer): integer</code></td>
+      <td>−1, 0 or +1 depending on the sign of <code>x</code>.</td></tr>
+  <tr><td><code>signF(x: float): integer</code></td>
+      <td>Float version. <code>NaN</code> → 0.</td></tr>
+  <tr><td><code>factorial(n: integer): integer</code></td>
+      <td><code>n!</code> with <code>0 ≤ n ≤ 12</code> (the largest that fits in i32).
+          Out of range raises <code>RuntimeError</code>.</td></tr>
+  <tr><td><code>gamma(x: float): float</code></td>
+      <td>The Γ function (Lanczos approximation). Γ(n+1) = n! for naturals.
+          Defined for <code>x &gt; 0</code>; on <code>(0, 0.5)</code> it uses
+          Euler's reflection.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-io">13.10 <code>IO</code></h3>
+<p>
+  Path manipulation and filesystem operations available after
+  <code>import IO</code>. All functions are <code>intrinsic</code>.
+  The path functions do NOT touch the disk — they only manipulate the string.
+  The ones that do access it raise a catchable <code>RuntimeError</code> if they fail.
+</p>
+<p>
+  <strong>On the board</strong>: the firmware FS is flat (no directories) —
+  <code>readFile</code>/<code>writeFile</code>/<code>appendFile</code>/
+  <code>fileExists</code>/<code>removeFile</code>/<code>rename</code>/<code>fileSize</code>
+  work; <code>mkdir</code>/<code>rmdir</code>/<code>copyFile</code>/
+  <code>isDirectory</code>/<code>lastModified</code> raise a catchable
+  <code>RuntimeError</code>.
+</p>
+<p>
+  Separately there is <code>IO.prompt(spec)</code>, which asks the connected IDE
+  to render a form and returns the JSON with the user's
+  response (see <a href="#stdlib-funcs">§13.1</a>: the primitive BLOCKS
+  the BP thread until it answers). <strong>Java VM (PC) only</strong>:
+  the form is drawn by the IDE, so <code>IO.prompt</code> is a
+  development utility. On the micros (VM-C, C subset) it is absent and
+  raises a catchable <code>RuntimeError</code> — just like with no IDE connected.
+  Wrap it in <code>try/catch</code> if the program must also run
+  on the board.
+</p>
+<pre><code><span class="kw">import</span> IO
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> p: <span class="type">string</span> := IO.pathJoin(<span class="str">"build"</span>, <span class="str">"out.txt"</span>)
+  <span class="kw">print</span> IO.pathExtension(p)               <span class="comment">// "txt"</span>
+  <span class="kw">if</span> IO.isDirectory(<span class="str">"build"</span>) == <span class="kw">false</span> <span class="kw">then</span>
+    IO.mkdir(<span class="str">"build"</span>)
+  <span class="kw">endif</span>
+  writeFile(p, <span class="str">"hi"</span>)
+  <span class="kw">print</span> IO.fileSize(p)                    <span class="comment">// 2</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>pathJoin(a, b): string</code></td>
+      <td>Joins two components with the OS separator.</td></tr>
+  <tr><td><code>pathParent(p): string</code></td>
+      <td>Parent directory. <code>""</code> if there is none.</td></tr>
+  <tr><td><code>pathBasename(p): string</code></td>
+      <td>Last component of the path.</td></tr>
+  <tr><td><code>pathExtension(p): string</code></td>
+      <td>Extension without the dot. <code>""</code> if there is none.</td></tr>
+  <tr><td><code>pathAbsolute(p): string</code></td>
+      <td>Resolves to an absolute, normalized path (<code>".."</code>, <code>"."</code>).</td></tr>
+  <tr><td><code>mkdir(p)</code></td>
+      <td>Creates the directory (and any missing intermediates). Does not fail if it already exists.</td></tr>
+  <tr><td><code>rmdir(p)</code></td>
+      <td>Removes a directory. Only if it is empty.</td></tr>
+  <tr><td><code>removeFile(p)</code></td>
+      <td>Removes a file.</td></tr>
+  <tr><td><code>rename(src, dst)</code></td>
+      <td>Renames/moves. Overwrites the destination if it exists.</td></tr>
+  <tr><td><code>copyFile(src, dst)</code></td>
+      <td>Copies a file. Overwrites the destination if it exists.</td></tr>
+  <tr><td><code>fileSize(p): integer</code></td>
+      <td>Size in bytes. Fails if <code>&gt; 2 GB</code>.</td></tr>
+  <tr><td><code>isDirectory(p): boolean</code></td>
+      <td><code>true</code> if <code>p</code> is an existing directory.</td></tr>
+  <tr><td><code>lastModified(p): integer</code></td>
+      <td>Last <code>mtime</code> in ms epoch (truncated to i32).</td></tr>
+  <tr><td><code>prompt(spec): string</code></td>
+      <td>Asks the connected IDE to show a form. <code>spec</code>
+          is a JSON with the description. Blocks the BP thread until it
+          answers. With no IDE connected, <code>RuntimeError</code>.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-gpio">13.11 <code>Gpio</code></h3>
+<p>
+  GPIO pin control. The Java VM on the PC only logs; the C VM on the
+  Pico 2 (RP2350) translates each call to the Pico SDK
+  (<code>gpio_init</code>, <code>gpio_put</code>, <code>gpio_get</code>,
+  <code>gpio_set_dir</code>, <code>gpio_pull_up/down</code>). The same
+  <code>.mod</code> runs on both sides — handy for developing on the
+  PC and then uploading to the microcontroller.
+</p>
+<p>
+  The module exposes two layers: an object-oriented <code>Gpio.Pin</code>
+  class (recommended) and a set of low-level intrinsic functions that
+  the class itself uses underneath (also available
+  for drivers that need them).
+</p>
+
+<h4>13.11.1 The <code>Gpio.Pin</code> class (recommended)</h4>
+<p>
+  Each instance encapsulates the pin number and the mode. The constructor
+  configures the pin; the <code>on()</code>/<code>off()</code> methods
+  are the canonical way to write HIGH/LOW without having to repeat the
+  number on each call.
+</p>
+<pre><code><span class="kw">import</span> Gpio
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> led: Gpio.Pin := Gpio.Pin(<span class="num">25</span>, Gpio.Pin.OUTPUT)   <span class="comment">// Pico's on-board LED</span>
+  <span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">0</span>
+  <span class="kw">while</span> i &lt; <span class="num">10</span> <span class="kw">do</span>
+    led.on()
+    sleep(<span class="num">250</span>)
+    led.off()
+    sleep(<span class="num">250</span>)
+    i := i + <span class="num">1</span>
+  <span class="kw">endwh</span>
+
+  <span class="kw">var</span> button: Gpio.Pin := Gpio.Pin(<span class="num">14</span>, Gpio.Pin.INPUT)
+  button.setPull(Gpio.Pin.PULL_UP)
+  <span class="kw">if</span> button.isLow() <span class="kw">then</span>
+    <span class="kw">print</span> <span class="str">"pressed"</span>
+  <span class="kw">endif</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Member</th><th>Description</th></tr>
+  <tr><td><code>Pin(num, mode)</code></td>
+      <td>Constructor. Configures the pin automatically.
+          <code>mode</code>: <code>Pin.INPUT</code> or <code>Pin.OUTPUT</code>.</td></tr>
+  <tr><td><code>on()</code></td>
+      <td>Drives the pin HIGH (only if it is <code>OUTPUT</code>).</td></tr>
+  <tr><td><code>off()</code></td>
+      <td>Drives the pin LOW (only if it is <code>OUTPUT</code>).</td></tr>
+  <tr><td><code>toggle()</code></td>
+      <td>Toggles HIGH↔LOW. Convenient for blinking.</td></tr>
+  <tr><td><code>value(): integer</code></td>
+      <td>Reads the pin. Returns 0 or 1.</td></tr>
+  <tr><td><code>isHigh(): boolean</code></td>
+      <td><code>true</code> if the pin reads HIGH.</td></tr>
+  <tr><td><code>isLow(): boolean</code></td>
+      <td><code>true</code> if the pin reads LOW.</td></tr>
+  <tr><td><code>setPull(mode)</code></td>
+      <td>Configures the internal resistor (only useful on <code>INPUT</code>).
+          <code>mode</code>: <code>Pin.PULL_NONE</code> /
+          <code>Pin.PULL_UP</code> / <code>Pin.PULL_DOWN</code>.</td></tr>
+</table>
+<p>
+  Static consts accessible without instantiating:
+  <code>Pin.INPUT</code> (0), <code>Pin.OUTPUT</code> (1),
+  <code>Pin.PULL_NONE</code> (0), <code>Pin.PULL_UP</code> (1),
+  <code>Pin.PULL_DOWN</code> (2).
+</p>
+
+<h4>13.11.2 Low-level functional API</h4>
+<p>
+  The <code>intrinsic</code> primitives that <code>Pin</code> uses
+  underneath. Useful for device drivers that already manage their
+  own pin model (SPI CS, ADC sync, etc.) and do not want
+  the overhead of a Pin object per line.
+</p>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>init(pin, mode)</code></td>
+      <td>Configures the pin. <code>mode</code>:
+          <code>INPUT()</code> (0) or <code>OUTPUT()</code> (1). Call
+          once per pin before <code>read</code>/<code>write</code>.</td></tr>
+  <tr><td><code>pull(pin, pullMode)</code></td>
+      <td>Internal resistor: <code>PULL_NONE()</code> (0),
+          <code>PULL_UP()</code> (1), <code>PULL_DOWN()</code> (2).</td></tr>
+  <tr><td><code>write(pin, value)</code></td>
+      <td>Writes to an <code>OUTPUT</code> pin.
+          <code>LOW()</code> = 0, anything else = <code>HIGH</code>.</td></tr>
+  <tr><td><code>read(pin): integer</code></td>
+      <td>Reads an <code>INPUT</code> pin. Returns 0 or 1.</td></tr>
+</table>
+<p>
+  Functional constants (return literals):
+  <code>INPUT()</code>, <code>OUTPUT()</code>,
+  <code>LOW()</code>, <code>HIGH()</code>,
+  <code>PULL_NONE()</code>, <code>PULL_UP()</code>, <code>PULL_DOWN()</code>.
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-i2c">13.12 <code>I2c</code></h3>
+<p>
+  Multi-slave I²C master bus over 2 wires (SDA + SCL). On the Pico 2
+  there are 2 HW buses (<code>i2c0</code>, <code>i2c1</code>). Byte
+  buffers are passed as <code>integer[]</code> where each slot
+  carries one byte in the low 8 bits.
+</p>
+<pre><code><span class="kw">import</span> I2c
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  I2c.init(I2c.BUS0(), <span class="num">4</span>, <span class="num">5</span>, I2c.STANDARD())     <span class="comment">// SDA=GP4, SCL=GP5, 100kHz</span>
+  <span class="kw">var</span> devs: <span class="type">integer</span>[] := I2c.scan(I2c.BUS0())
+  <span class="kw">for</span> d <span class="kw">in</span> devs <span class="kw">do</span>
+    <span class="kw">print</span> <span class="str">"device at 0x"</span>, d
+  <span class="kw">next</span> d
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>init(bus, sda, scl, baudrate)</code></td>
+      <td>Configures the bus. <code>bus</code>: 0 or 1. <code>baudrate</code> in Hz
+          (typically 100&nbsp;000 = standard, 400&nbsp;000 = fast).</td></tr>
+  <tr><td><code>write(bus, addr, data, count): integer</code></td>
+      <td>Sends <code>count</code> bytes to the slave <code>addr</code>.
+          Returns bytes written, or <code>-1</code> on NAK/timeout.</td></tr>
+  <tr><td><code>read(bus, addr, data, count): integer</code></td>
+      <td>Reads <code>count</code> bytes from the slave <code>addr</code>.
+          Returns bytes read, or <code>-1</code> on error.</td></tr>
+  <tr><td><code>scan(bus): integer[]</code></td>
+      <td>Scans addresses <code>0x08..0x77</code> and returns an
+          array of those that ACKed. Implemented in BP
+          on top of <code>read</code> — needs no dedicated opcode.</td></tr>
+</table>
+<p>
+  Constants:
+  <code>BUS0()</code>, <code>BUS1()</code>,
+  <code>STANDARD()</code> (100 kHz), <code>FAST()</code> (400 kHz).
+</p>
+<p>
+  There is also an <code>I2c.Bus</code> class (recommended) that
+  encapsulates the bus + pins + baudrate in one instance. See
+  <a href="#stdlib-hw-policy">§13.22</a> for the general pattern.
+</p>
+<pre><code><span class="kw">var</span> bus: I2c.Bus := I2c.Bus(<span class="num">0</span>, <span class="num">4</span>, <span class="num">5</span>, I2c.Bus.STANDARD)
+<span class="kw">var</span> devs: <span class="type">integer</span>[] := bus.scan()
+bus.write(<span class="num">0x48</span>, [<span class="num">0x00</span>], <span class="num">1</span>)</code></pre>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-spi">13.13 <code>Spi</code></h3>
+<p>
+  Full-duplex SPI master bus over 4 wires (SCK + MOSI + MISO + CS).
+  Each slave's CS is managed by the user with
+  <code>Gpio.write(...)</code>; this module handles the shared
+  bus. On the Pico 2 there are 2 HW buses (<code>spi0</code>,
+  <code>spi1</code>), each with several supported pin maps.
+</p>
+<pre><code><span class="kw">import</span> Spi
+<span class="kw">import</span> Gpio
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  Spi.init(Spi.BUS0(), <span class="num">6</span>, <span class="num">7</span>, <span class="num">16</span>, Spi.MHZ_1(), Spi.MODE3())
+  Gpio.init(<span class="num">9</span>, Gpio.OUTPUT())                <span class="comment">// CS</span>
+  Gpio.write(<span class="num">9</span>, Gpio.LOW())                   <span class="comment">// select</span>
+
+  <span class="kw">var</span> tx: <span class="type">integer</span>[] := [<span class="num">0x40</span>, <span class="num">0x00</span>, <span class="num">0x00</span>]
+  <span class="kw">var</span> rx: <span class="type">integer</span>[] := [<span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>]
+  Spi.transfer(Spi.BUS0(), tx, rx, <span class="num">3</span>)
+
+  Gpio.write(<span class="num">9</span>, Gpio.HIGH())                  <span class="comment">// deselect</span>
+  <span class="kw">print</span> <span class="str">"rx[1]="</span>, rx[<span class="num">1</span>], <span class="str">" rx[2]="</span>, rx[<span class="num">2</span>]
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>init(bus, sck, mosi, miso, baudrate, mode)</code></td>
+      <td>Configures the bus. <code>mode</code> 0..3 encodes
+          <code>(CPOL, CPHA)</code>: 0=(0,0), 1=(0,1), 2=(1,0), 3=(1,1).
+          <code>baudrate</code> in Hz (typically 1–10 MHz).</td></tr>
+  <tr><td><code>write(bus, data, count): integer</code></td>
+      <td>Sends <code>count</code> bytes. Returns bytes written.</td></tr>
+  <tr><td><code>read(bus, data, count): integer</code></td>
+      <td>Reads <code>count</code> bytes clocking dummy 0xFF on MOSI.
+          Returns bytes read.</td></tr>
+  <tr><td><code>transfer(bus, tx, rx, count): integer</code></td>
+      <td>Full-duplex exchange: writes <code>tx[i]</code> and reads
+          <code>rx[i]</code> simultaneously. Returns bytes exchanged.</td></tr>
+</table>
+<p>
+  Constants:
+  <code>BUS0()</code>, <code>BUS1()</code>,
+  <code>MODE0()</code>..<code>MODE3()</code>,
+  <code>KHZ_500()</code>, <code>MHZ_1()</code>, <code>MHZ_4()</code>, <code>MHZ_10()</code>.
+</p>
+<p>
+  OO form with <code>Spi.Bus</code> (recommended):
+</p>
+<pre><code><span class="kw">var</span> bus: Spi.Bus := Spi.Bus(<span class="num">0</span>, <span class="num">6</span>, <span class="num">7</span>, <span class="num">16</span>, Spi.Bus.MHZ_4, Spi.Bus.MODE0)
+bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-uart">13.14 <code>Uart</code></h3>
+<p>
+  Point-to-point asynchronous serial bus (logical RS-232) over 2 wires
+  TX/RX + GND. No shared clock: both ends must agree on
+  baudrate, format (data bits, stop bits, parity) and, if any,
+  flow control (unsupported in v1 — 3-wire only).
+</p>
+<p>
+  The Pico 2 has 2 HW UARTs (<code>uart0</code>, <code>uart1</code>) with
+  several pin maps:
+</p>
+<table>
+  <tr><th>Bus</th><th>TX</th><th>RX</th></tr>
+  <tr><td><code>uart0</code></td><td>GP0 / GP12 / GP16 / GP28</td><td>GP1 / GP13 / GP17 / GP29</td></tr>
+  <tr><td><code>uart1</code></td><td>GP4 / GP8 / GP20 / GP24</td><td>GP5 / GP9 / GP21 / GP25</td></tr>
+</table>
+<p>
+  The <code>bpvm_pico</code> firmware uses USB CDC as stdio, so
+  GP0/GP1 are free for the user (they do not conflict with
+  <code>print</code>).
+</p>
+<pre><code><span class="kw">import</span> Uart
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  Uart.init(Uart.BUS0(), <span class="num">0</span>, <span class="num">1</span>, Uart.BAUD_115200(),
+            <span class="num">8</span>, <span class="num">1</span>, Uart.PARITY_NONE())
+  <span class="kw">var</span> tx: <span class="type">integer</span>[] := [<span class="num">0x41</span>, <span class="num">0x54</span>, <span class="num">0x0D</span>, <span class="num">0x0A</span>]    <span class="comment">// "AT\r\n"</span>
+  Uart.write(Uart.BUS0(), tx, <span class="num">4</span>)
+  <span class="kw">var</span> rx: <span class="type">integer</span>[] := newIntArray(<span class="num">64</span>)
+  <span class="kw">var</span> n: <span class="type">integer</span> := Uart.read(Uart.BUS0(), rx, <span class="num">64</span>, <span class="num">1000</span>)
+  <span class="kw">print</span> <span class="str">"RX bytes:"</span>, n
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>init(bus, tx, rx, baudrate, dataBits, stopBits, parity)</code></td>
+      <td>Configures the UART. <code>dataBits</code> 5..8,
+          <code>stopBits</code> 1 or 2, <code>parity</code>:
+          <code>PARITY_NONE()</code> / <code>PARITY_ODD()</code> / <code>PARITY_EVEN()</code>.</td></tr>
+  <tr><td><code>write(bus, data, count): integer</code></td>
+      <td>Sends <code>count</code> bytes. Blocks until the TX FIFO
+          has accepted them. Returns bytes written or <code>-1</code>.</td></tr>
+  <tr><td><code>read(bus, data, count, timeoutMs): integer</code></td>
+      <td>Reads up to <code>count</code> bytes. If <code>timeoutMs &lt;= 0</code>
+          it blocks until it has them all; if <code>&gt; 0</code> it returns
+          when the timeout expires OR when <code>count</code> bytes arrive.
+          Returns the bytes actually read (0..count).</td></tr>
+  <tr><td><code>available(bus): integer</code></td>
+      <td>Bytes already received waiting in the RX buffer. Useful for
+          non-blocking polling.</td></tr>
+</table>
+<p>
+  Constants:
+  <code>BUS0()</code>, <code>BUS1()</code>,
+  <code>PARITY_NONE()</code>, <code>PARITY_ODD()</code>, <code>PARITY_EVEN()</code>,
+  and baudrate aliases:
+  <code>BAUD_9600()</code>, <code>BAUD_19200()</code>, <code>BAUD_38400()</code>,
+  <code>BAUD_57600()</code>, <code>BAUD_115200()</code>, <code>BAUD_230400()</code>,
+  <code>BAUD_460800()</code>, <code>BAUD_921600()</code>.
+</p>
+<p>
+  There is also a <code>Uart.Port</code> class (recommended) with the
+  same API in OO form — see <a href="#stdlib-hw-policy">§13.22</a>
+  for the general pattern.
+</p>
+<pre><code><span class="kw">var</span> port: Uart.Port := Uart.Port(<span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">115200</span>,
+                                  <span class="num">8</span>, <span class="num">1</span>, Uart.Port.PARITY_NONE)
+port.write(tx, <span class="num">4</span>)
+<span class="kw">var</span> n: <span class="type">integer</span> := port.read(rx, <span class="num">64</span>, <span class="num">1000</span>)</code></pre>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-pulse">13.15 <code>Pulse</code></h3>
+<p>
+  Hardware pulse counter. On the RP2350 each PWM slice can operate
+  in &quot;input gate edge counting&quot; mode: the slice counter
+  advances with each edge on pin B instead of with the system clock.
+  Pure hardware, no CPU cost. Useful for rotary encoders, Hall
+  sensors, flow turbines, Geiger counters, etc.
+</p>
+<p>
+  HW constraint: the pin passed to the constructor MUST be a pin
+  that maps to channel B of some PWM slice (odd GPIOs: GP1, GP3,
+  GP5, GP7, GP9, GP11, GP13, ..., GP29). Otherwise a
+  <code>RuntimeError</code> is raised. Moreover, the associated slice CANNOT be
+  used simultaneously as a PWM output — a slice operates in ONE mode at a time.
+</p>
+<pre><code><span class="kw">import</span> Pulse
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> c: Pulse.Counter := Pulse.Counter(<span class="num">13</span>, Pulse.Counter.RISING)
+  c.start()
+  sleep(<span class="num">1000</span>)
+  <span class="kw">print</span> <span class="str">"pulses in 1s:"</span>, c.value()
+  c.stop()
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Member</th><th>Description</th></tr>
+  <tr><td><code>Counter(pin, edgeKind)</code></td>
+      <td>Constructor. <code>edgeKind</code>:
+          <code>Counter.RISING</code> (0),
+          <code>Counter.FALLING</code> (1),
+          <code>Counter.BOTH</code> (2; on RP2350 falls back to RISING — no HW support for both).</td></tr>
+  <tr><td><code>start()</code></td><td>Starts counting.</td></tr>
+  <tr><td><code>stop()</code></td><td>Stops counting and releases the slice.</td></tr>
+  <tr><td><code>value(): integer</code></td>
+      <td>Current count. 16-bit counter → 0..65535. Reset
+          periodically if you need more range.</td></tr>
+  <tr><td><code>reset()</code></td><td>Resets the counter to zero without stopping.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-pwm">13.16 <code>Pwm</code></h3>
+<p>
+  Hardware PWM signal generation. Each GPIO maps to a fixed slice +
+  channel of the PWM by hardware (even = channel A, odd = channel B). The
+  two channels of the SAME slice share frequency (clkdiv + wrap) but
+  can have independent duty cycles.
+</p>
+<p>
+  Typical applications:
+</p>
+<ul>
+  <li>Dimmable LEDs (PWM ~1-10 kHz).</li>
+  <li>RC servos (50 Hz, 1-2 ms pulse).</li>
+  <li>DC motors with a MOSFET (5-20 kHz).</li>
+  <li>Audio tone generation (200-20000 Hz).</li>
+</ul>
+<pre><code><span class="kw">import</span> Pwm
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> p: Pwm.Slice := Pwm.Slice(<span class="num">10</span>, <span class="num">1000</span>)   <span class="comment">// GP10 at 1 kHz</span>
+  p.setDuty(<span class="num">50</span>)                              <span class="comment">// 50% duty</span>
+  p.start()
+  sleep(<span class="num">2000</span>)
+  p.stop()
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Member</th><th>Description</th></tr>
+  <tr><td><code>Slice(pin, freqHz)</code></td>
+      <td>Constructor. Configures the pin's slice to the given
+          frequency. Duty starts at 0. Call <code>start()</code> to make
+          it oscillate.</td></tr>
+  <tr><td><code>setDuty(dutyPct)</code></td>
+      <td>Duty cycle 0..100. Applied immediately.</td></tr>
+  <tr><td><code>setFreq(freqHz)</code></td>
+      <td>Changes the frequency. Affects both channels of the slice.
+          The current duty is preserved.</td></tr>
+  <tr><td><code>start()</code></td><td>Starts generation.</td></tr>
+  <tr><td><code>stop()</code></td><td>Stops. The pin is left LOW.</td></tr>
+</table>
+<p>
+  <strong>Tip combined with Pulse:</strong> to verify the
+  frequency generated with PWM you can count the pulses with
+  <code>Pulse.Counter</code> on another pin (wired to the PWM pin).
+  Important: the two pins must be on DIFFERENT slices
+  (e.g. GP10 (slice 5) + GP13 (slice 6)).
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-adc">13.17 <code>Adc</code></h3>
+<p>
+  The MCU's analog-to-digital converter. The RP2350 has 4 channels
+  accessible via GPIO:
+</p>
+<table>
+  <tr><th>Channel</th><th>Pin</th></tr>
+  <tr><td><code>CH0</code></td><td>GP26</td></tr>
+  <tr><td><code>CH1</code></td><td>GP27</td></tr>
+  <tr><td><code>CH2</code></td><td>GP28</td></tr>
+  <tr><td><code>CH3</code></td><td>GP29</td></tr>
+</table>
+<p>
+  12-bit resolution (0..4095), reference Vref ≈ 3.3 V typical. To
+  read the die's internal temperature, do NOT use <code>Adc</code> — use
+  <code>Pico.tempC()</code> (see <a href="#stdlib-pico">§13.18</a>)
+  which already does the conversion with the sensor's formula.
+</p>
+<pre><code><span class="kw">import</span> Adc
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> sensor: Adc.Channel := Adc.Channel(Adc.Channel.CH0)
+  <span class="kw">while</span> <span class="kw">true</span> <span class="kw">do</span>
+    <span class="kw">var</span> raw: <span class="type">integer</span> := sensor.read()        <span class="comment">// 0..4095</span>
+    <span class="kw">var</span> v:   <span class="type">float</span>   := sensor.readVolts()   <span class="comment">// 0.0..3.3 V</span>
+    <span class="kw">print</span> <span class="str">"raw:"</span>, raw, <span class="str">"  V:"</span>, v
+    sleep(<span class="num">100</span>)
+  <span class="kw">endwh</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Member</th><th>Description</th></tr>
+  <tr><td><code>Channel(ch)</code></td>
+      <td>Constructor. <code>ch</code>: <code>Channel.CH0</code>..<code>CH3</code>.
+          Raises <code>RuntimeError</code> if ch is out of range.</td></tr>
+  <tr><td><code>read(): integer</code></td>
+      <td>Raw reading 0..4095. Blocks ~2 µs per conversion.</td></tr>
+  <tr><td><code>readVolts(): float</code></td>
+      <td>Reading converted to volts using the nominal Vref (3.3 V).</td></tr>
+  <tr><td><code>readAvg(n): integer</code></td>
+      <td>Average of N readings. Reduces noise on analog sensors.
+          Cost: N × 2 µs.</td></tr>
+</table>
+<p>
+  Static consts: <code>Channel.CH0</code> (0), <code>CH1</code> (1),
+  <code>CH2</code> (2), <code>CH3</code> (3), <code>VREF</code> (3.3).
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-pico">13.18 <code>Pico</code> (MCU information)</h3>
+<p>
+  Information about the physical microcontroller: identification, internal
+  sensors, clock and control of the clk_sys frequency.
+</p>
+<p>
+  <strong>Documented exception</strong> to the HW = OO class policy
+  (see <a href="#stdlib-hw-policy">§13.22</a>): <code>Pico</code>
+  exposes functions + constants without a class because the chip's info has no
+  &quot;instance&quot; (there is exactly one) and encapsulates no
+  releasable resources.
+</p>
+<pre><code><span class="kw">import</span> Pico
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">print</span> <span class="str">"Board:"</span>, Pico.boardName()
+  <span class="kw">print</span> <span class="str">"Serial:"</span>, Pico.uniqueId()
+  <span class="kw">print</span> <span class="str">"CPU MHz:"</span>, Pico.cpuFreqHz() / <span class="num">1000000</span>
+  <span class="kw">print</span> <span class="str">"Die °C:"</span>, Pico.tempC()
+  <span class="kw">print</span> <span class="str">"Uptime ms:"</span>, Pico.uptimeMs()
+
+  <span class="comment">// Safe overclock to 250 MHz (scales voltage automatically)</span>
+  Pico.setCpuFreqMHz(<span class="num">250</span>)
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>uniqueId(): string</code></td>
+      <td>Unique flash chip ID (16 hex chars). Stable across
+          reboots and reflashes.</td></tr>
+  <tr><td><code>boardName(): string</code></td>
+      <td><code>&quot;pico2&quot;</code> on RP2350; <code>&quot;host&quot;</code>
+          on the Java/C-host VM.</td></tr>
+  <tr><td><code>tempC(): float</code></td>
+      <td>Die temperature in °C. ADC4 sensor with internal conversion.
+          Accuracy ±2 °C without calibration.</td></tr>
+  <tr><td><code>cpuFreqHz(): integer</code></td>
+      <td>Current clk_sys frequency in Hz.</td></tr>
+  <tr><td><code>uptimeMs(): integer</code></td>
+      <td>Ms since firmware boot (32-bit, wraps at ~49 days).</td></tr>
+  <tr><td><code>setCpuFreqMHz(mhz): boolean</code></td>
+      <td>Changes clk_sys. Clamped to <code>[MIN_CPU_MHZ, MAX_CPU_MHZ]</code>.
+          Auto-scales Vdd_core (1.10/1.15/1.20/1.30 V depending on mhz).
+          Returns <code>true</code> if the PLL could be configured.
+          Call BEFORE configuring UART/SPI/I2C/PWM because
+          their dividers are computed from clk_peri.
+          The <code>sleep*</code> functions and <code>now()</code> are
+          immune (independent 1 MHz HW timer).</td></tr>
+</table>
+<p>
+  Constants (return literals):
+  <code>MAX_CPU_MHZ()</code> (300), <code>MIN_CPU_MHZ()</code> (18),
+  <code>I2C_BUSES()</code> (2), <code>SPI_BUSES()</code> (2),
+  <code>UART_BUSES()</code> (2), <code>GPIO_COUNT()</code> (30),
+  <code>ADC_CHANNELS()</code> (4), <code>PWM_SLICES()</code> (12).
+</p>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-rtc">13.19 <code>Rtc</code></h3>
+<p>
+  Wall clock with IDE→Pico synchronization. The Pico has no RTC with
+  backup battery by default, so this module keeps an
+  <em>offset</em> between &quot;epoch (Unix) seconds&quot; and &quot;monotonic
+  time since boot&quot;.
+</p>
+<p>
+  The BPIDE IDE sends a <code>TIME &lt;epochsec&gt;</code> command
+  automatically when it connects to the device. After that,
+  <code>epochSec()</code> returns the real UTC time. If not calibrated,
+  it returns seconds since boot — still useful as a relative clock.
+</p>
+<p>
+  The API is limited to SECONDS because BP only has int32; range
+  1970..2038. For finer deltas within a session use
+  <code>now()</code>.
+</p>
+<pre><code><span class="kw">import</span> Rtc
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> clk: Rtc.Clock := Rtc.Clock()
+  <span class="kw">print</span> <span class="str">"epoch now:"</span>, clk.epochSec()
+
+  <span class="comment">// Calibrate manually if needed:</span>
+  clk.setEpochSec(<span class="num">1716544800</span>)   <span class="comment">// 2024-05-24 10:00:00 UTC</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Member</th><th>Description</th></tr>
+  <tr><td><code>Clock()</code></td>
+      <td>Constructor with no arguments. The backend keeps the offset
+          globally (logical singleton).</td></tr>
+  <tr><td><code>epochSec(): integer</code></td>
+      <td>Seconds since the Unix epoch. Uncalibrated, seconds since boot.</td></tr>
+  <tr><td><code>setEpochSec(sec)</code></td>
+      <td>Calibrates: from here on, <code>epochSec()</code> returns
+          <code>sec + time_elapsed_since_here</code>.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-wdt">13.20 <code>Wdt</code> (watchdog)</h3>
+<p>
+  The MCU's watchdog timer. If it is not &quot;fed&quot; within the
+  configured timeout, the chip RESETS automatically. Useful for
+  recovering from hangs in unattended deployments.
+</p>
+<p>
+  <strong>CRITICAL WARNING:</strong> if you enable the watchdog with a
+  short timeout and the code hangs, the chip resets in a loop.
+  To get out: reflash a firmware that does NOT enable the watchdog at
+  boot, or enter BOOTSEL (hold the button while connecting USB).
+</p>
+<p>
+  The constructor applies a minimum of 100 ms to the timeout to minimize
+  accidental bricks. <code>Wdt</code> is an <em>MCU singleton</em>:
+  there is only one watchdog; constructing several instances is legal but
+  they all operate on the same HW (the last <code>enable</code> wins).
+</p>
+<pre><code><span class="kw">import</span> Wdt
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> wdog: Wdt.Timer := Wdt.Timer(<span class="num">2000</span>)   <span class="comment">// 2 seconds</span>
+  <span class="kw">while</span> running <span class="kw">do</span>
+    doWork()
+    wdog.feed()        <span class="comment">// must run within 2s</span>
+  <span class="kw">endwh</span>
+  wdog.disable()       <span class="comment">// before a long sleep</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Member</th><th>Description</th></tr>
+  <tr><td><code>Timer(timeoutMs)</code></td>
+      <td>Constructor. Enables the watchdog. Clamped to the 100 ms minimum.</td></tr>
+  <tr><td><code>feed()</code></td>
+      <td>Feeds the watchdog: resets the counter to the configured
+          timeout. Call periodically.</td></tr>
+  <tr><td><code>disable()</code></td>
+      <td>Disables it. On RP2350 this is simulated with a very
+          large timeout (there is no real off API). Useful before known
+          long operations.</td></tr>
+  <tr><td><code>reenable()</code></td>
+      <td>Re-enables with the same timeout it had.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-timer">13.21 <code>Timer</code> (periodic alarms)</h3>
+<p>
+  <code>Timer.Alarm</code> is a pure-BP abstraction over
+  <code>now()</code>. It does NOT use hardware interrupts or callbacks — the
+  user code polls the alarm with <code>check()</code> or synchronizes
+  with <code>wait()</code>. Advantages:
+</p>
+<ul>
+  <li>Portable to any target (Java host, C host, Pico) without a
+      native backend.</li>
+  <li>Immune to overclock: <code>now()</code> on the Pico uses the
+      1 MHz HW timer, which is independent of clk_sys.</li>
+  <li>Zero cost in firmware (does not consume the MCU's HW timers).</li>
+</ul>
+<p>
+  Limitation: the resolution depends on how often the
+  user calls <code>check()</code>. For critical timing
+  (debouncing, bit-banging) use hardware PWM or the
+  <code>Pulse</code> module.
+</p>
+<pre><code><span class="kw">import</span> Timer
+<span class="kw">import</span> Gpio
+
+<span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">var</span> led: Gpio.Pin := Gpio.Pin(<span class="num">25</span>, Gpio.Pin.OUTPUT)
+
+  <span class="comment">// Mode A: non-blocking polling</span>
+  <span class="kw">var</span> blink: Timer.Alarm := Timer.Alarm(<span class="num">500</span>)
+  <span class="kw">while</span> running <span class="kw">do</span>
+    <span class="kw">if</span> blink.check() <span class="kw">then</span>
+      led.toggle()
+    <span class="kw">endif</span>
+    doOtherWork()
+  <span class="kw">endwh</span>
+
+  <span class="comment">// Mode B: periodic loop without drift</span>
+  <span class="kw">var</span> beat: Timer.Alarm := Timer.Alarm(<span class="num">100</span>)
+  <span class="kw">while</span> i &lt; <span class="num">100</span> <span class="kw">do</span>
+    sampleSensor()
+    beat.wait()         <span class="comment">// blocks until the next fire</span>
+    i := i + <span class="num">1</span>
+  <span class="kw">endwh</span>
+<span class="kw">end</span> main</code></pre>
+<table>
+  <tr><th>Member</th><th>Description</th></tr>
+  <tr><td><code>Alarm(periodMs)</code></td>
+      <td>Constructor. <code>periodMs=0</code> leaves the instance as a
+          passive stopwatch (only <code>since()</code>).</td></tr>
+  <tr><td><code>check(): boolean</code></td>
+      <td><code>true</code> if it was time to fire; advances
+          <code>nextFire</code>. Catch-up safe: if you fall behind, it skips
+          the missed multiples without firing in a burst.</td></tr>
+  <tr><td><code>wait()</code></td>
+      <td>Blocks until the next fire. For periodic loops
+          without accumulated drift.</td></tr>
+  <tr><td><code>reset()</code></td>
+      <td>The next fire will be <code>periodMs</code> from NOW.</td></tr>
+  <tr><td><code>since(): integer</code></td>
+      <td>Ms elapsed since the last reset/construction. Useful
+          to use the alarm as a stopwatch.</td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-hw-policy">13.22 HW policy = OO class</h3>
+<p>
+  Project architectural decision: <strong>every new hardware
+  peripheral is modeled as an OO class</strong> inside a BP module
+  that encapsulates it. Full detail in
+  <code>docs/HW_CLASS_POLICY.md</code>; summary here.
+</p>
+<p>
+  Reasons: encapsulation (the backend's opaque id lives in the
+  instance), typing (<code>var bus: Spi.Bus</code> documents what
+  the variable represents), and resource release when
+  finalizers arrive.
+</p>
+<p>
+  Canonical pattern:
+</p>
+<ul>
+  <li>A <code>Foo</code> module with low-level intrinsics
+      suffixed with the resource type (e.g. <code>initBus</code>,
+      <code>startSlice</code>) so they do not collide with the class's short
+      methods (<code>start()</code>).</li>
+  <li>A wrapping <code>Foo.Bar</code> class. The constructor takes the
+      physical parameters + raises <code>RuntimeError</code> if the
+      backend init fails.</li>
+  <li>Static consts inside the class for enumerations
+      (<code>Bar.MODE_X</code>, <code>Pin.PULL_UP</code>, etc.).</li>
+  <li>Fields private to the owning module. They are <strong>NOT</strong>
+      exported cross-module. To expose values cross-module you
+      use a <code>property</code> with a getter (classic encapsulation).</li>
+</ul>
+<p>
+  <strong>Documented exception</strong>: the <code>Pico</code> module
+  exposes functions + constants without a class because the chip info is a
+  singleton with no releasable resources. Same logic for future
+  global-information modules.
+</p>
+<p>
+  Current state of the OO HW suite:
+</p>
+<table>
+  <tr><th>Module</th><th>Class</th><th>Encapsulated resource</th></tr>
+  <tr><td><code>Gpio</code></td><td><code>Gpio.Pin</code></td>
+      <td>Pin number + mode</td></tr>
+  <tr><td><code>I2c</code></td><td><code>I2c.Bus</code></td>
+      <td>busId + pins + baudrate</td></tr>
+  <tr><td><code>Spi</code></td><td><code>Spi.Bus</code></td>
+      <td>busId + pins + baudrate + mode</td></tr>
+  <tr><td><code>Uart</code></td><td><code>Uart.Port</code></td>
+      <td>busId + pins + baudrate + format</td></tr>
+  <tr><td><code>Pulse</code></td><td><code>Pulse.Counter</code></td>
+      <td>counterSlice in input-gate mode</td></tr>
+  <tr><td><code>Pwm</code></td><td><code>Pwm.Slice</code></td>
+      <td>sliceId + channel A/B</td></tr>
+  <tr><td><code>Adc</code></td><td><code>Adc.Channel</code></td>
+      <td>ADC channel + physical pin</td></tr>
+  <tr><td><code>Rtc</code></td><td><code>Rtc.Clock</code></td>
+      <td>Wall clock with offset (logical singleton)</td></tr>
+  <tr><td><code>Wdt</code></td><td><code>Wdt.Timer</code></td>
+      <td>HW watchdog (singleton)</td></tr>
+  <tr><td><code>Timer</code></td><td><code>Timer.Alarm</code></td>
+      <td>Period + nextFire (pure BP, no HW)</td></tr>
+  <tr><td><code>Pico</code></td><td><em>(funcs + consts)</em></td>
+      <td><em>Singleton MCU info with no resources — documented exception</em></td></tr>
+</table>
+
+<!-- =========================================================== -->
+<h3 id="stdlib-neopixel">13.23 <code>Neopixel</code></h3>
+<p>
+  WS2812 ("NeoPixel") LED strip driven by the RP2350's PIO
+  (Pico 2 / Metro; on other families the constructor raises
+  <code>RuntimeError</code>). Framebuffer pattern: the <code>set*</code>
+  calls write to memory and <code>show()</code> flushes the whole strip.
+</p>
+<pre><code><span class="kw">import</span> Neopixel
+
+<span class="kw">var</span> strip: Neopixel.Strip := Neopixel.Strip(<span class="num">15</span>, <span class="num">8</span>)   <span class="comment">// pin, number of LEDs</span>
+strip.setColor(<span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>)            <span class="comment">// all off</span>
+strip.setPixel(<span class="num">0</span>, <span class="num">32</span>, <span class="num">0</span>, <span class="num">0</span>)        <span class="comment">// LED 0 in soft red</span>
+strip.show()</code></pre>
+<table>
+  <tr><th>Method</th><th>Description</th></tr>
+  <tr><td><code>Strip(pin, count)</code></td><td>Constructor: data pin + number of LEDs.</td></tr>
+  <tr><td><code>setPixel(i, r, g, b)</code></td><td>Color of one LED (0..255 per channel).</td></tr>
+  <tr><td><code>setColor(r, g, b)</code></td><td>Same color for the whole strip.</td></tr>
+  <tr><td><code>clear()</code></td><td>All to 0 (does not show).</td></tr>
+  <tr><td><code>show()</code></td><td>Flushes the framebuffer to the strip.</td></tr>
+  <tr><td><code>count(): integer</code></td><td>Number of LEDs.</td></tr>
+</table>
+
+<h3 id="stdlib-log">13.24 <code>Log</code></h3>
+<p>
+  Application logger in pure BP on top of the <code>IO</code> file I/O:
+  levels, output to console and/or file, size-based rotation and thread-safe
+  (internal Mutex). <strong>Failure-proof</strong>: if the file fails
+  (FS full, unsupported op), it warns ONCE and degrades to console-only —
+  a logger never takes the application down.
+</p>
+<pre><code><span class="kw">import</span> Log
+
+Log.setLevel(Log.DEBUG)            <span class="comment">// INFO by default</span>
+Log.setFile(<span class="str">"app.log"</span>)             <span class="comment">// "app.log" by default</span>
+Log.info(<span class="str">"starting up"</span>)            <span class="comment">// → [INFO ] starting up</span>
+Log.warn(<span class="str">"low battery"</span>)
+Log.error(<span class="str">"sensor not responding"</span>)</code></pre>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>debug/info/warn/error(msg)</code></td>
+      <td>Emits a <code>[LEVEL] msg</code> line if <code>level >= setLevel</code>.</td></tr>
+  <tr><td><code>setLevel(n)</code></td>
+      <td>Minimum level: consts <code>Log.DEBUG/INFO/WARN/ERROR</code> (0..3). INFO by default.</td></tr>
+  <tr><td><code>setFile(p)</code></td><td>Path of the log file.</td></tr>
+  <tr><td><code>setConsole(b)</code> / <code>setFileEnabled(b)</code></td>
+      <td>Enables/disables each output (both on by default).</td></tr>
+  <tr><td><code>setMaxSize(n)</code></td>
+      <td>Rotation: on exceeding n bytes, the file is moved to <code>&lt;path&gt;.old</code> and a new one starts (16 KB by default).</td></tr>
+  <tr><td><code>setTimestamp(b)</code></td>
+      <td>Prepends the uptime in ms (off by default — deterministic output).</td></tr>
+</table>
+
+<h3 id="stdlib-str">13.25 <code>Str</code></h3>
+<p>
+  String utilities in pure BP. The parsers return a
+  <strong>tuple</strong> <code>(ok, value)</code> — no exceptions on
+  bad format:
+</p>
+<pre><code><span class="kw">import</span> Str
+
+<span class="kw">var</span> ok: <span class="type">boolean</span> := <span class="kw">false</span>
+<span class="kw">var</span> v: <span class="type">integer</span> := <span class="num">0</span>
+{ ok, v } := Str.parseInt(<span class="str">"123"</span>)
+<span class="kw">if</span> ok <span class="kw">then</span> <span class="kw">print</span> v <span class="kw">endif</span>
+
+<span class="kw">print</span> Str.formatDouble(<span class="num">3.14159d</span>, <span class="num">2</span>)   <span class="comment">// "3.14"</span>
+<span class="kw">print</span> Str.padLeft(<span class="str">"7"</span>, <span class="num">3</span>)             <span class="comment">// "  7"</span></code></pre>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>formatDouble(x, dec): string</code></td>
+      <td>Rounded to <code>dec</code> decimals.</td></tr>
+  <tr><td><code>longToString(x)</code> / <code>doubleToString(x)</code></td>
+      <td>Identical to the concat <code>"" + x</code> (kept for compatibility and for composing).</td></tr>
+  <tr><td><code>toHex(x: long): string</code></td><td>Hexadecimal without prefix.</td></tr>
+  <tr><td><code>fromCharCode(cp): string</code></td><td>String of 1 code point.</td></tr>
+  <tr><td><code>lastIndexOf(s, sub): integer</code></td><td>Last occurrence (-1 if absent).</td></tr>
+  <tr><td><code>compare(a, b): integer</code></td><td>&lt;0 / 0 / &gt;0 (order by code points).</td></tr>
+  <tr><td><code>padLeft(s, width)</code> / <code>padRight(s, width)</code></td><td>Padding with spaces.</td></tr>
+  <tr><td><code>parseInt/parseLong/parseDouble/parseHex(s): (boolean, T)</code></td>
+      <td>Tuple <code>(ok, value)</code>; <code>ok=false</code> if the format is not valid.</td></tr>
+</table>
+
+<h3 id="stdlib-collections">13.26 <code>Collections</code></h3>
+<p>
+  Ordered map + comparison infrastructure in pure BP. Since the
+  primitives are not objects, there are wrappers <code>Integer</code>/
+  <code>Long</code>/<code>Double</code>/<code>Float</code>/<code>Boolean</code>
+  (with <code>value()</code> and <code>compareTo</code>) to use them as
+  keys/values.
+</p>
+<pre><code><span class="kw">import</span> Collections
+
+<span class="kw">var</span> ages: Collections.Map := Collections.stringMap()
+ages.put(<span class="str">"ana"</span>, Collections.Integer(<span class="num">30</span>))
+<span class="kw">var</span> w: Collections.Integer := ages.get(<span class="str">"ana"</span>)
+<span class="kw">print</span> w.value()                          <span class="comment">// 30</span></code></pre>
+<table>
+  <tr><th>API</th><th>Description</th></tr>
+  <tr><td><code>stringMap()</code> / <code>numericMap()</code></td>
+      <td>Factories: a Map with a string / numeric comparator.</td></tr>
+  <tr><td><code>Map.put/get/containsKey/remove</code></td>
+      <td>Basic operations; <code>get</code> returns <code>null</code> if absent.</td></tr>
+  <tr><td><code>Map.size()</code>, <code>keyAt(i)</code>, <code>valueAt(i)</code></td>
+      <td>Iteration by index, in the comparator's ORDER (ordered map:
+          binary search inside). Thread-safe (internal Mutex).</td></tr>
+  <tr><td><code>Comparator</code> / <code>Comparable</code></td>
+      <td>Base classes for custom ordering (<code>Map.withComparator(c)</code>).</td></tr>
+</table>
+
+<h3 id="stdlib-stats">13.27 <code>Stats</code></h3>
+<p>
+  Incremental statistics in pure BP (double): meant for streams of
+  sensor measurements without keeping the history.
+</p>
+<table>
+  <tr><th>Class</th><th>API</th></tr>
+  <tr><td><code>Accumulator</code></td>
+      <td><code>add(x)</code>, <code>count()</code>, <code>mean()</code>,
+          <code>variance()</code>, <code>stdDev()</code>, <code>min()</code>,
+          <code>max()</code> — online accumulation.</td></tr>
+  <tr><td><code>LinReg</code></td>
+      <td><code>addPoint(x, y)</code> / <code>subPoint(x, y)</code> (sliding
+          window), <code>addData(xs, ys, n)</code>, <code>slope()</code>,
+          <code>intercept()</code>, <code>r()</code>,
+          <code>predict(x)</code> — incremental linear regression.</td></tr>
+</table>
+
+<h3 id="stdlib-compress">13.28 <code>Compress</code></h3>
+<p>
+  LZSS decompressor in pure BP, for deploying compressed data in the
+  micro's flash (tables, resources). <strong>Decompression only by
+  design</strong>: the compressor is a host tool.
+</p>
+<pre><code><span class="kw">import</span> Compress
+
+<span class="kw">var</span> dst: <span class="type">byte</span>[] := newByteArray(<span class="num">8192</span>)
+<span class="kw">var</span> n: <span class="type">integer</span> := Compress.decompress(src, len(src), dst, len(dst))
+<span class="comment">// n = bytes decompressed into dst; -1 if the destination does not fit
+// or the data is corrupt (no exceptions)</span></code></pre>
+
+<h3 id="stdlib-net">13.29 <code>Net</code></h3>
+<p>
+  Simple TCP client (H11). Available on <strong>PC</strong> (both VMs:
+  OS sockets); on the micros <em>there is still no network backend</em>
+  (Pico 2 W and ESP32-S3 will arrive with lwIP) — there any operation raises
+  a <em>catchable</em> <code>RuntimeError</code>
+  (&laquo;<code>Net: no network on this platform</code>&raquo;).
+</p>
+<pre><code><span class="kw">import</span> Net
+
+<span class="kw">var</span> c: Net.Tcp := Net.Tcp()
+<span class="kw">if</span> c.connect(<span class="str">"192.168.1.50"</span>, <span class="num">7000</span>, <span class="num">2000</span>) <span class="kw">then</span>   <span class="comment">// timeout in ms</span>
+  c.sendStr(<span class="str">"hi"</span>)                    <span class="comment">// also send(data: byte[])</span>
+  <span class="kw">var</span> resp: <span class="type">string</span> := c.recvStr(<span class="num">256</span>, <span class="num">1000</span>)  <span class="comment">// "" = timeout</span>
+  print resp
+  c.close()
+<span class="kw">endif</span></code></pre>
+<p>Contract (identical in both VMs):</p>
+<ul>
+  <li><code>connect(host, port, timeoutMs): boolean</code> — a connection
+      failure (refused, timeout, DNS) is a <em>normal</em> result:
+      it returns <code>false</code>, it does not throw.</li>
+  <li><code>recv(max, timeoutMs): byte[]</code> / <code>recvStr</code> —
+      <strong>always with a timeout</strong> (on a micro an infinite recv
+      would block the entire worker). Timeout → empty <code>byte[]</code> /
+      <code>""</code>. The peer closed → catchable <code>RuntimeError</code>.</li>
+  <li><code>send(data: byte[]): integer</code> / <code>sendStr(s)</code> —
+      sends everything or raises <code>RuntimeError</code> (broken connection).</li>
+  <li><code>isOpen()</code>, <code>close()</code> (tolerant). There are also
+      low-level module functions (<code>Net.tcpConnect/tcpSend/
+      tcpRecv/tcpClose</code>) with an integer handle.</li>
+</ul>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h3 id="stdlib-json">13.30 <code>Json</code></h3>
+<p>
+  Reading and writing JSON (<code>import Json</code>). The document is modeled with a
+  class hierarchy: <code>JsonValue</code> (base) and its children <code>JsonNull</code>,
+  <code>JsonBool</code>, <code>JsonInt</code>, <code>JsonFloat</code>, <code>JsonString</code>,
+  <code>JsonArray</code> and <code>JsonObject</code>.
+</p>
+<table>
+  <tr><th>API</th><th>Description</th></tr>
+  <tr><td><code>Json.parseJson(s): JsonValue</code></td>
+      <td>Parses a JSON string; raises <code>RuntimeError</code> if it is invalid.</td></tr>
+  <tr><td><code>Json.writeJson(v): string</code><br><code>Json.writeJsonPretty(v): string</code></td>
+      <td>Serializes (compact / indented). A value can also be serialized with
+          <code>v.toJson()</code>.</td></tr>
+  <tr><td><code>v.isObject() … v.isNull()</code></td>
+      <td>Polymorphic type test: <code>isNull isBool isInt isFloat isNumber isString
+          isArray isObject</code>.</td></tr>
+  <tr><td><code>v.asObject() … v.asString()</code></td>
+      <td>Checked cast (raises <code>RuntimeError</code> if the type does not match).</td></tr>
+  <tr><td><code>JsonObject</code></td>
+      <td><code>put(key, v)</code> · <code>has(key)</code> ·
+          <code>getString/getInt/getFloat/getBool/getObject/getArray(key)</code> ·
+          <code>get…Or(key, def)</code> variants with a default value.</td></tr>
+  <tr><td><code>JsonArray</code></td>
+      <td><code>add(v)</code> · <code>at(i): JsonValue</code> · <code>length()</code>.</td></tr>
+</table>
+<pre><code><span class="kw">var</span> root: Json.<span class="type">JsonObject</span> := Json.<span class="fn">JsonObject</span>()
+root.<span class="fn">put</span>(<span class="str">"name"</span>, Json.<span class="fn">JsonString</span>(<span class="str">"Ana"</span>))
+root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span class="fn">JsonInt</span>(<span class="num">30</span>))
+<span class="kw">print</span> Json.<span class="fn">writeJson</span>(root)              <span class="comment">// {"name":"Ana","age":30}</span>
+
+<span class="kw">var</span> v: Json.<span class="type">JsonValue</span> := Json.<span class="fn">parseJson</span>(<span class="str">"{\"ok\":true}"</span>)
+<span class="kw">print</span> boolToString(v.<span class="fn">asObject</span>().<span class="fn">getBool</span>(<span class="str">"ok"</span>))</code></pre>
+<p>
+  Full example: <code>samples/JsonDemo.bp</code>. The <code>.win</code> form loader
+  (<a href="gui.html#eventos">graphics guide §22</a>) uses this module.
+</p>
+
+<h3 id="stdlib-freq">13.31 <code>Freq</code></h3>
+<p>
+  Frequency meter by edge counting (<code>import Freq</code>): measures the frequency of a pin's
+  signal by counting the edges arriving during a known time window
+  (<em>gate time</em>) — <code>Hz = edges / window</code>. It relies on
+  <code>Pulse.Counter</code> (hardware counting, no CPU cost); the pin has the same
+  channel restriction as <code>Pulse.Counter</code> (<a href="#stdlib-pulse">§13.15</a>).
+</p>
+<table>
+  <tr><th>Member</th><th>Description</th></tr>
+  <tr><td><code>Freq.RISING() / FALLING() / BOTH()</code></td>
+      <td>Which edge to count.</td></tr>
+  <tr><td><code>Meter(pin, edge)</code></td>
+      <td>Creates the meter on a pin.</td></tr>
+  <tr><td><code>measureHz(windowMs): integer</code></td>
+      <td>A single measurement with a <code>windowMs</code> ms window.</td></tr>
+  <tr><td><code>measureHzAvg(windowMs, samples): integer</code></td>
+      <td>Average of <code>samples</code> measurements.</td></tr>
+  <tr><td><code>maxHz(windowMs): integer</code></td>
+      <td>Maximum measurable frequency with that window before the 16-bit
+          counter overflows; above it, use a smaller window.</td></tr>
+  <tr><td><code>close()</code></td>
+      <td>Releases the counter (leaves the channel available for PWM, etc.).</td></tr>
+</table>
+
+<h3 id="stdlib-app">13.32 <code>App</code></h3>
+<p>
+  Introspection of the running project (<code>import App</code>),
+  Java <code>getResource()</code> style: the program can ask where its root is and build
+  explicit resource paths. The values depend on the environment (on the board,
+  <code>/app/&lt;project&gt;/…</code>; on the host, the executed <code>.mod</code> and its base-dir) —
+  like <code>now()</code> or the FS, they are not part of the byte-identical parity.
+</p>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>App.mainModule(): string</code></td><td>Name of the main module in execution.</td></tr>
+  <tr><td><code>App.mainModulePath(): string</code></td><td>Path of the executed <code>.mod</code>.</td></tr>
+  <tr><td><code>App.projectPath(): string</code></td><td>Project root (the base of the relative paths of <code>readFile</code>, images, <code>.win</code>…).</td></tr>
+</table>
+
+<h3 id="stdlib-gui">13.33 <code>Gui</code> — separate volume</h3>
+<p>
+  The graphical interface (screen and widget tree, the full catalog, color and fonts,
+  <code>.win</code> forms, execution on host and board) has its own volume:
+  <a href="gui.html"><strong>BasicPlus — Graphical interface</strong></a> (§18–25), with the
+  quick reference of the <code>Gui.*</code> API in <a href="gui.html#referencia">§24</a>.
+</p>
+
+<h2 id="cli">15. Compilation &amp; execution</h2>
+
+<h3 id="cli-frontend">15.1 Frontend</h3>
+<pre><code>java -jar basicplus-frontend.jar &lt;file.bp&gt; [options]</code></pre>
+<table>
+  <tr><th>Option</th><th>Effect</th></tr>
+  <tr><td><code>--tokens</code></td><td>Dump of the lexer's tokens.</td></tr>
+  <tr><td><code>--ast</code></td><td>Dump of the AST.</td></tr>
+  <tr><td><code>--quiet</code></td><td>Diagnostics only.</td></tr>
+  <tr><td><code>--compile &lt;dir&gt;</code></td><td>Compiles to <code>.mod</code> (+ <code>.bpi</code>).</td></tr>
+  <tr><td><code>--interface &lt;dir&gt;</code></td><td>Emits only <code>.bpi</code> (no code).</td></tr>
+  <tr><td><code>--backend=jvm|mivm</code></td><td>Backend (mivm is the default).</td></tr>
+</table>
+<p>
+  With <code>--compile</code>, the driver is recursive: it finds the
+  <code>.bp</code> of the missing imports, generates their
+  <code>.bpi</code> first (INTERFACE mode), then compiles the module, and
+  finally recurses in FULL mode to produce the <code>.mod</code> of the
+  deps.
+</p>
+
+<h3 id="cli-vm">15.2 VM (bpgenvm)</h3>
+<pre><code>java -jar bpgenvm.jar [options] &lt;file.mod&gt;</code></pre>
+<ul>
+  <li>By default it loads and runs the root <code>.mod</code>. The VM resolves
+      the imports transitively by reading each referenced <code>.mod</code>.</li>
+  <li><code>--trace</code> prints PC/Opcode/CS/SP/tid per instruction.</li>
+  <li><code>--workers=N</code> the number of Java worker threads in parallel
+      (default <code>2</code>; equivalent to "simulated physical cores").
+      <code>--workers=1</code> serializes everything: useful for reproducibility or
+      to debug races. See <a href="manual.html#concurrencia">§14</a>.</li>
+  <li><code>-d</code> dumps the bytecode (integrated disassembler).</li>
+  <li><code>--config &lt;file&gt;</code> loads a JSON config
+      (<a href="#cli-vmcfg">BpVM.cfg</a>) from the given path.</li>
+  <li><code>--no-config</code> ignores any auto-discovered BpVM.cfg
+      and starts with defaults.</li>
+</ul>
+
+<h4 id="cli-vmcfg">BpVM.cfg — VM configuration</h4>
+<pre><code>{
+  "memorySize": 524288,
+  "stackBase":  262144,
+  "stdlibDir":  "C:/lenguajes/pm/bpstdlib"
+}</code></pre>
+<p>
+  A JSON file with the VM's global configuration. All fields
+  are optional; missing ones take the default value:
+</p>
+<ul>
+  <li><code>memorySize</code> (total bytes of the <code>memory</code> array;
+      default 524288 = 512 KiB).</li>
+  <li><code>stackBase</code> (offset where the stacks start; default
+      256 KiB &mdash; it is validated that <code>stackBase &lt; memorySize</code> and
+      that at least <code>MAIN_STACK_BYTES</code> fit). If you set
+      <code>memorySize</code> but not <code>stackBase</code>, it is derived
+      as <code>memorySize/2</code>.</li>
+  <li><code>stdlibDir</code> (path to the directory where the VM looks for the
+      stdlib modules &mdash; <code>Json.mod</code> today, more in the future
+      &mdash; when an import does not resolve from the cwd or from the importer's
+      <code>fromPath</code>).</li>
+</ul>
+<p>
+  The parser accepts <code>// until-end-of-line</code> comments. It does not
+  support arrays or nested objects (not needed today).
+</p>
+<p>
+  <strong>Resolution</strong>:
+</p>
+<ol>
+  <li>If you pass <code>--config &lt;path&gt;</code>, that path is loaded. If the
+      file does not exist or the JSON is malformed, the VM aborts with
+      a clear message.</li>
+  <li>Otherwise, the VM looks for <code>BpVM.cfg</code> in:
+    <ol>
+      <li>the current directory (<code>cwd</code>);</li>
+      <li>the directory where the root <code>.mod</code> is.</li>
+    </ol>
+    The first one that exists is used.</li>
+  <li>If there is nothing, the defaults are used.</li>
+</ol>
+<p>
+  The BpIde also respects <code>BpVM.cfg</code> when you press
+  <kbd>F5</kbd> (Run) or <kbd>F11</kbd> (Debug) &mdash; it looks first
+  in the cwd and then next to the <code>.mod</code> it is running.
+</p>
+
+<h4 id="cli-vmproject">.bpproject — VM project file</h4>
+<pre><code>{
+  "main":        "out/MyApp.mod",
+  "modulePaths": ["out", "../shared/modules"]
+}</code></pre>
+<p>
+  A JSON file that describes which .mod to start and where to look for the .mod
+  of the imports. It is passed to the VM as an argument in place of the .mod:
+</p>
+<pre><code>bpgenvm MyApp.bpproject</code></pre>
+<p>
+  The VM detects the type by extension (<code>.mod</code> vs.
+  <code>.bpproject</code>). Fields:
+</p>
+<ul>
+  <li><code>main</code> (string, <strong>required</strong>): path to the
+      .mod of the startup module. Can be absolute or relative to the
+      directory of the .bpproject. The VM verifies that the file exists.</li>
+  <li><code>modulePaths</code> (array of strings, optional): directories
+      where the VM looks for the .mod of the imports, in priority order.
+      Relative paths are resolved with respect to the .bpproject.</li>
+</ul>
+<p>
+  <strong>Full resolution of an import</strong>:
+</p>
+<ol>
+  <li>As indicated (cwd or absolute).</li>
+  <li>Each <code>modulePaths[i]/&lt;basename&gt;</code> in order.</li>
+  <li><code>stdlibDir/&lt;basename&gt;</code> (from BpVM.cfg).</li>
+  <li>If nothing exists, FileNotFound with a clear message.</li>
+</ol>
+<p>
+  The parser accepts <code>//</code> comments. It supports arrays
+  (unlike BpVM.cfg, which is flat). See
+  <code>docs/BpProject.example</code> for an annotated template.
+</p>
+
+<h4 id="cli-bpbuild">.bpbuild — compiler and IDE project file</h4>
+<pre><code>{
+  "projectDir":   "./",
+  "sourceDir":    "src",
+  "outDir":       "out",
+  "main":         "App",
+  "dependencies": ["../shared/lib", "../utils/Logger.mod"]
+}</code></pre>
+<p>
+  A JSON file consumed by the compiler (the <code>lexer-java</code>
+  frontend) and by the BpIde. Distinct from the
+  <code>.bpproject</code>: that one lives at run-time and enumerates compiled
+  <em>.mod</em>; this one lives at build-time and enumerates source <em>.bp</em> +
+  compile dependencies.
+</p>
+<p>
+  Use from the CLI:
+</p>
+<pre><code>lexer-java --project app.bpbuild</code></pre>
+<p>
+  Fields:
+</p>
+<ul>
+  <li><code>projectDir</code> (string, optional): project root.
+      Default = the directory where the <code>.bpbuild</code> is. The rest
+      of the relative paths are resolved with respect to this.</li>
+  <li><code>sourceDir</code> (string, <strong>required</strong>):
+      directory with the project's <code>.bp</code> files.</li>
+  <li><code>outDir</code> (string, <strong>required</strong>):
+      directory where the compiler emits <code>.mod</code> and
+      <code>.bpi</code>. Created on demand.</li>
+  <li><code>main</code> (string, <strong>required</strong>): the logical
+      name of the main module (without extension). The compiler looks for
+      <code>&lt;sourceDir&gt;/&lt;main&gt;.bp</code>.</li>
+  <li><code>dependencies</code> (array of strings, optional): each entry
+      is a directory (looks for any <code>.bpi</code>/<code>.mod</code>
+      inside when resolving imports) or a specific <code>.mod</code>/<code>.bpi</code>
+      file.</li>
+</ul>
+<p>
+  <strong>Import resolution in project mode</strong>:
+</p>
+<ol>
+  <li>Other project sources under <code>sourceDir</code>.</li>
+  <li><code>outDir</code> (already-compiled project modules).</li>
+  <li>Each <code>dependencies</code> entry in order.</li>
+</ol>
+<p>
+  <strong>Integration with the BpIde</strong>: a <code>Project</code> menu with
+  entries <em>New Project...</em>, <em>Open Project...</em>,
+  <em>Close Project</em>. When you open a project the top-left panel
+  shows a NetBeans-style tree with three branches:
+</p>
+<ul>
+  <li><strong>Sources</strong>: all the <code>.bp</code> under <code>sourceDir</code>.</li>
+  <li><strong>Output</strong>: <code>.mod</code> and <code>.bpi</code> under <code>outDir</code>.</li>
+  <li><strong>Dependencies</strong>: the entries of the
+      <code>dependencies</code> field.</li>
+</ul>
+<p>
+  A double click opens the file in the editor. With a project loaded,
+  Run/Debug compiles <code>&lt;sourceDir&gt;/&lt;main&gt;.bp</code> to
+  <code>outDir/&lt;main&gt;.mod</code> and launches the VM pointing at that
+  module. Without a project loaded, Run/Debug keeps using the active
+  file (single-file mode).
+</p>
+<p>
+  The parser accepts <code>//</code> comments. See
+  <code>docs/BpBuild.example</code> for an annotated template.
+</p>
+
+<h3 id="cli-disasm">15.3 Disasm</h3>
+<pre><code>java -cp bpgenvm.jar edu.bpgenvm.tools.Disasm &lt;file.mod&gt;</code></pre>
+<p>
+  Shows the header, imports, exports, data block and the disassembled code
+  with annotations (function name, section, jumps with target).
+</p>
+
+<h3 id="cli-mcu">15.4 Running on microcontrollers (RP2350 / ESP32-S3 / ESP32-P4 / STM32)</h3>
+<p>
+  From the IDE, <em>Run on Device</em> runs the module on an MCU connected
+  over a serial port (the &laquo;wire v1&raquo; protocol): the IDE uploads the <code>.mod</code>
+  (and any missing deps — the stdlib to <code>/lib</code>, the drivers to
+  <code>/app</code>), runs it and shows the output. The files
+  persist in the device's FS across reboots. A running
+  program is aborted with <em>Run → Stop</em> (Ctrl+F2) or the
+  console's <code>kill</code> command, without rebooting the board.
+</p>
+<table>
+  <tr><th>MCU</th><th>Notes</th></tr>
+  <tr><td>RP2350 (Pico 2 / Metro RP2350)</td>
+      <td>Wire v1 over USB-CDC; a single firmware image for both boards
+          (the variant is decided at runtime with <code>/sys/board.json</code>).
+          <code>native</code> functions accelerated by AOT.</td></tr>
+  <tr><td>ESP32-S3 (Xtensa)</td>
+      <td>Wire v1 over UART0 (the USB-UART bridge port); console/logs over
+          the native USB (USB-Serial-JTAG). Persistent FS in a dedicated
+          partition. <code>native</code> interpreted (no AOT on Xtensa).</td></tr>
+  <tr><td>ESP32-P4 (RISC-V)</td>
+      <td>Wire v1 over UART (the USB-UART bridge port). <strong>Single
+          firmware image</strong> for the P4 boards with a display: the panel is
+          chosen at runtime with <code>/sys/board.json</code> (see the
+          <a href="gui.html#ej-pantalla">graphics guide §23.4</a>). FS in
+          PSRAM persisted to flash; GUI on a MIPI-DSI display with touch.
+          <code>native</code> interpreted (no AOT on RISC-V).</td></tr>
+  <tr><td>STM32 (ref. Nucleo-U575ZI-Q)</td>
+      <td>Wire v1 over the ST-LINK's VCP; persistent FS in the last
+          128 KB of the internal flash. <code>native</code> accelerated by AOT
+          (same Cortex-M33 as the RP2350).</td></tr>
+</table>
+<p>
+  The <strong>language and the bytecode are identical</strong> on all
+  platforms (PC, RP2350, ESP32-S3, ESP32-P4, STM32): the same <code>.mod</code>
+  runs on any of them. Only the hardware backend layer (GPIO, I²C,
+  SPI…) and the AOT acceleration, which is architecture-specific, differ.
+</p>
+
+<h4 id="cli-autorun">Autonomous startup (<code>/sys/auto.txt</code>)</h4>
+<p>
+  If the device's FS contains <code>/sys/auto.txt</code>, the firmware
+  runs at boot the module named on its first line (e.g.
+  <code>/app/MyApp.mod</code>) — the board acts as an autonomous device,
+  without an IDE. The convenient way to manage it is the console command
+  <code>autorun</code>:
+</p>
+<pre>
+/&gt; autorun MyApp        ← writes /sys/auto.txt and persists it to flash
+/&gt; autorun              ← shows the current autorun
+/&gt; autorun off          ← disables it (removes the file)
+</pre>
+<p>
+  Autonomous startup is safe by design: the serial port is still
+  serviced <em>while</em> the app runs, so the IDE can connect to
+  a board with an autorun in progress (even an infinite loop),
+  stop it with <code>kill</code> and remove it with <code>autorun off</code> —
+  a reflash is never needed. If the path does not exist or the program ends,
+  the firmware continues to the normal REPL (there are no boot loops). The same
+  caveat as Stop applies here: a long <code>native function</code> is
+  not interruptible until it returns to the interpreter.
+</p>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="artefactos">16. On-disk artifacts</h2>
+
+<h3 id="mod">16.1 <code>.mod</code> (binary, MOD5)</h3>
+<pre>[MAGIC=0x4D4F4435]            4 bytes  "MOD5"
+[dataSize]                    4
+[mainOffset]                  4   offset to __startup, or -1
+[importsSize]                 4
+[exportsSize]                 4
+[codeSize]                    4
+[librarySize]                 4
+--- header (28) ---
+[library  bytes]              librarySize
+[imports  bytes]              importsSize   (name, fromPath) UTF pairs
+[exports  bytes]              exportsSize   (name, offset) pairs
+[data block]                  dataSize      strings, constants, class descriptors
+[code]                        codeSize      bytecode</pre>
+
+<h3 id="bpi">16.2 <code>.bpi</code> (textual interface, v6)</h3>
+<pre>bpi 6
+library com.example
+module Util
+interface true                <span class="comment">// only if module interface</span>
+extends com.example.Base      <span class="comment">// only if a child interface</span>
+implements com.example.LogApi <span class="comment">// only in a concrete module</span>
+func suma(a:integer,b:integer):integer public
+func label(text:string,prefix:string="["):string public  <span class="comment">// defaults travel</span>
+const PI:float=3.14159 public
+enum Color public
+  ROJO=0
+  VERDE=1
+end enum
+class Punto public extends Base   <span class="comment">// full classes (L2 v3)</span>
+  layout 2 5 - -                  <span class="comment">// # fields / vtable size / owner masks</span>
+  ctor(x:integer,y:integer)
+  method modulo():double public
+  prop x:integer public
+end class</pre>
+<p>
+  The <code>.bpi</code> v6 exports functions (with defaults), consts
+  (inlined in the importer), enums, arrays of primitives, tuples in
+  signatures, and <strong>full classes</strong> (layout, constructor,
+  methods, properties, inheritance — even cross-module). All the
+  language's primitive types (incl. <code>long</code>/<code>double</code>/
+  narrow ones) are valid in signatures. It is regenerable: if the version on disk
+  is old, the compiler rebuilds it from the source.
+</p>
+
+<h3 id="dbg">16.3 <code>.dbg</code> (debug information, v3)</h3>
+<pre>dbg 3
+module Str
+source C:\...\Str.bp
+lines
+1474 34          <span class="comment">// bytecode offset → source line</span>
+...
+vars ...         <span class="comment">// variable name → frame slot (per function)</span></pre>
+<p>
+  Generated alongside the <code>.mod</code>. It is consumed by the IDE's debugger for
+  line breakpoints and to show locals by name — both against the
+  local VM and against the device (same format).
+</p>
+
+<h3 id="mdn">16.4 <code>.mdn</code> (AOT overlay)</h3>
+<p>
+  Thumb-2 machine code of a module's <code>native function</code>s
+  (see <a href="manual.html#funciones-native">§8.3</a>). It is <strong>additive</strong>:
+  the <code>.mod</code> always carries the bytecode; if the runtime finds
+  <code>&lt;Module&gt;.mdn</code> and it is of its architecture, it registers those
+  functions as native (zero-copy load, data aligned to 4). Otherwise,
+  everything runs interpreted. The IDE uploads it to the board alongside the
+  <code>.mod</code>.
+</p>
+<p>
+  <strong>Generation (CLI, outside the IDE)</strong>: the <code>.mdn</code> is
+  produced by the <code>build_mdn.sh</code> script in three steps —
+  <code>AotMain</code> emits C, <code>arm-none-eabi-gcc</code> compiles it to
+  Thumb-2 PIC, and <code>MdnPack</code> packs it. It requires the ARM
+  bare-metal toolchain (<code>arm-none-eabi-gcc</code>) on the <code>PATH</code> or
+  in the <code>GCC</code> environment variable. Since v3 the IDE runs this
+  step <strong>automatically</strong> in <em>Run on Device</em> (ARM boards;
+  toolchain detection/configuration in <em>Project → AOT (toolchain)…</em>,
+  installation in the <a href="guia-ide.html#aot">IDE guide §5.1</a>); the
+  script remains for manual or automated builds.
+</p>
+
+<h3 id="proyecto">16.5 <code>.bpbuild</code> / <code>.bpproject</code> (JSON)</h3>
+<pre><span class="comment">// App.bpbuild — the COMPILER's entry (and the IDE's):</span>
+{ "sourceDir": "src", "outDir": "out", "main": "App", "dependencies": [] }
+
+<span class="comment">// App.bpproject — the VM's entry to run:</span>
+{ "main": "out/App.mod", "modulePaths": ["out"] }</pre>
+<p>
+  <code>lexer-java --project App.bpbuild</code> compiles the whole tree;
+  <code>bpgenvm App.bpproject</code> runs it. The IDE uses the
+  <code>.bpbuild</code> as the project definition (the Sources /
+  Resources / Output / Dependencies tree).
+</p>
+
+<!-- =========================================================== -->
+<hr>
+<p style="color:var(--fg-muted); font-size:0.85em">
+  BasicPlus reference manual — generated alongside development.
+  Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) and
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) ·
+  <code>.mod</code> v5 / <code>.bpi</code> v6 formats.
+</p>
+
+</main>
+</div>
+</body>
+</html>
