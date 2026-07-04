@@ -165,7 +165,14 @@ commit del fix si lo hay.)_
   **pico (Metro) COLGÓ mudo** → el bug del cuelgue es del **firmware pico** (su `fs_put`/`compact`
   bajo lleno), **NO del núcleo compartido**. Gran acotación para la sesión de repro. Nota: el FS
   del DK2 (96 KB) es JUSTO para la GUI → hay que **limpiar `/app`** (borrar los `.mod` de prueba)
-  antes de las demos gráficas; ¿ampliar la partición FS del DK2? → V4.
+  antes de las demos gráficas. **(Eduardo 4-jul, buen punto): 96 KB de FS con 2,5 MB de SRAM
+  'no está bien repartido'** — cierto, sobre todo en placa gráfica: `Gui.mod`=31 KB + `Json.mod`
+  =16 KB ya son 47 KB solo en deps. **Arquitectura:** `s_arena[96 KB]` en RAM (`stm32_fs.c:14`)
+  persistido a región flash de 128 KB (`FS_REGION_SIZE`/`BOARD_FS_FLASH_ADDR`). Ampliar = subir
+  `FS_ARENA_SIZE` (RAM, sobra) **+** la región flash (`.ld`/`board.h`, sin colisionar con el
+  programa) **+** `FS_MAX_FILES` → cambio coordinado con prueba de persistencia → **V4** (o
+  sub-tarea pre-publish si se decide agrandar la DK2 gráfica). Un FS más grande **también aliviaría
+  el cuelgue del pico y la truncación del LIST** (los 3 son del mismo tema FS).
 
 - **DK2/stm32 · el explorer no lista todos los ficheros con el FS lleno** (bug CONFIRMADO,
   usabilidad → V4) — `handle_list` (`stm32_repl.c:112`) monta el `LIST_REPLY` en un **buffer fijo
