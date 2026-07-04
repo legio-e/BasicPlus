@@ -191,8 +191,12 @@ commit del fix si lo hay.)_
   tenían el MISMO hueco (`.gpioCount` sí, `.adcChannels`/`.pwmSlices` no) → fallback 4/12.
   **CONFIRMADO en la S3:** PicoInfo dio `ADC channels: 4` / `PWM slices: 12` (debían 20/8).
   Fix **f15b7a5** (esp32 → 20/8; stm32 → 20/28; casan con lo que ya reporta el INFO del wire).
-  **Pendiente:** reflash esp32 (S3) + stm32 (Nucleo) → verificar. **Menor S3 → V4:** `Pico.tempC()`
-  devuelve 0 (el backend esp32 no cablea el sensor de temperatura interno).
+  ✅ **esp32 VERIFICADO en la S3** (reflasheada → PicoInfo da `ADC 20 / PWM 8`, casan con el INFO).
+  Pendiente: stm32 (Nucleo). **Menor S3 → V4:** `Pico.tempC()` devuelve 0 (el backend esp32 no
+  cablea el sensor de temperatura interno). **Nota FS (relevante al cuelgue):** en la S3 el `/app`
+  **PERSISTE** al reflash (partición esp; no RAM-only como el pico — el skip-PUT confirmó
+  `/app/PicoInfo.mod` idéntico tras reflashear) → allí `/app` se acumula, el cuelgue podría
+  alcanzarse antes.
 
 - **Puerta 0 · TryCatch** — el harness daba 1 rojo (V3-Java salía vacío, "paridad
   rota"). **Causa: hueco del arnés, NO regresión del producto.** `try/catch` en V3
