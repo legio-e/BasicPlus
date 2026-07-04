@@ -93,6 +93,26 @@ salga a arreglar, se arregla. Estimación **~1 semana / 10 días**; si se alarga
 El norte es **converger** (que todo FUNCIONE), no añadir features nuevas grandes.
 - **Verificación HW FUSIONADA** (pasos 1+3 de la lista de cierre = UN lote): reflash de confirmación
   (CRC del PUT + reset-cause + RtcDemo) **junto con** las pruebas de pin (I2C/SPI con dispositivo).
+
+### 🧪 PLAN DE PRUEBAS FINALES — 2 GRUPOS (Eduardo, 4-jul; para la visión de conjunto, sin prisa)
+
+Las pruebas de hardware de V3 se organizan en **dos grupos** con profundidad distinta:
+
+**GRUPO 1 — No gráfico: 3 firmwares · 4 placas.** Es una **REGRESIÓN LIGERA**: revisar que todo
+sigue funcionando *sin cambios importantes* (V3 no rompió lo de V2). Firmwares: `pico` (RP2350),
+`esp32` (ESP32-S3), `stm32` (Nucleo). Placas: **Pico 2 · Metro RP2350 · ESP32-S3 DevKit · STM32
+Nucleo-U575**. Contenido: recompilar con las fuentes V3 (eth no-fatal + flush + builtins nuevos) +
+arnés de no-regresión (paridad + programas de prueba) + reset-cause e2e + `^`/`eval` en placa.
+
+**GRUPO 2 — Gráfico: 2 firmwares · 3 placas.** Verificación **COMPLETA**: la parte NO gráfica
+(buses/HW, como el grupo 1) **Y** la parte gráfica (GUI + táctil). Firmwares: `esp32p4` (imagen
+única RISC-V) y el STM32 con display (DK2/LTDC). Placas: **ESP32-P4-Function-EV · Waveshare P4 4.3"
+· STM32 Discovery DK2**. Contenido extra sobre el grupo 1: catálogo de widgets, formularios `.win`,
+color/fuentes, rotación, imagen única (board.json/SetDisplay en las 2 P4), táctil.
+
+**⚠️ A CONFIRMAR (Eduardo):** el mapeo firmware↔placa del STM32 — ¿la Discovery DK2 (con LTDC) es un
+BUILD aparte del `stm32`/Nucleo, o el mismo port compilado con display? De eso depende si son 5
+builds de firmware en total (3+2) o hay solape STM32. Es la única pieza sin fijar del plan.
 - **Documentación (paso 5):** hoy 2 documentos (el **lenguaje** + las **librerías estándar**); la
   **parte gráfica = 3er documento aparte** (el que no quiera gráficos se ahorra esa doc). Es la
   PRÓXIMA tarea al retomar. Después: ver qué documentación EXTRA necesita V3.
