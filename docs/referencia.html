@@ -332,50 +332,50 @@ ol.removeAndFree(<span class="num">0</span>)               <span class="comment"
 
 <h3 id="stdlib-synclist">13.4 <code>SyncList</code></h3>
 <pre><code><span class="kw">var</span> sl: SyncList := SyncList()
-sl.add(Item(<span class="num">1</span>))               <span class="comment">// at�mico</span>
+sl.add(Item(<span class="num">1</span>))               <span class="comment">// atómico</span>
 sl.add(Item(<span class="num">2</span>))
-<span class="kw">var</span> n: <span class="type">integer</span> := sl.length()  <span class="comment">// at�mico</span>
-<span class="kw">var</span> it: Item := sl.get(<span class="num">0</span>)    <span class="comment">// at�mico</span>
-sl.remove(<span class="num">0</span>)                  <span class="comment">// at�mico</span>
-<span class="kw">var</span> last: Item := sl.pop()    <span class="comment">// at�mico; null si est� vac�a</span></code></pre>
+<span class="kw">var</span> n: <span class="type">integer</span> := sl.length()  <span class="comment">// atómico</span>
+<span class="kw">var</span> it: Item := sl.get(<span class="num">0</span>)    <span class="comment">// atómico</span>
+sl.remove(<span class="num">0</span>)                  <span class="comment">// atómico</span>
+<span class="kw">var</span> last: Item := sl.pop()    <span class="comment">// atómico; null si está vacía</span></code></pre>
 <p>
-  Hereda de <code>List</code> y a�ade un <code>Mutex</code> propio por
-  instancia (<code>__mutex</code>). Cada operaci�n p�blica
+  Hereda de <code>List</code> y añade un <code>Mutex</code> propio por
+  instancia (<code>__mutex</code>). Cada operación pública
   (<code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>,
-  <code>remove</code>) est� envuelta con <code>lock</code>/<code>unlock</code>,
-  as� que es segura para llamarse desde m�ltiples threads sin contenci�n
-  externa. M�todos:
+  <code>remove</code>) está envuelta con <code>lock</code>/<code>unlock</code>,
+  así que es segura para llamarse desde múltiples threads sin contención
+  externa. Métodos:
 </p>
 <ul>
   <li><code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>,
-      <code>remove</code>: idem a List, pero <strong>at�micos</strong>.</li>
-  <li><code>pop(): any</code>: extrae y devuelve el �ltimo elemento
-      at�micamente. Si la lista est� vac�a, devuelve <code>null</code>
+      <code>remove</code>: idem a List, pero <strong>atómicos</strong>.</li>
+  <li><code>pop(): any</code>: extrae y devuelve el último elemento
+      atómicamente. Si la lista está vacía, devuelve <code>null</code>
       (sentinel). Primitiva canon para producer/consumer queues.</li>
 </ul>
 <p>
-  <strong>Garant�a</strong>: cada operaci�n individual es serializable
+  <strong>Garantía</strong>: cada operación individual es serializable
   respecto al resto. Una lectura nunca devuelve estado parcial; un
-  <code>pop</code> nunca duplica ni pierde el �ltimo elemento entre
+  <code>pop</code> nunca duplica ni pierde el último elemento entre
   threads.
 </p>
 <p>
-  <strong>L�mite a recordar</strong>: SyncList garantiza atomicidad
-  <em>por operaci�n individual</em>. Una secuencia compuesta como
+  <strong>Límite a recordar</strong>: SyncList garantiza atomicidad
+  <em>por operación individual</em>. Una secuencia compuesta como
   &quot;si <code>length() &gt; 0</code> entonces <code>get(0)</code>&quot;
-  NO es at�mica como bloque � otro thread puede colarse entre las dos
-  llamadas y dejar la lista vac�a. Para read-modify-write compuestos
+  NO es atómica como bloque — otro thread puede colarse entre las dos
+  llamadas y dejar la lista vacía. Para read-modify-write compuestos
   toma un <a href="#stdlib-mutex">Mutex</a> externo alrededor del bloque,
-  o usa <code>pop()</code> que combina chequeo y extracci�n en una sola
-  operaci�n at�mica.
+  o usa <code>pop()</code> que combina chequeo y extracción en una sola
+  operación atómica.
 </p>
 <p>
-  <strong>Implementaci�n</strong>: SyncList extiende <code>List</code> y
-  a�ade un field <code>__mutex</code> inicializado en el constructor. Cada
-  m�todo override hace <code>this.__mutex.lock()</code>, llama directamente
-  al m�todo correspondiente de <code>List</code> (sin re-virtualizar) y
-  hace <code>this.__mutex.unlock()</code>. <code>pop()</code> es el �nico
-  m�todo nuevo (no existe en <code>List</code>).
+  <strong>Implementación</strong>: SyncList extiende <code>List</code> y
+  añade un field <code>__mutex</code> inicializado en el constructor. Cada
+  método override hace <code>this.__mutex.lock()</code>, llama directamente
+  al método correspondiente de <code>List</code> (sin re-virtualizar) y
+  hace <code>this.__mutex.unlock()</code>. <code>pop()</code> es el único
+  método nuevo (no existe en <code>List</code>).
 </p>
 
 <h3 id="stdlib-sb">13.5 <code>StringBuilder</code></h3>
