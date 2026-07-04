@@ -101,6 +101,10 @@ el GC mark-sweep lo recoja** (no permanente, pero las owner-semantics prometen f
 - **Rollout de gráficos a más kits** (solo equipos con recursos de sobra).
 - **IDE multiplataforma** (`purejavacomm → jSerialComm`, lanzador `.sh`).
 - **Strings multilínea + interpolación** (tanda de lenguaje).
+- **Valores-función / closures** (tanda de lenguaje; charla 20-jun + 4-jul): hoy NO se pueden pasar
+  métodos como parámetros (modismos: override virtual u objeto-Runnable). Habilitaría el
+  `async(…)`/`invokeLater(…)` ergonómico del GUI (ver nota "GUI-blocking-from-event" en V3_BACKLOG).
+  Interactúa con la sobrecarga (nº 4 del índice): una referencia a método debe elegir firma.
 - **`deflate`-lite** (LZSS → +Huffman) · **multi-fichero/Archive**.
 - **Layout compacto de narrow** (`byte[]`/`int16[]` con storage real; hoy i32).
 
