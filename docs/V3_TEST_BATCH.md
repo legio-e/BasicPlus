@@ -112,7 +112,7 @@ ahora tiene la de P5, sin la stdlib unificada.
 | Placa | Pantalla enciende | Catálogo widgets | Color/fuentes | Formulario `.win` | Táctil | Rotación | Imagen única (board.json) |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **P4 Function-EV** (ek79007, default) | [x] | [x] | [x] | [x] | [x] | [x]⁵ | [x] (sin json = EV) |
-| **Waveshare P4** (st7701) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] (`SetDisplay.bp` → st7701) |
+| **Waveshare P4** (st7701) | [x] | [x] | [x] | [x] | [x] | [x]⁶ | [x] (`SetDisplay.bp` → st7701) |
 | **STM32 DK2** (LTDC) | [x] | [x] | [x] | —⁴ | [x] | n/a² | n/a |
 
 ² La rotación (`Gui.setRotation`) no está en la DK2/LTDC en esta versión (avisa y sigue).
@@ -131,6 +131,16 @@ hoy **re-confirmado sobre el build actual**: INFO (14/14 backend limpio) + parid
 **FormDemo** (formulario `.win`, handlers `onSaludar`/checkbox disparan por táctil). Pantalla ek79007
 + widgets + color + táctil OK. **Rotación ✅** (`GuiRotDemo`: gira 90/180/270/0 al tocar; las
 dimensiones del árbol pasan de 480×320 a 320×480 = giro real — lo que el DK2/LTDC NO puede).
+
+⁶ Rotación en la Waveshare no probada explícitamente, pero es el **MISMO firmware que la EV**
+(donde ✅) — mecanismo idéntico.
+
+> ### 🏁 GRUPO 2 COMPLETO (4-jul) — 3/3 placas gráficas
+> **P4-EV · Waveshare-P4 · DK2** verificadas. **Imagen única P4 DEMOSTRADA en placa:** el mismo
+> `bpvm_esp32p4` (byte a byte) enciende **ek79007** (EV) *y* **st7701** (Waveshare) vía `board.json`
+> — un binario, dos paneles P4, elegido en runtime. GUI + táctil + forms + rotación en el P4;
+> GUI + táctil + forms en el DK2. **Salvedad DK2:** el formulario `.win` queda bloqueado por su FS
+> de 96 KB (mecanismo verificado en P4) → sub-tarea de agrandar el FS del DK2 (V4/pre-publish).
 **Pendiente genuino del Grupo 2: Waveshare P4** (2ª placa, `SetDisplay.bp`→st7701) = imagen única
 sobre el build FINAL (la memoria: re-flashear la Waveshare con la imagen final).
 
@@ -143,11 +153,15 @@ sobre el build FINAL (la memoria: re-flashear la Waveshare con la imagen final).
 
 ## Cosas NUEVAS de V3 a confirmar (transversal, marcar donde aplique)
 
-- [ ] **eth_init no-fatal** (P4): la imagen del EV arranca en una placa SIN PHY (la
-      Waveshare) — ya visto en P1, reconfirmar tras el rebuild final.
-- [ ] **Imagen única P4**: la MISMA imagen sirve a las 2 placas P4 vía `/sys/board.json`.
-- [ ] **reset-cause e2e** (3 familias no-P4 + P4): forzar un reset (power-on, watchdog,
-      botón) → INFO muestra la causa correcta.
+- [x] **eth_init no-fatal** (P4): la imagen del EV arranca en una placa SIN PHY (la
+      Waveshare) — ya visto en P1, **reconfirmado 4-jul**: la Waveshare (sin Ethernet) bootea
+      con la imagen final byte-idéntica a la EV, INFO limpio.
+- [x] **Imagen única P4**: la MISMA imagen sirve a las 2 placas P4 vía `/sys/board.json`.
+      **DEMOSTRADO en placa (4-jul):** el mismo `bpvm_esp32p4` (byte a byte) enciende **ek79007**
+      (EV) *y* **st7701** (Waveshare) — GUI + táctil + forms (`FormDemo`) verificados en ambos paneles.
+- [x] **reset-cause e2e** (3 familias no-P4 + P4): forzar un reset (power-on, watchdog,
+      botón) → INFO muestra la causa correcta. ✅ **4-jul:** Pico/Metro/S3/Nucleo/DK2/P4 muestran
+      la causa en INFO (Nucleo/DK2 `pin (NRST)` tras el botón de reset; P4/S3 power-on).
 - [x] **`^` (potencia) y `eval`** en placa: correr en las ARM (Pico/Metro/Nucleo — AOT) y
       en ESP32 (interpretado) — misma salida que host. **Pico 2 ✅ (4-jul):** H7Pow/H7Eval
       byte-idénticos al host; **AOT** confirmado con `fibobench` (native==interpretado=4160200,
