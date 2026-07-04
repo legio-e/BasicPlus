@@ -28,6 +28,11 @@ cambios importantes"). NO es re-test exhaustivo de sensores — es un pase smoke
 placa. 3 firmwares · 4 placas.
 
 **Paso 0 (Eduardo, por placa):** recompilar el firmware con las fuentes V3 y flashear.
+**⚠ NO reutilizar imágenes viejas** (p.ej. el `.uf2` del 15/06): son anteriores a `^`,
+`eval`, reset-cause-en-INFO, CRC skip-PUT y base-dir #268 del núcleo → falsas regresiones.
+**Blobs stdlib embebidos regenerados** (eran rancios, pre-ADC/PWM del 26/06): Pico
+`pico_mod.c` (1edb72c) y STM32 `stm32_mods.c` (9feee77); ESP32 ya estaba fresco. El
+rebuild los recoge — no hace falta nada más por tu parte.
 
 **Peldaños por placa** (de H14; marcar los que apliquen a lo que tengas cableado):
 
@@ -113,6 +118,13 @@ ahora tiene la de P5, sin la stdlib unificada.
 
 _(Cada fallo: placa · peldaño · síntoma · ¿bug de V3 o de cableado/entorno? ·
 commit del fix si lo hay.)_
+
+- **Paso 0 · blobs stdlib embebidos rancios** (Pico + STM32) — al comprobar si el `.uf2`
+  del 15/06 servía, se detectó que el `Pico.mod` horneado en los firmwares Pico y STM32
+  era anterior al cambio ADC/PWM board-aware (26/06): `pico_mod` embebido ≠ `bpstdlib`.
+  Mismo skew [[stdlib-mod-version-skew-oo-device]] que mordió en S3/P4. Regenerados con
+  `regen_*_mods.sh` (Pico 1edb72c, STM32 9feee77); ESP32 ya fresco. El build no regenera
+  el blob solo → hay que correr el regen antes de recompilar. Detectado en PC, sin gastar flash.
 
 - **Puerta 0 · TryCatch** — el harness daba 1 rojo (V3-Java salía vacío, "paridad
   rota"). **Causa: hueco del arnés, NO regresión del producto.** `try/catch` en V3
