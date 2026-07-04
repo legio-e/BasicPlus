@@ -110,9 +110,19 @@ arnés de no-regresión (paridad + programas de prueba) + reset-cause e2e + `^`/
 · STM32 Discovery DK2**. Contenido extra sobre el grupo 1: catálogo de widgets, formularios `.win`,
 color/fuentes, rotación, imagen única (board.json/SetDisplay en las 2 P4), táctil.
 
-**⚠️ A CONFIRMAR (Eduardo):** el mapeo firmware↔placa del STM32 — ¿la Discovery DK2 (con LTDC) es un
-BUILD aparte del `stm32`/Nucleo, o el mismo port compilado con display? De eso depende si son 5
-builds de firmware en total (3+2) o hay solape STM32. Es la única pieza sin fijar del plan.
+**✅ RESUELTO (Eduardo, 4-jul): DOS imágenes STM32 SEPARADAS** — Nucleo-U575 (no gráfica, grupo 1) y
+Discovery DK2/LTDC (gráfica, grupo 2) son **builds distintos**, NO una imagen compartida. Motivos:
+(1) nunca se probó que el firmware de una corra en la otra, y la sospecha es que NO — o peor, "que
+unas cosas funcionen y otras no" → no arriesgar; (2) de todas formas serían dos, porque una lleva la
+parte gráfica y la otra no. → **Total del batch = 5 builds de firmware** (grupo 1: pico + esp32-S3 +
+stm32-Nucleo; grupo 2: esp32p4 + stm32-DK2). Nótese el contraste: RP2350 (1 imagen para Pico+Metro)
+y ESP32-P4 (1 imagen para las 2 placas con pantalla) SÍ son genéricas por runtime; el STM32 NO
+(Nucleo≠DK2). **Publicación: 5 binarios** (ver lista abajo).
+
+**Por qué publicar imágenes precompiladas (Eduardo, 4-jul):** para que **los usuarios NO tengan que
+compilar todo el código C** — que exige bajarse todas las herramientas e imágenes de los fabricantes
+(pico-sdk, ESP-IDF, STM32Cube, toolchains ARM/RISC-V). El binario listo-para-flashear es el producto.
+Refuerza la filosofía "una imagen por chip, genérica" y la nomenclatura `_generic`.
 - **Documentación (paso 5):** hoy 2 documentos (el **lenguaje** + las **librerías estándar**); la
   **parte gráfica = 3er documento aparte** (el que no quiera gráficos se ahorra esa doc). Es la
   PRÓXIMA tarea al retomar. Después: ver qué documentación EXTRA necesita V3.
