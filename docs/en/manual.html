@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BasicPlus — Language manual</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    font-size: 0.92rem;
+  }
+  nav.toc h2 {
+    margin: 0 0 .5rem 0;
+    font-size: 0.95rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav.toc ul { list-style: none; padding-left: 0; margin: 0 0 1rem 0; }
+  nav.toc li { margin: 0.1rem 0; }
+  nav.toc a {
+    color: var(--fg);
+    text-decoration: none;
+    display: block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+  nav.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+  nav.toc .group { margin-top: 0.8rem; }
+  nav.toc .sub { padding-left: 0.8rem; font-size: 0.85rem; color: var(--fg-muted); }
+
+  main {
+    padding: 2rem 3rem 6rem;
+    max-width: 900px;
+  }
+  h1 {
+    color: var(--accent);
+    margin-top: 0;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+  }
+  h2 {
+    color: var(--accent);
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 { margin-top: 1.8rem; color: #333; }
+  h4 { margin-top: 1.2rem; color: var(--fg-muted); }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.4;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.88em;
+  }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .note p:first-child, .warn p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ul>
+  <ul>
+    <li><a href="#intro">1. Introduction</a></li>
+    <li><a href="#hello">2. Hello world</a></li>
+    <li class="group"><a href="#lexico">3. Lexical structure</a></li>
+    <li class="sub"><a href="#comentarios">3.1 Comments</a></li>
+    <li class="sub"><a href="#identificadores">3.2 Identifiers</a></li>
+    <li class="sub"><a href="#keywords">3.3 Reserved words</a></li>
+    <li class="sub"><a href="#literales">3.4 Literals</a></li>
+
+    <li class="group"><a href="#tipos">4. Types</a></li>
+    <li class="sub"><a href="#primitivos">4.1 Primitives</a></li>
+    <li class="sub"><a href="#arrays">4.2 Arrays (fixed vs variable)</a></li>
+    <li class="sub"><a href="#enums">4.3 Enums</a></li>
+    <li class="sub"><a href="#clases-tipo">4.4 Classes</a></li>
+    <li class="sub"><a href="#any">4.5 any</a></li>
+
+    <li class="group"><a href="#declaraciones">5. Declarations</a></li>
+    <li class="sub"><a href="#var">5.1 var</a></li>
+    <li class="sub"><a href="#const">5.2 const</a></li>
+    <li class="sub"><a href="#var-owner">5.3 var owner</a></li>
+
+    <li class="group"><a href="#operadores">6. Operators</a></li>
+    <li class="group"><a href="#control">7. Control flow</a></li>
+    <li class="sub"><a href="#if">7.1 if / elseif</a></li>
+    <li class="sub"><a href="#while">7.2 while / do</a></li>
+    <li class="sub"><a href="#for">7.3 for</a></li>
+    <li class="sub"><a href="#switch">7.4 switch</a></li>
+    <li class="sub"><a href="#breakcont">7.5 break / continue</a></li>
+    <li class="sub"><a href="#parallel">7.6 parallel / endpar</a></li>
+
+    <li class="group"><a href="#funciones">8. Functions</a></li>
+    <li class="sub"><a href="#defaults">8.1 Default parameter values</a></li>
+    <li class="sub"><a href="#tuplas">8.2 Tuples (multiple return)</a></li>
+    <li class="sub"><a href="#funciones-native">8.3 native functions (AOT)</a></li>
+    <li class="group"><a href="#clases">9. Classes</a></li>
+    <li class="sub"><a href="#campos">9.1 Fields</a></li>
+    <li class="sub"><a href="#metodos">9.2 Methods</a></li>
+    <li class="sub"><a href="#ctor">9.3 Constructor</a></li>
+    <li class="sub"><a href="#herencia">9.4 Inheritance</a></li>
+    <li class="sub"><a href="#props">9.5 Properties</a></li>
+    <li class="sub"><a href="#static">9.6 Static members / final</a></li>
+    <li class="sub"><a href="#fields-owner">9.7 Fields owner</a></li>
+
+    <li class="group"><a href="#modulos">10. Modules</a></li>
+    <li class="sub"><a href="#library">10.1 library</a></li>
+    <li class="sub"><a href="#main">10.2 main / initializer</a></li>
+    <li class="sub"><a href="#imports">10.3 import / from</a></li>
+    <li class="sub"><a href="#interfaces">10.4 module interface</a></li>
+    <li class="sub"><a href="#implements">10.5 implements</a></li>
+    <li class="sub"><a href="#binding">10.6 Binding I:Impl</a></li>
+    <li class="sub"><a href="#encapsulacion">10.7 Class↔module encapsulation</a></li>
+
+    <li class="group"><a href="#excepciones">11. Exceptions</a></li>
+    <li class="group"><a href="#owner">12. Owner semantics</a></li>
+
+    <li class="group"><a href="#concurrencia">14. Concurrency</a></li>
+    <li class="sub"><a href="#conc-modelo">14.1 Execution model</a></li>
+    <li class="sub"><a href="#conc-preempt">14.2 Preemption and yield</a></li>
+    <li class="sub"><a href="#conc-encapsulacion">14.3 Encapsulation of case bodies</a></li>
+    <li class="sub"><a href="#conc-gc">14.4 GC and concurrency</a></li>
+
+
+
+    <li class="group"><a href="#pendientes">17. Pending / not supported</a></li>
+  </ul>
+  <h2>Reference (separate volume)</h2>
+  <ul>
+    <li class="group"><a href="referencia.html#stdlib">13. Standard library</a></li>
+    <li class="group"><a href="referencia.html#cli">15. Compilation &amp; execution</a></li>
+    <li class="group"><a href="referencia.html#artefactos">16. On-disk artifacts</a></li>
+  </ul>
+  <h2>Graphics (separate volume)</h2>
+  <ul>
+    <li class="group"><a href="gui.html#intro">18–25. Graphical interface (<code>Gui</code>)</a></li>
+  </ul>
+  <h2>Other volumes</h2>
+  <ul>
+    <li><a href="../manual.html">🇪🇸 Español</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<h1>BasicPlus — Language manual</h1>
+<p style="color:var(--fg-muted)">
+  A structured, typed, module-oriented language. A Java frontend compiles to
+  its own bytecode (the <code>.mod</code> v5 format, "MOD5"), executed by the
+  <code>bpgenvm</code> VM (mark-and-sweep GC, deterministic owner handling,
+  typed exceptions).
+</p>
+
+<!-- =========================================================== -->
+<h2 id="intro">1. Introduction</h2>
+<p>
+  BasicPlus (BP) takes the friendly syntax of Basic / Pascal and combines it
+  with modern semantics: classes with single inheritance, modules as
+  Modula-2-style units, interfaces as contracts, exception handling, and
+  deterministic "ownership" for immediate release of resources.
+</p>
+<p>The overall pipeline is:</p>
+<pre><code><span class="comment">// 1) Compilation: each module → a .mod (binary) and a .bpi (textual interface)</span>
+java -jar basicplus-frontend.jar samples/hola.bp --compile out --backend=mivm
+
+<span class="comment">// 2) Execution: the VM loads the root .mod; the .mod files of its imports are
+//    found by the convention <library>.<Module>.mod or via 'from "..."'</span>
+java -jar bpgenvm.jar out/Hola.mod</code></pre>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="hello">2. Hello world</h2>
+<pre><code><span class="kw">module</span> Hola
+
+  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+    <span class="kw">print</span> <span class="str">"hello, "</span> + arg
+  <span class="kw">end</span> main
+
+<span class="kw">end</span> Hola</code></pre>
+
+<p>
+  The minimum: a <code>module</code>, a <code>function main(arg: string)</code>,
+  and matched <code>end</code>s. The VM passes an empty string to
+  <code>main</code> when there are no arguments.
+</p>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="lexico">3. Lexical structure</h2>
+
+<h3 id="comentarios">3.1 Comments</h3>
+<p>Line comments only, with <code>//</code> to the end of the line.</p>
+<pre><code><span class="comment">// this is a comment</span></code></pre>
+
+<h3 id="identificadores">3.2 Identifiers</h3>
+<p>
+  A letter or <code>_</code> followed by letters, digits or <code>_</code>.
+  Case-sensitive. Names starting with a double underscore
+  (<code>__name</code>) are reserved by convention for the compiler and the
+  stdlib (e.g. <code>__init</code>, <code>__newRefArray</code>).
+</p>
+
+<h3 id="keywords">3.3 Reserved words</h3>
+<table>
+  <tr><th>Category</th><th>Tokens</th></tr>
+  <tr><td>Structure</td>
+      <td><code>module</code> <code>end</code> <code>import</code> <code>library</code> <code>from</code> <code>interface</code> <code>implements</code></td></tr>
+  <tr><td>Declarations</td>
+      <td><code>const</code> <code>var</code> <code>function</code> <code>native</code> <code>class</code> <code>extends</code> <code>enum</code>
+          <code>property</code> <code>get</code> <code>set</code> <code>endprop</code> <code>endget</code> <code>endset</code></td></tr>
+  <tr><td>Visibility / modifiers</td>
+      <td><code>public</code> <code>final</code> <code>owner</code> <code>sync</code></td></tr>
+  <tr><td>Instance</td>
+      <td><code>this</code> <code>super</code> <code>field</code></td></tr>
+  <tr><td>Control flow</td>
+      <td><code>if</code> <code>then</code> <code>else</code> <code>elseif</code> <code>endif</code>
+          <code>while</code> <code>do</code> <code>endwh</code>
+          <code>for</code> <code>to</code> <code>step</code> <code>in</code> <code>next</code>
+          <code>switch</code> <code>case</code> <code>default</code> <code>endsw</code>
+          <code>parallel</code> <code>endpar</code>
+          <code>break</code> <code>continue</code> <code>return</code></td></tr>
+  <tr><td>Exceptions</td>
+      <td><code>try</code> <code>catch</code> <code>finally</code> <code>endtry</code> <code>throw</code> <code>instanceof</code></td></tr>
+  <tr><td>Booleans / null</td>
+      <td><code>true</code> <code>false</code> <code>null</code></td></tr>
+  <tr><td>Word operators</td>
+      <td><code>and</code> <code>or</code> <code>not</code> <code>mod</code>
+          <code>xor</code> <code>shl</code> <code>shr</code></td></tr>
+  <tr><td>I/O</td>
+      <td><code>print</code></td></tr>
+</table>
+
+<h3 id="literales">3.4 Literals</h3>
+<table>
+  <tr><th>Type</th><th>Examples</th></tr>
+  <tr><td>Integer</td><td><code>0</code> <code>42</code> <code>-7</code> <code>0xFF</code> (hex) <code>0b1010</code> (binary)</td></tr>
+  <tr><td>Long</td><td><code>123L</code> <code>4000000000L</code> — <code>L</code>/<code>l</code> suffix on a decimal integer</td></tr>
+  <tr><td>Float</td><td><code>3.14</code> <code>1.0e-3</code> — with no suffix, a literal with a point or exponent is a <code>float</code> (f32)</td></tr>
+  <tr><td>Double</td><td><code>1.5d</code> <code>5d</code> <code>2e3d</code> — <code>d</code>/<code>D</code> suffix on an integer or float</td></tr>
+  <tr><td>String</td><td><code>"hola"</code> with escapes <code>\n \t \r \" \\ \0</code></td></tr>
+  <tr><td>Boolean</td><td><code>true</code> <code>false</code></td></tr>
+  <tr><td>Null</td><td><code>null</code> (references only: classes and arrays)</td></tr>
+</table>
+<p>
+  Any numeric literal may include a <strong>visual separator <code>_</code></strong>
+  between digits (Python-style); the value is identical to the one without it. It works in
+  decimal, hex, binary, the fractional part and the exponent:
+  <code>1_000_000</code> · <code>0xDE_AD</code> · <code>0b1111_0000</code> ·
+  <code>2_000_000L</code> · <code>1_234.5</code> · <code>1_0e2</code>.
+</p>
+
+<h3 id="multilinea">3.5 Line continuation</h3>
+<p>
+  A newline ends the statement, <strong>except inside open parentheses or
+  brackets</strong>: there the newline is not significant and the expression
+  continues on the next line. To split a long expression, wrap it in
+  <code>( )</code>:
+</p>
+<pre><code><span class="kw">print</span> (<span class="str">"total = "</span> + intToString(a)
+    + <span class="str">" / "</span> + intToString(b))      <span class="comment">// OK: inside ( )</span>
+
+<span class="kw">var</span> v: <span class="type">integer</span>[] := [<span class="num">1</span>, <span class="num">2</span>,
+                       <span class="num">3</span>, <span class="num">4</span>]          <span class="comment">// OK: inside [ ]</span></code></pre>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="tipos">4. Types</h2>
+
+<h3 id="primitivos">4.1 Primitives</h3>
+<table>
+  <tr><th>Type</th><th>Range / detail</th></tr>
+  <tr><td><code>integer</code></td><td>Signed 32-bit integer (-2³¹..2³¹-1)</td></tr>
+  <tr><td><code>long</code></td><td>Signed 64-bit integer. Literal with <code>L</code> suffix: <code>4000000000L</code></td></tr>
+  <tr><td><code>float</code></td><td>IEEE-754 32-bit</td></tr>
+  <tr><td><code>double</code></td><td>IEEE-754 64-bit. Literal with <code>d</code> suffix: <code>1.5d</code></td></tr>
+  <tr><td><code>byte</code></td><td>Narrow unsigned integer, 8 bits (0..255)</td></tr>
+  <tr><td><code>int8</code></td><td>Narrow signed integer, 8 bits (-128..127)</td></tr>
+  <tr><td><code>word</code></td><td>Narrow unsigned integer, 16 bits (0..65535)</td></tr>
+  <tr><td><code>int16</code></td><td>Narrow signed integer, 16 bits (-32768..32767). <code>short</code> is an alias for <code>int16</code></td></tr>
+  <tr><td><code>string</code></td><td>Immutable; internally UTF-8, indexing and <code>len()</code> by <em>code point</em> (<code>len("héllo") = 5</code>)</td></tr>
+  <tr><td><code>boolean</code></td><td><code>true</code> / <code>false</code></td></tr>
+</table>
+<p>
+  The <strong>narrow</strong> types (<code>byte</code>/<code>int8</code>/
+  <code>word</code>/<code>int16</code>) are <em>storage</em> types: in arrays
+  and fields they occupy 1–2 bytes per element; on the stack and in
+  expressions they operate as <code>integer</code> (a read sign-extends or
+  zero-extends according to the type). Assigning an out-of-range literal is a
+  compile error, with the exact range in the message.
+</p>
+<h4>4.1.1 Promotion and casts</h4>
+<p>
+  In mixed operations and assignment there is <strong>automatic promotion to
+  the widest type</strong>: <code>integer → long → float → double</code> (the
+  narrow types are promoted to <code>integer</code> first). The opposite
+  direction is NEVER implicit: narrowing requires an <strong>explicit
+  cast</strong> using the call syntax of the target type:
+</p>
+<pre><code><span class="kw">var</span> d: <span class="type">double</span> := <span class="num">3.9d</span>
+<span class="kw">var</span> i: <span class="type">integer</span> := integer(d)     <span class="comment">// 3 — truncates toward zero (integer(-3.9d) = -3)</span>
+<span class="kw">var</span> L: <span class="type">long</span>    := long(i)        <span class="comment">// explicit widening is available too</span>
+<span class="kw">var</span> f: <span class="type">float</span>   := float(L)
+<span class="kw">var</span> b: <span class="type">byte</span>    := byte(i)        <span class="comment">// validates the RANGE at runtime:</span>
+                                  <span class="comment">// outside 0..255 throws RuntimeError (catchable)</span></code></pre>
+<p>
+  The numeric casts are <code>integer(x)</code>, <code>long(x)</code>,
+  <code>float(x)</code>, <code>double(x)</code> and the narrow ones
+  <code>byte(x)</code>, <code>int8(x)</code>, <code>word(x)</code>,
+  <code>int16(x)</code>. <code>integer(x)</code> on a float/double
+  <em>truncates toward zero</em>; to round, use <code>floor</code>,
+  <code>ceil</code> or <code>round</code>. Casting a literal outside the
+  target type's range is rejected at compile time.
+</p>
+
+<h3 id="arrays">4.2 Arrays</h3>
+<p>
+  An array is an indexable sequence of elements of the same type. BP
+  distinguishes <strong>two variants</strong> depending on whether the size is
+  known at declaration time, and that determines <em>where</em> the storage
+  lives.
+</p>
+
+<h4>4.2.1 Fixed-size arrays &nbsp;<code>T[N]</code></h4>
+<p>
+  The size is an <strong>integer literal &gt; 0</strong> known at compile time,
+  and the elements are <strong>primitives</strong> (integers, narrow types,
+  <code>long</code>, <code>float</code>, <code>double</code>,
+  <code>boolean</code> — for <code>string</code> or classes use
+  <code>T[]</code>). The variable <em>IS</em> the array: it has a
+  <strong>fixed binding</strong> (it cannot be reassigned; its elements are
+  writable, though). Where it lives depends on the scope:
+</p>
+<table>
+  <tr><th>Scope</th><th>Where it lives</th></tr>
+  <tr><td>Module global</td><td>Baked into the data block of the <code>.mod</code> (including the literal initializer): zero heap and zero startup code.</td></tr>
+  <tr><td>Function local</td><td>An N-element heap array, zero-allocated when the declaration is entered. Managed by the GC like any array.</td></tr>
+  <tr><td>Class field</td><td><strong>Not supported</strong> (compile error): declare <code>T[]</code> and initialize it in the constructor with <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.</td></tr>
+</table>
+<pre><code><span class="comment">// Module: baked into the data block; the literal initializer may be shorter</span>
+<span class="comment">// than N — the rest stays at zero. [1,2,250] fits in byte[4] (it is validated</span>
+<span class="comment">// element by element, not by array assignability).</span>
+<span class="kw">var</span> tabla: <span class="type">integer</span>[<span class="num">4</span>] := [<span class="num">10</span>, <span class="num">20</span>, <span class="num">30</span>]   <span class="comment">// → 10,20,30,0</span>
+<span class="kw">var</span> mascara: <span class="type">byte</span>[<span class="num">4</span>] := [<span class="num">1</span>, <span class="num">2</span>, <span class="num">250</span>]
+
+<span class="kw">function</span> Main()
+  <span class="comment">// Local: N elements at zero on the heap; len() and iteration work</span>
+  <span class="kw">var</span> buf: <span class="type">byte</span>[<span class="num">64</span>]                    <span class="comment">// typical I2C/SPI buffer</span>
+  buf[<span class="num">0</span>] := <span class="num">42</span>
+  <span class="kw">print</span> len(buf)                       <span class="comment">// 64</span>
+  <span class="comment">// buf := other    ← error: fixed binding (write to its elements instead)</span>
+<span class="kw">end</span> Main</code></pre>
+<p>
+  A local fixed array is a normal heap array: it can be passed to a function
+  that takes <code>T[]</code> and disappears via GC once it is no longer
+  referenced. The module one lives in the data block and is never freed. There
+  are no <em>const</em> arrays: a module <code>const</code> only accepts
+  primitive literals (see <a href="#const">§5.2</a>).
+</p>
+
+<h4>4.2.2 Variable-size arrays &nbsp;<code>T[]</code></h4>
+<p>
+  The size is decided at run time. The array is allocated on the
+  <strong>heap</strong> (opcode <code>NEWARRAY</code>) and referenced through a
+  ref (an i32 holding the pointer to the block). Managed by the GC.
+</p>
+<pre><code><span class="comment">// From a literal: the frontend emits NEWARRAY n + an ASTORE for each element</span>
+<span class="kw">var</span> primos: <span class="type">integer</span>[] := [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>, <span class="num">11</span>]
+
+<span class="comment">// From a function: split, listDir, etc. return arrays</span>
+<span class="kw">var</span> partes: <span class="type">string</span>[] := split(<span class="str">"a,b,c"</span>, <span class="str">","</span>)
+<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)</code></pre>
+<p>
+  The VM uses five physical heap types depending on the element width:
+  <code>TYPE_ARRAY_I8</code> (byte/int8 and UTF-8 strings),
+  <code>TYPE_ARRAY_I16</code> (word/int16),
+  <code>TYPE_ARRAY_I32</code> (integer; also floats, as 4 opaque bytes),
+  <code>TYPE_ARRAY_I64</code> (long/double, 8 bytes per element) and
+  <code>TYPE_ARRAY_REF</code> (4 bytes, object refs, scanned by the GC). The
+  array carries its own length as the first slot. For the narrow widths, a read
+  extends the value to i32 (signed or unsigned according to the type) and a
+  write truncates to the element width.
+</p>
+
+<h4>4.2.3 Access and iteration</h4>
+<p>
+  Indexed with <code>arr[i]</code> (0-based). <code>for-in</code> iterates over
+  all elements (see <a href="#for">§7.3</a>).
+</p>
+<pre><code><span class="kw">for</span> n <span class="kw">in</span> primos <span class="kw">do</span>
+  total += n
+<span class="kw">next</span> n</code></pre>
+
+<div class="note">
+  For <strong>dynamic</strong> collections (grow, shrink, mixed types), use
+  <a href="referencia.html#stdlib-list"><code>List</code></a> or
+  <a href="referencia.html#stdlib-ownerlist"><code>OwnerList</code></a> instead of
+  <code>T[]</code>. <code>T[]</code> arrays have a fixed size after creation
+  (there is no <code>append</code>); <code>List</code> resizes internally.
+</div>
+
+<h3 id="enums">4.3 Enums</h3>
+<pre><code><span class="kw">public enum</span> Dia
+  LUNES               <span class="comment">// = 0</span>
+  MARTES              <span class="comment">// = 1</span>
+  MIERCOLES
+  JUEVES
+  VIERNES
+  SABADO := <span class="num">10</span>          <span class="comment">// explicit jump</span>
+  DOMINGO             <span class="comment">// = 11</span>
+<span class="kw">end</span> Dia
+
+<span class="kw">var</span> d: Dia := Dia.MIERCOLES</code></pre>
+<p>
+  Enums are symbolic names for <code>integer</code> constants. They auto-number
+  from 0 unless assigned explicitly.
+</p>
+
+<h3 id="clases-tipo">4.4 Classes</h3>
+<p>
+  Any <code>class Foo ... end Foo</code> introduces a type <code>Foo</code>
+  usable as a variable, parameter and return type. Refs admit
+  <code>null</code>.
+</p>
+
+<h3 id="any">4.5 <code>any</code></h3>
+<p>
+  An internal type used by some stdlib signatures (e.g.
+  <code>List.add(item: any)</code>). It is bidirectionally assignable: any ref
+  goes in, and any target type accepts a value of type <code>any</code>. You
+  cannot write <code>any</code> as a type in BP source.
+</p>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="declaraciones">5. Declarations</h2>
+
+<h3 id="var">5.1 <code>var</code></h3>
+<pre><code><span class="kw">var</span> nombre: <span class="type">string</span>
+<span class="kw">var</span> edad:   <span class="type">integer</span> := <span class="num">30</span>
+<span class="kw">var</span> total:  <span class="type">long</span> := <span class="num">0L</span>
+<span class="kw">var</span> media:  <span class="type">double</span>
+<span class="kw">var</span> x, y, z: <span class="type">integer</span>                  <span class="comment">// multiple names</span>
+<span class="kw">var</span> pts: <span class="type">integer</span>[<span class="num">100</span>]                  <span class="comment">// fixed array (§4.2.1)</span>
+<span class="kw">var</span> p: Punto := Punto(<span class="num">3</span>, <span class="num">4</span>)             <span class="comment">// class ref</span></code></pre>
+<p>
+  At module level, a <code>var</code> with a <strong>literal</strong>
+  initializer (numeric/boolean/string) is <em>baked</em> into the data block of
+  the <code>.mod</code>: it generates no startup code and the variable remains
+  reassignable. A non-literal module initializer is ignored with a warning —
+  assign it in the module's initializer function (the function with the same
+  name as the module).
+</p>
+
+<h3 id="const">5.2 <code>const</code></h3>
+<pre><code><span class="kw">public const</span> PI: <span class="type">float</span> := <span class="num">3.14159</span>
+<span class="kw">public const</span> MAX_MS: <span class="type">long</span> := <span class="num">86400000L</span>
+<span class="kw">const</span> SALUDO: <span class="type">string</span> := <span class="str">"hello"</span>
+<span class="kw">const</span> DEBUG: <span class="type">boolean</span> := <span class="kw">false</span>
+<span class="kw">const</span> MIN: <span class="type">integer</span> := -<span class="num">40</span>             <span class="comment">// '-' on a literal, OK</span></code></pre>
+<p>
+  A module <code>const</code> requires a <strong>primitive literal</strong>
+  (integer/float/long/double/boolean/string, with an optional <code>-</code>) —
+  the value is inlined at each use, occupies no slot, and public ones travel in
+  the <code>.bpi</code> so importers inline them too. For a computed value or a
+  non-primitive type, use a <code>var</code> assigned in the module's
+  initializer function. It is not assignable in any scope, and there are no
+  const arrays (<a href="#arrays">§4.2.1</a>).
+</p>
+
+<h3 id="var-owner">5.3 <code>var owner</code></h3>
+<pre><code><span class="kw">var owner</span> r: Recurso := Recurso(<span class="str">"db"</span>)
+<span class="comment">// when it goes out of scope or is reassigned, the object it points to is freed
+// deterministically via FREE_REF (including the owner cascade).</span></code></pre>
+<p>Full detail in <a href="#owner">§12 Owner semantics</a>.</p>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="operadores">6. Operators</h2>
+<table>
+  <tr><th>Category</th><th>Operators</th></tr>
+  <tr><td>Arithmetic</td><td><code>+ - * / mod</code> (with int↔float coercion)</td></tr>
+  <tr><td>Power</td><td><code>^</code> — <code>2 ^ 10</code> = 1024. <code>int^int</code> is exact (integer);
+      <code>float^int</code> by squaring; <code>float^float</code> via exp·ln (float)</td></tr>
+  <tr><td>Bitwise (integer only)</td><td><code>&amp; | xor shl shr</code> and unary <code>~</code></td></tr>
+  <tr><td>Comparison</td><td><code>== != &lt; &lt;= &gt; &gt;=</code></td></tr>
+  <tr><td>Logical</td><td><code>and or not</code></td></tr>
+  <tr><td>Assignment</td><td><code>:= += -=</code></td></tr>
+  <tr><td>Access</td><td><code>.</code> (member) <code>[]</code> (index) <code>()</code> (call)</td></tr>
+  <tr><td>Type test</td><td><code>x instanceof Foo</code></td></tr>
+  <tr><td>String</td><td><code>+</code> concatenates (coerces scalars to string)</td></tr>
+</table>
+<p>
+  Precedence (lowest to highest):
+  <code>or</code> &lt; <code>and</code> &lt; <code>not</code> &lt; comparison
+  &lt; bit-or &lt; bit-xor &lt; bit-and &lt; shift &lt; <code>+ -</code>
+  &lt; <code>* / mod</code> &lt; unary &lt; <code>^</code>.
+  Power is <strong>right-associative</strong> (<code>2 ^ 2 ^ 3</code> =
+  <code>2 ^ (2 ^ 3)</code> = 256) and binds tighter than unary:
+  <code>-x ^ 2</code> = <code>-(x ^ 2)</code>.
+</p>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="control">7. Control flow</h2>
+
+<h3 id="if">7.1 <code>if / elseif / else</code></h3>
+<pre><code><span class="kw">if</span> edad &lt; <span class="num">18</span> <span class="kw">then</span>
+  <span class="kw">print</span> <span class="str">"under age"</span>
+<span class="kw">elseif</span> edad &lt; <span class="num">65</span> <span class="kw">then</span>
+  <span class="kw">print</span> <span class="str">"adult"</span>
+<span class="kw">else</span>
+  <span class="kw">print</span> <span class="str">"senior"</span>
+<span class="kw">endif</span></code></pre>
+
+<h3 id="while">7.2 <code>while / do</code></h3>
+<pre><code><span class="kw">while</span> i &lt; n <span class="kw">do</span>
+  total := total + i
+  i := i + <span class="num">1</span>
+<span class="kw">endwh</span>
+
+<span class="kw">do</span>
+  i := i + <span class="num">1</span>
+<span class="kw">while</span> i &lt; <span class="num">100</span>          <span class="comment">// do-while: condition after the body</span></code></pre>
+
+<h3 id="for">7.3 <code>for</code></h3>
+<p>Two variants: numeric and foreach (<code>for-in</code>).</p>
+<pre><code><span class="comment">// Numeric: i := from to to [step]</span>
+<span class="kw">for</span> i := <span class="num">0</span> <span class="kw">to</span> <span class="num">9</span> <span class="kw">do</span>
+  <span class="kw">print</span> i
+<span class="kw">next</span> i
+
+<span class="kw">for</span> i := <span class="num">10</span> <span class="kw">to</span> <span class="num">1</span> <span class="kw">step</span> -<span class="num">1</span> <span class="kw">do</span>
+  <span class="kw">print</span> i
+<span class="kw">next</span> i
+
+<span class="comment">// Foreach over an array (fixed or variable, any element type)</span>
+<span class="kw">var</span> primos: <span class="type">integer</span>[] := [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>, <span class="num">11</span>]
+<span class="kw">for</span> n <span class="kw">in</span> primos <span class="kw">do</span>
+  total += n
+<span class="kw">next</span> n</code></pre>
+<p>
+  The body closes with <code>next [name]</code> (not <code>endfor</code>); the
+  name after <code>next</code> is optional and, if present, must match the
+  iteration variable (documentation use).
+</p>
+
+<h3 id="switch">7.4 <code>switch</code></h3>
+<pre><code><span class="kw">switch</span> dia
+  <span class="kw">case</span> Dia.SABADO, Dia.DOMINGO
+    <span class="kw">print</span> <span class="str">"weekend"</span>
+  <span class="kw">case</span> Dia.LUNES
+    <span class="kw">print</span> <span class="str">"back to work"</span>
+  <span class="kw">default</span>
+    <span class="kw">print</span> <span class="str">"weekday"</span>
+<span class="kw">endsw</span></code></pre>
+
+<h3 id="breakcont">7.5 <code>break</code> / <code>continue</code></h3>
+<p>
+  Breaks out of (or jumps to the next iteration of) the nearest enclosing loop
+  (<code>while</code>, <code>do</code>, <code>for</code>, <code>switch</code>).
+</p>
+
+<h3 id="parallel">7.6 <code>parallel</code> / <code>endpar</code></h3>
+<p>
+  Syntactic sugar for starting several threads without writing a subclass of
+  <a href="referencia.html#stdlib-thread"><code>Thread</code></a> for each one. Each
+  <code>case</code> introduces a thread whose body is the block's body; the
+  <code>default</code> (optional) runs on the calling thread between the
+  <code>start()</code>s and the <code>join()</code>s; after
+  <code>endpar</code> all threads are joined.
+</p>
+<pre><code><span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+  <span class="kw">parallel</span>
+    <span class="kw">case</span> t1 := Thread(<span class="num">2048</span>)
+      <span class="kw">var</span> r: <span class="type">integer</span> := sumaRango(<span class="num">1</span>, <span class="num">50000</span>)
+      <span class="kw">print</span> <span class="str">"t1 = "</span> + intToString(r)
+
+    <span class="kw">case</span> t2 := Thread(<span class="num">2048</span>)
+      <span class="kw">var</span> r: <span class="type">integer</span> := sumaRango(<span class="num">50001</span>, <span class="num">100000</span>)
+      <span class="kw">print</span> <span class="str">"t2 = "</span> + intToString(r)
+
+    <span class="kw">default</span>
+      <span class="comment">// runs on the calling thread; sees its locals and globals</span>
+      <span class="kw">print</span> <span class="str">"default while t1/t2 work"</span>
+  <span class="kw">endpar</span>
+  <span class="kw">print</span> <span class="str">"all joined"</span>
+<span class="kw">end</span> main</code></pre>
+<p>
+  Conceptually equivalent to the long pattern (<code>class W extends Thread …; W().start(); W().join()</code>),
+  but the compiler synthesizes an anonymous subclass of Thread for each
+  <code>case</code>, with the case body as its <code>run()</code>. The
+  variables <code>t1</code>, <code>t2</code>, … are visible in the enclosing
+  scope <strong>after</strong> <code>endpar</code>: they are already joined and
+  can be inspected.
+</p>
+<p>
+  The first token after <code>:=</code> must be literally <code>Thread</code>
+  with an integer argument (the worker's stack). For thread-owned state with
+  fields, use the classic Thread-subclass pattern.
+</p>
+<p>
+  <strong>Visibility rules</strong> for the <code>case</code> body (object
+  encapsulation — see <a href="#conc-encapsulacion">14.3</a>):
+</p>
+<table>
+  <tr><th>Symbol</th><th>Visible</th></tr>
+  <tr><td>Locals declared in the body itself</td><td>✓</td></tr>
+  <tr><td>stdlib (<code>print</code>, <code>intToString</code>, <code>yield()</code>, <code>Mutex</code>, ...)</td><td>✓</td></tr>
+  <tr><td>Module classes, functions, <code>const</code>s</td><td>✓</td></tr>
+  <tr><td>Module global variables (<code>var</code>)</td><td>✗ semantic error</td></tr>
+  <tr><td>Locals of the enclosing scope</td><td>✗ "unresolved identifier"</td></tr>
+</table>
+<p>
+  The <code>default</code> block, in contrast, runs in the enclosing scope and
+  sees EVERYTHING: locals, globals, etc. For branches to coordinate, they share
+  state via objects (<a href="referencia.html#stdlib-mutex">Mutex</a>, <code>List</code>,
+  shared classes).
+</p>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="funciones">8. Functions</h2>
+<pre><code><span class="kw">public function</span> <span class="fn">suma</span>(a: <span class="type">integer</span>, b: <span class="type">integer</span>): <span class="type">integer</span>
+  <span class="kw">return</span> a + b
+<span class="kw">end</span> suma
+
+<span class="kw">function</span> <span class="fn">imprimir</span>(msg: <span class="type">string</span>)        <span class="comment">// no ': T' → void</span>
+  <span class="kw">print</span> msg
+<span class="kw">end</span> imprimir</code></pre>
+<ul>
+  <li><code>public</code> → exported in the <code>.bpi</code>, callable cross-library.</li>
+  <li>By default, functions are private to the module.</li>
+  <li>The return type is declared with <code>: T</code> after the parentheses.
+      If omitted, the function is <code>void</code>.</li>
+  <li>Returning is done only with <code>return [value]</code>. With no explicit return, void.</li>
+</ul>
+
+<h3 id="defaults">8.1 Default parameter values</h3>
+<pre><code><span class="kw">public function</span> <span class="fn">label</span>(text: <span class="type">string</span>, prefix: <span class="type">string</span> := <span class="str">"["</span>, suffix: <span class="type">string</span> := <span class="str">"]"</span>): <span class="type">string</span>
+  <span class="kw">return</span> prefix + text + suffix
+<span class="kw">end</span> label
+
+label(<span class="str">"hi"</span>)              <span class="comment">// "[hi]"</span>
+label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>)         <span class="comment">// "&lt;hi]"</span>
+label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span class="str">"&gt;"</span>)    <span class="comment">// "&lt;hi&gt;"</span></code></pre>
+<p>
+  A parameter with <code>:= value</code> is optional at the call site. Rules:
+</p>
+<ul>
+  <li>The default value must be a <strong>constant literal</strong> (numeric,
+      string, boolean).</li>
+  <li>Parameters with defaults go <strong>at the end</strong> of the list;
+      arguments are filled by position.</li>
+  <li>The default is <em>substituted at the caller</em> at compile time (zero
+      cost in the VM) and travels in the <code>.bpi</code>: it works the same
+      way when calling functions from another library.</li>
+</ul>
+
+<h3 id="tuplas">8.2 Tuples (multiple return)</h3>
+<pre><code><span class="comment">// A function can return SEVERAL values: a tuple type (T1, T2, ...)</span>
+<span class="kw">function</span> <span class="fn">divmod</span>(a: <span class="type">integer</span>, b: <span class="type">integer</span>): (<span class="type">integer</span>, <span class="type">integer</span>)
+  <span class="kw">return</span> (a / b, a <span class="kw">mod</span> b)
+<span class="kw">end</span> divmod
+
+<span class="comment">// Unpacking with { ... } := onto already-declared lvalues</span>
+<span class="kw">var</span> q: <span class="type">integer</span> := <span class="num">0</span>
+<span class="kw">var</span> r: <span class="type">integer</span> := <span class="num">0</span>
+{ q, r } := divmod(<span class="num">17</span>, <span class="num">5</span>)        <span class="comment">// q=3, r=2</span></code></pre>
+<p>
+  Tuples are <strong>first-class</strong>: besides being unpacked on the fly,
+  they can be stored in a variable, passed as a parameter and returned in
+  stored form. The unpacking targets can be any lvalues, not just variables:
+</p>
+<pre><code><span class="kw">var</span> t: (<span class="type">integer</span>, <span class="type">string</span>) := pair()   <span class="comment">// store the tuple</span>
+{ n, s } := t                          <span class="comment">// ... and unpack it later</span>
+
+{ arr[<span class="num">0</span>], arr[<span class="num">1</span>] } := coords()        <span class="comment">// into array elements</span>
+{ p.x, p.y } := coords()               <span class="comment">// into object fields</span>
+
+lista.add(pair())                      <span class="comment">// go into collections via any</span>
+<span class="kw">var</span> t2: (<span class="type">integer</span>, <span class="type">string</span>) := lista.get(<span class="num">0</span>)</code></pre>
+<p>
+  A tuple is not printed directly (<code>print t</code> is an error): unpack it
+  first. The targets of <code>{ ... } :=</code> must already exist (it does not
+  declare variables).
+</p>
+
+<h3 id="funciones-native">8.3 <code>native</code> functions (AOT)</h3>
+<p>
+  A function marked <code>native function</code> is a candidate for
+  <strong>AOT compilation</strong> (Ahead-Of-Time): besides the normal
+  bytecode, the compiler can translate it to native C for the micro, which
+  runs directly (without the interpreter loop) to speed up hot compute
+  kernels.
+</p>
+<pre><code><span class="kw">native function</span> <span class="fn">sumaCuadrados</span>(n: <span class="type">integer</span>): <span class="type">integer</span>
+  <span class="kw">var</span> s: <span class="type">integer</span> := <span class="num">0</span>
+  <span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">1</span>
+  <span class="kw">while</span> i &lt;= n <span class="kw">do</span>
+    s := s + i * i
+    i := i + <span class="num">1</span>
+  <span class="kw">endwh</span>
+  <span class="kw">return</span> s
+<span class="kw">end</span> sumaCuadrados</code></pre>
+<ul>
+  <li><strong>Additive</strong>: the <code>.mod</code> ALWAYS contains the
+      function's bytecode. The AOT is an optional overlay
+      (<code>.mdn</code>) that the runtime uses if it is present and matches the
+      micro's architecture; otherwise the function runs interpreted. Not
+      compiling the AOT never breaks the program.</li>
+  <li><strong>Per-platform behavior</strong>:
+    <table>
+      <tr><th>Platform</th><th><code>native</code> function</th></tr>
+      <tr><td>Raspberry Pi Pico 2 / Metro (RP2350, ARM Cortex-M33)</td>
+          <td>AOT-accelerated (≈40–90× on integer kernels).</td></tr>
+      <tr><td>STM32 (Nucleo-U575, ARM Cortex-M33)</td>
+          <td>AOT-accelerated — same Thumb-2 <code>.mdn</code>
+              (≈45× measured on an LZSS kernel on-board).</td></tr>
+      <tr><td>ESP32-S3 (Xtensa LX7)</td>
+          <td>Interpreted — same semantics, no speedup. The <code>.mdn</code>
+              is ARM code; AOT for Xtensa is future work.</td></tr>
+      <tr><td>PC VM (host)</td>
+          <td>Interpreted (there is a host AOT path for testing only).</td></tr>
+    </table>
+  </li>
+  <li><strong>Supported subset</strong>: leaf functions over primitives,
+      arrays (<code>integer[]</code>, <code>byte[]</code>, …),
+      <code>string</code>, module variables and builtins
+      (<code>print</code>, <code>now</code>, …). A runtime failure
+      (index out of range, null reference) or a
+      <code>throw RuntimeError("…")</code> inside the native propagates to the
+      BP <code>try/catch</code> that wraps the call. What still does NOT fit
+      (calling object methods, <code>try/catch</code> inside the native) falls
+      back to interpreted bytecode automatically. Local fixed arrays
+      <code>type[N]</code> are not supported inside a native (compile error):
+      use <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.</li>
+  <li><strong>Calling normal BP functions from a native</strong> is possible
+      (the bridge exists), but it crosses back into the interpreter: the speed
+      gained is lost on every crossing. The compiler detects this and emits a
+      <strong>performance warning</strong>.</li>
+  <li><strong>How the <code>.mdn</code> is generated</strong>: the IDE does it
+      <strong>automatically</strong> on <em>Run on Device</em> (v3, on ARM
+      boards: RP2350/STM32): it detects the <strong>ARM bare-metal
+      toolchain</strong> (<code>arm-none-eabi-gcc</code> — a standard install of
+      the <em>Arm GNU Toolchain</em> or on the <code>PATH</code>; set manually
+      in <em>Project → AOT (toolchain)…</em>; installation:
+      <a href="guia-ide.html#aot">IDE Guide §5.1</a>), emits C, compiles
+      Thumb-2 PIC and uploads the <code>.mdn</code> alongside the
+      <code>.mod</code>. If there is no toolchain, it <strong>warns and the
+      program runs interpreted</strong> (the <code>.mdn</code> is optional and
+      additive). The step can also be done by hand with the
+      <code>build_mdn.sh</code> script (<code>AotMain</code> emits C →
+      <code>arm-none-eabi-gcc</code> → <code>MdnPack</code> packages it; it
+      looks for the compiler on the <code>PATH</code> or in the <code>GCC</code>
+      environment variable).</li>
+</ul>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="clases">9. Classes</h2>
+<pre><code><span class="kw">public class</span> Persona
+  <span class="kw">public var</span> nombre: <span class="type">string</span>
+  <span class="kw">public var</span> edad:   <span class="type">integer</span>
+
+  <span class="kw">public function</span> Persona(nombre: <span class="type">string</span>, edad: <span class="type">integer</span>)
+    <span class="kw">this</span>.nombre := nombre
+    <span class="kw">this</span>.edad   := edad
+  <span class="kw">end</span> Persona
+
+  <span class="kw">public function</span> saludar(): <span class="type">string</span>
+    <span class="kw">return</span> <span class="str">"Hi, I'm "</span> + <span class="kw">this</span>.nombre
+  <span class="kw">end</span> saludar
+<span class="kw">end</span> Persona</code></pre>
+
+<h3 id="campos">9.1 Fields</h3>
+<p>
+  A <code>var</code> inside the class declares an instance field.
+  <code>public</code> visibility is optional. Access via <code>this.field</code>
+  from inside; <code>obj.field</code> from outside (only if public).
+</p>
+<p>
+  A field does NOT allow a fixed-size array <code>type[N]</code> (compile
+  error): declare <code>type[]</code> and initialize it in the constructor with
+  <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
+  Fields are not exported in the <code>.bpi</code> — they are private to the
+  owning module by OO design; expose a <code>property</code> if you need
+  cross-module access.
+</p>
+
+<h3 id="metodos">9.2 Methods</h3>
+<p>
+  Like functions but inside the class. The implicit parameter <code>this</code>
+  points to the instance. All non-static methods are virtual (dynamic dispatch
+  via vtable).
+</p>
+
+<h3 id="ctor">9.3 Constructor</h3>
+<p>
+  A function with the same name as the class. It runs when you do
+  <code>ClassName(args)</code>. When <code>super(args)</code> is called, it must
+  be the first statement.
+</p>
+<p>
+  <strong>Implicit <code>super()</code> (Java model).</strong> If the class has
+  a base and its constructor does not call <code>super(...)</code>, the compiler
+  <em>injects</em> the call to the parent's no-argument constructor. If the
+  parent's constructor <em>requires</em> arguments, the explicit call is
+  mandatory (compile error if missing). If the parent has no constructor, there
+  is nothing to call and nothing is injected.
+</p>
+
+<h3 id="herencia">9.4 Inheritance</h3>
+<pre><code><span class="kw">public class</span> Animal
+  <span class="kw">public var</span> nombre: <span class="type">string</span>
+  <span class="kw">public function</span> Animal(nombre: <span class="type">string</span>)
+    <span class="kw">this</span>.nombre := nombre
+  <span class="kw">end</span> Animal
+  <span class="kw">public function</span> hablar()
+    <span class="kw">print</span> <span class="str">"..."</span>
+  <span class="kw">end</span> hablar
+<span class="kw">end</span> Animal
+
+<span class="kw">public class</span> Perro <span class="kw">extends</span> Animal
+  <span class="kw">public function</span> Perro(nombre: <span class="type">string</span>)
+    <span class="kw">super</span>(nombre)
+  <span class="kw">end</span> Perro
+  <span class="kw">public function</span> hablar()
+    <span class="kw">print</span> <span class="kw">this</span>.nombre + <span class="str">" says woof"</span>
+  <span class="kw">end</span> hablar
+<span class="kw">end</span> Perro</code></pre>
+<p>
+  Single inheritance. <code>super.method(args)</code> explicitly invokes the
+  parent's method inside an override. Inheritance also works
+  <strong>cross-module</strong>: the base class can come from another imported
+  library (vtable, <code>super(...)</code>, <code>instanceof</code> and statics
+  included). <code>x instanceof Foo</code> checks the dynamic type at runtime
+  (including the <a href="#excepciones"><code>Exception</code></a> hierarchy).
+</p>
+
+<h3 id="props">9.5 Properties</h3>
+<pre><code><span class="kw">public class</span> Punto
+  <span class="kw">var</span> _x: <span class="type">integer</span>
+  <span class="kw">public property</span> x: <span class="type">integer</span>
+    <span class="kw">get</span>
+      <span class="kw">return</span> <span class="kw">this</span>._x
+    <span class="kw">endget</span>
+    <span class="kw">set</span>(v)
+      <span class="kw">if</span> v &lt; <span class="num">0</span> <span class="kw">then throw</span> RuntimeError(<span class="str">"negative"</span>) <span class="kw">endif</span>
+      <span class="kw">this</span>._x := v
+    <span class="kw">endset</span>
+  <span class="kw">endprop</span>
+<span class="kw">end</span> Punto
+
+<span class="comment">// Short form: backing field + trivial getter/setter auto-generated</span>
+<span class="kw">public property</span> y: <span class="type">integer</span></code></pre>
+<p>
+  A <code>property</code> synthesizes a backing field and two methods
+  <code>getX</code>/<code>setX</code>. From code it is accessed like a field
+  (<code>p.x</code>, <code>p.x := 5</code>).
+</p>
+
+<h4>sync properties (thread-safe)</h4>
+<pre><code><span class="kw">public class</span> Account
+  <span class="kw">public sync property</span> balance: <span class="type">integer</span>
+  <span class="kw">public function</span> Account(initial: <span class="type">integer</span>)
+    <span class="kw">this</span>.balance := initial
+  <span class="kw">end</span> Account
+<span class="kw">end</span> Account</code></pre>
+<p>
+  The <code>sync</code> modifier before <code>property</code> wraps the
+  auto-generated getter and setter with <code>lock()</code> / <code>unlock()</code>
+  against a <code>Mutex</code> shared per instance. The compiler:
+</p>
+<ul>
+  <li>Automatically declares a hidden field <code>__syncMutex</code>
+      (inherited by subclasses — it is declared only once, in the first link of
+      the hierarchy that needs sync).</li>
+  <li>Initializes it with <code>Mutex()</code> on entering the constructor. If
+      the class has no user constructor, it synthesizes a default one that only
+      performs that initialization.</li>
+  <li>Inserts <code>this.__syncMutex.lock()</code> at the start and
+      <code>this.__syncMutex.unlock()</code> at the end of each
+      <code>getX</code>/<code>setX</code>.</li>
+</ul>
+<p>
+  <strong>Guarantees</strong>: each individual access to the backing field is
+  atomic with respect to other threads. A read never returns a partial state; a
+  write is indivisible.
+</p>
+<p>
+  <strong>Important</strong>: a compound expression such as
+  <code>this.value := this.value + 1</code> is NOT atomic as a whole — it
+  decomposes into get + add + set, each individually atomic, but another thread
+  can slip in between them. For compound atomic operations, use an explicit
+  <a href="referencia.html#stdlib-mutex"><code>Mutex</code></a> around the block.
+</p>
+<p>
+  A <code>return</code> inside the custom body of a sync get/set correctly
+  releases the mutex: the emitter injects the <code>unlock</code> before the
+  jump to the exit point (no explicit try/finally is needed in BP). The same
+  applies to module-level sync properties.
+</p>
+
+<h4>Module-level properties</h4>
+<pre><code><span class="kw">module</span> Counter
+  <span class="comment">// A public module property. The state lives in a private
+  // global, accessible from outside ONLY through the get/set.</span>
+  <span class="kw">public property</span> tick: <span class="type">integer</span>
+  <span class="kw">public function</span> bump()
+    tick := tick + <span class="num">1</span>
+  <span class="kw">end</span> bump
+<span class="kw">end</span> Counter
+
+<span class="kw">module</span> App
+  <span class="kw">import</span> Counter
+  <span class="kw">function</span> main(arg: <span class="type">string</span>)
+    Counter.bump()
+    <span class="kw">print</span> Counter.tick           <span class="comment">// cross-module read → 1</span>
+    Counter.tick := <span class="num">42</span>          <span class="comment">// cross-module write</span>
+  <span class="kw">end</span> main
+<span class="kw">end</span> App</code></pre>
+<p>
+  BP also lets you declare a <code>property</code> outside a class, at module
+  level. It is the canonical way to expose mutable state to other modules:
+  module <code>var</code>s are private by design (they are not exported in the
+  <code>.bpi</code>), but a <code>public property</code> exposes its synthetic
+  getter/setter, accessible via <code>Module.name</code> from another module
+  that imports it.
+</p>
+<p>
+  Internally the compiler emits:
+</p>
+<ul>
+  <li>A private global <code>__prop_&lt;name&gt;</code> that is the backing field.</li>
+  <li>A public function <code>__prop_get_&lt;name&gt;()</code> that returns the value.</li>
+  <li>A public function <code>__prop_set_&lt;name&gt;(__val)</code> that writes it.</li>
+  <li>In the <code>.bpi</code>, a line <code>prop &lt;name&gt;:&lt;type&gt; public</code>
+      that travels to importing modules (without exposing the accessors as
+      normal functions).</li>
+</ul>
+<p>
+  The identifier <code>tick</code> within the module itself resolves to the
+  getter/setter (not the global directly), so encapsulation is respected inside
+  the owning module too. If you need to initialize the property with a value
+  other than zero, do it in the module's initializer function (the function
+  with the same name as the module), just as with a module-level
+  <code>var</code>.
+</p>
+<p>
+  <code>sync</code> is also valid on module properties:
+</p>
+<pre><code><span class="kw">module</span> Stats
+  <span class="kw">public sync property</span> contador: <span class="type">integer</span>
+<span class="kw">end</span> Stats</code></pre>
+<p>
+  In this case the module declares a single global <code>Mutex</code>
+  (<code>__prop_mutex</code>) shared by all its sync properties. It is
+  initialized when the module loads (in <code>__init</code>) and the get/set
+  wrap their body with <code>lock</code>/<code>unlock</code>. The guarantees and
+  limitations are the same as for sync in classes.
+</p>
+<p>
+  MVP limitations:
+</p>
+<ul>
+  <li>Module-level <code>owner</code> properties are not supported (classes only).</li>
+  <li><code>final</code> is not supported at module level (the modifier applies
+      only to class properties).</li>
+  <li>The property's init expression is ignored at compile time; use the
+      module's initializer function to set the initial value.</li>
+</ul>
+
+<h3 id="static">9.6 Static members / <code>final</code></h3>
+<p>
+  BP has no <code>static</code> keyword: a member is static when it is declared
+  <strong>with a name qualified by the class</strong>
+  (<code>Class.member</code>) inside the class body. It works for
+  <code>const</code>, <code>var</code>, <code>property</code> and
+  <code>function</code>:
+</p>
+<pre><code><span class="kw">public class</span> Counter
+  <span class="kw">public const</span> Counter.MAX: <span class="type">integer</span> := <span class="num">100</span>   <span class="comment">// static const</span>
+  <span class="kw">public var</span> Counter.viva: <span class="type">integer</span>            <span class="comment">// static var</span>
+
+  <span class="kw">public property</span> Counter.total: <span class="type">integer</span>     <span class="comment">// static property (auto get/set;</span>
+                                               <span class="comment">// custom get/set allowed with `field`)</span>
+
+  <span class="kw">public function</span> Counter.bump()               <span class="comment">// static method</span>
+    Counter.total := Counter.total + <span class="num">1</span>
+  <span class="kw">end</span> Counter.bump
+<span class="kw">end</span> Counter
+
+<span class="comment">// Access is ALWAYS qualified, with no instance — also from instance
+// methods and from other modules (they travel in the .bpi):</span>
+Counter.total := <span class="num">7</span>
+Counter.total += <span class="num">3</span>
+Counter.bump()</code></pre>
+<p>
+  Static state lives as a global of the owning module (one per class, not per
+  instance); 8-byte types (<code>long</code>/<code>double</code>) work the same.
+  <code>final</code> on a class: not extensible; on a method: not overridable
+  (the modifier goes before <code>function</code> or <code>class</code>).
+</p>
+
+<h3 id="fields-owner">9.7 Fields owner</h3>
+<pre><code><span class="kw">public class</span> Caja
+  <span class="kw">public var owner</span> contenido: Recurso
+  <span class="kw">public function</span> Caja(r: Recurso)
+    <span class="kw">this</span>.contenido := r
+  <span class="kw">end</span> Caja
+<span class="kw">end</span> Caja</code></pre>
+<p>
+  When a <code>Caja</code> is freed (via FREE_REF), its owner field
+  <code>contenido</code> is freed too, recursively.
+</p>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="modulos">10. Modules</h2>
+
+<h3 id="library">10.1 <code>library</code> (optional)</h3>
+<pre><code><span class="kw">library</span> <span class="str">"com.example.app"</span>
+<span class="kw">module</span> Util
+  ...
+<span class="kw">end</span> Util</code></pre>
+<p>
+  If you declare <code>library</code>, the artifact is named
+  <code>com.example.app.Util.mod</code> and <code>.bpi</code>. Without
+  <code>library</code>, it is called <code>Util.mod</code>.
+</p>
+
+<h3 id="main">10.2 <code>main(arg: string)</code> and module constructor</h3>
+<pre><code><span class="kw">module</span> MiApp
+  <span class="comment">// Initializer (auto): runs when the module loads, after the imports.</span>
+  <span class="kw">function</span> MiApp()
+    <span class="kw">print</span> <span class="str">"[init] loaded"</span>
+  <span class="kw">end</span> MiApp
+
+  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+    <span class="kw">print</span> <span class="str">"running with arg='"</span> + arg + <span class="str">"'"</span>
+  <span class="kw">end</span> main
+<span class="kw">end</span> MiApp</code></pre>
+<ul>
+  <li><code>function ModuleName()</code> is the module "constructor". It runs
+      after all imports have been initialized.</li>
+  <li><code>function main(arg: string)</code> is the entry-point. Only the root
+      module's main is called; the mains of dependencies remain as a utility
+      for standalone testing.</li>
+  <li>Legacy form: <code>function Main()</code> with no parameters (still
+      accepted).</li>
+</ul>
+
+<h3 id="imports">10.3 <code>import</code> / <code>from</code></h3>
+<pre><code><span class="kw">module</span> App
+  <span class="kw">import</span> Util                       <span class="comment">// same library</span>
+  <span class="kw">import</span> com.example.Util           <span class="comment">// qualified path</span>
+  <span class="kw">import</span> ext.tools.Helper <span class="kw">from</span> <span class="str">"plugins/helper.mod"</span>
+  ...
+<span class="kw">end</span> App</code></pre>
+<ul>
+  <li>The last segment of the path is the local alias (<code>Util</code>,
+      <code>Helper</code>). You use it as <code>Util.foo()</code>.</li>
+  <li><code>from "&lt;path&gt;"</code> tells the VM where to find the
+      <code>.mod</code> at runtime. Compilable when the frontend locates the
+      source <code>.bp</code> by deriving the path.</li>
+</ul>
+
+<h3 id="interfaces">10.4 <code>module interface</code></h3>
+<pre><code><span class="kw">library</span> <span class="str">"com.example"</span>
+<span class="kw">module interface</span> LogApi
+  <span class="kw">public function</span> log(msg: <span class="type">string</span>)
+  <span class="kw">public function</span> level(): <span class="type">integer</span>
+  <span class="kw">public const</span> VERSION: <span class="type">integer</span> := <span class="num">1</span>
+<span class="kw">end</span> LogApi</code></pre>
+<p>
+  An interface is a contract (a Modula-2 <code>DEFINITION MODULE</code>): public
+  signatures only, no function bodies. It compiles to a <code>.bpi</code> with
+  the flag <code>interface true</code> and produces no <code>.mod</code>.
+</p>
+<p>
+  Interfaces can extend another interface (contract inheritance):
+</p>
+<pre><code><span class="kw">module interface</span> LogApiV2 <span class="kw">extends</span> com.example.LogApi
+  <span class="kw">public function</span> logWithLevel(lvl: <span class="type">integer</span>, msg: <span class="type">string</span>)
+  <span class="kw">public function</span> flush()
+<span class="kw">end</span> LogApiV2</code></pre>
+
+<h3 id="implements">10.5 <code>implements</code></h3>
+<pre><code><span class="kw">module</span> ConsoleLogger <span class="kw">implements</span> com.example.LogApi
+  <span class="kw">public function</span> log(msg: <span class="type">string</span>)
+    <span class="kw">print</span> <span class="str">"[CON] "</span> + msg
+  <span class="kw">end</span> log
+  <span class="kw">public function</span> level(): <span class="type">integer</span>
+    <span class="kw">return</span> <span class="num">0</span>
+  <span class="kw">end</span> level
+  <span class="kw">public const</span> VERSION: <span class="type">integer</span> := <span class="num">1</span>
+<span class="kw">end</span> ConsoleLogger</code></pre>
+<p>
+  The analyzer verifies that the module exposes ALL the contract's signatures
+  (functions with identical types, consts with the same type, enums with the
+  same members and values). The impl may freely add public <em>extras</em> not
+  required by the contract. Typical errors:
+</p>
+<ul>
+  <li><code>does not implement the function 'foo' required by 'I'</code></li>
+  <li><code>function 'foo': declared return 'float', 'integer' was expected</code></li>
+  <li><code>function 'foo' required by 'I' must be public</code></li>
+</ul>
+
+<h3 id="binding">10.6 Binding <code>import I:Impl</code></h3>
+<pre><code><span class="kw">module</span> App
+  <span class="kw">import</span> com.example.LogApi:ConsoleLogger
+  <span class="comment">// Equivalent with from:
+  // import com.example.LogApi:ConsoleLogger from "plugins/logger.mod"</span>
+
+  <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
+    LogApi.log(<span class="str">"hi"</span>)          <span class="comment">// types against LogApi; CALL_EXT to ConsoleLogger.log</span>
+  <span class="kw">end</span> main
+<span class="kw">end</span> App</code></pre>
+<p>
+  Compile-time: the <code>LogApi</code> namespace is typed against the
+  interface. Codegen: each <code>LogApi.x</code> emits <code>CALL_EXT</code> to
+  the bound impl. Switching impl = editing the binding line and recompiling.
+</p>
+<p>
+  <strong>LSP compatibility</strong>: <code>import LogApi:BufferedLogger</code>
+  is valid even if <code>BufferedLogger</code> declares
+  <code>implements LogApiV2</code> and <code>LogApiV2 extends LogApi</code>.
+  The driver walks the <code>implements → extends</code> chain.
+</p>
+
+<h3 id="encapsulacion">10.7 Class ↔ module encapsulation</h3>
+<p>
+  From inside a class, only <strong>public</strong> module symbols are
+  accessible (functions, consts, vars, properties). Types (classes, enums,
+  import namespaces) are always visible.
+</p>
+<pre><code><span class="kw">module</span> M
+  <span class="kw">function</span> helperPriv(): <span class="type">integer</span>     <span class="comment">// private</span>
+    <span class="kw">return</span> <span class="num">99</span>
+  <span class="kw">end</span> helperPriv
+
+  <span class="kw">class</span> C
+    <span class="kw">public function</span> bad(): <span class="type">integer</span>
+      <span class="kw">return</span> helperPriv()             <span class="comment">// ERROR: not public</span>
+    <span class="kw">end</span> bad
+  <span class="kw">end</span> C
+<span class="kw">end</span> M</code></pre>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="excepciones">11. Exceptions</h2>
+<pre><code><span class="kw">try</span>
+  riskyOp()
+<span class="kw">catch</span> e: RuntimeError
+  <span class="kw">print</span> <span class="str">"runtime: "</span> + e.msg
+<span class="kw">catch</span> e: MiError
+  <span class="kw">print</span> <span class="str">"my error: "</span> + e.detalle
+<span class="kw">catch</span> e
+  <span class="kw">print</span> <span class="str">"unknown"</span>
+<span class="kw">finally</span>
+  <span class="kw">print</span> <span class="str">"cleanup"</span>
+<span class="kw">endtry</span>
+
+<span class="kw">throw</span> RuntimeError(<span class="str">"something failed"</span>)</code></pre>
+<ul>
+  <li><code>try</code> installs a handler on a VM handler stack.</li>
+  <li><code>catch e: Foo</code> only catches instances assignable to <code>Foo</code>.
+      <code>catch e</code> (no type) catches any exception.</li>
+  <li><code>finally</code> always runs (with or without an exception).</li>
+  <li><code>throw expr</code> throws the value. If it is a class, its class_ptr
+      is used for the typed <code>catch</code> match.</li>
+  <li>All exceptions descend from <code>Exception</code> (with its
+      <code>msg</code> property), which lives in the standard module
+      <code>Core</code> along with <code>RuntimeError</code>. The
+      <code>import Core</code> is IMPLICIT: just using <code>try</code>/<code>throw</code>
+      or naming <code>Exception</code>/<code>RuntimeError</code> makes them
+      available.</li>
+  <li>A user exception is a class that extends <code>Exception</code> (it
+      inherits <code>msg</code>; add whatever fields you want).
+      <code>throw</code> and the typed <code>catch</code> require classes that
+      descend from <code>Exception</code>.</li>
+  <li>The VM's native errors (division by zero, null reference, index out of
+      range, failures in <code>native</code> functions...) are thrown as
+      <code>RuntimeError</code> and caught the same way, regardless of the
+      module where they occur.</li>
+  <li>An uncaught exception terminates the VM, showing a stack trace with the
+      symbolic name of each frame.</li>
+</ul>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="owner">12. Owner semantics</h2>
+<p>
+  BP supports <em>deterministic</em> object destruction as a complement to the
+  traditional GC. The basic rule: an object can have <strong>one</strong>
+  owner; when the owner is freed, the owned object is freed too (cascade).
+</p>
+
+<h3>12.1 <code>var owner x: T</code></h3>
+<ul>
+  <li>On assigning <code>x := y</code>, the previous value of <code>x</code> is
+      freed (FREE_REF) beforehand.</li>
+  <li>On leaving scope, the current value of <code>x</code> is freed.</li>
+  <li>Assigning <code>x</code> to a non-owner variable copies the ref without
+      transferring ownership (it still belongs to <code>x</code>).</li>
+  <li>Assigning to another owner variable transfers: the source is left at
+      <code>null</code> without being freed.</li>
+</ul>
+
+<h3>12.2 Fields <code>owner</code></h3>
+<p>
+  <code>public var owner f: T</code> inside a class. The class descriptor holds
+  a bitmap of owners; when the instance is freed, each marked slot is freed
+  recursively. The opcode <code>SET_FIELD_OWNER</code> frees the field's
+  previous value before writing the new one (an owner-safe atomic assignment).
+</p>
+
+<h3>12.3 Cascade through ref arrays</h3>
+<p>
+  If an owner field holds a reference to a <code>TYPE_ARRAY_REF</code> array,
+  freeing the container also frees all the array's non-null slots. This is the
+  mechanism behind <a href="referencia.html#stdlib-ownerlist">OwnerList</a>.
+</p>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="concurrencia">14. Concurrency</h2>
+<p>
+  The VM simulates a 2-core microcontroller: by default it launches N real Java
+  workers (default <code>N=2</code>; configurable with <code>--workers=N</code>,
+  see <a href="referencia.html#cli-vm">§15.2</a>) that share out the queued BP threads.
+</p>
+
+<h3 id="conc-modelo">14.1 Execution model</h3>
+<ul>
+  <li>The <strong>main</strong> BP thread (tid&nbsp;0) starts first: it runs the
+      module's initializer and then <code>main(arg)</code>. It has a large stack
+      (16&nbsp;KB). Only <em>it</em> can execute the <code>HALT</code>
+      instruction that shuts the VM down.</li>
+  <li>Any subclass of <code>Thread</code> adds a new BP thread when you call
+      <code>start()</code>. The VM assigns it a stack (default 2&nbsp;KB) and
+      queues it <code>RUNNABLE</code>. A free Java worker picks it up and runs
+      its <code>run()</code> until return (THREAD_EXIT) or
+      <code>yield()</code>/<code>sleep()</code>/<code>join()</code>/a lock.</li>
+  <li>Each BP thread has its own context (<code>ThreadContext</code>): PC, SP,
+      BP, CS, stack region, exception-handler stack. The heap (including objects
+      owned by threads) is <strong>shared</strong>.</li>
+  <li>When all BP threads finish, the VM shuts down. If main does
+      <code>HALT</code> first, the in-flight workers are cut off at their next
+      opcode.</li>
+</ul>
+
+<h3 id="conc-preempt">14.2 Preemption and <code>yield()</code></h3>
+<p>
+  A daemon timer (<code>ScheduledExecutorService</code>, default quantum
+  10&nbsp;ms) sets <code>yieldRequested=true</code> on every
+  <code>RUNNING</code> BP thread. The interpreter loop observes it between
+  opcodes (a <code>volatile</code> field) and abandons the inner loop with a
+  YIELD signal; the worker re-queues the thread and picks up the next RUNNABLE.
+</p>
+<p>
+  In parallel with preemption, BP code can yield the CPU
+  <strong>cooperatively</strong>:
+</p>
+<ul>
+  <li><code>yield()</code> &mdash; yields once; the thread stays RUNNABLE and
+      the scheduler picks it when its turn comes.</li>
+  <li><code>sleep(ms)</code> &mdash; marks BLOCKED_SLEEP until
+      <code>now() + ms</code>. If there is no other RUNNABLE, the Java worker
+      sleeps until the next wake-up.</li>
+  <li><code>join()</code> on another thread &mdash; marks BLOCKED_JOIN until the
+      target finishes.</li>
+  <li><code>Mutex.lock()</code> on a taken mutex &mdash; marks BLOCKED_MUTEX
+      until hand-off.</li>
+</ul>
+
+<h3 id="conc-encapsulacion">14.3 Encapsulation of <code>case</code> bodies</h3>
+<p>
+  The body of each <code>case</code> inside a <code>parallel</code> is the
+  <code>run()</code> of an anonymous Thread subclass synthesized by the
+  compiler. It follows the same object-encapsulation rule as a normal class
+  method: <strong>it cannot read/write the module's global variables</strong>.
+  It can call module functions, instantiate classes, use <code>const</code>s
+  and call builtins.
+</p>
+<p>
+  To coordinate, threads use shared objects
+  (<a href="referencia.html#stdlib-mutex">Mutex</a>, <code>List</code>, stateful classes)
+  instead of mutable globals. The compiler rejects the direct read with the
+  message:
+</p>
+<pre><code>semantic error: the body of a 'case' inside 'parallel' cannot
+access the global variable 'X'; use a const, a function or a
+shared object</code></pre>
+<p>
+  The <code>default</code> block does NOT suffer this restriction: it runs on
+  the calling thread and sees its locals and globals.
+</p>
+
+<h3 id="conc-gc">14.4 GC and concurrency</h3>
+<p>
+  The mark-and-sweep GC is conservative: it scans the stacks of all live
+  threads and the modules' data blocks to identify roots. The heap operations
+  (<code>heapAlloc</code>, <code>gc()</code>, <code>freeOwnedObject</code>) are
+  serialized under <code>vmLock</code> &mdash; two workers cannot mutate the
+  heap at the same time.
+</p>
+<p>
+  <strong>Stop-the-world safepoint</strong>: when a worker needs the GC
+  (because <code>heapAlloc</code> exhausts the heap), it sets a global flag
+  <code>stopTheWorld</code>. The other workers check it at the start of each
+  interpreter iteration: they synchronize
+  <code>tc.{pc,sp,bp,cs}</code> and abandon <code>runOnContext</code> with a
+  YIELD signal. They return to the <code>WorkerLoop</code>, see the flag and
+  park in <code>vmLock.wait()</code>. The worker that requested GC waits until
+  no other is in the RUNNING state (those parked in <code>vmLock.wait</code>
+  inside <code>heapAlloc</code> are counted as parked via
+  <code>parkedInHeapAlloc</code>), runs <code>gcLocked</code>, and then clears
+  the flag.
+</p>
+<p>
+  In addition, each <code>tc</code> keeps an <strong>alloc anchor</strong>
+  (<code>tc.allocAnchor</code>): <code>heapAlloc</code> leaves the just-allocated
+  ref in it before releasing <code>vmLock</code>. If another worker triggers GC
+  between <code>heapAlloc</code>'s <code>return</code> and the caller's
+  subsequent push, the GC scanner sees the anchor as an extra root and does not
+  free the object in transit.
+</p>
+<p>
+  <strong>Wraps of allocation opcodes</strong>:
+  <code>NEW_OBJECT</code> and the <code>NEWARRAY</code> variants hold
+  <code>vmLock</code> from allocation until publication to the BP stack
+  (<code>tc.sp</code> synchronized). This closes the window in which another
+  worker could sweep the just-created object before its ref reaches the stack of
+  whoever created it.
+</p>
+<p>
+  <strong>Known residual</strong> (~5–10 % under very high contention): some
+  allocation builtins
+  (<code>allocVmString</code>, <code>allocVmRefArray</code>,
+  <code>GROW_REF_ARRAY</code>) still release <code>vmLock</code> between the
+  allocation and the final push. When a producer/consumer pattern with many
+  simultaneous allocations materializes, occasional corruption can appear.
+  Symptoms: <code>INVOKE_VIRTUAL</code> on <code>null</code>,
+  &quot;Address 0&quot;, opcode 0xA6.
+</p>
+<p>
+  When the residual manifests, only the affected thread dies &mdash; the rest
+  of the program continues because <code>BpThreadFault</code> prevents a single
+  failure from bringing down the whole VM (see the code in
+  <code>VirtualMachine.WorkerLoop</code>).
+</p>
+<p>
+  Reference tests with all the B1 fixes active:
+</p>
+<ul>
+  <li><code>synctest.bp</code> (class + sync property + 5000 iters × 2 threads): ~90 % pass-rate.</li>
+  <li><code>synclisttest.bp</code> (SyncList + 1000 prods + 2 consumers): ~93 % pass-rate.</li>
+  <li><code>modpropsync.bp</code> (module-level sync property): ~95 % pass-rate.</li>
+</ul>
+
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="pendientes">17. Pending / not supported</h2>
+<p style="color:var(--fg-muted)">Status at the close of V3 (July 2026). What
+was here and is now done: classes/properties in the <code>.bpi</code>
+(full cross-module), qualified types <code>Mod.Class</code>,
+<code>Collections.Map</code>, the project file, the GC's stop-the-world
+safepoint (the Java VM also runs at 1 worker by default, like the device)
+and, in V3, automatic AOT from the IDE and the GUI
+(<a href="gui.html">separate volume</a>).</p>
+<ul>
+  <li><code>try/catch</code> INSIDE a <code>native function</code>
+      (throwing from the native and catching OUTSIDE does work): the
+      <code>.mdn</code> does not embed setjmp; deferred, with the design noted.</li>
+  <li>Fixed-size array <code>type[N]</code> as a class field and inside a
+      <code>native function</code> (compile error, with the alternative:
+      <code>type[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
+  <li>AOT on ESP32 (the S3's Xtensa, the P4's RISC-V) — the <code>.mdn</code> is
+      Thumb-2 (RP2350 and STM32 do accelerate); v4.</li>
+  <li>Performance improvement (not functionality): a <code>native</code>'s call
+      to a function in ANOTHER module already works, but crosses the interpreter
+      bridge (the compiler warns). The improvement — dispatching native→native
+      directly, without re-entering the interpreter — has a closed design in
+      <code>docs/AOT_CROSS_MODULE.md</code> (v4). Within the same module it is
+      already a direct C call.</li>
+  <li>Networking on the micros: the TCP client (the <code>Net</code> module,
+      §13.29) works on PC; on Pico 2 W / ESP32-S3 the WiFi+lwIP backend is
+      missing (v4) — for now it throws a catchable RuntimeError there.</li>
+  <li><code>owner</code> / <code>final</code> do not apply to module properties.</li>
+  <li><code>Mutex</code> is non-reentrant; no <code>Semaphore</code> /
+      <code>Channel</code> in the stdlib.</li>
+  <li>Owners on exception paths (some throw paths skip the deterministic free).</li>
+  <li>Closures over the enclosing scope's locals in <code>case</code> bodies of
+      the <code>parallel</code> statement (today only stdlib + module
+      non-globals are visible — see <a href="#conc-encapsulacion">§14.3</a>).</li>
+  <li><code>Adc</code>: on RP2350B boards (48 GPIO) channels 4-7 are not yet
+      exposed in BP (common subset 0..3; the backend already supports them).</li>
+  <li>Dual-core on-board (the SMP VM runs single-core on the device; RP2350
+      dual-core is left for v4, with SWD debugging).</li>
+  <li>Generics / type parameters in user classes.</li>
+  <li>Explicit versioning of library contracts (covered pragmatically with
+      <code>extends</code>).</li>
+</ul>
+
+<hr>
+<p style="color:var(--fg-muted); font-size:0.85em">
+  BasicPlus reference manual — generated alongside development.
+  Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) and
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) ·
+  Formats <code>.mod</code> v5 / <code>.bpi</code> v6.
+</p>
+
+</main>
+</div>
+</body>
+</html>
