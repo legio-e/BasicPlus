@@ -39,7 +39,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 | Placa | Firmware | Boot+INFO | Ejec/OO (paridad) | GPIO (blink) | I2C | SPI | UART | reset-cause | autorun+Stop |
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
-| **Metro RP2350B** | `pico` (misma img) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| **Metro RP2350B** | `pico` (misma img) | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
 | **ESP32-S3 DevKit** | `esp32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | **STM32 Nucleo-U575** | `stm32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 
@@ -53,6 +53,9 @@ buses son código compartido; basta validarlos en una placa con los cacharros a 
   en un sample compute y comparar con host.
 - **Metro RP2350B**: subir `/sys/board.json` (variante B) → INFO debe mostrar 48 GPIO +
   **PSRAM 8 MB usada como heap** + NeoPixel. Es la placa donde el heap PSRAM importa.
+  **✅ 4-jul (INFO):** RP2350B · 48 GPIO · 8 ADC · 16 MB flash · **PSRAM 8 MB** — **imagen
+  única CONFIRMADA** (el MISMO `bpvm_pico.uf2` que la Pico 2; la variante la elige
+  `/sys/board.json` vía `SetBoardMetro.bp`). PSRAM sondeada+habilitada en GP47.
 - **ESP32-S3**: wire por UART0 (bridge); consola/logs por USB nativo. `native`
   interpretada (sin AOT en Xtensa) — corre igual, sin ganancia.
 - **STM32 Nucleo**: wire por VCP del ST-LINK; AOT ARM (probar `^`/`eval`). reset-cause
