@@ -165,10 +165,16 @@ commit del fix si lo hay.)_
   **pico (Metro) COLGÓ mudo** → el bug del cuelgue es del **firmware pico** (su `fs_put`/`compact`
   bajo lleno), **NO del núcleo compartido**. Gran acotación para la sesión de repro. Nota: el FS
   del DK2 (96 KB) es JUSTO para la GUI → hay que **limpiar `/app`** (borrar los `.mod` de prueba)
-  antes de las demos gráficas; ¿ampliar la partición FS del DK2? → V4. **A CONFIRMAR:** con el
-  FS lleno el explorer del IDE parece **no listar todos los ficheros** (Eduardo: al borrar `/app`
-  van "apareciendo" los de `/lib` que estaban ocultos) — ¿truncación de la respuesta `LIST` del
-  device con muchos ficheros (tope de buffer del reply)? o refresco cosmético. → mirar en V4.
+  antes de las demos gráficas; ¿ampliar la partición FS del DK2? → V4.
+
+- **DK2/stm32 · el explorer no lista todos los ficheros con el FS lleno** (bug CONFIRMADO,
+  usabilidad → V4) — `handle_list` (`stm32_repl.c:112`) monta el `LIST_REPLY` en un **buffer fijo
+  de 1024 B** y **trunca en silencio** (`break`, L137) cuando no cabe → tope **~14 entradas**
+  (Eduardo lo vio: al borrar `/app` "aparecen" los de `/lib`). El **pico NO lo tiene** (streamea
+  el LIST con `fputs`, sin buffer). Afecta stm32 (y probablemente esp32/P4, mismo patrón buffered).
+  Funcionalmente inocuo (RUN/DEL por nombre van; los ficheros existen). **Fix propio = streamear
+  el LIST como el pico** (bump del buffer solo sube el tope + gasta stack) → **V4** (toca firmware).
+  No bloquea el batch (workaround: limpiar `/app`).
 
 - **DK2 (Grupo 2) · build fallaba: `printf` sin `<stdio.h>`** — al Paso 0 del Grupo 2 (Eduardo
   recompilando el `Discovery_u5g9j` en CubeIDE), `stm32/port/gui_display_ltdc.c` no compilaba:
