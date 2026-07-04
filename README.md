@@ -182,10 +182,9 @@ ESP-IDF, STM32CubeIDE); see `bpgenvm-c/{pico,esp32,stm32}/`.
 Documentation is available in **English** (`docs/en/`) and
 **[Spanish](README.es.md)** (`docs/`).
 
-- **[Quick start](docs/QUICKSTART.md)** *(Spanish)* — zero to blink, per
-  platform.
-- **[Installing the firmware](docs/INSTALAR_FIRMWARE.md)** *(Spanish)* —
-  flashing the VM on each micro (prebuilt image or built by you).
+- **[Quick start](docs/en/QUICKSTART.md)** — zero to blink, per platform.
+- **[Installing the firmware](docs/en/INSTALAR_FIRMWARE.md)** — flashing
+  the VM on each micro (prebuilt image or built by you).
 - **[Language manual](docs/en/manual.html)** — lexicon, types, classes,
   modules, exceptions, concurrency.
 - **[Reference](docs/en/referencia.html)** — the complete standard library,
