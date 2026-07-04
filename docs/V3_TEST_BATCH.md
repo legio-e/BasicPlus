@@ -113,7 +113,7 @@ ahora tiene la de P5, sin la stdlib unificada.
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **P4 Function-EV** (ek79007, default) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] (sin json = EV) |
 | **Waveshare P4** (st7701) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] (`SetDisplay.bp` → st7701) |
-| **STM32 DK2** (LTDC) | [ ] | [ ] | [ ] | [ ] | [ ] | n/a² | n/a |
+| **STM32 DK2** (LTDC) | [x] | [ ] | [x] | [ ] | [ ] | n/a² | n/a |
 
 ² La rotación (`Gui.setRotation`) no está en la DK2/LTDC en esta versión (avisa y sigue).
 
