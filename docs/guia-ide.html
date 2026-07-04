@@ -167,6 +167,7 @@
     <li><a href="#proyectos">3. Proyectos</a></li>
     <li><a href="#compilar">4. Editar y compilar</a></li>
     <li><a href="#ejecutar">5. Ejecutar (y parar)</a></li>
+    <li style="padding-left:0.9rem;font-size:0.9em"><a href="#aot">5.1 native (AOT): el toolchain</a></li>
     <li><a href="#placa">6. Conectarse a la placa</a></li>
     <li><a href="#consola">7. La consola del micro</a></li>
     <li><a href="#info">8. INFO del dispositivo</a></li>
@@ -177,6 +178,7 @@
   <ul>
     <li><a href="manual.html">Manual del lenguaje</a></li>
     <li><a href="referencia.html">Referencia</a></li>
+    <li><a href="gui.html">Interfaz gráfica</a></li>
     <li><a href="bp-desde-dentro.html">Basic Plus desde dentro</a></li>
   </ul>
 </nav>
@@ -284,6 +286,37 @@
   — allí <code>IO.prompt</code> lanza un <code>RuntimeError</code>
   atrapable, así que envuélvelo en <code>try/catch</code> si tu programa
   ha de correr también en placa.
+</p>
+
+<h3 id="aot">5.1 <code>native</code> (AOT): instalar el toolchain ARM</h3>
+<p>
+  Si el programa usa <code>function native</code>, en <em>Run on Device</em> el
+  IDE compila esas funciones a código máquina (<code>.mdn</code>) y lo sube
+  junto al <code>.mod</code> — en las placas ARM (RP2350 y STM32). Para ese
+  paso hace falta tener instalado en el PC el <strong>toolchain ARM
+  bare-metal</strong> (<code>arm-none-eabi-gcc</code>):
+</p>
+<ul>
+  <li><strong>Windows</strong> — el instalador del <em>Arm GNU Toolchain</em>
+      (arm-none-eabi) de developer.arm.com. Si ya usas STM32CubeIDE o el
+      pico-sdk, ya tienes uno instalado.</li>
+  <li><strong>Linux</strong> — <code>sudo apt install gcc-arm-none-eabi</code>
+      (Debian/Ubuntu) o el paquete equivalente de tu distribución.</li>
+</ul>
+<p>
+  El IDE lo <strong>autodetecta</strong> (la instalación estándar del Arm GNU
+  Toolchain, o el <code>PATH</code>). Si no lo encuentra, se fija a mano en
+  <strong>Project → AOT (toolchain)…</strong>: la ruta de
+  <code>arm-none-eabi-gcc</code> y la raíz de <code>bpgenvm-c</code> (aporta
+  las cabeceras del runtime), cada una con su botón <em>Detectar</em>. Ese
+  ajuste es por máquina; qué proyectos usan AOT (y para qué placa) va en el
+  <code>.bpbuild</code> del proyecto (sección <code>"aot"</code>).
+</p>
+<p class="note">
+  El toolchain es <strong>opcional</strong>: si no está, el IDE avisa y el
+  programa corre <em>interpretado</em> — mismo comportamiento, menos velocidad
+  en los kernels de cómputo. En los ESP32 (S3 y P4) <code>native</code> corre
+  interpretado en esta versión.
 </p>
 
 <h2 id="placa">6. Conectarse a la placa</h2>

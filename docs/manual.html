@@ -840,8 +840,10 @@ lista.add(pair())                      <span class="comment">// entran en colecc
   <li><strong>Cómo se genera el <code>.mdn</code></strong>: el IDE lo hace
       <strong>automáticamente</strong> en <em>Run on Device</em> (v3, en placas
       ARM: RP2350/STM32): detecta el <strong>toolchain ARM bare-metal</strong>
-      (<code>arm-none-eabi-gcc</code>, p. ej. el <em>Arm GNU Toolchain</em>, en
-      el <code>PATH</code> o configurado por proyecto), emite C, compila
+      (<code>arm-none-eabi-gcc</code> — instalación estándar del <em>Arm GNU
+      Toolchain</em> o <code>PATH</code>; se fija a mano en <em>Project → AOT
+      (toolchain)…</em>; instalación: <a href="guia-ide.html#aot">Guía del IDE
+      §5.1</a>), emite C, compila
       Thumb-2 PIC y sube el <code>.mdn</code> junto al <code>.mod</code>. Si no
       hay toolchain, <strong>avisa y el programa corre interpretado</strong>
       (el <code>.mdn</code> es opcional y aditivo). El paso también puede

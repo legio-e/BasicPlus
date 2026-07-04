@@ -8,7 +8,10 @@ por plataforma. Para el detalle fino de cada port: los README de
 
 ## 1. PC (sin placa) — 5 minutos
 
-Requisitos: JDK 8+, Maven, GCC (MinGW en Windows), `make`.
+Requisitos: JDK 8+, Maven, GCC (MinGW en Windows), `make`. Opcional, para
+`function native` en RP2350/STM32: el **Arm GNU Toolchain**
+(`arm-none-eabi-gcc`) — instalación y configuración en la
+[guía del IDE](guia-ide.html#aot).
 
 ```sh
 # Toolchain (compilador + VM Java) y VM C de host
