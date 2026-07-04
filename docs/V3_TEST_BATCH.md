@@ -40,7 +40,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
 | **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [x]³ | —¹ | —¹ | —¹ | [x] | [x] |
-| **ESP32-S3 DevKit** | `esp32` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
+| **ESP32-S3 DevKit** | `esp32` | [x] | [x] | —¹ | —¹ | —¹ | —¹ | [x] | [x] |
 | **STM32 Nucleo-U575** | `stm32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 
 ¹ **I2C/SPI/UART en Pico 2 y Metro (RP2350) = diferidos** a la placa donde el cableado sea cómodo (los
@@ -64,6 +64,10 @@ buses son código compartido; basta validarlos en una placa con los cacharros a 
   mismo binario que Pico 2 (allí ✅). Hallazgo abierto: el cuelgue con `/app` lleno (registro).
 - **ESP32-S3**: wire por UART0 (bridge); consola/logs por USB nativo. `native`
   interpretada (sin AOT en Xtensa) — corre igual, sin ganancia.
+  **S3 CERRADA (4-jul):** Boot+INFO · paridad `^`/`eval` (interpretado) · **ADC/PWM fix
+  verificado** (PicoInfo 20/8) · reset-cause · CRC skip-PUT · Stop ✅. GPIO-pin no probado
+  (`blink.bp` hardcodea GP25 ≠ LED del S3; sin sample S3-blink a mano) e I2C/SPI/UART
+  diferidos → a una sesión con cableado. El backend GPIO esp32 SÍ se ejercita (INFO=45).
 - **STM32 Nucleo**: wire por VCP del ST-LINK; AOT ARM (probar `^`/`eval`). reset-cause
   vía `RCC->CSR`.
 
