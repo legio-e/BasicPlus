@@ -40,7 +40,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
 | **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [x]³ | —¹ | —¹ | —¹ | [x] | [x] |
-| **ESP32-S3 DevKit** | `esp32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| **ESP32-S3 DevKit** | `esp32` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
 | **STM32 Nucleo-U575** | `stm32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 
 ¹ **I2C/SPI/UART en Pico 2 y Metro (RP2350) = diferidos** a la placa donde el cableado sea cómodo (los
@@ -185,6 +185,14 @@ commit del fix si lo hay.)_
   `board_desc`→8), solo la API BP los ocultaba. **Fix (5º commit del batch):**
   `.adcChannels`/`.pwmSlices = board_desc()->…` (calcado de `gpioCount`, commit 88bd7d4).
   ✅ **Verificado 4-jul:** Metro recompilada+reflasheada → PicoInfo da `ADC channels: 8` (era 4).
+
+- **S3/Nucleo · MISMO bug ADC/PWM en los backends esp32 + stm32** — el fix de la Metro solo
+  tocó el backend pico; los backends **esp32** (`gpio_esp32.c`) y **stm32** (`gpio_stm32.c`)
+  tenían el MISMO hueco (`.gpioCount` sí, `.adcChannels`/`.pwmSlices` no) → fallback 4/12.
+  **CONFIRMADO en la S3:** PicoInfo dio `ADC channels: 4` / `PWM slices: 12` (debían 20/8).
+  Fix **f15b7a5** (esp32 → 20/8; stm32 → 20/28; casan con lo que ya reporta el INFO del wire).
+  **Pendiente:** reflash esp32 (S3) + stm32 (Nucleo) → verificar. **Menor S3 → V4:** `Pico.tempC()`
+  devuelve 0 (el backend esp32 no cablea el sensor de temperatura interno).
 
 - **Puerta 0 · TryCatch** — el harness daba 1 rojo (V3-Java salía vacío, "paridad
   rota"). **Causa: hueco del arnés, NO regresión del producto.** `try/catch` en V3
