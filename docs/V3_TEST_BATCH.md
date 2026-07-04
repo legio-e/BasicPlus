@@ -41,7 +41,7 @@ rebuild los recoge — no hace falta nada más por tu parte.
 | **Pico 2** (RP2350A) | `pico` | [x] | [x] | [x] | —¹ | —¹ | —¹ | [x] | [x] |
 | **Metro RP2350B** | `pico` (misma img) | [x] | [x] | [x]³ | —¹ | —¹ | —¹ | [x] | [x] |
 | **ESP32-S3 DevKit** | `esp32` | [x] | [x] | —¹ | —¹ | —¹ | —¹ | [x] | [x] |
-| **STM32 Nucleo-U575** | `stm32` | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| **STM32 Nucleo-U575** | `stm32` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | [x] | [ ] |
 
 ¹ **I2C/SPI/UART en Pico 2 y Metro (RP2350) = diferidos** a la placa donde el cableado sea cómodo (los
 buses son código compartido; basta validarlos en una placa con los cacharros a mano).
@@ -196,8 +196,11 @@ commit del fix si lo hay.)_
   tenían el MISMO hueco (`.gpioCount` sí, `.adcChannels`/`.pwmSlices` no) → fallback 4/12.
   **CONFIRMADO en la S3:** PicoInfo dio `ADC channels: 4` / `PWM slices: 12` (debían 20/8).
   Fix **f15b7a5** (esp32 → 20/8; stm32 → 20/28; casan con lo que ya reporta el INFO del wire).
-  ✅ **esp32 VERIFICADO en la S3** (reflasheada → PicoInfo da `ADC 20 / PWM 8`, casan con el INFO).
-  Pendiente: stm32 (Nucleo). **Menor S3 → V4:** `Pico.tempC()` devuelve 0 (el backend esp32 no
+  ✅ **esp32 VERIFICADO en la S3** (reflasheada → PicoInfo da `ADC 20 / PWM 8`, casan con el INFO)
+  y ✅ **stm32 VERIFICADO en la Nucleo** (PicoInfo `ADC 20 / PWM 28`, sin reflash-extra: el fix iba
+  pre-cargado) → **los 3 backends verificados**. **Otro → V4:** en la Nucleo `GPIO count` sale 128
+  (backend `STM32_PIN_COUNT`) vs 114 (string del INFO) — desajuste cosmético pre-existente, no el
+  bug ADC. **Menor S3 → V4:** `Pico.tempC()` devuelve 0 (el backend esp32 no
   cablea el sensor de temperatura interno). **Nota FS (relevante al cuelgue):** en la S3 el `/app`
   **PERSISTE** al reflash (partición esp; no RAM-only como el pico — el skip-PUT confirmó
   `/app/PicoInfo.mod` idéntico tras reflashear) → allí `/app` se acumula, el cuelgue podría
