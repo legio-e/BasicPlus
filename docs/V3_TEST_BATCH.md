@@ -117,11 +117,11 @@ ahora tiene la de P5, sin la stdlib unificada.
 
 ² La rotación (`Gui.setRotation`) no está en la DK2/LTDC en esta versión (avisa y sigue).
 
-⁴ **Formulario `.win` en la DK2 = bloqueado por el tamaño del FS** (96 KB no traga `Gui.mod` 31 KB
-+ `Json.mod` 16 KB + stdlib sembrada ~40 KB + form). El **mecanismo de forms está verificado en el
-P4** (formdemo funciona ahí). → **RESUELTO en código (5-jul, commit `abd24f8`): FS de la DK2 subido a
-496 KB arena / 512 KB región, per-placa (Nucleo intacta).** FALTA: recompilar+flashear la DK2 + probar
-FormDemo en placa (1er arranque = FS vacío, re-siembra `/lib` sola).
+⁴ **Formulario `.win` en la DK2 = era bloqueado por el tamaño del FS** (96 KB no tragaba `Gui.mod`
+31 KB + `Json.mod` 16 KB + stdlib sembrada ~40 KB + form). → **RESUELTO Y VERIFICADO EN PLACA (5-jul,
+commit `abd24f8`): FS de la DK2 a 496 KB arena / 512 KB región, per-placa (Nucleo intacta).** INFO en
+placa = `FS 35 KB / 496 KB`; FormDemo sube Gui+Json **sin `NO_SPACE`**, renderiza y los handlers
+disparan (`onSaludar` + checkbox). **Forms GUI en las 3 familias (P4-EV · Waveshare · DK2).**
 
 **DK2 CERRADA (4-jul, con salvedad):** no gráfico (Boot+INFO · paridad AOT · ADC/PWM fix · reset-cause
 `NRST`) ✅; gráfico (pantalla · widgets · color · **táctil + dispatch por slot**) ✅. Falta el
@@ -141,9 +141,9 @@ dimensiones del árbol pasan de 480×320 a 320×480 = giro real — lo que el DK
 > **P4-EV · Waveshare-P4 · DK2** verificadas. **Imagen única P4 DEMOSTRADA en placa:** el mismo
 > `bpvm_esp32p4` (byte a byte) enciende **ek79007** (EV) *y* **st7701** (Waveshare) vía `board.json`
 > — un binario, dos paneles P4, elegido en runtime. GUI + táctil + forms + rotación en el P4;
-> GUI + táctil + forms en el DK2. **Salvedad DK2:** el formulario `.win` estaba bloqueado por su FS
-> de 96 KB (mecanismo verificado en P4) → **RESUELTO en código (commit `abd24f8`): FS a 496/512 KB
-> per-placa; falta recompilar+flashear+probar FormDemo en la DK2.**
+> GUI + táctil + forms en el DK2. **Salvedad DK2 → CERRADA (5-jul):** el formulario `.win` estaba
+> bloqueado por su FS de 96 KB → **FS a 496/512 KB per-placa (commit `abd24f8`), VERIFICADO EN PLACA:
+> `FS 35 KB / 496 KB`, FormDemo carga + renderiza + handlers disparan. Forms GUI en las 3 familias.**
 **Pendiente genuino del Grupo 2: Waveshare P4** (2ª placa, `SetDisplay.bp`→st7701) = imagen única
 sobre el build FINAL (la memoria: re-flashear la Waveshare con la imagen final).
 
