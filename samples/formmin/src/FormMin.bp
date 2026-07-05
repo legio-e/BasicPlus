@@ -1,0 +1,28 @@
+// FormMin.bp — bisección P4: ventana + .win MÍNIMO. Prints por el wire →
+// consola del IDE, para ver el paso exacto donde (si pasa) se cuelga.
+module FormMin
+import Gui
+
+  public class MainWin extends Gui.Window
+    public function MainWin()
+    end MainWin
+
+    // Handler del evento clic del Label (peldaño "eventos": el IDE hornea
+    // "clic":"onPulsar" → clicSlot → buildForm llama __bindEvents).
+    // OJO: nombre propio (NO "onClick", que choca con el onClick() heredado
+    // de Gui.Component, sin parámetros) — igual que formdemo usa onSaludar.
+    public function onPulsar(sender: Gui.Component)
+      print "[FormMin] onPulsar disparado"
+    end onPulsar
+  end MainWin
+
+  function main(arg: string)
+    print "== FormMin: creando MainWin =="
+    var w: MainWin := MainWin()
+    print "== MainWin OK; w.load(main.win) =="
+    w.load("main.win")
+    print "== load OK; Gui.run() =="
+    Gui.run()
+  end main
+
+end FormMin

@@ -1,0 +1,18 @@
+// GuiWinLbl.bp — bisección P4 (peldaño 3a): Window + un Label HIJO (sin .win).
+// Label usa __guiCreateLabel (= lv_label_create). Tests "meter un widget como
+// hijo del contenedor de la Window" (parent = lv_obj creado, no la pantalla).
+// Los prints van por el wire → consola del IDE; señalan el paso exacto.
+module GuiWinLbl
+  import Gui
+
+  function Main()
+    print "== GuiWinLbl: creando Window =="
+    var w: Gui.Window := Gui.Window()
+    print "== Window OK; creando Label hijo (lv_label_create) =="
+    var lbl: Gui.Label := Gui.Label(w, "Label en Window")
+    lbl.align(Gui.Align.CENTER, 0, 0)
+    print "== Label OK; Gui.run() =="
+    Gui.run()
+  end Main
+
+end GuiWinLbl

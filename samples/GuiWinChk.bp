@@ -1,0 +1,17 @@
+// GuiWinChk.bp — bisección P4 (peldaño 4): Window + un Checkbox HIJO (sin .win).
+// Checkbox usa __guiCreateCheckbox — el ÚNICO widget de formdemo que GuiColorDemo
+// no tiene (sus botones ya prueban Button). Si esto cuelga → es el Checkbox.
+module GuiWinChk
+  import Gui
+
+  function Main()
+    print "== GuiWinChk: creando Window =="
+    var w: Gui.Window := Gui.Window()
+    print "== Window OK; creando Checkbox hijo (__guiCreateCheckbox) =="
+    var cb: Gui.Checkbox := Gui.Checkbox(w, "Activar")
+    cb.align(Gui.Align.CENTER, 0, 0)
+    print "== Checkbox OK; Gui.run() =="
+    Gui.run()
+  end Main
+
+end GuiWinChk

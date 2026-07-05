@@ -128,3 +128,9 @@ bpgenvm-c/esp32p4_lvgl_test/
 # el manifiesto idf_component.yml SÍ se versiona). Igual que el firmware del S3.
 bpgenvm-c/esp32p4/managed_components/
 bpgenvm-c/esp32p4/dependencies.lock
+
+# ============================================================
+# Capturas de pantalla / imágenes de trabajo (locales, fuera del repo)
+# ============================================================
+/Captura_pantallas_Graficas/
+/Imagenes IDE/

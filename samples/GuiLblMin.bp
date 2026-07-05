@@ -1,0 +1,16 @@
+// GuiLblMin.bp — bisección P4 (paso 1): lo MÍNIMO que debería ir.
+// Screen + 1 Label, igual familia que GuiColorDemo (que funciona). Sin Window,
+// sin Panel, sin .win. Si ESTO cuelga, el problema es muy básico; si va (lo
+// esperado), subimos un peldaño con GuiWinMin.
+module GuiLblMin
+  import Gui
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var lbl: Gui.Label := Gui.Label(scr, "Hola P4")
+    lbl.align(Gui.Align.CENTER, 0, 0)
+    print "== GuiLblMin: label creado, entro a Gui.run() =="
+    Gui.run()
+  end Main
+
+end GuiLblMin

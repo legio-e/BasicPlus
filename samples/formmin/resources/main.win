@@ -1,0 +1,7 @@
+{
+  "class": "MainWin",
+  "type": "Panel",
+  "children": [
+    { "type": "Label", "text": "Hola .win", "clic": "onPulsar" }
+  ]
+}

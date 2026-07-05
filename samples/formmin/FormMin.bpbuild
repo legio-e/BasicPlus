@@ -1,0 +1,11 @@
+// Bisección P4 — proyecto con el .win MÍNIMO (Panel + 1 Label, sin align,
+// sin eventos, sin Checkbox). Abre este proyecto en BpIde → Run on Device.
+// Si CUELGA → el problema está en la maquinaria del .win (readJsonFile +
+// buildForm + applyCommon + fijar tamaño del raíz). Si VA → vamos creciendo
+// el main.win (añadir align, luego Button+clic, luego Checkbox+change).
+{
+  "sourceDir":    "src",
+  "outDir":       "out",
+  "main":         "FormMin",
+  "dependencies": []
+}

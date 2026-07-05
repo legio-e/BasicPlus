@@ -1,0 +1,22 @@
+// SetBoardMetro.bp — configura /sys/board.json para la Adafruit Metro RP2350B.
+//
+// El firmware Pico es imagen UNICA: la misma bpvm_pico.uf2 sirve a la Pico 2
+// (variante A, 30 GPIO) y a la Metro (variante B, 48 GPIO + PSRAM 8 MB). La
+// placa concreta se declara en /sys/board.json.
+//
+// Uso:  "Run on Device" UNA vez -> escribe el fichero. Luego RESETEA la placa:
+// el firmware lee /sys/board.json en el ARRANQUE, asi que el INFO nuevo
+// (RP2350B + PSRAM + 48 GPIO) aparece tras el reset.
+//
+// Para volver al default (variante A): borrar el fichero
+// (consola del explorer: del /sys/board.json).
+module SetBoardMetro
+
+    const JSON := "{\"name\":\"metro-rp2350b\",\"variant\":\"B\",\"psramCsPin\":47,\"ledPin\":23,\"neopixelPin\":25}"
+
+    function main()
+        writeFile("/sys/board.json", JSON)
+        print("escrito /sys/board.json: " + readFile("/sys/board.json"))
+    end
+
+end SetBoardMetro

@@ -1,0 +1,23 @@
+// GuiWinPanel.bp — bisección P4 (peldaño 3b): Window + un Panel HIJO (sin .win).
+// Panel usa __guiCreateObj (= lv_obj_create) con parent = el contenedor de la
+// Window (un lv_obj creado, NO la pantalla). ESTE es el delta exacto frente a
+// GuiColorDemo (que mete widgets bajo Gui.Screen). Es lo que hace formdemo al
+// cargar su .win (raíz = Panel). Los prints van por el wire → consola del IDE.
+//   - Si sale "creando Panel hijo" pero NO "Panel OK" (y salta el WDT) →
+//     CONFIRMADO: cuelga lv_obj_create con parent = lv_obj (no pantalla). El
+//     .win/Json quedan descartados del todo.
+module GuiWinPanel
+  import Gui
+
+  function Main()
+    print "== GuiWinPanel: creando Window =="
+    var w: Gui.Window := Gui.Window()
+    print "== Window OK; creando Panel hijo (lv_obj_create, parent=lv_obj) =="
+    var p: Gui.Panel := Gui.Panel(w)
+    print "== Panel OK; creando Label dentro del Panel =="
+    var lbl: Gui.Label := Gui.Label(p, "Label en Panel")
+    print "== Label OK; Gui.run() =="
+    Gui.run()
+  end Main
+
+end GuiWinPanel

@@ -1,0 +1,19 @@
+// GuiWinMin.bp — bisección P4 (paso 2): solo CONSTRUIR una Gui.Window, sin .win.
+//
+// Sospecha (por el backtrace del WDT en lv_obj_create + lectura de Gui.bp):
+// Gui.Window() llama __guiScreenActive() y luego __guiCreateObj(scr) =
+// lv_obj_create — el create genérico que NO usa GuiColorDemo (que va con
+// Gui.Screen). Los prints viajan por el wire → consola del IDE:
+//   - si sale "antes" pero NO "Window creada OK" (y salta el WDT) → el cuelgue
+//     está EXACTAMENTE en Gui.Window()/lv_obj_create. El .win queda descartado.
+module GuiWinMin
+  import Gui
+
+  function Main()
+    print "== GuiWinMin: antes de Gui.Window() =="
+    var w: Gui.Window := Gui.Window()
+    print "== GuiWinMin: Window creada OK, entro a Gui.run() =="
+    Gui.run()
+  end Main
+
+end GuiWinMin
