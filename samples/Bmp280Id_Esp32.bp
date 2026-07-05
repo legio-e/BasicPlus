@@ -33,7 +33,7 @@ module Bmp280IdEsp32
     print "--- BME280/BMP280 chip_id por I2C (H16 ESP32-S3, bus 0 = I2C0) ---"
 
     // bus 0 = I2C0. SDA=GPIO8, SCL=GPIO9. 100 kHz (STANDARD).
-    var bus: I2c.Bus := I2c.Bus(0, 8, 9, I2c.Bus.STANDARD)
+    var bus: I2c.Bus := I2c.Bus(1, 20, 21, I2c.Bus.STANDARD)
 
     print "[1] scan del bus I2C (0x08..0x77)..."
     var devs: integer[] := bus.scan()

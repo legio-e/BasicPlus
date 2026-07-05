@@ -191,9 +191,9 @@ module Bme280ReadEsp32
   function main()
     print "--- BME280 T/H/P por I2C (H16 ESP32-S3, bus 0 = I2C0) ---"
 
-    // bus 0 = I2C0. SDA=GPIO8, SCL=GPIO9.
-    var bus: I2c.Bus := I2c.Bus(0, 8, 9, I2c.Bus.STANDARD)
-    var s: Sensor := Sensor(bus, 0x76)
+    // bus 0 = I2C0. SDA=GPIO20, SCL=GPIO21.
+    var bus: I2c.Bus := I2c.Bus(1, 20, 21, I2c.Bus.STANDARD)
+    var s: Sensor := Sensor(bus, 118)
 
     if s.begin() == false then
       print "RESULT: FAIL -- begin() no arranco (chip =", s.chipID(), ", esperado 96/88)"

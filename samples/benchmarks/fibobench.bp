@@ -28,7 +28,7 @@ module Fibo
 		ini := now()
 		i := 0
 		total := 0
-		while i < 5 do
+		while i < 1 do
 			total := total + fibo(30)
 			i := i + 1
 		endwh
@@ -39,7 +39,7 @@ module Fibo
 		ini := now()
 		i := 0
 		total := 0
-		while i < 5 do
+		while i < 1 do
 			total := total + fiboNative(30)
 			i := i + 1
 		endwh

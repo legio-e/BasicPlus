@@ -231,6 +231,11 @@
     <li class="group"><a href="referencia.html#cli">15. Compilación &amp; ejecución</a></li>
     <li class="group"><a href="referencia.html#artefactos">16. Artefactos en disco</a></li>
   </ul>
+  <h2>Gráficos (volumen aparte)</h2>
+  <ul>
+    <li class="group"><a href="gui.html#intro">18–25. Interfaz gráfica (<code>Gui</code>)</a></li>
+    <li><a href="en/manual.html">🇬🇧 English</a></li>
+  </ul>
 </nav>
 
 <main>
@@ -325,7 +330,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <h3 id="literales">3.4 Literales</h3>
 <table>
   <tr><th>Tipo</th><th>Ejemplos</th></tr>
-  <tr><td>Integer</td><td><code>0</code> <code>42</code> <code>-7</code> <code>0xFF</code></td></tr>
+  <tr><td>Integer</td><td><code>0</code> <code>42</code> <code>-7</code> <code>0xFF</code> (hex) <code>0b1010</code> (binario)</td></tr>
   <tr><td>Long</td><td><code>123L</code> <code>4000000000L</code> — sufijo <code>L</code>/<code>l</code> sobre un entero decimal</td></tr>
   <tr><td>Float</td><td><code>3.14</code> <code>1.0e-3</code> — sin sufijo, un literal con punto o exponente es <code>float</code> (f32)</td></tr>
   <tr><td>Double</td><td><code>1.5d</code> <code>5d</code> <code>2e3d</code> — sufijo <code>d</code>/<code>D</code> sobre un entero o float</td></tr>
@@ -333,6 +338,13 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Boolean</td><td><code>true</code> <code>false</code></td></tr>
   <tr><td>Null</td><td><code>null</code> (sólo para referencias: clases y arrays)</td></tr>
 </table>
+<p>
+  En cualquier literal numérico se admite el <strong>separador visual <code>_</code></strong>
+  entre dígitos (estilo Python); el valor es idéntico a sin él. Vale en decimal, hex,
+  binario, la fracción y el exponente:
+  <code>1_000_000</code> · <code>0xDE_AD</code> · <code>0b1111_0000</code> ·
+  <code>2_000_000L</code> · <code>1_234.5</code> · <code>1_0e2</code>.
+</p>
 
 <h3 id="multilinea">3.5 Continuación de línea</h3>
 <p>
@@ -565,6 +577,8 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <table>
   <tr><th>Categoría</th><th>Operadores</th></tr>
   <tr><td>Aritmética</td><td><code>+ - * / mod</code> (con coerción int↔float)</td></tr>
+  <tr><td>Potencia</td><td><code>^</code> — <code>2 ^ 10</code> = 1024. <code>int^int</code> exacto (entero);
+      <code>float^int</code> por cuadrados; <code>float^float</code> por exp·ln (float)</td></tr>
   <tr><td>Bit a bit (sólo integer)</td><td><code>&amp; | xor shl shr</code> y unario <code>~</code></td></tr>
   <tr><td>Comparación</td><td><code>== != &lt; &lt;= &gt; &gt;=</code></td></tr>
   <tr><td>Lógicos</td><td><code>and or not</code></td></tr>
@@ -577,7 +591,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   Precedencia (de menor a mayor):
   <code>or</code> &lt; <code>and</code> &lt; <code>not</code> &lt; comparación
   &lt; bit-or &lt; bit-xor &lt; bit-and &lt; shift &lt; <code>+ -</code>
-  &lt; <code>* / mod</code> &lt; unario.
+  &lt; <code>* / mod</code> &lt; unario &lt; <code>^</code>.
+  La potencia es <strong>asociativa a la derecha</strong> (<code>2 ^ 2 ^ 3</code> =
+  <code>2 ^ (2 ^ 3)</code> = 256) y liga más fuerte que el unario:
+  <code>-x ^ 2</code> = <code>-(x ^ 2)</code>.
 </p>
 
 <!-- =========================================================== -->
@@ -821,21 +838,20 @@ lista.add(pair())                      <span class="comment">// entran en colecc
       posible (el puente existe), pero cruza de vuelta al intérprete: lo
       ganado en velocidad se pierde en cada cruce. El compilador lo detecta
       y emite un <strong>warning de rendimiento</strong>.</li>
-  <li><strong>Cómo se genera el <code>.mdn</code></strong>: hoy la
-      compilación AOT es un <strong>paso de línea de comandos aparte</strong>,
-      no la hace el IDE. El IDE produce el <code>.mod</code> (bytecode) y
-      <em>valida</em> que la native sea compilable AOT, pero el overlay
-      <code>.mdn</code> lo genera el script <code>build_mdn.sh</code>
-      (<code>AotMain</code> emite C → <code>arm-none-eabi-gcc</code>
-      compila Thumb-2 PIC → <code>MdnPack</code> empaqueta). Necesitas el
-      <strong>toolchain ARM bare-metal</strong>
-      (<code>arm-none-eabi-gcc</code>, p. ej. el <em>Arm GNU Toolchain</em>)
-      instalado; el script lo busca en el <code>PATH</code> o en la variable
-      de entorno <code>GCC</code>
-      (<code>GCC=/ruta/arm-none-eabi-gcc ./build_mdn.sh …</code>). Como el
-      <code>.mdn</code> es opcional y aditivo, si no lo generas el programa
-      sigue corriendo (interpretado). <em>Integrar este paso en el IDE,
-      con detección/configuración del toolchain, está previsto para v3.</em></li>
+  <li><strong>Cómo se genera el <code>.mdn</code></strong>: el IDE lo hace
+      <strong>automáticamente</strong> en <em>Run on Device</em> (v3, en placas
+      ARM: RP2350/STM32): detecta el <strong>toolchain ARM bare-metal</strong>
+      (<code>arm-none-eabi-gcc</code> — instalación estándar del <em>Arm GNU
+      Toolchain</em> o <code>PATH</code>; se fija a mano en <em>Project → AOT
+      (toolchain)…</em>; instalación: <a href="guia-ide.html#aot">Guía del IDE
+      §5.1</a>), emite C, compila
+      Thumb-2 PIC y sube el <code>.mdn</code> junto al <code>.mod</code>. Si no
+      hay toolchain, <strong>avisa y el programa corre interpretado</strong>
+      (el <code>.mdn</code> es opcional y aditivo). El paso también puede
+      hacerse a mano con el script <code>build_mdn.sh</code>
+      (<code>AotMain</code> emite C → <code>arm-none-eabi-gcc</code> →
+      <code>MdnPack</code> empaqueta; busca el compilador en el
+      <code>PATH</code> o en la variable de entorno <code>GCC</code>).</li>
 </ul>
 
 <!-- =========================================================== -->
@@ -880,8 +896,15 @@ lista.add(pair())                      <span class="comment">// entran en colecc
 <h3 id="ctor">9.3 Constructor</h3>
 <p>
   Función con el mismo nombre que la clase. Se ejecuta al hacer
-  <code>NombreClase(args)</code>. Si la clase tiene clase base, debe llamar
-  a <code>super(args)</code> como primera sentencia.
+  <code>NombreClase(args)</code>. Cuando se llama a <code>super(args)</code>,
+  debe ser la primera sentencia.
+</p>
+<p>
+  <strong><code>super()</code> implícito (modelo Java).</strong> Si la clase tiene base y su
+  constructor no llama a <code>super(...)</code>, el compilador <em>inyecta</em> la llamada
+  al constructor sin argumentos del padre. Si el constructor del padre <em>exige</em>
+  argumentos, la llamada explícita es obligatoria (error de compilación si falta). Si el
+  padre no tiene constructor, no hay nada que llamar y no se inyecta nada.
 </p>
 
 <h3 id="herencia">9.4 Herencia</h3>
@@ -1445,12 +1468,13 @@ objeto compartido</code></pre>
 <!-- =========================================================== -->
 <!-- =========================================================== -->
 <h2 id="pendientes">17. Pendientes / no soportado</h2>
-<p style="color:var(--fg-muted)">Estado al cierre de V2 (junio 2026). Lo
+<p style="color:var(--fg-muted)">Estado al cierre de V3 (julio 2026). Lo
 que estaba aquí y ya se hizo: clases/properties en <code>.bpi</code>
 (cross-module completo), tipos cualificados <code>Mod.Clase</code>,
-<code>Collections.Map</code>, fichero de proyecto, y el safepoint
+<code>Collections.Map</code>, fichero de proyecto, el safepoint
 stop-the-world del GC (la VM-Java corre además a 1 worker por defecto,
-igual que el device).</p>
+igual que el device) y, en V3, el AOT automático desde el IDE y la GUI
+(<a href="gui.html">volumen aparte</a>).</p>
 <ul>
   <li><code>try/catch</code> DENTRO de una <code>native function</code>
       (lanzar desde la native y atrapar FUERA sí funciona): el
@@ -1458,17 +1482,17 @@ igual que el device).</p>
   <li>Array de tamaño fijo <code>tipo[N]</code> como campo de clase y
       dentro de una <code>native function</code> (error de compilación con
       alternativa: <code>tipo[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
-  <li>AOT para Xtensa (ESP32-S3) — el <code>.mdn</code> es Thumb-2
-      (RP2350 y STM32 sí aceleran).</li>
+  <li>AOT en ESP32 (Xtensa del S3, RISC-V del P4) — el <code>.mdn</code> es
+      Thumb-2 (RP2350 y STM32 sí aceleran); v4.</li>
   <li>Mejora de rendimiento (no de funcionalidad): la llamada de una
       <code>native</code> a una función de OTRO módulo ya funciona, pero
       cruza por el puente del intérprete (el compilador avisa). La mejora
       — despachar native→native directo, sin re-entrar al intérprete —
-      tiene el diseño cerrado en <code>docs/AOT_CROSS_MODULE.md</code> (v3).
+      tiene el diseño cerrado en <code>docs/AOT_CROSS_MODULE.md</code> (v4).
       Dentro del mismo módulo ya es llamada C directa.</li>
   <li>Red en los micros: el cliente TCP (módulo <code>Net</code>, §13.29)
       funciona en PC; en Pico 2 W / ESP32-S3 falta el backend WiFi+lwIP
-      (H11.b/c, v3) — hoy allí lanza RuntimeError atrapable.</li>
+      (v4) — hoy allí lanza RuntimeError atrapable.</li>
   <li><code>owner</code> / <code>final</code> no aplican a property de
       módulo.</li>
   <li><code>Mutex</code> no reentrante; sin <code>Semaphore</code> /
@@ -1481,7 +1505,7 @@ igual que el device).</p>
   <li><code>Adc</code>: en placas RP2350B (48 GPIO) los canales 4-7 aún no
       se exponen en BP (subset común 0..3; el backend ya los soporta).</li>
   <li>Dual-core en placa (la VM SMP corre single-core en device; el
-      dual-core RP2350 queda para v3, con depuración SWD).</li>
+      dual-core RP2350 queda para v4, con depuración SWD).</li>
   <li>Genéricos / type parameters en clases del usuario.</li>
   <li>Versionado explícito de contratos de librería (cubierto
       pragmáticamente con <code>extends</code>).</li>
@@ -1491,7 +1515,7 @@ igual que el device).</p>
 <p style="color:var(--fg-muted); font-size:0.85em">
   BasicPlus reference manual — generado al hilo del desarrollo.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) y
-  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / STM32) ·
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) ·
   Formatos <code>.mod</code> v5 / <code>.bpi</code> v6.
 </p>
 
