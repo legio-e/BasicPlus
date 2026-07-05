@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.mycompany</groupId>
     <artifactId>BpIde</artifactId>
-    <version>2.0</version>
+    <version>3.0</version>
     <packaging>jar</packaging>
     <dependencies>
         <dependency>
@@ -80,7 +80,7 @@
             <!--
               Fat-jar: empaqueta el IDE + todas las deps (basicplus-frontend,
               bpgenvm, purejavacomm + sus deps transitivas como JNA) en un
-              único jar ejecutable con `java -jar BpIde-2.0.jar`.
+              único jar ejecutable con `java -jar BpIde-3.0.jar`.
               Necesario para correr el IDE fuera de NetBeans sin pelear con
               classpaths.
             -->

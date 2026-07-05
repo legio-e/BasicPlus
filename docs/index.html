@@ -166,17 +166,26 @@
   <h1>BasicPlus</h1>
   <p class="tagline">
     Un lenguaje de propósito general para microcontroladores de 32 bits:
-    sintaxis BASIC moderna, orientación a objetos y un depurador de primera
-    clase. Compila a bytecode que corre <strong>idéntico</strong> en el PC y
-    en el micro.
+    sintaxis BASIC moderna, orientación a objetos, <strong>interfaz gráfica</strong>
+    y un depurador de primera clase. Compila a bytecode que corre
+    <strong>idéntico</strong> en el PC y en el micro.
   </p>
   <div class="badges">
-    <span class="badge">V2 · código congelado</span>
-    <span class="badge">RP2350 · ESP32-S3 · STM32</span>
+    <span class="badge">V3 · interfaz gráfica</span>
+    <span class="badge">RP2350 · ESP32-S3/P4 · STM32</span>
+    <span class="badge">GUI con LVGL</span>
     <span class="badge">Dos VMs · una salida byte-idéntica</span>
     <span class="badge">Probado en hardware real</span>
     <span class="badge">MIT</span>
   </div>
+  <figure style="margin:2.2rem auto 0;max-width:660px">
+    <img src="img/guicolordemo.png"
+         alt="La demo GuiColorDemo de BasicPlus — una paleta de botones de colores — en una placa con pantalla"
+         style="width:100%;height:auto;border-radius:10px;border:1px solid var(--border);box-shadow:0 6px 22px rgba(0,0,0,0.12)">
+    <figcaption style="font-size:0.85rem;color:var(--fg-muted);margin-top:0.6rem;text-align:center">
+      <code>GuiColorDemo</code> en placa — GUI con LVGL. El mismo bytecode se ejecuta en el PC y en el micro.
+    </figcaption>
+  </figure>
 </header>
 
 <p>
@@ -204,6 +213,13 @@
     <span class="kw">print</span> <span class="str">"Blink terminado"</span>
   <span class="kw">end</span> Main
 <span class="kw">end</span> Blink</code></pre>
+
+<p style="margin-top:1.4rem">
+  <strong>Nuevo en V3:</strong> interfaces gráficas con <strong>LVGL</strong> — una
+  veintena de widgets, formularios que diseñas en un fichero JSON y táctil, con el
+  mismo «pinta en el PC, ejecuta en la placa». Todo en la
+  <a href="gui.html">guía de interfaz gráfica</a>.
+</p>
 
 <h2>Empezar</h2>
 <div class="cards">
@@ -253,7 +269,7 @@
   </a>
   <a class="card" href="RELEASES.md">
     <span class="t">Notas de versión →</span>
-    <span class="d">Qué trae v2.0, los artefactos para descargar y lo diferido a v3.</span>
+    <span class="d">Qué trae v3.0, los artefactos para descargar y lo diferido a v4.</span>
   </a>
 </div>
 
@@ -285,9 +301,14 @@
     <td>FS persistente en partición dedicada; consola por USB nativo. <code>native</code> interpretada (sin AOT en Xtensa).</td>
   </tr>
   <tr>
-    <td><strong>STM32</strong> (ref. Nucleo-U575ZI-Q)</td>
+    <td><strong>ESP32-P4</strong> (RISC-V) — con pantalla</td>
+    <td>UART</td>
+    <td>GUI con LVGL sobre panel MIPI-DSI + táctil. Una <strong>imagen única</strong> para el kit Function-EV (EK79007 1024×600) y la Waveshare 4.3" (ST7701 480×800); el panel se elige en <em>runtime</em> (<code>/sys/board.json</code>). <code>native</code> interpretada.</td>
+  </tr>
+  <tr>
+    <td><strong>STM32</strong> (Nucleo-U575ZI-Q · Discovery U5G9J-DK2)</td>
     <td>VCP del ST-LINK</td>
-    <td>FS en flash interna; AOT activo (mismo Cortex-M33 que el RP2350).</td>
+    <td>FS en flash interna; AOT activo (mismo Cortex-M33 que el RP2350). El <strong>Discovery DK2</strong> añade pantalla LTDC 800×480 + táctil (GUI).</td>
   </tr>
 </table>
 <p>
@@ -325,8 +346,16 @@
   <strong>ESP32-S3</strong> (DevKitC) se validaron en placa esos <strong>mismos cuatro buses</strong>
   con sensores reales (BME688 por SPI, BME280 por I2C, loopbacks de GPIO y UART) — las
   <strong>tres familias quedan a la par</strong>. En STM32 y ESP32, los periféricos no críticos
-  (PWM/ADC/RTC/WDT) existen en la API y se ejecutan, pero su backend queda para v3. El
+  (PWM/ADC/RTC/WDT) existen en la API y se ejecutan; su backend HW llegó en v3. El
   <strong>Metro RP2350B</strong> comparte la imagen de firmware con la Pico.
+</p>
+
+<p>
+  <strong>V3 — placas con pantalla.</strong> La GUI (LVGL) se ha verificado en placa en las
+  tres: <strong>STM32U5G9J-DK2</strong> (LTDC 800×480 + táctil GT911),
+  <strong>ESP32-P4-Function-EV</strong> (EK79007 1024×600) y <strong>Waveshare ESP32-P4</strong>
+  (ST7701 480×800) — catálogo de widgets, color, formularios <code>.win</code> y táctil, con el
+  mismo bytecode en las tres.
 </p>
 
 <div class="note">
@@ -341,7 +370,7 @@
 <footer>
   BasicPlus — documentación generada al hilo del desarrollo.
   Frontend <code>lexer-java</code> · VMs <code>miVM</code> (Java) y
-  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / STM32) · IDE
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) · IDE
   <code>BpIde</code>. Licencia MIT.
 </footer>
 

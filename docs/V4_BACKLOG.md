@@ -50,8 +50,8 @@ El índice que manda; el resto del documento es el detalle que va colgando de é
 
 ## 🔴 Bugs delicados (movidos de `PENDIENTES.md`, 27-jun)
 
-Tres bugs que exigen tocar la maquinaria de slots/vtable o el GC → se hacen en V4
-con red de pruebas (no son fixes contenidos de V3).
+Bugs que exigen tocar maquinaria delicada (slots/vtable, GC, o el FS del firmware) → se
+hacen en V4 con red de pruebas (no son fixes contenidos de V3).
 
 ### B-174b — slot de vtable divergente al añadir métodos a clase base con subclases  ⭐ (el que más desbloquea)
 Añadir métodos a una clase que tiene subclases desplaza su vtable y `ClassSymbol.ensureMethodSlots`
@@ -75,6 +75,15 @@ de memoria/GC. No ha mordido (workloads reales OK), pero es un agujero de correc
 recursivamente los campos `owner`. Un árbol de objetos con dueños no se libera en cascada → **fuga hasta que
 el GC mark-sweep lo recoja** (no permanente, pero las owner-semantics prometen free determinista). Hallado
 28-jun (relacionado con L7).
+
+### B-fs-pico-hang — cuelgue mudo del pico con `/app` lleno de módulos (batch 4-jul)
+Correr una demo (p.ej. `NeoDemo`) con `/app` MUY lleno de `.mod` colgó la Metro (hubo que resetear, sin
+mensaje). NO es tope limpio del FS (`fs_put` ya devuelve `NO_SPACE`/`TABLE_FULL`) → overflow/loop/corrupción
+en el `fs_put`/`compact` del pico. **LOCALIZADO al firmware pico**: la DK2/stm32 con el FS lleno da error
+limpio `NO_SPACE`, NO cuelga → no es el núcleo. Riesgo: es código compartido del FS (`s_data` + cargador),
+podría morder en cualquier placa con `/app` a tope. **Método (Eduardo):** reproducir EN FRÍO primero (subir
+`.mod` 1 a 1 sin resetear + correr la demo entre medias → nº y punto exactos), localizar, y SOLO ENTONCES
+tocar (territorio delicado). Documentado como limitación conocida en la release v3.0.
 
 ---
 
@@ -109,5 +118,9 @@ el GC mark-sweep lo recoja** (no permanente, pero las owner-semantics prometen f
 - **Layout compacto de narrow** (`byte[]`/`int16[]` con storage real; hoy i32).
 
 ## 🟢 Mejoras menores (de `PENDIENTES.md`, candidatas a V4)
+- **L-list-stm32-trunc — `LIST` truncado a ~14 entradas en STM32** (batch 4-jul): `handle_list`
+  (`stm32_repl.c:~112`) arma la respuesta en un buffer fijo de 1024 B y corta al no caber → el explorer del
+  IDE ve ~14 ficheros aunque haya más ("efecto ventana"). El pico streamea con `fputs` y no lo sufre. Fix:
+  paginar o streamear la respuesta del LIST en el stm32. Cosmético (no pierde datos, solo el listado).
 - **M6 — `const := Color.RED`**: inlinar el valor de enum (conocido en compilación) desde
   `EnumSymbol.values` en vez de dar "requiere literal". (Sale de N17, ya resuelto.)
