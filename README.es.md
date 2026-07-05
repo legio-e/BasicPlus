@@ -3,12 +3,13 @@
 > 🇬🇧 [English version](README.md)
 
 **Un lenguaje de propósito general para microcontroladores de 32 bits, con
-sintaxis BASIC moderna, orientación a objetos y un debugger de primera clase.**
+sintaxis BASIC moderna, orientación a objetos, interfaz gráfica y un debugger
+de primera clase.**
 
 Compila a bytecode (`.mod`) que corre **idéntico** en el PC y en el micro:
 el mismo programa que depuras en tu sobremesa parpadea después un LED en una
-Raspberry Pi Pico 2, un ESP32-S3 o un STM32 — sin recompilar, sin `#ifdef`,
-sin sorpresas.
+Raspberry Pi Pico 2, un ESP32-S3, un ESP32-P4 o un STM32 — sin recompilar, sin
+`#ifdef`, sin sorpresas.
 
 ```basic
 // blink.bp — parpadea el LED on-board de la Pico (GP25) con el API OO.
@@ -32,6 +33,20 @@ end Blink
 
 En un PC sin GPIO los builtins de hardware loggean por stdout; en la placa
 mueven pines de verdad. El programa es el mismo byte a byte.
+
+## Nuevo en V3 — interfaces gráficas
+
+V3 añade **interfaces gráficas** sobre **LVGL**: una veintena de widgets, la
+posibilidad de **diseñar las pantallas en un fichero JSON** que en tiempo de
+ejecución se convierte en la ventana (con sus manejadores de eventos ya
+conectados), y táctil — todo con el mismo "pinta en el PC, corre en la placa".
+Verificado en tres pantallas: **STM32U5G9J-DK2** (LTDC), **ESP32-P4-Function-EV**
+(EK79007) y una **Waveshare ESP32-P4** (ST7701).
+
+![GuiColorDemo en placa — GUI con LVGL](docs/img/guicolordemo.png)
+
+*La demo `GuiColorDemo` — el mismo bytecode corre en el PC y en el micro.
+Todo en la **[guía de interfaz gráfica](docs/gui.html)**.*
 
 ---
 
@@ -66,6 +81,9 @@ pequeño de hoy: los microcontroladores de 32 bits.
 - **`native function`**: funciones compiladas AOT a C/Thumb-2 (`.mdn`) que
   corren a velocidad nativa en RP2350/STM32 — 40-90× sobre el intérprete en
   kernels de cómputo, con faults propagados a `try/catch` BP.
+- **Interfaz gráfica**: el módulo `Gui` sobre **LVGL** — ~20 widgets OO,
+  formularios diseñados en JSON (`.win`), color y fuentes, táctil. El mismo
+  bytecode pinta en una ventana del PC y en la pantalla de la placa.
 - **Biblioteca estándar**: `Core`, `Math`, `IO` (ficheros + prompt), `Str`,
   `Collections`, `Stats`, `Compress` (LZSS), `Log`, `Json`, `Net` (cliente
   TCP) y el zoo de hardware: `Gpio`, `I2c`, `Spi`, `Uart`, `Pwm`, `Adc`,
@@ -90,10 +108,11 @@ no sea un eslogan.
 
 | Plataforma | Transporte | Notas |
 |---|---|---|
-| PC (Windows/Linux/macOS) | — | Ambas VMs; daemon TCP para el IDE |
+| PC (Windows/Linux/macOS) | — | Ambas VMs; daemon TCP para el IDE. La VM-C + LVGL/SDL pinta la GUI en una ventana. |
 | Raspberry Pi **Pico 2** y Adafruit **Metro RP2350** | USB-CDC | **Una imagen de firmware única** para ambas placas: la variante (A/B), los pines y la PSRAM se deciden en *runtime* (`/sys/board.json`), no con macros de compilación. AOT activo. |
-| **ESP32-S3** (Xtensa) | UART0 | FS persistente en partición dedicada; consola por USB nativo |
-| **STM32** (ref. Nucleo-U575ZI-Q) | VCP del ST-LINK | FS en flash interna; AOT activo (mismo Cortex-M33 que el RP2350) |
+| **ESP32-S3** (Xtensa) | UART0 | FS persistente en partición dedicada; consola por USB nativo. |
+| **ESP32-P4** (RISC-V) — con pantalla | UART | GUI con LVGL sobre panel MIPI-DSI + táctil. **Una imagen única** para el kit Function-EV (EK79007 1024×600) y la Waveshare 4.3" (ST7701 480×800); el panel se elige en *runtime* (`/sys/board.json`). |
+| **STM32** (Nucleo-U575ZI-Q · Discovery U5G9J-DK2) | VCP del ST-LINK | FS en flash interna; AOT activo (mismo Cortex-M33 que el RP2350). El **Discovery DK2** añade pantalla LTDC (800×480) + táctil (GUI). |
 
 En todas: REPL "wire v1" (JSON por línea) con subida de ficheros, RUN
 remoto, **Stop** (KILL cooperativo sin resetear la placa), **autorun**
@@ -125,11 +144,13 @@ En el **STM32** (Nucleo-U575ZI-Q) se han validado además en placa, con sensores
 reales, los **cuatro buses críticos**: GPIO, **SPI** (BME688), **UART** (loopback)
 e **I2C** (BME280, T/P). Y en el **ESP32-S3** (DevKitC) se validaron en placa esos
 **mismos cuatro buses** con sensores reales (BME688 por SPI, BME280 por I2C, loopbacks
-de GPIO y UART) — las **tres familias quedan a la par**. En STM32 y ESP32 los
-periféricos no críticos (PWM/ADC/RTC/WDT) existen en la API y se ejecutan, pero su
-backend en esas familias queda para v3. El **Metro RP2350B** comparte la imagen de
-firmware con la Pico. Todo el detalle, en el
-**[plan de test en hardware](docs/H14_TEST_PLAN.md)**.
+de GPIO y UART) — las **tres familias no gráficas quedan a la par**. El **Metro
+RP2350B** comparte la imagen de firmware con la Pico.
+
+**V3 — las placas con pantalla.** La GUI (LVGL) se ha verificado en placa en las
+tres: **STM32U5G9J-DK2** (LTDC 800×480 + táctil GT911), **ESP32-P4-Function-EV**
+(EK79007 1024×600) y **Waveshare ESP32-P4** (ST7701 480×800) — catálogo de widgets,
+color, formularios `.win` y táctil, con el mismo bytecode en las tres.
 
 ## El IDE
 
@@ -143,11 +164,11 @@ breakpoints y paso a paso tanto en la VM local como dentro del dispositivo.
 ```
 lexer-java/   compilador (frontend): .bp → .mod + .bpi + .dbg (+ AOT .mdn)
 miVM/         VM Java + debugger + daemon TCP
-bpgenvm-c/    VM C99: host, firmware Pico/RP2350, ESP32-S3, STM32
+bpgenvm-c/    VM C99: host, firmware Pico/RP2350, ESP32-S3, ESP32-P4, STM32
 BpIde/        IDE Swing (fat-jar)
 bpstdlib/     biblioteca estándar (fuentes .bp + .mod compilados)
 samples/      programas de ejemplo
-docs/         manual, specs (.mod, opcodes, heap, wire), backlog
+docs/         manual, guía gráfica, specs (.mod, opcodes, heap, wire), backlog
 ```
 
 ## Compilar y probar (PC)
@@ -159,7 +180,7 @@ Requisitos: JDK 8+, Maven, GCC (MinGW en Windows), `make`.
 mvn -f miVM/pom.xml install
 mvn -f lexer-java/pom.xml install
 
-# 2. VM C de host
+# 2. VM C de host  (añade LVGL=1 para la ventana de la GUI; ver bpgenvm-c/README)
 cd bpgenvm-c && make && cd ..
 
 # 3. Compilar y ejecutar un ejemplo en AMBAS VMs
@@ -170,11 +191,12 @@ bpgenvm-c/build/bpgenvm-c samples/Blink.mod
 
 # 4. (Opcional) el IDE
 mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-1.0-SNAPSHOT-shaded.jar
+java -jar BpIde/target/BpIde-3.0.jar
 ```
 
 Los firmwares se compilan con sus toolchains habituales (pico-sdk + ninja,
-ESP-IDF, STM32CubeIDE); ver `bpgenvm-c/{pico,esp32,stm32}/`.
+ESP-IDF, STM32CubeIDE); ver `bpgenvm-c/{pico,esp32,esp32p4,stm32}/`. O coge
+los **binarios precompilados** de la [última release](https://github.com/legio-e/BasicPlus/releases/latest).
 
 ## Documentación
 
@@ -185,6 +207,8 @@ ESP-IDF, STM32CubeIDE); ver `bpgenvm-c/{pico,esp32,stm32}/`.
   módulos, excepciones, concurrencia.
 - **[Referencia](docs/referencia.html)** — biblioteca estándar completa,
   línea de comandos y artefactos en disco.
+- **[Guía de interfaz gráfica](docs/gui.html)** — el módulo `Gui`: widgets,
+  color y fuentes, formularios (`.win`), ejecución en host y placa.
 - **[Guía del IDE](docs/guia-ide.html)** — la ventana, proyectos, Run/Stop,
   el explorador de la placa, la consola del micro y el depurador.
 - **[Basic Plus desde dentro](docs/bp-desde-dentro.html)** — la arquitectura:
@@ -197,15 +221,17 @@ ESP-IDF, STM32CubeIDE); ver `bpgenvm-c/{pico,esp32,stm32}/`.
 
 ## Estado
 
-**V2 — código congelado, en fase de documentación** (junio 2026). La V1
-cerró con las tres familias de micros funcionando end-to-end; la V2 añadió
-long/double, strings UTF-8, tuplas, defaults, static properties, herencia
-cross-module completa, file I/O, logger, autorun, Stop, cliente TCP y un
-IDE consolidado. Solo se aceptan correcciones de bugs; todo lo demás va a v3.
+**V3 — interfaces gráficas** (julio 2026). La V1 demostró la idea; la V2 la
+endureció y la amplió; **la V3 le pone cara**: un módulo `Gui` sobre LVGL,
+pantallas diseñadas en JSON, y tres placas nuevas con pantalla (Discovery
+STM32U5, ESP32-P4-EV, Waveshare ESP32-P4) — el mismo bytecode, ahora con
+gráficos y táctil, verificado en hardware real.
 
-Detalle completo de lo que trae esta entrega: **[notas de versión](docs/RELEASES.md)**.
+Descargas (7 binarios precompilados) y detalle completo: la
+**[release v3.0](https://github.com/legio-e/BasicPlus/releases/tag/v3.0)** y las
+**[notas de versión](docs/RELEASES.md)**.
 
 ## Licencia
 
-[MIT](LICENSE). Hecho con cariño, dos placas en la mesa y memoria de los
+[MIT](LICENSE). Hecho con cariño, placas en la mesa y memoria de los
 PDP-11.

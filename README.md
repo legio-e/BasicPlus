@@ -3,12 +3,12 @@
 > 🇪🇸 [Versión en español](README.es.md)
 
 **A general-purpose language for 32-bit microcontrollers, with modern BASIC
-syntax, object orientation and a first-class debugger.**
+syntax, object orientation, a graphical UI and a first-class debugger.**
 
 It compiles to bytecode (`.mod`) that runs **identically** on the PC and on
 the micro: the same program you debug on your desktop later blinks an LED on
-a Raspberry Pi Pico 2, an ESP32-S3 or an STM32 — no recompiling, no
-`#ifdef`, no surprises.
+a Raspberry Pi Pico 2, an ESP32-S3, an ESP32-P4 or an STM32 — no recompiling,
+no `#ifdef`, no surprises.
 
 ```basic
 // blink.bp — blinks the Pico on-board LED (GP25) using the OO API.
@@ -32,6 +32,19 @@ end Blink
 
 On a PC with no GPIO the hardware builtins log to stdout; on the board they
 drive real pins. The program is the same, byte for byte.
+
+## New in V3 — graphical interfaces
+
+V3 adds **graphical interfaces** built on **LVGL**: around twenty widgets, the
+ability to **design screens in a JSON file** that becomes the window (with its
+event handlers already wired) at runtime, and touch — all with the same "paints
+on the PC, runs on the board". Verified on three screens: **STM32U5G9J-DK2**
+(LTDC), **ESP32-P4-Function-EV** (EK79007) and a **Waveshare ESP32-P4** (ST7701).
+
+![GuiColorDemo running on a board — GUI with LVGL](docs/img/guicolordemo.png)
+
+*The `GuiColorDemo` sample — the same bytecode runs on the PC and on the micro.
+Everything in the **[GUI guide](docs/en/gui.html)**.*
 
 ---
 
@@ -66,6 +79,9 @@ hardware: 32-bit microcontrollers.
 - **`native function`**: functions AOT-compiled to C/Thumb-2 (`.mdn`) that
   run at native speed on RP2350/STM32 — 40-90× over the interpreter on
   compute kernels, with faults propagated to BP `try/catch`.
+- **Graphical UI**: the `Gui` module over **LVGL** — ~20 OO widgets, forms
+  designed in JSON (`.win`), color and fonts, touch. The same bytecode paints
+  in a window on the PC and on the board's screen.
 - **Standard library**: `Core`, `Math`, `IO` (files + prompt), `Str`,
   `Collections`, `Stats`, `Compress` (LZSS), `Log`, `Json`, `Net` (TCP
   client) and the hardware zoo: `Gpio`, `I2c`, `Spi`, `Uart`, `Pwm`, `Adc`,
@@ -90,10 +106,11 @@ slogan.
 
 | Platform | Transport | Notes |
 |---|---|---|
-| PC (Windows/Linux/macOS) | — | Both VMs; TCP daemon for the IDE |
+| PC (Windows/Linux/macOS) | — | Both VMs; TCP daemon for the IDE. VM-C + LVGL/SDL renders the GUI in a window. |
 | Raspberry Pi **Pico 2** and Adafruit **Metro RP2350** | USB-CDC | **A single firmware image** for both boards: variant (A/B), pins and PSRAM are decided at *runtime* (`/sys/board.json`), not with compile-time macros. AOT enabled. |
-| **ESP32-S3** (Xtensa) | UART0 | Persistent FS on a dedicated partition; console over native USB |
-| **STM32** (ref. Nucleo-U575ZI-Q) | ST-LINK VCP | FS in internal flash; AOT enabled (same Cortex-M33 as the RP2350) |
+| **ESP32-S3** (Xtensa) | UART0 | Persistent FS on a dedicated partition; console over native USB. |
+| **ESP32-P4** (RISC-V) — with a screen | UART | GUI over LVGL on a MIPI-DSI panel + touch. **A single image** for the Function-EV (EK79007 1024×600) and the Waveshare 4.3" (ST7701 480×800); the panel is chosen at *runtime* (`/sys/board.json`). |
+| **STM32** (Nucleo-U575ZI-Q · Discovery U5G9J-DK2) | ST-LINK VCP | FS in internal flash; AOT enabled (same Cortex-M33 as the RP2350). The **Discovery DK2** adds an LTDC screen (800×480) + touch (GUI). |
 
 On all of them: a "wire v1" REPL (JSON per line) with file upload, remote
 RUN, **Stop** (cooperative KILL without resetting the board), **autorun**
@@ -126,11 +143,14 @@ validated on the board with real sensors: GPIO, **SPI** (BME688), **UART**
 (loopback) and **I2C** (BMP280, T/P). And on the **ESP32-S3** (DevKitC)
 those **same four buses** were validated on the board with real sensors
 (BME688 over SPI, BME280 over I2C, GPIO and UART loopbacks) — the **three
-families are on par**. On STM32 and ESP32 the non-critical peripherals
-(PWM/ADC/RTC/WDT) exist in the API and execute, but their backend on those
-families is scheduled for v3. The **Metro RP2350B** shares the firmware
-image with the Pico. Full details in the
-**[hardware test plan](docs/H14_TEST_PLAN.md)** *(Spanish)*.
+non-graphical families are on par**. The **Metro RP2350B** shares the firmware
+image with the Pico.
+
+**V3 — the boards with a screen.** The GUI (LVGL) was verified on the board on
+all three: **STM32U5G9J-DK2** (LTDC 800×480 + GT911 touch),
+**ESP32-P4-Function-EV** (EK79007 1024×600) and **Waveshare ESP32-P4** (ST7701
+480×800) — widget catalog, color, `.win` forms and touch, the same bytecode on
+all three.
 
 ## The IDE
 
@@ -144,11 +164,11 @@ the local VM and inside the device.
 ```
 lexer-java/   compiler (frontend): .bp → .mod + .bpi + .dbg (+ AOT .mdn)
 miVM/         Java VM + debugger + TCP daemon
-bpgenvm-c/    C99 VM: host, Pico/RP2350 firmware, ESP32-S3, STM32
+bpgenvm-c/    C99 VM: host, Pico/RP2350 firmware, ESP32-S3, ESP32-P4, STM32
 BpIde/        Swing IDE (fat-jar)
 bpstdlib/     standard library (.bp sources + compiled .mod)
 samples/      example programs
-docs/         manual, specs (.mod, opcodes, heap, wire), backlog
+docs/         manual, GUI guide, specs (.mod, opcodes, heap, wire), backlog
 ```
 
 ## Build and try it (PC)
@@ -160,7 +180,7 @@ Requirements: JDK 8+, Maven, GCC (MinGW on Windows), `make`.
 mvn -f miVM/pom.xml install
 mvn -f lexer-java/pom.xml install
 
-# 2. Host C VM
+# 2. Host C VM  (add LVGL=1 for the GUI window; see bpgenvm-c/README)
 cd bpgenvm-c && make && cd ..
 
 # 3. Compile and run an example on BOTH VMs
@@ -171,11 +191,12 @@ bpgenvm-c/build/bpgenvm-c samples/Blink.mod
 
 # 4. (Optional) the IDE
 mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-1.0-SNAPSHOT-shaded.jar
+java -jar BpIde/target/BpIde-3.0.jar
 ```
 
 The firmwares are built with their usual toolchains (pico-sdk + ninja,
-ESP-IDF, STM32CubeIDE); see `bpgenvm-c/{pico,esp32,stm32}/`.
+ESP-IDF, STM32CubeIDE); see `bpgenvm-c/{pico,esp32,esp32p4,stm32}/`. Or grab
+the **prebuilt binaries** from the [latest release](https://github.com/legio-e/BasicPlus/releases/latest).
 
 ## Documentation
 
@@ -205,16 +226,17 @@ Documentation is available in **English** (`docs/en/`) and
 
 ## Status
 
-**V2 — code frozen, documentation phase** (June 2026). V1 closed with the
-three microcontroller families working end to end; V2 added long/double,
-UTF-8 strings, tuples, default parameters, static properties, full
-cross-module inheritance, file I/O, a logger, autorun, Stop, a TCP client
-and a consolidated IDE. Only bug fixes are accepted; everything else goes
-to v3.
+**V3 — graphical interfaces** (July 2026). V1 proved the idea; V2 hardened and
+broadened it; **V3 gives it a face**: a `Gui` module over LVGL, screens designed
+in JSON, and three new boards with a display (STM32U5 Discovery, ESP32-P4-EV,
+Waveshare ESP32-P4) — the same bytecode, now with graphics and touch, verified
+on real hardware.
 
-Full detail of what this release brings: **[release notes](docs/RELEASES.md)** *(Spanish)*.
+Downloads (7 prebuilt binaries) and full detail: the
+**[v3.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v3.0)** and the
+**[release notes](docs/RELEASES.md)** *(Spanish)*.
 
 ## License
 
-[MIT](LICENSE). Made with care, two boards on the desk, and memories of the
+[MIT](LICENSE). Made with care, boards on the desk, and memories of the
 PDP-11.
