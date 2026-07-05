@@ -46,7 +46,7 @@ _Min_Stack_Size = 0x4000; /* 16 KB: el interprete BP corre sobre este stack (V3/
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 3008K
-  FLASH    (rx)    : ORIGIN = 0x08000000,   LENGTH = 3968K   /* 4 MB - 128 KB reservados al FS @0x083E0000 (stm32_fs.c) */
+  FLASH    (rx)    : ORIGIN = 0x08000000,   LENGTH = 3584K   /* 4 MB - 512 KB reservados al FS @0x08380000 (board.h/stm32_fs.c) */
 }
 
 /* Sections */

@@ -43,8 +43,9 @@ CubeMX no la pise.
   con resolución de imports. **Requiere 160 MHz** (a 4 MHz el bulk del PUT
   desborda la RX del USART).
 - **H9.3** (✅ pendiente placa) — **FS persistente** en flash interna
-  (`stm32_fs.c`: `fs_save`/`fs_load`). Región = últimos **128 KB** (`0x081E0000`),
-  reservados en el `.ld` (FLASH 1920 KB + `FS_FLASH`) → disjunta del programa.
+  (`stm32_fs.c`: `fs_save`/`fs_load`). Región **per-placa** (`board.h`): Nucleo
+  **128 KB** (`0x081E0000`, FLASH 1920 KB) · **DK2 512 KB** (`0x08380000`, FLASH
+  3584 KB) para apps GUI grandes (V3). Reservada en el `.ld` → disjunta del programa.
   Auto-persist en PUT/DEL/FORMAT (los PUT a `/lib` no persisten). Al boot
   restaura `/app`; `/lib` lo re-instala el embebido. Borra por páginas (8 KB),
   programa quad-words (16 B), banco/página por `DUALBANK`, ICACHE off (sin tocar

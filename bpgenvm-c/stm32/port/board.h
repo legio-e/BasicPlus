@@ -25,7 +25,13 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
 #define BOARD_WIRE_IRQn         USART1_IRQn  /* IRQ de RX → ring (V3/H5.2) */
 #define BOARD_NAME              "u5g9j-dk2"
 #define BOARD_SRAM_BYTES        (3008UL * 1024UL)   /* SRAM interna contigua (linker) */
-#define BOARD_FS_FLASH_ADDR     0x083E0000u          /* últimos 128 KB de 4 MB (reservados en el .ld) */
+#define BOARD_FS_FLASH_ADDR     0x08380000u          /* últimos 512 KB de 4 MB (reservados en el .ld) */
+/* FS per-placa (V3): la DK2 es la placa gráfica insignia → FS grande para apps GUI.
+ * Un form pesa ~111 KB de pico (Gui.mod 31 KB + Json.mod 16 KB + stdlib + app); 496 KB
+ * de arena = holgura de sobra. Cabe: 3 MB SRAM y, restando 512 KB al programa, 3584 KB
+ * de flash (el firmware ocupa <1 MB). REGION = 8 KB cabecera + arena, múltiplo de página. */
+#define BOARD_FS_ARENA_SIZE     (496u * 1024u)       /* arena del FS en RAM (.bss) */
+#define BOARD_FS_REGION_SIZE    (512u * 1024u)       /* región de persistencia en flash */
 /* H10 — RTC HW: la DK2 YA lo tiene habilitado en su CubeMX (hrtc) con reloj LSE 32768
  * (cristal real → más preciso que el LSI de la Nucleo; el default 127/255 da 1 Hz) →
  * backend RTC activo, sin tocar CubeMX. (ADC1 aún NO está en su .ioc → BOARD_HAS_ADC_TEMP
@@ -60,6 +66,10 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
 #define BOARD_NAME              "nucleo-u575zi"
 #define BOARD_SRAM_BYTES        (768UL * 1024UL)
 #define BOARD_FS_FLASH_ADDR     0x081E0000u          /* últimos 128 KB de 2 MB (.ld limita código a 1920 KB) */
+/* FS per-placa (V3): la Nucleo se queda en el tamaño de V2 (known-good). Solo 768 KB de
+ * SRAM y no es placa gráfica → no se agranda el arena. */
+#define BOARD_FS_ARENA_SIZE     (96u * 1024u)        /* arena del FS en RAM (sin cambios vs V2) */
+#define BOARD_FS_REGION_SIZE    (128u * 1024u)       /* región de persistencia en flash (sin cambios vs V2) */
 /* H10 — ADC1 habilitado en CubeMX (hadc1) con el canal interno del sensor de
  * temperatura → stm32_temp_c_impl() lee la temperatura del die por ADC. La DK2
  * aún no lo define (sigue con el stub) hasta que se habilite ADC1 en su .ioc. */

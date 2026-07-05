@@ -11,7 +11,12 @@
 
 #define FS_MAX_FILES   40   /* 13 stdlib core en /lib + módulos de app + holgura */
 #define FS_NAME_MAX    64
-#define FS_ARENA_SIZE  (96u * 1024u)
+/* Tamaño del arena (RAM) per-placa, definido en board.h (DK2 496 KB / Nucleo 96 KB).
+ * Fallback conservador 96 KB si alguna placa no lo define. */
+#ifndef BOARD_FS_ARENA_SIZE
+#define BOARD_FS_ARENA_SIZE  (96u * 1024u)
+#endif
+#define FS_ARENA_SIZE  BOARD_FS_ARENA_SIZE
 
 typedef struct {
     char     name[FS_NAME_MAX];
@@ -132,10 +137,11 @@ void fs_format(void) {
 /* ============================================================
  * Persistencia en flash interna (H9.3).
  *
- * Región: últimos 128 KB de los 2 MB (0x081E0000..0x08200000), DISJUNTA del
- * área del programa (el .ld limita FLASH a 1920 KB). ⇒ un fallo de escritura
- * NUNCA corrompe el firmware; el peor caso es perder el FS (recuperable con
- * re-subida o FORMAT).
+ * Región: los últimos BOARD_FS_REGION_SIZE bytes de la flash, en BOARD_FS_FLASH_ADDR
+ * (per-placa, board.h: Nucleo 128 KB @0x081E0000 de 2 MB · DK2 512 KB @0x08380000 de
+ * 4 MB). DISJUNTA del área del programa (el .ld le recorta esos KB a FLASH) ⇒ un fallo
+ * de escritura NUNCA corrompe el firmware; el peor caso es perder el FS (recuperable
+ * con re-subida o FORMAT).
  *
  * Layout en la región: [header 16 B][tabla N×72 B] en la 1ª página (8 KB);
  * arena cruda a partir de +8 KB. magic+version invalidan imágenes viejas.
@@ -147,7 +153,12 @@ void fs_format(void) {
  * ============================================================ */
 
 #define FS_FLASH_ADDR   BOARD_FS_FLASH_ADDR   /* región FS reservada (por placa, ver board.h) */
-#define FS_REGION_SIZE  (128u * 1024u)
+/* Tamaño de la región de persistencia per-placa (board.h). Debe ser ≥ 8 KB (cabecera) +
+ * FS_ARENA_SIZE y múltiplo de la página de flash (8 KB en U5). Fallback conservador. */
+#ifndef BOARD_FS_REGION_SIZE
+#define BOARD_FS_REGION_SIZE  (128u * 1024u)
+#endif
+#define FS_REGION_SIZE  BOARD_FS_REGION_SIZE
 #define FS_HDR_BYTES    0x2000u              /* 1 página (8 KB): header + tabla */
 #define FS_MAGIC        0x42504653u          /* 'BPFS' */
 #define FS_VERSION      1u
