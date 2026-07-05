@@ -1,7 +1,0 @@
-# Componentes gestionados del firmware ESP32-P4 Waveshare 4.3".
-# Graficos (paso 6): driver del panel ST7701 por MIPI-DSI (trae esp_lcd_mipi_dsi) + tactil GT911.
-# LVGL NO va aqui: usamos la vendorizada (third_party/lvgl 9.2.2) via EXTRA_COMPONENT_DIRS,
-# para paridad con host/STM32/Function-EV (NO la lvgl/lvgl del registro).
-dependencies:
-  espressif/esp_lcd_st7701: "*"
-  espressif/esp_lcd_touch_gt911: "^1.2.0"   # tactil (trae esp_lcd_touch)
