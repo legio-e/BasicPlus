@@ -24,7 +24,8 @@
 > **PROGRESO (6-jul): GC-1 + H-008 ✅ HECHOS y verificados (commit de "Camino 1").**
 > El repro de GC-1 (`bpgenvm-c/samples/GcLong.bp`) destapó además **H-008** — falsas
 > raíces del scan conservativo que **PISAN datos vivos**, no solo sobre-retienen. Ambos
-> se arreglan de un tiro con Camino 1. Falta **H-010** (acoplado, siguiente) y **GC-2**.
+> se arreglan de un tiro con Camino 1. **H-010 ✅ HECHO** (bloque consistente en FREE_REF;
+> puso verde `ownerlistremove`, 11/11 samples con paridad). Falta solo **GC-2**.
 
 **Método:** cambio pequeño en el modelo **viejo** (conocido, bajo riesgo);
 **verificar la paridad dual-VM** de cada arreglo (comprobar si la VM-Java ya lo hace
@@ -45,15 +46,16 @@ análisis V4 como tests de regresión.
    limpio, 9/9 samples OO/owner/array con paridad, **sin regresión** (baseline confirmado
    en la V3 original). Ficheros: `heap.c` (`build_gc_valid_map`/`is_valid_header`/
    `is_heap_ref`) + `bpvm.c` + `bpvm_internal.h` + `samples/GcLong.bp`.
-3. **H-010 — `FREE_REF` deja el bloque inconsistente (corrupción de heap). ⬜ SIGUIENTE.**
-   `OP_FREE_REF` (`interp.c:1500`) / `OP_SET_FIELD_OWNER` (`:1519`) al liberar solo ponen
-   `FREE_BIT`, sin tamaño en `+4` → `block_total_size` (`heap.c:36`) lee el `class_ptr`
-   como tamaño → el `gc_sweep` **y AHORA el `build_gc_valid_map` de Camino 1** (recorre el
-   heap igual) **se desincronizan**. **ACOPLADO con Camino 1** → hay que arreglarlo para
-   que Camino 1 sea robusto con owner-free + GC. **Síntoma:** `samples/ownerlistremove`
-   diverge (verificado PRE-EXISTENTE en la V3 original, no lo causa Camino 1). **Fix:**
-   dejar bloque consistente vía `add_to_free_list` (espejo del `freeOwnedObject` de Java);
-   pondrá verde `ownerlistremove`.
+3. **H-010 — `FREE_REF` deja el bloque inconsistente (corrupción de heap). ✅ HECHO.**
+   `OP_FREE_REF` / `OP_SET_FIELD_OWNER` al liberar solo ponían `FREE_BIT`, sin tamaño en
+   `+4` → `block_total_size` leía el `class_ptr` como tamaño → el `gc_sweep` **y el
+   `build_gc_valid_map` de Camino 1** (recorren el heap igual) **se desincronizaban**.
+   **Fix:** `bpvm_heap_free_block(vm, header)` calcula el tamaño ANTES y deja el bloque
+   consistente vía `add_to_free_list` (`[FREE_BIT][size@+4][next]`) — espejo del
+   `freeOwnedObject` de la VM-Java; además reutilizable de inmediato. **Verificado:**
+   `samples/ownerlistremove` pasó de DIFF a **paridad** (confirma que su divergencia era
+   H-010, no H-006); **11/11** samples con paridad; `GcLong` intacto. Ficheros: `heap.c`
+   + `interp.c` (los 2 sitios de free) + `bpvm_internal.h`.
 4. **GC-2 — raíces incompletas (UAF). ⬜.** `gc_mark_phase` (`heap.c:134`) solo escanea
    pilas; faltan `allocAnchor` (H-001) y los **data blocks de módulo** → un global de
    módulo que sea el único camino a un objeto vivo se recolecta en vivo. **Fix:** añadir

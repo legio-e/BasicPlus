@@ -455,6 +455,9 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm);
 
 /* heap.c (F2) */
 uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type);
+/* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
+ * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */
+void     bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr);
 uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len);
 void     bpvm_heap_gc(bpvm_t* vm);
 

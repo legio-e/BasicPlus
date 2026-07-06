@@ -1495,9 +1495,11 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 uint32_t tag = bpvm_read_u32_be(mem + header);
                 int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
                 if (type == BPVM_TYPE_OBJECT) {
-                    /* TODO: recorrer owner_bitmap y FREE_REF recursivo de
-                     * fields owners. F3 v1 sólo libera el objeto raíz. */
-                    bpvm_write_u32_be(mem + header, tag | BPVM_TAG_FREE_BIT);
+                    /* TODO (H-006, V4): recorrer owner_bitmap y FREE_REF recursivo
+                     * de los fields owners. F3 v1 sólo libera el objeto raíz. */
+                    /* H-010: dejar el bloque CONSISTENTE (size@+4 + free-list), no
+                     * solo FREE_BIT, o el recorrido del heap se desincroniza. */
+                    bpvm_heap_free_block(vm, header);
                 }
             }
             break;
@@ -1516,7 +1518,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                     uint32_t otag = bpvm_read_u32_be(mem + old_header);
                     int otype = (int)((otag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
                     if (otype == BPVM_TYPE_OBJECT) {
-                        bpvm_write_u32_be(mem + old_header, otag | BPVM_TAG_FREE_BIT);
+                        bpvm_heap_free_block(vm, old_header);   /* H-010: bloque consistente */
                     }
                 }
             }

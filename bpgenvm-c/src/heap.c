@@ -199,6 +199,19 @@ static void add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {
     vm->free_list_head = addr;
 }
 
+/* H-010 (v3.0.1): libera un bloque de objeto dejándolo CONSISTENTE (espejo del
+ * freeOwnedObject de la VM-Java). Antes, OP_FREE_REF/OP_SET_FIELD_OWNER solo
+ * ponían FREE_BIT sin el tamaño en +4 → block_total_size leía el class_ptr como
+ * tamaño y DESINCRONIZABA el recorrido del heap (el sweep y el build_gc_valid_map
+ * de Camino 1). Aquí calculamos el tamaño ANTES de tocar la cabecera y lo
+ * escribimos vía add_to_free_list ([FREE_BIT][size@+4][next]) → bloque caminable
+ * y reutilizable de inmediato. */
+void bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr) {
+    uint32_t size = block_total_size(vm, header_addr);
+    if (size == 0) return;   /* defensivo: no tocar si no sabemos el tamaño */
+    add_to_free_list(vm, header_addr, size);
+}
+
 /* H3 (V2): sweep que RECONSTRUYE la free-list coalesciendo runs de bloques
  * libres/muertos adyacentes, y RETROCEDE heap_next si el run final lo toca
  * (devuelve memoria al bump sin compactar). Espejo del gcLocked de la VM-Java. */
