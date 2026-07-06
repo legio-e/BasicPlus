@@ -395,6 +395,7 @@ void bpvm_destroy(bpvm_t* vm) {
     free(vm->mutexes);
     free(vm->symbols);
     free(vm->scratch);
+    free(vm->gc_valid_map);
     free(vm);
 }
 

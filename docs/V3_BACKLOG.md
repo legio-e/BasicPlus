@@ -9,6 +9,62 @@
 
 ---
 
+## 🩹 v3.0.1 — parche de memoria (post-publicación, 5-jul)  ← ACTIVO
+
+> V3 se publicó el 5-jul. Preparando el análisis del modelo de memoria de V4, el
+> **cross-check del código contra `main`** (`c2f82929`, ver
+> `bp_propuesta_modelo_memoria/02-verificacion/cross-check-codigo-2026-07-05.md`)
+> confirmó **tres bugs vivos de memoria** en el binario publicado. Eduardo (5-jul):
+> *"lo correcto y lo honesto es arreglarlo, y antes que el resto"* → **v3.0.1**, un
+> parche a los usuarios, **antes** de empezar V4 (V4 como tal aún no ha empezado).
+> Alcance = solo estos tres (UAF / corrupción). La **cascada `owner`** (H-006) es una
+> **fuga** que el GC recupera, no corrupción → **NO** entra aquí; se resuelve con el
+> modelo de handles en V4.
+
+> **PROGRESO (6-jul): GC-1 + H-008 ✅ HECHOS y verificados (commit de "Camino 1").**
+> El repro de GC-1 (`bpgenvm-c/samples/GcLong.bp`) destapó además **H-008** — falsas
+> raíces del scan conservativo que **PISAN datos vivos**, no solo sobre-retienen. Ambos
+> se arreglan de un tiro con Camino 1. Falta **H-010** (acoplado, siguiente) y **GC-2**.
+
+**Método:** cambio pequeño en el modelo **viejo** (conocido, bajo riesgo);
+**verificar la paridad dual-VM** de cada arreglo (comprobar si la VM-Java ya lo hace
+bien —era la de referencia— y dejar ambas coherentes); las escenas de la maqueta del
+análisis V4 como tests de regresión.
+
+1. **GC-1 — `long[]`/`double[]` invisibles al GC (UAF). ✅ HECHO (Camino 1).**
+   `is_heap_ref` aceptaba solo tipos 0..4; `ARRAY_I64=5` → un `long[]`/`double[]` vivo
+   no se marcaba y se recolectaba. **Subsumido en Camino 1** (la cabecera real de un
+   `long[]` entra en el bitmap de cabeceras válidas → se reconoce).
+2. **H-008 — falsas raíces del scan conservativo PISAN datos vivos (corrupción). ✅ HECHO (Camino 1).**
+   Un ENTERO cuyo valor cae en `[heap_start, heap_next)` se tomaba por puntero, y al
+   marcar **EN BANDA** se corrompía el dato vivo en esa dirección (no determinista;
+   descubierto vía `GcLong.bp`). **Camino 1** (espejo del set `valid` de la VM-Java): al
+   empezar cada mark se construye un bitmap "¿es inicio de cabecera real?" recorriendo el
+   heap; `is_heap_ref` solo valida candidatos cuya `(v-4)` sea cabecera real → un entero a
+   mitad de objeto se rechaza. **Verificado:** `GcLong.bp`→checksum 64, 2×2 array-churn
+   limpio, 9/9 samples OO/owner/array con paridad, **sin regresión** (baseline confirmado
+   en la V3 original). Ficheros: `heap.c` (`build_gc_valid_map`/`is_valid_header`/
+   `is_heap_ref`) + `bpvm.c` + `bpvm_internal.h` + `samples/GcLong.bp`.
+3. **H-010 — `FREE_REF` deja el bloque inconsistente (corrupción de heap). ⬜ SIGUIENTE.**
+   `OP_FREE_REF` (`interp.c:1500`) / `OP_SET_FIELD_OWNER` (`:1519`) al liberar solo ponen
+   `FREE_BIT`, sin tamaño en `+4` → `block_total_size` (`heap.c:36`) lee el `class_ptr`
+   como tamaño → el `gc_sweep` **y AHORA el `build_gc_valid_map` de Camino 1** (recorre el
+   heap igual) **se desincronizan**. **ACOPLADO con Camino 1** → hay que arreglarlo para
+   que Camino 1 sea robusto con owner-free + GC. **Síntoma:** `samples/ownerlistremove`
+   diverge (verificado PRE-EXISTENTE en la V3 original, no lo causa Camino 1). **Fix:**
+   dejar bloque consistente vía `add_to_free_list` (espejo del `freeOwnedObject` de Java);
+   pondrá verde `ownerlistremove`.
+4. **GC-2 — raíces incompletas (UAF). ⬜.** `gc_mark_phase` (`heap.c:134`) solo escanea
+   pilas; faltan `allocAnchor` (H-001) y los **data blocks de módulo** → un global de
+   módulo que sea el único camino a un objeto vivo se recolecta en vivo. **Fix:** añadir
+   esas raíces, conservador. (Subsume la entrada `B-gc-allocanchor` del `V4_BACKLOG`.)
+
+**Reward:** los fixes van en el **núcleo C compartido** → arreglan las 3 familias de
+micros al recompilar (batch de firmwares al final). **Al publicar:** rehacer los 7
+binarios + entrada en `RELEASES.md`. (Firmwares los recompila/flashea Eduardo.)
+
+---
+
 ## 🗺️ Mapa de hitos (post-H7, Eduardo 20-jun)
 
 H6 (widgets GUI, en la DK2) ✅ · H7 (lenguaje: `^`, `eval`, separador `_`, continuación) ✅.

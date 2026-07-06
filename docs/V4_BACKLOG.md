@@ -69,6 +69,7 @@ AOT-cross-module + extensión de clases base** → prioritario en V4.
 al thread */`: el GC mark-sweep no recorre esa raíz (el campo no existe aún en `bpvm_thread_t`). Riesgo
 LATENTE: un objeto recién alocado y aún no guardado en stack/global podría recolectarse a mitad bajo presión
 de memoria/GC. No ha mordido (workloads reales OK), pero es un agujero de corrección del GC. Hallado 28-jun.
+**→ MOVIDO a v3.0.1** (es parte del fix GC-2; seguimiento en `V3_BACKLOG.md` §v3.0.1).
 
 ### B-freeref-no-recursivo — `OP_FREE_REF` no libera en cascada los campos `owner` (F3 v1)
 `interp.c:1498`: `FREE_REF` sólo libera el objeto raíz; el TODO pide recorrer el `owner_bitmap` y liberar

@@ -20,6 +20,7 @@
 
 #include "bpvm_internal.h"
 #include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
 
@@ -79,15 +80,56 @@ static uint32_t block_total_size(const bpvm_t* vm, uint32_t header_addr) {
  * es OK para el smoke; F2.b añadirá la free-list.
  */
 
+/* --- Camino 1 (H-008, v3.0.1): validación de cabeceras reales ---------------
+ *
+ * El scan conservativo trata cualquier palabra de la pila como posible ref. Sin
+ * validar, un ENTERO cuyo valor cae en el rango del heap se toma por puntero
+ * (falsa raíz) y, como el MARK_BIT se escribe EN BANDA en la cabecera, PISA
+ * datos vivos → corrupción no determinista. Espejo del set `valid` de la VM-Java
+ * (`valid.contains(headerAddr)`): un bitmap de "esto es inicio de cabecera real"
+ * reconstruido al empezar cada mark. Subsume GC-1: la cabecera de un
+ * long[]/double[] real ENTRA en el bitmap (block_total_size la recorre) → se
+ * reconoce; un entero a mitad de objeto NO entra → se rechaza. */
+static void build_gc_valid_map(bpvm_t* vm) {
+    uint32_t span  = vm->stack_base - vm->heap_start;      /* heap máximo */
+    uint32_t words = span / 4u;                            /* nº de palabras de 4B */
+    size_t   bytes = ((size_t) words + 7u) / 8u + 1u;      /* 1 bit por palabra + pad */
+    if (vm->gc_valid_map == NULL || vm->gc_valid_map_size < bytes) {
+        free(vm->gc_valid_map);
+        vm->gc_valid_map = (uint8_t*) calloc(1, bytes);
+        vm->gc_valid_map_size = vm->gc_valid_map ? bytes : 0;
+    } else {
+        memset(vm->gc_valid_map, 0, vm->gc_valid_map_size);
+    }
+    if (vm->gc_valid_map == NULL) return;   /* sin memoria → is_heap_ref rechaza todo (conservador) */
+    uint32_t cur = vm->heap_start;
+    while (cur < vm->heap_next) {
+        uint32_t total = block_total_size(vm, cur);
+        if (total == 0) break;
+        uint32_t word = (cur - vm->heap_start) / 4u;
+        vm->gc_valid_map[word / 8u] |= (uint8_t)(1u << (word % 8u));
+        cur += total;
+    }
+}
+
+/* ¿`header_addr` es el inicio de una cabecera de bloque real? Usa el bitmap
+ * fresco del GC en curso. Rechaza desalineadas o fuera de rango. */
+static int is_valid_header(const bpvm_t* vm, uint32_t header_addr) {
+    if (vm->gc_valid_map == NULL) return 0;
+    if (header_addr < vm->heap_start || header_addr >= vm->heap_next) return 0;
+    uint32_t off = header_addr - vm->heap_start;
+    if ((off & 3u) != 0) return 0;          /* no alineada a 4 → no es cabecera */
+    uint32_t word = off / 4u;
+    return (vm->gc_valid_map[word / 8u] >> (word % 8u)) & 1u;
+}
+
 static int is_heap_ref(const bpvm_t* vm, uint32_t v) {
     if (v < vm->heap_start || v >= vm->heap_next) return 0;
-    /* Heurística: refs apuntan al user_ref que está 4 bytes tras un
-     * header válido. Verificamos que (v - 4) tenga un tag con type
-     * válido (0..4). Esto reduce falsos positivos del scan conservativo. */
     if (v < vm->heap_start + 4) return 0;
-    uint32_t tag = bpvm_read_u32_be(vm->memory + v - 4);
-    int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
-    return (type >= 0 && type <= BPVM_TYPE_OBJECT);
+    /* Camino 1 (H-008): un ref real apunta a user_ref = cabecera + 4. Validamos
+     * que (v-4) sea una cabecera REAL, no la vieja heurística de tipo (que
+     * aceptaba enteros a mitad de objeto como falsas raíces y los pisaba). */
+    return is_valid_header(vm, v - 4);
 }
 
 static void mark_recursive(bpvm_t* vm, uint32_t user_ref) {
@@ -132,6 +174,9 @@ static void mark_recursive(bpvm_t* vm, uint32_t user_ref) {
 }
 
 static void gc_mark_phase(bpvm_t* vm) {
+    /* Camino 1 (H-008): (re)construir el set de cabeceras reales ANTES de marcar,
+     * para que el scan conservativo no tome enteros por punteros. */
+    build_gc_valid_map(vm);
     /* 1. Stacks de threads. */
     for (int t = 0; t < vm->thread_count; t++) {
         const bpvm_thread_t* tc = &vm->threads[t];

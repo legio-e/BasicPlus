@@ -1,0 +1,44 @@
+module GcLong
+
+    // Regresion GC (v3.0.1): un long[] (tipo 5, ARRAY_I64) VIVO debe sobrevivir
+    // al GC, y su contenido no debe corromperse. Cubre DOS bugs de la VM-C que
+    // el fix "Camino 1" (validar el scan conservativo contra cabeceras reales)
+    // resuelve de un tiro:
+    //   GC-1  -> is_heap_ref rechazaba el tipo 5 -> el long[] se recolectaba vivo.
+    //   H-008 -> un entero en rango de heap se tomaba por falsa raiz y, al marcar
+    //            EN BANDA, pisaba los datos del long[] superviviente.
+    // Un long[] relleno de 1L, vivo en la pila, sobrevive a >=1 GC forzado por
+    // churn de basura, y se relee. Paridad con la VM-Java. SALIDA: checksum = 64.
+
+    function Main()
+        var a: long[] := newLongArray(64)
+        var i: integer := 0
+        while i < 64 do
+            a[i] := 1L
+            i := i + 1
+        endwh
+
+        // Forzar >=1 GC generando basura long[] mientras 'a' sigue vivo en la pila.
+        var junk: long[] := newLongArray(64)
+        var g: integer := 0
+        var k: integer := 0
+        while g < 3000 do
+            junk := newLongArray(64)
+            k := 0
+            while k < 64 do
+                junk[k] := 7777L
+                k := k + 1
+            endwh
+            g := g + 1
+        endwh
+
+        var sum: long := 0L
+        i := 0
+        while i < 64 do
+            sum := sum + a[i]
+            i := i + 1
+        endwh
+        print "checksum =", sum
+    end Main
+
+end GcLong

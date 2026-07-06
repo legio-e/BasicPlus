@@ -236,6 +236,14 @@ struct bpvm {
     uint32_t free_list_head;   /* 0 = lista vacía */
     uint32_t last_gc_heap_next;/* heap_next en el último GC (base del umbral) */
     uint32_t gc_bump_threshold;/* bump máx. desde el último GC antes de colectar (0 = off) */
+    /* Camino 1 (H-008, v3.0.1): bitmap "¿es inicio de cabecera real?" (1 bit por
+     * palabra de 4B del heap). Se reconstruye al empezar cada mark; el scan
+     * conservativo solo valida candidatos cuya (v-4) esté aquí → un entero que
+     * cae a mitad de un objeto NO se toma por raíz ni se marca en banda (que
+     * pisaba datos vivos). Espejo del set `valid` de la VM-Java. Alloc perezoso
+     * en el 1er GC; se libera en bpvm_destroy. */
+    uint8_t* gc_valid_map;
+    size_t   gc_valid_map_size;
 
     /* Módulos cargados. */
     bpvm_module_t modules[BPVM_MAX_MODULES];
