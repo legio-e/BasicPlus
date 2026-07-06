@@ -25,7 +25,9 @@
 > El repro de GC-1 (`bpgenvm-c/samples/GcLong.bp`) destapó además **H-008** — falsas
 > raíces del scan conservativo que **PISAN datos vivos**, no solo sobre-retienen. Ambos
 > se arreglan de un tiro con Camino 1. **H-010 ✅ HECHO** (bloque consistente en FREE_REF;
-> puso verde `ownerlistremove`, 11/11 samples con paridad). Falta solo **GC-2**.
+> puso verde `ownerlistremove`, 11/11 samples con paridad). **GC-2 ✅ HECHO** (alineación
+> de CS + escaneo de data blocks). **Los 4 arreglos de v3.0.1 completos; queda el batch
+> de binarios + publicar.**
 
 **Método:** cambio pequeño en el modelo **viejo** (conocido, bajo riesgo);
 **verificar la paridad dual-VM** de cada arreglo (comprobar si la VM-Java ya lo hace
@@ -56,10 +58,20 @@ análisis V4 como tests de regresión.
    `samples/ownerlistremove` pasó de DIFF a **paridad** (confirma que su divergencia era
    H-010, no H-006); **11/11** samples con paridad; `GcLong` intacto. Ficheros: `heap.c`
    + `interp.c` (los 2 sitios de free) + `bpvm_internal.h`.
-4. **GC-2 — raíces incompletas (UAF). ⬜.** `gc_mark_phase` (`heap.c:134`) solo escanea
-   pilas; faltan `allocAnchor` (H-001) y los **data blocks de módulo** → un global de
-   módulo que sea el único camino a un objeto vivo se recolecta en vivo. **Fix:** añadir
-   esas raíces, conservador. (Subsume la entrada `B-gc-allocanchor` del `V4_BACKLOG`.)
+4. **GC-2 — globales de módulo recolectados en vivo (UAF). ✅ HECHO.** `gc_mark_phase`
+   solo escaneaba pilas (no data blocks). Al reproducir salió una causa **más profunda**:
+   los globales viven en `[data_start, code_start)` en offsets **CS-relativos** (crecen
+   hacia atrás desde CS); si `data_size` no es múltiplo de 4, **CS queda desalineado** y
+   los globales caen en direcciones **NO 4-alineadas** → ambos GC (que escanean a 4) los
+   **pierden** = UAF, **en las DOS VMs** (no solo la C, como asumía el análisis). Bonus:
+   acceso a `integer` no alineado, que **puede fallar en ARM/RISC-V**. **Fix (Eduardo:
+   opción b):** el `ModWriter` rellena el bloque const+globales a múltiplo de 4 por el
+   extremo bajo → CS alineado → globales 4-alineados; la VM-Java ya los encuentra (su
+   `getDataRegions` escanea a 4) y la VM-C **añade** el escaneo de data blocks +
+   `allocAnchor`. **Verificado:** `samples/GcRoot` de 2577→**320** en ambas; 11/11
+   samples; `GcLong` intacto. Ficheros: `ModWriter.java` (relleno) + `heap.c` (escaneo) +
+   `samples/GcRoot.bp`. **Requiere regenerar los `.mod`** (app auto; stdlib/firmwares en
+   el batch). (Subsume `B-gc-allocanchor` del `V4_BACKLOG`.)
 
 **Reward:** los fixes van en el **núcleo C compartido** → arreglan las 3 familias de
 micros al recompilar (batch de firmwares al final). **Al publicar:** rehacer los 7

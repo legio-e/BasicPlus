@@ -187,7 +187,25 @@ static void gc_mark_phase(bpvm_t* vm) {
             mark_recursive(vm, v);
         }
     }
-    /* 2. allocAnchor — TODO en F2.b cuando se añada el campo al thread. */
+    /* 2. allocAnchor por thread: objeto anclado durante el unwind de un
+     *    RuntimeError (F5), raíz mientras no esté en la pila (H-001/GC-2). */
+    for (int t = 0; t < vm->thread_count; t++) {
+        uint32_t anchor = (uint32_t) vm->threads[t].alloc_anchor;
+        if (anchor != 0) mark_recursive(vm, anchor);
+    }
+    /* 3. GC-2: data blocks de módulo. Consts + globales de módulo viven en
+     *    [data_start, code_start) (crecen hacia atrás desde CS). Un global que
+     *    apunte a heap es una RAÍZ; sin escanearlo se recolecta en vivo (UAF).
+     *    Conservador, como las pilas. Espejo del getDataRegions de la VM-Java. */
+    for (int i = 0; i < vm->module_count; i++) {
+        const bpvm_module_t* m = &vm->modules[i];
+        uint32_t lo = m->data_start;
+        uint32_t hi = m->data_start + m->data_size;
+        for (uint32_t addr = lo; addr + 4 <= hi; addr += 4) {
+            uint32_t v = bpvm_read_u32_be(vm->memory + addr);
+            mark_recursive(vm, v);
+        }
+    }
 }
 
 /* H3: añade un bloque libre [tag FREE][size@+4][next@+8] al head de la lista. */

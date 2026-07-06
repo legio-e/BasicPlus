@@ -1910,9 +1910,18 @@ public class ModWriter {
         }
         exportOut.flush();
 
-        int dataSize = -currentNegativeOffset;
+        // GC-2 (v3.0.1): el bloque const+globales crece hacia atrás desde CS, así
+        // que CS = dataStart + dataSize. Si dataSize no es múltiplo de 4, CS queda
+        // desalineado y los globales (en CS-4k) caen en direcciones NO alineadas →
+        // (a) el scan del GC (que lee a 4) no los ve = recolección en vivo (UAF), y
+        // (b) acceso a `integer` no alineado, que puede FALLAR en ARM/RISC-V.
+        // Rellenamos dataSize a múltiplo de 4 por el extremo BAJO (dataStart): los
+        // símbolos siguen pegados a CS y sus offsets CS-relativos no cambian.
+        int usedSize = -currentNegativeOffset;
+        int dataSize = (usedSize + 3) & ~3;      // CS = dataStart + dataSize → alineado a 4
+        int pad = dataSize - usedSize;
         byte[] dataBuf = new byte[dataSize];
-        int pos = 0;
+        int pos = pad;                            // padding al extremo bajo; símbolos pegados a CS
         for (int i = symbolBytes.size() - 1; i >= 0; i--) {
             byte[] b = symbolBytes.get(i);
             System.arraycopy(b, 0, dataBuf, pos, b.length);

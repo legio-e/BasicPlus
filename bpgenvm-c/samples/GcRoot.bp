@@ -1,0 +1,46 @@
+module GcRoot
+
+    // Regresion GC-2 (v3.0.1): un objeto vivo alcanzable SOLO desde un GLOBAL de
+    // modulo (bloque const+globales, delante de CS) debe sobrevivir al GC.
+    // Dos partes del fix, ambas necesarias:
+    //   - Frontend (ModWriter): rellena el bloque const+globales a multiplo de 4
+    //     -> CS alineado -> los globales (en CS-4k) caen en direcciones 4-alineadas,
+    //     que es donde ambos GC (VM-Java y VM-C) escanean. (Ademas evita acceso a
+    //     int no alineado, que falla en ARM/RISC-V.)
+    //   - VM-C: gc_mark_phase escanea los data blocks de modulo como raices.
+    // 'g' se rellena en setup() (su frame se descarta -> sin ref colgante en pila),
+    // luego churn dispara GC. PARIDAD esperada: 'sum = 320' en ambas VMs.
+
+    var g: integer[]
+
+    function setup()
+        g := newIntArray(64)
+        var i: integer := 0
+        while i < 64 do
+            g[i] := 5
+            i := i + 1
+        endwh
+    end
+
+    function churn()
+        var i: integer := 0
+        while i < 3000 do
+            var junk: integer[] := newIntArray(64)
+            junk[0] := i
+            i := i + 1
+        endwh
+    end
+
+    function Main()
+        setup()          // g queda solo en el data block (frame de setup descartado)
+        churn()          // GC: 'g' debe seguir siendo raiz
+        var sum: integer := 0
+        var i: integer := 0
+        while i < 64 do
+            sum := sum + g[i]
+            i := i + 1
+        endwh
+        print "sum =", sum
+    end
+
+end GcRoot
