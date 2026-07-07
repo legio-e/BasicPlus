@@ -480,7 +480,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t hi = (uint32_t) pop_i32(vm, tc);
         int64_t v = (int64_t) (((uint64_t) hi << 32) | lo);
         char buf[32];
-        int n = snprintf(buf, sizeof(buf), "%" PRId64, v);
+        int n = bpvm_format_i64(buf, v);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
         push_i32(vm, tc, (int32_t) ref);
         return BPVM_OK;

@@ -58,11 +58,13 @@ static void emit_int(bpvm_t* vm, int32_t v, int newline) {
     if (n > 0) emit_text(vm, buf, (size_t) n);
 }
 
-/* H1.2 (V2): print de un long (i64). %lld + cast a long long para portabilidad. */
+/* H1.2 (V2): print de un long (i64). Vía bpvm_format_i64 (u64_dec) — NO %lld de
+ * snprintf, que el newlib-nano del STM32 no soporta (salía "ld"). Byte-idéntico. */
 static void emit_long(bpvm_t* vm, int64_t v, int newline) {
-    char buf[32];
-    int n = snprintf(buf, sizeof(buf), newline ? "%lld\n" : "%lld", (long long) v);
-    if (n > 0) emit_text(vm, buf, (size_t) n);
+    char buf[24];
+    int n = bpvm_format_i64(buf, v);
+    if (newline) buf[n++] = '\n';
+    emit_text(vm, buf, (size_t) n);
 }
 
 static void emit_newline(bpvm_t* vm) {
@@ -387,6 +389,19 @@ int bpvm_format_double(char* out, double v) {   /* L13: lo usa builtins.c */
         out[n] = '\0';
         return n;
     }
+}
+
+/* i64 → decimal con signo en out ('\0'-terminado). Como bpvm_format_double, usa
+ * u64_dec (NO %lld de snprintf: el newlib-nano del STM32 no lleva long long y
+ * salía "ld"). Byte-idéntico a Long.toString en todas las plataformas. */
+int bpvm_format_i64(char* out, int64_t v) {
+    int n = 0;
+    unsigned long long mag;
+    if (v < 0) { out[n++] = '-'; mag = (unsigned long long) (-(v + 1)) + 1ULL; }
+    else       { mag = (unsigned long long) v; }
+    n += u64_dec(out + n, mag, 0);
+    out[n] = '\0';
+    return n;
 }
 
 static void emit_float(bpvm_t* vm, float v, int newline) {

@@ -466,6 +466,11 @@ void     bpvm_heap_gc(bpvm_t* vm);
  * FLOAT/DOUBLE_TO_STRING del concat. Devuelve la longitud escrita. */
 int bpvm_format_double(char* out, double v);
 
+/* interp.c — formateo de un int64 a decimal con signo, byte-idéntico y portable
+ * en newlib-nano (NO usa %lld de snprintf, que el STM32 no lleva). L13: lo usa
+ * BUILTIN_LONG_TO_STRING de builtins.c. Devuelve la longitud (sin '\0'). */
+int bpvm_format_i64(char* out, int64_t v);
+
 /* builtins.c (F2) */
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id);
 
