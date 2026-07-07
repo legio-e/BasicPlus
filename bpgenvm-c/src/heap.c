@@ -91,7 +91,14 @@ static uint32_t block_total_size(const bpvm_t* vm, uint32_t header_addr) {
  * long[]/double[] real ENTRA en el bitmap (block_total_size la recorre) → se
  * reconoce; un entero a mitad de objeto NO entra → se rechaza. */
 static void build_gc_valid_map(bpvm_t* vm) {
-    uint32_t span  = vm->stack_base - vm->heap_start;      /* heap máximo */
+    /* Dimensiona el bitmap por el heap USADO [heap_start, heap_next), NO por la
+     * capacidad total (stack_base - heap_start): is_valid_header solo consulta
+     * direcciones < heap_next, y build recorre hasta heap_next. Sizearlo por la
+     * capacidad hacía un calloc de ~256 KB en el heap de 8 MB (PSRAM) del Metro
+     * que COLGABA el firmware en cada gc() (regresión de Camino 1). El bitmap
+     * crece con el uso real (el chequeo gc_valid_map_size<bytes solo re-aloca al
+     * crecer). Verificado: Pico 128 KB no colgaba; Metro 8 MB sí. */
+    uint32_t span  = vm->heap_next - vm->heap_start;       /* heap USADO */
     uint32_t words = span / 4u;                            /* nº de palabras de 4B */
     size_t   bytes = ((size_t) words + 7u) / 8u + 1u;      /* 1 bit por palabra + pad */
     if (vm->gc_valid_map == NULL || vm->gc_valid_map_size < bytes) {
