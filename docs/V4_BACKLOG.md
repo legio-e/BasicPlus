@@ -86,6 +86,30 @@ podría morder en cualquier placa con `/app` a tope. **Método (Eduardo):** repr
 `.mod` 1 a 1 sin resetear + correr la demo entre medias → nº y punto exactos), localizar, y SOLO ENTONCES
 tocar (territorio delicado). Documentado como limitación conocida en la release v3.0.
 
+### N-dtblock-align — layout del data block: variables a 4 vs constantes empaquetadas (raíz de GC-2)
+**✅ RESUELTO en v3.0.1 (7-jul):** `registerSymbol` alinea **cada símbolo** a múltiplo de 4
+(`slot=(len+3)&~3`) → cada global 4-alineado, el bloque auto-alineado. Cierra GC-2 del todo
+(`GcMisalign2` 3437→320, 21/21 paridad). Los objetos ya eran seguros (campos word-slotted +
+el compilador prohíbe arrays fijos como campo de clase). Lo de abajo queda como **contexto
+histórico** de por qué el data block se empaqueta; para V4 (modelo de handles) el layout se
+revisará igualmente:
+Al arreglar **GC-2** (v3.0.1) salió que el bloque const+globales **no queda alineado a 4 por
+construcción**, y Eduardo pidió registrar el porqué. Causa (verificada en `ModWriter.registerSymbol`,
+cada símbolo ocupa su `bytes.length` **crudo**): las **variables** escalares normales y los arrays
+numéricos SÍ son múltiplo de 4 (`integer`/`float`=4, `long`/`double`=8, `int[]`/`float[]`=`4+n·4`,
+`long[]`=`4+n·8`), pero las **constantes empaquetadas** no: un **`string`** es `4+N` (N=bytes UTF-8,
+arbitrario ⇒ el culpable más común), un `int8`/`byte` const **1** byte, un `int16`/`short` **2**, un
+`byte[]`/`int16[]` const `4+N`/`4+2n`. Demostrado: un módulo con solo `var g:integer` da bloque de 380
+(múltiplo de 4); añadir `const MSG:string:="abc"` (7 B) lo lleva a 387 → padding a 388. **v3.0.1 parchea
+el síntoma** rellenando `dataSize` al múltiplo de 4 por el extremo bajo (documentado en `MOD_FORMAT.md`
+§5). **Para V4 (revisar, ligado al modelo de handles que toca el codegen de `.mod`):** decidir si la
+alineación se hace **intrínseca** —cada entrada alineada por construcción— en vez de un padding global a
+posteriori; y **resolver la inconsistencia** que señala Eduardo: hoy conviven variables acolchadas a 4
+(un `byte` var podría estar ocupando 4 B — **confirmar**, el emisor vive fuera de `miVM/generador`) con
+constantes empaquetadas byte a byte. Es cuestión de coherencia y de que la alineación deje de ser un caso
+a recordar. (El acceso a `integer` no alineado, además, **falla en ARM/RISC-V** — otra razón para hacerlo
+por construcción.)
+
 ---
 
 ## 🧭 Temas de V4 (índice; el detalle de diseño vive en `V3_BACKLOG.md` §"V4 — fuera de V3")

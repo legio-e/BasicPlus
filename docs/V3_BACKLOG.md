@@ -25,9 +25,10 @@
 > El repro de GC-1 (`bpgenvm-c/samples/GcLong.bp`) destapó además **H-008** — falsas
 > raíces del scan conservativo que **PISAN datos vivos**, no solo sobre-retienen. Ambos
 > se arreglan de un tiro con Camino 1. **H-010 ✅ HECHO** (bloque consistente en FREE_REF;
-> puso verde `ownerlistremove`, 11/11 samples con paridad). **GC-2 ✅ HECHO** (alineación
-> de CS + escaneo de data blocks). **Los 4 arreglos de v3.0.1 completos; queda el batch
-> de binarios + publicar.**
+> puso verde `ownerlistremove`, 11/11 samples con paridad). **GC-2 ✅ HECHO en 2 pasos**
+> (padding de CS `5a7ff66` + alineación por-símbolo): `GcMisalign2` 3437→320, 21/21
+> paridad, stdlib 25/25 alineada. **Los 4 arreglos de v3.0.1 completos; queda el batch de
+> binarios + publicar.**
 
 **Método:** cambio pequeño en el modelo **viejo** (conocido, bajo riesgo);
 **verificar la paridad dual-VM** de cada arreglo (comprobar si la VM-Java ya lo hace
@@ -58,20 +59,25 @@ análisis V4 como tests de regresión.
    `samples/ownerlistremove` pasó de DIFF a **paridad** (confirma que su divergencia era
    H-010, no H-006); **11/11** samples con paridad; `GcLong` intacto. Ficheros: `heap.c`
    + `interp.c` (los 2 sitios de free) + `bpvm_internal.h`.
-4. **GC-2 — globales de módulo recolectados en vivo (UAF). ✅ HECHO.** `gc_mark_phase`
-   solo escaneaba pilas (no data blocks). Al reproducir salió una causa **más profunda**:
-   los globales viven en `[data_start, code_start)` en offsets **CS-relativos** (crecen
-   hacia atrás desde CS); si `data_size` no es múltiplo de 4, **CS queda desalineado** y
-   los globales caen en direcciones **NO 4-alineadas** → ambos GC (que escanean a 4) los
-   **pierden** = UAF, **en las DOS VMs** (no solo la C, como asumía el análisis). Bonus:
-   acceso a `integer` no alineado, que **puede fallar en ARM/RISC-V**. **Fix (Eduardo:
-   opción b):** el `ModWriter` rellena el bloque const+globales a múltiplo de 4 por el
-   extremo bajo → CS alineado → globales 4-alineados; la VM-Java ya los encuentra (su
-   `getDataRegions` escanea a 4) y la VM-C **añade** el escaneo de data blocks +
-   `allocAnchor`. **Verificado:** `samples/GcRoot` de 2577→**320** en ambas; 11/11
-   samples; `GcLong` intacto. Ficheros: `ModWriter.java` (relleno) + `heap.c` (escaneo) +
-   `samples/GcRoot.bp`. **Requiere regenerar los `.mod`** (app auto; stdlib/firmwares en
-   el batch). (Subsume `B-gc-allocanchor` del `V4_BACKLOG`.)
+4. **GC-2 — globales de módulo recolectados en vivo (UAF). ✅ HECHO (2 pasos).** Los
+   globales viven en `[data_start, code_start)` en offsets **CS-relativos**; si caen en
+   direcciones **NO 4-alineadas**, ambos GC (que escanean a 4) los **pierden** = UAF, **en
+   las DOS VMs**. Bonus: acceso a `integer` no alineado, que **falla en ARM/RISC-V**.
+   **Paso 1 (commit `5a7ff66`):** `ModWriter` rellena el bloque a múltiplo de 4 (alinea
+   **CS**) + la VM-C añade escaneo de data blocks + `allocAnchor`. Necesario pero **no
+   suficiente** (lo destapó Eduardo): alineaba CS, no cada símbolo → un `byte[N]` fijo
+   antes de un ref global lo desalineaba y GC-2 volvía (`GcMisalign2` sum=3437). **Paso 2
+   (completo):** `registerSymbol` redondea el tamaño de **cada símbolo** a múltiplo de 4
+   (`slot=(len+3)&~3`; dato al extremo bajo del slot, pad al alto; `writeToFile` recoloca
+   por slots) → cada símbolo 4-alineado, el bloque auto-alineado (subsume el paso 1).
+   **Verificado:** `GcMisalign2` 3437→**320**, `GcRoot`/`GcLong`/`GcMisalign`/`GcObjAlign`
+   OK, **21/21** paridad dual-VM (1 SKIP builtin no portado), stdlib 25/25 alineada +
+   `.bpi` idénticos. Samples: `GcRoot` (simple) + `GcMisalign2` (byte[] antes de ref) +
+   `GcObjAlign` (campos de objeto). **Objetos NO afectados:** sus campos van word-slotted
+   (1-2 slots, ModWriter 821-827), el GC los marca preciso por bitmap, y el compilador
+   **rechaza** arrays fijos como campo de clase → imposible desalinear un ref dentro de un
+   objeto. Ficheros: `ModWriter.java` + `heap.c` + los 3 samples. (Subsume
+   `B-gc-allocanchor`.) **Requiere regenerar los `.mod`** (stdlib/firmwares en el batch).
 
 **Reward:** los fixes van en el **núcleo C compartido** → arreglan las 3 familias de
 micros al recompilar (batch de firmwares al final). **Al publicar:** rehacer los 7

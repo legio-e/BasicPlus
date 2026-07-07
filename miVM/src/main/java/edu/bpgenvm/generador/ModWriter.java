@@ -388,7 +388,14 @@ public class ModWriter {
     private int registerSymbol(String name, byte[] bytes) {
         requireUnique(name);
         int size = bytes.length;
-        int csOffset = currentNegativeOffset - size;
+        // GC-2 (v3.0.1): cada símbolo ocupa un slot de tamaño múltiplo de 4 para que
+        // su offset CS-relativo sea múltiplo de 4 → 4-alineado en runtime (CS ya se
+        // alinea). Así el barrido conservador del GC (lee a 4) encuentra los globales
+        // de referencia estén donde estén, aunque un símbolo impar (string, byte[N]
+        // fijo) los precediera. El dato va al extremo BAJO del slot (el offset apunta
+        // a su inicio); los (slot-size) bytes sobrantes quedan al alto, a cero.
+        int slot = (size + 3) & ~3;
+        int csOffset = currentNegativeOffset - slot;
         if (csOffset < Short.MIN_VALUE) {
             throw new RuntimeException("Offset CS fuera de rango short al declarar '"
                     + name + "': " + csOffset + " (data block excede 32 KB)");
@@ -1910,22 +1917,23 @@ public class ModWriter {
         }
         exportOut.flush();
 
-        // GC-2 (v3.0.1): el bloque const+globales crece hacia atrás desde CS, así
-        // que CS = dataStart + dataSize. Si dataSize no es múltiplo de 4, CS queda
-        // desalineado y los globales (en CS-4k) caen en direcciones NO alineadas →
-        // (a) el scan del GC (que lee a 4) no los ve = recolección en vivo (UAF), y
-        // (b) acceso a `integer` no alineado, que puede FALLAR en ARM/RISC-V.
-        // Rellenamos dataSize a múltiplo de 4 por el extremo BAJO (dataStart): los
-        // símbolos siguen pegados a CS y sus offsets CS-relativos no cambian.
+        // GC-2 (v3.0.1): cada símbolo se registró en un slot múltiplo de 4 (ver
+        // registerSymbol), así que -currentNegativeOffset ya es múltiplo de 4 y con él
+        // CS = dataStart + dataSize queda alineado, Y cada símbolo cae en un offset
+        // 4-alineado → el barrido conservador del GC (lee a 4) los encuentra todos,
+        // aunque un símbolo impar preceda a un global de referencia. Reconstruimos el
+        // bloque respetando esos slots: recorremos los símbolos en orden de registro
+        // con un cursor que baja desde CS, colocando cada dato en el extremo BAJO de su
+        // slot (donde apunta su offset); el resto del slot queda a cero.
         int usedSize = -currentNegativeOffset;
-        int dataSize = (usedSize + 3) & ~3;      // CS = dataStart + dataSize → alineado a 4
-        int pad = dataSize - usedSize;
+        int dataSize = (usedSize + 3) & ~3;      // == usedSize (ya alineado); defensivo
         byte[] dataBuf = new byte[dataSize];
-        int pos = pad;                            // padding al extremo bajo; símbolos pegados a CS
-        for (int i = symbolBytes.size() - 1; i >= 0; i--) {
+        int cursor = dataSize;                    // CS (extremo alto); baja slot a slot
+        for (int i = 0; i < symbolBytes.size(); i++) {
             byte[] b = symbolBytes.get(i);
-            System.arraycopy(b, 0, dataBuf, pos, b.length);
-            pos += b.length;
+            int slot = (b.length + 3) & ~3;
+            cursor -= slot;
+            System.arraycopy(b, 0, dataBuf, cursor, b.length);
         }
 
         // Resolución del entry-point:

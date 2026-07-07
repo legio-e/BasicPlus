@@ -1,0 +1,41 @@
+module GcMisalign2
+
+    // Array fijo estrecho INLINE (no-ref) de longitud que hace 4+10=14 bytes,
+    // NO multiplo de 4, registrado ENTRE los globales. Si va antes que 'g' en
+    // la pasada de globales, 'g' cae en offset no-4-alineado -> el GC lo pierde.
+    var buf: byte[10]
+    var g: integer[]
+
+    function setup()
+        g := newIntArray(64)
+        var i: integer := 0
+        while i < 64 do
+            g[i] := 5
+            i := i + 1
+        endwh
+        buf[0] := 7
+    end
+
+    function churn()
+        var i: integer := 0
+        while i < 4000 do
+            var junk: integer[] := newIntArray(64)
+            junk[0] := i
+            i := i + 1
+        endwh
+    end
+
+    function Main()
+        setup()
+        churn()
+        var sum: integer := 0
+        var i: integer := 0
+        while i < 64 do
+            sum := sum + g[i]
+            i := i + 1
+        endwh
+        print "sum =", sum
+        print "buf0 =", buf[0]
+    end
+
+end GcMisalign2

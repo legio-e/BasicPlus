@@ -1,0 +1,60 @@
+module GcObjAlign
+
+    // Campos estrechos (byte, int16) ANTES de un campo de referencia.
+    // Si los campos se empaquetaran byte a byte (como el data block), 'data'
+    // caeria en offset no-4-alineado y el GC (preciso, lee campo i en base+4+i*4)
+    // lo leeria mal -> se recolectaria en vivo. Si van word-slotted (1 slot cada
+    // uno), 'data' esta en su slot 4-alineado y sobrevive. Esperado: chk = 627.
+    class Box
+        var tag: byte
+        var code: int16
+        var data: integer[]
+
+        public function Box()
+        end Box
+
+        public function build(n: integer)
+            tag := 7
+            code := 300
+            data := newIntArray(n)
+            var i: integer := 0
+            while i < n do
+                data[i] := 5
+                i := i + 1
+            endwh
+        end build
+
+        public function checksum(): integer
+            var s: integer := 0
+            var i: integer := 0
+            while i < 64 do
+                s := s + data[i]
+                i := i + 1
+            endwh
+            return s + tag + code
+        end checksum
+    end Box
+
+    var b: Box
+
+    function setup()
+        b := Box()
+        b.build(64)
+    end
+
+    function churn()
+        var i: integer := 0
+        while i < 4000 do
+            var j: integer[] := newIntArray(64)
+            j[0] := i
+            i := i + 1
+        endwh
+    end
+
+    function Main()
+        setup()
+        churn()
+        print "chk =", b.checksum()
+    end
+
+end GcObjAlign

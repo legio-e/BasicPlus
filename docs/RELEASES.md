@@ -5,6 +5,56 @@
 
 ---
 
+## v3.0.1 — julio 2026 · «parche de memoria»
+
+Versión de mantenimiento. Preparando el modelo de memoria de la próxima V4
+salieron a la luz **cuatro fallos** en el **recolector de basura** y la
+**liberación de objetos** del núcleo en C —el que comparten las tres familias de
+micro—. Ninguno se dispara a diario, pero podían **corromper datos en silencio**
+en programas que sobreviven a varias recolecciones. Lo correcto y lo honesto es
+arreglarlos, así que aquí están: en **un único sitio**, de modo que **las tres
+familias heredan el arreglo** al recompilar. No hay cambios de lenguaje ni de API
+—tus programas compilan y corren igual—; solo el motor es más robusto.
+
+### Lo que se corrige
+
+- **Arrays de `long`/`double`** que sobrevivían a una recolección podían
+  desaparecer. Ahora el GC los reconoce.
+- Un **entero cuyo valor coincidía con una dirección del heap** podía hacer que
+  el recolector **pisara datos vivos** (corrupción no determinista). Ahora el GC
+  valida los candidatos contra las **cabeceras reales de objeto**, igual que la
+  VM de Java.
+- **Liberar un objeto «con dueño»** dejaba el heap en un estado que descuadraba
+  el barrido posterior. Ahora la liberación deja el bloque consistente.
+- Una **variable global de módulo** que fuera el único camino a un objeto vivo
+  podía recolectarse **en vivo** (uso-tras-liberación). La causa de fondo era de
+  **alineación**: el bloque de constantes y variables no siempre quedaba alineado
+  a 4, y entonces los globales caían en direcciones que **ningún** recolector
+  miraba. Se corrige alineando ese bloque en el compilador y añadiendo su escaneo
+  en la VM-C. De regalo, evita accesos a enteros no alineados que **fallan en
+  ARM/RISC-V**.
+
+### Qué implica al actualizar
+
+- Por la alineación, el **bytecode de la stdlib cambia unos pocos bytes**. Hay que
+  **reflashear el firmware** de las placas con esta versión. El IDE resube la
+  stdlib de host automáticamente (compara por CRC, así que solo sube lo que
+  cambió).
+- Nada más que hacer: mismo lenguaje, misma API, mismos artefactos.
+
+### Artefactos de la release
+
+Los mismos que en v3.0 (el IDE pasa a `BpIde-3.0.1.jar`); reconstruidos con el
+núcleo parcheado. Ver la tabla de v3.0 más abajo y **[INSTALAR_FIRMWARE.md](INSTALAR_FIRMWARE.md)**.
+
+### El invariante
+
+Sin novedad donde importa: **la salida de un programa sigue siendo byte-idéntica
+en la VM de Java (`miVM`) y en la VM de C (`bpgenvm-c`)**, en el PC y en el micro.
+Los cuatro arreglos se verificaron con esa vara de medir.
+
+---
+
 ## v3.0 — julio 2026 · «interfaz gráfica»
 
 BasicPlus llega a su versión **V3**, cuya novedad principal es el **diseño de

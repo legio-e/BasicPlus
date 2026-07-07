@@ -195,6 +195,25 @@ de modo que `isDescendantOf` casa el `catch` con la clase del otro módulo.
   string `TYPE_ARRAY_I8` (sin el tag), así que `LEA_GLOBAL` empuja la dirección
   y el string se usa in-situ.
 
+**Alineación a 4 (v3.0.1).** Cada símbolo ocupa su tamaño **natural**, y no todos
+son múltiplo de 4: `integer`/`float`/`long`/`double` y los arrays numéricos sí lo
+son, pero un **string** es `4 + N` bytes (N = longitud UTF-8, arbitraria), un
+`int8`/`byte` const ocupa **1** byte, un `int16`/`short` **2**, y un
+`byte[]`/`int16[]` const `4 + N` / `4 + 2n`. Si se empaquetaran a pelo, un símbolo
+impar dejaría a los que le siguen (y al propio CS) en direcciones **no 4-alineadas**.
+Por eso el frontend **redondea el tamaño de CADA símbolo al siguiente múltiplo de
+4** (`slot = (len + 3) & ~3`): el dato va al extremo **bajo** del slot (donde apunta
+su offset CS-relativo) y los bytes sobrantes quedan al alto, a cero. Como todos los
+slots son múltiplo de 4, **cada símbolo cae en un offset 4-alineado** y el bloque
+entero —y con él `codeStart = dataStart + dataSize` (= **CS**)— queda alineado sin
+padding extra al final. Importa porque el barrido conservador del GC —en **ambas**
+VMs— solo lee palabras **alineadas a 4**: un símbolo de referencia (un global) en
+dirección no alineada sería invisible al GC → recolección de un objeto vivo (el bug
+**GC-2** de v3.0.1). Como extra, evita accesos a `integer` no alineados, que
+**fallan** en ARM/RISC-V. (Los campos DENTRO de un objeto no sufren esto: van en
+slots de 4 bytes indexados —ver §8— y el compilador prohíbe arrays de tamaño fijo
+como campo de clase, así que un campo de referencia siempre queda 4-alineado.)
+
 El loader inyecta el bloque entero en memoria a partir de
 `dataStart = moduleBase + extTableSize`. Los offsets dentro del bloque
 los conoce el frontend al emitir (no se reportan al loader).
