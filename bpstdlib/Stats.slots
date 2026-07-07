@@ -1,0 +1,5 @@
+{
+  "Accumulator": { "add": 2, "count": 3, "mean": 4, "variance": 5, "stdDev": 6, "min": 7, "max": 8 },
+  "LinReg": { "clearData": 2, "addPoint": 3, "subPoint": 4, "addData": 5, "count": 6, "meanX": 7, "meanY": 8, "slope": 9, "intercept": 10, "r": 11, "stdDevX": 12, "stdDevY": 13, "predict": 14 },
+  "LinFit": { "slope": 2, "intercept": 3, "predict": 4 }
+}

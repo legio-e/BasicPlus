@@ -1,0 +1,3 @@
+{
+  "Meter": { "measureHz": 2, "measureHzAvg": 3, "maxHz": 4, "close": 5 }
+}

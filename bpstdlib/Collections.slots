@@ -1,0 +1,12 @@
+{
+  "Comparable": { "compareTo": 1 },
+  "StringComparator": { "compare": 2 },
+  "Double": { "value": 2, "compareTo": 1, "toString": 0 },
+  "Comparator": { "compare": 2 },
+  "Integer": { "value": 2, "compareTo": 1, "toString": 0 },
+  "Float": { "value": 2, "compareTo": 1, "toString": 0 },
+  "NaturalComparator": { "compare": 2 },
+  "Long": { "value": 2, "compareTo": 1, "toString": 0 },
+  "Boolean": { "value": 2, "compareTo": 1, "toString": 0 },
+  "Map": { "withComparator": 2, "size": 3, "put": 4, "get": 5, "containsKey": 6, "remove": 7, "keyAt": 8, "valueAt": 9 }
+}

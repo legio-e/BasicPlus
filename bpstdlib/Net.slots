@@ -1,0 +1,3 @@
+{
+  "Tcp": { "connect": 2, "isOpen": 3, "send": 4, "sendStr": 5, "recv": 6, "recvStr": 7, "close": 8 }
+}

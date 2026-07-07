@@ -34,6 +34,16 @@ familias heredan el arreglo** al recompilar. No hay cambios de lenguaje ni de AP
   en la VM-C. De regalo, evita accesos a enteros no alineados que **fallan en
   ARM/RISC-V**.
 
+Y **dos más**, cazados al probar los binarios en las **seis placas** antes de publicar:
+
+- **`gc()` colgaba en placas con heap grande** (Metro RP2350B, ESP32-P4, STM32
+  Discovery): el mapa de cabeceras del recolector se dimensionaba por la capacidad
+  total del heap, y en varios MB de PSRAM eso disparaba una reserva enorme en cada
+  recolección. Ahora se dimensiona por la memoria realmente usada.
+- **Un `long` se imprimía como «ld» en el STM32** (su `printf` reducido no incluye
+  `long long`). Ahora los enteros de 64 bits se formatean sin depender de la
+  librería C → correctos y byte-idénticos en todas las placas.
+
 ### Qué implica al actualizar
 
 - Por la alineación, el **bytecode de la stdlib cambia unos pocos bytes**. Hay que

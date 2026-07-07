@@ -1,0 +1,3 @@
+{
+  "Alarm": { "check": 2, "wait": 3, "reset": 4, "since": 5 }
+}

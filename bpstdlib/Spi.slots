@@ -1,0 +1,3 @@
+{
+  "Bus": { "write": 2, "read": 3, "transfer": 4 }
+}

@@ -1,0 +1,5 @@
+{
+  "Channel": { "read": 2, "readVolts": 3, "readAvg": 4 },
+  "RuntimeError": {  },
+  "Exception": {  }
+}
