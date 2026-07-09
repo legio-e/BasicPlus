@@ -3211,9 +3211,9 @@ public class VirtualMachine {
 
     /** Aloca un array de refs (TYPE_ARRAY_REF) con n elementos, devolviendo user_ref. Los slots quedan a 0. */
     private int allocVmRefArray(int n) {
-        int ref = heapAlloc(n * 4, TYPE_ARRAY_REF);
+        int ref = heapAlloc(n * 8, TYPE_ARRAY_REF);   // H1.2a (V4): ref plana = 8 bytes/elem
         writeInt32(ref, n);
-        for (int i = 0; i < n; i++) writeInt32(ref + 4 + i * 4, 0);
+        for (int i = 0; i < n; i++) writeI64(memory, ref + 4 + i * 8, 0L);
         // B1 residual — ver allocVmString. Mismo motivo: ancla GC para el
         // intervalo entre alocación y publicación al stack del programa.
         ThreadContext me = currentTcLocal.get();
@@ -3643,7 +3643,7 @@ public class VirtualMachine {
                 int[] refs = new int[parts.length];
                 for (int i = 0; i < parts.length; i++) refs[i] = allocVmString(parts[i]);
                 int arrRef = allocVmRefArray(parts.length);
-                for (int i = 0; i < parts.length; i++) writeInt32(arrRef + 4 + i * 4, refs[i]);
+                for (int i = 0; i < parts.length; i++) writeI64(memory, arrRef + 4 + i * 8, ((long) refs[i]) & 0xFFFFFFFFL);  // H1.2a: ref plana 8B
                 pushTc(tc, arrRef);
                 break;
             }
@@ -3757,7 +3757,7 @@ public class VirtualMachine {
                 int[] refs = new int[names.length];
                 for (int i = 0; i < names.length; i++) refs[i] = allocVmString(names[i]);
                 int arrRef = allocVmRefArray(names.length);
-                for (int i = 0; i < names.length; i++) writeInt32(arrRef + 4 + i * 4, refs[i]);
+                for (int i = 0; i < names.length; i++) writeI64(memory, arrRef + 4 + i * 8, ((long) refs[i]) & 0xFFFFFFFFL);  // H1.2a: ref plana 8B
                 pushTc(tc, arrRef);
                 break;
             }
@@ -3776,8 +3776,8 @@ public class VirtualMachine {
                 int oldLen = (oldRef != 0) ? readInt32(oldRef) : 0;
                 int newRef = allocVmRefArray(newCap);
                 int copyLen = Math.min(oldLen, newCap);
-                for (int i = 0; i < copyLen; i++) {
-                    writeInt32(newRef + 4 + i * 4, readInt32(oldRef + 4 + i * 4));
+                for (int i = 0; i < copyLen; i++) {   // H1.2a (V4): ref plana = 8 bytes/elem
+                    writeI64(memory, newRef + 4 + i * 8, readI64(memory, oldRef + 4 + i * 8));
                 }
                 pushTcRef(tc, newRef);
                 break;
@@ -4847,7 +4847,7 @@ public class VirtualMachine {
             // recursivamente y luego el array como bloque.
             int length = readInt32(ref);
             for (int i = 0; i < length; i++) {
-                int slotRef = readInt32(ref + 4 + i * 4);
+                int slotRef = (int) readI64(memory, ref + 4 + i * 8);   // H1.2a: ref plana 8B (low32)
                 if (slotRef != 0) freeOwnedObjectLocked(slotRef);
             }
         }

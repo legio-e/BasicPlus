@@ -3363,8 +3363,8 @@ public final class MivmEmitter {
                     default:     break;
                 }
             }
-            // H1.2a: elemento ref (objeto/string/array anidado) = 8 bytes flat.
-            if (isRefType(el)) return OpCode.ALOAD_I64;
+            // H1.2a: elemento ref/any (objeto/string/array anidado/any) = 8 bytes.
+            if (occupies8Bytes(el)) return OpCode.ALOAD_I64;
         }
         return OpCode.ALOAD;
     }
@@ -3392,8 +3392,8 @@ public final class MivmEmitter {
                 default:                  break;
             }
         }
-        // H1.2a: elemento ref (objeto/string/array anidado) = 8 bytes flat.
-        if (isRefType(el)) return OpCode.ASTORE_I64;
+        // H1.2a: elemento ref/any (objeto/string/array anidado/any) = 8 bytes.
+        if (occupies8Bytes(el)) return OpCode.ASTORE_I64;
         return OpCode.ASTORE;
     }
 
@@ -3542,13 +3542,13 @@ public final class MivmEmitter {
         }
         try {
             w.addClass("List", "Object");   // H5.1.a — raíz Object
-            w.declareField("items", true);
+            w.declareField("items", true, false, true);   // H1.2a (V4): ref array = 8 bytes (GET/SET_FIELD_LONG)
             w.declareField("size",  false);
             w.declareField("cap",   false);
 
             // -------------------------- add(item) --------------------------
             w.addMethod("add");
-            w.declareParam("item");
+            w.declareParam("item", 8);   // H1.2a: item es `any` = 8 bytes
             beginFunctionScope(makeSynthFs("add", null), null);
             try {
                 int afterGrow = w.newLabel();
@@ -3577,7 +3577,7 @@ public final class MivmEmitter {
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("this"); w.emitGetField("List", "size");
                 w.emitGetParam("item");
-                w.emit(OpCode.ASTORE);
+                w.emit(OpCode.ASTORE_I64);
 
                 // size := size + 1
                 w.emitGetParam("this");
@@ -3596,7 +3596,7 @@ public final class MivmEmitter {
                 // __result := items[idx]
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("idx");
-                w.emit(OpCode.ALOAD);
+                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)
                 w.emitSetLocal("__result");
                 emitFunctionEnd();
             } finally { scopeStack.pop(); }
@@ -3604,13 +3604,13 @@ public final class MivmEmitter {
             // -------------------------- set(idx, item) --------------------------
             w.addMethod("set");
             w.declareParam("idx");
-            w.declareParam("item");
+            w.declareParam("item", 8);   // H1.2a: item es `any` = 8 bytes
             beginFunctionScope(makeSynthFs("set", null), null);
             try {
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("idx");
                 w.emitGetParam("item");
-                w.emit(OpCode.ASTORE);
+                w.emit(OpCode.ASTORE_I64);
                 emitFunctionEnd();
             } finally { scopeStack.pop(); }
 
@@ -3651,8 +3651,8 @@ public final class MivmEmitter {
                 w.emitGetLocal("i");                                       // idx
                 w.emitGetParam("this"); w.emitGetField("List", "items");  // arr (source)
                 w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD);       // i+1
-                w.emit(OpCode.ALOAD);                                       // val = items[i+1]
-                w.emit(OpCode.ASTORE);                                      // items[i] := val
+                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)                                       // val = items[i+1]
+                w.emit(OpCode.ASTORE_I64);                                      // items[i] := val
 
                 // i := i + 1
                 w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD);
@@ -3671,7 +3671,7 @@ public final class MivmEmitter {
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("this"); w.emitGetField("List", "size");
                 emitInt(0);
-                w.emit(OpCode.ASTORE);
+                w.emit(OpCode.ASTORE_I64);
 
                 emitFunctionEnd();
             } finally { scopeStack.pop(); }
@@ -3729,14 +3729,14 @@ public final class MivmEmitter {
                 // 1. liberar items[idx]
                 w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
                 w.emitGetParam("idx");
-                w.emit(OpCode.ALOAD);          // push items[idx]
+                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)          // push items[idx]
                 w.emitFreeRef();                // pop & free (cascade si owner)
 
                 // 2. items[idx] := 0
                 w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
                 w.emitGetParam("idx");
                 emitInt(0);
-                w.emit(OpCode.ASTORE);
+                w.emit(OpCode.ASTORE_I64);
 
                 // 3. for (i := idx; i < size-1; i++): items[i] := items[i+1]
                 w.emitGetParam("idx");
@@ -3756,8 +3756,8 @@ public final class MivmEmitter {
                 w.emitGetLocal("i");
                 w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
                 w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD);
-                w.emit(OpCode.ALOAD);
-                w.emit(OpCode.ASTORE);
+                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)
+                w.emit(OpCode.ASTORE_I64);
 
                 // i := i + 1
                 w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD);
@@ -3775,7 +3775,7 @@ public final class MivmEmitter {
                 w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
                 w.emitGetParam("this"); w.emitGetField("OwnerList", "size");
                 emitInt(0);
-                w.emit(OpCode.ASTORE);
+                w.emit(OpCode.ASTORE_I64);
 
                 emitFunctionEnd();
             } finally { scopeStack.pop(); }
@@ -4076,7 +4076,7 @@ public final class MivmEmitter {
 
             // ---- add(item) ----
             w.addMethod("add");
-            w.declareParam("item");
+            w.declareParam("item", 8);   // H1.2a: item es `any` = 8 bytes
             beginFunctionScope(makeSynthFs("add", null), null);
             try {
                 emitSyncListLock();
@@ -4122,7 +4122,7 @@ public final class MivmEmitter {
             // ---- set(idx, item) ----
             w.addMethod("set");
             w.declareParam("idx");
-            w.declareParam("item");
+            w.declareParam("item", 8);   // H1.2a: item es `any` = 8 bytes
             beginFunctionScope(makeSynthFs("set", null), null);
             try {
                 emitSyncListLock();
@@ -4174,7 +4174,7 @@ public final class MivmEmitter {
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("this"); w.emitGetField("List", "size");
                 emitInt(1); w.emit(OpCode.SUB);
-                w.emit(OpCode.ALOAD);
+                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)
                 w.emitSetLocal("__result");
                 // size := size - 1
                 w.emitGetParam("this");
@@ -4185,7 +4185,7 @@ public final class MivmEmitter {
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("this"); w.emitGetField("List", "size");
                 emitInt(0);
-                w.emit(OpCode.ASTORE);
+                w.emit(OpCode.ASTORE_I64);
 
                 w.declareLabel(endLabel);
                 // (emptyLabel queda no usado — lo dejamos para no romper la estructura;
@@ -4225,7 +4225,7 @@ public final class MivmEmitter {
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("this"); w.emitGetField("List", "size");
                 emitInt(1); w.emit(OpCode.SUB);
-                w.emit(OpCode.ALOAD);
+                w.emit(OpCode.ALOAD_I64);   // H1.2a: items = any[] (8 bytes/elem)
                 w.emitSetLocal("__result");
                 w.emitGetParam("this");
                 w.emitGetParam("this"); w.emitGetField("List", "size");
@@ -4234,7 +4234,7 @@ public final class MivmEmitter {
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("this"); w.emitGetField("List", "size");
                 emitInt(0);
-                w.emit(OpCode.ASTORE);
+                w.emit(OpCode.ASTORE_I64);
                 emitSyncListUnlock();
                 w.emitJump(doneOk);
 
@@ -4635,7 +4635,10 @@ public final class MivmEmitter {
      *  con el ensanchado de refs 4→8B, toda ref viaja por el carril de 8 bytes.
      *  Es el predicado de ANCHO; is8Byte sigue siendo solo el numérico. */
     private boolean occupies8Bytes(BpType t) {
-        return is8Byte(t) || isRefType(t);
+        // H1.2a (V4): `any` = 8 bytes — es un valor opaco que contiene o un int
+        // (zero-extended) o una ref flat; en el modelo plano ocupa 2 slots como
+        // las refs. Sin esto, List/SyncList (any de punta a punta) truncan.
+        return is8Byte(t) || isRefType(t) || (t instanceof BpType.AnyType);
     }
 
     /** BUG-6: nº de slots de 4 bytes que ocupan los argumentos (excluye `this`).
@@ -4919,6 +4922,15 @@ public final class MivmEmitter {
         if (target == null) return;
         BpType srcT = info.exprTypes.get(src);
         if (srcT == null) return;
+        // H1.2a (V4) — destino `any` = 8 bytes. Un valor de 4 bytes (int/narrow/
+        // bool) debe ensancharse a 8B para ocupar los 2 slots que el llamante
+        // reserva (numArgs cuenta `any` como 2). Sin esto el arg viaja 4B, el sp
+        // queda -4 y el receptor del INVOKE_VIRTUAL se lee desalineado (null).
+        // Lo ya de 8B (long/double/ref/string/any) viaja tal cual (flat).
+        if (target instanceof BpType.AnyType) {
+            if (!occupies8Bytes(srcT)) w.emit(OpCode.I32_TO_I64);
+            return;
+        }
         if (!(target instanceof PrimitiveType)) return;
         PrimitiveType pt = (PrimitiveType) target;
         // int → float (promoción numérica)
