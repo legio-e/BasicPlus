@@ -408,6 +408,26 @@ static inline void bpref_push(bpvm_t* vm, bpvm_thread_t* tc, bpref_t r) {
     tc->sp += BPVM_REF_SIZE;
 }
 
+/* -- acceso a través de una referencia (genérico: la indirección, la cabecera y
+ *    el stride viven AQUÍ, no en cada opcode). Cambiar el modelo de referencia
+ *    (p.ej. handles) = tocar bpref_deref; los call sites no. -- */
+#define BPVM_ARR_DATA_OFF 4u   /* bytes de user_ref al 1er elemento (prefijo length u32) */
+
+/* Resolver una referencia a su offset en memory[] (DÓNDE vive el objeto). Esta es
+ * LA indirección: hoy identidad; con handles = tabla (índice -> addr). */
+static inline uint32_t bpref_deref(const bpvm_t* vm, bpref_t r) {
+    (void) vm; return r.v;
+}
+/* Longitud (nº de elementos) de un array, leída de su cabecera. 0 si null. */
+static inline uint32_t bpref_arr_len(const bpvm_t* vm, bpref_t arr) {
+    return bpref_is_null(arr) ? 0u
+         : bpvm_read_u32_be(vm->memory + bpref_deref(vm, arr));
+}
+/* Puntero al elemento idx (SIN bounds check): deref + cabecera + idx*elem_size. */
+static inline uint8_t* bpref_arr_elem(bpvm_t* vm, bpref_t arr, uint32_t idx, uint32_t elem_size) {
+    return vm->memory + bpref_deref(vm, arr) + BPVM_ARR_DATA_OFF + idx * elem_size;
+}
+
 /* ---- H2 (V2): helpers UTF-8 sobre el payload de un string byte[] ----
  * Fuente UNICA para el intérprete (builtins.c) y el AOT (bpvm_aot_helpers.c):
  * deben coincidir byte a byte para la paridad bytecode <-> native. */
