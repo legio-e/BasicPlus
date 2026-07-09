@@ -62,8 +62,8 @@ public class MainProperties {
 
             // ---- main ----
             w.addFunction("main", true);
-            w.declareLocal("p1");
-            w.declareLocal("p2");
+            w.declareLocalLong("p1");   // H1.2a: ref de objeto = 8 bytes
+            w.declareLocalLong("p2");
             w.declareLocal("ret");
 
             w.emitLeaGlobal("titulo"); w.emit(OpCode.PRINT_STRING);
@@ -123,7 +123,7 @@ public class MainProperties {
                 w2.declareInstanceProperty("secreto", false, false);
                 w2.endClass();
                 w2.addFunction("main", true);
-                w2.declareLocal("p");
+                w2.declareLocalLong("p");   // H1.2a: ref de objeto = 8 bytes
                 w2.emitNewObject("Punto"); w2.emitSetLocal("p");
                 w2.emitGetLocal("p");
                 w2.emitGetInstanceProperty("Punto", "secreto"); // <-- debe lanzar

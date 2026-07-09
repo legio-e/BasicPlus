@@ -81,12 +81,12 @@ public class MainOOP {
 
             // ---- main ----
             w.addFunction("main", true);
-            w.declareLocal("a1");
-            w.declareLocal("p1");
-            w.declareLocal("p2");
-            w.declareLocal("arr");
+            w.declareLocalLong("a1");   // H1.2a: refs de objeto/array = 8 bytes
+            w.declareLocalLong("p1");
+            w.declareLocalLong("p2");
+            w.declareLocalLong("arr");
             w.declareLocal("i");
-            w.declareLocal("tmpName");
+            w.declareLocalLong("tmpName");
             w.declareLocal("ret");             // dump de valores de retorno descartados
 
             int LBL_TOP = w.newLabel();

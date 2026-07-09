@@ -3363,6 +3363,8 @@ public final class MivmEmitter {
                     default:     break;
                 }
             }
+            // H1.2a: elemento ref (objeto/string/array anidado) = 8 bytes flat.
+            if (isRefType(el)) return OpCode.ALOAD_I64;
         }
         return OpCode.ALOAD;
     }
@@ -3390,6 +3392,8 @@ public final class MivmEmitter {
                 default:                  break;
             }
         }
+        // H1.2a: elemento ref (objeto/string/array anidado) = 8 bytes flat.
+        if (isRefType(el)) return OpCode.ASTORE_I64;
         return OpCode.ASTORE;
     }
 

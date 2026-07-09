@@ -2111,9 +2111,9 @@ public class VirtualMachine {
                     writeI64(mem, sp, ((long)(cs + off)) & 0xFFFFFFFFL); sp += 8;
                     break;
                 }
-                case 0x23: { // LEA_LOCAL
+                case 0x23: { // LEA_LOCAL — H1.2a: dirección de local (array inline) = ref 8 bytes
                     short off = (short) readI16(mem, pc); pc += 2;
-                    writeI32(mem, sp, bp + off); sp += 4;
+                    writeI64(mem, sp, ((long)(bp + off)) & 0xFFFFFFFFL); sp += 8;
                     break;
                 }
 
@@ -3032,11 +3032,9 @@ public class VirtualMachine {
                     mem[a] = (byte)(v >> 24); mem[a+1] = (byte)(v >> 16); mem[a+2] = (byte)(v >> 8); mem[a+3] = (byte)v;
                     break;
                 }
-                case 0x69: { // LEA_LOCAL_S8
+                case 0x69: { // LEA_LOCAL_S8 — H1.2a: dirección de local = ref 8 bytes
                     int off = mem[pc]; pc++;
-                    int v = bp + off;
-                    mem[sp] = (byte)(v >> 24); mem[sp+1] = (byte)(v >> 16); mem[sp+2] = (byte)(v >> 8); mem[sp+3] = (byte)v;
-                    sp += 4;
+                    writeI64(mem, sp, ((long)(bp + off)) & 0xFFFFFFFFL); sp += 8;
                     break;
                 }
                 case 0x6A: { // GET_GLOBAL_S8

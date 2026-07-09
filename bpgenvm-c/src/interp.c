@@ -691,15 +691,15 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             bpvm_write_i32_be(mem + (uint32_t)((int32_t)bp + soff), v);
             break;
         }
-        case OP_LEA_LOCAL: {
+        case OP_LEA_LOCAL: {   /* H1.2a: dirección de local (array inline) = ref 8 bytes */
             int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
-            bpvm_write_i32_be(mem + sp, (int32_t)((int32_t)bp + soff));
-            sp += 4; break;
+            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)bp + soff));
+            sp += 8; break;
         }
         case OP_LEA_LOCAL_S8: {
             int8_t soff = (int8_t) mem[pc++];
-            bpvm_write_i32_be(mem + sp, (int32_t)((int32_t)bp + soff));
-            sp += 4; break;
+            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)bp + soff));
+            sp += 8; break;
         }
         case OP_GET_GLOBAL: {
             int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;

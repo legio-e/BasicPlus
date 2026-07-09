@@ -40,7 +40,7 @@ public class MainArrays {
             w.addFunction("main", true);
             w.declareLocalArray("buffer", 3);
             w.declareLocal("i");
-            w.declareLocal("heap");
+            w.declareLocalLong("heap");   // H1.2a: guarda un ref de array (NEWARRAY) = 8 bytes
 
             // Etiquetas para los 4 bucles. newLabel() asigna IDs anónimos.
             int LBL_FILL_TOP = w.newLabel();
