@@ -784,7 +784,7 @@ public class VirtualMachine {
     private String readRuntimeErrorMsg(int objRef) {
         try {
             if (objRef <= 0) return null;
-            int msgRef = readInt32(objRef + 4 + 0 * 4);
+            int msgRef = (int) readI64(memory, objRef + 4 + 0 * 4);   // H1.2a: msg es ref 8B (low32)
             if (msgRef <= 0) return null;
             return readStringIfPossible(msgRef);
         } catch (Throwable t) {
@@ -822,8 +822,10 @@ public class VirtualMachine {
                 writeInt32(objRef + 4 + i * 4, 0);
             }
             // Field `msg` está en slot 0 (la clase sintetizada lo declara
-            // primero y es el único campo).
-            writeInt32(objRef + 4 + 0 * 4, msgRef);
+            // primero y es el único campo). H1.2a: es una ref (string) → 8 bytes
+            // flat (high=0, low=msgRef); si se escribe a 4B, GET_FIELD_LONG lee
+            // la palabra baja (0) y e.msg sale null/basura.
+            writeI64(memory, objRef + 4 + 0 * 4, ((long) msgRef) & 0xFFFFFFFFL);
             // Empujamos el ref al stack del thread. El dispatcher hará el
             // pop como parte del unwind, igual que con el opcode THROW.
             writeInt32(tc.sp, objRef);
