@@ -364,6 +364,50 @@ static inline void bpvm_write_i64_be(uint8_t* p, int64_t v) {
     bpvm_write_u32_be(p + 4, (uint32_t)  v);
 }
 
+/* ============================================================ */
+/*  Referencia (V4) — LA "definición de referencia".            */
+/*  Una referencia es un valor OPACO, distinto de un int y de un */
+/*  long: NO se mezcla con int32/int64. Hoy encapsula el user_ref */
+/*  plano (offset en memory[], = cabecera+4; 0 = null). El día    */
+/*  que sea un handle (índice,generación) SOLO cambian los        */
+/*  accesores de aquí + BPVM_REF_SIZE; los call sites no.         */
+/*  Ver docs/V4_REF_ABSTRACTION.md.                               */
+/* ============================================================ */
+
+/* Bytes que ocupa una referencia EN memory[]/pila (el "slot"). Es el
+ * footprint en MEMORIA, NO sizeof(bpref_t). Hoy: carril plano de 8 bytes. */
+#define BPVM_REF_SIZE 8
+
+typedef struct { uint32_t v; } bpref_t;
+
+/* -- construcción / consulta -- */
+static inline bpref_t bpref_null(void)               { bpref_t r; r.v = 0u; return r; }
+static inline bool    bpref_is_null(bpref_t r)       { return r.v == 0u; }
+static inline bool    bpref_eq(bpref_t a, bpref_t b) { return a.v == b.v; }
+
+/* -- puente al mundo crudo: SOLO en la frontera de acceso a memory[].
+ *    Aquí un handle se decodificaría a puntero/offset. Hoy, identidad. -- */
+static inline uint32_t bpref_addr(bpref_t r)         { return r.v; }
+static inline bpref_t  bpref_from_addr(uint32_t a)   { bpref_t r; r.v = a; return r; }
+
+/* -- codificación en memory[]: LA frontera de representación (handle aquí) -- */
+static inline bpref_t bpref_load(const bpvm_t* vm, uint32_t at) {
+    return bpref_from_addr((uint32_t) bpvm_read_i64_be(vm->memory + at));
+}
+static inline void bpref_store(bpvm_t* vm, uint32_t at, bpref_t r) {
+    bpvm_write_i64_be(vm->memory + at, (int64_t) r.v);
+}
+
+/* -- pila del intérprete / builtins (unidades de BPVM_REF_SIZE) -- */
+static inline bpref_t bpref_pop(bpvm_t* vm, bpvm_thread_t* tc) {
+    tc->sp -= BPVM_REF_SIZE;
+    return bpref_load(vm, tc->sp);
+}
+static inline void bpref_push(bpvm_t* vm, bpvm_thread_t* tc, bpref_t r) {
+    bpref_store(vm, tc->sp, r);
+    tc->sp += BPVM_REF_SIZE;
+}
+
 /* ---- H2 (V2): helpers UTF-8 sobre el payload de un string byte[] ----
  * Fuente UNICA para el intérprete (builtins.c) y el AOT (bpvm_aot_helpers.c):
  * deben coincidir byte a byte para la paridad bytecode <-> native. */

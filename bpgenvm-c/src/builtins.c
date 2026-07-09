@@ -277,13 +277,14 @@ static void push_i32(bpvm_t* vm, bpvm_thread_t* tc, int32_t v) {
     tc->sp += 4;
 }
 /* H1.2a (V4): refs = 8 bytes (plano, low32 = dirección). */
+/* V4: adaptadores finos sobre la abstracción bpref_* (bpvm_internal.h). Mantienen
+ * la firma uint32_t para no tocar aún los ~99 callers; el ancho/codificación ya
+ * pasa por BPVM_REF_SIZE + bpref_load/store. Migración capa a capa después. */
 static uint32_t pop_ref(bpvm_t* vm, bpvm_thread_t* tc) {
-    tc->sp -= 8;
-    return (uint32_t) bpvm_read_i64_be(vm->memory + tc->sp);
+    return bpref_addr(bpref_pop(vm, tc));
 }
 static void push_ref(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
-    bpvm_write_i64_be(vm->memory + tc->sp, (int64_t) ref);
-    tc->sp += 8;
+    bpref_push(vm, tc, bpref_from_addr(ref));
 }
 
 /* Lee un string BP (TYPE_ARRAY_I32 con codepoints) a un buffer C UTF-8.
