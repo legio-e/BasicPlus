@@ -723,15 +723,15 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             bpvm_write_i32_be(mem + (uint32_t)((int32_t)cs + soff), v);
             break;
         }
-        case OP_LEA_GLOBAL: {
+        case OP_LEA_GLOBAL: {   /* H1.2a: dirección de global (string-const/array fijo) = ref 8 bytes */
             int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
-            bpvm_write_i32_be(mem + sp, (int32_t)((int32_t)cs + soff));
-            sp += 4; break;
+            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)cs + soff));
+            sp += 8; break;
         }
         case OP_LEA_GLOBAL_S8: {
             int8_t soff = (int8_t) mem[pc++];
-            bpvm_write_i32_be(mem + sp, (int32_t)((int32_t)cs + soff));
-            sp += 4; break;
+            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)cs + soff));
+            sp += 8; break;
         }
 
         /* ---- Control flow ----
@@ -1115,13 +1115,13 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 8, BPVM_TYPE_ARRAY_I64);
             if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
-            bpvm_write_i32_be(mem + sp, (int32_t) ref); sp += 4;
+            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t) ref); sp += 8;   /* H1.2a: ref = 8 bytes */
             mem = vm->memory;
             break;
         }
         case OP_ALOAD_I64: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I64: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
             int64_t v = bpvm_read_i64_be(mem + ref + 4 + (uint32_t) idx * 8);
@@ -1131,7 +1131,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ASTORE_I64: {
             sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I64: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
             bpvm_write_i64_be(mem + ref + 4 + (uint32_t) idx * 8, v);
@@ -1233,7 +1233,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 4, BPVM_TYPE_ARRAY_I32);
             if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
-            bpvm_write_i32_be(mem + sp, (int32_t) ref); sp += 4;
+            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t) ref); sp += 8;   /* H1.2a: ref = 8 bytes */
             mem = vm->memory;  /* heap_alloc no realoca pero defensivo */
             break;
         }
@@ -1243,7 +1243,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size, BPVM_TYPE_ARRAY_I8);
             if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
-            bpvm_write_i32_be(mem + sp, (int32_t) ref); sp += 4;
+            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t) ref); sp += 8;   /* H1.2a: ref = 8 bytes */
             break;
         }
         case OP_NEWARRAY_I16: {
@@ -1252,12 +1252,12 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 2, BPVM_TYPE_ARRAY_I16);
             if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
-            bpvm_write_i32_be(mem + sp, (int32_t) ref); sp += 4;
+            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t) ref); sp += 8;   /* H1.2a: ref = 8 bytes */
             break;
         }
         case OP_ALOAD: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length)
                 BPVM_RT_THROW("ALOAD: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
@@ -1268,7 +1268,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ASTORE: {
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length)
                 BPVM_RT_THROW("ASTORE: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
@@ -1276,14 +1276,14 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
         case OP_ALEN: {
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             bpvm_write_i32_be(mem + sp, (int32_t) length); sp += 4;
             break;
         }
         case OP_ALOAD_I8: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I8: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             int8_t v = (int8_t) mem[ref + 4 + (uint32_t) idx];
@@ -1292,7 +1292,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_ALOAD_U8: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_U8: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             uint8_t v = mem[ref + 4 + (uint32_t) idx];
@@ -1301,7 +1301,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_ALOAD_I16: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I16: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             int16_t v = bpvm_read_i16_be(mem + ref + 4 + (uint32_t) idx * 2);
@@ -1310,7 +1310,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_ALOAD_U16: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_U16: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             uint16_t v = bpvm_read_u16_be(mem + ref + 4 + (uint32_t) idx * 2);
@@ -1320,7 +1320,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ASTORE_I8: {
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I8: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             mem[ref + 4 + (uint32_t) idx] = (uint8_t)(v & 0xFF);
@@ -1329,7 +1329,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ASTORE_I16: {
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             uint32_t length = (ref == 0) ? 0 : bpvm_read_u32_be(mem + ref);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I16: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             int16_t v16 = (int16_t)(v & 0xFFFF);
@@ -1342,7 +1342,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         /* ---- F2: print strings ---- */
         case OP_PRINT_STRING:
         case OP_PRINT_STR_NONL: {
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             if (ref != 0) {
                 /* H2 (V2): strings son byte[] UTF-8 → emitimos los bytes
                  * directamente, sin truncar (Unicode completo). */
@@ -1390,13 +1390,13 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
             bpvm_write_u32_be(mem + ref, class_ptr);   /* slot[0] = class_ptr */
             /* fields ya zeroed por heap_alloc. */
-            bpvm_write_i32_be(mem + sp, (int32_t) ref); sp += 4;
+            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t) ref); sp += 8;   /* H1.2a: ref = 8 bytes */
             mem = vm->memory;
             break;
         }
         case OP_GET_FIELD: {
             uint8_t slot = mem[pc++];
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
             int32_t v = bpvm_read_i32_be(mem + ref + 4 + (uint32_t) slot * 4);
             bpvm_write_i32_be(mem + sp, v); sp += 4;
@@ -1405,7 +1405,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_SET_FIELD: {
             uint8_t slot = mem[pc++];
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
             bpvm_write_i32_be(mem + ref + 4 + (uint32_t) slot * 4, v);
             break;
@@ -1414,7 +1414,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
          * slot de 4 bytes; el valor ocupa 2 slots consecutivos en ref+4+slot*4. */
         case OP_GET_FIELD_LONG: {
             uint8_t slot = mem[pc++];
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
             int64_t v = bpvm_read_i64_be(mem + ref + 4 + (uint32_t) slot * 4);
             bpvm_write_i64_be(mem + sp, v); sp += 8;
@@ -1423,7 +1423,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_SET_FIELD_LONG: {
             uint8_t slot = mem[pc++];
             sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
             bpvm_write_i64_be(mem + ref + 4 + (uint32_t) slot * 4, v);
             break;
@@ -1432,8 +1432,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_INVOKE_VIRTUAL: {
             uint8_t vt_slot = mem[pc++];
             uint8_t num_args = mem[pc++];
-            uint32_t this_addr = sp - 4 - (uint32_t) num_args * 4;
-            uint32_t this_ref = (uint32_t) bpvm_read_i32_be(mem + this_addr);
+            uint32_t this_addr = sp - 8 - (uint32_t) num_args * 4;   /* H1.2a: receptor ref = 8 bytes */
+            uint32_t this_ref = (uint32_t) bpvm_read_i64_be(mem + this_addr);   /* low32 = dirección */
             if (this_ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
             uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(mem + this_ref);
 
@@ -1485,7 +1485,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_INSTANCEOF: {
             int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2;
             uint32_t expected = (uint32_t)((int32_t) cs + cs_off);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             int32_t result = 0;
             if (ref != 0) {
                 uint32_t cur = (uint32_t) bpvm_read_i32_be(mem + ref);
@@ -1503,7 +1503,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
 
         case OP_FREE_REF: {
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             if (ref != 0) {
                 /* Sólo objetos. Para arrays / strings, NOP. */
                 uint32_t header = ref - 4;
@@ -1523,7 +1523,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_SET_FIELD_OWNER: {
             uint8_t slot = mem[pc++];
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
             if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
             uint32_t field_addr = ref + 4 + (uint32_t) slot * 4;
             uint32_t old_val = (uint32_t) bpvm_read_i32_be(mem + field_addr);
@@ -1619,7 +1619,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
         case OP_THROW: {
-            sp -= 4; uint32_t ref = (uint32_t) bpvm_read_i32_be(mem + sp);
+            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: excepción ref = 8 bytes */
             tc->pc = pc; tc->sp = sp; tc->bp = bp; tc->cs = cs;
             int caught = bpvm_eh_unwind(vm, tc, ref);
             if (!caught) {

@@ -72,9 +72,9 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
             tc->bp = (uint32_t) e.saved_bp;
             tc->cs = (uint32_t) e.saved_cs;
             tc->pc = (uint32_t) e.handler_pc;
-            /* Push ref para que el catch lo reciba como local. */
-            bpvm_write_i32_be(vm->memory + tc->sp, (int32_t) ref);
-            tc->sp += 4;
+            /* Push ref para que el catch lo reciba como local. H1.2a: ref = 8 bytes. */
+            bpvm_write_i64_be(vm->memory + tc->sp, (int64_t)(uint32_t) ref);
+            tc->sp += 8;
             return 1;
         }
         /* No matchee: seguimos popeando entries (los handlers más
@@ -84,7 +84,7 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
     fprintf(stderr, "[bpvm-c] excepción no atrapada en tid=%" PRId32 "\n", tc->id);
     if (ref != 0) {
         /* Intenta leer field 0 = msg (asumiendo layout RuntimeError). */
-        int32_t msg_ref = bpvm_read_i32_be(vm->memory + ref + 4);
+        int32_t msg_ref = (int32_t) bpvm_read_i64_be(vm->memory + ref + 4);   /* H1.2a: campo ref = 8B */
         if (msg_ref > 0) {
             uint32_t mlen = bpvm_read_u32_be(vm->memory + msg_ref);   /* H2: bytes UTF-8 */
             char buf[256]; size_t n = 0;
@@ -156,7 +156,7 @@ have_class:
     bpvm_write_u32_be(vm->memory + obj_ref, class_ptr);
     /* slot 0 = msg (convención del frontend). */
     if (num_fields > 0) {
-        bpvm_write_i32_be(vm->memory + obj_ref + 4 + 0 * 4, (int32_t) msg_ref);
+        bpvm_write_i64_be(vm->memory + obj_ref + 4 + 0 * 4, (int64_t)(uint32_t) msg_ref);   /* H1.2a: campo ref = 8B */
     }
 
     /* Anclar para GC; el caller decide si pasarlo a eh_unwind o usarlo

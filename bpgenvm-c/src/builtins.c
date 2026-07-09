@@ -276,6 +276,15 @@ static void push_i32(bpvm_t* vm, bpvm_thread_t* tc, int32_t v) {
     bpvm_write_i32_be(vm->memory + tc->sp, v);
     tc->sp += 4;
 }
+/* H1.2a (V4): refs = 8 bytes (plano, low32 = dirección). */
+static uint32_t pop_ref(bpvm_t* vm, bpvm_thread_t* tc) {
+    tc->sp -= 8;
+    return (uint32_t) bpvm_read_i64_be(vm->memory + tc->sp);
+}
+static void push_ref(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
+    bpvm_write_i64_be(vm->memory + tc->sp, (int64_t) ref);
+    tc->sp += 8;
+}
 
 /* Lee un string BP (TYPE_ARRAY_I32 con codepoints) a un buffer C UTF-8.
  * Devuelve el número de bytes escritos (sin null terminator). Si el
@@ -411,7 +420,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     switch (id) {
 
     case BUILTIN_STRLEN: {
-        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
         uint32_t nbytes = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
         uint32_t ncp = (ref == 0) ? 0 : utf8_cp_count(vm->memory + ref + 4, nbytes);
         push_i32(vm, tc, (int32_t) ncp);   /* H2: longitud en codepoints */
@@ -419,7 +428,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 
     case BUILTIN_EVAL: {   /* H7 — eval("expr") -> float (calc. de constantes) */
-        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
         char buf[256];
         size_t n = read_bp_string(vm, ref, buf, sizeof(buf));
         double v = bpvm_eval_calc(buf, (int) n);
@@ -458,7 +467,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[32];
         int n = snprintf(buf, sizeof(buf), "%" PRId32, v);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
 
@@ -472,7 +481,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[64];
         int n = bpvm_format_double(buf, (double) x);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
     case BUILTIN_LONG_TO_STRING: {
@@ -482,7 +491,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[32];
         int n = bpvm_format_i64(buf, v);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
     case BUILTIN_DOUBLE_TO_STRING: {
@@ -494,7 +503,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[64];
         int n = bpvm_format_double(buf, v);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
 
@@ -502,7 +511,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t v = pop_i32(vm, tc);
         const char* s = v ? "true" : "false";
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
 
@@ -559,7 +568,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* n==0 (timeout) → byte[] vacío. La longitud del array puede ser
          * menor que el payload alocado (mismo patrón que READ_FILE). */
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) n);
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
     case BUILTIN_TCP_CLOSE: {
@@ -674,7 +683,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         size_t n = bpvm_gui_dump_tree(&buf);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf ? buf : "", n);
         free(buf);
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
     case BUILTIN_GUI_INVOKE_BY_NAME: {
@@ -780,7 +789,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int h = pop_i32(vm, tc);
         const char* s = bpvm_gui_get_text(h);
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
-        push_i32(vm, tc, (int32_t) ref); return BPVM_OK;
+        push_ref(vm, tc, ref); return BPVM_OK;
     }
     case BUILTIN_GUI_CREATE_LIST: return gui_make_child(vm, tc, bpvm_gui_create_list);
     case BUILTIN_GUI_CREATE_KEYBOARD: return gui_make_child(vm, tc, bpvm_gui_create_keyboard);
@@ -812,7 +821,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int col = pop_i32(vm, tc); int row = pop_i32(vm, tc); int h = pop_i32(vm, tc);
         const char* s = bpvm_gui_table_get_cell(h, row, col);
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
-        push_i32(vm, tc, (int32_t) ref); return BPVM_OK;
+        push_ref(vm, tc, ref); return BPVM_OK;
     }
     case BUILTIN_GUI_IMAGE_NEW: { push_i32(vm, tc, bpvm_gui_image_new()); return BPVM_OK; }
     case BUILTIN_GUI_IMAGE_LOAD_FILE: {
@@ -850,7 +859,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 #endif /* BPVM_GUI */
 
     case BUILTIN_PARSE_INT: {
-        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
         char buf[64];
         read_bp_string(vm, ref, buf, sizeof(buf));
         /* trim simple */
@@ -867,7 +876,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_PARSE_FLOAT: {   /* string -> float (f32). Espejo de parseInt pero con
                                    * strtod: (float)strtod == (float)Double.parseDouble
                                    * (f32 correctamente redondeado) -> paridad con miVM. */
-        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
         char buf[64];
         read_bp_string(vm, ref, buf, sizeof(buf));
         /* trim simple (igual que parseInt) */
@@ -913,7 +922,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 return builtin_throw(vm, tc, em);
             }
         }
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
     case BUILTIN_WRITE_FILE:
@@ -1065,7 +1074,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_CHAR_CODE_AT: {
         int32_t i   = pop_i32(vm, tc);
-        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
         if (ref == 0) { push_i32(vm, tc, 0); return BPVM_OK; }
         uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
         const uint8_t* p = vm->memory + ref + 4;
@@ -1082,7 +1091,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * el codepoint en esa posición. Si idx fuera de rango, devuelve
          * string vacía. */
         int32_t i    = pop_i32(vm, tc);
-        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
         uint8_t enc[4]; uint32_t enc_len = 0;
         if (ref != 0) {
             uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
@@ -1104,7 +1113,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             bpvm_write_u32_be(vm->memory + out, enc_len);
             for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
         }
-        push_i32(vm, tc, (int32_t) out);
+        push_ref(vm, tc, out);   /* H1.2a: string ref result = 8 bytes */
         return BPVM_OK;
     }
 
@@ -1114,7 +1123,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * para que intérprete y AOT den el mismo resultado (#173). */
         int32_t end   = pop_i32(vm, tc);
         int32_t start = pop_i32(vm, tc);
-        uint32_t ref  = (uint32_t) pop_i32(vm, tc);
+        uint32_t ref  = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
         uint32_t nbytes = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
         const uint8_t* p = vm->memory + ref + 4;
         uint32_t ncp = (ref == 0) ? 0 : utf8_cp_count(p, nbytes);   /* H2: índices en codepoints */
@@ -1131,7 +1140,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             for (uint32_t i = 0; i < n; i++)
                 vm->memory[out + 4 + i] = vm->memory[ref + 4 + boff + i];
         }
-        push_i32(vm, tc, (int32_t) out);
+        push_ref(vm, tc, out);   /* H1.2a: string ref result = 8 bytes */
         return BPVM_OK;
     }
 
@@ -1141,7 +1150,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) cap * 4, BPVM_TYPE_ARRAY_REF);
         if (ref == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) cap);
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
 
@@ -1158,7 +1167,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint32_t v = bpvm_read_u32_be(vm->memory + old_ref + 4 + i * 4);
             bpvm_write_u32_be(vm->memory + new_ref + 4 + i * 4, v);
         }
-        push_i32(vm, tc, (int32_t) new_ref);
+        push_ref(vm, tc, new_ref);
         return BPVM_OK;
     }
 
@@ -1183,7 +1192,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint8_t enc[4]; uint32_t el = utf8_encode(cp, enc);
             for (uint32_t k = 0; k < el; k++) vm->memory[new_ref + 4 + w++] = enc[k];
         }
-        push_i32(vm, tc, (int32_t) new_ref);
+        push_ref(vm, tc, new_ref);
         return BPVM_OK;
     }
 
@@ -1198,7 +1207,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (out == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + out, n);
         for (uint32_t i = 0; i < n; i++) vm->memory[out + 4 + i] = vm->memory[ref + 4 + i];
-        push_i32(vm, tc, (int32_t) out);
+        push_ref(vm, tc, out);   /* H1.2a: string ref result = 8 bytes */
         return BPVM_OK;
     }
 
@@ -1476,7 +1485,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (ref == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) size);
         /* bpvm_heap_alloc ya zero-init (memset en heap.c). */
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
 
@@ -1671,20 +1680,20 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[32];
         bpvm_pico_unique_id(buf, sizeof(buf));
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, strlen(buf));
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
     case BUILTIN_PICO_BOARD_NAME: {
         char buf[32];
         bpvm_pico_board_name(buf, sizeof(buf));
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, strlen(buf));
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
     case BUILTIN_PICO_RESET_CAUSE: {   /* H10 — causa del último reset (string) */
         const char* s = bpvm_pico_reset_cause();
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
-        push_i32(vm, tc, (int32_t) ref);
+        push_ref(vm, tc, ref);
         return BPVM_OK;
     }
     case BUILTIN_PICO_SET_MARK: {      /* H10 — breadcrumb: deja una miga */

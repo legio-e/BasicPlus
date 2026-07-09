@@ -493,7 +493,7 @@ public final class MivmEmitter {
                 int id = tempCounter++;
                 String newref  = "__modmtx_newref_"  + id;
                 String discard = "__modmtx_discard_" + id;
-                w.declareLocal(newref);
+                w.declareLocalLong(newref);
                 w.declareLocal(discard);
                 w.emitNewObject("Mutex");
                 w.emitSetLocal(newref);
@@ -619,7 +619,7 @@ public final class MivmEmitter {
             if (lit != null && bakeModuleVarInit(dn.name, t, lit)) continue;
 
             // Sin init horneable: slot a cero, 4 bytes (8 si long/double).
-            if (is8Byte(t)) w.declareGlobalLong(dn.name);   // H1.2/H1.3
+            if (occupies8Bytes(t)) w.declareGlobalLong(dn.name);   // H1.2/H1.3
             else w.declareGlobal(dn.name);
         }
     }
@@ -1018,7 +1018,7 @@ public final class MivmEmitter {
                     // L6 — backing de static property: global cualificado, width-aware.
                     PropertySymbol ps = (PropertySymbol) s;
                     String backing = staticBackingName(cd.name, ps.name);
-                    if (is8Byte(ps.type)) w.declareGlobalLong(backing);
+                    if (occupies8Bytes(ps.type)) w.declareGlobalLong(backing);
                     else w.declareGlobal(backing);
                 }
             }
@@ -1097,7 +1097,7 @@ public final class MivmEmitter {
                             if (vs != null) t = vs.type;
                             boolean isRef = isRefType(t);
                             // BUG-6: long/double = campo de 8 bytes (2 slots).
-                            w.declareField(dn.name, isRef, vd.isOwner, is8Byte(t));
+                            w.declareField(dn.name, isRef, vd.isOwner, occupies8Bytes(t));
                         }
                     }
                 }
@@ -1240,7 +1240,7 @@ public final class MivmEmitter {
                 // BUG-6: width-aware — long/double = 8 bytes. Sin esto la
                 // factoría cross-module declaraba el param a 4 bytes y un arg
                 // long/double se corrompía al pasarlo al __init.
-                w.declareParam(p.name, is8Byte(p.type) ? 8 : 4, varDbgTypeTag(p.type));
+                w.declareParam(p.name, occupies8Bytes(p.type) ? 8 : 4, varDbgTypeTag(p.type));
             }
         }
         // returnType=AnyType para evitar dependencia de tipo: el caller
@@ -1251,7 +1251,7 @@ public final class MivmEmitter {
         try {
             String newref  = "__factory_newref";
             String discard = "__factory_discard";
-            declareLocal(newref);
+            declareLocalLong(newref);
             declareLocal(discard);
             // newref := new Cls
             w.emitNewObject(cls.name);
@@ -1287,10 +1287,10 @@ public final class MivmEmitter {
     private void synthesizeCrossModuleInit(ClassSymbol cls) throws IOException {
         String initName = "__cls_init_" + cls.name;
         w.addFunction(initName, true);   // pública: cross-module
-        w.declareParam("this");
+        w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
         FunctionSymbol ctor = cls.constructor;
         for (ParamSymbol p : ctor.params) {
-            w.declareParam(p.name, is8Byte(p.type) ? 8 : 4, varDbgTypeTag(p.type));   // BUG-6: long/double = 8 bytes
+            w.declareParam(p.name, occupies8Bytes(p.type) ? 8 : 4, varDbgTypeTag(p.type));   // BUG-6: long/double = 8 bytes
         }
         FunctionSymbol synthFs = new FunctionSymbol(initName, true, false, false, null, null);
         beginFunctionScope(synthFs, null);   // void
@@ -1351,7 +1351,7 @@ public final class MivmEmitter {
         int id = tempCounter++;
         String newref  = "__syncmtx_newref_"  + id;
         String discard = "__syncmtx_discard_" + id;
-        declareLocal(newref);
+        declareLocalLong(newref);
         declareLocal(discard);
         w.emitNewObject("Mutex");
         w.emitSetLocal(newref);
@@ -1374,7 +1374,7 @@ public final class MivmEmitter {
      */
     private void synthesizeSyncMutexCtor(ClassSymbol cls) throws IOException {
         w.addFunction(cls.name + ".__init", false);
-        w.declareParam("this");
+        w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
         beginFunctionScope(makeSynthFs("__init", null), null);
         try {
             emitSyncMutexInit(cls.name);
@@ -1437,7 +1437,7 @@ public final class MivmEmitter {
         // sintetiza separadamente — su nombre sin puntos evita la ambigüedad
         // del parser de imports (parts[len-2] = módulo).
         w.addFunction(cls.name + ".__init", false);
-        w.declareParam("this");
+        w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);   // constructor = void
         try {
@@ -1507,7 +1507,7 @@ public final class MivmEmitter {
         // 1) Backing field (con flag isOwner si la propiedad es owner; el VM
         //    libera recursivamente este campo cuando la instancia se destruye).
         //    BUG-6: long/double = campo de 8 bytes (2 slots).
-        w.declareField(pd.name.name, isRef, pd.isOwner, is8Byte(propType));
+        w.declareField(pd.name.name, isRef, pd.isOwner, occupies8Bytes(propType));
 
         // 2) Getter (custom o auto). Devuelve el tipo de la property.
         //    Si la property es sync, envolvemos cuerpo con lock/unlock contra
@@ -1540,7 +1540,7 @@ public final class MivmEmitter {
         String setterSimple = "set" + capitalize(pd.name.name);
         w.addMethod(setterSimple);
         // BUG-6: el valor de una property long/double ocupa 8 bytes en el param.
-        w.declareParam("__val", is8Byte(propType) ? 8 : 4);
+        w.declareParam("__val", occupies8Bytes(propType) ? 8 : 4);
         FunctionSymbol setterFs = new FunctionSymbol(setterSimple, pd.isPublic, false, false, cls, null);
         beginFunctionScope(setterFs, null);
         currentPropertyField = pd.name.name;
@@ -1549,7 +1549,7 @@ public final class MivmEmitter {
             if (pd.isSync) emitSyncLock(cls.name);
             if (pd.setter != null) {
                 // Alias el param al nombre que el usuario escribió (BUG-6: 8 bytes si long/double).
-                if (is8Byte(propType)) declareLocalLong(pd.setter.paramName);
+                if (occupies8Bytes(propType)) declareLocalLong(pd.setter.paramName);
                 else declareLocal(pd.setter.paramName);
                 w.emitGetParam("__val");
                 w.emitSetLocal(pd.setter.paramName);
@@ -1589,7 +1589,7 @@ public final class MivmEmitter {
             PropertySymbol psym = (PropertySymbol) info.declSymbols.get(pd);
             BpType propType = (psym != null && psym.type != null) ? psym.type
                             : (pd.type != null ? typeRefToBpType(pd.type) : null);
-            boolean p8 = is8Byte(propType);
+            boolean p8 = occupies8Bytes(propType);
 
             String backing = staticBackingName(cls.name, pd.name.name);
             String getter  = staticGetterName(cls.name, pd.name.name);
@@ -1727,8 +1727,12 @@ public final class MivmEmitter {
             }
             return;
         }
+        // H1.2a: declT (typeRefToBpType) es null para refs (clase/array) → resolvemos el
+        // tipo semántico REAL del Symbol para decidir el ancho, igual que declareField.
+        Symbol dsW = info.declSymbols.get(vd);
+        BpType widthT = (dsW instanceof VarSymbol) ? ((VarSymbol) dsW).type : declT;
         for (DeclName dn : vd.names) {
-            if (is8Byte(declT)) declareLocalLong(dn.name, declTag);   // H1.2/H1.3: long/double = 8 bytes
+            if (occupies8Bytes(widthT)) declareLocalLong(dn.name, declTag);   // H1.2/H1.3/H1.2a: long/double/ref = 8 bytes
             else declareLocal(dn.name, declTag);
             if (vd.isOwner) {
                 scopeStack.peek().ownerLocals.add(dn.name);
@@ -1793,7 +1797,7 @@ public final class MivmEmitter {
         // No-literal: slot local de única asignación, width-aware (un long en
         // slot de 4 bytes desbalancearía la pila en el SET_LOCAL).
         BpType t = (cs != null && cs.type != null) ? cs.type : info.exprTypes.get(cd.value);
-        if (is8Byte(t)) declareLocalLong(cd.name.name, varDbgTypeTag(t));
+        if (occupies8Bytes(t)) declareLocalLong(cd.name.name, varDbgTypeTag(t));
         else declareLocal(cd.name.name, varDbgTypeTag(t));
         emitExpr(cd.value);
         coerceToTarget(cd.value, t);
@@ -1823,7 +1827,7 @@ public final class MivmEmitter {
     // H6.a.2: además pasa el tag de tipo BP para el .dbg.
     private void declareParamsWidthAware(FunctionSymbol fs) {
         for (ParamSymbol p : fs.params) {
-            w.declareParam(p.name, is8Byte(p.type) ? 8 : 4, varDbgTypeTag(p.type));
+            w.declareParam(p.name, occupies8Bytes(p.type) ? 8 : 4, varDbgTypeTag(p.type));
         }
     }
 
@@ -2042,7 +2046,7 @@ public final class MivmEmitter {
                         emitExpr(a.value);
                         coerceToTarget(a.value, tType);
                         // BUG-6: numArgs = slots (long/double = 2).
-                        emitInvokeVirtualSmart(ps.ownerClass, setter, is8Byte(tType) ? 2 : 1);
+                        emitInvokeVirtualSmart(ps.ownerClass, setter, occupies8Bytes(tType) ? 2 : 1);
                         declareLocal("__discard");
                         w.emitSetLocal("__discard");
                         // El FREE del valor anterior lo hace el propio setter
@@ -2059,7 +2063,7 @@ public final class MivmEmitter {
                         emitExpr(a.value);
                         coerceToTarget(a.value, tType);
                         emitCompoundOp(a.op, tType);
-                        emitInvokeVirtualSmart(ps.ownerClass, setter, is8Byte(tType) ? 2 : 1);
+                        emitInvokeVirtualSmart(ps.ownerClass, setter, occupies8Bytes(tType) ? 2 : 1);
                         declareLocal("__discard");
                         w.emitSetLocal("__discard");
                         return;
@@ -2267,7 +2271,7 @@ public final class MivmEmitter {
             // descuadraba locales/pila — p.ej. this.metodo(x) dentro del bucle leía
             // un receiver null ("INVOKE_VIRTUAL sobre null"). Narrow (byte/word)
             // se extiende a i32 en el ALOAD → local de 4 bytes, correcto.
-            if (is8Byte(forinElem)) declareLocalLong(s.iteratorName, forinTag);
+            if (occupies8Bytes(forinElem)) declareLocalLong(s.iteratorName, forinTag);
             else declareLocal(s.iteratorName, forinTag);
 
             emitExpr(r.iterable);
@@ -2360,7 +2364,7 @@ public final class MivmEmitter {
             int id = tempCounter++;
             String newref  = "__par_newref_"  + id;
             String discard = "__par_discard_" + id;
-            declareLocal(newref);
+            declareLocalLong(newref);
             declareLocal(discard);
             w.emitNewObject(br.synthesizedClassName);
             w.emitSetLocal(newref);
@@ -2495,7 +2499,7 @@ public final class MivmEmitter {
 
         // --- Constructor __init(this, stackSize) → super(stackSize)
         w.addFunction(name + ".__init", false);
-        w.declareParam("this");
+        w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
         w.declareParam("stackSize");
         beginFunctionScope(makeSynthFs("__init", null), null);
         try {
@@ -2565,7 +2569,7 @@ public final class MivmEmitter {
     private void beginFunctionScope(FunctionSymbol fs, BpType returnTypeOverride) {
         BpType rt = (returnTypeOverride != null) ? returnTypeOverride : fs.returnType;
         boolean returnsValue = rt != null && !(rt instanceof BpType.VoidType);
-        boolean returnsLong = is8Byte(rt);   // H1.2/H1.3: return de 8 bytes (long/double) → LRET
+        boolean returnsLong = occupies8Bytes(rt);   // H1.2/H1.3: return de 8 bytes (long/double) → LRET
         FuncScope scope = new FuncScope(fs, returnsValue, w.newLabel());
         scope.returnsLong = returnsLong;
         scopeStack.push(scope);
@@ -2736,10 +2740,10 @@ public final class MivmEmitter {
             CatchClause cc = s.catches.get(i);
             w.declareLabel(handlerLabels[i]);
             if (cc.varName != null) {
-                declareLocal(cc.varName);
+                declareLocalLong(cc.varName);   // H1.2a: el objeto de excepción cazado = ref 8 bytes
                 w.emitSetLocal(cc.varName);
             } else {
-                declareLocal("__discard");
+                declareLocalLong("__discard");   // H1.2a: hay que sacar los 8 bytes del ref de excepción
                 w.emitSetLocal("__discard");
             }
             // Al entrar al handler, el VM ya pop'eó todos los N handlers.
@@ -3672,7 +3676,7 @@ public final class MivmEmitter {
             w.endClass();
 
             w.addFunction("List.__init", false);
-            w.declareParam("this");
+            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
                 w.emitGetParam("this");
@@ -3775,7 +3779,7 @@ public final class MivmEmitter {
             w.endClass();
 
             w.addFunction("OwnerList.__init", false);
-            w.declareParam("this");
+            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
                 // Delegamos en List.__init (same module → CALL intra-módulo).
@@ -3926,7 +3930,7 @@ public final class MivmEmitter {
             w.endClass();
 
             w.addFunction("StringBuilder.__init", false);
-            w.declareParam("this");
+            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
                 w.emitGetParam("this");
@@ -4004,7 +4008,7 @@ public final class MivmEmitter {
 
             // -------------------------- Constructor Thread(stackSize) --------------------------
             w.addFunction("Thread.__init", false);
-            w.declareParam("this");
+            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
             w.declareParam("stackSize");
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
@@ -4254,7 +4258,7 @@ public final class MivmEmitter {
 
             // ---- Constructor SyncList() ----
             w.addFunction("SyncList.__init", false);
-            w.declareParam("this");
+            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
                 // super() = List.__init(this): inicializa items[8], size=0, cap=8.
@@ -4267,7 +4271,7 @@ public final class MivmEmitter {
                 int id = tempCounter++;
                 String newref  = "__newmtx_"  + id;
                 String discard = "__discardMtx_" + id;
-                declareLocal(newref);
+                declareLocalLong(newref);
                 declareLocal(discard);
                 w.emitNewObject("Mutex");
                 w.emitSetLocal(newref);
@@ -4340,7 +4344,7 @@ public final class MivmEmitter {
 
             // -------------------------- Constructor Mutex() --------------------------
             w.addFunction("Mutex.__init", false);
-            w.declareParam("this");
+            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
                 // this.__mid := __mutexCreate()
@@ -4449,7 +4453,7 @@ public final class MivmEmitter {
         int id = tempCounter++;
         String newref  = "__newref_" + id;
         String discard = "__discard_" + id;
-        declareLocal(newref);
+        declareLocalLong(newref);   // H1.2a: el ref del objeto nuevo = 8 bytes
         declareLocal(discard);
         w.emitNewObject(cls.name);
         w.emitSetLocal(newref);
@@ -4617,9 +4621,17 @@ public final class MivmEmitter {
         return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.DOUBLE;
     }
 
-    /** H1.3 — tipos de 8 bytes (2 slots): long y double comparten storage. */
+    /** H1.3 — tipos NUMÉRICOS de 8 bytes (2 slots): long y double comparten storage. */
     private boolean is8Byte(BpType t) {
         return isLong(t) || isDouble(t);
+    }
+
+    /** H1.2a (V4) — ¿ocupa 8 bytes / 2 slots en pila, frame, campo y array?
+     *  Numérico de 8 bytes (long/double) O una REFERENCIA (object/array/string):
+     *  con el ensanchado de refs 4→8B, toda ref viaja por el carril de 8 bytes.
+     *  Es el predicado de ANCHO; is8Byte sigue siendo solo el numérico. */
+    private boolean occupies8Bytes(BpType t) {
+        return is8Byte(t) || isRefType(t);
     }
 
     /** BUG-6: nº de slots de 4 bytes que ocupan los argumentos (excluye `this`).
@@ -4629,7 +4641,7 @@ public final class MivmEmitter {
     private int argSlotCount(FunctionSymbol fs) {
         int slots = 0;
         for (int i = 0; i < fs.params.size(); i++) {
-            slots += is8Byte(fs.params.get(i).type) ? 2 : 1;
+            slots += occupies8Bytes(fs.params.get(i).type) ? 2 : 1;
         }
         return slots;
     }
@@ -4695,7 +4707,7 @@ public final class MivmEmitter {
             w.addClass(cls, "Object");   // H5.1.a — raíz Object
             for (int i = 0; i < tt.elements.size(); i++) {
                 BpType el = tt.elements.get(i);
-                w.declareField("_" + i, isRefType(el), false, is8Byte(el));
+                w.declareField("_" + i, isRefType(el), false, occupies8Bytes(el));
             }
             w.endClass();
         }
@@ -4784,7 +4796,7 @@ public final class MivmEmitter {
                 } else {                                     // property de clase (instancia)
                     emitExpr(ma.target);
                     w.emitGetLocal(valLocal);
-                    emitInvokeVirtualSmart(ps.ownerClass, "set" + capitalize(ps.name), is8Byte(vt) ? 2 : 1);
+                    emitInvokeVirtualSmart(ps.ownerClass, "set" + capitalize(ps.name), occupies8Bytes(vt) ? 2 : 1);
                     declareLocal("__discard"); w.emitSetLocal("__discard");
                 }
                 return;
@@ -5059,8 +5071,11 @@ public final class MivmEmitter {
             else if (v.isStatic) w.emitSetGlobal(v.ownerClass.name + "." + v.name);
             else {
                 // Campo de instancia con implicit this. Pila: ..., val. Necesitamos ref, val.
+                // H1.2a: si el campo es long/double/ref, el temp es de 8 bytes (si no,
+                // el valor 8B se trunca a 4B al pasar por el temp → SET_FIELD corrupto).
+                boolean v8 = occupies8Bytes(v.type);
                 String temp = "__stf_" + (stringPoolCounter++);
-                declareLocal(temp);
+                if (v8) declareLocalLong(temp); else declareLocal(temp);
                 w.emitSetLocal(temp);
                 w.emitGetParam("this");
                 w.emitGetLocal(temp);
@@ -5089,7 +5104,7 @@ public final class MivmEmitter {
             }
             // Pila: ..., val. Necesitamos this, val para INVOKE_VIRTUAL setX.
             // BUG-6: si la property es long/double, el temp y el numArgs son de 8 bytes / 2 slots.
-            boolean ps8 = is8Byte(ps.type);
+            boolean ps8 = occupies8Bytes(ps.type);
             String temp = "__stp_" + (stringPoolCounter++);
             if (ps8) declareLocalLong(temp); else declareLocal(temp);
             w.emitSetLocal(temp);
@@ -5176,11 +5191,11 @@ public final class MivmEmitter {
 
     private void emitStrconcatBody() throws IOException {
         w.addFunction("__strconcat", false);
-        w.declareParam("a");
-        w.declareParam("b");
+        w.declareParam("a", 8);   // H1.2a: string ref = 8 bytes
+        w.declareParam("b", 8);
         w.declareLocal("la");
         w.declareLocal("lb");
-        w.declareLocal("out");
+        w.declareLocalLong("out");   // H1.2a: byte[] ref = 8 bytes
         w.declareLocal("i");
 
         // la = a.length
@@ -5220,7 +5235,7 @@ public final class MivmEmitter {
         w.declareLabel(end2);
 
         w.emitGetLocal("out");
-        w.emitRet();
+        w.emitLRet();   // H1.2a: devuelve un ref (8 bytes)
     }
 
     /**

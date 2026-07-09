@@ -1015,7 +1015,7 @@ public class VirtualMachine {
             case TYPE_ARRAY_I16: return 2;
             case TYPE_ARRAY_I32: return 4;
             case TYPE_ARRAY_I64: return 8;   // H1.2 (V2)
-            case TYPE_ARRAY_REF: return 4;
+            case TYPE_ARRAY_REF: return 8;   // H1.2a (V4): ref plana = 8 bytes (low32 = dirección)
             default: throw new RuntimeException("Tipo de heap desconocido: " + type);
         }
     }
@@ -1226,7 +1226,9 @@ public class VirtualMachine {
         if (type == TYPE_ARRAY_REF) {
             int length = readInt32(headerAddr + 4);
             for (int i = 0; i < length; i++) {
-                int childRef = readInt32(headerAddr + OBJ_HEADER_SIZE + i * 4);
+                // H1.2a (V4): elemento ref = 8 bytes (stride 8); la dirección va en la
+                // palabra baja (big-endian) → readI64 y (int) toma los 32 bajos.
+                int childRef = (int) readI64(memory, headerAddr + OBJ_HEADER_SIZE + i * 8);
                 int childHeader = childRef - 4; // user_ref apunta a length
                 if (valid.contains(childHeader)) {
                     markObject(childHeader, valid);
@@ -1240,7 +1242,9 @@ public class VirtualMachine {
             for (int i = 0; i < numFields; i++) {
                 int word = readInt32(bitmapBase + (i >>> 5) * 4);
                 if (((word >> (i & 31)) & 1) != 0) {
-                    int childRef = readInt32(headerAddr + OBJ_HEADER_SIZE + i * 4);
+                    // H1.2a (V4): campo ref = 8 bytes (2 slots, bit en el slot base);
+                    // dirección en la palabra baja → readI64 + (int) low32.
+                    int childRef = (int) readI64(memory, headerAddr + OBJ_HEADER_SIZE + i * 4);
                     int childHeader = childRef - 4;
                     if (valid.contains(childHeader)) {
                         markObject(childHeader, valid);
@@ -2100,9 +2104,9 @@ public class VirtualMachine {
                     break;
                 }
 
-                case 0x1C: { // LEA_GLOBAL
+                case 0x1C: { // LEA_GLOBAL — H1.2a: dirección de global = ref 8 bytes
                     short off = (short) readI16(mem, pc); pc += 2;
-                    writeI32(mem, sp, cs + off); sp += 4;
+                    writeI64(mem, sp, ((long)(cs + off)) & 0xFFFFFFFFL); sp += 8;
                     break;
                 }
                 case 0x23: { // LEA_LOCAL
@@ -2119,7 +2123,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 4, TYPE_ARRAY_I32);
                         writeI32(mem, ref, size);
-                        writeI32(mem, sp, ref); sp += 4;
+                        writeI64(mem, sp, ((long) ref) & 0xFFFFFFFFL); sp += 8;
                         tc.sp = sp;
                     }
                     break;
@@ -2131,7 +2135,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size, TYPE_ARRAY_I8);
                         writeI32(mem, ref, size);
-                        writeI32(mem, sp, ref); sp += 4;
+                        writeI64(mem, sp, ((long) ref) & 0xFFFFFFFFL); sp += 8;
                         tc.sp = sp;
                     }
                     break;
@@ -2143,7 +2147,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 2, TYPE_ARRAY_I16);
                         writeI32(mem, ref, size);
-                        writeI32(mem, sp, ref); sp += 4;
+                        writeI64(mem, sp, ((long) ref) & 0xFFFFFFFFL); sp += 8;
                         tc.sp = sp;
                     }
                     break;
@@ -2151,7 +2155,7 @@ public class VirtualMachine {
 
                 case 0x1E: { // ALOAD
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -2164,7 +2168,7 @@ public class VirtualMachine {
                 case 0x1F: { // ASTORE
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -2175,7 +2179,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x20: { // ALEN
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     writeI32(mem, sp, readI32(mem, ref)); sp += 4;
                     break;
                 }
@@ -2186,7 +2190,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x22: { // PRINT_STRING (legacy: con \n al final)
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     programOut.writeText(readVmString(ref));  // H2: decodifica UTF-8
                     programOut.newline();
                     break;
@@ -2317,7 +2321,7 @@ public class VirtualMachine {
 
                 case 0x3A: { // ALOAD_I8
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     writeI32(mem, sp, (int) mem[ref + 4 + idx]); sp += 4;
@@ -2325,7 +2329,7 @@ public class VirtualMachine {
                 }
                 case 0x3B: { // ALOAD_U8
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     writeI32(mem, sp, mem[ref + 4 + idx] & 0xFF); sp += 4;
@@ -2333,7 +2337,7 @@ public class VirtualMachine {
                 }
                 case 0x3C: { // ALOAD_I16
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = ref + 4 + idx * 2;
@@ -2343,7 +2347,7 @@ public class VirtualMachine {
                 }
                 case 0x3D: { // ALOAD_U16
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = ref + 4 + idx * 2;
@@ -2355,7 +2359,7 @@ public class VirtualMachine {
                 case 0x3E: { // ASTORE_I8
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     mem[ref + 4 + idx] = (byte) val;
@@ -2364,7 +2368,7 @@ public class VirtualMachine {
                 case 0x3F: { // ASTORE_I16
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = ref + 4 + idx * 2;
@@ -2493,21 +2497,21 @@ public class VirtualMachine {
                         for (int i = 0; i < numFields; i++) {
                             writeI32(mem, ref + 4 + i * 4, 0);
                         }
-                        writeI32(mem, sp, ref); sp += 4;
+                        writeI64(mem, sp, ((long) ref) & 0xFFFFFFFFL); sp += 8;
                         tc.sp = sp;
                     }
                     break;
                 }
                 case 0x53: { // GET_FIELD
                     int slot = mem[pc] & 0xFF; pc++;
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     writeI32(mem, sp, readI32(mem, ref + 4 + slot * 4)); sp += 4;
                     break;
                 }
                 case 0x54: { // SET_FIELD
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= 4; int val = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     writeI32(mem, ref + 4 + slot * 4, val);
                     break;
                 }
@@ -2515,14 +2519,14 @@ public class VirtualMachine {
                 // de slot de 4 bytes; el valor ocupa 2 slots consecutivos en ref+4+slot*4.
                 case 0xA8: { // GET_FIELD_LONG
                     int slot = mem[pc] & 0xFF; pc++;
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     writeI64(mem, sp, readI64(mem, ref + 4 + slot * 4)); sp += 8;
                     break;
                 }
                 case 0xA9: { // SET_FIELD_LONG
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= 8; long val = readI64(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     writeI64(mem, ref + 4 + slot * 4, val);
                     break;
                 }
@@ -2537,7 +2541,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x58: { // PRINT_STR_NONL
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     programOut.writeText(readVmString(ref));  // H2: decodifica UTF-8
                     break;
                 }
@@ -2694,14 +2698,14 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 8, TYPE_ARRAY_I64);
                         writeI32(mem, ref, size);
-                        writeI32(mem, sp, ref); sp += 4;
+                        writeI64(mem, sp, ((long) ref) & 0xFFFFFFFFL); sp += 8;
                         tc.sp = sp;
                     }
                     break;
                 }
                 case 0x8E: { // ALOAD_I64
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -2713,7 +2717,7 @@ public class VirtualMachine {
                 case 0x8F: { // ASTORE_I64
                     sp -= 8; long val = readI64(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int length = readI32(mem, ref);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -2912,7 +2916,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x5D: { // THROW
-                    sp -= 4; int v = readI32(mem, sp);
+                    sp -= 8; int v = (int) readI64(mem, sp);   // H1.2a: excepción ref = 8 bytes
                     // Sync: classPtrOfRefOr0 puede leer this.memory; nuestro mem es el mismo.
                     int thrownClass = classPtrOfRefOr0(v);
                     boolean handled = false;
@@ -2932,7 +2936,7 @@ public class VirtualMachine {
                             bp = savedBp;
                             cs = savedCs;
                             pc = handlerPc;
-                            writeI32(mem, sp, v); sp += 4;
+                            writeI64(mem, sp, ((long) v) & 0xFFFFFFFFL); sp += 8;   // H1.2a: excepción ref = 8 bytes
                             handled = true;
                             break;
                         }
@@ -2946,7 +2950,7 @@ public class VirtualMachine {
                 }
 
                 case 0x5F: { // FREE_REF
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     freeOwnedObject(ref);
                     break;
@@ -2954,7 +2958,7 @@ public class VirtualMachine {
                 case 0x60: { // SET_FIELD_OWNER
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= 4; int val = readI32(mem, sp);
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int slotAddr = ref + 4 + slot * 4;
                     int old = readI32(mem, slotAddr);
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
@@ -2966,7 +2970,7 @@ public class VirtualMachine {
                 case 0x5E: { // INSTANCEOF
                     short csOff = (short) readI16(mem, pc); pc += 2;
                     int expected = cs + csOff;
-                    sp -= 4; int ref = readI32(mem, sp);
+                    sp -= 8; int ref = (int) readI64(mem, sp);
                     int objClass = classPtrOfRefOr0(ref);
                     boolean ok = (objClass != 0) && isDescendantOf(objClass, expected);
                     writeI32(mem, sp, ok ? 1 : 0); sp += 4;
@@ -3049,11 +3053,10 @@ public class VirtualMachine {
                     mem[a] = (byte)(v >> 24); mem[a+1] = (byte)(v >> 16); mem[a+2] = (byte)(v >> 8); mem[a+3] = (byte)v;
                     break;
                 }
-                case 0x6C: { // LEA_GLOBAL_S8
+                case 0x6C: { // LEA_GLOBAL_S8 — H1.2a: dirección de global = ref 8 bytes
                     int off = mem[pc]; pc++;
                     int v = cs + off;
-                    mem[sp] = (byte)(v >> 24); mem[sp+1] = (byte)(v >> 16); mem[sp+2] = (byte)(v >> 8); mem[sp+3] = (byte)v;
-                    sp += 4;
+                    writeI64(mem, sp, ((long) v) & 0xFFFFFFFFL); sp += 8;
                     break;
                 }
 
@@ -3061,7 +3064,9 @@ public class VirtualMachine {
                     int vtSlot  = mem[pc]     & 0xFF;
                     int numArgs = mem[pc + 1] & 0xFF;
                     pc += 2;
-                    int thisRef    = readI32(mem, sp - 4 - numArgs * 4);
+                    // H1.2a (V4): el receptor es una ref = 8 bytes (bajo los args, que ya
+                    // van contados en slots) → sp-8-numArgs*4; readI64 + (int) low32.
+                    int thisRef    = (int) readI64(mem, sp - 8 - numArgs * 4);
                     if (thisRef == 0) {
                         tc.sp = sp;
                         throwBpRuntimeError(tc, "INVOKE_VIRTUAL sobre null receiver"
@@ -3143,7 +3148,7 @@ public class VirtualMachine {
                     ehSavedCs = prev[3]; ehExpectedClass = prev[4];
                     if (matches) {
                         sp = savedSp; bp = savedBp; cs = savedCs; pc = handlerPc;
-                        writeI32(mem, sp, v); sp += 4;
+                        writeI64(mem, sp, ((long) v) & 0xFFFFFFFFL); sp += 8;   // H1.2a: excepción ref = 8 bytes
                         handled = true;
                         break;
                     }
@@ -3230,18 +3235,18 @@ public class VirtualMachine {
     private void dispatchBuiltin(Builtin b, ThreadContext tc) {
         switch (b) {
             case STRLEN: {
-                int ref = popTc(tc);
+                int ref = popTcRef(tc);   // H1.2a: string ref 8 bytes
                 String s = readVmString(ref);          // H2: longitud en codepoints
                 pushTc(tc, s.codePointCount(0, s.length()));
                 break;
             }
             case PARSE_INT: {
-                String s = readVmString(popTc(tc));
+                String s = readVmString(popTcRef(tc));
                 pushTc(tc, (int) Long.parseLong(s.trim()));
                 break;
             }
             case PARSE_FLOAT: {
-                String s = readVmString(popTc(tc));
+                String s = readVmString(popTcRef(tc));
                 pushTc(tc, Float.floatToRawIntBits((float) Double.parseDouble(s.trim())));
                 break;
             }
@@ -3249,13 +3254,13 @@ public class VirtualMachine {
                 // H7 — calculadora de constantes (descenso recursivo, evalúa sobre la
                 // marcha; sin AST). Computa en double, devuelve float. Lógica byte-a-byte
                 // idéntica a bpvm_eval_calc() de la VM-C (builtins.c). Error -> NaN.
-                String s = readVmString(popTc(tc));
+                String s = readVmString(popTcRef(tc));
                 pushTc(tc, Float.floatToRawIntBits((float) EvalCalc.run(s)));
                 break;
             }
             case INT_TO_STRING: {
                 int n = popTc(tc);
-                pushTc(tc, allocVmString(Integer.toString(n)));
+                pushTcRef(tc, allocVmString(Integer.toString(n)));
                 break;
             }
             case FLOAT_TO_STRING: {
@@ -3263,21 +3268,21 @@ public class VirtualMachine {
                 // L13 — formateo canónico GAP-4 (el mismo que FPRINT), no
                 // Float.toString: así `"" + f` y `print f` dan SIEMPRE lo
                 // mismo, y el puerto C es byte-idéntico.
-                pushTc(tc, allocVmString(formatBpDouble((double) x)));
+                pushTcRef(tc, allocVmString(formatBpDouble((double) x)));
                 break;
             }
             case LONG_TO_STRING: {   // L13 — concat string + long
                 int lo = popTc(tc);
                 int hi = popTc(tc);
                 long v = ((long) hi << 32) | (lo & 0xFFFFFFFFL);
-                pushTc(tc, allocVmString(Long.toString(v)));
+                pushTcRef(tc, allocVmString(Long.toString(v)));
                 break;
             }
             case DOUBLE_TO_STRING: {   // L13 — concat string + double (GAP-4)
                 int lo = popTc(tc);
                 int hi = popTc(tc);
                 double v = Double.longBitsToDouble(((long) hi << 32) | (lo & 0xFFFFFFFFL));
-                pushTc(tc, allocVmString(formatBpDouble(v)));
+                pushTcRef(tc, allocVmString(formatBpDouble(v)));
                 break;
             }
 
@@ -3289,7 +3294,7 @@ public class VirtualMachine {
             case TCP_CONNECT: {
                 int timeoutMs = popTc(tc);
                 int port      = popTc(tc);
-                String host   = readVmString(popTc(tc));
+                String host   = readVmString(popTcRef(tc));
                 int handle = 0;
                 try {
                     java.net.Socket s = new java.net.Socket();
@@ -3391,7 +3396,7 @@ public class VirtualMachine {
             case GUI_SET_BG_COLOR:   { int rgb = popTc(tc); int hnd = popTc(tc); gui.setBgColor(hnd, rgb);   pushTc(tc, 0); break; }
             case GUI_SET_TEXT_COLOR: { int rgb = popTc(tc); int hnd = popTc(tc); gui.setTextColor(hnd, rgb); pushTc(tc, 0); break; }
             case GUI_SET_FONT:       { int f   = popTc(tc); int hnd = popTc(tc); gui.setFont(hnd, f);        pushTc(tc, 0); break; }
-            case GUI_LOAD_FONT:      { int ref = popTc(tc); pushTc(tc, gui.loadFont(readVmString(ref))); break; }
+            case GUI_LOAD_FONT:      { int ref = popTcRef(tc); pushTc(tc, gui.loadFont(readVmString(ref))); break; }
             case GUI_SET_ROTATION:   { int deg = popTc(tc); gui.setRotation(deg); pushTc(tc, 0); break; }
 
             // H19 — App.* introspección del proyecto (ids 211-213).
@@ -3401,21 +3406,21 @@ public class VirtualMachine {
                 String base = (sl >= 0) ? p.substring(sl + 1) : p;
                 int dot = base.indexOf('.');
                 if (dot >= 0) base = base.substring(0, dot);
-                pushTc(tc, allocVmString(base));
+                pushTcRef(tc, allocVmString(base));
                 break;
             }
-            case APP_MAIN_MODULE_PATH: { pushTc(tc, allocVmString(appMainModulePath)); break; }
+            case APP_MAIN_MODULE_PATH: { pushTcRef(tc, allocVmString(appMainModulePath)); break; }
             case APP_PROJECT_PATH: {
                 ModuleManager mm = getModuleManager();
                 java.nio.file.Path wd = (mm != null) ? mm.getWorkdir() : null;
-                pushTc(tc, allocVmString(wd != null ? wd.toString() : ""));
+                pushTcRef(tc, allocVmString(wd != null ? wd.toString() : ""));
                 break;
             }
             case GUI_CLEAN:       { int hnd = popTc(tc); gui.clean(hnd);      pushTc(tc, 0); break; }
             case GUI_DELETE:      { int hnd = popTc(tc); gui.delete(hnd);     pushTc(tc, 0); break; }
             case GUI_SCREEN_LOAD: { int hnd = popTc(tc); gui.screenLoad(hnd); pushTc(tc, 0); break; }
             case GUI_RUN:       { guiEventLoop(tc); pushTc(tc, 0); break; }
-            case GUI_DUMP_TREE: { pushTc(tc, allocVmString(gui.dumpTree())); break; }
+            case GUI_DUMP_TREE: { pushTcRef(tc, allocVmString(gui.dumpTree())); break; }
             case GUI_BIND_CLICK: {
                 int self = popTc(tc); int hnd = popTc(tc);
                 gui.bindClick(hnd, self); pushTc(tc, 0); break;
@@ -3469,7 +3474,7 @@ public class VirtualMachine {
             case GUI_CREATE_DROPDOWN: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createDropdown(p)); break; }
             case GUI_SET_OPTIONS: { int o = popTc(tc); int hnd = popTc(tc); gui.setOptions(hnd, readVmString(o)); pushTc(tc, 0); break; }
             case GUI_CREATE_TEXTAREA: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createTextarea(p)); break; }
-            case GUI_GET_TEXT: { int hnd = popTc(tc); pushTc(tc, allocVmString(gui.getText(hnd))); break; }
+            case GUI_GET_TEXT: { int hnd = popTc(tc); pushTcRef(tc, allocVmString(gui.getText(hnd))); break; }
             case GUI_CREATE_LIST: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createList(p)); break; }
             case GUI_CREATE_KEYBOARD: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createKeyboard(p)); break; }
             case GUI_KEYBOARD_SET_TEXTAREA: { int ta = popTc(tc); int hnd = popTc(tc); gui.keyboardSetTextarea(hnd, ta); pushTc(tc, 0); break; }
@@ -3480,7 +3485,7 @@ public class VirtualMachine {
             case GUI_CREATE_TABLE: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createTable(p)); break; }
             case GUI_TABLE_SET_GRID: { int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); gui.tableSetGrid(hnd, r, c); pushTc(tc, 0); break; }
             case GUI_TABLE_SET_CELL: { int t = popTc(tc); int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); gui.tableSetCell(hnd, r, c, readVmString(t)); pushTc(tc, 0); break; }
-            case GUI_TABLE_GET_CELL: { int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); pushTc(tc, allocVmString(gui.tableGetCell(hnd, r, c))); break; }
+            case GUI_TABLE_GET_CELL: { int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); pushTcRef(tc, allocVmString(gui.tableGetCell(hnd, r, c))); break; }
             case GUI_IMAGE_NEW: { pushTc(tc, gui.imageNew()); break; }
             case GUI_IMAGE_LOAD_FILE: { int p = popTc(tc); int id = popTc(tc); pushTc(tc, gui.imageLoadFile(id, readVmString(p))); break; }
             case GUI_IMAGE_WIDTH: { int id = popTc(tc); pushTc(tc, gui.imageWidth(id)); break; }
@@ -3494,26 +3499,26 @@ public class VirtualMachine {
             case GUI_TEXTAREA_GET_READONLY: { int h = popTc(tc); pushTc(tc, gui.getReadonly(h)); break; }
             case BOOL_TO_STRING: {
                 int v = popTc(tc);
-                pushTc(tc, allocVmString(v != 0 ? "true" : "false"));
+                pushTcRef(tc, allocVmString(v != 0 ? "true" : "false"));
                 break;
             }
-            case UPPER: { String s = readVmString(popTc(tc)); pushTc(tc, allocVmString(s.toUpperCase())); break; }
-            case LOWER: { String s = readVmString(popTc(tc)); pushTc(tc, allocVmString(s.toLowerCase())); break; }
-            case TRIM:  { String s = readVmString(popTc(tc)); pushTc(tc, allocVmString(s.trim()));        break; }
+            case UPPER: { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(s.toUpperCase())); break; }
+            case LOWER: { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(s.toLowerCase())); break; }
+            case TRIM:  { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(s.trim()));        break; }
 
             case SUBSTRING: {
                 int end = popTc(tc); int start = popTc(tc);
-                String s = readVmString(popTc(tc));
+                String s = readVmString(popTcRef(tc));
                 int n = s.codePointCount(0, s.length());   // H2: índices en codepoints
                 int from = Math.max(0, Math.min(n, start));
                 int to   = Math.max(from, Math.min(n, end));
-                pushTc(tc, allocVmString(s.substring(s.offsetByCodePoints(0, from),
+                pushTcRef(tc, allocVmString(s.substring(s.offsetByCodePoints(0, from),
                                                      s.offsetByCodePoints(0, to))));
                 break;
             }
             case INDEX_OF: {
-                String target = readVmString(popTc(tc));
-                String s = readVmString(popTc(tc));
+                String target = readVmString(popTcRef(tc));
+                String s = readVmString(popTcRef(tc));
                 int ci = s.indexOf(target);   // índice en char units (UTF-16)
                 // H2: devolver índice en codepoints para ser consistente con
                 // charAt/charCodeAt/substring (semántica de carácter).
@@ -3521,39 +3526,39 @@ public class VirtualMachine {
                 break;
             }
             case STARTS_WITH: {
-                String pre = readVmString(popTc(tc));
-                String s = readVmString(popTc(tc));
+                String pre = readVmString(popTcRef(tc));
+                String s = readVmString(popTcRef(tc));
                 pushTc(tc, s.startsWith(pre) ? 1 : 0);
                 break;
             }
             case ENDS_WITH: {
-                String suf = readVmString(popTc(tc));
-                String s = readVmString(popTc(tc));
+                String suf = readVmString(popTcRef(tc));
+                String s = readVmString(popTcRef(tc));
                 pushTc(tc, s.endsWith(suf) ? 1 : 0);
                 break;
             }
             case CONTAINS: {
-                String sub = readVmString(popTc(tc));
-                String s = readVmString(popTc(tc));
+                String sub = readVmString(popTcRef(tc));
+                String s = readVmString(popTcRef(tc));
                 pushTc(tc, s.contains(sub) ? 1 : 0);
                 break;
             }
             case CHAR_AT: {
                 int i = popTc(tc);
-                String s = readVmString(popTc(tc));
+                String s = readVmString(popTcRef(tc));
                 int n = s.codePointCount(0, s.length());   // H2: índice en codepoints
                 if (i < 0 || i >= n) {
                     throwBpRuntimeError(tc, "charAt: idx fuera de rango " + i + " (len=" + n + ")");
                 }
                 int cp = s.codePointAt(s.offsetByCodePoints(0, i));
-                pushTc(tc, allocVmString(new String(Character.toChars(cp))));
+                pushTcRef(tc, allocVmString(new String(Character.toChars(cp))));
                 break;
             }
             case REPLACE: {
-                String rep = readVmString(popTc(tc));
-                String tgt = readVmString(popTc(tc));
-                String s = readVmString(popTc(tc));
-                pushTc(tc, allocVmString(s.replace(tgt, rep)));
+                String rep = readVmString(popTcRef(tc));
+                String tgt = readVmString(popTcRef(tc));
+                String s = readVmString(popTcRef(tc));
+                pushTcRef(tc, allocVmString(s.replace(tgt, rep)));
                 break;
             }
 
@@ -3629,8 +3634,8 @@ public class VirtualMachine {
             }
 
             case SPLIT: {
-                String sep = readVmString(popTc(tc));
-                String s   = readVmString(popTc(tc));
+                String sep = readVmString(popTcRef(tc));
+                String s   = readVmString(popTcRef(tc));
                 // String.split con regex literal: pasamos java.util.regex.Pattern.quote.
                 String[] parts = s.split(java.util.regex.Pattern.quote(sep), -1);
                 // Aloca primero los strings individuales, luego el array (en ese orden el
@@ -3649,7 +3654,7 @@ public class VirtualMachine {
                 }
                 try {
                     String line = stdinReader.readLine();
-                    pushTc(tc, allocVmString(line != null ? line : ""));
+                    pushTcRef(tc, allocVmString(line != null ? line : ""));
                 } catch (java.io.IOException e) {
                     throw new RuntimeException("input(): " + e.getMessage());
                 }
@@ -3657,18 +3662,18 @@ public class VirtualMachine {
             }
 
             case READ_FILE: {
-                String path = readVmString(popTc(tc));
+                String path = readVmString(popTcRef(tc));
                 try {
                     byte[] data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
-                    pushTc(tc, allocVmString(new String(data, java.nio.charset.StandardCharsets.UTF_8)));
+                    pushTcRef(tc, allocVmString(new String(data, java.nio.charset.StandardCharsets.UTF_8)));
                 } catch (java.io.IOException e) {
                     throwBpRuntimeError(tc, "readFile('" + path + "'): " + e.getMessage());
                 }
                 break;
             }
             case WRITE_FILE: {
-                String content = readVmString(popTc(tc));
-                String path    = readVmString(popTc(tc));
+                String content = readVmString(popTcRef(tc));
+                String path    = readVmString(popTcRef(tc));
                 try {
                     java.nio.file.Files.write(sandboxPath(tc, path),
                             content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -3679,8 +3684,8 @@ public class VirtualMachine {
                 break;
             }
             case APPEND_FILE: {
-                String content = readVmString(popTc(tc));
-                String path    = readVmString(popTc(tc));
+                String content = readVmString(popTcRef(tc));
+                String path    = readVmString(popTcRef(tc));
                 try {
                     java.nio.file.Files.write(sandboxPath(tc, path),
                             content.getBytes(java.nio.charset.StandardCharsets.UTF_8),
@@ -3693,7 +3698,7 @@ public class VirtualMachine {
                 break;
             }
             case FILE_EXISTS: {
-                String path = readVmString(popTc(tc));
+                String path = readVmString(popTcRef(tc));
                 pushTc(tc, java.nio.file.Files.exists(sandboxPath(tc, path)) ? 1 : 0);
                 break;
             }
@@ -3701,7 +3706,7 @@ public class VirtualMachine {
                 // #247 binario: copia cruda a un byte[] (TYPE_ARRAY_I8), SIN pasar
                 // por String → preserva NUL/>127/UTF-8 inválido (a diferencia de
                 // readFile, que decodifica UTF-8 y es lossy para binario).
-                String path = readVmString(popTc(tc));
+                String path = readVmString(popTcRef(tc));
                 try {
                     byte[] data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
                     int ref = heapAlloc(data.length, TYPE_ARRAY_I8);
@@ -3719,7 +3724,7 @@ public class VirtualMachine {
                 // #247 binario: escribe los bytes crudos del byte[] (TYPE_ARRAY_I8),
                 // SIN pasar por String. Args: (path, data) → data empujado el último.
                 int dataRef = popTc(tc);
-                String path = readVmString(popTc(tc));
+                String path = readVmString(popTcRef(tc));
                 int n = (dataRef == 0) ? 0 : readInt32(dataRef);
                 byte[] out = new byte[n];
                 System.arraycopy(memory, dataRef + 4, out, 0, n);
@@ -3735,7 +3740,7 @@ public class VirtualMachine {
                 // #248 — lanza el RuntimeError nativo de la VM con el mensaje
                 // dado (mismo path que div0/null deref → atrapable con
                 // try/catch BP). No retorna.
-                String msg = readVmString(popTc(tc));
+                String msg = readVmString(popTcRef(tc));
                 throwBpRuntimeError(tc, msg);
                 break;   // unreachable: throwBpRuntimeError siempre lanza
             }
@@ -3745,7 +3750,7 @@ public class VirtualMachine {
                 break;
             }
             case LIST_DIR: {
-                String path = readVmString(popTc(tc));
+                String path = readVmString(popTcRef(tc));
                 java.io.File dir = sandboxPath(tc, path).toFile();
                 String[] names = dir.list();
                 if (names == null) names = new String[0];
@@ -3766,7 +3771,7 @@ public class VirtualMachine {
             }
             case GROW_REF_ARRAY: {
                 int newCap = popTc(tc);
-                int oldRef = popTc(tc);
+                int oldRef = popTcRef(tc);   // H1.2a: array ref 8 bytes
                 if (newCap < 0) throwBpRuntimeError(tc, "__growRefArray: capacidad negativa: " + newCap);
                 int oldLen = (oldRef != 0) ? readInt32(oldRef) : 0;
                 int newRef = allocVmRefArray(newCap);
@@ -3774,12 +3779,12 @@ public class VirtualMachine {
                 for (int i = 0; i < copyLen; i++) {
                     writeInt32(newRef + 4 + i * 4, readInt32(oldRef + 4 + i * 4));
                 }
-                pushTc(tc, newRef);
+                pushTcRef(tc, newRef);
                 break;
             }
             case GROW_INT_ARRAY: {
                 int newCap = popTc(tc);
-                int oldRef = popTc(tc);
+                int oldRef = popTcRef(tc);   // H1.2a: array ref 8 bytes
                 if (newCap < 0) throwBpRuntimeError(tc, "__growIntArray: capacidad negativa: " + newCap);
                 int oldLen = (oldRef != 0) ? readInt32(oldRef) : 0;
                 int newRef = heapAlloc(newCap * 4, TYPE_ARRAY_I32);
@@ -3791,7 +3796,7 @@ public class VirtualMachine {
                 for (int i = copyLen; i < newCap; i++) {
                     writeInt32(newRef + 4 + i * 4, 0);
                 }
-                pushTc(tc, newRef);
+                pushTcRef(tc, newRef);
                 break;
             }
             case CHARS_TO_STRING: {
@@ -3802,7 +3807,7 @@ public class VirtualMachine {
                 if (len > avail) throwBpRuntimeError(tc, "__charsToString: longitud " + len + " > capacidad " + avail);
                 StringBuilder sb = new StringBuilder(len);
                 for (int i = 0; i < len; i++) sb.appendCodePoint(readInt32(charsRef + 4 + i * 4));
-                pushTc(tc, allocVmString(sb.toString()));   // H2: codifica UTF-8
+                pushTcRef(tc, allocVmString(sb.toString()));   // H2: codifica UTF-8
                 break;
             }
             case CHAR_CODE_AT: {
@@ -3830,12 +3835,12 @@ public class VirtualMachine {
                 break;
             }
             case HEAP_FRAG: {           // H3: diagnóstico (solo VM-Java)
-                pushTc(tc, allocVmString(heapFragReport()));
+                pushTcRef(tc, allocVmString(heapFragReport()));
                 break;
             }
             case HEAP_MAP: {            // H3: diagnóstico (solo VM-Java)
                 int cols = popTc(tc);
-                pushTc(tc, allocVmString(heapMap(cols)));
+                pushTcRef(tc, allocVmString(heapMap(cols)));
                 break;
             }
 
@@ -4079,44 +4084,44 @@ public class VirtualMachine {
 
             // ---- IO intrínsecos ----
             case PATH_JOIN: {
-                String b2 = readVmString(popTc(tc));
-                String a  = readVmString(popTc(tc));
+                String b2 = readVmString(popTcRef(tc));
+                String a  = readVmString(popTcRef(tc));
                 String r = java.nio.file.Paths.get(a, b2).toString();
-                pushTc(tc, allocVmString(r));
+                pushTcRef(tc, allocVmString(r));
                 break;
             }
             case PATH_PARENT: {
-                String p = readVmString(popTc(tc));
+                String p = readVmString(popTcRef(tc));
                 java.nio.file.Path pa = java.nio.file.Paths.get(p).getParent();
-                pushTc(tc, allocVmString(pa == null ? "" : pa.toString()));
+                pushTcRef(tc, allocVmString(pa == null ? "" : pa.toString()));
                 break;
             }
             case PATH_BASENAME: {
-                String p = readVmString(popTc(tc));
+                String p = readVmString(popTcRef(tc));
                 java.nio.file.Path pa = java.nio.file.Paths.get(p).getFileName();
-                pushTc(tc, allocVmString(pa == null ? "" : pa.toString()));
+                pushTcRef(tc, allocVmString(pa == null ? "" : pa.toString()));
                 break;
             }
             case PATH_EXTENSION: {
-                String p = readVmString(popTc(tc));
+                String p = readVmString(popTcRef(tc));
                 java.nio.file.Path pa = java.nio.file.Paths.get(p).getFileName();
                 String name = (pa == null) ? "" : pa.toString();
                 int dot = name.lastIndexOf('.');
                 String ext = (dot <= 0 || dot == name.length() - 1) ? "" : name.substring(dot + 1);
-                pushTc(tc, allocVmString(ext));
+                pushTcRef(tc, allocVmString(ext));
                 break;
             }
             case PATH_ABSOLUTE: {
-                String p = readVmString(popTc(tc));
+                String p = readVmString(popTcRef(tc));
                 // Con sandbox: devuelve el path absoluto DENTRO del workdir
                 // (no filtra info del host). Sin sandbox: usa Paths.get raw.
                 java.nio.file.Path resolved = sandboxPath(tc, p);
                 String r = resolved.toAbsolutePath().normalize().toString();
-                pushTc(tc, allocVmString(r));
+                pushTcRef(tc, allocVmString(r));
                 break;
             }
             case MKDIR: {
-                String p = readVmString(popTc(tc));
+                String p = readVmString(popTcRef(tc));
                 try { java.nio.file.Files.createDirectories(sandboxPath(tc, p)); }
                 catch (java.io.IOException e) {
                     throwBpRuntimeError(tc, "mkdir('" + p + "'): " + e.getMessage());
@@ -4125,7 +4130,7 @@ public class VirtualMachine {
                 break;
             }
             case RMDIR: {
-                String p = readVmString(popTc(tc));
+                String p = readVmString(popTcRef(tc));
                 try { java.nio.file.Files.delete(sandboxPath(tc, p)); }
                 catch (java.nio.file.DirectoryNotEmptyException e) {
                     throwBpRuntimeError(tc, "rmdir('" + p + "'): directorio no vacío");
@@ -4136,7 +4141,7 @@ public class VirtualMachine {
                 break;
             }
             case REMOVE_FILE: {
-                String p = readVmString(popTc(tc));
+                String p = readVmString(popTcRef(tc));
                 try { java.nio.file.Files.delete(sandboxPath(tc, p)); }
                 catch (java.io.IOException e) {
                     throwBpRuntimeError(tc, "removeFile('" + p + "'): " + e.getMessage());
@@ -4145,8 +4150,8 @@ public class VirtualMachine {
                 break;
             }
             case RENAME: {
-                String to   = readVmString(popTc(tc));
-                String from = readVmString(popTc(tc));
+                String to   = readVmString(popTcRef(tc));
+                String from = readVmString(popTcRef(tc));
                 try {
                     java.nio.file.Files.move(sandboxPath(tc, from),
                             sandboxPath(tc, to),
@@ -4158,8 +4163,8 @@ public class VirtualMachine {
                 break;
             }
             case COPY_FILE: {
-                String to   = readVmString(popTc(tc));
-                String from = readVmString(popTc(tc));
+                String to   = readVmString(popTcRef(tc));
+                String from = readVmString(popTcRef(tc));
                 try {
                     java.nio.file.Files.copy(sandboxPath(tc, from),
                             sandboxPath(tc, to),
@@ -4171,7 +4176,7 @@ public class VirtualMachine {
                 break;
             }
             case FILE_SIZE: {
-                String p = readVmString(popTc(tc));
+                String p = readVmString(popTcRef(tc));
                 try {
                     long sz = java.nio.file.Files.size(sandboxPath(tc, p));
                     // i32: si sobrepasa Integer.MAX_VALUE, error claro.
@@ -4184,12 +4189,12 @@ public class VirtualMachine {
                 break;
             }
             case IS_DIRECTORY: {
-                String p = readVmString(popTc(tc));
+                String p = readVmString(popTcRef(tc));
                 pushTc(tc, java.nio.file.Files.isDirectory(sandboxPath(tc, p)) ? 1 : 0);
                 break;
             }
             case LAST_MODIFIED: {
-                String p = readVmString(popTc(tc));
+                String p = readVmString(popTcRef(tc));
                 try {
                     long ms = java.nio.file.Files.getLastModifiedTime(sandboxPath(tc, p)).toMillis();
                     pushTc(tc, (int) (ms & 0x7FFFFFFFL));
@@ -4328,7 +4333,7 @@ public class VirtualMachine {
                 for (int i = 0; i < size; i++) {
                     writeInt32(ref + 4 + i * 4, 0);
                 }
-                pushTc(tc, ref);
+                pushTcRef(tc, ref);   // H1.2a: ref 8 bytes
                 break;
             }
 
@@ -4545,15 +4550,15 @@ public class VirtualMachine {
              * que código BP que use Pico.* corra en desarrollo sin
              * HW. Solo el firmware Pico devuelve datos reales. */
             case PICO_UNIQUE_ID: {
-                pushTc(tc, allocVmString("host-pc"));
+                pushTcRef(tc, allocVmString("host-pc"));
                 break;
             }
             case PICO_BOARD_NAME: {
-                pushTc(tc, allocVmString("host"));
+                pushTcRef(tc, allocVmString("host"));
                 break;
             }
             case PICO_RESET_CAUSE: {   // H10 — en host no hay causa de reset de MCU
-                pushTc(tc, allocVmString("unknown"));
+                pushTcRef(tc, allocVmString("unknown"));
                 break;
             }
             case PICO_SET_MARK: {      // H10 — breadcrumb (host: sin RAM retenida)
@@ -4867,6 +4872,19 @@ public class VirtualMachine {
     private int popTc(ThreadContext tc) {
         tc.sp -= 4;
         return readInt32(tc.sp);
+    }
+
+    // H1.2a: refs viajan por el carril de 8 bytes (flat: high=0, low=addr).
+    // Los builtins que producen/consumen una referencia (arrays, strings,
+    // objetos) deben usar estos en vez de pushTc/popTc (4 bytes) para no
+    // desalinear el operand stack contra SET_LOCAL_L/ALOAD/etc.
+    private void pushTcRef(ThreadContext tc, int ref) {
+        writeI64(memory, tc.sp, ((long) ref) & 0xFFFFFFFFL);
+        tc.sp += 8;
+    }
+    private int popTcRef(ThreadContext tc) {
+        tc.sp -= 8;
+        return (int) readI64(memory, tc.sp);
     }
 
     // ============================================================

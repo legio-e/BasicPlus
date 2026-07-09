@@ -45,7 +45,7 @@ static uint32_t block_total_size(const bpvm_t* vm, uint32_t header_addr) {
     case BPVM_TYPE_ARRAY_I16: payload = length * 2;      break;
     case BPVM_TYPE_ARRAY_I32: payload = length * 4;      break;
     case BPVM_TYPE_ARRAY_I64: payload = length * 8;      break;   /* H1.2 (V2) */
-    case BPVM_TYPE_ARRAY_REF: payload = length * 4;      break;
+    case BPVM_TYPE_ARRAY_REF: payload = length * 8;      break;   /* H1.2a (V4): ref plana = 8 bytes */
     case BPVM_TYPE_OBJECT: {
         /* length = class_ptr absoluto. Leemos num_fields del descriptor. */
         uint16_t num_fields = bpvm_read_u16_be(vm->memory + length
@@ -152,7 +152,9 @@ static void mark_recursive(bpvm_t* vm, uint32_t user_ref) {
 
     if (type == BPVM_TYPE_ARRAY_REF) {
         for (uint32_t i = 0; i < length; i++) {
-            uint32_t slot = bpvm_read_u32_be(vm->memory + user_ref + 4 + i * 4);
+            /* H1.2a (V4): elemento ref = 8 bytes (stride 8); la dirección va en la
+             * palabra baja (big-endian) → read_i64 y (uint32_t) toma los 32 bajos. */
+            uint32_t slot = (uint32_t) bpvm_read_i64_be(vm->memory + user_ref + 4 + i * 8);
             mark_recursive(vm, slot);
         }
     } else if (type == BPVM_TYPE_OBJECT) {
@@ -172,7 +174,9 @@ static void mark_recursive(bpvm_t* vm, uint32_t user_ref) {
         for (uint32_t i = 0; i < num_fields; i++) {
             uint32_t word = bpvm_read_u32_be(vm->memory + fbm_base + (i / 32) * 4);
             if (word & (1u << (i & 31))) {
-                uint32_t slot = bpvm_read_u32_be(vm->memory + user_ref + 4 + i * 4);
+                /* H1.2a (V4): campo ref = 8 bytes (2 slots, bit en el slot base);
+                 * dirección en la palabra baja → read_i64 + (uint32_t) low32. */
+                uint32_t slot = (uint32_t) bpvm_read_i64_be(vm->memory + user_ref + 4 + i * 4);
                 mark_recursive(vm, slot);
             }
         }

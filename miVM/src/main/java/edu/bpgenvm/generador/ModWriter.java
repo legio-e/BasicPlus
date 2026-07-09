@@ -877,7 +877,7 @@ public class ModWriter {
 
         // Los métodos no se exportan al exports table (acceso intra-módulo vía vtable).
         addFunction(qualifiedName, false);
-        declareParam("this");
+        declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
     }
 
     /**
@@ -922,7 +922,7 @@ public class ModWriter {
         }
         String qualifiedName = currentClass.name + "." + simpleName;
         addFunction(qualifiedName, false);   // llamable por CALL, sin slot de vtable
-        declareParam("this");
+        declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
     }
 
     /**
