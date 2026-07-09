@@ -1507,6 +1507,32 @@ public class VirtualMachine {
     }
 
     // ============================================================
+    //  Referencia (V4) — réplica del bpref_* de la VM-C.
+    //  En Java una ref sigue siendo un int (el user_ref); un wrapper por-ref
+    //  mataría el bucle caliente. Pero el KNOB de tamaño (REF_SIZE) y las
+    //  fronteras de codificación (refLoad/refStore) e indirección (refDeref)
+    //  viven AQUÍ: cambiar el modelo (p.ej. handles) toca estos helpers, no los
+    //  call sites. Ver docs/V4_REF_ABSTRACTION.md.
+    // ============================================================
+    private static final int REF_SIZE     = 8;   // bytes de una ref en memory[]/pila
+    private static final int ARR_DATA_OFF = 4;   // offset user_ref → 1er elemento
+
+    /** Lee una referencia de memory[at] (frontera de codificación; handle aquí). */
+    private static int refLoad(byte[] mem, int at) { return (int) readI64(mem, at); }
+    /** Escribe una referencia en memory[at] (plana: low32=addr, high=0). */
+    private static void refStore(byte[] mem, int at, int ref) {
+        writeI64(mem, at, ((long) ref) & 0xFFFFFFFFL);
+    }
+    /** Resuelve una referencia a su offset en memory[] (LA indirección; hoy identidad). */
+    private static int refDeref(int ref) { return ref; }
+    /** Longitud (nº de elementos) de un array, de su cabecera. */
+    private static int arrLen(byte[] mem, int arr) { return readI32(mem, arr); }
+    /** Offset del elemento idx: deref + cabecera + idx*elem_size. */
+    private static int arrElem(int arr, int idx, int elemSize) {
+        return refDeref(arr) + ARR_DATA_OFF + idx * elemSize;
+    }
+
+    // ============================================================
     // GAP-4 — formateo canónico de double/float para print (DPRINT/FPRINT).
     // Punto fijo estilo Str.doubleToString (entero-based: escala por 1e6 a un
     // long, redondea, separa parte entera/decimal, recorta ceros). Para
@@ -2125,7 +2151,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 4, TYPE_ARRAY_I32);
                         writeI32(mem, ref, size);
-                        writeI64(mem, sp, ((long) ref) & 0xFFFFFFFFL); sp += 8;
+                        refStore(mem, sp, ref); sp += REF_SIZE;
                         tc.sp = sp;
                     }
                     break;
@@ -2137,7 +2163,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size, TYPE_ARRAY_I8);
                         writeI32(mem, ref, size);
-                        writeI64(mem, sp, ((long) ref) & 0xFFFFFFFFL); sp += 8;
+                        refStore(mem, sp, ref); sp += REF_SIZE;
                         tc.sp = sp;
                     }
                     break;
@@ -2149,7 +2175,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 2, TYPE_ARRAY_I16);
                         writeI32(mem, ref, size);
-                        writeI64(mem, sp, ((long) ref) & 0xFFFFFFFFL); sp += 8;
+                        refStore(mem, sp, ref); sp += REF_SIZE;
                         tc.sp = sp;
                     }
                     break;
@@ -2157,32 +2183,32 @@ public class VirtualMachine {
 
                 case 0x1E: { // ALOAD
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int length = readI32(mem, ref);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
                         throwBpRuntimeError(tc, "ALOAD: índice fuera de rango "
                                 + idx + " (length=" + length + ")");
                     }
-                    writeI32(mem, sp, readI32(mem, ref + 4 + idx * 4)); sp += 4;
+                    writeI32(mem, sp, readI32(mem, arrElem(arr, idx, 4))); sp += 4;
                     break;
                 }
                 case 0x1F: { // ASTORE
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int length = readI32(mem, ref);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
                         throwBpRuntimeError(tc, "ASTORE: índice fuera de rango "
                                 + idx + " (length=" + length + ")");
                     }
-                    writeI32(mem, ref + 4 + idx * 4, val);
+                    writeI32(mem, arrElem(arr, idx, 4), val);
                     break;
                 }
                 case 0x20: { // ALEN
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    writeI32(mem, sp, readI32(mem, ref)); sp += 4;
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    writeI32(mem, sp, arrLen(mem, arr)); sp += 4;
                     break;
                 }
 
@@ -2323,36 +2349,36 @@ public class VirtualMachine {
 
                 case 0x3A: { // ALOAD_I8
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int length = readI32(mem, ref);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
-                    writeI32(mem, sp, (int) mem[ref + 4 + idx]); sp += 4;
+                    writeI32(mem, sp, (int) mem[arrElem(arr, idx, 1)]); sp += 4;
                     break;
                 }
                 case 0x3B: { // ALOAD_U8
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int length = readI32(mem, ref);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U8: idx fuera de rango " + idx + " (len=" + length + ")"); }
-                    writeI32(mem, sp, mem[ref + 4 + idx] & 0xFF); sp += 4;
+                    writeI32(mem, sp, mem[arrElem(arr, idx, 1)] & 0xFF); sp += 4;
                     break;
                 }
                 case 0x3C: { // ALOAD_I16
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int length = readI32(mem, ref);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
-                    int addr = ref + 4 + idx * 2;
+                    int addr = arrElem(arr, idx, 2);
                     int raw = ((mem[addr] & 0xFF) << 8) | (mem[addr + 1] & 0xFF);
                     writeI32(mem, sp, (short) raw); sp += 4;
                     break;
                 }
                 case 0x3D: { // ALOAD_U16
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int length = readI32(mem, ref);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U16: idx fuera de rango " + idx + " (len=" + length + ")"); }
-                    int addr = ref + 4 + idx * 2;
+                    int addr = arrElem(arr, idx, 2);
                     int raw = ((mem[addr] & 0xFF) << 8) | (mem[addr + 1] & 0xFF);
                     writeI32(mem, sp, raw); sp += 4;
                     break;
@@ -2361,19 +2387,19 @@ public class VirtualMachine {
                 case 0x3E: { // ASTORE_I8
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int length = readI32(mem, ref);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
-                    mem[ref + 4 + idx] = (byte) val;
+                    mem[arrElem(arr, idx, 1)] = (byte) val;
                     break;
                 }
                 case 0x3F: { // ASTORE_I16
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int length = readI32(mem, ref);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
-                    int addr = ref + 4 + idx * 2;
+                    int addr = arrElem(arr, idx, 2);
                     mem[addr]     = (byte) ((val >> 8) & 0xFF);
                     mem[addr + 1] = (byte) ( val       & 0xFF);
                     break;
@@ -2700,32 +2726,32 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 8, TYPE_ARRAY_I64);
                         writeI32(mem, ref, size);
-                        writeI64(mem, sp, ((long) ref) & 0xFFFFFFFFL); sp += 8;
+                        refStore(mem, sp, ref); sp += REF_SIZE;
                         tc.sp = sp;
                     }
                     break;
                 }
                 case 0x8E: { // ALOAD_I64
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int length = readI32(mem, ref);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
                         throwBpRuntimeError(tc, "ALOAD_I64: índice fuera de rango " + idx + " (length=" + length + ")");
                     }
-                    writeI64(mem, sp, readI64(mem, ref + 4 + idx * 8)); sp += 8;
+                    writeI64(mem, sp, readI64(mem, arrElem(arr, idx, 8))); sp += 8;
                     break;
                 }
                 case 0x8F: { // ASTORE_I64
                     sp -= 8; long val = readI64(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int length = readI32(mem, ref);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
                         throwBpRuntimeError(tc, "ASTORE_I64: índice fuera de rango " + idx + " (length=" + length + ")");
                     }
-                    writeI64(mem, ref + 4 + idx * 8, val);
+                    writeI64(mem, arrElem(arr, idx, 8), val);
                     break;
                 }
 
