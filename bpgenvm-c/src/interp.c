@@ -1433,10 +1433,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_INVOKE_VIRTUAL: {
             uint8_t vt_slot = mem[pc++];
             uint8_t num_args = mem[pc++];
-            uint32_t this_addr = sp - 8 - (uint32_t) num_args * 4;   /* H1.2a: receptor ref = 8 bytes */
-            uint32_t this_ref = (uint32_t) bpvm_read_i64_be(mem + this_addr);   /* low32 = dirección */
-            if (this_ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
-            uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(mem + this_ref);
+            uint32_t this_addr = sp - BPVM_REF_SIZE - (uint32_t) num_args * 4;   /* receptor ref */
+            bpref_t this_obj = bpref_load(vm, this_addr);
+            if (bpref_is_null(this_obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, this_obj));
 
             /* L2 v3: fall-back al parent si vt[slot] == -1 o slot >= num_methods.
              * El bucle termina al encontrar un methodOff válido o llegar

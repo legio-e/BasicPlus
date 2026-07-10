@@ -2530,7 +2530,7 @@ public class VirtualMachine {
                         for (int i = 0; i < numFields; i++) {
                             writeI32(mem, ref + 4 + i * 4, 0);
                         }
-                        writeI64(mem, sp, ((long) ref) & 0xFFFFFFFFL); sp += 8;
+                        refStore(mem, sp, ref); sp += REF_SIZE;   // V4: push del ref nuevo
                         tc.sp = sp;
                     }
                     break;
@@ -2983,7 +2983,7 @@ public class VirtualMachine {
                 }
 
                 case 0x5F: { // FREE_REF
-                    sp -= 8; int ref = (int) readI64(mem, sp);
+                    sp -= REF_SIZE; int ref = refLoad(mem, sp);
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     freeOwnedObject(ref);
                     break;
@@ -3003,7 +3003,7 @@ public class VirtualMachine {
                 case 0x5E: { // INSTANCEOF
                     short csOff = (short) readI16(mem, pc); pc += 2;
                     int expected = cs + csOff;
-                    sp -= 8; int ref = (int) readI64(mem, sp);
+                    sp -= REF_SIZE; int ref = refLoad(mem, sp);
                     int objClass = classPtrOfRefOr0(ref);
                     boolean ok = (objClass != 0) && isDescendantOf(objClass, expected);
                     writeI32(mem, sp, ok ? 1 : 0); sp += 4;
@@ -3097,14 +3097,14 @@ public class VirtualMachine {
                     pc += 2;
                     // H1.2a (V4): el receptor es una ref = 8 bytes (bajo los args, que ya
                     // van contados en slots) → sp-8-numArgs*4; readI64 + (int) low32.
-                    int thisRef    = (int) readI64(mem, sp - 8 - numArgs * 4);
+                    int thisRef    = refLoad(mem, sp - REF_SIZE - numArgs * 4);
                     if (thisRef == 0) {
                         tc.sp = sp;
                         throwBpRuntimeError(tc, "INVOKE_VIRTUAL sobre null receiver"
                                 + " (vtSlot=" + vtSlot + ", numArgs=" + numArgs + ")");
                         break;
                     }
-                    int classPtr   = readI32(mem, thisRef);
+                    int classPtr   = readI32(mem, refDeref(thisRef));
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
 
                     // L2 v3 — herencia cross-module: si vt[slot] == -1 o el slot
