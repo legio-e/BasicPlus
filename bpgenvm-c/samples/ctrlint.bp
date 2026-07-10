@@ -1,0 +1,28 @@
+module CtrlInt
+  function Main()
+    var s: integer := 0
+    var i: integer := 1
+    while i <= 10 do
+      s := s + i * i
+      i := i + 1
+    endwh
+    print s            // 385
+    var f0: integer := 0
+    var f1: integer := 1
+    var k: integer := 0
+    while k < 15 do
+      var t: integer := f0 + f1
+      f0 := f1
+      f1 := t
+      k := k + 1
+    endwh
+    print f1           // fib(16)=987
+    var m: integer := 123456 mod 1000
+    print m            // 456
+    if s > 300 and f1 > 100 then
+      print 1
+    else
+      print 0
+    endif
+  end
+end CtrlInt

@@ -1,0 +1,11 @@
+module CtrlCast
+  function Main()
+    var d: double := 7.9d
+    print integer(d)         // 7
+    print long(d)            // 7
+    var big: long := 4000000000L
+    print integer(big)       // trunc low32
+    print double(42)         // 42.0
+    print long(1000)         // 1000
+  end
+end CtrlCast

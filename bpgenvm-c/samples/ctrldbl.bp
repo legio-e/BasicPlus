@@ -1,0 +1,16 @@
+module CtrlDbl
+  function Main()
+    var x: double := 3.5d
+    var y: double := 2.0d
+    print x + y
+    print x * y
+    print x / y
+    var sum: double := 0.0d
+    var i: integer := 1
+    while i <= 5 do
+      sum := sum + 1.0d / double(i)
+      i := i + 1
+    endwh
+    print sum
+  end
+end CtrlDbl

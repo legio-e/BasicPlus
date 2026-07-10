@@ -1,0 +1,16 @@
+module CtrlLong
+  function Main()
+    var a: long := 5000000000L
+    var b: long := 3L
+    print a + b
+    print a * b
+    print a / b
+    var acc: long := 1L
+    var i: integer := 0
+    while i < 20 do
+      acc := acc * 2L
+      i := i + 1
+    endwh
+    print acc          // 2^20 = 1048576
+  end
+end CtrlLong
