@@ -3798,7 +3798,7 @@ public class VirtualMachine {
             case NEW_REF_ARRAY: {
                 int cap = popTc(tc);
                 if (cap < 0) throwBpRuntimeError(tc, "__newRefArray: capacidad negativa: " + cap);
-                pushTc(tc, allocVmRefArray(cap));
+                pushTcRef(tc, allocVmRefArray(cap));   // V4: ref array = 8B (era pushTc 4B → SET_FIELD_LONG hacía underflow → cs=0)
                 break;
             }
             case GROW_REF_ARRAY: {
