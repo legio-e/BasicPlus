@@ -291,12 +291,16 @@ static void push_ref(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
  * Devuelve el número de bytes escritos (sin null terminator). Si el
  * codepoint > 127 lo escribe como '?' (F2 v1 sólo ASCII). */
 static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t dst_size) {
-    /* H2 (V2): strings son byte[] UTF-8 → copiamos los bytes tal cual. */
+    /* H2 (V2): strings son byte[] UTF-8 → copiamos los bytes tal cual.
+     * V4: la resolución ref→bytes pasa por la abstracción (bpref_deref/arr_len);
+     * la firma sigue tomando uint32_t (boundary a migrar con el modelo handle). */
     if (ref == 0) { if (dst_size) dst[0] = '\0'; return 0; }
-    uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
+    bpref_t s = bpref_from_addr(ref);
+    uint32_t nbytes = bpref_arr_len(vm, s);
+    uint32_t base   = bpref_deref(vm, s) + BPVM_ARR_DATA_OFF;
     size_t out = 0;
     for (uint32_t i = 0; i < nbytes && out + 1 < dst_size; i++) {
-        dst[out++] = (char) vm->memory[ref + 4 + i];
+        dst[out++] = (char) vm->memory[base + i];
     }
     if (out < dst_size) dst[out] = '\0';
     return out;
@@ -421,9 +425,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     switch (id) {
 
     case BUILTIN_STRLEN: {
-        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
-        uint32_t nbytes = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
-        uint32_t ncp = (ref == 0) ? 0 : utf8_cp_count(vm->memory + ref + 4, nbytes);
+        bpref_t s = bpref_pop(vm, tc);   /* string ref */
+        uint32_t nbytes = bpref_arr_len(vm, s);
+        uint32_t ncp = bpref_is_null(s) ? 0 : utf8_cp_count(bpref_arr_elem(vm, s, 0, 1), nbytes);
         push_i32(vm, tc, (int32_t) ncp);   /* H2: longitud en codepoints */
         return BPVM_OK;
     }
@@ -1075,10 +1079,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_CHAR_CODE_AT: {
         int32_t i   = pop_i32(vm, tc);
-        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
-        if (ref == 0) { push_i32(vm, tc, 0); return BPVM_OK; }
-        uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
-        const uint8_t* p = vm->memory + ref + 4;
+        bpref_t s = bpref_pop(vm, tc);   /* string ref */
+        if (bpref_is_null(s)) { push_i32(vm, tc, 0); return BPVM_OK; }
+        uint32_t nbytes = bpref_arr_len(vm, s);
+        const uint8_t* p = bpref_arr_elem(vm, s, 0, 1);
         uint32_t ncp = utf8_cp_count(p, nbytes);
         if (i < 0 || (uint32_t) i >= ncp) { push_i32(vm, tc, 0); return BPVM_OK; }
         uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) i);
@@ -1092,11 +1096,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * el codepoint en esa posición. Si idx fuera de rango, devuelve
          * string vacía. */
         int32_t i    = pop_i32(vm, tc);
-        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
+        bpref_t s = bpref_pop(vm, tc);   /* string ref */
         uint8_t enc[4]; uint32_t enc_len = 0;
-        if (ref != 0) {
-            uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
-            const uint8_t* p = vm->memory + ref + 4;
+        if (!bpref_is_null(s)) {
+            uint32_t nbytes = bpref_arr_len(vm, s);
+            const uint8_t* p = bpref_arr_elem(vm, s, 0, 1);
             uint32_t ncp = utf8_cp_count(p, nbytes);
             if (i < 0 || (uint32_t) i >= ncp) {
                 /* BUG-7b — idx fuera de rango → RuntimeError atrapable (paridad VM-Java). */
@@ -1124,10 +1128,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * para que intérprete y AOT den el mismo resultado (#173). */
         int32_t end   = pop_i32(vm, tc);
         int32_t start = pop_i32(vm, tc);
-        uint32_t ref  = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
-        uint32_t nbytes = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
-        const uint8_t* p = vm->memory + ref + 4;
-        uint32_t ncp = (ref == 0) ? 0 : utf8_cp_count(p, nbytes);   /* H2: índices en codepoints */
+        bpref_t s = bpref_pop(vm, tc);   /* string ref */
+        uint32_t nbytes = bpref_arr_len(vm, s);
+        const uint8_t* p = bpref_arr_elem(vm, s, 0, 1);
+        uint32_t ncp = bpref_is_null(s) ? 0 : utf8_cp_count(p, nbytes);   /* H2: índices en codepoints */
         if (start < 0) start = 0;
         if (end   < 0) end = 0;
         if ((uint32_t) end > ncp) end = (int32_t) ncp;
@@ -1137,11 +1141,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t n = eoff - boff;                                   /* nº de bytes del rango */
         uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
         if (out) {
-            bpvm_write_u32_be(vm->memory + out, n);
+            bpvm_write_u32_be(vm->memory + out, n);   /* out: alloc fresca (dirección física) */
             for (uint32_t i = 0; i < n; i++)
-                vm->memory[out + 4 + i] = vm->memory[ref + 4 + boff + i];
+                vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, boff + i, 1);
         }
-        push_ref(vm, tc, out);   /* H1.2a: string ref result = 8 bytes */
+        push_ref(vm, tc, out);   /* string ref result (push_ref ya es genérico) */
         return BPVM_OK;
     }
 
@@ -1174,22 +1178,23 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_CHARS_TO_STRING: {
         int32_t len = pop_i32(vm, tc);
-        uint32_t chars_ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t chars_ref = (uint32_t) pop_i32(vm, tc);   /* pop 4B preservado (inconsistencia pre-existente) */
         if (len < 0) return BPVM_ERR_RUNTIME;
-        uint32_t avail = (chars_ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + chars_ref);
+        bpref_t ca = bpref_from_addr(chars_ref);           /* array i32 de codepoints (entrada) */
+        uint32_t avail = bpref_arr_len(vm, ca);
         if ((uint32_t) len > avail) return BPVM_ERR_RUNTIME;
         /* H2: input = array i32 de codepoints; output = string byte[] UTF-8. */
         uint32_t total = 0;
         for (uint32_t i = 0; i < (uint32_t) len; i++) {
-            uint32_t cp = bpvm_read_u32_be(vm->memory + chars_ref + 4 + i * 4);
+            uint32_t cp = bpvm_read_u32_be(bpref_arr_elem(vm, ca, i, 4));
             uint8_t tmp[4]; total += utf8_encode(cp, tmp);
         }
         uint32_t new_ref = bpvm_heap_alloc(vm, total, BPVM_TYPE_ARRAY_I8);
         if (new_ref == 0) return BPVM_ERR_OOM;
-        bpvm_write_u32_be(vm->memory + new_ref, total);
+        bpvm_write_u32_be(vm->memory + new_ref, total);   /* new_ref: alloc fresca (dirección física) */
         uint32_t w = 0;
         for (uint32_t i = 0; i < (uint32_t) len; i++) {
-            uint32_t cp = bpvm_read_u32_be(vm->memory + chars_ref + 4 + i * 4);
+            uint32_t cp = bpvm_read_u32_be(bpref_arr_elem(vm, ca, i, 4));
             uint8_t enc[4]; uint32_t el = utf8_encode(cp, enc);
             for (uint32_t k = 0; k < el; k++) vm->memory[new_ref + 4 + w++] = enc[k];
         }

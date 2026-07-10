@@ -1343,12 +1343,12 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         /* ---- F2: print strings ---- */
         case OP_PRINT_STRING:
         case OP_PRINT_STR_NONL: {
-            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
-            if (ref != 0) {
+            sp -= BPVM_REF_SIZE; bpref_t s = bpref_load(vm, sp);
+            if (!bpref_is_null(s)) {
                 /* H2 (V2): strings son byte[] UTF-8 → emitimos los bytes
                  * directamente, sin truncar (Unicode completo). */
-                uint32_t nbytes = bpvm_read_u32_be(mem + ref);
-                emit_text(vm, (const char*)(mem + ref + 4), nbytes);
+                uint32_t nbytes = bpref_arr_len(vm, s);
+                emit_text(vm, (const char*) bpref_arr_elem(vm, s, 0, 1), nbytes);
             }
             if (op == OP_PRINT_STRING) emit_newline(vm);
             break;
