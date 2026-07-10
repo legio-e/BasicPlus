@@ -1231,7 +1231,7 @@ public class VirtualMachine {
                 // H1.2a (V4): elemento ref = 8 bytes (stride 8); la dirección va en la
                 // palabra baja (big-endian) → readI64 y (int) toma los 32 bajos.
                 int childRef = (int) readI64(memory, headerAddr + OBJ_HEADER_SIZE + i * 8);
-                int childHeader = childRef - 4; // user_ref apunta a length
+                int childHeader = refDeref(childRef) - 4; // user_ref apunta a length
                 if (valid.contains(childHeader)) {
                     markObject(childHeader, valid);
                 }
@@ -1247,7 +1247,7 @@ public class VirtualMachine {
                     // H1.2a (V4): campo ref = 8 bytes (2 slots, bit en el slot base);
                     // dirección en la palabra baja → readI64 + (int) low32.
                     int childRef = (int) readI64(memory, headerAddr + OBJ_HEADER_SIZE + i * 4);
-                    int childHeader = childRef - 4;
+                    int childHeader = refDeref(childRef) - 4;
                     if (valid.contains(childHeader)) {
                         markObject(childHeader, valid);
                     }
@@ -1262,7 +1262,7 @@ public class VirtualMachine {
         int s = (start + 3) & ~3;
         for (int p = s; p + 4 <= endExclusive; p += 4) {
             int candidate = readInt32(p);
-            int headerAddr = candidate - 4;
+            int headerAddr = refDeref(candidate) - 4;   // V4: deref handle→addr (conservador)
             if (valid.contains(headerAddr)) {
                 markObject(headerAddr, valid);
             }
@@ -1300,7 +1300,7 @@ public class VirtualMachine {
             // tránsito (B1: ventana entre return de heapAlloc y push del
             // caller).
             if (t.allocAnchor != 0) {
-                int headerAddr = t.allocAnchor - 4;
+                int headerAddr = refDeref(t.allocAnchor) - 4;
                 if (valid.contains(headerAddr)) {
                     markObject(headerAddr, valid);
                 }
@@ -1523,17 +1523,19 @@ public class VirtualMachine {
     private static void refStore(byte[] mem, int at, int ref) {
         writeI64(mem, at, ((long) ref) & 0xFFFFFFFFL);
     }
-    /** Resuelve una referencia a su offset en memory[] (LA indirección; hoy identidad). */
-    private static int refDeref(int ref) { return ref; }
-    /** Longitud (nº de elementos) de un array, de su cabecera. */
-    private static int arrLen(byte[] mem, int arr) { return readI32(mem, arr); }
+    /** Resuelve una referencia a su offset en memory[] (LA indirección).
+     *  V4/Paso2: hoy IDENTIDAD (modelo plano); en 2b pasa a consultar la tabla de
+     *  handles. Instancia (no static) porque la tabla es estado del VM. */
+    private int refDeref(int ref) { return ref; }
+    /** Longitud (nº de elementos) de un array, de su cabecera. V4: deref primero. */
+    private int arrLen(byte[] mem, int arr) { return readI32(mem, refDeref(arr)); }
     /** Offset del elemento idx: deref + cabecera + idx*elem_size. */
-    private static int arrElem(int arr, int idx, int elemSize) {
+    private int arrElem(int arr, int idx, int elemSize) {
         return refDeref(arr) + ARR_DATA_OFF + idx * elemSize;
     }
     /** Offset del campo slot de un objeto: deref + cabecera + slot*4 (slots de 4B;
      *  el valor puede ser 4 u 8B). Layout: user_ref → [class_ptr u32][campos...]. */
-    private static int fieldAddr(int obj, int slot) {
+    private int fieldAddr(int obj, int slot) {
         return refDeref(obj) + ARR_DATA_OFF + slot * 4;
     }
 
@@ -4776,7 +4778,7 @@ public class VirtualMachine {
      */
     private int classPtrOfRefOr0(int ref) {
         if (ref <= 0) return 0;
-        int headerAddr = ref - 4;
+        int headerAddr = refDeref(ref) - 4;
         if (headerAddr < heapStart || headerAddr >= heapNext) return 0;
         int tag = readInt32(headerAddr);
         if ((tag & TAG_FREE_BIT) != 0) return 0;
@@ -4853,7 +4855,7 @@ public class VirtualMachine {
     /** Implementación de freeOwnedObject que asume vmLock ya adquirido (para llamadas recursivas). */
     private void freeOwnedObjectLocked(int ref) {
         if (ref == 0) return;
-        int headerAddr = ref - 4;
+        int headerAddr = refDeref(ref) - 4;
         if (headerAddr < heapStart || headerAddr >= heapNext) return;
         int tag = readInt32(headerAddr);
         if ((tag & TAG_FREE_BIT) != 0) return;       // ya libre
@@ -5010,7 +5012,7 @@ public class VirtualMachine {
     private void invokeHandlerByName(ThreadContext tc, int ownerRef, String name, int sender) {
         if (moduleManager == null) return;
         if (ownerRef == 0) return;                          // sin ventana → ignorar
-        int classPtr = readInt32(ownerRef);                 // header en ref-4; class_ptr en ref+0
+        int classPtr = readInt32(refDeref(ownerRef));       // V4: deref handle→addr; class_ptr en +0
         int moduleCs = moduleManager.getCSForDataAddr(classPtr);
         Integer pc = moduleManager.resolveExportInModule(moduleCs, name);
         if (pc == null) {
