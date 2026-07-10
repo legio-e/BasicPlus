@@ -1,0 +1,23 @@
+module tgrow
+  import List
+  function Main()
+    var xs: List := List()
+    var i: integer := 0
+    while i < 40 do
+      xs.add(i * i)
+      i := i + 1
+    endwh
+    print "len=", xs.length()
+    print "g0=", xs.get(0)
+    print "g10=", xs.get(10)
+    print "g39=", xs.get(39)
+    var sum: integer := 0
+    var j: integer := 0
+    while j < xs.length() do
+      var v: integer := xs.get(j)
+      sum := sum + v
+      j := j + 1
+    endwh
+    print "sum=", sum
+  end
+end tgrow

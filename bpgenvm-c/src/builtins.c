@@ -74,6 +74,7 @@ enum {
     BUILTIN_SLEEP           = 35,
     BUILTIN_GC              = 43,
     BUILTIN_NEW_REF_ARRAY   = 44,
+    BUILTIN_GROW_REF_ARRAY  = 45,   /* V4: faltaba (paridad con miVM) */
     BUILTIN_GROW_INT_ARRAY  = 46,
     BUILTIN_CHARS_TO_STRING = 47,
     BUILTIN_CHAR_CODE_AT    = 48,
@@ -1152,16 +1153,39 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_NEW_REF_ARRAY: {
         int32_t cap = pop_i32(vm, tc);
         if (cap < 0) return BPVM_ERR_RUNTIME;
-        uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) cap * 4, BPVM_TYPE_ARRAY_REF);
+        /* V4: ref plana = 8 bytes/elem (era *4 → array a media asignación →
+         * corrupción al almacenar el elemento cap/2 en adelante). heap_alloc
+         * zero-inicializa el payload, así que los slots quedan nulos. */
+        uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) cap * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
         if (ref == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) cap);
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
 
+    case BUILTIN_GROW_REF_ARRAY: {
+        /* V4/paridad miVM: crecer el array de refs (backing de List/any[]).
+         * Antes ausente en la VM-C (enum saltaba 44→46) → cualquier List que
+         * creciera más allá de su capacidad inicial petaba 'builtin desconocido'. */
+        int32_t new_cap = pop_i32(vm, tc);
+        uint32_t old_ref = pop_ref(vm, tc);   /* array ref = 8 bytes (como miVM popTcRef) */
+        if (new_cap < 0) return BPVM_ERR_RUNTIME;
+        uint32_t old_len = (old_ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + old_ref);
+        uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) new_cap * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
+        if (new_ref == 0) return BPVM_ERR_OOM;
+        bpvm_write_u32_be(vm->memory + new_ref, (uint32_t) new_cap);
+        uint32_t copy = (old_len < (uint32_t) new_cap) ? old_len : (uint32_t) new_cap;
+        for (uint32_t i = 0; i < copy; i++) {   /* ref plana 8B/elem, vía la frontera de codificación */
+            bpref_t e = bpref_load(vm, old_ref + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE);
+            bpref_store(vm, new_ref + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE, e);
+        }
+        push_ref(vm, tc, new_ref);
+        return BPVM_OK;
+    }
+
     case BUILTIN_GROW_INT_ARRAY: {
         int32_t new_cap = pop_i32(vm, tc);
-        uint32_t old_ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t old_ref = pop_ref(vm, tc);   /* V4: array ref = 8 bytes (era pop_i32 4B → drift vs miVM popTcRef) */
         if (new_cap < 0) return BPVM_ERR_RUNTIME;
         uint32_t old_len = (old_ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + old_ref);
         uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) new_cap * 4, BPVM_TYPE_ARRAY_I32);
