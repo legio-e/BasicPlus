@@ -1531,6 +1531,11 @@ public class VirtualMachine {
     private static int arrElem(int arr, int idx, int elemSize) {
         return refDeref(arr) + ARR_DATA_OFF + idx * elemSize;
     }
+    /** Offset del campo slot de un objeto: deref + cabecera + slot*4 (slots de 4B;
+     *  el valor puede ser 4 u 8B). Layout: user_ref → [class_ptr u32][campos...]. */
+    private static int fieldAddr(int obj, int slot) {
+        return refDeref(obj) + ARR_DATA_OFF + slot * 4;
+    }
 
     // ============================================================
     // GAP-4 — formateo canónico de double/float para print (DPRINT/FPRINT).
@@ -2532,30 +2537,30 @@ public class VirtualMachine {
                 }
                 case 0x53: { // GET_FIELD
                     int slot = mem[pc] & 0xFF; pc++;
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    writeI32(mem, sp, readI32(mem, ref + 4 + slot * 4)); sp += 4;
+                    sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    writeI32(mem, sp, readI32(mem, fieldAddr(obj, slot))); sp += 4;
                     break;
                 }
                 case 0x54: { // SET_FIELD
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= 4; int val = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    writeI32(mem, ref + 4 + slot * 4, val);
+                    sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    writeI32(mem, fieldAddr(obj, slot), val);
                     break;
                 }
-                // BUG-6: campos de instancia de 8 bytes (long/double). slot = índice
-                // de slot de 4 bytes; el valor ocupa 2 slots consecutivos en ref+4+slot*4.
+                // BUG-6: campos de instancia de 8 bytes (long/double/ref). slot = índice
+                // de slot de 4 bytes; el valor ocupa 2 slots consecutivos en el campo.
                 case 0xA8: { // GET_FIELD_LONG
                     int slot = mem[pc] & 0xFF; pc++;
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    writeI64(mem, sp, readI64(mem, ref + 4 + slot * 4)); sp += 8;
+                    sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    writeI64(mem, sp, readI64(mem, fieldAddr(obj, slot))); sp += 8;
                     break;
                 }
                 case 0xA9: { // SET_FIELD_LONG
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= 8; long val = readI64(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    writeI64(mem, ref + 4 + slot * 4, val);
+                    sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    writeI64(mem, fieldAddr(obj, slot), val);
                     break;
                 }
                 case 0x56: { // PRINT_NONL
@@ -2985,9 +2990,9 @@ public class VirtualMachine {
                 }
                 case 0x60: { // SET_FIELD_OWNER
                     int slot = mem[pc] & 0xFF; pc++;
-                    sp -= 4; int val = readI32(mem, sp);
-                    sp -= 8; int ref = (int) readI64(mem, sp);
-                    int slotAddr = ref + 4 + slot * 4;
+                    sp -= 4; int val = readI32(mem, sp);   // valor 4B preservado (owner ref; revisar en 4b/listas)
+                    sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    int slotAddr = fieldAddr(obj, slot);
                     int old = readI32(mem, slotAddr);
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     freeOwnedObject(old);
