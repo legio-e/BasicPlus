@@ -56,8 +56,11 @@ public class MainOOP {
 
             // ---- class Animal { peso (int), nombre (ref); hablar() } ----
             w.addClass("Animal", null);
-            w.declareField("peso",   false);   // bit 0 del bitmap = 0
-            w.declareField("nombre", true);    // bit 1 del bitmap = 1 (GC traza este slot)
+            w.declareField("peso",   false);              // slot 0, no-ref
+            // V4 (H1.2a): un campo ref es de 8 bytes (is8=true) → SET/GET_FIELD_LONG.
+            // Con el declareField de 2 args (is8=false) se emitía SET_FIELD (4B) y la
+            // ref de 8B se truncaba. bit del bitmap en el 1er slot del campo.
+            w.declareField("nombre", true, false, true);  // slot 1-2, ref 8B (GC traza este slot)
             w.addMethod("hablar");
                 w.emitGetParam("this");
                 w.emitGetField("Animal", "peso");
@@ -68,7 +71,7 @@ public class MainOOP {
 
             // ---- class Perro extends Animal { dueno (ref); hablar() override } ----
             w.addClass("Perro", "Animal");
-            w.declareField("dueno", true);     // bit 2 del bitmap = 1
+            w.declareField("dueno", true, false, true);   // ref 8B heredando peso+nombre
             w.addMethod("hablar");             // override, mismo slot (0) que Animal.hablar
                 w.emitGetParam("this");
                 w.emitGetField("Perro", "peso");
@@ -111,11 +114,16 @@ public class MainOOP {
             w.emitGetLocal("p2"); w.emitLeaGlobal("name_toby"); w.emitSetField("Perro", "nombre");
             w.emitGetLocal("p2"); w.emitLeaGlobal("name_rex");  w.emitSetField("Perro", "dueno");
 
-            // arr = new int[3]; arr[0]=a1; arr[1]=p1; arr[2]=p2
-            push(w, 3); w.emit(OpCode.NEWARRAY); w.emitSetLocal("arr");
-            w.emitGetLocal("arr"); push(w, 0); w.emitGetLocal("a1"); w.emit(OpCode.ASTORE);
-            w.emitGetLocal("arr"); push(w, 1); w.emitGetLocal("p1"); w.emit(OpCode.ASTORE);
-            w.emitGetLocal("arr"); push(w, 2); w.emitGetLocal("p2"); w.emit(OpCode.ASTORE);
+            // arr = new ref[3]; arr[0]=a1; arr[1]=p1; arr[2]=p2
+            // V4 (H1.2a): las refs de objeto son de 8 bytes, así que el array que
+            // las guarda debe tener slots de 8 bytes (NEWARRAY_I64 + A{LOAD,STORE}_I64).
+            // Antes NEWARRAY/ASTORE (i32, 4B) → guardar una ref 8B desalineaba la pila
+            // y leía el array-ref truncado (length=0). arr se descarta antes del GC, así
+            // que no necesita ser TYPE_ARRAY_REF trazable.
+            push(w, 3); w.emit(OpCode.NEWARRAY_I64); w.emitSetLocal("arr");
+            w.emitGetLocal("arr"); push(w, 0); w.emitGetLocal("a1"); w.emit(OpCode.ASTORE_I64);
+            w.emitGetLocal("arr"); push(w, 1); w.emitGetLocal("p1"); w.emit(OpCode.ASTORE_I64);
+            w.emitGetLocal("arr"); push(w, 2); w.emitGetLocal("p2"); w.emit(OpCode.ASTORE_I64);
 
             // for (i = 0; i < 3; i++) arr[i].hablar()
             w.emitLeaGlobal("tag_poly"); w.emit(OpCode.PRINT_STRING);
@@ -124,7 +132,7 @@ public class MainOOP {
                 w.emitGetLocal("i"); push(w, 3); w.emit(OpCode.LT);
                 w.emitJumpIfFalse(LBL_END);
 
-                w.emitGetLocal("arr"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD);
+                w.emitGetLocal("arr"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD_I64);   // V4: ref 8B
                 w.emitInvokeVirtual("Animal", "hablar", 0);   // dispatch dinámico
                 w.emitSetLocal("ret");                        // descarta el return value (dummy 0)
 
