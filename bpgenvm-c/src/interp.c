@@ -1389,9 +1389,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4,
                                             BPVM_TYPE_OBJECT);
             if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
-            bpvm_write_u32_be(mem + ref, class_ptr);   /* slot[0] = class_ptr */
+            bpvm_write_u32_be(mem + ref, class_ptr);   /* slot[0] = class_ptr (alloc fresca) */
             /* fields ya zeroed por heap_alloc. */
-            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t) ref); sp += 8;   /* H1.2a: ref = 8 bytes */
+            bpref_store(vm, sp, bpref_from_addr(ref)); sp += BPVM_REF_SIZE;
             mem = vm->memory;
             break;
         }
@@ -1486,10 +1486,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_INSTANCEOF: {
             int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2;
             uint32_t expected = (uint32_t)((int32_t) cs + cs_off);
-            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
+            sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             int32_t result = 0;
-            if (ref != 0) {
-                uint32_t cur = (uint32_t) bpvm_read_i32_be(mem + ref);
+            if (!bpref_is_null(obj)) {
+                uint32_t cur = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, obj));
                 while (cur != 0) {
                     if (cur == expected) { result = 1; break; }
                     int32_t parent_off = bpvm_read_i32_be(mem + cur
@@ -1504,10 +1504,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
 
         case OP_FREE_REF: {
-            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
-            if (ref != 0) {
+            sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
+            if (!bpref_is_null(obj)) {
                 /* Sólo objetos. Para arrays / strings, NOP. */
-                uint32_t header = ref - 4;
+                uint32_t header = bpref_deref(vm, obj) - 4;
                 uint32_t tag = bpvm_read_u32_be(mem + header);
                 int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
                 if (type == BPVM_TYPE_OBJECT) {
