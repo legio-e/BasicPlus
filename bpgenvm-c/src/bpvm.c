@@ -32,6 +32,11 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->last_gc_heap_next = vm->heap_next;
     vm->gc_bump_threshold = 0;   /* off hasta entonces */
     vm->main_absolute_address = 0;
+    /* V4 — tabla de handles (lazy) + GC suspendido durante la migración. */
+    vm->handle_addr  = NULL;
+    vm->handle_cap   = 0;
+    vm->handle_next  = 1;        /* 0 = null */
+    vm->gc_suspended = 1;
 
     /* Pone los bytes sentinela en la región reservada:
      *   memory[0] = THREAD_EXIT (fin de Thread.run / hilo)
@@ -375,6 +380,7 @@ uint32_t bpvm_thread_cs(const bpvm_thread_t* tc) { return tc ? tc->cs : 0; }
 
 void bpvm_destroy(bpvm_t* vm) {
     if (!vm) return;
+    free(vm->handle_addr);   /* V4: tabla de handles */
     /* Liberar módulos cargados. */
     for (int i = 0; i < vm->module_count; i++) {
         bpvm_module_t* m = &vm->modules[i];

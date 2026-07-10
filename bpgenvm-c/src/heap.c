@@ -286,9 +286,27 @@ static void bpvm_gc(bpvm_t* vm) {
     gc_sweep_phase(vm);
 }
 
+/* V4 — registra un objeto de HEAP en la tabla de handles y devuelve su HANDLE
+ * (índice | TAG). Modo neutro: monotónico (sin reciclaje ni generación aún; eso
+ * llega en pasos 3-4). Tabla lazy, crece por duplicación. Si no puede crecer,
+ * devuelve la dirección cruda (sin tag → bpref_deref la trata por identidad). */
+uint32_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
+    if (vm->handle_next >= vm->handle_cap) {
+        uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u : 4096u;
+        uint32_t* na = (uint32_t*) realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
+        if (!na) return addr;
+        vm->handle_addr = na;
+        vm->handle_cap  = new_cap;
+    }
+    uint32_t idx = vm->handle_next++;
+    vm->handle_addr[idx] = addr;
+    return idx | BPVM_HANDLE_TAG;
+}
+
 /* H3: GC stop-the-world. Asume vm_lock tomado. Lo usan el disparo proactivo
  * por umbral y la ruta de OOM. En legacy/single-worker no hay baile. */
 static void gc_stw(bpvm_t* vm) {
+    if (vm->gc_suspended) return;   /* V4: GC suspendido durante la migración a handles */
     if (vm->smp) {
         vm->smp->stop_the_world = true;
         bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
@@ -360,7 +378,7 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
      * avanzó >= umbral desde el último GC, colecta ahora. gc_stw hace el baile
      * STW (mark scanea las pilas de todos los threads → deben estar en
      * safepoint con tc->sp sincronizado; en legacy/single-worker no hay baile). */
-    if (vm->gc_bump_threshold != 0 &&
+    if (!vm->gc_suspended && vm->gc_bump_threshold != 0 &&
         vm->heap_next - vm->last_gc_heap_next >= vm->gc_bump_threshold) {
         gc_stw(vm);
     }

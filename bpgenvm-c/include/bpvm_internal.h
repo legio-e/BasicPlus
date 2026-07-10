@@ -245,6 +245,15 @@ struct bpvm {
     uint8_t* gc_valid_map;
     size_t   gc_valid_map_size;
 
+    /* V4 — TABLA DE HANDLES (paso 2b, espejo de miVM). Un objeto de HEAP se
+     * registra aquí y su ref es un HANDLE = índice | tag; bpref_deref lo resuelve.
+     * Modo neutro: monotónica, sin generación (pasos 3-4). handle_addr[i] = addr
+     * físico. El GC se SUSPENDE durante la migración (gc_suspended). */
+    uint32_t* handle_addr;
+    uint32_t  handle_cap;
+    uint32_t  handle_next;     /* 0 reservado para null */
+    int       gc_suspended;    /* 1 = GC no corre (migración a handles) */
+
     /* Módulos cargados. */
     bpvm_module_t modules[BPVM_MAX_MODULES];
     int           module_count;
@@ -413,10 +422,22 @@ static inline void bpref_push(bpvm_t* vm, bpvm_thread_t* tc, bpref_t r) {
  *    (p.ej. handles) = tocar bpref_deref; los call sites no. -- */
 #define BPVM_ARR_DATA_OFF 4u   /* bytes de user_ref al 1er elemento (prefijo length u32) */
 
-/* Resolver una referencia a su offset en memory[] (DÓNDE vive el objeto). Esta es
- * LA indirección: hoy identidad; con handles = tabla (índice -> addr). */
+/* V4 — bit 30 marca "es HANDLE de heap". null (0) y las CONSTANTES del data block
+ * (dirección directa, inmutable/no-heap) tienen el bit a 0 → no necesitan tabla ni
+ * generación. La memoria es <256KB (0x40000) → una dirección real jamás lo tiene. */
+#define BPVM_HANDLE_TAG 0x40000000u
+
+/* V4: registra un objeto de HEAP (dirección user_ref) y devuelve su HANDLE
+ * (índice | TAG). Implementado en heap.c (puede crecer la tabla). */
+uint32_t bpvm_handle_register(bpvm_t* vm, uint32_t addr);
+
+/* Resolver una referencia a su offset en memory[] (DÓNDE vive el objeto). LA
+ * indirección: sin TAG = null o constante del data block → identidad; con TAG =
+ * consulta la tabla (defensivo: índice fuera de rango → 0). */
 static inline uint32_t bpref_deref(const bpvm_t* vm, bpref_t r) {
-    (void) vm; return r.v;
+    if ((r.v & BPVM_HANDLE_TAG) == 0u) return r.v;
+    uint32_t idx = r.v & ~BPVM_HANDLE_TAG;
+    return (idx > 0u && idx < vm->handle_next) ? vm->handle_addr[idx] : 0u;
 }
 /* Longitud (nº de elementos) de un array, leída de su cabecera. 0 si null. */
 static inline uint32_t bpref_arr_len(const bpvm_t* vm, bpref_t arr) {
