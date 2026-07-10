@@ -2218,7 +2218,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x22: { // PRINT_STRING (legacy: con \n al final)
-                    sp -= 8; int ref = (int) readI64(mem, sp);
+                    sp -= REF_SIZE; int ref = refLoad(mem, sp);
                     programOut.writeText(readVmString(ref));  // H2: decodifica UTF-8
                     programOut.newline();
                     break;
@@ -2569,7 +2569,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x58: { // PRINT_STR_NONL
-                    sp -= 8; int ref = (int) readI64(mem, sp);
+                    sp -= REF_SIZE; int ref = refLoad(mem, sp);
                     programOut.writeText(readVmString(ref));  // H2: decodifica UTF-8
                     break;
                 }
@@ -3212,10 +3212,11 @@ public class VirtualMachine {
     /** Lee un string de la VM (length + chars) a partir de su user_ref y devuelve String Java. */
     private String readVmString(int ref) {
         // H2 (V2): strings son byte[] UTF-8. length = nº de bytes; payload en ref+4.
+        // V4: la resolución ref→bytes pasa por la abstracción (arrLen/arrElem).
         if (ref == 0) return "";
-        int nbytes = readInt32(ref);
+        int nbytes = arrLen(memory, ref);
         byte[] buf = new byte[nbytes];
-        System.arraycopy(memory, ref + 4, buf, 0, nbytes);
+        System.arraycopy(memory, arrElem(ref, 0, 1), buf, 0, nbytes);
         return new String(buf, java.nio.charset.StandardCharsets.UTF_8);
     }
 
@@ -4904,13 +4905,13 @@ public class VirtualMachine {
     // Los builtins que producen/consumen una referencia (arrays, strings,
     // objetos) deben usar estos en vez de pushTc/popTc (4 bytes) para no
     // desalinear el operand stack contra SET_LOCAL_L/ALOAD/etc.
-    private void pushTcRef(ThreadContext tc, int ref) {
-        writeI64(memory, tc.sp, ((long) ref) & 0xFFFFFFFFL);
-        tc.sp += 8;
+    private void pushTcRef(ThreadContext tc, int ref) {   // V4: base de la pila de builtins (análogo a push_ref de la VM-C)
+        refStore(memory, tc.sp, ref);
+        tc.sp += REF_SIZE;
     }
     private int popTcRef(ThreadContext tc) {
-        tc.sp -= 8;
-        return (int) readI64(memory, tc.sp);
+        tc.sp -= REF_SIZE;
+        return refLoad(memory, tc.sp);
     }
 
     // ============================================================
