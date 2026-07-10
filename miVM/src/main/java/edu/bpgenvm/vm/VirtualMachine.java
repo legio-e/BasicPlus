@@ -565,6 +565,20 @@ public class VirtualMachine {
     //                     proactivamente (evita over-commit; ~1/8 del heap).
     private int lastGcHeapNext = 0;
     private int gcBumpThreshold = 1 << 16;
+    // V4 — migración a handles: el GC se SUSPENDE mientras se monta la tabla de
+    // handles (pasos 2-5). Es la parte más delicada de hacer handle-aware y su
+    // ejecución alteraría el heap durante la verificación; se reactiva ya-preciso
+    // en el paso 6 (GC vía tabla). owner-free / FREE_REF (determinista) siguen ON.
+    // Los samples de verificación son cortos → el heap de 256 KB nunca se agota.
+    private boolean gcSuspended = true;
+
+    // V4 — TABLA DE HANDLES (paso 2b). Una referencia BP pasa a ser un HANDLE =
+    // índice en esta tabla; refDeref(handle) → dirección física del objeto.
+    // Modo neutro: monotónica (sin reciclaje ni chequeo de generación aún; eso
+    // llega en pasos 3-4). slot 0 = null. Con el GC suspendido no se recicla, y
+    // los samples cortos no agotan la tabla (crece por duplicación si hiciera falta).
+    private int[] handleAddr = new int[4096];
+    private int   handleNext = 1;   // 0 reservado para null
 
     // Tag bits del header del objeto
     private static final int TAG_MARK_BIT  = 0x80000000;
@@ -826,6 +840,7 @@ public class VirtualMachine {
             // flat (high=0, low=msgRef); si se escribe a 4B, GET_FIELD_LONG lee
             // la palabra baja (0) y e.msg sale null/basura.
             writeI64(memory, objRef + 4 + 0 * 4, ((long) msgRef) & 0xFFFFFFFFL);
+            objRef = handleRegister(objRef);   // V4: addr → handle (tras escribir todos los campos)
             // Empujamos el ref al stack del thread. El dispatcher hará el
             // pop como parte del unwind, igual que con el opcode THROW.
             writeInt32(tc.sp, objRef);
@@ -906,6 +921,7 @@ public class VirtualMachine {
         this.heapStart  = stackBase;
         this.heapNext   = stackBase;
         this.lastGcHeapNext = stackBase;
+        this.handleNext = 1;   // V4: la tabla de handles se reinicia con el heap
         this.nextStackBase = stackBase + MAIN_STACK_BYTES;
 
         // memory[0] = 0x70 (opcode THREAD_EXIT). Es la sentinela de salida
@@ -997,6 +1013,7 @@ public class VirtualMachine {
         // H3: base del umbral de GC proactivo, fijada con el heapStart real
         // (tras cargar el data block). Umbral ~1/8 del heap, con suelo de 4 KB.
         this.lastGcHeapNext = addr;
+        this.handleNext = 1;   // V4: la tabla de handles se reinicia con el heap
         this.gcBumpThreshold = Math.max(4096, (STACK_BASE - addr) / 8);
     }
 
@@ -1072,7 +1089,7 @@ public class VirtualMachine {
             // H3: GC PROACTIVO por umbral de crecimiento de bump. Evita el
             // over-commit (que el heap suba a su pico de bump antes de colectar):
             // si el bump ha avanzado >= umbral desde el último GC, colecta ahora.
-            if (heapNext - lastGcHeapNext >= gcBumpThreshold) {
+            if (!gcSuspended && heapNext - lastGcHeapNext >= gcBumpThreshold) {
                 gcSafepoint(myTid);
             }
             int addr = tryAllocateInner(totalSize);
@@ -1279,6 +1296,7 @@ public class VirtualMachine {
      * adquirido (lo asegura {@link #gc()} y los internals de heapAlloc).
      */
     private void gcLocked() {
+        if (gcSuspended) return;   // V4: GC suspendido durante la migración a handles (pasos 2-5)
         int beforeBumpUsed = heapNext - heapStart;
         int beforeFreeListBytes = 0;
         {
@@ -1523,10 +1541,32 @@ public class VirtualMachine {
     private static void refStore(byte[] mem, int at, int ref) {
         writeI64(mem, at, ((long) ref) & 0xFFFFFFFFL);
     }
-    /** Resuelve una referencia a su offset en memory[] (LA indirección).
-     *  V4/Paso2: hoy IDENTIDAD (modelo plano); en 2b pasa a consultar la tabla de
-     *  handles. Instancia (no static) porque la tabla es estado del VM. */
-    private int refDeref(int ref) { return ref; }
+    /** V4 — bit 30 marca "es HANDLE de heap". Las direcciones directas (null=0 y
+     *  las CONSTANTES del data block, inmutables/no-heap) tienen este bit a 0: no
+     *  necesitan tabla ni generación (nunca se liberan ni mueven). La memoria es
+     *  <256KB (0x40000) → una dirección real jamás tiene el bit 30 puesto. */
+    private static final int HANDLE_TAG = 0x40000000;
+
+    /** V4: registra un objeto de HEAP (dirección user_ref) en la tabla y devuelve
+     *  su HANDLE (índice | TAG). Neutro: monotónico, sin generación todavía. */
+    private int handleRegister(int addr) {
+        if (handleNext >= handleAddr.length) {
+            handleAddr = java.util.Arrays.copyOf(handleAddr, handleAddr.length * 2);
+        }
+        int idx = handleNext++;
+        handleAddr[idx] = addr;
+        return idx | HANDLE_TAG;
+    }
+
+    /** Resuelve una referencia a su dirección física en memory[].
+     *  V4/Paso2b: si NO tiene el TAG → es null (0) o una constante del data block
+     *  (dirección directa, inmutable) → identidad. Si tiene el TAG → consulta la
+     *  tabla (defensivo: índice fuera de rango → 0, útil al escaneo conservativo). */
+    private int refDeref(int ref) {
+        if ((ref & HANDLE_TAG) == 0) return ref;
+        int idx = ref & ~HANDLE_TAG;
+        return (idx > 0 && idx < handleNext) ? handleAddr[idx] : 0;
+    }
     /** Longitud (nº de elementos) de un array, de su cabecera. V4: deref primero. */
     private int arrLen(byte[] mem, int arr) { return readI32(mem, refDeref(arr)); }
     /** Offset del elemento idx: deref + cabecera + idx*elem_size. */
@@ -2158,6 +2198,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 4, TYPE_ARRAY_I32);
                         writeI32(mem, ref, size);
+                        ref = handleRegister(ref);   // V4: addr físico → handle
                         refStore(mem, sp, ref); sp += REF_SIZE;
                         tc.sp = sp;
                     }
@@ -2170,6 +2211,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size, TYPE_ARRAY_I8);
                         writeI32(mem, ref, size);
+                        ref = handleRegister(ref);   // V4: addr físico → handle
                         refStore(mem, sp, ref); sp += REF_SIZE;
                         tc.sp = sp;
                     }
@@ -2182,6 +2224,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 2, TYPE_ARRAY_I16);
                         writeI32(mem, ref, size);
+                        ref = handleRegister(ref);   // V4: addr físico → handle
                         refStore(mem, sp, ref); sp += REF_SIZE;
                         tc.sp = sp;
                     }
@@ -2532,6 +2575,7 @@ public class VirtualMachine {
                         for (int i = 0; i < numFields; i++) {
                             writeI32(mem, ref + 4 + i * 4, 0);
                         }
+                        ref = handleRegister(ref);   // V4: addr físico → handle
                         refStore(mem, sp, ref); sp += REF_SIZE;   // V4: push del ref nuevo
                         tc.sp = sp;
                     }
@@ -2733,6 +2777,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 8, TYPE_ARRAY_I64);
                         writeI32(mem, ref, size);
+                        ref = handleRegister(ref);   // V4: addr físico → handle
                         refStore(mem, sp, ref); sp += REF_SIZE;
                         tc.sp = sp;
                     }
@@ -3234,6 +3279,7 @@ public class VirtualMachine {
         int ref = heapAlloc(len, TYPE_ARRAY_I8);
         writeInt32(ref, len);
         System.arraycopy(utf8, 0, memory, ref + 4, len);
+        ref = handleRegister(ref);   // V4: addr físico → handle
         // B1 residual — el caller llama a allocVmString desde dispatchBuiltin
         // SIN vmLock, así que entre `return ref` y el `pushTc(tc, ref)` un GC
         // de otro worker podría liberar `ref` (no hay raíz aún). Anclamos
@@ -3248,6 +3294,7 @@ public class VirtualMachine {
         int ref = heapAlloc(n * 8, TYPE_ARRAY_REF);   // H1.2a (V4): ref plana = 8 bytes/elem
         writeInt32(ref, n);
         for (int i = 0; i < n; i++) writeI64(memory, ref + 4 + i * 8, 0L);
+        ref = handleRegister(ref);   // V4: addr físico → handle
         // B1 residual — ver allocVmString. Mismo motivo: ancla GC para el
         // intervalo entre alocación y publicación al stack del programa.
         ThreadContext me = currentTcLocal.get();
@@ -3396,6 +3443,7 @@ public class VirtualMachine {
                 int ref = heapAlloc(n, TYPE_ARRAY_I8);
                 writeInt32(ref, n);
                 if (n > 0) System.arraycopy(buf, 0, memory, ref + 4, n);
+                ref = handleRegister(ref);   // V4: addr → handle
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = ref;   // ancla GC
                 pushTc(tc, ref);
@@ -3746,6 +3794,7 @@ public class VirtualMachine {
                     int ref = heapAlloc(data.length, TYPE_ARRAY_I8);
                     writeInt32(ref, data.length);
                     System.arraycopy(data, 0, memory, ref + 4, data.length);
+                    ref = handleRegister(ref);   // V4: addr → handle
                     ThreadContext me = currentTcLocal.get();
                     if (me != null) me.allocAnchor = ref;   // ancla GC (ver allocVmString)
                     pushTc(tc, ref);
@@ -3790,8 +3839,9 @@ public class VirtualMachine {
                 if (names == null) names = new String[0];
                 int[] refs = new int[names.length];
                 for (int i = 0; i < names.length; i++) refs[i] = allocVmString(names[i]);
-                int arrRef = allocVmRefArray(names.length);
-                for (int i = 0; i < names.length; i++) writeI64(memory, arrRef + 4 + i * 8, ((long) refs[i]) & 0xFFFFFFFFL);  // H1.2a: ref plana 8B
+                int arrRef = allocVmRefArray(names.length);   // ya es handle
+                int adir = refDeref(arrRef);   // V4: dirección física
+                for (int i = 0; i < names.length; i++) writeI64(memory, adir + 4 + i * 8, ((long) refs[i]) & 0xFFFFFFFFL);  // ref plana 8B
                 pushTc(tc, arrRef);
                 break;
             }
@@ -3807,11 +3857,13 @@ public class VirtualMachine {
                 int newCap = popTc(tc);
                 int oldRef = popTcRef(tc);   // H1.2a: array ref 8 bytes
                 if (newCap < 0) throwBpRuntimeError(tc, "__growRefArray: capacidad negativa: " + newCap);
-                int oldLen = (oldRef != 0) ? readInt32(oldRef) : 0;
-                int newRef = allocVmRefArray(newCap);
+                int od = (oldRef != 0) ? refDeref(oldRef) : 0;   // V4: dirección física fuente
+                int oldLen = (od != 0) ? readInt32(od) : 0;
+                int newRef = allocVmRefArray(newCap);            // ya es handle
+                int nd = refDeref(newRef);
                 int copyLen = Math.min(oldLen, newCap);
-                for (int i = 0; i < copyLen; i++) {   // H1.2a (V4): ref plana = 8 bytes/elem
-                    writeI64(memory, newRef + 4 + i * 8, readI64(memory, oldRef + 4 + i * 8));
+                for (int i = 0; i < copyLen; i++) {   // ref plana = 8 bytes/elem
+                    writeI64(memory, nd + 4 + i * 8, readI64(memory, od + 4 + i * 8));
                 }
                 pushTcRef(tc, newRef);
                 break;
@@ -3820,16 +3872,18 @@ public class VirtualMachine {
                 int newCap = popTc(tc);
                 int oldRef = popTcRef(tc);   // H1.2a: array ref 8 bytes
                 if (newCap < 0) throwBpRuntimeError(tc, "__growIntArray: capacidad negativa: " + newCap);
-                int oldLen = (oldRef != 0) ? readInt32(oldRef) : 0;
-                int newRef = heapAlloc(newCap * 4, TYPE_ARRAY_I32);
+                int od = (oldRef != 0) ? refDeref(oldRef) : 0;   // V4: dirección física fuente
+                int oldLen = (od != 0) ? readInt32(od) : 0;
+                int newRef = heapAlloc(newCap * 4, TYPE_ARRAY_I32);   // addr físico
                 writeInt32(newRef, newCap);
                 int copyLen = Math.min(oldLen, newCap);
                 for (int i = 0; i < copyLen; i++) {
-                    writeInt32(newRef + 4 + i * 4, readInt32(oldRef + 4 + i * 4));
+                    writeInt32(newRef + 4 + i * 4, readInt32(od + 4 + i * 4));
                 }
                 for (int i = copyLen; i < newCap; i++) {
                     writeInt32(newRef + 4 + i * 4, 0);
                 }
+                newRef = handleRegister(newRef);   // V4: addr → handle
                 pushTcRef(tc, newRef);
                 break;
             }
@@ -3837,10 +3891,11 @@ public class VirtualMachine {
                 int len = popTc(tc);
                 int charsRef = popTc(tc);
                 if (len < 0) throwBpRuntimeError(tc, "__charsToString: longitud negativa: " + len);
-                int avail = (charsRef != 0) ? readInt32(charsRef) : 0;
+                int cd = (charsRef != 0) ? refDeref(charsRef) : 0;   // V4: dirección física
+                int avail = (cd != 0) ? readInt32(cd) : 0;
                 if (len > avail) throwBpRuntimeError(tc, "__charsToString: longitud " + len + " > capacidad " + avail);
                 StringBuilder sb = new StringBuilder(len);
-                for (int i = 0; i < len; i++) sb.appendCodePoint(readInt32(charsRef + 4 + i * 4));
+                for (int i = 0; i < len; i++) sb.appendCodePoint(readInt32(cd + 4 + i * 4));
                 pushTcRef(tc, allocVmString(sb.toString()));   // H2: codifica UTF-8
                 break;
             }
@@ -3859,10 +3914,12 @@ public class VirtualMachine {
                 // conversión es una copia defensiva (string inmutable / byte[]
                 // mutable): mismos bytes, objeto nuevo.
                 int ref = popTc(tc);
-                int n = (ref == 0) ? 0 : readInt32(ref);
-                int out = heapAlloc(n, TYPE_ARRAY_I8);
+                int rd = (ref == 0) ? 0 : refDeref(ref);   // V4: dirección física fuente
+                int n = (rd == 0) ? 0 : readInt32(rd);
+                int out = heapAlloc(n, TYPE_ARRAY_I8);   // addr físico
                 writeInt32(out, n);
-                System.arraycopy(memory, ref + 4, memory, out + 4, n);
+                if (n > 0) System.arraycopy(memory, rd + 4, memory, out + 4, n);
+                out = handleRegister(out);   // V4: addr → handle
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = out;
                 pushTc(tc, out);
@@ -4367,6 +4424,7 @@ public class VirtualMachine {
                 for (int i = 0; i < size; i++) {
                     writeInt32(ref + 4 + i * 4, 0);
                 }
+                ref = handleRegister(ref);   // V4: addr → handle
                 pushTcRef(tc, ref);   // H1.2a: ref 8 bytes
                 break;
             }
