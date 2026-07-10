@@ -2990,13 +2990,13 @@ public class VirtualMachine {
                 }
                 case 0x60: { // SET_FIELD_OWNER
                     int slot = mem[pc] & 0xFF; pc++;
-                    sp -= 4; int val = readI32(mem, sp);   // valor 4B preservado (owner ref; revisar en 4b/listas)
+                    sp -= REF_SIZE; int val = refLoad(mem, sp);   // V4: valor = ref nueva (8B, era 4B → drift + high-word)
                     sp -= REF_SIZE; int obj = refLoad(mem, sp);
                     int slotAddr = fieldAddr(obj, slot);
-                    int old = readI32(mem, slotAddr);
+                    int old = refLoad(mem, slotAddr);             // V4: ref vieja (8B flat; era readI32 = high-word=0 → leak)
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     freeOwnedObject(old);
-                    writeI32(mem, slotAddr, val);
+                    refStore(mem, slotAddr, val);                 // V4: escribe ref plana 8B
                     break;
                 }
 
@@ -4868,7 +4868,8 @@ public class VirtualMachine {
             for (int i = 0; i < numFields; i++) {
                 int word = readInt32(ownerBitmapBase + (i >>> 5) * 4);
                 if (((word >> (i & 31)) & 1) != 0) {
-                    int childRef = readInt32(headerAddr + OBJ_HEADER_SIZE + i * 4);
+                    // V4: sub-campo owner = ref plana 8B (bit en el 1er slot; addr en el low word).
+                    int childRef = refLoad(memory, headerAddr + OBJ_HEADER_SIZE + i * 4);
                     freeOwnedObjectLocked(childRef);
                 }
             }

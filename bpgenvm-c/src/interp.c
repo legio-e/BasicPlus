@@ -437,6 +437,49 @@ static void emit_double(bpvm_t* vm, double v, int newline) {
     emit_text(vm, buf, (size_t) n);
 }
 
+/* V4 / H-006: liberación determinista y RECURSIVA de un ref owned — espejo de
+ * freeOwnedObjectLocked de miVM. Recorre el owner-bitmap del descriptor de clase
+ * y libera en cascada los sub-campos owner; para arrays de refs owned libera cada
+ * slot. Al final libera el bloque contenedor sea cual sea su tipo (objeto, array
+ * de refs, array de primitivos o string). Cada bloque queda CONSISTENTE
+ * (size@+4 + free-list) vía bpvm_heap_free_block. NOP en null / fuera del heap /
+ * ya-libre (FREE_BIT), lo que hace la recursión segura ante alias.
+ *
+ * El sub-campo owner es una ref PLANA de 8B: el bit del owner-bitmap está en el
+ * 1er slot del campo (offset i*4 = high word), la dirección va en el low word;
+ * bpref_load lo decodifica. Las direcciones ocupan 2 slots pero el bit sólo está
+ * en el primero, así que el barrido por slot no lo procesa dos veces. */
+static void bpvm_free_owned(bpvm_t* vm, bpref_t r) {
+    if (bpref_is_null(r)) return;
+    uint32_t addr = bpref_deref(vm, r);
+    if (addr < vm->heap_start || addr >= vm->heap_next) return;   /* no-heap: NOP */
+    uint32_t header = addr - 4u;
+    uint32_t tag = bpvm_read_u32_be(vm->memory + header);
+    if ((tag & BPVM_TAG_FREE_BIT) != 0) return;                    /* ya libre */
+    int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
+
+    if (type == BPVM_TYPE_OBJECT) {
+        uint32_t class_ptr    = bpvm_read_u32_be(vm->memory + header + 4u);
+        uint32_t num_fields   = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_NUM_FIELDS);
+        uint32_t bitmap_words = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_BITMAP_WORDS);
+        uint32_t owner_base   = class_ptr + BPVM_CLS_OFF_FIELD_BITMAP + bitmap_words * 4u;
+        for (uint32_t i = 0; i < num_fields; i++) {
+            uint32_t word = bpvm_read_u32_be(vm->memory + owner_base + (i >> 5) * 4u);
+            if (((word >> (i & 31)) & 1u) != 0u) {
+                bpref_t child = bpref_load(vm, header + BPVM_OBJ_HEADER_SIZE + i * 4u);
+                bpvm_free_owned(vm, child);
+            }
+        }
+    } else if (type == BPVM_TYPE_ARRAY_REF) {
+        uint32_t length = bpvm_read_u32_be(vm->memory + addr);
+        for (uint32_t i = 0; i < length; i++) {
+            bpref_t slot = bpref_load(vm, addr + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE);
+            bpvm_free_owned(vm, slot);
+        }
+    }
+    bpvm_heap_free_block(vm, header);   /* H-010: bloque consistente */
+}
+
 /* Ejecuta el thread `tc` durante hasta `max_ops` opcodes o hasta que
  * el thread ceda (yield, sleep, mutex_lock contended, join, HALT,
  * THREAD_EXIT). Setea *yielded a 1 si cedió, 0 si quedó RUNNABLE
@@ -1505,40 +1548,21 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
 
         case OP_FREE_REF: {
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (!bpref_is_null(obj)) {
-                /* Sólo objetos. Para arrays / strings, NOP. */
-                uint32_t header = bpref_deref(vm, obj) - 4;
-                uint32_t tag = bpvm_read_u32_be(mem + header);
-                int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
-                if (type == BPVM_TYPE_OBJECT) {
-                    /* TODO (H-006, V4): recorrer owner_bitmap y FREE_REF recursivo
-                     * de los fields owners. F3 v1 sólo libera el objeto raíz. */
-                    /* H-010: dejar el bloque CONSISTENTE (size@+4 + free-list), no
-                     * solo FREE_BIT, o el recorrido del heap se desincroniza. */
-                    bpvm_heap_free_block(vm, header);
-                }
-            }
+            /* V4/H-006: cascada recursiva (owners + arrays de refs + cualquier tipo).
+             * Antes era root-only y solo objetos → divergía de miVM y dejaba leaks. */
+            bpvm_free_owned(vm, obj);
             break;
         }
 
         case OP_SET_FIELD_OWNER: {
             uint8_t slot = mem[pc++];
-            sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);   /* valor 4B preservado (owner ref; revisar en 4b/listas) */
+            sp -= BPVM_REF_SIZE; bpref_t val = bpref_load(vm, sp);   /* V4: valor = ref nueva (8B; era 4B → drift + high-word) */
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
             uint32_t field_addr = bpref_deref(vm, obj) + BPVM_ARR_DATA_OFF + (uint32_t) slot * 4u;
-            uint32_t old_val = (uint32_t) bpvm_read_i32_be(mem + field_addr);
-            if (old_val != 0) {
-                uint32_t old_header = old_val - 4;
-                if (old_val >= vm->heap_start && old_val < vm->heap_next) {
-                    uint32_t otag = bpvm_read_u32_be(mem + old_header);
-                    int otype = (int)((otag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
-                    if (otype == BPVM_TYPE_OBJECT) {
-                        bpvm_heap_free_block(vm, old_header);   /* H-010: bloque consistente */
-                    }
-                }
-            }
-            bpvm_write_i32_be(mem + field_addr, v);
+            bpref_t old = bpref_load(vm, field_addr);               /* V4: ref vieja (8B flat; era readi32=high-word=0 → leak) */
+            bpvm_free_owned(vm, old);   /* V4/H-006: cascada recursiva; era root-only + solo objetos */
+            bpref_store(vm, field_addr, val);   /* V4: escribe ref plana 8B */
             break;
         }
 
