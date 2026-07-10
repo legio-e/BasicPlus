@@ -427,6 +427,11 @@ static inline uint32_t bpref_arr_len(const bpvm_t* vm, bpref_t arr) {
 static inline uint8_t* bpref_arr_elem(bpvm_t* vm, bpref_t arr, uint32_t idx, uint32_t elem_size) {
     return vm->memory + bpref_deref(vm, arr) + BPVM_ARR_DATA_OFF + idx * elem_size;
 }
+/* Puntero al campo `slot` de un objeto. Layout: user_ref -> [class_ptr u32][campos...]
+ * (mismo +4 que arrays). El slot es de 4 bytes; el valor puede ser 4 u 8B. */
+static inline uint8_t* bpref_field(bpvm_t* vm, bpref_t obj, uint32_t slot) {
+    return vm->memory + bpref_deref(vm, obj) + BPVM_ARR_DATA_OFF + slot * 4u;
+}
 
 /* ---- H2 (V2): helpers UTF-8 sobre el payload de un string byte[] ----
  * Fuente UNICA para el intérprete (builtins.c) y el AOT (bpvm_aot_helpers.c):

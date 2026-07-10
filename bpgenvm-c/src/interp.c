@@ -1397,36 +1397,36 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_GET_FIELD: {
             uint8_t slot = mem[pc++];
-            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
-            if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
-            int32_t v = bpvm_read_i32_be(mem + ref + 4 + (uint32_t) slot * 4);
+            sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
+            if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            int32_t v = bpvm_read_i32_be(bpref_field(vm, obj, slot));
             bpvm_write_i32_be(mem + sp, v); sp += 4;
             break;
         }
         case OP_SET_FIELD: {
             uint8_t slot = mem[pc++];
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
-            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
-            if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
-            bpvm_write_i32_be(mem + ref + 4 + (uint32_t) slot * 4, v);
+            sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
+            if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            bpvm_write_i32_be(bpref_field(vm, obj, slot), v);
             break;
         }
-        /* BUG-6: campos de instancia de 8 bytes (long/double). slot = índice de
-         * slot de 4 bytes; el valor ocupa 2 slots consecutivos en ref+4+slot*4. */
+        /* BUG-6: campos de instancia de 8 bytes (long/double/ref). slot = índice de
+         * slot de 4 bytes; el valor ocupa 2 slots consecutivos en el campo. */
         case OP_GET_FIELD_LONG: {
             uint8_t slot = mem[pc++];
-            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
-            if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
-            int64_t v = bpvm_read_i64_be(mem + ref + 4 + (uint32_t) slot * 4);
+            sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
+            if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            int64_t v = bpvm_read_i64_be(bpref_field(vm, obj, slot));
             bpvm_write_i64_be(mem + sp, v); sp += 8;
             break;
         }
         case OP_SET_FIELD_LONG: {
             uint8_t slot = mem[pc++];
             sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
-            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
-            if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
-            bpvm_write_i64_be(mem + ref + 4 + (uint32_t) slot * 4, v);
+            sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
+            if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            bpvm_write_i64_be(bpref_field(vm, obj, slot), v);
             break;
         }
 
@@ -1523,10 +1523,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
 
         case OP_SET_FIELD_OWNER: {
             uint8_t slot = mem[pc++];
-            sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
-            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: ref = 8 bytes */
-            if (ref == 0) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
-            uint32_t field_addr = ref + 4 + (uint32_t) slot * 4;
+            sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);   /* valor 4B preservado (owner ref; revisar en 4b/listas) */
+            sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
+            if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            uint32_t field_addr = bpref_deref(vm, obj) + BPVM_ARR_DATA_OFF + (uint32_t) slot * 4u;
             uint32_t old_val = (uint32_t) bpvm_read_i32_be(mem + field_addr);
             if (old_val != 0) {
                 uint32_t old_header = old_val - 4;
