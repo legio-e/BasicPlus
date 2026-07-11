@@ -445,9 +445,13 @@ void bpvm_handle_kill(bpvm_t* vm, bpref_t r);
  * (opcodes de campo/array/invoke) para gritar "objeto eliminado". */
 static inline int bpvm_ref_dead(const bpvm_t* vm, bpref_t r) {
     if ((r.v & BPVM_HANDLE_TAG) == 0u) return 0;
-    uint32_t idx = r.v & ~BPVM_HANDLE_TAG;
+    uint32_t idx = (uint32_t) r.v & ~BPVM_HANDLE_TAG;
+    uint32_t gen = (uint32_t) (r.v >> 32);   /* generación embebida en la palabra alta */
+    /* Paso 4b: compara la gen del handle con la del slot. Monotónico → todo handle
+     * lleva gen=0, equivale al dead-flag; en 4c (reuso) un slot reciclado tiene gen
+     * bumpeada y un handle rancio no matchea → grita. */
     return (vm->handle_gen != NULL && idx > 0u && idx < vm->handle_next
-            && vm->handle_gen[idx] != 0u) ? 1 : 0;
+            && vm->handle_gen[idx] != gen) ? 1 : 0;
 }
 
 /* Resolver una referencia a su offset en memory[] (DÓNDE vive el objeto). LA

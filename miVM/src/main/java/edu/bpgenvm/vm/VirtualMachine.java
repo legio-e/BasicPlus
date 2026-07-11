@@ -578,11 +578,10 @@ public class VirtualMachine {
     // llega en pasos 3-4). slot 0 = null. Con el GC suspendido no se recicla, y
     // los samples cortos no agotan la tabla (crece por duplicación si hiciera falta).
     private int[] handleAddr = new int[4096];
-    // Paso 3 — GENERACIÓN por índice (contrato B). Monotónica-no-reuso todavía:
-    // 0 = vivo; >0 = LIBERADO (muerto). El deref de PROGRAMA (requireAlive) lanza
-    // "objeto eliminado" si el índice está muerto → use-after-free que grita y salta.
-    // Es la generación de 1 bit: el ensanche a handle 64b (gen en los 32 altos) llega
-    // en el paso 4 con el reuso de slots, donde distinguir ocupante viejo/nuevo lo exige.
+    // GENERACIÓN por índice (contrato B). 0 = slot fresco; se incrementa en cada
+    // owner-free. El handle 64b lleva la gen que tenía el slot al mintearse; el deref
+    // valida gen(handle)==gen(slot) → un handle a un slot RECICLADO (gen bumpeada) no
+    // matchea y grita "objeto eliminado".
     private int[] handleGen  = new int[4096];
     private int   handleNext = 1;   // 0 reservado para null
 
@@ -1570,14 +1569,17 @@ public class VirtualMachine {
         }
         int idx = handleNext++;
         handleAddr[idx] = addr;
-        handleGen[idx]  = 0;   // vivo
-        // 4a: devuelve idx|TAG (int). bit31=0 → al almacenarse en 8B se zero-extiende
-        // (gen=0 en la palabra alta). En 4b devolverá long con gen<<32 | (idx|TAG).
+        handleGen[idx]  = 0;   // slot fresco
+        // 4b: devuelve idx|TAG (int, gen=0 al zero-extenderse en el store de 8B). El
+        // handle 64b con gen != 0 (para slots RECICLADOS) llega en 4c, donde esto
+        // pasa a long = gen(slot)<<32 | (idx|TAG) y se reusan slots de la free-list.
         return idx | HANDLE_TAG;
     }
 
-    /** Paso 3 — marca MUERTO el índice de un handle (owner-free). No-op para null y
-     *  constantes. Idempotente. El TAG_FREE_BIT del bloque físico evita el doble-free real. */
+    /** Contrato B — libera el slot de un handle (owner-free): BUMP de la generación
+     *  → los handles rancios dejan de matchear (gen(handle) != gen(slot)) y gritan.
+     *  No-op para null/constantes. El TAG_FREE_BIT del bloque físico evita el doble-free
+     *  real. Paso 4c: aquí además se reciclará el índice a la free-list para reuso. */
     private void handleKill(long ref) {
         if ((ref & HANDLE_TAG) == 0) return;
         int idx = handleIdx(ref);
@@ -1593,7 +1595,11 @@ public class VirtualMachine {
     private void requireAlive(ThreadContext tc, int sp, long ref) {
         if ((ref & HANDLE_TAG) == 0) return;           // null/constante: siempre vivo
         int idx = handleIdx(ref);
-        if (idx > 0 && idx < handleNext && handleGen[idx] != 0) {
+        // Paso 4b: compara la GENERACIÓN del handle con la del slot. En régimen
+        // monotónico (4b) todo handle minteado lleva gen=0, así que esto equivale al
+        // dead-flag (handleGen[idx]!=0); en 4c, con reuso, un slot reciclado tiene
+        // gen bumpeada y un handle rancio (gen vieja) NO matchea → grita.
+        if (idx > 0 && idx < handleNext && handleGen[idx] != handleGenOf(ref)) {
             tc.sp = sp;
             throwBpRuntimeError(tc, "referencia a objeto eliminado (use-after-free)");
         }
