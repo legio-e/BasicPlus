@@ -318,8 +318,8 @@ static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t d
  *     BPVM_ERR_RUNTIME y el dispatcher termina el quantum con error.
  * tc->cs ya está fijado por el dispatcher (lo necesita throw_runtime_error). */
 static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
-    uint32_t ref = bpvm_throw_runtime_error(vm, tc, msg);
-    return (ref && bpvm_eh_unwind(vm, tc, ref)) ? BPVM_OK : BPVM_ERR_RUNTIME;
+    bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+    return (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) ? BPVM_OK : BPVM_ERR_RUNTIME;
 }
 
 #ifdef BPVM_GUI

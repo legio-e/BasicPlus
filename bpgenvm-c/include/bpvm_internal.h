@@ -631,14 +631,14 @@ void bpvm_eh_pop(bpvm_thread_t* tc);
  * Devuelve el ref alocado (también queda en tc.alloc_anchor para que
  * el GC no lo libere). Si no encuentra la clase RuntimeError (módulo
  * no la exporta), devuelve 0 y el caller debe abortar el thread. */
-uint32_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
-                                   const char* msg);
+bpref_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
+                                  const char* msg);   /* V4: devuelve el handle 64b (gen); bpref_null() si no hay clase */
 
 /* Realiza el unwind del stack para encontrar un handler que matchee.
  * Si encuentra: ajusta tc->pc/sp/bp/cs y deja `ref` en el top. Si no,
  * deja tc en estado terminado con stack trace al stderr. Devuelve 1
  * si fue atrapado, 0 si no. */
-int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref);
+int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref);   /* V4: ref de excepción = handle 64b (gen preservada) */
 
 /* ---- #186: boundary de fault para código AOT native ----
  *

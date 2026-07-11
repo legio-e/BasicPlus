@@ -805,12 +805,14 @@ public class VirtualMachine {
      *  el contenido del string, o null si el ref no apunta a un objeto
      *  con un campo string válido. Tolerante a referencias inválidas
      *  (usado por el path de "uncaught"). */
-    private String readRuntimeErrorMsg(int objRef) {
+    private String readRuntimeErrorMsg(long objRef) {
         try {
-            if (objRef <= 0) return null;
-            int msgRef = (int) readI64(memory, objRef + 4 + 0 * 4);   // H1.2a: msg es ref 8B (low32)
-            if (msgRef <= 0) return null;
-            return readStringIfPossible(msgRef);
+            int addr = refDeref(objRef);   // V4: el ref de excepción es un handle → dirección física
+            if (addr <= 0) return null;
+            long msgRef = readI64(memory, addr + 4 + 0 * 4);   // msg = handle 64b (campo slot 0)
+            int msgAddr = refDeref(msgRef);
+            if (msgAddr <= 0) return null;
+            return readStringIfPossible(msgAddr);
         } catch (Throwable t) {
             return null;
         }
@@ -850,12 +852,12 @@ public class VirtualMachine {
             writeI64(memory, objAddr + 4 + 0 * 4, msgRef);
             objH = handleRegister(objAddr);   // addr → handle 64b (tras escribir todos los campos)
             // Empujamos el ref al stack del thread; el dispatcher hará el pop en el
-            // unwind. NOTA: el push/pop de esta ruta (throwBpRuntimeError↔catch
-            // BpExceptionPending) es a 4 BYTES → la gen se pierde. Inocuo mientras el
-            // GC esté suspendido (los objetos-excepción/strings nunca se reciclan → gen=0);
-            // el paso 6 (GC handle-aware) debe ensanchar esta ruta a 8B si se reusan sus slots.
-            writeInt32(tc.sp, (int) objH);
-            tc.sp += 4;
+            // unwind. 8 BYTES = handle 64b completo (gen preservada): el objeto-excepción
+            // puede caer en un slot RECICLADO (gen>0); si se empujara a 4B la gen se perdería
+            // y el catch, al leer e.msg (requireAlive), vería gen-mismatch y re-lanzaría
+            // (lo cazó uafcascade). El catch BpExceptionPending pop-ea 8B a juego.
+            writeI64(memory, tc.sp, objH);
+            tc.sp += 8;
             // B1 residual — anclamos al thread para que el GC no lo libere entre soltar
             // vmLock y el unwind. El ancla es idx|TAG (refDeref dead-tolerant).
             tc.allocAnchor = (int) objH;
@@ -3270,8 +3272,8 @@ public class VirtualMachine {
                 // convertimos a BpThreadFault para que WorkerLoop termine
                 // el thread con un mensaje legible.
                 sp = tc.sp;
-                sp -= 4;
-                int v = readI32(mem, sp);
+                sp -= 8;
+                long v = readI64(mem, sp);   // V4: excepción ref = handle 64b (gen preservada)
                 int thrownClass = classPtrOfRefOr0(v);
                 boolean handled = false;
                 while (ehHandlerPc != -1) {
@@ -3285,7 +3287,7 @@ public class VirtualMachine {
                     ehSavedCs = prev[3]; ehExpectedClass = prev[4];
                     if (matches) {
                         sp = savedSp; bp = savedBp; cs = savedCs; pc = handlerPc;
-                        writeI64(mem, sp, ((long) v) & 0xFFFFFFFFL); sp += 8;   // H1.2a: excepción ref = 8 bytes
+                        writeI64(mem, sp, v); sp += 8;   // V4: excepción ref = handle 64b completo (gen preservada)
                         handled = true;
                         break;
                     }

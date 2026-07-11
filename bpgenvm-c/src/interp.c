@@ -112,9 +112,9 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
     /* #213 — si el native dejó una excepción YA construida (throw_ref de una
      * clase de usuario via factory), propagarla tal cual; si no, construir el
      * RuntimeError clásico con el mensaje del fault-slot. */
-    uint32_t obj;
+    bpref_t obj;
     if (f->pending_ref != 0) {
-        obj = f->pending_ref;
+        obj.v = f->pending_ref;   /* V4: ref de clase de usuario (idx|TAG, gen=0 en migración) */
         f->pending_ref = 0;
     } else {
         obj = bpvm_throw_runtime_error(vm, tc, f->msg);
@@ -303,8 +303,8 @@ static int interp_throw_rt(bpvm_t* vm, bpvm_thread_t* tc,
                            uint32_t* sp, uint32_t* bp, uint32_t* pc, uint32_t* cs,
                            uint8_t** mem, const char* msg) {
     tc->sp = *sp; tc->bp = *bp; tc->pc = *pc; tc->cs = *cs;
-    uint32_t ref = bpvm_throw_runtime_error(vm, tc, msg);
-    if (ref && bpvm_eh_unwind(vm, tc, ref)) {
+    bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+    if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
         *pc = tc->pc; *sp = tc->sp; *bp = tc->bp; *cs = tc->cs;
         *mem = vm->memory;
         return 1;
@@ -631,8 +631,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                        sp -= 4; int32_t a = bpvm_read_i32_be(mem+sp);
                        if (b == 0) {
                            tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                           uint32_t ref = bpvm_throw_runtime_error(vm, tc, "División por cero");
-                           if (ref && bpvm_eh_unwind(vm, tc, ref)) {
+                           bpref_t ref = bpvm_throw_runtime_error(vm, tc, "División por cero");
+                           if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                                pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                                mem = vm->memory;
                                break;
@@ -646,8 +646,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                        sp -= 4; int32_t a = bpvm_read_i32_be(mem+sp);
                        if (b == 0) {
                            tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                           uint32_t ref = bpvm_throw_runtime_error(vm, tc, "Módulo por cero");
-                           if (ref && bpvm_eh_unwind(vm, tc, ref)) {
+                           bpref_t ref = bpvm_throw_runtime_error(vm, tc, "Módulo por cero");
+                           if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                                pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                                mem = vm->memory;
                                break;
@@ -1061,8 +1061,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                         sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
                         if (b == 0) {
                             tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                            uint32_t ref = bpvm_throw_runtime_error(vm, tc, "División por cero");
-                            if (ref && bpvm_eh_unwind(vm, tc, ref)) {
+                            bpref_t ref = bpvm_throw_runtime_error(vm, tc, "División por cero");
+                            if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                                 pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                                 mem = vm->memory; break;
                             }
@@ -1075,8 +1075,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                         sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
                         if (b == 0) {
                             tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                            uint32_t ref = bpvm_throw_runtime_error(vm, tc, "Módulo por cero");
-                            if (ref && bpvm_eh_unwind(vm, tc, ref)) {
+                            bpref_t ref = bpvm_throw_runtime_error(vm, tc, "Módulo por cero");
+                            if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                                 pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                                 mem = vm->memory; break;
                             }
@@ -1202,8 +1202,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                         sp -= 4; int32_t base = bpvm_read_i32_be(mem+sp);
                         if (e < 0) {
                             tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                            uint32_t ref = bpvm_throw_runtime_error(vm, tc, "exponente negativo en potencia entera");
-                            if (ref && bpvm_eh_unwind(vm, tc, ref)) { pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs; mem = vm->memory; break; }
+                            bpref_t ref = bpvm_throw_runtime_error(vm, tc, "exponente negativo en potencia entera");
+                            if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) { pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs; mem = vm->memory; break; }
                             exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done;
                         }
                         int32_t r = 1, bb = base;
@@ -1213,8 +1213,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                         sp -= 8; int64_t base = bpvm_read_i64_be(mem+sp);
                         if (e < 0) {
                             tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                            uint32_t ref = bpvm_throw_runtime_error(vm, tc, "exponente negativo en potencia entera");
-                            if (ref && bpvm_eh_unwind(vm, tc, ref)) { pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs; mem = vm->memory; break; }
+                            bpref_t ref = bpvm_throw_runtime_error(vm, tc, "exponente negativo en potencia entera");
+                            if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) { pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs; mem = vm->memory; break; }
                             exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done;
                         }
                         int64_t r = 1, bb = base;
@@ -1662,7 +1662,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
         case OP_THROW: {
-            sp -= 8; uint32_t ref = (uint32_t) bpvm_read_i64_be(mem + sp);   /* H1.2a: excepción ref = 8 bytes */
+            sp -= 8; bpref_t ref; ref.v = (uint64_t) bpvm_read_i64_be(mem + sp);   /* V4: excepción ref = handle 64b completo (gen) */
             tc->pc = pc; tc->sp = sp; tc->bp = bp; tc->cs = cs;
             int caught = bpvm_eh_unwind(vm, tc, ref);
             if (!caught) {

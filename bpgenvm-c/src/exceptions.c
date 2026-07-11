@@ -56,10 +56,10 @@ static int is_descendant_of(const bpvm_t* vm, uint32_t obj_class, uint32_t targe
     return 0;
 }
 
-int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
+int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
     uint32_t thrown_class = 0;
-    if (ref != 0) {
-        thrown_class = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, bpref_from_addr(ref)));
+    if (!bpref_is_null(ref)) {
+        thrown_class = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, ref));
     }
     /* Busca un handler que matchee, desde el top hacia abajo. */
     while (tc->eh_stack_size > 0) {
@@ -72,8 +72,10 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
             tc->bp = (uint32_t) e.saved_bp;
             tc->cs = (uint32_t) e.saved_cs;
             tc->pc = (uint32_t) e.handler_pc;
-            /* Push ref para que el catch lo reciba como local. H1.2a: ref = 8 bytes. */
-            bpvm_write_i64_be(vm->memory + tc->sp, (int64_t)(uint32_t) ref);
+            /* Push ref para que el catch lo reciba como local. V4: handle 64b COMPLETO
+             * (gen preservada) — si se truncara a 32b, un objeto-excepción en slot
+             * reciclado (gen>0) daría gen-mismatch al leer e.msg y re-lanzaría. */
+            bpvm_write_i64_be(vm->memory + tc->sp, (int64_t) ref.v);
             tc->sp += 8;
             return 1;
         }
@@ -82,11 +84,11 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
     }
     /* Sin handler: print error + terminar thread. */
     fprintf(stderr, "[bpvm-c] excepción no atrapada en tid=%" PRId32 "\n", tc->id);
-    if (ref != 0) {
+    if (!bpref_is_null(ref)) {
         /* Intenta leer field 0 = msg (asumiendo layout RuntimeError). */
-        int32_t msg_ref = (int32_t) bpvm_read_i64_be(vm->memory + bpref_deref(vm, bpref_from_addr(ref)) + 4);   /* H1.2a: campo ref = 8B */
-        if (msg_ref > 0) {
-            uint32_t msg_addr = bpref_deref(vm, bpref_from_addr((uint32_t) msg_ref));   /* V4: handle→addr */
+        bpref_t msg_r; msg_r.v = (uint64_t) bpvm_read_i64_be(vm->memory + bpref_deref(vm, ref) + 4);   /* msg = handle 64b */
+        if (msg_r.v != 0u) {
+            uint32_t msg_addr = bpref_deref(vm, msg_r);   /* handle→addr */
             uint32_t mlen = bpvm_read_u32_be(vm->memory + msg_addr);   /* H2: bytes UTF-8 */
             char buf[256]; size_t n = 0;
             for (uint32_t i = 0; i < mlen && n < sizeof(buf) - 1; i++) {
@@ -100,8 +102,8 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
     return 0;
 }
 
-uint32_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
-                                   const char* msg) {
+bpref_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
+                                  const char* msg) {
     /* Buscar el class_ptr de RuntimeError exportado por algún módulo.
      * El frontend Java sintetiza la clase y la exporta como data
      * symbol "<lib>.<mod>.RuntimeError" / "<mod>.RuntimeError" — la
@@ -142,28 +144,28 @@ have_class:
          * equivalente (= terminar thread). Aquí imprimimos al menos. */
         fprintf(stderr, "[bpvm-c] RuntimeError sin clase exportada: %s\n",
                 msg ? msg : "");
-        return 0;
+        return bpref_null();
     }
 
     /* Alocar el string del mensaje. */
     size_t mlen = msg ? strlen(msg) : 0;
     uint32_t msg_ref = bpvm_heap_alloc_string(vm, msg ? msg : "", mlen);
-    if (msg_ref == 0) return 0;
+    if (msg_ref == 0) return bpref_null();
 
     /* Alocar el objeto RuntimeError. */
     uint16_t num_fields = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_NUM_FIELDS);
-    uint32_t obj_ref = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4, BPVM_TYPE_OBJECT);
-    if (obj_ref == 0) return 0;
-    bpvm_write_u32_be(vm->memory + obj_ref, class_ptr);
-    /* slot 0 = msg (convención del frontend). */
+    uint32_t obj_addr = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4, BPVM_TYPE_OBJECT);
+    if (obj_addr == 0) return bpref_null();
+    bpvm_write_u32_be(vm->memory + obj_addr, class_ptr);
+    /* slot 0 = msg (convención del frontend). Guardamos el handle completo del msg. */
     if (num_fields > 0) {
-        bpvm_write_i64_be(vm->memory + obj_ref + 4 + 0 * 4, (int64_t)(uint32_t) msg_ref);   /* H1.2a: campo ref = 8B */
+        bpvm_write_i64_be(vm->memory + obj_addr + 4 + 0 * 4, (int64_t)(uint32_t) msg_ref);   /* msg: idx|TAG (gen=0 string) */
     }
-    obj_ref = (uint32_t) bpvm_handle_register(vm, obj_ref).v;   /* V4: idx|TAG (gen=0; excepción no se recicla en migración → paso 6) */
+    bpref_t obj_h = bpvm_handle_register(vm, obj_addr);   /* V4: handle 64b (gen preservada — clave si el slot fue reciclado) */
 
     /* Anclar para GC; el caller decide si pasarlo a eh_unwind o usarlo
      * de otra forma. No tocamos el stack BP aquí — eso lo hace
-     * eh_unwind tras encontrar handler. */
-    tc->alloc_anchor = (int32_t) obj_ref;
-    return obj_ref;
+     * eh_unwind tras encontrar handler. El ancla es idx|TAG. */
+    tc->alloc_anchor = (int32_t) (uint32_t) obj_h.v;
+    return obj_h;
 }
