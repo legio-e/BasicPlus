@@ -1160,7 +1160,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * corrupción al almacenar el elemento cap/2 en adelante). heap_alloc
          * zero-inicializa el payload, así que los slots quedan nulos. */
         uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) cap * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
-        if (ref == 0) return BPVM_ERR_OOM;
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) cap);
                 bpref_push(vm, tc, bpvm_handle_register(vm, ref));
         return BPVM_OK;
@@ -1176,7 +1176,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t od = (old_ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(old_ref));   /* V4: fuente handle→addr */
         uint32_t old_len = (od == 0) ? 0 : bpvm_read_u32_be(vm->memory + od);
         uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) new_cap * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
-        if (new_ref == 0) return BPVM_ERR_OOM;
+        if (new_ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
         bpvm_write_u32_be(vm->memory + new_ref, (uint32_t) new_cap);
         uint32_t copy = (old_len < (uint32_t) new_cap) ? old_len : (uint32_t) new_cap;
         for (uint32_t i = 0; i < copy; i++) {   /* ref plana 8B/elem, vía la frontera de codificación */
@@ -1194,7 +1194,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t od = (old_ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(old_ref));   /* V4: fuente handle→addr */
         uint32_t old_len = (od == 0) ? 0 : bpvm_read_u32_be(vm->memory + od);
         uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) new_cap * 4, BPVM_TYPE_ARRAY_I32);
-        if (new_ref == 0) return BPVM_ERR_OOM;
+        if (new_ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
         bpvm_write_u32_be(vm->memory + new_ref, (uint32_t) new_cap);
         uint32_t copy = (old_len < (uint32_t) new_cap) ? old_len : (uint32_t) new_cap;
         for (uint32_t i = 0; i < copy; i++) {
@@ -1219,7 +1219,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint8_t tmp[4]; total += utf8_encode(cp, tmp);
         }
         uint32_t new_ref = bpvm_heap_alloc(vm, total, BPVM_TYPE_ARRAY_I8);
-        if (new_ref == 0) return BPVM_ERR_OOM;
+        if (new_ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
         bpvm_write_u32_be(vm->memory + new_ref, total);   /* new_ref: alloc fresca (dirección física) */
         uint32_t w = 0;
         for (uint32_t i = 0; i < (uint32_t) len; i++) {
@@ -1240,7 +1240,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t rd = (ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(ref));   /* V4: fuente handle→addr */
         uint32_t n = (rd == 0) ? 0 : bpvm_read_u32_be(vm->memory + rd);
         uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
-        if (out == 0) return BPVM_ERR_OOM;
+        if (out == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
         bpvm_write_u32_be(vm->memory + out, n);
         for (uint32_t i = 0; i < n; i++) vm->memory[out + 4 + i] = vm->memory[rd + 4 + i];
                 bpref_push(vm, tc, bpvm_handle_register(vm, out));   /* H1.2a: string ref result = 8 bytes */
@@ -1520,7 +1520,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (size < 0) return BPVM_ERR_RUNTIME;
         uint32_t bytes = (uint32_t) size * 4u;
         uint32_t ref = bpvm_heap_alloc(vm, bytes, BPVM_TYPE_ARRAY_I32);
-        if (ref == 0) return BPVM_ERR_OOM;
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) size);
         /* bpvm_heap_alloc ya zero-init (memset en heap.c). */
                 bpref_push(vm, tc, bpvm_handle_register(vm, ref));

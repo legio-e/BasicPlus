@@ -1,0 +1,31 @@
+// OomCatch.bp — H1: agotar el heap debe saltar un RuntimeError ATRAPABLE
+// ("No space in heap"), NUNCA colgarse mudo. Cadena de nodos que crece
+// (todos vivos, alcanzables desde head → el GC no libera) hasta OOM.
+module OomCatch
+  class Node
+    var nxt: Node
+    var buf: integer[]
+    public function Node(prev: Node, sz: integer)
+      this.nxt := prev
+      this.buf := newIntArray(sz)
+    end Node
+  end Node
+
+  function Main()
+    var head: Node
+    var count: integer := 0
+    var caught: integer := 0
+    try
+      var i: integer := 0
+      while i < 100000 do
+        head := Node(head, 2000)   // 8 KB/nodo, todos vivos → agota el heap
+        count := count + 1
+        i := i + 1
+      endwh
+    catch e: RuntimeError
+      caught := 1
+      print "cazado OOM:", e.msg
+    endtry
+    print "vivo tras OOM, caught =", caught
+  end Main
+end OomCatch

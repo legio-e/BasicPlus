@@ -592,6 +592,13 @@ public class VirtualMachine {
     private int   handleFreeTop  = 0;
     private int   handleNext = 1;   // 0 reservado para null
 
+    // H1 — guarda anti-recursión del OOM: al quedarse sin heap, la alocación lanza un
+    // RuntimeError BP ATRAPABLE, pero CONSTRUIR ese objeto-excepción vuelve a alocar; si
+    // eso también OOMea, sin esta bandera recurriríamos hasta el StackOverflow. Con la
+    // bandera, el 2º OOM cae al fallback incatchable (BpThreadFault). Se resetea en cada
+    // alocación con éxito (la de la propia excepción → deja la bandera limpia al lanzar).
+    private boolean throwingOom = false;
+
     // Paso 7c — A1 publicación segura: la VM-C pone RELEASE/ACQUIRE explícitos en el slot
     // (bpref_deref/handle_register, atómicos C11) porque VA a placa ARM/RISC-V. miVM es la
     // VM de HOST (x86, memoria fuerte) y NO se despliega a placa → aquí el RELEASE lo da
@@ -1129,6 +1136,7 @@ public class VirtualMachine {
                 // medias otro worker dispara GC, scanRegion ve este ancla
                 // y marca el objeto como vivo.
                 if (me != null) me.allocAnchor = userRef;
+                throwingOom = false;   // H1: alocación con éxito → limpia la guarda
                 return userRef;
             }
 
@@ -1141,8 +1149,17 @@ public class VirtualMachine {
             gcSafepoint(myTid);
             addr = tryAllocateInner(totalSize);
             if (addr == -1) {
-                throw new RuntimeException("Heap overflow tras GC: pido " + totalSize
-                        + " bytes; libre=" + (STACK_BASE - heapNext));
+                // H1 — OOM tras GC: RuntimeError BP ATRAPABLE (nunca colgar ni matar la VM
+                // en silencio). throwBpRuntimeError construye el objeto (re-entra heapAlloc,
+                // reentrante bajo vmLock); la guarda throwingOom evita recursión si NI la
+                // excepción cabe → fallback incatchable (BpThreadFault).
+                if (throwingOom || me == null) {
+                    throw new BpThreadFault("No space in heap (ni para la excepción): pido "
+                            + totalSize + " bytes; libre=" + (STACK_BASE - heapNext));
+                }
+                throwingOom = true;
+                throwBpRuntimeError(me, "No space in heap");   // lanza BpExceptionPending
+                // (inalcanzable)
             }
             int tag = (type << TAG_TYPE_SHIFT);
             writeInt32(addr, tag);
@@ -1150,6 +1167,7 @@ public class VirtualMachine {
             // Mismo zero-init que la ruta sin GC (paridad VM-C).
             java.util.Arrays.fill(memory, userRef2, userRef2 + 4 + payloadBytes, (byte) 0);
             if (me != null) me.allocAnchor = userRef2;
+            throwingOom = false;   // H1: alocación con éxito → limpia la guarda
             return userRef2;
         }
     }

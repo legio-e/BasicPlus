@@ -1162,7 +1162,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
             if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 8, BPVM_TYPE_ARRAY_I64);
-            if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
+            if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
                         bpref_store(vm, sp, bpvm_handle_register(vm, ref)); sp += BPVM_REF_SIZE;
             mem = vm->memory;
@@ -1282,7 +1282,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
             if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 4, BPVM_TYPE_ARRAY_I32);
-            if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
+            if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
                         bpref_store(vm, sp, bpvm_handle_register(vm, ref)); sp += BPVM_REF_SIZE;
             mem = vm->memory;  /* heap_alloc no realoca pero defensivo */
@@ -1292,7 +1292,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
             if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size, BPVM_TYPE_ARRAY_I8);
-            if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
+            if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
                         bpref_store(vm, sp, bpvm_handle_register(vm, ref)); sp += BPVM_REF_SIZE;
             break;
@@ -1301,7 +1301,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t size = bpvm_read_i32_be(mem + sp);
             if (size < 0) { exit_status = BPVM_ERR_RUNTIME; goto done; }
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 2, BPVM_TYPE_ARRAY_I16);
-            if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
+            if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
                         bpref_store(vm, sp, bpvm_handle_register(vm, ref)); sp += BPVM_REF_SIZE;
             break;
@@ -1448,7 +1448,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                                                     + BPVM_CLS_OFF_NUM_FIELDS);
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4,
                                             BPVM_TYPE_OBJECT);
-            if (ref == 0) { exit_status = BPVM_ERR_OOM; goto done; }
+            if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
             bpvm_write_u32_be(mem + ref, class_ptr);   /* slot[0] = class_ptr (alloc fresca) */
             /* fields ya zeroed por heap_alloc. */
                         bpref_store(vm, sp, bpvm_handle_register(vm, ref)); sp += BPVM_REF_SIZE;

@@ -58,7 +58,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -282,6 +282,27 @@ test-smphandles: $(LIBOBJ)
 	@echo "--- concurrente 4 y 8 threads (0 = tabla SMP-safe) ---"
 	-./$(SMPH_BIN) 4 200000
 	-./$(SMPH_BIN) 8 200000
+
+# H1 (V4) — OOM ATRAPABLE. Al agotarse el heap, la VM lanza un RuntimeError
+# "No space in heap" que el BP puede cazar con try/catch; NUNCA se cuelga mudo
+# (el bug del "cuelgue silencioso con una lista de N referencias"). OomCatch.bp
+# crece una cadena de nodos vivos hasta OOM y lo caza. Verde = imprime
+# "cazado OOM" + "vivo tras OOM" y sale 0 (no exit-4 mudo, no hang).
+test-oom: $(BIN)
+	@if [ ! -f samples/OomCatch.mod ]; then \
+	  echo "(skip test-oom: falta samples/OomCatch.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/OomCatch.bp --compile samples --backend=mivm)"; \
+	else \
+	  echo "--- OOM atrapable (esperado: 'cazado OOM: No space in heap' + 'vivo tras OOM' + exit 0) ---"; \
+	  out=$$(cd samples && ../$(BIN) OomCatch.mod 2>&1); st=$$?; \
+	  echo "$$out" | grep -vE 'INICIANDO|FIN DE'; \
+	  if echo "$$out" | grep -q "cazado OOM: No space in heap" && [ $$st -eq 0 ]; then \
+	    echo "PASS test-oom"; \
+	  else \
+	    echo "FAIL test-oom (status=$$st — OOM no atrapable o cuelgue)"; exit 1; \
+	  fi; \
+	fi
 
 test-throwmsg: $(LIBOBJ)
 	@mkdir -p build
