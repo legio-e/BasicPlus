@@ -139,7 +139,14 @@ static int is_heap_ref(const bpvm_t* vm, uint32_t v) {
     return is_valid_header(vm, v - 4);
 }
 
-static void mark_recursive(bpvm_t* vm, uint32_t user_ref) {
+/* `ref_word` es una PALABRA de referencia tal cual vive en pila/heap: un HANDLE
+ * tageado (idx|TAG en la palabra baja) o una dirección cruda/constante sin tag.
+ * bpref_deref la resuelve a user_ref (tabla si tageada, identidad si no) — espejo del
+ * refDeref del scanRegion de miVM. Sin esto, un handle (idx|TAG > heap_next) se
+ * rechazaría como no-heap y NADA vivo se marcaría. */
+static void mark_recursive(bpvm_t* vm, uint32_t ref_word) {
+    bpref_t rr; rr.v = ref_word;
+    uint32_t user_ref = bpref_deref(vm, rr);
     if (!is_heap_ref(vm, user_ref)) return;
     uint32_t header_addr = user_ref - 4;
     uint32_t tag = bpvm_read_u32_be(vm->memory + header_addr);
@@ -281,6 +288,26 @@ static void gc_sweep_phase(bpvm_t* vm) {
     }
 }
 
+static void handle_kill_idx(bpvm_t* vm, uint32_t idx);   /* def. más abajo (junto a bpvm_handle_kill) */
+
+/* Paso 6 — BARRIDO DE TABLA (handle-aware): un slot VIVO (addr!=0) cuyo bloque quedó
+ * SIN marcar es inalcanzable → handle_kill_idx (bump gen + addr=0 + free-list) para que
+ * un handle rancio a él GRITE (contrato B también para lo que recolecta el GC). Debe ir
+ * ANTES del sweep de heap (que limpia el MARK_BIT). El bloque físico lo libera el sweep
+ * de heap. Bajo el STW del GC → seguro reciclar ya. Espejo del barrido de tabla de miVM. */
+static void gc_table_sweep_phase(bpvm_t* vm) {
+    for (uint32_t idx = 1u; idx < vm->handle_next; idx++) {
+        uint32_t a = vm->handle_addr[idx];
+        if (a == 0u) continue;                                  /* slot libre */
+        uint32_t hh = a - 4u;
+        if (hh < vm->heap_start || hh >= vm->heap_next) continue;   /* defensivo */
+        uint32_t tag = bpvm_read_u32_be(vm->memory + hh);
+        if ((tag & BPVM_TAG_MARK_BIT) == 0u) {                  /* no alcanzable */
+            handle_kill_idx(vm, idx);
+        }
+    }
+}
+
 static void bpvm_gc(bpvm_t* vm) {
     /* V4: GC suspendido durante la migración a handles — guarda en el NÚCLEO
      * (espejo del gcLocked de miVM): cubre gc_stw Y bpvm_heap_gc (builtin gc()).
@@ -288,6 +315,7 @@ static void bpvm_gc(bpvm_t* vm) {
      * handles tageados → no marca nada → libera TODO lo vivo (ownerreassign). */
     if (vm->gc_suspended) return;
     gc_mark_phase(vm);
+    gc_table_sweep_phase(vm);   /* paso 6: recicla slots de tabla de lo inalcanzable */
     gc_sweep_phase(vm);
 }
 
@@ -320,14 +348,14 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
     return r;
 }
 
-/* Paso 4c — libera el slot de un handle (owner-free): BUMP de la generación (handles
- * rancios dejan de matchear → gritan) y RECICLA el índice a la free-list para reuso.
- * No-op para null/constantes. El TAG_FREE_BIT del bloque físico evita el doble-free real. */
-void bpvm_handle_kill(bpvm_t* vm, bpref_t r) {
-    if ((r.v & BPVM_HANDLE_TAG) == 0u) return;
-    uint32_t idx = (uint32_t) r.v & ~BPVM_HANDLE_TAG;
+/* Paso 4c/6 — recicla un slot de la tabla por índice: BUMP de la generación (handles
+ * rancios dejan de matchear → gritan), addr=0 (slot libre: vivo ⟺ addr!=0, lo usa el
+ * barrido de tabla del GC) y RECICLA el índice a la free-list para reuso. Lo comparten
+ * el owner-free (bpvm_handle_kill) y el barrido de tabla del GC (paso 6). */
+static void handle_kill_idx(bpvm_t* vm, uint32_t idx) {
     if (vm->handle_gen == NULL || idx == 0u || idx >= vm->handle_next) return;
-    vm->handle_gen[idx]++;                       /* gen bumpeada → handles rancios mueren */
+    vm->handle_gen[idx]++;                        /* gen bumpeada → handles rancios mueren */
+    vm->handle_addr[idx] = 0u;                    /* slot libre en la tabla (paso 6) */
     if (vm->handle_free_top >= vm->handle_free_cap) {
         uint32_t nc = vm->handle_free_cap ? vm->handle_free_cap * 2u : 256u;
         uint32_t* nl = (uint32_t*) realloc(vm->handle_free_list, (size_t) nc * sizeof(uint32_t));
@@ -336,6 +364,13 @@ void bpvm_handle_kill(bpvm_t* vm, bpref_t r) {
         vm->handle_free_cap  = nc;
     }
     vm->handle_free_list[vm->handle_free_top++] = idx;   /* reciclar el slot */
+}
+
+/* Paso 4c — libera el slot de un handle (owner-free): delega en handle_kill_idx.
+ * No-op para null/constantes. El TAG_FREE_BIT del bloque físico evita el doble-free real. */
+void bpvm_handle_kill(bpvm_t* vm, bpref_t r) {
+    if ((r.v & BPVM_HANDLE_TAG) == 0u) return;
+    handle_kill_idx(vm, (uint32_t) r.v & ~BPVM_HANDLE_TAG);
 }
 
 /* H3: GC stop-the-world. Asume vm_lock tomado. Lo usan el disparo proactivo

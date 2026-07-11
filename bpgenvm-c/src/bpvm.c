@@ -40,7 +40,7 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->handle_free_cap  = 0;
     vm->handle_cap   = 0;
     vm->handle_next  = 1;        /* 0 = null */
-    vm->gc_suspended = 1;
+    vm->gc_suspended = 0;        /* paso 6: GC reactivado (handle-aware: mark + barrido de tabla) */
 
     /* Pone los bytes sentinela en la región reservada:
      *   memory[0] = THREAD_EXIT (fin de Thread.run / hilo)
