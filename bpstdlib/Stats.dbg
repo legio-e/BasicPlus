@@ -242,174 +242,174 @@ lines
 6028 519
 vars
 func Object.toString 0
-this -16 4 0 ?
+this -20 8 0 ?
 func Object.compareTo 25
-this -20 4 0 ?
+this -24 8 0 ?
 other -16 4 0 ?
 func List.add 41
-this -20 4 0 ?
-item -16 4 0 ?
+this -28 8 0 ?
+item -20 8 0 ?
 func List.get 131
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func List.set 151
-this -24 4 0 ?
-idx -20 4 0 ?
-item -16 4 0 ?
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
 func List.length 173
-this -16 4 0 ?
+this -20 8 0 ?
 func List.remove 189
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
 func List.__init 295
-this -16 4 0 ?
+this -20 8 0 ?
 func OwnerList.removeAndFree 338
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
 func OwnerList.__init 468
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.appendChar 489
-this -20 4 0 ?
+this -24 8 0 ?
 c -16 4 0 ?
 func StringBuilder.appendStr 579
-this -20 4 0 ?
+this -24 8 0 ?
 s -16 4 0 ?
 i 0 4 0 ?
 n 4 4 0 ?
 func StringBuilder.appendInt 650
-this -20 4 0 ?
+this -24 8 0 ?
 n -16 4 0 ?
 func StringBuilder.toString 675
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.length 699
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.__init 715
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.run 756
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.start 766
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.join 785
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.__init 804
-this -20 4 0 ?
+this -24 8 0 ?
 stackSize -16 4 0 ?
 func Mutex.lock 832
-this -16 4 0 ?
+this -20 8 0 ?
 func Mutex.unlock 851
-this -16 4 0 ?
+this -20 8 0 ?
 func Mutex.__init 870
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.add 888
-this -20 4 0 ?
-item -16 4 0 ?
+this -28 8 0 ?
+item -20 8 0 ?
 func SyncList.remove 934
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func SyncList.get 980
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func SyncList.set 1024
-this -24 4 0 ?
-idx -20 4 0 ?
-item -16 4 0 ?
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
 func SyncList.length 1073
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.pop 1114
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.popBlocking 1225
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.__init 1352
-this -16 4 0 ?
+this -20 8 0 ?
 func Accumulator.add 1443
-this -24 4 0 ?
+this -28 8 0 ?
 x -20 8 0 double
 delta 0 8 0 double
 delta2 8 8 0 double
 func Accumulator.count 1645
-this -16 4 0 ?
+this -20 8 0 ?
 func Accumulator.mean 1666
-this -16 4 0 ?
+this -20 8 0 ?
 func Accumulator.variance 1725
-this -16 4 0 ?
+this -20 8 0 ?
 func Accumulator.stdDev 1797
-this -16 4 0 ?
+this -20 8 0 ?
 func Accumulator.min 1824
-this -16 4 0 ?
+this -20 8 0 ?
 func Accumulator.max 1883
-this -16 4 0 ?
+this -20 8 0 ?
 func Accumulator.__init 1942
-this -16 4 0 ?
+this -20 8 0 ?
 func __cls_init_Accumulator 2049
-this -16 4 0 ?
+this -20 8 0 ?
 func LinReg.clearData 2067
-this -16 4 0 ?
+this -20 8 0 ?
 func LinReg.addPoint 2157
-this -32 4 0 ?
+this -36 8 0 ?
 x -28 8 0 double
 y -20 8 0 double
 func LinReg.subPoint 2265
-this -32 4 0 ?
+this -36 8 0 ?
 x -28 8 0 double
 y -20 8 0 double
 func LinReg.addData 2399
-this -28 4 0 ?
-dataX -24 4 0 ref
-dataY -20 4 0 ref
+this -40 8 0 ?
+dataX -32 8 0 ref
+dataY -24 8 0 ref
 n -16 4 0 integer
 i 0 4 0 integer
 func LinReg.count 2466
-this -16 4 0 ?
+this -20 8 0 ?
 func LinReg.meanX 2487
-this -16 4 0 ?
+this -20 8 0 ?
 func LinReg.meanY 2553
-this -16 4 0 ?
+this -20 8 0 ?
 func LinReg.slope 2619
-this -16 4 0 ?
+this -20 8 0 ?
 nn 8 8 0 double
 sxx 16 8 0 double
 sxy 24 8 0 double
 func LinReg.intercept 2777
-this -16 4 0 ?
+this -20 8 0 ?
 func LinReg.r 2851
-this -16 4 0 ?
+this -20 8 0 ?
 nn 8 8 0 double
 sxx 16 8 0 double
 syy 24 8 0 double
 sxy 32 8 0 double
 func LinReg.stdDevX 3071
-this -16 4 0 ?
+this -20 8 0 ?
 nn 8 8 0 double
 sxx 16 8 0 double
 func LinReg.stdDevY 3219
-this -16 4 0 ?
+this -20 8 0 ?
 nn 8 8 0 double
 syy 16 8 0 double
 func LinReg.predict 3367
-this -24 4 0 ?
+this -28 8 0 ?
 x -20 8 0 double
 func LinReg.__init 3400
-this -16 4 0 ?
+this -20 8 0 ?
 func __cls_init_LinReg 3521
-this -16 4 0 ?
+this -20 8 0 ?
 func LinFit.slope 3539
-this -16 4 0 ?
+this -20 8 0 ?
 func LinFit.intercept 3560
-this -16 4 0 ?
+this -20 8 0 ?
 func LinFit.predict 3581
-this -24 4 0 ?
+this -28 8 0 ?
 x -20 8 0 double
 func LinFit.__init 3612
-this -32 4 0 ?
+this -36 8 0 ?
 slope -28 8 0 double
 intercept -20 8 0 double
 func __cls_new_LinFit 3638
 slope -28 8 0 double
 intercept -20 8 0 double
 func __cls_init_LinFit 3675
-this -32 4 0 ?
+this -36 8 0 ?
 slope -28 8 0 double
 intercept -20 8 0 double
 func sqrtD 3721
@@ -420,33 +420,33 @@ done 20 4 0 boolean
 ng 24 8 0 double
 d 32 8 0 double
 func sum 3955
-data -24 4 0 ref
+data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
 s 8 8 0 double
 i 16 4 0 integer
 func mean 4038
-data -24 4 0 ref
+data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
 func min 4109
-data -24 4 0 ref
+data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
 m 8 8 0 double
 i 16 4 0 integer
 func max 4247
-data -24 4 0 ref
+data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
 m 8 8 0 double
 i 16 4 0 integer
 func range 4385
-data -24 4 0 ref
+data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
 func variance 4466
-data -24 4 0 ref
+data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
 mu 8 8 0 double
@@ -454,28 +454,28 @@ ss 16 8 0 double
 i 24 4 0 integer
 dx 28 8 0 double
 func stdDev 4627
-data -24 4 0 ref
+data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
 func median 4662
-data -24 4 0 ref
+data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
-tmp 8 4 0 ?
-mid 12 4 0 integer
+tmp 8 8 0 ?
+mid 16 4 0 integer
 func percentile 4814
-data -32 4 0 ref
+data -36 8 0 ref
 off -28 4 0 integer
 n -24 4 0 integer
 p -20 8 0 double
-tmp 8 4 0 ?
-rank 12 8 0 double
-lo 20 4 0 integer
-frac 24 8 0 double
+tmp 8 8 0 ?
+rank 16 8 0 double
+lo 24 4 0 integer
+frac 28 8 0 double
 func covariance 5131
-xs -32 4 0 ref
-xoff -28 4 0 integer
-ys -24 4 0 ref
+xs -40 8 0 ref
+xoff -32 4 0 integer
+ys -28 8 0 ref
 yoff -20 4 0 integer
 n -16 4 0 integer
 mx 8 8 0 double
@@ -483,41 +483,41 @@ my 16 8 0 double
 s 24 8 0 double
 i 32 4 0 integer
 func correlation 5315
-xs -32 4 0 ref
-xoff -28 4 0 integer
-ys -24 4 0 ref
+xs -40 8 0 ref
+xoff -32 4 0 integer
+ys -28 8 0 ref
 yoff -20 4 0 integer
 n -16 4 0 integer
 sx 8 8 0 double
 sy 16 8 0 double
 denom 24 8 0 double
 func linfit 5475
-xs -32 4 0 ref
-xoff -28 4 0 integer
-ys -24 4 0 ref
+xs -40 8 0 ref
+xoff -32 4 0 integer
+ys -28 8 0 ref
 yoff -20 4 0 integer
 n -16 4 0 integer
-mx 12 8 0 double
-my 20 8 0 double
-sxy 28 8 0 double
-sxx 36 8 0 double
-i 44 4 0 integer
-dx 48 8 0 double
-slope 64 8 0 double
-intercept 72 8 0 double
+mx 20 8 0 double
+my 28 8 0 double
+sxy 36 8 0 double
+sxx 44 8 0 double
+i 52 4 0 integer
+dx 56 8 0 double
+slope 76 8 0 double
+intercept 84 8 0 double
 func sortedCopy 5819
-data -24 4 0 ref
+data -28 8 0 ref
 off -20 4 0 integer
 n -16 4 0 integer
-tmp 4 4 0 ?
-i 8 4 0 integer
-j 12 4 0 integer
-key 16 8 0 double
-k 24 4 0 integer
+tmp 8 8 0 ?
+i 16 4 0 integer
+j 20 4 0 integer
+key 24 8 0 double
+k 32 4 0 integer
 func __strconcat 6044
-a -20 4 0 ?
-b -16 4 0 ?
+a -28 8 0 ?
+b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
-out 8 4 0 ?
-i 12 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?

@@ -264,535 +264,535 @@ lines
 8742 904
 vars
 func Object.toString 0
-this -16 4 0 ?
+this -20 8 0 ?
 func Object.compareTo 25
-this -20 4 0 ?
+this -24 8 0 ?
 other -16 4 0 ?
 func List.add 41
-this -20 4 0 ?
-item -16 4 0 ?
+this -28 8 0 ?
+item -20 8 0 ?
 func List.get 131
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func List.set 151
-this -24 4 0 ?
-idx -20 4 0 ?
-item -16 4 0 ?
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
 func List.length 173
-this -16 4 0 ?
+this -20 8 0 ?
 func List.remove 189
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
 func List.__init 295
-this -16 4 0 ?
+this -20 8 0 ?
 func OwnerList.removeAndFree 338
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
 func OwnerList.__init 468
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.appendChar 489
-this -20 4 0 ?
+this -24 8 0 ?
 c -16 4 0 ?
 func StringBuilder.appendStr 579
-this -20 4 0 ?
+this -24 8 0 ?
 s -16 4 0 ?
 i 0 4 0 ?
 n 4 4 0 ?
 func StringBuilder.appendInt 650
-this -20 4 0 ?
+this -24 8 0 ?
 n -16 4 0 ?
 func StringBuilder.toString 675
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.length 699
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.__init 715
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.run 756
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.start 766
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.join 785
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.__init 804
-this -20 4 0 ?
+this -24 8 0 ?
 stackSize -16 4 0 ?
 func Mutex.lock 832
-this -16 4 0 ?
+this -20 8 0 ?
 func Mutex.unlock 851
-this -16 4 0 ?
+this -20 8 0 ?
 func Mutex.__init 870
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.add 888
-this -20 4 0 ?
-item -16 4 0 ?
+this -28 8 0 ?
+item -20 8 0 ?
 func SyncList.remove 934
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func SyncList.get 980
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func SyncList.set 1024
-this -24 4 0 ?
-idx -20 4 0 ?
-item -16 4 0 ?
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
 func SyncList.length 1073
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.pop 1114
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.popBlocking 1225
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.__init 1352
-this -16 4 0 ?
+this -20 8 0 ?
 func Color.__init 1449
-this -20 4 0 ?
+this -24 8 0 ?
 rgb -16 4 0 integer
 func __cls_new_Color 1467
 rgb -16 4 0 integer
 func __cls_init_Color 1501
-this -20 4 0 ?
+this -24 8 0 ?
 rgb -16 4 0 integer
 func Component.getLvglId 1562
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.setLvglId 1578
-this -20 4 0 ?
+this -24 8 0 ?
 func Component.getName 1596
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.setName 1612
-this -20 4 0 ?
+this -28 8 0 ?
 func Component.getX 1630
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.setX 1655
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Component.getY 1686
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.setY 1711
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Component.getWidth 1742
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.setWidth 1767
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Component.getHeight 1798
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.setHeight 1823
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Component.getScrollDir 1854
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.setScrollDir 1879
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Component.getFontSize 1910
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.setFontSize 1935
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Component.setPos 1966
-this -24 4 0 ?
+this -28 8 0 ?
 px -20 4 0 integer
 py -16 4 0 integer
 func Component.setSize 2006
-this -24 4 0 ?
+this -28 8 0 ?
 w -20 4 0 integer
 h -16 4 0 integer
 func Component.setBounds 2046
-this -32 4 0 ?
+this -36 8 0 ?
 px -28 4 0 integer
 py -24 4 0 integer
 w -20 4 0 integer
 h -16 4 0 integer
 func Component.align 2116
-this -28 4 0 ?
+this -32 8 0 ?
 a -24 4 0 integer
 dx -20 4 0 integer
 dy -16 4 0 integer
 func Component.setBgColor 2147
-this -20 4 0 ?
-c -16 4 0 ref
+this -28 8 0 ?
+c -20 8 0 ref
 func Component.setTextColor 2174
-this -20 4 0 ?
-c -16 4 0 ref
+this -28 8 0 ?
+c -20 8 0 ref
 func Component.refresh 2201
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.clean 2223
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.delete 2245
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.__bindEvents 2267
-this -28 4 0 ?
-win -24 4 0 ?
+this -36 8 0 ?
+win -28 8 0 ?
 slotClic -20 4 0 integer
 slotChange -16 4 0 integer
 func Component.onClick 2301
-this -16 4 0 ?
+this -20 8 0 ?
 func Component.onChange 2351
-this -16 4 0 ?
+this -20 8 0 ?
 func Screen.load 2421
-this -16 4 0 ?
+this -20 8 0 ?
 func Screen.__init 2443
-this -16 4 0 ?
+this -20 8 0 ?
 func __cls_init_Screen 2511
-this -16 4 0 ?
+this -20 8 0 ?
 func Panel.__init 2529
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Panel 2572
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Panel 2606
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Label.setText 2627
-this -20 4 0 ?
-t -16 4 0 string
+this -28 8 0 ?
+t -20 8 0 string
 func Label.setFont 2652
-this -20 4 0 ?
+this -24 8 0 ?
 font -16 4 0 integer
 func Label.__init 2677
-this -24 4 0 ?
-parent -20 4 0 ref
-text -16 4 0 string
+this -36 8 0 ?
+parent -28 8 0 ref
+text -20 8 0 string
 func __cls_new_Label 2735
-parent -20 4 0 ref
-text -16 4 0 string
+parent -28 8 0 ref
+text -20 8 0 string
 func __cls_init_Label 2772
-this -24 4 0 ?
-parent -20 4 0 ref
-text -16 4 0 string
+this -36 8 0 ?
+parent -28 8 0 ref
+text -20 8 0 string
 func Button.__init 2796
-this -24 4 0 ?
-parent -20 4 0 ref
-text -16 4 0 string
-lbl 4 4 0 ?
+this -36 8 0 ?
+parent -28 8 0 ref
+text -20 8 0 string
+lbl 4 8 0 ?
 func __cls_new_Button 2868
-parent -20 4 0 ref
-text -16 4 0 string
+parent -28 8 0 ref
+text -20 8 0 string
 func __cls_init_Button 2905
-this -24 4 0 ?
-parent -20 4 0 ref
-text -16 4 0 string
+this -36 8 0 ?
+parent -28 8 0 ref
+text -20 8 0 string
 func Checkbox.getChecked 2929
-this -16 4 0 ?
+this -20 8 0 ?
 func Checkbox.setChecked 2954
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Checkbox.setText 2985
-this -20 4 0 ?
-t -16 4 0 string
+this -28 8 0 ?
+t -20 8 0 string
 func Checkbox.__init 3010
-this -24 4 0 ?
-parent -20 4 0 ref
-text -16 4 0 string
+this -36 8 0 ?
+parent -28 8 0 ref
+text -20 8 0 string
 func __cls_new_Checkbox 3068
-parent -20 4 0 ref
-text -16 4 0 string
+parent -28 8 0 ref
+text -20 8 0 string
 func __cls_init_Checkbox 3105
-this -24 4 0 ?
-parent -20 4 0 ref
-text -16 4 0 string
+this -36 8 0 ?
+parent -28 8 0 ref
+text -20 8 0 string
 func Toggle.getChecked 3129
-this -16 4 0 ?
+this -20 8 0 ?
 func Toggle.setChecked 3154
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Toggle.__init 3185
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Toggle 3228
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Toggle 3262
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Slider.getValue 3283
-this -16 4 0 ?
+this -20 8 0 ?
 func Slider.setValue 3308
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Slider.setRange 3339
-this -24 4 0 ?
+this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
 func Slider.__init 3367
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Slider 3410
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Slider 3444
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Bar.getValue 3465
-this -16 4 0 ?
+this -20 8 0 ?
 func Bar.setValue 3490
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Bar.setRange 3521
-this -24 4 0 ?
+this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
 func Bar.__init 3549
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Bar 3577
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Bar 3611
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Spinbox.getValue 3632
-this -16 4 0 ?
+this -20 8 0 ?
 func Spinbox.setValue 3657
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Spinbox.setRange 3688
-this -24 4 0 ?
+this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
 func Spinbox.__init 3716
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Spinbox 3759
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Spinbox 3793
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Led.getValue 3814
-this -16 4 0 ?
+this -20 8 0 ?
 func Led.setValue 3839
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Led.on 3870
-this -16 4 0 ?
+this -20 8 0 ?
 func Led.off 3897
-this -16 4 0 ?
+this -20 8 0 ?
 func Led.__init 3924
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Led 3952
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Led 3986
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Dropdown.getSelected 4007
-this -16 4 0 ?
+this -20 8 0 ?
 func Dropdown.setSelected 4032
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Dropdown.setOptions 4063
-this -20 4 0 ?
-opts -16 4 0 string
+this -28 8 0 ?
+opts -20 8 0 string
 func Dropdown.__init 4088
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Dropdown 4131
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Dropdown 4165
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Textarea.getText 4186
-this -16 4 0 ?
+this -20 8 0 ?
 func Textarea.setText 4211
-this -20 4 0 ?
-v 0 4 0 ?
+this -28 8 0 ?
+v 0 8 0 ?
 func Textarea.getReadOnly 4242
-this -16 4 0 ?
+this -20 8 0 ?
 func Textarea.setReadOnly 4273
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Textarea.__init 4336
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Textarea 4379
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Textarea 4413
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func ListBox.getSelected 4434
-this -16 4 0 ?
+this -20 8 0 ?
 func ListBox.setSelected 4459
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func ListBox.setItems 4490
-this -20 4 0 ?
-items -16 4 0 string
+this -28 8 0 ?
+items -20 8 0 string
 func ListBox.__init 4515
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_ListBox 4558
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_ListBox 4592
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Keyboard.attach 4613
-this -20 4 0 ?
-ta -16 4 0 ref
+this -28 8 0 ?
+ta -20 8 0 ref
 func Keyboard.__init 4641
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Keyboard 4669
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Keyboard 4703
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Msgbox.getResult 4724
-this -16 4 0 ?
+this -20 8 0 ?
 func Msgbox.setResult 4749
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Msgbox.setButtons 4780
-this -20 4 0 ?
-labels -16 4 0 string
+this -28 8 0 ?
+labels -20 8 0 string
 func Msgbox.__init 4805
-this -24 4 0 ?
-parent -20 4 0 ref
-message -16 4 0 string
+this -36 8 0 ?
+parent -28 8 0 ref
+message -20 8 0 string
 func __cls_new_Msgbox 4863
-parent -20 4 0 ref
-message -16 4 0 string
+parent -28 8 0 ref
+message -20 8 0 string
 func __cls_init_Msgbox 4900
-this -24 4 0 ?
-parent -20 4 0 ref
-message -16 4 0 string
+this -36 8 0 ?
+parent -28 8 0 ref
+message -20 8 0 string
 func TabPage.__init 4924
-this -20 4 0 ?
+this -24 8 0 ?
 pageId -16 4 0 integer
 func __cls_new_TabPage 4946
 pageId -16 4 0 integer
 func __cls_init_TabPage 4980
-this -20 4 0 ?
+this -24 8 0 ?
 pageId -16 4 0 integer
 func Tabview.getActive 5001
-this -16 4 0 ?
+this -20 8 0 ?
 func Tabview.setActive 5026
-this -20 4 0 ?
+this -24 8 0 ?
 v 0 4 0 ?
 func Tabview.addTab 5057
-this -20 4 0 ?
-name -16 4 0 string
+this -28 8 0 ?
+name -20 8 0 string
 func Tabview.__init 5105
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Tabview 5148
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Tabview 5182
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Table.setGrid 5203
-this -24 4 0 ?
+this -28 8 0 ?
 rows -20 4 0 integer
 cols -16 4 0 integer
 func Table.setCell 5231
-this -28 4 0 ?
-row -24 4 0 integer
-col -20 4 0 integer
-text -16 4 0 string
+this -36 8 0 ?
+row -28 4 0 integer
+col -24 4 0 integer
+text -20 8 0 string
 func Table.getCell 5262
-this -24 4 0 ?
+this -28 8 0 ?
 row -20 4 0 integer
 col -16 4 0 integer
 func Table.__init 5293
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_Table 5321
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_Table 5355
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Image.getAssetId 5376
-this -16 4 0 ?
+this -20 8 0 ?
 func Image.setAssetId 5392
-this -20 4 0 ?
+this -24 8 0 ?
 func Image.loadFile 5410
-this -20 4 0 ?
-path -16 4 0 string
+this -28 8 0 ?
+path -20 8 0 string
 func Image.width 5444
-this -16 4 0 ?
+this -20 8 0 ?
 func Image.height 5469
-this -16 4 0 ?
+this -20 8 0 ?
 func Image.__init 5494
-this -16 4 0 ?
+this -20 8 0 ?
 func __cls_init_Image 5547
-this -16 4 0 ?
+this -20 8 0 ?
 func ImageView.setImage 5565
-this -20 4 0 ?
-img -16 4 0 ref
+this -28 8 0 ?
+img -20 8 0 ref
 func ImageView.refresh 5593
-this -16 4 0 ?
+this -20 8 0 ?
 func ImageView.__init 5627
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func __cls_new_ImageView 5670
-parent -16 4 0 ref
+parent -20 8 0 ref
 func __cls_init_ImageView 5704
-this -20 4 0 ?
-parent -16 4 0 ref
+this -28 8 0 ?
+parent -20 8 0 ref
 func Window.load 5725
-this -20 4 0 ?
-path -16 4 0 string
-root 4 4 0 ?
-node 8 4 0 ?
-w 12 4 0 ?
-scr 16 4 0 integer
+this -28 8 0 ?
+path -20 8 0 string
+root 8 8 0 ?
+node 16 8 0 ?
+w 24 8 0 ?
+scr 32 4 0 integer
 func Window.destroy 5855
-this -16 4 0 ?
+this -20 8 0 ?
 func Window.__init 5874
-this -16 4 0 ?
+this -20 8 0 ?
 scr 0 4 0 integer
 func __cls_init_Window 5981
-this -16 4 0 ?
+this -20 8 0 ?
 func __guiDispatch 6021
-self -16 4 0 ref
+self -20 8 0 ref
 func __guiDispatchChange 6040
-self -16 4 0 ref
+self -20 8 0 ref
 func loadFont 6075
-path -16 4 0 string
+path -20 8 0 string
 func setRotation 6097
 deg -16 4 0 integer
 func buildForm 6116
-node -24 4 0 ref
-parent -20 4 0 ref
-win -16 4 0 ref
-t 4 4 0 string
-w 8 4 0 ?
-slotClic 16 4 0 integer
-slotChange 20 4 0 integer
-arr 24 4 0 ?
-i 28 4 0 integer
-child 32 4 0 ?
+node -36 8 0 ref
+parent -28 8 0 ref
+win -20 8 0 ref
+t 8 8 0 string
+w 16 8 0 ?
+slotClic 28 4 0 integer
+slotChange 32 4 0 integer
+arr 36 8 0 ?
+i 44 4 0 integer
+child 48 8 0 ?
 func makeWidget 6379
-t -24 4 0 string
-parent -20 4 0 ref
-node -16 4 0 ref
-cb 28 4 0 ?
-tg 44 4 0 ?
-sl 56 4 0 ?
-ta 68 4 0 ?
-br 80 4 0 ?
-sp 92 4 0 ?
-ld 104 4 0 ?
-dd 116 4 0 ?
-lb 128 4 0 ?
-mb 140 4 0 ?
+t -36 8 0 string
+parent -28 8 0 ref
+node -20 8 0 ref
+cb 44 8 0 ?
+tg 68 8 0 ?
+sl 88 8 0 ?
+ta 108 8 0 ?
+br 128 8 0 ?
+sp 148 8 0 ?
+ld 168 8 0 ?
+dd 188 8 0 ?
+lb 208 8 0 ?
+mb 228 8 0 ?
 func applyCommon 7621
-w -20 4 0 ref
-node -16 4 0 ref
+w -28 8 0 ref
+node -20 8 0 ref
 func colorFromHex 8026
-s -16 4 0 string
+s -20 8 0 string
 n 4 4 0 integer
 i 8 4 0 integer
 acc 12 4 0 integer
 c 16 4 0 integer
 d 20 4 0 integer
 func alignFromName 8467
-a -16 4 0 string
+a -20 8 0 string
 func __strconcat 8760
-a -20 4 0 ?
-b -16 4 0 ?
+a -28 8 0 ?
+b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
-out 8 4 0 ?
-i 12 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?
 func __strequals 8893
 a -20 4 0 ?
 b -16 4 0 ?

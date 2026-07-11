@@ -132,256 +132,256 @@ lines
 4151 352
 vars
 func Object.toString 0
-this -16 4 0 ?
+this -20 8 0 ?
 func Object.compareTo 25
-this -20 4 0 ?
+this -24 8 0 ?
 other -16 4 0 ?
 func List.add 41
-this -20 4 0 ?
-item -16 4 0 ?
+this -28 8 0 ?
+item -20 8 0 ?
 func List.get 131
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func List.set 151
-this -24 4 0 ?
-idx -20 4 0 ?
-item -16 4 0 ?
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
 func List.length 173
-this -16 4 0 ?
+this -20 8 0 ?
 func List.remove 189
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
 func List.__init 295
-this -16 4 0 ?
+this -20 8 0 ?
 func OwnerList.removeAndFree 338
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
 func OwnerList.__init 468
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.appendChar 489
-this -20 4 0 ?
+this -24 8 0 ?
 c -16 4 0 ?
 func StringBuilder.appendStr 579
-this -20 4 0 ?
+this -24 8 0 ?
 s -16 4 0 ?
 i 0 4 0 ?
 n 4 4 0 ?
 func StringBuilder.appendInt 650
-this -20 4 0 ?
+this -24 8 0 ?
 n -16 4 0 ?
 func StringBuilder.toString 675
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.length 699
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.__init 715
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.run 756
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.start 766
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.join 785
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.__init 804
-this -20 4 0 ?
+this -24 8 0 ?
 stackSize -16 4 0 ?
 func Mutex.lock 832
-this -16 4 0 ?
+this -20 8 0 ?
 func Mutex.unlock 851
-this -16 4 0 ?
+this -20 8 0 ?
 func Mutex.__init 870
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.add 888
-this -20 4 0 ?
-item -16 4 0 ?
+this -28 8 0 ?
+item -20 8 0 ?
 func SyncList.remove 934
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func SyncList.get 980
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func SyncList.set 1024
-this -24 4 0 ?
-idx -20 4 0 ?
-item -16 4 0 ?
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
 func SyncList.length 1073
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.pop 1114
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.popBlocking 1225
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.__init 1352
-this -16 4 0 ?
+this -20 8 0 ?
 func Comparator.compare 1449
-this -24 4 0 ?
-a -20 4 0 ?
-b -16 4 0 ?
+this -36 8 0 ?
+a -28 8 0 ?
+b -20 8 0 ?
 func Comparator.__init 1470
-this -16 4 0 ?
+this -20 8 0 ?
 func __cls_init_Comparator 1511
-this -16 4 0 ?
+this -20 8 0 ?
 func StringComparator.compare 1529
-this -24 4 0 ?
-a -20 4 0 ?
-b -16 4 0 ?
-sa 4 4 0 string
-sb 8 4 0 string
+this -36 8 0 ?
+a -28 8 0 ?
+b -20 8 0 ?
+sa 4 8 0 string
+sb 12 8 0 string
 func StringComparator.__init 1566
-this -16 4 0 ?
+this -20 8 0 ?
 func __cls_init_StringComparator 1618
-this -16 4 0 ?
+this -20 8 0 ?
 func Comparable.compareTo 1636
-this -20 4 0 ?
-other -16 4 0 ?
+this -28 8 0 ?
+other -20 8 0 ?
 func Comparable.__init 1657
-this -16 4 0 ?
+this -20 8 0 ?
 func __cls_init_Comparable 1698
-this -16 4 0 ?
+this -20 8 0 ?
 func Integer.value 1716
-this -16 4 0 ?
+this -20 8 0 ?
 func Integer.compareTo 1737
-this -20 4 0 ?
-other -16 4 0 ?
-o 4 4 0 ?
+this -28 8 0 ?
+other -20 8 0 ?
+o 4 8 0 ?
 func Integer.toString 1833
-this -16 4 0 ?
+this -20 8 0 ?
 func Integer.__init 1857
-this -20 4 0 ?
+this -24 8 0 ?
 x -16 4 0 integer
 func __cls_new_Integer 1886
 x -16 4 0 integer
 func __cls_init_Integer 1920
-this -20 4 0 ?
+this -24 8 0 ?
 x -16 4 0 integer
 func Long.value 1941
-this -16 4 0 ?
+this -20 8 0 ?
 func Long.compareTo 1962
-this -20 4 0 ?
-other -16 4 0 ?
-o 4 4 0 ?
+this -28 8 0 ?
+other -20 8 0 ?
+o 4 8 0 ?
 func Long.toString 2058
-this -16 4 0 ?
+this -20 8 0 ?
 func Long.__init 2082
-this -24 4 0 ?
+this -28 8 0 ?
 x -20 8 0 long
 func __cls_new_Long 2111
 x -20 8 0 long
 func __cls_init_Long 2145
-this -24 4 0 ?
+this -28 8 0 ?
 x -20 8 0 long
 func Double.value 2166
-this -16 4 0 ?
+this -20 8 0 ?
 func Double.compareTo 2187
-this -20 4 0 ?
-other -16 4 0 ?
-o 4 4 0 ?
+this -28 8 0 ?
+other -20 8 0 ?
+o 4 8 0 ?
 func Double.toString 2283
-this -16 4 0 ?
+this -20 8 0 ?
 func Double.__init 2307
-this -24 4 0 ?
+this -28 8 0 ?
 x -20 8 0 double
 func __cls_new_Double 2336
 x -20 8 0 double
 func __cls_init_Double 2370
-this -24 4 0 ?
+this -28 8 0 ?
 x -20 8 0 double
 func Float.value 2391
-this -16 4 0 ?
+this -20 8 0 ?
 func Float.compareTo 2412
-this -20 4 0 ?
-other -16 4 0 ?
-o 4 4 0 ?
+this -28 8 0 ?
+other -20 8 0 ?
+o 4 8 0 ?
 func Float.toString 2508
-this -16 4 0 ?
+this -20 8 0 ?
 func Float.__init 2533
-this -20 4 0 ?
+this -24 8 0 ?
 x -16 4 0 float
 func __cls_new_Float 2562
 x -16 4 0 float
 func __cls_init_Float 2596
-this -20 4 0 ?
+this -24 8 0 ?
 x -16 4 0 float
 func Boolean.value 2617
-this -16 4 0 ?
+this -20 8 0 ?
 func Boolean.compareTo 2638
-this -20 4 0 ?
-other -16 4 0 ?
-o 4 4 0 ?
+this -28 8 0 ?
+other -20 8 0 ?
+o 4 8 0 ?
 func Boolean.toString 2764
-this -16 4 0 ?
+this -20 8 0 ?
 func Boolean.__init 2788
-this -20 4 0 ?
+this -24 8 0 ?
 x -16 4 0 boolean
 func __cls_new_Boolean 2817
 x -16 4 0 boolean
 func __cls_init_Boolean 2851
-this -20 4 0 ?
+this -24 8 0 ?
 x -16 4 0 boolean
 func NaturalComparator.compare 2872
-this -24 4 0 ?
-a -20 4 0 ?
-b -16 4 0 ?
-ca 4 4 0 ?
+this -36 8 0 ?
+a -28 8 0 ?
+b -20 8 0 ?
+ca 4 8 0 ?
 func NaturalComparator.__init 2903
-this -16 4 0 ?
+this -20 8 0 ?
 func __cls_init_NaturalComparator 2955
-this -16 4 0 ?
+this -20 8 0 ?
 func Map.withComparator 2973
-this -20 4 0 ?
-c -16 4 0 ref
+this -28 8 0 ?
+c -20 8 0 ref
 func Map.bsearch 3022
-this -20 4 0 ?
-key -16 4 0 ?
+this -28 8 0 ?
+key -20 8 0 ?
 lo 4 4 0 integer
 hi 8 4 0 integer
 mid 12 4 0 integer
-midKey 16 4 0 ?
-c 20 4 0 integer
+midKey 16 8 0 ?
+c 24 4 0 integer
 func Map.insertAt 3208
-this -28 4 0 ?
-ip -24 4 0 integer
-key -20 4 0 ?
-val -16 4 0 ?
+this -40 8 0 ?
+ip -32 4 0 integer
+key -28 8 0 ?
+val -20 8 0 ?
 i 4 4 0 integer
 func Map.size 3385
-this -16 4 0 ?
+this -20 8 0 ?
 n 8 4 0 integer
 func Map.put 3437
-this -24 4 0 ?
-key -20 4 0 ?
-val -16 4 0 ?
+this -36 8 0 ?
+key -28 8 0 ?
+val -20 8 0 ?
 idx 4 4 0 integer
 func Map.get 3546
-this -20 4 0 ?
-key -16 4 0 ?
-idx 8 4 0 integer
-result 12 4 0 ?
+this -28 8 0 ?
+key -20 8 0 ?
+idx 12 4 0 integer
+result 16 8 0 ?
 func Map.containsKey 3642
-this -20 4 0 ?
-key -16 4 0 ?
+this -28 8 0 ?
+key -20 8 0 ?
 found 8 4 0 boolean
 func Map.remove 3703
-this -20 4 0 ?
-key -16 4 0 ?
+this -28 8 0 ?
+key -20 8 0 ?
 idx 8 4 0 integer
 existed 12 4 0 boolean
 func Map.keyAt 3821
-this -20 4 0 ?
+this -24 8 0 ?
 i -16 4 0 integer
-k 8 4 0 ?
+k 12 8 0 ?
 func Map.valueAt 3876
-this -20 4 0 ?
+this -24 8 0 ?
 i -16 4 0 integer
-v 8 4 0 ?
+v 12 8 0 ?
 func Map.__init 3931
-this -16 4 0 ?
+this -20 8 0 ?
 func __cls_init_Map 4072
-this -16 4 0 ?
+this -20 8 0 ?
 func __strconcat 4207
-a -20 4 0 ?
-b -16 4 0 ?
+a -28 8 0 ?
+b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
-out 8 4 0 ?
-i 12 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?

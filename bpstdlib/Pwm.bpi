@@ -14,10 +14,10 @@ class Slice public
   method stop():void public
 end class
 class RuntimeError public extends Core.Exception
-  layout 1 4 00000001 00000000
+  layout 2 4 00000001 00000000
   ctor(m:string)
 end class
 class Exception public
-  layout 1 4 00000001 00000000
+  layout 2 4 00000001 00000000
   ctor(m:string)
 end class

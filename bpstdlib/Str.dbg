@@ -223,136 +223,136 @@ lines
 5448 407
 vars
 func Object.toString 0
-this -16 4 0 ?
+this -20 8 0 ?
 func Object.compareTo 25
-this -20 4 0 ?
+this -24 8 0 ?
 other -16 4 0 ?
 func List.add 41
-this -20 4 0 ?
-item -16 4 0 ?
+this -28 8 0 ?
+item -20 8 0 ?
 func List.get 131
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func List.set 151
-this -24 4 0 ?
-idx -20 4 0 ?
-item -16 4 0 ?
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
 func List.length 173
-this -16 4 0 ?
+this -20 8 0 ?
 func List.remove 189
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
 func List.__init 295
-this -16 4 0 ?
+this -20 8 0 ?
 func OwnerList.removeAndFree 338
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
 func OwnerList.__init 468
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.appendChar 489
-this -20 4 0 ?
+this -24 8 0 ?
 c -16 4 0 ?
 func StringBuilder.appendStr 579
-this -20 4 0 ?
+this -24 8 0 ?
 s -16 4 0 ?
 i 0 4 0 ?
 n 4 4 0 ?
 func StringBuilder.appendInt 650
-this -20 4 0 ?
+this -24 8 0 ?
 n -16 4 0 ?
 func StringBuilder.toString 675
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.length 699
-this -16 4 0 ?
+this -20 8 0 ?
 func StringBuilder.__init 715
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.run 756
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.start 766
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.join 785
-this -16 4 0 ?
+this -20 8 0 ?
 func Thread.__init 804
-this -20 4 0 ?
+this -24 8 0 ?
 stackSize -16 4 0 ?
 func Mutex.lock 832
-this -16 4 0 ?
+this -20 8 0 ?
 func Mutex.unlock 851
-this -16 4 0 ?
+this -20 8 0 ?
 func Mutex.__init 870
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.add 888
-this -20 4 0 ?
-item -16 4 0 ?
+this -28 8 0 ?
+item -20 8 0 ?
 func SyncList.remove 934
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func SyncList.get 980
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func SyncList.set 1024
-this -24 4 0 ?
-idx -20 4 0 ?
-item -16 4 0 ?
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
 func SyncList.length 1073
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.pop 1114
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.popBlocking 1225
-this -16 4 0 ?
+this -20 8 0 ?
 func SyncList.__init 1352
-this -16 4 0 ?
+this -20 8 0 ?
 func hexDigitCode 1471
 d -16 4 0 integer
 func longToString 1532
 x -20 8 0 long
-neg 4 4 0 boolean
-v 8 8 0 long
-digits 16 4 0 ?
-nd 20 4 0 integer
-d 24 4 0 integer
-sb 28 4 0 ?
-i 44 4 0 integer
+neg 8 4 0 boolean
+v 12 8 0 long
+digits 20 8 0 ?
+nd 28 4 0 integer
+d 32 4 0 integer
+sb 36 8 0 ?
+i 60 4 0 integer
 func formatDouble 1823
 x -24 8 0 double
 dec -16 4 0 integer
-neg 4 4 0 boolean
-ax 8 8 0 double
-scale 16 8 0 long
-i 24 4 0 integer
-scaled 28 8 0 long
-intPart 36 8 0 long
-fracPart 44 8 0 long
-sb 52 4 0 ?
-fs 68 4 0 string
-pad 72 4 0 integer
-k 76 4 0 integer
+neg 8 4 0 boolean
+ax 12 8 0 double
+scale 20 8 0 long
+i 28 4 0 integer
+scaled 32 8 0 long
+intPart 40 8 0 long
+fracPart 48 8 0 long
+sb 56 8 0 ?
+fs 80 8 0 string
+pad 88 4 0 integer
+k 92 4 0 integer
 func doubleToString 2191
 x -20 8 0 double
-s 4 4 0 string
-stop 8 4 0 integer
+s 8 8 0 string
+stop 16 4 0 integer
 func toHex 2377
 x -20 8 0 long
-sb 4 4 0 ?
-started 16 4 0 boolean
-i 20 4 0 integer
-nib 24 4 0 integer
+sb 8 8 0 ?
+started 28 4 0 boolean
+i 32 4 0 integer
+nib 36 4 0 integer
 func fromCharCode 2585
 cp -16 4 0 integer
-sb 4 4 0 ?
+sb 8 8 0 ?
 func lastIndexOf 2765
-s -20 4 0 string
-sub -16 4 0 string
+s -28 8 0 string
+sub -20 8 0 string
 ls 4 4 0 integer
 lsub 8 4 0 integer
 start 12 4 0 integer
 k 16 4 0 integer
 ok 20 4 0 boolean
 func compare 3030
-a -20 4 0 string
-b -16 4 0 string
+a -28 8 0 string
+b -20 8 0 string
 la 4 4 0 integer
 lb 8 4 0 integer
 n 12 4 0 integer
@@ -360,21 +360,21 @@ i 16 4 0 integer
 ca 20 4 0 integer
 cb 24 4 0 integer
 func padLeft 3278
-s -20 4 0 string
+s -24 8 0 string
 ancho -16 4 0 integer
-n 4 4 0 integer
-sb 8 4 0 ?
-pad 20 4 0 integer
-i 24 4 0 integer
+n 8 4 0 integer
+sb 12 8 0 ?
+pad 32 4 0 integer
+i 36 4 0 integer
 func padRight 3430
-s -20 4 0 string
+s -24 8 0 string
 ancho -16 4 0 integer
-n 4 4 0 integer
-sb 8 4 0 ?
-pad 24 4 0 integer
-i 28 4 0 integer
+n 8 4 0 integer
+sb 12 8 0 ?
+pad 36 4 0 integer
+i 40 4 0 integer
 func parseLong 3582
-s -16 4 0 string
+s -20 8 0 string
 n 4 4 0 integer
 i 12 4 0 integer
 neg 16 4 0 boolean
@@ -382,11 +382,11 @@ c0 20 4 0 integer
 acc 28 8 0 long
 c 36 4 0 integer
 func parseInt 4027
-s -16 4 0 string
+s -20 8 0 string
 err 4 4 0 boolean
 v 8 8 0 long
 func parseDouble 4108
-s -16 4 0 string
+s -20 8 0 string
 n 4 4 0 integer
 i 12 4 0 integer
 neg 16 4 0 boolean
@@ -398,16 +398,16 @@ frac 44 8 0 double
 scale 52 8 0 double
 v 68 8 0 double
 func parseHex 4868
-s -16 4 0 string
+s -20 8 0 string
 n 4 4 0 integer
 i 12 4 0 integer
 acc 20 8 0 long
 c 28 4 0 integer
 d 32 4 0 integer
 func __strconcat 5488
-a -20 4 0 ?
-b -16 4 0 ?
+a -28 8 0 ?
+b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
-out 8 4 0 ?
-i 12 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?

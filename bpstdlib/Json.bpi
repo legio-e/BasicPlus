@@ -25,7 +25,7 @@ class JsonBool public extends JsonValue
   method writeTo(sb:StringBuilder):void public
 end class
 class JsonObject public extends JsonValue
-  layout 2 36 00000003 00000000
+  layout 4 36 00000005 00000000
   ctor()
   method isObject():boolean public
   method asObject():JsonObject public
@@ -50,7 +50,7 @@ class JsonObject public extends JsonValue
   method writeTo(sb:StringBuilder):void public
 end class
 class RuntimeError public extends Core.Exception
-  layout 1 4 00000001 00000000
+  layout 2 4 00000001 00000000
   ctor(m:string)
 end class
 class JsonNull public extends JsonValue
@@ -60,7 +60,7 @@ class JsonNull public extends JsonValue
   method writeTo(sb:StringBuilder):void public
 end class
 class JsonReader public
-  layout 3 6 00000001 00000000
+  layout 4 6 00000001 00000000
   ctor(text:string)
   method peek():integer public
   method advance():integer public
@@ -96,11 +96,11 @@ class JsonValue public
   method toJson():string public
 end class
 class Exception public
-  layout 1 4 00000001 00000000
+  layout 2 4 00000001 00000000
   ctor(m:string)
 end class
 class JsonArray public extends JsonValue
-  layout 1 21 00000001 00000000
+  layout 2 21 00000001 00000000
   ctor()
   method isArray():boolean public
   method asArray():JsonArray public
@@ -118,7 +118,7 @@ class JsonFloat public extends JsonValue
   method writeTo(sb:StringBuilder):void public
 end class
 class JsonString public extends JsonValue
-  layout 1 18 00000001 00000000
+  layout 2 18 00000001 00000000
   ctor(value:string)
   method isString():boolean public
   method asString():string public

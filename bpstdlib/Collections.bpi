@@ -58,7 +58,7 @@ class Boolean public extends Comparable
   method toString():string public
 end class
 class Map public
-  layout 4 10 0000000f 00000000
+  layout 8 10 00000055 00000000
   ctor()
   method withComparator(c:Comparator):Map public
   method size():integer public

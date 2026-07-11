@@ -1,0 +1,20 @@
+module ExcField
+  public class MyErr extends Exception
+    var code: integer
+    public function MyErr(m: string, c: integer)
+      super(m)
+      this.code := c
+    end MyErr
+    public function getCode(): integer
+      return this.code
+    end getCode
+  end MyErr
+  function Main()
+    try
+      throw MyErr("boom", 99)
+    catch e: MyErr
+      print "caught:", e.msg, "code", e.getCode()
+    endtry
+    print "fin"
+  end Main
+end ExcField

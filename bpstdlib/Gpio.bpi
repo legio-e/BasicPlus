@@ -12,11 +12,11 @@ func PULL_DOWN():integer public
 func write(pin:integer,value:integer):void public intrinsic
 func PULL_NONE():integer public
 class RuntimeError public extends Core.Exception
-  layout 1 4 00000001 00000000
+  layout 2 4 00000001 00000000
   ctor(m:string)
 end class
 class Exception public
-  layout 1 4 00000001 00000000
+  layout 2 4 00000001 00000000
   ctor(m:string)
 end class
 class Pin public
