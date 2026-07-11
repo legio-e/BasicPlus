@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <time.h>
 
 static bpvm_t* g_vm;
 static int     g_iters;
@@ -59,9 +60,14 @@ int main(int argc, char** argv) {
      * test simula varios workers — el único escenario donde varios threads tocan la
      * tabla. Inicializamos un bpvm_smp_t mínimo (solo su vm_lock; los demás campos
      * quedan a 0, que es lo que el lock necesita). Así el fix (paso 7) queda ejercitado. */
-    g_vm->smp = (bpvm_smp_t*) calloc(1, sizeof(bpvm_smp_t));
-    if (!g_vm->smp) { fprintf(stderr, "smp calloc fallo\n"); return 2; }
-    bpvm_platform_mutex_init(&g_vm->smp->vm_lock);
+    /* Modo "nolock" (3er arg): NO inicializa vm->smp → bpvm_smp_lock queda no-op →
+     * mide el throughput SIN lock (corrompe, pero da el techo = objetivo de per-core). */
+    int nolock = (argc > 3 && argv[3][0] == 'n');
+    if (!nolock) {
+        g_vm->smp = (bpvm_smp_t*) calloc(1, sizeof(bpvm_smp_t));
+        if (!g_vm->smp) { fprintf(stderr, "smp calloc fallo\n"); return 2; }
+        bpvm_platform_mutex_init(&g_vm->smp->vm_lock);
+    }
 
     /* Paso 7b.1 — FREE CON GENERACIÓN VALIDADA (refuerzo de la maqueta), SECUENCIAL.
      * Un free RANCIO a un slot RECICLADO no debe bumpear la gen del NUEVO ocupante. */
@@ -86,13 +92,19 @@ int main(int argc, char** argv) {
 
     pthread_t th[64];
     targ_t    ta[64];
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
     for (int t = 0; t < nthreads; t++) {
         ta[t].tid = t; ta[t].corr = 0;
         pthread_create(&th[t], NULL, worker, &ta[t]);
     }
     long total = 0;
     for (int t = 0; t < nthreads; t++) { pthread_join(th[t], NULL); total += ta[t].corr; }
+    clock_gettime(CLOCK_MONOTONIC, &t1);
 
-    printf("threads=%d iters=%d corrupciones=%ld\n", nthreads, g_iters, total);
+    double secs = (double)(t1.tv_sec - t0.tv_sec) + (double)(t1.tv_nsec - t0.tv_nsec) / 1e9;
+    double ops  = (double) nthreads * (double) g_iters;   /* cada iter = 1 register + 1 kill */
+    printf("threads=%d iters=%d corrupciones=%ld  %.3fs  %.2f Mreg-kill/s\n",
+           nthreads, g_iters, total, secs, ops / secs / 1e6);
     return (total == 0 && !genfree_bad) ? 0 : 1;
 }
