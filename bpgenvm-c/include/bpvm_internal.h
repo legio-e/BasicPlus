@@ -256,6 +256,12 @@ struct bpvm {
     uint32_t* handle_gen;
     uint32_t  handle_cap;      /* capacidad de handle_addr Y handle_gen */
     uint32_t  handle_next;     /* 0 reservado para null */
+    /* Paso 4c — FREE-LIST de slots reciclables (pila LIFO). owner-free empuja el slot;
+     * handle_register lo reusa con su gen ya bumpeada. Reclamación inmediata (1 worker);
+     * la diferida-a-safepoint (SMP/ARM) se pliega al paso 6. */
+    uint32_t* handle_free_list;
+    uint32_t  handle_free_top;
+    uint32_t  handle_free_cap;
     int       gc_suspended;    /* 1 = GC no corre (migración a handles) */
 
     /* Módulos cargados. */
@@ -433,9 +439,11 @@ static inline void bpref_push(bpvm_t* vm, bpvm_thread_t* tc, bpref_t r) {
  * generación. La memoria es <256KB (0x40000) → una dirección real jamás lo tiene. */
 #define BPVM_HANDLE_TAG 0x40000000u
 
-/* V4: registra un objeto de HEAP (dirección user_ref) y devuelve su HANDLE
- * (índice | TAG). Implementado en heap.c (puede crecer la tabla). */
-uint32_t bpvm_handle_register(bpvm_t* vm, uint32_t addr);
+/* V4/paso4c: registra un objeto de HEAP y devuelve su HANDLE 64b (bpref_t =
+ * gen(slot)<<32 | idx|TAG). Reusa slots de la free-list si los hay. Devuelve bpref_t
+ * (NO uint32) a propósito: asignarlo a un uint32_t es error de compilación → el
+ * compilador caza cada sitio que perdería la generación. Implementado en heap.c. */
+bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr);
 /* Paso 3 — marca MUERTO el índice de un handle (owner-free). No-op para null y
  * constantes. Idempotente. Implementado en heap.c. */
 void bpvm_handle_kill(bpvm_t* vm, bpref_t r);

@@ -159,7 +159,7 @@ have_class:
     if (num_fields > 0) {
         bpvm_write_i64_be(vm->memory + obj_ref + 4 + 0 * 4, (int64_t)(uint32_t) msg_ref);   /* H1.2a: campo ref = 8B */
     }
-    obj_ref = bpvm_handle_register(vm, obj_ref);   /* V4: addr → handle (tras escribir campos) */
+    obj_ref = (uint32_t) bpvm_handle_register(vm, obj_ref).v;   /* V4: idx|TAG (gen=0; excepción no se recicla en migración → paso 6) */
 
     /* Anclar para GC; el caller decide si pasarlo a eh_unwind o usarlo
      * de otra forma. No tocamos el stack BP aquí — eso lo hace

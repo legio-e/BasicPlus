@@ -291,34 +291,51 @@ static void bpvm_gc(bpvm_t* vm) {
     gc_sweep_phase(vm);
 }
 
-/* V4 — registra un objeto de HEAP en la tabla de handles y devuelve su HANDLE
- * (índice | TAG). Modo neutro: monotónico (sin reciclaje ni generación aún; eso
- * llega en pasos 3-4). Tabla lazy, crece por duplicación. Si no puede crecer,
- * devuelve la dirección cruda (sin tag → bpref_deref la trata por identidad). */
-uint32_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
-    if (vm->handle_next >= vm->handle_cap) {
-        uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u : 4096u;
-        uint32_t* na = (uint32_t*) realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
-        if (!na) return addr;
-        uint32_t* ng = (uint32_t*) realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
-        if (!ng) { vm->handle_addr = na; return addr; }   /* addr ya realojado; gen no crece → sin tag */
-        vm->handle_addr = na;
-        vm->handle_gen  = ng;
-        vm->handle_cap  = new_cap;
+/* V4/paso4c — registra un objeto de HEAP y devuelve su HANDLE 64b (gen(slot)<<32 |
+ * idx|TAG). Reusa un slot de la free-list si lo hay (con su gen ya bumpeada); si no,
+ * crece la tabla. Devuelve bpref_t: al asignarlo a un uint32_t da error de compilación
+ * → el compilador caza cada sitio que perdería la generación. Si no puede crecer,
+ * devuelve la dirección cruda (sin tag → bpref_deref por identidad). */
+bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
+    uint32_t idx;
+    if (vm->handle_free_top > 0u) {
+        idx = vm->handle_free_list[--vm->handle_free_top];   /* REUSO: slot reciclado, gen ya bumpeada */
+    } else {
+        if (vm->handle_next >= vm->handle_cap) {
+            uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u : 4096u;
+            uint32_t* na = (uint32_t*) realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
+            if (!na) { bpref_t r; r.v = addr; return r; }
+            uint32_t* ng = (uint32_t*) realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
+            if (!ng) { vm->handle_addr = na; bpref_t r; r.v = addr; return r; }
+            vm->handle_addr = na;
+            vm->handle_gen  = ng;
+            vm->handle_cap  = new_cap;
+        }
+        idx = vm->handle_next++;
+        vm->handle_gen[idx] = 0u;   /* slot fresco */
     }
-    uint32_t idx = vm->handle_next++;
     vm->handle_addr[idx] = addr;
-    vm->handle_gen[idx]  = 0u;   /* vivo (paso 4: aquí se sembrará la gen del handle 64b) */
-    return idx | BPVM_HANDLE_TAG;
+    bpref_t r;
+    r.v = ((uint64_t) vm->handle_gen[idx] << 32) | (uint64_t)(idx | BPVM_HANDLE_TAG);
+    return r;
 }
 
-/* Paso 3 — marca MUERTO el índice de un handle (owner-free). No-op para null y
- * constantes (sin TAG, nunca mueren). Idempotente: el doble-free real lo sigue
- * evitando el TAG_FREE_BIT del bloque físico. */
+/* Paso 4c — libera el slot de un handle (owner-free): BUMP de la generación (handles
+ * rancios dejan de matchear → gritan) y RECICLA el índice a la free-list para reuso.
+ * No-op para null/constantes. El TAG_FREE_BIT del bloque físico evita el doble-free real. */
 void bpvm_handle_kill(bpvm_t* vm, bpref_t r) {
     if ((r.v & BPVM_HANDLE_TAG) == 0u) return;
-    uint32_t idx = r.v & ~BPVM_HANDLE_TAG;
-    if (vm->handle_gen != NULL && idx > 0u && idx < vm->handle_next) vm->handle_gen[idx]++;
+    uint32_t idx = (uint32_t) r.v & ~BPVM_HANDLE_TAG;
+    if (vm->handle_gen == NULL || idx == 0u || idx >= vm->handle_next) return;
+    vm->handle_gen[idx]++;                       /* gen bumpeada → handles rancios mueren */
+    if (vm->handle_free_top >= vm->handle_free_cap) {
+        uint32_t nc = vm->handle_free_cap ? vm->handle_free_cap * 2u : 256u;
+        uint32_t* nl = (uint32_t*) realloc(vm->handle_free_list, (size_t) nc * sizeof(uint32_t));
+        if (!nl) return;   /* sin free-list no reciclamos este slot (se pierde, no se corrompe) */
+        vm->handle_free_list = nl;
+        vm->handle_free_cap  = nc;
+    }
+    vm->handle_free_list[vm->handle_free_top++] = idx;   /* reciclar el slot */
 }
 
 /* H3: GC stop-the-world. Asume vm_lock tomado. Lo usan el disparo proactivo
@@ -436,7 +453,7 @@ uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len) {
     for (size_t i = 0; i < len; i++) {
         vm->memory[ref + 4 + i] = (uint8_t) s[i];
     }
-    return bpvm_handle_register(vm, ref);   /* V4: addr físico → handle */
+    return (uint32_t) bpvm_handle_register(vm, ref).v;   /* string: idx|TAG (gen=0); reuso de strings = paso 6 */
 }
 
 /* Trigger manual de GC. Devuelve bytes liberados (aproximado: el delta

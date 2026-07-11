@@ -35,6 +35,9 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     /* V4 — tabla de handles (lazy) + GC suspendido durante la migración. */
     vm->handle_addr  = NULL;
     vm->handle_gen   = NULL;     /* paso 3: generación por índice (contrato B) */
+    vm->handle_free_list = NULL; /* paso 4c: free-list de slots reciclables */
+    vm->handle_free_top  = 0;
+    vm->handle_free_cap  = 0;
     vm->handle_cap   = 0;
     vm->handle_next  = 1;        /* 0 = null */
     vm->gc_suspended = 1;
@@ -383,6 +386,7 @@ void bpvm_destroy(bpvm_t* vm) {
     if (!vm) return;
     free(vm->handle_addr);   /* V4: tabla de handles */
     free(vm->handle_gen);    /* V4/paso 3: generación */
+    free(vm->handle_free_list);   /* V4/paso 4c: free-list */
     /* Liberar módulos cargados. */
     for (int i = 0; i < vm->module_count; i++) {
         bpvm_module_t* m = &vm->modules[i];

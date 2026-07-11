@@ -574,8 +574,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* n==0 (timeout) → byte[] vacío. La longitud del array puede ser
          * menor que el payload alocado (mismo patrón que READ_FILE). */
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) n);
-        ref = bpvm_handle_register(vm, ref);   /* V4: addr → handle */
-        push_ref(vm, tc, ref);
+                bpref_push(vm, tc, bpvm_handle_register(vm, ref));
         return BPVM_OK;
     }
     case BUILTIN_TCP_CLOSE: {
@@ -929,8 +928,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 return builtin_throw(vm, tc, em);
             }
         }
-        ref = bpvm_handle_register(vm, ref);   /* V4: addr → handle */
-        push_ref(vm, tc, ref);
+                bpref_push(vm, tc, bpvm_handle_register(vm, ref));
         return BPVM_OK;
     }
     case BUILTIN_WRITE_FILE:
@@ -1121,7 +1119,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (out) {
             bpvm_write_u32_be(vm->memory + out, enc_len);
             for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
-            out = bpvm_handle_register(vm, out);   /* V4: addr → handle */
+            out = (uint32_t) bpvm_handle_register(vm, out).v;   /* V4: addr → handle */
         }
         push_ref(vm, tc, out);   /* H1.2a: string ref result = 8 bytes */
         return BPVM_OK;
@@ -1149,7 +1147,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             bpvm_write_u32_be(vm->memory + out, n);   /* out: alloc fresca (dirección física) */
             for (uint32_t i = 0; i < n; i++)
                 vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, boff + i, 1);
-            out = bpvm_handle_register(vm, out);   /* V4: addr → handle */
+            out = (uint32_t) bpvm_handle_register(vm, out).v;   /* V4: addr → handle */
         }
         push_ref(vm, tc, out);   /* string ref result (push_ref ya es genérico) */
         return BPVM_OK;
@@ -1164,8 +1162,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) cap * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
         if (ref == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) cap);
-        ref = bpvm_handle_register(vm, ref);   /* V4: addr → handle */
-        push_ref(vm, tc, ref);
+                bpref_push(vm, tc, bpvm_handle_register(vm, ref));
         return BPVM_OK;
     }
 
@@ -1186,8 +1183,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             bpref_t e = bpref_load(vm, od + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE);
             bpref_store(vm, new_ref + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE, e);
         }
-        new_ref = bpvm_handle_register(vm, new_ref);   /* V4: addr → handle */
-        push_ref(vm, tc, new_ref);
+                bpref_push(vm, tc, bpvm_handle_register(vm, new_ref));
         return BPVM_OK;
     }
 
@@ -1205,8 +1201,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint32_t v = bpvm_read_u32_be(vm->memory + od + 4 + i * 4);
             bpvm_write_u32_be(vm->memory + new_ref + 4 + i * 4, v);
         }
-        new_ref = bpvm_handle_register(vm, new_ref);   /* V4: addr → handle */
-        push_ref(vm, tc, new_ref);
+                bpref_push(vm, tc, bpvm_handle_register(vm, new_ref));
         return BPVM_OK;
     }
 
@@ -1232,8 +1227,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint8_t enc[4]; uint32_t el = utf8_encode(cp, enc);
             for (uint32_t k = 0; k < el; k++) vm->memory[new_ref + 4 + w++] = enc[k];
         }
-        new_ref = bpvm_handle_register(vm, new_ref);   /* V4: addr → handle */
-        push_ref(vm, tc, new_ref);
+                bpref_push(vm, tc, bpvm_handle_register(vm, new_ref));
         return BPVM_OK;
     }
 
@@ -1249,8 +1243,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (out == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + out, n);
         for (uint32_t i = 0; i < n; i++) vm->memory[out + 4 + i] = vm->memory[rd + 4 + i];
-        out = bpvm_handle_register(vm, out);   /* V4: addr → handle */
-        push_ref(vm, tc, out);   /* H1.2a: string ref result = 8 bytes */
+                bpref_push(vm, tc, bpvm_handle_register(vm, out));   /* H1.2a: string ref result = 8 bytes */
         return BPVM_OK;
     }
 
@@ -1530,8 +1523,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (ref == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) size);
         /* bpvm_heap_alloc ya zero-init (memset en heap.c). */
-        ref = bpvm_handle_register(vm, ref);   /* V4: addr → handle */
-        push_ref(vm, tc, ref);
+                bpref_push(vm, tc, bpvm_handle_register(vm, ref));
         return BPVM_OK;
     }
 
