@@ -325,6 +325,13 @@ static void bpvm_gc(bpvm_t* vm) {
  * → el compilador caza cada sitio que perdería la generación. Si no puede crecer,
  * devuelve la dirección cruda (sin tag → bpref_deref por identidad). */
 bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
+    /* Paso 7 — la tabla (free-list/handle_next) es estado COMPARTIDO: bajo SMP dos
+     * workers registran a la vez (handle_register corre FUERA del vm_lock, heap_alloc
+     * ya lo soltó) → carrera en free_top → roban el mismo idx. Serializamos con el
+     * vm_lock (no-op en single-worker → coste cero en el default de envío). El GC usa
+     * handle_kill_idx (sin lock) porque corre bajo STW (todos parados). */
+    bpref_t r;
+    bpvm_smp_lock(vm);
     uint32_t idx;
     if (vm->handle_free_top > 0u) {
         idx = vm->handle_free_list[--vm->handle_free_top];   /* REUSO: slot reciclado, gen ya bumpeada */
@@ -332,9 +339,9 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
         if (vm->handle_next >= vm->handle_cap) {
             uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u : 4096u;
             uint32_t* na = (uint32_t*) realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
-            if (!na) { bpref_t r; r.v = addr; return r; }
+            if (!na) { r.v = addr; bpvm_smp_unlock(vm); return r; }
             uint32_t* ng = (uint32_t*) realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
-            if (!ng) { vm->handle_addr = na; bpref_t r; r.v = addr; return r; }
+            if (!ng) { vm->handle_addr = na; r.v = addr; bpvm_smp_unlock(vm); return r; }
             vm->handle_addr = na;
             vm->handle_gen  = ng;
             vm->handle_cap  = new_cap;
@@ -343,8 +350,8 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
         vm->handle_gen[idx] = 0u;   /* slot fresco */
     }
     vm->handle_addr[idx] = addr;
-    bpref_t r;
     r.v = ((uint64_t) vm->handle_gen[idx] << 32) | (uint64_t)(idx | BPVM_HANDLE_TAG);
+    bpvm_smp_unlock(vm);
     return r;
 }
 
@@ -370,7 +377,9 @@ static void handle_kill_idx(bpvm_t* vm, uint32_t idx) {
  * No-op para null/constantes. El TAG_FREE_BIT del bloque físico evita el doble-free real. */
 void bpvm_handle_kill(bpvm_t* vm, bpref_t r) {
     if ((r.v & BPVM_HANDLE_TAG) == 0u) return;
+    bpvm_smp_lock(vm);   /* paso 7: serializa la free-list contra registers/kills de otros workers */
     handle_kill_idx(vm, (uint32_t) r.v & ~BPVM_HANDLE_TAG);
+    bpvm_smp_unlock(vm);
 }
 
 /* H3: GC stop-the-world. Asume vm_lock tomado. Lo usan el disparo proactivo

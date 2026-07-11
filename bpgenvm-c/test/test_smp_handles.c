@@ -55,6 +55,14 @@ int main(int argc, char** argv) {
     g_vm = bpvm_init(mem, sizeof(mem), sizeof(mem) / 2);
     if (!g_vm) { fprintf(stderr, "bpvm_init fallo\n"); return 2; }
 
+    /* Activar el vm_lock (modo SMP): bpvm_smp_lock es no-op si vm->smp==NULL, y este
+     * test simula varios workers — el único escenario donde varios threads tocan la
+     * tabla. Inicializamos un bpvm_smp_t mínimo (solo su vm_lock; los demás campos
+     * quedan a 0, que es lo que el lock necesita). Así el fix (paso 7) queda ejercitado. */
+    g_vm->smp = (bpvm_smp_t*) calloc(1, sizeof(bpvm_smp_t));
+    if (!g_vm->smp) { fprintf(stderr, "smp calloc fallo\n"); return 2; }
+    bpvm_platform_mutex_init(&g_vm->smp->vm_lock);
+
     /* Pre-calentar: puebla la free-list con 8192 slots reciclables. */
     for (int i = 0; i < 8192; i++) {
         bpref_t h = bpvm_handle_register(g_vm, (uint32_t) i + 1);

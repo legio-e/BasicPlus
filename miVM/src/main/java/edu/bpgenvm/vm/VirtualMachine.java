@@ -1586,21 +1586,28 @@ public class VirtualMachine {
      *  (idéntico a antes). En 4b el handle empieza a llevar la gen del slot; en 4c el
      *  idx puede venir de la free-list (reuso), con la gen ya bumpeada del ocupante viejo. */
     private long handleRegister(int addr) {
-        int idx;
-        if (handleFreeTop > 0) {
-            idx = handleFreeList[--handleFreeTop];   // 4c: REUSO — slot reciclado (gen ya bumpeada por handleKill)
-        } else {
-            if (handleNext >= handleAddr.length) {
-                handleAddr = java.util.Arrays.copyOf(handleAddr, handleAddr.length * 2);
-                handleGen  = java.util.Arrays.copyOf(handleGen,  handleGen.length  * 2);
+        // Paso 7 — la tabla (free-list/handleNext) es estado COMPARTIDO: bajo multi-worker
+        // dos threads registran a la vez → carrera en handleFreeTop → roban el mismo idx.
+        // Serializamos con vmLock (regla explícita, espejo del bpvm_smp_lock de la VM-C).
+        // Reentrante: los opcodes que ya envuelven alloc+register en synchronized(vmLock)
+        // lo re-adquieren sin problema. El GC usa handleKillIdx bajo vmLock (STW).
+        synchronized (vmLock) {
+            int idx;
+            if (handleFreeTop > 0) {
+                idx = handleFreeList[--handleFreeTop];   // 4c: REUSO — slot reciclado (gen ya bumpeada por handleKill)
+            } else {
+                if (handleNext >= handleAddr.length) {
+                    handleAddr = java.util.Arrays.copyOf(handleAddr, handleAddr.length * 2);
+                    handleGen  = java.util.Arrays.copyOf(handleGen,  handleGen.length  * 2);
+                }
+                idx = handleNext++;
+                handleGen[idx] = 0;   // slot fresco
             }
-            idx = handleNext++;
-            handleGen[idx] = 0;   // slot fresco
+            handleAddr[idx] = addr;
+            // Handle 64b = gen(slot)<<32 | (idx|TAG). El deref valida gen(handle)==gen(slot):
+            // un handle a un slot RECICLADO (gen vieja) no matchea → grita.
+            return ((long) handleGen[idx] << 32) | ((long) (idx | HANDLE_TAG) & HANDLE_LOW);
         }
-        handleAddr[idx] = addr;
-        // Handle 64b = gen(slot)<<32 | (idx|TAG). El deref valida gen(handle)==gen(slot):
-        // un handle a un slot RECICLADO (gen vieja) no matchea → grita.
-        return ((long) handleGen[idx] << 32) | ((long) (idx | HANDLE_TAG) & HANDLE_LOW);
     }
 
     /** Contrato B / paso 4c — libera el slot de un handle (owner-free): BUMP de la
@@ -1609,9 +1616,11 @@ public class VirtualMachine {
      *  evita el doble-free real → aquí reciclamos el slot una sola vez. */
     private void handleKill(long ref) {
         if ((ref & HANDLE_TAG) == 0) return;
-        int idx = handleIdx(ref);
-        if (idx <= 0 || idx >= handleNext) return;
-        handleKillIdx(idx);
+        synchronized (vmLock) {   // paso 7: serializa la free-list (espejo del bpvm_smp_lock de la VM-C)
+            int idx = handleIdx(ref);
+            if (idx <= 0 || idx >= handleNext) return;
+            handleKillIdx(idx);
+        }
     }
 
     /** Recicla un SLOT de la tabla por índice: bump de generación + addr=0 (marca el
