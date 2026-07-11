@@ -4938,9 +4938,9 @@ public class VirtualMachine {
             // owner del objeto contenedor) considera que ESTE array de refs y
             // su contenido le pertenecen. Liberamos cada slot non-null
             // recursivamente y luego el array como bloque.
-            int length = readInt32(ref);
+            int length = readInt32(headerAddr + 4);   // V4: vía headerAddr (ya derefeado; era readInt32(ref) crudo → con handle leía basura)
             for (int i = 0; i < length; i++) {
-                int slotRef = (int) readI64(memory, ref + 4 + i * 8);   // H1.2a: ref plana 8B (low32)
+                int slotRef = (int) readI64(memory, headerAddr + OBJ_HEADER_SIZE + i * 8);   // ref plana 8B (low32)
                 if (slotRef != 0) freeOwnedObjectLocked(slotRef);
             }
         }
