@@ -250,7 +250,11 @@ struct bpvm {
      * Modo neutro: monotónica, sin generación (pasos 3-4). handle_addr[i] = addr
      * físico. El GC se SUSPENDE durante la migración (gc_suspended). */
     uint32_t* handle_addr;
-    uint32_t  handle_cap;
+    /* Paso 3 — GENERACIÓN por índice (contrato B). Monotónica-no-reuso: 0 = vivo;
+     * >0 = LIBERADO. El deref de PROGRAMA (bpvm_ref_dead) lo consulta → use-after-free
+     * grita. Gen de 1 bit; el handle 64b (gen en los 32 altos) llega en el paso 4. */
+    uint32_t* handle_gen;
+    uint32_t  handle_cap;      /* capacidad de handle_addr Y handle_gen */
     uint32_t  handle_next;     /* 0 reservado para null */
     int       gc_suspended;    /* 1 = GC no corre (migración a handles) */
 
@@ -430,6 +434,19 @@ static inline void bpref_push(bpvm_t* vm, bpvm_thread_t* tc, bpref_t r) {
 /* V4: registra un objeto de HEAP (dirección user_ref) y devuelve su HANDLE
  * (índice | TAG). Implementado en heap.c (puede crecer la tabla). */
 uint32_t bpvm_handle_register(bpvm_t* vm, uint32_t addr);
+/* Paso 3 — marca MUERTO el índice de un handle (owner-free). No-op para null y
+ * constantes. Idempotente. Implementado en heap.c. */
+void bpvm_handle_kill(bpvm_t* vm, bpref_t r);
+
+/* Paso 3 / contrato B — ¿es `r` un handle a un objeto LIBERADO? Solo los handles
+ * (con TAG) pueden morir; null/constantes nunca. Lo consulta el deref de PROGRAMA
+ * (opcodes de campo/array/invoke) para gritar "objeto eliminado". */
+static inline int bpvm_ref_dead(const bpvm_t* vm, bpref_t r) {
+    if ((r.v & BPVM_HANDLE_TAG) == 0u) return 0;
+    uint32_t idx = r.v & ~BPVM_HANDLE_TAG;
+    return (vm->handle_gen != NULL && idx > 0u && idx < vm->handle_next
+            && vm->handle_gen[idx] != 0u) ? 1 : 0;
+}
 
 /* Resolver una referencia a su offset en memory[] (DÓNDE vive el objeto). LA
  * indirección: sin TAG = null o constante del data block → identidad; con TAG =

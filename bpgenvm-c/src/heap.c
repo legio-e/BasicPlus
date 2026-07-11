@@ -300,12 +300,25 @@ uint32_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
         uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u : 4096u;
         uint32_t* na = (uint32_t*) realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
         if (!na) return addr;
+        uint32_t* ng = (uint32_t*) realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
+        if (!ng) { vm->handle_addr = na; return addr; }   /* addr ya realojado; gen no crece → sin tag */
         vm->handle_addr = na;
+        vm->handle_gen  = ng;
         vm->handle_cap  = new_cap;
     }
     uint32_t idx = vm->handle_next++;
     vm->handle_addr[idx] = addr;
+    vm->handle_gen[idx]  = 0u;   /* vivo (paso 4: aquí se sembrará la gen del handle 64b) */
     return idx | BPVM_HANDLE_TAG;
+}
+
+/* Paso 3 — marca MUERTO el índice de un handle (owner-free). No-op para null y
+ * constantes (sin TAG, nunca mueren). Idempotente: el doble-free real lo sigue
+ * evitando el TAG_FREE_BIT del bloque físico. */
+void bpvm_handle_kill(bpvm_t* vm, bpref_t r) {
+    if ((r.v & BPVM_HANDLE_TAG) == 0u) return;
+    uint32_t idx = r.v & ~BPVM_HANDLE_TAG;
+    if (vm->handle_gen != NULL && idx > 0u && idx < vm->handle_next) vm->handle_gen[idx]++;
 }
 
 /* H3: GC stop-the-world. Asume vm_lock tomado. Lo usan el disparo proactivo

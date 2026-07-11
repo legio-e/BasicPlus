@@ -578,6 +578,12 @@ public class VirtualMachine {
     // llega en pasos 3-4). slot 0 = null. Con el GC suspendido no se recicla, y
     // los samples cortos no agotan la tabla (crece por duplicación si hiciera falta).
     private int[] handleAddr = new int[4096];
+    // Paso 3 — GENERACIÓN por índice (contrato B). Monotónica-no-reuso todavía:
+    // 0 = vivo; >0 = LIBERADO (muerto). El deref de PROGRAMA (requireAlive) lanza
+    // "objeto eliminado" si el índice está muerto → use-after-free que grita y salta.
+    // Es la generación de 1 bit: el ensanche a handle 64b (gen en los 32 altos) llega
+    // en el paso 4 con el reuso de slots, donde distinguir ocupante viejo/nuevo lo exige.
+    private int[] handleGen  = new int[4096];
     private int   handleNext = 1;   // 0 reservado para null
 
     // Tag bits del header del objeto
@@ -1552,10 +1558,34 @@ public class VirtualMachine {
     private int handleRegister(int addr) {
         if (handleNext >= handleAddr.length) {
             handleAddr = java.util.Arrays.copyOf(handleAddr, handleAddr.length * 2);
+            handleGen  = java.util.Arrays.copyOf(handleGen,  handleGen.length  * 2);
         }
         int idx = handleNext++;
         handleAddr[idx] = addr;
+        handleGen[idx]  = 0;   // vivo (paso 4: aquí se sembrará la gen del handle 64b)
         return idx | HANDLE_TAG;
+    }
+
+    /** Paso 3 — marca MUERTO el índice de un handle (owner-free). No-op para null y
+     *  constantes (sin TAG, nunca mueren). Idempotente: doble-free deja el flag puesto.
+     *  El chequeo del bloque físico (TAG_FREE_BIT) sigue evitando el doble-free real. */
+    private void handleKill(int ref) {
+        if ((ref & HANDLE_TAG) == 0) return;
+        int idx = ref & ~HANDLE_TAG;
+        if (idx > 0 && idx < handleNext) handleGen[idx]++;
+    }
+
+    /** Contrato B — deref de PROGRAMA: si el ref es un handle a un objeto LIBERADO,
+     *  lanza RuntimeError "objeto eliminado" (use-after-free que grita y salta). Se
+     *  llama en los opcodes de deref (campo/array/invoke) donde hay tc+sp; el
+     *  refDeref interno (GC/free) sigue siendo tolerante a muertos. */
+    private void requireAlive(ThreadContext tc, int sp, int ref) {
+        if ((ref & HANDLE_TAG) == 0) return;           // null/constante: siempre vivo
+        int idx = ref & ~HANDLE_TAG;
+        if (idx > 0 && idx < handleNext && handleGen[idx] != 0) {
+            tc.sp = sp;
+            throwBpRuntimeError(tc, "referencia a objeto eliminado (use-after-free)");
+        }
     }
 
     /** Resuelve una referencia a su dirección física en memory[].
@@ -2584,6 +2614,7 @@ public class VirtualMachine {
                 case 0x53: { // GET_FIELD
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    requireAlive(tc, sp, obj);   // contrato B
                     writeI32(mem, sp, readI32(mem, fieldAddr(obj, slot))); sp += 4;
                     break;
                 }
@@ -2591,6 +2622,7 @@ public class VirtualMachine {
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    requireAlive(tc, sp, obj);   // contrato B
                     writeI32(mem, fieldAddr(obj, slot), val);
                     break;
                 }
@@ -2599,6 +2631,7 @@ public class VirtualMachine {
                 case 0xA8: { // GET_FIELD_LONG
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    requireAlive(tc, sp, obj);   // contrato B
                     writeI64(mem, sp, readI64(mem, fieldAddr(obj, slot))); sp += 8;
                     break;
                 }
@@ -2606,6 +2639,7 @@ public class VirtualMachine {
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= 8; long val = readI64(mem, sp);
                     sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    requireAlive(tc, sp, obj);   // contrato B
                     writeI64(mem, fieldAddr(obj, slot), val);
                     break;
                 }
@@ -3039,6 +3073,7 @@ public class VirtualMachine {
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= REF_SIZE; int val = refLoad(mem, sp);   // V4: valor = ref nueva (8B, era 4B → drift + high-word)
                     sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    requireAlive(tc, sp, obj);   // contrato B
                     int slotAddr = fieldAddr(obj, slot);
                     int old = refLoad(mem, slotAddr);             // V4: ref vieja (8B flat; era readI32 = high-word=0 → leak)
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
@@ -3151,6 +3186,7 @@ public class VirtualMachine {
                                 + " (vtSlot=" + vtSlot + ", numArgs=" + numArgs + ")");
                         break;
                     }
+                    requireAlive(tc, sp, thisRef);   // contrato B: método sobre objeto liberado → grita
                     int classPtr   = readI32(mem, refDeref(thisRef));
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
 
@@ -4917,6 +4953,7 @@ public class VirtualMachine {
         if (headerAddr < heapStart || headerAddr >= heapNext) return;
         int tag = readInt32(headerAddr);
         if ((tag & TAG_FREE_BIT) != 0) return;       // ya libre
+        handleKill(ref);   // Paso 3/contrato B: el índice queda MUERTO → derefs futuros gritan
         int type = (tag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
 
         if (type == TYPE_OBJECT) {

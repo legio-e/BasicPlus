@@ -1,0 +1,40 @@
+// uaftest.bp — Paso 3 / contrato B: usar una referencia a un objeto LIBERADO
+// grita y salta ("objeto eliminado"), nunca lee el objeto equivocado en silencio.
+module UafTest
+
+  public class Animal
+    public var nombre: string
+    public function Animal(nombre: string)
+      this.nombre := nombre
+    end Animal
+  end Animal
+
+  public class Caja
+    public var owner contenido: Animal
+    public function Caja(a: Animal)
+      this.contenido := a
+    end Caja
+    public function Sustituir(nuevo: Animal)
+      this.contenido := nuevo   // libera el contenido viejo (owner-free)
+    end Sustituir
+  end Caja
+
+  function Main()
+    var owner c: Caja := Caja(Animal("Rex"))
+    var alias: Animal := c.contenido     // alias (borrow) al Rex — mismo handle
+    print "vivo:", alias.nombre          // "Rex" — objeto vivo
+
+    c.Sustituir(Animal("Toby"))          // libera Rex → alias queda COLGANTE
+
+    try
+      var n: string := alias.nombre      // use-after-free AISLADO → debe gritar aqui
+      print "colgante:", n
+      print "ERROR: no deberia llegar aqui"
+    catch e: RuntimeError
+      print "cazado:", e.msg
+    endtry
+
+    print "fin OK"
+  end Main
+
+end UafTest

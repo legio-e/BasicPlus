@@ -456,6 +456,7 @@ static void bpvm_free_owned(bpvm_t* vm, bpref_t r) {
     uint32_t header = addr - 4u;
     uint32_t tag = bpvm_read_u32_be(vm->memory + header);
     if ((tag & BPVM_TAG_FREE_BIT) != 0) return;                    /* ya libre */
+    bpvm_handle_kill(vm, r);   /* Paso 3/contrato B: el índice queda MUERTO → derefs futuros gritan */
     int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
 
     if (type == BPVM_TYPE_OBJECT) {
@@ -1447,6 +1448,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint8_t slot = mem[pc++];
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             int32_t v = bpvm_read_i32_be(bpref_field(vm, obj, slot));
             bpvm_write_i32_be(mem + sp, v); sp += 4;
             break;
@@ -1456,6 +1458,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             bpvm_write_i32_be(bpref_field(vm, obj, slot), v);
             break;
         }
@@ -1465,6 +1468,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint8_t slot = mem[pc++];
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             int64_t v = bpvm_read_i64_be(bpref_field(vm, obj, slot));
             bpvm_write_i64_be(mem + sp, v); sp += 8;
             break;
@@ -1474,6 +1478,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             bpvm_write_i64_be(bpref_field(vm, obj, slot), v);
             break;
         }
@@ -1484,6 +1489,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t this_addr = sp - BPVM_REF_SIZE - (uint32_t) num_args * 4;   /* receptor ref */
             bpref_t this_obj = bpref_load(vm, this_addr);
             if (bpref_is_null(this_obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B: método sobre objeto liberado */
             uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, this_obj));
 
             /* L2 v3: fall-back al parent si vt[slot] == -1 o slot >= num_methods.
@@ -1564,6 +1570,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= BPVM_REF_SIZE; bpref_t val = bpref_load(vm, sp);   /* V4: valor = ref nueva (8B; era 4B → drift + high-word) */
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             if (bpref_is_null(obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t field_addr = bpref_deref(vm, obj) + BPVM_ARR_DATA_OFF + (uint32_t) slot * 4u;
             bpref_t old = bpref_load(vm, field_addr);               /* V4: ref vieja (8B flat; era readi32=high-word=0 → leak) */
             bpvm_free_owned(vm, old);   /* V4/H-006: cascada recursiva; era root-only + solo objetos */
