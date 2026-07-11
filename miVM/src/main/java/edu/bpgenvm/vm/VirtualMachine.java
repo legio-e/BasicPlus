@@ -592,6 +592,14 @@ public class VirtualMachine {
     private int   handleFreeTop  = 0;
     private int   handleNext = 1;   // 0 reservado para null
 
+    // Paso 7c — A1 publicación segura: la VM-C pone RELEASE/ACQUIRE explícitos en el slot
+    // (bpref_deref/handle_register, atómicos C11) porque VA a placa ARM/RISC-V. miVM es la
+    // VM de HOST (x86, memoria fuerte) y NO se despliega a placa → aquí el RELEASE lo da
+    // synchronized(vmLock) al publicar en handleRegister (monitor-exit = release) y el
+    // ACQUIRE del lector es gratis en x86. El dual explícito (VarHandle get/setAcquire) es
+    // Java 9+; el proyecto es Java 8 → se deja documentado (solo importaría en un host
+    // ARM multi-worker, fuera del target).
+
     // Tag bits del header del objeto
     private static final int TAG_MARK_BIT  = 0x80000000;
     private static final int TAG_FREE_BIT  = 0x40000000;
@@ -1603,7 +1611,7 @@ public class VirtualMachine {
                 idx = handleNext++;
                 handleGen[idx] = 0;   // slot fresco
             }
-            handleAddr[idx] = addr;
+            handleAddr[idx] = addr;   // paso 7c: publicado bajo synchronized(vmLock) → release en el monitor-exit
             // Handle 64b = gen(slot)<<32 | (idx|TAG). El deref valida gen(handle)==gen(slot):
             // un handle a un slot RECICLADO (gen vieja) no matchea → grita.
             return ((long) handleGen[idx] << 32) | ((long) (idx | HANDLE_TAG) & HANDLE_LOW);
@@ -1663,6 +1671,9 @@ public class VirtualMachine {
     private int refDeref(long ref) {
         if ((ref & HANDLE_TAG) == 0) return (int) ref;
         int idx = handleIdx(ref);
+        // Paso 7c — A1: en x86 (host) el load ya es acquire; el dual explícito (VarHandle
+        // getAcquire) es Java 9+ → ver nota en la declaración de la tabla. La VM-C sí lleva
+        // el atómico C11 porque va a placa ARM/RISC-V.
         return (idx > 0 && idx < handleNext) ? handleAddr[idx] : 0;
     }
     /** Longitud (nº de elementos) de un array, de su cabecera. V4: deref primero. */

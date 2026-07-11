@@ -468,7 +468,13 @@ static inline int bpvm_ref_dead(const bpvm_t* vm, bpref_t r) {
 static inline uint32_t bpref_deref(const bpvm_t* vm, bpref_t r) {
     if ((r.v & BPVM_HANDLE_TAG) == 0u) return r.v;
     uint32_t idx = r.v & ~BPVM_HANDLE_TAG;
-    return (idx > 0u && idx < vm->handle_next) ? vm->handle_addr[idx] : 0u;
+    if (idx == 0u || idx >= vm->handle_next) return 0u;
+    /* Paso 7c — A1 publicación segura: ACQUIRE al leer el slot → garantiza VER el objeto
+     * COMPLETAMENTE inicializado que el escritor publicó con RELEASE (bpvm_handle_register).
+     * Es la mitad LECTOR del apretón de manos (el único punto de publicación = el slot).
+     * INERTE en x86 (los loads ya son acquire); en ARM/RISC-V emite la barrera (dmb/ldar).
+     * Validación real = fase de placa. */
+    return __atomic_load_n(&vm->handle_addr[idx], __ATOMIC_ACQUIRE);
 }
 /* Longitud (nº de elementos) de un array, leída de su cabecera. 0 si null. */
 static inline uint32_t bpref_arr_len(const bpvm_t* vm, bpref_t arr) {

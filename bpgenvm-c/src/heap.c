@@ -349,7 +349,11 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
         idx = vm->handle_next++;
         vm->handle_gen[idx] = 0u;   /* slot fresco */
     }
-    vm->handle_addr[idx] = addr;
+    /* Paso 7c — A1: publica el slot con RELEASE → todo lo escrito ANTES (init del objeto)
+     * es visible para quien lo lea con ACQUIRE (bpref_deref). Mitad ESCRITOR del apretón.
+     * (El unlock de abajo ya da release; esto lo hace EXPLÍCITO y sobrevive a quitar el
+     * lock en 7b.2.) Inerte en x86; barrera en ARM/RISC-V. */
+    __atomic_store_n(&vm->handle_addr[idx], addr, __ATOMIC_RELEASE);
     r.v = ((uint64_t) vm->handle_gen[idx] << 32) | (uint64_t)(idx | BPVM_HANDLE_TAG);
     bpvm_smp_unlock(vm);
     return r;
