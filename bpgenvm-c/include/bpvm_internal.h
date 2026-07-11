@@ -391,7 +391,9 @@ static inline void bpvm_write_i64_be(uint8_t* p, int64_t v) {
  * footprint en MEMORIA, NO sizeof(bpref_t). Hoy: carril plano de 8 bytes. */
 #define BPVM_REF_SIZE 8
 
-typedef struct { uint32_t v; } bpref_t;
+/* V4/paso4: HANDLE de 64b = [gen:32 | idx|TAG:32]. bpref_t transporta los 64b;
+ * bpref_deref/bpvm_ref_dead enmascaran la palabra baja para idx/tag y la alta para gen. */
+typedef struct { uint64_t v; } bpref_t;
 
 /* -- construcción / consulta -- */
 static inline bpref_t bpref_null(void)               { bpref_t r; r.v = 0u; return r; }
@@ -405,7 +407,7 @@ static inline bpref_t  bpref_from_addr(uint32_t a)   { bpref_t r; r.v = a; retur
 
 /* -- codificación en memory[]: LA frontera de representación (handle aquí) -- */
 static inline bpref_t bpref_load(const bpvm_t* vm, uint32_t at) {
-    return bpref_from_addr((uint32_t) bpvm_read_i64_be(vm->memory + at));
+    bpref_t r; r.v = (uint64_t) bpvm_read_i64_be(vm->memory + at); return r;   /* 64b completo (gen en la palabra alta) */
 }
 static inline void bpref_store(bpvm_t* vm, uint32_t at, bpref_t r) {
     bpvm_write_i64_be(vm->memory + at, (int64_t) r.v);

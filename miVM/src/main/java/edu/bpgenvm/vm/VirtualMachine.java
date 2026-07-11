@@ -1541,20 +1541,28 @@ public class VirtualMachine {
     private static final int REF_SIZE     = 8;   // bytes de una ref en memory[]/pila
     private static final int ARR_DATA_OFF = 4;   // offset user_ref → 1er elemento
 
-    /** Lee una referencia de memory[at] (frontera de codificación; handle aquí). */
-    private static int refLoad(byte[] mem, int at) { return (int) readI64(mem, at); }
-    /** Escribe una referencia en memory[at] (plana: low32=addr, high=0). */
-    private static void refStore(byte[] mem, int at, int ref) {
-        writeI64(mem, at, ((long) ref) & 0xFFFFFFFFL);
+    /** Lee una referencia de memory[at]. V4/paso4: HANDLE de 64b = [gen:32 | idx|TAG:32].
+     *  refLoad devuelve los 64b completos (antes truncaba a low32 y perdía la gen). */
+    private static long refLoad(byte[] mem, int at) { return readI64(mem, at); }
+    /** Escribe una referencia (handle 64b completo) en memory[at]. */
+    private static void refStore(byte[] mem, int at, long ref) {
+        writeI64(mem, at, ref);
     }
-    /** V4 — bit 30 marca "es HANDLE de heap". Las direcciones directas (null=0 y
-     *  las CONSTANTES del data block, inmutables/no-heap) tienen este bit a 0: no
-     *  necesitan tabla ni generación (nunca se liberan ni mueven). La memoria es
-     *  <256KB (0x40000) → una dirección real jamás tiene el bit 30 puesto. */
-    private static final int HANDLE_TAG = 0x40000000;
+    /** V4 — bit 30 (en la palabra BAJA) marca "es HANDLE de heap". Las direcciones
+     *  directas (null=0 y las CONSTANTES del data block) tienen este bit a 0 y gen=0:
+     *  no necesitan tabla ni generación. La memoria es <256KB → una dirección real
+     *  jamás tiene el bit 30 puesto. Paso 4: la GENERACIÓN va en la palabra ALTA. */
+    private static final int  HANDLE_TAG = 0x40000000;
+    private static final long HANDLE_LOW = 0xFFFFFFFFL;
+    /** Índice de tabla de un handle (palabra baja sin el tag). */
+    private static int handleIdx(long ref) { return ((int) ref) & ~HANDLE_TAG; }
+    /** Generación embebida en el handle (palabra alta). */
+    private static int handleGenOf(long ref) { return (int) (ref >>> 32); }
 
-    /** V4: registra un objeto de HEAP (dirección user_ref) en la tabla y devuelve
-     *  su HANDLE (índice | TAG). Neutro: monotónico, sin generación todavía. */
+    /** V4: registra un objeto de HEAP (dirección user_ref) en la tabla y devuelve su
+     *  HANDLE 64b = gen<<32 | (idx|TAG). Paso 4a NEUTRO: monotónico, gen sembrada = 0
+     *  (idéntico a antes). En 4b el handle empieza a llevar la gen del slot; en 4c el
+     *  idx puede venir de la free-list (reuso), con la gen ya bumpeada del ocupante viejo. */
     private int handleRegister(int addr) {
         if (handleNext >= handleAddr.length) {
             handleAddr = java.util.Arrays.copyOf(handleAddr, handleAddr.length * 2);
@@ -1562,50 +1570,51 @@ public class VirtualMachine {
         }
         int idx = handleNext++;
         handleAddr[idx] = addr;
-        handleGen[idx]  = 0;   // vivo (paso 4: aquí se sembrará la gen del handle 64b)
+        handleGen[idx]  = 0;   // vivo
+        // 4a: devuelve idx|TAG (int). bit31=0 → al almacenarse en 8B se zero-extiende
+        // (gen=0 en la palabra alta). En 4b devolverá long con gen<<32 | (idx|TAG).
         return idx | HANDLE_TAG;
     }
 
     /** Paso 3 — marca MUERTO el índice de un handle (owner-free). No-op para null y
-     *  constantes (sin TAG, nunca mueren). Idempotente: doble-free deja el flag puesto.
-     *  El chequeo del bloque físico (TAG_FREE_BIT) sigue evitando el doble-free real. */
-    private void handleKill(int ref) {
+     *  constantes. Idempotente. El TAG_FREE_BIT del bloque físico evita el doble-free real. */
+    private void handleKill(long ref) {
         if ((ref & HANDLE_TAG) == 0) return;
-        int idx = ref & ~HANDLE_TAG;
+        int idx = handleIdx(ref);
         if (idx > 0 && idx < handleNext) handleGen[idx]++;
     }
 
     /** Contrato B — deref de PROGRAMA: si el ref es un handle a un objeto LIBERADO,
      *  lanza RuntimeError "objeto eliminado" (use-after-free que grita y salta). Se
      *  llama en los opcodes de deref (campo/array/invoke) donde hay tc+sp; el
-     *  refDeref interno (GC/free) sigue siendo tolerante a muertos. */
-    private void requireAlive(ThreadContext tc, int sp, int ref) {
+     *  refDeref interno (GC/free) sigue siendo tolerante a muertos.
+     *  Paso 4a NEUTRO: aún compara con el dead-flag (handleGen[idx] != 0), no con la
+     *  gen del handle — eso llega en 4b (handleGen[idx] != handleGenOf(ref)). */
+    private void requireAlive(ThreadContext tc, int sp, long ref) {
         if ((ref & HANDLE_TAG) == 0) return;           // null/constante: siempre vivo
-        int idx = ref & ~HANDLE_TAG;
+        int idx = handleIdx(ref);
         if (idx > 0 && idx < handleNext && handleGen[idx] != 0) {
             tc.sp = sp;
             throwBpRuntimeError(tc, "referencia a objeto eliminado (use-after-free)");
         }
     }
 
-    /** Resuelve una referencia a su dirección física en memory[].
-     *  V4/Paso2b: si NO tiene el TAG → es null (0) o una constante del data block
-     *  (dirección directa, inmutable) → identidad. Si tiene el TAG → consulta la
-     *  tabla (defensivo: índice fuera de rango → 0, útil al escaneo conservativo). */
-    private int refDeref(int ref) {
-        if ((ref & HANDLE_TAG) == 0) return ref;
-        int idx = ref & ~HANDLE_TAG;
+    /** Resuelve una referencia a su dirección física en memory[]. Sin TAG → null(0) o
+     *  constante (identidad). Con TAG → tabla (defensivo: fuera de rango → 0). */
+    private int refDeref(long ref) {
+        if ((ref & HANDLE_TAG) == 0) return (int) ref;
+        int idx = handleIdx(ref);
         return (idx > 0 && idx < handleNext) ? handleAddr[idx] : 0;
     }
     /** Longitud (nº de elementos) de un array, de su cabecera. V4: deref primero. */
-    private int arrLen(byte[] mem, int arr) { return readI32(mem, refDeref(arr)); }
+    private int arrLen(byte[] mem, long arr) { return readI32(mem, refDeref(arr)); }
     /** Offset del elemento idx: deref + cabecera + idx*elem_size. */
-    private int arrElem(int arr, int idx, int elemSize) {
+    private int arrElem(long arr, int idx, int elemSize) {
         return refDeref(arr) + ARR_DATA_OFF + idx * elemSize;
     }
     /** Offset del campo slot de un objeto: deref + cabecera + slot*4 (slots de 4B;
      *  el valor puede ser 4 u 8B). Layout: user_ref → [class_ptr u32][campos...]. */
-    private int fieldAddr(int obj, int slot) {
+    private int fieldAddr(long obj, int slot) {
         return refDeref(obj) + ARR_DATA_OFF + slot * 4;
     }
 
@@ -2263,7 +2272,7 @@ public class VirtualMachine {
 
                 case 0x1E: { // ALOAD
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -2276,7 +2285,7 @@ public class VirtualMachine {
                 case 0x1F: { // ASTORE
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -2287,7 +2296,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x20: { // ALEN
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     writeI32(mem, sp, arrLen(mem, arr)); sp += 4;
                     break;
                 }
@@ -2298,7 +2307,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x22: { // PRINT_STRING (legacy: con \n al final)
-                    sp -= REF_SIZE; int ref = refLoad(mem, sp);
+                    sp -= REF_SIZE; long ref = refLoad(mem, sp);
                     programOut.writeText(readVmString(ref));  // H2: decodifica UTF-8
                     programOut.newline();
                     break;
@@ -2429,7 +2438,7 @@ public class VirtualMachine {
 
                 case 0x3A: { // ALOAD_I8
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     writeI32(mem, sp, (int) mem[arrElem(arr, idx, 1)]); sp += 4;
@@ -2437,7 +2446,7 @@ public class VirtualMachine {
                 }
                 case 0x3B: { // ALOAD_U8
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     writeI32(mem, sp, mem[arrElem(arr, idx, 1)] & 0xFF); sp += 4;
@@ -2445,7 +2454,7 @@ public class VirtualMachine {
                 }
                 case 0x3C: { // ALOAD_I16
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = arrElem(arr, idx, 2);
@@ -2455,7 +2464,7 @@ public class VirtualMachine {
                 }
                 case 0x3D: { // ALOAD_U16
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = arrElem(arr, idx, 2);
@@ -2467,7 +2476,7 @@ public class VirtualMachine {
                 case 0x3E: { // ASTORE_I8
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     mem[arrElem(arr, idx, 1)] = (byte) val;
@@ -2476,7 +2485,7 @@ public class VirtualMachine {
                 case 0x3F: { // ASTORE_I16
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = arrElem(arr, idx, 2);
@@ -2613,7 +2622,7 @@ public class VirtualMachine {
                 }
                 case 0x53: { // GET_FIELD
                     int slot = mem[pc] & 0xFF; pc++;
-                    sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    sp -= REF_SIZE; long obj = refLoad(mem, sp);
                     requireAlive(tc, sp, obj);   // contrato B
                     writeI32(mem, sp, readI32(mem, fieldAddr(obj, slot))); sp += 4;
                     break;
@@ -2621,7 +2630,7 @@ public class VirtualMachine {
                 case 0x54: { // SET_FIELD
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= 4; int val = readI32(mem, sp);
-                    sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    sp -= REF_SIZE; long obj = refLoad(mem, sp);
                     requireAlive(tc, sp, obj);   // contrato B
                     writeI32(mem, fieldAddr(obj, slot), val);
                     break;
@@ -2630,7 +2639,7 @@ public class VirtualMachine {
                 // de slot de 4 bytes; el valor ocupa 2 slots consecutivos en el campo.
                 case 0xA8: { // GET_FIELD_LONG
                     int slot = mem[pc] & 0xFF; pc++;
-                    sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    sp -= REF_SIZE; long obj = refLoad(mem, sp);
                     requireAlive(tc, sp, obj);   // contrato B
                     writeI64(mem, sp, readI64(mem, fieldAddr(obj, slot))); sp += 8;
                     break;
@@ -2638,7 +2647,7 @@ public class VirtualMachine {
                 case 0xA9: { // SET_FIELD_LONG
                     int slot = mem[pc] & 0xFF; pc++;
                     sp -= 8; long val = readI64(mem, sp);
-                    sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    sp -= REF_SIZE; long obj = refLoad(mem, sp);
                     requireAlive(tc, sp, obj);   // contrato B
                     writeI64(mem, fieldAddr(obj, slot), val);
                     break;
@@ -2654,7 +2663,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x58: { // PRINT_STR_NONL
-                    sp -= REF_SIZE; int ref = refLoad(mem, sp);
+                    sp -= REF_SIZE; long ref = refLoad(mem, sp);
                     programOut.writeText(readVmString(ref));  // H2: decodifica UTF-8
                     break;
                 }
@@ -2819,7 +2828,7 @@ public class VirtualMachine {
                 }
                 case 0x8E: { // ALOAD_I64
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -2831,7 +2840,7 @@ public class VirtualMachine {
                 case 0x8F: { // ASTORE_I64
                     sp -= 8; long val = readI64(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
+                    sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -3064,18 +3073,18 @@ public class VirtualMachine {
                 }
 
                 case 0x5F: { // FREE_REF
-                    sp -= REF_SIZE; int ref = refLoad(mem, sp);
+                    sp -= REF_SIZE; long ref = refLoad(mem, sp);
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     freeOwnedObject(ref);
                     break;
                 }
                 case 0x60: { // SET_FIELD_OWNER
                     int slot = mem[pc] & 0xFF; pc++;
-                    sp -= REF_SIZE; int val = refLoad(mem, sp);   // V4: valor = ref nueva (8B, era 4B → drift + high-word)
-                    sp -= REF_SIZE; int obj = refLoad(mem, sp);
+                    sp -= REF_SIZE; long val = refLoad(mem, sp);   // V4: valor = ref nueva (8B, era 4B → drift + high-word)
+                    sp -= REF_SIZE; long obj = refLoad(mem, sp);
                     requireAlive(tc, sp, obj);   // contrato B
                     int slotAddr = fieldAddr(obj, slot);
-                    int old = refLoad(mem, slotAddr);             // V4: ref vieja (8B flat; era readI32 = high-word=0 → leak)
+                    long old = refLoad(mem, slotAddr);             // V4: ref vieja (8B flat; era readI32 = high-word=0 → leak)
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     freeOwnedObject(old);
                     refStore(mem, slotAddr, val);                 // V4: escribe ref plana 8B
@@ -3085,7 +3094,7 @@ public class VirtualMachine {
                 case 0x5E: { // INSTANCEOF
                     short csOff = (short) readI16(mem, pc); pc += 2;
                     int expected = cs + csOff;
-                    sp -= REF_SIZE; int ref = refLoad(mem, sp);
+                    sp -= REF_SIZE; long ref = refLoad(mem, sp);
                     int objClass = classPtrOfRefOr0(ref);
                     boolean ok = (objClass != 0) && isDescendantOf(objClass, expected);
                     writeI32(mem, sp, ok ? 1 : 0); sp += 4;
@@ -3179,7 +3188,7 @@ public class VirtualMachine {
                     pc += 2;
                     // H1.2a (V4): el receptor es una ref = 8 bytes (bajo los args, que ya
                     // van contados en slots) → sp-8-numArgs*4; readI64 + (int) low32.
-                    int thisRef    = refLoad(mem, sp - REF_SIZE - numArgs * 4);
+                    long thisRef    = refLoad(mem, sp - REF_SIZE - numArgs * 4);
                     if (thisRef == 0) {
                         tc.sp = sp;
                         throwBpRuntimeError(tc, "INVOKE_VIRTUAL sobre null receiver"
@@ -3298,7 +3307,7 @@ public class VirtualMachine {
     // ====================================================================
 
     /** Lee un string de la VM (length + chars) a partir de su user_ref y devuelve String Java. */
-    private String readVmString(int ref) {
+    private String readVmString(long ref) {
         // H2 (V2): strings son byte[] UTF-8. length = nº de bytes; payload en ref+4.
         // V4: la resolución ref→bytes pasa por la abstracción (arrLen/arrElem).
         if (ref == 0) return "";
@@ -3352,7 +3361,7 @@ public class VirtualMachine {
     private void dispatchBuiltin(Builtin b, ThreadContext tc) {
         switch (b) {
             case STRLEN: {
-                int ref = popTcRef(tc);   // H1.2a: string ref 8 bytes
+                long ref = popTcRef(tc);   // H1.2a: string ref 8 bytes
                 String s = readVmString(ref);          // H2: longitud en codepoints
                 pushTc(tc, s.codePointCount(0, s.length()));
                 break;
@@ -3514,7 +3523,7 @@ public class VirtualMachine {
             case GUI_SET_BG_COLOR:   { int rgb = popTc(tc); int hnd = popTc(tc); gui.setBgColor(hnd, rgb);   pushTc(tc, 0); break; }
             case GUI_SET_TEXT_COLOR: { int rgb = popTc(tc); int hnd = popTc(tc); gui.setTextColor(hnd, rgb); pushTc(tc, 0); break; }
             case GUI_SET_FONT:       { int f   = popTc(tc); int hnd = popTc(tc); gui.setFont(hnd, f);        pushTc(tc, 0); break; }
-            case GUI_LOAD_FONT:      { int ref = popTcRef(tc); pushTc(tc, gui.loadFont(readVmString(ref))); break; }
+            case GUI_LOAD_FONT:      { long ref = popTcRef(tc); pushTc(tc, gui.loadFont(readVmString(ref))); break; }
             case GUI_SET_ROTATION:   { int deg = popTc(tc); gui.setRotation(deg); pushTc(tc, 0); break; }
 
             // H19 — App.* introspección del proyecto (ids 211-213).
@@ -3891,7 +3900,7 @@ public class VirtualMachine {
             }
             case GROW_REF_ARRAY: {
                 int newCap = popTc(tc);
-                int oldRef = popTcRef(tc);   // H1.2a: array ref 8 bytes
+                long oldRef = popTcRef(tc);   // H1.2a: array ref 8 bytes
                 if (newCap < 0) throwBpRuntimeError(tc, "__growRefArray: capacidad negativa: " + newCap);
                 int od = (oldRef != 0) ? refDeref(oldRef) : 0;   // V4: dirección física fuente
                 int oldLen = (od != 0) ? readInt32(od) : 0;
@@ -3906,7 +3915,7 @@ public class VirtualMachine {
             }
             case GROW_INT_ARRAY: {
                 int newCap = popTc(tc);
-                int oldRef = popTcRef(tc);   // H1.2a: array ref 8 bytes
+                long oldRef = popTcRef(tc);   // H1.2a: array ref 8 bytes
                 if (newCap < 0) throwBpRuntimeError(tc, "__growIntArray: capacidad negativa: " + newCap);
                 int od = (oldRef != 0) ? refDeref(oldRef) : 0;   // V4: dirección física fuente
                 int oldLen = (od != 0) ? readInt32(od) : 0;
@@ -4870,7 +4879,7 @@ public class VirtualMachine {
      * con header TAG_TYPE = TYPE_OBJECT), devuelve su class_ptr. En caso
      * contrario (null, no-ref, ref a array, ref fuera del heap, etc.) devuelve 0.
      */
-    private int classPtrOfRefOr0(int ref) {
+    private int classPtrOfRefOr0(long ref) {
         if (ref <= 0) return 0;
         int headerAddr = refDeref(ref) - 4;
         if (headerAddr < heapStart || headerAddr >= heapNext) return 0;
@@ -4942,12 +4951,12 @@ public class VirtualMachine {
      *   - ref no apunta a una instancia de clase válida en el heap.
      *   - el header ya está marcado como libre.
      */
-    private void freeOwnedObject(int ref) {
+    private void freeOwnedObject(long ref) {
         synchronized (vmLock) { freeOwnedObjectLocked(ref); }
     }
 
     /** Implementación de freeOwnedObject que asume vmLock ya adquirido (para llamadas recursivas). */
-    private void freeOwnedObjectLocked(int ref) {
+    private void freeOwnedObjectLocked(long ref) {
         if (ref == 0) return;
         int headerAddr = refDeref(ref) - 4;
         if (headerAddr < heapStart || headerAddr >= heapNext) return;
@@ -4966,7 +4975,7 @@ public class VirtualMachine {
                 int word = readInt32(ownerBitmapBase + (i >>> 5) * 4);
                 if (((word >> (i & 31)) & 1) != 0) {
                     // V4: sub-campo owner = ref plana 8B (bit en el 1er slot; addr en el low word).
-                    int childRef = refLoad(memory, headerAddr + OBJ_HEADER_SIZE + i * 4);
+                    long childRef = refLoad(memory, headerAddr + OBJ_HEADER_SIZE + i * 4);
                     freeOwnedObjectLocked(childRef);
                 }
             }
@@ -5008,11 +5017,11 @@ public class VirtualMachine {
     // Los builtins que producen/consumen una referencia (arrays, strings,
     // objetos) deben usar estos en vez de pushTc/popTc (4 bytes) para no
     // desalinear el operand stack contra SET_LOCAL_L/ALOAD/etc.
-    private void pushTcRef(ThreadContext tc, int ref) {   // V4: base de la pila de builtins (análogo a push_ref de la VM-C)
+    private void pushTcRef(ThreadContext tc, long ref) {   // V4: base de la pila de builtins (análogo a push_ref de la VM-C)
         refStore(memory, tc.sp, ref);
         tc.sp += REF_SIZE;
     }
-    private int popTcRef(ThreadContext tc) {
+    private long popTcRef(ThreadContext tc) {
         tc.sp -= REF_SIZE;
         return refLoad(memory, tc.sp);
     }
