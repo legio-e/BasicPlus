@@ -269,6 +269,20 @@ test-kill: $(LIBOBJ)
 # BP. test/aot_ThrowMsg.c es un SNAPSHOT del .c que genera AotCEmitter (usa
 # throw_str con el string-handle computado). Salida byte-idéntica a la VM-Java.
 THROW_BIN = build/test_throwmsg.exe
+# Paso 7 (V4) — estrés de la tabla de handles bajo concurrencia. N pthreads
+# martillean handle_register/handle_kill sobre un vm compartido. CONTROL 1 thread
+# = 0 corrupciones (test sano); >1 thread = corrupciones por la carrera de la
+# free-list (ROJO hasta 7a: hacer la tabla SMP-safe).
+SMPH_BIN = build/test_smp_handles.exe
+test-smphandles: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_smp_handles.c $(LIBOBJ) -o $(SMPH_BIN) $(LDFLAGS)
+	@echo "--- CONTROL 1 thread (esperado: corrupciones=0) ---"
+	./$(SMPH_BIN) 1 200000
+	@echo "--- concurrente 4 y 8 threads (0 = tabla SMP-safe) ---"
+	-./$(SMPH_BIN) 4 200000
+	-./$(SMPH_BIN) 8 200000
+
 test-throwmsg: $(LIBOBJ)
 	@mkdir -p build
 	@if [ ! -f samples/ThrowMsg.mod ]; then \
