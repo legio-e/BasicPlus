@@ -1167,6 +1167,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD_I64: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I64: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
             int64_t v = bpvm_read_i64_be(bpref_arr_elem(vm, arr, (uint32_t) idx, 8));
@@ -1177,6 +1178,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I64: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
             bpvm_write_i64_be(bpref_arr_elem(vm, arr, (uint32_t) idx, 8), v);
@@ -1306,6 +1308,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length)
                 BPVM_RT_THROW("ALOAD: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
@@ -1317,6 +1320,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length)
                 BPVM_RT_THROW("ASTORE: índice fuera de rango %" PRId32 " (length=%d)", idx, (int) length);
@@ -1325,6 +1329,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_ALEN: {
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             bpvm_write_i32_be(mem + sp, (int32_t) length); sp += 4;
             break;
@@ -1332,6 +1337,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD_I8: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I8: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             int8_t v = (int8_t) *bpref_arr_elem(vm, arr, (uint32_t) idx, 1);
@@ -1341,6 +1347,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD_U8: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_U8: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             uint8_t v = *bpref_arr_elem(vm, arr, (uint32_t) idx, 1);
@@ -1350,6 +1357,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD_I16: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_I16: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             int16_t v = bpvm_read_i16_be(bpref_arr_elem(vm, arr, (uint32_t) idx, 2));
@@ -1359,6 +1367,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD_U16: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ALOAD_U16: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             uint16_t v = bpvm_read_u16_be(bpref_arr_elem(vm, arr, (uint32_t) idx, 2));
@@ -1369,6 +1378,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I8: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             *bpref_arr_elem(vm, arr, (uint32_t) idx, 1) = (uint8_t)(v & 0xFF);
@@ -1378,6 +1388,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_THROW("ASTORE_I16: idx fuera de rango %" PRId32 " (len=%d)", idx, (int) length);
             int16_t v16 = (int16_t)(v & 0xFFFF);

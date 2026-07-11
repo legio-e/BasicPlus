@@ -2263,7 +2263,7 @@ public class VirtualMachine {
 
                 case 0x1E: { // ALOAD
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -2276,7 +2276,7 @@ public class VirtualMachine {
                 case 0x1F: { // ASTORE
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -2287,7 +2287,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x20: { // ALEN
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     writeI32(mem, sp, arrLen(mem, arr)); sp += 4;
                     break;
                 }
@@ -2429,7 +2429,7 @@ public class VirtualMachine {
 
                 case 0x3A: { // ALOAD_I8
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     writeI32(mem, sp, (int) mem[arrElem(arr, idx, 1)]); sp += 4;
@@ -2437,7 +2437,7 @@ public class VirtualMachine {
                 }
                 case 0x3B: { // ALOAD_U8
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     writeI32(mem, sp, mem[arrElem(arr, idx, 1)] & 0xFF); sp += 4;
@@ -2445,7 +2445,7 @@ public class VirtualMachine {
                 }
                 case 0x3C: { // ALOAD_I16
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = arrElem(arr, idx, 2);
@@ -2455,7 +2455,7 @@ public class VirtualMachine {
                 }
                 case 0x3D: { // ALOAD_U16
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = arrElem(arr, idx, 2);
@@ -2467,7 +2467,7 @@ public class VirtualMachine {
                 case 0x3E: { // ASTORE_I8
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     mem[arrElem(arr, idx, 1)] = (byte) val;
@@ -2476,7 +2476,7 @@ public class VirtualMachine {
                 case 0x3F: { // ASTORE_I16
                     sp -= 4; int val = readI32(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = arrElem(arr, idx, 2);
@@ -2819,7 +2819,7 @@ public class VirtualMachine {
                 }
                 case 0x8E: { // ALOAD_I64
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
@@ -2831,7 +2831,7 @@ public class VirtualMachine {
                 case 0x8F: { // ASTORE_I64
                     sp -= 8; long val = readI64(mem, sp);
                     sp -= 4; int idx = readI32(mem, sp);
-                    sp -= REF_SIZE; int arr = refLoad(mem, sp);
+                    sp -= REF_SIZE; int arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;

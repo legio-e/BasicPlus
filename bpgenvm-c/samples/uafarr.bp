@@ -1,0 +1,34 @@
+// uafarr.bp — Paso 3b / contrato B sobre ARRAYS: indexar un array LIBERADO
+// (vía owner-free de un campo owner integer[]) grita "objeto eliminado".
+module UafArr
+
+  public class Buf
+    public var owner data: integer[]
+    public function Buf(d: integer[])
+      this.data := d
+    end Buf
+    public function Reemplaza(d: integer[])
+      this.data := d   // libera el array viejo (owner-free)
+    end Reemplaza
+  end Buf
+
+  function Main()
+    var a: integer[] := newIntArray(3)
+    a[0] := 42
+    var owner b: Buf := Buf(a)
+    var alias: integer[] := b.data       // alias al array a — mismo handle
+    print "vivo:", alias[0]              // 42 — array vivo
+
+    b.Reemplaza(newIntArray(2))          // libera el array a → alias COLGANTE
+
+    try
+      var v: integer := alias[0]         // use-after-free sobre array → debe gritar
+      print "colgante:", v
+    catch e: RuntimeError
+      print "cazado:", e.msg
+    endtry
+
+    print "fin OK"
+  end Main
+
+end UafArr
