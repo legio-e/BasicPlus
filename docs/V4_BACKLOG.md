@@ -48,6 +48,81 @@ El índice que manda; el resto del documento es el detalle que va colgando de é
 
 ---
 
+## 🏗️ H1 — Modelo de memoria por handles  *(hito ACTIVO de V4, arrancado 8-jul-2026)*
+
+La **columna de V4**: refs planas → **handle (índice + generación, 64 b decidido)**, contrato
+**fail-fast** (deref de objeto liberado → RuntimeError, nunca UAF mudo). Vuelve imposibles por
+construcción la familia de bugs de v3.0.1 (UAF, punteros crudos, alineación). Método: **paso a
+paso, verificando cada escalón contra la paridad dual-VM**. Análisis en
+`bp_propuesta_modelo_memoria/` (spec + verificación + ADR-0001). Los otros 9 temas del índice van
+cogiendo H2, H3… según se secuencien.
+
+- **H1.1 — Spike de coste de indirección. ✅ HECHO (8-jul) → handles UNIFORMES viables.**
+  Experimento **desechable** (ya revertido: macro `HANDLE_DEREF` + tabla proxy en `interp.c`, toggle
+  guardado `-DBPVM_HANDLE_SPIKE` en `pico/CMakeLists.txt`). El proxy = 1 carga a tabla + 1 check de
+  generación devolviendo la **misma dirección** → paridad byte-idéntica en las 12 corridas
+  (`chk`=504469776/11940000/-455008256 siempre). Kernels: campo (ref cte), recorrido de lista (ref
+  variable), array. Medido en **host VM-C + Pico (heap SRAM) + Metro (heap PSRAM, tabla SRAM)**:
+  **Host x86 (OoO+caché) ~0 %** (dentro de ruido) · **Pico Cortex-M33 +2–5 %** (field +4.7, walk
+  +3.1, array +1.9) · **Metro +2–4 %** (field +4.2, walk +2.4, array +1.9). **La PSRAM NO lo
+  empeora** (tabla en SRAM; la lentitud de PSRAM la pagan OFF y ON por igual en las lecturas del
+  objeto). Confirma la hipótesis: el micro en-orden sin caché no esconde la carga extra → ~3 %; en
+  `native` se resuelve-1-vez-y-pin → ~0. **Veredicto: uniforme viable — no hace falta híbrido para
+  el intérprete.** Falta medir aparte (dentro de H1.2b): barrera de escritura A1 + alta de handle en
+  la alocación (mucho más raras que el deref). Datos/kernels: `C:/tmp/spike_device/`.
+- **Lead (8-jul, del spike) — cuelgue mudo en placa al construir estructuras medianas.** Construir
+  una lista enlazada de ~1000 nodos (~12 KB) **cuelga MUDO** en Pico y Metro; a 200 nodos va. En
+  **host corre hasta con `--mem=64 KB`** → NO reproduce en host = **específico del device**. Acotado:
+  NO es el stack de operandos (`CallLoop` 3M llamadas void y `VarLoop` 3M var-en-bucle completan con
+  128 KB en host) → apunta al **GC/heap del micro**. Caracterizar con la placa delante (empezar por
+  el `mem` del device para ver el heap real). Candidato a que el contrato **fail-fast** de handles lo
+  saque a la luz (gritar) en vez de colgar en silencio.
+  - **Requisito (Eduardo 8-jul):** la función de **alocación del heap** (`heap.c` + su gemela en miVM)
+    debe, al quedarse sin espacio tras el GC, **saltar un `RuntimeError` atrapable — "No space in
+    heap"** (o similar) — y **NUNCA colgarse** (hoy, sospecha: bucle GC-sin-progreso cuando el GC no
+    libera nada porque todo está vivo). Fail-fast **como norma ya**, no hace falta esperar a los
+    handles para esto; el mensaje con **paridad dual-VM**. Es un arreglo contenido y de robustez.
+    - **✅ HECHO (11-jul, commit `bbea3d7`).** Descartada la sospecha del bucle: `bpvm_heap_alloc` es
+      **GC-once-then-fail** (colecta 1 vez y `return 0`, sin bucle). El "cuelgue MUDO" del device era
+      el `0` propagándose como `BPVM_ERR_OOM` → **exit-4 invisible en placa** (en host imprime status;
+      en el firmware no se surfaceaba). Ahora los 11 sitios de alocación (5 en `interp.c` vía
+      `BPVM_RT_THROW`, 6 en `builtins.c` vía `builtin_throw`) + `heapAlloc` de miVM (guarda
+      `throwingOom` anti-recursión + fallback `BpThreadFault`) lanzan un **RuntimeError BP atrapable
+      "No space in heap"**. La excepción PEQUEÑA cabe en el hueco de bump que deja el alloc GRANDE que
+      falló; si ni eso cabe → salida limpia (`BPVM_ERR_RUNTIME` / `BpThreadFault`), nunca hang. Test
+      permanente `samples/OomCatch.bp` + `make test-oom`; **paridad dual-VM byte-idéntica** ("cazado
+      OOM: No space in heap" / "vivo tras OOM" / exit 0); JUnit 34/34. **Pendiente menor (con la placa
+      delante, diferido con el resto de trabajo de device):** confirmar que el caso de ~1000 nodos ya
+      muestra el error en vez de aparentar colgarse — muy probable, pero sin verificar en HW.
+- **H1.2 — Migración a handles.** En **dos escalones** (idea de Eduardo 8-jul: aislar la fontanería
+  de 64 b antes de la semántica, porque es la **misma clase que el `long`** y ya nos mordió en STM32):
+  - **H1.2a — Refs a 8 bytes, semántica PLANA** (prevención/de-risk). Ensanchar toda ref 4→8 B
+    **reutilizando el carril de 8 bytes de `long`/`double`** (H1.2 de V3, ya probado); los 8 B
+    guardan la misma dirección (32 bajos = dir, 32 altos = 0), deref igual que hoy. **Verificación:
+    TODO el suite byte-idéntico dual-VM + shakedown** → cualquier divergencia = bug del ensanchado,
+    aislado. Riesgo real: **GC** (marcar/trazar ref de 8 B) + tamaño de elemento de **arrays de ref**
+    (4→8) y **campos ref** (→ 2 slots + bitmap). **NO se publica** — es un checkpoint interno (8 B
+    planos = coste sin beneficio; es el escalón). **Plan detallado:**
+    `bp_propuesta_modelo_memoria/03-arquitectura/plan-h1.2a-ensanchado-refs.md` (análisis cerrado
+    8-jul: inventario dual-VM de sitios 4B + orden de ataque + crux del bitmap/GC con la trampa
+    big-endian).
+  - **H1.2b — Semántica de handle.** Los mismos 8 B pasan a `(índice, generación)`; deref → lookup
+    en tabla de slots `{addr, gen, flags}` + check de generación; contrato B (fail-fast) + **barrera
+    A1** en el punto único de publicación (TSan en host SMP + litmus en device 2-core). Cambio
+    pequeño y localizado, sobre fontanería ya probada.
+- **Diferidos dentro de H1:** compactación (cota de pausa STW, H-004) + arrays fijos locales pasados
+  por-ref (sin entrada en la tabla — ver propuesta §9 decisión 5 / [[v4-modelo-memoria-handles]]).
+- **Diferido — AOT/native no es handle-aware (regresión conocida, NO bloquea).** El puente
+  `native→BP` (`aot_helpers.c` / `aot_call_bp` / `call_method`) pasa **direcciones planas** mientras
+  la VM interpretada ya usa **handles** → los tests `make test-throwmsg` (SIGSEGV) y
+  `make test-throwuser` (use-after-free en `call_bp`) están **ROJOS** desde la migración de handles.
+  Es exactamente el pendiente ya registrado *"aot_helpers.c handle-aware (refs en AOT, solo .mdn)"*.
+  **NO afecta a la ruta interpretada** (lo que se despacha por defecto: 1 worker, interpretado); la
+  suite interpretada (JUnit 34/34 + paridad dual-VM + `test-smphandles` + `test-oom`) está VERDE. Se
+  aborda al migrar el AOT a handles.
+
+---
+
 ## 🔴 Bugs delicados (movidos de `PENDIENTES.md`, 27-jun)
 
 Bugs que exigen tocar maquinaria delicada (slots/vtable, GC, o el FS del firmware) → se
