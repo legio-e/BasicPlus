@@ -1,0 +1,45 @@
+// uafreuse.bp — Paso 4c / contrato B con REUSO de slots: tras liberar un objeto y
+// realocar (que puede RECICLAR su slot de handle), un handle viejo al objeto liberado
+// NO lee el objeto nuevo — grita "objeto eliminado" (nunca el objeto equivocado).
+module UafReuse
+
+  public class Animal
+    public var nombre: string
+    public function Animal(nombre: string)
+      this.nombre := nombre
+    end Animal
+  end Animal
+
+  public class Caja
+    public var owner contenido: Animal
+    public function Caja(a: Animal)
+      this.contenido := a
+    end Caja
+    public function Sustituir(nuevo: Animal)
+      this.contenido := nuevo   // libera el contenido viejo → su slot se recicla
+    end Sustituir
+  end Caja
+
+  function Main()
+    var owner c: Caja := Caja(Animal("A"))
+    var alias: Animal := c.contenido       // alias al objeto "A"
+    print "vivo:", alias.nombre            // "A"
+
+    c.Sustituir(Animal("B"))               // libera "A": slot reciclado + gen bumpeada
+
+    // Alocamos MÁS objetos: alguno puede REUSAR el slot que ocupaba "A".
+    var d: Animal := Animal("C")
+    var e: Animal := Animal("D")
+    print "nuevos:", d.nombre, e.nombre    // "C" "D" — vivos
+
+    try
+      var n: string := alias.nombre        // handle viejo a "A": debe GRITAR, no leer "C"/"D"
+      print "ERROR leyó objeto reciclado:", n
+    catch ex: RuntimeError
+      print "cazado:", ex.msg
+    endtry
+
+    print "fin OK"
+  end Main
+
+end UafReuse

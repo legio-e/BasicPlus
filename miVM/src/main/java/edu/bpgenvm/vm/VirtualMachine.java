@@ -377,7 +377,7 @@ public class VirtualMachine {
         ThreadContext tc = pendingPrompts.remove(requestId);
         if (tc == null) return;
         synchronized (vmLock) {
-            int ref = allocVmString(valuesJson == null ? "" : valuesJson);
+            int ref = (int) allocVmString(valuesJson == null ? "" : valuesJson);
             writeInt32(tc.sp, ref);
             tc.sp += 4;
             tc.status = ThreadStatus.RUNNABLE;
@@ -583,6 +583,11 @@ public class VirtualMachine {
     // valida gen(handle)==gen(slot) → un handle a un slot RECICLADO (gen bumpeada) no
     // matchea y grita "objeto eliminado".
     private int[] handleGen  = new int[4096];
+    // Paso 4c — FREE-LIST de slots reciclables (pila LIFO). owner-free empuja el slot;
+    // handleRegister lo reusa con su gen ya bumpeada. Reclamación INMEDIATA (segura en
+    // 1 worker); la diferida-a-safepoint (SMP/ARM) se pliega al paso 6 (GC/STW).
+    private int[] handleFreeList = new int[256];
+    private int   handleFreeTop  = 0;
     private int   handleNext = 1;   // 0 reservado para null
 
     // Tag bits del header del objeto
@@ -829,34 +834,33 @@ public class VirtualMachine {
         }
         int classPtr = classPtrBox;
 
-        int msgRef;
-        int objRef;
+        long msgRef;
+        long objH;
         // Alocamos string + objeto bajo vmLock para sincronizar con GC.
         synchronized (vmLock) {
-            msgRef = allocVmString(message == null ? "" : message);
+            msgRef = allocVmString(message == null ? "" : message);   // handle 64b
             int numFields = readInt16(classPtr + CLS_OFF_NUM_FIELDS) & 0xFFFF;
-            objRef = heapAlloc(numFields * 4, TYPE_OBJECT);
-            writeInt32(objRef, classPtr);
+            int objAddr = heapAlloc(numFields * 4, TYPE_OBJECT);   // dirección física para el init
+            writeInt32(objAddr, classPtr);
             for (int i = 0; i < numFields; i++) {
-                writeInt32(objRef + 4 + i * 4, 0);
+                writeInt32(objAddr + 4 + i * 4, 0);
             }
-            // Field `msg` está en slot 0 (la clase sintetizada lo declara
-            // primero y es el único campo). H1.2a: es una ref (string) → 8 bytes
-            // flat (high=0, low=msgRef); si se escribe a 4B, GET_FIELD_LONG lee
-            // la palabra baja (0) y e.msg sale null/basura.
-            writeI64(memory, objRef + 4 + 0 * 4, ((long) msgRef) & 0xFFFFFFFFL);
-            objRef = handleRegister(objRef);   // V4: addr → handle (tras escribir todos los campos)
-            // Empujamos el ref al stack del thread. El dispatcher hará el
-            // pop como parte del unwind, igual que con el opcode THROW.
-            writeInt32(tc.sp, objRef);
+            // Field `msg` en slot 0 (la clase sintetizada lo declara primero). Es una
+            // ref (string) → 8 bytes; guardamos el HANDLE completo (gen preservada).
+            writeI64(memory, objAddr + 4 + 0 * 4, msgRef);
+            objH = handleRegister(objAddr);   // addr → handle 64b (tras escribir todos los campos)
+            // Empujamos el ref al stack del thread; el dispatcher hará el pop en el
+            // unwind. NOTA: el push/pop de esta ruta (throwBpRuntimeError↔catch
+            // BpExceptionPending) es a 4 BYTES → la gen se pierde. Inocuo mientras el
+            // GC esté suspendido (los objetos-excepción/strings nunca se reciclan → gen=0);
+            // el paso 6 (GC handle-aware) debe ensanchar esta ruta a 8B si se reusan sus slots.
+            writeInt32(tc.sp, (int) objH);
             tc.sp += 4;
-            // B1 residual — anclamos el objRef al thread para que el GC
-            // no lo libere entre soltar vmLock aquí y el unwind del catch
-            // BpExceptionPending del intérprete. El stack tiene el ref pero
-            // el GC no traza por type info — necesita la ancla.
-            tc.allocAnchor = objRef;
+            // B1 residual — anclamos al thread para que el GC no lo libere entre soltar
+            // vmLock y el unwind. El ancla es idx|TAG (refDeref dead-tolerant).
+            tc.allocAnchor = (int) objH;
         }
-        throw new BpExceptionPending(objRef);
+        throw new BpExceptionPending((int) objH);
     }
 
     /** V3 Forms — valida que `parent` es un contenedor vivo; si no, lanza el mismo
@@ -1562,28 +1566,37 @@ public class VirtualMachine {
      *  HANDLE 64b = gen<<32 | (idx|TAG). Paso 4a NEUTRO: monotónico, gen sembrada = 0
      *  (idéntico a antes). En 4b el handle empieza a llevar la gen del slot; en 4c el
      *  idx puede venir de la free-list (reuso), con la gen ya bumpeada del ocupante viejo. */
-    private int handleRegister(int addr) {
-        if (handleNext >= handleAddr.length) {
-            handleAddr = java.util.Arrays.copyOf(handleAddr, handleAddr.length * 2);
-            handleGen  = java.util.Arrays.copyOf(handleGen,  handleGen.length  * 2);
+    private long handleRegister(int addr) {
+        int idx;
+        if (handleFreeTop > 0) {
+            idx = handleFreeList[--handleFreeTop];   // 4c: REUSO — slot reciclado (gen ya bumpeada por handleKill)
+        } else {
+            if (handleNext >= handleAddr.length) {
+                handleAddr = java.util.Arrays.copyOf(handleAddr, handleAddr.length * 2);
+                handleGen  = java.util.Arrays.copyOf(handleGen,  handleGen.length  * 2);
+            }
+            idx = handleNext++;
+            handleGen[idx] = 0;   // slot fresco
         }
-        int idx = handleNext++;
         handleAddr[idx] = addr;
-        handleGen[idx]  = 0;   // slot fresco
-        // 4b: devuelve idx|TAG (int, gen=0 al zero-extenderse en el store de 8B). El
-        // handle 64b con gen != 0 (para slots RECICLADOS) llega en 4c, donde esto
-        // pasa a long = gen(slot)<<32 | (idx|TAG) y se reusan slots de la free-list.
-        return idx | HANDLE_TAG;
+        // Handle 64b = gen(slot)<<32 | (idx|TAG). El deref valida gen(handle)==gen(slot):
+        // un handle a un slot RECICLADO (gen vieja) no matchea → grita.
+        return ((long) handleGen[idx] << 32) | ((long) (idx | HANDLE_TAG) & HANDLE_LOW);
     }
 
-    /** Contrato B — libera el slot de un handle (owner-free): BUMP de la generación
-     *  → los handles rancios dejan de matchear (gen(handle) != gen(slot)) y gritan.
-     *  No-op para null/constantes. El TAG_FREE_BIT del bloque físico evita el doble-free
-     *  real. Paso 4c: aquí además se reciclará el índice a la free-list para reuso. */
+    /** Contrato B / paso 4c — libera el slot de un handle (owner-free): BUMP de la
+     *  generación (handles rancios dejan de matchear → gritan) y RECICLA el índice a la
+     *  free-list para reuso. No-op para null/constantes. El TAG_FREE_BIT del bloque físico
+     *  evita el doble-free real → aquí reciclamos el slot una sola vez. */
     private void handleKill(long ref) {
         if ((ref & HANDLE_TAG) == 0) return;
         int idx = handleIdx(ref);
-        if (idx > 0 && idx < handleNext) handleGen[idx]++;
+        if (idx <= 0 || idx >= handleNext) return;
+        handleGen[idx]++;                       // gen bumpeada → handles rancios mueren
+        if (handleFreeTop >= handleFreeList.length) {
+            handleFreeList = java.util.Arrays.copyOf(handleFreeList, handleFreeList.length * 2);
+        }
+        handleFreeList[handleFreeTop++] = idx;   // reciclar el slot
     }
 
     /** Contrato B — deref de PROGRAMA: si el ref es un handle a un objeto LIBERADO,
@@ -2243,8 +2256,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 4, TYPE_ARRAY_I32);
                         writeI32(mem, ref, size);
-                        ref = handleRegister(ref);   // V4: addr físico → handle
-                        refStore(mem, sp, ref); sp += REF_SIZE;
+                                                refStore(mem, sp, handleRegister(ref)); sp += REF_SIZE;
                         tc.sp = sp;
                     }
                     break;
@@ -2256,8 +2268,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size, TYPE_ARRAY_I8);
                         writeI32(mem, ref, size);
-                        ref = handleRegister(ref);   // V4: addr físico → handle
-                        refStore(mem, sp, ref); sp += REF_SIZE;
+                                                refStore(mem, sp, handleRegister(ref)); sp += REF_SIZE;
                         tc.sp = sp;
                     }
                     break;
@@ -2269,8 +2280,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 2, TYPE_ARRAY_I16);
                         writeI32(mem, ref, size);
-                        ref = handleRegister(ref);   // V4: addr físico → handle
-                        refStore(mem, sp, ref); sp += REF_SIZE;
+                                                refStore(mem, sp, handleRegister(ref)); sp += REF_SIZE;
                         tc.sp = sp;
                     }
                     break;
@@ -2620,8 +2630,7 @@ public class VirtualMachine {
                         for (int i = 0; i < numFields; i++) {
                             writeI32(mem, ref + 4 + i * 4, 0);
                         }
-                        ref = handleRegister(ref);   // V4: addr físico → handle
-                        refStore(mem, sp, ref); sp += REF_SIZE;   // V4: push del ref nuevo
+                                                refStore(mem, sp, handleRegister(ref)); sp += REF_SIZE;   // V4: push del ref nuevo
                         tc.sp = sp;
                     }
                     break;
@@ -2826,8 +2835,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         int ref = heapAlloc(size * 8, TYPE_ARRAY_I64);
                         writeI32(mem, ref, size);
-                        ref = handleRegister(ref);   // V4: addr físico → handle
-                        refStore(mem, sp, ref); sp += REF_SIZE;
+                                                refStore(mem, sp, handleRegister(ref)); sp += REF_SIZE;
                         tc.sp = sp;
                     }
                     break;
@@ -3324,33 +3332,34 @@ public class VirtualMachine {
     }
 
     /** Aloca un nuevo string en el heap (byte[] UTF-8) con el contenido de Java String. Devuelve user_ref. */
-    private int allocVmString(String s) {
+    private long allocVmString(String s) {
         byte[] utf8 = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         int len = utf8.length;
-        int ref = heapAlloc(len, TYPE_ARRAY_I8);
-        writeInt32(ref, len);
-        System.arraycopy(utf8, 0, memory, ref + 4, len);
-        ref = handleRegister(ref);   // V4: addr físico → handle
+        int addr = heapAlloc(len, TYPE_ARRAY_I8);
+        writeInt32(addr, len);
+        System.arraycopy(utf8, 0, memory, addr + 4, len);
+        long h = handleRegister(addr);   // V4: addr físico → handle 64b
         // B1 residual — el caller llama a allocVmString desde dispatchBuiltin
-        // SIN vmLock, así que entre `return ref` y el `pushTc(tc, ref)` un GC
-        // de otro worker podría liberar `ref` (no hay raíz aún). Anclamos
-        // explícitamente en el tc actual; el GC lo agrega a roots.
+        // SIN vmLock, así que entre `return h` y el `pushTc(tc, h)` un GC
+        // de otro worker podría liberar `h` (no hay raíz aún). Anclamos
+        // explícitamente en el tc actual; el GC lo agrega a roots. El ancla es
+        // idx|TAG (refDeref la usa dead-tolerant → la gen no importa).
         ThreadContext me = currentTcLocal.get();
-        if (me != null) me.allocAnchor = ref;
-        return ref;
+        if (me != null) me.allocAnchor = (int) h;
+        return h;
     }
 
-    /** Aloca un array de refs (TYPE_ARRAY_REF) con n elementos, devolviendo user_ref. Los slots quedan a 0. */
-    private int allocVmRefArray(int n) {
-        int ref = heapAlloc(n * 8, TYPE_ARRAY_REF);   // H1.2a (V4): ref plana = 8 bytes/elem
-        writeInt32(ref, n);
-        for (int i = 0; i < n; i++) writeI64(memory, ref + 4 + i * 8, 0L);
-        ref = handleRegister(ref);   // V4: addr físico → handle
+    /** Aloca un array de refs (TYPE_ARRAY_REF) con n elementos, devolviendo el handle. Los slots quedan a 0. */
+    private long allocVmRefArray(int n) {
+        int addr = heapAlloc(n * 8, TYPE_ARRAY_REF);   // H1.2a (V4): ref plana = 8 bytes/elem
+        writeInt32(addr, n);
+        for (int i = 0; i < n; i++) writeI64(memory, addr + 4 + i * 8, 0L);
+        long h = handleRegister(addr);   // V4: addr físico → handle 64b
         // B1 residual — ver allocVmString. Mismo motivo: ancla GC para el
         // intervalo entre alocación y publicación al stack del programa.
         ThreadContext me = currentTcLocal.get();
-        if (me != null) me.allocAnchor = ref;
-        return ref;
+        if (me != null) me.allocAnchor = (int) h;
+        return h;
     }
 
     /**
@@ -3494,7 +3503,7 @@ public class VirtualMachine {
                 int ref = heapAlloc(n, TYPE_ARRAY_I8);
                 writeInt32(ref, n);
                 if (n > 0) System.arraycopy(buf, 0, memory, ref + 4, n);
-                ref = handleRegister(ref);   // V4: addr → handle
+                ref = (int) handleRegister(ref);   // V4: addr → handle
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = ref;   // ancla GC
                 pushTc(tc, ref);
@@ -3774,8 +3783,8 @@ public class VirtualMachine {
                 // Aloca primero los strings individuales, luego el array (en ese orden el
                 // GC tendrá los slots zero-init mientras se llenan).
                 int[] refs = new int[parts.length];
-                for (int i = 0; i < parts.length; i++) refs[i] = allocVmString(parts[i]);
-                int arrRef = allocVmRefArray(parts.length);
+                for (int i = 0; i < parts.length; i++) refs[i] = (int) allocVmString(parts[i]);
+                int arrRef = (int) allocVmRefArray(parts.length);
                 for (int i = 0; i < parts.length; i++) writeI64(memory, arrRef + 4 + i * 8, ((long) refs[i]) & 0xFFFFFFFFL);  // H1.2a: ref plana 8B
                 pushTc(tc, arrRef);
                 break;
@@ -3845,7 +3854,7 @@ public class VirtualMachine {
                     int ref = heapAlloc(data.length, TYPE_ARRAY_I8);
                     writeInt32(ref, data.length);
                     System.arraycopy(data, 0, memory, ref + 4, data.length);
-                    ref = handleRegister(ref);   // V4: addr → handle
+                    ref = (int) handleRegister(ref);   // V4: addr → handle
                     ThreadContext me = currentTcLocal.get();
                     if (me != null) me.allocAnchor = ref;   // ancla GC (ver allocVmString)
                     pushTc(tc, ref);
@@ -3889,8 +3898,8 @@ public class VirtualMachine {
                 String[] names = dir.list();
                 if (names == null) names = new String[0];
                 int[] refs = new int[names.length];
-                for (int i = 0; i < names.length; i++) refs[i] = allocVmString(names[i]);
-                int arrRef = allocVmRefArray(names.length);   // ya es handle
+                for (int i = 0; i < names.length; i++) refs[i] = (int) allocVmString(names[i]);
+                int arrRef = (int) allocVmRefArray(names.length);   // ya es handle
                 int adir = refDeref(arrRef);   // V4: dirección física
                 for (int i = 0; i < names.length; i++) writeI64(memory, adir + 4 + i * 8, ((long) refs[i]) & 0xFFFFFFFFL);  // ref plana 8B
                 pushTc(tc, arrRef);
@@ -3910,7 +3919,7 @@ public class VirtualMachine {
                 if (newCap < 0) throwBpRuntimeError(tc, "__growRefArray: capacidad negativa: " + newCap);
                 int od = (oldRef != 0) ? refDeref(oldRef) : 0;   // V4: dirección física fuente
                 int oldLen = (od != 0) ? readInt32(od) : 0;
-                int newRef = allocVmRefArray(newCap);            // ya es handle
+                long newRef = allocVmRefArray(newCap);            // ya es handle
                 int nd = refDeref(newRef);
                 int copyLen = Math.min(oldLen, newCap);
                 for (int i = 0; i < copyLen; i++) {   // ref plana = 8 bytes/elem
@@ -3934,8 +3943,7 @@ public class VirtualMachine {
                 for (int i = copyLen; i < newCap; i++) {
                     writeInt32(newRef + 4 + i * 4, 0);
                 }
-                newRef = handleRegister(newRef);   // V4: addr → handle
-                pushTcRef(tc, newRef);
+                                pushTcRef(tc, handleRegister(newRef));
                 break;
             }
             case CHARS_TO_STRING: {
@@ -3970,7 +3978,7 @@ public class VirtualMachine {
                 int out = heapAlloc(n, TYPE_ARRAY_I8);   // addr físico
                 writeInt32(out, n);
                 if (n > 0) System.arraycopy(memory, rd + 4, memory, out + 4, n);
-                out = handleRegister(out);   // V4: addr → handle
+                out = (int) handleRegister(out);   // V4: addr → handle
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = out;
                 pushTc(tc, out);
@@ -4475,8 +4483,7 @@ public class VirtualMachine {
                 for (int i = 0; i < size; i++) {
                     writeInt32(ref + 4 + i * 4, 0);
                 }
-                ref = handleRegister(ref);   // V4: addr → handle
-                pushTcRef(tc, ref);   // H1.2a: ref 8 bytes
+                                pushTcRef(tc, handleRegister(ref));   // H1.2a: ref 8 bytes
                 break;
             }
 
