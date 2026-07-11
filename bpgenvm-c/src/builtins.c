@@ -574,6 +574,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* n==0 (timeout) → byte[] vacío. La longitud del array puede ser
          * menor que el payload alocado (mismo patrón que READ_FILE). */
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) n);
+        ref = bpvm_handle_register(vm, ref);   /* V4: addr → handle */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
@@ -928,6 +929,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 return builtin_throw(vm, tc, em);
             }
         }
+        ref = bpvm_handle_register(vm, ref);   /* V4: addr → handle */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
@@ -939,8 +941,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = (uint32_t) pop_i32(vm, tc);   /* path */
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
-        uint32_t clen = (cref == 0) ? 0 : bpvm_read_u32_be(vm->memory + cref);
-        const uint8_t* cdata = (cref == 0) ? NULL : (vm->memory + cref + 4);
+        uint32_t cad = (cref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(cref));   /* V4: handle→addr */
+        uint32_t clen = (cad == 0) ? 0 : bpvm_read_u32_be(vm->memory + cad);
+        const uint8_t* cdata = (cad == 0) ? NULL : (vm->memory + cad + 4);
         if (bpvm_fs_write(path, cdata, clen, append) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "%s('%s'): error de escritura",
@@ -1118,6 +1121,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (out) {
             bpvm_write_u32_be(vm->memory + out, enc_len);
             for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
+            out = bpvm_handle_register(vm, out);   /* V4: addr → handle */
         }
         push_ref(vm, tc, out);   /* H1.2a: string ref result = 8 bytes */
         return BPVM_OK;
@@ -1145,6 +1149,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             bpvm_write_u32_be(vm->memory + out, n);   /* out: alloc fresca (dirección física) */
             for (uint32_t i = 0; i < n; i++)
                 vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, boff + i, 1);
+            out = bpvm_handle_register(vm, out);   /* V4: addr → handle */
         }
         push_ref(vm, tc, out);   /* string ref result (push_ref ya es genérico) */
         return BPVM_OK;
@@ -1159,6 +1164,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) cap * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
         if (ref == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) cap);
+        ref = bpvm_handle_register(vm, ref);   /* V4: addr → handle */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
@@ -1170,15 +1176,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t new_cap = pop_i32(vm, tc);
         uint32_t old_ref = pop_ref(vm, tc);   /* array ref = 8 bytes (como miVM popTcRef) */
         if (new_cap < 0) return BPVM_ERR_RUNTIME;
-        uint32_t old_len = (old_ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + old_ref);
+        uint32_t od = (old_ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(old_ref));   /* V4: fuente handle→addr */
+        uint32_t old_len = (od == 0) ? 0 : bpvm_read_u32_be(vm->memory + od);
         uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) new_cap * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
         if (new_ref == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + new_ref, (uint32_t) new_cap);
         uint32_t copy = (old_len < (uint32_t) new_cap) ? old_len : (uint32_t) new_cap;
         for (uint32_t i = 0; i < copy; i++) {   /* ref plana 8B/elem, vía la frontera de codificación */
-            bpref_t e = bpref_load(vm, old_ref + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE);
+            bpref_t e = bpref_load(vm, od + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE);
             bpref_store(vm, new_ref + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE, e);
         }
+        new_ref = bpvm_handle_register(vm, new_ref);   /* V4: addr → handle */
         push_ref(vm, tc, new_ref);
         return BPVM_OK;
     }
@@ -1187,15 +1195,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t new_cap = pop_i32(vm, tc);
         uint32_t old_ref = pop_ref(vm, tc);   /* V4: array ref = 8 bytes (era pop_i32 4B → drift vs miVM popTcRef) */
         if (new_cap < 0) return BPVM_ERR_RUNTIME;
-        uint32_t old_len = (old_ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + old_ref);
+        uint32_t od = (old_ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(old_ref));   /* V4: fuente handle→addr */
+        uint32_t old_len = (od == 0) ? 0 : bpvm_read_u32_be(vm->memory + od);
         uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) new_cap * 4, BPVM_TYPE_ARRAY_I32);
         if (new_ref == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + new_ref, (uint32_t) new_cap);
         uint32_t copy = (old_len < (uint32_t) new_cap) ? old_len : (uint32_t) new_cap;
         for (uint32_t i = 0; i < copy; i++) {
-            uint32_t v = bpvm_read_u32_be(vm->memory + old_ref + 4 + i * 4);
+            uint32_t v = bpvm_read_u32_be(vm->memory + od + 4 + i * 4);
             bpvm_write_u32_be(vm->memory + new_ref + 4 + i * 4, v);
         }
+        new_ref = bpvm_handle_register(vm, new_ref);   /* V4: addr → handle */
         push_ref(vm, tc, new_ref);
         return BPVM_OK;
     }
@@ -1222,6 +1232,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint8_t enc[4]; uint32_t el = utf8_encode(cp, enc);
             for (uint32_t k = 0; k < el; k++) vm->memory[new_ref + 4 + w++] = enc[k];
         }
+        new_ref = bpvm_handle_register(vm, new_ref);   /* V4: addr → handle */
         push_ref(vm, tc, new_ref);
         return BPVM_OK;
     }
@@ -1232,11 +1243,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * conversión es una copia defensiva (string inmutable / byte[]
          * mutable): mismos bytes, objeto nuevo. */
         uint32_t ref = (uint32_t) pop_i32(vm, tc);
-        uint32_t n = (ref == 0) ? 0 : bpvm_read_u32_be(vm->memory + ref);
+        uint32_t rd = (ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(ref));   /* V4: fuente handle→addr */
+        uint32_t n = (rd == 0) ? 0 : bpvm_read_u32_be(vm->memory + rd);
         uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
         if (out == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + out, n);
-        for (uint32_t i = 0; i < n; i++) vm->memory[out + 4 + i] = vm->memory[ref + 4 + i];
+        for (uint32_t i = 0; i < n; i++) vm->memory[out + 4 + i] = vm->memory[rd + 4 + i];
+        out = bpvm_handle_register(vm, out);   /* V4: addr → handle */
         push_ref(vm, tc, out);   /* H1.2a: string ref result = 8 bytes */
         return BPVM_OK;
     }
@@ -1500,8 +1513,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * con integer[] y string). Para int8/int16 habría que mirar
          * el tag — F3 lo añade. */
         uint32_t slot = 4;
-        memmove(vm->memory + dstRef + 4 + (uint32_t) dstStart * slot,
-                vm->memory + srcRef + 4 + (uint32_t) srcStart * slot,
+        uint32_t dd = bpref_deref(vm, bpref_from_addr(dstRef));   /* V4: handle→addr */
+        uint32_t sd = bpref_deref(vm, bpref_from_addr(srcRef));
+        memmove(vm->memory + dd + 4 + (uint32_t) dstStart * slot,
+                vm->memory + sd + 4 + (uint32_t) srcStart * slot,
                 (size_t) count * slot);
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -1515,6 +1530,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (ref == 0) return BPVM_ERR_OOM;
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) size);
         /* bpvm_heap_alloc ya zero-init (memset en heap.c). */
+        ref = bpvm_handle_register(vm, ref);   /* V4: addr → handle */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }

@@ -282,6 +282,11 @@ static void gc_sweep_phase(bpvm_t* vm) {
 }
 
 static void bpvm_gc(bpvm_t* vm) {
+    /* V4: GC suspendido durante la migración a handles — guarda en el NÚCLEO
+     * (espejo del gcLocked de miVM): cubre gc_stw Y bpvm_heap_gc (builtin gc()).
+     * Sin esto, el gc() manual corría y su escaneo conservativo no reconoce los
+     * handles tageados → no marca nada → libera TODO lo vivo (ownerreassign). */
+    if (vm->gc_suspended) return;
     gc_mark_phase(vm);
     gc_sweep_phase(vm);
 }
@@ -418,7 +423,7 @@ uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len) {
     for (size_t i = 0; i < len; i++) {
         vm->memory[ref + 4 + i] = (uint8_t) s[i];
     }
-    return ref;
+    return bpvm_handle_register(vm, ref);   /* V4: addr físico → handle */
 }
 
 /* Trigger manual de GC. Devuelve bytes liberados (aproximado: el delta

@@ -59,7 +59,7 @@ static int is_descendant_of(const bpvm_t* vm, uint32_t obj_class, uint32_t targe
 int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
     uint32_t thrown_class = 0;
     if (ref != 0) {
-        thrown_class = (uint32_t) bpvm_read_i32_be(vm->memory + ref);
+        thrown_class = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, bpref_from_addr(ref)));
     }
     /* Busca un handler que matchee, desde el top hacia abajo. */
     while (tc->eh_stack_size > 0) {
@@ -84,12 +84,13 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
     fprintf(stderr, "[bpvm-c] excepción no atrapada en tid=%" PRId32 "\n", tc->id);
     if (ref != 0) {
         /* Intenta leer field 0 = msg (asumiendo layout RuntimeError). */
-        int32_t msg_ref = (int32_t) bpvm_read_i64_be(vm->memory + ref + 4);   /* H1.2a: campo ref = 8B */
+        int32_t msg_ref = (int32_t) bpvm_read_i64_be(vm->memory + bpref_deref(vm, bpref_from_addr(ref)) + 4);   /* H1.2a: campo ref = 8B */
         if (msg_ref > 0) {
-            uint32_t mlen = bpvm_read_u32_be(vm->memory + msg_ref);   /* H2: bytes UTF-8 */
+            uint32_t msg_addr = bpref_deref(vm, bpref_from_addr((uint32_t) msg_ref));   /* V4: handle→addr */
+            uint32_t mlen = bpvm_read_u32_be(vm->memory + msg_addr);   /* H2: bytes UTF-8 */
             char buf[256]; size_t n = 0;
             for (uint32_t i = 0; i < mlen && n < sizeof(buf) - 1; i++) {
-                buf[n++] = (char) vm->memory[msg_ref + 4 + i];
+                buf[n++] = (char) vm->memory[msg_addr + 4 + i];
             }
             buf[n] = '\0';
             fprintf(stderr, "  RuntimeError: %s\n", buf);
@@ -158,6 +159,7 @@ have_class:
     if (num_fields > 0) {
         bpvm_write_i64_be(vm->memory + obj_ref + 4 + 0 * 4, (int64_t)(uint32_t) msg_ref);   /* H1.2a: campo ref = 8B */
     }
+    obj_ref = bpvm_handle_register(vm, obj_ref);   /* V4: addr → handle (tras escribir campos) */
 
     /* Anclar para GC; el caller decide si pasarlo a eh_unwind o usarlo
      * de otra forma. No tocamos el stack BP aquí — eso lo hace
