@@ -63,6 +63,21 @@ int main(int argc, char** argv) {
     if (!g_vm->smp) { fprintf(stderr, "smp calloc fallo\n"); return 2; }
     bpvm_platform_mutex_init(&g_vm->smp->vm_lock);
 
+    /* Paso 7b.1 — FREE CON GENERACIÓN VALIDADA (refuerzo de la maqueta), SECUENCIAL.
+     * Un free RANCIO a un slot RECICLADO no debe bumpear la gen del NUEVO ocupante. */
+    int genfree_bad = 0;
+    {
+        bpref_t h1 = bpvm_handle_register(g_vm, 0xAAAAu);   /* idx=K, gen g */
+        bpvm_handle_kill(g_vm, h1);                          /* gen g+1, slot K a free-list */
+        bpref_t h2 = bpvm_handle_register(g_vm, 0xBBBBu);   /* reusa K, gen g+1 (ocupante vivo) */
+        bpvm_handle_kill(g_vm, h1);                          /* RANCIO: sin gen-check mata h2 */
+        /* h2 debe SEGUIR vivo: su addr intacto y su gen matchea. */
+        if (bpref_deref(g_vm, h2) != 0xBBBBu || bpvm_ref_dead(g_vm, h2)) genfree_bad = 1;
+        bpvm_handle_kill(g_vm, h2);                          /* limpieza (kill válido) */
+    }
+    printf("genfree (free rancio a slot reciclado): %s\n",
+           genfree_bad ? "CORROMPE el ocupante (ROJO)" : "no-op seguro (VERDE)");
+
     /* Pre-calentar: puebla la free-list con 8192 slots reciclables. */
     for (int i = 0; i < 8192; i++) {
         bpref_t h = bpvm_handle_register(g_vm, (uint32_t) i + 1);
@@ -79,5 +94,5 @@ int main(int argc, char** argv) {
     for (int t = 0; t < nthreads; t++) { pthread_join(th[t], NULL); total += ta[t].corr; }
 
     printf("threads=%d iters=%d corrupciones=%ld\n", nthreads, g_iters, total);
-    return total == 0 ? 0 : 1;
+    return (total == 0 && !genfree_bad) ? 0 : 1;
 }

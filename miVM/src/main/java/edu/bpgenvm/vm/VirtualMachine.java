@@ -1619,6 +1619,10 @@ public class VirtualMachine {
         synchronized (vmLock) {   // paso 7: serializa la free-list (espejo del bpvm_smp_lock de la VM-C)
             int idx = handleIdx(ref);
             if (idx <= 0 || idx >= handleNext) return;
+            // Paso 7b.1 — FREE CON GENERACIÓN VALIDADA (refuerzo de la maqueta): solo el 1er
+            // kill de un handle vivo actúa; un kill RANCIO (slot reciclado, gen no matchea) es
+            // no-op — si no bumpearía la gen del ocupante NUEVO y lo corrompería.
+            if (handleGen[idx] != handleGenOf(ref)) return;
             handleKillIdx(idx);
         }
     }
@@ -5007,6 +5011,12 @@ public class VirtualMachine {
     /** Implementación de freeOwnedObject que asume vmLock ya adquirido (para llamadas recursivas). */
     private void freeOwnedObjectLocked(long ref) {
         if (ref == 0) return;
+        // Paso 7b.1 — free RANCIO (slot reciclado, gen no matchea) = NO-OP seguro: si no,
+        // derefearía al ocupante NUEVO y liberaría SU bloque → corrupción. ANTES del deref.
+        if ((ref & HANDLE_TAG) != 0) {
+            int hidx = handleIdx(ref);
+            if (hidx > 0 && hidx < handleNext && handleGen[hidx] != handleGenOf(ref)) return;
+        }
         int headerAddr = refDeref(ref) - 4;
         if (headerAddr < heapStart || headerAddr >= heapNext) return;
         int tag = readInt32(headerAddr);

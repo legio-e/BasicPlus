@@ -451,6 +451,11 @@ static void emit_double(bpvm_t* vm, double v, int newline) {
  * en el primero, así que el barrido por slot no lo procesa dos veces. */
 static void bpvm_free_owned(bpvm_t* vm, bpref_t r) {
     if (bpref_is_null(r)) return;
+    /* Paso 7b.1 — free RANCIO (slot reciclado, gen no matchea) = NO-OP seguro: si no,
+     * derefearía al ocupante NUEVO y liberaría SU bloque/handle → corrupción. Debe ir
+     * ANTES del deref+free_block, no solo en handle_kill. (El doble-free del MISMO ref ya
+     * lo tapaba addr=0 del paso 6; esto cubre el rancio-a-slot-reusado.) */
+    if (bpvm_ref_dead(vm, r)) return;
     uint32_t addr = bpref_deref(vm, r);
     if (addr < vm->heap_start || addr >= vm->heap_next) return;   /* no-heap: NOP */
     uint32_t header = addr - 4u;

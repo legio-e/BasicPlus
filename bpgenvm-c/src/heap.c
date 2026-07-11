@@ -378,7 +378,13 @@ static void handle_kill_idx(bpvm_t* vm, uint32_t idx) {
 void bpvm_handle_kill(bpvm_t* vm, bpref_t r) {
     if ((r.v & BPVM_HANDLE_TAG) == 0u) return;
     bpvm_smp_lock(vm);   /* paso 7: serializa la free-list contra registers/kills de otros workers */
-    handle_kill_idx(vm, (uint32_t) r.v & ~BPVM_HANDLE_TAG);
+    /* Paso 7b.1 — FREE CON GENERACIÓN VALIDADA (refuerzo de la maqueta): solo el PRIMER
+     * kill de un handle vivo actúa; un kill RANCIO (slot ya reciclado, gen no matchea) es
+     * NO-OP seguro — si no, bumpearía la gen del ocupante NUEVO y lo corromperría (doble
+     * free-list, etc). check+kill atómicos bajo el lock = el compareAndSet(slot,g,g+1). */
+    if (!bpvm_ref_dead(vm, r)) {
+        handle_kill_idx(vm, (uint32_t) r.v & ~BPVM_HANDLE_TAG);
+    }
     bpvm_smp_unlock(vm);
 }
 
