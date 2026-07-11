@@ -569,8 +569,10 @@ public class VirtualMachine {
     // handles (pasos 2-5). Es la parte más delicada de hacer handle-aware y su
     // ejecución alteraría el heap durante la verificación; se reactiva ya-preciso
     // en el paso 6 (GC vía tabla). owner-free / FREE_REF (determinista) siguen ON.
-    // Los samples de verificación son cortos → el heap de 256 KB nunca se agota.
-    private boolean gcSuspended = true;
+    // Paso 6 — REACTIVADO: el GC es handle-aware (mark traza por la tabla + field-bitmap;
+    // el sweep recicla los slots de lo recolectado vía handleKillIdx → contrato B también
+    // para el GC). La reclamación-diferida-a-safepoint (SMP) se pliega al paso 7.
+    private boolean gcSuspended = false;
 
     // V4 — TABLA DE HANDLES (paso 2b). Una referencia BP pasa a ser un HANDLE =
     // índice en esta tabla; refDeref(handle) → dirección física del objeto.
@@ -1344,6 +1346,21 @@ public class VirtualMachine {
             }
         }
 
+        // Paso 6 — BARRIDO DE TABLA (handle-aware): un slot VIVO (addr!=0) cuyo bloque
+        // quedó SIN marcar es inalcanzable → reciclar el slot (bump gen + addr=0 + free-list)
+        // para que un handle rancio a él GRITE (contrato B también para lo que libera el GC).
+        // Debe ir ANTES del barrido de heap (que limpia el MARK_BIT). El bloque físico lo
+        // libera el barrido de heap de abajo. Bajo el STW del GC → seguro reciclar ya.
+        for (int hidx = 1; hidx < handleNext; hidx++) {
+            int a = handleAddr[hidx];
+            if (a == 0) continue;                          // slot libre
+            int hh = a - 4;
+            if (hh < heapStart || hh >= heapNext) continue;   // defensivo
+            if ((readInt32(hh) & TAG_MARK_BIT) == 0) {     // no alcanzable
+                handleKillIdx(hidx);
+            }
+        }
+
         // Sweep: reconstruir free list, coalescing adyacentes
         freeListHead = 0;
         int addr = heapStart;
@@ -1594,7 +1611,15 @@ public class VirtualMachine {
         if ((ref & HANDLE_TAG) == 0) return;
         int idx = handleIdx(ref);
         if (idx <= 0 || idx >= handleNext) return;
+        handleKillIdx(idx);
+    }
+
+    /** Recicla un SLOT de la tabla por índice: bump de generación + addr=0 (marca el
+     *  slot LIBRE — el GC lo distingue del vivo por addr!=0) + push a la free-list. Lo
+     *  usan owner-free (handleKill) y el barrido de tabla del GC (paso 6). */
+    private void handleKillIdx(int idx) {
         handleGen[idx]++;                       // gen bumpeada → handles rancios mueren
+        handleAddr[idx] = 0;                     // slot libre en la tabla (paso 6: vivo ⟺ addr!=0)
         if (handleFreeTop >= handleFreeList.length) {
             handleFreeList = java.util.Arrays.copyOf(handleFreeList, handleFreeList.length * 2);
         }

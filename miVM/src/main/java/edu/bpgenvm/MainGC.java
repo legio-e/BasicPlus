@@ -67,12 +67,18 @@ public class MainGC {
             w.addConstantString("tag_a99",           "  a[99] esperado=2020202, real=");
 
             w.addFunction("main", true);
-            w.declareLocal("a");
-            w.declareLocal("b");
-            w.declareLocal("c");
-            w.declareLocal("d");
-            w.declareLocal("i");
-            w.declareLocal("trash");
+            // V4 (handles): una referencia ocupa 8 bytes (handle de 64b). Los locales
+            // que guardan refs de array deben ser slots de 8 bytes para casar con
+            // NEWARRAY/ALEN/ALOAD (que empujan/popean 8 bytes). declareLocalLong es el
+            // mecanismo de ModWriter para un slot de 8 bytes → emite GET/SET_LOCAL_L.
+            // (En la era plana eran 4 bytes; con GET/SET_LOCAL de 4 bytes se desincronizaba
+            //  el operand stack y ALEN leía 4 bytes rancios como generación fantasma.)
+            w.declareLocalLong("a");
+            w.declareLocalLong("b");
+            w.declareLocalLong("c");
+            w.declareLocalLong("d");
+            w.declareLocal("i");            // contador int → 4 bytes
+            w.declareLocalLong("trash");
 
             int LBL_TOP = w.newLabel();
             int LBL_END = w.newLabel();
@@ -94,7 +100,8 @@ public class MainGC {
             w.emitLeaGlobal("tag_baseline");      w.emit(OpCode.PRINT_STRING);
             w.emit(OpCode.GC_COLLECT);
 
-            push(w, 0); w.emitSetLocal("b");
+            // Soltar b = ponerlo a null. Un ref es 8 bytes → LPUSH 0 (null de 64b) + SET_LOCAL_L.
+            w.emit(OpCode.LPUSH); w.emitLong(0L); w.emitSetLocal("b");
             w.emitLeaGlobal("tag_after_drop");    w.emit(OpCode.PRINT_STRING);
             w.emit(OpCode.GC_COLLECT);
 
@@ -106,7 +113,10 @@ public class MainGC {
             w.emitGetLocal("a"); w.emit(OpCode.ALEN); w.emit(OpCode.PRINT);  // 100
             w.emitGetLocal("c"); w.emit(OpCode.ALEN); w.emit(OpCode.PRINT);  // 100
             w.emitGetLocal("d"); w.emit(OpCode.ALEN); w.emit(OpCode.PRINT);  // 100
-            w.emitGetLocal("b"); w.emit(OpCode.PRINT);                       // 0
+            // b es null (ref de 8 bytes). Lo leemos entero (GET_LOCAL_L respeta el layout
+            // big-endian del handle) y lo reducimos a int por L2D→D2I para imprimirlo con
+            // PRINT (el arnés de test captura sólo el path int "VM [PRINT]: N"). null → 0.
+            w.emitGetLocal("b"); w.emit(OpCode.L2D); w.emit(OpCode.D2I); w.emit(OpCode.PRINT); // 0
 
             // ============================================================
             // FASE 2: disparo automático del GC
@@ -135,7 +145,7 @@ public class MainGC {
             // Suelta trash y dispara un GC manual final: el heap debe quedar
             // alive = 4*408 = 1632 bytes (a, c, d, y... ojo: la última `trash`
             // ya está suelta, así que sólo a, c, d → alive = 1224).
-            push(w, 0); w.emitSetLocal("trash");
+            w.emit(OpCode.LPUSH); w.emitLong(0L); w.emitSetLocal("trash");   // soltar trash = null (ref 8 bytes)
             w.emitLeaGlobal("tag_stress_end"); w.emit(OpCode.PRINT_STRING);
             w.emit(OpCode.GC_COLLECT);
 
