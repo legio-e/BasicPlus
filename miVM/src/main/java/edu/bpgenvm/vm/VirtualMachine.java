@@ -4070,12 +4070,15 @@ public class VirtualMachine {
             // Convención de vtable: slot 0 = run() (virtual).
             case THREAD_START: {
                 int threadRef = popTc(tc);
-                int classPtr  = readInt32(threadRef);
-                int stackSize = readInt32(threadRef + 4 + 1 * 4);   // field 1
+                // V4 (tanda 2): threadRef es un HANDLE → refDeref para tocar memory[];
+                // el REF se conserva tal cual como `this` de run() (abajo, writeInt32(sb, threadRef)).
+                int ta        = refDeref(threadRef);
+                int classPtr  = readInt32(ta);
+                int stackSize = readInt32(ta + 4 + 1 * 4);   // field 1
                 synchronized (vmLock) {
                     // 1) Crear el nuevo ThreadContext con su región de stack.
                     int newTid = spawnThread(stackSize);
-                    writeInt32(threadRef + 4 + 0 * 4, newTid);          // guardar tid en field 0
+                    writeInt32(ta + 4 + 0 * 4, newTid);          // guardar tid en field 0
                     ThreadContext nt = threads.get(newTid);
                     // 2) Resolver dirección absoluta del run() en la vtable.
                     int targetCS   = moduleManager.getCSForDataAddr(classPtr);
@@ -4106,7 +4109,8 @@ public class VirtualMachine {
             }
             case THREAD_JOIN: {
                 int threadRef = popTc(tc);
-                int targetTid = readInt32(threadRef + 4 + 0 * 4);
+                if (threadRef == 0) { pushTc(tc, 0); break; }   // null → no-op (como VM-C)
+                int targetTid = readInt32(refDeref(threadRef) + 4 + 0 * 4);   // V4: handle→addr
                 if (targetTid <= 0) {
                     // No spawneado o tid inválido → no-op.
                     pushTc(tc, 0);
@@ -4138,7 +4142,7 @@ public class VirtualMachine {
             }
             case MUTEX_LOCK: {
                 int mutexRef = popTc(tc);
-                int mid = readInt32(mutexRef + 4 + 0 * 4);
+                int mid = readInt32(refDeref(mutexRef) + 4 + 0 * 4);   // V4: handle→addr
                 if (mid < 0 || mid >= mutexes.size()) {
                     // B3 v2 — lanzamos RuntimeError BP atrapable en lugar de
                     // BpThreadFault, así el código BP puede try/catch.
@@ -4166,7 +4170,7 @@ public class VirtualMachine {
             }
             case MUTEX_UNLOCK: {
                 int mutexRef = popTc(tc);
-                int mid = readInt32(mutexRef + 4 + 0 * 4);
+                int mid = readInt32(refDeref(mutexRef) + 4 + 0 * 4);   // V4: handle→addr
                 if (mid < 0 || mid >= mutexes.size()) {
                     throwBpRuntimeError(tc, "mutex.unlock: id inválido " + mid);
                 }

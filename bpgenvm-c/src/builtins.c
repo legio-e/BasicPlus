@@ -284,6 +284,13 @@ static void push_i32(bpvm_t* vm, bpvm_thread_t* tc, int32_t v) {
 static uint32_t pop_ref(bpvm_t* vm, bpvm_thread_t* tc) {
     return bpref_addr(bpref_pop(vm, tc));
 }
+/* V4 (tanda 2): dirección FÍSICA del objeto tras un pop_ref — deref del handle
+ * por la tabla (identidad para direcciones directas/constantes). Obligatorio
+ * antes de tocar vm->memory: el valor de pop_ref es un handle (idx|TAG), no
+ * una dirección. */
+static uint32_t ref_addr(bpvm_t* vm, uint32_t ref) {
+    return (ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(ref));
+}
 static void push_ref(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
     bpref_push(vm, tc, bpref_from_addr(ref));
 }
@@ -343,7 +350,8 @@ static bpvm_status_t gui_make_child(bpvm_t* vm, bpvm_thread_t* tc, int (*mk)(int
  * Devuelve la dirección absoluta o 0 si no existe. */
 static uint32_t bpvm_resolve_handler(bpvm_t* vm, uint32_t host, const char* simple) {
     if (host == 0) return 0;
-    uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + host);
+    uint32_t ha = bpref_deref(vm, bpref_from_addr(host));   /* V4: handle→addr */
+    uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + ha);
     const bpvm_module_t* m = NULL;
     for (int i = 0; i < vm->module_count; i++) {
         const bpvm_module_t* mm = &vm->modules[i];
@@ -530,7 +538,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_TCP_CONNECT: {
         int32_t timeout_ms = pop_i32(vm, tc);
         int32_t port       = pop_i32(vm, tc);
-        uint32_t href      = (uint32_t) pop_i32(vm, tc);
+        uint32_t href      = pop_ref(vm, tc);
         if (!bpvm_net_available()) {
             return builtin_throw(vm, tc, "Net: sin red en esta plataforma");
         }
@@ -541,13 +549,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_TCP_SEND: {
-        uint32_t dref = (uint32_t) pop_i32(vm, tc);   /* data: byte[] */
+        uint32_t dref = pop_ref(vm, tc);   /* data: byte[] */
         int32_t  h    = pop_i32(vm, tc);
         if (!bpvm_net_available()) {
             return builtin_throw(vm, tc, "Net: sin red en esta plataforma");
         }
-        uint32_t len = (dref == 0) ? 0 : bpvm_read_u32_be(vm->memory + dref);
-        const uint8_t* data = (dref == 0) ? NULL : (vm->memory + dref + 4);
+        uint32_t dd = (dref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(dref));   /* V4: handle→addr */
+        uint32_t len = (dd == 0) ? 0 : bpvm_read_u32_be(vm->memory + dd);
+        const uint8_t* data = (dd == 0) ? NULL : (vm->memory + dd + 4);
         int n = (len == 0) ? 0 : bpvm_net_send((int) h, data, (int) len);
         if (n < 0) return builtin_throw(vm, tc, "Net.send: conexión cerrada o inválida");
         push_i32(vm, tc, (int32_t) n);
@@ -594,7 +603,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_CREATE_LABEL: return gui_make_child(vm, tc, bpvm_gui_create_label);
     case BUILTIN_GUI_CREATE_BUTTON: return gui_make_child(vm, tc, bpvm_gui_create_button);
     case BUILTIN_GUI_SET_TEXT: {
-        uint32_t tref = (uint32_t) pop_i32(vm, tc);
+        uint32_t tref = pop_ref(vm, tc);
         int handle = pop_i32(vm, tc);
         char buf[1024];
         read_bp_string(vm, tref, buf, sizeof(buf));
@@ -613,7 +622,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_SET_BG_COLOR:   { uint32_t rgb = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_bg_color(h, rgb);   push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SET_TEXT_COLOR: { uint32_t rgb = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_text_color(h, rgb); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SET_FONT:       { int f = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_font(h, f); push_i32(vm, tc, 0); return BPVM_OK; }
-    case BUILTIN_GUI_LOAD_FONT:      { uint32_t ref = (uint32_t) pop_i32(vm, tc); char path[256]; read_bp_string(vm, ref, path, sizeof(path)); push_i32(vm, tc, bpvm_gui_load_font(path)); return BPVM_OK; }
+    case BUILTIN_GUI_LOAD_FONT:      { uint32_t ref = pop_ref(vm, tc); char path[256]; read_bp_string(vm, ref, path, sizeof(path)); push_i32(vm, tc, bpvm_gui_load_font(path)); return BPVM_OK; }
     case BUILTIN_GUI_SET_ROTATION:   { int deg = pop_i32(vm, tc); bpvm_gui_set_rotation(deg); push_i32(vm, tc, 0); return BPVM_OK; }
 
     /* H19 — App.* introspección del proyecto en ejecución (id 211-213). */
@@ -696,9 +705,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* H13 — Forms: resuelve `name` como función pública del módulo de `host`
          * (la ventana) y la invoca con `sender` como arg0. Args: host, name, sender.
          * Espejo de GUI_INVOKE_BY_NAME en miVM. */
-        uint32_t sender   = (uint32_t) pop_i32(vm, tc);
-        uint32_t name_ref = (uint32_t) pop_i32(vm, tc);
-        uint32_t host     = (uint32_t) pop_i32(vm, tc);
+        uint32_t sender   = pop_ref(vm, tc);
+        uint32_t name_ref = pop_ref(vm, tc);
+        uint32_t host     = pop_ref(vm, tc);
         char nm[128];
         read_bp_string(vm, name_ref, nm, sizeof(nm));
         uint32_t target = bpvm_resolve_handler(vm, host, nm);
@@ -719,12 +728,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * invokeHandlerBySlot en miVM: paseo de vtable con fallback al padre
          * (idéntico a OP_INVOKE_VIRTUAL) → bridge con [this=win, sender] como
          * locals 0/1. slot < 0 o no resoluble → IGNORA (sin excepción). */
-        uint32_t sender = (uint32_t) pop_i32(vm, tc);
+        uint32_t sender = pop_ref(vm, tc);
         int32_t  slot   = pop_i32(vm, tc);
-        uint32_t win    = (uint32_t) pop_i32(vm, tc);
+        uint32_t win    = pop_ref(vm, tc);
         if (win == 0 || slot < 0) { push_i32(vm, tc, 0); return BPVM_OK; }
         uint8_t* mem = vm->memory;
-        uint32_t desc = (uint32_t) bpvm_read_i32_be(mem + win);
+        uint32_t wa = ref_addr(vm, win);   /* V4: handle→addr (el `this` que se pasa abajo sigue siendo el REF `win`) */
+        uint32_t desc = (uint32_t) bpvm_read_i32_be(mem + wa);
         int32_t  method_off = -1;
         uint32_t target_cs  = 0;
         for (;;) {
@@ -747,14 +757,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_GUI_BIND_CLICK: {
-        uint32_t self = (uint32_t) pop_i32(vm, tc);
+        uint32_t self = pop_ref(vm, tc);
         int handle = pop_i32(vm, tc);
         bpvm_gui_bind_click(handle, self);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
     case BUILTIN_GUI_CLICK: {
-        uint32_t obj = (uint32_t) pop_i32(vm, tc);
+        uint32_t obj = pop_ref(vm, tc);
         bpvm_gui_inject_click(obj);
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -774,7 +784,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_CREATE_CHECKBOX: return gui_make_child(vm, tc, bpvm_gui_create_checkbox);
     case BUILTIN_GUI_SET_CHECKED:     { int v = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_checked(h, v); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_GET_CHECKED:     { int h = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_get_checked(h)); return BPVM_OK; }
-    case BUILTIN_GUI_CHANGE:          { uint32_t obj = (uint32_t) pop_i32(vm, tc); bpvm_gui_inject_change(obj); push_i32(vm, tc, 0); return BPVM_OK; }
+    case BUILTIN_GUI_CHANGE:          { uint32_t obj = pop_ref(vm, tc); bpvm_gui_inject_change(obj); push_i32(vm, tc, 0); return BPVM_OK; }
     /* H6 — switch + slider + bar (value-widgets enteros; el backend clampa al rango). */
     case BUILTIN_GUI_CREATE_SWITCH: return gui_make_child(vm, tc, bpvm_gui_create_switch);
     case BUILTIN_GUI_CREATE_SLIDER: return gui_make_child(vm, tc, bpvm_gui_create_slider);
@@ -786,7 +796,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_CREATE_LED: return gui_make_child(vm, tc, bpvm_gui_create_led);
     case BUILTIN_GUI_CREATE_DROPDOWN: return gui_make_child(vm, tc, bpvm_gui_create_dropdown);
     case BUILTIN_GUI_SET_OPTIONS: {
-        uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc); int h = pop_i32(vm, tc);
         char buf[512]; read_bp_string(vm, ref, buf, sizeof(buf));
         bpvm_gui_set_options(h, buf); push_i32(vm, tc, 0); return BPVM_OK;
     }
@@ -802,13 +812,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_KEYBOARD_SET_TEXTAREA: { int ta = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_keyboard_set_textarea(h, ta); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_CREATE_MSGBOX: return gui_make_child(vm, tc, bpvm_gui_create_msgbox);
     case BUILTIN_GUI_SET_BUTTONS: {
-        uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc); int h = pop_i32(vm, tc);
         char buf[256]; read_bp_string(vm, ref, buf, sizeof(buf));
         bpvm_gui_set_buttons(h, buf); push_i32(vm, tc, 0); return BPVM_OK;
     }
     case BUILTIN_GUI_CREATE_TABVIEW: return gui_make_child(vm, tc, bpvm_gui_create_tabview);
     case BUILTIN_GUI_TABVIEW_ADD_TAB: {
-        uint32_t ref = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc); int h = pop_i32(vm, tc);
         char buf[128]; read_bp_string(vm, ref, buf, sizeof(buf));
         push_i32(vm, tc, bpvm_gui_tabview_add_tab(h, buf)); return BPVM_OK;
     }
@@ -818,7 +828,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         bpvm_gui_table_set_grid(h, rows, cols); push_i32(vm, tc, 0); return BPVM_OK;
     }
     case BUILTIN_GUI_TABLE_SET_CELL: {
-        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc);
         int col = pop_i32(vm, tc); int row = pop_i32(vm, tc); int h = pop_i32(vm, tc);
         char buf[256]; read_bp_string(vm, ref, buf, sizeof(buf));
         bpvm_gui_table_set_cell(h, row, col, buf); push_i32(vm, tc, 0); return BPVM_OK;
@@ -831,7 +841,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_GUI_IMAGE_NEW: { push_i32(vm, tc, bpvm_gui_image_new()); return BPVM_OK; }
     case BUILTIN_GUI_IMAGE_LOAD_FILE: {
-        uint32_t ref = (uint32_t) pop_i32(vm, tc); int id = pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc); int id = pop_i32(vm, tc);
         char buf[512]; read_bp_string(vm, ref, buf, sizeof(buf));
         push_i32(vm, tc, bpvm_gui_image_load_file(id, buf)); return BPVM_OK;
     }
@@ -1207,7 +1217,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_CHARS_TO_STRING: {
         int32_t len = pop_i32(vm, tc);
-        uint32_t chars_ref = (uint32_t) pop_i32(vm, tc);   /* pop 4B preservado (inconsistencia pre-existente) */
+        uint32_t chars_ref = pop_ref(vm, tc);   /* V4 tanda2: ref de 8B */
         if (len < 0) return BPVM_ERR_RUNTIME;
         bpref_t ca = bpref_from_addr(chars_ref);           /* array i32 de codepoints (entrada) */
         uint32_t avail = bpref_arr_len(vm, ca);
@@ -1236,7 +1246,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* H2 (V2): string y byte[] comparten layout (TYPE_ARRAY_I8). La
          * conversión es una copia defensiva (string inmutable / byte[]
          * mutable): mismos bytes, objeto nuevo. */
-        uint32_t ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t ref = pop_ref(vm, tc);
         uint32_t rd = (ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(ref));   /* V4: fuente handle→addr */
         uint32_t n = (rd == 0) ? 0 : bpvm_read_u32_be(vm->memory + rd);
         uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
@@ -1303,7 +1313,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 
     case BUILTIN_THREAD_START: {
-        uint32_t thread_ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t thread_ref = pop_ref(vm, tc);
         int new_tid = bpvm_thread_spawn(vm, thread_ref);
         if (new_tid < 0) {
             fprintf(stderr, "[bpvm-c] Thread.start falló\n");
@@ -1315,13 +1325,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 
     case BUILTIN_THREAD_JOIN: {
-        uint32_t thread_ref = (uint32_t) pop_i32(vm, tc);
+        uint32_t thread_ref = pop_ref(vm, tc);
         if (thread_ref == 0) {
             push_i32(vm, tc, 0); return BPVM_OK;
         }
         /* Convención: field[0] del Thread BP guarda el tid (escrito
          * por __threadStart). 0 = no spawneado todavía. */
-        int32_t target_tid = bpvm_read_i32_be(vm->memory + thread_ref + 4 + 0 * 4);
+        int32_t target_tid = bpvm_read_i32_be(vm->memory + ref_addr(vm, thread_ref) + 4 + 0 * 4);
         if (target_tid <= 0 || target_tid >= vm->thread_count) {
             push_i32(vm, tc, 0); return BPVM_OK;
         }
@@ -1344,11 +1354,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* Recibe el ref del objeto Mutex BP. El mid (id en el pool de
          * la VM) está en field[0] del objeto, escrito por el ctor de
          * Mutex que llama a __mutexCreate. */
-        uint32_t mref = (uint32_t) pop_i32(vm, tc);
+        uint32_t mref = pop_ref(vm, tc);
         if (mref == 0) {
             push_i32(vm, tc, 0); return BPVM_ERR_NULL_RECEIVER;
         }
-        int32_t mid = bpvm_read_i32_be(vm->memory + mref + 4 + 0 * 4);
+        int32_t mid = bpvm_read_i32_be(vm->memory + ref_addr(vm, mref) + 4 + 0 * 4);
         if (mid < 0 || mid >= vm->mutex_count) {
             fprintf(stderr, "[bpvm-c] mutex_lock: mid inválido %" PRId32 "\n", mid);
             push_i32(vm, tc, 0);
@@ -1376,11 +1386,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 
     case BUILTIN_MUTEX_UNLOCK: {
-        uint32_t mref = (uint32_t) pop_i32(vm, tc);
+        uint32_t mref = pop_ref(vm, tc);
         if (mref == 0) {
             push_i32(vm, tc, 0); return BPVM_ERR_NULL_RECEIVER;
         }
-        int32_t mid = bpvm_read_i32_be(vm->memory + mref + 4 + 0 * 4);
+        int32_t mid = bpvm_read_i32_be(vm->memory + ref_addr(vm, mref) + 4 + 0 * 4);
         if (mid < 0 || mid >= vm->mutex_count) {
             fprintf(stderr, "[bpvm-c] mutex_unlock: mid inválido %" PRId32 "\n", mid);
             push_i32(vm, tc, 0);
@@ -1456,13 +1466,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_I2C_WRITE: {
         /* write(bus, addr, data: integer[], count): integer */
         int count = pop_i32(vm, tc);
-        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        uint32_t dataRef = pop_ref(vm, tc);
+        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int addr = pop_i32(vm, tc);
         int bus  = pop_i32(vm, tc);
         uint8_t buf[64];
         int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
         for (int i = 0; i < n; i++) {
-            int32_t v = bpvm_read_i32_be(vm->memory + dataRef + 4 + i * 4);
+            int32_t v = bpvm_read_i32_be(vm->memory + dataAddr + 4 + i * 4);
             buf[i] = (uint8_t)(v & 0xFF);
         }
         int wrote = bpvm_i2c_write(bus, addr, buf, (size_t) n);
@@ -1472,7 +1483,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_I2C_READ: {
         /* read(bus, addr, data: integer[], count): integer */
         int count = pop_i32(vm, tc);
-        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        uint32_t dataRef = pop_ref(vm, tc);
+        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int addr = pop_i32(vm, tc);
         int bus  = pop_i32(vm, tc);
         uint8_t buf[64];
@@ -1480,7 +1492,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int got = bpvm_i2c_read(bus, addr, buf, (size_t) n);
         if (got > 0) {
             for (int i = 0; i < got; i++) {
-                bpvm_write_i32_be(vm->memory + dataRef + 4 + i * 4,
+                bpvm_write_i32_be(vm->memory + dataAddr + 4 + i * 4,
                                   (int32_t) buf[i]);
             }
         }
@@ -1496,8 +1508,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t count    = pop_i32(vm, tc);
         int32_t dstStart = pop_i32(vm, tc);
         int32_t srcStart = pop_i32(vm, tc);
-        uint32_t dstRef  = (uint32_t) pop_i32(vm, tc);
-        uint32_t srcRef  = (uint32_t) pop_i32(vm, tc);
+        uint32_t dstRef  = pop_ref(vm, tc);
+        uint32_t srcRef  = pop_ref(vm, tc);
         if (count <= 0 || srcRef == 0 || dstRef == 0) {
             push_i32(vm, tc, 0);
             return BPVM_OK;
@@ -1541,12 +1553,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_SPI_WRITE: {
         int count = pop_i32(vm, tc);
-        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        uint32_t dataRef = pop_ref(vm, tc);
+        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int bus = pop_i32(vm, tc);
         uint8_t buf[256];
         int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
         for (int i = 0; i < n; i++) {
-            int32_t v = bpvm_read_i32_be(vm->memory + dataRef + 4 + i * 4);
+            int32_t v = bpvm_read_i32_be(vm->memory + dataAddr + 4 + i * 4);
             buf[i] = (uint8_t)(v & 0xFF);
         }
         int wrote = bpvm_spi_write(bus, buf, (size_t) n);
@@ -1555,14 +1568,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_SPI_READ: {
         int count = pop_i32(vm, tc);
-        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        uint32_t dataRef = pop_ref(vm, tc);
+        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int bus = pop_i32(vm, tc);
         uint8_t buf[256];
         int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
         int got = bpvm_spi_read(bus, buf, (size_t) n);
         if (got > 0) {
             for (int i = 0; i < got; i++) {
-                bpvm_write_i32_be(vm->memory + dataRef + 4 + i * 4, (int32_t) buf[i]);
+                bpvm_write_i32_be(vm->memory + dataAddr + 4 + i * 4, (int32_t) buf[i]);
             }
         }
         push_i32(vm, tc, (int32_t) got);
@@ -1570,19 +1584,21 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_SPI_TRANSFER: {
         int count = pop_i32(vm, tc);
-        uint32_t rxRef = (uint32_t) pop_i32(vm, tc);
-        uint32_t txRef = (uint32_t) pop_i32(vm, tc);
+        uint32_t rxRef = pop_ref(vm, tc);
+        uint32_t rxAddr = ref_addr(vm, rxRef);   /* V4: handle→addr */
+        uint32_t txRef = pop_ref(vm, tc);
+        uint32_t txAddr = ref_addr(vm, txRef);   /* V4: handle→addr */
         int bus = pop_i32(vm, tc);
         uint8_t txBuf[256], rxBuf[256];
         int n = count > (int) sizeof(txBuf) ? (int) sizeof(txBuf) : count;
         for (int i = 0; i < n; i++) {
-            int32_t v = bpvm_read_i32_be(vm->memory + txRef + 4 + i * 4);
+            int32_t v = bpvm_read_i32_be(vm->memory + txAddr + 4 + i * 4);
             txBuf[i] = (uint8_t)(v & 0xFF);
         }
         int xchg = bpvm_spi_transfer(bus, txBuf, rxBuf, (size_t) n);
         if (xchg > 0) {
             for (int i = 0; i < xchg; i++) {
-                bpvm_write_i32_be(vm->memory + rxRef + 4 + i * 4, (int32_t) rxBuf[i]);
+                bpvm_write_i32_be(vm->memory + rxAddr + 4 + i * 4, (int32_t) rxBuf[i]);
             }
         }
         push_i32(vm, tc, (int32_t) xchg);
@@ -1605,12 +1621,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_UART_WRITE: {
         int count = pop_i32(vm, tc);
-        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        uint32_t dataRef = pop_ref(vm, tc);
+        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int bus = pop_i32(vm, tc);
         uint8_t buf[256];
         int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
         for (int i = 0; i < n; i++) {
-            int32_t v = bpvm_read_i32_be(vm->memory + dataRef + 4 + i * 4);
+            int32_t v = bpvm_read_i32_be(vm->memory + dataAddr + 4 + i * 4);
             buf[i] = (uint8_t)(v & 0xFF);
         }
         int wrote = bpvm_uart_write(bus, buf, (size_t) n);
@@ -1620,14 +1637,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_UART_READ: {
         int timeout = pop_i32(vm, tc);
         int count   = pop_i32(vm, tc);
-        uint32_t dataRef = (uint32_t) pop_i32(vm, tc);
+        uint32_t dataRef = pop_ref(vm, tc);
+        uint32_t dataAddr = ref_addr(vm, dataRef);   /* V4: handle→addr */
         int bus = pop_i32(vm, tc);
         uint8_t buf[256];
         int n = count > (int) sizeof(buf) ? (int) sizeof(buf) : count;
         int got = bpvm_uart_read(bus, buf, (size_t) n, timeout);
         if (got > 0) {
             for (int i = 0; i < got; i++) {
-                bpvm_write_i32_be(vm->memory + dataRef + 4 + i * 4, (int32_t) buf[i]);
+                bpvm_write_i32_be(vm->memory + dataAddr + 4 + i * 4, (int32_t) buf[i]);
             }
         }
         push_i32(vm, tc, (int32_t) got);
@@ -1789,12 +1807,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* __npShow(pin, grb: integer[], count): void — empuja count palabras
          * GRB del array (mismo layout que I2C/SPI: ref+4 = primer i32 BE). */
         int count = pop_i32(vm, tc);
-        uint32_t grbRef = (uint32_t) pop_i32(vm, tc);
+        uint32_t grbRef = pop_ref(vm, tc);
+        uint32_t grbAddr = ref_addr(vm, grbRef);   /* V4: handle→addr */
         int pin = pop_i32(vm, tc);
         static uint32_t s_npbuf[256];           /* single-worker: estático OK */
         int n = count < 0 ? 0 : (count > 256 ? 256 : count);
         for (int i = 0; i < n; i++) {
-            s_npbuf[i] = (uint32_t) bpvm_read_i32_be(vm->memory + grbRef + 4 + i * 4);
+            s_npbuf[i] = (uint32_t) bpvm_read_i32_be(vm->memory + grbAddr + 4 + i * 4);
         }
         bpvm_neopixel_show(pin, s_npbuf, n);
         push_i32(vm, tc, 0);

@@ -1,0 +1,41 @@
+// ThreadsMin.bp — tanda 2: Thread.start/join + Mutex.lock/unlock (refs de
+// objeto popeados a 8B). El Mutex COMPARTIDO viaja por constructor; cada
+// hilo cuenta bajo el lock en su propio campo; Main suma tras el join.
+// Determinista en el RESULTADO.
+module ThreadsMin
+  class Sumador extends Thread
+    var m: Mutex
+    var veces: integer
+    var hechos: integer
+    public function Sumador(mx: Mutex, n: integer)
+      super(4096)
+      this.m := mx
+      this.veces := n
+      this.hechos := 0
+    end Sumador
+    public function run()
+      var i: integer := 0
+      while i < this.veces do
+        this.m.lock()
+        this.hechos := this.hechos + 1
+        this.m.unlock()
+        i := i + 1
+      endwh
+    end run
+    public function total(): integer
+      return this.hechos
+    end total
+  end Sumador
+
+  function Main()
+    var mtx: Mutex := Mutex()
+    var a: Sumador := Sumador(mtx, 500)
+    var b: Sumador := Sumador(mtx, 500)
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "total =", a.total() + b.total()
+    print "ThreadsMin: fin"
+  end Main
+end ThreadsMin

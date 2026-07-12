@@ -151,11 +151,14 @@ int bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref) {
     /* Guarda el tid en field[0] del Thread BP (convención del frontend
      * Java: el constructor de Thread sintetizado deja field[0]=0 hasta
      * que se llama start()). Esto es lo que __threadJoin lee para
-     * encontrar el tc target. */
-    bpvm_write_i32_be(vm->memory + thread_ref + 4 + 0 * 4, (int32_t) tid);
+     * encontrar el tc target. V4: thread_ref es un HANDLE → deref para
+     * tocar memory[] (thread_ref_heap arriba se queda como REF: es el
+     * ancla del GC y el `this` de run()). */
+    uint32_t ta = bpref_deref(vm, bpref_from_addr(thread_ref));
+    bpvm_write_i32_be(vm->memory + ta + 4 + 0 * 4, (int32_t) tid);
 
     /* Resolver dirección de Thread.run() (slot 0 de la vtable). */
-    uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + thread_ref);
+    uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + ta);
     uint16_t bw       = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_BITMAP_WORDS);
     uint32_t vt_base  = class_ptr + BPVM_CLS_OFF_FIELD_BITMAP + 2u * (uint32_t) bw * 4u;
     int32_t  off      = bpvm_read_i32_be(vm->memory + vt_base);
