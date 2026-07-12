@@ -109,19 +109,39 @@ Cada paso: **committable + verificable**. Regla en cada uno: **verificar contra 
   fs_host.c) + `fs_lfs_host.c` (filebd/.img, modo oráculo). 33 asserts + persistencia + mount-no-
   reformatea. Trazas littlefs silenciadas en la lib (romperían paridad). B0.3 = 84 escenarios de
   corte de corriente, 0 corrupciones.
-- **1.2 Selección de backend en host:** libc = **default** (dev-loop intacto, corren los `.mod`
-  como hoy); littlefs-en-fichero = **opt-in** por flag `--fs=lfs:<img>` (oráculo). *Verif:*
-  dev-loop intacto + la suite BP de IO da los mismos resultados sobre el oráculo.
-- **1.4 Lock grueso de FS** (ADELANTADO — requisito de multitarea). Mutex de plataforma por
-  OPERACIÓN COMPLETA de la fachada en `fs_lfs.c` (no por llamada lfs_* suelta → ops atómicas,
-  sin TOCTOU). *Verif en dos niveles:* (a) C-level: N pthreads martillean la fachada sobre el
-  oráculo (control 1 thread, metodología test-smphandles); (b) BP-level: sample con varios
-  Threads BP appendeando a ficheros propios + uno compartido, verificación por PROPIEDADES
-  (conteos exactos + ninguna línea rota), con `--smp=1` (como placa) y `--smp=2/4` (estrés).
-  OJO: puede aflorar el bug diferido de H1 (owner-alloc en Thread.run()) → si sale, se caza aquí.
-- **1.3 Directorios reales** (`/sys /lib /app` como dirs littlefs) + **montajes** en el VFS
-  (andamiaje multi-montaje/multi-motor). *Verif:* paths absolutos y relativos (base-dir H19)
-  resuelven sobre dirs reales.
+- **1.2 Selección de backend en host** ✅ **HECHO 12-jul** (`1e7f1dc`): flag `--fs=lfs:<img>`
+  (libc default). `samples/IoLfs.bp` byte-idéntico a 3 bandas (VM-C-libc == VM-C-lfs == miVM).
+  BONUS: la suite destapó la regresión de pops de ref de H1.2a → tandas 1+2 (`c2fe54d`,
+  `7270e40`) — 49 sitios arreglados en VM-C + Thread/Mutex en miVM; **resuelto el bug diferido
+  de Thread de H1** (ThreadsMin.bp lo guarda).
+- **1.4 Lock grueso de FS** ✅ **HECHO 13-jul** (`bd9c6a1`, adelantado por el requisito). Lock
+  por OPERACIÓN COMPLETA en fs_lfs.c (wrappers; mutex de cintura pthread/FreeRTOS). ROJO→VERDE:
+  sin lock littlefs ASSERTA (pcache) con 4 pthreads; con lock 0 corrupciones a 1/4/8
+  (`test-fslfsmt`). BP-level `IoMt.bp` + `test-iomt`: 3 Threads BP × 4 ficheros, salida IDÉNTICA
+  en 5 corridas (oráculo --smp=1/2/4 + libc + miVM), 0 líneas rotas. El bug de Thread NO afloró
+  aquí porque ya lo había cazado la tanda 2. Gotcha BP: charAt devuelve string y `==` de strings
+  compara refs → charCodeAt para contenido.
+- **1.3 Directorios reales + `list` + montajes** ✅ **HECHO 13-jul** (`6b4b563`) — **CIERRA B1.**
+  Op `list` (callback, sin allocs) en fachada + fs_lfs (bajo el lock) + fs_host (dirent).
+  Montajes: tabla por prefijo (raíz + hasta 3; `bpvm_fs_mount("/sd", be)` para fase B), ruteo
+  por prefijo más largo, cross-mount rename/copy → -1. `test-fsvfs` 33 asserts (jerarquía real,
+  list exacto, resolve/base-dir H19 sobre el oráculo, stub en /mnt). Regresión completa verde.
+
+> **🏁 BLOQUE B1 COMPLETO (13-jul).** El host es el oráculo funcional completo del FS que irá a
+> placa: motor + fachada + selección por flag + lock multitarea + dirs/list/montajes, todo con
+> tests permanentes. Siguiente: **B2** (RP2350 en Metro+Pico, flasheo intensivo — con Eduardo).
+
+> **AUDITORÍA DEL CAMINO DE COMUNICACIONES (pregunta de Eduardo, 13-jul).** Los handlers del
+> wire en los 3 firmwares (PUT/GET/DEL/COPY/LS+CRC en `repl_v1.c`/`repl_esp32.c`/STM32) llaman
+> el API LEGADO `fs_get/fs_put/fs_delete` DIRECTAMENTE — se saltan la fachada. Los builtins BP
+> van por la fachada → backend device → los mismos `fs_*`: dos caminos al mismo motor → la
+> carrera comm↔worker ya existe en potencia HOY (mitigada por patrón de uso). **Decisión de
+> diseño para B2:** (1) añadir `list` a la fachada (1.3); (2) migrar los handlers del repl a la
+> fachada (PUT→write, GET→read, DEL→remove, COPY→copy, LS→list) → **el lock de B1.4 en el
+> backend cubre a los DOS clientes por construcción**; (3) el zero-copy de `fs_get` (puntero al
+> mirror) muere con el mirror — RUN carga el .mod copiando a RAM vía `read` (ya previsto §3 de
+> la propuesta). El host no está afectado (comm_host solo drena output; el daemon no escribe
+> ficheros). El bug de pops (tandas 1-2) NO toca el comm: no ejecuta bytecode.
 
 **Bloque 2 — Un micro de referencia a fondo**
 - **2.1 Cintura block-device del micro de referencia** (sobre sus primitivas), absorbiendo su quirk.
