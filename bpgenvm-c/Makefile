@@ -22,7 +22,10 @@ SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
           src/fs_facade.c src/fs_host.c src/crc32.c \
-          src/net.c src/net_host.c
+          src/net.c src/net_host.c \
+          src/fs_lfs.c src/fs_lfs_host.c \
+          third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \
+          third_party/littlefs/bd/lfs_filebd.c
 
 # Paths de las deps GUI vendorizadas (third_party/, gitignored; ver su README).
 LVGL_DIR  = third_party/lvgl
@@ -30,9 +33,18 @@ SDL2_DIR  = third_party/SDL2/x86_64-w64-mingw32
 LVGL_INC  = -I$(LVGL_DIR) -Iinclude -DLV_CONF_INCLUDE_SIMPLE -I$(SDL2_DIR)/include
 
 # littlefs vendorizado (H2 fase A — motor del FS de flash). third_party/, ver su README.
+# In-tree y compilado EN la lib host (SRC incluye lfs core + filebd + fs_lfs*):
+# la VM-C de PC lleva el modo oráculo dentro (B1.2: seleccionable por flag).
 LFS_DIR   = third_party/littlefs
 LFS_INC   = -I$(LFS_DIR) -I$(LFS_DIR)/bd
 LFS_CORE  = $(LFS_DIR)/lfs.c $(LFS_DIR)/lfs_util.c
+CFLAGS   += $(LFS_INC)
+# Trazas internas de littlefs SILENCIADAS en la lib de la VM: imprimen por
+# stdout (p.ej. "Corrupted dir pair" en el 1er mount de una imagen virgen,
+# ESPERADO antes del format) y romperían la paridad byte a byte de la salida.
+# El canal de error real es la fachada (-1 → RuntimeError BP atrapable). Los
+# tests B0 (test-lfs*) compilan littlefs aparte SIN esto → conservan trazas.
+CFLAGS   += -DLFS_NO_DEBUG -DLFS_NO_WARN -DLFS_NO_ERROR
 
 # V3/H4 — backend GUI. Dos ejes de FEATURE (build-time), no de placa:
 #   GUI=1 (default): contrato Gui.* (modelo + dumpTree). GUI=0 -> VM lean (los
@@ -63,7 +75,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs test-lfsfile test-lfsfault gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs test-lfsfile test-lfsfault test-fslfs gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -360,6 +372,17 @@ test-lfsfault:
 	  echo "--- littlefs B0.3 fault-injection (cortes exhaustivos + bloques malos) ---"; \
 	  ./$(LFS_FAULT_BIN); \
 	fi
+
+# H2 fase A · B1.1 — la FACHADA bpvm_fs sobre littlefs (backend fs_lfs.c +
+# constructor host fs_lfs_host.c, ya DENTRO de la lib). Afirma la semántica
+# documentada (= espejo de fs_host.c) + persistencia entre attach + el
+# contrato mount-primero-no-reformatear.
+FSLFS_BIN = build/test_fs_lfs.exe
+test-fslfs: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_fs_lfs.c $(LIBOBJ) -o $(FSLFS_BIN) $(LDFLAGS)
+	@echo "--- B1.1 fachada bpvm_fs sobre littlefs (semántica espejo de fs_host) ---"
+	./$(FSLFS_BIN)
 
 test-throwmsg: $(LIBOBJ)
 	@mkdir -p build

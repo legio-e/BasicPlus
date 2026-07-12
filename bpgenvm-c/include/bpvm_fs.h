@@ -91,6 +91,16 @@ const char* bpvm_fs_resolve(const char* path, char* out, size_t outsz);
  * registra el suyo (fs_get/fs_put). */
 void bpvm_fs_register_host(void);
 
+/* H2 fase A (B1.1) — backend littlefs sobre una IMAGEN en fichero (host-only,
+ * fs_lfs_host.c): el modo ORÁCULO de la VM-C en PC (mismo motor que el micro).
+ * Monta img_path (block_size/block_count en 0 → defaults 4096/256 = 1 MB);
+ * si el mount falla y format_if_needed, formatea. 0 / -1. Solo tipos planos
+ * aquí: el API que arrastra lfs.h vive en bpvm_fs_lfs.h. */
+int  bpvm_fs_register_lfs_filebd(const char* img_path,
+                                 unsigned block_size, unsigned block_count,
+                                 int format_if_needed);
+void bpvm_fs_lfs_filebd_close(void);
+
 #ifdef __cplusplus
 }
 #endif
