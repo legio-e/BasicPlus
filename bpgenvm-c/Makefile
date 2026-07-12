@@ -29,6 +29,11 @@ LVGL_DIR  = third_party/lvgl
 SDL2_DIR  = third_party/SDL2/x86_64-w64-mingw32
 LVGL_INC  = -I$(LVGL_DIR) -Iinclude -DLV_CONF_INCLUDE_SIMPLE -I$(SDL2_DIR)/include
 
+# littlefs vendorizado (H2 fase A — motor del FS de flash). third_party/, ver su README.
+LFS_DIR   = third_party/littlefs
+LFS_INC   = -I$(LFS_DIR) -I$(LFS_DIR)/bd
+LFS_CORE  = $(LFS_DIR)/lfs.c $(LFS_DIR)/lfs_util.c
+
 # V3/H4 — backend GUI. Dos ejes de FEATURE (build-time), no de placa:
 #   GUI=1 (default): contrato Gui.* (modelo + dumpTree). GUI=0 -> VM lean (los
 #                    builtins GUI caen al "no implementado", como un micro sin-GUI).
@@ -58,7 +63,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -302,6 +307,22 @@ test-oom: $(BIN)
 	  else \
 	    echo "FAIL test-oom (status=$$st — OOM no atrapable o cuelgue)"; exit 1; \
 	  fi; \
+	fi
+
+# H2 fase A · B0.1 — smoke de littlefs vendorizado (third_party/littlefs). Sobre
+# el block-device de RAM: format/mount/mkdir/write/unmount+remount/read+verify.
+# Motor puro en host, aún sin tocar la VM (el futuro oráculo). Flags relajados
+# para el código vendorizado (mismo criterio que gui-smoke).
+LFS_SMOKE_BIN = build/test_lfs_smoke.exe
+test-lfs:
+	@mkdir -p build
+	@if [ ! -f $(LFS_DIR)/lfs.c ]; then \
+	  echo "(skip test-lfs: falta third_party/littlefs — vendorízalo, ver third_party/README.md)"; \
+	else \
+	  $(CC) -std=c99 -O2 $(LFS_INC) test/test_lfs_smoke.c $(LFS_CORE) \
+	    $(LFS_DIR)/bd/lfs_rambd.c -o $(LFS_SMOKE_BIN); \
+	  echo "--- littlefs B0.1 smoke (rambd: format/mount/mkdir/write/remount/read) ---"; \
+	  ./$(LFS_SMOKE_BIN); \
 	fi
 
 test-throwmsg: $(LIBOBJ)
