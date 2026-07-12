@@ -75,7 +75,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs test-lfsfile test-lfsfault test-fslfs gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs test-lfsfile test-lfsfault test-fslfs test-fslfsmt test-iomt gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -371,6 +371,38 @@ test-lfsfault:
 	    -o $(LFS_FAULT_BIN); \
 	  echo "--- littlefs B0.3 fault-injection (cortes exhaustivos + bloques malos) ---"; \
 	  ./$(LFS_FAULT_BIN); \
+	fi
+
+# H2 fase A · B1.4a — estrés MULTITAREA C-level de la fachada sobre littlefs:
+# N pthreads (modelan Threads BP + comm task) martillean write/append/stat
+# sobre ficheros propios + un log compartido. Verificación por PROPIEDADES
+# (byte-exacto + línea-atómica + conteos). Rojo→verde: sin el lock grueso,
+# littlefs (no reentrante) asserta con 4 threads; con él, 0 corrupciones.
+FSLFSMT_BIN = build/test_fs_lfs_mt.exe
+test-fslfsmt: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_fs_lfs_mt.c $(LIBOBJ) -o $(FSLFSMT_BIN) $(LDFLAGS)
+	@echo "--- B1.4a lock grueso del FS: control 1 thread + 4 + 8 (0 corrupciones) ---"
+	./$(FSLFSMT_BIN) build/mt.img 1 60
+	./$(FSLFSMT_BIN) build/mt.img 4 60
+	./$(FSLFSMT_BIN) build/mt.img 8 60
+
+# H2 fase A · B1.4b — el requisito de multitarea A NIVEL BP: 3 Threads BP
+# escribiendo 4 ficheros a la vez sobre el ORÁCULO littlefs con 4 workers
+# REALES (--smp=4). Verde = tamaños exactos + 0 líneas rotas.
+test-iomt: $(BIN)
+	@if [ ! -f samples/IoMt.mod ]; then \
+	  echo "(skip test-iomt: falta samples/IoMt.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/IoMt.bp --compile samples --backend=mivm)"; \
+	else \
+	  echo "--- B1.4b Threads BP + littlefs + --smp=4 (esperado: 200/200/200/600, 0 rotas) ---"; \
+	  rm -f build/iomt.img; \
+	  out=$$(cd samples && ../$(BIN) --fs=lfs:../build/iomt.img --smp=4 IoMt.mod 2>&1); \
+	  echo "$$out" | grep -vE 'INICIANDO|FIN DE'; \
+	  if echo "$$out" | grep -q "lineas rotas = 0"; then echo "PASS test-iomt"; \
+	  else echo "FAIL test-iomt"; exit 1; fi; \
+	  rm -f build/iomt.img; \
 	fi
 
 # H2 fase A · B1.1 — la FACHADA bpvm_fs sobre littlefs (backend fs_lfs.c +

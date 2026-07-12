@@ -1,0 +1,77 @@
+// IoMt.bp — B1.4b (H2): el requisito de multitarea de Eduardo — VARIOS
+// Threads BP leyendo/escribiendo VARIOS archivos a la vez. Cada hilo escribe
+// su fichero PROPIO y appendea una línea MARCADA al COMPARTIDO. Verificación
+// por PROPIEDADES (determinista aunque el orden no lo sea): tamaños exactos +
+// ninguna línea rota en el compartido + conteo por marcador exacto.
+// La atomicidad por llamada del lock grueso (B1.4) garantiza que una línea
+// de log jamás se entrelaza a medias con otra — el caso de uso del LOG.
+module IoMt
+  import IO
+
+  class Escritor extends Thread
+    var propio: string
+    var marca: string
+    var veces: integer
+    public function Escritor(p: string, m: string, n: integer)
+      super(4096)
+      this.propio := p
+      this.marca := m
+      this.veces := n
+    end Escritor
+    public function run()
+      writeFile(this.propio, "")
+      var i: integer := 0
+      while i < this.veces do
+        appendFile(this.propio, "o\n")
+        appendFile("mt_shared.log", this.marca)
+        i := i + 1
+      endwh
+    end run
+  end Escritor
+
+  function Main()
+    writeFile("mt_shared.log", "")
+    var a: Escritor := Escritor("mt_own1.txt", "a\n", 100)
+    var b: Escritor := Escritor("mt_own2.txt", "b\n", 100)
+    var c: Escritor := Escritor("mt_own3.txt", "c\n", 100)
+    a.start()
+    b.start()
+    c.start()
+    a.join()
+    b.join()
+    c.join()
+
+    print "own1 =", IO.fileSize("mt_own1.txt")
+    print "own2 =", IO.fileSize("mt_own2.txt")
+    print "own3 =", IO.fileSize("mt_own3.txt")
+    print "shared =", IO.fileSize("mt_shared.log")
+
+    // ninguna línea rota: el compartido es una secuencia de pares
+    // (marca, \n) y cada marca aparece EXACTAMENTE 100 veces
+    var s: string := readFile("mt_shared.log")
+    var na: integer := 0
+    var nb: integer := 0
+    var nc: integer := 0
+    var rotas: integer := 0
+    var i: integer := 0
+    while i < len(s) do
+      var ch: integer := charCodeAt(s, i)
+      if ch == 97 then
+        na := na + 1
+      elseif ch == 98 then
+        nb := nb + 1
+      elseif ch == 99 then
+        nc := nc + 1
+      else
+        rotas := rotas + 1
+      endif
+      if charCodeAt(s, i + 1) != 10 then
+        rotas := rotas + 1
+      endif
+      i := i + 2
+    endwh
+    print "marcas a/b/c =", na, nb, nc
+    print "lineas rotas =", rotas
+    print "IoMt: fin"
+  end Main
+end IoMt

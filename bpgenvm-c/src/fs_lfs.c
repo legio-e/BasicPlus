@@ -27,10 +27,28 @@
  */
 #include "bpvm_fs.h"
 #include "bpvm_fs_lfs.h"
+#include "bpvm_platform.h"
 #include <string.h>
 
 static lfs_t s_lfs;
 static int   s_mounted = 0;
+
+/* B1.4 — LOCK GRUESO del FS (requisito multitarea, Eduardo 12-jul): littlefs
+ * NO es reentrante y tiene ≥2 clientes (Threads BP vía builtins + la comm
+ * task del wire cuando el repl migre a la fachada en B2). El lock envuelve
+ * la OPERACIÓN COMPLETA de la fachada (no cada llamada lfs_* suelta) →
+ * cada op es ATÓMICA: un append de log jamás se entrelaza con otro y las
+ * secuencias internas stat+remove no tienen TOCTOU. El FS es camino frío
+ * (ops raras, ~ms) e inherentemente serial → lock global correcto (§5.1 de
+ * la propuesta; hooks LFS_THREADSAFE serían por-llamada, más débiles).
+ * Mutex de la cintura de plataforma: pthread en host, FreeRTOS en el micro.
+ * Verificado rojo→verde con test_fs_lfs_mt (sin lock: assertion pcache de
+ * littlefs con 4 threads; con lock: 0 corrupciones). */
+static bpvm_platform_mutex_handle_t s_fs_lock;
+static int s_fs_lock_ready = 0;
+
+static void fs_lock(void)   { if (s_fs_lock_ready) bpvm_platform_mutex_lock(&s_fs_lock); }
+static void fs_unlock(void) { if (s_fs_lock_ready) bpvm_platform_mutex_unlock(&s_fs_lock); }
 
 /* ¿el path existe y de qué tipo? 0=no existe, 1=fichero, 2=dir (size out) */
 static int kind_of(const char* path, uint32_t* size) {
@@ -40,11 +58,11 @@ static int kind_of(const char* path, uint32_t* size) {
     return (info.type == LFS_TYPE_DIR) ? 2 : 1;
 }
 
-static int be_stat(const char* path, uint32_t* size) {
+static int be_stat_impl(const char* path, uint32_t* size) {
     return (kind_of(path, size) == 1) ? 0 : -1;   /* dirs → -1, como host */
 }
 
-static long be_read(const char* path, uint8_t* dst, uint32_t cap) {
+static long be_read_impl(const char* path, uint8_t* dst, uint32_t cap) {
     lfs_file_t f;
     if (lfs_file_open(&s_lfs, &f, path, LFS_O_RDONLY) < 0) return -1;
     lfs_ssize_t n = lfs_file_read(&s_lfs, &f, dst, cap);
@@ -52,7 +70,7 @@ static long be_read(const char* path, uint8_t* dst, uint32_t cap) {
     return (n < 0) ? -1 : (long) n;
 }
 
-static int be_write(const char* path, const uint8_t* data, uint32_t len, int append) {
+static int be_write_impl(const char* path, const uint8_t* data, uint32_t len, int append) {
     lfs_file_t f;
     int flags = LFS_O_WRONLY | LFS_O_CREAT | (append ? LFS_O_APPEND : LFS_O_TRUNC);
     if (lfs_file_open(&s_lfs, &f, path, flags) < 0) return -1;
@@ -66,18 +84,18 @@ static int be_write(const char* path, const uint8_t* data, uint32_t len, int app
     return rc;
 }
 
-static int be_remove(const char* path) {
+static int be_remove_impl(const char* path) {
     if (kind_of(path, NULL) != 1) return -1;      /* solo ficheros, como host */
     return (lfs_remove(&s_lfs, path) < 0) ? -1 : 0;
 }
 
-static int be_rename(const char* from, const char* to) {
+static int be_rename_impl(const char* from, const char* to) {
     /* lfs_rename ya sobreescribe un fichero destino (REPLACE_EXISTING). */
     return (lfs_rename(&s_lfs, from, to) < 0) ? -1 : 0;
 }
 
 /* mkdir recursivo (crea intermedios; ok si ya existe) — espejo de host_mkdir. */
-static int be_mkdir(const char* path) {
+static int be_mkdir_impl(const char* path) {
     char buf[512];
     size_t n = strlen(path);
     if (n == 0 || n >= sizeof(buf)) return -1;
@@ -96,12 +114,12 @@ static int be_mkdir(const char* path) {
     return -1;
 }
 
-static int be_rmdir(const char* path) {
+static int be_rmdir_impl(const char* path) {
     if (kind_of(path, NULL) != 2) return -1;      /* solo dirs, como host */
     return (lfs_remove(&s_lfs, path) < 0) ? -1 : 0;   /* NOTEMPTY → -1 */
 }
 
-static int be_copy(const char* from, const char* to) {
+static int be_copy_impl(const char* from, const char* to) {
     lfs_file_t fi, fo;
     if (lfs_file_open(&s_lfs, &fi, from, LFS_O_RDONLY) < 0) return -1;
     if (lfs_file_open(&s_lfs, &fo, to, LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) < 0) {
@@ -121,8 +139,39 @@ static int be_copy(const char* from, const char* to) {
     return rc;
 }
 
-static int be_isdir(const char* path) {
+static int be_isdir_impl(const char* path) {
     return (kind_of(path, NULL) == 2) ? 1 : 0;
+}
+
+/* B1.4 — wrappers con el lock grueso: cada op de la fachada = una sección
+ * crítica completa. kind_of y las _impl NUNCA toman el lock (se llaman solo
+ * desde aquí) → sin recursión. */
+static int be_stat(const char* path, uint32_t* size) {
+    fs_lock(); int r = be_stat_impl(path, size); fs_unlock(); return r;
+}
+static long be_read(const char* path, uint8_t* dst, uint32_t cap) {
+    fs_lock(); long r = be_read_impl(path, dst, cap); fs_unlock(); return r;
+}
+static int be_write(const char* path, const uint8_t* data, uint32_t len, int append) {
+    fs_lock(); int r = be_write_impl(path, data, len, append); fs_unlock(); return r;
+}
+static int be_remove(const char* path) {
+    fs_lock(); int r = be_remove_impl(path); fs_unlock(); return r;
+}
+static int be_rename(const char* from, const char* to) {
+    fs_lock(); int r = be_rename_impl(from, to); fs_unlock(); return r;
+}
+static int be_mkdir(const char* path) {
+    fs_lock(); int r = be_mkdir_impl(path); fs_unlock(); return r;
+}
+static int be_rmdir(const char* path) {
+    fs_lock(); int r = be_rmdir_impl(path); fs_unlock(); return r;
+}
+static int be_copy(const char* from, const char* to) {
+    fs_lock(); int r = be_copy_impl(from, to); fs_unlock(); return r;
+}
+static int be_isdir(const char* path) {
+    fs_lock(); int r = be_isdir_impl(path); fs_unlock(); return r;
 }
 
 static const bpvm_fs_backend_t s_lfs_backend = {
@@ -140,21 +189,30 @@ static const bpvm_fs_backend_t s_lfs_backend = {
 
 int bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed) {
     if (s_mounted) return -1;
+    /* B1.4 — el lock nace ANTES del mount (una vez; sobrevive re-attaches). */
+    if (!s_fs_lock_ready) {
+        if (bpvm_platform_mutex_init(&s_fs_lock) != 0) return -1;
+        s_fs_lock_ready = 1;
+    }
+    fs_lock();
     int e = lfs_mount(&s_lfs, cfg);
     if (e < 0 && format_if_needed) {
         /* primer arranque / bump de formato → reformateo limpio (§7 del plan) */
         e = lfs_format(&s_lfs, cfg);
         if (e == 0) e = lfs_mount(&s_lfs, cfg);
     }
+    if (e == 0) s_mounted = 1;
+    fs_unlock();
     if (e < 0) return -1;
-    s_mounted = 1;
     bpvm_fs_set_backend(&s_lfs_backend);
     return 0;
 }
 
 void bpvm_fs_lfs_detach(void) {
     if (!s_mounted) return;
+    fs_lock();
     lfs_unmount(&s_lfs);
     s_mounted = 0;
+    fs_unlock();
     bpvm_fs_set_backend(NULL);   /* las ops vuelven a "fallo limpio" */
 }
