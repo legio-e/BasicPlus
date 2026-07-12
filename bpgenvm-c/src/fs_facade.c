@@ -9,10 +9,63 @@
 #include <string.h>
 #include <stdio.h>
 
-static const bpvm_fs_backend_t* g_fs = NULL;
+/* ── H2·B1.3 — tabla de MONTAJES (andamiaje multi-motor, fase B lista) ─────
+ * Entrada 0 = backend RAÍZ (prefijo ""); las demás, prefijos tipo "/sd".
+ * route() elige el prefijo coincidente MÁS LARGO (un prefijo coincide si el
+ * path empieza por él y sigue '/' o fin). Con solo la raíz montada, el ruteo
+ * es transparente = comportamiento de siempre. */
+#define BPVM_FS_MAX_MOUNTS 4
+
+typedef struct {
+    char prefix[32];                 /* "" = raíz */
+    const bpvm_fs_backend_t* be;
+} fs_mount_t;
+
+static fs_mount_t g_mounts[BPVM_FS_MAX_MOUNTS];
+static int        g_mount_count = 0;
 
 void bpvm_fs_set_backend(const bpvm_fs_backend_t* backend) {
-    g_fs = backend;
+    /* backend raíz nuevo → borra los montajes (arranque limpio / tests) */
+    g_mount_count = 0;
+    if (backend) {
+        g_mounts[0].prefix[0] = '\0';
+        g_mounts[0].be = backend;
+        g_mount_count = 1;
+    }
+}
+
+int bpvm_fs_mount(const char* prefix, const bpvm_fs_backend_t* backend) {
+    if (!prefix || prefix[0] != '/' || !backend) return -1;
+    size_t n = strlen(prefix);
+    if (n >= sizeof(g_mounts[0].prefix)) return -1;
+    for (int i = 0; i < g_mount_count; i++) {          /* re-montar = actualizar */
+        if (strcmp(g_mounts[i].prefix, prefix) == 0) { g_mounts[i].be = backend; return 0; }
+    }
+    if (g_mount_count >= BPVM_FS_MAX_MOUNTS) return -1;
+    memcpy(g_mounts[g_mount_count].prefix, prefix, n + 1);
+    g_mounts[g_mount_count].be = backend;
+    g_mount_count++;
+    return 0;
+}
+
+/* backend que atiende `path` (prefijo coincidente más largo; raíz = fallback) */
+static const bpvm_fs_backend_t* route(const char* path) {
+    const bpvm_fs_backend_t* best = NULL;
+    size_t best_len = 0;
+    int have_best = 0;
+    if (!path) path = "";
+    for (int i = 0; i < g_mount_count; i++) {
+        const char* p = g_mounts[i].prefix;
+        size_t n = strlen(p);
+        if (n == 0) {                                   /* raíz: match universal */
+            if (!have_best) { best = g_mounts[i].be; best_len = 0; have_best = 1; }
+            continue;
+        }
+        if (strncmp(path, p, n) == 0 && (path[n] == '/' || path[n] == '\0')) {
+            if (!have_best || n > best_len) { best = g_mounts[i].be; best_len = n; have_best = 1; }
+        }
+    }
+    return have_best ? best : NULL;
 }
 
 /* ── H19-F1 — base-dir por ejecución ─────────────────────────────────────── */
@@ -81,17 +134,20 @@ const char* bpvm_fs_resolve(const char* path, char* out, size_t outsz) {
 }
 
 int bpvm_fs_stat(const char* path, uint32_t* size) {
-    if (g_fs && g_fs->stat) return g_fs->stat(path, size);
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->stat) return be->stat(path, size);
     return -1;
 }
 
 long bpvm_fs_read(const char* path, uint8_t* dst, uint32_t cap) {
-    if (g_fs && g_fs->read) return g_fs->read(path, dst, cap);
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->read) return be->read(path, dst, cap);
     return -1;
 }
 
 int bpvm_fs_write(const char* path, const uint8_t* data, uint32_t len, int append) {
-    if (g_fs && g_fs->write) return g_fs->write(path, data, len, append);
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->write) return be->write(path, data, len, append);
     return -1;
 }
 
@@ -102,37 +158,58 @@ int bpvm_fs_exists(const char* path) {
 
 /* #240 — ops opcionales del backend (logger: rotación y limpieza). */
 int bpvm_fs_remove(const char* path) {
-    if (g_fs && g_fs->remove) return g_fs->remove(path);
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->remove) return be->remove(path);
     return -1;
 }
 
 int bpvm_fs_rename(const char* from, const char* to) {
-    if (g_fs && g_fs->rename) return g_fs->rename(from, to);
+    /* B1.3: entre montajes distintos → -1 (mover cross-motor = fase B). */
+    const bpvm_fs_backend_t* be = route(from);
+    if (be != route(to)) return -1;
+    if (be && be->rename) return be->rename(from, to);
     return -1;
 }
 
 /* #240 (2ª pasada) — resto de IO.bp. */
 int bpvm_fs_mkdir(const char* path) {
-    if (g_fs && g_fs->mkdir) return g_fs->mkdir(path);
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->mkdir) return be->mkdir(path);
     return -1;
 }
 
 int bpvm_fs_rmdir(const char* path) {
-    if (g_fs && g_fs->rmdir) return g_fs->rmdir(path);
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->rmdir) return be->rmdir(path);
     return -1;
 }
 
 int bpvm_fs_copy(const char* from, const char* to) {
-    if (g_fs && g_fs->copy) return g_fs->copy(from, to);
+    /* B1.3: entre montajes distintos → -1 (copiar cross-motor = fase B,
+     * trivial vía read+write cuando haga falta). */
+    const bpvm_fs_backend_t* be = route(from);
+    if (be != route(to)) return -1;
+    if (be && be->copy) return be->copy(from, to);
     return -1;
 }
 
 int bpvm_fs_isdir(const char* path) {
-    if (g_fs && g_fs->isdir) return g_fs->isdir(path);
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->isdir) return be->isdir(path);
     return 0;
 }
 
 long long bpvm_fs_mtime_ms(const char* path) {
-    if (g_fs && g_fs->mtime_ms) return g_fs->mtime_ms(path);
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->mtime_ms) return be->mtime_ms(path);
+    return -1;
+}
+
+/* H2·B1.3 — listado (wire LS+CRC / explorer del IDE). */
+int bpvm_fs_list(const char* path,
+                 void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
+                 void* user) {
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->list) return be->list(path, cb, user);
     return -1;
 }

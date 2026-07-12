@@ -75,7 +75,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs test-lfsfile test-lfsfault test-fslfs test-fslfsmt test-iomt gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -372,6 +372,16 @@ test-lfsfault:
 	  echo "--- littlefs B0.3 fault-injection (cortes exhaustivos + bloques malos) ---"; \
 	  ./$(LFS_FAULT_BIN); \
 	fi
+
+# H2 fase A · B1.3 — dirs reales + op `list` + MONTAJES (andamiaje fase B):
+# list sobre littlefs y host (contrato único), resolve/base-dir sobre dirs
+# reales del oráculo, ruteo por prefijo (stub en /mnt), cross-mount → -1.
+FSVFS_BIN = build/test_fs_vfs.exe
+test-fsvfs: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_fs_vfs.c $(LIBOBJ) -o $(FSVFS_BIN) $(LDFLAGS)
+	@echo "--- B1.3 dirs reales + list + montajes ---"
+	./$(FSVFS_BIN)
 
 # H2 fase A · B1.4a — estrés MULTITAREA C-level de la fachada sobre littlefs:
 # N pthreads (modelan Threads BP + comm task) martillean write/append/stat

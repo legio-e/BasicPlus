@@ -127,6 +127,31 @@ static long long host_mtime_ms(const char* path) {
     return (long long) st.st_mtime * 1000LL;
 }
 
+/* H2·B1.3 — listado (dirent existe en MinGW y POSIX; fs_host es host-only). */
+#include <dirent.h>
+static int host_list(const char* path,
+                     void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
+                     void* user) {
+    DIR* d = opendir((path && path[0]) ? path : ".");
+    if (!d) return -1;
+    struct dirent* e;
+    char full[600];
+    while ((e = readdir(d)) != NULL) {
+        if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0) continue;
+        snprintf(full, sizeof full, "%s/%s", path, e->d_name);
+        host_stat_t st;
+        int isd = 0;
+        uint32_t sz = 0;
+        if (HOST_STATFN(full, &st) == 0) {
+            isd = HOST_ISDIR(st.st_mode) ? 1 : 0;
+            sz  = (uint32_t) st.st_size;
+        }
+        cb(e->d_name, isd, sz, user);
+    }
+    closedir(d);
+    return 0;
+}
+
 static const bpvm_fs_backend_t s_host_fs = {
     .stat     = host_stat,
     .read     = host_read,
@@ -138,6 +163,7 @@ static const bpvm_fs_backend_t s_host_fs = {
     .copy     = host_copy,
     .isdir    = host_isdir,
     .mtime_ms = host_mtime_ms,
+    .list     = host_list,   /* B1.3 */
 };
 
 void bpvm_fs_register_host(void) {

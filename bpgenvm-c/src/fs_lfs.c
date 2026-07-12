@@ -143,6 +143,23 @@ static int be_isdir_impl(const char* path) {
     return (kind_of(path, NULL) == 2) ? 1 : 0;
 }
 
+/* B1.3 — listado (wire LS+CRC / explorer del IDE): cb por entrada, sin
+ * '.' ni '..'. OJO: el cb corre BAJO el lock del FS (op atómica) → no debe
+ * re-entrar en la fachada (el llamante acumula y postprocesa fuera). */
+static int be_list_impl(const char* path,
+                        void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
+                        void* user) {
+    lfs_dir_t d;
+    struct lfs_info info;
+    if (lfs_dir_open(&s_lfs, &d, path) < 0) return -1;
+    while (lfs_dir_read(&s_lfs, &d, &info) > 0) {
+        if (strcmp(info.name, ".") == 0 || strcmp(info.name, "..") == 0) continue;
+        cb(info.name, (info.type == LFS_TYPE_DIR) ? 1 : 0, (uint32_t) info.size, user);
+    }
+    lfs_dir_close(&s_lfs, &d);
+    return 0;
+}
+
 /* B1.4 — wrappers con el lock grueso: cada op de la fachada = una sección
  * crítica completa. kind_of y las _impl NUNCA toman el lock (se llaman solo
  * desde aquí) → sin recursión. */
@@ -173,6 +190,11 @@ static int be_copy(const char* from, const char* to) {
 static int be_isdir(const char* path) {
     fs_lock(); int r = be_isdir_impl(path); fs_unlock(); return r;
 }
+static int be_list(const char* path,
+                   void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
+                   void* user) {
+    fs_lock(); int r = be_list_impl(path, cb, user); fs_unlock(); return r;
+}
 
 static const bpvm_fs_backend_t s_lfs_backend = {
     .stat     = be_stat,
@@ -185,6 +207,7 @@ static const bpvm_fs_backend_t s_lfs_backend = {
     .copy     = be_copy,
     .isdir    = be_isdir,
     .mtime_ms = NULL,   /* littlefs no tiene timestamps → "no soportado" limpio */
+    .list     = be_list,   /* B1.3 */
 };
 
 int bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed) {

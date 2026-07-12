@@ -48,10 +48,23 @@ typedef struct {
     int  (*isdir)(const char* path);
     /* mtime en ms epoch (puede truncarse a i32 arriba); -1 si error. */
     long long (*mtime_ms)(const char* path);
+    /* H2·B1.3 — listado de directorio: invoca cb por cada entrada (sin '.'
+     * ni '..'; name SIN el prefijo del dir). Lo necesitan el LS+CRC del wire
+     * y el explorer del IDE. Campo AL FINAL (backends viejos → NULL). 0 / -1. */
+    int  (*list)(const char* path,
+                 void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
+                 void* user);
 } bpvm_fs_backend_t;
 
-/* Registra el backend (una vez al boot). */
+/* Registra el backend RAÍZ (una vez al boot). Limpia cualquier montaje
+ * adicional (ver bpvm_fs_mount). NULL → sin FS (todo falla limpio). */
 void bpvm_fs_set_backend(const bpvm_fs_backend_t* backend);
+
+/* H2·B1.3 — MONTAJES (andamiaje multi-motor para la fase B, sin estrecharlo
+ * a "solo flash"): monta `backend` bajo `prefix` (p.ej. "/sd" → FatFs en V5).
+ * Las ops rutan por prefijo más largo; el backend raíz atiende el resto.
+ * rename/copy ENTRE montajes distintos → -1 (fase B decidirá). 0 / -1. */
+int  bpvm_fs_mount(const char* prefix, const bpvm_fs_backend_t* backend);
 
 /* Funciones efectivas (sin backend → fallo limpio). */
 int  bpvm_fs_stat  (const char* path, uint32_t* size);
@@ -65,6 +78,10 @@ int  bpvm_fs_rmdir (const char* path);                    /* #240 2ª: 0 / -1 */
 int  bpvm_fs_copy  (const char* from, const char* to);    /* #240 2ª: 0 / -1 */
 int  bpvm_fs_isdir (const char* path);                    /* #240 2ª: 1 / 0 */
 long long bpvm_fs_mtime_ms(const char* path);             /* #240 2ª: ms / -1 */
+/* H2·B1.3 — lista el directorio `path` (cb por entrada). 0 / -1. */
+int  bpvm_fs_list(const char* path,
+                  void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
+                  void* user);
 
 /* ── H19-F1 — base-dir por ejecución (modelo de proyecto / paths web-app) ──
  * Cuando un proyecto está activo (p.ej. "/app/<proj>"), los paths RELATIVOS de
