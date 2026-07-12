@@ -1,0 +1,29 @@
+// ExcMsgGc.bp — V4/GC test negativo permanente: el mensaje de un RuntimeError
+// NATIVO debe sobrevivir al GC. Repro del bug de la gen truncada en el campo
+// `msg` del objeto RuntimeError (exceptions.c): heap_alloc_string devuelve el
+// handle 64b truncado a uint32 (gen=0); si el slot del msg fue RECICLADO por el
+// GC (gen != 0), leer e.msg daba "referencia a objeto eliminado" sobre un
+// mensaje vivo. El fix re-adjunta la gen viva (bpref_regen) al guardar el campo.
+//
+// Cómo dispara la condición: el bucle de basura hace que el GC libere slots
+// (gen++ en la free-list); luego un RuntimeError nativo (índice fuera de rango)
+// aloca su msg reusando uno de esos slots. Correr con BPVM_GC_EVERY=1 y memoria
+// acotada para forzar el reciclaje. Esperado: "caught msg=[ALOAD..." + "fin".
+module ExcMsgGc
+  import Core
+  function main()
+    var i: integer := 0
+    while i < 500 do
+      var s: string := "basura" + intToString(i)
+      i := i + 1
+    endwh
+    var arr: integer[] := newIntArray(2)
+    try
+      var x: integer := arr[999]
+      print x
+    catch e: Core.Exception
+      print "caught msg=[" + e.msg + "]"
+    endtry
+    print "fin"
+  end main
+end ExcMsgGc

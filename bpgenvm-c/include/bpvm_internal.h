@@ -469,6 +469,24 @@ static inline int bpvm_ref_dead(const bpvm_t* vm, bpref_t r) {
             && vm->handle_gen[idx] != gen) ? 1 : 0;
 }
 
+/* V4 — reconstruye el HANDLE de 64b (gen VIVA<<32 | idx|TAG) para un `ref` uint32
+ * que porta el TAG pero PERDIÓ la generación al truncarse desde un bpref_t de 64b
+ * (p.ej. el retorno de bpvm_heap_alloc_string, o el trabajo interno de builtins.c
+ * sobre uint32 idx|TAG). Debe invocarse cuando la gen del slot AÚN es la correcta
+ * (objeto recién registrado, sin GC de por medio, o ref anclado). Un `ref` sin TAG
+ * (null / dirección cruda / constante del data block) va tal cual, gen 0.
+ * ÚNICA implementación del patrón: la usan push_ref (empujar a la pila) Y el guardado
+ * del msg en el objeto RuntimeError (exceptions.c). Sin esto, un slot RECICLADO por el
+ * GC (gen ≠ 0) recibe un handle con gen=0 → "referencia a objeto eliminado" al 1er uso. */
+static inline bpref_t bpref_regen(const bpvm_t* vm, uint32_t ref) {
+    if ((ref & BPVM_HANDLE_TAG) == 0u) return bpref_from_addr(ref);
+    uint32_t idx = ref & ~BPVM_HANDLE_TAG;
+    uint32_t gen = (vm->handle_gen != NULL && idx < vm->handle_next)
+                   ? vm->handle_gen[idx] : 0u;
+    bpref_t r; r.v = ((uint64_t) gen << 32) | (uint64_t) ref;
+    return r;
+}
+
 /* Resolver una referencia a su offset en memory[] (DÓNDE vive el objeto). LA
  * indirección: sin TAG = null o constante del data block → identidad; con TAG =
  * consulta la tabla (defensivo: índice fuera de rango → 0). */

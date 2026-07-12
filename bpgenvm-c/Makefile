@@ -75,7 +75,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -318,6 +318,29 @@ test-oom: $(BIN)
 	    echo "PASS test-oom"; \
 	  else \
 	    echo "FAIL test-oom (status=$$st — OOM no atrapable o cuelgue)"; exit 1; \
+	  fi; \
+	fi
+
+# V4/GC — test negativo permanente: el mensaje de un RuntimeError NATIVO debe
+# sobrevivir al GC (bug de la gen truncada en el campo `msg` del objeto
+# RuntimeError, exceptions.c: heap_alloc_string devuelve el handle 64b truncado a
+# uint32 → gen=0; si el slot del msg fue reciclado, leer e.msg gritaba
+# "referencia a objeto eliminado" sobre un mensaje vivo). Corre con GC agresivo +
+# memoria acotada para FORZAR el reciclaje de slots que destapa el bug.
+# Esperado: 'caught msg=[ALOAD...' + 'fin', SIN 'use-after-free'.
+test-excmsggc: $(BIN)
+	@if [ ! -f samples/ExcMsgGc.mod ]; then \
+	  echo "(skip test-excmsggc: falta samples/ExcMsgGc.mod — regenéralo con:"; \
+	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "        samples/ExcMsgGc.bp --compile samples --backend=mivm --libdir ../bpstdlib)"; \
+	else \
+	  echo "--- msg de RuntimeError sobrevive al GC (esperado: 'caught msg=[ALOAD...' + 'fin') ---"; \
+	  out=$$(cd samples && BPVM_GC_EVERY=1 ../$(BIN) --mem=65536 ExcMsgGc.mod 2>&1); st=$$?; \
+	  echo "$$out" | grep -vE 'INICIANDO|FIN DE'; \
+	  if echo "$$out" | grep -q "caught msg=\[ALOAD" && ! echo "$$out" | grep -q "use-after-free" && [ $$st -eq 0 ]; then \
+	    echo "PASS test-excmsggc"; \
+	  else \
+	    echo "FAIL test-excmsggc (status=$$st — msg del RuntimeError corrupto tras GC)"; exit 1; \
 	  fi; \
 	fi
 

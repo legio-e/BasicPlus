@@ -159,15 +159,22 @@ have_class:
     size_t mlen = msg ? strlen(msg) : 0;
     uint32_t msg_ref = bpvm_heap_alloc_string(vm, msg ? msg : "", mlen);
     if (msg_ref == 0) return bpref_null();
+    /* GC-safety: el msg AÚN no vive en ninguna raíz y la alocación del objeto de
+     * abajo PUEDE disparar el GC (umbral/OOM) → anclarlo para que no lo recicle
+     * (su gen queda intacta, clave para el bpref_regen de más abajo). */
+    tc->alloc_anchor = (int32_t) msg_ref;
 
     /* Alocar el objeto RuntimeError. */
     uint16_t num_fields = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_NUM_FIELDS);
     uint32_t obj_addr = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4, BPVM_TYPE_OBJECT);
     if (obj_addr == 0) return bpref_null();
     bpvm_write_u32_be(vm->memory + obj_addr, class_ptr);
-    /* slot 0 = msg (convención del frontend). Guardamos el handle completo del msg. */
+    /* slot 0 = msg (convención del frontend). Guardamos el HANDLE COMPLETO de 64b:
+     * bpref_regen re-adjunta la gen VIVA del slot del msg (heap_alloc_string truncó
+     * a uint32 → gen=0). Sin esto, si el slot del msg fue reciclado (gen ≠ 0), leer
+     * e.msg daría "referencia a objeto eliminado" sobre un mensaje vivo. */
     if (num_fields > 0) {
-        bpvm_write_i64_be(vm->memory + obj_addr + 4 + 0 * 4, (int64_t)(uint32_t) msg_ref);   /* msg: idx|TAG (gen=0 string) */
+        bpref_store(vm, obj_addr + 4 + 0 * 4, bpref_regen(vm, msg_ref));
     }
     bpref_t obj_h = bpvm_handle_register(vm, obj_addr);   /* V4: handle 64b (gen preservada — clave si el slot fue reciclado) */
 

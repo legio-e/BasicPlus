@@ -292,23 +292,13 @@ static uint32_t ref_addr(bpvm_t* vm, uint32_t ref) {
     return (ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(ref));
 }
 static void push_ref(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
-    /* V4: `ref` puede ser un handle tageado de 32b (idx|TAG) cuyo llamante
-     * PERDIÓ la generación al truncar el bpref_t de 64b a uint32_t (p.ej.
-     * bpvm_heap_alloc_string). Reconstruimos la gen ACTUAL del slot (que aquí
-     * es la correcta: el objeto se acaba de registrar) → el handle en pila
-     * lleva su gen real. Sin esto, un slot RECICLADO por el GC (gen ≠ 0) daría
-     * un handle con gen=0 → "referencia a objeto eliminado" al primer uso.
-     * Un `ref` sin TAG (dirección cruda / constante) va tal cual, gen 0. */
-    bpref_t r;
-    if ((ref & BPVM_HANDLE_TAG) != 0u) {
-        uint32_t idx = ref & ~BPVM_HANDLE_TAG;
-        uint32_t gen = (vm->handle_gen != NULL && idx < vm->handle_next)
-                       ? vm->handle_gen[idx] : 0u;
-        r.v = ((uint64_t) gen << 32) | (uint64_t) ref;
-    } else {
-        r.v = ref;
-    }
-    bpref_push(vm, tc, r);
+    /* V4: `ref` puede ser un handle tageado de 32b (idx|TAG) cuyo llamante PERDIÓ
+     * la generación al truncar el bpref_t de 64b a uint32_t (p.ej. el retorno de
+     * bpvm_heap_alloc_string). bpref_regen reconstruye la gen VIVA del slot (aquí
+     * la correcta: el objeto se acaba de registrar) → el handle en pila lleva su
+     * gen real. Mismo patrón, misma implementación que el guardado del msg en
+     * exceptions.c (bpvm_internal.h). */
+    bpref_push(vm, tc, bpref_regen(vm, ref));
 }
 
 /* Lee un string BP (TYPE_ARRAY_I32 con codepoints) a un buffer C UTF-8.
