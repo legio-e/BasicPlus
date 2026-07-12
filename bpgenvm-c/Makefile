@@ -63,7 +63,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs test-lfsfile gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -323,6 +323,25 @@ test-lfs:
 	    $(LFS_DIR)/bd/lfs_rambd.c -o $(LFS_SMOKE_BIN); \
 	  echo "--- littlefs B0.1 smoke (rambd: format/mount/mkdir/write/remount/read) ---"; \
 	  ./$(LFS_SMOKE_BIN); \
+	fi
+
+# H2 fase A · B0.2 — block-device RESPALDADO POR FICHERO (lfs_filebd): la base
+# del oráculo VM-C-PC. write y read corren como DOS PROCESOS separados → la
+# imagen .img debe persistir entre procesos, no solo entre mounts.
+LFS_FILEBD_BIN = build/test_lfs_filebd.exe
+LFS_IMG        = build/lfs_test.img
+test-lfsfile:
+	@mkdir -p build
+	@if [ ! -f $(LFS_DIR)/lfs.c ]; then \
+	  echo "(skip test-lfsfile: falta third_party/littlefs — vendorízalo, ver third_party/README.md)"; \
+	else \
+	  $(CC) -std=c99 -O2 $(LFS_INC) test/test_lfs_filebd.c $(LFS_CORE) \
+	    $(LFS_DIR)/bd/lfs_filebd.c -o $(LFS_FILEBD_BIN); \
+	  echo "--- littlefs B0.2 filebd (imagen en fichero, write y read en procesos separados) ---"; \
+	  rm -f $(LFS_IMG); \
+	  ./$(LFS_FILEBD_BIN) write $(LFS_IMG) && \
+	  ./$(LFS_FILEBD_BIN) read  $(LFS_IMG) && \
+	  rm -f $(LFS_IMG); \
 	fi
 
 test-throwmsg: $(LIBOBJ)
