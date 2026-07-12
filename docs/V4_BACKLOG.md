@@ -112,7 +112,18 @@ cogiendo H2, H3… según se secuencien.
     pequeño y localizado, sobre fontanería ya probada.
 - **Diferidos dentro de H1:** compactación (cota de pausa STW, H-004) + arrays fijos locales pasados
   por-ref (sin entrada en la tabla — ver propuesta §9 decisión 5 / [[v4-modelo-memoria-handles]]).
-- **PENDIENTE — TANDA 2 de pops de ref en builtins.c (regresión H1.2a, parcialmente arreglada).**
+- **✅ TANDA 2 HECHA (13-jul, `7270e40`) — y RESUELVE el bug diferido de Thread de H1.** 34 sitios
+  más de VM-C a `pop_ref` + deref de handle antes de `memory[]` (ref_addr) en TCP_SEND,
+  resolve_handler, vtable de invokeBySlot, Thread, Mutex, HW ×8, NeoPixel y spawn (threading.c);
+  y el MISMO bug sabor Java en miVM (THREAD_START escribía el tid en la dirección CRUDA del
+  handle; JOIN + MUTEX ×2 → refDeref). El «owner-alloc en Thread.run() peta» de H1 ERA ESTO.
+  Sample permanente `samples/ThreadsMin.bp` (2 threads + Mutex compartido contendido → total=1000,
+  paridad dual-VM). Verificación: 9/9 paridad, test-net PASS end-to-end (ojo: TcpEchoTest.mod
+  RANCIO del 12-jun crasheaba ambas VMs — regenerado; la trampa de blobs de siempre), IoLfs
+  3-bandas, GuiLblMin PAR, JUnit 34/34. **Queda para el batch de placa:** verificar los HW
+  dataRefs en device (host = backends "no soportado").
+- ~~PENDIENTE — TANDA 2 de pops de ref en builtins.c (regresión H1.2a, parcialmente arreglada).~~
+  **(HECHA — ver arriba.)**
   La suite BP de IO (H2·B1.2, 12-jul) destapó que ~45 builtins de la VM-C popean refs con
   `pop_i32` (4B) cuando la pila de operandos los apila a 8B → multi-arg corruptos + 4B de basura
   por llamada que corrompe EXPRESIONES (`IO.fileSize(p) + 1`). miVM NO afectada (su pila usa refs
