@@ -1279,7 +1279,10 @@ public final class PicoExplorer extends JPanel {
     }
     private static String human(long bytes) {
         if (bytes <= 0) return "0";
-        if (bytes >= 1024L * 1024L) return (bytes / (1024L * 1024L)) + " MB";
+        // MB con un decimal: un FS de 2080768 B es "1.98 MB", no "1 MB"
+        // (la división entera perdía casi 1 MB de golpe en el redondeo).
+        if (bytes >= 1024L * 1024L)
+            return String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0));
         if (bytes >= 1024L)         return (bytes / 1024L) + " KB";
         return bytes + " B";
     }
