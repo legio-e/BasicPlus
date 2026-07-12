@@ -112,6 +112,22 @@ cogiendo H2, H3… según se secuencien.
     pequeño y localizado, sobre fontanería ya probada.
 - **Diferidos dentro de H1:** compactación (cota de pausa STW, H-004) + arrays fijos locales pasados
   por-ref (sin entrada en la tabla — ver propuesta §9 decisión 5 / [[v4-modelo-memoria-handles]]).
+- **PENDIENTE — TANDA 2 de pops de ref en builtins.c (regresión H1.2a, parcialmente arreglada).**
+  La suite BP de IO (H2·B1.2, 12-jul) destapó que ~45 builtins de la VM-C popean refs con
+  `pop_i32` (4B) cuando la pila de operandos los apila a 8B → multi-arg corruptos + 4B de basura
+  por llamada que corrompe EXPRESIONES (`IO.fileSize(p) + 1`). miVM NO afectada (su pila usa refs
+  4B — convención interna distinta). **Tanda 1 HECHA (`c2fe54d`): familia FS + THROW_RTE (15
+  sitios → `pop_ref`).** **QUEDAN (inventario 12-jul, líneas pre-fix):** GUI string/objeto
+  (set_text 597, load_font 616, invokeByName 699-701 ¡3 refs!, invokeBySlot 722-724, bindClick
+  750/757, set_options 789, set_buttons 805, tabview_add_tab 811, table_set_cell 821,
+  image_load_file 834), Net (connect 533, send 544, recv 597-área), string↔bytes (1210 «pop 4B
+  preservado (inconsistencia pre-existente)», 1239, 1499/1500), Thread spawn/join (1306/1318),
+  Mutex lock/unlock (1347/1379), HW dataRef (SPI/I2C/UART 1459-1623, NeoPixel 1792). Método: cada
+  sitio cross-checkeado contra la VM-Java (orden top-first + ancho por tipo BP: string/array/
+  objeto=8B ref, int/handle/slot=4B). OJO: los sitios de 1 ref "funcionan" de chiripa hoy — el
+  riesgo es en expresiones y multi-arg. **Candidato estrella: Thread spawn/join popeando a 4B
+  puede ser el bug diferido "owner-alloc en Thread.run() peta" de H1** — verificar al arreglarlo.
+  Verificación de la tanda: paridad dual-VM de samples GUI (dumpTree), threads, Mutex, HW-host.
 - **Diferido — AOT/native no es handle-aware (regresión conocida, NO bloquea).** El puente
   `native→BP` (`aot_helpers.c` / `aot_call_bp` / `call_method`) pasa **direcciones planas** mientras
   la VM interpretada ya usa **handles** → los tests `make test-throwmsg` (SIGSEGV) y

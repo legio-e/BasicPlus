@@ -54,6 +54,17 @@
    Pico flash_range_* · STM32 HAL_FLASH_* · ESP esp_partition_*
 ```
 
+### Contrato de durabilidad de la fachada (pregunta de Eduardo, 12-jul: ¿flush para logs?)
+- **Con la fachada de fichero-entero, el flush va implícito:** cada `writeFile`/`appendFile` es
+  `open→write→close` DENTRO del builtin, y el `close` de littlefs **committea a flash**. Cada
+  append cuya llamada retornó ya está grabado → si el micro se cuelga, el log queda íntegro
+  hasta la última llamada completada (la línea a medias se pierde limpia, sin corromper —
+  verificado por el barrido de cortes de B0.3). **No hace falta builtin `flush()` en fase A.**
+- **Precio:** durabilidad-por-llamada = un commit littlefs por append (~ms + desgaste). Log
+  parlanchín → acumular en RAM y appendear cada N líneas (patrón del programa BP, no de la VM).
+- **Futuro (API de streaming,** open/write-chunk persistente entre llamadas, fuera de fase A**):**
+  ahí SÍ se expone `flush()` → `lfs_file_sync` (committea sin cerrar). Queda apuntado.
+
 ### Tres aclaraciones que fijamos ANTES de codear
 1. **Fachada de fichero entero, no stream.** La victoria de RAM de littlefs (F2) es matar el
    **mirror del FS entero** (p.ej. la arena RAM de 96 KB del STM32 vuelve), **no** el buffer
@@ -83,15 +94,34 @@ Cada paso: **committable + verificable**. Regla en cada uno: **verificar contra 
   escritura/erase) + bloques dañados. *Verif:* littlefs recupera sin corromper.
 
 **Bloque 1 — VFS host sobre littlefs (el oráculo funcionando)**
-- **1.1 Backend `bpvm_fs` → littlefs** (mapea la fachada de fichero entero a `lfs_file_*`).
-  *Verif:* la suite de builtins de FS (IO.bp) da los mismos resultados sobre littlefs-en-fichero.
+
+> **REQUISITO EXPLÍCITO (Eduardo, 12-jul): el FS debe ser ROBUSTO EN MULTITAREA.** Hoy = 1 core
+> con VARIOS Threads BP leyendo/escribiendo varios archivos (lo testeable ya); futuro = multitarea
+> multi-core. Análisis: con 1 worker los builtins de IO se serializan solos (corren enteros en el
+> quantum), **PERO la COMM TASK es un 2º cliente del FS** (PUT/LS/GET del wire, en placa corre en
+> el OTRO core) → concurrencia real sobre littlefs YA en fase A, incluso con 1 worker → **el lock
+> grueso NO es futuro-proofing, es necesario ahora**. En host se estresa de verdad: `--smp=N`
+> (workers pthread) + thread de comm. Por eso **1.4 sube por delante de 1.3**. Garantía a nivel BP:
+> **append atómico por llamada** (una línea de log jamás se entrelaza a medias con otra).
+
+- **1.1 Backend `bpvm_fs` → littlefs** ✅ **HECHO 12-jul** (`a0802c3`; smoke B0: `b85e564`+
+  `957c864`+`02b46ec`). Dos capas: `fs_lfs.c` portable (ops sobre lfs_t, semántica espejo de
+  fs_host.c) + `fs_lfs_host.c` (filebd/.img, modo oráculo). 33 asserts + persistencia + mount-no-
+  reformatea. Trazas littlefs silenciadas en la lib (romperían paridad). B0.3 = 84 escenarios de
+  corte de corriente, 0 corrupciones.
 - **1.2 Selección de backend en host:** libc = **default** (dev-loop intacto, corren los `.mod`
-  como hoy); littlefs-en-fichero = **opt-in** (oráculo). *Verif:* dev-loop intacto + oráculo activable.
+  como hoy); littlefs-en-fichero = **opt-in** por flag `--fs=lfs:<img>` (oráculo). *Verif:*
+  dev-loop intacto + la suite BP de IO da los mismos resultados sobre el oráculo.
+- **1.4 Lock grueso de FS** (ADELANTADO — requisito de multitarea). Mutex de plataforma por
+  OPERACIÓN COMPLETA de la fachada en `fs_lfs.c` (no por llamada lfs_* suelta → ops atómicas,
+  sin TOCTOU). *Verif en dos niveles:* (a) C-level: N pthreads martillean la fachada sobre el
+  oráculo (control 1 thread, metodología test-smphandles); (b) BP-level: sample con varios
+  Threads BP appendeando a ficheros propios + uno compartido, verificación por PROPIEDADES
+  (conteos exactos + ninguna línea rota), con `--smp=1` (como placa) y `--smp=2/4` (estrés).
+  OJO: puede aflorar el bug diferido de H1 (owner-alloc en Thread.run()) → si sale, se caza aquí.
 - **1.3 Directorios reales** (`/sys /lib /app` como dirs littlefs) + **montajes** en el VFS
   (andamiaje multi-montaje/multi-motor). *Verif:* paths absolutos y relativos (base-dir H19)
   resuelven sobre dirs reales.
-- **1.4 Lock grueso de FS** (hooks lock/unlock de littlefs) + interleavings deterministas de varios
-  threads BP en el PC. *Verif:* sin corrupción bajo el lock (jugada B1).
 
 **Bloque 2 — Un micro de referencia a fondo**
 - **2.1 Cintura block-device del micro de referencia** (sobre sus primitivas), absorbiendo su quirk.
