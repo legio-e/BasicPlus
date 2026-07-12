@@ -63,7 +63,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs test-lfsfile gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-lfs test-lfsfile test-lfsfault gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -342,6 +342,23 @@ test-lfsfile:
 	  ./$(LFS_FILEBD_BIN) write $(LFS_IMG) && \
 	  ./$(LFS_FILEBD_BIN) read  $(LFS_IMG) && \
 	  rm -f $(LFS_IMG); \
+	fi
+
+# H2 fase A · B0.3 — INYECCIÓN DE FALLOS (lfs_emubd): el oráculo de robustez.
+# Barrido exhaustivo de cortes de corriente en cada op de escritura (NOOP +
+# OOO out-of-order) con invariantes de atomicidad/orden/usabilidad, + bloques
+# dañados (PROGERROR → littlefs reubica). Determinista, imposible en placa.
+LFS_FAULT_BIN = build/test_lfs_fault.exe
+test-lfsfault:
+	@mkdir -p build
+	@if [ ! -f $(LFS_DIR)/lfs.c ]; then \
+	  echo "(skip test-lfsfault: falta third_party/littlefs — vendorízalo, ver third_party/README.md)"; \
+	else \
+	  $(CC) -std=c99 -O2 $(LFS_INC) test/test_lfs_fault.c $(LFS_CORE) \
+	    $(LFS_DIR)/bd/lfs_emubd.c $(LFS_DIR)/bd/lfs_rambd.c $(LFS_DIR)/bd/lfs_filebd.c \
+	    -o $(LFS_FAULT_BIN); \
+	  echo "--- littlefs B0.3 fault-injection (cortes exhaustivos + bloques malos) ---"; \
+	  ./$(LFS_FAULT_BIN); \
 	fi
 
 test-throwmsg: $(LIBOBJ)
