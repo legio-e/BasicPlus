@@ -75,6 +75,9 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/heap.c
     ${BPVM_C_ROOT}/src/builtins.c
     ${BPVM_C_ROOT}/src/fs_facade.c           # #247: facade file I/O (readFile/writeFile/appendFile/fileExists)
+    ${BPVM_C_ROOT}/src/fs_lfs.c              # H2-B2: backend littlefs de la fachada (portable)
+    ${BPVM_C_ROOT}/third_party/littlefs/lfs.c        # H2: motor littlefs v2.11.3 (in-tree)
+    ${BPVM_C_ROOT}/third_party/littlefs/lfs_util.c
     ${BPVM_C_ROOT}/src/crc32.c               # paso 4 cierre: CRC del FS en LS (== java.util.zip.CRC32)
     ${BPVM_C_ROOT}/src/net.c                 # H11 (#241): facade Net — sin backend hasta H11.b/c → RuntimeError atrapable
     ${BPVM_C_ROOT}/src/link.c
@@ -128,7 +131,7 @@ add_executable(bpvm_pico
     board_desc.c    # H7.3: descriptor de placa (variante A/B + /sys/board.json)
     psram.c         # H7.2.a: detección + init de PSRAM (QMI CS1, APS6404)
     neopixel.c      # H7.4: driver WS2812 (NeoPixel) vía PIO
-    fs.c            # FP2 step 1+3: filesystem RAM + persistencia flash
+    fs_lfs_pico.c   # H2-B2: littlefs (descriptor + cintura flash_range_* + shim fs.h)
     repl.c          # FP2 step 2: REPL sobre USB CDC (protocolo texto legacy)
     repl_v1.c       # H1 fase A: dispatcher wire BPVM v1 JSON
     json_min.c      # H1 fase A: parser JSON minimal (~200 líneas)
@@ -161,6 +164,7 @@ set_source_files_properties(
 target_include_directories(bpvm_pico PRIVATE
     ${BPVM_C_ROOT}/include
     ${BPVM_C_ROOT}/src                          # aot_registry.h (H3)
+    ${BPVM_C_ROOT}/third_party/littlefs         # H2-B2: lfs.h
     ${CMAKE_CURRENT_LIST_DIR}                   # FreeRTOSConfig.h + embedded_mods.h
 )
 
@@ -193,6 +197,10 @@ endif()
 message(STATUS "BPVM_PICO_NUM_CORES = ${BPVM_PICO_NUM_CORES}")
 target_compile_definitions(bpvm_pico PRIVATE
     BPVM_PICO_NUM_CORES=${BPVM_PICO_NUM_CORES}
+    LFS_NO_DEBUG
+    LFS_NO_WARN
+    LFS_NO_ERROR
+    LFS_NO_MALLOC   # H2-B2: todos los buffers de littlefs son estaticos
 )
 if (BPVM_PICO_NUM_CORES GREATER 1)
     target_link_libraries(bpvm_pico PRIVATE pico_multicore)

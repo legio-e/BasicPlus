@@ -30,6 +30,12 @@ int  bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed);
 /* Desmonta y desregistra el backend (tests / shutdown limpio). */
 void bpvm_fs_lfs_detach(void);
 
+/* B2 — stats del volumen (INFO del IDE / logs de boot). 0 / -1. */
+int  bpvm_fs_lfs_stats(uint32_t* total_bytes, uint32_t* used_bytes);
+
+/* B2 - reformateo en caliente (FORMAT del wire). 0 / -1. */
+int  bpvm_fs_lfs_format(void);
+
 #ifdef __cplusplus
 }
 #endif

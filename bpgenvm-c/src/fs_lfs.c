@@ -32,6 +32,20 @@
 
 static lfs_t s_lfs;
 static int   s_mounted = 0;
+static const struct lfs_config* s_cfg_ptr = NULL;   /* B2: para reformat */
+
+/* B2 — CERO malloc en las ops de fichero (obligatorio en micro): los open
+ * usan lfs_file_opencfg con buffers ESTÁTICOS de cache_size. Bastan DOS
+ * porque el lock grueso serializa las ops y solo be_copy tiene 2 ficheros
+ * abiertos a la vez. Exige cfg->cache_size == BPVM_FS_LFS_CACHE (attach lo
+ * valida) — host y micros usan el mismo valor. */
+#ifndef BPVM_FS_LFS_CACHE
+#define BPVM_FS_LFS_CACHE 256
+#endif
+static uint8_t s_fbuf_a[BPVM_FS_LFS_CACHE];
+static uint8_t s_fbuf_b[BPVM_FS_LFS_CACHE];
+static const struct lfs_file_config s_fcfg_a = { .buffer = s_fbuf_a };
+static const struct lfs_file_config s_fcfg_b = { .buffer = s_fbuf_b };
 
 /* B1.4 — LOCK GRUESO del FS (requisito multitarea, Eduardo 12-jul): littlefs
  * NO es reentrante y tiene ≥2 clientes (Threads BP vía builtins + la comm
@@ -64,7 +78,7 @@ static int be_stat_impl(const char* path, uint32_t* size) {
 
 static long be_read_impl(const char* path, uint8_t* dst, uint32_t cap) {
     lfs_file_t f;
-    if (lfs_file_open(&s_lfs, &f, path, LFS_O_RDONLY) < 0) return -1;
+    if (lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a) < 0) return -1;
     lfs_ssize_t n = lfs_file_read(&s_lfs, &f, dst, cap);
     lfs_file_close(&s_lfs, &f);
     return (n < 0) ? -1 : (long) n;
@@ -73,7 +87,7 @@ static long be_read_impl(const char* path, uint8_t* dst, uint32_t cap) {
 static int be_write_impl(const char* path, const uint8_t* data, uint32_t len, int append) {
     lfs_file_t f;
     int flags = LFS_O_WRONLY | LFS_O_CREAT | (append ? LFS_O_APPEND : LFS_O_TRUNC);
-    if (lfs_file_open(&s_lfs, &f, path, flags) < 0) return -1;
+    if (lfs_file_opencfg(&s_lfs, &f, path, flags, &s_fcfg_a) < 0) return -1;
     int rc = 0;
     if (len > 0 && data) {
         lfs_ssize_t n = lfs_file_write(&s_lfs, &f, data, len);
@@ -121,8 +135,8 @@ static int be_rmdir_impl(const char* path) {
 
 static int be_copy_impl(const char* from, const char* to) {
     lfs_file_t fi, fo;
-    if (lfs_file_open(&s_lfs, &fi, from, LFS_O_RDONLY) < 0) return -1;
-    if (lfs_file_open(&s_lfs, &fo, to, LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) < 0) {
+    if (lfs_file_opencfg(&s_lfs, &fi, from, LFS_O_RDONLY, &s_fcfg_a) < 0) return -1;
+    if (lfs_file_opencfg(&s_lfs, &fo, to, LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC, &s_fcfg_b) < 0) {
         lfs_file_close(&s_lfs, &fi);
         return -1;
     }
@@ -212,6 +226,10 @@ static const bpvm_fs_backend_t s_lfs_backend = {
 
 int bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed) {
     if (s_mounted) return -1;
+    /* B2 — los buffers estáticos de fichero son de BPVM_FS_LFS_CACHE bytes:
+     * el cache_size del cfg DEBE coincidir (littlefs exige file buffer ==
+     * cache_size). Host y micros usan el mismo valor. */
+    if (cfg->cache_size != BPVM_FS_LFS_CACHE) return -1;
     /* B1.4 — el lock nace ANTES del mount (una vez; sobrevive re-attaches). */
     if (!s_fs_lock_ready) {
         if (bpvm_platform_mutex_init(&s_fs_lock) != 0) return -1;
@@ -227,6 +245,7 @@ int bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed) {
     if (e == 0) s_mounted = 1;
     fs_unlock();
     if (e < 0) return -1;
+    s_cfg_ptr = cfg;
     bpvm_fs_set_backend(&s_lfs_backend);
     return 0;
 }
@@ -238,4 +257,32 @@ void bpvm_fs_lfs_detach(void) {
     s_mounted = 0;
     fs_unlock();
     bpvm_fs_set_backend(NULL);   /* las ops vuelven a "fallo limpio" */
+}
+
+/* B2 — stats para el shim del firmware (INFO del IDE / logs de boot).
+ * used = bloques ocupados × block_size (lfs_fs_size); total = geometría. */
+int bpvm_fs_lfs_stats(uint32_t* total_bytes, uint32_t* used_bytes) {
+    if (!s_mounted) return -1;
+    fs_lock();
+    lfs_ssize_t blocks = lfs_fs_size(&s_lfs);
+    uint32_t bs = s_lfs.cfg->block_size;
+    if (total_bytes) *total_bytes = s_lfs.cfg->block_count * bs;
+    if (used_bytes)  *used_bytes  = (blocks < 0) ? 0 : (uint32_t) blocks * bs;
+    fs_unlock();
+    return (blocks < 0) ? -1 : 0;
+}
+
+/* B2 - reformateo del volumen EN CALIENTE (comando FORMAT del wire /
+ * bump de version de formato). Bajo el lock: unmount + format + mount.
+ * El llamante recrea la jerarquia (/sys /lib /app) despues. 0 / -1. */
+int bpvm_fs_lfs_format(void) {
+    if (!s_mounted || !s_cfg_ptr) return -1;
+    fs_lock();
+    lfs_unmount(&s_lfs);
+    int e = lfs_format(&s_lfs, s_cfg_ptr);
+    if (e == 0) e = lfs_mount(&s_lfs, s_cfg_ptr);
+    if (e < 0) s_mounted = 0;   /* irrecuperable: ops fallaran limpio */
+    fs_unlock();
+    if (e < 0) { bpvm_fs_set_backend(NULL); return -1; }
+    return 0;
 }

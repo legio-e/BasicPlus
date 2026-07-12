@@ -37,6 +37,13 @@ static unsigned detect_flash_bytes(void) {
     return 1u << cap;
 }
 
+/* H2-B2 - el descriptor de particiones necesita el tamano de flash ANTES de
+ * board_desc_init (que a su vez lee board.json DEL FS -> huevo y gallina).
+ * Wrapper publico del probe JEDEC, sin dependencias del FS. */
+unsigned board_desc_probe_flash_bytes(void) {
+    return detect_flash_bytes();
+}
+
 static board_desc_t s_board;
 
 /*

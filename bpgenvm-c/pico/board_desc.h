@@ -45,4 +45,8 @@ void board_desc_init(void);
 /* El descriptor activo (válido tras board_desc_init). */
 const board_desc_t* board_desc(void);
 
+/* H2-B2: probe JEDEC del tamano de flash, SIN tocar el FS (para el
+ * descriptor de particiones, que se lee antes de montar nada). */
+unsigned board_desc_probe_flash_bytes(void);
+
 #endif /* BOARD_DESC_H */
