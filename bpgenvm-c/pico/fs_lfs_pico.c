@@ -43,6 +43,7 @@
 #include "flash_lock.h"
 #include "board_desc.h"
 #include "crc32.h"
+#include "log.h"            /* log_printf: al log PERSISTENTE (printf = solo consola USB) */
 
 #include "pico/stdlib.h"
 #include "hardware/flash.h"
@@ -175,12 +176,12 @@ fs_status_t fs_init(void) {
     if (!ptable_sane(&s_pt, flash_bytes)) {
         ptable_defaults(&s_pt, flash_bytes);
         ptable_write(&s_pt);
-        printf("[fs] descriptor de particiones AUTO-INIT (flash=%uMB)\n",
-               (unsigned)(flash_bytes >> 20));
+        log_printf("fs: descriptor AUTO-INIT (flash=%uMB)",
+                   (unsigned)(flash_bytes >> 20));
     }
-    printf("[fs] littlefs: off=0x%06X size=%uKB (flash=%uMB)\n",
-           (unsigned) s_pt.fs_offset, (unsigned)(s_pt.fs_size >> 10),
-           (unsigned)(flash_bytes >> 20));
+    log_printf("fs: littlefs off=0x%06X size=%uKB (flash=%uMB)",
+               (unsigned) s_pt.fs_offset, (unsigned)(s_pt.fs_size >> 10),
+               (unsigned)(flash_bytes >> 20));
 
     memset(&s_cfg, 0, sizeof(s_cfg));
     s_cfg.read  = pico_bd_read;
@@ -199,7 +200,7 @@ fs_status_t fs_init(void) {
     s_cfg.lookahead_buffer = s_look_buf;
 
     if (bpvm_fs_lfs_attach(&s_cfg, 1) != 0) {   /* formatea si no monta */
-        printf("[fs] ERROR: littlefs no monta ni formatea\n");
+        log_printf("fs: ERROR littlefs no monta ni formatea");
         return FS_ERR_BAD_FLASH;
     }
     bpvm_fs_mkdir("/sys");
