@@ -1126,6 +1126,7 @@ static void run_module_path(const char* path, long id) {
     const char* status_str; int exit_code;
     map_vm_status(rs, &status_str, &exit_code);
     const char* link_err = bpvm_link_error(vm);   /* paso 4 — "" salvo fallo de link */
+    const char* rt_err   = bpvm_runtime_error(vm); /* detalle del RuntimeError no atrapado */
     if (link_err[0]) status_str = "LINK_ERROR";
     int off = wire_v1_msg_begin_event(s_reply_buf, sizeof(s_reply_buf), 0, "EXITED");
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
@@ -1137,9 +1138,14 @@ static void run_module_path(const char* path, long id) {
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "elapsedMs", (long) dt);
     if (rs != BPVM_OK) {
+        /* Detalle > genérico: link_error, luego el detalle del RuntimeError
+         * (p.ej. "referencia a objeto eliminado"), y como último recurso el
+         * status genérico. Antes siempre iba el genérico "exit N". */
+        const char* emsg = link_err[0] ? link_err
+                         : (rt_err[0]   ? rt_err
+                                        : bpvm_status_str(rs));
         if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
-                                                   (size_t) off, "errorMessage",
-                                                   link_err[0] ? link_err : bpvm_status_str(rs));
+                                                   (size_t) off, "errorMessage", emsg);
     }
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
                                           (size_t) off);

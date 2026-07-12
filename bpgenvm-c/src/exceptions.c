@@ -102,8 +102,16 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
     return 0;
 }
 
+const char* bpvm_runtime_error(const bpvm_t* vm) {
+    return (vm && vm->runtime_error[0]) ? vm->runtime_error : "";
+}
+
 bpref_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
                                   const char* msg) {
+    /* Guarda el detalle para que el host / wire lo surtan si el error acaba
+     * NO atrapado (espejo de link_error). En cada throw; solo se reporta si el
+     * run termina en BPVM_ERR_RUNTIME. */
+    snprintf(vm->runtime_error, sizeof(vm->runtime_error), "%s", msg ? msg : "");
     /* Buscar el class_ptr de RuntimeError exportado por algún módulo.
      * El frontend Java sintetiza la clase y la exporta como data
      * symbol "<lib>.<mod>.RuntimeError" / "<mod>.RuntimeError" — la

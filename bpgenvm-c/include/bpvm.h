@@ -327,6 +327,12 @@ const char* bpvm_status_str(bpvm_status_t s);
  */
 const char* bpvm_link_error(const bpvm_t* vm);
 
+/* Detalle del último RuntimeError lanzado (msg de bpvm_throw_runtime_error),
+ * p.ej. "referencia a objeto eliminado (use-after-free)". "" si no hubo. Los
+ * handlers de RUN lo surten al wire/host cuando el status es BPVM_ERR_RUNTIME,
+ * en vez del "exit N" genérico. NO propietario: válido mientras viva la VM. */
+const char* bpvm_runtime_error(const bpvm_t* vm);
+
 #ifdef __cplusplus
 }
 #endif

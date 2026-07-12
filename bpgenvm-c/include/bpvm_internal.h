@@ -344,6 +344,13 @@ struct bpvm {
      * en vez del exit-code mudo (antes el detalle solo iba a stderr). "" = sin
      * error. Tamaño fijo (sin malloc → MCU-friendly). */
     char link_error[160];
+
+    /* Detalle del ÚLTIMO RuntimeError lanzado (msg de bpvm_throw_runtime_error):
+     * p.ej. "referencia a objeto eliminado (use-after-free)". Espejo de
+     * link_error → el host y el wire lo surten en vez del "exit N" mudo. Se
+     * setea en CADA throw; solo se REPORTA cuando el run acaba con
+     * BPVM_ERR_RUNTIME (no atrapado). "" = sin error. Fijo (MCU-friendly). */
+    char runtime_error[192];
 };
 
 /* ============================================================ */

@@ -162,6 +162,9 @@ int main(int argc, char** argv) {
     {
         const char* le = bpvm_link_error(vm);   /* paso 4 — detalle de lib/símbolo no resuelto */
         if (le[0]) printf("=== ERROR DE LINK: %s ===\n", le);
+        /* Detalle del RuntimeError no atrapado (en vez del status genérico). */
+        const char* re = bpvm_runtime_error(vm);
+        if (s == BPVM_ERR_RUNTIME && re[0]) printf("=== RuntimeError: %s ===\n", re);
     }
     printf("=== FIN DE LA EJECUCION (status=%s) ===\n", bpvm_status_str(s));
 
