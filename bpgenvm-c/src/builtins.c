@@ -904,7 +904,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * el heap (cualquier tamaño). */
     case BUILTIN_READ_FILE:
     case BUILTIN_READ_FILE_BYTES: {   /* #247: idéntico — los bytes ya son crudos en heap */
-        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        uint32_t pref = pop_ref(vm, tc);
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         /* H19-F1 — resuelve relativo al base-dir del proyecto (si lo hay), luego
@@ -935,8 +935,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_WRITE_FILE_BYTES:    /* #247: idéntico — escribe los bytes crudos del array */
     case BUILTIN_APPEND_FILE: {
         int append = (id == BUILTIN_APPEND_FILE);
-        uint32_t cref = (uint32_t) pop_i32(vm, tc);   /* content (empujado el último) */
-        uint32_t pref = (uint32_t) pop_i32(vm, tc);   /* path */
+        uint32_t cref = pop_ref(vm, tc);   /* content (empujado el último) */
+        uint32_t pref = pop_ref(vm, tc);   /* path */
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         uint32_t cad = (cref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(cref));   /* V4: handle→addr */
@@ -952,7 +952,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_FILE_EXISTS: {
-        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        uint32_t pref = pop_ref(vm, tc);
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         push_i32(vm, tc, bpvm_fs_exists(path) ? 1 : 0);
@@ -963,7 +963,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * Mismos contratos que la VM-Java; backend sin la op → RuntimeError
      * atrapable (los firmwares la añaden en su próximo build). */
     case BUILTIN_REMOVE_FILE: {
-        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        uint32_t pref = pop_ref(vm, tc);
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         if (bpvm_fs_remove(path) != 0) {
@@ -975,8 +975,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_RENAME: {
-        uint32_t tref = (uint32_t) pop_i32(vm, tc);   /* to (empujado el último) */
-        uint32_t fref = (uint32_t) pop_i32(vm, tc);   /* from */
+        uint32_t tref = pop_ref(vm, tc);   /* to (empujado el último) */
+        uint32_t fref = pop_ref(vm, tc);   /* from */
         char from[512], to[512];
         read_bp_string(vm, fref, from, sizeof(from));
         read_bp_string(vm, tref, to, sizeof(to));
@@ -989,7 +989,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_FILE_SIZE: {
-        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        uint32_t pref = pop_ref(vm, tc);
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         uint32_t sz = 0;
@@ -1010,7 +1010,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     /* #240 (2ª pasada) — resto de IO.bp. En device los backends pueden no
      * implementarlos (FS plano sin directorios) → RuntimeError atrapable. */
     case BUILTIN_MKDIR: {
-        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        uint32_t pref = pop_ref(vm, tc);
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         if (bpvm_fs_mkdir(path) != 0) {
@@ -1022,7 +1022,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_RMDIR: {
-        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        uint32_t pref = pop_ref(vm, tc);
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         if (bpvm_fs_rmdir(path) != 0) {
@@ -1034,8 +1034,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_COPY_FILE: {
-        uint32_t tref = (uint32_t) pop_i32(vm, tc);   /* to (empujado el último) */
-        uint32_t fref = (uint32_t) pop_i32(vm, tc);   /* from */
+        uint32_t tref = pop_ref(vm, tc);   /* to (empujado el último) */
+        uint32_t fref = pop_ref(vm, tc);   /* from */
         char from[512], to[512];
         read_bp_string(vm, fref, from, sizeof(from));
         read_bp_string(vm, tref, to, sizeof(to));
@@ -1048,14 +1048,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_IS_DIRECTORY: {
-        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        uint32_t pref = pop_ref(vm, tc);
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         push_i32(vm, tc, bpvm_fs_isdir(path) ? 1 : 0);   /* sin throw, como Java */
         return BPVM_OK;
     }
     case BUILTIN_LAST_MODIFIED: {
-        uint32_t pref = (uint32_t) pop_i32(vm, tc);
+        uint32_t pref = pop_ref(vm, tc);
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         long long ms = bpvm_fs_mtime_ms(path);
@@ -1073,7 +1073,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * (mismo path que div0/null deref → atrapable con try/catch BP).
          * Lo usa el compareTo por defecto de Object para no depender del
          * descriptor local de RuntimeError. No retorna valor. */
-        uint32_t mref = (uint32_t) pop_i32(vm, tc);
+        uint32_t mref = pop_ref(vm, tc);
         char msg[256];
         read_bp_string(vm, mref, msg, sizeof(msg));
         return builtin_throw(vm, tc, msg);
