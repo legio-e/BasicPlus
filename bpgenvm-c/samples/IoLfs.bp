@@ -1,0 +1,61 @@
+// IoLfs.bp — H2·B1.2: la suite BP de IO, para correrla sobre el ORÁCULO
+// (--fs=lfs:<img>) y sobre el backend por defecto (libc / FS de la VM-Java)
+// y comparar salidas: deben ser IDÉNTICAS. Rutas RELATIVAS a propósito
+// (libc → cwd; littlefs → raíz del volumen) para que el texto impreso sea
+// el mismo en ambos mundos. No usa lastModified (recorte documentado: el
+// backend littlefs no tiene timestamps).
+module IoLfs
+  import IO
+
+  function Main()
+    // limpieza defensiva de una corrida anterior (host cwd)
+    if fileExists("t_io/f.txt") then
+      IO.removeFile("t_io/f.txt")
+    endif
+    if fileExists("t_io/copia.txt") then
+      IO.removeFile("t_io/copia.txt")
+    endif
+    if fileExists("t_io/final.txt") then
+      IO.removeFile("t_io/final.txt")
+    endif
+    if IO.isDirectory("t_io/sub") then
+      IO.rmdir("t_io/sub")
+    endif
+    if IO.isDirectory("t_io") then
+      IO.rmdir("t_io")
+    endif
+
+    // mkdir recursivo + isDirectory
+    IO.mkdir("t_io/sub")
+    print "dir t_io:", IO.isDirectory("t_io")
+    print "dir t_io/sub:", IO.isDirectory("t_io/sub")
+
+    // write + exists + size + read
+    writeFile("t_io/f.txt", "hola")
+    print "existe f:", fileExists("t_io/f.txt")
+    print "size f:", IO.fileSize("t_io/f.txt")
+    print "lee f:", readFile("t_io/f.txt")
+
+    // append acumula (el caso del LOG: cada append committeado al retornar)
+    appendFile("t_io/f.txt", " mundo")
+    print "size f tras append:", IO.fileSize("t_io/f.txt")
+    print "lee f tras append:", readFile("t_io/f.txt")
+
+    // copy sobreescribiendo + rename REPLACE
+    IO.copyFile("t_io/f.txt", "t_io/copia.txt")
+    print "lee copia:", readFile("t_io/copia.txt")
+    IO.rename("t_io/copia.txt", "t_io/final.txt")
+    print "existe copia tras rename:", fileExists("t_io/copia.txt")
+    print "lee final:", readFile("t_io/final.txt")
+
+    // remove + rmdir (vacío)
+    IO.removeFile("t_io/f.txt")
+    IO.removeFile("t_io/final.txt")
+    print "existe f tras remove:", fileExists("t_io/f.txt")
+    IO.rmdir("t_io/sub")
+    IO.rmdir("t_io")
+    print "dir t_io tras rmdir:", IO.isDirectory("t_io")
+
+    print "IoLfs: fin"
+  end Main
+end IoLfs

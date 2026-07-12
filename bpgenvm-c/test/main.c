@@ -6,6 +6,9 @@
  *   bpgenvm-c <fichero.mod>            ejecuta el módulo
  *   bpgenvm-c --trace <fichero.mod>    activa trace per-instrucción
  *   bpgenvm-c --mem=N <fichero.mod>    memorySize en bytes (default 512 KiB)
+ *   bpgenvm-c --fs=lfs:<img> <f.mod>   H2·B1.2: FS littlefs sobre la imagen
+ *                                       <img> (modo ORÁCULO, mismo motor que
+ *                                       el micro; default = FS del host/libc)
  *   bpgenvm-c --debug-trace[=N] <m>    #139: instala un debug hook que
  *                                       cuenta cambios de línea (modo
  *                                       sintético: pc_to_line=NULL, así
@@ -64,6 +67,7 @@ int main(int argc, char** argv) {
     int   smp_workers = 0;        /* 0 = single-worker legacy */
     size_t mem_size   = 512 * 1024;
     const char* basedir = NULL;   /* H19-F1: raíz de proyecto (paths relativos) */
+    const char* fs_lfs_img = NULL;/* H2·B1.2: modo ORÁCULO — littlefs sobre imagen */
 
     for (int i = 1; i < argc; i++) {
         const char* a = argv[i];
@@ -86,6 +90,9 @@ int main(int argc, char** argv) {
         }
         else if (strncmp(a, "--basedir=", 10) == 0) {
             basedir = a + 10;        /* H19-F1: raíz de proyecto (paths relativos) */
+        }
+        else if (strncmp(a, "--fs=lfs:", 9) == 0) {
+            fs_lfs_img = a + 9;      /* H2·B1.2: FS littlefs sobre <imagen> (oráculo) */
         }
         else if (a[0] == '-')                  {
             fprintf(stderr, "Argumento desconocido: %s\n", a);
@@ -115,7 +122,18 @@ int main(int argc, char** argv) {
         return 1;
     }
     bpvm_set_tracing(vm, trace);
-    bpvm_fs_register_host();   /* file I/O sobre libc (host) */
+    /* H2·B1.2 — selección de backend de FS: libc (default, dev-loop de siempre)
+     * o littlefs sobre imagen (--fs=lfs:<img> → el ORÁCULO: mismo motor que el
+     * micro; formatea la imagen solo si no monta = primer arranque). */
+    if (fs_lfs_img) {
+        if (bpvm_fs_register_lfs_filebd(fs_lfs_img, 0, 0, 1) != 0) {
+            fprintf(stderr, "--fs=lfs: no se pudo montar littlefs sobre %s\n", fs_lfs_img);
+            bpvm_destroy(vm); free(mem);
+            return 1;
+        }
+    } else {
+        bpvm_fs_register_host();   /* file I/O sobre libc (host) */
+    }
     if (basedir) bpvm_fs_set_basedir(basedir);   /* H19-F1: readFile/load relativos resuelven bajo la raíz */
     bpvm_fs_set_main_module_path(path);          /* H19: App.mainModulePath() = el .mod ejecutado */
     bpvm_net_register_host();  /* H11 — sockets TCP del SO (host) */
