@@ -1,0 +1,81 @@
+// FsPowerCut.bp — H2/B2: TORTURADOR de corte de corriente para el FS (littlefs)
+// EN PLACA. No re-prueba el algoritmo de littlefs (eso ya está exhausto en host,
+// make test-lfsfault) — prueba NUESTRO pegamento de device: la cintura flash
+// (flash_range_program/erase + lock) y el safepoint flash<->XIP, bajo un corte
+// FÍSICO real durante la escritura.
+//
+// IDIOMA POWER-SAFE: escribir a un temporal y RENOMBRAR (rename atómico en
+// littlefs = 1 commit de metadatos). Tras CUALQUIER corte, pcut.txt es siempre
+// el valor viejo o el nuevo COMPLETO, nunca a medias:
+//   - corte durante writeFile(tmp)  -> pcut.txt intacto (el viejo).
+//   - corte durante rename          -> atómico: pcut.txt es viejo o nuevo.
+// Así el INVARIANTE es inequívoco: pcut.txt SIEMPRE existe (tras el 1er commit)
+// y SIEMPRE parsea a un entero >= 0 y monótono.
+//
+// NOTA: parseo el contador A MANO (bucle charCodeAt, sentinela -1 = corrupción)
+// a propósito, para NO depender de Str.parse* (tuplas) — hoy las tuplas tienen
+// un bug de memoria pendiente (revisión aparte). El contador es siempre >= 0.
+//
+// PROCEDIMIENTO EN PLACA:
+//   1) Run on Device. Verás "ARRANQUE: contador recuperado = N" y commits.
+//   2) CORTA la corriente en cualquier momento (mejor mientras imprime commits:
+//      está en plena escritura de flash = la ventana vulnerable).
+//   3) Rearranca + Run on Device otra vez. El contador DEBE recuperarse a un
+//      valor >= al último que viste (nunca corrupto, nunca hacia atrás).
+//   4) Repite el corte varias veces. Cualquier "*** CORRUPCION ***", fallo de
+//      montaje (no arranca) o retroceso del contador = bug del pegamento.
+module FsPowerCut
+  import IO
+
+  // Parsea un entero >= 0 de un string de dígitos. Devuelve -1 si el string
+  // está vacío o tiene algún carácter no-dígito (= contenido corrupto).
+  function parseUintOrNeg(s: string): integer
+    var len: integer := strlen(s)
+    if len == 0 then
+      return -1
+    endif
+    var n: integer := 0
+    var i: integer := 0
+    while i < len do
+      var c: integer := charCodeAt(s, i)
+      if (c < 48) or (c > 57) then
+        return -1
+      endif
+      n := n * 10 + (c - 48)
+      i := i + 1
+    endwh
+    return n
+  end parseUintOrNeg
+
+  function main()
+    var path: string := "pcut.txt"
+    var tmp:  string := "pcut.tmp"
+    var iters: integer := 20000        // ~decenas de seg en flash real; si acaba, relanza
+
+    // --- Fase de recuperación: leer y VALIDAR el contador comprometido ---
+    var bootVal: integer := 0
+    if fileExists(path) then
+      var content: string := readFile(path)
+      var pv: integer := parseUintOrNeg(content)
+      if pv < 0 then
+        print "*** CORRUPCION: pcut.txt no es entero valido = [" + content + "] ***"
+        return
+      endif
+      bootVal := pv
+    endif
+    print "=== ARRANQUE: contador recuperado = " + intToString(bootVal) + " ==="
+
+    // --- Fase de tortura: reescritura atómica en bucle ---
+    var i: integer := bootVal
+    var target: integer := bootVal + iters
+    while i < target do
+      i := i + 1
+      writeFile(tmp, intToString(i))   // escribe el nuevo valor al temporal
+      IO.rename(tmp, path)             // COMMIT atómico (rename)
+      if (i mod 1000) == 0 then
+        print "  commit " + intToString(i)
+      endif
+    endwh
+    print "=== FIN sin corte: contador = " + intToString(i) + " (relanza para seguir) ==="
+  end main
+end FsPowerCut
