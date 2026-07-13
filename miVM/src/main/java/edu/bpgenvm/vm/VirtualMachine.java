@@ -4017,7 +4017,7 @@ public class VirtualMachine {
             }
             case CHARS_TO_STRING: {
                 int len = popTc(tc);
-                int charsRef = popTc(tc);
+                long charsRef = popTcRef(tc);   // #6 (censo V4): int[] ref = 8B (era popTc 4B → desalineaba)
                 if (len < 0) throwBpRuntimeError(tc, "__charsToString: longitud negativa: " + len);
                 int cd = (charsRef != 0) ? refDeref(charsRef) : 0;   // V4: dirección física
                 int avail = (cd != 0) ? readInt32(cd) : 0;
@@ -4029,8 +4029,7 @@ public class VirtualMachine {
             }
             case CHAR_CODE_AT: {
                 int idx = popTc(tc);
-                int sRef = popTc(tc);
-                String s = readVmString(sRef);              // H2: índice en codepoints
+                String s = readVmString(popTcRef(tc));      // #6 (censo V4): string ref = 8B; H2 índice en codepoints
                 int n = s.codePointCount(0, s.length());
                 if (idx < 0 || idx >= n) throwBpRuntimeError(tc, "charCodeAt: índice " + idx + " fuera de [0," + n + ")");
                 pushTc(tc, s.codePointAt(s.offsetByCodePoints(0, idx)));
@@ -4041,16 +4040,16 @@ public class VirtualMachine {
                 // H2 (V2): string y byte[] comparten layout (TYPE_ARRAY_I8). La
                 // conversión es una copia defensiva (string inmutable / byte[]
                 // mutable): mismos bytes, objeto nuevo.
-                int ref = popTc(tc);
+                long ref = popTcRef(tc);   // #6 (censo V4): string/byte[] ref = 8B
                 int rd = (ref == 0) ? 0 : refDeref(ref);   // V4: dirección física fuente
                 int n = (rd == 0) ? 0 : readInt32(rd);
                 int out = heapAlloc(n, TYPE_ARRAY_I8);   // addr físico
                 writeInt32(out, n);
                 if (n > 0) System.arraycopy(memory, rd + 4, memory, out + 4, n);
-                out = (int) handleRegister(out);   // V4: addr → handle
+                long outRef = handleRegister(out);   // V4: addr → handle 64b COMPLETO (no truncar)
                 ThreadContext me = currentTcLocal.get();
-                if (me != null) me.allocAnchor = out;
-                pushTc(tc, out);
+                if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG) que refDeref usa
+                pushTcRef(tc, outRef);
                 break;
             }
             case HEAP_FRAG: {           // H3: diagnóstico (solo VM-Java)

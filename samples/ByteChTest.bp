@@ -1,0 +1,15 @@
+// ByteChTest.bp — regresión #6 (censo V4, racimo miVM): builtins byte[]/chars
+// (toBytes/fromBytes/charCodeAt/__charsToString) usaban el carril crudo 4B en
+// miVM (VM-C ya era correcto). Convertidos a popTcRef/pushTcRef+refDeref (8B).
+// Salida determinista; miVM debe MATCHear VM-C.
+module ByteChTest
+  function Main()
+    var s: string := "Hola"
+    var b: byte[] := toBytes(s)
+    var s2: string := fromBytes(b)
+    print "round=" + s2
+    print "eq=" + boolToString(s == s2)
+    print "cc0=" + intToString(charCodeAt(s, 0))
+    print "cc3=" + intToString(charCodeAt(s, 3))
+  end Main
+end ByteChTest
