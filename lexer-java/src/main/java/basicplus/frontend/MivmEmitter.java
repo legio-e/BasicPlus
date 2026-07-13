@@ -5272,8 +5272,8 @@ public final class MivmEmitter {
      */
     private void emitStrequalsBody() throws IOException {
         w.addFunction("__strequals", false);
-        w.declareParam("a");
-        w.declareParam("b");
+        w.declareParam("a", 8);   // #9 (censo V4): string ref = 8 bytes — la migración 4→8B saltó
+        w.declareParam("b", 8);   // este hermano de __strconcat → string ==/!= leía basura
         w.declareLocal("la");
         w.declareLocal("i");
 

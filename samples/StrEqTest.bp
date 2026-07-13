@@ -1,0 +1,18 @@
+// StrEqTest.bp — regresión #9 (censo V4 refs): string ==/!= via helper __strequals.
+// El ensanchado 4→8B (9-jul) migró __strconcat pero NO __strequals: sus params
+// a/b se declaraban a 4B siendo strings de 8B → == leía basura (siempre false) +
+// fuga de pila. Fix: declareParam("a",8)/("b",8). Salida determinista, dual-VM.
+module StrEqTest
+  function Main()
+    print "eq_true="  + boolToString("abc" == "abc")
+    print "eq_false=" + boolToString("abc" == "abd")
+    print "ne_true="  + boolToString("abc" != "xyz")
+    print "ne_false=" + boolToString("abc" != "abc")
+    var a: string := "hola"
+    var b: string := "hola"
+    var c: string := "adios"
+    print "var_eq="   + boolToString(a == b)
+    print "var_ne="   + boolToString(a != c)
+    print "empty="    + boolToString("" == "")
+  end Main
+end StrEqTest
