@@ -3122,7 +3122,7 @@ public class VirtualMachine {
                     break;
                 }
                 case 0x5D: { // THROW
-                    sp -= 8; int v = (int) readI64(mem, sp);   // H1.2a: excepción ref = 8 bytes
+                    sp -= 8; long vFull = readI64(mem, sp); int v = (int) vFull;   // V4 #7: handle 64b COMPLETO (preserva gen); v = palabra baja (idx|TAG) para clase/mensaje
                     // Sync: classPtrOfRefOr0 puede leer this.memory; nuestro mem es el mismo.
                     int thrownClass = classPtrOfRefOr0(v);
                     boolean handled = false;
@@ -3142,7 +3142,7 @@ public class VirtualMachine {
                             bp = savedBp;
                             cs = savedCs;
                             pc = handlerPc;
-                            writeI64(mem, sp, ((long) v) & 0xFFFFFFFFL); sp += 8;   // H1.2a: excepción ref = 8 bytes
+                            writeI64(mem, sp, vFull); sp += 8;   // V4 #7: re-empuja el handle COMPLETO (antes `& 0xFFFFFFFF` forzaba gen=0 → rompería con reuso de slots 4c; paridad VM-C)
                             handled = true;
                             break;
                         }

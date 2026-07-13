@@ -1,0 +1,39 @@
+// ThrowGenTest.bp — regresión #7 (censo refs): el opcode THROW de miVM re-empuja
+// la ref de la excepción en el catch con `& 0xFFFFFFFF` → FUERZA la generación a 0.
+// Si el objeto-excepción vive en un slot RECICLADO (gen>0), el catch recibe un
+// handle con gen=0 y el requireAlive (contrato B) del acceso a campo/método
+// dispara un use-after-free ESPURIO. VM-C preserva el handle 64b completo.
+//
+// El bucle throw/catch fuerza el reciclado: tras el ciclo 0, el GC libera el
+// slot del MyErr (gen++), y los ciclos siguientes reusan ese slot (gen>0).
+// Esperado (ambas VMs, byte-idéntico): "code = i  msg = boom" ×6 + "fin".
+module ThrowGenTest
+  import Core
+  class MyErr extends Core.Exception
+    var code: integer
+    public function MyErr(m: string, c: integer)
+      super(m)
+      this.code := c
+    end MyErr
+    public function getCode(): integer
+      return this.code
+    end getCode
+  end MyErr
+
+  function once(n: integer)
+    try
+      throw MyErr("boom", n)
+    catch e: MyErr
+      print "code =", e.getCode(), " msg =", e.msg
+    endtry
+  end once
+
+  function Main()
+    var i: integer := 0
+    while i < 6 do
+      once(i)
+      i := i + 1
+    endwh
+    print "fin"
+  end Main
+end ThrowGenTest
