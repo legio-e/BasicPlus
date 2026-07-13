@@ -1,0 +1,11 @@
+module T2
+  function twoVals(): (boolean, integer)
+    return (false, 42)
+  end twoVals
+  function main()
+    var e: boolean
+    var n: integer
+    { e, n } := twoVals()
+    print "n=" + intToString(n)
+  end main
+end T2

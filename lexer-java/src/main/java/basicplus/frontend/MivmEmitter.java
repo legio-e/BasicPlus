@@ -1647,6 +1647,7 @@ public final class MivmEmitter {
         if (t == null) return false;
         if (t instanceof ClassType) return true;
         if (t instanceof ArrayType) return true;
+        if (t instanceof BpType.TupleType) return true;   // #281: una tupla es un objeto de heap = ref (8 bytes)
         if (t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING) return true;
         return false;
     }
@@ -4727,7 +4728,7 @@ public final class MivmEmitter {
         BpType.TupleType tt = (BpType.TupleType) bt;
         String cls = tupleClassName(tt);
         String temp = "__tup_" + (stringPoolCounter++);
-        declareLocal(temp);
+        declareLocalLong(temp);   // #281: el ref del objeto-tupla es un handle de 8 bytes (no 4)
         w.emitNewObject(cls);
         w.emitSetLocal(temp);
         for (int i = 0; i < te.elements.size(); i++) {
@@ -4748,7 +4749,7 @@ public final class MivmEmitter {
         String cls = tupleClassName(tt);
         emitExpr(s.value);                       // ref de la tupla en pila
         String temp = "__dst_" + (stringPoolCounter++);
-        declareLocal(temp);
+        declareLocalLong(temp);   // #281: el ref del objeto-tupla es un handle de 8 bytes (no 4)
         w.emitSetLocal(temp);
         int n = Math.min(s.targets.size(), tt.elements.size());
         for (int i = 0; i < n; i++) {
@@ -4758,7 +4759,8 @@ public final class MivmEmitter {
             BpType vt = (targetT != null) ? targetT : tt.elements.get(i);
             // Extrae el elemento (con ensanchado) a un temp; luego lo guarda en el lvalue.
             String valLocal = "__de_" + (stringPoolCounter++);
-            declareLocal(valLocal);
+            if (occupies8Bytes(vt)) declareLocalLong(valLocal);   // #281: elemento de 8B (string/long/double/ref/tupla)
+            else declareLocal(valLocal);
             w.emitGetLocal(temp);
             w.emitGetField(cls, "_" + i);        // is8-aware → GET_FIELD_LONG si procede
             if (targetT != null) emitWiden(tt.elements.get(i), targetT);

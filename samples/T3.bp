@@ -1,0 +1,18 @@
+module T3
+  // tupla con elemento STRING (8 bytes) + almacenar la tupla en una var
+  function pair(): (string, integer)
+    return ("hola", 7)
+  end pair
+  function main()
+    var s: string
+    var k: integer
+    { s, k } := pair()
+    print "s=" + s + " k=" + intToString(k)
+    // tupla guardada en var, luego destructurada
+    var t: (string, integer) := pair()
+    var s2: string
+    var k2: integer
+    { s2, k2 } := t
+    print "s2=" + s2 + " k2=" + intToString(k2)
+  end main
+end T3
