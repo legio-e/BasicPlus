@@ -5082,7 +5082,7 @@ public class VirtualMachine {
             // recursivamente y luego el array como bloque.
             int length = readInt32(headerAddr + 4);   // V4: vía headerAddr (ya derefeado; era readInt32(ref) crudo → con handle leía basura)
             for (int i = 0; i < length; i++) {
-                int slotRef = (int) readI64(memory, headerAddr + OBJ_HEADER_SIZE + i * 8);   // ref plana 8B (low32)
+                long slotRef = refLoad(memory, headerAddr + OBJ_HEADER_SIZE + i * 8);   // V4 #2: handle 64b COMPLETO (gen) — como el caso OBJECT (5074) y VM-C bpref_load; era (int)readI64 = gen truncada
                 if (slotRef != 0) freeOwnedObjectLocked(slotRef);
             }
         }
