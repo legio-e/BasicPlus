@@ -99,37 +99,37 @@ lines
 3549 283
 3560 284
 3574 285
-3582 286
-3596 287
-3615 289
-3626 290
-3645 294
-3656 295
-3676 296
-3687 297
-3706 302
-3717 303
-3731 304
-3739 305
-3753 306
-3767 307
-3781 308
-3794 310
-3805 311
-3824 323
-3835 324
-3849 325
-3860 326
-3879 330
-3890 331
-3904 332
-3915 333
-3934 211
-3959 212
-3984 213
-4009 214
-4115 347
-4151 352
+3583 286
+3597 287
+3616 289
+3627 290
+3646 294
+3657 295
+3677 296
+3688 297
+3707 302
+3718 303
+3732 304
+3740 305
+3754 306
+3768 307
+3782 308
+3795 310
+3806 311
+3825 323
+3836 324
+3850 325
+3861 326
+3880 330
+3891 331
+3905 332
+3916 333
+3935 211
+3960 212
+3985 213
+4010 214
+4116 347
+4152 352
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -357,28 +357,28 @@ this -28 8 0 ?
 key -20 8 0 ?
 idx 12 4 0 integer
 result 16 8 0 ?
-func Map.containsKey 3642
+func Map.containsKey 3643
 this -28 8 0 ?
 key -20 8 0 ?
 found 8 4 0 boolean
-func Map.remove 3703
+func Map.remove 3704
 this -28 8 0 ?
 key -20 8 0 ?
 idx 8 4 0 integer
 existed 12 4 0 boolean
-func Map.keyAt 3821
+func Map.keyAt 3822
 this -24 8 0 ?
 i -16 4 0 integer
 k 12 8 0 ?
-func Map.valueAt 3876
+func Map.valueAt 3877
 this -24 8 0 ?
 i -16 4 0 integer
 v 12 8 0 ?
-func Map.__init 3931
+func Map.__init 3932
 this -20 8 0 ?
-func __cls_init_Map 4072
+func __cls_init_Map 4073
 this -20 8 0 ?
-func __strconcat 4207
+func __strconcat 4208
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

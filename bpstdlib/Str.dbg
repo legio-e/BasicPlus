@@ -375,35 +375,35 @@ pad 36 4 0 integer
 i 40 4 0 integer
 func parseLong 3582
 s -20 8 0 string
-n 4 4 0 integer
-i 12 4 0 integer
-neg 16 4 0 boolean
-c0 20 4 0 integer
-acc 28 8 0 long
-c 36 4 0 integer
+n 8 4 0 integer
+i 20 4 0 integer
+neg 24 4 0 boolean
+c0 28 4 0 integer
+acc 40 8 0 long
+c 48 4 0 integer
 func parseInt 4027
 s -20 8 0 string
-err 4 4 0 boolean
-v 8 8 0 long
+err 8 4 0 boolean
+v 12 8 0 long
 func parseDouble 4108
 s -20 8 0 string
-n 4 4 0 integer
-i 12 4 0 integer
-neg 16 4 0 boolean
-c0 20 4 0 integer
-ip 24 8 0 double
-sawDigit 32 4 0 boolean
-c 36 4 0 integer
-frac 44 8 0 double
-scale 52 8 0 double
-v 68 8 0 double
+n 8 4 0 integer
+i 20 4 0 integer
+neg 24 4 0 boolean
+c0 28 4 0 integer
+ip 32 8 0 double
+sawDigit 40 4 0 boolean
+c 44 4 0 integer
+frac 56 8 0 double
+scale 64 8 0 double
+v 88 8 0 double
 func parseHex 4868
 s -20 8 0 string
-n 4 4 0 integer
-i 12 4 0 integer
-acc 20 8 0 long
-c 28 4 0 integer
-d 32 4 0 integer
+n 8 4 0 integer
+i 20 4 0 integer
+acc 32 8 0 long
+c 40 4 0 integer
+d 44 4 0 integer
 func __strconcat 5488
 a -28 8 0 ?
 b -20 8 0 ?
