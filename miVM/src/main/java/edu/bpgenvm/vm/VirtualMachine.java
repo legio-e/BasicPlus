@@ -3924,10 +3924,10 @@ public class VirtualMachine {
                     int ref = heapAlloc(data.length, TYPE_ARRAY_I8);
                     writeInt32(ref, data.length);
                     System.arraycopy(data, 0, memory, ref + 4, data.length);
-                    ref = (int) handleRegister(ref);   // V4: addr → handle
+                    long outRef = handleRegister(ref);   // V4: addr → handle 64b
                     ThreadContext me = currentTcLocal.get();
-                    if (me != null) me.allocAnchor = ref;   // ancla GC (ver allocVmString)
-                    pushTc(tc, ref);
+                    if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG)
+                    pushTcRef(tc, outRef);   // 8B (byte[] es referencia — antes truncaba a 4B)
                 } catch (java.io.IOException e) {
                     throwBpRuntimeError(tc, "readFileBytes('" + path + "'): " + e.getMessage());
                 }
@@ -3936,11 +3936,12 @@ public class VirtualMachine {
             case WRITE_FILE_BYTES: {
                 // #247 binario: escribe los bytes crudos del byte[] (TYPE_ARRAY_I8),
                 // SIN pasar por String. Args: (path, data) → data empujado el último.
-                int dataRef = popTc(tc);
+                long dataRefH = popTcRef(tc);   // 8B (byte[] es referencia — antes popTc 4B)
                 String path = readVmString(popTcRef(tc));
+                int dataRef = (dataRefH == 0) ? 0 : refDeref(dataRefH);   // handle → addr físico (faltaba deref)
                 int n = (dataRef == 0) ? 0 : readInt32(dataRef);
                 byte[] out = new byte[n];
-                System.arraycopy(memory, dataRef + 4, out, 0, n);
+                if (n > 0) System.arraycopy(memory, dataRef + 4, out, 0, n);
                 try {
                     java.nio.file.Files.write(sandboxPath(tc, path), out);
                 } catch (java.io.IOException e) {
