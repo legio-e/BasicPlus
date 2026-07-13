@@ -195,19 +195,35 @@ Animal := null` → `PUSH 0`(4B) → `SET_LOCAL_L`(8B) sin `I32_TO_I64` → mete
 el destino estático es clase/array/string/tupla **concreta**. `Object`(=AnyType) SÍ va →
 por eso `var x: Object := null` funciona. Fix = ensanchar null→ref-concreta (o coerceToTarget).
 
-### 🟠 #12 (EMISOR, correctitud) — `I32_TO_I64` int→any hace SIGN-extend, el modelo dice zero-extend
+### ⚪ #12 ANALIZADO — INOCUO (no divergente, no observable) — `I32_TO_I64` int→any sign-extend
 `coerceToTarget:4933`: un `int` NEGATIVO metido en `any` queda con word alto `0xFFFFFFFF`
-(el comentario del modelo 4639 dice "zero-extended"). Hack ya marcado a retirar (doc §5). _(F)_
+(el modelo 4639 dice zero-extend). **VEREDICTO (13-jul): no se arregla.** El emisor emite el
+MISMO opcode para AMBAS VMs → NO hay divergencia dual-VM. La discriminación ref-vs-número de
+un `any` mira el TAG de la palabra BAJA (no la alta), y el scan conservador tolera 0xFFFFFFFF
+en la palabra alta → sin efecto observable. Zero-extend costaría opcodes de máscara por cada
+coerción int→any por pura cosmética. Si algún día se hashea/serializa el `any` crudo de 8B,
+reconsiderar (o corregir el comentario del modelo a "sign-extend").
 
 ### ⚪ #13 latente (EMISOR) — `newarrayOpForElement:3403` sin la rama `NEWARRAY_I64` de su espejo
 Un array-fijo local de refs caería a `NEWARRAY`(4B) + `ASTORE_I64`(8B); hoy inalcanzable
 (el semántico rechaza arrays-fijos de refs). Mordería si se levanta esa restricción. _(F)_
 
-### 🟠 #14 (AMBAS VMs, GC-trace de `any`) — `isRefType(AnyType)=false` → GC no traza refs en `any`
-`isRefType:1646` da false para `any` (el ANCHO sí lo cubre `occupies8Bytes`, pero `isRef`
-alimenta el flag de GC-trace en `declareField:1098`/`4718`) → un campo/elem `any` que guarde
-una ref queda `isRef=false` → el GC NO la sigue → recolección de objeto vivo → UAF. Es
-trazado GC (no ancho); el doc §5 pide disciplina propia para `any`. _(F, observación 2ª)_
+### 🟡 #14 ANALIZADO — real pero ENMASCARADO + NO divergente (seguimiento con pruebas, decisión de Eduardo)
+`isRefType:1646`=false para `any` → un campo `Object`/`any` (isRef=false en el bitmap de refs
+del objeto) NO se traza en la marca PRECISA del GC (markObject usa el bitmap estático para
+TYPE_OBJECT). En teoría: un objeto cuya ÚNICA ref viva está en un campo `any` → recolectado →
+UAF. **VEREDICTO (13-jul): NO se toca esta sesión.** (1) **No es divergencia dual-VM**: ambas
+VMs leen el MISMO bitmap del .mod y ambas tienen el scan conservador → comportamiento idéntico
+(oráculo AnyGcTest byte-idéntico, `val=777` en las dos, incluso con stash+churn+GC_EVERY=1).
+(2) **Enmascarado** por el scan conservador de pila (`scanRegion(stackBase,sp)` marca cualquier
+patrón que parezca handle vivo) → no se pudo reproducir un fallo desde BP. (3) **Radio de
+explosión**: el fix (meter `any` en el bitmap de refs, como ya hace TYPE_ARRAY_REF que traza
+conservador cada slot) es del EMISOR → cambia el bitmap de TODA clase con campo `any`/`Object`
+→ exige recompilar stdlib + reverificar paridad + regenerar blobs, y toca la precisión del GC
+(lo delicado). Correcto arreglarlo como tarea deliberada con pruebas de GC, no a ciegas sobre
+código que hoy funciona. Fix propuesto: `isRef = isRefType(t) || t instanceof AnyType` en los
+sitios de `declareField` (1098/campos, +arrays/props si aplica); verificar el bit en el disasm
+del descriptor de clase + JUnit + List/SyncList (usan `any[]`, ya trazado). _(F, observación 2ª)_
 
 ### ✅ #6 ARREGLADO (racimo runtime; GUI reservado a Eduardo) — builtins sin convertir a 8B
 **Runtime CERRADO:** `MOVE`/`SPLIT`/`LIST_DIR` `fb4955a`, `READ`/`WRITE_FILE_BYTES` `dc1c0bb`, `TCP_SEND`/`RECV` `3eb7c09`, `TO`/`FROM_BYTES`+`CHARS_TO_STRING`+`CHAR_CODE_AT` `e0e3014` (todos con oráculo dual-VM byte-idéntico bajo GC_EVERY=1 + JUnit 34/34). **THREAD/MUTEX = NO es bug** (disasm probó que corren en métodos wrapper cuyo `RET` resetea sp → el `popTc`(4B) queda confinado y borrado, nunca acumula; valor `idx|TAG` correcto; VM-C descarta la gen idénticamente → paridad total; NO tocar). **GUI = reservado a Eduardo** (verificación visual): los handles de widget son ENTEROS OPACOS (4B correcto, NO tocar); latentes forward-compat solo los string-args (`GUI_SET_TEXT`/`SET_OPTIONS`/`SET_BUTTONS`, calcar `GUI_LOAD_FONT`) y las refs de objeto de Forms (`BIND_CLICK`/`INVOKE_BY_NAME`/`INVOKE_BY_SLOT`). _(nota histórica del censo abajo)_
@@ -234,7 +250,10 @@ VM-C equivalente = OK en todos. Fix = `popTcRef`/`pushTcRef`(8B) + `refDeref`. _
 al leer `e.msg` y se re-lanzaría. VM-C `exceptions.c:78` escribe el handle 64b completo = OK.
 Enmascarado hoy solo en régimen sin-GC. _(barrido E)_
 
-### 🟠 #8 CONFIRMADO (VM-C-only, menor) — 3 `push_i32` de string en builtins APP_*
+### ✅ #8 ARREGLADO (`1973009`) — 3 `push_i32` de string en builtins APP_*
+Fix: los 3 pasan a `push_ref`. Red→green probado (samples/AppTest.bp): VM-C imprimía
+`n=0` (12B de drift corrompían el local siguiente), ahora `n=42` byte-idéntico a miVM.
+<!-- censo original: -->
 `builtins.c:643/649/655` (`APP_MAIN_MODULE`/`_PATH`/`APP_PROJECT_PATH`) empujan el handle
 de string con `push_i32`(4B) en vez de `push_ref`(8B) → trunca gen + desalinea. miVM
 correcto (`pushTcRef`). Path poco ejercitado. Fix = `bpref_push`. _(barrido E)_
