@@ -1,0 +1,11 @@
+// SplitTest.bp — regresión #6 (racimo miVM): split() construía el string[] con
+// handles truncados (int) y lo empujaba a 4B. Fix: handle 8B completo + refDeref
+// del array + pushTcRef. (miVM-only; VM-C no implementa split.)
+module SplitTest
+  function Main()
+    var parts: string[] := split("a,b,c", ",")
+    print "p0=" + parts[0]
+    print "p1=" + parts[1]
+    print "p2=" + parts[2]
+  end Main
+end SplitTest

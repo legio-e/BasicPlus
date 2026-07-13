@@ -3851,11 +3851,12 @@ public class VirtualMachine {
                 String[] parts = s.split(java.util.regex.Pattern.quote(sep), -1);
                 // Aloca primero los strings individuales, luego el array (en ese orden el
                 // GC tendrá los slots zero-init mientras se llenan).
-                int[] refs = new int[parts.length];
-                for (int i = 0; i < parts.length; i++) refs[i] = (int) allocVmString(parts[i]);
-                int arrRef = (int) allocVmRefArray(parts.length);
-                for (int i = 0; i < parts.length; i++) writeI64(memory, arrRef + 4 + i * 8, ((long) refs[i]) & 0xFFFFFFFFL);  // H1.2a: ref plana 8B
-                pushTc(tc, arrRef);
+                long[] refs = new long[parts.length];
+                for (int i = 0; i < parts.length; i++) refs[i] = allocVmString(parts[i]);   // #6 (censo V4): handle 64b completo (era (int)→gen=0)
+                long arrRef = allocVmRefArray(parts.length);
+                int adir = refDeref(arrRef);   // V4: dirección física (antes usaba el handle crudo como addr, sin refDeref)
+                for (int i = 0; i < parts.length; i++) writeI64(memory, adir + 4 + i * 8, refs[i]);   // ref 8B completa
+                pushTcRef(tc, arrRef);
                 break;
             }
 
@@ -3966,12 +3967,12 @@ public class VirtualMachine {
                 java.io.File dir = sandboxPath(tc, path).toFile();
                 String[] names = dir.list();
                 if (names == null) names = new String[0];
-                int[] refs = new int[names.length];
-                for (int i = 0; i < names.length; i++) refs[i] = (int) allocVmString(names[i]);
-                int arrRef = (int) allocVmRefArray(names.length);   // ya es handle
+                long[] refs = new long[names.length];
+                for (int i = 0; i < names.length; i++) refs[i] = allocVmString(names[i]);   // #6 (censo V4): handle 64b completo (era (int)→gen=0)
+                long arrRef = allocVmRefArray(names.length);   // ya es handle
                 int adir = refDeref(arrRef);   // V4: dirección física
-                for (int i = 0; i < names.length; i++) writeI64(memory, adir + 4 + i * 8, ((long) refs[i]) & 0xFFFFFFFFL);  // ref plana 8B
-                pushTc(tc, arrRef);
+                for (int i = 0; i < names.length; i++) writeI64(memory, adir + 4 + i * 8, refs[i]);   // ref 8B completa
+                pushTcRef(tc, arrRef);
                 break;
             }
 
@@ -4208,12 +4209,14 @@ public class VirtualMachine {
                 int count    = popTc(tc);
                 int dstStart = popTc(tc);
                 int srcStart = popTc(tc);
-                int dstRef   = popTc(tc);
-                int srcRef   = popTc(tc);
-                if (srcRef <= 0)
+                long dstRefH = popTcRef(tc);   // #6 (censo V4): array ref = 8B (era popTc 4B + el handle se usaba como dirección física SIN refDeref)
+                long srcRefH = popTcRef(tc);
+                if (srcRefH == 0)
                     throwBpRuntimeError(tc, "move: src es null");
-                if (dstRef <= 0)
+                if (dstRefH == 0)
                     throwBpRuntimeError(tc, "move: dst es null");
+                int srcRef = refDeref(srcRefH);   // V4: handle → dirección física del dato del array
+                int dstRef = refDeref(dstRefH);
                 int srcHeader = srcRef - 4;
                 int dstHeader = dstRef - 4;
                 if (srcHeader < heapStart || srcHeader >= heapNext)
