@@ -14,37 +14,34 @@
 
 El índice que manda; el resto del documento es el detalle que va colgando de él.
 
-1. **SD** — lectura de tarjeta SD (almacenamiento masivo removible). *(Detalle abajo, junto a Pack.)*
-2. **Pack** — XIP de bytecode: código en flash sin copiar a RAM; stdlib como pack →
-   actualizar `Gui` sin reflashear. *(Diseño detallado en `V3_IDEAS.md` §Packs, charla 2-jul.)*
-3. **Pack manager** — **pantalla nueva del IDE** (formulación Eduardo 3-jul): dos lados, como el
-   explorer pero de packs. Lado PC = **carpeta de packs** (biblioteca local): construir packs nuevos,
-   borrar antiguos. Lado micro = ver los packs del device y borrar. El puente = **escoger cuáles
-   subir y subirlos** (Burn por el wire). Pide un comando wire de inventario de packs (hermano del
-   LS). *(Detalle en `V3_IDEAS.md` §Packs → "Pack manager".)*
-4. **Sobrecarga de funciones** — overloading en el lenguaje (misma función, firmas distintas).
-   *(Nuevo; tanda de lenguaje. Toca frontend + mangling de nombres en .mod/.bpi — hoy ya existe
-   `nombre#arity` en los símbolos, base a estudiar.)*
-5. **Funciones nativas RISC-V** — AOT/`native` en el ESP32-P4 (port del emisor/loader `.mdn` a
-   RISC-V; hoy `native` cae a interpretado en ESP32). *(La placa gráfica insignia lo merece.)*
+> **Reorganización 13-jul-2026 (Eduardo):** **SD y el FS de la SD (FAT32/…) salen de V4 → V5.**
+> **H3 = Packs** SIN la parte del IDE. Ver §H3 abajo para el scope.
+
+1. ~~**SD**~~ → **MOVIDO A V5** (lectura de tarjeta SD + su FS FAT32). Fuera de V4. (13-jul)
+2. **H3 — Packs** — XIP de bytecode: `.mod`+resources en flash sin copiar a RAM; actualizar la
+   stdlib (p.ej. `Gui`) sin reflashear. **SIN la parte del IDE.** Scope detallado en **§H3** abajo.
+   *(Diseño: `V3_IDEAS.md` §Packs, charla 2-jul.)*
+3. **Pack manager (pantalla del IDE)** → **H8.a** (fuera de H3; la pantalla vive en el hito del IDE,
+   apoyándose en la infraestructura de packs de H3). Dos lados como el explorer: biblioteca PC ↔ packs
+   del micro, Burn por el wire. Formulación en `V3_IDEAS.md` §Packs → "Pack manager".
+4. **H5 — Compilador** — mejora principal **sobrecarga de funciones** (overloading) + **`import
+   pack:modulo`** + **llamadas asíncronas sencillas** (eventos LVGL). **Acoplado a H6.** Ver **§H5**.
+5. **H4 — AOT** (todo el AOT bajo un paraguas) — **novedad: compilar `native` a RISC-V** (ESP32-P4) +
+   todos los bugs/huecos de AOT (handle-aware, cross-module #169, casts, try/catch en native…).
+   Ver **§H4** abajo. *(La placa gráfica insignia lo merece.)*
 6. **Heap** — el frente GC/memoria: `B-gc-allocanchor` + `B-freeref-no-recursivo` (abajo) +
    fragmentación/rendimiento (las herramientas H3 ya existen) + layout compacto de narrow types.
-7. **Módulo + mdi** — **el contenido del fichero de interfaz (hoy `.bpi`) TAMBIÉN dentro del `.mod`**
-   (formulación Eduardo 3-jul): módulo AUTODESCRIPTIVO. El `.mod` crece un poco ("asumible" — la
-   interfaz son nombres+firmas; y con Packs/XIP se ahorra RAM, "en conjunto salimos ganando").
-   Beneficios que caen solos: (a) compilar contra un `.mod` sin su `.bpi`; (b) el DEVICE puede
-   resolver nombre→slot en carga = **el Camino B de forms** (nº 10) sale de aquí; (c) el Pack
-   manager puede inspeccionar qué exporta cada módulo de un pack; (d) **mata la familia de bugs de
-   DESFASE `.bpi`/`.mod`/`.slots`** (Json rancio, slots de Gui — un artefacto, una verdad); el
-   sidecar `.slots` de H13.1 queda subsumido.
-8. **2 Núcleos** — dual-core: RP2350 (#153, incluye el fix de la race B1) y el P4 (2× RISC-V 360 MHz);
-   SMP real en device (hoy 1 worker).
-9. **Revisar IDE** — pase de consolidación (incluye multiplataforma jSerialComm, breadcrumb, y lo
-   que deje la lista de V3).
-10. **Revisar GUI** — paraguas gráfico: preview de forms en miVM/Swing, Camino B (nombre→slot en
-    .mod), campos tipados de widgets (diseño Swing/NetBeans, 28-jun), repesca de widgets simples,
-    bug estado-GUI-entre-runs, board-aware data-driven (params de panel en board.json), rotación
-    LTDC, PPA del giro, retirar `esp32p4-ws/` de referencia.
+7. **H6 — Formato de módulos** — **módulo AUTODESCRIPTIVO** (la interfaz `.bpi` DENTRO del `.mod`) +
+   **encoding de firmas para el overloading** (H5.a) + resolución `import pack:modulo` (H5.b). **Acoplado
+   a H5.** Mata la familia de bugs de desfase `.bpi`/`.mod`/`.slots`; habilita el Camino B de forms. Ver **§H6**.
+8. ~~**2 Núcleos** (dual-core / SMP real en device)~~ → **APLAZADO INDEFINIDAMENTE** (Eduardo 13-jul):
+   con los problemas de memoria en curso NO se aborda; se retoma **cuando todo esté consolidado**. Hoy
+   1 worker (el fix de la race B1 y el P4 2×RISC-V esperan con él).
+9. **H8 — IDE** — novedad: **ventana de gestión de Packs** (construir/grabar/ver) + botón
+   **"Previsualizar ventana"** (form en miVM/Swing). Sin diseñador drag&drop todavía. Ver **§H8**.
+10. **H7 — GUI** — modesto: **algún widget más** (repesca de simples). El resto del viejo paraguas
+    "Revisar GUI" repartido: preview de forms → **H8.b**, Camino B → **H6.a**, y los ítems de
+    gráficos-device por reubicar. Ver **§H7**.
 
 ---
 
@@ -139,18 +136,151 @@ cogiendo H2, H3… según se secuencien.
   riesgo es en expresiones y multi-arg. **Candidato estrella: Thread spawn/join popeando a 4B
   puede ser el bug diferido "owner-alloc en Thread.run() peta" de H1** — verificar al arreglarlo.
   Verificación de la tanda: paridad dual-VM de samples GUI (dumpTree), threads, Mutex, HW-host.
-- **Diferido — AOT/native no es handle-aware (regresión conocida, NO bloquea).** El puente
-  `native→BP` (`aot_helpers.c` / `aot_call_bp` / `call_method`) pasa **direcciones planas** mientras
-  la VM interpretada ya usa **handles** → los tests `make test-throwmsg` (SIGSEGV) y
-  `make test-throwuser` (use-after-free en `call_bp`) están **ROJOS** desde la migración de handles.
-  Es exactamente el pendiente ya registrado *"aot_helpers.c handle-aware (refs en AOT, solo .mdn)"*.
-  **NO afecta a la ruta interpretada** (lo que se despacha por defecto: 1 worker, interpretado); la
-  suite interpretada (JUnit 34/34 + paridad dual-VM + `test-smphandles` + `test-oom`) está VERDE. Se
-  aborda al migrar el AOT a handles.
+- **Diferido — AOT/native no es handle-aware (regresión, NO bloquea la ruta interpretada).** →
+  **movido al hito H4** (§H4.b). Resumen: el puente `native→BP` pasa direcciones planas →
+  `make test-throwmsg`/`test-throwuser` ROJOS desde la migración de handles. La suite interpretada
+  (default 1 worker: JUnit 34/34 + paridad dual-VM + `test-smphandles` + `test-oom`) está VERDE.
+
+---
+
+## 📦 H3 — Packs  *(hito de V4; scope fijado por Eduardo 13-jul)*
+
+Un **pack** = zona de flash contigua (FUERA del littlefs) con `.mod` + resources, ejecutable por
+**XIP** (bytecode en flash, sin copiar a RAM). Objetivo: **una imagen solo-VM** + añadidos como packs
+opcionales → actualizar la stdlib (p.ej. `Gui`) sin reflashear. Diseño: `V3_IDEAS.md` §Packs (charla
+2-jul). **Fuera de V4 → V5** ([[v5-packs-sqlite-sd]]): código NATIVO en packs, SQLite, **SD y su FS
+(FAT32/…)**. **Fuera de H3:** la pantalla Pack manager del IDE → **H8.a** (hito del IDE).
+
+- **H3.a — Herramienta PC `pack` (consola).** Programa de línea de comandos del PC para **montar** un
+  pack (empaquetar `.mod` + resources en el formato de pack) y **extraer** su contenido (listar/volcar).
+  Es el vehículo de pruebas del formato (round-trip mount→extract byte-idéntico) ANTES de tocar el micro.
+- **H3.b — Flash del micro (particiones + grabar/descargar).** Descriptor de **particiones** para la
+  zona de packs (contigua, alineada, FUERA del littlefs — los campos `packs_offset`/`packs_size` ya
+  están reservados en `fs_lfs_pico.c`). **Grabar (Burn) y descargar** packs por el **wire** + un comando
+  de **inventario de packs** (hermano del `LS`).
+- **H3.c — VM: resolución y carga.** La VM sabe **buscar un pack**, **buscar un archivo/módulo** dentro
+  de un pack, y **cargar un módulo** desde el pack (loader `.mod` desde XIP; la base ya está resuelta por
+  el loader `.mdn` del AOT). Integrar con la resolución de imports/stdlib.
+
+Por dónde entrar: descriptor de particiones `fs_lfs_pico.c`; loader `.mdn` (`mdn_loader.c`) como base de
+"cargar desde flash a direcciones de runtime"; formato `.mod` (`MOD_FORMAT.md`).
+
+---
+
+## ⚙️ H4 — AOT  *(hito de V4; todo el AOT bajo un paraguas — Eduardo 13-jul)*
+
+Consolida TODO el AOT/`native`: la **novedad (RISC-V)** + los bugs y huecos pendientes. Hoy `native`
+tiene siempre fallback a interpretado; compilado a nativo solo en **ARM** (Pico + STM32). Cadena:
+`AotCEmitter.java` → C → `.mdn` (thunks Thumb-2) → `mdn_loader.c` + registry por nombre + `aot_helpers`.
+Diseño: `AOT_CROSS_MODULE.md` (cross-module) · `AOT_HYBRID_REFLECTION.md` (híbrido).
+
+- **H4.a — Native RISC-V ⭐ (la novedad).** Compilar `native` a **RISC-V** (ESP32-P4, la placa gráfica
+  insignia): port del emisor + del loader `.mdn` a RV32 (hoy el `.mdn` es Thumb-2/ARM; en ESP32
+  Xtensa/RISC-V `native` cae a interpretado). Incluye ABI + relocations de RISC-V. (Xtensa del S3, menor prioridad.)
+- **H4.b — AOT handle-aware (BUG/regresión).** El puente `native→BP` (`aot_helpers.c` / `aot_call_bp` /
+  `call_method`) pasa **direcciones planas** mientras la VM interpretada ya usa **handles** →
+  `make test-throwmsg` (SIGSEGV) y `make test-throwuser` (use-after-free en `call_bp`) **ROJOS** desde
+  la migración de handles (H1). NO afecta a la ruta interpretada (default 1 worker). Se cierra migrando
+  el AOT a handles. *(Era el "Diferido" de la sección H1.)*
+- **H4.c — AOT cross-module #169.** Sin puente del intérprete (hoy vía `call_bp`+warning). Se apoya en
+  el MISMO `slotOf` que **B-174b** (slots de vtable) → van juntos. Diseño: `AOT_CROSS_MODULE.md`.
+- **H4.d — AOT casts + `^`.** `byte()/int()/float()/long()/double()` y el operador `^` en `AotCEmitter`
+  (hoy caen a interpretado). **Desbloquea `compress` native.**
+- **H4.e — try/catch DENTRO de native.** Diferido con motivo (#213 parte 2): el código `.mdn` no puede
+  llamar `setjmp` (cero relocations externas). Necesita helpers `eh_native_try` + locals en context
+  struct. (El `throw` DESDE native ya va; falta el `try` dentro.)
+- **H4.f — huecos de cobertura de `AotCEmitter`** (hoy → fallback interpretado, NO bloquean): método
+  privado/`super`/estático, intrínsecos cross-module, `for-range` no numérico, y demás "no soportado
+  todavía". Ampliar para que más módulos compilen enteros a nativo.
+- **H4.g — auditar el AOT por el ensanchado de refs 4→8B (Eduardo 13-jul).** Al atacar H4, REVISAR
+  sistemáticamente si alguna emisión/llamada de opcode del camino AOT quedó SUELTA con el cambio de
+  tipo de referencia (refs pasaron a handle de 8B; ver campaña de refs en `docs/V4_REF_AUDIT.md`). El
+  censo dual-VM cubrió el intérprete de ambas VMs y el emisor de bytecode, **NO el `AotCEmitter` ni
+  `aot_helpers.c`** (el AOT es "acceso plano", H4.b) → cualquier opcode que el AOT emita o implemente
+  a mano (loads/stores de ref, campos owner, arrays de refs, push/pop de handles, string builtins)
+  puede seguir asumiendo 4B. Barrer con la MISMA rúbrica del censo (OK / raw-safe / SUSPECT) sobre
+  `AotCEmitter.java` + `aot_helpers.c`, y usar `test-throwmsg`/`test-throwuser` como oráculos rojos de
+  partida. Va de la mano de H4.b (handle-aware) — son la misma familia.
+
+> Nota: la cabecera de `AotCEmitter.java` ("integer i32 únicamente; float/string/arrays → TODO") está
+> **rancia** — float (#166), arrays (#167), strings (#173) y tipos mixtos (#171) YA están.
+
+---
+
+## 🛠️ H5 — Compilador  *(hito de V4; ACOPLADO a H6 — Eduardo 13-jul)*
+
+Mejoras de lenguaje/frontend. **Va PEGADO a H6** (formato de módulos): la sobrecarga y el `import` con
+pack tocan el `.mod`, así que se harán puntos de H5 y H6 **entrelazados**.
+
+- **H5.a — Sobrecarga de funciones (overloading) ⭐ (mejora principal).** Misma función, firmas
+  distintas. Toca el frontend (resolución por firma en la llamada) + el **mangling en el `.mod`/`.bpi`**
+  (hoy ya existe `nombre#arity` en los símbolos — base a extender a **firma completa**, no solo aridad).
+  El cambio de encoding en el módulo vive en **H6.b**.
+- **H5.b — `import` con pack.** Indicar el pack en el import: `import nombrepack:nombremodulo`. Se apoya
+  en H3 (packs) + la resolución del módulo (**H6.c**).
+- **H5.c — Llamadas asíncronas sencillas (para eventos de LVGL).** Azúcar tipo `async(…)`/`invokeLater(…)`
+  para lanzar trabajo desde un handler de evento sin bloquear el bucle GUI (ver "GUI-blocking-from-event"
+  en `V3_BACKLOG.md`). Interactúa con **valores-función/closures** (abajo): una ref a método debe elegir
+  firma → roza la sobrecarga (H5.a).
+- **Relacionados de lenguaje (candidatos a H5):** strings **multilínea + interpolación**;
+  **valores-función/closures** (base del async de H5.c).
+
+---
+
+## 📇 H6 — Formato de módulos  *(hito de V4; ACOPLADO a H5 — Eduardo 13-jul)*
+
+**Va PEGADO a H5.** Cambios en el `.mod`/`.bpi` que H5 necesita, más el salto del módulo autodescriptivo.
+
+- **H6.a — Módulo autodescriptivo ⭐ (índice nº 7).** Meter la **interfaz (`.bpi`) DENTRO del `.mod`** →
+  módulo auto-descriptivo. El `.mod` crece un poco (nombres+firmas, "asumible"; con Packs/XIP se ahorra
+  RAM). Beneficios: (a) compilar contra un `.mod` sin su `.bpi`; (b) el **device resuelve nombre→slot en
+  carga** = el **Camino B de forms**; (c) el Pack manager inspecciona qué exporta cada módulo; (d) **mata
+  la familia de bugs de desfase `.bpi`/`.mod`/`.slots`** (Json rancio, slots de Gui) — un artefacto, una
+  verdad; el sidecar `.slots` de H13.1 queda subsumido.
+- **H6.b — Encoding de firmas para la sobrecarga (H5.a).** El módulo debe distinguir sobrecargas por
+  **firma completa** (tipos de params), no solo por aridad. Toca `.mod`/`.bpi` + el mangling.
+- **H6.c — Resolución de módulo desde pack (H5.b + H3).** Soportar `import pack:modulo` — localizar el
+  módulo dentro de un pack por nombre.
+- **Relacionado:** `N-dtblock-align` — hacer la alineación del data block **intrínseca** (cada entrada
+  alineada por construcción) en vez del padding global de v3.0.1; toca el codegen del `.mod`.
+
+---
+
+## 🖼️ H7 — GUI  *(hito de V4; Eduardo 13-jul)*
+
+Paraguas gráfico, MODESTO. Eduardo: "solo añadimos algún widget más; no recuerdo nada más pendiente."
+- **H7.a — Repesca de widgets simples.** Añadir algún widget más — cosas SIMPLES, nada complicado (ya
+  hay 14 widgets + color). *(El preview de forms → IDE **H8.b**; el Camino B nombre→slot → **H6.a**.)*
+
+*Repartidos (Eduardo 13-jul; NO van en H7):*
+- Bug **estado-GUI-entre-runs** → **pool de bugs sueltos**.
+- **Campos tipados** de widgets → **backlog no urgente** (semilla del futuro diseñador de forms).
+- **Gráficos de device/HW** (board-aware data-driven, rotación LTDC, PPA del giro, retirar
+  `esp32p4-ws/`, ajustes P4 portrait/mirror) → **backlog de pulido gráfico** no urgente (varios ya
+  "aceptados como están").
+
+---
+
+## 🧰 H8 — IDE  *(hito de V4; Eduardo 13-jul)*
+
+- **H8.a — Ventana de gestión de Packs ⭐ (la novedad).** Pantalla nueva del IDE para **construir**
+  packs, **grabarlos** en los micros (Burn por el wire) y verlos/borrarlos. Es el **Pack manager** que
+  se sacó de H3 (dos lados como el explorer: biblioteca PC ↔ packs del micro). Se apoya en la
+  infraestructura de packs de H3 (comando de inventario, Burn).
+- **H8.b — Botón "Previsualizar ventana".** Correr un form en **miVM/Swing** dentro del IDE para verlo
+  sin subirlo al device (el cargador de forms es BP y miVM ya pinta en Swing → "preview" ≈ correr el
+  form en miVM). **NO hay diseñador de ventanas (drag&drop) todavía** — diferido.
+
+*A backlog (Eduardo 13-jul; NO en H8 de momento — revisar en la próxima pasada del roadmap):*
+- IDE **multiplataforma**: `purejavacomm → jSerialComm` + lanzador `.sh` (correr el IDE en Linux/Mac).
+- **breadcrumb** de navegación (no urgente).
 
 ---
 
 ## 🔴 Bugs delicados (movidos de `PENDIENTES.md`, 27-jun)
+
+> **Política (Eduardo 13-jul): los bugs van SUELTOS, no son hito.** Se arreglan **uno a uno cuando se
+> pueda**, con su red de pruebas. Aplica a estos delicados Y a los menores de `PENDIENTES.md`.
 
 Bugs que exigen tocar maquinaria delicada (slots/vtable, GC, o el FS del firmware) → se
 hacen en V4 con red de pruebas (no son fixes contenidos de V3).
@@ -218,29 +348,27 @@ por construcción.)
 
 **Tema general: consolidar + mejorar rendimiento** (como V2), además de lo diferido:
 
-- **AOT cross-module #169** — sin puente del intérprete (hoy funciona vía `call_bp`+warning). Se
-  apoya en el MISMO `slotOf` que B-174b. Diseño en `AOT_CROSS_MODULE.md`.
-- **AOT — casts** (`byte()/int()/float()/long()/double()`) en `AotCEmitter` (hoy cae a interpretado).
-  Bloquea `compress` native. Mismo paraguas que `^` en native.
+- **AOT (todo)** → consolidado en el hito **H4** (ver §H4): novedad RISC-V + cross-module #169 +
+  casts/`^` + handle-aware (bug) + try/catch en native + huecos de cobertura.
 - **Forms — diseñador visual drag&drop** + **preview de forms en miVM/Swing** (el cargador es BP y
   miVM ya pinta en Swing → "preview" ≈ correr el form en miVM dentro del IDE).
 - **Forms — Camino B**: tabla `nombre→slot` en el descriptor de clase del `.mod` (resolver en el
   device en carga; editar/enviar pantallas sin IDE). Re-baselinea el compat de emisión.
-- **PACK = XIP de bytecode** (código en flash, no en RAM; stdlib como pack → actualizar `Gui` sin
-  reflashear) + **lectura de SD** (almacenamiento masivo removible).
-- **#153 — Dual-core RP2350** (incluye el fix de **B1**, la race multi-worker; hoy mitigada a 1 worker).
+- **PACK = XIP de bytecode** → ahora es el hito **H3** (ver §H3 arriba). ~~+ lectura de SD~~ → **V5**.
+- ~~**#153 — Dual-core RP2350**~~ → **APLAZADO INDEFINIDAMENTE** (ver índice nº 8; con los líos de
+  memoria no se aborda, se retoma tras consolidar). El fix de la race **B1** espera con él; hoy 1 worker.
 - **Net.Listener / servidor TCP** (`listen`/`accept`) sobre la Ethernet del P4.
-- **AOT en ESP32** (Xtensa/RISC-V — port del loader `.mdn`).
+- *(AOT en ESP32 Xtensa/RISC-V → ahora H4.a.)*
 - **Neopixel en ESP32/P4** — backend WS2812 vía **RMT** (componente `led_strip` o encoder RMT propio).
   Hoy STUB en el ESP32 (el Pico ✅ lo hace vía PIO, #227/#228). Más plumbing que los demás periféricos
   (encoder + timing + dependencia de componente) → diferido por Eduardo (27-jun): "no es crítico ni urgente".
 - **Rollout de gráficos a más kits** (solo equipos con recursos de sobra).
 - **IDE multiplataforma** (`purejavacomm → jSerialComm`, lanzador `.sh`).
-- **Strings multilínea + interpolación** (tanda de lenguaje).
-- **Valores-función / closures** (tanda de lenguaje; charla 20-jun + 4-jul): hoy NO se pueden pasar
-  métodos como parámetros (modismos: override virtual u objeto-Runnable). Habilitaría el
-  `async(…)`/`invokeLater(…)` ergonómico del GUI (ver nota "GUI-blocking-from-event" en V3_BACKLOG).
-  Interactúa con la sobrecarga (nº 4 del índice): una referencia a método debe elegir firma.
+- **Strings multilínea + interpolación** (tanda de lenguaje) → **candidato a H5**.
+- **Valores-función / closures** (tanda de lenguaje; charla 20-jun + 4-jul) → **candidato a H5** (base
+  del async de **H5.c**): hoy NO se pueden pasar métodos como parámetros (modismos: override virtual u
+  objeto-Runnable). Habilitaría el `async(…)`/`invokeLater(…)` ergonómico del GUI. Interactúa con la
+  sobrecarga (**H5.a**): una referencia a método debe elegir firma.
 - **`deflate`-lite** (LZSS → +Huffman) · **multi-fichero/Archive**.
 - **Layout compacto de narrow** (`byte[]`/`int16[]` con storage real; hoy i32).
 
