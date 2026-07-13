@@ -1,0 +1,13 @@
+// StrVarInitTest.bp — regresión #10 (censo V4): var-string de módulo CON init
+// literal declaraba el global a 4B (declareGlobal) → handle truncado + fuga de
+// pila en __init. Fix: declareGlobalLong. Salida determinista, dual-VM.
+module StrVarInitTest
+  var greeting: string := "hola mundo"
+  var other: integer := 42
+  function Main()
+    print "g=" + greeting
+    print "len=" + intToString(strlen(greeting))
+    print "eq=" + boolToString(greeting == "hola mundo")
+    print "other=" + intToString(other)
+  end Main
+end StrVarInitTest

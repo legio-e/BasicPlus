@@ -639,7 +639,7 @@ public final class MivmEmitter {
         switch (k) {
             case STRING:
                 if (!(lit instanceof String)) return false;
-                w.declareGlobal(name);   // slot de la REF; __init la asigna
+                w.declareGlobalLong(name);   // #10 (censo V4): la REF de string es 8B (era declareGlobal=4B → truncaba el handle + fuga de pila en __init); igual que el path sin-init (occupies8Bytes)
                 pendingStrVarInits.add(new String[]{ name, internString((String) lit) });
                 return true;
             case LONG:
