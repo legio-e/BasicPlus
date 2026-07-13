@@ -157,7 +157,7 @@ estos 3 (líneas 1084/3817/4076, atajos de 2-3 args). El resto de campos-ref usa
 **Fix (centralizador, opción B):** que `declareField` fuerce `is8=true` cuando `isRef=true`
 (una ref SIEMPRE es 8B) → arregla los 3 y hace **imposible** volver a declarar una ref de 4B.
 
-### 🔴 #2 CONFIRMADO (miVM-only, ASIMETRÍA real) — `freeOwnedObjectLocked` trunca el handle
+### ✅ #2 ARREGLADO (`80598c5`) — `freeOwnedObjectLocked` leía el child ref-array truncado
 `VirtualMachine.java:5081` lee cada elemento de la cascada owner de array-de-refs con
 `(int)readI64(base+i*8)` → **trunca la gen a 0**; luego los checks de gen (5051/1651) lo
 toman por rancio → NO libera la hija poseída (leak) y NO recicla el slot. VM-C
@@ -209,7 +209,10 @@ alimenta el flag de GC-trace en `declareField:1098`/`4718`) → un campo/elem `a
 una ref queda `isRef=false` → el GC NO la sigue → recolección de objeto vivo → UAF. Es
 trazado GC (no ancho); el doc §5 pide disciplina propia para `any`. _(F, observación 2ª)_
 
-### 🔴 #6 CONFIRMADO (miVM-only, RACIMO — asimetría con VM-C) — builtins sin convertir a 8B
+### ✅ #6 ARREGLADO (racimo runtime; GUI reservado a Eduardo) — builtins sin convertir a 8B
+**Runtime CERRADO:** `MOVE`/`SPLIT`/`LIST_DIR` `fb4955a`, `READ`/`WRITE_FILE_BYTES` `dc1c0bb`, `TCP_SEND`/`RECV` `3eb7c09`, `TO`/`FROM_BYTES`+`CHARS_TO_STRING`+`CHAR_CODE_AT` `e0e3014` (todos con oráculo dual-VM byte-idéntico bajo GC_EVERY=1 + JUnit 34/34). **THREAD/MUTEX = NO es bug** (disasm probó que corren en métodos wrapper cuyo `RET` resetea sp → el `popTc`(4B) queda confinado y borrado, nunca acumula; valor `idx|TAG` correcto; VM-C descarta la gen idénticamente → paridad total; NO tocar). **GUI = reservado a Eduardo** (verificación visual): los handles de widget son ENTEROS OPACOS (4B correcto, NO tocar); latentes forward-compat solo los string-args (`GUI_SET_TEXT`/`SET_OPTIONS`/`SET_BUTTONS`, calcar `GUI_LOAD_FONT`) y las refs de objeto de Forms (`BIND_CLICK`/`INVOKE_BY_NAME`/`INVOKE_BY_SLOT`). _(nota histórica del censo abajo)_
+
+<!-- CENSO ORIGINAL (histórico): -->
 miVM dejó un grupo de builtins en el carril CRUDO de 4B (`popTc`/`pushTc`) o usando el
 handle como dirección sin `refDeref`, mientras VM-C SÍ los convirtió (foco de las tandas).
 Verificado directamente el racimo GUI (`GUI_BIND_CLICK`:3636 `self=popTc(4B)`;
@@ -225,7 +228,7 @@ enmascarados por reset de `sp` en RET + palabra baja): `THREAD_START`:4072, `THR
 `MUTEX_LOCK`:4144, `MUTEX_UNLOCK`:4172, `CHARS_TO_STRING`:4020, `CHAR_CODE_AT`:4032.
 VM-C equivalente = OK en todos. Fix = `popTcRef`/`pushTcRef`(8B) + `refDeref`. _(barrido E, racimo GUI verificado a mano; resto = spot-verify al corregir)_
 
-### 🔴 #7 CONFIRMADO (miVM-only) — `OP_THROW` trunca la gen de la excepción
+### ✅ #7 ARREGLADO (`8551e30`) — `OP_THROW` trunca la gen de la excepción
 `VirtualMachine.java:3125/3145`: lee la ref 8B pero la re-empuja al catch con `(int)v` /
 `((long)v)&0xFFFFFFFF` → gen=0. Una excepción en slot RECICLADO (gen>0) daría gen-mismatch
 al leer `e.msg` y se re-lanzaría. VM-C `exceptions.c:78` escribe el handle 64b completo = OK.
