@@ -27,7 +27,7 @@ idf_component_register(
         "../../esp32/main/json_min.c"         # VM.3: parser JSON del wire (C portable)
         "../../esp32/main/platform_esp32.c"
         "../../esp32/main/gpio_esp32.c"       # H14: backends HW del P4 = REÚSO del S3 (GPIO/UART/SPI/I2C, ESP-IDF estándar)
-        "../../esp32/main/fs_ram.c"          # VM.2b: FS en RAM (reutilizado del S3)
+        "../../esp32/main/fs_lfs_esp32.c"    # H2-B3: littlefs (reutilizado del S3) — reemplaza fs_ram.c
         # --- núcleo VM (portable C99) ---
         "../../src/bpvm.c"
         "../../src/loader.c"
@@ -36,6 +36,9 @@ idf_component_register(
         "../../src/builtins.c"
         "../../src/gui.c"                     # G6: modelo GUI + widgets LVGL (Gui.* de BasicPlus)
         "../../src/fs_facade.c"
+        "../../src/fs_lfs.c"                  # H2-B3: backend littlefs de la fachada (portable)
+        "../../third_party/littlefs/lfs.c"    # H2: motor littlefs v2.11.3 (in-tree)
+        "../../third_party/littlefs/lfs_util.c"
         "../../src/crc32.c"                   # paso 4 cierre: CRC del FS en LS (== java.util.zip.CRC32)
         "../../src/net.c"
         "../../src/link.c"
@@ -63,6 +66,7 @@ idf_component_register(
         "."
         "../../include"
         "../../src"
+        "../../third_party/littlefs"   # H2-B3: lfs.h
         "../../esp32/main"
     REQUIRES
         esp_eth
@@ -84,6 +88,12 @@ idf_component_register(
         esp_driver_tsens # H14: sensor de temperatura interno (Pico.tempC)
         esp_driver_pcnt  # H14: backend contador de pulsos (PCNT)
 )
+
+# H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas.
+target_compile_definitions(${COMPONENT_LIB} PRIVATE
+    LFS_NO_DEBUG LFS_NO_WARN LFS_NO_ERROR LFS_NO_MALLOC)
+# fs_lfs_esp32.c: snprintf de paths acotado por el FS (falso positivo de -Wformat-truncation con -Werror).
+set_source_files_properties("../../esp32/main/fs_lfs_esp32.c" PROPERTIES COMPILE_FLAGS -Wno-format-truncation)
 
 # Activa el camino TCP/Ethernet en main.c (por defecto = UART0, sin este define).
 if(BPVM_P4_WIRE STREQUAL "tcp")
