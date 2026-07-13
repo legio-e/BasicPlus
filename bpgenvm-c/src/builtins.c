@@ -640,19 +640,19 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         while (base[i] && base[i] != '.' && i + 1 < sizeof(nm)) { nm[i] = base[i]; i++; }
         nm[i] = '\0';
         uint32_t r = bpvm_heap_alloc_string(vm, nm, strlen(nm));
-        push_i32(vm, tc, (int32_t) r);
+        push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
         return BPVM_OK;
     }
     case BUILTIN_APP_MAIN_MODULE_PATH: {
         const char* s = bpvm_fs_main_module_path();
         uint32_t r = bpvm_heap_alloc_string(vm, s, strlen(s));
-        push_i32(vm, tc, (int32_t) r);
+        push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
         return BPVM_OK;
     }
     case BUILTIN_APP_PROJECT_PATH: {
         const char* s = bpvm_fs_basedir();
         uint32_t r = bpvm_heap_alloc_string(vm, s, strlen(s));
-        push_i32(vm, tc, (int32_t) r);
+        push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
         return BPVM_OK;
     }
     case BUILTIN_GUI_CLEAN:       { int h = pop_i32(vm, tc); bpvm_gui_clean(h);  push_i32(vm, tc, 0); return BPVM_OK; }

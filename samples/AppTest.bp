@@ -1,0 +1,15 @@
+// #8: App.mainModule/mainModulePath/projectPath devuelven string. En VM-C se
+// empujaban con push_i32 (4B) → drift de pila + gen=0. El sentinel tras las
+// llamadas lo destaparía (si hay drift, n sale corrupto). miVM ya era correcto.
+module AppTest
+  import App
+  function Main()
+    var m: string := App.mainModule()
+    var mp: string := App.mainModulePath()
+    var pp: string := App.projectPath()
+    var n: integer := 42
+    print "main=[" + m + "]"
+    print "hasPath=" + boolToString(strlen(mp) > 0)
+    print "n=" + intToString(n)
+  end Main
+end AppTest
