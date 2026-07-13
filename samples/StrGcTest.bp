@@ -1,0 +1,15 @@
+// StrGcTest.bp — regresión #1 (censo V4): StringBuilder.chars era ref de 4B →
+// el GC no marcaba el array de respaldo del concat → recolectado a media
+// operación (UAF) bajo presión de GC. Concat en bucle + BPVM_GC_EVERY=1.
+module StrGcTest
+  function Main()
+    var s: string := ""
+    var i: integer := 0
+    while i < 40 do
+      s := s + "ab"
+      i := i + 1
+    endwh
+    print "len=" + intToString(strlen(s))
+    print "tail=" + s
+  end Main
+end StrGcTest

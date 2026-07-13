@@ -803,7 +803,12 @@ public class ModWriter {
         f.name = fieldName;
         f.isRef = isRef;
         f.isOwner = isOwner;
-        f.is8 = is8;
+        // #1 (censo V4 refs): una REFERENCIA es SIEMPRE de 8 bytes (REF_SIZE). Forzarlo
+        // aquí hace IMPOSIBLE declarar una ref de 4B por los atajos de 2/3 args
+        // (declareField(name,isRef[,isOwner]) ponían is8=false → StringBuilder.chars,
+        // __syncMutex, SyncList.__mutex quedaban a 4B: handle truncado + el GC no
+        // marcaba la hija). Los long/double no-ref siguen pasando is8=true explícito.
+        f.is8 = is8 || isRef;
         f.slot = nextFieldSlot(currentClass);   // BUG-6: slot = suma de anchos previos
         currentClass.fields.add(f);
     }
