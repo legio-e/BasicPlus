@@ -3520,13 +3520,14 @@ public class VirtualMachine {
                 break;
             }
             case TCP_SEND: {
-                int dataRef = popTc(tc);
-                int h       = popTc(tc);
+                long dataRefH = popTcRef(tc);   // byte[] (8B ref) — antes popTc 4B
+                int h       = popTc(tc);        // socket handle (int opaco) — OK
                 java.net.Socket s = netSockets.get(h);
                 if (s == null) {
                     throwBpRuntimeError(tc, "Net.send: conexión cerrada o inválida");
                     break;
                 }
+                int dataRef = (dataRefH == 0) ? 0 : refDeref(dataRefH);   // handle → addr (faltaba deref)
                 int n = (dataRef == 0) ? 0 : readInt32(dataRef);
                 try {
                     if (n > 0) {
@@ -3572,10 +3573,10 @@ public class VirtualMachine {
                 int ref = heapAlloc(n, TYPE_ARRAY_I8);
                 writeInt32(ref, n);
                 if (n > 0) System.arraycopy(buf, 0, memory, ref + 4, n);
-                ref = (int) handleRegister(ref);   // V4: addr → handle
+                long outRef = handleRegister(ref);   // V4: addr → handle 64b
                 ThreadContext me = currentTcLocal.get();
-                if (me != null) me.allocAnchor = ref;   // ancla GC
-                pushTc(tc, ref);
+                if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG)
+                pushTcRef(tc, outRef);   // 8B (byte[] es referencia — antes truncaba a 4B)
                 break;
             }
             case TCP_CLOSE: {
