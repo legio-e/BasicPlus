@@ -151,6 +151,15 @@ opcionales → actualizar la stdlib (p.ej. `Gui`) sin reflashear. Diseño: `V3_I
 2-jul). **Fuera de V4 → V5** ([[v5-packs-sqlite-sd]]): código NATIVO en packs, SQLite, **SD y su FS
 (FAT32/…)**. **Fuera de H3:** la pantalla Pack manager del IDE → **H8.a** (hito del IDE).
 
+> **📄 SPEC IMPLEMENTABLE (leer al arrancar H3):** `C:\lenguajes\bp-analisis\temas\packs\especificacion\ESPECIFICACION-PACKS-V4.md`
+> — consolidada y autocontenida (Eduardo 13-jul). Gotchas de paridad (CRC-16/CCITT-FALSE exacto,
+> big-endian, relleno `0xFF`, `size_total` múltiplo del bloque de borrado), formato binario, cargador
+> (rebase de tabla pública a flash), resolución FS-eclipsa-pack, API/wire del micro. **2 cabos sueltos
+> LOAD-BEARING (§10):** (1) mecanismo de **versión-compatible de módulos** (desempata duplicados en la
+> resolución) — es la misma pieza que la mejora **module-info + gate de ABI del `.mod`** → diseñarlos
+> JUNTOS; (2) **particionado unificado FS↔packs** (`packs_offset`/`packs_size` ya reservados en
+> `fs_lfs_pico.c`, pero falta el layout+dimensionado escrito).
+
 - **H3.a — Herramienta PC `pack` (consola).** Programa de línea de comandos del PC para **montar** un
   pack (empaquetar `.mod` + resources en el formato de pack) y **extraer** su contenido (listar/volcar).
   Es el vehículo de pruebas del formato (round-trip mount→extract byte-idéntico) ANTES de tocar el micro.
