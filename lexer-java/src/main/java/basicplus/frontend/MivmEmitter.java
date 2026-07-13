@@ -2839,7 +2839,7 @@ public final class MivmEmitter {
             w.emitLeaGlobal(name);
         }
         else if (e instanceof BoolLitExpr)  emitInt(((BoolLitExpr) e).value ? 1 : 0);
-        else if (e instanceof NullLitExpr)  emitInt(0);
+        else if (e instanceof NullLitExpr)  { emitInt(0); w.emit(OpCode.I32_TO_I64); }   // #11 (censo V4): null es una REF = handle de 8B (cero); antes emitInt(0) 4B descuadraba la pila y dejaba basura en el word alto
         else if (e instanceof IdentifierExpr) emitIdentifier((IdentifierExpr) e);
         else if (e instanceof UnaryExpr)    emitUnary((UnaryExpr) e);
         else if (e instanceof BinaryExpr)   emitBinary((BinaryExpr) e);
@@ -2969,6 +2969,13 @@ public final class MivmEmitter {
         boolean useDouble = isDouble(tl) || isDouble(tr) || isDouble(tb);
         boolean useFloat  = !useDouble && (isFloat(tl) || isFloat(tr) || isFloat(tb));
         boolean useLong   = !useDouble && !useFloat && (isLong(tl) || isLong(tr) || isLong(tb));
+        // #11 (censo V4): igualdad de REFERENCIAS = comparar los 8 bytes ENTEROS del
+        // handle (gen+idx). Dos handles con mismo idx y distinta gen son objetos
+        // DISTINTOS → el EQ de 4B (solo idx|TAG) da falsos "iguales" + descuadra la
+        // pila (16B apilados, 8B popeados). Aplica a class/array/tuple/any/null (todo
+        // lo de 8B no-numérico); string ==/!= ya se resolvió arriba con __strequals.
+        boolean use8ByteEq = useLong || (!useDouble && !useFloat
+                             && (occupies8Bytes(tl) || occupies8Bytes(tr)));
         emitExpr(b.left);
         promoteNumeric(tl, useDouble, useFloat, useLong);
         emitExpr(b.right);
@@ -2980,8 +2987,8 @@ public final class MivmEmitter {
             case "*": w.emit(useDouble ? OpCode.DMUL : useFloat ? OpCode.FMUL : useLong ? OpCode.LMUL : OpCode.MUL); break;
             case "/": w.emit(useDouble ? OpCode.DDIV : useFloat ? OpCode.FDIV : useLong ? OpCode.LDIV : OpCode.DIV); break;
             case "mod": w.emit(useDouble ? OpCode.DMOD : useFloat ? OpCode.FMOD : useLong ? OpCode.LMOD : OpCode.MOD); break;
-            case "==": w.emit(useDouble ? OpCode.DEQ : useFloat ? OpCode.FEQ : useLong ? OpCode.LEQ : OpCode.EQ); break;
-            case "!=": w.emit(useDouble ? OpCode.DNEQ : useFloat ? OpCode.FNEQ : useLong ? OpCode.LNEQ : OpCode.NEQ); break;
+            case "==": w.emit(useDouble ? OpCode.DEQ : useFloat ? OpCode.FEQ : use8ByteEq ? OpCode.LEQ : OpCode.EQ); break;
+            case "!=": w.emit(useDouble ? OpCode.DNEQ : useFloat ? OpCode.FNEQ : use8ByteEq ? OpCode.LNEQ : OpCode.NEQ); break;
             case "<":  w.emit(useDouble ? OpCode.DLT : useFloat ? OpCode.FLT : useLong ? OpCode.LLT : OpCode.LT); break;
             case "<=": w.emit(useDouble ? OpCode.DLE : useFloat ? OpCode.FLE : useLong ? OpCode.LLE : OpCode.LE); break;
             case ">":  w.emit(useDouble ? OpCode.DGT : useFloat ? OpCode.FGT : useLong ? OpCode.LGT : OpCode.GT); break;
@@ -4639,7 +4646,8 @@ public final class MivmEmitter {
         // H1.2a (V4): `any` = 8 bytes — es un valor opaco que contiene o un int
         // (zero-extended) o una ref flat; en el modelo plano ocupa 2 slots como
         // las refs. Sin esto, List/SyncList (any de punta a punta) truncan.
-        return is8Byte(t) || isRefType(t) || (t instanceof BpType.AnyType);
+        return is8Byte(t) || isRefType(t) || (t instanceof BpType.AnyType)
+               || (t instanceof BpType.NullType);   // #11: null es una ref = 8B (así no se re-ensancha en coerceToTarget)
     }
 
     /** BUG-6: nº de slots de 4 bytes que ocupan los argumentos (excluye `this`).

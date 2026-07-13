@@ -1,0 +1,25 @@
+// NullRefEqTest.bp — regresión #11 (censo V4): null como ref de 8B + igualdad de
+// referencias comparando el handle ENTERO (gen+idx, via LEQ). Cubre := null,
+// ==/!= null (ambos sentidos), identidad de objetos (mismo/distinto), return null.
+module NullRefEqTest
+  class Box
+    var v: integer
+  end Box
+  function makeNull(): Box
+    return null
+  end makeNull
+  function Main()
+    var a: Box := null
+    print "a_isnull=" + boolToString(a == null)
+    var b: Box := Box()
+    print "b_isnull=" + boolToString(b == null)
+    print "b_notnull=" + boolToString(b != null)
+    var c: Box := b
+    print "same=" + boolToString(b == c)
+    var d: Box := Box()
+    print "diff=" + boolToString(b == d)
+    var e: Box := makeNull()
+    print "e_isnull=" + boolToString(e == null)
+    print "done"
+  end Main
+end NullRefEqTest
