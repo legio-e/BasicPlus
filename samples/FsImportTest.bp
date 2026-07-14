@@ -1,0 +1,12 @@
+// FsImportTest.bp — test AISLANTE del camino FS-upload: import de un módulo NO
+// embebido (Str) que el IDE debe SUBIR por FS y el device RESOLVER. Si sale
+// "símbolo no resuelto" o valor mal → problema de FS/skew, no de memoria.
+module FsImportTest
+  import Str
+  function Main()
+    print "pad =[" + Str.padRight("hi", 6) + "]"
+    print "cmp =", Str.compare("abc", "abd")
+    print "long =", Str.longToString(1234567890)
+    print "FsImportTest: fin"
+  end Main
+end FsImportTest

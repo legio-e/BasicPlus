@@ -18,8 +18,8 @@ vars
 func Object.toString 0
 this -20 8 0 ?
 func Object.compareTo 25
-this -24 8 0 ?
-other -16 4 0 ?
+this -28 8 0 ?
+other -20 8 0 ?
 func List.add 41
 this -28 8 0 ?
 item -20 8 0 ?
@@ -48,8 +48,8 @@ func StringBuilder.appendChar 489
 this -24 8 0 ?
 c -16 4 0 ?
 func StringBuilder.appendStr 579
-this -24 8 0 ?
-s -16 4 0 ?
+this -28 8 0 ?
+s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
 func StringBuilder.appendInt 650

@@ -1,0 +1,49 @@
+// MemStress.bp — test AISLANTE de MEMORIA para placa: OO alloc + concat + GC churn
+// + arrays, self-contained (solo Core, embebido → NO sube stdlib por FS). Determinista.
+module MemStress
+  class Node
+    var val: integer
+    var name: string
+    public function Node(v: integer, n: string)
+      this.val := v
+      this.name := n
+    end Node
+    public function getVal(): integer
+      return this.val
+    end getVal
+    public function tag(): string
+      return this.name + "=" + intToString(this.val)
+    end tag
+  end Node
+
+  function Main()
+    var sum: integer := 0
+    var acc: string := ""
+    var i: integer := 0
+    while i < 300 do
+      var n: Node := Node(i, "n" + intToString(i))
+      sum := sum + n.getVal()
+      if i mod 60 == 0 then
+        acc := acc + n.tag() + "|"
+      endif
+      i := i + 1
+    endwh
+    var arr: integer[] := newIntArray(64)
+    var j: integer := 0
+    while j < 64 do
+      arr[j] := (j * 7) mod 100
+      j := j + 1
+    endwh
+    var asum: integer := 0
+    var k: integer := 0
+    while k < 64 do
+      asum := asum + arr[k]
+      k := k + 1
+    endwh
+    print "sum =", sum
+    print "asum =", asum
+    print "acc =", acc
+    print "acclen =", strlen(acc)
+    print "MemStress: fin"
+  end Main
+end MemStress

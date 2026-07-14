@@ -923,7 +923,9 @@ public final class MivmEmitter {
 
             // ---- Setter ----
             w.addFunction(setter, pd.isPublic);
-            w.declareParam("__val");
+            declareParamByType("__val", propType);   // el setter de property de MÓDULO ahora declara __val
+                                       // por su TIPO (propType) — si la property es ref (string/objeto),
+                                       // va a 8B sola. Antes era 4B fijo → drift. (El de CLASE ya lo era.)
             FunctionSymbol sfs = new FunctionSymbol(setter, pd.isPublic, false, false, null, null);
             beginFunctionScope(sfs, null);
             currentModulePropertyBacking = backing;
@@ -1843,6 +1845,15 @@ public final class MivmEmitter {
         for (ParamSymbol p : fs.params) {
             w.declareParam(p.name, occupies8Bytes(p.type) ? 8 : 4, varDbgTypeTag(p.type));
         }
+    }
+
+    /** Ref-abstracción (Eduardo): declara UN param sintético por su TIPO, no por un
+     *  ancho puesto a mano. Una REFERENCIA (string/objeto/array/any) toma el carril de
+     *  8B automáticamente vía occupies8Bytes — y si cambia la repr de ref, se adapta
+     *  solo. Gemelo mono-param de declareParamsWidthAware, para los métodos
+     *  SINTETIZADOS que declaran sus params a mano (StringBuilder, Object, properties). */
+    private void declareParamByType(String name, BpType type) {
+        w.declareParam(name, occupies8Bytes(type) ? 8 : 4, varDbgTypeTag(type));
     }
 
     private void emitAssign(AssignStmt a) throws IOException {
@@ -3492,7 +3503,9 @@ public final class MivmEmitter {
             // -------------------------- compareTo(other): integer --------------------------
             // SEGUNDO método → slot 1.
             w.addMethod("compareTo");
-            w.declareParam("other");
+            declareParamByType("other", BpType.AnyType.INSTANCE);   // `other` es un Object = REFERENCIA.
+                                           // El cuerpo default solo lanza, pero la firma debe declararse
+                                           // como ref para coincidir con lo que empuja el caller.
             beginFunctionScope(makeSynthFs("compareTo", PrimitiveType.INTEGER), null);
             try {
                 // Por defecto lanza: comparar objetos sin override es un error de
@@ -3882,7 +3895,12 @@ public final class MivmEmitter {
             // -------------------------- appendStr(s) --------------------------
             // for i := 0; i < strlen(s); i++:  this.appendChar(charCodeAt(s, i))
             w.addMethod("appendStr");
-            w.declareParam("s");
+            declareParamByType("s", PrimitiveType.STRING);   // `s` es un STRING = REFERENCIA → el carril
+                                       // de 8B sale del TIPO. Antes se declaraba como no-ref (4B) →
+                                       // emitGetParam salía GET_LOCAL(4B); al empujarse bajo el receptor
+                                       // `this`, charCodeAt se comía parte de `this` → INVOKE_VIRTUAL con
+                                       // receptor corrupto → use-after-free (repro host dual-VM vía
+                                       // Str.padRight). RAÍZ del cyan de GuiColorDemo.
             beginFunctionScope(makeSynthFs("appendStr", null), null);
             try {
                 declareLocal("i");
