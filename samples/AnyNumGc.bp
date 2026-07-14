@@ -1,0 +1,37 @@
+// Seguridad de #14: un campo `Object` (any) que contiene un NÚMERO, ahora que el
+// GC lo traza (bit puesto). markObject hace mark_recursive(número) → debe VALIDAR
+// y saltarlo, sin crash. Peor caso: -1 (todos los bits altos) y 0x40000001 (que
+// PARECE un handle tageado idx=1). Esperado: n=-1 / m=1073741825 / fin, sin crash.
+module AnyNumGc
+  class Box
+    var v: Object
+    public function Box()
+    end Box
+    public function put(x: Object)
+      this.v := x
+    end put
+    public function getInt(): integer
+      return this.v
+    end getInt
+  end Box
+
+  function churn()
+    var i: integer := 0
+    while i < 50 do
+      var junk: Box := Box()
+      i := i + 1
+    endwh
+  end churn
+
+  function Main()
+    var b: Box := Box()
+    b.put(-1)
+    churn()
+    print "n =", b.getInt()
+    var c: Box := Box()
+    c.put(1073741825)    // 0x40000001 = TAG|1: parece handle
+    churn()
+    print "m =", c.getInt()
+    print "fin"
+  end Main
+end AnyNumGc

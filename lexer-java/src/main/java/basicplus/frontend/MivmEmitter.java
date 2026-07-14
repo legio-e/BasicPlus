@@ -1095,7 +1095,7 @@ public final class MivmEmitter {
                             // Si no tenemos el tipo ya, lo sacamos del Symbol.
                             VarSymbol vs = (VarSymbol) cls.instanceMembers.tryLookup(dn.name);
                             if (vs != null) t = vs.type;
-                            boolean isRef = isRefType(t);
+                            boolean isRef = isGcRef(t);   // #14: any/Object también → GC lo traza
                             // BUG-6: long/double = campo de 8 bytes (2 slots).
                             w.declareField(dn.name, isRef, vd.isOwner, occupies8Bytes(t));
                         }
@@ -1502,7 +1502,7 @@ public final class MivmEmitter {
             return;
         }
         BpType propType = (ps != null) ? ps.type : (pd.type != null ? typeRefToBpType(pd.type) : null);
-        boolean isRef = isRefType(propType);
+        boolean isRef = isGcRef(propType);   // #14: any/Object también → GC lo traza
 
         // 1) Backing field (con flag isOwner si la propiedad es owner; el VM
         //    libera recursivamente este campo cuando la instancia se destruye).
@@ -1650,6 +1650,19 @@ public final class MivmEmitter {
         if (t instanceof BpType.TupleType) return true;   // #281: una tupla es un objeto de heap = ref (8 bytes)
         if (t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING) return true;
         return false;
+    }
+
+    /** #14 — ¿el GC debe TRAZAR este campo/elemento como ref? Igual que isRefType
+     *  PERO incluyendo `any`/Object: un campo `any` puede CONTENER una ref (además
+     *  de un número). El marcado preciso del GC lo traza de forma conservadora
+     *  (deref + valida contra el mapa de cabeceras; un número se salta, idéntico a
+     *  un slot de un Object[]=ARRAY_REF). Sin este bit, un objeto cuya ÚNICA ref
+     *  viva está en un campo `any` (p.ej. Component.__win de Forms) se recolecta →
+     *  use-after-free (hoy enmascarado por el scan conservador de pila; ver
+     *  docs/V4_REF_AUDIT.md #14). Feed SOLO del bitmap de refs del GC — NO del ancho
+     *  (el ancho de `any` ya lo cubre occupies8Bytes). */
+    private boolean isGcRef(BpType t) {
+        return isRefType(t) || (t instanceof BpType.AnyType);
     }
 
     // ============================================================
@@ -4723,7 +4736,7 @@ public final class MivmEmitter {
             w.addClass(cls, "Object");   // H5.1.a — raíz Object
             for (int i = 0; i < tt.elements.size(); i++) {
                 BpType el = tt.elements.get(i);
-                w.declareField("_" + i, isRefType(el), false, occupies8Bytes(el));
+                w.declareField("_" + i, isGcRef(el), false, occupies8Bytes(el));   // #14: elem any → GC lo traza
             }
             w.endClass();
         }

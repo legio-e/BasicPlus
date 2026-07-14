@@ -1,0 +1,47 @@
+// Repro agresivo de #14: el Payload vive SOLO en el campo `Object` h.content tras
+// volver de stash(); deep(200) mete 200 niveles de recursión (pisa la pila a fondo)
+// + 200 allocs con GC_EVERY=1. Si el campo `any` no se traza y el scan conservador
+// no lo salva → Payload recolectado → h.get()+val() = UAF/basura.
+module AnyGcHard
+  class Payload
+    var v: integer
+    public function Payload(n: integer)
+      this.v := n
+    end Payload
+    public function val(): integer
+      return this.v
+    end val
+  end Payload
+  class Holder
+    var content: Object
+    public function Holder()
+    end Holder
+    public function put(x: Object)
+      this.content := x
+    end put
+    public function get(): Object
+      return this.content
+    end get
+  end Holder
+
+  function stash(h: Holder)
+    h.put(Payload(777))
+  end stash
+
+  function deep(n: integer): integer
+    if n <= 0 then
+      return 0
+    endif
+    var junk: Payload := Payload(n)
+    return junk.val() + deep(n - 1)
+  end deep
+
+  function Main()
+    var h: Holder := Holder()
+    stash(h)
+    var s: integer := deep(200)
+    var p: Payload := h.get()
+    print "val =", p.val()
+    print "s =", s
+  end Main
+end AnyGcHard
