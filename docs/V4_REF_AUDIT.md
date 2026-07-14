@@ -208,7 +208,18 @@ reconsiderar (o corregir el comentario del modelo a "sign-extend").
 Un array-fijo local de refs caería a `NEWARRAY`(4B) + `ASTORE_I64`(8B); hoy inalcanzable
 (el semántico rechaza arrays-fijos de refs). Mordería si se levanta esa restricción. _(F)_
 
-### 🟡 #14 ANALIZADO — real pero ENMASCARADO + NO divergente (seguimiento con pruebas, decisión de Eduardo)
+### ✅ #14 ARREGLADO (`381f034`, 14-jul) — campos `any`/Object ahora en el bitmap de refs del GC
+Fix en el emisor (helper `isGcRef = isRefType || AnyType` en los 3 sitios del bitmap: campos,
+backing field de property, elementos de tupla) → ambas VMs trazan los campos `any` en la marca
+PRECISA. Seguro por construcción (mismo `mark_recursive`/`valid.contains` que ARRAY_REF; un número
+en un campo any se valida y se salta — probado 0x40000001 en `samples/AnyNumGc.bp`). NO reproducible
+desde BP (el scan conservador de pila rescata el objeto siempre — ni deep-recursion+GC_EVERY=1 en el
+build buggy lo recolecta) → defensa-en-profundidad. Verificado por MECANISMO: diff .mod fixed-vs-buggy
+= EXACTAMENTE el bit de ref del campo (`samples/AnyGcHard.bp`). Radio stdlib = SOLO Gui (Component.__win,
+único campo Object escalar; Gui NO está en los blobs embebidos → sube por el FS del IDE). JUnit
+lexer-java + miVM 34/34; ParseTest paridad dual-VM. _(censo original abajo)_
+
+<!-- CENSO ORIGINAL (histórico): -->
 `isRefType:1646`=false para `any` → un campo `Object`/`any` (isRef=false en el bitmap de refs
 del objeto) NO se traza en la marca PRECISA del GC (markObject usa el bitmap estático para
 TYPE_OBJECT). En teoría: un objeto cuya ÚNICA ref viva está en un campo `any` → recolectado →
