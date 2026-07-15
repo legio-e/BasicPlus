@@ -1665,11 +1665,32 @@ public final class MivmEmitter {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
+    /** ¿`t` es una REFERENCIA (handle de heap, REF_SIZE=8)?
+     *
+     *  H1.8 (Eduardo, repaso de tipos): **la fuente de verdad es el TIPO**, no una lista
+     *  de `instanceof` escrita aquí a mano. Antes esto enumeraba ClassType/ArrayType/
+     *  TupleType/string, y esa lista es el TERCER modo de fallo de toda la saga 4→8B: si
+     *  le falta un tipo-ref, fallan a la vez TODOS los sitios que preguntan el ancho.
+     *
+     *  NO es teórico — es exactamente lo que pasó con las TUPLAS (#281):
+     *    · 02-jun (c833d85) nacen las tuplas, con `TupleType.isReference() = true`.
+     *    · 13-jul (3ff52b0) se caza el use-after-free y se arregla añadiendo TupleType
+     *      a la lista de aquí.
+     *  El tipo llevaba SEIS SEMANAS diciendo que era una referencia. Este método nunca se
+     *  lo preguntó. El fix de #281 parcheó la reimplementación en vez de eliminarla.
+     *
+     *  Y dejaba a `UnresolvedClassRef` (isReference()=true desde siempre) fuera → una
+     *  clase sin resolver se declaraba a 4B: el mismo bug esperando su turno.
+     *
+     *  Ahora un tipo NUEVO que declare `isReference()=true` queda cubierto SOLO. */
     private boolean isRefType(BpType t) {
         if (t == null) return false;
-        if (t instanceof ClassType) return true;
-        if (t instanceof ArrayType) return true;
-        if (t instanceof BpType.TupleType) return true;   // #281: una tupla es un objeto de heap = ref (8 bytes)
+        if (t.isReference()) return true;   // ← el tipo manda (Class/Array/Tuple/Any/UnresolvedClassRef)
+        // ÚNICA excepción: `string` ES una ref de heap, pero PrimitiveType NO sobreescribe
+        // isReference() → dice false. NO se toca ahí porque isReference() lo consume el
+        // SEMÁNTICO para la asignabilidad de `null` (SemanticAnalyzer:2613-2614) y
+        // ModuleInterface:533: cambiarlo mueve la semántica del lenguaje, no el ancho.
+        // Alinear string en isReference() es otra tarea, con sus propias pruebas.
         if (t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING) return true;
         return false;
     }
