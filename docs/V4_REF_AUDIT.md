@@ -7,14 +7,18 @@
 > perdió tiempo. Regla nueva: **al arreglar algo se actualiza AQUÍ en el mismo commit**;
 > si no, este fichero miente y es peor que no tenerlo.
 >
+> **✅ H1 CERRADO (15-jul).** H1.8 completo en 3 fases: globales (`7896494`, cazó
+> #16+#17+#18) · params+locales (`12b4ba0`, el ancho se decide en **3 helpers, no en 17
+> sitios**; refactor PURO: .mod/.dbg/.bpi 41/41 idénticos) · el predicado (`8019b4d`,
+> `isRefType` **le PREGUNTA al tipo**; cazó `UnresolvedClassRef`). **Los 3 modos de fallo
+> del ancho de ref, cerrados.**
+>
 > **Lo único ABIERTO hoy:**
 > - **#4 (=H4.b)** — `bpvm_aot_helpers.c` no handle-aware. **Causa los 9 tests rojos**
 >   (ver §6). Real y acotado; no bloquea (el default es intérprete).
-> - **H1.8 fases 2 y 3** — la conversión centralizadora está hecha **solo para los
->   GLOBALES** (`7896494`: cazó #16 + #17 + #18). **Faltan `declareParam` (46 sitios) y
->   `declareLocal` (97 sitios)**, que siguen decidiendo el ancho eligiendo el método —
->   o sea, siguen expuestos al mismo patrón (#9 fue un param; las tuplas y el
->   `appendStr` fueron locales). H1 NO cierra hasta terminarlas.
+> - **#19** — el **array fijo LOCAL** es un UAF vivo y sigue declarando a 4B. Es el único
+>   borrón del cierre de H1 y es DELIBERADO: no es un gemelo olvidado, es una construcción
+>   que necesita REDISEÑO (decisión de Eduardo: inline de verdad) → tarea #288.
 >
 > **Latentes/inocuos (no tocar sin motivo):** #3 (degradado a higiene: su premisa se
 > DESMONTÓ, ver entrada), #5, #12, #13.
