@@ -1,5 +1,25 @@
 # BasicPlus V4 — Catálogo de auditoría de referencias (censo antes de corregir)
 
+> ## 📍 ESTADO A 15-jul-2026 *(saneado y verificado CONTRA EL CÓDIGO, no de memoria)*
+>
+> **Todas las semillas (S1-S5) están CERRADAS.** El catálogo tenía entradas rancias que
+> daban por abierto lo ya arreglado (S1 y #10) — se decidió sobre ellas dos veces y se
+> perdió tiempo. Regla nueva: **al arreglar algo se actualiza AQUÍ en el mismo commit**;
+> si no, este fichero miente y es peor que no tenerlo.
+>
+> **Lo único ABIERTO hoy:**
+> - **#4 (=H4.b)** — `bpvm_aot_helpers.c` no handle-aware. **Causa los 9 tests rojos**
+>   (ver §6). Real y acotado; no bloquea (el default es intérprete).
+> - **#16** — SOSPECHA nueva sin probar: backing de `property` de MÓDULO a 4B.
+>
+> **Latentes/inocuos (no tocar sin motivo):** #3 (degradado a higiene: su premisa se
+> DESMONTÓ, ver entrada), #5, #12, #13.
+>
+> **Verificado hoy:** batería VM-C 16/25 (los 9 rojos = #4, **idénticos antes y después
+> del fix del alocador** → preexistentes) · JUnit miVM 34/34 · tren de memoria MemT1-T5 +
+> MemStress × 4 tamaños de heap = 24/24 · `FileTest` (S1) `status=OK` · en placa (Pico):
+> MemT4/MemT4d verdes.
+
 > **Método (Eduardo, 13-jul-2026):** siguen apareciendo bugs de memoria nuevos → los
 > escaneos por síntoma dejaron huecos. Antes de tocar NADA, levantar el **catálogo
 > completo** de todos los sitios donde se maneja una referencia en las DOS VMs,
@@ -71,11 +91,14 @@ peligrosa y hay que barrerla por CONTRATO, no por divergencia. Superficies:
 
 ## 3. Semillas (bugs ya conocidos que el catálogo debe explicar)
 
+**✅ LAS 5 SEMILLAS ESTÁN CERRADAS (15-jul).** El catálogo cumplió su función: cada una
+quedó explicada por una raíz concreta, no por una teoría.
+
 | # | Bug | Estado | Dónde cae |
 |---|---|---|---|
-| S1 | **FileTest use-after-free** — `fileExists`+concat en host, ambas rutas FS (libc/lfs), GC on/off → estructural 4B/8B. Repro host sin placa. **HIPÓTESIS FUERTE: es un bug del EMISOR (F), hermano de las tuplas** — `__strconcat` declara su temp-String en 4B (`declareLocal`) en vez de 8B. Peta en el concat, no en el FS. | ABIERTO | **Emisor (F) — `__strconcat`** / o Builtins (E) |
-| S2 | **GC `i*8` vs `i*4`** — miVM lee refs-hijas con stride distinto en `VirtualMachine.java:1289` vs `:1305` + `(int) readI64` (trunca handle) | SOSPECHA a la vista | GC (D) |
-| S3 | **Concat de strings peta solo-Pico** (gen basura en SRAM del device) | APARCADO (Pico) | Builtins (E) — string / heap |
+| S1 | **FileTest use-after-free** — `fileExists`+concat en host, ambas rutas FS (libc/lfs), GC on/off → estructural 4B/8B. **La hipótesis `__strconcat` era FALSA** (ese path ya estaba migrado a 8B el 9-jul, `d2dcbe9`); la raíz era **`StringBuilder.chars` declarado a 4B = #1** (`e2d56fe`): el GC no lo marcaba → recolectado en vivo. **VERIFICADO 15-jul: `FileTest` corre `status=OK`** (incl. `--mem=65536`). | ✅ CERRADA (= #1) | Emisor (F) — `declareField` |
+| S2 | **GC `i*8` vs `i*4`** — miVM lee refs-hijas con stride distinto en `VirtualMachine.java:1289` vs `:1305` + `(int) readI64` (trunca handle) | ✅ DESCARTADA (no es bug — ver §5) | GC (D) |
+| S3 | **Concat de strings peta solo-Pico** (gen basura en SRAM del device) | ✅ CERRADA (= #15, y **no era de placa**) | Alocador del heap (C) |
 | **S5** | **Tuplas (#281)** — el emisor las trataba en 4B (olvidó `isRefType(TupleType)` + `declareLocalLong`). ARREGLADO, pero es el **EXEMPLAR de la clase emisor/ciego-a-paridad**. El §6 lista HERMANOS del mismo patrón sin verificar: `__strconcat`, var de `catch`, `__newref` de Mutex, `__stf_`. | FIXED (verificar hermanos) | **Emisor (F)** |
 | S4 | Familia ya cerrada: ~45+34 builtins tandas 1/2, gen truncada en heap_alloc_string | CERRADOS | (referencia — verificar que no dejaron hermanos) |
 
@@ -85,14 +108,25 @@ peligrosa y hay que barrerla por CONTRATO, no por divergencia. Superficies:
 
 ### F. EMISOR (compilador) — `MivmEmitter.java` + `ModWriter.java`  ⚠️ ciego a la paridad, LA MÁS CRÍTICA
 `isRefType`/`occupies8Bytes` (¿cubren TODOS los tipos-ref?), `declareLocal` vs
-`declareLocalLong` de refs (emitConstruction, `__stf_`, catch var, **`__strconcat`**,
+`declareLocalLong` de refs (emitConstruction, `__stf_`, catch var, `__strconcat`,
 Mutex `__newref`, temps de tupla), `declareParam(this,8)`, `declareField(is8)` +
 nextSlot, GET_FIELD vs GET_FIELD_LONG, `returnsLong`→LRET, `paramSlots`, el hack
-`I32_TO_I64`. **Incluye S1 (hipótesis `__strconcat`) y S5 (hermanos de tuplas).**
-_(pendiente de volcar + verificar)_
+`I32_TO_I64`.
+
+**⚠️ ESTADO REAL (15-jul): BARRIDA CON HALLAZGOS, pero NUNCA cerrada formalmente** (no tiene
+un "0 SUSPECT" como B/C/D/E). Fue la superficie más productiva del censo — salieron de aquí
+**#1, #9, #10, #11, #13, #14, S5(tuplas)** — y sigue teniendo **#16 vivo**. La hipótesis
+`__strconcat` de S1 era **FALSA** (ya estaba a 8B desde `d2dcbe9`); la raíz de S1 fue #1.
+**Patrón que REINCIDE aquí (3 veces ya: #9, #10, #16): "se migró un camino y el gemelo se
+quedó atrás".** Mientras el ancho se decida sitio a sitio volverá a pasar → el cierre de F NO
+es seguir buscando gemelos, es el **fix centralizador (B)**: que sea IMPOSIBLE declarar una
+ref de 4B (`declareField`/`declareParam`/`declareLocal`/`declareGlobal` fuerzan 8B si es ref).
 
 ### A. Pila de operandos (ALOAD/ASTORE/GET_FIELD/SET_FIELD/INSTANCEOF/ALEN/receptor)
-_(pendiente de volcar + verificar)_
+**⚠️ ESTADO REAL (15-jul): la ÚNICA superficie sin barrido sistemático.** Solo ha producido
+hallazgos de rebote (#1(a): `emitGetField/SetField` eligen opcode por `is8` → 4B sobre una ref).
+No está volcada ni cruzada VM-C↔miVM. **Es el hueco conocido del censo** — tenerlo presente
+antes de dar la auditoría por cerrada.
 
 ### B. Frame de llamada y locales (GET/SET_LOCAL, LEA, RET/LRET, slots de params, receptor) — ✅ AUDITADO: 0 SUSPECT
 Aplicado correcta y **simétricamente** en ambas VMs. Los opcodes de 4B (GET/SET_LOCAL,
@@ -124,11 +158,20 @@ EMISOR cuente cada campo ref/long/double como **2 slots** + bit del bitmap solo 
 slot base. Si el emisor fallara, romperían las DOS VMs igual (ciego a paridad) → F lo verifica.
 **2 SUSPECT fronterizos** (fuera del layout puro) → ver §5 B1, B2.
 
-### D. GC y ciclo de vida de handles (mark/sweep, refs-hijas, cascada de free, tabla de handles)
-_(pendiente — incluye S2)_
+### D. GC y ciclo de vida de handles (mark/sweep, refs-hijas, cascada de free, tabla de handles) — ✅ BARRIDO
+S2 **DESCARTADA** (no es bug). Salieron y se arreglaron: **#2** (`freeOwnedObjectLocked`
+truncaba el child), **#1(b)** (el GC no marcaba la hija de un campo-ref de 4B), **#14**
+(campos `any`/Object fuera del bitmap de refs). Quedan **#3** (degradado a higiene) y **#5**
+(latente). ⚠️ **El bug más grave de todo el censo NO era de refs y por poco se escapa de
+aquí: #15, el alocador** — el GC barría objetos VIVOS. Ver §5 #15 y la lección de §7.
 
-### E. Builtins y throw (string, array, file I/O, Thread/Mutex, GUI, Net, HW, msg de throw)
-_(pendiente — incluye S1, S3)_
+### E. Builtins y throw (string, array, file I/O, Thread/Mutex, GUI, Net, HW, msg de throw) — ✅ BARRIDO (salvo GUI de miVM)
+S1 **CERRADA** (era #1, no el I/O: ver "✅ CONFIRMADO OK — el path de file I/O NO es el bug").
+S3 **CERRADA** (era #15). Arreglados: **#6** (racimo runtime), **#7** (`OP_THROW` truncaba la
+gen), **#8** (`push_i32` de string en APP_*). **THREAD/MUTEX = NO es bug** (probado).
+**Único hueco: los builtins GUI de miVM** — reservados a Eduardo por exigir verificación
+visual; los handles de widget son enteros opacos (4B correcto, NO tocar), los latentes son
+solo string-args y las refs de objeto de Forms. Ver #6.
 
 ---
 
@@ -174,11 +217,13 @@ Determinista, en AMBAS VMs (ciego a paridad → no lo cazó nada). Su hermano `_
 SÍ se migró (`declareParam(...,8)`) el 9-jul (`d2dcbe9`); `__strequals` se quedó atrás.
 **Rota todo `==`/`!=` de strings desde el 9-jul.** Fix = `declareParam("a",8)`/`("b",8)`.
 
-### 🔴 #10 CONFIRMADO (AMBAS VMs, EMISOR) — init de var-string de módulo declara global a 4B
-`MivmEmitter.java:642` (`bakeModuleVarInit`, +484-486): `var s: string := "lit"` a nivel
-módulo declara el global con `declareGlobal(name)` (4B) → emite `LEA_GLOBAL`(8B)/`SET_GLOBAL`(4B)/
-`GET_GLOBAL`(4B) → trunca el ref + fuga 4B. El path SIN-init (622) usa `declareGlobalLong`.
-git: 622 migrado 9-jul; el path CON-init se quedó. Fix = `declareGlobalLong` en el init.
+### ✅ #10 ARREGLADO (`6b16414`) — init de var-string de módulo declaraba el global a 4B
+`MivmEmitter.java:642` (`bakeModuleVarInit`): `var s: string := "lit"` a nivel módulo declaraba
+el global con `declareGlobal(name)` (4B) → `LEA_GLOBAL`(8B)/`SET_GLOBAL`(4B)/`GET_GLOBAL`(4B)
+→ truncaba el ref + fuga 4B. El path SIN-init (622) ya usaba `declareGlobalLong` (migrado 9-jul);
+el path CON-init se quedó atrás. Fix = `declareGlobalLong` en el init. **Verificado en el código
+15-jul** (la línea 642 lleva el fix + comentario del censo). ⚠️ **Su patrón "se migró un camino y
+el gemelo se quedó" REINCIDE: ver #16.**
 
 ### ✅ #11 ARREGLADO (`606592b`) — `null` a 4B + `==`/`!=` de refs con `EQ` de 4B
 **Ampliado por insight de Eduardo:** el `==`/`!=` de refs usaba `OpCode.EQ` (4B, solo
@@ -274,14 +319,49 @@ correcto (`pushTcRef`). Path poco ejercitado. Fix = `bpref_push`. _(barrido E)_
 abstracción). Refuerza que **FileTest peta por el concat (`StringBuilder.chars`, #1)**, no
 por el I/O. _(barrido E)_
 
-### 🟠 #3 candidato (device-only) — `heap.c:339-350 bpvm_handle_register` realloc sin zero-init
-El `realloc` de `handle_addr`/`handle_gen` no pone a 0 `[old_cap,new_cap)`. Host inocuo
-(lectores guardan `idx<handle_next`), device = SRAM basura → gen deforme. Región exacta de
-[[v4-concat-handle-gen-basura-placa]]. Fix = `memset` al crecer. VM-C-only. _(barrido C)_
+### ⚪ #3 DEGRADADO a higiene (15-jul) — `bpvm_handle_register` realloc sin zero-init
+El `realloc` de `handle_addr`/`handle_gen` no cerea `[old_cap,new_cap)` (sigue así, verificado
+15-jul en `heap.c:362-364`). **Su premisa se DESMONTÓ:** decía "device = SRAM basura → gen
+deforme, región exacta del bug del concat de la Pico". Pero ese bug era **#15 (el alocador)**, y
+la teoría de la memoria sin inicializar se descartó **con datos** (`BPVM_POISON=1` llena el
+buffer de 0xAA y NO reproduce). Hoy **no muerde**: los lectores se guardan con `idx<handle_next`,
+así que nunca se lee un slot no escrito. Queda como higiene barata (un `memset` al crecer), no
+como candidato a bug. **Lección: era un candidato construido sobre una teoría, no sobre una
+prueba — y la teoría era falsa.** _(barrido C)_
 
-### 🟡 #4 diferido (ya conocido) — `bpvm_aot_helpers.c` no handle-aware
-Accesores de objeto/ref-array del AOT no ensancharon refs a 8B. Solo `.mdn`. Ya en
-[[v4-pendientes-diferidos]] (test-throwmsg/throwuser rojos). No bloquea. _(barrido C)_
+### 🟡 #4 ABIERTO, diferido (=H4.b) — `bpvm_aot_helpers.c` no handle-aware
+Los accesores de objeto/ref-array del AOT nunca se ensancharon a 8B → fabrican handles
+truncados → el contrato B los caza. **Es la causa ÚNICA de los 9 tests rojos** (§6): todos dan
+`use-after-free` y `test-throwmsg` además segfaultea (139). Solo afecta al camino `.mdn` (AOT);
+**no bloquea** porque el default de envío es intérprete. Ya en [[v4-pendientes-diferidos]].
+**Es la deuda más gorda que queda en V4.** _(barrido C)_
+
+### 🆕 ✅ #15 ARREGLADO (`5ea0155`, 15-jul) — el ALOCADOR regalaba la astilla → el GC barría objetos VIVOS
+**El bug más grave del censo, y NO es de refs — por eso este catálogo por poco no lo encuentra.**
+Un bloque asignado no guarda su tamaño: `block_total_size()` lo RECALCULA desde type/length.
+`try_allocate_inner`, al servir de la free-list un bloque con sobrante `< MIN_FREE_BLOCK` (no
+representable), **se lo regalaba al bloque asignado** → tamaño físico ≠ recálculo → el recorrido
+del heap se quedaba corto, leía payload como cabecera y **descarrilaba EN SILENCIO** → mapa/set
+de cabeceras truncado → `is_heap_ref` rechazaba objetos **VIVOS** → barridos → UAF cientos de
+asignaciones más tarde. **Estaba en LAS DOS VMs** (en miVM latente: su heap por defecto es
+grande; estrechándolo reproduce → UAF en el concat 137). Explica **S3** y el residuo de **S1**.
+Fix: aceptar el bloque solo si encaja exacto o el resto es representable. **+ GUARDIÁN permanente
+en ambas** (1 comparación por GC): si el recorrido no aterriza en `heap_next` → grita `[gc] !!
+HEAP INCONSISTENTE`. Repro: `bpgenvm-c --mem=131072 MemT4d.mod`. Verificado en placa (Pico).
+
+### 🆕 🟠 #16 SOSPECHA sin probar (15-jul, EMISOR) — backing de `property` de MÓDULO a 4B
+`MivmEmitter.java:857` (`emitModulePropertyBacking`): `w.declareGlobal(moduleBackingName(...))`
+**sin mirar el ancho** → una `property` de módulo de tipo ref se declara a 4B. **Confirmado en el
+disasm** (`samples`-sonda con `public property nombre: string` → `__prop_get_nombre` emite
+`GET_GLOBAL -4` y `__prop_set_nombre` `SET_GLOBAL -4`, 4B para un string). Firma idéntica a #1/#10.
+**PERO: NO se ha conseguido hacerlo petar** en 4 intentos (churn ligero, churn pesado T4-style,
+400 asignaciones en bucle, `--mem` de 262144 a 40960; ambas VMs verdes). Explicación probable:
+truncar pierde la GEN, y con gen=0 el ref truncado cuela — hace falta que ESE slot venga reciclado.
+**HERMANO SIN VERIFICAR: `MivmEmitter.java:1018`** — `var` estática de clase, mismo `declareGlobal`
+pelado, mientras que la static **property** de la línea 1023 SÍ es width-aware (`occupies8Bytes`).
+Es literalmente el patrón de #10 ("se migró un camino y el gemelo se quedó"). Fix propuesto = el
+centralizador de #1 llevado a los globales: que `declareGlobal` fuerce 8B si el tipo es ref, y que
+sea IMPOSIBLE declarar un global-ref de 4B. _(F — pendiente: probarlo o descartarlo con un repro)_
 
 ### ⚪ #5 latente — `ModWriter.declareInstanceProperty`→`declareField(name,isRef)` (is8=false)
 Si algún día se usa con `isRef=true` para una property-ref, crea otro campo-ref de 4B
@@ -292,3 +372,52 @@ width-aware → probablemente sin uso para refs. Lo cubre el fix centralizador d
 Son conceptos distintos y correctos: `i*8` indexa ELEMENTOS de ref-array (8B c/u); `i*4`
 indexa SLOTS de 4B de objeto (un campo-ref ocupa 2 slots). El `(int)readI64` del MARCADO es
 inocuo (`refDeref` ignora la gen; solo necesita idx→addr). Simétrico en ambas VMs. _(barrido D)_
+
+---
+
+## 6. LÍNEA BASE DE LA BATERÍA *(medida 15-jul — para no volver a preguntarse "¿esto ya estaba rojo?")*
+
+**Medida DOS veces, con y sin el fix de #15 → los rojos son IDÉNTICOS = preexistentes.**
+Cualquier rojo NUEVO respecto a esta lista es una regresión de verdad.
+
+| Suite | Verde | Rojo |
+|---|---|---|
+| `make test-*` (VM-C, 25 targets) | **16** | **9 — TODOS = #4 (AOT)** |
+| JUnit miVM | **34/34** | 0 |
+| JUnit lexer-java | verde | 0 |
+| Tren de memoria (MemT1-T5 + MemStress × 4 tamaños de heap) | **24/24** | 0 |
+
+**Los 9 rojos, todos con la misma firma (`use-after-free`; `test-throwmsg` además SIGSEGV=139):**
+`test-method` · `test-callbp` · `test-bytenat` · `test-xmodule` · `test-xmethodnat` ·
+`test-throwmsg` · `test-throwuser` · `test-compressnat` · `test-compressbench`
+→ **causa única: #4**. Ojo, `test-xmodnat` SÍ es verde: no vale con decir "todos los AOT".
+
+**Cómo se mide** (el `make` no distingue skip de fallo; hay que mirar el exit code):
+```
+for t in $(grep -oE '^test-[a-z0-9-]+' Makefile | sort -u); do make $t >/dev/null 2>&1; echo "$t exit=$?"; done
+```
+
+---
+
+## 7. Lecciones del método *(lo que de verdad cambió el resultado)*
+
+1. **⚠️ `BPVM_GC_EVERY=1` ENMASCARA los bugs de GC, no los expone.** Fuerza GC en cada alloc →
+   el heap nunca se llena → la free-list nunca se ejerce. Nuestro "estrés de GC" era MÁS DÉBIL
+   que el caso real. **Para estresar el GC hay que ENCOGER el heap** (`--mem` en VM-C,
+   `stackBase` en `BpVM.cfg` en miVM). Así cayó #15.
+2. **⚠️ "Es de placa" es casi siempre falso — pregunta qué hace distinto el host y anúlalo.**
+   El host por defecto (512K) nunca llenaba el heap, así que el GC natural NUNCA corría. Costó
+   días de teorías de SMP/ARM/SRAM, todas descartadas después CON DATOS.
+3. **⚠️ Un test que pasa no prueba que el código sea correcto.** #16 pasa en las dos VMs y su
+   bytecode es demostrablemente de 4B. Truncar una ref pierde la GEN, y **con gen=0 el ref
+   truncado cuela**: por eso toda esta familia es LATENTE hasta que hay reuso de slots. El
+   disasm es más fiable que el verde.
+4. **⚠️ Artefactos rancios: la trampa recurrente de este proyecto.** BpIde empaquetaba un
+   compilador pre-4→8B (días perdidos); `make` tiene granularidad de 1s y no recompila si
+   encadenas comandos en el mismo segundo (conclusión falsa a media verificación). **Al tocar
+   miVM hay que `mvn install` + repackage BpIde**; al medir un fix, `touch` y build separado.
+5. **⚠️ Un catálogo desfasado es peor que no tenerlo.** S1 y #10 figuraban abiertos estando
+   arreglados. **Al arreglar algo, actualizar aquí en el MISMO commit.**
+6. **El censo por CONTRATO funcionó** (encontró #1/#2/#6/#7/#8/#9/#10/#11/#14)… **pero #15, el
+   más grave, no era de refs y se le escapó**: lo cazó un repro mínimo con el heap encogido.
+   Censar por contrato Y estresar por comportamiento; ninguna de las dos basta sola.
