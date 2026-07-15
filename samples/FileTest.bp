@@ -2,10 +2,16 @@
 // fileExists) en la VM-C con paridad con la VM-Java. Salida determinista.
 module FileTest
   function main()
+  var i:integer
     var path: string := "fileio_test.txt"
     print "exists antes=" + boolToString(fileExists(path))
     writeFile(path, "hola")
-    appendFile(path, " mundo")
+    print"append"
+    i:=i
+    while i<= 1000 do
+      appendFile(path, " mundo")
+      i:=i+1
+    endwh
     var content: string := readFile(path)
     print "content=[" + content + "]"
     print "len=" + intToString(strlen(content))

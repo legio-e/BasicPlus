@@ -26,9 +26,9 @@ module SyncTest
   // No es interesante "qué valor queda al final" — es que la VM no se
   // corrompe y siempre devuelve algo coherente.
   public class Setter extends Thread
-    public var acc:   Account
-    public var v:     integer
-    public var iters: integer
+    var acc:   Account
+    var v:     integer
+    var iters: integer
 
     public function Setter(acc: Account, v: integer, iters: integer)
       super(2048)

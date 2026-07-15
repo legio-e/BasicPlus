@@ -2,46 +2,46 @@ dbg 3
 module I2c
 source C:\lenguajes\pm\bpstdlib\I2c.bp
 lines
-1446 144
-1479 150
-1512 158
-1541 159
-1552 160
-1560 161
-1568 162
-1582 163
-1604 164
-1618 165
-1628 166
-1645 168
-1659 170
-1668 171
-1693 172
-1712 134
-1720 135
-1728 136
-1736 137
-1744 138
-1867 51
-1895 55
-1926 59
-1957 67
-1986 68
-1997 69
-2005 70
-2013 71
-2027 72
-2047 73
-2061 74
-2071 75
-2088 77
-2102 80
-2111 81
-2136 82
-2155 87
-2176 90
-2197 93
-2218 96
+1582 144
+1616 150
+1650 158
+1679 159
+1690 160
+1698 161
+1706 162
+1720 163
+1743 164
+1757 165
+1767 166
+1784 168
+1798 170
+1807 171
+1832 172
+1851 134
+1863 135
+1875 136
+1887 137
+1899 138
+2022 51
+2050 55
+2081 59
+2112 67
+2141 68
+2152 69
+2160 70
+2168 71
+2182 72
+2202 73
+2216 74
+2226 75
+2243 77
+2257 80
+2266 81
+2291 82
+2310 87
+2331 90
+2352 93
+2373 96
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -125,65 +125,81 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Bus.write 1443
+func Bus.getId 1443
+this -20 8 0 ?
+func Bus.setId 1459
+this -24 8 0 ?
+func Bus.getSda 1477
+this -20 8 0 ?
+func Bus.setSda 1493
+this -24 8 0 ?
+func Bus.getScl 1511
+this -20 8 0 ?
+func Bus.setScl 1527
+this -24 8 0 ?
+func Bus.getBaudrate 1545
+this -20 8 0 ?
+func Bus.setBaudrate 1561
+this -24 8 0 ?
+func Bus.write 1579
 this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.read 1476
+func Bus.read 1613
 this -36 8 0 ?
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.scan 1509
+func Bus.scan 1647
 this -20 8 0 ?
 rxbuf 8 8 0 ?
-max 20 8 0 ?
-found 28 4 0 integer
-addr 32 4 0 integer
-rc 36 4 0 integer
-result 40 8 0 ?
-func Bus.__init 1709
+max 24 8 0 ?
+found 32 4 0 integer
+addr 36 4 0 integer
+rc 40 4 0 integer
+result 44 8 0 ?
+func Bus.__init 1848
 this -36 8 0 ?
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_new_Bus 1769
+func __cls_new_Bus 1924
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func __cls_init_Bus 1812
+func __cls_init_Bus 1967
 this -36 8 0 ?
 id -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func init 1864
+func init 2019
 bus -28 4 0 integer
 sda -24 4 0 integer
 scl -20 4 0 integer
 baudrate -16 4 0 integer
-func write 1892
+func write 2047
 bus -32 4 0 integer
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 1923
+func read 2078
 bus -32 4 0 integer
 addr -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func scan 1954
+func scan 2109
 bus -16 4 0 integer
 rxbuf 8 8 0 ?
-max 20 8 0 ?
-found 28 4 0 integer
-addr 32 4 0 integer
-rc 36 4 0 integer
-result 40 8 0 ?
-func __strconcat 2236
+max 24 8 0 ?
+found 32 4 0 integer
+addr 36 4 0 integer
+rc 40 4 0 integer
+result 44 8 0 ?
+func __strconcat 2391
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

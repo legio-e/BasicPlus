@@ -22,8 +22,15 @@ func readPort(bus:integer,data:integer[],count:integer,timeoutMs:integer):intege
 func BAUD_57600():integer public
 func BAUD_921600():integer public
 class Port public
-  layout 7 5 00000000 00000000
+  layout 7 19 00000000 00000000
   ctor(id:integer,tx:integer,rx:integer,baudrate:integer,dataBits:integer,stopBits:integer,parity:integer)
+  prop id:integer public
+  prop tx:integer public
+  prop rx:integer public
+  prop baudrate:integer public
+  prop dataBits:integer public
+  prop stopBits:integer public
+  prop parity:integer public
   staticconst PARITY_NONE:integer=0 public
   staticconst PARITY_ODD:integer=1 public
   staticconst PARITY_EVEN:integer=2 public

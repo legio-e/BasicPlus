@@ -13,8 +13,8 @@ module L2App
 
   // --- Worker que estresa la SafeCounter cross-module ---
   public class Bumper extends Thread
-    public var c: SafeCounter
-    public var iters: integer
+    var c: SafeCounter
+    var iters: integer
 
     public function Bumper(c: SafeCounter, iters: integer)
       super(2048)

@@ -13,7 +13,7 @@ module Fase2
   // ---------- Clase base ----------
   public class Animal
     var nombre: string
-    public var Animal.totalCreados: integer := 0
+    public property Animal.totalCreados: integer := 0
 
     public function Animal(nombre: string)
       this.nombre := nombre

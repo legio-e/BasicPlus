@@ -13,7 +13,7 @@
 module N5PopBlocking
 
   public class Item
-    public var n: integer
+    public property n: integer
     public function Item(n: integer)
       this.n := n
     end Item
@@ -21,8 +21,8 @@ module N5PopBlocking
 
   // Productor "lento": añade un item cada 20ms. El consumer DEBE bloquearse.
   public class SlowProd extends Thread
-    public var bag: SyncList
-    public var iters: integer
+    var bag: SyncList
+    var iters: integer
     public function SlowProd(bag: SyncList, iters: integer)
       super(2048)
       this.bag := bag
@@ -40,10 +40,14 @@ module N5PopBlocking
 
   // Consumer que llama popBlocking — espera SIEMPRE hasta haber item.
   public class Cons extends Thread
-    public var bag: SyncList
-    public var iters: integer
-    public var got: integer
-    public var sum: integer
+    var bag: SyncList
+    var iters: integer
+    // L11.a: privadas + getters a mano. Una `property` en una clase que extiende
+    // Thread descuadra hoy los slots de vtable (frontend vs ModWriter) — la base
+    // Thread está sintetizada en dos sitios y discrepan. Cuando Thread se declare
+    // en Core.bp esto vuelve a ser `public property`. Ver #291.
+    var got: integer
+    var sum: integer
     public function Cons(bag: SyncList, iters: integer)
       super(2048)
       this.bag := bag
@@ -60,6 +64,14 @@ module N5PopBlocking
         i := i + 1
       endwh
     end run
+
+    public function getGot(): integer
+      return this.got
+    end getGot
+
+    public function getSum(): integer
+      return this.sum
+    end getSum
   end Cons
 
   function main(arg: string)
@@ -75,9 +87,9 @@ module N5PopBlocking
     c.join()
 
     // Suma esperada: 100..107 = (100+107)*8/2 = 828.
-    print "consumidos = " + intToString(c.got)
-    print "suma       = " + intToString(c.sum)
-    if c.got == iters and c.sum == 828 then
+    print "consumidos = " + intToString(c.getGot())
+    print "suma       = " + intToString(c.getSum())
+    if c.getGot() == iters and c.getSum() == 828 then
       print "OK: popBlocking recibió todos los items y en orden"
     else
       print "ERROR: faltan items o suma incorrecta"

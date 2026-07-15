@@ -75,9 +75,9 @@ module Pulse
     public const Counter.FALLING: integer := 1
     public const Counter.BOTH:    integer := 2
 
-    public var pin:      integer
-    public var edgeKind: integer
-    public var id:       integer    // counterId devuelto por init()
+    public property pin:      integer
+    public property edgeKind: integer
+    public property id:       integer    // counterId devuelto por init()
 
     // Constructor: configura el slice PWM correspondiente al pin
     // en modo input-gated edge counting. Lanza RuntimeError si el

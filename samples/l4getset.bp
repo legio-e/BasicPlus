@@ -7,7 +7,7 @@
 module L4GetSet
 
   public class Cache
-    public var n: integer
+    public property n: integer
 
     public function Cache()
       this.n := 0

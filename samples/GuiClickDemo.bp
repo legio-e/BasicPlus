@@ -9,7 +9,7 @@ module GuiClickDemo
   import Gui
 
   class MyButton extends Gui.Button
-    public var target: Gui.Label
+    public property target: Gui.Label
     public function MyButton(parent: Gui.Component, text: string, target: Gui.Label)
       super(parent, text)
       this.target := target

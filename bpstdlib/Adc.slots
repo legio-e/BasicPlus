@@ -1,5 +1,5 @@
 {
-  "Channel": { "read": 2, "readVolts": 3, "readAvg": 4 },
+  "Channel": { "read": 6, "readVolts": 7, "readAvg": 8 },
   "RuntimeError": {  },
   "Exception": {  }
 }

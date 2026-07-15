@@ -20,8 +20,10 @@ class Exception public
   ctor(m:string)
 end class
 class Pin public
-  layout 2 9 00000000 00000000
+  layout 2 13 00000000 00000000
   ctor(num:integer,mode:integer)
+  prop num:integer public
+  prop mode:integer public
   staticconst INPUT:integer=0 public
   staticconst PULL_UP:integer=1 public
   staticconst OUTPUT:integer=1 public

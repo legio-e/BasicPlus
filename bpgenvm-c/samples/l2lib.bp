@@ -12,7 +12,7 @@ module L2Lib
   // El módulo dueño sintetiza `__cls_new_Counter(init)` que el importador
   // llama vía CALL_EXT para construir instancias.
   public class Counter
-    public var n: integer
+    public property n: integer
 
     public function Counter(init: integer)
       this.n := init

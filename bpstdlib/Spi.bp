@@ -133,12 +133,12 @@ module Spi
     public const Bus.MHZ_4:   integer := 4000000
     public const Bus.MHZ_10:  integer := 10000000
 
-    public var id:       integer    // 0 (spi0) o 1 (spi1)
-    public var sck:      integer
-    public var mosi:     integer
-    public var miso:     integer
-    public var baudrate: integer
-    public var mode:     integer    // 0..3
+    public property id:       integer    // 0 (spi0) o 1 (spi1)
+    public property sck:      integer
+    public property mosi:     integer
+    public property miso:     integer
+    public property baudrate: integer
+    public property mode:     integer    // 0..3
 
     // Constructor: configura el bus SPI en HW.
     public function Bus(id: integer, sck: integer, mosi: integer, miso: integer, baudrate: integer, mode: integer)

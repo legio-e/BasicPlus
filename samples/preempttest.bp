@@ -5,7 +5,7 @@ module PreemptTest
   // y luego iría el segundo (cooperativo puro). CON timer preemptivo, los
   // workers interleavean visualmente.
   class Marker extends Thread
-    public var nombre: string
+    var nombre: string
 
     public function Marker(nombre: string)
       super(2048)

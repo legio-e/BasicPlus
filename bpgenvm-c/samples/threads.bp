@@ -10,7 +10,9 @@ module Threads
   public var mtx: Mutex
 
   public class Worker extends Thread
+  
     public function Worker()
+      super(1000)
     end Worker
 
     public function run()

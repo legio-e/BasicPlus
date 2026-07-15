@@ -96,7 +96,7 @@ import Json
 
   // ---- Color (RGB 0xRRGGBB). Ej.: Gui.Color(0xFF0000) = rojo. ----
   public class Color
-    public var rgb: integer
+    public property rgb: integer
     public function Color(rgb: integer)
       this.rgb := rgb
     end Color

@@ -13,16 +13,16 @@ module SyncListTest
   // ambos at�micos por s� mismos.
 
   public class Item
-    public var n: integer
+    public property n: integer
     public function Item(n: integer)
       this.n := n
     end Item
   end Item
 
   public class Producer extends Thread
-    public var bag: SyncList
-    public var base: integer
-    public var iters: integer
+    var bag: SyncList
+    var base: integer
+    var iters: integer
 
     public function Producer(bag: SyncList, base: integer, iters: integer)
       super(2048)
@@ -46,9 +46,9 @@ module SyncListTest
   // sumando los dos consumidores deber�amos haber consumido EXACTAMENTE lo
   // producido.
   public class Consumer extends Thread
-    public var bag: SyncList
-    public var consumed: integer    // contador propio del hilo
-    public var maxAttempts: integer  // tope para evitar bucle infinito
+    var bag: SyncList
+    var consumed: integer    // contador propio del hilo
+    var maxAttempts: integer  // tope para evitar bucle infinito
 
     public function Consumer(bag: SyncList, maxAttempts: integer)
       super(2048)
@@ -67,6 +67,15 @@ module SyncListTest
         attempts := attempts + 1
       endwh
     end run
+
+    // L11.a: `consumed` privada + getter a mano. Una `property` en una clase que
+    // extiende Thread descuadra los slots de vtable (frontend cuenta la base de
+    // Thread como si fuera Object). El getter va DESPUÉS de run() a propósito:
+    // ahí los dos errores del frontend se cancelan. Volver a `public property`
+    // cuando Thread se declare en Core.bp — ver #291.
+    public function getConsumed(): integer
+      return this.consumed
+    end getConsumed
   end Consumer
 
   function main(arg: string)
@@ -121,8 +130,8 @@ module SyncListTest
     c1.join()
     c2.join()
 
-    var consumed1: integer := c1.consumed
-    var consumed2: integer := c2.consumed
+    var consumed1: integer := c1.getConsumed()
+    var consumed2: integer := c2.getConsumed()
     var totalConsumed: integer := consumed1 + consumed2
     var remaining: integer := bag.length()
     print "consumidos c1 = " + intToString(consumed1)

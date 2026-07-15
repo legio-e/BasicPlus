@@ -2,22 +2,22 @@ dbg 3
 module Adc
 source C:\lenguajes\pm\bpstdlib\Adc.bp
 lines
-1452 66
-1476 71
-1487 72
-1519 78
-1533 79
-1554 81
-1562 82
-1570 83
-1582 84
-1597 85
-1611 87
-1634 56
-1642 57
-1653 58
-1669 59
-1694 60
+1520 66
+1545 71
+1557 72
+1589 78
+1603 79
+1625 81
+1633 82
+1641 83
+1653 84
+1669 85
+1683 87
+1706 56
+1718 57
+1733 58
+1750 59
+1775 60
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -101,26 +101,34 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Channel.read 1449
+func Channel.getCh_ 1449
 this -20 8 0 ?
-func Channel.readVolts 1473
+func Channel.setCh_ 1465
+this -24 8 0 ?
+func Channel.getPin_ 1483
+this -20 8 0 ?
+func Channel.setPin_ 1499
+this -24 8 0 ?
+func Channel.read 1517
+this -20 8 0 ?
+func Channel.readVolts 1542
 this -20 8 0 ?
 raw 4 4 0 integer
-func Channel.readAvg 1516
+func Channel.readAvg 1586
 this -24 8 0 ?
 n -16 4 0 integer
 sum 4 4 0 integer
 i 8 4 0 integer
-func Channel.__init 1631
+func Channel.__init 1703
 this -24 8 0 ?
 ch -16 4 0 integer
-msg 0 8 0 string
-func __cls_new_Channel 1713
+msg 4 8 0 string
+func __cls_new_Channel 1794
 ch -16 4 0 integer
-func __cls_init_Channel 1747
+func __cls_init_Channel 1828
 this -24 8 0 ?
 ch -16 4 0 integer
-func __strconcat 1790
+func __strconcat 1871
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

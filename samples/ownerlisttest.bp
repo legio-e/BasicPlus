@@ -1,7 +1,7 @@
 module OwnerListTest
 
   class Recurso
-    public var nombre: string
+    public property nombre: string
 
     public function Recurso(nombre: string)
       this.nombre := nombre

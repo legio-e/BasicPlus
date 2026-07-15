@@ -5,16 +5,19 @@
 module SmpHeapStress
 
   public class Counter
-    public var v: integer
+    public property v: integer
     public function Counter(v_: integer)
       v := v_
     end Counter
   end Counter
 
   public class Builder extends Thread
-    public var n: integer
-    public var total: integer
+    var n: integer
+    // L11.a: privada + getter a mano (property en clase Thread descuadra slots — ver #291)
+    var total: integer
+    
     public function Builder(n_: integer)
+      super(1000)
       n := n_
       total := 0
     end Builder
@@ -29,6 +32,10 @@ module SmpHeapStress
       endwh
       total := sum
     end run
+
+    public function getTotal(): integer
+      return this.total
+    end getTotal
   end Builder
 
   function Main()
@@ -40,8 +47,8 @@ module SmpHeapStress
     w2.start()
     w1.join()
     w2.join()
-    print "w1.total =", w1.total
-    print "w2.total =", w2.total
+    print "w1.total =", w1.getTotal()
+    print "w2.total =", w2.getTotal()
     print "esperado  =", N * (N + 1) / 2
   end Main
 

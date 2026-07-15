@@ -3,8 +3,8 @@
 module TupleFC
 
   class Point
-    public var x: integer
-    public var y: integer
+    public property x: integer
+    public property y: integer
     public function Point()
       this.x := 0
       this.y := 0

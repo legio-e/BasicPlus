@@ -55,10 +55,10 @@ module Pwm
   // ============================================================
   public class Slice
 
-    public var pin:     integer
-    public var id:      integer   // sliceId devuelto por initSlice
-    public var freqHz:  integer   // freq objetivo guardada para inspección
-    public var dutyPct: integer   // último duty seteado (0..100)
+    public property pin:     integer
+    public property id:      integer   // sliceId devuelto por initSlice
+    public property freqHz:  integer   // freq objetivo guardada para inspección
+    public property dutyPct: integer   // último duty seteado (0..100)
 
     // Constructor: configura el slice del pin a la frecuencia
     // indicada. Duty arranca a 0 (pin LOW). Llama start() para

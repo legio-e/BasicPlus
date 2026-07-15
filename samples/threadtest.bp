@@ -1,8 +1,8 @@
 module ThreadTest
 
   class Worker extends Thread
-    public var nombre: string
-    public var iters:  integer
+    var nombre: string
+    var iters:  integer
 
     public function Worker(nombre: string, iters: integer)
       super(1024)            // 1K stack

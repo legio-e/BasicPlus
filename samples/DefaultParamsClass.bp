@@ -2,8 +2,8 @@
 module DefaultParamsClass
 
   class Box
-    public var w: integer
-    public var h: integer
+    public property w: integer
+    public property h: integer
 
     public function Box(w: integer, h: integer := 1)
       this.w := w

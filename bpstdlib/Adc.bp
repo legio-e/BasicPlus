@@ -49,8 +49,8 @@ module Adc
     // VBUS y dividir por 4095 para una calibración exacta.
     public const Channel.VREF: float := 3.3
 
-    public var ch_:  integer
-    public var pin_: integer
+    public property ch_:  integer
+    public property pin_: integer
 
     public function Channel(ch: integer)
       this.ch_ := ch

@@ -4,8 +4,10 @@ func FALLING():integer public
 func RISING():integer public
 func BOTH():integer public
 class Meter public
-  layout 4 6 00000004 00000000
+  layout 4 10 00000001 00000000
   ctor(pin:integer,edge:integer)
+  prop pin:integer public
+  prop edge:integer public
   method measureHz(windowMs:integer):integer public
   method measureHzAvg(windowMs:integer,samples:integer):integer public
   method maxHz(windowMs:integer):integer public

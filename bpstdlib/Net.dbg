@@ -2,17 +2,17 @@ dbg 3
 module Net
 source C:\lenguajes\pm\bpstdlib\Net.bp
 lines
-1446 58
-1463 59
-1490 63
-1517 68
-1544 73
-1574 78
-1604 83
-1637 87
-1653 88
-1664 89
-1689 53
+1480 58
+1501 59
+1529 63
+1557 68
+1585 73
+1616 78
+1647 83
+1681 87
+1698 88
+1710 89
+1739 53
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -96,34 +96,38 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Tcp.connect 1443
+func Tcp.getH 1443
+this -20 8 0 ?
+func Tcp.setH 1459
+this -24 8 0 ?
+func Tcp.connect 1477
 this -36 8 0 ?
 host -28 8 0 string
 port -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.isOpen 1487
+func Tcp.isOpen 1526
 this -20 8 0 ?
-func Tcp.send 1514
+func Tcp.send 1554
 this -28 8 0 ?
 data -20 8 0 ref
-func Tcp.sendStr 1541
+func Tcp.sendStr 1582
 this -28 8 0 ?
 s -20 8 0 string
-func Tcp.recv 1571
+func Tcp.recv 1613
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.recvStr 1601
+func Tcp.recvStr 1644
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.close 1634
+func Tcp.close 1678
 this -20 8 0 ?
-func Tcp.__init 1686
+func Tcp.__init 1736
 this -20 8 0 ?
-func __cls_init_Tcp 1737
+func __cls_init_Tcp 1791
 this -20 8 0 ?
-func __strconcat 1777
+func __strconcat 1831
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

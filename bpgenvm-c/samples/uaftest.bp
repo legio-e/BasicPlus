@@ -3,14 +3,14 @@
 module UafTest
 
   public class Animal
-    public var nombre: string
+    public property nombre: string
     public function Animal(nombre: string)
       this.nombre := nombre
     end Animal
   end Animal
 
   public class Caja
-    public var owner contenido: Animal
+    public property owner contenido: Animal
     public function Caja(a: Animal)
       this.contenido := a
     end Caja

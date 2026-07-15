@@ -117,7 +117,7 @@ module Json
   end JsonNull
 
   public class JsonBool extends JsonValue
-    public var value: boolean
+    public property value: boolean
     public function JsonBool(value: boolean)
       super()
       this.value := value
@@ -138,7 +138,7 @@ module Json
   end JsonBool
 
   public class JsonInt extends JsonValue
-    public var value: integer
+    public property value: integer
     public function JsonInt(value: integer)
       super()
       this.value := value
@@ -158,7 +158,7 @@ module Json
   end JsonInt
 
   public class JsonFloat extends JsonValue
-    public var value: float
+    public property value: float
     public function JsonFloat(value: float)
       super()
       this.value := value
@@ -178,7 +178,7 @@ module Json
   end JsonFloat
 
   public class JsonString extends JsonValue
-    public var value: string
+    public property value: string
     public function JsonString(value: string)
       super()
       this.value := value
@@ -195,7 +195,7 @@ module Json
   end JsonString
 
   public class JsonArray extends JsonValue
-    public var items: List
+    public property items: List
 
     public function JsonArray()
       super()
@@ -243,8 +243,8 @@ module Json
     // Las claves se guardan como JsonString porque BP no permite asignar
     // `any → string` (primitiva); sí permite `any → ClassType`.
     // Preserva orden de inserción.
-    public var keys:   List
-    public var values: List
+    public property keys:   List
+    public property values: List
 
     public function JsonObject()
       super()
@@ -408,9 +408,9 @@ module Json
   // -------------------------------------------------------------------
 
   public class JsonReader
-    public var text: string
-    public var pos:  integer
-    public var len:  integer
+    public property text: string
+    public property pos:  integer
+    public property len:  integer
 
     public function JsonReader(text: string)
       this.text := text

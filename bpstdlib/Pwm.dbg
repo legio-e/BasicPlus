@@ -2,19 +2,19 @@ dbg 3
 module Pwm
 source C:\lenguajes\pm\bpstdlib\Pwm.bp
 lines
-1452 84
-1460 85
-1489 92
-1497 93
-1521 99
-1542 104
-1563 71
-1571 72
-1579 73
-1589 74
-1603 75
-1619 76
-1644 77
+1588 84
+1600 85
+1631 92
+1643 93
+1668 99
+1690 104
+1712 71
+1724 72
+1736 73
+1750 74
+1768 75
+1785 76
+1810 77
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -98,29 +98,45 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Slice.setDuty 1449
+func Slice.getPin 1449
+this -20 8 0 ?
+func Slice.setPin 1465
+this -24 8 0 ?
+func Slice.getId 1483
+this -20 8 0 ?
+func Slice.setId 1499
+this -24 8 0 ?
+func Slice.getFreqHz 1517
+this -20 8 0 ?
+func Slice.setFreqHz 1533
+this -24 8 0 ?
+func Slice.getDutyPct 1551
+this -20 8 0 ?
+func Slice.setDutyPct 1567
+this -24 8 0 ?
+func Slice.setDuty 1585
 this -24 8 0 ?
 dutyPct -16 4 0 integer
-func Slice.setFreq 1486
+func Slice.setFreq 1628
 this -24 8 0 ?
 freqHz -16 4 0 integer
-func Slice.start 1518
+func Slice.start 1665
 this -20 8 0 ?
-func Slice.stop 1539
+func Slice.stop 1687
 this -20 8 0 ?
-func Slice.__init 1560
+func Slice.__init 1709
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-msg 0 8 0 string
-func __cls_new_Slice 1663
+msg 4 8 0 string
+func __cls_new_Slice 1829
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_init_Slice 1700
+func __cls_init_Slice 1866
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __strconcat 1746
+func __strconcat 1912
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

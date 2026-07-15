@@ -55,8 +55,8 @@ module Wdt
     // Static const con el mínimo recomendado.
     public const Timer.MIN_TIMEOUT_MS: integer := 100
 
-    public var timeoutMs_: integer
-    public var active_:    boolean
+    public property timeoutMs_: integer
+    public property active_:    boolean
 
     // Constructor: activa el watchdog. Aplica clamp al mínimo
     // de 100 ms para evitar bricks accidentales.

@@ -5,8 +5,9 @@ func tcpClose(h:integer):void public intrinsic
 func tcpConnect(host:string,port:integer,timeoutMs:integer):integer public intrinsic
 func tcpSend(h:integer,data:uint8[]):integer public intrinsic
 class Tcp public
-  layout 1 9 00000000 00000000
+  layout 1 11 00000000 00000000
   ctor()
+  prop h:integer public
   method connect(host:string,port:integer,timeoutMs:integer):boolean public
   method isOpen():boolean public
   method send(data:uint8[]):integer public

@@ -54,8 +54,8 @@ module Timer
   // ============================================================
   public class Alarm
 
-    public var periodMs_: integer
-    public var nextFire_: integer
+    public property periodMs_: integer
+    public property nextFire_: integer
 
     // Constructor: configura el periodo en ms. El primer disparo
     // será en `periodMs` ms desde ahora. Pasa periodMs=0 si solo

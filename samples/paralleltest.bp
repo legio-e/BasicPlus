@@ -6,9 +6,9 @@ module ParallelTest
   // como no hay yields, el primero monopoliza hasta terminar y luego va el
   // segundo: tiempo total ≈ 2× el de uno.
   class Worker extends Thread
-    public var id:     integer
-    public var iters:  integer
-    public var result: integer
+    var id:     integer
+    var iters:  integer
+    var result: integer
 
     public function Worker(id: integer, iters: integer)
       super(2048)

@@ -16,10 +16,10 @@ module Diagnosis
   import Pca9554
 
   class Diag
-    public var isAnalog: boolean
-    public var isR:      boolean
-    public var is420:    boolean
-    public var isTC:     boolean
+    public property isAnalog: boolean
+    public property isR:      boolean
+    public property is420:    boolean
+    public property isTC:     boolean
 
     public function Diag()
       this.isAnalog := false

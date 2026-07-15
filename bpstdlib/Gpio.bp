@@ -96,8 +96,8 @@ module Gpio
     public const Pin.PULL_UP:   integer := 1
     public const Pin.PULL_DOWN: integer := 2
 
-    public var num:  integer    // número de pin físico (GP0..GP29)
-    public var mode: integer    // INPUT (0) u OUTPUT (1)
+    public property num:  integer    // número de pin físico (GP0..GP29)
+    public property mode: integer    // INPUT (0) u OUTPUT (1)
 
     // Constructor: configura el pin en el modo indicado.
     // H7.3 — valida el rango contra la placa: Gpio.Pin(47) es válido en

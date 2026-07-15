@@ -2,34 +2,34 @@ dbg 3
 module Uart
 source C:\lenguajes\pm\bpstdlib\Uart.bp
 lines
-1446 173
-1476 179
-1509 185
-1533 160
-1541 161
-1549 162
-1557 163
-1565 164
-1573 165
-1581 166
-1589 167
-1739 63
-1776 67
-1804 71
-1835 75
-1857 80
-1878 83
-1899 88
-1920 91
-1941 94
-1962 99
-1983 102
-2004 105
-2025 108
-2046 111
-2067 114
-2088 117
-2109 120
+1684 173
+1715 179
+1749 185
+1774 160
+1786 161
+1798 162
+1810 163
+1822 164
+1834 165
+1846 166
+1858 167
+2008 63
+2045 67
+2073 71
+2104 75
+2126 80
+2147 83
+2168 88
+2189 91
+2210 94
+2231 99
+2252 102
+2273 105
+2294 108
+2315 111
+2336 114
+2357 117
+2378 120
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -113,18 +113,46 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Port.write 1443
+func Port.getId 1443
+this -20 8 0 ?
+func Port.setId 1459
+this -24 8 0 ?
+func Port.getTx 1477
+this -20 8 0 ?
+func Port.setTx 1493
+this -24 8 0 ?
+func Port.getRx 1511
+this -20 8 0 ?
+func Port.setRx 1527
+this -24 8 0 ?
+func Port.getBaudrate 1545
+this -20 8 0 ?
+func Port.setBaudrate 1561
+this -24 8 0 ?
+func Port.getDataBits 1579
+this -20 8 0 ?
+func Port.setDataBits 1595
+this -24 8 0 ?
+func Port.getStopBits 1613
+this -20 8 0 ?
+func Port.setStopBits 1629
+this -24 8 0 ?
+func Port.getParity 1647
+this -20 8 0 ?
+func Port.setParity 1663
+this -24 8 0 ?
+func Port.write 1681
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Port.read 1473
+func Port.read 1712
 this -36 8 0 ?
 data -28 8 0 ref
 count -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Port.available 1506
+func Port.available 1746
 this -20 8 0 ?
-func Port.__init 1530
+func Port.__init 1771
 this -48 8 0 ?
 id -40 4 0 integer
 tx -36 4 0 integer
@@ -133,7 +161,7 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func __cls_new_Port 1623
+func __cls_new_Port 1892
 id -40 4 0 integer
 tx -36 4 0 integer
 rx -32 4 0 integer
@@ -141,7 +169,7 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func __cls_init_Port 1675
+func __cls_init_Port 1944
 this -48 8 0 ?
 id -40 4 0 integer
 tx -36 4 0 integer
@@ -150,7 +178,7 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func init 1736
+func init 2005
 bus -40 4 0 integer
 tx -36 4 0 integer
 rx -32 4 0 integer
@@ -158,18 +186,18 @@ baudrate -28 4 0 integer
 dataBits -24 4 0 integer
 stopBits -20 4 0 integer
 parity -16 4 0 integer
-func write 1773
+func write 2042
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 1801
+func read 2070
 bus -32 4 0 integer
 data -28 8 0 ref
 count -20 4 0 integer
 timeoutMs -16 4 0 integer
-func available 1832
+func available 2101
 bus -16 4 0 integer
-func __strconcat 2127
+func __strconcat 2396
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

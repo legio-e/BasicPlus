@@ -32,9 +32,9 @@ module Neopixel
   // ----------------------------------------------------------
   public class Strip
 
-    public var pin_: integer      // GPIO de datos
-    public var n_:   integer      // número de píxeles
-    public var px_:  integer[]    // color GRB empaquetado por píxel
+    public property pin_: integer      // GPIO de datos
+    public property n_:   integer      // número de píxeles
+    public property px_:  integer[]    // color GRB empaquetado por píxel
 
     // Constructor: configura el pin para WS2812 y reserva el buffer.
     public function Strip(pin: integer, count: integer)

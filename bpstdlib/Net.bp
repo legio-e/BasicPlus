@@ -47,7 +47,7 @@ module Net
 
   public class Tcp
 
-    public var h: integer   // handle de la conexión; 0 = no conectada
+    public property h: integer   // handle de la conexión; 0 = no conectada
 
     public function Tcp()
       this.h := 0

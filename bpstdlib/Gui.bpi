@@ -182,8 +182,9 @@ class ImageView public extends Component
   method refresh():void public
 end class
 class Color public
-  layout 1 2 00000000 00000000
+  layout 1 4 00000000 00000000
   ctor(rgb:integer)
+  prop rgb:integer public
 end class
 class Slider public extends Component
   layout 14 33 00000021 00000000

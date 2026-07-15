@@ -4,7 +4,7 @@ module MutexTestUnsafe
   // necesidad del mutex: con preempt 10ms el balance final estará muy
   // por debajo de iters*2 (lost updates en read-modify-write).
   class Account
-    public var balance: integer
+    public property balance: integer
 
     public function Account()
       this.balance := 0
@@ -12,9 +12,9 @@ module MutexTestUnsafe
   end Account
 
   class Adder extends Thread
-    public var acc:    Account
-    public var iters:  integer
-    public var nombre: string
+    var acc:    Account
+    var iters:  integer
+    var nombre: string
 
     public function Adder(nombre: string, acc: Account, iters: integer)
       super(2048)

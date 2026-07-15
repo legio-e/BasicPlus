@@ -4,7 +4,7 @@
 module OwnerProp
 
   public class Animal
-    public var nombre: string
+    public property nombre: string
     public function Animal(nombre: string)
       this.nombre := nombre
     end Animal

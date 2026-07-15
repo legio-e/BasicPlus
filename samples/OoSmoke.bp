@@ -9,7 +9,7 @@
 module OoSmoke
 
   public class Shape
-    public var name: string
+    public property name: string
     public function Shape(n: string)
       this.name := n
     end Shape
@@ -22,7 +22,7 @@ module OoSmoke
   end Shape
 
   public class Circle extends Shape
-    public var r: double
+    public property r: double
     public function Circle(radius: double)
       super("circulo")
       this.r := radius
@@ -33,7 +33,7 @@ module OoSmoke
   end Circle
 
   public class Square extends Shape
-    public var side: double
+    public property side: double
     public function Square(s: double)
       super("cuadrado")
       this.side := s

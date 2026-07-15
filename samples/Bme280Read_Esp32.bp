@@ -14,35 +14,35 @@ module Bme280ReadEsp32
   import I2c
 
   public class Sensor
-    public var bus:  I2c.Bus
-    public var addr: integer
-    public var chip: integer
+    public property bus:  I2c.Bus
+    public property addr: integer
+    public property chip: integer
 
     // calibracion T/P (igual que Bmp280)
-    public var t1: integer
-    public var t2: integer
-    public var t3: integer
-    public var p1: integer
-    public var p2: integer
-    public var p3: integer
-    public var p4: integer
-    public var p5: integer
-    public var p6: integer
-    public var p7: integer
-    public var p8: integer
-    public var p9: integer
+    public property t1: integer
+    public property t2: integer
+    public property t3: integer
+    public property p1: integer
+    public property p2: integer
+    public property p3: integer
+    public property p4: integer
+    public property p5: integer
+    public property p6: integer
+    public property p7: integer
+    public property p8: integer
+    public property p9: integer
     // calibracion de humedad (BME280)
-    public var h1: integer
-    public var h2: integer
-    public var h3: integer
-    public var h4: integer
-    public var h5: integer
-    public var h6: integer
+    public property h1: integer
+    public property h2: integer
+    public property h3: integer
+    public property h4: integer
+    public property h5: integer
+    public property h6: integer
 
-    public var tFine:    double
-    public var tempC:    double
-    public var pressHpa: double
-    public var humPct:   double
+    public property tFine:    double
+    public property tempC:    double
+    public property pressHpa: double
+    public property humPct:   double
 
     public function Sensor(bus: I2c.Bus, addr: integer)
       this.bus  := bus

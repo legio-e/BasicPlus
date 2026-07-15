@@ -4,8 +4,10 @@ func disableRaw():void public intrinsic
 func feedRaw():void public intrinsic
 func enableRaw(timeoutMs:integer):void public intrinsic
 class Timer public
-  layout 2 5 00000000 00000000
+  layout 2 9 00000000 00000000
   ctor(timeoutMs:integer)
+  prop timeoutMs_:integer public
+  prop active_:boolean public
   staticconst MIN_TIMEOUT_MS:integer=100 public
   method feed():void public
   method disable():void public

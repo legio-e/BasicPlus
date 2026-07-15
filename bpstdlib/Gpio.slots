@@ -1,5 +1,5 @@
 {
   "RuntimeError": {  },
   "Exception": {  },
-  "Pin": { "on": 2, "off": 3, "toggle": 4, "value": 5, "isHigh": 6, "isLow": 7, "setPull": 8 }
+  "Pin": { "on": 6, "off": 7, "toggle": 8, "value": 9, "isHigh": 10, "isLow": 11, "setPull": 12 }
 }

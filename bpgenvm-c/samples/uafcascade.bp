@@ -4,9 +4,9 @@
 module OwnerCascade
 
   public class Node
-    public var nombre: string
-    public var owner hijo: Node    // hijo OWNER: participa en la cascada
-    public var vecino: Node        // referencia NO-owner: NO cascadea
+    public property nombre: string
+    public property owner hijo: Node    // hijo OWNER: participa en la cascada
+    public property vecino: Node        // referencia NO-owner: NO cascadea
     public function Node(nombre: string)
       this.nombre := nombre
     end Node
@@ -19,7 +19,7 @@ module OwnerCascade
   end Node
 
   public class Box
-    public var owner raiz: Node
+    public property owner raiz: Node
     public function Box(n: Node)
       this.raiz := n
     end Box

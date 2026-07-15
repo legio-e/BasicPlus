@@ -20,7 +20,7 @@ module ModPropSync
   public sync property tick: integer
 
   public class Bumper extends Thread
-    public var iters: integer
+    var iters: integer
 
     public function Bumper(iters: integer)
       super(2048)

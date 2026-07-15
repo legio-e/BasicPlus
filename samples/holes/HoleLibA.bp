@@ -2,7 +2,7 @@
 module HoleLibA
 
   public class MyError
-    public var msg_: string
+    public property msg_: string
     public function MyError(m: string)
       this.msg_ := m
     end MyError

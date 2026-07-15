@@ -3,7 +3,7 @@
 module UafArr
 
   public class Buf
-    public var owner data: integer[]
+    public property owner data: integer[]
     public function Buf(d: integer[])
       this.data := d
     end Buf

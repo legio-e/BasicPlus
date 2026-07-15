@@ -5,9 +5,11 @@
 module SmpPrintStress
 
   public class Printer extends Thread
-    public var id: integer
-    public var n: integer
+    var id: integer
+    var n: integer
+    
     public function Printer(id_: integer, n_: integer)
+      super(1000)
       id := id_
       n := n_
     end Printer

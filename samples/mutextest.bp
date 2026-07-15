@@ -4,7 +4,7 @@ module MutexTest
   // sobre el balance global; con preempción a 10 ms y SIN mutex, las
   // operaciones leer-modificar-escribir corrompen el contador.
   class Account
-    public var balance: integer
+    public property balance: integer
 
     public function Account()
       this.balance := 0
@@ -12,10 +12,10 @@ module MutexTest
   end Account
 
   class Adder extends Thread
-    public var acc:   Account
-    public var lock:  Mutex
-    public var iters: integer
-    public var nombre: string
+    var acc:   Account
+    var lock:  Mutex
+    var iters: integer
+    var nombre: string
 
     public function Adder(nombre: string, acc: Account, lock: Mutex, iters: integer)
       super(2048)

@@ -2,29 +2,29 @@ dbg 3
 module Gpio
 source C:\lenguajes\pm\bpstdlib\Gpio.bp
 lines
-1458 117
-1484 122
-1510 127
-1521 128
-1535 129
-1556 131
-1582 137
-1606 142
-1636 147
-1666 155
-1690 106
-1727 107
-1777 108
-1789 110
-1797 111
-1805 112
-1910 46
-1931 49
-1952 52
-1973 55
-1994 58
-2015 61
-2036 64
+1526 117
+1553 122
+1580 127
+1592 128
+1606 129
+1628 131
+1655 137
+1680 142
+1711 147
+1742 155
+1767 106
+1804 107
+1854 108
+1866 110
+1878 111
+1890 112
+1995 46
+2016 49
+2037 52
+2058 55
+2079 58
+2100 61
+2121 64
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -108,35 +108,43 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Pin.on 1455
+func Pin.getNum 1455
 this -20 8 0 ?
-func Pin.off 1481
+func Pin.setNum 1471
+this -24 8 0 ?
+func Pin.getMode 1489
 this -20 8 0 ?
-func Pin.toggle 1507
+func Pin.setMode 1505
+this -24 8 0 ?
+func Pin.on 1523
+this -20 8 0 ?
+func Pin.off 1550
+this -20 8 0 ?
+func Pin.toggle 1577
 this -20 8 0 ?
 v 0 4 0 integer
-func Pin.value 1579
+func Pin.value 1652
 this -20 8 0 ?
-func Pin.isHigh 1603
+func Pin.isHigh 1677
 this -20 8 0 ?
-func Pin.isLow 1633
+func Pin.isLow 1708
 this -20 8 0 ?
-func Pin.setPull 1663
+func Pin.setPull 1739
 this -24 8 0 ?
 pullMode -16 4 0 integer
-func Pin.__init 1687
+func Pin.__init 1764
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
 msg 0 8 0 string
-func __cls_new_Pin 1824
+func __cls_new_Pin 1909
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Pin 1861
+func __cls_init_Pin 1946
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
-func __strconcat 2054
+func __strconcat 2139
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

@@ -1,8 +1,8 @@
 module StdTest
 
   class Persona
-    public var nombre: string
-    public var edad: integer
+    public property nombre: string
+    public property edad: integer
 
     public function Persona(nombre: string, edad: integer)
       this.nombre := nombre

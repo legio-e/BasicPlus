@@ -2,19 +2,19 @@ dbg 3
 module Pulse
 source C:\lenguajes\pm\bpstdlib\Pulse.bp
 lines
-1452 98
-1473 104
-1494 111
-1518 116
-1539 86
-1547 87
-1555 88
-1569 89
-1585 90
-1610 91
-1715 51
-1736 54
-1757 57
+1554 98
+1576 104
+1598 111
+1623 116
+1645 86
+1657 87
+1669 88
+1687 89
+1704 90
+1729 91
+1834 51
+1855 54
+1876 57
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -98,27 +98,39 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Counter.start 1449
+func Counter.getPin 1449
 this -20 8 0 ?
-func Counter.stop 1470
+func Counter.setPin 1465
+this -24 8 0 ?
+func Counter.getEdgeKind 1483
 this -20 8 0 ?
-func Counter.value 1491
+func Counter.setEdgeKind 1499
+this -24 8 0 ?
+func Counter.getId 1517
 this -20 8 0 ?
-func Counter.reset 1515
+func Counter.setId 1533
+this -24 8 0 ?
+func Counter.start 1551
 this -20 8 0 ?
-func Counter.__init 1536
+func Counter.stop 1573
+this -20 8 0 ?
+func Counter.value 1595
+this -20 8 0 ?
+func Counter.reset 1620
+this -20 8 0 ?
+func Counter.__init 1642
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-msg 0 8 0 string
-func __cls_new_Counter 1629
+msg 4 8 0 string
+func __cls_new_Counter 1748
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_init_Counter 1666
+func __cls_init_Counter 1785
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __strconcat 1775
+func __strconcat 1894
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

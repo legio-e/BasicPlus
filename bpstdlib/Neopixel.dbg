@@ -2,20 +2,20 @@ dbg 3
 module Neopixel
 source C:\lenguajes\pm\bpstdlib\Neopixel.bp
 lines
-1446 50
-1484 51
-1531 57
-1557 58
-1565 59
-1579 60
-1591 61
-1615 67
-1649 72
-1680 77
-1701 41
-1709 42
-1717 43
-1728 44
+1548 50
+1587 51
+1635 57
+1661 58
+1669 59
+1684 60
+1697 61
+1721 67
+1755 72
+1789 77
+1811 41
+1823 42
+1835 43
+1850 44
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -99,37 +99,49 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Strip.setPixel 1443
+func Strip.getPin_ 1443
+this -20 8 0 ?
+func Strip.setPin_ 1459
+this -24 8 0 ?
+func Strip.getN_ 1477
+this -20 8 0 ?
+func Strip.setN_ 1493
+this -24 8 0 ?
+func Strip.getPx_ 1511
+this -20 8 0 ?
+func Strip.setPx_ 1527
+this -28 8 0 ?
+func Strip.setPixel 1545
 this -36 8 0 ?
 i -28 4 0 integer
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-func Strip.setColor 1528
+func Strip.setColor 1632
 this -32 8 0 ?
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
 c 0 4 0 integer
 i 4 4 0 integer
-func Strip.clear 1612
+func Strip.clear 1718
 this -20 8 0 ?
-func Strip.show 1646
+func Strip.show 1752
 this -20 8 0 ?
-func Strip.count 1677
+func Strip.count 1786
 this -20 8 0 ?
-func Strip.__init 1698
+func Strip.__init 1808
 this -28 8 0 ?
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_new_Strip 1744
+func __cls_new_Strip 1866
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_init_Strip 1781
+func __cls_init_Strip 1903
 this -28 8 0 ?
 pin -20 4 0 integer
 count -16 4 0 integer
-func __strconcat 1827
+func __strconcat 1949
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

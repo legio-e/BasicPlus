@@ -145,13 +145,13 @@ module Uart
     public const Port.PARITY_ODD:  integer := 1
     public const Port.PARITY_EVEN: integer := 2
 
-    public var id:       integer    // 0 (uart0) o 1 (uart1)
-    public var tx:       integer    // pin TX
-    public var rx:       integer    // pin RX
-    public var baudrate: integer
-    public var dataBits: integer    // 5..8 (típico 8)
-    public var stopBits: integer    // 1 ó 2
-    public var parity:   integer    // PARITY_NONE/ODD/EVEN
+    public property id:       integer    // 0 (uart0) o 1 (uart1)
+    public property tx:       integer    // pin TX
+    public property rx:       integer    // pin RX
+    public property baudrate: integer
+    public property dataBits: integer    // 5..8 (típico 8)
+    public property stopBits: integer    // 1 ó 2
+    public property parity:   integer    // PARITY_NONE/ODD/EVEN
 
     // Constructor: configura el UART en HW. El backend del host
     // loguea pero no aborta para mantener la VM-host usable sin

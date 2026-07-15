@@ -14,7 +14,7 @@ module ClassIsolation
 
   // -----------------------------------------------------------
   class Caja
-    public var x: integer
+    public property x: integer
 
     public function Caja()
       this.x := 0

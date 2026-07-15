@@ -11,9 +11,12 @@
 module SmpFibBench
 
   public class FibWorker extends Thread
-    public var n: integer
-    public var result: integer
+    var n: integer
+    // L11.a: privada + getter a mano (property en clase Thread descuadra slots — ver #291)
+    var result: integer
+    
     public function FibWorker(n_: integer)
+      super(1000)
       n := n_
       result := 0
     end FibWorker
@@ -21,6 +24,10 @@ module SmpFibBench
     public function run()
       result := fib(n)
     end run
+
+    public function getResult(): integer
+      return this.result
+    end getResult
   end FibWorker
 
   public function fib(n: integer): integer
@@ -50,7 +57,7 @@ module SmpFibBench
     w1.join()
     w2.join()
     var t3: integer := now()
-    print "paralelo   2x fib(30) =", w1.result, w2.result, " ms =", t3 - t2
+    print "paralelo   2x fib(30) =", w1.getResult(), w2.getResult(), " ms =", t3 - t2
   end Main
 
 end SmpFibBench

@@ -246,6 +246,20 @@ pack tocan el `.mod`, así que se harán puntos de H5 y H6 **entrelazados**.
   carga** = el **Camino B de forms**; (c) el Pack manager inspecciona qué exporta cada módulo; (d) **mata
   la familia de bugs de desfase `.bpi`/`.mod`/`.slots`** (Json rancio, slots de Gui) — un artefacto, una
   verdad; el sidecar `.slots` de H13.1 queda subsumido.
+
+  **Precisión de Eduardo (15-jul): el `.bpi` NO queda opcional — queda TEMPORAL y se BORRA.** En cuanto
+  el `.mod` está generado, el `.bpi` deja de ser necesario y hay que eliminarlo. La diferencia con "(a)
+  compilar sin su `.bpi`" no es cosmética: un `.bpi` que sigue existiendo se sigue encontrando y sigue
+  mintiendo cuando se queda rancio. Solo si **no existe** es cierto el "un artefacto, una verdad" de (d);
+  si es opcional, es un deseo. Evidencia del día 15-jul: 8 rojos falsos del barrido de samples salieron
+  de `.bpi` desparejados (318 en la librería, 1 en el dir de compilación), y el `.bpi` ausente lleva todo
+  el día disfrazándose de bug del compilador.
+
+  **Cabo suelto a decidir**: ¿el `.bpi` se **escribe y luego se borra**, o **no se escribe nunca** (la
+  interfaz se construye en memoria y se embebe directamente)? Escribir-y-borrar deja una ventana: si la
+  compilación se cae entre el write y el delete, sobrevive un `.bpi` huérfano — y si algo lo lee como
+  fallback, vuelve el bug que este hito venía a matar. No-escribirlo nunca cierra el modo de fallo por
+  construcción, en la línea de H1.8 (el ancho de ref se decide en 3 helpers, no en 17 sitios).
 - **H6.b — Encoding de firmas para la sobrecarga (H5.a).** El módulo debe distinguir sobrecargas por
   **firma completa** (tipos de params), no solo por aridad. Toca `.mod`/`.bpi` + el mangling.
 - **H6.c — Resolución de módulo desde pack (H5.b + H3).** Soportar `import pack:modulo` — localizar el

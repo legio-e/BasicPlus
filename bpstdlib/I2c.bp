@@ -122,10 +122,10 @@ module I2c
     public const Bus.STANDARD: integer := 100000
     public const Bus.FAST:     integer := 400000
 
-    public var id:       integer    // 0 (i2c0) o 1 (i2c1)
-    public var sda:      integer
-    public var scl:      integer
-    public var baudrate: integer
+    public property id:       integer    // 0 (i2c0) o 1 (i2c1)
+    public property sda:      integer
+    public property scl:      integer
+    public property baudrate: integer
 
     // Constructor: inicializa el bus en HW. Si id no es 0/1 el
     // backend logueará pero no abortará — para mantener la VM-host

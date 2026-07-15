@@ -2,29 +2,29 @@ dbg 3
 module Freq
 source C:\lenguajes\pm\bpstdlib\Freq.bp
 lines
-1452 76
-1463 77
-1474 78
-1483 79
-1494 80
-1505 81
-1534 87
-1540 88
-1554 89
-1567 91
-1575 92
-1583 93
-1595 94
-1611 95
-1625 97
-1648 103
-1679 108
-1700 67
-1708 68
-1716 69
-1823 46
-1844 49
-1865 52
+1520 76
+1531 77
+1542 78
+1551 79
+1562 80
+1573 81
+1602 87
+1608 88
+1622 89
+1635 91
+1643 92
+1651 93
+1663 94
+1679 95
+1693 97
+1716 103
+1747 108
+1768 67
+1780 68
+1792 69
+1899 46
+1920 49
+1941 52
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -108,34 +108,42 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Meter.measureHz 1449
+func Meter.getPin 1449
+this -20 8 0 ?
+func Meter.setPin 1465
+this -24 8 0 ?
+func Meter.getEdge 1483
+this -20 8 0 ?
+func Meter.setEdge 1499
+this -24 8 0 ?
+func Meter.measureHz 1517
 this -24 8 0 ?
 windowMs -16 4 0 integer
 n 8 4 0 integer
-func Meter.measureHzAvg 1531
+func Meter.measureHzAvg 1599
 this -28 8 0 ?
 windowMs -20 4 0 integer
 samples -16 4 0 integer
 s 4 4 0 integer
 sum 8 4 0 integer
 i 12 4 0 integer
-func Meter.maxHz 1645
+func Meter.maxHz 1713
 this -24 8 0 ?
 windowMs -16 4 0 integer
-func Meter.close 1676
+func Meter.close 1744
 this -20 8 0 ?
-func Meter.__init 1697
+func Meter.__init 1765
 this -28 8 0 ?
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_new_Meter 1737
+func __cls_new_Meter 1813
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_init_Meter 1774
+func __cls_init_Meter 1850
 this -28 8 0 ?
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __strconcat 1883
+func __strconcat 1959
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

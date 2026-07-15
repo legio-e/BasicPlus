@@ -21,50 +21,50 @@ module Bme688SpiEsp32
 
   public class Sensor
     // ---- conexion SPI ----
-    public var bus:     Spi.Bus
-    public var cs:      Gpio.Pin
-    public var pageBit: integer    // bit4 de 0x73 que creemos activo; 2 = desconocido
-    public var chip:    integer
-    public var variant: integer
+    public property bus:     Spi.Bus
+    public property cs:      Gpio.Pin
+    public property pageBit: integer    // bit4 de 0x73 que creemos activo; 2 = desconocido
+    public property chip:    integer
+    public property variant: integer
 
     // ---- coeficientes de calibracion (uso interno) ----
-    public var par_t1: integer
-    public var par_t2: integer
-    public var par_t3: integer
-    public var par_p1: integer
-    public var par_p2: integer
-    public var par_p3: integer
-    public var par_p4: integer
-    public var par_p5: integer
-    public var par_p6: integer
-    public var par_p7: integer
-    public var par_p8: integer
-    public var par_p9: integer
-    public var par_p10: integer
-    public var par_h1: integer
-    public var par_h2: integer
-    public var par_h3: integer
-    public var par_h4: integer
-    public var par_h5: integer
-    public var par_h6: integer
-    public var par_h7: integer
-    public var par_gh1: integer
-    public var par_gh2: integer
-    public var par_gh3: integer
-    public var res_heat_val: integer
-    public var res_heat_range: integer
+    public property par_t1: integer
+    public property par_t2: integer
+    public property par_t3: integer
+    public property par_p1: integer
+    public property par_p2: integer
+    public property par_p3: integer
+    public property par_p4: integer
+    public property par_p5: integer
+    public property par_p6: integer
+    public property par_p7: integer
+    public property par_p8: integer
+    public property par_p9: integer
+    public property par_p10: integer
+    public property par_h1: integer
+    public property par_h2: integer
+    public property par_h3: integer
+    public property par_h4: integer
+    public property par_h5: integer
+    public property par_h6: integer
+    public property par_h7: integer
+    public property par_gh1: integer
+    public property par_gh2: integer
+    public property par_gh3: integer
+    public property res_heat_val: integer
+    public property res_heat_range: integer
 
     // estado intermedio (t_fine) + resultados
-    public var tFine:    double
-    public var tempC:    double
-    public var pressHpa: double
-    public var humPct:   double
-    public var gasOhm:   double
-    public var iaq:      integer
-    public var gasValid: boolean
-    public var heatStab: boolean
+    public property tFine:    double
+    public property tempC:    double
+    public property pressHpa: double
+    public property humPct:   double
+    public property gasOhm:   double
+    public property iaq:      integer
+    public property gasValid: boolean
+    public property heatStab: boolean
 
-    public var gasBaseline: double
+    public property gasBaseline: double
 
     public function Sensor(bus: Spi.Bus, cs: Gpio.Pin)
       this.bus := bus

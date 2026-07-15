@@ -2,18 +2,18 @@ dbg 3
 module Wdt
 source C:\lenguajes\pm\bpstdlib\Wdt.bp
 lines
-1446 77
-1456 78
-1477 87
-1487 88
-1503 93
-1513 94
-1534 64
-1540 65
-1554 66
-1567 68
-1575 69
-1585 70
+1514 77
+1525 78
+1546 87
+1560 88
+1576 93
+1590 94
+1612 64
+1618 65
+1632 66
+1645 68
+1657 69
+1671 70
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -97,22 +97,30 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Timer.feed 1443
+func Timer.getTimeoutMs_ 1443
 this -20 8 0 ?
-func Timer.disable 1474
+func Timer.setTimeoutMs_ 1459
+this -24 8 0 ?
+func Timer.getActive_ 1477
 this -20 8 0 ?
-func Timer.reenable 1500
+func Timer.setActive_ 1493
+this -24 8 0 ?
+func Timer.feed 1511
 this -20 8 0 ?
-func Timer.__init 1531
+func Timer.disable 1543
+this -20 8 0 ?
+func Timer.reenable 1573
+this -20 8 0 ?
+func Timer.__init 1609
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
 t 0 4 0 integer
-func __cls_new_Timer 1601
+func __cls_new_Timer 1687
 timeoutMs -16 4 0 integer
-func __cls_init_Timer 1635
+func __cls_init_Timer 1721
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
-func __strconcat 1678
+func __strconcat 1764
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

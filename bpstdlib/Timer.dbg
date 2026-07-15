@@ -2,21 +2,21 @@ dbg 3
 module Timer
 source C:\lenguajes\pm\bpstdlib\Timer.bp
 lines
-1446 75
-1452 76
-1466 77
-1482 78
-1496 79
-1519 82
-1537 84
-1558 93
-1570 94
-1584 95
-1598 97
-1622 104
-1646 110
-1677 64
-1685 65
+1514 75
+1520 76
+1535 77
+1552 78
+1567 79
+1596 82
+1614 84
+1635 93
+1648 94
+1662 95
+1676 97
+1705 104
+1734 110
+1767 64
+1779 65
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -100,25 +100,33 @@ func SyncList.popBlocking 1225
 this -20 8 0 ?
 func SyncList.__init 1352
 this -20 8 0 ?
-func Alarm.check 1443
+func Alarm.getPeriodMs_ 1443
+this -20 8 0 ?
+func Alarm.setPeriodMs_ 1459
+this -24 8 0 ?
+func Alarm.getNextFire_ 1477
+this -20 8 0 ?
+func Alarm.setNextFire_ 1493
+this -24 8 0 ?
+func Alarm.check 1511
 this -20 8 0 ?
 cur 4 4 0 integer
-func Alarm.wait 1555
+func Alarm.wait 1632
 this -20 8 0 ?
 rem 0 4 0 integer
-func Alarm.reset 1619
+func Alarm.reset 1702
 this -20 8 0 ?
-func Alarm.since 1643
+func Alarm.since 1731
 this -20 8 0 ?
-func Alarm.__init 1674
+func Alarm.__init 1764
 this -24 8 0 ?
 periodMs -16 4 0 integer
-func __cls_new_Alarm 1704
+func __cls_new_Alarm 1802
 periodMs -16 4 0 integer
-func __cls_init_Alarm 1738
+func __cls_init_Alarm 1836
 this -24 8 0 ?
 periodMs -16 4 0 integer
-func __strconcat 1781
+func __strconcat 1879
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
