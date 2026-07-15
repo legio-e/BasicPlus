@@ -1,0 +1,23 @@
+// MemT4_Concat.bp — escalón 4: concat `+` en bucle (realloc de string + churn de handles).
+// SOSPECHOSO PRINCIPAL: handle_gen basura en SRAM de placa (host-OK / Pico-fail).
+// Construye la cadena y la relee (charCodeAt) → un handle corrupto sale en len o en sum.
+// Self-contained. Esperado: T4 len = 200 / T4 sum = 10500
+module MemT4
+  function Main()
+    var s: string := ""
+    var i: integer := 0
+    while i < 200 do
+      s := s + intToString(i mod 10)
+      i := i + 1
+    endwh
+    var sum: integer := 0
+    var j: integer := 0
+    while j < strlen(s) do
+      sum := sum + charCodeAt(s, j)
+      j := j + 1
+    endwh
+    print "T4 len =", strlen(s)
+    print "T4 sum =", sum
+    print "T4: fin"
+  end Main
+end MemT4

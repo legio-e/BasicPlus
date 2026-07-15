@@ -1,0 +1,23 @@
+// MemT2_StrField.bp — escalón 2: campo STRING (referencia) en objetos.
+// Aquí vivió #1 (StringBuilder.chars a 4B → gen truncada). Self-contained. Determinista.
+// Esperado: T2 a = hola / T2 b = mundo / T2 len = 9
+module MemT2
+  class Named
+    var label: string
+    public function Named(s: string)
+      this.label := s
+    end Named
+    public function tag(): string
+      return this.label
+    end tag
+  end Named
+
+  function Main()
+    var a: Named := Named("hola")
+    var b: Named := Named("mundo")
+    print "T2 a =", a.tag()
+    print "T2 b =", b.tag()
+    print "T2 len =", strlen(a.tag()) + strlen(b.tag())
+    print "T2: fin"
+  end Main
+end MemT2

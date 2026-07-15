@@ -1,0 +1,35 @@
+// MemT3_Inherit.bp — escalón 3: herencia + super() + despacho virtual.
+// La forma OO de GuiColorDemo (Screen/Button/Label descienden de Object), mínima.
+// Self-contained. Esperado: T3 desc = circle / T3 area = 147
+module MemT3
+  class Shape
+    var kind: string
+    public function Shape(k: string)
+      this.kind := k
+    end Shape
+    public function describe(): string
+      return this.kind
+    end describe
+    public function area(): integer
+      return 0
+    end area
+  end Shape
+
+  class Circle extends Shape
+    var r: integer
+    public function Circle(radius: integer)
+      super("circle")
+      this.r := radius
+    end Circle
+    public function area(): integer
+      return this.r * this.r * 3
+    end area
+  end Circle
+
+  function Main()
+    var s: Shape := Circle(7)
+    print "T3 desc =", s.describe()
+    print "T3 area =", s.area()
+    print "T3: fin"
+  end Main
+end MemT3

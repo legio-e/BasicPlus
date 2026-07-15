@@ -1,0 +1,23 @@
+// MemT4b_ReadOnly.bp — ACOTADO de T4, variante B: SOLO la lectura.
+// UN concat (→ string de HEAP con handle, como en T4) y luego el bucle de
+// charCodeAt. SIN churn: una sola alocación. Aísla la LECTURA de un string de
+// heap del churn del bucle.
+//   → si PETA: el problema es charCodeAt leyendo un ref de heap (sin churn).
+//   → si PASA: leer heap está sano → el veneno es la REPETICIÓN (ver T4c).
+// Ojo: el concat SIMPLE ya se probó verde en placa (T.bp), así que aquí lo
+// nuevo es el bucle de charCodeAt sobre su resultado.
+// Self-contained (solo Core). Esperado: T4b len = 10 / T4b sum = 525
+module MemT4b
+  function Main()
+    var s: string := "01234" + "56789"
+    var sum: integer := 0
+    var j: integer := 0
+    while j < strlen(s) do
+      sum := sum + charCodeAt(s, j)
+      j := j + 1
+    endwh
+    print "T4b len =", strlen(s)
+    print "T4b sum =", sum
+    print "T4b: fin"
+  end Main
+end MemT4b

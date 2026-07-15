@@ -1,0 +1,27 @@
+// MemT4c_Few.bp — ACOTADO de T4, variante C: T4 IDÉNTICO pero con 20 vueltas
+// en vez de 200. Misma forma (concat en bucle + charCodeAt), 10× menos churn.
+// Aísla si el fallo depende de la CUENTA (umbral: heap lleno → GC real en la
+// placa que el host no dispara).
+//   → si PASA (y T4 con 200 peta): es dependiente de cuenta → apunta al GC real
+//     del device / reuso de slots de handle.
+//   → si PETA con solo 20: no hay umbral, rompe con poco churn.
+// Self-contained (solo Core). Esperado: T4c len = 20 / T4c sum = 1050
+module MemT4c
+  function Main()
+    var s: string := ""
+    var i: integer := 0
+    while i < 20 do
+      s := s + intToString(i mod 10)
+      i := i + 1
+    endwh
+    var sum: integer := 0
+    var j: integer := 0
+    while j < strlen(s) do
+      sum := sum + charCodeAt(s, j)
+      j := j + 1
+    endwh
+    print "T4c len =", strlen(s)
+    print "T4c sum =", sum
+    print "T4c: fin"
+  end Main
+end MemT4c

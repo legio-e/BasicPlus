@@ -1,0 +1,32 @@
+// MemT5_Gc.bp — escalón 5: churn de GC (aloca+descarta ~440 KB en bucle → fuerza recolección)
+// + verifica que un superviviente con campo string sigue íntegro tras la recolección.
+// Donde la SRAM sin inicializar / la gen reusada muerde. Self-contained.
+// Esperado: T5 acc = 322690 / T5 keep = SURVIVOR / T5 keeplen = 8
+module MemT5
+  class Cell
+    var tag: string
+    public function Cell(s: string)
+      this.tag := s
+    end Cell
+    public function tag2(): string
+      return this.tag
+    end tag2
+  end Cell
+
+  function Main()
+    var keep: Cell := Cell("SURVIVOR")
+    var i: integer := 0
+    var acc: integer := 0
+    while i < 800 do
+      var junk: integer[] := newIntArray(128)
+      junk[0] := i
+      var tmp: Cell := Cell("t" + intToString(i))
+      acc := acc + junk[0] + strlen(tmp.tag2())
+      i := i + 1
+    endwh
+    print "T5 acc =", acc
+    print "T5 keep =", keep.tag2()
+    print "T5 keeplen =", strlen(keep.tag2())
+    print "T5: fin"
+  end Main
+end MemT5

@@ -1,0 +1,32 @@
+// MemT4d_Count.bp — ACOTADO de T4a: ¿a partir de CUÁNTOS concats rompe?
+//
+// Cuerpo del bucle IDÉNTICO a T4a (misma concat, sin leer nada), pero envuelto
+// en try/catch: reporta el nº EXACTO de concat en que muere + el mensaje, y sale
+// LIMPIO (exit 0) para que el output LLEGUE (al petar de golpe, los prints se
+// pierden — método de Eduardo de la investigación anterior).
+//
+// Sabemos: 1 concat VA (T.bp "Hola"+" mundo"); 200 PETA (T4a).
+//   → muere en el nº 2-3   → ESTRUCTURAL: el reassign de `s` / liberar el viejo.
+//   → muere en un nº alto  → UMBRAL: heap lleno → GC real del device / reuso de
+//                            slots de handle (el host no lo dispara).
+//
+// Self-contained (solo Core). Esperado en host: T4d OK — concats = 200, len = 200
+module MemT4d
+  import Core
+  function Main()
+    var s: string := ""
+    var i: integer := 0
+    try
+      while i < 200 do
+        s := s + intToString(i mod 10)
+        i := i + 1
+      endwh
+      print "T4d OK — concats =", i, " len =", strlen(s)
+    catch e: Core.Exception
+      print "T4d PETO en el concat nº", i + 1
+      print "  concats OK antes de morir =", i
+      print "  msg:", e.msg
+    endtry
+    print "T4d: fin"
+  end Main
+end MemT4d

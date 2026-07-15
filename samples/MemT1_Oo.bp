@@ -1,0 +1,24 @@
+// MemT1_Oo.bp — TREN DE MEMORIA, escalón 1: OO básico (clase + campo int + método).
+// Self-contained (solo Core embebido → NO sube stdlib por FS). Determinista.
+// Esperado: T1 get = 42
+module MemT1
+  class Box
+    var n: integer
+    public function Box(v: integer)
+      this.n := v
+    end Box
+    public function get(): integer
+      return this.n
+    end get
+    public function add(d: integer)
+      this.n := this.n + d
+    end add
+  end Box
+
+  function Main()
+    var b: Box := Box(10)
+    b.add(32)
+    print "T1 get =", b.get()
+    print "T1: fin"
+  end Main
+end MemT1

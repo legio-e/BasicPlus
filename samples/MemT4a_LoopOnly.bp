@@ -1,0 +1,18 @@
+// MemT4a_LoopOnly.bp — ACOTADO de T4, variante A: SOLO el bucle de concat.
+// Construye la cadena con 200 concats (mucho churn de handles de string) pero
+// NO la relee con charCodeAt. Aísla el CHURN del concat del camino de lectura.
+//   → si PETA en placa: el culpable es el churn del concat (charCodeAt inocente).
+//   → si PASA: el bucle de concat está sano; mira T4b (lectura) / T4c (cuenta).
+// Self-contained (solo Core). Esperado: T4a len = 200
+module MemT4a
+  function Main()
+    var s: string := ""
+    var i: integer := 0
+    while i < 200 do
+      s := s + intToString(i mod 10)
+      i := i + 1
+    endwh
+    print "T4a len =", strlen(s)
+    print "T4a: fin"
+  end Main
+end MemT4a
