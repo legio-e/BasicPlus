@@ -497,7 +497,7 @@ public final class MivmEmitter {
                 int id = tempCounter++;
                 String newref  = "__modmtx_newref_"  + id;
                 String discard = "__modmtx_discard_" + id;
-                w.declareLocalLong(newref);
+                declareLocalRef(newref);   // H1.8: el Mutex es una ref (era declareLocalLong = un 8 a mano)
                 w.declareLocal(discard);
                 w.emitNewObject("Mutex");
                 w.emitSetLocal(newref);
@@ -623,8 +623,7 @@ public final class MivmEmitter {
             if (lit != null && bakeModuleVarInit(dn.name, t, lit)) continue;
 
             // Sin init horneable: slot a cero, 4 bytes (8 si long/double).
-            if (occupies8Bytes(t)) w.declareGlobalLong(dn.name);   // H1.2/H1.3
-            else w.declareGlobal(dn.name);
+            declareGlobalByType(dn.name, t);   // H1.8: el ancho lo decide el TIPO (era if/else aquí)
         }
     }
 
@@ -643,7 +642,7 @@ public final class MivmEmitter {
         switch (k) {
             case STRING:
                 if (!(lit instanceof String)) return false;
-                w.declareGlobalLong(name);   // #10 (censo V4): la REF de string es 8B (era declareGlobal=4B → truncaba el handle + fuga de pila en __init); igual que el path sin-init (occupies8Bytes)
+                declareGlobalRef(name);   // #10 (censo V4): la REF de string es 8B (era declareGlobal=4B → truncaba el handle + fuga de pila en __init). H1.8: por el carril de ref, no un 8 a mano
                 pendingStrVarInits.add(new String[]{ name, internString((String) lit) });
                 return true;
             case LONG:
@@ -1043,8 +1042,7 @@ public final class MivmEmitter {
                     // L6 — backing de static property: global cualificado, width-aware.
                     PropertySymbol ps = (PropertySymbol) s;
                     String backing = staticBackingName(cd.name, ps.name);
-                    if (occupies8Bytes(ps.type)) w.declareGlobalLong(backing);
-                    else w.declareGlobal(backing);
+                    declareGlobalByType(backing, ps.type);   // H1.8: el ancho lo decide el TIPO
                 }
             }
 
@@ -1265,7 +1263,7 @@ public final class MivmEmitter {
                 // BUG-6: width-aware — long/double = 8 bytes. Sin esto la
                 // factoría cross-module declaraba el param a 4 bytes y un arg
                 // long/double se corrompía al pasarlo al __init.
-                w.declareParam(p.name, occupies8Bytes(p.type) ? 8 : 4, varDbgTypeTag(p.type));
+                declareParamByType(p.name, p.type);   // H1.8 (antes: ?8:4 aqui)
             }
         }
         // returnType=AnyType para evitar dependencia de tipo: el caller
@@ -1312,10 +1310,10 @@ public final class MivmEmitter {
     private void synthesizeCrossModuleInit(ClassSymbol cls) throws IOException {
         String initName = "__cls_init_" + cls.name;
         w.addFunction(initName, true);   // pública: cross-module
-        w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
+        declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
         FunctionSymbol ctor = cls.constructor;
         for (ParamSymbol p : ctor.params) {
-            w.declareParam(p.name, occupies8Bytes(p.type) ? 8 : 4, varDbgTypeTag(p.type));   // BUG-6: long/double = 8 bytes
+            declareParamByType(p.name, p.type);   // H1.8 (antes: ?8:4 aquí). BUG-6: long/double = 8 bytes
         }
         FunctionSymbol synthFs = new FunctionSymbol(initName, true, false, false, null, null);
         beginFunctionScope(synthFs, null);   // void
@@ -1399,7 +1397,7 @@ public final class MivmEmitter {
      */
     private void synthesizeSyncMutexCtor(ClassSymbol cls) throws IOException {
         w.addFunction(cls.name + ".__init", false);
-        w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
+        declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
         beginFunctionScope(makeSynthFs("__init", null), null);
         try {
             emitSyncMutexInit(cls.name);
@@ -1462,7 +1460,7 @@ public final class MivmEmitter {
         // sintetiza separadamente — su nombre sin puntos evita la ambigüedad
         // del parser de imports (parts[len-2] = módulo).
         w.addFunction(cls.name + ".__init", false);
-        w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
+        declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);   // constructor = void
         try {
@@ -1565,7 +1563,7 @@ public final class MivmEmitter {
         String setterSimple = "set" + capitalize(pd.name.name);
         w.addMethod(setterSimple);
         // BUG-6: el valor de una property long/double ocupa 8 bytes en el param.
-        w.declareParam("__val", occupies8Bytes(propType) ? 8 : 4);
+        declareParamByType("__val", propType);   // H1.8 (antes: ?8:4 aquí)
         FunctionSymbol setterFs = new FunctionSymbol(setterSimple, pd.isPublic, false, false, cls, null);
         beginFunctionScope(setterFs, null);
         currentPropertyField = pd.name.name;
@@ -1574,8 +1572,7 @@ public final class MivmEmitter {
             if (pd.isSync) emitSyncLock(cls.name);
             if (pd.setter != null) {
                 // Alias el param al nombre que el usuario escribió (BUG-6: 8 bytes si long/double).
-                if (occupies8Bytes(propType)) declareLocalLong(pd.setter.paramName);
-                else declareLocal(pd.setter.paramName);
+                declareLocalByType(pd.setter.paramName, propType, null);   // H1.8
                 w.emitGetParam("__val");
                 w.emitSetLocal(pd.setter.paramName);
                 for (IStmt s : pd.setter.body) emitStmt(s);
@@ -1771,8 +1768,10 @@ public final class MivmEmitter {
         Symbol dsW = info.declSymbols.get(vd);
         BpType widthT = (dsW instanceof VarSymbol) ? ((VarSymbol) dsW).type : declT;
         for (DeclName dn : vd.names) {
-            if (occupies8Bytes(widthT)) declareLocalLong(dn.name, declTag);   // H1.2/H1.3/H1.2a: long/double/ref = 8 bytes
-            else declareLocal(dn.name, declTag);
+            // H1.8: el ancho lo decide el TIPO (widthT). declTag va aparte A PROPOSITO:
+            // declT es null para refs, asi que el .dbg las etiqueta "?" — mejorable, pero
+            // es otra tarea; aqui el .dbg sale byte-identico.
+            declareLocalByType(dn.name, widthT, declTag);   // H1.2/H1.3/H1.2a: long/double/ref = 8 bytes
             if (vd.isOwner) {
                 scopeStack.peek().ownerLocals.add(dn.name);
             }
@@ -1836,8 +1835,7 @@ public final class MivmEmitter {
         // No-literal: slot local de única asignación, width-aware (un long en
         // slot de 4 bytes desbalancearía la pila en el SET_LOCAL).
         BpType t = (cs != null && cs.type != null) ? cs.type : info.exprTypes.get(cd.value);
-        if (occupies8Bytes(t)) declareLocalLong(cd.name.name, varDbgTypeTag(t));
-        else declareLocal(cd.name.name, varDbgTypeTag(t));
+        declareLocalByType(cd.name.name, t);   // H1.8
         emitExpr(cd.value);
         coerceToTarget(cd.value, t);
         w.emitSetLocal(cd.name.name);
@@ -1866,7 +1864,7 @@ public final class MivmEmitter {
     // H6.a.2: además pasa el tag de tipo BP para el .dbg.
     private void declareParamsWidthAware(FunctionSymbol fs) {
         for (ParamSymbol p : fs.params) {
-            w.declareParam(p.name, occupies8Bytes(p.type) ? 8 : 4, varDbgTypeTag(p.type));
+            declareParamByType(p.name, p.type);   // H1.8 (antes: ?8:4 aqui)
         }
     }
 
@@ -1901,6 +1899,56 @@ public final class MivmEmitter {
      *  mano: el Mutex de las sync property de módulo). Una ref SIEMPRE es REF_SIZE=8. */
     private void declareGlobalRef(String name) {
         w.declareGlobalLong(name);
+    }
+
+    /** H1.8 — gemelo para los LOCALES. Colapsa el `if (occupies8Bytes(t)) declareLocalLong
+     *  else declareLocal` que estaba REPETIDO en 6 sitios: la decisión de ancho vive en UN
+     *  sitio y sale del tipo. (El fallo de las tuplas #281 fue del PREDICADO —`isRefType`
+     *  no conocía `TupleType`— y por eso rompió los 6 a la vez: con un solo sitio, arreglar
+     *  el predicado sigue arreglándolo todo, pero ya no hay 6 sitios que puedan divergir.) */
+    private void declareLocalByType(String name, BpType type) {
+        declareLocalByType(name, type, varDbgTypeTag(type));
+    }
+
+    /** H1.8 — variante con tag del .dbg EXPLÍCITO. Existe porque hay sitios donde el tipo
+     *  que decide el ANCHO y el que etiqueta el .dbg NO son el mismo a propósito: en una
+     *  var local, `declT` (typeRefToBpType) es **null para refs** y el ancho sale del tipo
+     *  semántico del Symbol (`widthT`). Derivar aquí el tag del tipo de ancho "mejoraría"
+     *  el .dbg de "?" a "ref" — pero eso ya no es centralizar el ancho, es cambiar el
+     *  debugger de paso. H1.8 cambia UNA cosa: dónde se decide el ancho. El .dbg sale
+     *  byte-idéntico. (Que el .dbg etiquete "?" los locales-ref es mejorable, pero es otra
+     *  tarea con sus propias pruebas.) */
+    private void declareLocalByType(String name, BpType type, String dbgTag) {
+        if (type != null && occupies8Bytes(type)) declareLocalLong(name, dbgTag);
+        else declareLocal(name, dbgTag);
+    }
+
+    /** H1.8 — local que es una REFERENCIA por construcción (sintéticos sin BpType: el
+     *  `newref` del Mutex de módulo). Una ref SIEMPRE es REF_SIZE=8.
+     *
+     *  OJO — va a `w.` DIRECTO, no al wrapper `declareLocalLong(name,tag)` del emisor: los
+     *  sintéticos se emiten en sitios (emitInitFunction) donde el scopeStack AÚN NO existe
+     *  y el wrapper hace `scopeStack.peek()` → NPE. Lo cazó `samples/RefGlobals.bp` (el
+     *  único del corpus con `sync property` de módulo) en el primer intento de H1.8 fase
+     *  2/3: sin ese sample el .mod habría salido idéntico y el NPE se cuela.
+     *
+     *  Tag del .dbg = null, como el `w.declareLocalLong(newref)` original: H1.8 cambia el
+     *  ANCHO, no el .dbg. */
+    private void declareLocalRef(String name) {
+        w.declareLocalLong(name);
+    }
+
+    /** H1.8 — param que es una REFERENCIA por construcción: el receptor `this` de los
+     *  métodos SINTETIZADOS (List/StringBuilder/Object/tuplas), que no tienen un BpType
+     *  de su clase a mano.
+     *
+     *  POR QUÉ IMPORTA aunque hoy sea correcto: estaba escrito `declareParam("this", 8)`
+     *  — un **8 a mano**. Hoy acierta, pero NO SE ADAPTA: si vuelve a cambiar la
+     *  representación de una ref (que es justo el propósito de la abstracción, y lo que
+     *  provocó todo el 4→8B), estos sitios se quedarían atrás EXACTAMENTE igual que se
+     *  quedaron entonces. Aquí el ancho lo pone el carril de ref, no un humano. */
+    private void declareParamRef(String name) {
+        w.declareParam(name, 8);   // REF_SIZE. Tag del .dbg = null, como el original: H1.8 cambia el ANCHO, no el .dbg
     }
 
     private void emitAssign(AssignStmt a) throws IOException {
@@ -2343,8 +2391,7 @@ public final class MivmEmitter {
             // descuadraba locales/pila — p.ej. this.metodo(x) dentro del bucle leía
             // un receiver null ("INVOKE_VIRTUAL sobre null"). Narrow (byte/word)
             // se extiende a i32 en el ALOAD → local de 4 bytes, correcto.
-            if (occupies8Bytes(forinElem)) declareLocalLong(s.iteratorName, forinTag);
-            else declareLocal(s.iteratorName, forinTag);
+            declareLocalByType(s.iteratorName, forinElem, forinTag);   // H1.8
 
             emitExpr(r.iterable);
             w.emitSetLocal(arrLocal);
@@ -2571,7 +2618,7 @@ public final class MivmEmitter {
 
         // --- Constructor __init(this, stackSize) → super(stackSize)
         w.addFunction(name + ".__init", false);
-        w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
+        declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
         w.declareParam("stackSize");
         beginFunctionScope(makeSynthFs("__init", null), null);
         try {
@@ -3629,7 +3676,7 @@ public final class MivmEmitter {
 
             // -------------------------- add(item) --------------------------
             w.addMethod("add");
-            w.declareParam("item", 8);   // H1.2a: item es `any` = 8 bytes
+            declareParamRef("item");   // H1.8: `any` = 8B por el carril de ref (era un 8 a mano; .dbg sin tag, como antes)
             beginFunctionScope(makeSynthFs("add", null), null);
             try {
                 int afterGrow = w.newLabel();
@@ -3685,7 +3732,7 @@ public final class MivmEmitter {
             // -------------------------- set(idx, item) --------------------------
             w.addMethod("set");
             w.declareParam("idx");
-            w.declareParam("item", 8);   // H1.2a: item es `any` = 8 bytes
+            declareParamRef("item");   // H1.8: `any` = 8B por el carril de ref (era un 8 a mano; .dbg sin tag, como antes)
             beginFunctionScope(makeSynthFs("set", null), null);
             try {
                 w.emitGetParam("this"); w.emitGetField("List", "items");
@@ -3761,7 +3808,7 @@ public final class MivmEmitter {
             w.endClass();
 
             w.addFunction("List.__init", false);
-            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
+            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
                 w.emitGetParam("this");
@@ -3864,7 +3911,7 @@ public final class MivmEmitter {
             w.endClass();
 
             w.addFunction("OwnerList.__init", false);
-            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
+            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
                 // Delegamos en List.__init (same module → CALL intra-módulo).
@@ -4020,7 +4067,7 @@ public final class MivmEmitter {
             w.endClass();
 
             w.addFunction("StringBuilder.__init", false);
-            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
+            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
                 w.emitGetParam("this");
@@ -4098,7 +4145,7 @@ public final class MivmEmitter {
 
             // -------------------------- Constructor Thread(stackSize) --------------------------
             w.addFunction("Thread.__init", false);
-            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
+            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
             w.declareParam("stackSize");
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
@@ -4162,7 +4209,7 @@ public final class MivmEmitter {
 
             // ---- add(item) ----
             w.addMethod("add");
-            w.declareParam("item", 8);   // H1.2a: item es `any` = 8 bytes
+            declareParamRef("item");   // H1.8: `any` = 8B por el carril de ref (era un 8 a mano; .dbg sin tag, como antes)
             beginFunctionScope(makeSynthFs("add", null), null);
             try {
                 emitSyncListLock();
@@ -4208,7 +4255,7 @@ public final class MivmEmitter {
             // ---- set(idx, item) ----
             w.addMethod("set");
             w.declareParam("idx");
-            w.declareParam("item", 8);   // H1.2a: item es `any` = 8 bytes
+            declareParamRef("item");   // H1.8: `any` = 8B por el carril de ref (era un 8 a mano; .dbg sin tag, como antes)
             beginFunctionScope(makeSynthFs("set", null), null);
             try {
                 emitSyncListLock();
@@ -4348,7 +4395,7 @@ public final class MivmEmitter {
 
             // ---- Constructor SyncList() ----
             w.addFunction("SyncList.__init", false);
-            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
+            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
                 // super() = List.__init(this): inicializa items[8], size=0, cap=8.
@@ -4434,7 +4481,7 @@ public final class MivmEmitter {
 
             // -------------------------- Constructor Mutex() --------------------------
             w.addFunction("Mutex.__init", false);
-            w.declareParam("this", 8);   // H1.2a (V4): el receptor es una ref = 8 bytes
+            declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
             beginFunctionScope(makeSynthFs("__init", null), null);
             try {
                 // this.__mid := __mutexCreate()
@@ -4845,8 +4892,7 @@ public final class MivmEmitter {
             BpType vt = (targetT != null) ? targetT : tt.elements.get(i);
             // Extrae el elemento (con ensanchado) a un temp; luego lo guarda en el lvalue.
             String valLocal = "__de_" + (stringPoolCounter++);
-            if (occupies8Bytes(vt)) declareLocalLong(valLocal);   // #281: elemento de 8B (string/long/double/ref/tupla)
-            else declareLocal(valLocal);
+            declareLocalByType(valLocal, vt, null);   // H1.8. #281: elemento de 8B (string/long/double/ref/tupla)
             w.emitGetLocal(temp);
             w.emitGetField(cls, "_" + i);        // is8-aware → GET_FIELD_LONG si procede
             if (targetT != null) emitWiden(tt.elements.get(i), targetT);
@@ -5295,8 +5341,8 @@ public final class MivmEmitter {
 
     private void emitStrconcatBody() throws IOException {
         w.addFunction("__strconcat", false);
-        w.declareParam("a", 8);   // H1.2a: string ref = 8 bytes
-        w.declareParam("b", 8);
+        declareParamRef("a");   // H1.8: string = ref, por el carril de ref (era un 8 a mano; #9 vivió aquí)
+        declareParamRef("b");   // H1.8: idem
         w.declareLocal("la");
         w.declareLocal("lb");
         w.declareLocalLong("out");   // H1.2a: byte[] ref = 8 bytes
@@ -5358,8 +5404,8 @@ public final class MivmEmitter {
      */
     private void emitStrequalsBody() throws IOException {
         w.addFunction("__strequals", false);
-        w.declareParam("a", 8);   // #9 (censo V4): string ref = 8 bytes — la migración 4→8B saltó
-        w.declareParam("b", 8);   // este hermano de __strconcat → string ==/!= leía basura
+        declareParamRef("a");   // H1.8: string = ref, por el carril de ref (era un 8 a mano; #9 vivió aquí)
+        declareParamRef("b");   // H1.8: idem
         w.declareLocal("la");
         w.declareLocal("i");
 
