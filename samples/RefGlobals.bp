@@ -1,0 +1,72 @@
+// RefGlobals.bp — H1.8: los TRES sitios donde un GLOBAL puede guardar una REFERENCIA.
+//
+// POR QUÉ EXISTE ESTE SAMPLE (importante): al centralizar el ancho de ref (H1.8) se
+// regeneró TODO el corpus (25 módulos de stdlib + 14 samples) y el diff de los .mod
+// salió 0/39 — ni un byte. No porque el fix no hiciera nada, sino porque **NINGÚN
+// módulo del corpus usaba estas tres construcciones**. Ese era el agujero: nada las
+// compilaba, así que nada podía delatar que sus globales estaban a 4B. Este sample
+// las mete en el corpus para que, si alguien vuelve a estrechar una ref, el .mod
+// cambie y salte a la vista.
+//
+// Los tres sitios (MivmEmitter, arreglados en H1.8):
+//   1. backing de `property` de MÓDULO        (era declareGlobal=4B → #16)
+//   2. Mutex de las `sync property` de módulo (era declareGlobal=4B; el __init lo
+//      guardaba empujando 8B y popeando 4 → truncaba + fugaba 4B de pila)
+//   3. `var` ESTÁTICA de clase                (era declareGlobal=4B; su gemela, la
+//      static *property*, ya era width-aware)
+//
+// Ojo con la trampa de esta familia: un ref truncado pierde la GENERACIÓN, y con
+// gen=0 FUNCIONA IGUAL. Por eso hay churn (para que los slots se reciclen y la gen
+// deje de ser 0) y por eso conviene correrlo también con el heap encogido:
+//   bpgenvm-c.exe --mem=65536 RefGlobals.mod
+//
+// Esperado (idéntico en ambas VMs):
+//   modProp = hola mundo / 10
+//   syncProp = sincronizada / 12
+//   statVar = etiqueta larga / 14
+//   RefGlobals: fin
+module RefGlobals
+
+  public property modProp: string          // sitio 1: backing de property de módulo
+  public sync property syncProp: string    // sitio 2: + Mutex de módulo en global
+
+  class Caja
+    var Caja.etiqueta: string              // sitio 3: var estática de clase (ref)
+    var dummy: integer
+    public function Caja()
+      this.dummy := 0
+    end Caja
+    public function pon(s: string)
+      Caja.etiqueta := s
+    end pon
+    public function dame(): string
+      return Caja.etiqueta
+    end dame
+  end Caja
+
+  function main()
+    // Churn primero: tira strings para que el GC recicle slots y las gens
+    // dejen de ser 0 (con gen=0 un ref truncado cuela y el bug no se ve).
+    var basura: string := ""
+    var i: integer := 0
+    while i < 200 do
+      basura := basura + intToString(i mod 10)
+      i := i + 1
+    endwh
+
+    modProp := "hola" + " mundo"
+    print "modProp =", modProp
+    print "  len =", strlen(modProp)
+
+    syncProp := "sincro" + "nizada"
+    print "syncProp =", syncProp
+    print "  len =", strlen(syncProp)
+
+    var c: Caja := Caja()
+    c.pon("etiqueta" + " larga")
+    print "statVar =", c.dame()
+    print "  len =", strlen(c.dame())
+
+    print "RefGlobals: fin"
+  end main
+end RefGlobals

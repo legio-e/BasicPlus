@@ -232,7 +232,11 @@ public final class MivmEmitter {
         //        Es un único Mutex por módulo (no uno por property) — más
         //        simple y suficiente: la operación atómica es por accesor.
         if (hasModuleSyncProperty()) {
-            w.declareGlobal(MODULE_SYNC_MUTEX_GLOBAL);
+            // H1.8: el Mutex es un OBJETO = REFERENCIA (8B). Era declareGlobal (4B):
+            // el __init lo guarda con emitGetLocal(newref) —que empuja 8B, porque el
+            // local SÍ es declareLocalLong— y emitSetGlobal popeaba 4 → handle
+            // TRUNCADO (gen perdida) + fuga de 4B en la pila. Misma firma que #10.
+            declareGlobalRef(MODULE_SYNC_MUTEX_GLOBAL);
         }
 
         // 2.5) Flag de idempotencia para __init: declarado siempre porque
@@ -854,7 +858,23 @@ public final class MivmEmitter {
             errors.add("property estática de clase a nivel módulo no soportada: " + pd.name.name);
             return;
         }
-        w.declareGlobal(moduleBackingName(pd.name.name));
+        // H1.8 (#16): por TIPO. Era declareGlobal (4B) siempre → una property de módulo
+        // de tipo ref (`public property nombre: string`) tenía el backing a 4B y sus
+        // accesores emitían GET/SET_GLOBAL de 4B sobre un handle de 8B (verificado en
+        // el disasm). El de CLASE (static property) ya era width-aware — el gemelo de
+        // MÓDULO se quedó atrás, como en #10. Mismo propType que los accesores.
+        declareGlobalByType(moduleBackingName(pd.name.name), modulePropertyType(pd));
+    }
+
+    /** H1.8 — tipo de una property de módulo, con la misma resolución que usan sus
+     *  accesores (AST y, si el analyzer cargó uno más rico, el del símbolo). */
+    private BpType modulePropertyType(PropertyDef pd) {
+        BpType t = (pd.type != null) ? typeRefToBpType(pd.type) : null;
+        Symbol psym = info.declSymbols.get(pd);
+        if (psym instanceof PropertySymbol && ((PropertySymbol) psym).type != null) {
+            t = ((PropertySymbol) psym).type;
+        }
+        return t;
     }
 
     /** Lock/unlock contra el mutex compartido del módulo. */
@@ -1015,7 +1035,10 @@ public final class MivmEmitter {
             for (Symbol s : cls.staticMembers.getSymbols()) {
                 if (s instanceof VarSymbol) {
                     VarSymbol v = (VarSymbol) s;
-                    w.declareGlobal(cd.name + "." + v.name);
+                    // H1.8 (hermano de #16): por TIPO. Era declareGlobal (4B) siempre →
+                    // una `var` estática de clase de tipo ref quedaba a 4B, mientras que
+                    // la static PROPERTY de aquí al lado ya era width-aware.
+                    declareGlobalByType(cd.name + "." + v.name, v.type);
                 } else if (s instanceof PropertySymbol) {
                     // L6 — backing de static property: global cualificado, width-aware.
                     PropertySymbol ps = (PropertySymbol) s;
@@ -1854,6 +1877,30 @@ public final class MivmEmitter {
      *  SINTETIZADOS que declaran sus params a mano (StringBuilder, Object, properties). */
     private void declareParamByType(String name, BpType type) {
         w.declareParam(name, occupies8Bytes(type) ? 8 : 4, varDbgTypeTag(type));
+    }
+
+    /** H1.8 (Eduardo) — gemelo de declareParamByType para los GLOBALES. Declara por el
+     *  TIPO, no por un ancho puesto a mano: una REFERENCIA toma el carril de 8B sola.
+     *
+     *  Motivo: el ancho de los globales se decidía en cada sitio eligiendo el método
+     *  (declareGlobal=4B vs declareGlobalLong=8B) y el patrón "se migró un camino y el
+     *  gemelo se quedó atrás" REINCIDIÓ 3 veces (#9 __strequals, #10 var-string de
+     *  módulo, #16 backing de property de módulo). Un global-ref de 4B trunca el handle
+     *  (pierde la GENERACIÓN de la palabra alta) y además FUGA 4B de pila, porque el
+     *  valor se empuja a 8: el bug no se ve hasta que el slot viene reciclado (gen>0),
+     *  y entonces sale como use-after-free lejísimos de aquí.
+     *
+     *  type==null → no se puede decidir → 4B (el conservador de siempre). Lo que es ref
+     *  POR CONSTRUCCIÓN (sintéticos) usa declareGlobalRef. */
+    private void declareGlobalByType(String name, BpType type) {
+        if (type != null && occupies8Bytes(type)) w.declareGlobalLong(name);
+        else w.declareGlobal(name);
+    }
+
+    /** H1.8 — global que es una REFERENCIA por construcción (sintéticos, sin BpType a
+     *  mano: el Mutex de las sync property de módulo). Una ref SIEMPRE es REF_SIZE=8. */
+    private void declareGlobalRef(String name) {
+        w.declareGlobalLong(name);
     }
 
     private void emitAssign(AssignStmt a) throws IOException {
