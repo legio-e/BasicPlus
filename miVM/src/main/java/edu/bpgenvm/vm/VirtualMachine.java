@@ -1230,26 +1230,45 @@ public class VirtualMachine {
         int cur = freeListHead;
         while (cur != 0) {
             int blockSize = readInt32(cur + 4);
+            int next = readInt32(cur + 8);
             if (blockSize >= totalSize) {
-                int next = readInt32(cur + 8);
                 int remaining = blockSize - totalSize;
-                if (remaining >= MIN_FREE_BLOCK) {
-                    // Split: usar cur..cur+totalSize, dejar cur+totalSize..cur+blockSize como libre
-                    int newFreeAddr = cur + totalSize;
-                    writeInt32(newFreeAddr, TAG_FREE_BIT);
-                    writeInt32(newFreeAddr + 4, remaining);
-                    writeInt32(newFreeAddr + 8, next);
-                    if (prev == 0) freeListHead = newFreeAddr;
-                    else writeInt32(prev + 8, newFreeAddr);
-                } else {
-                    // Usar bloque completo; quitarlo de la lista
-                    if (prev == 0) freeListHead = next;
-                    else writeInt32(prev + 8, next);
+                // INVARIANTE DEL HEAP: un bloque ASIGNADO no guarda su tamaño en ningún
+                // sitio — objectTotalSize lo RECALCULA desde type/length. Luego el tamaño
+                // físico debe coincidir SIEMPRE con ese recálculo, o el recorrido del heap
+                // (buildValidObjectsSet / gc) aterriza a mitad del siguiente y descarrila.
+                //
+                // BUG (cazado 15-jul en la VM-C, que es espejo de ésta; repro
+                // `--mem=131072 samples/MemT4d_Count.bp` → petaba en el concat nº 193):
+                // si el sobrante era < MIN_FREE_BLOCK (no representable como bloque libre)
+                // se REGALABA al bloque asignado → ocupaba blockSize pero objectTotalSize
+                // decía totalSize → recorrido corto → set de cabeceras incompleto →
+                // objetos VIVOS no reconocidos → el barrido se los llevaba → UAF.
+                // Aquí estaba LATENTE (el heap por defecto es grande y la free-list apenas
+                // se ejerce); se arregla en lockstep con la VM-C, no cuando explote.
+                //
+                // FIX: aceptar el bloque sólo si encaja EXACTO o si el resto es un bloque
+                // libre representable. Un sobrante-astilla se salta (sigue en la lista).
+                if (remaining == 0 || remaining >= MIN_FREE_BLOCK) {
+                    if (remaining >= MIN_FREE_BLOCK) {
+                        // Split: usar cur..cur+totalSize, dejar cur+totalSize..cur+blockSize como libre
+                        int newFreeAddr = cur + totalSize;
+                        writeInt32(newFreeAddr, TAG_FREE_BIT);
+                        writeInt32(newFreeAddr + 4, remaining);
+                        writeInt32(newFreeAddr + 8, next);
+                        if (prev == 0) freeListHead = newFreeAddr;
+                        else writeInt32(prev + 8, newFreeAddr);
+                    } else {
+                        // Encaje exacto: usar el bloque completo; quitarlo de la lista
+                        if (prev == 0) freeListHead = next;
+                        else writeInt32(prev + 8, next);
+                    }
+                    return cur;
                 }
-                return cur;
+                // sobrante no representable → este bloque no sirve, seguir buscando
             }
             prev = cur;
-            cur = readInt32(cur + 8);
+            cur = next;
         }
         // 2) Bump desde heapNext
         if (heapNext + totalSize > STACK_BASE) return -1;
@@ -1270,6 +1289,20 @@ public class VirtualMachine {
             }
             if (size <= 0) break; // protección contra corrupción
             addr += size;
+        }
+        // GUARDIÁN DEL INVARIANTE (permanente; coste = UNA comparación por GC).
+        // El heap es una tira contigua de bloques y ninguno guarda su tamaño: se
+        // RECALCULA con objectTotalSize. Si todos miden lo que ese recálculo dice, el
+        // recorrido aterriza EXACTAMENTE en heapNext. Si no, ya se ha desincronizado:
+        // sigue leyendo payload como si fuera cabecera, el set sale incompleto → se
+        // barren objetos VIVOS → use-after-free mucho más tarde y sin rastro del origen
+        // (así se fueron varios días con MemT4 en la VM-C: el descarrilamiento era
+        // SILENCIOSO). Que grite aquí, en el sitio y el instante del destrozo.
+        if (addr != heapNext) {
+            System.err.println("[gc] !! HEAP INCONSISTENTE: el recorrido de cabeceras acabó en "
+                    + addr + ", no en heapNext=" + heapNext + ". Hay un bloque cuyo tamaño real no "
+                    + "coincide con objectTotalSize() → el set del GC sale incompleto y se barrerán "
+                    + "objetos vivos.");
         }
         return valid;
     }

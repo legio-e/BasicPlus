@@ -114,6 +114,15 @@ int main(int argc, char** argv) {
         fprintf(stderr, "No se pudo alocar %zu bytes\n", mem_size);
         return 1;
     }
+    /* Diagnóstico: BPVM_POISON=1 rellena el buffer de la VM con 0xAA ANTES del
+     * init → simula la SRAM SIN INICIALIZAR de un micro (bare-metal no zeroa el
+     * buffer como sí hace calloc en el host). Reproduce en host los bugs que
+     * solo salen en placa por leer memoria sin inicializar (gen de handle en
+     * pila/local, etc.). Runs normales sin la env → intactos. */
+    if (getenv("BPVM_POISON")) {
+        memset(mem, 0xAA, mem_size);
+        fprintf(stderr, "[BPVM_POISON] buffer de %zu bytes envenenado con 0xAA\n", mem_size);
+    }
 
     bpvm_t* vm = bpvm_init(mem, mem_size, 0);
     if (!vm) {

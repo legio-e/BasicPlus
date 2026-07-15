@@ -117,6 +117,27 @@ static void build_gc_valid_map(bpvm_t* vm) {
         vm->gc_valid_map[word / 8u] |= (uint8_t)(1u << (word % 8u));
         cur += total;
     }
+    /* GUARDIÁN DEL INVARIANTE (permanente; coste = UNA comparación por GC).
+     * El heap es una tira contigua de bloques y NINGUNO guarda su tamaño: se
+     * RECALCULA con block_total_size desde type/length. Luego, si todos miden lo
+     * que ese recálculo dice, este recorrido aterriza EXACTAMENTE en heap_next.
+     *
+     * Si no, ya se ha desincronizado: sigue leyendo payload como si fuera
+     * cabecera, el mapa sale truncado → is_heap_ref rechaza objetos VIVOS → el
+     * barrido se los lleva → "use-after-free" cientos de asignaciones más tarde
+     * y sin rastro del origen (así se fueron varios días con MemT4: el
+     * descarrilamiento era SILENCIOSO — ojo, el `break` de arriba NO lo cazaba,
+     * block_total_size nunca devuelve 0 porque clampa a MIN_FREE_BLOCK).
+     * Que grite aquí, en el sitio y el instante del destrozo.
+     *
+     * No abortamos: el mensaje ya identifica la causa, y matar la VM en placa
+     * sería peor que dejar que el error normal de la VM siga su curso. */
+    if (cur != vm->heap_next) {
+        fprintf(stderr, "[gc] !! HEAP INCONSISTENTE: el recorrido de cabeceras acabó en %" PRIu32
+                        ", no en heap_next=%" PRIu32 ". Hay un bloque cuyo tamaño real no coincide "
+                        "con block_total_size() → el mapa del GC sale truncado y se barrerán "
+                        "objetos vivos.\n", cur, vm->heap_next);
+    }
 }
 
 /* ¿`header_addr` es el inicio de una cabecera de bloque real? Usa el bitmap
@@ -418,26 +439,46 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
     uint32_t prev = 0, cur = vm->free_list_head;
     while (cur != 0) {
         uint32_t block_size = bpvm_read_u32_be(mem + cur + 4);
+        uint32_t next = bpvm_read_u32_be(mem + cur + 8);
         if (block_size >= total) {
-            uint32_t next = bpvm_read_u32_be(mem + cur + 8);
             uint32_t remaining = block_size - total;
-            if (remaining >= BPVM_MIN_FREE_BLOCK) {
-                /* Split: usar [cur, cur+total); dejar el resto libre. */
-                uint32_t nf = cur + total;
-                bpvm_write_u32_be(mem + nf,     BPVM_TAG_FREE_BIT);
-                bpvm_write_u32_be(mem + nf + 4, remaining);
-                bpvm_write_u32_be(mem + nf + 8, next);
-                if (prev == 0) vm->free_list_head = nf;
-                else bpvm_write_u32_be(mem + prev + 8, nf);
-            } else {
-                /* Usar el bloque entero; quitarlo de la lista. */
-                if (prev == 0) vm->free_list_head = next;
-                else bpvm_write_u32_be(mem + prev + 8, next);
+            /* INVARIANTE DEL HEAP: un bloque ASIGNADO no guarda su tamaño en
+             * ningún sitio — block_total_size lo RECALCULA desde type/length.
+             * Luego el tamaño físico del bloque debe coincidir SIEMPRE con ese
+             * recálculo, o el recorrido (build_gc_valid_map / gc_sweep_phase)
+             * aterriza a mitad del siguiente y DESCARRILA en silencio.
+             *
+             * BUG (cazado 15-jul, repro `--mem=131072 samples/MemT4d_Count.bp`,
+             * petaba en el concat nº 193 igual en host que en la Pico): si el
+             * sobrante era < MIN_FREE_BLOCK (no representable como bloque libre)
+             * se REGALABA al bloque asignado → ocupaba block_size pero
+             * block_total_size decía `total` → recorrido corto → mapa de
+             * cabeceras truncado → is_heap_ref rechazaba objetos VIVOS → el
+             * barrido se los llevaba → USE-AFTER-FREE.
+             *
+             * FIX: solo aceptar el bloque si encaja EXACTO (remaining == 0) o si
+             * el resto es un bloque libre representable. Un sobrante-astilla se
+             * salta (se queda en la lista para una petición que le encaje). */
+            if (remaining == 0u || remaining >= BPVM_MIN_FREE_BLOCK) {
+                if (remaining >= BPVM_MIN_FREE_BLOCK) {
+                    /* Split: usar [cur, cur+total); dejar el resto libre. */
+                    uint32_t nf = cur + total;
+                    bpvm_write_u32_be(mem + nf,     BPVM_TAG_FREE_BIT);
+                    bpvm_write_u32_be(mem + nf + 4, remaining);
+                    bpvm_write_u32_be(mem + nf + 8, next);
+                    if (prev == 0) vm->free_list_head = nf;
+                    else bpvm_write_u32_be(mem + prev + 8, nf);
+                } else {
+                    /* Encaje exacto: usar el bloque entero; quitarlo de la lista. */
+                    if (prev == 0) vm->free_list_head = next;
+                    else bpvm_write_u32_be(mem + prev + 8, next);
+                }
+                return cur;
             }
-            return cur;
+            /* sobrante no representable → este bloque no sirve, seguir buscando */
         }
         prev = cur;
-        cur = bpvm_read_u32_be(mem + cur + 8);
+        cur = next;
     }
     /* 2) Bump. */
     if (vm->heap_next + total > vm->stack_base) return 0;
