@@ -10,7 +10,11 @@
 > **Lo único ABIERTO hoy:**
 > - **#4 (=H4.b)** — `bpvm_aot_helpers.c` no handle-aware. **Causa los 9 tests rojos**
 >   (ver §6). Real y acotado; no bloquea (el default es intérprete).
-> - **#16** — SOSPECHA nueva sin probar: backing de `property` de MÓDULO a 4B.
+> - **H1.8 fases 2 y 3** — la conversión centralizadora está hecha **solo para los
+>   GLOBALES** (`7896494`: cazó #16 + #17 + #18). **Faltan `declareParam` (46 sitios) y
+>   `declareLocal` (97 sitios)**, que siguen decidiendo el ancho eligiendo el método —
+>   o sea, siguen expuestos al mismo patrón (#9 fue un param; las tuplas y el
+>   `appendStr` fueron locales). H1 NO cierra hasta terminarlas.
 >
 > **Latentes/inocuos (no tocar sin motivo):** #3 (degradado a higiene: su premisa se
 > DESMONTÓ, ver entrada), #5, #12, #13.
@@ -358,7 +362,29 @@ Fix: aceptar el bloque solo si encaja exacto o el resto es representable. **+ GU
 en ambas** (1 comparación por GC): si el recorrido no aterriza en `heap_next` → grita `[gc] !!
 HEAP INCONSISTENTE`. Repro: `bpgenvm-c --mem=131072 MemT4d.mod`. Verificado en placa (Pico).
 
-### 🆕 🟠 #16 SOSPECHA sin probar (15-jul, EMISOR) — backing de `property` de MÓDULO a 4B
+### 🆕 ✅ #16 + #17 + #18 ARREGLADOS (`7896494`, H1.8 fase globales) — 3 globales-ref a 4B
+La conversión centralizadora (`declareGlobalByType`, por TIPO vía `occupies8Bytes`) cazó
+**TRES** sitios, no uno. Los 3 verificados en el disasm (4B → opcodes `_L` de 8B):
+- **#16** `:857 emitModulePropertyBacking` — el sospechado. `public property nombre: string`
+  emitía `GET/SET_GLOBAL -4` sobre un handle de 8B. CONFIRMADO y arreglado.
+- **#17** `:1018` **var ESTÁTICA de clase** — el hermano que estaba sin verificar. `var
+  Caja.etiqueta: string` iba a 4B; su gemela (la static *property* de `:1023`) ya era
+  width-aware. El patrón de #10, otra vez.
+- **#18** `:235` **Mutex de las `sync property` de módulo — NO ESTABA EN EL CENSO.** El peor
+  de los tres: el `__init` lo guarda con `emitGetLocal(newref)`, que empuja **8B** (el local
+  sí era `declareLocalLong`), y `emitSetGlobal` popeaba **4** → handle truncado **+ fuga de
+  4B en la pila**. Firma exacta de #10.
+
+**⚠️ EL HALLAZGO DE VERDAD — el diff salió 0/39 (ni un byte) y eso NO es que el fix no haga
+nada:** regenerado TODO el corpus (25 stdlib + 14 samples), **ningún módulo usa esas tres
+construcciones**. *Ese* era el agujero que las mantuvo vivas: nada las compilaba, así que
+nada podía delatarlas — ni la paridad, ni los tests, ni este catálogo. **Un censo por lectura
+no encuentra lo que el corpus no ejercita.** Tapado con `samples/RefGlobals.bp` (los 3 sitios
++ churn, paridad dual-VM byte-idéntica) → a partir de ahora, estrechar una ref cambia un .mod
+y salta a la vista. Consecuencia buena: **stdlib y blobs NO cambian → sin device batch.**
+
+<!-- entrada original de #16 (histórico): -->
+### (orig) 🟠 #16 SOSPECHA sin probar (15-jul, EMISOR) — backing de `property` de MÓDULO a 4B
 `MivmEmitter.java:857` (`emitModulePropertyBacking`): `w.declareGlobal(moduleBackingName(...))`
 **sin mirar el ancho** → una `property` de módulo de tipo ref se declara a 4B. **Confirmado en el
 disasm** (`samples`-sonda con `public property nombre: string` → `__prop_get_nombre` emite
