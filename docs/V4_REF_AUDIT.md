@@ -285,11 +285,49 @@ sin un aviso**. Disasm: `PUSH 4 / NEWARRAY / SET_LOCAL +0` → NEWARRAY empuja u
 `var a: integer[4]` **tiene que ser un array en memoria local DE VERDAD (inline)**, no azúcar
 de `newIntArray(4)`: ocupa menos, no hay que crearlo, es más rápido — *"merece la pena
 trabajar nosotros un poco más para que luego salgan ganando los programadores"*. El fix de una
-línea (`declareLocalByType`) lo dejaría correcto pero en el heap, que es justo lo que NO se
-quiere. Mecanismo por decidir; el dato que lo condiciona está en #288: **una ref sin tag es
-INVISIBLE para el contrato B** (`bpvm_ref_dead` devuelve 0 si no hay tag) → pasar un inline
-por dirección directa funciona pero deja los escapes MUDOS. La opción (C) (handle prestado,
-muerto al salir del frame) es la única que da inline de verdad **y** escapes que gritan.
+línea (`declareLocalByType`) lo dejaría correcto pero en el heap = justo lo que NO se quiere.
+
+> #### 🧠 MODELO AFINADO en la charla del 15-jul — *"para eso sirven estas charlas, para ir afinando el modelo (y además es mucho más sencillo que perseguir bugs)"* (Eduardo)
+> Merece leerse entero antes de tocar: el diseño cambió mucho al hablarlo, y **encogió**.
+>
+> **1. No es un problema del paso de parámetros.** Es CUALQUIER sitio donde un array fijo cae
+> en un hueco de tipo ref: `a := miarrayfijo`, parámetro, `return`, campo, elemento. Todos son
+> el mismo momento: **donde el inline se convierte en referencia**.
+>
+> **2. Fabricar la referencia = TOMAR LA DIRECCIÓN. Ya existe y ya funciona.** VERIFICADO:
+> `a := tabla` (fijo de módulo) → `LEA_GLOBAL -24 / SET_LOCAL_L +0`, con ALIAS correcto
+> (`a[0]:=99` → `tabla[0]`=99). El `LEA_LOCAL` equivalente **ya existe y ya es de 8B** desde
+> H1.2a; el frontend nunca lo emite. **Nada que inventar en la firma.**
+>
+> **3. Handle y dirección absoluta conviven en el mismo hueco de 8B** porque el bit 30 los
+> discrimina y `bpref_deref` despacha: sin TAG → identidad; con TAG → `handle_addr[idx]`. **No
+> hay dos tipos de referencia: hay uno con dos representaciones**, y la indirección solo ocurre
+> cuando hace falta.
+>
+> **4. La categoría de Eduardo ("un string constante al final es un array") es correcta — pero
+> la propiedad que la hace segura NO es "ser constante", es NO MORIR NUNCA.** Probado:
+> `tabla[0] := 99` ESCRIBE → el array fijo de módulo es MUTABLE y aun así seguro, porque vive
+> lo que el programa. → string constante: inmortal ✅ · array fijo de MÓDULO: inmortal ✅ **ya
+> resuelto, misma categoría, nada que hacer** · array fijo LOCAL: **mortal** ❌.
+> **El problema encogió a UNA sola cosa: la vida del local.**
+>
+> **5. CIERRE (Eduardo): dentro de la función la referencia YA es inmortal** — la vida del
+> llamado está ANIDADA en la del llamante. `suma(miarrayfijo)` es seguro con dirección directa,
+> gratis. → **La opción "handle prestado" que se proponía SOBRA**: era fabricar una generación
+> para poder matar algo cuya vida ya garantiza el anidamiento.
+>
+> **6. El ÚNICO agujero es el ESCAPE — y se caza por RANGO, en runtime.** Estáticamente NO se
+> puede distinguir (dentro de la función el tipo es `integer[]` venga de donde venga: eso es lo
+> que se quiere). **Pero el mapa de memoria delata la vida** — layout lineal
+> `[data block][heap][stacks]`, con `stack_base` = "offset donde termina heap y empiezan
+> stacks": dirección **< heap_start** → data block → inmortal → guardar OK · **≥ stack_base** →
+> un frame → **mortal → guardar = puntero colgante → GRITAR** · con TAG → el contrato B ya se
+> ocupa. **Una comparación**, sin análisis de escape, sin generación, sin tabla.
+>
+> **7. Cabo suelto:** el chequeo es por VALOR en runtime → habría que ponerlo en **cada sitio de
+> guardado de refs** (SET_GLOBAL_L, SET_FIELD, ASTORE de ref-array, return…), no en uno. Ver si
+> son pocos y si duele en el bucle caliente. (Un `newIntArray` local SÍ puede escapar
+> legítimamente —tiene TAG, el GC lo sostiene—; el fijo no. El rango los separa gratis.)
 
 ### ✅ #14 ARREGLADO (`381f034`, 14-jul) — campos `any`/Object ahora en el bitmap de refs del GC
 Fix en el emisor (helper `isGcRef = isRefType || AnyType` en los 3 sitios del bitmap: campos,
