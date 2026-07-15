@@ -118,9 +118,18 @@ un "0 SUSPECT" como B/C/D/E). Fue la superficie más productiva del censo — sa
 **#1, #9, #10, #11, #13, #14, S5(tuplas)** — y sigue teniendo **#16 vivo**. La hipótesis
 `__strconcat` de S1 era **FALSA** (ya estaba a 8B desde `d2dcbe9`); la raíz de S1 fue #1.
 **Patrón que REINCIDE aquí (3 veces ya: #9, #10, #16): "se migró un camino y el gemelo se
-quedó atrás".** Mientras el ancho se decida sitio a sitio volverá a pasar → el cierre de F NO
-es seguir buscando gemelos, es el **fix centralizador (B)**: que sea IMPOSIBLE declarar una
-ref de 4B (`declareField`/`declareParam`/`declareLocal`/`declareGlobal` fuerzan 8B si es ref).
+quedó atrás".** Mientras el ancho se decida sitio a sitio volverá a pasar.
+
+> ### ▶ EL CIERRE DE F ESTÁ DECIDIDO: **H1.8** (Eduardo, 15-jul — tarea #287, última entrada de H1)
+> **F no se cierra cazando gemelos uno a uno, se cierra haciendo el bug IMPOSIBLE.** Extender a
+> `declareParam`/`declareLocal`/`declareGlobal` el movimiento que YA funcionó en `declareField`
+> (#1, `e2d56fe`: `is8 = is8 || isRef`) → una ref SIEMPRE 8B por construcción. #9, #10 y #16
+> habrían sido imposibles de escribir.
+>
+> **Y la verificación es lo bonito (exigida por Eduardo): el DIFF de los `.mod` antes/después ES
+> LA AUDITORÍA DE F.** Un sitio ya correcto no cambia nada; **cada `.mod` que cambie delata un
+> sitio que declaraba una ref de 4B**. Es barrer F por construcción en vez de a ojo — que es
+> justo lo que este catálogo no consiguió hacer con F. Plan completo en la tarea #287.
 
 ### A. Pila de operandos (ALOAD/ASTORE/GET_FIELD/SET_FIELD/INSTANCEOF/ALEN/receptor)
 **⚠️ ESTADO REAL (15-jul): la ÚNICA superficie sin barrido sistemático.** Solo ha producido
