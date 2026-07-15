@@ -3489,7 +3489,16 @@ public final class MivmEmitter {
         int n = a.elements.size();
         // Reservamos un temp único para no pisar otros __arr concurrentes.
         String tmp = "__arr_" + Integer.toHexString(System.identityHashCode(a));
-        declareLocal(tmp);
+        // H1.8/#19 — REGRESIÓN del 4→8B. `__arr_` sostiene EL ARRAY que acaba de crear
+        // NEWARRAY = una REFERENCIA de 8B, y estaba `declareLocal(tmp)` = 4B A PELO:
+        // NEWARRAY empuja 8, SET_LOCAL popeaba 4 → handle truncado + fuga de 4B.
+        // AFECTA A TODO LITERAL DE ARRAY del lenguaje (`[1,2,3]` en cualquier posición).
+        // Lo delató `samples/arraytest.bp` (`var primos: integer[] := [2,3,5,7,11]`),
+        // que además es el ÚNICO sample del repo con `enum`, y llevaba roto sin que
+        // nadie lo ejecutara. Es ref POR CONSTRUCCIÓN (el temp no tiene BpType a mano:
+        // el tipo de elemento del literal ni siquiera se conoce aquí — ver el TODO de
+        // abajo), así que va por el carril de ref, no por ByType.
+        declareLocalRef(tmp);
         emitInt(n);
         w.emit(OpCode.NEWARRAY);
         w.emitSetLocal(tmp);
