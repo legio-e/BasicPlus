@@ -1769,7 +1769,19 @@ public final class MivmEmitter {
                     ? ((ArrayLitExpr) vd.init).elements
                     : java.util.Collections.<IExpr>emptyList();
             for (DeclName dn : vd.names) {
-                declareLocal(dn.name, declTag);
+                // H1.8/#19 — REGRESIÓN del ensanchado 4→8B, restaurada. Era
+                // `declareLocal(dn.name, declTag)` = 4B A PELO, ignorando `vt` (que está
+                // resuelto 6 líneas más arriba): la var ES el array = un ArrayType = una
+                // REFERENCIA de 8B. NEWARRAY empuja un handle de 8B y SET_LOCAL popeaba 4
+                // → handle TRUNCADO (gen perdida) + fuga de 4B de pila → use-after-free.
+                //
+                // Esta rama hace `return` ANTES del carril centralizado de H1.8, así que
+                // la centralización no la cubrió: hay que traerle el carril aquí.
+                //
+                // Lo delató `samples/LocalArrTest.bp` — el oráculo de L8 v3, que documenta
+                // la paridad esperada byte a byte y llevaba ROTO desde el 4→8B sin que
+                // nadie lo oyera (es un .bp suelto, no está en ninguna batería `make`).
+                declareLocalByType(dn.name, vt, declTag);
                 emitInt(fixedN);
                 w.emit(newarrayOpForElement(el));
                 w.emitSetLocal(dn.name);
@@ -2399,11 +2411,20 @@ public final class MivmEmitter {
             String arrLocal = "__forin_arr_" + Integer.toHexString(System.identityHashCode(s));
             String idxLocal = "__forin_idx_" + Integer.toHexString(System.identityHashCode(s));
             String endLocal = "__forin_end_" + Integer.toHexString(System.identityHashCode(s));
-            declareLocal(arrLocal);
-            declareLocal(idxLocal);
-            declareLocal(endLocal);
             // H6.a.2: tag del iterador = tipo de elemento del iterable.
             BpType itElem = info.exprTypes.get(r.iterable);
+            // H1.8/#19 — REGRESIÓN del 4→8B. `__forin_arr_` guarda EL ARRAY del bucle =
+            // una REFERENCIA de 8B, y estaba `declareLocal(arrLocal)` = 4B A PELO. Se
+            // ESCONDÍA porque el llamante también empujaba 4B (todo mal pero CONSISTENTE);
+            // en cuanto un array llega bien a 8B (param `integer[]`, o el array fijo local
+            // ya arreglado), `GET_LOCAL_L` empuja 8 y `SET_LOCAL` popeaba 4 → handle
+            // truncado + 4B de fuga que descuadran la pila del bucle.
+            // AFECTA A TODO `for x in <array>`, no solo a los arrays fijos.
+            // Lo delató `samples/LocalArrTest.bp` (su `suma via funcion` = for-in sobre un
+            // param `integer[]`). idx/end SÍ son enteros → 4B correcto.
+            declareLocalByType(arrLocal, itElem, null);
+            declareLocal(idxLocal);
+            declareLocal(endLocal);
             BpType forinElem = (itElem instanceof ArrayType) ? ((ArrayType) itElem).element : null;
             String forinTag = (forinElem != null) ? varDbgTypeTag(forinElem) : null;
             // task_cf2a924b (Bug B): la variable de bucle debe declararse con el
