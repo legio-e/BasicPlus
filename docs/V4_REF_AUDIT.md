@@ -265,6 +265,31 @@ reconsiderar (o corregir el comentario del modelo a "sign-extend").
 ### ⚪ #13 latente (EMISOR) — `newarrayOpForElement:3403` sin la rama `NEWARRAY_I64` de su espejo
 Un array-fijo local de refs caería a `NEWARRAY`(4B) + `ASTORE_I64`(8B); hoy inalcanzable
 (el semántico rechaza arrays-fijos de refs). Mordería si se levanta esa restricción. _(F)_
+⚠️ **OJO: #13 NO es el bug del array fijo local — ése es #19, y NO es latente, es real.**
+
+### 🔴 #19 CONFIRMADO (AMBAS VMs, EMISOR) — array de tamaño fijo LOCAL trunca el handle
+**Lo destapó el repaso de tipos de Eduardo (15-jul).** `var loc: integer[4]` dentro de una
+función **PETA con use-after-free en las dos VMs**, determinista, y **el compilador lo acepta
+sin un aviso**. Disasm: `PUSH 4 / NEWARRAY / SET_LOCAL +0` → NEWARRAY empuja un handle de
+**8B** y SET_LOCAL popea **4** → handle truncado (gen perdida) + fuga de 4B. Firma de #16/#18.
+- **Causa:** la rama `if (fixedN != null)` de la var local hace `declareLocal(...)` (4B a
+  pelo) y **`return`** ANTES del sitio que H1.8 centralizó → por eso H1.8 no lo cubrió, y por
+  eso el diff salió 0: **ningún módulo del corpus declara un array fijo local** (el MISMO
+  agujero de cobertura de la fase 1, otra vez).
+- **El array fijo de MÓDULO SÍ funciona** (`suma(tabla)`=60): vive en el data block y
+  `LEA_GLOBAL` empuja su dirección DIRECTA (sin tag) → deref por identidad.
+- ⚠️ **Las notas viejas MENTÍAN:** #13 hablaba de arrays DE refs (no es esto); la nota de
+  [[h1-2a-wip]] decía "guarda el tamaño como si fuera el ref" → **falso**, sí aloca; trunca.
+
+**NO se arregla con el fix barato: es una DECISIÓN DE DISEÑO de Eduardo (15-jul) → tarea #288.**
+`var a: integer[4]` **tiene que ser un array en memoria local DE VERDAD (inline)**, no azúcar
+de `newIntArray(4)`: ocupa menos, no hay que crearlo, es más rápido — *"merece la pena
+trabajar nosotros un poco más para que luego salgan ganando los programadores"*. El fix de una
+línea (`declareLocalByType`) lo dejaría correcto pero en el heap, que es justo lo que NO se
+quiere. Mecanismo por decidir; el dato que lo condiciona está en #288: **una ref sin tag es
+INVISIBLE para el contrato B** (`bpvm_ref_dead` devuelve 0 si no hay tag) → pasar un inline
+por dirección directa funciona pero deja los escapes MUDOS. La opción (C) (handle prestado,
+muerto al salir del frame) es la única que da inline de verdad **y** escapes que gritan.
 
 ### ✅ #14 ARREGLADO (`381f034`, 14-jul) — campos `any`/Object ahora en el bitmap de refs del GC
 Fix en el emisor (helper `isGcRef = isRefType || AnyType` en los 3 sitios del bitmap: campos,
