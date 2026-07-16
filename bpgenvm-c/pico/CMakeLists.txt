@@ -255,3 +255,42 @@ if (DEFINED BPVM_PICO_BOOT_LED)
     message(STATUS "BPVM_PICO_BOOT_LED = ${BPVM_PICO_BOOT_LED}")
     target_compile_definitions(bpvm_pico PRIVATE BPVM_PICO_BOOT_LED=1)
 endif()
+
+# #292 — BRING-UP ESCALONADO. Para placas que no enumeran: el USB no puede
+# contarnos nada, así que en vez de deducir, se bisecta. Cada nivel añade UNA
+# pieza del arranque y se queda ahí, imprimiendo por USB. La primera que no
+# enumere es la culpable.
+#
+#   1 = SOLO stdio_init_all + bucle de prints. Nada más: sin LED, sin log, sin
+#       FS, sin board_desc, sin PSRAM, sin scheduler. Responde a la única
+#       pregunta que importa cuando estás ciego: ¿esta placa enumera con
+#       nuestra imagen, sí o no?
+#   2 = todo main(): led_init + stdio + log_init + backends, y PARA antes del
+#       scheduler. log_init ya toca flash → separa "la flash mata" de "el FS mata".
+#   3 = 2 + scheduler + fs_init()        (descriptor + montar/FORMATEAR littlefs)
+#   4 = 3 + board_desc_init()            (JEDEC + board.json + sondeo QMI PSRAM)
+#
+# Los niveles 3/4 paran DENTRO de vm_task, no en main(): fs_init() usa
+# bpvm_flash_lock, que en dual-core hace multicore_lockout_start_blocking() —
+# antes del scheduler el core 1 no está armado como víctima y se colgaría
+# esperando. Cada pieza se prueba donde de verdad corre.
+#
+# Ojo con el LED como testigo: led_init/led_set están a fuego en
+# PICO_DEFAULT_LED_PIN (25) — en la Metro el 25 es el NeoPixel y el LED es el
+# 23. Por eso el nivel 1 NO toca el LED: una variable menos.
+#
+# Activar:  cmake .. -DBPVM_PICO_BRINGUP=1
+if (DEFINED BPVM_PICO_BRINGUP)
+    message(STATUS "BPVM_PICO_BRINGUP = ${BPVM_PICO_BRINGUP}  (imagen de diagnóstico, NO de uso)")
+    target_compile_definitions(bpvm_pico PRIVATE
+        BPVM_PICO_BRINGUP=${BPVM_PICO_BRINGUP}
+        # El stdio_usb del SDK TIRA la salida al suelo si el host no assertó DTR
+        # (stdio_usb_out_chars: `if (stdio_usb_connected())`, y eso es
+        # tud_cdc_connected() = DTR). Un testigo que sólo habla si el terminal
+        # levanta DTR no sirve para diagnosticar: si no ves nada no sabes si la
+        # placa está muerta o si tu terminal no assertó una señal. Con esto,
+        # stdio_usb_connected() pasa a ser tud_ready() = "el USB está listo".
+        # Sólo en la imagen de bring-up; el firmware normal no cambia.
+        PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1
+    )
+endif()

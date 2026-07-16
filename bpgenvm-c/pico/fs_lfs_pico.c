@@ -77,14 +77,48 @@ static uint32_t ptable_crc(const bp_ptable_t* p) {
     return bpvm_crc32((const uint8_t*) p, sizeof(*p) - sizeof(uint32_t));
 }
 
+/*
+ * #292 — CUÁNTA FLASH PODEMOS USAR DE VERDAD.
+ *
+ * Hay DOS números y no son el mismo:
+ *   · flash_bytes  = lo que tiene la placa (JEDEC, runtime). La Metro: 16 MB.
+ *   · PICO_FLASH_SIZE_BYTES = lo que la IMAGEN declara al compilar. Hoy 4 MB,
+ *     y es UNO SOLO porque el .uf2 es único para todas las placas.
+ *
+ * El SDK hace hard_assert(offs + count <= PICO_FLASH_SIZE_BYTES) en CADA
+ * flash_range_erase/program (flash.c:193/224). No es un aviso: es un panic.
+ * Así que aunque la Metro tenga 16 MB, escribir en 0x400000 con una imagen
+ * que declara 4 MB MATA LA PLACA — y como pasa en el arranque, ni llega a
+ * enumerar el USB ("dispositivo desconocido"). Ese era el bug: el FS de la
+ * Metro nacía en 0x400000 = el primer byte fuera de lo declarado.
+ *
+ * El invariante correcto no es "usa toda la flash": es "usa lo que puedes
+ * ESCRIBIR". Y eso es el mínimo de los dos. Con el clamp, la imagen única
+ * funciona en las dos placas (la Metro desaprovecha 12 MB, y es un precio
+ * barato por arrancar). El día que PICO_FLASH_SIZE_BYTES deje de mentir, la
+ * Metro recupera su volumen entero SIN TOCAR ESTA LÓGICA.
+ */
+static uint32_t usable_flash_bytes(uint32_t flash_bytes) {
+#ifdef PICO_FLASH_SIZE_BYTES
+    if (PICO_FLASH_SIZE_BYTES > 0 && flash_bytes > (uint32_t) PICO_FLASH_SIZE_BYTES)
+        return (uint32_t) PICO_FLASH_SIZE_BYTES;
+#endif
+    return flash_bytes;
+}
+
 static int ptable_sane(const bp_ptable_t* p, uint32_t flash_bytes) {
     if (p->magic != BP_PTABLE_MAGIC || p->version != BP_PTABLE_VERSION) return 0;
     if (p->crc != ptable_crc(p)) return 0;
     if (p->fs_offset % FLASH_SECTOR_SIZE || p->fs_size % FLASH_SECTOR_SIZE) return 0;
     if (p->fs_size < 64u * 1024u) return 0;               /* mínimo útil */
     if (p->fs_offset < 0x100000u) return 0;               /* nunca sobre el firmware */
-    uint32_t top = (flash_bytes >= 4u * 1024u * 1024u) ? flash_bytes
-                                                       : 4u * 1024u * 1024u;
+    /* #292: contra lo ESCRIBIBLE, no contra lo que tiene el chip. Esto además
+     * RECHAZA un descriptor rancio grabado por una imagen anterior (la Metro
+     * tiene uno que dice [0x400000, 12MB): ptable_write() cae en 0x3FF000 y
+     * SÍ se escribió; el panic vino después, al formatear littlefs). Al no ser
+     * sano, se regenera con el layout bueno en el siguiente arranque. */
+    uint32_t usable = usable_flash_bytes(flash_bytes);
+    uint32_t top = (usable >= 4u * 1024u * 1024u) ? usable : 4u * 1024u * 1024u;
     if (p->fs_offset + p->fs_size > top) return 0;
     /* si la región cae bajo los 4MB, no puede pisar el log ni el descriptor */
     if (p->fs_offset < 0x400000u &&
@@ -96,12 +130,17 @@ static void ptable_defaults(bp_ptable_t* p, uint32_t flash_bytes) {
     memset(p, 0, sizeof(*p));
     p->magic   = BP_PTABLE_MAGIC;
     p->version = BP_PTABLE_VERSION;
-    if (flash_bytes > 4u * 1024u * 1024u) {
-        /* Metro (16M) y familia: TODO lo que hay por encima de los 4MB */
+    uint32_t usable = usable_flash_bytes(flash_bytes);
+    if (usable > 4u * 1024u * 1024u) {
+        /* >4MB ESCRIBIBLES: todo lo que hay por encima de los 4MB. Hoy este
+         * camino NO se toma con la imagen única (PICO_FLASH_SIZE_BYTES=4MB lo
+         * clampa); se activará solo cuando el build declare la flash real. */
         p->fs_offset = 0x400000u;
-        p->fs_size   = flash_bytes - 0x400000u;
+        p->fs_size   = usable - 0x400000u;
     } else {
-        /* Pico 2 (4M): [2MB, log) — el firmware (~0.5MB) va muy holgado */
+        /* Layout conservador: [2MB, log) ≈ 2 MB. Cabe en 4 MB, o sea en
+         * CUALQUIER RP2350 que arranque esta imagen — Pico 2 y Metro por igual.
+         * El firmware (~0.5MB) va muy holgado. */
         p->fs_offset = 0x200000u;
         p->fs_size   = BP_LOG_SECTOR - 0x200000u;          /* 0x1FC000 ≈ 2 MB */
     }

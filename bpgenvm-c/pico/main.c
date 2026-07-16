@@ -782,14 +782,117 @@ static void vm_task(void* arg) {
     setvbuf(stdout, NULL, _IONBF, 0);
     log_printf("vm_task: setvbuf OK");
 
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 9
+    /* #292 — nivel 9: LA PELÍCULA EN DIRECTO, un solo flasheo (idea de Eduardo:
+     * "la comunicación es nuestro chivato").
+     *
+     * El truco: ESPERAR a que el USB esté enumerado ANTES de tocar nada. Así el
+     * puerto ya existe cuando llega el fallo, y no se pierde el desenlace. Y de
+     * regalo: panic() del SDK IMPRIME ("*** PANIC ***" + el mensaje, panic.c:65)
+     * — o sea que un hard_assert nos cuenta él mismo qué aserto reventó.
+     *
+     * Cada paso se ANUNCIA antes de darlo: la última línea que veas es el paso
+     * que mató la placa. */
+    /* PAUSA LARGA con cuenta atrás (Eduardo: "necesito que el arranque sea más
+     * lento, que me dé tiempo a abrir el puerto"). No sirve esperar a
+     * stdio_usb_connected(): con PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1 eso es
+     * tud_ready(), que es true en cuanto enumera — no espera a que ABRAS. Así que
+     * esperamos por reloj: 30 s cantando cada segundo. Si ves la cuenta atrás,
+     * la placa está viva y te da tiempo de sobra a abrir el terminal. */
+    for (int s = 30; s > 0; s--) {
+        printf("bringup-9: esperando %2d s antes de tocar nada (abre el puerto)\n", s);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    printf("\n===== bringup-9: arranque paso a paso =====\n");
+    printf("[1] USB listo. A partir de aquí, la ULTIMA linea que veas es la que mata.\n");
+
+    printf("[2] probe JEDEC (flash_do_cmd 0x9F)...\n");
+    unsigned fb = board_desc_probe_flash_bytes();
+    printf("[2] OK -> flash = %u bytes (%u MB)\n", fb, fb / (1024u * 1024u));
+
+    printf("[3] LO QUE VIENE: fs_init() escribe en flash. El board header declara\n");
+    printf("    PICO_FLASH_SIZE_BYTES = %u (%u MB), y el SDK hace hard_assert de que\n",
+           (unsigned) PICO_FLASH_SIZE_BYTES, (unsigned) PICO_FLASH_SIZE_BYTES / (1024u*1024u));
+    printf("    todo flash_range_erase/program caiga DENTRO de ese limite.\n");
+    printf("    Si el FS de esta placa empieza en 0x400000 y el limite son 4MB -> panic.\n");
+    printf("[3] llamando a fs_init()...\n");
+    fs_init();
+    printf("[3] fs_init() SOBREVIVIO: %d ficheros\n", fs_file_count());
+
+    printf("[4] llamando a board_desc_init() (board.json + sondeo QMI de PSRAM)...\n");
+    board_desc_init();
+    printf("[4] OK -> variante %c, psram %u MB\n", board_desc()->variant,
+           (unsigned)(board_desc()->psram_bytes / (1024u * 1024u)));
+
+    printf("===== TODO EL ARRANQUE SOBREVIVIO =====\n");
+    for (unsigned i = 0; ; i++) {
+        printf("bringup-9 vivo %u (arranque completo OK)\n", i);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+#endif
+
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 26
+    /* #292 — nivel 2.6: parte fs_init() por dentro. Hace SÓLO el primer paso,
+     * el probe JEDEC (board_desc_probe_flash_bytes → flash_do_cmd 0x9F, que
+     * suspende el XIP), y CANTA EL NÚMERO. No escribe el descriptor ni monta
+     * ni formatea nada.
+     *   · Si habla: el JEDEC es inocente y el asesino es escribir/formatear.
+     *     Y de propina sabemos qué tamaño de flash ve la Metro — que es el
+     *     único dato del que cuelga TODO el layout del FS (>4MB → 12 MB de
+     *     volumen; si sale 0 o un valor raro, el descriptor sale mal).
+     *   · Si calla: es el probe JEDEC, y estamos en el #256 otra vez. */
+    for (unsigned i = 0; ; i++) {
+        unsigned fb = board_desc_probe_flash_bytes();
+        printf("bringup-2.6 vivo %u — JEDEC dice flash = %u bytes (%u MB)%s\n",
+               i, fb, fb / (1024u * 1024u),
+               fb == 0 ? "  <-- CERO: JEDEC no reconocido!" : "");
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+#endif
+
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 25
+    /* #292 — nivel 2.5: parte el hueco entre el 2 y el 3, que metía DOS cosas
+     * de golpe (scheduler+core1 Y fs_init). Aquí el scheduler YA corre y la
+     * tarea vive, pero NO se ha tocado el FS. Si el 2 habla y el 2.5 calla,
+     * el asesino es el scheduler/core 1, no el FS. Si el 2.5 habla y el 3
+     * calla, es el FS. Una variable cada vez. */
+    for (unsigned i = 0; ; i++) {
+        printf("bringup-2.5 vivo %u (scheduler + vm_task OK, SIN tocar el FS)\n", i);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+#endif
+
     fs_init();
     log_printf("fs_init: %d ficheros, %u bytes",
                fs_file_count(), (unsigned) fs_used_bytes());
+
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 3
+    /* #292 — nivel 3: sobrevivió a fs_init(). En una flash virgen eso incluye
+     * escribir el descriptor de particiones y FORMATEAR el volumen littlefs
+     * (Metro: 12 MB ≈ 3072 sectores, cada uno bajo bpvm_flash_lock = IRQs off
+     * + otro core aparcado). Si el nivel 2 enumera y este NO, es el FS. */
+    for (unsigned i = 0; ; i++) {
+        printf("bringup-3 vivo %u (fs_init OK: %d ficheros)\n", i, fs_file_count());
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+#endif
 
     /* H7.3: descriptor de placa — caps por variante (A/B) + override de
      * /sys/board.json. Tras fs_init para poder leer el board.json del FS.
      * Sondea/habilita la PSRAM (si board.json declara psramCsPin). */
     board_desc_init();
+
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 4
+    /* #292 — nivel 4: sobrevivió al JEDEC + board.json + sondeo QMI de la PSRAM
+     * (boot-crítico: suspende el XIP). Si el 3 enumera y este NO, es la PSRAM. */
+    for (unsigned i = 0; ; i++) {
+        printf("bringup-4 vivo %u (board_desc OK: variante %c, psram %u MB)\n", i,
+               board_desc()->variant,
+               (unsigned)(board_desc()->psram_bytes / (1024u * 1024u)));
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+#endif
 
     /* H7.2.b — si hay PSRAM USABLE (detectada + QPI + RW test OK), el heap de la
      * VM pasa de los 128 KB de SRAM interna a la ventana PSRAM (MBs). El resto
@@ -985,6 +1088,18 @@ void vApplicationGetPassiveIdleTaskMemory(StaticTask_t **ppxTCB,
 #endif
 
 int main(void) {
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 1
+    /* #292 — bring-up nivel 1: el mínimo absoluto. Sólo USB y un bucle.
+     * NADA de LED (en la Metro el pin 25 de PICO_DEFAULT_LED_PIN es la línea
+     * del NeoPixel, no un LED), log, FS, board_desc, PSRAM ni scheduler.
+     * Si esto no enumera, el problema no es nuestro software de arriba. */
+    stdio_init_all();
+    stdio_set_translate_crlf(&stdio_usb, false);
+    for (unsigned i = 0; ; i++) {
+        printf("bringup-1 vivo %u\n", i);
+        sleep_ms(500);
+    }
+#else
     led_init();
     stdio_init_all();
     /* CRÍTICO para el wire v1: el stdout del Pico SDK trae la traducción
@@ -1021,6 +1136,16 @@ int main(void) {
      * del REPL llama a bpvm_rtc_set_now_ms — a partir de ahí el reloj
      * está calibrado. */
 
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 2
+    /* #292 — nivel 2: todo lo de main() (led + stdio + log_init + backends) y
+     * PARA. log_init() ya toca flash (su sector propio), así que este nivel
+     * distingue "la flash mata el boot" de "el FS mata el boot". No arranca el
+     * scheduler: sin core 1 no hay multicore_lockout, y fs_init() se colgaría. */
+    for (unsigned i = 0; ; i++) {
+        printf("bringup-2 vivo %u (led+stdio+log_init+backends OK)\n", i);
+        sleep_ms(500);
+    }
+#endif
     BaseType_t r = xTaskCreate(vm_task, "vm_task", 4096, NULL,
                                 tskIDLE_PRIORITY + 2, NULL);
     if (r != pdPASS) {
@@ -1039,5 +1164,6 @@ int main(void) {
 #endif
     vTaskStartScheduler();
     for (;;) {}
+#endif  /* BPVM_PICO_BRINGUP == 1 */
     return 0;
 }
