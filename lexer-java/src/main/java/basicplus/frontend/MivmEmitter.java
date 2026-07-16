@@ -2830,13 +2830,25 @@ public final class MivmEmitter {
      */
     private void emitObjectToStringOnStack() throws IOException {
         String tmp = "__o2s_" + (stringPoolCounter++);
-        declareLocal(tmp);
-        w.emitSetLocal(tmp);                  // guarda el ref
+        // #292f (4→8B): tmp guarda un REF de objeto = 8 bytes. Con declareLocal (4B),
+        // el SET_LOCAL truncaba el handle y dejaba la palabra `gen` HUÉRFANA en la
+        // pila. El path no-null la reconsumía por CASUALIDAD (invokeVirtual saca 8
+        // bytes = gen huérfano + idxTag re-empujado), pero el path null saltaba ese
+        // invoke → fuga de 4 bytes → el concat siguiente leía el otro operando
+        // desalineado → "No space in heap". Un ref = 8 bytes: declareLocalRef.
+        declareLocalRef(tmp);
+        w.emitSetLocal(tmp);                  // guarda el ref (8 bytes)
         int nullL = w.newLabel();
         int doneL = w.newLabel();
-        w.emitGetLocal(tmp);
-        w.emitJumpIfFalse(nullL);             // ref == 0 → "null"
-        w.emitGetLocal(tmp);                  // this = ref
+        // null-check a 8 BYTES: el handle es de 8B, así que el test == null hay que
+        // hacerlo con LNEQ (como el path de usuario, #11). Un GET_LOCAL_L empuja 8
+        // bytes y el JUMPIFFALSE sólo saca 4 → habría que igualar el ancho antes de
+        // ramificar. LNEQ contra 0 consume los 8 bytes y deja un bool de 4B.
+        w.emitGetLocal(tmp);                  // handle (8 bytes)
+        w.emit(OpCode.LPUSH); w.emitLong(0L); // null = 8 bytes a cero
+        w.emit(OpCode.LNEQ);                  // bool: handle != null
+        w.emitJumpIfFalse(nullL);             // == null → "null"
+        w.emitGetLocal(tmp);                  // this = ref (8 bytes)
         w.emitInvokeVirtualBySlot(0, 0);      // toString() → string ref
         w.emitJump(doneL);
         w.declareLabel(nullL);
@@ -3644,9 +3656,13 @@ public final class MivmEmitter {
             try {
                 String prefix = internString("object@");
                 w.emitLeaGlobal(prefix);                  // "object@"
-                w.emitGetParam("this");                   // ref (int)
-                emitBuiltinCall(Builtin.INT_TO_STRING);   // "<addr>"
-                emitStringConcatCall();                   // "object@<addr>"
+                w.emitGetParam("this");                   // this = ref = handle de 8 BYTES
+                // #292e (4→8B): this es una ref de 8B, no un int. INT_TO_STRING sólo
+                // saca 4 bytes → dejaba 4 bytes del handle huérfanos en la pila → el
+                // concat siguiente leía una ref de string DESALINEADA (basura) → longitud
+                // gigante → "No space in heap". LONG_TO_STRING saca los 8 bytes.
+                emitBuiltinCall(Builtin.LONG_TO_STRING);  // "<handle>"
+                emitStringConcatCall();                   // "object@<handle>"
                 w.emitSetLocal("__result");
                 emitFunctionEnd();
             } finally { scopeStack.pop(); }
