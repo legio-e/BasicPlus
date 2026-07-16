@@ -72,7 +72,13 @@ static char s_reply_buf[1024];
  *    para soportar PUT incremental).
  *  - Subir mediante múltiples PUTs con prefijo y un comando FINISH
  *    que concatene (workaround a nivel cliente, sin cambios FS). */
-#define V1_PUT_BUF_SIZE  (16 * 1024)
+/* INTERINO (16-jul): subido 16K→48K porque Json.mod ya pesa 17.8K (Gui 31.8K)
+ * y el bulk se rechazaba con NO_SPACE. Cabe en los 520K de SRAM del RP2350
+ * (VM 128K + FS s_data 128K + este 48K). El fix DE VERDAD (Eduardo) es el
+ * "Streaming chunk a chunk a fs_put" de arriba — trocear el envío para NO
+ * buferizar el fichero entero, así el tamaño deja de estar acotado. Los .mod
+ * seguirán creciendo → subir el buffer es un parche con techo. Ver tarea/mejora. */
+#define V1_PUT_BUF_SIZE  (48 * 1024)
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
 
 /* ============================================================ */
