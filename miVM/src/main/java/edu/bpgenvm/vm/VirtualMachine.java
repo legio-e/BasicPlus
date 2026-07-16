@@ -3629,7 +3629,7 @@ public class VirtualMachine {
             case GUI_CREATE_LABEL:  { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createLabel(p));  break; }
             case GUI_CREATE_BUTTON: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createButton(p)); break; }
             case GUI_SET_TEXT: {
-                int t = popTc(tc); int hnd = popTc(tc);
+                long t = popTcRef(tc); int hnd = popTc(tc);   // 4→8B: el string es ref de 8 bytes; popTc (4B) truncaba el handle → texto vacío + id sin sacar (pila descuadrada)
                 gui.setText(hnd, readVmString(t)); pushTc(tc, 0); break;
             }
             case GUI_SET_WIDTH:  { int w  = popTc(tc); int hnd = popTc(tc); gui.setWidth(hnd, w);   pushTc(tc, 0); break; }
@@ -3717,22 +3717,22 @@ public class VirtualMachine {
             case GUI_CREATE_SPINBOX: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createSpinbox(p)); break; }
             case GUI_CREATE_LED:     { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createLed(p)); break; }
             case GUI_CREATE_DROPDOWN: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createDropdown(p)); break; }
-            case GUI_SET_OPTIONS: { int o = popTc(tc); int hnd = popTc(tc); gui.setOptions(hnd, readVmString(o)); pushTc(tc, 0); break; }
+            case GUI_SET_OPTIONS: { long o = popTcRef(tc); int hnd = popTc(tc); gui.setOptions(hnd, readVmString(o)); pushTc(tc, 0); break; }   // 4→8B: opts = string ref 8B
             case GUI_CREATE_TEXTAREA: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createTextarea(p)); break; }
             case GUI_GET_TEXT: { int hnd = popTc(tc); pushTcRef(tc, allocVmString(gui.getText(hnd))); break; }
             case GUI_CREATE_LIST: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createList(p)); break; }
             case GUI_CREATE_KEYBOARD: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createKeyboard(p)); break; }
             case GUI_KEYBOARD_SET_TEXTAREA: { int ta = popTc(tc); int hnd = popTc(tc); gui.keyboardSetTextarea(hnd, ta); pushTc(tc, 0); break; }
             case GUI_CREATE_MSGBOX: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createMsgbox(p)); break; }
-            case GUI_SET_BUTTONS: { int lbls = popTc(tc); int hnd = popTc(tc); gui.setButtons(hnd, readVmString(lbls)); pushTc(tc, 0); break; }
+            case GUI_SET_BUTTONS: { long lbls = popTcRef(tc); int hnd = popTc(tc); gui.setButtons(hnd, readVmString(lbls)); pushTc(tc, 0); break; }   // 4→8B: labels = string ref 8B
             case GUI_CREATE_TABVIEW: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createTabview(p)); break; }
-            case GUI_TABVIEW_ADD_TAB: { int nm = popTc(tc); int hnd = popTc(tc); pushTc(tc, gui.tabviewAddTab(hnd, readVmString(nm))); break; }
+            case GUI_TABVIEW_ADD_TAB: { long nm = popTcRef(tc); int hnd = popTc(tc); pushTc(tc, gui.tabviewAddTab(hnd, readVmString(nm))); break; }   // 4→8B: name = string ref 8B
             case GUI_CREATE_TABLE: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createTable(p)); break; }
             case GUI_TABLE_SET_GRID: { int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); gui.tableSetGrid(hnd, r, c); pushTc(tc, 0); break; }
-            case GUI_TABLE_SET_CELL: { int t = popTc(tc); int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); gui.tableSetCell(hnd, r, c, readVmString(t)); pushTc(tc, 0); break; }
+            case GUI_TABLE_SET_CELL: { long t = popTcRef(tc); int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); gui.tableSetCell(hnd, r, c, readVmString(t)); pushTc(tc, 0); break; }   // 4→8B: text = string ref 8B
             case GUI_TABLE_GET_CELL: { int c = popTc(tc); int r = popTc(tc); int hnd = popTc(tc); pushTcRef(tc, allocVmString(gui.tableGetCell(hnd, r, c))); break; }
             case GUI_IMAGE_NEW: { pushTc(tc, gui.imageNew()); break; }
-            case GUI_IMAGE_LOAD_FILE: { int p = popTc(tc); int id = popTc(tc); pushTc(tc, gui.imageLoadFile(id, readVmString(p))); break; }
+            case GUI_IMAGE_LOAD_FILE: { long p = popTcRef(tc); int id = popTc(tc); pushTc(tc, gui.imageLoadFile(id, readVmString(p))); break; }   // 4→8B: path = string ref 8B
             case GUI_IMAGE_WIDTH: { int id = popTc(tc); pushTc(tc, gui.imageWidth(id)); break; }
             case GUI_IMAGE_HEIGHT: { int id = popTc(tc); pushTc(tc, gui.imageHeight(id)); break; }
             case GUI_CREATE_IMAGEVIEW: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createImageView(p)); break; }
