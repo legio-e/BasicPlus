@@ -688,6 +688,14 @@ public final class Main {
         if (sourcePath != null) {
             emitter.setSourcePath(sourcePath.toString());
         }
+        // H6.a — construye la interfaz del módulo EN MEMORIA (el mismo modelo que
+        // el .bpi) y la embebe en el .mod (sección `interface`, formato v6). Es
+        // lo que permite dejar de depender del .bpi en disco.
+        String ifaceLib = (module.library == null) ? "" : module.library;
+        ModuleInterface embeddedIface = ModuleInterface.extractFrom(
+                ifaceLib, module.name, module.isInterface, module.implementsName,
+                info.module, new ArrayList<>());
+        emitter.setInterfaceBytes(embeddedIface.toBytes());
         emitter.emitTo(ctx.outDir);
         if (!emitter.errors.isEmpty()) {
             indent(depth); System.out.printf("-- Errores del emisor mivm (%d) --%n", emitter.errors.size());

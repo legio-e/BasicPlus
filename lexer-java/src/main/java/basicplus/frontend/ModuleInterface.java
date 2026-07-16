@@ -589,6 +589,25 @@ public final class ModuleInterface {
     public void writeTo(Path file) throws IOException {
         Files.createDirectories(file.toAbsolutePath().getParent());
         try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(file, StandardCharsets.UTF_8))) {
+            writeTo(pw);
+        }
+    }
+
+    /** H6.a — serializa la interfaz a bytes UTF-8 (el MISMO texto de directivas
+     *  que iría al .bpi) para embeberla en la sección `interface` del .mod. El
+     *  .bpi deja así de ser necesario en disco. */
+    public byte[] toBytes() {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (PrintWriter pw = new PrintWriter(
+                new java.io.OutputStreamWriter(bos, StandardCharsets.UTF_8))) {
+            writeTo(pw);
+        }
+        return bos.toByteArray();
+    }
+
+    /** Cuerpo compartido de la serialización: vuelca el texto de directivas al
+     *  PrintWriter dado (fichero .bpi o buffer en memoria para el .mod). */
+    public void writeTo(PrintWriter pw) {
             pw.println("bpi " + CURRENT_VERSION);
             if (library != null && !library.isEmpty()) pw.println("library " + library);
             pw.println("module " + moduleName);
@@ -679,8 +698,7 @@ public final class ModuleInterface {
                 }
                 pw.println("end class");
             }
-        }
-    }
+    } // fin writeTo(PrintWriter)
 
     /** Helper para serializar arrays de int como hex separado por '|'.
      *  "" = array vacío. Cada int se escribe como 8 hex chars sin prefijo. */
@@ -840,9 +858,32 @@ public final class ModuleInterface {
     /** Carga una interfaz desde un .bpi. Lanza IOException con mensaje legible
      *  ante problemas de formato. */
     public static ModuleInterface readFrom(Path file) throws IOException {
+        try (BufferedReader br = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            return readFrom(br, file);
+        }
+    }
+
+    /** H6.a — parsea la interfaz desde bytes UTF-8 (la sección `interface`
+     *  embebida en el .mod). {@code sourceLabel} sólo se usa para los mensajes
+     *  de error (p.ej. el nombre del .mod de origen). */
+    public static ModuleInterface fromBytes(byte[] data, String sourceLabel) throws IOException {
+        try (BufferedReader br = new BufferedReader(new java.io.InputStreamReader(
+                new java.io.ByteArrayInputStream(data), StandardCharsets.UTF_8))) {
+            return readFrom(br, syntheticLabelPath(sourceLabel));
+        }
+    }
+
+    /** Convierte una etiqueta libre en un Path válido (sólo para toString en
+     *  errores); sanea caracteres que Windows rechaza en rutas. */
+    private static Path syntheticLabelPath(String label) {
+        String safe = (label == null ? "<embedded>" : label).replaceAll("[<>:\"|?*]", "_");
+        return java.nio.file.Paths.get(safe);
+    }
+
+    private static ModuleInterface readFrom(BufferedReader br, Path file) throws IOException {
         ModuleInterface iface = new ModuleInterface();
         iface.sourcePath = file.toString();
-        try (BufferedReader br = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+        {   // br lo gestiona (cierra) el llamante
             String line;
             int lineNo = 0;
             boolean sawHeader = false;

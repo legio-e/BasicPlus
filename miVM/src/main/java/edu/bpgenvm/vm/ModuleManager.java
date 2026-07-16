@@ -302,9 +302,11 @@ public class ModuleManager {
         discoveryQueue.put(moduleName, resolved);
 
         try (DataInputStream in = new DataInputStream(new FileInputStream(resolved))) {
-            if (in.readInt() != ModFormat.MAGIC_NUMBER) {
+            int magic0 = in.readInt();
+            if (!ModFormat.isKnownMagic(magic0)) {
                 throw new RuntimeException("Firma mágica inválida en " + resolved);
             }
+            boolean v6a = (magic0 == ModFormat.MAGIC_NUMBER_V6);
             in.readInt(); // dataSize
             in.readInt(); // mainOffset
 
@@ -312,6 +314,7 @@ public class ModuleManager {
             in.readInt();   // exportSize
             in.readInt();   // codeSize
             int librarySize = in.readInt();
+            if (v6a) in.readInt();   // interfaceSize (v6): irrelevante para el discovery de imports
 
             byte[] libraryBytes = new byte[librarySize];
             in.readFully(libraryBytes);
@@ -364,15 +367,18 @@ public class ModuleManager {
         int moduleBase = nextFreeAddress;
 
         try (DataInputStream in = new DataInputStream(new FileInputStream(filename))) {
-            if (in.readInt() != ModFormat.MAGIC_NUMBER) {
+            int magic1 = in.readInt();
+            if (!ModFormat.isKnownMagic(magic1)) {
                 throw new RuntimeException("Firma mágica inválida en " + filename);
             }
+            boolean v6 = (magic1 == ModFormat.MAGIC_NUMBER_V6);
             int dataSize    = in.readInt();
             int mainOffset  = in.readInt();
             int importSize  = in.readInt();
             int exportSize  = in.readInt();
             int codeSize    = in.readInt();
             int librarySize = in.readInt();
+            int interfaceSize = v6 ? in.readInt() : 0;   // H6.a: sección interface (v6)
 
             byte[] libraryBytes = new byte[librarySize];
             in.readFully(libraryBytes);
@@ -415,6 +421,13 @@ public class ModuleManager {
             // .mods nuevos sin romper compat con los viejos.
             byte[] expBuf = new byte[exportSize];
             in.readFully(expBuf);
+            // H6.a — la sección `interface` va entre exports y data. La VM
+            // ejecuta sin ella; la saltamos íntegra (readFully garantiza el
+            // consumo, a diferencia de skipBytes).
+            if (interfaceSize > 0) {
+                byte[] ifaceSkip = new byte[interfaceSize];
+                in.readFully(ifaceSkip);
+            }
             java.io.DataInputStream expIn = new java.io.DataInputStream(
                     new java.io.ByteArrayInputStream(expBuf));
 

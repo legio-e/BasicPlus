@@ -32,6 +32,12 @@ public class ModWriter {
     private final DataOutputStream exportOut = new DataOutputStream(exportStream);
     private final DataOutputStream codeOut   = new DataOutputStream(codeStream);
 
+    /** H6.a — sección `interface` embebida (texto del antiguo .bpi, UTF-8).
+     *  Si es null, el .mod se emite en formato v5 (sin sección interface, MAGIC
+     *  "MOD5"); si está presente, se emite v6 ("MOD6") con la interfaz entre
+     *  exports y data. */
+    private byte[] interfaceBytes = null;
+
     /** Cada external es (nombreLógico, fromPath). fromPath="" ⇒ usa convención por defecto. */
     private static class ExternalRef {
         final String name;
@@ -258,6 +264,15 @@ public class ModWriter {
      *  writeToFile. */
     public void setLibrary(String library) {
         this.currentLibrary = (library == null) ? "" : library;
+    }
+
+    /** H6.a — embebe la interfaz del módulo (texto del antiguo .bpi, UTF-8) en
+     *  el .mod. Si se llama con bytes no nulos, {@link #writeToFile} emite el
+     *  formato v6 (MAGIC "MOD6") con la sección `interface` entre exports y
+     *  data; si no se llama (o se pasa null), se emite v5 como antes. Debe
+     *  llamarse antes de writeToFile. */
+    public void setInterfaceBytes(byte[] bytes) {
+        this.interfaceBytes = (bytes != null && bytes.length > 0) ? bytes : null;
     }
 
     /**
@@ -1952,18 +1967,29 @@ public class ModWriter {
                 ? new byte[0]
                 : currentLibrary.getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
+        // H6.a — si hay interfaz embebida emitimos v6 (MAGIC "MOD6") con el
+        // campo interfaceSize en el header y la sección `interface` entre
+        // exports y data; si no, v5 idéntico al previo.
+        boolean v6 = (interfaceBytes != null);
+
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(filename))) {
-            out.writeInt(ModFormat.MAGIC_NUMBER);
+            out.writeInt(v6 ? ModFormat.MAGIC_NUMBER_V6 : ModFormat.MAGIC_NUMBER);
             out.writeInt(dataSize);
             out.writeInt(mainOffset);
             out.writeInt(importStream.size());
             out.writeInt(exportStream.size());
             out.writeInt(rawCode.length);
             out.writeInt(libraryBytes.length);
+            if (v6) {
+                out.writeInt(interfaceBytes.length);   // 8º entero del header v6
+            }
 
             out.write(libraryBytes);
             out.write(importStream.toByteArray());
             out.write(exportStream.toByteArray());
+            if (v6) {
+                out.write(interfaceBytes);             // sección interface (antes de data)
+            }
             out.write(dataBuf);
             out.write(rawCode);
         }

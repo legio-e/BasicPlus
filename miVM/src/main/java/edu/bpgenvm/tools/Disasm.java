@@ -55,18 +55,21 @@ public class Disasm {
     public static void dump(String filename, PrintStream out) throws IOException {
         try (DataInputStream in = new DataInputStream(new FileInputStream(filename))) {
             int magic       = in.readInt();
+            boolean v6      = (magic == ModFormat.MAGIC_NUMBER_V6);
             int dataSize    = in.readInt();
             int mainOffset  = in.readInt();
             int importsSize = in.readInt();
             int exportsSize = in.readInt();
             int codeSize    = in.readInt();
             int librarySize = in.readInt();
+            int interfaceSize = v6 ? in.readInt() : 0;   // H6.a: sección interface (v6)
 
-            byte[] libraryBuf = readN(in, librarySize);
-            byte[] importsBuf = readN(in, importsSize);
-            byte[] exportsBuf = readN(in, exportsSize);
-            byte[] dataBuf    = readN(in, dataSize);
-            byte[] codeBuf    = readN(in, codeSize);
+            byte[] libraryBuf   = readN(in, librarySize);
+            byte[] importsBuf   = readN(in, importsSize);
+            byte[] exportsBuf   = readN(in, exportsSize);
+            byte[] interfaceBuf = readN(in, interfaceSize);   // entre exports y data (v6)
+            byte[] dataBuf      = readN(in, dataSize);
+            byte[] codeBuf      = readN(in, codeSize);
 
             String library = new String(libraryBuf, StandardCharsets.UTF_8);
 
@@ -75,7 +78,9 @@ public class Disasm {
             out.println("================================================================");
 
             out.println("=== HEADER ===");
-            String magicOk = (magic == ModFormat.MAGIC_NUMBER) ? " (MOD5, OK)" : " (NO MATCH, esperado 0x4D4F4435)";
+            String magicOk = (magic == ModFormat.MAGIC_NUMBER) ? " (MOD5, OK)"
+                    : (magic == ModFormat.MAGIC_NUMBER_V6) ? " (MOD6, OK)"
+                    : " (NO MATCH, esperado MOD5/MOD6)";
             out.printf ("  magic         0x%08X%s%n", magic, magicOk);
             out.printf ("  dataSize      %d bytes%n", dataSize);
             out.printf ("  mainOffset    %d %s%n", mainOffset,
@@ -84,6 +89,7 @@ public class Disasm {
             out.printf ("  exportsSize   %d bytes%n", exportsSize);
             out.printf ("  codeSize      %d bytes%n", codeSize);
             out.printf ("  librarySize   %d bytes%n", librarySize);
+            if (v6) out.printf ("  interfaceSize %d bytes%n", interfaceSize);
             out.printf ("  library       %s%n", library.isEmpty() ? "(none)" : "\"" + library + "\"");
 
             List<ImportEntry> imports = parseImports(importsBuf);
@@ -114,6 +120,19 @@ public class Disasm {
                         ? "  [AOT]" : "";
                 out.printf("  %-25s @code +%d%s%n",
                         e.getValue(), e.getKey(), aotTag);
+            }
+
+            if (v6) {
+                out.println();
+                out.printf ("=== INTERFACE (%d bytes, embebida — antiguo .bpi) ===%n", interfaceSize);
+                if (interfaceSize == 0) {
+                    out.println("  (vacía)");
+                } else {
+                    String ifaceText = new String(interfaceBuf, StandardCharsets.UTF_8);
+                    for (String line : ifaceText.split("\n", -1)) {
+                        out.printf("  %s%n", line);
+                    }
+                }
             }
 
             if (mdn != null) {

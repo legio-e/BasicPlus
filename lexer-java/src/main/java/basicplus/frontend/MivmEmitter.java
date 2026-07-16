@@ -53,7 +53,17 @@ public final class MivmEmitter {
     private final SemanticInfo info;
     private final ModWriter w = new ModWriter();
 
+    /** H6.a — bytes de la interfaz (texto del .bpi) a embeber en el .mod. Lo
+     *  fija el driver de compilación (Main) antes de emitTo. Null ⇒ .mod v5. */
+    private byte[] interfaceBytes = null;
+
     public final List<String> errors = new ArrayList<>();
+
+    /** H6.a — fija la interfaz del módulo a embeber en el .mod (sección
+     *  `interface`). Debe llamarse antes de {@link #emitTo}. */
+    public void setInterfaceBytes(byte[] bytes) {
+        this.interfaceBytes = bytes;
+    }
 
     /**
      * Path (típicamente absoluto) al fichero fuente .bp del módulo. Se
@@ -320,6 +330,9 @@ public final class MivmEmitter {
 
         Files.createDirectories(outputDir);
         Path out = outputDir.resolve(w.getCanonicalFilename());
+        // H6.a — embebe la interfaz del módulo en el .mod (sección `interface`,
+        // formato v6). Si no se ha fijado, writeToFile emite v5 como antes.
+        if (interfaceBytes != null) w.setInterfaceBytes(interfaceBytes);
         w.writeToFile(out.toString());
 
         // Volcar la información de depuración a un fichero .dbg con el mismo
