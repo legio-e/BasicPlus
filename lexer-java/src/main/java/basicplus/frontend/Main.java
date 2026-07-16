@@ -62,6 +62,17 @@ public final class Main {
         Map<String, Path> bpSources;
         Path rootSrcDir;
 
+        /** H6.a-lite — .bpi que ESTE build ha ESCRITO (en outDir), para poder
+         *  borrarlos al terminar. Sólo entra lo que escribimos: los .bpi de
+         *  librerías precompiladas (stdlib) se LEEN de libPaths, no se escriben,
+         *  así que nunca aparecen aquí — están a salvo. */
+        final Set<Path> writtenBpi = new LinkedHashSet<>();
+        /** Si true, al terminar un build se borran los writtenBpi. El IDE lo
+         *  activa (un build de app: el .bpi ya cumplió su función, el .mod es el
+         *  entregable). La regeneración manual de librerías lo deja en false,
+         *  para no borrarse sus propios .bpi. Default OFF = comportamiento previo. */
+        boolean pruneBpi = false;
+
         /**
          * Paths donde buscar dependencias precompiladas (.bpi y .mod) cuando
          * no se encuentran en outDir ni en el directorio del importer.
@@ -119,9 +130,23 @@ public final class Main {
      * @return true si la compilación produjo el .mod sin errores semánticos.
      */
     public static boolean compileFile(Path source, Path outDir, String backend) {
+        return compileFile(source, outDir, backend, false);
+    }
+
+    /**
+     * @param pruneBpi si true, al terminar un build correcto borra los .bpi que
+     *   este build ESCRIBIÓ (raíz + imports de la app). El .bpi es un artefacto
+     *   de compilación: una vez emitido el .mod, ya cumplió su función (resolver
+     *   imports). Borrarlos evita que queden rondando — desfases .bpi/.mod y
+     *   subidas innecesarias al runtime (el IDE subía 407 ficheros para un hola
+     *   mundo). Los .bpi de la stdlib NO se tocan: se leen de su libdir, no se
+     *   escriben. Lo activa el IDE; la regen manual de librerías lo deja false.
+     */
+    public static boolean compileFile(Path source, Path outDir, String backend, boolean pruneBpi) {
         Ctx ctx = new Ctx();
         ctx.outDir = outDir;
         ctx.backend = (backend != null) ? backend : "mivm";
+        ctx.pruneBpi = pruneBpi;
         // Si el cwd no es el del repo (típico cuando un IDE invoca el compile)
         // el ctor de Ctx no habrá localizado BpVM.cfg. Re-intentamos caminando
         // hacia arriba desde el .bp para que `import IO` y resto de stdlib
@@ -129,11 +154,24 @@ public final class Main {
         if (source != null) ctx.autodiscoverFromSource(source.toAbsolutePath());
         try {
             boolean ok = compileFull(source, ctx, 0);
-            return ok && ctx.totalErrors == 0;
+            boolean success = ok && ctx.totalErrors == 0;
+            if (success && ctx.pruneBpi) pruneWrittenBpi(ctx);
+            return success;
         } catch (IOException ex) {
             System.err.println("compileFile: " + ex.getClass().getSimpleName() + ": " + ex.getMessage());
             return false;
         }
+    }
+
+    /** H6.a-lite — borra los .bpi que este build escribió. Sólo los nuestros:
+     *  la stdlib se lee, no se escribe, así que no está en writtenBpi. Fallar un
+     *  borrado no es fatal (el .mod ya está emitido). */
+    private static void pruneWrittenBpi(Ctx ctx) {
+        int n = 0;
+        for (Path bpi : ctx.writtenBpi) {
+            try { if (Files.deleteIfExists(bpi)) n++; } catch (IOException ignore) { }
+        }
+        if (ctx.verbose && n > 0) System.out.println("  .bpi intermedios borrados: " + n);
     }
 
     public static void main(String[] args)
@@ -145,10 +183,12 @@ public final class Main {
         String backend = "jvm";
         boolean showTokens = true;
         boolean showAst    = true;
+        boolean pruneBpi   = false;   // borra los .bpi del build al terminar (opt-in)
 
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
             if ("--tokens".equals(a))      showAst    = false;
+            else if ("--prune-bpi".equals(a)) pruneBpi = true;
             else if ("--ast".equals(a))    showTokens = false;
             else if ("--quiet".equals(a)) { showAst = false; showTokens = false; }
             else if ("--compile".equals(a)) {
@@ -202,8 +242,11 @@ public final class Main {
                 ctx.outDir     = Paths.get(proj.outDir);
                 Files.createDirectories(ctx.outDir);
                 for (String d : proj.dependencies) ctx.dependencyPaths.add(Paths.get(d));
+                ctx.pruneBpi = pruneBpi;
                 boolean ok = compileFull(mainBp, ctx, /*depth*/0);
-                System.exit(ok && ctx.totalErrors == 0 ? 0 : 2);
+                boolean success = ok && ctx.totalErrors == 0;
+                if (success && ctx.pruneBpi) pruneWrittenBpi(ctx);
+                System.exit(success ? 0 : 2);
             } catch (IOException ex) {
                 System.err.println("error proyecto: " + ex.getMessage());
                 System.exit(2); return;
@@ -243,8 +286,11 @@ public final class Main {
             } else if (compileOutDir != null) {
                 ctx.outDir = Paths.get(compileOutDir);
                 Files.createDirectories(ctx.outDir);
+                ctx.pruneBpi = pruneBpi;
                 boolean ok = compileFull(p, ctx, /*depth*/0);
-                System.exit(ok && ctx.totalErrors == 0 ? 0 : 2);
+                boolean success = ok && ctx.totalErrors == 0;
+                if (success && ctx.pruneBpi) pruneWrittenBpi(ctx);
+                System.exit(success ? 0 : 2);
             } else {
                 // Sin --compile ni --interface: sólo diagnósticos del raíz.
                 ctx.outDir = null;
@@ -674,6 +720,7 @@ public final class Main {
                 info.module, skipped);
         Path bpiPath = ctx.outDir.resolve(bpiName);
         iface.writeTo(bpiPath);
+        ctx.writtenBpi.add(bpiPath.toAbsolutePath());   // H6.a-lite: candidato a borrar al cerrar el build
         indent(depth); System.out.printf("interfaz : %s (funcs=%d%s%s)%n",
                 bpiPath.toAbsolutePath(), iface.functions.size(),
                 module.isInterface ? ", interface=true" : "",

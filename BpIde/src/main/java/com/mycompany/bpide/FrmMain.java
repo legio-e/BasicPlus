@@ -1738,7 +1738,7 @@ public class FrmMain extends javax.swing.JFrame
             protected Void doInBackground() {
                 publish("== compilando " + bpFile.getFileName() + " ==\n");
                 boolean ok = invokeWithCapture(() ->
-                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm"),
+                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm", /*pruneBpi*/ true),
                         this::publish);
                 if (!ok) {
                     publish("== compilación falló ==\n");
@@ -2014,7 +2014,7 @@ public class FrmMain extends javax.swing.JFrame
             protected Void doInBackground() {
                 publish("== compilando " + bpFile.getFileName() + " ==\n");
                 boolean ok = invokeWithCapture(() ->
-                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm"),
+                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm", /*pruneBpi*/ true),
                         this::publish);
                 if (!ok) {
                     publish("== compilación falló ==\n");
@@ -2095,7 +2095,7 @@ public class FrmMain extends javax.swing.JFrame
             protected Boolean doInBackground() {
                 publish("== compilando " + bpFile.getFileName() + " para la placa ==\n");
                 boolean ok = invokeWithCapture(() ->
-                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm"),
+                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm", /*pruneBpi*/ true),
                         this::publish);
                 if (!ok) {
                     publish("== compilación falló ==\n");
@@ -2309,7 +2309,7 @@ public class FrmMain extends javax.swing.JFrame
             protected Boolean doInBackground() {
                 publish("== compilando " + bpFile.getFileName() + " para Debug on Device ==\n");
                 boolean ok = invokeWithCapture(() ->
-                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm"),
+                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm", /*pruneBpi*/ true),
                         this::publish);
                 if (!ok) { publish("== compilación falló ==\n"); return false; }
                 base = inferModuleName(bpFile);
