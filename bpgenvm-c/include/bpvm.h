@@ -104,7 +104,8 @@ bpvm_status_t bpvm_load_mod_buffer(bpvm_t* vm, const uint8_t* data,
  * cargar el módulo principal + sus dependencias en orden.
  *
  * El loader:
- *   1. Lee y valida el header (MAGIC = 0x4D4F4435 / "MOD5").
+ *   1. Lee y valida el header (MAGIC "MOD5" v5 o "MOD6" v6; v6 añade la
+ *      sección `interface` entre exports y data, que el loader SALTA).
  *   2. Inyecta la ext-table (zeroed), data block y code block en
  *      memory[] empezando en next_free_address.
  *   3. Registra el módulo en la tabla interna de loadedModules.

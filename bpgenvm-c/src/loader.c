@@ -83,11 +83,13 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
 
     buf_cursor_t c = { data, size, 0, 0 };
 
-    /* --- Header (28 bytes) --- */
+    /* --- Header (v5=28 bytes / v6=32 bytes) --- */
     uint32_t magic, data_size, imports_size, exports_size, code_size, library_size;
+    uint32_t interface_size = 0;   /* H6.a: sección interface (sólo v6) */
     int32_t  main_offset;
     if (bc_read_be32(&c, &magic) != 0)                 return BPVM_ERR_IO;
-    if (magic != BPVM_MAGIC)                            return BPVM_ERR_BAD_MAGIC;
+    if (magic != BPVM_MAGIC && magic != BPVM_MAGIC_V6) return BPVM_ERR_BAD_MAGIC;
+    int is_v6 = (magic == BPVM_MAGIC_V6);
     if (bc_read_be32(&c, &data_size) != 0)             return BPVM_ERR_IO;
     {
         uint32_t mo;
@@ -98,6 +100,7 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
     if (bc_read_be32(&c, &exports_size) != 0)          return BPVM_ERR_IO;
     if (bc_read_be32(&c, &code_size) != 0)             return BPVM_ERR_IO;
     if (bc_read_be32(&c, &library_size) != 0)          return BPVM_ERR_IO;
+    if (is_v6 && bc_read_be32(&c, &interface_size) != 0) return BPVM_ERR_IO;
 
     bpvm_module_t* mod = &vm->modules[vm->module_count];
     memset(mod, 0, sizeof(*mod));
@@ -173,6 +176,12 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
         if (c.pos + exports_size > c.size) return BPVM_ERR_IO;
         exp_buf = c.base + c.pos;
         c.pos += exports_size;
+    }
+
+    /* H6.a — la sección interface va entre exports y data; la VM ejecuta sin
+     * ella (es metadato de compilación). La saltamos íntegra. */
+    if (interface_size > 0) {
+        if (bc_skip(&c, interface_size) != 0) return BPVM_ERR_IO;
     }
 
     /* Data block: lo copiamos en memory[]. */

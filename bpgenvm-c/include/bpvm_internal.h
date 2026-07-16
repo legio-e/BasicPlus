@@ -15,9 +15,11 @@
 /*  Constantes extraídas de docs/MOD_FORMAT.md / HEAP_LAYOUT.md  */
 /* ============================================================ */
 
-#define BPVM_MAGIC          0x4D4F4435u   /* "MOD5" big-endian */
-#define BPVM_HEADER_SIZE    28
-#define BPVM_FORMAT_VERSION 5
+#define BPVM_MAGIC          0x4D4F4435u   /* "MOD5" big-endian (v5, sin interfaz) */
+#define BPVM_MAGIC_V6       0x4D4F4436u   /* "MOD6" big-endian (v6, H6.a: sección interface) */
+#define BPVM_HEADER_SIZE    28            /* header v5; v6 = 32 (añade interfaceSize) */
+#define BPVM_HEADER_SIZE_V6 32
+#define BPVM_FORMAT_VERSION 6
 
 /* Tamaño en bytes de una entrada de la ext-table (per-module). */
 #define BPVM_EXT_ENTRY_SIZE 4
