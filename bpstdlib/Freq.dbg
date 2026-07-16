@@ -2,29 +2,29 @@ dbg 3
 module Freq
 source C:\lenguajes\pm\bpstdlib\Freq.bp
 lines
-1520 76
-1531 77
-1542 78
-1551 79
-1562 80
-1573 81
-1602 87
-1608 88
-1622 89
-1635 91
-1643 92
-1651 93
-1663 94
-1679 95
-1693 97
-1716 103
-1747 108
-1768 67
-1780 68
-1792 69
-1899 46
-1920 49
-1941 52
+1540 76
+1551 77
+1562 78
+1571 79
+1582 80
+1593 81
+1622 87
+1628 88
+1642 89
+1655 91
+1663 92
+1671 93
+1683 94
+1699 95
+1713 97
+1736 103
+1767 108
+1788 67
+1800 68
+1812 69
+1919 46
+1940 49
+1961 52
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -47,103 +47,103 @@ func List.remove 189
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 295
+func List.__init 299
 this -20 8 0 ?
-func OwnerList.removeAndFree 338
+func OwnerList.removeAndFree 342
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 468
+func OwnerList.__init 480
 this -20 8 0 ?
-func StringBuilder.appendChar 489
+func StringBuilder.appendChar 501
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 579
+func StringBuilder.appendStr 591
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 650
+func StringBuilder.appendInt 662
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 675
+func StringBuilder.toString 687
 this -20 8 0 ?
-func StringBuilder.length 699
+func StringBuilder.length 711
 this -20 8 0 ?
-func StringBuilder.__init 715
+func StringBuilder.__init 727
 this -20 8 0 ?
-func Thread.run 756
+func Thread.run 768
 this -20 8 0 ?
-func Thread.start 766
+func Thread.start 778
 this -20 8 0 ?
-func Thread.join 785
+func Thread.join 797
 this -20 8 0 ?
-func Thread.__init 804
+func Thread.__init 816
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 832
+func Mutex.lock 844
 this -20 8 0 ?
-func Mutex.unlock 851
+func Mutex.unlock 863
 this -20 8 0 ?
-func Mutex.__init 870
+func Mutex.__init 882
 this -20 8 0 ?
-func SyncList.add 888
+func SyncList.add 900
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 934
+func SyncList.remove 946
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 980
+func SyncList.get 992
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1024
+func SyncList.set 1036
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1073
+func SyncList.length 1085
 this -20 8 0 ?
-func SyncList.pop 1114
+func SyncList.pop 1126
 this -20 8 0 ?
-func SyncList.popBlocking 1225
+func SyncList.popBlocking 1241
 this -20 8 0 ?
-func SyncList.__init 1352
+func SyncList.__init 1372
 this -20 8 0 ?
-func Meter.getPin 1449
+func Meter.getPin 1469
 this -20 8 0 ?
-func Meter.setPin 1465
+func Meter.setPin 1485
 this -24 8 0 ?
-func Meter.getEdge 1483
+func Meter.getEdge 1503
 this -20 8 0 ?
-func Meter.setEdge 1499
+func Meter.setEdge 1519
 this -24 8 0 ?
-func Meter.measureHz 1517
+func Meter.measureHz 1537
 this -24 8 0 ?
 windowMs -16 4 0 integer
 n 8 4 0 integer
-func Meter.measureHzAvg 1599
+func Meter.measureHzAvg 1619
 this -28 8 0 ?
 windowMs -20 4 0 integer
 samples -16 4 0 integer
 s 4 4 0 integer
 sum 8 4 0 integer
 i 12 4 0 integer
-func Meter.maxHz 1713
+func Meter.maxHz 1733
 this -24 8 0 ?
 windowMs -16 4 0 integer
-func Meter.close 1744
+func Meter.close 1764
 this -20 8 0 ?
-func Meter.__init 1765
+func Meter.__init 1785
 this -28 8 0 ?
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_new_Meter 1813
+func __cls_new_Meter 1833
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_init_Meter 1850
+func __cls_init_Meter 1870
 this -28 8 0 ?
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __strconcat 1959
+func __strconcat 1979
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

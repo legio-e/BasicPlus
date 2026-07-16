@@ -2,19 +2,19 @@ dbg 3
 module Pulse
 source C:\lenguajes\pm\bpstdlib\Pulse.bp
 lines
-1554 98
-1576 104
-1598 111
-1623 116
-1645 86
-1657 87
-1669 88
-1687 89
-1704 90
-1729 91
-1834 51
-1855 54
-1876 57
+1574 98
+1596 104
+1618 111
+1643 116
+1665 86
+1677 87
+1689 88
+1707 89
+1724 90
+1749 91
+1854 51
+1875 54
+1896 57
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -37,100 +37,100 @@ func List.remove 189
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 295
+func List.__init 299
 this -20 8 0 ?
-func OwnerList.removeAndFree 338
+func OwnerList.removeAndFree 342
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 468
+func OwnerList.__init 480
 this -20 8 0 ?
-func StringBuilder.appendChar 489
+func StringBuilder.appendChar 501
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 579
+func StringBuilder.appendStr 591
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 650
+func StringBuilder.appendInt 662
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 675
+func StringBuilder.toString 687
 this -20 8 0 ?
-func StringBuilder.length 699
+func StringBuilder.length 711
 this -20 8 0 ?
-func StringBuilder.__init 715
+func StringBuilder.__init 727
 this -20 8 0 ?
-func Thread.run 756
+func Thread.run 768
 this -20 8 0 ?
-func Thread.start 766
+func Thread.start 778
 this -20 8 0 ?
-func Thread.join 785
+func Thread.join 797
 this -20 8 0 ?
-func Thread.__init 804
+func Thread.__init 816
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 832
+func Mutex.lock 844
 this -20 8 0 ?
-func Mutex.unlock 851
+func Mutex.unlock 863
 this -20 8 0 ?
-func Mutex.__init 870
+func Mutex.__init 882
 this -20 8 0 ?
-func SyncList.add 888
+func SyncList.add 900
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 934
+func SyncList.remove 946
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 980
+func SyncList.get 992
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1024
+func SyncList.set 1036
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1073
+func SyncList.length 1085
 this -20 8 0 ?
-func SyncList.pop 1114
+func SyncList.pop 1126
 this -20 8 0 ?
-func SyncList.popBlocking 1225
+func SyncList.popBlocking 1241
 this -20 8 0 ?
-func SyncList.__init 1352
+func SyncList.__init 1372
 this -20 8 0 ?
-func Counter.getPin 1449
+func Counter.getPin 1469
 this -20 8 0 ?
-func Counter.setPin 1465
+func Counter.setPin 1485
 this -24 8 0 ?
-func Counter.getEdgeKind 1483
+func Counter.getEdgeKind 1503
 this -20 8 0 ?
-func Counter.setEdgeKind 1499
+func Counter.setEdgeKind 1519
 this -24 8 0 ?
-func Counter.getId 1517
+func Counter.getId 1537
 this -20 8 0 ?
-func Counter.setId 1533
+func Counter.setId 1553
 this -24 8 0 ?
-func Counter.start 1551
+func Counter.start 1571
 this -20 8 0 ?
-func Counter.stop 1573
+func Counter.stop 1593
 this -20 8 0 ?
-func Counter.value 1595
+func Counter.value 1615
 this -20 8 0 ?
-func Counter.reset 1620
+func Counter.reset 1640
 this -20 8 0 ?
-func Counter.__init 1642
+func Counter.__init 1662
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Counter 1748
+func __cls_new_Counter 1768
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_init_Counter 1785
+func __cls_init_Counter 1805
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __strconcat 1894
+func __strconcat 1914
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

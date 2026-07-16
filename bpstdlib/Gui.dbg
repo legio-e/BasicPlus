@@ -2,266 +2,266 @@ dbg 3
 module Gui
 source C:\lenguajes\pm\bpstdlib\Gui.bp
 lines
-1486 101
-1671 144
-1702 147
-1727 152
-1758 155
-1783 160
-1814 163
-1839 168
-1870 171
-1895 178
-1926 181
-1951 189
-1982 192
-2007 198
-2022 199
-2047 202
-2062 203
-2087 206
-2102 207
-2117 208
-2132 209
-2157 213
-2188 217
-2216 223
-2244 228
-2266 232
-2288 235
-2310 249
-2318 250
-2326 251
-2344 259
-2361 259
-2395 262
-2412 262
-2466 291
-2488 287
-2500 288
-2574 298
-2592 299
-2672 312
-2697 316
-2722 306
-2740 307
-2755 308
-2841 324
-2859 325
-2874 326
-2974 345
-3005 348
-3030 340
-3055 334
-3073 335
-3088 336
-3174 364
-3205 367
-3230 358
-3248 359
-3328 387
-3359 390
-3384 382
-3412 377
-3430 378
-3510 408
-3541 411
-3566 403
-3594 399
-3677 430
-3708 433
-3733 425
-3761 420
-3779 421
-3859 454
-3890 457
-3915 446
-3942 449
-3969 442
-4052 476
-4083 479
-4108 471
-4133 466
-4151 467
-4231 494
-4262 497
-4287 505
-4324 508
-4332 509
-4354 511
-4381 488
-4399 489
-4479 533
-4510 536
-4535 528
-4560 523
-4578 524
-4658 549
-4686 545
-4769 572
-4800 575
-4825 566
-4850 560
-4868 561
-4883 562
-4969 586
-5046 605
-5077 608
-5102 600
-5150 595
-5168 596
-5248 622
-5276 626
-5307 630
-5338 618
-5455 649
-5489 654
-5514 657
-5539 644
-5610 671
-5638 677
-5650 678
-5672 666
-5690 667
-5770 738
-5779 739
-5788 740
-5805 743
-5811 744
-5826 744
-5846 745
-5861 745
-5881 746
-5900 751
-5919 728
-5925 729
-5940 730
-5955 731
-5970 732
-6066 688
-6085 692
-6104 697
-6120 706
-6142 715
-6161 759
-6176 760
-6193 761
-6207 763
-6225 764
-6243 765
-6282 766
-6305 768
-6319 769
-6331 770
-6339 771
-6354 772
-6366 773
-6386 774
-6405 777
-6424 783
-6440 784
-6476 786
-6492 787
-6540 789
-6556 790
-6604 792
-6620 793
-6658 794
-6681 795
-6697 797
-6713 798
-6739 799
-6762 800
-6778 802
-6794 803
-6820 804
-6857 805
-6880 806
-6896 808
-6912 809
-6938 810
-6959 811
-6975 813
-6991 814
-7017 815
-7054 816
-7077 817
-7093 819
-7109 820
-7135 821
-7172 822
-7195 823
-7211 825
-7227 826
-7253 827
-7276 828
-7292 830
-7308 831
-7334 832
-7355 833
-7378 834
-7394 836
-7410 837
-7436 838
-7457 839
-7480 840
-7496 842
-7512 843
-7550 844
-7564 844
-7590 845
-7606 847
-7627 848
-7666 853
-7680 853
-7708 854
-7722 854
-7750 855
-7764 855
-7792 856
-7806 856
-7834 857
-7848 857
-7876 858
-7890 858
-7941 859
-7955 859
-8006 860
-8020 861
-8071 869
-8080 870
-8088 871
-8199 872
-8212 874
-8220 875
-8232 876
-8244 877
-8253 878
-8291 879
-8346 881
-8407 883
-8430 885
-8444 886
-8462 888
-8478 889
-8493 891
-8512 896
-8528 896
-8546 897
-8562 897
-8580 898
-8596 898
-8614 899
-8630 899
-8648 900
-8664 900
-8682 901
-8698 901
-8716 902
-8732 902
-8750 903
-8766 903
-8784 904
+1506 101
+1691 144
+1722 147
+1747 152
+1778 155
+1803 160
+1834 163
+1859 168
+1890 171
+1915 178
+1946 181
+1971 189
+2002 192
+2027 198
+2042 199
+2067 202
+2082 203
+2107 206
+2122 207
+2137 208
+2152 209
+2177 213
+2208 217
+2236 223
+2264 228
+2286 232
+2308 235
+2330 249
+2338 250
+2346 251
+2364 259
+2381 259
+2415 262
+2432 262
+2486 291
+2508 287
+2520 288
+2594 298
+2612 299
+2692 312
+2717 316
+2742 306
+2760 307
+2775 308
+2861 324
+2879 325
+2894 326
+2994 345
+3025 348
+3050 340
+3075 334
+3093 335
+3108 336
+3194 364
+3225 367
+3250 358
+3268 359
+3348 387
+3379 390
+3404 382
+3432 377
+3450 378
+3530 408
+3561 411
+3586 403
+3614 399
+3697 430
+3728 433
+3753 425
+3781 420
+3799 421
+3879 454
+3910 457
+3935 446
+3962 449
+3989 442
+4072 476
+4103 479
+4128 471
+4153 466
+4171 467
+4251 494
+4282 497
+4307 505
+4344 508
+4352 509
+4374 511
+4401 488
+4419 489
+4499 533
+4530 536
+4555 528
+4580 523
+4598 524
+4678 549
+4706 545
+4789 572
+4820 575
+4845 566
+4870 560
+4888 561
+4903 562
+4989 586
+5066 605
+5097 608
+5122 600
+5170 595
+5188 596
+5268 622
+5296 626
+5327 630
+5358 618
+5475 649
+5509 654
+5534 657
+5559 644
+5630 671
+5658 677
+5670 678
+5692 666
+5710 667
+5790 738
+5799 739
+5808 740
+5825 743
+5831 744
+5846 744
+5866 745
+5881 745
+5901 746
+5920 751
+5939 728
+5945 729
+5960 730
+5975 731
+5990 732
+6086 688
+6105 692
+6124 697
+6140 706
+6162 715
+6181 759
+6196 760
+6213 761
+6227 763
+6245 764
+6263 765
+6302 766
+6325 768
+6339 769
+6351 770
+6359 771
+6374 772
+6386 773
+6406 774
+6425 777
+6444 783
+6460 784
+6496 786
+6512 787
+6560 789
+6576 790
+6624 792
+6640 793
+6678 794
+6701 795
+6717 797
+6733 798
+6759 799
+6782 800
+6798 802
+6814 803
+6840 804
+6877 805
+6900 806
+6916 808
+6932 809
+6958 810
+6979 811
+6995 813
+7011 814
+7037 815
+7074 816
+7097 817
+7113 819
+7129 820
+7155 821
+7192 822
+7215 823
+7231 825
+7247 826
+7273 827
+7296 828
+7312 830
+7328 831
+7354 832
+7375 833
+7398 834
+7414 836
+7430 837
+7456 838
+7477 839
+7500 840
+7516 842
+7532 843
+7570 844
+7584 844
+7610 845
+7626 847
+7647 848
+7686 853
+7700 853
+7728 854
+7742 854
+7770 855
+7784 855
+7812 856
+7826 856
+7854 857
+7868 857
+7896 858
+7910 858
+7961 859
+7975 859
+8026 860
+8040 861
+8091 869
+8100 870
+8108 871
+8219 872
+8232 874
+8240 875
+8252 876
+8264 877
+8273 878
+8311 879
+8366 881
+8427 883
+8450 885
+8464 886
+8482 888
+8498 889
+8513 891
+8532 896
+8548 896
+8566 897
+8582 897
+8600 898
+8616 898
+8634 899
+8650 899
+8668 900
+8684 900
+8702 901
+8718 901
+8736 902
+8752 902
+8770 903
+8786 903
+8804 904
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -284,476 +284,476 @@ func List.remove 189
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 295
+func List.__init 299
 this -20 8 0 ?
-func OwnerList.removeAndFree 338
+func OwnerList.removeAndFree 342
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 468
+func OwnerList.__init 480
 this -20 8 0 ?
-func StringBuilder.appendChar 489
+func StringBuilder.appendChar 501
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 579
+func StringBuilder.appendStr 591
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 650
+func StringBuilder.appendInt 662
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 675
+func StringBuilder.toString 687
 this -20 8 0 ?
-func StringBuilder.length 699
+func StringBuilder.length 711
 this -20 8 0 ?
-func StringBuilder.__init 715
+func StringBuilder.__init 727
 this -20 8 0 ?
-func Thread.run 756
+func Thread.run 768
 this -20 8 0 ?
-func Thread.start 766
+func Thread.start 778
 this -20 8 0 ?
-func Thread.join 785
+func Thread.join 797
 this -20 8 0 ?
-func Thread.__init 804
+func Thread.__init 816
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 832
+func Mutex.lock 844
 this -20 8 0 ?
-func Mutex.unlock 851
+func Mutex.unlock 863
 this -20 8 0 ?
-func Mutex.__init 870
+func Mutex.__init 882
 this -20 8 0 ?
-func SyncList.add 888
+func SyncList.add 900
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 934
+func SyncList.remove 946
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 980
+func SyncList.get 992
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1024
+func SyncList.set 1036
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1073
+func SyncList.length 1085
 this -20 8 0 ?
-func SyncList.pop 1114
+func SyncList.pop 1126
 this -20 8 0 ?
-func SyncList.popBlocking 1225
+func SyncList.popBlocking 1241
 this -20 8 0 ?
-func SyncList.__init 1352
+func SyncList.__init 1372
 this -20 8 0 ?
-func Color.getRgb 1449
+func Color.getRgb 1469
 this -20 8 0 ?
-func Color.setRgb 1465
+func Color.setRgb 1485
 this -24 8 0 ?
-func Color.__init 1483
-this -24 8 0 ?
-rgb -16 4 0 integer
-func __cls_new_Color 1505
-rgb -16 4 0 integer
-func __cls_init_Color 1539
+func Color.__init 1503
 this -24 8 0 ?
 rgb -16 4 0 integer
-func Component.getLvglId 1600
-this -20 8 0 ?
-func Component.setLvglId 1616
+func __cls_new_Color 1525
+rgb -16 4 0 integer
+func __cls_init_Color 1559
 this -24 8 0 ?
-func Component.getName 1634
+rgb -16 4 0 integer
+func Component.getLvglId 1620
 this -20 8 0 ?
-func Component.setName 1650
+func Component.setLvglId 1636
+this -24 8 0 ?
+func Component.getName 1654
+this -20 8 0 ?
+func Component.setName 1670
 this -28 8 0 ?
-func Component.getX 1668
+func Component.getX 1688
 this -20 8 0 ?
-func Component.setX 1693
+func Component.setX 1713
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getY 1724
+func Component.getY 1744
 this -20 8 0 ?
-func Component.setY 1749
+func Component.setY 1769
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getWidth 1780
+func Component.getWidth 1800
 this -20 8 0 ?
-func Component.setWidth 1805
+func Component.setWidth 1825
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getHeight 1836
+func Component.getHeight 1856
 this -20 8 0 ?
-func Component.setHeight 1861
+func Component.setHeight 1881
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getScrollDir 1892
+func Component.getScrollDir 1912
 this -20 8 0 ?
-func Component.setScrollDir 1917
+func Component.setScrollDir 1937
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getFontSize 1948
+func Component.getFontSize 1968
 this -20 8 0 ?
-func Component.setFontSize 1973
+func Component.setFontSize 1993
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.setPos 2004
+func Component.setPos 2024
 this -28 8 0 ?
 px -20 4 0 integer
 py -16 4 0 integer
-func Component.setSize 2044
+func Component.setSize 2064
 this -28 8 0 ?
 w -20 4 0 integer
 h -16 4 0 integer
-func Component.setBounds 2084
+func Component.setBounds 2104
 this -36 8 0 ?
 px -28 4 0 integer
 py -24 4 0 integer
 w -20 4 0 integer
 h -16 4 0 integer
-func Component.align 2154
+func Component.align 2174
 this -32 8 0 ?
 a -24 4 0 integer
 dx -20 4 0 integer
 dy -16 4 0 integer
-func Component.setBgColor 2185
+func Component.setBgColor 2205
 this -28 8 0 ?
 c -20 8 0 ref
-func Component.setTextColor 2213
+func Component.setTextColor 2233
 this -28 8 0 ?
 c -20 8 0 ref
-func Component.refresh 2241
+func Component.refresh 2261
 this -20 8 0 ?
-func Component.clean 2263
+func Component.clean 2283
 this -20 8 0 ?
-func Component.delete 2285
+func Component.delete 2305
 this -20 8 0 ?
-func Component.__bindEvents 2307
+func Component.__bindEvents 2327
 this -36 8 0 ?
 win -28 8 0 ?
 slotClic -20 4 0 integer
 slotChange -16 4 0 integer
-func Component.onClick 2341
+func Component.onClick 2361
 this -20 8 0 ?
-func Component.onChange 2392
+func Component.onChange 2412
 this -20 8 0 ?
-func Screen.load 2463
+func Screen.load 2483
 this -20 8 0 ?
-func Screen.__init 2485
+func Screen.__init 2505
 this -20 8 0 ?
-func __cls_init_Screen 2553
+func __cls_init_Screen 2573
 this -20 8 0 ?
-func Panel.__init 2571
+func Panel.__init 2591
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Panel 2614
+func __cls_new_Panel 2634
 parent -20 8 0 ref
-func __cls_init_Panel 2648
+func __cls_init_Panel 2668
 this -28 8 0 ?
 parent -20 8 0 ref
-func Label.setText 2669
+func Label.setText 2689
 this -28 8 0 ?
 t -20 8 0 string
-func Label.setFont 2694
+func Label.setFont 2714
 this -24 8 0 ?
 font -16 4 0 integer
-func Label.__init 2719
+func Label.__init 2739
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_new_Label 2777
+func __cls_new_Label 2797
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_init_Label 2814
+func __cls_init_Label 2834
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func Button.__init 2838
+func Button.__init 2858
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
 lbl 4 8 0 ?
-func __cls_new_Button 2910
+func __cls_new_Button 2930
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_init_Button 2947
+func __cls_init_Button 2967
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func Checkbox.getChecked 2971
+func Checkbox.getChecked 2991
 this -20 8 0 ?
-func Checkbox.setChecked 2996
+func Checkbox.setChecked 3016
 this -24 8 0 ?
 v 0 4 0 ?
-func Checkbox.setText 3027
+func Checkbox.setText 3047
 this -28 8 0 ?
 t -20 8 0 string
-func Checkbox.__init 3052
+func Checkbox.__init 3072
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_new_Checkbox 3110
+func __cls_new_Checkbox 3130
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_init_Checkbox 3147
+func __cls_init_Checkbox 3167
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func Toggle.getChecked 3171
+func Toggle.getChecked 3191
 this -20 8 0 ?
-func Toggle.setChecked 3196
+func Toggle.setChecked 3216
 this -24 8 0 ?
 v 0 4 0 ?
-func Toggle.__init 3227
+func Toggle.__init 3247
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Toggle 3270
+func __cls_new_Toggle 3290
 parent -20 8 0 ref
-func __cls_init_Toggle 3304
+func __cls_init_Toggle 3324
 this -28 8 0 ?
 parent -20 8 0 ref
-func Slider.getValue 3325
+func Slider.getValue 3345
 this -20 8 0 ?
-func Slider.setValue 3350
+func Slider.setValue 3370
 this -24 8 0 ?
 v 0 4 0 ?
-func Slider.setRange 3381
+func Slider.setRange 3401
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Slider.__init 3409
+func Slider.__init 3429
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Slider 3452
+func __cls_new_Slider 3472
 parent -20 8 0 ref
-func __cls_init_Slider 3486
+func __cls_init_Slider 3506
 this -28 8 0 ?
 parent -20 8 0 ref
-func Bar.getValue 3507
+func Bar.getValue 3527
 this -20 8 0 ?
-func Bar.setValue 3532
+func Bar.setValue 3552
 this -24 8 0 ?
 v 0 4 0 ?
-func Bar.setRange 3563
+func Bar.setRange 3583
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Bar.__init 3591
+func Bar.__init 3611
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Bar 3619
+func __cls_new_Bar 3639
 parent -20 8 0 ref
-func __cls_init_Bar 3653
+func __cls_init_Bar 3673
 this -28 8 0 ?
 parent -20 8 0 ref
-func Spinbox.getValue 3674
+func Spinbox.getValue 3694
 this -20 8 0 ?
-func Spinbox.setValue 3699
+func Spinbox.setValue 3719
 this -24 8 0 ?
 v 0 4 0 ?
-func Spinbox.setRange 3730
+func Spinbox.setRange 3750
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Spinbox.__init 3758
+func Spinbox.__init 3778
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Spinbox 3801
+func __cls_new_Spinbox 3821
 parent -20 8 0 ref
-func __cls_init_Spinbox 3835
+func __cls_init_Spinbox 3855
 this -28 8 0 ?
 parent -20 8 0 ref
-func Led.getValue 3856
+func Led.getValue 3876
 this -20 8 0 ?
-func Led.setValue 3881
+func Led.setValue 3901
 this -24 8 0 ?
 v 0 4 0 ?
-func Led.on 3912
+func Led.on 3932
 this -20 8 0 ?
-func Led.off 3939
+func Led.off 3959
 this -20 8 0 ?
-func Led.__init 3966
+func Led.__init 3986
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Led 3994
+func __cls_new_Led 4014
 parent -20 8 0 ref
-func __cls_init_Led 4028
+func __cls_init_Led 4048
 this -28 8 0 ?
 parent -20 8 0 ref
-func Dropdown.getSelected 4049
+func Dropdown.getSelected 4069
 this -20 8 0 ?
-func Dropdown.setSelected 4074
+func Dropdown.setSelected 4094
 this -24 8 0 ?
 v 0 4 0 ?
-func Dropdown.setOptions 4105
+func Dropdown.setOptions 4125
 this -28 8 0 ?
 opts -20 8 0 string
-func Dropdown.__init 4130
+func Dropdown.__init 4150
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Dropdown 4173
+func __cls_new_Dropdown 4193
 parent -20 8 0 ref
-func __cls_init_Dropdown 4207
+func __cls_init_Dropdown 4227
 this -28 8 0 ?
 parent -20 8 0 ref
-func Textarea.getText 4228
+func Textarea.getText 4248
 this -20 8 0 ?
-func Textarea.setText 4253
+func Textarea.setText 4273
 this -28 8 0 ?
 v 0 8 0 ?
-func Textarea.getReadOnly 4284
+func Textarea.getReadOnly 4304
 this -20 8 0 ?
-func Textarea.setReadOnly 4315
+func Textarea.setReadOnly 4335
 this -24 8 0 ?
 v 0 4 0 ?
-func Textarea.__init 4378
+func Textarea.__init 4398
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Textarea 4421
+func __cls_new_Textarea 4441
 parent -20 8 0 ref
-func __cls_init_Textarea 4455
+func __cls_init_Textarea 4475
 this -28 8 0 ?
 parent -20 8 0 ref
-func ListBox.getSelected 4476
+func ListBox.getSelected 4496
 this -20 8 0 ?
-func ListBox.setSelected 4501
+func ListBox.setSelected 4521
 this -24 8 0 ?
 v 0 4 0 ?
-func ListBox.setItems 4532
+func ListBox.setItems 4552
 this -28 8 0 ?
 items -20 8 0 string
-func ListBox.__init 4557
+func ListBox.__init 4577
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_ListBox 4600
+func __cls_new_ListBox 4620
 parent -20 8 0 ref
-func __cls_init_ListBox 4634
+func __cls_init_ListBox 4654
 this -28 8 0 ?
 parent -20 8 0 ref
-func Keyboard.attach 4655
+func Keyboard.attach 4675
 this -28 8 0 ?
 ta -20 8 0 ref
-func Keyboard.__init 4683
+func Keyboard.__init 4703
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Keyboard 4711
+func __cls_new_Keyboard 4731
 parent -20 8 0 ref
-func __cls_init_Keyboard 4745
+func __cls_init_Keyboard 4765
 this -28 8 0 ?
 parent -20 8 0 ref
-func Msgbox.getResult 4766
+func Msgbox.getResult 4786
 this -20 8 0 ?
-func Msgbox.setResult 4791
+func Msgbox.setResult 4811
 this -24 8 0 ?
 v 0 4 0 ?
-func Msgbox.setButtons 4822
+func Msgbox.setButtons 4842
 this -28 8 0 ?
 labels -20 8 0 string
-func Msgbox.__init 4847
+func Msgbox.__init 4867
 this -36 8 0 ?
 parent -28 8 0 ref
 message -20 8 0 string
-func __cls_new_Msgbox 4905
+func __cls_new_Msgbox 4925
 parent -28 8 0 ref
 message -20 8 0 string
-func __cls_init_Msgbox 4942
+func __cls_init_Msgbox 4962
 this -36 8 0 ?
 parent -28 8 0 ref
 message -20 8 0 string
-func TabPage.__init 4966
+func TabPage.__init 4986
 this -24 8 0 ?
 pageId -16 4 0 integer
-func __cls_new_TabPage 4988
+func __cls_new_TabPage 5008
 pageId -16 4 0 integer
-func __cls_init_TabPage 5022
+func __cls_init_TabPage 5042
 this -24 8 0 ?
 pageId -16 4 0 integer
-func Tabview.getActive 5043
+func Tabview.getActive 5063
 this -20 8 0 ?
-func Tabview.setActive 5068
+func Tabview.setActive 5088
 this -24 8 0 ?
 v 0 4 0 ?
-func Tabview.addTab 5099
+func Tabview.addTab 5119
 this -28 8 0 ?
 name -20 8 0 string
-func Tabview.__init 5147
+func Tabview.__init 5167
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Tabview 5190
+func __cls_new_Tabview 5210
 parent -20 8 0 ref
-func __cls_init_Tabview 5224
+func __cls_init_Tabview 5244
 this -28 8 0 ?
 parent -20 8 0 ref
-func Table.setGrid 5245
+func Table.setGrid 5265
 this -28 8 0 ?
 rows -20 4 0 integer
 cols -16 4 0 integer
-func Table.setCell 5273
+func Table.setCell 5293
 this -36 8 0 ?
 row -28 4 0 integer
 col -24 4 0 integer
 text -20 8 0 string
-func Table.getCell 5304
+func Table.getCell 5324
 this -28 8 0 ?
 row -20 4 0 integer
 col -16 4 0 integer
-func Table.__init 5335
+func Table.__init 5355
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Table 5363
+func __cls_new_Table 5383
 parent -20 8 0 ref
-func __cls_init_Table 5397
+func __cls_init_Table 5417
 this -28 8 0 ?
 parent -20 8 0 ref
-func Image.getAssetId 5418
+func Image.getAssetId 5438
 this -20 8 0 ?
-func Image.setAssetId 5434
+func Image.setAssetId 5454
 this -24 8 0 ?
-func Image.loadFile 5452
+func Image.loadFile 5472
 this -28 8 0 ?
 path -20 8 0 string
-func Image.width 5486
+func Image.width 5506
 this -20 8 0 ?
-func Image.height 5511
+func Image.height 5531
 this -20 8 0 ?
-func Image.__init 5536
+func Image.__init 5556
 this -20 8 0 ?
-func __cls_init_Image 5589
+func __cls_init_Image 5609
 this -20 8 0 ?
-func ImageView.setImage 5607
+func ImageView.setImage 5627
 this -28 8 0 ?
 img -20 8 0 ref
-func ImageView.refresh 5635
+func ImageView.refresh 5655
 this -20 8 0 ?
-func ImageView.__init 5669
+func ImageView.__init 5689
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_ImageView 5712
+func __cls_new_ImageView 5732
 parent -20 8 0 ref
-func __cls_init_ImageView 5746
+func __cls_init_ImageView 5766
 this -28 8 0 ?
 parent -20 8 0 ref
-func Window.load 5767
+func Window.load 5787
 this -28 8 0 ?
 path -20 8 0 string
 root 8 8 0 ?
 node 16 8 0 ?
 w 24 8 0 ?
 scr 32 4 0 integer
-func Window.destroy 5897
+func Window.destroy 5917
 this -20 8 0 ?
-func Window.__init 5916
+func Window.__init 5936
 this -20 8 0 ?
 scr 0 4 0 integer
-func __cls_init_Window 6023
+func __cls_init_Window 6043
 this -20 8 0 ?
-func __guiDispatch 6063
+func __guiDispatch 6083
 self -20 8 0 ref
-func __guiDispatchChange 6082
+func __guiDispatchChange 6102
 self -20 8 0 ref
-func loadFont 6117
+func loadFont 6137
 path -20 8 0 string
-func setRotation 6139
+func setRotation 6159
 deg -16 4 0 integer
-func buildForm 6158
+func buildForm 6178
 node -36 8 0 ref
 parent -28 8 0 ref
 win -20 8 0 ref
@@ -764,7 +764,7 @@ slotChange 32 4 0 integer
 arr 36 8 0 ?
 i 44 4 0 integer
 child 48 8 0 ?
-func makeWidget 6421
+func makeWidget 6441
 t -36 8 0 string
 parent -28 8 0 ref
 node -20 8 0 ref
@@ -778,26 +778,26 @@ ld 168 8 0 ?
 dd 188 8 0 ?
 lb 208 8 0 ?
 mb 228 8 0 ?
-func applyCommon 7663
+func applyCommon 7683
 w -28 8 0 ref
 node -20 8 0 ref
-func colorFromHex 8068
+func colorFromHex 8088
 s -20 8 0 string
 n 4 4 0 integer
 i 8 4 0 integer
 acc 12 4 0 integer
 c 16 4 0 integer
 d 20 4 0 integer
-func alignFromName 8509
+func alignFromName 8529
 a -20 8 0 string
-func __strconcat 8802
+func __strconcat 8822
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
 i 16 4 0 ?
-func __strequals 8935
+func __strequals 8955
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

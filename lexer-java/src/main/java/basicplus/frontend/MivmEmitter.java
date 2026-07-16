@@ -3849,7 +3849,7 @@ public final class MivmEmitter {
                 // items[size] := 0   (deja libre la última ref para GC)
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(0);
+                w.emit(OpCode.LPUSH); w.emitLong(0L);   // #292b: limpiar slot de any[] = 0 de 8 BYTES; emitInt(0)=4B desalineaba el ASTORE_I64 (índice = mitad baja del handle → crash length=0 en VM-C)
                 w.emit(OpCode.ASTORE_I64);
 
                 emitFunctionEnd();
@@ -3914,7 +3914,7 @@ public final class MivmEmitter {
                 // 2. items[idx] := 0
                 w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
                 w.emitGetParam("idx");
-                emitInt(0);
+                w.emit(OpCode.LPUSH); w.emitLong(0L);   // #292b: limpiar slot de any[] = 0 de 8 BYTES; emitInt(0)=4B desalineaba el ASTORE_I64 (índice = mitad baja del handle → crash length=0 en VM-C)
                 w.emit(OpCode.ASTORE_I64);
 
                 // 3. for (i := idx; i < size-1; i++): items[i] := items[i+1]
@@ -3953,7 +3953,7 @@ public final class MivmEmitter {
                 // 5. items[size] := 0
                 w.emitGetParam("this"); w.emitGetField("OwnerList", "items");
                 w.emitGetParam("this"); w.emitGetField("OwnerList", "size");
-                emitInt(0);
+                w.emit(OpCode.LPUSH); w.emitLong(0L);   // #292b: limpiar slot de any[] = 0 de 8 BYTES; emitInt(0)=4B desalineaba el ASTORE_I64 (índice = mitad baja del handle → crash length=0 en VM-C)
                 w.emit(OpCode.ASTORE_I64);
 
                 emitFunctionEnd();
@@ -4368,7 +4368,7 @@ public final class MivmEmitter {
                 // items[size] := 0   (limpia slot, ayuda al GC con refs)
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(0);
+                w.emit(OpCode.LPUSH); w.emitLong(0L);   // #292b: limpiar slot de any[] = 0 de 8 BYTES; emitInt(0)=4B desalineaba el ASTORE_I64 (índice = mitad baja del handle → crash length=0 en VM-C)
                 w.emit(OpCode.ASTORE_I64);
 
                 w.declareLabel(endLabel);
@@ -4417,7 +4417,7 @@ public final class MivmEmitter {
                 w.emitSetField("List", "size");
                 w.emitGetParam("this"); w.emitGetField("List", "items");
                 w.emitGetParam("this"); w.emitGetField("List", "size");
-                emitInt(0);
+                w.emit(OpCode.LPUSH); w.emitLong(0L);   // #292b: limpiar slot de any[] = 0 de 8 BYTES; emitInt(0)=4B desalineaba el ASTORE_I64 (índice = mitad baja del handle → crash length=0 en VM-C)
                 w.emit(OpCode.ASTORE_I64);
                 emitSyncListUnlock();
                 w.emitJump(doneOk);

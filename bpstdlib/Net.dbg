@@ -2,17 +2,17 @@ dbg 3
 module Net
 source C:\lenguajes\pm\bpstdlib\Net.bp
 lines
-1480 58
-1501 59
-1529 63
-1557 68
-1585 73
-1616 78
-1647 83
-1681 87
-1698 88
-1710 89
-1739 53
+1500 58
+1521 59
+1549 63
+1577 68
+1605 73
+1636 78
+1667 83
+1701 87
+1718 88
+1730 89
+1759 53
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -35,99 +35,99 @@ func List.remove 189
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 295
+func List.__init 299
 this -20 8 0 ?
-func OwnerList.removeAndFree 338
+func OwnerList.removeAndFree 342
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 468
+func OwnerList.__init 480
 this -20 8 0 ?
-func StringBuilder.appendChar 489
+func StringBuilder.appendChar 501
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 579
+func StringBuilder.appendStr 591
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 650
+func StringBuilder.appendInt 662
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 675
+func StringBuilder.toString 687
 this -20 8 0 ?
-func StringBuilder.length 699
+func StringBuilder.length 711
 this -20 8 0 ?
-func StringBuilder.__init 715
+func StringBuilder.__init 727
 this -20 8 0 ?
-func Thread.run 756
+func Thread.run 768
 this -20 8 0 ?
-func Thread.start 766
+func Thread.start 778
 this -20 8 0 ?
-func Thread.join 785
+func Thread.join 797
 this -20 8 0 ?
-func Thread.__init 804
+func Thread.__init 816
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 832
+func Mutex.lock 844
 this -20 8 0 ?
-func Mutex.unlock 851
+func Mutex.unlock 863
 this -20 8 0 ?
-func Mutex.__init 870
+func Mutex.__init 882
 this -20 8 0 ?
-func SyncList.add 888
+func SyncList.add 900
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 934
+func SyncList.remove 946
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 980
+func SyncList.get 992
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1024
+func SyncList.set 1036
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1073
+func SyncList.length 1085
 this -20 8 0 ?
-func SyncList.pop 1114
+func SyncList.pop 1126
 this -20 8 0 ?
-func SyncList.popBlocking 1225
+func SyncList.popBlocking 1241
 this -20 8 0 ?
-func SyncList.__init 1352
+func SyncList.__init 1372
 this -20 8 0 ?
-func Tcp.getH 1443
+func Tcp.getH 1463
 this -20 8 0 ?
-func Tcp.setH 1459
+func Tcp.setH 1479
 this -24 8 0 ?
-func Tcp.connect 1477
+func Tcp.connect 1497
 this -36 8 0 ?
 host -28 8 0 string
 port -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.isOpen 1526
+func Tcp.isOpen 1546
 this -20 8 0 ?
-func Tcp.send 1554
+func Tcp.send 1574
 this -28 8 0 ?
 data -20 8 0 ref
-func Tcp.sendStr 1582
+func Tcp.sendStr 1602
 this -28 8 0 ?
 s -20 8 0 string
-func Tcp.recv 1613
+func Tcp.recv 1633
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.recvStr 1644
+func Tcp.recvStr 1664
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.close 1678
+func Tcp.close 1698
 this -20 8 0 ?
-func Tcp.__init 1736
+func Tcp.__init 1756
 this -20 8 0 ?
-func __cls_init_Tcp 1791
+func __cls_init_Tcp 1811
 this -20 8 0 ?
-func __strconcat 1831
+func __strconcat 1851
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

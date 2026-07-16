@@ -2,30 +2,30 @@ dbg 3
 module Spi
 source C:\lenguajes\pm\bpstdlib\Spi.bp
 lines
-1650 156
-1681 161
-1712 166
-1746 145
-1758 146
-1770 147
-1782 148
-1794 149
-1806 150
-1818 151
-1959 54
-1993 58
-2021 62
-2049 66
-2080 71
-2101 74
-2122 77
-2143 80
-2164 83
-2185 86
-2206 90
-2227 93
-2248 96
-2269 99
+1670 156
+1701 161
+1732 166
+1766 145
+1778 146
+1790 147
+1802 148
+1814 149
+1826 150
+1838 151
+1979 54
+2013 58
+2041 62
+2069 66
+2100 71
+2121 74
+2142 77
+2163 80
+2184 83
+2205 86
+2226 90
+2247 93
+2268 96
+2289 99
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -48,105 +48,105 @@ func List.remove 189
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 295
+func List.__init 299
 this -20 8 0 ?
-func OwnerList.removeAndFree 338
+func OwnerList.removeAndFree 342
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 468
+func OwnerList.__init 480
 this -20 8 0 ?
-func StringBuilder.appendChar 489
+func StringBuilder.appendChar 501
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 579
+func StringBuilder.appendStr 591
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 650
+func StringBuilder.appendInt 662
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 675
+func StringBuilder.toString 687
 this -20 8 0 ?
-func StringBuilder.length 699
+func StringBuilder.length 711
 this -20 8 0 ?
-func StringBuilder.__init 715
+func StringBuilder.__init 727
 this -20 8 0 ?
-func Thread.run 756
+func Thread.run 768
 this -20 8 0 ?
-func Thread.start 766
+func Thread.start 778
 this -20 8 0 ?
-func Thread.join 785
+func Thread.join 797
 this -20 8 0 ?
-func Thread.__init 804
+func Thread.__init 816
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 832
+func Mutex.lock 844
 this -20 8 0 ?
-func Mutex.unlock 851
+func Mutex.unlock 863
 this -20 8 0 ?
-func Mutex.__init 870
+func Mutex.__init 882
 this -20 8 0 ?
-func SyncList.add 888
+func SyncList.add 900
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 934
+func SyncList.remove 946
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 980
+func SyncList.get 992
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1024
+func SyncList.set 1036
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1073
+func SyncList.length 1085
 this -20 8 0 ?
-func SyncList.pop 1114
+func SyncList.pop 1126
 this -20 8 0 ?
-func SyncList.popBlocking 1225
+func SyncList.popBlocking 1241
 this -20 8 0 ?
-func SyncList.__init 1352
+func SyncList.__init 1372
 this -20 8 0 ?
-func Bus.getId 1443
+func Bus.getId 1463
 this -20 8 0 ?
-func Bus.setId 1459
+func Bus.setId 1479
 this -24 8 0 ?
-func Bus.getSck 1477
+func Bus.getSck 1497
 this -20 8 0 ?
-func Bus.setSck 1493
+func Bus.setSck 1513
 this -24 8 0 ?
-func Bus.getMosi 1511
+func Bus.getMosi 1531
 this -20 8 0 ?
-func Bus.setMosi 1527
+func Bus.setMosi 1547
 this -24 8 0 ?
-func Bus.getMiso 1545
+func Bus.getMiso 1565
 this -20 8 0 ?
-func Bus.setMiso 1561
+func Bus.setMiso 1581
 this -24 8 0 ?
-func Bus.getBaudrate 1579
+func Bus.getBaudrate 1599
 this -20 8 0 ?
-func Bus.setBaudrate 1595
+func Bus.setBaudrate 1615
 this -24 8 0 ?
-func Bus.getMode 1613
+func Bus.getMode 1633
 this -20 8 0 ?
-func Bus.setMode 1629
+func Bus.setMode 1649
 this -24 8 0 ?
-func Bus.write 1647
+func Bus.write 1667
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.read 1678
+func Bus.read 1698
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.transfer 1709
+func Bus.transfer 1729
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func Bus.__init 1743
+func Bus.__init 1763
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -154,14 +154,14 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_new_Bus 1849
+func __cls_new_Bus 1869
 id -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Bus 1898
+func __cls_init_Bus 1918
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -169,27 +169,27 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func init 1956
+func init 1976
 bus -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func write 1990
+func write 2010
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 2018
+func read 2038
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func transfer 2046
+func transfer 2066
 bus -36 4 0 integer
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func __strconcat 2287
+func __strconcat 2307
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

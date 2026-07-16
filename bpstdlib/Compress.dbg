@@ -2,102 +2,102 @@ dbg 3
 module Compress
 source C:\lenguajes\pm\bpstdlib\Compress.bp
 lines
-1468 20
-1482 21
-1501 23
-1561 24
-1575 25
-1594 27
-1606 28
-1625 31
-1633 32
-1641 33
-1653 34
-1665 35
-1684 37
-1694 38
-1706 40
-1714 41
-1728 42
-1740 43
-1756 45
-1780 47
-1792 48
-1811 50
-1825 51
-1837 52
-1854 55
-1872 56
-1891 58
-1901 59
-1917 60
-1929 61
-1951 62
-1969 63
-1981 64
-1993 65
-2012 67
-2020 68
-2032 69
-2044 70
-2060 72
-2078 73
-2090 74
-2104 77
-2122 80
-2141 89
-2155 90
-2174 93
-2199 94
-2224 95
-2249 96
-2268 97
-2276 99
-2284 100
-2296 102
-2308 103
-2327 105
-2333 106
-2341 107
-2353 109
-2361 110
-2397 112
-2409 113
-2423 114
-2436 116
-2446 117
-2460 118
-2473 121
-2481 122
-2489 123
-2503 124
-2515 125
-2527 126
-2535 127
-2585 128
-2599 130
-2611 131
-2617 132
-2627 133
-2639 134
-2655 137
-2675 141
-2689 143
-2701 144
-2719 145
-2738 147
-2755 148
-2794 149
-2806 150
-2821 153
-2837 154
-2849 155
-2868 157
-2882 158
-2894 159
-2906 161
-2921 164
-2935 167
+1488 20
+1502 21
+1521 23
+1581 24
+1595 25
+1614 27
+1626 28
+1645 31
+1653 32
+1661 33
+1673 34
+1685 35
+1704 37
+1714 38
+1726 40
+1734 41
+1748 42
+1760 43
+1776 45
+1800 47
+1812 48
+1831 50
+1845 51
+1857 52
+1874 55
+1892 56
+1911 58
+1921 59
+1937 60
+1949 61
+1971 62
+1989 63
+2001 64
+2013 65
+2032 67
+2040 68
+2052 69
+2064 70
+2080 72
+2098 73
+2110 74
+2124 77
+2142 80
+2161 89
+2175 90
+2194 93
+2219 94
+2244 95
+2269 96
+2288 97
+2296 99
+2304 100
+2316 102
+2328 103
+2347 105
+2353 106
+2361 107
+2373 109
+2381 110
+2417 112
+2429 113
+2443 114
+2456 116
+2466 117
+2480 118
+2493 121
+2501 122
+2509 123
+2523 124
+2535 125
+2547 126
+2555 127
+2605 128
+2619 130
+2631 131
+2637 132
+2647 133
+2659 134
+2675 137
+2695 141
+2709 143
+2721 144
+2739 145
+2758 147
+2775 148
+2814 149
+2826 150
+2841 153
+2857 154
+2869 155
+2888 157
+2902 158
+2914 159
+2926 161
+2941 164
+2955 167
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -120,68 +120,68 @@ func List.remove 189
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 295
+func List.__init 299
 this -20 8 0 ?
-func OwnerList.removeAndFree 338
+func OwnerList.removeAndFree 342
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 468
+func OwnerList.__init 480
 this -20 8 0 ?
-func StringBuilder.appendChar 489
+func StringBuilder.appendChar 501
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 579
+func StringBuilder.appendStr 591
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 650
+func StringBuilder.appendInt 662
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 675
+func StringBuilder.toString 687
 this -20 8 0 ?
-func StringBuilder.length 699
+func StringBuilder.length 711
 this -20 8 0 ?
-func StringBuilder.__init 715
+func StringBuilder.__init 727
 this -20 8 0 ?
-func Thread.run 756
+func Thread.run 768
 this -20 8 0 ?
-func Thread.start 766
+func Thread.start 778
 this -20 8 0 ?
-func Thread.join 785
+func Thread.join 797
 this -20 8 0 ?
-func Thread.__init 804
+func Thread.__init 816
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 832
+func Mutex.lock 844
 this -20 8 0 ?
-func Mutex.unlock 851
+func Mutex.unlock 863
 this -20 8 0 ?
-func Mutex.__init 870
+func Mutex.__init 882
 this -20 8 0 ?
-func SyncList.add 888
+func SyncList.add 900
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 934
+func SyncList.remove 946
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 980
+func SyncList.get 992
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1024
+func SyncList.set 1036
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1073
+func SyncList.length 1085
 this -20 8 0 ?
-func SyncList.pop 1114
+func SyncList.pop 1126
 this -20 8 0 ?
-func SyncList.popBlocking 1225
+func SyncList.popBlocking 1241
 this -20 8 0 ?
-func SyncList.__init 1352
+func SyncList.__init 1372
 this -20 8 0 ?
-func decompress 1465
+func decompress 1485
 src -36 8 0 ref
 srcLen -28 4 0 integer
 dst -24 8 0 ref
@@ -197,7 +197,7 @@ off 32 4 0 integer
 leng 36 4 0 integer
 dist 40 4 0 integer
 k 44 4 0 integer
-func compress 2138
+func compress 2158
 src -36 8 0 ref
 srcLen -28 4 0 integer
 dst -24 8 0 ref
@@ -214,7 +214,7 @@ bestDist 36 4 0 integer
 cand 40 4 0 integer
 l 44 4 0 integer
 off 48 4 0 integer
-func __strconcat 2951
+func __strconcat 2971
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

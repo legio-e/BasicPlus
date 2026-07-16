@@ -2,19 +2,19 @@ dbg 3
 module Pwm
 source C:\lenguajes\pm\bpstdlib\Pwm.bp
 lines
-1588 84
-1600 85
-1631 92
-1643 93
-1668 99
-1690 104
-1712 71
-1724 72
-1736 73
-1750 74
-1768 75
-1785 76
-1810 77
+1608 84
+1620 85
+1651 92
+1663 93
+1688 99
+1710 104
+1732 71
+1744 72
+1756 73
+1770 74
+1788 75
+1805 76
+1830 77
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -37,106 +37,106 @@ func List.remove 189
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 295
+func List.__init 299
 this -20 8 0 ?
-func OwnerList.removeAndFree 338
+func OwnerList.removeAndFree 342
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 468
+func OwnerList.__init 480
 this -20 8 0 ?
-func StringBuilder.appendChar 489
+func StringBuilder.appendChar 501
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 579
+func StringBuilder.appendStr 591
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 650
+func StringBuilder.appendInt 662
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 675
+func StringBuilder.toString 687
 this -20 8 0 ?
-func StringBuilder.length 699
+func StringBuilder.length 711
 this -20 8 0 ?
-func StringBuilder.__init 715
+func StringBuilder.__init 727
 this -20 8 0 ?
-func Thread.run 756
+func Thread.run 768
 this -20 8 0 ?
-func Thread.start 766
+func Thread.start 778
 this -20 8 0 ?
-func Thread.join 785
+func Thread.join 797
 this -20 8 0 ?
-func Thread.__init 804
+func Thread.__init 816
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 832
+func Mutex.lock 844
 this -20 8 0 ?
-func Mutex.unlock 851
+func Mutex.unlock 863
 this -20 8 0 ?
-func Mutex.__init 870
+func Mutex.__init 882
 this -20 8 0 ?
-func SyncList.add 888
+func SyncList.add 900
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 934
+func SyncList.remove 946
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 980
+func SyncList.get 992
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1024
+func SyncList.set 1036
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1073
+func SyncList.length 1085
 this -20 8 0 ?
-func SyncList.pop 1114
+func SyncList.pop 1126
 this -20 8 0 ?
-func SyncList.popBlocking 1225
+func SyncList.popBlocking 1241
 this -20 8 0 ?
-func SyncList.__init 1352
+func SyncList.__init 1372
 this -20 8 0 ?
-func Slice.getPin 1449
+func Slice.getPin 1469
 this -20 8 0 ?
-func Slice.setPin 1465
+func Slice.setPin 1485
 this -24 8 0 ?
-func Slice.getId 1483
+func Slice.getId 1503
 this -20 8 0 ?
-func Slice.setId 1499
+func Slice.setId 1519
 this -24 8 0 ?
-func Slice.getFreqHz 1517
+func Slice.getFreqHz 1537
 this -20 8 0 ?
-func Slice.setFreqHz 1533
+func Slice.setFreqHz 1553
 this -24 8 0 ?
-func Slice.getDutyPct 1551
+func Slice.getDutyPct 1571
 this -20 8 0 ?
-func Slice.setDutyPct 1567
+func Slice.setDutyPct 1587
 this -24 8 0 ?
-func Slice.setDuty 1585
+func Slice.setDuty 1605
 this -24 8 0 ?
 dutyPct -16 4 0 integer
-func Slice.setFreq 1628
+func Slice.setFreq 1648
 this -24 8 0 ?
 freqHz -16 4 0 integer
-func Slice.start 1665
+func Slice.start 1685
 this -20 8 0 ?
-func Slice.stop 1687
+func Slice.stop 1707
 this -20 8 0 ?
-func Slice.__init 1709
+func Slice.__init 1729
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Slice 1829
+func __cls_new_Slice 1849
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_init_Slice 1866
+func __cls_init_Slice 1886
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __strconcat 1912
+func __strconcat 1932
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

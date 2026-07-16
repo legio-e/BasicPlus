@@ -2,29 +2,29 @@ dbg 3
 module Gpio
 source C:\lenguajes\pm\bpstdlib\Gpio.bp
 lines
-1526 117
-1553 122
-1580 127
-1592 128
-1606 129
-1628 131
-1655 137
-1680 142
-1711 147
-1742 155
-1767 106
-1804 107
-1854 108
-1866 110
-1878 111
-1890 112
-1995 46
-2016 49
-2037 52
-2058 55
-2079 58
-2100 61
-2121 64
+1546 117
+1573 122
+1600 127
+1612 128
+1626 129
+1648 131
+1675 137
+1700 142
+1731 147
+1762 155
+1787 106
+1824 107
+1874 108
+1886 110
+1898 111
+1910 112
+2015 46
+2036 49
+2057 52
+2078 55
+2099 58
+2120 61
+2141 64
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -47,104 +47,104 @@ func List.remove 189
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 295
+func List.__init 299
 this -20 8 0 ?
-func OwnerList.removeAndFree 338
+func OwnerList.removeAndFree 342
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 468
+func OwnerList.__init 480
 this -20 8 0 ?
-func StringBuilder.appendChar 489
+func StringBuilder.appendChar 501
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 579
+func StringBuilder.appendStr 591
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 650
+func StringBuilder.appendInt 662
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 675
+func StringBuilder.toString 687
 this -20 8 0 ?
-func StringBuilder.length 699
+func StringBuilder.length 711
 this -20 8 0 ?
-func StringBuilder.__init 715
+func StringBuilder.__init 727
 this -20 8 0 ?
-func Thread.run 756
+func Thread.run 768
 this -20 8 0 ?
-func Thread.start 766
+func Thread.start 778
 this -20 8 0 ?
-func Thread.join 785
+func Thread.join 797
 this -20 8 0 ?
-func Thread.__init 804
+func Thread.__init 816
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 832
+func Mutex.lock 844
 this -20 8 0 ?
-func Mutex.unlock 851
+func Mutex.unlock 863
 this -20 8 0 ?
-func Mutex.__init 870
+func Mutex.__init 882
 this -20 8 0 ?
-func SyncList.add 888
+func SyncList.add 900
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 934
+func SyncList.remove 946
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 980
+func SyncList.get 992
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1024
+func SyncList.set 1036
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1073
+func SyncList.length 1085
 this -20 8 0 ?
-func SyncList.pop 1114
+func SyncList.pop 1126
 this -20 8 0 ?
-func SyncList.popBlocking 1225
+func SyncList.popBlocking 1241
 this -20 8 0 ?
-func SyncList.__init 1352
+func SyncList.__init 1372
 this -20 8 0 ?
-func Pin.getNum 1455
+func Pin.getNum 1475
 this -20 8 0 ?
-func Pin.setNum 1471
+func Pin.setNum 1491
 this -24 8 0 ?
-func Pin.getMode 1489
+func Pin.getMode 1509
 this -20 8 0 ?
-func Pin.setMode 1505
+func Pin.setMode 1525
 this -24 8 0 ?
-func Pin.on 1523
+func Pin.on 1543
 this -20 8 0 ?
-func Pin.off 1550
+func Pin.off 1570
 this -20 8 0 ?
-func Pin.toggle 1577
+func Pin.toggle 1597
 this -20 8 0 ?
 v 0 4 0 integer
-func Pin.value 1652
+func Pin.value 1672
 this -20 8 0 ?
-func Pin.isHigh 1677
+func Pin.isHigh 1697
 this -20 8 0 ?
-func Pin.isLow 1708
+func Pin.isLow 1728
 this -20 8 0 ?
-func Pin.setPull 1739
+func Pin.setPull 1759
 this -24 8 0 ?
 pullMode -16 4 0 integer
-func Pin.__init 1764
+func Pin.__init 1784
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
 msg 0 8 0 string
-func __cls_new_Pin 1909
+func __cls_new_Pin 1929
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Pin 1946
+func __cls_init_Pin 1966
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
-func __strconcat 2139
+func __strconcat 2159
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
