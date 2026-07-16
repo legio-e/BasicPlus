@@ -1856,7 +1856,13 @@ public final class MivmEmitter {
         VarSymbol v = (VarSymbol) sym;
         if (!v.isOwner) return;
         if (!v.isLocal) return;     // por ahora sólo locales (no campos)
-        emitInt(0);
+        // #292d: un owner local es SIEMPRE ref = 8 bytes. Anularlo con emitInt(0)
+        // empujaba sólo 4 bytes, pero emitSetLocal ve el slot de 8B y emite
+        // SET_LOCAL_L (saca 8) → underflow de 4 bytes → la fuente quedaba
+        // [basura|0] (a==null daba false) y la PILA quedaba descuadrada 4 bytes,
+        // reventando el siguiente INVOKE_VIRTUAL ("slot no resoluble"). Misma
+        // familia que #292b: cero de 8 BYTES.
+        w.emit(OpCode.LPUSH); w.emitLong(0L);
         w.emitSetLocal(v.name);
     }
 
