@@ -112,8 +112,14 @@ public final class SemanticAnalyzer {
      */
     public SemanticInfo analyzeInterface(ModuleNode mod) {
         declarePass(mod);
-        // No inyectamos imports: en modo interfaz no se procesan bodies y
-        // los Foo.bar() internos no llegan a re-analizarse aquí.
+        // H6.a — SÍ inyectamos los imports precargados (registerImport). Aunque
+        // en modo interfaz no se procesan bodies, las FIRMAS públicas pueden
+        // referenciar TIPOS importados (p.ej. `func crear(): C.Caja`), y
+        // resolveTypesPass necesita el namespace del import en scope para
+        // resolverlos; sin esto la firma queda con tipo <error> y se cae de la
+        // interfaz. Los imports los provee la pasada de interfaz transitiva del
+        // driver (Main.compileInterface) antes de llamar aquí.
+        injectImports(mod);
         resolveTypesPass(mod);
         return info;
     }

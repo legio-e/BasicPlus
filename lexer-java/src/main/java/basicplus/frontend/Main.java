@@ -605,6 +605,27 @@ public final class Main {
             if (module == null) return false;
 
             SemanticAnalyzer analyzer = new SemanticAnalyzer();
+            // H6.a — pasada de interfaz TRANSITIVA. Antes de extraer la interfaz
+            // de este módulo, aseguramos+cargamos las interfaces de SUS imports,
+            // para que las firmas públicas que referencian tipos importados
+            // (p.ej. `func crear(): C.Caja`) resuelvan y NO se caigan de la .bpi.
+            // Precedente Modula-2/Turbo Pascal: la interfaz de C se construye
+            // antes que la de B antes que la de A. El corte de ciclos
+            // (compilingInterface, en compileInterface) evita recursión infinita;
+            // si un tipo público queda sin resolver por un ciclo de interfaz, lo
+            // reportará el análisis como error (dependencia circular de interfaz).
+            // Modo interfaz = tolerante: la resolución de imports aquí es
+            // INFORMATIVA, así que preservamos el contador de errores (el chequeo
+            // estricto de imports lo hace la pasada FULL); así no cambiamos el
+            // comportamiento externo (la interfaz nunca aportó errores fatales).
+            if (module.imports != null && !module.imports.isEmpty()) {
+                for (Ast.ImportNode imp : module.imports) {
+                    ensureInterfaceForImport(imp, src, ctx, depth + 1);
+                }
+                int errsBeforeImports = ctx.totalErrors;
+                loadImportsForAnalyzer(module, src, ctx, analyzer, depth + 1);
+                ctx.totalErrors = errsBeforeImports;
+            }
             SemanticInfo info = analyzer.analyzeInterface(module);
             // No abortamos ante errores: en modo interface puede haber refs no
             // resueltas (a tipos importados). Sólo contamos diagnósticos para
