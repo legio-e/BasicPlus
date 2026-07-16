@@ -47,7 +47,10 @@ extern uint32_t s_vm_buffer_size;
 static char    s_line_buf[WIRE_V1_LINE_MAX];
 static char    s_reply_buf[2048];
 #ifndef V1_PUT_BUF_SIZE
-#define V1_PUT_BUF_SIZE  (16 * 1024)   /* placas con más RAM lo suben por -D (P4 = 64 KB) */
+#define V1_PUT_BUF_SIZE  (48 * 1024)   /* 16K→48K (16-jul): Json.mod ya pesa 17.8K (Gui 31.8K)
+                                        * y el bulk se rechazaba con NO_SPACE, igual que en la Pico.
+                                        * placas con más RAM lo suben por -D (P4 = 64 KB). El fix
+                                        * de verdad = streaming por chunks (mejora #294). */
 #endif
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
 
