@@ -4087,7 +4087,13 @@ public final class MivmEmitter {
                 w.emitGetParam("this");
                 w.emitGetParam("n");
                 emitBuiltinCall(Builtin.INT_TO_STRING);
-                w.emitInvokeVirtual("StringBuilder", "appendStr", 1);
+                // #292c: el operando de INVOKE_VIRTUAL es nº de SLOTS de 4B, no de args
+                // (la VM calcula la posición del receptor con num*4). El arg de appendStr
+                // es un STRING = ref de 8B = 2 SLOTS. Con `1` el receptor salía 4B
+                // desplazado → "slot no resoluble" / crash 0x70000004. appendChar(int)=1 slot
+                // está bien; el path de usuario ya usa argSlotCount(). Sólo esta llamada
+                // sintetizada pasaba un arg de 8B con count en vez de slots.
+                w.emitInvokeVirtual("StringBuilder", "appendStr", 2);
                 declareLocal("__discardSBI");
                 w.emitSetLocal("__discardSBI");
                 emitFunctionEnd();
