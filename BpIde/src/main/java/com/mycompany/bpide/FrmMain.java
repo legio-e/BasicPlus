@@ -565,6 +565,7 @@ public class FrmMain extends javax.swing.JFrame
         // -- Centro: ejecución.
         group(tb, toolButton("Compile",       "Compilar",            e -> doRun(false)),
                   toolButton("Run",           "Ejecutar (VM local)", e -> doRun(true)),
+                  toolButton("Run Window",    "Ver la ventana en el PC (VM-C nativa)", e -> doRunWindow()),
                   toolButton("Run on Device", "Ejecutar en placa",   e -> doRunOnPico()),
                   toolButton("Debug",         "Depurar",             e -> doDebug()),
                   toolButton("Stop",          "Parar (Ctrl+F2)",     e -> onStopRun()));
@@ -2071,14 +2072,25 @@ public class FrmMain extends javax.swing.JFrame
                     publish("[vmc] stdlib junto al .mod: " + n + " módulo(s)\n");
 
                     // 2) resources/ horneados (mismo bake que Run on Device) y al lado.
+                    //    OJO: la CLAVE del mapa es la ruta de destino en el DEVICE
+                    //    (p.ej. "/app/formdemo/main.win"), no el nombre — hay que
+                    //    quedarse con el basename, porque la VM-C resuelve el .win
+                    //    por su nombre desde el cwd (= outDir).
                     java.util.Map<String, java.io.File> resources = collectProjectResources();
                     bakeWinResources(resources, outDir, moduleName);
+                    int nres = 0;
                     for (java.util.Map.Entry<String, java.io.File> e : resources.entrySet()) {
-                        Files.copy(e.getValue().toPath(), outDir.resolve(e.getKey()),
+                        String key = e.getKey();
+                        int slash = Math.max(key.lastIndexOf('/'), key.lastIndexOf('\\'));
+                        String base = (slash >= 0) ? key.substring(slash + 1) : key;
+                        Path dst = outDir.resolve(base);
+                        if (dst.equals(e.getValue().toPath())) continue;  // ya está ahí
+                        Files.copy(e.getValue().toPath(), dst,
                                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        nres++;
                     }
-                    if (!resources.isEmpty())
-                        publish("[vmc] resources: " + resources.size() + " fichero(s)\n");
+                    if (nres > 0)
+                        publish("[vmc] resources: " + nres + " fichero(s) junto al .mod\n");
 
                     // 3) Lanzar. La ventana la abre la propia VM-C; el proceso
                     //    termina al cerrarla. Un relanzamiento mata al anterior.
