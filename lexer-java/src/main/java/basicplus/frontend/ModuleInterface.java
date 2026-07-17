@@ -567,7 +567,7 @@ public final class ModuleInterface {
     // import circular → error de compilación, no un caso a soportar.
     //
     // Las reglas REFLEJAN lo que construye el ModWriter (no las "mejoran"):
-    //   fields (en SLOTS de 4B):  [__syncMutex 1 slot, ref] si la clase tiene
+    //   fields (en SLOTS de 4B):  [__syncMutex 2 slots, ref] si la clase tiene
     //     sync property propia y ningún ancestor la tiene → vars de instancia
     //     en orden de AST → backing de cada property en orden de AST. Ancho por
     //     tipo = MivmEmitter.occupies8Bytes (ref/long/double/any = 2 slots).
@@ -699,8 +699,12 @@ public final class ModuleInterface {
         int slot = base.numFields;
         List<int[]> refMarks = new ArrayList<>();   // {slot, isRef, isOwner}
         if (astHasOwnSyncProperty(cls.astNode) && !ancestorHasSyncProperty(cls)) {
-            refMarks.add(new int[]{slot, 1, 0});    // __syncMutex: 1 slot, ref, no-owner
-            slot += 1;
+            // __syncMutex es una REF (handle de 8B): el ModWriter FUERZA is8 para
+            // toda ref en declareField (fix del censo #1), así que son 2 SLOTS
+            // aunque el emisor lo declare con el atajo de 3 args. El bit ref va
+            // en el primer slot del par, como en el resto de refs.
+            refMarks.add(new int[]{slot, 1, 0});
+            slot += 2;
         }
         for (Ast.ITopLevelDecl m : cls.astNode.members) {
             if (m instanceof Ast.VarDecl) {
