@@ -720,11 +720,19 @@ public final class Main {
         // H6.a — construye la interfaz del módulo EN MEMORIA (el mismo modelo que
         // el .bpi) y la embebe en el .mod (sección `interface`, formato v6). Es
         // lo que permite dejar de depender del .bpi en disco.
+        //
+        // DIFERIDA a propósito (#299): la interfaz publica el layout binario de
+        // cada clase (numFields/numMethods), y ese lo calcula el EMISOR. Si se
+        // extrae aquí, `binaryLayout` es null y ModuleInterface reconstruye el
+        // layout desde el AST: cuenta campos en vez de slots (una ref son 2) y
+        // sólo los métodos propios (sin los heredados de Object). El .mod
+        // publicaba entonces un layout MENOR que el real, y toda subclase de otro
+        // módulo colocaba sus miembros ENCIMA de los heredados. El supplier se
+        // invoca al final de emitTo, con el layout ya calculado.
         String ifaceLib = (module.library == null) ? "" : module.library;
-        ModuleInterface embeddedIface = ModuleInterface.extractFrom(
+        emitter.setInterfaceSupplier(() -> ModuleInterface.extractFrom(
                 ifaceLib, module.name, module.isInterface, module.implementsName,
-                info.module, new ArrayList<>());
-        emitter.setInterfaceBytes(embeddedIface.toBytes());
+                info.module, new ArrayList<>()).toBytes());
         emitter.emitTo(ctx.outDir);
         if (!emitter.errors.isEmpty()) {
             indent(depth); System.out.printf("-- Errores del emisor mivm (%d) --%n", emitter.errors.size());

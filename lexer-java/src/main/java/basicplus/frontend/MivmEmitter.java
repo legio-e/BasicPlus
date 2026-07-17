@@ -55,14 +55,24 @@ public final class MivmEmitter {
 
     /** H6.a — bytes de la interfaz (texto del .bpi) a embeber en el .mod. Lo
      *  fija el driver de compilación (Main) antes de emitTo. Null ⇒ .mod v5. */
-    private byte[] interfaceBytes = null;
+    /** H6.a — proveedor de la interfaz a embeber en el .mod. Es un SUPPLIER y no
+     *  un byte[] a propósito: la interfaz lleva el layout binario de cada clase
+     *  (numFields/numMethods), y ESE LO CALCULA EL EMISOR. Si se extrae antes de
+     *  emitir, `cls.binaryLayout` aún es null y ModuleInterface cae en su rama de
+     *  reconstrucción desde el AST, que cuenta CAMPOS (no slots: una ref son 2) y
+     *  sólo los métodos PROPIOS (sin los heredados de Object) → el .mod publica un
+     *  layout MENOR que el real, y cualquier subclase de otro módulo coloca sus
+     *  miembros ENCIMA de los heredados. Se invoca en emitTo, ya emitido todo. */
+    private java.util.function.Supplier<byte[]> interfaceSupplier = null;
 
     public final List<String> errors = new ArrayList<>();
 
-    /** H6.a — fija la interfaz del módulo a embeber en el .mod (sección
-     *  `interface`). Debe llamarse antes de {@link #emitTo}. */
-    public void setInterfaceBytes(byte[] bytes) {
-        this.interfaceBytes = bytes;
+    /** H6.a — fija CÓMO obtener la interfaz a embeber en el .mod (sección
+     *  `interface`). Se registra antes de {@link #emitTo}, pero el supplier se
+     *  INVOCA al final de la emisión, cuando el layout binario de las clases ya
+     *  está calculado (ver el campo interfaceSupplier). */
+    public void setInterfaceSupplier(java.util.function.Supplier<byte[]> supplier) {
+        this.interfaceSupplier = supplier;
     }
 
     /**
@@ -332,7 +342,13 @@ public final class MivmEmitter {
         Path out = outputDir.resolve(w.getCanonicalFilename());
         // H6.a — embebe la interfaz del módulo en el .mod (sección `interface`,
         // formato v6). Si no se ha fijado, writeToFile emite v5 como antes.
-        if (interfaceBytes != null) w.setInterfaceBytes(interfaceBytes);
+        // El supplier se invoca AQUÍ, no antes: a estas alturas ya se han emitido
+        // todas las clases, así que `cls.binaryLayout` lleva el layout REAL (el que
+        // contó el ModWriter) y la interfaz publica ese, no una reconstrucción.
+        if (interfaceSupplier != null) {
+            byte[] ib = interfaceSupplier.get();
+            if (ib != null) w.setInterfaceBytes(ib);
+        }
         w.writeToFile(out.toString());
 
         // Volcar la información de depuración a un fichero .dbg con el mismo
