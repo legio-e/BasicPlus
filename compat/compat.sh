@@ -1,21 +1,28 @@
 #!/usr/bin/env bash
 # compat/compat.sh — Arnes de compatibilidad V3 -> V2 (BasicPlus, H1)
 #
-# El invariante de V3 (principio 7): un programa de V2 corre SIN CAMBIOS en V3.
-# Este arnes lo hace verificable, en tres frentes:
+# ############################################################################
+# ## 'check' DESACTIVADO en V4 (decision de Eduardo, 17-jul).               ##
+# ## La compatibilidad BINARIA con las versiones anteriores (V2 y V3) ya no ##
+# ## se sostiene: estamos modificando el formato del .mod a proposito.      ##
+# ## La red pasa a ser: PARIDAD VM-Java <-> VM-C + la bateria de tests.     ##
+# ## El arnes NO se borra: V2 esta publicada y los goldens son su registro. ##
+# ## Ver el mensaje de check() para el detalle. 'gen' sigue disponible.     ##
+# ############################################################################
+#
+# El invariante que este arnes verificaba (principio 7 de V3): un programa de V2
+# corre SIN CAMBIOS en V3. Se comprobaba en tres frentes:
 #   - comportamiento  : la salida de cada .mod de V2 no cambia en las VMs V3.
 #   - opcodes         : los ids de opcode de V2 no se mueven (Java y C).
 #   - emision         : el frontend V3 emite .mod byte-identicos a los de V2.
+# Los tres daban por contrato los ARTEFACTOS BINARIOS de V2 — y eso es justo lo
+# que V4 rompe a proposito (ver check()).
 #
 #   ./compat.sh gen     Captura goldens con los binarios V2 (capsula v2/bin):
 #                       v2/golden/*.mod + *.out + opcodes_java.txt + opcodes_c.txt.
 #                       Solo se re-ejecuta cuando cambia V2 (raro: V2 esta congelada).
 #
-#   ./compat.sh check   Verifica las VMs/frontend V3 (actuales) contra los goldens.
-#                       Codigo de salida 0 si todo verde; !=0 si hay regresion.
-#
-# Hoy (V3 == V2 en codigo) 'check' debe dar TODO VERDE: esa es la linea base que
-# valida el propio arnes. Cuando V3 toque el nucleo, un rojo = regresion real.
+#   ./compat.sh check   DESACTIVADO: explica por que y no verifica nada.
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -154,13 +161,72 @@ check_emit() {
   return $fail
 }
 
+# ------------------------------------------------------- check: paridad dual-VM
+# El unico frente vivo desde V4. No mira a V2: compila el corpus con el frontend
+# ACTUAL y compara las dos VMs de hoy ENTRE SI. Es lo que sigue siendo cierto
+# cuando el formato del .mod evoluciona a proposito, y es la red que pide
+# docs/PUBLICAR.md ("paridad dual-VM en host").
+check_parity() {
+  echo "-- paridad dual-VM (frontend actual -> VM-Java == VM-C) --"
+  local pass=0 fail=0 skip=0 s mod oj oc
+  for s in $CORPUS; do
+    if [ ! -f "$SAMPLES/$s.bp" ]; then
+      echo "  SKIP $s (no existe $SAMPLES/$s.bp)"; skip=$((skip+1)); continue
+    fi
+    rm -f "$WORK"/*.mod
+    if ! java -jar "$V3_FE" "$SAMPLES/$s.bp" --compile "$WORK" --backend=mivm >/dev/null 2>&1; then
+      echo "  SKIP $s (no compila con el frontend actual)"; skip=$((skip+1)); continue
+    fi
+    # El .mod raiz es el que NO es Core (dep implicita desde #248).
+    mod="$(ls "$WORK"/*.mod 2>/dev/null | grep -v '[/\]Core\.mod$' | head -1)"
+    if [ -z "$mod" ]; then
+      echo "  SKIP $s (el frontend no emitio .mod)"; skip=$((skip+1)); continue
+    fi
+    [ -f "$WORK/Core.mod" ] || cp "$STDLIB/Core.mod" "$WORK/" 2>/dev/null
+    oj="$(run_vm "$V3_JAVA" "$mod")"; oc="$(run_vm "$V3_C" "$mod")"
+    if [ "$oj" = "$oc" ]; then
+      pass=$((pass+1))
+    else
+      echo "  FAIL $s — VM-Java != VM-C (paridad rota)"; fail=$((fail+1))
+      diff <(printf '%s\n' "$oj") <(printf '%s\n' "$oc") 2>/dev/null | head -6 | sed 's/^/       /'
+    fi
+  done
+  echo "  paridad: $pass PASS, $fail FAIL, $skip SKIP"
+  [ "$fail" -eq 0 ]
+}
+
+# check_behaviour / check_opcodes / check_emit se conservan intactas arriba: son
+# el registro de lo que se verificaba contra V2 y siguen siendo reutilizables si
+# algun dia hay algo que comparar. Desde V4 NO se llaman (ver el aviso de abajo).
 check() {
-  echo "== check: V3 contra los goldens de V2 =="
+  cat <<'EOF'
+== check: compatibilidad binaria con V2/V3 DESACTIVADA ==
+
+Decision de Eduardo (17-jul, V4): se desactiva la compatibilidad BINARIA con las
+versiones anteriores. Estamos modificando el formato del .mod a proposito, asi
+que mantenerla es imposible — y fingir que se mantiene es peor que no tenerla:
+
+  - el ensanchado de refs 4->8B (H1.2a, 9-jul) cambio el ABI del bytecode;
+  - H6.a metio la interfaz DENTRO del .mod y subio el formato a v6;
+  - #284 fijo la norma: el formato del .mod debe ser IGUAL al que habla la VM.
+    Si no coincide -> recompilar (y ya lo tienes actualizado). Un .mod v5 de V2
+    lo RECHAZAN las dos VMs, a proposito.
+
+Los tres frentes de V2 daban por contrato sus ARTEFACTOS BINARIOS, y por eso se
+retiran: 'comportamiento' ejecutaba los .mod v5 de V2 en las VMs de hoy (justo
+lo que #284 prohibe); 'emision' exigia .mod byte-identicos a los de V2
+(imposible en cuanto el formato evoluciona); 'opcodes' solo tenia sentido con
+los otros dos. El arnes NO se borra: V2 esta publicada (Release v2.0) y
+v2/golden + v2/bin son su registro historico; 'gen' sigue disponible.
+
+Lo que SI seguimos garantizando, y es lo que verifica este check:
+  - PARIDAD VM-Java <-> VM-C sobre la cadena ACTUAL (abajo);
+  - la bateria de tests (fuera de este arnes).
+
+EOF
   local fails=0
-  check_behaviour || fails=$((fails+1))
-  check_opcodes   || fails=$((fails+1))
-  check_emit      || fails=$((fails+1))
-  echo "== check: $([ "$fails" -eq 0 ] && echo 'TODO VERDE' || echo "$fails frente(s) en ROJO") =="
+  check_parity || fails=$((fails+1))
+  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM VERDE' || echo 'paridad dual-VM en ROJO') =="
   [ "$fails" -eq 0 ]
 }
 
