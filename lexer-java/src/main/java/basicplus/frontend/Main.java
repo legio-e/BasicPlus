@@ -1499,6 +1499,32 @@ public final class Main {
                         stub.externalMethodSlots.put("toString", 0);
                         stub.externalMethodSlots.put("compareTo", 1);
                         nextSlot = 2;
+                    } else if ("Object".equals(cs.baseClassName)) {
+                        // #291 — base builtin EXPLÍCITA `extends Object`: misma
+                        // siembra que la raíz implícita. Antes caía al defer de
+                        // abajo buscando un módulo "Object" que no existe → los
+                        // métodos propios numeraban desde 0 (slot de toString).
+                        stub.externalMethodSlots.put("toString", 0);
+                        stub.externalMethodSlots.put("compareTo", 1);
+                        nextSlot = 2;
+                    } else if ("Thread".equals(cs.baseClassName)) {
+                        // #291 — base builtin Thread (SIN Object: run=0 lo asume
+                        // __threadStart en las VMs). Antes este caso caía al
+                        // defer → el stub no tenía ni los slots NI los miembros
+                        // heredados → `w.start()` sobre una subclase de Thread
+                        // importada era "no tiene miembro 'start'": las
+                        // subclases de Thread no se podían usar cross-module.
+                        // Mismos números que computeClassLayout (la función única).
+                        stub.externalMethodSlots.put("run",   0);
+                        stub.externalMethodSlots.put("start", 1);
+                        stub.externalMethodSlots.put("join",  2);
+                        nextSlot = 3;
+                        for (String mn : new String[]{"run", "start", "join"}) {
+                            Symbol.FunctionSymbol thf = new Symbol.FunctionSymbol(
+                                    mn, true, false, false, stub, null);
+                            thf.returnType = null;   // void (misma convención que FuncSig)
+                            stub.instanceMembers.tryDefine(thf);
+                        }
                     } else {
                         // #248 (cerraba el gap anotado de #44): base en OTRO
                         // módulo (`extends Core.Exception`). Aquí su ns puede no
