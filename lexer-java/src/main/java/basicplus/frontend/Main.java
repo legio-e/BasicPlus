@@ -1183,22 +1183,33 @@ public final class Main {
             String fp = effectiveFromPath;
             if (fp.endsWith(".bpi")) fp = fp.substring(0, fp.length() - 4) + ".mod";
             Path direct = importerDir.resolve(fp).toAbsolutePath().normalize();
-            if (Files.exists(direct)) return direct;
+            if (carriesInterface(direct)) return direct;
         }
         Path candidate = ctx.outDir.resolve(modName);
-        if (Files.exists(candidate)) return candidate;
+        if (carriesInterface(candidate)) return candidate;
         Path sib = importerDir.resolve(modName);
-        if (Files.exists(sib)) return sib;
+        if (carriesInterface(sib)) return sib;
         for (Path dep : ctx.dependencyPaths) {
             if (Files.isDirectory(dep)) {
                 Path inDir = dep.resolve(modName);
-                if (Files.exists(inDir)) return inDir;
+                if (carriesInterface(inDir)) return inDir;
             } else if (Files.isRegularFile(dep)
-                    && dep.getFileName().toString().equals(modName)) {
+                    && dep.getFileName().toString().equals(modName)
+                    && carriesInterface(dep)) {
                 return dep;
             }
         }
         return null;
+    }
+
+    /** H6.a — ¿este .mod puede DECIR cuál es su interfaz? Sólo un v6 la lleva
+     *  dentro. Un v5 rancio tirado junto al fuente (los hay: los .mod se emiten
+     *  ahí) NO vale como fuente de interfaz y no debe cortar la búsqueda: hay que
+     *  seguir hasta la stdlib, donde está el bueno. Devuelve false ante cualquier
+     *  problema de lectura — quien no puede responder, no sirve. */
+    private static boolean carriesInterface(Path modPath) {
+        try { return extractInterfaceSection(modPath) != null; }
+        catch (IOException e) { return false; }
     }
 
     /** H6.a — extrae la sección `interface` (texto del antiguo .bpi) de un .mod
@@ -1277,8 +1288,16 @@ public final class Main {
             if (!ctx.interfaceCache.containsKey(cacheKey)) {
                 bpi = locateImportBpi(imp, bpiName, library, alias, importerDir, ctx);
                 if (bpi == null) {
-                    indent(depth); System.out.printf("-- aviso: sin interfaz '%s' para import '%s' --%n",
-                            bpiName, alias);
+                    // H6.a — el .bpi ya no se genera: para una librería precompilada
+                    // (stdlib) la interfaz vive DENTRO de su .mod v6. Sin este
+                    // fallback, `import Core` (implícito) se saltaba en silencio y
+                    // RuntimeError dejaba de ser una clase → try/catch no compilaba.
+                    String modName = library.isEmpty() ? alias + ".mod" : library + "." + alias + ".mod";
+                    bpi = locateImportMod(imp, modName, importerDir, ctx);
+                }
+                if (bpi == null) {
+                    indent(depth); System.out.printf("-- aviso: sin interfaz para import '%s' (ni '%s' ni su .mod) --%n",
+                            alias, bpiName);
                     continue;
                 }
             }
@@ -1287,6 +1306,12 @@ public final class Main {
                 ModuleInterface ifaceBpi = (bpi != null)
                         ? readInterfaceCached(bpi, ctx)          // disco (.mod/.bpi), cachea
                         : ctx.interfaceCache.get(cacheKey);      // ya en memoria
+                if (ifaceBpi == null) {
+                    // Un .mod sin interfaz legible: avisa, no revientes (antes: NPE).
+                    indent(depth); System.out.printf("-- aviso: '%s' no expone interfaz legible para import '%s' --%n",
+                            bpi, alias);
+                    continue;
+                }
                 // Si la interfaz extiende otra, garantizamos la cadena y la
                 // aplanamos para que el namespace exponga también los símbolos
                 // heredados.
