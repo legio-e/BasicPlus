@@ -243,6 +243,11 @@ public final class ModuleInterface {
         if (isInterface) iface.extendsName = parentContractName;
         else             iface.implementsName = parentContractName;
 
+        // #299 — caché por-módulo de la función única de layout: cada clase se
+        // calcula UNA vez y sus subclases (incluida una base privada calculada
+        // al vuelo) la reutilizan.
+        Map<String, LayoutAndNames> localLayouts = new LinkedHashMap<>();
+
         for (Symbol s : modSym.members.getSymbols()) {
             // ---------- Funciones públicas ----------
             if (s instanceof FunctionSymbol) {
@@ -314,7 +319,7 @@ public final class ModuleInterface {
             if (s instanceof Symbol.ClassSymbol) {
                 Symbol.ClassSymbol cls = (Symbol.ClassSymbol) s;
                 if (!cls.isPublic) continue;
-                ClassSig cs = extractClass(cls, skipped);
+                ClassSig cs = extractClass(cls, skipped, localLayouts);
                 if (cs != null) iface.classes.add(cs);
                 continue;
             }
@@ -333,7 +338,8 @@ public final class ModuleInterface {
      * MISMO orden que MivmEmitter usa para construir la vtable; sin esta
      * coincidencia, los vtSlot del importador no apuntarían al método correcto.
      */
-    private static ClassSig extractClass(Symbol.ClassSymbol cls, List<String> skipped) {
+    private static ClassSig extractClass(Symbol.ClassSymbol cls, List<String> skipped,
+                                         Map<String, LayoutAndNames> localLayouts) {
         // ---- Constructor (sólo el de la propia clase, no heredado) ----
         List<ParamSig> ctorParams = null;
         if (cls.constructor != null) {
@@ -441,21 +447,40 @@ public final class ModuleInterface {
             }
             sig.staticConsts.add(new ConstSig(cst.name, cst.type, lit));
         }
-        // L2 v3 — propaga el layout binario para herencia cross-module. Si el
-        // backend ya lo populates (cls.binaryLayout != null), usamos eso (la
-        // fuente más fiel). Si no (típicamente porque estamos en modo
-        // INTERFACE_ONLY, donde el emisor no corre), reconstruimos un layout
-        // aproximado a partir del AST — replicando la lógica de MivmEmitter:
-        //   * __syncMutex si la clase tiene sync property (slot 0, ref);
-        //   * fields VarDecl en orden (con flags isRef/isOwner);
-        //   * backing field de cada property en orden.
-        //   * num_methods = 2*nProps + nMethods.
+        // #299/#291 — el layout binario lo calcula SIEMPRE la función ÚNICA
+        // (computeClassLayout), tanto en INTERFACE_ONLY como en compilación
+        // completa. Norma de Eduardo: "es un error de programación básico que
+        // dos funciones calculen lo mismo; o lo hace una o la otra". Aquí vivía
+        // una reconstrucción gemela que contaba distinto (campos en vez de
+        // slots, sin los métodos heredados de Object, sin overrides) → una
+        // subclase de otro módulo colocaba sus miembros ENCIMA de los heredados.
+        //
+        // El ModWriter (compilación completa) no es una segunda fuente: es la
+        // CONSTRUCCIÓN, y se VERIFICA contra la función única — si discrepan,
+        // error a gritos, no números inventados en silencio.
+        LayoutAndNames lay = computeClassLayout(cls, localLayouts);
         if (cls.binaryLayout != null) {
-            sig.binaryNumFields  = cls.binaryLayout.numFields;
-            sig.binaryNumMethods = cls.binaryLayout.numMethods;
-            sig.binaryFieldBitmap = cls.binaryLayout.fieldBitmap;
-            sig.binaryOwnerBitmap = cls.binaryLayout.ownerBitmap;
-        } else {
+            if (cls.binaryLayout.numFields != lay.numFields
+                    || cls.binaryLayout.numMethods != lay.numMethods
+                    || !java.util.Arrays.equals(cls.binaryLayout.fieldBitmap, lay.fieldBitmap)
+                    || !java.util.Arrays.equals(cls.binaryLayout.ownerBitmap, lay.ownerBitmap)) {
+                throw new RuntimeException("layout de la clase '" + cls.name
+                        + "': la interfaz calcula " + lay.numFields + "/" + lay.numMethods
+                        + " y el ModWriter construyó " + cls.binaryLayout.numFields + "/"
+                        + cls.binaryLayout.numMethods
+                        + " — bug en computeClassLayout o en la emisión; NO se publica un layout que miente");
+            }
+        }
+        sig.binaryNumFields   = lay.numFields;
+        sig.binaryNumMethods  = lay.numMethods;
+        sig.binaryFieldBitmap = lay.fieldBitmap;
+        sig.binaryOwnerBitmap = lay.ownerBitmap;
+        localLayouts.put(cls.name, lay);
+        /* RETIRADA (#299) — la reconstrucción gemela. Se conserva comentada como
+         * registro de POR QUÉ no se puede hacer así: contaba campos en vez de
+         * slots (una ref = 2 slots de 4B), no sumaba los métodos heredados de
+         * Object ni de la base, no detectaba overrides y su orden de campos
+         * (intercalado) tampoco era el del emisor (vars primero, luego props).
             // Reconstrucción del layout desde el AST (INTERFACE_ONLY mode).
             // Sólo necesitamos saber num_fields, num_methods y los bitmaps.
             int nFields = 0, nMethods = 0;
@@ -522,12 +547,222 @@ public final class ModuleInterface {
             sig.binaryNumMethods = nMethods;
             sig.binaryFieldBitmap = fieldBitmap;
             sig.binaryOwnerBitmap = ownerBitmap;
-        }
+        } — fin de la reconstrucción retirada */
         return sig;
     }
 
     /** Aproximación de isRefType para reconstruir el bitmap desde el AST.
      *  Coincide con MivmEmitter.isRefType: refs = string, class, array, any. */
+    // ================================================================
+    // #299/#291 — LA función del layout binario de una clase.
+    //
+    // ÚNICA fuente de las reglas de conteo (norma de Eduardo: dos funciones
+    // calculando lo mismo es un bug casi asegurado). La secuencia que la hace
+    // posible es la de la pasada de interfaces: se construyen de abajo arriba
+    // (las de los imports ANTES que la del importador), así que cuando se
+    // calcula el layout de una clase, el de su base — viva donde viva — ya
+    // existe: local → calculada antes en este mismo módulo (o al vuelo, si la
+    // base es privada); externa → publicado en la interfaz de su módulo dueño.
+    // "B desciende de una clase de A" (el importador) exigiría importar A →
+    // import circular → error de compilación, no un caso a soportar.
+    //
+    // Las reglas REFLEJAN lo que construye el ModWriter (no las "mejoran"):
+    //   fields (en SLOTS de 4B):  [__syncMutex 1 slot, ref] si la clase tiene
+    //     sync property propia y ningún ancestor la tiene → vars de instancia
+    //     en orden de AST → backing de cada property en orden de AST. Ancho por
+    //     tipo = MivmEmitter.occupies8Bytes (ref/long/double/any = 2 slots).
+    //     El bit de ref/owner se marca en el PRIMER slot del par.
+    //   methods (vtable): nombres heredados de la base (por slot) → get/set de
+    //     cada property → métodos PÚBLICOS de instancia (ni static ni ctor) en
+    //     orden de declaración. Un override REUTILIZA el slot heredado.
+    //   bases sintetizadas: Object = 0 campos, vt [toString, compareTo];
+    //     Thread = 2 campos (__tid, __stackSize), vt [run, start, join] SIN
+    //     Object (la excepción de la norma del modelo de objetos).
+    // ================================================================
+
+    /** Layout binario + nombres de vtable por slot (para detectar overrides al encadenar). */
+    static final class LayoutAndNames {
+        final int numFields;
+        final int numMethods;
+        final int[] fieldBitmap;
+        final int[] ownerBitmap;
+        final List<String> methodNames;   // índice = slot; null = slot sin nombre conocido
+        LayoutAndNames(int nf, int nm, int[] fb, int[] ob, List<String> names) {
+            numFields = nf; numMethods = nm; fieldBitmap = fb; ownerBitmap = ob; methodNames = names;
+        }
+    }
+
+    private static LayoutAndNames objectBaseLayout() {
+        List<String> names = new ArrayList<>();
+        names.add("toString");
+        names.add("compareTo");
+        return new LayoutAndNames(0, 2, new int[0], new int[0], names);
+    }
+
+    private static LayoutAndNames threadBaseLayout() {
+        List<String> names = new ArrayList<>();
+        names.add("run");
+        names.add("start");
+        names.add("join");
+        // __tid + __stackSize = 2 slots, ninguno ref/owner.
+        return new LayoutAndNames(2, 3, new int[]{0}, new int[]{0}, names);
+    }
+
+    /** Resuelve el layout de la BASE de {@code cls} (null = sin base ⇒ Object). */
+    private static LayoutAndNames baseLayoutOf(Symbol.ClassSymbol cls,
+                                               Map<String, LayoutAndNames> localLayouts) {
+        Symbol.ClassSymbol b = cls.baseClass;
+        if (b == null) return objectBaseLayout();
+        if (b.isExternal) {
+            LayoutAndNames pub = publishedLayoutOf(b);
+            if (pub == null) {
+                throw new RuntimeException("clase '" + cls.name + "': la base cross-module '"
+                        + b.name + "' no publica layout binario en su interfaz — recompila el módulo dueño");
+            }
+            return pub;
+        }
+        if ("Object".equals(b.name)) return objectBaseLayout();
+        if ("Thread".equals(b.name)) return threadBaseLayout();
+        LayoutAndNames done = localLayouts.get(b.name);
+        if (done != null) return done;
+        if (b.astNode != null) {
+            // Base local aún no calculada (p.ej. base PRIVADA, que extractFrom no
+            // recorre): se calcula al vuelo y se cachea. El orden de declaración
+            // (base antes que subclase) garantiza que su propia base ya resuelve.
+            return computeClassLayout(b, localLayouts);
+        }
+        throw new RuntimeException("clase '" + cls.name + "': base '" + b.name
+                + "' sin layout calculable (¿builtin sin tabla en computeClassLayout?) — se aborta a gritos");
+    }
+
+    private static boolean astHasOwnSyncProperty(Ast.ClassDef cd) {
+        if (cd == null || cd.members == null) return false;
+        for (Ast.ITopLevelDecl m : cd.members) {
+            if (m instanceof Ast.PropertyDef && ((Ast.PropertyDef) m).isSync) return true;
+        }
+        return false;
+    }
+
+    private static boolean ancestorHasSyncProperty(Symbol.ClassSymbol cls) {
+        Symbol.ClassSymbol p = cls.baseClass;
+        while (p != null) {
+            for (Symbol s : p.instanceMembers.getSymbols()) {
+                if (s instanceof PropertySymbol && ((PropertySymbol) s).isSync) return true;
+            }
+            p = p.baseClass;
+        }
+        return false;
+    }
+
+    private static String capitalizeForAccessor(String n) {
+        return Character.toUpperCase(n.charAt(0)) + n.substring(1);
+    }
+
+    /** Layout YA PUBLICADO de una clase de OTRO módulo (stub/alias de import).
+     *  No es un recálculo: es leer el contrato que la función única emitió al
+     *  compilarse el módulo dueño. null si el stub no lo trae. */
+    private static LayoutAndNames publishedLayoutOf(Symbol.ClassSymbol b) {
+        SemanticInfo.ClassBinaryLayout bl = b.binaryLayout;
+        if (bl == null) return null;
+        // Nombres por slot desde externalMethodSlots (slots absolutos: la
+        // siembra del stub ya cuenta Object y toda la cadena heredada).
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < bl.numMethods; i++) names.add(null);
+        if (b.externalMethodSlots != null) {
+            for (Map.Entry<String, Integer> e : b.externalMethodSlots.entrySet()) {
+                int sl = e.getValue();
+                if (sl >= 0 && sl < names.size()) names.set(sl, e.getKey());
+            }
+        }
+        return new LayoutAndNames(bl.numFields, bl.numMethods,
+                bl.fieldBitmap != null ? bl.fieldBitmap : new int[0],
+                bl.ownerBitmap != null ? bl.ownerBitmap : new int[0], names);
+    }
+
+    /** LA función (ver el bloque de arriba). Calcula el layout TOTAL (base incluida). */
+    static LayoutAndNames computeClassLayout(Symbol.ClassSymbol cls,
+                                             Map<String, LayoutAndNames> localLayouts) {
+        LayoutAndNames cached = localLayouts.get(cls.name);
+        if (cached != null) return cached;
+        // Stub/alias de una clase de OTRO módulo (p.ej. RuntimeError, el alias
+        // del import implícito de Core, que vive como clase pública en el scope
+        // del importador): su layout no se calcula aquí — lo publicó su dueño.
+        if (cls.isExternal || cls.astNode == null || cls.astNode.members == null) {
+            LayoutAndNames pub = publishedLayoutOf(cls);
+            if (pub != null) return pub;
+            throw new RuntimeException("clase '" + cls.name
+                    + "': sin AST y sin layout publicado — no se puede calcular (¿clase sintetizada sin tabla?)");
+        }
+        LayoutAndNames base = baseLayoutOf(cls, localLayouts);
+
+        // ---- fields (slots de 4B), en el MISMO orden que el emisor ----
+        int slot = base.numFields;
+        List<int[]> refMarks = new ArrayList<>();   // {slot, isRef, isOwner}
+        if (astHasOwnSyncProperty(cls.astNode) && !ancestorHasSyncProperty(cls)) {
+            refMarks.add(new int[]{slot, 1, 0});    // __syncMutex: 1 slot, ref, no-owner
+            slot += 1;
+        }
+        for (Ast.ITopLevelDecl m : cls.astNode.members) {
+            if (m instanceof Ast.VarDecl) {
+                Ast.VarDecl vd = (Ast.VarDecl) m;
+                for (Ast.DeclName dn : vd.names) {
+                    if (dn.isStatic()) continue;
+                    Symbol vsym = cls.instanceMembers.tryLookup(dn.name);
+                    BpType t = (vsym instanceof VarSymbol) ? ((VarSymbol) vsym).type : null;
+                    refMarks.add(new int[]{slot, MivmEmitter.isGcRef(t) ? 1 : 0, vd.isOwner ? 1 : 0});
+                    slot += MivmEmitter.occupies8Bytes(t) ? 2 : 1;
+                }
+            }
+        }
+        for (Ast.ITopLevelDecl m : cls.astNode.members) {
+            if (m instanceof Ast.PropertyDef) {
+                Ast.PropertyDef pd = (Ast.PropertyDef) m;
+                if (pd.name != null && pd.name.isStatic()) continue;
+                Symbol psym = cls.instanceMembers.tryLookup(pd.name.name);
+                BpType t = (psym instanceof PropertySymbol) ? ((PropertySymbol) psym).type : null;
+                refMarks.add(new int[]{slot, MivmEmitter.isGcRef(t) ? 1 : 0, pd.isOwner ? 1 : 0});
+                slot += MivmEmitter.occupies8Bytes(t) ? 2 : 1;
+            }
+        }
+        int numFields = slot;
+        int words = (numFields + 31) >>> 5;
+        int[] fieldBitmap = new int[words];
+        int[] ownerBitmap = new int[words];
+        for (int i = 0; i < base.fieldBitmap.length && i < words; i++) fieldBitmap[i] = base.fieldBitmap[i];
+        for (int i = 0; i < base.ownerBitmap.length && i < words; i++) ownerBitmap[i] = base.ownerBitmap[i];
+        for (int[] mk : refMarks) {
+            if (mk[1] != 0) fieldBitmap[mk[0] >>> 5] |= (1 << (mk[0] & 31));
+            if (mk[2] != 0) ownerBitmap[mk[0] >>> 5] |= (1 << (mk[0] & 31));
+        }
+
+        // ---- vtable: heredados + accesores de property + métodos públicos ----
+        List<String> names = new ArrayList<>(base.methodNames);
+        for (Ast.ITopLevelDecl m : cls.astNode.members) {
+            if (m instanceof Ast.PropertyDef) {
+                Ast.PropertyDef pd = (Ast.PropertyDef) m;
+                if (pd.name != null && pd.name.isStatic()) continue;
+                String cap = capitalizeForAccessor(pd.name.name);
+                if (!names.contains("get" + cap)) names.add("get" + cap);
+                if (!names.contains("set" + cap)) names.add("set" + cap);
+            }
+        }
+        for (Ast.ITopLevelDecl m : cls.astNode.members) {
+            if (m instanceof Ast.FuncDef) {
+                Ast.FuncDef fn = (Ast.FuncDef) m;
+                Symbol fsym = cls.instanceMembers.tryLookup(fn.name.name);
+                if (fsym instanceof FunctionSymbol) {
+                    FunctionSymbol f = (FunctionSymbol) fsym;
+                    if (f.isPublic && !f.isStatic && !f.isConstructor && !names.contains(f.name)) {
+                        names.add(f.name);
+                    }
+                }
+            }
+        }
+        LayoutAndNames out = new LayoutAndNames(numFields, names.size(), fieldBitmap, ownerBitmap, names);
+        localLayouts.put(cls.name, out);
+        return out;
+    }
+
     private static boolean isRefTypeForBpi(BpType t) {
         if (t == null) return false;
         if (t.isReference()) return true;

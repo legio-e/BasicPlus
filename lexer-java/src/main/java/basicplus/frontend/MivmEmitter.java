@@ -1712,7 +1712,7 @@ public final class MivmEmitter {
      *  clase sin resolver se declaraba a 4B: el mismo bug esperando su turno.
      *
      *  Ahora un tipo NUEVO que declare `isReference()=true` queda cubierto SOLO. */
-    private boolean isRefType(BpType t) {
+    static boolean isRefType(BpType t) {
         if (t == null) return false;
         if (t.isReference()) return true;   // ← el tipo manda (Class/Array/Tuple/Any/UnresolvedClassRef)
         // ÚNICA excepción: `string` ES una ref de heap, pero PrimitiveType NO sobreescribe
@@ -1733,7 +1733,7 @@ public final class MivmEmitter {
      *  use-after-free (hoy enmascarado por el scan conservador de pila; ver
      *  docs/V4_REF_AUDIT.md #14). Feed SOLO del bitmap de refs del GC — NO del ancho
      *  (el ancho de `any` ya lo cubre occupies8Bytes). */
-    private boolean isGcRef(BpType t) {
+    static boolean isGcRef(BpType t) {
         return isRefType(t) || (t instanceof BpType.AnyType);
     }
 
@@ -4858,16 +4858,16 @@ public final class MivmEmitter {
         return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.FLOAT;
     }
 
-    private boolean isLong(BpType t) {   // H1.2 (V2)
+    static boolean isLong(BpType t) {   // H1.2 (V2)
         return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.LONG;
     }
 
-    private boolean isDouble(BpType t) {   // H1.3 (V2)
+    static boolean isDouble(BpType t) {   // H1.3 (V2)
         return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.DOUBLE;
     }
 
     /** H1.3 — tipos NUMÉRICOS de 8 bytes (2 slots): long y double comparten storage. */
-    private boolean is8Byte(BpType t) {
+    static boolean is8Byte(BpType t) {
         return isLong(t) || isDouble(t);
     }
 
@@ -4875,7 +4875,7 @@ public final class MivmEmitter {
      *  Numérico de 8 bytes (long/double) O una REFERENCIA (object/array/string):
      *  con el ensanchado de refs 4→8B, toda ref viaja por el carril de 8 bytes.
      *  Es el predicado de ANCHO; is8Byte sigue siendo solo el numérico. */
-    private boolean occupies8Bytes(BpType t) {
+    static boolean occupies8Bytes(BpType t) {
         // H1.2a (V4): `any` = 8 bytes — es un valor opaco que contiene o un int
         // (zero-extended) o una ref flat; en el modelo plano ocupa 2 slots como
         // las refs. Sin esto, List/SyncList (any de punta a punta) truncan.
