@@ -49,7 +49,22 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 # Core (import implicito de clases/excepciones). Se amplia en tandas posteriores.
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest casttest utf8test idxtest \
-        convtest strops"
+        convtest strops \
+        samples/LocalArrTest.bp"
+
+# Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
+# relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
+# oraculos que viven FUERA de bpgenvm-c/samples/ tambien entren en la red: un .bp
+# suelto que no esta en ninguna bateria se pudre en silencio. Paso justamente con
+# samples/LocalArrTest.bp (oraculo de L8 v3, paridad byte a byte): estuvo roto
+# desde el ensanchado 4->8B sin que nadie lo oyera, y despues estuvo ARREGLADO
+# (b99529e) sin que nadie se enterara tampoco. Si un .bp es un oraculo, va aqui.
+bp_path() {
+  case "$1" in
+    */*) echo "$ROOT/$1" ;;
+    *)   echo "$SAMPLES/$1.bp" ;;
+  esac
+}
 
 filt() { grep -vE 'INICIANDO|FIN DE|heapStart|^config:' | sed '/^[[:space:]]*$/d'; }
 
@@ -168,13 +183,14 @@ check_emit() {
 # docs/PUBLICAR.md ("paridad dual-VM en host").
 check_parity() {
   echo "-- paridad dual-VM (frontend actual -> VM-Java == VM-C) --"
-  local pass=0 fail=0 skip=0 s mod oj oc
+  local pass=0 fail=0 skip=0 s bp mod oj oc
   for s in $CORPUS; do
-    if [ ! -f "$SAMPLES/$s.bp" ]; then
-      echo "  SKIP $s (no existe $SAMPLES/$s.bp)"; skip=$((skip+1)); continue
+    bp="$(bp_path "$s")"
+    if [ ! -f "$bp" ]; then
+      echo "  SKIP $s (no existe $bp)"; skip=$((skip+1)); continue
     fi
     rm -f "$WORK"/*.mod
-    if ! java -jar "$V3_FE" "$SAMPLES/$s.bp" --compile "$WORK" --backend=mivm >/dev/null 2>&1; then
+    if ! java -jar "$V3_FE" "$bp" --compile "$WORK" --backend=mivm >/dev/null 2>&1; then
       echo "  SKIP $s (no compila con el frontend actual)"; skip=$((skip+1)); continue
     fi
     # El .mod raiz es el que NO es Core (dep implicita desde #248).
