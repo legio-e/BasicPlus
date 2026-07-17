@@ -415,7 +415,10 @@ const char* bpvm_status_str(bpvm_status_t s) {
     switch (s) {
     case BPVM_OK:                 return "OK";
     case BPVM_ERR_IO:             return "IO error";
-    case BPVM_ERR_BAD_MAGIC:      return "MAGIC inválido (no es un .mod v5/v6)";
+    case BPVM_ERR_BAD_MAGIC:      return "MAGIC inválido (no es un .mod; se esperaba \"MOD6\")";
+    case BPVM_ERR_ABI_MOD_V5:     return ".mod v5: es anterior al ensanchado de refs 4->8B, "
+                                         "su ABI no se puede garantizar (si es de la era 4B "
+                                         "corrompería memoria). Recompílalo con el compilador actual";
     case BPVM_ERR_BAD_HEADER:     return "header inconsistente";
     case BPVM_ERR_OOM:            return "memoria del buffer insuficiente";
     case BPVM_ERR_BAD_OPCODE:     return "opcode desconocido o no soportado";

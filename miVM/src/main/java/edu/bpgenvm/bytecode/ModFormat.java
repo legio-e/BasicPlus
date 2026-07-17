@@ -85,9 +85,50 @@ public final class ModFormat {
     /** Versión lógica del formato; informativa. */
     public static final int FORMAT_VERSION = 6;
 
-    /** True si {@code magic} es un MAGIC de .mod reconocido (v5 o v6). */
+    /** True si {@code magic} es un MAGIC de .mod RECONOCIBLE (v5 o v6). Sirve
+     *  para INSPECCIONAR (disasm / module info): saber qué es un fichero. NO
+     *  implica que se pueda ejecutar — para eso está {@link #isAbiSupported}. */
     public static boolean isKnownMagic(int magic) {
         return magic == MAGIC_NUMBER || magic == MAGIC_NUMBER_V6;
+    }
+
+    // ============================================================
+    // #284 — CONTRATO DE ABI: la versión de formato ES la declaración de ABI
+    // ============================================================
+    //
+    // El ensanchado de refs 4→8B (H1.2a, d2dcbe9, 9-jul-2026) cambió el ABI del
+    // bytecode pero NO bumpeó la versión del .mod. Consecuencia: un .mod de la
+    // era 4B entra en una VM de 8B y corrompe memoria EN SILENCIO (use-after-free,
+    // objetos mal creados) — nos costó días de depuración a ciegas.
+    //
+    //   v5 y anteriores : ABI AMBIGUO. Puede ser era 4B (corruptor) o era 8B; el
+    //                     fichero no lo declara y no hay forma de distinguirlo.
+    //                     ⇒ los loaders lo RECHAZAN.
+    //   v6              : refs de 8 bytes GARANTIZADO — v6 nació DESPUÉS del
+    //                     ensanchado, así que todo v6 sale del compilador actual.
+    //
+    // Si el ancho de ref vuelve a cambiar ⇒ hay que bumpear a v7. Regla: un .mod
+    // que la VM no pueda garantizar debe GRITAR al cargarlo, nunca correr y
+    // corromper (principio "errores que gritan", ver docs/V4_REF_AUDIT.md).
+
+    /** Ancho de referencia (bytes) que garantiza el formato v6. */
+    public static final int ABI_REF_SIZE_V6 = 8;
+
+    /** True si un .mod con este magic tiene un ABI que esta VM puede EJECUTAR.
+     *  Hoy sólo v6 (refs 8B garantizado); v5 es ambiguo → no se ejecuta. */
+    public static boolean isAbiSupported(int magic) {
+        return magic == MAGIC_NUMBER_V6;
+    }
+
+    /** Motivo de rechazo, claro y accionable, para un magic no ejecutable. */
+    public static String abiRejectReason(int magic) {
+        if (magic == MAGIC_NUMBER) {
+            return "formato v5 (\"MOD5\"): es anterior al ensanchado de refs 4->8B, "
+                 + "así que su ABI no se puede garantizar (si es de la era 4B, "
+                 + "corrompería memoria en silencio). Recompílalo con el compilador actual.";
+        }
+        return String.format(
+                "MAGIC 0x%08X no reconocido: no parece un .mod (se esperaba \"MOD6\")", magic);
     }
 
     private ModFormat() { /* no-instanciable */ }

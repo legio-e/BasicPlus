@@ -88,8 +88,14 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
     uint32_t interface_size = 0;   /* H6.a: sección interface (sólo v6) */
     int32_t  main_offset;
     if (bc_read_be32(&c, &magic) != 0)                 return BPVM_ERR_IO;
-    if (magic != BPVM_MAGIC && magic != BPVM_MAGIC_V6) return BPVM_ERR_BAD_MAGIC;
-    int is_v6 = (magic == BPVM_MAGIC_V6);
+    /* #284 — GATE DE ABI. La versión del formato ES la declaración de ABI:
+     * v6 garantiza refs de 8 bytes (nació DESPUÉS del ensanchado 4->8B), v5 es
+     * AMBIGUO (puede ser de la era 4B y corromper memoria en silencio). Lo que
+     * no se pueda garantizar se RECHAZA aquí, en la carga, con un error claro
+     * -- nunca se ejecuta a ciegas. */
+    if (magic == BPVM_MAGIC)                           return BPVM_ERR_ABI_MOD_V5;
+    if (magic != BPVM_MAGIC_V6)                        return BPVM_ERR_BAD_MAGIC;
+    int is_v6 = 1;
     if (bc_read_be32(&c, &data_size) != 0)             return BPVM_ERR_IO;
     {
         uint32_t mo;

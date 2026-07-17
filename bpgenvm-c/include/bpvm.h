@@ -34,6 +34,10 @@ typedef enum {
     BPVM_OK = 0,
     BPVM_ERR_IO,             /* no se pudo abrir/leer el fichero */
     BPVM_ERR_BAD_MAGIC,      /* MAGIC del .mod no coincide */
+    BPVM_ERR_ABI_MOD_V5,     /* #284 — .mod v5: ABI anterior al ensanchado de
+                              * refs 4->8B; no se puede garantizar y NO se carga
+                              * (recompilar). El gate que hace GRITAR al blob
+                              * rancio en vez de dejarlo corromper en silencio. */
     BPVM_ERR_BAD_HEADER,     /* tamaños inconsistentes en el header */
     BPVM_ERR_OOM,            /* memoria caller-provided insuficiente */
     BPVM_ERR_BAD_OPCODE,     /* opcode no implementado */

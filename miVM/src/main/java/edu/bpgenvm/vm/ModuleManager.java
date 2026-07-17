@@ -303,8 +303,9 @@ public class ModuleManager {
 
         try (DataInputStream in = new DataInputStream(new FileInputStream(resolved))) {
             int magic0 = in.readInt();
-            if (!ModFormat.isKnownMagic(magic0)) {
-                throw new RuntimeException("Firma mágica inválida en " + resolved);
+            if (!ModFormat.isAbiSupported(magic0)) {   // #284 — gate de ABI
+                throw new RuntimeException("no se puede cargar " + resolved + ": "
+                        + ModFormat.abiRejectReason(magic0));
             }
             boolean v6a = (magic0 == ModFormat.MAGIC_NUMBER_V6);
             in.readInt(); // dataSize
@@ -368,8 +369,9 @@ public class ModuleManager {
 
         try (DataInputStream in = new DataInputStream(new FileInputStream(filename))) {
             int magic1 = in.readInt();
-            if (!ModFormat.isKnownMagic(magic1)) {
-                throw new RuntimeException("Firma mágica inválida en " + filename);
+            if (!ModFormat.isAbiSupported(magic1)) {   // #284 — gate de ABI
+                throw new RuntimeException("no se puede cargar " + filename + ": "
+                        + ModFormat.abiRejectReason(magic1));
             }
             boolean v6 = (magic1 == ModFormat.MAGIC_NUMBER_V6);
             int dataSize    = in.readInt();

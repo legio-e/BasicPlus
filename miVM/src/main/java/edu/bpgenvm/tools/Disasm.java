@@ -78,10 +78,21 @@ public class Disasm {
             out.println("================================================================");
 
             out.println("=== HEADER ===");
-            String magicOk = (magic == ModFormat.MAGIC_NUMBER) ? " (MOD5, OK)"
+            String magicOk = (magic == ModFormat.MAGIC_NUMBER) ? " (MOD5)"
                     : (magic == ModFormat.MAGIC_NUMBER_V6) ? " (MOD6, OK)"
-                    : " (NO MATCH, esperado MOD5/MOD6)";
+                    : " (NO MATCH, esperado MOD6)";
             out.printf ("  magic         0x%08X%s%n", magic, magicOk);
+            // #284 — la versión ES la declaración de ABI: qué garantiza este .mod
+            // y si esta VM lo ejecutaría. Lo que faltaba para no ir a ciegas con
+            // los blobs rancios (aparte del tamaño).
+            if (ModFormat.isAbiSupported(magic)) {
+                out.printf ("  ABI           refs %dB garantizado — EJECUTABLE%n",
+                        ModFormat.ABI_REF_SIZE_V6);
+            } else {
+                out.printf ("  ABI           NO EJECUTABLE: %s%n", ModFormat.abiRejectReason(magic));
+            }
+            out.printf ("  crc32         %08X (%d bytes de fichero)%n",
+                    fileCrc32(filename), new java.io.File(filename).length());
             out.printf ("  dataSize      %d bytes%n", dataSize);
             out.printf ("  mainOffset    %d %s%n", mainOffset,
                     (mainOffset == -1) ? "(sin main)" : "(relativo al inicio del code)");
@@ -154,6 +165,19 @@ public class Disasm {
             out.println();
             out.printf ("=== CODE (%d bytes) ===%n", codeSize);
             dumpCode(codeBuf, exportsByOffset, imports, out);
+        }
+    }
+
+    /** #284 — CRC32 del fichero entero. Identifica un .mod de un vistazo: permite
+     *  comparar el que hay en el device contra el que emite el compilador actual
+     *  sin fiarse sólo del tamaño (que era lo único visible y no bastaba). */
+    private static long fileCrc32(String filename) {
+        try {
+            java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+            crc.update(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(filename)));
+            return crc.getValue();
+        } catch (IOException ex) {
+            return 0L;
         }
     }
 
