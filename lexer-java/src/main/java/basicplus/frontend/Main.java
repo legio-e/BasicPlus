@@ -803,6 +803,20 @@ public final class Main {
 
         Path bpSource = locateBpSource(qualifiedName, library, moduleName, effectiveFromPath, importerSrc, ctx);
 
+        // 0) H6.a — ¿hay un .mod PRECOMPILADO v6 (con la interfaz embebida) y no
+        //    obsoleto respecto a su fuente? Entonces la interfaz sale de ahí y la
+        //    cacheamos: es el caso de la stdlib y evita recompilar el módulo
+        //    desde fuente en cada build. readInterfaceCached devuelve null si el
+        //    .mod es v5 (sin sección) → caemos al camino de siempre.
+        String modName = library.isEmpty() ? moduleName + ".mod" : library + "." + moduleName + ".mod";
+        Path preMod = locateImportMod(imp, modName, importerDir, ctx);
+        if (preMod != null && !isStale(preMod, bpSource)
+                && readInterfaceCached(preMod, ctx) != null) {
+            indent(depth); System.out.printf("-- interfaz de '%s' desde %s (embebida) --%n",
+                    qualifiedName, preMod.getFileName());
+            return;
+        }
+
         // 1) Si hay fromPath aplicable, busca la .bpi directamente allí.
         if (effectiveFromPath != null && !effectiveFromPath.isEmpty()) {
             String fp = effectiveFromPath;
@@ -1156,6 +1170,35 @@ public final class Main {
         String n = p.getFileName().toString();
         if (n.endsWith(".bpi") || n.endsWith(".mod")) return n.substring(0, n.length() - 4);
         return n;
+    }
+
+    /** H6.a — localiza el .mod PRECOMPILADO de un import. Mismo orden de
+     *  búsqueda que {@link #locateImportBpi} pero con extensión .mod: outDir →
+     *  dir del importer → dependencyPaths (ahí vive la stdlib). Su sección
+     *  `interface` (v6) es la fuente de la interfaz para deps precompiladas, así
+     *  no hay que recompilarlas desde fuente en cada build. */
+    private static Path locateImportMod(Ast.ImportNode imp, String modName, Path importerDir, Ctx ctx) {
+        String effectiveFromPath = (imp.boundImpl != null) ? null : imp.fromPath;
+        if (effectiveFromPath != null && !effectiveFromPath.isEmpty()) {
+            String fp = effectiveFromPath;
+            if (fp.endsWith(".bpi")) fp = fp.substring(0, fp.length() - 4) + ".mod";
+            Path direct = importerDir.resolve(fp).toAbsolutePath().normalize();
+            if (Files.exists(direct)) return direct;
+        }
+        Path candidate = ctx.outDir.resolve(modName);
+        if (Files.exists(candidate)) return candidate;
+        Path sib = importerDir.resolve(modName);
+        if (Files.exists(sib)) return sib;
+        for (Path dep : ctx.dependencyPaths) {
+            if (Files.isDirectory(dep)) {
+                Path inDir = dep.resolve(modName);
+                if (Files.exists(inDir)) return inDir;
+            } else if (Files.isRegularFile(dep)
+                    && dep.getFileName().toString().equals(modName)) {
+                return dep;
+            }
+        }
+        return null;
     }
 
     /** H6.a — extrae la sección `interface` (texto del antiguo .bpi) de un .mod
