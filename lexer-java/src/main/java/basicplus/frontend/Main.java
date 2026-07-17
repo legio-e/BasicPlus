@@ -750,7 +750,6 @@ public final class Main {
 
     private static void writeInterfaceFile(Ast.ModuleNode module, SemanticInfo info, Ctx ctx, int depth) throws IOException {
         String lib = (module.library == null) ? "" : module.library;
-        String bpiName = lib.isEmpty() ? module.name + ".bpi" : lib + "." + module.name + ".bpi";
         List<String> skipped = new ArrayList<>();
         ModuleInterface iface = ModuleInterface.extractFrom(
                 lib, module.name, module.isInterface, module.implementsName,
@@ -763,11 +762,13 @@ public final class Main {
         // escribir el .bpi (los consumidores lo encuentran en el caché).
         String cacheKey = lib.isEmpty() ? module.name : lib + "." + module.name;
         ctx.interfaceCache.put(cacheKey, ModuleInterface.fromBytes(iface.toBytes(), cacheKey));
-        Path bpiPath = ctx.outDir.resolve(bpiName);
-        iface.writeTo(bpiPath);
-        ctx.writtenBpi.add(bpiPath.toAbsolutePath());   // H6.a-lite: candidato a borrar al cerrar el build
-        indent(depth); System.out.printf("interfaz : %s (funcs=%d%s%s)%n",
-                bpiPath.toAbsolutePath(), iface.functions.size(),
+        // H6.a — YA NO se escribe el .bpi a disco. La interfaz vive (1) en el
+        // caché en memoria (arriba) para el resto de ESTE build, y (2) embebida
+        // en el .mod (sección `interface`) para builds futuros. El .bpi era el
+        // artefacto que se quedaba rancio y mentía; al no existir, no puede.
+        // (bpiName se conserva sólo para el nombre canónico / logs.)
+        indent(depth); System.out.printf("interfaz : %s (en memoria, funcs=%d%s%s)%n",
+                cacheKey, iface.functions.size(),
                 module.isInterface ? ", interface=true" : "",
                 module.implementsName == null ? ""
                         : (module.isInterface
@@ -786,6 +787,11 @@ public final class Main {
         String qualifiedName = joinPath(imp.path);
         String library = libraryFromImportPath(imp);
         String moduleName = imp.path.get(imp.path.size() - 1);
+        // H6.a — si la interfaz ya está en el caché en memoria (construida en
+        // este build), no hay nada que asegurar: es la fuente de verdad y no
+        // dependemos de que exista un .bpi en disco.
+        String ifaceCacheKey = library.isEmpty() ? moduleName : library + "." + moduleName;
+        if (ctx.interfaceCache.containsKey(ifaceCacheKey)) return;
         String bpiName = library.isEmpty() ? moduleName + ".bpi" : library + "." + moduleName + ".bpi";
         Path importerDir = importerSrc.toAbsolutePath().getParent();
 
@@ -1220,16 +1226,24 @@ public final class Main {
             String library = libraryFromImportPath(imp);
             String bpiName = library.isEmpty() ? alias + ".bpi" : library + "." + alias + ".bpi";
 
-            // ---- 1) Localizar la .bpi del path (interfaz o módulo concreto) ----
-            Path bpi = locateImportBpi(imp, bpiName, library, alias, importerDir, ctx);
-            if (bpi == null) {
-                indent(depth); System.out.printf("-- aviso: sin interfaz '%s' para import '%s' --%n",
-                        bpiName, alias);
-                continue;
+            // ---- 1) Resolver la interfaz: H6.a caché en memoria PRIMERO (así un
+            //     módulo construido en ESTE build no necesita .bpi en disco), y
+            //     en fallo localizar en disco (.mod v6 embebido o .bpi legacy).
+            String cacheKey = library.isEmpty() ? alias : library + "." + alias;
+            Path bpi = null;
+            if (!ctx.interfaceCache.containsKey(cacheKey)) {
+                bpi = locateImportBpi(imp, bpiName, library, alias, importerDir, ctx);
+                if (bpi == null) {
+                    indent(depth); System.out.printf("-- aviso: sin interfaz '%s' para import '%s' --%n",
+                            bpiName, alias);
+                    continue;
+                }
             }
 
             try {
-                ModuleInterface ifaceBpi = readInterfaceCached(bpi, ctx);   // H6.a: caché en memoria
+                ModuleInterface ifaceBpi = (bpi != null)
+                        ? readInterfaceCached(bpi, ctx)          // disco (.mod/.bpi), cachea
+                        : ctx.interfaceCache.get(cacheKey);      // ya en memoria
                 // Si la interfaz extiende otra, garantizamos la cadena y la
                 // aplanamos para que el namespace exponga también los símbolos
                 // heredados.
@@ -1258,15 +1272,28 @@ public final class Main {
                         ctx.totalErrors++;   // N6: fatal
                         continue;
                     }
-                    Path implBpiPath = resolveImplBpi(imp.boundImpl, imp.fromPath, module, importerDir, ctx);
-                    if (implBpiPath == null) {
-                        indent(depth); System.err.printf(
-                            "-- error: no se encuentra .bpi del impl '%s' --%n",
-                            imp.boundImpl);
-                        ctx.totalErrors++;   // N6: fatal
-                        continue;
+                    // H6.a — cache-first para el impl bindeado (ya no hay .bpi en
+                    // disco): buscamos su interfaz en el caché por nombre canónico
+                    // (exacto o por sufijo, igual que la búsqueda amplia que hace
+                    // resolveImplBpi sobre los .bpi). Fallback a disco si no está.
+                    ModuleInterface implBpi = null;
+                    for (Map.Entry<String, ModuleInterface> ce : ctx.interfaceCache.entrySet()) {
+                        String k = ce.getKey();
+                        if (k.equals(imp.boundImpl) || k.endsWith("." + imp.boundImpl)) {
+                            implBpi = ce.getValue(); break;
+                        }
                     }
-                    ModuleInterface implBpi = readInterfaceCached(implBpiPath, ctx);   // H6.a: caché en memoria
+                    if (implBpi == null) {
+                        Path implBpiPath = resolveImplBpi(imp.boundImpl, imp.fromPath, module, importerDir, ctx);
+                        if (implBpiPath == null) {
+                            indent(depth); System.err.printf(
+                                "-- error: no se encuentra interfaz del impl '%s' --%n",
+                                imp.boundImpl);
+                            ctx.totalErrors++;   // N6: fatal
+                            continue;
+                        }
+                        implBpi = readInterfaceCached(implBpiPath, ctx);   // H6.a: caché en memoria
+                    }
                     if (implBpi.isInterface) {
                         indent(depth); System.err.printf(
                             "-- error: '%s' es una interfaz, no puede ser impl bindeado --%n",
@@ -1494,11 +1521,11 @@ public final class Main {
                 analyzer.registerImport(ns);
                 loadedNs.add(ns);
                 indent(depth); System.out.printf("-- cargado import '%s' desde %s (funcs=%d, consts=%d, enums=%d, props=%d, classes=%d) --%n",
-                        alias, bpi.getFileName(),
+                        alias, (bpi != null ? bpi.getFileName().toString() : "caché en memoria"),
                         ns.functions.size(), ns.consts.size(), ns.enums.size(),
                         ns.properties.size(), ns.classes.size());
             } catch (IOException ex) {
-                System.err.println("error leyendo " + bpi + ": " + ex.getMessage());
+                System.err.println("error leyendo " + (bpi != null ? bpi : cacheKey) + ": " + ex.getMessage());
             }
         }
 
