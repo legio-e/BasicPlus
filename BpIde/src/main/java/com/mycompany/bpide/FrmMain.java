@@ -512,6 +512,12 @@ public class FrmMain extends javax.swing.JFrame
         miRunOnPico.addActionListener(e -> doRunOnPico());
         jMenu3.add(miRunOnPico);
 
+        // Ver la ventana del programa en el PC: compila y lanza la VM-C nativa
+        // (LVGL/SDL), que abre la GUI en una ventana de escritorio.
+        JMenuItem miRunWin = new JMenuItem("Run Window (VM-C)");
+        miRunWin.addActionListener(e -> doRunWindow());
+        jMenu3.add(miRunWin);
+
         jMenu3.addSeparator();
         JMenuItem miClear = new JMenuItem("Clear console");
         miClear.addActionListener(e -> {
@@ -1985,6 +1991,137 @@ public class FrmMain extends javax.swing.JFrame
      * {@link PrintStream} que vuelca línea a línea al panel "Consola"
      * (también parsea diagnósticos a la tabla "Errores").
      */
+    /** Proceso de la VM-C lanzado por Run Window (para matarlo al relanzar). */
+    private Process vmcProcess = null;
+
+    /**
+     * Run Window (VM-C) — compila el .bp actual y lanza la VM-C NATIVA
+     * (build LVGL/SDL) con el .mod: la GUI del programa se abre en una
+     * ventana de escritorio del PC. Pensado para ver Forms (FormDemo) sin
+     * placa: misma VM que corre en los micros, mismo render LVGL.
+     *
+     * A diferencia de Run (daemon Java + upload por wire), aquí la VM-C
+     * resuelve deps y resources desde el DIRECTORIO del .mod, así que se
+     * prepara el outDir como un "workdir": stdlib *.mod copiada al lado,
+     * resources/ horneados (.win nombre→slot vía FormBaker, el MISMO camino
+     * que Run on Device) y copiados también al lado.
+     */
+    private void doRunWindow() {
+        if (editorArea.getText().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Editor vacío. Carga o escribe un fichero primero.",
+                    "Aviso", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        onSave();
+        if (currentFile == null) return;
+
+        consolaArea.setText("");
+        errors.clear();
+
+        final Path bpFile;
+        final Path outDir;
+        if (currentProject != null) {
+            bpFile = java.nio.file.Paths.get(currentProject.sourceDir, currentProject.main + ".bp");
+            outDir = java.nio.file.Paths.get(currentProject.outDir);
+        } else {
+            bpFile = currentFile;
+            outDir = bpFile.getParent().resolve("out");
+        }
+
+        new SwingWorker<Void, String>() {
+            @Override
+            protected Void doInBackground() {
+                publish("== compilando " + bpFile.getFileName() + " ==\n");
+                boolean ok = invokeWithCapture(() ->
+                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm", /*pruneBpi*/ true),
+                        this::publish);
+                if (!ok) { publish("== compilación falló ==\n"); return null; }
+
+                String moduleName = inferModuleName(bpFile);
+                Path mod = outDir.resolve(moduleName + ".mod");
+                if (!Files.isRegularFile(mod)) {
+                    publish("== no se encontró " + mod.getFileName() + " ==\n");
+                    return null;
+                }
+
+                // 1) La VM-C busca el exe y la stdlib subiendo desde el .bp
+                //    (misma convención de descubrimiento que BpVM.cfg).
+                Path repoRoot = findUpwards(bpFile.getParent(), "bpgenvm-c");
+                Path exe = (repoRoot != null)
+                        ? repoRoot.resolve("bpgenvm-c").resolve("build").resolve("bpgenvm-c.exe") : null;
+                if (exe == null || !Files.isRegularFile(exe)) {
+                    publish("[vmc] no encuentro bpgenvm-c/build/bpgenvm-c.exe subiendo desde "
+                            + bpFile.getParent() + " — compílala con `make LVGL=1`\n");
+                    return null;
+                }
+                Path stdlib = repoRoot.resolve("bpstdlib");
+                try {
+                    int n = 0;
+                    if (Files.isDirectory(stdlib) && !stdlib.equals(outDir)) {
+                        try (java.util.stream.Stream<Path> st = Files.list(stdlib)) {
+                            for (Path p : (Iterable<Path>) st::iterator) {
+                                if (p.getFileName().toString().endsWith(".mod")) {
+                                    Files.copy(p, outDir.resolve(p.getFileName()),
+                                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                                    n++;
+                                }
+                            }
+                        }
+                    }
+                    publish("[vmc] stdlib junto al .mod: " + n + " módulo(s)\n");
+
+                    // 2) resources/ horneados (mismo bake que Run on Device) y al lado.
+                    java.util.Map<String, java.io.File> resources = collectProjectResources();
+                    bakeWinResources(resources, outDir, moduleName);
+                    for (java.util.Map.Entry<String, java.io.File> e : resources.entrySet()) {
+                        Files.copy(e.getValue().toPath(), outDir.resolve(e.getKey()),
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    if (!resources.isEmpty())
+                        publish("[vmc] resources: " + resources.size() + " fichero(s)\n");
+
+                    // 3) Lanzar. La ventana la abre la propia VM-C; el proceso
+                    //    termina al cerrarla. Un relanzamiento mata al anterior.
+                    if (vmcProcess != null && vmcProcess.isAlive()) {
+                        publish("[vmc] cerrando la instancia anterior…\n");
+                        vmcProcess.destroy();
+                    }
+                    publish("== ventana: " + mod.getFileName()
+                            + " (cierra la ventana para terminar) ==\n");
+                    ProcessBuilder pb = new ProcessBuilder(exe.toString(), mod.getFileName().toString());
+                    pb.directory(outDir.toFile());
+                    pb.redirectErrorStream(true);
+                    vmcProcess = pb.start();
+                    try (java.io.BufferedReader r = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(vmcProcess.getInputStream(),
+                                    java.nio.charset.StandardCharsets.UTF_8))) {
+                        String line;
+                        while ((line = r.readLine()) != null) publish(line + "\n");
+                    }
+                    publish("== ventana cerrada (exit " + vmcProcess.waitFor() + ") ==\n");
+                } catch (Exception ex) {
+                    publish("[vmc] error: " + ex.getMessage() + "\n");
+                }
+                return null;
+            }
+            @Override
+            protected void process(List<String> chunks) {
+                for (String s : chunks) { appendConsola(s); parseAndAddError(s); }
+            }
+        }.execute();
+    }
+
+    /** Sube directorios desde {@code start} hasta encontrar uno que contenga
+     *  {@code childName}; devuelve ese directorio (o null). */
+    private static Path findUpwards(Path start, String childName) {
+        Path d = start;
+        for (int i = 0; i < 10 && d != null; i++) {
+            if (Files.isDirectory(d.resolve(childName))) return d;
+            d = d.getParent();
+        }
+        return null;
+    }
+
     private void doRun(boolean execute) {
         if (editorArea.getText().isEmpty()) {
             JOptionPane.showMessageDialog(this, "Editor vacío. Carga o escribe un fichero primero.",
