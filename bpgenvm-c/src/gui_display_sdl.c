@@ -41,6 +41,108 @@ static int      g_shot_after_ms  = -1;      /* -1 = off */
 static uint32_t g_shot_deadline  = 0;
 static int      g_shot_env_read  = 0;
 
+/* --- Guion de entrada: BPVM_GUI_SCRIPT=<fichero> --------------------------
+ * Da MANOS a quien ya tiene ojos (la captura PNG). Un comando por linea:
+ *
+ *   wait <ms>       espera
+ *   click <x> <y>   clic izquierdo en coordenadas de PANTALLA
+ *   shot            captura PNG (bp_shot_NNNN.png)
+ *   quit            cierra la ventana (termina el programa)
+ *
+ * Lineas vacias y las que empiezan por '#' se ignoran.
+ *
+ * El clic se inyecta como EVENTO SDL de raton, NO llamando a bpvm_gui_inject_click:
+ * asi entra por el camino de verdad —indev de LVGL, su hit-testing, su callback—
+ * y no aparece una ruta paralela que se pueda pudrir sin que nadie se entere.
+ * LVGL filtra los eventos por windowID (lv_sdl_mouse_handler), de ahi g_win_id.
+ *
+ * Por que un guion y no el wire: el wire es binario v1 y lo comparten el IDE y
+ * los 3 firmwares, asi que tocarle el protocolo pide recompilarlos y verificar
+ * en placa. El guion no toca nada de eso, es DETERMINISTA (vale para una bateria
+ * de golden images) y se prueba entero en host. El wire es el paso 2 — y es el
+ * que dara ojos+manos sobre la PLACA, que es donde de verdad hacen falta.
+ */
+static uint32_t g_win_id         = 0;   /* ventana SDL de LVGL (para inyectar) */
+static char*    g_script_buf     = NULL;
+static char**   g_script         = NULL;
+static int      g_script_n       = 0;
+static int      g_script_i       = 0;
+static uint32_t g_script_gate    = 0;   /* no avanzar hasta este tick */
+static uint32_t g_click_up_at    = 0;   /* soltar el boton en este tick */
+static int      g_click_x = 0, g_click_y = 0;
+
+static void mouse_event(uint32_t type, int x, int y) {
+    SDL_Event e;
+    SDL_memset(&e, 0, sizeof(e));
+    e.type = type;
+    if (type == SDL_MOUSEMOTION) {
+        e.motion.windowID = g_win_id; e.motion.x = x; e.motion.y = y;
+        e.motion.state = (type == SDL_MOUSEMOTION) ? 0 : SDL_BUTTON_LMASK;
+    } else {
+        e.button.windowID = g_win_id; e.button.x = x; e.button.y = y;
+        e.button.button = SDL_BUTTON_LEFT;
+        e.button.state  = (type == SDL_MOUSEBUTTONDOWN) ? SDL_PRESSED : SDL_RELEASED;
+        e.button.clicks = 1;
+    }
+    SDL_PushEvent(&e);
+}
+
+static void script_load(void) {
+    const char* path = getenv("BPVM_GUI_SCRIPT");
+    if (!path || !*path) return;
+    FILE* f = fopen(path, "rb");
+    if (!f) { printf("[gui] guion: no se puede abrir %s\n", path); fflush(stdout); return; }
+    fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+    if (n <= 0) { fclose(f); return; }
+    g_script_buf = (char*) malloc((size_t) n + 1);
+    if (!g_script_buf) { fclose(f); return; }
+    size_t rd = fread(g_script_buf, 1, (size_t) n, f);
+    fclose(f);
+    g_script_buf[rd] = '\0';
+    /* Trocear en lineas (in-place) y quedarnos con las utiles. */
+    g_script = (char**) malloc(sizeof(char*) * (rd + 1));
+    if (!g_script) return;
+    char* p = g_script_buf;
+    while (*p) {
+        char* line = p;
+        while (*p && *p != '\n') p++;
+        if (*p) *p++ = '\0';
+        while (*line == ' ' || *line == '\t') line++;
+        size_t L = strlen(line);
+        while (L && (line[L-1] == '\r' || line[L-1] == ' ')) line[--L] = '\0';
+        if (L && line[0] != '#') g_script[g_script_n++] = line;
+    }
+    printf("[gui] guion %s: %d comandos\n", path, g_script_n);
+    fflush(stdout);
+}
+
+/* Un paso del guion por pump. Respeta el gate (waits y el soltar del clic). */
+static void script_step(void) {
+    if (!g_script || g_script_i >= g_script_n) return;
+    if (SDL_GetTicks() < g_script_gate) return;
+    if (g_click_up_at) return;                 /* clic a medias: esperar al UP */
+    const char* line = g_script[g_script_i++];
+    int x, y, ms;
+    if (sscanf(line, "wait %d", &ms) == 1) {
+        g_script_gate = SDL_GetTicks() + (uint32_t) ms;
+    } else if (sscanf(line, "click %d %d", &x, &y) == 2) {
+        mouse_event(SDL_MOUSEMOTION, x, y);
+        mouse_event(SDL_MOUSEBUTTONDOWN, x, y);
+        g_click_x = x; g_click_y = y;
+        g_click_up_at = SDL_GetTicks() + 60;   /* el UP va en un pump posterior:
+                                                * LVGL lee el indev en cada
+                                                * lv_timer_handler, y press+release
+                                                * en la misma pasada se pierde. */
+        printf("[gui] guion: click %d,%d\n", x, y); fflush(stdout);
+    } else if (strcmp(line, "shot") == 0) {
+        g_shot_requested = 1;
+    } else if (strcmp(line, "quit") == 0) {
+        g_window_closed = 1;
+    } else {
+        printf("[gui] guion: comando no reconocido: '%s'\n", line); fflush(stdout);
+    }
+}
+
 /* Watch de eventos SDL: marca el cierre de ventana SIN consumir el evento (LVGL
  * sigue recibiendo el ratón). Evita depender de internals de lv_sdl. */
 static int SDLCALL lvgl_watch(void* ud, SDL_Event* e) {
@@ -178,9 +280,17 @@ static void bpvm_gui_take_screenshot(void) {
 void bpvm_gui_disp_init(int w, int h) {
     SDL_SetMainReady();
     lv_tick_set_cb(SDL_GetTicks);
-    lv_sdl_window_create(w, h);
+    lv_display_t* d = lv_sdl_window_create(w, h);
     lv_sdl_mouse_create();
     SDL_AddEventWatch(lvgl_watch, NULL);
+    /* windowID de la ventana que acaba de crear LVGL: hace falta para inyectar
+     * eventos de ratón sintéticos (BPVM_GUI_SCRIPT). lv_sdl_mouse_handler filtra
+     * por event->button.windowID, así que un evento sin él se descarta y el clic
+     * se pierde EN SILENCIO. */
+    SDL_Renderer* r = (SDL_Renderer*) lv_sdl_window_get_renderer(d);
+    SDL_Window* win = r ? SDL_RenderGetWindow(r) : NULL;
+    if (win) g_win_id = SDL_GetWindowID(win);
+    else { printf("[gui] aviso: sin windowID → los clics del guión no llegarán\n"); fflush(stdout); }
 }
 
 void bpvm_gui_disp_pump(void) {
@@ -190,6 +300,7 @@ void bpvm_gui_disp_pump(void) {
      * el instante que le importa a quien pide la captura. */
     if (!g_shot_env_read) {
         g_shot_env_read = 1;
+        script_load();
         const char* e = getenv("BPVM_GUI_SHOT_MS");
         if (e && *e) {
             g_shot_after_ms = atoi(e);
@@ -204,6 +315,14 @@ void bpvm_gui_disp_pump(void) {
         g_shot_after_ms = -1;      /* una sola vez */
         g_shot_requested = 1;
     }
+    /* Soltar el botón del clic del guión: va en un pump POSTERIOR al press
+     * porque LVGL lee el indev una vez por lv_timer_handler — press+release en
+     * la misma pasada se pierde. */
+    if (g_click_up_at && SDL_GetTicks() >= g_click_up_at) {
+        g_click_up_at = 0;
+        mouse_event(SDL_MOUSEBUTTONUP, g_click_x, g_click_y);
+    }
+    script_step();
     if (g_shot_requested) {
         g_shot_requested = 0;
         bpvm_gui_take_screenshot();
