@@ -290,9 +290,13 @@ Paraguas gráfico, MODESTO. Eduardo: "solo añadimos algún widget más; no recu
   packs, **grabarlos** en los micros (Burn por el wire) y verlos/borrarlos. Es el **Pack manager** que
   se sacó de H3 (dos lados como el explorer: biblioteca PC ↔ packs del micro). Se apoya en la
   infraestructura de packs de H3 (comando de inventario, Burn).
-- **H8.b — Botón "Previsualizar ventana".** Correr un form en **miVM/Swing** dentro del IDE para verlo
-  sin subirlo al device (el cargador de forms es BP y miVM ya pinta en Swing → "preview" ≈ correr el
-  form en miVM). **NO hay diseñador de ventanas (drag&drop) todavía** — diferido.
+- **H8.b — Botón "Previsualizar ventana". ✅ HECHO 17-jul (f96b35a) — pero con VM-C, no Swing.**
+  El botón **Run Window (VM-C)** (barra + menú Run) compila el `.bp`, hornea `nombre→slot` en los `.win`
+  (mismo `FormBaker` que Run on Device) y lanza la **VM-C nativa (LVGL/SDL)** con el `.mod` → la ventana
+  se abre en el escritorio. Se eligió VM-C sobre miVM/Swing porque **pinta EXACTAMENTE igual que la placa**
+  (mismo LVGL) → el preview es fiel, no una aproximación Swing. Verificado con FormDemo (render OK).
+  Pendiente menor: el clic del form da UAF en la VM-C (objptr `uint32_t` = handle truncado, gemelo de
+  #292h/#293 en el lado Java) → **#301**. **NO hay diseñador de ventanas (drag&drop) todavía** — diferido.
 
 *A backlog (Eduardo 13-jul; NO en H8 de momento — revisar en la próxima pasada del roadmap):*
 - IDE **multiplataforma**: `purejavacomm → jSerialComm` + lanzador `.sh` (correr el IDE en Linux/Mac).
