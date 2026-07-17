@@ -1,20 +1,148 @@
-dbg 2
+dbg 3
 module Pca9554
 source C:\lenguajes\pm\bpdevices\Pca9554.bp
 lines
-1429 43
-1468 44
-1502 49
-1529 50
-1553 51
-1582 52
-1606 53
-1631 60
-1658 65
-1685 70
-1712 75
-1739 78
-1766 83
-1793 86
-1820 36
-1828 37
+1472 43
+1511 44
+1545 49
+1572 50
+1596 51
+1625 52
+1649 53
+1674 60
+1701 65
+1728 70
+1755 75
+1782 78
+1809 83
+1836 86
+1863 36
+1871 37
+vars
+func Object.toString 0
+this -20 8 0 ?
+func Object.compareTo 25
+this -28 8 0 ?
+other -20 8 0 ?
+func List.add 41
+this -28 8 0 ?
+item -20 8 0 ?
+func List.get 131
+this -24 8 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
+func List.length 173
+this -20 8 0 ?
+func List.remove 189
+this -24 8 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 299
+this -20 8 0 ?
+func OwnerList.removeAndFree 342
+this -24 8 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 480
+this -20 8 0 ?
+func StringBuilder.appendChar 501
+this -24 8 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 591
+this -28 8 0 ?
+s -20 8 0 string
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 662
+this -24 8 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 687
+this -20 8 0 ?
+func StringBuilder.length 711
+this -20 8 0 ?
+func StringBuilder.__init 727
+this -20 8 0 ?
+func Thread.run 768
+this -20 8 0 ?
+func Thread.start 778
+this -20 8 0 ?
+func Thread.join 797
+this -20 8 0 ?
+func Thread.__init 816
+this -24 8 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 844
+this -20 8 0 ?
+func Mutex.unlock 863
+this -20 8 0 ?
+func Mutex.__init 882
+this -20 8 0 ?
+func SyncList.add 900
+this -28 8 0 ?
+item -20 8 0 ?
+func SyncList.remove 946
+this -24 8 0 ?
+idx -16 4 0 ?
+func SyncList.get 992
+this -24 8 0 ?
+idx -16 4 0 ?
+func SyncList.set 1036
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
+func SyncList.length 1085
+this -20 8 0 ?
+func SyncList.pop 1126
+this -20 8 0 ?
+func SyncList.popBlocking 1241
+this -20 8 0 ?
+func SyncList.__init 1372
+this -20 8 0 ?
+func Expander.wreg 1469
+this -28 8 0 ?
+reg -20 4 0 integer
+value -16 4 0 integer
+buf 0 8 0 ?
+func Expander.rreg 1542
+this -24 8 0 ?
+reg -16 4 0 integer
+ptr 4 8 0 ?
+rx 24 8 0 ?
+func Expander.readIn 1671
+this -20 8 0 ?
+func Expander.getOut 1698
+this -20 8 0 ?
+func Expander.writeOut 1725
+this -24 8 0 ?
+value -16 4 0 integer
+func Expander.getInvert 1752
+this -20 8 0 ?
+func Expander.setInvert 1779
+this -24 8 0 ?
+value -16 4 0 integer
+func Expander.getDir 1806
+this -20 8 0 ?
+func Expander.setDir 1833
+this -24 8 0 ?
+value -16 4 0 integer
+func Expander.__init 1860
+this -28 8 0 ?
+bus -20 4 0 integer
+addr -16 4 0 integer
+func __cls_new_Expander 1886
+bus -20 4 0 integer
+addr -16 4 0 integer
+func __cls_init_Expander 1923
+this -28 8 0 ?
+bus -20 4 0 integer
+addr -16 4 0 integer
+func __strconcat 1969
+a -28 8 0 ?
+b -20 8 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?

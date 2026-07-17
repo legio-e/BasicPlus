@@ -1,111 +1,316 @@
-dbg 2
+dbg 3
 module Ad7177
 source C:\lenguajes\pm\bpdevices\Ad7177.bp
 lines
-1435 43
-1459 47
-1483 51
-1610 52
-1639 58
-1654 59
-1669 60
-1687 61
-1695 62
-1707 63
-1719 64
-1733 66
-1759 67
-1768 68
-1776 69
-1788 70
-1808 71
-1822 73
-1841 77
-1856 78
-1868 79
-1876 80
-1888 81
-1908 82
-1922 84
-1955 92
-2012 93
-2042 98
-2059 99
-2112 105
-2139 109
-2158 110
-2189 114
-2198 116
-2229 120
-2237 121
-2251 122
-2260 123
-2274 124
-2302 132
-2321 133
+1478 43
+1502 47
+1526 51
+1653 52
+1682 58
+1697 59
+1712 60
+1730 61
+1738 62
+1750 63
+1762 64
+1776 66
+1802 67
+1811 68
+1819 69
+1831 70
+1851 71
+1865 73
+1884 77
+1899 78
+1911 79
+1919 80
+1931 81
+1951 82
+1965 84
+1998 92
+2055 93
+2085 98
+2102 99
+2155 105
+2182 109
+2201 110
+2232 114
+2241 116
+2272 120
+2280 121
+2294 122
+2303 123
+2317 124
 2345 134
-2373 135
-2401 136
-2423 137
-2442 148
-2450 149
-2458 150
-2475 152
-2497 153
-2519 154
-2541 155
-2568 165
-2576 166
-2584 167
-2601 169
-2609 170
-2626 172
-2634 173
-2651 175
-2663 176
-2690 182
-2698 183
-2706 184
-2723 186
-2745 187
-2777 188
-2808 195
-2826 196
-2840 197
-2857 199
-2869 201
-2885 202
-2916 207
-2934 208
-2956 209
-2987 226
-3011 227
-3030 228
-3064 229
-3088 230
-3117 232
-3128 233
-3137 234
-3146 235
-3180 238
-3188 239
-3202 240
-3214 242
-3227 244
-3251 245
-3270 250
-3279 251
-3290 252
-3299 253
-3310 254
-3319 255
-3330 256
-3339 257
-3348 258
-3367 33
-3375 34
-3383 35
-3391 36
-3403 37
-3415 38
-3427 39
+2353 135
+2361 136
+2373 137
+2382 138
+2390 139
+2401 141
+2410 142
+2424 145
+2443 151
+2462 152
+2486 153
+2514 154
+2542 155
+2564 156
+2583 167
+2591 168
+2599 169
+2616 171
+2638 172
+2660 173
+2682 174
+2709 184
+2717 185
+2725 186
+2742 188
+2750 189
+2767 191
+2775 192
+2792 194
+2804 195
+2831 201
+2839 202
+2847 203
+2864 205
+2886 206
+2918 207
+2949 214
+2967 215
+2981 216
+2998 218
+3010 220
+3026 221
+3057 226
+3075 227
+3097 228
+3128 245
+3152 246
+3171 247
+3205 248
+3229 249
+3258 251
+3269 252
+3278 253
+3287 254
+3321 257
+3329 258
+3343 259
+3355 261
+3368 263
+3392 264
+3411 269
+3420 270
+3431 271
+3440 272
+3451 273
+3460 274
+3471 275
+3480 276
+3489 277
+3508 33
+3516 34
+3524 35
+3532 36
+3544 37
+3556 38
+3568 39
+vars
+func Object.toString 0
+this -20 8 0 ?
+func Object.compareTo 25
+this -28 8 0 ?
+other -20 8 0 ?
+func List.add 41
+this -28 8 0 ?
+item -20 8 0 ?
+func List.get 131
+this -24 8 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
+func List.length 173
+this -20 8 0 ?
+func List.remove 189
+this -24 8 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 299
+this -20 8 0 ?
+func OwnerList.removeAndFree 342
+this -24 8 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 480
+this -20 8 0 ?
+func StringBuilder.appendChar 501
+this -24 8 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 591
+this -28 8 0 ?
+s -20 8 0 string
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 662
+this -24 8 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 687
+this -20 8 0 ?
+func StringBuilder.length 711
+this -20 8 0 ?
+func StringBuilder.__init 727
+this -20 8 0 ?
+func Thread.run 768
+this -20 8 0 ?
+func Thread.start 778
+this -20 8 0 ?
+func Thread.join 797
+this -20 8 0 ?
+func Thread.__init 816
+this -24 8 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 844
+this -20 8 0 ?
+func Mutex.unlock 863
+this -20 8 0 ?
+func Mutex.__init 882
+this -20 8 0 ?
+func SyncList.add 900
+this -28 8 0 ?
+item -20 8 0 ?
+func SyncList.remove 946
+this -24 8 0 ?
+idx -16 4 0 ?
+func SyncList.get 992
+this -24 8 0 ?
+idx -16 4 0 ?
+func SyncList.set 1036
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
+func SyncList.length 1085
+this -20 8 0 ?
+func SyncList.pop 1126
+this -20 8 0 ?
+func SyncList.popBlocking 1241
+this -20 8 0 ?
+func SyncList.__init 1372
+this -20 8 0 ?
+func Adc.enabled 1475
+this -20 8 0 ?
+func Adc.disabled 1499
+this -20 8 0 ?
+func Adc.reset 1523
+this -20 8 0 ?
+cmd 0 8 0 ?
+func Adc.rreg 1679
+this -28 8 0 ?
+register -20 4 0 integer
+n -16 4 0 integer
+tx 8 8 0 ?
+rx 16 8 0 ?
+i 24 4 0 integer
+out 32 8 0 ?
+func Adc.wreg 1881
+this -36 8 0 ?
+register -28 4 0 integer
+data -24 8 0 ref
+n -16 4 0 integer
+cmd 0 8 0 ?
+i 8 4 0 integer
+func Adc.wreg16 1995
+this -28 8 0 ?
+register -20 4 0 integer
+value -16 4 0 integer
+buf 0 8 0 ?
+func Adc.rreg16 2082
+this -24 8 0 ?
+register -16 4 0 integer
+b 4 8 0 ?
+func Adc.leerId 2152
+this -20 8 0 ?
+func Adc.leerStatus 2179
+this -20 8 0 ?
+b 4 8 0 ?
+func Adc.isReady 2229
+this -20 8 0 ?
+s 4 4 0 integer
+func Adc.waitReady 2269
+this -20 8 0 ?
+ready 0 4 0 boolean
+func Adc.waitReadyMax 2342
+this -28 8 0 ?
+maxIter -20 4 0 integer
+stepMs -16 4 0 integer
+ready 4 4 0 boolean
+iter 8 4 0 integer
+func Adc.readData 2440
+this -20 8 0 ?
+b 4 8 0 ?
+r 12 4 0 integer
+func Adc.setMode 2580
+this -36 8 0 ?
+intRef -28 4 0 boolean
+delay -24 4 0 integer
+mode -20 4 0 integer
+clock -16 4 0 integer
+m 0 4 0 integer
+func Adc.setInterface 2706
+this -32 8 0 ?
+altSync -24 4 0 boolean
+ioStrength -20 4 0 boolean
+contRead -16 4 0 boolean
+i 0 4 0 integer
+func Adc.setChannel 2828
+this -40 8 0 ?
+channel -32 4 0 integer
+enab -28 4 0 boolean
+setupSel -24 4 0 integer
+ainp -20 4 0 integer
+ainn -16 4 0 integer
+c 0 4 0 integer
+func Adc.setChSetup 2946
+this -32 8 0 ?
+channel -24 4 0 integer
+bipolar -20 4 0 integer
+ref -16 4 0 integer
+sc 0 4 0 integer
+func Adc.setSPS 3054
+this -28 8 0 ?
+channel -20 4 0 integer
+sps -16 4 0 integer
+s 0 4 0 integer
+func Adc.leerPowerV 3125
+this -20 8 0 ?
+data 8 4 0 integer
+raw 12 4 0 float
+v 16 4 0 float
+func Adc.test0 3408
+this -20 8 0 ?
+id 8 4 0 integer
+func Adc.__init 3505
+this -32 8 0 ?
+bus -24 4 0 integer
+cs -20 4 0 integer
+syncP -16 4 0 integer
+func __cls_new_Adc 3587
+bus -24 4 0 integer
+cs -20 4 0 integer
+syncP -16 4 0 integer
+func __cls_init_Adc 3627
+this -32 8 0 ?
+bus -24 4 0 integer
+cs -20 4 0 integer
+syncP -16 4 0 integer
+func __strconcat 3676
+a -28 8 0 ?
+b -20 8 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?

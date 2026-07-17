@@ -1,0 +1,3 @@
+{
+  "Sensor": { "s16": 2, "writeReg": 3, "readRegs": 4, "readReg": 5, "begin": 6, "readCalibration": 7, "measure": 8, "compTemp": 9, "compPress": 10, "temperature": 11, "pressure": 12, "chipID": 13 }
+}

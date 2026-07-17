@@ -1,0 +1,3 @@
+{
+  "Adc": { "enabled": 2, "disabled": 3, "reset": 4, "rreg": 5, "wreg": 6, "wreg16": 7, "rreg16": 8, "leerId": 9, "leerStatus": 10, "isReady": 11, "waitReady": 12, "waitReadyMax": 13, "readData": 14, "setMode": 15, "setInterface": 16, "setChannel": 17, "setChSetup": 18, "setSPS": 19, "leerPowerV": 20, "test0": 21 }
+}

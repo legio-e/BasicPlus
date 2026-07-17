@@ -1,0 +1,3 @@
+{
+  "Expander": { "wreg": 2, "rreg": 3, "readIn": 4, "getOut": 5, "writeOut": 6, "getInvert": 7, "setInvert": 8, "getDir": 9, "setDir": 10 }
+}

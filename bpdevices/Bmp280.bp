@@ -26,27 +26,27 @@ module Bmp280
   import I2c
 
   public class Sensor
-    public var busId: integer
-    public var addr:  integer
-    public var chip:  integer
+    var busId: integer
+    var addr:  integer
+    var chip:  integer
 
     // calibración T/P (LE desde 0x88)
-    public var t1: integer
-    public var t2: integer
-    public var t3: integer
-    public var p1: integer
-    public var p2: integer
-    public var p3: integer
-    public var p4: integer
-    public var p5: integer
-    public var p6: integer
-    public var p7: integer
-    public var p8: integer
-    public var p9: integer
+    var t1: integer
+    var t2: integer
+    var t3: integer
+    var p1: integer
+    var p2: integer
+    var p3: integer
+    var p4: integer
+    var p5: integer
+    var p6: integer
+    var p7: integer
+    var p8: integer
+    var p9: integer
 
-    public var tFine:    double
-    public var tempC:    double
-    public var pressHpa: double
+    var tFine:    double
+    var tempC:    double
+    var pressHpa: double
 
     public function Sensor(busId: integer, addr: integer)
       this.busId := busId

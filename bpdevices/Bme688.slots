@@ -1,0 +1,3 @@
+{
+  "Sensor": { "s8": 2, "s16": 3, "writeReg": 4, "readRegs": 5, "readReg": 6, "begin": 7, "readCalibration": 8, "injectCalibration": 9, "configure": 10, "measure": 11, "computeFromRaw": 12, "compTemp": 13, "compPress": 14, "compHum": 15, "compGasHigh": 16, "calcResHeat": 17, "calcIaq": 18, "temperature": 19, "pressure": 20, "humidity": 21, "gas": 22, "airIndex": 23, "chipID": 24, "variantID": 25, "gasIsValid": 26, "heaterStable": 27, "setGasBaseline": 28 }
+}

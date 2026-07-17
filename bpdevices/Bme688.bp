@@ -40,50 +40,50 @@ module Bme688
 
   public class Sensor
     // ---- conexión ----
-    public var busId: integer
-    public var addr:  integer
-    public var chip: integer
-    public var variant: integer
+    var busId: integer
+    var addr:  integer
+    var chip: integer
+    var variant: integer
 
     // ---- coeficientes de calibración (uso interno) ----
-    public var par_t1: integer
-    public var par_t2: integer
-    public var par_t3: integer
-    public var par_p1: integer
-    public var par_p2: integer
-    public var par_p3: integer
-    public var par_p4: integer
-    public var par_p5: integer
-    public var par_p6: integer
-    public var par_p7: integer
-    public var par_p8: integer
-    public var par_p9: integer
-    public var par_p10: integer
-    public var par_h1: integer
-    public var par_h2: integer
-    public var par_h3: integer
-    public var par_h4: integer
-    public var par_h5: integer
-    public var par_h6: integer
-    public var par_h7: integer
-    public var par_gh1: integer
-    public var par_gh2: integer
-    public var par_gh3: integer
-    public var res_heat_val: integer
-    public var res_heat_range: integer
+    var par_t1: integer
+    var par_t2: integer
+    var par_t3: integer
+    var par_p1: integer
+    var par_p2: integer
+    var par_p3: integer
+    var par_p4: integer
+    var par_p5: integer
+    var par_p6: integer
+    var par_p7: integer
+    var par_p8: integer
+    var par_p9: integer
+    var par_p10: integer
+    var par_h1: integer
+    var par_h2: integer
+    var par_h3: integer
+    var par_h4: integer
+    var par_h5: integer
+    var par_h6: integer
+    var par_h7: integer
+    var par_gh1: integer
+    var par_gh2: integer
+    var par_gh3: integer
+    var res_heat_val: integer
+    var res_heat_range: integer
 
     // estado intermedio (t_fine) + resultados
-    public var tFine:    double
-    public var tempC:    double
-    public var pressHpa: double
-    public var humPct:   double
-    public var gasOhm:   double
-    public var iaq:      integer
-    public var gasValid: boolean
-    public var heatStab: boolean
+    var tFine:    double
+    var tempC:    double
+    var pressHpa: double
+    var humPct:   double
+    var gasOhm:   double
+    var iaq:      integer
+    var gasValid: boolean
+    var heatStab: boolean
 
     // baseline de gas (Ω en "aire limpio") para el índice IAQ
-    public var gasBaseline: double
+    var gasBaseline: double
 
     public function Sensor(busId: integer, addr: integer)
       this.busId := busId

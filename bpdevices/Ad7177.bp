@@ -25,9 +25,9 @@ module Ad7177
   import Gpio
 
   public class Adc
-    public var bus:     integer
-    public var csPin:   integer
-    public var syncPin: integer
+    var bus:     integer
+    var csPin:   integer
+    var syncPin: integer
 
     public function Adc(bus: integer, cs: integer, syncP: integer)
       this.bus     := bus

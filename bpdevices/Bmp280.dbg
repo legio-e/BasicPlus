@@ -2,217 +2,217 @@ dbg 3
 module Bmp280
 source C:\lenguajes\pm\bpdevices\Bmp280.bp
 lines
-1452 58
-1466 59
-1488 61
-1507 66
-1546 67
-1580 71
-1607 72
-1631 73
-1663 77
-1692 78
-1712 79
-1737 86
-1756 87
-1767 88
-1783 89
-1825 90
-1843 92
-1852 93
-1871 94
-1890 95
-1901 96
-1922 100
-1933 101
-1955 102
-1985 103
-2021 104
-2057 105
-2087 106
-2123 107
-2159 108
-2195 109
-2231 110
-2267 111
-2303 112
-2339 113
-2385 118
-2396 119
-2418 120
-2468 121
-2518 122
-2532 123
-2566 128
-2607 129
-2641 130
-2658 131
-2670 132
-2701 136
-2729 137
-2756 138
-2783 139
-2816 140
-2864 141
-2897 142
-2915 143
-2937 145
-2954 146
-2988 147
-3015 148
-3038 149
-3069 150
-3088 155
-3109 158
-3130 161
-3151 52
-3159 53
+1472 58
+1486 59
+1508 61
+1527 66
+1566 67
+1600 71
+1627 72
+1651 73
+1683 77
+1712 78
+1732 79
+1757 86
+1776 87
+1787 88
+1803 89
+1845 90
+1863 92
+1872 93
+1891 94
+1910 95
+1921 96
+1942 100
+1953 101
+1975 102
+2005 103
+2041 104
+2077 105
+2107 106
+2143 107
+2179 108
+2215 109
+2251 110
+2287 111
+2323 112
+2359 113
+2405 118
+2416 119
+2438 120
+2488 121
+2538 122
+2552 123
+2586 128
+2627 129
+2661 130
+2678 131
+2690 132
+2721 136
+2749 137
+2776 138
+2803 139
+2836 140
+2884 141
+2917 142
+2935 143
+2957 145
+2974 146
+3008 147
+3035 148
+3058 149
+3089 150
+3108 155
+3129 158
+3150 161
+3171 52
+3179 53
 vars
 func Object.toString 0
-this -16 4 0 ?
+this -20 8 0 ?
 func Object.compareTo 25
-this -20 4 0 ?
-other -16 4 0 ?
+this -28 8 0 ?
+other -20 8 0 ?
 func List.add 41
-this -20 4 0 ?
-item -16 4 0 ?
+this -28 8 0 ?
+item -20 8 0 ?
 func List.get 131
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 func List.set 151
-this -24 4 0 ?
-idx -20 4 0 ?
-item -16 4 0 ?
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
 func List.length 173
-this -16 4 0 ?
+this -20 8 0 ?
 func List.remove 189
-this -20 4 0 ?
+this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 295
-this -16 4 0 ?
-func OwnerList.removeAndFree 338
-this -20 4 0 ?
+func List.__init 299
+this -20 8 0 ?
+func OwnerList.removeAndFree 342
+this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 468
-this -16 4 0 ?
-func StringBuilder.appendChar 489
-this -20 4 0 ?
+func OwnerList.__init 480
+this -20 8 0 ?
+func StringBuilder.appendChar 501
+this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 579
-this -20 4 0 ?
-s -16 4 0 ?
+func StringBuilder.appendStr 591
+this -28 8 0 ?
+s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 650
-this -20 4 0 ?
+func StringBuilder.appendInt 662
+this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 675
-this -16 4 0 ?
-func StringBuilder.length 699
-this -16 4 0 ?
-func StringBuilder.__init 715
-this -16 4 0 ?
-func Thread.run 756
-this -16 4 0 ?
-func Thread.start 766
-this -16 4 0 ?
-func Thread.join 785
-this -16 4 0 ?
-func Thread.__init 804
-this -20 4 0 ?
+func StringBuilder.toString 687
+this -20 8 0 ?
+func StringBuilder.length 711
+this -20 8 0 ?
+func StringBuilder.__init 727
+this -20 8 0 ?
+func Thread.run 768
+this -20 8 0 ?
+func Thread.start 778
+this -20 8 0 ?
+func Thread.join 797
+this -20 8 0 ?
+func Thread.__init 816
+this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 832
-this -16 4 0 ?
-func Mutex.unlock 851
-this -16 4 0 ?
-func Mutex.__init 870
-this -16 4 0 ?
-func SyncList.add 888
-this -20 4 0 ?
-item -16 4 0 ?
-func SyncList.remove 934
-this -20 4 0 ?
+func Mutex.lock 844
+this -20 8 0 ?
+func Mutex.unlock 863
+this -20 8 0 ?
+func Mutex.__init 882
+this -20 8 0 ?
+func SyncList.add 900
+this -28 8 0 ?
+item -20 8 0 ?
+func SyncList.remove 946
+this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 980
-this -20 4 0 ?
+func SyncList.get 992
+this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1024
-this -24 4 0 ?
-idx -20 4 0 ?
-item -16 4 0 ?
-func SyncList.length 1073
-this -16 4 0 ?
-func SyncList.pop 1114
-this -16 4 0 ?
-func SyncList.popBlocking 1225
-this -16 4 0 ?
-func SyncList.__init 1352
-this -16 4 0 ?
-func Sensor.s16 1449
-this -20 4 0 ?
+func SyncList.set 1036
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
+func SyncList.length 1085
+this -20 8 0 ?
+func SyncList.pop 1126
+this -20 8 0 ?
+func SyncList.popBlocking 1241
+this -20 8 0 ?
+func SyncList.__init 1372
+this -20 8 0 ?
+func Sensor.s16 1469
+this -24 8 0 ?
 v -16 4 0 integer
-func Sensor.writeReg 1504
-this -24 4 0 ?
+func Sensor.writeReg 1524
+this -28 8 0 ?
 reg -20 4 0 integer
 val -16 4 0 integer
-b 0 4 0 ?
-func Sensor.readRegs 1577
-this -28 4 0 ?
-reg -24 4 0 integer
-buf -20 4 0 ref
+b 0 8 0 ?
+func Sensor.readRegs 1597
+this -36 8 0 ?
+reg -28 4 0 integer
+buf -24 8 0 ref
 n -16 4 0 integer
-p 0 4 0 ?
-func Sensor.readReg 1660
-this -20 4 0 ?
+p 0 8 0 ?
+func Sensor.readReg 1680
+this -24 8 0 ?
 reg -16 4 0 integer
-buf 4 4 0 ?
-func Sensor.begin 1734
-this -16 4 0 ?
-func Sensor.readCalibration 1919
-this -16 4 0 ?
-c 0 4 0 ?
-func Sensor.measure 2382
-this -16 4 0 ?
-d 0 4 0 ?
-adcP 8 4 0 integer
-adcT 12 4 0 integer
-func Sensor.compTemp 2563
-this -20 4 0 ?
+buf 4 8 0 ?
+func Sensor.begin 1754
+this -20 8 0 ?
+func Sensor.readCalibration 1939
+this -20 8 0 ?
+c 0 8 0 ?
+func Sensor.measure 2402
+this -20 8 0 ?
+d 0 8 0 ?
+adcP 12 4 0 integer
+adcT 16 4 0 integer
+func Sensor.compTemp 2583
+this -24 8 0 ?
 adc -16 4 0 integer
 var1 8 8 0 double
 dd 16 8 0 double
 var2 24 8 0 double
-func Sensor.compPress 2698
-this -20 4 0 ?
+func Sensor.compPress 2718
+this -24 8 0 ?
 adc -16 4 0 integer
 var1 8 8 0 double
 var2 16 8 0 double
 p 24 8 0 double
 pv1 32 8 0 double
 pv2 40 8 0 double
-func Sensor.temperature 3085
-this -16 4 0 ?
-func Sensor.pressure 3106
-this -16 4 0 ?
-func Sensor.chipID 3127
-this -16 4 0 ?
-func Sensor.__init 3148
-this -24 4 0 ?
+func Sensor.temperature 3105
+this -20 8 0 ?
+func Sensor.pressure 3126
+this -20 8 0 ?
+func Sensor.chipID 3147
+this -20 8 0 ?
+func Sensor.__init 3168
+this -28 8 0 ?
 busId -20 4 0 integer
 addr -16 4 0 integer
-func __cls_new_Sensor 3174
+func __cls_new_Sensor 3194
 busId -20 4 0 integer
 addr -16 4 0 integer
-func __cls_init_Sensor 3211
-this -24 4 0 ?
+func __cls_init_Sensor 3231
+this -28 8 0 ?
 busId -20 4 0 integer
 addr -16 4 0 integer
-func __strconcat 3257
-a -20 4 0 ?
-b -16 4 0 ?
+func __strconcat 3277
+a -28 8 0 ?
+b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
-out 8 4 0 ?
-i 12 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?

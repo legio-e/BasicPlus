@@ -29,8 +29,8 @@ module Pca9554
   import I2c
 
   public class Expander
-    public var bus:  integer
-    public var addr: integer
+    var bus:  integer
+    var addr: integer
 
     public function Expander(bus: integer, addr: integer)
       this.bus  := bus

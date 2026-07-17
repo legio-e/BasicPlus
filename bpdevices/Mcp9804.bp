@@ -23,8 +23,8 @@ module Mcp9804
   import I2c
 
   public class Sensor
-    public var bus:  integer
-    public var addr: integer
+    var bus:  integer
+    var addr: integer
 
     public function Sensor(bus: integer, addr: integer)
       this.bus  := bus

@@ -1,19 +1,127 @@
-dbg 2
+dbg 3
 module Mcp9804
 source C:\lenguajes\pm\bpdevices\Mcp9804.bp
 lines
-1429 38
-1458 39
-1482 41
-1525 42
-1549 43
-1561 44
-1573 46
-1585 47
-1593 48
-1613 51
-1625 52
-1660 55
-1684 57
-1703 30
-1711 31
+1472 38
+1501 39
+1525 41
+1568 42
+1592 43
+1604 44
+1616 46
+1628 47
+1636 48
+1656 51
+1668 52
+1703 55
+1727 57
+1746 30
+1754 31
+vars
+func Object.toString 0
+this -20 8 0 ?
+func Object.compareTo 25
+this -28 8 0 ?
+other -20 8 0 ?
+func List.add 41
+this -28 8 0 ?
+item -20 8 0 ?
+func List.get 131
+this -24 8 0 ?
+idx -16 4 0 ?
+func List.set 151
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
+func List.length 173
+this -20 8 0 ?
+func List.remove 189
+this -24 8 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func List.__init 299
+this -20 8 0 ?
+func OwnerList.removeAndFree 342
+this -24 8 0 ?
+idx -16 4 0 ?
+i 0 4 0 ?
+func OwnerList.__init 480
+this -20 8 0 ?
+func StringBuilder.appendChar 501
+this -24 8 0 ?
+c -16 4 0 ?
+func StringBuilder.appendStr 591
+this -28 8 0 ?
+s -20 8 0 string
+i 0 4 0 ?
+n 4 4 0 ?
+func StringBuilder.appendInt 662
+this -24 8 0 ?
+n -16 4 0 ?
+func StringBuilder.toString 687
+this -20 8 0 ?
+func StringBuilder.length 711
+this -20 8 0 ?
+func StringBuilder.__init 727
+this -20 8 0 ?
+func Thread.run 768
+this -20 8 0 ?
+func Thread.start 778
+this -20 8 0 ?
+func Thread.join 797
+this -20 8 0 ?
+func Thread.__init 816
+this -24 8 0 ?
+stackSize -16 4 0 ?
+func Mutex.lock 844
+this -20 8 0 ?
+func Mutex.unlock 863
+this -20 8 0 ?
+func Mutex.__init 882
+this -20 8 0 ?
+func SyncList.add 900
+this -28 8 0 ?
+item -20 8 0 ?
+func SyncList.remove 946
+this -24 8 0 ?
+idx -16 4 0 ?
+func SyncList.get 992
+this -24 8 0 ?
+idx -16 4 0 ?
+func SyncList.set 1036
+this -32 8 0 ?
+idx -24 4 0 ?
+item -20 8 0 ?
+func SyncList.length 1085
+this -20 8 0 ?
+func SyncList.pop 1126
+this -20 8 0 ?
+func SyncList.popBlocking 1241
+this -20 8 0 ?
+func SyncList.__init 1372
+this -20 8 0 ?
+func Sensor.readTemp 1469
+this -20 8 0 ?
+ptr 4 8 0 ?
+data 24 8 0 ?
+msb 40 4 0 integer
+lsb 44 4 0 integer
+temp 48 4 0 float
+func Sensor.__init 1743
+this -28 8 0 ?
+bus -20 4 0 integer
+addr -16 4 0 integer
+func __cls_new_Sensor 1769
+bus -20 4 0 integer
+addr -16 4 0 integer
+func __cls_init_Sensor 1806
+this -28 8 0 ?
+bus -20 4 0 integer
+addr -16 4 0 integer
+func __strconcat 1852
+a -28 8 0 ?
+b -20 8 0 ?
+la 0 4 0 ?
+lb 4 4 0 ?
+out 8 8 0 ?
+i 16 4 0 ?
