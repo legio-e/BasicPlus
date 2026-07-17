@@ -58,6 +58,14 @@ public final class Main {
         final Set<Path> compilingFull      = new LinkedHashSet<>();
         final Set<Path> compilingInterface = new LinkedHashSet<>();
 
+        /** H6.a — caché de interfaces EN MEMORIA, clave = nombre canónico del
+         *  artefacto ("lib.Module" o "Module"). Es el almacén del build
+         *  recursivo: se rellena al construir cada interfaz (writeInterfaceFile)
+         *  y se lee al cargar imports (readInterfaceCached), en vez de ir a
+         *  disco. Sustituye al .bpi como vía de paso de interfaces DENTRO de un
+         *  build. Se descarta con el Ctx (uso acotado al cierre transitivo). */
+        final Map<String, ModuleInterface> interfaceCache = new java.util.LinkedHashMap<>();
+
         /** Mapa de "<library>.<Module>" → ruta del .bp. Construido lazy. */
         Map<String, Path> bpSources;
         Path rootSrcDir;
@@ -747,6 +755,14 @@ public final class Main {
         ModuleInterface iface = ModuleInterface.extractFrom(
                 lib, module.name, module.isInterface, module.implementsName,
                 info.module, skipped);
+        // H6.a — cachea la interfaz EN MEMORIA (clave = nombre canónico). La
+        // round-tripeamos (toBytes→fromBytes) para que el objeto cacheado sea
+        // BYTE-idéntico a lo que un lector obtendría de disco (.bpi/.mod): así el
+        // caché se comporta igual que leer del fichero, sin depender de que la
+        // serialización sea 100% sin pérdidas. Esto es lo que permitirá dejar de
+        // escribir el .bpi (los consumidores lo encuentran en el caché).
+        String cacheKey = lib.isEmpty() ? module.name : lib + "." + module.name;
+        ctx.interfaceCache.put(cacheKey, ModuleInterface.fromBytes(iface.toBytes(), cacheKey));
         Path bpiPath = ctx.outDir.resolve(bpiName);
         iface.writeTo(bpiPath);
         ctx.writtenBpi.add(bpiPath.toAbsolutePath());   // H6.a-lite: candidato a borrar al cerrar el build
@@ -982,7 +998,7 @@ public final class Main {
             if (Files.exists(sib)) p = sib;
             else return null;
         }
-        return ModuleInterface.readFrom(p);
+        return readInterfaceCached(p, ctx);   // H6.a: caché en memoria
     }
 
     /**
@@ -1111,7 +1127,7 @@ public final class Main {
             }
         }
         try {
-            ModuleInterface iface = ModuleInterface.readFrom(candidate);
+            ModuleInterface iface = readInterfaceCached(candidate, ctx);   // H6.a: caché en memoria
             indent(depth); System.out.printf("-- cargado contrato '%s' desde %s (funcs=%d, consts=%d, enums=%d, interface=%s) --%n",
                     qualifiedName, candidate.getFileName(),
                     iface.functions.size(), iface.consts.size(), iface.enums.size(),
@@ -1121,6 +1137,66 @@ public final class Main {
             System.err.println("error leyendo " + candidate + ": " + ex.getMessage());
             return null;
         }
+    }
+
+    // ============================================================
+    // H6.a — caché de interfaces en memoria + lectura .bpi/.mod
+    // ============================================================
+
+    /** Nombre canónico del artefacto (clave del caché): basename sin extensión
+     *  .bpi/.mod. "lib.Str.bpi" → "lib.Str", "Str.mod" → "Str". Así la .bpi y el
+     *  .mod del mismo módulo comparten clave. */
+    private static String keyForArtifact(Path p) {
+        String n = p.getFileName().toString();
+        if (n.endsWith(".bpi") || n.endsWith(".mod")) return n.substring(0, n.length() - 4);
+        return n;
+    }
+
+    /** H6.a — extrae la sección `interface` (texto del antiguo .bpi) de un .mod
+     *  v6. Devuelve null si el .mod es v5 (sin sección) o su interfaz está vacía. */
+    private static byte[] extractInterfaceSection(Path modPath) throws IOException {
+        try (java.io.DataInputStream in = new java.io.DataInputStream(
+                new java.io.BufferedInputStream(Files.newInputStream(modPath)))) {
+            int magic = in.readInt();
+            if (magic != edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V6) return null;
+            in.readInt();                 // dataSize
+            in.readInt();                 // mainOffset
+            int importsSize = in.readInt();
+            int exportsSize = in.readInt();
+            in.readInt();                 // codeSize
+            int librarySize = in.readInt();
+            int interfaceSize = in.readInt();
+            if (interfaceSize <= 0) return null;
+            // Orden de secciones: library, imports, exports, [interface], data,
+            // code. La interfaz va tras exports → saltamos library+imports+exports.
+            byte[] skip = new byte[librarySize + importsSize + exportsSize];
+            in.readFully(skip);
+            byte[] iface = new byte[interfaceSize];
+            in.readFully(iface);
+            return iface;
+        }
+    }
+
+    /** H6.a — lee una interfaz usando el caché EN MEMORIA como fuente primaria.
+     *  Orden: (1) caché por nombre canónico; (2) si `path` es un .mod v6, su
+     *  sección `interface` embebida (fromBytes); (3) fallback .bpi (readFrom).
+     *  Cachea el resultado. Devuelve null si es un .mod sin interfaz (el caller
+     *  cae al .bpi). Sustituye a {@code ModuleInterface.readFrom} en el resolver
+     *  para no ir a disco cuando la interfaz ya se construyó en este build. */
+    static ModuleInterface readInterfaceCached(Path path, Ctx ctx) throws IOException {
+        String key = keyForArtifact(path);
+        ModuleInterface cached = ctx.interfaceCache.get(key);
+        if (cached != null) return cached;
+        ModuleInterface iface;
+        if (path.getFileName().toString().endsWith(".mod")) {
+            byte[] bytes = extractInterfaceSection(path);
+            if (bytes == null) return null;   // .mod v5 sin interfaz
+            iface = ModuleInterface.fromBytes(bytes, path.toString());
+        } else {
+            iface = ModuleInterface.readFrom(path);
+        }
+        ctx.interfaceCache.put(key, iface);
+        return iface;
     }
 
     // Package-private (#212): AotMain lo reutiliza para resolver imports antes de
@@ -1153,7 +1229,7 @@ public final class Main {
             }
 
             try {
-                ModuleInterface ifaceBpi = ModuleInterface.readFrom(bpi);
+                ModuleInterface ifaceBpi = readInterfaceCached(bpi, ctx);   // H6.a: caché en memoria
                 // Si la interfaz extiende otra, garantizamos la cadena y la
                 // aplanamos para que el namespace exponga también los símbolos
                 // heredados.
@@ -1190,7 +1266,7 @@ public final class Main {
                         ctx.totalErrors++;   // N6: fatal
                         continue;
                     }
-                    ModuleInterface implBpi = ModuleInterface.readFrom(implBpiPath);
+                    ModuleInterface implBpi = readInterfaceCached(implBpiPath, ctx);   // H6.a: caché en memoria
                     if (implBpi.isInterface) {
                         indent(depth); System.err.printf(
                             "-- error: '%s' es una interfaz, no puede ser impl bindeado --%n",
@@ -1756,7 +1832,7 @@ public final class Main {
         Path bpiPath = resolveImplBpi(boundImpl, fromPath, importerModule, importerDir, ctx);
         String modName;
         if (bpiPath != null) {
-            ModuleInterface bpi = ModuleInterface.readFrom(bpiPath);
+            ModuleInterface bpi = readInterfaceCached(bpiPath, ctx);   // H6.a: caché en memoria
             modName = bpi.library.isEmpty()
                     ? bpi.moduleName + ".mod"
                     : bpi.library + "." + bpi.moduleName + ".mod";
