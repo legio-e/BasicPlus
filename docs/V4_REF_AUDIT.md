@@ -475,6 +475,38 @@ Son conceptos distintos y correctos: `i*8` indexa ELEMENTOS de ref-array (8B c/u
 indexa SLOTS de 4B de objeto (un campo-ref ocupa 2 slots). El `(int)readI64` del MARCADO es
 inocuo (`refDeref` ignora la gen; solo necesita idx→addr). Simétrico en ambas VMs. _(barrido D)_
 
+### 🆕 ✅ #20 ARREGLADO (`541db61`, 18-jul) — upcalls del GUI: objptr sin raíz GC + frames a 4B (AMBAS VMs)
+Barrido inline/core post-paso-1 (petición de Eduardo, 18-jul). **Dos mitades del mismo agujero:**
+- **(a) Los objptr del GUI no eran raíces del GC.** El objeto BP ligado a un widget
+  (`bindClick`) o retenido por la cola de eventos vive FUERA de la memoria escaneada
+  (globals C `g_nodes[]`/`g_ev_obj[]` en la VM-C; objetos Java `GuiBackend` en miVM) →
+  si el widget era su único holder, el GC lo barría EN VIVO → clic = UAF (segfault en
+  VM-C, `BpThreadFault` en miVM). Fix: visitor de raíces (`bpvm_gui_visit_roots` /
+  `GuiBackend.visitRoots`) llamado desde el mark. **Además hace SÓLIDO el regen del
+  paso 1**: el objeto retenido no muere → su slot no se recicla → la gen viva es la suya.
+- **(b) miVM: los 3 constructores de frame de upcall** (`invokeGuiDispatch`,
+  `invokeHandlerByName`, `invokeHandlerBySlot`) escribían la ref del arg a **4B** y el
+  callee compilado la lee a 8B → la palabra ALTA (gen) era basura rancia de pila →
+  `requireAlive` gritaba (o callaba) **POR LOTERÍA**. Diag que lo desnudó:
+  `ref=0x4000000240000003` = dos palabras handle ADYACENTES. Fix: `regenRef(word)`
+  (espejo de `bpref_regen`) + frames de 20/28 bytes. Es el gemelo exacto en miVM del
+  `ref_mask` del `bridge_run_bp_frame` de la VM-C (79ab1b9). Bonus: `refDeref` que
+  faltaba en `invokeHandlerBySlot` (leía el class_ptr sin deref).
+Oráculos versionados: `samples/GuiGcRoot.bp` (raíz widget; A/B sin fix = SEGFAULT exit
+139) y `samples/GuiGcRootQ.bp` (raíz cola; headless, byte-idéntico dual-VM). ⚠️ NO están
+en el CORPUS de compat.sh: bajo LVGL `Gui.run()` abre ventana y bloquea (necesitarían la
+build modelo-only). Diag permanente env-gated `BPVM_DEBUG_UAF` en `requireAlive`.
+
+### ⚪ #21 latente (AMBAS VMs) — thisRef de THREAD_START a 4B (el hermano que QUEDA del patrón #20b)
+El frame del `run()` de un thread escribe thisRef a 4B: VM-C `threading.c:182`
+(`bpvm_write_i32_be(vm->memory + sb, thread_ref)`) y su gemelo miVM (THREAD_START). Mismo
+patrón que #20b… pero aquí es ESTABLE-latente, no lotería: la pila del thread nuevo está
+RECIÉN creada (calloc/zero) → la palabra alta del read de 8B es 0 determinista → con gen
+viva 0 cuela; el objeto Thread además está anclado por el stack del creador. Rompería si
+el slot del Thread se reciclara (gen>0) — hoy no hay camino que lo haga en vida del
+thread. Ensanchar por higiene EN LAS DOS VMs A LA VEZ (misma tanda), con ThreadSlots/
+ThrUse2 como red. _(barrido inline/core 18-jul; ThreadSlots/ThrUse2 verdes ambas VMs)_
+
 ---
 
 ## 6. LÍNEA BASE DE LA BATERÍA *(medida 15-jul — para no volver a preguntarse "¿esto ya estaba rojo?")*
