@@ -186,16 +186,14 @@ Diseño: `AOT_CROSS_MODULE.md` (cross-module) · `AOT_HYBRID_REFLECTION.md` (hí
 - **H4.a — Native RISC-V ⭐ (la novedad).** Compilar `native` a **RISC-V** (ESP32-P4, la placa gráfica
   insignia): port del emisor + del loader `.mdn` a RV32 (hoy el `.mdn` es Thumb-2/ARM; en ESP32
   Xtensa/RISC-V `native` cae a interpretado). Incluye ABI + relocations de RISC-V. (Xtensa del S3, menor prioridad.)
-- **H4.b — AOT handle-aware (BUG/regresión). 🎯 PRIORIZADO 18-jul = tarea #302.** El puente `native→BP`
-  (`aot_helpers.c` / `aot_call_bp` / `call_method` / `bridge_run_bp_frame`) pasa **direcciones planas de
-  4 bytes** mientras la VM ya usa **handles de 8 bytes** → `make test-throwmsg` (SIGSEGV) y
-  `make test-throwuser` (use-after-free en `call_bp`) **ROJOS** desde la migración de handles (H1); y el
-  clic de Forms en la VM-C (#301) es la misma raíz. **Diseño completo del arreglo en
-  [`AOT_HANDLE_MODEL.md`](AOT_HANDLE_MODEL.md)** (charla 18-jul): un solo ABI con handles de 8B en toda
-  frontera, dirección plana solo interna/transitoria; secuenciación **inline primero, AOT después**
-  (cimientos hacia arriba, evita conflicto AOT-inline); capa de raíces-de-GC (shadow stack) diferida al
-  native compilado en placa. Política: los bugs nuevos de esta familia se APARCAN aquí, no se parchean.
-  *(Era el "Diferido" de la sección H1.)*
+- **H4.b — AOT handle-aware. ✅✅ CERRADO 18-jul (#302).** Paso 1 inline (`79ab1b9`) + barrido inline/core
+  (`541db61`, cerró #20 = raíces GC del GUI + frames de upcall a 8B en las 2 VMs) + paso 2 AOT
+  (`bf42bed`: `aot_helpers` v1→v2 handle-aware — deref dentro, read_ref/write_ref, ref_mask+ret_is_ref;
+  emisor con thunk 8B por ref; `MDN_ABI_VERSION`→2). **LOS 9 ROJOS VERDES** (throwmsg/throwuser/method/
+  callbp/bytenat/xmodule/xmodnat/xmethodnat/compressnat) + paridad 17/1/0 + GUI intacto. Diseño en
+  [`AOT_HANDLE_MODEL.md`](AOT_HANDLE_MODEL.md). **Queda solo el paso 3** (raíces GC del native COMPILADO /
+  shadow stack), diferido a la fase de AOT-en-placa (en host no muerde: native síncrono sin GC asíncrono,
+  F2 no compacta). Subsume **H4.g** (auditoría refs 4→8B del AOT). *(Era el "Diferido" de la sección H1.)*
 - **H4.c — AOT cross-module #169.** Sin puente del intérprete (hoy vía `call_bp`+warning). Se apoya en
   el MISMO `slotOf` que **B-174b** (slots de vtable) → van juntos. Diseño: `AOT_CROSS_MODULE.md`.
 - **H4.d — AOT casts + `^`.** `byte()/int()/float()/long()/double()` y el operador `^` en `AotCEmitter`
