@@ -347,8 +347,23 @@ feedback ante fallos, en placas nuevas y en cambios profundos).
 4. `bpvm_bmgr` — board manager: núcleo del protocolo de gestión de placa (ENV_*/
    PART_*), compone env+part, transaccional. `test-bmgr` 30/30. (`a104961`)
 
-**Pendiente (fase de placa/IDE):** cintura de flash por-micro (leer/borrar/escribir
+**IDE SIN PLACA — end-to-end verde (Eduardo escogió "mini-server C que reusa bmgr"):**
+5. `boardsim` (`tools/boardsim.c`, `a8a35b2`) — servidor TCP wire v1 que despacha
+   STATE/ENV_*/PART_* al `bpvm_bmgr` real; env respaldado por un fichero A/B = la
+   "flash" (lo único simulado). `make boardsim` + `boardsim-smoke` (python, 21/21).
+6. Cliente Java en `BpvmClient` (`82f4320`) — `boardState/envList/envGet/envSet/
+   envDel/partLayout/partDefaults/partApply` + modelos. `BoardMgrSmoke` 8/8 vs el sim.
+7. `BoardMgrPanel` + `FrmBoard` (`cfea355`) + menú Run→«Gestión de placa…» (`4cdd083`).
+   Comparte la conexión de la ventana principal (`backend.debugClient()`).
+
+**Cómo probarlo sin placa:** `make boardsim && build/bpvm-boardsim.exe 5099 board.flash`
+→ en el IDE, conectar el explorador de dispositivo a `127.0.0.1:5099` (TCP) → Run →
+«Gestión de placa…» → tablas de entorno/particiones en vivo (placa virgen: entorno
+0 vars, particiones "missing" → Proponer defaults → editar → Aplicar).
+
+**Pendiente (fase de placa):** cintura de flash por-micro (leer/borrar/escribir
 el sector del env + volcar `wrote_slot`; offset fijo por familia); transporte
-kernel-comm (dispatcher de dos tablas); adaptador JSON del firmware (repl_v1 →
-`bpvm_bmgr_*`); mount callbacks reales de las capas; wiring de FrmBoard en el IDE.
-Opcional host: descriptor de placa tipado `bpvm_board` (fachada `Board.*` sobre env).
+kernel-comm (dispatcher de dos tablas en el firmware); adaptador JSON del firmware
+(repl_v1 → `bpvm_bmgr_*`, MISMO shape que el sim); mount callbacks reales de las
+capas; verificación interactiva de Eduardo; refinar FrmBoard a la rejilla 3×2 +
+asistente de 1ª conexión. Opcional host: descriptor tipado `bpvm_board`.
