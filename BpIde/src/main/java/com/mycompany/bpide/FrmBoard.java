@@ -46,6 +46,9 @@ public class FrmBoard extends javax.swing.JFrame {
     private void installBoardPanel() {
         boardPanel = new BoardMgrPanel();
         setTitle("Gestión de placa");
+        // initComponents() (NetBeans) pone EXIT_ON_CLOSE: cerrar esta ventana MATARÍA
+        // el IDE entero. Como es una ventana secundaria, solo se cierra ella.
+        setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
         jSplitPane1.setLeftComponent(boardPanel);
         jSplitPane1.setDividerLocation(560);
     }

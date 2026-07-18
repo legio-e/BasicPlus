@@ -518,6 +518,12 @@ public class FrmMain extends javax.swing.JFrame
         miRunWin.addActionListener(e -> doRunWindow());
         jMenu3.add(miRunWin);
 
+        // H9 — abre FrmBoard (entorno + particiones) sobre la conexión ya abierta.
+        jMenu3.addSeparator();
+        JMenuItem miBoard = new JMenuItem("Gestión de placa…");
+        miBoard.addActionListener(e -> openBoardManager());
+        jMenu3.add(miBoard);
+
         jMenu3.addSeparator();
         JMenuItem miClear = new JMenuItem("Clear console");
         miClear.addActionListener(e -> {
@@ -2952,6 +2958,26 @@ public class FrmMain extends javax.swing.JFrame
             consolaArea.append(s);
             consolaArea.setCaretPosition(consolaArea.getDocument().getLength());
         });
+    }
+
+    /**
+     * H9 — abre la ventana de gestión de placa (FrmBoard: entorno + particiones +
+     * STATE) reutilizando la conexión YA abierta del explorador (serie o TCP, incl.
+     * el boardsim de host). Si no hay conexión, avisa. El log de FrmBoard va a la
+     * consola del IDE.
+     */
+    private void openBoardManager() {
+        BpvmClient client = picoExplorer != null ? picoExplorer.debugClient() : null;
+        if (client == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Conéctate primero a la placa (o al boardsim) desde el explorador de dispositivo.",
+                    "Gestión de placa", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        FrmBoard fb = new FrmBoard(client, s -> appendConsola(s + "\n"));
+        fb.setSize(760, 520);
+        fb.setLocationRelativeTo(this);
+        fb.setVisible(true);
     }
 
     /**
