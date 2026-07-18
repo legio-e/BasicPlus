@@ -675,7 +675,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint32_t objptr; int kind;
             while ((objptr = bpvm_gui_next_event(&kind)) != 0) {
                 uint32_t d = (kind == 1) ? disp_change : disp_click;
-                if (d) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, d, &a, 1); }
+                if (d) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, d, &a, 1, 1u); /* #302: arg0 es ref */ }
             }
             /* P-run-stop (#257) — KILL durante Gui.run(): el scheduler no corre
              * quanta mientras este builtin bombea, así que poleamos el wire aquí
@@ -693,7 +693,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t objptr; int kind;
         while ((objptr = bpvm_gui_next_event(&kind)) != 0) {
             uint32_t d = (kind == 1) ? disp_change : disp_click;
-            if (d) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, d, &a, 1); }
+            if (d) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, d, &a, 1, 1u); /* #302: arg0 es ref */ }
         }
 #endif
         push_i32(vm, tc, 0);
@@ -724,7 +724,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return BPVM_OK;
         }
         int32_t a = (int32_t) sender;
-        bpvm_call_bp_from_builtin(vm, tc, target, &a, 1);
+        bpvm_call_bp_from_builtin(vm, tc, target, &a, 1, 1u); /* #302: sender es ref */
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -758,7 +758,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         uint32_t target_abs = target_cs + (uint32_t) method_off;
         int32_t a2[2]; a2[0] = (int32_t) win; a2[1] = (int32_t) sender;
-        bpvm_call_bp_from_builtin(vm, tc, target_abs, a2, 2);
+        bpvm_call_bp_from_builtin(vm, tc, target_abs, a2, 2, 3u); /* #302: win+sender son refs */
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }

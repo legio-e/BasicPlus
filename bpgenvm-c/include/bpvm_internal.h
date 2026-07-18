@@ -733,8 +733,11 @@ int32_t bpvm_aot_call_bp_i32(struct bpvm* vm, uint32_t target_abs,
 /* H4 — puente builtin→función BP (upcall de eventos GUI). Como
  * bpvm_aot_call_bp_i32 pero desde un builtin (registros vivos en tc->sp/bp).
  * Ver interp.c. */
+/* #302 paso 1 — ref_mask: bit i = arg i es una REFERENCIA (handle) → se empuja a
+ * 8 bytes con la gen viva (bpref_regen), no a 4. Los args no-ref van a 4 bytes. */
 int32_t bpvm_call_bp_from_builtin(bpvm_t* vm, bpvm_thread_t* tc,
-                                  uint32_t target_abs, const int32_t* args, int nargs);
+                                  uint32_t target_abs, const int32_t* args, int nargs,
+                                  uint32_t ref_mask);
 
 /* P-aot-methods (#174, mitad-VM). Despacho VIRTUAL de un método público desde
  * native: resuelve la dirección vía la vtable de la clase REAL de `this_ref`

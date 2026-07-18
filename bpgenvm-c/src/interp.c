@@ -134,15 +134,29 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
 static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
                                    bpvm_aot_callctx_t* cc,
                                    uint32_t target_cs, uint32_t target_abs,
-                                   const int32_t* args, int nargs) {
+                                   const int32_t* args, int nargs, uint32_t ref_mask) {
     uint8_t* mem = vm->memory;
     uint32_t sp = *cc->sp_p;        /* registros vivos del intérprete exterior */
     uint32_t bp = *cc->bp_p;
     uint32_t caller_cs = tc->cs;
 
-    /* Frame falso (réplica exacta de OP_CALL): args, luego saved pc/bp/cs. */
+    /* Frame falso (réplica exacta de OP_CALL): args, luego saved pc/bp/cs.
+     *
+     * #302 paso 1 — ref_mask: bit i = arg i es una REFERENCIA. La función BP la
+     * lee como HANDLE de 8 bytes (una ref = 8 bytes en la pila BP desde el 4->8B).
+     * args[i] llega como idx|TAG (32 bits, gen perdida al truncar a int32_t);
+     * bpref_regen reconstruye la gen VIVA del slot → handle válido. Sin esto la
+     * función recibía un handle con gen basura (idx|TAG + el sentinela como gen)
+     * → self.onClick() daba "referencia a objeto eliminado (use-after-free)".
+     * Los args no-ref (bit 0) siguen a 4 bytes. Los args-ref van a 8 bytes, que
+     * es EXACTAMENTE lo que emite OP_CALL para un parámetro de tipo referencia. */
     for (int i = 0; i < nargs; i++) {
-        bpvm_write_i32_be(mem + sp, args[i]); sp += 4;
+        if ((ref_mask >> i) & 1u) {
+            bpvm_write_i64_be(mem + sp, (int64_t) bpref_regen(vm, (uint32_t) args[i]).v);
+            sp += 8;
+        } else {
+            bpvm_write_i32_be(mem + sp, args[i]); sp += 4;
+        }
     }
     bpvm_write_i32_be(mem + sp, (int32_t) BPVM_SENTINEL_NATIVE_RETURN_ADDR); sp += 4;
     bpvm_write_i32_be(mem + sp, (int32_t) bp);        sp += 4;
@@ -199,7 +213,10 @@ int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
             break;
         }
     }
-    return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, args, nargs);
+    /* #302 paso 2 (PENDIENTE): el path AOT aún pasa ref_mask=0 → los args-ref van
+     * a 4 bytes sin regen (comportamiento actual). Se hace handle-aware al migrar
+     * el AOT (aot_helpers v2). Hoy: sin cambio, no regresa test-throwmsg/user. */
+    return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, args, nargs, 0u);
 }
 
 /* H4 — puente BUILTIN→función BP (upcall de eventos GUI). Como bpvm_aot_call_bp_i32
@@ -209,7 +226,8 @@ int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
  * retorno (el handler onClick es void). target_abs lo resuelve el caller por nombre
  * (vm->symbols). Restricción v1: la función BP no debe ceder al scheduler. */
 int32_t bpvm_call_bp_from_builtin(bpvm_t* vm, bpvm_thread_t* tc,
-                                  uint32_t target_abs, const int32_t* args, int nargs) {
+                                  uint32_t target_abs, const int32_t* args, int nargs,
+                                  uint32_t ref_mask) {
     if (target_abs == 0) return 0;
     uint32_t target_cs = tc->cs;
     for (int i = 0; i < vm->module_count; i++) {
@@ -227,7 +245,7 @@ int32_t bpvm_call_bp_from_builtin(bpvm_t* vm, bpvm_thread_t* tc,
     uint32_t sp = tc->sp, bp = tc->bp;
     bpvm_aot_callctx_t cc;
     cc.tc = tc; cc.sp_p = &sp; cc.bp_p = &bp;
-    int32_t r = bridge_run_bp_frame(vm, tc, &cc, target_cs, target_abs, args, nargs);
+    int32_t r = bridge_run_bp_frame(vm, tc, &cc, target_cs, target_abs, args, nargs, ref_mask);
     tc->sp = base;       /* descarta el frame de la llamada + el retorno (void) */
     tc->bp = bp;         /* bridge restauró bp del caller vía cc->bp_p */
     tc->pc = saved_pc;   /* CRÍTICO: el dispatcher re-lee tc->pc tras el builtin */
@@ -290,7 +308,10 @@ int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
     }
     buf[0] = (int32_t) this_ref;
     for (int i = 0; i < nargs; i++) buf[1 + i] = args[i];
-    return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, buf, total);
+    /* #302 paso 2 (PENDIENTE): this_ref (buf[0]) es una REF y debería ir a 8 bytes
+     * con regen; hoy ref_mask=0 → 4 bytes, sin cambio respecto al comportamiento
+     * actual. Se hace handle-aware al migrar el AOT. */
+    return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, buf, total, 0u);
 }
 
 /* BUG-7 — Lanza un RuntimeError BP desde un opcode del intérprete (no-native):
