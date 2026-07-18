@@ -79,6 +79,14 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/third_party/littlefs/lfs.c        # H2: motor littlefs v2.11.3 (in-tree)
     ${BPVM_C_ROOT}/third_party/littlefs/lfs_util.c
     ${BPVM_C_ROOT}/src/crc32.c               # paso 4 cierre: CRC del FS en LS (== java.util.zip.CRC32)
+    # H9 — gestión de placa (entorno + particiones), núcleo portable compartido
+    # con el boardsim de host; el firmware solo aporta la cintura de flash + el
+    # puente (board_mgr_pico.c, abajo).
+    ${BPVM_C_ROOT}/src/bpvm_env.c            # bloque de env A/B (formato + CRC + A/B)
+    ${BPVM_C_ROOT}/src/bpvm_part.c           # particiones fijas, offsets derivados
+    ${BPVM_C_ROOT}/src/bpvm_boot.c           # máquina de estados de arranque + STATE
+    ${BPVM_C_ROOT}/src/bpvm_bmgr.c           # board manager (compone env+part)
+    ${BPVM_C_ROOT}/src/bpvm_bmgr_wire.c      # adaptador de wire (replies = las del sim)
     ${BPVM_C_ROOT}/src/net.c                 # H11 (#241): facade Net — sin backend hasta H11.b/c → RuntimeError atrapable
     ${BPVM_C_ROOT}/src/link.c
     ${BPVM_C_ROOT}/src/scheduler.c
@@ -134,6 +142,7 @@ add_executable(bpvm_pico
     fs_lfs_pico.c   # H2-B2: littlefs (descriptor + cintura flash_range_* + shim fs.h)
     repl.c          # FP2 step 2: REPL sobre USB CDC (protocolo texto legacy)
     repl_v1.c       # H1 fase A: dispatcher wire BPVM v1 JSON
+    board_mgr_pico.c # H9: cintura de flash del env (A/B) + puente a bpvm_bmgr_wire
     json_min.c      # H1 fase A: parser JSON minimal (~200 líneas)
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente

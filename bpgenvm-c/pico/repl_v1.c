@@ -32,6 +32,7 @@
 #include "bpvm_internal.h"   /* inspect deps en handle_run */
 #include "bpvm_pico.h"       /* INFO: uniqueId/boardName/temp/freq/uptime */
 #include "board_desc.h"      /* INFO: variante/gpio/flash/psram del board_desc */
+#include "board_mgr_pico.h"  /* H9: gestión de placa (entorno + particiones) */
 #include "bpvm_rtc.h"        /* TIME: set epoch */
 #include "aot_registry.h"    /* H3 #160: bpvm_aot_clear */
 
@@ -1293,6 +1294,11 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "DF")       == 0) { handle_df(id, &obj);       return; }
     if (strcmp(type, "LOG_DUMP") == 0) { handle_log_dump(id, &obj); return; }
     if (strcmp(type, "LOG_CLEAR")== 0) { handle_log_clear(id, &obj); return; }
+    /* BOARD (H9) — gestión de placa: entorno + particiones (núcleo compartido con
+     * el boardsim vía bpvm_bmgr_wire). */
+    if (strcmp(type, "STATE") == 0
+        || strncmp(type, "ENV_", 4) == 0
+        || strncmp(type, "PART_", 5) == 0) { board_mgr_pico_handle(id, &obj, type); return; }
     /* TERMINAL */
     if (strcmp(type, "RUN")      == 0) { handle_run(id, &obj);      return; }
     /* DEBUG (H6.b.3 #140) — pre-RUN: acumular breakpoints / pedir pausa
