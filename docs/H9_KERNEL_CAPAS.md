@@ -21,6 +21,12 @@ Eduardo: *"si algo no funciona todavía, que mantengamos el sistema básico; per
 también poder manejar el sistema de particiones y a partir de ahí arrancar el
 resto."*
 
+> **✅ Núcleo host IMPLEMENTADO (18-jul):** 3 ladrillos verdes sin placa —
+> `bpvm_env` (bloque de identidad, `1041fd1`), `bpvm_part` (tabla de particiones +
+> validación + clamp #292, `e0e98c3`) y `bpvm_boot` (esta máquina de estados +
+> STATE, `4660e8b`). `make test-env`/`test-part`/`test-boot` = 24/18/20 verde.
+> Falta enchufarlo a placa (cintura de flash por-micro + transporte kernel-comm).
+
 ## El modelo: estados apilados y recuperables
 
 Cada estado es **independientemente útil** e **independientemente recuperable**.
