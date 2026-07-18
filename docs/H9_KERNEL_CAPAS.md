@@ -49,6 +49,42 @@ El arranque normal SUBE 0→1→2→3; un fallo BAJA al último estado bueno y *
   comms + FS vivos y reportas. Aquí vive el *"la app petó pero el aparato sigue
   alcanzable"*.
 
+## Corolario: el descriptor de PLACA es un artefacto del kernel, no un fichero del FS (Eduardo, 18-jul)
+
+Hoy `board.json` (qué micro, tamaño de flash, si hay PSRAM y cuánta/en qué pin,
+GPIO…) vive en `/sys/board.json` = **el FS**, una capa de ARRIBA (estado 2). Pero:
+
+- **Las particiones (estado 1) NECESITAN el tamaño de flash** para trazar regiones.
+- **La memoria (estado 3) NECESITA la PSRAM** (presencia/tamaño/pin) para el heap.
+
+Ambos son **hechos de placa** → el descriptor debe ser legible **en el suelo**, ANTES
+de esos estados. Montar memoria/particiones con defaults y *corregirlos luego* con un
+fichero del FS es tarde: es exactamente lo que nos mordió (clamp del tamaño de flash de
+la Metro; PSRAM apagada hasta escribir `board.json` — [[esp32-p4-memoria-psram]] /
+[[placa-p4-pantalla-flexibilidad-hw]] / [[firmware-rp2350-imagen-unica]]).
+
+**Por tanto: el descriptor de placa es de la MISMA categoría que el descriptor de
+particiones** — identidad "quién soy / cómo estoy hecho", en sitio fijo de flash, leído
+por el kernel (estado 0/1) con flash raw, escribible por el host vía kernel-comm. No hay
+bootstrap nuevo: leer un bloque en un offset conocido no requiere saber nada de la placa;
+el transporte del estado 0 es fijo por familia de firmware. Bonus:
+
+1. **Sobrevive a las operaciones de FS** (está fuera de la partición del FS, como la
+   tabla) → un formateo o un burn de pack ya no borran la identidad de la placa (se acaba
+   el "re-ejecutar `SetBoardMetro` tras tocar el FS").
+2. **Poner en marcha una placa nueva pasa a ser una operación del SUELO:** el host escribe
+   "Metro, 16 MB flash, 8 MB PSRAM CS47" por kernel-comm ANTES de FS/memoria → reinicio →
+   el kernel lo lee → estados 1 y 3 se montan BIEN a la primera. Es el "feedback en placas
+   nuevas" que motiva H9.
+3. **Refuerza la imagen única:** el mismo `.uf2` sigue eligiendo variante en runtime, pero
+   lee su identidad de la flash en el suelo, no como fichero corrector.
+
+**Decisiones a cerrar (no urgentes):** (a) ¿descriptor de placa y tabla de particiones
+JUNTOS (un "bloque de descriptor de sistema" único, A/B+CRC) o separados? — inclinación:
+junto y simple; (b) ¿`board.json`-el-fichero desaparece o queda como ESPEJO legible en
+`/sys/`? — la fuente de verdad pasa al bloque de flash; el fichero, a lo sumo, copia humana
+para inspección, NUNCA lo que la VM consulta para decidir el layout.
+
 ## Las DOS capas de comunicación (refinamiento de Eduardo)
 
 La comunicación no es monolítica: son **dos juegos de comandos sobre UN solo
