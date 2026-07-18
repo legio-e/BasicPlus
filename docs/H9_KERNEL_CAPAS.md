@@ -161,6 +161,47 @@ que necesita una capa aún no disponible **devuelve un error limpio "no disponib
 en el estado actual"** — nunca cuelga ni corrompe. `STATE` es el latido del bucle
 de feedback: el host **siempre** sabe con qué está hablando.
 
+## Flujo de bring-up (IDE ↔ FrmBoard) — placa virgen (charla 18-jul)
+
+Es la máquina de estados de H9 asomando en el IDE. Una **placa recién flasheada = estado 0**
+(kernel, sin particiones → sin FS → sin VM).
+
+1. **Al conectar, el IDE manda `STATE`** (el "escrutinio"; NO inferir "árbol vacío ⇒ virgen":
+   un árbol vacío también es una placa sana sin ficheros — `STATE` desambigua).
+   - **estado < 3** → abre/propone **FrmBoard** en modo setup/recuperación.
+   - **estado 3** → operación normal; FrmBoard se abre a mano con el botón **INFO**.
+2. **Auto-abrir si VIRGEN** (nada que perder); **PROPONER si DEGRADADA** ("FS no se pudo montar,
+   ¿reparar?") — puede haber datos/intención, o el usuario solo quiere reflashear.
+3. En FrmBoard **la conexión ya existe → sin conectar/desconectar** (comparte el puerto). INFO
+   evoluciona de popup a "abre la ventana de placa" (y su info la lee del env).
+
+### El asistente de primera conexión — orden OBLIGATORIO: entorno ANTES que particiones
+
+No es preferencia: es el corolario. Las **particiones necesitan el tamaño de flash** y la
+**memoria la PSRAM** → ambos hechos de placa que hay que fijar primero.
+1. **Identidad/entorno** (flash size, PSRAM sí/no + tamaño/pin, GPIO…). Sin esto el paso 2 no
+   puede sugerir tamaños sensatos.
+2. **Particiones**: sugiere layout por defecto *ya sabiendo el tamaño de flash*; el usuario ajusta;
+   valida (caben, alineadas al sector de borrado, sin solapes).
+3. **Formatea el FS** en su partición → estado 2.
+4. Escribe env (A/B) + tabla + **reinicia** → sube a estado 3, aparece el árbol normal.
+
+**Afinados:**
+- **Auto-detectar lo detectable, preguntar el resto.** El kernel (estado 0) lee el **JEDEC de la
+  flash** (tamaño real) y **sondea la PSRAM** → pre-rellena el asistente. Es lo que habría evitado
+  el mordisco Pico/Metro (declarábamos el tamaño a mano y mentía). Lo no detectable lo pregunta
+  apoyándose en el **catálogo de placas del IDE** (eliges "Metro RP2350B" → pre-rellena
+  flash/PSRAM/GPIO/layout); si el JEDEC contradice la elección, avisa.
+- **Validar antes de escribir + red de seguridad:** rechaza un layout imposible *antes* de tocar
+  flash; si algo sale mal tras el reinicio, vuelve a estado 0/1 y FrmBoard se reabre → recuperable.
+  El asistente es seguro de experimentar porque H9 lo hace irrompible.
+- **El mismo asistente reconfigura** (no solo el 1er arranque); los botones crear/borrar partición
+  son la versión "a mano". Aviso: cambiar el tamaño de la partición del FS ⇒ reformatear (pérdida
+  de datos).
+- **Botones de FrmBoard** (sin cerrar, "ya veremos"): crear/borrar partición, formatear FS,
+  editar/escribir entrada de env, botón del asistente; más adelante Burn/borrar pack (H3). **No**
+  hay conectar/desconectar.
+
 ## Invariantes (lo que hace que esto funcione)
 
 1. **El estado 0 es un suelo SIEMPRE alcanzable.** Ninguna capa de arriba puede
