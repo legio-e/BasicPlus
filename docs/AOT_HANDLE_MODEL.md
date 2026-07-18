@@ -97,15 +97,20 @@ El puente y la convención de llamada son **compartidos** entre inline y AOT. Se
 arregla el **inline primero** para que el AOT se apoye en un cimiento asentado y
 verificado (oráculo interpretado + paridad dual-VM), no co-evolucionando.
 
-1. **Inline, representación-correcta** — `bridge_run_bp_frame` pasa refs como
-   handle de 8 bytes + `bpref_regen`. **Greenea #301** (builtin GUI → función BP,
-   ruta interpretada). Cimiento y oráculo.
-2. **AOT, representación-correcta** — `aot_helpers v1→v2` (refs como handles) +
-   el emisor. Sobre el puente ya arreglado. **Greenea test-throwmsg /
-   test-throwuser** y los 9 rojos.
-3. **Raíces de GC del native compilado** (shadow stack) — Capa 2, solo para
-   AOT-en-placa; el lado inline la tiene gratis. Se empareja con la fase de
-   AOT-en-device.
+1. ✅ **HECHO (79ab1b9 + 541db61)** — **Inline, representación-correcta**:
+   `bridge_run_bp_frame` pasa refs como handle de 8 bytes + `bpref_regen`.
+   Greeneó #301 (builtin GUI → función BP) y, con las raíces GC del GUI, cerró
+   #20 del censo. Cimiento y oráculo.
+2. ✅ **HECHO (bf42bed)** — **AOT, representación-correcta**: `aot_helpers v1→v2`
+   (refs = handle EMPAQUETADO, deref dentro; slots read_ref/write_ref;
+   call_bp/call_method con ref_mask+ret_is_ref) + el emisor (thunk 8B por
+   ref según occupies8Bytes; ref_mask desde la firma del callee) + bump
+   MDN_ABI_VERSION→2. **Los 9 rojos VERDES** (throwmsg/throwuser/method/callbp/
+   bytenat/xmodule/xmodnat/xmethodnat/compressnat), paridad 17/1/0, GUI intacto.
+3. ⏳ **PENDIENTE (diferido a AOT-en-device)** — **Raíces de GC del native
+   COMPILADO** (shadow stack): Capa 2, solo para AOT-en-placa; el lado inline y
+   el AOT-en-host la tienen gratis (el native corre síncrono dentro de un quantum
+   sin GC asíncrono y F2 no compacta). Se empareja con la fase de AOT-en-device.
 
 ## Disciplina de ABI (decisión de implementación, alineada con #284)
 

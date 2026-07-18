@@ -409,12 +409,19 @@ así que nunca se lee un slot no escrito. Queda como higiene barata (un `memset`
 como candidato a bug. **Lección: era un candidato construido sobre una teoría, no sobre una
 prueba — y la teoría era falsa.** _(barrido C)_
 
-### 🟡 #4 ABIERTO, diferido (=H4.b) — `bpvm_aot_helpers.c` no handle-aware
-Los accesores de objeto/ref-array del AOT nunca se ensancharon a 8B → fabrican handles
-truncados → el contrato B los caza. **Es la causa ÚNICA de los 9 tests rojos** (§6): todos dan
-`use-after-free` y `test-throwmsg` además segfaultea (139). Solo afecta al camino `.mdn` (AOT);
-**no bloquea** porque el default de envío es intérprete. Ya en [[v4-pendientes-diferidos]].
-**Es la deuda más gorda que queda en V4.** _(barrido C)_
+### ✅ #4 CERRADO (`bf42bed`, 18-jul, =H4.b / #302 paso 2) — `bpvm_aot_helpers` ahora handle-aware
+Los accesores de objeto/ref-array/string del AOT seguían en el modelo pre-handles (V3): `ref`
+= offset crudo (`vm->memory + ref`). Con el 4→8B eso corrompía: `bpvm_heap_alloc_string`
+devuelve un handle empaquetado (idx|TAG) → `vm->memory + ref` fuera de rango. Los 9 rojos daban
+`use-after-free`/segfault. **Fix (aot_helpers v1→v2):** cada helper DEREFIA el handle dentro
+(bpref_deref∘bpref_regen) y los que alocan REGISTRAN el handle; slots read_ref/write_ref para la
+frontera thunk↔pila; call_bp/call_method con ref_mask+ret_is_ref (los args-ref se ensanchan a 8B
+con regen en el puente, el retorno-ref popea 8, this_ref se derefia); MDN_ABI_VERSION→2 (el
+loader RECHAZA .mdn de ABI vieja, gate estilo #284). Emisor: el thunk lee/escribe refs a 8B según
+`MivmEmitter.occupies8Bytes` del BpType resuelto (enum NO es ref). **LOS 9 VERDES**
+(throwmsg/throwuser/method/callbp/bytenat/xmodule/xmodnat/xmethodnat/compressnat) + compressbench;
+paridad 17/1/0; GUI paso 1 intacto. Charter docs/AOT_HANDLE_MODEL.md paso 2. Queda paso 3 (raíces
+GC del native COMPILADO / shadow stack) diferido a AOT-en-placa. _(barrido C — cerrado)_
 
 ### 🆕 ✅ #15 ARREGLADO (`5ea0155`, 15-jul) — el ALOCADOR regalaba la astilla → el GC barría objetos VIVOS
 **El bug más grave del censo, y NO es de refs — por eso este catálogo por poco no lo encuentra.**
