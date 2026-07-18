@@ -21,7 +21,7 @@ SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/pulse.c src/pwm.c src/pico.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
-          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c \
+          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c \
           src/net.c src/net_host.c \
           src/fs_lfs.c src/fs_lfs_host.c \
           third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \
@@ -75,7 +75,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -314,6 +314,14 @@ test-env:
 	$(CC) $(CFLAGS) test/test_env.c src/bpvm_env.c src/crc32.c -o build/test_env.exe
 	@echo "--- H9 bloque de env (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_env.exe
+
+# H9 — tabla de particiones sobre el env (estado 1). Host-only: parse + fachada
+# kind→región + validación del layout (alineación, no-solape, clamp #292).
+test-part:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_part.c src/bpvm_part.c src/bpvm_env.c src/crc32.c -o build/test_part.exe
+	@echo "--- H9 tabla de particiones (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_part.exe
 
 test-oom: $(BIN)
 	@if [ ! -f samples/OomCatch.mod ]; then \
