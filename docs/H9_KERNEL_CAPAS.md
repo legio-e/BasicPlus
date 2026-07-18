@@ -85,6 +85,39 @@ junto y simple; (b) ¿`board.json`-el-fichero desaparece o queda como ESPEJO leg
 `/sys/`? — la fuente de verdad pasa al bloque de flash; el fichero, a lo sumo, copia humana
 para inspección, NUNCA lo que la VM consulta para decidir el layout.
 
+### Formato del bloque de env (DECIDIDO 18-jul — Eduardo delegó el formato)
+
+Zona pequeña de flash **a offset fijo, a piñón** (propuesta de Eduardo). Es una **zona de
+"variables de environment"**: no JSON, sino **líneas `clave=valor\n`** (modelo *env* de
+U-Boot). Razón: el kernel lo parsea **en el estado 0, SIN heap y robusto ante corrupción**;
+un parser JSON ahí es código y superficie de fallo de más, mientras que `clave=valor` se
+lee con un bucle trivial sin alocar y es **abierto por construcción** (clave desconocida →
+se ignora; añadir entradas nunca rompe a un kernel viejo). Todo cabe como string:
+`flashSizeBytes=16777216`, `psram=1`, `psramCsPin=47`, `gpioCount=48`.
+
+Marco del bloque (fiabilidad, no solo texto):
+```
+[magic "BPEV" 4B][version u16][len u16][crc u32][seq u32]
+[payload: clave=valor\n ...][relleno 0xFF hasta fin de sector]
+```
+- **magic** distingue env válida de flash borrada (0xFF); **crc** (reusar el CRC-16/CCITT
+  del formato de packs, por consistencia) sobre el payload → bloque a medio escribir se
+  rechaza y se cae a defaults de compilación + kernel-comm lo reporta; **seq** para el A/B.
+- **A/B desde el principio** (dos sectores): seguro barato contra corte de corriente a mitad
+  de escritura (= "nunca brickear"). El kernel elige la copia con `seq` mayor que pase CRC;
+  actualizar = escribir en la copia rancia. **Nota física:** el borrado es por **sector de
+  4K**, así que aunque el contenido sea ~2K cada copia ocupa un sector; A/B ⇒ 8K totales
+  (minúsculo).
+- **⚠️ Posición: offset fijo BAJO, justo tras la región reservada de la imagen — NUNCA
+  relativo al FINAL de la flash.** El tamaño de flash está DENTRO del env → la posición del
+  env no puede depender de él (huevo-y-gallina). El offset es una constante por familia,
+  compartida kernel↔host, y es **una entrada más del `FLASH_LAYOUT` por micro** (el "solo
+  falta tamaños por micro" de [[particiones-flash-estado-pre-h3]]).
+- **Un solo mecanismo en el suelo:** como es un env abierto, la **tabla de particiones puede
+  vivir como entradas del mismo bloque** (`part.fs.offset=…`, `part.fs.size=…`); solo se
+  gradúa a un descriptor binario aparte si crece. Cierra hacia "junto y simple" de la
+  decisión (a).
+
 ## Las DOS capas de comunicación (refinamiento de Eduardo)
 
 La comunicación no es monolítica: son **dos juegos de comandos sobre UN solo
