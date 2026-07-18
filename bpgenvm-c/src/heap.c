@@ -23,6 +23,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
+#ifdef BPVM_GUI
+#include "bpvm_gui.h"   /* #302: bpvm_gui_visit_roots (raíces GC del GUI) */
+#endif
 
 static uint32_t align4(uint32_t v) {
     return (v + 3) & ~3u;
@@ -212,6 +215,15 @@ static void mark_recursive(bpvm_t* vm, uint32_t ref_word) {
     }
 }
 
+#ifdef BPVM_GUI
+/* #302 — adaptador visitor→mark: gui.c enumera sus objptr (opacos para él) y
+ * aquí los marcamos. Así gui.c sigue sin saber nada de la VM y mark_recursive
+ * sigue siendo static. */
+static void gui_mark_visit(void* ctx, uint32_t objptr) {
+    mark_recursive((bpvm_t*) ctx, objptr);
+}
+#endif
+
 static void gc_mark_phase(bpvm_t* vm) {
     /* Camino 1 (H-008): (re)construir el set de cabeceras reales ANTES de marcar,
      * para que el scan conservativo no tome enteros por punteros. */
@@ -232,6 +244,15 @@ static void gc_mark_phase(bpvm_t* vm) {
         uint32_t anchor = (uint32_t) vm->threads[t].alloc_anchor;
         if (anchor != 0) mark_recursive(vm, anchor);
     }
+    /* 2b. #302 — raíces del GUI: los objptr ligados a widgets (bind_click) y la
+     *     cola de eventos viven en GLOBALS C (gui.c), FUERA de vm->memory → el
+     *     scan conservador no los ve. Sin esto, un objeto BP cuyo único holder
+     *     es el widget se recolecta EN VIVO y el siguiente clic es un UAF real.
+     *     Además, mantenerlo vivo hace sólido el regen del despacho: el slot del
+     *     handle nunca se recicla mientras el widget lo retenga. */
+#ifdef BPVM_GUI
+    bpvm_gui_visit_roots(gui_mark_visit, vm);
+#endif
     /* 3. GC-2: data blocks de módulo. Consts + globales de módulo viven en
      *    [data_start, code_start) (crecen hacia atrás desde CS). Un global que
      *    apunte a heap es una RAÍZ; sin escanearlo se recolecta en vivo (UAF).

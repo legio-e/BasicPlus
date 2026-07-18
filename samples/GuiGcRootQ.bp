@@ -1,0 +1,45 @@
+// GuiGcRootQ.bp — repro #302 paso 3 (variante COLA, headless dual-VM).
+// makeButton() crea el boton, encola un clic sintetico y RETORNA: el unico
+// holder del objeto MyButton pasa a ser el evento pendiente en la cola del
+// backend GUI (fuera de vm->memory / del mem[] de miVM). Sin la raiz GC de la
+// cola, gc() barre el objeto EN VIVO y el bombeo de Gui.run() despacha sobre
+// un handle muerto (use-after-free).
+module GuiGcRootQ
+  import Gui
+
+  class MyButton extends Gui.Button
+    public property target: Gui.Label
+    public function MyButton(parent: Gui.Component, text: string, target: Gui.Label)
+      super(parent, text)
+      this.target := target
+    end MyButton
+
+    public function onClick()
+      print "[onClick] vivo tras gc()"
+      this.target.setText("PULSADO")
+    end onClick
+  end MyButton
+
+  function makeButton(scr: Gui.Screen, lbl: Gui.Label)
+    var btn: MyButton := MyButton(scr, "Pulsame", lbl)
+    btn.align(Gui.Align.CENTER, 0, 0)
+    Gui.__guiClick(btn)          // encola el evento: la COLA retiene el objptr
+  end makeButton
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var lbl: Gui.Label := Gui.Label(scr, "esperando")
+    lbl.align(Gui.Align.TOP_MID, 0, 10)
+
+    makeButton(scr, lbl)
+
+    gc()                          // sin raiz de cola: barreria el MyButton en vivo
+    print "== tras gc() =="
+
+    Gui.run()                     // bombea el evento pendiente -> dispatch onClick
+
+    print "== al salir =="
+    print Gui.__guiDumpTree()
+  end Main
+
+end GuiGcRootQ

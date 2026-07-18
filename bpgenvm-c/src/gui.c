@@ -919,6 +919,19 @@ uint32_t bpvm_gui_next_event(int* kind_out) {
     return v;
 }
 
+/* #302 — enumera las raíces GC que este backend retiene fuera de vm->memory:
+ * objptr de widgets vivos (bind_click) + eventos pendientes en la cola. Lo
+ * llama gc_mark_phase (heap.c) vía visitor; se ejecuta bajo STW, así que no
+ * hay mutación concurrente de g_nodes/g_ev_*. */
+void bpvm_gui_visit_roots(void (*visit)(void* ctx, uint32_t objptr), void* ctx) {
+    for (int i = 0; i < g_node_count; i++)
+        if (g_nodes[i].used && g_nodes[i].objptr != 0)
+            visit(ctx, g_nodes[i].objptr);
+    for (int i = g_ev_head; i != g_ev_tail; i = (i + 1) % GUI_MAX_NODES)
+        if (g_ev_obj[i] != 0)
+            visit(ctx, g_ev_obj[i]);
+}
+
 /* ---- dump_tree — byte-idéntico a GuiBackend.dumpTree de miVM ---- */
 static void buf_append(char** buf, size_t* len, size_t* cap, const char* s, size_t n) {
     if (*len + n + 1 > *cap) {

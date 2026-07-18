@@ -1397,6 +1397,16 @@ public class VirtualMachine {
             }
         }
 
+        // Roots #302: objptr retenidos por el backend GUI (widgets con bindClick +
+        // cola de eventos pendientes). Viven en objetos Java, FUERA de mem[] → el
+        // scan conservador no los ve; sin esto un objeto cuyo único holder es el
+        // widget se recolecta en vivo (UAF en el siguiente clic). Mismo patrón que
+        // allocAnchor: refDeref tolerante (muerto → 0) + filtro por `valid`.
+        gui.visitRoots(objptr -> {
+            int headerAddr = refDeref(objptr) - 4;
+            if (valid.contains(headerAddr)) markObject(headerAddr, valid);
+        });
+
         // Roots: data blocks de todos los módulos
         if (moduleManager != null) {
             List<int[]> regions = moduleManager.getDataRegions();
@@ -1712,6 +1722,10 @@ public class VirtualMachine {
         // dead-flag (handleGen[idx]!=0); en 4c, con reuso, un slot reciclado tiene
         // gen bumpeada y un handle rancio (gen vieja) NO matchea → grita.
         if (idx > 0 && idx < handleNext && handleGen[idx] != handleGenOf(ref)) {
+            if (System.getenv("BPVM_DEBUG_UAF") != null) {   // DIAG temporal #302
+                System.err.printf("[uaf-diag] ref=0x%016x idx=%d handleGen[idx]=%d genOf(ref)=%d addr=%d%n",
+                        ref, idx, handleGen[idx], handleGenOf(ref), handleAddr[idx]);
+            }
             tc.sp = sp;
             throwBpRuntimeError(tc, "referencia a objeto eliminado (use-after-free)");
         }
@@ -1726,6 +1740,20 @@ public class VirtualMachine {
         // getAcquire) es Java 9+ → ver nota en la declaración de la tabla. La VM-C sí lleva
         // el atómico C11 porque va a placa ARM/RISC-V.
         return (idx > 0 && idx < handleNext) ? handleAddr[idx] : 0;
+    }
+
+    /** #302 (espejo de bpref_regen, VM-C) — reconstruye el HANDLE 64b completo desde
+     *  la palabra BAJA (idx|TAG) con la generación VIVA del slot. Para los upcalls del
+     *  GUI, cuyo objptr viaja como int por la cola de eventos: escribirlo tal cual a
+     *  4B dejaba la palabra alta del arg con BASURA rancia de pila → requireAlive
+     *  comparaba esa basura como gen y gritaba (o callaba) POR LOTERÍA. Solo es sólido
+     *  porque las raíces GUI del GC garantizan que el objeto no muere mientras el
+     *  widget/evento lo retenga (el slot no se recicla → la gen viva es la suya). */
+    private long regenRef(int word) {
+        if ((word & HANDLE_TAG) == 0) return word & HANDLE_LOW;   // null/constante: identidad
+        int idx = handleIdx(word);
+        if (idx <= 0 || idx >= handleNext) return word & HANDLE_LOW;
+        return (((long) handleGen[idx]) << 32) | (word & HANDLE_LOW);
     }
     /** Longitud (nº de elementos) de un array, de su cabecera. V4: deref primero. */
     private int arrLen(byte[] mem, long arr) { return readI32(mem, refDeref(arr)); }
@@ -5206,16 +5234,19 @@ public class VirtualMachine {
         int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
         ThreadStatus savedStatus = tc.status;
         boolean savedYield = tc.yieldRequested;
-        // Frame del dispatcher(self): [self, savedPC=0(centinela), savedBP, savedCS],
-        // con bp tras ellos (convención de CALL/INVOKE_VIRTUAL). Según `kind`,
-        // dispPc/dispCs apuntan a __guiDispatch (click→onClick) o a
+        // Frame del dispatcher(self): [self(8B ref), savedPC=0(centinela), savedBP,
+        // savedCS], con bp tras ellos (convención de CALL/INVOKE_VIRTUAL). Según
+        // `kind`, dispPc/dispCs apuntan a __guiDispatch (click→onClick) o a
         // __guiDispatchChange (change→onChange).
-        writeInt32(base,      objptr);     // arg: self (objptr)
-        writeInt32(base + 4,  0);          // saved PC = 0 → mem[0] = THREAD_EXIT
-        writeInt32(base + 8,  savedBp);    // saved BP (valor sano; se restaura abajo)
-        writeInt32(base + 12, savedCs);    // saved CS
-        tc.bp = base + 16;
-        tc.sp = base + 16;
+        // #302: self es una REF → 8 bytes con la gen VIVA (regenRef). Escribirla a
+        // 4B dejaba la palabra alta con basura rancia de pila → UAF por lotería
+        // (espejo del ref_mask del bridge_run_bp_frame de la VM-C, 79ab1b9).
+        refStore(memory, base, regenRef(objptr));   // arg: self (ref 8B)
+        writeInt32(base + 8,  0);          // saved PC = 0 → mem[0] = THREAD_EXIT
+        writeInt32(base + 12, savedBp);    // saved BP (valor sano; se restaura abajo)
+        writeInt32(base + 16, savedCs);    // saved CS
+        tc.bp = base + 20;
+        tc.sp = base + 20;
         tc.pc = dispPc;
         tc.cs = dispCs;
         tc.yieldRequested = false;
@@ -5259,12 +5290,13 @@ public class VirtualMachine {
         int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
         ThreadStatus savedStatus = tc.status;
         boolean savedYield = tc.yieldRequested;
-        writeInt32(base,      sender);   // arg0 = sender (el widget que disparó el evento)
-        writeInt32(base + 4,  0);        // saved PC = 0 → mem[0] = THREAD_EXIT (centinela)
-        writeInt32(base + 8,  savedBp);
-        writeInt32(base + 12, savedCs);
-        tc.bp = base + 16;
-        tc.sp = base + 16;
+        // #302: sender es una REF → 8 bytes con gen viva (ver regenRef).
+        refStore(memory, base, regenRef(sender));   // arg0 = sender (ref 8B)
+        writeInt32(base + 8,  0);        // saved PC = 0 → mem[0] = THREAD_EXIT (centinela)
+        writeInt32(base + 12, savedBp);
+        writeInt32(base + 16, savedCs);
+        tc.bp = base + 20;
+        tc.sp = base + 20;
         tc.pc = pc;
         tc.cs = cs;
         tc.yieldRequested = false;
@@ -5290,7 +5322,7 @@ public class VirtualMachine {
      */
     private void invokeHandlerBySlot(ThreadContext tc, int winRef, int slot, int sender) {
         if (winRef == 0 || slot < 0) return;            // sin ventana / handler ausente → ignorar
-        int classPtr   = readInt32(winRef);
+        int classPtr   = readInt32(refDeref(winRef));   // #302: deref handle→addr (como invokeHandlerByName)
         int targetCS   = moduleManager.getCSForDataAddr(classPtr);
         int bitmapW    = readInt16(classPtr + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
         int vtableBase = classPtr + CLS_OFF_FIELD_BITMAP + 2 * bitmapW * 4;
@@ -5300,14 +5332,15 @@ public class VirtualMachine {
         int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
         ThreadStatus savedStatus = tc.status;
         boolean savedYield = tc.yieldRequested;
-        // Frame de método: [this=win, sender, savedPC=0, savedBP, savedCS], bp tras ellos.
-        writeInt32(base,      winRef);   // local0 = this (la ventana)
-        writeInt32(base + 4,  sender);   // local1 = sender (el widget que disparó)
-        writeInt32(base + 8,  0);        // saved PC = 0 → mem[0] = THREAD_EXIT (centinela)
-        writeInt32(base + 12, savedBp);
-        writeInt32(base + 16, savedCs);
-        tc.bp = base + 20;
-        tc.sp = base + 20;
+        // Frame de método: [this=win(8B), sender(8B), savedPC=0, savedBP, savedCS],
+        // bp tras ellos. #302: ambos son REFS → 8 bytes con gen viva (ver regenRef).
+        refStore(memory, base,     regenRef(winRef));   // local0 = this (la ventana)
+        refStore(memory, base + 8, regenRef(sender));   // local1 = sender (el widget que disparó)
+        writeInt32(base + 16, 0);        // saved PC = 0 → mem[0] = THREAD_EXIT (centinela)
+        writeInt32(base + 20, savedBp);
+        writeInt32(base + 24, savedCs);
+        tc.bp = base + 28;
+        tc.sp = base + 28;
         tc.pc = methodPc;
         tc.cs = targetCS;
         tc.yieldRequested = false;

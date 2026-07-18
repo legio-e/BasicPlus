@@ -1,0 +1,44 @@
+// GuiGcRoot.bp — repro #302 paso 3 (host): el objeto BP ligado a un widget
+// cuyo UNICO holder es el propio widget (objptr en gui.c, fuera de vm->memory).
+// makeButton() crea el MyButton en un local que MUERE al volver -> sin la raiz
+// GUI, gc() lo barre EN VIVO y el clic real es un use-after-free.
+module GuiGcRoot
+  import Gui
+
+  class MyButton extends Gui.Button
+    public property target: Gui.Label
+    public function MyButton(parent: Gui.Component, text: string, target: Gui.Label)
+      super(parent, text)
+      this.target := target
+    end MyButton
+
+    public function onClick()
+      print "[onClick] vivo tras gc()"
+      this.target.setText("PULSADO")
+    end onClick
+  end MyButton
+
+  // El boton se crea AQUI: al volver, la unica referencia viva al objeto
+  // MyButton es el objptr del widget (C global de gui.c).
+  function makeButton(scr: Gui.Screen, lbl: Gui.Label)
+    var btn: MyButton := MyButton(scr, "Pulsame", lbl)
+    btn.align(Gui.Align.CENTER, 0, 0)
+  end makeButton
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var lbl: Gui.Label := Gui.Label(scr, "esperando")
+    lbl.align(Gui.Align.TOP_MID, 0, 10)
+
+    makeButton(scr, lbl)
+
+    gc()                          // sin raiz GUI: barreria el MyButton en vivo
+    print "== tras gc() =="
+
+    Gui.run()                     // clic real via BPVM_GUI_SCRIPT -> dispatch
+
+    print "== al salir =="
+    print Gui.__guiDumpTree()
+  end Main
+
+end GuiGcRoot

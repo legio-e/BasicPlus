@@ -57,6 +57,7 @@ public final class GuiBackend {
         int fontSize = 0;           // tamaño de fuente en px (0 = por defecto); el dump lo refleja
         boolean readOnly = false;   // textarea: solo lectura (sin cursor, no editable)
         String text = "";
+        int objptr = 0;             // objeto BP dueño (bindClick), 0 = ninguno; raíz GC (#302, visitRoots)
         Node(int handle, String type, JComponent comp, int parent) {
             this.handle = handle; this.type = type; this.comp = comp; this.parent = parent;
         }
@@ -532,6 +533,7 @@ public final class GuiBackend {
     public void bindClick(int handle, int objptr) {
         Node n = nodes.get(handle);
         if (n == null) return;
+        n.objptr = objptr;   // #302: registrar el dueño → raíz GC enumerable (visitRoots)
         if (n.hasValue && n.comp instanceof AbstractButton) {
             // Toggle booleano (checkbox, switch): el cambio es CHANGE.
             AbstractButton b = (AbstractButton) n.comp;
@@ -603,6 +605,21 @@ public final class GuiBackend {
     public void injectClick(int objptr) { events.offer(new int[]{objptr, KIND_CLICK}); }
     /** Inyecta un cambio de valor sintético (diagnóstico headless). */
     public void injectChange(int objptr) { events.offer(new int[]{objptr, KIND_CHANGE}); }
+
+    /** #302 — enumera las raíces GC que este backend retiene FUERA del mem[] de
+     *  la VM: objptr de widgets vivos (bindClick) + eventos pendientes en la
+     *  cola. gcLocked() los marca como raíces; sin esto, un objeto BP cuyo único
+     *  holder es el widget/evento se recolecta EN VIVO y el dispatch del clic es
+     *  un use-after-free. Espejo de bpvm_gui_visit_roots (gui.c de la VM-C).
+     *  El iterator de LinkedBlockingQueue es weakly-consistent → seguro aunque
+     *  el EDT ofrezca eventos en paralelo (un evento nuevo lleva el objptr de un
+     *  widget que ya está marcado como raíz por su Node). */
+    public void visitRoots(java.util.function.IntConsumer visit) {
+        for (Node n : nodes.values())
+            if (n.objptr != 0) visit.accept(n.objptr);
+        for (int[] ev : events)
+            if (ev[0] != 0 && ev[0] != EVENT_CLOSE) visit.accept(ev[0]);
+    }
 
     // ---- Lazo de eventos: la ventana se muestra aquí; el BOMBEO lo hace la VM
     //      (que es quien sabe ejecutar BP) sacando eventos con takeEvent(). ----

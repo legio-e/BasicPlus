@@ -97,6 +97,13 @@ void     bpvm_gui_inject_click(uint32_t objptr);
 void     bpvm_gui_inject_change(uint32_t objptr);
 uint32_t bpvm_gui_next_event(int* kind_out);
 
+/* #302 — raíces GC del GUI: los objptr (widgets vivos + cola de eventos) viven
+ * en globals C, fuera de vm->memory, así que el scan conservador del GC no los
+ * ve. Este visitor los enumera para que heap.c los marque como raíces; sin él,
+ * un objeto BP cuyo único holder es el widget se recolectaría EN VIVO (UAF en
+ * el siguiente clic). gui.c sigue sin saber nada de la VM (objptr opaco). */
+void bpvm_gui_visit_roots(void (*visit)(void* ctx, uint32_t objptr), void* ctx);
+
 /* Vuelca el árbol de widgets a un buffer recién malloc'd (el caller hace free).
  * Devuelve la longitud en bytes (sin el '\0'). Byte-idéntico a miVM. */
 size_t bpvm_gui_dump_tree(char** out);
