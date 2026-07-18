@@ -289,10 +289,19 @@ Paraguas gráfico, MODESTO. Eduardo: "solo añadimos algún widget más; no recu
 
 ## 🧰 H8 — IDE  *(hito de V4; Eduardo 13-jul)*
 
-- **H8.a — Ventana de gestión de Packs ⭐ (la novedad).** Pantalla nueva del IDE para **construir**
-  packs, **grabarlos** en los micros (Burn por el wire) y verlos/borrarlos. Es el **Pack manager** que
-  se sacó de H3 (dos lados como el explorer: biblioteca PC ↔ packs del micro). Se apoya en la
-  infraestructura de packs de H3 (comando de inventario, Burn).
+- **H8.a — Ventana de gestión de placa (particiones + env + packs) ⭐.** Pantalla nueva del IDE. Es la
+  cara-IDE de H9 (gestionar particiones y variables de entorno) **y** el Pack manager que se sacó de H3
+  (construir/grabar/ver packs). **Esqueleto ya creado por Eduardo 18-jul** (`FrmBoard.form`/`FrmBoard.java`
+  en NetBeans, sin commitear): rejilla **3×2** de split panes — arriba-izq un `JTabbedPane` con pestañas
+  **"Variables de entorno"** (tabla nombre|valor) y **"Packs"** (packs cargados en placa); abajo-izq las
+  **comunicaciones con la placa** (mostrando por defecto la **tabla de particiones**); abajo-centro la
+  **consola** (igual que la ventana principal); el resto (columna central-sup + columna derecha) para la
+  **gestión de packs, aún sin hacer**. Reusa de `FrmMain`: `consolaArea`+`consoleInput` (consola) y
+  `PicoExplorer` (comms) — **debe COMPARTIR la conexión de la placa** con la ventana principal (un solo
+  puerto), no abrir otra. El layout visual es de Eduardo (NetBeans regenera `initComponents`; la lógica va
+  en código a mano). **ESTADO: registrado, UI sin cablear** — va por delante de sus backends: el contenido
+  de las 3 tablas (particiones/env/packs) necesita comandos de wire que hoy NO existen (H9 env+particiones,
+  H3 packs). Se retoma cuando esos backends aterricen. Ver [`H9_KERNEL_CAPAS.md`](H9_KERNEL_CAPAS.md).
 - **H8.b — Botón "Previsualizar ventana". ✅ HECHO 17-jul (f96b35a) — pero con VM-C, no Swing.**
   El botón **Run Window (VM-C)** (barra + menú Run) compila el `.bp`, hornea `nombre→slot` en los `.win`
   (mismo `FormBaker` que Run on Device) y lanza la **VM-C nativa (LVGL/SDL)** con el `.mod` → la ventana

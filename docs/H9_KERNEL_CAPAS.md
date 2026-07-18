@@ -208,6 +208,9 @@ de feedback: el host **siempre** sabe con qué está hablando.
 - **H9.4 — Dispatcher full-comm** registrado al llegar a 2/3; kernel-comm siempre
   presente; comando `STATE`; **el IDE aprende a hablar con un device degradado**
   (modo recuperación: escribir tabla / formatear / reflashear) — pieza vecina de H8.
+  **La ventana IDE de esto es `FrmBoard` = H8.a** (esqueleto ya creado 18-jul: 3×2 con
+  pestañas env/packs, comms con la tabla de particiones, consola; comparte conexión con
+  la ventana principal). Registrada, **UI sin cablear hasta que existan estos backends**.
 - **H9.5 — Watchdog/hang-detection** como respaldo + KILL desde full-comm.
 - **Transversal — cintura por micro:** transporte (ya abstraído #137), flash raw
   (ya hay `flash_range_*` RP2350 / `esp_flash`-`esp_partition` ESP32 / HAL STM32),
