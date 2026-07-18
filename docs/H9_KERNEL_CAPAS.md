@@ -89,7 +89,13 @@ sube con el layout nuevo** (no se reparticiona en vivo con el FS montado sobre e
 viejo); si algo falla, se queda en estado 0/1, recuperable. Es justo el "cambio profundo"
 que hoy podría brickear y que H9 hace seguro.
 
-### Formato del bloque de env (DECIDIDO 18-jul — Eduardo delegó el formato)
+### Formato del bloque de env (DECIDIDO 18-jul — Eduardo delegó el formato) — ✅ IMPLEMENTADO (host, `1041fd1`)
+
+> **Primer ladrillo de H9 HECHO (host):** `bpgenvm-c/{include/bpvm_env.h,src/bpvm_env.c}` +
+> `test-env` (24/24 verde). Formato + parse + A/B (`bpvm_env_pick`/`next_seq`) + get/get_bool/
+> get_long + serialize, dependencia mínima (solo crc32, sin VM/heap). La **cintura de flash
+> por-micro** (leer/borrar/escribir el sector) NO está — llega en su fase (placa).
+
 
 Zona pequeña de flash **a offset fijo, a piñón** (propuesta de Eduardo). Es una **zona de
 "variables de environment"**: no JSON, sino **líneas `clave=valor\n`** (modelo *env* de
