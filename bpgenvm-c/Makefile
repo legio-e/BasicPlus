@@ -21,7 +21,7 @@ SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/pulse.c src/pwm.c src/pico.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
-          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c \
+          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_bmgr.c \
           src/net.c src/net_host.c \
           src/fs_lfs.c src/fs_lfs_host.c \
           third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \
@@ -75,7 +75,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -331,6 +331,16 @@ test-boot:
 	$(CC) $(CFLAGS) test/test_boot.c src/bpvm_boot.c -o build/test_boot.exe
 	@echo "--- H9 maquina de estados + STATE (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_boot.exe
+
+# H9 — board manager: núcleo portable del protocolo de gestión de placa (ENV_*/
+# PART_*). Compone env+part. Host-only: opera sobre sectores A/B en RAM; simula el
+# flujo virgen→defaults→apply→edit y el volcado del slot rancio. La cintura de flash
+# (volcar wrote_slot) y el adaptador JSON del firmware llegan en la fase de placa.
+test-bmgr:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_bmgr.c src/bpvm_bmgr.c src/bpvm_part.c src/bpvm_env.c src/crc32.c -o build/test_bmgr.exe
+	@echo "--- H9 board manager (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_bmgr.exe
 
 test-oom: $(BIN)
 	@if [ ! -f samples/OomCatch.mod ]; then \

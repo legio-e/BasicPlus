@@ -84,6 +84,30 @@ int bpvm_env_payload_set(const char* payload_in, size_t in_len,
                          const char* key, const char* value,
                          char* out, size_t out_cap);
 
+/* --- Enumeración de pares (para ENV_LS: la tabla nombre|valor del IDE) --- */
+
+/* Nº de pares `clave=valor` del env (líneas sin '=' se ignoran). 0 si inválido. */
+int bpvm_env_count(const bpvm_env_t* env);
+
+/* Copia el par `idx` (0-based, en orden de aparición) en `key`/`val` (NUL-terminados,
+ * truncados a kcap/vcap). Devuelve 1 si existe, 0 si idx fuera de rango. */
+int bpvm_env_pair_at(const bpvm_env_t* env, int idx,
+                     char* key, size_t kcap, char* val, size_t vcap);
+
+/* --- Actualización A/B completa (ENV_SET/DEL, PART_APPLY) --- */
+
+/* Escritura transaccional A/B: lee la copia ACTUAL de {a,b} (cada buffer de `sector`
+ * bytes = un sector de flash), aplica el edit `key=value` (value=NULL BORRA), y
+ * re-serializa el resultado a la copia RANCIA con seq+1, usando `scratch` (>= sector)
+ * como payload intermedio. En `*wrote_slot` deja el sector modificado (0=A, 1=B) para
+ * que el llamador (cintura de flash) lo vuelque. Placa virgen (ninguna válida) →
+ * escribe A (slot 0) con seq 1. Devuelve 0 OK, -1 si no cabe / args malos.
+ * El corte de corriente a mitad es seguro: la copia actual sigue intacta hasta que la
+ * nueva pasa CRC. Sin heap; toda la memoria la pone el llamador. */
+int bpvm_env_apply(uint8_t* a, uint8_t* b, size_t sector,
+                   uint8_t* scratch, size_t scratch_cap,
+                   const char* key, const char* value, int* wrote_slot);
+
 #ifdef __cplusplus
 }
 #endif

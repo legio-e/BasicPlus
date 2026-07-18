@@ -174,6 +174,77 @@ int bpvm_env_payload_set(const char* payload_in, size_t in_len, const char* key,
     return (int) o;
 }
 
+int bpvm_env_count(const bpvm_env_t* env) {
+    if (!env || !env->valid) return 0;
+    const uint8_t* p   = env->payload;
+    const uint8_t* end = p + env->payload_len;
+    int n = 0;
+    while (p < end) {
+        const uint8_t* ls = p;
+        const uint8_t* le = ls;
+        while (le < end && *le != '\n') le++;
+        const uint8_t* eq = ls;
+        while (eq < le && *eq != '=') eq++;
+        if (eq < le) n++;                             /* solo líneas con '=' cuentan */
+        p = (le < end) ? le + 1 : end;
+    }
+    return n;
+}
+
+int bpvm_env_pair_at(const bpvm_env_t* env, int idx,
+                     char* key, size_t kcap, char* val, size_t vcap) {
+    if (!env || !env->valid || idx < 0) return 0;
+    const uint8_t* p   = env->payload;
+    const uint8_t* end = p + env->payload_len;
+    int n = 0;
+    while (p < end) {
+        const uint8_t* ls = p;
+        const uint8_t* le = ls;
+        while (le < end && *le != '\n') le++;
+        const uint8_t* eq = ls;
+        while (eq < le && *eq != '=') eq++;
+        if (eq < le) {                                /* línea con '=' */
+            if (n == idx) {
+                size_t klen = (size_t)(eq - ls);
+                size_t vlen = (size_t)(le - (eq + 1));
+                if (key && kcap) {
+                    size_t c = (klen < kcap - 1) ? klen : (kcap - 1);
+                    memcpy(key, ls, c); key[c] = '\0';
+                }
+                if (val && vcap) {
+                    size_t c = (vlen < vcap - 1) ? vlen : (vcap - 1);
+                    memcpy(val, eq + 1, c); val[c] = '\0';
+                }
+                return 1;
+            }
+            n++;
+        }
+        p = (le < end) ? le + 1 : end;
+    }
+    return 0;                                          /* idx fuera de rango */
+}
+
+int bpvm_env_apply(uint8_t* a, uint8_t* b, size_t sector,
+                   uint8_t* scratch, size_t scratch_cap,
+                   const char* key, const char* value, int* wrote_slot) {
+    if (!a || !b || !scratch || !key) return -1;
+    bpvm_env_t cur;
+    int who = bpvm_env_pick(a, sector, b, sector, &cur);   /* 0=A, 1=B, -1=ninguna */
+    const char* pin = (who >= 0 && cur.valid) ? (const char*) cur.payload : NULL;
+    size_t pin_len  = (who >= 0 && cur.valid) ? cur.payload_len : 0;
+    /* payload_set lee de `pin` (dentro de la copia que gana) y escribe en `scratch`
+     * (disjunto): nunca pisamos la copia actual. */
+    int n = bpvm_env_payload_set(pin, pin_len, key, value, (char*) scratch, scratch_cap);
+    if (n < 0) return -1;
+    uint32_t ns = bpvm_env_next_seq(a, sector, b, sector);
+    int stale = (who == 0) ? 1 : 0;    /* escribe en la que NO es actual; virgen→A(0) */
+    uint8_t* dst = (stale == 0) ? a : b;
+    int u = bpvm_env_serialize((const char*) scratch, (size_t) n, ns, dst, sector);
+    if (u < 0) return -1;
+    if (wrote_slot) *wrote_slot = stale;
+    return 0;
+}
+
 uint32_t bpvm_env_next_seq(const uint8_t* blockA, size_t lenA,
                            const uint8_t* blockB, size_t lenB) {
     bpvm_env_t a, b;
