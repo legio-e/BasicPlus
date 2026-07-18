@@ -837,6 +837,131 @@ public final class BpvmClient implements AutoCloseable {
         return sendRequest("INFO", null, null, timeoutMs);
     }
 
+    // ============================================================
+    // H9 — gestión de placa (protocolo STATE / ENV_* / PART_*).
+    // Lo consume FrmBoard sobre el MISMO transporte ya conectado (comparte
+    // conexión con la ventana principal). El peer es el firmware (kernel-comm)
+    // o el boardsim de host (tools/boardsim.c). Modelos: clases anidadas abajo.
+    // ============================================================
+
+    /** Estado del arranque escalonado (H9): en qué capa está el device y por qué. */
+    public static final class BoardState {
+        public final int state;          // 0 kernel, 1 particiones, 2 fs, 3 app
+        public final String name;
+        public final boolean degraded;
+        public final String reason;
+        public BoardState(int state, String name, boolean degraded, String reason) {
+            this.state = state; this.name = name; this.degraded = degraded; this.reason = reason;
+        }
+    }
+
+    /** Una variable de entorno (par clave/valor del bloque de env). */
+    public static final class EnvVar {
+        public final String key, value;
+        public EnvVar(String key, String value) { this.key = key; this.value = value; }
+    }
+
+    /** Una partición: nombre + región. `offset` es -1 en respuestas que solo
+     *  llevan tamaños (PART_DEFAULTS); es el offset DERIVADO en PART_LS. */
+    public static final class Partition {
+        public final String name;
+        public final long offset, size;
+        public Partition(String name, long offset, long size) {
+            this.name = name; this.offset = offset; this.size = size;
+        }
+    }
+
+    /** Layout de particiones + contexto de flash. `missing`=true → placa virgen a
+     *  nivel de particiones (el asistente ofrece defaults). */
+    public static final class PartTable {
+        public final boolean missing;
+        public final long base, usableFlash;
+        public final List<Partition> parts;
+        public PartTable(boolean missing, long base, long usableFlash, List<Partition> parts) {
+            this.missing = missing; this.base = base; this.usableFlash = usableFlash; this.parts = parts;
+        }
+    }
+
+    /** STATE — estado del arranque escalonado. */
+    public BoardState boardState(long timeoutMs) throws IOException {
+        Map<String, Object> r = sendRequest("STATE", null, null, timeoutMs);
+        return new BoardState((int) Json.getLong(r, "state", -1),
+                Json.getString(r, "name", "?"),
+                Json.getBool(r, "degraded", false),
+                Json.getString(r, "reason", ""));
+    }
+
+    /** ENV_LS — todas las variables de entorno (la tabla nombre|valor). */
+    public List<EnvVar> envList(long timeoutMs) throws IOException {
+        Map<String, Object> r = sendRequest("ENV_LS", null, null, timeoutMs);
+        List<Object> arr = Json.getList(r, "entries");
+        List<EnvVar> out = new ArrayList<>();
+        if (arr == null) return out;
+        for (Object o : arr) {
+            if (!(o instanceof Map)) continue;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) o;
+            out.add(new EnvVar(Json.getString(m, "key", ""), Json.getString(m, "value", "")));
+        }
+        return out;
+    }
+
+    /** ENV_GET — valor de una clave (o IOException si el peer responde NOT_FOUND). */
+    public String envGet(String key, long timeoutMs) throws IOException {
+        Map<String, Object> r = sendRequest("ENV_GET", "\"key\":" + jsonStr(key), null, timeoutMs);
+        return Json.getString(r, "value", "");
+    }
+
+    /** ENV_SET — fija/crea `key=value`. El peer re-serializa a la copia A/B rancia. */
+    public void envSet(String key, String value, long timeoutMs) throws IOException {
+        sendRequest("ENV_SET", "\"key\":" + jsonStr(key) + ",\"value\":" + jsonStr(value), null, timeoutMs);
+    }
+
+    /** ENV_DEL — borra una clave. */
+    public void envDel(String key, long timeoutMs) throws IOException {
+        sendRequest("ENV_DEL", "\"key\":" + jsonStr(key), null, timeoutMs);
+    }
+
+    private static PartTable parsePartTable(Map<String, Object> r) {
+        List<Object> arr = Json.getList(r, "parts");
+        List<Partition> parts = new ArrayList<>();
+        if (arr != null) {
+            for (Object o : arr) {
+                if (!(o instanceof Map)) continue;
+                @SuppressWarnings("unchecked")
+                Map<String, Object> m = (Map<String, Object>) o;
+                parts.add(new Partition(Json.getString(m, "name", ""),
+                        Json.getLong(m, "offset", -1), Json.getLong(m, "size", 0)));
+            }
+        }
+        return new PartTable(Json.getBool(r, "missing", false),
+                Json.getLong(r, "base", 0), Json.getLong(r, "usableFlash", 0), parts);
+    }
+
+    /** PART_LS — layout actual (offsets DERIVADOS + tamaños), o missing si virgen. */
+    public PartTable partLayout(long timeoutMs) throws IOException {
+        return parsePartTable(sendRequest("PART_LS", null, null, timeoutMs));
+    }
+
+    /** PART_DEFAULTS — tamaños sugeridos para una placa virgen (offset = -1). */
+    public PartTable partDefaults(long timeoutMs) throws IOException {
+        return parsePartTable(sendRequest("PART_DEFAULTS", null, null, timeoutMs));
+    }
+
+    /** PART_APPLY — aplica tamaños (un campo long por partición, keyed por nombre).
+     *  El peer VALIDA (offsets derivados, no-cero, alineado, cabe) y solo si es
+     *  válido escribe; si no, responde ERROR (→ IOException con el detalle). */
+    public void partApply(Map<String, Long> sizesByName, long timeoutMs) throws IOException {
+        StringBuilder extra = new StringBuilder();
+        boolean first = true;
+        for (Map.Entry<String, Long> e : sizesByName.entrySet()) {
+            if (!first) extra.append(',');
+            extra.append(jsonStr(e.getKey())).append(':').append(e.getValue());
+            first = false;
+        }
+        sendRequest("PART_APPLY", extra.toString(), null, timeoutMs);
+    }
+
     /** Helper para serializar un string con comillas + escape. */
     private static String jsonStr(String s) { return "\"" + Json.escape(s) + "\""; }
 
