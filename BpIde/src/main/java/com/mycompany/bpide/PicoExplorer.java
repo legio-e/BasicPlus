@@ -256,6 +256,13 @@ public final class PicoExplorer extends JPanel {
     /** FrmMain enchufa aquí el "limpiar consola" (comando cls). */
     public void setClearSink(Runnable r) { this.clearSink = r; }
 
+    /** H9 — FrmMain engancha aquí el "escrutinio de primera conexión": se invoca
+     *  tras conectar con éxito, con el {@link BpvmClient} compartido (null si el
+     *  backend no es v1). FrmMain decide si la placa es virgen y ofrece abrir
+     *  FrmBoard. */
+    private Consumer<BpvmClient> connectedSink;
+    public void setConnectedSink(Consumer<BpvmClient> s) { this.connectedSink = s; }
+
     /** Prompt actual: ruta del device + "> ". */
     public String consolePrompt() { return consoleCwd + "> "; }
 
@@ -889,6 +896,7 @@ public final class PicoExplorer extends JPanel {
             setConnectedUI(true);
             status.setText(endpoint + " — " + hello);
             onRefresh();
+            if (connectedSink != null) connectedSink.accept(debugClient());   // H9 escrutinio
         });
     }
 

@@ -573,6 +573,7 @@ public class FrmMain extends javax.swing.JFrame
                   toolButton("Run",           "Ejecutar (VM local)", e -> doRun(true)),
                   toolButton("Run Window",    "Ver la ventana en el PC (VM-C nativa)", e -> doRunWindow()),
                   toolButton("Run on Device", "Ejecutar en placa",   e -> doRunOnPico()),
+                  toolButton("Placa",         "Gestión de placa (entorno + particiones)", e -> openBoardManager()),
                   toolButton("Debug",         "Depurar",             e -> doDebug()),
                   toolButton("Stop",          "Parar (Ctrl+F2)",     e -> onStopRun()));
 
@@ -759,8 +760,38 @@ public class FrmMain extends javax.swing.JFrame
         });
         // H12 — la consola usa el backend del explorador; cls limpia la consolaArea.
         picoExplorer.setClearSink(() -> { if (consolaArea != null) consolaArea.setText(""); });
+        // H9 — escrutinio de primera conexión: si la placa está sin configurar,
+        // ofrecemos abrir la ventana de gestión.
+        picoExplorer.setConnectedSink(this::onDeviceConnected);
         if (consolePromptLabel != null) consolePromptLabel.setText(" " + picoExplorer.consolePrompt());
         jSplitPane2.setBottomComponent(picoExplorer);
+    }
+
+    /**
+     * H9 — "escrutinio" al conectar: pregunta STATE al device; si es una placa sin
+     * configurar (estado 0 = kernel, o sin particiones), ofrece abrir FrmBoard. Si
+     * el device no habla el protocolo de gestión (STATE → ERROR), no molesta.
+     */
+    private void onDeviceConnected(BpvmClient client) {
+        if (client == null) return;
+        new Thread(() -> {
+            final BpvmClient.BoardState st;
+            try {
+                st = client.boardState(5000);
+            } catch (java.io.IOException e) {
+                return;   // el device no soporta STATE → no es una placa H9, silencio
+            }
+            if (st.state >= 3 && !st.degraded) return;   // ya configurada y sana
+            SwingUtilities.invokeLater(() -> {
+                String msg = (st.state == 0)
+                        ? "Esta placa está sin configurar (estado 0 — kernel).\n¿Abrir la ventana de gestión de placa?"
+                        : "La placa está en estado " + st.state + " (" + st.name + ")"
+                          + (st.degraded ? " y DEGRADADA" : "") + ".\n¿Abrir la ventana de gestión de placa?";
+                int r = JOptionPane.showConfirmDialog(this, msg, "Gestión de placa",
+                        JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+                if (r == JOptionPane.YES_OPTION) openBoardManager();
+            });
+        }, "board-escrutinio").start();
     }
 
     /** H12 (#260) — ¿el fichero parece de texto (editable en el IDE)? Por
