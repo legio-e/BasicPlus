@@ -126,7 +126,10 @@ Marco del bloque (fiabilidad, no solo texto):
 - **Un solo mecanismo en el suelo:** como es un env abierto, la **tabla de particiones puede
   vivir como entradas del mismo bloque** (`part.fs.offset=…`, `part.fs.size=…`); solo se
   gradúa a un descriptor binario aparte si crece. Cierra hacia "junto y simple" de la
-  decisión (a).
+  decisión (a). **✅ IMPLEMENTADO (host, `e0e98c3`):** `bpvm_part.{h,c}` + `test-part` (18/18) —
+  parse desde el env + fachada kind→región + validación del layout (alineación, no-solape,
+  clamp #292); subsumirá el `bp_ptable_t` binario de `fs_lfs_pico.c` (B2.b). Cintura de flash
+  por-micro aparte (fase de placa).
 
 ### Acceso desde los programas BP (DECIDIDO 18-jul) — las dos APIs, en capas (fachada, no duplicación)
 
