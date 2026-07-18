@@ -79,11 +79,15 @@ el transporte del estado 0 es fijo por familia de firmware. Bonus:
 3. **Refuerza la imagen única:** el mismo `.uf2` sigue eligiendo variante en runtime, pero
    lee su identidad de la flash en el suelo, no como fichero corrector.
 
-**Decisiones a cerrar (no urgentes):** (a) ¿descriptor de placa y tabla de particiones
-JUNTOS (un "bloque de descriptor de sistema" único, A/B+CRC) o separados? — inclinación:
-junto y simple; (b) ¿`board.json`-el-fichero desaparece o queda como ESPEJO legible en
-`/sys/`? — la fuente de verdad pasa al bloque de flash; el fichero, a lo sumo, copia humana
-para inspección, NUNCA lo que la VM consulta para decidir el layout.
+**Decisiones (18-jul):** (a) ¿descriptor de placa y tabla de particiones JUNTOS o
+separados? → **JUNTOS**, un env único (la tabla de particiones son entradas más). (b)
+¿`board.json`-el-fichero desaparece o queda como espejo? → ✅ **DESAPARECE.** Una sola
+fuente de verdad = el bloque de env en flash; ni espejo ni copia en `/sys`. El **IDE es el
+EDITOR** (escribe el env por kernel-comm, A/B); el device solo LEE. Si el usuario quiere
+cambiar tamaños de particiones lo hace desde el IDE → **escribe env → reinicia → el device
+sube con el layout nuevo** (no se reparticiona en vivo con el FS montado sobre el layout
+viejo); si algo falla, se queda en estado 0/1, recuperable. Es justo el "cambio profundo"
+que hoy podría brickear y que H9 hace seguro.
 
 ### Formato del bloque de env (DECIDIDO 18-jul — Eduardo delegó el formato)
 
@@ -117,6 +121,26 @@ Marco del bloque (fiabilidad, no solo texto):
   vivir como entradas del mismo bloque** (`part.fs.offset=…`, `part.fs.size=…`); solo se
   gradúa a un descriptor binario aparte si crece. Cierra hacia "junto y simple" de la
   decisión (a).
+
+### Acceso desde los programas BP (DECIDIDO 18-jul) — las dos APIs, en capas (fachada, no duplicación)
+
+- **Base: API genérica de env** — `Env.get("psramCsPin")`, `Env.has(...)`, `Env.list()`.
+  Abierta por construcción, igual que el bloque: una entrada nueva es legible desde BP sin
+  tocar nada (el `getenv()` de toda la vida). Valores string.
+- **Encima: funciones de sistema TIPADAS** para el puñado de hechos universales —
+  `Board.flashSize(): long`, `Board.hasPsram(): boolean`, `Board.psramSize(): long`,
+  `Board.gpioCount(): integer`, `Board.name(): string`. **Delegan** en la genérica
+  (`hasPsram()` = `Env.get("psram")=="1"`), no recalculan → NO pueden divergir de la fuente.
+- **Una sola verdad, sin skew:** el runtime lee de una **copia en RAM que el kernel rellena
+  UNA vez al arrancar** desde el env; la flash es la única verdad, la RAM es caché derivada
+  de solo-lectura. Desde BP es **SOLO LECTURA** (escribir el env es privilegio del IDE).
+- **Re-hospeda lo existente:** las funciones de identificación del módulo `Pico`/MCU
+  ([[esp32-p4-memoria-psram]] / P-mcu-module) y el botón **INFO del IDE** (micro/flash/RAM/
+  PSRAM, #230) pasan a leer del MISMO env → mueren como fuentes separadas que podrían
+  discrepar. Reparto: tipadas para lo universal (nombre, flash, PSRAM, GPIO); `Env.get` para
+  la cola larga board-específica (dirección I2C de un sensor horneada en la placa, un pin
+  raro). *(Nombre exacto de los módulos `Env`/`Board` = detalle a alinear con el módulo MCU
+  existente para no fragmentar.)*
 
 ## Las DOS capas de comunicación (refinamiento de Eduardo)
 
