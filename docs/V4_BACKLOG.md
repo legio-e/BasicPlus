@@ -186,11 +186,16 @@ Diseño: `AOT_CROSS_MODULE.md` (cross-module) · `AOT_HYBRID_REFLECTION.md` (hí
 - **H4.a — Native RISC-V ⭐ (la novedad).** Compilar `native` a **RISC-V** (ESP32-P4, la placa gráfica
   insignia): port del emisor + del loader `.mdn` a RV32 (hoy el `.mdn` es Thumb-2/ARM; en ESP32
   Xtensa/RISC-V `native` cae a interpretado). Incluye ABI + relocations de RISC-V. (Xtensa del S3, menor prioridad.)
-- **H4.b — AOT handle-aware (BUG/regresión).** El puente `native→BP` (`aot_helpers.c` / `aot_call_bp` /
-  `call_method`) pasa **direcciones planas** mientras la VM interpretada ya usa **handles** →
-  `make test-throwmsg` (SIGSEGV) y `make test-throwuser` (use-after-free en `call_bp`) **ROJOS** desde
-  la migración de handles (H1). NO afecta a la ruta interpretada (default 1 worker). Se cierra migrando
-  el AOT a handles. *(Era el "Diferido" de la sección H1.)*
+- **H4.b — AOT handle-aware (BUG/regresión). 🎯 PRIORIZADO 18-jul = tarea #302.** El puente `native→BP`
+  (`aot_helpers.c` / `aot_call_bp` / `call_method` / `bridge_run_bp_frame`) pasa **direcciones planas de
+  4 bytes** mientras la VM ya usa **handles de 8 bytes** → `make test-throwmsg` (SIGSEGV) y
+  `make test-throwuser` (use-after-free en `call_bp`) **ROJOS** desde la migración de handles (H1); y el
+  clic de Forms en la VM-C (#301) es la misma raíz. **Diseño completo del arreglo en
+  [`AOT_HANDLE_MODEL.md`](AOT_HANDLE_MODEL.md)** (charla 18-jul): un solo ABI con handles de 8B en toda
+  frontera, dirección plana solo interna/transitoria; secuenciación **inline primero, AOT después**
+  (cimientos hacia arriba, evita conflicto AOT-inline); capa de raíces-de-GC (shadow stack) diferida al
+  native compilado en placa. Política: los bugs nuevos de esta familia se APARCAN aquí, no se parchean.
+  *(Era el "Diferido" de la sección H1.)*
 - **H4.c — AOT cross-module #169.** Sin puente del intérprete (hoy vía `call_bp`+warning). Se apoya en
   el MISMO `slotOf` que **B-174b** (slots de vtable) → van juntos. Diseño: `AOT_CROSS_MODULE.md`.
 - **H4.d — AOT casts + `^`.** `byte()/int()/float()/long()/double()` y el operador `^` en `AotCEmitter`
