@@ -21,7 +21,7 @@ SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/pulse.c src/pwm.c src/pico.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
-          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_bmgr.c \
+          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c \
           src/net.c src/net_host.c \
           src/fs_lfs.c src/fs_lfs_host.c \
           third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \
@@ -348,7 +348,7 @@ test-bmgr:
 # Reusa pico/json_min.c (parser JSON portable). Winsock via $(LDFLAGS) (-lws2_32).
 boardsim:
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Ipico tools/boardsim.c src/bpvm_bmgr.c src/bpvm_part.c src/bpvm_env.c src/bpvm_boot.c src/crc32.c pico/json_min.c -o build/bpvm-boardsim.exe $(LDFLAGS)
+	$(CC) $(CFLAGS) -Ipico tools/boardsim.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_part.c src/bpvm_env.c src/bpvm_boot.c src/crc32.c pico/json_min.c -o build/bpvm-boardsim.exe $(LDFLAGS)
 	@echo "boardsim listo: build/bpvm-boardsim.exe [puerto] [flash-file] [flashSizeBytes]"
 
 # H9 — smoke end-to-end del sim por el wire (arranca el sim, recorre el flujo de

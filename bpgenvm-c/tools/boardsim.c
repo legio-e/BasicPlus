@@ -15,6 +15,7 @@
  * Ver docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
  */
 #include "bpvm_bmgr.h"
+#include "bpvm_bmgr_wire.h"
 #include "bpvm_boot.h"
 #include "json_min.h"
 
@@ -135,15 +136,6 @@ static int recv_line(sock_t c, char* buf, size_t cap) {
     }
 }
 
-/* --- estado del arranque derivado (para STATE): virgen→0, sin particiones→1, listo→3 --- */
-static int derive_state(void) {
-    if (!bpvm_bmgr_env(&g_bm, NULL)) return BPVM_BOOT_KERNEL;      /* sin env → suelo */
-    bpvm_part_layout_t lay; int bad;
-    if (bpvm_bmgr_part_layout(&g_bm, SECTOR, &lay, &bad) != BPVM_PART_OK)
-        return BPVM_BOOT_PARTITIONS;                               /* env pero sin tamaños */
-    return BPVM_BOOT_APP;                                          /* completo */
-}
-
 /* --- dispatch de un request --- */
 static void handle(sock_t c, const json_obj_t* obj) {
     char type[32];
@@ -173,111 +165,25 @@ static void handle(sock_t c, const json_obj_t* obj) {
         if (s.ok) send_line(c, s.buf);
         return;
     }
-    if (!strcmp(type, "STATE")) {
-        int st = derive_state();
-        sb_raw(&s, "{\"type\":\"STATE_REPLY\",\"id\":"); sb_long(&s, id);
-        sb_raw(&s, ",\"state\":"); sb_long(&s, st);
-        sb_raw(&s, ",\"name\":\""); sb_esc(&s, bpvm_boot_state_name((bpvm_boot_state_t) st));
-        sb_raw(&s, "\",\"degraded\":false,\"reason\":\"\"}");
-        if (s.ok) send_line(c, s.buf);
-        return;
-    }
-    if (!strcmp(type, "ENV_LS")) {
-        int n = bpvm_bmgr_env_count(&g_bm);
-        sb_raw(&s, "{\"type\":\"ENV_LS_REPLY\",\"id\":"); sb_long(&s, id);
-        sb_raw(&s, ",\"entries\":[");
-        for (int i = 0; i < n; i++) {
-            char k[64], val[128];
-            if (!bpvm_bmgr_env_pair_at(&g_bm, i, k, sizeof k, val, sizeof val)) continue;
-            if (i) sb_raw(&s, ",");
-            sb_raw(&s, "{\"key\":\""); sb_esc(&s, k);
-            sb_raw(&s, "\",\"value\":\""); sb_esc(&s, val); sb_raw(&s, "\"}");
-        }
-        sb_raw(&s, "]}");
-        if (s.ok) send_line(c, s.buf); else send_err(c, id, "INTERNAL_ERROR", "reply no cabe");
-        return;
-    }
-    if (!strcmp(type, "ENV_GET")) {
-        char key[64], val[256];
-        if (json_get_str(obj, "key", key, sizeof key) < 0) { send_err(c, id, "INVALID_PARAM", "falta key"); return; }
-        if (bpvm_bmgr_env_get(&g_bm, key, val, sizeof val) < 0) { send_err(c, id, "NOT_FOUND", "clave no existe"); return; }
-        sb_raw(&s, "{\"type\":\"ENV_GET_REPLY\",\"id\":"); sb_long(&s, id);
-        sb_raw(&s, ",\"value\":\""); sb_esc(&s, val); sb_raw(&s, "\"}");
-        if (s.ok) send_line(c, s.buf);
-        return;
-    }
-    if (!strcmp(type, "ENV_SET") || !strcmp(type, "ENV_DEL")) {
-        char key[64], val[256];
-        if (json_get_str(obj, "key", key, sizeof key) < 0) { send_err(c, id, "INVALID_PARAM", "falta key"); return; }
-        const char* value = NULL;
-        if (!strcmp(type, "ENV_SET")) {
-            if (json_get_str(obj, "value", val, sizeof val) < 0) { send_err(c, id, "INVALID_PARAM", "falta value"); return; }
-            value = val;
-        }
-        int slot = -1;
-        if (bpvm_bmgr_env_set(&g_bm, key, value, &slot) != 0) { send_err(c, id, "NO_SPACE", "no cabe en el env"); return; }
-        flash_store();
-        sb_raw(&s, "{\"type\":\""); sb_raw(&s, type); sb_raw(&s, "_REPLY\",\"id\":"); sb_long(&s, id);
-        sb_raw(&s, ",\"slot\":"); sb_long(&s, slot); sb_raw(&s, "}");
-        if (s.ok) send_line(c, s.buf);
-        return;
-    }
-    if (!strcmp(type, "PART_LS")) {
-        bpvm_part_layout_t lay; int bad;
-        bpvm_part_err_t e = bpvm_bmgr_part_layout(&g_bm, SECTOR, &lay, &bad);
-        sb_raw(&s, "{\"type\":\"PART_LS_REPLY\",\"id\":"); sb_long(&s, id);
-        sb_raw(&s, ",\"base\":"); sb_long(&s, (long) g_bm.part_base);
-        sb_raw(&s, ",\"usableFlash\":"); sb_long(&s, (long) g_bm.usable_flash);
-        if (e == BPVM_PART_ERR_MISSING) {
-            sb_raw(&s, ",\"missing\":true,\"parts\":[]}");   /* virgen: el IDE ofrece defaults */
-        } else {
-            sb_raw(&s, ",\"missing\":false,\"parts\":[");
-            for (int i = 0; i < BPVM_PART_COUNT; i++) {
-                if (i) sb_raw(&s, ",");
-                sb_raw(&s, "{\"name\":\""); sb_esc(&s, bpvm_part_name((bpvm_part_kind_t) i));
-                sb_raw(&s, "\",\"offset\":"); sb_long(&s, (long) lay.parts[i].offset);
-                sb_raw(&s, ",\"size\":"); sb_long(&s, (long) lay.parts[i].size); sb_raw(&s, "}");
-            }
-            sb_raw(&s, "]}");
-        }
-        if (s.ok) send_line(c, s.buf); else send_err(c, id, "INTERNAL_ERROR", "reply no cabe");
-        return;
-    }
-    if (!strcmp(type, "PART_DEFAULTS")) {
-        uint32_t sizes[BPVM_PART_COUNT];
-        bpvm_bmgr_part_defaults(&g_bm, SECTOR, sizes);
-        sb_raw(&s, "{\"type\":\"PART_DEFAULTS_REPLY\",\"id\":"); sb_long(&s, id);
-        sb_raw(&s, ",\"parts\":[");
-        for (int i = 0; i < BPVM_PART_COUNT; i++) {
-            if (i) sb_raw(&s, ",");
-            sb_raw(&s, "{\"name\":\""); sb_esc(&s, bpvm_part_name((bpvm_part_kind_t) i));
-            sb_raw(&s, "\",\"size\":"); sb_long(&s, (long) sizes[i]); sb_raw(&s, "}");
-        }
-        sb_raw(&s, "]}");
-        if (s.ok) send_line(c, s.buf);
-        return;
-    }
-    if (!strcmp(type, "PART_APPLY")) {
-        /* tamaños: un campo long por partición, keyed por su nombre (evita parsear arrays) */
-        uint32_t sizes[BPVM_PART_COUNT];
-        for (int i = 0; i < BPVM_PART_COUNT; i++) {
-            long v = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
-            if (v < 0) { send_err(c, id, "INVALID_PARAM", "falta tamano de una particion"); return; }
-            sizes[i] = (uint32_t) v;
-        }
-        int bad = -1, slot = -1;
-        bpvm_part_err_t e = bpvm_bmgr_part_apply(&g_bm, SECTOR, sizes, &bad, &slot);
-        if (e != BPVM_PART_OK) {
-            char m[128];
-            snprintf(m, sizeof m, "%s (particion %d: %s)", bpvm_part_err_str(e), bad,
-                     bad >= 0 && bad < BPVM_PART_COUNT ? bpvm_part_name((bpvm_part_kind_t) bad) : "?");
-            send_err(c, id, "INVALID_PARAM", m);
-            return;
-        }
-        flash_store();
-        sb_raw(&s, "{\"type\":\"PART_APPLY_REPLY\",\"id\":"); sb_long(&s, id);
-        sb_raw(&s, ",\"slot\":"); sb_long(&s, slot); sb_raw(&s, "}");
-        if (s.ok) send_line(c, s.buf);
+    /* --- gestión de placa (STATE, ENV_x, PART_x): NÚCLEO COMPARTIDO con el firmware.
+     *     El sim solo parsea el JSON al `req`, despacha, y —si hubo escritura— vuelca
+     *     la "flash" (el fichero A/B). Las replies las construye bpvm_bmgr_wire →
+     *     byte-idénticas a las del device. --- */
+    if (!strcmp(type, "STATE") || !strncmp(type, "ENV_", 4) || !strncmp(type, "PART_", 5)) {
+        bpvm_bmgr_req_t req;
+        memset(&req, 0, sizeof req);
+        snprintf(req.type, sizeof req.type, "%s", type);
+        req.id = id;
+        req.has_key   = json_get_str(obj, "key",   req.key,   sizeof req.key)   >= 0;
+        req.has_value = json_get_str(obj, "value", req.value, sizeof req.value) >= 0;
+        for (int i = 0; i < BPVM_PART_COUNT; i++)
+            req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
+        char rbuf[4096];
+        int wrote = -1;
+        int n = bpvm_bmgr_wire_dispatch(&g_bm, &req, rbuf, sizeof rbuf, &wrote);
+        if (n < 0) { send_err(c, id, "INTERNAL_ERROR", "reply no cabe"); return; }
+        if (wrote >= 0) flash_store();     /* la "flash" del sim = el fichero A/B */
+        send_line(c, rbuf);
         return;
     }
     send_err(c, id, "UNSUPPORTED", "comando no soportado por el sim");
@@ -311,7 +217,7 @@ int main(int argc, char** argv) {
 
     printf("bpvm-boardsim: 127.0.0.1:%d  flash=%s (%u bytes usables)\n",
            port, g_flash_path, (unsigned) g_bm.usable_flash);
-    printf("estado inicial: %s\n", bpvm_boot_state_name((bpvm_boot_state_t) derive_state()));
+    printf("estado inicial: %s\n", bpvm_boot_state_name((bpvm_boot_state_t) bpvm_bmgr_wire_state(&g_bm)));
     fflush(stdout);
 
     for (;;) {   /* un cliente a la vez (el IDE) */

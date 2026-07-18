@@ -1,0 +1,171 @@
+/*
+ * bpvm_bmgr_wire.c — H9: núcleo único del adaptador de wire (STATE, ENV_x, PART_x).
+ * Construye replies JSON idénticas para el boardsim (host) y el firmware (device).
+ * Sin heap, sin sockets, sin JSON-parse (el llamador ya extrajo el `req`). Ver .h.
+ */
+#include "bpvm_bmgr_wire.h"
+#include "bpvm_boot.h"
+
+#include <string.h>
+#include <stdio.h>
+
+/* --- string builder minúsculo (NUL-terminado; el llamador usa strlen o el ret) --- */
+typedef struct { char* buf; size_t cap, off; int ok; } sb_t;
+
+static void sb_init(sb_t* s, char* buf, size_t cap) { s->buf = buf; s->cap = cap; s->off = 0; s->ok = 1; if (cap) buf[0] = '\0'; }
+static void sb_raw(sb_t* s, const char* str) {
+    if (!s->ok) return;
+    size_t n = strlen(str);
+    if (s->off + n >= s->cap) { s->ok = 0; return; }
+    memcpy(s->buf + s->off, str, n);
+    s->off += n;
+    s->buf[s->off] = '\0';
+}
+static void sb_long(sb_t* s, long v) { char t[24]; snprintf(t, sizeof t, "%ld", v); sb_raw(s, t); }
+static void sb_esc(sb_t* s, const char* str) {   /* string JSON escapado, sin comillas */
+    if (!s->ok) return;
+    for (const char* p = str; *p; p++) {
+        char c = *p;
+        const char* rep = NULL; char u[8];
+        switch (c) {
+        case '"':  rep = "\\\""; break;
+        case '\\': rep = "\\\\"; break;
+        case '\n': rep = "\\n";  break;
+        case '\r': rep = "\\r";  break;
+        case '\t': rep = "\\t";  break;
+        default:
+            if ((unsigned char) c < 0x20) { snprintf(u, sizeof u, "\\u%04x", c); rep = u; }
+            break;
+        }
+        if (rep) sb_raw(s, rep);
+        else {
+            if (s->off + 1 >= s->cap) { s->ok = 0; return; }
+            s->buf[s->off++] = c;
+            s->buf[s->off] = '\0';
+        }
+    }
+}
+
+int bpvm_bmgr_wire_state(const bpvm_bmgr_t* bm) {
+    if (!bpvm_bmgr_env(bm, NULL)) return BPVM_BOOT_KERNEL;            /* sin env → suelo */
+    bpvm_part_layout_t lay; int bad;
+    if (bpvm_bmgr_part_layout(bm, bm->sector, &lay, &bad) != BPVM_PART_OK)
+        return BPVM_BOOT_PARTITIONS;                                 /* env pero sin tamaños */
+    return BPVM_BOOT_APP;                                            /* completo */
+}
+
+/* Construye un ERROR reply en `out`. Devuelve su longitud (siempre un reply válido). */
+static int reply_error(char* out, size_t cap, long id, const char* code, const char* msg) {
+    sb_t s; sb_init(&s, out, cap);
+    sb_raw(&s, "{\"type\":\"ERROR\",\"id\":"); sb_long(&s, id);
+    sb_raw(&s, ",\"code\":\""); sb_esc(&s, code);
+    sb_raw(&s, "\",\"message\":\""); sb_esc(&s, msg); sb_raw(&s, "\"}");
+    return s.ok ? (int) s.off : -1;
+}
+
+int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
+                            char* out, size_t cap, int* wrote_slot) {
+    if (wrote_slot) *wrote_slot = -1;
+    if (!bm || !req || !out) return -1;
+    const long id = req->id;
+    const char* type = req->type;
+    sb_t s; sb_init(&s, out, cap);
+
+    if (!strcmp(type, "STATE")) {
+        int st = bpvm_bmgr_wire_state(bm);
+        sb_raw(&s, "{\"type\":\"STATE_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"state\":"); sb_long(&s, st);
+        sb_raw(&s, ",\"name\":\""); sb_esc(&s, bpvm_boot_state_name((bpvm_boot_state_t) st));
+        sb_raw(&s, "\",\"degraded\":false,\"reason\":\"\"}");
+        return s.ok ? (int) s.off : -1;
+    }
+    if (!strcmp(type, "ENV_LS")) {
+        int n = bpvm_bmgr_env_count(bm);
+        sb_raw(&s, "{\"type\":\"ENV_LS_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"entries\":[");
+        for (int i = 0; i < n; i++) {
+            char k[64], val[192];
+            if (!bpvm_bmgr_env_pair_at(bm, i, k, sizeof k, val, sizeof val)) continue;
+            if (i) sb_raw(&s, ",");
+            sb_raw(&s, "{\"key\":\""); sb_esc(&s, k);
+            sb_raw(&s, "\",\"value\":\""); sb_esc(&s, val); sb_raw(&s, "\"}");
+        }
+        sb_raw(&s, "]}");
+        return s.ok ? (int) s.off : reply_error(out, cap, id, "INTERNAL_ERROR", "reply no cabe");
+    }
+    if (!strcmp(type, "ENV_GET")) {
+        if (!req->has_key) return reply_error(out, cap, id, "INVALID_PARAM", "falta key");
+        char val[256];
+        if (bpvm_bmgr_env_get(bm, req->key, val, sizeof val) < 0)
+            return reply_error(out, cap, id, "NOT_FOUND", "clave no existe");
+        sb_raw(&s, "{\"type\":\"ENV_GET_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"value\":\""); sb_esc(&s, val); sb_raw(&s, "\"}");
+        return s.ok ? (int) s.off : -1;
+    }
+    if (!strcmp(type, "ENV_SET") || !strcmp(type, "ENV_DEL")) {
+        if (!req->has_key) return reply_error(out, cap, id, "INVALID_PARAM", "falta key");
+        int is_set = !strcmp(type, "ENV_SET");
+        if (is_set && !req->has_value) return reply_error(out, cap, id, "INVALID_PARAM", "falta value");
+        int slot = -1;
+        if (bpvm_bmgr_env_set(bm, req->key, is_set ? req->value : NULL, &slot) != 0)
+            return reply_error(out, cap, id, "NO_SPACE", "no cabe en el env");
+        if (wrote_slot) *wrote_slot = slot;
+        sb_raw(&s, "{\"type\":\""); sb_raw(&s, type); sb_raw(&s, "_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"slot\":"); sb_long(&s, slot); sb_raw(&s, "}");
+        return s.ok ? (int) s.off : -1;
+    }
+    if (!strcmp(type, "PART_LS")) {
+        bpvm_part_layout_t lay; int bad;
+        bpvm_part_err_t e = bpvm_bmgr_part_layout(bm, bm->sector, &lay, &bad);
+        sb_raw(&s, "{\"type\":\"PART_LS_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"base\":"); sb_long(&s, (long) bm->part_base);
+        sb_raw(&s, ",\"usableFlash\":"); sb_long(&s, (long) bm->usable_flash);
+        if (e == BPVM_PART_ERR_MISSING) {
+            sb_raw(&s, ",\"missing\":true,\"parts\":[]}");
+        } else {
+            sb_raw(&s, ",\"missing\":false,\"parts\":[");
+            for (int i = 0; i < BPVM_PART_COUNT; i++) {
+                if (i) sb_raw(&s, ",");
+                sb_raw(&s, "{\"name\":\""); sb_esc(&s, bpvm_part_name((bpvm_part_kind_t) i));
+                sb_raw(&s, "\",\"offset\":"); sb_long(&s, (long) lay.parts[i].offset);
+                sb_raw(&s, ",\"size\":"); sb_long(&s, (long) lay.parts[i].size); sb_raw(&s, "}");
+            }
+            sb_raw(&s, "]}");
+        }
+        return s.ok ? (int) s.off : reply_error(out, cap, id, "INTERNAL_ERROR", "reply no cabe");
+    }
+    if (!strcmp(type, "PART_DEFAULTS")) {
+        uint32_t sizes[BPVM_PART_COUNT];
+        bpvm_bmgr_part_defaults(bm, bm->sector, sizes);
+        sb_raw(&s, "{\"type\":\"PART_DEFAULTS_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"parts\":[");
+        for (int i = 0; i < BPVM_PART_COUNT; i++) {
+            if (i) sb_raw(&s, ",");
+            sb_raw(&s, "{\"name\":\""); sb_esc(&s, bpvm_part_name((bpvm_part_kind_t) i));
+            sb_raw(&s, "\",\"size\":"); sb_long(&s, (long) sizes[i]); sb_raw(&s, "}");
+        }
+        sb_raw(&s, "]}");
+        return s.ok ? (int) s.off : -1;
+    }
+    if (!strcmp(type, "PART_APPLY")) {
+        uint32_t sizes[BPVM_PART_COUNT];
+        for (int i = 0; i < BPVM_PART_COUNT; i++) {
+            if (req->part_sizes[i] < 0) return reply_error(out, cap, id, "INVALID_PARAM", "falta tamano de una particion");
+            sizes[i] = (uint32_t) req->part_sizes[i];
+        }
+        int bad = -1, slot = -1;
+        bpvm_part_err_t e = bpvm_bmgr_part_apply(bm, bm->sector, sizes, &bad, &slot);
+        if (e != BPVM_PART_OK) {
+            char m[128];
+            snprintf(m, sizeof m, "%s (particion %d: %s)", bpvm_part_err_str(e), bad,
+                     (bad >= 0 && bad < BPVM_PART_COUNT) ? bpvm_part_name((bpvm_part_kind_t) bad) : "?");
+            return reply_error(out, cap, id, "INVALID_PARAM", m);
+        }
+        if (wrote_slot) *wrote_slot = slot;
+        sb_raw(&s, "{\"type\":\"PART_APPLY_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"slot\":"); sb_long(&s, slot); sb_raw(&s, "}");
+        return s.ok ? (int) s.off : -1;
+    }
+
+    return reply_error(out, cap, id, "UNSUPPORTED", "comando de gestion no soportado");
+}
