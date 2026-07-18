@@ -184,6 +184,36 @@ que necesita una capa aún no disponible **devuelve un error limpio "no disponib
 en el estado actual"** — nunca cuelga ni corrompe. `STATE` es el latido del bucle
 de feedback: el host **siempre** sabe con qué está hablando.
 
+### Comandos de gestión de placa (kernel-comm) — ✅ NÚCLEO IMPLEMENTADO (host, `a104961`)
+
+El puñado de verbos que el IDE (FrmBoard) usa para ver/editar entorno y particiones.
+Van en **kernel-comm** (deben funcionar en el suelo, es donde se recupera una placa
+virgen). Framing = wire v1 de siempre (`{"type":..,"id":N,..}` + reply `_REPLY` /
+`ERROR`). El firmware es un **adaptador fino**: parsea el JSON, llama a la función
+`bpvm_bmgr_*` correspondiente, formatea el reply. Toda la lógica (y sus pruebas) vive
+en `bpvm_bmgr` (host-testable, `test-bmgr` 30/30).
+
+| Verbo | Argumentos | Reply | `bpvm_bmgr_*` |
+|---|---|---|---|
+| `STATE` | — | `{state,name,degraded,reason}` | (bpvm_boot_state_report) |
+| `ENV_LS` | — | lista `{key,value}` | `env_count` + `env_pair_at` |
+| `ENV_GET` | `key` | `{value}` o ERROR NOT_FOUND | `env_get` |
+| `ENV_SET` | `key,value` | OK (+ vuelca slot) | `env_set` |
+| `ENV_DEL` | `key` | OK (+ vuelca slot) | `env_set(value=NULL)` |
+| `PART_LS` | — | tamaños+offsets derivados, o `MISSING` (virgen) | `part_layout` |
+| `PART_DEFAULTS` | — | tamaños sugeridos (1ª vez) | `part_defaults` |
+| `PART_APPLY` | `sizes[]` | OK (+ vuelca slot) o error de validación | `part_apply` |
+
+**Notas de contrato** (cerradas por el modelo de particiones y el bloque A/B):
+- **No hay `PART_ADD`/`PART_DEL`.** Las particiones son un conjunto fijo; "crear" =
+  `PART_APPLY` con los tamaños (defaults la 1ª vez). Los offsets NUNCA viajan (derivados).
+- `PART_APPLY` es **transaccional**: valida primero; si falla, **no toca el env** y
+  devuelve el error + índice culpable. No reparticiona en vivo → el device se reinicia y
+  sube con el layout nuevo (si algo va mal, se queda en estado 0/1, recuperable).
+- `ENV_SET`/`PART_APPLY` re-serializan a la copia A/B **rancia** con `seq+1`; el device
+  solo tiene que volcar el sector `wrote_slot` a flash (la cintura por-micro). Corte de
+  corriente a mitad = seguro (la copia actual sigue válida hasta que la nueva pasa CRC).
+
 ## Flujo de bring-up (IDE ↔ FrmBoard) — placa virgen (charla 18-jul)
 
 Es la máquina de estados de H9 asomando en el IDE. Una **placa recién flasheada = estado 0**
@@ -304,6 +334,21 @@ No es preferencia: es el corolario. Las **particiones necesitan el tamaño de fl
 ## Estado
 
 Propuesto y ACORDADO 18-jul (Eduardo prefiere este modelo al diseño actual: da
-feedback ante fallos, en placas nuevas y en cambios profundos). **Sin implementar
-— registrado como charla de diseño.** Antes de programar: cerrar las 3 decisiones
-load-bearing. Empezar por **H9.0 (kernel/estado 0)**, que no depende de nada.
+feedback ante fallos, en placas nuevas y en cambios profundos).
+
+**Núcleo portable EN HOST — 4 ladrillos verdes (host-como-oráculo, sin placa):**
+1. `bpvm_env` — bloque de env A/B (formato + CRC + pick + get + serialize +
+   payload_set + enumeración + apply). `test-env` 34/34. (`1041fd1` + `9e59895` + `a104961`)
+2. `bpvm_part` — particiones = conjunto FIJO y ORDENADO, offsets DERIVADOS, el
+   usuario solo edita tamaños; defaults la 1ª vez; validación + clamp #292.
+   `test-part` 21/21. (`e0e98c3` → reescrito `9e59895`)
+3. `bpvm_boot` — máquina de estados 0→3, subida/retirada a último-bueno + `STATE`.
+   `test-boot` 20/20. (`4660e8b`)
+4. `bpvm_bmgr` — board manager: núcleo del protocolo de gestión de placa (ENV_*/
+   PART_*), compone env+part, transaccional. `test-bmgr` 30/30. (`a104961`)
+
+**Pendiente (fase de placa/IDE):** cintura de flash por-micro (leer/borrar/escribir
+el sector del env + volcar `wrote_slot`; offset fijo por familia); transporte
+kernel-comm (dispatcher de dos tablas); adaptador JSON del firmware (repl_v1 →
+`bpvm_bmgr_*`); mount callbacks reales de las capas; wiring de FrmBoard en el IDE.
+Opcional host: descriptor de placa tipado `bpvm_board` (fachada `Board.*` sobre env).
