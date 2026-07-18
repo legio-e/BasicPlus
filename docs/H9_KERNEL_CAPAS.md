@@ -129,13 +129,21 @@ Marco del bloque (fiabilidad, no solo texto):
   env no puede depender de él (huevo-y-gallina). El offset es una constante por familia,
   compartida kernel↔host, y es **una entrada más del `FLASH_LAYOUT` por micro** (el "solo
   falta tamaños por micro" de [[particiones-flash-estado-pre-h3]]).
-- **Un solo mecanismo en el suelo:** como es un env abierto, la **tabla de particiones puede
-  vivir como entradas del mismo bloque** (`part.fs.offset=…`, `part.fs.size=…`); solo se
-  gradúa a un descriptor binario aparte si crece. Cierra hacia "junto y simple" de la
-  decisión (a). **✅ IMPLEMENTADO (host, `e0e98c3`):** `bpvm_part.{h,c}` + `test-part` (18/18) —
-  parse desde el env + fachada kind→región + validación del layout (alineación, no-solape,
-  clamp #292); subsumirá el `bp_ptable_t` binario de `fs_lfs_pico.c` (B2.b). Cintura de flash
-  por-micro aparte (fase de placa).
+- **Un solo mecanismo en el suelo:** como es un env abierto, la **tabla de particiones vive
+  como entradas del mismo bloque** — pero **SOLO tamaños** (`part.fs.size=…`,
+  `part.packs.size=…`), nunca offsets. Cierra hacia "junto y simple" de la decisión (a). Solo
+  se gradúa a un descriptor binario aparte si crece.
+- **⚠️ Modelo de particiones (CORREGIDO 18-jul, Eduardo):** las particiones son un **conjunto
+  FIJO y ORDENADO** — las que son, en su orden. El usuario **NO las crea/borra**; lo único
+  editable es el **TAMAÑO**. Por eso los **offsets se DERIVAN** (contiguos desde la base, en
+  orden) y NO se guardan: no pueden contradecir al orden y **no hay solapes por
+  construcción** → una sola fuente de verdad. La 1ª vez (env sin tamaños) el asistente
+  **propone defaults**, el usuario ajusta y confirma. **✅ IMPLEMENTADO (host, `e0e98c3` →
+  reescrito `9e59895`):** `bpvm_part.{h,c}` + `test-part` (21/21) — enum fijo `BPVM_PART_FS/
+  PACKS`, `bpvm_part_defaults`, offsets derivados, fachada kind→región, validación reducida a
+  lo que aún puede fallar (ZERO/UNALIGNED/OVERFLOW) + clamp #292; falta un tamaño →
+  `BPVM_PART_ERR_MISSING` (virgen, no error). Subsumirá el `bp_ptable_t` binario de
+  `fs_lfs_pico.c` (B2.b). Cintura de flash por-micro aparte (fase de placa).
 
 ### Acceso desde los programas BP (DECIDIDO 18-jul) — las dos APIs, en capas (fachada, no duplicación)
 
