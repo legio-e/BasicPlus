@@ -1,46 +1,47 @@
 /*
- * test/aot_MethodCall.c — thunk AOT a mano para #174 (mitad-VM). Hace el papel
- * del código native de `useBox`, que invoca el MÉTODO público getDoubled() de
- * un objeto Box vía vm->aot_helpers->call_method_i32 (despacho virtual por
- * vtable). Desde #174b AotCEmitter genera un thunk EQUIVALENTE al compilar
- * `native function useBox` (verás `call_method_i32(vm, b, 2, ...)` con
- * AotMain). Este se mantiene a mano como FIXTURE del test C, con el slot
- * hard-coded (getDoubled = slot 2, verificado con el disassembler), para que
- * `make test-method` no dependa de re-ejecutar el frontend Java.
+ * aot_MethodCall.c — AUTOGENERADO por AotCEmitter (H3 #157).
+ * NO EDITAR A MANO. Regenerar compilando MethodCall.bp con --aot.
  *
- * Lo NUEVO que prueba (runtime): código native despachando un método virtual
- * según la clase real del receptor (obj→class→vtable[slot]→cs+offset) + el
- * puente con `this` como arg0.
+ * Funciones BP marcadas con `function native ...` traducidas a C.
+ * El bytecode .mod se sigue generando normalmente; el runtime
+ * decide qué versión usar via aot_registry tras link.
  */
 
 #include "aot_registry.h"
 #include "bpvm.h"
 #include "bpvm_internal.h"
-#include "bpvm_aot_helpers.h"
+#include "bpvm_aot_helpers.h"   /* H3 #158 — helpers indirect */
 
-/* Box: toString=0, compareTo=1 (heredados de Object), getDoubled=2. */
-#define SLOT_GETDOUBLED 2
+/* Forward decls de las funciones AOT de este módulo. */
+static int32_t aot_MethodCall_useBox(struct bpvm* vm, int32_t b);
 
 static int32_t aot_MethodCall_useBox(struct bpvm* vm, int32_t b) {
-    const struct aot_helpers_v1* H = vm->aot_helpers;
-    /* useBox(b) = b.getDoubled() + 1. getDoubled no toma args (solo this). */
-    return H->call_method_i32(vm, (uint32_t) b, SLOT_GETDOUBLED,
-                              (const int32_t*) 0, 0) + 1;
+    (void) vm;   /* puede no usarse si la función no toca
+                  *  globals/arrays/builtins. */
+    (void) b;
+    return (vm->aot_helpers->call_method_i32(vm, b, 2, (const int32_t*) 0, 0, 0u, 0) + 1);
 }
 
 static void thunk_MethodCall_useBox(struct bpvm* vm,
                               uint32_t* sp_p,
                               uint32_t* bp_p) {
     (void) bp_p;
-    const struct aot_helpers_v1* H = vm->aot_helpers;
+    /* H3 #158 — helpers accedidos indirect via vm.
+     * No referencia símbolos del runtime por nombre → el
+     * .o resultante con -fpic es 100% relocatable. */
+    const struct aot_helpers_v2* H = vm->aot_helpers;
     uint8_t* mem = vm->memory;
     uint32_t sp = *sp_p;
-    int32_t a0 = H->read_i32_be(mem + sp - 4); sp -= 4;   /* el Box */
+    int32_t a0 = (int32_t) H->read_ref(mem + sp - 8); sp -= 8;  /* ref: 8B */
     int32_t r = aot_MethodCall_useBox(vm, a0);
     H->write_i32_be(mem + sp, r); sp += 4;
     *sp_p = sp;
 }
 
+/* Registra todas las funciones AOT de este módulo en el AOT
+ * registry. Llamar tras link, antes de bpvm_run. Tolerante a
+ * símbolos ausentes (skip silente si el .mod no está cargado). */
 void aot_MethodCall_register(struct bpvm* vm) {
     bpvm_aot_register_by_name(vm, "MethodCall.useBox", thunk_MethodCall_useBox);
 }
+

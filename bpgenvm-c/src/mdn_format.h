@@ -31,7 +31,10 @@
 
 #define MDN_MAGIC          { 'M', 'D', 'N', 0 }
 #define MDN_VERSION        1   /* incrementar si cambia el header layout */
-#define MDN_ABI_VERSION    1   /* matches aot_helpers_v1_t */
+#define MDN_ABI_VERSION    2   /* #302 paso 2 — matches aot_helpers_v2_t (refs = handles).
+                                * Un .mdn de ABI 1 (refs = offset crudo) pasaría offsets a
+                                * helpers que ahora esperan handles → corrupción; el loader
+                                * lo RECHAZA con MDN_ERR_ABI (gate estilo #284). */
 #define MDN_NAME_MAX       32  /* longitud max de qualified name */
 
 typedef struct {

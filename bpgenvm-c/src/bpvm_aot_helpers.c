@@ -45,6 +45,26 @@ bpvm_aot_callctx_t* bpvm_aot_callctx(void) {
     return &g_aot_callctx;
 }
 
+/* ---------- #302 paso 2 — frontera de referencias ----------
+ * A(vm, ref): resuelve un HANDLE EMPAQUETADO (idx|TAG, gen descartada — la
+ * representación de una ref en la ABI AOT v2) a su offset crudo en memory[].
+ * bpref_regen le devuelve la gen viva; bpref_deref hace la indirección de tabla.
+ * ref==0 (null) → addr 0. TODO helper que antes hacía `vm->memory + ref` debe
+ * pasar por aquí: en v2 `ref` YA NO es un offset (lleva el TAG). */
+static inline uint32_t A(bpvm_t* vm, uint32_t ref) {
+    return bpref_deref(vm, bpref_regen(vm, ref));
+}
+
+/* Frontera thunk↔pila BP: una ref son 8 bytes en la pila (handle de 64b).
+ * read_ref devuelve la palabra baja (handle empaquetado idx|TAG) que circula
+ * por el cuerpo AOT; write_ref reconstruye la gen viva y escribe los 8 bytes. */
+static uint32_t h_read_ref(const uint8_t* p) {
+    return (uint32_t) bpvm_read_i64_be(p);
+}
+static void h_write_ref(bpvm_t* vm, uint8_t* p, uint32_t ref) {
+    bpvm_write_i64_be(p, (int64_t) bpref_regen(vm, ref).v);
+}
+
 /* ---------- I/O memoria big-endian ----------
  * Estos están como static inline en bpvm_internal.h — necesitamos
  * un wrapper extern para tenerlos en la tabla. Mismas semánticas. */
@@ -92,10 +112,11 @@ static void h_throw_runtime(bpvm_t* vm, const char* msg) {
 static void h_throw_str(bpvm_t* vm, uint32_t msg_ref) {
     char buf[128];
     uint32_t n = 0;
-    if (msg_ref != 0) {
-        n = bpvm_read_u32_be(vm->memory + msg_ref);
+    uint32_t addr = msg_ref ? A(vm, msg_ref) : 0;   /* v2: handle → offset */
+    if (addr != 0) {
+        n = bpvm_read_u32_be(vm->memory + addr);
         if (n > sizeof(buf) - 1) n = (uint32_t)(sizeof(buf) - 1);
-        memcpy(buf, vm->memory + msg_ref + 4, n);
+        memcpy(buf, vm->memory + addr + 4, n);
     }
     buf[n] = '\0';
     h_throw_runtime(vm, buf);   /* no retorna (longjmp al boundary) */
@@ -155,10 +176,11 @@ static void h_print_f32(bpvm_t* vm, float v, int nl) {
 }
 static void h_print_string(bpvm_t* vm, uint32_t ref, int nl) {
     /* H2 (V2): string = byte[] UTF-8 → emite los bytes directamente, sin
-     * truncar (paridad con OP_PRINT_STRING del intérprete). */
-    if (ref != 0) {
-        uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
-        const char* p = (const char*)(vm->memory + ref + 4);
+     * truncar (paridad con OP_PRINT_STRING del intérprete). v2: deref el handle. */
+    uint32_t addr = ref ? A(vm, ref) : 0;
+    if (addr != 0) {
+        uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
+        const char* p = (const char*)(vm->memory + addr + 4);
         if (nbytes > 0) {
             if (vm->output_cb) vm->output_cb(p, (size_t) nbytes, vm->output_user);
             else fwrite(p, 1, (size_t) nbytes, stdout);
@@ -206,33 +228,35 @@ static void h_write_f32_be(uint8_t* p, float v) {
  * #175). */
 static int32_t h_array_load_i32(bpvm_t* vm, uint32_t ref, int32_t idx) {
     if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_i32: null array");
+        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i32: null array");
         return 0;
     }
     uint8_t* mem = vm->memory;
-    uint32_t length = bpvm_read_u32_be(mem + ref);
+    uint32_t addr = A(vm, ref);                 /* v2: handle → offset */
+    uint32_t length = bpvm_read_u32_be(mem + addr);
     if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_i32: index out of bounds");
+        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i32: index out of bounds");
         return 0;
     }
-    return bpvm_read_i32_be(mem + ref + 4 + (uint32_t) idx * 4);
+    return bpvm_read_i32_be(mem + addr + 4 + (uint32_t) idx * 4);
 }
 static void h_array_store_i32(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
     if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v1.throw_runtime(vm, "array_store_i32: null array");
+        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i32: null array");
         return;
     }
     uint8_t* mem = vm->memory;
-    uint32_t length = bpvm_read_u32_be(mem + ref);
+    uint32_t addr = A(vm, ref);
+    uint32_t length = bpvm_read_u32_be(mem + addr);
     if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v1.throw_runtime(vm, "array_store_i32: index out of bounds");
+        bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i32: index out of bounds");
         return;
     }
-    bpvm_write_i32_be(mem + ref + 4 + (uint32_t) idx * 4, v);
+    bpvm_write_i32_be(mem + addr + 4 + (uint32_t) idx * 4, v);
 }
 static int32_t h_array_length(bpvm_t* vm, uint32_t ref) {
     if (ref == 0) return 0;   /* null array → length 0 (BP semantics) */
-    return (int32_t) bpvm_read_u32_be(vm->memory + ref);
+    return (int32_t) bpvm_read_u32_be(vm->memory + A(vm, ref));
 }
 
 /* #193 — arrays narrow de 1 byte (BP byte[]). Layout: [length:u32 BE][b0][b1]...
@@ -240,42 +264,45 @@ static int32_t h_array_length(bpvm_t* vm, uint32_t ref) {
  * (interp.c): load_i8 extiende con signo, load_u8 con cero, store_i8 trunca. */
 static int32_t h_array_load_i8(bpvm_t* vm, uint32_t ref, int32_t idx) {
     if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_i8: null array");
+        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i8: null array");
         return 0;
     }
     uint8_t* mem = vm->memory;
-    uint32_t length = bpvm_read_u32_be(mem + ref);
+    uint32_t addr = A(vm, ref);                 /* v2: handle → offset */
+    uint32_t length = bpvm_read_u32_be(mem + addr);
     if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_i8: index out of bounds");
+        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_i8: index out of bounds");
         return 0;
     }
-    return (int32_t)(int8_t) mem[ref + 4 + (uint32_t) idx];   /* sign-extend */
+    return (int32_t)(int8_t) mem[addr + 4 + (uint32_t) idx];   /* sign-extend */
 }
 static int32_t h_array_load_u8(bpvm_t* vm, uint32_t ref, int32_t idx) {
     if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_u8: null array");
+        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_u8: null array");
         return 0;
     }
     uint8_t* mem = vm->memory;
-    uint32_t length = bpvm_read_u32_be(mem + ref);
+    uint32_t addr = A(vm, ref);
+    uint32_t length = bpvm_read_u32_be(mem + addr);
     if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v1.throw_runtime(vm, "array_load_u8: index out of bounds");
+        bpvm_aot_helpers_v2.throw_runtime(vm, "array_load_u8: index out of bounds");
         return 0;
     }
-    return (int32_t)(uint8_t) mem[ref + 4 + (uint32_t) idx];  /* zero-extend */
+    return (int32_t)(uint8_t) mem[addr + 4 + (uint32_t) idx];  /* zero-extend */
 }
 static void h_array_store_i8(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) {
     if (ref == 0) {
-        if (vm) bpvm_aot_helpers_v1.throw_runtime(vm, "array_store_i8: null array");
+        if (vm) bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i8: null array");
         return;
     }
     uint8_t* mem = vm->memory;
-    uint32_t length = bpvm_read_u32_be(mem + ref);
+    uint32_t addr = A(vm, ref);
+    uint32_t length = bpvm_read_u32_be(mem + addr);
     if (idx < 0 || (uint32_t) idx >= length) {
-        bpvm_aot_helpers_v1.throw_runtime(vm, "array_store_i8: index out of bounds");
+        bpvm_aot_helpers_v2.throw_runtime(vm, "array_store_i8: index out of bounds");
         return;
     }
-    mem[ref + 4 + (uint32_t) idx] = (uint8_t)(v & 0xFF);      /* truncate */
+    mem[addr + 4 + (uint32_t) idx] = (uint8_t)(v & 0xFF);      /* truncate */
 }
 
 /* ---------- Builtins (H3 #168) ----------
@@ -327,15 +354,22 @@ static uint32_t h_find_function(bpvm_t* vm, const char* qualified) {
  * String heap = [byte_len:u32 BE][bytes UTF-8] (TYPE_ARRAY_I8). Índice por
  * codepoint vía helpers utf8_* (bpvm_internal.h). Reusan bpvm_heap_alloc /
  * bpvm_heap_alloc_string del runtime. DEBEN coincidir con builtins.c. */
+/* v2: los `ref` de entrada son handles empaquetados → A(vm,ref) los resuelve.
+ * Los que ALOCAN (char_at/concat/substring) llaman bpvm_heap_alloc (offset crudo)
+ * y devuelven el handle EMPAQUETADO (bpvm_handle_register). La alocación es un
+ * safepoint: re-derefiamos los inputs DESPUÉS de alocar (regla de la dirección
+ * transitoria; en F2 no compacta, pero mantiene la disciplina del modelo). */
 static int32_t h_string_length(bpvm_t* vm, uint32_t ref) {
     if (ref == 0) return 0;
-    uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
-    return (int32_t) utf8_cp_count(vm->memory + ref + 4, nbytes);
+    uint32_t addr = A(vm, ref);
+    uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
+    return (int32_t) utf8_cp_count(vm->memory + addr + 4, nbytes);
 }
 static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
     if (ref == 0) return 0;
-    uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
-    const uint8_t* p = vm->memory + ref + 4;
+    uint32_t addr = A(vm, ref);
+    uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
+    const uint8_t* p = vm->memory + addr + 4;
     uint32_t ncp = utf8_cp_count(p, nbytes);
     if (idx < 0 || (uint32_t) idx >= ncp) return 0;
     uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) idx);
@@ -344,8 +378,9 @@ static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
 static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
     uint8_t enc[4]; uint32_t enc_len = 0;
     if (ref != 0) {
-        uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
-        const uint8_t* p = vm->memory + ref + 4;
+        uint32_t addr = A(vm, ref);
+        uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
+        const uint8_t* p = vm->memory + addr + 4;
         uint32_t ncp = utf8_cp_count(p, nbytes);
         if (idx >= 0 && (uint32_t) idx < ncp) {
             uint32_t off = utf8_byte_offset(p, nbytes, (uint32_t) idx);
@@ -354,27 +389,29 @@ static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
         }
     }
     uint32_t out = bpvm_heap_alloc(vm, enc_len, BPVM_TYPE_ARRAY_I8);
-    if (out) {
-        bpvm_write_u32_be(vm->memory + out, enc_len);
-        for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
-    }
-    return out;
+    if (!out) return 0;
+    bpvm_write_u32_be(vm->memory + out, enc_len);
+    for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
+    return (uint32_t) bpvm_handle_register(vm, out).v;
 }
 static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
-    uint32_t la = a ? bpvm_read_u32_be(vm->memory + a) : 0;   /* bytes */
-    uint32_t lb = b ? bpvm_read_u32_be(vm->memory + b) : 0;
+    uint32_t aa = a ? A(vm, a) : 0, ba = b ? A(vm, b) : 0;
+    uint32_t la = aa ? bpvm_read_u32_be(vm->memory + aa) : 0;   /* bytes */
+    uint32_t lb = ba ? bpvm_read_u32_be(vm->memory + ba) : 0;
     uint32_t out = bpvm_heap_alloc(vm, la + lb, BPVM_TYPE_ARRAY_I8);
     if (!out) return 0;
-    uint8_t* mem = vm->memory;   /* F2 no compacta: a/b siguen válidos */
+    aa = a ? A(vm, a) : 0; ba = b ? A(vm, b) : 0;   /* re-deref tras el safepoint */
+    uint8_t* mem = vm->memory;
     bpvm_write_u32_be(mem + out, la + lb);
-    for (uint32_t i = 0; i < la; i++) mem[out + 4 + i] = mem[a + 4 + i];
-    for (uint32_t i = 0; i < lb; i++) mem[out + 4 + la + i] = mem[b + 4 + i];
-    return out;
+    for (uint32_t i = 0; i < la; i++) mem[out + 4 + i] = mem[aa + 4 + i];
+    for (uint32_t i = 0; i < lb; i++) mem[out + 4 + la + i] = mem[ba + 4 + i];
+    return (uint32_t) bpvm_handle_register(vm, out).v;
 }
 static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {
     if (ref == 0) return 0;
-    uint32_t nbytes = bpvm_read_u32_be(vm->memory + ref);
-    const uint8_t* p = vm->memory + ref + 4;
+    uint32_t addr = A(vm, ref);
+    uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
+    const uint8_t* p = vm->memory + addr + 4;
     uint32_t ncp = utf8_cp_count(p, nbytes);   /* índices en codepoints */
     if (from < 0) from = 0;
     if (to < 0)   to = 0;
@@ -385,20 +422,22 @@ static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32
     uint32_t n = eoff - boff;
     uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
     if (!out) return 0;
+    addr = A(vm, ref);   /* re-deref tras el safepoint */
     uint8_t* mem = vm->memory;
     bpvm_write_u32_be(mem + out, n);
-    for (uint32_t i = 0; i < n; i++) mem[out + 4 + i] = mem[ref + 4 + boff + i];
-    return out;
+    for (uint32_t i = 0; i < n; i++) mem[out + 4 + i] = mem[addr + 4 + boff + i];
+    return (uint32_t) bpvm_handle_register(vm, out).v;
 }
 static int32_t h_string_eq(bpvm_t* vm, uint32_t a, uint32_t b) {
-    if (a == b) return 1;              /* misma ref (incl. ambos null) */
+    if (a == b) return 1;              /* mismo handle (incl. ambos null) */
     if (a == 0 || b == 0) return 0;
     uint8_t* mem = vm->memory;
-    uint32_t la = bpvm_read_u32_be(mem + a);   /* bytes */
-    uint32_t lb = bpvm_read_u32_be(mem + b);
+    uint32_t aa = A(vm, a), ba = A(vm, b);
+    uint32_t la = bpvm_read_u32_be(mem + aa);   /* bytes */
+    uint32_t lb = bpvm_read_u32_be(mem + ba);
     if (la != lb) return 0;
     for (uint32_t i = 0; i < la; i++)
-        if (mem[a + 4 + i] != mem[b + 4 + i]) return 0;
+        if (mem[aa + 4 + i] != mem[ba + 4 + i]) return 0;
     return 1;
 }
 static uint32_t h_string_from_cstr(bpvm_t* vm, const char* s, int32_t len) {
@@ -413,7 +452,7 @@ static uint32_t h_int_to_string(bpvm_t* vm, int32_t v) {
 
 /* ---------- Instancia exportada ----------
  * `const` para que viva en .rodata (flash en el Pico). */
-const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
+const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     .read_i32_be     = h_read_i32_be,
     .write_i32_be    = h_write_i32_be,
     .read_i16_be     = h_read_i16_be,
@@ -456,4 +495,7 @@ const aot_helpers_v1_t bpvm_aot_helpers_v1 = {
     .array_store_i8      = h_array_store_i8,
     /* #213 — throw de excepción construida (clase de usuario desde native). */
     .throw_ref           = h_throw_ref,
+    /* #302 paso 2 — frontera de referencias thunk↔pila BP. */
+    .read_ref            = h_read_ref,
+    .write_ref           = h_write_ref,
 };

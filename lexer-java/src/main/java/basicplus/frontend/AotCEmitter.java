@@ -419,16 +419,23 @@ public final class AotCEmitter {
         w.println("    /* H3 #158 — helpers accedidos indirect via vm.");
         w.println("     * No referencia símbolos del runtime por nombre → el");
         w.println("     * .o resultante con -fpic es 100% relocatable. */");
-        w.println("    const struct aot_helpers_v1* H = vm->aot_helpers;");
+        w.println("    const struct aot_helpers_v2* H = vm->aot_helpers;");
         w.println("    uint8_t* mem = vm->memory;");
         w.println("    uint32_t sp = *sp_p;");
         // Pop args en orden inverso (último pusheado, primero popeado).
-        // Cada arg usa el helper de lectura adecuado a su tipo (int/float).
+        // #302 paso 2 — un arg REFERENCIA ocupa 8 bytes en la pila BP (handle):
+        // se lee con read_ref (devuelve el handle empaquetado, que el cuerpo AOT
+        // maneja como i32) y avanza sp -= 8. Los no-ref siguen a 4 bytes.
         int n = f.params.size();
         for (int i = n - 1; i >= 0; i--) {
             Ast.Param p = f.params.get(i);
-            w.println("    " + cType(p.type) + " a" + i + " = H->"
-                + readHelper(p.type) + "(mem + sp - 4); sp -= 4;");
+            if (paramIsRef(f, i)) {
+                w.println("    " + cType(p.type) + " a" + i
+                    + " = (int32_t) H->read_ref(mem + sp - 8); sp -= 8;  /* ref: 8B */");
+            } else {
+                w.println("    " + cType(p.type) + " a" + i + " = H->"
+                    + readHelper(p.type) + "(mem + sp - 4); sp -= 4;");
+            }
         }
         // C call con args en orden original a0, a1, a2...
         // Si la función es void, no asignamos a una variable y no
@@ -442,7 +449,11 @@ public final class AotCEmitter {
         for (int i = 0; i < n; i++) call.append(", a").append(i);
         call.append(");");
         w.println(call);
-        if (!isVoid) {
+        if (!isVoid && returnIsRef(f)) {
+            /* #302 paso 2 — retorno REFERENCIA: escribir el handle de 8 bytes con
+             * la gen VIVA (write_ref regen internamente) y avanzar sp += 8. */
+            w.println("    H->write_ref(vm, mem + sp, (uint32_t) r); sp += 8;  /* ref: 8B */");
+        } else if (!isVoid) {
             w.println("    H->" + writeHelper(f.returnType)
                 + "(mem + sp, r); sp += 4;");
         } else {
@@ -794,9 +805,11 @@ public final class AotCEmitter {
 
         indent();
         w.print("vm->aot_helpers->throw_ref(vm, (uint32_t) ");
+        /* La factory __cls_new_* SIEMPRE devuelve la instancia (una ref) → ret_is_ref=1. */
+        int ctorMask = (ctor != null) ? refMaskOfParams(ctor.params) : 0;
         emitCallBpEmission(qn.toString(), c.args, line,
             "la factory de '" + cls.name + "' (la instancia del throw se construye "
-            + "en el intérprete)");
+            + "en el intérprete)", ctorMask, true);
         w.println(");");
     }
 
@@ -1135,7 +1148,8 @@ public final class AotCEmitter {
 
         emitCallBpEmission(moduleName + "." + name, c.args, c.line,
             "la función BP interpretada '" + name + "'. Para máximo rendimiento, "
-            + "declara '" + name + "' también como native");
+            + "declara '" + name + "' también como native",
+            refMaskOfFuncDef(target), returnIsRef(target));
     }
 
     /** #169 — emite una llamada cross-module native→BP (`Mod.func(args)`) por
@@ -1160,7 +1174,8 @@ public final class AotCEmitter {
                 "AOT: call cross-module a '" + qn + "' (line " + c.line + "): "
                 + c.args.size() + " args pero espera " + fs.params.size() + ".");
         }
-        emitCallBpEmission(qn, c.args, c.line, "la función BP cross-module '" + qn + "'");
+        emitCallBpEmission(qn, c.args, c.line, "la función BP cross-module '" + qn + "'",
+            refMaskOfParams(fs.params), isRefBp(fs.returnType));
     }
 
     /** #174b — emite una llamada a método PÚBLICO de instancia (virtual) desde
@@ -1195,13 +1210,18 @@ public final class AotCEmitter {
         warnings.add("la función native '" + currentFuncName + "' invoca el método público '"
             + fs.name + "' (línea " + c.line + "). Esa llamada cruza al intérprete por el "
             + "puente native→BP (dispatch virtual) y NO se acelera por AOT.");
-        /* call_method_i32(vm, <this>, slot, (int32_t[]){args...}, n). */
+        /* call_method_i32(vm, <this>, slot, (int32_t[]){args...}, n, ref_mask, ret_is_ref).
+         * #302 paso 2 — ref_mask marca los args del USUARIO (el `this` lo añade la
+         * propia call_method_i32 como bit 0); ret_is_ref, el retorno. */
+        int refMask = refMaskOfParams(fs.params);
+        boolean retIsRef = isRefBp(fs.returnType);
+        String tail = ", " + refMask + "u, " + (retIsRef ? 1 : 0) + ")";
         w.print("vm->aot_helpers->call_method_i32(vm, ");
         emitExpr(ma.target);   // receptor (this)
         w.print(", " + slot + ", ");
         int n = c.args.size();
         if (n == 0) {
-            w.print("(const int32_t*) 0, 0)");
+            w.print("(const int32_t*) 0, 0" + tail);
             return;
         }
         w.print("(int32_t[]){ ");
@@ -1209,7 +1229,7 @@ public final class AotCEmitter {
             if (i > 0) w.print(", ");
             emitExpr(c.args.get(i));
         }
-        w.print(" }, " + n + ")");
+        w.print(" }, " + n + tail);
     }
 
     /** Emisión común del puente: aviso + call_bp_i32(vm, find_function(qn),
@@ -1217,15 +1237,19 @@ public final class AotCEmitter {
      *  envolvente — válido como argumento. find_function resuelve el nombre
      *  cada vez (scan barato; cachear en static es mejora futura, pero el coste
      *  del puente domina). */
-    private void emitCallBpEmission(String qualified, List<Ast.IExpr> args, int line, String targetDesc) {
+    private void emitCallBpEmission(String qualified, List<Ast.IExpr> args, int line,
+                                    String targetDesc, int refMask, boolean retIsRef) {
         warnings.add("la función native '" + currentFuncName + "' llama a " + targetDesc
             + " (línea " + line + "). Esa llamada cruza al intérprete por el puente "
             + "native→BP y NO se acelera por AOT.");
+        /* #302 paso 2 — ref_mask + ret_is_ref: los args-ref se ensanchan a 8 bytes
+         * con regen en el puente y el retorno-ref popea 8 (ver bridge_run_bp_frame). */
+        String tail = ", " + refMask + "u, " + (retIsRef ? 1 : 0) + ")";
         w.print("vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, \""
             + qualified + "\"), ");
         int n = args.size();
         if (n == 0) {
-            w.print("(const int32_t*) 0, 0)");
+            w.print("(const int32_t*) 0, 0" + tail);
             return;
         }
         w.print("(int32_t[]){ ");
@@ -1233,7 +1257,7 @@ public final class AotCEmitter {
             if (i > 0) w.print(", ");
             emitExpr(args.get(i));
         }
-        w.print(" }, " + n + ")");
+        w.print(" }, " + n + tail);
     }
 
     /** #211 — ¿el tipo se representa como un i32 de 4 bytes que el puente
@@ -1342,6 +1366,76 @@ public final class AotCEmitter {
     }
 
     // ==================== Helpers ====================
+
+    /** #302 paso 2 — ¿este tipo cruza la frontera AOT como REFERENCIA de 8 bytes?
+     *  Fuente de verdad = MivmEmitter.occupies8Bytes sobre el BpType RESUELTO: es
+     *  el mismo predicado que decide cuántos bytes empuja OP_CALL, así el thunk lee
+     *  exactamente lo que el intérprete escribió. El `!is8Byte` deja fuera
+     *  long/double (que el AOT rechaza antes en cType). El enum NO es ref
+     *  (isScalar, isReference()=false → 4 bytes), a diferencia de una clase. */
+    private static boolean isRefBp(BpType t) {
+        return t != null && MivmEmitter.occupies8Bytes(t) && !MivmEmitter.is8Byte(t);
+    }
+
+    /** #302 paso 2 — ref_mask de una lista de parámetros: bit i = el param i es
+     *  una referencia (8 bytes). Lo consumen call_bp_i32 / call_method_i32. */
+    private static int refMaskOfParams(List<Symbol.ParamSymbol> ps) {
+        int m = 0;
+        for (int i = 0; i < ps.size(); i++) if (isRefBp(ps.get(i).type)) m |= (1 << i);
+        return m;
+    }
+
+    /** #302 paso 2 — la FunctionSymbol de un FuncDef (tipos resueltos), o null si
+     *  no hay info semántica. `declSymbols` la mapea al declarar la función. */
+    private Symbol.FunctionSymbol funcSym(Ast.FuncDef f) {
+        if (semInfo == null) return null;
+        Symbol s = semInfo.declSymbols.get(f);
+        return (s instanceof Symbol.FunctionSymbol) ? (Symbol.FunctionSymbol) s : null;
+    }
+
+    /** #302 paso 2 — ¿el parámetro i-ésimo del thunk es una ref (8 bytes)? Prefiere
+     *  el BpType resuelto (distingue enum de clase); sin info semántica cae al
+     *  mirror por Ast.TypeRef (string/array/clase → ref; puede errar en enum, caso
+     *  que no ocurre sin semInfo en la práctica). */
+    private boolean paramIsRef(Ast.FuncDef f, int i) {
+        Symbol.FunctionSymbol fs = funcSym(f);
+        if (fs != null && i < fs.params.size()) return isRefBp(fs.params.get(i).type);
+        return isRefTypeRefFallback(f.params.get(i).type);
+    }
+
+    /** #302 paso 2 — ¿el retorno del thunk es una ref (8 bytes)? */
+    private boolean returnIsRef(Ast.FuncDef f) {
+        if (f.returnType == null) return false;   /* void */
+        Symbol.FunctionSymbol fs = funcSym(f);
+        if (fs != null) return isRefBp(fs.returnType);
+        return isRefTypeRefFallback(f.returnType);
+    }
+
+    /** #302 paso 2 — ref_mask de un FuncDef (para el puente call_bp_i32 a una
+     *  función BP del mismo módulo). Prefiere BpType; si no, mirror por Ast. */
+    private int refMaskOfFuncDef(Ast.FuncDef f) {
+        Symbol.FunctionSymbol fs = funcSym(f);
+        if (fs != null) return refMaskOfParams(fs.params);
+        int m = 0;
+        for (int i = 0; i < f.params.size(); i++)
+            if (isRefTypeRefFallback(f.params.get(i).type)) m |= (1 << i);
+        return m;
+    }
+
+    /** Fallback sin BpType: string/array/clase-o-any (default de cType) → ref. */
+    private boolean isRefTypeRefFallback(Ast.TypeRef t) {
+        if (t instanceof Ast.ArrayTypeRef) return true;
+        if (t instanceof Ast.SimpleTypeRef) {
+            String n = ((Ast.SimpleTypeRef) t).name;
+            switch (n) {
+                case "integer": case "float": case "boolean": return false;
+                case "long": case "double": return false;   /* rechazados en cType */
+                case "string": return true;
+                default: return true;   /* clase/any (enum se maneja con BpType) */
+            }
+        }
+        return false;
+    }
 
     /** TypeRef BP → tipo C. null (sin tipo de retorno) → void.
      *  ArrayTypeRef se trata como handle i32 (el ref al heap donde

@@ -19,7 +19,7 @@ static int32_t aot_XmodNat_compute(struct bpvm* vm, int32_t x) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
     (void) x;
-    return (vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, "Helper.dbl"), (int32_t[]){ x }, 1) + 1);
+    return (vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, "Helper.dbl"), (int32_t[]){ x }, 1, 0u, 0) + 1);
 }
 
 static void thunk_XmodNat_compute(struct bpvm* vm,
@@ -29,7 +29,7 @@ static void thunk_XmodNat_compute(struct bpvm* vm,
     /* H3 #158 — helpers accedidos indirect via vm.
      * No referencia símbolos del runtime por nombre → el
      * .o resultante con -fpic es 100% relocatable. */
-    const struct aot_helpers_v1* H = vm->aot_helpers;
+    const struct aot_helpers_v2* H = vm->aot_helpers;
     uint8_t* mem = vm->memory;
     uint32_t sp = *sp_p;
     int32_t a0 = H->read_i32_be(mem + sp - 4); sp -= 4;

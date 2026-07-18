@@ -30,11 +30,21 @@ struct bpvm;
 extern "C" {
 #endif
 
-/* Versión 1 del ABI. Slots añadidos solo al final; nunca reordenar
- * ni cambiar firmas en una version dada — el .mdn referencia por
- * offset (no por nombre), así que reordenar rompe módulos viejos. */
-typedef struct aot_helpers_v1 aot_helpers_v1_t;
-struct aot_helpers_v1 {
+/* Versión 2 del ABI (#302 paso 2 — modelo de handles). Slots añadidos solo al
+ * final; nunca reordenar ni cambiar firmas en una version dada — el .mdn
+ * referencia por offset (no por nombre), así que reordenar rompe módulos viejos.
+ *
+ * CONVENIO DE REFERENCIAS (v2): una `ref` que cruza esta ABI es un HANDLE
+ * EMPAQUETADO — la palabra baja `idx|TAG` de un handle de 64b, con la generación
+ * DESCARTADA (misma convención que la capa de builtins, docs/AOT_HANDLE_MODEL.md).
+ * NO es el offset crudo al heap (eso era v1/pre-handles, y hoy corrompería: un
+ * handle empaquetado lleva el bit TAG=0x40000000 → `vm->memory + ref` se sale de
+ * rango). Cada helper DEREFIA dentro (bpref_deref∘bpref_regen); los que ALOCAN
+ * devuelven un handle empaquetado (bpvm_handle_register). El ensanchado a 8 bytes
+ * con la gen VIVA ocurre SOLO en las dos fronteras: el thunk (read_ref/write_ref,
+ * contra la pila BP) y el puente native→BP (bridge_run_bp_frame vía ref_mask). */
+typedef struct aot_helpers_v2 aot_helpers_v2_t;
+struct aot_helpers_v2 {
     /* --- I/O de memoria big-endian (los más usados) ----------- */
     int32_t  (*read_i32_be)(const uint8_t* p);
     void     (*write_i32_be)(uint8_t* p, int32_t v);
@@ -130,14 +140,22 @@ struct aot_helpers_v1 {
      * find_function: resuelve un nombre cualificado ("Modulo.func") a su
      *   dirección absoluta en memoria, o 0 si no existe. El thunk lo resuelve
      *   UNA vez y lo cachea en un static (patrón §4 Opción A).
-     * call_bp_i32: llama a la función BP en `target_abs` con `nargs` args de
-     *   4 bytes y devuelve su retorno de 4 bytes (i32 o ref). Ver
-     *   bpvm_aot_call_bp_i32 (interp.c) para la mecánica del frame falso +
-     *   bucle anidado + sentinela. Restricción v1: el target no debe ceder al
-     *   scheduler. */
+     * call_bp_i32: llama a la función BP en `target_abs` con `nargs` args de 4
+     *   bytes (cada uno un i32 o un HANDLE EMPAQUETADO para los args-ref) y
+     *   devuelve su retorno (i32, o el handle empaquetado si ret_is_ref). Ver
+     *   bpvm_aot_call_bp_i32 (interp.c) para la mecánica del frame falso + bucle
+     *   anidado + sentinela. Restricción v1: el target no debe ceder al
+     *   scheduler.
+     *   #302 paso 2 — `ref_mask`: bit i = el arg i es una REFERENCIA → el puente
+     *   lo ensancha a un handle de 8 bytes con la gen viva (bpref_regen) antes de
+     *   escribirlo en el frame BP; los no-ref van a 4 bytes. `ret_is_ref`: el
+     *   retorno de la función BP es una ref (8 bytes en la pila) → el puente
+     *   popea 8 y devuelve el handle empaquetado. Sin esto un arg/retorno ref se
+     *   truncaba y la función BP recibía un handle con gen basura. */
     uint32_t (*find_function)(struct bpvm* vm, const char* qualified);
     int32_t  (*call_bp_i32)(struct bpvm* vm, uint32_t target_abs,
-                            const int32_t* args, int nargs);
+                            const int32_t* args, int nargs,
+                            uint32_t ref_mask, int ret_is_ref);
 
     /* #175 — throw con mensaje COMPUTADO desde native. Recibe un string-handle
      * BP (objeto heap UTF-8) en vez de un literal C; construye un RuntimeError
@@ -153,7 +171,8 @@ struct aot_helpers_v1 {
      * como arg0. NO requiere que el método esté exportado. call_method_i32 vive
      * en interp.c. */
     int32_t (*call_method_i32)(struct bpvm* vm, uint32_t this_ref, int slot,
-                               const int32_t* args, int nargs);
+                               const int32_t* args, int nargs,
+                               uint32_t ref_mask, int ret_is_ref);
 
     /* #193 — arrays narrow de 1 byte (BP `byte[]`). Mismo layout/bounds que
      * OP_ALOAD_I8/OP_ALOAD_U8/OP_ASTORE_I8 del intérprete (paridad): el load_i8
@@ -170,12 +189,22 @@ struct aot_helpers_v1 {
      * #186, que lo propaga TAL CUAL por el eh_stack BP (sin construir un
      * RuntimeError). NO retorna. Como siempre: slot nuevo AL FINAL. */
     void (*throw_ref)(struct bpvm* vm, uint32_t exc_ref);
+
+    /* #302 paso 2 — FRONTERA thunk↔pila BP para referencias. Una ref ocupa 8
+     * bytes en la pila BP (handle de 64b). read_ref lee esos 8 bytes y devuelve
+     * el handle EMPAQUETADO (idx|TAG, palabra baja) que circula por el cuerpo
+     * AOT; write_ref toma un handle empaquetado, reconstruye la gen VIVA
+     * (bpref_regen) y escribe el handle de 8 bytes. Son el equivalente AOT del
+     * read_i32_be/write_i32_be pero de 8 bytes y con regen — el thunk los usa
+     * para los args/retorno de tipo referencia. */
+    uint32_t (*read_ref)(const uint8_t* p);
+    void     (*write_ref)(struct bpvm* vm, uint8_t* p, uint32_t ref);
 };
 
-/* Tabla v1 instanciada en el runtime con los punteros a las funciones
+/* Tabla v2 instanciada en el runtime con los punteros a las funciones
  * reales. Compartida entre todas las VMs del proceso. Pasada a cada
  * vm en bpvm_init via vm->aot_helpers. */
-extern const aot_helpers_v1_t bpvm_aot_helpers_v1;
+extern const aot_helpers_v2_t bpvm_aot_helpers_v2;
 
 #ifdef __cplusplus
 }

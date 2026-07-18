@@ -217,7 +217,7 @@ typedef struct {
 
 /* H3 #158 — forward del struct de helpers para código AOT. Definido
  * en src/bpvm_aot_helpers.h; lo referenciamos sólo por puntero aquí. */
-struct aot_helpers_v1;
+struct aot_helpers_v2;
 
 /* H6.b — máximo de breakpoints simultáneos. Tabla fija (sin malloc). 32 es
  * holgado para un debugger y barato en RAM en el MCU. */
@@ -305,10 +305,10 @@ struct bpvm {
     size_t   scratch_size;
 
     /* H3 #158 — Tabla de helpers para código AOT. Apunta a la
-     * instancia global del runtime (bpvm_aot_helpers_v1). El código
+     * instancia global del runtime (bpvm_aot_helpers_v2). El código
      * AOT C-emitido accede a helpers vía vm->aot_helpers->func(...).
      * Inicializado en bpvm_init. Definición en bpvm_aot_helpers.h. */
-    const struct aot_helpers_v1* aot_helpers;
+    const struct aot_helpers_v2* aot_helpers;
 
     /* #139 — Debug hook + lookup pc→línea. Si debug_hook == NULL el
      * inner loop sólo paga un null-check por opcode (negligible).
@@ -728,7 +728,8 @@ bpvm_aot_callctx_t* bpvm_aot_callctx(void);
  * (sin sleep/mutex-contended/join). Si lo hace, o si target_abs es inválido,
  * lanza un RuntimeError BP vía el boundary de #186. */
 int32_t bpvm_aot_call_bp_i32(struct bpvm* vm, uint32_t target_abs,
-                             const int32_t* args, int nargs);
+                             const int32_t* args, int nargs,
+                             uint32_t ref_mask, int ret_is_ref);
 
 /* H4 — puente builtin→función BP (upcall de eventos GUI). Como
  * bpvm_aot_call_bp_i32 pero desde un builtin (registros vivos en tc->sp/bp).
@@ -743,8 +744,10 @@ int32_t bpvm_call_bp_from_builtin(bpvm_t* vm, bpvm_thread_t* tc,
  * native: resuelve la dirección vía la vtable de la clase REAL de `this_ref`
  * (slot dado por el compilador) y corre el cuerpo BP por el puente con
  * `this_ref` como arg0. Devuelve el retorno (4 bytes). NO requiere que el
- * método esté exportado. v1: solo args/retorno i32 (incl. refs). */
+ * método esté exportado. #302 paso 2: `ref_mask` marca los args-ref (el `this`
+ * SIEMPRE es ref y lo añade la propia función); `ret_is_ref` el retorno-ref. */
 int32_t bpvm_aot_call_method_i32(struct bpvm* vm, uint32_t this_ref, int slot,
-                                 const int32_t* args, int nargs);
+                                 const int32_t* args, int nargs,
+                                 uint32_t ref_mask, int ret_is_ref);
 
 #endif /* BPVM_INTERNAL_H */

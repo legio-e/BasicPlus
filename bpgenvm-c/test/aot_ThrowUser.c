@@ -20,7 +20,7 @@ static int32_t aot_ThrowUser_checkRange(struct bpvm* vm, int32_t n) {
                   *  globals/arrays/builtins. */
     (void) n;
     if ((n < 0)) {
-        vm->aot_helpers->throw_ref(vm, (uint32_t) vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, "ThrowUser.__cls_new_RangoError"), (int32_t[]){ vm->aot_helpers->string_from_cstr(vm, "valor negativo", 14), n }, 2));
+        vm->aot_helpers->throw_ref(vm, (uint32_t) vm->aot_helpers->call_bp_i32(vm, vm->aot_helpers->find_function(vm, "ThrowUser.__cls_new_RangoError"), (int32_t[]){ vm->aot_helpers->string_from_cstr(vm, "valor negativo", 14), n }, 2, 1u, 1));
     }
     return (n * 2);
 }
@@ -32,7 +32,7 @@ static void thunk_ThrowUser_checkRange(struct bpvm* vm,
     /* H3 #158 — helpers accedidos indirect via vm.
      * No referencia símbolos del runtime por nombre → el
      * .o resultante con -fpic es 100% relocatable. */
-    const struct aot_helpers_v1* H = vm->aot_helpers;
+    const struct aot_helpers_v2* H = vm->aot_helpers;
     uint8_t* mem = vm->memory;
     uint32_t sp = *sp_p;
     int32_t a0 = H->read_i32_be(mem + sp - 4); sp -= 4;

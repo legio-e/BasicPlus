@@ -88,13 +88,13 @@ static void thunk_CompressNat_decompress(struct bpvm* vm,
     /* H3 #158 — helpers accedidos indirect via vm.
      * No referencia símbolos del runtime por nombre → el
      * .o resultante con -fpic es 100% relocatable. */
-    const struct aot_helpers_v1* H = vm->aot_helpers;
+    const struct aot_helpers_v2* H = vm->aot_helpers;
     uint8_t* mem = vm->memory;
     uint32_t sp = *sp_p;
     int32_t a3 = H->read_i32_be(mem + sp - 4); sp -= 4;
-    int32_t a2 = H->read_i32_be(mem + sp - 4); sp -= 4;
+    int32_t a2 = (int32_t) H->read_ref(mem + sp - 8); sp -= 8;  /* ref: 8B */
     int32_t a1 = H->read_i32_be(mem + sp - 4); sp -= 4;
-    int32_t a0 = H->read_i32_be(mem + sp - 4); sp -= 4;
+    int32_t a0 = (int32_t) H->read_ref(mem + sp - 8); sp -= 8;  /* ref: 8B */
     int32_t r = aot_CompressNat_decompress(vm, a0, a1, a2, a3);
     H->write_i32_be(mem + sp, r); sp += 4;
     *sp_p = sp;

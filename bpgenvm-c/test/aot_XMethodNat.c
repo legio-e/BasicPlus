@@ -19,7 +19,7 @@ static int32_t aot_XMethodNat_useBox(struct bpvm* vm, int32_t b) {
     (void) vm;   /* puede no usarse si la función no toca
                   *  globals/arrays/builtins. */
     (void) b;
-    return (vm->aot_helpers->call_method_i32(vm, b, 2, (const int32_t*) 0, 0) + 1);
+    return (vm->aot_helpers->call_method_i32(vm, b, 2, (const int32_t*) 0, 0, 0u, 0) + 1);
 }
 
 static void thunk_XMethodNat_useBox(struct bpvm* vm,
@@ -29,10 +29,10 @@ static void thunk_XMethodNat_useBox(struct bpvm* vm,
     /* H3 #158 — helpers accedidos indirect via vm.
      * No referencia símbolos del runtime por nombre → el
      * .o resultante con -fpic es 100% relocatable. */
-    const struct aot_helpers_v1* H = vm->aot_helpers;
+    const struct aot_helpers_v2* H = vm->aot_helpers;
     uint8_t* mem = vm->memory;
     uint32_t sp = *sp_p;
-    int32_t a0 = H->read_i32_be(mem + sp - 4); sp -= 4;
+    int32_t a0 = (int32_t) H->read_ref(mem + sp - 8); sp -= 8;  /* ref: 8B */
     int32_t r = aot_XMethodNat_useBox(vm, a0);
     H->write_i32_be(mem + sp, r); sp += 4;
     *sp_p = sp;

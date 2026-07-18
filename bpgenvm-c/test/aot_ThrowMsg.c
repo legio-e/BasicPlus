@@ -32,7 +32,7 @@ static void thunk_ThrowMsg_checkRange(struct bpvm* vm,
     /* H3 #158 — helpers accedidos indirect via vm.
      * No referencia símbolos del runtime por nombre → el
      * .o resultante con -fpic es 100% relocatable. */
-    const struct aot_helpers_v1* H = vm->aot_helpers;
+    const struct aot_helpers_v2* H = vm->aot_helpers;
     uint8_t* mem = vm->memory;
     uint32_t sp = *sp_p;
     int32_t a0 = H->read_i32_be(mem + sp - 4); sp -= 4;

@@ -114,7 +114,10 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
      * RuntimeError clásico con el mensaje del fault-slot. */
     bpref_t obj;
     if (f->pending_ref != 0) {
-        obj.v = f->pending_ref;   /* V4: ref de clase de usuario (idx|TAG, gen=0 en migración) */
+        /* #302 paso 2 — pending_ref es un handle EMPAQUETADO (idx|TAG); regen le
+         * pone la gen VIVA del slot → handle válido que el eh_stack propaga (antes
+         * quedaba gen=0, sólo correcto para un objeto recién creado sin GC). */
+        obj = bpref_regen(vm, f->pending_ref);
         f->pending_ref = 0;
     } else {
         obj = bpvm_throw_runtime_error(vm, tc, f->msg);
@@ -134,7 +137,8 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
 static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
                                    bpvm_aot_callctx_t* cc,
                                    uint32_t target_cs, uint32_t target_abs,
-                                   const int32_t* args, int nargs, uint32_t ref_mask) {
+                                   const int32_t* args, int nargs, uint32_t ref_mask,
+                                   int ret_is_ref) {
     uint8_t* mem = vm->memory;
     uint32_t sp = *cc->sp_p;        /* registros vivos del intérprete exterior */
     uint32_t bp = *cc->bp_p;
@@ -181,9 +185,14 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
         return 0;   /* inalcanzable */
     }
 
+    /* #302 paso 2 — retorno-ref: la función BP dejó 8 bytes (handle) en el top;
+     * si no, 4 (i32). En ambos casos el VALOR útil son los 4 bytes bajos (rsp-4,
+     * big-endian = idx|TAG para una ref = handle empaquetado que el cuerpo AOT
+     * consume). Solo cambia cuánto POPeamos del stack del intérprete exterior. */
     uint32_t rsp = tc->sp;
+    uint32_t retw = ret_is_ref ? 8u : 4u;
     int32_t result = bpvm_read_i32_be(vm->memory + rsp - 4);
-    *cc->sp_p = rsp - 4;
+    *cc->sp_p = rsp - retw;
     *cc->bp_p = tc->bp;             /* == bp del caller (restaurado por el RET) */
     tc->cs = caller_cs;
     tc->status = BPVM_THREAD_RUNNING;   /* restaura invariante del quantum exterior */
@@ -195,7 +204,8 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
  * vm->aot_helpers->call_bp_i32. Deriva el CS del módulo dueño de target_abs y
  * delega en bridge_run_bp_frame. */
 int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
-                             const int32_t* args, int nargs) {
+                             const int32_t* args, int nargs,
+                             uint32_t ref_mask, int ret_is_ref) {
     bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
     bpvm_thread_t* tc = cc ? cc->tc : NULL;
     if (!tc || target_abs == 0) {
@@ -213,10 +223,10 @@ int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
             break;
         }
     }
-    /* #302 paso 2 (PENDIENTE): el path AOT aún pasa ref_mask=0 → los args-ref van
-     * a 4 bytes sin regen (comportamiento actual). Se hace handle-aware al migrar
-     * el AOT (aot_helpers v2). Hoy: sin cambio, no regresa test-throwmsg/user. */
-    return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, args, nargs, 0u);
+    /* #302 paso 2 — el AOT (aot_helpers v2) ya provee ref_mask/ret_is_ref reales:
+     * los args-ref se ensanchan a 8 bytes con regen y el retorno-ref popea 8. */
+    return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, args, nargs,
+                               ref_mask, ret_is_ref);
 }
 
 /* H4 — puente BUILTIN→función BP (upcall de eventos GUI). Como bpvm_aot_call_bp_i32
@@ -245,7 +255,8 @@ int32_t bpvm_call_bp_from_builtin(bpvm_t* vm, bpvm_thread_t* tc,
     uint32_t sp = tc->sp, bp = tc->bp;
     bpvm_aot_callctx_t cc;
     cc.tc = tc; cc.sp_p = &sp; cc.bp_p = &bp;
-    int32_t r = bridge_run_bp_frame(vm, tc, &cc, target_cs, target_abs, args, nargs, ref_mask);
+    int32_t r = bridge_run_bp_frame(vm, tc, &cc, target_cs, target_abs, args, nargs,
+                                    ref_mask, 0 /*ret_is_ref: el handler onClick es void*/);
     tc->sp = base;       /* descarta el frame de la llamada + el retorno (void) */
     tc->bp = bp;         /* bridge restauró bp del caller vía cc->bp_p */
     tc->pc = saved_pc;   /* CRÍTICO: el dispatcher re-lee tc->pc tras el builtin */
@@ -260,7 +271,8 @@ int32_t bpvm_call_bp_from_builtin(bpvm_t* vm, bpvm_thread_t* tc,
  * de vtable); la VM hace obj→class_ptr→vtable[slot]→cs+offset. NO requiere que
  * el método esté exportado (la vtable lo lleva). Contrato en bpvm_internal.h. */
 int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
-                                 const int32_t* args, int nargs) {
+                                 const int32_t* args, int nargs,
+                                 uint32_t ref_mask, int ret_is_ref) {
     bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
     bpvm_thread_t* tc = cc ? cc->tc : NULL;
     if (!tc) {
@@ -272,8 +284,11 @@ int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
         return 0;
     }
     uint8_t* mem = vm->memory;
+    /* #302 paso 2 — this_ref es un HANDLE EMPAQUETADO (idx|TAG): derefiar a su
+     * offset crudo antes de leer el class_ptr. En v1 se asumía offset directo. */
+    uint32_t this_addr = bpref_deref(vm, bpref_regen(vm, this_ref));
     /* Paseo vtable con fallback al padre — idéntico a OP_INVOKE_VIRTUAL. */
-    uint32_t desc = (uint32_t) bpvm_read_i32_be(mem + this_ref);
+    uint32_t desc = (uint32_t) bpvm_read_i32_be(mem + this_addr);
     int32_t  method_off = -1;
     uint32_t target_cs  = 0;
     for (;;) {
@@ -306,12 +321,13 @@ int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
         vm->aot_helpers->throw_runtime(vm, "call_method: demasiados argumentos (max 16)");
         return 0;
     }
-    buf[0] = (int32_t) this_ref;
+    buf[0] = (int32_t) this_ref;   /* handle empaquetado; el frame lo regen (bit 0) */
     for (int i = 0; i < nargs; i++) buf[1 + i] = args[i];
-    /* #302 paso 2 (PENDIENTE): this_ref (buf[0]) es una REF y debería ir a 8 bytes
-     * con regen; hoy ref_mask=0 → 4 bytes, sin cambio respecto al comportamiento
-     * actual. Se hace handle-aware al migrar el AOT. */
-    return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, buf, total, 0u);
+    /* #302 paso 2 — el frame lleva [this, args...]: this SIEMPRE es ref (bit 0);
+     * los args-ref del usuario van desplazados un bit (ref_mask << 1). */
+    uint32_t frame_mask = (ref_mask << 1) | 1u;
+    return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, buf, total,
+                               frame_mask, ret_is_ref);
 }
 
 /* BUG-7 — Lanza un RuntimeError BP desde un opcode del intérprete (no-native):
