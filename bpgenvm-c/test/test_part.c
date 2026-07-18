@@ -1,9 +1,10 @@
 /*
- * test_part.c — H9: unidad de la tabla de particiones (bpvm_part) sobre el env.
- * Host-only, sin placa: construye envs en RAM y valida el parse, la fachada
- * kind→región, el round-trip (to_payload) y la validación del layout — incluido
- * el clamp de #292 (partición válida en 16 MB reales pero fuera de una imagen de
- * 4 MB) reproducido como test.
+ * test_part.c — H9: unidad de la tabla de particiones (bpvm_part), modelo FIJO +
+ * ORDENADO (Eduardo 18-jul): el usuario solo edita TAMAÑOS; los OFFSETS se DERIVAN
+ * (contiguos desde la base) → sin solapes por construcción; el env guarda solo
+ * tamaños. Host-only. Prueba defaults, offsets derivados, validación (cero/
+ * alineación/overflow), la virginidad (falta tamaño → MISSING), el clamp de #292 y
+ * el round-trip sizes→env→layout.
  *
  *   make test-part
  */
@@ -20,8 +21,9 @@ static int g_fail = 0;
 
 #define SECT 4096u
 #define S4K  4096u
+#define BASE 0x100000u   /* 1 MB reservado (imagen + env) */
+#define U4M  0x400000u   /* 4 MB usable */
 
-/* Serializa `payload` en `sect` y lo parsea a `e`. Devuelve 1 si válido. */
 static int mkenv(const char* payload, uint8_t* sect, bpvm_env_t* e) {
     int u = bpvm_env_serialize(payload, strlen(payload), 1u, sect, SECT);
     if (u < 0) return 0;
@@ -29,101 +31,97 @@ static int mkenv(const char* payload, uint8_t* sect, bpvm_env_t* e) {
 }
 
 int main(void) {
-    printf("=== test_part (H9 tabla de particiones) ===\n");
+    printf("=== test_part (H9 particiones: conjunto fijo, offsets derivados) ===\n");
     static uint8_t sect[SECT];
     bpvm_env_t e;
-    bpvm_part_table_t t;
-
-    /* --- 1. parse + fachada kind→región + por nombre --- */
-    const char* GOOD =
-        "flashSizeBytes=4194304\n"
-        "partitions=fs,packs\n"
-        "part.fs.offset=1048576\n"      /* 0x100000 */
-        "part.fs.size=131072\n"          /* 128K */
-        "part.packs.offset=1179648\n"    /* 0x120000 */
-        "part.packs.size=262144\n";      /* 256K */
-    CHECK(mkenv(GOOD, sect, &e), "env con particiones serializa+parsea");
-    CHECK(bpvm_part_parse(&e, &t) == 2 && t.count == 2, "parse: 2 particiones");
-    const bpvm_part_t* fs = bpvm_part_find(&t, BPVM_PART_FS);
-    const bpvm_part_t* pk = bpvm_part_find(&t, BPVM_PART_PACKS);
-    CHECK(fs && fs->offset == 0x100000u && fs->size == 131072u, "find(FS) = región correcta");
-    CHECK(pk && pk->offset == 0x120000u && pk->size == 262144u, "find(PACKS) = región correcta");
-    CHECK(bpvm_part_find_name(&t, "fs") == fs, "find_name(fs)");
-    CHECK(bpvm_part_find(&t, BPVM_PART_APP) == NULL, "find(APP) = NULL (no hay)");
-
-    /* --- 2. validación de un layout bueno --- */
+    bpvm_part_layout_t lay;
     int bad = -99;
-    /* reserved_end = 1 MB (imagen + env por debajo); flash usable = 4 MB. */
-    CHECK(bpvm_part_validate(&t, 0x400000u, 0x100000u, S4K, &bad) == BPVM_PART_OK && bad == -1,
-          "layout bueno → OK");
 
-    /* --- 3. clamp #292: 16 MB reales, imagen declara 4 MB → usable = 4 MB --- */
-    CHECK(bpvm_part_usable_flash(0x1000000u, 0x400000u) == 0x400000u, "usable_flash = min(16M, 4M) = 4M");
-    CHECK(bpvm_part_usable_flash(0x400000u, 0) == 0x400000u, "usable_flash sin clamp (image_max=0)");
+    /* --- 1. nombres/kinds fijos --- */
+    CHECK(BPVM_PART_COUNT == 2, "conjunto fijo de 2 particiones");
+    CHECK(!strcmp(bpvm_part_name(BPVM_PART_FS), "fs")
+          && !strcmp(bpvm_part_name(BPVM_PART_PACKS), "packs"), "nombres fijos fs/packs");
+
+    /* --- 2. defaults: reparten [base, usable) alineado, suma exacta --- */
     {
-        /* partición a 5 MB: válida en 16 MB, pero fuera de la imagen de 4 MB. */
-        const char* BIG =
-            "partitions=fs\npart.fs.offset=5242880\npart.fs.size=131072\n"; /* 0x500000 */
-        bpvm_env_t e2; static uint8_t s2[SECT];
-        mkenv(BIG, s2, &e2); bpvm_part_table_t t2; bpvm_part_parse(&e2, &t2);
+        uint32_t sizes[BPVM_PART_COUNT];
+        bpvm_part_defaults(BASE, U4M, S4K, sizes);
+        uint32_t avail = U4M - BASE;   /* 3 MB */
+        CHECK(sizes[BPVM_PART_FS] % S4K == 0 && sizes[BPVM_PART_PACKS] % S4K == 0,
+              "defaults alineados al sector");
+        CHECK(sizes[BPVM_PART_FS] + sizes[BPVM_PART_PACKS] == avail, "defaults suman el espacio disponible");
+    }
+
+    /* --- 3. layout desde tamaños: offsets DERIVADOS contiguos desde base --- */
+    {
+        uint32_t sizes[BPVM_PART_COUNT] = { 0x100000u /*fs 1M*/, 0x200000u /*packs 2M*/ };
+        bpvm_part_err_t err = bpvm_part_layout_from_sizes(sizes, BASE, U4M, S4K, &lay, &bad);
+        CHECK(err == BPVM_PART_OK && bad == -1, "layout bueno → OK");
+        const bpvm_part_t* fs = bpvm_part_get(&lay, BPVM_PART_FS);
+        const bpvm_part_t* pk = bpvm_part_get(&lay, BPVM_PART_PACKS);
+        CHECK(fs && fs->offset == BASE && fs->size == 0x100000u, "FS: offset=base (derivado)");
+        CHECK(pk && pk->offset == BASE + 0x100000u && pk->size == 0x200000u,
+              "PACKS: offset = base + size(FS) (derivado, sin solape posible)");
+    }
+
+    /* --- 4. layout desde el env (solo tamaños; offsets no se guardan) --- */
+    {
+        CHECK(mkenv("flashSizeBytes=4194304\npart.fs.size=1048576\npart.packs.size=2097152\n",
+                    sect, &e), "env con tamaños serializa+parsea");
+        bpvm_part_err_t err = bpvm_part_layout(&e, BASE, U4M, S4K, &lay, &bad);
+        CHECK(err == BPVM_PART_OK && lay.complete, "layout desde env → OK, completo");
+        CHECK(bpvm_part_get(&lay, BPVM_PART_PACKS)->offset == BASE + 0x100000u,
+              "offset de PACKS derivado desde el env");
+    }
+
+    /* --- 5. virgen: falta un tamaño → MISSING (1ª vez → proponer defaults) --- */
+    {
+        mkenv("flashSizeBytes=4194304\npart.fs.size=1048576\n", sect, &e);  /* sin packs */
+        bpvm_part_err_t err = bpvm_part_layout(&e, BASE, U4M, S4K, &lay, &bad);
+        CHECK(err == BPVM_PART_ERR_MISSING && !lay.complete, "falta tamaño → MISSING (virgen)");
+        mkenv("flashSizeBytes=4194304\n", sect, &e);                        /* sin ninguno */
+        CHECK(bpvm_part_layout(&e, BASE, U4M, S4K, &lay, &bad) == BPVM_PART_ERR_MISSING,
+              "env sin tamaños → MISSING");
+    }
+
+    /* --- 6. validación: cero, no-alineado, overflow --- */
+    {
+        uint32_t z[BPVM_PART_COUNT]  = { 0u, 0x100000u };
+        CHECK(bpvm_part_layout_from_sizes(z, BASE, U4M, S4K, &lay, &bad) == BPVM_PART_ERR_ZERO && bad == 0,
+              "tamaño 0 → ZERO");
+        uint32_t ua[BPVM_PART_COUNT] = { 0x100001u, 0x100000u };
+        CHECK(bpvm_part_layout_from_sizes(ua, BASE, U4M, S4K, &lay, &bad) == BPVM_PART_ERR_UNALIGNED && bad == 0,
+              "tamaño no alineado → UNALIGNED");
+        uint32_t ov[BPVM_PART_COUNT] = { 0x200000u, 0x200000u };  /* 2M+2M=4M > avail 3M */
+        CHECK(bpvm_part_layout_from_sizes(ov, BASE, U4M, S4K, &lay, &bad) == BPVM_PART_ERR_OVERFLOW && bad == 1,
+              "suma no cabe → OVERFLOW");
+    }
+
+    /* --- 7. clamp #292: 16 MB reales, imagen 4 MB → usable 4 MB; un layout de 7 MB no cabe --- */
+    {
+        CHECK(bpvm_part_usable_flash(0x1000000u, 0x400000u) == 0x400000u, "usable = min(16M, 4M) = 4M");
+        uint32_t big[BPVM_PART_COUNT] = { 0x100000u, 0x600000u };  /* 1M + 6M = 7M */
         uint32_t usable = bpvm_part_usable_flash(0x1000000u, 0x400000u);   /* clamp → 4M */
-        CHECK(bpvm_part_validate(&t2, usable, 0x100000u, S4K, &bad) == BPVM_PART_ERR_OUT_OF_FLASH,
-              "#292: partición a 5M con imagen 4M → fuera de flash usable");
+        CHECK(bpvm_part_layout_from_sizes(big, BASE, usable, S4K, &lay, &bad) == BPVM_PART_ERR_OVERFLOW,
+              "#292: layout de 7M con imagen de 4M → OVERFLOW");
+        /* SIN clamp (16M) el MISMO layout cabría */
+        CHECK(bpvm_part_layout_from_sizes(big, BASE, 0x1000000u, S4K, &lay, &bad) == BPVM_PART_OK,
+              "el mismo layout en 16M reales → OK");
     }
 
-    /* --- 4. errores de validación --- */
+    /* --- 8. round-trip: sizes → payload → env → layout conserva los tamaños --- */
     {
-        bpvm_env_t x; static uint8_t sx[SECT]; bpvm_part_table_t tx;
-
-        mkenv("partitions=fs\npart.fs.offset=1048577\npart.fs.size=131072\n", sx, &x); /* 0x100001 */
-        bpvm_part_parse(&x, &tx);
-        CHECK(bpvm_part_validate(&tx, 0x400000u, 0x100000u, S4K, &bad) == BPVM_PART_ERR_UNALIGNED,
-              "offset no alineado → UNALIGNED");
-
-        mkenv("partitions=fs\npart.fs.offset=524288\npart.fs.size=131072\n", sx, &x); /* 0x80000 < 1M */
-        bpvm_part_parse(&x, &tx);
-        CHECK(bpvm_part_validate(&tx, 0x400000u, 0x100000u, S4K, &bad) == BPVM_PART_ERR_BELOW_RESERVED,
-              "por debajo de reserved_end → BELOW_RESERVED");
-
-        mkenv("partitions=fs\npart.fs.offset=1048576\npart.fs.size=0\n", sx, &x);
-        bpvm_part_parse(&x, &tx);
-        CHECK(bpvm_part_validate(&tx, 0x400000u, 0x100000u, S4K, &bad) == BPVM_PART_ERR_EMPTY,
-              "size 0 → EMPTY");
-
-        /* dos particiones que se solapan */
-        mkenv("partitions=fs,packs\n"
-              "part.fs.offset=1048576\npart.fs.size=131072\n"       /* [0x100000, 0x120000) */
-              "part.packs.offset=1114112\npart.packs.size=131072\n", /* 0x110000 dentro de fs */
-              sx, &x);
-        bpvm_part_parse(&x, &tx);
-        CHECK(bpvm_part_validate(&tx, 0x400000u, 0x100000u, S4K, &bad) == BPVM_PART_ERR_OVERLAP,
-              "solape → OVERLAP");
-    }
-
-    /* --- 5. tolerancia: sin partitions= → 0; nombre desconocido → APP --- */
-    {
-        bpvm_env_t x; static uint8_t sx[SECT]; bpvm_part_table_t tx;
-        mkenv("flashSizeBytes=4194304\n", sx, &x);                  /* env sin tabla */
-        CHECK(bpvm_part_parse(&x, &tx) == 0, "sin partitions= → 0 (estado 1 virgen)");
-
-        mkenv("partitions=misc\npart.misc.offset=2097152\npart.misc.size=65536\n", sx, &x);
-        bpvm_part_parse(&x, &tx);
-        const bpvm_part_t* m = bpvm_part_find_name(&tx, "misc");
-        CHECK(m && m->kind == BPVM_PART_APP, "nombre desconocido → kind APP");
-    }
-
-    /* --- 6. round-trip: to_payload → env → parse → misma tabla --- */
-    {
-        char pl[256];
-        int w = bpvm_part_to_payload(&t, pl, sizeof pl);
-        CHECK(w > 0, "to_payload produce fragmento");
-        bpvm_env_t e3; static uint8_t s3[SECT]; bpvm_part_table_t t3;
-        mkenv(pl, s3, &e3); bpvm_part_parse(&e3, &t3);
-        const bpvm_part_t* fs3 = bpvm_part_find(&t3, BPVM_PART_FS);
-        const bpvm_part_t* pk3 = bpvm_part_find(&t3, BPVM_PART_PACKS);
-        CHECK(t3.count == 2 && fs3 && fs3->offset == 0x100000u && fs3->size == 131072u
-              && pk3 && pk3->offset == 0x120000u && pk3->size == 262144u,
-              "round-trip to_payload → parse conserva la tabla");
+        uint32_t sizes[BPVM_PART_COUNT] = { 0x100000u, 0x200000u };
+        char pl[128];
+        int w = bpvm_part_sizes_to_payload(sizes, pl, sizeof pl);
+        CHECK(w > 0, "sizes_to_payload produce fragmento (solo tamaños)");
+        CHECK(strstr(pl, "part.fs.size=1048576") && strstr(pl, "part.packs.size=2097152")
+              && strstr(pl, "offset") == NULL, "el payload lleva SOLO tamaños (ningún offset)");
+        mkenv(pl, sect, &e);
+        bpvm_part_layout(&e, BASE, U4M, S4K, &lay, &bad);
+        CHECK(bpvm_part_get(&lay, BPVM_PART_FS)->size == 0x100000u
+              && bpvm_part_get(&lay, BPVM_PART_PACKS)->size == 0x200000u,
+              "round-trip conserva los tamaños");
     }
 
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);

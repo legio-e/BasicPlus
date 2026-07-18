@@ -113,6 +113,48 @@ int main(void) {
         CHECK(bpvm_env_get_long(&picked, "gpioCount", -1) == 26L, "update visible (gpioCount=26)");
     }
 
+    /* --- 7. payload_set: reemplazar / añadir / borrar una clave (base de ENV_SET/DEL) --- */
+    {
+        const char* base = "board=Pico2\npsram=0\ngpioCount=26\n";
+        char out[256];
+
+        /* (a) reemplazar una clave existente conserva las demás y el valor nuevo */
+        int n = bpvm_env_payload_set(base, strlen(base), "psram", "1", out, sizeof out);
+        CHECK(n > 0, "payload_set reemplaza → longitud > 0");
+        out[n] = '\0';
+        CHECK(strstr(out, "psram=1\n") && !strstr(out, "psram=0"), "psram reemplazado 0→1");
+        CHECK(strstr(out, "board=Pico2\n") && strstr(out, "gpioCount=26\n"), "las demás claves intactas");
+
+        /* re-parsear el resultado (via serialize) confirma que sigue siendo un env válido */
+        {
+            static uint8_t S[SECT];
+            bpvm_env_serialize(out, (size_t) n, 5u, S, SECT);
+            bpvm_env_t re;
+            CHECK(bpvm_env_parse(S, SECT, &re) == 1
+                  && bpvm_env_get_bool(&re, "psram", 0) == 1, "el env editado re-parsea (psram=1)");
+        }
+
+        /* (b) clave nueva se AÑADE al final con separador correcto */
+        n = bpvm_env_payload_set(base, strlen(base), "part.fs.size", "1048576", out, sizeof out);
+        out[n] = '\0';
+        CHECK(strstr(out, "part.fs.size=1048576\n"), "clave nueva añadida");
+        CHECK(strstr(out, "board=Pico2\n") && strstr(out, "gpioCount=26\n"), "las previas siguen");
+
+        /* (c) value=NULL BORRA la clave (y solo esa) */
+        n = bpvm_env_payload_set(base, strlen(base), "psram", NULL, out, sizeof out);
+        out[n] = '\0';
+        CHECK(!strstr(out, "psram"), "value=NULL borra la clave");
+        CHECK(strstr(out, "board=Pico2\n") && strstr(out, "gpioCount=26\n"), "el borrado no toca las demás");
+
+        /* (d) partir de un payload vacío: set crea la primera línea */
+        n = bpvm_env_payload_set(NULL, 0, "board", "MetroRP2350B", out, sizeof out);
+        out[n] = '\0';
+        CHECK(n > 0 && !strcmp(out, "board=MetroRP2350B\n"), "set sobre payload vacío crea la 1ª línea");
+
+        /* (e) capacidad insuficiente → -1 (no desborda) */
+        CHECK(bpvm_env_payload_set(base, strlen(base), "x", "y", out, 4) == -1, "cap insuficiente → -1");
+    }
+
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
     return g_fail == 0 ? 0 : 1;
 }

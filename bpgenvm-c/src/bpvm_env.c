@@ -132,6 +132,48 @@ int bpvm_env_serialize(const char* payload, size_t payload_len, uint32_t seq,
     return (int) used;
 }
 
+int bpvm_env_payload_set(const char* payload_in, size_t in_len, const char* key,
+                         const char* value, char* out, size_t out_cap) {
+    if (!out || !key) return -1;
+    size_t klen = strlen(key);
+    size_t o = 0;
+    const char* p   = payload_in;
+    const char* end = payload_in ? payload_in + in_len : payload_in;
+
+    /* Copiar todas las líneas cuyo NOMBRE != key (así reemplazamos o borramos). */
+    while (payload_in && p < end) {
+        const char* ls = p;
+        const char* le = ls;
+        while (le < end && *le != '\n') le++;
+        const char* eq = ls;
+        while (eq < le && *eq != '=') eq++;
+        size_t nlen = (size_t)(eq - ls);
+        int match = (nlen == klen && memcmp(ls, key, klen) == 0);
+        if (!match) {
+            size_t linelen = (size_t)(le - ls) + (le < end ? 1u : 0u);   /* incluye el '\n' */
+            if (o + linelen > out_cap) return -1;
+            memcpy(out + o, ls, linelen);
+            o += linelen;
+        }
+        p = (le < end) ? le + 1 : end;
+    }
+
+    /* Añadir la nueva línea `key=value\n` si es un SET (value != NULL). */
+    if (value) {
+        if (o > 0 && out[o - 1] != '\n') {   /* asegurar separador */
+            if (o + 1 > out_cap) return -1;
+            out[o++] = '\n';
+        }
+        size_t vlen = strlen(value);
+        if (o + klen + 1 + vlen + 1 > out_cap) return -1;
+        memcpy(out + o, key, klen); o += klen;
+        out[o++] = '=';
+        memcpy(out + o, value, vlen); o += vlen;
+        out[o++] = '\n';
+    }
+    return (int) o;
+}
+
 uint32_t bpvm_env_next_seq(const uint8_t* blockA, size_t lenA,
                            const uint8_t* blockB, size_t lenB) {
     bpvm_env_t a, b;

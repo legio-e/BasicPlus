@@ -75,6 +75,15 @@ int bpvm_env_serialize(const char* payload, size_t payload_len, uint32_t seq,
 uint32_t bpvm_env_next_seq(const uint8_t* blockA, size_t lenA,
                            const uint8_t* blockB, size_t lenB);
 
+/* Edita un PAYLOAD de env (no el bloque): reemplaza —o añade si no existe— la
+ * línea `key=value`; si `value` es NULL, BORRA la clave. Copia el resultado a
+ * `out` (cap). Preserva las demás claves. Devuelve la nueva longitud (>=0) o -1 si
+ * no cabe. Es la lógica detrás de ENV_SET/ENV_DEL del protocolo de gestión de placa:
+ * el kernel lee el env, edita el payload, y re-serializa a la copia A/B rancia. */
+int bpvm_env_payload_set(const char* payload_in, size_t in_len,
+                         const char* key, const char* value,
+                         char* out, size_t out_cap);
+
 #ifdef __cplusplus
 }
 #endif
