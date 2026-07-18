@@ -307,7 +307,7 @@ public class FrmMain extends javax.swing.JFrame
      * Save, Run-Compile, Run-Run) y double-click de tabla de errores.
      */
     private void setupMvp() {
-        setTitle("BpIde — Untitled");
+        setTitle("BpIde [H9] — Untitled");
         setSize(1100, 720);
         setLocationRelativeTo(null);
 
@@ -1061,7 +1061,7 @@ public class FrmMain extends javax.swing.JFrame
         javax.swing.tree.DefaultMutableTreeNode root =
                 new javax.swing.tree.DefaultMutableTreeNode("(sin proyecto)");
         projectTreeModel.setRoot(root);
-        setTitle("BpIde — Untitled");
+        setTitle("BpIde [H9] — Untitled");
     }
 
     private static boolean isValidModuleName(String s) {
@@ -1082,7 +1082,7 @@ public class FrmMain extends javax.swing.JFrame
             this.currentProject     = proj;
             this.currentProjectFile = bpbuild;
             refreshProjectTree();
-            setTitle("BpIde — " + bpbuild.getFileName());
+            setTitle("BpIde [H9] — " + bpbuild.getFileName());
             // IDE-3 — registrar en "Recent Projects".
             IdePrefs prP = IdePrefs.load();
             IdePrefs.pushRecent(prP.recentProjects, bpbuild.toAbsolutePath().toString(), IdePrefs.MAX_RECENT);
@@ -1261,7 +1261,7 @@ public class FrmMain extends javax.swing.JFrame
             if (lblStatusFile != null) {
                 lblStatusFile.setText(of.file != null ? of.file.toString() : "(sin guardar)");
             }
-            setTitle("BpIde" + (of.file != null ? " — " + of.file : ""));
+            setTitle("BpIde [H9]" + (of.file != null ? " — " + of.file : ""));
             updateCaretStatus();
         }
     }
@@ -1983,7 +1983,7 @@ public class FrmMain extends javax.swing.JFrame
         try {
             Files.write(of.file, of.editor.getText().getBytes(StandardCharsets.UTF_8));
             setTabTitle(of.scroll, of.file.getFileName().toString());
-            setTitle("BpIde — " + of.file);
+            setTitle("BpIde [H9] — " + of.file);
             if (lblStatusFile != null) lblStatusFile.setText(of.file.toString());
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "No se pudo guardar: " + ex.getMessage(),
