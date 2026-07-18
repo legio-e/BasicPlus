@@ -75,7 +75,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -341,6 +341,21 @@ test-bmgr:
 	$(CC) $(CFLAGS) test/test_bmgr.c src/bpvm_bmgr.c src/bpvm_part.c src/bpvm_env.c src/crc32.c -o build/test_bmgr.exe
 	@echo "--- H9 board manager (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_bmgr.exe
+
+# H9 — "device" simulado para el IDE (FrmBoard) SIN placa: servidor TCP wire v1 que
+# despacha STATE/ENV_*/PART_* al bpvm_bmgr REAL, con el env respaldado por un fichero
+# A/B = la "flash". Una sola fuente de verdad (misma lógica y mismo wire que placa).
+# Reusa pico/json_min.c (parser JSON portable). Winsock via $(LDFLAGS) (-lws2_32).
+boardsim:
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Ipico tools/boardsim.c src/bpvm_bmgr.c src/bpvm_part.c src/bpvm_env.c src/bpvm_boot.c src/crc32.c pico/json_min.c -o build/bpvm-boardsim.exe $(LDFLAGS)
+	@echo "boardsim listo: build/bpvm-boardsim.exe [puerto] [flash-file] [flashSizeBytes]"
+
+# H9 — smoke end-to-end del sim por el wire (arranca el sim, recorre el flujo de
+# placa virgen, verifica cada reply). Necesita python3. No necesita placa ni IDE.
+boardsim-smoke: boardsim
+	@echo "--- H9 boardsim smoke (esperado: solo 'ok', [status=OK]) ---"
+	python tools/boardsim_smoke.py
 
 test-oom: $(BIN)
 	@if [ ! -f samples/OomCatch.mod ]; then \
