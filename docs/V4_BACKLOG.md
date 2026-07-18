@@ -307,6 +307,45 @@ Paraguas gráfico, MODESTO. Eduardo: "solo añadimos algún widget más; no recu
 
 ---
 
+## 🧱 H9 — Kernel por capas / arranque escalonado  *(hito NUEVO de V4; propuesto y acordado por Eduardo 18-jul)*
+
+Re-estratificar el arranque del firmware en **capas recuperables** sobre un **núcleo
+mínimo siempre-vivo**. Da a las particiones la importancia que merecen (pasan a ser el
+**pivote** del boot) y es el **cimiento que H3 (Packs) necesita**. Eduardo lo prefiere al
+diseño actual: **feedback cuando las cosas no funcionan** — en placas nuevas o en cambios
+profundos (como el modelo de memoria de ahora), en vez de "cuelgue mudo en placa". Es el
+*fail-fast* de H1 subido al nivel del arranque.
+
+**Diseño completo en [`H9_KERNEL_CAPAS.md`](H9_KERNEL_CAPAS.md)** (charla 18-jul). Modelo:
+estados apilados y recuperables — **0 Kernel** (comms mínima + flash raw, sin heap/FS/
+particiones) → **1 Particiones** (gestión del descriptor A/B+CRC) → **2 FS** (mount falible)
+→ **3 VM/App** (heap + autorun). El arranque SUBE; un fallo BAJA al último estado bueno
+**reportando por qué**. **Dos capas de comunicación** (refinamiento de Eduardo) sobre un
+solo transporte: **kernel-comm** (mínima, siempre) y **full-comm** (completa: copiar
+archivos + ejecutar, se registra al llegar a memoria+FS).
+
+- **H9.0 — Kernel (estado 0)** ⭐: transporte + buffer estático + lazo de comandos + flash
+  raw por dirección absoluta. **Entregable POR SÍ SOLO** (canal de recuperación imposible de
+  brickear), no depende de nada. Primer escalón.
+- **H9.1 — Gestor de particiones (estado 1)** sobre la fachada ya acordada
+  ([[particiones-flash-estado-pre-h3]]): leer/validar/escribir el descriptor (A/B + CRC).
+- **H9.2 — Mount de FS falible (estado 2)** + formateo conducido por el host.
+- **H9.3 — Init de VM/heap/app falible (estado 3)** + autorun gateado por salud + **flag de
+  modo seguro** (persistente, el host fuerza "quédate en el suelo").
+- **H9.4 — Dispatcher full-comm** (registrado al llegar a 2/3) + comando `STATE` + **el IDE
+  aprende a hablar con un device degradado** (modo recuperación — pieza vecina de H8).
+- **H9.5 — Watchdog/hang-detection** de respaldo + KILL desde full-comm.
+
+**3 decisiones load-bearing a cerrar antes de programar:** (1) supervivencia del estado 0
+(las particiones garantizan que FS/packs solo escriben su región → app/FS malos no
+brickean; solo un reflash, recuperable por BOOTSEL); (2) descriptor A/B + CRC; (3) detección
+de cuelgue + máquina de estados + flag de modo seguro. **Verificación:** oráculo de inyección
+de fallos EN HOST (sin placa) + estado 0 verificable solo; cintura por micro pequeña (todo
+casi existe: transporte #137, flash raw, fachada de particiones). **Sin implementar** —
+registrado como charla.
+
+---
+
 ## 🔴 Bugs delicados (movidos de `PENDIENTES.md`, 27-jun)
 
 > **Política (Eduardo 13-jul): los bugs van SUELTOS, no son hito.** Se arreglan **uno a uno cuando se

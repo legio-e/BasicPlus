@@ -1,0 +1,149 @@
+# H9 — Kernel por capas / arranque escalonado (charla de diseño, 18-jul)
+
+> Charla de diseño (método *analizar-antes-de-programar*). Fija el modelo de un
+> **hito NUEVO H9** propuesto por Eduardo (18-jul): re-estratificar el arranque
+> del firmware en **capas recuperables** sobre un **núcleo mínimo siempre-vivo**.
+> Da a las **particiones** la importancia que merecen —pasan a ser el *pivote*
+> del boot, no un detalle enterrado— y es el **cimiento que H3 (Packs) necesita**.
+
+## La motivación (Eduardo)
+
+**Feedback cuando las cosas NO funcionan** — en placas nuevas o durante cambios
+profundos (como el modelo de memoria de ahora). Hoy el boot es **monolítico**:
+init flash/PSRAM → mount FS → init heap de la VM → levantar el wire → autorun,
+todo acoplado. Si una etapa falla o se cuelga, el aparato se queda **mudo** (los
+"cuelgues mudos en placa" que arrastramos desde H1). La idea: **un sistema mínimo
+que SIEMPRE responde**, y el resto montado encima de forma que un fallo arriba te
+deje caer a la **última capa buena DICIENDO por qué**, en vez de brickear en
+silencio. Es el *fail-fast* de H1 subido al nivel del arranque.
+
+Eduardo: *"si algo no funciona todavía, que mantengamos el sistema básico; pero
+también poder manejar el sistema de particiones y a partir de ahí arrancar el
+resto."*
+
+## El modelo: estados apilados y recuperables
+
+Cada estado es **independientemente útil** e **independientemente recuperable**.
+El arranque normal SUBE 0→1→2→3; un fallo BAJA al último estado bueno y **reporta**.
+
+| Estado | Da | Necesita | Al fallar la capa de arriba |
+|--------|----|----------|-----------------------------|
+| **0 — Kernel** | comunicación básica | reloj/core (SDK) + 1 transporte + buffer **estático** | — (es el suelo) |
+| **1 — Particiones** | gestionar la tabla de particiones | descriptor válido en sitio fijo de flash | te quedas en 0, "sin tabla de particiones" |
+| **2 — FS** | copiar/listar/borrar archivos | mount de littlefs sobre su partición | te quedas en 1, "FS no montable" (host formatea) |
+| **3 — VM/App** | ejecutar programas | heap (SRAM/PSRAM) + stdlib + autorun | caes a 2 (comms+FS vivos), "app/heap falló" |
+
+- **Estado 0 (kernel).** Sin heap, sin FS, sin particiones. Un lazo de comandos
+  diminuto con buffer **estático**. Su set mínimo: `PING`, `INFO/STATE` y —lo que
+  lo hace todo posible— **lectura/escritura/borrado de flash por dirección
+  ABSOLUTA**. Eso es lo que permite *manejar el sistema de particiones desde el
+  suelo*. Superficie de fallo casi nula → más robusto que el boot de hoy.
+- **Estado 1 (particiones).** Lee y valida el descriptor de particiones (sitio
+  fijo, fuera del FS — ya diseñado en `particiones-flash-estado-pre-h3`). Corrupto
+  o ausente → te quedas en 0 y el host lo escribe. **Aquí las particiones dejan de
+  ser una precondición enterrada y pasan a ser algo que se gestiona desde el
+  suelo** — que es el objetivo de "darles la importancia que merecen".
+- **Estado 2 (FS).** Monta littlefs en su partición. Falla → te quedas en 1 y el
+  host formatea. (El FS ya existe; es el *mount* el que hoy puede colgar.)
+- **Estado 3 (VM + app).** Init del heap, stdlib, autorun. Crash → caes a 2 con
+  comms + FS vivos y reportas. Aquí vive el *"la app petó pero el aparato sigue
+  alcanzable"*.
+
+## Las DOS capas de comunicación (refinamiento de Eduardo)
+
+La comunicación no es monolítica: son **dos juegos de comandos sobre UN solo
+transporte físico** (mismo framing/CRC/chunking = `comm_common`, ya abstraído).
+
+1. **kernel-comm** — mínima, **presente desde el estado 0 y SIEMPRE**. Solo lo
+   imprescindible para traer el sistema y recuperarlo: `PING`, `STATE` (¿en qué
+   estado estoy y por qué?), flash raw (read/write/erase por dirección), y las
+   transiciones (escribir tabla de particiones, "quédate en el suelo").
+2. **full-comm** — **completa, se registra cuando memoria + FS están arriba**
+   (estado 2/3): copiar archivos (PUT/GET/LS), ejecutar programas (RUN/KILL/
+   autorun), debugger, upload de módulos… Es esencialmente el wire rico de hoy.
+
+**Mecanismo:** un solo dispatcher físico con **dos tablas**: la del kernel
+(diminuta, siempre) y la completa (registrada al llegar a estado 2/3). Un comando
+que necesita una capa aún no disponible **devuelve un error limpio "no disponible
+en el estado actual"** — nunca cuelga ni corrompe. `STATE` es el latido del bucle
+de feedback: el host **siempre** sabe con qué está hablando.
+
+## Invariantes (lo que hace que esto funcione)
+
+1. **El estado 0 es un suelo SIEMPRE alcanzable.** Ninguna capa de arriba puede
+   pisarlo (ver decisión #1).
+2. **Todo `init` es FALIBLE y NUNCA cuelga:** devuelve error → se reporta → se
+   queda abajo. (La disciplina de H1: gritar, no colgar.)
+3. **Ante fallo, se cae al último estado bueno reportando el motivo** — no se
+   reintenta a ciegas ni se brickea.
+4. **El host CONDUCE las transiciones** (escribe la tabla desde 0, formatea desde
+   1, arranca la app desde 2). El device ofrece el mecanismo; el host decide.
+
+## Decisiones load-bearing (a cerrar ANTES de programar)
+
+1. **Supervivencia del estado 0.** Para que "mantener el sistema básico" sea
+   real, arriba no debe poder pisar el 0. La buena noticia: **es para lo que
+   sirven las particiones.** Si el gestor garantiza que un formateo de FS o un
+   burn de pack solo escriben *en su partición* (nunca en la región de código),
+   entonces una **app mala o un FS corrupto NO pueden brickear** — solo un reflash
+   completo, y ese ya se recupera por BOOTSEL/DFU. Historia limpia, sin bootloader
+   aparte. *(Alternativa más dura: estado 0 en región de flash protegida tipo
+   mini-bootloader → abre "¿quién actualiza el estado 0?". Empezar por la ligera.)*
+2. **Robustez del descriptor de particiones.** Sitio fijo + **CRC** + **copia A/B**
+   → una escritura a medias no te deja tirado. Pequeño pero es el pivote del boot.
+3. **Detección de cuelgue + máquina de estados + flag de "modo seguro".**
+   - Si el estado 3 se cuelga (bucle infinito de un programa), kernel-comm debe
+     seguir vivo para atender un `KILL` y volver a 2 (ya medio hecho: KILL #257 +
+     comm task en core/prioridad aparte). El **watchdog** (Wdt) es el respaldo del
+     cuelgue duro.
+   - **Flag persistente de "no subas, quédate en el suelo"** que el host pueda
+     poner: si un autorun brickea el ascenso, se recupera forzando arranque a
+     estado 0. Es el "modo seguro" clásico, pero por flash en vez de por botón.
+   - El **autorun (#256) se re-encuadra**: "estado 3 sube solo si está sano"; un
+     fallo previo o el flag de modo seguro lo inhiben.
+
+## Descomposición / secuencia sugerida
+
+- **H9.0 — Kernel (estado 0).** Transporte + buffer estático + lazo de comandos +
+  flash raw. **Entregable POR SÍ SOLO** (canal de recuperación imposible de
+  brickear), no depende de nada. Es el mejor primer escalón.
+- **H9.1 — Gestor de particiones (estado 1)** sobre la fachada ya acordada:
+  leer/validar/escribir el descriptor (A/B + CRC), gestionar regiones.
+- **H9.2 — Mount de FS falible (estado 2)** + formateo conducido por el host.
+- **H9.3 — Init de VM/heap/app falible (estado 3)** + autorun gateado por salud +
+  flag de modo seguro.
+- **H9.4 — Dispatcher full-comm** registrado al llegar a 2/3; kernel-comm siempre
+  presente; comando `STATE`; **el IDE aprende a hablar con un device degradado**
+  (modo recuperación: escribir tabla / formatear / reflashear) — pieza vecina de H8.
+- **H9.5 — Watchdog/hang-detection** como respaldo + KILL desde full-comm.
+- **Transversal — cintura por micro:** transporte (ya abstraído #137), flash raw
+  (ya hay `flash_range_*` RP2350 / `esp_flash`-`esp_partition` ESP32 / HAL STM32),
+  fachada de particiones (ya diseñada). El trozo por-familia es **pequeño y casi
+  todo existe**.
+
+## Relación con lo existente
+
+- **Subsume/re-encuadra** `particiones-flash-estado-pre-h3` (la fachada
+  `bpvm_part.h` pasa a ser el gestor del estado 1) y es **prerequisito de H3
+  (Packs)** — un pack es una región gestionada por particiones; no hay packs en
+  serio sin gestor de particiones, y H9 *es* ese gestor manejable desde el suelo.
+- Es el **hogar sistémico del fail-fast** de H1: convierte "brickeo silencioso en
+  boot" en imposible-por-construcción.
+- Reusa: transporte abstraído (#137), KILL end-to-end (#257), Wdt, autorun (#256),
+  el wire v1 rico (pasa a ser full-comm).
+
+## Verificación
+
+- **Oráculo de inyección de fallos EN HOST:** el host puede simular las capas
+  (modo "sin particiones", "FS no montable", "heap no inicializa") y probar la
+  máquina de estados + la retirada + los mensajes **sin placa** — misma filosofía
+  host-como-oráculo del dual-VM. La verificación en silicio (por etapas y por
+  familia) va en tandas de placa, que Eduardo agrupa por caras en tiempo.
+- **El estado 0 es un hito entregable y verificable por sí mismo.**
+
+## Estado
+
+Propuesto y ACORDADO 18-jul (Eduardo prefiere este modelo al diseño actual: da
+feedback ante fallos, en placas nuevas y en cambios profundos). **Sin implementar
+— registrado como charla de diseño.** Antes de programar: cerrar las 3 decisiones
+load-bearing. Empezar por **H9.0 (kernel/estado 0)**, que no depende de nada.
