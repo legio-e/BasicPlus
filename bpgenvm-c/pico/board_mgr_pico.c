@@ -33,34 +33,37 @@
  * llega cuando H9 subsuma bp_ptable_t. */
 #define BP_PART_BASE     0x00100000u
 
-static uint8_t s_env_a[BP_ENV_SECTOR];
-static uint8_t s_env_b[BP_ENV_SECTOR];
-static uint8_t s_env_scratch[BP_ENV_SECTOR];
-static char    s_bm_reply[2048];
-
-/* Lee las dos copias del env desde flash (XIP) a RAM. */
-static void env_read(void) {
-    memcpy(s_env_a, (const void*)(XIP_BASE + BP_ENV_A_OFFSET), BP_ENV_SECTOR);
-    memcpy(s_env_b, (const void*)(XIP_BASE + BP_ENV_B_OFFSET), BP_ENV_SECTOR);
-}
-
-/* Vuelca a flash el sector A/B que el dispatch modificó (borra + programa el sector
- * entero de 4K, bajo la ventana XIP-safe). El otro sector queda intacto (A/B). */
-static void env_write(int slot) {
+/* Vuelca a flash un sector A/B (borra + programa el sector entero de 4K, bajo la
+ * ventana XIP-safe). El otro sector queda intacto (A/B). `src` = el buffer RAM. */
+static void env_write(int slot, const uint8_t* src) {
     uint32_t off = (slot == 0) ? BP_ENV_A_OFFSET : BP_ENV_B_OFFSET;
-    const uint8_t* src = (slot == 0) ? s_env_a : s_env_b;
     uint32_t tok = bpvm_flash_lock_begin();
     flash_range_erase(off, BP_ENV_SECTOR);
     flash_range_program(off, src, BP_ENV_SECTOR);   /* 4096 = múltiplo de FLASH_PAGE_SIZE */
     bpvm_flash_lock_end(tok);
 }
 
-void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type) {
-    env_read();
+void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
+                           unsigned char* scratch, unsigned long scratch_len) {
+    /* Sin BSS propio: troceamos el buffer prestado (s_put_buf, libre durante un comando
+     * de gestión). 3 sectores (a/b/scratch) + el resto para la reply. */
+    if (scratch == NULL || scratch_len < (unsigned long) (3u * BP_ENV_SECTOR + 512u)) {
+        wire_v1_send_error(id, "INTERNAL_ERROR", "scratch insuficiente");
+        return;
+    }
+    uint8_t* a         = scratch + 0u * BP_ENV_SECTOR;
+    uint8_t* b         = scratch + 1u * BP_ENV_SECTOR;
+    uint8_t* sc        = scratch + 2u * BP_ENV_SECTOR;
+    char*    reply     = (char*)  (scratch + 3u * BP_ENV_SECTOR);
+    size_t   reply_cap = (size_t) (scratch_len - 3u * BP_ENV_SECTOR);
+
+    /* Lee las dos copias del env desde flash (XIP) al scratch prestado. */
+    memcpy(a, (const void*)(XIP_BASE + BP_ENV_A_OFFSET), BP_ENV_SECTOR);
+    memcpy(b, (const void*)(XIP_BASE + BP_ENV_B_OFFSET), BP_ENV_SECTOR);
 
     const board_desc_t* bd = board_desc();
     bpvm_bmgr_t bm;
-    bm.a = s_env_a; bm.b = s_env_b; bm.scratch = s_env_scratch;
+    bm.a = a; bm.b = b; bm.scratch = sc;
     bm.sector = BP_ENV_SECTOR;
     bm.part_base = BP_PART_BASE;
     /* usable = flash real por JEDEC, sin clamp (el plan H9 se GUARDA, no se escribe;
@@ -77,8 +80,8 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type) {
         req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
 
     int wrote = -1;
-    int n = bpvm_bmgr_wire_dispatch(&bm, &req, s_bm_reply, sizeof s_bm_reply, &wrote);
+    int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);
     if (n < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "reply de gestion no cabe"); return; }
-    if (wrote >= 0) env_write(wrote);                 /* la cintura: RAM → flash */
-    wire_v1_send_line(s_bm_reply, (size_t) n);
+    if (wrote >= 0) env_write(wrote, wrote == 0 ? a : b);   /* la cintura: RAM → flash */
+    wire_v1_send_line(reply, (size_t) n);
 }

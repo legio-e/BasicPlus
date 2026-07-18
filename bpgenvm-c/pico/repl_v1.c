@@ -1298,7 +1298,11 @@ void repl_v1_handle_request(int first_char) {
      * el boardsim vía bpvm_bmgr_wire). */
     if (strcmp(type, "STATE") == 0
         || strncmp(type, "ENV_", 4) == 0
-        || strncmp(type, "PART_", 5) == 0) { board_mgr_pico_handle(id, &obj, type); return; }
+        || strncmp(type, "PART_", 5) == 0) {
+        /* reusa s_put_buf (48K, libre fuera de una subida) → board_mgr sin BSS propio. */
+        board_mgr_pico_handle(id, &obj, type, s_put_buf, sizeof s_put_buf);
+        return;
+    }
     /* TERMINAL */
     if (strcmp(type, "RUN")      == 0) { handle_run(id, &obj);      return; }
     /* DEBUG (H6.b.3 #140) — pre-RUN: acumular breakpoints / pedir pausa

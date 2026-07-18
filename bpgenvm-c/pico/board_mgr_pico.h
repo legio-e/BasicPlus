@@ -18,8 +18,14 @@ extern "C" {
 
 /* Atiende un comando de gestión de placa ya parseado (obj) cuyo `type` es
  * STATE, ENV_x, PART_x. Lee el env de flash, despacha al núcleo compartido, envía la
- * reply por el wire y —si hubo escritura— vuelca el sector A/B a flash. */
-void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type);
+ * reply por el wire y —si hubo escritura— vuelca el sector A/B a flash.
+ *
+ * `scratch` (>= 4 sectores = 16 KB) lo presta el llamador —típicamente s_put_buf, que
+ * está LIBRE durante un comando de gestión (nunca coincide con una subida)—. Así este
+ * módulo NO tiene buffers estáticos propios: no le roba SRAM al heap de la VM, crítico
+ * en la Pico (sin PSRAM). */
+void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
+                           unsigned char* scratch, unsigned long scratch_len);
 
 #ifdef __cplusplus
 }
