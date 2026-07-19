@@ -11,10 +11,16 @@
 #define BOARD_MGR_PICO_H
 
 #include "json_min.h"
+#include "bpvm_boot.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* H9 (unificación): estado REAL alcanzado por el boot (lo rellena vm_task tras
+ * bpvm_boot_climb). Lo usan board_mgr (STATE live, en vez del derivado del env)
+ * y repl_v1 (gating de comandos FS/RUN por estado). Implementado en main.c. */
+const bpvm_boot_status_t* board_boot_status(void);
 
 /* Atiende un comando de gestión de placa ya parseado (obj) cuyo `type` es
  * STATE, ENV_x, PART_x. Lee el env de flash, despacha al núcleo compartido, envía la

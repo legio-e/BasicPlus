@@ -1285,6 +1285,32 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "PING")     == 0) { handle_ping(id, &obj);     return; }
     if (strcmp(type, "RESET")    == 0) { handle_reset(id, &obj);    return; }
     if (strcmp(type, "BOOTSEL")  == 0) { handle_bootsel(id, &obj);  return; }
+    /* H9 — gating por estado REAL del boot: sin particiones/FS (estado < 2)
+     * los comandos de fichero se RECHAZAN con error claro (nunca cuelgan ni
+     * inventan un FS); RUN además necesita la VM (estado 3). Norma de Eduardo:
+     * "si no hay partición, nada con el sistema de ficheros". */
+    {
+        const bpvm_boot_status_t* bs = board_boot_status();
+        int is_fs_cmd = strcmp(type, "LIST") == 0 || strcmp(type, "STAT") == 0
+                     || strcmp(type, "GET") == 0  || strcmp(type, "PUT") == 0
+                     || strcmp(type, "DEL") == 0  || strcmp(type, "MKDIR") == 0
+                     || strcmp(type, "RMDIR") == 0 || strcmp(type, "RENAME") == 0
+                     || strcmp(type, "FORMAT") == 0 || strcmp(type, "SAVE") == 0
+                     || strcmp(type, "DF") == 0;
+        if (is_fs_cmd && bs->state < BPVM_BOOT_FS) {
+            char msg[96];
+            snprintf(msg, sizeof msg,
+                     "FS no disponible en estado %d (%s): configurar particiones",
+                     (int) bs->state, bpvm_boot_state_name(bs->state));
+            wire_v1_send_error(id, "NOT_READY", msg);
+            return;
+        }
+        if (strcmp(type, "RUN") == 0 && bs->state < BPVM_BOOT_APP) {
+            wire_v1_send_error(id, "NOT_READY",
+                               "VM no disponible en el estado actual del boot");
+            return;
+        }
+    }
     /* FILES */
     if (strcmp(type, "LIST")     == 0) { handle_list(id, &obj);     return; }
     if (strcmp(type, "STAT")     == 0) { handle_stat(id, &obj);     return; }

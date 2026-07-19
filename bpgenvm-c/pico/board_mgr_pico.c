@@ -26,12 +26,11 @@
  * borrado es por sector de 4K; cada copia ocupa un sector. */
 #define BP_ENV_SECTOR    FLASH_SECTOR_SIZE        /* 4096 */
 
-/* Base conceptual de las particiones H9 (recordadas en el env). De momento NO
- * conduce el FS real (que sigue con bp_ptable_t); solo define el reparto que el IDE
- * muestra/edita. El tamaño usable = flash real por JEDEC (board_desc) → Pico 4 MB /
- * Metro 16 MB se distinguen solos en los defaults. La unificación con el FS real
- * llega cuando H9 subsuma bp_ptable_t. */
-#define BP_PART_BASE     0x00100000u
+/* Base de particiones: BP_PART_BASE de flash_layout.h (0x200000). Desde la
+ * unificación H9 (19-jul) las particiones del env CONDUCEN el FS real (el
+ * bp_ptable_t viejo murió) → base y clamp deben ser LOS MISMOS que usa el
+ * boot (main.c layer_partitions), o FrmBoard propondría layouts que el
+ * arranque luego rechaza. */
 
 /* Vuelca a flash un sector A/B (borra + programa el sector entero de 4K, bajo la
  * ventana XIP-safe). El otro sector queda intacto (A/B). `src` = el buffer RAM. */
@@ -76,9 +75,13 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
     bm.a = a; bm.b = b; bm.scratch = sc;
     bm.sector = BP_ENV_SECTOR;
     bm.part_base = BP_PART_BASE;
-    /* usable = flash real por JEDEC, sin clamp (el plan H9 se GUARDA, no se escribe;
-     * el env vive en la zona 2 —0x010/0x011000, muy por debajo de 4 MB— → escritura segura). */
-    bm.usable_flash = bpvm_part_usable_flash(bd ? bd->flash_bytes : 0u, 0u);
+    /* usable CON clamp #292 (= el mismo número que usa el boot): desde la
+     * unificación el plan SE EJECUTA (el mount sale de aquí), así que proponer
+     * más de lo escribible sería ofrecer un layout que el arranque rechaza. */
+    bm.usable_flash = bpvm_part_usable_flash(bd ? bd->flash_bytes : 0u,
+                                             PICO_FLASH_SIZE_BYTES);
+    /* STATE cuenta el estado REAL alcanzado por el boot (no el plan del env). */
+    bm.live = board_boot_status();
 
     bpvm_bmgr_req_t req;
     memset(&req, 0, sizeof req);

@@ -9,12 +9,14 @@
  * no los graba y el env sobrevive al reflasheo).
  *
  *   0x000000-0x00FFFF  ZONA 1 arranque (64K FIJOS, region FLASH_BOOT)
- *   0x010000-0x010FFF  ZONA 2: env A (4K)          ┐ hueco del UF2:
- *   0x011000-0x011FFF          env B (4K)          │ NUNCA se graba
- *   0x012000-0x013FFF          reserva kernel (8K) ┘ (modo-seguro, futuro)
+ *   0x010000-0x010FFF  ZONA 2: env A (4K)           ┐ hueco del UF2:
+ *   0x011000-0x011FFF          env B (4K)           │ NUNCA se graba
+ *   0x012000-0x012FFF          log persistente (4K) │ (log.c, mudado de 0x3FC000)
+ *   0x013000-0x013FFF          reserva kernel (4K)  ┘ (modo-seguro, futuro)
  *   0x014000-0x1FFFFF  ZONA 3 firmware (region FLASH_MAIN)
- *   0x200000-...       FS littlefs (fs_lfs_pico.c) + arriba: log 0x3FC000 +
- *                      bp_ptable_t 0x3FF000 (se quedan donde estan de momento)
+ *   0x200000-...       PARTICIONES H9 (bpvm_part: contiguas desde BP_PART_BASE,
+ *                      hoy FS littlefs + PACKS). El bp_ptable_t viejo (0x3FF000)
+ *                      MURIO con la unificacion; su sector es espacio de particion.
  *
  * Red anti-divergencia: board_mgr_pico.c comprueba en runtime que estos
  * offsets caen dentro del hueco real usando __bp_zone1_end / __bp_zone3_start
@@ -25,10 +27,17 @@
 #ifndef BP_FLASH_LAYOUT_H
 #define BP_FLASH_LAYOUT_H
 
-/* Zona 2 — bloque de env A/B (offsets de flash, relativos a XIP_BASE). */
+/* Zona 2 — sectores del kernel (offsets de flash, relativos a XIP_BASE). */
 #define BP_ENV_A_OFFSET       0x00010000u
 #define BP_ENV_B_OFFSET       0x00011000u
-/* 0x012000-0x013FFF: reserva del kernel (flag modo-seguro, futuro). */
+#define BP_LOG_OFFSET         0x00012000u   /* log persistente (mudado de 0x3FC000) */
+/* 0x013000-0x013FFF: reserva del kernel (flag modo-seguro, futuro). */
+
+/* Base de particiones (H9): el espacio [BP_PART_BASE, flash usable) es TODO de
+ * las particiones (bpvm_part: offsets derivados, contiguos, en orden). La imagen
+ * (zona 3) termina en el linker ANTES de esta base, y el env/log viven en la
+ * zona 2 → ningun artefacto del kernel dentro del espacio de particiones. */
+#define BP_PART_BASE          0x00200000u
 
 /* Limites de zona reales, exportados por bp_memmap.ld (direcciones XIP). */
 #ifdef __cplusplus

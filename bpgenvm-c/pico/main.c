@@ -27,6 +27,12 @@
 #include "repl.h"
 #include "repl_v1.h"   /* P-autorun (#256) */
 #include "log.h"
+#include "board_mgr_pico.h"   /* H9: board_boot_status (estado real del boot) */
+#include "flash_layout.h"     /* H9: BP_ENV_*, BP_PART_BASE (layout 3 zonas) */
+#include "bpvm_env.h"         /* H9: env de la zona 2 (bloque A/B) */
+#include "bpvm_part.h"        /* H9: particiones derivadas del env */
+#include "bpvm_boot.h"        /* H9: máquina de estados del arranque */
+#include "hardware/flash.h"   /* FLASH_SECTOR_SIZE */
 #include "bench.h"
 #include "bpvm_gpio.h"
 #include "bpvm_i2c.h"
@@ -775,6 +781,56 @@ static bpvm_status_t run_vm_once(int iteration) {
  * falta para post-mortem, log_printf() sigue ahí escribiendo al log
  * persistente en flash (silencioso pero recuperable con LOG en REPL).
  */
+/* ===== H9: arranque escalonado (unificación 19-jul) =====================
+ * El boot deja de ser monolítico: 0) identidad en el SUELO → 1) particiones
+ * del env → 2) FS → 3) VM. bpvm_boot_climb sube capa a capa y PARA en la
+ * primera que falla (último estado bueno + motivo). STATE (wire) reporta este
+ * estado REAL vía board_boot_status(), y repl_v1 gatea los comandos FS/RUN. */
+
+static bpvm_env_t         s_env;      /* env de la zona 2 (payload apunta a XIP) */
+static bpvm_part_layout_t s_layout;   /* particiones derivadas del env */
+static bpvm_boot_status_t s_boot;     /* estado REAL alcanzado por el boot */
+
+const bpvm_boot_status_t* board_boot_status(void) { return &s_boot; }
+
+/* 0→1: particiones del env (mismo base+clamp que board_mgr — una sola verdad). */
+static bpvm_boot_step_t layer_partitions(void* u) {
+    (void) u;
+    bpvm_boot_step_t r; r.ok = 0; r.reason[0] = '\0';
+    uint32_t usable = bpvm_part_usable_flash(board_desc()->flash_bytes,
+                                             PICO_FLASH_SIZE_BYTES);   /* clamp #292 */
+    int bad = -1;
+    bpvm_part_err_t e = bpvm_part_layout(&s_env, BP_PART_BASE, usable,
+                                         FLASH_SECTOR_SIZE, &s_layout, &bad);
+    if (e == BPVM_PART_OK) { r.ok = 1; return r; }
+    snprintf(r.reason, sizeof r.reason, "%s", bpvm_part_err_str(e));
+    return r;
+}
+
+/* 1→2: montar littlefs en la región FS derivada (formatea si no monta:
+ * región recién definida por el usuario = legítimo). */
+static bpvm_boot_step_t layer_fs(void* u) {
+    (void) u;
+    bpvm_boot_step_t r; r.ok = 0; r.reason[0] = '\0';
+    const bpvm_part_t* fsp = bpvm_part_get(&s_layout, BPVM_PART_FS);
+    if (!fsp) { snprintf(r.reason, sizeof r.reason, "sin region FS"); return r; }
+    if (fs_init_at(fsp->offset, fsp->size) != FS_OK) {
+        snprintf(r.reason, sizeof r.reason, "littlefs no monta ni formatea");
+        return r;
+    }
+    r.ok = 1;
+    return r;
+}
+
+/* 2→3: la VM está lista si hay heap (SRAM o PSRAM, ya elegido). */
+static bpvm_boot_step_t layer_app(void* u) {
+    (void) u;
+    bpvm_boot_step_t r; r.reason[0] = '\0';
+    r.ok = (s_vm_buffer != NULL && s_vm_buffer_size > 0);
+    if (!r.ok) snprintf(r.reason, sizeof r.reason, "heap de la VM no disponible");
+    return r;
+}
+
 static void vm_task(void* arg) {
     (void) arg;
 
@@ -816,9 +872,8 @@ static void vm_task(void* arg) {
            (unsigned) PICO_FLASH_SIZE_BYTES, (unsigned) PICO_FLASH_SIZE_BYTES / (1024u*1024u));
     printf("    todo flash_range_erase/program caiga DENTRO de ese limite.\n");
     printf("    Si el FS de esta placa empieza en 0x400000 y el limite son 4MB -> panic.\n");
-    printf("[3] llamando a fs_init()...\n");
-    fs_init();
-    printf("[3] fs_init() SOBREVIVIO: %d ficheros\n", fs_file_count());
+    printf("[3] H9: el mount del FS lo conduce el env (particiones derivadas);\n");
+    printf("    este nivel de bringup ya no monta nada por si mismo.\n");
 
     printf("[4] llamando a board_desc_init() (board.json + sondeo QMI de PSRAM)...\n");
     board_desc_init();
@@ -863,32 +918,26 @@ static void vm_task(void* arg) {
     }
 #endif
 
-    fs_init();
-    log_printf("fs_init: %d ficheros, %u bytes",
-               fs_file_count(), (unsigned) fs_used_bytes());
+    /* ===== H9: subida escalonada (unificación 19-jul) =====
+     * 0) Identidad en el SUELO: variante (PACKAGE_SEL) + flash real (JEDEC).
+     *    Hardware puro — sin FS, sin env. */
+    board_desc_early_init();
+
+    /* Env de la ZONA 2, por XIP (sin copia y sin FS): la verdad de la placa. */
+    bpvm_env_pick((const uint8_t*)(XIP_BASE + BP_ENV_A_OFFSET), FLASH_SECTOR_SIZE,
+                  (const uint8_t*)(XIP_BASE + BP_ENV_B_OFFSET), FLASH_SECTOR_SIZE,
+                  &s_env);
+
+    /* PSRAM conducida por el env (`psram=1` ∧ RP2350B → CS=GPIO47), ANTES de
+     * elegir el heap — "distribuir la memoria pronto" (Eduardo, H9). */
+    board_desc_psram_from_env(bpvm_env_get_bool(&s_env, "psram", 0));
 
 #if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 3
-    /* #292 — nivel 3: sobrevivió a fs_init(). En una flash virgen eso incluye
-     * escribir el descriptor de particiones y FORMATEAR el volumen littlefs
-     * (Metro: 12 MB ≈ 3072 sectores, cada uno bajo bpvm_flash_lock = IRQs off
-     * + otro core aparcado). Si el nivel 2 enumera y este NO, es el FS. */
+    /* nivel 3 (H9): identidad + env + psram hechos, SIN tocar el FS aún. */
     for (unsigned i = 0; ; i++) {
-        printf("bringup-3 vivo %u (fs_init OK: %d ficheros)\n", i, fs_file_count());
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-#endif
-
-    /* H7.3: descriptor de placa — caps por variante (A/B) + override de
-     * /sys/board.json. Tras fs_init para poder leer el board.json del FS.
-     * Sondea/habilita la PSRAM (si board.json declara psramCsPin). */
-    board_desc_init();
-
-#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 4
-    /* #292 — nivel 4: sobrevivió al JEDEC + board.json + sondeo QMI de la PSRAM
-     * (boot-crítico: suspende el XIP). Si el 3 enumera y este NO, es la PSRAM. */
-    for (unsigned i = 0; ; i++) {
-        printf("bringup-4 vivo %u (board_desc OK: variante %c, psram %u MB)\n", i,
-               board_desc()->variant,
+        printf("bringup-3 vivo %u (identidad: variante %c, flash %u MB, psram %u MB)\n",
+               i, board_desc()->variant,
+               (unsigned)(board_desc()->flash_bytes / (1024u * 1024u)),
                (unsigned)(board_desc()->psram_bytes / (1024u * 1024u)));
         vTaskDelay(pdMS_TO_TICKS(500));
     }
@@ -908,6 +957,28 @@ static void vm_task(void* arg) {
         log_printf("vm: heap en SRAM interna %u KB",
                    (unsigned)(s_vm_buffer_size / 1024u));
     }
+
+    /* 1)→3): particiones del env → FS → VM. bpvm_boot_climb para en la
+     * PRIMERA capa que falla: último estado bueno + motivo (nada se
+     * auto-inicializa; sin particiones NO hay FS — norma de Eduardo). */
+    {
+        bpvm_boot_layers_t layers;
+        layers.to_partitions = layer_partitions;
+        layers.to_fs         = layer_fs;
+        layers.to_app        = layer_app;
+        layers.user          = NULL;
+        layers.max_state     = BPVM_BOOT_APP;
+        bpvm_boot_climb(&layers, &s_boot);
+    }
+    log_printf("boot: estado %d (%s)%s%s", (int) s_boot.state,
+               bpvm_boot_state_name(s_boot.state),
+               s_boot.degraded ? " DEGRADADO: " : "",
+               s_boot.degraded ? s_boot.reason : "");
+
+    if (s_boot.state >= BPVM_BOOT_FS) {
+    /* H7.3: overrides de /sys/board.json (name/led/neopixel) — ya con FS. La
+     * variante, la flash y la PSRAM vienen del suelo/env, no de aquí. */
+    board_desc_init();
 
     /* H7.4.a — test del driver NeoPixel: si la placa declara neopixelPin, enciende
      * el LED onboard en verde tenue al boot. Valida la 1ª infra PIO de forma
@@ -994,6 +1065,7 @@ static void vm_task(void* arg) {
     log_printf("fs: %d ficheros, %u/%u bytes usados",
                fs_file_count(), (unsigned) fs_used_bytes(),
                (unsigned) fs_total_bytes());
+    }  /* fin estado >= FS (H9): sin particiones/FS no hay board.json/stdlib */
 
     /* H3 micro-bench (#159) — fib_native(28) en C puro para medir el
      * techo de rendimiento del AOT. Compara con Bench.mod corriendo
@@ -1013,7 +1085,8 @@ static void vm_task(void* arg) {
      * antes) se cumple solo: el wire ya está vivo y el poll del run
      * atiende HELLO/KILL, así que el IDE puede conectar y parar la app
      * aunque sea un bucle infinito. */
-    repl_v1_autorun();
+    if (s_boot.state == BPVM_BOOT_APP && !s_boot.degraded)
+        repl_v1_autorun();   /* H9: autorun solo con la placa SANA en estado 3 */
     repl_run();
     (void) run_vm_once;  /* silenciar unused warning */
 }

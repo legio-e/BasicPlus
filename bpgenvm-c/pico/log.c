@@ -19,16 +19,15 @@
 #define LOG_MAGIC      0x4C4F4731u   /* 'LOG1' */
 #define LOG_VERSION    1u
 
-/* Sector dedicado en flash inmediatamente antes de la región FS.
- * Pico 2 con 4 MB: FS está en los últimos 12 KB (0x3FD000-0x3FFFFF),
- * el log usa el sector previo (0x3FC000-0x3FCFFF). */
-#ifndef PICO_FLASH_SIZE_BYTES
-#define PICO_FLASH_SIZE_BYTES (4 * 1024 * 1024)
-#endif
+#include "flash_layout.h"   /* H9: el log vive en la ZONA 2 (kernel) del layout de 3 zonas */
 
-#define FS_REGION_BYTES        (12u * 1024u)         /* coincide con fs.c */
+/* H9: sector del log = zona 2 (0x012000). Antes vivía en 0x3FC000, calculado
+ * contra el layout del FS LEGADO (FS_REGION_BYTES); con la unificación de
+ * particiones el espacio [BP_PART_BASE, usable) es TODO de las particiones y
+ * el log se muda al hueco del kernel — que el UF2 no graba (el log también
+ * sobrevive al reflasheo). */
 #define LOG_REGION_BYTES       FLASH_SECTOR_SIZE     /* 4 KB */
-#define LOG_FLASH_OFFSET       (PICO_FLASH_SIZE_BYTES - FS_REGION_BYTES - LOG_REGION_BYTES)
+#define LOG_FLASH_OFFSET       BP_LOG_OFFSET
 
 /* Header in-flash: 16 bytes alineados, data sigue. */
 typedef struct {

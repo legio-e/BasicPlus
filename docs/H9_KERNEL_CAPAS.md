@@ -413,12 +413,35 @@ flash A/B + el adaptador JSON existen y están cableados — `pico/board_mgr_pic
 (STATE/ENV_*/PART_* → `board_mgr_pico_handle`) y compilado en el UF2 (`786eb66` +
 `a262537`). Env provisional en `0x3FD/0x3FE000` → se muda al layout de 3 zonas.
 
-**Pendiente (ladrillos acordados 19-jul, en orden, "poco a poco"):**
-1. **Layout 3 zonas** (linker partido + env a `0x010000/0x011000` + hueco del UF2).
-2. **Identidad en el suelo** (PACKAGE_SEL + JEDEC pre-FS → fuente de env/bmgr).
-3. **PSRAM por env** (leer env al arrancar + `psram=1` ∧ RP2350B → CS=GPIO47 + init temprano).
-4. **Verificación interactiva de Eduardo** (Pico + Metro, una tanda): FrmBoard contra
-   placa real + persistencia del env tras reinicio Y tras reflasheo del firmware.
-Después: máquina de estados conduciendo el boot real de main.c; unificación
-particiones-H9 ↔ FS real (subsumir `bp_ptable_t`); refinar FrmBoard (rejilla 3×2 +
-asistente de 1ª conexión). Opcional host: descriptor tipado `bpvm_board`.
+**✅✅ LOS 4 LADRILLOS + LA UNIFICACIÓN — HECHOS Y VERIFICADOS EN PLACA (19-jul, Pico + Metro):**
+1. ✅ **Layout 3 zonas** (`3c30be0`): linker partido, env en `0x010000/0x011000`, hueco
+   del UF2 (0 bloques verificado) → env Y log sobreviven al reflasheo. Persistencia
+   verificada por Eduardo en la Pico (PART_APPLY + reset).
+2. ✅ **UNIFICACIÓN — el env CONDUCE el boot** (norma de Eduardo: *"si no hay partición,
+   nada con el sistema de ficheros"*): `bp_ptable_t` y su auto-init MURIERON;
+   `bpvm_boot_climb` con capas reales (particiones del env → `fs_init_at(region derivada)`
+   → VM); `STATE` reporta el estado REAL (`bm.live`); repl_v1 gatea FS/RUN por estado con
+   error `NOT_READY` claro; autorun solo con placa sana en 3; stdlib/board.json solo con
+   FS arriba. El log se mudó a la zona 2 (`0x012000`). Verificado en la Metro: placa
+   virgen → estado 0 honesto + árbol vacío → defaults → apply → reset → estado 3.
+3. ✅ **Identidad en el suelo**: `board_desc_early_init` (PACKAGE_SEL + JEDEC, pre-FS,
+   fallback 4 MB si JEDEC raro) = fuente única; board.json queda solo para
+   name/led/neopixel (estado ≥ 2).
+4. ✅ **PSRAM por env**: boot lee el env por XIP (sin FS) → `psram=1` ∧ RP2350B →
+   CS=GPIO47 → sondeo ANTES de elegir el heap. Verificado Metro: "psram: 8 MB usable
+   @ GP47" + heap en PSRAM. Solo variante B (decisión 19-jul).
+5. ✅ **#292 CERRADO de verdad**: `PICO_FLASH_SIZE_BYTES` 4→16 MB = el SOBRE máximo de
+   la imagen; la verdad por placa es el JEDEC runtime + clamp. Metro recupera sus
+   16 MB (verificado: usable 16384 KB, FS de 7 MB montado). Pico sigue en 4 (JEDEC).
+6. ✅ **Env a prueba de humanos** (2 mordiscos reales el mismo día): booleanos aceptan
+   `s/si` (Eduardo escribió `psram=si` y se ignoraba MUDO) y las claves son
+   **CASE-INSENSITIVE** (decisión de Eduardo: el checkbox del IDE escribía `PSRAM`,
+   el firmware leía `psram` — con CI la entrada vieja funciona sin tocarla). El
+   checkbox del IDE escribe ya la clave canónica en minúsculas.
+
+**Pendiente (siguientes tandas):** refinar FrmBoard (rejilla 3×2 + asistente de 1ª
+conexión + botón formatear); máquina de estados conduciendo también las comms
+(comms-first real); flag de modo seguro (reserva de zona 2); portar la unificación a
+ESP32/STM32 (ESP32 ya es limpio por tabla vendor; STM32 = #297); variante B del layout
+(zona 1 = kernel real que valida la zona 3); env keys para pines (matar board.json del
+todo). Opcional host: descriptor tipado `bpvm_board`.

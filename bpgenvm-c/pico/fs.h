@@ -53,9 +53,13 @@ typedef enum {
 /* Inicializa el FS. Intenta cargar desde flash si hay magic válido;
  * si no, deja el FS vacío. Devuelve FS_OK en ambos casos.
  *
- * Llamar UNA vez antes de cualquier otra operación. No es seguro
- * llamarlo concurrentemente con otras operaciones del FS. */
-fs_status_t fs_init(void);
+ * H9 (unificación 19-jul): monta littlefs en la REGIÓN dada (offset+size
+ * absolutos de flash, que vienen del ENV vía bpvm_part — offsets derivados).
+ * Ya NO hay descriptor propio ni auto-init: sin particiones definidas NO se
+ * monta nada (el boot se queda en estado 1 y el host conduce). Formatea si
+ * no monta (región recién definida por el usuario = legítimo). Llamar UNA
+ * vez, no concurrente con otras operaciones del FS. */
+fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size);
 
 /* Vacía el FS en RAM (no toca flash hasta el siguiente save). */
 void fs_format_ram(void);

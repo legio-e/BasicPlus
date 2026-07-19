@@ -39,8 +39,21 @@ typedef struct {
     unsigned flash_bytes;   /* 4 MB Pico 2 / 16 MB Metro, etc. */
 } board_desc_t;
 
-/* Inicializa el descriptor: defaults por variante + override de
- * /sys/board.json (si existe). Llamar UNA vez tras fs_init() en boot. */
+/* H9 — identidad en el SUELO: variante (SYSINFO.PACKAGE_SEL) + caps por
+ * variante + tamaño de flash (JEDEC). Sin FS, sin env: hardware puro. Llamar
+ * PRIMERO en el boot; board_desc() ya es válido después. */
+void board_desc_early_init(void);
+
+/* H9 — PSRAM conducida por el ENV (`psram=1`), no por board.json. Solo RP2350B
+ * (CS = GPIO47, el último pin); en la A no se sondea (no se conoce placa A con
+ * PSRAM; si aparece, se añade la posibilidad). Llamar tras early_init y ANTES
+ * de elegir el heap de la VM. */
+void board_desc_psram_from_env(int psram_flag);
+
+/* Overrides de /sys/board.json — datos de la PLACA que aún viven en el FS
+ * (name/led/neopixel/gpioCount/variant). Llamar SOLO con el FS montado
+ * (estado >= 2). La variante base, la flash y la PSRAM ya NO salen de aquí
+ * (identidad en el suelo + env, H9). */
 void board_desc_init(void);
 
 /* El descriptor activo (válido tras board_desc_init). */

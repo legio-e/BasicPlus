@@ -1,48 +1,35 @@
 /*
- * fs_lfs_pico.c — H2·B2: littlefs en el RP2350 (Metro 16M + Pico 2 4M,
- * MISMO .uf2). Reemplaza al stopgap pico/fs.c con TRES piezas:
+ * fs_lfs_pico.c — H2·B2 + H9: littlefs en el RP2350 (Metro 16M + Pico 2 4M,
+ * MISMO .uf2). DOS piezas:
  *
- * 1) DESCRIPTOR DE PARTICIONES en sitio FIJO fuera del FS (huevo-y-gallina:
- *    board.json vive DENTRO del FS, no puede decir dónde está el FS).
- *    Sector 0x3FF000 (último 4K de los primeros 4 MB — existe en ambas
- *    placas). Struct binario magic+versión+regiones+CRC. Si falta/corrupto,
- *    el firmware lo AUTO-INICIALIZA con el tamaño de flash real (JEDEC):
- *      Pico 2 (4M):  FS = [0x200000, 0x3FC000)  ≈ 2 MB   (antes 128 KB)
- *      Metro (16M):  FS = [0x400000, 0x1000000) = 12 MB  (antes 128 KB)
- *    (La herramienta de PC con el "automático" fino vendrá después; hasta
- *    entonces el descriptor auto-init ES la fuente de verdad.)
- *
- * 2) CINTURA block-device de littlefs (§2.3 del plan): read por XIP
+ * 1) CINTURA block-device de littlefs (§2.3 del plan): read por XIP
  *    (memcpy desde XIP_BASE), prog/erase por flash_range_* BAJO
  *    bpvm_flash_lock (el guard XIP de #153: IRQs off en single-core;
  *    parquea el otro core en dual-core). El quirk se absorbe AQUÍ.
  *
- * 3) SHIM del API legado fs.h SOBRE la fachada bpvm_fs: los 5 llamadores
- *    (repl_v1, repl, main, board_desc, bench) no cambian NI UNA LÍNEA →
- *    mismo comportamiento externo, motor littlefs debajo. La migración de
- *    los llamadores a la fachada directa es B2 v2 (tras validar en placa).
+ * 2) SHIM del API legado fs.h SOBRE la fachada bpvm_fs (retirarlo = #305).
  *    - fs_get: read a un scratch estático (contrato documentado del API:
- *      "puntero válido hasta el siguiente fs_put/fs_delete" — los
- *      llamadores ya lo respetan; el loader COPIA el .mod a vm->memory).
+ *      "puntero válido hasta el siguiente fs_put/fs_delete").
  *    - fs_put: crea los dirs padre (el FS viejo era plano; littlefs no).
- *    - fs_list: paseo BFS que emite paths PLANOS como el FS viejo
- *      ("Hello.mod" en la raíz, "/lib/Core.mod" en dirs) → el wire LS no
- *      cambia. Los dirs pendientes se acumulan FUERA del callback (el cb
- *      corre bajo el lock del FS: prohibido re-entrar en la fachada).
+ *    - fs_list: paseo BFS que emite paths PLANOS como el FS viejo.
  *    - fs_save_to_flash: no-op (littlefs committea en cada close).
  *    - fs_format_ram: reformateo EN CALIENTE + recrear /sys /lib /app.
  *
- * Nota heredada: log.c conserva su sector propio (0x3FC000) — que con el
- * fs.c viejo SOLAPABA con la región del FS (bug latente: FS_REGION_BYTES=12K
- * en log.c vs 132K reales en fs.c). Con este layout el solape desaparece:
- * el FS nuevo termina JUSTO donde empieza el log.
+ * H9 (unificación, 19-jul — norma de Eduardo: "si no hay partición, nada
+ * con el sistema de ficheros"): el DESCRIPTOR binario propio (bp_ptable_t
+ * en 0x3FF000, B2.b) MURIÓ, y con él su auto-init. La región del FS ya no
+ * se decide aquí: viene del ENV (bpvm_part: tamaños `part.*.size`, offsets
+ * DERIVADOS desde BP_PART_BASE) y la pasa el boot a fs_init_at(). Sin
+ * particiones definidas no se monta nada — el boot se queda en estado 1,
+ * reporta por STATE, y el host conduce (FrmBoard: defaults → apply →
+ * reinicio). El clamp #292 vive en bpvm_part_usable_flash (el llamador).
+ * El log ya no acota el volumen: se mudó a la zona 2 (flash_layout.h) y
+ * el espacio [BP_PART_BASE, usable) es TODO de las particiones.
  */
 #include "fs.h"
 #include "bpvm_fs.h"
 #include "bpvm_fs_lfs.h"
 #include "flash_lock.h"
-#include "board_desc.h"
-#include "crc32.h"
 #include "log.h"            /* log_printf: al log PERSISTENTE (printf = solo consola USB) */
 
 #include "pico/stdlib.h"
@@ -51,119 +38,19 @@
 #include <string.h>
 #include <stdio.h>
 
-/* ───────────────────────── 1) descriptor de particiones ─────────────── */
+/* ───────────────── región del FS (viene del env vía fs_init_at) ───────
+ * H9: el volumen littlefs vive en la partición FS que definió el usuario
+ * (env → bpvm_part → offset derivado). Nada se auto-decide aquí. */
 
-#define BP_PTABLE_OFFSET   0x003FF000u          /* último 4K del 1er 4MB */
-#define BP_PTABLE_MAGIC    0x42505054u          /* 'BPPT' */
-#define BP_PTABLE_VERSION  1u
+static uint32_t s_fs_offset = 0;   /* offset absoluto en flash del volumen */
+static uint32_t s_fs_size   = 0;   /* bytes (múltiplo de sector) */
 
-typedef struct {
-    uint32_t magic;
-    uint32_t version;
-    uint32_t fs_offset;      /* offset absoluto en flash del volumen littlefs */
-    uint32_t fs_size;        /* bytes (múltiplo de sector) */
-    uint32_t packs_offset;   /* reservado (0 = sin zona de packs aún) */
-    uint32_t packs_size;
-    uint32_t reserved0;
-    uint32_t crc;            /* bpvm_crc32 de los 7 campos anteriores */
-} bp_ptable_t;
-
-static bp_ptable_t s_pt;
-
-/* límites del FS legado/log que este layout NO debe pisar (ver cabecera) */
-#define BP_LOG_SECTOR      0x003FC000u          /* log.c, intacto */
-
-static uint32_t ptable_crc(const bp_ptable_t* p) {
-    return bpvm_crc32((const uint8_t*) p, sizeof(*p) - sizeof(uint32_t));
-}
-
-/*
- * #292 — CUÁNTA FLASH PODEMOS USAR DE VERDAD.
- *
- * Hay DOS números y no son el mismo:
- *   · flash_bytes  = lo que tiene la placa (JEDEC, runtime). La Metro: 16 MB.
- *   · PICO_FLASH_SIZE_BYTES = lo que la IMAGEN declara al compilar. Hoy 4 MB,
- *     y es UNO SOLO porque el .uf2 es único para todas las placas.
- *
- * El SDK hace hard_assert(offs + count <= PICO_FLASH_SIZE_BYTES) en CADA
- * flash_range_erase/program (flash.c:193/224). No es un aviso: es un panic.
- * Así que aunque la Metro tenga 16 MB, escribir en 0x400000 con una imagen
- * que declara 4 MB MATA LA PLACA — y como pasa en el arranque, ni llega a
- * enumerar el USB ("dispositivo desconocido"). Ese era el bug: el FS de la
- * Metro nacía en 0x400000 = el primer byte fuera de lo declarado.
- *
- * El invariante correcto no es "usa toda la flash": es "usa lo que puedes
- * ESCRIBIR". Y eso es el mínimo de los dos. Con el clamp, la imagen única
- * funciona en las dos placas (la Metro desaprovecha 12 MB, y es un precio
- * barato por arrancar). El día que PICO_FLASH_SIZE_BYTES deje de mentir, la
- * Metro recupera su volumen entero SIN TOCAR ESTA LÓGICA.
- */
-static uint32_t usable_flash_bytes(uint32_t flash_bytes) {
-#ifdef PICO_FLASH_SIZE_BYTES
-    if (PICO_FLASH_SIZE_BYTES > 0 && flash_bytes > (uint32_t) PICO_FLASH_SIZE_BYTES)
-        return (uint32_t) PICO_FLASH_SIZE_BYTES;
-#endif
-    return flash_bytes;
-}
-
-static int ptable_sane(const bp_ptable_t* p, uint32_t flash_bytes) {
-    if (p->magic != BP_PTABLE_MAGIC || p->version != BP_PTABLE_VERSION) return 0;
-    if (p->crc != ptable_crc(p)) return 0;
-    if (p->fs_offset % FLASH_SECTOR_SIZE || p->fs_size % FLASH_SECTOR_SIZE) return 0;
-    if (p->fs_size < 64u * 1024u) return 0;               /* mínimo útil */
-    if (p->fs_offset < 0x100000u) return 0;               /* nunca sobre el firmware */
-    /* #292: contra lo ESCRIBIBLE, no contra lo que tiene el chip. Esto además
-     * RECHAZA un descriptor rancio grabado por una imagen anterior (la Metro
-     * tiene uno que dice [0x400000, 12MB): ptable_write() cae en 0x3FF000 y
-     * SÍ se escribió; el panic vino después, al formatear littlefs). Al no ser
-     * sano, se regenera con el layout bueno en el siguiente arranque. */
-    uint32_t usable = usable_flash_bytes(flash_bytes);
-    uint32_t top = (usable >= 4u * 1024u * 1024u) ? usable : 4u * 1024u * 1024u;
-    if (p->fs_offset + p->fs_size > top) return 0;
-    /* si la región cae bajo los 4MB, no puede pisar el log ni el descriptor */
-    if (p->fs_offset < 0x400000u &&
-        p->fs_offset + p->fs_size > BP_LOG_SECTOR) return 0;
-    return 1;
-}
-
-static void ptable_defaults(bp_ptable_t* p, uint32_t flash_bytes) {
-    memset(p, 0, sizeof(*p));
-    p->magic   = BP_PTABLE_MAGIC;
-    p->version = BP_PTABLE_VERSION;
-    uint32_t usable = usable_flash_bytes(flash_bytes);
-    if (usable > 4u * 1024u * 1024u) {
-        /* >4MB ESCRIBIBLES: todo lo que hay por encima de los 4MB. Hoy este
-         * camino NO se toma con la imagen única (PICO_FLASH_SIZE_BYTES=4MB lo
-         * clampa); se activará solo cuando el build declare la flash real. */
-        p->fs_offset = 0x400000u;
-        p->fs_size   = usable - 0x400000u;
-    } else {
-        /* Layout conservador: [2MB, log) ≈ 2 MB. Cabe en 4 MB, o sea en
-         * CUALQUIER RP2350 que arranque esta imagen — Pico 2 y Metro por igual.
-         * El firmware (~0.5MB) va muy holgado. */
-        p->fs_offset = 0x200000u;
-        p->fs_size   = BP_LOG_SECTOR - 0x200000u;          /* 0x1FC000 ≈ 2 MB */
-    }
-    p->crc = ptable_crc(p);
-}
-
-static void ptable_write(const bp_ptable_t* p) {
-    /* páginas de 256: el struct (32B) viaja en la primera, resto 0xFF */
-    uint8_t page[FLASH_PAGE_SIZE];
-    memset(page, 0xFF, sizeof(page));
-    memcpy(page, p, sizeof(*p));
-    uint32_t tok = bpvm_flash_lock_begin();
-    flash_range_erase(BP_PTABLE_OFFSET, FLASH_SECTOR_SIZE);
-    flash_range_program(BP_PTABLE_OFFSET, page, sizeof(page));
-    bpvm_flash_lock_end(tok);
-}
-
-/* ───────────────────────── 2) cintura block-device ──────────────────── */
+/* ───────────────────────── 1) cintura block-device ──────────────────── */
 
 static int pico_bd_read(const struct lfs_config* c, lfs_block_t block,
                         lfs_off_t off, void* buffer, lfs_size_t size) {
     (void) c;
-    const uint8_t* src = (const uint8_t*)(XIP_BASE + s_pt.fs_offset
+    const uint8_t* src = (const uint8_t*)(XIP_BASE + s_fs_offset
                                           + block * FLASH_SECTOR_SIZE + off);
     memcpy(buffer, src, size);
     return 0;
@@ -173,7 +60,7 @@ static int pico_bd_prog(const struct lfs_config* c, lfs_block_t block,
                         lfs_off_t off, const void* buffer, lfs_size_t size) {
     (void) c;
     uint32_t tok = bpvm_flash_lock_begin();
-    flash_range_program(s_pt.fs_offset + block * FLASH_SECTOR_SIZE + off,
+    flash_range_program(s_fs_offset + block * FLASH_SECTOR_SIZE + off,
                         buffer, size);
     bpvm_flash_lock_end(tok);
     return 0;
@@ -182,7 +69,7 @@ static int pico_bd_prog(const struct lfs_config* c, lfs_block_t block,
 static int pico_bd_erase(const struct lfs_config* c, lfs_block_t block) {
     (void) c;
     uint32_t tok = bpvm_flash_lock_begin();
-    flash_range_erase(s_pt.fs_offset + block * FLASH_SECTOR_SIZE,
+    flash_range_erase(s_fs_offset + block * FLASH_SECTOR_SIZE,
                       FLASH_SECTOR_SIZE);
     bpvm_flash_lock_end(tok);
     return 0;
@@ -206,21 +93,13 @@ static struct lfs_config s_cfg;   /* debe sobrevivir (littlefs guarda el ptr) */
 #define FS_GET_SCRATCH_BYTES  (128u * 1024u)
 static uint8_t s_get_scratch[FS_GET_SCRATCH_BYTES] __attribute__((aligned(8)));
 
-fs_status_t fs_init(void) {
-    uint32_t flash_bytes = board_desc_probe_flash_bytes();
-    if (flash_bytes == 0) flash_bytes = 4u * 1024u * 1024u;   /* JEDEC raro → 4M */
-
-    /* descriptor: leer del sitio fijo; auto-init si falta o no es sano */
-    memcpy(&s_pt, (const void*)(XIP_BASE + BP_PTABLE_OFFSET), sizeof(s_pt));
-    if (!ptable_sane(&s_pt, flash_bytes)) {
-        ptable_defaults(&s_pt, flash_bytes);
-        ptable_write(&s_pt);
-        log_printf("fs: descriptor AUTO-INIT (flash=%uMB)",
-                   (unsigned)(flash_bytes >> 20));
-    }
-    log_printf("fs: littlefs off=0x%06X size=%uKB (flash=%uMB)",
-               (unsigned) s_pt.fs_offset, (unsigned)(s_pt.fs_size >> 10),
-               (unsigned)(flash_bytes >> 20));
+fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
+    /* La región viene VALIDADA por bpvm_part (alineada, no-cero, cabe en la
+     * flash usable con el clamp #292). Aquí solo se monta. */
+    s_fs_offset = fs_offset;
+    s_fs_size   = fs_size;
+    log_printf("fs: littlefs off=0x%06X size=%uKB (region del env)",
+               (unsigned) s_fs_offset, (unsigned)(s_fs_size >> 10));
 
     memset(&s_cfg, 0, sizeof(s_cfg));
     s_cfg.read  = pico_bd_read;
@@ -230,7 +109,7 @@ fs_status_t fs_init(void) {
     s_cfg.read_size      = 256;
     s_cfg.prog_size      = 256;                 /* página de flash */
     s_cfg.block_size     = FLASH_SECTOR_SIZE;   /* 4096 */
-    s_cfg.block_count    = s_pt.fs_size / FLASH_SECTOR_SIZE;
+    s_cfg.block_count    = s_fs_size / FLASH_SECTOR_SIZE;
     s_cfg.cache_size     = 256;                 /* == BPVM_FS_LFS_CACHE */
     s_cfg.lookahead_size = 64;
     s_cfg.block_cycles   = 500;

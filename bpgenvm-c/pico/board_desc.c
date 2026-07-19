@@ -80,31 +80,77 @@ static void apply_variant_caps(board_desc_t* d, char variant) {
     }
 }
 
-void board_desc_init(void) {
+/* H9 — identidad en el SUELO (sin FS, sin env: hardware puro). Se llama la
+ * PRIMERA del boot, antes de particiones/FS/heap. */
+void board_desc_early_init(void) {
     board_desc_t* d = &s_board;
     memset(d, 0, sizeof *d);
 
     /*
      * Variante desde HARDWARE: SYSINFO.PACKAGE_SEL (RO, 1 bit). Mapeo CONFIRMADO
      * en placa (19-jul, Pico 2 = RP2350A lee 1): **1 = QFN-60 (RP2350A, Pico 2),
-     * 0 = QFN-80 (RP2350B, Metro)** — al revés de lo que sugería el reset=0; el chip
-     * lo fija por su package. Es la detección dinámica que el comentario viejo
-     * prometía "hasta que H7.2.a la haga por PSRAM": ahora la da el propio chip,
-     * INDEPENDIENTE del FS → sobrevive a un borrado de flash. Antes, sin
-     * /sys/board.json, defaulteaba a 'A' y una Metro elegía el canal ADC y
-     * gpio_count equivocados (412 °C + PSRAM invisible). board.json puede seguir
-     * forzando la variante (placas atípicas).
+     * 0 = QFN-80 (RP2350B, Metro)** — al revés de lo que sugería el reset=0; el
+     * chip lo fija por su package. INDEPENDIENTE del FS → sobrevive a un borrado
+     * de flash. board.json puede seguir forzando la variante (placas atípicas).
      */
     strncpy(d->name, "rp2350-generic", sizeof d->name - 1);
     d->package_sel = (int) (sysinfo_hw->package_sel & 1u);
     apply_variant_caps(d, d->package_sel ? 'A' : 'B');
-    d->led_pin       = -1;   /* lo declara la placa */
+    d->led_pin       = -1;   /* lo declara la placa (board.json, estado >= 2) */
     d->neopixel_pin  = -1;   /* peculiar de cada placa */
-    /* psram_cs_pin lo deja apply_variant_caps (default por variante). */
-    d->psram_present = 0;    /* lo rellena H7.2 */
+    d->psram_present = 0;    /* lo decide board_desc_psram_from_env (H9, env) */
     d->psram_bytes   = 0;
 
-    /* --- Override desde /sys/board.json (datos de la PLACA) --- */
+    /* Tamaño de flash (JEDEC). Seguro (flash_do_cmd hace XIP-suspend). Con el
+     * define a 16 MB (sobre máximo), el JEDEC es EL límite real de escritura:
+     * si no se reconoce, asumir 4 MB conservador (nunca más de lo seguro). */
+    d->flash_bytes = detect_flash_bytes();
+    if (d->flash_bytes == 0) {
+        d->flash_bytes = 4u * 1024u * 1024u;
+        log_printf("board: JEDEC no reconocido -> asumo flash 4 MB (conservador)");
+    }
+    log_printf("board: variante %c (PACKAGE_SEL=%d) flash=%u MB",
+               d->variant, d->package_sel, d->flash_bytes / (1024u * 1024u));
+}
+
+/* H9 — PSRAM conducida por el ENV (`psram=1`), no por board.json. Decisión de
+ * Eduardo (19-jul): solo RP2350B, CS = GPIO47 (el último pin, el estándar de
+ * las placas B); en la A no se sondea — no se conoce placa A con PSRAM y el
+ * sondeo QMI es boot-crítico. Si aparece una, se añade la posibilidad.
+ * detect → enable QPI → auto-test RW; psram_present sólo si los TRES pasan
+ * (= PSRAM USABLE para el heap). */
+void board_desc_psram_from_env(int psram_flag) {
+    board_desc_t* d = &s_board;
+    if (!psram_flag) {
+        log_printf("psram: no activada por env (psram!=1)");
+        return;
+    }
+    if (d->variant != 'B') {
+        log_printf("psram: env la pide pero la variante es %c (solo RP2350B)", d->variant);
+        return;
+    }
+    d->psram_cs_pin = 47;   /* último GPIO de la RP2350B */
+    size_t sz = psram_detect_init(d->psram_cs_pin);
+    unsigned mb = (unsigned)(sz / (1024u * 1024u));
+    if (sz == 0) {
+        log_printf("psram: no detectada en GP%d", d->psram_cs_pin);
+    } else if (!psram_enable_xip()) {
+        log_printf("psram: detectada (%u MB) pero enable QPI FALLO", mb);
+    } else if (!psram_rw_selftest(sz)) {
+        log_printf("psram: detectada (%u MB) + QPI, pero RW test FALLO", mb);
+    } else {
+        d->psram_present = 1;
+        d->psram_bytes   = (unsigned) sz;
+        log_printf("psram: %u MB usable @ GP%d (QPI + RW OK, ventana 0x%08x)",
+                   mb, d->psram_cs_pin, (unsigned) PSRAM_XIP_BASE);
+    }
+}
+
+/* Overrides de /sys/board.json — datos de la PLACA que aún viven en el FS.
+ * Llamar SOLO con el FS montado (estado >= 2). La variante base, la flash y
+ * la PSRAM ya NO salen de aquí (suelo + env, H9); psramCsPin se IGNORA. */
+void board_desc_init(void) {
+    board_desc_t* d = &s_board;
     const uint8_t* data = NULL;
     uint32_t       size = 0;
     if (fs_get("/sys/board.json", &data, &size) == FS_OK && data && size > 0) {
@@ -118,7 +164,6 @@ void board_desc_init(void) {
             json_get_str(&obj, "name", d->name, sizeof d->name);
             d->led_pin      = (int) json_get_long(&obj, "ledPin",     d->led_pin);
             d->neopixel_pin = (int) json_get_long(&obj, "neopixelPin", d->neopixel_pin);
-            d->psram_cs_pin = (int) json_get_long(&obj, "psramCsPin", d->psram_cs_pin);
             /* gpioCount: override explícito de la tabla (placas atípicas). */
             d->gpio_count   = (int) json_get_long(&obj, "gpioCount",  d->gpio_count);
             log_printf("board: /sys/board.json aplicado");
@@ -129,36 +174,9 @@ void board_desc_init(void) {
         log_printf("board: sin /sys/board.json, uso defaults por variante");
     }
 
-    /* --- Tamaño de flash (JEDEC). Seguro (flash_do_cmd hace XIP-suspend). --- */
-    d->flash_bytes = detect_flash_bytes();
-    log_printf("flash: %u bytes (%u MB)", d->flash_bytes,
-               d->flash_bytes / (1024u * 1024u));
-
-    /* --- H7.2.a/b: sondeo + habilitación de PSRAM. OPT-IN: sólo si board.json
-     * declaró psramCsPin (psram_cs_pin>=0). detect → enable QPI → auto-test RW;
-     * psram_present sólo si los TRES pasan (= PSRAM USABLE para el heap). --- */
-    if (d->psram_cs_pin >= 0) {
-        size_t sz = psram_detect_init(d->psram_cs_pin);
-        unsigned mb = (unsigned)(sz / (1024u * 1024u));
-        if (sz == 0) {
-            log_printf("psram: no detectada en GP%d", d->psram_cs_pin);
-        } else if (!psram_enable_xip()) {
-            log_printf("psram: detectada (%u MB) pero enable QPI FALLO", mb);
-        } else if (!psram_rw_selftest(sz)) {
-            log_printf("psram: detectada (%u MB) + QPI, pero RW test FALLO", mb);
-        } else {
-            d->psram_present = 1;
-            d->psram_bytes   = (unsigned) sz;
-            log_printf("psram: %u MB usable @ GP%d (QPI + RW OK, ventana 0x%08x)",
-                       mb, d->psram_cs_pin, (unsigned) PSRAM_XIP_BASE);
-        }
-    } else {
-        log_printf("psram: no sondeada (board.json sin psramCsPin)");
-    }
-
-    log_printf("board: %s variant=%c gpio=%d pio=%d pwm=%d adc=%d led=%d npx=%d psramCs=%d psram=%uMB",
+    log_printf("board: %s variant=%c gpio=%d pio=%d pwm=%d adc=%d led=%d npx=%d psram=%uMB",
                d->name, d->variant, d->gpio_count, d->pio_count, d->pwm_slices,
-               d->adc_channels, d->led_pin, d->neopixel_pin, d->psram_cs_pin,
+               d->adc_channels, d->led_pin, d->neopixel_pin,
                d->psram_bytes / (1024u * 1024u));
 }
 
