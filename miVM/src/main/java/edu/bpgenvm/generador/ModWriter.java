@@ -1270,21 +1270,28 @@ public class ModWriter {
      * típicos = 0..+64).
      */
     /**
-     * Activa las variantes compactas de opcodes (PUSH_0..4, *_S8). Reducen
-     * el tamaño del .mod en ~14% para programas típicos, pero AÑADEN cases
-     * al switch del intérprete que la JIT del HotSpot no compila tan bien
-     * como antes (medido: fibo(30) 1.22s → 2.08s, +70% latencia).
+     * Activa las variantes compactas de opcodes (PUSH_0..4, PUSH_NEG1, *_S8).
+     * El 87% de los push de entero son 0..4, así que codificarlos en 1 byte
+     * (en vez de PUSH + i32 = 5 bytes) encoge el .mod de forma notable.
      *
-     * La causa probable: el tableswitch generado por C2 crece (109 entradas
-     * vs 97) y el branch-target-buffer del CPU acumula más mispredictions
-     * en el dispatch indirecto. Para programas pequeños CPU-light el
-     * trade-off es aceptable; para hot loops (fibo, parsers) NO compensa.
+     * #298 — DECISIÓN (19-jul): ON. Se midió antes/después con fibo(30)*5:
+     *   · tamaño Fibo.mod:      2358 → 2001 B   (-15,1%)
+     *   · RP2350A @150MHz:   107,49 → 105,06 s  (-2,3%, número que MANDA)
+     *   · VM-C host x86:       0,525 → 0,508 s  (-3,3%)
+     *   · miVM Java host:       9,09 → 10,92 s  (+20%, ver abajo)
+     * En el micro —que es el producto— gana por los DOS lados: -15% de flash
+     * (recurso escaso) y CPU más rápida. La stdlib embebida encoge ~-8% en
+     * conjunto. Paridad dual-VM verificada en 10 samples (Str/Collections/
+     * Json/Stats/Compress) tras regenerar toda la stdlib.
      *
-     * Hasta haber un compilador AOT / mejor profile-driven dispatch, lo
-     * dejamos OFF por defecto. La infraestructura está completa (opcodes,
-     * cases en run(), Disasm, helpers) y se puede activar aquí.
+     * El único coste está en el host de desarrollo (miVM Java, +20% en el
+     * PEOR caso: fibo puro = todo push+local, justo lo que estresa el
+     * tableswitch de C2 de HotSpot). Es dev-only (Run-on-host / depurar paso
+     * a paso) y un programa real con HW/strings/I-O lo diluye; no pesa frente
+     * al doble beneficio en placa. Para desactivar (p.ej. profiling del host):
+     * poner false aquí y regenerar (bpstdlib + blobs de firmware).
      */
-    private static final boolean USE_COMPACT_OPS = false;
+    private static final boolean USE_COMPACT_OPS = true;   // #298: ON — gana en placa (-15% flash, -2,3% CPU)
     private void emitLocalAccessOptimal(int offset, OpCode i16op, OpCode i8op) throws IOException {
         if (USE_COMPACT_OPS && offset >= -128 && offset <= 127) {
             codeOut.writeByte(i8op.code);
