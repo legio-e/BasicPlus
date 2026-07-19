@@ -1226,7 +1226,14 @@ public final class SemanticAnalyzer {
         // que nadie asignaba (miVM petaba al leerla como string; VM-C imprimía
         // vacío — divergencia). Un init no-literal a nivel módulo nunca
         // funcionó → ahora es error claro en vez de 0 silencioso.
-        cs.literalValue = constLiteralValue(c.value);
+        // M6 — «optimización enum.member → valor», ANTES de aplicar la norma de
+        // const. Si el init es un acceso a miembro de enum, su valor es el int
+        // subyacente (lo mismo que el emisor inlina en emitMemberAccess). Con eso
+        // `const K := Color.RED` se reduce a `const K := <int>` y cumple la norma de
+        // const por construcción, sin que la norma tenga que conocer los enums. Ambas
+        // VMs ven un simple push de int (sin divergencia).
+        Long folded = foldEnumMemberToLiteral(c.value);
+        cs.literalValue = (folded != null) ? folded : constLiteralValue(c.value);
         // N17 — una const NO-LOCAL requiere un valor literal: el emisor INLINA ese
         // literal en cada lectura. Sin literal no hay backing global declarado y la
         // lectura emitía GET_GLOBAL "Cls.K"/"K" → RuntimeException del ModWriter
@@ -1243,6 +1250,23 @@ public final class SemanticAnalyzer {
                     + "(entero/float/long/double/boolean/string, '-' opcional); "
                     + "para un valor calculado, " + donde);
         }
+    }
+
+    /** M6 — «optimización enum.member → valor»: pliega un acceso a miembro de enum
+     *  (`Color.RED` o `Ns.Color.RED`) a su literal int, o null si no es eso. Espeja
+     *  lo que hace el emisor en emitMemberAccess: el símbolo del target es el
+     *  EnumSymbol y su mapa `values` da el int del miembro. Requiere que
+     *  analyzeExpr(value) ya haya anotado info.exprSymbols (esta se invoca después).
+     *  Sirve a cualquier consumidor de valores literales (hoy: la norma de const). */
+    private Long foldEnumMemberToLiteral(IExpr e) {
+        while (e instanceof ParenExpr) e = ((ParenExpr) e).inner;
+        if (e instanceof MemberAccessExpr) {
+            MemberAccessExpr ma = (MemberAccessExpr) e;
+            Symbol tgt = info.exprSymbols.get(ma.target);
+            if (tgt instanceof EnumSymbol)
+                return ((EnumSymbol) tgt).values.get(ma.member);
+        }
+        return null;
     }
 
     private void analyzeVarInit(VarDecl v) {
