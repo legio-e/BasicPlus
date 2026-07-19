@@ -82,6 +82,11 @@ static char s_reply_buf[1024];
 #define V1_PUT_BUF_SIZE  (48 * 1024)
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
 
+/* #304 — accesor para que el REPL de texto (repl.c) comparta este buffer en vez
+ * de duplicar 32 K (modo-texto y modo-wire son mutuamente excluyentes). */
+unsigned char* repl_v1_put_buf(void)      { return s_put_buf; }
+unsigned long  repl_v1_put_buf_size(void) { return sizeof s_put_buf; }
+
 /* ============================================================ */
 /* Helper: convierte código fs_status_t en (code, message) v1. */
 static void map_fs_status(fs_status_t s, const char** code, const char** msg) {

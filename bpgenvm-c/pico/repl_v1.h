@@ -40,6 +40,13 @@ void repl_v1_handle_request(int first_char);
  * log y retorno inmediato. Llamar UNA vez al boot, antes de repl_run. */
 void repl_v1_autorun(void);
 
+/* #304 — buffer de subida COMPARTIDO. El REPL de texto (repl.c cmd_put) reusa
+ * este buffer en vez de tener el suyo: el modo-texto y el modo-wire nunca corren
+ * a la vez (una iteración del loop es una cosa o la otra), así que compartirlo
+ * elimina 32 K de SRAM duplicada. Devuelve el s_put_buf de 48 K y su tamaño. */
+unsigned char* repl_v1_put_buf(void);
+unsigned long  repl_v1_put_buf_size(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -20,6 +20,7 @@
 #include "repl_v1.h"
 #include "fs.h"
 #include "log.h"
+#include "board_desc.h"   /* #304: INFO en modo texto (board/psram/gpio) */
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* para inspect deps en cmd_run */
@@ -146,10 +147,6 @@ static void cmd_mem(void) {
     fflush(stdout);
 }
 
-/* Buffer temporal para PUT. 32 KB cubre cualquier .mod razonable
- * (los más grandes vistos son ~3-5 KB; Json.mod sube de 20 KB). */
-static uint8_t s_put_buf[32 * 1024];
-
 static void cmd_put(const char* args) {
     /* parse "name size" */
     char name[FS_NAME_LEN];
@@ -159,8 +156,13 @@ static void cmd_put(const char* args) {
         fflush(stdout);
         return;
     }
-    if (size > sizeof(s_put_buf)) {
-        printf("ERR file too big (max %u)\n", (unsigned) sizeof(s_put_buf));
+    /* #304 — buffer de subida COMPARTIDO con el wire v1 (repl_v1 s_put_buf, 48 K):
+     * modo-texto y modo-wire nunca corren a la vez → reusarlo elimina los 32 K
+     * propios que había aquí. Bonus: el límite de PUT-texto sube de 32 K a 48 K. */
+    uint8_t*      buf = repl_v1_put_buf();
+    unsigned long cap = repl_v1_put_buf_size();
+    if (size > cap) {
+        printf("ERR file too big (max %lu)\n", cap);
         fflush(stdout);
         return;
     }
@@ -168,8 +170,8 @@ static void cmd_put(const char* args) {
     printf("READY %u\n", size);
     fflush(stdout);
 
-    read_bytes(s_put_buf, size);
-    fs_status_t s = fs_put(name, s_put_buf, size);
+    read_bytes(buf, size);
+    fs_status_t s = fs_put(name, buf, size);
     if (s == FS_OK) printf("OK %u free\n", (unsigned) fs_free_bytes());
     else            printf("ERR %s\n", fs_status_str(s));
     fflush(stdout);
@@ -366,9 +368,41 @@ static void cmd_logclear(void) {
     fflush(stdout);
 }
 
+/* #304 — ECHO <txt>: devuelve el argumento tal cual. Smoke de "¿está vivo el
+ * enlace y el REPL?" cuando algo no responde. */
+static void cmd_echo(const char* args) {
+    printf("%s\n", args);
+    fflush(stdout);
+}
+
+/* #304 — INFO: estado del micro de un vistazo (equivalente texto del INFO del
+ * wire, #230): firmware, placa, flash/PSRAM, heap de la VM, heap de FreeRTOS,
+ * FS y log. El comando de reserva para diagnosticar por terminal. */
+static void cmd_info(void) {
+    const board_desc_t* bd = board_desc();
+    printf("OK\n");
+    printf("firmware   bpvm-pico v0.2 build " __DATE__ " " __TIME__ "\n");
+    printf("board      %s (RP2350%c, %d GPIO)\n", bd->name, bd->variant, bd->gpio_count);
+    printf("flash      %u MB\n", (unsigned) (bd->flash_bytes / (1024u * 1024u)));
+    if (bd->psram_present)
+        printf("psram      %u MB\n", (unsigned) (bd->psram_bytes / (1024u * 1024u)));
+    else
+        printf("psram      ninguna\n");
+    printf("vm heap    %u KB (%s)\n", (unsigned) (s_vm_buffer_size / 1024u),
+           bd->psram_present ? "PSRAM" : "SRAM");
+    printf("rtos heap  %u bytes libres\n", (unsigned) xPortGetFreeHeapSize());
+    printf("fs         %u/%u bytes, %d ficheros\n",
+           (unsigned) fs_used_bytes(), (unsigned) fs_total_bytes(), fs_file_count());
+    printf("log        %u/%u bytes\n",
+           (unsigned) log_used_bytes(), (unsigned) log_total_bytes());
+    fflush(stdout);
+}
+
 static void cmd_help(void) {
     printf("OK\n");
     printf("HELLO              banner\n");
+    printf("ECHO <txt>         devuelve <txt> (test de enlace)\n");
+    printf("INFO               estado del micro (board/ram/psram/fs/log)\n");
     printf("LS                 list files\n");
     printf("PUT name size      upload a file (binary)\n");
     printf("GET name           download a file\n");
@@ -458,6 +492,8 @@ void repl_run(void) {
         }
 
         if      (strcmp(line, "HELLO")   == 0) cmd_hello();
+        else if (strcmp(line, "ECHO")    == 0) cmd_echo(args);
+        else if (strcmp(line, "INFO")    == 0) cmd_info();
         else if (strcmp(line, "LS")      == 0) cmd_ls();
         else if (strcmp(line, "PUT")     == 0) cmd_put(args);
         else if (strcmp(line, "GET")     == 0) cmd_get(args);
