@@ -2,146 +2,146 @@ dbg 3
 module Neopixel
 source C:\lenguajes\pm\bpstdlib\Neopixel.bp
 lines
-1568 50
-1607 51
-1655 57
-1681 58
-1689 59
-1704 60
-1717 61
-1741 67
-1775 72
-1809 77
-1831 41
-1843 42
-1855 43
-1870 44
+1283 50
+1312 51
+1352 57
+1374 58
+1377 59
+1391 60
+1402 61
+1416 67
+1433 72
+1462 77
+1482 41
+1492 42
+1502 43
+1515 44
 vars
 func Object.toString 0
 this -20 8 0 ?
-func Object.compareTo 25
+func Object.compareTo 24
 this -28 8 0 ?
 other -20 8 0 ?
-func List.add 41
+func List.add 38
 this -28 8 0 ?
 item -20 8 0 ?
-func List.get 131
+func List.get 116
 this -24 8 0 ?
 idx -16 4 0 ?
-func List.set 151
+func List.set 135
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func List.length 173
+func List.length 152
 this -20 8 0 ?
-func List.remove 189
+func List.remove 166
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 299
+func List.__init 249
 this -20 8 0 ?
-func OwnerList.removeAndFree 342
+func OwnerList.removeAndFree 284
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 480
+func OwnerList.__init 393
 this -20 8 0 ?
-func StringBuilder.appendChar 501
+func StringBuilder.appendChar 409
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 591
+func StringBuilder.appendStr 486
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 662
+func StringBuilder.appendInt 537
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 687
+func StringBuilder.toString 556
 this -20 8 0 ?
-func StringBuilder.length 711
+func StringBuilder.length 580
 this -20 8 0 ?
-func StringBuilder.__init 727
+func StringBuilder.__init 594
 this -20 8 0 ?
-func Thread.run 768
+func Thread.run 627
 this -20 8 0 ?
-func Thread.start 778
+func Thread.start 633
 this -20 8 0 ?
-func Thread.join 797
+func Thread.join 647
 this -20 8 0 ?
-func Thread.__init 816
+func Thread.__init 661
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 844
+func Mutex.lock 680
 this -20 8 0 ?
-func Mutex.unlock 863
+func Mutex.unlock 694
 this -20 8 0 ?
-func Mutex.__init 882
+func Mutex.__init 708
 this -20 8 0 ?
-func SyncList.add 900
+func SyncList.add 722
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 946
+func SyncList.remove 761
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 992
+func SyncList.get 799
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1036
+func SyncList.set 840
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1085
+func SyncList.length 881
 this -20 8 0 ?
-func SyncList.pop 1126
+func SyncList.pop 918
 this -20 8 0 ?
-func SyncList.popBlocking 1241
+func SyncList.popBlocking 1015
 this -20 8 0 ?
-func SyncList.__init 1372
+func SyncList.__init 1126
 this -20 8 0 ?
-func Strip.getPin_ 1463
+func Strip.getPin_ 1196
 this -20 8 0 ?
-func Strip.setPin_ 1479
+func Strip.setPin_ 1210
 this -24 8 0 ?
-func Strip.getN_ 1497
+func Strip.getN_ 1223
 this -20 8 0 ?
-func Strip.setN_ 1513
+func Strip.setN_ 1237
 this -24 8 0 ?
-func Strip.getPx_ 1531
+func Strip.getPx_ 1250
 this -20 8 0 ?
-func Strip.setPx_ 1547
+func Strip.setPx_ 1266
 this -28 8 0 ?
-func Strip.setPixel 1565
+func Strip.setPixel 1280
 this -36 8 0 ?
 i -28 4 0 integer
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-func Strip.setColor 1652
+func Strip.setColor 1349
 this -32 8 0 ?
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
 c 0 4 0 integer
 i 4 4 0 integer
-func Strip.clear 1738
+func Strip.clear 1413
 this -20 8 0 ?
-func Strip.show 1772
+func Strip.show 1430
 this -20 8 0 ?
-func Strip.count 1806
+func Strip.count 1459
 this -20 8 0 ?
-func Strip.__init 1828
+func Strip.__init 1479
 this -28 8 0 ?
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_new_Strip 1886
+func __cls_new_Strip 1525
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_init_Strip 1923
+func __cls_init_Strip 1559
 this -28 8 0 ?
 pin -20 4 0 integer
 count -16 4 0 integer
-func __strconcat 1969
+func __strconcat 1593
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

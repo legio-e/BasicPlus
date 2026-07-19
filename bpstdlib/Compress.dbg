@@ -2,186 +2,186 @@ dbg 3
 module Compress
 source C:\lenguajes\pm\bpstdlib\Compress.bp
 lines
-1488 20
-1502 21
-1521 23
-1581 24
-1595 25
-1614 27
-1626 28
-1645 31
-1653 32
-1661 33
-1673 34
-1685 35
-1704 37
-1714 38
-1726 40
-1734 41
-1748 42
-1760 43
-1776 45
-1800 47
-1812 48
-1831 50
-1845 51
-1857 52
-1874 55
-1892 56
-1911 58
-1921 59
-1937 60
-1949 61
-1971 62
-1989 63
-2001 64
-2013 65
-2032 67
-2040 68
-2052 69
-2064 70
-2080 72
-2098 73
-2110 74
-2124 77
-2142 80
-2161 89
-2175 90
-2194 93
-2219 94
-2244 95
-2269 96
-2288 97
-2296 99
-2304 100
-2316 102
-2328 103
-2347 105
-2353 106
-2361 107
-2373 109
-2381 110
-2417 112
-2429 113
-2443 114
-2456 116
-2466 117
-2480 118
-2493 121
-2501 122
-2509 123
-2523 124
-2535 125
-2547 126
-2555 127
-2605 128
-2619 130
-2631 131
-2637 132
-2647 133
-2659 134
-2675 137
-2695 141
-2709 143
-2721 144
-2739 145
-2758 147
-2775 148
-2814 149
-2826 150
-2841 153
-2857 154
-2869 155
-2888 157
-2902 158
-2914 159
-2926 161
-2941 164
-2955 167
+1215 20
+1224 21
+1238 23
+1281 24
+1290 25
+1304 27
+1314 28
+1328 31
+1331 32
+1334 33
+1344 34
+1354 35
+1368 37
+1376 38
+1382 40
+1385 41
+1398 42
+1408 43
+1422 45
+1436 47
+1446 48
+1460 50
+1472 51
+1478 52
+1489 55
+1501 56
+1515 58
+1523 59
+1533 60
+1539 61
+1550 62
+1562 63
+1568 64
+1578 65
+1592 67
+1595 68
+1605 69
+1615 70
+1629 72
+1644 73
+1650 74
+1658 77
+1670 80
+1686 89
+1695 90
+1709 93
+1729 94
+1749 95
+1769 96
+1783 97
+1786 99
+1789 100
+1799 102
+1809 103
+1823 105
+1827 106
+1830 107
+1836 109
+1839 110
+1868 112
+1878 113
+1887 114
+1895 116
+1902 117
+1915 118
+1927 121
+1930 122
+1933 123
+1942 124
+1948 125
+1958 126
+1961 127
+2001 128
+2009 130
+2019 131
+2023 132
+2030 133
+2040 134
+2054 137
+2067 141
+2076 143
+2082 144
+2094 145
+2108 147
+2119 148
+2143 149
+2149 150
+2161 153
+2170 154
+2180 155
+2194 157
+2206 158
+2212 159
+2218 161
+2227 164
+2239 167
 vars
 func Object.toString 0
 this -20 8 0 ?
-func Object.compareTo 25
+func Object.compareTo 24
 this -28 8 0 ?
 other -20 8 0 ?
-func List.add 41
+func List.add 38
 this -28 8 0 ?
 item -20 8 0 ?
-func List.get 131
+func List.get 116
 this -24 8 0 ?
 idx -16 4 0 ?
-func List.set 151
+func List.set 135
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func List.length 173
+func List.length 152
 this -20 8 0 ?
-func List.remove 189
+func List.remove 166
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 299
+func List.__init 249
 this -20 8 0 ?
-func OwnerList.removeAndFree 342
+func OwnerList.removeAndFree 284
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 480
+func OwnerList.__init 393
 this -20 8 0 ?
-func StringBuilder.appendChar 501
+func StringBuilder.appendChar 409
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 591
+func StringBuilder.appendStr 486
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 662
+func StringBuilder.appendInt 537
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 687
+func StringBuilder.toString 556
 this -20 8 0 ?
-func StringBuilder.length 711
+func StringBuilder.length 580
 this -20 8 0 ?
-func StringBuilder.__init 727
+func StringBuilder.__init 594
 this -20 8 0 ?
-func Thread.run 768
+func Thread.run 627
 this -20 8 0 ?
-func Thread.start 778
+func Thread.start 633
 this -20 8 0 ?
-func Thread.join 797
+func Thread.join 647
 this -20 8 0 ?
-func Thread.__init 816
+func Thread.__init 661
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 844
+func Mutex.lock 680
 this -20 8 0 ?
-func Mutex.unlock 863
+func Mutex.unlock 694
 this -20 8 0 ?
-func Mutex.__init 882
+func Mutex.__init 708
 this -20 8 0 ?
-func SyncList.add 900
+func SyncList.add 722
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 946
+func SyncList.remove 761
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 992
+func SyncList.get 799
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1036
+func SyncList.set 840
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1085
+func SyncList.length 881
 this -20 8 0 ?
-func SyncList.pop 1126
+func SyncList.pop 918
 this -20 8 0 ?
-func SyncList.popBlocking 1241
+func SyncList.popBlocking 1015
 this -20 8 0 ?
-func SyncList.__init 1372
+func SyncList.__init 1126
 this -20 8 0 ?
-func decompress 1485
+func decompress 1212
 src -36 8 0 ref
 srcLen -28 4 0 integer
 dst -24 8 0 ref
@@ -197,7 +197,7 @@ off 32 4 0 integer
 leng 36 4 0 integer
 dist 40 4 0 integer
 k 44 4 0 integer
-func compress 2158
+func compress 1683
 src -36 8 0 ref
 srcLen -28 4 0 integer
 dst -24 8 0 ref
@@ -214,7 +214,7 @@ bestDist 36 4 0 integer
 cand 40 4 0 integer
 l 44 4 0 integer
 off 48 4 0 integer
-func __strconcat 2971
+func __strconcat 2252
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

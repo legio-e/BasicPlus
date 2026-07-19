@@ -2,311 +2,311 @@ dbg 3
 module Str
 source C:\lenguajes\pm\bpstdlib\Str.bp
 lines
-1494 34
-1508 35
-1530 37
-1555 51
-1570 52
-1586 54
-1599 55
-1605 56
-1614 57
-1626 59
-1637 60
-1645 61
-1660 62
-1675 63
-1685 64
-1697 65
-1712 67
-1735 68
-1743 69
-1762 71
-1774 72
-1788 73
-1810 74
-1824 76
-1846 86
-1859 87
-1865 88
-1873 89
-1885 91
-1894 92
-1902 93
-1914 94
-1927 95
-1941 97
-1960 98
-1975 99
-1988 101
-1998 102
-2008 103
-2031 104
-2039 105
-2058 107
-2075 108
-2089 109
-2103 110
-2114 111
-2127 112
-2135 113
-2147 114
-2161 115
-2175 117
-2192 119
-2214 128
-2230 129
-2239 130
-2289 131
-2303 133
-2353 134
-2370 136
-2400 145
-2415 146
-2431 148
-2454 149
-2462 150
-2470 151
-2484 152
-2509 153
-2542 154
-2550 155
-2572 157
-2586 159
-2608 168
-2647 169
-2670 171
-2708 172
-2731 174
-2754 175
-2766 176
-2788 184
-2797 185
-2806 186
-2820 187
-2836 189
-2848 190
-2867 192
-2877 193
-2891 194
-2899 195
-2907 196
-2937 197
-2965 198
-2978 200
-2992 202
-3000 203
-3016 205
-3031 207
-3053 215
-3062 216
-3071 217
-3077 218
-3089 219
-3100 221
-3108 222
-3120 223
-3132 224
-3144 225
-3156 226
-3175 228
-3187 229
-3205 231
-3219 233
-3231 234
-3250 236
-3262 237
-3280 239
-3301 246
-3310 247
-3322 248
-3338 250
-3361 251
-3371 252
-3379 253
-3391 254
-3405 255
-3419 257
-3431 258
-3453 262
-3462 263
-3474 264
-3490 266
-3513 267
-3525 268
-3535 269
-3543 270
-3555 271
-3569 272
-3583 274
-3605 287
-3614 288
-3628 289
-3674 291
-3682 292
-3690 293
-3704 294
-3718 295
-3726 296
-3753 298
-3766 300
-3778 301
-3824 303
-3836 304
-3848 305
-3860 306
-3899 307
-3945 309
-3972 310
-3987 312
-3995 313
-4007 315
-4050 320
-4089 323
-4131 328
-4140 329
-4154 330
-4200 332
-4208 333
-4216 334
-4230 335
-4244 336
-4252 337
-4279 339
-4292 341
-4304 342
-4312 343
-4354 344
-4366 345
-4405 346
-4451 348
-4478 349
-4486 350
-4501 352
-4513 353
-4525 354
-4567 355
-4579 356
-4591 357
-4603 358
-4642 359
-4688 361
-4704 362
-4731 363
-4739 364
-4759 367
-4768 368
-4814 370
-4828 371
-4836 372
-4848 374
-4891 379
-4900 380
-4914 381
-4960 383
-4968 384
-5079 385
-5092 387
-5104 388
-5150 390
-5162 391
-5174 392
-5186 393
-5195 394
-5233 395
-5288 397
-5349 399
-5372 401
-5386 402
-5432 404
-5453 405
-5468 407
+1220 34
+1233 35
+1253 37
+1275 51
+1286 52
+1302 54
+1310 55
+1316 56
+1324 57
+1336 59
+1347 60
+1350 61
+1361 62
+1375 63
+1383 64
+1389 65
+1404 67
+1426 68
+1433 69
+1451 71
+1457 72
+1466 73
+1486 74
+1494 76
+1516 86
+1528 87
+1534 88
+1541 89
+1553 91
+1558 92
+1561 93
+1571 94
+1584 95
+1592 97
+1611 98
+1622 99
+1630 101
+1640 102
+1650 103
+1672 104
+1679 105
+1697 107
+1713 108
+1722 109
+1735 110
+1746 111
+1757 112
+1760 113
+1770 114
+1783 115
+1791 117
+1807 119
+1829 128
+1845 129
+1853 130
+1889 131
+1897 133
+1933 134
+1944 136
+1969 145
+1980 146
+1996 148
+2018 149
+2021 150
+2028 151
+2037 152
+2056 153
+2079 154
+2082 155
+2102 157
+2110 159
+2132 168
+2161 169
+2183 171
+2215 172
+2237 174
+2259 175
+2269 176
+2291 184
+2299 185
+2307 186
+2316 187
+2330 189
+2340 190
+2354 192
+2361 193
+2370 194
+2373 195
+2376 196
+2399 197
+2424 198
+2432 200
+2440 202
+2447 203
+2461 205
+2469 207
+2485 215
+2493 216
+2501 217
+2505 218
+2515 219
+2524 221
+2527 222
+2537 223
+2547 224
+2557 225
+2567 226
+2581 228
+2591 229
+2604 231
+2612 233
+2622 234
+2636 236
+2646 237
+2659 239
+2674 246
+2682 247
+2692 248
+2708 250
+2730 251
+2737 252
+2740 253
+2750 254
+2763 255
+2771 257
+2782 258
+2804 262
+2812 263
+2822 264
+2838 266
+2860 267
+2871 268
+2878 269
+2881 270
+2891 271
+2904 272
+2912 274
+2934 287
+2942 288
+2951 289
+2993 291
+2996 292
+2999 293
+3008 294
+3021 295
+3024 296
+3045 298
+3053 300
+3063 301
+3105 303
+3117 304
+3127 305
+3137 306
+3170 307
+3212 309
+3238 310
+3246 312
+3253 313
+3265 315
+3304 320
+3340 323
+3381 328
+3389 329
+3398 330
+3440 332
+3443 333
+3446 334
+3455 335
+3468 336
+3471 337
+3492 339
+3500 341
+3512 342
+3515 343
+3550 344
+3560 345
+3593 346
+3635 348
+3661 349
+3664 350
+3673 352
+3685 353
+3697 354
+3732 355
+3738 356
+3748 357
+3758 358
+3791 359
+3833 361
+3849 362
+3875 363
+3878 364
+3892 367
+3900 368
+3942 370
+3956 371
+3963 372
+3975 374
+4014 379
+4022 380
+4031 381
+4073 383
+4076 384
+4158 385
+4166 387
+4176 388
+4218 390
+4230 391
+4240 392
+4250 393
+4254 394
+4286 395
+4333 397
+4386 399
+4407 401
+4416 402
+4458 404
+4478 405
+4487 407
 vars
 func Object.toString 0
 this -20 8 0 ?
-func Object.compareTo 25
+func Object.compareTo 24
 this -28 8 0 ?
 other -20 8 0 ?
-func List.add 41
+func List.add 38
 this -28 8 0 ?
 item -20 8 0 ?
-func List.get 131
+func List.get 116
 this -24 8 0 ?
 idx -16 4 0 ?
-func List.set 151
+func List.set 135
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func List.length 173
+func List.length 152
 this -20 8 0 ?
-func List.remove 189
+func List.remove 166
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 299
+func List.__init 249
 this -20 8 0 ?
-func OwnerList.removeAndFree 342
+func OwnerList.removeAndFree 284
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 480
+func OwnerList.__init 393
 this -20 8 0 ?
-func StringBuilder.appendChar 501
+func StringBuilder.appendChar 409
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 591
+func StringBuilder.appendStr 486
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 662
+func StringBuilder.appendInt 537
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 687
+func StringBuilder.toString 556
 this -20 8 0 ?
-func StringBuilder.length 711
+func StringBuilder.length 580
 this -20 8 0 ?
-func StringBuilder.__init 727
+func StringBuilder.__init 594
 this -20 8 0 ?
-func Thread.run 768
+func Thread.run 627
 this -20 8 0 ?
-func Thread.start 778
+func Thread.start 633
 this -20 8 0 ?
-func Thread.join 797
+func Thread.join 647
 this -20 8 0 ?
-func Thread.__init 816
+func Thread.__init 661
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 844
+func Mutex.lock 680
 this -20 8 0 ?
-func Mutex.unlock 863
+func Mutex.unlock 694
 this -20 8 0 ?
-func Mutex.__init 882
+func Mutex.__init 708
 this -20 8 0 ?
-func SyncList.add 900
+func SyncList.add 722
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 946
+func SyncList.remove 761
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 992
+func SyncList.get 799
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1036
+func SyncList.set 840
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1085
+func SyncList.length 881
 this -20 8 0 ?
-func SyncList.pop 1126
+func SyncList.pop 918
 this -20 8 0 ?
-func SyncList.popBlocking 1241
+func SyncList.popBlocking 1015
 this -20 8 0 ?
-func SyncList.__init 1372
+func SyncList.__init 1126
 this -20 8 0 ?
-func hexDigitCode 1491
+func hexDigitCode 1217
 d -16 4 0 integer
-func longToString 1552
+func longToString 1272
 x -20 8 0 long
 neg 8 4 0 boolean
 v 12 8 0 long
@@ -315,7 +315,7 @@ nd 28 4 0 integer
 d 32 4 0 integer
 sb 36 8 0 ?
 i 60 4 0 integer
-func formatDouble 1843
+func formatDouble 1513
 x -24 8 0 double
 dec -16 4 0 integer
 neg 8 4 0 boolean
@@ -329,20 +329,20 @@ sb 56 8 0 ?
 fs 80 8 0 string
 pad 88 4 0 integer
 k 92 4 0 integer
-func doubleToString 2211
+func doubleToString 1826
 x -20 8 0 double
 s 8 8 0 string
 stop 16 4 0 integer
-func toHex 2397
+func toHex 1966
 x -20 8 0 long
 sb 8 8 0 ?
 started 28 4 0 boolean
 i 32 4 0 integer
 nib 36 4 0 integer
-func fromCharCode 2605
+func fromCharCode 2129
 cp -16 4 0 integer
 sb 8 8 0 ?
-func lastIndexOf 2785
+func lastIndexOf 2288
 s -28 8 0 string
 sub -20 8 0 string
 ls 4 4 0 integer
@@ -350,7 +350,7 @@ lsub 8 4 0 integer
 start 12 4 0 integer
 k 16 4 0 integer
 ok 20 4 0 boolean
-func compare 3050
+func compare 2482
 a -28 8 0 string
 b -20 8 0 string
 la 4 4 0 integer
@@ -359,21 +359,21 @@ n 12 4 0 integer
 i 16 4 0 integer
 ca 20 4 0 integer
 cb 24 4 0 integer
-func padLeft 3298
+func padLeft 2671
 s -24 8 0 string
 ancho -16 4 0 integer
 n 8 4 0 integer
 sb 12 8 0 ?
 pad 32 4 0 integer
 i 36 4 0 integer
-func padRight 3450
+func padRight 2801
 s -24 8 0 string
 ancho -16 4 0 integer
 n 8 4 0 integer
 sb 12 8 0 ?
 pad 36 4 0 integer
 i 40 4 0 integer
-func parseLong 3602
+func parseLong 2931
 s -20 8 0 string
 n 8 4 0 integer
 i 20 4 0 integer
@@ -381,11 +381,11 @@ neg 24 4 0 boolean
 c0 28 4 0 integer
 acc 40 8 0 long
 c 48 4 0 integer
-func parseInt 4047
+func parseInt 3301
 s -20 8 0 string
 err 8 4 0 boolean
 v 12 8 0 long
-func parseDouble 4128
+func parseDouble 3378
 s -20 8 0 string
 n 8 4 0 integer
 i 20 4 0 integer
@@ -397,14 +397,14 @@ c 44 4 0 integer
 frac 56 8 0 double
 scale 64 8 0 double
 v 88 8 0 double
-func parseHex 4888
+func parseHex 4011
 s -20 8 0 string
 n 8 4 0 integer
 i 20 4 0 integer
 acc 32 8 0 long
 c 40 4 0 integer
 d 44 4 0 integer
-func __strconcat 5508
+func __strconcat 4523
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

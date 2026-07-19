@@ -2,151 +2,151 @@ dbg 3
 module Spi
 source C:\lenguajes\pm\bpstdlib\Spi.bp
 lines
-1670 156
-1701 161
-1732 166
-1766 145
-1778 146
-1790 147
-1802 148
-1814 149
-1826 150
-1838 151
-1979 54
-2013 58
-2041 62
-2069 66
-2100 71
-2121 74
-2142 77
-2163 80
-2184 83
-2205 86
-2226 90
-2247 93
-2268 96
-2289 99
+1361 156
+1389 161
+1417 166
+1448 145
+1458 146
+1468 147
+1478 148
+1488 149
+1498 150
+1508 151
+1615 54
+1638 58
+1662 62
+1686 66
+1713 71
+1728 74
+1743 77
+1758 80
+1773 83
+1788 86
+1803 90
+1822 93
+1841 96
+1860 99
 vars
 func Object.toString 0
 this -20 8 0 ?
-func Object.compareTo 25
+func Object.compareTo 24
 this -28 8 0 ?
 other -20 8 0 ?
-func List.add 41
+func List.add 38
 this -28 8 0 ?
 item -20 8 0 ?
-func List.get 131
+func List.get 116
 this -24 8 0 ?
 idx -16 4 0 ?
-func List.set 151
+func List.set 135
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func List.length 173
+func List.length 152
 this -20 8 0 ?
-func List.remove 189
+func List.remove 166
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func List.__init 299
+func List.__init 249
 this -20 8 0 ?
-func OwnerList.removeAndFree 342
+func OwnerList.removeAndFree 284
 this -24 8 0 ?
 idx -16 4 0 ?
 i 0 4 0 ?
-func OwnerList.__init 480
+func OwnerList.__init 393
 this -20 8 0 ?
-func StringBuilder.appendChar 501
+func StringBuilder.appendChar 409
 this -24 8 0 ?
 c -16 4 0 ?
-func StringBuilder.appendStr 591
+func StringBuilder.appendStr 486
 this -28 8 0 ?
 s -20 8 0 string
 i 0 4 0 ?
 n 4 4 0 ?
-func StringBuilder.appendInt 662
+func StringBuilder.appendInt 537
 this -24 8 0 ?
 n -16 4 0 ?
-func StringBuilder.toString 687
+func StringBuilder.toString 556
 this -20 8 0 ?
-func StringBuilder.length 711
+func StringBuilder.length 580
 this -20 8 0 ?
-func StringBuilder.__init 727
+func StringBuilder.__init 594
 this -20 8 0 ?
-func Thread.run 768
+func Thread.run 627
 this -20 8 0 ?
-func Thread.start 778
+func Thread.start 633
 this -20 8 0 ?
-func Thread.join 797
+func Thread.join 647
 this -20 8 0 ?
-func Thread.__init 816
+func Thread.__init 661
 this -24 8 0 ?
 stackSize -16 4 0 ?
-func Mutex.lock 844
+func Mutex.lock 680
 this -20 8 0 ?
-func Mutex.unlock 863
+func Mutex.unlock 694
 this -20 8 0 ?
-func Mutex.__init 882
+func Mutex.__init 708
 this -20 8 0 ?
-func SyncList.add 900
+func SyncList.add 722
 this -28 8 0 ?
 item -20 8 0 ?
-func SyncList.remove 946
+func SyncList.remove 761
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.get 992
+func SyncList.get 799
 this -24 8 0 ?
 idx -16 4 0 ?
-func SyncList.set 1036
+func SyncList.set 840
 this -32 8 0 ?
 idx -24 4 0 ?
 item -20 8 0 ?
-func SyncList.length 1085
+func SyncList.length 881
 this -20 8 0 ?
-func SyncList.pop 1126
+func SyncList.pop 918
 this -20 8 0 ?
-func SyncList.popBlocking 1241
+func SyncList.popBlocking 1015
 this -20 8 0 ?
-func SyncList.__init 1372
+func SyncList.__init 1126
 this -20 8 0 ?
-func Bus.getId 1463
+func Bus.getId 1196
 this -20 8 0 ?
-func Bus.setId 1479
+func Bus.setId 1210
 this -24 8 0 ?
-func Bus.getSck 1497
+func Bus.getSck 1223
 this -20 8 0 ?
-func Bus.setSck 1513
+func Bus.setSck 1237
 this -24 8 0 ?
-func Bus.getMosi 1531
+func Bus.getMosi 1250
 this -20 8 0 ?
-func Bus.setMosi 1547
+func Bus.setMosi 1264
 this -24 8 0 ?
-func Bus.getMiso 1565
+func Bus.getMiso 1277
 this -20 8 0 ?
-func Bus.setMiso 1581
+func Bus.setMiso 1291
 this -24 8 0 ?
-func Bus.getBaudrate 1599
+func Bus.getBaudrate 1304
 this -20 8 0 ?
-func Bus.setBaudrate 1615
+func Bus.setBaudrate 1318
 this -24 8 0 ?
-func Bus.getMode 1633
+func Bus.getMode 1331
 this -20 8 0 ?
-func Bus.setMode 1649
+func Bus.setMode 1345
 this -24 8 0 ?
-func Bus.write 1667
+func Bus.write 1358
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.read 1698
+func Bus.read 1386
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func Bus.transfer 1729
+func Bus.transfer 1414
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func Bus.__init 1763
+func Bus.__init 1445
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -154,14 +154,14 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_new_Bus 1869
+func __cls_new_Bus 1528
 id -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Bus 1918
+func __cls_init_Bus 1570
 this -44 8 0 ?
 id -36 4 0 integer
 sck -32 4 0 integer
@@ -169,27 +169,27 @@ mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func init 1976
+func init 1612
 bus -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func write 2010
+func write 1635
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 2038
+func read 1659
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func transfer 2066
+func transfer 1683
 bus -36 4 0 integer
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func __strconcat 2307
+func __strconcat 1876
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
