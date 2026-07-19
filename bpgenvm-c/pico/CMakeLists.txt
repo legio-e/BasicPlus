@@ -219,6 +219,12 @@ endif()
 pico_enable_stdio_usb(bpvm_pico  1)
 pico_enable_stdio_uart(bpvm_pico 0)
 
+# H9 — layout de flash en 3 ZONAS: linker script propio (FLASH_BOOT 64K fijos |
+# hueco del env 16K que el UF2 NO graba | FLASH_MAIN hasta el FS en 0x200000).
+# Si una zona se desborda, el link FALLA (region overflow) — el crecimiento de
+# la imagen grita en build. Ver bp_memmap.ld + flash_layout.h + docs/H9_KERNEL_CAPAS.md.
+pico_set_linker_script(bpvm_pico ${CMAKE_CURRENT_LIST_DIR}/bp_memmap.ld)
+
 # Generar .uf2 + .elf + .bin
 pico_add_extra_outputs(bpvm_pico)
 

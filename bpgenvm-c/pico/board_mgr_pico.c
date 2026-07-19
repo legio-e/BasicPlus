@@ -11,19 +11,19 @@
 #include "wire_v1.h"
 #include "flash_lock.h"
 #include "board_desc.h"
+#include "flash_layout.h"
 
 #include "pico/stdlib.h"
 #include "hardware/flash.h"
 
+#include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 
-/* Bloque de env A/B: dos sectores LIBRES entre el log (0x3FC000) y la tabla de
- * particiones binaria (0x3FF000) — existen en ambas placas (dentro del 1er 4 MB,
- * la zona escribible por la imagen). Ver fs_lfs_pico.c (layout de flash). El borrado
- * es por sector de 4K; cada copia ocupa un sector. */
-#define BP_ENV_A_OFFSET  0x003FD000u
-#define BP_ENV_B_OFFSET  0x003FE000u
+/* Bloque de env A/B: ZONA 2 del layout de 3 zonas (flash_layout.h) — el hueco
+ * 0x010000-0x013FFF que el UF2 NO graba (el env sobrevive al reflasheo) y que
+ * el linker (bp_memmap.ld) mantiene libre entre FLASH_BOOT y FLASH_MAIN. El
+ * borrado es por sector de 4K; cada copia ocupa un sector. */
 #define BP_ENV_SECTOR    FLASH_SECTOR_SIZE        /* 4096 */
 
 /* Base conceptual de las particiones H9 (recordadas en el env). De momento NO
@@ -45,6 +45,16 @@ static void env_write(int slot, const uint8_t* src) {
 
 void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
                            unsigned char* scratch, unsigned long scratch_len) {
+    /* Red anti-divergencia bp_memmap.ld ↔ flash_layout.h: los offsets del env
+     * deben caer DENTRO del hueco real (zona 2, entre FLASH_BOOT y FLASH_MAIN).
+     * Si alguien mueve las regiones del linker sin tocar el header (o al revés),
+     * tocar flash borraría CÓDIGO → rechazar a gritos, nunca escribir. */
+    if ((uintptr_t)(XIP_BASE + BP_ENV_A_OFFSET) < (uintptr_t) __bp_zone1_end
+        || (uintptr_t)(XIP_BASE + BP_ENV_B_OFFSET + BP_ENV_SECTOR) > (uintptr_t) __bp_zone3_start) {
+        wire_v1_send_error(id, "INTERNAL_ERROR",
+                           "layout de flash inconsistente (env fuera de la zona 2)");
+        return;
+    }
     /* Sin BSS propio: troceamos el buffer prestado (s_put_buf, libre durante un comando
      * de gestión). 3 sectores (a/b/scratch) + el resto para la reply. */
     if (scratch == NULL || scratch_len < (unsigned long) (3u * BP_ENV_SECTOR + 512u)) {
@@ -67,7 +77,7 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
     bm.sector = BP_ENV_SECTOR;
     bm.part_base = BP_PART_BASE;
     /* usable = flash real por JEDEC, sin clamp (el plan H9 se GUARDA, no se escribe;
-     * el env vive en 0x3FD/0x3FE000, siempre < 4 MB → escritura segura). */
+     * el env vive en la zona 2 —0x010/0x011000, muy por debajo de 4 MB— → escritura segura). */
     bm.usable_flash = bpvm_part_usable_flash(bd ? bd->flash_bytes : 0u, 0u);
 
     bpvm_bmgr_req_t req;

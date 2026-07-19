@@ -165,6 +165,51 @@ Marco del bloque (fiabilidad, no solo texto):
   raro). *(Nombre exacto de los módulos `Env`/`Board` = detalle a alinear con el módulo MCU
   existente para no fragmentar.)*
 
+## Layout de flash en 3 ZONAS (DECIDIDO 19-jul, charla Eduardo) — el env al PRINCIPIO, en hueco no-grabado
+
+Eduardo: la imagen tiene **dos zonas de código** con una **zona en blanco** entre medias;
+el env va **al principio, a dirección FIJA**, reservando el espacio en la imagen, de modo
+que NUNCA haya que moverlo aunque la imagen crezca.
+
+| Zona | Rango (RP2350) | Qué es |
+|---|---|---|
+| **1 arranque** | `0x000000–0x00FFFF` (64K **FIJOS**) | vectores + cabecera picobin + arranque; "salta" a la zona 3 |
+| **2 kernel** | `0x010000–0x013FFF` (16K) | **env A** (4K) + **env B** (4K) + reserva (8K: flag modo-seguro, futuro) — **HUECO del UF2, no se graba NUNCA** |
+| **3 firmware** | `0x014000–0x1FFFFF` (~1,9 MB) | el firmware real (hoy ~0,5 MB) |
+| FS | `0x200000–…` | littlefs (como hoy; luego conducido por las particiones H9) |
+
+- **Por qué funciona:** (a) la zona 1 es una **región del linker con LENGTH fijo** → si el
+  código de arranque crece, el build **FALLA gritando** (region overflow); la dirección del
+  env es eterna. (b) la zona 2 **no tiene secciones** → el UF2 no contiene bloques ahí → el
+  flasheo BOOTSEL no borra esos sectores → **el env sobrevive a cada reflasheo del firmware**.
+- **Es el modelo nativo de ESP-IDF** (bootloader | tabla | app) → estandariza el MISMO
+  layout en las 3 familias. Portabilidad.
+- **64K de zona 1, deliberadamente generosos** ("el tamaño del boot no es un problema,
+  64K de 4M" — Eduardo): hoy solo arranca y salta; mañana es el sitio del **kernel-comm
+  REAL del estado 0** sin mover ninguna dirección.
+- **Variante A primero (decidido, "poco a poco"):** UN solo build partido por el linker
+  (el "salto" es el vector de reset apuntando a código de la zona 3). La evolución a B
+  (dos programas: la zona 1 **valida** la zona 3 con magic/CRC y, si está corrupta, se
+  queda en el suelo respondiendo) NO mueve direcciones — se hace cuando toque.
+- Migración: el env deja `0x3FD000/0x3FE000` (posición provisional del primer adaptador);
+  el contenido actual se pierde (fase de desarrollo, asumido).
+
+### Los 2 huecos de H9 que quedan (Eduardo, 19-jul)
+
+1. **Identidad en el SUELO — "que se lea el procesador y el tamaño de la flash de verdad".**
+   La detección ya existe (SYSINFO.PACKAGE_SEL + JEDEC, board_desc.c) pero corre DENTRO de
+   `board_desc_init`, DESPUÉS de montar el FS (por board.json). Hay que bajarla a
+   **antes-del-FS** y que sea LA fuente de identidad (env/bmgr). Abre el cierre bueno de
+   #292: subir `PICO_FLASH_SIZE_BYTES` a 16 MB y que el guardián pase a ser el **clamp
+   RUNTIME por JEDEC** (la verdad detectada sustituye a la constante mentirosa).
+2. **PSRAM por env.** Hoy NADIE lee el env al arrancar (solo al llegar un comando del IDE)
+   y el sondeo PSRAM (H7.2.a) cuelga de `board.json:psramCsPin`. Decidido: el arranque lee
+   el env por XIP (memcpy, sin FS); **`psram=1` + micro RP2350B → CS = GPIO47 derivado**
+   (el último pin). **Solo RP2350B de momento** — técnicamente posible en la A pero no se
+   conoce placa que lo lleve; si aparece, se añade la posibilidad. Init TEMPRANO pre-FS →
+   la distribución de memoria se decide antes de montar nada. Primer clavo del ataúd de
+   board.json.
+
 ## Las DOS capas de comunicación (refinamiento de Eduardo)
 
 La comunicación no es monolítica: son **dos juegos de comandos sobre UN solo
@@ -361,9 +406,19 @@ feedback ante fallos, en placas nuevas y en cambios profundos).
 «Gestión de placa…» → tablas de entorno/particiones en vivo (placa virgen: entorno
 0 vars, particiones "missing" → Proponer defaults → editar → Aplicar).
 
-**Pendiente (fase de placa):** cintura de flash por-micro (leer/borrar/escribir
-el sector del env + volcar `wrote_slot`; offset fijo por familia); transporte
-kernel-comm (dispatcher de dos tablas en el firmware); adaptador JSON del firmware
-(repl_v1 → `bpvm_bmgr_*`, MISMO shape que el sim); mount callbacks reales de las
-capas; verificación interactiva de Eduardo; refinar FrmBoard a la rejilla 3×2 +
-asistente de 1ª conexión. Opcional host: descriptor tipado `bpvm_board`.
+**Adaptador de firmware YA EN CÓDIGO (18-jul, re-verificado 19-jul):** la cintura de
+flash A/B + el adaptador JSON existen y están cableados — `pico/board_mgr_pico.c`
+(lee A/B por XIP, trocea `s_put_buf`, despacha a `bpvm_bmgr_wire_dispatch`, vuelca
+`wrote_slot` con erase+program bajo `bpvm_flash_lock`) enganchado en `repl_v1.c`
+(STATE/ENV_*/PART_* → `board_mgr_pico_handle`) y compilado en el UF2 (`786eb66` +
+`a262537`). Env provisional en `0x3FD/0x3FE000` → se muda al layout de 3 zonas.
+
+**Pendiente (ladrillos acordados 19-jul, en orden, "poco a poco"):**
+1. **Layout 3 zonas** (linker partido + env a `0x010000/0x011000` + hueco del UF2).
+2. **Identidad en el suelo** (PACKAGE_SEL + JEDEC pre-FS → fuente de env/bmgr).
+3. **PSRAM por env** (leer env al arrancar + `psram=1` ∧ RP2350B → CS=GPIO47 + init temprano).
+4. **Verificación interactiva de Eduardo** (Pico + Metro, una tanda): FrmBoard contra
+   placa real + persistencia del env tras reinicio Y tras reflasheo del firmware.
+Después: máquina de estados conduciendo el boot real de main.c; unificación
+particiones-H9 ↔ FS real (subsumir `bp_ptable_t`); refinar FrmBoard (rejilla 3×2 +
+asistente de 1ª conexión). Opcional host: descriptor tipado `bpvm_board`.
