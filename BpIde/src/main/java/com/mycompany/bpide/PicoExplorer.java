@@ -1289,6 +1289,12 @@ public final class PicoExplorer extends JPanel {
         sb.append("SRAM        : ").append(human(ilong(m, "sramBytes"))).append('\n');
         long ps = ilong(m, "psramBytes");
         sb.append("PSRAM       : ").append(ps > 0 ? human(ps) : "(ninguna)").append('\n');
+        // H9 — reparto de la memoria de la VM (heap BP + región de stacks, tope
+        // 512K). Solo si el firmware lo manda (tolerante con firmwares viejos).
+        long vh = ilong(m, "vmHeapBytes"), vs = ilong(m, "vmStackBytes");
+        if (vh > 0 && vs > 0)
+            sb.append("VM          : heap ").append(human(vh))
+              .append(" + stack ").append(human(vs)).append('\n');
         sb.append("FS          : ").append(human(ilong(m, "fsUsedBytes"))).append(" / ")
           .append(human(ilong(m, "fsTotalBytes"))).append('\n');
         long up = ilong(m, "uptimeMs");

@@ -82,6 +82,20 @@ static char s_reply_buf[1024];
 #define V1_PUT_BUF_SIZE  (48 * 1024)
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
 
+/* Reparto heap/stacks de la VM (decisión Eduardo 19-jul): la región de stacks
+ * BP se TOPA en 512 KB y el RESTO es heap. El default de bpvm_init (tamaño/2)
+ * estaba pensado para 128 KB de SRAM; con los 8 MB de PSRAM de la Metro
+ * dormía ~4 MB en stacks que usan decenas de KB. Con el tope:
+ *   Pico  (128 KB): min(64K, 512K) = 64K  → 64K/64K, IDÉNTICO a siempre.
+ *   Metro (8 MB):   stacks 512 KB (main 16K + 2K/thread ≈ 240 threads,
+ *                   de sobra para cualquier app razonable) → heap ~7,5 MB.
+ * ÚNICO cálculo: lo usan el RUN (bpvm_init) y el INFO (mostrar el reparto). */
+static size_t vm_stack_region_bytes(void) {
+    size_t r = (size_t) s_vm_buffer_size / 2u;
+    if (r > 512u * 1024u) r = 512u * 1024u;
+    return r;
+}
+
 /* #304 — accesor para que el REPL de texto (repl.c) comparta este buffer en vez
  * de duplicar 32 K (modo-texto y modo-wire son mutuamente excluyentes). */
 unsigned char* repl_v1_put_buf(void)      { return s_put_buf; }
@@ -734,6 +748,16 @@ static void handle_info(long id, const json_obj_t* obj) {
                                              (size_t) off, "sramBytes", 520L * 1024L);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "psramBytes", (long) bd->psram_bytes);
+    /* Reparto de la memoria de la VM (heap/stacks BP) — el MISMO cálculo que
+     * usa el RUN (vm_stack_region_bytes), visible sin ejecutar nada. */
+    {
+        size_t vstack = vm_stack_region_bytes();
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "vmHeapBytes",
+                                                 (long)(s_vm_buffer_size - vstack));
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "vmStackBytes", (long) vstack);
+    }
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
                                           (size_t) off);
     if (off < 0) {
@@ -968,8 +992,15 @@ static void run_module_path(const char* path, long id) {
         if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
     }
 
-    /* 3. Init VM + cargar módulo + resolver deps. */
-    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size, 0);
+    /* 3. Init VM + cargar módulo + resolver deps. Reparto heap/stacks =
+     * vm_stack_region_bytes (cálculo único, compartido con INFO). */
+    size_t stack_region = vm_stack_region_bytes();
+    log_printf("vm: memoria %u KB -> heap %u KB + stacks %u KB",
+               (unsigned)(s_vm_buffer_size >> 10),
+               (unsigned)((s_vm_buffer_size - stack_region) >> 10),
+               (unsigned)(stack_region >> 10));
+    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size,
+                           s_vm_buffer_size - stack_region);
     if (!vm) {
         /* No podemos mandar RUN_REPLY de error porque ya enviamos el
          * RUN_REPLY positivo. Emitimos EXITED con código de error. */
