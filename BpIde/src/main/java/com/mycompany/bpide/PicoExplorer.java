@@ -308,9 +308,9 @@ public final class PicoExplorer extends JPanel {
 
         switch (cmd) {
             case "help": case "?":
-                emitLine("  comandos: dir [ruta] · cd <ruta> · type <fich> · edit <fich> · run <fich> · del <fich>");
+                emitLine("  comandos: dir [ruta] · cd <ruta> · type <fich> · edit <fich> · new <fich> · run <fich> · del <fich>");
                 emitLine("            kill · autorun [fich|off] · mem · save · log · reset · cls · help");
-                emitLine("  type=volcar fichero a la consola · edit=ver/editar en ventana");
+                emitLine("  type=volcar fichero a la consola · edit=ver/editar en ventana · new=crear fichero nuevo");
                 emitLine("  kill=aborta el programa en ejecución (también menú Run → Stop, Ctrl+F2)");
                 emitLine("  autorun=app que arranca al boot (/sys/auto.txt); con la app corriendo");
                 emitLine("          el IDE puede conectar y pararla con kill");
@@ -363,6 +363,29 @@ public final class PicoExplorer extends JPanel {
                         for (int i = 0; i < cap; i++) emitLine("  " + lns[i]);
                         if (cap < lns.length) emitLine("  … (" + (lns.length - cap) + " líneas más)");
                         emitLine("  (" + data.length + " bytes)");
+                        break;
+                    }
+                    case "new": {
+                        if (farg.isEmpty()) { emitLine("  uso: new <fichero>"); break; }
+                        String p = resolvePath(farg);
+                        // No pisar un fichero existente: para eso está 'edit'. El
+                        // primitivo de crear ya existe (DeviceFileEditor.doSave →
+                        // backend.put crea rutas nuevas); aquí solo lo exponemos.
+                        boolean exists = false;
+                        for (Backend.Entry e : backend.list()) {
+                            String nm = e.name.startsWith("/") ? e.name : "/" + e.name;
+                            if (nm.equals(p)) { exists = true; break; }
+                        }
+                        if (exists) {
+                            emitLine("  ya existe: " + p + " — usa 'edit' para modificarlo");
+                            break;
+                        }
+                        SwingUtilities.invokeLater(() -> {
+                            Window owner = SwingUtilities.getWindowAncestor(this);
+                            new DeviceFileEditor(owner, backend, p, new byte[0], this::onRefresh)
+                                    .setVisible(true);
+                        });
+                        emitLine("  fichero nuevo (se crea al Guardar): " + p);
                         break;
                     }
                     case "edit": {
