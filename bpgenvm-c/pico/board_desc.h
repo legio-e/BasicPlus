@@ -18,6 +18,7 @@
 typedef struct {
     char name[24];        /* nombre legible de la placa */
     char variant;         /* 'A' (RP2350A, 30 GPIO) | 'B' (RP2350B, 48 GPIO) */
+    int  package_sel;     /* SYSINFO.PACKAGE_SEL crudo: 1=QFN60/A, 0=QFN80/B (confirmado en placa) */
 
     /* --- Caps del CHIP (de la tabla por variante) --- */
     int  gpio_count;      /* GPIO bondeados: 30 (A) / 48 (B) */

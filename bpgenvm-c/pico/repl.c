@@ -383,6 +383,7 @@ static void cmd_info(void) {
     printf("OK\n");
     printf("firmware   bpvm-pico v0.2 build " __DATE__ " " __TIME__ "\n");
     printf("board      %s (RP2350%c, %d GPIO)\n", bd->name, bd->variant, bd->gpio_count);
+    printf("package    PACKAGE_SEL=%d (1=QFN60/A, 0=QFN80/B)\n", bd->package_sel);
     printf("flash      %u MB\n", (unsigned) (bd->flash_bytes / (1024u * 1024u)));
     if (bd->psram_present)
         printf("psram      %u MB\n", (unsigned) (bd->psram_bytes / (1024u * 1024u)));

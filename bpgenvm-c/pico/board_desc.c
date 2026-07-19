@@ -11,6 +11,7 @@
 #include "psram.h"
 #include "hardware/flash.h"   /* flash_do_cmd (JEDEC ID) */
 #include "hardware/sync.h"    /* save_and_disable_interrupts (#256) */
+#include "hardware/structs/sysinfo.h"  /* SYSINFO.PACKAGE_SEL → variante A/B */
 
 #include <stdint.h>
 #include <string.h>
@@ -84,15 +85,19 @@ void board_desc_init(void) {
     memset(d, 0, sizeof *d);
 
     /*
-     * Default sin board.json: variante 'A' (30 GPIO), conservador. Con el build
-     * genérico RP2350B (H7.1) ya NO hay riesgo de panic por defaultear a B
-     * (gpio_init de 0..47 es válido; en una placa A los pines 30-47 son no-op),
-     * pero mantenemos A como default neutro hasta que H7.2.a lo haga DINÁMICO
-     * por sondeo de PSRAM (presente → perfil B, ausente → perfil A). Una placa
-     * concreta declara su variante en /sys/board.json (boards/metro-rp2350b.json).
+     * Variante desde HARDWARE: SYSINFO.PACKAGE_SEL (RO, 1 bit). Mapeo CONFIRMADO
+     * en placa (19-jul, Pico 2 = RP2350A lee 1): **1 = QFN-60 (RP2350A, Pico 2),
+     * 0 = QFN-80 (RP2350B, Metro)** — al revés de lo que sugería el reset=0; el chip
+     * lo fija por su package. Es la detección dinámica que el comentario viejo
+     * prometía "hasta que H7.2.a la haga por PSRAM": ahora la da el propio chip,
+     * INDEPENDIENTE del FS → sobrevive a un borrado de flash. Antes, sin
+     * /sys/board.json, defaulteaba a 'A' y una Metro elegía el canal ADC y
+     * gpio_count equivocados (412 °C + PSRAM invisible). board.json puede seguir
+     * forzando la variante (placas atípicas).
      */
     strncpy(d->name, "rp2350-generic", sizeof d->name - 1);
-    apply_variant_caps(d, 'A');
+    d->package_sel = (int) (sysinfo_hw->package_sel & 1u);
+    apply_variant_caps(d, d->package_sel ? 'A' : 'B');
     d->led_pin       = -1;   /* lo declara la placa */
     d->neopixel_pin  = -1;   /* peculiar de cada placa */
     /* psram_cs_pin lo deja apply_variant_caps (default por variante). */
