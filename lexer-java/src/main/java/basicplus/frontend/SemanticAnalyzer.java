@@ -831,6 +831,16 @@ public final class SemanticAnalyzer {
     private void declareConst(ConstDecl c, ClassSymbol owner, Scope scope) {
         boolean isStatic = c.name.isStatic();
         validateStaticPrefix(c.name, owner);
+        // L11.b — una const «a secas» (sin cualificar) dentro de una clase no tiene
+        // sentido: una const es un valor de compilación común a todas las instancias,
+        // así que es de CLASE, no de objeto. Antes se aceptaba muda y nacía como
+        // miembro de instancia en silencio. Ahora se exige la forma estática
+        // `const Cls.NAME := …` (o mover la const a nivel de módulo).
+        if (owner != null && !isStatic) {
+            err(c.line, c.column, "una const dentro de una clase debe ser estática: escribe"
+                    + " `const " + owner.name + "." + c.name.name + " := …` (constante de clase;"
+                    + " añade `public` si se lee fuera) o muévela a nivel de módulo");
+        }
         ConstSymbol sym = new ConstSymbol(c.name.name, c.isPublic, isStatic, owner, c.line, c.column);
         sym.decl = c;
         if (!scope.tryDefine(sym))
