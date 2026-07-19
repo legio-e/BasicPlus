@@ -82,16 +82,24 @@ pico_board_cmake_set(PICO_PLATFORM, rp2350)
 #define PICO_DEFAULT_SPI_CSN_PIN 17
 #endif
 
-// --- FLASH (idéntico a pico2: 4MB + boot2 W25Q080, probado en el Metro) ---
+// --- FLASH ---
 #define PICO_BOOT_STAGE2_CHOOSE_W25Q080 1
 
 #ifndef PICO_FLASH_SPI_CLKDIV
 #define PICO_FLASH_SPI_CLKDIV 2
 #endif
 
-pico_board_cmake_set_default(PICO_FLASH_SIZE_BYTES, (4 * 1024 * 1024))
+// H9 / cierre de #292 (19-jul): 16 MB = el SOBRE MÁXIMO que la imagen única
+// puede direccionar (ventana XIP de 16 MB), NO lo que tiene cada placa. La
+// verdad por placa la pone el RUNTIME: JEDEC (board_desc_early_init) +
+// bpvm_part_usable_flash(jedec, PICO_FLASH_SIZE_BYTES) acotan TODAS las
+// escrituras derivadas de particiones. Antes este define (4 MB) MENTÍA en la
+// Metro (16 MB reales) y el clamp la capaba; ahora el hard_assert del SDK es
+// el sobre y el clamp runtime es el guardián fino. Pico 2: JEDEC=4 MB → nada
+// cambia. Metro: JEDEC=16 MB → recupera su flash entera.
+pico_board_cmake_set_default(PICO_FLASH_SIZE_BYTES, (16 * 1024 * 1024))
 #ifndef PICO_FLASH_SIZE_BYTES
-#define PICO_FLASH_SIZE_BYTES (4 * 1024 * 1024)
+#define PICO_FLASH_SIZE_BYTES (16 * 1024 * 1024)
 #endif
 
 // Drive high to force power supply into PWM mode (lower ripple on 3V3 at light loads)
