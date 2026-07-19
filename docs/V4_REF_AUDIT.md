@@ -1,6 +1,24 @@
 # BasicPlus V4 — Catálogo de auditoría de referencias (censo antes de corregir)
 
-> ## 📍 ESTADO A 15-jul-2026 *(saneado y verificado CONTRA EL CÓDIGO, no de memoria)*
+> ## 📍 ACTUALIZACIÓN 19-jul-2026 *(supersede el bloque de 15-jul de abajo)*
+>
+> - **#4 (=H4.b) CERRADO** — `bf42bed` (#302 paso 2): `bpvm_aot_helpers` v1→v2 handle-aware
+>   + emisor → **los 9 tests rojos VERDES**, paridad 17/1/0. Ya NO está abierto (el bloque de
+>   15-jul lo listaba como "lo único abierto" — desfasado).
+> - **#19 — el UAF ESTÁ CERRADO** (`b99529e`): el array fijo LOCAL ya no es use-after-free. Lo
+>   que queda (tarea #288) es el **rediseño inline por eficiencia** (decisión de Eduardo) — **NO
+>   es un bug de memoria**.
+> - **Único frente de SEGURIDAD DE MEMORIA abierto = #302 paso 3**: raíces GC / shadow-stack del
+>   native **COMPILADO (AOT)**. Solo muerde en la ruta AOT-nativo; el **intérprete (default) no
+>   se ve** → **diferido a AOT-en-placa**.
+> - **Latentes/inocuos** (sin cambio): #3, #5, #12, #13, #21, #16 (sospecha sin probar). Ninguno
+>   provoca fallo.
+> - **Resumen**: por el camino normal (intérprete, host y placa) **no quedan bugs de memoria
+>   vivos**; **H1 cerrado de verdad**. El bloque de 15-jul queda como histórico.
+>
+> ---
+>
+> ## 📍 ESTADO A 15-jul-2026 *(HISTÓRICO — ver bloque 19-jul de arriba; saneado y verificado CONTRA EL CÓDIGO, no de memoria)*
 >
 > **Todas las semillas (S1-S5) están CERRADAS.** El catálogo tenía entradas rancias que
 > daban por abierto lo ya arreglado (S1 y #10) — se decidió sobre ellas dos veces y se
