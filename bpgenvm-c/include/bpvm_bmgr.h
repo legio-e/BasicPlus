@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include "bpvm_env.h"
 #include "bpvm_part.h"
+#include "bpvm_boot.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,6 +36,11 @@ typedef struct {
     size_t   sector;        /* tamaño de sector (cada uno de a/b/scratch mide esto) */
     uint32_t part_base;     /* 1er offset de particiones (constante por familia) */
     uint32_t usable_flash;  /* flash usable YA con el clamp #292 aplicado */
+    /* Estado REAL del boot (opcional). NULL → STATE se deriva del env (modo
+     * sim/host: plan completo ⇒ APP). El firmware lo apunta al bpvm_boot_status_t
+     * del arranque real para que STATE cuente lo CONSEGUIDO, no el plan (p.ej.
+     * particiones OK pero mount fallido ⇒ estado 1 + motivo, degraded). */
+    const bpvm_boot_status_t* live;
 } bpvm_bmgr_t;
 
 /* --- Lectura: entorno --- */

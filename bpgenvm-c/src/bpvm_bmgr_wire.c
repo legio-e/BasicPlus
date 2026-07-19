@@ -72,11 +72,18 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
     sb_t s; sb_init(&s, out, cap);
 
     if (!strcmp(type, "STATE")) {
-        int st = bpvm_bmgr_wire_state(bm);
+        /* Estado: el REAL del boot si el llamador lo provee (firmware, bm->live);
+         * si no, el derivado del env (sim/host: plan completo equivale a APP). */
+        int st             = bm->live ? (int) bm->live->state : bpvm_bmgr_wire_state(bm);
+        int degraded       = bm->live ? bm->live->degraded : 0;
+        const char* reason = bm->live ? bm->live->reason : "";
         sb_raw(&s, "{\"type\":\"STATE_REPLY\",\"id\":"); sb_long(&s, id);
         sb_raw(&s, ",\"state\":"); sb_long(&s, st);
         sb_raw(&s, ",\"name\":\""); sb_esc(&s, bpvm_boot_state_name((bpvm_boot_state_t) st));
-        sb_raw(&s, "\",\"degraded\":false,\"reason\":\"\"}");
+        sb_raw(&s, degraded ? "\",\"degraded\":true,\"reason\":\""
+                            : "\",\"degraded\":false,\"reason\":\"");
+        sb_esc(&s, reason);
+        sb_raw(&s, "\"}");
         return s.ok ? (int) s.off : -1;
     }
     if (!strcmp(type, "ENV_LS")) {

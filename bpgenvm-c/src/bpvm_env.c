@@ -60,6 +60,22 @@ int bpvm_env_pick(const uint8_t* blockA, size_t lenA,
     return -1;
 }
 
+/* Comparación de CLAVES case-insensitive (decisión de Eduardo, 19-jul: en una
+ * clave de env las mayúsculas no le importan a nadie y solo confunden —
+ * "PSRAM" y "psram" son LA MISMA clave, tanto al leer como al reemplazar o
+ * borrar; así no pueden coexistir duplicadas que difieren solo en caja). ASCII. */
+static int key_eq_ci(const void* a, const void* b, size_t n) {
+    const unsigned char* x = (const unsigned char*) a;
+    const unsigned char* y = (const unsigned char*) b;
+    for (size_t i = 0; i < n; i++) {
+        unsigned char cx = x[i], cy = y[i];
+        if (cx >= 'A' && cx <= 'Z') cx = (unsigned char)(cx + 32);
+        if (cy >= 'A' && cy <= 'Z') cy = (unsigned char)(cy + 32);
+        if (cx != cy) return 0;
+    }
+    return 1;
+}
+
 int bpvm_env_get(const bpvm_env_t* env, const char* key, char* val_out, size_t val_cap) {
     if (!env || !env->valid || !key) return -1;
     size_t klen = strlen(key);
@@ -73,7 +89,7 @@ int bpvm_env_get(const bpvm_env_t* env, const char* key, char* val_out, size_t v
         while (eq < le && *eq != '=') eq++;
         if (eq < le) {                                /* línea con '=' */
             size_t nlen = (size_t)(eq - ls);
-            if (nlen == klen && memcmp(ls, key, klen) == 0) {
+            if (nlen == klen && key_eq_ci(ls, key, klen)) {
                 const uint8_t* vs = eq + 1;
                 size_t vlen = (size_t)(le - vs);
                 if (val_out && val_cap) {
@@ -95,12 +111,14 @@ int bpvm_env_get_bool(const bpvm_env_t* env, const char* key, int def) {
     if (n < 0) return def;
     if (n == 1) {
         switch (v[0]) {
-        case '1': case 'y': case 'Y': case 't': case 'T': return 1;
+        case '1': case 'y': case 'Y': case 't': case 'T':
+        case 's': case 'S':                               return 1;  /* sí */
         case '0': case 'n': case 'N': case 'f': case 'F': return 0;
         default: break;
         }
     }
-    if (!strcmp(v, "true") || !strcmp(v, "yes") || !strcmp(v, "on"))  return 1;
+    if (!strcmp(v, "true") || !strcmp(v, "yes") || !strcmp(v, "on")
+        || !strcmp(v, "si") || !strcmp(v, "Si") || !strcmp(v, "SI")) return 1;
     if (!strcmp(v, "false")|| !strcmp(v, "no")  || !strcmp(v, "off")) return 0;
     return def;
 }
@@ -148,7 +166,7 @@ int bpvm_env_payload_set(const char* payload_in, size_t in_len, const char* key,
         const char* eq = ls;
         while (eq < le && *eq != '=') eq++;
         size_t nlen = (size_t)(eq - ls);
-        int match = (nlen == klen && memcmp(ls, key, klen) == 0);
+        int match = (nlen == klen && key_eq_ci(ls, key, klen));
         if (!match) {
             size_t linelen = (size_t)(le - ls) + (le < end ? 1u : 0u);   /* incluye el '\n' */
             if (o + linelen > out_cap) return -1;

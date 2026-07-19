@@ -54,8 +54,10 @@ int bpvm_env_parse(const uint8_t* block, size_t block_len, bpvm_env_t* env);
 int bpvm_env_pick(const uint8_t* blockA, size_t lenA,
                   const uint8_t* blockB, size_t lenB, bpvm_env_t* out);
 
-/* Busca `key`. Copia el valor (sin '\n', NUL-terminado) en `val_out` (cap `val_cap`).
- * Devuelve la longitud del valor (>=0), o -1 si la clave no está (tolerante). */
+/* Busca `key` (claves CASE-INSENSITIVE — decisión 19-jul: "PSRAM" y "psram"
+ * son la misma clave, en lectura y en edición). Copia el valor (sin '\n',
+ * NUL-terminado) en `val_out` (cap `val_cap`). Devuelve la longitud del valor
+ * (>=0), o -1 si la clave no está (tolerante). */
 int bpvm_env_get(const bpvm_env_t* env, const char* key, char* val_out, size_t val_cap);
 
 /* Conveniencias tipadas (delegan en bpvm_env_get → una sola fuente). `def` si la
