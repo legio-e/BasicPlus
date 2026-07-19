@@ -850,15 +850,17 @@ public final class SemanticAnalyzer {
             if (v.isOwner && isStatic) {
                 err(n.line, n.column, "'var owner' no compatible con miembro estático: '" + n.name + "'");
             }
-            // L11.a — `public var` en una clase es una promesa que el .bpi no puede
-            // cumplir: los fields NO se exportan, solo get/set. El cuerpo de la clase
-            // se parsea con parseDefStmt() (el mismo del nivel de módulo), así que
-            // heredaba mudo las reglas de arriba y nadie miraba este flag.
-            if (v.isPublic && owner != null) {
-                err(n.line, n.column, "una variable de clase no puede ser public: '" + n.name
-                        + "'. Un field no cruza la frontera del módulo (el .bpi solo exporta"
-                        + " get/set); declárala `public property " + n.name + "` y su backing"
-                        + " field queda privado");
+            // L11.a — NINGUNA variable puede ser public, ni de clase ni de módulo: un
+            // field no cruza la frontera del .bpi, que sólo exporta el get/set de una
+            // property. Antes sólo se vetaba en clase (owner != null); como clase y
+            // módulo comparten parseDefStmt(), el flag se heredaba mudo a nivel módulo.
+            // La norma del modelo de objetos: público ⇒ property.
+            if (v.isPublic) {
+                String ambito = (owner != null) ? "de clase" : "de módulo";
+                err(n.line, n.column, "una variable " + ambito + " no puede ser public: '" + n.name
+                        + "'. Un field no cruza la frontera del .bpi (sólo se exporta el get/set"
+                        + " de una property); declárala `public property " + n.name + "` y su"
+                        + " backing field queda privado");
             }
             VarSymbol sym = new VarSymbol(n.name, v.isPublic, isStatic, owner, false, n.line, n.column);
             sym.decl = v;

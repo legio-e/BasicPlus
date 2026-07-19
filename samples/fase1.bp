@@ -7,7 +7,7 @@ module Fase1
   // Variable y constante a nivel módulo (campos estáticos en IL).
   // Nota: el inicializador de `var` a nivel módulo NO se ejecuta (ver L8);
   // asignar en la función inicializadora del módulo si hace falta != 0.
-  public var contador: integer
+  var contador: integer
   public const PI: float := 3.14159
 
   // Inicializador del módulo: se llama antes de Main.

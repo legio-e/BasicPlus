@@ -6,8 +6,18 @@
 //   - sleep() bloquea con wake-up por timeout.
 module Threads
 
-  public var counter: integer := 0
-  public var mtx: Mutex
+  // Estado compartido entre los Worker (clase del mismo módulo). Como un field
+  // no puede ser public (L11.a), el estado que una clase lee del módulo va como
+  // property: público ⇒ property. Los sitios de acceso no cambian.
+  public property counter: integer
+  public property mtx: Mutex
+
+  // Inicializador del módulo (corre antes de Main). El init de una property a
+  // nivel módulo no se hornea como el de una var, así que se asigna aquí.
+  function Threads()
+    counter := 0
+    mtx := Mutex()
+  end Threads
 
   public class Worker extends Thread
   
@@ -27,7 +37,6 @@ module Threads
   end Worker
 
   function Main()
-    mtx := Mutex()
     var t1: Worker := Worker()
     var t2: Worker := Worker()
     t1.start()
