@@ -1967,29 +1967,29 @@ public class ModWriter {
                 ? new byte[0]
                 : currentLibrary.getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
-        // H6.a — si hay interfaz embebida emitimos v6 (MAGIC "MOD6") con el
-        // campo interfaceSize en el header y la sección `interface` entre
-        // exports y data; si no, v5 idéntico al previo.
-        boolean v6 = (interfaceBytes != null);
+        // H6.a + post 4→8B: el ModWriter actual es 8B-safe, así que emite SIEMPRE
+        // v6 (MAGIC "MOD6") con el campo interfaceSize en el header y la sección
+        // `interface` entre exports y data. Si no hay interfaz embebida (p.ej. los
+        // módulos hand-emit de los tests, o cualquier módulo sin exports), va una
+        // sección interface VACÍA. Razón: el gate de ABI (#284) trata MOD5 como
+        // "posible era de refs 4B" y lo rechaza; un .mod recién generado NUNCA debe
+        // dispararlo. (Los .mod v5 genuinamente antiguos siguen rechazados.)
+        byte[] iface = (interfaceBytes != null) ? interfaceBytes : new byte[0];
 
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(filename))) {
-            out.writeInt(v6 ? ModFormat.MAGIC_NUMBER_V6 : ModFormat.MAGIC_NUMBER);
+            out.writeInt(ModFormat.MAGIC_NUMBER_V6);
             out.writeInt(dataSize);
             out.writeInt(mainOffset);
             out.writeInt(importStream.size());
             out.writeInt(exportStream.size());
             out.writeInt(rawCode.length);
             out.writeInt(libraryBytes.length);
-            if (v6) {
-                out.writeInt(interfaceBytes.length);   // 8º entero del header v6
-            }
+            out.writeInt(iface.length);                // 8º entero del header v6
 
             out.write(libraryBytes);
             out.write(importStream.toByteArray());
             out.write(exportStream.toByteArray());
-            if (v6) {
-                out.write(interfaceBytes);             // sección interface (antes de data)
-            }
+            out.write(iface);                          // sección interface (vacía si no hay)
             out.write(dataBuf);
             out.write(rawCode);
         }

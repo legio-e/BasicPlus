@@ -57,7 +57,7 @@ class DeviceResolveTest {
                 case "total": mem.put(a, 15); break;
                 case "i":     mem.put(a, 3);  break;
                 case "ok":    mem.put(a, 1);  break;          // boolean
-                case "msg":   mem.put(a, 777); break;          // string ref
+                case "msg":   mem.put(a, 0); mem.put(a + 4, 777); break;  // string ref (handle 8B: hi@a, lo@a+4)
                 case "big":   mem.put(a, 0); mem.put(a + 4, 100); break;  // long 100
                 case "ratio": mem.put(a, (int) (ratioBits >>> 32));
                               mem.put(a + 4, (int) ratioBits); break;      // double 1.5
