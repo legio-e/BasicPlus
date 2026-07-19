@@ -45,7 +45,13 @@ import javax.swing.table.DefaultTableModel;
 public final class BoardMgrPanel extends JPanel {
 
     private static final long T = 8000;    // timeout wire
-    private static final String PSRAM_KEY = "PSRAM";
+    /* Clave CANÓNICA del env (minúsculas): el firmware lee "psram" EXACTO
+     * (bpvm_env_get es case-sensitive). Escribir "PSRAM" fue el bug que dejó
+     * la PSRAM de la Metro apagada con el checkbox marcado (19-jul). La
+     * lectura de abajo usa equalsIgnoreCase a propósito: tolera una entrada
+     * vieja en mayúsculas para MOSTRARLA, pero aquí siempre se escribe en
+     * minúsculas. */
+    private static final String PSRAM_KEY = "psram";
 
     private BpvmClient client;
     private Consumer<String> log = s -> { };
