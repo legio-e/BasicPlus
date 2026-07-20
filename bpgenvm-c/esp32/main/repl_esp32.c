@@ -42,6 +42,16 @@
 extern uint8_t* s_vm_buffer;
 extern uint32_t s_vm_buffer_size;
 
+/* H9 — reparto heap/stacks de la VM: la región de stacks BP se TOPA en 512 KB y
+ * el RESTO es heap (decisión Eduardo 19-jul, igual que el Pico repl_v1.c). El
+ * default de bpvm_init (tamaño/2) desperdiciaba ~1 MB en stacks con los 2 MB de
+ * PSRAM del P4. Cálculo ÚNICO, compartido por RUN (bpvm_init) e INFO. */
+static size_t vm_stack_region_bytes(void) {
+    size_t r = (size_t) s_vm_buffer_size / 2u;
+    if (r > 512u * 1024u) r = 512u * 1024u;
+    return r;
+}
+
 #define ESP32_BUILD_DATE  (__DATE__ " " __TIME__)
 
 static char    s_line_buf[WIRE_V1_LINE_MAX];
@@ -156,6 +166,13 @@ static void handle_info(long id, const json_obj_t* obj) {
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "flashBytes", (long) flash_bytes);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "sramBytes", bid->sram_bytes);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "psramBytes", psram_bytes);
+    /* H9 — reparto de la memoria de la VM (heap + stacks BP, tope 512K); mismo
+     * cálculo que el RUN. El IDE lo muestra como "VM: heap X + stack Y". */
+    {
+        size_t vstack = vm_stack_region_bytes();
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "vmHeapBytes", (long)(s_vm_buffer_size - vstack));
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "vmStackBytes", (long) vstack);
+    }
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fsTotalBytes", fsTotal);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fsUsedBytes", fsUsed);
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
@@ -413,7 +430,8 @@ static void run_module_path(const char* path, long id) {
         if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
     }
 
-    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size, 0);
+    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size,
+                           s_vm_buffer_size - (uint32_t) vm_stack_region_bytes());
     if (!vm) { send_exited(session, "INTERNAL_ERROR", -1, 0, "bpvm_init failed"); s_active_session = 0; return; }
 
     v1_sink_ctx_t sink_ctx = { session };

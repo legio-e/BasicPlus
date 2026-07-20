@@ -52,7 +52,12 @@ static const char *TAG = "bpvm_p4";
  * VM vive en PSRAM (32 MB in-package, HEX@200 MHz → baja penalización): se
  * reserva en vm_buffer_init_psram() antes de arrancar las tasks. El P4 SIEMPRE
  * lleva PSRAM (el framebuffer del display también la usa). */
-#define VM_MEM_SIZE  (2 * 1024 * 1024)   /* 2 MiB en PSRAM (antes 128 KiB SRAM) */
+/* H9 — reparto de la PSRAM (Eduardo 19-jul): ~4 MB reservados para el framebuffer
+ * del display (LVGL reserva ON-DEMAND, más tarde, cuando un .mod usa Gui.*), y
+ * TODO EL RESTO para el heap de la VM. Se calcula en runtime (free PSRAM − reserva)
+ * → auto-adapta a la PSRAM real (16/32 MB) sin hornear el tamaño. Antes: 2 MiB fijos. */
+#define VM_PSRAM_DISPLAY_RESERVE  (4u * 1024u * 1024u)   /* margen para LVGL */
+#define VM_MEM_MIN                (2u * 1024u * 1024u)    /* piso si algo va mal */
 uint8_t*       s_vm_buffer      = NULL;
 uint32_t       s_vm_buffer_size = 0;
 
@@ -225,15 +230,27 @@ static void wire_task_uart(void *arg)
  * buffer en SRAM; esto es board-specific del P4. */
 static void vm_buffer_init_psram(void)
 {
-    s_vm_buffer = (uint8_t*) heap_caps_malloc(VM_MEM_SIZE, MALLOC_CAP_SPIRAM);
+    /* Toda la PSRAM libre MENOS la reserva del display (que LVGL alocará luego,
+     * on-demand, dentro del VM). Reintenta bajando 1 MiB si la mayor no cabe por
+     * fragmentación, hasta un piso. */
+    size_t freeps = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    size_t want = (freeps > VM_PSRAM_DISPLAY_RESERVE)
+                  ? (freeps - VM_PSRAM_DISPLAY_RESERVE) : 0u;
+    want &= ~((size_t) 4095u);   /* alineado al sector */
+    while (want >= VM_MEM_MIN) {
+        s_vm_buffer = (uint8_t*) heap_caps_malloc(want, MALLOC_CAP_SPIRAM);
+        if (s_vm_buffer != NULL) break;
+        want -= 1024u * 1024u;
+    }
     if (s_vm_buffer == NULL) {
-        ESP_LOGE(TAG, "PSRAM: no se pudo reservar el heap de la VM (%u KiB) - abort",
-                 (unsigned)(VM_MEM_SIZE / 1024u));
+        ESP_LOGE(TAG, "PSRAM: no se pudo reservar el heap de la VM (free=%u KiB) - abort",
+                 (unsigned)(freeps / 1024u));
         abort();
     }
-    s_vm_buffer_size = VM_MEM_SIZE;
-    ESP_LOGI(TAG, "VM heap en PSRAM: %u KiB @ %p",
-             (unsigned)(VM_MEM_SIZE / 1024u), (void*) s_vm_buffer);
+    s_vm_buffer_size = (uint32_t) want;
+    ESP_LOGI(TAG, "VM heap en PSRAM: %u KiB (reserva display %u KiB, PSRAM libre %u KiB) @ %p",
+             (unsigned)(want / 1024u), (unsigned)(VM_PSRAM_DISPLAY_RESERVE / 1024u),
+             (unsigned)(freeps / 1024u), (void*) s_vm_buffer);
 }
 
 void app_main(void)
