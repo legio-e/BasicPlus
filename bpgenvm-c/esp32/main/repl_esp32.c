@@ -149,8 +149,15 @@ static void handle_info(long id, const json_obj_t* obj) {
     char uid[16];
     snprintf(uid, sizeof(uid), "%02X%02X%02X%02X%02X%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    /* Tamaño FÍSICO del chip (SFDP/JEDEC), NO el del sobre del build: esp_flash_get_size
+     * devuelve el FLASHSIZE del sdkconfig (horneado, "a piñon"). Mismo criterio que el
+     * JEDEC del RP2350 (#292): la verdad es el chip. Fallback al sobre si el chip no
+     * reporta SFDP. OJO — lo USABLE lo acota la tabla vendor (bpdata), tambien horneada
+     * en el build: si fisica > sobre, hay flash de sobra sin particionar. */
     uint32_t flash_bytes = 0;
-    if (esp_flash_get_size(NULL, &flash_bytes) != ESP_OK) flash_bytes = 0;
+    if (esp_flash_get_physical_size(NULL, &flash_bytes) != ESP_OK || flash_bytes == 0) {
+        if (esp_flash_get_size(NULL, &flash_bytes) != ESP_OK) flash_bytes = 0;
+    }
     long psram_bytes = (long) heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
     const repl_board_id_t *bid = s_board_id;
     int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "INFO_REPLY", id);
