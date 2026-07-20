@@ -26,6 +26,7 @@
 #include "esp_netif.h"
 #include "esp_eth.h"
 #include "esp_event.h"
+#include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"   /* heap_caps_malloc: heap de la VM en PSRAM */
@@ -173,12 +174,14 @@ static void wire_task(void *arg)
     (void) arg;
     xEventGroupWaitBits(s_events, LINK_UP_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
 
-    /* FS + stdlib listos ANTES de aceptar al IDE (no dependen del PC log). */
-    fs_status_t r = fs_init();
-    fs_register_bpvm();          /* #247: file I/O desde BP sobre este FS */
-    esp32_mods_install();        /* stdlib completa -> /lib (if-absent, save en lote) */
-    net_logf("[p4] FS+stdlib listos: %s, %d ficheros, %u B libres",
-             fs_status_str(r), fs_file_count(), (unsigned) fs_free_bytes());
+    /* H9 — arranque escalonado (particiones del env → FS → VM). Sin FS el climb
+     * se queda abajo y el host conduce; stdlib solo con el FS montado. */
+    board_mgr_esp32_boot();
+    const bpvm_boot_status_t* bs = board_boot_status();
+    if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
+    net_logf("[p4] boot estado %d (%s)%s, %d ficheros",
+             (int) bs->state, bpvm_boot_state_name(bs->state),
+             bs->degraded ? " DEGRADADO" : "", fs_file_count());
 
     esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3, ESP-IDF) */
     p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* backend del P4 (pisa el del S3) */
@@ -186,9 +189,9 @@ static void wire_task(void *arg)
     net_logf("[p4] VM.3: esperando al IDE en *:%d (backend 'VM (TCP v1)' -> 192.168.2.2:%d)",
              WIRE_PORT, WIRE_PORT);
 
-    /* /sys/auto.txt si existiera (no en P4 todavía) + bucle del REPL. El
-     * accept/reconnect vive dentro de wire_v1_recv_line (wire_v1_tcp.c). */
-    repl_esp32_autorun();
+    /* bucle del REPL (accept/reconnect en wire_v1_recv_line). H9: autorun solo
+     * con la placa sana en estado 3. */
+    if (bs->state == BPVM_BOOT_APP && !bs->degraded) repl_esp32_autorun();
     repl_esp32_run();            /* no retorna */
 }
 
@@ -206,18 +209,19 @@ static void wire_task_uart(void *arg)
      * igual (sin logs por red). */
     xEventGroupWaitBits(s_events, LINK_UP_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(5000));
 
-    fs_status_t r = fs_init();
-    fs_register_bpvm();          /* #247: file I/O desde BP sobre este FS */
-    esp32_mods_install();        /* stdlib completa -> /lib (if-absent, save en lote) */
-    net_logf("[p4] FS+stdlib listos (UART): %s, %d ficheros, %u B libres",
-             fs_status_str(r), fs_file_count(), (unsigned) fs_free_bytes());
+    board_mgr_esp32_boot();
+    const bpvm_boot_status_t* bs = board_boot_status();
+    if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
+    net_logf("[p4] boot estado %d (%s)%s (UART), %d ficheros",
+             (int) bs->state, bpvm_boot_state_name(bs->state),
+             bs->degraded ? " DEGRADADO" : "", fs_file_count());
 
     esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3) */
     p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* del P4 */
     wire_v1_uart_init();
     net_logf("[p4] VM.3 (UART0): wire v1 por el bridge USB-UART; conecta el IDE");
 
-    repl_esp32_autorun();        /* /sys/auto.txt si existiera */
+    if (bs->state == BPVM_BOOT_APP && !bs->degraded) repl_esp32_autorun();  /* H9 */
     repl_esp32_run();            /* no retorna */
 }
 

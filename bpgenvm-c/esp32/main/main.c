@@ -17,6 +17,7 @@
 #include "repl_esp32.h"
 #include "hw_esp32.h"
 #include "esp32_mods.h"
+#include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
 
 /* Buffer caller-provided de la VM. repl_esp32.c lo referencia como extern
  * (PUNTERO, igual convención que repl_v1.c en la Pico/Metro y que el P4). El S3
@@ -33,10 +34,15 @@ void app_main(void)
     printf("\n=== BasicPlus VM en ESP32-S3 (H4.3 — wire v1) ===\n");
     printf("[boot] consola/logs = USB-Serial-JTAG | wire v1 = UART0 @115200\n");
 
-    fs_init();
-    fs_register_bpvm();    /* #247 — file I/O desde BP sobre este FS */
-    esp32_mods_install();  /* stdlib core embebida -> /lib (if-absent), como STM32/Pico */
-    esp32_hw_register();   /* backends de HW (GPIO, pico/info) */
+    /* H9 — arranque escalonado: identidad → particiones del env → FS → VM. Sin
+     * particiones/FS el climb se queda abajo y el host conduce (nada se
+     * auto-inicializa); stdlib solo con el FS montado. */
+    board_mgr_esp32_boot();
+    if (board_boot_status()->state >= BPVM_BOOT_FS) {
+        fs_register_bpvm();    /* #247 — file I/O desde BP sobre este FS */
+        esp32_mods_install();  /* stdlib core embebida -> /lib (if-absent) */
+    }
+    esp32_hw_register();   /* backends de HW (GPIO, pico/info) — siempre */
     wire_v1_uart_init();
 
     printf("[boot] REPL wire v1 escuchando en UART0. Conecta el IDE al puerto del bridge.\n");
@@ -45,6 +51,7 @@ void app_main(void)
      * del REPL. El wire ya está vivo y el poll del run atiende
      * HELLO/KILL: el IDE puede conectar y parar la app en cualquier
      * momento. */
-    repl_esp32_autorun();
+    if (board_boot_status()->state == BPVM_BOOT_APP && !board_boot_status()->degraded)
+        repl_esp32_autorun();   /* H9: autorun solo con la placa sana en estado 3 */
     repl_esp32_run();   /* no retorna */
 }

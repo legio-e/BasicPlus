@@ -69,7 +69,11 @@ typedef enum {
  *
  * Llamar UNA vez antes de cualquier otra operación. No es seguro
  * llamarlo concurrentemente con otras operaciones del FS. */
-fs_status_t fs_init(void);
+/* H9 (unificación): monta littlefs en la REGIÓN FS (sub-rango de la partición
+ * vendor "bpdata"): `fs_offset` relativo a bpdata (0 = FS primero), `fs_size` del
+ * env (bpvm_part, un mando). Sin partición/tamaños definidos NO se monta nada —
+ * el climb se queda en estado 1 y el host conduce. Formatea si no monta. */
+fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size);
 
 /* Vacía el FS en RAM (no toca flash hasta el siguiente save). */
 void fs_format_ram(void);

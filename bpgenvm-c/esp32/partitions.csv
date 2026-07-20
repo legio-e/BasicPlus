@@ -1,9 +1,10 @@
-# Tabla de particiones — firmware BasicPlus ESP32-S3 (H4.4).
-# Igual que la single-factory por defecto + una partición de datos "bpfs"
-# para el FS persistente (los .mod subidos por el wire). Cabe en 2 MB.
+# Tabla de particiones — firmware BasicPlus ESP32-S3 (H9: bpenv + bpdata).
+# factory 1M | bpenv (env A/B, 32K) | bpdata (zona de datos FS+Packs, el resto).
+# El firmware busca "bpdata"; el limite FS|Packs vive en el env (un mando). Cabe en 2 MB.
 #
 # Name,     Type, SubType,  Offset,    Size,     Flags
 nvs,        data, nvs,      0x9000,    0x6000,
 phy_init,   data, phy,      0xf000,    0x1000,
 factory,    app,  factory,  0x10000,   0x100000,
-bpfs,       data, 0x40,     0x110000,  0x40000,
+bpenv,      data, 0x41,     0x110000,  0x8000,
+bpdata,     data, 0x40,     0x118000,  0xE8000,

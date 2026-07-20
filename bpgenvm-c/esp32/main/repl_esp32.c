@@ -23,6 +23,7 @@
 #include "bpvm_rtc.h"        /* H14 — TIME del wire → RTC (bpvm_rtc_set_now_ms) */
 #include "bpvm_pico.h"       /* paso 4 cierre — bpvm_pico_reset_cause (INFO) */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
+#include "board_mgr_esp32.h" /* H9: gestión de placa (STATE/ENV/PART) + board_boot_status */
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -570,6 +571,30 @@ static void handle_request(const char* line, int len) {
     if (strcmp(type, "INFO")  == 0) { handle_info(id, &obj);  return; }
     if (strcmp(type, "PING")  == 0) { handle_ping(id, &obj);  return; }
     if (strcmp(type, "RESET") == 0) { handle_reset(id, &obj); return; }
+    /* H9 — gestión de placa (env + particiones): mismo núcleo que boardsim/Pico. */
+    if (strcmp(type, "STATE") == 0
+        || strncmp(type, "ENV_", 4) == 0
+        || strncmp(type, "PART_", 5) == 0) {
+        board_mgr_esp32_handle(id, &obj, type, s_put_buf, sizeof s_put_buf);
+        return;
+    }
+    /* H9 — gating por estado REAL del boot: sin FS (estado<2) los comandos de
+     * fichero → NOT_READY; RUN necesita la VM (estado 3). "Sin partición, nada
+     * con el sistema de ficheros" (Eduardo). */
+    {
+        const bpvm_boot_status_t* bs = board_boot_status();
+        int is_fs = strcmp(type, "LIST") == 0 || strcmp(type, "STAT") == 0
+                 || strcmp(type, "GET")  == 0 || strcmp(type, "PUT")  == 0
+                 || strcmp(type, "DEL")  == 0;
+        if (is_fs && bs->state < BPVM_BOOT_FS) {
+            wire_v1_send_error(id, "NOT_READY", "FS no disponible: configurar particiones");
+            return;
+        }
+        if (strcmp(type, "RUN") == 0 && bs->state < BPVM_BOOT_APP) {
+            wire_v1_send_error(id, "NOT_READY", "VM no disponible en el estado actual del boot");
+            return;
+        }
+    }
     if (strcmp(type, "LIST")  == 0) { handle_list(id, &obj);  return; }
     if (strcmp(type, "STAT")  == 0) { handle_stat(id, &obj);  return; }
     if (strcmp(type, "GET")   == 0) { handle_get(id, &obj);   return; }

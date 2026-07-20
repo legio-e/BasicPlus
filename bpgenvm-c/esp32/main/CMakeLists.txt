@@ -11,6 +11,7 @@ idf_component_register(
         "gpio_esp32.c"
         "esp32_mods.c"
         "json_min.c"
+        "board_mgr_esp32.c"           # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART)
         # --- core VM (portable C99) ---
         "../../src/bpvm.c"
         "../../src/loader.c"
@@ -22,6 +23,12 @@ idf_component_register(
         "../../third_party/littlefs/lfs.c"        # H2: motor littlefs v2.11.3 (in-tree)
         "../../third_party/littlefs/lfs_util.c"
         "../../src/crc32.c"            # paso 4 cierre: CRC del FS en LS (== java.util.zip.CRC32)
+        # --- H9 kernel por capas (portable C99, host-testable) ---
+        "../../src/bpvm_env.c"         # H9: bloque de env A/B
+        "../../src/bpvm_part.c"        # H9: particiones (FS+Packs, un mando)
+        "../../src/bpvm_boot.c"        # H9: maquina de estados del arranque
+        "../../src/bpvm_bmgr.c"        # H9: board manager (compone env+part)
+        "../../src/bpvm_bmgr_wire.c"   # H9: nucleo del protocolo STATE/ENV/PART
         "../../src/net.c"              # H11 (#241): facade Net — sin backend hasta H11.c (lwIP) → RuntimeError atrapable
         "../../src/link.c"
         "../../src/scheduler.c"

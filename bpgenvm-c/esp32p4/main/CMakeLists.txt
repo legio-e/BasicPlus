@@ -25,6 +25,7 @@ idf_component_register(
         "gui_display_dsi.c"                   # G3: display MIPI-DSI (panel EK79007 + backlight LEDC)
         "../../esp32/main/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
         "../../esp32/main/json_min.c"         # VM.3: parser JSON del wire (C portable)
+        "../../esp32/main/board_mgr_esp32.c"  # H9: gestion de placa (env bpenv + climb + STATE/ENV/PART) — compartido S3
         "../../esp32/main/platform_esp32.c"
         "../../esp32/main/gpio_esp32.c"       # H14: backends HW del P4 = REÚSO del S3 (GPIO/UART/SPI/I2C, ESP-IDF estándar)
         "../../esp32/main/fs_lfs_esp32.c"    # H2-B3: littlefs (reutilizado del S3) — reemplaza fs_ram.c
@@ -40,6 +41,12 @@ idf_component_register(
         "../../third_party/littlefs/lfs.c"    # H2: motor littlefs v2.11.3 (in-tree)
         "../../third_party/littlefs/lfs_util.c"
         "../../src/crc32.c"                   # paso 4 cierre: CRC del FS en LS (== java.util.zip.CRC32)
+        # --- H9 kernel por capas (portable C99, host-testable) ---
+        "../../src/bpvm_env.c"                # H9: bloque de env A/B
+        "../../src/bpvm_part.c"               # H9: particiones (FS+Packs, un mando)
+        "../../src/bpvm_boot.c"               # H9: maquina de estados del arranque
+        "../../src/bpvm_bmgr.c"               # H9: board manager (compone env+part)
+        "../../src/bpvm_bmgr_wire.c"          # H9: nucleo del protocolo STATE/ENV/PART
         "../../src/net.c"
         "../../src/link.c"
         "../../src/scheduler.c"

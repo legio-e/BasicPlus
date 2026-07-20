@@ -30,25 +30,26 @@
 
 #define ESP_FS_BLOCK_SIZE   4096u          /* sector de borrado de la flash SPI */
 
-static const esp_partition_t* s_part = NULL;
+static const esp_partition_t* s_part = NULL;   /* particion vendor "bpdata" (FS+Packs) */
+static uint32_t s_fs_offset = 0;   /* H9: inicio del sub-rango FS DENTRO de bpdata (relativo) */
 
 static int esp_bd_read(const struct lfs_config* c, lfs_block_t block,
                        lfs_off_t off, void* buffer, lfs_size_t size) {
     (void) c;
-    return (esp_partition_read(s_part, block * ESP_FS_BLOCK_SIZE + off,
+    return (esp_partition_read(s_part, s_fs_offset + block * ESP_FS_BLOCK_SIZE + off,
                                buffer, size) == ESP_OK) ? 0 : LFS_ERR_IO;
 }
 
 static int esp_bd_prog(const struct lfs_config* c, lfs_block_t block,
                        lfs_off_t off, const void* buffer, lfs_size_t size) {
     (void) c;
-    return (esp_partition_write(s_part, block * ESP_FS_BLOCK_SIZE + off,
+    return (esp_partition_write(s_part, s_fs_offset + block * ESP_FS_BLOCK_SIZE + off,
                                 buffer, size) == ESP_OK) ? 0 : LFS_ERR_IO;
 }
 
 static int esp_bd_erase(const struct lfs_config* c, lfs_block_t block) {
     (void) c;
-    return (esp_partition_erase_range(s_part, block * ESP_FS_BLOCK_SIZE,
+    return (esp_partition_erase_range(s_part, s_fs_offset + block * ESP_FS_BLOCK_SIZE,
                                       ESP_FS_BLOCK_SIZE) == ESP_OK) ? 0 : LFS_ERR_IO;
 }
 
@@ -73,10 +74,16 @@ static struct lfs_config s_cfg;   /* debe sobrevivir (littlefs guarda el ptr) */
 #define FS_GET_SCRATCH_BYTES  (64u * 1024u)
 static uint8_t s_get_scratch[FS_GET_SCRATCH_BYTES] __attribute__((aligned(8)));
 
-fs_status_t fs_init(void) {
+fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
+    /* H9: la zona de datos es la particion vendor "bpdata"; la REGION FS es su
+     * sub-rango [fs_offset, fs_offset+fs_size). El tamaño lo define el env
+     * (bpvm_part, un mando); aqui solo se monta. Antes montaba "bpfs" entera. */
     s_part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
-                                      ESP_PARTITION_SUBTYPE_ANY, "bpfs");
-    if (!s_part) return FS_ERR_BAD_FLASH;   /* sin partición → sin FS */
+                                      ESP_PARTITION_SUBTYPE_ANY, "bpdata");
+    if (!s_part) return FS_ERR_BAD_FLASH;   /* sin particion de datos → sin FS */
+    if (fs_size == 0 || (uint64_t) fs_offset + fs_size > (uint64_t) s_part->size)
+        return FS_ERR_BAD_FLASH;            /* region fuera de bpdata */
+    s_fs_offset = fs_offset;
 
     memset(&s_cfg, 0, sizeof(s_cfg));
     s_cfg.read  = esp_bd_read;
@@ -86,7 +93,7 @@ fs_status_t fs_init(void) {
     s_cfg.read_size      = 256;
     s_cfg.prog_size      = 256;
     s_cfg.block_size     = ESP_FS_BLOCK_SIZE;                 /* 4096 */
-    s_cfg.block_count    = s_part->size / ESP_FS_BLOCK_SIZE;
+    s_cfg.block_count    = fs_size / ESP_FS_BLOCK_SIZE;
     s_cfg.cache_size     = 256;                              /* == BPVM_FS_LFS_CACHE */
     s_cfg.lookahead_size = 64;
     s_cfg.block_cycles   = 500;
