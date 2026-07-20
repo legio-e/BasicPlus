@@ -254,6 +254,14 @@ public final class Main {
                 boolean ok = compileFull(mainBp, ctx, /*depth*/0);
                 boolean success = ok && ctx.totalErrors == 0;
                 if (success && ctx.pruneBpi) pruneWrittenBpi(ctx);
+                // H3 Packs: si el proyecto pide out:pack, tras el build correcto
+                // empaquetamos los .mod/.mdn del outDir + resources en un pack
+                // ejecutable (el manifest reusa `main`). Si falla, IOException →
+                // lo caza el catch de abajo.
+                if (success && "pack".equals(proj.out)) {
+                    Path packPath = PackStep.buildPack(proj);
+                    System.out.println("pack generado: " + packPath);
+                }
                 System.exit(success ? 0 : 2);
             } catch (IOException ex) {
                 System.err.println("error proyecto: " + ex.getMessage());

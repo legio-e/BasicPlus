@@ -66,6 +66,11 @@ public final class BpBuild {
      *  .mdn PIC para ambos). Futuro (V4): "esp32" (Xtensa / RISC-V). */
     public String aotTarget = "arm";
 
+    /** Salida del build (H3 Packs): "normal" (default) o "pack". En "pack", tras
+     *  el build normal se empaquetan los .mod/.mdn del outDir + los resources en
+     *  un pack EJECUTABLE (el `main` va al manifest). */
+    public String out = "normal";
+
     /**
      * Carga y valida un .bpbuild desde disco. Lanza IOException si:
      *   - el JSON está malformado;
@@ -150,6 +155,17 @@ public final class BpBuild {
             if (en instanceof Boolean) b.aotEnabled = (Boolean) en;
             Object tg = aot.get("target");
             if (tg instanceof String && !((String) tg).isEmpty()) b.aotTarget = ((String) tg).trim();
+        }
+
+        // out: opcional, "normal" (default) | "pack"
+        Object outVal = map.get("out");
+        if (outVal != null) {
+            if (!(outVal instanceof String))
+                throw new IOException(file + ": 'out' debe ser string");
+            String o = ((String) outVal).trim().toLowerCase();
+            if (!o.equals("normal") && !o.equals("pack"))
+                throw new IOException(file + ": 'out' debe ser 'normal' o 'pack', no '" + o + "'");
+            b.out = o;
         }
         return b;
     }

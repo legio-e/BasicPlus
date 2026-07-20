@@ -32,11 +32,29 @@
             <artifactId>bpgenvm</artifactId>
             <version>1.0</version>
         </dependency>
+        <!-- Pack.jar (H3): el compilador arma la lista y llama a la librería del
+             formato para producir el pack cuando el proyecto pide out:pack. -->
+        <dependency>
+            <groupId>basicplus</groupId>
+            <artifactId>pack</artifactId>
+            <version>1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <finalName>basicplus-frontend</finalName>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
