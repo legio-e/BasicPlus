@@ -109,7 +109,9 @@ bpvm_part_err_t bpvm_bmgr_part_apply(bpvm_bmgr_t* bm, uint32_t sector,
         if (o + 1 > cap) return BPVM_PART_ERR_OVERFLOW;
         out[o++] = '\n';
     }
-    for (int i = 0; i < BPVM_PART_COUNT; i++) {
+    /* Solo las KNOBS (part.<knob>.size); la última (packs) es el RESTO, se deriva
+     * al leer → no se guarda (una sola fuente de verdad = el límite). */
+    for (int i = 0; i < BPVM_PART_COUNT - 1; i++) {
         int w = snprintf(out + o, cap - o, "part.%s.size=%lu\n",
                          bpvm_part_name((bpvm_part_kind_t) i), (unsigned long) sizes[i]);
         if (w < 0 || (size_t) w >= cap - o) return BPVM_PART_ERR_OVERFLOW;

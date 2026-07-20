@@ -93,14 +93,14 @@ int main(void) {
     /* las variables de entorno SIGUEN ahí (apply no las tocó) */
     CHECK(bpvm_bmgr_env_get(&bm, "board", v, sizeof v) > 0 && !strcmp(v, "Pico2"),
           "apply conserva las variables de entorno");
-    CHECK(bpvm_bmgr_env_count(&bm) == 6, "6 vars: 4 de entorno + 2 part.<n>.size");
+    CHECK(bpvm_bmgr_env_count(&bm) == 5, "5 vars: 4 de entorno + 1 part.fs.size (packs deriva)");
 
     /* --- 4. EDITAR una variable existente (psram 0→1) persiste y no rompe nada --- */
     CHECK(bpvm_bmgr_env_set(&bm, "psram", "1", &slot) == 0, "edita psram 0→1");
     CHECK(bpvm_bmgr_env_get(&bm, "psram", v, sizeof v) > 0 && !strcmp(v, "1"), "psram=1 persiste");
     CHECK(bpvm_bmgr_part_layout(&bm, SECT, &lay, &bad) == BPVM_PART_OK,
           "las particiones siguen intactas tras editar entorno");
-    CHECK(bpvm_bmgr_env_count(&bm) == 6, "sigue habiendo 6 (edición, no alta)");
+    CHECK(bpvm_bmgr_env_count(&bm) == 5, "siguen 5 (edición, no alta)");
 
     /* --- 5. VALIDACIÓN fallida NO toca el env (transaccional) --- */
     {
@@ -108,7 +108,7 @@ int main(void) {
         bpvm_part_layout_t before;
         bpvm_bmgr_part_layout(&bm, SECT, &before, &bad);
 
-        uint32_t bad_sizes[BPVM_PART_COUNT] = { 0x300000u, 0x300000u }; /* 6 MB > 3 MB avail */
+        uint32_t bad_sizes[BPVM_PART_COUNT] = { 0x400000u, 0u }; /* FS 4M > 3M avail (la knob no cabe) */
         int wr = -9;
         bpvm_part_err_t e = bpvm_bmgr_part_apply(&bm, SECT, bad_sizes, &bad, &wr);
         CHECK(e == BPVM_PART_ERR_OVERFLOW, "PART_APPLY inválido → OVERFLOW");
@@ -147,10 +147,10 @@ int main(void) {
         static uint8_t A2[SECT], B2[SECT], S2[SECT];
         memset(A2, 0xFF, SECT); memset(B2, 0xFF, SECT);
         bm2.a = A2; bm2.b = B2; bm2.scratch = S2;
-        uint32_t big[BPVM_PART_COUNT] = { 0x100000u, 0x600000u };  /* 1M + 6M = 7M */
+        uint32_t big[BPVM_PART_COUNT] = { 0x600000u, 0u };  /* FS 6M (la knob) */
         int wr;
         CHECK(bpvm_bmgr_part_apply(&bm2, SECT, big, &bad, &wr) == BPVM_PART_ERR_OVERFLOW,
-              "#292: apply de 7M con imagen de 4M → OVERFLOW (aunque la flash real sea 16M)");
+              "#292: FS de 6M con imagen de 4M → OVERFLOW (aunque la flash real sea 16M)");
     }
 
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);

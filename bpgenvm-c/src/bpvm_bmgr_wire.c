@@ -155,10 +155,13 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         return s.ok ? (int) s.off : -1;
     }
     if (!strcmp(type, "PART_APPLY")) {
+        /* Solo las KNOBS son obligatorias (hoy FS); la última (packs) es EL RESTO,
+         * derivada → su valor es opcional y se ignora (el cliente puede mandarlo o no). */
         uint32_t sizes[BPVM_PART_COUNT];
         for (int i = 0; i < BPVM_PART_COUNT; i++) {
-            if (req->part_sizes[i] < 0) return reply_error(out, cap, id, "INVALID_PARAM", "falta tamano de una particion");
-            sizes[i] = (uint32_t) req->part_sizes[i];
+            if (i < BPVM_PART_COUNT - 1 && req->part_sizes[i] < 0)
+                return reply_error(out, cap, id, "INVALID_PARAM", "falta el tamano del FS");
+            sizes[i] = (req->part_sizes[i] >= 0) ? (uint32_t) req->part_sizes[i] : 0u;
         }
         int bad = -1, slot = -1;
         bpvm_part_err_t e = bpvm_bmgr_part_apply(bm, bm->sector, sizes, &bad, &slot);

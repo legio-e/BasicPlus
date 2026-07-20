@@ -53,10 +53,16 @@ bpvm_part_err_t bpvm_part_layout_from_sizes(const uint32_t sizes[BPVM_PART_COUNT
     out->usable_flash = usable_flash;
     out->complete = 1;
 
-    uint32_t off = base;
+    /* La zona de DATOS [base, usable) alineada al sector es UNA sola región que se
+     * reparten FS y Packs (Eduardo 19-jul: "FS + Packs es uno y el límite entre los
+     * dos lo cambiamos cuando queramos"). El único MANDO es el tamaño de las knobs
+     * (todas menos la última = hoy solo FS); la ÚLTIMA (packs) se lleva EL RESTO. */
     uint32_t avail = (usable_flash > base) ? (usable_flash - base) : 0;
-    uint32_t total = 0;
-    for (int i = 0; i < BPVM_PART_COUNT; i++) {
+    avail = align_down(avail, sector);
+
+    uint32_t off  = base;
+    uint32_t used = 0;
+    for (int i = 0; i < BPVM_PART_COUNT - 1; i++) {   /* KNOBS */
         uint32_t sz = sizes[i];
         out->parts[i].kind   = (bpvm_part_kind_t) i;
         out->parts[i].offset = off;      /* offset DERIVADO: contiguo, en orden */
@@ -66,13 +72,21 @@ bpvm_part_err_t bpvm_part_layout_from_sizes(const uint32_t sizes[BPVM_PART_COUNT
             if (bad_idx) *bad_idx = i;
             return BPVM_PART_ERR_UNALIGNED;
         }
-        /* la suma no debe pasarse (cuidado con el desbordamiento de u32) */
-        if (sz > avail - total) {   /* total<=avail siempre aquí, así que avail-total válido */
+        if (sz > avail - used) {   /* used<=avail aquí, así que avail-used válido */
             if (bad_idx) *bad_idx = i;
             return BPVM_PART_ERR_OVERFLOW;
         }
-        total += sz;
-        off   += sz;
+        used += sz;
+        off  += sz;
+    }
+    /* La ÚLTIMA (packs) = EL RESTO. Derivada: no la fija el usuario, no puede
+     * contradecir a las knobs ni desbordar (used<=avail garantizado). Alineada
+     * (avail y used lo son). Puede ser 0 si el usuario dio todo a las knobs. */
+    {
+        int last = BPVM_PART_COUNT - 1;
+        out->parts[last].kind   = (bpvm_part_kind_t) last;
+        out->parts[last].offset = off;
+        out->parts[last].size   = avail - used;
     }
     return BPVM_PART_OK;
 }
@@ -83,7 +97,9 @@ bpvm_part_err_t bpvm_part_layout(const bpvm_env_t* env, uint32_t base,
     if (bad_idx) *bad_idx = -1;
     if (!out) return BPVM_PART_ERR_ZERO;
     uint32_t sizes[BPVM_PART_COUNT];
-    for (int i = 0; i < BPVM_PART_COUNT; i++) {
+    /* Solo las KNOBS viven en el env (part.<knob>.size). La última (packs) se
+     * DERIVA → ni se lee ni se guarda. Falta una knob → virgen (MISSING). */
+    for (int i = 0; i < BPVM_PART_COUNT - 1; i++) {
         char key[8 + 16];
         /* key = "part.<name>.size" */
         snprintf(key, sizeof key, "part.%s.size", PART_NAMES[i]);
@@ -95,6 +111,7 @@ bpvm_part_err_t bpvm_part_layout(const bpvm_env_t* env, uint32_t base,
         }
         sizes[i] = (uint32_t) sz;
     }
+    sizes[BPVM_PART_COUNT - 1] = 0;   /* derivada; from_sizes la recalcula (resto) */
     return bpvm_part_layout_from_sizes(sizes, base, usable_flash, sector, out, bad_idx);
 }
 
@@ -118,7 +135,8 @@ int bpvm_part_sizes_to_payload(const uint32_t sizes[BPVM_PART_COUNT],
                                char* buf, size_t cap) {
     if (!sizes || !buf || cap == 0) return -1;
     size_t off = 0;
-    for (int i = 0; i < BPVM_PART_COUNT; i++) {
+    /* Solo las KNOBS (part.<knob>.size); la última (packs) se deriva → no se guarda. */
+    for (int i = 0; i < BPVM_PART_COUNT - 1; i++) {
         int w = snprintf(buf + off, cap - off, "part.%s.size=%lu\n",
                          PART_NAMES[i], (unsigned long) sizes[i]);
         if (w < 0 || (size_t) w >= cap - off) return -1;

@@ -1,15 +1,20 @@
 /*
- * bpvm_part.h — H9: tabla de particiones (estado 1). Modelo (Eduardo, 18-jul):
+ * bpvm_part.h — H9: tabla de particiones (estado 1). Modelo (Eduardo, 18/19-jul):
  * las particiones son un CONJUNTO FIJO y ORDENADO (las que son, en su orden); el
- * usuario NO las crea/borra — solo edita TAMAÑOS. Por eso los OFFSETS se DERIVAN
- * (contiguos desde el fin de la zona reservada) y NO se guardan: no pueden
- * contradecir al orden, y no hay solapes por construcción. El env guarda SOLO
- * los tamaños (`part.fs.size`, `part.packs.size`); una sola fuente de verdad.
+ * usuario NO las crea/borra. Los OFFSETS se DERIVAN (contiguos desde la base) → no
+ * pueden contradecir al orden, sin solapes por construcción.
  *
- * La primera vez (env sin tamaños): se proponen defaults (bpvm_part_defaults), el
- * usuario ajusta y confirma → se escriben `part.<n>.size` en el env (via
- * bpvm_env_payload_set). Es la versión portable/host-testable que subsumirá el
- * bp_ptable_t binario Pico (fs_lfs_pico.c, B2.b). Ver docs/H9_KERNEL_CAPAS.md.
+ * REFINADO 19-jul: FS + Packs son UNA región de datos y "el límite entre los dos lo
+ * cambiamos cuando queramos". Por eso el único MANDO es el tamaño de las KNOBS (todas
+ * MENOS la última = hoy solo FS); la ÚLTIMA (packs) se lleva EL RESTO — es DERIVADA,
+ * ni se edita ni se guarda. El env guarda SOLO las knobs (`part.fs.size`); una sola
+ * fuente de verdad = el límite, imposible de dejar inconsistente. `base`/`usable` los
+ * pone el LLAMADOR por plataforma: RP2350 = BP_PART_BASE + JEDEC/clamp #292; ESP32 =
+ * offset+size de la partición vendor de datos (bpdata). Núcleo idéntico en las dos.
+ *
+ * La primera vez (env sin la knob): se proponen defaults (bpvm_part_defaults), el
+ * usuario ajusta el FS y confirma → se escribe `part.fs.size` en el env. Es la
+ * versión portable/host-testable que subsumió el bp_ptable_t Pico. Ver docs/H9.
  */
 #ifndef BPVM_PART_H
 #define BPVM_PART_H
