@@ -16,6 +16,8 @@
 #include "stm32_repl.h"
 #include "stm32_wire.h"
 #include "stm32_fs.h"
+#include "board_mgr_stm32.h"  /* H9 — arranque escalonado + STATE/ENV/PART */
+#include "log.h"              /* log persistente de diagnóstico (espejo del Pico) */
 #include "bpvm_fs.h"          /* H19 — base-dir / main module por proyecto */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "stm32_mods.h"     /* stdlib core embebida (pre-install /lib) */
@@ -242,11 +244,22 @@ static void handle_format(long id, json_obj_t* obj) {
     reply_empty("FORMAT_REPLY", id);
 }
 
+/* Sink que escapa cada chunk del log y lo escribe RAW → streaming como el Pico
+ * (header + chunks + cierre), sin buffer para el log entero. */
+static char s_log_esc[1600];   /* chunk de 256 B escapado (peor caso ~6x + NUL) */
+static void log_chunk_sink(const char* data, size_t len, void* user) {
+    (void) user;
+    if (stm32_wire_json_escape(data, len, s_log_esc, sizeof(s_log_esc)) < 0) return;
+    stm32_wire_write(s_log_esc, strlen(s_log_esc));
+}
+
 static void handle_log_dump(long id) {
-    char buf[96];
-    int n = snprintf(buf, sizeof(buf),
-        "{\"type\":\"LOG_DUMP_REPLY\",\"id\":%ld,\"text\":\"\"}", id);
-    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    char hdr[64];
+    int n = snprintf(hdr, sizeof(hdr),
+        "{\"type\":\"LOG_DUMP_REPLY\",\"id\":%ld,\"text\":\"", id);
+    if (n > 0) stm32_wire_write(hdr, (size_t) n);
+    log_dump(log_chunk_sink, NULL);
+    stm32_wire_write("\"}\n", 3);
 }
 
 /* ---- TERMINAL: RUN + streaming ---- */
@@ -512,6 +525,32 @@ static void dispatch(int first_char) {
         stm32_wire_send_error(id, "PROTOCOL_ERROR", "missing type"); return;
     }
 
+    /* H9 — gestión de placa (STATE/ENV_x/PART_x): el host configura el env/particiones
+     * cuando el arranque no llegó al FS. Las replies las pone bpvm_bmgr_wire (idénticas
+     * al boardsim y a las otras placas). s_put_buf (32 KB) presta el scratch. */
+    if (strcmp(type, "STATE") == 0
+        || strncmp(type, "ENV_", 4) == 0
+        || strncmp(type, "PART_", 5) == 0) {
+        board_mgr_stm32_handle(id, &obj, type, s_put_buf, sizeof s_put_buf);
+        return;
+    }
+    /* H9 — gating: sin FS montado, las ops de fichero no valen; sin VM, el RUN no.
+     * HELLO/INFO/STATE/PING/TIME/RESET van SIEMPRE (para conectar y configurar). */
+    {
+        int st = (int) board_boot_status()->state;
+        int is_fs = (strcmp(type, "LIST")  == 0 || strcmp(type, "STAT") == 0 || strcmp(type, "DF")  == 0
+                  || strcmp(type, "GET")   == 0 || strcmp(type, "PUT")  == 0 || strcmp(type, "DEL") == 0
+                  || strcmp(type, "MKDIR") == 0 || strcmp(type, "FORMAT") == 0);
+        if (is_fs && st < BPVM_BOOT_FS) {
+            stm32_wire_send_error(id, "NOT_READY", "FS no montado (configura particiones)");
+            return;
+        }
+        if (strcmp(type, "RUN") == 0 && st < BPVM_BOOT_APP) {
+            stm32_wire_send_error(id, "NOT_READY", "VM no lista (configura particiones)");
+            return;
+        }
+    }
+
     if      (strcmp(type, "HELLO")     == 0) handle_hello(id);
     else if (strcmp(type, "INFO")      == 0) handle_info(id);
     else if (strcmp(type, "PING")      == 0) reply_empty("PONG", id);
@@ -534,8 +573,14 @@ static void dispatch(int first_char) {
     else if (strcmp(type, "KILL")      == 0)
         stm32_wire_send_error(id, "NO_SESSION", "no hay programa en ejecución");
     else if (strcmp(type, "LOG_DUMP")  == 0) handle_log_dump(id);
-    else if (strcmp(type, "LOG_CLEAR") == 0) reply_empty("LOG_CLEAR_REPLY", id);
+    else if (strcmp(type, "LOG_CLEAR") == 0) {
+        log_clear_ram();
+        log_clear_flash();
+        reply_empty("LOG_CLEAR_REPLY", id);
+    }
     else if (strcmp(type, "RESET")     == 0) {
+        log_printf("RESET (wire): reinicio");
+        log_flush();                 /* persiste la sesión antes de reiniciar */
         reply_empty("RESET_REPLY", id);
         HAL_Delay(50);
         NVIC_SystemReset();
@@ -547,16 +592,25 @@ static void dispatch(int first_char) {
 }
 
 void stm32_repl_run(void) {
-    /* H9.3 — restaura el FS persistido (los ficheros de /app sobreviven al
-     * reset). /lib NO se restaura aquí: lo re-instala el embebido a continuación
-     * (stdlib siempre fresca del firmware actual). */
-    fs_load();
-    /* H9.4 — stdlib core embebida en /lib + backends de HW (GPIO + info de MCU),
-     * antes de atender el wire: el primer RUN ya resuelve imports y controla
-     * pines reales. */
-    stm32_mods_install();
-    stm32_hw_register();
-    stm32_fs_register_bpvm();   /* #247 — readFile/writeFile/... sobre el FS */
+    /* H9 — arranque ESCALONADO: identidad → particiones del env → FS → VM, parando
+     * en la 1ª capa que falla. Sin particiones/FS el climb se queda abajo y el host
+     * conduce (Gestión de placa: proponer defaults → aplicar → reset). Sustituye al
+     * fs_load() de región fija. */
+    log_init();                     /* recupera el log de la sesión anterior (post-mortem) */
+    board_mgr_stm32_boot();
+    const bpvm_boot_status_t* bs = board_boot_status();
+    log_printf("boot: estado %d (%s)%s%s", (int) bs->state, bpvm_boot_state_name(bs->state),
+               bs->degraded ? " DEGRADED: " : "", bs->degraded ? bs->reason : "");
+    /* stdlib core embebida en /lib SOLO con el FS montado (si el climb no llegó al
+     * FS, no hay dónde instalarla; el host configura particiones primero). */
+    if (bs->state >= BPVM_BOOT_FS) {
+        stm32_mods_install();       /* stdlib core -> /lib (si-ausente) */
+        stm32_fs_register_bpvm();   /* #247 — readFile/writeFile/... sobre el FS */
+        log_printf("fs: %u/%u bytes usados", (unsigned) fs_used_bytes(),
+                   (unsigned) fs_total_bytes());
+    }
+    stm32_hw_register();            /* backends de HW (GPIO, info de MCU) — siempre */
+    log_flush();                    /* persiste la historia del boot (post-mortem tras corte) */
 
     /* FIFO RX/TX (8 bytes): absorbe el hueco de procesado entre la línea JSON
      * y los bytes bulk que la siguen → PUT fiable aunque la CPU vaya lenta.

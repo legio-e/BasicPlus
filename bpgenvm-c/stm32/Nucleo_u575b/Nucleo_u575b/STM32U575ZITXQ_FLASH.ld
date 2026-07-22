@@ -43,17 +43,31 @@ _Min_Heap_Size = 0x4000;	/* required amount of heap  */
 _Min_Stack_Size = 0x1000;	/* required amount of stack */
 
 /* Memories definition */
-/* H9.3: los últimos 128 KB de la flash (FS_FLASH) se reservan para el FS
- * persistente (stm32_fs.c). FLASH se acorta a 1920 KB para que el enlazador
- * NUNCA coloque código/datos ahí → un fallo de escritura del FS no puede
- * corromper el programa (regiones disjuntas). */
+/* H9 — layout por capas (Eduardo): [firmware][log][env A/B][datos FS+Packs].
+ *   FLASH   1016K  → firmware (el enlazador SOLO coloca secciones aquí).
+ *   BP_LOG     8K  → log persistente de diagnóstico (1 página), SIN secciones.
+ *   BP_ENV    16K  → env A/B (2 páginas de 8K), SIN secciones.
+ *   BP_DATA 1008K  → zona de datos FS+Packs (el env reparte FS|Packs), SIN secciones.
+ * BP_LOG/BP_ENV/BP_DATA no llevan secciones → el flasheo no los escribe → sobreviven
+ * al reflasheo (salvo borrado masivo). Disjuntas del firmware → un fallo de escritura
+ * del log/FS/env NUNCA corrompe el programa. El log sale del hueco que cede el firmware
+ * al encoger FLASH 1024K→1016K (el firmware usa ~320K, sobra de sobra). */
 MEMORY
 {
-  RAM	(xrw)	: ORIGIN = 0x20000000,	LENGTH = 768K
-  SRAM4	(xrw)	: ORIGIN = 0x28000000,	LENGTH = 16K
-  FLASH	(rx)	: ORIGIN = 0x08000000,	LENGTH = 1920K
-  FS_FLASH (r)	: ORIGIN = 0x081E0000,	LENGTH = 128K   /* FS persistente; sin secciones */
+  RAM	  (xrw) : ORIGIN = 0x20000000, LENGTH = 768K
+  SRAM4	  (xrw) : ORIGIN = 0x28000000, LENGTH = 16K
+  FLASH	  (rx)  : ORIGIN = 0x08000000, LENGTH = 1016K
+  BP_LOG  (r)   : ORIGIN = 0x080FE000, LENGTH = 8K
+  BP_ENV  (r)   : ORIGIN = 0x08100000, LENGTH = 16K
+  BP_DATA (r)   : ORIGIN = 0x08104000, LENGTH = 1008K
 }
+
+/* H9 — límites reales para la red anti-divergencia de board_mgr_stm32.c: el env
+ * debe caer entre el fin del firmware y el inicio de los datos, o las escrituras
+ * de env se RECHAZAN (nunca tocar código). Deben cuadrar con flash_layout_stm32.h. */
+__bp_flash_end  = ORIGIN(FLASH) + LENGTH(FLASH);   /* 0x080FE000 (fin del código; el log ocupa la página siguiente) */
+__bp_log_start  = ORIGIN(BP_LOG);                  /* 0x080FE000 (sector del log persistente) */
+__bp_part_start = ORIGIN(BP_DATA);                 /* 0x08104000 */
 
 /* Sections */
 SECTIONS
