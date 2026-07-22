@@ -46,8 +46,23 @@ _Min_Stack_Size = 0x4000; /* 16 KB: el interprete BP corre sobre este stack (V3/
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 3008K
-  FLASH    (rx)    : ORIGIN = 0x08000000,   LENGTH = 3584K   /* 4 MB - 512 KB reservados al FS @0x08380000 (board.h/stm32_fs.c) */
+  FLASH    (rx)    : ORIGIN = 0x08000000,   LENGTH = 1528K
+  BP_LOG   (r)    : ORIGIN = 0x0817E000,   LENGTH = 8K
+  BP_ENV   (r)    : ORIGIN = 0x08180000,   LENGTH = 16K
+  BP_DATA  (r)    : ORIGIN = 0x08184000,   LENGTH = 2544K
 }
+
+/* H9 — layout por capas (Eduardo): [firmware][log][env A/B][datos FS+Packs].
+ *   FLASH   1528K -> firmware (LVGL + VM). El enlazador SOLO coloca secciones aqui.
+ *   BP_LOG     8K -> log persistente (1 pagina), SIN secciones.
+ *   BP_ENV    16K -> env A/B (2 paginas de 8K), SIN secciones.
+ *   BP_DATA 2544K -> datos FS+Packs (el env reparte FS|Packs), SIN secciones.
+ * BP_LOG/BP_ENV/BP_DATA sin secciones -> el flasheo no los graba -> sobreviven al
+ * reflasheo. El FS viejo @0x08380000 queda subsumido en BP_DATA. Cuadran con
+ * flash_layout_stm32.h (rama DK2). */
+__bp_flash_end  = ORIGIN(FLASH) + LENGTH(FLASH);   /* 0x0817E000 (fin del codigo; el log ocupa la pagina siguiente) */
+__bp_log_start  = ORIGIN(BP_LOG);                  /* 0x0817E000 (sector del log persistente) */
+__bp_part_start = ORIGIN(BP_DATA);                 /* 0x08184000 */
 
 /* Sections */
 SECTIONS

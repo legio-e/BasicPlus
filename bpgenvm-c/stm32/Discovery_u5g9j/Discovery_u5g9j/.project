@@ -47,5 +47,10 @@
 			<type>2</type>
 			<location>C:/lenguajes/pm/bpgenvm-c/third_party/lvgl/src</location>
 		</link>
+		<link>
+			<name>littlefs</name>
+			<type>2</type>
+			<location>C:/lenguajes/pm/bpgenvm-c/third_party/littlefs</location>
+		</link>
 	</linkedResources>
 </projectDescription>
