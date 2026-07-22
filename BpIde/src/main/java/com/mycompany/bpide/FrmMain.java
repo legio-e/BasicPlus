@@ -497,6 +497,10 @@ public class FrmMain extends javax.swing.JFrame
         miCompile.addActionListener(e -> doRun(false));
         jMenu3.add(miCompile);
 
+        JMenuItem miBuild = new JMenuItem("Build Project");   // H3: compila el proyecto + monta el pack (out:pack)
+        miBuild.addActionListener(e -> doBuildProject());
+        jMenu3.add(miBuild);
+
         JMenuItem miRun = new JMenuItem("Run");
         miRun.addActionListener(e -> doRun(true));
         jMenu3.add(miRun);
@@ -570,6 +574,7 @@ public class FrmMain extends javax.swing.JFrame
 
         // -- Centro: ejecución.
         group(tb, toolButton("Compile",       "Compilar",            e -> doRun(false)),
+                  toolButton("Build Proj",    "Construir el proyecto (+ pack si out:pack)", e -> doBuildProject()),
                   toolButton("Run",           "Ejecutar (VM local)", e -> doRun(true)),
                   toolButton("Run Window",    "Ver la ventana en el PC (VM-C nativa)", e -> doRunWindow()),
                   toolButton("Run on Device", "Ejecutar en placa",   e -> doRunOnPico()),
@@ -826,12 +831,14 @@ public class FrmMain extends javax.swing.JFrame
         JMenuItem miAddRes = new JMenuItem("Add File to Resources...");   // H12 (#260)
         JMenuItem miEndpoint = new JMenuItem("VM Endpoint...");
         JMenuItem miAot = new JMenuItem("AOT (toolchain)...");      // H12 Bloque B
+        JMenuItem miProps = new JMenuItem("Project Properties...");  // H3: out:pack + AOT
         miNew.addActionListener(e -> onNewProject());
         miOpen.addActionListener(e -> onOpenProject());
         miClose.addActionListener(e -> onCloseProject());
         miAddRes.addActionListener(e -> onAddFileToResources());
         miEndpoint.addActionListener(e -> onConfigureVmEndpoint());
         miAot.addActionListener(e -> onConfigureAot());
+        miProps.addActionListener(e -> onProjectProperties());
         menuProject.add(miNew);
         menuProject.add(miOpen);
         recentProjectsMenu = new javax.swing.JMenu("Recent Projects");
@@ -842,6 +849,7 @@ public class FrmMain extends javax.swing.JFrame
         menuProject.addSeparator();
         menuProject.add(miClose);
         menuProject.addSeparator();
+        menuProject.add(miProps);
         menuProject.add(miEndpoint);
         menuProject.add(miAot);
         // Insertar entre File y Edit. El JMenuBar tiene File, Edit, Run; queremos
@@ -1003,6 +1011,89 @@ public class FrmMain extends javax.swing.JFrame
                 + ", bpgenvm=" + (prefs.aotBpgenvmDir == null ? "(auto)" : prefs.aotBpgenvmDir) + "\n");
     }
 
+    /** H3/IDE — Propiedades del proyecto: editar `out` (checkbox pack) y AOT sin
+     *  tocar el .bpbuild a mano. Persiste vía BpBuild.save() (conserva rutas
+     *  relativas y campos ajenos; se pierden los comentarios //). */
+    private void onProjectProperties() {
+        if (currentProject == null || currentProjectFile == null) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "No hay proyecto abierto. Abre o crea un proyecto (.bpbuild).",
+                    "Propiedades del proyecto", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        javax.swing.JCheckBox cbPack = new javax.swing.JCheckBox(
+                "Empaquetar en un pack al construir (out:pack)", "pack".equals(currentProject.out));
+        javax.swing.JCheckBox cbAot = new javax.swing.JCheckBox(
+                "AOT: compilar 'native' a .mdn al subir al device", currentProject.aotEnabled);
+        javax.swing.JTextField tfTarget = new javax.swing.JTextField(currentProject.aotTarget, 8);
+
+        javax.swing.JPanel panel = new javax.swing.JPanel(new java.awt.GridBagLayout());
+        java.awt.GridBagConstraints c = new java.awt.GridBagConstraints();
+        c.insets = new java.awt.Insets(3, 3, 3, 3);
+        c.anchor = java.awt.GridBagConstraints.WEST;
+        c.gridx = 0; c.gridy = 0; c.gridwidth = 2;
+        panel.add(new javax.swing.JLabel("Proyecto: " + currentProject.main
+                + "   (" + currentProjectFile.getFileName() + ")"), c);
+        c.gridy = 1; panel.add(cbPack, c);
+        c.gridy = 2; panel.add(cbAot, c);
+        c.gridwidth = 1;
+        c.gridx = 0; c.gridy = 3; panel.add(new javax.swing.JLabel("     target AOT:"), c);
+        c.gridx = 1; c.gridy = 3; panel.add(tfTarget, c);
+
+        int res = javax.swing.JOptionPane.showConfirmDialog(this, panel, "Propiedades del proyecto",
+                javax.swing.JOptionPane.OK_CANCEL_OPTION, javax.swing.JOptionPane.PLAIN_MESSAGE);
+        if (res != javax.swing.JOptionPane.OK_OPTION) return;
+
+        currentProject.out        = cbPack.isSelected() ? "pack" : "normal";
+        currentProject.aotEnabled = cbAot.isSelected();
+        String tg = tfTarget.getText().trim();
+        if (!tg.isEmpty()) currentProject.aotTarget = tg;
+        try {
+            currentProject.save(currentProjectFile);
+            appendConsola("[ide] proyecto guardado: out=" + currentProject.out
+                    + ", aot=" + (currentProject.aotEnabled ? currentProject.aotTarget : "off") + "\n");
+        } catch (java.io.IOException ex) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "No se pudo guardar el .bpbuild: " + ex.getMessage(),
+                    "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /** H3/IDE — Build Project: construye el proyecto abierto (compila todo +
+     *  monta el pack si out:pack), por el MISMO camino que la CLI (buildProject).
+     *  Acción explícita de build de proyecto (sin ejecutar). */
+    private void doBuildProject() {
+        if (currentProject == null) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "No hay proyecto abierto. Abre o crea un proyecto (.bpbuild).",
+                    "Build Project", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        consolaArea.setText("");
+        errors.clear();
+        final basicplus.frontend.BpBuild proj = currentProject;
+        new SwingWorker<Void, String>() {
+            @Override protected Void doInBackground() {
+                publish("== construyendo proyecto " + proj.main
+                        + ("pack".equals(proj.out) ? " (out:pack)" : "") + " ==\n");
+                boolean ok = invokeWithCapture(() -> {
+                    try {
+                        return basicplus.frontend.Main.buildProject(proj, "mivm", /*pruneBpi*/ true);
+                    } catch (java.io.IOException ex) {
+                        System.err.println("build: " + ex.getMessage());
+                        return false;
+                    }
+                }, this::publish);
+                publish(ok ? "== build OK ==\n" : "== build falló ==\n");
+                return null;
+            }
+            @Override protected void process(List<String> chunks) {
+                for (String s : chunks) { appendConsola(s); parseAndAddError(s); }
+            }
+            @Override protected void done() { refreshProjectTree(); }   // H3: que el .pack aparezca en Output
+        }.execute();
+    }
+
     /** Pregunta al usuario: directorio del proyecto + nombre. Crea estructura:
      *  <projectDir>/<name>.bpbuild + src/<name>.bp + out/. */
     private void onNewProject() {
@@ -1130,8 +1221,8 @@ public class FrmMain extends javax.swing.JFrame
      * Reconstruye el árbol estilo NetBeans desde currentProject:
      *   <ProjectName> (root)
      *     ├─ Sources    (todos los .bp de sourceDir)
-     *     ├─ Output     (todos los .mod/.bpi de outDir, si existen)
-     *     └─ Dependencies (cada entrada de dependencies; si es dir, sus .mod/.bpi)
+     *     ├─ Output     (los .mod/.mdn/.pack de outDir, si existen)
+     *     └─ Dependencies (cada entrada de dependencies; si es dir, sus .mod/.mdn)
      */
     private void refreshProjectTree() {
         if (currentProject == null) return;
@@ -1177,7 +1268,8 @@ public class FrmMain extends javax.swing.JFrame
                 new javax.swing.tree.DefaultMutableTreeNode(new ProjectNode("Output", null));
         if (java.nio.file.Files.isDirectory(outDir)) {
             addFilesUnder(output, outDir, ".mod");
-            addFilesUnder(output, outDir, ".bpi");
+            addFilesUnder(output, outDir, ".mdn");    // AOT nativo (out:pack lo incluye)
+            addFilesUnder(output, outDir, ".pack");   // H3 Packs (el .bpi ya no existe: H6.a)
         }
         root.add(output);
 
@@ -1191,7 +1283,7 @@ public class FrmMain extends javax.swing.JFrame
                     new javax.swing.tree.DefaultMutableTreeNode(new ProjectNode(label, null));
             if (java.nio.file.Files.isDirectory(dp)) {
                 addFilesUnder(dn, dp, ".mod");
-                addFilesUnder(dn, dp, ".bpi");
+                addFilesUnder(dn, dp, ".mdn");
             }
             deps.add(dn);
         }
@@ -2198,10 +2290,27 @@ public class FrmMain extends javax.swing.JFrame
         new SwingWorker<Void, String>() {
             @Override
             protected Void doInBackground() {
-                publish("== compilando " + bpFile.getFileName() + " ==\n");
-                boolean ok = invokeWithCapture(() ->
-                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm", /*pruneBpi*/ true),
-                        this::publish);
+                // H3: en modo proyecto el build va por Main.buildProject (compila el
+                // proyecto entero + monta el pack si out:pack) — el MISMO camino que
+                // la CLI. Fichero suelto: compileFile de siempre.
+                final boolean ok;
+                if (currentProject != null) {
+                    publish("== construyendo proyecto " + currentProject.main
+                            + ("pack".equals(currentProject.out) ? " (out:pack)" : "") + " ==\n");
+                    ok = invokeWithCapture(() -> {
+                        try {
+                            return basicplus.frontend.Main.buildProject(currentProject, "mivm", /*pruneBpi*/ true);
+                        } catch (java.io.IOException ex) {
+                            System.err.println("build: " + ex.getMessage());
+                            return false;
+                        }
+                    }, this::publish);
+                } else {
+                    publish("== compilando " + bpFile.getFileName() + " ==\n");
+                    ok = invokeWithCapture(() ->
+                            basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm", /*pruneBpi*/ true),
+                            this::publish);
+                }
                 if (!ok) {
                     publish("== compilación falló ==\n");
                     return null;

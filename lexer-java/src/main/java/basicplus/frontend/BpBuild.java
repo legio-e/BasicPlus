@@ -71,6 +71,12 @@ public final class BpBuild {
      *  un pack EJECUTABLE (el `main` va al manifest). */
     public String out = "normal";
 
+    /** El objeto JSON tal cual se parseó (LinkedHashMap → conserva el orden de
+     *  claves). save() lo re-serializa tras actualizar los campos editables → se
+     *  conservan rutas relativas y campos no modelados; solo se pierden los
+     *  comentarios //. */
+    private Map<String, Object> raw;
+
     /**
      * Carga y valida un .bpbuild desde disco. Lanza IOException si:
      *   - el JSON está malformado;
@@ -88,6 +94,7 @@ public final class BpBuild {
         Map<String, Object> map = (Map<String, Object>) parsed;
 
         BpBuild b = new BpBuild();
+        b.raw = map;   // para save(): re-serializa esto conservando lo no editado
         b.sourcePath = file.toAbsolutePath().toString();
         Path fileDir = file.toAbsolutePath().getParent();
         if (fileDir == null) fileDir = file.toAbsolutePath();
@@ -168,6 +175,89 @@ public final class BpBuild {
             b.out = o;
         }
         return b;
+    }
+
+    /**
+     * Persiste el proyecto al `.bpbuild`, actualizando SOLO los campos editables
+     * por el IDE (`out`, `aot`); el resto (sourceDir/outDir/main/dependencies) se
+     * conserva TAL CUAL estaba en el fichero — rutas relativas incluidas — porque
+     * re-serializa el mapa JSON crudo. Se pierden únicamente los comentarios //.
+     */
+    public void save(Path file) throws IOException {
+        Map<String, Object> m = (raw != null) ? raw : new LinkedHashMap<>();
+        // out: solo se escribe si es "pack" (default "normal" = ausente, sin ensuciar).
+        if ("pack".equals(out)) m.put("out", "pack");
+        else                    m.remove("out");
+        // aot: objeto {enabled,target}. Solo si está activo (off = ausente).
+        if (aotEnabled) {
+            Map<String, Object> aot = new LinkedHashMap<>();
+            aot.put("enabled", Boolean.TRUE);
+            aot.put("target", aotTarget);
+            m.put("aot", aot);
+        } else {
+            m.remove("aot");
+        }
+        StringBuilder sb = new StringBuilder();
+        writeJson(m, sb, 0);
+        sb.append('\n');
+        Files.write(file, sb.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    // -- serializador JSON mínimo (los tipos que produce el JsonParser de arriba) --
+    private static void writeJson(Object v, StringBuilder sb, int indent) {
+        if (v instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) v;
+            if (m.isEmpty()) { sb.append("{}"); return; }
+            sb.append("{\n");
+            int i = 0;
+            for (Map.Entry<String, Object> e : m.entrySet()) {
+                indent(sb, indent + 1);
+                writeStr(e.getKey(), sb);
+                sb.append(": ");
+                writeJson(e.getValue(), sb, indent + 1);
+                if (++i < m.size()) sb.append(',');
+                sb.append('\n');
+            }
+            indent(sb, indent); sb.append('}');
+        } else if (v instanceof List) {
+            List<?> l = (List<?>) v;
+            if (l.isEmpty()) { sb.append("[]"); return; }
+            sb.append("[\n");
+            for (int i = 0; i < l.size(); i++) {
+                indent(sb, indent + 1);
+                writeJson(l.get(i), sb, indent + 1);
+                if (i + 1 < l.size()) sb.append(',');
+                sb.append('\n');
+            }
+            indent(sb, indent); sb.append(']');
+        } else if (v instanceof String) {
+            writeStr((String) v, sb);
+        } else if (v instanceof Boolean || v instanceof Long || v instanceof Integer) {
+            sb.append(v.toString());
+        } else if (v == null) {
+            sb.append("null");
+        } else {
+            writeStr(v.toString(), sb);
+        }
+    }
+
+    private static void indent(StringBuilder sb, int n) { for (int i = 0; i < n; i++) sb.append("  "); }
+
+    private static void writeStr(String s, StringBuilder sb) {
+        sb.append('"');
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"':  sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:   sb.append(c);
+            }
+        }
+        sb.append('"');
     }
 
     @Override public String toString() {

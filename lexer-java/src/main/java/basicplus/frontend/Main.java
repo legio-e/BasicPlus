@@ -171,6 +171,49 @@ public final class Main {
         }
     }
 
+    /**
+     * Construye un PROYECTO entero: compila el `main` + sus dependencias
+     * transitivas al `outDir` y, si el proyecto pide `out:pack`, empaqueta los
+     * .mod/.mdn del outDir + resources en un pack (ejecutable si hay `main`).
+     * REUTILIZADO por la CLI (--project) y por el IDE → un solo camino de build.
+     * Devuelve true si compiló sin errores (y empaquetó, si tocaba). Lo impreso va
+     * por stdout/stderr (el IDE lo captura a su consola). Lanza IOException si algo
+     * de E/S (crear outDir, escribir el pack) falla → lo maneja el llamador.
+     */
+    public static boolean buildProject(BpBuild proj, String backend, boolean pruneBpi)
+            throws IOException {
+        System.out.println("project: " + proj.sourcePath
+                + " (main=" + proj.main
+                + ", sourceDir=" + proj.sourceDir
+                + ", outDir=" + proj.outDir
+                + ", dependencies=" + proj.dependencies + ")");
+        Path mainBp = Paths.get(proj.sourceDir, proj.main + ".bp")
+                .toAbsolutePath().normalize();
+        if (!Files.exists(mainBp)) {
+            System.err.println("no se encuentra el fichero del main: " + mainBp);
+            return false;
+        }
+        Ctx ctx = new Ctx();
+        ctx.backend    = backend;
+        ctx.showTokens = false;
+        ctx.showAst    = false;
+        ctx.rootSrcDir = Paths.get(proj.sourceDir);
+        ctx.outDir     = Paths.get(proj.outDir);
+        Files.createDirectories(ctx.outDir);
+        for (String d : proj.dependencies) ctx.dependencyPaths.add(Paths.get(d));
+        ctx.pruneBpi = pruneBpi;
+        boolean ok = compileFull(mainBp, ctx, /*depth*/0);
+        boolean success = ok && ctx.totalErrors == 0;
+        if (success && ctx.pruneBpi) pruneWrittenBpi(ctx);
+        // H3 Packs: tras el build correcto, si out:pack empaqueta el proyecto
+        // (el manifest reusa `main` → pack ejecutable). IOException la ve el caller.
+        if (success && "pack".equals(proj.out)) {
+            Path packPath = PackStep.buildPack(proj);
+            System.out.println("pack generado: " + packPath);
+        }
+        return success;
+    }
+
     /** H6.a-lite — borra los .bpi que este build escribió. Sólo los nuestros:
      *  la stdlib se lee, no se escribe, así que no está en writtenBpi. Fallar un
      *  borrado no es fatal (el .mod ya está emitido). */
@@ -231,38 +274,9 @@ public final class Main {
         if (projectFile != null) {
             try {
                 BpBuild proj = BpBuild.load(Paths.get(projectFile));
-                System.out.println("project: " + proj.sourcePath
-                        + " (main=" + proj.main
-                        + ", sourceDir=" + proj.sourceDir
-                        + ", outDir=" + proj.outDir
-                        + ", dependencies=" + proj.dependencies + ")");
-                Path mainBp = Paths.get(proj.sourceDir, proj.main + ".bp")
-                        .toAbsolutePath().normalize();
-                if (!Files.exists(mainBp)) {
-                    System.err.println("no se encuentra el fichero del main: " + mainBp);
-                    System.exit(1); return;
-                }
-                Ctx ctx = new Ctx();
-                ctx.backend    = backend;
-                ctx.showTokens = false;
-                ctx.showAst    = false;
-                ctx.rootSrcDir = Paths.get(proj.sourceDir);
-                ctx.outDir     = Paths.get(proj.outDir);
-                Files.createDirectories(ctx.outDir);
-                for (String d : proj.dependencies) ctx.dependencyPaths.add(Paths.get(d));
-                ctx.pruneBpi = pruneBpi;
-                boolean ok = compileFull(mainBp, ctx, /*depth*/0);
-                boolean success = ok && ctx.totalErrors == 0;
-                if (success && ctx.pruneBpi) pruneWrittenBpi(ctx);
-                // H3 Packs: si el proyecto pide out:pack, tras el build correcto
-                // empaquetamos los .mod/.mdn del outDir + resources en un pack
-                // ejecutable (el manifest reusa `main`). Si falla, IOException →
-                // lo caza el catch de abajo.
-                if (success && "pack".equals(proj.out)) {
-                    Path packPath = PackStep.buildPack(proj);
-                    System.out.println("pack generado: " + packPath);
-                }
-                System.exit(success ? 0 : 2);
+                // H3: el build de proyecto (compila + out:pack) vive en buildProject,
+                // reutilizado por el IDE → un solo camino de build.
+                System.exit(buildProject(proj, backend, pruneBpi) ? 0 : 2);
             } catch (IOException ex) {
                 System.err.println("error proyecto: " + ex.getMessage());
                 System.exit(2); return;
