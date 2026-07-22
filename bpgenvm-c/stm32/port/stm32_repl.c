@@ -40,7 +40,7 @@
 
 /* Buffers estáticos (NO en stack: el stack C del micro es pequeño). */
 static char    s_line[WIRE_LINE_MAX];
-static uint8_t s_put_buf[32u * 1024u];        /* payload de PUT */
+static uint8_t s_put_buf[64u * 1024u];        /* payload de PUT (64K: cabe Gui.mod ~42K tras H6.a; el fix SIN límite = streaming del PUT, #294) */
 static uint8_t s_vm_mem[128u * 1024u];        /* RAM que gestiona la VM */
 static char    s_out_esc[2048];               /* salida escapada (sink) */
 static char    s_out_msg[2300];               /* evento OUTPUT completo */
