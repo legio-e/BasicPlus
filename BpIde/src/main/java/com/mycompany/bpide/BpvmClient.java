@@ -1015,6 +1015,31 @@ public final class BpvmClient implements AutoCloseable {
                 Json.getBool(r, "chainOk", false), (int) Json.getLong(r, "count", 0), packs);
     }
 
+    /** H3 — un fichero dentro de un pack (una fila del PACK_ENTRIES). */
+    public static final class PackEntry {
+        public final String tipo, nombre;
+        public final long size;
+        public PackEntry(String tipo, String nombre, long size) {
+            this.tipo = tipo; this.nombre = nombre; this.size = size;
+        }
+    }
+
+    /** PACK_ENTRIES — ficheros dentro del pack en `offset` (del PACK_LS previo). */
+    public List<PackEntry> packEntries(long offset, long timeoutMs) throws IOException {
+        Map<String, Object> r = sendRequest("PACK_ENTRIES", "\"offset\":" + offset, null, timeoutMs);
+        List<Object> arr = Json.getList(r, "entries");
+        List<PackEntry> out = new ArrayList<>();
+        if (arr == null) return out;
+        for (Object o : arr) {
+            if (!(o instanceof Map)) continue;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) o;
+            out.add(new PackEntry(Json.getString(m, "tipo", ""),
+                    Json.getString(m, "nombre", ""), Json.getLong(m, "size", 0)));
+        }
+        return out;
+    }
+
     /** Helper para serializar un string con comillas + escape. */
     private static String jsonStr(String s) { return "\"" + Json.escape(s) + "\""; }
 
