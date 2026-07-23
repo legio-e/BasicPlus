@@ -15,11 +15,18 @@
  *                                       cada opcode es una "línea"). Sin
  *                                       N imprime sólo el total; con N
  *                                       imprime los primeros N hits.
+ *   bpgenvm-c --pack=<f.pack> <m>      H3: "graba" la imagen en una región RAM
+ *                                       que simula la partición de packs de la
+ *                                       flash interna del micro (repetible).
+ *                                       --pack-del=<nombre> tumba (tombstone)
+ *                                       un pack tras el grabado. Imprime el
+ *                                       LIST resultante de la cadena.
  */
 
 #include "bpvm.h"
 #include "bpvm_fs.h"
 #include "bpvm_net.h"   /* H11 — registro del backend TCP del host */
+#include "bpvm_pack.h"  /* H3 — zona de packs simulada (--pack=) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +48,67 @@ typedef struct {
     long max_print;
     long printed;
 } debug_trace_state_t;
+
+/* ── H3: simulación de la zona de packs ─────────────────────────────────── */
+#define PACKS_MAX_FILES   8
+#define PACKS_MAX_DELS    4
+#define PACKS_REGION_SIZE (1024u * 1024u)   /* 1 MB de "flash" de packs */
+
+/* Graba cada --pack= en la región (ADD = append a la cadena), aplica los
+ * --pack-del= (tombstone) y deja el LIST en stdout. Devuelve 0 o -1. */
+static int packs_setup(uint8_t* region,
+                       const char** files, int n_files,
+                       const char** dels, int n_dels) {
+    memset(region, 0xFF, PACKS_REGION_SIZE);   /* NOR borrada */
+    for (int i = 0; i < n_files; i++) {
+        FILE* f = fopen(files[i], "rb");
+        if (!f) { fprintf(stderr, "--pack: no puedo abrir %s\n", files[i]); return -1; }
+        fseek(f, 0, SEEK_END);
+        long sz = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        uint8_t* img = (sz > 0) ? (uint8_t*) malloc((size_t) sz) : NULL;
+        if (!img || fread(img, 1, (size_t) sz, f) != (size_t) sz) {
+            fprintf(stderr, "--pack: error leyendo %s\n", files[i]);
+            free(img); fclose(f); return -1;
+        }
+        fclose(f);
+        int32_t off = bpvm_pack_add(region, PACKS_REGION_SIZE, img, (uint32_t) sz);
+        free(img);
+        if (off == BPVM_PACK_ERR_BADIMG) {
+            fprintf(stderr, "--pack: %s no es un pack valido (magic/CRC/formato)\n", files[i]);
+            return -1;
+        }
+        if (off == BPVM_PACK_ERR_NOSPACE) {
+            fprintf(stderr, "--pack: %s no cabe en la region (%u B)\n", files[i], PACKS_REGION_SIZE);
+            return -1;
+        }
+        printf("[packs] + %s grabado en 0x%06X\n", files[i], (unsigned) off);
+    }
+    for (int i = 0; i < n_dels; i++) {
+        int32_t off = bpvm_pack_remove(region, PACKS_REGION_SIZE, dels[i]);
+        if (off < 0) {
+            fprintf(stderr, "--pack-del: no hay ningun pack activo llamado '%s'\n", dels[i]);
+            return -1;
+        }
+        printf("[packs] - '%s' tombstone en 0x%06X\n", dels[i], (unsigned) off);
+    }
+    /* LIST de la cadena resultante (lo que veria el micro en su flash). */
+    bpvm_pack_info_t inf[PACKS_MAX_FILES];
+    uint32_t end = 0;
+    int n = bpvm_pack_scan(region, PACKS_REGION_SIZE, inf, PACKS_MAX_FILES, 1, &end);
+    int alive = 0;
+    for (int i = 0; i < n && i < PACKS_MAX_FILES; i++) {
+        printf("[packs]   0x%06X  %-24s v'%s'  %7u B  %2u fich  %s%s\n",
+               (unsigned) inf[i].off, inf[i].nombre, inf[i].vercont,
+               (unsigned) inf[i].size_total, (unsigned) inf[i].n_entries,
+               inf[i].alive ? "activo" : "borrado",
+               inf[i].crc_ok ? "" : "  [CRC MAL]");
+        if (inf[i].alive) alive++;
+    }
+    printf("[packs] %d packs (%d activos), libre %u B\n",
+           n, alive, (end == BPVM_PACK_NO_SPACE) ? 0u : (unsigned) (PACKS_REGION_SIZE - end));
+    return 0;
+}
 
 static void debug_trace_hook(bpvm_t* vm, bpvm_thread_t* tc,
                               uint32_t pc, int line, const char* source,
@@ -68,6 +136,8 @@ int main(int argc, char** argv) {
     size_t mem_size   = 512 * 1024;
     const char* basedir = NULL;   /* H19-F1: raíz de proyecto (paths relativos) */
     const char* fs_lfs_img = NULL;/* H2·B1.2: modo ORÁCULO — littlefs sobre imagen */
+    const char* pack_files[PACKS_MAX_FILES]; int n_pack_files = 0;  /* H3 --pack= */
+    const char* pack_dels[PACKS_MAX_DELS];   int n_pack_dels  = 0;  /* H3 --pack-del= */
 
     for (int i = 1; i < argc; i++) {
         const char* a = argv[i];
@@ -93,6 +163,20 @@ int main(int argc, char** argv) {
         }
         else if (strncmp(a, "--fs=lfs:", 9) == 0) {
             fs_lfs_img = a + 9;      /* H2·B1.2: FS littlefs sobre <imagen> (oráculo) */
+        }
+        else if (strncmp(a, "--pack=", 7) == 0) {
+            if (n_pack_files >= PACKS_MAX_FILES) {
+                fprintf(stderr, "Demasiados --pack (max %d)\n", PACKS_MAX_FILES);
+                return 2;
+            }
+            pack_files[n_pack_files++] = a + 7;   /* H3: pack "ya grabado" en flash */
+        }
+        else if (strncmp(a, "--pack-del=", 11) == 0) {
+            if (n_pack_dels >= PACKS_MAX_DELS) {
+                fprintf(stderr, "Demasiados --pack-del (max %d)\n", PACKS_MAX_DELS);
+                return 2;
+            }
+            pack_dels[n_pack_dels++] = a + 11;    /* H3: tombstone tras el grabado */
         }
         else if (a[0] == '-')                  {
             fprintf(stderr, "Argumento desconocido: %s\n", a);
@@ -147,6 +231,19 @@ int main(int argc, char** argv) {
     bpvm_fs_set_main_module_path(path);          /* H19: App.mainModulePath() = el .mod ejecutado */
     bpvm_net_register_host();  /* H11 — sockets TCP del SO (host) */
 
+    /* H3 — zona de packs simulada: la región RAM hace de flash interna del
+     * micro; los --pack= quedan "grabados" en ella antes de arrancar la VM. */
+    uint8_t* packs_region = NULL;
+    if (n_pack_files > 0 || n_pack_dels > 0) {
+        packs_region = (uint8_t*) malloc(PACKS_REGION_SIZE);
+        if (!packs_region ||
+            packs_setup(packs_region, pack_files, n_pack_files,
+                        pack_dels, n_pack_dels) != 0) {
+            free(packs_region); bpvm_destroy(vm); free(mem);
+            return 1;
+        }
+    }
+
     debug_trace_state_t dbg_state = { 0, debug_print, 0 };
     if (debug_trace) {
         /* pc_to_line=NULL → modo sintético "todo opcode es una línea". */
@@ -156,7 +253,7 @@ int main(int argc, char** argv) {
     bpvm_status_t s = bpvm_load_mod(vm, path);
     if (s != BPVM_OK) {
         fprintf(stderr, "load_mod %s: %s\n", path, bpvm_status_str(s));
-        bpvm_destroy(vm); free(mem);
+        bpvm_destroy(vm); free(mem); free(packs_region);
         return (int) s;
     }
 
@@ -183,5 +280,6 @@ int main(int argc, char** argv) {
 
     bpvm_destroy(vm);
     free(mem);
+    free(packs_region);
     return (int) s;
 }

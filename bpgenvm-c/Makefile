@@ -22,6 +22,7 @@ SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
           src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c \
+          src/bpvm_pack.c \
           src/net.c src/net_host.c \
           src/fs_lfs.c src/fs_lfs_host.c \
           third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \
@@ -75,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -341,6 +342,16 @@ test-bmgr:
 	$(CC) $(CFLAGS) test/test_bmgr.c src/bpvm_bmgr.c src/bpvm_part.c src/bpvm_env.c src/crc32.c -o build/test_bmgr.exe
 	@echo "--- H9 board manager (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_bmgr.exe
+
+# H3 — zona de packs (bpvm_pack): LIST/ADD/REMOVE sobre una región RAM que hace
+# de flash. PARIDAD: las fixtures samples/PackFix*.pack las genera Pack.jar
+# (lado PC) — el test recalcula los CRCs en C sobre esos bytes; un byte distinto
+# entre C y Java = rojo (el micro rechazaría los packs del PC).
+test-pack:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_pack.c src/bpvm_pack.c -o build/test_pack.exe
+	@echo "--- H3 zona de packs (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_pack.exe
 
 # H9 — "device" simulado para el IDE (FrmBoard) SIN placa: servidor TCP wire v1 que
 # despacha STATE/ENV_*/PART_* al bpvm_bmgr REAL, con el env respaldado por un fichero
