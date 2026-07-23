@@ -31,6 +31,20 @@
 #define EOFF_LONGITUD   36
 #define TIPO_END        0xFFFFFFFFuL   /* tipo == slack borrado = fin de entradas */
 
+/* ── región montada (ver bpvm_pack.h) ── */
+static const uint8_t* s_mounted_base = NULL;
+static uint32_t       s_mounted_size = 0;
+
+void bpvm_pack_mount(const uint8_t* base, uint32_t size) {
+    s_mounted_base = base;
+    s_mounted_size = size;
+}
+
+const uint8_t* bpvm_pack_mounted(uint32_t* size_out) {
+    if (size_out) *size_out = s_mounted_size;
+    return s_mounted_base;
+}
+
 uint16_t bpvm_pack_crc16(uint16_t crc, const uint8_t* data, uint32_t len) {
     for (uint32_t i = 0; i < len; i++) {
         crc = (uint16_t) (crc ^ ((uint16_t) data[i] << 8));

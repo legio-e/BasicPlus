@@ -8,6 +8,7 @@
 
 #include "bpvm_internal.h"
 #include "bpvm_aot_helpers.h"   /* H3 #158: tabla helpers para AOT */
+#include "bpvm_pack.h"          /* H3.c: resolución de imports contra la zona de packs */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -150,24 +151,45 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
         derive_owner(imp, lib, sizeof(lib), mod, sizeof(mod));
         if (!mod[0]) continue;
         if (module_loaded(vm, lib, mod)) continue;
-        /* Derivar filename. */
-        char filename[512];
+        /* Derivar filename + nombre de entrada en pack (mismo base-name). */
+        char filename[512], pname[160];
         if (lib[0]) {
             snprintf(filename, sizeof(filename), "%s%s%s.%s.mod",
                      search_dir, search_dir[0] ? "/" : "", lib, mod);
+            snprintf(pname, sizeof(pname), "%s.%s", lib, mod);
         } else {
             snprintf(filename, sizeof(filename), "%s%s%s.mod",
                      search_dir, search_dir[0] ? "/" : "", mod);
+            snprintf(pname, sizeof(pname), "%s", mod);
         }
+        /* H3.c — resolución FS → packs (spec §4): el FS ECLIPSA al pack (shadow
+         * de desarrollo, con aviso); si no está en FS, se carga DESDE el pack
+         * montado (mismos bytes .mod; hoy con copia — el XIP es la tanda 2). */
+        uint32_t pk_region_size = 0;
+        const uint8_t* pk_region = bpvm_pack_mounted(&pk_region_size);
+        uint32_t pk_len = 0;
+        const uint8_t* pk_mod = pk_region
+            ? bpvm_pack_find(pk_region, pk_region_size, "mod", pname, &pk_len)
+            : NULL;
+
         FILE* f = fopen(filename, "rb");
-        if (!f) {
+        if (!f && !pk_mod) {
             fprintf(stderr, "[bpvm-c] dep '%s' (%s) no encontrado: %s\n",
                     imp, mod, filename);
             continue;   /* dejamos que linkAll dispare el error si falta. */
         }
-        fclose(f);
         int idx_before = vm->module_count;
-        bpvm_status_t s = bpvm_loader_load(vm, filename);
+        bpvm_status_t s;
+        if (f) {
+            fclose(f);
+            if (pk_mod) {
+                fprintf(stderr, "[bpvm-c] aviso: '%s' del FS eclipsa al del pack\n",
+                        pname);
+            }
+            s = bpvm_loader_load(vm, filename);
+        } else {
+            s = bpvm_loader_load_buffer(vm, pk_mod, pk_len, pname);
+        }
         if (s != BPVM_OK) return s;
         /* Recursivo: descubre las deps de esta nueva carga. */
         for (int j = idx_before; j < vm->module_count; j++) {

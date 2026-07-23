@@ -67,6 +67,13 @@ typedef struct {
     uint32_t data_off;
 } bpvm_pack_entry_t;
 
+/* ── Región MONTADA (resolución de módulos, H3.c) ──
+ * El arranque registra la zona de packs activa (host: --pack= sobre RAM;
+ * firmware: la partición PACKS por XIP) y la resolución de imports la consulta
+ * como fallback tras el FS (el FS ECLIPSA al pack, spec §4). NULL = sin packs. */
+void bpvm_pack_mount(const uint8_t* base, uint32_t size);
+const uint8_t* bpvm_pack_mounted(uint32_t* size_out);
+
 /* LIST — recorre la cadena y rellena hasta `max` descriptores (activos Y
  * tombstones). Devuelve el nº de packs encontrados (puede ser > max; solo se
  * escriben los primeros max). end_off (opcional) = offset del primer hueco
