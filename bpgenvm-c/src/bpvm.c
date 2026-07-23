@@ -21,6 +21,10 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
 
     bpvm_t* vm = (bpvm_t*) calloc(1, sizeof(bpvm_t));
     if (!vm) return NULL;
+    /* H3.c — ventana XIP vacía (lo>hi imposible con lo=MAX): el guardián de PC
+     * rechaza todo fuera de memory_size hasta que un loader XIP la abra. */
+    vm->xip_lo = 0xFFFFFFFFu;
+    vm->xip_hi = 0;
 
     vm->memory = memory;
     vm->memory_size = memory_size;
@@ -188,7 +192,13 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
             }
             s = bpvm_loader_load(vm, filename);
         } else {
-            s = bpvm_loader_load_buffer(vm, pk_mod, pk_len, pname);
+            /* H3.c tanda 2 — carga XIP: el código se queda EN LA REGIÓN (flash
+             * en placa); a RAM solo van ext-table + data block. */
+            s = bpvm_loader_load_xip(vm, pk_mod, pk_len, pname);
+            if (s == BPVM_OK) {
+                fprintf(stderr, "[bpvm-c] '%s' cargado XIP desde pack (codigo en sitio)\n",
+                        pname);
+            }
         }
         if (s != BPVM_OK) return s;
         /* Recursivo: descubre las deps de esta nueva carga. */
@@ -235,14 +245,10 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
     if (vm->main_absolute_address == 0) return BPVM_ERR_BAD_PC;
     bpvm_thread_t* main_tc = &vm->threads[0];
     main_tc->pc = vm->main_absolute_address;
-    /* cs del módulo del entry-point. */
-    for (int i = 0; i < vm->module_count; i++) {
-        bpvm_module_t* m = &vm->modules[i];
-        if (m->code_start <= vm->main_absolute_address
-                && vm->main_absolute_address < m->end_addr) {
-            main_tc->cs = m->code_start;
-            break;
-        }
+    /* cs del módulo del entry-point (H3.c: por rango de CÓDIGO [cb, cb+size)). */
+    {
+        const bpvm_module_t* m = bpvm_module_for_code_addr(vm, vm->main_absolute_address);
+        if (m) main_tc->cs = m->code_start;
     }
     if (main_tc->cs == 0) return BPVM_ERR_BAD_PC;
     main_tc->sp = main_tc->stack_base;

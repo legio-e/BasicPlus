@@ -216,12 +216,9 @@ int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
     /* cs del módulo dueño de target_abs (para sus CALL/globals). Por defecto el
      * mismo módulo que el caller (native→BP intra-módulo). */
     uint32_t target_cs = tc->cs;
-    for (int i = 0; i < vm->module_count; i++) {
-        const bpvm_module_t* m = &vm->modules[i];
-        if (target_abs >= m->code_start && target_abs < m->end_addr) {
-            target_cs = m->code_start;
-            break;
-        }
+    {
+        const bpvm_module_t* m = bpvm_module_for_code_addr(vm, target_abs);
+        if (m) target_cs = m->code_start;   /* H3.c: rango de CÓDIGO [cb, cb+size) */
     }
     /* #302 paso 2 — el AOT (aot_helpers v2) ya provee ref_mask/ret_is_ref reales:
      * los args-ref se ensanchan a 8 bytes con regen y el retorno-ref popea 8. */
@@ -240,11 +237,9 @@ int32_t bpvm_call_bp_from_builtin(bpvm_t* vm, bpvm_thread_t* tc,
                                   uint32_t ref_mask) {
     if (target_abs == 0) return 0;
     uint32_t target_cs = tc->cs;
-    for (int i = 0; i < vm->module_count; i++) {
-        const bpvm_module_t* m = &vm->modules[i];
-        if (target_abs >= m->code_start && target_abs < m->end_addr) {
-            target_cs = m->code_start; break;
-        }
+    {
+        const bpvm_module_t* m = bpvm_module_for_code_addr(vm, target_abs);
+        if (m) target_cs = m->code_start;   /* H3.c: rango de CÓDIGO [cb, cb+size) */
     }
     /* El dispatcher de OP_CALL_BUILTIN RE-LEE tc->pc/sp/bp/cs al volver del
      * builtin; bridge_run_bp_frame deja tc->pc en el sentinela y tc->sp/bp en el
@@ -312,7 +307,7 @@ int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
         uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, desc);
         desc = (uint32_t)((int32_t) cur_cs + parent_off);
     }
-    uint32_t target_abs = target_cs + (uint32_t) method_off;
+    uint32_t target_abs = bpvm_cb_for_cs(vm, tc, target_cs) + (uint32_t) method_off;   /* H3.c: vtable → cb */
 
     /* args con `this` como arg0. Cap defensivo (los métodos rara vez tienen >16). */
     int32_t buf[1 + 16];
@@ -559,7 +554,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
         ops++;
-        if (pc >= vm->memory_size) { exit_status = BPVM_ERR_BAD_PC; break; }
+        if (pc >= vm->memory_size
+            && (pc < vm->xip_lo || pc >= vm->xip_hi)) {   /* H3.c: pc XIP válido */
+            exit_status = BPVM_ERR_BAD_PC; break;
+        }
 
         if (vm->tracing) {
             fprintf(stderr, "[trace] pc=%" PRIu32 " sp=%" PRIu32 " bp=%" PRIu32 " cs=%" PRIu32 " op=0x%02X\n",
@@ -871,7 +869,11 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         /* ---- Calls + frame setup ---- */
         case OP_CALL: {
             int32_t target_rel = bpvm_read_i32_be(mem + pc); pc += 4;
-            uint32_t target_abs = cs + (uint32_t) target_rel;
+            /* H3.c — el offset del CALL local es CS-relativo en el .mod; la
+             * DIRECCIÓN real sale de la base de CÓDIGO del módulo (cb): RAM →
+             * cb==cs (idéntico a siempre, caché 1-entrada); XIP → flash.
+             * Transitoria hasta CALL_REL (#307). */
+            uint32_t target_abs = bpvm_cb_for_cs(vm, tc, cs) + (uint32_t) target_rel;
             /* H3 #160 — AOT hijack. Si el target tiene un thunk
              * registrado, divertir SIN crear frame BP. */
             bpvm_aot_thunk_t aot = bpvm_aot_lookup(target_abs);
@@ -1579,7 +1581,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 desc = (uint32_t)((int32_t) cur_cs + parent_off);
             }
 
-            uint32_t target_pc = target_cs + (uint32_t) method_off;
+            /* H3.c — method_off (vtable) es CS-relativo; la dirección real va
+             * por la base de CÓDIGO del módulo dueño (cb; RAM → cb==cs). */
+            uint32_t target_pc = bpvm_cb_for_cs(vm, tc, target_cs) + (uint32_t) method_off;
             /* push saved pc/bp/cs, bp = sp, salta */
             bpvm_write_i32_be(mem + sp, (int32_t) pc); sp += 4;
             bpvm_write_i32_be(mem + sp, (int32_t) bp); sp += 4;
@@ -1695,8 +1699,25 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_TRY_BEGIN_EXT: {
             /* BUG-2 — como TRY_BEGIN pero cls_off es i32 (catch cross-module). */
             uint32_t instr_addr = pc - 1;
+            uint32_t operand_addr = pc;
             int32_t handler_rel = bpvm_read_i32_be(mem + pc); pc += 4;
             int32_t cls_off     = bpvm_read_i32_be(mem + pc); pc += 4;
+            /* H3.c — en un módulo XIP el operando cls_off vive en FLASH y el
+             * link no pudo parchearlo → el valor resuelto está en la tabla
+             * lateral del módulo (por code_off). Camino frío (entrar al try). */
+            {
+                const bpvm_module_t* xm = bpvm_module_for_code_addr(vm, instr_addr);
+                if (xm && xm->cb != xm->code_start) {
+                    int32_t rel = (int32_t)(operand_addr - xm->cb);
+                    for (int fi = 0; fi < xm->eh_class_fixup_count; fi++) {
+                        const bpvm_eh_class_fixup_t* fx = &xm->eh_class_fixups[fi];
+                        if (fx->code_off == rel && fx->resolved) {
+                            cls_off = fx->resolved_cls_off;
+                            break;
+                        }
+                    }
+                }
+            }
             int32_t handler_pc  = (int32_t) instr_addr + handler_rel;
             int32_t expected_cls = (cls_off == 0) ? 0
                                    : (int32_t)((int32_t) cs + cls_off);

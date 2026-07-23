@@ -186,7 +186,7 @@ int bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref) {
     tc->sp = sb + 16;
     tc->bp = sb + 16;
     tc->cs = target_cs;
-    tc->pc = target_cs + (uint32_t) off;
+    tc->pc = bpvm_cb_for_cs(vm, tc, target_cs) + (uint32_t) off;   /* H3.c: vtable → cb */
     tc->status = BPVM_THREAD_RUNNABLE;
     /* Aviso al scheduler: hay un tc nuevo RUNNABLE. */
     if (vm->smp) {

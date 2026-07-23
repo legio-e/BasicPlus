@@ -76,8 +76,11 @@ static void derive_module_name(const char* path, char* dst, size_t dst_size) {
     dst[n] = '\0';
 }
 
-bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
-                                       size_t size, const char* name_hint) {
+/* Cuerpo común de la carga. `xip` (H3.c): el código NO se copia a RAM — queda
+ * direccionado en sitio (los bytes de `data` deben ser persistentes: la región
+ * de packs montada). CS queda anclado en RAM como siempre; solo cb difiere. */
+static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
+                                      size_t size, const char* name_hint, int xip) {
     if (vm->module_count >= BPVM_MAX_MODULES) return BPVM_ERR_OOM;
     if (!data || size < 28) return BPVM_ERR_BAD_HEADER;
 
@@ -157,13 +160,13 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
     /* --- Layout en memory[] ---
      *    moduleBase ─┬─ ext-table (ext_count * 4 bytes, zeroed)
      *                ├─ data block (data_size bytes)
-     *                └─ code block (code_size bytes)
+     *                └─ code block (code_size bytes)   [XIP: NO ocupa RAM]
      */
     uint32_t module_base = vm->next_free_address;
     uint32_t ext_table_size = ext_count * BPVM_EXT_ENTRY_SIZE;
     uint32_t data_start  = module_base + ext_table_size;
-    uint32_t code_start  = data_start + data_size;
-    uint32_t end_addr    = code_start + code_size;
+    uint32_t code_start  = data_start + data_size;      /* = CS (ancla, SIEMPRE RAM) */
+    uint32_t end_addr    = xip ? code_start : code_start + code_size;
 
     if (end_addr > vm->stack_base) {
         return BPVM_ERR_OOM;
@@ -190,17 +193,29 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
         if (bc_skip(&c, interface_size) != 0) return BPVM_ERR_IO;
     }
 
-    /* Data block: lo copiamos en memory[]. */
+    /* Data block: lo copiamos en memory[] (mutable: SIEMPRE a RAM). */
     if (data_size > 0) {
         if (c.pos + data_size > c.size) return BPVM_ERR_IO;
         memcpy(vm->memory + data_start, c.base + c.pos, data_size);
         c.pos += data_size;
     }
 
-    /* Code block: idem. */
+    /* Code block: RAM → copia como siempre. XIP → NO se copia: cb apunta a los
+     * bytes del .mod dentro de la región montada. La dirección VIRTUAL se elige
+     * tal que `vm->memory + cb == puntero real` — en host la región vive DENTRO
+     * del buffer (resta en rango); en micro de 32 bits la resta envuelve módulo
+     * 2^32 y `mem + pc` cae en la flash. El fetch del intérprete no se toca. */
+    uint32_t mod_cb = code_start;
     if (code_size > 0) {
         if (c.pos + code_size > c.size) return BPVM_ERR_IO;
-        memcpy(vm->memory + code_start, c.base + c.pos, code_size);
+        if (xip) {
+            mod_cb = (uint32_t)((uintptr_t)(c.base + c.pos) - (uintptr_t) vm->memory);
+            /* Ventana de PC válido del guardián del bucle (unión de rangos XIP). */
+            if (mod_cb < vm->xip_lo) vm->xip_lo = mod_cb;
+            if (mod_cb + code_size > vm->xip_hi) vm->xip_hi = mod_cb + code_size;
+        } else {
+            memcpy(vm->memory + code_start, c.base + c.pos, code_size);
+        }
         c.pos += code_size;
     }
 
@@ -209,6 +224,7 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
     mod->data_start     = data_start;
     mod->code_start     = code_start;
     mod->end_addr       = end_addr;
+    mod->cb             = mod_cb;
 
     /* --- Procesar la sección exports ---
      *
@@ -234,7 +250,7 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
             memcpy(name, exp_buf + exp_off, nl); name[nl] = '\0';
             exp_off += nlen;
             int32_t rel = bpvm_read_i32_be(exp_buf + exp_off); exp_off += 4;
-            uint32_t abs = code_start + (uint32_t) rel;
+            uint32_t abs = mod_cb + (uint32_t) rel;   /* función → base de CÓDIGO (XIP: flash) */
             char qual[320];
             snprintf(qual, sizeof(qual), "%s%s", export_prefix, name);
             bpvm_link_register_symbol(vm, qual, abs);
@@ -258,6 +274,7 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
                 memcpy(name, exp_buf + exp_off, nl); name[nl] = '\0';
                 exp_off += nlen;
                 int32_t cs_off = bpvm_read_i32_be(exp_buf + exp_off); exp_off += 4;
+                /* data export → ancla CS (RAM): descriptors/constantes viven en data. */
                 uint32_t abs = (uint32_t)((int32_t) code_start + cs_off);
                 char qual[320];
                 snprintf(qual, sizeof(qual), "%s%s", export_prefix, name);
@@ -341,11 +358,21 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
     if (vm->gc_bump_threshold < 4096) vm->gc_bump_threshold = 4096;
 
     if (main_offset >= 0 && vm->main_absolute_address == 0) {
-        vm->main_absolute_address = code_start + (uint32_t) main_offset;
+        vm->main_absolute_address = mod_cb + (uint32_t) main_offset;
     }
 
     vm->module_count++;
     return BPVM_OK;
+}
+
+bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
+                                       size_t size, const char* name_hint) {
+    return load_buffer_impl(vm, data, size, name_hint, 0);
+}
+
+bpvm_status_t bpvm_loader_load_xip(bpvm_t* vm, const uint8_t* data,
+                                    size_t size, const char* name_hint) {
+    return load_buffer_impl(vm, data, size, name_hint, 1);
 }
 
 bpvm_status_t bpvm_loader_load(bpvm_t* vm, const char* path) {

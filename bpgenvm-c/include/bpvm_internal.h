@@ -89,10 +89,15 @@ typedef struct {
 
 /* BUG-2 — eh-class fixup. Parchea el operando clsOff (i32) de un TRY_BEGIN_EXT,
  * que vive en code_start + code_off, con (parent_abs - code_start) para que
- * cs+clsOff apunte al descriptor de la clase de excepción de otro módulo. */
+ * cs+clsOff apunte al descriptor de la clase de excepción de otro módulo.
+ * H3.c/XIP: en un módulo-en-pack el código está en flash y NO se puede
+ * parchear → el link deja el valor RESUELTO aquí y OP_TRY_BEGIN_EXT lo
+ * consulta por code_off (tabla lateral; camino frío). */
 typedef struct {
     int32_t  code_off;           /* offset del operando i32 relativo al code block */
     char     parent_qualified[128];
+    int32_t  resolved_cls_off;   /* XIP: (parent_abs - cs), puesto por el link */
+    int      resolved;           /* XIP: 1 si resolved_cls_off es válido */
 } bpvm_eh_class_fixup_t;
 
 typedef struct {
@@ -105,8 +110,19 @@ typedef struct {
     uint32_t data_size;
     uint32_t code_start;       /* = data_start + data_size; CS del módulo */
     uint32_t code_size;
-    uint32_t end_addr;         /* code_start + code_size; primer byte libre */
+    uint32_t end_addr;         /* fin del módulo EN RAM: código RAM → fin del code
+                                  block; XIP → == code_start (el código no ocupa RAM) */
     int32_t  main_offset;      /* -1 si no es entry-point */
+    /* H3.c — base de CÓDIGO del módulo (transitoria hasta CALL_REL, #307):
+     * módulo RAM → cb == code_start (todo como siempre); módulo-en-pack (XIP)
+     * → cb = dirección VIRTUAL del código en la región montada, elegida tal
+     * que `vm->memory + cb == puntero real` (en host la región vive DENTRO
+     * del buffer; en micro de 32 bits la resta envuelve módulo 2^32 y cae en
+     * la flash). El CS queda INTACTO anclado en RAM (globals, descriptors,
+     * cls_off: nada cambia); solo las conversiones offset-de-función→dirección
+     * usan cb: OP_CALL, dispatch de vtable, exports de función y main. El
+     * rango de código para "¿de qué módulo es este pc?" es [cb, cb+code_size). */
+    uint32_t cb;
 
     /* F3 — imports cualificados (e.g. "L2Lib.Counter.__init"). Cada
      * entry k corresponde al slot k de la ext-table. */
@@ -155,6 +171,10 @@ struct bpvm_thread {
     uint32_t sp;
     uint32_t bp;
     uint32_t cs;
+    /* H3.c — caché de 1 entrada cs→cb (por-thread = SMP-safe). cb NO viaja en
+     * frames ni en tc: se DERIVA del cs vigente cuando hace falta (OP_CALL). */
+    uint32_t cb_cache_cs;
+    uint32_t cb_cache_cb;
     uint32_t stack_base;       /* dirección baja de su región de pila */
     uint32_t stack_top;        /* dirección alta (excluida) */
     bpvm_thread_status_t status;
@@ -228,6 +248,12 @@ struct bpvm {
     uint8_t* memory;
     size_t   memory_size;
     uint32_t stack_base;       /* offset donde termina heap y empiezan stacks */
+    /* H3.c — ventana de PC válido para código XIP (fuera de memory_size): la
+     * unión [xip_lo, xip_hi) de los rangos de código de los módulos-en-pack.
+     * La acumula el loader XIP; el guardián de PC del bucle la acepta.
+     * Vacía (lo>hi) si no hay módulos XIP → cero coste en el caso RAM. */
+    uint32_t xip_lo;
+    uint32_t xip_hi;
 
     /* Allocator del data block (bump). */
     uint32_t next_free_address;
@@ -580,6 +606,18 @@ bpvm_status_t bpvm_loader_load(bpvm_t* vm, const char* path);
  * no hay path del cual derivarlo). Puede ser NULL → "embedded". */
 bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
                                        size_t size, const char* name_hint);
+/* H3.c — variante XIP (módulo-en-pack): `data` debe apuntar a los bytes del
+ * .mod DENTRO de la región de packs montada (persistentes toda la vida de la
+ * VM). A RAM van solo ext-table + data block; el CÓDIGO no se copia — queda
+ * direccionado por cb (ver bpvm_module_t.cb). El resto, idéntico. */
+bpvm_status_t bpvm_loader_load_xip(bpvm_t* vm, const uint8_t* data,
+                                    size_t size, const char* name_hint);
+
+/* H3.c — cb del módulo cuyo CS es `cs` (caché 1-entrada en tc; módulos RAM
+ * devuelven cs). Transitoria hasta CALL_REL (#307). */
+uint32_t bpvm_cb_for_cs(const bpvm_t* vm, bpvm_thread_t* tc, uint32_t cs);
+/* Módulo por dirección de CÓDIGO (rango [cb, cb+code_size)) o NULL. */
+const bpvm_module_t* bpvm_module_for_code_addr(const bpvm_t* vm, uint32_t addr);
 
 /* H2 SMP — lock helpers condicionales.
  *

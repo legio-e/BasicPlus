@@ -20,33 +20,56 @@
 /* ---- Helpers de mapeo addr → módulo ---- */
 
 uint32_t bpvm_get_cs_for_data_addr(const bpvm_t* vm, uint32_t addr) {
-    /* Busca el módulo cuyo rango [data_start, code_start) contiene addr.
-     * O bien [moduleBase, code_start + codeSize) en el caso general.
+    /* Busca el módulo cuyo rango RAM [module_base, end_addr) contiene addr.
      * Devolvemos code_start (= CS del módulo).
      *
      * NOTA: para class descriptors, addr cae en [data_start, code_start).
-     * Para code addrs, en [code_start, end_addr). Ambos casos los cubre
-     * la rama amplia [module_base, end_addr).
-     */
+     * Para code addrs de módulos RAM, en [code_start, end_addr) (la rama
+     * amplia los cubre). H3.c: en módulos XIP end_addr == code_start (el
+     * código no ocupa RAM) → fallback por rango de CÓDIGO [cb, cb+size). */
     for (int i = 0; i < vm->module_count; i++) {
         const bpvm_module_t* m = &vm->modules[i];
         if (addr >= m->module_base && addr < m->end_addr) {
             return m->code_start;
         }
     }
+    {
+        const bpvm_module_t* m = bpvm_module_for_code_addr(vm, addr);
+        if (m) return m->code_start;
+    }
     return 0;
 }
 
-uint32_t bpvm_get_cs_for_code_addr(const bpvm_t* vm, uint32_t code_addr) {
-    /* Variante para direcciones en el CODE block. Si code_addr está en
-     * [code_start, end_addr), devuelve code_start. */
+const bpvm_module_t* bpvm_module_for_code_addr(const bpvm_t* vm, uint32_t addr) {
+    /* Rango de CÓDIGO = [cb, cb+code_size): módulos RAM tienen cb==code_start
+     * (idéntico a antes); módulos XIP tienen cb en la región de packs. */
     for (int i = 0; i < vm->module_count; i++) {
         const bpvm_module_t* m = &vm->modules[i];
-        if (code_addr >= m->code_start && code_addr < m->end_addr) {
-            return m->code_start;
+        if (addr >= m->cb && addr - m->cb < m->code_size) {
+            return m;
         }
     }
-    return 0;
+    return NULL;
+}
+
+uint32_t bpvm_get_cs_for_code_addr(const bpvm_t* vm, uint32_t code_addr) {
+    /* Si code_addr está en el rango de código de un módulo, devuelve su CS. */
+    const bpvm_module_t* m = bpvm_module_for_code_addr(vm, code_addr);
+    return m ? m->code_start : 0;
+}
+
+/* H3.c — cb del módulo cuyo CS es `cs`, con caché de 1 entrada en el tc
+ * (por-thread = SMP-safe). Para módulos RAM cb == cs, así que el fallback
+ * identidad conserva el comportamiento de siempre. Transitoria hasta que el
+ * CALL local sea PC-relativo (#307) — entonces esto se retira. */
+uint32_t bpvm_cb_for_cs(const bpvm_t* vm, bpvm_thread_t* tc, uint32_t cs) {
+    if (tc && tc->cb_cache_cs == cs && cs != 0) return tc->cb_cache_cb;
+    uint32_t cb = cs;
+    for (int i = 0; i < vm->module_count; i++) {
+        if (vm->modules[i].code_start == cs) { cb = vm->modules[i].cb; break; }
+    }
+    if (tc) { tc->cb_cache_cs = cs; tc->cb_cache_cb = cb; }
+    return cb;
 }
 
 uint32_t bpvm_get_ext_table_addr(const bpvm_t* vm, uint32_t cs) {
@@ -172,7 +195,10 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
                               parent_off_rel);
         }
 
-        /* BUG-2 — parcha el clsOff i32 de los TRY_BEGIN_EXT (catch cross-module). */
+        /* BUG-2 — parcha el clsOff i32 de los TRY_BEGIN_EXT (catch cross-module).
+         * H3.c: en un módulo XIP el operando vive en FLASH y no se puede
+         * escribir → el valor resuelto queda en el fixup (tabla lateral) y
+         * OP_TRY_BEGIN_EXT lo consulta por code_off (camino frío). */
         for (int k = 0; k < m->eh_class_fixup_count; k++) {
             bpvm_eh_class_fixup_t* fx = &m->eh_class_fixups[k];
             uint32_t parent_abs = bpvm_link_lookup(vm, fx->parent_qualified);
@@ -182,8 +208,13 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
                 return BPVM_ERR_RUNTIME;
             }
             int32_t cls_off = (int32_t)(parent_abs - m->code_start);
-            bpvm_write_i32_be(vm->memory + m->code_start + (uint32_t) fx->code_off,
-                              cls_off);
+            if (m->cb != m->code_start) {          /* XIP: no tocar flash */
+                fx->resolved_cls_off = cls_off;
+                fx->resolved = 1;
+            } else {
+                bpvm_write_i32_be(vm->memory + m->code_start + (uint32_t) fx->code_off,
+                                  cls_off);
+            }
         }
     }
     return BPVM_OK;

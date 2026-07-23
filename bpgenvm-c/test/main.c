@@ -193,9 +193,15 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    uint8_t* mem = (uint8_t*) calloc(1, mem_size);
+    /* H3.c — la región de packs se TALLA a continuación de la memoria de la VM,
+     * dentro del mismo buffer: así los offsets virtuales del código XIP
+     * (cb = puntero_región − vm->memory) caben en uint32 también en host de
+     * 64 bits. En placa la resta envuelve módulo 2^32 y cae en la flash real. */
+    size_t alloc_size = mem_size
+        + ((n_pack_files > 0 || n_pack_dels > 0) ? (size_t) PACKS_REGION_SIZE : 0);
+    uint8_t* mem = (uint8_t*) calloc(1, alloc_size);
     if (!mem) {
-        fprintf(stderr, "No se pudo alocar %zu bytes\n", mem_size);
+        fprintf(stderr, "No se pudo alocar %zu bytes\n", alloc_size);
         return 1;
     }
     /* Diagnóstico: BPVM_POISON=1 rellena el buffer de la VM con 0xAA ANTES del
@@ -235,11 +241,10 @@ int main(int argc, char** argv) {
      * micro; los --pack= quedan "grabados" en ella antes de arrancar la VM. */
     uint8_t* packs_region = NULL;
     if (n_pack_files > 0 || n_pack_dels > 0) {
-        packs_region = (uint8_t*) malloc(PACKS_REGION_SIZE);
-        if (!packs_region ||
-            packs_setup(packs_region, pack_files, n_pack_files,
+        packs_region = mem + mem_size;   /* tallada en el mismo buffer (ver arriba) */
+        if (packs_setup(packs_region, pack_files, n_pack_files,
                         pack_dels, n_pack_dels) != 0) {
-            free(packs_region); bpvm_destroy(vm); free(mem);
+            bpvm_destroy(vm); free(mem);
             return 1;
         }
         /* H3.c — montar la región: la resolución de imports (discover_deps) la
@@ -256,7 +261,7 @@ int main(int argc, char** argv) {
     bpvm_status_t s = bpvm_load_mod(vm, path);
     if (s != BPVM_OK) {
         fprintf(stderr, "load_mod %s: %s\n", path, bpvm_status_str(s));
-        bpvm_destroy(vm); free(mem); free(packs_region);
+        bpvm_destroy(vm); free(mem);
         return (int) s;
     }
 
@@ -283,6 +288,6 @@ int main(int argc, char** argv) {
 
     bpvm_destroy(vm);
     free(mem);
-    free(packs_region);
+    (void) packs_region;   /* tallada dentro de mem: se libera con él */
     return (int) s;
 }
