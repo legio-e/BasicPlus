@@ -175,6 +175,18 @@ def main():
         check(r.get("type") == "ERROR" and r.get("code") == "INVALID_STATE",
               "BURN_END sin sesion → INVALID_STATE")
 
+        # 10. H3 — PACK_FORMAT: estreno/recuperación de la zona (borra TODO,
+        #     con confirmación explícita — nunca automático).
+        r = w.call("PACK_FORMAT")
+        check(r.get("type") == "ERROR" and r.get("code") == "INVALID_PARAM",
+              "PACK_FORMAT sin confirm → INVALID_PARAM")
+        r = w.call("PACK_FORMAT", confirm="YES")
+        check(r.get("type") == "PACK_FORMAT_REPLY", "PACK_FORMAT confirm=YES → OK")
+        r = w.call("PACK_LS")
+        check(r.get("count") == 0 and r.get("chainOk") is True
+              and r.get("free") == r.get("regionSize"),
+              "tras format: 0 packs, cadena sana, todo libre")
+
         print("[status=OK]" if fails == 0 else f"[status=FAIL: {fails}]")
         return 0 if fails == 0 else 1
     finally:

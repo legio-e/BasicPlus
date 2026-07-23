@@ -1060,6 +1060,14 @@ public final class BpvmClient implements AutoCloseable {
         return Json.getLong(end, "offset", -1);
     }
 
+    /** PACK_FORMAT — borra la zona de packs ENTERA (estreno de la zona o
+     *  recuperación de cadena corrupta: una zona recién reparticionada lleva
+     *  restos de su uso anterior). Requiere confirm=YES en el wire; la UI pide
+     *  la confirmación al usuario ANTES de llamar aquí. */
+    public void packFormat(long timeoutMs) throws IOException {
+        sendRequest("PACK_FORMAT", "\"confirm\":\"YES\"", null, timeoutMs);
+    }
+
     /** Helper para serializar un string con comillas + escape. */
     private static String jsonStr(String s) { return "\"" + Json.escape(s) + "\""; }
 

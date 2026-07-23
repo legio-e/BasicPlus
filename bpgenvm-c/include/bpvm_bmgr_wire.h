@@ -36,6 +36,7 @@ typedef struct {
     int  has_size;
     const unsigned char* bulk;          /* H3: PACK_BURN_DATA — el chunk ya RECIBIDO por */
     long bulk_len;                      /*     el transporte del llamador (NULL si no hay) */
+    int  confirm_yes;                   /* H3: PACK_FORMAT — "confirm":"YES" (como el FORMAT del FS) */
 } bpvm_bmgr_req_t;
 
 /* Despacha el comando → escribe la línea JSON de reply en `out` (SIN '\n'; el

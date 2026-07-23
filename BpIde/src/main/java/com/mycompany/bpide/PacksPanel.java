@@ -97,6 +97,9 @@ public final class PacksPanel extends JPanel {
         JButton copy = new JButton("Copiar pack a la placa…");
         copy.addActionListener(e -> onBurn());
         north.add(copy);
+        JButton fmt = new JButton("Formatear zona…");
+        fmt.addActionListener(e -> onFormat());
+        north.add(fmt);
         add(north, BorderLayout.NORTH);
 
         JPanel packPanel = new JPanel(new BorderLayout(4, 4));
@@ -166,7 +169,11 @@ public final class PacksPanel extends JPanel {
         s.append(t.count).append(" packs (").append(alive).append(" activos) · ocupado ")
          .append(kb(used)).append(" · libre ").append(kb(t.free))
          .append(" de ").append(kb(t.regionSize));
-        if (!t.chainOk) s.append("  ⚠ compactar desde el PC");
+        // cadena corrupta con 0 packs = zona SIN ESTRENAR (restos del uso anterior
+        // de esa flash: littlefs/FS viejo) → la salida es «Formatear zona…»
+        if (!t.chainOk) s.append(t.count == 0
+                ? "  ⚠ zona sin formatear (restos previos) → «Formatear zona…»"
+                : "  ⚠ cadena corrupta → compactar desde el PC o «Formatear zona…»");
         if (t.count > t.packs.size()) s.append("  (listados ").append(t.packs.size()).append(")");
         summaryLabel.setText(s.toString());
     }
@@ -204,6 +211,26 @@ public final class PacksPanel extends JPanel {
             return new Object[] { img.length, off };
         }, r -> {
             log.accept("[Packs] grabado " + f.getName() + " (" + r[0] + " B) en offset " + r[1]);
+            refresh();
+        });
+    }
+
+    /** "Formatear zona…": borra la zona de packs ENTERA. Es el estreno de una
+     *  zona recién reparticionada (lleva restos de littlefs/FS viejo y el scan
+     *  la ve corrupta, correctamente) o la recuperación de una cadena rota.
+     *  Confirmación explícita SIEMPRE — borra todos los packs. */
+    private void onFormat() {
+        if (client == null) { summaryLabel.setText("(sin conexión)"); return; }
+        int ok = JOptionPane.showConfirmDialog(this,
+                "Esto BORRA TODOS los packs de la placa (la zona entera).\n"
+                + "Es lo correcto para estrenar una zona recién particionada\n"
+                + "(contiene restos de su uso anterior) o recuperar una cadena rota.\n\n"
+                + "¿Formatear la zona de packs?",
+                "Formatear zona de packs", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (ok != JOptionPane.YES_OPTION) return;
+        summaryLabel.setText("formateando zona de packs…");
+        bg(() -> { client.packFormat(30000); return null; }, r -> {
+            log.accept("[Packs] zona de packs formateada");
             refresh();
         });
     }

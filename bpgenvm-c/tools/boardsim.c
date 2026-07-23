@@ -241,6 +241,11 @@ static void handle(sock_t c, const json_obj_t* obj) {
         req.has_off = req.off >= 0;
         req.size = json_get_long(obj, "size", -1);      /* H3: PACK_BURN_BEGIN */
         req.has_size = req.size >= 0;
+        {                                               /* H3: PACK_FORMAT (confirm=YES) */
+            char confirm[8];
+            req.confirm_yes = json_get_str(obj, "confirm", confirm, sizeof confirm) >= 0
+                              && strcmp(confirm, "YES") == 0;
+        }
         /* H3 — bulk crudo tras la línea (PACK_BURN_DATA): leerlo SIEMPRE que se
          * anuncie, aunque sobre, para no desincronizar el wire. */
         static uint8_t s_bulk[BPVM_PACK_BURN_CHUNK];

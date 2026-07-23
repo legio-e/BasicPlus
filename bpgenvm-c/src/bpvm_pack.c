@@ -345,3 +345,11 @@ int32_t bpvm_pack_burn_end(const uint8_t* base, uint32_t region_size,
         return BPVM_PACK_ERR_VERIFY;
     return (int32_t) s->off;
 }
+
+int bpvm_pack_format(const bpvm_pack_flash_t* fl, uint32_t region_size) {
+    /* La región de particiones viene alineada al sector; el clamp al múltiplo
+     * del bloque es red por si acaso (nunca dejar un erase parcial colgando). */
+    uint32_t len = region_size - (region_size % fl->erase_block);
+    if (len == 0) return BPVM_PACK_ERR_IO;
+    return (fl->erase(fl->user, 0, len) == 0) ? 0 : BPVM_PACK_ERR_IO;
+}

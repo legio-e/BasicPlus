@@ -171,6 +171,13 @@ int bpvm_pack_burn_data(bpvm_pack_burn_t* s, const bpvm_pack_flash_t* fl,
 int32_t bpvm_pack_burn_end(const uint8_t* base, uint32_t region_size,
                            bpvm_pack_burn_t* s, const bpvm_pack_flash_t* fl);
 
+/* FORMAT — borra la región ENTERA (estreno de la zona o recuperación de una
+ * cadena corrupta: una zona recién reparticionada lleva RESTOS de su uso
+ * anterior —littlefs, FS viejo— y el scan la ve corrupta, correctamente).
+ * Operación EXPLÍCITA del usuario (con confirmación en el wire), nunca
+ * automática. Borra TODOS los packs. 0 OK, BPVM_PACK_ERR_IO si falla. */
+int bpvm_pack_format(const bpvm_pack_flash_t* fl, uint32_t region_size);
+
 #ifdef __cplusplus
 }
 #endif

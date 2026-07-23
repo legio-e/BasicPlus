@@ -191,6 +191,11 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
     req.has_size = req.size >= 0;
     req.bulk = bulk;                                /* H3: PACK_BURN_DATA (ya recibido) */
     req.bulk_len = (long) bulk_len;
+    {                                               /* H3: PACK_FORMAT (confirm=YES) */
+        char confirm[8];
+        req.confirm_yes = json_get_str(obj, "confirm", confirm, sizeof confirm) >= 0
+                          && strcmp(confirm, "YES") == 0;
+    }
 
     int wrote = -1;
     int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);

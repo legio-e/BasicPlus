@@ -256,6 +256,22 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         sb_raw(&s, ",\"offset\":"); sb_long(&s, r); sb_raw(&s, "}");
         return s.ok ? (int) s.off : -1;
     }
+    if (!strcmp(type, "PACK_FORMAT")) {
+        /* H3 — estreno/recuperación de la zona: una región recién reparticionada
+         * lleva RESTOS de su uso anterior (littlefs/FS viejo) y el scan la ve
+         * corrupta — correctamente. Borrado EXPLÍCITO con confirmación (como el
+         * FORMAT del FS); borra TODOS los packs. Nunca automático. */
+        if (!bm->packs_flash || !bm->packs_base || bm->packs_size == 0)
+            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
+        if (!req->confirm_yes)
+            return reply_error(out, cap, id, "INVALID_PARAM", "falta confirm=YES");
+        s_burn.active = 0;                       /* una sesión de burn a medias muere aquí */
+        if (bpvm_pack_format(bm->packs_flash, bm->packs_size) != 0)
+            return reply_pack_err(out, cap, id, BPVM_PACK_ERR_IO);
+        sb_raw(&s, "{\"type\":\"PACK_FORMAT_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"regionSize\":"); sb_long(&s, (long) bm->packs_size); sb_raw(&s, "}");
+        return s.ok ? (int) s.off : -1;
+    }
     if (!strcmp(type, "PART_DEFAULTS")) {
         uint32_t sizes[BPVM_PART_COUNT];
         bpvm_bmgr_part_defaults(bm, bm->sector, sizes);
