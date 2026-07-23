@@ -94,6 +94,9 @@ public final class PacksPanel extends JPanel {
         JButton refresh = new JButton("Refrescar");
         refresh.addActionListener(e -> refresh());
         north.add(refresh);
+        JButton copy = new JButton("Copiar pack a la placa…");
+        copy.addActionListener(e -> onBurn());
+        north.add(copy);
         add(north, BorderLayout.NORTH);
 
         JPanel packPanel = new JPanel(new BorderLayout(4, 4));
@@ -183,7 +186,31 @@ public final class PacksPanel extends JPanel {
         });
     }
 
+    /** "Copiar pack a la placa…": elige un .pack (por defecto el último dir) y
+     *  lo graba por chunks (PACK_BURN_*). El device verifica en flash antes de
+     *  activar; aquí solo se informa del resultado y se refresca la lista. */
+    private void onBurn() {
+        if (client == null) { summaryLabel.setText("(sin conexión)"); return; }
+        javax.swing.JFileChooser fc = new javax.swing.JFileChooser(lastBurnDir);
+        fc.setDialogTitle("Copiar pack a la placa");
+        fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Packs (*.pack)", "pack"));
+        if (fc.showOpenDialog(this) != javax.swing.JFileChooser.APPROVE_OPTION) return;
+        final java.io.File f = fc.getSelectedFile();
+        lastBurnDir = f.getParentFile();
+        summaryLabel.setText("grabando " + f.getName() + "…");
+        bg(() -> {
+            byte[] img = java.nio.file.Files.readAllBytes(f.toPath());
+            long off = client.packBurn(img, 30000);   // el burn borra+programa: T holgado
+            return new Object[] { img.length, off };
+        }, r -> {
+            log.accept("[Packs] grabado " + f.getName() + " (" + r[0] + " B) en offset " + r[1]);
+            refresh();
+        });
+    }
+
     // ---- helpers ----
+
+    private static java.io.File lastBurnDir = null;   // recordar carpeta entre usos
 
     private static String kb(long bytes) { return (bytes / 1024L) + " KB"; }
 

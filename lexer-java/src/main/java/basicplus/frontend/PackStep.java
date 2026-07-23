@@ -64,11 +64,15 @@ public final class PackStep {
                 manifest.getBytes(StandardCharsets.UTF_8)));
 
         // 4) empaquetar (Pack.jar = librería). fecha = ahora (la no-determinación
-        //    intencionada del formato). bloque por defecto 4 KB.
+        //    intencionada del formato). Bloque 8 KB = el bloque de borrado MÁS
+        //    GRANDE de las 3 familias (STM32 U5 página 8K; múltiplo del 4K de
+        //    Pico/ESP32) → el MISMO pack se puede grabar en cualquiera (regla de
+        //    portabilidad de la spec §2.1; el BURN valida la alineación).
+        final int PORTABLE_BLOCK = 8192;
         Path out = outDir.resolve(proj.main + ".pack");
         try {
             byte[] img = PackWriter.build(proj.main, "", System.currentTimeMillis() / 1000L,
-                    entries, PackFormat.DEFAULT_BLOCK);
+                    entries, PORTABLE_BLOCK);
             Files.write(out, img);
         } catch (PackException pe) {
             throw new IOException("out:pack — empaquetando: " + pe.getMessage(), pe);

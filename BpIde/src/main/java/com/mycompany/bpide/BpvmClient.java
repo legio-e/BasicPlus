@@ -1040,6 +1040,26 @@ public final class BpvmClient implements AutoCloseable {
         return out;
     }
 
+    /** PACK_BURN_* — graba un pack en la zona de packs del device POR CHUNKS
+     *  (RAM constante en el micro; sin límite de tamaño de pack). El device
+     *  valida ambos CRC leyendo de su flash y solo entonces ACTIVA el pack
+     *  (magic al final): un corte o un error deja la zona como estaba.
+     *  Devuelve el offset donde quedó grabado. */
+    public long packBurn(byte[] img, long timeoutMs) throws IOException {
+        Map<String, Object> r = sendRequest("PACK_BURN_BEGIN",
+                "\"size\":" + img.length, null, timeoutMs);
+        int chunk = (int) Json.getLong(r, "chunkMax", 4096);
+        chunk -= chunk % 16;                       // contrato: chunks múltiplos de 16
+        if (chunk <= 0) chunk = 4096;
+        for (int o = 0; o < img.length; o += chunk) {
+            int n = Math.min(chunk, img.length - o);
+            byte[] part = java.util.Arrays.copyOfRange(img, o, o + n);
+            sendRequest("PACK_BURN_DATA", null, part, timeoutMs);
+        }
+        Map<String, Object> end = sendRequest("PACK_BURN_END", null, null, timeoutMs);
+        return Json.getLong(end, "offset", -1);
+    }
+
     /** Helper para serializar un string con comillas + escape. */
     private static String jsonStr(String s) { return "\"" + Json.escape(s) + "\""; }
 
