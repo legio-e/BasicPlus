@@ -25,16 +25,24 @@ def check(cond, msg):
 class Wire:
     def __init__(self, sock):
         self.s = sock; self.buf = b""; self.id = 0
-    def call(self, typ, **fields):
-        self.id += 1
-        fields.update(type=typ, id=self.id)
-        self.s.sendall((json.dumps(fields) + "\n").encode())
+    def _reply(self):
         while b"\n" not in self.buf:
             chunk = self.s.recv(4096)
             if not chunk: raise EOFError("sim cerró la conexión")
             self.buf += chunk
         line, self.buf = self.buf.split(b"\n", 1)
         return json.loads(line.decode())
+    def call(self, typ, **fields):
+        self.id += 1
+        fields.update(type=typ, id=self.id)
+        self.s.sendall((json.dumps(fields) + "\n").encode())
+        return self._reply()
+    def call_bulk(self, typ, data, **fields):
+        """Línea JSON con "bulk":N + N bytes crudos detrás (framing del PUT/BURN)."""
+        self.id += 1
+        fields.update(type=typ, id=self.id, bulk=len(data))
+        self.s.sendall((json.dumps(fields) + "\n").encode() + data)
+        return self._reply()
 
 def main():
     flash = os.path.join(tempfile.gettempdir(), "boardsim_smoke.flash")
@@ -143,6 +151,29 @@ def main():
         r = w.call("PACK_ENTRIES")
         check(r.get("type") == "ERROR" and r.get("code") == "INVALID_PARAM",
               "PACK_ENTRIES sin offset → INVALID_PARAM")
+
+        # 9. H3 — BURN por chunks: graba la fixture (Pack.jar) en la región
+        #    virgen por el wire (BEGIN → DATA×n con bulk crudo → END) y aparece.
+        fix = os.path.join(HERE, "..", "samples", "PackFixB.pack")
+        img = open(fix, "rb").read()
+        r = w.call("PACK_BURN_BEGIN", size=len(img))
+        check(r.get("type") == "PACK_BURN_BEGIN_REPLY" and r.get("offset") == 0
+              and r.get("chunkMax", 0) >= 1000, "BURN_BEGIN → offset 0 + chunkMax")
+        okd = True
+        for o in range(0, len(img), 1024):          # trozos de 1024 (multi-chunk, mult. de 16)
+            r = w.call_bulk("PACK_BURN_DATA", img[o:o+1024])
+            okd = okd and r.get("type") == "PACK_BURN_DATA_REPLY"
+        check(okd, "BURN_DATA: todos los chunks aceptados")
+        r = w.call("PACK_BURN_END")
+        check(r.get("type") == "PACK_BURN_END_REPLY" and r.get("offset") == 0,
+              "BURN_END → verificado en flash y ACTIVADO en 0")
+        r = w.call("PACK_LS")
+        check(r.get("count") == 1 and r["packs"][0]["name"] == "PackFixB"
+              and r["packs"][0]["crcOk"] is True and r["packs"][0]["active"] is True,
+              "PACK_LS tras burn → PackFixB valido y activo")
+        r = w.call("PACK_BURN_END")
+        check(r.get("type") == "ERROR" and r.get("code") == "INVALID_STATE",
+              "BURN_END sin sesion → INVALID_STATE")
 
         print("[status=OK]" if fails == 0 else f"[status=FAIL: {fails}]")
         return 0 if fails == 0 else 1

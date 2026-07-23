@@ -110,6 +110,67 @@ int bpvm_pack_remove_at(uint8_t* base, uint32_t region_size, uint32_t pack_off);
  * "se ve", por la regla del find). Devuelve su offset o -1 si no está. */
 int32_t bpvm_pack_remove(uint8_t* base, uint32_t region_size, const char* nombre);
 
+/* ── BURN por CHUNKS (grabación real a flash, RAM constante) ──
+ *
+ * La imagen llega en trozos y se graba SECUENCIAL según llega; solo la
+ * cabecera (128 B) se retiene en RAM. La validación completa (ambos CRC) se
+ * hace en el END *leyendo de la flash* (XIP = el readback de verdad) y solo
+ * entonces se graba la cabecera — [16,128) primero y el primer quadword (el
+ * MAGIC) al FINAL. Corte de luz o CRC malo en cualquier punto ⇒ el magic
+ * queda 0xFF ⇒ para el scan el pack NUNCA EXISTIÓ (disciplina append-only);
+ * el siguiente burn re-borra esa zona. El PC conserva el pack y reintenta.
+ *
+ * La cintura pone las escrituras; offsets RELATIVOS a la región. erase_block =
+ * granularidad de borrado del target (STM32 U5 8K, Pico/ESP 4K, sim 4K): el
+ * begin exige size múltiplo (mantiene la cadena alineada para siempre). */
+typedef struct bpvm_pack_flash {   /* con tag: bpvm_bmgr.h lo forward-declara */
+    int (*erase)(void* user, uint32_t off, uint32_t len);              /* len mult. de block */
+    int (*program)(void* user, uint32_t off, const uint8_t* d, uint32_t len);
+    void*    user;
+    uint32_t erase_block;
+} bpvm_pack_flash_t;
+
+/* Sesión de burn (la guarda el llamador; una a la vez por región). */
+typedef struct {
+    int      active;
+    uint32_t off;                            /* destino en la región (append) */
+    uint32_t total;                          /* tamaño anunciado en el BEGIN */
+    uint32_t received;
+    uint8_t  hdr[BPVM_PACK_HEADER_SIZE];     /* cabecera retenida (se graba al final) */
+} bpvm_pack_burn_t;
+
+/* Tamaño máximo de chunk que el protocolo anuncia al PC (cabe en cualquier
+ * transporte/buffer de los 3 micros). */
+#define BPVM_PACK_BURN_CHUNK 4096
+
+#define BPVM_PACK_ERR_ALIGN    (-3)  /* size no es múltiplo del bloque de borrado */
+#define BPVM_PACK_ERR_STATE    (-4)  /* sesión inválida (sin begin / tamaño no cuadra) */
+#define BPVM_PACK_ERR_VERIFY   (-5)  /* CRC no cuadra al verificar EN FLASH */
+#define BPVM_PACK_ERR_IO       (-6)  /* la cintura de flash falló */
+
+/* Abre sesión: valida size (>=128, múltiplo de erase_block), localiza el punto
+ * de append (scan), comprueba que cabe y BORRA el rango destino. Devuelve el
+ * offset destino (>=0) o BPVM_PACK_ERR_*. Una sesión activa previa se abandona
+ * (su magic nunca se escribió → invisible). */
+int32_t bpvm_pack_burn_begin(const uint8_t* base, uint32_t region_size,
+                             const bpvm_pack_flash_t* fl, uint32_t size,
+                             bpvm_pack_burn_t* s);
+
+/* Un chunk más (en orden). len debe ser MÚLTIPLO DE 16 (contrato uniforme: así
+ * cada program queda alineado a quadword, obligatorio en flash con ECC como el
+ * U5; total es múltiplo del bloque ⇒ el último chunk también cumple). Los
+ * primeros 128 B se retienen en s->hdr; el resto se graba directo. 0 OK, o
+ * BPVM_PACK_ERR_STATE/IO (la sesión se cierra). */
+int bpvm_pack_burn_data(bpvm_pack_burn_t* s, const bpvm_pack_flash_t* fl,
+                        const uint8_t* data, uint32_t len);
+
+/* Cierra: exige received==total, valida la cabecera retenida (crc_cab, verfmt,
+ * size_total==total) y el contenido LEYENDO de la flash (crc_contenido); solo
+ * si todo cuadra graba la cabecera (magic al final). Devuelve el offset del
+ * pack ya VISIBLE (>=0) o BPVM_PACK_ERR_* (y la zona queda invisible). */
+int32_t bpvm_pack_burn_end(const uint8_t* base, uint32_t region_size,
+                           bpvm_pack_burn_t* s, const bpvm_pack_flash_t* fl);
+
 #ifdef __cplusplus
 }
 #endif

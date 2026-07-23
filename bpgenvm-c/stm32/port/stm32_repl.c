@@ -17,6 +17,7 @@
 #include "stm32_wire.h"
 #include "stm32_fs.h"
 #include "board_mgr_stm32.h"  /* H9 — arranque escalonado + STATE/ENV/PART */
+#include "bpvm_pack.h"        /* H3 — BPVM_PACK_BURN_CHUNK (bulk del PACK_BURN_DATA) */
 #include "log.h"              /* log persistente de diagnóstico (espejo del Pico) */
 #include "bpvm_fs.h"          /* H19 — base-dir / main module por proyecto */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
@@ -526,14 +527,40 @@ static void dispatch(int first_char) {
     }
 
     /* H9 — gestión de placa (STATE/ENV_x/PART_x + H3 PACK_x): el host configura el
-     * env/particiones cuando el arranque no llegó al FS, y consulta la zona de packs.
-     * Las replies las pone bpvm_bmgr_wire (idénticas al boardsim y a las otras
-     * placas). s_put_buf presta el scratch. */
+     * env/particiones cuando el arranque no llegó al FS, y consulta/graba la zona
+     * de packs. Las replies las pone bpvm_bmgr_wire (idénticas al boardsim y a las
+     * otras placas). s_put_buf presta el scratch; el bulk de PACK_BURN_DATA va a
+     * su buffer propio (chunk ≤ 4K) para no pisar el scratch. */
     if (strcmp(type, "STATE") == 0
         || strncmp(type, "ENV_", 4) == 0
         || strncmp(type, "PART_", 5) == 0
         || strncmp(type, "PACK_", 5) == 0) {
-        board_mgr_stm32_handle(id, &obj, type, s_put_buf, sizeof s_put_buf);
+        static uint8_t s_burn_chunk[BPVM_PACK_BURN_CHUNK];
+        const uint8_t* bulk_ptr = NULL;
+        unsigned long  bulk_n   = 0;
+        long bulk = json_get_long(&obj, "bulk", -1);
+        if (bulk > 0) {
+            /* CRÍTICO: consumir SIEMPRE los bytes anunciados (como el PUT) para
+             * no desincronizar el wire, quepan o no. */
+            if ((size_t) bulk > sizeof s_burn_chunk) {
+                size_t rem = (size_t) bulk;
+                while (rem > 0) {
+                    size_t chunk = rem < sizeof s_burn_chunk ? rem : sizeof s_burn_chunk;
+                    if (stm32_wire_recv_bulk(s_burn_chunk, chunk) != 0) {
+                        stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
+                    }
+                    rem -= chunk;
+                }
+                stm32_wire_send_error(id, "INVALID_PARAM", "chunk demasiado grande");
+                return;
+            }
+            if (stm32_wire_recv_bulk(s_burn_chunk, (size_t) bulk) != 0) {
+                stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
+            }
+            bulk_ptr = s_burn_chunk;
+            bulk_n = (unsigned long) bulk;
+        }
+        board_mgr_stm32_handle(id, &obj, type, s_put_buf, sizeof s_put_buf, bulk_ptr, bulk_n);
         return;
     }
     /* H9 — gating: sin FS montado, las ops de fichero no valen; sin VM, el RUN no.

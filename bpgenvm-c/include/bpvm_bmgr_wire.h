@@ -32,6 +32,10 @@ typedef struct {
     long part_sizes[BPVM_PART_COUNT];   /* PART_APPLY (por partición, en bytes); -1 si falta */
     long off;                           /* H3: offset de pack en la región (PACK_ENTRIES; */
     int  has_off;                       /*     lo usarán también PACK_DEL/PACK_READ) */
+    long size;                          /* H3: PACK_BURN_BEGIN (tamaño total anunciado) */
+    int  has_size;
+    const unsigned char* bulk;          /* H3: PACK_BURN_DATA — el chunk ya RECIBIDO por */
+    long bulk_len;                      /*     el transporte del llamador (NULL si no hay) */
 } bpvm_bmgr_req_t;
 
 /* Despacha el comando → escribe la línea JSON de reply en `out` (SIN '\n'; el

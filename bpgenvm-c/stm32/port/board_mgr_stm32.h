@@ -25,11 +25,14 @@ void board_mgr_stm32_boot(void);
 /* Estado REAL del boot (para STATE del wire y el gating de FS/RUN en el repl). */
 const bpvm_boot_status_t* board_boot_status(void);
 
-/* Atiende un comando de gestión ya parseado (STATE/ENV_x/PART_x). `scratch` (>= 3
- * sectores + 512 = 24.5 KB; s_put_buf de 32 KB del repl vale) lo presta el
- * llamador → sin BSS propio grande. Idéntico shape que board_mgr_esp32/pico. */
+/* Atiende un comando de gestión ya parseado (STATE/ENV_x/PART_x/PACK_x). `scratch`
+ * (>= 3 sectores + 512 = 24.5 KB; s_put_buf del repl vale) lo presta el llamador →
+ * sin BSS propio grande. `bulk`/`bulk_len` = payload binario ya recibido por el
+ * transporte (PACK_BURN_DATA; NULL si el comando no lleva). Idéntico shape que
+ * board_mgr_esp32/pico. */
 void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
-                            unsigned char* scratch, unsigned long scratch_len);
+                            unsigned char* scratch, unsigned long scratch_len,
+                            const unsigned char* bulk, unsigned long bulk_len);
 
 #ifdef __cplusplus
 }

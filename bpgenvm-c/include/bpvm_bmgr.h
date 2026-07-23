@@ -46,6 +46,9 @@ typedef struct {
      * el llamador desde su layout de particiones (BPVM_PART_PACKS). */
     const uint8_t* packs_base;
     uint32_t       packs_size;
+    /* H3 — cintura de ESCRITURA de la zona de packs (erase/program por-micro).
+     * NULL = packs de solo lectura (PACK_BURN responde UNSUPPORTED). */
+    const struct bpvm_pack_flash* packs_flash;
 } bpvm_bmgr_t;
 
 /* --- Lectura: entorno --- */

@@ -59,6 +59,22 @@ static const char* g_flash_path = "boardsim.flash";
 #define PACKS_REGION_SIZE (1024u * 1024u)
 static uint8_t g_packs[PACKS_REGION_SIZE];
 
+/* Cintura de "flash" del sim para el BURN (erase/program sobre la región RAM).
+ * Bloque de borrado 4K (como Pico/ESP; el STM32 real usa 8K). */
+static int sim_pack_erase(void* u, uint32_t off, uint32_t len) {
+    (void) u;
+    if (off + len > PACKS_REGION_SIZE) return -1;
+    memset(g_packs + off, 0xFF, len);
+    return 0;
+}
+static int sim_pack_program(void* u, uint32_t off, const uint8_t* d, uint32_t len) {
+    (void) u;
+    if (off + len > PACKS_REGION_SIZE) return -1;
+    memcpy(g_packs + off, d, len);
+    return 0;
+}
+static const bpvm_pack_flash_t g_packs_fl = { sim_pack_erase, sim_pack_program, NULL, 4096u };
+
 static int packs_preload(const char* path) {
     FILE* f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "boardsim: --pack: no puedo abrir %s\n", path); return -1; }
@@ -167,6 +183,16 @@ static int recv_line(sock_t c, char* buf, size_t cap) {
         if (n < cap - 1) buf[n++] = ch;
     }
 }
+/* Lee EXACTAMENTE n bytes crudos (el bulk que sigue a una línea con "bulk":N). */
+static int recv_exact(sock_t c, uint8_t* buf, size_t n) {
+    size_t got = 0;
+    while (got < n) {
+        int r = recv(c, (char*) buf + got, (int) (n - got), 0);
+        if (r <= 0) return -1;
+        got += (size_t) r;
+    }
+    return 0;
+}
 
 /* --- dispatch de un request --- */
 static void handle(sock_t c, const json_obj_t* obj) {
@@ -213,6 +239,28 @@ static void handle(sock_t c, const json_obj_t* obj) {
             req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
         req.off = json_get_long(obj, "offset", -1);     /* H3: PACK_ENTRIES/DEL/READ */
         req.has_off = req.off >= 0;
+        req.size = json_get_long(obj, "size", -1);      /* H3: PACK_BURN_BEGIN */
+        req.has_size = req.size >= 0;
+        /* H3 — bulk crudo tras la línea (PACK_BURN_DATA): leerlo SIEMPRE que se
+         * anuncie, aunque sobre, para no desincronizar el wire. */
+        static uint8_t s_bulk[BPVM_PACK_BURN_CHUNK];
+        long bulk = json_get_long(obj, "bulk", -1);
+        if (bulk > 0) {
+            if (bulk > (long) sizeof s_bulk) {
+                uint8_t sink[512];
+                long rem = bulk;
+                while (rem > 0) {
+                    size_t chunk = rem < (long) sizeof sink ? (size_t) rem : sizeof sink;
+                    if (recv_exact(c, sink, chunk) != 0) return;
+                    rem -= (long) chunk;
+                }
+                send_err(c, id, "INVALID_PARAM", "chunk demasiado grande");
+                return;
+            }
+            if (recv_exact(c, s_bulk, (size_t) bulk) != 0) return;
+            req.bulk = s_bulk;
+            req.bulk_len = bulk;
+        }
         char rbuf[4096];
         int wrote = -1;
         int n = bpvm_bmgr_wire_dispatch(&g_bm, &req, rbuf, sizeof rbuf, &wrote);
@@ -245,6 +293,7 @@ int main(int argc, char** argv) {
     g_bm.usable_flash = bpvm_part_usable_flash(flash, 0);   /* la flash simulada es la verdad */
     g_bm.packs_base = g_packs;                              /* H3: PACK_LS sirve esta región */
     g_bm.packs_size = PACKS_REGION_SIZE;
+    g_bm.packs_flash = &g_packs_fl;                         /* H3: BURN escribible en el sim */
 
 #if defined(_WIN32)
     WSADATA wsa;

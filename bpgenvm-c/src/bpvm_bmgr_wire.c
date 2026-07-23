@@ -64,6 +64,24 @@ static int reply_error(char* out, size_t cap, long id, const char* code, const c
     return s.ok ? (int) s.off : -1;
 }
 
+/* H3 — sesión de BURN (una a la vez: el wire de gestión es single-thread en
+ * todos los llamadores; un BEGIN nuevo abandona la anterior sin daño porque
+ * su magic nunca se escribió). static: fuera del stack de la comm task. */
+static bpvm_pack_burn_t s_burn;
+
+/* Mapea un error del núcleo de packs a (code, message) del wire. */
+static int reply_pack_err(char* out, size_t cap, long id, int32_t e) {
+    switch (e) {
+    case BPVM_PACK_ERR_BADIMG:  return reply_error(out, cap, id, "BAD_PACK",      "pack invalido (magic/CRC/formato)");
+    case BPVM_PACK_ERR_NOSPACE: return reply_error(out, cap, id, "NO_SPACE",      "no cabe en la zona de packs (o cadena corrupta)");
+    case BPVM_PACK_ERR_ALIGN:   return reply_error(out, cap, id, "BAD_ALIGN",     "el tamano no es multiplo del bloque de borrado");
+    case BPVM_PACK_ERR_STATE:   return reply_error(out, cap, id, "INVALID_STATE", "sesion de burn invalida (begin/data/end desordenados)");
+    case BPVM_PACK_ERR_VERIFY:  return reply_error(out, cap, id, "VERIFY_FAIL",   "el CRC no cuadra al verificar en flash");
+    case BPVM_PACK_ERR_IO:      return reply_error(out, cap, id, "FLASH_ERROR",   "fallo de erase/program en la flash");
+    default:                    return reply_error(out, cap, id, "INTERNAL_ERROR", "error de packs desconocido");
+    }
+}
+
 int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
                             char* out, size_t cap, int* wrote_slot) {
     if (wrote_slot) *wrote_slot = -1;
@@ -200,6 +218,43 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         }
         sb_raw(&s, "]}");
         return s.ok ? (int) s.off : reply_error(out, cap, id, "INTERNAL_ERROR", "reply no cabe");
+    }
+    if (!strcmp(type, "PACK_BURN_BEGIN")) {
+        /* H3 — grabar un pack por CHUNKS (RAM constante; ver bpvm_pack.h §BURN).
+         * BEGIN valida+borra y abre sesión; DATA graba según llega; END verifica
+         * en flash y ACTIVA (magic al final). */
+        if (!bm->packs_base || bm->packs_size == 0 || !bm->packs_flash)
+            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
+        if (!req->has_size || req->size <= 0)
+            return reply_error(out, cap, id, "INVALID_PARAM", "falta size");
+        int32_t r = bpvm_pack_burn_begin(bm->packs_base, bm->packs_size, bm->packs_flash,
+                                         (uint32_t) req->size, &s_burn);
+        if (r < 0) return reply_pack_err(out, cap, id, r);
+        sb_raw(&s, "{\"type\":\"PACK_BURN_BEGIN_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"offset\":"); sb_long(&s, r);
+        sb_raw(&s, ",\"chunkMax\":"); sb_long(&s, BPVM_PACK_BURN_CHUNK); sb_raw(&s, "}");
+        return s.ok ? (int) s.off : -1;
+    }
+    if (!strcmp(type, "PACK_BURN_DATA")) {
+        if (!bm->packs_flash)
+            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
+        if (!req->bulk || req->bulk_len <= 0 || req->bulk_len > BPVM_PACK_BURN_CHUNK)
+            return reply_error(out, cap, id, "INVALID_PARAM", "falta bulk (o chunk demasiado grande)");
+        int r = bpvm_pack_burn_data(&s_burn, bm->packs_flash,
+                                    req->bulk, (uint32_t) req->bulk_len);
+        if (r < 0) return reply_pack_err(out, cap, id, r);
+        sb_raw(&s, "{\"type\":\"PACK_BURN_DATA_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"received\":"); sb_long(&s, (long) s_burn.received); sb_raw(&s, "}");
+        return s.ok ? (int) s.off : -1;
+    }
+    if (!strcmp(type, "PACK_BURN_END")) {
+        if (!bm->packs_flash)
+            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
+        int32_t r = bpvm_pack_burn_end(bm->packs_base, bm->packs_size, &s_burn, bm->packs_flash);
+        if (r < 0) return reply_pack_err(out, cap, id, r);
+        sb_raw(&s, "{\"type\":\"PACK_BURN_END_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"offset\":"); sb_long(&s, r); sb_raw(&s, "}");
+        return s.ok ? (int) s.off : -1;
     }
     if (!strcmp(type, "PART_DEFAULTS")) {
         uint32_t sizes[BPVM_PART_COUNT];

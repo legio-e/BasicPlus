@@ -12,6 +12,7 @@
 
 #include "bpvm_bmgr.h"
 #include "bpvm_bmgr_wire.h"
+#include "bpvm_pack.h"           /* H3 — cintura de burn de la zona de packs */
 #include "bpvm_part.h"
 #include "bpvm_env.h"
 #include "stm32_wire.h"          /* stm32_wire_send_error / send_line (no wire_v1) */
@@ -48,6 +49,35 @@ static void env_write_slot(int slot, const uint8_t* src) {
     if (stm32_flash_erase(addr, 1u) == 0)          /* 1 página de 8 KB */
         stm32_flash_write(addr, src, BP_ENV_SECTOR);
 }
+
+/* ── H3: cintura de BURN de la zona de packs (offsets RELATIVOS a la región;
+ * la región = partición PACKS del layout, s_packs_off relativo a FLASH_BASE).
+ * El U5 borra por página de 8K y programa por quadword de 16 con ECC: un
+ * quadword solo se programa UNA vez → los grupos todo-0xFF se SALTAN (quedan
+ * de verdad borrados; el slack del pack no se toca). ── */
+static uint32_t s_packs_off;   /* offset flash de la región (lo fija handle()) */
+
+static int packs_fl_erase(void* u, uint32_t off, uint32_t len) {
+    (void) u;
+    if ((len % BP_ENV_SECTOR) != 0) return -1;
+    return stm32_flash_erase(FLASH_BASE + s_packs_off + off, len / BP_ENV_SECTOR);
+}
+static int packs_fl_program(void* u, uint32_t off, const uint8_t* d, uint32_t len) {
+    (void) u;
+    uint32_t base = FLASH_BASE + s_packs_off + off;
+    uint32_t i = 0;
+    while (i < len) {
+        uint32_t run = len - i < 16u ? len - i : 16u;   /* grupo de quadword */
+        int all_ff = 1;
+        for (uint32_t k = 0; k < run; k++)
+            if (d[i + k] != 0xFF) { all_ff = 0; break; }
+        if (!all_ff && stm32_flash_write(base + i, d + i, run) != 0) return -1;
+        i += run;
+    }
+    return 0;
+}
+static const bpvm_pack_flash_t s_packs_fl =
+    { packs_fl_erase, packs_fl_program, NULL, BP_ENV_SECTOR /* pagina 8K */ };
 
 /* ── arranque escalonado: particiones del env → FS (sub-rango de BP_DATA) → VM ── */
 
@@ -104,7 +134,8 @@ void board_mgr_stm32_boot(void) {
 /* ── ramo del wire (STATE/ENV_x/PART_x): el repl encamina aquí ── */
 
 void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
-                            unsigned char* scratch, unsigned long scratch_len) {
+                            unsigned char* scratch, unsigned long scratch_len,
+                            const unsigned char* bulk, unsigned long bulk_len) {
     /* Red anti-divergencia .ld ↔ flash_layout_stm32.h: el env debe caer entre el
      * fin del firmware y el inicio de los datos. Si alguien mueve las regiones del
      * linker sin tocar el header (o al revés), tocar flash borraría CÓDIGO → se
@@ -141,6 +172,8 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
         if (pp && pp->size > 0) {
             bm.packs_base = (const uint8_t*) (uintptr_t) (FLASH_BASE + pp->offset);
             bm.packs_size = pp->size;
+            s_packs_off   = pp->offset;      /* la cintura de burn escribe aquí */
+            bm.packs_flash = &s_packs_fl;
         }
     }
 
@@ -154,6 +187,10 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
         req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
     req.off = json_get_long(obj, "offset", -1);     /* H3: PACK_ENTRIES/DEL/READ */
     req.has_off = req.off >= 0;
+    req.size = json_get_long(obj, "size", -1);      /* H3: PACK_BURN_BEGIN */
+    req.has_size = req.size >= 0;
+    req.bulk = bulk;                                /* H3: PACK_BURN_DATA (ya recibido) */
+    req.bulk_len = (long) bulk_len;
 
     int wrote = -1;
     int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);

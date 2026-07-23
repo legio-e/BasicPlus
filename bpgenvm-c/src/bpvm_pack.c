@@ -250,3 +250,98 @@ int32_t bpvm_pack_remove(uint8_t* base, uint32_t region_size, const char* nombre
     if (bpvm_pack_remove_at(base, region_size, (uint32_t) target) != 0) return -1;
     return target;
 }
+
+/* ── BURN por chunks (ver bpvm_pack.h para el contrato y la disciplina) ── */
+
+int32_t bpvm_pack_burn_begin(const uint8_t* base, uint32_t region_size,
+                             const bpvm_pack_flash_t* fl, uint32_t size,
+                             bpvm_pack_burn_t* s) {
+    s->active = 0;                                          /* abandona sesión previa */
+    if (size < BPVM_PACK_HEADER_SIZE) return BPVM_PACK_ERR_BADIMG;
+    if (fl->erase_block == 0 || (size % fl->erase_block) != 0)
+        return BPVM_PACK_ERR_ALIGN;
+    uint32_t end;
+    (void) bpvm_pack_scan(base, region_size, NULL, 0, 0, &end);
+    if (end == BPVM_PACK_NO_SPACE) return BPVM_PACK_ERR_NOSPACE;   /* cadena corrupta */
+    if (size > region_size - end) return BPVM_PACK_ERR_NOSPACE;    /* no cabe */
+    /* end es múltiplo del bloque por inducción (todos los size_total lo son). */
+    if (fl->erase(fl->user, end, size) != 0) return BPVM_PACK_ERR_IO;
+    s->active = 1;
+    s->off = end;
+    s->total = size;
+    s->received = 0;
+    return (int32_t) end;
+}
+
+int bpvm_pack_burn_data(bpvm_pack_burn_t* s, const bpvm_pack_flash_t* fl,
+                        const uint8_t* data, uint32_t len) {
+    if (!s->active) return BPVM_PACK_ERR_STATE;
+    /* CONTRATO: chunks múltiplos de 16. Con la cabecera de 128 retenida, TODAS
+     * las escrituras quedan alineadas y en múltiplos de quadword — obligatorio
+     * en flash con ECC (U5: un quadword solo se programa una vez; un chunk
+     * arbitrario partiría un quadword entre dos program). total es múltiplo
+     * del bloque ⇒ el último chunk también cumple. Regla UNIFORME en las 3
+     * familias y el sim: el PC no puede coger vicios que solo rompen en placa. */
+    if (len == 0 || (len % 16u) != 0 || len > s->total - s->received) {
+        s->active = 0;
+        return BPVM_PACK_ERR_STATE;
+    }
+    uint32_t pos = s->received;
+    /* Los primeros 128 B (cabecera) se RETIENEN en RAM — se graban en el END,
+     * con el magic al final. El resto va directo a flash según llega. */
+    if (pos < BPVM_PACK_HEADER_SIZE) {
+        uint32_t h = BPVM_PACK_HEADER_SIZE - pos;
+        if (h > len) h = len;
+        memcpy(s->hdr + pos, data, h);
+        pos += h; data += h; len -= h;
+        s->received = pos;
+    }
+    if (len > 0) {
+        if (fl->program(fl->user, s->off + pos, data, len) != 0) {
+            s->active = 0;
+            return BPVM_PACK_ERR_IO;
+        }
+        s->received = pos + len;
+    }
+    return 0;
+}
+
+int32_t bpvm_pack_burn_end(const uint8_t* base, uint32_t region_size,
+                           bpvm_pack_burn_t* s, const bpvm_pack_flash_t* fl) {
+    (void) region_size;
+    if (!s->active) return BPVM_PACK_ERR_STATE;
+    s->active = 0;                                          /* la sesión muere aquí, pase lo que pase */
+    if (s->received != s->total) return BPVM_PACK_ERR_STATE;
+
+    /* 1) cabecera retenida: magic + verfmt + size_total coherente + crc_cab. */
+    const uint8_t* h = s->hdr;
+    if (get_u32(h + OFF_MAGIC) != BPVM_PACK_MAGIC) return BPVM_PACK_ERR_BADIMG;
+    if (get_u16(h + OFF_VERFMT) != BPVM_PACK_VERFMT) return BPVM_PACK_ERR_BADIMG;
+    if (get_u32(h + OFF_SIZE_TOTAL) != s->total) return BPVM_PACK_ERR_BADIMG;
+    uint16_t crc = bpvm_pack_crc16(BPVM_PACK_CRC16_INIT, h, OFF_FLAGS);
+    crc = bpvm_pack_crc16(crc, h + OFF_SIZE_TOTAL, OFF_CRC_CAB - OFF_SIZE_TOTAL);
+    if (crc != get_u16(h + OFF_CRC_CAB)) return BPVM_PACK_ERR_BADIMG;
+
+    /* 2) contenido: recorrido + crc_contenido LEYENDO DE LA FLASH (readback). */
+    {
+        uint32_t rel = BPVM_PACK_HEADER_SIZE;
+        int r;
+        while ((r = next_entry(base, s->off, s->total, &rel, NULL)) == 1) { }
+        if (r < 0) return BPVM_PACK_ERR_VERIFY;
+        uint16_t cc = bpvm_pack_crc16(BPVM_PACK_CRC16_INIT,
+                                      base + s->off + BPVM_PACK_HEADER_SIZE,
+                                      rel - BPVM_PACK_HEADER_SIZE);
+        if (cc != get_u16(h + OFF_CRC_CONT)) return BPVM_PACK_ERR_VERIFY;
+    }
+
+    /* 3) ACTIVAR: cabecera [16,128) primero, el quadword del MAGIC al FINAL.
+     * Un corte entre medias deja magic=0xFF → el pack nunca existió. */
+    if (fl->program(fl->user, s->off + 16, s->hdr + 16, BPVM_PACK_HEADER_SIZE - 16) != 0)
+        return BPVM_PACK_ERR_IO;
+    if (fl->program(fl->user, s->off, s->hdr, 16) != 0)
+        return BPVM_PACK_ERR_IO;
+    /* 4) verificación final de la cabecera en flash (readback del quadword). */
+    if (memcmp(base + s->off, s->hdr, BPVM_PACK_HEADER_SIZE) != 0)
+        return BPVM_PACK_ERR_VERIFY;
+    return (int32_t) s->off;
+}

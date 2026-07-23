@@ -43,6 +43,27 @@ static int load_fix(const char* path, uint8_t* dst, uint32_t size) {
     return 1;
 }
 
+/* --- "flash" ESTRICTA para el burn: write-once (programar solo sobre 0xFF,
+ * el modelo mas duro = flash interna con ECC). Caza doble-program y erase
+ * desalineado, que en placa serian corrupcion silenciosa. --- */
+#define FLREG (16u * 1024u)
+static uint8_t g_fl[FLREG];
+static int fl_erase(void* u, uint32_t off, uint32_t len) {
+    (void) u;
+    if ((off % 4096u) != 0 || (len % 4096u) != 0 || off + len > FLREG) return -1;
+    memset(g_fl + off, 0xFF, len);
+    return 0;
+}
+static int fl_program(void* u, uint32_t off, const uint8_t* d, uint32_t len) {
+    (void) u;
+    if (off + len > FLREG) return -1;
+    for (uint32_t i = 0; i < len; i++) {
+        if (g_fl[off + i] != 0xFF) return -1;   /* write-once: doble-program = error */
+        g_fl[off + i] = d[i];
+    }
+    return 0;
+}
+
 int main(void) {
     printf("=== test_pack (H3 zona de packs) ===\n");
 
@@ -179,6 +200,87 @@ int main(void) {
         CHECK(bpvm_pack_add(small, sizeof small, fixB, FIX_SIZE) == (int32_t) FIX_SIZE, "add 2/2 cabe");
         CHECK(bpvm_pack_add(small, sizeof small, fixA, FIX_SIZE) == BPVM_PACK_ERR_NOSPACE,
               "add 3/2 → NO_SPACE");
+    }
+
+    /* --- 11. BURN por chunks sobre una "flash" ESTRICTA (write-once) --- */
+    {
+        memset(g_fl, 0xFF, sizeof g_fl);
+        bpvm_pack_flash_t fl = { fl_erase, fl_program, NULL, 4096u };
+        bpvm_pack_burn_t bs;
+        memset(&bs, 0, sizeof bs);
+
+        /* happy path en trozos de 1008 (16×63: parte cabecera y contenido pero
+         * respeta el contrato de multiplos de 16) */
+        CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, FIX_SIZE, &bs) == 0, "burn begin → off 0");
+        uint32_t sent = 0;
+        int derr = 0;
+        while (sent < FIX_SIZE) {
+            uint32_t n = FIX_SIZE - sent < 1008 ? FIX_SIZE - sent : 1008;
+            if (bpvm_pack_burn_data(&bs, &fl, fixA + sent, n) != 0) { derr = 1; break; }
+            sent += n;
+            if (sent == 2016) {   /* a MITAD de burn: el pack NO existe aún */
+                uint32_t e2 = 0;
+                int n2 = bpvm_pack_scan(g_fl, FLREG, NULL, 0, 0, &e2);
+                CHECK(n2 == 0 && e2 == 0, "a mitad de burn: invisible (magic 0xFF)");
+            }
+        }
+        CHECK(!derr, "todos los chunks grabados");
+        CHECK(bpvm_pack_burn_end(g_fl, FLREG, &bs, &fl) == 0, "burn end → visible en 0");
+        n = bpvm_pack_scan(g_fl, FLREG, inf, 4, 1, &end);
+        CHECK(n == 1 && inf[0].crc_ok && !strcmp(inf[0].nombre, "PackFixA") && end == FIX_SIZE,
+              "tras burn: 1 pack valido, byte-identico (CRCs OK)");
+        CHECK(memcmp(g_fl, fixA, FIX_SIZE) == 0, "flash == imagen original");
+
+        /* torn burn: begin+mitad SIN end → invisible; el siguiente begin re-borra */
+        CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, FIX_SIZE, &bs) == (int32_t) FIX_SIZE,
+              "2o begin → append en 4096");
+        CHECK(bpvm_pack_burn_data(&bs, &fl, fixB, 2048) == 0, "torn: mitad grabada");
+        n = bpvm_pack_scan(g_fl, FLREG, NULL, 0, 0, &end);
+        CHECK(n == 1 && end == FIX_SIZE, "torn abandonado: sigue habiendo 1 pack");
+        CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, FIX_SIZE, &bs) == (int32_t) FIX_SIZE,
+              "re-begin re-borra y reusa el hueco");
+        CHECK(bpvm_pack_burn_data(&bs, &fl, fixB, FIX_SIZE) == 0, "reintento entero");
+        CHECK(bpvm_pack_burn_end(g_fl, FLREG, &bs, &fl) == (int32_t) FIX_SIZE, "reintento OK");
+        n = bpvm_pack_scan(g_fl, FLREG, inf, 4, 1, &end);
+        CHECK(n == 2 && inf[1].crc_ok && !strcmp(inf[1].nombre, "PackFixB"),
+              "cadena: PackFixA + PackFixB");
+
+        /* contenido corrupto: el END lo caza EN FLASH y el pack no se activa */
+        static uint8_t badimg[FIX_SIZE];
+        memcpy(badimg, fixA, FIX_SIZE);
+        badimg[300] ^= 0x01;
+        CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, FIX_SIZE, &bs) == (int32_t) (2 * FIX_SIZE),
+              "begin del corrupto");
+        CHECK(bpvm_pack_burn_data(&bs, &fl, badimg, FIX_SIZE) == 0, "chunks del corrupto");
+        CHECK(bpvm_pack_burn_end(g_fl, FLREG, &bs, &fl) == BPVM_PACK_ERR_VERIFY,
+              "end → VERIFY falla (crc_contenido en flash)");
+        n = bpvm_pack_scan(g_fl, FLREG, NULL, 0, 0, &end);
+        CHECK(n == 2 && end == 2 * FIX_SIZE, "el corrupto NO se activo (invisible)");
+
+        /* cabecera corrupta */
+        memcpy(badimg, fixA, FIX_SIZE);
+        badimg[12] ^= 0xFF;   /* nombre → crc_cab falla */
+        CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, FIX_SIZE, &bs) >= 0, "begin cab-mala");
+        CHECK(bpvm_pack_burn_data(&bs, &fl, badimg, FIX_SIZE) == 0, "chunks cab-mala");
+        CHECK(bpvm_pack_burn_end(g_fl, FLREG, &bs, &fl) == BPVM_PACK_ERR_BADIMG,
+              "end → BADIMG (crc_cab retenida)");
+
+        /* validaciones del begin + estado */
+        CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, 4095, &bs) == BPVM_PACK_ERR_ALIGN,
+              "size no alineado al bloque → ALIGN");
+        CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, 100, &bs) == BPVM_PACK_ERR_BADIMG,
+              "size < cabecera → BADIMG");
+        CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, FLREG, &bs) == BPVM_PACK_ERR_NOSPACE,
+              "no cabe → NOSPACE");
+        CHECK(bpvm_pack_burn_data(&bs, &fl, fixA, 100) == BPVM_PACK_ERR_STATE,
+              "data sin sesion → STATE");
+        CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, FIX_SIZE, &bs) >= 0, "begin overflow-test");
+        CHECK(bpvm_pack_burn_data(&bs, &fl, fixA, FIX_SIZE) == 0, "data completa");
+        CHECK(bpvm_pack_burn_data(&bs, &fl, fixA, 16) == BPVM_PACK_ERR_STATE,
+              "data de mas → STATE (sesion cerrada)");
+        CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, FIX_SIZE, &bs) >= 0, "begin chunk-desalineado");
+        CHECK(bpvm_pack_burn_data(&bs, &fl, fixA, 1000) == BPVM_PACK_ERR_STATE,
+              "chunk no multiplo de 16 → STATE (contrato quadword/ECC)");
     }
 
 done:
