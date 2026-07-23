@@ -27,29 +27,34 @@ public class FrmBoard extends javax.swing.JFrame {
      */
     public FrmBoard(BpvmClient client, java.util.function.Consumer<String> log) {
         this();
-        if (log != null) boardPanel.setLog(log);
+        if (log != null) {
+            boardPanel.setLog(log);
+            packsPanel.setLog(log);
+        }
         attach(client);
     }
 
     /** Engancha (o re-engancha) el cliente compartido y refresca. */
     public void attach(BpvmClient client) {
         if (boardPanel != null) boardPanel.attach(client);
+        if (packsPanel != null) packsPanel.attach(client);
     }
 
     /**
-     * Embebe el panel funcional de gestión (entorno + particiones + STATE) en la
-     * parte izquierda del layout de NetBeans. Se hace a mano (fuera de
-     * initComponents, que NetBeans regenera) para no pelear con el diseñador: la
-     * estructura de split panes de Eduardo sigue viva; de momento el panel ocupa el
-     * lado izquierdo y el derecho queda para la gestión de packs.
+     * Embebe los paneles funcionales en el layout de NetBeans. Se hace a mano
+     * (fuera de initComponents, que NetBeans regenera) para no pelear con el
+     * diseñador: la estructura de split panes de Eduardo sigue viva. Izquierda =
+     * gestión H9 (entorno + particiones + STATE); derecha = packs H3 (PACK_LS).
      */
     private void installBoardPanel() {
         boardPanel = new BoardMgrPanel();
+        packsPanel = new PacksPanel();
         setTitle("Gestión de placa");
         // initComponents() (NetBeans) pone EXIT_ON_CLOSE: cerrar esta ventana MATARÍA
         // el IDE entero. Como es una ventana secundaria, solo se cierra ella.
         setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
         jSplitPane1.setLeftComponent(boardPanel);
+        jSplitPane1.setRightComponent(packsPanel);
         jSplitPane1.setDividerLocation(560);
     }
 
@@ -177,6 +182,7 @@ public class FrmBoard extends javax.swing.JFrame {
     private javax.swing.JTabbedPane jTabbedPane1;
     // End of variables declaration//GEN-END:variables
 
-    // H9 — añadidos a mano (fuera del bloque que regenera NetBeans).
+    // H9/H3 — añadidos a mano (fuera del bloque que regenera NetBeans).
     private BoardMgrPanel boardPanel;
+    private PacksPanel packsPanel;
 }

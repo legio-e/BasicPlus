@@ -882,6 +882,34 @@ public final class BpvmClient implements AutoCloseable {
         }
     }
 
+    /** H3 — un pack de la zona de packs del device (una fila del PACK_LS). */
+    public static final class PackInfo {
+        public final String name, version;
+        public final long date, size, offset;
+        public final int files;
+        public final boolean active, crcOk;
+        public PackInfo(String name, String version, long date, long size, long offset,
+                        int files, boolean active, boolean crcOk) {
+            this.name = name; this.version = version; this.date = date; this.size = size;
+            this.offset = offset; this.files = files; this.active = active; this.crcOk = crcOk;
+        }
+    }
+
+    /** H3 — la zona de packs completa: cadena (activos Y tombstones) + espacio.
+     *  `chainOk`=false → hay una cabecera corrupta que corta la cadena (lo repara
+     *  una compactación desde el PC); `count` puede superar packs.size() si el
+     *  device truncó el listado. */
+    public static final class PackTable {
+        public final long regionSize, free;
+        public final boolean chainOk;
+        public final int count;
+        public final List<PackInfo> packs;
+        public PackTable(long regionSize, long free, boolean chainOk, int count, List<PackInfo> packs) {
+            this.regionSize = regionSize; this.free = free; this.chainOk = chainOk;
+            this.count = count; this.packs = packs;
+        }
+    }
+
     /** STATE — estado del arranque escalonado. */
     public BoardState boardState(long timeoutMs) throws IOException {
         Map<String, Object> r = sendRequest("STATE", null, null, timeoutMs);
@@ -960,6 +988,31 @@ public final class BpvmClient implements AutoCloseable {
             first = false;
         }
         sendRequest("PART_APPLY", extra.toString(), null, timeoutMs);
+    }
+
+    /** PACK_LS — packs de la zona de packs (H3). El peer responde UNSUPPORTED si
+     *  la placa no expone packs (sin layout de particiones aún) → IOException. */
+    public PackTable packList(long timeoutMs) throws IOException {
+        Map<String, Object> r = sendRequest("PACK_LS", null, null, timeoutMs);
+        List<Object> arr = Json.getList(r, "packs");
+        List<PackInfo> packs = new ArrayList<>();
+        if (arr != null) {
+            for (Object o : arr) {
+                if (!(o instanceof Map)) continue;
+                @SuppressWarnings("unchecked")
+                Map<String, Object> m = (Map<String, Object>) o;
+                packs.add(new PackInfo(Json.getString(m, "name", ""),
+                        Json.getString(m, "version", ""),
+                        Json.getLong(m, "date", 0),
+                        Json.getLong(m, "size", 0),
+                        Json.getLong(m, "offset", -1),
+                        (int) Json.getLong(m, "files", 0),
+                        Json.getBool(m, "active", false),
+                        Json.getBool(m, "crcOk", false)));
+            }
+        }
+        return new PackTable(Json.getLong(r, "regionSize", 0), Json.getLong(r, "free", 0),
+                Json.getBool(r, "chainOk", false), (int) Json.getLong(r, "count", 0), packs);
     }
 
     /** Helper para serializar un string con comillas + escape. */
