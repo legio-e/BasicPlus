@@ -175,6 +175,32 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         sb_raw(&s, "]}");
         return s.ok ? (int) s.off : reply_error(out, cap, id, "INTERNAL_ERROR", "reply no cabe");
     }
+    if (!strcmp(type, "PACK_ENTRIES")) {
+        /* H3 — ficheros DENTRO del pack en `offset` (lo da el PACK_LS previo).
+         * Lectura pura; el panel del IDE lo pide al seleccionar un pack. */
+        if (!bm->packs_base || bm->packs_size == 0)
+            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs");
+        if (!req->has_off || req->off < 0)
+            return reply_error(out, cap, id, "INVALID_PARAM", "falta offset");
+        static bpvm_pack_entry_t es[32];   /* static: fuera del stack de la comm task */
+        enum { PACK_ENT_MAX = (int) (sizeof es / sizeof es[0]) };
+        int n = bpvm_pack_entries(bm->packs_base, bm->packs_size,
+                                  (uint32_t) req->off, es, PACK_ENT_MAX);
+        if (n < 0)
+            return reply_error(out, cap, id, "NOT_FOUND", "ahi no hay un pack valido");
+        sb_raw(&s, "{\"type\":\"PACK_ENTRIES_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"offset\":"); sb_long(&s, req->off);
+        sb_raw(&s, ",\"count\":"); sb_long(&s, n);
+        sb_raw(&s, ",\"entries\":[");
+        for (int i = 0; i < n && i < PACK_ENT_MAX; i++) {
+            if (i) sb_raw(&s, ",");
+            sb_raw(&s, "{\"tipo\":\""); sb_esc(&s, es[i].tipo);
+            sb_raw(&s, "\",\"nombre\":\""); sb_esc(&s, es[i].nombre);
+            sb_raw(&s, "\",\"size\":"); sb_long(&s, (long) es[i].len); sb_raw(&s, "}");
+        }
+        sb_raw(&s, "]}");
+        return s.ok ? (int) s.off : reply_error(out, cap, id, "INTERNAL_ERROR", "reply no cabe");
+    }
     if (!strcmp(type, "PART_DEFAULTS")) {
         uint32_t sizes[BPVM_PART_COUNT];
         bpvm_bmgr_part_defaults(bm, bm->sector, sizes);

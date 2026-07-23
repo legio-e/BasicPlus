@@ -152,6 +152,8 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
     req.has_value = json_get_str(obj, "value", req.value, sizeof req.value) >= 0;
     for (int i = 0; i < BPVM_PART_COUNT; i++)
         req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
+    req.off = json_get_long(obj, "offset", -1);     /* H3: PACK_ENTRIES/DEL/READ */
+    req.has_off = req.off >= 0;
 
     int wrote = -1;
     int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);

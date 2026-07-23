@@ -137,6 +137,12 @@ def main():
         check(r.get("type") == "PACK_LS_REPLY" and r.get("count") == 0
               and r.get("chainOk") is True and r.get("free") == r.get("regionSize"),
               "PACK_LS región virgen → 0 packs, cadena sana, todo libre")
+        r = w.call("PACK_ENTRIES", offset=0)
+        check(r.get("type") == "ERROR" and r.get("code") == "NOT_FOUND",
+              "PACK_ENTRIES en región virgen → NOT_FOUND")
+        r = w.call("PACK_ENTRIES")
+        check(r.get("type") == "ERROR" and r.get("code") == "INVALID_PARAM",
+              "PACK_ENTRIES sin offset → INVALID_PARAM")
 
         print("[status=OK]" if fails == 0 else f"[status=FAIL: {fails}]")
         return 0 if fails == 0 else 1

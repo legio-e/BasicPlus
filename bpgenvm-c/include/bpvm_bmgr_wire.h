@@ -21,7 +21,7 @@ extern "C" {
 #endif
 
 /* Request ya EXTRAÍDO del JSON por el llamador (cada lado con su json_min). Campos
- * ausentes: has_key/has_value = 0; part_sizes[i] = -1. */
+ * ausentes: has_key/has_value/has_off = 0; part_sizes[i] = -1. */
 typedef struct {
     char type[32];                      /* "STATE", "ENV_SET", "PART_APPLY", … */
     long id;                            /* id de correlación del wire */
@@ -30,6 +30,8 @@ typedef struct {
     char value[192];                    /* ENV_SET (un valor de env: nombre/número/path) */
     int  has_value;
     long part_sizes[BPVM_PART_COUNT];   /* PART_APPLY (por partición, en bytes); -1 si falta */
+    long off;                           /* H3: offset de pack en la región (PACK_ENTRIES; */
+    int  has_off;                       /*     lo usarán también PACK_DEL/PACK_READ) */
 } bpvm_bmgr_req_t;
 
 /* Despacha el comando → escribe la línea JSON de reply en `out` (SIN '\n'; el
