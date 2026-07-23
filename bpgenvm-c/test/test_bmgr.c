@@ -29,6 +29,7 @@ int main(void) {
     memset(B, 0xFF, sizeof B);
 
     bpvm_bmgr_t bm;
+    memset(&bm, 0, sizeof bm);   /* campos nuevos (p.ej. packs H3) nunca con basura */
     bm.a = A; bm.b = B; bm.scratch = SCRATCH; bm.sector = SECT;
     bm.part_base = BASE; bm.usable_flash = U4M;
 

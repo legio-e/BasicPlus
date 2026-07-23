@@ -57,8 +57,9 @@ def main():
 
         # 1. handshake
         r = w.call("HELLO", protoVersion=1, clientName="smoke")
-        check(r.get("type") == "HELLO_REPLY" and "BOARDMGR" in r.get("capabilities", []),
-              "HELLO → HELLO_REPLY con capability BOARDMGR")
+        caps = r.get("capabilities", [])
+        check(r.get("type") == "HELLO_REPLY" and "BOARDMGR" in caps and "PACKS" in caps,
+              "HELLO → HELLO_REPLY con capabilities BOARDMGR + PACKS")
 
         # 2. placa VIRGEN: escrutinio
         r = w.call("STATE")
@@ -104,11 +105,20 @@ def main():
         r = w.call("ENV_GET", key="gpioCount")
         check(r.get("type") == "ERROR" and r.get("code") == "NOT_FOUND", "ENV_DEL gpioCount → borrada")
 
-        # 6. validación fallida NO toca nada
-        r = w.call("PART_APPLY", fs=0x300000, packs=0x300000)   # 6M > 3M
-        check(r.get("type") == "ERROR", "PART_APPLY inválido (6M) → ERROR")
+        # 6. validación fallida NO toca nada. OJO semántica 'un mando' (80503d5):
+        #    packs = EL RESTO (lo que se mande se ignora) → para desbordar hay que
+        #    pasarse con la KNOB (fs), no con la suma.
+        r = w.call("PART_APPLY", fs=0x340000)   # 3.25M > 3M disponibles
+        check(r.get("type") == "ERROR", "PART_APPLY inválido (fs 3.25M > 3M) → ERROR")
         r = w.call("PART_LS")
         check(r["parts"][0]["size"] == 0x100000, "el layout bueno sobrevive a la validación fallida")
+        # 6b. degenerado VÁLIDO por diseño: fs se lo lleva todo → packs = resto = 0
+        r = w.call("PART_APPLY", fs=0x300000)
+        check(r.get("type") == "PART_APPLY_REPLY", "PART_APPLY fs=3M → OK (packs=resto puede ser 0)")
+        r = w.call("PART_LS")
+        check(r["parts"][1]["size"] == 0, "packs derivado = 0")
+        r = w.call("PART_APPLY", fs=0x100000)   # restaurar el layout para lo que sigue
+        check(r.get("type") == "PART_APPLY_REPLY", "restaurar fs=1M")
 
         # 7. persistencia: reconectar y comprobar que el estado sigue
         sock.close()
@@ -119,6 +129,14 @@ def main():
         check(r.get("state") == 3, "reconexión: el estado persiste (flash-file A/B) → sigue en 3")
         r = w.call("ENV_GET", key="psram")
         check(r.get("value") == "1", "reconexión: psram=1 persistió")
+
+        # 8. H3 — PACK_LS: zona de packs del sim (virgen → 0 packs, cadena sana).
+        #    El listado con packs reales lo cubren make test-pack (núcleo C, paridad
+        #    Pack.jar) y el arranque del sim con --pack=<f.pack>.
+        r = w.call("PACK_LS")
+        check(r.get("type") == "PACK_LS_REPLY" and r.get("count") == 0
+              and r.get("chainOk") is True and r.get("free") == r.get("regionSize"),
+              "PACK_LS región virgen → 0 packs, cadena sana, todo libre")
 
         print("[status=OK]" if fails == 0 else f"[status=FAIL: {fails}]")
         return 0 if fails == 0 else 1

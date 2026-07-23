@@ -359,7 +359,7 @@ test-pack:
 # Reusa pico/json_min.c (parser JSON portable). Winsock via $(LDFLAGS) (-lws2_32).
 boardsim:
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Ipico tools/boardsim.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_part.c src/bpvm_env.c src/bpvm_boot.c src/crc32.c pico/json_min.c -o build/bpvm-boardsim.exe $(LDFLAGS)
+	$(CC) $(CFLAGS) -Ipico tools/boardsim.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_part.c src/bpvm_env.c src/bpvm_boot.c src/bpvm_pack.c src/crc32.c pico/json_min.c -o build/bpvm-boardsim.exe $(LDFLAGS)
 	@echo "boardsim listo: build/bpvm-boardsim.exe [puerto] [flash-file] [flashSizeBytes]"
 
 # H9 — smoke end-to-end del sim por el wire (arranca el sim, recorre el flujo de

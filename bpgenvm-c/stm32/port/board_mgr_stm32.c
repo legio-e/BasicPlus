@@ -25,9 +25,11 @@
 #include <stdio.h>
 
 /* Estado del boot + el layout del climb (estáticos: el layout debe sobrevivir para
- * que layer_fs lo use; el boot lo lee board_boot_status). */
+ * que layer_fs lo use; el boot lo lee board_boot_status). s_layout_ok = el layout
+ * validó en el boot → la zona de packs (BPVM_PART_PACKS) es direccionable (H3). */
 static bpvm_boot_status_t s_boot;
 static bpvm_part_layout_t s_layout;
+static int s_layout_ok = 0;
 /* Copias A/B del env para layer_partitions (8 KB c/u en .bss; fuera del stack). */
 static uint8_t s_env_a[BP_ENV_SECTOR];
 static uint8_t s_env_b[BP_ENV_SECTOR];
@@ -60,7 +62,7 @@ static bpvm_boot_step_t layer_partitions(void* u) {
      * — el U5 conoce su tamaño de flash en compilación, no hay sorpresa JEDEC). */
     bpvm_part_err_t e = bpvm_part_layout(&env, BP_PART_BASE, BP_USABLE_FLASH,
                                          BP_ENV_SECTOR, &s_layout, &bad);
-    if (e == BPVM_PART_OK) { r.ok = 1; return r; }
+    if (e == BPVM_PART_OK) { s_layout_ok = 1; r.ok = 1; return r; }
     snprintf(r.reason, sizeof r.reason, "%s", bpvm_part_err_str(e));
     return r;
 }
@@ -126,11 +128,21 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
     env_read_slots(a, b);   /* copias frescas del env desde flash */
 
     bpvm_bmgr_t bm;
+    memset(&bm, 0, sizeof bm);           /* campos nuevos futuros nunca con basura */
     bm.a = a; bm.b = b; bm.scratch = sc;
     bm.sector = BP_ENV_SECTOR;
     bm.part_base = BP_PART_BASE;
     bm.usable_flash = BP_USABLE_FLASH;   /* tamaño de flash fijo por placa; sin clamp */
     bm.live = &s_boot;                   /* STATE cuenta el estado REAL del boot */
+    /* H3 — zona de packs: XIP directo sobre la partición PACKS del layout del boot
+     * (offset relativo a FLASH_BASE, como el FS). Sin layout válido → sin packs. */
+    if (s_layout_ok) {
+        const bpvm_part_t* pp = bpvm_part_get(&s_layout, BPVM_PART_PACKS);
+        if (pp && pp->size > 0) {
+            bm.packs_base = (const uint8_t*) (uintptr_t) (FLASH_BASE + pp->offset);
+            bm.packs_size = pp->size;
+        }
+    }
 
     bpvm_bmgr_req_t req;
     memset(&req, 0, sizeof req);

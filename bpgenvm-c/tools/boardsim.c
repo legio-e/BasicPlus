@@ -8,8 +8,11 @@
  * El único trozo que aquí es "de mentira" es la flash: dos sectores A/B respaldados
  * por un fichero (flash_load/flash_store) en vez de flash_range_*.
  *
- * Uso:  bpvm-boardsim [puerto] [fichero-flash] [flashSizeBytes]
+ * Uso:  bpvm-boardsim [--pack=<f.pack>]... [puerto] [fichero-flash] [flashSizeBytes]
  *   por defecto: 127.0.0.1:5099, "boardsim.flash", 4 MB de flash simulada.
+ *   --pack=<f.pack> (repetible): H3 — "graba" la imagen en la zona de packs
+ *   simulada (región RAM, 0xFF = NOR virgen) para que PACK_LS la liste, igual
+ *   que el --pack= de la VM-C host.
  *
  * El IDE se conecta con BpvmBackend ("host:port") como a cualquier device wire v1.
  * Ver docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
@@ -17,6 +20,7 @@
 #include "bpvm_bmgr.h"
 #include "bpvm_bmgr_wire.h"
 #include "bpvm_boot.h"
+#include "bpvm_pack.h"
 #include "json_min.h"
 
 #include <stdio.h>
@@ -49,6 +53,34 @@
 static uint8_t g_a[SECTOR], g_b[SECTOR], g_scratch[SECTOR];
 static bpvm_bmgr_t g_bm;
 static const char* g_flash_path = "boardsim.flash";
+
+/* H3 — zona de packs simulada (región RAM que hace de flash; 0xFF = borrada).
+ * Se precarga con los --pack= y PACK_LS la sirve por el dispatch compartido. */
+#define PACKS_REGION_SIZE (1024u * 1024u)
+static uint8_t g_packs[PACKS_REGION_SIZE];
+
+static int packs_preload(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) { fprintf(stderr, "boardsim: --pack: no puedo abrir %s\n", path); return -1; }
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t* img = (sz > 0) ? (uint8_t*) malloc((size_t) sz) : NULL;
+    if (!img || fread(img, 1, (size_t) sz, f) != (size_t) sz) {
+        fprintf(stderr, "boardsim: --pack: error leyendo %s\n", path);
+        free(img); fclose(f); return -1;
+    }
+    fclose(f);
+    int32_t off = bpvm_pack_add(g_packs, PACKS_REGION_SIZE, img, (uint32_t) sz);
+    free(img);
+    if (off < 0) {
+        fprintf(stderr, "boardsim: --pack: %s %s\n", path,
+                (off == BPVM_PACK_ERR_BADIMG) ? "no es un pack valido" : "no cabe");
+        return -1;
+    }
+    printf("boardsim: pack %s grabado en 0x%06X\n", path, (unsigned) off);
+    return 0;
+}
 
 static void flash_load(void) {
     memset(g_a, 0xFF, SECTOR);   /* borrada = placa virgen */
@@ -146,7 +178,7 @@ static void handle(sock_t c, const json_obj_t* obj) {
     if (!strcmp(type, "HELLO")) {
         sb_raw(&s, "{\"type\":\"HELLO_REPLY\",\"id\":"); sb_long(&s, id);
         sb_raw(&s, ",\"protoVersion\":1,\"serverName\":\"bpvm-boardsim\","
-                   "\"serverBuild\":\"h9\",\"capabilities\":[\"META\",\"BOARDMGR\"]}");
+                   "\"serverBuild\":\"h9\",\"capabilities\":[\"META\",\"BOARDMGR\",\"PACKS\"]}");
         if (s.ok) send_line(c, s.buf);
         return;
     }
@@ -165,11 +197,12 @@ static void handle(sock_t c, const json_obj_t* obj) {
         if (s.ok) send_line(c, s.buf);
         return;
     }
-    /* --- gestión de placa (STATE, ENV_x, PART_x): NÚCLEO COMPARTIDO con el firmware.
-     *     El sim solo parsea el JSON al `req`, despacha, y —si hubo escritura— vuelca
-     *     la "flash" (el fichero A/B). Las replies las construye bpvm_bmgr_wire →
+    /* --- gestión de placa (STATE, ENV_x, PART_x, PACK_x): NÚCLEO COMPARTIDO con el
+     *     firmware. El sim solo parsea el JSON al `req`, despacha, y —si hubo escritura—
+     *     vuelca la "flash" (el fichero A/B). Las replies las construye bpvm_bmgr_wire →
      *     byte-idénticas a las del device. --- */
-    if (!strcmp(type, "STATE") || !strncmp(type, "ENV_", 4) || !strncmp(type, "PART_", 5)) {
+    if (!strcmp(type, "STATE") || !strncmp(type, "ENV_", 4) || !strncmp(type, "PART_", 5)
+        || !strncmp(type, "PACK_", 5)) {
         bpvm_bmgr_req_t req;
         memset(&req, 0, sizeof req);
         snprintf(req.type, sizeof req.type, "%s", type);
@@ -190,14 +223,26 @@ static void handle(sock_t c, const json_obj_t* obj) {
 }
 
 int main(int argc, char** argv) {
-    int port = (argc > 1) ? atoi(argv[1]) : 5099;
-    if (argc > 2) g_flash_path = argv[2];
-    uint32_t flash = (argc > 3) ? (uint32_t) strtoul(argv[3], NULL, 0) : DEF_FLASH;
+    /* H3: los --pack= se filtran primero; el resto sigue siendo posicional. */
+    memset(g_packs, 0xFF, sizeof g_packs);   /* zona de packs virgen */
+    const char* pos[3]; int npos = 0;
+    for (int i = 1; i < argc; i++) {
+        if (!strncmp(argv[i], "--pack=", 7)) {
+            if (packs_preload(argv[i] + 7) != 0) return 1;
+        } else if (npos < 3) {
+            pos[npos++] = argv[i];
+        }
+    }
+    int port = (npos > 0) ? atoi(pos[0]) : 5099;
+    if (npos > 1) g_flash_path = pos[1];
+    uint32_t flash = (npos > 2) ? (uint32_t) strtoul(pos[2], NULL, 0) : DEF_FLASH;
 
     flash_load();
     g_bm.a = g_a; g_bm.b = g_b; g_bm.scratch = g_scratch; g_bm.sector = SECTOR;
     g_bm.part_base = PART_BASE;
     g_bm.usable_flash = bpvm_part_usable_flash(flash, 0);   /* la flash simulada es la verdad */
+    g_bm.packs_base = g_packs;                              /* H3: PACK_LS sirve esta región */
+    g_bm.packs_size = PACKS_REGION_SIZE;
 
 #if defined(_WIN32)
     WSADATA wsa;

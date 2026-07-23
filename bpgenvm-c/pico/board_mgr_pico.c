@@ -72,6 +72,7 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
 
     const board_desc_t* bd = board_desc();
     bpvm_bmgr_t bm;
+    memset(&bm, 0, sizeof bm);   /* campos nuevos (p.ej. packs H3) nunca con basura de pila */
     bm.a = a; bm.b = b; bm.scratch = sc;
     bm.sector = BP_ENV_SECTOR;
     bm.part_base = BP_PART_BASE;

@@ -41,6 +41,11 @@ typedef struct {
      * del arranque real para que STATE cuente lo CONSEGUIDO, no el plan (p.ej.
      * particiones OK pero mount fallido ⇒ estado 1 + motivo, degraded). */
     const bpvm_boot_status_t* live;
+    /* H3 — zona de packs mapeada en memoria (XIP en device, buffer en el sim).
+     * NULL/0 = esta placa no expone packs → PACK_* responde UNSUPPORTED. La pone
+     * el llamador desde su layout de particiones (BPVM_PART_PACKS). */
+    const uint8_t* packs_base;
+    uint32_t       packs_size;
 } bpvm_bmgr_t;
 
 /* --- Lectura: entorno --- */

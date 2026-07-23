@@ -5,6 +5,7 @@
  */
 #include "bpvm_bmgr_wire.h"
 #include "bpvm_boot.h"
+#include "bpvm_pack.h"   /* H3 — PACK_LS sobre la zona de packs (bm->packs_base) */
 
 #include <string.h>
 #include <stdio.h>
@@ -139,6 +140,39 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
             }
             sb_raw(&s, "]}");
         }
+        return s.ok ? (int) s.off : reply_error(out, cap, id, "INTERNAL_ERROR", "reply no cabe");
+    }
+    if (!strcmp(type, "PACK_LS")) {
+        /* H3 — LIST de la zona de packs. Lectura pura (scan de la cadena con
+         * verificación de CRCs); las escrituras (BURN/DEL) llegan en su fase. */
+        if (!bm->packs_base || bm->packs_size == 0)
+            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs");
+        /* static: ~1.4 KB que no queremos en el stack de la comm task del micro;
+         * el wire de gestión es single-thread en todos los llamadores. */
+        static bpvm_pack_info_t inf[16];
+        enum { PACK_LS_MAX = (int) (sizeof inf / sizeof inf[0]) };
+        uint32_t end = 0;
+        int n = bpvm_pack_scan(bm->packs_base, bm->packs_size, inf, PACK_LS_MAX,
+                               /*verify_content=*/1, &end);
+        int chain_ok = (end != BPVM_PACK_NO_SPACE);
+        sb_raw(&s, "{\"type\":\"PACK_LS_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"regionSize\":"); sb_long(&s, (long) bm->packs_size);
+        sb_raw(&s, ",\"free\":"); sb_long(&s, chain_ok ? (long) (bm->packs_size - end) : 0L);
+        sb_raw(&s, chain_ok ? ",\"chainOk\":true" : ",\"chainOk\":false");
+        sb_raw(&s, ",\"count\":"); sb_long(&s, n);
+        sb_raw(&s, ",\"packs\":[");
+        for (int i = 0; i < n && i < PACK_LS_MAX; i++) {
+            if (i) sb_raw(&s, ",");
+            sb_raw(&s, "{\"name\":\""); sb_esc(&s, inf[i].nombre);
+            sb_raw(&s, "\",\"version\":\""); sb_esc(&s, inf[i].vercont);
+            sb_raw(&s, "\",\"date\":"); sb_long(&s, (long) inf[i].fecha);
+            sb_raw(&s, ",\"size\":"); sb_long(&s, (long) inf[i].size_total);
+            sb_raw(&s, ",\"files\":"); sb_long(&s, (long) inf[i].n_entries);
+            sb_raw(&s, ",\"offset\":"); sb_long(&s, (long) inf[i].off);
+            sb_raw(&s, inf[i].alive ? ",\"active\":true" : ",\"active\":false");
+            sb_raw(&s, inf[i].crc_ok ? ",\"crcOk\":true}" : ",\"crcOk\":false}");
+        }
+        sb_raw(&s, "]}");
         return s.ok ? (int) s.off : reply_error(out, cap, id, "INTERNAL_ERROR", "reply no cabe");
     }
     if (!strcmp(type, "PART_DEFAULTS")) {

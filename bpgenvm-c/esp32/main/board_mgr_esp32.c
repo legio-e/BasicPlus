@@ -145,6 +145,7 @@ void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
     env_read_slots(a, b);   /* copias frescas del env desde flash */
 
     bpvm_bmgr_t bm;
+    memset(&bm, 0, sizeof bm);         /* campos nuevos (p.ej. packs H3) nunca con basura de pila */
     bm.a = a; bm.b = b; bm.scratch = sc;
     bm.sector = BP_ENV_SECTOR;
     bm.part_base = 0u;                 /* offsets relativos a bpdata */

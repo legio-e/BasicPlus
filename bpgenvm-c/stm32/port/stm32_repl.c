@@ -62,7 +62,7 @@ static void handle_hello(long id) {
     int n = snprintf(buf, sizeof(buf),
         "{\"type\":\"HELLO_REPLY\",\"id\":%ld,\"protoVersion\":1,"
         "\"serverName\":\"%s\",\"serverBuild\":\"%s %s\","
-        "\"capabilities\":[\"META\",\"FILES\",\"TERMINAL\"]}",
+        "\"capabilities\":[\"META\",\"FILES\",\"TERMINAL\",\"PACKS\"]}",
         id, SERVER_NAME, __DATE__, __TIME__);
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);
 }
@@ -525,12 +525,14 @@ static void dispatch(int first_char) {
         stm32_wire_send_error(id, "PROTOCOL_ERROR", "missing type"); return;
     }
 
-    /* H9 — gestión de placa (STATE/ENV_x/PART_x): el host configura el env/particiones
-     * cuando el arranque no llegó al FS. Las replies las pone bpvm_bmgr_wire (idénticas
-     * al boardsim y a las otras placas). s_put_buf (32 KB) presta el scratch. */
+    /* H9 — gestión de placa (STATE/ENV_x/PART_x + H3 PACK_x): el host configura el
+     * env/particiones cuando el arranque no llegó al FS, y consulta la zona de packs.
+     * Las replies las pone bpvm_bmgr_wire (idénticas al boardsim y a las otras
+     * placas). s_put_buf presta el scratch. */
     if (strcmp(type, "STATE") == 0
         || strncmp(type, "ENV_", 4) == 0
-        || strncmp(type, "PART_", 5) == 0) {
+        || strncmp(type, "PART_", 5) == 0
+        || strncmp(type, "PACK_", 5) == 0) {
         board_mgr_stm32_handle(id, &obj, type, s_put_buf, sizeof s_put_buf);
         return;
     }
