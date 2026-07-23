@@ -381,7 +381,26 @@ static void run_module_path(const char* path, long id) {
                 if (already) continue;
                 char fname[48]; snprintf(fname, sizeof(fname), "%s.mod", owner);
                 const uint8_t* dep; uint32_t dep_size;
-                if (stm32_fs_resolve(fname, &dep, &dep_size) != 0) continue;  /* falta → guard */
+                /* H3.c — resolución FS → packs (spec §4): el FS ECLIPSA al pack
+                 * (aviso al log persistente); si no está en FS, carga XIP desde
+                 * la zona de packs montada (código EN FLASH, cero copia). */
+                uint32_t pk_rs = 0;
+                const uint8_t* pk_rb = bpvm_pack_mounted(&pk_rs);
+                uint32_t pk_len = 0;
+                const uint8_t* pk_mod = pk_rb
+                    ? bpvm_pack_find(pk_rb, pk_rs, "mod", owner, &pk_len) : NULL;
+                if (stm32_fs_resolve(fname, &dep, &dep_size) != 0) {
+                    if (!pk_mod) continue;               /* falta → guard */
+                    bpvm_status_t ds = bpvm_loader_load_xip(vm, pk_mod, pk_len, owner);
+                    if (ds != BPVM_OK) { st = ds; break; }
+                    log_printf("pack: '%s' XIP (%lu B en flash)", owner,
+                               (unsigned long) pk_len);
+                    loaded_any = 1;
+                    continue;
+                }
+                if (pk_mod) {
+                    log_printf("aviso: '%s' del FS eclipsa al del pack", owner);
+                }
                 bpvm_status_t ds = bpvm_load_mod_buffer(vm, dep, dep_size, owner);
                 if (ds != BPVM_OK) { st = ds; break; }
                 loaded_any = 1;

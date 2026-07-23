@@ -129,6 +129,17 @@ void board_mgr_stm32_boot(void) {
     layers.max_state     = BPVM_BOOT_APP;
     bpvm_boot_climb(&layers, &s_boot);
     /* Sin log de consola (el STM32 no tiene una): el estado se consulta por STATE. */
+
+    /* H3.c — montar la zona de packs (XIP) para la resolución de módulos del
+     * RUN: el repl la consulta como fallback tras el FS (el FS eclipsa). El
+     * mismo montaje que hace el host con --pack=, aquí sobre la flash real. */
+    if (s_layout_ok) {
+        const bpvm_part_t* pp = bpvm_part_get(&s_layout, BPVM_PART_PACKS);
+        if (pp && pp->size > 0) {
+            bpvm_pack_mount((const uint8_t*) (uintptr_t) (FLASH_BASE + pp->offset),
+                            pp->size);
+        }
+    }
 }
 
 /* ── ramo del wire (STATE/ENV_x/PART_x): el repl encamina aquí ── */
