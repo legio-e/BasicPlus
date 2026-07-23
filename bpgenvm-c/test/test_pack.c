@@ -281,6 +281,19 @@ int main(void) {
         CHECK(bpvm_pack_burn_begin(g_fl, FLREG, &fl, FIX_SIZE, &bs) >= 0, "begin chunk-desalineado");
         CHECK(bpvm_pack_burn_data(&bs, &fl, fixA, 1000) == BPVM_PACK_ERR_STATE,
               "chunk no multiplo de 16 → STATE (contrato quadword/ECC)");
+
+        /* --- fase 3: DEL en flash real = RMW de la 1a pagina (gotcha ECC) --- */
+        static uint8_t page[4096];
+        CHECK(bpvm_pack_del(g_fl, FLREG, &fl, FIX_SIZE, page) == 0,
+              "del del 2o pack (RMW de su 1a pagina)");
+        n = bpvm_pack_scan(g_fl, FLREG, inf, 4, 1, &end);
+        CHECK(n == 2 && inf[0].alive && !inf[1].alive, "cadena: A activo, B borrado");
+        CHECK(inf[1].crc_ok && end == 2 * FIX_SIZE,
+              "tombstone RMW conserva cabecera valida y la cadena entera");
+        CHECK(bpvm_pack_del(g_fl, FLREG, &fl, FIX_SIZE, page) == BPVM_PACK_ERR_STATE,
+              "del repetido → STATE (ya borrado)");
+        CHECK(bpvm_pack_del(g_fl, FLREG, &fl, 12345, page) == BPVM_PACK_ERR_BADIMG,
+              "del en offset invalido → BADIMG");
     }
 
 done:

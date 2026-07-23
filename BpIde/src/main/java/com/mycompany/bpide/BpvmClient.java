@@ -1068,6 +1068,12 @@ public final class BpvmClient implements AutoCloseable {
         sendRequest("PACK_FORMAT", "\"confirm\":\"YES\"", null, timeoutMs);
     }
 
+    /** PACK_DEL — tombstone del pack en `offset`: se MARCA borrado (no se
+     *  borra); el espacio se recupera compactando desde el PC. */
+    public void packDel(long offset, long timeoutMs) throws IOException {
+        sendRequest("PACK_DEL", "\"offset\":" + offset, null, timeoutMs);
+    }
+
     /** Helper para serializar un string con comillas + escape. */
     private static String jsonStr(String s) { return "\"" + Json.escape(s) + "\""; }
 

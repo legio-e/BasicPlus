@@ -97,6 +97,9 @@ public final class PacksPanel extends JPanel {
         JButton copy = new JButton("Copiar pack a la placa…");
         copy.addActionListener(e -> onBurn());
         north.add(copy);
+        JButton del = new JButton("Borrar");
+        del.addActionListener(e -> onDelete());
+        north.add(del);
         JButton fmt = new JButton("Formatear zona…");
         fmt.addActionListener(e -> onFormat());
         north.add(fmt);
@@ -211,6 +214,33 @@ public final class PacksPanel extends JPanel {
             return new Object[] { img.length, off };
         }, r -> {
             log.accept("[Packs] grabado " + f.getName() + " (" + r[0] + " B) en offset " + r[1]);
+            refresh();
+        });
+    }
+
+    /** "Borrar" = fase 3, tombstone del pack seleccionado: se MARCA borrado
+     *  (no se borra); el espacio se recupera compactando desde el PC. */
+    private void onDelete() {
+        int row = packTable.getSelectedRow();
+        if (row < 0 || row >= packOffsets.size() || client == null) {
+            JOptionPane.showMessageDialog(this, "Selecciona un pack de la lista.",
+                    "Packs de la placa", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        final String name = String.valueOf(packModel.getValueAt(row, 0));
+        if ("borrado".equals(String.valueOf(packModel.getValueAt(row, 5)))) {
+            JOptionPane.showMessageDialog(this, "'" + name + "' ya está borrado.",
+                    "Packs de la placa", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        final long off = packOffsets.get(row);
+        int ok = JOptionPane.showConfirmDialog(this,
+                "¿Marcar '" + name + "' como borrado?\n"
+                + "(No se borra de la flash: el espacio se recupera compactando desde el PC.)",
+                "Borrar pack", JOptionPane.YES_NO_OPTION);
+        if (ok != JOptionPane.YES_OPTION) return;
+        bg(() -> { client.packDel(off, 30000); return null; }, r -> {
+            log.accept("[Packs] '" + name + "' marcado como borrado (offset " + off + ")");
             refresh();
         });
     }

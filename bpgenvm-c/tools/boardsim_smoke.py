@@ -187,6 +187,27 @@ def main():
               and r.get("free") == r.get("regionSize"),
               "tras format: 0 packs, cadena sana, todo libre")
 
+        # 11. H3 fase 3 — PACK_DEL (tombstone): re-graba la fixture y la tumba.
+        #     Se MARCA borrado (RMW de la 1ª página); el espacio no baja hasta
+        #     compactar desde el PC.
+        w.call("PACK_BURN_BEGIN", size=len(img))
+        for o in range(0, len(img), 1024):
+            w.call_bulk("PACK_BURN_DATA", img[o:o+1024])
+        r = w.call("PACK_BURN_END")
+        check(r.get("type") == "PACK_BURN_END_REPLY", "re-burn para probar el DEL")
+        r = w.call("PACK_DEL", offset=0)
+        check(r.get("type") == "PACK_DEL_REPLY", "PACK_DEL → tombstone")
+        r = w.call("PACK_LS")
+        check(r.get("count") == 1 and r["packs"][0]["active"] is False
+              and r["packs"][0]["crcOk"] is True,
+              "tras DEL: borrado pero cabecera valida (RMW)")
+        r = w.call("PACK_DEL", offset=0)
+        check(r.get("type") == "ERROR" and r.get("code") == "INVALID_STATE",
+              "DEL repetido → INVALID_STATE (ya borrado)")
+        r = w.call("PACK_DEL", offset=8192)
+        check(r.get("type") == "ERROR" and r.get("code") == "NOT_FOUND",
+              "DEL donde no hay pack → NOT_FOUND")
+
         print("[status=OK]" if fails == 0 else f"[status=FAIL: {fails}]")
         return 0 if fails == 0 else 1
     finally:

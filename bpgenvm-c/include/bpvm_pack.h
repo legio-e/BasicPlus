@@ -178,6 +178,21 @@ int32_t bpvm_pack_burn_end(const uint8_t* base, uint32_t region_size,
  * automática. Borra TODOS los packs. 0 OK, BPVM_PACK_ERR_IO si falla. */
 int bpvm_pack_format(const bpvm_pack_flash_t* fl, uint32_t region_size);
 
+/* DEL en FLASH REAL (tombstone vía cintura): marca borrado el pack de
+ * `pack_off` haciendo READ-MODIFY-WRITE de su PRIMERA página de borrado —
+ * en la flash interna con ECC (U5) los flags comparten quadword con el magic
+ * y un quadword solo se programa una vez, así que el bit no se puede tocar
+ * in-situ. Los packs van alineados al bloque ⇒ la página solo contiene el
+ * arranque de ESTE pack. `page_buf` lo pone el llamador (>= erase_block).
+ * Ventana asumida (spec §6.2a): un corte entre erase y program deja la página
+ * borrada → la cadena se corta AHÍ (los packs anteriores sobreviven; los
+ * posteriores los recupera la compactación del PC, que conserva los packs).
+ * 0 OK · BADIMG = ahí no hay pack válido · STATE = ya estaba borrado ·
+ * IO/VERIFY = fallo de flash o el readback no cuadra. */
+int bpvm_pack_del(const uint8_t* base, uint32_t region_size,
+                  const bpvm_pack_flash_t* fl, uint32_t pack_off,
+                  uint8_t* page_buf);
+
 #ifdef __cplusplus
 }
 #endif

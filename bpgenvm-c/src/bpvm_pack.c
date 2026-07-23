@@ -353,3 +353,24 @@ int bpvm_pack_format(const bpvm_pack_flash_t* fl, uint32_t region_size) {
     if (len == 0) return BPVM_PACK_ERR_IO;
     return (fl->erase(fl->user, 0, len) == 0) ? 0 : BPVM_PACK_ERR_IO;
 }
+
+int bpvm_pack_del(const uint8_t* base, uint32_t region_size,
+                  const bpvm_pack_flash_t* fl, uint32_t pack_off,
+                  uint8_t* page_buf) {
+    bpvm_pack_info_t info;
+    uint32_t blk = fl->erase_block;
+    if (pack_off + 4 > region_size || (pack_off % blk) != 0) return BPVM_PACK_ERR_BADIMG;
+    if (get_u32(base + pack_off) != BPVM_PACK_MAGIC) return BPVM_PACK_ERR_BADIMG;
+    if (parse_header(base, region_size, pack_off, &info) != 0) return BPVM_PACK_ERR_BADIMG;
+    if (!info.alive) return BPVM_PACK_ERR_STATE;
+
+    /* RMW de la 1ª página: copiar, tumbar el bit ALIVE, borrar, regrabar.
+     * crc_cab NO cubre flags (a propósito) → la cabecera regrabada sigue
+     * siendo válida byte a byte salvo el bit. */
+    memcpy(page_buf, base + pack_off, blk);
+    put_u16(page_buf + OFF_FLAGS, (uint16_t) (info.flags & ~BPVM_PACK_ALIVE_BIT));
+    if (fl->erase(fl->user, pack_off, blk) != 0) return BPVM_PACK_ERR_IO;
+    if (fl->program(fl->user, pack_off, page_buf, blk) != 0) return BPVM_PACK_ERR_IO;
+    if (memcmp(base + pack_off, page_buf, blk) != 0) return BPVM_PACK_ERR_VERIFY;
+    return 0;
+}

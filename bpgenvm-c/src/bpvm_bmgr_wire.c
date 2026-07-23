@@ -256,6 +256,31 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         sb_raw(&s, ",\"offset\":"); sb_long(&s, r); sb_raw(&s, "}");
         return s.ok ? (int) s.off : -1;
     }
+    if (!strcmp(type, "PACK_DEL")) {
+        /* H3 fase 3 — REMOVE = tombstone del pack en `offset` (se MARCA
+         * borrado, no se borra; el espacio lo recupera la compactación del
+         * PC). En flash real va por RMW de la 1ª página (gotcha ECC del U5:
+         * los flags comparten quadword con el magic). */
+        if (!bm->packs_base || bm->packs_size == 0 || !bm->packs_flash)
+            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
+        if (!req->has_off)
+            return reply_error(out, cap, id, "INVALID_PARAM", "falta offset");
+        /* static: página de RMW fuera del stack de la comm task (8K = la página
+         * más grande entre familias; una mayor se rechaza, no se trunca). */
+        static uint8_t s_del_page[8192];
+        if (bm->packs_flash->erase_block > sizeof s_del_page)
+            return reply_error(out, cap, id, "INTERNAL_ERROR", "bloque de borrado > buffer de RMW");
+        int r = bpvm_pack_del(bm->packs_base, bm->packs_size, bm->packs_flash,
+                              (uint32_t) req->off, s_del_page);
+        if (r == BPVM_PACK_ERR_BADIMG)
+            return reply_error(out, cap, id, "NOT_FOUND", "ahi no hay un pack valido");
+        if (r == BPVM_PACK_ERR_STATE)
+            return reply_error(out, cap, id, "INVALID_STATE", "ese pack ya esta borrado");
+        if (r < 0) return reply_pack_err(out, cap, id, r);
+        sb_raw(&s, "{\"type\":\"PACK_DEL_REPLY\",\"id\":"); sb_long(&s, id);
+        sb_raw(&s, ",\"offset\":"); sb_long(&s, req->off); sb_raw(&s, "}");
+        return s.ok ? (int) s.off : -1;
+    }
     if (!strcmp(type, "PACK_FORMAT")) {
         /* H3 — estreno/recuperación de la zona: una región recién reparticionada
          * lleva RESTOS de su uso anterior (littlefs/FS viejo) y el scan la ve
