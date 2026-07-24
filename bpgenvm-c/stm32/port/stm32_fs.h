@@ -18,6 +18,10 @@ extern "C" {
 /* Guarda (o sobreescribe) un fichero. 0 OK, -1 sin espacio / demasiados. */
 int  fs_put(const char* name, const uint8_t* data, uint32_t size);
 
+/* #294 streaming PUT — apende un trozo (el PUT_BEGIN del wire crea/trunca con
+ * fs_put(name,NULL,0)). Sube ficheros > buffer del wire por trozos. */
+int  fs_put_append(const char* name, const uint8_t* data, uint32_t size);
+
 /* Devuelve puntero (dentro del arena) + tamaño. 0 OK, -1 no existe.
  * El puntero es válido hasta el siguiente fs_put/fs_del/fs_format. */
 int  fs_get(const char* name, const uint8_t** data, uint32_t* size);

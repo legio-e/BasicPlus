@@ -234,6 +234,75 @@ static void handle_put(long id, json_obj_t* obj) {
     reply_empty("PUT_REPLY", id);
 }
 
+/* #294 streaming PUT — subida por trozos (PUT_BEGIN/PUT_DATA/PUT_END), espejo del
+ * BURN de packs. BEGIN crea/trunca, cada DATA apende (lee su propio bulk), END
+ * verifica el tamaño y persiste UNA vez (fs_save por chunk seria un erase+program
+ * por trozo). Una sesion a la vez. */
+static struct {
+    int      active;
+    char     path[64];
+    uint32_t received;
+    uint32_t expected;
+} s_put_sess;
+
+static void reply_put_field(const char* type, long id, uint32_t val, const char* field) {
+    char buf[96];
+    int n = snprintf(buf, sizeof(buf), "{\"type\":\"%s\",\"id\":%ld,\"%s\":%lu}",
+                     type, id, field, (unsigned long) val);
+    if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+}
+
+static void handle_put_begin(long id, json_obj_t* obj) {
+    char path[64];
+    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+        stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
+    }
+    if (fs_put(path, NULL, 0) != 0) { stm32_wire_send_error(id, "NO_SPACE", "FS lleno"); return; }
+    s_put_sess.active   = 1;
+    s_put_sess.received = 0;
+    s_put_sess.expected = (uint32_t) json_get_long(obj, "size", 0);
+    strncpy(s_put_sess.path, path, sizeof(s_put_sess.path) - 1);
+    s_put_sess.path[sizeof(s_put_sess.path) - 1] = '\0';
+    reply_put_field("PUT_BEGIN_REPLY", id, 0, "received");
+}
+
+static void handle_put_data(long id, json_obj_t* obj) {
+    long bulk = json_get_long(obj, "bulk", -1);
+    if (bulk < 0) { stm32_wire_send_error(id, "INVALID_PARAM", "missing bulk"); return; }
+    /* CONSUMIR SIEMPRE el bulk (aunque falle luego) para no desincronizar el wire. */
+    if ((size_t) bulk > sizeof(s_put_buf)) {
+        size_t rem = (size_t) bulk;
+        while (rem > 0) {
+            size_t chunk = rem < sizeof(s_put_buf) ? rem : sizeof(s_put_buf);
+            if (stm32_wire_recv_bulk(s_put_buf, chunk) != 0) { stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return; }
+            rem -= chunk;
+        }
+        s_put_sess.active = 0;
+        stm32_wire_send_error(id, "NO_SPACE", "chunk mayor que el buffer"); return;
+    }
+    if (stm32_wire_recv_bulk(s_put_buf, (size_t) bulk) != 0) { stm32_wire_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return; }
+    /* bulk ya consumido → ahora validar sesion + escribir. */
+    if (!s_put_sess.active) { stm32_wire_send_error(id, "NO_SESSION", "PUT_DATA sin PUT_BEGIN"); return; }
+    if (bulk > 0 && fs_put_append(s_put_sess.path, s_put_buf, (uint32_t) bulk) != 0) {
+        s_put_sess.active = 0;
+        stm32_wire_send_error(id, "NO_SPACE", "FS lleno"); return;
+    }
+    s_put_sess.received += (uint32_t) bulk;
+    reply_put_field("PUT_DATA_REPLY", id, s_put_sess.received, "received");
+}
+
+static void handle_put_end(long id, json_obj_t* obj) {
+    (void) obj;
+    if (!s_put_sess.active) { stm32_wire_send_error(id, "NO_SESSION", "PUT_END sin PUT_BEGIN"); return; }
+    uint32_t recv = s_put_sess.received;
+    uint32_t exp  = s_put_sess.expected;
+    s_put_sess.active = 0;
+    if (exp != 0 && recv != exp) { stm32_wire_send_error(id, "SIZE_MISMATCH", "bytes != size"); return; }
+    /* Persistir UNA sola vez (no por chunk). /lib lo re-instala el embebido al boot. */
+    if (strncmp(s_put_sess.path, "/lib/", 5) != 0) fs_save();
+    reply_put_field("PUT_END_REPLY", id, recv, "size");
+}
+
 static void handle_format(long id, json_obj_t* obj) {
     char confirm[8];
     if (json_get_str(obj, "confirm", confirm, sizeof(confirm)) < 0 ||
@@ -588,6 +657,7 @@ static void dispatch(int first_char) {
         int st = (int) board_boot_status()->state;
         int is_fs = (strcmp(type, "LIST")  == 0 || strcmp(type, "STAT") == 0 || strcmp(type, "DF")  == 0
                   || strcmp(type, "GET")   == 0 || strcmp(type, "PUT")  == 0 || strcmp(type, "DEL") == 0
+                  || strncmp(type, "PUT_", 4) == 0   /* #294 streaming: PUT_BEGIN/DATA/END */
                   || strcmp(type, "MKDIR") == 0 || strcmp(type, "FORMAT") == 0);
         if (is_fs && st < BPVM_BOOT_FS) {
             stm32_wire_send_error(id, "NOT_READY", "FS no montado (configura particiones)");
@@ -612,6 +682,10 @@ static void dispatch(int first_char) {
     else if (strcmp(type, "DF")        == 0) handle_df(id);
     else if (strcmp(type, "GET")       == 0) handle_get(id, &obj);
     else if (strcmp(type, "PUT")       == 0) handle_put(id, &obj);
+    /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
+    else if (strcmp(type, "PUT_BEGIN") == 0) handle_put_begin(id, &obj);
+    else if (strcmp(type, "PUT_DATA")  == 0) handle_put_data(id, &obj);
+    else if (strcmp(type, "PUT_END")   == 0) handle_put_end(id, &obj);
     else if (strcmp(type, "DEL")       == 0) handle_del(id, &obj);
     else if (strcmp(type, "MKDIR")     == 0) reply_empty("MKDIR_REPLY", id);
     else if (strcmp(type, "FORMAT")    == 0) handle_format(id, &obj);

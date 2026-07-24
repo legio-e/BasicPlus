@@ -487,6 +487,67 @@ err:
 }
 
 /* ============================================================ */
+/* #294 streaming PUT — subida por trozos (PUT_BEGIN/PUT_DATA/PUT_END), espejo del
+ * BURN de packs. Evita el techo del PUT clasico (s_put_buf=48K): BEGIN crea/trunca,
+ * cada DATA apende un chunk, END verifica el tamaño. Una sesion a la vez. */
+
+static struct {
+    int      active;
+    char     path[FS_NAME_LEN];
+    uint32_t received;
+    uint32_t expected;   /* size anunciado en BEGIN (0 = no verificar) */
+} s_put_sess;
+
+static void put_stream_reply(long id, const char* type, uint32_t val, const char* field) {
+    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, type, id);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, field, (long) val);
+    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
+    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "reply no cabe"); return; }
+    wire_v1_send_line(s_reply_buf, (size_t) off);
+}
+
+static void handle_put_begin(long id, const json_obj_t* obj) {
+    char path[FS_NAME_LEN];
+    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+        wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
+    }
+    fs_status_t s = fs_put(path, NULL, 0);   /* crea/trunca + dirs padre */
+    if (s != FS_OK) { const char* c; const char* m; map_fs_status(s, &c, &m); wire_v1_send_error(id, c, m); return; }
+    s_put_sess.active   = 1;
+    s_put_sess.received = 0;
+    s_put_sess.expected = (uint32_t) json_get_long(obj, "size", 0);
+    strncpy(s_put_sess.path, path, sizeof(s_put_sess.path) - 1);
+    s_put_sess.path[sizeof(s_put_sess.path) - 1] = '\0';
+    put_stream_reply(id, "PUT_BEGIN_REPLY", 0, "received");
+}
+
+static void handle_put_data(long id, const json_obj_t* obj, const uint8_t* bulk, size_t bulk_size) {
+    (void) obj;
+    if (!s_put_sess.active) { wire_v1_send_error(id, "NO_SESSION", "PUT_DATA sin PUT_BEGIN"); return; }
+    if (bulk_size > 0) {
+        fs_status_t s = fs_put_append(s_put_sess.path, bulk, (uint32_t) bulk_size);
+        if (s != FS_OK) {
+            s_put_sess.active = 0;
+            const char* c; const char* m; map_fs_status(s, &c, &m); wire_v1_send_error(id, c, m); return;
+        }
+        s_put_sess.received += (uint32_t) bulk_size;
+    }
+    put_stream_reply(id, "PUT_DATA_REPLY", s_put_sess.received, "received");
+}
+
+static void handle_put_end(long id, const json_obj_t* obj) {
+    (void) obj;
+    if (!s_put_sess.active) { wire_v1_send_error(id, "NO_SESSION", "PUT_END sin PUT_BEGIN"); return; }
+    uint32_t recv = s_put_sess.received;
+    uint32_t exp  = s_put_sess.expected;
+    s_put_sess.active = 0;
+    if (exp != 0 && recv != exp) {
+        wire_v1_send_error(id, "SIZE_MISMATCH", "bytes recibidos != size anunciado"); return;
+    }
+    put_stream_reply(id, "PUT_END_REPLY", recv, "size");
+}
+
+/* ============================================================ */
 /* DEL */
 
 static void handle_del(long id, const json_obj_t* obj) {
@@ -1324,6 +1385,7 @@ void repl_v1_handle_request(int first_char) {
         const bpvm_boot_status_t* bs = board_boot_status();
         int is_fs_cmd = strcmp(type, "LIST") == 0 || strcmp(type, "STAT") == 0
                      || strcmp(type, "GET") == 0  || strcmp(type, "PUT") == 0
+                     || strncmp(type, "PUT_", 4) == 0   /* #294 streaming: PUT_BEGIN/DATA/END */
                      || strcmp(type, "DEL") == 0  || strcmp(type, "MKDIR") == 0
                      || strcmp(type, "RMDIR") == 0 || strcmp(type, "RENAME") == 0
                      || strcmp(type, "FORMAT") == 0 || strcmp(type, "SAVE") == 0
@@ -1347,6 +1409,10 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "STAT")     == 0) { handle_stat(id, &obj);     return; }
     if (strcmp(type, "GET")      == 0) { handle_get(id, &obj);      return; }
     if (strcmp(type, "PUT")      == 0) { handle_put(id, &obj, s_put_buf, bulk_size); return; }
+    /* #294 streaming PUT (subida por trozos, ficheros > buffer del wire). */
+    if (strcmp(type, "PUT_BEGIN") == 0) { handle_put_begin(id, &obj); return; }
+    if (strcmp(type, "PUT_DATA")  == 0) { handle_put_data(id, &obj, s_put_buf, bulk_size); return; }
+    if (strcmp(type, "PUT_END")   == 0) { handle_put_end(id, &obj); return; }
     if (strcmp(type, "DEL")      == 0) { handle_del(id, &obj);      return; }
     if (strcmp(type, "MKDIR")    == 0) { handle_mkdir(id, &obj);    return; }
     if (strcmp(type, "RMDIR")    == 0) { handle_rmdir(id, &obj);    return; }

@@ -214,6 +214,14 @@ int fs_put(const char* name, const uint8_t* data, uint32_t size) {
     return (bpvm_fs_write(name, data, size, 0) == 0) ? 0 : -1;
 }
 
+/* #294 streaming PUT — apende un trozo (el PUT_BEGIN del wire crea/trunca con
+ * fs_put(name,NULL,0)). Sube ficheros > buffer del wire sin buferizarlos enteros. */
+int fs_put_append(const char* name, const uint8_t* data, uint32_t size) {
+    if (!name || name[0] == '\0') return -1;
+    if (size == 0) return 0;
+    return (bpvm_fs_write(name, data, size, 1) == 0) ? 0 : -1;
+}
+
 int fs_get(const char* name, const uint8_t** data, uint32_t* size) {
     uint32_t sz = 0;
     if (bpvm_fs_stat(name, &sz) != 0) return -1;
