@@ -32,6 +32,7 @@ extern "C" {
 #define MDN_ERR_ABI        -3
 #define MDN_ERR_TOO_LARGE  -4   /* code section excede el pool */
 #define MDN_ERR_TRUNCATED  -5   /* size < layout esperado */
+#define MDN_ERR_ARCH       -6   /* arch del .mdn != arch del firmware (H4 gate) */
 
 /* Carga un .mdn ya en memoria (data + size).
  * Tras OK, los símbolos están registrados en el aot_registry y

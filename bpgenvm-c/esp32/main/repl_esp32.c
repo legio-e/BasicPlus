@@ -33,6 +33,11 @@
 #include "esp_mac.h"         /* INFO: uniqueId desde la MAC de efuse */
 #include "esp_flash.h"       /* INFO: tamaño real de la flash montada */
 #include "esp_heap_caps.h"   /* INFO: PSRAM mapeada (0 si el módulo no trae) */
+#if defined(__riscv)
+#include "esp_cache.h"       /* H4 AOT: sync de cachés tras copiar .mdn a RAM exec */
+#include "esp_log.h"         /* H4 AOT: trazas del cargador .mdn (consola) */
+#include "mdn_loader.h"      /* H4 AOT: bpvm_load_mdn (.mdn dinámico en el P4) */
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -394,6 +399,15 @@ static void send_exited(long session, const char* status, int exit_code,
  *   otra  → error BUSY inmediato. */
 static long s_kill_ack_id = -1;
 
+#if defined(__riscv)
+/* H4 AOT — RAM ejecutable de los .mdn cargados en este RUN. El loader es
+ * zero-copy (los thunks apuntan a estos buffers), así que persisten durante el
+ * run y se liberan justo después. */
+#define MDN_MAX_EXEC 16
+static void* s_mdn_exec[MDN_MAX_EXEC];
+static int   s_mdn_exec_n;
+#endif
+
 static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
     (void) vm; (void) user;
     int c = wire_v1_try_getchar();
@@ -502,6 +516,51 @@ static void run_module_path(const char* path, long id) {
     bpvm_aot_clear();
     esp_aot_register(vm);
 
+#if defined(__riscv)
+    /* H4 AOT — .mdn DINÁMICO (RISC-V). Por cada módulo cargado, buscar su .mdn en
+     * el FS y, si existe, COPIARLO a RAM EJECUTABLE (la DRAM del ESP32 no ejecuta;
+     * el Pico sí, por eso allí el loader es zero-copy desde el buffer del FS) y
+     * registrar sus thunks. El gate de arch del loader rechaza un .mdn que no sea
+     * RISC-V. El buffer exec persiste durante el run; se libera al terminar. */
+    s_mdn_exec_n = 0;
+    for (int mi = 0; mi < vm->module_count && s_mdn_exec_n < MDN_MAX_EXEC; mi++) {
+        const char* mname = vm->modules[mi].name;
+        if (!mname || !mname[0]) continue;
+        char mdn_path[80];   /* nombre de módulo (<=63) + ".mdn" + NUL, holgado */
+        snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
+        const uint8_t* mdn_data; uint32_t mdn_size;
+        if (v1_get_resolve(mdn_path, &mdn_data, &mdn_size) != FS_OK) continue;
+        /* El P4 (RISC-V) NO tiene MALLOC_CAP_EXEC (su RAM interna es unificada =
+         * ejecutable; ese cap solo existe en targets con split IRAM/DRAM como
+         * Xtensa). RAM interna normal, que la CPU puede ejecutar. */
+#ifdef MALLOC_CAP_EXEC
+        void* exec = heap_caps_malloc(mdn_size, MALLOC_CAP_EXEC);
+#else
+        void* exec = heap_caps_malloc(mdn_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+#endif
+        if (!exec) { ESP_LOGW("AOT", "%s: sin RAM exec (%u B)", mdn_path, (unsigned) mdn_size); continue; }
+        memcpy(exec, mdn_data, mdn_size);
+        /* Coherencia de cachés (RISC-V): escribir la D-cache a memoria (C2M),
+         * invalidar la I-cache, y fence.i para sincronizar el flujo de
+         * instrucciones. Sin esto se ejecutaría código rancio/basura. */
+        esp_cache_msync(exec, mdn_size,
+            ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+        esp_cache_msync(exec, mdn_size,
+            ESP_CACHE_MSYNC_FLAG_TYPE_INST | ESP_CACHE_MSYNC_FLAG_INVALIDATE
+            | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+        __asm__ volatile ("fence.i" ::: "memory");
+        int rc = bpvm_load_mdn(vm, (const uint8_t*) exec, (size_t) mdn_size);
+        if (rc == MDN_OK) {
+            s_mdn_exec[s_mdn_exec_n++] = exec;
+            ESP_LOGI("AOT", "%s: .mdn RISC-V cargado (%u B) en RAM exec %p",
+                     mdn_path, (unsigned) mdn_size, exec);
+        } else {
+            heap_caps_free(exec);
+            ESP_LOGW("AOT", "%s: bpvm_load_mdn rc=%d (arch/abi/formato?)", mdn_path, rc);
+        }
+    }
+#endif
+
     /* Ejecutar. bpvm_run single-thread (el SMP en ESP32 es H4.2+). */
     s_kill_ack_id = -1;
     bpvm_set_poll(vm, esp32_run_poll_cb, NULL);   /* P-run-stop (#257) */
@@ -522,6 +581,13 @@ static void run_module_path(const char* path, long id) {
     const char* err_msg = (rs == BPVM_OK) ? NULL
                         : (link_err[0] ? link_err : bpvm_status_str(rs));
     send_exited(session, status_str, exit_code, (long) dt, err_msg);
+
+#if defined(__riscv)
+    /* H4 AOT — el run terminó: los thunks .mdn ya no se ejecutan → liberar la RAM
+     * ejecutable. bpvm_aot_clear() del próximo RUN limpia el registry. */
+    for (int k = 0; k < s_mdn_exec_n; k++) heap_caps_free(s_mdn_exec[k]);
+    s_mdn_exec_n = 0;
+#endif
 
     bpvm_destroy(vm);
     s_active_session = 0;

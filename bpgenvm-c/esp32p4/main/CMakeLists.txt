@@ -57,6 +57,7 @@ idf_component_register(
         "../../src/exceptions.c"
         "../../src/aot_registry.c"
         "../../src/bpvm_aot_helpers.c"
+        "../../src/mdn_loader.c"              # H4 AOT RISC-V (Hito 2): loader .mdn dinámico (SOLO P4)
         "../../src/scheduler_smp.c"
         "../../src/comm_common.c"
         "../../src/comm_host.c"
@@ -87,6 +88,7 @@ idf_component_register(
         esp_partition
         spi_flash        # INFO (repl_esp32): esp_flash_get_size (flash real montada)
         esp_hw_support   # INFO (repl_esp32): esp_mac.h (uniqueId desde efuse)
+        esp_mm           # H4 AOT RISC-V: esp_cache_msync (sync I/D-cache del .mdn en RAM exec)
         esp_lcd          # G3: MIPI-DSI (esp_lcd_new_dsi_bus + panel ops)
         esp_driver_ledc  # G3: PWM del backlight (GPIO26)
         lvgl             # G4: LVGL 9.2.2 vendorizada (via EXTRA_COMPONENT_DIRS)

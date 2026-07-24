@@ -37,14 +37,22 @@
                                 * lo RECHAZA con MDN_ERR_ABI (gate estilo #284). */
 #define MDN_NAME_MAX       32  /* longitud max de qualified name */
 
+/* Arquitectura del código nativo del .mdn = e_machine del ELF de origen (H4).
+ * El loader RECHAZA un .mdn cuya arch no case con la del firmware (ejecutar
+ * código de otra ISA = crash). 0 = sin tag (.mdn legacy pre-H4, siempre ARM). */
+#define MDN_ARCH_NONE      0    /* sin tag — legacy (ARM) */
+#define MDN_ARCH_ARM       40   /* EM_ARM   (Cortex-M Thumb-2) */
+#define MDN_ARCH_RISCV     243  /* EM_RISCV (RV32 — ESP32-P4) */
+
 typedef struct {
     uint8_t  magic[4];     /* "MDN\0" */
     uint16_t version;      /* formato del header — actualmente 1 */
     uint16_t abi_version;  /* mínimo aot_helpers_vN_t que necesita */
     uint32_t code_size;    /* bytes del code section */
     uint32_t sym_count;    /* nº de entradas mdn_symbol_t que siguen */
-    /* Reservado por alineación a 16 bytes — útil para extender. */
-    uint32_t _reserved;
+    /* Arquitectura del código = e_machine del ELF (MDN_ARCH_*). Antes _reserved
+     * (0); el loader trata 0 como legacy-ARM por compat. Gate de arch estilo #284. */
+    uint32_t arch;
 } mdn_header_t;
 
 typedef struct {

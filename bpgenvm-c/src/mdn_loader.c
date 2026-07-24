@@ -29,6 +29,20 @@
 #include <stdint.h>
 #include <string.h>
 
+/* H4 — arquitectura del firmware (gate del .mdn) + bit de modo del puntero a
+ * función. Compile-time: un .mdn solo puede ejecutar en la ISA que lo compiló,
+ * así que la arch del host la fija el toolchain que compila ESTE fichero. */
+#if defined(__arm__) || defined(__thumb__)
+#  define MDN_HOST_ARCH   MDN_ARCH_ARM
+#  define MDN_FUNCPTR_BIT 1u    /* ARM: bit 0 del address = modo Thumb */
+#elif defined(__riscv)
+#  define MDN_HOST_ARCH   MDN_ARCH_RISCV
+#  define MDN_FUNCPTR_BIT 0u    /* RISC-V: dirección plana (entradas 2-byte aligned) */
+#else
+#  define MDN_HOST_ARCH   MDN_ARCH_NONE   /* host/x86: sin gate, dirección plana */
+#  define MDN_FUNCPTR_BIT 0u
+#endif
+
 /* H9.5 — el loader es compartido entre ports (Pico, STM32, ...). Las trazas
  * van por bpvm_mdn_log, débil no-op aquí: el Pico da una implementación
  * fuerte sobre su log persistente (pico/aot_funcs.c); el STM32 (wire-only)
@@ -65,19 +79,36 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
     if (h->version != MDN_VERSION)          return MDN_ERR_VERSION;
     if (h->abi_version > MDN_ABI_VERSION)   return MDN_ERR_ABI;
 
+    /* Gate de arquitectura (H4, estilo #284): ejecutar código de otra ISA =
+     * instrucciones basura → crash. Se rechaza. arch==0 = .mdn legacy (pre-tag,
+     * siempre ARM): se acepta SOLO en firmware ARM. En el host (arch NONE) no hay
+     * gate (para tests). */
+    if (MDN_HOST_ARCH != MDN_ARCH_NONE) {
+        uint32_t a = h->arch;
+        int ok = (a == MDN_HOST_ARCH)
+              || (a == MDN_ARCH_NONE && MDN_HOST_ARCH == MDN_ARCH_ARM);
+        if (!ok) {
+            bpvm_mdn_log("MDN: arch mismatch .mdn=%u firmware=%u — RECHAZADO",
+                       (unsigned) a, (unsigned) MDN_HOST_ARCH);
+            return MDN_ERR_ARCH;
+        }
+    }
+
     /* Layout sanity. */
     size_t hdr_total = sizeof(mdn_header_t)
                      + (size_t) h->sym_count * sizeof(mdn_symbol_t);
     if (size < hdr_total + h->code_size) return MDN_ERR_TRUNCATED;
 
-    /* Registro zero-copy: el código Thumb-2 ya está en RAM en data[],
-     * solo apuntamos el thunk ahí. Bit 0 del address = modo Thumb. */
+    /* Registro zero-copy: el código nativo ya está en RAM (ejecutable) en data[],
+     * solo apuntamos el thunk ahí. MDN_FUNCPTR_BIT añade el bit de modo que pida
+     * la ISA (ARM Thumb = 1; RISC-V/x86 = 0). */
     const uint8_t*      code_base = data + hdr_total;
     const mdn_symbol_t* syms      = (const mdn_symbol_t*)
                                       (data + sizeof(mdn_header_t));
     int registered = 0;
     for (uint32_t i = 0; i < h->sym_count; i++) {
-        uintptr_t thunk_addr = (uintptr_t)(code_base + syms[i].thunk_offset) | 1u;
+        uintptr_t thunk_addr = (uintptr_t)(code_base + syms[i].thunk_offset)
+                             | MDN_FUNCPTR_BIT;
         int rc = bpvm_aot_register_by_name(vm, syms[i].name,
                                              (bpvm_aot_thunk_t) thunk_addr);
         if (rc == 0) {

@@ -119,7 +119,7 @@ public final class MdnPack {
         hdr.putShort((short) MDN_ABI_VERSION);
         hdr.putInt(code.length);
         hdr.putInt(exports.size());
-        hdr.putInt(0);  // _reserved
+        hdr.putInt(f.machine);  // arch = e_machine del ELF (H4 — gate del loader)
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(hdr.array());
@@ -156,6 +156,7 @@ public final class MdnPack {
         private final byte[] data;
         private final List<Section> sections = new ArrayList<>();
         private final List<Symbol> syms = new ArrayList<>();
+        private int machine;   /* e_machine (offset 18): 40=EM_ARM, 243=EM_RISCV */
 
         private ElfFile(byte[] data) { this.data = data; }
 
@@ -196,6 +197,7 @@ public final class MdnPack {
             if (data[4] != 1) {
                 throw new RuntimeException("solo ELF32 soportado");
             }
+            machine = u16(18);   /* e_machine: 40=EM_ARM, 243=EM_RISCV (H4 arch tag) */
             int shoff = u32(32);
             int shentsize = u16(46);
             int shnum = u16(48);
