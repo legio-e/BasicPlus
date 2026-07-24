@@ -29,6 +29,8 @@ idf_component_register(
         "../../src/bpvm_boot.c"        # H9: maquina de estados del arranque
         "../../src/bpvm_bmgr.c"        # H9: board manager (compone env+part)
         "../../src/bpvm_bmgr_wire.c"   # H9: nucleo del protocolo STATE/ENV/PART
+        "../../src/bpvm_pack.c"        # H3 Packs V4: core portable de packs (lo llama bmgr_wire)
+        "aot_funcs_stub.c"            # H4 AOT: def fuerte no-op de esp_aot_register (S3 sin AOT baked-in)
         "../../src/net.c"              # H11 (#241): facade Net — sin backend hasta H11.c (lwIP) → RuntimeError atrapable
         "../../src/link.c"
         "../../src/scheduler.c"

@@ -24,6 +24,7 @@
 #include "bpvm_pico.h"       /* paso 4 cierre — bpvm_pico_reset_cause (INFO) */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "board_mgr_esp32.h" /* H9: gestión de placa (STATE/ENV/PART) + board_boot_status */
+#include "aot_registry.h"    /* H4 AOT: bpvm_aot_clear/count (hook esp_aot_register) */
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -36,6 +37,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* H4 AOT — hook de registro de funciones AOT baked-in. Se define FUERTE por
+ * target en un fichero aparte que enlaza cada build (P4: aot_funcs_p4.c con el
+ * thunk nativo RISC-V; S3: aot_funcs_stub.c no-op). Aqui SOLO se DECLARA: asi
+ * repl.o deja la referencia sin resolver y el linker TIRA del objeto fuerte del
+ * archive. (Con un weak no-op local el linker se conformaria con el y jamas
+ * enlazaria el fuerte del .a → AOT muerto: lo vimos, esp_aot_register salia 'W'
+ * y el thunk no aparecia.) Se llama tras link, antes de bpvm_run (igual Pico).
+ * El .mdn dinamico cross-arch = Hito 2. */
+void esp_aot_register(struct bpvm* vm);
 
 /* Buffer VM compartido (definido en main.c). Ahora PUNTERO (no array): el S3 lo
  * apunta a un array estático en SRAM interna y el P4 a PSRAM reservada en boot.
@@ -484,8 +495,14 @@ static void run_module_path(const char* path, long id) {
         if (!loaded_any) break;
     }
 
-    /* Ejecutar. NO AOT en Xtensa (el .mdn es ARM). bpvm_run single-thread
-     * (el SMP en ESP32 es H4.2+, no necesario para H4.3). */
+    /* H4 AOT — registrar funciones AOT baked-in tras link, antes de run (mismo
+     * punto que la Pico). En el P4 (RISC-V) esp_aot_register (fuerte, aot_funcs_p4.c)
+     * arma los thunks nativos compilados para RISC-V; en el S3 (Xtensa) es weak
+     * no-op. Clear primero: cada RUN recarga módulos en direcciones frescas. */
+    bpvm_aot_clear();
+    esp_aot_register(vm);
+
+    /* Ejecutar. bpvm_run single-thread (el SMP en ESP32 es H4.2+). */
     s_kill_ack_id = -1;
     bpvm_set_poll(vm, esp32_run_poll_cb, NULL);   /* P-run-stop (#257) */
 

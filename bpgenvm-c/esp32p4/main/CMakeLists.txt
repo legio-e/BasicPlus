@@ -22,6 +22,8 @@ idf_component_register(
         "../../esp32/main/esp32_mods.c"       # P6 imagen única: stdlib embebida COMPARTIDA con el S3 (14 mods)
         "${WIRE_TRANSPORT_SRC}"               # VM.3: capa de I/O del wire v1 (TCP o UART0 según BPVM_P4_WIRE)
         "p4_board_id.c"                       # VM.3 pulido: identidad de placa esp32p4 (override fuerte de repl_board_id)
+        "aot_funcs_p4.c"                      # H4 AOT RISC-V (Hito 1): override fuerte de esp_aot_register (SOLO P4)
+        "aot_Bench.c"                         # H4 AOT RISC-V (Hito 1): fib nativo (mismo .c portable que el Pico, toolchain RISC-V)
         "gui_display_dsi.c"                   # G3: display MIPI-DSI (panel EK79007 + backlight LEDC)
         "../../esp32/main/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
         "../../esp32/main/json_min.c"         # VM.3: parser JSON del wire (C portable)
@@ -47,6 +49,7 @@ idf_component_register(
         "../../src/bpvm_boot.c"               # H9: maquina de estados del arranque
         "../../src/bpvm_bmgr.c"               # H9: board manager (compone env+part)
         "../../src/bpvm_bmgr_wire.c"          # H9: nucleo del protocolo STATE/ENV/PART
+        "../../src/bpvm_pack.c"               # H3 Packs V4: core portable de packs (lo llama bmgr_wire)
         "../../src/net.c"
         "../../src/link.c"
         "../../src/scheduler.c"

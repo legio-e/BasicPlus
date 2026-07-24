@@ -12,11 +12,32 @@ module Bench
     return fib(n - 1) + fib(n - 2)
   end fib
 
-  function Main()   // nothing
+  // H4 AOT — gemelo NO-nativo de fib: cuerpo identico, SIEMPRE
+  // interpretado (el AOT solo secuestra "Bench.fib"). Sirve de linea
+  // base para medir el speedup del nativo en UNA sola ejecucion, en el
+  // mismo micro y con el mismo reloj (interp vs AOT, sin cambiar de
+  // firmware). Sin el solo tendriamos el numero nativo, sin referencia.
+  function fibInterp(n: integer): integer
+    if n < 2 then
+      return n
+    endif
+    return fibInterp(n - 1) + fibInterp(n - 2)
+  end fibInterp
+
+  function Main()
+    // Linea base: interpretado.
     var t0: integer := Pico.uptimeMs()
-    var r: integer := fib(28)
-    var dt: integer := Pico.uptimeMs() - t0
-    print "BP fib(28) = ", r, " in ", dt, " ms"
+    var ri: integer := fibInterp(28)
+    var dti: integer := Pico.uptimeMs() - t0
+    print "fib(28) interp = ", ri, " in ", dti, " ms"
+
+    // AOT: si el firmware trae el thunk nativo de esta arquitectura,
+    // fib(28) corre como codigo maquina; si no, cae a interpretado
+    // (mismo resultado, sin speedup) — el sample es portable.
+    var t1: integer := Pico.uptimeMs()
+    var rn: integer := fib(28)
+    var dtn: integer := Pico.uptimeMs() - t1
+    print "fib(28) AOT    = ", rn, " in ", dtn, " ms"
   end Main
 
 end Bench
