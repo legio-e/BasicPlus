@@ -35,8 +35,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /** Compilación AOT de módulos `native` a `.mdn` desde el IDE. Sin estado. */
 public final class AotBuild {
@@ -49,6 +52,29 @@ public final class AotBuild {
     private static final String[] ARM_M33_FLAGS = {
         "-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=softfp", "-mfpu=fpv5-sp-d16",
         "-fpic", "-fno-jump-tables", "-Os",
+    };
+
+    /** Flags de compilación del target "riscv" = ESP32-P4 (RV32IMAFC). NO fijamos
+     *  -march/-mabi: el toolchain esp trae el del P4 por DEFECTO y el firmware
+     *  tampoco los pasa → casan por construcción. A diferencia de ARM, el .text
+     *  RISC-V NO sale autocontenido (la llamada recursiva, refs PC-relativas dejan
+     *  relocalizaciones que MdnPack no resuelve) → hace falta el paso de enlace
+     *  (RISCV_LINK_FLAGS). -mno-relax evita las relocs de relajación. */
+    private static final String[] RISCV_P4_FLAGS = {
+        "-fno-pic", "-mno-relax", "-fno-jump-tables", "-Os",
+    };
+
+    /** Paso EXTRA de RISC-V (bifurcación A, decidida con Eduardo): enlazar el .o a
+     *  -Ttext=0 resolviendo las relocalizaciones internas PC-relativas → el .text
+     *  queda autocontenido y position-independent (todo relativo al PC). El código
+     *  muerto del .mdn (aot_<Mod>_register) referencia el registry del firmware, un
+     *  símbolo externo → --unresolved-symbols=ignore-all lo deja en 0 (nunca se
+     *  ejecuta: el loader registra los thunks por la tabla del .mdn). MdnPack lee
+     *  el .elf enlazado igual que un .o; con -Ttext=0, valor de símbolo == offset. */
+    private static final String[] RISCV_LINK_FLAGS = {
+        "-nostdlib", "-nostartfiles",
+        "-Wl,--no-relax", "-Wl,--unresolved-symbols=ignore-all",
+        "-Wl,-Ttext=0", "-Wl,-e,0",
     };
 
     /** Resultado global de un pase AOT sobre el proyecto. */
@@ -78,15 +104,17 @@ public final class AotBuild {
                                       String target, IdePrefs prefs, Consumer<String> log) {
         Result res = new Result();
 
-        if (target != null && !target.equalsIgnoreCase("arm")) {
-            String w = "AOT target '" + target + "' no soportado en V3 (sólo 'arm' = "
-                + "Cortex-M33 para RP2350/STM32). Los módulos se ejecutarán interpretados.";
+        boolean riscv = "riscv".equalsIgnoreCase(target);
+        if (target != null && !target.equalsIgnoreCase("arm") && !riscv) {
+            String w = "AOT target '" + target + "' no soportado (arm = Cortex-M33 "
+                + "RP2350/STM32 · riscv = ESP32-P4). Los módulos se ejecutarán interpretados.";
             res.warnings.add(w);
             log.accept("[aot] " + w);
             return res;
         }
 
-        String gcc     = resolveGcc(prefs);
+        String   gcc    = riscv ? resolveRiscvGcc(prefs) : resolveGcc(prefs);
+        String[] cflags = riscv ? RISCV_P4_FLAGS : ARM_M33_FLAGS;
         String bpgenvm = resolveBpgenvm(prefs, outDir);
         if (bpgenvm == null) {
             res.toolchainMissing = true;
@@ -111,7 +139,7 @@ public final class AotBuild {
 
         for (Path bp : bps) {
             try {
-                Path mdn = buildOne(bp, outDir, work, gcc, bpgenvm, res, log);
+                Path mdn = buildOne(bp, outDir, work, gcc, cflags, riscv, bpgenvm, res, log);
                 if (mdn != null) res.mdnFiles.add(mdn);
             } catch (ToolchainMissing tm) {
                 // gcc no se pudo ni lanzar — no tiene sentido reintentar el resto.
@@ -137,6 +165,7 @@ public final class AotBuild {
     /** AOT de un único .bp. Devuelve el `.mdn` generado, o null si el módulo no
      *  tiene funciones `native` (lo normal para la mayoría de módulos). */
     private static Path buildOne(Path bp, Path outDir, Path work, String gcc,
+                                 String[] cflags, boolean link,
                                  String bpgenvm, Result res, Consumer<String> log)
             throws Exception {
         // 1) Emitir aot_<Mod>.c (modo --mdn). cFile==null → sin native.
@@ -157,18 +186,34 @@ public final class AotBuild {
         Path oFile   = work.resolve("aot_" + mod + ".o");
         Path mdnFile = outDir.resolve(mod + ".mdn");
 
-        // 2) arm-none-eabi-gcc → .o (PIC Thumb-2).
+        // 2) gcc → .o (ARM: PIC Thumb-2 · RISC-V: -fno-pic, se resuelve al enlazar).
         List<String> cmd = new ArrayList<>();
         cmd.add(gcc);
-        cmd.addAll(Arrays.asList(ARM_M33_FLAGS));
+        cmd.addAll(Arrays.asList(cflags));
         cmd.add("-I" + Paths.get(bpgenvm, "include"));
         cmd.add("-I" + Paths.get(bpgenvm, "src"));
         cmd.add("-c"); cmd.add(ar.cFile.toString());
         cmd.add("-o"); cmd.add(oFile.toString());
         runGcc(cmd, mod, log);
 
+        // 2b) RISC-V: paso EXTRA de enlace. El .text RISC-V (a diferencia de ARM) NO
+        // sale autocontenido — lleva relocalizaciones internas PC-relativas (la
+        // recursión, etc.) que MdnPack no resuelve. Enlazamos a -Ttext=0 para
+        // resolverlas dejando el código position-independent. Empaquetamos el .elf.
+        Path packInput = oFile;
+        if (link) {
+            Path elf = work.resolve("aot_" + mod + ".elf");
+            List<String> lk = new ArrayList<>();
+            lk.add(gcc);
+            lk.addAll(Arrays.asList(RISCV_LINK_FLAGS));
+            lk.add(oFile.toString());
+            lk.add("-o"); lk.add(elf.toString());
+            runGcc(lk, mod, log);
+            packInput = elf;
+        }
+
         // 3) MdnPack → .mdn (alongside del .mod en outDir; PicoExplorer lo sube).
-        MdnPack.PackResult pr = MdnPack.pack(oFile, mdnFile, mod);
+        MdnPack.PackResult pr = MdnPack.pack(packInput, mdnFile, mod);
         log.accept("[aot] " + mod + ".mdn ✓ (" + pr.symbols + " thunk(s), "
             + pr.codeBytes + " B nativo)");
         return mdnFile;
@@ -183,7 +228,7 @@ public final class AotBuild {
         try {
             p = pb.start();
         } catch (IOException launchFail) {
-            throw new ToolchainMissing("No se pudo lanzar arm-none-eabi-gcc ('"
+            throw new ToolchainMissing("No se pudo lanzar el compilador AOT ('"
                 + cmd.get(0) + "'): " + launchFail.getMessage()
                 + ". Configura la ruta del toolchain en Ajustes → AOT. "
                 + "Se sube sólo el .mod (interpretado).");
@@ -246,6 +291,50 @@ public final class AotBuild {
         }
         // 3) Fallback: comando pelado (PATH en exec-time).
         return "arm-none-eabi-gcc";
+    }
+
+    /** Ruta efectiva del gcc RISC-V (ESP32-P4): prefs si está fijada, si no
+     *  autodetect. Reutiliza aotGccPath solo si apunta a un riscv*-gcc (heurística
+     *  por nombre) para no confundirlo con el ARM. */
+    static String resolveRiscvGcc(IdePrefs prefs) {
+        if (prefs != null && prefs.aotGccPath != null
+                && prefs.aotGccPath.toLowerCase().contains("riscv"))
+            return prefs.aotGccPath;
+        return autodetectRiscvGcc();
+    }
+
+    /** Localiza riscv32-esp-elf-gcc. Prioridad: toolchain de ESP-IDF en
+     *  ~/.espressif/tools/riscv32-esp-elf/&lt;ver&gt;/... (el MISMO que compila el
+     *  firmware → ABI casada; si hay varias versiones toma la más nueva), luego
+     *  PATH, y como último recurso el comando pelado. Nunca null. */
+    static String autodetectRiscvGcc() {
+        String exe = isWindows() ? "riscv32-esp-elf-gcc.exe" : "riscv32-esp-elf-gcc";
+        // 1) Toolchain vendido con ESP-IDF (el que usa el firmware del P4).
+        String home = System.getProperty("user.home");
+        if (home != null) {
+            Path base = Paths.get(home, ".espressif", "tools", "riscv32-esp-elf");
+            if (Files.isDirectory(base)) {
+                try (Stream<Path> dirs = Files.list(base)) {
+                    Optional<Path> found = dirs
+                        .sorted(Comparator.reverseOrder())   // esp-15.x antes que esp-13.x
+                        .map(d -> d.resolve("riscv32-esp-elf").resolve("bin").resolve(exe))
+                        .filter(Files::isRegularFile)
+                        .findFirst();
+                    if (found.isPresent()) return found.get().toString();
+                } catch (IOException ignore) { /* cae a PATH */ }
+            }
+        }
+        // 2) Buscar en PATH.
+        String path = System.getenv("PATH");
+        if (path != null) {
+            for (String dir : path.split(File.pathSeparator)) {
+                if (dir.isEmpty()) continue;
+                Path cand = Paths.get(dir, exe);
+                if (Files.isRegularFile(cand)) return cand.toString();
+            }
+        }
+        // 3) Fallback: comando pelado (PATH en exec-time).
+        return "riscv32-esp-elf-gcc";
     }
 
     /** Localiza la raíz de bpgenvm-c (la que tiene include/ y src/). Parte de
