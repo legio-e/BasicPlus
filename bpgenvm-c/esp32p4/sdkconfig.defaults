@@ -38,3 +38,13 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # (sin host en esta placa) cuelga el arranque. Con NONE, UART0 queda limpio para el
 # wire y los logs de diagnóstico salen por Ethernet (net_logf → :5555).
 CONFIG_ESP_CONSOLE_NONE=y
+
+# H4 AOT (Hito 2) — el .mdn dinamico ejecuta codigo nativo copiado a RAM. Con
+# MEMPROT (W^X, PMP) el heap es NO-ejecutable y MALLOC_CAP_EXEC no existe (Kconfig:
+# "allocating memory with MALLOC_CAP_EXEC is not possible when this config is
+# enabled"). Ejecutar el .mdn ahi disparaba un fallo de proteccion (panic mudo por
+# CONSOLE_NONE, = "cuelgue" visto desde el wire). Desactivamos la proteccion para
+# permitir codigo cargable — trade-off estandar de JIT/loadable code; el .mdn es
+# codigo de confianza de nuestro propio toolchain. (Al desactivar MEMPROT,
+# HEAP_HAS_EXEC_HEAP pasa a 'y' -> MALLOC_CAP_EXEC disponible.)
+CONFIG_ESP_SYSTEM_MEMPROT=n
