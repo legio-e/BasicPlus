@@ -718,10 +718,38 @@ public final class BpvmClient implements AutoCloseable {
     // Transferencia de ficheros (A2.2) — PR-2: bulk binario raw inline.
     // ============================================================
 
-    /** Sube `bytes` al workdir de la VM en `remotePath`. Bulk raw inline. */
+    /* #294 — umbral del PUT clásico (whole-buffer). Por debajo del tope del wire
+     * del firmware (s_put_buf=48K), con margen. Ficheros <= esto van por el PUT de
+     * siempre (1 round-trip, probado en todas las placas); mayores van por
+     * streaming (PUT_BEGIN/DATA/END), que hoy solo tiene el ESP32 (Pico/STM32 =
+     * tanda 3). Así grandes = sin techo en el ESP32 y cero regresión en el resto. */
+    private static final int PUT_SINGLE_SHOT_MAX = 40 * 1024;
+    private static final int PUT_STREAM_CHUNK     = 16 * 1024;
+
+    /** Sube `bytes` al workdir de la VM en `remotePath`. Whole-buffer si cabe;
+     *  streaming por trozos si es grande. Bulk raw inline. */
     public int uploadFile(String remotePath, byte[] bytes, long timeoutMs) throws IOException {
-        String extra = "\"path\":" + jsonStr(remotePath);
-        Map<String, Object> resp = sendRequest("PUT", extra, bytes, timeoutMs);
+        if (bytes.length <= PUT_SINGLE_SHOT_MAX) {
+            String extra = "\"path\":" + jsonStr(remotePath);
+            Map<String, Object> resp = sendRequest("PUT", extra, bytes, timeoutMs);
+            return (int) Json.getLong(resp, "size", 0);
+        }
+        return uploadFileStreaming(remotePath, bytes, timeoutMs);
+    }
+
+    /** #294 — subida por trozos (PUT_BEGIN + N×PUT_DATA + PUT_END). Sin techo de
+     *  tamaño: el firmware apende cada chunk al FS sin buferizar el fichero entero. */
+    private int uploadFileStreaming(String remotePath, byte[] bytes, long timeoutMs)
+            throws IOException {
+        String p = "\"path\":" + jsonStr(remotePath);
+        sendRequest("PUT_BEGIN", p + ",\"size\":" + bytes.length, null, timeoutMs);
+        int off = 0;
+        while (off < bytes.length) {
+            int n = Math.min(PUT_STREAM_CHUNK, bytes.length - off);
+            sendRequest("PUT_DATA", "", java.util.Arrays.copyOfRange(bytes, off, off + n), timeoutMs);
+            off += n;
+        }
+        Map<String, Object> resp = sendRequest("PUT_END", "\"size\":" + bytes.length, null, timeoutMs);
         return (int) Json.getLong(resp, "size", 0);
     }
 

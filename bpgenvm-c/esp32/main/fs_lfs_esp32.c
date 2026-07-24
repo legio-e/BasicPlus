@@ -160,6 +160,16 @@ fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
     return FS_OK;
 }
 
+/* #294 streaming PUT — apende un trozo al fichero. El PUT_BEGIN del wire lo
+ * crea/trunca (+dirs) con fs_put(name,NULL,0); cada PUT_DATA llama aquí. Permite
+ * subir ficheros mayores que el buffer del wire sin buferizarlos enteros. */
+fs_status_t fs_put_append(const char* name, const uint8_t* data, uint32_t size) {
+    if (strlen(name) >= 128) return FS_ERR_NAME_TOO_LONG;
+    if (size == 0) return FS_OK;
+    if (bpvm_fs_write(name, data, size, 1) != 0) return FS_ERR_NO_SPACE;
+    return FS_OK;
+}
+
 fs_status_t fs_delete(const char* name) {
     if (!bpvm_fs_exists(name)) return FS_ERR_NOT_FOUND;
     return (bpvm_fs_remove(name) == 0) ? FS_OK : FS_ERR_INVALID;
