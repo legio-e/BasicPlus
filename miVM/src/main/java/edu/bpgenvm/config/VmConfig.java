@@ -46,6 +46,11 @@ public final class VmConfig {
      *  El frontend lo añade al search path de imports; el firmware NO los
      *  embebe — viajan por upload junto con la app del usuario. */
     public String devicesDir = null;
+    /** H5.b — BIBLIOTECA DE PACKS: carpeta con los `.pack` que distribuimos
+     *  nosotros (stdlib, GUI, y en el futuro SQLite…). Viaja con el IDE y se
+     *  configura aquí. Es lo que resuelve `import Modulo from pack NombrePack`.
+     *  null = sin biblioteca (solo se buscan packs junto al proyecto). */
+    public String packsDir   = null;
     /** Path real de donde se cargó (null si es config default sintética). */
     public String sourcePath = null;
 
@@ -67,6 +72,7 @@ public final class VmConfig {
         if (map.containsKey("stackBase"))  c.stackBase  = toInt(map.get("stackBase"),  "stackBase",  file);
         if (map.containsKey("stdlibDir"))  c.stdlibDir  = toString(map.get("stdlibDir"), "stdlibDir", file);
         if (map.containsKey("devicesDir")) c.devicesDir = toString(map.get("devicesDir"),"devicesDir",file);
+        if (map.containsKey("packsDir"))   c.packsDir   = toString(map.get("packsDir"),  "packsDir",  file);   // H5.b
 
         // Si memorySize está pero stackBase no, derivar a mitad-mitad.
         if (map.containsKey("memorySize") && !map.containsKey("stackBase")) {
@@ -124,6 +130,8 @@ public final class VmConfig {
             stdlibDir = null;
         if (devicesDir != null && devicesDir.isEmpty())
             devicesDir = null;
+        if (packsDir != null && packsDir.isEmpty())
+            packsDir = null;
     }
 
     @Override public String toString() {

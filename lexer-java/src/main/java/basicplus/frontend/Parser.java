@@ -177,18 +177,27 @@ public final class Parser {
             boundImpl = sb.toString();
         }
         String fromPath = null;
+        String packName = null;
         if (match(TokenType.FROM)) {
-            Token litTok = current();
-            if (!check(TokenType.STRING_LIT)) {
-                error("se esperaba un string literal tras 'from'");
-            } else {
-                Object val = litTok.value;
-                fromPath = (val instanceof String) ? (String) val : null;
+            // H5.b — `from pack <NombrePack>`: el módulo vive DENTRO de un pack.
+            // `pack` es keyword CONTEXTUAL (solo se reconoce aquí) para no romper
+            // el código que ya use 'pack' como identificador.
+            if (check(TokenType.IDENTIFIER) && "pack".equals(current().lexeme)) {
                 advance();
+                packName = consumeIdentifier("nombre del pack tras 'from pack'");
+            } else {
+                Token litTok = current();
+                if (!check(TokenType.STRING_LIT)) {
+                    error("se esperaba un string literal o 'pack <nombre>' tras 'from'");
+                } else {
+                    Object val = litTok.value;
+                    fromPath = (val instanceof String) ? (String) val : null;
+                    advance();
+                }
             }
         }
         consumeStmtTerminator("se esperaba salto de línea tras 'import'");
-        return new ImportNode(path, fromPath, boundImpl, tok.line, tok.column);
+        return new ImportNode(path, fromPath, boundImpl, packName, tok.line, tok.column);
     }
 
     // ============================================================

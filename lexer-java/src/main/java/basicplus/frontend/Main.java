@@ -822,6 +822,13 @@ public final class Main {
         // dependemos de que exista un .bpi en disco.
         String ifaceCacheKey = library.isEmpty() ? moduleName : library + "." + moduleName;
         if (ctx.interfaceCache.containsKey(ifaceCacheKey)) return;
+        // H5.b — `import Modulo from pack NombrePack`: el módulo NO es un .mod
+        // suelto, vive dentro del pack. Su interfaz sale de ahí y punto (no se
+        // busca fuente ni se recompila: un pack es un artefacto ya construido).
+        if (imp.packName != null) {
+            loadInterfaceFromPack(imp, moduleName, ifaceCacheKey, ctx, depth);
+            return;
+        }
         String bpiName = library.isEmpty() ? moduleName + ".bpi" : library + "." + moduleName + ".bpi";
         Path importerDir = importerSrc.toAbsolutePath().getParent();
 
@@ -1245,8 +1252,20 @@ public final class Main {
     /** H6.a — extrae la sección `interface` (texto del antiguo .bpi) de un .mod
      *  v6. Devuelve null si el .mod es v5 (sin sección) o su interfaz está vacía. */
     private static byte[] extractInterfaceSection(Path modPath) throws IOException {
-        try (java.io.DataInputStream in = new java.io.DataInputStream(
-                new java.io.BufferedInputStream(Files.newInputStream(modPath)))) {
+        try (java.io.InputStream raw = new java.io.BufferedInputStream(Files.newInputStream(modPath))) {
+            return extractInterfaceSection(raw);
+        }
+    }
+
+    /** H5.b — misma extracción sobre los BYTES de un `.mod` (p.ej. el que vive
+     *  DENTRO de un pack, que no tiene fichero propio en disco). */
+    private static byte[] extractInterfaceSection(byte[] modBytes) throws IOException {
+        return extractInterfaceSection(new java.io.ByteArrayInputStream(modBytes));
+    }
+
+    private static byte[] extractInterfaceSection(java.io.InputStream src) throws IOException {
+        {
+            java.io.DataInputStream in = new java.io.DataInputStream(src);
             int magic = in.readInt();
             if (magic != edu.bpgenvm.bytecode.ModFormat.MAGIC_NUMBER_V6) return null;
             in.readInt();                 // dataSize
@@ -1265,6 +1284,78 @@ public final class Main {
             in.readFully(iface);
             return iface;
         }
+    }
+
+    /** H5.b — resuelve `import Modulo from pack NombrePack`: localiza el `.pack`,
+     *  saca de él la entrada `(mod, Modulo.mod)` y carga su interfaz embebida.
+     *  Un pack es un artefacto YA CONSTRUIDO: no se busca fuente ni se recompila.
+     *  Falla con un mensaje que dice exactamente qué faltó y dónde se buscó. */
+    private static void loadInterfaceFromPack(Ast.ImportNode imp, String moduleName,
+                                              String ifaceCacheKey, Ctx ctx, int depth)
+            throws IOException {
+        java.util.List<Path> tried = new java.util.ArrayList<>();
+        Path packFile = locatePackFile(imp.packName, ctx, tried);
+        if (packFile == null) {
+            throw new IOException("no se encuentra el pack '" + imp.packName + "' (import de '"
+                    + moduleName + "'). Buscado en: " + tried
+                    + ". Define 'packsDir' en BpVM.cfg para la biblioteca de packs.");
+        }
+        basicplus.pack.PackReader.Pack pk;
+        try {
+            pk = basicplus.pack.PackReader.read(Files.readAllBytes(packFile));
+        } catch (basicplus.pack.PackException e) {
+            throw new IOException("pack '" + imp.packName + "' (" + packFile + ") ilegible: "
+                    + e.getMessage(), e);
+        }
+        // La clave dentro del pack es (tipo, nombre) con tipo = extensión y nombre
+        // = basename SIN extensión (`mod`/`Saludo`). Aceptamos también la variante
+        // con `.mod` por si un pack se construyó con el nombre completo.
+        String want = moduleName;
+        byte[] modBytes = null;
+        for (basicplus.pack.PackEntry e : pk.entries) {
+            if (!"mod".equals(e.tipo)) continue;
+            if (want.equals(e.nombre) || (want + ".mod").equals(e.nombre)) { modBytes = e.data; break; }
+        }
+        if (modBytes == null) {
+            StringBuilder hay = new StringBuilder();
+            for (basicplus.pack.PackEntry e : pk.entries) {
+                if ("mod".equals(e.tipo)) { if (hay.length() > 0) hay.append(", "); hay.append(e.nombre); }
+            }
+            throw new IOException("el pack '" + imp.packName + "' (" + packFile.getFileName()
+                    + ") no contiene el módulo '" + want + "'. Módulos del pack: ["
+                    + hay + "]");
+        }
+        byte[] ifaceBytes = extractInterfaceSection(modBytes);
+        if (ifaceBytes == null) {
+            throw new IOException("el módulo '" + want + "' dentro del pack '" + imp.packName
+                    + "' no lleva interfaz embebida (¿.mod de una versión anterior?); recompílalo");
+        }
+        ModuleInterface iface = ModuleInterface.fromBytes(ifaceBytes,
+                packFile.getFileName() + "!" + want);
+        ctx.interfaceCache.put(ifaceCacheKey, iface);
+        indent(depth); System.out.printf("-- interfaz de '%s' desde el pack %s --%n",
+                moduleName, packFile.getFileName());
+    }
+
+    /** H5.b — busca `<nombre>.pack`: primero la BIBLIOTECA DE PACKS (packsDir del
+     *  BpVM.cfg — la carpeta que distribuimos con el IDE: stdlib, GUI, …), luego
+     *  el outDir del proyecto (packs recién construidos) y los dirs de deps. */
+    private static Path locatePackFile(String packName, Ctx ctx, java.util.List<Path> tried) {
+        String fname = packName.endsWith(".pack") ? packName : packName + ".pack";
+        java.util.List<Path> dirs = new java.util.ArrayList<>();
+        try {
+            edu.bpgenvm.config.VmConfig cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(null);
+            if (cfg.packsDir != null && !cfg.packsDir.isEmpty()) dirs.add(Paths.get(cfg.packsDir));
+        } catch (Throwable ignored) { /* sin config: solo dirs del proyecto */ }
+        if (ctx.outDir != null) dirs.add(ctx.outDir);
+        dirs.addAll(ctx.dependencyPaths);
+        for (Path d : dirs) {
+            if (d == null) continue;
+            Path p = d.resolve(fname);
+            tried.add(p);
+            if (Files.isRegularFile(p)) return p.toAbsolutePath().normalize();
+        }
+        return null;
     }
 
     /** H6.a — lee una interfaz usando el caché EN MEMORIA como fuente primaria.

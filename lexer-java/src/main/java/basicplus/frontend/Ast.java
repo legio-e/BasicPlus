@@ -75,14 +75,24 @@ public final class Ast {
         public final List<String> path;           // segmentos: último = nombre de la interfaz (o módulo, si no hay binding)
         public final String fromPath;             // null si no hay 'from "..."'
         public final String boundImpl;            // nombre simple del módulo concreto en `import Iface:Impl`; null si import directo
+        /** H5.b — `import Modulo from pack NombrePack`: el módulo vive DENTRO de
+         *  ese pack (no como .mod suelto). null = import normal. Se eligió esta
+         *  forma porque `from` ya significa "de dónde sale este módulo" y el ':'
+         *  estaba ocupado por `import Iface:Impl`. */
+        public final String packName;
         public ImportNode(List<String> path, String fromPath, int line, int column) {
-            this(path, fromPath, null, line, column);
+            this(path, fromPath, null, null, line, column);
         }
         public ImportNode(List<String> path, String fromPath, String boundImpl, int line, int column) {
+            this(path, fromPath, boundImpl, null, line, column);
+        }
+        public ImportNode(List<String> path, String fromPath, String boundImpl, String packName,
+                          int line, int column) {
             super(line, column);
             this.path = path;
             this.fromPath = fromPath;
             this.boundImpl = boundImpl;
+            this.packName = packName;
         }
     }
 
