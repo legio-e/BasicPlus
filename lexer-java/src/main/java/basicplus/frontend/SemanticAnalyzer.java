@@ -898,8 +898,26 @@ public final class SemanticAnalyzer {
             psym.defaultExpr = p.defaultValue;   // H8.1: crudo aquí; se valida/normaliza al resolver tipos
             sym.params.add(psym);
         }
-        if (!scope.tryDefine(sym))
-            err(f.line, f.column, "nombre duplicado: '" + f.name.name + "' en " + scope.tag);
+        if (!scope.tryDefine(sym)) {
+            // H5.a — sobrecarga: si el nombre ya lo tiene OTRA función (libre o
+            // estática), no es error: se ENCADENA y la resolución por firma en la
+            // llamada elige. La validación de firma-duplicada va después, con los
+            // tipos ya resueltos (validateOverloads). Los métodos de INSTANCIA
+            // (virtuales) quedan fuera de este escalón (slots de vtable) → siguen
+            // dando "nombre duplicado". Colisión con var/const/property también.
+            boolean overloadAllowed = (owner == null) || isStatic;
+            Symbol prev = scope.tryLookup(f.name.name);
+            if (overloadAllowed && prev instanceof FunctionSymbol) {
+                FunctionSymbol head = (FunctionSymbol) prev;
+                FunctionSymbol tail = head;
+                while (tail.nextOverload != null) tail = tail.nextOverload;
+                tail.nextOverload = sym;
+                head.overloaded = true;
+                sym.overloaded  = true;
+            } else {
+                err(f.line, f.column, "nombre duplicado: '" + f.name.name + "' en " + scope.tag);
+            }
+        }
         info.declSymbols.put(f, sym);
     }
 
@@ -1005,6 +1023,10 @@ public final class SemanticAnalyzer {
             }
         }
 
+        // H5.a — con los tipos ya resueltos, valida que no haya dos sobrecargas
+        // con la MISMA firma (mismo nombre + mismos tipos de parámetros).
+        validateOverloads();
+
         // H5.1.c — toda clase de usuario hereda toString()/compareTo() de Object.
         // Inyectamos los FunctionSymbol (sin nodo AST) si la clase no los declara,
         // para que sean invocables desde fuente. NO se exportan al .bpi
@@ -1096,6 +1118,36 @@ public final class SemanticAnalyzer {
             Symbol sym = info.declSymbols.get(p);
             if (sym instanceof PropertySymbol)
                 ((PropertySymbol) sym).type = resolveType(p.type);
+        }
+    }
+
+    /** H5.a — tras resolver los tipos, valida que no haya dos sobrecargas con la
+     *  MISMA firma (mismo nombre + mismos tipos de parámetros) en un scope: sería
+     *  ambiguo siempre y colisionaría en el emisor. Recorre las cadenas de
+     *  funciones libres (módulo) y estáticas (por clase). */
+    private void validateOverloads() {
+        for (Symbol s : module.members.getSymbols()) checkOverloadChain(s);
+        for (Symbol s : module.members.getSymbols()) {
+            if (s instanceof ClassSymbol) {
+                ClassSymbol cls = (ClassSymbol) s;
+                for (Symbol m : cls.staticMembers.getSymbols()) checkOverloadChain(m);
+            }
+        }
+    }
+
+    private void checkOverloadChain(Symbol s) {
+        if (!(s instanceof FunctionSymbol)) return;
+        FunctionSymbol head = (FunctionSymbol) s;
+        if (!head.overloaded) return;
+        for (FunctionSymbol a = head; a != null; a = a.nextOverload) {
+            for (FunctionSymbol b = a.nextOverload; b != null; b = b.nextOverload) {
+                if (a.hasSameSignatureAs(b)) {
+                    int ln  = (b.astNode != null) ? b.astNode.line   : head.line;
+                    int col = (b.astNode != null) ? b.astNode.column : head.column;
+                    err(ln, col, "sobrecarga duplicada: '" + head.name
+                            + "' con la misma firma de parámetros ya declarada");
+                }
+            }
         }
     }
 
@@ -2435,7 +2487,15 @@ public final class SemanticAnalyzer {
 
         if (target instanceof FunctionSymbol) {
             FunctionSymbol fn = (FunctionSymbol) target;
-            checkArgs(ce.line, ce.column, fn.params, ce.args, scope);
+            if (fn.overloaded) {
+                // H5.a — varias sobrecargas con este nombre: elige por firma.
+                FunctionSymbol chosen = resolveOverloadCall(fn, ce, scope);
+                if (chosen == null) return ErrorType.INSTANCE;   // ambigua / ninguna encaja
+                fn = chosen;
+                info.exprSymbols.put(ce.callee, fn);   // el emisor emite la sobrecarga elegida
+            } else {
+                checkArgs(ce.line, ce.column, fn.params, ce.args, scope);
+            }
             // L10 — pre-evaluación de literal en casts a tipo estrecho:
             // si el arg es una constante entera fuera del rango, error
             // en compile-time en lugar de esperar al runtime check.
@@ -2520,6 +2580,72 @@ public final class SemanticAnalyzer {
             }
         }
         for (int i = n; i < args.size(); i++) analyzeExpr(args.get(i), scope, null);
+    }
+
+    /** H5.a — elige la sobrecarga que mejor encaja con los tipos de los
+     *  argumentos de la llamada. Coste por argumento: 0 si el tipo coincide
+     *  EXACTO (sameAs), 1 si es asignable con ensanchado (isAssignableFrom),
+     *  rechazo si no. Gana el de menor coste total; empate = ambigüedad; ninguno
+     *  = error. Rellena los defaults omitidos del elegido (H8.1). Devuelve la
+     *  sobrecarga elegida, o null si ya emitió un error. */
+    private FunctionSymbol resolveOverloadCall(FunctionSymbol head, CallExpr ce, Scope scope) {
+        // Tipo estático (natural, sin hint de parámetro) de cada argumento: la
+        // selección de sobrecarga se hace sobre esos tipos.
+        List<BpType> at = new ArrayList<>();
+        for (IExpr a : ce.args) at.add(analyzeExpr(a, scope, null));
+
+        FunctionSymbol best = null;
+        int bestCost = Integer.MAX_VALUE;
+        boolean ambiguous = false;
+        for (FunctionSymbol c = head; c != null; c = c.nextOverload) {
+            int cost = overloadMatchCost(c, at);
+            if (cost < 0) continue;
+            if (cost < bestCost) { bestCost = cost; best = c; ambiguous = false; }
+            else if (cost == bestCost) ambiguous = true;
+        }
+        if (best == null) {
+            err(ce.line, ce.column, "ninguna sobrecarga de '" + head.name
+                    + "' acepta los argumentos " + argTypeList(at));
+            return null;
+        }
+        if (ambiguous) {
+            err(ce.line, ce.column, "llamada ambigua a '" + head.name + "' con "
+                    + argTypeList(at) + ": varias sobrecargas encajan por igual (usa un cast)");
+            return null;
+        }
+        // Rellena los defaults omitidos del elegido (clon del literal), como checkArgs.
+        for (int i = ce.args.size(); i < best.params.size(); i++)
+            ce.args.add(cloneConstExpr(best.params.get(i).defaultExpr, ce.line, ce.column));
+        return best;
+    }
+
+    /** Coste de encaje de una sobrecarga con los tipos de argumento dados, o -1
+     *  si no aplica (aridad fuera del rango [requeridos, total] o algún argumento
+     *  no asignable ni con ensanchado). */
+    private int overloadMatchCost(FunctionSymbol fn, List<BpType> at) {
+        int nArgs = at.size();
+        int required = 0;
+        for (ParamSymbol p : fn.params) if (p.defaultExpr == null) required++;
+        if (nArgs < required || nArgs > fn.params.size()) return -1;
+        int cost = 0;
+        for (int i = 0; i < nArgs; i++) {
+            BpType pt = fn.params.get(i).type, a = at.get(i);
+            if (a instanceof ErrorType) continue;                // no encadenar diagnósticos
+            if (pt == null) { cost += 1; continue; }
+            if (pt.sameAs(a)) continue;                          // exacto → coste 0
+            if (pt.isAssignableFrom(a)) { cost += 1; continue; } // ensanchado → coste 1
+            return -1;                                           // no asignable
+        }
+        return cost;
+    }
+
+    private String argTypeList(List<BpType> at) {
+        StringBuilder sb = new StringBuilder("(");
+        for (int i = 0; i < at.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(at.get(i) == null ? "?" : at.get(i).display());
+        }
+        return sb.append(")").toString();
     }
 
     private BpType analyzeUnary(UnaryExpr u, Scope scope) {

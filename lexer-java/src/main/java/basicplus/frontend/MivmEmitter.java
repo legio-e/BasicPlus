@@ -1026,7 +1026,7 @@ public final class MivmEmitter {
                 return;
             }
 
-            String name = fs.name;  // funciones top-level: name simple
+            String name = emitName(fs);  // H5.a: mangleado si sobrecargada; si no, pelado
             // Siempre exportadas (true) para que aparezcan en stack traces aunque
             // sean privadas en BP. La privacidad de BP se enforza en compile-time
             // (lookup en SemanticAnalyzer), no a nivel de runtime.
@@ -1536,8 +1536,16 @@ public final class MivmEmitter {
         w.emitSetLocal("__discardSuper");
     }
 
+    /** H5.a — nombre con el que esta función se registra en el .mod y se invoca:
+     *  si participa en un conjunto de sobrecargas, se manglea por firma para que
+     *  las tablas por-nombre del ModWriter no colisionen; si no, el nombre pelado.
+     *  DEFINICIÓN y LLAMADA deben usar SIEMPRE este mismo helper. */
+    static String emitName(FunctionSymbol fs) {
+        return fs.overloaded ? fs.overloadMangle() : fs.name;
+    }
+
     private void emitStaticMethodFn(ClassSymbol cls, FuncDef fn, FunctionSymbol fs) throws IOException {
-        w.addFunction(cls.name + "." + fs.name, fs.isPublic);
+        w.addFunction(cls.name + "." + emitName(fs), fs.isPublic);
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);
         try {
@@ -3377,7 +3385,7 @@ public final class MivmEmitter {
                 if (fs.isExternal) {
                     w.emitCallExt(fs.externalQualifiedName(), fs.externalFromPath);
                 } else {
-                    w.emitCall(fs.name);
+                    w.emitCall(emitName(fs));   // H5.a
                 }
                 return;
             }
@@ -3428,7 +3436,7 @@ public final class MivmEmitter {
                     emitExpr(c.args.get(i));
                     if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
                 }
-                w.emitCall(fs.ownerClass.name + "." + fs.name);
+                w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a
                 return;
             }
             // Método de instancia: ¿es super.foo() o p.foo()?

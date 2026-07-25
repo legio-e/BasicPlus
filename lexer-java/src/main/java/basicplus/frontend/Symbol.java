@@ -231,6 +231,16 @@ public abstract class Symbol {
         /** fromPath declarado en el import; "" si no hay (usa convención por defecto). */
         public String externalFromPath = "";
 
+        // ----- H5.a — sobrecarga de funciones (overloading) -----
+        /** Cadena de sobrecargas con el MISMO nombre en el mismo scope. El
+         *  símbolo que vive en el Scope es la CABEZA; las demás cuelgan aquí.
+         *  null = sin más sobrecargas (caso común). La resolución por firma en
+         *  la llamada recorre la cadena desde la cabeza. */
+        public FunctionSymbol nextOverload;
+        /** true en TODOS los miembros de un conjunto de sobrecargas (>1 función
+         *  con el mismo nombre). El emisor manglea el nombre solo si es true. */
+        public boolean overloaded;
+
         public FunctionSymbol(String name, boolean isPublic, boolean isFinal, boolean isStatic,
                               ClassSymbol owner, Ast.FuncDef ast) {
             super(name, ast != null ? ast.line : 0, ast != null ? ast.column : 0);
@@ -267,6 +277,54 @@ public abstract class Symbol {
                 if (a == null || b == null || !a.sameAs(b)) return false;
             }
             return true;
+        }
+
+        /** H5.a — nombre ÚNICO de ESTA sobrecarga para las tablas por-nombre del
+         *  backend (ModWriter) y para el CALL/CALL_EXT. Solo debe usarse cuando
+         *  {@link #overloaded} es true; si no, el nombre pelado sigue valiendo.
+         *  Formato: {@code name + '$' + códigos de tipo de cada parámetro}.
+         *  Requiere que los tipos de los parámetros estén resueltos. */
+        public String overloadMangle() {
+            StringBuilder sb = new StringBuilder(name).append('$');
+            for (ParamSymbol p : params) sb.append(typeCode(p.type));
+            return sb.toString();
+        }
+
+        /** H5.a — código de tipo para el mangling de sobrecargas. Debe ser
+         *  DETERMINISTA e IDÉNTICO en la definición, en la llamada y cross-module
+         *  (por eso vive en UN solo sitio). Estilo descriptor de Java. */
+        public static String typeCode(BpType t) {
+            if (t == null) return "?";
+            if (t instanceof BpType.PrimitiveType) {
+                switch (((BpType.PrimitiveType) t).tag) {
+                    case INTEGER: return "i";
+                    case LONG:    return "j";
+                    case FLOAT:   return "f";
+                    case DOUBLE:  return "d";
+                    case STRING:  return "s";
+                    case BOOLEAN: return "z";
+                    case INT8:    return "b";
+                    case UINT8:   return "B";
+                    case INT16:   return "h";
+                    case UINT16:  return "H";
+                    default:      return "?";
+                }
+            }
+            if (t instanceof BpType.ArrayType)
+                return "[" + typeCode(((BpType.ArrayType) t).element);
+            if (t instanceof BpType.ClassType)
+                return "L" + ((BpType.ClassType) t).cls.name + ";";
+            if (t instanceof BpType.UnresolvedClassRef)
+                return "L" + ((BpType.UnresolvedClassRef) t).name + ";";
+            if (t instanceof BpType.EnumType)
+                return "E" + ((BpType.EnumType) t).en.name + ";";
+            if (t instanceof BpType.AnyType) return "a";
+            if (t instanceof BpType.TupleType) {
+                StringBuilder sb = new StringBuilder("T");
+                for (BpType e : ((BpType.TupleType) t).elements) sb.append(typeCode(e));
+                return sb.append(";").toString();
+            }
+            return "?";
         }
     }
 

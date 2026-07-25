@@ -1,0 +1,55 @@
+// OverloadTest.bp — H5.a: sobrecarga de funciones (libres), intra-módulo.
+// Verifica coexistencia + resolución por firma (exacto + ensanchado) + mangling.
+module OverloadTest
+
+  // Sobrecarga por TIPO de parámetro.
+  function show(n: integer)
+    print "int"
+    print n
+  end show
+
+  function show(s: string)
+    print "str"
+    print s
+  end show
+
+  function show(b: boolean)
+    print "bool"
+    if b then
+      print 1
+    else
+      print 0
+    endif
+  end show
+
+  // Sobrecarga por ARIDAD.
+  function sum(a: integer, b: integer)
+    print a + b
+  end sum
+
+  function sum(a: integer, b: integer, c: integer)
+    print a + b + c
+  end sum
+
+  // Llamada que encaja por ENSANCHADO (int -> long), sin match exacto:
+  // la sobrecarga de string se descarta, la de long gana.
+  function conv(x: long)
+    print x + 1000
+  end conv
+
+  function conv(s: string)
+    print "conv-str"
+    print s
+  end conv
+
+  function Main()
+    show(42)
+    show("hola")
+    show(true)
+    sum(2, 3)
+    sum(2, 3, 4)
+    conv(7)
+    conv("hey")
+  end Main
+
+end OverloadTest
