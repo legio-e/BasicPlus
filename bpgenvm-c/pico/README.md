@@ -100,82 +100,58 @@ pico/
   README.md             — este fichero
 ```
 
-## FP2: Carga dinámica de .mod sobre USB CDC
+## Cómo se habla con la placa
 
-A partir de FP2 el firmware NO ejecuta automáticamente el módulo
-embebido. En su lugar arranca un **REPL** sobre USB CDC con comandos
-de filesystem + ejecución. El primer arranque pre-carga `Hello.mod`
-en el filesystem (RAM) para que tengas algo que probar.
+El firmware no ejecuta el módulo embebido al arrancar: levanta el
+**wire BPVM v1** sobre USB CDC y espera. Es el mismo protocolo en las
+tres familias (RP2350, ESP32, STM32), descrito en
+`docs/BPVM_WIRE_PROTOCOL.md`: JSON por líneas, con los binarios
+grandes en bruto detrás de la línea que los anuncia.
 
-### Comandos del REPL
+Quien lo habla es el **IDE** (BpIde). No hay cliente de línea de
+comandos: para trastear sin placa está el micro simulado
+(`make sim` → `bpvm-sim`), que es un dispositivo wire v1 completo y
+el IDE lo trata igual que a un RP2350.
 
-```
-HELLO              banner
-LS                 list files
-PUT name size      upload a file (binary)
-GET name           download a file
-DEL name           delete a file
-RUN name           execute a .mod
-MEM                fs stats
-SAVE               persist fs to flash
-FORMAT             wipe fs (ram only)
-RESET              soft reboot
-BOOTSEL            reboot into bootloader (drag-drop uf2)
-HELP               this list
-```
+> **Histórico.** Hasta #305 convivía aquí un REPL de TEXTO
+> (`HELLO`/`LS`/`PUT`/`GET`/`RUN`/`HELP`…), el protocolo original del
+> Pico de cuando aún no existía el wire, con su propio cliente en
+> `scripts/bpvm-pico.py`. Era un segundo camino a las mismas cosas
+> —`RUN` tenía su propia resolución de módulos, en paralelo a la del
+> wire— que nadie ejercitaba y que iba divergiendo en silencio. El
+> ESP32 y el STM32 nacieron ya wire-v1 y nunca lo tuvieron. Retirarlo
+> dejó a las tres familias iguales y liberó 41 KB de flash. El script
+> de Python habla ese protocolo, así que ya no sirve.
 
-Puedes hablar el protocolo manualmente desde PuTTY/VS Code Serial:
+### Autorun
 
-```
-> LS
-OK 1
-Hello.mod 1911
-> RUN Hello.mod
---- VM output ---
-0
-1
-1
-...
-999
---- VM finished: OK ---
-```
+Si existe `/sys/auto.txt`, el firmware ejecuta al arrancar el módulo
+que nombre su primera línea, antes de entrar al bucle del wire. El
+wire sigue vivo durante la ejecución, así que el IDE puede conectar y
+parar la app aunque sea un bucle infinito (#256).
 
-### Cliente Python (recomendado)
+## Filesystem
 
-`scripts/bpvm-pico.py` automatiza todo. Requiere `pyserial`:
+**littlefs** sobre una partición de la flash, con la misma fachada
+(`bpvm_fs_*`) que usan las otras dos familias; lo específico del
+RP2350 es sólo la cintura de bloque (`fs_lfs_pico.c`, sobre
+`flash_range_*`). Sobrevive a reflashear el firmware, porque la
+región del FS no es la del código: las particiones viven en un
+descriptor fuera del propio FS (H2·B2).
 
-```cmd
-pip install pyserial
-```
+Estructura: `/sys` (config de la placa), `/lib` (módulos de
+librería), `/app` (la aplicación). Al primer arranque el firmware
+pre-instala la stdlib que lleva embebida, fichero a fichero y sólo si
+falta — así un `PUT` del IDE con una versión más nueva no se pisa en
+el siguiente reset.
 
-Workflow típico:
+## Limitaciones conocidas
 
-```cmd
-cd C:\lenguajes\pm\bpgenvm-c
-java -jar ..\lexer-java\target\basicplus-frontend.jar samples\benchcpu.bp --compile samples
-python pico\scripts\bpvm-pico.py put samples\BenchCpu.mod
-python pico\scripts\bpvm-pico.py run BenchCpu.mod
-python pico\scripts\bpvm-pico.py save        # persiste en flash si quieres
-```
-
-El script autodetecta el COM port de la Pico por VID 0x2E8A. También
-acepta `--port COM5` explícito.
-
-### Persistencia en flash
-
-El FS vive en RAM por defecto. `SAVE` graba los 33 KB de FS en los
-últimos sectores del chip (offset 0x3F7000 sobre 4 MB de flash). En
-el siguiente arranque `fs_init()` lo recupera.
-
-Si el FS vacío al arrancar, pre-cargamos `Hello.mod` desde el array
-embebido — así siempre hay algo para `RUN`.
-
-## Limitaciones FP2
-
-- 16 ficheros máximo, 32 KB de datos totales, 40 chars por nombre.
-- PUT requiere conocer el tamaño de antemano (no streaming).
-- Single-core. SMP (los dos cores M33) llegará tras estabilizar bring-up.
-- MSC (drag&drop nativo en Explorador) = FP3 (pendiente).
+- Módulo cargado para ejecutar = residente en un scratch aparte de la
+  RAM de la VM (128 KB). Es lo que queda de #305; se resuelve en H11
+  junto con la reorganización de RAM/PSRAM, y es igual en las tres
+  familias.
+- MSC (drag&drop nativo en el Explorador) sigue pendiente.
 
 ## Troubleshooting
 

@@ -98,8 +98,6 @@ static size_t vm_stack_region_bytes(void) {
 
 /* #304 — accesor para que el REPL de texto (repl.c) comparta este buffer en vez
  * de duplicar 32 K (modo-texto y modo-wire son mutuamente excluyentes). */
-unsigned char* repl_v1_put_buf(void)      { return s_put_buf; }
-unsigned long  repl_v1_put_buf_size(void) { return sizeof s_put_buf; }
 
 /* ============================================================ */
 /* Helper: convierte código fs_status_t en (code, message) v1. */
@@ -1463,4 +1461,50 @@ void repl_v1_handle_request(int first_char) {
     /* Fase D-E: META resto (INFO/TIME/PING/RESET/BOOTSEL), DEBUG. */
     wire_v1_send_error(id, "UNSUPPORTED",
                         "type no implementado en este firmware");
+}
+
+/* --- Bucle de transporte (#305) ------------------------------------
+ *
+ * Antes vivía en repl.c, mezclado con un REPL de TEXTO (HELLO/LS/PUT/GET/RUN/
+ * HELP...) que era el protocolo original del Pico, de cuando aún no existía el
+ * wire. Al llegar el wire v1 no se retiró: el bucle hacía peek del primer
+ * carácter y elegía protocolo — '{' al wire, cualquier otra cosa a modo texto.
+ *
+ * Esa convivencia costaba de verdad. El modo texto tenía su PROPIA resolución
+ * de módulos (cmd_run duplicaba lo que hace handle_run aquí al lado), su propio
+ * GET, su propio PUT... es decir, un segundo camino para las mismas cosas que
+ * nadie ejercitaba y que iba divergiendo en silencio. Y sobre todo: mantenía
+ * vivos cuatro fs_get, que es justo lo que #305 viene a quitar.
+ *
+ * El ESP32 y el STM32 nunca tuvieron modo texto — nacieron ya hablando wire v1,
+ * con un solo fichero de REPL cada uno. El Pico era el raro por ser el primero.
+ * Ahora los tres son iguales.
+ *
+ * Nada se pierde por funcionalidad: el wire v1 cubre TIME, RESET y BOOTSEL, que
+ * era lo único del modo texto sin equivalente obvio. */
+void repl_v1_run(void) {
+    log_printf("REPL entry (wire v1)");
+    log_flush();   /* snapshot del estado de arranque a flash */
+
+    /* Banner x3: si el host abre el COM con retraso se pierde el primero, y sin
+     * banner no hay forma de distinguir "la placa no arrancó" de "el puerto no
+     * es este". Cada uno con su flush y su delay para forzar rondas de
+     * tud_task(). El IDE drena a la conexión, así que no le estorba. */
+    for (int i = 0; i < 3; i++) {
+        printf("\n=========================================\n");
+        printf(" bpvm-pico listo (wire BPVM v1).\n");
+        printf("=========================================\n");
+        fflush(stdout);
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+
+    for (;;) {
+        int first = getchar_timeout_us(0);
+        if (first < 0) {                      /* nada que leer: ceder la CPU */
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+        if (first != '{') continue;           /* ruido entre requests: descartar */
+        repl_v1_handle_request(first);
+    }
 }

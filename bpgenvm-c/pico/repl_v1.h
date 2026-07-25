@@ -1,10 +1,11 @@
 /*
- * repl_v1.h — entrada del REPL en modo wire BPVM v1.
+ * repl_v1.h — el REPL del Pico: wire BPVM v1.
  *
- * Convive con el repl-texto legacy de repl.c durante la migración.
- * El despachador en repl.c detecta el primer carácter de cada línea:
- *   '{' → wire v1, delega aquí.
- *   letra → protocolo texto legacy.
+ * #305: aquí vivía sólo el despachador, porque el BUCLE estaba en repl.c junto
+ * a un REPL de texto legacy que elegía protocolo por el primer carácter. El modo
+ * texto se retiró (duplicaba RUN/GET/PUT por un camino que nadie ejercitaba) y
+ * el bucle se mudó aquí: un fichero, un protocolo — como el ESP32 y el STM32,
+ * que nunca tuvieron modo texto.
  *
  * La función `repl_v1_handle_request` recibe la línea JSON YA leída
  * (sin el '{' inicial que el despachador consumió para detectar) y
@@ -40,12 +41,9 @@ void repl_v1_handle_request(int first_char);
  * log y retorno inmediato. Llamar UNA vez al boot, antes de repl_run. */
 void repl_v1_autorun(void);
 
-/* #304 — buffer de subida COMPARTIDO. El REPL de texto (repl.c cmd_put) reusa
- * este buffer en vez de tener el suyo: el modo-texto y el modo-wire nunca corren
- * a la vez (una iteración del loop es una cosa o la otra), así que compartirlo
- * elimina 32 K de SRAM duplicada. Devuelve el s_put_buf de 48 K y su tamaño. */
-unsigned char* repl_v1_put_buf(void);
-unsigned long  repl_v1_put_buf_size(void);
+/* Bucle de transporte: lee de stdin y despacha cada request del wire. No
+ * retorna. Pensado para correr como task de FreeRTOS. */
+void repl_v1_run(void);
 
 #ifdef __cplusplus
 }

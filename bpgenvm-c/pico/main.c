@@ -24,8 +24,7 @@
 #include "psram.h"
 #include "neopixel.h"
 #include "bpvm_neopixel.h"
-#include "repl.h"
-#include "repl_v1.h"   /* P-autorun (#256) */
+#include "repl_v1.h"   /* wire v1: despachador + bucle (#305) + autorun (#256) */
 #include "log.h"
 #include "board_mgr_pico.h"   /* H9: board_boot_status (estado real del boot) */
 #include "flash_layout.h"     /* H9: BP_ENV_*, BP_PART_BASE (layout 3 zonas) */
@@ -1064,7 +1063,7 @@ static void vm_task(void* arg) {
      * aunque sea un bucle infinito. */
     if (s_boot.state == BPVM_BOOT_APP && !s_boot.degraded)
         repl_v1_autorun();   /* H9: autorun solo con la placa SANA en estado 3 */
-    repl_run();
+    repl_v1_run();
     (void) run_vm_once;  /* silenciar unused warning */
 }
 

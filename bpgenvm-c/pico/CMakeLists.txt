@@ -141,8 +141,9 @@ add_executable(bpvm_pico
     psram.c         # H7.2.a: detección + init de PSRAM (QMI CS1, APS6404)
     neopixel.c      # H7.4: driver WS2812 (NeoPixel) vía PIO
     fs_lfs_pico.c   # H2-B2: littlefs (descriptor + cintura flash_range_* + shim fs.h)
-    repl.c          # FP2 step 2: REPL sobre USB CDC (protocolo texto legacy)
-    repl_v1.c       # H1 fase A: dispatcher wire BPVM v1 JSON
+    repl_v1.c       # el REPL: wire BPVM v1 (bucle + dispatcher). #305 retiró el
+                    # protocolo texto legacy de repl.c, que era del Pico y sólo
+                    # del Pico (ESP32/STM32 nacieron ya wire-v1).
     board_mgr_pico.c # H9: cintura de flash del env (A/B) + puente a bpvm_bmgr_wire
     json_min.c      # H1 fase A: parser JSON minimal (~200 líneas)
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
