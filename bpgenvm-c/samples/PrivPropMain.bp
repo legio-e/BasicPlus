@@ -1,0 +1,7 @@
+module PrivPropMain
+  import PrivPropLib
+  function Main()
+    var c: PrivPropLib.Caja := PrivPropLib.Caja(7)
+    c.lee()
+  end Main
+end PrivPropMain

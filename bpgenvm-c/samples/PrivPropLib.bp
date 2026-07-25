@@ -1,0 +1,12 @@
+// SIN sobrecargas: clase con property PRIVADA + 1 método público.
+module PrivPropLib
+  public class Caja
+    property n: integer
+    public function Caja(v: integer)
+      this.n := v
+    end Caja
+    public function lee()
+      print this.n
+    end lee
+  end Caja
+end PrivPropLib

@@ -148,8 +148,19 @@ public final class ModuleInterface {
         public final String name;
         public final BpType type;
         public final boolean isSync;
+        /** #316 — una property de CLASE **no pública** también se exporta: sus
+         *  accesores get/set OCUPAN slots de vtable, así que el importador tiene
+         *  que contarlos o numera de menos todo lo que va detrás. Se exporta
+         *  marcada como NO pública ⇒ el semántico sigue prohibiendo el acceso
+         *  desde fuera (y permitiéndolo a las subclases, que es para lo que
+         *  sirve). Las properties de MÓDULO no tienen vtable: siguen siendo
+         *  solo-públicas. */
+        public final boolean isPublic;
         public PropSig(String name, BpType type, boolean isSync) {
-            this.name = name; this.type = type; this.isSync = isSync;
+            this(name, type, isSync, true);
+        }
+        public PropSig(String name, BpType type, boolean isSync, boolean isPublic) {
+            this.name = name; this.type = type; this.isSync = isSync; this.isPublic = isPublic;
         }
     }
 
@@ -368,7 +379,8 @@ public final class ModuleInterface {
             for (Ast.ITopLevelDecl m : cls.astNode.members) {
                 if (m instanceof Ast.PropertyDef) {
                     Ast.PropertyDef pd = (Ast.PropertyDef) m;
-                    if (!pd.isPublic) continue;
+                    // #316 — las NO públicas también se exportan (por sus SLOTS);
+                    // van marcadas como no-públicas y el consumidor no puede usarlas.
                     // Property estática no soportada cross-module por ahora.
                     if (pd.name != null && pd.name.isStatic()) {
                         skipped.add("class " + cls.name + ".property " + pd.name.name
@@ -384,7 +396,7 @@ public final class ModuleInterface {
                                 + (psym.type == null ? "<null>" : psym.type.display()));
                         continue;
                     }
-                    properties.add(new PropSig(psym.name, psym.type, psym.isSync));
+                    properties.add(new PropSig(psym.name, psym.type, psym.isSync, psym.isPublic));
                 } else if (m instanceof Ast.FuncDef) {
                     Ast.FuncDef fn = (Ast.FuncDef) m;
                     // H5.a-E5 — con sobrecarga hay VARIOS FuncDef con el mismo
@@ -938,8 +950,11 @@ public final class ModuleInterface {
                     pw.println(cs.toString());
                 }
                 for (PropSig p : c.properties) {
-                    pw.printf("  prop %s:%s public%s%n",
-                            p.name, typeToString(p.type), p.isSync ? " sync" : "");
+                    // #316 — sin el flag `public` = property no pública: se exporta
+                    // SOLO para que el consumidor cuente sus 2 slots de accesor.
+                    pw.printf("  prop %s:%s%s%s%n",
+                            p.name, typeToString(p.type),
+                            p.isPublic ? " public" : "", p.isSync ? " sync" : "");
                 }
                 for (ConstSig sc : c.staticConsts) {
                     pw.printf("  staticconst %s:%s=%s public%n",
@@ -1410,14 +1425,15 @@ public final class ModuleInterface {
         String flagsStr = (sp < 0) ? "" : rest.substring(sp + 1).trim();
         BpType type = parseType(file, lineNo, typeStr);
         boolean isSync = false;
+        boolean isPublic = false;   // #316: sin el flag ⇒ property NO pública (solo cuenta slots)
         if (!flagsStr.isEmpty()) {
             for (String tk : flagsStr.split("\\s+")) {
-                if ("public".equals(tk)) { /* sólo properties públicas se exportan */ }
+                if ("public".equals(tk)) isPublic = true;
                 else if ("sync".equals(tk)) isSync = true;
                 else throw new IOException(file + ":" + lineNo + ": flag desconocido en prop '" + tk + "'");
             }
         }
-        return new PropSig(name, type, isSync);
+        return new PropSig(name, type, isSync, isPublic);
     }
 
     private static ConstSig parseConst(Path file, int lineNo, String body) throws IOException {

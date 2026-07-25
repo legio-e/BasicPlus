@@ -1574,8 +1574,13 @@ public final class Main {
                     }
                     // Properties → getter (slot N) + setter (slot N+1)
                     for (ModuleInterface.PropSig p : cs.properties) {
+                        // #316 — respeta la visibilidad declarada: una property NO
+                        // pública se importa igualmente (sus accesores ocupan slots
+                        // y hay que contarlos), pero marcada como no-pública ⇒
+                        // checkVisibility sigue prohibiendo el acceso desde fuera y
+                        // permitiéndoselo a las subclases (que es su razón de ser).
                         Symbol.PropertySymbol psym = new Symbol.PropertySymbol(
-                                p.name, true, false, false, stub, null);
+                                p.name, p.isPublic, false, false, stub, null);
                         psym.type = p.type;
                         stub.instanceMembers.tryDefine(psym);
                         if (!deferSlots) {
