@@ -1,0 +1,49 @@
+// Stdlib.bp — el "índice" de la librería estándar de BasicPlus.
+//
+// No tiene código: su único cometido es IMPORTAR todos los módulos de la
+// librería. Compilar este módulo compila la librería entera (el compilador
+// arrastra los imports transitivamente) y, con `"out": "pack"` en el
+// Stdlib.bpbuild, el build deja Stdlib.pack con todos los .mod dentro.
+//
+// Es decir: **la librería se construye compilando un proyecto normal**, con las
+// mismas herramientas que cualquier programa de usuario. Sin script aparte.
+//
+// Al añadir un módulo nuevo a la librería, añade aquí su import — si no, no
+// entra en el pack (el compilador sólo sigue lo que se importa).
+//
+// Core NO aparece: se importa implícitamente en todos los módulos (#253).
+module Stdlib
+
+  // --- núcleo del lenguaje y utilidades ---
+  import App              // proyecto en ejecución (projectPath, mainModule)
+  import Collections      // List, Map, SyncList, ...
+  import Compress         // compresión/descompresión
+  import IO               // ficheros, consola, prompt
+  import Json             // parseo y escritura JSON
+  import Log              // logger
+  import Math             // funciones matemáticas
+  import Stats            // estadística
+  import Str              // cadenas
+  import Timer            // temporizadores
+
+  // --- interfaz gráfica ---
+  import Gui              // widgets, ventanas, eventos
+
+  // --- red ---
+  import Net              // cliente TCP
+
+  // --- hardware (en PC son no-ops o fallan limpio; en placa, los periféricos) ---
+  import Adc
+  import Freq
+  import Gpio
+  import I2c
+  import Neopixel
+  import Pico             // identificación del micro, constantes de placa
+  import Pulse
+  import Pwm
+  import Rtc
+  import Spi
+  import Uart
+  import Wdt
+
+end Stdlib

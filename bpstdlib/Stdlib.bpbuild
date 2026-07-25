@@ -1,0 +1,28 @@
+{
+  "_comentario": [
+    "Proyecto de la LIBRERIA ESTANDAR. Compilarlo produce la libreria:",
+    "  java -jar lexer-java/target/basicplus-frontend.jar \\",
+    "       --project bpstdlib/Stdlib.bpbuild --backend=mivm --prune-bpi",
+    "(o Project -> Build Project desde el IDE).",
+    "",
+    "Resultado: out/*.mod (todos los modulos, recien compilados) y out/Stdlib.pack,",
+    "que es el pack que se copia a la libreria de packs del IDE.",
+    "",
+    "main = Stdlib, un modulo sin codigo que solo IMPORTA la libreria entera: el",
+    "compilador sigue los imports, asi que compilar el main compila todo. Al anadir",
+    "un modulo nuevo hay que anadir su import en Stdlib.bp.",
+    "",
+    "outDir = 'out' y NO '.', a proposito: los .mod sueltos de bpstdlib/ los",
+    "consumen el arnes de paridad y los blobs de los firmwares, y ademas ahi",
+    "conviven .mod de demos cuyo fuente vive en samples/ — empaquetarlos meteria",
+    "en el pack cosas que no son la libreria.",
+    "",
+    "aot: no. El pack es PORTABLE (mismo .pack para las 3 familias); el .mdn es",
+    "codigo nativo de una arquitectura concreta y se genera por proyecto."
+  ],
+  "sourceDir": ".",
+  "outDir": "out",
+  "main": "Stdlib",
+  "dependencies": [],
+  "out": "pack"
+}
