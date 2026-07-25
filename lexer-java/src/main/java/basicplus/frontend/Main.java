@@ -1444,7 +1444,20 @@ public final class Main {
                             psym.defaultExpr = SemanticAnalyzer.literalExprFromValue(ps.defaultValue, ps.type, 0, 0);
                         f.params.add(psym);
                     }
-                    ns.functions.put(fs.name, f);
+                    // H5.a-E2 — sobrecarga cross-module: si el nombre ya lo tiene
+                    // otra firma importada, ENCADENA (la interfaz ya trae los tipos
+                    // de cada params); resolveOverloadCall elige en la llamada, y el
+                    // CALL_EXT nombra el target mangleado (externalQualifiedName).
+                    Symbol.FunctionSymbol prevOv = ns.functions.get(fs.name);
+                    if (prevOv == null) {
+                        ns.functions.put(fs.name, f);
+                    } else {
+                        Symbol.FunctionSymbol tail = prevOv;
+                        while (tail.nextOverload != null) tail = tail.nextOverload;
+                        tail.nextOverload = f;
+                        prevOv.overloaded = true;
+                        f.overloaded = true;
+                    }
                 }
                 for (ModuleInterface.ConstSig cs : ifaceBpi.consts) {
                     Symbol.ConstSymbol c =

@@ -263,7 +263,10 @@ public abstract class Symbol {
             if (externalLibrary != null && !externalLibrary.isEmpty()) {
                 sb.append(externalLibrary).append('.');
             }
-            sb.append(externalModule).append('.').append(name);
+            // H5.a-E2 — si es una sobrecarga, el componente final va MANGLEADO por
+            // firma (igual que lo exportó el módulo dueño), para que el CALL_EXT
+            // resuelva el overload correcto contra la tabla de exports.
+            sb.append(externalModule).append('.').append(overloaded ? overloadMangle() : name);
             return sb.toString();
         }
 
@@ -313,9 +316,9 @@ public abstract class Symbol {
             if (t instanceof BpType.ArrayType)
                 return "[" + typeCode(((BpType.ArrayType) t).element);
             if (t instanceof BpType.ClassType)
-                return "L" + ((BpType.ClassType) t).cls.name + ";";
+                return "L" + simpleClassName(((BpType.ClassType) t).cls.name) + ";";
             if (t instanceof BpType.UnresolvedClassRef)
-                return "L" + ((BpType.UnresolvedClassRef) t).name + ";";
+                return "L" + simpleClassName(((BpType.UnresolvedClassRef) t).name) + ";";
             if (t instanceof BpType.EnumType)
                 return "E" + ((BpType.EnumType) t).en.name + ";";
             if (t instanceof BpType.AnyType) return "a";
@@ -325,6 +328,15 @@ public abstract class Symbol {
                 return sb.append(";").toString();
             }
             return "?";
+        }
+
+        /** H5.a-E2 — nombre simple (último segmento). La interfaz serializa las
+         *  clases con nombre cualificado (Lib.Mod.Cls) pero el módulo dueño manglea
+         *  con el nombre simple; normalizamos a simple para que la firma del def y
+         *  la de la llamada cross-module coincidan. */
+        private static String simpleClassName(String n) {
+            int i = n.lastIndexOf('.');
+            return (i < 0) ? n : n.substring(i + 1);
         }
     }
 

@@ -1,0 +1,19 @@
+// OvLib.bp — módulo proveedor con funciones públicas SOBRECARGADAS (H5.a-E2).
+module OvLib
+  public function describe(x: long)
+    print "long"
+    print x + 1000
+  end describe
+  public function describe(s: string)
+    print "str"
+    print s
+  end describe
+  public function describe(b: boolean)
+    print "bool"
+    if b then
+      print 1
+    else
+      print 0
+    endif
+  end describe
+end OvLib

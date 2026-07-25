@@ -251,19 +251,24 @@ public final class ModuleInterface {
         for (Symbol s : modSym.members.getSymbols()) {
             // ---------- Funciones públicas ----------
             if (s instanceof FunctionSymbol) {
-                FunctionSymbol fs = (FunctionSymbol) s;
-                if (!fs.isPublic) continue;
-                if (fs.isModuleInitializer) continue;
-                if (("Main".equals(fs.name) || "main".equals(fs.name)) && fs.params.size() <= 1) continue;
+                // H5.a-E2 — recorre la cadena de sobrecargas: en el scope solo vive
+                // la CABEZA; cada overload es una entrada de interfaz propia (misma
+                // clave de nombre, distinta firma) para que el consumidor las vea
+                // TODAS y pueda resolver por firma cross-module.
+                for (FunctionSymbol fs = (FunctionSymbol) s; fs != null; fs = fs.nextOverload) {
+                    if (!fs.isPublic) continue;
+                    if (fs.isModuleInitializer) continue;
+                    if (("Main".equals(fs.name) || "main".equals(fs.name)) && fs.params.size() <= 1) continue;
 
-                String issue = signatureIssue(fs);
-                if (issue != null) {
-                    skipped.add("func " + fs.name + ": " + issue);
-                    continue;
+                    String issue = signatureIssue(fs);
+                    if (issue != null) {
+                        skipped.add("func " + fs.name + ": " + issue);
+                        continue;
+                    }
+                    List<ParamSig> ps = new ArrayList<>(fs.params.size());
+                    for (ParamSymbol p : fs.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
+                    iface.functions.add(new FuncSig(fs.name, true, fs.isStatic, fs.isIntrinsic, ps, fs.returnType));
                 }
-                List<ParamSig> ps = new ArrayList<>(fs.params.size());
-                for (ParamSymbol p : fs.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
-                iface.functions.add(new FuncSig(fs.name, true, fs.isStatic, fs.isIntrinsic, ps, fs.returnType));
                 continue;
             }
 

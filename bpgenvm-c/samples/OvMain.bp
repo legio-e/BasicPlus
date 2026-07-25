@@ -1,0 +1,9 @@
+// OvMain.bp — consumidor: resuelve la sobrecarga de OvLib.describe cross-module.
+module OvMain
+  import OvLib
+  function Main()
+    OvLib.describe(7)        // int -> long (ensanchado, sin exacto) -> 1007
+    OvLib.describe("hola")   // string exacto
+    OvLib.describe(true)     // boolean exacto
+  end Main
+end OvMain
