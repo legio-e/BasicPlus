@@ -428,12 +428,12 @@ static void handle_get(long id, const json_obj_t* obj) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta path");
         return;
     }
-    const uint8_t* data; uint32_t size;
-    fs_status_t s = fs_get(path, &data, &size);
-    if (s != FS_OK) {
-        const char* code; const char* msg;
-        map_fs_status(s, &code, &msg);
-        wire_v1_send_error(id, code, msg);
+    /* #305 — el GET NO carga el fichero: sólo necesita su TAMAÑO para la cabecera
+     * y después lo va escupiendo por trozos. Antes era un fs_get, o sea el
+     * fichero ENTERO al scratch de 128 KB para copiarlo acto seguido al wire. */
+    uint32_t size = 0;
+    if (bpvm_fs_stat(path, &size) != 0) {
+        wire_v1_send_error(id, "NOT_FOUND", "no existe");
         return;
     }
     /* Header: {"type":"GET_REPLY","id":N,"bulk":<size>} */
@@ -446,8 +446,20 @@ static void handle_get(long id, const json_obj_t* obj) {
     off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
     if (off < 0) goto err;
     wire_v1_send_line(s_reply_buf, (size_t) off);
-    /* Y los bytes raw. */
-    if (size > 0) wire_v1_send_bulk(data, (size_t) size);
+    /* Y los bytes raw, POR TROZOS. El tamaño del trozo es el mismo 256 B que usa
+     * littlefs internamente: ni introduce un número nuevo ni fuerza al motor a
+     * partir lecturas. Si el FS falla a media transferencia ya no se puede
+     * rectificar —la cabecera con `bulk` ya salió— así que se corta y el cliente
+     * lo detecta por el bulk incompleto; es lo mismo que pasaría con un cable
+     * desconectado, y el wire no tiene forma mejor de decirlo. */
+    uint32_t sent = 0;
+    while (sent < size) {
+        uint8_t chunk[256];
+        long n = bpvm_fs_read_at(path, sent, chunk, sizeof chunk);
+        if (n <= 0) break;
+        wire_v1_send_bulk(chunk, (size_t) n);
+        sent += (uint32_t) n;
+    }
     return;
 err:
     wire_v1_send_error(id, "INTERNAL_ERROR", "GET_REPLY no cabe");
