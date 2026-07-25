@@ -35,6 +35,10 @@
 static int g_screen_w0 = GUI_SCREEN_W;
 static int g_screen_h0 = GUI_SCREEN_H;
 
+/* H7 — tope de series por chart (el modelo es estático por nodo; los puntos sí
+ * son dinámicos). 8 sobra para un panel de sensores y no infla el nodo. */
+#define GUI_CHART_MAX_SERIES 8
+
 typedef struct {
     int         used;       /* 0 = libre/muerto */
     int         handle;
@@ -50,6 +54,12 @@ typedef struct {
     int         rmin, rmax; /* rango de value-widgets enteros (clamp); default 0..100 */
     int         trows, tcols; /* table: dimensiones de la rejilla */
     char**      cells;      /* table: celdas row-major (trows*tcols), cada una malloc o NULL */
+    /* H7 — chart: el MODELO vive aquí (lo usa el dump y el host sin LVGL); el
+     * eje Y reusa rmin/rmax. cpoints = muestras por serie; cnser = nº de series;
+     * cdata = matriz [serie][punto] plana (malloc, cnser*cpoints). */
+    int         cpoints, cnser, ctype;
+    int*        cdata;
+    int         cser_rgb[GUI_CHART_MAX_SERIES];
     int         img_asset;  /* imageview: id del asset Image asignado (0 = ninguno) */
     int         rendered_version; /* imageview: versión del asset ya renderizada (version-stamp) */
     int         reloads;    /* imageview: nº de recargas reales (prueba la optimización) */
@@ -59,6 +69,7 @@ typedef struct {
     uint32_t    objptr;     /* objeto BP dueño (bind_click), 0 = ninguno */
 #ifdef BPVM_LVGL
     lv_obj_t*   lv;         /* widget LVGL asociado (NULL si aún sin crear) */
+    lv_chart_series_t* cser_lv[GUI_CHART_MAX_SERIES];  /* H7: índice BP → serie LVGL */
 #endif
 } gui_node;
 
@@ -798,7 +809,109 @@ void bpvm_gui_set_range(int handle, int mn, int mx) {
         if (strcmp(n->type, "slider") == 0) { lv_slider_set_range(n->lv, mn, mx); lv_slider_set_value(n->lv, n->value, LV_ANIM_OFF); }
         else if (strcmp(n->type, "bar") == 0) { lv_bar_set_range(n->lv, mn, mx); lv_bar_set_value(n->lv, n->value, LV_ANIM_OFF); }
         else if (strcmp(n->type, "spinbox") == 0) { lv_spinbox_set_range(n->lv, mn, mx); lv_spinbox_set_value(n->lv, n->value); }
+        /* H7 — en un chart el "rango" es el del eje Y primario. */
+        else if (strcmp(n->type, "chart") == 0) { lv_chart_set_range(n->lv, LV_CHART_AXIS_PRIMARY_Y, mn, mx); }
     }
+#endif
+}
+
+/* ============================================================ */
+/*  H7 — Chart (gráfica de series)                              */
+/*  El MODELO (puntos por serie) vive en el nodo: así el dump y  */
+/*  el host sin LVGL dicen la verdad, igual que hace la tabla.   */
+/*  El eje Y va por bpvm_gui_set_range y el repintado por        */
+/*  bpvm_gui_refresh — no hacen falta builtins propios.          */
+/* ============================================================ */
+
+#define GUI_CHART_DEF_POINTS 10
+
+/* (Re)dimensiona la matriz de puntos conservando lo que quepa. */
+static void chart_realloc(gui_node* n, int nser, int npoints) {
+    if (nser < 0) nser = 0;
+    if (npoints < 1) npoints = 1;
+    int* nd = (int*) calloc((size_t)(nser ? nser : 1) * (size_t) npoints, sizeof(int));
+    if (!nd) return;                      /* sin memoria: deja el modelo como estaba */
+    if (n->cdata) {
+        for (int s = 0; s < nser && s < n->cnser; s++)
+            for (int p = 0; p < npoints && p < n->cpoints; p++)
+                nd[s * npoints + p] = n->cdata[s * n->cpoints + p];
+        free(n->cdata);
+    }
+    n->cdata = nd; n->cnser = nser; n->cpoints = npoints;
+}
+
+int bpvm_gui_create_chart(int parent) {
+    int h = create_node("chart", parent);
+    gui_node* n = node_for(h);
+    if (n) {
+        n->cpoints = GUI_CHART_DEF_POINTS; n->cnser = 0; n->ctype = 0;
+        n->rmin = 0; n->rmax = 100;        /* mismo default que los value-widgets */
+        chart_realloc(n, 0, GUI_CHART_DEF_POINTS);
+#ifdef BPVM_LVGL
+        n->lv = lv_chart_create(parent_lv(parent));
+        if (n->lv) {
+            lv_chart_set_point_count(n->lv, (uint32_t) n->cpoints);
+            lv_chart_set_range(n->lv, LV_CHART_AXIS_PRIMARY_Y, n->rmin, n->rmax);
+        }
+#endif
+    }
+    return h;
+}
+
+void bpvm_gui_chart_set_points(int handle, int npoints) {
+    gui_node* n = node_for(handle); if (!n) return;
+    if (npoints < 1) npoints = 1;
+    chart_realloc(n, n->cnser, npoints);
+#ifdef BPVM_LVGL
+    if (n->lv) lv_chart_set_point_count(n->lv, (uint32_t) npoints);
+#endif
+}
+
+int bpvm_gui_chart_add_series(int handle, int rgb) {
+    gui_node* n = node_for(handle); if (!n) return -1;
+    if (n->cnser >= GUI_CHART_MAX_SERIES) return -1;   /* tope: -1 = no se añadió */
+    int idx = n->cnser;
+    chart_realloc(n, n->cnser + 1, n->cpoints);
+    n->cser_rgb[idx] = rgb;
+#ifdef BPVM_LVGL
+    if (n->lv) {
+        n->cser_lv[idx] = lv_chart_add_series(n->lv,
+                lv_color_hex((uint32_t) rgb), LV_CHART_AXIS_PRIMARY_Y);
+    }
+#endif
+    return idx;
+}
+
+/* Desplaza la serie una muestra a la izquierda y mete `value` al final: el uso
+ * típico de un sensor (ventana deslizante). Es lo que hace lv_chart_set_next_value. */
+void bpvm_gui_chart_push(int handle, int series, int value) {
+    gui_node* n = node_for(handle); if (!n) return;
+    if (series < 0 || series >= n->cnser || !n->cdata) return;
+    int* row = n->cdata + (size_t) series * n->cpoints;
+    for (int i = 0; i + 1 < n->cpoints; i++) row[i] = row[i + 1];
+    row[n->cpoints - 1] = value;
+#ifdef BPVM_LVGL
+    if (n->lv && n->cser_lv[series]) lv_chart_set_next_value(n->lv, n->cser_lv[series], value);
+#endif
+}
+
+void bpvm_gui_chart_set_value(int handle, int series, int idx, int value) {
+    gui_node* n = node_for(handle); if (!n) return;
+    if (series < 0 || series >= n->cnser || !n->cdata) return;
+    if (idx < 0 || idx >= n->cpoints) return;
+    n->cdata[(size_t) series * n->cpoints + idx] = value;
+#ifdef BPVM_LVGL
+    if (n->lv && n->cser_lv[series])
+        lv_chart_set_value_by_id(n->lv, n->cser_lv[series], (uint32_t) idx, value);
+#endif
+}
+
+void bpvm_gui_chart_set_type(int handle, int type) {
+    gui_node* n = node_for(handle); if (!n) return;
+    if (type != 0 && type != 1) return;    /* 0=línea, 1=barras; otro = se ignora */
+    n->ctype = type;
+#ifdef BPVM_LVGL
+    if (n->lv) lv_chart_set_type(n->lv, type == 1 ? LV_CHART_TYPE_BAR : LV_CHART_TYPE_LINE);
 #endif
 }
 

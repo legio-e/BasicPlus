@@ -439,7 +439,19 @@ public enum Builtin {
     APP_PROJECT_PATH("__appProjectPath"),              // () → string: carpeta del proyecto
 
     // Orientación del display en runtime (id 214).
-    GUI_SET_ROTATION("__guiSetRotation");              // (deg: integer) → void; 0/90/180/270, inválidos se ignoran
+    GUI_SET_ROTATION("__guiSetRotation"),              // (deg: integer) → void; 0/90/180/270, inválidos se ignoran
+
+    // ---- H7 — Chart (gráfica de series). El id es el ORDINAL, así que estas
+    //      entradas van SIEMPRE AL FINAL: insertarlas en medio desplazaría los
+    //      ids de todo lo posterior y rompería el contrato con la VM-C, donde
+    //      son números explícitos (builtins.c). Rango: 215..220.
+    //      El eje Y y el repintado reusan los genéricos __guiSetRange/__guiRefresh.
+    GUI_CREATE_CHART("__guiCreateChart"),              // (parent) → id                       [215]
+    GUI_CHART_SET_POINTS("__guiChartSetPoints"),       // (h, n) → void: nº de puntos          [216]
+    GUI_CHART_ADD_SERIES("__guiChartAddSeries"),       // (h, rgb) → índice de serie           [217]
+    GUI_CHART_PUSH("__guiChartPush"),                  // (h, serie, v) → void: desplaza+añade [218]
+    GUI_CHART_SET_VALUE("__guiChartSetValue"),         // (h, serie, idx, v) → void            [219]
+    GUI_CHART_SET_TYPE("__guiChartSetType");           // (h, tipo) → void: 0=línea, 1=barras  [220]
 
     public final String bpName;
     public final int id;

@@ -265,7 +265,17 @@ enum {
     BUILTIN_APP_PROJECT_PATH     = 213, /* () → string: carpeta del proyecto ("/app/<proj>"); "" si plano */
 
     /* Orientación del display en runtime (0/90/180/270 grados). */
-    BUILTIN_GUI_SET_ROTATION     = 214  /* (deg: integer) → void */
+    BUILTIN_GUI_SET_ROTATION     = 214, /* (deg: integer) → void */
+
+    /* H7 — Chart. Los ids DEBEN coincidir con el ordinal del enum Builtin.java
+     * (allí id = ordinal(), por eso las entradas nuevas van al final). El eje Y
+     * y el repintado reusan los genéricos SET_RANGE / REFRESH. */
+    BUILTIN_GUI_CREATE_CHART     = 215, /* (parent) → id */
+    BUILTIN_GUI_CHART_SET_POINTS = 216, /* (h, n) → void */
+    BUILTIN_GUI_CHART_ADD_SERIES = 217, /* (h, rgb) → índice de serie */
+    BUILTIN_GUI_CHART_PUSH       = 218, /* (h, serie, v) → void */
+    BUILTIN_GUI_CHART_SET_VALUE  = 219, /* (h, serie, idx, v) → void */
+    BUILTIN_GUI_CHART_SET_TYPE   = 220  /* (h, tipo) → void: 0=línea, 1=barras */
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -827,6 +837,28 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t ref = pop_ref(vm, tc); int h = pop_i32(vm, tc);
         char buf[128]; read_bp_string(vm, ref, buf, sizeof(buf));
         push_i32(vm, tc, bpvm_gui_tabview_add_tab(h, buf)); return BPVM_OK;
+    }
+    /* H7 — Chart */
+    case BUILTIN_GUI_CREATE_CHART: return gui_make_child(vm, tc, bpvm_gui_create_chart);
+    case BUILTIN_GUI_CHART_SET_POINTS: {
+        int n = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        bpvm_gui_chart_set_points(h, n); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_CHART_ADD_SERIES: {
+        int rgb = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        push_i32(vm, tc, bpvm_gui_chart_add_series(h, rgb)); return BPVM_OK;
+    }
+    case BUILTIN_GUI_CHART_PUSH: {
+        int v = pop_i32(vm, tc); int s = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        bpvm_gui_chart_push(h, s, v); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_CHART_SET_VALUE: {
+        int v = pop_i32(vm, tc); int i = pop_i32(vm, tc); int s = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        bpvm_gui_chart_set_value(h, s, i, v); push_i32(vm, tc, 0); return BPVM_OK;
+    }
+    case BUILTIN_GUI_CHART_SET_TYPE: {
+        int t = pop_i32(vm, tc); int h = pop_i32(vm, tc);
+        bpvm_gui_chart_set_type(h, t); push_i32(vm, tc, 0); return BPVM_OK;
     }
     case BUILTIN_GUI_CREATE_TABLE: return gui_make_child(vm, tc, bpvm_gui_create_table);
     case BUILTIN_GUI_TABLE_SET_GRID: {

@@ -41,6 +41,14 @@ void bpvm_gui_set_buttons(int handle, const char* labels);
 int  bpvm_gui_create_tabview(int parent);
 int  bpvm_gui_tabview_add_tab(int handle, const char* name);
 int  bpvm_gui_create_table(int parent);
+/* H7 — Chart: gráfica de series. El rango del eje Y y el repintado usan los
+ * genéricos bpvm_gui_set_range / bpvm_gui_refresh. */
+int  bpvm_gui_create_chart(int parent);
+void bpvm_gui_chart_set_points(int handle, int n);
+int  bpvm_gui_chart_add_series(int handle, int rgb);
+void bpvm_gui_chart_push(int handle, int series, int value);
+void bpvm_gui_chart_set_value(int handle, int series, int idx, int value);
+void bpvm_gui_chart_set_type(int handle, int type);
 void bpvm_gui_table_set_grid(int handle, int rows, int cols);
 void bpvm_gui_table_set_cell(int handle, int row, int col, const char* text);
 const char* bpvm_gui_table_get_cell(int handle, int row, int col);

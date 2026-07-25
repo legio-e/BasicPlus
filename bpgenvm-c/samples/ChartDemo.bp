@@ -1,0 +1,36 @@
+// ChartDemo.bp — H7: widget Chart (gráfica de series).
+// Caso realista: una ventana deslizante de muestras de sensor. Se declara la
+// ventana, se añaden dos series (p.ej. temperatura y humedad) y en cada lectura
+// se hace push(), que desplaza y mete la muestra al final.
+module ChartDemo
+  import Gui
+
+  function Main()
+    var pantalla: Gui.Screen := Gui.Screen()
+    var g: Gui.Chart := Gui.Chart(pantalla)
+    g.setSize(200, 120)
+    g.setPointCount(8)
+    g.setRange(0, 100)            // eje Y (genérico, heredado de Component)
+    g.setType(Gui.Chart.LINE)
+
+    var temp: integer := g.addSeries(0xFF0000)   // rojo
+    var hum: integer  := g.addSeries(0x0000FF)   // azul
+    print "series"
+    print temp
+    print hum
+
+    // Streaming: 10 lecturas en una ventana de 8 → las 2 primeras salen por la izquierda.
+    var i: integer := 0
+    while i < 10 do
+      g.push(temp, i * 10)
+      g.push(hum, 100 - i * 5)
+      i := i + 1
+    endwh
+
+    // Punto concreto (datos ya conocidos, sin desplazar).
+    g.setValue(temp, 0, 42)
+
+    print "ok"
+    print Gui.__guiDumpTree()
+  end Main
+end ChartDemo

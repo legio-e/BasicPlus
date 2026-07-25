@@ -3744,6 +3744,13 @@ public class VirtualMachine {
             case GUI_SET_RANGE: { int mx = popTc(tc); int mn = popTc(tc); int hnd = popTc(tc); gui.setRange(hnd, mn, mx); pushTc(tc, 0); break; }
             case GUI_CREATE_SPINBOX: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createSpinbox(p)); break; }
             case GUI_CREATE_LED:     { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createLed(p)); break; }
+            // H7 — Chart (el eje Y va por GUI_SET_RANGE, el repintado por GUI_REFRESH)
+            case GUI_CREATE_CHART:   { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createChart(p)); break; }
+            case GUI_CHART_SET_POINTS: { int n = popTc(tc); int h = popTc(tc); gui.chartSetPoints(h, n); pushTc(tc, 0); break; }
+            case GUI_CHART_ADD_SERIES: { int c = popTc(tc); int h = popTc(tc); pushTc(tc, gui.chartAddSeries(h, c)); break; }
+            case GUI_CHART_PUSH:     { int v = popTc(tc); int s = popTc(tc); int h = popTc(tc); gui.chartPush(h, s, v); pushTc(tc, 0); break; }
+            case GUI_CHART_SET_VALUE:{ int v = popTc(tc); int i = popTc(tc); int s = popTc(tc); int h = popTc(tc); gui.chartSetValue(h, s, i, v); pushTc(tc, 0); break; }
+            case GUI_CHART_SET_TYPE: { int t = popTc(tc); int h = popTc(tc); gui.chartSetType(h, t); pushTc(tc, 0); break; }
             case GUI_CREATE_DROPDOWN: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createDropdown(p)); break; }
             case GUI_SET_OPTIONS: { long o = popTcRef(tc); int hnd = popTc(tc); gui.setOptions(hnd, readVmString(o)); pushTc(tc, 0); break; }   // 4→8B: opts = string ref 8B
             case GUI_CREATE_TEXTAREA: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createTextarea(p)); break; }

@@ -257,6 +257,13 @@ public final class Intrinsics {
         // H6 widgets — spinbox + led.
         register("Gui.__guiCreateSpinbox",  w -> emitBuiltin(w, Builtin.GUI_CREATE_SPINBOX));
         register("Gui.__guiCreateLed",      w -> emitBuiltin(w, Builtin.GUI_CREATE_LED));
+        // H7 — Chart. El eje Y usa __guiSetRange y el repintado __guiRefresh.
+        register("Gui.__guiCreateChart",    w -> emitBuiltin(w, Builtin.GUI_CREATE_CHART));
+        register("Gui.__guiChartSetPoints", w -> emitBuiltin(w, Builtin.GUI_CHART_SET_POINTS));
+        register("Gui.__guiChartAddSeries", w -> emitBuiltin(w, Builtin.GUI_CHART_ADD_SERIES));
+        register("Gui.__guiChartPush",      w -> emitBuiltin(w, Builtin.GUI_CHART_PUSH));
+        register("Gui.__guiChartSetValue",  w -> emitBuiltin(w, Builtin.GUI_CHART_SET_VALUE));
+        register("Gui.__guiChartSetType",   w -> emitBuiltin(w, Builtin.GUI_CHART_SET_TYPE));
         // H6 widgets — dropdown + textarea.
         register("Gui.__guiCreateDropdown", w -> emitBuiltin(w, Builtin.GUI_CREATE_DROPDOWN));
         register("Gui.__guiSetOptions",     w -> emitBuiltin(w, Builtin.GUI_SET_OPTIONS));

@@ -25,6 +25,11 @@ import java.util.Map;
 
 public final class GuiBackend {
 
+    /** H7 — tope de series por chart. DEBE coincidir con GUI_CHART_MAX_SERIES
+     *  de la VM-C (gui.c): si no, un programa que añade la serie 9 se comporta
+     *  distinto en cada VM. */
+    static final int CHART_MAX_SERIES = 8;
+
     // Anclas: deben coincidir con Gui.Align.* en bpstdlib/Gui.bp.
     public static final int TOP_LEFT = 0, TOP_MID = 1, TOP_RIGHT = 2,
                             LEFT_MID = 3, CENTER = 4, RIGHT_MID = 5,
@@ -49,6 +54,10 @@ public final class GuiBackend {
         boolean suppressEvents = false;  // setChecked/setValue programático: no emitir onChange (paridad LVGL)
         int value = 0;              // valor actual (checkbox/switch: 0/1; slider/bar: entero)
         int rmin = 0, rmax = 100;   // rango de value-widgets enteros (clamp); default LVGL/Swing 0..100
+        // H7 — chart: modelo de la gráfica (el eje Y usa rmin/rmax)
+        int cpoints = 0, ctype = 0;
+        List<int[]>  cseries = null;   // una fila de puntos por serie
+        List<Integer> cserRgb = null;  // color de cada serie
         int trows = 0, tcols = 0;   // table: dimensiones de la rejilla
         String[] cells = null;      // table: celdas row-major (trows*tcols)
         int imgAsset = 0;           // imageview: id del asset Image asignado (0 = ninguno)
@@ -161,6 +170,53 @@ public final class GuiBackend {
         Node n = nodes.get(h); if (n != null) n.hasValue = true;
         return h;
     }
+    // ---- H7 — Chart. Igual que Table: el MODELO (puntos por serie) es la verdad
+    //      para el dump; el aspecto fiel se ve en el preview VM-C/LVGL. El eje Y
+    //      reusa rmin/rmax vía setRange, y el repintado vía refresh.
+    public int createChart(int parent) {
+        int h = create("chart", new JPanel(null), parent);
+        Node n = nodes.get(h);
+        if (n != null) { n.cpoints = 10; n.cseries = new ArrayList<>(); n.cserRgb = new ArrayList<>();
+                         n.rmin = 0; n.rmax = 100; }
+        return h;
+    }
+    public void chartSetPoints(int handle, int npoints) {
+        Node n = nodes.get(handle); if (n == null) return;
+        if (npoints < 1) npoints = 1;
+        for (int s = 0; s < n.cseries.size(); s++) {          // conserva lo que quepa
+            int[] old = n.cseries.get(s), nw = new int[npoints];
+            for (int i = 0; i < npoints && i < old.length; i++) nw[i] = old[i];
+            n.cseries.set(s, nw);
+        }
+        n.cpoints = npoints;
+    }
+    public int chartAddSeries(int handle, int rgb) {
+        Node n = nodes.get(handle); if (n == null) return -1;
+        if (n.cseries.size() >= CHART_MAX_SERIES) return -1;   // mismo tope que la VM-C
+        n.cseries.add(new int[n.cpoints]); n.cserRgb.add(rgb);
+        return n.cseries.size() - 1;
+    }
+    /** Desplaza la serie y mete el valor al final (ventana deslizante de sensor). */
+    public void chartPush(int handle, int series, int value) {
+        Node n = nodes.get(handle); if (n == null) return;
+        if (series < 0 || series >= n.cseries.size()) return;
+        int[] row = n.cseries.get(series);
+        for (int i = 0; i + 1 < row.length; i++) row[i] = row[i + 1];
+        if (row.length > 0) row[row.length - 1] = value;
+    }
+    public void chartSetValue(int handle, int series, int idx, int value) {
+        Node n = nodes.get(handle); if (n == null) return;
+        if (series < 0 || series >= n.cseries.size()) return;
+        int[] row = n.cseries.get(series);
+        if (idx < 0 || idx >= row.length) return;
+        row[idx] = value;
+    }
+    public void chartSetType(int handle, int type) {
+        Node n = nodes.get(handle); if (n == null) return;
+        if (type != 0 && type != 1) return;   // 0=línea, 1=barras; otro se ignora
+        n.ctype = type;
+    }
+
     public int createLed(int parent) {
         // Indicador (solo salida): un JLabel sirve de placeholder; el modelo (value)
         // es la verdad para el dump. No se enlaza evento.

@@ -51,6 +51,14 @@ import Json
   public intrinsic function __guiCreateTabview(parent: integer): integer
   public intrinsic function __guiTabviewAddTab(handle: integer, name: string): integer
   // Table: rejilla de celdas (filas×columnas) de texto.
+  // H7 — Chart. El eje Y usa __guiSetRange (genérico) y el repintado __guiRefresh.
+  public intrinsic function __guiCreateChart(parent: integer): integer
+  public intrinsic function __guiChartSetPoints(handle: integer, n: integer)
+  public intrinsic function __guiChartAddSeries(handle: integer, rgb: integer): integer
+  public intrinsic function __guiChartPush(handle: integer, series: integer, v: integer)
+  public intrinsic function __guiChartSetValue(handle: integer, series: integer, idx: integer, v: integer)
+  public intrinsic function __guiChartSetType(handle: integer, t: integer)
+
   public intrinsic function __guiCreateTable(parent: integer): integer
   public intrinsic function __guiTableSetGrid(handle: integer, rows: integer, cols: integer)
   public intrinsic function __guiTableSetCell(handle: integer, row: integer, col: integer, text: string)
@@ -613,6 +621,55 @@ import Json
   // ---- Table — rejilla de celdas de texto (filas×columnas). setGrid fija el
   //      tamaño; setCell/getCell acceden a cada celda. (Solo datos; sin onChange
   //      en este subconjunto — la edición/selección de celda sería repesca.) ----
+  // ---- Chart (H7) — gráfica de series. Pensada para sensores: se declara una
+  //      ventana de N muestras (setPointCount), se añade una serie por magnitud
+  //      (addSeries) y en cada lectura se hace push(), que DESPLAZA la ventana y
+  //      mete la muestra al final. El eje Y se fija con setRange (heredado de
+  //      Component), y setValue() sirve para rellenar un conjunto de datos ya
+  //      conocido en vez de ir en streaming. ----
+  public class Chart extends Component
+    // Tipos de gráfica para setType().
+    public const Chart.LINE := 0
+    public const Chart.BARS := 1
+    // Máximo de series por gráfica (mismo tope en las dos VMs).
+    public const Chart.MAX_SERIES := 8
+
+    public function Chart(parent: Component)
+      this.lvglId := __guiCreateChart(parent.lvglId)
+    end Chart
+
+    // Rango del eje Y. Usa el intrínseco genérico de rango (el mismo de
+    // slider/bar/spinbox), que en un chart aplica al eje Y primario.
+    public function setRange(mn: integer, mx: integer)
+      __guiSetRange(this.lvglId, mn, mx)
+    end setRange
+
+    // Nº de muestras visibles (la ventana). Conserva los datos que sigan cabiendo.
+    public function setPointCount(n: integer)
+      __guiChartSetPoints(this.lvglId, n)
+    end setPointCount
+
+    // Añade una serie del color dado; devuelve su índice (o -1 si se pasó del tope).
+    public function addSeries(rgb: integer): integer
+      return __guiChartAddSeries(this.lvglId, rgb)
+    end addSeries
+
+    // Desplaza la serie una muestra y añade `v` al final. El uso típico.
+    public function push(series: integer, v: integer)
+      __guiChartPush(this.lvglId, series, v)
+    end push
+
+    // Fija un punto concreto (para datos ya conocidos, no streaming).
+    public function setValue(series: integer, idx: integer, v: integer)
+      __guiChartSetValue(this.lvglId, series, idx, v)
+    end setValue
+
+    // LINE o BARS.
+    public function setType(t: integer)
+      __guiChartSetType(this.lvglId, t)
+    end setType
+  end Chart
+
   public class Table extends Component
     public function Table(parent: Component)
       this.lvglId := __guiCreateTable(parent.lvglId)
