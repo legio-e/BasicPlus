@@ -391,12 +391,11 @@ static void handle_stat(long id, const json_obj_t* obj) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta path");
         return;
     }
-    const uint8_t* data; uint32_t size;
-    fs_status_t s = fs_get(path, &data, &size);
-    if (s != FS_OK) {
-        const char* code; const char* msg;
-        map_fs_status(s, &code, &msg);
-        wire_v1_send_error(id, code, msg);
+    /* #305 — el STAT sólo publica el TAMAÑO, y para eso leía el fichero ENTERO
+     * al scratch. Ahora es lo que siempre debió ser: un stat. */
+    uint32_t size = 0;
+    if (bpvm_fs_stat(path, &size) != 0) {
+        wire_v1_send_error(id, "NOT_FOUND", "no existe");
         return;
     }
     int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
@@ -610,31 +609,16 @@ static void handle_rename(long id, const json_obj_t* obj) {
         wire_v1_send_error(id, "INVALID_PARAM", "faltan from/to");
         return;
     }
-    const uint8_t* data; uint32_t size;
-    fs_status_t s = fs_get(from, &data, &size);
-    if (s != FS_OK) {
-        const char* code; const char* msg;
-        map_fs_status(s, &code, &msg);
-        wire_v1_send_error(id, code, msg);
+    /* #305 — RENAME nativo. Antes esto era leer-copiar-escribir-borrar: el
+     * fichero al scratch, de ahí al buffer del PUT y de ahí al FS otra vez, con
+     * un tope artificial de 16 KB "por el buffer". littlefs sabe renombrar él
+     * solo —es mover una entrada de directorio— así que no se copia ni un byte,
+     * no hay límite de tamaño, y además es ATÓMICO: antes, si fallaba el borrado
+     * del origen, quedaban las dos copias. */
+    if (bpvm_fs_rename(from, to) != 0) {
+        wire_v1_send_error(id, "NOT_FOUND", "no se pudo renombrar");
         return;
     }
-    /* Copia a buffer estático antes de tocar el FS, porque fs_put
-     * puede invalidar el puntero `data` si compacta. Limitado por
-     * V1_PUT_BUF_SIZE igual que PUT. */
-    if (size > V1_PUT_BUF_SIZE) {
-        wire_v1_send_error(id, "NO_SPACE",
-                            "RENAME: source >16KB (límite del buffer v1)");
-        return;
-    }
-    memcpy(s_put_buf, data, size);
-    s = fs_put(to, s_put_buf, size);
-    if (s != FS_OK) {
-        const char* code; const char* msg;
-        map_fs_status(s, &code, &msg);
-        wire_v1_send_error(id, code, msg);
-        return;
-    }
-    fs_delete(from);   /* tolerante: si falla, el cliente ya tiene la copia */
     wire_v1_send_reply_empty("RENAME_REPLY", id);
 }
 
@@ -1301,8 +1285,12 @@ static void handle_run(long id, const json_obj_t* obj) {
 /* (comando `autorun off` de la consola) → reset.                */
 /* ============================================================ */
 void repl_v1_autorun(void) {
-    const uint8_t* data; uint32_t size;
-    if (fs_get("/sys/auto.txt", &data, &size) != FS_OK) return;  /* sin autorun */
+    /* #305 — de auto.txt sólo se lee la PRIMERA LÍNEA, así que no hay que traerse
+     * el fichero: con un buffer de pila del tamaño de un path sobra. */
+    uint8_t data[FS_NAME_LEN + 8];
+    long rd = bpvm_fs_read("/sys/auto.txt", data, sizeof data);
+    if (rd <= 0) return;                                          /* sin autorun */
+    uint32_t size = (uint32_t) rd;
 
     char path[FS_NAME_LEN];
     size_t n = 0, i = 0;

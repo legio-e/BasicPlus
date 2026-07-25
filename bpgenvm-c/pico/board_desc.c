@@ -8,6 +8,7 @@
 #include "fs.h"
 #include "json_min.h"
 #include "log.h"
+#include "bpvm_fs.h"   /* #305 — lectura directa, sin pasar por el scratch */
 #include "psram.h"
 #include "hardware/flash.h"   /* flash_do_cmd (JEDEC ID) */
 #include "hardware/sync.h"    /* save_and_disable_interrupts (#256) */
@@ -151,9 +152,21 @@ void board_desc_psram_from_env(int psram_flag) {
  * la PSRAM ya NO salen de aquí (suelo + env, H9); psramCsPin se IGNORA. */
 void board_desc_init(void) {
     board_desc_t* d = &s_board;
-    const uint8_t* data = NULL;
-    uint32_t       size = 0;
-    if (fs_get("/sys/board.json", &data, &size) == FS_OK && data && size > 0) {
+    /* #305 — board.json es un puñado de campos: cabe de sobra en la pila y no
+     * hay razón para pasar por el scratch del FS. Si algún día no cupiese, se
+     * dice por el log en vez de parsear medio JSON y quedarse tan tranquilo con
+     * los defaults (un truncado silencioso aquí = una placa mal descrita). */
+    uint8_t data[512];
+    uint32_t size = 0;
+    if (bpvm_fs_stat("/sys/board.json", &size) == 0 && size > sizeof data) {
+        log_printf("board.json: %u B no caben en %u — se ignora",
+                   (unsigned) size, (unsigned) sizeof data);
+        size = 0;
+    } else {
+        long n = bpvm_fs_read("/sys/board.json", data, sizeof data);
+        size = (n > 0) ? (uint32_t) n : 0;
+    }
+    if (size > 0) {
         json_obj_t obj;
         if (json_parse((const char*) data, (size_t) size, &obj) == 0) {
             /* variant primero: re-aplica la tabla de caps de la variante. */
