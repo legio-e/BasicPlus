@@ -12,7 +12,7 @@ except Exception: pass
 
 PORT = 5107
 HERE = os.path.dirname(os.path.abspath(__file__))
-SIM  = os.path.join(HERE, "..", "build", "bpvm-boardsim.exe")
+SIM  = os.path.join(HERE, "..", "build", "bpvm-sim.exe")
 if not os.path.exists(SIM):
     SIM = SIM[:-4]  # sin .exe (Linux/mac)
 

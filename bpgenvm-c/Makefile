@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -353,20 +353,30 @@ test-pack:
 	@echo "--- H3 zona de packs (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_pack.exe
 
-# H9 — "device" simulado para el IDE (FrmBoard) SIN placa: servidor TCP wire v1 que
-# despacha STATE/ENV_*/PART_* al bpvm_bmgr REAL, con el env respaldado por un fichero
-# A/B = la "flash". Una sola fuente de verdad (misma lógica y mismo wire que placa).
-# Reusa pico/json_min.c (parser JSON portable). Winsock via $(LDFLAGS) (-lws2_32).
-boardsim:
+# H10 — el MICRO SIMULADO del IDE: servidor TCP wire v1 COMPLETO (META + FILES +
+# TERMINAL + gestión de placa + packs) con FS littlefs sobre imagen y la VM-C de
+# verdad ejecutando. El IDE lo trata como una placa más. Nació en H9 como
+# boardsim (sólo STATE/ENV_*/PART_*); H10 le enchufa el FS y la VM → enlaza la
+# lib entera ($(LIBOBJ)). Reusa pico/json_min.c (parser JSON portable).
+# Winsock via $(LDFLAGS) (-lws2_32). Con LVGL=1 arrastra la ventana SDL.
+sim: $(LIBOBJ)
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Ipico tools/boardsim.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_part.c src/bpvm_env.c src/bpvm_boot.c src/bpvm_pack.c src/crc32.c pico/json_min.c -o build/bpvm-boardsim.exe $(LDFLAGS)
-	@echo "boardsim listo: build/bpvm-boardsim.exe [puerto] [flash-file] [flashSizeBytes]"
+	$(CC) $(CFLAGS) -Ipico -Isrc tools/bpvm_sim.c pico/json_min.c $(LIBOBJ) -o build/bpvm-sim.exe $(LDFLAGS)
+	@echo "sim listo: build/bpvm-sim.exe [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG]"
 
-# H9 — smoke end-to-end del sim por el wire (arranca el sim, recorre el flujo de
-# placa virgen, verifica cada reply). Necesita python3. No necesita placa ni IDE.
-boardsim-smoke: boardsim
-	@echo "--- H9 boardsim smoke (esperado: solo 'ok', [status=OK]) ---"
+# Alias histórico (H9): el boardsim ES el sim, con otro nombre.
+boardsim: sim
+
+# Smoke end-to-end del sim por el wire (arranca el sim, recorre el flujo de placa
+# virgen, verifica cada reply). Necesita python3. No necesita placa ni IDE.
+boardsim-smoke: sim
+	@echo "--- boardsim smoke (protocolo de gestión de placa) ---"
 	python tools/boardsim_smoke.py
+
+# H10 — smoke del wire de FICHEROS + EJECUCIÓN contra el sim (PUT/LIST/GET/RUN…).
+sim-smoke: sim
+	@echo "--- H10 sim smoke (FILES + TERMINAL) ---"
+	python tools/sim_smoke.py
 
 test-oom: $(BIN)
 	@if [ ! -f samples/OomCatch.mod ]; then \
