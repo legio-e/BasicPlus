@@ -761,6 +761,14 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
                     if (!pk_mod) continue;              /* falta → lo caza el guard */
                     bpvm_status_t ds = bpvm_loader_load_xip(vm, pk_mod, pk_len, owner);
                     if (ds != BPVM_OK) { st = ds; break; }
+                    /* Que se vea en la consola del IDE de dónde sale cada módulo:
+                     * "no aparece por ningún lado" y "vino del pack, no del que
+                     * acabas de subir" son dos ratos de búsqueda distintos. */
+                    { char m2[128];
+                      int n2 = snprintf(m2, sizeof m2,
+                                        "[sim] '%s' desde el pack (XIP, %lu B)\n",
+                                        owner, (unsigned long) pk_len);
+                      if (n2 > 0) sim_output_sink(m2, (size_t) n2, NULL); }
                     loaded_any = 1;
                     continue;
                 }
@@ -822,8 +830,20 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
     if (g_kill_ack_id >= 0) { send_ok(c, "KILL_REPLY", g_kill_ack_id); g_kill_ack_id = -1; }
 
     if (missing[0]) {
-        char msg[160];
-        snprintf(msg, sizeof msg, "falta el modulo %s en el FS", missing);
+        /* Que el mensaje diga QUÉ hacer. El caso típico es un módulo de la
+         * librería (Core el primero, que se importa implícito): una placa lo
+         * trae embebido en el firmware y por eso el IDE no lo sube, pero el
+         * simulado arranca con el FS vacío y necesita el pack de la stdlib. */
+        char msg[256];
+        uint32_t pk_rs = 0;
+        int hay_packs = bpvm_pack_mounted(&pk_rs) != NULL;
+        snprintf(msg, sizeof msg,
+                 "falta el modulo '%s': no esta en el FS%s. %s",
+                 missing,
+                 hay_packs ? " ni en los packs grabados" : " y no hay ningun pack grabado",
+                 hay_packs ? "Comprueba que el pack que lo trae este en la libreria de packs."
+                           : "Si es de la libreria estandar, configura la libreria de packs "
+                             "(engranaje del micro simulado) y reinicia el simulador.");
         emit_exited(c, session, "RUNTIME_ERROR", -2, 0, msg);
     } else {
         const char* link_err = bpvm_link_error(vm);

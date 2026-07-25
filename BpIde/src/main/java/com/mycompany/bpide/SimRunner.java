@@ -65,6 +65,27 @@ public final class SimRunner {
              + " — compílalo con:  make sim   (o  make LVGL=1 sim  para tener ventana)";
     }
 
+    /** Packs de la biblioteca del IDE que se "graban" en el micro simulado.
+     *  Tope 8 = el del propio simulador; si hay más, se avisa en vez de recortar
+     *  en silencio (un pack que falta se manifiesta como un módulo que no existe,
+     *  y eso es un rato de búsqueda). */
+    static List<Path> packsToBurn(IdePrefs prefs) {
+        List<Path> out = new ArrayList<>();
+        String dir = prefs.packsDirEffective();
+        if (dir == null) return out;
+        Path d = Paths.get(dir);
+        if (!Files.isDirectory(d)) return out;
+        try (java.util.stream.Stream<Path> s = Files.list(d)) {
+            s.filter(Files::isRegularFile)
+             .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".pack"))
+             .sorted()
+             .forEach(out::add);
+        } catch (IOException ignored) {
+            /* carpeta ilegible: se arranca sin packs y el aviso de start() lo dice */
+        }
+        return out;
+    }
+
     /** Arranca el simulador con la configuración de `prefs` y espera a que acepte
      *  conexiones. Devuelve el endpoint "host:puerto", o lanza si no arranca. */
     public synchronized String start(IdePrefs prefs) throws IOException {
@@ -86,6 +107,23 @@ public final class SimRunner {
         cmd.add("--flash=" + (prefs.simFlashKb * 1024L));
         if (prefs.simNoScreen) cmd.add("--no-screen");
         else cmd.add("--screen=" + prefs.simScreenW + "x" + prefs.simScreenH);
+
+        /* La LIBRERÍA, "grabada" en la zona de packs del micro simulado.
+         * Una placa real trae la stdlib embebida en el firmware, por eso el IDE
+         * nunca sube Core (ni Str, ni…): da por hecho que ya está. El simulado
+         * arranca con el FS vacío, así que sin esto el primer programa que use
+         * cualquier cosa de la librería muere con "falta el modulo Core en el
+         * FS". Montar los packs es el equivalente honesto: el código se ejecuta
+         * XIP desde la zona de packs, sin copiarlo al FS, igual que en placa. */
+        int nPacks = 0;
+        for (Path p : packsToBurn(prefs)) {
+            cmd.add("--pack=" + p);
+            nPacks++;
+        }
+        if (nPacks == 0)
+            say("[sim] aviso: sin librería de packs — los programas que usen la "
+              + "stdlib fallarán con 'falta el modulo Core'. Configúrala en el "
+              + "engranaje del micro simulado.\n");
 
         say("[sim] " + String.join(" ", cmd) + "\n");
         ProcessBuilder pb = new ProcessBuilder(cmd);
