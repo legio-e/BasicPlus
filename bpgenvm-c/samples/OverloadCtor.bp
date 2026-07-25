@@ -1,0 +1,39 @@
+// OverloadCtor.bp — H5.a-E4: sobrecarga de CONSTRUCTORES.
+// Un ctor NO va a la vtable (CALL directo a <Cls>.__init), así que basta con
+// distinguirlos por nombre: el primero se queda con `__init` y las sobrecargas
+// añaden el sufijo de su firma (`__init$dd`) — aditivo, como el resto de H5.a.
+module OverloadCtor
+
+  class Punto
+    property x: integer
+    property y: integer
+
+    // 1ª firma: se queda con `Punto.__init`
+    public function Punto(px: integer, py: integer)
+      this.x := px
+      this.y := py
+      print "ctor(int,int)"
+    end Punto
+
+    // 2ª firma: sobrecarga → `Punto.__init$s`
+    public function Punto(etiqueta: string)
+      this.x := 0
+      this.y := 0
+      print "ctor(str)"
+      print etiqueta
+    end Punto
+
+    public function muestra()
+      print this.x
+      print this.y
+    end muestra
+  end Punto
+
+  function Main()
+    var a: Punto := Punto(3, 4)
+    a.muestra()
+    var b: Punto := Punto("origen")
+    b.muestra()
+  end Main
+
+end OverloadCtor

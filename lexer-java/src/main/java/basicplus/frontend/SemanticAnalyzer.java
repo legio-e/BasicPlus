@@ -809,10 +809,16 @@ public final class SemanticAnalyzer {
         Symbol maybeCtor = cls.instanceMembers.tryLookup(cls.name);
         if (maybeCtor instanceof FunctionSymbol) {
             FunctionSymbol fCtor = (FunctionSymbol) maybeCtor;
-            cls.constructor = fCtor;
-            fCtor.isConstructor = true;
-            if (fCtor.astNode.returnType != null)
-                err(fCtor.line, fCtor.column, "el constructor no puede declarar tipo de retorno");
+            cls.constructor = fCtor;   // cabeza de la cadena (findConstructor)
+            // H5.a-E4 — con constructores SOBRECARGADOS hay varios en la cadena:
+            // TODOS son constructores. Marcar solo la cabeza dejaba a las demás
+            // sin emitir (y peor: como no llevaban el flag, el layout las habría
+            // metido en la VTABLE, que es justo donde un ctor no debe estar).
+            for (FunctionSymbol c = fCtor; c != null; c = c.nextOverload) {
+                c.isConstructor = true;
+                if (c.astNode != null && c.astNode.returnType != null)
+                    err(c.line, c.column, "el constructor no puede declarar tipo de retorno");
+            }
         }
     }
 
@@ -2571,6 +2577,13 @@ public final class SemanticAnalyzer {
                 if (!ce.args.isEmpty())
                     err(ce.line, ce.column, "la clase '" + cls.name + "' no define constructor; no admite argumentos");
                 for (IExpr a : ce.args) analyzeExpr(a, scope, null);
+            } else if (ctor.overloaded) {
+                // H5.a-E4 — constructores sobrecargados: elige por firma y ANOTA la
+                // elección en el nodo de llamada (el emisor la lee para saber a qué
+                // `__init` llamar). Los ctors no van a vtable: es un CALL directo.
+                FunctionSymbol chosen = resolveOverloadCall(ctor, ce, scope);
+                if (chosen == null) return ErrorType.INSTANCE;
+                info.exprSymbols.put(ce, chosen);
             } else {
                 checkArgs(ce.line, ce.column, ctor.params, ce.args, scope);
             }

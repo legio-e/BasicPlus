@@ -49,7 +49,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 # Core (import implicito de clases/excepciones). Se amplia en tandas posteriores.
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest casttest utf8test idxtest \
-        convtest strops OverloadTest OverloadMethod SlotPropPriv SlotThreadSub \
+        convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
         samples/LocalArrTest.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA

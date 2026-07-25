@@ -1488,7 +1488,7 @@ public final class MivmEmitter {
         // acceso cross-module pasa por la factoría `__cls_init_<Cls>` que se
         // sintetiza separadamente — su nombre sin puntos evita la ambigüedad
         // del parser de imports (parts[len-2] = módulo).
-        w.addFunction(cls.name + ".__init", false);
+        w.addFunction(ctorInitName(cls, fs), false);   // H5.a-E4: sufijo si sobrecargado
         declareParamRef("this");   // H1.8: receptor = ref (era un 8 a mano)
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);   // constructor = void
@@ -1542,6 +1542,18 @@ public final class MivmEmitter {
      *  DEFINICIÓN y LLAMADA deben usar SIEMPRE este mismo helper. */
     static String emitName(FunctionSymbol fs) {
         return fs.slotKey();
+    }
+
+    /** H5.a-E4 — nombre del `__init` de un constructor. Los ctors NO van a la
+     *  vtable (CALL directo), así que basta distinguirlos por nombre: el PRIMERO
+     *  se queda con `<Cls>.__init` y las sobrecargas añaden el sufijo de su clave
+     *  (`<Cls>.__init$dd`). Al ser aditivo, un `.mod` ya compilado con un solo
+     *  constructor no cambia de símbolo. */
+    static String ctorInitName(ClassSymbol cls, FunctionSymbol ctor) {
+        String suffix = "";
+        if (ctor != null && !ctor.slotKey().equals(ctor.name))
+            suffix = ctor.slotKey().substring(ctor.name.length());   // "$dd"
+        return cls.name + ".__init" + suffix;
     }
 
     private void emitStaticMethodFn(ClassSymbol cls, FuncDef fn, FunctionSymbol fs) throws IOException {
@@ -3305,13 +3317,17 @@ public final class MivmEmitter {
         if (c.callee instanceof IdentifierExpr) {
             Symbol sym = info.exprSymbols.get(c.callee);
             if (sym instanceof ClassSymbol) {
-                emitConstruction((ClassSymbol) sym, c.args);
+                // H5.a-E4: el semántico anotó en el NODO de llamada qué sobrecarga
+                // de constructor eligió (null si solo hay una).
+                Symbol ck = info.exprSymbols.get(c);
+                emitConstruction((ClassSymbol) sym, c.args,
+                        (ck instanceof FunctionSymbol) ? (FunctionSymbol) ck : null);
                 return;
             }
             if (sym instanceof FunctionSymbol) {
                 FunctionSymbol fs = (FunctionSymbol) sym;
                 if (fs.isConstructor && fs.ownerClass != null) {
-                    emitConstruction(fs.ownerClass, c.args);
+                    emitConstruction(fs.ownerClass, c.args, fs);
                     return;
                 }
                 // ¿Built-in del analyzer? → CALL_BUILTIN id, salvo casts L10.
@@ -4679,6 +4695,12 @@ public final class MivmEmitter {
      *   SET_LOCAL __discard; GET_LOCAL __newref   ← restaura la ref para la expresión
      */
     private void emitConstruction(ClassSymbol cls, List<IExpr> args) throws IOException {
+        emitConstruction(cls, args, null);
+    }
+
+    /** H5.a-E4 — {@code chosenCtor} = la sobrecarga de constructor que eligió el
+     *  semántico por firma (null ⇒ la única / la heredada). */
+    private void emitConstruction(ClassSymbol cls, List<IExpr> args, FunctionSymbol chosenCtor) throws IOException {
         // L2: si la clase vive en otro módulo, no podemos emitir NEW_OBJECT
         // local (no tenemos su class_ptr). En su lugar invocamos la factoría
         // `__cls_new_<Cls>(args)` que el módulo dueño sintetiza: hace el
@@ -4711,7 +4733,9 @@ public final class MivmEmitter {
         w.emitNewObject(cls.name);
         w.emitSetLocal(newref);
 
-        FunctionSymbol ctor = cls.findConstructor();
+        // H5.a-E4 — con constructores sobrecargados, el elegido lo decidió el
+        // semántico (por firma) y lo anotó; si no hay anotación, el único/heredado.
+        FunctionSymbol ctor = (chosenCtor != null) ? chosenCtor : cls.findConstructor();
         if (ctor != null) {
             w.emitGetLocal(newref);
             for (int i = 0; i < args.size(); i++) {
@@ -4719,7 +4743,7 @@ public final class MivmEmitter {
                 if (i < ctor.params.size()) coerceToTarget(args.get(i), ctor.params.get(i).type);
             }
             // El ctor puede ser heredado: usar el nombre de SU clase dueña, no de la subclase.
-            w.emitCall(ctor.ownerClass.name + ".__init");
+            w.emitCall(ctorInitName(ctor.ownerClass, ctor));
             w.emitSetLocal(discard);
         }
         w.emitGetLocal(newref);
