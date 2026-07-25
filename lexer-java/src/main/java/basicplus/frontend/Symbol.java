@@ -87,6 +87,12 @@ public abstract class Symbol {
         /** H5.a-E3 — marca de la pasada `assignSlotKeys` (base antes que subclase). */
         public boolean keysAssigned;
 
+        /** Clase BUILT-IN del lenguaje (List, Thread, Mutex, SyncList, OwnerList,
+         *  StringBuilder): la declara el semántico a mano y la implementa la VM
+         *  NATIVAMENTE, así que no tiene AST ni vtable nuestra. Hay que distinguirla
+         *  de "clase sin AST porque algo se rompió" — ver computeClassLayout. */
+        public boolean isBuiltin;
+
         public ClassSymbol(String name, boolean isPublic, String baseClassName,
                            Ast.ClassDef ast, int line, int column) {
             super(name, line, column);

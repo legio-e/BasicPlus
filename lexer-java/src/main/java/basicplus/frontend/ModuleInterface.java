@@ -715,6 +715,16 @@ public final class ModuleInterface {
         if (cls.isExternal || cls.astNode == null || cls.astNode.members == null) {
             LayoutAndNames pub = publishedLayoutOf(cls);
             if (pub != null) return pub;
+            // Clase BUILT-IN (Mutex, StringBuilder, List…): no tiene AST porque la
+            // implementa la VM, y sus métodos NO viven en una vtable nuestra — el
+            // emisor los despacha POR NOMBRE (emitInvokeVirtual) y el slot sólo se
+            // usa como cross-check #174b, que tolera -1. Devolver el layout de la
+            // base (= la raíz Object) es exactamente lo que hacía el cálculo previo
+            // a #315; sin este caso, compilar cualquier módulo que use un Mutex o un
+            // StringBuilder aborta — se llevó por delante 5 módulos de la stdlib.
+            // Las built-in que SÍ pueden ser base de una clase de usuario (Object,
+            // Thread) tienen tabla propia en baseLayoutOf.
+            if (cls.isBuiltin) return baseLayoutOf(cls, localLayouts);
             throw new RuntimeException("clase '" + cls.name
                     + "': sin AST y sin layout publicado — no se puede calcular (¿clase sintetizada sin tabla?)");
         }

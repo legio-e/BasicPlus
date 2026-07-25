@@ -338,6 +338,7 @@ public final class SemanticAnalyzer {
         // Las firmas que toman/devuelven `any` permiten almacenar instancias
         // de cualquier clase de usuario sin fricción de tipos.
         ClassSymbol listCls = new ClassSymbol("List", true, null, null, 0, 0);
+        listCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
         {
             FunctionSymbol ctor = makeMethod("List", listCls, null, true);
             ctor.isConstructor = true;
@@ -360,6 +361,7 @@ public final class SemanticAnalyzer {
         // Subclasea para tu worker, sobreescribe run(), llama start()/join().
         // El stackSize del constructor se reserva al hacer start(); 0 = default.
         ClassSymbol threadCls = new ClassSymbol("Thread", true, null, null, 0, 0);
+        threadCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
         {
             FunctionSymbol ctor = makeMethod("Thread", threadCls, null,
                     new String[]{"stackSize"}, new BpType[]{PrimitiveType.INTEGER});
@@ -384,6 +386,7 @@ public final class SemanticAnalyzer {
         // siguiente waiter. NO es reentrante: lock() dos veces desde el mismo
         // thread es error.
         ClassSymbol mutexCls = new ClassSymbol("Mutex", true, null, null, 0, 0);
+        mutexCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
         {
             FunctionSymbol ctor = makeMethod("Mutex", mutexCls, null, true);
             ctor.isConstructor = true;
@@ -404,6 +407,7 @@ public final class SemanticAnalyzer {
         // tomando un Mutex propio: SyncList sólo garantiza atomicidad por
         // operación individual.
         ClassSymbol syncListCls = new ClassSymbol("SyncList", true, "List", null, 0, 0);
+        syncListCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
         syncListCls.baseClass = listCls;
         {
             FunctionSymbol ctor = makeMethod("SyncList", syncListCls, null, true);
@@ -438,6 +442,7 @@ public final class SemanticAnalyzer {
         // contenidos. Implementado vía cascada en TYPE_ARRAY_REF + bitmap
         // owner del field `items` en el descriptor de OwnerList.
         ClassSymbol ownerListCls = new ClassSymbol("OwnerList", true, "List", null, 0, 0);
+        ownerListCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
         ownerListCls.baseClass = listCls;
         {
             FunctionSymbol ctor = makeMethod("OwnerList", ownerListCls, null, true);
@@ -456,6 +461,7 @@ public final class SemanticAnalyzer {
 
         // ---- Clase stdlib: StringBuilder (construcción eficiente de strings) ----
         ClassSymbol sbCls = new ClassSymbol("StringBuilder", true, null, null, 0, 0);
+        sbCls.isBuiltin = true;   // la implementa la VM: sin AST ni vtable nuestra
         {
             FunctionSymbol ctor = makeMethod("StringBuilder", sbCls, null, true);
             ctor.isConstructor = true;
