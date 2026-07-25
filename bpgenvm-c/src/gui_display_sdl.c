@@ -307,11 +307,22 @@ static void disp_init_headless(int w, int h) {
     fflush(stdout);
 }
 
+/* #322 — el título por defecto de LVGL es "LVGL Simulator": nombra la librería
+ * que dibuja, no lo que está corriendo. Quien arranca el display dice quién es;
+ * el micro simulado se identifica como tal para no confundirlo con una placa. */
+static char g_title[64] = "BasicPlus";
+
+void bpvm_gui_disp_set_title(const char* title) {
+    if (!title || !*title) return;
+    snprintf(g_title, sizeof g_title, "%s", title);
+}
+
 void bpvm_gui_disp_init(int w, int h) {
     if (g_headless) { disp_init_headless(w, h); return; }
     SDL_SetMainReady();
     lv_tick_set_cb(SDL_GetTicks);
     lv_display_t* d = lv_sdl_window_create(w, h);
+    lv_sdl_window_set_title(d, g_title);
     lv_sdl_mouse_create();
     SDL_AddEventWatch(lvgl_watch, NULL);
     /* windowID de la ventana que acaba de crear LVGL: hace falta para inyectar

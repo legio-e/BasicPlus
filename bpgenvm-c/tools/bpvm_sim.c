@@ -1049,6 +1049,19 @@ int main(int argc, char** argv) {
 #endif
 #ifdef BPVM_LVGL
     if (g_no_screen) bpvm_gui_disp_set_headless(1);
+    /* #322 — la ventana decía "LVGL Simulator": nombraba la librería que dibuja,
+     * no lo que corre. Que se identifique como lo que es —un micro simulado, no
+     * una placa— y con la resolución, que es el dato que se compara con la
+     * pantalla real cuando el layout no cuadra. */
+    {
+        char title[64];
+        if (g_screen_w > 0)
+            snprintf(title, sizeof title, "BasicPlus — micro simulado (%dx%d)",
+                     g_screen_w, g_screen_h);
+        else
+            snprintf(title, sizeof title, "BasicPlus — micro simulado");
+        bpvm_gui_disp_set_title(title);
+    }
 #endif
 
 #if defined(_WIN32)

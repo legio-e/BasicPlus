@@ -136,6 +136,11 @@ void bpvm_gui_disp_set_rotation(int deg);/* orientación en runtime (deg validad
  * el host (SDL); llamarla es cosa del host, gui.c nunca la invoca → los ports de
  * micro no tienen que definirla. En un build sin LVGL esto ya es lo que pasa. */
 void bpvm_gui_disp_set_headless(int on);
+
+/* #322 — título de la ventana. Sin llamarla, LVGL pone el suyo ("LVGL Simulator"),
+ * que dice qué librería dibuja en vez de qué está corriendo. Llamar ANTES de
+ * disp_init. Sólo la implementa el host (SDL); en un micro no hay ventana. */
+void bpvm_gui_disp_set_title(const char* title);
 #endif
 
 /* H10 — tamaño del panel simulado (modelo). Antes de crear el screen. Vive fuera
