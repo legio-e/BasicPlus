@@ -102,7 +102,28 @@ build/SDL2.dll:
 	cp $(SDL2_DIR)/bin/SDL2.dll $@
 endif
 
-build/%.o: %.c
+# ── SABOR del build (GUI/LVGL) ────────────────────────────────────────────
+# Un .o NO recuerda con qué flags se compiló, y aquí los flags cambian lo que
+# el fichero ES: con -DBPVM_LVGL, gui.c llama al display; sin él, ni lo menciona.
+# Al pasar de `make sim` a `make LVGL=1 sim`, make veía gui.o más nuevo que
+# gui.c y NO lo recompilaba → el binario enlazaba gui_display_sdl.o pero nadie
+# lo inicializaba: la ventana no aparecía jamás, sin un solo aviso. Un día
+# perdido buscándolo en el sitio equivocado.
+# Solución: un sello por combinación de flags. Si cambia, se tiran los .o del
+# sabor anterior y se recompila entero (~30 s, y correcto).
+BUILD_FLAVOR := gui$(GUI)-lvgl$(LVGL)
+FLAVOR_STAMP := build/.flavor-$(BUILD_FLAVOR)
+
+$(FLAVOR_STAMP):
+	@mkdir -p build
+	@if ls build/.flavor-* >/dev/null 2>&1; then \
+	   echo "== el build cambia de sabor a $(BUILD_FLAVOR): se recompila todo =="; \
+	   rm -rf build/src build/test build/third_party build/pico build/tools; \
+	 fi
+	@rm -f build/.flavor-*
+	@touch $@
+
+build/%.o: %.c $(FLAVOR_STAMP)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
