@@ -54,6 +54,13 @@ typedef struct {
     int  (*list)(const char* path,
                  void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
                  void* user);
+    /* #305 — lee `cap` bytes DESDE `off`. Es la primitiva que permite tratar un
+     * fichero por trozos en vez de entero: sin ella, calcular el CRC de un
+     * fichero o mandarlo por el wire obliga a un buffer del tamaño del fichero
+     * más grande (en el Pico eran 128 KB de SRAM permanentes). Devuelve los
+     * bytes leídos (0 al final) o -1. Campo AL FINAL: los backends que no la
+     * implementen la dejan a NULL y el llamante cae al camino de siempre. */
+    long (*read_at)(const char* path, uint32_t off, uint8_t* dst, uint32_t cap);
 } bpvm_fs_backend_t;
 
 /* Registra el backend RAÍZ (una vez al boot). Limpia cualquier montaje
@@ -82,6 +89,13 @@ long long bpvm_fs_mtime_ms(const char* path);             /* #240 2ª: ms / -1 *
 int  bpvm_fs_list(const char* path,
                   void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
                   void* user);
+/* #305 — lectura parcial (ver read_at). Bytes leídos, 0 = fin, -1 = error o
+ * backend sin soporte. */
+long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap);
+/* #305 — CRC-32 de un fichero SIN cargarlo: lee por trozos con un buffer de
+ * pila. Es lo que el LS del wire necesita de cada fichero, y la razón por la
+ * que había un scratch enorme. 0 y *crc_out puesto; -1 si no se pudo leer. */
+int  bpvm_fs_crc32(const char* path, uint32_t* crc_out);
 
 /* ── H19-F1 — base-dir por ejecución (modelo de proyecto / paths web-app) ──
  * Cuando un proyecto está activo (p.ej. "/app/<proj>"), los paths RELATIVOS de

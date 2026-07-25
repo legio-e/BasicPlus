@@ -7,12 +7,24 @@
  */
 #include "crc32.h"
 
-uint32_t bpvm_crc32(const uint8_t* data, size_t len) {
-    uint32_t crc = 0xFFFFFFFFu;
+/* #305 — el bucle, ahora reutilizable por trozos. `state` entra y sale SIN el
+ * xor final: encadenar update() sobre trozos consecutivos da exactamente lo
+ * mismo que una sola pasada sobre el fichero entero. */
+uint32_t bpvm_crc32_update(uint32_t state, const uint8_t* data, size_t len) {
     for (size_t i = 0; i < len; i++) {
-        crc ^= (uint32_t) data[i];
+        state ^= (uint32_t) data[i];
         for (int k = 0; k < 8; k++)
-            crc = (crc & 1u) ? (crc >> 1) ^ 0xEDB88320u : (crc >> 1);
+            state = (state & 1u) ? (state >> 1) ^ 0xEDB88320u : (state >> 1);
     }
-    return crc ^ 0xFFFFFFFFu;
+    return state;
+}
+
+uint32_t bpvm_crc32_final(uint32_t state) {
+    return state ^ 0xFFFFFFFFu;
+}
+
+/* De una tacada = init + un update + final. Se mantiene porque es lo natural
+ * cuando los bytes YA están en RAM (un blob embebido, un buffer del wire). */
+uint32_t bpvm_crc32(const uint8_t* data, size_t len) {
+    return bpvm_crc32_final(bpvm_crc32_update(BPVM_CRC32_INIT, data, len));
 }

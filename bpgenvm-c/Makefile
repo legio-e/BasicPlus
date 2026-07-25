@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 all: $(BIN)
 
@@ -373,6 +373,15 @@ test-pack:
 	$(CC) $(CFLAGS) test/test_pack.c src/bpvm_pack.c -o build/test_pack.exe
 	@echo "--- H3 zona de packs (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_pack.exe
+
+# #305 — el CRC por trozos DEBE dar lo mismo que el de una tacada: el IDE se salta
+# el PUT comparándolo con java.util.zip.CRC32, así que una divergencia deja
+# ficheros rancios en la placa EN SILENCIO. Vectores canónicos + tamaños frontera.
+test-crc:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_crc.c src/crc32.c src/fs_facade.c src/fs_host.c -o build/test_crc.exe
+	@echo "--- #305 CRC por trozos (esperado: solo 'ok', [status=OK]) ---"
+	@cd build && ./test_crc.exe
 
 # H10 — el MICRO SIMULADO del IDE: servidor TCP wire v1 COMPLETO (META + FILES +
 # TERMINAL + gestión de placa + packs) con FS littlefs sobre imagen y la VM-C de

@@ -361,10 +361,13 @@ static int list_cb(const char* name, uint32_t size, void* user) {
     }
     fputc('"', stdout);
     /* paso 4 cierre — CRC del contenido (== java.util.zip.CRC32) para que el
-     * IDE salte el PUT por contenido REAL del device (fs_get = lookup barato). */
+     * IDE salte el PUT por contenido REAL del device.
+     * #305: por TROZOS. Antes esto era un fs_get, o sea leer el fichero ENTERO al
+     * scratch de 128 KB... por cada fichero del listado, uno detrás de otro. Con
+     * bpvm_fs_crc32 el coste es un buffer de 256 B en la pila, y el resultado es
+     * bit a bit el mismo (mismo algoritmo, sólo encadenado). */
     uint32_t crc = 0;
-    const uint8_t* d; uint32_t sz;
-    if (fs_get(name, &d, &sz) == FS_OK) crc = bpvm_crc32(d, sz);
+    if (bpvm_fs_crc32(name, &crc) != 0) crc = 0;
     fprintf(stdout, ",\"size\":%u,\"crc\":%u,\"isDir\":false}", (unsigned) size, (unsigned) crc);
     return 0;
 }

@@ -29,6 +29,16 @@ static long host_read(const char* path, uint8_t* dst, uint32_t cap) {
     return (long) n;
 }
 
+/* #305 — lectura desde un offset (el simulador la usa igual que el micro). */
+static long host_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return -1;
+    if (fseek(f, (long) off, SEEK_SET) != 0) { fclose(f); return -1; }
+    size_t n = fread(dst, 1, (size_t) cap, f);
+    fclose(f);
+    return (long) n;
+}
+
 static int host_write(const char* path, const uint8_t* data, uint32_t len, int append) {
     FILE* f = fopen(path, append ? "ab" : "wb");
     if (!f) return -1;
@@ -164,6 +174,7 @@ static const bpvm_fs_backend_t s_host_fs = {
     .isdir    = host_isdir,
     .mtime_ms = host_mtime_ms,
     .list     = host_list,   /* B1.3 */
+    .read_at  = host_read_at, /* #305 — lectura por trozos */
 };
 
 void bpvm_fs_register_host(void) {

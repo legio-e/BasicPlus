@@ -84,6 +84,21 @@ static long be_read_impl(const char* path, uint8_t* dst, uint32_t cap) {
     return (n < 0) ? -1 : (long) n;
 }
 
+/* #305 — lectura desde un offset. littlefs ya sabe posicionarse (lfs_file_seek),
+ * así que esto no cuesta nada y es lo que permite tratar el fichero por trozos.
+ * Lo hereda TODO el que use este backend: los 3 firmwares y el simulador. */
+static long be_read_at_impl(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
+    lfs_file_t f;
+    if (lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a) < 0) return -1;
+    long r = -1;
+    if (lfs_file_seek(&s_lfs, &f, (lfs_soff_t) off, LFS_SEEK_SET) >= 0) {
+        lfs_ssize_t n = lfs_file_read(&s_lfs, &f, dst, cap);
+        r = (n < 0) ? -1 : (long) n;
+    }
+    lfs_file_close(&s_lfs, &f);
+    return r;
+}
+
 static int be_write_impl(const char* path, const uint8_t* data, uint32_t len, int append) {
     lfs_file_t f;
     int flags = LFS_O_WRONLY | LFS_O_CREAT | (append ? LFS_O_APPEND : LFS_O_TRUNC);
@@ -183,6 +198,9 @@ static int be_stat(const char* path, uint32_t* size) {
 static long be_read(const char* path, uint8_t* dst, uint32_t cap) {
     fs_lock(); long r = be_read_impl(path, dst, cap); fs_unlock(); return r;
 }
+static long be_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
+    fs_lock(); long r = be_read_at_impl(path, off, dst, cap); fs_unlock(); return r;
+}
 static int be_write(const char* path, const uint8_t* data, uint32_t len, int append) {
     fs_lock(); int r = be_write_impl(path, data, len, append); fs_unlock(); return r;
 }
@@ -222,6 +240,7 @@ static const bpvm_fs_backend_t s_lfs_backend = {
     .isdir    = be_isdir,
     .mtime_ms = NULL,   /* littlefs no tiene timestamps → "no soportado" limpio */
     .list     = be_list,   /* B1.3 */
+    .read_at  = be_read_at, /* #305 — lectura por trozos */
 };
 
 int bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed) {

@@ -6,6 +6,7 @@
  * libc (fs_host.c), el firmware sobre su FS (fs_get/fs_put).
  */
 #include "bpvm_fs.h"
+#include "crc32.h"        /* #305 — bpvm_fs_crc32 por trozos */
 #include <string.h>
 #include <stdio.h>
 
@@ -212,4 +213,32 @@ int bpvm_fs_list(const char* path,
     const bpvm_fs_backend_t* be = route(path);
     if (be && be->list) return be->list(path, cb, user);
     return -1;
+}
+
+/* #305 — lectura parcial. Sin backend que la implemente devuelve -1: el llamante
+ * decide si degrada al camino de fichero entero o falla. */
+long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->read_at) return be->read_at(path, off, dst, cap);
+    return -1;
+}
+
+/* #305 — CRC-32 de un fichero POR TROZOS. El buffer es de pila y pequeño a
+ * propósito: es lo que sustituye al scratch del tamaño del fichero mayor. 256 B
+ * es el mismo tamaño que ya usa littlefs para sus buffers de lectura, así que no
+ * introduce un número nuevo que cuadrar. */
+int bpvm_fs_crc32(const char* path, uint32_t* crc_out) {
+    uint32_t size = 0;
+    if (bpvm_fs_stat(path, &size) != 0) return -1;
+    uint32_t st = BPVM_CRC32_INIT;
+    uint8_t  buf[256];
+    uint32_t off = 0;
+    while (off < size) {
+        long n = bpvm_fs_read_at(path, off, buf, sizeof buf);
+        if (n <= 0) return -1;               /* incluye "backend sin read_at" */
+        st = bpvm_crc32_update(st, buf, (size_t) n);
+        off += (uint32_t) n;
+    }
+    if (crc_out) *crc_out = bpvm_crc32_final(st);
+    return 0;
 }
