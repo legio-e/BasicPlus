@@ -1,0 +1,53 @@
+// OverloadMethod.bp — H5.a-E3: sobrecarga de MÉTODOS DE INSTANCIA (vtable).
+// Cubre los tres casos que decidió Eduardo:
+//   1) sobrecarga dentro de la misma clase,
+//   2) OVERRIDE de verdad (misma firma) → reusa el slot heredado (polimórfico),
+//   3) sobrecarga A TRAVÉS DE LA HERENCIA: el hijo declara el mismo nombre con
+//      otra firma → es una sobrecarga del grupo heredado, y en el hijo se pueden
+//      llamar LAS DOS (el programador ve la cadena como un solo espacio de nombres).
+module OverloadMethod
+
+  class Base
+    public function di(n: integer)
+      print "Base.di(int)"
+      print n
+    end di
+    public function di(s: string)
+      print "Base.di(str)"
+      print s
+    end di
+    public function saluda()
+      print "Base.saluda"
+    end saluda
+  end Base
+
+  class Hijo extends Base
+    // OVERRIDE: misma firma que Base.saluda() → mismo slot (polimorfismo).
+    public function saluda()
+      print "Hijo.saluda"
+    end saluda
+    // SOBRECARGA heredada: Base tiene di(int) y di(str); esta es nueva.
+    public function di(f: float)
+      print "Hijo.di(float)"
+      print f
+    end di
+  end Hijo
+
+  function Main()
+    var b: Base := Base()
+    b.di(7)
+    b.di("hola")
+    b.saluda()
+
+    var h: Hijo := Hijo()
+    h.di(7)          // heredada de Base (int)
+    h.di("hola")     // heredada de Base (str)
+    h.di(2.5)        // propia del Hijo (float)
+    h.saluda()       // override
+
+    // Polimorfismo: referencia de tipo Base apuntando a un Hijo.
+    var p: Base := h
+    p.saluda()       // debe imprimir Hijo.saluda
+  end Main
+
+end OverloadMethod

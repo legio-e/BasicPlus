@@ -1451,12 +1451,14 @@ public final class Main {
                     Symbol.FunctionSymbol prevOv = ns.functions.get(fs.name);
                     if (prevOv == null) {
                         ns.functions.put(fs.name, f);
+                        f.slotKey = f.name;             // 1ª firma del grupo: nombre pelado
                     } else {
                         Symbol.FunctionSymbol tail = prevOv;
                         while (tail.nextOverload != null) tail = tail.nextOverload;
                         tail.nextOverload = f;
                         prevOv.overloaded = true;
                         f.overloaded = true;
+                        f.slotKey = f.overloadMangle(); // sobrecarga: clave mangleada
                     }
                 }
                 for (ModuleInterface.ConstSig cs : ifaceBpi.consts) {

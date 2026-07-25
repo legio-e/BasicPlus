@@ -758,12 +758,20 @@ public final class ModuleInterface {
         for (Ast.ITopLevelDecl m : cls.astNode.members) {
             if (m instanceof Ast.FuncDef) {
                 Ast.FuncDef fn = (Ast.FuncDef) m;
-                Symbol fsym = cls.instanceMembers.tryLookup(fn.name.name);
-                if (fsym instanceof FunctionSymbol) {
-                    FunctionSymbol f = (FunctionSymbol) fsym;
-                    if (f.isPublic && !f.isStatic && !f.isConstructor && !names.contains(f.name)) {
-                        names.add(f.name);
-                    }
+                // H5.a-E3 — con sobrecarga puede haber VARIOS FuncDef con el mismo
+                // nombre: hay que casar cada uno con SU símbolo (por identidad del
+                // nodo AST), no coger el de `tryLookup` (que es la cabeza). Y la
+                // clave del slot es slotKey(): un override reusa la del padre
+                // (mismo slot) y una sobrecarga nueva trae clave nueva (slot nuevo).
+                FunctionSymbol f = null;
+                Symbol head = cls.instanceMembers.tryLookup(fn.name.name);
+                for (FunctionSymbol o = (head instanceof FunctionSymbol) ? (FunctionSymbol) head : null;
+                     o != null; o = o.nextOverload) {
+                    if (o.astNode == fn) { f = o; break; }
+                }
+                if (f != null && f.isPublic && !f.isStatic && !f.isConstructor
+                        && !names.contains(f.slotKey())) {
+                    names.add(f.slotKey());
                 }
             }
         }

@@ -1178,7 +1178,7 @@ public final class MivmEmitter {
                     FuncDef fn = (FuncDef) m;
                     FunctionSymbol fs = (FunctionSymbol) info.declSymbols.get(fn);
                     if (fs == null || fs.isStatic || fs.isConstructor || !fs.isPublic) continue;
-                    w.declareMethodSlot(fs.name);
+                    w.declareMethodSlot(emitName(fs));   // H5.a-E3: clave de slot
                 }
             }
 
@@ -1471,9 +1471,9 @@ public final class MivmEmitter {
         // despachan por CALL directo (ver el call-site) → fuera de la vtable,
         // así su orden coincide con el .bpi y no hay desfase de slots.
         if (fs.isPublic) {
-            w.addMethod(fs.name);          // vtable + función; declara "this"
+            w.addMethod(emitName(fs));          // vtable + función; declara "this"
         } else {
-            w.addPrivateMethod(fs.name);   // solo función llamable; declara "this"
+            w.addPrivateMethod(emitName(fs));   // solo función llamable; declara "this"
         }
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);
@@ -1541,7 +1541,7 @@ public final class MivmEmitter {
      *  las tablas por-nombre del ModWriter no colisionen; si no, el nombre pelado.
      *  DEFINICIÓN y LLAMADA deben usar SIEMPRE este mismo helper. */
     static String emitName(FunctionSymbol fs) {
-        return fs.overloaded ? fs.overloadMangle() : fs.name;
+        return fs.slotKey();
     }
 
     private void emitStaticMethodFn(ClassSymbol cls, FuncDef fn, FunctionSymbol fs) throws IOException {
@@ -3448,7 +3448,7 @@ public final class MivmEmitter {
                     emitExpr(c.args.get(i));
                     if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
                 }
-                w.emitCall(fs.ownerClass.name + "." + fs.name);
+                w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a-E3
                 return;
             }
             // Despacho. push receiver, push args.
@@ -3462,10 +3462,10 @@ public final class MivmEmitter {
                 if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
             }
             if (!fs.isPublic && !fs.isExternal) {
-                w.emitCall(fs.ownerClass.name + "." + fs.name);
+                w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a-E3
             } else {
                 // BUG-6: numArgs = slots de 4 bytes (long/double = 2), no nº de args.
-                emitInvokeVirtualSmart(fs.ownerClass, fs.name, argSlotCount(fs));
+                emitInvokeVirtualSmart(fs.ownerClass, emitName(fs), argSlotCount(fs));
             }
             return;
         }

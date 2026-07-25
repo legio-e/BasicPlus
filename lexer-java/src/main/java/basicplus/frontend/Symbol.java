@@ -84,6 +84,9 @@ public abstract class Symbol {
          *  el class fixup). */
         public SemanticInfo.ClassBinaryLayout binaryLayout;
 
+        /** H5.a-E3 — marca de la pasada `assignSlotKeys` (base antes que subclase). */
+        public boolean keysAssigned;
+
         public ClassSymbol(String name, boolean isPublic, String baseClassName,
                            Ast.ClassDef ast, int line, int column) {
             super(name, line, column);
@@ -220,6 +223,28 @@ public abstract class Symbol {
          *  con el mismo nombre). El emisor manglea el nombre solo si es true. */
         public boolean overloaded;
 
+        /** H5.a — CLAVE con la que esta función se registra/invoca en el backend
+         *  (tablas por-nombre del ModWriter, CALL/CALL_EXT y SLOT de vtable).
+         *  La calcula UNA sola pasada ({@code assignSlotKeys}) con la regla:
+         *  <b>la primera firma de un grupo se queda con el nombre pelado; las
+         *  siguientes se manglean</b>. Así, añadir una sobrecarga es ADITIVO (no
+         *  cambia el símbolo de la que ya existía) y una clase base YA COMPILADA
+         *  en otro módulo no necesita re-manglearse cuando una subclase añade una
+         *  sobrecarga de ese nombre. null ⇒ aún sin asignar: vale el nombre. */
+        public String slotKey;
+
+        /** Clave efectiva (ver {@link #slotKey}). Nunca null. */
+        public String slotKey() { return slotKey != null ? slotKey : name; }
+
+        /** Firma canónica (solo los tipos de los parámetros) — identifica una
+         *  sobrecarga dentro de un grupo, y es lo que hace de un método un
+         *  OVERRIDE de otro. Misma codificación que el mangling. */
+        public String signatureKey() {
+            StringBuilder sb = new StringBuilder();
+            for (ParamSymbol p : params) sb.append(typeCode(p.type));
+            return sb.toString();
+        }
+
         public FunctionSymbol(String name, boolean isPublic, boolean isFinal, boolean isStatic,
                               ClassSymbol owner, Ast.FuncDef ast) {
             super(name, ast != null ? ast.line : 0, ast != null ? ast.column : 0);
@@ -245,7 +270,7 @@ public abstract class Symbol {
             // H5.a-E2 — si es una sobrecarga, el componente final va MANGLEADO por
             // firma (igual que lo exportó el módulo dueño), para que el CALL_EXT
             // resuelva el overload correcto contra la tabla de exports.
-            sb.append(externalModule).append('.').append(overloaded ? overloadMangle() : name);
+            sb.append(externalModule).append('.').append(slotKey());
             return sb.toString();
         }
 

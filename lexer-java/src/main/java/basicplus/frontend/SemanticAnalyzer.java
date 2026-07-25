@@ -48,6 +48,12 @@ public final class SemanticAnalyzer {
      */
     private final java.util.Set<String> reportedUnknownType = new java.util.HashSet<>();
 
+    /** H5.a-E3 — clase ESTÁTICA del receptor de cada `obj.metodo` resuelto a
+     *  función. La sobrecarga de métodos se resuelve sobre esa clase (ve las suyas
+     *  y las heredadas); `lookupInstance` solo devuelve una, así que analyzeCall
+     *  necesita saber desde dónde juntar los candidatos. */
+    private final java.util.Map<Ast.IExpr, ClassSymbol> maRecvClass = new java.util.IdentityHashMap<>();
+
     // ---------- Estado del recorrido (pase 3) ----------
     private ClassSymbol currentClass;
     private FunctionSymbol currentFunction;
@@ -899,15 +905,15 @@ public final class SemanticAnalyzer {
             sym.params.add(psym);
         }
         if (!scope.tryDefine(sym)) {
-            // H5.a — sobrecarga: si el nombre ya lo tiene OTRA función (libre o
-            // estática), no es error: se ENCADENA y la resolución por firma en la
-            // llamada elige. La validación de firma-duplicada va después, con los
-            // tipos ya resueltos (validateOverloads). Los métodos de INSTANCIA
-            // (virtuales) quedan fuera de este escalón (slots de vtable) → siguen
-            // dando "nombre duplicado". Colisión con var/const/property también.
-            boolean overloadAllowed = (owner == null) || isStatic;
+            // H5.a — sobrecarga: si el nombre ya lo tiene OTRA función, no es
+            // error: se ENCADENA y la resolución por firma en la llamada elige.
+            // La validación de firma-duplicada va después, con los tipos ya
+            // resueltos (validateOverloads). Vale para funciones libres, métodos
+            // estáticos y —desde E3— métodos de INSTANCIA (cada sobrecarga se
+            // lleva su propio slot de vtable, ver assignSlotKeys). Colisión con
+            // var/const/property sigue siendo "nombre duplicado".
             Symbol prev = scope.tryLookup(f.name.name);
-            if (overloadAllowed && prev instanceof FunctionSymbol) {
+            if (prev instanceof FunctionSymbol) {
                 FunctionSymbol head = (FunctionSymbol) prev;
                 FunctionSymbol tail = head;
                 while (tail.nextOverload != null) tail = tail.nextOverload;
@@ -1026,6 +1032,10 @@ public final class SemanticAnalyzer {
         // H5.a — con los tipos ya resueltos, valida que no haya dos sobrecargas
         // con la MISMA firma (mismo nombre + mismos tipos de parámetros).
         validateOverloads();
+        // H5.a-E3 — y asigna la CLAVE de cada función (nombre pelado o mangleada).
+        // Debe ir DESPUÉS de resolver tipos (hacen falta las firmas) y DESPUÉS de
+        // resolver baseClass (el grupo de un método abarca la herencia).
+        assignSlotKeys();
 
         // H5.1.c — toda clase de usuario hereda toString()/compareTo() de Object.
         // Inyectamos los FunctionSymbol (sin nodo AST) si la clase no los declara,
@@ -1133,6 +1143,83 @@ public final class SemanticAnalyzer {
                 for (Symbol m : cls.staticMembers.getSymbols()) checkOverloadChain(m);
             }
         }
+    }
+
+    /** H5.a-E3 — asigna {@link FunctionSymbol#slotKey} a TODA función del módulo.
+     *  Regla ÚNICA: dentro de un grupo (mismo nombre), la PRIMERA firma se queda
+     *  con el nombre pelado y las siguientes se manglean. Para métodos, el grupo
+     *  abarca la CADENA DE HERENCIA: un método con la misma firma que uno heredado
+     *  es un OVERRIDE y hereda su clave (⇒ reusa su slot); con firma nueva es una
+     *  SOBRECARGA y toma una clave nueva (⇒ slot nuevo).
+     *  Ser aditivo es lo que permite que una base ya compilada en OTRO módulo no
+     *  tenga que re-manglearse cuando una subclase añade una sobrecarga. */
+    private void assignSlotKeys() {
+        for (Symbol s : module.members.getSymbols()) {
+            if (s instanceof FunctionSymbol) assignKeysInChain((FunctionSymbol) s, null);
+        }
+        for (Symbol s : module.members.getSymbols()) {
+            if (s instanceof ClassSymbol) assignKeysInClass((ClassSymbol) s);
+        }
+    }
+
+    /** Recorre las clases en orden base-antes-que-subclase (la clave de un
+     *  override se copia de la del padre, así que el padre debe estar listo). */
+    private void assignKeysInClass(ClassSymbol cls) {
+        if (cls == null || cls.keysAssigned) return;
+        cls.keysAssigned = true;
+        if (cls.baseClass != null) assignKeysInClass(cls.baseClass);
+        for (Symbol s : cls.staticMembers.getSymbols())
+            if (s instanceof FunctionSymbol) assignKeysInChain((FunctionSymbol) s, null);
+        for (Symbol s : cls.instanceMembers.getSymbols())
+            if (s instanceof FunctionSymbol) assignKeysInChain((FunctionSymbol) s, cls);
+    }
+
+    /** Asigna las claves de una cadena de sobrecargas (mismo nombre, mismo scope).
+     *  {@code owner} != null ⇒ métodos de instancia: se mira la herencia. */
+    private void assignKeysInChain(FunctionSymbol head, ClassSymbol owner) {
+        // Claves ya usadas por ese nombre en los ANCESTROS (para no pisarlas), y
+        // firma→clave heredada (para detectar overrides).
+        java.util.Set<String> taken = new java.util.HashSet<>();
+        java.util.Map<String, String> inheritedBySig = new java.util.LinkedHashMap<>();
+        if (owner != null) {
+            for (ClassSymbol a = owner.baseClass; a != null; a = a.baseClass) {
+                Symbol as = a.instanceMembers.tryLookup(head.name);
+                if (!(as instanceof FunctionSymbol)) continue;
+                for (FunctionSymbol o = (FunctionSymbol) as; o != null; o = o.nextOverload) {
+                    taken.add(o.slotKey());
+                    inheritedBySig.putIfAbsent(o.signatureKey(), o.slotKey());
+                }
+            }
+        }
+        for (FunctionSymbol f = head; f != null; f = f.nextOverload) {
+            String inherited = inheritedBySig.get(f.signatureKey());
+            if (inherited != null) {
+                f.slotKey = inherited;          // OVERRIDE: misma clave ⇒ mismo slot
+                continue;
+            }
+            if (!taken.contains(f.name)) {
+                f.slotKey = f.name;             // 1ª firma del grupo: nombre pelado
+            } else {
+                f.slotKey = f.overloadMangle(); // sobrecarga: clave nueva ⇒ slot nuevo
+            }
+            taken.add(f.slotKey);
+        }
+    }
+
+    /** H5.a-E3 — todas las sobrecargas de {@code name} visibles en {@code cls},
+     *  mirando la clase y sus ancestros. Una firma que ya apareció en una subclase
+     *  OCULTA a la del ancestro (es su override), así que gana la más derivada. */
+    private List<FunctionSymbol> collectInstanceCandidates(ClassSymbol cls, String name) {
+        List<FunctionSymbol> out = new ArrayList<>();
+        java.util.Set<String> seenSig = new java.util.HashSet<>();
+        for (ClassSymbol c = cls; c != null; c = c.baseClass) {
+            Symbol s = c.instanceMembers.tryLookup(name);
+            if (!(s instanceof FunctionSymbol)) continue;
+            for (FunctionSymbol o = (FunctionSymbol) s; o != null; o = o.nextOverload) {
+                if (seenSig.add(o.signatureKey())) out.add(o);
+            }
+        }
+        return out;
     }
 
     private void checkOverloadChain(Symbol s) {
@@ -2403,6 +2490,11 @@ public final class SemanticAnalyzer {
             }
             checkVisibility(ma.line, ma.column, sub, ct.cls);
             info.exprSymbols.put(ma, sub);
+            // H5.a-E3 — la sobrecarga de métodos se resuelve sobre la clase del
+            // RECEPTOR (ve las suyas y las heredadas); lookupInstance devuelve una
+            // sola, así que anotamos la clase para que analyzeCall pueda juntar
+            // todos los candidatos de la cadena de herencia.
+            if (sub instanceof FunctionSymbol) maRecvClass.put(ma, ct.cls);
             return typeOfSymbol(sub);
         }
 
@@ -2487,7 +2579,19 @@ public final class SemanticAnalyzer {
 
         if (target instanceof FunctionSymbol) {
             FunctionSymbol fn = (FunctionSymbol) target;
-            if (fn.overloaded) {
+            // H5.a-E3 — método de instancia: los candidatos son los de la clase del
+            // RECEPTOR + los heredados (una firma redeclarada en la subclase oculta
+            // a la del ancestro). Puede haber sobrecarga aunque `fn.overloaded` sea
+            // false: la otra firma puede vivir en la base.
+            ClassSymbol recv = maRecvClass.get(ce.callee);
+            List<FunctionSymbol> cands = (recv != null)
+                    ? collectInstanceCandidates(recv, fn.name) : null;
+            if (cands != null && cands.size() > 1) {
+                FunctionSymbol chosen = resolveOverloadCall(cands, fn.name, ce, scope);
+                if (chosen == null) return ErrorType.INSTANCE;
+                fn = chosen;
+                info.exprSymbols.put(ce.callee, fn);
+            } else if (fn.overloaded) {
                 // H5.a — varias sobrecargas con este nombre: elige por firma.
                 FunctionSymbol chosen = resolveOverloadCall(fn, ce, scope);
                 if (chosen == null) return ErrorType.INSTANCE;   // ambigua / ninguna encaja
@@ -2589,6 +2693,13 @@ public final class SemanticAnalyzer {
      *  = error. Rellena los defaults omitidos del elegido (H8.1). Devuelve la
      *  sobrecarga elegida, o null si ya emitió un error. */
     private FunctionSymbol resolveOverloadCall(FunctionSymbol head, CallExpr ce, Scope scope) {
+        List<FunctionSymbol> cands = new ArrayList<>();
+        for (FunctionSymbol c = head; c != null; c = c.nextOverload) cands.add(c);
+        return resolveOverloadCall(cands, head.name, ce, scope);
+    }
+
+    private FunctionSymbol resolveOverloadCall(List<FunctionSymbol> cands, String name,
+                                               CallExpr ce, Scope scope) {
         // Tipo estático (natural, sin hint de parámetro) de cada argumento: la
         // selección de sobrecarga se hace sobre esos tipos.
         List<BpType> at = new ArrayList<>();
@@ -2597,19 +2708,19 @@ public final class SemanticAnalyzer {
         FunctionSymbol best = null;
         int bestCost = Integer.MAX_VALUE;
         boolean ambiguous = false;
-        for (FunctionSymbol c = head; c != null; c = c.nextOverload) {
+        for (FunctionSymbol c : cands) {
             int cost = overloadMatchCost(c, at);
             if (cost < 0) continue;
             if (cost < bestCost) { bestCost = cost; best = c; ambiguous = false; }
             else if (cost == bestCost) ambiguous = true;
         }
         if (best == null) {
-            err(ce.line, ce.column, "ninguna sobrecarga de '" + head.name
+            err(ce.line, ce.column, "ninguna sobrecarga de '" + name
                     + "' acepta los argumentos " + argTypeList(at));
             return null;
         }
         if (ambiguous) {
-            err(ce.line, ce.column, "llamada ambigua a '" + head.name + "' con "
+            err(ce.line, ce.column, "llamada ambigua a '" + name + "' con "
                     + argTypeList(at) + ": varias sobrecargas encajan por igual (usa un cast)");
             return null;
         }
@@ -2815,14 +2926,24 @@ public final class SemanticAnalyzer {
         if (cls.baseClass == null) return;
         for (Symbol s : cls.instanceMembers.getSymbols()) {
             if (s instanceof FunctionSymbol) {
-                FunctionSymbol fn = (FunctionSymbol) s;
-                Symbol baseSym = cls.baseClass.lookupInstance(fn.name);
-                if (baseSym instanceof FunctionSymbol) {
-                    FunctionSymbol baseFn = (FunctionSymbol) baseSym;
+                // H5.a-E3 — con sobrecarga, "mismo nombre en la base" YA NO implica
+                // override: solo lo es si coincide la FIRMA. Un método con el mismo
+                // nombre y firma distinta es una sobrecarga legítima del grupo
+                // heredado (el programador ve la cadena como un solo espacio de
+                // nombres) y se lleva su propio slot. Se recorre la cadena de
+                // sobrecargas de la base buscando la firma exacta.
+                for (FunctionSymbol fn = (FunctionSymbol) s; fn != null; fn = fn.nextOverload) {
+                    FunctionSymbol baseFn = null;
+                    for (ClassSymbol a = cls.baseClass; a != null && baseFn == null; a = a.baseClass) {
+                        Symbol as = a.instanceMembers.tryLookup(fn.name);
+                        for (FunctionSymbol o = (as instanceof FunctionSymbol) ? (FunctionSymbol) as : null;
+                             o != null; o = o.nextOverload) {
+                            if (fn.hasSameSignatureAs(o)) { baseFn = o; break; }
+                        }
+                    }
+                    if (baseFn == null) continue;   // sobrecarga nueva, no override
                     if (baseFn.isFinal)
                         err(fn.line, fn.column, "'" + fn.name + "' está marcada 'final' en la clase base, no se puede sobreescribir");
-                    if (!fn.hasSameSignatureAs(baseFn))
-                        err(fn.line, fn.column, "sobreescritura de '" + fn.name + "' con firma incompatible");
                     String bret = baseFn.returnType != null ? baseFn.returnType.display() : "void";
                     String fret = fn.returnType   != null ? fn.returnType.display()   : "void";
                     if (!bret.equals(fret))
