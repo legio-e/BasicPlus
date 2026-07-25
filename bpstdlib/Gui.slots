@@ -9,6 +9,7 @@
   "TabPage": {  },
   "ListBox": { "setItems": 32 },
   "Textarea": {  },
+  "Chart": { "setRange": 30, "setPointCount": 31, "addSeries": 32, "push": 33, "setValue": 34, "setType": 35 },
   "Window": { "load": 30, "destroy": 31 },
   "Table": { "setGrid": 30, "setCell": 31, "getCell": 32 },
   "Panel": {  },
