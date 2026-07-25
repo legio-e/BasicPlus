@@ -1,0 +1,21 @@
+// SlotPropPriv.bp — ORÁCULO de slots de vtable (#299 / #315).
+// Una property PRIVADA declarada antes de un método público: sus accesores
+// get/set SÍ ocupan slots de vtable. El cálculo del frontend debe coincidir
+// con el del ModWriter — antes divergía (frontend=2 vs ModWriter=4) y el
+// cross-check #174b gritaba; el .slots/FormBaker y el AOT consumían el valor
+// equivocado SIN verificación.
+module SlotPropPriv
+
+  class Box
+    property oculta: integer
+    public function saluda()
+      print "hola"
+    end saluda
+  end Box
+
+  function Main()
+    var b: Box := Box()
+    b.saluda()
+  end Main
+
+end SlotPropPriv

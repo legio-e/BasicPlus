@@ -1,0 +1,23 @@
+// SlotThreadSub.bp — ORÁCULO de slots de vtable (#299 / #315).
+// Subclase de Thread: su base es {run, start, join} (NO Object), así que un
+// método público propio va al slot 3, no al 2. Antes el frontend numeraba
+// desde Object {toString, compareTo} y decía 2 mientras el ModWriter decía 3
+// → el cross-check #174b gritaba; el .slots/FormBaker y el AOT consumían el
+// valor equivocado SIN verificación.
+module SlotThreadSub
+
+  class Worker extends Thread
+    public function extra()
+      print "extra"
+    end extra
+    function run()
+      print "run"
+    end run
+  end Worker
+
+  function Main()
+    var w: Worker := Worker(0)
+    w.extra()
+  end Main
+
+end SlotThreadSub

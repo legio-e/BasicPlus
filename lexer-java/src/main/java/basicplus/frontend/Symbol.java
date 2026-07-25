@@ -147,52 +147,31 @@ public abstract class Symbol {
             return s == null ? -1 : s;
         }
 
-        /** Computa el mapa nombre→slot replicando FIELMENTE el orden de
-         *  ModWriter/emitClassDef: Object root (toString=0, compareTo=1) →
-         *  heredados del padre → accesores get/set de properties públicas de
-         *  instancia → métodos públicos de instancia (no ctor, no static), todo
-         *  en orden de declaración del AST; un override reusa el slot heredado.
-         *  Privados/estáticos NO entran (no virtuales). Clase externa: usa
-         *  externalMethodSlots (sembrado desde el .bpi). */
+        /** Puebla el mapa nombre→slot PREGUNTÁNDOSELO A LA FUNCIÓN ÚNICA
+         *  ({@link ModuleInterface#computeClassLayout}), que es la que reproduce
+         *  fielmente al ModWriter y la que publica el layout en la interfaz.
+         *
+         *  Norma de #299: **dos funciones calculando lo mismo = bug casi seguro**.
+         *  Aquí vivía un cálculo GEMELO (`ensureMethodSlots`) que se desviaba en
+         *  dos casos REALES, confirmados con repro (el cross-check #174b gritaba):
+         *    · property PRIVADA antes de un método público → el gemelo filtraba
+         *      `!isPublic` y la función única NO ⇒ slots 2 menos (Box.saluda 2 vs 4);
+         *    · subclase de `Thread` → el gemelo numeraba desde Object
+         *      {toString,compareTo} y la base real es {run,start,join} (Worker.extra
+         *      2 vs 3).
+         *  El #174b solo cubre el camino del INTÉRPRETE; `slotOf()` lo consumen SIN
+         *  verificación el `.slots`/FormBaker (hornea el slot en el `.win`) y el AOT
+         *  → ahí la desviación era silenciosa. Preguntando a la función única el
+         *  modo de fallo desaparece por construcción. */
         private void ensureMethodSlots() {
             if (methodSlots != null) return;
             if (isExternal) { methodSlots = externalMethodSlots; return; }
             java.util.Map<String, Integer> m = new java.util.LinkedHashMap<>();
-            int nextSlot;
-            if (baseClass != null) {
-                baseClass.ensureMethodSlots();
-                m.putAll(baseClass.methodSlots);
-                nextSlot = (baseClass.isExternal && baseClass.binaryLayout != null)
-                         ? baseClass.binaryLayout.numMethods
-                         : m.size();
-            } else {
-                // Raíz implícita Object: slots 0/1 = toString/compareTo.
-                m.put("toString", 0);
-                m.put("compareTo", 1);
-                nextSlot = 2;
-            }
-            if (astNode != null && astNode.members != null) {
-                // Properties públicas de instancia PRIMERO (get/set), orden de decl.
-                for (Ast.ITopLevelDecl d : astNode.members) {
-                    if (!(d instanceof Ast.PropertyDef)) continue;
-                    Ast.PropertyDef pd = (Ast.PropertyDef) d;
-                    if (!pd.isPublic) continue;
-                    if (pd.name != null && pd.name.isStatic()) continue;
-                    String nm = pd.name.name;
-                    String cap = Character.toUpperCase(nm.charAt(0)) + nm.substring(1);
-                    m.put("get" + cap, nextSlot++);
-                    m.put("set" + cap, nextSlot++);
-                }
-                // Métodos públicos de instancia (no ctor, no static), orden de decl.
-                for (Ast.ITopLevelDecl d : astNode.members) {
-                    if (!(d instanceof Ast.FuncDef)) continue;
-                    Ast.FuncDef fn = (Ast.FuncDef) d;
-                    Symbol s = instanceMembers.tryLookup(fn.name.name);
-                    if (!(s instanceof FunctionSymbol)) continue;
-                    FunctionSymbol fs = (FunctionSymbol) s;
-                    if (!fs.isPublic || fs.isStatic || fs.isConstructor) continue;
-                    if (!m.containsKey(fn.name.name)) m.put(fn.name.name, nextSlot++);
-                }
+            ModuleInterface.LayoutAndNames lay =
+                    ModuleInterface.computeClassLayout(this, new java.util.HashMap<>());
+            for (int slot = 0; slot < lay.methodNames.size(); slot++) {
+                String nm = lay.methodNames.get(slot);
+                if (nm != null) m.putIfAbsent(nm, slot);   // 1er slot con ese nombre
             }
             methodSlots = m;
         }
