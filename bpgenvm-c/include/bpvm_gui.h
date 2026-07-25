@@ -129,6 +129,17 @@ void bpvm_gui_disp_init(int w, int h);   /* tick + display + (host) input/cierre
 void bpvm_gui_disp_pump(void);           /* lv_timer_handler + ceder CPU */
 int  bpvm_gui_disp_is_open(void);        /* host: ventana abierta; micro: 1 si corre */
 void bpvm_gui_disp_set_rotation(int deg);/* orientación en runtime (deg validado por gui.c); sin soporte: no-op con aviso */
+
+/* H10 — micro simulado SIN pantalla: LVGL se monta contra un display fuera de
+ * pantalla (los widgets se crean y el modelo funciona; no se abre ventana y
+ * disp_is_open() da 0, así que Gui.run() vuelve en seguida). Sólo la implementa
+ * el host (SDL); llamarla es cosa del host, gui.c nunca la invoca → los ports de
+ * micro no tienen que definirla. En un build sin LVGL esto ya es lo que pasa. */
+void bpvm_gui_disp_set_headless(int on);
 #endif
+
+/* H10 — tamaño del panel simulado (modelo). Antes de crear el screen. Vive fuera
+ * del #ifdef de LVGL: el MODELO existe con GUI=1 aunque no haya render. */
+void bpvm_gui_set_screen_size(int w, int h);
 
 #endif /* BPVM_GUI_H */

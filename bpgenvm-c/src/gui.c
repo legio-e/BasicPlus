@@ -31,9 +31,22 @@
 
 /* Aspecto lógico del screen del MODELO (paridad con screenW/H de miVM): setRotation
  * con 90/270 lo intercambia — funcione antes o después de crear el screen, igual que
- * GuiBackend.setRotation en la VM Java. */
+ * GuiBackend.setRotation en la VM Java.
+ * H10: dejan de ser constantes de compilación. El micro simulado del IDE tiene que
+ * poder decir "soy una DK2 de 480x320" o "soy una P4 de 1024x600", porque un layout
+ * se ve distinto según la pantalla y ahí está media gracia de simular la placa. Los
+ * #define siguen siendo el DEFAULT. */
 static int g_screen_w0 = GUI_SCREEN_W;
 static int g_screen_h0 = GUI_SCREEN_H;
+
+/* Fija el tamaño del panel simulado. Sólo tiene efecto ANTES de crear el screen
+ * (después, el display ya está montado a ese tamaño) → el host la llama al
+ * arrancar, con lo que venga de la línea de comandos. */
+void bpvm_gui_set_screen_size(int w, int h) {
+    if (w <= 0 || h <= 0) return;
+    g_screen_w0 = w;
+    g_screen_h0 = h;
+}
 
 /* H7 — tope de series por chart (el modelo es estático por nodo; los puntos sí
  * son dinámicos). 8 sobra para un panel de sensores y no infla el nodo. */
@@ -159,7 +172,7 @@ static void lvgl_ensure_init(void) {
     g_lvgl_inited = 1;
     lv_init();                                       /* core LVGL (portable) */
     lv_lodepng_init();                               /* decoder PNG (image / Gui.Image) */
-    bpvm_gui_disp_init(GUI_SCREEN_W, GUI_SCREEN_H);  /* tick + display + input (plataforma) */
+    bpvm_gui_disp_init(g_screen_w0, g_screen_h0);    /* tick + display + input (plataforma) */
 }
 
 /* Callback de clic LVGL: encola el objptr del objeto BP dueño (user_data). NO

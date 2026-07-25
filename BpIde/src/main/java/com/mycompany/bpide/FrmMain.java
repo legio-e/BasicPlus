@@ -142,6 +142,11 @@ public class FrmMain extends javax.swing.JFrame
         initComponents();
         this.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         FrmMain.form=this;
+        /* H10.4 — el compilador corre EN PROCESO dentro del IDE, así que no tiene
+         * un BpVM.cfg propio del que sacar la biblioteca de packs: se la pasamos
+         * nosotros. Sin esto, `import X from pack Y` sólo encontraría los packs
+         * recién construidos en el outDir del proyecto. */
+        basicplus.frontend.Main.setPacksDir(IdePrefs.load().packsDirEffective());
         setupMvp();
     }
 
@@ -2229,7 +2234,18 @@ public class FrmMain extends javax.swing.JFrame
                     }
                     publish("== ventana: " + mod.getFileName()
                             + " (cierra la ventana para terminar) ==\n");
-                    ProcessBuilder pb = new ProcessBuilder(exe.toString(), mod.getFileName().toString());
+                    /* H10 — la ventana usa el MISMO micro simulado que configura el
+                     * engranaje del panel de placa: si dices que tu placa es una P4
+                     * de 1024x600 con 1 MB, el preview se ve con esa pantalla y esa
+                     * RAM. Sin esto, el preview mentía (siempre 480x320). */
+                    IdePrefs sp = IdePrefs.load();
+                    java.util.List<String> args = new java.util.ArrayList<>();
+                    args.add(exe.toString());
+                    args.add("--mem=" + (sp.simRamKb * 1024L));
+                    if (sp.simNoScreen) args.add("--no-screen");
+                    else args.add("--screen=" + sp.simScreenW + "x" + sp.simScreenH);
+                    args.add(mod.getFileName().toString());
+                    ProcessBuilder pb = new ProcessBuilder(args);
                     pb.directory(outDir.toFile());
                     pb.redirectErrorStream(true);
                     vmcProcess = pb.start();

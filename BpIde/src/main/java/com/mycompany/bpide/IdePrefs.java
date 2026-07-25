@@ -56,6 +56,58 @@ public final class IdePrefs {
      *  Null/empty = autodetect. */
     public String aotBpgenvmDir;
 
+    /** H10.4 — Carpeta de PACKS que acompaña al IDE (la stdlib empaquetada, el pack
+     *  de Gui, y en el futuro SQLite...). El compilador la mira al resolver
+     *  `import X from pack Y`, y de aquí salen los packs que se graban en la placa.
+     *  Null/empty = autodetect (junto al jar / al repo). */
+    public String packsDir;
+
+    /** ── H10: el MICRO SIMULADO (bpvm-sim) ─────────────────────────────────
+     *  Es una placa de mentira que corre en el PC: el IDE se conecta a ella por
+     *  TCP igual que a una de verdad. Estos son los mimbres del "silicio" que se
+     *  configuran desde la ventana del engranaje; el ejecutable se localiza bajo
+     *  {@link #aotBpgenvmDir} (build/bpvm-sim.exe) porque es la MISMA raíz de
+     *  bpgenvm-c que ya se configura para el AOT — una ruta, no dos. */
+    public int     simPort     = 5099;
+    public int     simRamKb    = 512;
+    public int     simPsramKb  = 0;
+    public int     simFlashKb  = 4096;
+    public int     simScreenW  = 480;
+    public int     simScreenH  = 320;
+    public boolean simNoScreen = false;
+    /** Dónde viven la "flash" y la imagen del FS del micro simulado (persisten
+     *  entre arranques, como en una placa). Null/empty = $HOME/.bpide-sim. */
+    public String  simDataDir;
+
+    /** Biblioteca de packs efectiva: la configurada; si no, la que VIAJA CON EL IDE
+     *  (una carpeta `packs/` junto al jar) y por último `packs/` en el directorio
+     *  de trabajo (útil en el repo). null si no hay ninguna — el compilador dirá
+     *  entonces dónde configurarla. */
+    public String packsDirEffective() {
+        if (packsDir != null && !packsDir.isEmpty()) return packsDir;
+        try {
+            java.net.URI uri = IdePrefs.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI();
+            Path here = Paths.get(uri);
+            Path dir = Files.isDirectory(here) ? here : here.getParent();
+            if (dir != null) {
+                Path cand = dir.resolve("packs");
+                if (Files.isDirectory(cand)) return cand.toString();
+            }
+        } catch (Exception ignored) {
+            /* jar en una URL rara / sin permisos: se cae al siguiente candidato */
+        }
+        Path cwd = Paths.get(System.getProperty("user.dir", "."), "packs");
+        return Files.isDirectory(cwd) ? cwd.toString() : null;
+    }
+
+    /** Carpeta de datos efectiva del simulador (nunca null). */
+    public String simDataDirEffective() {
+        if (simDataDir != null && !simDataDir.isEmpty()) return simDataDir;
+        String home = System.getProperty("user.home");
+        return Paths.get(home != null ? home : ".", ".bpide-sim").toString();
+    }
+
     /** IDE-3 — Recientes: ficheros .bp abiertos y proyectos .bpbuild abiertos.
      *  Más-reciente-primero, sin duplicados, cap MAX_RECENT. Se persisten como
      *  un string con entradas separadas por '\n' (los paths no llevan newline). */
@@ -134,11 +186,24 @@ public final class IdePrefs {
             p.lastUploadDir = Json.getString(m, "lastUploadDir", null);
             p.aotGccPath = Json.getString(m, "aotGccPath", null);
             p.aotBpgenvmDir = Json.getString(m, "aotBpgenvmDir", null);
+            p.packsDir   = Json.getString(m, "packsDir", null);
+            p.simDataDir = Json.getString(m, "simDataDir", null);
+            /* Los tamaños del micro simulado: si la clave falta (prefs de una
+             * versión anterior) se queda el default del campo, no un 0. */
+            p.simPort     = (int) Json.getLong(m, "simPort",     p.simPort);
+            p.simRamKb    = (int) Json.getLong(m, "simRamKb",    p.simRamKb);
+            p.simPsramKb  = (int) Json.getLong(m, "simPsramKb",  p.simPsramKb);
+            p.simFlashKb  = (int) Json.getLong(m, "simFlashKb",  p.simFlashKb);
+            p.simScreenW  = (int) Json.getLong(m, "simScreenW",  p.simScreenW);
+            p.simScreenH  = (int) Json.getLong(m, "simScreenH",  p.simScreenH);
+            p.simNoScreen = Json.getLong(m, "simNoScreen", 0) != 0;
             if (p.vmHost  != null && p.vmHost.isEmpty())  p.vmHost  = null;
             if (p.lastDir != null && p.lastDir.isEmpty()) p.lastDir = null;
             if (p.lastUploadDir != null && p.lastUploadDir.isEmpty()) p.lastUploadDir = null;
             if (p.aotGccPath != null && p.aotGccPath.isEmpty()) p.aotGccPath = null;
             if (p.aotBpgenvmDir != null && p.aotBpgenvmDir.isEmpty()) p.aotBpgenvmDir = null;
+            if (p.packsDir   != null && p.packsDir.isEmpty())   p.packsDir   = null;
+            if (p.simDataDir != null && p.simDataDir.isEmpty()) p.simDataDir = null;
             p.recentFiles    = splitRecent(Json.getString(m, "recentFiles", null));
             p.recentProjects = splitRecent(Json.getString(m, "recentProjects", null));
         } catch (Throwable t) {
@@ -158,6 +223,15 @@ public final class IdePrefs {
         m.put("lastUploadDir", lastUploadDir == null ? "" : lastUploadDir);
         m.put("aotGccPath", aotGccPath == null ? "" : aotGccPath);
         m.put("aotBpgenvmDir", aotBpgenvmDir == null ? "" : aotBpgenvmDir);
+        m.put("packsDir",   packsDir   == null ? "" : packsDir);
+        m.put("simDataDir", simDataDir == null ? "" : simDataDir);
+        m.put("simPort",     (long) simPort);
+        m.put("simRamKb",    (long) simRamKb);
+        m.put("simPsramKb",  (long) simPsramKb);
+        m.put("simFlashKb",  (long) simFlashKb);
+        m.put("simScreenW",  (long) simScreenW);
+        m.put("simScreenH",  (long) simScreenH);
+        m.put("simNoScreen", simNoScreen ? 1L : 0L);
         m.put("recentFiles",    String.join("\n", recentFiles));
         m.put("recentProjects", String.join("\n", recentProjects));
         StringBuilder sb = new StringBuilder();

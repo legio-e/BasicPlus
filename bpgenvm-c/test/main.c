@@ -27,6 +27,9 @@
 #include "bpvm_fs.h"
 #include "bpvm_net.h"   /* H11 — registro del backend TCP del host */
 #include "bpvm_pack.h"  /* H3 — zona de packs simulada (--pack=) */
+#ifdef BPVM_GUI
+#include "bpvm_gui.h"   /* H10 — --screen=WxH / --no-screen (micro simulado) */
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -164,6 +167,24 @@ int main(int argc, char** argv) {
         else if (strncmp(a, "--fs=lfs:", 9) == 0) {
             fs_lfs_img = a + 9;      /* H2·B1.2: FS littlefs sobre <imagen> (oráculo) */
         }
+        /* H10 — pantalla del micro simulado. Sin GUI en el build, se aceptan y se
+         * ignoran: así el IDE puede pasarlas siempre sin saber cómo se compiló. */
+        else if (strncmp(a, "--screen=", 9) == 0) {
+            int sw = 0, sh = 0;
+            if (sscanf(a + 9, "%dx%d", &sw, &sh) == 2 && sw > 0 && sh > 0) {
+#ifdef BPVM_GUI
+                bpvm_gui_set_screen_size(sw, sh);
+#endif
+            } else {
+                fprintf(stderr, "--screen espera ANCHOxALTO (p.ej. --screen=480x320)\n");
+                return 2;
+            }
+        }
+        else if (strcmp(a, "--no-screen") == 0) {
+#ifdef BPVM_LVGL
+            bpvm_gui_disp_set_headless(1);
+#endif
+        }
         else if (strncmp(a, "--pack=", 7) == 0) {
             if (n_pack_files >= PACKS_MAX_FILES) {
                 fprintf(stderr, "Demasiados --pack (max %d)\n", PACKS_MAX_FILES);
@@ -189,7 +210,7 @@ int main(int argc, char** argv) {
         }
     }
     if (!path) {
-        fprintf(stderr, "Uso: bpgenvm-c [--trace] [--mem=N] <fichero.mod>\n");
+        fprintf(stderr, "Uso: bpgenvm-c [--trace] [--mem=N] [--screen=WxH] [--no-screen] <fichero.mod>\n");
         return 1;
     }
 

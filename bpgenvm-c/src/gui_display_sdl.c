@@ -277,7 +277,38 @@ static void bpvm_gui_take_screenshot(void) {
     lv_draw_buf_destroy(snap);
 }
 
+/* H10 — micro simulado SIN pantalla. LVGL SIGUE montándose (los ~50 sitios que
+ * llaman lv_* dan por hecho que hay display; saltarse lv_init sería sembrar
+ * NULLs), pero contra un display fuera de pantalla cuyo flush no escribe en
+ * ningún sitio. Resultado: los widgets se crean, el modelo y el dumpTree son
+ * correctos, no aparece ventana, y disp_is_open() = 0 → Gui.run() vuelve en
+ * seguida en vez de girar esperando un cierre que nunca llega. */
+static int g_headless = 0;
+void bpvm_gui_disp_set_headless(int on) { g_headless = on ? 1 : 0; }
+
+static void headless_flush(lv_display_t* d, const lv_area_t* a, uint8_t* px) {
+    (void) a; (void) px;
+    lv_display_flush_ready(d);
+}
+
+static void disp_init_headless(int w, int h) {
+    lv_tick_set_cb(SDL_GetTicks);   /* el tick sirve igual; SDL no abre nada por sí solo */
+    lv_display_t* d = lv_display_create(w, h);
+    /* Buffer parcial de 10 líneas: LVGL renderiza por trozos y lo tira. */
+    static uint8_t* buf = NULL;
+    size_t bytes = (size_t) w * 10u * 4u;   /* ARGB8888, el formato por defecto */
+    free(buf);
+    buf = (uint8_t*) malloc(bytes);
+    if (!buf) { printf("[gui] headless: sin memoria para el buffer de dibujo\n"); return; }
+    lv_display_set_flush_cb(d, headless_flush);
+    lv_display_set_buffers(d, buf, NULL, (uint32_t) bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    g_window_closed = 1;            /* no hay ventana que cerrar: "cerrada" desde el minuto 0 */
+    printf("[gui] sin pantalla (%dx%d fuera de pantalla)\n", w, h);
+    fflush(stdout);
+}
+
 void bpvm_gui_disp_init(int w, int h) {
+    if (g_headless) { disp_init_headless(w, h); return; }
     SDL_SetMainReady();
     lv_tick_set_cb(SDL_GetTicks);
     lv_display_t* d = lv_sdl_window_create(w, h);

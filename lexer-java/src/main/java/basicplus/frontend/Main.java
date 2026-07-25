@@ -1298,7 +1298,8 @@ public final class Main {
         if (packFile == null) {
             throw new IOException("no se encuentra el pack '" + imp.packName + "' (import de '"
                     + moduleName + "'). Buscado en: " + tried
-                    + ". Define 'packsDir' en BpVM.cfg para la biblioteca de packs.");
+                    + ". Configura la biblioteca de packs (IDE: engranaje del micro"
+                    + " simulado → 'Librería de packs'; CLI: 'packsDir' en BpVM.cfg).");
         }
         basicplus.pack.PackReader.Pack pk;
         try {
@@ -1337,12 +1338,24 @@ public final class Main {
                 moduleName, packFile.getFileName());
     }
 
-    /** H5.b — busca `<nombre>.pack`: primero la BIBLIOTECA DE PACKS (packsDir del
-     *  BpVM.cfg — la carpeta que distribuimos con el IDE: stdlib, GUI, …), luego
-     *  el outDir del proyecto (packs recién construidos) y los dirs de deps. */
+    /** H10 — biblioteca de packs fijada por el HOSPEDADOR del compilador (el IDE la
+     *  pone desde sus preferencias antes de compilar). Hace falta porque el IDE
+     *  llama al frontend EN PROCESO: no hay un BpVM.cfg suyo donde mirar, y obligar
+     *  al usuario a mantener uno a mano sería un pie de foto para el olvido. */
+    private static String packsDirOverride;
+
+    /** Fija (o limpia, con null) la biblioteca de packs del hospedador. */
+    public static void setPacksDir(String dir) {
+        packsDirOverride = (dir == null || dir.isEmpty()) ? null : dir;
+    }
+
+    /** H5.b — busca `<nombre>.pack`: primero la BIBLIOTECA DE PACKS (la que fija el
+     *  IDE, o packsDir del BpVM.cfg — la carpeta que distribuimos: stdlib, GUI, …),
+     *  luego el outDir del proyecto (packs recién construidos) y los dirs de deps. */
     private static Path locatePackFile(String packName, Ctx ctx, java.util.List<Path> tried) {
         String fname = packName.endsWith(".pack") ? packName : packName + ".pack";
         java.util.List<Path> dirs = new java.util.ArrayList<>();
+        if (packsDirOverride != null) dirs.add(Paths.get(packsDirOverride));
         try {
             edu.bpgenvm.config.VmConfig cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(null);
             if (cfg.packsDir != null && !cfg.packsDir.isEmpty()) dirs.add(Paths.get(cfg.packsDir));

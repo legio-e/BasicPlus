@@ -24,7 +24,8 @@
  *
  * Uso:  bpvm-sim [puerto] [fichero-flash] [flashSizeBytes]        (posicional)
  *       bpvm-sim [--port=N] [--flash-file=F] [--flash=N] [--mem=N] [--psram=N]
- *                [--fs=IMG] [--fs-size=N] [--board=NOMBRE] [--pack=F]...
+ *                [--fs=IMG] [--fs-size=N] [--board=NOMBRE] [--screen=WxH]
+ *                [--no-screen] [--pack=F]...
  *   defaults: 127.0.0.1:5099, "boardsim.flash", 4 MB de flash, 512 KiB de RAM,
  *             imagen de FS "<fichero-flash>.fs".
  *   --pack=<f.pack> (repetible): "graba" la imagen en la zona de packs simulada
@@ -47,6 +48,9 @@
 #include "mdn_loader.h"
 #include "aot_registry.h"
 #include "json_min.h"
+#ifdef BPVM_GUI
+#include "bpvm_gui.h"   /* H10 — --screen=WxH / --no-screen */
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -97,6 +101,9 @@ static uint32_t g_psram_size = 0;              /* PSRAM declarada (--psram) */
 static uint32_t g_flash_size = DEF_FLASH;      /* flash total (--flash) */
 static uint8_t* g_vm_mem     = NULL;           /* buffer de la VM (RAM del micro) */
 static const char* g_board   = NULL;           /* --board: identidad por defecto */
+static int      g_screen_w   = 0;              /* --screen=WxH (0 = el default de gui.c) */
+static int      g_screen_h   = 0;
+static int      g_no_screen  = 0;              /* --no-screen: placa sin panel */
 
 /* Estado del servidor mientras hay un cliente: el sink de OUTPUT y el poll del
  * KILL son callbacks de la VM y necesitan el socket → global, igual que el
@@ -415,6 +422,9 @@ static void handle_info(sock_t c, long id) {
     sb_raw(&s, ",\"psramBytes\":");   sb_ulong(&s, (unsigned long) g_psram_size);
     sb_raw(&s, ",\"fsTotalBytes\":"); sb_ulong(&s, (unsigned long) fs_total);
     sb_raw(&s, ",\"fsUsedBytes\":");  sb_ulong(&s, (unsigned long) g_tally.used);
+    /* H10 — el panel simulado, para que el IDE pueda mostrarlo (0x0 = sin pantalla). */
+    sb_raw(&s, ",\"screenW\":"); sb_long(&s, g_no_screen ? 0 : (g_screen_w > 0 ? g_screen_w : 480));
+    sb_raw(&s, ",\"screenH\":"); sb_long(&s, g_no_screen ? 0 : (g_screen_h > 0 ? g_screen_h : 320));
     sb_raw(&s, "}");
     if (s.ok) send_line(c, s.buf); else send_err(c, id, "INTERNAL_ERROR", "INFO_REPLY no cabe");
 }
@@ -954,6 +964,16 @@ int main(int argc, char** argv) {
         else if (!strncmp(a, "--fs=", 5))         fs_img_arg = a + 5;
         else if (!strncmp(a, "--fs-size=", 10))   fs_size_arg = parse_size(a + 10);
         else if (!strncmp(a, "--board=", 8))      g_board = a + 8;
+        /* H10 — pantalla. Con GUI=0 en el build se aceptan y se ignoran: el IDE
+         * las pasa siempre sin tener que saber cómo se compiló el sim. */
+        else if (!strncmp(a, "--screen=", 9)) {
+            if (sscanf(a + 9, "%dx%d", &g_screen_w, &g_screen_h) != 2
+                || g_screen_w <= 0 || g_screen_h <= 0) {
+                fprintf(stderr, "sim: --screen espera ANCHOxALTO (p.ej. --screen=480x320)\n");
+                return 2;
+            }
+        }
+        else if (!strcmp(a, "--no-screen"))       g_no_screen = 1;
         else if (a[0] == '-') { fprintf(stderr, "sim: argumento desconocido: %s\n", a); return 2; }
         else if (npos < 3) pos[npos++] = a;
     }
@@ -1001,6 +1021,16 @@ int main(int argc, char** argv) {
     }
     bpvm_net_register_host();   /* sockets TCP del SO, como en la VM-C host */
 
+    /* H10 — el panel simulado. Se fija ANTES de que ningún programa cree el
+     * screen; a partir de ahí Gui.Screen() reporta este tamaño y el layout se
+     * comporta como en la placa que estamos imitando. */
+#ifdef BPVM_GUI
+    if (g_screen_w > 0) bpvm_gui_set_screen_size(g_screen_w, g_screen_h);
+#endif
+#ifdef BPVM_LVGL
+    if (g_no_screen) bpvm_gui_disp_set_headless(1);
+#endif
+
 #if defined(_WIN32)
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) { fprintf(stderr, "WSAStartup falló\n"); return 1; }
@@ -1023,6 +1053,9 @@ int main(int argc, char** argv) {
            (unsigned long) (g_flash_size / 1024), (unsigned long) (g_bm.usable_flash / 1024));
     printf("  env   %s\n  FS    %s (%u bloques de %u B)\n",
            g_flash_path, g_fs_img, g_fs_blocks, (unsigned) SECTOR);
+    if (g_no_screen) printf("  panel sin pantalla\n");
+    else             printf("  panel %dx%d\n", g_screen_w > 0 ? g_screen_w : 480,
+                            g_screen_h > 0 ? g_screen_h : 320);
     printf("  estado inicial: %s\n",
            bpvm_boot_state_name((bpvm_boot_state_t) bpvm_bmgr_wire_state(&g_bm)));
     fflush(stdout);

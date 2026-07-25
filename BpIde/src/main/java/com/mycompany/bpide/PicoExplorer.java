@@ -79,11 +79,20 @@ public final class PicoExplorer extends JPanel {
     /* --- UI components ----------------------------------------- */
     private final JRadioButton rbSerial = new JRadioButton("Placa (serial v1)", true);
     private final JRadioButton rbVm     = new JRadioButton("VM Java (TCP v1)");
+    /** H10 — el micro simulado: una placa que no existe, servida por bpvm-sim en
+     *  este mismo PC. Habla el MISMO wire v1 por TCP, así que reutiliza tal cual
+     *  el BpvmBackend; lo único propio es arrancar/parar el proceso. */
+    private final JRadioButton rbSim    = new JRadioButton("Micro simulado (VM-C)");
     private final JComboBox<String> portCombo = new JComboBox<>();
     private final JTextField endpointField = new JTextField("localhost:7332", 16);
     private final JPanel endpointPanel = new JPanel(new CardLayout());
     private static final String CARD_SERIAL = "SERIAL";
     private static final String CARD_VM     = "VM";
+    private static final String CARD_SIM    = "SIM";
+    private final JLabel simState = new JLabel("parado");
+    private final JButton btnSim    = new JButton("Arrancar");
+    private final JButton btnSimCfg = new JButton();
+    private final SimRunner sim = new SimRunner(this::emitLine);
     private final JButton btnConnect = new JButton("Connect");
     private final JButton btnRefresh = new JButton("Refresh");
     private final JButton btnUpload  = new JButton("Upload…");
@@ -117,10 +126,12 @@ public final class PicoExplorer extends JPanel {
         ButtonGroup bg = new ButtonGroup();
         bg.add(rbSerial);
         bg.add(rbVm);
+        bg.add(rbSim);
         rowBackend.add(rbSerial);
         rowBackend.add(rbVm);
+        rowBackend.add(rbSim);
 
-        // CardLayout intercambia portCombo / endpointField según el radio.
+        // CardLayout intercambia portCombo / endpointField / estado del sim según el radio.
         JPanel serialCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         serialCard.add(new JLabel("Port:"));
         portCombo.setPreferredSize(new Dimension(120, 22));
@@ -128,11 +139,33 @@ public final class PicoExplorer extends JPanel {
         JPanel vmCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         vmCard.add(new JLabel("Endpoint:"));
         vmCard.add(endpointField);
+        // H10 — el micro simulado no pide endpoint: lo arranca el IDE y sabe dónde
+        // escucha. Lo que va aquí es su ESTADO y los dos botones (marcha/paro +
+        // engranaje de configuración).
+        JPanel simCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        simCard.add(new JLabel("Simulador:"));
+        simCard.add(simState);
+        simCard.add(btnSim);
+        simCard.add(btnSimCfg);
         endpointPanel.add(serialCard, CARD_SERIAL);
         endpointPanel.add(vmCard,     CARD_VM);
+        endpointPanel.add(simCard,    CARD_SIM);
         showCard(CARD_SERIAL);
         rbSerial.addActionListener(e -> showCard(CARD_SERIAL));
         rbVm.addActionListener(e     -> showCard(CARD_VM));
+        rbSim.addActionListener(e    -> showCard(CARD_SIM));
+
+        btnSim.setIcon(SimIcons.chip(14));
+        btnSim.setToolTipText("Arranca el micro simulado y se conecta a él");
+        btnSimCfg.setIcon(SimIcons.gear(14));
+        btnSimCfg.setToolTipText("Configurar el micro simulado (RAM, flash, pantalla…)");
+        btnSimCfg.setMargin(new Insets(2, 4, 2, 4));
+        btnSim.addActionListener(e -> onToggleSim());
+        btnSimCfg.addActionListener(e -> onSimConfig());
+        /* Si el IDE se cierra con el simulador en marcha, el proceso hijo se
+         * quedaría huérfano ocupando el puerto → al siguiente arranque "no
+         * aceptó conexiones" sin motivo aparente. */
+        Runtime.getRuntime().addShutdownHook(new Thread(sim::stop, "bpvm-sim-stop"));
 
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         row1.add(endpointPanel);
@@ -856,6 +889,75 @@ public final class PicoExplorer extends JPanel {
         return new File(modFile.getParentFile(), base + ".mdn");
     }
 
+    /* ===== H10 — micro simulado: arranque, parada y configuración ===== */
+
+    /** Refresca el estado visible del simulador (texto + color del chip). */
+    private void updateSimUI() {
+        boolean run = sim.isRunning();
+        btnSim.setText(run ? "Parar" : "Arrancar");
+        btnSim.setIcon(SimIcons.chip(14, run ? new Color(0x1B, 0x8A, 0x3C) : null));
+        simState.setText(run ? ("en marcha :" + IdePrefs.load().simPort) : "parado");
+        /* Parar mientras está conectado desconecta primero, así que el botón nunca
+         * se bloquea; lo que sí se bloquea es cambiar la configuración en caliente
+         * (el diálogo lo avisa). */
+        btnSim.setEnabled(true);
+    }
+
+    /** Botón del chip: arranca el simulador y se conecta, o desconecta y lo para.
+     *  Worker propio en vez de runAsync porque aquí SÍ hace falta atender el fallo
+     *  (dejar el botón usable y explicar qué pasó); runAsync no expone ese punto. */
+    private void onToggleSim() {
+        if (!btnSim.isEnabled()) return;         // ya hay un arranque en curso
+        if (sim.isRunning()) {
+            if (isConnected()) onConnect();      // toggle: aquí desconecta
+            sim.stop();
+            updateSimUI();
+            status.setText("simulador parado");
+            return;
+        }
+        final IdePrefs prefs = IdePrefs.load();
+        rbSim.setSelected(true);
+        showCard(CARD_SIM);
+        status.setText("arrancando el simulador…");
+        btnSim.setEnabled(false);
+        new SwingWorker<String, Void>() {
+            @Override protected String doInBackground() throws Exception {
+                return sim.start(prefs);
+            }
+            @Override protected void done() {
+                try {
+                    String endpoint = get();
+                    updateSimUI();
+                    status.setText("simulador en " + endpoint + " — conectando…");
+                    if (!isConnected()) onConnect();   // ya escucha: conectar de verdad
+                } catch (Exception ex) {
+                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                    String msg = cause.getMessage() == null ? cause.toString() : cause.getMessage();
+                    status.setText("no arrancó el simulador");
+                    emitLine("[sim ERROR] " + msg + "\n");
+                    updateSimUI();
+                }
+            }
+        }.execute();
+    }
+
+    /** Botón del engranaje: la ventana de configuración del micro simulado. */
+    private void onSimConfig() {
+        IdePrefs prefs = IdePrefs.load();
+        if (SimConfigDialog.show(this, prefs, sim.isRunning())) {
+            /* La biblioteca de packs se aplica YA (el compilador es in-process):
+             * si el usuario acaba de apuntarla, el siguiente Compile la usa. */
+            basicplus.frontend.Main.setPacksDir(prefs.packsDirEffective());
+            emitLine("[sim] configuración guardada: RAM " + prefs.simRamKb + "K, PSRAM "
+                    + prefs.simPsramKb + "K, flash " + prefs.simFlashKb + "K, pantalla "
+                    + (prefs.simNoScreen ? "ninguna"
+                                         : prefs.simScreenW + "x" + prefs.simScreenH) + "\n");
+            if (sim.isRunning())
+                emitLine("[sim] para y arranca el simulador para aplicarla\n");
+            updateSimUI();
+        }
+    }
+
     /* ============================================================ */
 
     private void refreshPorts() {
@@ -873,8 +975,10 @@ public final class PicoExplorer extends JPanel {
         btnConnect.setText(connected ? "Disconnect" : "Connect");
         rbSerial.setEnabled(!connected);
         rbVm.setEnabled(!connected);
+        rbSim.setEnabled(!connected);
         portCombo.setEnabled(!connected);
         endpointField.setEnabled(!connected);
+        updateSimUI();
         btnRefresh.setEnabled(connected);
         btnUpload.setEnabled(connected);
         btnRun.setEnabled(connected);
@@ -901,9 +1005,17 @@ public final class PicoExplorer extends JPanel {
             return;
         }
         final boolean serial = rbSerial.isSelected();
+        final boolean simulado = rbSim.isSelected();
+        if (simulado && !sim.isRunning()) {
+            status.setText("el simulador no está en marcha — pulsa Arrancar");
+            return;
+        }
+        /* El micro simulado habla el mismo wire por TCP: su "endpoint" no lo teclea
+         * nadie, sale de la configuración con la que lo arrancamos. */
         final String endpoint = serial
                 ? (String) portCombo.getSelectedItem()
-                : endpointField.getText().trim();
+                : simulado ? ("127.0.0.1:" + IdePrefs.load().simPort)
+                           : endpointField.getText().trim();
         if (endpoint == null || endpoint.isEmpty()) {
             status.setText(serial ? "No port selected" : "Empty endpoint");
             return;

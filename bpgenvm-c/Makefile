@@ -359,7 +359,7 @@ test-pack:
 # boardsim (sólo STATE/ENV_*/PART_*); H10 le enchufa el FS y la VM → enlaza la
 # lib entera ($(LIBOBJ)). Reusa pico/json_min.c (parser JSON portable).
 # Winsock via $(LDFLAGS) (-lws2_32). Con LVGL=1 arrastra la ventana SDL.
-sim: $(LIBOBJ)
+sim: $(LIBOBJ) $(if $(filter 1,$(LVGL)),build/liblvgl.a build/SDL2.dll,)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Ipico -Isrc tools/bpvm_sim.c pico/json_min.c $(LIBOBJ) -o build/bpvm-sim.exe $(LDFLAGS)
 	@echo "sim listo: build/bpvm-sim.exe [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG]"
