@@ -1,0 +1,10 @@
+// Consumidor: resuelve la sobrecarga de métodos CROSS-MODULE (por vtable).
+module OvClsMain
+  import OvClsLib
+  function Main()
+    var c: OvClsLib.Caja := OvClsLib.Caja(5)
+    c.lee()
+    c.pon(42)
+    c.pon("hola")
+  end Main
+end OvClsMain

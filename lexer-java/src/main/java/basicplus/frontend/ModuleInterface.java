@@ -387,9 +387,17 @@ public final class ModuleInterface {
                     properties.add(new PropSig(psym.name, psym.type, psym.isSync));
                 } else if (m instanceof Ast.FuncDef) {
                     Ast.FuncDef fn = (Ast.FuncDef) m;
-                    Symbol fs = cls.instanceMembers.tryLookup(fn.name.name);
-                    if (!(fs instanceof FunctionSymbol)) continue;
-                    FunctionSymbol fsym = (FunctionSymbol) fs;
+                    // H5.a-E5 — con sobrecarga hay VARIOS FuncDef con el mismo
+                    // nombre: casar cada uno con SU símbolo por identidad del nodo
+                    // (tryLookup devuelve la cabeza → se exportaría N veces la misma
+                    // firma y el consumidor solo vería una).
+                    Symbol head = cls.instanceMembers.tryLookup(fn.name.name);
+                    FunctionSymbol fsym = null;
+                    for (FunctionSymbol o = (head instanceof FunctionSymbol) ? (FunctionSymbol) head : null;
+                         o != null; o = o.nextOverload) {
+                        if (o.astNode == fn) { fsym = o; break; }
+                    }
+                    if (fsym == null) continue;
                     if (!fsym.isPublic) continue;
                     if (fsym.isConstructor) continue;          // se exporta vía ctorParams
                     if (fsym.isStatic) continue;               // v1: sin estáticos

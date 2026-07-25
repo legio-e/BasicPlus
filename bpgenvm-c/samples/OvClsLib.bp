@@ -1,0 +1,20 @@
+// Clase con MÉTODOS públicos sobrecargados, para consumir desde otro módulo.
+module OvClsLib
+  public class Caja
+    public property n: integer
+    public function Caja(v: integer)
+      this.n := v
+    end Caja
+    public function pon(x: integer)
+      print "pon(int)"
+      print x
+    end pon
+    public function pon(s: string)
+      print "pon(str)"
+      print s
+    end pon
+    public function lee()
+      print this.n
+    end lee
+  end Caja
+end OvClsLib

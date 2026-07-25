@@ -1599,11 +1599,28 @@ public final class Main {
                         // isExternal queda false porque INVOKE_VIRTUAL despacha
                         // via vtable, no via CALL_EXT. Lo que sí necesita el
                         // emisor es el slot — está en externalMethodSlots.
-                        stub.instanceMembers.tryDefine(fsym);
+                        // H5.a-E5 — sobrecarga de métodos cross-module: si el nombre
+                        // ya está definido en el stub, ENCADENAR (tryDefine fallaría
+                        // en silencio y la 2ª firma se perdería). La CLAVE de slot
+                        // sigue la misma regla aditiva: 1ª firma = nombre pelado, las
+                        // siguientes mangleadas ⇒ cada una con su propio slot.
+                        Symbol prevM = stub.instanceMembers.tryLookup(m.name);
+                        if (prevM instanceof Symbol.FunctionSymbol) {
+                            Symbol.FunctionSymbol headM = (Symbol.FunctionSymbol) prevM;
+                            Symbol.FunctionSymbol tailM = headM;
+                            while (tailM.nextOverload != null) tailM = tailM.nextOverload;
+                            tailM.nextOverload = fsym;
+                            headM.overloaded = true;
+                            fsym.overloaded  = true;
+                            fsym.slotKey = fsym.overloadMangle();
+                        } else {
+                            stub.instanceMembers.tryDefine(fsym);
+                            fsym.slotKey = fsym.name;
+                        }
                         // Override de un método heredado → mantiene su slot base
-                        // (ya sembrado). Método nuevo → siguiente slot libre.
-                        if (!deferSlots && !stub.externalMethodSlots.containsKey(m.name)) {
-                            stub.externalMethodSlots.put(m.name, nextSlot++);
+                        // (ya sembrado). Método nuevo/sobrecarga → siguiente slot libre.
+                        if (!deferSlots && !stub.externalMethodSlots.containsKey(fsym.slotKey())) {
+                            stub.externalMethodSlots.put(fsym.slotKey(), nextSlot++);
                         }
                     }
                     // L2 v3.d — static consts públicos del .bpi. Se añaden al
