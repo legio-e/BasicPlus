@@ -1001,65 +1001,42 @@ static void vm_task(void* arg) {
      *
      * NO persistimos automáticamente a flash — el FORMAT borra apps
      * pero la stdlib resurge en el siguiente reboot desde la imagen. */
-    const uint8_t* dummy; uint32_t dummy_sz;
-    if (fs_get("/lib/Core.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Core.mod", core_mod, core_mod_len);
-        log_printf("stdlib: /lib/Core.mod installed (%u bytes)", core_mod_len);
-    }
-    if (fs_get("/lib/Gpio.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Gpio.mod", gpio_mod, gpio_mod_len);
-        log_printf("stdlib: /lib/Gpio.mod installed (%u bytes)", gpio_mod_len);
-    }
-    if (fs_get("/lib/I2c.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/I2c.mod", i2c_mod, i2c_mod_len);
-        log_printf("stdlib: /lib/I2c.mod installed (%u bytes)", i2c_mod_len);
-    }
-    if (fs_get("/lib/Spi.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Spi.mod", spi_mod, spi_mod_len);
-        log_printf("stdlib: /lib/Spi.mod installed (%u bytes)", spi_mod_len);
-    }
-    if (fs_get("/lib/Uart.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Uart.mod", uart_mod, uart_mod_len);
-        log_printf("stdlib: /lib/Uart.mod installed (%u bytes)", uart_mod_len);
-    }
-    if (fs_get("/lib/Pulse.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Pulse.mod", pulse_mod, pulse_mod_len);
-        log_printf("stdlib: /lib/Pulse.mod installed (%u bytes)", pulse_mod_len);
-    }
-    if (fs_get("/lib/Pwm.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Pwm.mod", pwm_mod, pwm_mod_len);
-        log_printf("stdlib: /lib/Pwm.mod installed (%u bytes)", pwm_mod_len);
-    }
-    if (fs_get("/lib/Pico.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Pico.mod", pico_mod, pico_mod_len);
-        log_printf("stdlib: /lib/Pico.mod installed (%u bytes)", pico_mod_len);
-    }
-    if (fs_get("/lib/Rtc.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Rtc.mod", rtc_mod, rtc_mod_len);
-        log_printf("stdlib: /lib/Rtc.mod installed (%u bytes)", rtc_mod_len);
-    }
-    if (fs_get("/lib/Adc.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Adc.mod", adc_mod, adc_mod_len);
-        log_printf("stdlib: /lib/Adc.mod installed (%u bytes)", adc_mod_len);
-    }
-    if (fs_get("/lib/Wdt.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Wdt.mod", wdt_mod, wdt_mod_len);
-        log_printf("stdlib: /lib/Wdt.mod installed (%u bytes)", wdt_mod_len);
-    }
-    if (fs_get("/lib/Timer.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Timer.mod", timer_mod, timer_mod_len);
-        log_printf("stdlib: /lib/Timer.mod installed (%u bytes)", timer_mod_len);
-    }
-    if (fs_get("/lib/Neopixel.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/lib/Neopixel.mod", neopixel_mod, neopixel_mod_len);
-        log_printf("stdlib: /lib/Neopixel.mod installed (%u bytes)", neopixel_mod_len);
-    }
-    /* Drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO se
-     * pre-instalan aquí — los sube el IDE como deps al hacer Run a
-     * /app/ o a root, da igual: la resolución encuentra ambos. */
-    if (fs_get("/app/Hello.mod", &dummy, &dummy_sz) != FS_OK) {
-        fs_put("/app/Hello.mod", hello_mod, hello_mod_len);
-        log_printf("app: /app/Hello.mod installed (%u bytes)", hello_mod_len);
+    /* #305 — pre-instalación de la stdlib embebida. Antes eran 14 bloques
+     * copiados a mano, cada uno preguntando "¿existe?" con fs_get, que LEE EL
+     * FICHERO ENTERO al scratch de 128 KB para no mirar ni un byte (Gui.mod son
+     * 42 KB). Ahora: una tabla —como las que ya tenían el ESP32 y el STM32— y
+     * fs_exists, que es un stat y no toca el scratch.
+     *
+     * NO se persiste a flash a propósito: un FORMAT borra las apps del usuario
+     * pero la stdlib resurge en el siguiente arranque desde la imagen. */
+    /* La longitud se guarda POR DIRECCIÓN: los *_mod_len son variables
+     * (`extern const unsigned int`), no constantes de compilación, así que su
+     * VALOR no vale en un inicializador estático — su dirección sí. Con esto la
+     * tabla vive en flash y no gasta ni un byte de pila. */
+    static const struct { const char* path; const uint8_t* data; const unsigned int* len; }
+    PREINSTALL[] = {
+        { "/lib/Core.mod",     core_mod,     &core_mod_len     },
+        { "/lib/Gpio.mod",     gpio_mod,     &gpio_mod_len     },
+        { "/lib/I2c.mod",      i2c_mod,      &i2c_mod_len      },
+        { "/lib/Spi.mod",      spi_mod,      &spi_mod_len      },
+        { "/lib/Uart.mod",     uart_mod,     &uart_mod_len     },
+        { "/lib/Pulse.mod",    pulse_mod,    &pulse_mod_len    },
+        { "/lib/Pwm.mod",      pwm_mod,      &pwm_mod_len      },
+        { "/lib/Pico.mod",     pico_mod,     &pico_mod_len     },
+        { "/lib/Rtc.mod",      rtc_mod,      &rtc_mod_len      },
+        { "/lib/Adc.mod",      adc_mod,      &adc_mod_len      },
+        { "/lib/Wdt.mod",      wdt_mod,      &wdt_mod_len      },
+        { "/lib/Timer.mod",    timer_mod,    &timer_mod_len    },
+        { "/lib/Neopixel.mod", neopixel_mod, &neopixel_mod_len },
+        /* Los drivers de dispositivo (PCA9554, BME280, SSD1306...) NO se
+         * pre-instalan: los sube el IDE como deps al hacer Run. */
+        { "/app/Hello.mod",    hello_mod,    &hello_mod_len    },
+    };
+    for (size_t i = 0; i < sizeof(PREINSTALL) / sizeof(PREINSTALL[0]); i++) {
+        if (fs_exists(PREINSTALL[i].path)) continue;
+        fs_put(PREINSTALL[i].path, PREINSTALL[i].data, *PREINSTALL[i].len);
+        log_printf("preinstall: %s (%u bytes)", PREINSTALL[i].path,
+                   (unsigned) *PREINSTALL[i].len);
     }
 
     log_printf("fs: %d ficheros, %u/%u bytes usados",

@@ -142,6 +142,13 @@ fs_status_t fs_save_to_flash(void) {
     return FS_OK;
 }
 
+/* #305 — existencia sin leer nada. El fs_get de abajo ya empieza por este mismo
+ * stat; la diferencia es que aquí no seguimos leyendo el fichero al scratch. */
+int fs_exists(const char* name) {
+    uint32_t sz = 0;
+    return bpvm_fs_stat(name, &sz) == 0 ? 1 : 0;
+}
+
 fs_status_t fs_get(const char* name, const uint8_t** data_out, uint32_t* size_out) {
     uint32_t sz = 0;
     if (bpvm_fs_stat(name, &sz) != 0) return FS_ERR_NOT_FOUND;
