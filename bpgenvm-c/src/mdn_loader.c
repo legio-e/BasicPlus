@@ -77,7 +77,18 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
     static const uint8_t expected[4] = MDN_MAGIC;
     if (memcmp(h->magic, expected, 4) != 0) return MDN_ERR_MAGIC;
     if (h->version != MDN_VERSION)          return MDN_ERR_VERSION;
-    if (h->abi_version > MDN_ABI_VERSION)   return MDN_ERR_ABI;
+    /* Gate de ABI — IGUAL, no "menor o igual" (norma #284: el formato debe
+     * COINCIDIR; si no, se recompila). El `>` de antes sólo protegía de los
+     * .mdn del FUTURO y dejaba pasar los RANCIOS, que son el caso real: un
+     * .mdn de ABI 1 lleva código que pasa offsets crudos a helpers que desde
+     * #302 esperan HANDLES de 64 bits ⇒ corrupción y reset mudo. Preferimos
+     * quedarnos sin overlay (interpretado, correcto) que ejecutar a ciegas. */
+    if (h->abi_version != MDN_ABI_VERSION) {
+        bpvm_mdn_log("MDN: RECHAZADO — ABI %u, esta VM habla %u. El .mdn es de "
+                     "otra era de los helpers AOT: hay que REGENERARLO.",
+                     (unsigned) h->abi_version, (unsigned) MDN_ABI_VERSION);
+        return MDN_ERR_ABI;
+    }
 
     /* Gate de arquitectura (H4, estilo #284): ejecutar código de otra ISA =
      * instrucciones basura → crash. Se rechaza. arch==0 = .mdn legacy (pre-tag,
