@@ -740,3 +740,64 @@ Trabajo identificado, por sitio:
   los handlers de dentro del builtin de `Gui.run()` · bandera de «cerrándose».
 - **Ninguno:** el GC. El bitmap ya expresa la forma del campo, herencia cross-module
   incluida.
+
+### Qué pasa con Gui.mod — DECIDIDO: se reforma entera (Eduardo, 26-jul)
+
+Pregunta de Eduardo al terminar el paso 2: *"cuando terminemos habrá que modificar
+la Gui.mod?"*
+
+**Hallazgo: el GUI ya tiene el par (receptor, destino), hecho a mano.** El Camino A
+de Forms (H13.1) guarda en cada `Component`:
+
+```
+var __win: Object            // la ventana dueña      <- RECEPTOR
+var __slotClic: integer      // slot del handler      <- DESTINO
+var __slotChange: integer
+
+public function onClick()
+  if this.__win != null then __guiInvokeBySlot(this.__win, this.__slotClic, this)
+end onClick
+```
+
+Es exactamente lo que H5.c convierte en mecanismo del lenguaje. Así que `Gui.mod` no
+cambia tanto por *añadir* como por **poder borrar**: los tres campos, `__bindEvents`,
+los intrínsecos `__guiInvokeBySlot` y `__guiInvokeByName`, y del lado C
+`bpvm_resolve_handler` entero — esa búsqueda lineal con `strcmp` sobre la tabla de
+símbolos **en cada clic**.
+
+**La decisión (Eduardo):** *"Yo me inclino por reformar toda la librería gráfica y las
+demos. Tener 2 sistemas mezclados no es bueno. Ahora no lo hacemos hasta que el
+sistema nuevo esté verificado. Y como paso transitorio se puede mezclar los 2
+sistemas. Pero fíjate lo que nos ha pasado con el FS y el nuevo, que todavía tenemos
+una mezcla de los dos sistemas."*
+
+Se descarta por tanto la opción (c) que yo proponía —dejar `onClick()` como método
+virtual cuya implementación por defecto dispara el evento— pese a no romper nada:
+dejaría dos mecanismos conviviendo indefinidamente, que es justo el problema.
+
+**Coste asumido:** hoy el camino documentado es *subclasear y reescribir `onClick`*.
+Al pasar `onClick` a campo de evento, todo `class MiBoton extends Gui.Button` con su
+`onClick()` deja de compilar ⇒ hay que migrar la librería, **las demos**, el formato
+`.win` y el horneado de slots del IDE.
+
+#### La lección del FS, con su mecanismo
+
+La mezcla del FS no duró por falta de ganas: duró porque **el puente tenía un uso que
+no se podía migrar**. El shim de `fs.h` sobrevivía por `fs_get`, y `fs_get` sobrevivía
+por UN solo consumidor legítimo —cargar el módulo a ejecutar— que exigía resolver un
+problema más difícil (de dónde sale ese buffer). Con el shim vivo, todo lo demás podía
+seguir colgando de él sin que nada fallara nunca.
+
+⇒ **Un puente transitorio dura lo que dure su uso más difícil de migrar.**
+
+Para el GUI ese uso NO es la librería (eso es mecánico) sino **el `.win` + el IDE**:
+hoy el IDE hornea los slots de vtable dentro del `.win` y el loader de Forms los lee.
+Si se reforma `Gui.bp` y las demos pero el IDE sigue horneando a la vieja usanza,
+queda exactamente la foto del FS.
+
+**Disciplina para cuando toque:** que el borrado de lo viejo vaya **en la misma tanda
+que lo prueba**, no en una posterior. Es lo que se hizo con el REPL de texto del Pico
+en #305 — se fue en el mismo paso que demostró que el wire lo cubría.
+
+**Cuándo:** no ahora. Cuando el sistema de eventos esté verificado. Como paso
+transitorio se admite la convivencia, con el borrado planificado, no aplazado.
