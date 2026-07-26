@@ -2422,7 +2422,7 @@ public class FrmMain extends javax.swing.JFrame
                 // H12 Bloque B — AOT automático: si el proyecto lo pide, compilar
                 // las funciones `native` a .mdn (PicoExplorer las sube alongside
                 // del .mod). En este hilo de fondo: gcc es un subproceso.
-                runAotPass(outDir, this::publish);
+                runAotPass(bpFile, outDir, this::publish);
                 return true;
             }
             @Override
@@ -2537,14 +2537,30 @@ public class FrmMain extends javax.swing.JFrame
      * native no es AOT-able, avisa por consola y el módulo se ejecuta
      * interpretado (el `.mod` siempre se generó). Sólo aplica en modo proyecto.
      */
-    private void runAotPass(Path outDir, java.util.function.Consumer<String> log) {
-        if (currentProject == null || !currentProject.aotEnabled) return;
-        Path sourceDir  = java.nio.file.Paths.get(currentProject.sourceDir);
-        Path projectDir = java.nio.file.Paths.get(currentProject.projectDir);
-        log.accept("== AOT: compilando funciones native (target "
-                + currentProject.aotTarget + ") ==\n");
+    private void runAotPass(Path bpFile, Path outDir, java.util.function.Consumer<String> log) {
+        /* H11 — el TARGET lo dice la PLACA. El `.mdn` es código nativo de una ISA
+         * concreta, y hasta ahora la única forma de indicarla era un campo de
+         * texto del proyecto: con un `.bp` suelto no había dónde ponerlo (y en un
+         * proyecto podías teclear "arm" estando enchufado a un P4). Ahora el
+         * firmware publica su arquitectura en el INFO, el explorador la guarda al
+         * conectar, y de ahí sale el target. El ajuste del proyecto queda como
+         * respaldo para compilar sin placa delante. */
+        String deviceTarget = picoExplorer != null
+                ? PicoExplorer.archName(picoExplorer.deviceArch()) : "";
+        boolean haveProject = currentProject != null;
+        if (haveProject && !currentProject.aotEnabled) return;   // apagado a propósito
+        String target = !deviceTarget.isEmpty() ? deviceTarget
+                      : haveProject ? currentProject.aotTarget : "";
+        if (target == null || target.isEmpty()) return;   // nadie sabe a qué compilar
+        /* Sin proyecto, el "proyecto" es la carpeta del .bp. */
+        Path sourceDir  = haveProject ? java.nio.file.Paths.get(currentProject.sourceDir)
+                                      : bpFile.getParent();
+        Path projectDir = haveProject ? java.nio.file.Paths.get(currentProject.projectDir)
+                                      : bpFile.getParent();
+        log.accept("== AOT: compilando funciones native (target " + target
+                + (deviceTarget.isEmpty() ? " — del proyecto" : " — lo dice la placa") + ") ==\n");
         AotBuild.Result r = AotBuild.buildProject(sourceDir, outDir, projectDir,
-                currentProject.aotTarget, IdePrefs.load(), msg -> log.accept(msg + "\n"));
+                target, IdePrefs.load(), msg -> log.accept(msg + "\n"));
         if (!r.mdnFiles.isEmpty()) {
             log.accept("== AOT: " + r.mdnFiles.size()
                     + " .mdn generado(s) — se suben junto al .mod ==\n");

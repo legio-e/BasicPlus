@@ -96,12 +96,16 @@ static void handle_info(long id) {
         "\"tempMilliC\":0,\"resetReason\":\"%s\","
         "\"gpioCount\":114,\"pioCount\":0,\"pwmSlices\":28,\"adcChannels\":20,"
         "\"flashBytes\":%lu,\"sramBytes\":%lu,\"psramBytes\":0,"
-        "\"fsTotalBytes\":%lu,\"fsUsedBytes\":%lu}",
+        "\"fsTotalBytes\":%lu,\"fsUsedBytes\":%lu,"
+        /* H11 — arquitectura del nativo que ejecuta este firmware: el IDE la
+         * usa para compilar el .mdn a la ISA correcta sin que nadie la teclee. */
+        "\"arch\":%u}",
         id, (unsigned long) u2, (unsigned long) u1, (unsigned long) u0,
         BOARD_NAME, (unsigned long) SystemCoreClock, (unsigned long) HAL_GetTick(),
         stm32_reset_cause(),
         flash_bytes, BOARD_SRAM_BYTES,
-        (unsigned long) fs_total_bytes(), (unsigned long) fs_used_bytes());
+        (unsigned long) fs_total_bytes(), (unsigned long) fs_used_bytes(),
+        (unsigned) bpvm_mdn_host_arch());
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);
 }
 

@@ -178,6 +178,10 @@ static void handle_info(long id, const json_obj_t* obj) {
     const repl_board_id_t *bid = s_board_id;
     int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "INFO_REPLY", id);
     if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "boardName", bid->board_name);
+    /* H11 — ARQUITECTURA del código nativo que ejecuta este firmware. El IDE la
+     * necesita para compilar el .mdn a la ISA correcta cuando no hay proyecto
+     * donde apuntarla (un `.bp` suelto). La sabe la placa, la dice la placa. */
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "arch", (long) bpvm_mdn_host_arch());
     if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "uniqueId", uid);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "cpuFreqHz", bid->cpu_freq_hz);
     if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "uptimeMs", uptime);

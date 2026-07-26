@@ -296,6 +296,19 @@ public final class PicoExplorer extends JPanel {
     private Consumer<BpvmClient> connectedSink;
     public void setConnectedSink(Consumer<BpvmClient> s) { this.connectedSink = s; }
 
+    /**
+     * H11 — ARQUITECTURA del código nativo de la placa conectada (e_machine:
+     * 40=ARM, 243=RISC-V; 0 = desconocida o firmware que no la publica).
+     *
+     * Se pide UNA vez al conectar y se guarda, porque quien la necesita es la
+     * compilación AOT, que ocurre ANTES de subir nada: si sólo se preguntara al
+     * pulsar el botón INFO, al compilar no la tendríamos. Y la fuente de verdad
+     * es la PLACA, no un ajuste tecleado — con un `.bp` suelto ni siquiera hay
+     * proyecto donde apuntarla.
+     */
+    private volatile int deviceArch = 0;
+    public int deviceArch() { return deviceArch; }
+
     /** Prompt actual: ruta del device + "> ". */
     public String consolePrompt() { return consoleCwd + "> "; }
 
@@ -743,8 +756,14 @@ public final class PicoExplorer extends JPanel {
                             + " bytes, contenido idéntico), salto PUT"));
                 }
                 // Si el dep tiene .mdn alongside, subirlo también.
-                File depMdn = mdnSiblingOf(dep);
-                if (depMdn != null && depMdn.isFile()) {
+                final File depMdn = mdnSiblingOf(dep);
+                boolean depMdnStale = depMdn != null && depMdn.isFile() && mdnIsStale(depMdn, dep);
+                if (depMdnStale && outputSink != null) {
+                    SwingUtilities.invokeLater(() -> outputSink.accept(
+                            "[Explorer] AOT " + depMdn.getName() + " es MÁS VIEJO que su .mod"
+                            + " — NO se sube (regenéralo activando AOT en el proyecto)"));
+                }
+                if (depMdn != null && depMdn.isFile() && !depMdnStale) {
                     String depMdnRemote = isLib ? toAppPath(depMdn.getName())
                                                 : appPath(prefix, depMdn.getName());
                     if (!isLib) deployed.add(depMdnRemote);   // F2: junto a su .mod
@@ -787,8 +806,14 @@ public final class PicoExplorer extends JPanel {
             //     <mod>.mdn y registra los thunks AOT zero-copy. Si el
             //     .mdn no existe localmente, sin problema — BP corre
             //     interpretado normal.
-            File mdnFile = mdnSiblingOf(modFile);
-            if (mdnFile != null && mdnFile.isFile()) {
+            final File mdnFile = mdnSiblingOf(modFile);
+            boolean mdnStale = mdnFile != null && mdnFile.isFile() && mdnIsStale(mdnFile, modFile);
+            if (mdnStale && outputSink != null) {
+                SwingUtilities.invokeLater(() -> outputSink.accept(
+                        "[Explorer] AOT " + mdnFile.getName() + " es MÁS VIEJO que su .mod"
+                        + " — NO se sube (regenéralo activando AOT en el proyecto)"));
+            }
+            if (mdnFile != null && mdnFile.isFile() && !mdnStale) {
                 String mdnRemote = appPath(prefix, mdnFile.getName());
                 deployed.add(mdnRemote);   // F2
                 boolean up = putIfChanged(b, mdnFile, mdnRemote, remote.get(mdnRemote));
@@ -887,6 +912,30 @@ public final class PicoExplorer extends JPanel {
         if (!name.toLowerCase().endsWith(".mod")) return null;
         String base = name.substring(0, name.length() - 4);
         return new File(modFile.getParentFile(), base + ".mdn");
+    }
+
+    /**
+     * ¿Es este `.mdn` MÁS VIEJO que su `.mod`? Entonces es de otra compilación y
+     * NO se sube.
+     *
+     * Por qué existe esta comprobación: el `.mdn` sólo se regenera si el
+     * proyecto tiene el AOT activado, pero el subidor cogía cualquiera que
+     * hubiera al lado del `.mod`. Un `.mdn` de hace dos meses viajaba a la placa
+     * como si fuera de este build — y como lleva código NATIVO compilado contra
+     * una versión concreta de los helpers AOT, ejecutarlo tras cambiar esos
+     * helpers es corrupción de memoria y reset (pasó: .mdn de mayo, helpers
+     * v1→v2 en julio).
+     *
+     * Es la cuarta vez que un artefacto rancio muerde en este proyecto (el
+     * fat-jar del IDE, los .mod versionados de la stdlib, los .o sin memoria de
+     * sus flags). La regla barata que los caza a todos: si el fuente se
+     * recompiló y el derivado no, el derivado NO vale.
+     *
+     * La VM tiene además su propio gate de ABI, que rechaza el `.mdn`
+     * incompatible aunque llegue. Dos redes independientes, a propósito.
+     */
+    private static boolean mdnIsStale(File mdnFile, File modFile) {
+        return mdnFile.lastModified() < modFile.lastModified();
     }
 
     /* ===== H10 — micro simulado: arranque, parada y configuración ===== */
@@ -998,6 +1047,7 @@ public final class PicoExplorer extends JPanel {
         if (isConnected()) {
             backend.close();
             backend = null;
+            deviceArch = 0;              // H11: la arch se va con la conexión
             setConnectedUI(false);
             rootNode.removeAllChildren();
             treeModel.reload();
@@ -1031,6 +1081,7 @@ public final class PicoExplorer extends JPanel {
             setConnectedUI(true);
             status.setText(endpoint + " — " + hello);
             onRefresh();
+            fetchDeviceArch();           // H11: la arch, ANTES de que haga falta compilar
             if (connectedSink != null) connectedSink.accept(debugClient());   // H9 escrutinio
         });
     }
@@ -1357,6 +1408,35 @@ public final class PicoExplorer extends JPanel {
                     setConnectedUI(false);
                     status.setText("Reset sent, conexión cerrada");
                 });
+    }
+
+    /**
+     * H11 — pregunta al micro por su arquitectura y la guarda. En segundo plano
+     * y sin ruido: un firmware viejo no manda el campo y se queda en 0, con lo
+     * que el AOT simplemente no se ofrece (y el módulo corre interpretado, que
+     * es correcto). No falla nada por no saberlo.
+     */
+    private void fetchDeviceArch() {
+        final BpvmClient dc = debugClient();
+        if (dc == null) return;
+        runAsync(() -> dc.getInfo(4000), m -> {
+            if (m == null) return;
+            long a = ilong(m, "arch");
+            deviceArch = (int) a;
+            if (a != 0 && outputSink != null) {
+                outputSink.accept("[Explorer] la placa ejecuta nativo "
+                        + archName((int) a) + " (arch=" + a + ")");
+            }
+        });
+    }
+
+    /** Nombre legible de la arquitectura del nativo (e_machine del ELF). */
+    public static String archName(int arch) {
+        switch (arch) {
+            case 40:  return "arm";      /* EM_ARM   — Cortex-M Thumb-2 */
+            case 243: return "riscv";    /* EM_RISCV — RV32, ESP32-P4   */
+            default:  return "";
+        }
     }
 
     /** H7 / #230 — botón INFO: micro, flash, RAM y PSRAM del dispositivo. */

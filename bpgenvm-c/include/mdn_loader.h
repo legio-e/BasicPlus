@@ -43,6 +43,12 @@ extern "C" {
  * para resolver la dirección absoluta. */
 int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size);
 
+/* H11 — arquitectura del código nativo que ESTE firmware puede ejecutar
+ * (MDN_ARCH_ARM / MDN_ARCH_RISCV / MDN_ARCH_NONE en host). La publica el
+ * INFO del wire para que el IDE compile el .mdn a la ISA correcta sin que
+ * nadie tenga que teclearla. */
+uint16_t bpvm_mdn_host_arch(void);
+
 /* Legacy del approach con copy/pool. Hoy son no-ops — el registry
  * se limpia vía bpvm_aot_clear() (del aot_registry) y no hay pool
  * de RAM extra que resetear. Mantenidos por compat con callers. */

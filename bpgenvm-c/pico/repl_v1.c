@@ -767,6 +767,13 @@ static void handle_info(long id, const json_obj_t* obj) {
                                                (size_t) off, "uniqueId", unique);
     if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
                                                (size_t) off, "boardName", board);
+    /* H11 — la ARQUITECTURA del código nativo que este firmware ejecuta
+     * (MDN_ARCH_ARM/RISCV). Sin esto el IDE no sabe a qué ISA compilar el .mdn
+     * de un `.bp` suelto, que no tiene proyecto donde apuntarla. La placa es
+     * quien lo sabe, así que lo dice ella. */
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "arch",
+                                             (long) bpvm_mdn_host_arch());
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                              (size_t) off, "cpuFreqHz", freq);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),

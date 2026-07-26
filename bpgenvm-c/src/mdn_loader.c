@@ -43,6 +43,13 @@
 #  define MDN_FUNCPTR_BIT 0u
 #endif
 
+/* H11 — la arquitectura del firmware, PUBLICADA. Estaba aquí dentro sirviendo
+ * sólo al gate del .mdn, y el IDE la necesita para saber a qué compilar el
+ * código nativo: con un `.bp` suelto no hay proyecto donde apuntarla, así que
+ * la fuente de verdad pasa a ser la PLACA — que es quien lo sabe de verdad.
+ * Mismo principio que el JEDEC frente al #define de tamaño de flash. */
+uint16_t bpvm_mdn_host_arch(void) { return (uint16_t) MDN_HOST_ARCH; }
+
 /* H9.5 — el loader es compartido entre ports (Pico, STM32, ...). Las trazas
  * van por bpvm_mdn_log, débil no-op aquí: el Pico da una implementación
  * fuerte sobre su log persistente (pico/aot_funcs.c); el STM32 (wire-only)
