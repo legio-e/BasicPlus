@@ -966,3 +966,55 @@ al despachar. El slot se pide con `emitName(fs)` de la elegida.
 
 `samples/EvSubs.bp` declara a propósito la sobrecarga que NO casa **primero**, para
 que el sample falle si alguien vuelve al atajo.
+
+### Paso 4 — la cola y el drenaje, ya en las dos VMs (26-jul)
+
+Funciona: `raise` encola y vuelve; el scheduler, entre quanta, le monta al
+thread destino el frame del handler; desde ahí es código BP corriente.
+
+**El frame inyectado es el que montaría una llamada normal, byte a byte.** No
+hay convención de eventos aparte — se reusa la que ya existe. Por eso rectifico
+lo que había decidido en e2d1af2 (normalizar los argumentos a 8 bytes):
+normalizar era inventarse una ABI paralela, y este proyecto ya sabe lo que
+cuestan los desajustes de ancho. Los argumentos van en su ancho NATURAL y la VM
+no lo adivina: se lo dice el compilador en la misma palabra que la máscara de
+refs del GC (bits 0-3 ref, bits 8-11 ocho-bytes).
+
+**La vuelta va por un opcode SENTINELA**, `OP_EVENT_RETURN` (0x6F) en
+`memory[2]`, tercero de la región reservada tras THREAD_EXIT y NATIVE_RETURN.
+Hace falta porque el RET del handler deja su valor de retorno en la pila y el
+código interrumpido no lo espera. El PC de reanudación se guarda EN LA PILA,
+debajo de los argumentos, no en el `tc`: así un handler interrumpido no pisa la
+vuelta del de abajo, y la reentrada sale gratis y sin estado extra.
+
+#### Lo que costó una medida: un handler a la vez
+
+Yo había puesto "un evento por punto de planificación" pensando que bastaba para
+el FIFO. **No basta**, y lo cazó un sample con tres cadenas de eventos: el
+siguiente punto de planificación puede caer DENTRO de un handler que aún no ha
+terminado, y el frame nuevo se le monta encima → el segundo evento se completa
+ANTES que el primero.
+
+Lo interesante es que **sólo se veía en la VM-Java**: su quantum es por TIEMPO y
+puede expirar dentro del handler; el de la VM-C es por OPCODES y el handler
+cabía entero. Un mismo programa daba `10 20 30 11 21 31` en C y
+`10 20 11 30 31 21` en Java. Sin la pareja de VMs esto se habría quedado dentro
+como un fallo intermitente de los que aparecen en placa seis meses después.
+
+Arreglo: `ev_depth` por thread — el drenaje no inyecta si ya hay un handler
+corriendo. **Un handler corre hasta el final antes de despachar el siguiente**,
+que es la semántica de un pump de mensajes (el EDT de Swing hace exactamente
+esto). Un `raise` DESDE un handler sigue valiendo: eso encola, no inyecta.
+
+#### Comportamiento anotado (no decidido, sólo medido)
+
+- **Excepción no atrapada en un handler**: se reporta y se para, igual que
+  cualquier otra excepción que nadie atrapa. No es silencioso, que es lo que
+  importa. Un despachador estilo EDT reportaría y seguiría con el siguiente
+  evento; si algún día se quiere eso, el sitio es el borde de la inyección.
+  Sample `EvThrow.bp` (rojo a propósito).
+- **Eventos pendientes al terminar el programa**: se pierden. El drenaje
+  necesita puntos de planificación, y si `main` acaba no hay más.
+- **Cola llena** (16) y **slot no resoluble**: gritan por stderr y descartan.
+  **Receptor muerto** entre el raise y el drenaje: se ignora sin ruido — es el
+  caso normal al destruir un suscriptor con eventos pendientes.

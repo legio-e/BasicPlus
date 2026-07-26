@@ -1,0 +1,38 @@
+// EvOrder — H5.c: los eventos se atienden en el ORDEN en que se dispararon.
+// Tres disparos seguidos y un bucle de sleeps que da puntos de planificación
+// de sobra (se drena UNO por punto). Determinista: no encadena.
+module EvOrder
+
+  class Boton
+    var id: integer
+    event onClick(n: integer)
+    public function Boton()
+    end Boton
+    public function pulsa(n: integer)
+      raise onClick(n)
+    end pulsa
+  end Boton
+
+  class Panel
+    public function Panel()
+    end Panel
+    function event pulsado(n: integer)
+      print("  handler n=" + n)
+    end pulsado
+  end Panel
+
+  public function main()
+    var b: Boton := Boton()
+    var p: Panel := Panel()
+    b.onClick := p::pulsado
+    b.pulsa(1)
+    b.pulsa(2)
+    b.pulsa(3)
+    var i: integer
+    for i := 1 to 12 do
+      sleep(5)
+    next
+    print("fin")
+  end main
+
+end EvOrder

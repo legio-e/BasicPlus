@@ -191,6 +191,13 @@ public enum OpCode {
     //   desde su run(), el saved PC apunta a 0 y aquí se lee THREAD_EXIT.
     //   HALT (0x00) sigue existiendo pero termina la VM ENTERA (sólo legal
     //   en el thread main; en un worker es un error fatal).
+    // H5.c — EVENT_RETURN: vuelta de un handler de EVENTO. Opcode-SENTINELA:
+    //   NUNCA lo emite el compilador. Vive en memory[2]; el frame que inyecta
+    //   el scheduler lleva ahí su saved PC, así que al hacer RET el handler el
+    //   dispatch cae aquí, tira el valor de retorno que la convención dejó en
+    //   la pila y salta al PC de reanudación (guardado bajo los argumentos).
+    EVENT_RETURN   (0x6F, OperandKind.NONE),
+
     THREAD_EXIT    (0x70, OperandKind.NONE),
 
     // ============================================================

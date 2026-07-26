@@ -640,6 +640,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
              * interrumpido no se entera de nada. */
             sp -= 8;
             pc = (uint32_t) bpvm_read_i32_be(mem + sp);
+            if (tc->ev_depth > 0) tc->ev_depth--;
             break;
         }
 

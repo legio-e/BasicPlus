@@ -1,0 +1,42 @@
+// EvThrow — qué pasa si un handler LANZA y no lo atrapa él mismo.
+//
+// ⚠️ SAMPLE ROJO A PROPÓSITO: termina con "excepción no atrapada" en las dos
+// VMs. Documenta el comportamiento de HOY, que es el mismo que el de cualquier
+// otra excepción que nadie atrapa: se reporta y se para. No es silencioso, que
+// es lo que importa. (Un despachador estilo EDT reportaría y seguiría con el
+// siguiente evento; queda anotado en docs/V4_IDEAS.md, no es de este paso.)
+// Los dos mensajes NO son idénticos entre VMs — diferencia PREEXISTENTE en el
+// reporte de excepciones no atrapadas, no de los eventos.
+module EvThrow
+
+  class Boton
+    event onClick(n: integer)
+    public function Boton()
+    end Boton
+    public function pulsa(n: integer)
+      raise onClick(n)
+    end pulsa
+  end Boton
+
+  class Panel
+    public function Panel()
+    end Panel
+    function event pulsado(n: integer)
+      print("  handler n=" + n)
+      throw RuntimeError("revienta el handler")
+    end pulsado
+  end Panel
+
+  public function main()
+    var b: Boton := Boton()
+    var p: Panel := Panel()
+    b.onClick := p::pulsado
+    b.pulsa(1)
+    var i: integer
+    for i := 1 to 6 do
+      sleep(5)
+    next
+    print("fin")
+  end main
+
+end EvThrow

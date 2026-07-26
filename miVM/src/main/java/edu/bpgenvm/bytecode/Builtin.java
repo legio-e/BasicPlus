@@ -460,7 +460,7 @@ public enum Builtin {
      *  Va AL FINAL del enum a propósito: el id es ordinal(), así que meterlo
      *  en medio renumeraría todos los de después y todo .mod existente
      *  llamaría a otro builtin. */
-    EVENT_RAISE("__eventRaise");                       // (recv,dest,sender,kind,args) → void   [221]
+    EVENT_RAISE("__eventRaise");                       // args..,masks,nargs,dest,recv → void   [221]
 
     public final String bpName;
     public final int id;

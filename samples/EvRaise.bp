@@ -1,22 +1,21 @@
-// EvRaise — H5.c paso 3: comprueba que `raise` EMITE bien.
+// EvRaise — H5.c: un evento SIN SUSCRIPTOR se ignora.
 //
-// ⚠️ ESTE SAMPLE NO CORRE TODAVÍA, Y ES LO ESPERADO. El `raise` emite
-// CALL_BUILTIN 221 (__eventRaise) y ese builtin llega en el PASO 4, con la cola
-// y el drenaje. Hasta entonces las dos VMs paran con un mensaje claro
-// ("builtin no implementado"), que es el comportamiento correcto.
+// No es un descuido: un evento es una NOTIFICACIÓN, no una llamada. Si nadie
+// escucha no pasa nada — el mismo criterio que los eventos de Swing. Por eso
+// este sample corre entero y termina normal aunque `pulsa()` dispare.
 //
-// Se verifica DESENSAMBLANDO, no ejecutando:
+// Para ver el bytecode del `raise`:
 //   java -cp miVM/target/classes edu.bpgenvm.MainDisasm samples/EvRaise.mod
-// y comprobando que antes del CALL_BUILTIN [221] van, en orden: los argumentos
-// declarados (todos de 8 bytes), la máscara de refs, el número de argumentos,
-// el destino (4B) y el receptor (8B) — la cabecera encima para que el
-// despachador la saque primero.
+// antes del CALL_BUILTIN [221] van, en orden, los argumentos declarados (cada
+// uno en su ancho natural), la máscara ref|ancho, el nº de argumentos, el
+// destino (4B) y el receptor (8B) — la cabecera encima para que el despachador
+// la saque primero.
 module EvRaise
 
   class Boton
     var id: integer
-    // El evento declara SU firma: quién lo dispara y con qué datos.
-    // `veces` tiene valor por defecto, así que `raise onClick(this)` vale.
+    // El evento declara SU firma. `veces` tiene valor por defecto, así que
+    // `raise onClick(this)` vale.
     event onClick(sender: Boton, veces: integer := 1)
     public function Boton(n: integer)
       this.id := n
@@ -33,7 +32,8 @@ module EvRaise
   public function main()
     var b: Boton := Boton(1)
     b.pulsa()
-    print("no se llega aqui hasta el paso 4")
+    b.pulsaVarias(5)
+    print("nadie escuchaba: los dos disparos se ignoran")
   end main
 
 end EvRaise

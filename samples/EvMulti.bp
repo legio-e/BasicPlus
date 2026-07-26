@@ -1,0 +1,45 @@
+// EvNest — H5.c: un handler puede DISPARAR otro evento (reentrada).
+// La vuelta de cada frame inyectado va en su propia pila, debajo de sus
+// argumentos, así que anidar no pisa la vuelta del de abajo.
+module EvMulti
+
+  class Boton
+    event onClick(n: integer)
+    public function Boton()
+    end Boton
+    public function pulsa(n: integer)
+      raise onClick(n)
+    end pulsa
+  end Boton
+
+  class Panel
+    var b: Boton
+    public function Panel()
+    end Panel
+    public function conecta(x: Boton)
+      this.b := x
+      x.onClick := this::pulsado
+    end conecta
+    function event pulsado(n: integer)
+      print("  handler n=" + n)
+      if n mod 10 == 0 then
+        this.b.pulsa(n + 1)
+      endif
+    end pulsado
+  end Panel
+
+  public function main()
+    var b: Boton := Boton()
+    var p: Panel := Panel()
+    p.conecta(b)
+    b.pulsa(10)
+    b.pulsa(20)
+    b.pulsa(30)
+    var i: integer
+    for i := 1 to 12 do
+      sleep(5)
+    next
+    print("fin")
+  end main
+
+end EvMulti

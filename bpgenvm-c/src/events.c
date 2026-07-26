@@ -142,6 +142,7 @@ static int inject(bpvm_t* vm, bpvm_thread_t* tc, const bpvm_event_t* e) {
     tc->sp = sp;
     tc->bp = sp;
     tc->cs = hcs;
+    tc->ev_depth++;
     tc->pc = bpvm_cb_for_cs(vm, tc, hcs) + (uint32_t) hoff;   /* H3.c: vtable → cb */
     return 1;
 }
@@ -150,6 +151,7 @@ static int inject(bpvm_t* vm, bpvm_thread_t* tc, const bpvm_event_t* e) {
  * inyectar dos seguidos los ejecutaría en orden inverso (el segundo frame
  * queda encima), y los eventos son FIFO. */
 int bpvm_event_drain_one(bpvm_t* vm, bpvm_thread_t* tc) {
+    if (tc->ev_depth > 0) return 0;   /* un handler a la vez: FIFO de verdad */
     for (int k = 0; k < vm->ev_count; k++) {
         int idx = (vm->ev_head + k) % BPVM_EVENT_QUEUE_CAP;
         bpvm_event_t* e = &vm->ev_queue[idx];

@@ -120,6 +120,16 @@ public class VirtualMachine {
          * normales (o son basura legítima).
          */
         int allocAnchor = 0;
+        /**
+         * H5.c — profundidad de handlers de evento inyectados en este thread.
+         * &gt;0 = hay un handler CORRIENDO y el drenaje NO inyecta otro. Sin esto,
+         * el siguiente punto de planificación puede caer DENTRO del handler y
+         * meterle otro encima: el segundo termina antes que el primero y los
+         * eventos dejan de atenderse en orden. Un handler corre hasta el final
+         * antes de despachar el siguiente, como el EDT de Swing. Un `raise`
+         * DESDE un handler sigue valiendo: eso encola, no inyecta.
+         */
+        int evDepth = 0;
         // Lista de threads que esperan a que ÉSTE termine.
         final List<Integer> waiters = new ArrayList<>();
         // Excepciones: estado per-thread.
@@ -301,6 +311,29 @@ public class VirtualMachine {
     private int numWorkers = 1;
     public void setNumWorkers(int n) { this.numWorkers = Math.max(1, n); }
     public int getNumWorkers() { return numWorkers; }
+
+    // ============================================================
+    // H5.c — COLA DE EVENTOS (espejo de events.c en la VM-C)
+    // ============================================================
+    /**
+     * Un `raise` pendiente. No se llama al handler en el raise: se encola, y
+     * el scheduler le inyecta el frame al thread destino ENTRE QUANTA. Desde
+     * ahí el handler es código BP corriente (puede ceder, bloquear y lanzar).
+     *
+     * `masks` la rellena el COMPILADOR: bits 0-3 = el argumento es referencia
+     * (para el GC), bits 8-11 = ocupa 8 bytes (para montar el frame). La VM no
+     * adivina ninguna de las dos cosas.
+     */
+    private static final class PendingEvent {
+        final long recv; final int dest; final int tid; final int masks; final long[] args;
+        PendingEvent(long recv, int dest, int tid, int masks, long[] args) {
+            this.recv = recv; this.dest = dest; this.tid = tid;
+            this.masks = masks; this.args = args;
+        }
+    }
+    private static final int EVENT_MAX_ARGS   = 4;
+    private static final int EVENT_QUEUE_CAP  = 16;
+    private final java.util.ArrayDeque<PendingEvent> eventQueue = new java.util.ArrayDeque<>();
 
     /**
      * Quantum del scheduler preemptivo en milisegundos. Cada {@code quantumMs}
@@ -959,6 +992,14 @@ public class VirtualMachine {
         // del thread main (termina la VM entera).
         memory[0] = (byte) 0x70;
 
+        // memory[2] = 0x6F (EVENT_RETURN). H5.c: sentinela de vuelta de un
+        // handler de evento. El frame que inyecta el scheduler lleva ahí su
+        // saved PC; cuando el handler hace RET, el dispatch cae en esta celda,
+        // tira el valor de retorno y salta al PC de reanudación. Espejo exacto
+        // de BPVM_SENTINEL_EVENT_RETURN_ADDR de la VM-C.
+        memory[2] = (byte) 0x6F;
+        eventQueue.clear();
+
         // Thread 0 (main): región fija de MAIN_STACK_BYTES. El resto del
         // espacio queda libre para nuevos threads (alocados con allocStackRegion).
         ThreadContext main = new ThreadContext(0, STACK_BASE, STACK_BASE + MAIN_STACK_BYTES);
@@ -1406,6 +1447,20 @@ public class VirtualMachine {
             int headerAddr = refDeref(objptr) - 4;
             if (valid.contains(headerAddr)) markObject(headerAddr, valid);
         });
+
+        // Roots H5.c: la cola de eventos vive en objetos Java, fuera de mem[]. El
+        // receptor y los argumentos-referencia de un evento pendiente no los ve el
+        // scan conservador; sin esto, un objeto cuyo único holder es un evento en
+        // cola se recolecta EN VIVO. Mismo agujero que tapó #302 con el GUI.
+        for (PendingEvent ev : eventQueue) {
+            int h = refDeref(ev.recv) - 4;
+            if (valid.contains(h)) markObject(h, valid);
+            for (int i = 0; i < ev.args.length; i++) {
+                if ((ev.masks & (1 << i)) == 0) continue;
+                int ha = refDeref(ev.args[i]) - 4;
+                if (valid.contains(ha)) markObject(ha, valid);
+            }
+        }
 
         // Roots: data blocks de todos los módulos
         if (moduleManager != null) {
@@ -1930,6 +1985,11 @@ public class VirtualMachine {
                             }
                         }
                         tc.status = ThreadStatus.RUNNING;
+                        // H5.c — ENTRE QUANTA: si hay un evento para este thread,
+                        // le inyectamos el frame del handler antes de darle CPU.
+                        // Dentro del vmLock y con el tc ya asignado a este worker:
+                        // nadie más lo está ejecutando, su estado es el bueno.
+                        drainOneEvent(tc);
                     }
                     ExitSignal sig;
                     currentTcLocal.set(tc);
@@ -2149,6 +2209,18 @@ public class VirtualMachine {
                     running = false;
                     exitSignal = ExitSignal.HALT;
                     break;
+
+                case 0x6F: { // EVENT_RETURN — H5.c: vuelta de un handler de evento
+                    // El RET del handler ya restauró bp y cs (le pasamos los
+                    // buenos) y dejó en la pila su valor de retorno. Aquí lo
+                    // tiramos junto con las 4 bytes del PC de reanudación que la
+                    // inyección guardó DEBAJO de los argumentos, y seguimos donde
+                    // estábamos: el código interrumpido no se entera de nada.
+                    sp -= 8;
+                    pc = readI32(mem, sp);
+                    if (tc.evDepth > 0) tc.evDepth--;
+                    break;
+                }
 
                 case 0x70: // THREAD_EXIT (sentinela de salida de workers)
                     // Termina sólo el thread actual; la VM sigue corriendo
@@ -3720,6 +3792,42 @@ public class VirtualMachine {
                 pushTc(tc, 0);
                 break;
             }
+            // H5.c — `raise ev(args)`: ENCOLA, no llama. El handler lo inyecta el
+            // scheduler entre quanta (drainOneEvent). Pila de arriba abajo:
+            // recv(8B) dest(4B) nargs(4B) masks(4B) argN-1..arg0; los anchos de
+            // los argumentos los DICE el compilador en masks, no los adivinamos.
+            case EVENT_RAISE: {
+                long recv = popTcRef(tc);
+                int dest  = popTc(tc);
+                int nargs = popTc(tc);
+                int masks = popTc(tc);
+                if (nargs < 0 || nargs > EVENT_MAX_ARGS) {
+                    throwBpRuntimeError(tc, "__eventRaise: aridad " + nargs + " fuera de rango");
+                    break;
+                }
+                long[] args = new long[nargs];
+                for (int i = nargs - 1; i >= 0; i--) {          // se desapilan al revés
+                    if ((masks & (1 << (8 + i))) != 0) { tc.sp -= 8; args[i] = readI64(memory, tc.sp); }
+                    else                               { tc.sp -= 4; args[i] = readI32(memory, tc.sp); }
+                }
+                // Sin suscriptor no pasa nada: un evento es una NOTIFICACIÓN, y si
+                // nadie escucha no hay error (decisión de diseño, modelo Swing).
+                if (recv != 0 && dest != 0) {
+                    synchronized (vmLock) {
+                        if (eventQueue.size() >= EVENT_QUEUE_CAP) {
+                            // Que GRITE: un evento perdido en silencio cuesta una tarde.
+                            System.err.println("[bpgenvm] cola de eventos llena ("
+                                    + EVENT_QUEUE_CAP + "): evento descartado (tid=" + tc.id
+                                    + ", slot=" + dest + ")");
+                        } else {
+                            eventQueue.addLast(new PendingEvent(recv, dest, tc.id, masks, args));
+                        }
+                    }
+                }
+                pushTc(tc, 0);   // void
+                break;
+            }
+
             // V3/H6 — geometría (backend = verdad) + scroll (opt-in) + refresh.
             case GUI_SET_X:  { int v = popTc(tc); int hnd = popTc(tc); gui.setX(hnd, v); pushTc(tc, 0); break; }
             case GUI_GET_X:  { int hnd = popTc(tc); pushTc(tc, gui.getX(hnd)); break; }
@@ -5188,6 +5296,96 @@ public class VirtualMachine {
     private long popTcRef(ThreadContext tc) {
         tc.sp -= REF_SIZE;
         return refLoad(memory, tc.sp);
+    }
+
+    // ============================================================
+    // H5.c — Drenaje de la cola de eventos (espejo de events.c)
+    // ============================================================
+
+    /**
+     * Saca UN evento para {@code tc} y le monta el frame del handler. Lo llama
+     * el scheduler ENTRE QUANTA, con el tc ya asignado a este worker: no está
+     * corriendo, así que su pc/sp/bp/cs son los buenos.
+     *
+     * <p>Uno solo por punto de planificación: inyectar dos seguidos los
+     * ejecutaría en orden inverso (el segundo frame queda encima) y los eventos
+     * son FIFO.
+     *
+     * <p>El frame es el que montaría una llamada normal, byte a byte — no hay
+     * convención de eventos aparte. Lo único propio es la vuelta: el saved PC
+     * apunta al SENTINELA (memory[2] = EVENT_RETURN), porque el RET del handler
+     * deja su valor de retorno en la pila y el código interrumpido no lo espera.
+     * El PC real de reanudación va EN LA PILA, debajo de los argumentos, para
+     * que un handler interrumpido por otro evento no pise la vuelta del primero.
+     */
+    private void drainOneEvent(ThreadContext tc) {
+        if (tc.evDepth > 0) return;   // un handler a la vez: FIFO de verdad
+        PendingEvent ev = null;
+        for (java.util.Iterator<PendingEvent> it = eventQueue.iterator(); it.hasNext(); ) {
+            PendingEvent e = it.next();
+            if (e.tid == tc.id) { ev = e; it.remove(); break; }
+        }
+        if (ev == null) return;
+        if (System.getenv("BPVM_DEBUG_EV") != null) {
+            StringBuilder q = new StringBuilder();
+            for (PendingEvent e : eventQueue) q.append(e.args.length > 0 ? e.args[0] : -1).append(' ');
+            System.err.println("[ev] drain arg0=" + (ev.args.length > 0 ? ev.args[0] : -1)
+                    + " tid=" + tc.id + " restoQ=[" + q.toString().trim() + "]");
+        }
+
+        // El receptor puede haber muerto entre el raise y el drenaje: es el caso
+        // normal al destruir un suscriptor con eventos pendientes, y el diseño
+        // dice que un evento sin quien lo escuche se IGNORA, no revienta.
+        int idx = handleIdx(ev.recv);
+        if ((ev.recv & HANDLE_TAG) != 0
+                && (idx <= 0 || idx >= handleNext || handleGen[idx] != handleGenOf(ev.recv))) return;
+        int obj = refDeref(ev.recv);
+        if (obj == 0) return;
+
+        // Resolver el slot sobre la clase REAL, subiendo por la herencia igual
+        // que INVOKE_VIRTUAL.
+        byte[] mem = memory;
+        int desc = readI32(mem, obj), methodOff = -1, targetCS = -1;
+        while (true) {
+            int bitmapW  = readI16(mem, desc + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
+            int nMethods = readI16(mem, desc + CLS_OFF_NUM_METHODS)  & 0xFFFF;
+            int vtBase   = desc + CLS_OFF_FIELD_BITMAP + 2 * bitmapW * 4;
+            if (ev.dest >= 0 && ev.dest < nMethods) {
+                int off = readI32(mem, vtBase + ev.dest * 4);
+                if (off != -1) { methodOff = off; targetCS = moduleManager.getCSForDataAddr(desc); break; }
+            }
+            int parentOff = readI32(mem, desc + CLS_OFF_PARENT_OFF);
+            if (parentOff == 0) {
+                System.err.println("[bpgenvm] evento: slot " + ev.dest + " no resoluble en la"
+                        + " clase del receptor — descartado");
+                return;
+            }
+            desc = moduleManager.getCSForDataAddr(desc) + parentOff;
+        }
+
+        int need = 4 + REF_SIZE + 12;
+        for (int i = 0; i < ev.args.length; i++) need += ((ev.masks & (1 << (8 + i))) != 0) ? 8 : 4;
+        if (tc.sp + need > tc.stackTop) {
+            System.err.println("[bpgenvm] evento: sin pila en tid=" + tc.id + " — descartado");
+            return;
+        }
+
+        int sp = tc.sp;
+        writeI32(mem, sp, tc.pc); sp += 4;                 // PC de reanudación, bajo todo
+        refStore(mem, sp, ev.recv); sp += REF_SIZE;        // this
+        for (int i = 0; i < ev.args.length; i++) {
+            if ((ev.masks & (1 << (8 + i))) != 0) { writeI64(mem, sp, ev.args[i]); sp += 8; }
+            else { writeI32(mem, sp, (int) ev.args[i]); sp += 4; }
+        }
+        writeI32(mem, sp, 2); sp += 4;                     // saved PC = sentinela (memory[2])
+        writeI32(mem, sp, tc.bp); sp += 4;
+        writeI32(mem, sp, tc.cs); sp += 4;
+
+        tc.sp = sp;
+        tc.bp = sp;
+        tc.cs = targetCS;
+        tc.pc = targetCS + methodOff;
+        tc.evDepth++;
     }
 
     // ============================================================

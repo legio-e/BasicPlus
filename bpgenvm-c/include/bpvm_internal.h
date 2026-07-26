@@ -218,6 +218,17 @@ struct bpvm_thread {
     /* F5 — RuntimeError anclar para GC durante unwind. */
     int32_t  alloc_anchor;
 
+    /* H5.c — profundidad de handlers de evento inyectados en este thread.
+     * >0 = hay un handler CORRIENDO y el drenaje NO inyecta otro. Sin esto,
+     * el siguiente punto de planificación puede caer DENTRO del handler y
+     * meterle otro encima: el segundo termina antes que el primero y los
+     * eventos dejan de atenderse en orden (medido: pasa en la VM-Java, con
+     * su quantum por TIEMPO, y no en la C, con quantum por opcodes). Un
+     * handler corre hasta el final antes de despachar el siguiente, como el
+     * EDT de Swing. Un `raise` DESDE un handler sigue valiendo: eso encola,
+     * no inyecta. */
+    int  ev_depth;
+
     /* #139 — última línea origen vista por el debug hook; 0 = "ninguna
      * todavía". El hook sólo se invoca cuando la línea actual cambia
      * respecto a este valor, acotando la frecuencia a sentencias BP. */
