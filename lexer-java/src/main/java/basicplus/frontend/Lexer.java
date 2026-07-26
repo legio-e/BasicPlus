@@ -78,6 +78,7 @@ public final class Lexer {
         m.put("native",    TokenType.NATIVE);   /* H3 #162 — modificador AOT */
         // ownership
         m.put("owner",    TokenType.OWNER);
+        m.put("event",    TokenType.EVENT);
         // instancia / clase base
         m.put("this",     TokenType.THIS);
         m.put("super",    TokenType.SUPER);

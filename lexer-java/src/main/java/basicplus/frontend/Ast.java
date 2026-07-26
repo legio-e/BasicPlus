@@ -221,6 +221,31 @@ public final class Ast {
         }
     }
 
+    /**
+     * H5.c — declaración de un EVENTO: `event onClick`.
+     *
+     * No lleva tipo: la firma de todo handler es fija —
+     * `(sender: Object, kind, args: Object)` y nunca devuelve valor— así que no
+     * hay nada que declarar ni que comprobar (ver docs/V4_IDEAS.md §H5.c).
+     *
+     * No lleva `isPublic`: el acceso de un evento es ASIMÉTRICO por definición —
+     * asignarlo (suscribirse) es público, leerlo y dispararlo es de la clase y
+     * sus descendientes. No es una visibilidad que se elija, es lo que ES un
+     * evento; por eso tiene palabra propia en vez de ser una `property` con
+     * modificadores.
+     *
+     * En memoria son DOS campos consecutivos (receptor de 8B + destino de 4B),
+     * no un campo de 3 slots: así reusa `declareField` tal cual y el bit de GC
+     * cae solo en el slot del receptor. Ver computeClassLayout.
+     */
+    public static final class EventDef extends Node implements ITopLevelDecl {
+        public final DeclName name;
+        public EventDef(DeclName name, int line, int column) {
+            super(line, column);
+            this.name = name;
+        }
+    }
+
     public static final class FuncDef extends Node implements ITopLevelDecl {
         public final boolean isPublic;
         public final boolean isFinal;

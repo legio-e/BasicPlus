@@ -763,6 +763,27 @@ public final class ModuleInterface {
                 slot += MivmEmitter.occupies8Bytes(t) ? 2 : 1;
             }
         }
+        // H5.c — EVENTOS, al FINAL de los campos a propósito: así una clase sin
+        // eventos conserva EXACTAMENTE el layout que ya tenía y no hay churn en
+        // toda la stdlib. Cada evento son DOS campos consecutivos:
+        //
+        //   slot   +0,+1 : receptor — handle de 8B  -> bit de GC AQUÍ
+        //   slot   +2    : destino  — dirección absoluta (función libre) o
+        //                            slot de vtable (método de instancia). 4B,
+        //                            SIN bit: no es una referencia, y marcarlo
+        //                            haría que el GC siguiera un entero.
+        //
+        // Nunca es `owner`: el evento apunta a un suscriptor que no le pertenece
+        // — soltarlo al morir sería destruir a otro.
+        for (Ast.ITopLevelDecl m : cls.astNode.members) {
+            if (m instanceof Ast.EventDef) {
+                refMarks.add(new int[]{slot, 1, 0});       // receptor: ref, no owner
+                slot += 2;
+                refMarks.add(new int[]{slot, 0, 0});       // destino: ni ref ni owner
+                slot += 1;
+            }
+        }
+
         int numFields = slot;
         int words = (numFields + 31) >>> 5;
         int[] fieldBitmap = new int[words];

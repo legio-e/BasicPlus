@@ -28,6 +28,7 @@ public enum TokenType {
 
     // ---- Modificador de ownership en var ----
     OWNER,
+    EVENT,          // H5.c — `event onClick` como miembro de clase
 
     // ---- Palabras clave: modificadores de herencia ----
     FINAL,

@@ -269,10 +269,11 @@ public final class Parser {
                     return null;
                 }
             case PROPERTY: return parsePropertyDef(isPublic, isFinal, isSync);
+            case EVENT:    return parseEventDef(isPublic);
             case CLASS:    return parseClassDef(isPublic);
             case ENUM:     return parseEnumDef(isPublic);
             default:
-                error("se esperaba const/var/function/property/class/enum, encontrado '" + tok.lexeme + "'");
+                error("se esperaba const/var/function/property/event/class/enum, encontrado '" + tok.lexeme + "'");
                 synchronize();
                 return null;
         }
@@ -486,6 +487,33 @@ public final class Parser {
         IExpr def = null;
         if (match(TokenType.ASSIGN)) def = parseExpr();
         return new Param(n, t, def, tok.line, tok.column);
+    }
+
+    // ============================================================
+    // EVENTOS (H5.c)
+    // ============================================================
+
+    /**
+     * `event onClick` — y nada más. Sin tipo (la firma del handler es fija) y
+     * sin inicializador (nace sin suscriptor, que es un estado legítimo).
+     *
+     * `public event` se rechaza AQUÍ, en la declaración, y no más tarde: el
+     * acceso de un evento ya es asimétrico por definición —asignar es público,
+     * disparar es de la clase— así que `public` no añade nada y sólo puede
+     * significar que quien lo escribe espera otra cosa. Mismo criterio que
+     * #290 con `const` dentro de clase: quejarse donde se declara, no donde
+     * se usa.
+     */
+    private EventDef parseEventDef(boolean isPublic) {
+        Token tok = current();
+        match(TokenType.EVENT);
+        if (isPublic) {
+            error("un evento no se marca 'public': asignarlo (suscribirse) YA es público, "
+                + "y dispararlo es siempre de la clase y sus descendientes");
+        }
+        DeclName name = parseDeclName();
+        consumeStmtTerminator("se esperaba salto de línea tras la declaración del evento");
+        return new EventDef(name, tok.line, tok.column);
     }
 
     // ============================================================

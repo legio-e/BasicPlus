@@ -1,0 +1,36 @@
+module EvDecl
+
+  // Clase SIN eventos: su layout no debe cambiar ni un byte.
+  class Simple
+    var a: integer
+    var s: string
+    public function Simple()
+      this.a := 1
+      this.s := "x"
+    end Simple
+    public function muestra()
+      print("simple.a=" + this.a + " s=" + this.s)
+    end muestra
+  end Simple
+
+  // Clase CON eventos: cada uno son 2 campos (receptor ref 8B + destino 4B).
+  class Boton
+    var id: integer
+    event onClick
+    event onLongPress
+    public function Boton(n: integer)
+      this.id := n
+    end Boton
+    public function muestra()
+      print("boton.id=" + this.id)
+    end muestra
+  end Boton
+
+  public function main()
+    var s: Simple := Simple()
+    var b: Boton := Boton(7)
+    s.muestra()
+    b.muestra()
+  end main
+
+end EvDecl

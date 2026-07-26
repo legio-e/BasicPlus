@@ -1165,6 +1165,23 @@ public final class MivmEmitter {
                 }
             }
 
+            // H5.c — EVENTOS, justo DESPUÉS de las properties y antes de los
+            // métodos. El orden importa: tiene que ser EL MISMO que el de
+            // computeClassLayout (que también los pone al final de los campos),
+            // o el cross-check de #299 aborta la compilación. Ponerlos al final
+            // deja intacto el layout de toda clase que no tenga eventos.
+            //
+            // Dos campos por evento, no uno de 3 slots: declareField sólo sabe
+            // de 1 o 2 slots (is8), y partirlo así hace que el bit de GC caiga
+            // solo donde debe — en el receptor, no en el destino.
+            for (ITopLevelDecl m : cd.members) {
+                if (m instanceof EventDef) {
+                    String ev = ((EventDef) m).name.name;
+                    w.declareField(ev + "$recv", true,  false, true);   // handle 8B, ref
+                    w.declareField(ev + "$dest", false, false, false);  // 4B, NO ref
+                }
+            }
+
             // Pre-pasada: registra los slots de vtable de TODOS los métodos
             // públicos de instancia ANTES de emitir ningún cuerpo, para que una
             // llamada this.m() a un método declarado más abajo (referencia
