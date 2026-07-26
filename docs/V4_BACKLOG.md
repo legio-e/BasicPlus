@@ -221,6 +221,24 @@ Diseño: `AOT_CROSS_MODULE.md` (cross-module) · `AOT_HYBRID_REFLECTION.md` (hí
 
 ## 🛠️ H5 — Compilador  *(hito de V4; ACOPLADO a H6 — Eduardo 13-jul)*
 
+### 🏁 H5 CERRADO (26-jul)
+
+- **H5.a ✅** sobrecarga completa: funciones libres/estáticas, métodos de instancia con herencia y
+  constructores, intra y cross-module (#312/#313/#314).
+- **H5.b ✅** `import pack:modulo` — salió con H3 (packs), resolución en `Main.locatePackFile`.
+- **H5.c ✅ pero NO como estaba escrito aquí.** El punto pedía azúcar `async(…)`/`invokeLater(…)` para
+  *lanzar trabajo desde un handler sin bloquear el bucle GUI*. La charla de diseño de 26-jul
+  (`V4_IDEAS.md` §H5.c) fue al problema de debajo y salió **el sistema de EVENTOS**: evento con firma
+  tipada + cola + inyección del frame del handler entre quanta. Con eso **el motivo del `async`
+  desaparece**: el handler ya no corre dentro de un builtin con la prohibición de ceder, es código BP
+  normal en su thread — puede ceder, bloquear y lanzar sin congelar nada. El azúcar `async(f)` en sí
+  NO existe; para trabajo en segundo plano se sigue heredando de `Thread`. Si algún día se quiere el
+  azúcar, es **feature nueva ⇒ V5** (norma de Eduardo 25-jul).
+- **Pendiente APARTE de H5** (no lo bloquea): reformar `Gui.bp` y las demos gráficas al sistema nuevo
+  y retirar el camino viejo de despacho.
+
+---
+
 Mejoras de lenguaje/frontend. **Va PEGADO a H6** (formato de módulos): la sobrecarga y el `import` con
 pack tocan el `.mod`, así que se harán puntos de H5 y H6 **entrelazados**.
 
