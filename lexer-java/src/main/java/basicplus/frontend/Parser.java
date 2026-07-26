@@ -510,6 +510,12 @@ public final class Parser {
      * #290 con `const` dentro de clase: quejarse donde se declara, no donde
      * se usa.
      */
+    /** H5.c — tope de parámetros de un evento. No es capricho: la entrada de la
+     *  cola es de tamaño FIJO y se dimensiona a este máximo, así que encolar
+     *  nunca aloca ni puede fallar por memoria. Cuatro cubre de sobra los casos
+     *  reales (sender + tres datos). */
+    static final int MAX_EVENT_PARAMS = 4;
+
     private EventDef parseEventDef(boolean isPublic) {
         Token tok = current();
         match(TokenType.EVENT);
@@ -518,8 +524,21 @@ public final class Parser {
                 + "y dispararlo es siempre de la clase y sus descendientes");
         }
         DeclName name = parseDeclName();
+        // Firma del evento. Paréntesis obligatorios aunque no lleve parámetros,
+        // por lo mismo que en `raise`: que se vea que es una firma y no un nombre.
+        consume(TokenType.LPAREN, "se esperaba '(' — un evento declara su firma");
+        List<Param> ps = new ArrayList<>();
+        if (!check(TokenType.RPAREN)) {
+            ps.add(parseParam());
+            while (match(TokenType.COMMA)) ps.add(parseParam());
+        }
+        consume(TokenType.RPAREN, "se esperaba ')' tras la firma del evento");
+        if (ps.size() > MAX_EVENT_PARAMS) {
+            error("un evento admite como mucho " + MAX_EVENT_PARAMS + " parámetros"
+                + " (la entrada de la cola de eventos es de tamaño fijo)");
+        }
         consumeStmtTerminator("se esperaba salto de línea tras la declaración del evento");
-        return new EventDef(name, tok.line, tok.column);
+        return new EventDef(name, ps, tok.line, tok.column);
     }
 
     // ============================================================
@@ -1083,9 +1102,12 @@ public final class Parser {
         // día que alguien escriba `raise onClick` esperando pasar algo, el
         // error saldría lejos del sitio.
         consume(TokenType.LPAREN, "se esperaba '(' tras el nombre del evento");
-        IExpr args = null;
-        if (!check(TokenType.RPAREN)) args = parseExpr();
-        consume(TokenType.RPAREN, "se esperaba ')' — un evento lleva 0 o 1 argumento (el payload)");
+        List<IExpr> args = new ArrayList<>();
+        if (!check(TokenType.RPAREN)) {
+            args.add(parseExpr());
+            while (match(TokenType.COMMA)) args.add(parseExpr());
+        }
+        consume(TokenType.RPAREN, "se esperaba ')' tras los argumentos del raise");
         consumeStmtTerminator("se esperaba salto de línea tras 'raise'");
         return new RaiseStmt(ev, args, tok.line, tok.column);
     }

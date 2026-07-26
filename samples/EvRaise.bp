@@ -7,21 +7,27 @@
 //
 // Se verifica DESENSAMBLANDO, no ejecutando:
 //   java -cp miVM/target/classes edu.bpgenvm.MainDisasm samples/EvRaise.mod
-// y comprobando que antes del CALL_BUILTIN [221] van los cinco operandos con
-// sus anchos: receptor 8B (GET_FIELD_LONG), destino 4B (GET_FIELD), sender 8B,
-// kind 4B, args 8B.
+// y comprobando que antes del CALL_BUILTIN [221] van, en orden: los argumentos
+// declarados (todos de 8 bytes), la máscara de refs, el número de argumentos,
+// el destino (4B) y el receptor (8B) — la cabecera encima para que el
+// despachador la saque primero.
 module EvRaise
 
   class Boton
     var id: integer
-    event onClick
+    // El evento declara SU firma: quién lo dispara y con qué datos.
+    // `veces` tiene valor por defecto, así que `raise onClick(this)` vale.
+    event onClick(sender: Boton, veces: integer := 1)
     public function Boton(n: integer)
       this.id := n
     end Boton
     // El propio botón dispara SU evento — nadie más puede.
     public function pulsa()
-      raise onClick()
+      raise onClick(this)          // el `veces` omitido lo pone el compilador
     end pulsa
+    public function pulsaVarias(n: integer)
+      raise onClick(this, n)
+    end pulsaVarias
   end Boton
 
   public function main()

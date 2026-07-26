@@ -232,9 +232,13 @@ public final class Ast {
      * dispara un evento.
      */
     public static final class RaiseStmt extends Node implements IStmt {
-        public final String event;      // nombre del evento (del propio objeto)
-        public final IExpr args;        // payload; null = sin datos (lo normal)
-        public RaiseStmt(String event, IExpr args, int line, int column) {
+        public final String event;        // nombre del evento (del propio objeto)
+        /** Argumentos EFECTIVOS del disparo. Pueden ser menos que los declarados:
+         *  los que falten los rellena el emisor con su valor por defecto (H8.1,
+         *  sustitución en el llamante) — así un evento puede GANAR parámetros
+         *  después sin romper los `raise` ya escritos. */
+        public final List<IExpr> args;
+        public RaiseStmt(String event, List<IExpr> args, int line, int column) {
             super(line, column);
             this.event = event;
             this.args = args;
@@ -268,9 +272,9 @@ public final class Ast {
     /**
      * H5.c — declaración de un EVENTO: `event onClick`.
      *
-     * No lleva tipo: la firma de todo handler es fija —
-     * `(sender: Object, kind, args: Object)` y nunca devuelve valor— así que no
-     * hay nada que declarar ni que comprobar (ver docs/V4_IDEAS.md §H5.c).
+     * Declara su FIRMA y nunca devuelve valor. El handler al que se suscriba
+     * tiene que casar con ella exactamente; la comprobación reusa el mangling
+     * de H5.a, que además resuelve la sobrecarga (ver docs/V4_IDEAS.md §H5.c).
      *
      * No lleva `isPublic`: el acceso de un evento es ASIMÉTRICO por definición —
      * asignarlo (suscribirse) es público, leerlo y dispararlo es de la clase y
@@ -284,9 +288,18 @@ public final class Ast {
      */
     public static final class EventDef extends Node implements ITopLevelDecl {
         public final DeclName name;
-        public EventDef(DeclName name, int line, int column) {
+        /** H5.c (revisión) — el evento DECLARA su firma. Con eso el `kind`
+         *  desaparece para los eventos con nombre: el discriminante deja de ser
+         *  un dato en ejecución y pasa a ser la SUSCRIPCIÓN. Y el sender va
+         *  tipado, así que no hay casteo en el handler.
+         *  Admite valores por defecto (H8.1) para que un evento pueda GANAR
+         *  parámetros después sin romper los `raise` ya escritos — importante
+         *  en una librería que se publica. */
+        public final List<Param> params;
+        public EventDef(DeclName name, List<Param> params, int line, int column) {
             super(line, column);
             this.name = name;
+            this.params = params;
         }
     }
 

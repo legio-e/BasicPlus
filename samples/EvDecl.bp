@@ -16,8 +16,8 @@ module EvDecl
   // Clase CON eventos: cada uno son 2 campos (receptor ref 8B + destino 4B).
   class Boton
     var id: integer
-    event onClick
-    event onLongPress
+    event onClick()
+    event onLongPress()
     public function Boton(n: integer)
       this.id := n
     end Boton

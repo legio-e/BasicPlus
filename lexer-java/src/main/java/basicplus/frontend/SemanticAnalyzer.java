@@ -554,13 +554,21 @@ public final class SemanticAnalyzer {
      *  que tengan default deben ir AL FINAL. Cada default válido se normaliza a una
      *  expresión literal reconstruida desde su valor (misma forma local/cross-module). */
     private void resolveParamDefaults(FunctionSymbol fs, FuncDef f) {
+        resolveParamDefaults(fs.params, f.params, f);
+    }
+
+    /** H5.c — la misma validación sirve para la firma de un EVENTO: sus parámetros
+     *  son parámetros con las mismas reglas. Se comparte el cuerpo en vez de
+     *  duplicarlo para que los defaults de eventos y de funciones no puedan
+     *  divergir. */
+    private void resolveParamDefaults(List<ParamSymbol> params, List<Param> decl, Node fallback) {
         boolean seenDefault = false;
-        for (int i = 0; i < fs.params.size(); i++) {
-            ParamSymbol ps = fs.params.get(i);
+        for (int i = 0; i < params.size(); i++) {
+            ParamSymbol ps = params.get(i);
             IExpr raw = ps.defaultExpr;
             if (raw == null) {
                 if (seenDefault) {
-                    Node nn = (i < f.params.size()) ? (Node) f.params.get(i) : (Node) f;
+                    Node nn = (i < decl.size()) ? (Node) decl.get(i) : fallback;
                     err(nn.line, nn.column, "el parámetro '" + ps.name
                         + "' sin valor por defecto no puede ir tras uno con valor por defecto");
                 }
@@ -806,6 +814,11 @@ public final class SemanticAnalyzer {
         }
         Symbol.EventSymbol sym = new Symbol.EventSymbol(ed.name.name, owner, ed.line, ed.column);
         sym.decl = ed;
+        for (Param p : ed.params) {
+            ParamSymbol psym = new ParamSymbol(p.name, p.line, p.column);
+            psym.defaultExpr = p.defaultValue;   // H8.1: se normaliza al resolver tipos
+            sym.params.add(psym);
+        }
         if (!scope.tryDefine(sym))
             err(ed.line, ed.column, "nombre duplicado: '" + ed.name.name + "' en " + scope.tag);
         if (!info.declSymbols.containsKey(ed)) info.declSymbols.put(ed, sym);
@@ -1159,6 +1172,18 @@ public final class SemanticAnalyzer {
                     fs.params.get(i).type = resolveType(f.params.get(i).type);
                 if (f.returnType != null) fs.returnType = resolveType(f.returnType);
                 resolveParamDefaults(fs, f);   // H8.1
+            }
+        } else if (def instanceof Ast.EventDef) {
+            // H5.c — la FIRMA del evento se resuelve aquí, en la misma pasada que
+            // la de las funciones: si no, el `::` compararía contra tipos a null y
+            // ninguna sobrecarga casaría nunca.
+            Ast.EventDef ed = (Ast.EventDef) def;
+            Symbol sym = info.declSymbols.get(ed);
+            if (sym instanceof Symbol.EventSymbol) {
+                Symbol.EventSymbol es = (Symbol.EventSymbol) sym;
+                for (int i = 0; i < ed.params.size(); i++)
+                    es.params.get(i).type = resolveType(ed.params.get(i).type);
+                resolveParamDefaults(es.params, ed.params, ed);
             }
         } else if (def instanceof PropertyDef) {
             PropertyDef p = (PropertyDef) def;
@@ -1868,7 +1893,12 @@ public final class SemanticAnalyzer {
                     + mr.method + "' al que apuntar");
             return true;
         }
-        FunctionSymbol fs = (FunctionSymbol) ms;
+        // H5.c (revisión) — de todas las sobrecargas con ese nombre, elegir la que
+        // CASA con la firma declarada del evento. Aquí es donde `::` se convierte
+        // en un sitio de resolución de sobrecarga: si Panel tiene pulsado(b: Boton)
+        // y pulsado(s: Slider), la firma del evento decide cuál.
+        FunctionSymbol fs = pickHandlerForEvent((FunctionSymbol) ms, ev, mr, rc);
+        if (fs == null) return true;
         if (fs.isStatic) {
             err(mr.line, mr.column, "'" + mr.method + "' es static: no tiene receptor,"
                     + " así que no se puede referenciar con `obj::" + mr.method + "`");
@@ -1884,7 +1914,12 @@ public final class SemanticAnalyzer {
                     + " tiene — marcarla se lo da SIN hacerla llamable por su nombre desde fuera");
             return true;
         }
-        int slot = rc.slotOf(mr.method);
+        // OJO: el slot se pide con la CLAVE de la sobrecarga elegida, no con el
+        // nombre pelado. Con `pulsado(Boton,integer)` y `pulsado(string)`, el
+        // nombre pelado devuelve siempre el slot de la PRIMERA declarada (regla
+        // H5.a), así que si la que casa con el evento es la segunda, colgaríamos
+        // el handler equivocado — mudo, y con la firma equivocada al despachar.
+        int slot = rc.slotOf(MivmEmitter.emitName(fs));
         if (slot < 0) {
             err(mr.line, mr.column, "'" + mr.method + "' no tiene slot de vtable en '"
                     + rc.name + "' — no se puede referenciar");
@@ -1893,6 +1928,45 @@ public final class SemanticAnalyzer {
         info.exprSymbols.put(mr, fs);
         info.methodRefSlots.put(mr, slot);
         return true;
+    }
+
+    /**
+     * H5.c — elige la sobrecarga de `cand` (y su cadena de sobrecargas) cuya
+     * firma casa con la del evento. null + error si ninguna.
+     *
+     * "Casar" es: mismo número de parámetros y mismo tipo en cada posición. No
+     * se admite que el handler tome MENOS parámetros que el evento aunque sea
+     * cómodo (lo hace JavaScript): el despachador tendría N valores y el frame
+     * esperaría M, y eso es un desajuste de aridad sobre una pila cruda — la
+     * misma clase de fallo que costó H1 entera (los pops de 4 en pila de 8).
+     */
+    private FunctionSymbol pickHandlerForEvent(FunctionSymbol cand, Symbol.EventSymbol ev,
+                                               Ast.MethodRefExpr mr, Symbol.ClassSymbol rc) {
+        List<FunctionSymbol> cands = new ArrayList<>();
+        for (FunctionSymbol f = cand; f != null; f = f.nextOverload) cands.add(f);
+        for (FunctionSymbol f : cands) {
+            if (f.params.size() != ev.params.size()) continue;
+            boolean ok = true;
+            for (int i = 0; i < f.params.size(); i++) {
+                BpType a = f.params.get(i).type, b = ev.params.get(i).type;
+                if (a == null || b == null || !a.display().equals(b.display())) { ok = false; break; }
+            }
+            if (ok) return f;
+        }
+        err(mr.line, mr.column, "'" + rc.name + "." + mr.method + "' no casa con la firma del"
+                + " evento '" + ev.name + "' " + signatureOf(ev)
+                + (cands.size() > 1 ? " (se probaron " + cands.size() + " sobrecargas)" : ""));
+        return null;
+    }
+
+    private String signatureOf(Symbol.EventSymbol ev) {
+        StringBuilder sb = new StringBuilder("(");
+        for (int i = 0; i < ev.params.size(); i++) {
+            if (i > 0) sb.append(", ");
+            BpType t = ev.params.get(i).type;
+            sb.append(ev.params.get(i).name).append(": ").append(t != null ? t.display() : "?");
+        }
+        return sb.append(")").toString();
     }
 
     /** El target de la asignación, ¿es un evento? null si no. */
@@ -1945,35 +2019,37 @@ public final class SemanticAnalyzer {
                     + "' ni de sus clases base");
             return;
         }
-        if (r.args != null) analyzeExpr(r.args, scope, null);
-        info.declSymbols.put(r, s);
-        info.eventKinds.put(r, eventKindOf((Symbol.EventSymbol) s));
-    }
-
-    /** Ordinal del evento en la jerarquía: los de la base primero (recursivo),
-     *  luego los propios en orden de declaración. Mismo orden que el layout. */
-    private int eventKindOf(Symbol.EventSymbol ev) {
-        Symbol.ClassSymbol owner = ev.ownerClass;
-        int base = countEventsUpTo(owner.baseClass);
-        int idx = 0;
-        if (owner.astNode != null && owner.astNode.members != null) {
-            for (ITopLevelDecl m : owner.astNode.members) {
-                if (m instanceof Ast.EventDef) {
-                    if (((Ast.EventDef) m).name.name.equals(ev.name)) return base + idx;
-                    idx++;
-                }
+        Symbol.EventSymbol ev = (Symbol.EventSymbol) s;
+        int given = r.args.size(), declared = ev.params.size();
+        if (given > declared) {
+            err(r.line, r.column, "el evento '" + r.event + "' declara " + declared
+                    + " parámetro(s) y el raise pasa " + given);
+            return;
+        }
+        // H8.1 — los que faltan tienen que tener valor por defecto; si no, error
+        // AQUÍ, en el disparo, que es donde el programador puede arreglarlo.
+        for (int i = given; i < declared; i++) {
+            if (ev.params.get(i).defaultExpr == null) {
+                err(r.line, r.column, "falta el argumento '" + ev.params.get(i).name
+                        + "' del evento '" + r.event + "', y no tiene valor por defecto");
+                return;
             }
         }
-        return base + idx;
-    }
+        // ...y se rellenan AQUÍ, igual que en las llamadas normales, para que el
+        // emisor vea siempre una lista completa y ya analizada.
+        for (int i = given; i < declared; i++)
+            r.args.add(cloneConstExpr(ev.params.get(i).defaultExpr, r.line, r.column));
 
-    private int countEventsUpTo(Symbol.ClassSymbol c) {
-        if (c == null) return 0;
-        int n = countEventsUpTo(c.baseClass);
-        if (c.astNode != null && c.astNode.members != null) {
-            for (ITopLevelDecl m : c.astNode.members) if (m instanceof Ast.EventDef) n++;
+        for (int i = 0; i < r.args.size(); i++) {
+            BpType at = analyzeExpr(r.args.get(i), scope, ev.params.get(i).type);
+            BpType pt = ev.params.get(i).type;
+            if (at != null && pt != null && !at.display().equals(pt.display())
+                    && !pt.isAssignableFrom(at)) {
+                err(r.line, r.column, "argumento " + (i + 1) + " del raise de '" + r.event
+                        + "': se esperaba '" + pt.display() + "' y es '" + at.display() + "'");
+            }
         }
-        return n;
+        info.declSymbols.put(r, s);
     }
 
     private void analyzeAssign(AssignStmt a, Scope scope) {

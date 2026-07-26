@@ -378,6 +378,10 @@ public abstract class Symbol {
      */
     public static final class EventSymbol extends Symbol {
         public final ClassSymbol ownerClass;
+        /** H5.c (revisión) — la FIRMA declarada. El handler suscrito tiene que
+         *  casar con ella; es lo que sustituye al `kind` y lo que resuelve la
+         *  sobrecarga en el `::`. */
+        public final List<ParamSymbol> params = new ArrayList<>();
         // OJO: NO declarar aquí un `decl` propio — Symbol ya lo tiene, y uno
         // nuevo lo SOMBREARÍA: quien escriba por la variable base y lea por la
         // derivada (o al revés) vería null sin que nada falle.

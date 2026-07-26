@@ -2143,15 +2143,30 @@ public final class MivmEmitter {
         if (!(sym instanceof Symbol.EventSymbol)) { errors.add("raise sin evento resuelto: " + r.event); return; }
         Symbol.EventSymbol ev = (Symbol.EventSymbol) sym;
         String cls = ev.ownerClass.name;
-        Integer kind = info.eventKinds.get(r);
-        if (kind == null) { errors.add("raise sin kind resuelto: " + r.event); return; }
+        int n = ev.params.size();
 
-        w.emitGetParam("this"); w.emitGetField(cls, ev.recvField());   // recv (8B)
-        w.emitGetParam("this"); w.emitGetField(cls, ev.destField());   // dest (4B)
-        w.emitGetParam("this");                                        // sender (8B)
-        emitInt(kind);                                                 // kind (4B)
-        if (r.args != null) emitExpr(r.args);
-        else { emitInt(0); w.emit(OpCode.I32_TO_I64); }                // args = null (ref 8B)
+        // ---- primero los ARGUMENTOS, todos normalizados a 8 bytes ----
+        // Normalizar el ancho es deliberado: con anchos mixtos el despachador
+        // necesitaría saber el de cada argumento para desapilarlos, y eso serían
+        // DOS máscaras (refs para el GC + anchos para la pila). Con todo a 8 basta
+        // la de refs, y desaparece una clase entera de fallos de ancho — que aquí
+        // no es un miedo teórico: el 4→8B costó H1 entera.
+        // (los omitidos ya los rellenó el semántico con su valor por defecto, H8.1)
+        if (r.args.size() != n) { errors.add("raise de '" + r.event + "' con aridad sin normalizar"); return; }
+        int refMask = 0;
+        for (int i = 0; i < n; i++) {
+            Symbol.ParamSymbol p = ev.params.get(i);
+            emitExpr(r.args.get(i));
+            coerceToTarget(r.args.get(i), p.type);
+            if (isGcRef(p.type)) refMask |= (1 << i);
+            else if (!occupies8Bytes(p.type)) w.emit(OpCode.I32_TO_I64);   // ensancha a 8
+        }
+
+        // ---- y encima la cabecera, para que el despachador la saque primero ----
+        emitInt(refMask);                                              // máscara de refs (4B)
+        emitInt(n);                                                    // nº de argumentos (4B)
+        w.emitGetParam("this"); w.emitGetField(cls, ev.destField());   // destino (4B)
+        w.emitGetParam("this"); w.emitGetField(cls, ev.recvField());   // receptor (8B)
         w.emit(OpCode.CALL_BUILTIN);
         w.emitShort((short) Builtin.EVENT_RAISE.id);
     }

@@ -1,12 +1,18 @@
 module EvSubs
 
-  // El que EMITE el evento. No sabe nada de quién escucha.
+  // El que EMITE el evento. Declara la FIRMA de lo que notificará; no sabe
+  // nada de quién escucha.
   class Boton
     var id: integer
-    event onClick
+    event onClick(sender: Boton, veces: integer)
     public function Boton(n: integer)
       this.id := n
     end Boton
+    public property numero: integer
+      get
+        return this.id
+      endget
+    endprop
   end Boton
 
   // El que ESCUCHA. Su handler es PRIVADO — no hace falta exportarlo.
@@ -15,15 +21,26 @@ module EvSubs
     public function Panel(n: string)
       this.nombre := n
     end Panel
-    function event pulsado()
-      print("pulsado en " + this.nombre)
+
+    // OJO AL ORDEN: la sobrecarga que NO casa va PRIMERO, a propósito.
+    // Por la regla de H5.a la primera declarada se queda el nombre pelado (y su
+    // slot), así que si el `::` pidiera el slot por nombre en vez de por la
+    // sobrecarga elegida, colgaría ÉSTA — mudo. Poniéndola delante, el sample
+    // falla si alguien vuelve a ese atajo.
+    function event pulsado(texto: string)
+      print("texto " + texto)
+    end pulsado
+
+    // La que CASA con la firma del evento: es la que se elige.
+    function event pulsado(b: Boton, veces: integer)
+      print("pulsado " + veces + " veces en " + this.nombre)
     end pulsado
   end Panel
 
   public function main()
     var b: Boton := Boton(1)
     var p: Panel := Panel("principal")
-    b.onClick := p::pulsado      // suscribir
+    b.onClick := p::pulsado      // suscribir (resuelve la sobrecarga por la firma)
     b.onClick := null            // desuscribir
     print("suscripcion y desuscripcion compiladas")
   end main
