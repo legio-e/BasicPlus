@@ -581,3 +581,92 @@ A+B con cajón de sastre en la clase base · disparo doble (específico primero)
 1. el desmontaje que **cede el control** a mitad ⇒ la cola se drena con media ventana
    destruida (mitigación: bandera «cerrándose», como LVGL);
 2. **raíces de GC** del receptor del evento.
+
+### Los dos puntos de VM — investigados contra el código (26-jul)
+
+#### 1. Raíces de GC — RESUELTO, sin tocar el GC
+
+El recolector marca los campos de un objeto leyendo el **bitmap de campos** del
+descriptor de clase (`src/heap.c`, rama `BPVM_TYPE_OBJECT`):
+
+```c
+for (uint32_t i = 0; i < num_fields; i++) {
+    uint32_t word = read_u32(fbm_base + (i / 32) * 4);
+    if (word & (1u << (i & 31))) {
+        /* campo ref = 8 bytes (2 slots, bit en el slot BASE) */
+        uint32_t slot = (uint32_t) read_i64(user_ref + 4 + i * 4);
+        mark_recursive(vm, slot);
+    }
+}
+```
+
+El bitmap es **por slot de 4 bytes**, y una referencia ocupa 2 slots con el bit
+puesto en el **slot base**. Un campo de evento son 12 bytes = **3 slots**:
+
+| slot | contenido | bit |
+|---|---|---|
+| i, i+1 | receptor (handle de 64b) | **1** en el slot i |
+| i+2 | destino (dirección o slot de vtable) | **0** |
+
+Es exactamente expresable con lo que hay: el GC marcará el receptor e ignorará el
+destino — que es justo lo que hace falta, porque el destino **no es una referencia**
+y marcarlo sería corromper el marcado.
+
+**El caso heredado también está cubierto**, que era mi duda con el cajón de sastre en
+la clase base: `computeClassLayout` construye el layout del hijo **a partir del de su
+base "viva donde viva"** (`ModuleInterface.java:588`), usando `publishedLayoutOf` para
+bases cross-module. Así que los bits de los campos heredados están en el bitmap del
+hijo, también cuando la base vive en otro módulo (p.ej. `Widget` en la stdlib y
+`Button` en el módulo del usuario).
+
+⇒ **Trabajo: sólo de compilador.** Colocar el campo del evento en el layout y poner el
+bit en el slot del receptor. Y como #299 dejó el layout de clase en **una sola
+función**, es un sitio, no diecisiete.
+
+#### 2. El desmontaje que cede el control — NO se materializa hoy, pero destapa una DECISIÓN
+
+`Gui.run()` es un **builtin** (`BUILTIN_GUI_RUN`, `src/builtins.c:671`) y el lazo de
+eventos entero vive dentro de él:
+
+```c
+for (;;) {
+    while ((objptr = bpvm_gui_next_event(&kind)) != 0)
+        bpvm_call_bp_from_builtin(vm, tc, d, &a, 1, 1u);   /* ejecuta el handler BP */
+    ...
+    bpvm_gui_lvgl_pump();
+}
+```
+
+La prueba de que el scheduler no puede intercalarse está escrita ahí mismo, en el
+comentario de #257: *"el scheduler no corre quanta mientras este builtin bombea, así
+que poleamos el wire aquí mismo"* — tuvieron que polear el KILL a mano precisamente
+porque el planificador no entra.
+
+⇒ Si un handler llama a `ventana.close()`, el desmontaje corre **anidado dentro del
+propio lazo de drenaje**, que está suspendido en la llamada al handler. **El drenaje
+no puede reentrar**, la cola sólo acumula, y se vacía cuando el handler retorna. El
+miedo al orden no se materializa.
+
+**Pero eso es hoy, y por un motivo que queríamos quitar.** Los handlers corren dentro
+de un builtin vía `bpvm_call_bp_from_builtin`, que lleva escrito *"Restricción v1: la
+función BP no debe ceder al scheduler"*. Es decir: no hay intercalado **porque el
+handler tiene prohibido ceder**. Y el modelo de cola se eligió justamente para quitar
+esa prohibición y que un handler pueda ceder, bloquear o lanzar excepciones.
+
+**DECISIÓN PENDIENTE (de Eduardo): ¿dónde se drena la cola de eventos?**
+
+- **(a) Dentro de un builtin, como hoy.** Cero intercalado por construcción, el
+  desmontaje es atómico gratis y no hace falta bandera de «cerrándose». A cambio, la
+  restricción de no ceder **se queda** — y con ella el problema que el modelo de cola
+  venía a resolver. Sirve para el GUI; no sirve para eventos de un timer, de la red o
+  de un thread cualquiera.
+- **(b) A nivel de scheduler**, drenando en el thread dueño entre quanta. El handler
+  es código BP normal: puede ceder, bloquear y lanzar. Es lo que hace falta para que
+  los eventos sean generales y no una pieza del GUI. A cambio **vuelve el intercalado**
+  y hay que implementar la bandera de «cerrándose» (descartar lo de la ventana y sus
+  descendientes mientras se desmonta), como hace LVGL.
+
+Mi lectura: (b) es lo coherente con "esto sirve para ahora y para el futuro" — un
+evento no debería ser una cosa del GUI. Y el coste, la bandera, ya lo teníamos
+identificado y tiene prior art. Pero (a) es hoy gratis y funciona, así que es una
+decisión real y no un trámite.
