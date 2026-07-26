@@ -670,3 +670,73 @@ Mi lectura: (b) es lo coherente con "esto sirve para ahora y para el futuro" —
 evento no debería ser una cosa del GUI. Y el coste, la bandera, ya lo teníamos
 identificado y tiene prior art. Pero (a) es hoy gratis y funciona, así que es una
 decisión real y no un trámite.
+
+#### Dónde se drena la cola — DECIDIDO: un mecanismo, no dos
+
+Eduardo preguntó si se podían tener las dos opciones o una combinación. Sí, pero
+**no como dos mecanismos: como uno, dejando que (a) deje de ser un caso especial.**
+
+**Aviso que motivó el encuadre:** dos caminos de despacho es justo lo que ha mordido
+dos veces en este mismo proyecto — `repl.c` con dos protocolos (el de texto acabó con
+su propia resolución de módulos divergiendo en silencio) y el FS con dos caminos al
+mismo motor. Si el GUI drenara de una forma y el resto de otra, en unos meses uno de
+los dos tendría un arreglo que el otro no.
+
+**Lo decidido:**
+
+- **El motor es (b):** el drenaje vive en el punto **entre quanta** del scheduler, que
+  YA EXISTE — `vm->poll_cb` en `src/scheduler.c:87` y `src/scheduler_smp.c:107`. Los
+  handlers son código BP normal en el thread dueño: **pueden ceder, bloquear y lanzar
+  excepciones**.
+- **`Gui.run()` pasa a ser un CLIENTE, no un lazo de eventos.** Vuelve a significar lo
+  que dice: *bloquea este thread hasta que se cierre la ventana*, bombeando LVGL y
+  cediendo. **Deja de ejecutar handlers.**
+
+**Ganancia que no es menor:** con eso `bpvm_call_bp_from_builtin` **desaparece del
+camino de eventos** — y esa función es dos cosas a la vez: la fuente de la restricción
+*"la función BP no debe ceder al scheduler"*, y donde vivió el bug de raíces de GC de
+#20 (upcalls del GUI).
+
+**El detalle que decide si es UN mecanismo o dos disfrazados de uno:** la restricción
+de ceder **no viene de quién drena, viene de dónde está el frame**. Si el builtin
+llamara a la misma función de drenaje, heredaría la restricción igual, porque el frame
+sigue anidado dentro de un builtin. Por tanto la regla es dura: **el builtin no
+ejecuta handlers en absoluto**, sólo bombea y cede.
+
+**Latencia — descartada como preocupación (Eduardo).** Los 50 ms del `poll_cb` son el
+**tope de la espera con el scheduler OCIOSO** (`if (poll_cb != NULL && dt > 50) dt = 50`),
+no la latencia normal: con trabajo pendiente el drenaje cae en el cambio de quantum.
+Razonamiento de Eduardo: *"Para el Gui no afecta. En lo único que puede afectar es en
+hardware y aquí sabiendo que estamos en BP también sabemos que tenemos cierta
+limitación de rendimiento. Lo normal si necesitamos mucha velocidad es que pasemos a
+hacerlo por pull."* Un evento es para *avísame cuando pase algo*, no para un lazo de
+control; lo que necesita velocidad va por sondeo o baja a `native`.
+
+**Consecuencia:** al drenar a nivel de scheduler **vuelve el intercalado** durante el
+desmontaje ⇒ hace falta la **bandera de «cerrándose»** (descartar los eventos de la
+ventana y sus descendientes mientras se desmonta), como hace LVGL internamente. Estaba
+ya identificada como mitigación; ahora es trabajo confirmado, no hipótesis.
+
+---
+
+## H5.c — DISEÑO COMPLETO (26-jul)
+
+Lenguaje y VM, cerrados. No queda ninguna decisión pendiente.
+
+Resumen ejecutable: evento = par **(receptor, destino)** en 12 bytes dentro del objeto
+· 1 suscriptor · handler **privado** · `obj::metodo` · palabra `event` con **asignación
+pública y disparo de clase+subclases** · firma única **`(sender, kind, args)`** con
+`args` `Object` casi siempre nulo y convención `"k:v,k:v"` · `kind` **constante emitida
+por el compilador** · **A+B** (eventos con nombre + cajón de sastre en la clase base) ·
+**disparan los dos, específico primero** · sin valor de retorno · **sin suscriptor =
+silencio** · **cola drenada entre quanta por el scheduler**, con `Gui.run()` como
+cliente.
+
+Trabajo identificado, por sitio:
+- **Compilador:** palabra `event` + layout del campo (3 slots, bit de GC en el
+  receptor) en la ÚNICA función de layout (#299) · `::` en el parser · constante de
+  `kind` cualificada por módulo · la regla de acceso asimétrico.
+- **VM (las dos):** drenaje en el punto entre quanta (`poll_cb` ya existe) · retirar
+  los handlers de dentro del builtin de `Gui.run()` · bandera de «cerrándose».
+- **Ninguno:** el GC. El bitmap ya expresa la forma del campo, herencia cross-module
+  incluida.
