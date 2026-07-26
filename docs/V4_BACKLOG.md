@@ -221,19 +221,23 @@ Diseño: `AOT_CROSS_MODULE.md` (cross-module) · `AOT_HYBRID_REFLECTION.md` (hí
 
 ## 🛠️ H5 — Compilador  *(hito de V4; ACOPLADO a H6 — Eduardo 13-jul)*
 
-### 🏁 H5 CERRADO (26-jul)
+### 🏁 H5 CERRADO (26-jul) — salvo el `async`, que sigue DENTRO DE V4
 
 - **H5.a ✅** sobrecarga completa: funciones libres/estáticas, métodos de instancia con herencia y
   constructores, intra y cross-module (#312/#313/#314).
 - **H5.b ✅** `import pack:modulo` — salió con H3 (packs), resolución en `Main.locatePackFile`.
-- **H5.c ✅ pero NO como estaba escrito aquí.** El punto pedía azúcar `async(…)`/`invokeLater(…)` para
-  *lanzar trabajo desde un handler sin bloquear el bucle GUI*. La charla de diseño de 26-jul
-  (`V4_IDEAS.md` §H5.c) fue al problema de debajo y salió **el sistema de EVENTOS**: evento con firma
-  tipada + cola + inyección del frame del handler entre quanta. Con eso **el motivo del `async`
-  desaparece**: el handler ya no corre dentro de un builtin con la prohibición de ceder, es código BP
-  normal en su thread — puede ceder, bloquear y lanzar sin congelar nada. El azúcar `async(f)` en sí
-  NO existe; para trabajo en segundo plano se sigue heredando de `Thread`. Si algún día se quiere el
-  azúcar, es **feature nueva ⇒ V5** (norma de Eduardo 25-jul).
+- **H5.c — EVENTOS ✅ / `async` ⏳ PENDIENTE, y se hace EN V4** (tarea #325). El punto pedía azúcar
+  `async(…)`/`invokeLater(…)` para *lanzar trabajo desde un handler sin bloquear a quien despacha*. La
+  charla de diseño de 26-jul (`V4_IDEAS.md` §H5.c) fue al problema de debajo y salió **el sistema de
+  EVENTOS**: firma tipada + cola + inyección del frame del handler entre quanta. Eso quitó la
+  *prohibición de ceder* (el handler ya es código BP normal en su thread), **pero no quita que un
+  handler LARGO ocupe su thread** — que es el que despacha los demás eventos (`ev_depth`) y, tras la
+  reforma del GUI (#324), el que bombea LVGL. Así que el `async` sigue haciendo falta.
+  ⚠️ Yo lo había mandado a V5 por "feature nueva"; **mal**: estaba en el plan de V4 desde el principio
+  y la norma del freeze **mira hacia adelante, no hacia atrás** (Eduardo, 25-jul). Corregido 26-jul.
+  Candidato de diseño (a analizar): la entrada de la cola de eventos ya es *"llama a (receptor, slot)
+  con estos argumentos, más tarde, en el thread TID"* y `tid` ya es un campo ⇒ `async(obj::metodo, …)`
+  podría ser el MISMO encolado con otro destino. Detalle en la tarea #325.
 - **Pendiente APARTE de H5** (no lo bloquea): reformar `Gui.bp` y las demos gráficas al sistema nuevo
   y retirar el camino viejo de despacho.
 
