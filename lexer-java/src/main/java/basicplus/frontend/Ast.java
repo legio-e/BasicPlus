@@ -222,6 +222,26 @@ public final class Ast {
     }
 
     /**
+     * H5.c — `raise onClick(args)`: DISPARA un evento del propio objeto.
+     *
+     * Verbo propio, y no una llamada, porque las tres cosas que hace son
+     * distintas de llamar: puede no hacer NADA (si nadie se suscribió), no es
+     * inmediato (se encola y lo ejecuta el thread dueño) y nunca devuelve valor.
+     * Escribirlo `this.onClick(args)` haría que la sintaxis mintiera sobre las
+     * tres. La simetría es con `throw` (Eduardo): throw dispara un error, raise
+     * dispara un evento.
+     */
+    public static final class RaiseStmt extends Node implements IStmt {
+        public final String event;      // nombre del evento (del propio objeto)
+        public final IExpr args;        // payload; null = sin datos (lo normal)
+        public RaiseStmt(String event, IExpr args, int line, int column) {
+            super(line, column);
+            this.event = event;
+            this.args = args;
+        }
+    }
+
+    /**
      * H5.c — REFERENCIA a un método: `obj::onTick`, `this::pulsar`.
      *
      * No es una llamada ni un valor de primera clase: sólo vale a la derecha de

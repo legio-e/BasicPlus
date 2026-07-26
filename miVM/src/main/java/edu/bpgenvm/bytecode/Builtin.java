@@ -451,7 +451,16 @@ public enum Builtin {
     GUI_CHART_ADD_SERIES("__guiChartAddSeries"),       // (h, rgb) → índice de serie           [217]
     GUI_CHART_PUSH("__guiChartPush"),                  // (h, serie, v) → void: desplaza+añade [218]
     GUI_CHART_SET_VALUE("__guiChartSetValue"),         // (h, serie, idx, v) → void            [219]
-    GUI_CHART_SET_TYPE("__guiChartSetType");           // (h, tipo) → void: 0=línea, 1=barras  [220]
+    GUI_CHART_SET_TYPE("__guiChartSetType"),           // (h, tipo) → void: 0=línea, 1=barras  [220]
+
+    /** H5.c — `raise ev(args)`. (recv, dest, sender, kind, args) → void.
+     *  Encola; NO ejecuta el handler. Si no hay destino vivo —evento sin
+     *  suscriptor, o receptor cuya generación ya no casa— vuelve en silencio,
+     *  que es la semántica decidida: nadie escuchando es un estado legítimo.
+     *  Va AL FINAL del enum a propósito: el id es ordinal(), así que meterlo
+     *  en medio renumeraría todos los de después y todo .mod existente
+     *  llamaría a otro builtin. */
+    EVENT_RAISE("__eventRaise");                       // (recv,dest,sender,kind,args) → void   [221]
 
     public final String bpName;
     public final int id;

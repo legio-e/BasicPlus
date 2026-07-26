@@ -25,6 +25,12 @@ public final class SemanticInfo {
      *  sólo tiene que escribirlo: así el slot se decide en UN sitio. */
     public final Map<Ast.IExpr, Integer> methodRefSlots = new IdentityHashMap<>();
 
+    /** H5.c — `kind` resuelto para cada `raise`: el ORDINAL del evento en la
+     *  jerarquía (los de la base primero, luego los propios en orden de
+     *  declaración). Único dentro de la clase, que es todo lo que hace falta:
+     *  el handler discrimina por (sender, kind) y el sender ya dice la clase. */
+    public final Map<Ast.Node, Integer> eventKinds = new IdentityHashMap<>();
+
     /** Símbolo declarado por un nodo de declaración. */
     public final Map<Ast.Node, Symbol> declSymbols = new IdentityHashMap<>();
 

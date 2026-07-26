@@ -79,6 +79,7 @@ public final class Lexer {
         // ownership
         m.put("owner",    TokenType.OWNER);
         m.put("event",    TokenType.EVENT);
+        m.put("raise",    TokenType.RAISE);
         // instancia / clase base
         m.put("this",     TokenType.THIS);
         m.put("super",    TokenType.SUPER);

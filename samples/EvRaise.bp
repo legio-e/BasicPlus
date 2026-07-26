@@ -1,0 +1,33 @@
+// EvRaise — H5.c paso 3: comprueba que `raise` EMITE bien.
+//
+// ⚠️ ESTE SAMPLE NO CORRE TODAVÍA, Y ES LO ESPERADO. El `raise` emite
+// CALL_BUILTIN 221 (__eventRaise) y ese builtin llega en el PASO 4, con la cola
+// y el drenaje. Hasta entonces las dos VMs paran con un mensaje claro
+// ("builtin no implementado"), que es el comportamiento correcto.
+//
+// Se verifica DESENSAMBLANDO, no ejecutando:
+//   java -cp miVM/target/classes edu.bpgenvm.MainDisasm samples/EvRaise.mod
+// y comprobando que antes del CALL_BUILTIN [221] van los cinco operandos con
+// sus anchos: receptor 8B (GET_FIELD_LONG), destino 4B (GET_FIELD), sender 8B,
+// kind 4B, args 8B.
+module EvRaise
+
+  class Boton
+    var id: integer
+    event onClick
+    public function Boton(n: integer)
+      this.id := n
+    end Boton
+    // El propio botón dispara SU evento — nadie más puede.
+    public function pulsa()
+      raise onClick()
+    end pulsa
+  end Boton
+
+  public function main()
+    var b: Boton := Boton(1)
+    b.pulsa()
+    print("no se llega aqui hasta el paso 4")
+  end main
+
+end EvRaise

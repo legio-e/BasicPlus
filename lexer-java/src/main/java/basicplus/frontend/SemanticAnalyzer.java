@@ -1666,6 +1666,7 @@ public final class SemanticAnalyzer {
         if      (s instanceof VarDecl)      analyzeLocalVarDecl((VarDecl) s, scope);
         else if (s instanceof ConstDecl)    analyzeLocalConstDecl((ConstDecl) s, scope);
         else if (s instanceof AssignStmt)   analyzeAssign((AssignStmt) s, scope);
+        else if (s instanceof Ast.RaiseStmt) analyzeRaise((Ast.RaiseStmt) s, scope);
         else if (s instanceof IfStmt)       analyzeIf((IfStmt) s, scope);
         else if (s instanceof SwitchStmt)   analyzeSwitch((SwitchStmt) s, scope);
         else if (s instanceof ParallelStmt) analyzeParallel((ParallelStmt) s, scope);
@@ -1926,6 +1927,53 @@ public final class SemanticAnalyzer {
             err(m.line, m.column, "'::' sólo vale para suscribir a un evento"
                     + " (`algo.onX := obj::metodo`); no es un valor de primera clase");
         }
+    }
+
+    /**
+     * H5.c — `raise onClick(args)`. Sólo dentro de la clase que declara el
+     * evento o de una descendiente: lo dispara SU objeto y nadie más.
+     */
+    private void analyzeRaise(Ast.RaiseStmt r, Scope scope) {
+        if (currentClass == null) {
+            err(r.line, r.column, "'raise' sólo vale dentro de una clase: un evento lo dispara"
+                    + " su propio objeto, y fuera de una clase no hay quién");
+            return;
+        }
+        Symbol s = currentClass.lookupInstance(r.event);
+        if (!(s instanceof Symbol.EventSymbol)) {
+            err(r.line, r.column, "'" + r.event + "' no es un evento de '" + currentClass.name
+                    + "' ni de sus clases base");
+            return;
+        }
+        if (r.args != null) analyzeExpr(r.args, scope, null);
+        info.declSymbols.put(r, s);
+        info.eventKinds.put(r, eventKindOf((Symbol.EventSymbol) s));
+    }
+
+    /** Ordinal del evento en la jerarquía: los de la base primero (recursivo),
+     *  luego los propios en orden de declaración. Mismo orden que el layout. */
+    private int eventKindOf(Symbol.EventSymbol ev) {
+        Symbol.ClassSymbol owner = ev.ownerClass;
+        int base = countEventsUpTo(owner.baseClass);
+        int idx = 0;
+        if (owner.astNode != null && owner.astNode.members != null) {
+            for (ITopLevelDecl m : owner.astNode.members) {
+                if (m instanceof Ast.EventDef) {
+                    if (((Ast.EventDef) m).name.name.equals(ev.name)) return base + idx;
+                    idx++;
+                }
+            }
+        }
+        return base + idx;
+    }
+
+    private int countEventsUpTo(Symbol.ClassSymbol c) {
+        if (c == null) return 0;
+        int n = countEventsUpTo(c.baseClass);
+        if (c.astNode != null && c.astNode.members != null) {
+            for (ITopLevelDecl m : c.astNode.members) if (m instanceof Ast.EventDef) n++;
+        }
+        return n;
     }
 
     private void analyzeAssign(AssignStmt a, Scope scope) {

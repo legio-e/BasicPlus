@@ -705,6 +705,7 @@ public final class Parser {
             case TRY:      return parseTryStmt();
             case RETURN:   return parseReturnStmt();
             case THROW:    return parseThrowStmt();
+            case RAISE:    return parseRaiseStmt();
             case PRINT:    return parsePrintStmt();
             case PARALLEL: return parseParallelStmt();
             case BREAK: {
@@ -1071,6 +1072,22 @@ public final class Parser {
             else if (t == TokenType.EOF) return false;
         }
         return false;
+    }
+
+    private RaiseStmt parseRaiseStmt() {
+        Token tok = current();
+        match(TokenType.RAISE);
+        String ev = consumeMemberName();
+        // Paréntesis obligatorios aunque no haya payload: `raise onClick()`.
+        // Sin ellos, `raise onClick` se leería como una expresión suelta y el
+        // día que alguien escriba `raise onClick` esperando pasar algo, el
+        // error saldría lejos del sitio.
+        consume(TokenType.LPAREN, "se esperaba '(' tras el nombre del evento");
+        IExpr args = null;
+        if (!check(TokenType.RPAREN)) args = parseExpr();
+        consume(TokenType.RPAREN, "se esperaba ')' — un evento lleva 0 o 1 argumento (el payload)");
+        consumeStmtTerminator("se esperaba salto de línea tras 'raise'");
+        return new RaiseStmt(ev, args, tok.line, tok.column);
     }
 
     private ThrowStmt parseThrowStmt() {

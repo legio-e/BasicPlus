@@ -1799,6 +1799,7 @@ public final class MivmEmitter {
                 }
             }
         }
+        if (s instanceof Ast.RaiseStmt) { emitRaise((Ast.RaiseStmt) s); return; }
         if (s instanceof AssignStmt)  emitAssign((AssignStmt) s);
         else if (s instanceof Ast.DestructAssignStmt) emitDestructAssign((Ast.DestructAssignStmt) s);
         else if (s instanceof IfStmt)       emitIf((IfStmt) s);
@@ -2122,6 +2123,37 @@ public final class MivmEmitter {
     private void emitEventOwner(IExpr owner) throws IOException {
         if (owner != null) emitExpr(owner);
         else               w.emitGetParam("this");
+    }
+
+    /**
+     * H5.c — `raise onClick(args)`. Empuja los cinco operandos y delega en el
+     * builtin, que ENCOLA. Aquí no se decide nada: ni si hay suscriptor, ni si
+     * el receptor sigue vivo. Esa comprobación vive en UN solo sitio (el
+     * despachador), que es lo que hace que "sin destino vivo -> silencio" sea
+     * una regla y no una repetición en cada sitio que dispara.
+     *
+     *   recv   receptor (handle 8B; null = sin suscriptor)
+     *   dest   slot de vtable del handler
+     *   sender el objeto que dispara = this
+     *   kind   ordinal del evento en la jerarquía (lo resolvió el semántico)
+     *   args   payload (Object) o null
+     */
+    private void emitRaise(Ast.RaiseStmt r) throws IOException {
+        Symbol sym = info.declSymbols.get(r);
+        if (!(sym instanceof Symbol.EventSymbol)) { errors.add("raise sin evento resuelto: " + r.event); return; }
+        Symbol.EventSymbol ev = (Symbol.EventSymbol) sym;
+        String cls = ev.ownerClass.name;
+        Integer kind = info.eventKinds.get(r);
+        if (kind == null) { errors.add("raise sin kind resuelto: " + r.event); return; }
+
+        w.emitGetParam("this"); w.emitGetField(cls, ev.recvField());   // recv (8B)
+        w.emitGetParam("this"); w.emitGetField(cls, ev.destField());   // dest (4B)
+        w.emitGetParam("this");                                        // sender (8B)
+        emitInt(kind);                                                 // kind (4B)
+        if (r.args != null) emitExpr(r.args);
+        else { emitInt(0); w.emit(OpCode.I32_TO_I64); }                // args = null (ref 8B)
+        w.emit(OpCode.CALL_BUILTIN);
+        w.emitShort((short) Builtin.EVENT_RAISE.id);
     }
 
     private void emitAssign(AssignStmt a) throws IOException {
