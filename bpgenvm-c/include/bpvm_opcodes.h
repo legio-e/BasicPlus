@@ -130,6 +130,14 @@
 #define OP_GET_GLOBAL_S8   0x6A
 #define OP_SET_GLOBAL_S8   0x6B
 #define OP_LEA_GLOBAL_S8   0x6C
+/* 0x6F — H5.c: vuelta de un handler de EVENTO. Opcode-SENTINELA: NUNCA lo
+ * emite el compilador. Vive en BPVM_SENTINEL_EVENT_RETURN_ADDR y se alcanza
+ * cuando el handler que el scheduler inyectó hace RET (su saved_pc apunta
+ * ahí). Tira el valor de retorno que la convención dejó en la pila y salta al
+ * PC real, que la inyección guardó DEBAJO de los argumentos. Mismo patrón que
+ * THREAD_EXIT (0x70) y NATIVE_RETURN (0xAA), pero éste va en las DOS VMs: el
+ * drenaje de eventos es dual. */
+#define OP_EVENT_RETURN    0x6F
 #define OP_THREAD_EXIT     0x70
 
 /* 0x71..0x90 — H1.2 (V2): long (i64). 8 bytes / 2 slots. */

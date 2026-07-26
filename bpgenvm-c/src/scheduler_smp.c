@@ -174,6 +174,11 @@ static void worker_loop(void* raw) {
         }
         tc->status = BPVM_THREAD_RUNNING;
         tc->sched_owner = wid;               /* H2: lock semántico del tc */
+        /* H5.c — ENTRE QUANTA: inyecta el handler de un evento pendiente para
+         * este thread. Va DENTRO del vm_lock y después de tomar sched_owner:
+         * el tc es nuestro y nadie más lo está ejecutando, así que su
+         * pc/sp/bp/cs son los buenos y la cola no se toca en paralelo. */
+        bpvm_event_drain_one(vm, tc);
         vm->current_thread_idx = tc_idx;
         smp->running_workers++;
         bpvm_platform_mutex_unlock(&smp->vm_lock);

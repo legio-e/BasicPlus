@@ -67,6 +67,28 @@
 #define BPVM_SENTINEL_NATIVE_RETURN      0xAA
 #define BPVM_SENTINEL_NATIVE_RETURN_ADDR 1u
 
+/* H5.c — sentinela de vuelta de un handler de evento: byte OP_EVENT_RETURN en
+ * memory[2]. La inyección monta el frame con saved_pc apuntando aquí; al hacer
+ * RET el handler, el dispatch encuentra este byte, tira el valor de retorno y
+ * salta al PC guardado bajo los argumentos. Tercero de la región reservada. */
+#define BPVM_SENTINEL_EVENT_RETURN      0x6F
+#define BPVM_SENTINEL_EVENT_RETURN_ADDR 2u
+
+/* H5.c — COLA DE EVENTOS. Aridad acotada (el usuario escribe la firma natural;
+ * la entrada de cola es de tamaño fijo). `masks` la rellena el COMPILADOR:
+ * bits 0-3 = el argumento es referencia (para el GC), bits 8-11 = ocupa 8
+ * bytes (para montar el frame). La VM no adivina ninguna de las dos cosas. */
+#define BPVM_EVENT_MAX_ARGS   4
+#define BPVM_EVENT_QUEUE_CAP 16
+typedef struct {
+    uint64_t recv;      /* handle 64b del receptor (bpref_t.v; el typedef vive más abajo) */
+    int32_t  dest;      /* slot de vtable del handler */
+    int32_t  tid;       /* thread destino = el que hizo el raise */
+    uint32_t masks;     /* ref (0-3) | ancho-8B (8-11) */
+    uint8_t  nargs;
+    int64_t  args[BPVM_EVENT_MAX_ARGS];
+} bpvm_event_t;
+
 /* Máximo de módulos cargables simultáneamente.
    F1 no carga deps, así que 8 sobra. F3+ puede crecer si hace falta. */
 #define BPVM_MAX_MODULES 16
@@ -314,6 +336,12 @@ struct bpvm {
     /* F4 — preferencias de scheduler. */
     int             quantum_ops;       /* opcodes por quantum de un tc */
 
+    /* H5.c — cola de eventos pendientes (anillo). El scheduler saca de aquí
+     * ENTRE QUANTA e inyecta el frame del handler en el thread destino. */
+    bpvm_event_t ev_queue[BPVM_EVENT_QUEUE_CAP];
+    int          ev_head;
+    int          ev_count;
+
     /* Threads BP. F1: sólo main. */
     bpvm_thread_t threads[BPVM_MAX_THREADS];
     int           thread_count;
@@ -482,6 +510,14 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr);
 /* Paso 3 — marca MUERTO el índice de un handle (owner-free). No-op para null y
  * constantes. Idempotente. Implementado en heap.c. */
 void bpvm_handle_kill(bpvm_t* vm, bpref_t r);
+
+/* -- H5.c: cola de eventos (events.c). El bpref_t del receptor viaja como
+ *    uint64_t porque bpvm_event_t se declara antes del typedef. -- */
+void bpvm_event_queue_init(bpvm_t* vm);
+int  bpvm_event_enqueue(bpvm_t* vm, int tid, uint64_t recv, int32_t dest,
+                        int nargs, uint32_t masks, const int64_t* args);
+void bpvm_event_mark_roots(bpvm_t* vm, void (*visit)(bpvm_t*, uint32_t));
+int  bpvm_event_drain_one(bpvm_t* vm, bpvm_thread_t* tc);
 
 /* Paso 3 / contrato B — ¿es `r` un handle a un objeto LIBERADO? Solo los handles
  * (con TAG) pueden morir; null/constantes nunca. Lo consulta el deref de PROGRAMA

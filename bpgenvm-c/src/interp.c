@@ -630,6 +630,19 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             if (yielded) *yielded = 1;
             goto done;
 
+        case OP_EVENT_RETURN: {
+            /* H5.c — sentinela de vuelta de un handler de EVENTO. El scheduler
+             * inyectó el frame con saved_pc = esta celda; al hacer RET el
+             * handler, el RET ya restauró bp y cs (le pasamos los buenos) y
+             * dejó en la pila su valor de retorno. Aquí tiramos ese valor y
+             * las 4 bytes del PC de reanudación que la inyección guardó DEBAJO
+             * de los argumentos, y seguimos donde estábamos. El código
+             * interrumpido no se entera de nada. */
+            sp -= 8;
+            pc = (uint32_t) bpvm_read_i32_be(mem + sp);
+            break;
+        }
+
         case OP_NATIVE_RETURN:
             /* P-aot-call-bp — sentinela del puente native→BP. Se alcanza
              * cuando la función BP llamada por bpvm_aot_call_bp_* hace RET:

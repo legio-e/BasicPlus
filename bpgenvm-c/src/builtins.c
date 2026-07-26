@@ -275,7 +275,11 @@ enum {
     BUILTIN_GUI_CHART_ADD_SERIES = 217, /* (h, rgb) → índice de serie */
     BUILTIN_GUI_CHART_PUSH       = 218, /* (h, serie, v) → void */
     BUILTIN_GUI_CHART_SET_VALUE  = 219, /* (h, serie, idx, v) → void */
-    BUILTIN_GUI_CHART_SET_TYPE   = 220  /* (h, tipo) → void: 0=línea, 1=barras */
+    BUILTIN_GUI_CHART_SET_TYPE   = 220, /* (h, tipo) → void: 0=línea, 1=barras */
+
+    /* H5.c — `raise ev(args)`. Encola; NO llama al handler (lo inyecta el
+     * scheduler entre quanta). Ver docs/V4_IDEAS.md §contrato de __eventRaise. */
+    BUILTIN_EVENT_RAISE          = 221
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -1347,6 +1351,32 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * para que el wrapper del scheduler decida. */
         tc->status = BPVM_THREAD_RUNNABLE;
         push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_EVENT_RAISE: {
+        /* Pila (de arriba abajo): recv(8B) dest(4B) nargs(4B) masks(4B) argN-1..arg0.
+         * Los anchos de los argumentos los DICE el compilador en `masks`
+         * (bits 8-11); la VM no los adivina. */
+        bpref_t recv  = bpref_pop(vm, tc);
+        int32_t dest  = pop_i32(vm, tc);
+        int32_t nargs = pop_i32(vm, tc);
+        uint32_t masks = (uint32_t) pop_i32(vm, tc);
+        if (nargs < 0 || nargs > BPVM_EVENT_MAX_ARGS) {
+            fprintf(stderr, "[bpvm] __eventRaise: aridad %d fuera de rango\n", (int) nargs);
+            push_i32(vm, tc, 0);
+            return BPVM_ERR_RUNTIME;
+        }
+        int64_t args[BPVM_EVENT_MAX_ARGS];
+        for (int i = nargs - 1; i >= 0; i--) {           /* se desapilan al revés */
+            if (masks & (1u << (8 + i))) { tc->sp -= 8; args[i] = bpvm_read_i64_be(vm->memory + tc->sp); }
+            else                         { tc->sp -= 4; args[i] = (int64_t) bpvm_read_i32_be(vm->memory + tc->sp); }
+        }
+        /* Sin suscriptor no pasa nada: un evento es una NOTIFICACIÓN, y si
+         * nadie escucha no hay error (decisión de diseño, modelo Swing). */
+        if (!bpref_is_null(recv) && dest != 0)
+            bpvm_event_enqueue(vm, tc->id, recv.v, dest, nargs, masks, args);
+        push_i32(vm, tc, 0);   /* void */
         return BPVM_OK;
     }
 

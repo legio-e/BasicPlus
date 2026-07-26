@@ -49,9 +49,12 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
 
     /* Pone los bytes sentinela en la región reservada:
      *   memory[0] = THREAD_EXIT (fin de Thread.run / hilo)
-     *   memory[1] = NATIVE_RETURN (retorno del puente native→BP) */
+     *   memory[1] = NATIVE_RETURN (retorno del puente native→BP)
+     *   memory[2] = EVENT_RETURN  (vuelta de un handler de evento, H5.c) */
     memory[0] = BPVM_SENTINEL_THREAD_EXIT;
     memory[BPVM_SENTINEL_NATIVE_RETURN_ADDR] = BPVM_SENTINEL_NATIVE_RETURN;
+    memory[BPVM_SENTINEL_EVENT_RETURN_ADDR]  = BPVM_SENTINEL_EVENT_RETURN;
+    bpvm_event_queue_init(vm);
 
     /* Thread main: región fija MAIN_STACK_BYTES a partir de stack_base. */
     bpvm_thread_t* main_tc = &vm->threads[0];

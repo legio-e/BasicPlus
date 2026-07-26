@@ -253,6 +253,11 @@ static void gc_mark_phase(bpvm_t* vm) {
 #ifdef BPVM_GUI
     bpvm_gui_visit_roots(gui_mark_visit, vm);
 #endif
+    /* 2c. H5.c — la cola de eventos vive en el struct de la VM, fuera de
+     *     vm->memory: el receptor y los argumentos-referencia de un evento
+     *     pendiente no los ve el scan conservativo. Sin esto, un objeto cuyo
+     *     único holder es un evento en cola se recolecta EN VIVO. */
+    bpvm_event_mark_roots(vm, mark_recursive);
     /* 3. GC-2: data blocks de módulo. Consts + globales de módulo viven en
      *    [data_start, code_start) (crecen hacia atrás desde CS). Un global que
      *    apunte a heap es una RAÍZ; sin escanearlo se recolecta en vivo (UAF).

@@ -2145,25 +2145,27 @@ public final class MivmEmitter {
         String cls = ev.ownerClass.name;
         int n = ev.params.size();
 
-        // ---- primero los ARGUMENTOS, todos normalizados a 8 bytes ----
-        // Normalizar el ancho es deliberado: con anchos mixtos el despachador
-        // necesitaría saber el de cada argumento para desapilarlos, y eso serían
-        // DOS máscaras (refs para el GC + anchos para la pila). Con todo a 8 basta
-        // la de refs, y desaparece una clase entera de fallos de ancho — que aquí
-        // no es un miedo teórico: el 4→8B costó H1 entera.
+        // ---- primero los ARGUMENTOS, cada uno en su ancho NATURAL ----
+        // El despachador monta con ellos un frame BYTE A BYTE IGUAL al que
+        // montaría una llamada normal a ese método. Ésa es la garantía fuerte
+        // contra los fallos de ancho (que en este proyecto no son teóricos: el
+        // 4→8B costó H1 entera): no inventamos una convención propia, usamos la
+        // que ya existe. A cambio la VM tiene que saber el ancho de cada
+        // argumento — y se lo DECIMOS, no lo adivina, en la misma palabra que la
+        // máscara de refs del GC (bits 0-3 = ref, bits 8-11 = 8 bytes).
         // (los omitidos ya los rellenó el semántico con su valor por defecto, H8.1)
         if (r.args.size() != n) { errors.add("raise de '" + r.event + "' con aridad sin normalizar"); return; }
-        int refMask = 0;
+        int masks = 0;
         for (int i = 0; i < n; i++) {
             Symbol.ParamSymbol p = ev.params.get(i);
             emitExpr(r.args.get(i));
             coerceToTarget(r.args.get(i), p.type);
-            if (isGcRef(p.type)) refMask |= (1 << i);
-            else if (!occupies8Bytes(p.type)) w.emit(OpCode.I32_TO_I64);   // ensancha a 8
+            if (isGcRef(p.type))      masks |= (1 << i);          // el GC lo sigue
+            if (occupies8Bytes(p.type)) masks |= (1 << (8 + i));  // ocupa 8 bytes
         }
 
         // ---- y encima la cabecera, para que el despachador la saque primero ----
-        emitInt(refMask);                                              // máscara de refs (4B)
+        emitInt(masks);                                                // ref|ancho (4B)
         emitInt(n);                                                    // nº de argumentos (4B)
         w.emitGetParam("this"); w.emitGetField(cls, ev.destField());   // destino (4B)
         w.emitGetParam("this"); w.emitGetField(cls, ev.recvField());   // receptor (8B)

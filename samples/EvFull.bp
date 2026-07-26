@@ -1,0 +1,47 @@
+// EvFull — H5.c paso 4: el ciclo COMPLETO de un evento.
+//
+// Suscribir + disparar + que el handler CORRA. Es la prueba de que el `raise`
+// no llama al handler: encola, y el scheduler le inyecta el frame al thread
+// ENTRE QUANTA. Por eso el "despues del raise" sale ANTES que el handler: el
+// raise vuelve inmediatamente.
+module EvFull
+
+  class Boton
+    var id: integer
+    event onClick(sender: Boton, veces: integer := 1)
+    public function Boton(n: integer)
+      this.id := n
+    end Boton
+    public property numero: integer
+      get
+        return this.id
+      endget
+    endprop
+    public function pulsa(n: integer)
+      raise onClick(this, n)
+    end pulsa
+  end Boton
+
+  class Panel
+    var nombre: string
+    public function Panel(n: string)
+      this.nombre := n
+    end Panel
+    function event pulsado(b: Boton, veces: integer)
+      print("  handler: boton " + b.numero + " x" + veces + " en " + this.nombre)
+    end pulsado
+  end Panel
+
+  public function main()
+    var b: Boton := Boton(7)
+    var p: Panel := Panel("principal")
+    b.onClick := p::pulsado
+
+    print("antes del raise")
+    b.pulsa(3)
+    print("despues del raise (el handler todavia NO ha corrido)")
+    sleep(30)
+    print("fin")
+  end main
+
+end EvFull

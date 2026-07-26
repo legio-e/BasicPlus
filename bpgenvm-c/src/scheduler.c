@@ -114,6 +114,11 @@ bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
 
         /* 3) Ejecuta un quantum del tc elegido. */
         bpvm_thread_t* tc = &vm->threads[idx];
+        /* H5.c — ENTRE QUANTA: si hay un evento pendiente para este thread, le
+         * inyectamos el frame del handler antes de darle la CPU. Aquí el tc no
+         * está corriendo, así que su pc/sp/bp/cs son los buenos. Uno por vuelta:
+         * dos frames seguidos se ejecutarían en orden inverso y son FIFO. */
+        bpvm_event_drain_one(vm, tc);
         vm->current_thread_idx = idx;
         last_idx = idx;
         int yielded = 0;
