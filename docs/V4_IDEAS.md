@@ -858,3 +858,75 @@ deja de ser cierto.
 por alguien que no sea el evento.* Si lo está (lo normal: es un objeto con dueño), no
 hay que desuscribirse nunca — ni al cerrar la ventana, ni al destruir el widget, ni al
 morir el propio suscriptor.
+
+### REVISIÓN: el evento declara su FIRMA (Eduardo, 26-jul) — se come el `kind` y el `Object`
+
+Pregunta de Eduardo tras el paso 3: *"ahora que tenemos sobrecarga de funciones,
+¿podemos comernos el kind y el object?"*
+
+**Sí para los eventos con nombre.** Si cada evento declara su propia firma, el
+discriminante deja de ser un dato en ejecución y pasa a ser **la suscripción**:
+
+```
+class Boton
+  event onClick(sender: Boton)
+end Boton
+
+class Panel
+  function event pulsado(b: Boton)     // tipado; sin kind, sin cast
+end Panel
+
+boton.onClick := panel::pulsado
+```
+
+Si `boton.onClick := this::pulsado`, entonces `pulsado` **es** el handler de clic y
+no hay nada que preguntar. Y `sender` deja de ser `Object`, así que desaparece el
+casteo del punto de uso.
+
+**Encaja con H5.a de una forma que no se había visto:** si `Panel` tiene
+`pulsado(b: Boton)` y `pulsado(s: Slider)` SOBRECARGADOS, `panel::pulsado` sería
+ambiguo — y lo resuelve **la firma declarada del evento**. `::` se convierte en un
+sitio de resolución de sobrecarga y la maquinaria de mangling de H5.a se aplica tal
+cual. Es reutilizar algo ya pagado.
+
+**Lo que NO se come: el cajón de sastre.** Su razón de ser es que UN handler atienda
+MUCHOS eventos distintos, y con firmas tipadas eso es imposible por construcción.
+Así que conserva la forma genérica `(sender: Object, kind: integer, args: Object)`.
+
+⇒ **`kind` y `Object` no desaparecen: se repliegan al cajón de sastre**, que es donde
+tienen sentido. Los eventos con nombre quedan tipados.
+
+#### Aridad: VARIABLE pero ACOTADA (corrección de mi propia propuesta)
+
+Yo había propuesto **aridad fija en dos** (`sender` + `args`) para que la entrada de
+la cola fuese de tamaño fijo. El criterio de Eduardo —*"todo lo que sea facilidad
+para el usuario y tenga un coste razonable merece la pena"*— la invalida: con aridad
+fija hay que inventarse una clase para cualquier evento con dos datos
+(`onValueChanged(sender, args: ValueArgs)`), que es PEOR que lo que había.
+
+Decisión: **aridad variable hasta un máximo pequeño (4 parámetros)**, con la entrada
+de cola de tamaño fijo dimensionada a ese máximo. El usuario escribe la firma natural
+y la cola sigue siendo un anillo de entradas iguales.
+
+Para que el GC sepa cuáles de esos argumentos son referencias que debe seguir, la
+entrada lleva una **máscara de refs** — el mismo patrón que ya usa
+`bpvm_call_bp_from_builtin(..., ref_mask)`.
+
+#### Impacto sobre lo ya commiteado
+
+- **Paso 1 (35a0f9a) — INTACTO.** El par (receptor, destino), los dos campos y los 12
+  bytes no cambian. La firma no vive en el objeto, vive en la declaración.
+- **Paso 2 (4c17e34) — casi intacto.** `::` sigue igual; se le AÑADE la comprobación
+  de que la firma del handler casa con la declarada por el evento (y con ella, la
+  resolución de sobrecarga). `function event` sigue haciendo la misma falta: el
+  destino sigue siendo un slot de vtable.
+- **Paso 3 (0748878) — se retoca.** El `raise` pasa a empujar los argumentos
+  declarados en vez de `(sender, kind, args)`; el `kind` sólo se emite para el cajón
+  de sastre. El builtin `__eventRaise` cambia de aridad ⇒ hay que fijar su contrato
+  antes del paso 4.
+- **Paso 4 — sin empezar**, así que absorbe el cambio sin coste: la cola se diseña ya
+  con la entrada acotada + máscara de refs.
+
+El grueso del trabajo nuevo es de COMPILADOR (declarar la firma, comprobarla en el
+`::`, emitir los args), que es donde el coste es razonable. La VM sólo ve una entrada
+de cola con N palabras y una máscara.
