@@ -2553,14 +2553,17 @@ public class FrmMain extends javax.swing.JFrame
                       : haveProject ? currentProject.aotTarget : "";
         if (target == null || target.isEmpty()) return;   // nadie sabe a qué compilar
         /* Sin proyecto, el "proyecto" es la carpeta del .bp. */
-        Path sourceDir  = haveProject ? java.nio.file.Paths.get(currentProject.sourceDir)
-                                      : bpFile.getParent();
-        Path projectDir = haveProject ? java.nio.file.Paths.get(currentProject.projectDir)
-                                      : bpFile.getParent();
         log.accept("== AOT: compilando funciones native (target " + target
                 + (deviceTarget.isEmpty() ? " — del proyecto" : " — lo dice la placa") + ") ==\n");
-        AotBuild.Result r = AotBuild.buildProject(sourceDir, outDir, projectDir,
-                target, IdePrefs.load(), msg -> log.accept(msg + "\n"));
+        /* Proyecto → todos sus módulos. Fichero SUELTO → sólo ese fichero: si le
+         * pasáramos su carpeta como sourceDir, abrir un sample de benchmarks/
+         * dispararía una pasada de gcc por cada .bp del directorio. */
+        AotBuild.Result r = haveProject
+                ? AotBuild.buildProject(java.nio.file.Paths.get(currentProject.sourceDir),
+                        outDir, java.nio.file.Paths.get(currentProject.projectDir),
+                        target, IdePrefs.load(), msg -> log.accept(msg + "\n"))
+                : AotBuild.buildSingle(bpFile, outDir, outDir,
+                        target, IdePrefs.load(), msg -> log.accept(msg + "\n"));
         if (!r.mdnFiles.isEmpty()) {
             log.accept("== AOT: " + r.mdnFiles.size()
                     + " .mdn generado(s) — se suben junto al .mod ==\n");

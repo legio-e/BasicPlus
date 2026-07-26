@@ -102,6 +102,24 @@ public final class AotBuild {
      */
     public static Result buildProject(Path sourceDir, Path outDir, Path projectDir,
                                       String target, IdePrefs prefs, Consumer<String> log) {
+        return build(sourceDir, null, outDir, projectDir, target, prefs, log);
+    }
+
+    /**
+     * H11 — AOT de UN SOLO `.bp`, para el fichero suelto (sin proyecto). Sin
+     * esto habría que pasar su carpeta como sourceDir, y entonces se compilaría
+     * TODO lo que hubiera al lado: abrir un sample de `benchmarks/` dispararía
+     * una pasada de gcc por cada `.bp` de la carpeta. Un fichero suelto es un
+     * fichero suelto.
+     */
+    public static Result buildSingle(Path bpFile, Path outDir, Path workRoot,
+                                     String target, IdePrefs prefs, Consumer<String> log) {
+        return build(bpFile.getParent(), bpFile, outDir, workRoot, target, prefs, log);
+    }
+
+    /** Núcleo común: si `only` != null se compila SOLO ese fichero. */
+    private static Result build(Path sourceDir, Path only, Path outDir, Path projectDir,
+                                String target, IdePrefs prefs, Consumer<String> log) {
         Result res = new Result();
 
         boolean riscv = "riscv".equalsIgnoreCase(target);
@@ -131,7 +149,9 @@ public final class AotBuild {
         Path work = (projectDir != null ? projectDir : outDir).resolve("target");
         try { Files.createDirectories(work); } catch (IOException ignore) {}
 
-        List<Path> bps = listBpFiles(sourceDir);
+        List<Path> bps = (only != null)
+                ? java.util.Collections.singletonList(only)
+                : listBpFiles(sourceDir);
         if (bps.isEmpty()) {
             log.accept("[aot] no hay .bp bajo " + sourceDir);
             return res;
