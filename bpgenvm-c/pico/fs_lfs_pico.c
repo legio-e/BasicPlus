@@ -87,11 +87,14 @@ static struct lfs_config s_cfg;   /* debe sobrevivir (littlefs guarda el ptr) */
 
 /* ───────────────────────── 3) shim del API legado fs.h ──────────────── */
 
-/* fs_get: contrato "válido hasta el siguiente put/delete" → un scratch.
- * 128K = mismo presupuesto SRAM que el mirror del fs.c viejo (neutral);
- * la ganancia real de RAM llega en B2 v2 al retirar el shim. */
-#define FS_GET_SCRATCH_BYTES  (128u * 1024u)
-static uint8_t s_get_scratch[FS_GET_SCRATCH_BYTES] __attribute__((aligned(8)));
+/* H11 — AQUÍ VIVÍAN 128 KB. El shim `fs_get` devolvía un puntero "válido hasta
+ * el siguiente put/delete", y sostener ese contrato costaba un scratch estático
+ * del tamaño del fichero más grande imaginable — el mismo presupuesto que el
+ * mirror del fs.c viejo, sólo que mudado de sitio. Retirado: quien necesitaba
+ * los bytes era el loader de módulos, y ahora los lee POR TROZOS directamente a
+ * su sitio final (bpvm_load_mod_stream); el overlay .mdn, que sí necesita el
+ * blob residente porque ejecuta en sitio, se lo pide a la arena de la VM
+ * (bpvm_arena_reserve) y pide lo que ocupa de verdad. */
 
 fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     /* La región viene VALIDADA por bpvm_part (alineada, no-cero, cabe en la
@@ -149,16 +152,6 @@ int fs_exists(const char* name) {
     return bpvm_fs_stat(name, &sz) == 0 ? 1 : 0;
 }
 
-fs_status_t fs_get(const char* name, const uint8_t** data_out, uint32_t* size_out) {
-    uint32_t sz = 0;
-    if (bpvm_fs_stat(name, &sz) != 0) return FS_ERR_NOT_FOUND;
-    if (sz > FS_GET_SCRATCH_BYTES) return FS_ERR_TOO_BIG;
-    long n = bpvm_fs_read(name, s_get_scratch, FS_GET_SCRATCH_BYTES);
-    if (n < 0 || (uint32_t) n != sz) return FS_ERR_INVALID;
-    if (data_out) *data_out = s_get_scratch;
-    if (size_out) *size_out = sz;
-    return FS_OK;
-}
 
 /* fs_put crea los dirs padre: el FS viejo era PLANO ("/lib/x" era un nombre
  * con barras); en littlefs /lib debe existir antes de escribir /lib/x. */

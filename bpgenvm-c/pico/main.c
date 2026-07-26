@@ -20,6 +20,7 @@
 #include "bpvm.h"
 #include "embedded_mods.h"
 #include "fs.h"
+#include "bpvm_fs.h"     /* H11: stat + lectura por trozos (el .mod no pasa entero por RAM) */
 #include "board_desc.h"
 #include "psram.h"
 #include "neopixel.h"
@@ -730,6 +731,11 @@ static void usb_sink(const char* data, size_t len, void* user) {
     fflush(stdout);
 }
 
+/* Lector por trozos para el loader (H11): el .mod nunca pasa entero por RAM. */
+static long boot_mod_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    return bpvm_fs_read_at((const char*) user, off, dst, n);
+}
+
 /* Ejecuta una vez la VM sobre Hello.mod cargado del FS. */
 static bpvm_status_t run_vm_once(int iteration) {
     printf("\n");
@@ -738,11 +744,11 @@ static bpvm_status_t run_vm_once(int iteration) {
     printf(" iteration #%d (FS-backed)\n", iteration);
     printf("===========================================\n");
 
-    /* Lee el .mod desde el FS, no del array directo. */
-    const uint8_t* data; uint32_t size;
-    fs_status_t fs = fs_get("Hello.mod", &data, &size);
-    if (fs != FS_OK) {
-        printf("[ERR] fs_get: %s\n", fs_status_str(fs));
+    /* H11 — el .mod se queda en el FS: sólo miramos que exista y cuánto ocupa;
+     * los bytes los lee el loader por trozos, directamente a su sitio. */
+    uint32_t size;
+    if (bpvm_fs_stat("Hello.mod", &size) != 0) {
+        printf("[ERR] Hello.mod no está en el FS\n");
         return BPVM_ERR_IO;
     }
     printf("[fs] Hello.mod %u bytes  (fs_used=%u/%u)\n",
@@ -756,7 +762,8 @@ static bpvm_status_t run_vm_once(int iteration) {
     }
     bpvm_set_output(vm, usb_sink, NULL);
 
-    bpvm_status_t s = bpvm_load_mod_buffer(vm, data, size, "Hello");
+    bpvm_status_t s = bpvm_load_mod_stream(vm, boot_mod_read_at,
+                                            (void*) "Hello.mod", size, "Hello");
     if (s != BPVM_OK) {
         printf("[ERR] load_mod_buffer: %s\n", bpvm_status_str(s));
         bpvm_destroy(vm);

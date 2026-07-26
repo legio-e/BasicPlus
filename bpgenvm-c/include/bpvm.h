@@ -122,6 +122,42 @@ bpvm_status_t bpvm_load_mod_buffer(bpvm_t* vm, const uint8_t* data,
 bpvm_status_t bpvm_load_mod(bpvm_t* vm, const char* path);
 
 /*
+ * H11 — Carga un .mod POR TROZOS, sin tenerlo entero en RAM.
+ *
+ * `rd` lee `n` bytes del .mod a partir de `off` y devuelve cuántos leyó (o -1).
+ * El loader sólo avanza hacia delante, así que le vale cualquier fuente: un
+ * fichero del FS, un socket con seek, una región de flash.
+ *
+ * Lo que gana: los dos bloques gordos —data y code— se leen DIRECTAMENTE en su
+ * sitio final dentro de memory[], y la única sección que necesita estar
+ * residente (exports, la que el parser mira por offsets) se monta transitoria
+ * en la arena libre por encima del módulo. En un micro eso es la diferencia
+ * entre reservar un buffer del tamaño del fichero más grande imaginable y no
+ * reservar nada.
+ *
+ * `size` es el tamaño total del .mod (el caller lo sabe: se lo dice el stat).
+ */
+typedef long (*bpvm_read_at_fn)(void* user, uint32_t off, uint8_t* dst, uint32_t n);
+bpvm_status_t bpvm_load_mod_stream(bpvm_t* vm, bpvm_read_at_fn rd, void* user,
+                                    size_t size, const char* name_hint);
+
+/*
+ * H11 — Reserva `n` bytes CONTIGUOS y PERMANENTES de la arena: por encima de
+ * los módulos ya cargados y por debajo del heap, que se desplaza para dejarles
+ * sitio. Para blobs que la VM mapea o EJECUTA EN SITIO y tienen que seguir
+ * vivos toda la ejecución — hoy el overlay `.mdn`, cuyos thunks se registran
+ * como punteros al propio buffer (zero-copy).
+ *
+ * Sustituye al patrón de "un scratch estático del tamaño del fichero más
+ * grande imaginable": aquí se pide lo que ocupa de verdad, y si no cabe se
+ * entera el caller en vez de corromper.
+ *
+ * DEBE llamarse ANTES de la primera alocación del heap (es decir, antes de
+ * bpvm_run). Devuelve NULL si no cabe. `align` en bytes (0 o 1 = sin alinear).
+ */
+uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align);
+
+/*
  * Ejecuta el módulo cargado empezando en el entry-point principal.
  * Devuelve BPVM_OK si terminó normalmente (HALT del main thread).
  * Otros códigos indican el motivo del fallo.

@@ -659,6 +659,9 @@ bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
  * direccionado por cb (ver bpvm_module_t.cb). El resto, idéntico. */
 bpvm_status_t bpvm_loader_load_xip(bpvm_t* vm, const uint8_t* data,
                                     size_t size, const char* name_hint);
+/* H11 — carga por trozos (ver bpvm_load_mod_stream en bpvm.h). */
+bpvm_status_t bpvm_loader_load_stream(bpvm_t* vm, bpvm_read_at_fn rd, void* user,
+                                       size_t size, const char* name_hint);
 
 /* H3.c — cb del módulo cuyo CS es `cs` (caché 1-entrada en tc; módulos RAM
  * devuelven cs). Transitoria hasta CALL_REL (#307). */

@@ -221,6 +221,32 @@ bpvm_status_t bpvm_load_mod_buffer(bpvm_t* vm, const uint8_t* data,
     return bpvm_loader_load_buffer(vm, data, size, name_hint);
 }
 
+uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {
+    if (!vm || n == 0) return NULL;
+    uint32_t base = vm->next_free_address;
+    if (align > 1) base = (base + (align - 1)) & ~(align - 1);
+    if (base + n > vm->stack_base) return NULL;      /* no cabe: que lo sepa el caller */
+    vm->next_free_address = base + n;
+    /* El heap empieza tras lo último reservado — MISMO invariante (y mismos
+     * campos) que fija el loader al terminar de cargar un módulo, incluido el
+     * umbral del GC, que se recalcula porque la arena disponible ha encogido. */
+    vm->heap_start        = vm->next_free_address;
+    vm->heap_next         = vm->heap_start;
+    vm->free_list_head    = 0;
+    vm->last_gc_heap_next = vm->heap_next;
+    vm->gc_bump_threshold = (vm->stack_base - vm->heap_start) / 8;
+    if (vm->gc_bump_threshold < 4096) vm->gc_bump_threshold = 4096;
+    return vm->memory + base;
+}
+
+bpvm_status_t bpvm_load_mod_stream(bpvm_t* vm, bpvm_read_at_fn rd, void* user,
+                                    size_t size, const char* name_hint) {
+    if (!vm || !rd || size == 0) return BPVM_ERR_IO;
+    /* Igual que load_mod_buffer: en target embebido NO descubrimos deps, las
+     * carga el caller. */
+    return bpvm_loader_load_stream(vm, rd, user, size, name_hint);
+}
+
 bpvm_status_t bpvm_load_mod(bpvm_t* vm, const char* path) {
     if (!vm || !path) return BPVM_ERR_IO;
     int idx_before = vm->module_count;

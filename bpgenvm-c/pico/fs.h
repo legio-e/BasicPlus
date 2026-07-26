@@ -73,14 +73,17 @@ fs_status_t fs_save_to_flash(void);
 typedef int (*fs_list_cb_t)(const char* name, uint32_t size, void* user);
 int fs_list(fs_list_cb_t cb, void* user);
 
-/* Lookup. Si existe, devuelve puntero a los bytes en RAM y rellena
- * *size_out. El puntero es válido hasta el siguiente fs_put/fs_delete. */
-fs_status_t fs_get(const char* name, const uint8_t** data_out, uint32_t* size_out);
+/* H11 — `fs_get` RETIRADO. Devolvía un puntero "válido hasta el siguiente
+ * fs_put/fs_delete", y ese contrato exigía tener el fichero ENTERO en RAM: un
+ * scratch estático de 128 KB. Lo que de verdad hacía falta era cargar un
+ * módulo, y eso ahora va por trozos (`bpvm_load_mod_stream`) leyendo cada
+ * bloque directamente a su sitio en memory[]. Para mirar/leer un fichero: la
+ * fachada (`bpvm_fs_stat` / `bpvm_fs_read` / `bpvm_fs_read_at`). */
 
-/* #305 — ¿existe el fichero? 1 / 0. SIN leerlo: es un stat del FS y no toca el
- * scratch de fs_get. Preguntar "¿está?" con fs_get costaba leer el fichero
- * ENTERO a RAM — en el arranque eran 14 módulos de la stdlib, uno de ellos de
- * 42 KB, para no usar ni un byte. */
+/* #305 — ¿existe el fichero? 1 / 0. SIN leerlo: es un stat del FS. Preguntar
+ * "¿está?" leyendo el fichero costaba traerlo ENTERO a RAM — en el arranque
+ * eran 14 módulos de la stdlib, uno de ellos de 42 KB, para no usar ni un
+ * byte. */
 int fs_exists(const char* name);
 
 /* Inserta o sobreescribe. Si ya existe, libera el slot antiguo. */

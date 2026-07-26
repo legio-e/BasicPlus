@@ -871,25 +871,32 @@ static void handle_bootsel(long id, const json_obj_t* obj) {
  * lógica de fs_get_resolve en repl.c. La duplicamos aquí en lugar de exportarla
  * para mantener el desacoplamiento entre los dos repls durante la
  * migración. Cuando el legacy se borre, este queda como la canónica. */
-static fs_status_t v1_get_resolve(const char* name,
-                                   const uint8_t** data_out,
-                                   uint32_t* size_out) {
-    char path[FS_NAME_LEN];
+/* H11 — devuelve la RUTA que existe y su tamaño, no los bytes. Antes esto
+ * resolvía a un puntero, y sostener ese puntero costaba un scratch estático de
+ * 128 KB: el fichero entero en RAM sólo para que el loader lo copiase. Ahora el
+ * llamante abre por esa ruta y lee por trozos. */
+static fs_status_t v1_resolve_path(const char* name, char* out, size_t out_cap,
+                                    uint32_t* size_out) {
     /* H19 — base-dir del proyecto PRIMERO (carpeta del módulo principal): un
      * import resuelve contra /app/<proj>/ antes que el resto del path. Plano
      * (basedir="") o entry absoluto (name[0]=='/') → se salta este candidato. */
     const char* bd = bpvm_fs_basedir();
     if (bd && bd[0] && name[0] != '/') {
-        snprintf(path, sizeof(path), "%s/%s", bd, name);
-        if (fs_get(path, data_out, size_out) == FS_OK) return FS_OK;
+        snprintf(out, out_cap, "%s/%s", bd, name);
+        if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
     }
-    fs_status_t s = fs_get(name, data_out, size_out);
-    if (s == FS_OK) return FS_OK;
-    snprintf(path, sizeof(path), "/app/%s", name);
-    s = fs_get(path, data_out, size_out);
-    if (s == FS_OK) return FS_OK;
-    snprintf(path, sizeof(path), "/lib/%s", name);
-    return fs_get(path, data_out, size_out);
+    snprintf(out, out_cap, "%s", name);
+    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
+    snprintf(out, out_cap, "/app/%s", name);
+    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
+    snprintf(out, out_cap, "/lib/%s", name);
+    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
+    return FS_ERR_NOT_FOUND;
+}
+
+/* Lector por trozos para el loader: el .mod se queda en el FS. */
+static long v1_mod_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    return bpvm_fs_read_at((const char*) user, off, dst, n);
 }
 
 /* Sesión activa (0 = ninguna). Sólo soportamos una sesión RUN a la
@@ -1024,9 +1031,10 @@ static void run_module_path(const char* path, long id) {
      * sin base-dir = modo plano. Se resetea en cada run. */
     bpvm_fs_set_basedir_from_module(path);
 
-    /* 1. Resolver el módulo principal en el FS. */
-    const uint8_t* data; uint32_t size;
-    fs_status_t fs_s = v1_get_resolve(path, &data, &size);
+    /* 1. Resolver el módulo principal en el FS (ruta + tamaño; los bytes se
+     *    leen por trozos al cargarlo). */
+    char main_path[FS_NAME_LEN]; uint32_t size;
+    fs_status_t fs_s = v1_resolve_path(path, main_path, sizeof(main_path), &size);
     if (fs_s != FS_OK) {
         const char* code; const char* msg;
         map_fs_status(fs_s, &code, &msg);
@@ -1073,7 +1081,7 @@ static void run_module_path(const char* path, long id) {
     v1_sink_ctx_t sink_ctx = { session };
     bpvm_set_output(vm, v1_output_sink, &sink_ctx);
 
-    bpvm_status_t ls = bpvm_load_mod_buffer(vm, data, size, path);
+    bpvm_status_t ls = bpvm_load_mod_stream(vm, v1_mod_read_at, main_path, size, path);
     if (ls != BPVM_OK) {
         fputs("{\"type\":\"EXITED\",\"session\":", stdout);
         fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
@@ -1109,9 +1117,10 @@ static void run_module_path(const char* path, long id) {
                 if (already) continue;
                 char fname[48];
                 snprintf(fname, sizeof(fname), "%s.mod", owner);
-                const uint8_t* dep; uint32_t dep_size;
-                if (v1_get_resolve(fname, &dep, &dep_size) != FS_OK) continue;
-                bpvm_status_t ds = bpvm_load_mod_buffer(vm, dep, dep_size, owner);
+                char dep_path[FS_NAME_LEN]; uint32_t dep_size;
+                if (v1_resolve_path(fname, dep_path, sizeof(dep_path), &dep_size) != FS_OK) continue;
+                bpvm_status_t ds = bpvm_load_mod_stream(vm, v1_mod_read_at, dep_path,
+                                                         dep_size, owner);
                 if (ds != BPVM_OK) {
                     fputs("{\"type\":\"EXITED\",\"session\":", stdout);
                     fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
@@ -1145,10 +1154,25 @@ static void run_module_path(const char* path, long id) {
         if (!mname || !mname[0]) continue;
         char mdn_path[48];
         snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
-        const uint8_t* mdn_data; uint32_t mdn_size;
-        fs_status_t fs_s = v1_get_resolve(mdn_path, &mdn_data, &mdn_size);
+        char mdn_real[FS_NAME_LEN]; uint32_t mdn_size;
+        fs_status_t fs_s = v1_resolve_path(mdn_path, mdn_real, sizeof(mdn_real), &mdn_size);
         if (fs_s != FS_OK) {
             log_printf("AOT/FS: %s not found (fs=%d) — sin overlay", mdn_path, (int) fs_s);
+            continue;
+        }
+        /* H11 — el .mdn es ZERO-COPY: los thunks se registran como punteros
+         * DENTRO de este buffer, así que tiene que seguir vivo y en RAM toda la
+         * ejecución. Antes vivía en el scratch de 128 KB; ahora se le reserva
+         * de la arena exactamente lo que ocupa (4-alineado, que es lo que pide
+         * Thumb-2). Si no cabe, se dice y se sigue sin overlay. */
+        uint8_t* mdn_data = bpvm_arena_reserve(vm, mdn_size, 4);
+        if (!mdn_data) {
+            log_printf("AOT/FS: %s (%u B) no cabe en la arena — sin overlay",
+                       mdn_real, (unsigned) mdn_size);
+            continue;
+        }
+        if (bpvm_fs_read(mdn_real, mdn_data, mdn_size) != (long) mdn_size) {
+            log_printf("AOT/FS: %s no se pudo leer — sin overlay", mdn_real);
             continue;
         }
         int rc = bpvm_load_mdn(vm, mdn_data, (size_t) mdn_size);

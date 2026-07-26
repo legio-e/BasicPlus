@@ -16,18 +16,36 @@
 #include <string.h>
 #include <stdlib.h>
 
-/* ---------- Cursor sobre un buffer in-memory. -------------------- */
+/* ---------- Cursor sobre el .mod: RAM o STREAM ----------------------
+ *
+ * El parser SIEMPRE avanza hacia delante, así que da igual de dónde salgan los
+ * bytes. Dos fuentes:
+ *   - `base != NULL`  → blob ya en RAM/flash (embebido en la imagen, XIP, host).
+ *   - `rd != NULL`    → lectura por trozos (H11): el .mod se queda en el FS y
+ *                       los bloques gordos aterrizan DIRECTAMENTE en su sitio
+ *                       final dentro de memory[]. Sin fichero completo en RAM,
+ *                       que es lo que sostenía el scratch de 128 KB del micro.
+ * Nada más del loader cambia: el parseo es idéntico. */
 typedef struct {
-    const uint8_t* base;
-    size_t         size;
-    size_t         pos;
-    int            err;       /* 1 si se intentó leer fuera de rango. */
+    const uint8_t*   base;    /* fuente RAM, o NULL si va por stream */
+    bpvm_read_at_fn  rd;      /* fuente STREAM, o NULL si va por RAM */
+    void*            rd_user;
+    size_t           size;
+    size_t           pos;
+    int              err;     /* 1 si se intentó leer fuera de rango. */
 } buf_cursor_t;
 
 static int bc_read(buf_cursor_t* c, void* dst, size_t n) {
     if (c->err) return -1;
     if (c->pos + n > c->size) { c->err = 1; return -1; }
-    if (dst) memcpy(dst, c->base + c->pos, n);
+    if (dst && n > 0) {
+        if (c->base) {
+            memcpy(dst, c->base + c->pos, n);
+        } else if (c->rd(c->rd_user, (uint32_t) c->pos, (uint8_t*) dst, (uint32_t) n)
+                       != (long) n) {
+            c->err = 1; return -1;
+        }
+    }
     c->pos += n;
     return 0;
 }
@@ -80,11 +98,14 @@ static void derive_module_name(const char* path, char* dst, size_t dst_size) {
  * direccionado en sitio (los bytes de `data` deben ser persistentes: la región
  * de packs montada). CS queda anclado en RAM como siempre; solo cb difiere. */
 static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
+                                      bpvm_read_at_fn rd, void* rd_user,
                                       size_t size, const char* name_hint, int xip) {
     if (vm->module_count >= BPVM_MAX_MODULES) return BPVM_ERR_OOM;
-    if (!data || size < 28) return BPVM_ERR_BAD_HEADER;
+    if (!data && !rd) return BPVM_ERR_IO;
+    if (size < 28) return BPVM_ERR_BAD_HEADER;
+    if (xip && !data) return BPVM_ERR_IO;   /* XIP ejecuta EN SITIO: exige blob mapeado */
 
-    buf_cursor_t c = { data, size, 0, 0 };
+    buf_cursor_t c = { data, rd, rd_user, size, 0, 0 };
 
     /* --- Header (v5=28 bytes / v6=32 bytes) --- */
     uint32_t magic, data_size, imports_size, exports_size, code_size, library_size;
@@ -183,8 +204,19 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     const uint8_t* exp_buf = NULL;
     if (exports_size > 0) {
         if (c.pos + exports_size > c.size) return BPVM_ERR_IO;
-        exp_buf = c.base + c.pos;
-        c.pos += exports_size;
+        if (c.base) {
+            exp_buf = c.base + c.pos;      /* RAM: cero copia, como siempre */
+            c.pos += exports_size;
+        } else {
+            /* STREAM: es la ÚNICA sección que el parser mira por offsets, así
+             * que tiene que estar residente. La montamos en la arena libre por
+             * encima del módulo — memoria que nadie ha reclamado todavía
+             * (next_free_address no llega ahí hasta el final) y que se olvida
+             * sola al volver. Cero buffers estáticos. */
+            if (end_addr + exports_size > vm->stack_base) return BPVM_ERR_OOM;
+            if (bc_read(&c, vm->memory + end_addr, exports_size) != 0) return BPVM_ERR_IO;
+            exp_buf = vm->memory + end_addr;
+        }
     }
 
     /* H6.a — la sección interface va entre exports y data; la VM ejecuta sin
@@ -195,9 +227,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
 
     /* Data block: lo copiamos en memory[] (mutable: SIEMPRE a RAM). */
     if (data_size > 0) {
-        if (c.pos + data_size > c.size) return BPVM_ERR_IO;
-        memcpy(vm->memory + data_start, c.base + c.pos, data_size);
-        c.pos += data_size;
+        if (bc_read(&c, vm->memory + data_start, data_size) != 0) return BPVM_ERR_IO;
     }
 
     /* Code block: RAM → copia como siempre. XIP → NO se copia: cb apunta a los
@@ -207,16 +237,16 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
      * 2^32 y `mem + pc` cae en la flash. El fetch del intérprete no se toca. */
     uint32_t mod_cb = code_start;
     if (code_size > 0) {
-        if (c.pos + code_size > c.size) return BPVM_ERR_IO;
         if (xip) {
+            if (c.pos + code_size > c.size) return BPVM_ERR_IO;
             mod_cb = (uint32_t)((uintptr_t)(c.base + c.pos) - (uintptr_t) vm->memory);
             /* Ventana de PC válido del guardián del bucle (unión de rangos XIP). */
             if (mod_cb < vm->xip_lo) vm->xip_lo = mod_cb;
             if (mod_cb + code_size > vm->xip_hi) vm->xip_hi = mod_cb + code_size;
-        } else {
-            memcpy(vm->memory + code_start, c.base + c.pos, code_size);
+            c.pos += code_size;
+        } else if (bc_read(&c, vm->memory + code_start, code_size) != 0) {
+            return BPVM_ERR_IO;
         }
-        c.pos += code_size;
     }
 
     mod->module_base    = module_base;
@@ -367,28 +397,39 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
 
 bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,
                                        size_t size, const char* name_hint) {
-    return load_buffer_impl(vm, data, size, name_hint, 0);
+    return load_buffer_impl(vm, data, NULL, NULL, size, name_hint, 0);
 }
 
 bpvm_status_t bpvm_loader_load_xip(bpvm_t* vm, const uint8_t* data,
                                     size_t size, const char* name_hint) {
-    return load_buffer_impl(vm, data, size, name_hint, 1);
+    return load_buffer_impl(vm, data, NULL, NULL, size, name_hint, 1);
+}
+
+/* H11 — carga por trozos. El .mod se queda donde está y sólo pasan por RAM las
+ * secciones pequeñas: data y code aterrizan directamente en memory[]. */
+bpvm_status_t bpvm_loader_load_stream(bpvm_t* vm, bpvm_read_at_fn rd, void* user,
+                                       size_t size, const char* name_hint) {
+    return load_buffer_impl(vm, NULL, rd, user, size, name_hint, 0);
+}
+
+/* Lector por trozos sobre un FILE* — la fuente del host para el cursor stream. */
+static long file_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    FILE* f = (FILE*) user;
+    if (fseek(f, (long) off, SEEK_SET) != 0) return -1;
+    return (long) fread(dst, 1, (size_t) n, f);
 }
 
 bpvm_status_t bpvm_loader_load(bpvm_t* vm, const char* path) {
+    /* H11 — por trozos, IGUAL que el micro. Antes se leía el fichero entero a
+     * un malloc; ahora el host recorre exactamente el mismo camino que la placa,
+     * así que la batería de paridad ejercita el loader de streaming en cada
+     * ejecución en vez de dejarlo sólo probado en el firmware. */
     FILE* f = fopen(path, "rb");
     if (!f) return BPVM_ERR_IO;
     if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return BPVM_ERR_IO; }
     long sz = ftell(f);
-    if (sz < 0) { fclose(f); return BPVM_ERR_IO; }
-    rewind(f);
-    uint8_t* buf = (uint8_t*) malloc((size_t) sz);
-    if (!buf) { fclose(f); return BPVM_ERR_OOM; }
-    if (fread(buf, 1, (size_t) sz, f) != (size_t) sz) {
-        free(buf); fclose(f); return BPVM_ERR_IO;
-    }
+    if (sz <= 0) { fclose(f); return BPVM_ERR_IO; }
+    bpvm_status_t s = bpvm_loader_load_stream(vm, file_read_at, f, (size_t) sz, path);
     fclose(f);
-    bpvm_status_t s = bpvm_loader_load_buffer(vm, buf, (size_t) sz, path);
-    free(buf);
     return s;
 }
