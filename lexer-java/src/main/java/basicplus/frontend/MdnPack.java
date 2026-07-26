@@ -36,10 +36,20 @@ import java.util.List;
 
 public final class MdnPack {
 
-    /* Estos constantes deben coincidir con mdn_format.h del firmware. */
+    /* Estos constantes deben coincidir con mdn_format.h del firmware.
+     *
+     * ⚠️ SI CAMBIA `aot_helpers`, ESTE NÚMERO SUBE. Es la mitad del contrato que
+     * el otro lado comprueba, y se quedó atrás una vez: el 18-jul (`bf42bed`,
+     * #302 paso 2) los helpers pasaron a v2 (refs = handles de 64 bits) y se
+     * actualizaron `bpvm_aot_helpers.*`, `AotCEmitter` (que emite el código) y
+     * `mdn_format.h` (que lo espera)... pero no ESTA línea, que es quien lo
+     * ESTAMPA. Resultado: ocho días generando .mdn con código v2 y etiqueta v1.
+     * El loader los aceptaba (su gate usaba `>` en vez de `!=`) y ejecutaba
+     * código nativo contra helpers que ya no coincidían → corrupción y reset
+     * mudo en placa. Se destapó el 26-jul al arreglar el gate. */
     private static final byte[] MAGIC = {'M', 'D', 'N', 0};
     private static final int MDN_VERSION = 1;
-    private static final int MDN_ABI_VERSION = 1;
+    private static final int MDN_ABI_VERSION = 2;   /* #302 paso 2 — aot_helpers v2 */
     private static final int MDN_NAME_MAX = 32;
 
     public static void main(String[] args) throws IOException {
