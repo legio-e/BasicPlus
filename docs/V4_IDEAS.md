@@ -379,3 +379,144 @@ tocar el heap**. Cincuenta widgets = 600 bytes. Suscribirse no puede fallar por
 memoria, y cerrar la ventana no dispara una cascada de liberaciones de nodos de lista
 — porque no hay listas. Confirma que "un suscriptor y sin alocación" era lo correcto
 para el caso de uso, no sólo lo simple.
+
+### La firma del handler (2ª sesión, 26-jul) — CERRADA
+
+Decisión de Eduardo: **una firma única para todos los eventos**. Con eso desaparece
+la pregunta del tipado que quedaba abierta arriba: si todos los eventos tienen la
+misma forma, no hay nada que declarar ni que comprobar, y el mangling de H5.a no
+entra en esto.
+
+```
+handler(sender: Object, kind: <constante del compilador>, args: Object)
+```
+
+#### 1. `sender` — quién dispara
+
+El objeto que emite: el botón, el timer, la conexión. Cubre la necesidad más común
+("¿cuál de los treinta botones ha sido?") y, sobre todo, **hace innecesarios los
+args en la mayoría de casos**: si el estado vive en el widget, el handler pregunta
+`sender.text()` / `sender.value()` / `sender.selectedIndex()`. Es lo que ya hace el
+callback de cambio del GUI (*"refleja el estado del widget en el modelo"*,
+`src/gui.c`) y lo que hace Swing con `getSource()`.
+
+Va tipado como `Object`: el precio es un `instanceof` o un cast en el punto de uso
+cuando un handler sirve a varias fuentes.
+
+#### 2. `args` — el payload, `Object` y casi siempre nulo
+
+Recorrido de la decisión, porque el camino importa:
+
+- **Descartado `Map`** (existe en `Collections.bp:203`). Su constructor crea
+  `keyList` + `valList` + `StringComparator` + **`Mutex`**: cinco objetos vacío, y
+  con dos entradas más dos strings de clave y dos cajas `Integer` ⇒ **nueve objetos
+  de heap y un mutex del SO por cada clic**. En un Pico con ~125 KB libres y en el
+  camino caliente, insostenible. Peor aún el lado C: hoy `bpvm_gui_inject_click`
+  encola un `objptr` y ya está; con Map, la VM en C tendría que alocar el grafo,
+  boxear valores y enlazarlo todo **en las dos VMs y byte-idéntico** para la
+  paridad — alocando en pleno despacho de eventos, que es donde vivieron los UAF
+  de V4.
+- **Convención de Eduardo: un string `"key1:valor1, key2:valor2"`.** El lado C pasa
+  de construir un grafo de objetos a hacer un `snprintf` + **una sola llamada a
+  `bpvm_heap_alloc_string`**, que ya existe. Además el payload viaja gratis por el
+  wire, al log y al depurador, y es legible al depurar.
+- **Tipo declarado: `Object`, no `string`.** Cuesta lo mismo (una referencia) y
+  quita el techo del string, que tiene tres límites reales: los valores pierden el
+  tipo (un float formateado y re-parseado no es el mismo valor), los separadores se
+  rompen con texto libre (`"texto:Hola, ¿qué tal?"` parte mal por la coma), y **no
+  puede llevar un objeto** — el `sender` cubre uno, los args no podrían cubrir un
+  segundo.
+
+⇒ **Lo normal: `null`, sin alocar nada. Lo sencillo: el string `"k:v,k:v"`. Lo raro:
+cualquier objeto.** La convención se recomienda; el lenguaje no la impone.
+
+Si algún día se reutiliza el buffer de args entre disparos (optimización posible,
+el despachador es uno), hay que fijar la regla: **`args` sólo vale durante el
+handler; si te lo quieres guardar, cópialo** — la misma regla que el puntero de
+`fs_get`.
+
+#### 3. `kind` — el tipo de evento (idea de Eduardo, del modelo de Windows)
+
+El `uMsg` del `WndProc` no está sólo para saber cómo leer `wParam`: está para que
+**un solo handler atienda muchos eventos**. Ése es el punto, y es justo el caso de
+"una ventana con decenas de widgets": un método que los atiende a todos
+discriminando por `(sender, kind)`, en vez de treinta métodos.
+
+Nótese que en el caso simple es redundante — si suscribes `boton.onClick :=
+this::pulsar`, dentro de `pulsar` ya sabes que fue un clic. Aporta cuando el handler
+sirve a varias fuentes.
+
+**Tipo: constante que emite el COMPILADOR**, cualificada por módulo. Descartadas:
+
+- *enteros pelados* (Windows): números mágicos y dos librerías pueden chocar
+  (Windows lo tapó con `WM_USER` como frontera, que es convención, no garantía);
+- *enum*: tipado y barato pero **cerrado** — si vive en la stdlib, una clase de
+  usuario no puede añadir sus eventos, y eso reintroduce el acoplamiento.
+
+El compilador sabe qué evento se dispara, así que emite él la constante: nadie
+escribe números, no hay colisiones posibles, en ejecución es un entero, y el handler
+compara contra un nombre (`if kind == Boton.onClick`). Encaja con lo que ya hace el
+compilador cualificando símbolos por módulo.
+
+#### 4. A + B: eventos con nombre **y** cajón de sastre (Eduardo)
+
+Se planteó como disyuntiva y Eduardo la resolvió con las dos:
+
+- **(A) cada evento un campo con nombre** — se lee solo, suscribirse a un evento
+  inexistente es error de compilación; cuesta 12 bytes por evento *declarado*, se
+  use o no (un Button con 6 eventos = 72 B/instancia; 50 widgets = 3,6 KB);
+- **(B) un solo campo + `kind`** — 12 B por widget (600 B en la misma ventana), pero
+  pierdes el nombre autoexplicativo, todo handler empieza con un `switch`, y con un
+  solo campo y un solo suscriptor **quien se apunta se lo lleva todo**.
+
+**A+B**: uno o dos eventos con nombre para lo normal, y un **cajón de sastre** para
+todo lo demás. Es a lo que converge todo el mundo: LVGL tiene códigos concretos *y*
+`LV_EVENT_ALL`; el DOM tiene `onclick` *y* `addEventListener`; Windows tiene mensajes
+concretos *y* `DefWindowProc`.
+
+Si el cajón de sastre vive en la **clase base** de los widgets, lo heredan todos por
+12 bytes y cada widget concreto añade su uno o dos ⇒ **1,2–1,8 KB** en la ventana de
+cincuenta widgets, entre los dos extremos. Y una clase de usuario que invente un
+evento nuevo **no necesita campo nuevo**: dispara el cajón de sastre con su propia
+constante. Ahí es donde paga la constante cualificada por el compilador.
+
+#### 5. Un clic dispara LOS DOS, primero el específico
+
+La decisión semántica que acompaña a A+B. **Ojo: el modelo de Windows NO está
+disponible** — *"llama al específico; si no lo trata, pásalo al general"* exige que
+el handler pueda decir "ya me he ocupado", y eso es un valor de retorno, descartado
+en la decisión 6. Hay que decidirlo estáticamente.
+
+Se elige **disparan los dos, el específico primero**:
+
+- un cajón de sastre que a veces no ve las cosas no es un cajón de sastre; si el
+  general dejara de enterarse *porque otro se suscribió al específico*, el
+  comportamiento dependería de quién más se suscribió — el acoplamiento invisible
+  que veníamos a quitar;
+- así el general **siempre** ve todo, lo que habilita usos reales que si no se
+  pierden: un trazador de interacción, un log de depuración, un panel de actividad;
+- coste: el despachador mira dos campos en vez de uno.
+
+Consecuencia bonita: como el específico también recibe `kind` (redundante ahí, pero
+mantiene **una sola firma**), el mismo método puede servir de handler específico de
+un botón y de cajón de sastre de la ventana sin cambiar nada.
+
+#### Criterio de aceptación (Eduardo, al cerrar)
+
+> *"Creo que hemos llegado a una buena solución. Y lo creo porque es sencilla, es
+> barata y es abierta."*
+
+Las tres, comprobables: **sencilla** (una firma, sin declaraciones de tipo, sin
+registro central), **barata** (12 bytes por evento, cero alocación en el camino
+común, un `snprintf` en el lado C), **abierta** (`args` admite cualquier objeto, el
+cajón de sastre admite eventos que aún no existen, y nada de esto obliga a tocar la
+stdlib para añadir uno).
+
+#### Estado
+
+Cerrado: el par (receptor, destino), un suscriptor, handler privado, `::`, cola,
+silencio sin suscriptor, sin valor de retorno, la firma única, `args` abierto,
+`kind` del compilador, A+B, y disparo doble.
+
+**Sigue abierto (implementación):** el desmontaje que cede el control a mitad, y las
+raíces de GC del receptor. Son las dos que hay que resolver antes de escribir código.
