@@ -801,3 +801,60 @@ en #305 — se fue en el mismo paso que demostró que el wire lo cubría.
 
 **Cuándo:** no ahora. Cuando el sistema de eventos esté verificado. Como paso
 transitorio se admite la convivencia, con el borrado planificado, no aplazado.
+
+### Vida de los objetos y eventos — VERIFICADO contra el código (26-jul)
+
+Pregunta de Eduardo: *"dijimos que si utilizamos 'owner' no hacía falta liberar los
+eventos, ¿eso sigue en pie?"*
+
+**Sí, y ahora está comprobado, no supuesto.** La pieza de la que depende es
+`bpvm_free_owned` (`src/interp.c:484`), que es **recursiva** y recorre el
+**owner-bitmap** del descriptor de clase:
+
+```c
+for (uint32_t i = 0; i < num_fields; i++) {
+    uint32_t word = read_u32(owner_base + (i >> 5) * 4);
+    if (((word >> (i & 31)) & 1u) != 0u) {
+        bpref_t child = bpref_load(...);
+        bpvm_free_owned(vm, child);      // cascada
+    }
+}
+```
+
+Encajan tres cosas:
+
+1. **Destruir la ventana destruye los widgets, y con ellos sus eventos.** La cascada
+   baja por los `owner` hasta el fondo; el campo del evento muere dentro del widget.
+   No hay nada que dar de baja.
+2. **Si muere el SUSCRIPTOR, el evento que le apuntaba se queda rancio y calla.**
+   `bpvm_handle_kill` sube la generación en el acto y el despachador pregunta con
+   `bpvm_ref_dead` (O(1)). Tampoco hay nada que dar de baja.
+3. **La cascada NO sigue al receptor del evento**, porque su bit de owner es **0**
+   (ref sí, owner no — ver computeClassLayout). Es lo correcto y conviene tenerlo
+   escrito: un evento apunta a un suscriptor que **no le pertenece**; si la cascada
+   lo siguiera, destruir un botón se llevaría por delante el panel de otro.
+
+**El ciclo no fuga.** ventana →posee→ widget →evento→ apunta a→ ventana es un ciclo.
+En un sistema de **contador de referencias** ésa es la fuga clásica de manual. Aquí
+no, porque la destrucción la manda la **PROPIEDAD**, no el conteo: cuando el dueño de
+la ventana la suelta, la cascada se lleva ventana y widgets y el ciclo no pinta nada.
+
+#### La única condición (⚠️ para el manual)
+
+El receptor del evento es una raíz de GC **FUERTE** — se decidió así al descartar la
+referencia débil, porque `owner` hacía innecesaria la debilidad. Consecuencia: **un
+suscriptor cuyo ÚNICO apuntador sea el evento no muere nunca.**
+
+```
+boton.onClick := Panel()::pulsado    // ese Panel no lo guarda nadie más -> vive para siempre
+```
+
+No deja de funcionar: el handler se sigue llamando. Simplemente el objeto no se
+libera jamás. No es el caso normal —el suscriptor suele ser la ventana, que ya está
+viva por otro lado— pero es el ÚNICO en el que "con `owner` no hace falta dar de baja"
+deja de ser cierto.
+
+**Regla para la documentación de usuario:** *el suscriptor tiene que estar sostenido
+por alguien que no sea el evento.* Si lo está (lo normal: es un objeto con dueño), no
+hay que desuscribirse nunca — ni al cerrar la ventana, ni al destruir el widget, ni al
+morir el propio suscriptor.
