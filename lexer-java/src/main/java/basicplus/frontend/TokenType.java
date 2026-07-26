@@ -117,6 +117,7 @@ public enum TokenType {
     COMMA,          // ,
     SEMICOLON,      // ;
     COLON,          // :
+    COLONCOLON,     // ::  — H5.c: referencia a método/función (obj::onTick)
     DOT,            // .
 
     // ---- Significativos ----

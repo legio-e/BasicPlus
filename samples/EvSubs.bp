@@ -1,0 +1,31 @@
+module EvSubs
+
+  // El que EMITE el evento. No sabe nada de quién escucha.
+  class Boton
+    var id: integer
+    event onClick
+    public function Boton(n: integer)
+      this.id := n
+    end Boton
+  end Boton
+
+  // El que ESCUCHA. Su handler es PRIVADO — no hace falta exportarlo.
+  class Panel
+    var nombre: string
+    public function Panel(n: string)
+      this.nombre := n
+    end Panel
+    function event pulsado()
+      print("pulsado en " + this.nombre)
+    end pulsado
+  end Panel
+
+  public function main()
+    var b: Boton := Boton(1)
+    var p: Panel := Panel("principal")
+    b.onClick := p::pulsado      // suscribir
+    b.onClick := null            // desuscribir
+    print("suscripcion y desuscripcion compiladas")
+  end main
+
+end EvSubs

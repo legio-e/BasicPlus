@@ -820,7 +820,7 @@ public final class ModuleInterface {
                      o != null; o = o.nextOverload) {
                     if (o.astNode == fn) { f = o; break; }
                 }
-                if (f != null && f.isPublic && !f.isStatic && !f.isConstructor
+                if (f != null && (f.isPublic || f.isEventHandler) && !f.isStatic && !f.isConstructor
                         && !names.contains(f.slotKey())) {
                     names.add(f.slotKey());
                 }

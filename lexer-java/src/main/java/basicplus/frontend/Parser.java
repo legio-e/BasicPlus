@@ -443,6 +443,10 @@ public final class Parser {
                                   boolean isIntrinsic, boolean isNative) {
         Token tok = current();
         match(TokenType.FUNCTION);
+        // H5.c — `function event nombre()`: modificador TRAS la palabra clave,
+        // como `property owner` / `var owner`. Marca que puede colgar de un
+        // evento, y por tanto que necesita slot de vtable aunque sea privada.
+        boolean isEventHandler = match(TokenType.EVENT);
         DeclName name = parseDeclName();
 
         consume(TokenType.LPAREN, "se esperaba '(' tras el nombre de la función");
@@ -475,7 +479,9 @@ public final class Parser {
             parseDeclName();
         }
         consumeStmtTerminator("se esperaba salto de línea tras 'end'");
-        return new FuncDef(isPublic, isFinal, false, isNative, name, paramList, retType, body, tok.line, tok.column);
+        FuncDef fd = new FuncDef(isPublic, isFinal, false, isNative, name, paramList, retType, body, tok.line, tok.column);
+        fd.isEventHandler = isEventHandler;   // H5.c
+        return fd;
     }
 
     private Param parseParam() {
@@ -1214,6 +1220,15 @@ public final class Parser {
                     consume(TokenType.RPAREN, "se esperaba ')'");
                     node = new CallExpr(node, args, lp.line, lp.column);
                 }
+            } else if (check(TokenType.COLONCOLON)) {
+                // H5.c — `obj::metodo`. Se corta aquí a propósito: no encadena
+                // más postfijos, porque `obj::m(...)` o `obj::m.x` no significan
+                // nada — una referencia a método no se llama ni se navega, sólo
+                // se asigna a un evento.
+                Token op = current(); advance();
+                String m = consumeMemberName();
+                node = new MethodRefExpr(node, m, op.line, op.column);
+                break;
             } else if (check(TokenType.LBRACKET)) {
                 Token op = current(); advance();
                 IExpr idx = parseExpr();

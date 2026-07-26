@@ -534,6 +534,10 @@ public final class Lexer {
 
         // Operadores de dos caracteres primero.
         if (c == ':' && n == '=') return make2(TokenType.ASSIGN,        ":=", startLine, startColumn);
+        // H5.c — '::' (referencia a método/función). Aquí arriba, con el resto de
+        // los de dos caracteres: si cayera al switch de un carácter, `obj::m` se
+        // lexaría como dos COLON sueltos y el parser vería un disparate.
+        if (c == ':' && n == ':') return make2(TokenType.COLONCOLON,    "::", startLine, startColumn);
         if (c == '+' && n == '=') return make2(TokenType.PLUS_ASSIGN,   "+=", startLine, startColumn);
         if (c == '-' && n == '=') return make2(TokenType.MINUS_ASSIGN,  "-=", startLine, startColumn);
         if (c == '=' && n == '=') return make2(TokenType.EQ,            "==", startLine, startColumn);

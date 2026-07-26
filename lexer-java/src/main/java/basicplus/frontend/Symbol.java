@@ -197,6 +197,9 @@ public abstract class Symbol {
         public final List<ParamSymbol> params = new ArrayList<>();
         public BpType returnType;                    // null = void
         public boolean isConstructor;
+        /** H5.c — `function event f()`: necesita slot de vtable aunque sea
+         *  privada, porque el destino de un evento ES un slot. */
+        public boolean isEventHandler = false;
         /** Auto-super (modelo Java): este constructor NO escribió super() y el
          *  padre tiene un constructor invocable sin argumentos → el emisor inyecta
          *  la llamada implícita al __init del padre. Lo marca el SemanticAnalyzer. */
@@ -363,6 +366,31 @@ public abstract class Symbol {
     // ============================================================
     // Variables, constantes, propiedades
     // ============================================================
+    /**
+     * H5.c — un EVENTO declarado en una clase.
+     *
+     * No lleva `isPublic` porque su acceso no se elige: asignarlo (suscribirse)
+     * es público SIEMPRE, y leerlo/dispararlo es de la clase y sus descendientes
+     * SIEMPRE. Es lo que define a un evento, no un modificador.
+     *
+     * En memoria son dos campos, `<name>$recv` y `<name>$dest`; el símbolo sólo
+     * guarda el nombre lógico y quién lo declaró.
+     */
+    public static final class EventSymbol extends Symbol {
+        public final ClassSymbol ownerClass;
+        // OJO: NO declarar aquí un `decl` propio — Symbol ya lo tiene, y uno
+        // nuevo lo SOMBREARÍA: quien escriba por la variable base y lea por la
+        // derivada (o al revés) vería null sin que nada falle.
+        public EventSymbol(String name, ClassSymbol owner, int line, int column) {
+            super(name, line, column);
+            this.ownerClass = owner;
+        }
+        /** Nombre del campo que guarda el receptor (handle de 8B, raíz de GC). */
+        public String recvField() { return name + "$recv"; }
+        /** Nombre del campo que guarda el destino (slot de vtable, 4B, NO ref). */
+        public String destField() { return name + "$dest"; }
+    }
+
     public static final class VarSymbol extends Symbol {
         public final boolean isPublic;
         public final boolean isStatic;

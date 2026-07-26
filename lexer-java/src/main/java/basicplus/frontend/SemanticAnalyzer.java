@@ -783,8 +783,32 @@ public final class SemanticAnalyzer {
         else if (decl instanceof VarDecl)      declareVar((VarDecl) decl, owner, scope);
         else if (decl instanceof FuncDef)      declareFunc((FuncDef) decl, owner, scope);
         else if (decl instanceof PropertyDef)  declareProperty((PropertyDef) decl, owner, scope);
+        else if (decl instanceof Ast.EventDef) declareEvent((Ast.EventDef) decl, owner, scope);
         else if (decl instanceof ClassDef)     declareClass((ClassDef) decl);
         else if (decl instanceof EnumDef)      declareEnum((EnumDef) decl);
+    }
+
+    /**
+     * H5.c — declara un evento. Sólo dentro de una clase: a nivel de módulo no
+     * habría receptor que disparar ni nadie a quien pertenecer, y el diseño
+     * (docs/V4_IDEAS.md §H5.c) dice que un evento lo dispara SU objeto.
+     */
+    private void declareEvent(Ast.EventDef ed, ClassSymbol owner, Scope scope) {
+        if (owner == null) {
+            err(ed.line, ed.column, "un evento sólo puede declararse dentro de una clase: '"
+                    + ed.name.name + "'");
+            return;
+        }
+        if (ed.name.isStatic()) {
+            err(ed.line, ed.column, "un evento no puede ser static: '" + ed.name.name
+                    + "'. Lo dispara UNA instancia, y sin instancia no hay quién");
+            return;
+        }
+        Symbol.EventSymbol sym = new Symbol.EventSymbol(ed.name.name, owner, ed.line, ed.column);
+        sym.decl = ed;
+        if (!scope.tryDefine(sym))
+            err(ed.line, ed.column, "nombre duplicado: '" + ed.name.name + "' en " + scope.tag);
+        if (!info.declSymbols.containsKey(ed)) info.declSymbols.put(ed, sym);
     }
 
     private void declareClass(ClassDef cd) {
@@ -910,6 +934,7 @@ public final class SemanticAnalyzer {
         if (f.isIntrinsic && !f.isPublic)
             err(f.line, f.column, "'intrinsic' implica visibilidad pública — añade 'public'");
         FunctionSymbol sym = new FunctionSymbol(f.name.name, f.isPublic, f.isFinal, isStatic, owner, f);
+        sym.isEventHandler = f.isEventHandler;   // H5.c — `function event`
         sym.isIntrinsic = f.isIntrinsic;
         for (Param p : f.params) {
             ParamSymbol psym = new ParamSymbol(p.name, p.line, p.column);
@@ -1794,7 +1819,123 @@ public final class SemanticAnalyzer {
         info.declSymbols.put(c, sym);
     }
 
+    /**
+     * H5.c — ¿es `a` una suscripción a un evento? Si lo es, la valida entera y
+     * devuelve true (el llamante no sigue por el camino normal).
+     *
+     * Un evento no tiene tipo y una referencia a método tampoco, así que aquí no
+     * se unifica nada: se comprueba que el par encaja. Las dos formas válidas:
+     *   ev := obj::metodo    suscribir
+     *   ev := null           desuscribir
+     */
+    private boolean analyzeEventSubscription(AssignStmt a, Scope scope) {
+        Symbol.EventSymbol ev = resolveEventTarget(a.target, scope);
+        if (ev == null) {
+            // Si NO es un evento pero le asignan un `::`, el error va aquí y no
+            // en el camino genérico, que hablaría de tipos y despistaría.
+            if (a.value instanceof Ast.MethodRefExpr)
+                err(a.line, a.column, "'::' sólo se puede asignar a un evento; "
+                        + "una referencia a método no es un valor que se pueda guardar en otro sitio");
+            return false;
+        }
+        if (a.op != Ast.AssignOpKind.ASSIGN) {
+            err(a.line, a.column, "a un evento sólo se le asigna ( := ): no admite += ni -=."
+                    + " Un evento tiene UN suscriptor, así que suscribirse es asignar y"
+                    + " desuscribirse es asignar null");
+            return true;
+        }
+        // Desuscripción explícita.
+        if (a.value instanceof Ast.NullLitExpr) return true;
+
+        if (!(a.value instanceof Ast.MethodRefExpr)) {
+            err(a.line, a.column, "a un evento se le asigna una referencia a método"
+                    + " (`obj::metodo`) o `null` para desuscribir");
+            return true;
+        }
+        Ast.MethodRefExpr mr = (Ast.MethodRefExpr) a.value;
+        BpType recvT = analyzeExpr(mr.target, scope, null);
+        Symbol.ClassSymbol rc = (recvT instanceof BpType.ClassType) ? ((BpType.ClassType) recvT).cls : null;
+        if (rc == null) {
+            err(mr.line, mr.column, "el receptor de '::' tiene que ser un objeto"
+                    + " (para poder llamar a su método), y aquí es '"
+                    + (recvT != null ? recvT.display() : "desconocido") + "'");
+            return true;
+        }
+        Symbol ms = rc.lookupInstance(mr.method);
+        if (!(ms instanceof FunctionSymbol)) {
+            err(mr.line, mr.column, "la clase '" + rc.name + "' no tiene un método '"
+                    + mr.method + "' al que apuntar");
+            return true;
+        }
+        FunctionSymbol fs = (FunctionSymbol) ms;
+        if (fs.isStatic) {
+            err(mr.line, mr.column, "'" + mr.method + "' es static: no tiene receptor,"
+                    + " así que no se puede referenciar con `obj::" + mr.method + "`");
+            return true;
+        }
+        // El destino es el slot de vtable, y tiene que existir AHORA (en
+        // compilación): si no, el emisor escribiría un -1 que el despachador
+        // interpretaría como basura en tiempo de ejecución.
+        if (!fs.isPublic && !fs.isEventHandler) {
+            err(mr.line, mr.column, "'" + mr.method + "' no se puede colgar de un evento:"
+                    + " decláralo `function event " + mr.method + "(...)`. El destino de un"
+                    + " evento es un slot de vtable, y una función privada sin marcar no lo"
+                    + " tiene — marcarla se lo da SIN hacerla llamable por su nombre desde fuera");
+            return true;
+        }
+        int slot = rc.slotOf(mr.method);
+        if (slot < 0) {
+            err(mr.line, mr.column, "'" + mr.method + "' no tiene slot de vtable en '"
+                    + rc.name + "' — no se puede referenciar");
+            return true;
+        }
+        info.exprSymbols.put(mr, fs);
+        info.methodRefSlots.put(mr, slot);
+        return true;
+    }
+
+    /** El target de la asignación, ¿es un evento? null si no. */
+    private Symbol.EventSymbol resolveEventTarget(IExpr target, Scope scope) {
+        if (target instanceof MemberAccessExpr) {
+            MemberAccessExpr ma = (MemberAccessExpr) target;
+            BpType t = analyzeExpr(ma.target, scope, null);
+            Symbol.ClassSymbol cs = (t instanceof BpType.ClassType) ? ((BpType.ClassType) t).cls : null;
+            if (cs == null) return null;
+            Symbol s = cs.lookupInstance(ma.member);
+            if (s instanceof Symbol.EventSymbol) {
+                info.exprSymbols.put(ma, s);
+                return (Symbol.EventSymbol) s;
+            }
+            return null;
+        }
+        if (target instanceof IdentifierExpr && currentClass != null) {
+            // `onClick := ...` dentro de la propia clase (this implícito).
+            Symbol s = currentClass.lookupInstance(((IdentifierExpr) target).name);
+            if (s instanceof Symbol.EventSymbol) {
+                info.exprSymbols.put(target, s);
+                return (Symbol.EventSymbol) s;
+            }
+        }
+        return null;
+    }
+
+    /** Un `::` fuera de una suscripción no significa nada: hay que decirlo. */
+    private void rejectStrayMethodRef(IExpr e) {
+        if (e instanceof Ast.MethodRefExpr) {
+            Ast.MethodRefExpr m = (Ast.MethodRefExpr) e;
+            err(m.line, m.column, "'::' sólo vale para suscribir a un evento"
+                    + " (`algo.onX := obj::metodo`); no es un valor de primera clase");
+        }
+    }
+
     private void analyzeAssign(AssignStmt a, Scope scope) {
+        // H5.c — SUSCRIPCIÓN: `algo.onClick := obj::metodo` (o `:= null` para
+        // desuscribir). Se resuelve ANTES del camino normal porque ni el evento
+        // ni la referencia a método tienen tipo: no hay nada que unificar, hay
+        // que comprobar que encajan el uno con el otro.
+        if (analyzeEventSubscription(a, scope)) return;
+        rejectStrayMethodRef(a.value);
+
         BpType lhsT = analyzeExpr(a.target, scope, null);
         BpType rhsT = analyzeExpr(a.value, scope, lhsT);
 

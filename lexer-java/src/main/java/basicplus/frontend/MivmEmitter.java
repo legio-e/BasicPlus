@@ -1487,7 +1487,14 @@ public final class MivmEmitter {
         // virtual, sobreescribibles, visibles cross-module). Los PRIVADOS se
         // despachan por CALL directo (ver el call-site) → fuera de la vtable,
         // así su orden coincide con el .bpi y no hay desfase de slots.
-        if (fs.isPublic) {
+        // H5.c — `function event` también entra en la vtable aunque sea privada:
+        // el destino de un evento ES un slot, así que sin slot no hay a dónde
+        // apuntar. Sigue sin ser llamable POR SU NOMBRE desde fuera (eso lo
+        // guarda el semántico) — es la misma idea que ya valía para las
+        // properties privadas, cuyos accesores llevan años en la vtable.
+        // La condición tiene que ser LA MISMA que en computeClassLayout o el
+        // cross-check de #299 aborta.
+        if (fs.isPublic || fs.isEventHandler) {
             w.addMethod(emitName(fs));          // vtable + función; declara "this"
         } else {
             w.addPrivateMethod(emitName(fs));   // solo función llamable; declara "this"
@@ -2056,7 +2063,69 @@ public final class MivmEmitter {
         w.declareParam(name, 8);   // REF_SIZE. Tag del .dbg = null, como el original: H1.8 cambia el ANCHO, no el .dbg
     }
 
+    /**
+     * H5.c — SUSCRIPCIÓN. `algo.onClick := obj::metodo` son DOS escrituras, y el
+     * ORDEN importa:
+     *
+     *   1º  destino (el slot de vtable)
+     *   2º  receptor (el handle)  <-- éste es el que "confirma"
+     *
+     * Porque el despachador lee al revés: mira el receptor y, sólo si hay uno
+     * vivo, usa el destino. Escribiendo el receptor el ÚLTIMO, un lector que se
+     * cuele entre las dos escrituras ve o bien "sin suscriptor" (y calla, que es
+     * el comportamiento correcto) o bien el par completo. Nunca un receptor
+     * nuevo con un destino viejo.
+     *
+     * Al desuscribir (`:= null`) el orden se invierte por el mismo motivo: se
+     * borra el receptor PRIMERO, y a partir de ese instante ya no se dispara.
+     *
+     * @return true si era una suscripción y ya está emitida.
+     */
+    private boolean emitEventSubscription(AssignStmt a) throws IOException {
+        Symbol sym = info.exprSymbols.get(a.target);
+        if (!(sym instanceof Symbol.EventSymbol)) return false;
+        Symbol.EventSymbol ev = (Symbol.EventSymbol) sym;
+        String cls = ev.ownerClass.name;
+
+        // El objeto dueño del evento: `algo` en `algo.onClick`, o `this` si se
+        // escribió a pelo dentro de la clase.
+        IExpr owner = (a.target instanceof MemberAccessExpr)
+                ? ((MemberAccessExpr) a.target).target : null;
+
+        if (a.value instanceof Ast.NullLitExpr) {
+            emitEventOwner(owner);
+            // null como REFERENCIA son 8 bytes (handle a cero), no un 0 de 4:
+            // el campo del receptor es is8 y SET_FIELD_LONG espera la palabra
+            // entera. Es el mismo cuidado del censo V4 #11.
+            emitInt(0); w.emit(OpCode.I32_TO_I64);
+            w.emitSetField(cls, ev.recvField());      // receptor PRIMERO al borrar
+            emitEventOwner(owner);
+            w.emitPushInt(0);
+            w.emitSetField(cls, ev.destField());
+            return true;
+        }
+
+        Ast.MethodRefExpr mr = (Ast.MethodRefExpr) a.value;
+        Integer slot = info.methodRefSlots.get(mr);
+        if (slot == null) { errors.add("referencia a método sin slot resuelto: " + mr.method); return true; }
+
+        emitEventOwner(owner);
+        w.emitPushInt(slot);
+        w.emitSetField(cls, ev.destField());          // destino primero
+        emitEventOwner(owner);
+        emitExpr(mr.target);                          // el receptor
+        w.emitSetField(cls, ev.recvField());          // y confirma
+        return true;
+    }
+
+    /** Empuja el objeto dueño del evento (o `this` si la forma era a pelo). */
+    private void emitEventOwner(IExpr owner) throws IOException {
+        if (owner != null) emitExpr(owner);
+        else               w.emitGetParam("this");
+    }
+
     private void emitAssign(AssignStmt a) throws IOException {
+        if (emitEventSubscription(a)) return;
         IExpr target = a.target;
         BpType tType = info.exprTypes.get(target);
         if (target instanceof IdentifierExpr) {

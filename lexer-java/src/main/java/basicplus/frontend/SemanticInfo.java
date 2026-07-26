@@ -20,6 +20,11 @@ public final class SemanticInfo {
     /** Símbolo al que resuelve un identificador / acceso a miembro. */
     public final Map<Ast.IExpr, Symbol> exprSymbols = new IdentityHashMap<>();
 
+    /** H5.c — slot de vtable resuelto para cada `obj::metodo`. Lo calcula el
+     *  semántico (que sabe la clase del receptor) y lo consume el emisor, que
+     *  sólo tiene que escribirlo: así el slot se decide en UN sitio. */
+    public final Map<Ast.IExpr, Integer> methodRefSlots = new IdentityHashMap<>();
+
     /** Símbolo declarado por un nodo de declaración. */
     public final Map<Ast.Node, Symbol> declSymbols = new IdentityHashMap<>();
 

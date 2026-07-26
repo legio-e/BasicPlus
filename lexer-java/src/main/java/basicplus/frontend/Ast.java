@@ -222,6 +222,30 @@ public final class Ast {
     }
 
     /**
+     * H5.c — REFERENCIA a un método: `obj::onTick`, `this::pulsar`.
+     *
+     * No es una llamada ni un valor de primera clase: sólo vale a la derecha de
+     * una asignación a un evento. El semántico lo comprueba y lo dice claro si
+     * aparece en otro sitio — hacerlo un valor suelto obligaría a inventar un
+     * tipo "referencia a función" en el sistema de tipos, y el diseño no lo
+     * necesita (un suscriptor, asignación y ya).
+     *
+     * Se escribe `::` y no `.` por una razón de BP, no por imitar a Java: aquí
+     * `obj.algo` sin paréntesis ya significa "lee la property", y una property
+     * EJECUTA código. Con el mismo símbolo, "dame el valor" y "dame la función"
+     * serían indistinguibles.
+     */
+    public static final class MethodRefExpr extends Node implements IExpr {
+        public final IExpr target;      // el receptor: this, una var, ...
+        public final String method;     // nombre del método
+        public MethodRefExpr(IExpr target, String method, int line, int column) {
+            super(line, column);
+            this.target = target;
+            this.method = method;
+        }
+    }
+
+    /**
      * H5.c — declaración de un EVENTO: `event onClick`.
      *
      * No lleva tipo: la firma de todo handler es fija —
@@ -260,6 +284,22 @@ public final class Ast {
         public final List<Param> params;
         public final TypeRef returnType;     // null si void
         public final List<IStmt> body;
+        /**
+         * H5.c — `function event pulsado()`: esta función puede colgar de un
+         * evento, así que necesita SLOT DE VTABLE aunque sea privada (el destino
+         * de un evento es un slot; sin él no hay a dónde apuntar).
+         *
+         * Es un modificador DECLARATIVO a propósito. Dárselo en su lugar a "toda
+         * privada referenciada con `::`" haría que el layout de la clase
+         * dependiese de los CUERPOS, y la pasada interfaz-only no los analiza:
+         * el layout publicado saldría distinto del emitido y el desajuste
+         * aparecería cross-module y en silencio. Declarándolo, el layout sale de
+         * la declaración — igual que con las properties.
+         *
+         * Mutable y no en el constructor porque FuncDef ya tiene tres
+         * constructores telescópicos; una cuarta bandera los multiplicaría.
+         */
+        public boolean isEventHandler = false;
         public FuncDef(boolean isPublic, boolean isFinal, DeclName name, List<Param> params,
                        TypeRef returnType, List<IStmt> body, int line, int column) {
             this(isPublic, isFinal, false, false, name, params, returnType, body, line, column);
