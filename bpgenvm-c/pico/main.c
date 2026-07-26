@@ -49,15 +49,49 @@
 #include "pico/unique_id.h"
 #include "pico/time.h"
 
-/* Buffer estático de la VM. 128 KB sobra para Hello.bp y deja sitio para
- * varios módulos. */
+/* Buffer de la VM en SRAM interna. 128 KB sobra para Hello.bp y deja sitio
+ * para varios módulos. */
 #define VM_BUFFER_SIZE   (128 * 1024)
-/* H7.2.b — el heap de la VM es un PUNTERO elegido en boot: SRAM interna por
- * defecto (este array), o la ventana PSRAM (MBs) si hay PSRAM usable. El buffer
- * SRAM sigue existiendo como fallback (Pico sin PSRAM). */
-static uint8_t s_sram_buffer[VM_BUFFER_SIZE] __attribute__((aligned(8)));
-uint8_t* s_vm_buffer      = s_sram_buffer;
-uint32_t s_vm_buffer_size = VM_BUFFER_SIZE;
+
+/* H11 — NO es un array estático, es una REGIÓN DE LA COLA DE LA RAM.
+ *
+ * Antes eran 128 KB de `.bss` reservados a piñón. Pero la decisión de dónde
+ * vive el heap de la VM es de RUNTIME (PSRAM si la hay) y la imagen es ÚNICA
+ * para Pico y Metro ⇒ en la Metro esos 128 KB se quedaban DORMIDOS: reservados
+ * en SRAM interna y sin que nadie los tocara nunca, porque el heap se iba a la
+ * ventana PSRAM.
+ *
+ * Ahora el sitio se toma del final de la RAM (`__HeapLimit`), que el linker ya
+ * deja libre: tras `.bss` sólo hay el placeholder de `.heap` y las pilas del
+ * CPU viven en los bancos scratch, aparte. `malloc` crece desde `end` hacia
+ * arriba y nosotros ocupamos el techo, así que crecen el uno hacia el otro con
+ * todo el hueco de por medio — y `vm_sram_region()` comprueba que no se toquen.
+ *
+ * En la Metro no se reserva NADA: si hay PSRAM la región ni se mira, y esa RAM
+ * queda entera para malloc. */
+extern char end;                 /* fin de .bss — desde aquí crece sbrk/malloc */
+extern char __HeapLimit;         /* tope de la RAM principal */
+
+/* Margen que se le deja a malloc por debajo del buffer de la VM. El loader
+ * pide calloc/strdup por cada import de cada módulo; con 32 KB va sobrado. */
+#define VM_SRAM_MALLOC_MARGIN  (32 * 1024)
+
+static uint8_t* vm_sram_region(uint32_t* size_out) {
+    uintptr_t top    = (uintptr_t) &__HeapLimit;
+    uintptr_t base   = (top - VM_BUFFER_SIZE) & ~(uintptr_t) 7u;   /* 8-alineado */
+    uintptr_t malloc_floor = (uintptr_t) &end + VM_SRAM_MALLOC_MARGIN;
+    if (base < malloc_floor) {
+        /* No cabe el buffer entero: damos lo que quede, y que se vea. Mejor
+         * una VM con menos heap que pisarle la memoria a malloc en silencio. */
+        base = malloc_floor;
+        if (base >= top) { *size_out = 0; return NULL; }
+    }
+    *size_out = (uint32_t) (top - base);
+    return (uint8_t*) base;
+}
+
+uint8_t* s_vm_buffer      = NULL;   /* se fija en boot (vm_sram_region o PSRAM) */
+uint32_t s_vm_buffer_size = 0;
 
 /* --- LED on-board (GP25 en Pico 2 igual que Pico 1) -------------- */
 #ifndef PICO_DEFAULT_LED_PIN
@@ -755,7 +789,10 @@ static bpvm_status_t run_vm_once(int iteration) {
            (unsigned) size, (unsigned) fs_used_bytes(),
            (unsigned) fs_total_bytes());
 
-    bpvm_t* vm = bpvm_init(s_vm_buffer, VM_BUFFER_SIZE, 0);
+    /* H11 — el TAMAÑO REAL, no la constante: la región se recorta si malloc
+     * necesita su margen, y decirle a la VM que tiene más de lo que hay es
+     * exactamente cómo se pisa memoria. */
+    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size, 0);
     if (!vm) {
         printf("[ERR] bpvm_init failed\n");
         return BPVM_ERR_OOM;
@@ -950,18 +987,28 @@ static void vm_task(void* arg) {
 #endif
 
     /* H7.2.b — si hay PSRAM USABLE (detectada + QPI + RW test OK), el heap de la
-     * VM pasa de los 128 KB de SRAM interna a la ventana PSRAM (MBs). El resto
-     * del firmware no cambia: sólo de dónde sale s_vm_buffer. Sin PSRAM (Pico)
-     * se queda en s_sram_buffer. */
+     * VM va a la ventana PSRAM (MBs). El resto del firmware no cambia: sólo de
+     * dónde sale s_vm_buffer.
+     * H11 — y si NO la hay, se toma del final de la RAM (vm_sram_region). La
+     * diferencia con antes: en la placa CON PSRAM no se reserva nada de SRAM
+     * interna, porque ya no hay array estático que reservar. */
     if (board_desc()->psram_present && board_desc()->psram_bytes >= (1u << 20)) {
         s_vm_buffer      = (uint8_t*) (uintptr_t) PSRAM_XIP_BASE;
         s_vm_buffer_size = board_desc()->psram_bytes;
-        log_printf("vm: heap en PSRAM %u MB @ 0x%08x",
+        log_printf("vm: heap en PSRAM %u MB @ 0x%08x (SRAM interna sin reservar)",
                    (unsigned)(s_vm_buffer_size / (1024u * 1024u)),
                    (unsigned) PSRAM_XIP_BASE);
     } else {
-        log_printf("vm: heap en SRAM interna %u KB",
-                   (unsigned)(s_vm_buffer_size / 1024u));
+        s_vm_buffer = vm_sram_region(&s_vm_buffer_size);
+        if (s_vm_buffer == NULL) {
+            log_printf("vm: NO HAY SITIO en SRAM para el buffer de la VM");
+            log_flush();
+        } else {
+            log_printf("vm: heap en SRAM interna %u KB @ 0x%08x (libre para malloc: %u KB)",
+                       (unsigned)(s_vm_buffer_size / 1024u),
+                       (unsigned)(uintptr_t) s_vm_buffer,
+                       (unsigned)(((uintptr_t) s_vm_buffer - (uintptr_t) &end) / 1024u));
+        }
     }
 
     /* 1)→3): particiones del env → FS → VM. bpvm_boot_climb para en la
