@@ -930,3 +930,39 @@ entrada lleva una **máscara de refs** — el mismo patrón que ya usa
 El grueso del trabajo nuevo es de COMPILADOR (declarar la firma, comprobarla en el
 `::`, emitir los args), que es donde el coste es razonable. La VM sólo ve una entrada
 de cola con N palabras y una máscara.
+
+#### Contrato de `__eventRaise` (221) — fijado al implementar el rediseño (e2d1af2)
+
+Lo que el emisor deja en la pila, de abajo arriba. La **cabecera va encima** para que
+el despachador la saque primero y sepa cuántos argumentos tiene que desapilar:
+
+```
+arg0 .. argN-1   cada uno 8 bytes          <- los declarados, en orden
+refMask          4B, bit i = argi es ref   <- para el GC de la cola
+nargs            4B                        <- 0..4
+dest             4B, slot de vtable        <- 0 = sin suscriptor
+recv             8B, handle del receptor   <- null = sin suscriptor
+```
+
+**Los argumentos se normalizan a 8 bytes.** Con anchos mixtos el despachador
+necesitaría saber el de cada uno para desapilarlos, y eso serían DOS máscaras (refs
+para el GC + anchos para la pila). Con todo a 8 basta la de refs, y desaparece una
+clase entera de fallos de ancho — que en este proyecto no es teórica: el 4→8B costó
+H1 entera. El coste es 4 bytes de pila por argumento primitivo, en una operación que
+ya va a la cola.
+
+Los omitidos los rellena el COMPILADOR con su valor por defecto (H8.1, sustitución en
+el llamante), así que el builtin siempre ve la aridad declarada: no hay "argumento
+ausente" en tiempo de ejecución.
+
+#### El `::` pide el slot por la sobrecarga ELEGIDA, no por el nombre
+
+Un fallo que se cazó al probar el rediseño, y que merece quedar escrito porque es
+silencioso. Por la regla de H5.a *la primera firma se queda el nombre pelado y las
+siguientes se manglean*, así que `slotOf("pulsado")` devuelve **siempre** el slot de
+la primera declarada. Si la que casa con la firma del evento era la segunda, el
+semántico elegía bien y el emisor colgaba la otra — muda, y con la firma equivocada
+al despachar. El slot se pide con `emitName(fs)` de la elegida.
+
+`samples/EvSubs.bp` declara a propósito la sobrecarga que NO casa **primero**, para
+que el sample falle si alguien vuelve al atajo.
