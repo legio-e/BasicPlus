@@ -217,3 +217,165 @@ mucho vs el mirror) + **stopgaps retirados**.
 - **Nota:** `/sys/device.json` (#134) NO es el descriptor de particiones (vive DENTRO del FS; es
   config de runtime que consumen los programas BP). El descriptor de particiones es una capa por
   debajo, fuera del FS (2.2). Dos "configs" en dos capas distintas.
+
+---
+
+## H5.c — EVENTOS (charla de diseño, 26-jul)
+
+**Estado: DISEÑO EN CONVERSACIÓN. No se ha tocado código.** Método de siempre:
+acotar antes de programar.
+
+### Por qué hacen falta (planteamiento de Eduardo)
+
+Hoy, para que una clase llame a una función, hay que importar y cablear la llamada.
+Eso da dos problemas:
+
+1. **Referencias circulares** en los imports.
+2. **Solución fija**: si escribes una clase genérica, no sabes quién la va a usar,
+   así que no puedes nombrar la función a la que llamar.
+
+Hace falta algo **flexible y dinámico**: sin importar módulos desconocidos y sin
+cablear una función concreta de forma permanente.
+
+### El terreno: esto ya existe a medias en el GUI
+
+`bpvm_resolve_handler` (`bpgenvm-c/src/builtins.c:366`) hace en cada clic: coge el
+objeto, mira su `class_ptr`, busca en qué módulo cae esa dirección, compone la cadena
+`"libreria.modulo.onClick"` y hace **búsqueda lineal por strcmp** sobre la tabla de
+símbolos. Y `bpvm_call_bp_from_builtin` (`src/interp.c:235`) monta el frame, con la
+restricción escrita *"la función BP no debe ceder al scheduler"*.
+
+Limitaciones que mapean 1:1 con las preguntas de Eduardo: sólo llama a **funciones
+libres** (nunca a un método, no hay `this`), exige que sean **públicas** (busca en
+exports), y resuelve el módulo por el truco de "el objeto me dice dónde vive" — que
+sólo funciona porque el handler está en el mismo módulo que la clase.
+
+Es la prueba de que el mecanismo hace falta, y el inventario de lo que no repetir.
+
+### Decisión de fondo: un evento no es una referencia a función
+
+Es **una referencia a función MÁS su receptor**. Si el evento apunta a `obj.onTick()`,
+quien dispara no sabe sobre qué objeto invocarlo — y no puede saberlo, precisamente
+porque es genérico. El objeto viaja dentro del evento.
+
+Con eso, los tres tipos de función colapsan en **un par `(receptor, destino)`**:
+
+| receptor | destino | qué es |
+|---|---|---|
+| `0` | dirección absoluta de código | función de módulo / método estático |
+| handle del objeto | slot de vtable | método de instancia |
+
+Discriminante: `receptor == 0`. El segundo caso sale **polimórfico de regalo** —
+guardar el slot y no la dirección hace que una subclase que sobreescriba reciba el
+evento correcto.
+
+**El CS NO se guarda: se deriva.** Las dos derivaciones ya están escritas y en
+producción:
+
+- desde el objeto: `class_ptr -> vtable[slot] -> bpvm_get_cs_for_data_addr(desc)`
+  (es lo que hace `OP_INVOKE_VIRTUAL`, `src/interp.c:297`);
+- desde la dirección absoluta: `bpvm_module_for_code_addr(vm, target) -> code_start`
+  (es lo que hace el upcall del GUI, `src/interp.c:243`).
+
+Por eso el destino es una **dirección absoluta y no un índice**: un índice de
+ext-table sólo vale dentro del módulo que la posee, y un evento viaja — se crea en A
+y se dispara desde B.
+
+### Decisiones tomadas
+
+1. **Un solo suscriptor** (Eduardo). Cubre la mayoría de casos y evita gestionar una
+   lista. Puerta abierta a multicast en el futuro.
+2. **El handler puede ser PRIVADO.** El compilador emite la referencia donde se
+   *asigna* el evento, y ahí está dentro del módulo dueño. Obligar a hacerlo público
+   sería reintroducir el acoplamiento que el evento elimina, y choca con la norma
+   "público => property". Precedente en el código: `bpvm_aot_call_method_i32`
+   documenta *"NO requiere que el método esté exportado (la vtable lo lleva)"*. La
+   visibilidad protege el **nombre**, no la **dirección**.
+3. **Sintaxis `obj::onTick` / `Modulo::procesar`** (Eduardo recordó el `::` de
+   Java 8). Motivo propio de BP, no imitación: BP tiene **properties**, así que
+   `obj.algo` sin paréntesis ya significa "lee la property" — y una property
+   *ejecuta código*. El choque sería peor que en Java, que eligió `::` justo por no
+   colisionar con los campos.
+4. **Disparar ENCOLA; el thread dueño ejecuta** (modelo de interrupción). Ya es lo
+   que hace el GUI: `lvgl_click_cb` no ejecuta BP, encola el objptr y el worker lo
+   corre en `GUI_RUN` (`src/gui.c:178`). Elimina la restricción "no debe ceder al
+   scheduler", que es una bomba de relojería, y sobrevive a SMP.
+5. **Sin suscriptor => SILENCIO** (Eduardo). Razón de fondo: si disparar exigiera
+   suscriptor, el emisor dependería del suscriptor — el acoplamiento que veníamos a
+   romper. "Nadie escuchando" es un estado legítimo. Precedente: en Swing los eventos
+   son notificaciones, no llamadas; si nadie escucha, no hay error. Se pierde poco:
+   el nombre mal escrito, el método inexistente y la firma que no encaja los caza el
+   **compilador**. El residuo mudo es sólo "olvidé escribir la suscripción", y eso no
+   lo detecta ningún lenguaje.
+6. **Un evento NUNCA devuelve valor** (Eduardo): *"Si queremos un valor lo suyo sería
+   utilizar una llamada a una función normal, no un evento."* Con eso la semántica es
+   **una sola** (notificación, void): no hacen falta dos verbos, ni un camino síncrono
+   en la VM, ni decidir qué devolver cuando no hay nadie. La firma de un evento es
+   siempre void, lo que además simplifica el tipado.
+
+### Vida de los objetos: `owner` cambia el problema
+
+Planteamiento de Eduardo: cerrar un suscriptor sin dar de baja las suscripciones es un
+error de programación, pero también un rollo — el caso común es **una ventana con
+decenas de widgets**, y al destruirla deberían destruirse todos (declarados `owner`).
+Su preocupación: que el **orden** de destrucción no sea el adecuado y salte un evento
+espurio.
+
+Análisis. En Java/C# sólo hay dos malas opciones: referencia fuerte -> fuga y objeto
+zombi que sigue recibiendo eventos; débil -> puede evaporarse en silencio. **BP no está
+en ese mundo**: tiene un tercer modelo, el de los *arenas generacionales* — propiedad
+explícita para decidir la vida, índice+generación para detectar lo rancio.
+
+- `owner` es palabra clave del lenguaje (RAII). `OP_SET_FIELD_OWNER` libera el objeto
+  anterior y `bpvm_handle_kill` **sube la generación en ese instante**.
+- `bpvm_ref_dead` (`include/bpvm_internal.h:488`) compara la generación embebida en el
+  handle con la del slot. **O(1)**, ya usado en cada acceso a campo y array (el
+  «contrato B» que grita *"referencia a objeto eliminado"*).
+
+Conclusión: el evento **no necesita ser una referencia débil**, porque el objeto muere
+cuando su dueño lo suelta, apunte quien apunte. Se descarta la referencia débil, que
+traía el riesgo de que el handler se evaporase sin avisar.
+
+### Por qué la cola resuelve el miedo al orden
+
+**La cola convierte un problema de ORDEN en un problema de VIVEZA — y el de viveza ya
+está resuelto desde H1.** Si disparar encola, durante el desmontaje no se ejecuta nada;
+los eventos se acumulan y, al drenar, la destrucción ya terminó y quién vive es un
+hecho asentado.
+
+- *Clic encolado justo antes de cerrar* -> al drenar, generación rancia -> se descarta.
+- *Eventos que dispara el propio desmontaje* (LVGL manda `LV_EVENT_DELETE`, foco...) ->
+  en ese instante el objeto aún vive, pero como sólo se encolan, al drenar ya están
+  liberados y caen igual.
+- *El handler de A toca el widget B ya liberado* -> con la cola, el handler de A no
+  llega a ejecutarse durante el desmontaje.
+
+Los tres con el mismo mecanismo, sin depender de acertar el orden.
+
+Y la decisión 5 (silencio) **colapsa dos casos en uno**: "evento nulo" y "receptor con
+generación rancia" hacen lo mismo. El despachador no distingue ni tiene política:
+*¿hay destino vivo? Si no, vuelve.* Una comparación y un `return`.
+
+### Riesgos abiertos (a cerrar antes de codear)
+
+- **Si el cierre CEDE el control, la cola puede drenarse a medias.** Todo lo anterior
+  se apoya en que el desmontaje corre entero sin ceder al scheduler. Si es largo,
+  bloquea, o llama a algo que cede, la cola puede vaciarse con media ventana destruida
+  y vuelve el problema del orden. Mitigación propuesta: marcar la ventana como
+  «cerrándose» y que el despachador descarte lo suyo y lo de sus descendientes — que
+  es lo que hace LVGL internamente con su bandera de borrado.
+- **Raíces de GC.** El evento guarda un handle. Si vive en variable de módulo o dentro
+  de otro objeto, el recolector tiene que marcarlo. Con el historial de UAF por refs
+  mal contadas (y #20, que fue justo *"raíces GC de los upcalls"*), esto se decide en
+  el diseño, no se parchea después.
+- **Tipado.** Sin firma, un handler con la firma equivocada corrompe la pila en
+  silencio. H5.a ya dejó el mangling de firmas: hay con qué comprobarlo al compilar.
+  Falta decidir cómo se declara la firma del evento.
+
+### Números del caso real
+
+12 bytes por evento (handle de 64b + destino de 32b) **dentro del propio widget, sin
+tocar el heap**. Cincuenta widgets = 600 bytes. Suscribirse no puede fallar por
+memoria, y cerrar la ventana no dispara una cascada de liberaciones de nodos de lista
+— porque no hay listas. Confirma que "un suscriptor y sin alocación" era lo correcto
+para el caso de uso, no sólo lo simple.
