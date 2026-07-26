@@ -520,3 +520,64 @@ silencio sin suscriptor, sin valor de retorno, la firma única, `args` abierto,
 
 **Sigue abierto (implementación):** el desmontaje que cede el control a mitad, y las
 raíces de GC del receptor. Son las dos que hay que resolver antes de escribir código.
+
+### Declaración y acceso — CERRADO
+
+**`event` es palabra reservada** (Eduardo). No es azúcar sobre `property`: es una
+clase de miembro con su propia regla de acceso.
+
+**Quién dispara: el objeto de la clase, y nadie más.** En palabras de Eduardo, *"un
+evento es más bien una propiedad: la asignación es pública mientras que la referencia
+(la llamada) es privada"*. O sea, **acceso asimétrico**:
+
+| operación | quién |
+|---|---|
+| asignar (suscribirse / desuscribir con `null`) | cualquiera, desde fuera |
+| leer y **disparar** | sólo la clase (y sus descendientes) |
+
+Se llegó por un camino que conviene registrar, porque desmonta una objeción:
+
+1. Se verificó que **BP no tiene `protected`** (el lexer sólo reconoce `public`) y que
+   `PropertySymbol` lleva **un único `isPublic`** — sin visibilidad por accesor. ⇒ la
+   asimetría no se puede expresar hoy con nada, y eso **justifica** la palabra propia
+   en vez de resolverlo con modificadores sobre `property`.
+2. Se planteó una objeción: si disparar es privado *de la clase que lo declara*, el
+   cajón de sastre vive en la clase base y **`Button` no podría dispararlo** ⇒ A+B roto.
+3. **Eduardo lo desmontó**: en BP lo implícito (sin `public`) *no* es el `private` de
+   Java, es su `protected` — privado de cara al exterior, accesible en clase y
+   subclases. **Verificado en `SemanticAnalyzer.checkVisibility` (~línea 2988):**
+
+```java
+if (currentClass != null && owner != null
+        && (currentClass == owner || currentClass.isSubclassOf(owner)))
+    return;                                    // <- la subclase pasa
+if (!isPublic)
+    err(line, col, "miembro privado '" + sub.name + "' inaccesible aquí");
+```
+
+⇒ La objeción no existía: `Button` dispara el cajón de sastre de `Widget` **por la
+visibilidad que ya hay**, sin regla nueva. Y `event` queda como **lo implícito de
+siempre + un setter público**: un bit de asimetría, no una tercera categoría de
+visibilidad.
+
+**Consecuencia aceptada:** con asignación pública y un solo suscriptor, cualquiera
+puede **pisar la suscripción de otro en silencio** (el último gana). Es inherente a
+"un suscriptor" — no hay alternativa salvo que asignar sobre un evento ya ocupado se
+queje. Queda documentado como comportamiento, no como bug.
+
+**Desuscribirse** = asignar `null`, consistente con que suscribirse sea asignar.
+
+---
+
+### Estado final del diseño (26-jul)
+
+**Lenguaje: CERRADO.** Par (receptor, destino) · 1 suscriptor · handler privado · `::`
+· cola · silencio sin suscriptor · sin valor de retorno · firma única
+`(sender, kind, args)` · `args` `Object` y casi siempre nulo · `kind` del compilador ·
+A+B con cajón de sastre en la clase base · disparo doble (específico primero) ·
+`event` como palabra reservada con asignación pública y disparo de clase+subclases.
+
+**Abierto: sólo implementación de VM** (se resuelve mirando el código, no decidiendo):
+1. el desmontaje que **cede el control** a mitad ⇒ la cola se drena con media ventana
+   destruida (mitigación: bandera «cerrándose», como LVGL);
+2. **raíces de GC** del receptor del evento.
