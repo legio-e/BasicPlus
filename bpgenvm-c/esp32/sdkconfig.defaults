@@ -22,3 +22,11 @@ CONFIG_ESP_TASK_WDT_INIT=n
 # (H4.4). Los .mod subidos por el wire sobreviven al reset.
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Flash de 16 MB (modulo S3 de referencia). Sin esto el build declara 2 MB y el
+# bootloader NO ve mas alla: la tabla de particiones se queda en 2 MB y sobran
+# ~15 MB sin mapear, aunque el INFO (que lee el chip por JEDEC) diga 16.
+# OJO: sdkconfig es GENERADO — hay que borrarlo o `idf.py reconfigure` para que
+# recoja esto (mismo gotcha que el MEMPROT del P4).
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"

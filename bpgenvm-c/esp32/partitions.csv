@@ -1,10 +1,19 @@
 # Tabla de particiones — firmware BasicPlus ESP32-S3 (H9: bpenv + bpdata).
 # factory 1M | bpenv (env A/B, 32K) | bpdata (zona de datos FS+Packs, el resto).
-# El firmware busca "bpdata"; el limite FS|Packs vive en el env (un mando). Cabe en 2 MB.
+# El firmware busca "bpdata"; el limite FS|Packs vive en el env (un mando).
+#
+# FLASH 16 MB (modulo de referencia). Antes esta tabla acababa en 2 MB y dejaba
+# ~15 MB SIN MAPEAR: el INFO decia 16 MB (lo lee del chip por JEDEC) pero el
+# gestor de placa solo ofrecia 928 KB, que es lo que media bpdata. Lo cazo
+# Eduardo 27-jul comparando las dos cifras. Mismo modo de fallo que el
+# PICO_FLASH_SIZE_BYTES del Metro (#292): la constante mentia, el chip no.
+# Los OFFSETS de factory/bpenv/bpdata NO se tocan a proposito: asi el env
+# sobrevive y el volumen littlefs no se mueve — solo CRECE el sitio libre.
+# Para un modulo S3 de 2 MB: usar partitions_2m.csv.
 #
 # Name,     Type, SubType,  Offset,    Size,     Flags
 nvs,        data, nvs,      0x9000,    0x6000,
 phy_init,   data, phy,      0xf000,    0x1000,
 factory,    app,  factory,  0x10000,   0x100000,
 bpenv,      data, 0x41,     0x110000,  0x8000,
-bpdata,     data, 0x40,     0x118000,  0xE8000,
+bpdata,     data, 0x40,     0x118000,  0xEE8000,

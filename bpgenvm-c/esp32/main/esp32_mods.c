@@ -4452,7 +4452,6 @@ static const mod_entry_t s_mods[] = {
 };
 
 void esp32_mods_install(void) {
-    const uint8_t* d; uint32_t sz;
     unsigned n = (unsigned) (sizeof(s_mods) / sizeof(s_mods[0]));
     unsigned installed = 0;
     /* LOTE: sin suspender, cada fs_put auto-persiste reescribiendo la partición
