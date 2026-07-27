@@ -35,6 +35,7 @@ idf_component_register(
         "../../src/link.c"
         "../../src/scheduler.c"
         "../../src/events.c"           # H5.c: cola de eventos + inyección del handler entre quanta
+        "../../src/bpvm_dbg_wire.c"   # #326: ramo de depuracion del wire (portable, ex-Pico)
         "../../src/bpvm_log.c"         # log post-mortem: núcleo portable (idéntico en las 3 familias)
         "log_esp32.c"                  # ... y su cintura ESP32 (esp_timer + bpenv sector 2)
         "../../src/threading.c"

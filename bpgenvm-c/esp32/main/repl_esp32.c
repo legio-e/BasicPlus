@@ -25,6 +25,7 @@
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "board_mgr_esp32.h" /* H9: gestión de placa (STATE/ENV/PART) + board_boot_status */
 #include "log.h"             /* log persistente (post-mortem) → LOG_DUMP / LOG_CLEAR */
+#include "bpvm_dbg_wire.h"   /* #326: ramo de depuración, núcleo portable compartido */
 #include "aot_registry.h"    /* H4 AOT: bpvm_aot_clear/count (hook esp_aot_register) */
 
 #include "freertos/FreeRTOS.h"
@@ -354,6 +355,55 @@ static void handle_log_clear(long id, const json_obj_t* obj) {
     log_clear_flash();
     log_printf("LOG cleared via wire v1");
     wire_v1_send_reply_empty("LOG_CLEAR_REPLY", id);
+}
+
+/* ── #326 DEPURACIÓN: cintura del núcleo portable bpvm_dbg_wire ──
+ * La máquina de depurar (breakpoints por pc, pausa, step) ya estaba en la placa
+ * —vive en el intérprete— pero el ESP32 no tenía el cableado del wire, así que
+ * "Debug on device" contestaba UNSUPPORTED. Lo único de aquí es traducir JSON ↔
+ * comando tipado y prestar los buffers; la lógica es la MISMA que la del Pico
+ * (de ahí se extrajo el núcleo).
+ *
+ * Sobre reusar s_line_buf en el bucle de pausa: es correcto porque el pause_cb
+ * corre DENTRO de bpvm_run, en la misma task del REPL, y el `obj` de la request
+ * que lanzó el RUN ya no se usa cuando la VM está corriendo. Mismo esquema que
+ * el Pico lleva funcionando desde #140. */
+static void dbgw_send(const char* line, size_t len, void* user) {
+    (void) user;
+    wire_v1_send_line(line, len);
+}
+
+static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
+    (void) user;
+    int n = wire_v1_recv_line(-1, s_line_buf, sizeof(s_line_buf));
+    if (n <= 0) return -1;                       /* overflow / vacía: reintentar */
+    json_obj_t o;
+    if (json_parse(s_line_buf, (size_t) n, &o) != 0) return -1;
+    char type[40];
+    if (json_get_str(&o, "type", type, sizeof type) < 0) return -1;
+    out->kind = bpvm_dbg_wire_kind(type);
+    out->id   = json_get_long(&o, "id",    0);
+    out->pc   = json_get_long(&o, "pc",   -1);
+    out->bpId = json_get_long(&o, "bpId", -1);
+    out->addr = json_get_long(&o, "addr", -1);
+    out->ref  = json_get_long(&o, "ref",   0);
+    return 0;
+}
+
+/* Vive todo el RUN: el núcleo lo recibe como `user` del pause_cb. */
+static bpvm_dbg_wire_t s_dbgw = {
+    dbgw_next_cmd, dbgw_send, NULL, s_reply_buf, sizeof s_reply_buf, 0
+};
+
+/* Rellena un comando tipado desde el JSON ya parseado (camino fuera de pausa). */
+static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* c, long id,
+                               const json_obj_t* obj, const char* type) {
+    c->kind = bpvm_dbg_wire_kind(type);
+    c->id   = id;
+    c->pc   = json_get_long(obj, "pc",   -1);
+    c->bpId = json_get_long(obj, "bpId", -1);
+    c->addr = json_get_long(obj, "addr", -1);
+    c->ref  = json_get_long(obj, "ref",   0);
 }
 
 static void handle_stat(long id, const json_obj_t* obj) {
@@ -726,6 +776,12 @@ static void run_module_path(const char* path, long id) {
     s_kill_ack_id = -1;
     bpvm_set_poll(vm, esp32_run_poll_cb, NULL);   /* P-run-stop (#257) */
 
+    /* #326 — si el IDE dejó breakpoints o pidió PAUSE antes del RUN, engancha el
+     * depurador: aplica los pendientes y registra el callback de pausa. Si no hay
+     * nada armado no hace nada (coste cero en un run normal). */
+    s_dbgw.session = session;
+    bpvm_dbg_wire_arm(&s_dbgw, vm);
+
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     bpvm_status_t rs = bpvm_run(vm);
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
@@ -749,6 +805,10 @@ static void run_module_path(const char* path, long id) {
     for (int k = 0; k < s_mdn_exec_n; k++) heap_caps_free(s_mdn_exec[k]);
     s_mdn_exec_n = 0;
 #endif
+
+    /* #326 — la sesión de depuración muere con el RUN: olvida la vm y los
+     * breakpoints pendientes para que la siguiente parta limpia. */
+    bpvm_dbg_wire_reset();
 
     bpvm_destroy(vm);
     s_active_session = 0;
@@ -865,6 +925,20 @@ static void handle_request(const char* line, int len) {
     if (strcmp(type, "LOG_DUMP")  == 0) { handle_log_dump(id, &obj);  return; }
     if (strcmp(type, "LOG_CLEAR") == 0) { handle_log_clear(id, &obj); return; }
     if (strcmp(type, "RUN")   == 0) { handle_run(id, &obj);   return; }
+    /* #326 DEPURACIÓN pre-RUN: acumular breakpoints / pedir pausa inicial. Los
+     * demás (CONTINUE, STEP, LOCALS, STACK, READ_*) los atiende el bucle de
+     * pausa del núcleo INLINE, mientras la VM está detenida. */
+    {
+        bpvm_dbg_cmd_t c;
+        dbgw_cmd_from_json(&c, id, &obj, type);
+        if (c.kind != BPVM_DBGC_OTHER && bpvm_dbg_wire_handle(&s_dbgw, &c)) return;
+    }
+    /* PROMPT_RESPONSE huérfano (IO.prompt() aún no emite PROMPT_REQUEST en la
+     * VM-C): ack silente, como en el Pico — que el IDE no se quede esperando. */
+    if (strcmp(type, "PROMPT_RESPONSE") == 0) {
+        wire_v1_send_reply_empty("PROMPT_RESPONSE_REPLY", id);
+        return;
+    }
     if (strcmp(type, "TIME")  == 0) {   /* H14 — sync de hora del IDE → RTC */
         long epochSec = json_get_long(&obj, "epochSec", -1);
         if (epochSec >= 0) bpvm_rtc_set_now_ms((int64_t) epochSec * 1000LL);

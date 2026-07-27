@@ -37,7 +37,17 @@
 #define BP_ENV_SECTOR_SIZE   4096u
 #define BP_LOG_SLOT          2u                       /* 1er sector libre de bpenv */
 #define BP_LOG_OFFSET        (BP_LOG_SLOT * BP_ENV_SECTOR_SIZE)
-#define BP_LOG_SIZE          (2u * BP_ENV_SECTOR_SIZE)  /* 8 KB, como el STM32 */
+
+/* Tamaño POR FAMILIA. El buffer vive en RAM interna (el log tiene que estar vivo
+ * antes que la PSRAM), y el S3 va justo: con 8 KB el enlace se pasaba de
+ * `dram0_0_seg` por 304 bytes. Se queda con 1 sector = 4 KB, que es lo mismo que
+ * usa el Pico y da de sobra para un post-mortem. El P4 tiene RAM y PSRAM: 8 KB,
+ * como el STM32. En ambos casos sobra sitio en bpenv (24 KB libres). */
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+#  define BP_LOG_SIZE        (1u * BP_ENV_SECTOR_SIZE)  /* 4 KB — S3, RAM justa */
+#else
+#  define BP_LOG_SIZE        (2u * BP_ENV_SECTOR_SIZE)  /* 8 KB — P4, como el STM32 */
+#endif
 
 /* La región del log EN RAM (= imagen de flash: header + data). El núcleo escribe
  * aquí y el flush vuelca este mismo buffer, sin copia intermedia. Va en RAM
