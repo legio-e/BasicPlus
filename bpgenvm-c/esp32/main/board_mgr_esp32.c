@@ -19,6 +19,7 @@
 #include "log.h"          /* el resultado del climb, al log persistente */
 
 #include "esp_partition.h"
+#include "esp_flash.h"    /* #328 — el tamaño REAL del chip, no el que dice la tabla */
 #include "esp_log.h"
 
 #include <stdint.h>
@@ -122,6 +123,24 @@ static bpvm_boot_step_t layer_app(void* u) {
 void board_mgr_esp32_boot(void) {
     s_bpenv  = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "bpenv");
     s_bpdata = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "bpdata");
+
+    /* #328 — la tabla de particiones DICE dónde acaba la flash; el chip decide.
+     * Si la tabla promete más de lo que hay, las particiones altas existen para
+     * el SDK pero no tienen silicio detrás: se escribe, no se guarda, y al releer
+     * sale otra cosa — que es exactamente lo que littlefs reporta como CORRUPT.
+     * Nadie se entera hasta que algo escribe lejos, así que se comprueba aquí y
+     * se DICE, en vez de descubrirlo por un error que habla de otra cosa. */
+    {
+        uint32_t chip = 0;
+        if (esp_flash_get_size(NULL, &chip) == ESP_OK) {
+            uint32_t need = s_bpdata ? (uint32_t) (s_bpdata->address + s_bpdata->size) : 0u;
+            log_printf("flash: chip REAL %u KB | bpdata acaba en %u KB%s",
+                       (unsigned) (chip / 1024u), (unsigned) (need / 1024u),
+                       (need > chip) ? "  <<< LA TABLA PROMETE MAS FLASH DE LA QUE HAY" : "  (cabe)");
+        } else {
+            log_printf("flash: no se pudo leer el tamano real del chip");
+        }
+    }
 
     bpvm_boot_layers_t layers;
     layers.to_partitions = layer_partitions;
