@@ -41,8 +41,12 @@ const bpvm_env_t* board_mgr_env(void);
 /* Atiende un comando de gestión ya parseado (STATE/ENV_x/PART_x). `scratch` (>= 4
  * sectores = 16 KB) lo presta el llamador (s_put_buf de repl_esp32, libre durante
  * un comando de gestión) → sin BSS propio grande. Idéntico shape que board_mgr_pico. */
+/* #327 — `bulk`/`bulk_len` llevan el chunk de PACK_BURN_DATA que el transporte YA
+ * ha recibido (NULL si el comando no trae bulk). Mismo shape que el STM32: el
+ * núcleo bpvm_bmgr_wire lo espera en req.bulk. */
 void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
-                            unsigned char* scratch, unsigned long scratch_len);
+                            unsigned char* scratch, unsigned long scratch_len,
+                            const unsigned char* bulk, unsigned long bulk_len);
 
 #ifdef __cplusplus
 }

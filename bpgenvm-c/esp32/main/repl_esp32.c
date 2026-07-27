@@ -26,6 +26,7 @@
 #include "board_mgr_esp32.h" /* H9: gestión de placa (STATE/ENV/PART) + board_boot_status */
 #include "log.h"             /* log persistente (post-mortem) → LOG_DUMP / LOG_CLEAR */
 #include "bpvm_dbg_wire.h"   /* #326: ramo de depuración, núcleo portable compartido */
+#include "bpvm_pack.h"       /* #327: BPVM_PACK_BURN_CHUNK (bulk del PACK_BURN_DATA) */
 #include "aot_registry.h"    /* H4 AOT: bpvm_aot_clear/count (hook esp_aot_register) */
 
 #include "freertos/FreeRTOS.h"
@@ -925,8 +926,41 @@ static void handle_request(const char* line, int len) {
     /* H9 — gestión de placa (env + particiones): mismo núcleo que boardsim/Pico. */
     if (strcmp(type, "STATE") == 0
         || strncmp(type, "ENV_", 4) == 0
-        || strncmp(type, "PART_", 5) == 0) {
-        board_mgr_esp32_handle(id, &obj, type, s_put_buf, sizeof s_put_buf);
+        || strncmp(type, "PART_", 5) == 0
+        /* #327 — PACK_* también. La capacidad ya estaba en el núcleo compartido
+         * (bpvm_bmgr_wire atiende PACK_LS y compañía) y este firmware YA lo
+         * enlazaba: lo único que faltaba era encaminarle los comandos, así que
+         * el panel de packs del IDE se comía un UNSUPPORTED. Sólo el STM32 lo
+         * hacía. */
+        || strncmp(type, "PACK_", 5) == 0) {
+        /* PACK_BURN_DATA trae BULK. Buffer propio (≤4K) para no pisar el scratch
+         * que presta s_put_buf al gestor. CRÍTICO: consumir SIEMPRE los bytes
+         * anunciados —quepan o no— o el wire se desincroniza, igual que el PUT. */
+        static uint8_t s_burn_chunk[BPVM_PACK_BURN_CHUNK];
+        const uint8_t* bulk_ptr = NULL;
+        unsigned long  bulk_n   = 0;
+        long bulk = json_get_long(&obj, "bulk", -1);
+        if (bulk > 0) {
+            if ((size_t) bulk > sizeof s_burn_chunk) {
+                size_t rem = (size_t) bulk;
+                while (rem > 0) {
+                    size_t chunk = rem < sizeof s_burn_chunk ? rem : sizeof s_burn_chunk;
+                    if (wire_v1_recv_bulk(s_burn_chunk, chunk, sizeof s_burn_chunk) < 0) {
+                        wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
+                    }
+                    rem -= chunk;
+                }
+                wire_v1_send_error(id, "INVALID_PARAM", "chunk demasiado grande");
+                return;
+            }
+            if (wire_v1_recv_bulk(s_burn_chunk, (size_t) bulk, sizeof s_burn_chunk) < 0) {
+                wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
+            }
+            bulk_ptr = s_burn_chunk;
+            bulk_n   = (unsigned long) bulk;
+        }
+        board_mgr_esp32_handle(id, &obj, type, s_put_buf, sizeof s_put_buf,
+                               bulk_ptr, bulk_n);
         return;
     }
     /* H9 — gating por estado REAL del boot: sin FS (estado<2) los comandos de

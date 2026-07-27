@@ -148,7 +148,8 @@ void board_mgr_esp32_boot(void) {
 /* ── ramo del wire (STATE/ENV_x/PART_x): repl_esp32 encamina aquí ── */
 
 void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
-                            unsigned char* scratch, unsigned long scratch_len) {
+                            unsigned char* scratch, unsigned long scratch_len,
+                            const unsigned char* bulk, unsigned long bulk_len) {
     if (scratch == NULL || scratch_len < (unsigned long) (3u * BP_ENV_SECTOR + 512u)) {
         wire_v1_send_error(id, "INTERNAL_ERROR", "scratch insuficiente");
         return;
@@ -181,6 +182,8 @@ void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
     req.has_value = json_get_str(obj, "value", req.value, sizeof req.value) >= 0;
     for (int i = 0; i < BPVM_PART_COUNT; i++)
         req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
+    req.bulk     = bulk;            /* #327 H3: PACK_BURN_DATA (ya recibido) */
+    req.bulk_len = (long) bulk_len;
 
     int wrote = -1;
     int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);
