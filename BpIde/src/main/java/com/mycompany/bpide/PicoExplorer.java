@@ -1435,6 +1435,11 @@ public final class PicoExplorer extends JPanel {
         switch (arch) {
             case 40:  return "arm";      /* EM_ARM   — Cortex-M Thumb-2 */
             case 243: return "riscv";    /* EM_RISCV — RV32, ESP32-P4   */
+            /* EM_XTENSA (ESP32-S3). Sin toolchain AOT todavía: se devuelve igual
+             * para que AotBuild lo rechace con un aviso claro ("target no
+             * soportado") en vez de caer al ajuste del proyecto y compilar ARM
+             * para una placa Xtensa. Decir la verdad y fallar limpio. */
+            case 94:  return "xtensa";   /* EM_XTENSA — ESP32-S3        */
             default:  return "";
         }
     }

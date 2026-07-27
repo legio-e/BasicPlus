@@ -33,10 +33,14 @@
 #include "esp_mac.h"         /* INFO: uniqueId desde la MAC de efuse */
 #include "esp_flash.h"       /* INFO: tamaño real de la flash montada */
 #include "esp_heap_caps.h"   /* INFO: PSRAM mapeada (0 si el módulo no trae) */
+/* mdn_loader NO va dentro del #if: el INFO publica `arch` (bpvm_mdn_host_arch)
+ * en TODA la familia — el S3 también tiene que decir a qué ISA compilar. Sólo la
+ * CARGA de .mdn dinámico es de momento del P4. */
+#include "mdn_loader.h"      /* H4/H11: bpvm_load_mdn + bpvm_mdn_host_arch (INFO) */
+
 #if defined(__riscv)
 #include "esp_cache.h"       /* H4 AOT: sync de cachés tras copiar .mdn a RAM exec */
 #include "esp_log.h"         /* H4 AOT: trazas del cargador .mdn (consola) */
-#include "mdn_loader.h"      /* H4 AOT: bpvm_load_mdn (.mdn dinámico en el P4) */
 #endif
 
 #include <stdio.h>

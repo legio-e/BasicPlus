@@ -43,6 +43,12 @@
 #define MDN_ARCH_NONE      0    /* sin tag — legacy (ARM) */
 #define MDN_ARCH_ARM       40   /* EM_ARM   (Cortex-M Thumb-2) */
 #define MDN_ARCH_RISCV     243  /* EM_RISCV (RV32 — ESP32-P4) */
+/* EM_XTENSA (ESP32-S3). Aún NO hay toolchain AOT para Xtensa: se define para que
+ * el S3 diga la VERDAD en el INFO. Antes caía en el `else` del mapa y se
+ * declaraba MDN_ARCH_NONE, que no significa "Xtensa" sino "host, SIN gate" —
+ * doble daño: el IDE no sabía a qué compilar (tiraba del ajuste del proyecto,
+ * que puede decir "arm") y el gate de arquitectura quedaba desarmado. */
+#define MDN_ARCH_XTENSA    94   /* EM_XTENSA (ESP32-S3) */
 
 typedef struct {
     uint8_t  magic[4];     /* "MDN\0" */

@@ -34,9 +34,14 @@ idf_component_register(
         "../../src/net.c"              # H11 (#241): facade Net — sin backend hasta H11.c (lwIP) → RuntimeError atrapable
         "../../src/link.c"
         "../../src/scheduler.c"
+        "../../src/events.c"           # H5.c: cola de eventos + inyección del handler entre quanta
         "../../src/threading.c"
         "../../src/exceptions.c"
         "../../src/aot_registry.c"
+        # H11: aquí vive bpvm_mdn_host_arch(), la ISA que publica el INFO — sale de
+        # los MISMOS macros que gatean el loader, así que van juntos (una sola
+        # fuente de verdad). El S3 aún no carga .mdn: --gc-sections tira lo que no use.
+        "../../src/mdn_loader.c"
         "../../src/bpvm_aot_helpers.c"
         "../../src/scheduler_smp.c"
         "../../src/comm_common.c"

@@ -53,6 +53,7 @@ idf_component_register(
         "../../src/net.c"
         "../../src/link.c"
         "../../src/scheduler.c"
+        "../../src/events.c"           # H5.c: cola de eventos + inyección del handler entre quanta
         "../../src/threading.c"
         "../../src/exceptions.c"
         "../../src/aot_registry.c"

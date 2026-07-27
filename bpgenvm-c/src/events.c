@@ -114,7 +114,8 @@ static int inject(bpvm_t* vm, bpvm_thread_t* tc, const bpvm_event_t* e) {
     uint32_t need = 4u + BPVM_REF_SIZE + 12u;
     for (int i = 0; i < e->nargs; i++) need += (e->masks & (1u << (8 + i))) ? 8u : 4u;
     if (tc->sp + need > tc->stack_top) {
-        fprintf(stderr, "[bpvm] evento: sin pila en tid=%d — descartado\n", tc->id);
+        /* cast: int32_t no es `int` en todos los ports (en RISC-V es `long`) */
+        fprintf(stderr, "[bpvm] evento: sin pila en tid=%d — descartado\n", (int) tc->id);
         return 0;
     }
 

@@ -38,6 +38,9 @@
 #elif defined(__riscv)
 #  define MDN_HOST_ARCH   MDN_ARCH_RISCV
 #  define MDN_FUNCPTR_BIT 0u    /* RISC-V: dirección plana (entradas 2-byte aligned) */
+#elif defined(__XTENSA__)
+#  define MDN_HOST_ARCH   MDN_ARCH_XTENSA
+#  define MDN_FUNCPTR_BIT 0u    /* Xtensa: dirección plana */
 #else
 #  define MDN_HOST_ARCH   MDN_ARCH_NONE   /* host/x86: sin gate, dirección plana */
 #  define MDN_FUNCPTR_BIT 0u
