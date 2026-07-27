@@ -237,9 +237,10 @@ static int list_cb(const char* name, uint32_t size, void* user) {
     /* paso 4 cierre — CRC del contenido (mismo que java.util.zip.CRC32) para
      * que el IDE salte el PUT por contenido REAL del device. fs_get es una
      * búsqueda barata en RAM; si fallara, crc=0 (el IDE re-subirá, seguro). */
+    /* H11 — CRC por trozos (buffer de 256 B en la pila dentro de la fachada), no
+     * leyendo el fichero entero a un espejo. Misma función que usa el Pico. */
     uint32_t crc = 0;
-    const uint8_t* d; uint32_t sz;
-    if (fs_get(name, &d, &sz) == FS_OK) crc = bpvm_crc32(d, sz);
+    if (bpvm_fs_crc32(name, &crc) != 0) crc = 0;
     char e[128];
     int o = 0;
     if (!ctx->first) e[o++] = ',';
@@ -411,9 +412,10 @@ static void handle_stat(long id, const json_obj_t* obj) {
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
     }
-    const uint8_t* data; uint32_t size;
-    fs_status_t s = fs_get(path, &data, &size);
-    if (s != FS_OK) { const char* c; const char* m; map_fs_status(s, &c, &m); wire_v1_send_error(id, c, m); return; }
+    /* H11 — el STAT sólo quiere el TAMAÑO; leer el fichero entero para eso era
+     * absurdo (y costaba el espejo de 64 KB). */
+    uint32_t size = 0;
+    if (bpvm_fs_stat(path, &size) != 0) { wire_v1_send_error(id, "NOT_FOUND", "no existe"); return; }
     int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "STAT_REPLY", id);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "size", (long) size);
     if (off >= 0) off = wire_v1_field_bool(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "isDir", 0);
@@ -428,15 +430,28 @@ static void handle_get(long id, const json_obj_t* obj) {
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return;
     }
-    const uint8_t* data; uint32_t size;
-    fs_status_t s = fs_get(path, &data, &size);
-    if (s != FS_OK) { const char* c; const char* m; map_fs_status(s, &c, &m); wire_v1_send_error(id, c, m); return; }
+    /* H11 — el GET NO carga el fichero: sólo necesita su TAMAÑO para la cabecera
+     * y después lo va escupiendo POR TROZOS. Antes era un fs_get, o sea el
+     * fichero ENTERO al espejo de 64 KB para copiarlo acto seguido al wire. */
+    uint32_t size = 0;
+    if (bpvm_fs_stat(path, &size) != 0) { wire_v1_send_error(id, "NOT_FOUND", "no existe"); return; }
     int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "GET_REPLY", id);
     if (off >= 0) off = wire_v1_field_bulk(s_reply_buf, sizeof(s_reply_buf), (size_t) off, (size_t) size);
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
     if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "GET_REPLY no cabe"); return; }
     wire_v1_send_line(s_reply_buf, (size_t) off);
-    if (size > 0) wire_v1_send_bulk(data, (size_t) size);
+    /* Trozo de 256 B = el mismo que usa littlefs por dentro: ni introduce un
+     * número nuevo ni fuerza al motor a partir lecturas. Si el FS falla a media
+     * transferencia ya no se puede rectificar (la cabecera con `bulk` ya salió),
+     * así que se corta y el cliente lo detecta por el bulk incompleto. */
+    uint32_t sent = 0;
+    while (sent < size) {
+        uint8_t chunk[256];
+        long n = bpvm_fs_read_at(path, sent, chunk, sizeof chunk);
+        if (n <= 0) break;
+        wire_v1_send_bulk(chunk, (size_t) n);
+        sent += (uint32_t) n;
+    }
 }
 
 static void handle_put(long id, const json_obj_t* obj, const uint8_t* bulk, size_t bulk_size) {
@@ -525,23 +540,34 @@ static void handle_del(long id, const json_obj_t* obj) {
 
 /* ====================== TERMINAL (RUN) ====================== */
 
-/* Resolución de módulo: base-dir del proyecto, luego /app/ y /lib/ (igual que Pico). */
-static fs_status_t v1_get_resolve(const char* name, const uint8_t** data_out, uint32_t* size_out) {
-    char path[FS_NAME_LEN];
-    /* H19 — base-dir del proyecto PRIMERO (carpeta del módulo principal).
-     * Plano (basedir="") o entry absoluto (name[0]=='/') → se salta. */
+/* Resolución de módulo: base-dir del proyecto, luego /app/ y /lib/ (igual que Pico).
+ *
+ * H11 — devuelve la RUTA que existe y su tamaño, NO los bytes. Antes resolvía a un
+ * puntero, y sostener ese puntero costaba un espejo estático de 64 KB: el fichero
+ * entero en RAM sólo para que el loader lo copiase a memory[]. Ahora el llamante
+ * abre por esa ruta y lee por trozos. Mismo cambio que cerró #305 en el Pico. */
+static fs_status_t v1_resolve_path(const char* name, char* out, size_t out_cap,
+                                   uint32_t* size_out) {
+    /* H19 — base-dir del proyecto PRIMERO (carpeta del módulo principal): un
+     * import resuelve contra /app/<proj>/ antes que el resto del path. Plano
+     * (basedir="") o entry absoluto (name[0]=='/') → se salta este candidato. */
     const char* bd = bpvm_fs_basedir();
     if (bd && bd[0] && name[0] != '/') {
-        snprintf(path, sizeof(path), "%s/%s", bd, name);
-        if (fs_get(path, data_out, size_out) == FS_OK) return FS_OK;
+        snprintf(out, out_cap, "%s/%s", bd, name);
+        if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
     }
-    fs_status_t s = fs_get(name, data_out, size_out);
-    if (s == FS_OK) return FS_OK;
-    snprintf(path, sizeof(path), "/app/%s", name);
-    s = fs_get(path, data_out, size_out);
-    if (s == FS_OK) return FS_OK;
-    snprintf(path, sizeof(path), "/lib/%s", name);
-    return fs_get(path, data_out, size_out);
+    snprintf(out, out_cap, "%s", name);
+    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
+    snprintf(out, out_cap, "/app/%s", name);
+    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
+    snprintf(out, out_cap, "/lib/%s", name);
+    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
+    return FS_ERR_NOT_FOUND;
+}
+
+/* Lector por trozos para el loader: el .mod se queda en el FS. */
+static long v1_mod_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    return bpvm_fs_read_at((const char*) user, off, dst, n);
 }
 
 static long s_active_session = 0;
@@ -656,8 +682,8 @@ static void run_module_path(const char* path, long id) {
      * Si esta línea NO aparece, el firmware es PRE-H19 (reflashear). */
     printf("[run] entry='%s' basedir='%s'\n", path, bpvm_fs_basedir());
 
-    const uint8_t* data; uint32_t size;
-    fs_status_t fs_s = v1_get_resolve(path, &data, &size);
+    char main_path[FS_NAME_LEN]; uint32_t size;
+    fs_status_t fs_s = v1_resolve_path(path, main_path, sizeof(main_path), &size);
     if (fs_s != FS_OK) {
         const char* c; const char* m; map_fs_status(fs_s, &c, &m);
         if (id >= 0) wire_v1_send_error(id, c, m);
@@ -681,7 +707,9 @@ static void run_module_path(const char* path, long id) {
     v1_sink_ctx_t sink_ctx = { session };
     bpvm_set_output(vm, v1_output_sink, &sink_ctx);
 
-    bpvm_status_t ls = bpvm_load_mod_buffer(vm, data, size, path);
+    /* H11 — el .mod se queda en el FS y el loader lo lee por trozos directamente
+     * a memory[]. Antes se mirroreaba entero en s_get_scratch (64 KB de .bss). */
+    bpvm_status_t ls = bpvm_load_mod_stream(vm, v1_mod_read_at, main_path, size, path);
     if (ls != BPVM_OK) {
         send_exited(session, "RUNTIME_ERROR", (int) ls, 0, bpvm_status_str(ls));
         bpvm_destroy(vm); s_active_session = 0; return;
@@ -706,9 +734,10 @@ static void run_module_path(const char* path, long id) {
                 if (already) continue;
                 char fname[48];
                 snprintf(fname, sizeof(fname), "%s.mod", owner);
-                const uint8_t* dep; uint32_t dep_size;
-                if (v1_get_resolve(fname, &dep, &dep_size) != FS_OK) continue;
-                bpvm_status_t ds = bpvm_load_mod_buffer(vm, dep, dep_size, owner);
+                char dep_path[FS_NAME_LEN]; uint32_t dep_size;
+                if (v1_resolve_path(fname, dep_path, sizeof(dep_path), &dep_size) != FS_OK) continue;
+                bpvm_status_t ds = bpvm_load_mod_stream(vm, v1_mod_read_at, dep_path,
+                                                        dep_size, owner);
                 if (ds != BPVM_OK) {
                     char em[80]; snprintf(em, sizeof(em), "dep %s: %s", fname, bpvm_status_str(ds));
                     send_exited(session, "RUNTIME_ERROR", (int) ds, 0, em);
@@ -739,8 +768,8 @@ static void run_module_path(const char* path, long id) {
         if (!mname || !mname[0]) continue;
         char mdn_path[80];   /* nombre de módulo (<=63) + ".mdn" + NUL, holgado */
         snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
-        const uint8_t* mdn_data; uint32_t mdn_size;
-        if (v1_get_resolve(mdn_path, &mdn_data, &mdn_size) != FS_OK) continue;
+        char mdn_real[FS_NAME_LEN]; uint32_t mdn_size;
+        if (v1_resolve_path(mdn_path, mdn_real, sizeof(mdn_real), &mdn_size) != FS_OK) continue;
         /* El P4 (RISC-V) NO tiene MALLOC_CAP_EXEC (su RAM interna es unificada =
          * ejecutable; ese cap solo existe en targets con split IRAM/DRAM como
          * Xtensa). RAM interna normal, que la CPU puede ejecutar. */
@@ -750,7 +779,13 @@ static void run_module_path(const char* path, long id) {
         void* exec = heap_caps_malloc(mdn_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 #endif
         if (!exec) { ESP_LOGW("AOT", "%s: sin RAM exec (%u B)", mdn_path, (unsigned) mdn_size); continue; }
-        memcpy(exec, mdn_data, mdn_size);
+        /* H11 — del FS DIRECTO a la RAM ejecutable. Antes iba al espejo de 64 KB y
+         * de ahí un memcpy: dos copias y un estático permanente para nada. */
+        if (bpvm_fs_read(mdn_real, (uint8_t*) exec, mdn_size) != (long) mdn_size) {
+            ESP_LOGW("AOT", "%s: lectura incompleta", mdn_path);
+            heap_caps_free(exec);
+            continue;
+        }
         /* Coherencia de cachés (RISC-V): escribir la D-cache a memoria (C2M),
          * invalidar la I-cache, y fence.i para sincronizar el flujo de
          * instrucciones. Sin esto se ejecutaría código rancio/basura. */
@@ -827,8 +862,13 @@ static void handle_run(long id, const json_obj_t* obj) {
  * llama tras fs_init + wire init, antes del bucle REPL. El poll del
  * run atiende HELLO/KILL → la placa nunca queda sorda. */
 void repl_esp32_autorun(void) {
-    const uint8_t* data; uint32_t size;
-    if (fs_get("/sys/auto.txt", &data, &size) != FS_OK) return;
+    /* H11 — sólo interesa la PRIMERA LÍNEA (una ruta), así que se lee la cabeza
+     * del fichero a la pila. Antes se cargaba entero al espejo de 64 KB. */
+    uint8_t head[FS_NAME_LEN + 8];
+    long got = bpvm_fs_read_at("/sys/auto.txt", 0, head, sizeof head);
+    if (got <= 0) return;
+    const uint8_t* data = head;
+    uint32_t size = (uint32_t) got;
 
     char path[FS_NAME_LEN];
     size_t n = 0, i = 0;

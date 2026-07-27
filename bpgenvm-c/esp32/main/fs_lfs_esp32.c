@@ -67,12 +67,21 @@ static uint8_t s_look_buf[64] __attribute__((aligned(8)));
 static struct lfs_config s_cfg;   /* debe sobrevivir (littlefs guarda el ptr) */
 
 /* ───────────────────────── shim del API legado fs.h ──────────────────────
- * fs_get: contrato "válido hasta el siguiente put/delete" → un scratch de UN
- * fichero (littlefs streamea, no mirrorea todo el FS como fs_ram.c). 64K entra
- * en el DRAM del S3 y sobra para el .mod más grande (Gui.mod ~32K). La ganancia
- * de RAM real llega en B2 v2 al retirar el shim. */
-#define FS_GET_SCRATCH_BYTES  (64u * 1024u)
-static uint8_t s_get_scratch[FS_GET_SCRATCH_BYTES] __attribute__((aligned(8)));
+ * H11 — AQUÍ VIVÍA `fs_get` Y SU ESPEJO DE 64 KB, y ya no existen.
+ *
+ * El shim heredaba de fs_ram.c un contrato imposible de cumplir barato: devolver
+ * un PUNTERO a los bytes, "válido hasta el siguiente put/delete". Con littlefs
+ * los ficheros no están mapeados en memoria, así que sostener ese puntero
+ * obligaba a copiar el fichero ENTERO a un estático de 64 KB — reservados en
+ * dram0_0_seg para siempre, se usaran o no. Era el mayor estático del firmware.
+ *
+ * Todos sus llamantes se pasaron a la fachada portable, que trabaja por trozos:
+ *   - ¿existe? / ¿tamaño?      → bpvm_fs_stat            (STAT, esp32_mods)
+ *   - leer un cacho            → bpvm_fs_read_at         (GET, autorun)
+ *   - cargar un módulo         → bpvm_load_mod_stream    (RUN: main, deps)
+ *   - leer a un destino propio → bpvm_fs_read            (.mdn → RAM ejecutable)
+ *   - CRC                      → bpvm_fs_crc32           (LS)
+ * Mismo camino que cerró #305 en el Pico, donde el espejo era de 128 KB. */
 
 fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     /* H9: la zona de datos es la particion vendor "bpdata"; la REGION FS es su
@@ -129,16 +138,6 @@ fs_status_t fs_save_to_flash(void) {
 void fs_autosave_suspend(void) { }
 void fs_autosave_resume(int save_now) { (void) save_now; }
 
-fs_status_t fs_get(const char* name, const uint8_t** data_out, uint32_t* size_out) {
-    uint32_t sz = 0;
-    if (bpvm_fs_stat(name, &sz) != 0) return FS_ERR_NOT_FOUND;
-    if (sz > FS_GET_SCRATCH_BYTES) return FS_ERR_TOO_BIG;
-    long n = bpvm_fs_read(name, s_get_scratch, FS_GET_SCRATCH_BYTES);
-    if (n < 0 || (uint32_t) n != sz) return FS_ERR_INVALID;
-    if (data_out) *data_out = s_get_scratch;
-    if (size_out) *size_out = sz;
-    return FS_OK;
-}
 
 /* fs_put crea los dirs padre (el FS viejo era PLANO; littlefs necesita /lib
  * antes de escribir /lib/x). */

@@ -8,6 +8,7 @@
  */
 #include "esp32_mods.h"
 #include "fs.h"
+#include "bpvm_fs.h"   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */
 #include <stdint.h>
 
 static const unsigned char core_mod[] = {
@@ -4461,7 +4462,10 @@ void esp32_mods_install(void) {
     fs_autosave_suspend();
     for (unsigned i = 0; i < n; i++) {
         /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */
-        if (fs_get(s_mods[i].path, &d, &sz) != 0) {
+        /* H11 — sólo se pregunta si EXISTE; leerlo entero para eso costaba el
+         * espejo de 64 KB (y por 14 módulos, uno detrás de otro). */
+        uint32_t sz_dummy;
+        if (bpvm_fs_stat(s_mods[i].path, &sz_dummy) != 0) {
             if (fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len) == FS_OK) installed++;
         }
     }

@@ -96,7 +96,9 @@ int fs_list(fs_list_cb_t cb, void* user);
 
 /* Lookup. Si existe, devuelve puntero a los bytes en RAM y rellena
  * *size_out. El puntero es válido hasta el siguiente fs_put/fs_delete. */
-fs_status_t fs_get(const char* name, const uint8_t** data_out, uint32_t* size_out);
+/* H11 — fs_get RETIRADO: su contrato (devolver un PUNTERO a los bytes) obligaba
+ * a un espejo estático de 64 KB con littlefs. Usar la fachada por trozos:
+ * bpvm_fs_stat / bpvm_fs_read_at / bpvm_fs_read / bpvm_fs_crc32. */
 
 /* Inserta o sobreescribe. Si ya existe, libera el slot antiguo. */
 fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size);
