@@ -17,6 +17,7 @@
 
 #include "json_min.h"
 #include "bpvm_boot.h"
+#include "bpvm_env.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +30,13 @@ void board_mgr_esp32_boot(void);
 
 /* Estado REAL del boot (para STATE del wire y el gating de FS/RUN en repl_esp32). */
 const bpvm_boot_status_t* board_boot_status(void);
+
+/* #311 — el env del boot, para configurar HARDWARE (el panel del P4 sale de aquí).
+ * Igual que el Pico con `psram`: la config de placa vive en el env, no en un
+ * fichero del FS. Nunca NULL, pero puede ser inválido (sin partición bpenv o env
+ * en blanco) — bpvm_env_get* lo detecta y devuelve el default, así que el
+ * llamante no necesita comprobar nada. Válido desde el estado 2 (particiones). */
+const bpvm_env_t* board_mgr_env(void);
 
 /* Atiende un comando de gestión ya parseado (STATE/ENV_x/PART_x). `scratch` (>= 4
  * sectores = 16 KB) lo presta el llamador (s_put_buf de repl_esp32, libre durante

@@ -39,11 +39,24 @@ static bpvm_part_layout_t s_layout;
 static uint8_t s_env_a[BP_ENV_SECTOR];
 static uint8_t s_env_b[BP_ENV_SECTOR];
 
+/* #311 — el env VIVO del boot, para que lo consulte quien configure hardware
+ * (hoy el panel del P4). Antes se parseaba en una local de layer_partitions y se
+ * tiraba, así que la única config de placa accesible luego era /sys/board.json —
+ * un fichero DENTRO del FS, que se pierde al formatear y depende de una capa que
+ * arranca después. El env está en su partición, sobrevive al reflasheo y ya está
+ * disponible en el estado 2. `payload` apunta dentro de s_env_a/s_env_b, que son
+ * estáticos y sólo se tocan aquí en el boot (el ENV_SET del wire trabaja sobre el
+ * scratch prestado) ⇒ esta vista sigue válida toda la sesión. Corolario: un
+ * ENV_SET NO cambia el hardware ya configurado; surte efecto al reiniciar. */
+static bpvm_env_t s_env;
+
 /* La memoria de la VM la definen los main.c (S3 array SRAM / P4 puntero PSRAM). */
 extern uint8_t* s_vm_buffer;
 extern uint32_t s_vm_buffer_size;
 
 const bpvm_boot_status_t* board_boot_status(void) { return &s_boot; }
+
+const bpvm_env_t* board_mgr_env(void) { return &s_env; }
 
 /* ── cintura del env: lee/escribe los 2 sectores A/B de la partición bpenv ── */
 
@@ -74,10 +87,9 @@ static bpvm_boot_step_t layer_partitions(void* u) {
     if (!s_bpenv)  { snprintf(r.reason, sizeof r.reason, "sin particion bpenv"); return r; }
     if (!s_bpdata) { snprintf(r.reason, sizeof r.reason, "sin particion bpdata"); return r; }
     env_read_slots(s_env_a, s_env_b);
-    bpvm_env_t env;
-    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &env);
+    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &s_env);
     int bad = -1;
-    bpvm_part_err_t e = bpvm_part_layout(&env, 0u, data_usable(), BP_ENV_SECTOR, &s_layout, &bad);
+    bpvm_part_err_t e = bpvm_part_layout(&s_env, 0u, data_usable(), BP_ENV_SECTOR, &s_layout, &bad);
     if (e == BPVM_PART_OK) { r.ok = 1; return r; }
     snprintf(r.reason, sizeof r.reason, "%s", bpvm_part_err_str(e));
     return r;

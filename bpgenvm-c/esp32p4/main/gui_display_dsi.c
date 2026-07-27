@@ -29,8 +29,7 @@
 #include "esp_lcd_touch.h"       /* G5: esp_lcd_touch_* (read_data / get_coordinates) */
 #include "esp_lcd_touch_gt911.h" /* G5: driver GT911 */
 #include "bpvm_gui.h"            /* G6: contrato de la costura bpvm_gui_disp_* */
-#include "fs.h"                  /* imagen única: leer /sys/board.json */
-#include "json_min.h"            /* imagen única: parsear la clave "display" */
+#include "board_mgr_esp32.h"      /* imagen única: la placa se describe en el ENV */
 #include <string.h>
 
 static const char *TAG = "p4_gfx";
@@ -40,11 +39,11 @@ static const char *TAG = "p4_gfx";
  * del catálogo (resolución, timings, velocidad DSI/DPI, polaridad del backlight,
  * transformación del táctil y la función de creación del IC). Los pines de control
  * (reset 27, backlight 26, I2C táctil 7/8) y el LDO del DPHY son IGUALES en las
- * placas conocidas y quedan comunes. Selección: /sys/board.json {"display":"..."}
- * en p4_panel_select(); sin fichero/clave → PANELS[0] (ek79007, la EV).
+ * placas conocidas y quedan comunes. Selección: el ENV (`display=st7701`) en
+ * p4_panel_select(); sin clave → PANELS[0] (ek79007, la EV).
  * Params pin-a-pin data-driven = V4. */
 typedef struct {
-    const char *name;                 /* clave para /sys/board.json */
+    const char *name;                 /* valor de la clave `display` del env */
     int hres, vres;                   /* resolución física del panel */
     int dsi_lanes, dsi_mbps;
     int dpi_clk_mhz;
@@ -93,37 +92,40 @@ static const p4_panel_cfg_t PANELS[] = {
 };
 
 /* Panel VIGENTE. Default = 1ª entrada (ek79007); p4_panel_select() lo cambia si
- * /sys/board.json lo pide (se llama UNA vez, antes del primer uso de s_cfg). */
+ * el env lo pide (se llama UNA vez, antes del primer uso de s_cfg). */
 static const p4_panel_cfg_t *s_cfg = &PANELS[0];
 
-/* Selección runtime del panel por /sys/board.json ({"display":"st7701"}). Sin
- * fichero, sin clave o valor fuera de catálogo → queda el default (la EV no
- * necesita configurar nada). El FS ya está montado: app_main lo inicializa antes
- * del REPL y la GUI arranca después (lazy, al primer builtin Gui). */
+/* Clave del env que elige el panel. CANÓNICA (minúsculas), igual que "psram" en
+ * el RP2350: el firmware compara EXACTO. */
+#define ENV_KEY_DISPLAY  "display"
+
+/* #311 — selección runtime del panel por el ENV (`display=st7701`). Antes esto
+ * salía de /sys/board.json y era la última config de HARDWARE que vivía dentro
+ * del FS: se perdía al formatear, viajaba en el sistema de ficheros de la app y
+ * dependía de una capa (FS, estado 3) que arranca DESPUÉS de conocerse la placa.
+ * El env está en su propia partición, sobrevive al reflasheo y ya está leído en
+ * el estado 2 — mismo sitio y mismo trato que `psram`, que es de lo que se
+ * trataba: una sola manera de decir cómo es esta placa.
+ * Sin clave o valor fuera de catálogo → queda el default (la EV no configura
+ * nada). El backlight viene con el panel: `bl_invert` es un campo de la entrada,
+ * así que elegir el panel elige también su polaridad. */
 static void p4_panel_select(void)
 {
-    const uint8_t *data = NULL;
-    uint32_t       size = 0;
-    if (fs_get("/sys/board.json", &data, &size) != FS_OK || data == NULL || size == 0) {
-        ESP_LOGI(TAG, "panel: sin /sys/board.json — default %s", s_cfg->name);
-        return;
-    }
-    json_obj_t obj;
-    char       name[24] = {0};
-    if (json_parse((const char *) data, (size_t) size, &obj) != 0 ||
-        json_get_str(&obj, "display", name, sizeof name) < 0 || name[0] == '\0') {
-        ESP_LOGI(TAG, "panel: /sys/board.json sin clave \"display\" — default %s", s_cfg->name);
+    char name[24] = {0};
+    if (bpvm_env_get(board_mgr_env(), ENV_KEY_DISPLAY, name, sizeof name) < 0 || name[0] == '\0') {
+        ESP_LOGI(TAG, "panel: env sin \"%s\" — default %s", ENV_KEY_DISPLAY, s_cfg->name);
         return;
     }
     for (size_t i = 0; i < sizeof PANELS / sizeof PANELS[0]; i++) {
         if (strcmp(PANELS[i].name, name) == 0) {
             s_cfg = &PANELS[i];
-            ESP_LOGI(TAG, "panel: board.json display=\"%s\" -> %dx%d", s_cfg->name, s_cfg->hres, s_cfg->vres);
+            ESP_LOGI(TAG, "panel: env %s=\"%s\" -> %dx%d (bl_invert=%d)",
+                     ENV_KEY_DISPLAY, s_cfg->name, s_cfg->hres, s_cfg->vres, s_cfg->bl_invert);
             return;
         }
     }
-    ESP_LOGW(TAG, "panel: display=\"%s\" NO esta en el catalogo (ek79007, st7701) — default %s",
-             name, s_cfg->name);
+    ESP_LOGW(TAG, "panel: %s=\"%s\" NO esta en el catalogo (ek79007, st7701) — default %s",
+             ENV_KEY_DISPLAY, name, s_cfg->name);
 }
 
 #define LDO_CHAN     3       /* LDO_VO3 -> VDD_MIPI_DPHY (igual en las placas conocidas) */
