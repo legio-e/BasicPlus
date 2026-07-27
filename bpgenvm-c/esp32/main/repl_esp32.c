@@ -24,6 +24,7 @@
 #include "bpvm_pico.h"       /* paso 4 cierre — bpvm_pico_reset_cause (INFO) */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "board_mgr_esp32.h" /* H9: gestión de placa (STATE/ENV/PART) + board_boot_status */
+#include "log.h"             /* log persistente (post-mortem) → LOG_DUMP / LOG_CLEAR */
 #include "aot_registry.h"    /* H4 AOT: bpvm_aot_clear/count (hook esp_aot_register) */
 
 #include "freertos/FreeRTOS.h"
@@ -261,6 +262,98 @@ static void handle_list(long id, const json_obj_t* obj) {
     list_ctx_t ctx = { 1 };
     fs_list(list_cb, &ctx);
     wire_v1_send_line("]}", 2);   /* cierra + '\n' */
+}
+
+/* ── SAVE / DF / MKDIR: el IDE los manda y la familia ESP32 no los tenía ──
+ * SAVE lo dispara PicoExplorer tras cada subida y desde el botón de guardar, así
+ * que el desfase saltaba en uso normal. Con littlefs la escritura ya es firme
+ * (fs_save_to_flash es el punto de sincronización de la fachada), pero el
+ * comando debe existir y contestar como en el Pico: el protocolo es UNO. */
+static void handle_save(long id, const json_obj_t* obj) {
+    (void) obj;
+    uint32_t t0 = (uint32_t) (esp_timer_get_time() / 1000);
+    fs_status_t s = fs_save_to_flash();
+    uint32_t dt = (uint32_t) (esp_timer_get_time() / 1000) - t0;
+    if (s != FS_OK) {
+        const char* c; const char* m; map_fs_status(s, &c, &m);
+        wire_v1_send_error(id, c, m);
+        return;
+    }
+    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "SAVE_REPLY", id);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "durationMs", (long) dt);
+    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
+    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "SAVE_REPLY no cabe"); return; }
+    wire_v1_send_line(s_reply_buf, (size_t) off);
+}
+
+static void handle_df(long id, const json_obj_t* obj) {
+    (void) obj;
+    long total = (long) fs_total_bytes();
+    long used  = (long) fs_used_bytes();
+    long fcnt  = (long) fs_file_count();
+    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "DF_REPLY", id);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "totalBytes", total);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "usedBytes", used);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "freeBytes", total - used);
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fileCount", fcnt);
+    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
+    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "DF_REPLY no cabe"); return; }
+    wire_v1_send_line(s_reply_buf, (size_t) off);
+}
+
+/* Igual que en el Pico: el `/` es namespace, no hay nodos de directorio → MKDIR
+ * es idempotente y silenciosa. Existe para que el IDE no se coma un error. */
+static void handle_mkdir(long id, const json_obj_t* obj) {
+    (void) obj;
+    wire_v1_send_reply_empty("MKDIR_REPLY", id);
+}
+
+/* ── LOG (post-mortem) ── Escapa el texto a JSON y lo va soltando por bulk, sin
+ * buffer intermedio del tamaño del log. Mismo formato de reply que el Pico. */
+static void log_chunk_sink(const char* data, size_t len, void* user) {
+    (void) user;
+    char esc[256 * 2];   /* el núcleo entrega chunks de 256 B; peor caso = x2 */
+    size_t o = 0;
+    for (size_t i = 0; i < len; i++) {
+        char ch = data[i];
+        const char* rep = NULL;
+        switch (ch) {
+            case '"':  rep = "\\\""; break;
+            case '\\': rep = "\\\\"; break;
+            case '\n': rep = "\\n";  break;
+            case '\r': rep = "\\r";  break;
+            case '\t': rep = "\\t";  break;
+            default: break;
+        }
+        if (rep) {
+            if (o + 2 > sizeof esc) { wire_v1_send_bulk((const uint8_t*) esc, o); o = 0; }
+            esc[o++] = rep[0]; esc[o++] = rep[1];
+        } else if ((unsigned char) ch < 0x20) {
+            if (o + 6 > sizeof esc) { wire_v1_send_bulk((const uint8_t*) esc, o); o = 0; }
+            o += (size_t) snprintf(esc + o, sizeof esc - o, "\\u%04x", (unsigned) ch);
+        } else {
+            if (o + 1 > sizeof esc) { wire_v1_send_bulk((const uint8_t*) esc, o); o = 0; }
+            esc[o++] = ch;
+        }
+    }
+    if (o) wire_v1_send_bulk((const uint8_t*) esc, o);
+}
+
+static void handle_log_dump(long id, const json_obj_t* obj) {
+    (void) obj;
+    char head[64];
+    int hn = snprintf(head, sizeof head, "{\"type\":\"LOG_DUMP_REPLY\",\"id\":%ld,\"text\":\"", id);
+    wire_v1_send_bulk((const uint8_t*) head, (size_t) hn);
+    log_dump(log_chunk_sink, NULL);
+    wire_v1_send_line("\"}", 2);   /* cierra + '\n' */
+}
+
+static void handle_log_clear(long id, const json_obj_t* obj) {
+    (void) obj;
+    log_clear_ram();
+    log_clear_flash();
+    log_printf("LOG cleared via wire v1");
+    wire_v1_send_reply_empty("LOG_CLEAR_REPLY", id);
 }
 
 static void handle_stat(long id, const json_obj_t* obj) {
@@ -744,7 +837,8 @@ static void handle_request(const char* line, int len) {
         int is_fs = strcmp(type, "LIST") == 0 || strcmp(type, "STAT") == 0
                  || strcmp(type, "GET")  == 0 || strcmp(type, "PUT")  == 0
                  || strncmp(type, "PUT_", 4) == 0   /* #294 streaming: PUT_BEGIN/DATA/END */
-                 || strcmp(type, "DEL")  == 0;
+                 || strcmp(type, "DEL")  == 0
+                 || strcmp(type, "SAVE") == 0 || strcmp(type, "DF") == 0;
         if (is_fs && bs->state < BPVM_BOOT_FS) {
             wire_v1_send_error(id, "NOT_READY", "FS no disponible: configurar particiones");
             return;
@@ -763,6 +857,13 @@ static void handle_request(const char* line, int len) {
     if (strcmp(type, "PUT_DATA")  == 0) { handle_put_data(id, &obj, s_put_buf, bulk_size); return; }
     if (strcmp(type, "PUT_END")   == 0) { handle_put_end(id, &obj); return; }
     if (strcmp(type, "DEL")   == 0) { handle_del(id, &obj);   return; }
+    if (strcmp(type, "SAVE")  == 0) { handle_save(id, &obj);  return; }
+    if (strcmp(type, "DF")    == 0) { handle_df(id, &obj);    return; }
+    if (strcmp(type, "MKDIR") == 0) { handle_mkdir(id, &obj); return; }
+    /* El log NO se gatea por el estado del boot: si el arranque se ha quedado a
+     * medias es justo cuando hace falta leerlo (vive en RAM + bpenv, no en el FS). */
+    if (strcmp(type, "LOG_DUMP")  == 0) { handle_log_dump(id, &obj);  return; }
+    if (strcmp(type, "LOG_CLEAR") == 0) { handle_log_clear(id, &obj); return; }
     if (strcmp(type, "RUN")   == 0) { handle_run(id, &obj);   return; }
     if (strcmp(type, "TIME")  == 0) {   /* H14 — sync de hora del IDE → RTC */
         long epochSec = json_get_long(&obj, "epochSec", -1);
@@ -777,7 +878,15 @@ static void handle_request(const char* line, int len) {
         return;
     }
 
-    wire_v1_send_error(id, "UNSUPPORTED", "type no implementado en el firmware ESP32");
+    /* El mensaje DICE CUÁL. El de antes ("type no implementado") obligaba a
+     * adivinar qué comando había mandado el IDE — costó una vuelta entera de
+     * diagnóstico. Si el wire crece y una familia se queda atrás, que el error
+     * nombre al culpable. */
+    {
+        char msg[96];
+        snprintf(msg, sizeof msg, "comando '%s' no implementado en el firmware ESP32", type);
+        wire_v1_send_error(id, "UNSUPPORTED", msg);
+    }
 }
 
 void repl_esp32_run(void) {

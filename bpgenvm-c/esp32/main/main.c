@@ -18,6 +18,7 @@
 #include "hw_esp32.h"
 #include "esp32_mods.h"
 #include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
+#include "log.h"               /* log persistente (post-mortem) — lo antes posible */
 
 /* Buffer caller-provided de la VM. repl_esp32.c lo referencia como extern
  * (PUNTERO, igual convención que repl_v1.c en la Pico/Metro y que el P4). El S3
@@ -33,6 +34,12 @@ void app_main(void)
      * NO al wire (UART0). Sirven para depurar el arranque. */
     printf("\n=== BasicPlus VM en ESP32-S3 (H4.3 — wire v1) ===\n");
     printf("[boot] consola/logs = USB-Serial-JTAG | wire v1 = UART0 @115200\n");
+
+    /* LO PRIMERO: el log persistente. Recupera el snapshot de la sesión anterior
+     * (post-mortem: si el arranque previo se fue al garete, aquí está escrito) y
+     * queda grabando desde antes del climb del boot. */
+    log_init();
+    log_printf("=== boot ESP32-S3 ===");
 
     /* H9 — arranque escalonado: identidad → particiones del env → FS → VM. Sin
      * particiones/FS el climb se queda abajo y el host conduce (nada se

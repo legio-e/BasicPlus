@@ -27,6 +27,7 @@
 #include "esp_eth.h"
 #include "esp_event.h"
 #include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
+#include "log.h"               /* log persistente (post-mortem) — lo antes posible */
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"   /* heap_caps_malloc: heap de la VM en PSRAM */
@@ -259,6 +260,13 @@ static void vm_buffer_init_psram(void)
 
 void app_main(void)
 {
+    /* LO PRIMERO: el log persistente. Recupera el snapshot de la sesión anterior
+     * (post-mortem: si el arranque previo se fue al garete, aquí está escrito) y
+     * queda grabando desde antes de la PSRAM y del climb del boot — vive en RAM
+     * interna + un sector libre de bpenv, así que no depende de ninguno. */
+    log_init();
+    log_printf("=== boot ESP32-P4 ===");
+
     /* Heap de la VM en PSRAM (común a todos los transportes). */
     vm_buffer_init_psram();
 
