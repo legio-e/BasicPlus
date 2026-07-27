@@ -6,6 +6,7 @@
  * de la Pico → los programas que importan stdlib resuelven sin uploads.
  */
 #include "stm32_mods.h"
+#include "bpvm_fs.h"   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */
 #include "stm32_fs.h"
 #include <stdint.h>
 
@@ -4450,11 +4451,13 @@ static const mod_entry_t s_mods[] = {
 };
 
 void stm32_mods_install(void) {
-    const uint8_t* d; uint32_t sz;
     unsigned n = (unsigned) (sizeof(s_mods) / sizeof(s_mods[0]));
     for (unsigned i = 0; i < n; i++) {
         /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */
-        if (fs_get(s_mods[i].path, &d, &sz) != 0) {
+        /* H11 — sólo se pregunta si EXISTE; leerlo entero para eso costaba el
+         * espejo (y por 14 módulos seguidos). */
+        uint32_t sz_dummy;
+        if (bpvm_fs_stat(s_mods[i].path, &sz_dummy) != 0) {
             fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len);
         }
     }

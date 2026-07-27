@@ -72,10 +72,23 @@ static uint8_t s_prog_buf[FS_CACHE];
 static uint8_t s_look_buf[64] __attribute__((aligned(8)));
 static struct lfs_config s_cfg;   /* debe sobrevivir (littlefs guarda el ptr) */
 
-/* scratch de fs_get: contrato "válido hasta el siguiente fs op" → un buffer.
- * Tamaño = arena vieja per-placa → MISMO presupuesto de SRAM que el FS anterior
- * (neutral). Alineado a 8 para el .mdn zero-copy (Thumb-2 ejecutado in-place). */
-static uint8_t s_get_scratch[BOARD_FS_ARENA_SIZE] __attribute__((aligned(8)));
+/* H11 — AQUÍ VIVÍA `fs_get` Y SU ESPEJO, el mayor estático de todo el proyecto:
+ * BOARD_FS_ARENA_SIZE = 496 KB en la Discovery, 96 KB en la Nucleo.
+ *
+ * El shim heredaba de stm32_fs.c un contrato imposible de cumplir barato:
+ * devolver un PUNTERO a los bytes. Con littlefs los ficheros no están mapeados,
+ * así que sostener ese puntero obligaba a copiar el fichero ENTERO a RAM. Se
+ * dimensionó igual que la arena del FS viejo para NO mover el presupuesto
+ * durante la migración a littlefs — un apaño consciente, y H11 es el momento
+ * de cobrarlo.
+ *
+ * Todos los llamantes usan ya la fachada portable, por trozos:
+ *   ¿existe?/¿tamaño? → bpvm_fs_stat · leer un cacho → bpvm_fs_read_at
+ *   cargar módulo     → bpvm_load_mod_stream        · CRC → bpvm_fs_crc32
+ * Y el .mdn, que se ejecuta ZERO-COPY in-place (era la razón del alineado a 8
+ * y de que el espejo tuviera que ser permanente), se reserva ahora de la arena
+ * de la VM con bpvm_arena_reserve: exactamente los bytes que ocupa. Mismo
+ * camino que el Pico en #305. */
 
 /* ── listado (compartido por fs_count/fs_entry y clear_lib) ────────────── */
 #define LIST_MAX_ENTRIES  64
@@ -222,16 +235,6 @@ int fs_put_append(const char* name, const uint8_t* data, uint32_t size) {
     return (bpvm_fs_write(name, data, size, 1) == 0) ? 0 : -1;
 }
 
-int fs_get(const char* name, const uint8_t** data, uint32_t* size) {
-    uint32_t sz = 0;
-    if (bpvm_fs_stat(name, &sz) != 0) return -1;
-    if (sz > sizeof(s_get_scratch)) return -1;              /* no cabe en el scratch */
-    long n = bpvm_fs_read(name, s_get_scratch, sizeof(s_get_scratch));
-    if (n < 0 || (uint32_t) n != sz) return -1;
-    if (data) *data = s_get_scratch;
-    if (size) *size = sz;
-    return 0;
-}
 
 int fs_del(const char* name) {
     if (!bpvm_fs_exists(name)) return -1;

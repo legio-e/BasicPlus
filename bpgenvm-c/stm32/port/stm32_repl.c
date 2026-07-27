@@ -135,9 +135,10 @@ static void handle_list(long id, json_obj_t* obj) {
         if (plen > 0 && *rel == '/') rel++;
         /* paso 4 cierre — CRC del contenido (== java.util.zip.CRC32) para el
          * skip-PUT por contenido real del device. fs_get por el nombre COMPLETO. */
+        /* H11 — CRC por trozos (256 B en la pila dentro de la fachada), no
+         * leyendo el fichero entero a un espejo. Igual que Pico y ESP32. */
         uint32_t crc = 0;
-        const uint8_t* fd; uint32_t fsz;
-        if (fs_get(name, &fd, &fsz) == 0) crc = bpvm_crc32(fd, fsz);
+        if (bpvm_fs_crc32(name, &crc) != 0) crc = 0;
         int w = snprintf(buf + o, sizeof(buf) - o,
             "%s{\"name\":\"%s\",\"size\":%lu,\"crc\":%lu,\"isDir\":false,\"mtime\":0}",
             first ? "" : ",", rel, (unsigned long) size, (unsigned long) crc);
@@ -154,8 +155,9 @@ static void handle_stat(long id, json_obj_t* obj) {
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
         stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
     }
-    const uint8_t* d; uint32_t size;
-    if (fs_get(path, &d, &size) != 0) {
+    /* H11 — el STAT sólo quiere el TAMAÑO. */
+    uint32_t size = 0;
+    if (bpvm_fs_stat(path, &size) != 0) {
         stm32_wire_send_error(id, "NOT_FOUND", "no existe"); return;
     }
     char buf[128];
@@ -181,8 +183,10 @@ static void handle_get(long id, json_obj_t* obj) {
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
         stm32_wire_send_error(id, "INVALID_PATH", "missing path"); return;
     }
-    const uint8_t* d; uint32_t size;
-    if (fs_get(path, &d, &size) != 0) {
+    /* H11 — el GET no carga el fichero: sólo su TAMAÑO para la cabecera, y
+     * luego lo escupe POR TROZOS de 256 B (el mismo trozo interno de littlefs). */
+    uint32_t size = 0;
+    if (bpvm_fs_stat(path, &size) != 0) {
         stm32_wire_send_error(id, "NOT_FOUND", "no existe"); return;
     }
     char buf[96];
@@ -190,7 +194,14 @@ static void handle_get(long id, json_obj_t* obj) {
         "{\"type\":\"GET_REPLY\",\"id\":%ld,\"bulk\":%lu}", id, (unsigned long) size);
     if (n > 0) {
         stm32_wire_send_line(buf, (size_t) n);
-        stm32_wire_send_bulk(d, size);
+        uint32_t sent = 0;
+        while (sent < size) {
+            uint8_t chunk[256];
+            long r = bpvm_fs_read_at(path, sent, chunk, sizeof chunk);
+            if (r <= 0) break;
+            stm32_wire_send_bulk(chunk, (uint32_t) r);
+            sent += (uint32_t) r;
+        }
     }
 }
 
@@ -383,22 +394,32 @@ static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
 }
 
 /* Resuelve un nombre de módulo en el FS: prueba base-dir/name, name, /app/name,
- * /lib/name (el IDE sube las deps a /lib). 0 OK, -1 no está. */
-static int stm32_fs_resolve(const char* name, const uint8_t** data, uint32_t* size) {
-    char p[80];
+ * /lib/name (el IDE sube las deps a /lib). 0 OK, -1 no está.
+ *
+ * H11 — devuelve la RUTA que existe y su tamaño, NO los bytes. Antes resolvía a
+ * un puntero, y sostenerlo costaba un espejo estático del tamaño de la arena del
+ * FS viejo: 496 KB en la Discovery, 96 KB en la Nucleo. Ahora el llamante abre
+ * por esa ruta y lee por trozos. Mismo cambio que #305 en el Pico. */
+static int stm32_fs_resolve(const char* name, char* out, size_t out_cap, uint32_t* size) {
     /* H19 — base-dir del proyecto PRIMERO (carpeta del módulo principal).
      * Plano (basedir="") o entry absoluto (name[0]=='/') → se salta. */
     const char* bd = bpvm_fs_basedir();
     if (bd && bd[0] && name[0] != '/') {
-        snprintf(p, sizeof(p), "%s/%s", bd, name);
-        if (fs_get(p, data, size) == 0) return 0;
+        snprintf(out, out_cap, "%s/%s", bd, name);
+        if (bpvm_fs_stat(out, size) == 0) return 0;
     }
-    if (fs_get(name, data, size) == 0) return 0;
-    snprintf(p, sizeof(p), "/app/%s", name);
-    if (fs_get(p, data, size) == 0) return 0;
-    snprintf(p, sizeof(p), "/lib/%s", name);
-    if (fs_get(p, data, size) == 0) return 0;
+    snprintf(out, out_cap, "%s", name);
+    if (bpvm_fs_stat(out, size) == 0) return 0;
+    snprintf(out, out_cap, "/app/%s", name);
+    if (bpvm_fs_stat(out, size) == 0) return 0;
+    snprintf(out, out_cap, "/lib/%s", name);
+    if (bpvm_fs_stat(out, size) == 0) return 0;
     return -1;
+}
+
+/* Lector por trozos para el loader: el .mod se queda en el FS. */
+static long stm32_mod_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    return bpvm_fs_read_at((const char*) user, off, dst, n);
 }
 
 /* Núcleo del RUN — compartido entre el comando RUN del wire (id >= 0)
@@ -409,8 +430,8 @@ static void run_module_path(const char* path, long id) {
     /* H19-F1 — fija el base-dir/main-module del proyecto si el módulo vive en
      * /app/<proj>/ (el IDE manda la ruta cualificada). Plano → sin base-dir. */
     bpvm_fs_set_basedir_from_module(path);
-    const uint8_t* data; uint32_t size;
-    if (stm32_fs_resolve(path, &data, &size) != 0) {
+    char main_path[80]; uint32_t size;
+    if (stm32_fs_resolve(path, main_path, sizeof(main_path), &size) != 0) {
         if (id >= 0) stm32_wire_send_error(id, "NOT_FOUND", "no existe");
         else         BOARD_LED_ERR_ON();            /* autorun: ruta mala */
         return;
@@ -431,7 +452,9 @@ static void run_module_path(const char* path, long id) {
 
     uint32_t t0 = HAL_GetTick();
     BOARD_LED_RUN_ON();                           /* LED RUN = ejecutando un programa */
-    bpvm_status_t st = bpvm_load_mod_buffer(vm, data, size, path);
+    /* H11 — el .mod se queda en el FS y el loader lo lee por trozos directamente
+     * a memory[]. Antes se mirroreaba entero en el espejo del fs_get. */
+    bpvm_status_t st = bpvm_load_mod_stream(vm, stm32_mod_read_at, main_path, size, path);
 
     /* Resolución iterativa de imports: por cada módulo cargado y cada import,
      * carga <owner>.mod del FS si aún no está. Hasta 4 pasadas (deps de deps).
@@ -453,7 +476,7 @@ static void run_module_path(const char* path, long id) {
                     if (strcmp(vm->modules[j].name, owner) == 0) { already = 1; break; }
                 if (already) continue;
                 char fname[48]; snprintf(fname, sizeof(fname), "%s.mod", owner);
-                const uint8_t* dep; uint32_t dep_size;
+                char dep_path[80]; uint32_t dep_size;
                 /* H3.c — resolución FS → packs (spec §4): el FS ECLIPSA al pack
                  * (aviso al log persistente); si no está en FS, carga XIP desde
                  * la zona de packs montada (código EN FLASH, cero copia). */
@@ -462,7 +485,7 @@ static void run_module_path(const char* path, long id) {
                 uint32_t pk_len = 0;
                 const uint8_t* pk_mod = pk_rb
                     ? bpvm_pack_find(pk_rb, pk_rs, "mod", owner, &pk_len) : NULL;
-                if (stm32_fs_resolve(fname, &dep, &dep_size) != 0) {
+                if (stm32_fs_resolve(fname, dep_path, sizeof(dep_path), &dep_size) != 0) {
                     if (!pk_mod) continue;               /* falta → guard */
                     bpvm_status_t ds = bpvm_loader_load_xip(vm, pk_mod, pk_len, owner);
                     if (ds != BPVM_OK) { st = ds; break; }
@@ -474,7 +497,8 @@ static void run_module_path(const char* path, long id) {
                 if (pk_mod) {
                     log_printf("aviso: '%s' del FS eclipsa al del pack", owner);
                 }
-                bpvm_status_t ds = bpvm_load_mod_buffer(vm, dep, dep_size, owner);
+                bpvm_status_t ds = bpvm_load_mod_stream(vm, stm32_mod_read_at,
+                                                        dep_path, dep_size, owner);
                 if (ds != BPVM_OK) { st = ds; break; }
                 loaded_any = 1;
             }
@@ -520,8 +544,24 @@ static void run_module_path(const char* path, long id) {
             if (!mname || !mname[0]) continue;
             char mdn_path[72];   /* name[64] + ".mdn" + NUL: sin -Wformat-truncation */
             snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
-            const uint8_t* mdn_data; uint32_t mdn_size;
-            if (stm32_fs_resolve(mdn_path, &mdn_data, &mdn_size) != 0) continue;
+            char mdn_real[80]; uint32_t mdn_size;
+            if (stm32_fs_resolve(mdn_path, mdn_real, sizeof(mdn_real), &mdn_size) != 0) continue;
+            /* H11 — el .mdn es ZERO-COPY: los thunks se registran como punteros
+             * DENTRO de este buffer, así que tiene que seguir vivo y en RAM toda
+             * la ejecución. Antes vivía en el espejo del fs_get (la razón de que
+             * el espejo fuera permanente y del tamaño de la arena); ahora se le
+             * reserva de la arena de la VM exactamente lo que ocupa, 4-alineado
+             * que es lo que pide Thumb-2. Mismo remedio que el Pico. */
+            uint8_t* mdn_data = bpvm_arena_reserve(vm, mdn_size, 4);
+            if (!mdn_data) {
+                log_printf("AOT: %s (%lu B) no cabe en la arena — sin overlay",
+                           mdn_real, (unsigned long) mdn_size);
+                continue;
+            }
+            if (bpvm_fs_read(mdn_real, mdn_data, mdn_size) != (long) mdn_size) {
+                log_printf("AOT: %s no se pudo leer — sin overlay", mdn_real);
+                continue;
+            }
             int mrc = bpvm_load_mdn(vm, mdn_data, (size_t) mdn_size);
             /* Visible en la consola del IDE: sin esto, un fallo de carga
              * (p.ej. buffer desalineado) caía a interpretado EN SILENCIO. */
@@ -585,8 +625,13 @@ static void handle_run(long id, json_obj_t* obj) {
  * primera línea por el mismo camino que un RUN del wire. El poll del
  * run atiende HELLO/KILL → el IDE puede conectar y parar la app. */
 static void autorun_boot(void) {
-    const uint8_t* data; uint32_t size;
-    if (fs_get("/sys/auto.txt", &data, &size) != 0) return;   /* sin autorun */
+    /* H11 — sólo interesa la PRIMERA LÍNEA (una ruta): se lee la cabeza del
+     * fichero a la pila en vez de cargarlo entero a un espejo. */
+    uint8_t head[96];
+    long got = bpvm_fs_read_at("/sys/auto.txt", 0, head, sizeof head);
+    if (got <= 0) return;                                    /* sin autorun */
+    const uint8_t* data = head;
+    uint32_t size = (uint32_t) got;
 
     char path[64];
     size_t n = 0, i = 0;

@@ -24,7 +24,9 @@ int  fs_put_append(const char* name, const uint8_t* data, uint32_t size);
 
 /* Devuelve puntero (dentro del arena) + tamaño. 0 OK, -1 no existe.
  * El puntero es válido hasta el siguiente fs_put/fs_del/fs_format. */
-int  fs_get(const char* name, const uint8_t** data, uint32_t* size);
+/* H11 — fs_get RETIRADO: su contrato (devolver un PUNTERO a los bytes) obligaba
+ * a un espejo estático del tamaño de la arena (496 KB / 96 KB). Usar la fachada
+ * por trozos: bpvm_fs_stat / bpvm_fs_read_at / bpvm_fs_read / bpvm_fs_crc32. */
 
 /* Borra (compacta el arena). 0 OK, -1 no existe. */
 int  fs_del(const char* name);
