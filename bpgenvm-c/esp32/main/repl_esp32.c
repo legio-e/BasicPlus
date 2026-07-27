@@ -904,7 +904,22 @@ static void handle_request(const char* line, int len) {
                 if (wire_v1_recv_bulk(drain, chunk, sizeof(drain)) < 0) break;
                 remaining -= (long) chunk;
             }
-            wire_v1_send_error(json_get_long(&obj, "id", 0), "NO_SPACE", "bulk supera el buffer del servidor");
+            /* #329 — este NO_SPACE no tiene NADA que ver con el FS (el volumen
+             * puede estar vacío): el bulk no cabe en s_put_buf. Como el IDE sólo
+             * ve el código, era indistinguible de "FS lleno" y mandaba a mirar
+             * el sitio equivocado. Dejamos las cifras en el log y el mensaje
+             * dice de qué buffer habla. */
+            char t[40] = {0};
+            json_get_str(&obj, "type", t, sizeof t);   /* `type` se lee más abajo */
+            log_printf("wire: bulk RECHAZADO %ld B > buffer %u B ('%s') — NO es el FS",
+                       bulk, (unsigned) sizeof(s_put_buf), t);
+            log_flush();
+            {
+                char m[96];
+                snprintf(m, sizeof m, "bulk %ld B supera el buffer del servidor (%u B)",
+                         bulk, (unsigned) sizeof(s_put_buf));
+                wire_v1_send_error(json_get_long(&obj, "id", 0), "BULK_TOO_BIG", m);
+            }
             return;
         }
         if (wire_v1_recv_bulk(s_put_buf, (size_t) bulk, sizeof(s_put_buf)) < 0) {
@@ -1038,6 +1053,13 @@ static void handle_request(const char* line, int len) {
 }
 
 void repl_esp32_run(void) {
+    /* #329 — igual que el Pico ("REPL entry (wire v1)"): marca la frontera entre
+     * el arranque y el diálogo con el IDE. Si el log se corta antes de esta
+     * línea, el problema es de boot; si aparece, la placa estaba escuchando y lo
+     * que venga después es del comando. También deja a la vista el tamaño del
+     * buffer de bulk, que es distinto por placa (S3 48K / P4 64K). */
+    log_printf("REPL entry (wire v1) — buffer de bulk %u B", (unsigned) sizeof(s_put_buf));
+    log_flush();
     for (;;) {
         int n = wire_v1_recv_line(-1, s_line_buf, sizeof(s_line_buf));
         if (n < 0) { wire_v1_send_fatal("PROTOCOL_ERROR", "línea excede WIRE_V1_LINE_MAX"); continue; }

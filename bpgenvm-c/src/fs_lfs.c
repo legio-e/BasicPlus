@@ -34,6 +34,34 @@ static lfs_t s_lfs;
 static int   s_mounted = 0;
 static const struct lfs_config* s_cfg_ptr = NULL;   /* B2: para reformat */
 
+/* #329 — último lfs_error crudo (ver bpvm_fs_lfs.h). La fachada devuelve 0/-1 y
+ * el -1 no informa de nada; el firmware lo traducía a "FS lleno" SIEMPRE. Esto
+ * conserva el código de verdad para quien reporta el error. */
+static int s_last_err = 0;
+
+int bpvm_fs_lfs_last_err(void) { return s_last_err; }
+
+const char* bpvm_fs_lfs_err_str(int e) {
+    switch (e) {
+        case LFS_ERR_OK:         return "OK";
+        case LFS_ERR_IO:         return "IO (fallo de flash)";
+        case LFS_ERR_CORRUPT:    return "CORRUPT (volumen danado)";
+        case LFS_ERR_NOENT:      return "NOENT (no existe)";
+        case LFS_ERR_EXIST:      return "EXIST (ya existe)";
+        case LFS_ERR_NOTDIR:     return "NOTDIR";
+        case LFS_ERR_ISDIR:      return "ISDIR";
+        case LFS_ERR_NOTEMPTY:   return "NOTEMPTY";
+        case LFS_ERR_BADF:       return "BADF";
+        case LFS_ERR_FBIG:       return "FBIG (fichero demasiado grande)";
+        case LFS_ERR_INVAL:      return "INVAL (parametro invalido)";
+        case LFS_ERR_NOSPC:      return "NOSPC (sin espacio)";
+        case LFS_ERR_NOMEM:      return "NOMEM (sin RAM)";
+        case LFS_ERR_NOATTR:     return "NOATTR";
+        case LFS_ERR_NAMETOOLONG:return "NAMETOOLONG";
+        default:                 return "desconocido";
+    }
+}
+
 /* B2 — CERO malloc en las ops de fichero (obligatorio en micro): los open
  * usan lfs_file_opencfg con buffers ESTÁTICOS de cache_size. Bastan DOS
  * porque el lock grueso serializa las ops y solo be_copy tiene 2 ficheros
@@ -102,14 +130,20 @@ static long be_read_at_impl(const char* path, uint32_t off, uint8_t* dst, uint32
 static int be_write_impl(const char* path, const uint8_t* data, uint32_t len, int append) {
     lfs_file_t f;
     int flags = LFS_O_WRONLY | LFS_O_CREAT | (append ? LFS_O_APPEND : LFS_O_TRUNC);
-    if (lfs_file_opencfg(&s_lfs, &f, path, flags, &s_fcfg_a) < 0) return -1;
+    int e = lfs_file_opencfg(&s_lfs, &f, path, flags, &s_fcfg_a);
+    if (e < 0) { s_last_err = e; return -1; }
     int rc = 0;
     if (len > 0 && data) {
         lfs_ssize_t n = lfs_file_write(&s_lfs, &f, data, len);
-        if (n < 0 || (uint32_t) n != len) rc = -1;
+        /* n >= 0 pero corto = disco lleno a media escritura; littlefs no lo marca
+         * como error, así que lo nombramos nosotros en vez de dejar el 0 de "todo
+         * fue bien" (#329: el que reporta el fallo tiene que poder decir cuál). */
+        if (n < 0)                    { s_last_err = (int) n;      rc = -1; }
+        else if ((uint32_t) n != len) { s_last_err = LFS_ERR_NOSPC; rc = -1; }
     }
     /* el close COMMITTEA (durabilidad-por-llamada; ver cabecera) */
-    if (lfs_file_close(&s_lfs, &f) < 0) rc = -1;
+    e = lfs_file_close(&s_lfs, &f);
+    if (e < 0) { s_last_err = e; rc = -1; }
     return rc;
 }
 

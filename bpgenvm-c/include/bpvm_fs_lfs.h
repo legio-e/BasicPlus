@@ -36,6 +36,16 @@ int  bpvm_fs_lfs_stats(uint32_t* total_bytes, uint32_t* used_bytes);
 /* B2 - reformateo en caliente (FORMAT del wire). 0 / -1. */
 int  bpvm_fs_lfs_format(void);
 
+/* #329 — CÓDIGO REAL del último fallo de littlefs (0 si la última op fue bien).
+ * La fachada bpvm_fs colapsa todo a 0/-1 a propósito (es backend-agnóstica), pero
+ * ese -1 no dice NADA: el firmware lo traducía a "FS lleno" y el IDE mostraba
+ * NO_SPACE con el FS al 1%, mandando la depuración por el barranco equivocado.
+ * Aquí queda el lfs_error crudo (LFS_ERR_NOSPC/-28, LFS_ERR_IO/-5, LFS_ERR_CORRUPT/-84,
+ * LFS_ERR_NOMEM/-12...) para que quien reporte el error diga la verdad.
+ * Se pisa en cada op → léelo INMEDIATAMENTE después del fallo. */
+int         bpvm_fs_lfs_last_err(void);
+const char* bpvm_fs_lfs_err_str(int lfs_err);   /* nombre corto, nunca NULL */
+
 #ifdef __cplusplus
 }
 #endif

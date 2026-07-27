@@ -40,8 +40,21 @@ static void vm_buffer_init(void) {
     /* SRAM interna a propósito: el S3 de referencia no lleva PSRAM y el heap de
      * la VM tiene que ser rápido. Si el módulo trae PSRAM, ampliarlo aquí es un
      * cambio local (el P4 ya lo hace en su main.c). */
+    /* #329 — la DRAM interna ANTES y DESPUÉS de la reserva. El Pico dice "libre
+     * para malloc: 255 KB" desde siempre y por eso allí se ve enseguida cuándo
+     * la RAM aprieta. Aquí falta esa foto: si tras coger 128 KB queda poco, todo
+     * lo que malloquee después (littlefs, el wire) empieza a fallar con errores
+     * que NO se parecen a "sin memoria". El bloque contiguo mayor importa tanto
+     * como el total: se puede tener RAM de sobra y aun así no caber. */
+    unsigned before      = (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    unsigned before_blk  = (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     s_vm_buffer = heap_caps_malloc(VM_BUFFER_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     s_vm_buffer_size = s_vm_buffer ? VM_BUFFER_SIZE : 0;
+    log_printf("vm: heap %d KB %s | DRAM interna libre %u->%u B (bloque mayor %u->%u B)",
+               VM_BUFFER_SIZE / 1024, s_vm_buffer ? "reservado" : "NO CABE",
+               before, (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+               before_blk,
+               (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     if (!s_vm_buffer) {
         /* No es fatal: el kernel sigue vivo y el host puede hablar con la placa
          * (H9). Lo que no habrá es VM — y el climb lo reportará. */

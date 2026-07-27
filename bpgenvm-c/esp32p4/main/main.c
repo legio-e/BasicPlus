@@ -256,6 +256,16 @@ static void vm_buffer_init_psram(void)
     ESP_LOGI(TAG, "VM heap en PSRAM: %u KiB (reserva display %u KiB, PSRAM libre %u KiB) @ %p",
              (unsigned)(want / 1024u), (unsigned)(VM_PSRAM_DISPLAY_RESERVE / 1024u),
              (unsigned)(freeps / 1024u), (void*) s_vm_buffer);
+    /* #329 — al log PERSISTENTE también, con el mismo formato que el S3: la
+     * consola se pierde al desconectar y las dos placas tienen que contar lo
+     * mismo para poder compararlas (que es justo lo que pide #328). Aquí además
+     * interesa la DRAM INTERNA, no la PSRAM: el heap de la VM vive fuera, pero
+     * littlefs y el wire siguen tirando de la interna. */
+    log_printf("vm: heap %u KB en PSRAM @%p (PSRAM libre %u KB) | DRAM interna libre %u B (bloque mayor %u B)",
+               (unsigned)(want / 1024u), (void*) s_vm_buffer,
+               (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024u),
+               (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+               (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 }
 
 void app_main(void)

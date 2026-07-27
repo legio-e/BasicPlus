@@ -20,6 +20,7 @@
 #include "fs.h"
 #include "bpvm_fs.h"
 #include "bpvm_fs_lfs.h"
+#include "log.h"          /* #329 — el porqué de un fallo de FS, al log persistente */
 
 #include "esp_partition.h"
 
@@ -89,9 +90,20 @@ fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
      * (bpvm_part, un mando); aqui solo se monta. Antes montaba "bpfs" entera. */
     s_part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
                                       ESP_PARTITION_SUBTYPE_ANY, "bpdata");
-    if (!s_part) return FS_ERR_BAD_FLASH;   /* sin particion de datos → sin FS */
-    if (fs_size == 0 || (uint64_t) fs_offset + fs_size > (uint64_t) s_part->size)
+    if (!s_part) {
+        log_printf("fs: NO hay particion 'bpdata' (tabla vieja sin reflashear?)");
+        return FS_ERR_BAD_FLASH;            /* sin particion de datos → sin FS */
+    }
+    /* #329 — el tamaño de bpdata al log: si la placa arrastra una tabla vieja
+     * (el S3 tenía una de 2 MB con 16 MB de flash), aquí se ve de un vistazo en
+     * vez de deducirlo de un "FS lleno". */
+    log_printf("fs: bpdata @0x%X size=%u KB | region FS +0x%X size=%u KB",
+               (unsigned) s_part->address, (unsigned) (s_part->size / 1024u),
+               (unsigned) fs_offset, (unsigned) (fs_size / 1024u));
+    if (fs_size == 0 || (uint64_t) fs_offset + fs_size > (uint64_t) s_part->size) {
+        log_printf("fs: la region FS NO CABE en bpdata → sin FS");
         return FS_ERR_BAD_FLASH;            /* region fuera de bpdata */
+    }
     s_fs_offset = fs_offset;
 
     memset(&s_cfg, 0, sizeof(s_cfg));
@@ -111,11 +123,20 @@ fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     s_cfg.lookahead_buffer = s_look_buf;
 
     if (bpvm_fs_lfs_attach(&s_cfg, 1) != 0) {   /* formatea si no monta */
+        int e = bpvm_fs_lfs_last_err();
+        log_printf("fs: littlefs NO monta ni formatea (lfs=%d %s)",
+                   e, bpvm_fs_lfs_err_str(e));
+        log_flush();
         return FS_ERR_BAD_FLASH;
     }
     bpvm_fs_mkdir("/sys");
     bpvm_fs_mkdir("/lib");
     bpvm_fs_mkdir("/app");
+    /* Igual que el Pico: cuántos ficheros hay y cuánto ocupan. Es la línea que
+     * dice de un golpe si la stdlib está o falta, y si el volumen va lleno. */
+    log_printf("fs: %d ficheros, %u/%u bytes usados",
+               fs_file_count(), (unsigned) fs_used_bytes(), (unsigned) fs_total_bytes());
+    log_flush();
     return FS_OK;
 }
 
@@ -152,10 +173,33 @@ static void ensure_parent_dirs(const char* name) {
     bpvm_fs_mkdir(dir);
 }
 
+/* #329 — el fallo de escritura DEJA DE MENTIR. Antes cualquier retorno != 0 de
+ * la fachada se traducía a FS_ERR_NO_SPACE y el IDE decía "FS lleno" con el FS
+ * al 1% — un mensaje falso manda la depuración por el barranco equivocado y
+ * cuesta tardes. Ahora se lee el lfs_error real y además se deja en el log
+ * persistente, que sobrevive al reset y se saca con LOG_DUMP. */
+static fs_status_t map_lfs_err(const char* op, const char* name, uint32_t size) {
+    int e = bpvm_fs_lfs_last_err();
+    log_printf("fs: %s '%s' (%u B) FALLO lfs=%d %s  [libre %u/%u B]",
+               op, name, (unsigned) size, e, bpvm_fs_lfs_err_str(e),
+               (unsigned) fs_free_bytes(), (unsigned) fs_total_bytes());
+    log_flush();
+    switch (e) {
+        case LFS_ERR_NOSPC:        return FS_ERR_NO_SPACE;
+        case LFS_ERR_FBIG:         return FS_ERR_TOO_BIG;
+        case LFS_ERR_NAMETOOLONG:  return FS_ERR_NAME_TOO_LONG;
+        case LFS_ERR_EXIST:        return FS_ERR_EXISTS;
+        case LFS_ERR_NOENT:        return FS_ERR_NOT_FOUND;
+        case LFS_ERR_IO:
+        case LFS_ERR_CORRUPT:      return FS_ERR_BAD_FLASH;
+        default:                   return FS_ERR_INVALID;
+    }
+}
+
 fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
     if (strlen(name) >= 128) return FS_ERR_NAME_TOO_LONG;
     ensure_parent_dirs(name);
-    if (bpvm_fs_write(name, data, size, 0) != 0) return FS_ERR_NO_SPACE;
+    if (bpvm_fs_write(name, data, size, 0) != 0) return map_lfs_err("put", name, size);
     return FS_OK;
 }
 
@@ -165,7 +209,7 @@ fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
 fs_status_t fs_put_append(const char* name, const uint8_t* data, uint32_t size) {
     if (strlen(name) >= 128) return FS_ERR_NAME_TOO_LONG;
     if (size == 0) return FS_OK;
-    if (bpvm_fs_write(name, data, size, 1) != 0) return FS_ERR_NO_SPACE;
+    if (bpvm_fs_write(name, data, size, 1) != 0) return map_lfs_err("append", name, size);
     return FS_OK;
 }
 
