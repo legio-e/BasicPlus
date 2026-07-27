@@ -3010,18 +3010,43 @@ public class FrmMain extends javax.swing.JFrame
      *  stdlib aún no había crecido con clases) hace que la VM use el
      *  fichero del workdir y falle con
      *  "Símbolo no resuelto: X.__cls_new_<Cls>". */
-    private static final java.util.Set<String> STDLIB_BASENAMES =
-            new java.util.HashSet<>(java.util.Arrays.asList(
-                    "Math", "IO", "Gpio", "I2c", "Spi", "Uart",
-                    "Pulse", "Pwm", "Pico", "Rtc", "Adc", "Wdt", "Timer",
-                    "Json", "L2Lib"
-            ));
+    /* Módulos que NO se suben desde outDir porque la VM ya los resuelve por
+     * --stdlibDir. Se PREGUNTA a la carpeta de la stdlib en vez de recordar una
+     * lista: la de antes estaba escrita a mano con los 15 módulos que había
+     * entonces y se quedó atrás — hoy la stdlib tiene ~47 (Core, Str,
+     * Collections, Compress, Log, Net, Stats, Gui...). Consecuencia real: un
+     * Core.mod RANCIO en samples/out/ se subía y TAPABA al bueno; como era
+     * anterior al ensanchado de refs 4→8B, el gate de ABI de la VM lo rechazaba
+     * y el debug no arrancaba. Dos sitios que debían coincidir, y uno se quedó
+     * viejo — el mismo modo de fallo que el ABI del .mdn. */
+    private static java.util.Set<String> stdlibBasenames(Path anchor) {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        try {
+            /* MISMA fuente que usa la resolución de imports y que se le pasa a la
+             * VM en --stdlibDir: si la VM lo va a resolver de ahí, la lista de lo
+             * que NO hay que subir sale de ahí. */
+            edu.bpgenvm.config.VmConfig cfg =
+                    edu.bpgenvm.config.VmConfig.loadDefaultFor(anchor);
+            if (cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty()) {
+                Path dir = java.nio.file.Paths.get(cfg.stdlibDir);
+                if (Files.isDirectory(dir)) {
+                    try (java.util.stream.Stream<Path> s = Files.list(dir)) {
+                        s.map(p -> p.getFileName().toString())
+                         .filter(nm -> nm.toLowerCase().endsWith(".mod"))
+                         .forEach(nm -> out.add(nm.substring(0, nm.length() - 4)));
+                    }
+                }
+            }
+        } catch (Throwable ignored) { /* sin stdlibDir legible: no se omite nada */ }
+        return out;
+    }
 
     private int uploadAppArtifacts(BpvmClient client, Path outDir,
                                    java.util.function.Consumer<String> publish) throws java.io.IOException {
         if (!Files.isDirectory(outDir)) return 0;
         int n = 0;
         int skipped = 0;
+        final java.util.Set<String> stdlib = stdlibBasenames(outDir);
         try (java.util.stream.Stream<Path> s = Files.list(outDir)) {
             java.util.List<Path> files = s
                     .filter(p -> {
@@ -3034,7 +3059,7 @@ public class FrmMain extends javax.swing.JFrame
                 String name = p.getFileName().toString();
                 int dot = name.lastIndexOf('.');
                 String base = (dot > 0) ? name.substring(0, dot) : name;
-                if (STDLIB_BASENAMES.contains(base)) {
+                if (stdlib.contains(base)) {
                     skipped++;
                     continue;   // la VM lo resuelve desde --stdlibDir
                 }
