@@ -166,10 +166,35 @@ static void ensure_parent_dirs(const char* name) {
     bpvm_fs_mkdir(dir);                          /* recursivo, ok-si-existe */
 }
 
+/* #329 — que el fallo de escritura NO MIENTA (la 3ª y última familia; ESP32 y
+ * STM32 ya lo tienen). La fachada bpvm_fs colapsa todo a 0/-1 por ser
+ * backend-agnóstica, y aquí ese -1 se traducía a "FS lleno" pasara lo que
+ * pasara. En el S3 (#328) ese mensaje falso mandó la depuración al sitio
+ * equivocado una tarde entera: el volumen estaba al 1% y el error decía que
+ * estaba lleno. Ahora se reporta el lfs_error REAL y queda en el log
+ * persistente, que sobrevive al reset y se saca con LOG_DUMP. */
+static fs_status_t map_lfs_err(const char* op, const char* name, uint32_t size) {
+    int e = bpvm_fs_lfs_last_err();
+    uint32_t tot = fs_total_bytes(), usa = fs_used_bytes();
+    log_printf("fs: %s '%s' (%lu B) FALLO lfs=%d %s  [libre %lu/%lu B]",
+               op, name, (unsigned long) size, e, bpvm_fs_lfs_err_str(e),
+               (unsigned long) ((tot > usa) ? (tot - usa) : 0u), (unsigned long) tot);
+    switch (e) {
+        case LFS_ERR_NOSPC:        return FS_ERR_NO_SPACE;
+        case LFS_ERR_FBIG:         return FS_ERR_TOO_BIG;
+        case LFS_ERR_NAMETOOLONG:  return FS_ERR_NAME_TOO_LONG;
+        case LFS_ERR_EXIST:        return FS_ERR_EXISTS;
+        case LFS_ERR_NOENT:        return FS_ERR_NOT_FOUND;
+        case LFS_ERR_IO:
+        case LFS_ERR_CORRUPT:      return FS_ERR_BAD_FLASH;
+        default:                   return FS_ERR_INVALID;
+    }
+}
+
 fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
     if (strlen(name) >= 128) return FS_ERR_NAME_TOO_LONG;
     ensure_parent_dirs(name);
-    if (bpvm_fs_write(name, data, size, 0) != 0) return FS_ERR_NO_SPACE;
+    if (bpvm_fs_write(name, data, size, 0) != 0) return map_lfs_err("put", name, size);
     return FS_OK;
 }
 
@@ -178,7 +203,7 @@ fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
 fs_status_t fs_put_append(const char* name, const uint8_t* data, uint32_t size) {
     if (strlen(name) >= 128) return FS_ERR_NAME_TOO_LONG;
     if (size == 0) return FS_OK;
-    if (bpvm_fs_write(name, data, size, 1) != 0) return FS_ERR_NO_SPACE;
+    if (bpvm_fs_write(name, data, size, 1) != 0) return map_lfs_err("append", name, size);
     return FS_OK;
 }
 
