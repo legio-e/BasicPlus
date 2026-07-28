@@ -14,18 +14,16 @@
  *    (mismo shape que fs_lfs_pico.c): fs_get a un scratch (contrato "válido hasta
  *    el siguiente fs op"), fs_put crea dirs padre, fs_count/fs_entry por recorrido
  *    BFS con paths PLANOS (como el FS viejo), fs_save no-op (littlefs committea en
- *    cada close), fs_load/boot monta. stm32_fs_register_bpvm no-op (el attach ya
+ *    cada close), el boot monta. stm32_fs_register_bpvm no-op (el attach ya
  *    registró el backend).
  *
- * H9: la región del FS ya NO es fija — la pasa el boot a fs_init_at(offset,size).
- * En el Paso 1 fs_load la fija a la de siempre (BOARD_FS_FLASH_ADDR); en el Paso 2
- * la dará el env (bpvm_part). Nota: multi-.mdn con el scratch único es limitación
+ * H9: la región del FS ya NO es fija — la pasa el boot a fs_init_at(offset,size),
+ * con la región que define el env (bpvm_part). Nota: multi-.mdn con el scratch único es limitación
  * LATENTE compartida con la Pico (0-1 .mdn/RUN = caso real OK).
  */
 #include "stm32_fs.h"
 #include "bpvm_fs.h"
 #include "bpvm_fs_lfs.h"
-#include "board.h"        /* BOARD_FS_FLASH_ADDR / _REGION_SIZE (por placa) */
 
 #include "main.h"         /* CMSIS: FLASH_BASE + FLASH_PAGE_SIZE (flash mapeada) */
 #include "stm32_flash.h"  /* stm32_flash_write / erase — primitivas COMPARTIDAS con board_mgr */
@@ -216,10 +214,11 @@ int fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     return 0;
 }
 
-int fs_load(void) {
-    /* Paso 1: región FIJA de siempre (por placa). En el Paso 2 la fija el env. */
-    return fs_init_at(BOARD_FS_FLASH_ADDR - FLASH_BASE, BOARD_FS_REGION_SIZE);
-}
+/* H11 — AQUÍ ESTABA `fs_load()`, que montaba la región FIJA de la placa. Su
+ * propio comentario decía "en el Paso 2 la fija el env", y ese paso 2 ya está
+ * hecho: el arranque escalonado llama a fs_init_at con la región del env
+ * (board_mgr_stm32.c). Nadie lo llamaba desde entonces, pero seguía siendo el
+ * único usuario de BOARD_FS_FLASH_ADDR/_REGION_SIZE y los mantenía vivos. */
 
 /* ── API legado stm32_fs.h sobre la fachada ───────────────────────────── */
 

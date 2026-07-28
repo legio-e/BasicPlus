@@ -42,19 +42,13 @@ void     fs_format(void);
 /* --- Persistencia en flash interna (H9.3) --- */
 
 /* Vuelca el FS (arena + tabla) a la región reservada de flash. Best-effort:
- * si falla, el próximo fs_load lo detecta (magic) y arranca con FS vacío.
+ * si falla, el próximo arranque lo detecta (magic) y arranca con FS vacío.
  * Llamar tras cada mutación que deba sobrevivir al reset (PUT/DEL/FORMAT). */
 void fs_save(void);
 
-/* Restaura el FS desde flash al boot. Salta las entradas /lib/ (las re-instala
- * el firmware embebido → sin desincronización de stdlib). 0 si cargó algo,
- * -1 si la flash está vacía/corrupta (FS queda vacío). */
-int  fs_load(void);
-
 /* H9 — monta el FS (littlefs) en un SUB-RANGO de la flash: `fs_offset` DESDE
- * FLASH_BASE + `fs_size` (múltiplo de página). En el Paso 1 lo llama fs_load con
- * la región fija de la placa; en el Paso 2 lo llama el arranque escalonado con la
- * región que define el env (bpvm_part). 0 OK, -1 si no monta ni formatea. */
+ * FLASH_BASE + `fs_size` (múltiplo de página). Lo llama el arranque escalonado con
+ * la región que define el env (bpvm_part). 0 OK, -1 si no monta ni formatea. */
 int  fs_init_at(uint32_t fs_offset, uint32_t fs_size);
 
 /* Registra este FS como backend de file I/O de BP (readFile/writeFile/
