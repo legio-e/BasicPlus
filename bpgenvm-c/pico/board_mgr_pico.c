@@ -43,7 +43,8 @@ static void env_write(int slot, const uint8_t* src) {
 }
 
 void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
-                           unsigned char* scratch, unsigned long scratch_len) {
+                           unsigned char* scratch, unsigned long scratch_len,
+                           const unsigned char* bulk, unsigned long bulk_len) {
     /* Red anti-divergencia bp_memmap.ld ↔ flash_layout.h: los offsets del env
      * deben caer DENTRO del hueco real (zona 2, entre FLASH_BOOT y FLASH_MAIN).
      * Si alguien mueve las regiones del linker sin tocar el header (o al revés),
@@ -92,6 +93,9 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
     req.has_value = json_get_str(obj, "value", req.value, sizeof req.value) >= 0;
     for (int i = 0; i < BPVM_PART_COUNT; i++)
         req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
+
+    req.bulk     = bulk;            /* #327 H3: PACK_BURN_DATA (ya recibido) */
+    req.bulk_len = (long) bulk_len;
 
     int wrote = -1;
     int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);

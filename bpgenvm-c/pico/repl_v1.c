@@ -1482,9 +1482,23 @@ void repl_v1_handle_request(int first_char) {
      * el boardsim vía bpvm_bmgr_wire). */
     if (strcmp(type, "STATE") == 0
         || strncmp(type, "ENV_", 4) == 0
-        || strncmp(type, "PART_", 5) == 0) {
-        /* reusa s_put_buf (48K, libre fuera de una subida) → board_mgr sin BSS propio. */
-        board_mgr_pico_handle(id, &obj, type, s_put_buf, sizeof s_put_buf);
+        || strncmp(type, "PART_", 5) == 0
+        /* #327 — PACK_* también. La capacidad ya estaba en el núcleo compartido
+         * (bpvm_bmgr_wire atiende PACK_LS y compañía) y este firmware YA lo
+         * enlazaba: sólo faltaba encaminarle los comandos, así que el panel de
+         * packs del IDE se comía un UNSUPPORTED. El STM32 era el único que lo
+         * hacía; ahora las 3. */
+        || strncmp(type, "PACK_", 5) == 0) {
+        /* El bulk de PACK_BURN_DATA YA lo ha leído el despachador, arriba, en
+         * s_put_buf — NO se relee (hacerlo se comería el mensaje siguiente y
+         * desincronizaría el wire; ese fue el bug del ESP32 en 0456da8).
+         * s_put_buf hace de las dos cosas: el bulk ocupa el principio y el
+         * gestor recibe el tramo de DETRÁS, para que no puedan pisarse. */
+        size_t used = bulk_size > sizeof s_put_buf ? sizeof s_put_buf : bulk_size;
+        board_mgr_pico_handle(id, &obj, type,
+                              s_put_buf + used, sizeof s_put_buf - used,
+                              bulk_size ? s_put_buf : NULL,
+                              (unsigned long) bulk_size);
         return;
     }
     /* TERMINAL */

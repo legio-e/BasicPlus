@@ -30,8 +30,12 @@ const bpvm_boot_status_t* board_boot_status(void);
  * está LIBRE durante un comando de gestión (nunca coincide con una subida)—. Así este
  * módulo NO tiene buffers estáticos propios: no le roba SRAM al heap de la VM, crítico
  * en la Pico (sin PSRAM). */
+/* #327 — `bulk`/`bulk_len` llevan el chunk de PACK_BURN_DATA que el transporte
+ * YA ha recibido (NULL si el comando no trae bulk). Mismo shape que ESP32 y
+ * STM32: el núcleo bpvm_bmgr_wire lo espera en req.bulk. */
 void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
-                           unsigned char* scratch, unsigned long scratch_len);
+                           unsigned char* scratch, unsigned long scratch_len,
+                           const unsigned char* bulk, unsigned long bulk_len);
 
 #ifdef __cplusplus
 }

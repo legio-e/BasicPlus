@@ -26,7 +26,6 @@
 #include "board_mgr_esp32.h" /* H9: gestión de placa (STATE/ENV/PART) + board_boot_status */
 #include "log.h"             /* log persistente (post-mortem) → LOG_DUMP / LOG_CLEAR */
 #include "bpvm_dbg_wire.h"   /* #326: ramo de depuración, núcleo portable compartido */
-#include "bpvm_pack.h"       /* #327: BPVM_PACK_BURN_CHUNK (bulk del PACK_BURN_DATA) */
 #include "aot_registry.h"    /* H4 AOT: bpvm_aot_clear/count (hook esp_aot_register) */
 
 #include "freertos/FreeRTOS.h"
@@ -968,34 +967,25 @@ static void handle_request(const char* line, int len) {
          * el panel de packs del IDE se comía un UNSUPPORTED. Sólo el STM32 lo
          * hacía. */
         || strncmp(type, "PACK_", 5) == 0) {
-        /* PACK_BURN_DATA trae BULK. Buffer propio (≤4K) para no pisar el scratch
-         * que presta s_put_buf al gestor. CRÍTICO: consumir SIEMPRE los bytes
-         * anunciados —quepan o no— o el wire se desincroniza, igual que el PUT. */
-        static uint8_t s_burn_chunk[BPVM_PACK_BURN_CHUNK];
-        const uint8_t* bulk_ptr = NULL;
-        unsigned long  bulk_n   = 0;
-        long bulk = json_get_long(&obj, "bulk", -1);
-        if (bulk > 0) {
-            if ((size_t) bulk > sizeof s_burn_chunk) {
-                size_t rem = (size_t) bulk;
-                while (rem > 0) {
-                    size_t chunk = rem < sizeof s_burn_chunk ? rem : sizeof s_burn_chunk;
-                    if (wire_v1_recv_bulk(s_burn_chunk, chunk, sizeof s_burn_chunk) < 0) {
-                        wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
-                    }
-                    rem -= chunk;
-                }
-                wire_v1_send_error(id, "INVALID_PARAM", "chunk demasiado grande");
-                return;
-            }
-            if (wire_v1_recv_bulk(s_burn_chunk, (size_t) bulk, sizeof s_burn_chunk) < 0) {
-                wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
-            }
-            bulk_ptr = s_burn_chunk;
-            bulk_n   = (unsigned long) bulk;
+        /* BUG MÍO de 0456da8, cazado al portar esto a la Pico: aquí había una
+         * SEGUNDA lectura del bulk (a un s_burn_chunk propio). Pero el
+         * despachador YA lo ha leído arriba, en s_put_buf — así que la segunda
+         * se comía los bytes del MENSAJE SIGUIENTE y desincronizaba el wire.
+         * No saltó porque sólo se probó PACK_LS, que no lleva bulk.
+         * El bulk ya está: se PASA, no se relee. Y el s_burn_chunk sobra (4 KB
+         * de .bss menos). */
+        /* El scratch del gestor y el bulk COMPARTEN s_put_buf: el bulk ocupa el
+         * principio y el gestor necesita 3 sectores + 512 al final. Con bulk
+         * (≤4 KB de PACK_BURN_DATA) y s_put_buf de 20 KB no se solapan, pero el
+         * gestor recibe el tramo de DETRÁS del bulk para que no puedan pisarse. */
+        {
+            size_t used = bulk_size;
+            if (used > sizeof s_put_buf) used = sizeof s_put_buf;   /* nunca pasa */
+            board_mgr_esp32_handle(id, &obj, type,
+                                   s_put_buf + used, sizeof s_put_buf - used,
+                                   bulk_size ? s_put_buf : NULL,
+                                   (unsigned long) bulk_size);
         }
-        board_mgr_esp32_handle(id, &obj, type, s_put_buf, sizeof s_put_buf,
-                               bulk_ptr, bulk_n);
         return;
     }
     /* H9 — gating por estado REAL del boot: sin FS (estado<2) los comandos de
