@@ -51,7 +51,9 @@
 
 /* Buffer de la VM en SRAM interna. 128 KB sobra para Hello.bp y deja sitio
  * para varios módulos. */
-#define VM_BUFFER_SIZE   (128 * 1024)
+/* H11 — AQUI ESTABA VM_BUFFER_SIZE (128 KB fijos). Se ha quedado sin
+ * usuarios: la region ya no es un tamaño elegido a dedo sino TODO lo que
+ * queda libre. Un numero que ya no manda sobre nada, fuera. */
 
 /* H11 — NO es un array estático, es una REGIÓN DE LA COLA DE LA RAM.
  *
@@ -74,20 +76,23 @@ extern char __HeapLimit;         /* tope de la RAM principal */
 
 /* Margen que se le deja a malloc por debajo del buffer de la VM. El loader
  * pide calloc/strdup por cada import de cada módulo; con 32 KB va sobrado. */
-#define VM_SRAM_MALLOC_MARGIN  (32 * 1024)
+#define VM_SRAM_MALLOC_MARGIN  (64 * 1024)
 
+/* Piso: por debajo de esto la VM no da para nada útil y hay que DECIRLO. */
+#define VM_SRAM_MIN            (64 * 1024)
+
+/* Eduardo, 28-jul: "en la Pico quedaba RAM sin usar, ¿la podemos usar toda?".
+ * Se usaban 128 KB FIJOS de ~520 y quedaban ~255 KB de SRAM sin dueño, porque el
+ * único cliente serio de malloc es el loader (calloc/strdup por import).
+ * Ahora la VM se queda con TODO lo que hay entre el final de .bss y el techo,
+ * menos la reserva de malloc. Sin número mágico: si mañana crece el .bss, la VM
+ * recibe menos AUTOMÁTICAMENTE en vez de pisarle la memoria a nadie. */
 static uint8_t* vm_sram_region(uint32_t* size_out) {
-    uintptr_t top    = (uintptr_t) &__HeapLimit;
-    uintptr_t base   = (top - VM_BUFFER_SIZE) & ~(uintptr_t) 7u;   /* 8-alineado */
-    uintptr_t malloc_floor = (uintptr_t) &end + VM_SRAM_MALLOC_MARGIN;
-    if (base < malloc_floor) {
-        /* No cabe el buffer entero: damos lo que quede, y que se vea. Mejor
-         * una VM con menos heap que pisarle la memoria a malloc en silencio. */
-        base = malloc_floor;
-        if (base >= top) { *size_out = 0; return NULL; }
-    }
-    *size_out = (uint32_t) (top - base);
-    return (uint8_t*) base;
+    uintptr_t top          = (uintptr_t) &__HeapLimit;
+    uintptr_t malloc_floor = ((uintptr_t) &end + VM_SRAM_MALLOC_MARGIN + 7u) & ~(uintptr_t) 7u;
+    if (malloc_floor >= top) { *size_out = 0; return NULL; }
+    *size_out = (uint32_t) (top - malloc_floor);
+    return (uint8_t*) malloc_floor;
 }
 
 uint8_t* s_vm_buffer      = NULL;   /* se fija en boot (vm_sram_region o PSRAM) */
@@ -792,7 +797,16 @@ static bpvm_status_t run_vm_once(int iteration) {
     /* H11 — el TAMAÑO REAL, no la constante: la región se recorta si malloc
      * necesita su margen, y decirle a la VM que tiene más de lo que hay es
      * exactamente cómo se pisa memoria. */
-    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size, 0);
+    /* Regla de Eduardo (28-jul): del bloque de la VM, 75% heap y 25% stacks.
+     * `stack_base` es el OFFSET donde empiezan los stacks ⇒ 3/4 del total.
+     * Con el bloque ya grande, el 25% son MÁS stacks que los 64 KB de antes
+     * (cuando el reparto era 50/50 de sólo 128 KB): no se pierde por ningún
+     * lado. Si el bloque saliera pequeño se deja el default (mitad y mitad),
+     * que es más conservador para el stack principal. */
+    size_t stack_base = (s_vm_buffer_size >= VM_SRAM_MIN)
+                        ? (size_t) (s_vm_buffer_size / 4u) * 3u
+                        : 0u;
+    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size, stack_base);
     if (!vm) {
         printf("[ERR] bpvm_init failed\n");
         return BPVM_ERR_OOM;
@@ -1004,9 +1018,12 @@ static void vm_task(void* arg) {
             log_printf("vm: NO HAY SITIO en SRAM para el buffer de la VM");
             log_flush();
         } else {
-            log_printf("vm: heap en SRAM interna %u KB @ 0x%08x (libre para malloc: %u KB)",
-                       (unsigned)(s_vm_buffer_size / 1024u),
-                       (unsigned)(uintptr_t) s_vm_buffer,
+            /* El reparto, explícito: si algún día la reserva de malloc se queda
+             * corta o el .bss se come la RAM, se ve aquí en vez de deducirlo. */
+            unsigned tot = (unsigned)(s_vm_buffer_size / 1024u);
+            log_printf("vm: SRAM interna %u KB @ 0x%08x -> heap %u KB (75%%) + stacks %u KB (25%%) | libre para malloc: %u KB",
+                       tot, (unsigned)(uintptr_t) s_vm_buffer,
+                       (unsigned)(tot * 3u / 4u), (unsigned)(tot - tot * 3u / 4u),
                        (unsigned)(((uintptr_t) s_vm_buffer - (uintptr_t) &end) / 1024u));
         }
     }
