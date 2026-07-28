@@ -32,7 +32,21 @@
  * PSRAM: mismos bytes en marcha, pero el enlazador deja de tener que encajar un
  * bloque contiguo enorme y, si no hay sitio, el boot lo DICE (se queda por
  * debajo del estado 3 con su motivo) en vez de fallar al enlazar. */
-#define VM_BUFFER_SIZE (128 * 1024)
+/* Cuánto pide la VM. NO es un número a ojo: sale de medir (#336).
+ *   DRAM libre al arrancar, antes de reservar ......... 319632 B
+ *   lo que el sistema consume EN MARCHA por encima .....  86256 B  (medido con
+ *     heap_caps_get_minimum_free_size tras varios RUN: 188556 justo tras
+ *     reservar − 102300 en el peor momento observado)
+ *   ⇒ tope seguro = 319632 − 86256 − margen
+ * Con 64 KB de margen salen ~164 KB; se redondea a la baja a 160.
+ * NO se sube a 192 (que daría heap 128) porque dejaría el peor caso en ~36 KB
+ * libres, y con las tareas del IDF creándose EN MARCHA eso ya no es margen.
+ * El reparto lo decide bpvm_stack_region_bytes: con 160 KB manda el suelo ⇒
+ * stacks 64 KB (igual que antes) y heap 96 KB (+50%).
+ * Si algún día no cabe, hay escalón de respaldo abajo: mejor una VM más
+ * pequeña que ninguna. */
+#define VM_BUFFER_SIZE   (160 * 1024)
+#define VM_BUFFER_FALLBACK (128 * 1024)   /* el de siempre, known-good */
 uint8_t*       s_vm_buffer      = NULL;
 uint32_t       s_vm_buffer_size = 0;
 
@@ -50,8 +64,17 @@ static void vm_buffer_init(void) {
     unsigned before_blk  = (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     s_vm_buffer = heap_caps_malloc(VM_BUFFER_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     s_vm_buffer_size = s_vm_buffer ? VM_BUFFER_SIZE : 0;
-    log_printf("vm: heap %d KB %s | DRAM interna libre %u->%u B (bloque mayor %u->%u B)",
-               VM_BUFFER_SIZE / 1024, s_vm_buffer ? "reservado" : "NO CABE",
+    if (!s_vm_buffer) {
+        /* Escalón de respaldo: si el bloque grande no cabe (otra variante de S3,
+         * un IDF que reserve más), se pide el de siempre en vez de quedarse sin
+         * VM. Y se DICE cuál tocó, que si no el día que baje nadie se entera. */
+        s_vm_buffer = heap_caps_malloc(VM_BUFFER_FALLBACK, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        s_vm_buffer_size = s_vm_buffer ? VM_BUFFER_FALLBACK : 0;
+        if (s_vm_buffer) log_printf("vm: AVISO %d KB no caben — se usa el respaldo de %d KB",
+                                    VM_BUFFER_SIZE / 1024, VM_BUFFER_FALLBACK / 1024);
+    }
+    log_printf("vm: heap %u KB %s | DRAM interna libre %u->%u B (bloque mayor %u->%u B)",
+               (unsigned)(s_vm_buffer_size / 1024u), s_vm_buffer ? "reservado" : "NO CABE",
                before, (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                before_blk,
                (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
