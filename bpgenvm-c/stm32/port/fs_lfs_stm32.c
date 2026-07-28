@@ -90,8 +90,17 @@ static struct lfs_config s_cfg;   /* debe sobrevivir (littlefs guarda el ptr) */
  * de la VM con bpvm_arena_reserve: exactamente los bytes que ocupa. Mismo
  * camino que el Pico en #305. */
 
-/* ── listado (compartido por fs_count/fs_entry y clear_lib) ────────────── */
-#define LIST_MAX_ENTRIES  64
+/* ── listado (compartido por fs_count/fs_entry y clear_lib) ──────────────
+ * EFECTO VENTANA (Eduardo, 28-jul): había UN SOLO tope de 64 para las dos
+ * cosas —los ficheros de un directorio y los del FS ENTERO— y al llenarse se
+ * cortaba EN SILENCIO. Como el recorrido es en anchura (raíz → /app → /lib →
+ * /sys), cuantos más módulos había en /app menos plazas le quedaban a /lib:
+ * los ficheros seguían ahí, pero DESAPARECÍAN DEL LISTADO. Un recorte mudo
+ * disfrazado de "no está".
+ * Ahora son dos topes distintos, dimensionados a lo que hay de verdad
+ * (la stdlib sola son ~47 módulos), y si alguno se queda corto SE DICE. */
+#define LIST_MAX_ENTRIES  96    /* ficheros de UN directorio (/lib lleva la stdlib) */
+#define SNAP_MAX_FILES    192   /* ficheros del FS ENTERO que puede listar el wire */
 #define LIST_MAX_DIRS     16
 #define LIST_NAME_MAX     64
 
@@ -100,13 +109,14 @@ typedef struct {
     uint8_t  isdir[LIST_MAX_ENTRIES];
     uint32_t sizes[LIST_MAX_ENTRIES];
     int      n;
+    int      overflow;   /* 1 si este directorio tiene MÁS de los que caben */
 } dirlist_t;
 
 /* El cb de la fachada corre BAJO el lock → SOLO acumula un directorio; el
  * descenso a subdirs y las mutaciones pasan FUERA del callback. */
 static void dirlist_cb(const char* name, int is_dir, uint32_t size, void* user) {
     dirlist_t* d = (dirlist_t*) user;
-    if (d->n >= LIST_MAX_ENTRIES) return;
+    if (d->n >= LIST_MAX_ENTRIES) { d->overflow = 1; return; }   /* NO en silencio */
     snprintf(d->names[d->n], LIST_NAME_MAX, "%s", name);
     d->isdir[d->n] = (uint8_t) is_dir;
     d->sizes[d->n] = size;
@@ -116,8 +126,8 @@ static void dirlist_cb(const char* name, int is_dir, uint32_t size, void* user) 
 /* snapshot BFS de paths PLANOS (raíz → "Hello.mod"; subdir → "/lib/Core.mod"),
  * como el FS viejo. Lo rellena fs_count(); fs_entry() lo lee (el wire llama
  * fs_count y luego fs_entry en secuencia). */
-static char     s_snap_names[LIST_MAX_ENTRIES][LIST_NAME_MAX];
-static uint32_t s_snap_sizes[LIST_MAX_ENTRIES];
+static char     s_snap_names[SNAP_MAX_FILES][LIST_NAME_MAX];
+static uint32_t s_snap_sizes[SNAP_MAX_FILES];
 static int      s_snap_n = 0;
 
 /* Los paths planos están acotados a LIST_NAME_MAX por contrato del FS (nombres
@@ -137,16 +147,30 @@ static void rebuild_snapshot(void) {
         char dir[LIST_NAME_MAX];
         snprintf(dir, sizeof(dir), "%s", pending[head++]);   /* copia local: sin aliasing con pending */
         int is_root = (dir[1] == '\0');
-        dl.n = 0;
+        dl.n = 0; dl.overflow = 0;
         if (bpvm_fs_list(dir, dirlist_cb, &dl) != 0) continue;
+        if (dl.overflow)
+            log_printf("fs: LISTADO INCOMPLETO — '%s' tiene mas de %d entradas",
+                       dir, LIST_MAX_ENTRIES);
         for (int i = 0; i < dl.n; i++) {
             if (dl.isdir[i]) {
                 if (tail < LIST_MAX_DIRS)
                     snprintf(pending[tail++], LIST_NAME_MAX, "%s%s%s",
                              dir, is_root ? "" : "/", dl.names[i]);
+                else
+                    log_printf("fs: LISTADO INCOMPLETO — mas de %d directorios; "
+                               "'%s' sin recorrer", LIST_MAX_DIRS, dl.names[i]);
                 continue;                        /* los dirs no se emiten (legado plano) */
             }
-            if (s_snap_n >= LIST_MAX_ENTRIES) return;
+            if (s_snap_n >= SNAP_MAX_FILES) {
+                /* EL efecto ventana. Antes era un `return` a secas: el resto del
+                 * FS —tipicamente /lib— simplemente no salia, y desde el IDE
+                 * parecia que los ficheros no estaban. */
+                log_printf("fs: LISTADO TRUNCADO a %d ficheros — hay MAS en el FS "
+                           "(se corto en '%s')", SNAP_MAX_FILES, dir);
+                log_flush();
+                return;
+            }
             if (is_root) snprintf(s_snap_names[s_snap_n], LIST_NAME_MAX, "%s", dl.names[i]);
             else         snprintf(s_snap_names[s_snap_n], LIST_NAME_MAX, "%s/%s", dir, dl.names[i]);
             s_snap_sizes[s_snap_n] = dl.sizes[i];

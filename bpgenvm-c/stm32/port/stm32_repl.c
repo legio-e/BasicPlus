@@ -116,10 +116,21 @@ static void handle_list(long id, json_obj_t* obj) {
     if (json_get_str(obj, "path", prefix, sizeof(prefix)) < 0) prefix[0] = '\0';
     size_t plen = strlen(prefix);
 
-    char buf[1024];
-    size_t o = 0;
-    o += (size_t) snprintf(buf + o, sizeof(buf) - o,
-        "{\"type\":\"LIST_REPLY\",\"id\":%ld,\"entries\":[", id);
+    /* EFECTO VENTANA (Eduardo, 28-jul) — AQUÍ ESTABA. La respuesta entera se
+     * armaba en `char buf[1024]` y, al llenarse, un `break` MUDO dejaba fuera el
+     * resto: con ~80 B por entrada cabían unas DOCE. Por eso, cuantos más
+     * módulos había en /app, más "desaparecían" los de /lib — /app se comía el
+     * presupuesto y a /lib no le llegaba el turno. Los ficheros estaban ahí; lo
+     * que se cortaba era el listado, sin decirlo.
+     * El Pico y el ESP32 ya EMITEN el listado según lo recorren (cabecera →
+     * entradas → cierre), sin buffer para la respuesta completa. El STM32 era el
+     * único que no, así que se alinea: sin tope, y de paso las 3 familias hacen
+     * lo mismo. Sólo queda un buffer POR ENTRADA, que sí tiene tamaño acotado. */
+    char head[64];
+    int hn = snprintf(head, sizeof(head),
+                      "{\"type\":\"LIST_REPLY\",\"id\":%ld,\"entries\":[", id);
+    stm32_wire_send_bulk((const uint8_t*) head, (size_t) hn);
+    char ent[192];
     int first = 1;
     int cnt = fs_count();
     for (int i = 0; i < cnt; i++) {
@@ -139,15 +150,18 @@ static void handle_list(long id, json_obj_t* obj) {
          * leyendo el fichero entero a un espejo. Igual que Pico y ESP32. */
         uint32_t crc = 0;
         if (bpvm_fs_crc32(name, &crc) != 0) crc = 0;
-        int w = snprintf(buf + o, sizeof(buf) - o,
+        int w = snprintf(ent, sizeof(ent),
             "%s{\"name\":\"%s\",\"size\":%lu,\"crc\":%lu,\"isDir\":false,\"mtime\":0}",
             first ? "" : ",", rel, (unsigned long) size, (unsigned long) crc);
-        if (w < 0 || (size_t) w >= sizeof(buf) - o) break;   /* no cabe más */
-        o += (size_t) w;
+        if (w <= 0) continue;
+        if ((size_t) w >= sizeof(ent)) {   /* nombre absurdo: sáltalo, pero DILO */
+            log_printf("fs: LIST se salta '%s' (no cabe en %u B)", rel, (unsigned) sizeof(ent));
+            continue;
+        }
+        stm32_wire_send_bulk((const uint8_t*) ent, (size_t) w);
         first = 0;
     }
-    o += (size_t) snprintf(buf + o, sizeof(buf) - o, "]}");
-    stm32_wire_send_line(buf, o);
+    stm32_wire_send_line("]}", 2);   /* cierra + '\n' */
 }
 
 static void handle_stat(long id, json_obj_t* obj) {
