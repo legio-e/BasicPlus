@@ -220,8 +220,16 @@ fs_status_t fs_delete(const char* name) {
 
 /* ── fs_list: BFS emitiendo paths PLANOS como el FS viejo. El cb de la fachada
  * corre BAJO el lock → SOLO acumula; el descenso y la emisión van FUERA. ── */
+/* EFECTO VENTANA (Eduardo, 28-jul) — el ESP32 SÍ emite el listado según lo
+ * recorre (a diferencia del STM32, que lo armaba entero en 1 KB), pero el
+ * snapshot POR DIRECTORIO se cortaba a 32 EN SILENCIO. Con la stdlib completa
+ * (~47 módulos en /lib) eso muerde seguro: el IDE mostraría 32 y los demás
+ * simplemente "no estarían". Sube a 96 y, sobre todo, DEJA DE SER MUDO:
+ * cualquier tope se queda corto alguna vez; lo que no puede hacer es mentir.
+ * El snapshot NO se puede quitar: el cb de la fachada corre BAJO el lock del FS
+ * y emitir al wire desde ahí fue un autobloqueo mudo en su día (H10). */
 #define LIST_MAX_DIRS     16
-#define LIST_MAX_ENTRIES  32
+#define LIST_MAX_ENTRIES  96
 #define LIST_NAME_MAX     64
 
 typedef struct {
@@ -229,11 +237,12 @@ typedef struct {
     uint32_t sizes[LIST_MAX_ENTRIES];
     uint8_t  isdir[LIST_MAX_ENTRIES];
     int      n;
+    int      overflow;   /* 1 si este directorio tiene MÁS de los que caben */
 } dir_snapshot_t;
 
 static void snap_cb(const char* name, int is_dir, uint32_t size, void* user) {
     dir_snapshot_t* s = (dir_snapshot_t*) user;
-    if (s->n >= LIST_MAX_ENTRIES) return;
+    if (s->n >= LIST_MAX_ENTRIES) { s->overflow = 1; return; }   /* NO en silencio */
     snprintf(s->names[s->n], LIST_NAME_MAX, "%s", name);
     s->sizes[s->n] = size;
     s->isdir[s->n] = (uint8_t) is_dir;
@@ -252,8 +261,13 @@ int fs_list(fs_list_cb_t cb, void* user) {
          * aunque head≠tail. El local desacopla lectura de escritura. */
         char dir[LIST_NAME_MAX];
         snprintf(dir, sizeof(dir), "%s", pending[head++]);
-        snap.n = 0;
+        snap.n = 0; snap.overflow = 0;
         if (bpvm_fs_list(dir, snap_cb, &snap) != 0) continue;
+        if (snap.overflow) {
+            log_printf("fs: LISTADO INCOMPLETO — '%s' tiene mas de %d entradas",
+                       dir, LIST_MAX_ENTRIES);
+            log_flush();
+        }
         for (int i = 0; i < snap.n; i++) {
             char full[LIST_NAME_MAX];
             int is_root = (dir[1] == '\0');
@@ -262,6 +276,10 @@ int fs_list(fs_list_cb_t cb, void* user) {
                     snprintf(pending[tail], LIST_NAME_MAX, "%s%s%s",
                              dir, is_root ? "" : "/", snap.names[i]);
                     tail++;
+                } else {
+                    log_printf("fs: LISTADO INCOMPLETO — mas de %d directorios; "
+                               "'%s' sin recorrer", LIST_MAX_DIRS, snap.names[i]);
+                    log_flush();
                 }
                 continue;
             }
