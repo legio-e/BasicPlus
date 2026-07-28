@@ -30,7 +30,6 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
  * Un form pesa ~111 KB de pico (Gui.mod 31 KB + Json.mod 16 KB + stdlib + app); 496 KB
  * de arena = holgura de sobra. Cabe: 3 MB SRAM y, restando 512 KB al programa, 3584 KB
  * de flash (el firmware ocupa <1 MB). REGION = 8 KB cabecera + arena, múltiplo de página. */
-#define BOARD_FS_ARENA_SIZE     (496u * 1024u)       /* arena del FS en RAM (.bss) */
 #define BOARD_FS_REGION_SIZE    (512u * 1024u)       /* región de persistencia en flash */
 /* H10 — RTC HW: la DK2 YA lo tiene habilitado en su CubeMX (hrtc) con reloj LSE 32768
  * (cristal real → más preciso que el LSI de la Nucleo; el default 127/255 da 1 Hz) →
@@ -68,7 +67,6 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
 #define BOARD_FS_FLASH_ADDR     0x081E0000u          /* últimos 128 KB de 2 MB (.ld limita código a 1920 KB) */
 /* FS per-placa (V3): la Nucleo se queda en el tamaño de V2 (known-good). Solo 768 KB de
  * SRAM y no es placa gráfica → no se agranda el arena. */
-#define BOARD_FS_ARENA_SIZE     (96u * 1024u)        /* arena del FS en RAM (sin cambios vs V2) */
 #define BOARD_FS_REGION_SIZE    (128u * 1024u)       /* región de persistencia en flash (sin cambios vs V2) */
 /* H10 — ADC1 habilitado en CubeMX (hadc1) con el canal interno del sensor de
  * temperatura → stm32_temp_c_impl() lee la temperatura del die por ADC. La DK2

@@ -25,10 +25,11 @@
 #include "stm32_fs.h"
 #include "bpvm_fs.h"
 #include "bpvm_fs_lfs.h"
-#include "board.h"        /* BOARD_FS_FLASH_ADDR / _REGION_SIZE / _ARENA_SIZE (por placa) */
+#include "board.h"        /* BOARD_FS_FLASH_ADDR / _REGION_SIZE (por placa) */
 
 #include "main.h"         /* CMSIS: FLASH_BASE + FLASH_PAGE_SIZE (flash mapeada) */
 #include "stm32_flash.h"  /* stm32_flash_write / erase — primitivas COMPARTIDAS con board_mgr */
+#include "log.h"          /* #329 — el porqué de un fallo de FS, al log persistente */
 #include <string.h>
 #include <stdio.h>
 
@@ -73,7 +74,8 @@ static uint8_t s_look_buf[64] __attribute__((aligned(8)));
 static struct lfs_config s_cfg;   /* debe sobrevivir (littlefs guarda el ptr) */
 
 /* H11 — AQUÍ VIVÍA `fs_get` Y SU ESPEJO, el mayor estático de todo el proyecto:
- * BOARD_FS_ARENA_SIZE = 496 KB en la Discovery, 96 KB en la Nucleo.
+ * 496 KB en la Discovery, 96 KB en la Nucleo (el desaparecido BOARD_FS_ARENA_SIZE
+ * de board.h, retirado al quedarse sin usuarios).
  *
  * El shim heredaba de stm32_fs.c un contrato imposible de cumplir barato:
  * devolver un PUNTERO a los bytes. Con littlefs los ficheros no están mapeados,
@@ -221,10 +223,26 @@ int fs_load(void) {
 
 /* ── API legado stm32_fs.h sobre la fachada ───────────────────────────── */
 
+/* #329 — que el fallo de escritura NO MIENTA (lo mismo que se hizo en el ESP32).
+ * La fachada bpvm_fs colapsa todo a 0/-1 por ser backend-agnóstica, así que ese
+ * -1 no dice nada y arriba se traducía a "FS lleno" pasara lo que pasara. En el
+ * S3 (#328) eso mandó la depuración al sitio equivocado durante una tarde: el
+ * volumen estaba al 1% y el error decía que estaba lleno. Aquí queda el código
+ * REAL de littlefs en el log persistente, que sobrevive al reset. */
+static void log_fallo_fs(const char* op, const char* name, uint32_t size) {
+    int e = bpvm_fs_lfs_last_err();
+    uint32_t tot = fs_total_bytes(), usa = fs_used_bytes();
+    log_printf("fs: %s '%s' (%lu B) FALLO lfs=%d %s  [libre %lu/%lu B]",
+               op, name, (unsigned long) size, e, bpvm_fs_lfs_err_str(e),
+               (unsigned long) ((tot > usa) ? (tot - usa) : 0u), (unsigned long) tot);
+    log_flush();
+}
+
 int fs_put(const char* name, const uint8_t* data, uint32_t size) {
     if (!name || name[0] == '\0') return -1;
     ensure_parent_dirs(name);
-    return (bpvm_fs_write(name, data, size, 0) == 0) ? 0 : -1;
+    if (bpvm_fs_write(name, data, size, 0) != 0) { log_fallo_fs("put", name, size); return -1; }
+    return 0;
 }
 
 /* #294 streaming PUT — apende un trozo (el PUT_BEGIN del wire crea/trunca con
@@ -232,7 +250,8 @@ int fs_put(const char* name, const uint8_t* data, uint32_t size) {
 int fs_put_append(const char* name, const uint8_t* data, uint32_t size) {
     if (!name || name[0] == '\0') return -1;
     if (size == 0) return 0;
-    return (bpvm_fs_write(name, data, size, 1) == 0) ? 0 : -1;
+    if (bpvm_fs_write(name, data, size, 1) != 0) { log_fallo_fs("append", name, size); return -1; }
+    return 0;
 }
 
 
