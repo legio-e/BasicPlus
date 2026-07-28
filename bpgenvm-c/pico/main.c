@@ -797,16 +797,12 @@ static bpvm_status_t run_vm_once(int iteration) {
     /* H11 — el TAMAÑO REAL, no la constante: la región se recorta si malloc
      * necesita su margen, y decirle a la VM que tiene más de lo que hay es
      * exactamente cómo se pisa memoria. */
-    /* Regla de Eduardo (28-jul): del bloque de la VM, 75% heap y 25% stacks.
-     * `stack_base` es el OFFSET donde empiezan los stacks ⇒ 3/4 del total.
-     * Con el bloque ya grande, el 25% son MÁS stacks que los 64 KB de antes
-     * (cuando el reparto era 50/50 de sólo 128 KB): no se pierde por ningún
-     * lado. Si el bloque saliera pequeño se deja el default (mitad y mitad),
-     * que es más conservador para el stack principal. */
-    size_t stack_base = (s_vm_buffer_size >= VM_SRAM_MIN)
-                        ? (size_t) (s_vm_buffer_size / 4u) * 3u
-                        : 0u;
-    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size, stack_base);
+    /* EL MISMO reparto que el RUN y el INFO: vm_stack_region_bytes() (repl_v1.c)
+     * es el único sitio donde vive la regla. Aquí se PIDE, no se recalcula —
+     * copiarla fue justo lo que hizo que el INFO enseñara 171+171. */
+    size_t stack_region = vm_stack_region_bytes();
+    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size,
+                           s_vm_buffer_size - stack_region);
     if (!vm) {
         printf("[ERR] bpvm_init failed\n");
         return BPVM_ERR_OOM;
@@ -1020,10 +1016,10 @@ static void vm_task(void* arg) {
         } else {
             /* El reparto, explícito: si algún día la reserva de malloc se queda
              * corta o el .bss se come la RAM, se ve aquí en vez de deducirlo. */
-            unsigned tot = (unsigned)(s_vm_buffer_size / 1024u);
-            log_printf("vm: SRAM interna %u KB @ 0x%08x -> heap %u KB (75%%) + stacks %u KB (25%%) | libre para malloc: %u KB",
-                       tot, (unsigned)(uintptr_t) s_vm_buffer,
-                       (unsigned)(tot * 3u / 4u), (unsigned)(tot - tot * 3u / 4u),
+            size_t stk = vm_stack_region_bytes();   /* la regla, no una copia */
+            log_printf("vm: SRAM interna %u KB @ 0x%08x -> heap %u KB + stacks %u KB | libre para malloc: %u KB",
+                       (unsigned)(s_vm_buffer_size / 1024u), (unsigned)(uintptr_t) s_vm_buffer,
+                       (unsigned)((s_vm_buffer_size - stk) / 1024u), (unsigned)(stk / 1024u),
                        (unsigned)(((uintptr_t) s_vm_buffer - (uintptr_t) &end) / 1024u));
         }
     }

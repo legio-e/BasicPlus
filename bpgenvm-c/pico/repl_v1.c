@@ -94,17 +94,28 @@ static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
 typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 16u*1024u &&
                              V1_PUT_BUF_SIZE >= 3u*4096u + 512u) ? 1 : -1];
 
-/* Reparto heap/stacks de la VM (decisión Eduardo 19-jul): la región de stacks
- * BP se TOPA en 512 KB y el RESTO es heap. El default de bpvm_init (tamaño/2)
- * estaba pensado para 128 KB de SRAM; con los 8 MB de PSRAM de la Metro
- * dormía ~4 MB en stacks que usan decenas de KB. Con el tope:
- *   Pico  (128 KB): min(64K, 512K) = 64K  → 64K/64K, IDÉNTICO a siempre.
- *   Metro (8 MB):   stacks 512 KB (main 16K + 2K/thread ≈ 240 threads,
- *                   de sobra para cualquier app razonable) → heap ~7,5 MB.
- * ÚNICO cálculo: lo usan el RUN (bpvm_init) y el INFO (mostrar el reparto). */
-static size_t vm_stack_region_bytes(void) {
-    size_t r = (size_t) s_vm_buffer_size / 2u;
-    if (r > 512u * 1024u) r = 512u * 1024u;
+/* Reparto heap/stacks de la VM. DOS reglas superpuestas:
+ *
+ *  (a) Eduardo 19-jul — la región de stacks se TOPA en 512 KB y el resto es
+ *      heap. Nació por la Metro: con 8 MB de PSRAM, un reparto proporcional
+ *      dormía ~4 MB en stacks que usan decenas de KB.
+ *  (b) Eduardo 28-jul — del bloque, 25% stacks y 75% heap (antes era mitad y
+ *      mitad). Va junto con que la Pico ya no coge 128 KB fijos sino TODA la
+ *      SRAM libre (main.c): con el bloque grande, el 25% siguen siendo MÁS
+ *      stacks que los 64 KB de antes, así que no se pierde por ningún lado.
+ *
+ * Cómo queda:
+ *   Pico  (343 KB): min(85K, 512K) = 85K  → heap 257 KB + stacks 85 KB.
+ *   Metro (8 MB):   manda el tope, 512 KB → heap ~7,5 MB (IGUAL que antes:
+ *                   el 25% serían 2 MB, así que el tope sigue mandando).
+ *
+ * ÚNICO cálculo, y esto es lo importante: lo usan el RUN (bpvm_init), el INFO
+ * (mostrar el reparto) y el arranque de main.c. Si se copiara en cada sitio,
+ * el día que cambie la regla unos dirían una cosa y otros otra — que es
+ * exactamente cómo el INFO acabó enseñando 171+171. */
+size_t vm_stack_region_bytes(void) {
+    size_t r = (size_t) s_vm_buffer_size / 4u;      /* 25% stacks */
+    if (r > 512u * 1024u) r = 512u * 1024u;         /* ...pero nunca más de 512 KB */
     return r;
 }
 

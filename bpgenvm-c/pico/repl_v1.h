@@ -45,6 +45,11 @@ void repl_v1_autorun(void);
  * retorna. Pensado para correr como task de FreeRTOS. */
 void repl_v1_run(void);
 
+/* Reparto heap/stacks del bloque de la VM (ver el comentario largo en el .c).
+ * Se expone para que el arranque de main.c use EL MISMO cálculo que el RUN y
+ * el INFO, en vez de copiarlo. */
+size_t vm_stack_region_bytes(void);
+
 #ifdef __cplusplus
 }
 #endif
