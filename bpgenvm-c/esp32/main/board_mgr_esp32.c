@@ -131,14 +131,27 @@ void board_mgr_esp32_boot(void) {
      * Nadie se entera hasta que algo escribe lejos, así que se comprueba aquí y
      * se DICE, en vez de descubrirlo por un error que habla de otra cosa. */
     {
-        uint32_t chip = 0;
-        if (esp_flash_get_size(NULL, &chip) == ESP_OK) {
-            uint32_t need = s_bpdata ? (uint32_t) (s_bpdata->address + s_bpdata->size) : 0u;
-            log_printf("flash: chip REAL %u KB | bpdata acaba en %u KB%s",
-                       (unsigned) (chip / 1024u), (unsigned) (need / 1024u),
-                       (need > chip) ? "  <<< LA TABLA PROMETE MAS FLASH DE LA QUE HAY" : "  (cabe)");
+        uint32_t cfgsz = 0, phys = 0;
+        esp_err_t e1 = esp_flash_get_size(NULL, &cfgsz);            /* el CONFIGURADO */
+        esp_err_t e2 = esp_flash_get_physical_size(NULL, &phys);    /* el del CHIP */
+        uint32_t need = s_bpdata ? (uint32_t) (s_bpdata->address + s_bpdata->size) : 0u;
+        if (e1 == ESP_OK && e2 == ESP_OK) {
+            /* SON DOS COSAS DISTINTAS y ahí estuvo la trampa del #328: el chip
+             * puede ser de 16 MB mientras el driver trabaja con el tamaño que
+             * trae la cabecera del BOOTLOADER. Si el bootloader es viejo (2 MB),
+             * todo acceso por encima de ese límite no surte efecto — sin error:
+             * se escribe, no se guarda, y al releer sale otra cosa, que es lo
+             * que littlefs reporta como CORRUPT. Y explica el patrón exacto que
+             * vimos: los superbloques (al principio) bien y el resto mal.
+             * Un reflasheo SOLO de la app no actualiza el bootloader ⇒ la placa
+             * arrastra el límite viejo y nada te lo dice. Aquí sí. */
+            log_printf("flash: configurada %u KB | chip fisico %u KB | bpdata acaba en %u KB%s%s",
+                       (unsigned) (cfgsz / 1024u), (unsigned) (phys / 1024u),
+                       (unsigned) (need / 1024u),
+                       (cfgsz < phys) ? "  <<< EL BOOTLOADER USA MENOS FLASH DE LA QUE HAY (reflashear bootloader)" : "",
+                       (need > cfgsz) ? "  <<< LA TABLA SE SALE DE LA FLASH CONFIGURADA" : "");
         } else {
-            log_printf("flash: no se pudo leer el tamano real del chip");
+            log_printf("flash: no se pudo leer el tamano (cfg=%d fis=%d)", (int) e1, (int) e2);
         }
     }
 

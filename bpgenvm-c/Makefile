@@ -463,6 +463,22 @@ test-lfs:
 	  ./$(LFS_SMOKE_BIN); \
 	fi
 
+# #330 — banco de FLASH SUCIA / BORRADO QUE MIENTE. Nació para comprobar la
+# explicación que dimos al #328 ("la región no estaba borrada") ANTES de escribir
+# el arreglo… y la REFUTÓ: con el erase funcionando, la basura previa no molesta.
+# Lo que sí rompe es que el borrado no ocurra. Usa un block-device con semántica
+# NOR de verdad (borrar→0xFF, programar→AND); lfs_filebd NO vale para esto.
+test-lfsdirty:
+	@mkdir -p build
+	@if [ ! -f $(LFS_DIR)/lfs.c ]; then \
+	  echo "(skip test-lfsdirty: falta third_party/littlefs)"; \
+	else \
+	  $(CC) -std=c99 -O2 $(LFS_INC) test/test_lfs_dirty.c $(LFS_CORE) \
+	    -o build/test_lfs_dirty.exe; \
+	  echo "--- littlefs: flash sucia vs borrado que miente (#330) ---"; \
+	  ./build/test_lfs_dirty.exe; \
+	fi
+
 # H2 fase A · B0.2 — block-device RESPALDADO POR FICHERO (lfs_filebd): la base
 # del oráculo VM-C-PC. write y read corren como DOS PROCESOS separados → la
 # imagen .img debe persistir entre procesos, no solo entre mounts.
