@@ -81,12 +81,20 @@ static size_t vm_stack_region_bytes(void) {
 static char    s_line_buf[WIRE_V1_LINE_MAX];
 static char    s_reply_buf[2048];
 #ifndef V1_PUT_BUF_SIZE
-#define V1_PUT_BUF_SIZE  (48 * 1024)   /* 16K→48K (16-jul): Json.mod ya pesa 17.8K (Gui 31.8K)
-                                        * y el bulk se rechazaba con NO_SPACE, igual que en la Pico.
-                                        * placas con más RAM lo suben por -D (P4 = 64 KB). El fix
-                                        * de verdad = streaming por chunks (mejora #294). */
+/* #294/#334 — el buffer del bulk YA NO tiene que dar para el fichero entero:
+ * desde que el IDE sube por trozos (PUT_BEGIN/DATA/END, verificado en placa en
+ * las 3 familias el 28-jul) sólo necesita el MAYOR de sus dos papeles:
+ *   (a) un trozo de streaming            = PUT_STREAM_CHUNK (16 KB)
+ *   (b) el scratch del gestor de placa   = 3*BP_ENV_SECTOR + 512
+ * (b) NO es igual en todas: el sector del env es la página de borrado, 4 KB en
+ * RP2350/ESP32 pero 8 KB en el U5 → el STM32 necesita 25088 B y los otros 12800.
+ * Por eso el recorte no es uniforme, y por eso hay una comprobación EN COMPILACIÓN
+ * más abajo: si alguien lo baja de más, no compila en vez de romperse en placa. */
+#define V1_PUT_BUF_SIZE  (20 * 1024)
 #endif
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
+typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 16u*1024u &&
+                             V1_PUT_BUF_SIZE >= 3u*4096u + 512u) ? 1 : -1];
 
 /* Identidad de placa para INFO/HELLO. Por defecto = ESP32-S3; una placa la
  * cambia con repl_set_board_id() (p.ej. el P4 desde p4_board_id.c).

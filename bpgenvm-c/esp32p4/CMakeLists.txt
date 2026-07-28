@@ -38,4 +38,4 @@ idf_build_set_property(COMPILE_OPTIONS "-DLV_CONF_PATH=${BPVM_LV_CONF}" APPEND)
 # G6 — Gui.mod (~24 KB) supera el buffer de PUT del wire (16 KB por defecto). El P4
 # tiene RAM de sobra -> 64 KB (cabe Gui.mod + apps/resources moderados). El S3 (con
 # menos RAM) mantiene su default vía el #ifndef de repl_esp32.c.
-idf_build_set_property(COMPILE_OPTIONS "-DV1_PUT_BUF_SIZE=65536" APPEND)
+idf_build_set_property(COMPILE_OPTIONS "-DV1_PUT_BUF_SIZE=20480" APPEND)

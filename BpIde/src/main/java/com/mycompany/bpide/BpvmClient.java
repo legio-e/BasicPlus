@@ -723,7 +723,12 @@ public final class BpvmClient implements AutoCloseable {
      * siempre (1 round-trip, probado en todas las placas); mayores van por
      * streaming (PUT_BEGIN/DATA/END), que hoy solo tiene el ESP32 (Pico/STM32 =
      * tanda 3). Así grandes = sin techo en el ESP32 y cero regresión en el resto. */
-    private static final int PUT_SINGLE_SHOT_MAX = 40 * 1024;
+    /* #334 — 40K -> 8K. El umbral por debajo del cual se sube de una pieza fija el
+     * buffer que el firmware tiene que reservar SIEMPRE. Con el streaming ya
+     * verificado en placa en las 3 familias, bajarlo devuelve 28-36 KB de RAM por
+     * placa. Se deja en 8K (y no en 0) porque casi todos los .mod son de 2-5 KB y
+     * asi siguen subiendo en UN viaje en vez de tres. */
+    private static final int PUT_SINGLE_SHOT_MAX = 8 * 1024;
     private static final int PUT_STREAM_CHUNK     = 16 * 1024;
 
     /** Sube `bytes` al workdir de la VM en `remotePath`. Whole-buffer si cabe;

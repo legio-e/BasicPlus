@@ -17,6 +17,7 @@
 #include "stm32_wire.h"
 #include "stm32_fs.h"
 #include "board_mgr_stm32.h"  /* H9 — arranque escalonado + STATE/ENV/PART */
+#include "flash_layout_stm32.h" /* BP_ENV_SECTOR: s_put_buf hace de scratch del env */
 #include "bpvm_pack.h"        /* H3 — BPVM_PACK_BURN_CHUNK (bulk del PACK_BURN_DATA) */
 #include "log.h"              /* log persistente de diagnóstico (espejo del Pico) */
 #include "bpvm_fs.h"          /* H19 — base-dir / main module por proyecto */
@@ -41,7 +42,18 @@
 
 /* Buffers estáticos (NO en stack: el stack C del micro es pequeño). */
 static char    s_line[WIRE_LINE_MAX];
-static uint8_t s_put_buf[64u * 1024u];        /* payload de PUT (64K: cabe Gui.mod ~42K tras H6.a; el fix SIN límite = streaming del PUT, #294) */
+/* #294/#334 — el buffer del bulk YA NO tiene que dar para el fichero entero:
+ * desde que el IDE sube por trozos (PUT_BEGIN/DATA/END, verificado en placa en
+ * las 3 familias el 28-jul) sólo necesita el MAYOR de sus dos papeles:
+ *   (a) un trozo de streaming            = PUT_STREAM_CHUNK (16 KB)
+ *   (b) el scratch del gestor de placa   = 3*BP_ENV_SECTOR + 512
+ * (b) NO es igual en todas: el sector del env es la página de borrado, 4 KB en
+ * RP2350/ESP32 pero 8 KB en el U5 → el STM32 necesita 25088 B y los otros 12800.
+ * Por eso el recorte no es uniforme, y por eso hay una comprobación EN COMPILACIÓN
+ * más abajo: si alguien lo baja de más, no compila en vez de romperse en placa. */
+static uint8_t s_put_buf[28u * 1024u];
+typedef char bp_chk_put_buf[(28u*1024u >= 16u*1024u &&
+                             28u*1024u >= 3u*BP_ENV_SECTOR + 512u) ? 1 : -1];
 static uint8_t s_vm_mem[128u * 1024u];        /* RAM que gestiona la VM */
 static char    s_out_esc[2048];               /* salida escapada (sink) */
 static char    s_out_msg[2300];               /* evento OUTPUT completo */

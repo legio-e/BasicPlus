@@ -79,8 +79,20 @@ static char s_reply_buf[1024];
  * "Streaming chunk a chunk a fs_put" de arriba — trocear el envío para NO
  * buferizar el fichero entero, así el tamaño deja de estar acotado. Los .mod
  * seguirán creciendo → subir el buffer es un parche con techo. Ver tarea/mejora. */
-#define V1_PUT_BUF_SIZE  (48 * 1024)
+/* #294/#334 — el buffer del bulk YA NO tiene que dar para el fichero entero:
+ * desde que el IDE sube por trozos (PUT_BEGIN/DATA/END, verificado en placa en
+ * las 3 familias el 28-jul) sólo necesita el MAYOR de sus dos papeles:
+ *   (a) un trozo de streaming            = PUT_STREAM_CHUNK (16 KB)
+ *   (b) el scratch del gestor de placa   = 3*BP_ENV_SECTOR + 512
+ * (b) NO es igual en todas: el sector del env es la página de borrado, 4 KB en
+ * RP2350/ESP32 pero 8 KB en el U5 → el STM32 necesita 25088 B y los otros 12800.
+ * Por eso el recorte no es uniforme, y por eso hay una comprobación EN COMPILACIÓN
+ * más abajo: si alguien lo baja de más, no compila en vez de romperse en placa. */
+#define V1_PUT_BUF_SIZE  (20 * 1024)
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
+/* C99 no tiene _Static_assert: el truco del array de tamaño negativo. */
+typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 16u*1024u &&
+                             V1_PUT_BUF_SIZE >= 3u*4096u + 512u) ? 1 : -1];
 
 /* Reparto heap/stacks de la VM (decisión Eduardo 19-jul): la región de stacks
  * BP se TOPA en 512 KB y el RESTO es heap. El default de bpvm_init (tamaño/2)
