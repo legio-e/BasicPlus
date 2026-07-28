@@ -114,9 +114,10 @@ typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 16u*1024u &&
  * el día que cambie la regla unos dirían una cosa y otros otra — que es
  * exactamente cómo el INFO acabó enseñando 171+171. */
 size_t vm_stack_region_bytes(void) {
-    size_t r = (size_t) s_vm_buffer_size / 4u;      /* 25% stacks */
-    if (r > 512u * 1024u) r = 512u * 1024u;         /* ...pero nunca más de 512 KB */
-    return r;
+    /* La REGLA ya no vive aquí: es bpvm_stack_region_bytes() del núcleo, que
+     * comparten las 3 familias (ver bpvm.h). Esto es sólo el envoltorio que le
+     * pasa el tamaño de ESTA placa. */
+    return bpvm_stack_region_bytes((size_t) s_vm_buffer_size);
 }
 
 /* #304 — accesor para que el REPL de texto (repl.c) comparta este buffer en vez

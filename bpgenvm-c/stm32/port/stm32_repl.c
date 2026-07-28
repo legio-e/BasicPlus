@@ -472,7 +472,11 @@ static void run_module_path(const char* path, long id) {
         if (n > 0) stm32_wire_send_line(buf, (size_t) n);
     }
 
-    bpvm_t* vm = bpvm_init(s_vm_mem, sizeof(s_vm_mem), 0);
+    /* Antes pasaba 0 = 'default de bpvm_init' (mitad y mitad): la única de las
+     * tres familias que ni siquiera tenía la regla. Ahora usa LA MISMA que Pico
+     * y ESP32. Con 128 KB manda el suelo ⇒ 64/64, idéntico a hoy. */
+    size_t stack_region = bpvm_stack_region_bytes(sizeof(s_vm_mem));
+    bpvm_t* vm = bpvm_init(s_vm_mem, sizeof(s_vm_mem), sizeof(s_vm_mem) - stack_region);
     if (!vm) { BOARD_LED_ERR_ON(); emit_exited(session, "INTERNAL_ERROR", -1, 0); return; }
     bpvm_set_output(vm, v1_output_sink, NULL);
 

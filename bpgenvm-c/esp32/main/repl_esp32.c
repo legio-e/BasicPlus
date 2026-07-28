@@ -71,9 +71,10 @@ extern uint32_t s_vm_buffer_size;
  * default de bpvm_init (tamaño/2) desperdiciaba ~1 MB en stacks con los 2 MB de
  * PSRAM del P4. Cálculo ÚNICO, compartido por RUN (bpvm_init) e INFO. */
 static size_t vm_stack_region_bytes(void) {
-    size_t r = (size_t) s_vm_buffer_size / 2u;
-    if (r > 512u * 1024u) r = 512u * 1024u;
-    return r;
+    /* Esta función tenía una COPIA de la regla, y se había quedado en /2
+     * mientras el Pico ya iba por /4 — dos placas repartiendo distinto sin que
+     * nadie lo hubiera decidido. Ahora pregunta al núcleo (bpvm.h). */
+    return bpvm_stack_region_bytes((size_t) s_vm_buffer_size);
 }
 
 #define ESP32_BUILD_DATE  (__DATE__ " " __TIME__)
@@ -854,6 +855,17 @@ static void run_module_path(const char* path, long id) {
      * breakpoints pendientes para que la siguiente parta limpia. */
     bpvm_dbg_wire_reset();
 
+    /* MARCA DE AGUA (#336): heap_caps_get_minimum_free_size da el MÍNIMO
+     * HISTÓRICO de DRAM interna libre, no el de ahora. Es exactamente el dato
+     * que falta para saber cuánto se le puede subir al bloque de la VM sin
+     * ahogar al IDF — que en el ESP32 crea tareas DESPUÉS del arranque, así
+     * que pasarse no rompe al arrancar sino más tarde, que es peor.
+     * Se emite tras cada RUN, que es cuando la memoria hace pico. */
+    log_printf("mem: DRAM interna libre %u B | MINIMO HISTORICO %u B (bloque mayor %u B)",
+               (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+               (unsigned) heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+               (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    log_flush();
     bpvm_destroy(vm);
     s_active_session = 0;
 }

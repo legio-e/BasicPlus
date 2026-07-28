@@ -13,6 +13,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+size_t bpvm_stack_region_bytes(size_t total_bytes) {
+    size_t r = total_bytes / 4u;                    /* 25% para stacks */
+    if (r < 64u * 1024u)  r = 64u * 1024u;          /* ...nunca menos (threads) */
+    if (r > 512u * 1024u) r = 512u * 1024u;         /* ...nunca más (PSRAM) */
+    if (r >= total_bytes) r = total_bytes / 2u;     /* bloque diminuto: mitad */
+    return r;
+}
+
 bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     if (memory == NULL || memory_size < 4096) return NULL;
     if (stack_base == 0) stack_base = memory_size / 2;

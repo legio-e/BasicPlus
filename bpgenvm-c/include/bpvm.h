@@ -86,6 +86,23 @@ typedef void (*bpvm_output_cb)(const char* s, size_t len, void* user);
  */
 bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base);
 
+/* Reparto heap/stacks del bloque de la VM. LA REGLA, EN UN SOLO SITIO: hasta hoy
+ * estaba COPIADA en el Pico y en el ESP32 (con valores ya distintos entre sí) y
+ * AUSENTE en el STM32, que se apoyaba en el default de bpvm_init. Tres estados
+ * para una sola decisión — justo el patrón que lleva toda la semana costando
+ * caro. Devuelve los bytes para stacks; el heap es el resto.
+ *
+ *   25% para stacks (Eduardo 28-jul)... pero acotado por los dos extremos:
+ *   - SUELO 64 KB: por debajo, el stack principal (16 KB) + 2 KB por thread
+ *     dejan tan pocos threads que es una regresión. En placas de 128 KB el 25%
+ *     serían 32 KB = 8 threads, cuando hoy caben 24.
+ *   - TECHO 512 KB (Eduardo 19-jul): con 8 MB de PSRAM un reparto proporcional
+ *     dormiría megas en stacks que usan decenas de KB.
+ *
+ * Cómo queda: Pico 343 KB -> 85 KB · Metro 8 MB -> 512 KB (techo) ·
+ * S3/STM32 128 KB -> 64 KB (suelo; IDÉNTICO a hoy, sin regresión). */
+size_t bpvm_stack_region_bytes(size_t total_bytes);
+
 /*
  * Variante embebida: carga un .mod desde un buffer ya en memoria. No
  * descubre dependencias (no hay filesystem). El caller debe pre-cargar
