@@ -206,14 +206,28 @@ static void dbg_say(const char* fmt, ...) {
      * ESO también es un dato. */
     log_printf("dbg#326: %s", buf + 10);
     log_flush();
-    buf[n++] = '\n'; buf[n] = 0;
-    v1_output_sink(buf, (size_t) n, &s_dbg_say_ctx);
+    /* AQUÍ IBA LA MARCA POR CONSOLA (evento OUTPUT). RETIRADA: el cuelgue está
+     * DENTRO del envío, y mis marcas viajaban por ese mismo cable — había
+     * triplicado el tráfico justo donde se muere. No se puede medir un atasco
+     * añadiendo tráfico al atasco. El log en flash da lo mismo y no toca el
+     * wire, así que la medida no se pierde: se limpia. */
 }
 
+/* El envío, abierto en canal para ver POR CUÁL de sus dos bloqueos se muere.
+ * Es una copia de wire_v1_send_line con marcas entre medias: el lock espera
+ * portMAX_DELAY (para siempre si alguien lo tiene) y el fwrite al USB CDC
+ * bloquea si el PC no drena. Son causas MUY distintas y hasta ahora las dos
+ * caían dentro de la misma marca. TEMPORAL. */
 static void dbgw_send(const char* line, size_t len, void* user) {
     (void) user;
-    bp_trace(BPT_SEND_ENTER);   dbg_say("envia (entra)");
-    wire_v1_send_line(line, len);
+    bp_trace(BPT_SEND_ENTER);   dbg_say("envia: pido lock (%u B)", (unsigned) len);
+    wire_v1_tx_lock();
+    bp_trace2(BPT_SEND_ENTER, 1); dbg_say("envia: lock TOMADO, escribo");
+    fwrite(line, 1, len, stdout);
+    fputc('\n', stdout);
+    bp_trace2(BPT_SEND_ENTER, 2); dbg_say("envia: escrito, hago flush");
+    fflush(stdout);
+    wire_v1_tx_unlock();
     bp_trace(BPT_SEND_DONE);    dbg_say("envia (hecho)");
 }
 
