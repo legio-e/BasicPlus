@@ -151,8 +151,23 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
     for (int i = 0; i < BPVM_PART_COUNT; i++)
         req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
 
-    req.bulk     = bulk;            /* #327 H3: PACK_BURN_DATA (ya recibido) */
+    /* H3 — los campos que piden los PACK_*. De los seis, el Pico rellenaba SOLO
+     * `bulk`: sin `off` no van PACK_ENTRIES/DEL/READ, sin `size` no arranca el
+     * BURN_BEGIN, y sin `confirm_yes` el FORMAT rechaza aunque el IDE mande el
+     * confirm (que lo manda). Encaminar los verbos y no rellenar su petición es
+     * la misma media función que dejar bm.packs_* a cero. Copiado del STM32,
+     * que es el que estaba completo. */
+    req.off      = json_get_long(obj, "offset", -1);   /* PACK_ENTRIES/DEL/READ */
+    req.has_off  = req.off >= 0;
+    req.size     = json_get_long(obj, "size", -1);     /* PACK_BURN_BEGIN */
+    req.has_size = req.size >= 0;
+    req.bulk     = bulk;                               /* PACK_BURN_DATA (ya recibido) */
     req.bulk_len = (long) bulk_len;
+    {                                                  /* PACK_FORMAT (confirm=YES) */
+        char confirm[8];
+        req.confirm_yes = json_get_str(obj, "confirm", confirm, sizeof confirm) >= 0
+                          && strcmp(confirm, "YES") == 0;
+    }
 
     int wrote = -1;
     int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);
