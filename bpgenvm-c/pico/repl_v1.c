@@ -1486,7 +1486,14 @@ void repl_v1_run(void) {
      * prueba de que el portador funciona — el equivalente a ejecutar T antes
      * de JsonDemo. Sin control, el silencio del rastro no dice nada. */
     bp_trace(BPT_REPL_ENTRY);
-    bp_wdt_arm();   /* #326: a partir de aquí, colgarse = resetearse */
+    /* #326 — AQUÍ ESTABA bp_wdt_arm(), Y HACÍA DAÑO. RETIRADO.
+     * El latido se alimentaba SÓLO en el camino de recepción, y el de ENVÍO
+     * también espera: si el PC no drena el USB, wire_v1_send_line se queda
+     * escribiendo y por ahí no pasa ningún latido. A los 8 s → reset. Con una
+     * transferencia larga eso cae a media escritura de littlefs y CORROMPE EL
+     * FS (a Eduardo le pasó: LIST fallando y el puerto muerto).
+     * Un instrumento no puede estropear lo que mide. Si algún día vuelve, será
+     * alimentado en TODAS las esperas legítimas, no sólo en la que yo miré. */
     log_flush();   /* snapshot del estado de arranque a flash */
 
     /* Banner x3: si el host abre el COM con retraso se pierde el primero, y sin
