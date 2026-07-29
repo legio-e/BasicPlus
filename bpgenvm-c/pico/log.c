@@ -39,8 +39,9 @@ typedef struct {
 
 #define LOG_DATA_BYTES   (LOG_REGION_BYTES - sizeof(log_header_t))
 
-/* Buffer en RAM. Append-only; si se llena, los siguientes log_printf
- * se descartan (no wrap). Suficiente para una sesión de bring-up. */
+/* Buffer en RAM. ANILLO por líneas: si se llena, se tiran las ANTIGUAS para
+ * dejar sitio a las nuevas (ver append_raw). Lo que se conserva es la COLA, que
+ * es lo que sirve en un post-mortem. */
 static char     s_buf[LOG_DATA_BYTES];
 static uint32_t s_used;
 static int      s_initialized = 0;
@@ -79,6 +80,7 @@ static void append_raw(const char* str, size_t n) {
 
 void log_init(void) {
     s_used = 0;
+    s_dropped = 0;
     memset(s_buf, 0, sizeof(s_buf));
 
     /* Intenta cargar del flash. */
@@ -141,6 +143,10 @@ void log_flush(void) {
 
 void log_clear_ram(void) {
     s_used = 0;
+    /* Y la bandera del anillo. Si no, tras vaciar el log el volcado seguía
+     * avisando de que "se tiraron lineas ANTIGUAS" cuando ya no faltaba nada:
+     * el aviso mentía, que es justo lo que este anillo vino a arreglar. */
+    s_dropped = 0;
     if (s_initialized) memset(s_buf, 0, sizeof(s_buf));
 }
 
