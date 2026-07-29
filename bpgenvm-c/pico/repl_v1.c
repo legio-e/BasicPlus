@@ -243,15 +243,17 @@ static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
     if (json_get_str(&o, "type", type, sizeof type) < 0) { bp_trace(BPT_CMD_BADJSON); return -1; }
     out->kind = bpvm_dbg_wire_kind(type);
     bp_trace2(BPT_CMD_PARSED, (uint32_t) out->kind);
-    /* Con los valores: la pregunta abierta es si `ref` sigue siendo una
-     * DIRECCIÓN (modelo viejo) o ya es un HANDLE (H1), y eso lo dice el número,
-     * no una teoría mía. */
-    dbg_say("cmd %s a=%ld r=%ld", type, out->addr, out->ref);
     out->id   = json_get_long(&o, "id",    0);
     out->pc   = json_get_long(&o, "pc",   -1);
     out->bpId = json_get_long(&o, "bpId", -1);
     out->addr = json_get_long(&o, "addr", -1);
     out->ref  = json_get_long(&o, "ref",   0);
+    /* DESPUÉS de parsear, no antes. La versión anterior imprimía addr y ref
+     * cuatro líneas por encima de donde se asignan, o sea los valores con los
+     * que pause_cb pre-rellena el comando (-1 y 0) — y por poco lo tomo por un
+     * segundo bug ("el IDE no manda addr"). El IDE los manda perfectamente
+     * (BpvmClient.java:707/713); era mi marca leyendo antes de la lectura. */
+    dbg_say("cmd %s a=%ld r=%ld", type, out->addr, out->ref);
     return 0;
 }
 

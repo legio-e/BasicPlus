@@ -123,22 +123,41 @@ static void dbg_read_int(bpvm_dbg_wire_t* w, const bpvm_dbg_cmd_t* c) {
 
 /* READ_STRING{ref}: string heap = [byte_len:u32 BE][bytes UTF-8]; ref 0 = "". */
 static void dbg_read_string(bpvm_dbg_wire_t* w, const bpvm_dbg_cmd_t* c) {
-    /* La cabecera del string tiene que caber ANTES de leerla, y el cuerpo antes
-     * de recorrerlo: blen sale de la propia memoria, o sea que también es un
-     * valor en el que no se puede confiar. */
-    if (s_dbg_vm && c->ref > 0 && !mem_ok(s_dbg_vm, (uint64_t) c->ref, 4)) {
-        emit(w, snprintf(w->reply, w->reply_cap,
-            "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"BAD_REF\","
-            "\"message\":\"ref %ld fuera de la memoria (%lu B)\"}",
-            c->id, c->ref, (unsigned long) s_dbg_vm->memory_size));
-        return;
+    /* `ref` es una REFERENCIA, no una dirección — y desde H1 una referencia es un
+     * HANDLE (idx|TAG), no un offset plano. Este código venía del modelo viejo y
+     * usaba el valor como desplazamiento: con un handle real (medido en placa:
+     * 1073741864 = 0x40000000|40, con un heap de 257 KB) el puntero se iba fuera
+     * de la SRAM. bpref_regen + bpref_deref es la indirección oficial, y para una
+     * ref SIN tag (null, dirección cruda, constante del data block) devuelve el
+     * valor tal cual: sirve para los dos casos sin distinguirlos aquí. */
+    uint32_t addr = 0;
+    if (s_dbg_vm && c->ref > 0) {
+        addr = bpref_deref(s_dbg_vm, bpref_regen(s_dbg_vm, (uint32_t) c->ref));
+        if (addr == 0u) {   /* handle muerto o índice fuera de la tabla */
+            emit(w, snprintf(w->reply, w->reply_cap,
+                "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"BAD_REF\","
+                "\"message\":\"ref %ld no resuelve a ningun objeto vivo\"}",
+                c->id, c->ref));
+            return;
+        }
+        /* La cabecera tiene que caber ANTES de leerla, y el cuerpo antes de
+         * recorrerlo: blen sale de la propia memoria, o sea que tampoco es un
+         * valor en el que se pueda confiar. */
+        if (!mem_ok(s_dbg_vm, addr, 4)) {
+            emit(w, snprintf(w->reply, w->reply_cap,
+                "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"BAD_REF\","
+                "\"message\":\"ref %ld -> %lu, fuera de la memoria (%lu B)\"}",
+                c->id, c->ref, (unsigned long) addr,
+                (unsigned long) s_dbg_vm->memory_size));
+            return;
+        }
     }
     int off = snprintf(w->reply, w->reply_cap,
         "{\"type\":\"READ_STRING_REPLY\",\"id\":%ld,\"value\":\"", c->id);
     if (off < 0) return;
-    if (s_dbg_vm && c->ref > 0) {
-        uint32_t blen = bpvm_mem_read_u32(s_dbg_vm, (uint32_t) c->ref);
-        if (!mem_ok(s_dbg_vm, (uint64_t) c->ref + 4, blen)) {
+    if (s_dbg_vm && addr != 0u) {
+        uint32_t blen = bpvm_mem_read_u32(s_dbg_vm, addr);
+        if (!mem_ok(s_dbg_vm, (uint64_t) addr + 4, blen)) {
             emit(w, snprintf(w->reply, w->reply_cap,
                 "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"BAD_REF\","
                 "\"message\":\"ref %ld dice medir %lu B y no cabe (%lu B)\"}",
@@ -146,7 +165,7 @@ static void dbg_read_string(bpvm_dbg_wire_t* w, const bpvm_dbg_cmd_t* c) {
                 (unsigned long) s_dbg_vm->memory_size));
             return;
         }
-        const uint8_t* b = s_dbg_vm->memory + c->ref + 4;
+        const uint8_t* b = s_dbg_vm->memory + addr + 4;
         for (uint32_t i = 0; i < blen && off < (int) w->reply_cap - 8; i++) {
             unsigned char ch = b[i];
             if (ch == '"' || ch == '\\') { w->reply[off++] = '\\'; w->reply[off++] = (char) ch; }
