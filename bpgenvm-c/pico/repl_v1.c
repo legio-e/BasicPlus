@@ -196,6 +196,16 @@ static void dbg_say(const char* fmt, ...) {
     va_end(ap);
     if (m < 0) return;
     n += m; if (n > (int) sizeof buf - 2) n = (int) sizeof buf - 2;
+    buf[n] = 0;
+    /* 3er portador, y el ÚNICO que aguanta lo que Eduardo tiene que hacer de
+     * verdad para recuperar la placa: desenchufarla. Un corte de corriente se
+     * lleva la RAM Y los scratch del watchdog; la flash no.
+     * Sí, log_flush() bloquea ~50 ms con IRQs off y perturba. Pero perturbar y
+     * medir es infinitamente mejor que no perturbar y no medir nada, que es lo
+     * que llevamos dos intentos haciendo. Si el bicho se esconde al medirlo,
+     * ESO también es un dato. */
+    log_printf("dbg#326: %s", buf + 10);
+    log_flush();
     buf[n++] = '\n'; buf[n] = 0;
     v1_output_sink(buf, (size_t) n, &s_dbg_say_ctx);
 }
@@ -1476,6 +1486,7 @@ void repl_v1_run(void) {
      * prueba de que el portador funciona — el equivalente a ejecutar T antes
      * de JsonDemo. Sin control, el silencio del rastro no dice nada. */
     bp_trace(BPT_REPL_ENTRY);
+    bp_wdt_arm();   /* #326: a partir de aquí, colgarse = resetearse */
     log_flush();   /* snapshot del estado de arranque a flash */
 
     /* Banner x3: si el host abre el COM con retraso se pierde el primero, y sin

@@ -57,6 +57,13 @@ volatile uint32_t __uninitialized_ram(g_bp_trace_magic);
 volatile uint32_t __uninitialized_ram(g_bp_trace_cnt);
 volatile uint32_t __uninitialized_ram(g_bp_trace)[BP_TRACE_N];
 
+/* El latido. 8 s: de sobra para cualquier espera legítima entre dos pasadas por
+ * el bucle del transporte, y corto para no tenerte esperando cuando se cuelga.
+ * Ojo: si un programa BP usa Wdt.Timer, manda el suyo — es su derecho. */
+static int s_bp_wdt_on = 0;
+void bp_wdt_arm(void)  { watchdog_enable(8000, true); s_bp_wdt_on = 1; }
+void bp_wdt_feed(void) { if (s_bp_wdt_on) watchdog_update(); }
+
 static const char* bp_trace_name(uint32_t c) {
     switch (c) {
         case BPT_RUN_ENTER:    return "RUN.entra";

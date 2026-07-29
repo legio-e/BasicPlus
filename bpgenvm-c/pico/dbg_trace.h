@@ -69,6 +69,16 @@ static inline void bp_trace2(uint32_t code, uint32_t detail) {
 
 static inline void bp_trace(uint32_t code) { bp_trace2(code, 0); }
 
+/* ── El latido (#326) ──────────────────────────────────────────────────────
+ * Eduardo NO tiene botón de reset, y con la placa colgada el reset del IDE
+ * tampoco responde: su única salida es desenchufar. Y desenchufar borra la RAM
+ * y los scratch, o sea que mis dos primeros portadores no podían sobrevivir a
+ * la forma REAL de recuperar la placa. En vez de buscar un tercer portador, se
+ * ataca la causa: que la placa se resetee SOLA. Un reset sí conserva el rastro
+ * — y de paso Eduardo recupera la placa sin tocar el cable. */
+void bp_wdt_arm(void);    /* arranca el latido (entrada del REPL) */
+void bp_wdt_feed(void);   /* "sigo vivo" — desde las esperas legítimas */
+
 /* Vuelca el rastro de la sesión ANTERIOR al log y lo da por consumido.
  * Llamar una sola vez al arrancar, antes de que nadie deje marcas nuevas. */
 void bp_trace_report(void);
