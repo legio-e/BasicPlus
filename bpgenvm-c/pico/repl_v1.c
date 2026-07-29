@@ -26,7 +26,6 @@
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "log.h"
 #include "bpvm_dbg_wire.h"   /* #326: el ramo de depuración salió de aquí a src/ */
-#include "dbg_trace.h"       /* #326: migas de pan que sobreviven al reset (TEMPORAL) */
 #include "aot_funcs.h"       /* H3 #160: registro AOT manual antes de run */
 #include "mdn_loader.h"      /* H3 #158 fase D: cargar .mdn desde FS */
 
@@ -44,7 +43,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include <stdarg.h>          /* #326: dbg_say con formato */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -167,93 +165,25 @@ static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
  * extrajo LITERALMENTE a src/bpvm_dbg_wire.c (cc658bd) y se estrenó en la P4;
  * verificado en placa, el Pico se pasa al núcleo y borra su copia. Aquí queda
  * sólo lo no portable: traducir JSON ↔ comando tipado y prestar los buffers. */
-/* ── #326: DOS testigos del mismo camino, que se tapan el punto ciego ──────
- *
- * (1) LA CONSOLA (dbg_say): la marca sale al PC como evento OUTPUT según
- *     ocurre, así que NO necesita sobrevivir a nada: ya está en la pantalla
- *     del IDE antes de que la placa se vaya. Es el testigo bueno... mientras
- *     el transporte esté vivo.
- * (2) LAS MIGAS (bp_trace): un store en RAM que el arranque no limpia. Sirve
- *     justo cuando el otro no: si lo que muere es el USB, la consola se calla
- *     y las migas siguen contando.
- *
- * Y si la consola llega MÁS LEJOS que las migas (o al revés), eso también es
- * un dato: dice cuál de los dos falló primero.
- * TEMPORAL: fuera al cerrar el bug. */
-/* Contexto del sink v1: lleva la session a embeber en cada OUTPUT. */
-typedef struct {
-    long session;
-} v1_sink_ctx_t;
-
-static void v1_output_sink(const char* data, size_t len, void* user);  /* def. abajo */
-static v1_sink_ctx_t s_dbg_say_ctx = { 0 };   /* session, fijada al arrancar el RUN */
-
-static void dbg_say(const char* fmt, ...) {
-    char buf[112];
-    int n = snprintf(buf, sizeof buf, "[dbg#326] ");
-    va_list ap; va_start(ap, fmt);
-    int m = vsnprintf(buf + n, sizeof buf - (size_t) n - 2, fmt, ap);
-    va_end(ap);
-    if (m < 0) return;
-    n += m; if (n > (int) sizeof buf - 2) n = (int) sizeof buf - 2;
-    buf[n] = 0;
-    /* 3er portador, y el ÚNICO que aguanta lo que Eduardo tiene que hacer de
-     * verdad para recuperar la placa: desenchufarla. Un corte de corriente se
-     * lleva la RAM Y los scratch del watchdog; la flash no.
-     * Sí, log_flush() bloquea ~50 ms con IRQs off y perturba. Pero perturbar y
-     * medir es infinitamente mejor que no perturbar y no medir nada, que es lo
-     * que llevamos dos intentos haciendo. Si el bicho se esconde al medirlo,
-     * ESO también es un dato. */
-    log_printf("d326 %s", buf + 10);
-    log_flush();
-    /* AQUÍ IBA LA MARCA POR CONSOLA (evento OUTPUT). RETIRADA: el cuelgue está
-     * DENTRO del envío, y mis marcas viajaban por ese mismo cable — había
-     * triplicado el tráfico justo donde se muere. No se puede medir un atasco
-     * añadiendo tráfico al atasco. El log en flash da lo mismo y no toca el
-     * wire, así que la medida no se pierde: se limpia. */
-}
-
-/* El envío, abierto en canal para ver POR CUÁL de sus dos bloqueos se muere.
- * Es una copia de wire_v1_send_line con marcas entre medias: el lock espera
- * portMAX_DELAY (para siempre si alguien lo tiene) y el fwrite al USB CDC
- * bloquea si el PC no drena. Son causas MUY distintas y hasta ahora las dos
- * caían dentro de la misma marca. TEMPORAL. */
 static void dbgw_send(const char* line, size_t len, void* user) {
     (void) user;
-    bp_trace(BPT_SEND_ENTER);   dbg_say("tx lock %u", (unsigned) len);
-    wire_v1_tx_lock();
-    bp_trace2(BPT_SEND_ENTER, 1); dbg_say("tx write");
-    fwrite(line, 1, len, stdout);
-    fputc('\n', stdout);
-    bp_trace2(BPT_SEND_ENTER, 2); dbg_say("tx flush");
-    fflush(stdout);
-    wire_v1_tx_unlock();
-    bp_trace(BPT_SEND_DONE);    dbg_say("tx ok");
+    wire_v1_send_line(line, len);
 }
 
 static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
     (void) user;
-    bp_trace(BPT_CMD_WAIT);     dbg_say("rx espera");
     int n = wire_v1_recv_line(-1, s_line_buf, sizeof s_line_buf);
-    bp_trace(BPT_CMD_GOT);      dbg_say("rx %d", n);
-    if (n <= 0) { bp_trace(BPT_CMD_BADLINE); return -1; }  /* overflow/vacía: reintentar */
+    if (n <= 0) return -1;                       /* overflow / vacía: reintentar */
     json_obj_t o;
-    if (json_parse(s_line_buf, (size_t) n, &o) != 0) { bp_trace(BPT_CMD_BADJSON); return -1; }
+    if (json_parse(s_line_buf, (size_t) n, &o) != 0) return -1;
     char type[40];
-    if (json_get_str(&o, "type", type, sizeof type) < 0) { bp_trace(BPT_CMD_BADJSON); return -1; }
+    if (json_get_str(&o, "type", type, sizeof type) < 0) return -1;
     out->kind = bpvm_dbg_wire_kind(type);
-    bp_trace2(BPT_CMD_PARSED, (uint32_t) out->kind);
     out->id   = json_get_long(&o, "id",    0);
     out->pc   = json_get_long(&o, "pc",   -1);
     out->bpId = json_get_long(&o, "bpId", -1);
     out->addr = json_get_long(&o, "addr", -1);
     out->ref  = json_get_long(&o, "ref",   0);
-    /* DESPUÉS de parsear, no antes. La versión anterior imprimía addr y ref
-     * cuatro líneas por encima de donde se asignan, o sea los valores con los
-     * que pause_cb pre-rellena el comando (-1 y 0) — y por poco lo tomo por un
-     * segundo bug ("el IDE no manda addr"). El IDE los manda perfectamente
-     * (BpvmClient.java:707/713); era mi marca leyendo antes de la lectura. */
-    dbg_say("cmd %s a=%ld r=%ld", type, out->addr, out->ref);
     return 0;
 }
 
@@ -888,6 +818,11 @@ static long s_active_session = 0;
  * "ninguna"). */
 static long s_next_session = 1;
 
+/* Contexto del sink v1: lleva la session a embeber en cada OUTPUT. */
+typedef struct {
+    long session;
+} v1_sink_ctx_t;
+
 /* Sink que la VM invoca para cada chunk de output del programa BP.
  * Cada chunk se envía como un evento OUTPUT con escape JSON. Chunks
  * pequeños generan eventos pequeños; el USB CDC del Pico tolera bien
@@ -1179,17 +1114,9 @@ static void run_module_path(const char* path, long id) {
     /* H6.b.3 #140 — modo debug: si el cliente fijó breakpoints o pidió
      * PAUSE antes de RUN, aplicar los pendientes + enganchar el pause_cb. */
     int debugging = bpvm_dbg_wire_armed();
-    /* #326 — SIEMPRE, no sólo en debug: que "corrió sin depurador" también
-     * deje huella. Un instrumento que sólo habla cuando esperas que hable no
-     * distingue "no pasó" de "no lo vi". */
-    s_dbg_say_ctx.session = session;
-    bp_trace2(BPT_RUN_ENTER, (uint32_t) debugging);
-    dbg_say("RUN entra dbg=%d", debugging);
     if (debugging) {
         s_dbgw.session = session;
         bpvm_dbg_wire_arm(&s_dbgw, vm);
-        bp_trace(BPT_RUN_ARMED);
-        dbg_say("ARMADO");
         log_printf("RUN/v1: DEBUG mode");
     }
 
@@ -1215,7 +1142,6 @@ static void run_module_path(const char* path, long id) {
 #else
     rs = bpvm_run(vm);
 #endif
-    bp_trace(BPT_RUN_RETURNED);   dbg_say("RUN vuelve %s", bpvm_status_str(rs));   /* #326 */
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
     log_printf("RUN/v1 %s finished: %s", path, bpvm_status_str(rs));
 
@@ -1259,7 +1185,6 @@ static void run_module_path(const char* path, long id) {
     s_active_session = 0;
     /* H6.b.3 — limpiar estado de debug de esta sesión. */
     bpvm_dbg_wire_reset();
-    bp_trace(BPT_RUN_DISARMED);                       /* #326 */
 }
 
 static void handle_run(long id, const json_obj_t* obj) {
@@ -1504,15 +1429,6 @@ void repl_v1_run(void) {
     /* #326 CONTROL: se marca en TODO arranque, haya depurador o no. Es la
      * prueba de que el portador funciona — el equivalente a ejecutar T antes
      * de JsonDemo. Sin control, el silencio del rastro no dice nada. */
-    bp_trace(BPT_REPL_ENTRY);
-    /* #326 — AQUÍ ESTABA bp_wdt_arm(), Y HACÍA DAÑO. RETIRADO.
-     * El latido se alimentaba SÓLO en el camino de recepción, y el de ENVÍO
-     * también espera: si el PC no drena el USB, wire_v1_send_line se queda
-     * escribiendo y por ahí no pasa ningún latido. A los 8 s → reset. Con una
-     * transferencia larga eso cae a media escritura de littlefs y CORROMPE EL
-     * FS (a Eduardo le pasó: LIST fallando y el puerto muerto).
-     * Un instrumento no puede estropear lo que mide. Si algún día vuelve, será
-     * alimentado en TODAS las esperas legítimas, no sólo en la que yo miré. */
     log_flush();   /* snapshot del estado de arranque a flash */
 
     /* Banner x3: si el host abre el COM con retraso se pierde el primero, y sin

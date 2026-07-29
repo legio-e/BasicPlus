@@ -48,76 +48,6 @@
 #include "hardware/adc.h"
 #include "pico/unique_id.h"
 #include "pico/time.h"
-#include "pico/platform/sections.h"  /* __uninitialized_ram (rastro #326) */
-#include "dbg_trace.h"               /* #326 — TEMPORAL */
-
-/* ── #326: migas de pan en RAM que el arranque NO limpia ──────────────────
- * Ver dbg_trace.h para el porqué de no usar el log directamente. */
-volatile uint32_t __uninitialized_ram(g_bp_trace_magic);
-volatile uint32_t __uninitialized_ram(g_bp_trace_cnt);
-volatile uint32_t __uninitialized_ram(g_bp_trace)[BP_TRACE_N];
-
-/* El latido. 8 s: de sobra para cualquier espera legítima entre dos pasadas por
- * el bucle del transporte, y corto para no tenerte esperando cuando se cuelga.
- * Ojo: si un programa BP usa Wdt.Timer, manda el suyo — es su derecho. */
-static int s_bp_wdt_on = 0;
-void bp_wdt_arm(void)  { watchdog_enable(8000, true); s_bp_wdt_on = 1; }
-void bp_wdt_feed(void) { if (s_bp_wdt_on) watchdog_update(); }
-
-static const char* bp_trace_name(uint32_t c) {
-    switch (c) {
-        case BPT_RUN_ENTER:    return "RUN.entra";
-        case BPT_RUN_ARMED:    return "RUN.depurador-armado";
-        case BPT_RUN_RETURNED: return "RUN.vuelve";
-        case BPT_RUN_DISARMED: return "RUN.depurador-desarmado";
-        case BPT_SEND_ENTER:   return "envia.entra";
-        case BPT_SEND_DONE:    return "envia.hecho";
-        case BPT_CMD_WAIT:     return "cmd.ESPERA";
-        case BPT_CMD_GOT:      return "cmd.recibido";
-        case BPT_CMD_PARSED:   return "cmd.parseado";
-        case BPT_CMD_BADLINE:  return "cmd.linea-mala";
-        case BPT_CMD_BADJSON:  return "cmd.json-malo";
-        default:               return "?";
-    }
-}
-
-void bp_trace_report(void) {
-    /* HABLA SIEMPRE. La primera versión callaba cuando el magic no cuadraba, y
-     * su silencio no distinguía "no se marcó nada" de "el rastro no sobrevivió"
-     * — dos cosas OPUESTAS. Un instrumento mudo no es un instrumento: los
-     * valores en crudo de los DOS portadores, siempre. */
-    uint32_t sm = watchdog_hw->scratch[0], sv = watchdog_hw->scratch[1],
-             sc = watchdog_hw->scratch[2];
-    log_printf("rastro #326: RAM magic=%08x cnt=%u | scratch magic=%08x cnt=%u ult=%s/c%u",
-               (unsigned) g_bp_trace_magic, (unsigned) g_bp_trace_cnt,
-               (unsigned) sm, (unsigned) sc,
-               sm == BP_TRACE_MAGIC ? bp_trace_name(sv & 0xFFu) : "-",
-               (unsigned) (sv >> 24));
-    watchdog_hw->scratch[0] = 0;                      /* consumido */
-    if (g_bp_trace_magic != BP_TRACE_MAGIC) return;   /* arranque en frío */
-    uint32_t total = g_bp_trace_cnt;
-    if (total == 0) { g_bp_trace_magic = 0; return; }
-    uint32_t n     = total < BP_TRACE_N ? total : BP_TRACE_N;
-    uint32_t first = total - n;
-    log_printf("rastro #326: %u marcas, últimas %u (la ÚLTIMA es donde murió):",
-               (unsigned) total, (unsigned) n);
-    /* Varias marcas por línea: el buffer del log es de 4 KB y una línea por
-     * marca se lo comería entero. */
-    char line[200]; size_t p = 0;
-    for (uint32_t i = 0; i < n; i++) {
-        uint32_t v = g_bp_trace[(first + i) % BP_TRACE_N];
-        uint32_t d = (v >> 8) & 0xFFu;
-        int w = d ? snprintf(line + p, sizeof line - p, " c%u:%s(%u)",
-                             (unsigned) (v >> 24), bp_trace_name(v & 0xFFu), (unsigned) d)
-                  : snprintf(line + p, sizeof line - p, " c%u:%s",
-                             (unsigned) (v >> 24), bp_trace_name(v & 0xFFu));
-        /* snprintf devuelve lo que HABRÍA escrito: si trunca, p se saldría del
-         * buffer y `sizeof line - p` daría un size_t enorme. */
-        if (w > 0 && (size_t) w < sizeof line - p) p += (size_t) w;
-        if ((i % 5) == 4 || i == n - 1) { log_printf(" %s", line); p = 0; line[0] = 0; }
-    }
-    g_bp_trace_magic = 0;   /* consumido: la sesión nueva empieza limpia */
-}
 
 /* Buffer de la VM en SRAM interna. 128 KB sobra para Hello.bp y deja sitio
  * para varios módulos. */
@@ -1307,7 +1237,6 @@ int main(void) {
      * ahorra media investigación. */
     log_printf("boot: causa del reset = %s",
                watchdog_caused_reboot() ? "WATCHDOG" : "power-on/run");
-    bp_trace_report();      /* #326: rastro de la sesión que murió (TEMPORAL) */
 
     /* Conecta los backends de HW reales (Pico SDK) a los builtins de
      * la VM. Sin esto los handlers caen al stub con logging. */

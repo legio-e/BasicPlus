@@ -3,7 +3,6 @@
  */
 
 #include "wire_v1.h"
-#include "dbg_trace.h"   /* #326: bp_wdt_feed (TEMPORAL) */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -31,16 +30,6 @@ int wire_v1_recv_line(int first_char_already_read,
     for (;;) {
         int c = try_get_char_v1();
         if (c < 0) {
-            /* #326 — el latido. Esperar bytes es LEGÍTIMO (tú pensando delante
-             * de un breakpoint), así que aquí se alimenta el watchdog y la
-             * placa sigue viva todo el tiempo que haga falta. Lo que NO
-             * alimenta es un bloqueo de verdad: un interbloqueo, un fault en
-             * bucle o cualquier cosa que no vuelva a pasar por aquí. Eso la
-             * resetea sola en ~8 s — y un reset SÍ conserva el rastro, mientras
-             * que desenchufar (la única salida que hoy tiene Eduardo) lo borra.
-             * TEMPORAL con #326; pero una placa sin botón de reset que se
-             * recupera sola tiene valor por sí mismo. */
-            bp_wdt_feed();
             vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
@@ -57,16 +46,6 @@ int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
     while (got < n) {
         int c = try_get_char_v1();
         if (c < 0) {
-            /* #326 — el latido. Esperar bytes es LEGÍTIMO (tú pensando delante
-             * de un breakpoint), así que aquí se alimenta el watchdog y la
-             * placa sigue viva todo el tiempo que haga falta. Lo que NO
-             * alimenta es un bloqueo de verdad: un interbloqueo, un fault en
-             * bucle o cualquier cosa que no vuelva a pasar por aquí. Eso la
-             * resetea sola en ~8 s — y un reset SÍ conserva el rastro, mientras
-             * que desenchufar (la única salida que hoy tiene Eduardo) lo borra.
-             * TEMPORAL con #326; pero una placa sin botón de reset que se
-             * recupera sola tiene valor por sí mismo. */
-            bp_wdt_feed();
             vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
