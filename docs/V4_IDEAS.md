@@ -1018,3 +1018,81 @@ esto). Un `raise` DESDE un handler sigue valiendo: eso encola, no inyecta.
 - **Cola llena** (16) y **slot no resoluble**: gritan por stderr y descartan.
   **Receptor muerto** entre el raise y el drenaje: se ignora sin ruido — es el
   caso normal al destruir un suscriptor con eventos pendientes.
+
+---
+
+## Ideas FUTURAS (sin plazo) — charla del 29-jul
+
+Ninguna de estas es de V4. Se anotan para que no se pierdan; **la segunda no es
+siquiera de V5**, es una posibilidad a estudiar sin compromiso.
+
+### Módulo entero native — "una isla sin puentes dentro"
+
+Pregunta de Eduardo: el AOT va función a función, ¿se pueden poner todas juntas?
+
+**Ya están juntas.** El `.mdn` es POR MÓDULO y el emisor recoge todas las `native`
+en un único fichero C; dos native del mismo módulo se llaman **directamente en C**,
+sin puente ni frame de VM (`AotCEmitter`: `if (!nativeFuncNames.contains(name))`
+→ sólo entonces `emitBridgeCall`). Lo que es por-función no es el empaquetado: es
+**la decisión**.
+
+Así que el premio de "módulo entero native" no es juntarlas, es **que desaparezcan
+los cruces de puente**: hoy cada llamada native→BP paga un `call_bp_i32` que monta
+un frame de intérprete. Con el módulo entero, todas las llamadas internas son C
+directo y el compilador puede además inlinear entre ellas.
+
+**El muro no es de formato, es de COBERTURA.** El emisor lanza
+`UnsupportedAotException` en bastante: intrínsecos cross-module, métodos
+privados/super/estáticos, construcción de objetos, `try/catch` dentro de native.
+Hoy se esquiva marcando sólo la función caliente; un módulo entero se los come
+todos de golpe.
+
+Y tres cosas sistémicas que hoy no duelen porque las estancias en native son
+CORTAS, y que con un módulo entero pasan a primer plano:
+
+1. **Raíces del GC** — es el paso 3 de #302 (shadow stack), diferido. Cuanto más
+   tiempo vive la ejecución dentro de C, más referencias hay en locales/registros
+   que el GC no ve. Deja de ser teórico.
+2. **El planificador** — el native es una caja negra entre quanta. Un módulo
+   entero puede correr mucho sin ceder: threads que no avanzan, eventos
+   encolados, `KILL` que no responde. Lo contrario del evento `Run` asíncrono.
+3. **Depuración** — dentro de native no hay breakpoints.
+
+**Pregunta que cambia el diseño (abierta):** ¿es para módulos de LIBRERÍA (Json,
+Str, Math — cálculo puro, sin GUI ni threads, donde las tres pegas casi no
+aplican) o para módulos de APLICACIÓN cualesquiera? Lo primero se puede abordar
+sin resolver nada de lo anterior y da casi todo el beneficio.
+
+### Backend propio de código máquina — "un JIT, pero previo"
+
+Idea de Eduardo, **sin plazo y sin compromiso**: generar código máquina
+DIRECTAMENTE, con emisor propio, en vez de BP → C → GCC → enlazar.
+
+**El listón está alto.** El Fibo del P4 dio **113×** sobre el intérprete, y eso lo
+pone `gcc -O3`, no el emisor. Un generador propio de primera generación (plantilla
+por opcode, sin optimizador) se mueve típicamente en 3-10×. Muchísimo frente a
+interpretar, pero un orden de magnitud POR DEBAJO del camino actual. No sería un
+sustituto del AOT: sería otro punto de la curva.
+
+**Pero la mitad difícil ya está hecha.** Un JIT tiene dos mitades: generar el
+código y poder ejecutarlo. La segunda —cargar en RAM ejecutable, hijack por
+registro, tag de arquitectura, W^X en el P4— es H4 y ya funciona en placa. Falta
+sólo el emisor.
+
+Dónde gana de verdad, y **no es la velocidad**:
+
+- **Quita la dependencia del toolchain**: hoy usar `native` exige los
+  cross-compilers instalados. Con emisor propio, el AOT no depende de nada
+  externo — literalmente la visión de soberanía.
+- **Es el único camino hacia compilar EN LA PLACA**. Con GCC de por medio, jamás.
+  Encaja con los packs de código nativo de V5.
+- **Ciclo de build instantáneo**, sin compilar ni enlazar.
+
+Hacerlo **previo** (no JIT) es lo correcto para empezar: el emisor se depura en el
+PC, con desensamblador, comparando contra lo que hace GCC. Moverlo a la placa
+después es cambiar dónde corre, no qué hace.
+
+Si algún día se aborda: **conviviendo, no sustituyendo**. Emisor propio como
+camino por defecto (siempre disponible, rápido) y el camino C como "modo release".
+El `.mdn` ya lleva tag de arquitectura, así que el formato admite las dos
+procedencias sin tocarlo.
