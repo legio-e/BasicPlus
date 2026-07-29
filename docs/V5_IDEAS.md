@@ -49,7 +49,8 @@ casa, y con precedente que funciona.
 - **Entity = clase normal.** Sin clase base especial, sin interfaz que implementar.
 - **Los campos van como `property` públicas** (norma del lenguaje: público ⇒
   property).
-- **Anotaciones `@{ ... }`** sobre la property **y también sobre la clase**.
+- **Anotaciones `@BD{ ... }`** sobre la property **y también sobre la clase**
+  (ver más abajo: mecanismo general con PREFIJO de espacio de nombres).
 - **Nombre de tabla** = nombre de la clase por defecto; la anotación de clase lo
   sobreescribe si no coincide.
 - **Nombre del DAO** = nombre de la clase + `"Dao"`. Sencillo y predecible.
@@ -121,12 +122,31 @@ el widget `Chart`). No entra en v1, y no hay conflicto: la ventana es una API
 ADICIONAL, no un reemplazo de las listas. El límite de v1 es lo que evita que se
 escriba código encima que dé por hechas listas ilimitadas.
 
+### Anotaciones: mecanismo GENERAL con prefijo — DECIDIDO (Eduardo, 29-jul)
+
+No es del ORM: es del lenguaje. Y llevan **prefijo de espacio de nombres** —
+`@BD{ ... }` para la base de datos, `@Json{ ... }` para serializar, etc.
+("una vez que destapas la liebre salen muchas más").
+
+El prefijo resuelve tres cosas de una vez:
+
+1. **Sin colisiones** entre herramientas (dos que quieran `name` no se pisan).
+2. **El compilador NO necesita conocer el vocabulario**: parsea `@Nombre{ … }`,
+   comprueba que está bien formado y lo guarda tal cual. Cada herramienta lee lo
+   suyo.
+3. Y la consecuencia buena: **una herramienta nueva no obliga a tocar el
+   compilador**. Para un equipo pequeño eso es mucho.
+
+⚠️ **La pega, y su red barata.** Si te equivocas escribiendo el prefijo
+(`@BB{PK}`), el compilador se lo traga —no conoce vocabularios— y **la PK
+desaparece en silencio**. Es la familia de bug de #326 otra vez. La red no está en
+el compilador sino en el generador: si se le pide un DAO de una clase **sin ningún
+`@BD`**, o **sin PK declarada**, que se NIEGUE con un mensaje claro en vez de
+fabricar un DAO roto. Un `if` ahora, o un bug que se descubre con la tabla ya en
+producción.
+
 ### Abierto
 
-- **¿Mecanismo GENERAL de anotaciones o específico del ORM?** Recomendación:
-  general, y que el ORM sea su primer usuario. La diferencia de coste es pequeña
-  —el parser tiene que aguantar la construcción igual— y en cuanto exista se va a
-  querer para serialización JSON y para lo que venga.
 - **¿De dónde sale el esquema?** Con lo decidido (Entity = clase + anotaciones) el
   camino es *code first*: de la clase salen la tabla y el DAO. Queda por decidir
   si además se ofrece introspección de una BD existente (`PRAGMA table_info` →
