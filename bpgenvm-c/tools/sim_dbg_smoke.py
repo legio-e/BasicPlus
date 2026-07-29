@@ -26,7 +26,9 @@ def free_port():
 
 class Wire:
     def __init__(self, sock): self.s = sock; self.buf = b""
-    def send(self, o): self.s.sendall((json.dumps(o) + "\n").encode())
+    def send(self, o):
+        print("    >>", json.dumps(o)[:150])
+        self.s.sendall((json.dumps(o) + "\n").encode())
     def recv(self, timeout=TIMEOUT):
         self.s.settimeout(timeout)
         while b"\n" not in self.buf:
@@ -34,6 +36,7 @@ class Wire:
             if not c: raise EOFError("el sim cerro la conexion")
             self.buf += c
         line, self.buf = self.buf.split(b"\n", 1)
+        print("    <<", line.decode()[:150])
         return json.loads(line.decode())
     def recv_until(self, mtype, timeout=TIMEOUT):
         # NO descartar en silencio: si esperamos X y llega otra cosa (un ERROR,
@@ -45,7 +48,11 @@ class Wire:
             m = self.recv(timeout)
             if m.get("type") == mtype: return m
             seen.append(m)
-            if m.get("type") in ("ERROR", "FATAL"):
+            # ERROR/FATAL es obvio; EXITED tambien TERMINA la espera: si aguardas
+            # un BP_HIT y el programa ya ha acabado, ese BP_HIT no va a llegar
+            # jamas. Tragarselo convertia "el modulo peto por deps que faltan"
+            # en un timeout mudo — me costo dos vueltas averiguarlo.
+            if m.get("type") in ("ERROR", "FATAL", "EXITED"):
                 raise RuntimeError("esperaba %s y llego %s: %s" % (mtype, m.get("type"), m))
         raise TimeoutError("%s no llego; por el camino: %s" % (mtype, seen))
 
