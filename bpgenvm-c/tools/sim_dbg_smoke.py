@@ -36,11 +36,18 @@ class Wire:
         line, self.buf = self.buf.split(b"\n", 1)
         return json.loads(line.decode())
     def recv_until(self, mtype, timeout=TIMEOUT):
+        # NO descartar en silencio: si esperamos X y llega otra cosa (un ERROR,
+        # por ejemplo), hay que DECIRLO. Descartar callado convierte "el sim me
+        # contesto que no existe el fichero" en "timeout", que no dice nada.
+        seen = []
         t0 = time.time()
         while time.time() - t0 < timeout:
             m = self.recv(timeout)
             if m.get("type") == mtype: return m
-        raise TimeoutError(mtype)
+            seen.append(m)
+            if m.get("type") in ("ERROR", "FATAL"):
+                raise RuntimeError("esperaba %s y llego %s: %s" % (mtype, m.get("type"), m))
+        raise TimeoutError("%s no llego; por el camino: %s" % (mtype, seen))
 
 def main():
     mod = sys.argv[1] if len(sys.argv) > 1 else "samples/Arith.mod"
@@ -54,7 +61,7 @@ def main():
     if os.path.exists(img): os.remove(img)
     exe = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "build", "bpvm-sim.exe"))
     sim = subprocess.Popen([exe, "--port=%d" % port, "--fs=" + img],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     time.sleep(0.6)
     fails = []
     try:
@@ -96,6 +103,13 @@ def main():
         fails.append("excepcion: %r" % (e,))
     finally:
         sim.terminate()
+        try:
+            out = sim.stdout.read().decode(errors="replace") if sim.stdout else ""
+        except Exception:
+            out = ""
+        if out.strip():
+            print("--- salida del sim ---")
+            print(out[-1500:])
 
     print("\n[status=%s]" % ("OK" if not fails else "FALLA"))
     for f in fails: print("  !!", f)
