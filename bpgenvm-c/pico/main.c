@@ -736,11 +736,29 @@ static const bpvm_adc_backend_t s_pico_adc_backend = {
 
 static int s_wdt_active = 0;
 
+/* Tope REAL de watchdog_enable(). El contador es de 24 bits (WATCHDOG_LOAD_BITS)
+ * y cuenta µs —x2 en RP2040 por la errata E1—, así que el SDK hace
+ * `load = delay_ms * (1000 * XFACTOR)` en uint32. Pasarse NO da "más plazo":
+ * el producto desborda y/o el SDK recorta a WATCHDOG_LOAD_BITS. Sale ~16777 ms
+ * en RP2350 y ~8388 ms en RP2040. Se CALCULA (no se pone a ojo) para que siga
+ * bien si cambia el silicio; el #if es el mismo que usa el SDK en watchdog.c,
+ * porque WATCHDOG_XFACTOR es privado de ese .c y no lo exporta ningún header. */
+#if PICO_RP2040
+#define PICO_WDT_XFACTOR 2u     /* errata RP2040-E1: decrementa 2 veces por tick */
+#else
+#define PICO_WDT_XFACTOR 1u
+#endif
+#define PICO_WDT_MAX_MS (WATCHDOG_LOAD_BITS / (1000u * PICO_WDT_XFACTOR))
+
 static void pico_wdt_enable_impl(int timeoutMs) {
     /* watchdog_enable(ms, pause_on_debug=true). pause_on_debug evita
      * que el watchdog dispare cuando el chip está paused en debugger,
      * que es lo razonable para desarrollo. */
     if (timeoutMs <= 0) timeoutMs = 100;
+    /* Recorte al tope: por encima, el uint32 del SDK desborda y el plazo que
+     * sale no se parece al pedido — puede quedar en microsegundos y resetear
+     * la placa al instante. Mejor un plazo corto que uno IMPREDECIBLE. */
+    if ((uint32_t) timeoutMs > PICO_WDT_MAX_MS) timeoutMs = (int) PICO_WDT_MAX_MS;
     watchdog_enable((uint32_t) timeoutMs, true);
     s_wdt_active = 1;
 }
@@ -750,10 +768,14 @@ static void pico_wdt_feed_impl(void) {
 }
 
 static void pico_wdt_disable_impl(void) {
-    /* RP2350: el watchdog no se puede deshabilitar completamente
-     * sin re-bootear. Aproximamos seteando el max valor (~8.4M ms)
-     * que en práctica nunca dispara. */
-    watchdog_enable(0x7FFFFF, true);
+    /* watchdog_disable() limpia WATCHDOG_CTRL_ENABLE_BITS: PARA el contador de
+     * verdad, sin rebotar ni dejar nada armado.
+     * Antes esto llamaba a watchdog_enable(0x7FFFFF) creyendo que era un plazo
+     * "tan largo que nunca dispara". No existe tal valor: el SDK recorta el load
+     * a WATCHDOG_LOAD_BITS, así que el techo son ~16,8 s (RP2350) pase lo que
+     * pase. O sea que Wdt.disable() NO desactivaba: dejaba el perro armado a
+     * ~16,8 s y la placa se reseteaba sola si el programa seguía sin feed. */
+    watchdog_disable();
     s_wdt_active = 0;
 }
 
@@ -845,6 +867,15 @@ static bpvm_part_layout_t s_layout;   /* particiones derivadas del env */
 static bpvm_boot_status_t s_boot;     /* estado REAL alcanzado por el boot */
 
 const bpvm_boot_status_t* board_boot_status(void) { return &s_boot; }
+
+/* #327 — el layout REAL del arranque, para quien necesite una partición que no
+ * sea el FS (hoy: la zona de packs del gestor de placa). NULL mientras el boot
+ * no haya pasado de la capa 1: sin layout válido no hay particiones que dar.
+ * El STM32 tenía su propio s_layout dentro del board_mgr; aquí se comparte el
+ * del boot, que es el que manda. */
+const bpvm_part_layout_t* board_partitions(void) {
+    return (s_boot.state >= BPVM_BOOT_PARTITIONS) ? &s_layout : NULL;
+}
 
 /* 0→1: particiones del env (mismo base+clamp que board_mgr — una sola verdad). */
 static bpvm_boot_step_t layer_partitions(void* u) {

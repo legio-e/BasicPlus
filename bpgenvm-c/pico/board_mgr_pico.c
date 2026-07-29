@@ -8,6 +8,7 @@
 #include "bpvm_bmgr.h"
 #include "bpvm_bmgr_wire.h"
 #include "bpvm_part.h"
+#include "bpvm_pack.h"   /* #327: cintura de flash de la zona de packs */
 #include "wire_v1.h"
 #include "flash_lock.h"
 #include "board_desc.h"
@@ -31,6 +32,48 @@
  * bp_ptable_t viejo murió) → base y clamp deben ser LOS MISMOS que usa el
  * boot (main.c layer_partitions), o FrmBoard propondría layouts que el
  * arranque luego rechaza. */
+
+/* ── #327: zona de packs (H3) ─────────────────────────────────────────────
+ * El Pico encaminaba los PACK_* desde f741693 pero NUNCA cableaba la región
+ * detrás: bm.packs_* se quedaba a cero y el LS contestaba —correctamente— "esta
+ * placa no expone packs", hiciera Eduardo lo que hiciera con las particiones.
+ * Encaminar los comandos y no dar la zona es media función; el STM32 sí lo hacía
+ * (board_mgr_stm32.c) y el simulado también, así que el Pico era el hueco.
+ *
+ * La cintura recibe offsets RELATIVOS a la región; el absoluto sale del layout
+ * del boot, que es la ÚNICA verdad sobre dónde vive cada partición. */
+static uint32_t s_packs_off = 0;      /* offset absoluto de la región en flash */
+
+static int packs_fl_erase(void* user, uint32_t off, uint32_t len) {
+    (void) user;
+    uint32_t tok = bpvm_flash_lock_begin();
+    flash_range_erase(s_packs_off + off, len);
+    bpvm_flash_lock_end(tok);
+    return 0;
+}
+
+static int packs_fl_program(void* user, uint32_t off, const uint8_t* d, uint32_t len) {
+    (void) user;
+    /* flash_range_program exige múltiplo de FLASH_PAGE_SIZE (256). El núcleo
+     * garantiza múltiplos de 16 (contrato uniforme de los 3 micros), así que la
+     * cola se completa con 0xFF —neutro en NOR, no altera lo ya escrito. */
+    static uint8_t page[FLASH_PAGE_SIZE];
+    uint32_t done = 0;
+    while (done < len) {
+        uint32_t run = len - done;
+        if (run > FLASH_PAGE_SIZE) run = FLASH_PAGE_SIZE;
+        memset(page, 0xFF, sizeof page);
+        memcpy(page, d + done, run);
+        uint32_t tok = bpvm_flash_lock_begin();
+        flash_range_program(s_packs_off + off + done, page, FLASH_PAGE_SIZE);
+        bpvm_flash_lock_end(tok);
+        done += run;
+    }
+    return 0;
+}
+
+static const bpvm_pack_flash_t s_packs_fl =
+    { packs_fl_erase, packs_fl_program, NULL, FLASH_SECTOR_SIZE /* 4K */ };
 
 /* Vuelca a flash un sector A/B (borra + programa el sector entero de 4K, bajo la
  * ventana XIP-safe). El otro sector queda intacto (A/B). `src` = el buffer RAM. */
@@ -84,6 +127,20 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
                                              PICO_FLASH_SIZE_BYTES);
     /* STATE cuenta el estado REAL alcanzado por el boot (no el plan del env). */
     bm.live = board_boot_status();
+
+    /* #327 — zona de packs: XIP directo sobre la partición PACKS del layout del
+     * BOOT (el mismo que conduce el FS: una sola verdad). Sin layout válido o
+     * con la partición a 0 → sin packs, y el LS lo dice en vez de callarse. */
+    const bpvm_part_layout_t* lay = board_partitions();
+    if (lay) {
+        const bpvm_part_t* pp = bpvm_part_get(lay, BPVM_PART_PACKS);
+        if (pp && pp->size > 0) {
+            bm.packs_base  = (const uint8_t*) (uintptr_t) (XIP_BASE + pp->offset);
+            bm.packs_size  = pp->size;
+            s_packs_off    = pp->offset;      /* la cintura de burn escribe aquí */
+            bm.packs_flash = &s_packs_fl;
+        }
+    }
 
     bpvm_bmgr_req_t req;
     memset(&req, 0, sizeof req);
