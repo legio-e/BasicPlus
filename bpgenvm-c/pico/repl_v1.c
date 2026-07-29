@@ -26,6 +26,7 @@
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "log.h"
 #include "bpvm_dbg_wire.h"   /* #326: el ramo de depuración salió de aquí a src/ */
+#include "dbg_trace.h"       /* #326: migas de pan que sobreviven al reset (TEMPORAL) */
 #include "aot_funcs.h"       /* H3 #160: registro AOT manual antes de run */
 #include "mdn_loader.h"      /* H3 #158 fase D: cargar .mdn desde FS */
 
@@ -165,20 +166,28 @@ static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
  * extrajo LITERALMENTE a src/bpvm_dbg_wire.c (cc658bd) y se estrenó en la P4;
  * verificado en placa, el Pico se pasa al núcleo y borra su copia. Aquí queda
  * sólo lo no portable: traducir JSON ↔ comando tipado y prestar los buffers. */
+/* #326: marcas en el camino del depurador. Ver dbg_trace.h — son un `store` en
+ * RAM que sobrevive al reset, NO tocan la flash y no cambian los tiempos.
+ * TEMPORAL: fuera al cerrar el bug. */
 static void dbgw_send(const char* line, size_t len, void* user) {
     (void) user;
+    bp_trace(BPT_SEND_ENTER);
     wire_v1_send_line(line, len);
+    bp_trace(BPT_SEND_DONE);
 }
 
 static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
     (void) user;
+    bp_trace(BPT_CMD_WAIT);
     int n = wire_v1_recv_line(-1, s_line_buf, sizeof s_line_buf);
-    if (n <= 0) return -1;                       /* overflow / vacía: reintentar */
+    bp_trace(BPT_CMD_GOT);
+    if (n <= 0) { bp_trace(BPT_CMD_BADLINE); return -1; }  /* overflow/vacía: reintentar */
     json_obj_t o;
-    if (json_parse(s_line_buf, (size_t) n, &o) != 0) return -1;
+    if (json_parse(s_line_buf, (size_t) n, &o) != 0) { bp_trace(BPT_CMD_BADJSON); return -1; }
     char type[40];
-    if (json_get_str(&o, "type", type, sizeof type) < 0) return -1;
+    if (json_get_str(&o, "type", type, sizeof type) < 0) { bp_trace(BPT_CMD_BADJSON); return -1; }
     out->kind = bpvm_dbg_wire_kind(type);
+    bp_trace2(BPT_CMD_PARSED, (uint32_t) out->kind);
     out->id   = json_get_long(&o, "id",    0);
     out->pc   = json_get_long(&o, "pc",   -1);
     out->bpId = json_get_long(&o, "bpId", -1);
@@ -1115,8 +1124,10 @@ static void run_module_path(const char* path, long id) {
      * PAUSE antes de RUN, aplicar los pendientes + enganchar el pause_cb. */
     int debugging = bpvm_dbg_wire_armed();
     if (debugging) {
+        bp_trace(BPT_RUN_ENTER);                      /* #326 */
         s_dbgw.session = session;
         bpvm_dbg_wire_arm(&s_dbgw, vm);
+        bp_trace(BPT_RUN_ARMED);                      /* #326 */
         log_printf("RUN/v1: DEBUG mode");
     }
 
@@ -1142,6 +1153,7 @@ static void run_module_path(const char* path, long id) {
 #else
     rs = bpvm_run(vm);
 #endif
+    if (debugging) bp_trace(BPT_RUN_RETURNED);        /* #326 */
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
     log_printf("RUN/v1 %s finished: %s", path, bpvm_status_str(rs));
 
@@ -1185,6 +1197,7 @@ static void run_module_path(const char* path, long id) {
     s_active_session = 0;
     /* H6.b.3 — limpiar estado de debug de esta sesión. */
     bpvm_dbg_wire_reset();
+    if (debugging) bp_trace(BPT_RUN_DISARMED);        /* #326 */
 }
 
 static void handle_run(long id, const json_obj_t* obj) {
