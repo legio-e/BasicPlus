@@ -75,6 +75,18 @@ static const char* bp_trace_name(uint32_t c) {
 }
 
 void bp_trace_report(void) {
+    /* HABLA SIEMPRE. La primera versión callaba cuando el magic no cuadraba, y
+     * su silencio no distinguía "no se marcó nada" de "el rastro no sobrevivió"
+     * — dos cosas OPUESTAS. Un instrumento mudo no es un instrumento: los
+     * valores en crudo de los DOS portadores, siempre. */
+    uint32_t sm = watchdog_hw->scratch[0], sv = watchdog_hw->scratch[1],
+             sc = watchdog_hw->scratch[2];
+    log_printf("rastro #326: RAM magic=%08x cnt=%u | scratch magic=%08x cnt=%u ult=%s/c%u",
+               (unsigned) g_bp_trace_magic, (unsigned) g_bp_trace_cnt,
+               (unsigned) sm, (unsigned) sc,
+               sm == BP_TRACE_MAGIC ? bp_trace_name(sv & 0xFFu) : "-",
+               (unsigned) (sv >> 24));
+    watchdog_hw->scratch[0] = 0;                      /* consumido */
     if (g_bp_trace_magic != BP_TRACE_MAGIC) return;   /* arranque en frío */
     uint32_t total = g_bp_trace_cnt;
     if (total == 0) { g_bp_trace_magic = 0; return; }

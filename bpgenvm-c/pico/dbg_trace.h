@@ -21,7 +21,8 @@
 #define BPVM_PICO_DBG_TRACE_H
 
 #include <stdint.h>
-#include "pico.h"            /* get_core_num */
+#include "pico.h"                        /* get_core_num */
+#include "hardware/structs/watchdog.h"   /* scratch[] = 2º portador */
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,10 +38,11 @@ extern volatile uint32_t g_bp_trace[BP_TRACE_N];
 
 /* Códigos. El byte alto lleva el núcleo: importa saber si quien murió era el
  * worker (core 1) o el de comunicaciones (core 0). */
-#define BPT_RUN_ENTER     0x01u
+#define BPT_RUN_ENTER     0x01u   /* +detalle = debugging (0/1) */
 #define BPT_RUN_ARMED     0x02u
 #define BPT_RUN_RETURNED  0x03u
 #define BPT_RUN_DISARMED  0x04u
+#define BPT_REPL_ENTRY    0x05u   /* CONTROL: se marca SIEMPRE, en todo arranque */
 #define BPT_SEND_ENTER    0x10u
 #define BPT_SEND_DONE     0x11u
 #define BPT_CMD_WAIT      0x20u   /* justo ANTES de la lectura bloqueante */
@@ -54,9 +56,15 @@ static inline void bp_trace2(uint32_t code, uint32_t detail) {
         g_bp_trace_magic = BP_TRACE_MAGIC;
         g_bp_trace_cnt   = 0;
     }
-    g_bp_trace[g_bp_trace_cnt % BP_TRACE_N] =
-        (get_core_num() << 24) | ((detail & 0xFFu) << 8) | (code & 0xFFu);
+    uint32_t v = (get_core_num() << 24) | ((detail & 0xFFu) << 8) | (code & 0xFFu);
+    g_bp_trace[g_bp_trace_cnt % BP_TRACE_N] = v;
     g_bp_trace_cnt++;
+    /* 2º portador, INDEPENDIENTE de la RAM: los scratch del watchdog (el SDK
+     * sólo usa 4..7, los 0..3 están libres). Sobreviven a cosas distintas que
+     * la RAM, así que si uno se pierde y el otro no, sabremos cuál falló. */
+    watchdog_hw->scratch[0] = BP_TRACE_MAGIC;
+    watchdog_hw->scratch[1] = v;
+    watchdog_hw->scratch[2] = g_bp_trace_cnt;
 }
 
 static inline void bp_trace(uint32_t code) { bp_trace2(code, 0); }

@@ -44,6 +44,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include <stdarg.h>          /* #326: dbg_say con formato */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -166,21 +167,51 @@ static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
  * extrajo LITERALMENTE a src/bpvm_dbg_wire.c (cc658bd) y se estrenó en la P4;
  * verificado en placa, el Pico se pasa al núcleo y borra su copia. Aquí queda
  * sólo lo no portable: traducir JSON ↔ comando tipado y prestar los buffers. */
-/* #326: marcas en el camino del depurador. Ver dbg_trace.h — son un `store` en
- * RAM que sobrevive al reset, NO tocan la flash y no cambian los tiempos.
+/* ── #326: DOS testigos del mismo camino, que se tapan el punto ciego ──────
+ *
+ * (1) LA CONSOLA (dbg_say): la marca sale al PC como evento OUTPUT según
+ *     ocurre, así que NO necesita sobrevivir a nada: ya está en la pantalla
+ *     del IDE antes de que la placa se vaya. Es el testigo bueno... mientras
+ *     el transporte esté vivo.
+ * (2) LAS MIGAS (bp_trace): un store en RAM que el arranque no limpia. Sirve
+ *     justo cuando el otro no: si lo que muere es el USB, la consola se calla
+ *     y las migas siguen contando.
+ *
+ * Y si la consola llega MÁS LEJOS que las migas (o al revés), eso también es
+ * un dato: dice cuál de los dos falló primero.
  * TEMPORAL: fuera al cerrar el bug. */
+/* Contexto del sink v1: lleva la session a embeber en cada OUTPUT. */
+typedef struct {
+    long session;
+} v1_sink_ctx_t;
+
+static void v1_output_sink(const char* data, size_t len, void* user);  /* def. abajo */
+static v1_sink_ctx_t s_dbg_say_ctx = { 0 };   /* session, fijada al arrancar el RUN */
+
+static void dbg_say(const char* fmt, ...) {
+    char buf[112];
+    int n = snprintf(buf, sizeof buf, "[dbg#326] ");
+    va_list ap; va_start(ap, fmt);
+    int m = vsnprintf(buf + n, sizeof buf - (size_t) n - 2, fmt, ap);
+    va_end(ap);
+    if (m < 0) return;
+    n += m; if (n > (int) sizeof buf - 2) n = (int) sizeof buf - 2;
+    buf[n++] = '\n'; buf[n] = 0;
+    v1_output_sink(buf, (size_t) n, &s_dbg_say_ctx);
+}
+
 static void dbgw_send(const char* line, size_t len, void* user) {
     (void) user;
-    bp_trace(BPT_SEND_ENTER);
+    bp_trace(BPT_SEND_ENTER);   dbg_say("envia (entra)");
     wire_v1_send_line(line, len);
-    bp_trace(BPT_SEND_DONE);
+    bp_trace(BPT_SEND_DONE);    dbg_say("envia (hecho)");
 }
 
 static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
     (void) user;
-    bp_trace(BPT_CMD_WAIT);
+    bp_trace(BPT_CMD_WAIT);     dbg_say("ESPERA comando (lectura bloqueante)");
     int n = wire_v1_recv_line(-1, s_line_buf, sizeof s_line_buf);
-    bp_trace(BPT_CMD_GOT);
+    bp_trace(BPT_CMD_GOT);      dbg_say("recibidos %d bytes", n);
     if (n <= 0) { bp_trace(BPT_CMD_BADLINE); return -1; }  /* overflow/vacía: reintentar */
     json_obj_t o;
     if (json_parse(s_line_buf, (size_t) n, &o) != 0) { bp_trace(BPT_CMD_BADJSON); return -1; }
@@ -188,6 +219,7 @@ static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
     if (json_get_str(&o, "type", type, sizeof type) < 0) { bp_trace(BPT_CMD_BADJSON); return -1; }
     out->kind = bpvm_dbg_wire_kind(type);
     bp_trace2(BPT_CMD_PARSED, (uint32_t) out->kind);
+    dbg_say("cmd '%s' -> kind %d", type, (int) out->kind);
     out->id   = json_get_long(&o, "id",    0);
     out->pc   = json_get_long(&o, "pc",   -1);
     out->bpId = json_get_long(&o, "bpId", -1);
@@ -827,11 +859,6 @@ static long s_active_session = 0;
  * "ninguna"). */
 static long s_next_session = 1;
 
-/* Contexto del sink v1: lleva la session a embeber en cada OUTPUT. */
-typedef struct {
-    long session;
-} v1_sink_ctx_t;
-
 /* Sink que la VM invoca para cada chunk de output del programa BP.
  * Cada chunk se envía como un evento OUTPUT con escape JSON. Chunks
  * pequeños generan eventos pequeños; el USB CDC del Pico tolera bien
@@ -1123,11 +1150,17 @@ static void run_module_path(const char* path, long id) {
     /* H6.b.3 #140 — modo debug: si el cliente fijó breakpoints o pidió
      * PAUSE antes de RUN, aplicar los pendientes + enganchar el pause_cb. */
     int debugging = bpvm_dbg_wire_armed();
+    /* #326 — SIEMPRE, no sólo en debug: que "corrió sin depurador" también
+     * deje huella. Un instrumento que sólo habla cuando esperas que hable no
+     * distingue "no pasó" de "no lo vi". */
+    s_dbg_say_ctx.session = session;
+    bp_trace2(BPT_RUN_ENTER, (uint32_t) debugging);
+    dbg_say("RUN entra, debugging=%d", debugging);
     if (debugging) {
-        bp_trace(BPT_RUN_ENTER);                      /* #326 */
         s_dbgw.session = session;
         bpvm_dbg_wire_arm(&s_dbgw, vm);
-        bp_trace(BPT_RUN_ARMED);                      /* #326 */
+        bp_trace(BPT_RUN_ARMED);
+        dbg_say("depurador ARMADO");
         log_printf("RUN/v1: DEBUG mode");
     }
 
@@ -1153,7 +1186,7 @@ static void run_module_path(const char* path, long id) {
 #else
     rs = bpvm_run(vm);
 #endif
-    if (debugging) bp_trace(BPT_RUN_RETURNED);        /* #326 */
+    bp_trace(BPT_RUN_RETURNED);   dbg_say("RUN vuelve: %s", bpvm_status_str(rs));   /* #326 */
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
     log_printf("RUN/v1 %s finished: %s", path, bpvm_status_str(rs));
 
@@ -1197,7 +1230,7 @@ static void run_module_path(const char* path, long id) {
     s_active_session = 0;
     /* H6.b.3 — limpiar estado de debug de esta sesión. */
     bpvm_dbg_wire_reset();
-    if (debugging) bp_trace(BPT_RUN_DISARMED);        /* #326 */
+    bp_trace(BPT_RUN_DISARMED);                       /* #326 */
 }
 
 static void handle_run(long id, const json_obj_t* obj) {
@@ -1439,6 +1472,10 @@ void repl_v1_handle_request(int first_char) {
  * era lo único del modo texto sin equivalente obvio. */
 void repl_v1_run(void) {
     log_printf("REPL entry (wire v1)");
+    /* #326 CONTROL: se marca en TODO arranque, haya depurador o no. Es la
+     * prueba de que el portador funciona — el equivalente a ejecutar T antes
+     * de JsonDemo. Sin control, el silencio del rastro no dice nada. */
+    bp_trace(BPT_REPL_ENTRY);
     log_flush();   /* snapshot del estado de arranque a flash */
 
     /* Banner x3: si el host abre el COM con retraso se pierde el primero, y sin
