@@ -243,7 +243,10 @@ static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
     if (json_get_str(&o, "type", type, sizeof type) < 0) { bp_trace(BPT_CMD_BADJSON); return -1; }
     out->kind = bpvm_dbg_wire_kind(type);
     bp_trace2(BPT_CMD_PARSED, (uint32_t) out->kind);
-    dbg_say("cmd %s", type);
+    /* Con los valores: la pregunta abierta es si `ref` sigue siendo una
+     * DIRECCIÓN (modelo viejo) o ya es un HANDLE (H1), y eso lo dice el número,
+     * no una teoría mía. */
+    dbg_say("cmd %s a=%ld r=%ld", type, out->addr, out->ref);
     out->id   = json_get_long(&o, "id",    0);
     out->pc   = json_get_long(&o, "pc",   -1);
     out->bpId = json_get_long(&o, "bpId", -1);

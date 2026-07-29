@@ -90,8 +90,31 @@ static void dbg_clr_bp(bpvm_dbg_wire_t* w, const bpvm_dbg_cmd_t* c) {
         "{\"type\":\"CLR_BP_REPLY\",\"id\":%ld}", c->id));
 }
 
+/* ¿Cabe [addr, addr+n) DENTRO de la memoria de la VM?
+ *
+ * #326 — ESTO FALTABA, Y COSTABA LA PLACA. Las direcciones de READ_INT y
+ * READ_STRING vienen DEL WIRE, y bpvm_mem_read_u32 es `vm->memory + addr` a
+ * pelo, sin comprobar nada (bpvm_internal.h:635). Con un valor fuera de rango el
+ * puntero se sale de la SRAM, el Cortex-M33 levanta un BusFault → HardFault, y
+ * la Pico se queda colgada con el USB muerto: no hay mensaje, no hay reset, no
+ * hay nada. Un depurador NUNCA puede matar al depurado porque el host le pida
+ * una dirección mala; como mucho debe contestar que no puede.
+ * El chequeo va en el núcleo portable, así que cubre las 3 familias + el
+ * simulado de una vez. */
+static int mem_ok(const bpvm_t* vm, uint64_t addr, uint64_t n) {
+    return vm && vm->memory && addr + n >= addr            /* sin desbordar */
+           && addr + n <= (uint64_t) vm->memory_size;
+}
+
 /* READ_INT{addr}: i32 crudo en dirección absoluta. */
 static void dbg_read_int(bpvm_dbg_wire_t* w, const bpvm_dbg_cmd_t* c) {
+    if (s_dbg_vm && c->addr >= 0 && !mem_ok(s_dbg_vm, (uint64_t) c->addr, 4)) {
+        emit(w, snprintf(w->reply, w->reply_cap,
+            "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"BAD_ADDR\","
+            "\"message\":\"addr %ld fuera de la memoria (%lu B)\"}",
+            c->id, c->addr, (unsigned long) s_dbg_vm->memory_size));
+        return;
+    }
     int32_t v = (s_dbg_vm && c->addr >= 0)
                 ? bpvm_mem_read_i32(s_dbg_vm, (uint32_t) c->addr) : 0;
     emit(w, snprintf(w->reply, w->reply_cap,
@@ -100,11 +123,29 @@ static void dbg_read_int(bpvm_dbg_wire_t* w, const bpvm_dbg_cmd_t* c) {
 
 /* READ_STRING{ref}: string heap = [byte_len:u32 BE][bytes UTF-8]; ref 0 = "". */
 static void dbg_read_string(bpvm_dbg_wire_t* w, const bpvm_dbg_cmd_t* c) {
+    /* La cabecera del string tiene que caber ANTES de leerla, y el cuerpo antes
+     * de recorrerlo: blen sale de la propia memoria, o sea que también es un
+     * valor en el que no se puede confiar. */
+    if (s_dbg_vm && c->ref > 0 && !mem_ok(s_dbg_vm, (uint64_t) c->ref, 4)) {
+        emit(w, snprintf(w->reply, w->reply_cap,
+            "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"BAD_REF\","
+            "\"message\":\"ref %ld fuera de la memoria (%lu B)\"}",
+            c->id, c->ref, (unsigned long) s_dbg_vm->memory_size));
+        return;
+    }
     int off = snprintf(w->reply, w->reply_cap,
         "{\"type\":\"READ_STRING_REPLY\",\"id\":%ld,\"value\":\"", c->id);
     if (off < 0) return;
     if (s_dbg_vm && c->ref > 0) {
         uint32_t blen = bpvm_mem_read_u32(s_dbg_vm, (uint32_t) c->ref);
+        if (!mem_ok(s_dbg_vm, (uint64_t) c->ref + 4, blen)) {
+            emit(w, snprintf(w->reply, w->reply_cap,
+                "{\"type\":\"ERROR\",\"id\":%ld,\"code\":\"BAD_REF\","
+                "\"message\":\"ref %ld dice medir %lu B y no cabe (%lu B)\"}",
+                c->id, c->ref, (unsigned long) blen,
+                (unsigned long) s_dbg_vm->memory_size));
+            return;
+        }
         const uint8_t* b = s_dbg_vm->memory + c->ref + 4;
         for (uint32_t i = 0; i < blen && off < (int) w->reply_cap - 8; i++) {
             unsigned char ch = b[i];
