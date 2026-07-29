@@ -47,17 +47,31 @@ static int      s_initialized = 0;
 
 /* ============================================================ */
 
+/* ANILLO, no truncado. Antes esto cortaba POR EL FINAL: al llenarse los 4 KB
+ * dejaba de anotar y se quedaba con el PRINCIPIO. Para un post-mortem eso es
+ * exactamente al revés — lo que importa es lo ÚLTIMO que pasó antes de morir.
+ * Y encima callaba: el aviso "[LOG OVERFLOW]" sólo se ponía si le cabían sus 16
+ * bytes, así que en la práctica truncaba EN SILENCIO y el log parecía terminar
+ * donde se había acabado el sitio. Eso mandó dos veces la caza de #326 a un
+ * sitio equivocado: el rastro no acababa donde moría la placa, sino donde se
+ * acababa el log.
+ * Ahora se tiran líneas ENTERAS del principio hasta que quepa lo nuevo, y el
+ * volcado lo DICE. */
+static int s_dropped = 0;
+
 static void append_raw(const char* str, size_t n) {
+    if (n > LOG_DATA_BYTES) n = LOG_DATA_BYTES;   /* línea absurda: recorta */
     if (s_used + n > LOG_DATA_BYTES) {
-        /* Trunca y marca overflow. */
-        const char* trunc = "\n[LOG OVERFLOW]\n";
-        size_t tlen = strlen(trunc);
-        if (s_used + tlen <= LOG_DATA_BYTES && s_used > 0
-                && s_buf[s_used - 1] != ']') {
-            memcpy(s_buf + s_used, trunc, tlen);
-            s_used += tlen;
+        size_t need = s_used + n - LOG_DATA_BYTES;
+        size_t drop = 0;
+        while (drop < need && drop < s_used) {     /* por líneas, no por bytes */
+            const char* nl = memchr(s_buf + drop, '\n', s_used - drop);
+            if (!nl) { drop = s_used; break; }
+            drop = (size_t) (nl - s_buf) + 1;
         }
-        return;
+        memmove(s_buf, s_buf + drop, s_used - drop);
+        s_used -= drop;
+        s_dropped = 1;
     }
     memcpy(s_buf + s_used, str, n);
     s_used += n;
@@ -138,6 +152,13 @@ void log_clear_flash(void) {
 
 void log_dump(log_sink_t cb, void* user) {
     if (!cb || s_used == 0) return;
+    /* Que se VEA que faltan líneas. Un log que empieza por el medio sin decirlo
+     * se lee como un log completo, y entonces su primera línea miente. */
+    if (s_dropped) {
+        const char* w = "[LOG: buffer lleno — se tiraron lineas ANTIGUAS "
+                        "(anillo); lo de abajo es la cola]\n";
+        cb(w, strlen(w), user);
+    }
     /* Chunks de 256 bytes para no abusar de la pila del sink. */
     size_t off = 0;
     while (off < s_used) {

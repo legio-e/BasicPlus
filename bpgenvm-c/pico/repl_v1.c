@@ -204,7 +204,7 @@ static void dbg_say(const char* fmt, ...) {
      * medir es infinitamente mejor que no perturbar y no medir nada, que es lo
      * que llevamos dos intentos haciendo. Si el bicho se esconde al medirlo,
      * ESO también es un dato. */
-    log_printf("dbg#326: %s", buf + 10);
+    log_printf("d326 %s", buf + 10);
     log_flush();
     /* AQUÍ IBA LA MARCA POR CONSOLA (evento OUTPUT). RETIRADA: el cuelgue está
      * DENTRO del envío, y mis marcas viajaban por ese mismo cable — había
@@ -220,22 +220,22 @@ static void dbg_say(const char* fmt, ...) {
  * caían dentro de la misma marca. TEMPORAL. */
 static void dbgw_send(const char* line, size_t len, void* user) {
     (void) user;
-    bp_trace(BPT_SEND_ENTER);   dbg_say("envia: pido lock (%u B)", (unsigned) len);
+    bp_trace(BPT_SEND_ENTER);   dbg_say("tx lock %u", (unsigned) len);
     wire_v1_tx_lock();
-    bp_trace2(BPT_SEND_ENTER, 1); dbg_say("envia: lock TOMADO, escribo");
+    bp_trace2(BPT_SEND_ENTER, 1); dbg_say("tx write");
     fwrite(line, 1, len, stdout);
     fputc('\n', stdout);
-    bp_trace2(BPT_SEND_ENTER, 2); dbg_say("envia: escrito, hago flush");
+    bp_trace2(BPT_SEND_ENTER, 2); dbg_say("tx flush");
     fflush(stdout);
     wire_v1_tx_unlock();
-    bp_trace(BPT_SEND_DONE);    dbg_say("envia (hecho)");
+    bp_trace(BPT_SEND_DONE);    dbg_say("tx ok");
 }
 
 static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
     (void) user;
-    bp_trace(BPT_CMD_WAIT);     dbg_say("ESPERA comando (lectura bloqueante)");
+    bp_trace(BPT_CMD_WAIT);     dbg_say("rx espera");
     int n = wire_v1_recv_line(-1, s_line_buf, sizeof s_line_buf);
-    bp_trace(BPT_CMD_GOT);      dbg_say("recibidos %d bytes", n);
+    bp_trace(BPT_CMD_GOT);      dbg_say("rx %d", n);
     if (n <= 0) { bp_trace(BPT_CMD_BADLINE); return -1; }  /* overflow/vacía: reintentar */
     json_obj_t o;
     if (json_parse(s_line_buf, (size_t) n, &o) != 0) { bp_trace(BPT_CMD_BADJSON); return -1; }
@@ -243,7 +243,7 @@ static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
     if (json_get_str(&o, "type", type, sizeof type) < 0) { bp_trace(BPT_CMD_BADJSON); return -1; }
     out->kind = bpvm_dbg_wire_kind(type);
     bp_trace2(BPT_CMD_PARSED, (uint32_t) out->kind);
-    dbg_say("cmd '%s' -> kind %d", type, (int) out->kind);
+    dbg_say("cmd %s", type);
     out->id   = json_get_long(&o, "id",    0);
     out->pc   = json_get_long(&o, "pc",   -1);
     out->bpId = json_get_long(&o, "bpId", -1);
@@ -1179,12 +1179,12 @@ static void run_module_path(const char* path, long id) {
      * distingue "no pasó" de "no lo vi". */
     s_dbg_say_ctx.session = session;
     bp_trace2(BPT_RUN_ENTER, (uint32_t) debugging);
-    dbg_say("RUN entra, debugging=%d", debugging);
+    dbg_say("RUN entra dbg=%d", debugging);
     if (debugging) {
         s_dbgw.session = session;
         bpvm_dbg_wire_arm(&s_dbgw, vm);
         bp_trace(BPT_RUN_ARMED);
-        dbg_say("depurador ARMADO");
+        dbg_say("ARMADO");
         log_printf("RUN/v1: DEBUG mode");
     }
 
@@ -1210,7 +1210,7 @@ static void run_module_path(const char* path, long id) {
 #else
     rs = bpvm_run(vm);
 #endif
-    bp_trace(BPT_RUN_RETURNED);   dbg_say("RUN vuelve: %s", bpvm_status_str(rs));   /* #326 */
+    bp_trace(BPT_RUN_RETURNED);   dbg_say("RUN vuelve %s", bpvm_status_str(rs));   /* #326 */
     uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
     log_printf("RUN/v1 %s finished: %s", path, bpvm_status_str(rs));
 
