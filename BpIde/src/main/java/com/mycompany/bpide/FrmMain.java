@@ -3348,9 +3348,20 @@ public class FrmMain extends javax.swing.JFrame
         /** H6.a.1: si `named` no está vacío, se muestra por nombre; si no, cae
          *  al array crudo `vs` (módulos sin .dbg v3). */
         void update(int[] vs, java.util.List<BpvmClient.NamedLocal> nm) {
+            boolean antes = hasNames();
             this.values = (vs != null) ? vs : new int[0];
             this.named  = (nm != null) ? nm : java.util.Collections.emptyList();
-            fireTableDataChanged();
+            /* #341 — este modelo tiene DOS formas: 3 columnas sin nombres y 4 con
+             * ellos. fireTableDataChanged() sólo redibuja datos: la JTable
+             * conserva las columnas que ya tenía. Al llegar los locales con
+             * nombre la tabla seguía con las 3 de la variante cruda y metía
+             * dentro nombre/tipo/valor → las cabeceras MENTÍAN ("Offset (bp+)"
+             * enseñando "string", que es el tipo; "Valor (i32)" enseñando un
+             * long perfectamente correcto), y el offset no salía porque su
+             * columna no llegó a existir. Si cambia la FORMA, hay que avisar de
+             * la estructura. */
+            if (antes != hasNames()) fireTableStructureChanged();
+            else                     fireTableDataChanged();
         }
     }
 
