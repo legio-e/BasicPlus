@@ -87,6 +87,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_boot.c           # máquina de estados de arranque + STATE
     ${BPVM_C_ROOT}/src/bpvm_bmgr.c           # board manager (compone env+part)
     ${BPVM_C_ROOT}/src/bpvm_bmgr_wire.c      # adaptador de wire (replies = las del sim)
+    ${BPVM_C_ROOT}/src/bpvm_dbg_wire.c       # #326: ramo de depuracion (salio de AQUI; ahora comun)
     ${BPVM_C_ROOT}/src/bpvm_pack.c           # H3 Packs V4: core portable de packs (lo llama bmgr_wire)
     ${BPVM_C_ROOT}/src/net.c                 # H11 (#241): facade Net — sin backend hasta H11.b/c → RuntimeError atrapable
     ${BPVM_C_ROOT}/src/link.c

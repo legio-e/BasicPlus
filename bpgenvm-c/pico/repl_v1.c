@@ -25,6 +25,7 @@
 #include "bpvm_fs.h"          /* H19-F1: base-dir por proyecto (bpvm_fs_basedir / bpvm_fs_set_basedir_from_module) */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "log.h"
+#include "bpvm_dbg_wire.h"   /* #326: el ramo de depuración salió de aquí a src/ */
 #include "aot_funcs.h"       /* H3 #160: registro AOT manual antes de run */
 #include "mdn_loader.h"      /* H3 #158 fase D: cargar .mdn desde FS */
 
@@ -158,170 +159,48 @@ static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
 
 /* Breakpoints fijados ANTES de RUN: la vm se crea por-RUN, así que se
  * acumulan y se aplican al arrancar. */
-static uint32_t s_pending_bp_pc[BPVM_MAX_BREAKPOINTS];
-static int      s_pending_bp_id[BPVM_MAX_BREAKPOINTS];
-static int      s_pending_bp_n  = 0;
-static int      s_bp_id_seq     = 1;     /* ids provisionales pre-RUN */
-static int      s_pause_initial = 0;     /* PAUSE pre-RUN → romper en 1er opcode */
-static bpvm_t*  s_dbg_vm        = NULL;  /* vm activa (no-NULL ⇒ depurando) */
-static long     s_dbg_session   = 0;
-/* Snapshot del frame pausado (para LOCALS/STACK/READ mientras pausados). */
-static uint32_t s_pf_pc, s_pf_sp, s_pf_bp, s_pf_cs, s_pf_sbase;
-
-/* SET_BP{pc}: live si hay vm (paused), si no acumula pre-RUN. */
-static void dbg_set_bp(long id, const json_obj_t* obj) {
-    long pc = json_get_long(obj, "pc", -1);
-    int bpId = -1;
-    if (s_dbg_vm) {
-        if (pc >= 0) bpId = bpvm_debug_add_breakpoint(s_dbg_vm, (uint32_t) pc);
-    } else if (pc >= 0 && s_pending_bp_n < BPVM_MAX_BREAKPOINTS) {
-        bpId = s_bp_id_seq++;
-        s_pending_bp_pc[s_pending_bp_n] = (uint32_t) pc;
-        s_pending_bp_id[s_pending_bp_n] = bpId;
-        s_pending_bp_n++;
-    }
-    int off = snprintf(s_reply_buf, sizeof s_reply_buf,
-        "{\"type\":\"SET_BP_REPLY\",\"id\":%ld,\"bpId\":%d}", id, bpId);
-    if (off > 0) wire_v1_send_line(s_reply_buf, (size_t) off);
+/* ── #326 DEPURACIÓN: cintura del núcleo portable bpvm_dbg_wire ──
+ * Todo este ramo (breakpoints, bucle de pausa, LOCALS/STACK/READ_*) vivía AQUÍ y
+ * era la única implementación: ESP32 y STM32 se quedaron sin depurador. Se
+ * extrajo LITERALMENTE a src/bpvm_dbg_wire.c (cc658bd) y se estrenó en la P4;
+ * verificado en placa, el Pico se pasa al núcleo y borra su copia. Aquí queda
+ * sólo lo no portable: traducir JSON ↔ comando tipado y prestar los buffers. */
+static void dbgw_send(const char* line, size_t len, void* user) {
+    (void) user;
+    wire_v1_send_line(line, len);
 }
 
-/* CLR_BP{bpId}: bpId<0 ⇒ limpiar todos. */
-static void dbg_clr_bp(long id, const json_obj_t* obj) {
-    long bpId = json_get_long(obj, "bpId", -1);
-    if (s_dbg_vm) {
-        if (bpId >= 0) bpvm_debug_clear_breakpoint(s_dbg_vm, (int) bpId);
-        else           bpvm_debug_clear_breakpoints(s_dbg_vm);
-    } else if (bpId < 0) {
-        s_pending_bp_n = 0;
-    } else {
-        for (int i = 0; i < s_pending_bp_n; i++) {
-            if (s_pending_bp_id[i] == (int) bpId) {
-                for (int j = i + 1; j < s_pending_bp_n; j++) {
-                    s_pending_bp_pc[j-1] = s_pending_bp_pc[j];
-                    s_pending_bp_id[j-1] = s_pending_bp_id[j];
-                }
-                s_pending_bp_n--; break;
-            }
-        }
-    }
-    int off = snprintf(s_reply_buf, sizeof s_reply_buf,
-        "{\"type\":\"CLR_BP_REPLY\",\"id\":%ld}", id);
-    if (off > 0) wire_v1_send_line(s_reply_buf, (size_t) off);
+static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
+    (void) user;
+    int n = wire_v1_recv_line(-1, s_line_buf, sizeof s_line_buf);
+    if (n <= 0) return -1;                       /* overflow / vacía: reintentar */
+    json_obj_t o;
+    if (json_parse(s_line_buf, (size_t) n, &o) != 0) return -1;
+    char type[40];
+    if (json_get_str(&o, "type", type, sizeof type) < 0) return -1;
+    out->kind = bpvm_dbg_wire_kind(type);
+    out->id   = json_get_long(&o, "id",    0);
+    out->pc   = json_get_long(&o, "pc",   -1);
+    out->bpId = json_get_long(&o, "bpId", -1);
+    out->addr = json_get_long(&o, "addr", -1);
+    out->ref  = json_get_long(&o, "ref",   0);
+    return 0;
 }
 
-/* READ_INT{addr}: i32 crudo en dirección absoluta. */
-static void dbg_read_int(long id, const json_obj_t* obj) {
-    long addr = json_get_long(obj, "addr", -1);
-    int32_t v = (s_dbg_vm && addr >= 0) ? bpvm_mem_read_i32(s_dbg_vm, (uint32_t) addr) : 0;
-    int off = snprintf(s_reply_buf, sizeof s_reply_buf,
-        "{\"type\":\"READ_INT_REPLY\",\"id\":%ld,\"value\":%ld}", id, (long) v);
-    if (off > 0) wire_v1_send_line(s_reply_buf, (size_t) off);
-}
+/* Vive todo el RUN: el núcleo lo recibe como `user` del pause_cb. */
+static bpvm_dbg_wire_t s_dbgw = {
+    dbgw_next_cmd, dbgw_send, NULL, s_reply_buf, sizeof s_reply_buf, 0
+};
 
-/* READ_STRING{ref}: string heap = [byte_len:u32 BE][bytes UTF-8]; ref 0 = "". */
-static void dbg_read_string(long id, const json_obj_t* obj) {
-    long ref = json_get_long(obj, "ref", 0);
-    int off = snprintf(s_reply_buf, sizeof s_reply_buf,
-        "{\"type\":\"READ_STRING_REPLY\",\"id\":%ld,\"value\":\"", id);
-    if (off < 0) return;
-    if (s_dbg_vm && ref > 0) {
-        uint32_t blen = bpvm_mem_read_u32(s_dbg_vm, (uint32_t) ref);
-        const uint8_t* b = s_dbg_vm->memory + ref + 4;
-        for (uint32_t i = 0; i < blen && off < (int) sizeof s_reply_buf - 8; i++) {
-            unsigned char c = b[i];
-            if (c == '"' || c == '\\') { s_reply_buf[off++] = '\\'; s_reply_buf[off++] = (char) c; }
-            else if (c == '\n')        { s_reply_buf[off++] = '\\'; s_reply_buf[off++] = 'n'; }
-            else if (c == '\t')        { s_reply_buf[off++] = '\\'; s_reply_buf[off++] = 't'; }
-            else if (c >= 0x20)          s_reply_buf[off++] = (char) c;  /* incl. UTF-8 >=0x80 */
-        }
-    }
-    off += snprintf(s_reply_buf + off, sizeof s_reply_buf - off, "\"}");
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-}
-
-/* LOCALS: i32 crudos entre bp y sp del frame pausado (el host resuelve
- * nombres con el .dbg). */
-static void dbg_locals(long id) {
-    int off = snprintf(s_reply_buf, sizeof s_reply_buf,
-        "{\"type\":\"LOCALS_REPLY\",\"id\":%ld,\"locals\":[", id);
-    if (s_dbg_vm && s_pf_sp > s_pf_bp) {
-        int nl = (int) ((s_pf_sp - s_pf_bp) / 4);
-        for (int i = 0; i < nl && off < (int) sizeof s_reply_buf - 24; i++)
-            off += snprintf(s_reply_buf + off, sizeof s_reply_buf - off, "%s%ld",
-                            i ? "," : "",
-                            (long) bpvm_mem_read_i32(s_dbg_vm, s_pf_bp + i * 4));
-    }
-    off += snprintf(s_reply_buf + off, sizeof s_reply_buf - off, "]}");
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-}
-
-/* STACK: walk de frames (saved pc en bp-12, saved bp en bp-8 = VM Java). */
-static void dbg_stack(long id) {
-    int off = snprintf(s_reply_buf, sizeof s_reply_buf,
-        "{\"type\":\"STACK_REPLY\",\"id\":%ld,\"frames\":[", id);
-    if (s_dbg_vm) {
-        uint32_t cbp = s_pf_bp, cpc = s_pf_pc;
-        int first = 1, safety = 0;
-        while (cbp > s_pf_sbase && safety < 256 && off < (int) sizeof s_reply_buf - 48) {
-            off += snprintf(s_reply_buf + off, sizeof s_reply_buf - off, "%s[%lu,%lu]",
-                            first ? "" : ",", (unsigned long) cpc, (unsigned long) cbp);
-            first = 0;
-            cpc = bpvm_mem_read_u32(s_dbg_vm, cbp - 12);
-            cbp = bpvm_mem_read_u32(s_dbg_vm, cbp - 8);
-            safety++;
-        }
-        off += snprintf(s_reply_buf + off, sizeof s_reply_buf - off, "%s[%lu,%lu]",
-                        first ? "" : ",", (unsigned long) cpc, (unsigned long) cbp);
-    }
-    off += snprintf(s_reply_buf + off, sizeof s_reply_buf - off, "]}");
-    wire_v1_send_line(s_reply_buf, (size_t) off);
-}
-
-/* pause_cb: snapshot del frame, emite BP_HIT y atiende comandos inline
- * hasta CONTINUE/STEP/STOP. Corre en la task del REPL (single-thread). */
-static bpvm_dbg_action_t pico_pause_cb(bpvm_t* vm, bpvm_thread_t* tc,
-                                       uint32_t pc, void* user) {
-    (void) vm; (void) user;
-    s_pf_pc = pc;
-    s_pf_sp = bpvm_thread_sp(tc);
-    s_pf_bp = bpvm_thread_bp(tc);
-    s_pf_cs = bpvm_thread_cs(tc);
-    s_pf_sbase = tc->stack_base;
-
-    int off = snprintf(s_reply_buf, sizeof s_reply_buf,
-        "{\"type\":\"BP_HIT\",\"session\":%ld,\"tid\":%d,"
-        "\"pc\":%lu,\"sp\":%lu,\"bp\":%lu,\"cs\":%lu}",
-        s_dbg_session, bpvm_thread_id(tc),
-        (unsigned long) pc, (unsigned long) s_pf_sp,
-        (unsigned long) s_pf_bp, (unsigned long) s_pf_cs);
-    if (off > 0) wire_v1_send_line(s_reply_buf, (size_t) off);
-
-    for (;;) {
-        int n = wire_v1_recv_line(-1, s_line_buf, sizeof s_line_buf);
-        if (n < 0) continue;                       /* overflow: ignora */
-        json_obj_t obj;
-        if (json_parse(s_line_buf, (size_t) n, &obj) != 0) continue;
-        long id = json_get_long(&obj, "id", 0);
-        char type[40];
-        if (json_get_str(&obj, "type", type, sizeof type) < 0) continue;
-
-        if      (strcmp(type, "CONTINUE") == 0) return BPVM_DBG_CONTINUE;
-        else if (strcmp(type, "STEP")     == 0) return BPVM_DBG_STEP;
-        else if (strcmp(type, "STOP") == 0 || strcmp(type, "KILL") == 0)
-            return BPVM_DBG_STOP;
-        else if (strcmp(type, "PING") == 0) {
-            int o = snprintf(s_reply_buf, sizeof s_reply_buf,
-                "{\"type\":\"PONG\",\"id\":%ld}", id);
-            if (o > 0) wire_v1_send_line(s_reply_buf, (size_t) o);
-        }
-        else if (strcmp(type, "SET_BP")      == 0) dbg_set_bp(id, &obj);
-        else if (strcmp(type, "CLR_BP")      == 0) dbg_clr_bp(id, &obj);
-        else if (strcmp(type, "READ_INT")    == 0) dbg_read_int(id, &obj);
-        else if (strcmp(type, "READ_STRING") == 0) dbg_read_string(id, &obj);
-        else if (strcmp(type, "LOCALS")      == 0) dbg_locals(id);
-        else if (strcmp(type, "STACK")       == 0) dbg_stack(id);
-        else wire_v1_send_error(id, "UNSUPPORTED", "no valido en pausa");
-    }
+/* Rellena un comando tipado desde el JSON ya parseado (camino fuera de pausa). */
+static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* c, long id,
+                               const json_obj_t* obj, const char* type) {
+    c->kind = bpvm_dbg_wire_kind(type);
+    c->id   = id;
+    c->pc   = json_get_long(obj, "pc",   -1);
+    c->bpId = json_get_long(obj, "bpId", -1);
+    c->addr = json_get_long(obj, "addr", -1);
+    c->ref  = json_get_long(obj, "ref",   0);
 }
 
 /* ============================================================ */
@@ -1234,16 +1113,11 @@ static void run_module_path(const char* path, long id) {
      * que no opten in. */
     /* H6.b.3 #140 — modo debug: si el cliente fijó breakpoints o pidió
      * PAUSE antes de RUN, aplicar los pendientes + enganchar el pause_cb. */
-    int debugging = (s_pending_bp_n > 0 || s_pause_initial);
+    int debugging = bpvm_dbg_wire_armed();
     if (debugging) {
-        for (int i = 0; i < s_pending_bp_n; i++)
-            bpvm_debug_add_breakpoint(vm, s_pending_bp_pc[i]);
-        bpvm_set_pause_cb(vm, pico_pause_cb, NULL);
-        s_dbg_vm = vm;
-        s_dbg_session = session;
-        if (s_pause_initial) bpvm_debug_request_pause(vm);
-        log_printf("RUN/v1: DEBUG mode (bps=%d pauseInit=%d)",
-                   s_pending_bp_n, s_pause_initial);
+        s_dbgw.session = session;
+        bpvm_dbg_wire_arm(&s_dbgw, vm);
+        log_printf("RUN/v1: DEBUG mode");
     }
 
     /* P-run-stop (#257) — poll del wire entre quanta para poder atender
@@ -1310,9 +1184,7 @@ static void run_module_path(const char* path, long id) {
     bpvm_destroy(vm);
     s_active_session = 0;
     /* H6.b.3 — limpiar estado de debug de esta sesión. */
-    s_dbg_vm = NULL;
-    s_pending_bp_n = 0;
-    s_pause_initial = 0;
+    bpvm_dbg_wire_reset();
 }
 
 static void handle_run(long id, const json_obj_t* obj) {
@@ -1505,12 +1377,13 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "RUN")      == 0) { handle_run(id, &obj);      return; }
     /* DEBUG (H6.b.3 #140) — pre-RUN: acumular breakpoints / pedir pausa
      * inicial. Durante un RUN en modo debug, los comandos READ_INT,
-     * READ_STRING, LOCALS, STACK, CONTINUE y STEP los atiende el
-     * pico_pause_cb inline mientras la VM esta pausada. */
-    if (strcmp(type, "PAUSE")    == 0) { s_pause_initial = 1;
-                                         wire_v1_send_reply_empty("PAUSE_REPLY", id); return; }
-    if (strcmp(type, "SET_BP")   == 0) { dbg_set_bp(id, &obj);      return; }
-    if (strcmp(type, "CLR_BP")   == 0) { dbg_clr_bp(id, &obj);      return; }
+     * READ_STRING, LOCALS, STACK, CONTINUE y STEP los atiende el bucle de
+     * pausa del NÚCLEO (bpvm_dbg_wire) inline mientras la VM esta pausada. */
+    {
+        bpvm_dbg_cmd_t c;
+        dbgw_cmd_from_json(&c, id, &obj, type);
+        if (c.kind != BPVM_DBGC_OTHER && bpvm_dbg_wire_handle(&s_dbgw, &c)) return;
+    }
     /* P-run-stop (#257) — KILL en idle: no hay nada que matar. El KILL
      * útil llega DURANTE un RUN y lo atiende pico_run_poll_cb (la VM
      * polea el wire entre quanta y termina con BPVM_KILLED). */
