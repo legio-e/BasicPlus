@@ -43,6 +43,7 @@
 #include "bpvm_fs.h"
 #include "bpvm_net.h"
 #include "bpvm_pack.h"
+#include "bpvm_dbg_wire.h"   /* #326: banco de pruebas del depurador en el micro simulado */
 #include "bpvm_rtc.h"
 #include "crc32.h"
 #include "mdn_loader.h"
@@ -701,6 +702,59 @@ static int module_loaded(const bpvm_t* vm, const char* name) {
     return 0;
 }
 
+/* ── #326 BANCO DE PRUEBAS DEL DEPURADOR ──────────────────────────────────
+ * El micro simulado NO tenía ramo de depuración, y eso es justo lo que faltaba
+ * para cazar el bug del Pico sin gastar flasheos: allí el 1er breakpoint va bien
+ * y a partir del 2º se cuelga, y sólo pasa DESDE que se migró al núcleo portable
+ * (el Pico con su código viejo funciona). Montando aquí el MISMO núcleo:
+ *   - si el 2º breakpoint también falla → el bug está en bpvm_dbg_wire y se caza
+ *     en el PC con depurador de verdad, no a ciegas en la placa.
+ *   - si NO falla → es específico del Pico (pila, memoria, temporización) y ya
+ *     sabemos por dónde mirar.
+ * La cintura es idéntica a la del ESP32: traducir JSON ↔ comando tipado y
+ * prestar buffers. La lógica vive toda en el núcleo. */
+static char s_dbg_reply[2048];
+static char s_dbg_line[WIRE_LINE_MAX];
+
+static void dbgw_send(const char* line, size_t len, void* user) {
+    (void) user;
+    /* El buffer es NUESTRO (s_dbg_reply), así que se puede cerrar en `len` y
+     * reusar send_line, que espera NUL-terminado. */
+    if (len < sizeof s_dbg_reply) ((char*) line)[len] = '\0';
+    if (g_cli != BAD_SOCK) send_line(g_cli, line);
+}
+
+static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
+    (void) user;
+    if (g_cli == BAD_SOCK) return -1;
+    if (recv_line(g_cli, s_dbg_line, sizeof s_dbg_line) < 0) return -1;
+    json_obj_t o;
+    if (json_parse(s_dbg_line, strlen(s_dbg_line), &o) != 0) return -1;
+    char type[40];
+    if (json_get_str(&o, "type", type, sizeof type) < 0) return -1;
+    out->kind = bpvm_dbg_wire_kind(type);
+    out->id   = json_get_long(&o, "id",    0);
+    out->pc   = json_get_long(&o, "pc",   -1);
+    out->bpId = json_get_long(&o, "bpId", -1);
+    out->addr = json_get_long(&o, "addr", -1);
+    out->ref  = json_get_long(&o, "ref",   0);
+    return 0;
+}
+
+static bpvm_dbg_wire_t s_dbgw = {
+    dbgw_next_cmd, dbgw_send, NULL, s_dbg_reply, sizeof s_dbg_reply, 0
+};
+
+static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* cmd, long id,
+                               const json_obj_t* obj, const char* type) {
+    cmd->kind = bpvm_dbg_wire_kind(type);
+    cmd->id   = id;
+    cmd->pc   = json_get_long(obj, "pc",   -1);
+    cmd->bpId = json_get_long(obj, "bpId", -1);
+    cmd->addr = json_get_long(obj, "addr", -1);
+    cmd->ref  = json_get_long(obj, "ref",   0);
+}
+
 static void handle_run(sock_t c, long id, const json_obj_t* obj) {
     char path[PATH_MAX_SIM];
     if (json_get_str(obj, "path", path, sizeof path) < 0) {
@@ -820,10 +874,15 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
 
     g_kill_ack_id = -1;
     if (st == BPVM_OK && !missing[0]) {
+        /* #326 — si hay breakpoints o PAUSE pendientes, el núcleo los aplica y
+         * registra su pause_cb. Sin nada armado no hace nada (coste cero). */
+        s_dbgw.session = session;
+        if (bpvm_dbg_wire_armed()) bpvm_dbg_wire_arm(&s_dbgw, vm);
         bpvm_set_poll(vm, sim_run_poll_cb, NULL);
         st = bpvm_run(vm);
         bpvm_set_poll(vm, NULL, NULL);
     }
+    bpvm_dbg_wire_reset();   /* la siguiente sesión parte limpia */
     unsigned long dt = (unsigned long) ((clock() - t0) * 1000L / CLOCKS_PER_SEC);
 
     /* Ack diferido del KILL, ANTES del EXITED (como los firmwares). */
@@ -862,12 +921,22 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
     g_run_session = 0;
 }
 
+
 /* ── dispatch de un request ───────────────────────────────────────────────── */
+
 
 static void handle(sock_t c, const json_obj_t* obj) {
     char type[32];
     if (json_get_str(obj, "type", type, sizeof type) < 0) return;
     long id = json_get_long(obj, "id", -1);
+
+    /* #326 — ramo de depuración (pre-RUN): SET_BP / CLR_BP / PAUSE. El núcleo
+     * acumula y contesta; si no es de su ramo devuelve 0 y seguimos. */
+    {
+        bpvm_dbg_cmd_t dcmd;
+        dbgw_cmd_from_json(&dcmd, id, obj, type);
+        if (dcmd.kind != BPVM_DBGC_OTHER && bpvm_dbg_wire_handle(&s_dbgw, &dcmd)) return;
+    }
 
     /* META */
     if (!strcmp(type, "HELLO")) { handle_hello(c, id); return; }
