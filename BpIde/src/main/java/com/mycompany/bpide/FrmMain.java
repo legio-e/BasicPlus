@@ -2684,6 +2684,14 @@ public class FrmMain extends javax.swing.JFrame
                             appendConsola("[debug] no se pudo obtener el client serie\n");
                             return;
                         }
+                        // La SALIDA del programa. Faltaba, y por eso una sesión de
+                        // debug en placa no imprimía NADA (#326): setOutputSink()
+                        // se instala dentro de AbstractBpvmBackend.run(), que es
+                        // el camino del Run normal — y aquí no se pasa por él, se
+                        // llama a runModule() directo. Los eventos OUTPUT llegaban
+                        // a BpvmClient, encontraban el sink a null y se tiraban EN
+                        // SILENCIO. appendConsola ya salta al EDT por su cuenta.
+                        client.setOutputSink(FrmMain.this::appendConsola);
                         debug.attach(client);            // el listener (onDebugPaused) ya está puesto
                         client.requestPause();           // rompe en el 1er opcode → BP_HIT(cs)
                         client.runModule(remoteMain);    // arranca; cada pausa pinta locales por nombre
