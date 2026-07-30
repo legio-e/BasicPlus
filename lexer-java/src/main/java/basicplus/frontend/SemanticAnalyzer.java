@@ -1066,6 +1066,12 @@ public final class SemanticAnalyzer {
             }
         }
 
+        // 1.b) H5.c — un miembro NO puede llamarse igual que un evento heredado
+        // (ni al revés). Ver validateEventShadowing: con la cadena de bases ya
+        // resuelta y antes de tocar tipos, que es cuando el nombre es lo único
+        // que hace falta.
+        validateEventShadowing();
+
         // 2) tipos de vars/consts/props/parámetros + retorno de funciones
         for (ITopLevelDecl def : mod.defs) resolveDefTypes(def, null);
         for (Symbol s : module.members.getSymbols()) {
@@ -1105,6 +1111,53 @@ public final class SemanticAnalyzer {
                 cls.instanceMembers.tryDefine(makeMethod(
                         "compareTo", cls, PrimitiveType.INTEGER,
                         new String[]{"other"}, new BpType[]{AnyType.INSTANCE}));
+            }
+        }
+    }
+
+    /**
+     * H5.c — el nombre de un evento heredado NO se puede reutilizar como miembro
+     * en una subclase (ni al revés).
+     *
+     * Sin esto el compilador CALLA y el resultado es el peor de los mundos: la
+     * base declara `event onClick`, la subclase declara `function onClick()`
+     * creyendo que lo sobrescribe, compila sin un diagnóstico... y ese método no
+     * se llama JAMÁS, porque `raise` no despacha por vtable — va al suscriptor
+     * que guarda el objeto en `ev$recv`/`ev$dest`. Medido con un spike al migrar
+     * el GUI (#324), donde 14 demos hacían exactamente eso.
+     *
+     * Se comprueba por NOMBRE y sólo contra ANCESTROS: el choque dentro de una
+     * misma clase ya lo caza scope.tryDefine.
+     */
+    private void validateEventShadowing() {
+        for (Symbol s : module.members.getSymbols()) {
+            if (!(s instanceof ClassSymbol)) continue;
+            ClassSymbol cls = (ClassSymbol) s;
+            if (cls.isExternal) continue;
+            checkShadowedEvents(cls, cls.instanceMembers);
+            checkShadowedEvents(cls, cls.staticMembers);
+        }
+    }
+
+    private void checkShadowedEvents(ClassSymbol cls, Symbol.Scope own) {
+        for (Symbol mine : own.getSymbols()) {
+            for (ClassSymbol a = cls.baseClass; a != null; a = a.baseClass) {
+                Symbol theirs = a.instanceMembers.tryLookup(mine.name);
+                if (theirs == null) theirs = a.staticMembers.tryLookup(mine.name);
+                if (theirs == null) continue;
+                boolean mineEv   = mine   instanceof Symbol.EventSymbol;
+                boolean theirsEv = theirs instanceof Symbol.EventSymbol;
+                if (mineEv == theirsEv) break;   // miembro/miembro o evento/evento: no es cosa mía
+                if (theirsEv) {
+                    err(mine.line, mine.column, "'" + mine.name + "' es un EVENTO heredado de '"
+                            + a.name + "': no se puede redeclarar como miembro de '" + cls.name
+                            + "'. Un evento no se sobrescribe, se SUSCRIBE: "
+                            + "obj." + mine.name + " := destino::handler");
+                } else {
+                    err(mine.line, mine.column, "el evento '" + mine.name + "' choca con un miembro"
+                            + " del mismo nombre heredado de '" + a.name + "'; renombra uno de los dos");
+                }
+                break;
             }
         }
     }
