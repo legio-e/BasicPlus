@@ -1,26 +1,28 @@
-// GuiClickDemo.bp — upcall de eventos (V3, H3.4).
+// GuiClickDemo.bp — upcall de eventos (V3, H3.4; migrado a H5.c en #324).
 //
-// Subclasea Gui.Button y reescribe onClick. Un clic (real, o sintetico via
-// __guiClick) hace que la VM llame POR NOMBRE a Gui.__guiDispatch(self) ->
-// self.onClick() (dispatch virtual: corre el override del usuario), que cambia
-// el texto de un label. Verificable headless comparando el dumpTree
-// antes/despues del clic.
+// Un clic (real, o sintetico via __guiClick) hace que la VM llame POR NOMBRE a
+// Gui.__guiDispatch(self) -> self.__fireClick(), que LEVANTA el evento onClick
+// del boton. El scheduler drena la cola entre quanta e inyecta el frame del
+// handler suscrito, que cambia el texto de un label. Verificable headless
+// comparando el dumpTree antes/despues del clic.
+//
+// MIGRADO: antes habia una subclase de Gui.Button cuyo unico fin era reescribir
+// onClick. Con eventos el boton se usa tal cual y el handler vive donde quieras.
+// Convencion de nombres (Eduardo): <componente>_<evento>, con el mismo nombre
+// que la variable que sostiene el widget.
 module GuiClickDemo
   import Gui
 
-  class MyButton extends Gui.Button
+  // El que ESCUCHA. Guarda lo que necesita tocar; antes eso era estado de la
+  // subclase del boton.
+  class Pantalla
     public property target: Gui.Label
-    public function MyButton(parent: Gui.Component, text: string, target: Gui.Label)
-      super(parent, text)
-      this.target := target
-    end MyButton
 
-    // Override del onClick heredado de Gui.Component. La VM lo invoca al pulsar.
-    public function onClick()
+    function event btn_onClick(quien: Gui.Component)
       print "[onClick] override ejecutado"
       this.target.setText("PULSADO")
-    end onClick
-  end MyButton
+    end btn_onClick
+  end Pantalla
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
@@ -28,14 +30,18 @@ module GuiClickDemo
     var lbl: Gui.Label := Gui.Label(scr, "esperando")
     lbl.align(Gui.Align.TOP_MID, 0, 10)
 
-    var btn: MyButton := MyButton(scr, "Pulsame", lbl)
+    var pant: Pantalla := Pantalla()
+    pant.target := lbl
+
+    var btn: Gui.Button := Gui.Button(scr, "Pulsame")
+    btn.onClick := pant::btn_onClick
     btn.align(Gui.Align.CENTER, 0, 0)
 
     print "== antes del clic =="
     print Gui.__guiDumpTree()
 
     Gui.__guiClick(btn)          // simula un clic sobre el widget (verificable headless)
-    Gui.run()                    // bombea el evento: dispatch onClick -> cambia el label
+    Gui.run()                    // bombea el evento: drena onClick -> cambia el label
 
     print "== despues del clic =="
     print Gui.__guiDumpTree()

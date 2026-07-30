@@ -8,24 +8,24 @@
 //
 // Paridad headless: el dump muestra el screen 480x320 antes y 320x480 tras el
 // clic sintético (que rota a 90), como GuiClickDemo.
+//
+// MIGRADO a eventos H5.c (#324): antes el estado `deg` vivía en una subclase de
+// Gui.Button; ahora vive en el que ESCUCHA, que es su sitio natural — el botón
+// no tiene por qué saber cuántos grados llevamos. Convención: <componente>_<evento>.
 module GuiRotDemo
   import Gui
 
-  class RotButton extends Gui.Button
-    var deg: integer               // rotación actual (campo del botón; arranca en 0)
-
-    public function RotButton(parent: Gui.Component, text: string)
-      super(parent, text)
-    end RotButton
+  class Mando
+    var deg: integer               // rotación actual (arranca en 0)
 
     // Cada toque: +90 grados (y vuelta a 0 tras 270).
-    public function onClick()
+    function event btn_onClick(quien: Gui.Component)
       this.deg := (this.deg + 90) mod 360
       Gui.setRotation(this.deg)
       print "rotacion:"
       print this.deg
-    end onClick
-  end RotButton
+    end btn_onClick
+  end Mando
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
@@ -33,7 +33,10 @@ module GuiRotDemo
     var lbl: Gui.Label := Gui.Label(scr, "toca el boton para girar")
     lbl.align(Gui.Align.TOP_MID, 0, 10)
 
-    var btn: RotButton := RotButton(scr, "Girar +90")
+    var mando: Mando := Mando()
+
+    var btn: Gui.Button := Gui.Button(scr, "Girar +90")
+    btn.onClick := mando::btn_onClick
     btn.align(Gui.Align.CENTER, 0, 0)
 
     print "== antes (0 grados) =="

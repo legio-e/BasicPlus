@@ -259,22 +259,48 @@ import Json
       this.__slotChange := slotChange
     end __bindEvents
 
-    // Eventos (upcall). El backend los dispara: al pulsar → onClick; al cambiar
-    // de valor → onChange. Si el widget está atado a un form, despachan al método
-    // de la ventana por su slot (sin handler → slot -1 → __guiInvokeBySlot ignora).
-    // Si no, no hacen nada y el usuario los reescribe subclaseando.
-    public function onClick()
+    // -- Eventos (#324). Al pulsar → onClick; al cambiar de valor → onChange.
+    //
+    //    Antes esto eran dos MÉTODOS virtuales que el usuario reescribía
+    //    subclaseando el widget: para atender un botón había que fabricar una
+    //    clase. Ahora son EVENTOS H5.c, así que el handler es una función
+    //    cualquiera de un objeto cualquiera y no hace falta heredar de nada:
+    //
+    //      boton1.onClick := pantalla::boton1_onClick
+    //
+    //    Convención de nombres (Eduardo, 30-jul): el handler se llama
+    //    <nombreDelComponente>_<nombreDelEvento>, con el MISMO nombre que lleva
+    //    la variable que sostiene el widget y que su `name` (el que pone el .win).
+    //    Un nombre, tres sitios — así dos botones tienen handlers distintos sin
+    //    inventar nombres.
+    //
+    //    Sin suscriptor no pasa nada: `raise` encola y el despachador tira el
+    //    evento si no hay destino vivo. Esa comprobación vive en UN sitio. --
+    event onClick(sender: Component)
+    event onChange(sender: Component)
+
+    // -- __fire* — el puente desde la VM. Los llama Gui.__guiDispatch, no el
+    //    usuario. Tienen que estar AQUÍ dentro porque `raise` sólo dispara
+    //    eventos del objeto en curso (lee ev$recv/ev$dest de `this`), y el
+    //    despachador es una función de módulo.
+    //
+    //    Levantan el evento Y mantienen el camino de Forms (slot horneado en el
+    //    .win), que se retira en la tanda 2 — hasta entonces conviven. --
+    public function __fireClick()
+      raise onClick(this)
       if this.__win != null then __guiInvokeBySlot(this.__win, this.__slotClic, this)
-    end onClick
-    public function onChange()
+    end __fireClick
+    public function __fireChange()
+      raise onChange(this)
       if this.__win != null then __guiInvokeBySlot(this.__win, this.__slotChange, this)
-    end onChange
+    end __fireChange
   end Component
 
   // ---- Eventos (upcall). __guiBindClick registra el objeto BP dueño del handle;
   //      al pulsar/cambiar, la VM llama por NOMBRE a __guiDispatch(self) →
-  //      self.onClick() o a __guiDispatchChange(self) → self.onChange() según el
-  //      tipo de evento. __guiClick inyecta un clic sintético (diagnóstico). ----
+  //      self.__fireClick() o a __guiDispatchChange(self) → self.__fireChange()
+  //      según el tipo de evento, y ésos levantan el evento BP (#324).
+  //      __guiClick inyecta un clic sintético (diagnóstico). ----
   public intrinsic function __guiBindClick(handle: integer, self: Component)
   public intrinsic function __guiClick(w: Component)
   public intrinsic function __guiChange(w: Component)   // cambio de valor sintético (diagnóstico)
@@ -737,16 +763,17 @@ import Json
   end ImageView
 
   // ---- Dispatch del upcall: la VM llama aquí (por NOMBRE, resolveGlobal) al
-  //      pulsar/cambiar un widget. self.onClick()/onChange() son llamadas
-  //      virtuales normales — el compilador resuelve el slot, así que respeta
-  //      el override del usuario. Dos dispatchers (sin rama en BP): la VM elige
+  //      pulsar/cambiar un widget. La VM no sabe de eventos: sólo entrega el
+  //      widget, y __fireClick/__fireChange (métodos de Component, #324) son los
+  //      que levantan el evento — tienen que estar dentro de la clase porque
+  //      `raise` dispara los eventos de `this`. Dos dispatchers (sin rama en BP): la VM elige
   //      según el tipo de evento. ----
   public function __guiDispatch(self: Component)
-    self.onClick()
+    self.__fireClick()
   end __guiDispatch
 
   public function __guiDispatchChange(self: Component)
-    self.onChange()
+    self.__fireChange()
   end __guiDispatchChange
 
   // ---- run — lazo de eventos (bloquea: refresca y entrega los onClick/onChange).

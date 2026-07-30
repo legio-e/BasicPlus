@@ -1,30 +1,32 @@
-// GuiValueDemo.bp — H6 tanda 2: switch + slider + bar (value-widgets).
+// GuiValueDemo.bp — H6 tanda 3: value-widgets enteros (switch, slider, bar).
 //
-// switch: booleano (como checkbox sin etiqueta), estado por `checked`.
-// slider: entero en rango, dispara onChange (override-able); el backend clampa.
-// bar:    barra de progreso, solo lectura (sin onChange).
-// Verificable headless por dumpTree (cada uno sale con `val=N`).
+// Los tres comparten `value` + `setRange`; el arrastre del slider levanta
+// onChange. Verificable headless por dumpTree (`val=N`).
+//
+// MIGRADO a eventos H5.c (#324). Antes esto era una subclase de Gui.Slider cuyo
+// UNICO fin era reescribir onChange: para atender un widget habia que fabricar una
+// clase. Ahora el handler es una funcion de un objeto cualquiera y el widget se
+// usa tal cual. Convencion de nombres (Eduardo): <componente>_<evento>, con el
+// mismo nombre que la variable que sostiene el widget.
 module GuiValueDemo
   import Gui
 
-  class MySlider extends Gui.Slider
-    public function MySlider(parent: Gui.Component)
-      super(parent)
-    end MySlider
-
-    public function onChange()
+  class Panel
+    function event sl_onChange(quien: Gui.Component)
       print "[slider] cambió"
-    end onChange
-  end MySlider
+    end sl_onChange
+  end Panel
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
+    var p: Panel := Panel()
 
     var sw: Gui.Toggle := Gui.Toggle(scr)
     sw.checked := true
     sw.align(Gui.Align.TOP_MID, 0, 20)
 
-    var sl: MySlider := MySlider(scr)
+    var sl: Gui.Slider := Gui.Slider(scr)
+    sl.onChange := p::sl_onChange
     sl.setRange(0, 200)
     sl.value := 150
     sl.align(Gui.Align.TOP_MID, 0, 90)
@@ -38,7 +40,7 @@ module GuiValueDemo
     print Gui.__guiDumpTree()
 
     Gui.__guiChange(sl)          // simula el arrastre del slider (verificable headless)
-    Gui.run()                    // bombea: dispatch onChange
+    Gui.run()                    // bombea: drena el evento onChange
   end Main
 
 end GuiValueDemo

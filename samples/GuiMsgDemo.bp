@@ -1,27 +1,25 @@
-// GuiMsgDemo.bp — H6 tanda 6: msgbox (aviso ASÍNCRONO).
+// GuiMsgDemo.bp — H6 tanda 6: msgbox (aviso modal).
 //
-// Diálogo NO modal: muestra un mensaje + un botón; al pulsarlo dispara onChange,
-// `result` = índice del botón pulsado, y la ventana se cierra. Para un aviso
-// basta UN botón (lo habitual): pulsar = enterado = cerrar. Asíncrono a propósito
-// (un modal bloqueante colgaría el GUI; ver V3_BACKLOG: GUI-blocking-from-event).
-// Aquí simulamos la pulsación con result:=0 + __guiChange (verificable headless).
+// setButtons pone las etiquetas \n-separadas; al pulsar una, el índice queda en
+// `result` y se levanta onChange.
+//
+// MIGRADO a eventos H5.c (#324): antes una subclase de Gui.Msgbox sólo para
+// reescribir onChange. Convención: <componente>_<evento>.
 module GuiMsgDemo
   import Gui
 
-  class MiAviso extends Gui.Msgbox
-    public function MiAviso(parent: Gui.Component, msg: string)
-      super(parent, msg)
-    end MiAviso
-
-    public function onChange()
+  class Panel
+    function event mb_onChange(quien: Gui.Component)
       print "[msgbox] boton pulsado"
-    end onChange
-  end MiAviso
+    end mb_onChange
+  end Panel
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
+    var p: Panel := Panel()
 
-    var mb: MiAviso := MiAviso(scr, "Operacion completada")
+    var mb: Gui.Msgbox := Gui.Msgbox(scr, "Operacion completada")
+    mb.onChange := p::mb_onChange
     mb.setButtons("OK")          // un aviso: con un botón basta (al pulsar, se cierra)
 
     print "== antes =="

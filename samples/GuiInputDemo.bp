@@ -1,25 +1,29 @@
 // GuiInputDemo.bp — H6 tanda 4: dropdown + textarea (entrada/selección).
 //
 // dropdown: opciones \n-separadas (setOptions) + índice `selected`; el cambio
-//           de selección dispara onChange.
-// textarea: contenido editable por la propiedad `text`; la edición dispara onChange.
+//           de selección levanta onChange.
+// textarea: contenido editable por la propiedad `text`; la edición levanta onChange.
+//
+// MIGRADO a eventos H5.c (#324). Antes esto era una subclase de Gui.Dropdown cuyo
+// UNICO fin era reescribir onChange: para atender un widget habia que fabricar una
+// clase. Ahora el handler es una funcion de un objeto cualquiera y el widget se
+// usa tal cual. Convencion de nombres (Eduardo): <componente>_<evento>, con el
+// mismo nombre que la variable que sostiene el widget.
 module GuiInputDemo
   import Gui
 
-  class MyDrop extends Gui.Dropdown
-    public function MyDrop(parent: Gui.Component)
-      super(parent)
-    end MyDrop
-
-    public function onChange()
+  class Panel
+    function event dd_onChange(quien: Gui.Component)
       print "[dropdown] seleccion cambiada"
-    end onChange
-  end MyDrop
+    end dd_onChange
+  end Panel
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
+    var p: Panel := Panel()
 
-    var dd: MyDrop := MyDrop(scr)
+    var dd: Gui.Dropdown := Gui.Dropdown(scr)
+    dd.onChange := p::dd_onChange
     dd.setOptions("Rojo\nVerde\nAzul")
     dd.selected := 2
     dd.align(Gui.Align.TOP_MID, 0, 30)

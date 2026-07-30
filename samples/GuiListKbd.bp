@@ -1,27 +1,31 @@
 // GuiListKbd.bp — H6 tanda 5: list + keyboard.
 //
 // list: lista de ítems \n-separados (setItems) + índice `selected`; el cambio de
-//       selección dispara onChange.
+//       selección levanta onChange.
 // keyboard: teclado en pantalla atado a un Textarea (attach); cableado render-only.
+//
+// MIGRADO a eventos H5.c (#324). Antes esto era una subclase de Gui.ListBox cuyo
+// UNICO fin era reescribir onChange: para atender un widget habia que fabricar una
+// clase. Ahora el handler es una funcion de un objeto cualquiera y el widget se
+// usa tal cual. Convencion de nombres (Eduardo): <componente>_<evento>, con el
+// mismo nombre que la variable que sostiene el widget.
 module GuiListKbd
   import Gui
 
-  class MyList extends Gui.ListBox
-    public function MyList(parent: Gui.Component)
-      super(parent)
-    end MyList
-
-    public function onChange()
+  class Panel
+    function event lst_onChange(quien: Gui.Component)
       print "[list] item seleccionado"
-    end onChange
-  end MyList
+    end lst_onChange
+  end Panel
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
+    var p: Panel := Panel()
 
     // Lista a la izquierda, textarea arriba a la derecha; el teclado (kb) se
     // auto-coloca abajo (lv_keyboard) → no hace falta posicionarlo.
-    var lst: MyList := MyList(scr)
+    var lst: Gui.ListBox := Gui.ListBox(scr)
+    lst.onChange := p::lst_onChange
     lst.setItems("Uno\nDos\nTres")          // caben sin scroll (en táctil el scroll va mal)
     lst.selected := 2
     lst.setBounds(5, 5, 180, 140)

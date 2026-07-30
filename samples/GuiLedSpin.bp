@@ -1,49 +1,55 @@
 // GuiLedSpin.bp — H6 tanda 3: spinbox + led.
 //
 // spinbox: entero en rango. En táctil un lv_spinbox pelado solo deja mover el
-//          cursor; los botones +/- (StepBtn) lo hacen usable ajustando value.
+//          cursor; los botones +/- lo hacen usable ajustando value.
 // led:     indicador on/off (solo salida); on()/off() o `value` 0/1.
+//
+// MIGRADO a eventos H5.c (#324). Aquí se ve para qué sirve la convención de
+// nombres: hay DOS botones sobre el mismo spinbox, y antes eso obligaba a una
+// subclase parametrizada (StepBtn con `delta`). Ahora cada uno tiene su handler
+// —minus_onClick y plus_onClick— y el paso está en el nombre, no en un campo.
 module GuiLedSpin
   import Gui
 
-  class MySpin extends Gui.Spinbox
-    public function MySpin(parent: Gui.Component)
-      super(parent)
-    end MySpin
+  class Panel
+    public property box: Gui.Spinbox
 
-    public function onChange()
+    function event sp_onChange(quien: Gui.Component)
       print "[spinbox] cambió"
-    end onChange
-  end MySpin
+    end sp_onChange
 
-  // Botón +/- que ajusta un spinbox por su propiedad value (con clamp al rango).
-  class StepBtn extends Gui.Button
-    var box: Gui.Spinbox
-    var delta: integer
+    function event minus_onClick(quien: Gui.Component)
+      this.paso(-5)
+    end minus_onClick
 
-    public function StepBtn(parent: Gui.Component, text: string, target: Gui.Spinbox, paso: integer)
-      super(parent, text)
-      this.box := target
-      this.delta := paso
-    end StepBtn
+    function event plus_onClick(quien: Gui.Component)
+      this.paso(5)
+    end plus_onClick
 
-    public function onClick()
-      this.box.value := this.box.value + this.delta
+    // Lo común de los dos botones, en un sitio (el backend clampa al rango).
+    function paso(delta: integer)
+      this.box.value := this.box.value + delta
       print "[spinbox] = " + intToString(this.box.value)
-    end onClick
-  end StepBtn
+    end paso
+  end Panel
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
+    var p: Panel := Panel()
 
-    var sp: MySpin := MySpin(scr)
+    var sp: Gui.Spinbox := Gui.Spinbox(scr)
+    sp.onChange := p::sp_onChange
     sp.setRange(0, 50)
     sp.value := 30
     sp.align(Gui.Align.TOP_MID, 0, 30)
+    p.box := sp
 
-    var minus: StepBtn := StepBtn(scr, "-5", sp, -5)
+    var minus: Gui.Button := Gui.Button(scr, "-5")
+    minus.onClick := p::minus_onClick
     minus.align(Gui.Align.TOP_MID, -70, 90)
-    var plus: StepBtn := StepBtn(scr, "+5", sp, 5)
+
+    var plus: Gui.Button := Gui.Button(scr, "+5")
+    plus.onClick := p::plus_onClick
     plus.align(Gui.Align.TOP_MID, 70, 90)
 
     var ld: Gui.Led := Gui.Led(scr)

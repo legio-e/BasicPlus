@@ -1,27 +1,29 @@
 // GuiGcRootQ.bp — repro #302 paso 3 (variante COLA, headless dual-VM).
-// makeButton() crea el boton, encola un clic sintetico y RETORNA: el unico
-// holder del objeto MyButton pasa a ser el evento pendiente en la cola del
-// backend GUI (fuera de vm->memory / del mem[] de miVM). Sin la raiz GC de la
-// cola, gc() barre el objeto EN VIVO y el bombeo de Gui.run() despacha sobre
-// un handle muerto (use-after-free).
+// makeButton() crea el boton y su oyente, encola un clic sintetico y RETORNA: el
+// unico holder del widget pasa a ser el evento pendiente en la cola del backend
+// GUI (fuera de vm->memory / del mem[] de miVM), y el del oyente es el campo
+// `recv` del evento en el widget. Sin esas dos raices, gc() barre objetos EN
+// VIVO y el bombeo de Gui.run() despacha sobre un handle muerto (use-after-free).
+//
+// MIGRADO a eventos H5.c (#324): la cadena que se prueba tiene ahora dos
+// eslabones (cola -> widget -> oyente), no uno.
 module GuiGcRootQ
   import Gui
 
-  class MyButton extends Gui.Button
+  class Pantalla
     public property target: Gui.Label
-    public function MyButton(parent: Gui.Component, text: string, target: Gui.Label)
-      super(parent, text)
-      this.target := target
-    end MyButton
 
-    public function onClick()
+    function event btn_onClick(quien: Gui.Component)
       print "[onClick] vivo tras gc()"
       this.target.setText("PULSADO")
-    end onClick
-  end MyButton
+    end btn_onClick
+  end Pantalla
 
   function makeButton(scr: Gui.Screen, lbl: Gui.Label)
-    var btn: MyButton := MyButton(scr, "Pulsame", lbl)
+    var pant: Pantalla := Pantalla()
+    pant.target := lbl
+    var btn: Gui.Button := Gui.Button(scr, "Pulsame")
+    btn.onClick := pant::btn_onClick
     btn.align(Gui.Align.CENTER, 0, 0)
     Gui.__guiClick(btn)          // encola el evento: la COLA retiene el objptr
   end makeButton
@@ -33,10 +35,11 @@ module GuiGcRootQ
 
     makeButton(scr, lbl)
 
-    gc()                          // sin raiz de cola: barreria el MyButton en vivo
+    gc()                          // sin raiz de cola: barreria el boton en vivo
+
     print "== tras gc() =="
 
-    Gui.run()                     // bombea el evento pendiente -> dispatch onClick
+    Gui.run()                     // bombea el evento pendiente -> drena onClick
 
     print "== al salir =="
     print Gui.__guiDumpTree()

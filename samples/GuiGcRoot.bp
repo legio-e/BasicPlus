@@ -1,27 +1,32 @@
 // GuiGcRoot.bp — repro #302 paso 3 (host): el objeto BP ligado a un widget
 // cuyo UNICO holder es el propio widget (objptr en gui.c, fuera de vm->memory).
-// makeButton() crea el MyButton en un local que MUERE al volver -> sin la raiz
-// GUI, gc() lo barre EN VIVO y el clic real es un use-after-free.
+// makeButton() crea el boton Y su oyente en locales que MUEREN al volver -> sin
+// la raiz GUI, gc() los barre EN VIVO y el clic real es un use-after-free.
+//
+// MIGRADO a eventos H5.c (#324), y la prueba sale REFORZADA: ahora la cadena que
+// tiene que sobrevivir es de dos eslabones — el widget lo sostiene el objptr, y
+// el widget sostiene al oyente por el campo `recv` del evento, que el layout
+// marca como referencia para el GC. Si ese bit faltara, el oyente moriria aqui.
 module GuiGcRoot
   import Gui
 
-  class MyButton extends Gui.Button
+  class Pantalla
     public property target: Gui.Label
-    public function MyButton(parent: Gui.Component, text: string, target: Gui.Label)
-      super(parent, text)
-      this.target := target
-    end MyButton
 
-    public function onClick()
+    function event btn_onClick(quien: Gui.Component)
       print "[onClick] vivo tras gc()"
       this.target.setText("PULSADO")
-    end onClick
-  end MyButton
+    end btn_onClick
+  end Pantalla
 
-  // El boton se crea AQUI: al volver, la unica referencia viva al objeto
-  // MyButton es el objptr del widget (C global de gui.c).
+  // El boton y su oyente se crean AQUI: al volver, la unica referencia viva al
+  // widget es el objptr (C global de gui.c), y al oyente solo lo sostiene el
+  // campo recv del evento.
   function makeButton(scr: Gui.Screen, lbl: Gui.Label)
-    var btn: MyButton := MyButton(scr, "Pulsame", lbl)
+    var pant: Pantalla := Pantalla()
+    pant.target := lbl
+    var btn: Gui.Button := Gui.Button(scr, "Pulsame")
+    btn.onClick := pant::btn_onClick
     btn.align(Gui.Align.CENTER, 0, 0)
   end makeButton
 
@@ -32,7 +37,8 @@ module GuiGcRoot
 
     makeButton(scr, lbl)
 
-    gc()                          // sin raiz GUI: barreria el MyButton en vivo
+    gc()                          // sin raiz GUI: barreria el boton en vivo
+
     print "== tras gc() =="
 
     Gui.run()                     // clic real via BPVM_GUI_SCRIPT -> dispatch

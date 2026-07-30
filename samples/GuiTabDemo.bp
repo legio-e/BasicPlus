@@ -1,26 +1,25 @@
-// GuiTabDemo.bp — H6 tanda 7: tabview (pestañas).
+// GuiTabDemo.bp — H6 tanda 6: tabview (pestañas).
 //
-// addTab(nombre) devuelve la página como Gui.Component (envuelta en TabPage),
-// usable como `parent` de los widgets de esa pestaña. El cambio de pestaña activa
-// dispara onChange; `active` = índice activo. Verifica el patrón "envolver un
-// handle del backend en un Component" (como Screen).
+// addTab devuelve la página (un Component) donde se cuelgan los hijos; `active`
+// es el índice de la pestaña visible, y cambiarla levanta onChange.
+//
+// MIGRADO a eventos H5.c (#324): antes una subclase de Gui.Tabview sólo para
+// reescribir onChange. Convención: <componente>_<evento>.
 module GuiTabDemo
   import Gui
 
-  class MiTabs extends Gui.Tabview
-    public function MiTabs(parent: Gui.Component)
-      super(parent)
-    end MiTabs
-
-    public function onChange()
+  class Panel
+    function event tv_onChange(quien: Gui.Component)
       print "[tabview] cambio de pestana"
-    end onChange
-  end MiTabs
+    end tv_onChange
+  end Panel
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
+    var p: Panel := Panel()
 
-    var tv: MiTabs := MiTabs(scr)
+    var tv: Gui.Tabview := Gui.Tabview(scr)
+    tv.onChange := p::tv_onChange
 
     var p1: Gui.Component := tv.addTab("Uno")
     var l1: Gui.Label := Gui.Label(p1, "Pagina 1")

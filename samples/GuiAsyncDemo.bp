@@ -1,11 +1,14 @@
 // GuiAsyncDemo.bp — trabajo largo desde un handler SIN congelar la GUI.
 //
-// Patrón: el onClick lanza la tarea en un thread aparte (extends Thread +
-// start()) y VUELVE al instante; el pump del GUI sigue vivo. La etiqueta va
+// Patrón: el handler del clic lanza la tarea en un thread aparte (extends Thread
+// + start()) y VUELVE al instante; el pump del GUI sigue vivo. La etiqueta va
 // marcando el progreso (se repinta sola) y el botón se puede volver a pulsar
 // mientras la tarea corre. Los threads BP se entrelazan por cuantos en un
 // worker (igual en PC y en placa), así que tocar widgets desde la tarea es
 // seguro: cada operación (setText...) es atómica a nivel de cuanto.
+//
+// MIGRADO a eventos H5.c (#324): antes el botón era una subclase con el label
+// dentro; ahora el label lo guarda el que ESCUCHA. Convención: <componente>_<evento>.
 module GuiAsyncDemo
   import Gui
 
@@ -28,19 +31,14 @@ module GuiAsyncDemo
     end run
   end Contador
 
-  class BtnLanzar extends Gui.Button
-    var lbl: Gui.Label
+  class Pantalla
+    public property estado: Gui.Label
 
-    public function BtnLanzar(parent: Gui.Component, texto: string, l: Gui.Label)
-      super(parent, texto)
-      this.lbl := l
-    end BtnLanzar
-
-    public function onClick()
-      this.lbl.setText("trabajando...")
-      Contador(this.lbl).start()
-    end onClick
-  end BtnLanzar
+    function event btn_onClick(quien: Gui.Component)
+      this.estado.setText("trabajando...")
+      Contador(this.estado).start()
+    end btn_onClick
+  end Pantalla
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
@@ -52,7 +50,11 @@ module GuiAsyncDemo
     estado.fontSize := 24
     estado.align(Gui.Align.CENTER, 0, -20)
 
-    var btn: BtnLanzar := BtnLanzar(scr, "Lanzar tarea (5 s)", estado)
+    var pant: Pantalla := Pantalla()
+    pant.estado := estado
+
+    var btn: Gui.Button := Gui.Button(scr, "Lanzar tarea (5 s)")
+    btn.onClick := pant::btn_onClick
     btn.align(Gui.Align.CENTER, 0, 40)
 
     Gui.run()
