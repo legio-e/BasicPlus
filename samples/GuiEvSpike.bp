@@ -1,0 +1,62 @@
+// GuiEvSpike.bp — SPIKE de #324 (tanda 1). No es una demo: es una MEDIDA.
+//
+// LA PREGUNTA. Hoy el backend, desde dentro de __guiRun(), llama por nombre a
+// Gui.__guiDispatch(self) → self.onClick(), que corre SÍNCRONO. Al pasar el GUI
+// a eventos H5.c, ese onClick pasará a ser un `raise`, que ENCOLA y se drena
+// entre quanta. ¿Se drena antes de que Gui.run() devuelva, o después?
+//
+// De la respuesta depende el diseño: si el handler corre después del run(), las
+// 10 demos que hacen `__guiClick(x)` + `run()` + comprobar cambian de
+// comportamiento, y hay que decidir qué hacer con ellas ANTES de tocar las 964
+// líneas de Gui.bp.
+//
+// CÓMO LO MIDE. Usa el camino VIEJO (subclasear onClick, que hoy funciona) para
+// levantar desde DENTRO del upcall un evento del sistema NUEVO. Así se observa
+// exactamente el instante que interesa sin tocar Gui.bp. Mezclar los dos
+// sistemas aquí es legítimo: es un instrumento, no código de producción.
+//
+// LECTURA DEL RESULTADO — el orden de las líneas lo dice todo:
+//   "3 handler" ANTES de "4 tras run"  → el drenaje ocurre DENTRO de run().
+//                                        La tanda 1 es mecánica.
+//   "3 handler" DESPUÉS de "4 tras run" → el handler se difiere.
+//                                        Hay que decidir qué pasa con las demos.
+//   No sale "3 handler"                 → no hay punto de drenaje por ahí.
+//                                        Es el caso que obligaría a diseño.
+module GuiEvSpike
+  import Gui
+
+  // El que ESCUCHA. Su handler sólo deja constancia de CUÁNDO corre.
+  class Testigo
+    function event alPulsar(quien: Object)
+      print "3 handler (el evento se ha drenado)"
+    end alPulsar
+  end Testigo
+
+  // El que EMITE. Sigue usando el camino viejo (onClick reescrito) para
+  // colocarse dentro del upcall, y desde ahí levanta el evento nuevo.
+  class BotonSpike extends Gui.Button
+    event pulsado(quien: Object)
+
+    public function BotonSpike(p: Gui.Component, t: string)
+      super(p, t)
+    end BotonSpike
+
+    public function onClick()
+      print "2 dentro del upcall (justo antes del raise)"
+      raise pulsado(this)
+    end onClick
+  end BotonSpike
+
+  public function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var btn: BotonSpike := BotonSpike(scr, "spike")
+    var t: Testigo := Testigo()
+    btn.pulsado := t::alPulsar
+
+    print "1 antes del clic"
+    Gui.__guiClick(btn)
+    Gui.run()
+    print "4 tras run()"
+  end Main
+
+end GuiEvSpike
