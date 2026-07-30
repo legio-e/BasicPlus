@@ -881,10 +881,8 @@ import Json
     // -1 = no existe, y no pasa nada: una ventana no tiene por qué declarar la
     // property de cada widget ni atender todos sus eventos.
     var nom: string := node.getStringOr("name", "")
-    if strlen(nom) > 0 then
-      bindMember(win, w, nom)
-      bindHandler(win, w, nom)
-    endif
+    if strlen(nom) > 0 then bindMember(win, w, nom)
+    bindHandler(win, w, nom, node)
     if node.has("children") then
       var arr: Json.JsonArray := node.getArray("children")
       var i: integer := 0
@@ -919,13 +917,29 @@ import Json
     if slot >= 0 then __guiInvokeBySlot(win, slot, w)
   end bindMember
 
-  // bindHandler — ata los eventos del widget a los métodos que siguen la
-  // convención <nombre>_<evento>. Aquí es donde la convención deja de ser
-  // cosmética: es lo que permite que el .win NO tenga que nombrar el handler,
-  // y por tanto que no puedan desincronizarse.
-  function bindHandler(win: Window, w: Component, nom: string)
-    var slotClic: integer := __guiSlotOf(win, nom + "_onClick")
-    var slotChange: integer := __guiSlotOf(win, nom + "_onChange")
+  // bindHandler — ata los eventos del widget a métodos de la ventana, SIEMPRE
+  // resolviendo el nombre en carga (__guiSlotOf). Dos formas, y ninguna necesita
+  // que el IDE hornee nada:
+  //
+  //   "name": "boton1"          → se DERIVA boton1_onClick / boton1_onChange.
+  //                               La convención deja de ser cosmética: es lo
+  //                               que evita que los dos nombres se desincronicen.
+  //   "clic": "onSaludar"       → handler nombrado a mano. Manda sobre el
+  //                               derivado, para poder salirse de la convención
+  //                               cuando haga falta (y es lo que hace formdemo).
+  //
+  // Un handler que no existe da -1 y se queda inactivo: un form a medias avisa
+  // y sigue, no revienta (criterio de Eduardo en H13).
+  function bindHandler(win: Window, w: Component, nom: string, node: Json.JsonObject)
+    var nClic: string := node.getStringOr("clic", "")
+    var nChange: string := node.getStringOr("change", "")
+    if (strlen(nClic) == 0) and (strlen(nom) > 0) then   nClic := nom + "_onClick"
+    if (strlen(nChange) == 0) and (strlen(nom) > 0) then nChange := nom + "_onChange"
+
+    var slotClic: integer := -1
+    var slotChange: integer := -1
+    if strlen(nClic) > 0 then   slotClic := __guiSlotOf(win, nClic)
+    if strlen(nChange) > 0 then slotChange := __guiSlotOf(win, nChange)
     if slotClic >= 0 or slotChange >= 0 then
       w.__bindEvents(win, slotClic, slotChange)
     endif

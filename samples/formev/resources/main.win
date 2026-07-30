@@ -4,6 +4,8 @@
   "type": "Panel",
   "children": [
     { "type": "Label",  "name": "salida", "text": "esperando", "align": "TOP_MID", "y": 12 },
-    { "type": "Button", "name": "boton1", "text": "Pulsame",   "align": "CENTER" }
+    { "type": "Button", "name": "boton1", "text": "Pulsame",   "align": "CENTER" },
+    { "type": "Button", "name": "boton2", "text": "El otro",   "align": "BOTTOM_MID", "y": -20,
+      "clic": "otroHandler" }
   ]
 }

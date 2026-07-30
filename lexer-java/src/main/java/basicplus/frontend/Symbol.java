@@ -169,7 +169,7 @@ public abstract class Symbol {
          *      {toString,compareTo} y la base real es {run,start,join} (Worker.extra
          *      2 vs 3).
          *  El #174b solo cubre el camino del INTÉRPRETE; `slotOf()` lo consumen SIN
-         *  verificación el `.slots`/FormBaker (hornea el slot en el `.win`) y el AOT
+         *  verificación el `.slots` (que el IDE publica) y el AOT
          *  → ahí la desviación era silenciosa. Preguntando a la función única el
          *  modo de fallo desaparece por construcción. */
         private void ensureMethodSlots() {

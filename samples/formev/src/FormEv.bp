@@ -20,6 +20,7 @@ import Gui
   public class MainWin extends Gui.Window
     // Los componentes, declarados ANTES del load. El .win los rellena.
     property boton1: Gui.Button
+    property boton2: Gui.Button
     property salida: Gui.Label
 
     public function MainWin()
@@ -33,12 +34,24 @@ import Gui
       this.salida.setText("PULSADO")
     end boton1_onClick
 
+    // El OTRO estilo: el .win nombra el handler a mano ("clic": "otroHandler"),
+    // saliendose de la convencion. Tambien se resuelve en carga — el IDE no
+    // hornea nada en ninguno de los dos casos.
+    public function otroHandler(sender: Gui.Component)
+      print "[FormEv] otroHandler (nombrado en el .win)"
+      this.salida.setText("EL OTRO")
+    end otroHandler
+
     // Pulsar es cosa de la ventana: desde fuera, boton1 es privado. Que la
     // prueba tenga que entrar por aquí NO es un estorbo, es la encapsulación
     // funcionando.
     public function pulsaBoton1()
       Gui.__guiClick(this.boton1)
     end pulsaBoton1
+
+    public function pulsaBoton2()
+      Gui.__guiClick(this.boton2)
+    end pulsaBoton2
   end MainWin
 
   function main(arg: string)
@@ -49,6 +62,9 @@ import Gui
     print Gui.__guiDumpTree()
 
     w.pulsaBoton1()
+    Gui.run()
+
+    w.pulsaBoton2()
     Gui.run()
 
     print "== tras el clic =="

@@ -2138,8 +2138,8 @@ public class FrmMain extends javax.swing.JFrame
      * A diferencia de Run (daemon Java + upload por wire), aquí la VM-C
      * resuelve deps y resources desde el DIRECTORIO del .mod, así que se
      * prepara el outDir como un "workdir": stdlib *.mod copiada al lado,
-     * resources/ horneados (.win nombre→slot vía FormBaker, el MISMO camino
-     * que Run on Device) y copiados también al lado.
+     * resources/ copiados también al lado (el .win va TAL CUAL: desde #324 la
+     * VM resuelve los handlers por nombre en carga, así que no hay horneado).
      */
     private void doRunWindow() {
         if (editorArea.getText().isEmpty()) {
@@ -2205,13 +2205,12 @@ public class FrmMain extends javax.swing.JFrame
                     }
                     publish("[vmc] stdlib junto al .mod: " + n + " módulo(s)\n");
 
-                    // 2) resources/ horneados (mismo bake que Run on Device) y al lado.
+                    // 2) resources/ al lado, TAL CUAL.
                     //    OJO: la CLAVE del mapa es la ruta de destino en el DEVICE
                     //    (p.ej. "/app/formdemo/main.win"), no el nombre — hay que
                     //    quedarse con el basename, porque la VM-C resuelve el .win
                     //    por su nombre desde el cwd (= outDir).
                     java.util.Map<String, java.io.File> resources = collectProjectResources();
-                    bakeWinResources(resources, outDir, moduleName);
                     int nres = 0;
                     for (java.util.Map.Entry<String, java.io.File> e : resources.entrySet()) {
                         String key = e.getKey();
@@ -2466,10 +2465,6 @@ public class FrmMain extends javax.swing.JFrame
                         // H12 (#260) — resources/ del proyecto al device.
                         java.util.Map<String, java.io.File> resources =
                                 collectProjectResources();
-                        // H13.1 (4.1) — Forms: hornear los .win de resources/
-                        // (evento nombre→slot vía el <Módulo>.slots que acaba de
-                        // emitir el compilador) antes de subirlos.
-                        bakeWinResources(resources, outDir, inferModuleName(bpFile));
                         if (!resources.isEmpty()) {
                             appendConsola("[resources] " + resources.size()
                                     + " fichero(s) de resources/ a subir\n");
@@ -2482,49 +2477,6 @@ public class FrmMain extends javax.swing.JFrame
                 }
             }
         }.execute();
-    }
-
-    /**
-     * H13.1 (V3) paso 4.1 — Forms (Camino A): hornea los ficheros .win de
-     * `resources` antes de subirlos al device. Por cada .win, resuelve sus
-     * eventos por NOMBRE ("clic":"onOk") al SLOT de vtable de la clase ventana
-     * usando el sidecar &lt;módulo&gt;.slots que el compilador acaba de emitir, y
-     * reemplaza el .win en el mapa de subida por una copia horneada (temporal),
-     * dejando intacto el .win de autoría en resources/.
-     *
-     * Robusto (decisión de Eduardo: un form a medias avisa, no peta): si falta el
-     * .slots, la clase ventana no es public/principal, o un handler no existe,
-     * avisa por consola y deja ese evento inactivo (slot -1) — el Run no aborta.
-     */
-    private void bakeWinResources(java.util.Map<String, java.io.File> resources,
-                                  Path outDir, String moduleName) {
-        if (resources == null || resources.isEmpty()) return;
-        Path slotsPath = outDir.resolve(moduleName + ".slots");
-        String slotsJson = null;
-        try {
-            if (Files.isRegularFile(slotsPath))
-                slotsJson = new String(Files.readAllBytes(slotsPath),
-                        java.nio.charset.StandardCharsets.UTF_8);
-        } catch (Exception ignored) { /* sin .slots → bake avisa y deja inactivo */ }
-        for (java.util.Map.Entry<String, java.io.File> e : resources.entrySet()) {
-            if (!e.getKey().toLowerCase().endsWith(".win")) continue;
-            try {
-                String win = new String(Files.readAllBytes(e.getValue().toPath()),
-                        java.nio.charset.StandardCharsets.UTF_8);
-                java.util.List<String> warns = new java.util.ArrayList<>();
-                String baked = basicplus.frontend.FormBaker.bake(win, slotsJson, warns);
-                Path tmp = Files.createTempFile("bpwin_", ".win");
-                Files.write(tmp, baked.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                tmp.toFile().deleteOnExit();
-                e.setValue(tmp.toFile());
-                appendConsola("[forms] horneado " + e.getKey()
-                        + (warns.isEmpty() ? "" : " (" + warns.size() + " aviso/s)") + "\n");
-                for (String w : warns) appendConsola("  [forms] aviso: " + w + "\n");
-            } catch (Exception ex) {
-                appendConsola("[forms] no se pudo hornear " + e.getKey()
-                        + ": " + ex.getMessage() + "\n");
-            }
-        }
     }
 
     /**
