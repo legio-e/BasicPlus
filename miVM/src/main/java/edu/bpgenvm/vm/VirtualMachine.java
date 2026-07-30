@@ -3765,6 +3765,7 @@ public class VirtualMachine {
             case GUI_DELETE:      { int hnd = popTc(tc); gui.delete(hnd);     pushTc(tc, 0); break; }
             case GUI_SCREEN_LOAD: { int hnd = popTc(tc); gui.screenLoad(hnd); pushTc(tc, 0); break; }
             case GUI_RUN:       { guiEventLoop(tc); pushTc(tc, 0); break; }
+            case GUI_RUN_ONCE:  { pushTc(tc, guiEventLoopOnce(tc) ? 1 : 0); break; }
             case GUI_DUMP_TREE: { pushTcRef(tc, allocVmString(gui.dumpTree())); break; }
             case GUI_BIND_CLICK: {
                 int self = popTc(tc); int hnd = popTc(tc);
@@ -5408,6 +5409,50 @@ public class VirtualMachine {
             if (objptr == edu.bpgenvm.gui.GuiBackend.EVENT_CLOSE || killRequested) break;
             if (objptr != 0) invokeGuiDispatch(tc, objptr, kind);
         }
+    }
+
+    /* #324 — estado del bombeo por pasadas. start() NO es idempotente (en
+     * headless encola EVENT_CLOSE cada vez), y el cierre hay que recordarlo
+     * porque EVENT_CLOSE se consume una sola vez. */
+    private boolean guiStarted = false;
+    private boolean guiClosed  = false;
+
+    /**
+     * #324 — UNA pasada del bombeo, en vez del lazo entero. Devuelve true =
+     * "vuelve a llamarme", false = "no queda nada".
+     *
+     * POR QUÉ. guiEventLoop bloqueaba dentro del builtin hasta cerrar la ventana,
+     * y mientras tanto la VM entera estaba parada: ni avanzaban los threads ni se
+     * drenaba la cola de eventos (el scheduler sólo inyecta ENTRE quanta, y no
+     * había ninguno). Con el lazo en Gui.run() (BP) hay frontera de instrucción
+     * entre pasadas. Medido en samples/GuiEvSpike.bp.
+     *
+     * El "una vuelta más" al cerrarse no es un detalle: si esta pasada drenó algo,
+     * puede haber handlers de evento encolados que aún no han corrido. Devolver
+     * false ya los perdería.
+     */
+    private boolean guiEventLoopOnce(ThreadContext tc) {
+        if (!guiStarted) { gui.start(); guiStarted = true; }
+        int drained = 0;
+        int[] ev;
+        while ((ev = gui.pollEvent()) != null) {
+            int objptr = ev[0], kind = ev[1];
+            if (objptr == edu.bpgenvm.gui.GuiBackend.EVENT_CLOSE) { guiClosed = true; break; }
+            if (objptr != 0) { invokeGuiDispatch(tc, objptr, kind); drained++; }
+        }
+        if (killRequested) return false;
+        // Ventana cerrada: sólo se sale cuando NO queda trabajo. "Trabajo" incluye
+        // los eventos BP encolados y aún sin entregar — el `raise` de un handler
+        // encola, y el frame lo inyecta el scheduler ENTRE quanta, así que salir
+        // aquí los perdería. Misma condición que la VM-C (builtins.c, GUI_RUN_ONCE).
+        if (guiClosed) return drained > 0 || !eventQueue.isEmpty();
+        /* Ventana viva y cola vacía: espera corta para no girar en vacío. Es el
+         * `delay` del lazo de LVGL, puesto donde el bombeo puede pagarlo sin que
+         * el lazo BP tenga que saber de tiempos. */
+        if (drained == 0) {
+            try { Thread.sleep(15); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return false; }
+        }
+        return true;
     }
 
     /**

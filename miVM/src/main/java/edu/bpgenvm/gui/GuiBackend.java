@@ -719,6 +719,12 @@ public final class GuiBackend {
         catch (InterruptedException ie) { Thread.currentThread().interrupt(); return new int[]{EVENT_CLOSE, 0}; }
     }
 
+    /** #324 — variante NO bloqueante: {objptr,kind} o null si la cola está vacía.
+     *  La usa __guiRunOnce, que hace UNA pasada y devuelve al lazo BP para que
+     *  el scheduler tenga su frontera de instrucción (es donde inyecta los
+     *  handlers de eventos). takeEvent() sigue existiendo para el camino viejo. */
+    public int[] pollEvent() { return events.poll(); }
+
     // ---- Volcado del árbol (paridad de comportamiento; NO píxeles) ----
     public String dumpTree() {
         StringBuilder sb = new StringBuilder();

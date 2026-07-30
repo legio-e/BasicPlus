@@ -749,9 +749,27 @@ import Json
     self.onChange()
   end __guiDispatchChange
 
-  // ---- run — lazo de eventos (bloquea: refresca y entrega los onClick/onChange). ----
+  // ---- run — lazo de eventos (bloquea: refresca y entrega los onClick/onChange).
+  //
+  // #324 — EL LAZO VIVE AQUÍ, EN BP, no dentro del builtin. Antes esto era un
+  // __guiRun() que bombeaba hasta cerrar la ventana SIN devolver, y mientras
+  // tanto la VM entera estaba parada: ni avanzaban los threads ni se drenaba la
+  // cola de eventos. El scheduler sólo inyecta el frame de un handler ENTRE
+  // quanta (events.c lo exige: "el thread NO puede estar corriendo"), y dentro
+  // del builtin no hay ningún quantum.
+  //
+  // Con el lazo aquí, cada vuelta es una frontera de instrucción → el scheduler
+  // drena. Es la misma forma que recomienda LVGL (while(1){ lv_timer_handler();
+  // delay(); }), sólo que la espera la pone el bombeo y el lazo la ignora.
+  //
+  // __guiRunOnce: true = "queda trabajo", false = "no queda nada".
+  // Medido en samples/GuiEvSpike.bp — sin esto, un evento levantado desde el
+  // upcall del GUI no se drenaba JAMÁS. ----
+  public intrinsic function __guiRunOnce(): boolean
+
   public function run()
-    __guiRun()
+    while __guiRunOnce() do
+    endwh
   end run
 
   // ---- loadFont — carga una fuente .bin (LVGL binfont) desde el FS del proyecto

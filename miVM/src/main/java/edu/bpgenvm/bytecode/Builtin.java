@@ -460,7 +460,13 @@ public enum Builtin {
      *  Va AL FINAL del enum a propósito: el id es ordinal(), así que meterlo
      *  en medio renumeraría todos los de después y todo .mod existente
      *  llamaría a otro builtin. */
-    EVENT_RAISE("__eventRaise");                       // args..,masks,nargs,dest,recv → void   [221]
+    EVENT_RAISE("__eventRaise"),                       // args..,masks,nargs,dest,recv → void   [221]
+
+    /** #324 — UNA pasada del bombeo del GUI. () → boolean: true "vuelve a
+     *  llamarme", false "no queda nada". El lazo pasa a Gui.run() (BP), que es
+     *  lo que da la frontera de instrucción donde el scheduler inyecta los
+     *  handlers de eventos. También AL FINAL: el id es ordinal(). */
+    GUI_RUN_ONCE("__guiRunOnce");                      // () → boolean                          [222]
 
     public final String bpName;
     public final int id;

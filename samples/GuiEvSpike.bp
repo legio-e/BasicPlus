@@ -22,6 +22,15 @@
 //                                        Hay que decidir qué pasa con las demos.
 //   No sale "3 handler"                 → no hay punto de drenaje por ahí.
 //                                        Es el caso que obligaría a diseño.
+//
+// RESULTADO (30-jul). Salió el tercer caso: "3 handler" NO aparecía. El lazo del
+// GUI vivía DENTRO del builtin __guiRun(), y ahí no hay quanta — el scheduler
+// sólo inyecta el frame del handler ENTRE quanta, así que el evento se quedaba
+// en la cola para siempre. Arreglado partiendo el bombeo en __guiRunOnce() y
+// subiendo el lazo a BP (Gui.run()), donde cada vuelta es frontera de
+// instrucción. La condición de salida del lazo tuvo que incluir "quedan eventos
+// BP encolados", no sólo "quedan clics": con lo segundo el lazo salía antes de
+// que el scheduler llegara a drenar. Hoy el orden es 1-2-3-4 en las DOS VMs.
 module GuiEvSpike
   import Gui
 

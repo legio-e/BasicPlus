@@ -279,7 +279,23 @@ enum {
 
     /* H5.c — `raise ev(args)`. Encola; NO llama al handler (lo inyecta el
      * scheduler entre quanta). Ver docs/V4_IDEAS.md §contrato de __eventRaise. */
-    BUILTIN_EVENT_RAISE          = 221
+    BUILTIN_EVENT_RAISE          = 221,
+
+    /* #324 — UNA PASADA del bombeo del GUI, en vez del lazo entero.
+     *   devuelve 1 = "queda trabajo, vuelve a llamarme"
+     *            0 = "no queda nada, puedes salir"
+     *
+     * POR QUÉ SE PARTIÓ. __guiRun bloqueaba hasta cerrar la ventana, y mientras
+     * bombeaba la VM ENTERA estaba parada: ni avanzaban los threads ni se drenaba
+     * la cola de eventos. Con el lazo en BP (Gui.run) hay frontera de instrucción
+     * entre pasadas, que es el ÚNICO sitio donde el scheduler puede inyectar el
+     * frame de un handler — events.c lo exige: "El thread NO puede estar
+     * corriendo". Medido en samples/GuiEvSpike.bp: sin esto, un evento levantado
+     * desde el upcall del GUI no se drena JAMÁS.
+     *
+     * En headless devuelve 1 si esta pasada drenó algo: así el lazo da UNA VUELTA
+     * MÁS y el scheduler tiene dónde correr los handlers antes de salir. */
+    BUILTIN_GUI_RUN_ONCE         = 222
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -711,6 +727,45 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
 #endif
         push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_GUI_RUN_ONCE: {
+        /* #324 — UNA pasada del bombeo. Mismo trabajo que GUI_RUN por dentro,
+         * pero SIN el lazo: el lazo vive ahora en Gui.run() (BP), que es lo que
+         * da la frontera de instrucción donde el scheduler drena los eventos.
+         * Devuelve 1 = "vuelve a llamarme" / 0 = "no queda nada". */
+        uint32_t disp_click = 0, disp_change = 0;
+        for (int i = 0; i < vm->symbol_count; i++) {
+            if      (strcmp(vm->symbols[i].name, "Gui.__guiDispatch")       == 0) disp_click  = vm->symbols[i].abs_addr;
+            else if (strcmp(vm->symbols[i].name, "Gui.__guiDispatchChange") == 0) disp_change = vm->symbols[i].abs_addr;
+        }
+        int drained = 0;
+        uint32_t objptr; int kind;
+        while ((objptr = bpvm_gui_next_event(&kind)) != 0) {
+            uint32_t d = (kind == 1) ? disp_change : disp_click;
+            if (d) { int32_t a = (int32_t) objptr; bpvm_call_bp_from_builtin(vm, tc, d, &a, 1, 1u); /* #302: arg0 es ref */ }
+            drained++;
+        }
+        /* P-run-stop (#257): el KILL se sigue poleando aquí. Ahora además el
+         * scheduler ve el kill entre pasadas, así que la parada es más fina que
+         * con el lazo dentro del builtin. */
+        if (vm->poll_cb != NULL && vm->poll_cb(vm, vm->poll_user) != 0)
+            vm->kill_requested = 1;
+        if (vm->kill_requested) { push_i32(vm, tc, 0); return BPVM_OK; }
+#ifdef BPVM_LVGL
+        if (!bpvm_gui_lvgl_window_open()) { push_i32(vm, tc, 0); return BPVM_OK; }
+        bpvm_gui_lvgl_pump();
+        push_i32(vm, tc, 1);                 /* ventana viva → sigue habiendo trabajo */
+#else
+        /* Headless: "queda trabajo" = clics drenados en ESTA pasada O eventos BP
+         * ENCOLADOS sin entregar. Lo segundo es lo que hace que el lazo sirva de
+         * algo: `raise` encola, y el scheduler sólo inyecta el frame del handler
+         * ENTRE quanta (events.c: "el thread NO puede estar corriendo"). Salir en
+         * cuanto no hay clics deja el evento en la cola para siempre — que es
+         * exactamente lo que midió samples/GuiEvSpike.bp. Girando mientras
+         * ev_count>0, el lazo alcanza la frontera de quantum donde se drena. */
+        push_i32(vm, tc, (drained > 0 || vm->ev_count > 0) ? 1 : 0);
+#endif
         return BPVM_OK;
     }
     case BUILTIN_GUI_DUMP_TREE: {
