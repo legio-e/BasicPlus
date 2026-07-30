@@ -1,0 +1,126 @@
+// AsyncDemo.bp — #325: lanzar trabajo en un thread SIN declarar una clase.
+//
+//   Thread(obj::metodo(args)).start()
+//
+// `obj::metodo(args)` es una LLAMADA PREPARADA: receptor, metodo y argumentos
+// puestos, pero sin llamar. El compilador sintetiza por detras la subclase de
+// Thread que se escribia a mano — campos = receptor + argumentos, run() = la
+// llamada. Los argumentos se evaluan AQUI, al construir, no cuando el thread
+// arranca: por eso viajan como campos (BP no tiene closures).
+//
+// Todo lo que hace este demo se podia hacer antes; lo que cambia es que ya no
+// hace falta una clase por cada cosa que quieras lanzar.
+//
+// La salida es DETERMINISTA a proposito (cada lanzamiento se espera con join)
+// para poder comparar las dos VMs byte a byte.
+module AsyncDemo
+
+  class Obrero
+    var n: integer
+    var nombre: string
+
+    public function Obrero(nom: string)
+      nombre := nom
+      n := 0
+    end Obrero
+
+    // 1) sin argumentos
+    public function saluda()
+      print "  [" + nombre + "] saluda"
+    end saluda
+
+    // 2) argumentos normales + 3) SOBRECARGA: la firma decide cual se lanza
+    public function suma(k: integer)
+      n := n + k
+      print "  [" + nombre + "] suma(" + intToString(k) + ") -> " + intToString(n)
+    end suma
+
+    public function suma(k: integer, veces: integer)
+      var i: integer := 0
+      while i < veces do
+        n := n + k
+        i := i + 1
+      endwh
+      print "  [" + nombre + "] suma(" + intToString(k) + "," + intToString(veces) + ") -> " + intToString(n)
+    end suma
+
+    // 4) anchos de 8 bytes (long/double) y 5) una ref (string y objeto)
+    // Los COMPARA en vez de imprimirlos: asi verifica que los 64 bits han
+    // llegado enteros (imprimir un long truncado no probaria nada).
+    public function anchos(l: long, d: double, s: string, otro: Obrero)
+      var ok: string := ""
+      if l == 123456789012 then ok := ok + "long "
+      if d == 2.75d then ok := ok + "double "
+      if s == "hola" then ok := ok + "string "
+      if otro.getNombre() == "b" then ok := ok + "objeto"
+      print "  [" + nombre + "] llegan intactos: " + ok
+    end anchos
+
+    public function getNombre(): string
+      return nombre
+    end getNombre
+
+    public function trabaja(pasos: integer)
+      var i: integer := 0
+      while i < pasos do
+        n := n + 1
+        sleep(10)
+        i := i + 1
+      endwh
+    end trabaja
+
+    public function total(): integer
+      return n
+    end total
+  end Obrero
+
+  public function Main()
+    var a: Obrero := Obrero("a")
+    var b: Obrero := Obrero("b")
+
+    print "1 sin argumentos"
+    var t1: Thread := Thread(a::saluda())
+    t1.start()
+    t1.join()
+
+    print "2 con argumentos"
+    var t2: Thread := Thread(a::suma(7))
+    t2.start()
+    t2.join()
+
+    print "3 sobrecarga: la firma elige"
+    var t3: Thread := Thread(a::suma(10, 3))
+    t3.start()
+    t3.join()
+
+    print "4 anchos de 8 bytes y refs"
+    var t4: Thread := Thread(a::anchos(123456789012, 2.75d, "hola", b))
+    t4.start()
+    t4.join()
+
+    print "5 pila explicita"
+    var t5: Thread := Thread(b::suma(5), 8192)
+    t5.start()
+    t5.join()
+
+    // Cada uno con SU objeto: tres threads sumando sobre el mismo sin
+    // sincronizar es una carrera, y una carrera no es un ejemplo.
+    print "6 tres a la vez"
+    var c1: Obrero := Obrero("c1")
+    var c2: Obrero := Obrero("c2")
+    var c3: Obrero := Obrero("c3")
+    var p: Thread := Thread(c1::trabaja(5))
+    var q: Thread := Thread(c2::trabaja(5))
+    var r: Thread := Thread(c3::trabaja(5))
+    p.start()
+    q.start()
+    r.start()
+    p.join()
+    q.join()
+    r.join()
+    print "  los tres han corrido: " + intToString(c1.total() + c2.total() + c3.total())
+
+    print "7 fin"
+  end Main
+
+end AsyncDemo

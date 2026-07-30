@@ -306,6 +306,10 @@ public final class MivmEmitter {
         //         su __init / descriptor.
         synthesizeAllParallelClasses();
 
+        // 4a-ter) #325 — subclases de Thread de cada `Thread(obj::metodo(args))`.
+        //         Mismo motivo y mismo sitio que las de `parallel`.
+        synthesizeAllThreadBodyClasses();
+
         // 4b) Clases del usuario (ANTES de las funciones del módulo, para que
         //     Main pueda referenciar Cls.__init y class descriptors al construir).
         //     Los EnumDef no requieren emisión: sus valores ya están en EnumSymbol.values
@@ -322,6 +326,11 @@ public final class MivmEmitter {
         //     Es función libre (Object.compareTo la llama por forward-ref,
         //     resuelto en link), así que su posición no afecta a sus llamadores.
         synthesizeObjectCompareErrorHelper();
+
+        // 4c-bis) #325 — los cuerpos de los `Thread(obj::metodo(args))`. Aquí y
+        //         no en 4a-ter por el mismo motivo que el helper de arriba: la
+        //         llamada necesita la clase del receptor ya registrada.
+        synthesizeAllThreadBodyFns();
 
         // 5) Funciones del módulo (initializer + Main del usuario + libres).
         for (ITopLevelDecl d : moduleAst.defs) {
@@ -2877,6 +2886,186 @@ public final class MivmEmitter {
         } finally { scopeStack.pop(); }
     }
 
+    // ============================================================
+    // #325 — `Thread(obj::metodo(args))`: un thread cuyo cuerpo es esa llamada.
+    //
+    // Es lo mismo que el usuario escribía a mano (subclasear Thread y meter la
+    // llamada en run()), pero sin la ceremonia. Como el método destino se
+    // conoce en COMPILACIÓN, el run() sintetizado LLAMA DIRECTAMENTE: no hay
+    // eventos, ni cola, ni drenaje.
+    //
+    // Receptor y argumentos viajan como CAMPOS del objeto porque BP no tiene
+    // closures. Eso además fija la semántica: los argumentos se evalúan en el
+    // llamante, al construir, no cuando el thread arranca.
+    // ============================================================
+
+    /** Una subclase de Thread por cada `Thread(obj::m(args))` del módulo. Van
+     *  antes que las clases de usuario, como las de `parallel`, para que
+     *  cualquier función pueda referenciar su descriptor y su `__init`. */
+    private void synthesizeAllThreadBodyClasses() throws IOException {
+        int n = 0;
+        for (Ast.BoundCallExpr bc : info.boundCalls) {
+            bc.synthesizedClassName = "__Thr" + (n++) + "_" + bc.method;
+            synthesizeThreadBodyClass(bc);
+        }
+    }
+
+    private void synthesizeThreadBodyClass(Ast.BoundCallExpr bc) throws IOException {
+        FunctionSymbol fn = (FunctionSymbol) info.exprSymbols.get(bc);
+        BpType rt = info.exprTypes.get(bc.target);
+        ClassSymbol rc = (rt instanceof BpType.ClassType) ? ((BpType.ClassType) rt).cls : null;
+        if (fn == null || rc == null) {
+            errors.add("Thread(obj::" + bc.method + "(...)): sin método o receptor resueltos"
+                    + " (línea " + bc.line + ")");
+            return;
+        }
+        String name = bc.synthesizedClassName;
+        w.addClass(name, "Thread");
+
+        // Campos: el receptor (ref ⇒ el GC lo traza, que es lo que mantiene vivo
+        // al objeto mientras el thread no ha corrido) y un campo por argumento.
+        w.declareField("__recv", true, false, true);   // handle 8B
+        for (int i = 0; i < bc.args.size(); i++) {
+            BpType at = argTypeOf(fn, bc, i);
+            w.declareField("__a" + i, isGcRef(at), false, occupies8Bytes(at));
+        }
+
+        // run() — override del slot 0 de Thread, que es el punto de entrada.
+        //
+        // No lleva la llamada dentro: saca los campos y delega en la función
+        // libre `__thrbody_N`. Es que si no, no hay orden posible — esta clase
+        // tiene que emitirse ANTES que las del usuario (para que `emitNewObject`
+        // encuentre su descriptor) y la llamada necesita que la clase del
+        // receptor ya esté declarada, que es DESPUÉS. El CALL a una función
+        // libre se resuelve por fixup en el link, así que no le importa el
+        // orden — el mismo truco que synthesizeObjectCompareErrorHelper.
+        w.addMethod("run");
+        beginFunctionScope(makeSynthFs("run", null), null);
+        try {
+            w.emitGetParam("this");
+            w.emitGetField(name, "__recv");
+            for (int i = 0; i < bc.args.size(); i++) {
+                w.emitGetParam("this");
+                w.emitGetField(name, "__a" + i);
+            }
+            w.emitCall(threadBodyFnName(bc));
+            declareLocal("__discardRun");
+            w.emitSetLocal("__discardRun");   // la llamada deja un valor; se tira
+            emitFunctionEnd();
+        } finally { scopeStack.pop(); }
+
+        w.endClass();
+
+        // __init(this, recv, a0..aN, stackSize) → super(stackSize) + guardar todo.
+        w.addFunction(name + ".__init", false);
+        declareParamRef("this");
+        declareParamRef("__recv");
+        for (int i = 0; i < bc.args.size(); i++) {
+            declareParamByType("__a" + i, argTypeOf(fn, bc, i));
+        }
+        w.declareParam("stackSize");
+        beginFunctionScope(makeSynthFs("__init", null), null);
+        try {
+            w.emitGetParam("this");
+            w.emitGetParam("stackSize");
+            w.emitCall("Thread.__init");          // super(stackSize)
+            declareLocal("__discardSuper");
+            w.emitSetLocal("__discardSuper");
+
+            w.emitGetParam("this");
+            w.emitGetParam("__recv");
+            w.emitSetField(name, "__recv");
+            for (int i = 0; i < bc.args.size(); i++) {
+                w.emitGetParam("this");
+                w.emitGetParam("__a" + i);
+                w.emitSetField(name, "__a" + i);
+            }
+            emitFunctionEnd();
+        } finally { scopeStack.pop(); }
+    }
+
+    private static String threadBodyFnName(Ast.BoundCallExpr bc) {
+        return "__thrbody" + bc.synthesizedClassName.substring("__Thr".length());
+    }
+
+    /** El cuerpo de verdad de cada `Thread(obj::metodo(args))`, como función
+     *  libre: recibe receptor y argumentos y hace la llamada. Va DESPUÉS de las
+     *  clases del usuario, que es cuando la clase del receptor ya existe para el
+     *  ModWriter y su slot de vtable se puede resolver. */
+    private void synthesizeAllThreadBodyFns() throws IOException {
+        for (Ast.BoundCallExpr bc : info.boundCalls) {
+            FunctionSymbol fn = (FunctionSymbol) info.exprSymbols.get(bc);
+            BpType rt = info.exprTypes.get(bc.target);
+            ClassSymbol rc = (rt instanceof BpType.ClassType) ? ((BpType.ClassType) rt).cls : null;
+            if (fn == null || rc == null || bc.synthesizedClassName == null) continue;  // ya se avisó
+
+            w.addFunction(threadBodyFnName(bc), false);
+            declareParamRef("__recv");
+            for (int i = 0; i < bc.args.size(); i++) {
+                declareParamByType("__a" + i, argTypeOf(fn, bc, i));
+            }
+            beginFunctionScope(makeSynthFs("__thrbody", null), null);
+            try {
+                w.emitGetParam("__recv");
+                for (int i = 0; i < bc.args.size(); i++) w.emitGetParam("__a" + i);
+                // Mismo criterio que una llamada normal: un método privado no
+                // está en la vtable y se llama directo.
+                if (!fn.isPublic && !fn.isExternal) {
+                    w.emitCall(fn.ownerClass.name + "." + emitName(fn));
+                } else {
+                    emitInvokeVirtualSmart(rc, emitName(fn), argSlotCount(fn));
+                }
+                declareLocal("__discardBody");
+                w.emitSetLocal("__discardBody");
+                emitFunctionEnd();
+            } finally { scopeStack.pop(); }
+        }
+    }
+
+    /** Tipo con el que se declara el campo/parámetro del argumento i: el del
+     *  PARÁMETRO (que manda para el ancho y la coerción), y sólo si no lo hay
+     *  —no debería— el del argumento. */
+    private BpType argTypeOf(FunctionSymbol fn, Ast.BoundCallExpr bc, int i) {
+        if (i < fn.params.size() && fn.params.get(i).type != null) return fn.params.get(i).type;
+        return info.exprTypes.get(bc.args.get(i));
+    }
+
+    /** Construcción de `Thread(obj::metodo(args) [, pila])`: NEW_OBJECT de la
+     *  subclase sintetizada + su `__init` con receptor, argumentos y pila.
+     *  Deja la ref en la pila, como cualquier construcción. */
+    private void emitThreadOfBoundCall(List<IExpr> args) throws IOException {
+        Ast.BoundCallExpr bc = (Ast.BoundCallExpr) args.get(0);
+        FunctionSymbol fn = (FunctionSymbol) info.exprSymbols.get(bc);
+        if (fn == null || bc.synthesizedClassName == null) {
+            errors.add("Thread(obj::" + bc.method + "(...)): sin clase sintetizada"
+                    + " (línea " + bc.line + ")");
+            return;
+        }
+        int id = tempCounter++;
+        String newref  = "__thrref_" + id;
+        String discard = "__thrdisc_" + id;
+        declareLocalLong(newref);   // el ref del objeto nuevo = handle de 8 bytes
+        declareLocal(discard);
+        w.emitNewObject(bc.synthesizedClassName);
+        w.emitSetLocal(newref);
+
+        w.emitGetLocal(newref);
+        emitExpr(bc.target);                      // el receptor
+        for (int i = 0; i < bc.args.size(); i++) {
+            emitExpr(bc.args.get(i));
+            coerceToTarget(bc.args.get(i), argTypeOf(fn, bc, i));
+        }
+        if (args.size() >= 2) {
+            emitExpr(args.get(1));                // pila pedida
+            coerceToTarget(args.get(1), PrimitiveType.INTEGER);
+        } else {
+            emitInt(0);                           // 0 = la de por defecto de la VM
+        }
+        w.emitCall(bc.synthesizedClassName + ".__init");
+        w.emitSetLocal(discard);
+        w.emitGetLocal(newref);
+    }
+
     private void emitReturn(ReturnStmt s) throws IOException {
         FuncScope scope = scopeStack.peek();
         if (scope.returnsValue) {
@@ -4849,6 +5038,13 @@ public final class MivmEmitter {
     /** H5.a-E4 — {@code chosenCtor} = la sobrecarga de constructor que eligió el
      *  semántico por firma (null ⇒ la única / la heredada). */
     private void emitConstruction(ClassSymbol cls, List<IExpr> args, FunctionSymbol chosenCtor) throws IOException {
+        // #325 — `Thread(obj::metodo(args) [, pila])`: no se construye un Thread
+        // pelado sino la subclase sintetizada que lleva la llamada dentro.
+        if ("Thread".equals(cls.name) && !args.isEmpty()
+                && args.get(0) instanceof Ast.BoundCallExpr) {
+            emitThreadOfBoundCall(args);
+            return;
+        }
         // L2: si la clase vive en otro módulo, no podemos emitir NEW_OBJECT
         // local (no tenemos su class_ptr). En su lugar invocamos la factoría
         // `__cls_new_<Cls>(args)` que el módulo dueño sintetiza: hace el

@@ -2568,6 +2568,17 @@ public final class SemanticAnalyzer {
                 "una tupla '(a, b)' solo puede aparecer como valor de 'return'");
             t = ErrorType.INSTANCE;
         }
+        else if (e instanceof Ast.BoundCallExpr) {
+            // #325 — una llamada preparada sólo vale dentro de `Thread(...)`, que
+            // la intercepta en analyzeCall. Si llega hasta aquí es que está en
+            // cualquier otro sitio, y no es un valor que se pueda guardar.
+            Ast.BoundCallExpr bc = (Ast.BoundCallExpr) e;
+            analyzeExpr(bc.target, scope, null);
+            for (IExpr a : bc.args) analyzeExpr(a, scope, null);
+            err(bc.line, bc.column, "'obj::metodo(args)' es una llamada preparada, no un valor:"
+                + " en V4 sólo vale dentro de 'Thread(...)' para decirle al thread qué ejecutar");
+            t = ErrorType.INSTANCE;
+        }
         else                                  t = ErrorType.INSTANCE;
         info.exprTypes.put(e, t);
         return t;
@@ -2844,6 +2855,74 @@ public final class SemanticAnalyzer {
         return ErrorType.INSTANCE;
     }
 
+    /**
+     * #325 — `Thread(obj::metodo(args) [, pila])`.
+     *
+     * Comprueba la llamada preparada: que el receptor sea un objeto, que el
+     * método exista y no sea static (sin receptor no hay a quién llamar), y que
+     * los argumentos encajen — resolviendo sobrecarga si la hay, igual que en
+     * una llamada normal. Anota el método elegido en el nodo para que el emisor
+     * sepa qué meter en el `run()` que sintetiza.
+     *
+     * Los argumentos se comprueban (y se evalúan, en ejecución) AQUÍ, en el
+     * llamante: lo que el thread recibe son valores, no una promesa.
+     */
+    private void analyzeThreadOfBoundCall(CallExpr ce, Scope scope) {
+        Ast.BoundCallExpr bc = (Ast.BoundCallExpr) ce.args.get(0);
+        if (ce.args.size() > 2) {
+            err(ce.line, ce.column, "Thread(): se esperaba la llamada a ejecutar y,"
+                    + " como mucho, el tamaño de pila — Thread(obj::metodo(args), 8192)");
+        }
+        // 2º argumento opcional: la pila. Sin él, la de por defecto de la VM.
+        for (int i = 1; i < ce.args.size(); i++) {
+            BpType st = analyzeExpr(ce.args.get(i), scope, PrimitiveType.INTEGER);
+            if (st != null && !(st instanceof ErrorType) && !PrimitiveType.INTEGER.isAssignableFrom(st))
+                err(ce.line, ce.column, "Thread(): el tamaño de pila es un entero, no '"
+                        + st.display() + "'");
+        }
+
+        BpType recvT = analyzeExpr(bc.target, scope, null);
+        ClassSymbol rc = (recvT instanceof ClassType) ? ((ClassType) recvT).cls : null;
+        if (rc == null) {
+            if (!(recvT instanceof ErrorType))
+                err(bc.line, bc.column, "el receptor de '::' tiene que ser un objeto"
+                        + " (para poder llamar a su método), y aquí es '"
+                        + (recvT != null ? recvT.display() : "desconocido") + "'");
+            for (IExpr a : bc.args) analyzeExpr(a, scope, null);
+            return;
+        }
+        Symbol ms = rc.lookupInstance(bc.method);
+        if (!(ms instanceof FunctionSymbol)) {
+            err(bc.line, bc.column, "la clase '" + rc.name + "' no tiene un método '"
+                    + bc.method + "' que el thread pueda ejecutar");
+            for (IExpr a : bc.args) analyzeExpr(a, scope, null);
+            return;
+        }
+        FunctionSymbol fn = (FunctionSymbol) ms;
+        // Sobrecarga: los tipos de los argumentos deciden, igual que en una
+        // llamada normal. Se envuelve en un CallExpr sintético porque el
+        // resolvedor trabaja sobre uno — comparte la MISMA lista de args, así
+        // que los defaults que rellene quedan puestos en la llamada preparada.
+        if (fn.overloaded) {
+            CallExpr synth = new CallExpr(null, bc.args, bc.line, bc.column);
+            FunctionSymbol chosen = resolveOverloadCall(fn, synth, scope);
+            if (chosen == null) return;
+            fn = chosen;
+        }
+        if (fn.isStatic) {
+            err(bc.line, bc.column, "'" + bc.method + "' es static: no tiene receptor,"
+                    + " así que no se puede escribir como 'obj::" + bc.method + "'");
+            return;
+        }
+        // Lanzar algo en un thread no da acceso a lo que no lo tendría escrito a
+        // mano: `lookupInstance` también encuentra los privados, así que la
+        // visibilidad se comprueba igual que en una llamada normal.
+        checkVisibility(bc.line, bc.column, fn, fn.ownerClass);
+        checkArgs(bc.line, bc.column, fn.params, bc.args, scope);
+        info.exprSymbols.put(bc, fn);
+        info.boundCalls.add(bc);   // el emisor sintetiza una subclase por cada uno
+    }
+
     private BpType analyzeCall(CallExpr ce, Scope scope) {
         Symbol target = null;
         boolean rejectedByModuleVisibility = false;
@@ -2896,6 +2975,15 @@ public final class SemanticAnalyzer {
         // Llamada a clase ⇒ construcción
         if (target instanceof ClassSymbol) {
             ClassSymbol cls = (ClassSymbol) target;
+            // #325 — `Thread(obj::metodo(args) [, pila])`: un thread cuyo cuerpo
+            // es esa llamada. Se intercepta antes del camino normal de
+            // constructor porque el 1er argumento no es un valor, es lo que va a
+            // EJECUTAR el thread. El emisor sintetiza la subclase.
+            if ("Thread".equals(cls.name) && !ce.args.isEmpty()
+                    && ce.args.get(0) instanceof Ast.BoundCallExpr) {
+                analyzeThreadOfBoundCall(ce, scope);
+                return new ClassType(cls);
+            }
             FunctionSymbol ctor = cls.findConstructor();
             if (ctor == null) {
                 if (!ce.args.isEmpty())

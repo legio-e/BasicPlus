@@ -1260,13 +1260,23 @@ public final class Parser {
                     node = new CallExpr(node, args, lp.line, lp.column);
                 }
             } else if (check(TokenType.COLONCOLON)) {
-                // H5.c — `obj::metodo`. Se corta aquí a propósito: no encadena
-                // más postfijos, porque `obj::m(...)` o `obj::m.x` no significan
-                // nada — una referencia a método no se llama ni se navega, sólo
-                // se asigna a un evento.
+                // H5.c — `obj::metodo`, referencia a método: se asigna a un evento.
+                // #325 — `obj::metodo(args)`, LLAMADA PREPARADA: lo mismo con los
+                // argumentos ya puestos, para `Thread(obj::metodo(args))`.
+                //
+                // Se sigue cortando aquí: ni una ni otra encadenan más postfijos,
+                // porque `obj::m.x` o `obj::m(a)(b)` no significan nada — no hay
+                // valor que navegar ni nada que volver a llamar.
                 Token op = current(); advance();
                 String m = consumeMemberName();
-                node = new MethodRefExpr(node, m, op.line, op.column);
+                if (check(TokenType.LPAREN)) {
+                    Token lp = current(); advance();
+                    List<IExpr> args = parseArgList();
+                    consume(TokenType.RPAREN, "se esperaba ')'");
+                    node = new BoundCallExpr(node, m, args, lp.line, lp.column);
+                } else {
+                    node = new MethodRefExpr(node, m, op.line, op.column);
+                }
                 break;
             } else if (check(TokenType.LBRACKET)) {
                 Token op = current(); advance();

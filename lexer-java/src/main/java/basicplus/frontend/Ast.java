@@ -270,6 +270,34 @@ public final class Ast {
     }
 
     /**
+     * #325 — LLAMADA PREPARADA: {@code obj::metodo(args)}.
+     *
+     * Es una {@link MethodRefExpr} con los argumentos ya puestos: receptor,
+     * método y valores, pero SIN llamar. Los argumentos se evalúan donde está
+     * escrita la expresión (no donde se ejecute luego), que es lo que la
+     * distingue de una closure — BP no tiene, y por eso los valores viajan
+     * como campos de la clase que sintetiza el emisor.
+     *
+     * En V4 el único sitio donde vale es {@code Thread(obj::metodo(args))}: el
+     * semántico la rechaza en cualquier otro, para no prometer un valor de
+     * "llamada diferida" de primera clase que no está diseñado. La sintaxis ya
+     * está puesta si algún día hace falta (un timer, un callback).
+     */
+    public static final class BoundCallExpr extends Node implements IExpr {
+        public final IExpr target;        // el receptor
+        public final String method;       // nombre del método
+        public final List<IExpr> args;    // argumentos, ya evaluados en el llamante
+        /** Nombre de la subclase de Thread que sintetiza el emisor (lo pone él). */
+        public String synthesizedClassName;
+        public BoundCallExpr(IExpr target, String method, List<IExpr> args, int line, int column) {
+            super(line, column);
+            this.target = target;
+            this.method = method;
+            this.args = args;
+        }
+    }
+
+    /**
      * H5.c — declaración de un EVENTO: `event onClick`.
      *
      * Declara su FIRMA y nunca devuelve valor. El handler al que se suscriba

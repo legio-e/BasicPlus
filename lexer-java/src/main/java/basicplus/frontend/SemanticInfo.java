@@ -25,6 +25,13 @@ public final class SemanticInfo {
      *  sólo tiene que escribirlo: así el slot se decide en UN sitio. */
     public final Map<Ast.IExpr, Integer> methodRefSlots = new IdentityHashMap<>();
 
+    /** #325 — cada `Thread(obj::metodo(args))` VÁLIDO del módulo, en orden de
+     *  análisis. El emisor sintetiza una subclase de Thread por entrada, y las
+     *  clases hay que emitirlas antes que el código que las construye. Se
+     *  recoge aquí en vez de rastrear el AST otra vez porque el semántico ya
+     *  pasa por todas las expresiones: un recorrido menos que mantener. */
+    public final List<Ast.BoundCallExpr> boundCalls = new ArrayList<>();
+
     /** H5.c — `kind` resuelto para cada `raise`: el ORDINAL del evento en la
      *  jerarquía (los de la base primero, luego los propios en orden de
      *  declaración). Único dentro de la clase, que es todo lo que hace falta:
