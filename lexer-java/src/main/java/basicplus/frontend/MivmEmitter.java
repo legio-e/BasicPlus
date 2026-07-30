@@ -2099,10 +2099,10 @@ public final class MivmEmitter {
             // el campo del receptor es is8 y SET_FIELD_LONG espera la palabra
             // entera. Es el mismo cuidado del censo V4 #11.
             emitInt(0); w.emit(OpCode.I32_TO_I64);
-            w.emitSetField(cls, ev.recvField());      // receptor PRIMERO al borrar
+            emitSetRecv(ev, cls);                     // receptor PRIMERO al borrar
             emitEventOwner(owner);
             w.emitPushInt(0);
-            w.emitSetField(cls, ev.destField());
+            emitSetDest(ev, cls);
             return true;
         }
 
@@ -2112,11 +2112,24 @@ public final class MivmEmitter {
 
         emitEventOwner(owner);
         w.emitPushInt(slot);
-        w.emitSetField(cls, ev.destField());          // destino primero
+        emitSetDest(ev, cls);                         // destino primero
         emitEventOwner(owner);
         emitExpr(mr.target);                          // el receptor
-        w.emitSetField(cls, ev.recvField());          // y confirma
+        emitSetRecv(ev, cls);                         // y confirma
         return true;
+    }
+
+    /* H5.c-E2 — los dos campos del evento. Si el evento viene de otro módulo, su
+     * clase no está en este ModWriter y no hay nombre que resolver: el slot lo
+     * publicó su dueño en la interfaz y aquí sólo se USA. Dentro del módulo, por
+     * nombre como siempre. */
+    private void emitSetRecv(Symbol.EventSymbol ev, String cls) throws IOException {
+        if (ev.externalRecvSlot >= 0) w.emitSetFieldBySlot(ev.externalRecvSlot, true);
+        else                          w.emitSetField(cls, ev.recvField());
+    }
+    private void emitSetDest(Symbol.EventSymbol ev, String cls) throws IOException {
+        if (ev.externalRecvSlot >= 0) w.emitSetFieldBySlot(ev.externalRecvSlot + 2, false);
+        else                          w.emitSetField(cls, ev.destField());
     }
 
     /** Empuja el objeto dueño del evento (o `this` si la forma era a pelo). */

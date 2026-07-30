@@ -1,0 +1,65 @@
+// h5cevuse.bp — H5.c-E2: el CONSUMIDOR. Se suscribe a eventos declarados en
+// otro módulo (h5cevlib.bp) y comprueba las tres cosas que hay que comprobar:
+//
+//   1. Suscripción cross-module a un evento de la clase importada.
+//   2. Lo mismo a un evento HEREDADO (BotonContador no declara onClick; lo
+//      hereda de Boton) — el consumidor tiene que recorrer la cadena de bases.
+//   3. Que el segundo evento (onChange) NO se confunde con el primero: sus
+//      campos van en slots distintos, y un fallo de conteo se vería aquí como
+//      el handler equivocado, o como un valor basura en `valor`.
+//
+// Ejecución esperada (idéntica en las dos VMs):
+//   1 clic en Aceptar
+//   2 cambio en Volumen = 42
+//   3 clic HEREDADO en Repetir (veces=7)
+//   fin
+module H5cEvUse
+  import H5cEvLib
+
+  class Panel
+    // Convención de nombres (#324): <nombreDelComponente>_<nombreDelEvento>.
+    // Con dos botones, cada uno tiene su handler sin inventar nombres.
+    function event aceptar_onClick(quien: H5cEvLib.Boton)
+      print "1 clic en", quien.etiqueta
+    end aceptar_onClick
+
+    function event volumen_onChange(quien: H5cEvLib.Boton, valor: integer)
+      print "2 cambio en", quien.etiqueta, "=", valor
+    end volumen_onChange
+
+    function event repetir_onClick(quien: H5cEvLib.Boton)
+      print "3 clic HEREDADO en", quien.etiqueta, "(veces=7)"
+    end repetir_onClick
+  end Panel
+
+  function Main()
+    var p: Panel := Panel()
+
+    var aceptar: H5cEvLib.Boton := H5cEvLib.Boton("Aceptar")
+    aceptar.onClick := p::aceptar_onClick
+
+    var volumen: H5cEvLib.Boton := H5cEvLib.Boton("Volumen")
+    volumen.onChange := p::volumen_onChange
+
+    // Evento HEREDADO: la subclase no lo declara, lo pone su base.
+    var repetir: H5cEvLib.BotonContador := H5cEvLib.BotonContador("Repetir")
+    repetir.veces := 7
+    repetir.onClick := p::repetir_onClick
+
+    aceptar.pulsar()
+    volumen.cambiar(42)
+    repetir.pulsar()
+
+    // `raise` ENCOLA; el frame del handler lo inyecta el scheduler ENTRE quanta,
+    // así que hace falta llegar a una frontera. Mismo apaño que EvOrder.bp: sin
+    // esto main termina con la cola llena y no corre ninguno (#342 — entregar
+    // los pendientes al terminar main sigue pendiente).
+    var i: integer
+    for i := 1 to 12 do
+      sleep(5)
+    next
+
+    print "fin"
+  end Main
+
+end H5cEvUse

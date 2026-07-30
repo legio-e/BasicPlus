@@ -385,6 +385,14 @@ public abstract class Symbol {
         // OJO: NO declarar aquí un `decl` propio — Symbol ya lo tiene, y uno
         // nuevo lo SOMBREARÍA: quien escriba por la variable base y lea por la
         // derivada (o al revés) vería null sin que nada falle.
+        /** H5.c-E2 — evento de una clase IMPORTADA: slot absoluto de su campo
+         *  `recv` (el `dest` va en recv+2), tal y como lo publicó su módulo.
+         *  -1 = evento local, el emisor resuelve los campos por nombre. */
+        public int externalRecvSlot = -1;
+        /** H5.c-E2 — importado sin firma (algún param no era exportable): ocupa
+         *  sus slots, pero suscribirse desde fuera no es posible. */
+        public boolean externalOpaque = false;
+
         public EventSymbol(String name, ClassSymbol owner, int line, int column) {
             super(name, line, column);
             this.ownerClass = owner;

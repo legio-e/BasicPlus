@@ -1693,6 +1693,22 @@ public final class Main {
                             stub.externalMethodSlots.put("set" + capName, nextSlot++);
                         }
                     }
+                    // H5.c-E2 — EVENTOS. No tocan la vtable (viven en campos), así
+                    // que no entran en el conteo de slots: se importan con el slot
+                    // de su campo `recv`, que publicó el módulo dueño. Los eventos
+                    // HEREDADOS no se copian — el lookup recorre baseClass, igual
+                    // que con los métodos.
+                    for (ModuleInterface.EventSig e : cs.events) {
+                        Symbol.EventSymbol esym = new Symbol.EventSymbol(e.name, stub, 0, 0);
+                        esym.externalRecvSlot = e.recvSlot;
+                        esym.externalOpaque   = e.opaque;
+                        for (ModuleInterface.ParamSig p : e.params) {
+                            Symbol.ParamSymbol psym = new Symbol.ParamSymbol(p.name, 0, 0);
+                            psym.type = p.type;
+                            esym.params.add(psym);
+                        }
+                        stub.instanceMembers.tryDefine(esym);
+                    }
                     // Methods en orden de declaración
                     for (ModuleInterface.FuncSig m : cs.methods) {
                         Symbol.FunctionSymbol fsym = new Symbol.FunctionSymbol(

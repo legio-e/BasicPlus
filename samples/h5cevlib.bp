@@ -1,0 +1,47 @@
+// h5cevlib.bp — H5.c-E2: la LIBRERÍA que declara los eventos.
+//
+// Los eventos nacieron intra-módulo (H5.c): el .mod no los exportaba, así que
+// una clase de otro módulo veía sus 3 slots en el layout pero no su nombre —
+// `boton.onClick := x::h` daba "no tiene miembro de instancia 'onClick'". Sin
+// esto el GUI por eventos (#324) no se podía hacer: los eventos los declara la
+// librería y quien se suscribe es siempre otro módulo.
+//
+// Este módulo es el lado dueño. Ver h5cevuse.bp para el consumidor.
+module H5cEvLib
+
+  // Clase con DOS eventos, para que se vea que el orden importa: sus campos
+  // (recv de 8B + dest de 4B) van al final del layout, en orden de declaración,
+  // y el consumidor los localiza por el slot que publica la interfaz.
+  public class Boton
+    public property etiqueta: string
+
+    event onClick(quien: Boton)
+    event onChange(quien: Boton, valor: integer)
+
+    public function Boton(etiqueta: string)
+      this.etiqueta := etiqueta
+    end Boton
+
+    // El disparo SIEMPRE es del dueño: `raise` lee los dos campos de `this`.
+    public function pulsar()
+      raise onClick(this)
+    end pulsar
+
+    public function cambiar(v: integer)
+      raise onChange(this, v)
+    end cambiar
+  end Boton
+
+  // Subclase en el MISMO módulo: sus campos propios tienen que ir DESPUÉS de
+  // los 6 slots que ocupan los dos eventos de la base. Si el layout se contara
+  // mal, este `veces` pisaría un campo del evento.
+  public class BotonContador extends Boton
+    public property veces: integer
+
+    public function BotonContador(etiqueta: string)
+      super(etiqueta)
+      this.veces := 0
+    end BotonContador
+  end BotonContador
+
+end H5cEvLib

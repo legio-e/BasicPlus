@@ -1092,6 +1092,22 @@ public class ModWriter {
     }
 
     /**
+     * H5.c-E2 — variante cross-module: el caller ya conoce el slot del campo
+     * porque se lo dio la interfaz del módulo dueño, y la clase NO está
+     * registrada en este ModWriter (su descriptor vive en otro .mod), así que
+     * resolveFieldInfo no la encontraría.
+     *
+     * Mismo bytecode que {@link #emitSetField}; sólo cambia de dónde sale el
+     * slot. Es el gemelo de {@link #emitInvokeVirtualBySlot} para campos.
+     */
+    public void emitSetFieldBySlot(int slot, boolean is8) throws IOException {
+        if (slot < 0 || slot > 0xFF) throw new RuntimeException("Field slot u8 desbordado: " + slot);
+        codeOut.writeByte(is8 ? OpCode.SET_FIELD_LONG.code : OpCode.SET_FIELD.code);
+        codeOut.writeByte((byte) slot);
+        currentBytecodeSize += 2;
+    }
+
+    /**
      * Variante para campos owner: libera el valor anterior del campo antes de
      * escribir el nuevo. Stack: pop val, pop ref; field[slot] = val (con FREE
      * del valor que tenía).

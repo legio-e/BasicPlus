@@ -144,6 +144,30 @@ public final class ModuleInterface {
 
     /** Property pública a nivel módulo. Sólo metadata; los accesores
      *  reales viven en el .mod con nombres convenidos (__prop_get_X / __prop_set_X). */
+    /**
+     * H5.c-E2 — un evento tal y como cruza la frontera de módulo: su nombre, su
+     * FIRMA (para que el `::` case el handler igual que dentro del módulo) y el
+     * slot ABSOLUTO de su campo `recv` (el `dest` va en recv+2).
+     *
+     * El slot viaja explícito, no se recalcula: quien lo sabe es
+     * computeClassLayout — LA función — y rehacer aquí su aritmética es la clase
+     * de duplicación que cerró #299.
+     *
+     * `opaque` = algún parámetro tiene un tipo no exportable. El evento se
+     * exporta IGUAL, sin firma, porque sus 3 slots cuentan para el layout y
+     * saltárselo desplazaría todo lo que va detrás; simplemente no se puede
+     * suscribir desde fuera.
+     */
+    public static final class EventSig {
+        public final String name;
+        public final List<ParamSig> params;   // vacía si opaque
+        public final int recvSlot;
+        public final boolean opaque;
+        public EventSig(String name, List<ParamSig> params, int recvSlot, boolean opaque) {
+            this.name = name; this.params = params; this.recvSlot = recvSlot; this.opaque = opaque;
+        }
+    }
+
     public static final class PropSig {
         public final String name;
         public final BpType type;
@@ -213,6 +237,13 @@ public final class ModuleInterface {
          *  inlinean en el call-site (mismo patrón que consts de módulo).
          *  Lista vacía si la clase no expone ninguno. */
         public List<ConstSig> staticConsts = new ArrayList<>();
+
+        /** H5.c-E2 — eventos PROPIOS de la clase (los heredados los ve el
+         *  consumidor recorriendo la cadena de bases, igual que los métodos).
+         *  Un evento es SIEMPRE público — el parser rechaza el modificador
+         *  ("asignarlo YA es público") — así que no hay flag de visibilidad;
+         *  lo que faltaba era que la interfaz cumpliera esa promesa. */
+        public List<EventSig> events = new ArrayList<>();
 
         public ClassSig(String name, boolean isPublic, String baseClassName,
                         List<ParamSig> ctorParams, List<PropSig> properties,
@@ -501,6 +532,34 @@ public final class ModuleInterface {
         sig.binaryFieldBitmap = lay.fieldBitmap;
         sig.binaryOwnerBitmap = lay.ownerBitmap;
         localLayouts.put(cls.name, lay);
+
+        // H5.c-E2 — EVENTOS. El slot sale de `lay` (la función única); aquí sólo
+        // se le pega la firma. Se exportan TODOS, en el mismo orden en que la
+        // función única les dio slot: un evento omitido no es "uno menos que
+        // usar", es el layout desplazado para el que venga detrás.
+        for (int i = 0; i < lay.ownEventNames.size(); i++) {
+            String evName = lay.ownEventNames.get(i);
+            Symbol evSym = cls.instanceMembers.tryLookup(evName);
+            List<ParamSig> ps = new ArrayList<>();
+            boolean opaque = false;
+            if (evSym instanceof Symbol.EventSymbol) {
+                for (ParamSymbol p : ((Symbol.EventSymbol) evSym).params) {
+                    if (!isExportableType(p.type)) {
+                        skipped.add("class " + cls.name + ".event " + evName + ": param '" + p.name
+                                + "' tipo no exportable: "
+                                + (p.type == null ? "<null>" : p.type.display())
+                                + " (se exporta sin firma: no se podrá suscribir desde fuera)");
+                        opaque = true;
+                        break;
+                    }
+                    ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
+                }
+            } else {
+                opaque = true;   // sin símbolo: sólo cuenta para el layout
+            }
+            sig.events.add(new EventSig(evName, opaque ? new ArrayList<>() : ps,
+                    lay.ownEventRecvSlots.get(i), opaque));
+        }
         /* RETIRADA (#299) — la reconstrucción gemela. Se conserva comentada como
          * registro de POR QUÉ no se puede hacer así: contaba campos en vez de
          * slots (una ref = 2 slots de 4B), no sumaba los métodos heredados de
@@ -612,6 +671,13 @@ public final class ModuleInterface {
         final int[] fieldBitmap;
         final int[] ownerBitmap;
         final List<String> methodNames;   // índice = slot; null = slot sin nombre conocido
+        /** H5.c-E2 — eventos PROPIOS de la clase (no heredados), en orden de
+         *  declaración, con el slot ABSOLUTO de su campo `recv` (el `dest` va
+         *  en recv+2). Lo rellena computeClassLayout — LA función — para que
+         *  la interfaz no tenga que rehacer la aritmética del layout por su
+         *  cuenta: ésa es justo la duplicación que cerró #299. */
+        final List<String>  ownEventNames     = new ArrayList<>();
+        final List<Integer> ownEventRecvSlots = new ArrayList<>();
         LayoutAndNames(int nf, int nm, int[] fb, int[] ob, List<String> names) {
             numFields = nf; numMethods = nm; fieldBitmap = fb; ownerBitmap = ob; methodNames = names;
         }
@@ -733,6 +799,9 @@ public final class ModuleInterface {
         // ---- fields (slots de 4B), en el MISMO orden que el emisor ----
         int slot = base.numFields;
         List<int[]> refMarks = new ArrayList<>();   // {slot, isRef, isOwner}
+        // H5.c-E2: se recogen aquí para publicarlos en la interfaz (ver LayoutAndNames).
+        List<String>  eventNames     = new ArrayList<>();
+        List<Integer> eventRecvSlots = new ArrayList<>();
         if (astHasOwnSyncProperty(cls.astNode) && !ancestorHasSyncProperty(cls)) {
             // __syncMutex es una REF (handle de 8B): el ModWriter FUERZA is8 para
             // toda ref en declareField (fix del censo #1), así que son 2 SLOTS
@@ -777,6 +846,8 @@ public final class ModuleInterface {
         // — soltarlo al morir sería destruir a otro.
         for (Ast.ITopLevelDecl m : cls.astNode.members) {
             if (m instanceof Ast.EventDef) {
+                eventNames.add(((Ast.EventDef) m).name.name);
+                eventRecvSlots.add(slot);                 // H5.c-E2: se publica en la interfaz
                 refMarks.add(new int[]{slot, 1, 0});       // receptor: ref, no owner
                 slot += 2;
                 refMarks.add(new int[]{slot, 0, 0});       // destino: ni ref ni owner
@@ -827,6 +898,8 @@ public final class ModuleInterface {
             }
         }
         LayoutAndNames out = new LayoutAndNames(numFields, names.size(), fieldBitmap, ownerBitmap, names);
+        out.ownEventNames.addAll(eventNames);
+        out.ownEventRecvSlots.addAll(eventRecvSlots);
         localLayouts.put(cls.name, out);
         return out;
     }
@@ -990,6 +1063,20 @@ public final class ModuleInterface {
                 for (ConstSig sc : c.staticConsts) {
                     pw.printf("  staticconst %s:%s=%s public%n",
                             sc.name, typeToString(sc.type), encodeLiteral(sc.value));
+                }
+                // H5.c-E2 — `event <nombre>(<firma>) recv <slot>` [opaque].
+                // El slot va explícito porque lo calcula la función única del
+                // layout; el consumidor lo LEE, no lo recalcula.
+                for (EventSig ev : c.events) {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("  event ").append(ev.name).append('(');
+                    for (int i = 0; i < ev.params.size(); i++) {
+                        if (i > 0) sb.append(',');
+                        appendParam(sb, ev.params.get(i));
+                    }
+                    sb.append(") recv ").append(ev.recvSlot);
+                    if (ev.opaque) sb.append(" opaque");
+                    pw.println(sb.toString());
                 }
                 for (FuncSig m : c.methods) {
                     StringBuilder sb = new StringBuilder();
@@ -1205,6 +1292,7 @@ public final class ModuleInterface {
             int[] clsBinFieldBitmap = new int[0], clsBinOwnerBitmap = new int[0];
             // L2 v3.d — static consts del bloque class.
             List<ConstSig> clsStaticConsts = new ArrayList<>();
+            List<EventSig> clsEvents = new ArrayList<>();
             // N6 — si el .bpi es de una versión MÁS NUEVA que CURRENT_VERSION, lo
             // leemos best-effort (forward-compat): saltamos las directivas que este
             // compilador no conoce, en lugar de abortar. El formato .bpi es aditivo.
@@ -1261,12 +1349,14 @@ public final class ModuleInterface {
                         cs.binaryFieldBitmap = clsBinFieldBitmap;
                         cs.binaryOwnerBitmap = clsBinOwnerBitmap;
                         cs.staticConsts = clsStaticConsts;
+                        cs.events = clsEvents;
                         iface.classes.add(cs);
                         clsName = null; clsParent = null;
                         clsCtorParams = null; clsProps = null; clsMethods = null;
                         clsBinNumFields = -1; clsBinNumMethods = -1;
                         clsBinFieldBitmap = new int[0]; clsBinOwnerBitmap = new int[0];
                         clsStaticConsts = new ArrayList<>();
+                        clsEvents = new ArrayList<>();
                         continue;
                     }
                     if (trimmed.startsWith("ctor(") || trimmed.startsWith("ctor (")) {
@@ -1286,6 +1376,10 @@ public final class ModuleInterface {
                     }
                     if (trimmed.startsWith("staticconst ")) {
                         clsStaticConsts.add(parseConst(file, lineNo, trimmed.substring("staticconst ".length())));
+                        continue;
+                    }
+                    if (trimmed.startsWith("event ")) {
+                        clsEvents.add(parseEvent(file, lineNo, trimmed.substring("event ".length())));
                         continue;
                     }
                     if (trimmed.startsWith("layout ")) {
@@ -1499,6 +1593,33 @@ public final class ModuleInterface {
         BpType type = parseType(file, lineNo, typeStr);
         Object lit = decodeLiteral(type, valueStr, file, lineNo);
         return new ConstSig(name, type, lit);
+    }
+
+    /** H5.c-E2 — `<nombre>(<firma>) recv <slot>` [opaque]. */
+    private static EventSig parseEvent(Path file, int lineNo, String body) throws IOException {
+        int lp = body.indexOf('(');
+        int rp = (lp < 0) ? -1 : matchParen(body, lp);
+        if (lp < 0 || rp < 0)
+            throw new IOException(file + ":" + lineNo + ": event mal formado (faltan paréntesis)");
+        String name = body.substring(0, lp).trim();
+        List<ParamSig> ps = parseParamList(file, lineNo, body.substring(lp + 1, rp));
+
+        String[] tail = body.substring(rp + 1).trim().split("\\s+");
+        if (tail.length < 2 || !"recv".equals(tail[0]))
+            throw new IOException(file + ":" + lineNo + ": event '" + name
+                    + "' sin 'recv <slot>' — sin el slot no se puede suscribir cross-module");
+        int recvSlot;
+        try { recvSlot = Integer.parseInt(tail[1]); }
+        catch (NumberFormatException nfe) {
+            throw new IOException(file + ":" + lineNo + ": event '" + name + "': slot recv no entero");
+        }
+        boolean opaque = false;
+        for (int i = 2; i < tail.length; i++) {
+            if ("opaque".equals(tail[i])) opaque = true;
+            else throw new IOException(file + ":" + lineNo + ": event '" + name
+                    + "': flag desconocido '" + tail[i] + "'");
+        }
+        return new EventSig(name, ps, recvSlot, opaque);
     }
 
     private static FuncSig parseFunc(Path file, int lineNo, String body) throws IOException {
