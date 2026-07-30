@@ -1,5 +1,5 @@
 {
-  "Slice": { "setDuty": 10, "setFreq": 11, "start": 12, "stop": 13 },
+  "Slice": { "setPin": 3, "setId": 5, "setFreqHz": 7, "setDutyPct": 9, "setDuty": 10, "setFreq": 11, "start": 12, "stop": 13 },
   "RuntimeError": {  },
   "Exception": {  }
 }

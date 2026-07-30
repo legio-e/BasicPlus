@@ -1,13 +1,13 @@
 {
-  "JsonBool": { "isBool": 3, "asBool": 10, "writeTo": 16 },
-  "JsonObject": { "isObject": 9, "asObject": 15, "length": 22, "indexOfKey": 23, "put": 24, "find": 25, "has": 26, "keyAt": 27, "valueAt": 28, "req": 29, "getString": 30, "getInt": 31, "getFloat": 32, "getBool": 33, "getObject": 34, "getArray": 35, "getStringOr": 36, "getIntOr": 37, "getFloatOr": 38, "getBoolOr": 39, "writeTo": 16 },
+  "JsonBool": { "setValue": 19, "isBool": 3, "asBool": 10, "writeTo": 16 },
+  "JsonObject": { "setKeys": 19, "setValues": 21, "isObject": 9, "asObject": 15, "length": 22, "indexOfKey": 23, "put": 24, "find": 25, "has": 26, "keyAt": 27, "valueAt": 28, "req": 29, "getString": 30, "getInt": 31, "getFloat": 32, "getBool": 33, "getObject": 34, "getArray": 35, "getStringOr": 36, "getIntOr": 37, "getFloatOr": 38, "getBoolOr": 39, "writeTo": 16 },
   "RuntimeError": {  },
   "JsonNull": { "isNull": 2, "writeTo": 16 },
-  "JsonReader": { "peek": 8, "advance": 9, "expect": 10, "skipWs": 11 },
-  "JsonInt": { "isNumber": 4, "isInt": 5, "asInt": 11, "writeTo": 16 },
+  "JsonReader": { "setText": 3, "setPos": 5, "setLen": 7, "peek": 8, "advance": 9, "expect": 10, "skipWs": 11 },
+  "JsonInt": { "setValue": 19, "isNumber": 4, "isInt": 5, "asInt": 11, "writeTo": 16 },
   "JsonValue": { "isNull": 2, "isBool": 3, "isNumber": 4, "isInt": 5, "isFloat": 6, "isString": 7, "isArray": 8, "isObject": 9, "asBool": 10, "asInt": 11, "asFloat": 12, "asString": 13, "asArray": 14, "asObject": 15, "writeTo": 16, "toJson": 17 },
   "Exception": {  },
-  "JsonArray": { "isArray": 8, "asArray": 14, "add": 20, "at": 21, "length": 22, "writeTo": 16 },
-  "JsonFloat": { "isNumber": 4, "isFloat": 6, "asFloat": 12, "writeTo": 16 },
-  "JsonString": { "isString": 7, "asString": 13, "writeTo": 16 }
+  "JsonArray": { "setItems": 19, "isArray": 8, "asArray": 14, "add": 20, "at": 21, "length": 22, "writeTo": 16 },
+  "JsonFloat": { "setValue": 19, "isNumber": 4, "isFloat": 6, "asFloat": 12, "writeTo": 16 },
+  "JsonString": { "setValue": 19, "isString": 7, "asString": 13, "writeTo": 16 }
 }

@@ -1,3 +1,3 @@
 {
-  "Strip": { "setPixel": 8, "setColor": 9, "clear": 10, "show": 11, "count": 12 }
+  "Strip": { "setPin_": 3, "setN_": 5, "setPx_": 7, "setPixel": 8, "setColor": 9, "clear": 10, "show": 11, "count": 12 }
 }

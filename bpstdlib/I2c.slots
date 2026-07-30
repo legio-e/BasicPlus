@@ -1,3 +1,3 @@
 {
-  "Bus": { "write": 10, "read": 11, "scan": 12 }
+  "Bus": { "setId": 3, "setSda": 5, "setScl": 7, "setBaudrate": 9, "write": 10, "read": 11, "scan": 12 }
 }
