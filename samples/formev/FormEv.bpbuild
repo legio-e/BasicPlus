@@ -1,0 +1,25 @@
+// #324 tanda 2 — Sample de Forms con el .win SIN SLOTS. Abre este proyecto en
+// BpIde y dale a Run-on-Device.
+//
+// Lo que prueba, y que formdemo NO probaba: que el despacho de Forms funciona
+// de verdad. formdemo carga el formulario pero no pulsa nada, asi que en
+// headless nunca se ejercitaba; aqui la ventana se pulsa a si misma (desde
+// fuera no puede: sus componentes son PRIVADOS) y ademas se puede tocar la
+// pantalla.
+//
+// Diferencia con formdemo: main.win lleva solo NOMBRES. Ni nameSlot ni
+// clicSlot — el IDE ya no tiene que hornear nada. La ventana declara sus
+// componentes y load() los ata resolviendo el slot en ejecucion (__guiSlotOf),
+// derivando ademas el handler del nombre: boton1 -> boton1_onClick.
+//
+//   formev/
+//     FormEv.bpbuild       (este fichero)
+//     src/FormEv.bp        (la ventana + sus componentes declarados + handler)
+//     resources/main.win   (el formulario: SOLO nombres)
+//     out/                 (.mod/.slots generados)
+{
+  "sourceDir":    "src",
+  "outDir":       "out",
+  "main":         "FormEv",
+  "dependencies": []
+}
