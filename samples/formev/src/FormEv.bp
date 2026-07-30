@@ -25,8 +25,9 @@ import Gui
     public function MainWin()
     end MainWin
 
-    // Handler del botón (por ahora atado por "clicSlot", como hasta hoy; en la
-    // tanda 2b lo derivará load() del nombre y el .win no tendrá que nombrarlo).
+    // Handler del botón. El .win NO lo nombra: load() lo deriva del nombre del
+    // componente (<nombre>_onClick) y resuelve su slot en ejecución. Por eso el
+    // .win de este sample no lleva un solo número.
     public function boton1_onClick(sender: Gui.Component)
       print "[FormEv] boton1_onClick"
       this.salida.setText("PULSADO")

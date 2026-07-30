@@ -295,7 +295,8 @@ enum {
      *
      * En headless devuelve 1 si esta pasada drenó algo: así el lazo da UNA VUELTA
      * MÁS y el scheduler tiene dónde correr los handlers antes de salir. */
-    BUILTIN_GUI_RUN_ONCE         = 222
+    BUILTIN_GUI_RUN_ONCE         = 222,
+    BUILTIN_GUI_SLOT_OF          = 223
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -766,6 +767,43 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * ev_count>0, el lazo alcanza la frontera de quantum donde se drena. */
         push_i32(vm, tc, (drained > 0 || vm->ev_count > 0) ? 1 : 0);
 #endif
+        return BPVM_OK;
+    }
+    case BUILTIN_GUI_SLOT_OF: {
+        /* #324 tanda 2b — REFLEXION MINIMA: nombre de metodo -> slot de vtable,
+         * en EJECUCION. Idea de Eduardo, y no hace falta dato nuevo: el .mod ya
+         * exporta un simbolo `Clase#metodo#slot` por cada entrada de la vtable
+         * (exportVtableMarkers), apuntando al descriptor de la clase. O sea que
+         * el mapa nombre->slot YA viaja; solo faltaba preguntarle.
+         *
+         * Con esto el .win deja de necesitar slots horneados: se acabo el
+         * numero congelado en un fichero que miente cuando la clase cambia.
+         *
+         * Devuelve -1 si no existe (el llamante decide; aqui no se lanza nada:
+         * "no hay handler con ese nombre" es normal, no un error).
+         *
+         * Coste: un barrido lineal de la tabla, en CARGA del form y una vez por
+         * nombre. No esta en ningun camino caliente. */
+        uint32_t name_ref = pop_ref(vm, tc);
+        uint32_t obj      = pop_ref(vm, tc);
+        if (obj == 0) { push_i32(vm, tc, -1); return BPVM_OK; }
+        char nm[96];
+        read_bp_string(vm, name_ref, nm, sizeof(nm));
+        uint32_t oa = ref_addr(vm, obj);
+        uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + oa);
+        size_t nlen = strlen(nm);
+        for (int i = 0; i < vm->symbol_count; i++) {
+            if (vm->symbols[i].abs_addr != class_ptr) continue;
+            /* Formato: <Clase>#<metodo>#<slot>. Se busca "#<metodo>#" y se lee
+             * el numero que va detras. */
+            const char* s = vm->symbols[i].name;
+            const char* h = strchr(s, '#');
+            if (h == NULL) continue;
+            if (strncmp(h + 1, nm, nlen) != 0 || h[1 + nlen] != '#') continue;
+            push_i32(vm, tc, atoi(h + 2 + nlen));
+            return BPVM_OK;
+        }
+        push_i32(vm, tc, -1);
         return BPVM_OK;
     }
     case BUILTIN_GUI_DUMP_TREE: {

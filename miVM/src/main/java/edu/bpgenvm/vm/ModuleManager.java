@@ -850,6 +850,33 @@ public class ModuleManager {
         throw new RuntimeException("Dirección " + addr + " no cae en el data block de ningún módulo cargado");
     }
 
+    /**
+     * #324 tanda 2b — REFLEXIÓN MÍNIMA: nombre de método → slot de vtable, en
+     * ejecución. Idea de Eduardo, y sin dato nuevo: el .mod ya exporta un
+     * símbolo {@code Clase#metodo#slot} por cada entrada de la vtable
+     * (ModWriter.exportVtableMarkers), apuntando al descriptor de la clase. El
+     * mapa nombre→slot YA viajaba; sólo faltaba preguntarle.
+     *
+     * Gracias a esto el .win no necesita slots horneados: se acabó el número
+     * congelado en un fichero, que miente en cuanto la clase cambia.
+     *
+     * @param classPtr dirección del descriptor (la primera palabra del objeto)
+     * @param simple   nombre del método, sin clase
+     * @return el slot, o -1 si esa clase no tiene un método así.
+     */
+    public int slotOfMarker(int classPtr, String simple) {
+        String needle = "#" + simple + "#";
+        for (Map.Entry<String, Integer> e : globalSymbolTable.entrySet()) {
+            if (e.getValue() != classPtr) continue;
+            String k = e.getKey();
+            int at = k.indexOf(needle);
+            if (at < 0) continue;
+            try { return Integer.parseInt(k.substring(at + needle.length())); }
+            catch (NumberFormatException nfe) { /* no era un marcador: sigue */ }
+        }
+        return -1;
+    }
+
     public int getExternalTableAddressForCS(int cs) {
         for (ModuleMetadata meta : loadedModules) {
             if (meta.codeStart == cs) return meta.extTableAddress;

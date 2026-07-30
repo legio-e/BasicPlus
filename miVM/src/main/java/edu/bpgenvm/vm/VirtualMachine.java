@@ -3766,6 +3766,17 @@ public class VirtualMachine {
             case GUI_SCREEN_LOAD: { int hnd = popTc(tc); gui.screenLoad(hnd); pushTc(tc, 0); break; }
             case GUI_RUN:       { guiEventLoop(tc); pushTc(tc, 0); break; }
             case GUI_RUN_ONCE:  { pushTc(tc, guiEventLoopOnce(tc) ? 1 : 0); break; }
+            // #324 tanda 2b — (obj, nombre) → slot de vtable. -1 si no existe:
+            // "esta ventana no tiene un handler con ese nombre" es lo normal,
+            // no un error, así que decide el llamante. Ver slotOfMarker.
+            case GUI_SLOT_OF: {
+                int nameRef = (int) popTcRef(tc);
+                int objRef  = (int) popTcRef(tc);
+                if (objRef == 0) { pushTc(tc, -1); break; }
+                int classPtr = readInt32(refDeref(objRef));
+                pushTc(tc, moduleManager.slotOfMarker(classPtr, readVmString(nameRef)));
+                break;
+            }
             case GUI_DUMP_TREE: { pushTcRef(tc, allocVmString(gui.dumpTree())); break; }
             case GUI_BIND_CLICK: {
                 int self = popTc(tc); int hnd = popTc(tc);

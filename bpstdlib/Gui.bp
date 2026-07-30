@@ -314,6 +314,13 @@ import Json
   // .win, resuelto vía .bpi/slotOf), `sender` el widget que disparó. Handler =
   // MÉTODO de la ventana. slot < 0 (handler ausente) → se ignora.
   public intrinsic function __guiInvokeBySlot(win: Object, slot: integer, sender: Object)
+  // #324 tanda 2b — REFLEXIÓN MÍNIMA (idea de Eduardo): nombre de método →
+  // slot de vtable, en ejecución. -1 si esa clase no lo tiene. No hace falta
+  // dato nuevo: el .mod ya exporta `Clase#metodo#slot` por cada entrada de la
+  // vtable, así que el mapa ya viajaba y sólo faltaba preguntarle. Con esto el
+  // .win deja de llevar slots horneados — y un slot horneado es un número
+  // congelado en un fichero, que miente en cuanto la clase cambia.
+  public intrinsic function __guiSlotOf(obj: Object, name: string): integer
 
   // ---- Screen — pantalla raíz (la entrega el backend ya montada). ----
   public class Screen extends Component
@@ -861,20 +868,22 @@ import Json
     var t: string := node.getStringOr("type", "Panel")
     var w: Component := makeWidget(t, parent, node)
     applyCommon(w, node)
-    // #324 tanda 2 — la ventana DECLARA sus componentes (modelo Swing) y aquí
-    // se ATAN: el .win no los inventa, los construye SOBRE esas declaraciones.
-    // El IDE hornea en "nameSlot" el slot del SETTER de la property que lleva
-    // ese nombre — el mismo mecanismo que clicSlot, con otro slot, porque un
-    // accesor de property también es un método de la vtable.
-    // -1 = el .win no lo trae (escrito a mano): el widget se crea igual, sólo
-    // que la ventana no lo sostiene por su nombre.
-    var nameSlot: integer := node.getIntOr("nameSlot", -1)
-    if nameSlot >= 0 then __guiInvokeBySlot(win, nameSlot, w)
-    // Slots horneados por el IDE (-1 = sin handler). Atamos si hay alguno.
-    var slotClic: integer := node.getIntOr("clicSlot", -1)
-    var slotChange: integer := node.getIntOr("changeSlot", -1)
-    if slotClic >= 0 or slotChange >= 0 then
-      w.__bindEvents(win, slotClic, slotChange)
+    // #324 tanda 2b — TODO sale del NOMBRE, en ejecución. El .win ya no lleva
+    // slots horneados: un slot en un fichero es un número congelado que miente
+    // en cuanto la clase cambia, y encima obligaba a pasar por el IDE para algo
+    // que la VM puede resolver sola (idea de Eduardo).
+    //
+    // Un nombre, todo lo demás se deriva:
+    //     "name": "boton1"  →  property boton1 de la ventana  (setBoton1)
+    //                       →  handlers boton1_onClick / boton1_onChange
+    //
+    // __guiSlotOf pregunta a la tabla `Clase#metodo#slot` que el .mod ya trae.
+    // -1 = no existe, y no pasa nada: una ventana no tiene por qué declarar la
+    // property de cada widget ni atender todos sus eventos.
+    var nom: string := node.getStringOr("name", "")
+    if strlen(nom) > 0 then
+      bindMember(win, w, nom)
+      bindHandler(win, w, nom)
     endif
     if node.has("children") then
       var arr: Json.JsonArray := node.getArray("children")
@@ -887,6 +896,40 @@ import Json
     endif
     return w
   end buildForm
+
+  // bindMember — ata el widget a la property de la ventana que lleva su nombre
+  // (modelo Swing: la clase DECLARA sus componentes y el form los construye
+  // sobre esas declaraciones). La property puede ser PRIVADA — es lo suyo, son
+  // las tripas de la ventana — y aun así su accesor tiene slot, que es lo único
+  // que hace falta. Sin property con ese nombre: -1, y no pasa nada.
+  // OJO con el subconjunto: la VM-C no tiene upper()/lower() — Str.bp lo avisa
+  // en su cabecera y por eso tampoco los usa. La inicial se sube a mano con
+  // charCodeAt + __charsToString, que sí están en las 3 VMs.
+  function bindMember(win: Window, w: Component, nom: string)
+    var n: integer := strlen(nom)
+    if n == 0 then return
+    var cs: integer[] := newIntArray(n)
+    var i: integer := 0
+    while i < n do
+      cs[i] := charCodeAt(nom, i)
+      i := i + 1
+    endwh
+    if (cs[0] >= 97) and (cs[0] <= 122) then cs[0] := cs[0] - 32
+    var slot: integer := __guiSlotOf(win, "set" + __charsToString(cs, n))
+    if slot >= 0 then __guiInvokeBySlot(win, slot, w)
+  end bindMember
+
+  // bindHandler — ata los eventos del widget a los métodos que siguen la
+  // convención <nombre>_<evento>. Aquí es donde la convención deja de ser
+  // cosmética: es lo que permite que el .win NO tenga que nombrar el handler,
+  // y por tanto que no puedan desincronizarse.
+  function bindHandler(win: Window, w: Component, nom: string)
+    var slotClic: integer := __guiSlotOf(win, nom + "_onClick")
+    var slotChange: integer := __guiSlotOf(win, nom + "_onChange")
+    if slotClic >= 0 or slotChange >= 0 then
+      w.__bindEvents(win, slotClic, slotChange)
+    endif
+  end bindHandler
 
   // makeWidget — tipo (string) → constructor. Las props específicas del widget
   // (text/value/checked/min/max) se fijan aquí, con el tipo concreto en mano.

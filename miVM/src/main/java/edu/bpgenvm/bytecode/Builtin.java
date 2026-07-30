@@ -466,7 +466,9 @@ public enum Builtin {
      *  llamarme", false "no queda nada". El lazo pasa a Gui.run() (BP), que es
      *  lo que da la frontera de instrucción donde el scheduler inyecta los
      *  handlers de eventos. También AL FINAL: el id es ordinal(). */
-    GUI_RUN_ONCE("__guiRunOnce");                      // () → boolean                          [222]
+    GUI_RUN_ONCE("__guiRunOnce"),                      // () → boolean                          [222]
+    // #324 tanda 2b — reflexión mínima: (obj, nombre) → slot de vtable (-1 = no existe).
+    GUI_SLOT_OF("__guiSlotOf");                        // (Object, string) → integer            [223]
 
     public final String bpName;
     public final int id;
