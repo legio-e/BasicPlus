@@ -43,6 +43,7 @@ var_of() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
     echo " * de la Pico → los programas que importan stdlib resuelven sin uploads."
     echo " */"
     echo '#include "stm32_mods.h"'
+    echo '#include "bpvm_fs.h"   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */'
     echo '#include "stm32_fs.h"'
     echo '#include <stdint.h>'
     echo ""
@@ -63,11 +64,13 @@ var_of() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
     echo "};"
     echo ""
     echo "void stm32_mods_install(void) {"
-    echo "    const uint8_t* d; uint32_t sz;"
     echo "    unsigned n = (unsigned) (sizeof(s_mods) / sizeof(s_mods[0]));"
     echo "    for (unsigned i = 0; i < n; i++) {"
     echo "        /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */"
-    echo "        if (fs_get(s_mods[i].path, &d, &sz) != 0) {"
+    echo "        /* H11 — sólo se pregunta si EXISTE; leerlo entero para eso costaba el"
+    echo "         * espejo (y por 14 módulos seguidos). */"
+    echo "        uint32_t sz_dummy;"
+    echo "        if (bpvm_fs_stat(s_mods[i].path, &sz_dummy) != 0) {"
     echo "            fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len);"
     echo "        }"
     echo "    }"

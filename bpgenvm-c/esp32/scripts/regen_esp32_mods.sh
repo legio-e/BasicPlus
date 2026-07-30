@@ -45,6 +45,7 @@ var_of() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
     echo " */"
     echo '#include "esp32_mods.h"'
     echo '#include "fs.h"'
+    echo '#include "bpvm_fs.h"   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */'
     echo '#include <stdint.h>'
     echo ""
     for m in "${MODS[@]}"; do
@@ -67,7 +68,6 @@ var_of() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
     # auto-persiste la partición entera y el primer boot del P4 tardaba ~46 s.
     # Si tocas esto, mantenlo idéntico al esp32_mods.c vigente.
     echo "void esp32_mods_install(void) {"
-    echo "    const uint8_t* d; uint32_t sz;"
     echo "    unsigned n = (unsigned) (sizeof(s_mods) / sizeof(s_mods[0]));"
     echo "    unsigned installed = 0;"
     echo "    /* LOTE: sin suspender, cada fs_put auto-persiste reescribiendo la partición"
@@ -77,7 +77,10 @@ var_of() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
     echo "    fs_autosave_suspend();"
     echo "    for (unsigned i = 0; i < n; i++) {"
     echo "        /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */"
-    echo "        if (fs_get(s_mods[i].path, &d, &sz) != 0) {"
+    echo "        /* H11 — sólo se pregunta si EXISTE; leerlo entero para eso costaba el"
+    echo "         * espejo de 64 KB (y por 14 módulos, uno detrás de otro). */"
+    echo "        uint32_t sz_dummy;"
+    echo "        if (bpvm_fs_stat(s_mods[i].path, &sz_dummy) != 0) {"
     echo "            if (fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len) == FS_OK) installed++;"
     echo "        }"
     echo "    }"
