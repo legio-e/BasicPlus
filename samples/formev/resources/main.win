@@ -1,0 +1,10 @@
+{
+  "class": "MainWin",
+  "comment": "FUENTE: nombra los componentes. El IDE hornea los slots -> out/main.win",
+  "type": "Panel",
+  "children": [
+    { "type": "Label",  "name": "salida", "text": "esperando", "align": "TOP_MID", "y": 12 },
+    { "type": "Button", "name": "boton1", "text": "Pulsame",   "align": "CENTER",
+      "clic": "boton1_onClick" }
+  ]
+}

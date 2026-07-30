@@ -3776,9 +3776,14 @@ public class VirtualMachine {
             // función pública del módulo de `owner` (la ventana) y la invoca con
             // `sender` como arg0. Los args se apilan owner, name, sender.
             case GUI_INVOKE_BY_NAME: {
-                int sender  = popTc(tc);
-                int nameRef = popTc(tc);
-                int ownerRef = popTc(tc);
+                // #324 tanda 2a — los TRES son refs (8 bytes). Se sacaban con
+                // popTc (4B) y la pila se leía descuadrada. Estaba latente
+                // porque este camino no lo ejercitaba nadie: formdemo carga el
+                // form pero no pulsa nada, así que en headless nunca se
+                // despachaba. La VM-C ya sacaba pop_ref/pop_ref/pop_ref.
+                int sender   = (int) popTcRef(tc);
+                int nameRef  = (int) popTcRef(tc);
+                int ownerRef = (int) popTcRef(tc);
                 invokeHandlerByName(tc, ownerRef, readVmString(nameRef), sender);
                 pushTc(tc, 0);
                 break;
@@ -3786,9 +3791,15 @@ public class VirtualMachine {
             // H13.1 (V3) — Forms Camino A: dispatch por SLOT (handler = método de la
             // ventana, slot horneado por el IDE en el .win). Args apilados: win, slot, sender.
             case GUI_INVOKE_BY_SLOT: {
-                int sender = popTc(tc);
+                // #324 tanda 2a — win y sender son refs (8 bytes); sólo `slot`
+                // es un entero. Se sacaban los tres con popTc (4B): la pila
+                // quedaba descuadrada y `winRef` salía basura. Lo delataba el
+                // propio helper, que tres líneas más abajo dice "ambos son REFS
+                // → 8 bytes". Mismo desliz del 4→8B que #20/#293, latente por
+                // no ejercitarse. La VM-C ya sacaba pop_ref/pop_i32/pop_ref.
+                int sender = (int) popTcRef(tc);
                 int slot   = popTc(tc);
-                int winRef = popTc(tc);
+                int winRef = (int) popTcRef(tc);
                 invokeHandlerBySlot(tc, winRef, slot, sender);
                 pushTc(tc, 0);
                 break;

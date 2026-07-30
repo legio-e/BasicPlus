@@ -569,6 +569,33 @@ public final class Main {
             // (no ctor, no static), en orden de declaración → su slot de vtable.
             if (cls.astNode != null && cls.astNode.members != null) {
                 for (Ast.ITopLevelDecl d : cls.astNode.members) {
+                    // #324 tanda 2 — PROPERTIES: su SETTER también es un slot de
+                    // vtable, y es el que el IDE necesita para hornear el "name"
+                    // del .win (el modelo Swing: la ventana DECLARA sus
+                    // componentes y el form los construye sobre esas
+                    // declaraciones). Se emite con el nombre del accesor, que es
+                    // el que resuelve slotOf.
+                    //
+                    // Se emiten TAMBIÉN las no públicas, y es lo que se quiere:
+                    // los componentes de una ventana son sus TRIPAS — si fueran
+                    // públicos, cualquiera podría hacer `win.boton1 := otraCosa`
+                    // y romper el form. Privadas, el compilador cierra la puerta
+                    // desde fuera y el slot sigue estando para atarlas. Mismo
+                    // criterio que #316 con las properties privadas en la interfaz.
+                    if (d instanceof Ast.PropertyDef) {
+                        Ast.PropertyDef pd = (Ast.PropertyDef) d;
+                        if (pd.name == null || pd.name.isStatic()) continue;
+                        Symbol ps = cls.instanceMembers.tryLookup(pd.name.name);
+                        if (!(ps instanceof Symbol.PropertySymbol)) continue;
+                        String setter = "set" + Character.toUpperCase(pd.name.name.charAt(0))
+                                + pd.name.name.substring(1);
+                        int pslot = cls.slotOf(setter);
+                        if (pslot < 0) continue;
+                        if (anyM) methods.append(", ");
+                        anyM = true;
+                        methods.append(jsonStr(setter)).append(": ").append(pslot);
+                        continue;
+                    }
                     if (!(d instanceof Ast.FuncDef)) continue;
                     Ast.FuncDef fn = (Ast.FuncDef) d;
                     Symbol ms = cls.instanceMembers.tryLookup(fn.name.name);

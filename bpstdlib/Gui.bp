@@ -861,6 +861,15 @@ import Json
     var t: string := node.getStringOr("type", "Panel")
     var w: Component := makeWidget(t, parent, node)
     applyCommon(w, node)
+    // #324 tanda 2 — la ventana DECLARA sus componentes (modelo Swing) y aquí
+    // se ATAN: el .win no los inventa, los construye SOBRE esas declaraciones.
+    // El IDE hornea en "nameSlot" el slot del SETTER de la property que lleva
+    // ese nombre — el mismo mecanismo que clicSlot, con otro slot, porque un
+    // accesor de property también es un método de la vtable.
+    // -1 = el .win no lo trae (escrito a mano): el widget se crea igual, sólo
+    // que la ventana no lo sostiene por su nombre.
+    var nameSlot: integer := node.getIntOr("nameSlot", -1)
+    if nameSlot >= 0 then __guiInvokeBySlot(win, nameSlot, w)
     // Slots horneados por el IDE (-1 = sin handler). Atamos si hay alguno.
     var slotClic: integer := node.getIntOr("clicSlot", -1)
     var slotChange: integer := node.getIntOr("changeSlot", -1)
@@ -952,6 +961,11 @@ import Json
 
   // applyCommon — props comunes (geometría/align/fuente), todas en Component.
   function applyCommon(w: Component, node: Json.JsonObject)
+    // #324 tanda 2 — el NOMBRE del componente. La property existía y estaba
+    // documentada ("el .win lo pone con name") pero nadie la rellenaba: estaba
+    // a medio construir. Es la pieza sobre la que se apoya todo lo demás —
+    // la property de la ventana que lo sostiene y sus handlers se llaman IGUAL.
+    if node.has("name") then     w.name := node.getStringOr("name", "")
     if node.has("x") then        w.x := node.getIntOr("x", 0)
     if node.has("y") then        w.y := node.getIntOr("y", 0)
     if node.has("width") then    w.width := node.getIntOr("width", 0)

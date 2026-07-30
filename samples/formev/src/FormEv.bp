@@ -1,0 +1,56 @@
+// FormEv.bp — #324 tanda 2a: la ventana DECLARA sus componentes.
+//
+// Modelo Swing/NetBeans (Eduardo): la clase declara sus componentes como
+// miembros ANTES de construir el árbol; el .win no los inventa, los construye
+// SOBRE esas declaraciones y los ata. El "name" del .win, la property que lo
+// sostiene y —tanda 2b— el handler se llaman IGUAL.
+//
+// PRIVADAS a propósito: los componentes de una ventana son sus tripas. Si
+// fueran públicos, cualquiera podría hacer `w.boton1 := otraCosa` y romper el
+// form. El accesor existe igual (es un método de la vtable), así que el IDE
+// puede hornear su slot en "nameSlot" y load() lo ata — el compilador cierra
+// la puerta desde fuera sin estorbar al atado.
+//
+// Este sample es ADEMAS la prueba que faltaba: hasta ahora el despacho por
+// slot de Forms no se ejercitaba en headless (formdemo no pulsa nada), asi que
+// migrarlo habria sido a ciegas. Con el componente atado ya se puede pulsar.
+module FormEv
+import Gui
+
+  public class MainWin extends Gui.Window
+    // Los componentes, declarados ANTES del load. El .win los rellena.
+    property boton1: Gui.Button
+    property salida: Gui.Label
+
+    public function MainWin()
+    end MainWin
+
+    // Handler del botón (por ahora atado por "clicSlot", como hasta hoy; en la
+    // tanda 2b lo derivará load() del nombre y el .win no tendrá que nombrarlo).
+    public function boton1_onClick(sender: Gui.Component)
+      print "[FormEv] boton1_onClick"
+      this.salida.setText("PULSADO")
+    end boton1_onClick
+
+    // Pulsar es cosa de la ventana: desde fuera, boton1 es privado. Que la
+    // prueba tenga que entrar por aquí NO es un estorbo, es la encapsulación
+    // funcionando.
+    public function pulsaBoton1()
+      Gui.__guiClick(this.boton1)
+    end pulsaBoton1
+  end MainWin
+
+  function main(arg: string)
+    var w: MainWin := MainWin()
+    w.load("main.win")
+
+    print "== tras load =="
+    print Gui.__guiDumpTree()
+
+    w.pulsaBoton1()
+    Gui.run()
+
+    print "== tras el clic =="
+    print Gui.__guiDumpTree()
+  end main
+end FormEv
