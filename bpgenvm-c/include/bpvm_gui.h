@@ -96,6 +96,12 @@ void bpvm_gui_set_font(int handle, int font_id);
 void bpvm_gui_clean(int handle);
 void bpvm_gui_delete(int handle);
 
+/* #352 — devuelve el modelo del GUI al estado inicial: libera lo que reservaron
+ * los widgets, vacía la tabla (el hueco se RECUPERA: antes sólo crecía) y deja
+ * la pantalla limpia. Lo llama bpvm_destroy: el modelo es de la VM, no del
+ * proceso. Sin esto, en placa cada RUN se encontraba los widgets del anterior. */
+void bpvm_gui_reset(void);
+
 /* Eventos {objptr, kind}. bind asocia el objeto BP dueño del widget; inject_click/
  * inject_change encolan un evento sintético (diagnóstico / pruebas headless);
  * next_event saca el siguiente {objptr, kind} (objptr 0 = cola vacía) y escribe

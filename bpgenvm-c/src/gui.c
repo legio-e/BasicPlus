@@ -1022,11 +1022,76 @@ void bpvm_gui_clean(int handle) {
     gui_node* n = node_for(handle); if (n && n->lv) lv_obj_clean(n->lv);
 #endif
 }
+/* Libera lo que un nodo tenga reservado. Lo comparten delete y reset: antes
+ * `delete` sólo marcaba used=0 y se dejaba dentro text/cells/cdata — o sea que
+ * hasta el delete explícito del programa fugaba. */
+static void node_release(gui_node* n) {
+    bpvm_free(n->text); n->text = NULL;
+    if (n->cells) {
+        int total = n->trows * n->tcols;
+        for (int c = 0; c < total; c++) bpvm_free(n->cells[c]);
+        bpvm_free(n->cells); n->cells = NULL;
+    }
+    bpvm_free(n->cdata); n->cdata = NULL;
+    n->trows = n->tcols = 0;
+    n->cpoints = n->cnser = 0;
+}
+
 void bpvm_gui_delete(int handle) {
     gui_node* n = node_for(handle); if (!n) return;
     n->used = 0;
+    node_release(n);
 #ifdef BPVM_LVGL
     if (n->lv) { lv_obj_delete(n->lv); n->lv = NULL; }
+#endif
+}
+
+/* #352 — EL MODELO DEL GUI ES DE LA VM, NO DEL PROCESO.
+ *
+ * Aquí vivía en globales de fichero, así que sobrevivía al programa: en el host
+ * no se notaba (cada RUN es un proceso nuevo) pero en placa y en el micro
+ * simulado el proceso PERSISTE, y cada RUN encontraba los widgets del anterior.
+ * No era sólo memoria: `g_node_count` sólo crece —`delete` no recupera el
+ * hueco— así que la tabla de 512 se llena y `create_node` empieza a devolver 0.
+ * MEDIDO: 30 ejecuciones de GuiColorDemo y la 31 muere con "no se puede crear
+ * un widget sin un contenedor valido", que además le echa la culpa al programa
+ * del usuario. Diseñar una interfaz son justo decenas de ciclos seguidos.
+ *
+ * miVM no tenía el problema: allí el modelo es un campo de instancia del
+ * GuiBackend, o sea que VM nueva = modelo limpio. Aquí la convergencia va al
+ * revés de la costumbre — el diseño bueno era el de Java y lo copiamos.
+ *
+ * Lo llama bpvm_destroy, que es UNA función portable: las 5 familias lo heredan.
+ */
+void bpvm_gui_reset(void) {
+    for (int i = 0; i < g_node_count; i++) {
+#ifdef BPVM_LVGL
+        /* Los lv_obj se van con la pantalla (abajo): borrarlos uno a uno además
+         * sería doble delete, porque el padre cascadea a los hijos. */
+        g_nodes[i].lv = NULL;
+#endif
+        node_release(&g_nodes[i]);
+        g_nodes[i].used = 0;
+    }
+    g_node_count = 0;
+    g_screen = 0;
+    g_next_handle = 1;
+    g_ev_head = g_ev_tail = 0;      /* la cola de eventos también es del programa */
+
+    for (int i = 0; i < g_image_count; i++) {
+        bpvm_free(g_images[i].path); g_images[i].path = NULL;
+#ifdef BPVM_LVGL
+        bpvm_free(g_images[i].png_data); g_images[i].png_data = NULL;
+#endif
+        g_images[i].used = 0;
+    }
+    g_image_count = 0;
+
+#ifdef BPVM_LVGL
+    /* La pantalla se queda LIMPIA: los widgets eran del programa que acaba de
+     * terminar. Dejarlos pintados es lo que hacía que el siguiente RUN dibujara
+     * encima de los anteriores. */
+    if (bpvm_gui_lvgl_window_open()) lv_obj_clean(lv_screen_active());
 #endif
 }
 

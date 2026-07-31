@@ -11,6 +11,9 @@
 #include "bpvm_pack.h"          /* H3.c: resolución de imports contra la zona de packs */
 #include "bpvm_fs.h"            /* #310: un pack ejecutable vive en /app del FS */
 #include "bpvm_alloc.h"         /* #339: guardián de fin de RUN */
+#ifdef BPVM_GUI
+#include "bpvm_gui.h"          /* #352: el modelo del GUI se va con la VM */
+#endif
 #include "bpvm_platform.h"      /* #339: candado de hoja de la lista de bloques */
 #include <stdio.h>
 #include <stdlib.h>
@@ -902,6 +905,11 @@ void bpvm_destroy(bpvm_t* vm) {
     bpvm_free(vm->symbols);
     bpvm_free(vm->scratch);
     bpvm_free(vm->gc_valid_map);
+    /* #352 — el modelo del GUI es de la VM: se va con ella. Antes vivía en
+     * globales de fichero y sobrevivía al programa (ver bpvm_gui_reset). */
+#ifdef BPVM_GUI
+    bpvm_gui_reset();
+#endif
     bpvm_free(vm);
 
     /* Y ahora el juicio: lo que quede vivo con secuencia >= la marca es memoria
