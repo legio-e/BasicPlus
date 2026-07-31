@@ -53,6 +53,31 @@ enum {
     BUILTIN_CONTAINS        = 13,
     BUILTIN_REPLACE         = 15,
     BUILTIN_SPLIT           = 36,
+    /* #348 tanda 2 — matemáticas de cómputo puro. Todas calculan en DOUBLE y
+     * estrechan a float AL FINAL, igual que miVM (Math.* de Java toma double y
+     * el resultado se castea a (float)). Usar las variantes 'f' de libm daría
+     * otro último bit y rompería la paridad. */
+    BUILTIN_SQRT            = 19,
+    BUILTIN_POW             = 20,
+    BUILTIN_LOG             = 21,
+    BUILTIN_LOG10           = 22,
+    BUILTIN_EXP             = 23,
+    BUILTIN_SIN             = 24,
+    BUILTIN_COS             = 25,
+    BUILTIN_TAN             = 26,
+    BUILTIN_PI              = 29,
+    BUILTIN_E               = 30,
+    BUILTIN_FLOOR           = 31,
+    BUILTIN_CEIL            = 32,
+    BUILTIN_ROUND           = 33,
+    BUILTIN_SIGN_I          = 56,
+    BUILTIN_SIGN_F          = 57,
+    BUILTIN_ASIN            = 58,
+    BUILTIN_ACOS            = 59,
+    BUILTIN_ATAN            = 60,
+    BUILTIN_ATAN2           = 61,
+    BUILTIN_FACTORIAL_I     = 62,
+    BUILTIN_GAMMA_F         = 63,
     /* Numéricas enteras (V2/GAP-1) — byte-exactas, sin riesgo de paridad float. */
     BUILTIN_ABS             = 16,
     BUILTIN_MIN             = 17,
@@ -386,6 +411,48 @@ static uint32_t latin1_lower_cp(uint32_t c) {
     if (c >= 0x00C0 && c <= 0x00DE && c != 0x00D7) return c + 32;  /* × no es letra */
     if (c == 0x0178)                     return 0x00FF;            /* Ÿ → ÿ */
     return c;
+}
+
+/* #348 tanda 2 — bits de un float BP (f32) y vuelta. El stack de BP guarda los
+ * floats como sus bits en un i32, igual que miVM (Float.intBitsToFloat). */
+static float bits_to_f32(int32_t bits) { float f; memcpy(&f, &bits, 4); return f; }
+static int32_t f32_to_bits(float f)    { int32_t b; memcpy(&b, &f, 4); return b; }
+
+/* #348 tanda 2 — conversión double→int32 con la semántica de JAVA, que NO es la
+ * de C. En C, convertir a int un double fuera de rango o NaN es COMPORTAMIENTO
+ * INDEFINIDO (en x86 suele salir 0x80000000, pero no hay promesa y en ARM/RISC-V
+ * puede ser otra cosa). Java lo define: NaN → 0, y saturación a MIN/MAX.
+ * floor/ceil/round tienen que coincidir en las dos VMs TAMBIÉN en los extremos,
+ * que es justo donde nadie mira. */
+static int32_t java_d2i(double d) {
+    if (d != d) return 0;                                  /* NaN */
+    if (d >=  2147483647.0) return  2147483647;
+    if (d <= -2147483648.0) return -2147483647 - 1;
+    return (int32_t) d;                                    /* trunca hacia cero */
+}
+
+/* #348 tanda 2 — Lanczos g=7, n=9. RÉPLICA EXACTA de lanczosGamma de miVM:
+ * mismos coeficientes, mismo orden de operaciones y misma reflexión. Cualquier
+ * reordenación cambia el último bit y rompe la paridad. */
+static double lanczos_gamma(double x) {
+    static const double p[9] = {
+        0.99999999999980993,
+        676.5203681218851,
+        -1259.1392167224028,
+        771.32342877765313,
+        -176.61502916214059,
+        12.507343278686905,
+        -0.13857109526572012,
+        9.9843695780195716e-6,
+        1.5056327351493116e-7
+    };
+    const double PI_D = 3.14159265358979323846;
+    if (x < 0.5) return PI_D / (sin(PI_D * x) * lanczos_gamma(1.0 - x));
+    x -= 1.0;
+    double a = p[0];
+    double t = x + 7.5;
+    for (int i = 1; i < 9; i++) a += p[i] / (x + i);
+    return sqrt(2.0 * PI_D) * pow(t, x + 0.5) * exp(-t) * a;
 }
 
 /* #348 — busca `q` (qn bytes) dentro de `p` (n bytes) desde el byte `from`.
@@ -1595,6 +1662,142 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         tc->sp -= BPVM_REF_SIZE;           /* fuera la raíz temporal */
         tc->sp -= 2 * BPVM_REF_SIZE;       /* fuera los dos argumentos */
         bpref_push(vm, tc, arrh);
+        return BPVM_OK;
+    }
+
+    /* ================================================================
+     * #348 tanda 2 — MATEMÁTICAS DE CÓMPUTO PURO.
+     *
+     * REGLA que las gobierna todas: calcular en DOUBLE y estrechar a float AL
+     * FINAL. miVM lo hace asi porque los Math.* de Java toman double y el
+     * resultado se castea a (float). Usar sqrtf/sinf/... daria otro ultimo bit
+     * en algunos valores y la paridad se rompe donde nadie mira.
+     * ================================================================ */
+
+    case BUILTIN_SQRT: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) sqrt((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_POW: {
+        float e = bits_to_f32(pop_i32(vm, tc));     /* exponente arriba */
+        float b = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) pow((double) b, (double) e)));
+        return BPVM_OK;
+    }
+    case BUILTIN_LOG: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) log((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_LOG10: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) log10((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_EXP: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) exp((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_SIN: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) sin((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_COS: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) cos((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_TAN: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) tan((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_ASIN: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) asin((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_ACOS: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) acos((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_ATAN: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) atan((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_ATAN2: {
+        /* pila (abajo→arriba): y, x. El pop devuelve primero el de arriba. */
+        float x = bits_to_f32(pop_i32(vm, tc));
+        float y = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) atan2((double) y, (double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_PI: {
+        /* El double más cercano a pi, luego a f32 — igual que (float) Math.PI. */
+        push_i32(vm, tc, f32_to_bits((float) 3.14159265358979323846));
+        return BPVM_OK;
+    }
+    case BUILTIN_E: {
+        push_i32(vm, tc, f32_to_bits((float) 2.7182818284590452354));
+        return BPVM_OK;
+    }
+    case BUILTIN_FLOOR: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, java_d2i(floor((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_CEIL: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, java_d2i(ceil((double) x)));
+        return BPVM_OK;
+    }
+    case BUILTIN_ROUND: {
+        /* Math.round(float) de Java: el int más cercano, con los empates hacia
+         * +infinito — o sea floor(x + 0.5f). NaN → 0 y saturación las pone
+         * java_d2i. Ojo: el +0.5 va en FLOAT, como en Java, no en double. */
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, java_d2i(floor((double)(x + 0.5f))));
+        return BPVM_OK;
+    }
+    case BUILTIN_SIGN_I: {
+        int32_t x = pop_i32(vm, tc);
+        push_i32(vm, tc, (x > 0) - (x < 0));       /* Integer.compare(x,0) */
+        return BPVM_OK;
+    }
+    case BUILTIN_SIGN_F: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        int32_t r;
+        if (x != x)      r = 0;                    /* convención de miVM: NaN → 0 */
+        else if (x > 0)  r = 1;
+        else if (x < 0)  r = -1;
+        else             r = 0;                    /* ±0 */
+        push_i32(vm, tc, r);
+        return BPVM_OK;
+    }
+    case BUILTIN_FACTORIAL_I: {
+        int32_t n = pop_i32(vm, tc);
+        char msg[80];
+        if (n < 0) {
+            snprintf(msg, sizeof msg, "factorial: argumento negativo (%d)", (int) n);
+            return builtin_throw(vm, tc, msg);
+        }
+        if (n > 12) {   /* 13! desborda i32 con signo */
+            snprintf(msg, sizeof msg, "factorial: %d desborda integer (max 12)", (int) n);
+            return builtin_throw(vm, tc, msg);
+        }
+        int32_t r = 1;
+        for (int32_t i = 2; i <= n; i++) r *= i;
+        push_i32(vm, tc, r);
+        return BPVM_OK;
+    }
+    case BUILTIN_GAMMA_F: {
+        float x = bits_to_f32(pop_i32(vm, tc));
+        push_i32(vm, tc, f32_to_bits((float) lanczos_gamma((double) x)));
         return BPVM_OK;
     }
 

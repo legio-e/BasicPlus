@@ -1,0 +1,92 @@
+// #348 tanda 2 — las 21 funciones matematicas que faltaban en la VM-C.
+//
+// La trampa de esta tanda: el float de BP es f32, pero miVM calcula en DOUBLE y
+// estrecha al final (los Math.* de Java toman double). Si la VM-C usara sqrtf en
+// vez de sqrt, algunos valores diferirian en el ULTIMO BIT y la paridad se
+// rompe donde nadie mira. Por eso aqui hay valores "feos" a proposito: 2, 3, 10,
+// 0.1 — no solo cuadrados perfectos.
+//
+// Y los EXTREMOS, que es donde C y Java no se parecen: en C convertir a int un
+// double fuera de rango o NaN es comportamiento INDEFINIDO; Java lo define
+// (NaN->0, saturacion). floor/ceil/round tienen que coincidir tambien ahi.
+module MathOps348
+
+  import Math
+
+  function f(t: string, v: float)
+    print t
+    print v
+  end f
+
+  function n(t: string, v: integer)
+    print t + " -> " + intToString(v)
+  end n
+
+  public function Main()
+    print "== raices, potencias, logaritmos =="
+    f("sqrt(9)   ", sqrt(9.0))
+    f("sqrt(2)   ", sqrt(2.0))
+    f("sqrt(0.1) ", sqrt(0.1))
+    f("pow(2,10) ", pow(2.0, 10.0))
+    f("pow(2,0.5)", pow(2.0, 0.5))
+    f("Math.ln(3)", Math.ln(3.0))
+    f("log10(100)", Math.log10(100.0))
+    f("exp(1)    ", exp(1.0))
+
+    print "== trigonometria =="
+    f("sin(0)    ", Math.sin(0.0))
+    f("sin(1)    ", Math.sin(1.0))
+    f("cos(1)    ", Math.cos(1.0))
+    f("tan(1)    ", Math.tan(1.0))
+    f("asin(0.5) ", Math.asin(0.5))
+    f("acos(0.5) ", Math.acos(0.5))
+    f("atan(1)   ", Math.atan(1.0))
+    f("atan2(1,1)", Math.atan2(1.0, 1.0))
+    f("atan2(1,-1)", Math.atan2(1.0, -1.0))
+
+    print "== constantes =="
+    f("pi        ", Math.pi())
+    f("e         ", Math.e())
+
+    print "== floor / ceil / round (devuelven integer) =="
+    n("floor(2.7)   ", floor(2.7))
+    n("floor(-2.7)  ", floor(-2.7))
+    n("ceil(2.1)    ", ceil(2.1))
+    n("ceil(-2.1)   ", ceil(-2.1))
+    n("round(2.4)   ", round(2.4))
+    n("round(2.5)   ", round(2.5))
+    n("round(-2.5)  ", round(-2.5))
+    n("round(-2.6)  ", round(-2.6))
+
+    print "== signo =="
+    n("sign(-7)     ", Math.sign(-7))
+    n("sign(0)      ", Math.sign(0))
+    n("sign(7)      ", Math.sign(7))
+    n("signF(-0.5)  ", Math.signF(-0.5))
+    n("signF(0.0)   ", Math.signF(0.0))
+    n("signF(0.5)   ", Math.signF(0.5))
+
+    print "== factorial (y sus dos errores) =="
+    n("factorial(0) ", Math.factorial(0))
+    n("factorial(5) ", Math.factorial(5))
+    n("factorial(12)", Math.factorial(12))
+    try
+      var x: integer := Math.factorial(-1)
+      print "factorial(-1) NO deberia llegar aqui"
+    catch e: RuntimeError
+      print "factorial(-1) -> RuntimeError (correcto)"
+    endtry
+    try
+      var y: integer := Math.factorial(13)
+      print "factorial(13) NO deberia llegar aqui"
+    catch e: RuntimeError
+      print "factorial(13) -> RuntimeError (correcto)"
+    endtry
+
+    print "== gamma (Lanczos: para natural da (x-1)!) =="
+    f("gamma(1)  ", Math.gamma(1.0))
+    f("gamma(5)  ", Math.gamma(5.0))
+    f("gamma(0.5)", Math.gamma(0.5))
+  end Main
+
+end MathOps348

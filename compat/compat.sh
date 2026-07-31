@@ -50,7 +50,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -189,9 +189,30 @@ check_parity() {
     if [ ! -f "$bp" ]; then
       echo "  SKIP $s (no existe $bp)"; skip=$((skip+1)); continue
     fi
-    rm -f "$WORK"/*.mod
+    rm -rf "$WORK"/*.mod "$WORK/src" "$WORK/p.bpbuild"
     if ! java -jar "$V3_FE" "$bp" --compile "$WORK" --backend=mivm >/dev/null 2>&1; then
-      echo "  SKIP $s (no compila con el frontend actual)"; skip=$((skip+1)); continue
+      # 2o intento POR PROYECTO. Un sample que importa stdlib (Math, IO, ...) no
+      # compila con --compile a secas: el frontend no sabe donde buscar, y eso
+      # hoy solo se le dice con un .bpbuild. Antes esos samples caian a SKIP, o
+      # sea que se quedaban fuera de la red por una limitacion del ARNES y no
+      # del sample — justo lo que el arnes existe para no dejar pasar.
+      # El `main` sale del `module` de dentro del .bp, NO del nombre del fichero
+      # (counter.bp declara CounterSample: usar el fichero daria un falso SKIP).
+      local mname
+      mname="$(sed -nE 's/^[[:space:]]*module[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' "$bp" | head -1)"
+      if [ -z "$mname" ]; then
+        echo "  SKIP $s (no compila y no se le ve el 'module')"; skip=$((skip+1)); continue
+      fi
+      mkdir -p "$WORK/src"; cp "$bp" "$WORK/src/"
+      printf '{ "sourceDir": "src", "outDir": ".", "main": "%s", "dependencies": ["%s"] }\n' \
+             "$mname" "$STDLIB" > "$WORK/p.bpbuild"
+      if ! ( cd "$WORK" && java -jar "$V3_FE" --project p.bpbuild --backend=mivm ) >/dev/null 2>&1; then
+        echo "  SKIP $s (no compila con el frontend actual, ni suelto ni por proyecto)"
+        skip=$((skip+1)); continue
+      fi
+      # Las deps de stdlib se resuelven en EJECUCION junto al .mod (es lo que
+      # hace el dispositivo, que las tiene instaladas), asi que van al lado.
+      cp "$STDLIB"/*.mod "$WORK/" 2>/dev/null
     fi
     # El .mod raiz es el que NO es Core (dep implicita desde #248).
     mod="$(ls "$WORK"/*.mod 2>/dev/null | grep -v '[/\]Core\.mod$' | head -1)"
