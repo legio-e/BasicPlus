@@ -188,7 +188,14 @@ uint64_t bpvm_alloc_live_bytes (bpvm_alloc_kind_t k) { return g_bytes[k]; }
 
 uint64_t bpvm_alloc_mark(void) { return g_seq_vm; }
 
-static void report_stderr(const char* linea) { fprintf(stderr, "%s\n", linea); }
+/* fflush OBLIGATORIO: con stderr redirigido a fichero o tubería (que es como
+ * corre el micro simulado bajo el IDE) el runtime lo vuelve BUFFERIZADO, y si
+ * al proceso lo matan el aviso se queda dentro sin llegar a nadie. Un guardián
+ * cuyo veredicto se pierde justo en el caso violento no sirve para nada. */
+static void report_stderr(const char* linea) {
+    fprintf(stderr, "%s\n", linea);
+    fflush(stderr);
+}
 static bpvm_alloc_report_fn g_report = report_stderr;
 
 void bpvm_alloc_set_report(bpvm_alloc_report_fn fn) {
