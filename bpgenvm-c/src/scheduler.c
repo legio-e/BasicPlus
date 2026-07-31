@@ -139,8 +139,8 @@ bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
      * después de agotarse el presupuesto. Tirarlos es legítimo; tirarlos EN
      * SILENCIO es la familia de bug que costó #326. Que lo diga. */
     if (vm->ev_count > 0) {
-        fprintf(stderr, "[bpvm] fin de ejecucion con %d evento(s) sin atender "
-                        "(destinatario muerto o encolados por un handler tardio)\n",
+        fprintf(stderr, "[bpvm] fin de ejecución con %d evento(s) sin atender "
+                        "(destinatario muerto o encolados por un handler tardío)\n",
                 vm->ev_count);
     }
     return BPVM_OK;

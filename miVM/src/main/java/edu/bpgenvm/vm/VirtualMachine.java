@@ -2050,7 +2050,7 @@ public class VirtualMachine {
         int evLeft;
         synchronized (vmLock) { evLeft = eventQueue.size(); }
         if (evLeft > 0) {
-            System.err.println("[bpgenvm] fin de ejecución con " + evLeft
+            System.err.println("[bpvm] fin de ejecución con " + evLeft
                     + " evento(s) sin atender (destinatario muerto o encolados"
                     + " por un handler tardío)");
         }
@@ -3975,7 +3975,7 @@ public class VirtualMachine {
                     synchronized (vmLock) {
                         if (eventQueue.size() >= EVENT_QUEUE_CAP) {
                             // Que GRITE: un evento perdido en silencio cuesta una tarde.
-                            System.err.println("[bpgenvm] cola de eventos llena ("
+                            System.err.println("[bpvm] cola de eventos llena ("
                                     + EVENT_QUEUE_CAP + "): evento descartado (tid=" + tc.id
                                     + ", slot=" + dest + ")");
                         } else {
@@ -5529,7 +5529,7 @@ public class VirtualMachine {
             }
             int parentOff = readI32(mem, desc + CLS_OFF_PARENT_OFF);
             if (parentOff == 0) {
-                System.err.println("[bpgenvm] evento: slot " + ev.dest + " no resoluble en la"
+                System.err.println("[bpvm] evento: slot " + ev.dest + " no resoluble en la"
                         + " clase del receptor — descartado");
                 return;
             }
@@ -5539,7 +5539,7 @@ public class VirtualMachine {
         int need = 4 + REF_SIZE + 12;
         for (int i = 0; i < ev.args.length; i++) need += ((ev.masks & (1 << (8 + i))) != 0) ? 8 : 4;
         if (tc.sp + need > tc.stackTop) {
-            System.err.println("[bpgenvm] evento: sin pila en tid=" + tc.id + " — descartado");
+            System.err.println("[bpvm] evento: sin pila en tid=" + tc.id + " — descartado");
             return;
         }
 
