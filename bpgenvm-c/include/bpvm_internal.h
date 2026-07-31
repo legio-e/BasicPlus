@@ -294,6 +294,12 @@ struct aot_helpers_v2;
 #define BPVM_MAX_BREAKPOINTS 32
 
 struct bpvm {
+    /* #339 — marca del guardián de fin de RUN: el número de secuencia de
+     * reserva que había justo al arrancar este programa. Todo bloque con
+     * secuencia >= esta marca que siga vivo cuando bpvm_destroy termine es
+     * memoria que se quedó sin limpiar. Ver bpvm_alloc.h. */
+    uint64_t run_mark;
+
     /* Buffer del caller. */
     uint8_t* memory;
     size_t   memory_size;

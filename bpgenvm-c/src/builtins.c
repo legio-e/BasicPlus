@@ -29,6 +29,7 @@
 #include "bpvm_fs.h"
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"   /* V3 / H4 — backend GUI (modelo). Sólo en el build con GUI. */
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #endif
 
 /* IDs estables (= ordinal del enum Builtin Java). Sólo los que F2
@@ -955,7 +956,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char* buf = NULL;
         size_t n = bpvm_gui_dump_tree(&buf);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf ? buf : "", n);
-        free(buf);
+        bpvm_free(buf);
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }

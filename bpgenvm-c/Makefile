@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -371,6 +371,17 @@ test-kill: $(LIBOBJ)
 	  (cd samples && ../$(KILL_BIN) KillLoop.mod KillSleep.mod); \
 	fi
 
+# #339 — el GUARDIÁN DE FIN DE RUN, probado contra una fuga DE VERDAD. Que la
+# VM no fugue lo dice el guardián en cada ejecución; lo que hay que demostrar
+# aquí es que el guardián no está mudo: se le pone delante un bloque sin liberar
+# y tiene que verlo, medirlo y señalar el fichero. Ver test/test_runguard.c.
+RUNGUARD_BIN = build/test_runguard.exe
+test-runguard: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,MethodCall)
+	$(CC) $(CFLAGS) -Isrc test/test_runguard.c $(LIBOBJ) -o $(RUNGUARD_BIN) $(LDFLAGS)
+	@echo "--- guardian de fin de RUN #339 (esperado: PASS) ---"
+	./$(RUNGUARD_BIN) samples/MethodCall.mod
 # #175 — throw RuntimeError(<msg computado>) desde native, cazado por try/catch
 # BP. test/aot_ThrowMsg.c es un SNAPSHOT del .c que genera AotCEmitter (usa
 # throw_str con el string-handle computado). Salida byte-idéntica a la VM-Java.

@@ -18,12 +18,13 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <string.h>
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
 void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,
                   int32_t saved_bp, int32_t saved_cs, int32_t expected_class) {
     if (tc->eh_stack_size >= tc->eh_stack_capacity) {
         int new_cap = tc->eh_stack_capacity == 0 ? 4 : tc->eh_stack_capacity * 2;
-        bpvm_eh_entry_t* arr = (bpvm_eh_entry_t*) realloc(tc->eh_stack,
+        bpvm_eh_entry_t* arr = (bpvm_eh_entry_t*) bpvm_realloc(tc->eh_stack,
                                   (size_t) new_cap * sizeof(bpvm_eh_entry_t));
         if (!arr) return;
         tc->eh_stack = arr;

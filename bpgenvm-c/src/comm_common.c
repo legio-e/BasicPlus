@@ -18,24 +18,25 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
 int bpvm_oq_init(bpvm_output_queue_t* q, size_t cap) {
-    q->buf = (char*) malloc(cap);
+    q->buf = (char*) bpvm_malloc(cap);
     if (!q->buf) return -1;
     q->cap  = cap;
     q->head = q->tail = q->used = 0;
     q->closed = false;
     if (bpvm_platform_mutex_init(&q->mtx) != 0) {
-        free(q->buf); q->buf = NULL; return -1;
+        bpvm_free(q->buf); q->buf = NULL; return -1;
     }
     if (bpvm_platform_cond_init(&q->not_empty) != 0) {
         bpvm_platform_mutex_destroy(&q->mtx);
-        free(q->buf); q->buf = NULL; return -1;
+        bpvm_free(q->buf); q->buf = NULL; return -1;
     }
     if (bpvm_platform_cond_init(&q->not_full) != 0) {
         bpvm_platform_cond_destroy(&q->not_empty);
         bpvm_platform_mutex_destroy(&q->mtx);
-        free(q->buf); q->buf = NULL; return -1;
+        bpvm_free(q->buf); q->buf = NULL; return -1;
     }
     return 0;
 }
@@ -45,7 +46,7 @@ void bpvm_oq_destroy(bpvm_output_queue_t* q) {
     bpvm_platform_cond_destroy(&q->not_full);
     bpvm_platform_cond_destroy(&q->not_empty);
     bpvm_platform_mutex_destroy(&q->mtx);
-    free(q->buf);
+    bpvm_free(q->buf);
     q->buf = NULL;
 }
 

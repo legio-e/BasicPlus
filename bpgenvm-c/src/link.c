@@ -16,6 +16,7 @@
 #include "bpvm_internal.h"
 #include <stdio.h>
 #include <string.h>
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
 /* ---- Helpers de mapeo addr → módulo ---- */
 
@@ -92,7 +93,7 @@ bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
                                          uint32_t abs_addr) {
     if (vm->symbol_count >= vm->symbol_capacity) {
         int new_cap = vm->symbol_capacity == 0 ? 32 : vm->symbol_capacity * 2;
-        bpvm_symbol_t* new_arr = (bpvm_symbol_t*) realloc(vm->symbols,
+        bpvm_symbol_t* new_arr = (bpvm_symbol_t*) bpvm_realloc(vm->symbols,
                                   (size_t) new_cap * sizeof(bpvm_symbol_t));
         if (!new_arr) return BPVM_ERR_OOM;
         vm->symbols = new_arr;

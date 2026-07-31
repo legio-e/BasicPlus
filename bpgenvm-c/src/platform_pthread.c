@@ -13,13 +13,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include "bpvm_alloc.h"   /* #339: familia OS del guardian */
 
 /* ---- Mutex ---- */
 
 int bpvm_platform_mutex_init(bpvm_platform_mutex_handle_t* m) {
-    pthread_mutex_t* mx = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
+    pthread_mutex_t* mx = (pthread_mutex_t*) bpvm_malloc_os(sizeof(pthread_mutex_t));
     if (!mx) return -1;
-    if (pthread_mutex_init(mx, NULL) != 0) { free(mx); return -1; }
+    if (pthread_mutex_init(mx, NULL) != 0) { bpvm_free(mx); return -1; }
     *m = mx;
     return 0;
 }
@@ -28,7 +29,7 @@ void bpvm_platform_mutex_destroy(bpvm_platform_mutex_handle_t* m) {
     if (!m || !*m) return;
     pthread_mutex_t* mx = (pthread_mutex_t*) *m;
     pthread_mutex_destroy(mx);
-    free(mx);
+    bpvm_free(mx);
     *m = NULL;
 }
 
@@ -43,9 +44,9 @@ void bpvm_platform_mutex_unlock(bpvm_platform_mutex_handle_t* m) {
 /* ---- Condvar ---- */
 
 int bpvm_platform_cond_init(bpvm_platform_cond_handle_t* c) {
-    pthread_cond_t* cv = (pthread_cond_t*) malloc(sizeof(pthread_cond_t));
+    pthread_cond_t* cv = (pthread_cond_t*) bpvm_malloc_os(sizeof(pthread_cond_t));
     if (!cv) return -1;
-    if (pthread_cond_init(cv, NULL) != 0) { free(cv); return -1; }
+    if (pthread_cond_init(cv, NULL) != 0) { bpvm_free(cv); return -1; }
     *c = cv;
     return 0;
 }
@@ -54,7 +55,7 @@ void bpvm_platform_cond_destroy(bpvm_platform_cond_handle_t* c) {
     if (!c || !*c) return;
     pthread_cond_t* cv = (pthread_cond_t*) *c;
     pthread_cond_destroy(cv);
-    free(cv);
+    bpvm_free(cv);
     *c = NULL;
 }
 
@@ -92,21 +93,21 @@ static void* pthread_trampoline(void* raw) {
     pthread_trampoline_arg_t* t = (pthread_trampoline_arg_t*) raw;
     bpvm_thread_entry_t entry = t->entry;
     void* arg = t->arg;
-    free(t);
+    bpvm_free(t);
     entry(arg);
     return NULL;
 }
 
 int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* th,
                                  bpvm_thread_entry_t entry, void* arg) {
-    pthread_t* p = (pthread_t*) malloc(sizeof(pthread_t));
+    pthread_t* p = (pthread_t*) bpvm_malloc_os(sizeof(pthread_t));
     if (!p) return -1;
-    pthread_trampoline_arg_t* t = (pthread_trampoline_arg_t*) malloc(sizeof(*t));
-    if (!t) { free(p); return -1; }
+    pthread_trampoline_arg_t* t = (pthread_trampoline_arg_t*) bpvm_malloc_os(sizeof(*t));
+    if (!t) { bpvm_free(p); return -1; }
     t->entry = entry;
     t->arg   = arg;
     int r = pthread_create(p, NULL, pthread_trampoline, t);
-    if (r != 0) { free(p); free(t); return -1; }
+    if (r != 0) { bpvm_free(p); bpvm_free(t); return -1; }
     *th = p;
     return 0;
 }
@@ -126,7 +127,7 @@ void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t) {
     if (!t || !*t) return;
     pthread_t* p = (pthread_t*) *t;
     pthread_join(*p, NULL);
-    free(p);
+    bpvm_free(p);
     *t = NULL;
 }
 

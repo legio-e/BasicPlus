@@ -14,6 +14,7 @@
 
 #include "bpvm_internal.h"
 #include <stdio.h>
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
 /* ---- Mutex pool ---- */
 
@@ -27,7 +28,7 @@ int bpvm_mutex_alloc(bpvm_t* vm) {
     bpvm_smp_lock(vm);
     if (vm->mutex_count >= vm->mutex_capacity) {
         int new_cap = vm->mutex_capacity == 0 ? 8 : vm->mutex_capacity * 2;
-        bpvm_bp_mutex_t* arr = (bpvm_bp_mutex_t*) realloc(vm->mutexes,
+        bpvm_bp_mutex_t* arr = (bpvm_bp_mutex_t*) bpvm_realloc(vm->mutexes,
                                 (size_t) new_cap * sizeof(bpvm_bp_mutex_t));
         if (!arr) { bpvm_smp_unlock(vm); return -1; }
         vm->mutexes = arr;
@@ -49,7 +50,7 @@ void bpvm_mutex_add_waiter(bpvm_t* vm, int mid, int tid) {
     bpvm_bp_mutex_t* m = &vm->mutexes[mid];
     if (m->waiter_count >= m->waiter_capacity) {
         int new_cap = m->waiter_capacity == 0 ? 4 : m->waiter_capacity * 2;
-        int32_t* arr = (int32_t*) realloc(m->waiters,
+        int32_t* arr = (int32_t*) bpvm_realloc(m->waiters,
                         (size_t) new_cap * sizeof(int32_t));
         if (!arr) { bpvm_smp_unlock(vm); return; }
         m->waiters = arr;

@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
 /* ============================================================ */
 /*  Helpers (bajo vm_lock)                                       */
@@ -104,7 +105,7 @@ static void worker_loop(void* raw) {
     bpvm_smp_t* smp = vm->smp;
     int wid = arg->worker_id;
     /* `arg` libre tras leerlo — fue malloc'd por el padre. */
-    free(arg);
+    bpvm_free(arg);
 
     for (;;) {
         /* P-run-stop (#257) — poll cooperativo del transporte ENTRE quanta
@@ -229,7 +230,7 @@ int bpvm_smp_init(bpvm_t* vm, int n_workers) {
     if (!vm || n_workers < 1) return -1;
     if (vm->smp) return -1;            /* ya inicializado */
 
-    bpvm_smp_t* smp = (bpvm_smp_t*) calloc(1, sizeof(bpvm_smp_t));
+    bpvm_smp_t* smp = (bpvm_smp_t*) bpvm_calloc(1, sizeof(bpvm_smp_t));
     if (!smp) return -1;
     smp->n_workers = n_workers;
     smp->shutdown = false;
@@ -241,7 +242,7 @@ int bpvm_smp_init(bpvm_t* vm, int n_workers) {
     if (bpvm_platform_cond_init(&smp->sched_cond) != 0) goto fail_lock;
 
     smp->worker_threads = (bpvm_platform_thread_handle_t*)
-            calloc(n_workers, sizeof(bpvm_platform_thread_handle_t));
+            bpvm_calloc(n_workers, sizeof(bpvm_platform_thread_handle_t));
     if (!smp->worker_threads) goto fail_cond;
 
     vm->smp = smp;
@@ -249,7 +250,7 @@ int bpvm_smp_init(bpvm_t* vm, int n_workers) {
     /* Arranca comm task (host: drena queue a stdout). */
     if (bpvm_comm_start(vm) != 0) {
         vm->smp = NULL;
-        free(smp->worker_threads);
+        bpvm_free(smp->worker_threads);
         goto fail_cond;
     }
     return 0;
@@ -259,7 +260,7 @@ fail_cond:
 fail_lock:
     bpvm_platform_mutex_destroy(&smp->vm_lock);
 fail_free:
-    free(smp);
+    bpvm_free(smp);
     return -1;
 }
 
@@ -273,10 +274,10 @@ void bpvm_smp_destroy(bpvm_t* vm) {
     bpvm_platform_mutex_unlock(&smp->vm_lock);
     /* Workers ya joineados en scheduler_run_smp; aquí solo cleanup. */
     bpvm_comm_stop(vm);
-    free(smp->worker_threads);
+    bpvm_free(smp->worker_threads);
     bpvm_platform_cond_destroy(&smp->sched_cond);
     bpvm_platform_mutex_destroy(&smp->vm_lock);
-    free(smp);
+    bpvm_free(smp);
     vm->smp = NULL;
 }
 
@@ -294,7 +295,7 @@ int bpvm_scheduler_run_smp(bpvm_t* vm) {
      * threads BP (que se turnan cooperativamente en ese único worker).
      * Con 1 core (o en host pthread) el pin se ignora — no-op. */
     for (int i = 0; i < smp->n_workers; i++) {
-        worker_arg_t* arg = (worker_arg_t*) malloc(sizeof(*arg));
+        worker_arg_t* arg = (worker_arg_t*) bpvm_malloc(sizeof(*arg));
         if (!arg) return -1;
         arg->vm = vm;
         arg->worker_id = i;
@@ -302,7 +303,7 @@ int bpvm_scheduler_run_smp(bpvm_t* vm) {
         if (bpvm_platform_thread_create_pinned(&smp->worker_threads[i],
                                                 worker_loop, arg,
                                                 core_id) != 0) {
-            free(arg);
+            bpvm_free(arg);
             return -1;
         }
     }

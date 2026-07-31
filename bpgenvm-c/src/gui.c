@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
 #ifdef BPVM_LVGL
 #include "lvgl.h"
@@ -199,8 +200,8 @@ static void lvgl_change_cb(lv_event_t* e) {
                 g_nodes[i].value = (int) lv_dropdown_get_selected(g_nodes[i].lv);
             else if (strcmp(g_nodes[i].type, "textarea") == 0) {
                 const char* t = lv_textarea_get_text(g_nodes[i].lv);   /* refleja el contenido en el modelo */
-                free(g_nodes[i].text); g_nodes[i].text = NULL;
-                if (t) { size_t L = strlen(t); g_nodes[i].text = (char*) malloc(L + 1); if (g_nodes[i].text) memcpy(g_nodes[i].text, t, L + 1); }
+                bpvm_free(g_nodes[i].text); g_nodes[i].text = NULL;
+                if (t) { size_t L = strlen(t); g_nodes[i].text = (char*) bpvm_malloc(L + 1); if (g_nodes[i].text) memcpy(g_nodes[i].text, t, L + 1); }
             }
             else if (strcmp(g_nodes[i].type, "tabview") == 0)
                 g_nodes[i].value = (int) lv_tabview_get_tab_active(g_nodes[i].lv);
@@ -433,7 +434,7 @@ int bpvm_gui_create_tabview(int parent) {
 int bpvm_gui_tabview_add_tab(int handle, const char* name) {
     int h = create_node("tabpage", handle);
     gui_node* n = node_for(h); if (!n) return h;
-    if (name) { size_t L = strlen(name); n->text = (char*) malloc(L + 1); if (n->text) memcpy(n->text, name, L + 1); }
+    if (name) { size_t L = strlen(name); n->text = (char*) bpvm_malloc(L + 1); if (n->text) memcpy(n->text, name, L + 1); }
 #ifdef BPVM_LVGL
     gui_node* tv = node_for(handle);
     if (tv && tv->lv) n->lv = lv_tabview_add_tab(tv->lv, name ? name : "");
@@ -453,17 +454,17 @@ void bpvm_gui_table_set_grid(int handle, int rows, int cols) {
     if (rows < 0) rows = 0;
     if (cols < 0) cols = 0;
     int total = rows * cols; if (total < 1) total = 1;
-    char** nc = (char**) calloc((size_t) total, sizeof(char*));
+    char** nc = (char**) bpvm_calloc((size_t) total, sizeof(char*));
     if (!nc) return;
     if (n->cells) {   /* conserva las celdas que sigan en rango y libera el resto */
         for (int r = 0; r < n->trows; r++) {
             for (int c = 0; c < n->tcols; c++) {
                 char* old = n->cells[r * n->tcols + c];
                 if (r < rows && c < cols) nc[r * cols + c] = old;
-                else free(old);
+                else bpvm_free(old);
             }
         }
-        free(n->cells);
+        bpvm_free(n->cells);
     }
     n->trows = rows; n->tcols = cols; n->cells = nc;
 #ifdef BPVM_LVGL
@@ -474,9 +475,9 @@ void bpvm_gui_table_set_cell(int handle, int row, int col, const char* text) {
     gui_node* n = node_for(handle); if (!n || !n->cells) return;
     if (row < 0 || row >= n->trows || col < 0 || col >= n->tcols) return;
     int idx = row * n->tcols + col;
-    free(n->cells[idx]);
+    bpvm_free(n->cells[idx]);
     size_t L = text ? strlen(text) : 0;
-    n->cells[idx] = (char*) malloc(L + 1);
+    n->cells[idx] = (char*) bpvm_malloc(L + 1);
     if (n->cells[idx]) { if (text) memcpy(n->cells[idx], text, L); n->cells[idx][L] = '\0'; }
 #ifdef BPVM_LVGL
     if (n->lv) lv_table_set_cell_value(n->lv, row, col, text ? text : "");
@@ -504,9 +505,9 @@ int bpvm_gui_image_new(void) {
  * la cabecera PNG es válida, 0 si no (no encontrado / no es PNG). */
 int bpvm_gui_image_load_file(int id, const char* path) {
     gui_image* a = image_for(id); if (!a) return 0;
-    free(a->path);
+    bpvm_free(a->path);
     size_t L = path ? strlen(path) : 0;
-    a->path = (char*) malloc(L + 1);
+    a->path = (char*) bpvm_malloc(L + 1);
     if (a->path) { if (path) memcpy(a->path, path, L); a->path[L] = '\0'; }
     a->w = 0; a->h = 0; a->loaded = 0;
     /* H19-F1 — resuelve relativo al base-dir del proyecto (si lo hay), luego
@@ -531,12 +532,12 @@ int bpvm_gui_image_load_file(int id, const char* path) {
 #ifdef BPVM_LVGL
     /* Para renderizar: lee el PNG ENTERO a RAM y monta un lv_image_dsc_t (src
      * VARIABLE) que el decoder lodepng decodifica al asignarlo con set_src. */
-    free(a->png_data); a->png_data = NULL;
+    bpvm_free(a->png_data); a->png_data = NULL;
     lv_memzero(&a->dsc, sizeof(a->dsc));
     if (a->loaded) {
         uint32_t sz = 0;
         if (bpvm_fs_stat(rpath, &sz) == 0 && sz > 0
-            && (a->png_data = (uint8_t*) malloc(sz)) != NULL
+            && (a->png_data = (uint8_t*) bpvm_malloc(sz)) != NULL
             && bpvm_fs_read(rpath, a->png_data, sz) == (long) sz) {
             a->dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
             a->dsc.header.cf    = LV_COLOR_FORMAT_RAW;   /* encoded: el decoder resuelve el formato real */
@@ -545,7 +546,7 @@ int bpvm_gui_image_load_file(int id, const char* path) {
             a->dsc.data         = a->png_data;
             a->dsc.data_size    = sz;
         } else {
-            free(a->png_data); a->png_data = NULL;
+            bpvm_free(a->png_data); a->png_data = NULL;
             a->loaded = 0;   /* no se pudo leer entero → no renderizable */
         }
     }
@@ -645,8 +646,8 @@ void bpvm_gui_set_buttons(int handle, const char* labels) {
 
 void bpvm_gui_set_text(int handle, const char* s) {
     gui_node* n = node_for(handle); if (!n) return;
-    free(n->text); n->text = NULL;
-    if (s) { size_t L = strlen(s); n->text = (char*) malloc(L + 1); if (n->text) memcpy(n->text, s, L + 1); }
+    bpvm_free(n->text); n->text = NULL;
+    if (s) { size_t L = strlen(s); n->text = (char*) bpvm_malloc(L + 1); if (n->text) memcpy(n->text, s, L + 1); }
 #ifdef BPVM_LVGL
     if (n->lv && strcmp(n->type, "label") == 0)    lv_label_set_text(n->lv, s ? s : "");
     if (n->lv && strcmp(n->type, "checkbox") == 0) lv_checkbox_set_text(n->lv, s ? s : "");
@@ -657,8 +658,8 @@ void bpvm_gui_set_text(int handle, const char* s) {
 /* dropdown: opciones \n-separadas (guardadas en n->text, igual que LVGL). */
 void bpvm_gui_set_options(int handle, const char* opts) {
     gui_node* n = node_for(handle); if (!n) return;
-    free(n->text); n->text = NULL;
-    if (opts) { size_t L = strlen(opts); n->text = (char*) malloc(L + 1); if (n->text) memcpy(n->text, opts, L + 1); }
+    bpvm_free(n->text); n->text = NULL;
+    if (opts) { size_t L = strlen(opts); n->text = (char*) bpvm_malloc(L + 1); if (n->text) memcpy(n->text, opts, L + 1); }
 #ifdef BPVM_LVGL
     if (n->lv && strcmp(n->type, "dropdown") == 0) lv_dropdown_set_options(n->lv, opts ? opts : "");
     else if (n->lv && strcmp(n->type, "list") == 0) {
@@ -842,13 +843,13 @@ void bpvm_gui_set_range(int handle, int mn, int mx) {
 static void chart_realloc(gui_node* n, int nser, int npoints) {
     if (nser < 0) nser = 0;
     if (npoints < 1) npoints = 1;
-    int* nd = (int*) calloc((size_t)(nser ? nser : 1) * (size_t) npoints, sizeof(int));
+    int* nd = (int*) bpvm_calloc((size_t)(nser ? nser : 1) * (size_t) npoints, sizeof(int));
     if (!nd) return;                      /* sin memoria: deja el modelo como estaba */
     if (n->cdata) {
         for (int s = 0; s < nser && s < n->cnser; s++)
             for (int p = 0; p < npoints && p < n->cpoints; p++)
                 nd[s * npoints + p] = n->cdata[s * n->cpoints + p];
-        free(n->cdata);
+        bpvm_free(n->cdata);
     }
     n->cdata = nd; n->cnser = nser; n->cpoints = npoints;
 }
@@ -971,10 +972,10 @@ int bpvm_gui_load_font(const char* path) {
     const char* rpath = bpvm_fs_resolve(path ? path : "", alt, sizeof(alt));
     uint32_t sz = 0;
     if (bpvm_fs_stat(rpath, &sz) == 0 && sz > 0) {
-        uint8_t* buf = (uint8_t*) malloc(sz);
+        uint8_t* buf = (uint8_t*) bpvm_malloc(sz);
         if (buf && bpvm_fs_read(rpath, buf, sz) == (long) sz)
             g_loaded_fonts[id - 1] = lv_binfont_create_from_buffer(buf, sz);
-        free(buf);     /* el lv_font_t copia lo que necesita; el buffer ya no hace falta */
+        bpvm_free(buf);     /* el lv_font_t copia lo que necesita; el buffer ya no hace falta */
     }
     if (!g_loaded_fonts[id - 1]) {
         printf("[gui] loadFont('%s'): no se pudo cargar (id %d queda sin fuente)\n",
@@ -1063,7 +1064,7 @@ static void buf_append(char** buf, size_t* len, size_t* cap, const char* s, size
     if (*len + n + 1 > *cap) {
         size_t nc = *cap ? *cap : 256;
         while (nc < *len + n + 1) nc *= 2;
-        *buf = (char*) realloc(*buf, nc); *cap = nc;
+        *buf = (char*) bpvm_realloc(*buf, nc); *cap = nc;
     }
     memcpy(*buf + *len, s, n); *len += n; (*buf)[*len] = '\0';
 }
@@ -1129,7 +1130,7 @@ static void dump_node(char** buf, size_t* len, size_t* cap, int handle, int dept
 size_t bpvm_gui_dump_tree(char** out) {
     char* buf = NULL; size_t len = 0, cap = 0;
     if (g_screen != 0) dump_node(&buf, &len, &cap, g_screen, 0);
-    if (!buf) { buf = (char*) malloc(1); if (buf) buf[0] = '\0'; }
+    if (!buf) { buf = (char*) bpvm_malloc(1); if (buf) buf[0] = '\0'; }
     *out = buf;
     return len;
 }

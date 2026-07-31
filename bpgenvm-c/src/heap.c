@@ -25,6 +25,7 @@
 #include <inttypes.h>
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"   /* #302: bpvm_gui_visit_roots (raíces GC del GUI) */
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #endif
 
 static uint32_t align4(uint32_t v) {
@@ -105,8 +106,8 @@ static void build_gc_valid_map(bpvm_t* vm) {
     uint32_t words = span / 4u;                            /* nº de palabras de 4B */
     size_t   bytes = ((size_t) words + 7u) / 8u + 1u;      /* 1 bit por palabra + pad */
     if (vm->gc_valid_map == NULL || vm->gc_valid_map_size < bytes) {
-        free(vm->gc_valid_map);
-        vm->gc_valid_map = (uint8_t*) calloc(1, bytes);
+        bpvm_free(vm->gc_valid_map);
+        vm->gc_valid_map = (uint8_t*) bpvm_calloc(1, bytes);
         vm->gc_valid_map_size = vm->gc_valid_map ? bytes : 0;
     } else {
         memset(vm->gc_valid_map, 0, vm->gc_valid_map_size);
@@ -385,9 +386,9 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
     } else {
         if (vm->handle_next >= vm->handle_cap) {
             uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u : 4096u;
-            uint32_t* na = (uint32_t*) realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
+            uint32_t* na = (uint32_t*) bpvm_realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
             if (!na) { r.v = addr; bpvm_smp_unlock(vm); return r; }
-            uint32_t* ng = (uint32_t*) realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
+            uint32_t* ng = (uint32_t*) bpvm_realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
             if (!ng) { vm->handle_addr = na; r.v = addr; bpvm_smp_unlock(vm); return r; }
             vm->handle_addr = na;
             vm->handle_gen  = ng;
@@ -409,14 +410,14 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
 /* Paso 4c/6 — recicla un slot de la tabla por índice: BUMP de la generación (handles
  * rancios dejan de matchear → gritan), addr=0 (slot libre: vivo ⟺ addr!=0, lo usa el
  * barrido de tabla del GC) y RECICLA el índice a la free-list para reuso. Lo comparten
- * el owner-free (bpvm_handle_kill) y el barrido de tabla del GC (paso 6). */
+ * el owner-bpvm_free(bpvm_handle_kill) y el barrido de tabla del GC (paso 6). */
 static void handle_kill_idx(bpvm_t* vm, uint32_t idx) {
     if (vm->handle_gen == NULL || idx == 0u || idx >= vm->handle_next) return;
     vm->handle_gen[idx]++;                        /* gen bumpeada → handles rancios mueren */
     vm->handle_addr[idx] = 0u;                    /* slot libre en la tabla (paso 6) */
     if (vm->handle_free_top >= vm->handle_free_cap) {
         uint32_t nc = vm->handle_free_cap ? vm->handle_free_cap * 2u : 256u;
-        uint32_t* nl = (uint32_t*) realloc(vm->handle_free_list, (size_t) nc * sizeof(uint32_t));
+        uint32_t* nl = (uint32_t*) bpvm_realloc(vm->handle_free_list, (size_t) nc * sizeof(uint32_t));
         if (!nl) return;   /* sin free-list no reciclamos este slot (se pierde, no se corrompe) */
         vm->handle_free_list = nl;
         vm->handle_free_cap  = nc;

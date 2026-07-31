@@ -19,6 +19,7 @@
 #include "lvgl.h"
 #include "bpvm_gui.h"
 #include "crc32.h"
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
 static volatile int g_window_closed = 0;
 static volatile int g_shot_requested = 0;   /* F12 → captura de pantalla (docs) */
@@ -94,13 +95,13 @@ static void script_load(void) {
     if (!f) { printf("[gui] guion: no se puede abrir %s\n", path); fflush(stdout); return; }
     fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
     if (n <= 0) { fclose(f); return; }
-    g_script_buf = (char*) malloc((size_t) n + 1);
+    g_script_buf = (char*) bpvm_malloc((size_t) n + 1);
     if (!g_script_buf) { fclose(f); return; }
     size_t rd = fread(g_script_buf, 1, (size_t) n, f);
     fclose(f);
     g_script_buf[rd] = '\0';
     /* Trocear en lineas (in-place) y quedarnos con las utiles. */
-    g_script = (char**) malloc(sizeof(char*) * (rd + 1));
+    g_script = (char**) bpvm_malloc(sizeof(char*) * (rd + 1));
     if (!g_script) return;
     char* p = g_script_buf;
     while (*p) {
@@ -189,13 +190,13 @@ static int png_chunk(FILE* f, const char* type, const uint8_t* data, size_t len)
     uint8_t n[4];
     be32w(n, (uint32_t) len);
     if (fwrite(n, 1, 4, f) != 4) return -1;
-    uint8_t* tmp = (uint8_t*) malloc(4 + len);
+    uint8_t* tmp = (uint8_t*) bpvm_malloc(4 + len);
     if (!tmp) return -1;
     memcpy(tmp, type, 4);
     if (len) memcpy(tmp + 4, data, len);
     int ok = (fwrite(tmp, 1, 4 + len, f) == 4 + len);
     uint32_t crc = bpvm_crc32(tmp, 4 + len);
-    free(tmp);
+    bpvm_free(tmp);
     if (!ok) return -1;
     uint8_t c[4];
     be32w(c, crc);
@@ -210,7 +211,7 @@ static int write_png24(const char* path, const uint8_t* px, int w, int h, int st
     /* Datos crudos: por fila, un byte de filtro (0=None) + w pixeles RGB. */
     size_t rowlen = 1 + (size_t) w * 3;
     size_t rawlen = rowlen * (size_t) h;
-    uint8_t* raw = (uint8_t*) malloc(rawlen);
+    uint8_t* raw = (uint8_t*) bpvm_malloc(rawlen);
     if (!raw) return -1;
     for (int y = 0; y < h; y++) {
         uint8_t* o = raw + (size_t) y * rowlen;
@@ -224,8 +225,8 @@ static int write_png24(const char* path, const uint8_t* px, int w, int h, int st
 
     /* Stream zlib: cabecera + bloques stored (<=65535 cada uno) + adler32. */
     size_t nblocks = (rawlen + 65534) / 65535;
-    uint8_t* z = (uint8_t*) malloc(2 + nblocks * 5 + rawlen + 4);
-    if (!z) { free(raw); return -1; }
+    uint8_t* z = (uint8_t*) bpvm_malloc(2 + nblocks * 5 + rawlen + 4);
+    if (!z) { bpvm_free(raw); return -1; }
     size_t zi = 0, off = 0;
     z[zi++] = 0x78; z[zi++] = 0x01;        /* CM=deflate/32K + FLG (0x7801 %31==0) */
     do {
@@ -239,10 +240,10 @@ static int write_png24(const char* path, const uint8_t* px, int w, int h, int st
         zi += n; off += n;
     } while (off < rawlen);
     be32w(z + zi, adler32(raw, rawlen)); zi += 4;
-    free(raw);
+    bpvm_free(raw);
 
     FILE* f = fopen(path, "wb");
-    if (!f) { free(z); return -1; }
+    if (!f) { bpvm_free(z); return -1; }
     static const uint8_t sig[8] = { 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A };
     uint8_t ihdr[13];
     be32w(ihdr, (uint32_t) w); be32w(ihdr + 4, (uint32_t) h);
@@ -257,7 +258,7 @@ static int write_png24(const char* path, const uint8_t* px, int w, int h, int st
     if (!rc) rc = png_chunk(f, "IDAT", z, zi);
     if (!rc) rc = png_chunk(f, "IEND", NULL, 0);
     fclose(f);
-    free(z);
+    bpvm_free(z);
     return rc;
 }
 
@@ -297,8 +298,8 @@ static void disp_init_headless(int w, int h) {
     /* Buffer parcial de 10 líneas: LVGL renderiza por trozos y lo tira. */
     static uint8_t* buf = NULL;
     size_t bytes = (size_t) w * 10u * 4u;   /* ARGB8888, el formato por defecto */
-    free(buf);
-    buf = (uint8_t*) malloc(bytes);
+    bpvm_free(buf);
+    buf = (uint8_t*) bpvm_malloc(bytes);
     if (!buf) { printf("[gui] headless: sin memoria para el buffer de dibujo\n"); return; }
     lv_display_set_flush_cb(d, headless_flush);
     lv_display_set_buffers(d, buf, NULL, (uint32_t) bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);

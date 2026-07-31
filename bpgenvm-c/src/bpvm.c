@@ -10,9 +10,231 @@
 #include "bpvm_aot_helpers.h"   /* H3 #158: tabla helpers para AOT */
 #include "bpvm_pack.h"          /* H3.c: resolución de imports contra la zona de packs */
 #include "bpvm_fs.h"            /* #310: un pack ejecutable vive en /app del FS */
+#include "bpvm_alloc.h"         /* #339: guardián de fin de RUN */
+#include "bpvm_platform.h"      /* #339: candado de hoja de la lista de bloques */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* ==========================================================================
+ * #339 — GUARDIÁN DE FIN DE RUN (idea de Eduardo, 28-jul)
+ *
+ * "No preguntes cuánta memoria libre queda: pon un contador. Desde la marca de
+ *  arranque del programa, todo bloque posterior que siga vivo es memoria que se
+ *  quedó sin limpiar."
+ *
+ * Eso es literalmente lo que hay aquí: cada reserva del núcleo lleva delante
+ * una cabecera con su NÚMERO DE SECUENCIA, su tamaño y dónde se pidió, y va
+ * encadenada en una lista de bloques vivos. bpvm_init anota la secuencia del
+ * momento; bpvm_destroy recorre la lista y canta lo que tenga secuencia >= esa
+ * marca.
+ *
+ * La alternativa (preguntarle al sistema la memoria libre antes y después) se
+ * DESCARTÓ: da un número que ensucian otras tareas y la fragmentación, obliga a
+ * una cintura por micro —justo lo que la arquitectura BP evita— y sólo sabe
+ * decir cuánto falta, no quién se lo quedó.
+ *
+ * Coste: la cabecera por bloque. Las reservas C del núcleo son POCAS y GRANDES
+ * (tabla de handles, símbolos, imports, EH stacks), así que es despreciable;
+ * la memoria del programa BP no pasa por aquí (vive en memory[], el bloque del
+ * llamante, que el siguiente RUN reinicia entero).
+ * ========================================================================== */
+
+#define BPVM_BLK_MAGIC 0x424C4B21u   /* "BLK!" — cazar free() de puntero ajeno */
+
+/* Las DOS bases de contador (idea de Eduardo). Muy separadas a propósito: el
+ * rango de la secuencia ES la etiqueta de familia, sin campo extra. Con 2^62 de
+ * hueco no hay forma de que una alcance a la otra ni en una eternidad de RUNs. */
+#define BPVM_SEQ_OS_BASE  ((uint64_t) 1)
+#define BPVM_SEQ_VM_BASE  ((uint64_t) 1 << 62)
+
+typedef struct bpvm_blk {
+    struct bpvm_blk* prev;
+    struct bpvm_blk* next;
+    uint64_t         seq;      /* número de secuencia: EL flag de Eduardo.
+                                * >= BPVM_SEQ_VM_BASE → bloque de la VM. */
+    size_t           size;     /* bytes útiles (sin cabecera) */
+    const char*      file;     /* dónde se pidió... */
+    int              line;     /* ...para poder señalar con el dedo */
+    uint32_t         magic;
+} bpvm_blk_t;
+
+#define BLK_IS_VM(b) ((b)->seq >= BPVM_SEQ_VM_BASE)
+
+/* Alineación: la cabecera se redondea para que el payload salga alineado como
+ * lo estaría un malloc normal (double/uint64 en todas las familias). */
+#define BPVM_BLK_HDR ((sizeof(bpvm_blk_t) + 15u) & ~(size_t)15u)
+
+static bpvm_blk_t* g_blk_head = NULL;
+static uint64_t    g_seq_os   = BPVM_SEQ_OS_BASE;
+static uint64_t    g_seq_vm   = BPVM_SEQ_VM_BASE;
+static uint32_t    g_live[2]  = { 0, 0 };   /* [VM], [OS] */
+static uint64_t    g_bytes[2] = { 0, 0 };
+
+/* Candado de HOJA: sólo protege el empalme en la lista, nunca se tiene cogido
+ * mientras se hace otra cosa. Por eso no puede interbloquear con vm_lock (que
+ * no es recursivo).
+ *
+ * El huevo y la gallina: crear el candado necesita un mutex de plataforma, que
+ * RESERVA memoria, que querría el candado. Se corta con un pestillo de
+ * reentrada — durante esa única reserva se pasa sin candado, que es correcto
+ * porque ocurre en la primera reserva del proceso, cuando aún no hay más de un
+ * hilo. Y como esa reserva es de familia OS, tampoco ensucia nunca el veredicto
+ * sobre la memoria del programa. */
+static bpvm_platform_mutex_handle_t g_blk_mtx = NULL;
+static int g_blk_mtx_ready = 0;
+static int g_blk_mtx_busy  = 0;
+
+static int blk_lock(void) {
+    if (!g_blk_mtx_ready) {
+        if (g_blk_mtx_busy) return 0;          /* reentrada: aún single-thread */
+        g_blk_mtx_busy = 1;
+        int ok = (bpvm_platform_mutex_init(&g_blk_mtx) == 0);
+        g_blk_mtx_busy = 0;
+        if (!ok) return 0;   /* sin mutex: seguimos; el guardián no tumba la VM */
+        g_blk_mtx_ready = 1;
+    }
+    bpvm_platform_mutex_lock(&g_blk_mtx);
+    return 1;
+}
+static void blk_unlock(int locked) {
+    if (locked) bpvm_platform_mutex_unlock(&g_blk_mtx);
+}
+
+static void blk_link(bpvm_blk_t* b, bpvm_alloc_kind_t k) {
+    int lk = blk_lock();
+    b->seq  = (k == BPVM_ALLOC_VM) ? g_seq_vm++ : g_seq_os++;
+    b->prev = NULL;
+    b->next = g_blk_head;
+    if (g_blk_head) g_blk_head->prev = b;
+    g_blk_head = b;
+    g_live[k]++;
+    g_bytes[k] += (uint64_t) b->size;
+    blk_unlock(lk);
+}
+
+static void blk_unlink(bpvm_blk_t* b) {
+    int k = BLK_IS_VM(b) ? BPVM_ALLOC_VM : BPVM_ALLOC_OS;
+    int lk = blk_lock();
+    if (b->prev) b->prev->next = b->next; else g_blk_head = b->next;
+    if (b->next) b->next->prev = b->prev;
+    g_live[k]--;
+    g_bytes[k] -= (uint64_t) b->size;
+    blk_unlock(lk);
+}
+
+void* bpvm_alloc_raw(size_t n, int zero, bpvm_alloc_kind_t k,
+                     const char* file, int line) {
+    uint8_t* raw = (uint8_t*) malloc(BPVM_BLK_HDR + n);
+    if (!raw) return NULL;
+    bpvm_blk_t* b = (bpvm_blk_t*) raw;
+    b->size = n; b->file = file; b->line = line; b->magic = BPVM_BLK_MAGIC;
+    blk_link(b, k);
+    if (zero) memset(raw + BPVM_BLK_HDR, 0, n);
+    return raw + BPVM_BLK_HDR;
+}
+
+void bpvm_free(void* p) {
+    if (!p) return;
+    bpvm_blk_t* b = (bpvm_blk_t*) ((uint8_t*) p - BPVM_BLK_HDR);
+    if (b->magic != BPVM_BLK_MAGIC) {
+        /* Puntero que no salió de aquí. GRITA en vez de corromper la lista:
+         * es un error de programación (reservado con malloc y liberado con
+         * bpvm_free, o doble free), y en silencio sería indetectable. */
+        fprintf(stderr, "[bpvm] bpvm_free: puntero que no reservó el núcleo (%p)\n", p);
+        return;
+    }
+    blk_unlink(b);
+    b->magic = 0;
+    free(b);
+}
+
+void* bpvm_realloc_at(void* p, size_t n, const char* file, int line) {
+    if (!p) return bpvm_alloc_raw(n, 0, BPVM_ALLOC_VM, file, line);
+    bpvm_blk_t* old = (bpvm_blk_t*) ((uint8_t*) p - BPVM_BLK_HDR);
+    if (old->magic != BPVM_BLK_MAGIC) {
+        fprintf(stderr, "[bpvm] bpvm_realloc: puntero que no reservó el núcleo (%p)\n", p);
+        return NULL;
+    }
+    bpvm_alloc_kind_t k = BLK_IS_VM(old) ? BPVM_ALLOC_VM : BPVM_ALLOC_OS;
+    /* Se desencadena ANTES de realloc: puede mover el bloque, y los vecinos
+     * apuntarían a memoria liberada. Al volver se re-encadena (secuencia NUEVA
+     * de su misma familia: un realloc es un bloque nuevo para el guardián). */
+    size_t keep_size = old->size;
+    blk_unlink(old);
+    uint8_t* raw = (uint8_t*) realloc((void*) old, BPVM_BLK_HDR + n);
+    if (!raw) {
+        /* realloc falló: el bloque original SIGUE vivo. Re-encadenarlo. */
+        old->size = keep_size;
+        blk_link(old, k);
+        return NULL;
+    }
+    bpvm_blk_t* b = (bpvm_blk_t*) raw;
+    b->size = n; b->file = file; b->line = line; b->magic = BPVM_BLK_MAGIC;
+    blk_link(b, k);
+    return raw + BPVM_BLK_HDR;
+}
+
+char* bpvm_strdup_at(const char* s, const char* file, int line) {
+    if (!s) return NULL;
+    size_t n = strlen(s) + 1;
+    char* d = (char*) bpvm_alloc_raw(n, 0, BPVM_ALLOC_VM, file, line);
+    if (d) memcpy(d, s, n);
+    return d;
+}
+
+uint32_t bpvm_alloc_live_blocks(bpvm_alloc_kind_t k) { return g_live[k]; }
+uint64_t bpvm_alloc_live_bytes (bpvm_alloc_kind_t k) { return g_bytes[k]; }
+
+uint64_t bpvm_alloc_mark(void) { return g_seq_vm; }
+
+static void report_stderr(const char* linea) { fprintf(stderr, "%s\n", linea); }
+static bpvm_alloc_report_fn g_report = report_stderr;
+
+void bpvm_alloc_set_report(bpvm_alloc_report_fn fn) {
+    g_report = fn ? fn : report_stderr;
+}
+
+uint64_t bpvm_alloc_sweep(uint64_t mark) {
+    char linea[224];
+    uint32_t n = 0;
+    uint64_t bytes = 0;
+    const bpvm_blk_t* peor = NULL;
+
+    int lk = blk_lock();
+    for (const bpvm_blk_t* b = g_blk_head; b; b = b->next) {
+        if (!BLK_IS_VM(b)) continue;              /* plataforma: no es del programa */
+        if (b->seq < mark) continue;              /* de antes del RUN: tampoco */
+        n++;
+        bytes += (uint64_t) b->size;
+        if (!peor || b->size > peor->size) peor = b;
+    }
+    uint32_t os_n = g_live[BPVM_ALLOC_OS];
+    blk_unlock(lk);
+
+    /* Habla SIEMPRE. Un guardián que sólo abre la boca cuando hay problema no
+     * se distingue de uno averiado — la lección de #326 (todo instrumento
+     * necesita su control). Los bloques de plataforma van como DATO al final,
+     * nunca mezclados con el veredicto. */
+    if (n == 0) {
+        snprintf(linea, sizeof linea,
+                 "[bpvm] fin de RUN: la memoria del programa vuelve a su sitio "
+                 "(0 bloques sin liberar; plataforma: %lu vivos)",
+                 (unsigned long) os_n);
+        g_report(linea);
+        return 0;
+    }
+    snprintf(linea, sizeof linea,
+             "[bpvm] fin de RUN: FUGA — %lu bloque(s) del programa sin liberar, %lu B; "
+             "el mayor (%lu B) se pidio en %s linea %d (plataforma: %lu vivos)",
+             (unsigned long) n, (unsigned long) bytes,
+             (unsigned long) (peor ? peor->size : 0),
+             peor && peor->file ? peor->file : "?",
+             peor ? peor->line : 0,
+             (unsigned long) os_n);
+    g_report(linea);
+    return bytes;
+}
 
 size_t bpvm_stack_region_bytes(size_t total_bytes) {
     size_t r = total_bytes / 4u;                    /* 25% para stacks */
@@ -28,8 +250,14 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     if (stack_base >= memory_size) return NULL;
     if (stack_base + BPVM_MAIN_STACK_BYTES > memory_size) return NULL;
 
-    bpvm_t* vm = (bpvm_t*) calloc(1, sizeof(bpvm_t));
+    /* #339 — la marca se toma AQUÍ, antes de reservar nada nuestro, para que la
+     * propia estructura del vm quede DENTRO de la ventana: si algún día se
+     * escapara, el guardián la vería como cualquier otro bloque. */
+    uint64_t run_mark = bpvm_alloc_mark();
+
+    bpvm_t* vm = (bpvm_t*) bpvm_calloc(1, sizeof(bpvm_t));
     if (!vm) return NULL;
+    vm->run_mark = run_mark;
     /* H3.c — ventana XIP vacía (lo>hi imposible con lo=MAX): el guardián de PC
      * rechaza todo fuera de memory_size hasta que un loader XIP la abra. */
     vm->xip_lo = 0xFFFFFFFFu;
@@ -639,31 +867,39 @@ uint32_t bpvm_thread_cs(const bpvm_thread_t* tc) { return tc ? tc->cs : 0; }
 
 void bpvm_destroy(bpvm_t* vm) {
     if (!vm) return;
-    free(vm->handle_addr);   /* V4: tabla de handles */
-    free(vm->handle_gen);    /* V4/paso 3: generación */
-    free(vm->handle_free_list);   /* V4/paso 4c: free-list */
+    /* #339 — a una local: la estructura del vm se libera aquí abajo y el barrido
+     * va DESPUÉS, cuando ya no queda nada del programa a lo que preguntar. */
+    uint64_t run_mark = vm->run_mark;
+
+    bpvm_free(vm->handle_addr);   /* V4: tabla de handles */
+    bpvm_free(vm->handle_gen);    /* V4/paso 3: generación */
+    bpvm_free(vm->handle_free_list);   /* V4/paso 4c: free-list */
     /* Liberar módulos cargados. */
     for (int i = 0; i < vm->module_count; i++) {
         bpvm_module_t* m = &vm->modules[i];
         if (m->imports) {
-            for (int k = 0; k < m->import_count; k++) free(m->imports[k]);
-            free(m->imports);
+            for (int k = 0; k < m->import_count; k++) bpvm_free(m->imports[k]);
+            bpvm_free(m->imports);
         }
-        free(m->class_fixups);
-        free(m->eh_class_fixups);
+        bpvm_free(m->class_fixups);
+        bpvm_free(m->eh_class_fixups);
     }
     /* Liberar EH stacks y mutex waiters. */
     for (int i = 0; i < vm->thread_count; i++) {
-        free(vm->threads[i].eh_stack);
+        bpvm_free(vm->threads[i].eh_stack);
     }
     for (int i = 0; i < vm->mutex_count; i++) {
-        free(vm->mutexes[i].waiters);
+        bpvm_free(vm->mutexes[i].waiters);
     }
-    free(vm->mutexes);
-    free(vm->symbols);
-    free(vm->scratch);
-    free(vm->gc_valid_map);
-    free(vm);
+    bpvm_free(vm->mutexes);
+    bpvm_free(vm->symbols);
+    bpvm_free(vm->scratch);
+    bpvm_free(vm->gc_valid_map);
+    bpvm_free(vm);
+
+    /* Y ahora el juicio: lo que quede vivo con secuencia >= la marca es memoria
+     * del programa que nadie limpió. Habla siempre (control). */
+    bpvm_alloc_sweep(run_mark);
 }
 
 const char* bpvm_status_str(bpvm_status_t s) {

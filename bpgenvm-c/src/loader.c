@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
 /* ---------- Cursor sobre el .mod: RAM o STREAM ----------------------
  *
@@ -161,7 +162,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     mod->ext_count = ext_count;
     mod->import_count = (int) ext_count;
     if (ext_count > 0) {
-        mod->imports = (char**) calloc(ext_count, sizeof(char*));
+        mod->imports = (char**) bpvm_calloc(ext_count, sizeof(char*));
         if (!mod->imports) return BPVM_ERR_OOM;
         char tmp_from[256];
         for (uint32_t i = 0; i < ext_count; i++) {
@@ -172,7 +173,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
             if (bc_read_writeutf(&c, tmp_from, sizeof(tmp_from)) != 0) {
                 return BPVM_ERR_IO;
             }
-            mod->imports[i] = strdup(tmp_name);
+            mod->imports[i] = bpvm_strdup(tmp_name);
             if (!mod->imports[i]) return BPVM_ERR_OOM;
         }
     }
@@ -322,7 +323,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
             if (exp_off + 4 <= exports_size) {
                 uint32_t fxcount = bpvm_read_u32_be(exp_buf + exp_off); exp_off += 4;
                 if (fxcount > 0) {
-                    mod->class_fixups = (bpvm_class_fixup_t*) calloc(fxcount,
+                    mod->class_fixups = (bpvm_class_fixup_t*) bpvm_calloc(fxcount,
                                           sizeof(bpvm_class_fixup_t));
                     if (!mod->class_fixups) return BPVM_ERR_OOM;
                     for (uint32_t i = 0; i < fxcount; i++) {
@@ -355,7 +356,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
             if (exp_off + 4 <= exports_size) {
                 uint32_t ehcount = bpvm_read_u32_be(exp_buf + exp_off); exp_off += 4;
                 if (ehcount > 0) {
-                    mod->eh_class_fixups = (bpvm_eh_class_fixup_t*) calloc(ehcount,
+                    mod->eh_class_fixups = (bpvm_eh_class_fixup_t*) bpvm_calloc(ehcount,
                                           sizeof(bpvm_eh_class_fixup_t));
                     if (!mod->eh_class_fixups) return BPVM_ERR_OOM;
                     for (uint32_t i = 0; i < ehcount; i++) {
