@@ -2335,13 +2335,18 @@ public class FrmMain extends javax.swing.JFrame
                     return null;
                 }
                 String moduleName = inferModuleName(bpFile);
-                Path mod = outDir.resolve(moduleName + ".mod");
-                if (!Files.isRegularFile(mod)) {
-                    publish("== no se encontró " + mod.getFileName() + " ==\n");
+                // #310 — en un proyecto out:pack lo que se EJECUTA es el pack,
+                // no el .mod suelto: el build ya lo ha dejado hecho, y dentro
+                // van el main y sus módulos. Un .mod suelto, como siempre.
+                final boolean packRun = currentProject != null
+                        && "pack".equals(currentProject.out);
+                Path entry = outDir.resolve(moduleName + (packRun ? ".pack" : ".mod"));
+                if (!Files.isRegularFile(entry)) {
+                    publish("== no se encontró " + entry.getFileName() + " ==\n");
                     return null;
                 }
-                publish("== ejecutando " + mod.getFileName() + " ==\n");
-                final String mainModName = moduleName + ".mod";
+                publish("== ejecutando " + entry.getFileName() + " ==\n");
+                final String mainModName = entry.getFileName().toString();
 
                 // A2.5 — flow remote-friendly: workdir temporal, VM en modo
                 // daemon, subir todos los .mod/.bpi/.dbg del outDir local
@@ -2870,8 +2875,9 @@ public class FrmMain extends javax.swing.JFrame
                     client.startDaemon(workdir.toString(), /*waitClient=*/true, stdlibDir);
                 }
 
-                // Sube los artefactos de la app compilada.
-                int nUploaded = uploadAppArtifacts(client, outDir, publish);
+                // Sube los artefactos de la app compilada (o el pack, si lo
+                // que se ejecuta es un pack: #310).
+                int nUploaded = uploadAppArtifacts(client, outDir, mainModName, publish);
                 publish.accept("[ide] subidos " + nUploaded + " ficheros\n");
 
                 if (pauseInitially) {
@@ -3001,9 +3007,22 @@ public class FrmMain extends javax.swing.JFrame
         return out;
     }
 
-    private int uploadAppArtifacts(BpvmClient client, Path outDir,
+    private int uploadAppArtifacts(BpvmClient client, Path outDir, String entryName,
                                    java.util.function.Consumer<String> publish) throws java.io.IOException {
         if (!Files.isDirectory(outDir)) return 0;
+        // #310 — si lo que se ejecuta es un PACK, lo único que viaja es el
+        // pack: sus módulos y sus recursos van dentro. Mandar además los .mod
+        // sueltos del outDir sería enviar dos copias de lo mismo.
+        if (entryName != null && entryName.toLowerCase().endsWith(".pack")) {
+            Path pack = outDir.resolve(entryName);
+            if (!Files.isRegularFile(pack)) {
+                publish.accept("[ide] no encuentro el pack " + entryName + "\n");
+                return 0;
+            }
+            int size = client.uploadFile(pack, entryName, 60_000);
+            publish.accept("[ide] up " + entryName + " (" + size + " bytes, pack)\n");
+            return 1;
+        }
         int n = 0;
         int skipped = 0;
         final java.util.Set<String> stdlib = stdlibBasenames(outDir);
