@@ -293,10 +293,23 @@ test-net: $(LIBOBJ)
 KILL_BIN = build/test_kill.exe
 test-kill: $(LIBOBJ)
 	@mkdir -p build
+	@# Los .mod son ARTEFACTOS (están en .gitignore): se regeneran si faltan o si
+	@# son más viejos que su .bp. Antes el target se limitaba a SALTARSE la prueba
+	@# —y, peor, si el .mod era rancio el gate de ABI (#284) lo rechazaba y el
+	@# target salía en ROJO por una razón que no tenía nada que ver con el KILL.
+	@# Pasó: estuvieron en v5 (12-jun, anteriores al ensanchado 4→8B) y test-kill
+	@# llevaba semanas rojo por eso. Un test que falla por su andamio enseña a
+	@# ignorarlo, que es la peor avería de todas.
+	@for m in KillLoop KillSleep; do \
+	  if [ ! -f samples/$$m.mod ] || [ samples/$$m.bp -nt samples/$$m.mod ]; then \
+	    echo "  (regenerando samples/$$m.mod)"; \
+	    java -jar ../lexer-java/target/basicplus-frontend.jar \
+	         samples/$$m.bp --compile samples --backend=mivm >/dev/null 2>&1 || true; \
+	  fi; \
+	done
 	@if [ ! -f samples/KillLoop.mod ] || [ ! -f samples/KillSleep.mod ]; then \
-	  echo "(skip test-kill: faltan samples/KillLoop.mod / KillSleep.mod — regenéralos con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
-	  echo "        samples/KillLoop.bp --compile samples --backend=mivm  (ídem KillSleep))"; \
+	  echo "(skip test-kill: no hay samples/KillLoop.mod / KillSleep.mod y no se han"; \
+	  echo " podido generar — ¿está construido ../lexer-java/target/basicplus-frontend.jar?)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_kill.c \
 	    $(LIBOBJ) -o $(KILL_BIN) $(LDFLAGS); \
