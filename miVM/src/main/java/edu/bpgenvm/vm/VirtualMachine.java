@@ -1012,6 +1012,37 @@ public class VirtualMachine {
      * cambia, la otra va detrás. Lo que se pierde a propósito: 'ß' no sube a
      * "SS" (crecería de longitud), y fuera de Latin-1 no se toca nada.
      */
+    /**
+     * #348 tanda 3 — rutas de BP: SIEMPRE '/'. La semántica se define aquí, no
+     * se hereda de java.nio.file (que es dependiente de plataforma). Réplica
+     * EXACTA de los BUILTIN_PATH_* de la VM-C: si una cambia, la otra detrás.
+     *
+     * join: a vacío → b; b vacío → a; si no, a sin '/' finales + '/' + b sin
+     * '/' iniciales. Así {@code pathJoin("/", "x")} da {@code "/x"}.
+     */
+    private static String pathJoin(String a, String b) {
+        if (a.isEmpty()) return b;
+        if (b.isEmpty()) return a;
+        int ae = a.length();  while (ae > 0 && a.charAt(ae - 1) == '/') ae--;
+        int bs = 0;           while (bs < b.length() && b.charAt(bs) == '/') bs++;
+        return a.substring(0, ae) + "/" + b.substring(bs);
+    }
+    /** parent: se ignoran los '/' finales; luego hasta el último '/' sin
+     *  incluirlo. Sin '/' → ""; si el último está en 0 → "/" (raíz). */
+    private static String pathParent(String p) {
+        int e = p.length();  while (e > 0 && p.charAt(e - 1) == '/') e--;
+        int slash = p.lastIndexOf('/', e - 1);
+        if (slash < 0)  return "";
+        if (slash == 0) return "/";
+        return p.substring(0, slash);
+    }
+    /** basename: se ignoran los '/' finales; luego desde el último '/'. */
+    private static String pathBasename(String p) {
+        int e = p.length();  while (e > 0 && p.charAt(e - 1) == '/') e--;
+        int slash = p.lastIndexOf('/', e - 1);
+        return p.substring(slash + 1, e);
+    }
+
     private static String latin1Case(String s, boolean up) {
         StringBuilder b = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); ) {
@@ -4618,29 +4649,32 @@ public class VirtualMachine {
             }
 
             // ---- IO intrínsecos ----
+            // #348 tanda 3 — rutas SIEMPRE con '/'. Antes esto era
+            // java.nio.file.Paths, que es DEPENDIENTE DE PLATAFORMA: en Windows
+            // pathJoin("a","b") daba "a\b", o sea rutas que el FS del
+            // dispositivo (que es '/') no entiende, y ademas distintas segun el
+            // host. Mismo patron que el locale de upper/lower: miVM converge
+            // hacia lo que el micro puede hacer. La regla vive en pathJoin/
+            // pathParent/pathBasename de abajo, replicadas en la VM-C.
             case PATH_JOIN: {
                 String b2 = readVmString(popTcRef(tc));
                 String a  = readVmString(popTcRef(tc));
-                String r = java.nio.file.Paths.get(a, b2).toString();
-                pushTcRef(tc, allocVmString(r));
+                pushTcRef(tc, allocVmString(pathJoin(a, b2)));
                 break;
             }
             case PATH_PARENT: {
                 String p = readVmString(popTcRef(tc));
-                java.nio.file.Path pa = java.nio.file.Paths.get(p).getParent();
-                pushTcRef(tc, allocVmString(pa == null ? "" : pa.toString()));
+                pushTcRef(tc, allocVmString(pathParent(p)));
                 break;
             }
             case PATH_BASENAME: {
                 String p = readVmString(popTcRef(tc));
-                java.nio.file.Path pa = java.nio.file.Paths.get(p).getFileName();
-                pushTcRef(tc, allocVmString(pa == null ? "" : pa.toString()));
+                pushTcRef(tc, allocVmString(pathBasename(p)));
                 break;
             }
             case PATH_EXTENSION: {
                 String p = readVmString(popTcRef(tc));
-                java.nio.file.Path pa = java.nio.file.Paths.get(p).getFileName();
-                String name = (pa == null) ? "" : pa.toString();
+                String name = pathBasename(p);
                 int dot = name.lastIndexOf('.');
                 String ext = (dot <= 0 || dot == name.length() - 1) ? "" : name.substring(dot + 1);
                 pushTcRef(tc, allocVmString(ext));

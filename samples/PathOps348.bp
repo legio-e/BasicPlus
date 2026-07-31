@@ -1,0 +1,56 @@
+// #348 tanda 3 — las 4 funciones de ruta, SIEMPRE con '/'.
+//
+// Antes miVM las hacia con java.nio.file.Paths, que es DEPENDIENTE DE
+// PLATAFORMA: en Windows pathJoin("a","b") daba "a\b". O sea rutas que el FS
+// del dispositivo (que es '/') no entiende, y encima distintas segun el host
+// donde corriera el programa. Ahora la semantica la define BP, y es la misma en
+// las dos VMs y en las tres familias.
+//
+// Los casos de aqui son los BORDES, que es donde una definicion se rompe:
+// barras finales, barras dobles, la raiz, ficheros ocultos y sin extension.
+module PathOps348
+
+  import IO
+
+  function p(t: string, v: string)
+    print t + " -> [" + v + "]"
+  end p
+
+  public function Main()
+    print "== join =="
+    p("join('a','b')       ", IO.pathJoin("a", "b"))
+    p("join('a/','b')      ", IO.pathJoin("a/", "b"))
+    p("join('a','/b')      ", IO.pathJoin("a", "/b"))
+    p("join('a//','//b')   ", IO.pathJoin("a//", "//b"))
+    p("join('/','x')       ", IO.pathJoin("/", "x"))
+    p("join('','b')        ", IO.pathJoin("", "b"))
+    p("join('a','')        ", IO.pathJoin("a", ""))
+    p("join('/app','d.txt')", IO.pathJoin("/app", "datos.txt"))
+
+    print "== parent =="
+    p("parent('a/b/c')     ", IO.pathParent("a/b/c"))
+    p("parent('a')         ", IO.pathParent("a"))
+    p("parent('/a')        ", IO.pathParent("/a"))
+    p("parent('/')         ", IO.pathParent("/"))
+    p("parent('a/b/')      ", IO.pathParent("a/b/"))
+    p("parent('')          ", IO.pathParent(""))
+
+    print "== basename =="
+    p("base('a/b/c')       ", IO.pathBasename("a/b/c"))
+    p("base('a')           ", IO.pathBasename("a"))
+    p("base('a/b/')        ", IO.pathBasename("a/b/"))
+    p("base('/')           ", IO.pathBasename("/"))
+    p("base('')            ", IO.pathBasename(""))
+    p("base('/app/d.txt')  ", IO.pathBasename("/app/datos.txt"))
+
+    print "== extension =="
+    p("ext('d.txt')        ", IO.pathExtension("datos.txt"))
+    p("ext('/app/d.txt')   ", IO.pathExtension("/app/datos.txt"))
+    p("ext('sin')          ", IO.pathExtension("sinextension"))
+    p("ext('.oculto')      ", IO.pathExtension(".oculto"))
+    p("ext('acaba.')       ", IO.pathExtension("acaba."))
+    p("ext('a.b.c')        ", IO.pathExtension("a.b.c"))
+    p("ext('')             ", IO.pathExtension(""))
+  end Main
+
+end PathOps348

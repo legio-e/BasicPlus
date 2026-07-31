@@ -78,6 +78,13 @@ enum {
     BUILTIN_ATAN2           = 61,
     BUILTIN_FACTORIAL_I     = 62,
     BUILTIN_GAMMA_F         = 63,
+    /* #348 tanda 3 — rutas. SIEMPRE con '/' (decisión de Eduardo): el FS del
+     * dispositivo es '/', y la semántica la definimos nosotros en vez de
+     * heredar la de java.nio.file, que es dependiente de plataforma. */
+    BUILTIN_PATH_JOIN       = 64,
+    BUILTIN_PATH_PARENT     = 65,
+    BUILTIN_PATH_BASENAME   = 66,
+    BUILTIN_PATH_EXTENSION  = 67,
     /* Numéricas enteras (V2/GAP-1) — byte-exactas, sin riesgo de paridad float. */
     BUILTIN_ABS             = 16,
     BUILTIN_MIN             = 17,
@@ -1798,6 +1805,94 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GAMMA_F: {
         float x = bits_to_f32(pop_i32(vm, tc));
         push_i32(vm, tc, f32_to_bits((float) lanczos_gamma((double) x)));
+        return BPVM_OK;
+    }
+
+    /* ================================================================
+     * #348 tanda 3 — RUTAS. Siempre con '/'.
+     *
+     * miVM las hacía con java.nio.file.Paths, que es DEPENDIENTE DE
+     * PLATAFORMA: en Windows pathJoin("a","b") daba "a\b" — o sea rutas que el
+     * FS del dispositivo no entiende, y ademas distintas segun el host donde
+     * corriera. Mismo patron que el locale de upper/lower.
+     *
+     * La semantica se DEFINE aqui (y en miVM igual), no se hereda:
+     *   join(a,b)  a vacio -> b; b vacio -> a; si no, a sin '/' finales + '/' +
+     *              b sin '/' iniciales.  ("/" + "x" -> "/x")
+     *   parent(p)  se ignoran los '/' finales; luego hasta el ultimo '/' sin
+     *              incluirlo. Sin '/' -> "". Si el ultimo esta en 0 -> "/".
+     *   basename(p) se ignoran los '/' finales; luego desde el ultimo '/'.
+     *   extension(p) sobre el basename: ultimo '.'; si esta en 0 o al final -> "".
+     * ================================================================ */
+
+    case BUILTIN_PATH_JOIN: {
+        bpref_t b = peek_ref(vm, tc, 0);
+        bpref_t a = peek_ref(vm, tc, 1);
+        uint32_t an = bpref_is_null(a) ? 0 : bpref_arr_len(vm, a);
+        uint32_t bn = bpref_is_null(b) ? 0 : bpref_arr_len(vm, b);
+        const uint8_t* ap = (an > 0) ? bpref_arr_elem(vm, a, 0, 1) : (const uint8_t*) "";
+        const uint8_t* bp = (bn > 0) ? bpref_arr_elem(vm, b, 0, 1) : (const uint8_t*) "";
+        uint32_t ae = an;                       while (ae > 0 && ap[ae-1] == '/') ae--;
+        uint32_t bs = 0;                        while (bs < bn && bp[bs] == '/') bs++;
+        uint32_t out_n;
+        if (an == 0)      out_n = bn;           /* a vacio -> b tal cual */
+        else if (bn == 0) out_n = an;           /* b vacio -> a tal cual */
+        else              out_n = ae + 1 + (bn - bs);
+        uint32_t out = bpvm_heap_alloc(vm, out_n, BPVM_TYPE_ARRAY_I8);
+        if (out) {
+            bpvm_write_u32_be(vm->memory + out, out_n);
+            ap = (an > 0) ? bpref_arr_elem(vm, a, 0, 1) : (const uint8_t*) "";
+            bp = (bn > 0) ? bpref_arr_elem(vm, b, 0, 1) : (const uint8_t*) "";
+            uint32_t o = 0;
+            if (an == 0)      { for (uint32_t i = 0; i < bn; i++) vm->memory[out+4+o++] = bp[i]; }
+            else if (bn == 0) { for (uint32_t i = 0; i < an; i++) vm->memory[out+4+o++] = ap[i]; }
+            else {
+                for (uint32_t i = 0; i < ae; i++) vm->memory[out+4+o++] = ap[i];
+                vm->memory[out+4+o++] = '/';
+                for (uint32_t i = bs; i < bn; i++) vm->memory[out+4+o++] = bp[i];
+            }
+            out = (uint32_t) bpvm_handle_register(vm, out).v;
+        }
+        tc->sp -= 2 * BPVM_REF_SIZE;
+        push_ref(vm, tc, out);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_PATH_PARENT:
+    case BUILTIN_PATH_BASENAME:
+    case BUILTIN_PATH_EXTENSION: {
+        bpref_t s = peek_ref(vm, tc, 0);
+        uint32_t n = bpref_is_null(s) ? 0 : bpref_arr_len(vm, s);
+        const uint8_t* p = (n > 0) ? bpref_arr_elem(vm, s, 0, 1) : (const uint8_t*) "";
+        uint32_t e = n;  while (e > 0 && p[e-1] == '/') e--;   /* '/' finales fuera */
+        long slash = -1;
+        for (uint32_t i = 0; i < e; i++) if (p[i] == '/') slash = (long) i;
+        uint32_t b0, b1;                                        /* rango a copiar */
+        if (id == BUILTIN_PATH_PARENT) {
+            if (slash < 0)      { b0 = 0; b1 = 0; }             /* sin '/' -> "" */
+            else if (slash == 0){ b0 = 0; b1 = 1; }             /* raiz -> "/"   */
+            else                { b0 = 0; b1 = (uint32_t) slash; }
+        } else {                                                /* basename y ext */
+            b0 = (slash < 0) ? 0 : (uint32_t) slash + 1;
+            b1 = e;
+            if (id == BUILTIN_PATH_EXTENSION) {
+                long dot = -1;
+                for (uint32_t i = b0; i < b1; i++) if (p[i] == '.') dot = (long) i;
+                /* dot en la 1a posicion del nombre (".oculto") o al final: sin ext */
+                if (dot < 0 || (uint32_t) dot == b0 || (uint32_t) dot == b1 - 1) b0 = b1 = 0;
+                else b0 = (uint32_t) dot + 1;
+            }
+        }
+        uint32_t len = b1 - b0;
+        uint32_t out = bpvm_heap_alloc(vm, len, BPVM_TYPE_ARRAY_I8);
+        if (out) {
+            bpvm_write_u32_be(vm->memory + out, len);
+            for (uint32_t i = 0; i < len; i++)
+                vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, b0 + i, 1);
+            out = (uint32_t) bpvm_handle_register(vm, out).v;
+        }
+        tc->sp -= BPVM_REF_SIZE;
+        push_ref(vm, tc, out);
         return BPVM_OK;
     }
 
