@@ -243,22 +243,6 @@ import Json
       __guiDelete(this.lvglId)
     end delete
 
-    // -- H13.1 Forms (Camino A): binding de eventos a MÉTODOS de la ventana por
-    //    SLOT de vtable. El loader (buildForm) los rellena con el slot que el IDE
-    //    horneó en el .win. __win == null → el widget NO está atado a un form (el
-    //    camino normal sigue siendo subclasear y reescribir onClick/onChange). --
-    var __win: Object            // la ventana dueña (null = sin form)
-    var __slotClic: integer      // slot del handler de clic (-1 = ninguno)
-    var __slotChange: integer    // slot del handler de change (-1 = ninguno)
-
-    // Ata los eventos de este widget a métodos de `win` por su slot de vtable.
-    // Lo llama el loader de Forms; el usuario no.
-    public function __bindEvents(win: Object, slotClic: integer, slotChange: integer)
-      this.__win := win
-      this.__slotClic := slotClic
-      this.__slotChange := slotChange
-    end __bindEvents
-
     // -- Eventos (#324). Al pulsar → onClick; al cambiar de valor → onChange.
     //
     //    Antes esto eran dos MÉTODOS virtuales que el usuario reescribía
@@ -284,15 +268,16 @@ import Json
     //    eventos del objeto en curso (lee ev$recv/ev$dest de `this`), y el
     //    despachador es una función de módulo.
     //
-    //    Levantan el evento Y mantienen el camino de Forms (slot horneado en el
-    //    .win), que se retira en la tanda 2 — hasta entonces conviven. --
+    //    #324 tanda 2c: UN SOLO CAMINO. Hasta aquí levantaban el evento Y ademas
+    //    llamaban por slot (el camino de Forms), porque el cargador guardaba su
+    //    propio (receptor, slot) en tres campos a mano. Eran los MISMOS dos
+    //    datos que el evento ya guarda, escritos dos veces; ahora el cargador
+    //    suscribe el evento de verdad y aquí sólo queda el `raise`. --
     public function __fireClick()
       raise onClick(this)
-      if this.__win != null then __guiInvokeBySlot(this.__win, this.__slotClic, this)
     end __fireClick
     public function __fireChange()
       raise onChange(this)
-      if this.__win != null then __guiInvokeBySlot(this.__win, this.__slotChange, this)
     end __fireChange
   end Component
 
@@ -861,9 +846,9 @@ import Json
     end destroy
   end Window
 
-  // buildForm — recursivo: crea el widget del nodo, fija sus props comunes, ata sus
-  // handlers (por slot horneado) y baja a los hijos. Función de módulo PRIVADA (la
-  // recursión usa resolución por nombre con fixup tardío).
+  // buildForm — recursivo: crea el widget del nodo, fija sus props comunes, suscribe
+  // sus handlers (por NOMBRE, resuelto en ejecución) y baja a los hijos. Función de
+  // módulo PRIVADA (la recursión usa resolución por nombre con fixup tardío).
   public function buildForm(node: Json.JsonObject, parent: Component, win: Window): Component
     var t: string := node.getStringOr("type", "Panel")
     var w: Component := makeWidget(t, parent, node)
@@ -928,20 +913,34 @@ import Json
   //                               derivado, para poder salirse de la convención
   //                               cuando haga falta (y es lo que hace formdemo).
   //
-  // Un handler que no existe da -1 y se queda inactivo: un form a medias avisa
-  // y sigue, no revienta (criterio de Eduardo en H13).
+  // #324 tanda 2c — SUSCRIBE EL EVENTO DE VERDAD. Antes esto guardaba su propio
+  // (receptor, slot) en tres campos del widget y __fireClick llamaba por slot: los
+  // mismos dos datos que el evento ya guarda, escritos dos veces. Ahora se usa la
+  // forma __methodRef(obj, "nombre") — como `obj::metodo` pero con el nombre
+  // resuelto en EJECUCION, que es lo que hace falta cuando sale de un .win.
+  //
+  // NOMBRE EXPLICITO que no existe -> se suscribe igual, con slot -1. Al pulsar,
+  // el despachador dira "slot no resoluble" y descartara: lo pediste y no esta,
+  // asi que se ve. NOMBRE DERIVADO por convencion que no existe -> no se suscribe
+  // y en silencio: es el caso normal (un boton no tiene onChange), y quejarse ahi
+  // seria un aviso por cada widget de cada form.
   function bindHandler(win: Window, w: Component, nom: string, node: Json.JsonObject)
     var nClic: string := node.getStringOr("clic", "")
     var nChange: string := node.getStringOr("change", "")
-    if (strlen(nClic) == 0) and (strlen(nom) > 0) then   nClic := nom + "_onClick"
-    if (strlen(nChange) == 0) and (strlen(nom) > 0) then nChange := nom + "_onChange"
+    var clicExplicito: boolean := strlen(nClic) > 0
+    var changeExplicito: boolean := strlen(nChange) > 0
+    if (not clicExplicito) and (strlen(nom) > 0) then   nClic := nom + "_onClick"
+    if (not changeExplicito) and (strlen(nom) > 0) then nChange := nom + "_onChange"
 
-    var slotClic: integer := -1
-    var slotChange: integer := -1
-    if strlen(nClic) > 0 then   slotClic := __guiSlotOf(win, nClic)
-    if strlen(nChange) > 0 then slotChange := __guiSlotOf(win, nChange)
-    if slotClic >= 0 or slotChange >= 0 then
-      w.__bindEvents(win, slotClic, slotChange)
+    if strlen(nClic) > 0 then
+      if clicExplicito or __guiSlotOf(win, nClic) >= 0 then
+        w.onClick := __methodRef(win, nClic)
+      endif
+    endif
+    if strlen(nChange) > 0 then
+      if changeExplicito or __guiSlotOf(win, nChange) >= 0 then
+        w.onChange := __methodRef(win, nChange)
+      endif
     endif
   end bindHandler
 

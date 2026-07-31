@@ -1782,7 +1782,9 @@ public final class MivmEmitter {
      *  de un número). El marcado preciso del GC lo traza de forma conservadora
      *  (deref + valida contra el mapa de cabeceras; un número se salta, idéntico a
      *  un slot de un Object[]=ARRAY_REF). Sin este bit, un objeto cuya ÚNICA ref
-     *  viva está en un campo `any` (p.ej. Component.__win de Forms) se recolecta →
+     *  viva está en un campo `any` (el caso que lo destapó fue Component.__win de
+     *  Forms, retirado en #324 tanda 2c; el bit sigue haciendo falta para
+     *  cualquier otro campo `any`) se recolecta →
      *  use-after-free (hoy enmascarado por el scan conservador de pila; ver
      *  docs/V4_REF_AUDIT.md #14). Feed SOLO del bitmap de refs del GC — NO del ancho
      *  (el ancho de `any` ya lo cubre occupies8Bytes). */
@@ -2112,6 +2114,31 @@ public final class MivmEmitter {
             emitEventOwner(owner);
             w.emitPushInt(0);
             emitSetDest(ev, cls);
+            return true;
+        }
+
+        // #324 tanda 2c — `ev := __methodRef(obj, "nombre")`: lo MISMO que la
+        // forma de abajo, pero con el slot resuelto en EJECUCIÓN en vez de por
+        // el compilador. Se emite el mismo par de campos; lo único que cambia es
+        // de dónde sale el destino: de la tabla `Clase#metodo#slot` que el .mod
+        // ya exporta, consultada con el builtin de reflexión (se llama
+        // __guiSlotOf por historia — no tiene nada de GUI, es "slot del método
+        // llamado así en la clase de este objeto").
+        //
+        // Nombre que no existe → -1, que NO es un slot válido: la suscripción
+        // queda hecha pero al dispararse el despachador dice "slot no resoluble"
+        // y descarta el evento. Falla donde se ve, no en silencio.
+        if (SemanticAnalyzer.isMethodRefByName(a.value)) {
+            Ast.CallExpr c = (Ast.CallExpr) a.value;
+            emitEventOwner(owner);
+            emitExpr(c.args.get(0));                  // el objeto que atiende
+            emitExpr(c.args.get(1));                  // el nombre del método
+            w.emit(OpCode.CALL_BUILTIN);              // → slot (o -1)
+            w.emitShort((short) Builtin.GUI_SLOT_OF.id);
+            emitSetDest(ev, cls);                     // destino primero
+            emitEventOwner(owner);
+            emitExpr(c.args.get(0));                  // y el receptor confirma
+            emitSetRecv(ev, cls);
             return true;
         }
 

@@ -359,7 +359,9 @@ en un campo any se valida y se salta — probado 0x40000001 en `samples/AnyNumGc
 desde BP (el scan conservador de pila rescata el objeto siempre — ni deep-recursion+GC_EVERY=1 en el
 build buggy lo recolecta) → defensa-en-profundidad. Verificado por MECANISMO: diff .mod fixed-vs-buggy
 = EXACTAMENTE el bit de ref del campo (`samples/AnyGcHard.bp`). Radio stdlib = SOLO Gui (Component.__win,
-único campo Object escalar; Gui NO está en los blobs embebidos → sube por el FS del IDE). JUnit
+único campo Object escalar; Gui NO está en los blobs embebidos → sube por el FS del IDE). _(Nota 31-jul:
+`Component.__win` ya no existe — lo retiró #324 tanda 2c al borrar el duplicado del despacho de Forms. El
+fix del bitmap sigue en pie: protege a cualquier campo `any`, no sólo a ése.)_ JUnit
 lexer-java + miVM 34/34; ParseTest paridad dual-VM. _(censo original abajo)_
 
 <!-- CENSO ORIGINAL (histórico): -->

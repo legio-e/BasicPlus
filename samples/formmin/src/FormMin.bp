@@ -7,8 +7,9 @@ import Gui
     public function MainWin()
     end MainWin
 
-    // Handler del evento clic del Label (peldaño "eventos": el IDE hornea
-    // "clic":"onPulsar" → clicSlot → buildForm llama __bindEvents).
+    // Handler del evento clic del Label (peldaño "eventos": el .win dice
+    // "clic":"onPulsar" y load() lo suscribe resolviendo el nombre en ejecución
+    // — #324 tanda 2c; ni el IDE ni el .win llevan ya números de slot).
     // OJO: nombre propio (NO "onClick", que choca con el onClick() heredado
     // de Gui.Component, sin parámetros) — igual que formdemo usa onSaludar.
     public function onPulsar(sender: Gui.Component)

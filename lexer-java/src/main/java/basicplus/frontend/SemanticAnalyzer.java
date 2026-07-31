@@ -1898,14 +1898,28 @@ public final class SemanticAnalyzer {
         info.declSymbols.put(c, sym);
     }
 
+    /** #324 tanda 2c — ¿es la forma `__methodRef(obj, "nombre")`? Se reconoce por
+     *  la FORMA (nombre + 2 argumentos), no por un símbolo: es una forma del
+     *  emisor, no una función que exista en ninguna parte. Mismo patrón que el
+     *  `Thread(obj::metodo(args))` de #325. */
+    static boolean isMethodRefByName(Ast.IExpr e) {
+        if (!(e instanceof Ast.CallExpr)) return false;
+        Ast.CallExpr c = (Ast.CallExpr) e;
+        return (c.callee instanceof Ast.IdentifierExpr)
+                && "__methodRef".equals(((Ast.IdentifierExpr) c.callee).name)
+                && c.args.size() == 2;
+    }
+
     /**
      * H5.c — ¿es `a` una suscripción a un evento? Si lo es, la valida entera y
      * devuelve true (el llamante no sigue por el camino normal).
      *
      * Un evento no tiene tipo y una referencia a método tampoco, así que aquí no
-     * se unifica nada: se comprueba que el par encaja. Las dos formas válidas:
-     *   ev := obj::metodo    suscribir
-     *   ev := null           desuscribir
+     * se unifica nada: se comprueba que el par encaja. Las formas válidas:
+     *   ev := obj::metodo               suscribir (el slot lo pone el compilador)
+     *   ev := __methodRef(obj, "n")     suscribir con el nombre resuelto en
+     *                                   EJECUCIÓN — para cargadores (#324 2c)
+     *   ev := null                      desuscribir
      */
     private boolean analyzeEventSubscription(AssignStmt a, Scope scope) {
         Symbol.EventSymbol ev = resolveEventTarget(a.target, scope);
@@ -1926,9 +1940,39 @@ public final class SemanticAnalyzer {
         // Desuscripción explícita.
         if (a.value instanceof Ast.NullLitExpr) return true;
 
+        // #324 tanda 2c — TERCERA forma, para cargadores: __methodRef(obj, "nombre").
+        //
+        // `obj::metodo` lo resuelve el COMPILADOR, así que no sirve cuando el
+        // nombre del handler sale de un fichero en EJECUCIÓN — que es lo que
+        // hace el cargador de Forms al leer el .win. Sin esto, Gui.bp tenía que
+        // llevar su propio (receptor, slot) a mano en tres campos: exactamente
+        // el duplicado que esta tanda viene a borrar.
+        //
+        // ⚠️ Resolver por nombre NO comprueba la firma. Con `::` el semántico
+        // valida argumentos y visibilidad; aquí no hay a quién mirar hasta que
+        // se ejecuta. Es el precio, y no es una regresión: el camino de Forms
+        // que sustituye (__guiInvokeBySlot) tenía el mismo agujero.
+        if (isMethodRefByName(a.value)) {
+            Ast.CallExpr c = (Ast.CallExpr) a.value;
+            BpType ot = analyzeExpr(c.args.get(0), scope, null);
+            if (!(ot instanceof BpType.ClassType) && !(ot instanceof AnyType)) {
+                err(a.line, a.column, "__methodRef: el primer argumento tiene que ser"
+                        + " el objeto que atiende el evento, y aquí es '"
+                        + (ot != null ? ot.display() : "desconocido") + "'");
+            }
+            BpType nt = analyzeExpr(c.args.get(1), scope, null);
+            if (nt != PrimitiveType.STRING) {
+                err(a.line, a.column, "__methodRef: el segundo argumento es el NOMBRE"
+                        + " del método (string), y aquí es '"
+                        + (nt != null ? nt.display() : "desconocido") + "'");
+            }
+            return true;
+        }
+
         if (!(a.value instanceof Ast.MethodRefExpr)) {
             err(a.line, a.column, "a un evento se le asigna una referencia a método"
-                    + " (`obj::metodo`) o `null` para desuscribir");
+                    + " (`obj::metodo`), `__methodRef(obj, \"nombre\")` si el nombre"
+                    + " sale de un fichero, o `null` para desuscribir");
             return true;
         }
         Ast.MethodRefExpr mr = (Ast.MethodRefExpr) a.value;
