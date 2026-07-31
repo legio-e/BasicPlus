@@ -83,6 +83,24 @@ int bpvm_entry_resolve(const char* name, char* out, size_t out_cap,
  * ruta resuelta y no quiere volver a buscarla. */
 bpvm_status_t bpvm_load_entry_file(bpvm_t* vm, const char* resolved_path);
 
+/* #345 — QUÉ arranca solo al encender: la primera línea de /sys/auto.txt.
+ *
+ * Otra vez las mismas doce líneas copiadas en Pico, ESP32 y STM32 (saltar
+ * espacios, cortar en el primer CR/LF, recortar por la derecha). Y otra vez sin
+ * un motivo: leer la cabeza de un fichero y limpiar una ruta no tiene nada de
+ * propietario — la fachada del FS ya estaba abstraída.
+ *
+ * Sólo se lee la PRIMERA LÍNEA, y sólo la cabeza del fichero: en un micro no se
+ * trae uno un fichero entero a RAM para mirar un renglón.
+ *
+ * Devuelve 1 y deja la ruta en `out` si hay autorun; 0 si no lo hay (no existe,
+ * está vacío o su primera línea son espacios) — que NO es un error: es el caso
+ * normal de una placa que arranca al REPL y espera al IDE.
+ *
+ * Ojo con lo que NO decide: si ESE autorun debe arrancarse AHORA. Eso depende
+ * de la ventana de rescate y del historial de arranques, y va aparte. */
+int bpvm_autorun_entry(char* out, size_t out_cap);
+
 #ifdef __cplusplus
 }
 #endif

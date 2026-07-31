@@ -744,6 +744,27 @@ bpvm_status_t bpvm_load_entry_file(bpvm_t* vm, const char* resolved_path) {
                                 (size_t) size, resolved_path);
 }
 
+/* #345 — la primera línea de /sys/auto.txt, limpia. Ver bpvm_entry.h. */
+int bpvm_autorun_entry(char* out, size_t out_cap) {
+    if (!out || out_cap == 0) return 0;
+    out[0] = '\0';
+    /* Sólo la CABEZA del fichero: lo que se busca es un renglón, no un
+     * fichero. En un micro traerse el fichero entero para esto sería el mismo
+     * error que ya costó el espejo de 128 KB en #305. */
+    uint8_t head[160];
+    long got = bpvm_fs_read_at("/sys/auto.txt", 0, head,
+                               (uint32_t) sizeof head);
+    if (got <= 0) return 0;                       /* no hay autorun: normal */
+
+    size_t size = (size_t) got, i = 0, n = 0;
+    while (i < size && (head[i] == ' ' || head[i] == '\t')) i++;
+    while (i < size && head[i] != '\n' && head[i] != '\r' && n + 1 < out_cap)
+        out[n++] = (char) head[i++];
+    while (n > 0 && (out[n - 1] == ' ' || out[n - 1] == '\t')) n--;
+    out[n] = '\0';
+    return n > 0;
+}
+
 /* ¿Queda algún import sin dueño cargado? Devuelve 1 y deja el nombre en `out`.
  * Mejor decir "falta 'Gui'" que dejar que el link reviente doscientas líneas
  * más tarde con un símbolo que no le dice nada a nadie. */

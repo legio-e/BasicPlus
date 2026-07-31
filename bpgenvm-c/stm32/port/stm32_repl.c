@@ -585,24 +585,11 @@ static void handle_run(long id, json_obj_t* obj) {
  * primera línea por el mismo camino que un RUN del wire. El poll del
  * run atiende HELLO/KILL → el IDE puede conectar y parar la app. */
 static void autorun_boot(void) {
-    /* H11 — sólo interesa la PRIMERA LÍNEA (una ruta): se lee la cabeza del
-     * fichero a la pila en vez de cargarlo entero a un espejo. */
-    uint8_t head[96];
-    long got = bpvm_fs_read_at("/sys/auto.txt", 0, head, sizeof head);
-    if (got <= 0) return;                                    /* sin autorun */
-    const uint8_t* data = head;
-    uint32_t size = (uint32_t) got;
-
+    /* #345 — leer y limpiar la primera línea lo hace el núcleo. (H11 sigue
+     * valiendo: sólo la CABEZA del fichero, nunca un espejo.) */
     char path[64];
-    size_t n = 0, i = 0;
-    while (i < size && (data[i] == ' ' || data[i] == '\t')) i++;
-    while (i < size && data[i] != '\n' && data[i] != '\r'
-           && n + 1 < sizeof(path)) {
-        path[n++] = (char) data[i++];
-    }
-    while (n > 0 && (path[n - 1] == ' ' || path[n - 1] == '\t')) n--;
-    path[n] = '\0';
-    if (n == 0) return;                                        /* vacío */
+    if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
+    log_printf("autorun: %s", path);
     run_module_path(path, -1);
 }
 

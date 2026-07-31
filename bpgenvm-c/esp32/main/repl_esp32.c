@@ -852,24 +852,10 @@ static void handle_run(long id, const json_obj_t* obj) {
  * llama tras fs_init + wire init, antes del bucle REPL. El poll del
  * run atiende HELLO/KILL → la placa nunca queda sorda. */
 void repl_esp32_autorun(void) {
-    /* H11 — sólo interesa la PRIMERA LÍNEA (una ruta), así que se lee la cabeza
-     * del fichero a la pila. Antes se cargaba entero al espejo de 64 KB. */
-    uint8_t head[FS_NAME_LEN + 8];
-    long got = bpvm_fs_read_at("/sys/auto.txt", 0, head, sizeof head);
-    if (got <= 0) return;
-    const uint8_t* data = head;
-    uint32_t size = (uint32_t) got;
-
+    /* #345 — leer y limpiar la primera línea lo hace el núcleo. (H11 sigue
+     * valiendo: sólo la CABEZA del fichero, nunca el espejo de 64 KB.) */
     char path[FS_NAME_LEN];
-    size_t n = 0, i = 0;
-    while (i < size && (data[i] == ' ' || data[i] == '\t')) i++;
-    while (i < size && data[i] != '\n' && data[i] != '\r'
-           && n + 1 < sizeof(path)) {
-        path[n++] = (char) data[i++];
-    }
-    while (n > 0 && (path[n - 1] == ' ' || path[n - 1] == '\t')) n--;
-    path[n] = '\0';
-    if (n == 0) { printf("[autorun] /sys/auto.txt vacío — REPL normal\n"); return; }
+    if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
     printf("[autorun] %s\n", path);
     run_module_path(path, -1);
     printf("[autorun] terminado — REPL normal\n");

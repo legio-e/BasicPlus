@@ -1172,26 +1172,11 @@ static void handle_run(long id, const json_obj_t* obj) {
 /* (comando `autorun off` de la consola) → reset.                */
 /* ============================================================ */
 void repl_v1_autorun(void) {
-    /* #305 — de auto.txt sólo se lee la PRIMERA LÍNEA, así que no hay que traerse
-     * el fichero: con un buffer de pila del tamaño de un path sobra. */
-    uint8_t data[FS_NAME_LEN + 8];
-    long rd = bpvm_fs_read("/sys/auto.txt", data, sizeof data);
-    if (rd <= 0) return;                                          /* sin autorun */
-    uint32_t size = (uint32_t) rd;
-
+    /* #345 — leer y limpiar la primera línea lo hace el núcleo: eran las mismas
+     * doce líneas en Pico, ESP32 y STM32. (#305 sigue valiendo: sólo la CABEZA
+     * del fichero, que aquí se busca un renglón, no un fichero.) */
     char path[FS_NAME_LEN];
-    size_t n = 0, i = 0;
-    while (i < size && (data[i] == ' ' || data[i] == '\t')) i++;
-    while (i < size && data[i] != '\n' && data[i] != '\r'
-           && n + 1 < sizeof(path)) {
-        path[n++] = (char) data[i++];
-    }
-    while (n > 0 && (path[n - 1] == ' ' || path[n - 1] == '\t')) n--;
-    path[n] = '\0';
-    if (n == 0) {
-        log_printf("autorun: /sys/auto.txt vacío — REPL normal");
-        return;
-    }
+    if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
     log_printf("autorun: %s", path);
     /* Gracia de arranque: el camino del RUN hace log_flush (erase de
      * flash con IRQs off) y la app puede tocar flash también — si eso
