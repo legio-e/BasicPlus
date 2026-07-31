@@ -48,6 +48,20 @@ static int load_fix(const char* path, uint8_t* dst, uint32_t size) {
  * desalineado, que en placa serian corrupcion silenciosa. --- */
 #define FLREG (16u * 1024u)
 static uint8_t g_fl[FLREG];
+/* #310 — read_at deliberadamente TACAÑO: sirve como mucho 7 bytes por llamada,
+ * como haria un FS con su propio tamano de bloque. Un lector que se crea que
+ * una lectura corta es un error (o un fin de datos) se rompe aqui y no en la
+ * placa seis meses despues. */
+static long stingy_read(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    const uint8_t* base = (const uint8_t*) user;
+    if (off >= REGION) return 0;
+    uint32_t avail = REGION - off;
+    if (n > avail) n = avail;
+    if (n > 7u) n = 7u;
+    memcpy(dst, base + off, n);
+    return (long) n;
+}
+
 static int fl_erase(void* u, uint32_t off, uint32_t len) {
     (void) u;
     if ((off % 4096u) != 0 || (len % 4096u) != 0 || off + len > FLREG) return -1;
@@ -294,6 +308,91 @@ int main(void) {
               "del repetido → STATE (ya borrado)");
         CHECK(bpvm_pack_del(g_fl, FLREG, &fl, 12345, page) == BPVM_PACK_ERR_BADIMG,
               "del en offset invalido → BADIMG");
+    }
+
+    /* ── #310: la MISMA región leída por trozos ──────────────────────────────
+     * El lector se generalizó a una FUENTE para poder leer un pack que vive en
+     * el FS (donde no hay bytes contiguos que mapear). El riesgo de esa
+     * generalización es que las dos fuentes NO den lo mismo, y eso no lo caza
+     * nada de lo de arriba: todo va por la fuente de memoria.
+     *
+     * Así que aquí se leen LOS MISMOS BYTES por el camino de trozos y se
+     * compara contra el mapeado. Y a propósito con un `read_at` TACAÑO, que
+     * devuelve como mucho 7 bytes por llamada: si el lector se creyera que una
+     * lectura corta es un error —o peor, un fin de datos— saldría aquí. */
+    {
+        static uint8_t region[REGION];
+        memcpy(region, reg, REGION);
+
+        bpvm_pack_src_t msrc, ssrc;
+        bpvm_pack_src_mem(&msrc, region, REGION);
+        bpvm_pack_src_stream(&ssrc, stingy_read, region, REGION);
+
+        bpvm_pack_info_t im[4], is[4];
+        uint32_t em = 0, es = 0;
+        int nm = bpvm_pack_scan_src(&msrc, im, 4, 1, &em);
+        int ns = bpvm_pack_scan_src(&ssrc, is, 4, 1, &es);
+        CHECK(nm == ns && em == es && nm > 0,
+              "#310 scan: mapeado y por trozos ven la misma cadena");
+        int same = (nm == ns);
+        for (int i = 0; same && i < nm; i++) {
+            same = im[i].off == is[i].off && im[i].size_total == is[i].size_total
+                && im[i].n_entries == is[i].n_entries && im[i].alive == is[i].alive
+                && im[i].crc_ok == is[i].crc_ok
+                && strcmp(im[i].nombre, is[i].nombre) == 0;
+        }
+        CHECK(same, "#310 scan: cada pack igual campo a campo (incl. crc_contenido)");
+
+        /* El CRC de contenido por trozos es el punto que más fácil se rompe:
+         * si crc_ok saliera 0 aquí, un pack bueno se rechazaría en el FS. */
+        CHECK(nm > 0 && is[0].crc_ok, "#310 crc_contenido por trozos VALIDA el pack");
+
+        bpvm_pack_entry_t em2[8], es2[8];
+        int cm = bpvm_pack_entries_src(&msrc, 0, em2, 8);
+        int cs = bpvm_pack_entries_src(&ssrc, 0, es2, 8);
+        int eq = (cm == cs && cm > 0);
+        for (int i = 0; eq && i < cm; i++) {
+            eq = em2[i].len == es2[i].len && em2[i].data_off == es2[i].data_off
+              && strcmp(em2[i].tipo, es2[i].tipo) == 0
+              && strcmp(em2[i].nombre, es2[i].nombre) == 0;
+        }
+        CHECK(eq, "#310 entries: misma lista por los dos caminos");
+
+        /* 'Lib' sigue en un pack ACTIVO; 'App' está en packs ya tombstoneados,
+         * así que el "no está" también tiene que coincidir en las dos fuentes
+         * — media generalización que sólo acierta cuando encuentra algo es
+         * peor que ninguna. */
+        bpvm_pack_entry_t fm, fs2;
+        int okm = bpvm_pack_find_src(&msrc, "mod", "Lib", &fm);
+        int oks = bpvm_pack_find_src(&ssrc, "mod", "Lib", &fs2);
+        CHECK(okm && oks && fm.data_off == fs2.data_off && fm.len == fs2.len,
+              "#310 find: misma entrada por los dos caminos");
+        CHECK(bpvm_pack_find_src(&msrc, "mod", "App", &fm) == 0
+           && bpvm_pack_find_src(&ssrc, "mod", "App", &fs2) == 0,
+              "#310 find: el 'no esta' (tombstone) coincide en las dos");
+        okm = bpvm_pack_find_src(&msrc, "mod", "Lib", &fm);
+        oks = bpvm_pack_find_src(&ssrc, "mod", "Lib", &fs2);
+
+        /* El predicado de "¿XIP o copia?": la fuente mapeada da puntero y la de
+         * trozos no. De AHÍ sale la regla de con/sin código — no se programa. */
+        CHECK(bpvm_pack_src_ptr(&msrc, fm.data_off, fm.len) == region + fm.data_off,
+              "#310 la fuente mapeada da puntero directo (→ XIP)");
+        CHECK(bpvm_pack_src_ptr(&ssrc, fs2.data_off, fs2.len) == NULL,
+              "#310 la fuente por trozos NO da puntero (→ carga con codigo)");
+
+        /* Y los BYTES del dato leídos a trozos son los del fichero. */
+        uint8_t got[64], want[64];
+        int rd = 1;
+        if (okm && fm.len <= sizeof got) {
+            memcpy(want, region + fm.data_off, fm.len);
+            for (uint32_t o = 0; o < fm.len; ) {
+                long r = stingy_read(region, fs2.data_off + o, got + o, fm.len - o);
+                if (r <= 0) { rd = 0; break; }
+                o += (uint32_t) r;
+            }
+            CHECK(rd && memcmp(got, want, fm.len) == 0,
+                  "#310 el dato leido por trozos es byte a byte el mismo");
+        }
     }
 
 done:

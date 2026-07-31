@@ -67,6 +67,45 @@ typedef struct {
     uint32_t data_off;
 } bpvm_pack_entry_t;
 
+/* ── FUENTE de lectura (#310) ────────────────────────────────────────────────
+ * Un pack se lee de dos sitios y NO queremos dos lectores:
+ *
+ *   · zona de packs  — partición mapeada en flash. Direccionable: `direct`
+ *                      apunta a ella y se puede leer (y EJECUTAR) en sitio.
+ *   · fichero del FS — /app/loquesea.pack. NO direccionable (littlefs no da
+ *                      bytes contiguos): sólo `read_at`, por trozos.
+ *
+ * De aquí sale sola la regla de Eduardo sobre con/sin código: un módulo se
+ * carga XIP (sin copiar el código) EXACTAMENTE cuando su fuente da puntero
+ * directo. Si no lo da, se carga por stream y el código se copia. No hay que
+ * programar la distinción — se pregunta con bpvm_pack_src_ptr().
+ *
+ * En RAM no cabe un pack entero (restricción de Eduardo): de aquí sólo salen
+ * cabeceras (128 B) y entradas (48 B) a buffers de pila. Sólo lectura.
+ *
+ * `read_at` tiene la MISMA firma que bpvm_read_at_fn del loader a propósito:
+ * el callback que sirve para leer el pack sirve para cargar el módulo. */
+typedef struct {
+    long (*read_at)(void* user, uint32_t off, uint8_t* dst, uint32_t n);
+    void*          user;
+    const uint8_t* direct;   /* NULL = no direccionable (hay que leer por trozos) */
+    uint32_t       size;     /* tamaño de la región / del fichero */
+} bpvm_pack_src_t;
+
+/* Fuente sobre una región mapeada (zona de packs, o el buffer RAM del host). */
+void bpvm_pack_src_mem(bpvm_pack_src_t* s, const uint8_t* base, uint32_t size);
+
+/* Fuente sobre algo que sólo se sabe leer por trozos (un fichero del FS). El
+ * caller construye el callback: así este fichero sigue SIN dependencias (ni
+ * stdio ni FS) y se puede seguir probando en host y compartir entre familias. */
+void bpvm_pack_src_stream(bpvm_pack_src_t* s,
+                          long (*read_at)(void*, uint32_t, uint8_t*, uint32_t),
+                          void* user, uint32_t size);
+
+/* Puntero directo a [off, off+len) si la fuente es direccionable y cabe; si no,
+ * NULL. ESTE es el predicado de "¿XIP o copia?". */
+const uint8_t* bpvm_pack_src_ptr(const bpvm_pack_src_t* s, uint32_t off, uint32_t len);
+
 /* ── Región MONTADA (resolución de módulos, H3.c) ──
  * El arranque registra la zona de packs activa (host: --pack= sobre RAM;
  * firmware: la partición PACKS por XIP) y la resolución de imports la consulta
@@ -86,11 +125,18 @@ const uint8_t* bpvm_pack_mounted(uint32_t* size_out);
 int bpvm_pack_scan(const uint8_t* base, uint32_t region_size,
                    bpvm_pack_info_t* out, int max,
                    int verify_content, uint32_t* end_off);
+/* #310 — la misma sobre una fuente cualquiera. La variante de arriba es un
+ * envoltorio de ésta con una fuente de memoria: hay UN lector, no dos. */
+int bpvm_pack_scan_src(const bpvm_pack_src_t* src,
+                       bpvm_pack_info_t* out, int max,
+                       int verify_content, uint32_t* end_off);
 
 /* Entradas del pack que empieza en pack_off (previamente localizado con scan).
  * Devuelve el nº de entradas (puede ser > max) o -1 si la cabecera no valida. */
 int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_off,
                       bpvm_pack_entry_t* out, int max);
+int bpvm_pack_entries_src(const bpvm_pack_src_t* src, uint32_t pack_off,
+                          bpvm_pack_entry_t* out, int max);
 
 /* Busca el fichero (tipo, nombre) en los packs ACTIVOS. Si varios lo tienen,
  * gana el ÚLTIMO de la cadena (= el añadido más recientemente: el flujo de
@@ -98,6 +144,14 @@ int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_o
  * dato (dentro de la región) y su longitud en *len, o NULL si no está. */
 const uint8_t* bpvm_pack_find(const uint8_t* base, uint32_t region_size,
                               const char* tipo, const char* nombre, uint32_t* len);
+
+/* #310 — la misma sobre una fuente. NO devuelve puntero (una fuente por trozos
+ * no lo tiene): devuelve la ENTRADA (data_off + len) y el caller decide con
+ * bpvm_pack_src_ptr() si puede usarla en sitio o tiene que leerla por trozos.
+ * 1 = encontrada, 0 = no está. */
+int bpvm_pack_find_src(const bpvm_pack_src_t* src,
+                       const char* tipo, const char* nombre,
+                       bpvm_pack_entry_t* out);
 
 /* ADD — valida la imagen completa (magic, verfmt, crc_cab, crc_contenido,
  * img_len == size_total) y la copia al final de la cadena. SOLO para regiones

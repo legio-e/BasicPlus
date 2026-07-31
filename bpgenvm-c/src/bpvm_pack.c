@@ -31,6 +31,74 @@
 #define EOFF_LONGITUD   36
 #define TIPO_END        0xFFFFFFFFuL   /* tipo == slack borrado = fin de entradas */
 
+/* ── FUENTE de lectura (#310) ──
+ * Todo el camino de LECTURA pasa por aquí. Dos sabores (mapeada / por trozos)
+ * y un solo lector: la alternativa —un lector por sitio— es justo la
+ * divergencia que la regla de "mecanismo único" prohíbe.
+ * El camino de ESCRITURA (add/remove/burn/format/del) sigue exigiendo región
+ * mapeada y escribible: eso es instalar, no ejecutar. */
+void bpvm_pack_src_mem(bpvm_pack_src_t* s, const uint8_t* base, uint32_t size) {
+    if (!s) return;
+    s->read_at = NULL;
+    s->user    = NULL;
+    s->direct  = base;
+    s->size    = size;
+}
+
+void bpvm_pack_src_stream(bpvm_pack_src_t* s,
+                          long (*read_at)(void*, uint32_t, uint8_t*, uint32_t),
+                          void* user, uint32_t size) {
+    if (!s) return;
+    s->read_at = read_at;
+    s->user    = user;
+    s->direct  = NULL;
+    s->size    = size;
+}
+
+const uint8_t* bpvm_pack_src_ptr(const bpvm_pack_src_t* s, uint32_t off, uint32_t len) {
+    if (!s || !s->direct) return NULL;
+    if (off > s->size || len > s->size - off) return NULL;
+    return s->direct + off;
+}
+
+/* Lee n bytes en dst. 1 = OK, 0 = fuera de rango o error de la fuente.
+ * El bucle es obligatorio: una lectura por trozos puede devolver MENOS de lo
+ * pedido sin que sea un error (es lo normal en el FS). */
+static int src_read(const bpvm_pack_src_t* s, uint32_t off, uint8_t* dst, uint32_t n) {
+    if (!s || off > s->size || n > s->size - off) return 0;
+    if (s->direct) { memcpy(dst, s->direct + off, n); return 1; }
+    if (!s->read_at) return 0;
+    uint32_t done = 0;
+    while (done < n) {
+        long r = s->read_at(s->user, off + done, dst + done, n - done);
+        if (r <= 0) return 0;
+        done += (uint32_t) r;
+    }
+    return 1;
+}
+
+/* CRC sobre [off, off+len) de la fuente. Si es direccionable va de una tacada;
+ * si no, por trozos. MISMO resultado — es la misma función sobre los mismos
+ * bytes, sólo cambia cómo llegan. */
+static uint16_t src_crc(const bpvm_pack_src_t* s, uint32_t off, uint32_t len, int* ok) {
+    if (ok) *ok = 1;
+    if (s->direct) {
+        if (off > s->size || len > s->size - off) { if (ok) *ok = 0; return 0; }
+        return bpvm_pack_crc16(BPVM_PACK_CRC16_INIT, s->direct + off, len);
+    }
+    uint16_t crc = BPVM_PACK_CRC16_INIT;
+    uint8_t buf[128];
+    uint32_t done = 0;
+    while (done < len) {
+        uint32_t n = len - done;
+        if (n > sizeof buf) n = (uint32_t) sizeof buf;
+        if (!src_read(s, off + done, buf, n)) { if (ok) *ok = 0; return 0; }
+        crc = bpvm_pack_crc16(crc, buf, n);
+        done += n;
+    }
+    return crc;
+}
+
 /* ── región montada (ver bpvm_pack.h) ── */
 static const uint8_t* s_mounted_base = NULL;
 static uint32_t       s_mounted_size = 0;
@@ -79,13 +147,17 @@ static uint32_t align4(uint32_t n) { return (n + 3u) & ~3u; }
 /* Siguiente entrada del pack en base[pack_off], iterando con *rel (offset
  * RELATIVO al pack, arranca en HEADER_SIZE). 1 = entrada en *e; 0 = fin
  * (slack o fin de pack); -1 = entrada malformada (truncada / se sale). */
-static int next_entry(const uint8_t* base, uint32_t pack_off, uint32_t size_total,
+static int next_entry(const bpvm_pack_src_t* src, uint32_t pack_off, uint32_t size_total,
                       uint32_t* rel, bpvm_pack_entry_t* e) {
     uint32_t off = *rel;
     if (off + 4 > size_total) return 0;
-    const uint8_t* p = base + pack_off + off;
+    uint8_t p[BPVM_PACK_ENTRY_HSIZE];
+    /* Primero SÓLO el tipo: puede ser el centinela de fin, y en ese caso la
+     * cabecera entera puede no estar (el slack no tiene por qué llegar). */
+    if (!src_read(src, pack_off + off + EOFF_TIPO, p + EOFF_TIPO, 4)) return -1;
     if (get_u32(p + EOFF_TIPO) == TIPO_END) return 0;
     if (off + BPVM_PACK_ENTRY_HSIZE > size_total) return -1;
+    if (!src_read(src, pack_off + off, p, BPVM_PACK_ENTRY_HSIZE)) return -1;
     uint32_t len = get_u32(p + EOFF_LONGITUD);
     uint32_t data_rel = off + BPVM_PACK_ENTRY_HSIZE;
     if (len > size_total - data_rel) return -1;
@@ -103,12 +175,14 @@ static int next_entry(const uint8_t* base, uint32_t pack_off, uint32_t size_tota
  * OK, verfmt conocido, size_total dentro de la región → se puede encadenar);
  * -1 = cabecera NO fiable (corta la cadena). En ambos casos rellena `info`
  * con lo que haya (diagnóstico). El contenido se valida aparte. */
-static int parse_header(const uint8_t* base, uint32_t region_size, uint32_t off,
+static int parse_header(const bpvm_pack_src_t* src, uint32_t off,
                         bpvm_pack_info_t* info) {
+    uint32_t region_size = src->size;
     memset(info, 0, sizeof *info);
     info->off = off;
     if (off + BPVM_PACK_HEADER_SIZE > region_size) return -1;
-    const uint8_t* h = base + off;
+    uint8_t h[BPVM_PACK_HEADER_SIZE];
+    if (!src_read(src, off, h, BPVM_PACK_HEADER_SIZE)) return -1;
 
     info->verfmt = get_u16(h + OFF_VERFMT);
     info->flags  = get_u16(h + OFF_FLAGS);
@@ -132,41 +206,46 @@ static int parse_header(const uint8_t* base, uint32_t region_size, uint32_t off,
 /* Recorre las entradas del pack (cabecera ya validada): cuenta, calcula
  * content_end y opcionalmente verifica crc_contenido. Devuelve 1 si el
  * contenido es válido, 0 si está malformado o el CRC no cuadra. */
-static int check_content(const uint8_t* base, uint32_t off, bpvm_pack_info_t* info,
+static int check_content(const bpvm_pack_src_t* src, uint32_t off, bpvm_pack_info_t* info,
                          int verify_crc) {
     uint32_t rel = BPVM_PACK_HEADER_SIZE, n = 0;
     int r;
-    while ((r = next_entry(base, off, info->size_total, &rel, NULL)) == 1) n++;
+    while ((r = next_entry(src, off, info->size_total, &rel, NULL)) == 1) n++;
     info->n_entries   = (uint16_t) n;
     info->content_end = rel;
     if (r < 0) return 0;
     if (verify_crc) {
-        uint16_t crc = bpvm_pack_crc16(BPVM_PACK_CRC16_INIT,
-                                       base + off + BPVM_PACK_HEADER_SIZE,
-                                       rel - BPVM_PACK_HEADER_SIZE);
-        if (crc != get_u16(base + off + OFF_CRC_CONT)) return 0;
+        int ok = 0;
+        uint16_t crc = src_crc(src, off + BPVM_PACK_HEADER_SIZE,
+                               rel - BPVM_PACK_HEADER_SIZE, &ok);
+        if (!ok) return 0;
+        uint8_t cc[2];
+        if (!src_read(src, off + OFF_CRC_CONT, cc, 2)) return 0;
+        if (crc != get_u16(cc)) return 0;
     }
     return 1;
 }
 
-int bpvm_pack_scan(const uint8_t* base, uint32_t region_size,
-                   bpvm_pack_info_t* out, int max,
-                   int verify_content, uint32_t* end_off) {
+int bpvm_pack_scan_src(const bpvm_pack_src_t* src,
+                       bpvm_pack_info_t* out, int max,
+                       int verify_content, uint32_t* end_off) {
     int count = 0;
     uint32_t off = 0;
     uint32_t end = BPVM_PACK_NO_SPACE;
     for (;;) {
-        if (off + 4 > region_size) { end = off; break; }    /* región agotada */
-        uint32_t magic = get_u32(base + off);
+        if (off + 4 > src->size) { end = off; break; }      /* región agotada */
+        uint8_t mg[4];
+        if (!src_read(src, off, mg, 4)) break;              /* fuente rota = fin */
+        uint32_t magic = get_u32(mg);
         if (magic == 0xFFFFFFFFuL) { end = off; break; }    /* flash virgen = fin */
         bpvm_pack_info_t tmp;
         bpvm_pack_info_t* slot = (out && count < max) ? &out[count] : &tmp;
         if (magic != BPVM_PACK_MAGIC) break;                /* basura: cadena corrupta */
-        if (parse_header(base, region_size, off, slot) != 0) {
+        if (parse_header(src, off, slot) != 0) {
             count++;                                        /* cabecera mala: reportar y cortar */
             break;
         }
-        slot->crc_ok = (uint8_t) check_content(base, off, slot, verify_content);
+        slot->crc_ok = (uint8_t) check_content(src, off, slot, verify_content);
         count++;
         off += slot->size_total;                            /* salto fiable (crc_cab OK) */
     }
@@ -174,46 +253,77 @@ int bpvm_pack_scan(const uint8_t* base, uint32_t region_size,
     return count;
 }
 
-int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_off,
-                      bpvm_pack_entry_t* out, int max) {
+int bpvm_pack_scan(const uint8_t* base, uint32_t region_size,
+                   bpvm_pack_info_t* out, int max,
+                   int verify_content, uint32_t* end_off) {
+    bpvm_pack_src_t src;
+    bpvm_pack_src_mem(&src, base, region_size);
+    return bpvm_pack_scan_src(&src, out, max, verify_content, end_off);
+}
+
+int bpvm_pack_entries_src(const bpvm_pack_src_t* src, uint32_t pack_off,
+                          bpvm_pack_entry_t* out, int max) {
     bpvm_pack_info_t info;
-    if (pack_off + 4 > region_size) return -1;
-    if (get_u32(base + pack_off) != BPVM_PACK_MAGIC) return -1;
-    if (parse_header(base, region_size, pack_off, &info) != 0) return -1;
+    if (pack_off + 4 > src->size) return -1;
+    uint8_t mg[4];
+    if (!src_read(src, pack_off, mg, 4)) return -1;
+    if (get_u32(mg) != BPVM_PACK_MAGIC) return -1;
+    if (parse_header(src, pack_off, &info) != 0) return -1;
     uint32_t rel = BPVM_PACK_HEADER_SIZE;
     int n = 0, r;
     bpvm_pack_entry_t e;
-    while ((r = next_entry(base, pack_off, info.size_total, &rel, &e)) == 1) {
+    while ((r = next_entry(src, pack_off, info.size_total, &rel, &e)) == 1) {
         if (out && n < max) out[n] = e;
         n++;
     }
     return (r < 0) ? -1 : n;
 }
 
-const uint8_t* bpvm_pack_find(const uint8_t* base, uint32_t region_size,
-                              const char* tipo, const char* nombre, uint32_t* len) {
-    const uint8_t* best = NULL;
-    uint32_t best_len = 0;
+int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_off,
+                      bpvm_pack_entry_t* out, int max) {
+    bpvm_pack_src_t src;
+    bpvm_pack_src_mem(&src, base, region_size);
+    return bpvm_pack_entries_src(&src, pack_off, out, max);
+}
+
+int bpvm_pack_find_src(const bpvm_pack_src_t* src,
+                       const char* tipo, const char* nombre,
+                       bpvm_pack_entry_t* out) {
+    int found = 0;
     uint32_t off = 0;
     for (;;) {
-        if (off + 4 > region_size) break;
-        if (get_u32(base + off) != BPVM_PACK_MAGIC) break;  /* virgen o corrupto = fin */
+        if (off + 4 > src->size) break;
+        uint8_t mg[4];
+        if (!src_read(src, off, mg, 4)) break;
+        if (get_u32(mg) != BPVM_PACK_MAGIC) break;          /* virgen o corrupto = fin */
         bpvm_pack_info_t info;
-        if (parse_header(base, region_size, off, &info) != 0) break;
+        if (parse_header(src, off, &info) != 0) break;
         if (info.alive) {
             uint32_t rel = BPVM_PACK_HEADER_SIZE;
             bpvm_pack_entry_t e;
-            while (next_entry(base, off, info.size_total, &rel, &e) == 1) {
+            while (next_entry(src, off, info.size_total, &rel, &e) == 1) {
                 if (strcmp(e.tipo, tipo) == 0 && strcmp(e.nombre, nombre) == 0) {
-                    best = base + e.data_off;               /* el ÚLTIMO de la cadena gana */
-                    best_len = e.len;
+                    if (out) *out = e;                      /* el ÚLTIMO de la cadena gana */
+                    found = 1;
                 }
             }
         }
         off += info.size_total;
     }
-    if (len) *len = best_len;
-    return best;
+    return found;
+}
+
+const uint8_t* bpvm_pack_find(const uint8_t* base, uint32_t region_size,
+                              const char* tipo, const char* nombre, uint32_t* len) {
+    bpvm_pack_src_t src;
+    bpvm_pack_src_mem(&src, base, region_size);
+    bpvm_pack_entry_t e;
+    if (!bpvm_pack_find_src(&src, tipo, nombre, &e)) {
+        if (len) *len = 0;
+        return NULL;
+    }
+    if (len) *len = e.len;
+    return bpvm_pack_src_ptr(&src, e.data_off, e.len);
 }
 
 int32_t bpvm_pack_add(uint8_t* base, uint32_t region_size,
@@ -223,9 +333,11 @@ int32_t bpvm_pack_add(uint8_t* base, uint32_t region_size,
     bpvm_pack_info_t info;
     if (img_len < BPVM_PACK_HEADER_SIZE) return BPVM_PACK_ERR_BADIMG;
     if (get_u32(img) != BPVM_PACK_MAGIC) return BPVM_PACK_ERR_BADIMG;
-    if (parse_header(img, img_len, 0, &info) != 0) return BPVM_PACK_ERR_BADIMG;
+    bpvm_pack_src_t isrc;
+    bpvm_pack_src_mem(&isrc, img, img_len);
+    if (parse_header(&isrc, 0, &info) != 0) return BPVM_PACK_ERR_BADIMG;
     if (info.size_total != img_len) return BPVM_PACK_ERR_BADIMG;
-    if (!check_content(img, 0, &info, 1)) return BPVM_PACK_ERR_BADIMG;
+    if (!check_content(&isrc, 0, &info, 1)) return BPVM_PACK_ERR_BADIMG;
 
     uint32_t end;
     (void) bpvm_pack_scan(base, region_size, NULL, 0, 0, &end);
@@ -239,7 +351,9 @@ int bpvm_pack_remove_at(uint8_t* base, uint32_t region_size, uint32_t pack_off) 
     bpvm_pack_info_t info;
     if (pack_off + 4 > region_size) return -1;
     if (get_u32(base + pack_off) != BPVM_PACK_MAGIC) return -1;
-    if (parse_header(base, region_size, pack_off, &info) != 0) return -1;
+    bpvm_pack_src_t src;
+    bpvm_pack_src_mem(&src, base, region_size);
+    if (parse_header(&src, pack_off, &info) != 0) return -1;
     if (!info.alive) return -1;
     /* Tombstone: bit ALIVE 1→0. En NOR es una escritura legal sin borrado;
      * crc_cab no cubre flags, así que la cabecera sigue siendo válida. */
@@ -251,11 +365,13 @@ int bpvm_pack_remove_at(uint8_t* base, uint32_t region_size, uint32_t pack_off) 
 int32_t bpvm_pack_remove(uint8_t* base, uint32_t region_size, const char* nombre) {
     int32_t target = -1;
     uint32_t off = 0;
+    bpvm_pack_src_t src;
+    bpvm_pack_src_mem(&src, base, region_size);
     for (;;) {
         if (off + 4 > region_size) break;
         if (get_u32(base + off) != BPVM_PACK_MAGIC) break;
         bpvm_pack_info_t info;
-        if (parse_header(base, region_size, off, &info) != 0) break;
+        if (parse_header(&src, off, &info) != 0) break;
         if (info.alive && strcmp(info.nombre, nombre) == 0)
             target = (int32_t) off;                         /* el ÚLTIMO activo gana */
         off += info.size_total;
@@ -338,9 +454,11 @@ int32_t bpvm_pack_burn_end(const uint8_t* base, uint32_t region_size,
 
     /* 2) contenido: recorrido + crc_contenido LEYENDO DE LA FLASH (readback). */
     {
+        bpvm_pack_src_t vsrc;
+        bpvm_pack_src_mem(&vsrc, base, region_size);
         uint32_t rel = BPVM_PACK_HEADER_SIZE;
         int r;
-        while ((r = next_entry(base, s->off, s->total, &rel, NULL)) == 1) { }
+        while ((r = next_entry(&vsrc, s->off, s->total, &rel, NULL)) == 1) { }
         if (r < 0) return BPVM_PACK_ERR_VERIFY;
         uint16_t cc = bpvm_pack_crc16(BPVM_PACK_CRC16_INIT,
                                       base + s->off + BPVM_PACK_HEADER_SIZE,
@@ -375,7 +493,9 @@ int bpvm_pack_del(const uint8_t* base, uint32_t region_size,
     uint32_t blk = fl->erase_block;
     if (pack_off + 4 > region_size || (pack_off % blk) != 0) return BPVM_PACK_ERR_BADIMG;
     if (get_u32(base + pack_off) != BPVM_PACK_MAGIC) return BPVM_PACK_ERR_BADIMG;
-    if (parse_header(base, region_size, pack_off, &info) != 0) return BPVM_PACK_ERR_BADIMG;
+    bpvm_pack_src_t dsrc;
+    bpvm_pack_src_mem(&dsrc, base, region_size);
+    if (parse_header(&dsrc, pack_off, &info) != 0) return BPVM_PACK_ERR_BADIMG;
     if (!info.alive) return BPVM_PACK_ERR_STATE;
 
     /* RMW de la 1ª página: copiar, tumbar el bit ALIVE, borrar, regrabar.
