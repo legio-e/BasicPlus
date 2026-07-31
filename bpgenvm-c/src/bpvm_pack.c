@@ -313,6 +313,13 @@ int bpvm_pack_find_src(const bpvm_pack_src_t* src,
     return found;
 }
 
+int bpvm_pack_src_is_pack(const bpvm_pack_src_t* src) {
+    if (!src || src->size < BPVM_PACK_HEADER_SIZE) return 0;
+    uint8_t mg[4];
+    if (!src_read(src, 0, mg, 4)) return 0;
+    return get_u32(mg) == BPVM_PACK_MAGIC;
+}
+
 int bpvm_pack_manifest_get(const bpvm_pack_src_t* src, const char* key,
                            char* out, int cap) {
     if (!src || !key || !out || cap <= 0) return 0;

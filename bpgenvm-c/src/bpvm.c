@@ -353,6 +353,13 @@ bpvm_status_t bpvm_load_pack(bpvm_t* vm, const char* pack_path,
         fprintf(stderr, "[bpvm-c] pack '%s' no se puede abrir\n", pack_path);
         return BPVM_ERR_IO;
     }
+    /* Antes de hablar del manifest, comprobar que esto es un pack: si no,
+     * el mensaje del manifest MIENTE (culpa al manifest de un fichero que ni
+     * siquiera es un pack) y manda a buscar donde no es. */
+    if (!bpvm_pack_src_is_pack(src)) {
+        fprintf(stderr, "[bpvm-c] '%s' no es un pack (cabecera invalida)\n", pack_path);
+        return BPVM_ERR_IO;
+    }
     char mainmod[BPVM_PACK_NAME_LEN + 1];
     if (!bpvm_pack_manifest_get(src, "main", mainmod, (int) sizeof mainmod)) {
         /* Un pack SIN manifest es perfectamente válido — es una librería. Lo

@@ -153,6 +153,12 @@ int bpvm_pack_find_src(const bpvm_pack_src_t* src,
                        const char* tipo, const char* nombre,
                        bpvm_pack_entry_t* out);
 
+/* ¿Empieza esta fuente por un pack? 1 = sí, 0 = no (o no cabe la cabecera).
+ * Existe para que quien abre un pack pueda decir "esto NO es un pack" en vez
+ * de echarle la culpa a lo primero que no encuentre dentro. Lee por la fuente,
+ * así que vale igual para un pack mapeado que para uno leído por trozos. */
+int bpvm_pack_src_is_pack(const bpvm_pack_src_t* src);
+
 /* ── MANIFEST: lo que hace EJECUTABLE a un pack (#310) ───────────────────────
  * Entrada de tipo 'mft' llamada "manifest", texto `clave=valor` por líneas
  * (modelo jar). La sintetiza PackStep desde el `main` del .bpbuild; espejo de
