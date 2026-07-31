@@ -1,0 +1,95 @@
+// #348 — las nueve funciones de cadena que faltaban en la VM-C.
+//
+// Ejercita los CORNERS que se midieron contra Java, no el caso feliz: acentos
+// (UTF-8 de 2 bytes), indices en codepoints, separadores vacios, sufijos que no
+// estan, y trim con tabuladores. Si las dos VMs no dan lo mismo aqui, es que
+// una de las dos miente.
+//
+// upper/lower son LATIN-1 a proposito en las DOS (decision 31-jul): 'a' acentuada
+// sube, pero 'ss' alemana NO se convierte en "SS" — eso creceria de longitud.
+module StrOps348
+
+  function linea(t: string, v: string)
+    print t + " -> [" + v + "]"
+  end linea
+
+  function num(t: string, v: integer)
+    print t + " -> " + intToString(v)
+  end num
+
+  function boo(t: string, v: boolean)
+    if v then
+      print t + " -> si"
+    else
+      print t + " -> no"
+    endif
+  end boo
+
+  public function Main()
+    print "== upper / lower (Latin-1) =="
+    linea("upper('hola mundo')", upper("hola mundo"))
+    linea("upper('canion')     ", upper("canción"))
+    linea("lower('CANION')     ", lower("CANCIÓN"))
+    linea("upper('aeiou')      ", upper("áéíóú"))
+    linea("lower('AEIOU')      ", lower("ÁÉÍÓÚ"))
+    linea("upper('nn')         ", upper("ñÑ"))
+    linea("upper('ss alemana') ", upper("ß"))
+    linea("upper('123-abc')    ", upper("123-abc"))
+
+    print "== trim =="
+    linea("trim('  x  ')       ", trim("  x  "))
+    linea("trim(tab x tab)     ", trim("	x	"))
+    linea("trim('')            ", trim(""))
+    linea("trim('   ')         ", trim("   "))
+    linea("trim('sin espacios')", trim("sin espacios"))
+
+    print "== indexOf (indices en CODEPOINTS) =="
+    num("indexOf('hola','la')  ", indexOf("hola", "la"))
+    num("indexOf('hola','z')   ", indexOf("hola", "z"))
+    num("indexOf('canion','on')", indexOf("canción", "ón"))
+    num("indexOf('aXbXc','X')  ", indexOf("aXbXc", "X"))
+    num("indexOf('abc','')     ", indexOf("abc", ""))
+    // DISCRIMINANTE: los acentos van DELANTE del match, asi que el indice en
+    // BYTES (9: cuatro acentos de 2 bytes + el guion) y el indice en CODEPOINTS
+    // (5) NO coinciden. Tiene que dar 5. Sin este caso, una VM que devolviera
+    // bytes pasaria todo lo demas igual y nadie se enteraria.
+    num("indexOf('aaaeee-x','x')", indexOf("ááéé-x", "x"))
+    num("longitud de 'aaee-x'   ", len("ááéé-x"))
+
+    print "== startsWith / endsWith / contains =="
+    boo("'hola' empieza 'ho'   ", startsWith("hola", "ho"))
+    boo("'hola' empieza 'la'   ", startsWith("hola", "la"))
+    boo("'hola' acaba 'la'     ", endsWith("hola", "la"))
+    boo("'canion' acaba 'on'   ", endsWith("canción", "ón"))
+    boo("'hola' contiene 'ol'  ", contains("hola", "ol"))
+    boo("'hola' contiene 'zz'  ", contains("hola", "zz"))
+    boo("'hola' empieza ''     ", startsWith("hola", ""))
+
+    print "== replace =="
+    linea("replace('aXa','X','-')  ", replace("aXa", "X", "-"))
+    linea("replace('aaa','a','bb') ", replace("aaa", "a", "bb"))
+    linea("replace('aba','a','')   ", replace("aba", "a", ""))
+    linea("replace('hola','z','!') ", replace("hola", "z", "!"))
+    linea("replace('ab','','-')    ", replace("ab", "", "-"))
+    linea("replace('canion','o','O')", replace("canción", "ó", "O"))
+
+    print "== split =="
+    var p: string[] := split(",a,,b,", ",")
+    num("split(',a,,b,' , ',') partes", len(p))
+    var i: integer := 0
+    while i < len(p) do
+      linea("  parte " + intToString(i), p[i])
+      i := i + 1
+    endwh
+    var q: string[] := split("uno dos tres", " ")
+    num("split('uno dos tres',' ') partes", len(q))
+    linea("  primera", q[0])
+    linea("  ultima ", q[2])
+    var r: string[] := split("sin-separador", ";")
+    num("split sin separador partes", len(r))
+    linea("  entera", r[0])
+    var v: string[] := split("", ",")
+    num("split de cadena vacia partes", len(v))
+  end Main
+
+end StrOps348

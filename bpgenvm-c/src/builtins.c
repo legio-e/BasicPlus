@@ -42,6 +42,17 @@ enum {
     BUILTIN_BOOL_TO_STRING  = 5,
     BUILTIN_SUBSTRING       = 9,   /* #173: substring(s, start, end) */
     BUILTIN_CHAR_AT         = 14,
+    /* #348 — cadenas de cómputo puro. Estaban SÓLO en miVM: un programa que
+     * las usara pasaba en el host y moría en la placa. Ids del enum Builtin. */
+    BUILTIN_UPPER           = 6,
+    BUILTIN_LOWER           = 7,
+    BUILTIN_TRIM            = 8,
+    BUILTIN_INDEX_OF        = 10,
+    BUILTIN_STARTS_WITH     = 11,
+    BUILTIN_ENDS_WITH       = 12,
+    BUILTIN_CONTAINS        = 13,
+    BUILTIN_REPLACE         = 15,
+    BUILTIN_SPLIT           = 36,
     /* Numéricas enteras (V2/GAP-1) — byte-exactas, sin riesgo de paridad float. */
     BUILTIN_ABS             = 16,
     BUILTIN_MIN             = 17,
@@ -330,6 +341,66 @@ static void push_ref(bpvm_t* vm, bpvm_thread_t* tc, uint32_t ref) {
      * gen real. Mismo patrón, misma implementación que el guardado del msg en
      * exceptions.c (bpvm_internal.h). */
     bpref_push(vm, tc, bpref_regen(vm, ref));
+}
+
+/* #348 — lee un argumento ref SIN sacarlo de la pila (0 = el de más arriba).
+ *
+ * POR QUÉ EXISTE: el GC marca escaneando [stack_base, sp) — EXCLUYE lo que ya
+ * se ha sacado. Y bpvm_heap_alloc PUEDE colectar (umbral de bump, y el
+ * reintento tras OOM). Así que el patrón «pop del origen → alocar el resultado
+ * → seguir leyendo del origen» deja la cadena origen SIN RAÍZ justo cuando
+ * puede pasar el GC: si el llamante no la tenía además en un local, se la
+ * lleva. Con handles no corrompe en silencio —la gen no cuadra y grita— pero
+ * el programa falla igual.
+ *
+ * Con peek el argumento sigue por debajo de sp, o sea que sigue siendo raíz.
+ * Se saca AL FINAL, justo antes de empujar el resultado. Todo builtin que
+ * alogue y siga leyendo de un argumento tiene que usar esto. */
+static bpref_t peek_ref(bpvm_t* vm, bpvm_thread_t* tc, int depth) {
+    return bpref_load(vm, tc->sp - (uint32_t)(depth + 1) * BPVM_REF_SIZE);
+}
+
+/* #348 — mayúsculas/minúsculas LATIN-1 (decisión de Eduardo 31-jul).
+ *
+ * miVM usaba toUpperCase()/toLowerCase() de Java: Unicode completo y —peor—
+ * DEPENDIENTE DEL LOCALE de la máquina (en un locale turco, 'i' sube a 'İ').
+ * Reproducir eso en un micro pide tablas de kilobytes, así que se acordó
+ * LATIN-1 en las DOS VMs: ASCII + el bloque U+00C0..U+00FF, que es lo que un
+ * proyecto en español necesita, y sale algorítmico sin ninguna tabla.
+ *
+ * Propiedad que aprovecha el llamante: en UTF-8 la longitud en BYTES no cambia
+ * (á U+00E1 y Á U+00C1 son 2 bytes los dos; ÿ U+00FF → Ÿ U+0178 también), así
+ * que el resultado se puede alocar del tamaño exacto del origen.
+ *
+ * Lo que NO hace, a propósito: 'ß' (U+00DF) se queda como está — su mayúscula
+ * Unicode es "SS", dos caracteres, y eso rompería la propiedad de la longitud.
+ * Java sí lo convierte; es la divergencia que se aceptó al elegir Latin-1. */
+static uint32_t latin1_upper_cp(uint32_t c) {
+    if (c >= 'a' && c <= 'z')            return c - 32;
+    if (c >= 0x00E0 && c <= 0x00FE && c != 0x00F7) return c - 32;  /* ÷ no es letra */
+    if (c == 0x00FF)                     return 0x0178;            /* ÿ → Ÿ */
+    return c;
+}
+static uint32_t latin1_lower_cp(uint32_t c) {
+    if (c >= 'A' && c <= 'Z')            return c + 32;
+    if (c >= 0x00C0 && c <= 0x00DE && c != 0x00D7) return c + 32;  /* × no es letra */
+    if (c == 0x0178)                     return 0x00FF;            /* Ÿ → ÿ */
+    return c;
+}
+
+/* #348 — busca `q` (qn bytes) dentro de `p` (n bytes) desde el byte `from`.
+ * Devuelve el OFFSET EN BYTES o -1. A nivel de byte y no de codepoint a
+ * propósito: UTF-8 es auto-sincronizante, o sea que una secuencia válida no
+ * puede casar a mitad de otra. El resultado es el mismo que buscar por
+ * caracteres, y sin decodificar nada. Aguja vacía → casa en `from` (como Java). */
+static long bp_find_bytes(const uint8_t* p, uint32_t n,
+                          const uint8_t* q, uint32_t qn, uint32_t from) {
+    if (qn == 0) return (long) (from <= n ? from : n);
+    if (qn > n) return -1;
+    for (uint32_t i = from; i + qn <= n; i++) {
+        if (memcmp(p + i, q, qn) == 0) return (long) i;
+    }
+    return -1;
 }
 
 /* Lee un string BP (TYPE_ARRAY_I32 con codepoints) a un buffer C UTF-8.
@@ -1295,6 +1366,235 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             out = (uint32_t) bpvm_handle_register(vm, out).v;   /* V4: addr → handle */
         }
         push_ref(vm, tc, out);   /* string ref result (push_ref ya es genérico) */
+        return BPVM_OK;
+    }
+
+    /* ================================================================
+     * #348 — CADENAS DE CÓMPUTO PURO. Estaban sólo en miVM.
+     *
+     * Semánticas MEDIDAS contra Java (sonda con codepoints y longitudes
+     * reales), no deducidas — los tres corners que importan:
+     *   split(",a,,b,", ",") -> 5 partes, conserva vacíos delante y detrás
+     *   split("abc", "")     -> 4: "a" "b" "c" ""
+     *   split("", cualquiera)-> 1: ""
+     *   replace("ab", "", "-") -> "-a-b-"
+     *   trim quita <= U+0020 (NO quita U+00A0)
+     *
+     * TODAS leen sus argumentos con peek_ref y los sacan AL FINAL: ver el
+     * comentario de peek_ref sobre por qué un pop antes de alocar es un
+     * agujero de GC.
+     * ================================================================ */
+
+    case BUILTIN_UPPER:
+    case BUILTIN_LOWER: {
+        /* Latin-1 (ver latin1_upper_cp): la longitud en BYTES no cambia, así
+         * que el resultado se aloca del tamaño exacto del origen. */
+        int up = (id == BUILTIN_UPPER);
+        bpref_t s = peek_ref(vm, tc, 0);
+        uint32_t n = bpref_is_null(s) ? 0 : bpref_arr_len(vm, s);
+        uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
+        if (out) {
+            bpvm_write_u32_be(vm->memory + out, n);
+            const uint8_t* p = (n > 0) ? bpref_arr_elem(vm, s, 0, 1) : NULL;
+            uint32_t i = 0, o = 0;
+            while (i < n) {
+                uint32_t adv = 0;
+                uint32_t cp  = utf8_decode(p + i, n - i, &adv);
+                uint32_t m   = up ? latin1_upper_cp(cp) : latin1_lower_cp(cp);
+                uint8_t enc[4];
+                uint32_t el = utf8_encode(m, enc);
+                for (uint32_t k = 0; k < el && o < n; k++) vm->memory[out + 4 + o++] = enc[k];
+                i += (adv > 0) ? adv : 1;
+            }
+            out = (uint32_t) bpvm_handle_register(vm, out).v;
+        }
+        tc->sp -= BPVM_REF_SIZE;
+        push_ref(vm, tc, out);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_TRIM: {
+        /* Java String.trim(): quita los caracteres <= U+0020 de los dos
+         * extremos. A nivel de byte es exacto — ningún byte de continuación
+         * UTF-8 es <= 0x20, así que no se puede cortar un carácter por medio. */
+        bpref_t s = peek_ref(vm, tc, 0);
+        uint32_t n = bpref_is_null(s) ? 0 : bpref_arr_len(vm, s);
+        uint32_t b = 0, e = n;
+        if (n > 0) {
+            const uint8_t* p = bpref_arr_elem(vm, s, 0, 1);
+            while (b < e && p[b] <= 0x20) b++;
+            while (e > b && p[e - 1] <= 0x20) e--;
+        }
+        uint32_t len = e - b;
+        uint32_t out = bpvm_heap_alloc(vm, len, BPVM_TYPE_ARRAY_I8);
+        if (out) {
+            bpvm_write_u32_be(vm->memory + out, len);
+            for (uint32_t i = 0; i < len; i++)
+                vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, b + i, 1);
+            out = (uint32_t) bpvm_handle_register(vm, out).v;
+        }
+        tc->sp -= BPVM_REF_SIZE;
+        push_ref(vm, tc, out);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_INDEX_OF: {
+        /* Devuelve el índice en CODEPOINTS (no en bytes), para ser coherente
+         * con charAt/substring. Se busca por bytes y se convierte al final. */
+        bpref_t q = peek_ref(vm, tc, 0);          /* aguja */
+        bpref_t s = peek_ref(vm, tc, 1);          /* pajar */
+        uint32_t sn = bpref_is_null(s) ? 0 : bpref_arr_len(vm, s);
+        uint32_t qn = bpref_is_null(q) ? 0 : bpref_arr_len(vm, q);
+        const uint8_t* sp_ = (sn > 0) ? bpref_arr_elem(vm, s, 0, 1) : (const uint8_t*) "";
+        const uint8_t* qp_ = (qn > 0) ? bpref_arr_elem(vm, q, 0, 1) : (const uint8_t*) "";
+        long off = bp_find_bytes(sp_, sn, qp_, qn, 0);
+        int32_t res = (off < 0) ? -1 : (int32_t) utf8_cp_count(sp_, (uint32_t) off);
+        tc->sp -= 2 * BPVM_REF_SIZE;
+        push_i32(vm, tc, res);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_STARTS_WITH:
+    case BUILTIN_ENDS_WITH:
+    case BUILTIN_CONTAINS: {
+        bpref_t q = peek_ref(vm, tc, 0);
+        bpref_t s = peek_ref(vm, tc, 1);
+        uint32_t sn = bpref_is_null(s) ? 0 : bpref_arr_len(vm, s);
+        uint32_t qn = bpref_is_null(q) ? 0 : bpref_arr_len(vm, q);
+        const uint8_t* sp_ = (sn > 0) ? bpref_arr_elem(vm, s, 0, 1) : (const uint8_t*) "";
+        const uint8_t* qp_ = (qn > 0) ? bpref_arr_elem(vm, q, 0, 1) : (const uint8_t*) "";
+        int r;
+        if (id == BUILTIN_STARTS_WITH)      r = (qn <= sn) && memcmp(sp_, qp_, qn) == 0;
+        else if (id == BUILTIN_ENDS_WITH)   r = (qn <= sn) && memcmp(sp_ + (sn - qn), qp_, qn) == 0;
+        else                                r = bp_find_bytes(sp_, sn, qp_, qn, 0) >= 0;
+        tc->sp -= 2 * BPVM_REF_SIZE;
+        push_i32(vm, tc, r ? 1 : 0);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_REPLACE: {
+        /* replace(s, target, rep): literal, TODAS las ocurrencias.
+         * Target vacío = el corner de Java: "ab" -> "-a-b-", o sea el
+         * reemplazo se mete en cada frontera de carácter Y al final. */
+        bpref_t rp = peek_ref(vm, tc, 0);
+        bpref_t tg = peek_ref(vm, tc, 1);
+        bpref_t s  = peek_ref(vm, tc, 2);
+        uint32_t sn = bpref_is_null(s)  ? 0 : bpref_arr_len(vm, s);
+        uint32_t tn = bpref_is_null(tg) ? 0 : bpref_arr_len(vm, tg);
+        uint32_t rn = bpref_is_null(rp) ? 0 : bpref_arr_len(vm, rp);
+        const uint8_t* sb = (sn > 0) ? bpref_arr_elem(vm, s,  0, 1) : (const uint8_t*) "";
+        const uint8_t* tb = (tn > 0) ? bpref_arr_elem(vm, tg, 0, 1) : (const uint8_t*) "";
+
+        /* 1ª pasada: contar ocurrencias para saber el tamaño exacto. */
+        uint32_t hits = 0;
+        if (tn == 0) {
+            hits = utf8_cp_count(sb, sn) + 1;          /* una por frontera + la final */
+        } else {
+            for (uint32_t i = 0; i + tn <= sn; ) {
+                if (memcmp(sb + i, tb, tn) == 0) { hits++; i += tn; } else i++;
+            }
+        }
+        uint32_t outn = sn - hits * tn + hits * rn;
+        uint32_t out  = bpvm_heap_alloc(vm, outn, BPVM_TYPE_ARRAY_I8);
+        if (out) {
+            bpvm_write_u32_be(vm->memory + out, outn);
+            /* 2ª pasada: copiar. Los punteros se re-piden tras la alocación. */
+            sb = (sn > 0) ? bpref_arr_elem(vm, s,  0, 1) : (const uint8_t*) "";
+            tb = (tn > 0) ? bpref_arr_elem(vm, tg, 0, 1) : (const uint8_t*) "";
+            const uint8_t* rb = (rn > 0) ? bpref_arr_elem(vm, rp, 0, 1) : (const uint8_t*) "";
+            uint32_t o = 0, i = 0;
+            if (tn == 0) {
+                for (uint32_t k = 0; k < rn; k++) vm->memory[out + 4 + o++] = rb[k];
+                while (i < sn) {
+                    uint32_t adv = 0;
+                    (void) utf8_decode(sb + i, sn - i, &adv);
+                    if (adv == 0) adv = 1;
+                    for (uint32_t k = 0; k < adv; k++) vm->memory[out + 4 + o++] = sb[i + k];
+                    for (uint32_t k = 0; k < rn; k++) vm->memory[out + 4 + o++] = rb[k];
+                    i += adv;
+                }
+            } else {
+                while (i < sn) {
+                    if (i + tn <= sn && memcmp(sb + i, tb, tn) == 0) {
+                        for (uint32_t k = 0; k < rn; k++) vm->memory[out + 4 + o++] = rb[k];
+                        i += tn;
+                    } else {
+                        vm->memory[out + 4 + o++] = sb[i++];
+                    }
+                }
+            }
+            out = (uint32_t) bpvm_handle_register(vm, out).v;
+        }
+        tc->sp -= 3 * BPVM_REF_SIZE;
+        push_ref(vm, tc, out);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_SPLIT: {
+        /* split(s, sep) -> string[]. Semántica de Java con límite -1: conserva
+         * los vacíos de los dos extremos. Casos medidos arriba.
+         *
+         * ORDEN DE ALOCACIÓN: primero el ARRAY y se EMPUJA como raíz; después
+         * cada trozo, guardándolo en el array nada más crearlo. Así, si una
+         * alocación dispara GC, los trozos ya creados están dentro de un array
+         * que sí es raíz. (miVM lo hace al revés — sus refs viven en un array
+         * Java que el GC de BP no escanea. Mismo QUÉ, distinto CÓMO.) */
+        bpref_t sep = peek_ref(vm, tc, 0);
+        bpref_t s   = peek_ref(vm, tc, 1);
+        uint32_t sn = bpref_is_null(s)   ? 0 : bpref_arr_len(vm, s);
+        uint32_t pn = bpref_is_null(sep) ? 0 : bpref_arr_len(vm, sep);
+        const uint8_t* sb = (sn > 0) ? bpref_arr_elem(vm, s,   0, 1) : (const uint8_t*) "";
+        const uint8_t* pb = (pn > 0) ? bpref_arr_elem(vm, sep, 0, 1) : (const uint8_t*) "";
+
+        /* Contar partes (y de paso decidir la forma). */
+        uint32_t nparts;
+        if (sn == 0)      nparts = 1;                        /* "" -> [""] siempre */
+        else if (pn == 0) nparts = utf8_cp_count(sb, sn) + 1;/* "abc" -> a,b,c,"" */
+        else {
+            nparts = 1;
+            for (uint32_t i = 0; i + pn <= sn; ) {
+                if (memcmp(sb + i, pb, pn) == 0) { nparts++; i += pn; } else i++;
+            }
+        }
+
+        uint32_t arr = bpvm_heap_alloc(vm, nparts * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
+        if (arr == 0) return builtin_throw(vm, tc, "No space in heap");
+        bpvm_write_u32_be(vm->memory + arr, nparts);
+        bpref_t arrh = bpvm_handle_register(vm, arr);
+        bpref_push(vm, tc, arrh);          /* raíz temporal: protege los trozos */
+
+        uint32_t done = 0;
+        uint32_t i = 0;
+        while (done < nparts) {
+            /* Recalcular punteros: entre trozo y trozo hay alocaciones. */
+            sb = (sn > 0) ? bpref_arr_elem(vm, s,   0, 1) : (const uint8_t*) "";
+            pb = (pn > 0) ? bpref_arr_elem(vm, sep, 0, 1) : (const uint8_t*) "";
+            uint32_t b = i, e;
+            if (sn == 0)      { e = 0; i = 0; }
+            else if (pn == 0) {
+                uint32_t adv = 0;
+                if (i < sn) { (void) utf8_decode(sb + i, sn - i, &adv); if (adv == 0) adv = 1; }
+                e = (i < sn) ? i + adv : i;
+                i = e;
+            } else {
+                long off = bp_find_bytes(sb, sn, pb, pn, i);
+                if (off < 0 || done == nparts - 1) { e = sn; i = sn; }
+                else { e = (uint32_t) off; i = e + pn; }
+            }
+            uint32_t plen = e - b;
+            uint32_t ps = bpvm_heap_alloc(vm, plen, BPVM_TYPE_ARRAY_I8);
+            if (ps == 0) { tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, "No space in heap"); }
+            bpvm_write_u32_be(vm->memory + ps, plen);
+            for (uint32_t k = 0; k < plen; k++)
+                vm->memory[ps + 4 + k] = *bpref_arr_elem(vm, s, b + k, 1);
+            bpref_t psh = bpvm_handle_register(vm, ps);
+            bpref_store(vm, bpref_deref(vm, arrh) + BPVM_ARR_DATA_OFF + done * BPVM_REF_SIZE, psh);
+            done++;
+        }
+
+        tc->sp -= BPVM_REF_SIZE;           /* fuera la raíz temporal */
+        tc->sp -= 2 * BPVM_REF_SIZE;       /* fuera los dos argumentos */
+        bpref_push(vm, tc, arrh);
         return BPVM_OK;
     }
 

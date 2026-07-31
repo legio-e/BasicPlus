@@ -1000,6 +1000,40 @@ public class VirtualMachine {
      * los que escriben. Para el programa y para la VM, el pack es de sólo
      * lectura.
      */
+    /**
+     * #348 — mayúsculas/minúsculas LATIN-1. Antes esto era {@code toUpperCase()}
+     * de Java: Unicode completo y —lo grave— DEPENDIENTE DEL LOCALE de la
+     * máquina (en un locale turco, 'i' sube a 'İ'), o sea que miVM no era ni
+     * determinista consigo misma. Reproducirlo en un micro pide tablas de
+     * kilobytes, así que se acordó LATIN-1 en las DOS VMs: ASCII + el bloque
+     * U+00C0..U+00FF, algorítmico y sin tablas.
+     *
+     * Réplica EXACTA de latin1_upper_cp/latin1_lower_cp de la VM-C: si una
+     * cambia, la otra va detrás. Lo que se pierde a propósito: 'ß' no sube a
+     * "SS" (crecería de longitud), y fuera de Latin-1 no se toca nada.
+     */
+    private static String latin1Case(String s, boolean up) {
+        StringBuilder b = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); ) {
+            int c = s.codePointAt(i);
+            i += Character.charCount(c);
+            b.appendCodePoint(up ? latin1UpperCp(c) : latin1LowerCp(c));
+        }
+        return b.toString();
+    }
+    private static int latin1UpperCp(int c) {
+        if (c >= 'a' && c <= 'z')                        return c - 32;
+        if (c >= 0x00E0 && c <= 0x00FE && c != 0x00F7)   return c - 32;   // ÷ no es letra
+        if (c == 0x00FF)                                 return 0x0178;   // ÿ → Ÿ
+        return c;
+    }
+    private static int latin1LowerCp(int c) {
+        if (c >= 'A' && c <= 'Z')                        return c + 32;
+        if (c >= 0x00C0 && c <= 0x00DE && c != 0x00D7)   return c + 32;   // × no es letra
+        if (c == 0x0178)                                 return 0x00FF;   // Ÿ → ÿ
+        return c;
+    }
+
     private byte[] packResource(String path) {
         ModuleManager mm = getModuleManager();
         return (mm != null) ? mm.packResource(path) : null;
@@ -3984,8 +4018,8 @@ public class VirtualMachine {
                 pushTcRef(tc, allocVmString(v != 0 ? "true" : "false"));
                 break;
             }
-            case UPPER: { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(s.toUpperCase())); break; }
-            case LOWER: { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(s.toLowerCase())); break; }
+            case UPPER: { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(latin1Case(s, true)));  break; }
+            case LOWER: { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(latin1Case(s, false))); break; }
             case TRIM:  { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(s.trim()));        break; }
 
             case SUBSTRING: {
