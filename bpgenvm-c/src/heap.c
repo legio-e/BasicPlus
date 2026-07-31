@@ -19,13 +19,13 @@
  */
 
 #include "bpvm_internal.h"
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"   /* #302: bpvm_gui_visit_roots (raíces GC del GUI) */
-#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #endif
 
 static uint32_t align4(uint32_t v) {

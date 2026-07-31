@@ -7,6 +7,7 @@
  */
 
 #include "bpvm_internal.h"
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #include "bpvm_platform.h"
 #include <stdio.h>
 #include <inttypes.h>
@@ -29,7 +30,6 @@
 #include "bpvm_fs.h"
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"   /* V3 / H4 — backend GUI (modelo). Sólo en el build con GUI. */
-#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #endif
 
 /* IDs estables (= ordinal del enum Builtin Java). Sólo los que F2

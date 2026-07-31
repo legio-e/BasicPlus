@@ -22,7 +22,8 @@
 #include "wire_v1.h"
 #include "json_min.h"
 #include "fs.h"
-#include "bpvm_fs.h"          /* H19-F1: base-dir por proyecto (bpvm_fs_basedir / bpvm_fs_set_basedir_from_module) */
+#include "bpvm_fs.h"
+#include "bpvm_entry.h"   /* #344 — el RUN, escrito una vez */          /* H19-F1: base-dir por proyecto (bpvm_fs_basedir / bpvm_fs_set_basedir_from_module) */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "log.h"
 #include "bpvm_dbg_wire.h"   /* #326: el ramo de depuración salió de aquí a src/ */
@@ -787,21 +788,12 @@ static void handle_bootsel(long id, const json_obj_t* obj) {
  * llamante abre por esa ruta y lee por trozos. */
 static fs_status_t v1_resolve_path(const char* name, char* out, size_t out_cap,
                                     uint32_t* size_out) {
-    /* H19 — base-dir del proyecto PRIMERO (carpeta del módulo principal): un
-     * import resuelve contra /app/<proj>/ antes que el resto del path. Plano
-     * (basedir="") o entry absoluto (name[0]=='/') → se salta este candidato. */
-    const char* bd = bpvm_fs_basedir();
-    if (bd && bd[0] && name[0] != '/') {
-        snprintf(out, out_cap, "%s/%s", bd, name);
-        if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
-    }
-    snprintf(out, out_cap, "%s", name);
-    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
-    snprintf(out, out_cap, "/app/%s", name);
-    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
-    snprintf(out, out_cap, "/lib/%s", name);
-    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
-    return FS_ERR_NOT_FOUND;
+    /* #344 — la REGLA vive en el nucleo (bpvm_entry_resolve): basedir del
+     * proyecto -> tal cual -> /app -> /lib. Estas 15 lineas estaban COPIADAS
+     * palabra por palabra en Pico, ESP32 y STM32. Aqui solo queda la
+     * traduccion al fs_status_t que usa el mapeo de errores del wire. */
+    return (bpvm_entry_resolve(name, out, out_cap, size_out) == 0)
+           ? FS_OK : FS_ERR_NOT_FOUND;
 }
 
 /* Lector por trozos para el loader: el .mod se queda en el FS. */
@@ -991,61 +983,33 @@ static void run_module_path(const char* path, long id) {
     v1_sink_ctx_t sink_ctx = { session };
     bpvm_set_output(vm, v1_output_sink, &sink_ctx);
 
-    bpvm_status_t ls = bpvm_load_mod_stream(vm, v1_mod_read_at, main_path, size, path);
+    /* #344 — UNA carga: bpvm_load_entry despacha .mod/.pack, lee por trozos,
+     * resuelve las dependencias con la regla comun (FS y, si no esta, los packs
+     * grabados en XIP) y NOMBRA la que falte. Aqui vivia el bucle de 4 pasadas
+     * copiado en las 4 familias, y ademas era una version POBRE: cortaba el
+     * import por el primer punto y no sabia nada del pack en ejecucion — que es
+     * lo que impedia ejecutar packs en la placa. */
+    bpvm_entry_t entry;
+    memset(&entry, 0, sizeof entry);
+    bpvm_status_t ls = bpvm_load_entry(vm, path, &entry);
     if (ls != BPVM_OK) {
         fputs("{\"type\":\"EXITED\",\"session\":", stdout);
-        fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
-                        "\"errorMessage\":\"load: %s\"}\n",
-                session, (int) ls, bpvm_status_str(ls));
+        if (entry.missing[0]) {
+            fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
+                            "\"errorMessage\":\"falta el modulo '%s'\"}\n",
+                    session, (int) ls, entry.missing);
+        } else {
+            fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
+                            "\"errorMessage\":\"load: %s\"}\n",
+                    session, (int) ls, bpvm_status_str(ls));
+        }
         fflush(stdout);
         bpvm_destroy(vm);
         s_active_session = 0;
         return;
     }
-
-    /* 4. Resolución iterativa de deps (mismo loop que cmd_run legacy). */
-    for (int pass = 0; pass < 4; pass++) {
-        int loaded_any = 0;
-        int n_before = vm->module_count;
-        for (int mi = 0; mi < n_before; mi++) {
-            bpvm_module_t* m = &vm->modules[mi];
-            for (int k = 0; k < m->import_count; k++) {
-                const char* imp = m->imports[k];
-                if (!imp || !imp[0]) continue;
-                char owner[40]; size_t ol = 0;
-                while (imp[ol] && imp[ol] != '.' && ol < sizeof(owner) - 1) {
-                    owner[ol] = imp[ol]; ol++;
-                }
-                owner[ol] = '\0';
-                if (!owner[0]) continue;
-                int already = 0;
-                for (int j = 0; j < vm->module_count; j++) {
-                    if (strcmp(vm->modules[j].name, owner) == 0) {
-                        already = 1; break;
-                    }
-                }
-                if (already) continue;
-                char fname[48];
-                snprintf(fname, sizeof(fname), "%s.mod", owner);
-                char dep_path[FS_NAME_LEN]; uint32_t dep_size;
-                if (v1_resolve_path(fname, dep_path, sizeof(dep_path), &dep_size) != FS_OK) continue;
-                bpvm_status_t ds = bpvm_load_mod_stream(vm, v1_mod_read_at, dep_path,
-                                                         dep_size, owner);
-                if (ds != BPVM_OK) {
-                    fputs("{\"type\":\"EXITED\",\"session\":", stdout);
-                    fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
-                                    "\"errorMessage\":\"dep %s: %s\"}\n",
-                            session, (int) ds, fname, bpvm_status_str(ds));
-                    fflush(stdout);
-                    bpvm_destroy(vm);
-                    s_active_session = 0;
-                    return;
-                }
-                loaded_any = 1;
-            }
-        }
-        if (!loaded_any) break;
-    }
+    if (entry.from_pack)
+        log_printf("run: pack '%s' (main=%s)", entry.resolved, entry.main_module);
 
     /* 4b. H3 #160 — registrar funciones AOT manualmente. Tras link,
      *     la global symbol table tiene "Bench.fib" si Bench.mod cargó;

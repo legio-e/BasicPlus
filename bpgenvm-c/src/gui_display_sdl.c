@@ -13,13 +13,13 @@
 
 #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
+#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "lvgl.h"
 #include "bpvm_gui.h"
 #include "crc32.h"
-#include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
 static volatile int g_window_closed = 0;
 static volatile int g_shot_requested = 0;   /* F12 → captura de pantalla (docs) */
