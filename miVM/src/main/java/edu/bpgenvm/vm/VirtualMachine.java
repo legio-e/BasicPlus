@@ -955,6 +955,21 @@ public class VirtualMachine {
     }
 
     /**
+     * #310 — ¿se lo lleva dentro el pack en ejecución? Devuelve los bytes del
+     * recurso, o null si no hay pack o el pack no lo lleva.
+     *
+     * Es el espejo del overlay de LECTURA de la fachada FS de la VM-C
+     * ({@code bpvm_fs_set_overlay}): lo consultan los builtins que LEEN
+     * (readFile, readFileBytes) o que PREGUNTAN (fileExists, fileSize), nunca
+     * los que escriben. Para el programa y para la VM, el pack es de sólo
+     * lectura.
+     */
+    private byte[] packResource(String path) {
+        ModuleManager mm = getModuleManager();
+        return (mm != null) ? mm.packResource(path) : null;
+    }
+
+    /**
      * Variante con tamaño total y `stackBase` (donde termina el heap y
      * empiezan los stacks). Llamada desde {@link edu.bpgenvm.Main} cuando
      * hay un BpVM.cfg activo. Validaciones:
@@ -4076,7 +4091,8 @@ public class VirtualMachine {
             case READ_FILE: {
                 String path = readVmString(popTcRef(tc));
                 try {
-                    byte[] data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
+                    byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
+                    if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
                     pushTcRef(tc, allocVmString(new String(data, java.nio.charset.StandardCharsets.UTF_8)));
                 } catch (java.io.IOException e) {
                     throwBpRuntimeError(tc, "readFile('" + path + "'): " + e.getMessage());
@@ -4111,7 +4127,9 @@ public class VirtualMachine {
             }
             case FILE_EXISTS: {
                 String path = readVmString(popTcRef(tc));
-                pushTc(tc, java.nio.file.Files.exists(sandboxPath(tc, path)) ? 1 : 0);
+                boolean hay = (packResource(path) != null)   // #310 — el pack en ejecución va primero
+                        || java.nio.file.Files.exists(sandboxPath(tc, path));
+                pushTc(tc, hay ? 1 : 0);
                 break;
             }
             case READ_FILE_BYTES: {
@@ -4120,7 +4138,8 @@ public class VirtualMachine {
                 // readFile, que decodifica UTF-8 y es lossy para binario).
                 String path = readVmString(popTcRef(tc));
                 try {
-                    byte[] data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
+                    byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
+                    if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
                     int ref = heapAlloc(data.length, TYPE_ARRAY_I8);
                     writeInt32(ref, data.length);
                     System.arraycopy(data, 0, memory, ref + 4, data.length);
@@ -4603,6 +4622,8 @@ public class VirtualMachine {
             }
             case FILE_SIZE: {
                 String p = readVmString(popTcRef(tc));
+                byte[] enPack = packResource(p);   // #310 — el pack en ejecución va primero
+                if (enPack != null) { pushTc(tc, enPack.length); break; }
                 try {
                     long sz = java.nio.file.Files.size(sandboxPath(tc, p));
                     // i32: si sobrepasa Integer.MAX_VALUE, error claro.

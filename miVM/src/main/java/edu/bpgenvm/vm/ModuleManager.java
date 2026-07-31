@@ -29,7 +29,7 @@ public class ModuleManager {
     private final List<ModuleMetadata> loadedModules = new ArrayList<>();
     private final List<LinkTask> pendingLinks = new ArrayList<>();
 
-    private final Map<String, String> discoveryQueue = new LinkedHashMap<>();
+    private final Map<String, ModSource> discoveryQueue = new LinkedHashMap<>();
     private int mainAbsoluteAddress = 0;
 
     /**
@@ -189,6 +189,208 @@ public class ModuleManager {
         return filename;
     }
 
+    // ============================================================
+    // #310 — PACKS EJECUTABLES
+    //
+    // Espejo del lado VM-C (bpvm.c). Dos ideas, las mismas que allí:
+    //
+    //   1) De dónde salen los bytes de un módulo es UNA costura (ModSource):
+    //      el resto del loader no sabe si vienen del FS o de dentro del pack.
+    //   2) Con un pack en ejecución, sus módulos y sus recursos se buscan
+    //      DENTRO antes que en ningún otro sitio (spec §4 — ADITIVO: el resto
+    //      del orden de búsqueda no se toca).
+    //
+    // Diferencia HONESTA con la VM-C: aquí el pack se lee entero a memoria
+    // (PackReader trabaja sobre byte[]). En un PC eso da igual, pero NO es un
+    // espejo de la restricción del micro, que lo lee por trozos. Lo que sí
+    // tiene que ser idéntico es el COMPORTAMIENTO: qué módulo gana y qué
+    // recurso gana.
+    // ============================================================
+
+    /**
+     * De dónde salen los bytes de un módulo: un fichero del FS o una entrada
+     * del pack en ejecución. Es la costura ÚNICA — quien carga módulos abre
+     * esto y no pregunta de dónde viene (espejo de {@code load_from_pack}).
+     */
+    private static final class ModSource {
+        final String path;    // != null → fichero del FS (y sitio donde buscar el .dbg)
+        final byte[] bytes;   // != null → entrada del pack en ejecución
+        final String label;   // para los mensajes de error
+
+        private ModSource(String path, byte[] bytes, String label) {
+            this.path = path; this.bytes = bytes; this.label = label;
+        }
+        static ModSource ofFile(String path) {
+            return new ModSource(path, null, path);
+        }
+        static ModSource ofPack(byte[] bytes, String name, String packPath) {
+            return new ModSource(null, bytes, name + " (dentro de " + packPath + ")");
+        }
+        DataInputStream open() throws IOException {
+            return new DataInputStream(bytes != null
+                    ? new java.io.ByteArrayInputStream(bytes)
+                    : new FileInputStream(path));
+        }
+    }
+
+    /** Ruta del pack en ejecución, o null si se ejecuta un .mod suelto. */
+    private String runPackPath = null;
+
+    /** Índice {@code tipo:nombre} → entrada del pack en ejecución. Se construye
+     *  en orden, así que el ÚLTIMO gana — igual que {@code bpvm_pack_find_src}. */
+    private final Map<String, basicplus.pack.PackEntry> runPackIndex = new HashMap<>();
+
+    /** true mientras hay un pack en ejecución. */
+    public boolean isRunningPack() { return runPackPath != null; }
+
+    /**
+     * Nombre de una entrada dentro del pack: el BASENAME sin extensión. Así lo
+     * empaqueta PackStep y así lo busca la VM-C ({@code lib.Mod.mod} → "lib.Mod").
+     */
+    private static String packEntryName(String filename) {
+        String base = new java.io.File(filename).getName();
+        int dot = base.lastIndexOf('.');
+        return (dot >= 0) ? base.substring(0, dot) : base;
+    }
+
+    /** Extensión en minúsculas = el `tipo` de la entrada; "" si no tiene. */
+    private static String packEntryType(String filename) {
+        String base = new java.io.File(filename).getName();
+        int dot = base.lastIndexOf('.');
+        return (dot >= 0) ? base.substring(dot + 1).toLowerCase() : "";
+    }
+
+    /**
+     * Lee el manifest buscando una línea {@code clave=valor}. Espejo de
+     * {@code bpvm_pack_manifest_get}: primera línea que casa, \n o \r\n.
+     */
+    private static String manifestGet(byte[] manifest, String key) {
+        String txt = new String(manifest, StandardCharsets.UTF_8);
+        for (String raw : txt.split("\n", -1)) {
+            String line = raw.endsWith("\r") ? raw.substring(0, raw.length() - 1) : raw;
+            if (line.length() <= key.length()) continue;
+            if (!line.startsWith(key) || line.charAt(key.length()) != '=') continue;
+            return line.substring(key.length() + 1);
+        }
+        return null;
+    }
+
+    /**
+     * Ejecuta un pack: lo abre, lee el manifest, localiza el módulo principal,
+     * lo carga DESDE DENTRO y resuelve sus dependencias con el pack por delante.
+     * Espejo de {@code bpvm_load_pack}.
+     *
+     * @return el nombre del módulo principal (el del manifest).
+     */
+    public String executeRootPack(String packPath) throws IOException {
+        String main = openRunPack(packPath);
+        boolean ok = false;
+        try {
+            discoveryQueue.clear();
+            // El main se busca por su nombre de entrada: ya está DENTRO, así que
+            // resolveModuleSource lo encuentra en el pack sin tocar el FS.
+            discoverDependencies(main + ".mod", main);
+            for (Map.Entry<String, ModSource> entry : discoveryQueue.entrySet()) {
+                loadModuleToMemory(entry.getValue(), entry.getKey());
+            }
+            linkAll();
+            vm.setHeapStart(nextFreeAddress);
+            ok = true;
+        } finally {
+            // Un pack que no llega a arrancar no deja la resolución tocada
+            // (mismo criterio que la VM-C, que enciende el pack al final).
+            if (!ok) closeRunPack();
+        }
+        return main;
+    }
+
+    /**
+     * Abre y VALIDA el pack (magic, versión de formato, los dos CRC) y deja su
+     * índice montado. Devuelve el módulo principal del manifest. Si algo no
+     * cuadra —incluido que no lleve manifest o que el main no esté dentro— no
+     * deja el pack montado: falla con un mensaje que dice qué pasa.
+     */
+    private String openRunPack(String packPath) throws IOException {
+        byte[] img = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(packPath));
+        basicplus.pack.PackReader.Pack p;
+        try {
+            p = basicplus.pack.PackReader.read(img);
+        } catch (basicplus.pack.PackException pe) {
+            throw new IOException("pack '" + packPath + "': " + pe.getMessage(), pe);
+        }
+        if (!p.active)
+            throw new IOException("pack '" + packPath + "': está marcado como borrado (tombstone)");
+
+        Map<String, basicplus.pack.PackEntry> idx = new HashMap<>();
+        for (basicplus.pack.PackEntry e : p.entries) {
+            idx.put(e.tipo + ":" + e.nombre, e);   // el último de la cadena gana
+        }
+        basicplus.pack.PackEntry mf = idx.get(
+                basicplus.pack.PackFormat.TYPE_MANIFEST + ":" + basicplus.pack.PackFormat.MANIFEST_NAME);
+        if (mf == null)
+            throw new IOException("pack '" + packPath + "': no lleva manifest — no es ejecutable");
+        String main = manifestGet(mf.data, "main");
+        if (main == null || main.isEmpty())
+            throw new IOException("pack '" + packPath + "': el manifest no declara main=");
+        if (!idx.containsKey("mod:" + main))
+            throw new IOException("pack '" + packPath + "' declara main='" + main
+                    + "' pero no lleva ese módulo");
+
+        runPackIndex.clear();
+        runPackIndex.putAll(idx);
+        runPackPath = packPath;
+        return main;
+    }
+
+    /**
+     * Cierra el pack en ejecución: se acaba la ejecución, se acaba el camino
+     * del pack. Sin esto, una segunda ejecución en el mismo proceso heredaría
+     * el pack de la anterior — la peor clase de fallo, porque funciona hasta
+     * que alguien encadena dos.
+     */
+    public void closeRunPack() {
+        runPackPath = null;
+        runPackIndex.clear();
+    }
+
+    /**
+     * #310 — recurso del pack en ejecución, o null si no lo lleva (o no hay
+     * pack). Espejo de {@code pack_res_entry}: del path sólo importa el
+     * BASENAME, porque dentro del pack la clave es (tipo, nombre) =
+     * (extensión, nombre sin extensión). `/app/x/main.win` → ("win", "main").
+     *
+     * Lo llaman los builtins de LECTURA de fichero (readFile, readFileBytes,
+     * fileExists, fileSize) — nunca los de escritura: para el programa y para
+     * la VM, el pack es de sólo lectura.
+     */
+    public byte[] packResource(String path) {
+        if (runPackPath == null || path == null) return null;
+        // Nunca reclamar el fichero del PROPIO pack: se lee por el FS de
+        // verdad, y reclamarlo aquí sería morderse la cola.
+        if (path.equals(runPackPath)) return null;
+        String tipo = packEntryType(path);
+        if (tipo.isEmpty()) return null;
+        basicplus.pack.PackEntry e = runPackIndex.get(tipo + ":" + packEntryName(path));
+        return (e != null) ? e.data : null;
+    }
+
+    /**
+     * Resuelve de dónde salen los bytes de un módulo. ORDEN (spec §4, ADITIVO):
+     *   0) el PACK EN EJECUCIÓN, si lo hay  ← lo único nuevo
+     *   1..n) exactamente lo de siempre (workdir, cwd, modulePaths, stdlibDir).
+     *
+     * Un pack que se ejecuta se lleva sus módulos dentro: buscarlos fuera
+     * primero sería dejar que el entorno le cambie las tripas a una app que
+     * viene cerrada.
+     */
+    private ModSource resolveModuleSource(String filename) {
+        if (runPackPath != null) {
+            basicplus.pack.PackEntry e = runPackIndex.get("mod:" + packEntryName(filename));
+            if (e != null) return ModSource.ofPack(e.data, packEntryName(filename), runPackPath);
+        }
+        return ModSource.ofFile(resolveModulePath(filename));
+    }
+
     private static class ModuleMetadata {
         String name;
         String library;          // "" si el .mod no declara library
@@ -287,7 +489,7 @@ public class ModuleManager {
     public void executeRootModule(String filename, String moduleName) throws IOException {
         discoveryQueue.clear();
         discoverDependencies(filename, moduleName);
-        for (Map.Entry<String, String> entry : discoveryQueue.entrySet()) {
+        for (Map.Entry<String, ModSource> entry : discoveryQueue.entrySet()) {
             loadModuleToMemory(entry.getValue(), entry.getKey());
         }
         linkAll();
@@ -296,15 +498,16 @@ public class ModuleManager {
 
     private void discoverDependencies(String filename, String moduleName) throws IOException {
         if (discoveryQueue.containsKey(moduleName)) return;
-        // Resolver vía stdlib si no está en cwd — y cachear la ruta REAL en
-        // la cola para que loadModuleToMemory abra exactamente el mismo .mod.
-        String resolved = resolveModulePath(filename);
-        discoveryQueue.put(moduleName, resolved);
+        // Resolver (#310: pack en ejecución primero; si no, vía stdlib como
+        // siempre) — y cachear la FUENTE en la cola para que loadModuleToMemory
+        // abra exactamente los mismos bytes.
+        ModSource src = resolveModuleSource(filename);
+        discoveryQueue.put(moduleName, src);
 
-        try (DataInputStream in = new DataInputStream(new FileInputStream(resolved))) {
+        try (DataInputStream in = src.open()) {
             int magic0 = in.readInt();
             if (!ModFormat.isAbiSupported(magic0)) {   // #284 — gate de ABI
-                throw new RuntimeException("no se puede cargar " + resolved + ": "
+                throw new RuntimeException("no se puede cargar " + src.label + ": "
                         + ModFormat.abiRejectReason(magic0));
             }
             boolean v6a = (magic0 == ModFormat.MAGIC_NUMBER_V6);
@@ -364,13 +567,13 @@ public class ModuleManager {
         }
     }
 
-    private void loadModuleToMemory(String filename, String moduleName) throws IOException {
+    private void loadModuleToMemory(ModSource source, String moduleName) throws IOException {
         int moduleBase = nextFreeAddress;
 
-        try (DataInputStream in = new DataInputStream(new FileInputStream(filename))) {
+        try (DataInputStream in = source.open()) {
             int magic1 = in.readInt();
             if (!ModFormat.isAbiSupported(magic1)) {   // #284 — gate de ABI
-                throw new RuntimeException("no se puede cargar " + filename + ": "
+                throw new RuntimeException("no se puede cargar " + source.label + ": "
                         + ModFormat.abiRejectReason(magic1));
             }
             boolean v6 = (magic1 == ModFormat.MAGIC_NUMBER_V6);
@@ -519,7 +722,10 @@ public class ModuleManager {
             meta.endAddress = codeStart + codeSize;
 
             // Intentar cargar info de depuración: <mismo nombre>.dbg al lado del .mod.
-            loadDbgFor(meta, filename);
+            // Un módulo que viene de un pack no tiene .dbg al lado (PackStep no
+            // los empaqueta): source.path es null y loadDbgFor no hace nada —
+            // mismo comportamiento que la VM-C.
+            loadDbgFor(meta, source.path);
 
             loadedModules.add(meta);
 
@@ -699,6 +905,7 @@ public class ModuleManager {
      * sigue cargado sin info de depuración.
      */
     private void loadDbgFor(ModuleMetadata meta, String modFilename) {
+        if (modFilename == null) return;   // #310 — módulo cargado desde un pack: no hay .dbg al lado
         String dbgFilename;
         if (modFilename.endsWith(".mod")) {
             dbgFilename = modFilename.substring(0, modFilename.length() - 4) + ".dbg";

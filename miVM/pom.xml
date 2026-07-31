@@ -11,6 +11,14 @@
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
     <dependencies>
+        <!-- #310 — packs ejecutables: la VM lee el MISMO formato que escribe el
+             compilador. Un segundo lector sería una segunda verdad; Pack.jar no
+             depende más que de junit, así que no hay ciclo. -->
+        <dependency>
+            <groupId>basicplus</groupId>
+            <artifactId>pack</artifactId>
+            <version>1.0</version>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -28,6 +36,14 @@
                     <archive>
                         <manifest>
                             <mainClass>edu.bpgenvm.Main</mainClass>
+                            <!-- #310 — `java -jar bpgenvm-1.0.jar` es la forma
+                                 documentada de arrancar la VM (READMEs,
+                                 QUICKSTART). Desde que hay una dependencia de
+                                 verdad (Pack.jar), el jar sólo se basta si
+                                 declara dónde están: target/lib, que es donde
+                                 las deja copy-dependencies (abajo). -->
+                            <addClasspath>true</addClasspath>
+                            <classpathPrefix>lib/</classpathPrefix>
                         </manifest>
                     </archive>
                 </configuration>
@@ -36,7 +52,10 @@
                 <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
                     <execution>
-                        <phase>install</phase>
+                        <!-- #310 — en `package`, no en `install`: el Class-Path
+                             del manifest apunta a lib/, así que lib/ tiene que
+                             existir en cuanto existe el jar. -->
+                        <phase>package</phase>
                         <goals>
                             <goal>copy-dependencies</goal>
                         </goals>

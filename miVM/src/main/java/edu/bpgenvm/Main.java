@@ -334,7 +334,13 @@ public class Main {
         int exitCode = 0;
         String exitReason = "main returned";
         try {
-            loader.executeRootModule(runMod, moduleName);
+            // #310 — un .pack se EJECUTA: la VM lo abre, lee el manifest y
+            // arranca por el módulo que declare. Un .mod, como siempre.
+            if (isPackFile(runMod)) {
+                loader.executeRootPack(runMod);
+            } else {
+                loader.executeRootModule(runMod, moduleName);
+            }
             vm.run();
             if (vm.isKillRequested()) {        // P-run-stop (#257)
                 exitCode = 130;                // convención 128+SIGINT
@@ -345,6 +351,10 @@ public class Main {
             exitReason = t.getClass().getSimpleName() + ": " + t.getMessage();
             throw t;
         } finally {
+            // #310 — se acabó la ejecución, se acabó el camino del pack: a
+            // partir de aquí vuelve a mandar el camino estándar (mismo cierre
+            // que hace bpvm_run en la VM-C).
+            loader.closeRunPack();
             if (controller != null) {
                 // A1.7: notificar al cliente debug que la ejecución terminó.
                 // Útil para que el IDE cierre la sesión sin necesidad de
@@ -358,6 +368,14 @@ public class Main {
                 dbgServer.close();
             }
         }
+    }
+
+    /**
+     * #310 — ¿el artefacto a ejecutar es un pack? Se decide por la extensión,
+     * sin flag nuevo: el que arranca la VM ya sabe qué le está dando.
+     */
+    private static boolean isPackFile(String fname) {
+        return fname != null && fname.toLowerCase().endsWith(".pack");
     }
 
     private static String stripModExtension(String fname) {
