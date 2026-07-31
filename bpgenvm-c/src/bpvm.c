@@ -279,6 +279,58 @@ static long pack_entry_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t 
     return e->src->read_at(e->src->user, e->base + off, dst, n);
 }
 
+/* ── #310 paso 4: los RECURSOS del pack en ejecución también van primero ──
+ * Los recursos no se resuelven por donde los módulos (readFile y compañía van
+ * por bpvm_fs), así que se engancha ahí: un overlay que la fachada consulta
+ * ANTES del backend. Un sitio, y todos los lectores de recursos lo heredan
+ * sin tocar ni uno.
+ *
+ * Del path sólo importa el BASENAME, porque dentro del pack una entrada es
+ * (tipo, nombre) = (extensión, nombre sin extensión) — así lo empaqueta
+ * PackStep. `/app/x/main.win` → ("win", "main"). */
+static int pack_res_entry(bpvm_t* vm, const char* path, bpvm_pack_entry_t* out) {
+    if (!vm->run_pack_on || !path) return 0;
+    /* Nunca reclamar el fichero del PROPIO pack: se lee por el FS de verdad y
+     * reclamarlo aquí sería morderse la cola. */
+    if (strcmp(path, vm->run_pack_st.path) == 0) return 0;
+    const char* base = path;
+    for (const char* p = path; *p; p++) if (*p == '/' || *p == '\\') base = p + 1;
+    const char* dot = NULL;
+    for (const char* p = base; *p; p++) if (*p == '.') dot = p;
+    if (!dot || dot == base) return 0;                  /* sin extensión: no sé el tipo */
+    char tipo[BPVM_PACK_TYPE_LEN + 1], nombre[BPVM_PACK_NAME_LEN + 1];
+    size_t nlen = (size_t)(dot - base), tlen = strlen(dot + 1);
+    if (nlen > BPVM_PACK_NAME_LEN || tlen > BPVM_PACK_TYPE_LEN) return 0;
+    memcpy(nombre, base, nlen); nombre[nlen] = '\0';
+    for (size_t i = 0; i < tlen; i++) {                 /* el tipo va en minúsculas */
+        char c = dot[1 + i];
+        tipo[i] = (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+    }
+    tipo[tlen] = '\0';
+    return bpvm_pack_find_src(&vm->run_pack_src, tipo, nombre, out);
+}
+
+static int pack_res_stat(void* user, const char* path, uint32_t* size) {
+    bpvm_pack_entry_t e;
+    if (!pack_res_entry((bpvm_t*) user, path, &e)) return -1;   /* no es mío */
+    if (size) *size = e.len;
+    return 0;
+}
+
+static long pack_res_read(void* user, const char* path, uint32_t off,
+                          uint8_t* dst, uint32_t cap) {
+    bpvm_t* vm = (bpvm_t*) user;
+    bpvm_pack_entry_t e;
+    if (!pack_res_entry(vm, path, &e)) return -1;
+    if (off >= e.len) return 0;
+    uint32_t n = e.len - off;
+    if (n > cap) n = cap;
+    const uint8_t* p = bpvm_pack_src_ptr(&vm->run_pack_src, e.data_off + off, n);
+    if (p) { memcpy(dst, p, n); return (long) n; }       /* mapeado: en sitio */
+    return vm->run_pack_src.read_at(vm->run_pack_src.user,
+                                    e.data_off + off, dst, n);
+}
+
 /* La regla de con/sin código vive AQUÍ y en un solo sitio: no se mira de dónde
  * viene el pack, se le PREGUNTA a la fuente si da puntero. */
 static bpvm_status_t load_from_pack(bpvm_t* vm, const bpvm_pack_src_t* src,
@@ -322,6 +374,9 @@ bpvm_status_t bpvm_load_pack(bpvm_t* vm, const char* pack_path,
      * antes que en ningún otro sitio. Se enciende DESPUÉS de cargar el main
      * para que un pack roto no deje la resolución tocada. */
     vm->run_pack_on = 1;
+    /* Y los RECURSOS: el overlay hace que readFile y compañía miren dentro del
+     * pack antes que en el FS, sin que ninguno de ellos se entere. */
+    bpvm_fs_set_overlay(pack_res_stat, pack_res_read, vm);
     /* Y las dependencias, como en bpvm_load_mod: primero dentro del pack (lo
      * de arriba), y lo que no esté, en el directorio del propio pack. */
     char dir[256];
@@ -412,7 +467,15 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
     /* Default quantum si no se ajustó. */
     if (vm->quantum_ops == 0) vm->quantum_ops = 1024;
 
-    return bpvm_scheduler_run(vm);
+    bpvm_status_t rs = bpvm_scheduler_run(vm);
+    /* #310 (Eduardo) — al TERMINAR se vuelve al camino estándar: el del pack
+     * desaparece. Si no, en un daemon (que es como lo usa el IDE) el Run
+     * siguiente heredaría el pack del anterior y resolvería imports contra un
+     * pack que ya no se está ejecutando: la peor clase de fallo, porque
+     * funciona hasta que alguien encadena dos ejecuciones. */
+    vm->run_pack_on = 0;
+    bpvm_fs_set_overlay(NULL, NULL, NULL);   /* y los recursos, al camino normal */
+    return rs;
 }
 
 /* H2 — variante SMP. Misma puesta a punto del main tc + n workers. */
@@ -443,6 +506,8 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     if (bpvm_smp_init(vm, n_workers) != 0) return BPVM_ERR_OOM;
     int rc = bpvm_scheduler_run_smp(vm);
     bpvm_smp_destroy(vm);
+    vm->run_pack_on = 0;   /* #310 — mismo cierre que bpvm_run: fuera el camino del pack */
+    bpvm_fs_set_overlay(NULL, NULL, NULL);
     if (vm->kill_requested) return BPVM_KILLED;   /* P-run-stop */
     return rc == 0 ? BPVM_OK : BPVM_ERR_RUNTIME;
 }

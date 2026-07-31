@@ -118,6 +118,24 @@ void        bpvm_fs_set_basedir_from_module(const char* modpath);
  * Para los builtins de lectura de recursos (readFile, load de .win, imágenes). */
 const char* bpvm_fs_resolve(const char* path, char* out, size_t outsz);
 
+/* ── #310: OVERLAY de lectura ────────────────────────────────────────────────
+ * Quien ejecuta un pack puede interponer una resolución de LECTURA que se
+ * consulta ANTES del backend: así los recursos del pack en ejecución van
+ * primero, exactamente igual que sus módulos.
+ *
+ * El FS NO sabe de packs y no tiene por qué: sólo ofrece el gancho. La política
+ * la pone quien la tiene (la VM). Sin overlay instalado, cero coste — un
+ * puntero a NULL.
+ *
+ * Contrato: `stat` devuelve 0 si el recurso es SUYO (y rellena size), !=0 para
+ * decir "no lo tengo, sigue por el camino normal". `read`/`read_at` sólo se
+ * llaman si el stat lo reclamó. SÓLO LECTURA: escribir nunca pasa por aquí
+ * (un pack es de sólo lectura). */
+typedef int  (*bpvm_fs_ov_stat_fn)(void* user, const char* path, uint32_t* size);
+typedef long (*bpvm_fs_ov_read_fn)(void* user, const char* path, uint32_t off,
+                                   uint8_t* dst, uint32_t cap);
+void bpvm_fs_set_overlay(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd, void* user);
+
 /* Backend host (libc). Implementado en fs_host.c (host-only); el firmware
  * registra el suyo (fs_get/fs_put). */
 void bpvm_fs_register_host(void);

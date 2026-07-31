@@ -134,13 +134,32 @@ const char* bpvm_fs_resolve(const char* path, char* out, size_t outsz) {
     return out;
 }
 
+/* #310 — overlay de lectura (ver bpvm_fs.h). Se consulta antes del backend. */
+static bpvm_fs_ov_stat_fn g_ov_stat = NULL;
+static bpvm_fs_ov_read_fn g_ov_read = NULL;
+static void*              g_ov_user = NULL;
+
+void bpvm_fs_set_overlay(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd, void* user) {
+    g_ov_stat = st; g_ov_read = rd; g_ov_user = user;
+}
+
+/* 1 = el overlay reclama este path (y deja el tamaño en *size). */
+static int overlay_claims(const char* path, uint32_t* size) {
+    return g_ov_stat && g_ov_stat(g_ov_user, path, size) == 0;
+}
+
 int bpvm_fs_stat(const char* path, uint32_t* size) {
+    uint32_t osz = 0;
+    if (overlay_claims(path, &osz)) { if (size) *size = osz; return 0; }
     const bpvm_fs_backend_t* be = route(path);
     if (be && be->stat) return be->stat(path, size);
     return -1;
 }
 
 long bpvm_fs_read(const char* path, uint8_t* dst, uint32_t cap) {
+    uint32_t osz = 0;
+    if (overlay_claims(path, &osz) && g_ov_read)
+        return g_ov_read(g_ov_user, path, 0, dst, cap);
     const bpvm_fs_backend_t* be = route(path);
     if (be && be->read) return be->read(path, dst, cap);
     return -1;
@@ -218,6 +237,9 @@ int bpvm_fs_list(const char* path,
 /* #305 — lectura parcial. Sin backend que la implemente devuelve -1: el llamante
  * decide si degrada al camino de fichero entero o falla. */
 long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
+    uint32_t osz = 0;
+    if (overlay_claims(path, &osz) && g_ov_read)
+        return g_ov_read(g_ov_user, path, off, dst, cap);
     const bpvm_fs_backend_t* be = route(path);
     if (be && be->read_at) return be->read_at(path, off, dst, cap);
     return -1;
