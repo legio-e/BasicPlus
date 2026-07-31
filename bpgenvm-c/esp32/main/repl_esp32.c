@@ -851,12 +851,60 @@ static void handle_run(long id, const json_obj_t* obj) {
  * primera línea por el mismo camino que un RUN del wire. app_main lo
  * llama tras fs_init + wire init, antes del bucle REPL. El poll del
  * run atiende HELLO/KILL → la placa nunca queda sorda. */
+/* #345 paso 2 — cintura del gate. Cuatro funciones y ni un verbo nuevo: el
+ * HELLO que el IDE ya manda al conectar dice "hay alguien", y el KILL que ya
+ * manda el Stop dice "no arranques". La política está en el núcleo. */
+static void esp32_autorun_anuncia(const char* path, int ventana_ms, void* user) {
+    (void) user;
+    log_printf("autorun: %s arranca en %d ms — Stop en el IDE para cancelar",
+               path, ventana_ms);
+    printf("[autorun] %s en %d ms (Stop para cancelar)\n", path, ventana_ms);
+}
+
+static int esp32_autorun_escucha(void* user) {
+    (void) user;
+    int c = wire_v1_try_getchar();
+    if (c < 0) return 0;                       /* nada pendiente */
+    int n = wire_v1_recv_line(c, s_line_buf, sizeof(s_line_buf));
+    if (n < 0) return 1;                       /* línea rota, pero HAY alguien */
+    json_obj_t obj;
+    if (json_parse(s_line_buf, (size_t) n, &obj) != 0) return 1;
+    char type[24] = {0};
+    json_get_str(&obj, "type", type, sizeof(type));
+    long rid = json_get_long(&obj, "id", 0);
+    if (strcmp(type, "KILL") == 0) {
+        wire_v1_send_reply_empty("KILL_REPLY", rid);
+        return 2;
+    }
+    if (strcmp(type, "HELLO") == 0) { handle_hello(rid, &obj); return 1; }
+    return 1;                                  /* hay alguien: basta con eso */
+}
+
+static void esp32_autorun_espera(int ms, void* user) {
+    (void) user; vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+static uint32_t esp32_autorun_ahora(void* user) {
+    (void) user; return (uint32_t) (esp_timer_get_time() / 1000);
+}
+
+static const bpvm_autorun_wire_t s_autorun_wire = {
+    esp32_autorun_anuncia, esp32_autorun_escucha,
+    esp32_autorun_espera,  esp32_autorun_ahora, NULL
+};
+
 void repl_esp32_autorun(void) {
     /* #345 — leer y limpiar la primera línea lo hace el núcleo. (H11 sigue
      * valiendo: sólo la CABEZA del fichero, nunca el espejo de 64 KB.) */
     char path[FS_NAME_LEN];
     if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
-    printf("[autorun] %s\n", path);
+
+    /* #345 paso 2 — la ventana de rescate. Decide el usuario. */
+    if (!bpvm_autorun_gate(&s_autorun_wire, path, 500, 10000)) {
+        log_printf("autorun: CANCELADO por el usuario (Stop) — REPL normal");
+        printf("[autorun] CANCELADO por el usuario — REPL normal\n");
+        return;
+    }
     run_module_path(path, -1);
     printf("[autorun] terminado — REPL normal\n");
 }

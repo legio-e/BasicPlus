@@ -765,6 +765,40 @@ int bpvm_autorun_entry(char* out, size_t out_cap) {
     return n > 0;
 }
 
+/* #345 paso 2 — la ventana de rescate. Ver bpvm_entry.h para el porqué. */
+int bpvm_autorun_gate(const bpvm_autorun_wire_t* w, const char* path,
+                      int saludo_ms, int ventana_ms) {
+    /* Sin cintura no hay a quién preguntar → se arranca, que es lo que hacía
+     * antes de todo esto. Nunca se queda una placa sin arrancar por un fallo
+     * de este mecanismo: el Auto es lo que el usuario pidió. */
+    if (!w || !w->escucha || !w->ahora_ms) return 1;
+
+    if (w->anuncia) w->anuncia(path, ventana_ms, w->user);
+
+    /* Fase 1: ¿hay alguien? El IDE manda HELLO al conectar — ya lo hacía. Corta
+     * a propósito: si está conectado, su HELLO ya llegó; si no contesta es que
+     * no está, y entonces NO se paga ninguna espera (una placa suelta, sin
+     * nadie delante, arranca a su ritmo como siempre). */
+    uint32_t t0 = w->ahora_ms(w->user);
+    int hay_alguien = 0;
+    while ((uint32_t)(w->ahora_ms(w->user) - t0) < (uint32_t) saludo_ms) {
+        int r = w->escucha(w->user);
+        if (r == 2) return 0;               /* KILL de entrada: ni se arranca */
+        if (r == 1) { hay_alguien = 1; break; }
+        if (w->espera_ms) w->espera_ms(5, w->user);
+    }
+    if (!hay_alguien) return 1;
+
+    /* Fase 2: la espera de verdad. Es del usuario, no de la placa: le da tiempo
+     * a ver el aviso y darle a Stop, que manda el KILL de siempre (#257). */
+    t0 = w->ahora_ms(w->user);
+    while ((uint32_t)(w->ahora_ms(w->user) - t0) < (uint32_t) ventana_ms) {
+        if (w->escucha(w->user) == 2) return 0;
+        if (w->espera_ms) w->espera_ms(10, w->user);
+    }
+    return 1;
+}
+
 /* ¿Queda algún import sin dueño cargado? Devuelve 1 y deja el nombre en `out`.
  * Mejor decir "falta 'Gui'" que dejar que el link reviente doscientas líneas
  * más tarde con un símbolo que no le dice nada a nadie. */

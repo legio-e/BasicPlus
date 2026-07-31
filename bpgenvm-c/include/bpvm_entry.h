@@ -101,6 +101,58 @@ bpvm_status_t bpvm_load_entry_file(bpvm_t* vm, const char* resolved_path);
  * de la ventana de rescate y del historial de arranques, y va aparte. */
 int bpvm_autorun_entry(char* out, size_t out_cap);
 
+/* #345 paso 2 — y SI se arranca ahora. Lo decide EL USUARIO, no la placa.
+ *
+ * Criterio de Eduardo, y es el que manda: *nada de cosas inteligentes; al final
+ * siempre aparece un caso imprevisto y todo deja de funcionar*. Aquí no hay
+ * contadores de intentos, ni memoria entre arranques, ni "si el reset fue raro
+ * entonces...". Y —segunda regla suya— **se usa lo que ya hay**: ni un verbo
+ * nuevo en el wire, ni una línea en el IDE.
+ *
+ *   1. La placa avisa de que va a arrancar el Auto.
+ *   2. ¿Hay alguien? El IDE manda HELLO al conectar. Eso YA existe.
+ *        NO  → nadie a quien preguntar: arranca ya, sin pausa ninguna.
+ *        SÍ  → espera `ventana_ms` (10 s).
+ *   3. ¿Ha dicho el usuario que no? Stop del IDE = KILL. Eso YA existe.
+ *        KILL → no se arranca, la placa se queda en el REPL.
+ *        nada → arranca.
+ *
+ * Los dos verbos son los del ciclo normal (#256/#257): el IDE ya saluda al
+ * conectar y ya sabe parar una app. Aquí sólo se escuchan un poco antes.
+ *
+ * Lo que arregla es el caso real: estás diseñando una ventana, la app del Auto
+ * peta la placa, y hoy sólo se sale desenchufando. Con esto basta con tener el
+ * IDE abierto y darle a Stop — que es lo que ya harías.
+ *
+ * Lo que NO hace, a propósito: adivinar. Si la app resetea la placa antes de
+ * que dé tiempo al aviso, esto no la salva; para eso sigue estando borrar
+ * auto.txt. Preferimos un mecanismo que se entiende entero a uno que casi
+ * siempre acierta.
+ *
+ * La política vive AQUÍ, idéntica en las cinco. Lo de por familia son estas
+ * cuatro llamadas — un USB CDC, una UART y un socket no se preguntan igual,
+ * pero la pregunta es la misma. */
+typedef struct {
+    /* Avisa de que va a arrancar `path` y de cuánto hay para pararlo. Cada
+     * familia por donde ya habla (log persistente, consola, wire). */
+    void (*anuncia)(const char* path, int ventana_ms, void* user);
+    /* ¿Ha llegado algo? 0 = nada · 1 = HELLO (hay alguien) · 2 = KILL (no
+     * arrancar). No debe bloquear. */
+    int (*escucha)(void* user);
+    /* Cede la CPU un rato (el bucle del gate no debe comerse el micro). */
+    void (*espera_ms)(int ms, void* user);
+    /* ms desde el arranque; sólo se usan diferencias, así que da igual el
+     * origen mientras avance. */
+    uint32_t (*ahora_ms)(void* user);
+    void* user;
+} bpvm_autorun_wire_t;
+
+/* 1 = arranca el Auto · 0 = el usuario ha dicho que no.
+ * `saludo_ms`: cuánto se espera a saber si hay alguien (corto: si el IDE está,
+ * su HELLO ya llegó). `ventana_ms`: la espera de verdad, la del usuario. */
+int bpvm_autorun_gate(const bpvm_autorun_wire_t* w, const char* path,
+                      int saludo_ms, int ventana_ms);
+
 #ifdef __cplusplus
 }
 #endif

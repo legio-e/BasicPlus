@@ -584,11 +584,55 @@ static void handle_run(long id, json_obj_t* obj) {
 /* P-autorun (#256) — si existe /sys/auto.txt, ejecuta el módulo de su
  * primera línea por el mismo camino que un RUN del wire. El poll del
  * run atiende HELLO/KILL → el IDE puede conectar y parar la app. */
+/* #345 paso 2 — cintura del gate. Cuatro funciones y ni un verbo nuevo: el
+ * HELLO que el IDE ya manda al conectar dice "hay alguien", y el KILL que ya
+ * manda el Stop dice "no arranques". La política está en el núcleo. */
+static void stm32_autorun_anuncia(const char* path, int ventana_ms, void* user) {
+    (void) user;
+    log_printf("autorun: %s arranca en %d ms — Stop en el IDE para cancelar",
+               path, ventana_ms);
+}
+
+static int stm32_autorun_escucha(void* user) {
+    (void) user;
+    int c = stm32_wire_getchar();
+    if (c < 0) return 0;                       /* nada pendiente */
+    int n = stm32_wire_recv_line(c, s_line, sizeof(s_line));
+    if (n < 0) return 1;                       /* línea rota, pero HAY alguien */
+    json_obj_t obj;
+    if (json_parse(s_line, (size_t) n, &obj) != 0) return 1;
+    char type[24] = {0};
+    json_get_str(&obj, "type", type, sizeof(type));
+    long rid = json_get_long(&obj, "id", 0);
+    if (strcmp(type, "KILL") == 0) { reply_empty("KILL_REPLY", rid); return 2; }
+    if (strcmp(type, "HELLO") == 0) { handle_hello(rid); return 1; }
+    return 1;                                  /* hay alguien: basta con eso */
+}
+
+static void stm32_autorun_espera(int ms, void* user) {
+    (void) user; HAL_Delay((uint32_t) ms);
+}
+
+static uint32_t stm32_autorun_ahora(void* user) {
+    (void) user; return HAL_GetTick();
+}
+
+static const bpvm_autorun_wire_t s_autorun_wire = {
+    stm32_autorun_anuncia, stm32_autorun_escucha,
+    stm32_autorun_espera,  stm32_autorun_ahora, NULL
+};
+
 static void autorun_boot(void) {
     /* #345 — leer y limpiar la primera línea lo hace el núcleo. (H11 sigue
      * valiendo: sólo la CABEZA del fichero, nunca un espejo.) */
     char path[64];
     if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
+
+    /* #345 paso 2 — la ventana de rescate. Decide el usuario. */
+    if (!bpvm_autorun_gate(&s_autorun_wire, path, 500, 10000)) {
+        log_printf("autorun: CANCELADO por el usuario (Stop) — REPL normal");
+        return;
+    }
     log_printf("autorun: %s", path);
     run_module_path(path, -1);
 }

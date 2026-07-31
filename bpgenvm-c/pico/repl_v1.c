@@ -1159,6 +1159,51 @@ static void handle_run(long id, const json_obj_t* obj) {
 }
 
 /* ============================================================ */
+/* #345 paso 2 — cintura del gate. Cuatro funciones y ni un verbo nuevo: el
+ * HELLO que el IDE ya manda al conectar dice "hay alguien", y el KILL que ya
+ * manda el Stop dice "no arranques". La política está en el núcleo. */
+static void pico_autorun_anuncia(const char* path, int ventana_ms, void* user) {
+    (void) user;
+    log_printf("autorun: %s arranca en %d ms — Stop en el IDE para cancelar",
+               path, ventana_ms);
+}
+
+static int pico_autorun_escucha(void* user) {
+    (void) user;
+    int c = getchar_timeout_us(0);
+    if (c < 0) return 0;                       /* nada pendiente */
+    int n = wire_v1_recv_line(c, s_line_buf, sizeof(s_line_buf));
+    if (n < 0) return 1;                       /* línea rota, pero HAY alguien */
+    json_obj_t obj;
+    if (json_parse(s_line_buf, (size_t) n, &obj) != 0) return 1;
+    char type[24] = {0};
+    json_get_str(&obj, "type", type, sizeof(type));
+    long rid = json_get_long(&obj, "id", 0);
+    if (strcmp(type, "KILL") == 0) {
+        /* Se le contesta como a un KILL normal: para el IDE esto es su Stop de
+         * siempre, no un caso especial. */
+        wire_v1_send_reply_empty("KILL_REPLY", rid);
+        return 2;
+    }
+    if (strcmp(type, "HELLO") == 0) { handle_hello(rid, &obj); return 1; }
+    /* Cualquier otra cosa: hay alguien al otro lado, que es lo que se
+     * preguntaba. No se contesta — el REPL la atenderá si no se arranca. */
+    return 1;
+}
+
+static void pico_autorun_espera(int ms, void* user) {
+    (void) user; vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+static uint32_t pico_autorun_ahora(void* user) {
+    (void) user; return (uint32_t) (xTaskGetTickCount() * portTICK_PERIOD_MS);
+}
+
+static const bpvm_autorun_wire_t s_autorun_wire = {
+    pico_autorun_anuncia, pico_autorun_escucha,
+    pico_autorun_espera,  pico_autorun_ahora, NULL
+};
+
 /* P-autorun (#256) — arranque autónomo desde /sys/auto.txt.     */
 /*                                                               */
 /* main.c lo invoca tras FS + stdlib + board, justo ANTES del    */
@@ -1178,6 +1223,7 @@ void repl_v1_autorun(void) {
     char path[FS_NAME_LEN];
     if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
     log_printf("autorun: %s", path);
+
     /* Gracia de arranque: el camino del RUN hace log_flush (erase de
      * flash con IRQs off) y la app puede tocar flash también — si eso
      * coincide con la ENUMERACIÓN USB del host, Windows da el puerto
@@ -1185,6 +1231,20 @@ void repl_v1_autorun(void) {
      * terminar la enumeración antes de arrancar. Boots sin auto.txt
      * no pagan nada (return arriba). */
     vTaskDelay(pdMS_TO_TICKS(2000));
+
+    /* #345 paso 2 — la ventana de rescate. Decide el usuario: si el IDE está
+     * conectado (su HELLO llega) se le dan 10 s para darle a Stop. Sin nadie
+     * escuchando no se espera nada. Los dos verbos son los de siempre.
+     *
+     * DESPUÉS de la gracia de USB, y no antes: el gate pregunta "¿hay alguien?"
+     * mirando el CDC, y antes de que TinyUSB enumere ahí no puede haber llegado
+     * nada aunque el IDE esté abierto. Preguntando antes, la respuesta sería
+     * siempre "no hay nadie" y la ventana no se abriría nunca — un mecanismo de
+     * rescate que sólo funciona cuando no hace falta. */
+    if (!bpvm_autorun_gate(&s_autorun_wire, path, 500, 10000)) {
+        log_printf("autorun: CANCELADO por el usuario (Stop) — REPL normal");
+        return;
+    }
     run_module_path(path, -1);
     log_printf("autorun: terminado — REPL normal");
 }
