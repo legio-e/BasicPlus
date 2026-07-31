@@ -153,6 +153,13 @@ static void derive_owner(const char* qualified, char* lib, size_t lib_size,
     }
 }
 
+/* #310 — carga UN módulo desde una fuente de pack. Definida más abajo, junto
+ * al resto de lo de packs; se declara aquí porque discover_deps la usa para el
+ * pack en ejecución y bpvm_load_pack para el módulo principal: UNA función
+ * para los dos, que es lo que garantiza que se carguen igual. */
+static bpvm_status_t load_from_pack(bpvm_t* vm, const bpvm_pack_src_t* src,
+                                    const bpvm_pack_entry_t* e, const char* name);
+
 /* Resuelve recursivamente las dependencias del módulo en `mod_idx`,
  * cargándolas desde `search_dir` por convención de naming
  * (<lib>.<mod>.mod o <mod>.mod). */
@@ -178,6 +185,26 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
             snprintf(filename, sizeof(filename), "%s%s%s.mod",
                      search_dir, search_dir[0] ? "/" : "", mod);
             snprintf(pname, sizeof(pname), "%s", mod);
+        }
+        /* #310 — ORDEN DE BÚSQUEDA (spec §4, ADITIVO):
+         *   0) el PACK EN EJECUCIÓN, si lo hay ← lo único nuevo
+         *   1) el FS (que ECLIPSA a la zona de packs: shadow de desarrollo)
+         *   2) la zona de packs montada, LO ÚLTIMO
+         * Un pack que se ejecuta se lleva sus módulos dentro: buscarlos fuera
+         * primero sería dejar que el entorno le cambie las tripas a una app
+         * que viene cerrada. */
+        if (vm->run_pack_on) {
+            bpvm_pack_entry_t pe;
+            if (bpvm_pack_find_src(&vm->run_pack_src, "mod", pname, &pe)) {
+                int idx0 = vm->module_count;
+                bpvm_status_t rs = load_from_pack(vm, &vm->run_pack_src, &pe, pname);
+                if (rs != BPVM_OK) return rs;
+                for (int j = idx0; j < vm->module_count; j++) {
+                    bpvm_status_t r = discover_deps(vm, j, search_dir);
+                    if (r != BPVM_OK) return r;
+                }
+                continue;                       /* resuelto dentro del pack */
+            }
         }
         /* H3.c — resolución FS → packs (spec §4): el FS ECLIPSA al pack (shadow
          * de desarrollo, con aviso); si no está en FS, se carga DESDE el pack
@@ -252,17 +279,30 @@ static long pack_entry_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t 
     return e->src->read_at(e->src->user, e->base + off, dst, n);
 }
 
+/* La regla de con/sin código vive AQUÍ y en un solo sitio: no se mira de dónde
+ * viene el pack, se le PREGUNTA a la fuente si da puntero. */
+static bpvm_status_t load_from_pack(bpvm_t* vm, const bpvm_pack_src_t* src,
+                                    const bpvm_pack_entry_t* e, const char* name) {
+    const uint8_t* xip = bpvm_pack_src_ptr(src, e->data_off, e->len);
+    if (xip) return bpvm_loader_load_xip(vm, xip, e->len, name);
+    pack_entry_rd_t rd = { src, e->data_off };
+    return bpvm_load_mod_stream(vm, pack_entry_read_at, &rd, e->len, name);
+}
+
 bpvm_status_t bpvm_load_pack(bpvm_t* vm, const char* pack_path,
                              char* main_out, int main_cap) {
     if (!vm || !pack_path) return BPVM_ERR_IO;
-    bpvm_pack_fs_t st;
-    bpvm_pack_src_t src;
-    if (bpvm_pack_open_fs(&src, &st, pack_path) != 0) {
+    /* La fuente vive en la VM, no en la pila: el pack sigue en ejecución
+     * después de esta función y su ruta tiene que seguir viva. */
+    bpvm_pack_src_t* src = &vm->run_pack_src;
+    bpvm_pack_fs_t*  st  = &vm->run_pack_st;
+    vm->run_pack_on = 0;
+    if (bpvm_pack_open_fs(src, st, pack_path) != 0) {
         fprintf(stderr, "[bpvm-c] pack '%s' no se puede abrir\n", pack_path);
         return BPVM_ERR_IO;
     }
     char mainmod[BPVM_PACK_NAME_LEN + 1];
-    if (!bpvm_pack_manifest_get(&src, "main", mainmod, (int) sizeof mainmod)) {
+    if (!bpvm_pack_manifest_get(src, "main", mainmod, (int) sizeof mainmod)) {
         /* Un pack SIN manifest es perfectamente válido — es una librería. Lo
          * que no es válido es pedirle que se ejecute, y hay que decirlo. */
         fprintf(stderr, "[bpvm-c] '%s' no es ejecutable: su manifest no declara 'main'\n",
@@ -270,25 +310,26 @@ bpvm_status_t bpvm_load_pack(bpvm_t* vm, const char* pack_path,
         return BPVM_ERR_IO;
     }
     bpvm_pack_entry_t e;
-    if (!bpvm_pack_find_src(&src, "mod", mainmod, &e)) {
+    if (!bpvm_pack_find_src(src, "mod", mainmod, &e)) {
         fprintf(stderr, "[bpvm-c] '%s' declara main='%s' pero no lleva ese modulo\n",
                 pack_path, mainmod);
         return BPVM_ERR_IO;
     }
-
-    /* AQUÍ está la regla de con/sin código, y no es un `if` sobre de dónde
-     * viene: se le PREGUNTA a la fuente si da puntero. Un pack del FS no lo
-     * da (littlefs no mapea) ⇒ carga por stream, con código. Uno de la zona
-     * de packs sí ⇒ XIP, el código se queda en flash. */
-    const uint8_t* xip = bpvm_pack_src_ptr(&src, e.data_off, e.len);
-    bpvm_status_t s;
-    if (xip) {
-        s = bpvm_loader_load_xip(vm, xip, e.len, mainmod);
-    } else {
-        pack_entry_rd_t rd = { &src, e.data_off };
-        s = bpvm_load_mod_stream(vm, pack_entry_read_at, &rd, e.len, mainmod);
-    }
+    int idx_before = vm->module_count;
+    bpvm_status_t s = load_from_pack(vm, src, &e, mainmod);
     if (s != BPVM_OK) return s;
+    /* A partir de aquí HAY pack en ejecución: sus imports se buscan DENTRO
+     * antes que en ningún otro sitio. Se enciende DESPUÉS de cargar el main
+     * para que un pack roto no deje la resolución tocada. */
+    vm->run_pack_on = 1;
+    /* Y las dependencias, como en bpvm_load_mod: primero dentro del pack (lo
+     * de arriba), y lo que no esté, en el directorio del propio pack. */
+    char dir[256];
+    path_dirname(pack_path, dir, sizeof dir);
+    for (int j = idx_before; j < vm->module_count; j++) {
+        bpvm_status_t r = discover_deps(vm, j, dir);
+        if (r != BPVM_OK) return r;
+    }
     if (main_out && main_cap > 0) {
         size_t n = strlen(mainmod);
         if (n + 1 > (size_t) main_cap) return BPVM_ERR_IO;

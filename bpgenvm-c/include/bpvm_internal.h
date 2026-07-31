@@ -288,6 +288,16 @@ struct bpvm {
     uint32_t xip_lo;
     uint32_t xip_hi;
 
+    /* #310 — PACK EN EJECUCIÓN. Cuando la VM arranca desde un pack, ese pack
+     * va PRIMERO al resolver imports (y recursos), por delante del orden
+     * normal; la zona de packs sigue siendo lo último. Es ADITIVO: sin pack en
+     * ejecución (run_pack_on = 0) la resolución es exactamente la de antes.
+     * `run_pack_st` guarda la ruta y tiene que seguir viva mientras la fuente
+     * se use — por eso vive aquí y no en la pila del que arranca. */
+    int             run_pack_on;
+    bpvm_pack_src_t run_pack_src;
+    bpvm_pack_fs_t  run_pack_st;
+
     /* Allocator del data block (bump). */
     uint32_t next_free_address;
     uint32_t heap_start;       /* fijado tras último módulo cargado */
