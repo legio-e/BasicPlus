@@ -796,10 +796,8 @@ static fs_status_t v1_resolve_path(const char* name, char* out, size_t out_cap,
            ? FS_OK : FS_ERR_NOT_FOUND;
 }
 
-/* Lector por trozos para el loader: el .mod se queda en el FS. */
-static long v1_mod_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
-    return bpvm_fs_read_at((const char*) user, off, dst, n);
-}
+/* (El lector por trozos vivía aquí. Se lo llevó #344: ahora el que abre el .mod
+ * y lo lee a cachos es bpvm_load_entry_file, en el núcleo, para las cinco.) */
 
 /* Sesión activa (0 = ninguna). Sólo soportamos una sesión RUN a la
  * vez por ahora — KILL multi-sesión y RUN concurrente vendrán cuando

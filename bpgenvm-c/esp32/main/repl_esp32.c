@@ -19,7 +19,8 @@
 #include "bpvm_fs.h"   /* H19-F1: base-dir por proyecto (bpvm_fs_set_basedir_from_module) */
 
 #include "bpvm.h"
-#include "bpvm_internal.h"   /* inspección de deps en handle_run */
+#include "bpvm_internal.h"   /* recorrido de vm->modules[] para los .mdn del AOT */
+#include "bpvm_entry.h"      /* #344 — el RUN, escrito una vez */
 #include "bpvm_rtc.h"        /* H14 — TIME del wire → RTC (bpvm_rtc_set_now_ms) */
 #include "bpvm_pico.h"       /* paso 4 cierre — bpvm_pico_reset_cause (INFO) */
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
@@ -557,27 +558,16 @@ static void handle_del(long id, const json_obj_t* obj) {
  * abre por esa ruta y lee por trozos. Mismo cambio que cerró #305 en el Pico. */
 static fs_status_t v1_resolve_path(const char* name, char* out, size_t out_cap,
                                    uint32_t* size_out) {
-    /* H19 — base-dir del proyecto PRIMERO (carpeta del módulo principal): un
-     * import resuelve contra /app/<proj>/ antes que el resto del path. Plano
-     * (basedir="") o entry absoluto (name[0]=='/') → se salta este candidato. */
-    const char* bd = bpvm_fs_basedir();
-    if (bd && bd[0] && name[0] != '/') {
-        snprintf(out, out_cap, "%s/%s", bd, name);
-        if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
-    }
-    snprintf(out, out_cap, "%s", name);
-    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
-    snprintf(out, out_cap, "/app/%s", name);
-    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
-    snprintf(out, out_cap, "/lib/%s", name);
-    if (bpvm_fs_stat(out, size_out) == 0) return FS_OK;
-    return FS_ERR_NOT_FOUND;
+    /* #344 — la REGLA vive en el núcleo (bpvm_entry_resolve): basedir del
+     * proyecto → tal cual → /app → /lib. Estas 15 líneas estaban COPIADAS
+     * palabra por palabra en Pico, ESP32 y STM32. Aquí sólo queda la traducción
+     * al fs_status_t que usa el mapeo de errores del wire. */
+    return (bpvm_entry_resolve(name, out, out_cap, size_out) == 0)
+           ? FS_OK : FS_ERR_NOT_FOUND;
 }
 
-/* Lector por trozos para el loader: el .mod se queda en el FS. */
-static long v1_mod_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
-    return bpvm_fs_read_at((const char*) user, off, dst, n);
-}
+/* (El lector por trozos vivía aquí. Se lo llevó #344: ahora el que abre el .mod
+ * y lo lee a cachos es bpvm_load_entry_file, en el núcleo, para las cinco.) */
 
 static long s_active_session = 0;
 static long s_next_session = 1;
@@ -716,47 +706,27 @@ static void run_module_path(const char* path, long id) {
     v1_sink_ctx_t sink_ctx = { session };
     bpvm_set_output(vm, v1_output_sink, &sink_ctx);
 
-    /* H11 — el .mod se queda en el FS y el loader lo lee por trozos directamente
-     * a memory[]. Antes se mirroreaba entero en s_get_scratch (64 KB de .bss). */
-    bpvm_status_t ls = bpvm_load_mod_stream(vm, v1_mod_read_at, main_path, size, path);
+    /* #344 — UNA carga: bpvm_load_entry despacha .mod/.pack, lee por trozos
+     * (H11: el .mod se queda en el FS, nada de espejo en .bss), resuelve las
+     * dependencias con la regla común (FS y, si no está, los packs grabados en
+     * XIP) y NOMBRA la que falte. Aquí vivía el bucle de 4 pasadas copiado en
+     * las tres familias, y además era una versión POBRE: cortaba el import por
+     * el primer punto y no sabía nada del pack en ejecución — que es lo que
+     * impedía ejecutar packs en la placa. */
+    bpvm_entry_t entry;
+    memset(&entry, 0, sizeof entry);
+    bpvm_status_t ls = bpvm_load_entry(vm, path, &entry);
     if (ls != BPVM_OK) {
-        send_exited(session, "RUNTIME_ERROR", (int) ls, 0, bpvm_status_str(ls));
+        if (entry.missing[0]) {
+            char em[80]; snprintf(em, sizeof(em), "falta el modulo '%s'", entry.missing);
+            send_exited(session, "RUNTIME_ERROR", (int) ls, 0, em);
+        } else {
+            send_exited(session, "RUNTIME_ERROR", (int) ls, 0, bpvm_status_str(ls));
+        }
         bpvm_destroy(vm); s_active_session = 0; return;
     }
-
-    /* Resolución iterativa de deps (mismo loop que la Pico). */
-    for (int pass = 0; pass < 4; pass++) {
-        int loaded_any = 0;
-        int n_before = vm->module_count;
-        for (int mi = 0; mi < n_before; mi++) {
-            bpvm_module_t* m = &vm->modules[mi];
-            for (int k = 0; k < m->import_count; k++) {
-                const char* imp = m->imports[k];
-                if (!imp || !imp[0]) continue;
-                char owner[40]; size_t ol = 0;
-                while (imp[ol] && imp[ol] != '.' && ol < sizeof(owner) - 1) { owner[ol] = imp[ol]; ol++; }
-                owner[ol] = '\0';
-                if (!owner[0]) continue;
-                int already = 0;
-                for (int j = 0; j < vm->module_count; j++)
-                    if (strcmp(vm->modules[j].name, owner) == 0) { already = 1; break; }
-                if (already) continue;
-                char fname[48];
-                snprintf(fname, sizeof(fname), "%s.mod", owner);
-                char dep_path[FS_NAME_LEN]; uint32_t dep_size;
-                if (v1_resolve_path(fname, dep_path, sizeof(dep_path), &dep_size) != FS_OK) continue;
-                bpvm_status_t ds = bpvm_load_mod_stream(vm, v1_mod_read_at, dep_path,
-                                                        dep_size, owner);
-                if (ds != BPVM_OK) {
-                    char em[80]; snprintf(em, sizeof(em), "dep %s: %s", fname, bpvm_status_str(ds));
-                    send_exited(session, "RUNTIME_ERROR", (int) ds, 0, em);
-                    bpvm_destroy(vm); s_active_session = 0; return;
-                }
-                loaded_any = 1;
-            }
-        }
-        if (!loaded_any) break;
-    }
+    if (entry.from_pack)
+        printf("[run] pack '%s' (main=%s)\n", entry.resolved, entry.main_module);
 
     /* H4 AOT — registrar funciones AOT baked-in tras link, antes de run (mismo
      * punto que la Pico). En el P4 (RISC-V) esp_aot_register (fuerte, aot_funcs_p4.c)

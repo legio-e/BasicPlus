@@ -26,7 +26,8 @@
 #include "gpio_stm32.h"     /* stm32_hw_register (backends GPIO + Pico) */
 #include "json_min.h"
 #include "bpvm.h"
-#include "bpvm_internal.h"   /* vm->modules[].{name,imports,import_count} para deps */
+#include "bpvm_internal.h"   /* recorrido de vm->modules[] para los .mdn del AOT */
+#include "bpvm_entry.h"      /* #344 — el RUN, escrito una vez */
 #include "bpvm_rtc.h"        /* H10 — TIME aplica la hora al RTC (bpvm_rtc_set_now_ms) */
 #include "mdn_loader.h"      /* H9.5: overlay AOT .mdn desde el FS (loader compartido) */
 #include "aot_registry.h"    /* H9.5: bpvm_aot_clear entre RUNs (registry global) */
@@ -427,25 +428,11 @@ static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
  * FS viejo: 496 KB en la Discovery, 96 KB en la Nucleo. Ahora el llamante abre
  * por esa ruta y lee por trozos. Mismo cambio que #305 en el Pico. */
 static int stm32_fs_resolve(const char* name, char* out, size_t out_cap, uint32_t* size) {
-    /* H19 — base-dir del proyecto PRIMERO (carpeta del módulo principal).
-     * Plano (basedir="") o entry absoluto (name[0]=='/') → se salta. */
-    const char* bd = bpvm_fs_basedir();
-    if (bd && bd[0] && name[0] != '/') {
-        snprintf(out, out_cap, "%s/%s", bd, name);
-        if (bpvm_fs_stat(out, size) == 0) return 0;
-    }
-    snprintf(out, out_cap, "%s", name);
-    if (bpvm_fs_stat(out, size) == 0) return 0;
-    snprintf(out, out_cap, "/app/%s", name);
-    if (bpvm_fs_stat(out, size) == 0) return 0;
-    snprintf(out, out_cap, "/lib/%s", name);
-    if (bpvm_fs_stat(out, size) == 0) return 0;
-    return -1;
-}
-
-/* Lector por trozos para el loader: el .mod se queda en el FS. */
-static long stm32_mod_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
-    return bpvm_fs_read_at((const char*) user, off, dst, n);
+    /* #344 — la REGLA vive en el núcleo (bpvm_entry_resolve): basedir del
+     * proyecto → tal cual → /app → /lib. Estas 15 líneas estaban COPIADAS
+     * palabra por palabra en Pico, ESP32 y STM32; aquí ya sólo se traduce el
+     * 0/-1 que espera el resto de este fichero. */
+    return bpvm_entry_resolve(name, out, out_cap, size);
 }
 
 /* Núcleo del RUN — compartido entre el comando RUN del wire (id >= 0)
@@ -482,80 +469,23 @@ static void run_module_path(const char* path, long id) {
 
     uint32_t t0 = HAL_GetTick();
     BOARD_LED_RUN_ON();                           /* LED RUN = ejecutando un programa */
-    /* H11 — el .mod se queda en el FS y el loader lo lee por trozos directamente
-     * a memory[]. Antes se mirroreaba entero en el espejo del fs_get. */
-    bpvm_status_t st = bpvm_load_mod_stream(vm, stm32_mod_read_at, main_path, size, path);
-
-    /* Resolución iterativa de imports: por cada módulo cargado y cada import,
-     * carga <owner>.mod del FS si aún no está. Hasta 4 pasadas (deps de deps).
-     * bpvm_run() enlaza todo al arrancar (bpvm_link_all interno). */
-    for (int pass = 0; st == BPVM_OK && pass < 4; pass++) {
-        int loaded_any = 0;
-        int n_before = vm->module_count;
-        for (int mi = 0; mi < n_before && st == BPVM_OK; mi++) {
-            bpvm_module_t* m = &vm->modules[mi];
-            for (int k = 0; k < m->import_count; k++) {
-                const char* imp = m->imports[k];
-                if (!imp || !imp[0]) continue;
-                char owner[40]; size_t ol = 0;
-                while (imp[ol] && imp[ol] != '.' && ol < sizeof(owner) - 1) { owner[ol] = imp[ol]; ol++; }
-                owner[ol] = '\0';
-                if (!owner[0]) continue;
-                int already = 0;
-                for (int j = 0; j < vm->module_count; j++)
-                    if (strcmp(vm->modules[j].name, owner) == 0) { already = 1; break; }
-                if (already) continue;
-                char fname[48]; snprintf(fname, sizeof(fname), "%s.mod", owner);
-                char dep_path[80]; uint32_t dep_size;
-                /* H3.c — resolución FS → packs (spec §4): el FS ECLIPSA al pack
-                 * (aviso al log persistente); si no está en FS, carga XIP desde
-                 * la zona de packs montada (código EN FLASH, cero copia). */
-                uint32_t pk_rs = 0;
-                const uint8_t* pk_rb = bpvm_pack_mounted(&pk_rs);
-                uint32_t pk_len = 0;
-                const uint8_t* pk_mod = pk_rb
-                    ? bpvm_pack_find(pk_rb, pk_rs, "mod", owner, &pk_len) : NULL;
-                if (stm32_fs_resolve(fname, dep_path, sizeof(dep_path), &dep_size) != 0) {
-                    if (!pk_mod) continue;               /* falta → guard */
-                    bpvm_status_t ds = bpvm_loader_load_xip(vm, pk_mod, pk_len, owner);
-                    if (ds != BPVM_OK) { st = ds; break; }
-                    log_printf("pack: '%s' XIP (%lu B en flash)", owner,
-                               (unsigned long) pk_len);
-                    loaded_any = 1;
-                    continue;
-                }
-                if (pk_mod) {
-                    log_printf("aviso: '%s' del FS eclipsa al del pack", owner);
-                }
-                bpvm_status_t ds = bpvm_load_mod_stream(vm, stm32_mod_read_at,
-                                                        dep_path, dep_size, owner);
-                if (ds != BPVM_OK) { st = ds; break; }
-                loaded_any = 1;
-            }
-        }
-        if (!loaded_any) break;
-    }
-
-    /* Guard anti-hard-fault: ¿quedó algún import sin resolver? En bare-metal un
-     * CALL_EXT no resuelto puede colgar el micro → mejor error limpio. */
+    /* #344 — UNA carga: bpvm_load_entry despacha .mod/.pack, lee por trozos
+     * (H11: el .mod se queda en el FS), resuelve las dependencias con la regla
+     * común —FS primero, y si no está, los packs grabados en XIP, código EN
+     * FLASH y cero copia— y NOMBRA la que falte.
+     *
+     * De las tres familias ésta era la que MÁS tenía (era la única con packs y
+     * con el guard anti-hard-fault), y es justo lo que se subió al núcleo: aquí
+     * desaparecen ~70 líneas sin perder ni una capacidad. El guard sigue siendo
+     * imprescindible en bare-metal — un CALL_EXT sin resolver cuelga el micro —
+     * sólo que ahora lo hace `first_missing` para las cinco. */
+    bpvm_entry_t entry;
+    memset(&entry, 0, sizeof entry);
+    bpvm_status_t st = bpvm_load_entry(vm, path, &entry);
     char missing[40] = {0};
-    if (st == BPVM_OK) {
-        for (int mi = 0; mi < vm->module_count && !missing[0]; mi++) {
-            bpvm_module_t* m = &vm->modules[mi];
-            for (int k = 0; k < m->import_count && !missing[0]; k++) {
-                const char* imp = m->imports[k];
-                if (!imp || !imp[0]) continue;
-                char owner[40]; size_t ol = 0;
-                while (imp[ol] && imp[ol] != '.' && ol < sizeof(owner) - 1) { owner[ol] = imp[ol]; ol++; }
-                owner[ol] = '\0';
-                if (!owner[0]) continue;
-                int found = 0;
-                for (int j = 0; j < vm->module_count; j++)
-                    if (strcmp(vm->modules[j].name, owner) == 0) { found = 1; break; }
-                if (!found) strncpy(missing, owner, sizeof(missing) - 1);
-            }
-        }
-    }
+    if (entry.missing[0]) strncpy(missing, entry.missing, sizeof(missing) - 1);
+    if (entry.from_pack)
+        log_printf("run: pack '%s' (main=%s)", entry.resolved, entry.main_module);
 
     /* H9.5 — overlay AOT: para cada módulo cargado, si el FS tiene su
      * <Modulo>.mdn (PIC Thumb-2 de build_mdn.sh — mismo -mcpu=cortex-m33

@@ -466,7 +466,12 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
         char found[192];
         uint32_t fsz = 0;
         int have_fs = (bpvm_fs_stat(filename, &fsz) == 0);
-        if (have_fs) snprintf(found, sizeof found, "%s", filename);
+        /* La precisión explícita no es cosmética: sin ella gcc avisa de posible
+         * truncado en CADA build, y un build ruidoso es exactamente donde se
+         * escondió la rotura de la Pico en #339. Truncar aquí es lo correcto —
+         * `filename` ya pasó el stat, así que cabe salvo ruta absurda. */
+        if (have_fs) snprintf(found, sizeof found, "%.*s",
+                              (int)(sizeof found - 1), filename);
         else         have_fs = (bpvm_entry_resolve(pname_file, found, sizeof found, &fsz) == 0);
 
         if (!have_fs && !pk_mod) {
@@ -721,8 +726,12 @@ static int first_missing(const bpvm_t* vm, char* out, size_t cap) {
             char lib[64], mod[64];
             derive_owner(imp, lib, sizeof lib, mod, sizeof mod);
             if (!mod[0] || module_loaded(vm, lib, mod)) continue;
-            if (lib[0]) snprintf(out, cap, "%s.%s", lib, mod);
-            else        snprintf(out, cap, "%s", mod);
+            /* Precisión explícita: el nombre es para un mensaje de error, así
+             * que truncarlo es aceptable — pero hay que DECIRLO, o gcc avisa en
+             * cada build y el aviso de verdad se pierde entre el ruido. */
+            if (lib[0]) snprintf(out, cap, "%.*s.%.*s",
+                                 (int)(cap / 2 - 1), lib, (int)(cap / 2 - 1), mod);
+            else        snprintf(out, cap, "%.*s", (int)(cap - 1), mod);
             return 1;
         }
     }
@@ -759,8 +768,12 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
         s = bpvm_load_entry_file(vm, e->resolved);
         if (s != BPVM_OK) return s;
         if (vm->module_count > idx_before)
-            snprintf(e->main_module, sizeof e->main_module, "%s",
-                     vm->modules[idx_before].name);
+            /* Precisión explícita otra vez: main_module tiene el ancho de un
+             * nombre de pack (33) y un nombre de módulo puede ser mayor. Lo
+             * cazó el gcc de ARM, no el del host — otra razón para compilar la
+             * placa en cada tanda, no sólo el host. */
+            snprintf(e->main_module, sizeof e->main_module, "%.*s",
+                     (int)(sizeof e->main_module - 1), vm->modules[idx_before].name);
         /* El directorio del PROPIO módulo es el primer sitio donde buscar sus
          * dependencias — un proyecto se lleva sus .mod al lado. (Se me olvidó
          * en el primer intento y la batería lo cazó a la primera: seis targets
