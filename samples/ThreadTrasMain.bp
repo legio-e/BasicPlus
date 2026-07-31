@@ -1,0 +1,31 @@
+// #346 — el programa acaba cuando acaban TODOS los threads, no cuando acaba
+// main. Un thread lanzado por main sigue vivo despues de que main termine, y
+// la VM no se apaga hasta que el tambien acaba.
+//
+// Estaba SIN VIGILAR: las dos VMs divergian aqui (la VM-C dejaba seguir a los
+// demas threads, miVM tumbaba la VM entera al HALT de main) y el arnes de
+// paridad no lo cazaba porque ningun sample del corpus dejaba trabajo vivo mas
+// alla de main. Este lo deja.
+//
+// Determinista a proposito: el margen del sleep es enorme comparado con lo que
+// tarda main en terminar, asi que el orden de las lineas es siempre el mismo.
+module ThreadTrasMain
+
+  class Rezagado extends Thread
+    public function Rezagado()
+      super(4096)
+    end Rezagado
+    public function run()
+      sleep(300)
+      print "3 el thread sigue vivo DESPUES de main"
+    end run
+  end Rezagado
+
+  public function Main()
+    var t: Rezagado := Rezagado()
+    print "1 main lanza el thread"
+    t.start()
+    print "2 main termina (el thread aun no)"
+  end Main
+
+end ThreadTrasMain

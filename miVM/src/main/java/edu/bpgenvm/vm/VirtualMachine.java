@@ -2102,17 +2102,19 @@ public class VirtualMachine {
                         switch (sig) {
                             case HALT:
                                 // Sólo el main puede haber emitido HALT (verificado
-                                // en runOnContext). Termina la VM entera.
-                                // #342 — salvo que main deje eventos SUYOS sin
-                                // atender: entonces vuelve a la cola para
-                                // saldarlos y el HALT llega de nuevo después.
-                                if (reviveForPendingEvents(tc)) {
-                                    vmLock.notifyAll();
-                                    break;
-                                }
-                                vmShutdown = true;
+                                // en runOnContext).
+                                // #346 — HALT termina ESE THREAD, no la VM: el
+                                // programa acaba cuando acaban TODOS los threads.
+                                // Antes miVM tumbaba la VM aquí y un thread que
+                                // sobreviviera a main se quedaba a medias; la VM-C
+                                // siempre les dejó terminar, y miVM converge hacia
+                                // ella. El bucle sale solo cuando no queda nadie
+                                // vivo (abajo, !anyThreadAlive()).
+                                // terminateThread ya contempla #342: si main deja
+                                // eventos SUYOS sin atender, no muere todavía.
+                                terminateThread(tc);
                                 vmLock.notifyAll();
-                                return;
+                                break;
                             case THREAD_EXIT:
                                 terminateThread(tc);
                                 vmLock.notifyAll();
