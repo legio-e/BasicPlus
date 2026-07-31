@@ -77,6 +77,7 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     main_tc->blocked_on_join = -1;
     main_tc->sched_owner = -1;
     main_tc->ev_depth = 0;       /* H5.c: sin handler de evento en curso */
+    main_tc->ev_post_mortem = -1; /* #342: vivo; la deuda se calcula al morir */
     vm->thread_count = 1;
     vm->current_thread_idx = 0;
 

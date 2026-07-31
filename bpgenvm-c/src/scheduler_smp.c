@@ -81,6 +81,11 @@ static int do_wakeups_locked(bpvm_t* vm) {
             woken++;
         }
     }
+    /* #342 — un thread que terminó dejando eventos SUYOS encolados es otra
+     * razón para volver a ser elegible, igual que un sleep vencido o un join
+     * completado. La regla vive en events.c y la llaman los DOS schedulers:
+     * una sola verdad, no una copia por scheduler. */
+    woken += bpvm_events_revive_terminated(vm);
     return woken;
 }
 
@@ -306,6 +311,14 @@ int bpvm_scheduler_run_smp(bpvm_t* vm) {
      * salen y aquí los recogemos en orden. */
     for (int i = 0; i < smp->n_workers; i++) {
         bpvm_platform_thread_join(&smp->worker_threads[i]);
+    }
+    /* #342 — mismo guardián de salida que el scheduler simple: si queda algo
+     * en la cola, que se sepa. Tirar eventos en silencio es la familia de bug
+     * de #326. */
+    if (vm->ev_count > 0) {
+        fprintf(stderr, "[bpvm] fin de ejecucion con %d evento(s) sin atender "
+                        "(destinatario muerto o encolados por un handler tardio)\n",
+                vm->ev_count);
     }
     return 0;
 }

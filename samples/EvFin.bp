@@ -1,0 +1,39 @@
+// #342 — un evento levantado como ULTIMA cosa de run() NO se pierde.
+//
+// El thread muere sin llegar a una frontera de quantum: antes, su evento se
+// quedaba encolado para un tid muerto y desaparecia sin un ruido. El fallo
+// dependia de cuanto viviera el thread — intermitencia pura.
+//
+// Determinista a proposito: el join no vuelve hasta que la tarea esta
+// REALMENTE terminada, y no lo esta mientras deba eventos. Asi la salida es
+// la misma en las dos VMs y sirve de test de regresion.
+module EvFin
+
+  class Tarea extends Thread
+    event alAcabar(quien: Object)
+    public function Tarea()
+      super(4096)
+    end Tarea
+    public function run()
+      print "  run: levanto el evento y me muero"
+      raise alAcabar(this)          // <-- lo ULTIMO: aqui estaba el agujero
+    end run
+  end Tarea
+
+  class Oyente
+    function event atender(quien: Object)
+      print "  handler: ATENDIDO"
+    end atender
+  end Oyente
+
+  public function Main()
+    var t: Tarea := Tarea()
+    var o: Oyente := Oyente()
+    t.alAcabar := o::atender
+    print "1 arranco la tarea"
+    t.start()
+    t.join()
+    print "2 el join ha vuelto"
+  end Main
+
+end EvFin

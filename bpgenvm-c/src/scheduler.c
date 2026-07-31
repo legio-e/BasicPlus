@@ -80,7 +80,14 @@ static int64_t earliest_wake(const bpvm_t* vm) {
 
 bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
     int last_idx = -1;
-    while (any_alive(vm)) {
+    for (;;) {
+        /* #342 — ANTES de mirar si queda alguien vivo: un thread que terminó
+         * dejando eventos SUYOS encolados vuelve a ser elegible para
+         * atenderlos. Va aquí y no dentro del `while` porque el caso más
+         * frecuente es justo el de main: si se comprueba después, main ya ha
+         * terminado, any_alive da falso y salimos con la cola llena. */
+        bpvm_events_revive_terminated(vm);
+        if (!any_alive(vm)) break;
         /* P-run-stop (#257) — KILL cooperativo: el poll_cb (si hay) mira
          * el transporte ENTRE quanta; kill_requested termina la ejecución
          * limpiamente (paramos entre opcodes → heap/FS consistentes). */
@@ -125,7 +132,16 @@ bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
         int quantum = vm->quantum_ops > 0 ? vm->quantum_ops : 1024;
         bpvm_status_t s = bpvm_interp_run_quantum(vm, tc, quantum, &yielded);
         if (s != BPVM_OK) return s;
-        /* Si el tc terminó o cedió, el while continúa. */
+        /* Si el tc terminó o cedió, el bucle continúa. */
+    }
+    /* #342 — GUARDIÁN DE SALIDA. Si aún queda algo en la cola es que su
+     * destinatario no existe, o que un handler post-mortem levantó eventos
+     * después de agotarse el presupuesto. Tirarlos es legítimo; tirarlos EN
+     * SILENCIO es la familia de bug que costó #326. Que lo diga. */
+    if (vm->ev_count > 0) {
+        fprintf(stderr, "[bpvm] fin de ejecucion con %d evento(s) sin atender "
+                        "(destinatario muerto o encolados por un handler tardio)\n",
+                vm->ev_count);
     }
     return BPVM_OK;
 }

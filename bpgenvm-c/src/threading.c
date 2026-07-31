@@ -147,6 +147,7 @@ int bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref) {
     tc->thread_ref_heap = (int32_t) thread_ref;
     tc->last_debug_line = 0;   /* #139: trigger en la primera línea vista */
     tc->ev_depth = 0;          /* H5.c: sin handler de evento en curso */
+    tc->ev_post_mortem = -1;   /* #342: vivo; la deuda se calcula al morir */
     tc->sched_owner = -1;      /* H2: tc libre para ser pickeado */
 
     /* Guarda el tid en field[0] del Thread BP (convención del frontend

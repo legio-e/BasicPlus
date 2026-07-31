@@ -58,6 +58,11 @@
 
 /* Bytes sentinela en memory[0] — vea HEAP_LAYOUT.md §1. */
 #define BPVM_SENTINEL_THREAD_EXIT 0x70
+/* Su DIRECCIÓN. El frame inicial de un thread guarda este pc para que, al
+ * volver run(), el dispatch ejecute THREAD_EXIT y el thread muera sin tumbar
+ * la VM. #342 la reusa: es la vuelta correcta de un handler inyectado en un
+ * thread que ya había terminado. */
+#define BPVM_SENTINEL_THREAD_EXIT_ADDR 0u
 
 /* Sentinela del puente native→BP (P-aot-call-bp): byte OP_NATIVE_RETURN en
  * memory[1]. El helper bpvm_aot_call_bp_* monta un frame BP con saved_pc
@@ -228,6 +233,18 @@ struct bpvm_thread {
      * EDT de Swing. Un `raise` DESDE un handler sigue valiendo: eso encola,
      * no inyecta. */
     int  ev_depth;
+
+    /* #342 — DEUDA DE EVENTOS AL MORIR. Un thread cuyo `raise` es lo último
+     * que hace muere antes de llegar a una frontera de quantum, y su evento
+     * se quedaba encolado para un tid muerto: desaparecía SIN UN RUIDO. Ahora
+     * el scheduler lo resucita para que salde lo que debía.
+     *   -1 = todavía vivo / sin calcular.
+     *    N = eventos que tenía encolados EN EL MOMENTO de terminar. Es un
+     *        PRESUPUESTO, no un contador: se drena lo que se debía entonces,
+     *        no lo que un handler post-mortem añada después — si no, un
+     *        programa que se realimenta no terminaría nunca.
+     *    0 = deuda saldada; ya no se resucita. */
+    int  ev_post_mortem;
 
     /* #139 — última línea origen vista por el debug hook; 0 = "ninguna
      * todavía". El hook sólo se invoca cuando la línea actual cambia
@@ -539,6 +556,11 @@ int  bpvm_event_enqueue(bpvm_t* vm, int tid, uint64_t recv, int32_t dest,
                         int nargs, uint32_t masks, const int64_t* args);
 void bpvm_event_mark_roots(bpvm_t* vm, void (*visit)(bpvm_t*, uint32_t));
 int  bpvm_event_drain_one(bpvm_t* vm, bpvm_thread_t* tc);
+/* #342 — Vuelve a RUNNABLE los threads que ya terminaron pero dejaron eventos
+ * SUYOS encolados, para que los atiendan antes de morir del todo. La llaman
+ * los DOS schedulers desde su punto de wake-up: una sola regla, no una copia
+ * por scheduler. Devuelve cuántos resucitó. */
+int  bpvm_events_revive_terminated(bpvm_t* vm);
 
 /* Paso 3 / contrato B — ¿es `r` un handle a un objeto LIBERADO? Solo los handles
  * (con TAG) pueden morir; null/constantes nunca. Lo consulta el deref de PROGRAMA

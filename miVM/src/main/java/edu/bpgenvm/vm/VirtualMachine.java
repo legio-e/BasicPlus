@@ -130,6 +130,18 @@ public class VirtualMachine {
          * DESDE un handler sigue valiendo: eso encola, no inyecta.
          */
         int evDepth = 0;
+        /**
+         * #342 — DEUDA DE EVENTOS AL MORIR. Un thread cuyo `raise` es lo último
+         * que hace muere antes de llegar a una frontera de quantum, y su evento
+         * se quedaba encolado para un tid muerto: desaparecía SIN UN RUIDO.
+         *   -1 = vivo / sin calcular.
+         *    N = eventos que tenía encolados EN EL MOMENTO de terminar. Es un
+         *        PRESUPUESTO: se salda lo que se debía entonces, no lo que un
+         *        handler post-mortem añada después — si no, un programa que se
+         *        realimenta no terminaría nunca.
+         *    0 = deuda saldada; ya no se resucita.
+         */
+        int evPostMortem = -1;
         // Lista de threads que esperan a que ÉSTE termine.
         final List<Integer> waiters = new ArrayList<>();
         // Excepciones: estado per-thread.
@@ -480,7 +492,31 @@ public class VirtualMachine {
      * Marca el ThreadContext recibido como TERMINATED, libera su región de
      * stack (si no es main) y despierta a sus joiners. Debe llamarse bajo vmLock.
      */
+    /**
+     * #342 — ¿este thread deja eventos SUYOS sin atender? Entonces todavía no
+     * está muerto: vuelve a RUNNABLE para saldarlos. Devuelve true si lo ha
+     * resucitado.
+     *
+     * Aquí (y no en el scheduler, como en la VM-C) porque en miVM terminar un
+     * thread LIBERA su región de pila: si se resucitara después, la inyección
+     * escribiría en una pila que otro `Thread.start()` puede haber reutilizado.
+     * Mismo comportamiento observable, distinto sitio — el sustrato manda.
+     *
+     * Debe llamarse bajo vmLock.
+     */
+    private boolean reviveForPendingEvents(ThreadContext t) {
+        if (t.evPostMortem == 0) return false;          // ya saldó su deuda
+        int n = 0;
+        for (PendingEvent e : eventQueue) if (e.tid == t.id) n++;
+        if (n == 0) { t.evPostMortem = 0; return false; }
+        if (t.evPostMortem < 0) t.evPostMortem = n;     // deuda al morir
+        t.status = ThreadStatus.RUNNABLE;
+        runQueue.addLast(t.id);
+        return true;
+    }
+
     private void terminateThread(ThreadContext t) {
+        if (reviveForPendingEvents(t)) return;   // #342 — aún debe eventos
         t.status = ThreadStatus.TERMINATED;
         if (t.id != 0) {
             freeStackRegion(t.stackBase, t.stackTop);
@@ -1942,6 +1978,17 @@ public class VirtualMachine {
         // antes de que la VM termine — crítico cuando el sink es un
         // socket cuyo lado lector cierra al ver el evento "exited".
         programOut.flush();
+        // #342 — GUARDIÁN DE SALIDA. Si aún queda algo en la cola es que su
+        // destinatario no existe, o que un handler post-mortem levantó eventos
+        // después de agotarse el presupuesto. Tirarlos es legítimo; tirarlos EN
+        // SILENCIO es la familia de bug que costó #326. Que lo diga.
+        int evLeft;
+        synchronized (vmLock) { evLeft = eventQueue.size(); }
+        if (evLeft > 0) {
+            System.err.println("[bpgenvm] fin de ejecución con " + evLeft
+                    + " evento(s) sin atender (destinatario muerto o encolados"
+                    + " por un handler tardío)");
+        }
         System.out.println("=== FIN DE LA EJECUCIÓN ===");
     }
 
@@ -2056,6 +2103,13 @@ public class VirtualMachine {
                             case HALT:
                                 // Sólo el main puede haber emitido HALT (verificado
                                 // en runOnContext). Termina la VM entera.
+                                // #342 — salvo que main deje eventos SUYOS sin
+                                // atender: entonces vuelve a la cola para
+                                // saldarlos y el HALT llega de nuevo después.
+                                if (reviveForPendingEvents(tc)) {
+                                    vmLock.notifyAll();
+                                    break;
+                                }
                                 vmShutdown = true;
                                 vmLock.notifyAll();
                                 return;
@@ -5370,6 +5424,11 @@ public class VirtualMachine {
             if (e.tid == tc.id) { ev = e; it.remove(); break; }
         }
         if (ev == null) return;
+        // #342 — si esto es drenaje POST-MORTEM, gasta presupuesto. Se descuenta
+        // al SACARLO de la cola y no tras inyectar, para que un evento cuyo
+        // receptor murió también cuente: si no, el thread volvería a resucitar
+        // por un evento que ya no está.
+        if (tc.evPostMortem > 0) tc.evPostMortem--;
         if (System.getenv("BPVM_DEBUG_EV") != null) {
             StringBuilder q = new StringBuilder();
             for (PendingEvent e : eventQueue) q.append(e.args.length > 0 ? e.args[0] : -1).append(' ');
@@ -5415,7 +5474,12 @@ public class VirtualMachine {
         }
 
         int sp = tc.sp;
-        writeI32(mem, sp, tc.pc); sp += 4;                 // PC de reanudación, bajo todo
+        // #342 — si el thread ya había terminado y sólo lo hemos resucitado para
+        // saldar su deuda, su pc apunta a DESPUÉS del HALT/THREAD_EXIT: volver
+        // ahí sería ejecutar lo que hubiera detrás. La vuelta correcta es el
+        // sentinela de fin de thread (memory[0]), que lo termina limpiamente.
+        int resumePc = (tc.evPostMortem >= 0) ? 0 : tc.pc;
+        writeI32(mem, sp, resumePc); sp += 4;              // PC de reanudación, bajo todo
         refStore(mem, sp, ev.recv); sp += REF_SIZE;        // this
         for (int i = 0; i < ev.args.length; i++) {
             if ((ev.masks & (1 << (8 + i))) != 0) { writeI64(mem, sp, ev.args[i]); sp += 8; }

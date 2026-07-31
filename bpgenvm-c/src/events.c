@@ -66,6 +66,43 @@ void bpvm_event_mark_roots(bpvm_t* vm, void (*visit)(bpvm_t*, uint32_t)) {
     }
 }
 
+/* ¿Cuántos eventos hay encolados para `tid`? */
+static int pending_for(const bpvm_t* vm, int tid) {
+    int n = 0;
+    for (int k = 0; k < vm->ev_count; k++) {
+        const bpvm_event_t* e = &vm->ev_queue[(vm->ev_head + k) % BPVM_EVENT_QUEUE_CAP];
+        if (e->tid == tid) n++;
+    }
+    return n;
+}
+
+/* #342 — Un thread cuyo `raise` es lo ÚLTIMO que hace muere antes de llegar a
+ * una frontera de quantum: su evento se quedaba encolado para un tid muerto y
+ * desaparecía sin ruido. El fallo dependía de cuánto viviera el thread —
+ * intermitencia pura, el peor modo de fallo.
+ *
+ * Aquí se le devuelve la vida SÓLO para saldar lo que debía. Lo hace el
+ * scheduler en su punto de wake-up, junto a los sleeps y los joins, porque es
+ * exactamente lo mismo: una razón para volver a ser elegible.
+ *
+ * El presupuesto (ev_post_mortem) se fija la PRIMERA vez que se le ve muerto
+ * con deuda, y sólo baja. Así un handler post-mortem que vuelva a levantar un
+ * evento no resucita al thread para siempre. */
+int bpvm_events_revive_terminated(bpvm_t* vm) {
+    int revived = 0;
+    for (int i = 0; i < vm->thread_count; i++) {
+        bpvm_thread_t* tc = &vm->threads[i];
+        if (tc->status != BPVM_THREAD_TERMINATED) continue;
+        if (tc->ev_post_mortem == 0) continue;          /* ya saldó su deuda */
+        int n = pending_for(vm, tc->id);
+        if (n == 0) { tc->ev_post_mortem = 0; continue; }
+        if (tc->ev_post_mortem < 0) tc->ev_post_mortem = n;   /* deuda al morir */
+        tc->status = BPVM_THREAD_RUNNABLE;
+        revived++;
+    }
+    return revived;
+}
+
 /* ----------------------------------------------------------- inyección --- */
 
 /* Resuelve el slot de vtable sobre la clase REAL del receptor, subiendo por la
@@ -123,8 +160,14 @@ static int inject(bpvm_t* vm, bpvm_thread_t* tc, const bpvm_event_t* e) {
     /* (1) el PC de reanudación, DEBAJO de todo: OP_EVENT_RETURN lo lee de aquí.
      *     Guardarlo en la pila (y no en el tc) hace la inyección reentrante sin
      *     estado extra: si un handler es interrumpido por otro evento, cada
-     *     frame lleva su propia vuelta. */
-    bpvm_write_i32_be(vm->memory + sp, (int32_t) tc->pc); sp += 4;
+     *     frame lleva su propia vuelta.
+     *     #342 — si el thread ya había TERMINADO y sólo lo hemos resucitado
+     *     para saldar su deuda, su pc apunta a DESPUÉS del HALT/THREAD_EXIT:
+     *     volver ahí sería ejecutar lo que hubiera detrás. La vuelta correcta
+     *     es el sentinela de fin de thread, que lo termina otra vez y limpio. */
+    uint32_t resume_pc = (tc->ev_post_mortem >= 0)
+                       ? BPVM_SENTINEL_THREAD_EXIT_ADDR : tc->pc;
+    bpvm_write_i32_be(vm->memory + sp, (int32_t) resume_pc); sp += 4;
 
     /* (2) los argumentos, EXACTAMENTE como los pondría una llamada normal:
      *     `this` primero y cada argumento en su ancho natural. El compilador
@@ -166,6 +209,12 @@ int bpvm_event_drain_one(bpvm_t* vm, bpvm_thread_t* tc) {
         }
         vm->ev_head = (vm->ev_head + 1) % BPVM_EVENT_QUEUE_CAP;
         vm->ev_count--;
+        /* #342 — si esto es drenaje POST-MORTEM, gasta presupuesto. Se
+         * descuenta aquí (al SACARLO de la cola) y no en el inject, para que
+         * un evento cuyo receptor murió también cuente: si no, un receptor
+         * muerto dejaría el presupuesto intacto y el thread volvería a
+         * resucitar por un evento que ya no está. */
+        if (tc->ev_post_mortem > 0) tc->ev_post_mortem--;
         return inject(vm, tc, &copy);
     }
     return 0;
