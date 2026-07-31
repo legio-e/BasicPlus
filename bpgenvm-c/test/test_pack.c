@@ -62,6 +62,18 @@ static long stingy_read(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
     return (long) n;
 }
 
+/* La misma tacaneria pero sobre una fixture de 4 KB (la de arriba mide la
+ * region entera). Mismo proposito: que una lectura corta sea lo NORMAL. */
+static long stingy_read_fix(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    const uint8_t* base = (const uint8_t*) user;
+    if (off >= FIX_SIZE) return 0;
+    uint32_t avail = FIX_SIZE - off;
+    if (n > avail) n = avail;
+    if (n > 5u) n = 5u;
+    memcpy(dst, base + off, n);
+    return (long) n;
+}
+
 static int fl_erase(void* u, uint32_t off, uint32_t len) {
     (void) u;
     if ((off % 4096u) != 0 || (len % 4096u) != 0 || off + len > FLREG) return -1;
@@ -129,6 +141,33 @@ int main(void) {
         const uint8_t* p = bpvm_pack_find(fixA, FIX_SIZE, "txt", "logo", &len);
         CHECK(p && len == 5 && memcmp(p, "hola\n", 5) == 0, "find txt/logo");
         CHECK(bpvm_pack_find(fixA, FIX_SIZE, "mod", "NoEsta", &len) == NULL, "find inexistente = NULL");
+    }
+
+    /* --- 4-bis. #310: MANIFEST — lo que hace EJECUTABLE a un pack --- */
+    {
+        bpvm_pack_src_t s;
+        bpvm_pack_src_mem(&s, fixA, FIX_SIZE);
+        char v[64];
+        CHECK(bpvm_pack_manifest_get(&s, "main", v, (int) sizeof v) && strcmp(v, "App") == 0,
+              "#310 manifest: main=App (el modulo principal)");
+        CHECK(bpvm_pack_manifest_get(&s, "noexiste", v, (int) sizeof v) == 0 && v[0] == '\0',
+              "#310 manifest: clave que no esta → 0 y cadena vacia");
+        /* Con un cap ridiculo NO se devuelve medio nombre: un main a medias
+         * seria un modulo que no existe, y el error saldria mas tarde y peor. */
+        char tiny[2];
+        CHECK(bpvm_pack_manifest_get(&s, "main", tiny, (int) sizeof tiny) == 0,
+              "#310 manifest: si no cabe entero, NADA (no medio nombre)");
+        /* El de trozos tiene que leer el mismo manifest. */
+        bpvm_pack_src_t st2;
+        bpvm_pack_src_stream(&st2, stingy_read_fix, (void*) fixA, FIX_SIZE);
+        CHECK(bpvm_pack_manifest_get(&st2, "main", v, (int) sizeof v) && strcmp(v, "App") == 0,
+              "#310 manifest: por trozos da lo mismo");
+        /* PackFixB no es ejecutable (no trae manifest): tiene que decir que no,
+         * no inventarse un main. Un pack sin manifest es una libreria. */
+        bpvm_pack_src_t sb;
+        bpvm_pack_src_mem(&sb, fixB, FIX_SIZE);
+        CHECK(bpvm_pack_manifest_get(&sb, "main", v, (int) sizeof v) == 0,
+              "#310 manifest: pack SIN manifest → no es ejecutable");
     }
 
     /* --- 5. LIST + ADD sobre región virgen (flash simulada) --- */

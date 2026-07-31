@@ -153,6 +153,22 @@ int bpvm_pack_find_src(const bpvm_pack_src_t* src,
                        const char* tipo, const char* nombre,
                        bpvm_pack_entry_t* out);
 
+/* ── MANIFEST: lo que hace EJECUTABLE a un pack (#310) ───────────────────────
+ * Entrada de tipo 'mft' llamada "manifest", texto `clave=valor` por líneas
+ * (modelo jar). La sintetiza PackStep desde el `main` del .bpbuild; espejo de
+ * PackFormat.java — un cambio aquí va con su cambio allí. */
+#define BPVM_PACK_TYPE_MANIFEST  "mft"
+#define BPVM_PACK_MANIFEST_NAME  "manifest"
+/* Tope de manifest que se mira. No es el tamaño del manifest: es cuánto se
+ * lee de él. Un pack NO cabe en RAM y el manifest tampoco tiene por qué. */
+#define BPVM_PACK_MANIFEST_MAX   256
+
+/* Valor de `clave` en el manifest del pack, NUL-terminado en `out`.
+ * 1 = encontrada; 0 = no hay manifest, no está la clave, o no cabe en `cap`.
+ * El módulo principal de un pack ejecutable es la clave "main". */
+int bpvm_pack_manifest_get(const bpvm_pack_src_t* src, const char* key,
+                           char* out, int cap);
+
 /* ADD — valida la imagen completa (magic, verfmt, crc_cab, crc_contenido,
  * img_len == size_total) y la copia al final de la cadena. SOLO para regiones
  * escribibles por memcpy (host RAM); el burn real a flash lo hace la cintura

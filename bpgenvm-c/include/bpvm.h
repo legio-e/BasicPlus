@@ -23,6 +23,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>   /* H6.b — bool en la API pública (bpvm_debug_clear_breakpoint) */
+#include "bpvm_pack.h" /* #310 — ejecutar un pack. La VM sabe de packs; el FS no. */
 
 #ifdef __cplusplus
 extern "C" {
@@ -157,6 +158,28 @@ bpvm_status_t bpvm_load_mod(bpvm_t* vm, const char* path);
 typedef long (*bpvm_read_at_fn)(void* user, uint32_t off, uint8_t* dst, uint32_t n);
 bpvm_status_t bpvm_load_mod_stream(bpvm_t* vm, bpvm_read_at_fn rd, void* user,
                                     size_t size, const char* name_hint);
+
+/* ── #310: EJECUTAR UN PACK ──────────────────────────────────────────────────
+ * Un pack ejecutable trae un manifest (`main=<módulo>`) que dice cuál de sus
+ * módulos es el principal. El pack que se ejecuta vive como FICHERO en /app
+ * del FS: no se carga a RAM (no cabe), se lee por trozos.
+ *
+ * Estado de la fuente: guarda la ruta, porque el callback de lectura la
+ * necesita en cada trozo. Tiene que seguir VIVO mientras se use la fuente. */
+#define BPVM_PACK_FS_PATH_MAX 128
+typedef struct { char path[BPVM_PACK_FS_PATH_MAX]; } bpvm_pack_fs_t;
+
+/* Abre un pack del FS como fuente de lectura. 0 = OK; -1 = no está, está
+ * vacío, o la ruta no cabe. NO da puntero directo ⇒ sus módulos se cargarán
+ * con código (ver bpvm_pack_src_ptr). */
+int bpvm_pack_open_fs(bpvm_pack_src_t* src, bpvm_pack_fs_t* st, const char* path);
+
+/* Carga el módulo PRINCIPAL del pack `pack_path` (el que declara su manifest).
+ * Deja su nombre en `main_out` para que el caller pueda arrancarlo. NO resuelve
+ * dependencias: eso es del caller (y del orden de búsqueda, que con un pack en
+ * ejecución antepone el propio pack). */
+bpvm_status_t bpvm_load_pack(bpvm_t* vm, const char* pack_path,
+                             char* main_out, int main_cap);
 
 /*
  * H11 — Reserva `n` bytes CONTIGUOS y PERMANENTES de la arena: por encima de

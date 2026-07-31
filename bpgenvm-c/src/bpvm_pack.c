@@ -313,6 +313,43 @@ int bpvm_pack_find_src(const bpvm_pack_src_t* src,
     return found;
 }
 
+int bpvm_pack_manifest_get(const bpvm_pack_src_t* src, const char* key,
+                           char* out, int cap) {
+    if (!src || !key || !out || cap <= 0) return 0;
+    out[0] = '\0';
+    bpvm_pack_entry_t e;
+    if (!bpvm_pack_find_src(src, BPVM_PACK_TYPE_MANIFEST, BPVM_PACK_MANIFEST_NAME, &e))
+        return 0;
+
+    uint8_t buf[BPVM_PACK_MANIFEST_MAX];
+    uint32_t n = e.len;
+    if (n > sizeof buf) n = (uint32_t) sizeof buf;   /* se mira el principio, no todo */
+    if (n == 0 || !src_read(src, e.data_off, buf, n)) return 0;
+
+    /* Barrido por líneas: `clave=valor`, terminador \n o \r\n o fin. Sin
+     * dependencias de string.h más allá de lo que ya hay, y sin copiar el
+     * manifest entero a ningún sitio. */
+    size_t klen = strlen(key);
+    uint32_t i = 0;
+    while (i < n) {
+        uint32_t ls = i;
+        while (i < n && buf[i] != '\n') i++;
+        uint32_t le = i;                             /* [ls, le) = la línea */
+        if (i < n) i++;                              /* saltar el \n */
+        if (le > ls && buf[le - 1] == '\r') le--;    /* CRLF */
+        if ((uint32_t) klen + 1 > le - ls) continue; /* no cabe "clave=" */
+        if (memcmp(buf + ls, key, klen) != 0) continue;
+        if (buf[ls + klen] != '=') continue;
+        uint32_t vs = ls + (uint32_t) klen + 1;
+        uint32_t vlen = le - vs;
+        if (vlen + 1 > (uint32_t) cap) return 0;     /* no cabe: mejor nada que a medias */
+        memcpy(out, buf + vs, vlen);
+        out[vlen] = '\0';
+        return 1;
+    }
+    return 0;
+}
+
 const uint8_t* bpvm_pack_find(const uint8_t* base, uint32_t region_size,
                               const char* tipo, const char* nombre, uint32_t* len) {
     bpvm_pack_src_t src;

@@ -9,6 +9,7 @@
 #include "bpvm_internal.h"
 #include "bpvm_aot_helpers.h"   /* H3 #158: tabla helpers para AOT */
 #include "bpvm_pack.h"          /* H3.c: resolución de imports contra la zona de packs */
+#include "bpvm_fs.h"            /* #310: un pack ejecutable vive en /app del FS */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -218,6 +219,80 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
             bpvm_status_t r = discover_deps(vm, j, search_dir);
             if (r != BPVM_OK) return r;
         }
+    }
+    return BPVM_OK;
+}
+
+/* ── #310: ejecutar un pack ──────────────────────────────────────────────── */
+
+/* Lectura por trozos de un pack que vive en el FS. La fuente pide offsets
+ * dentro del PACK; aquí se traducen a offsets del fichero, que son los mismos. */
+static long pack_fs_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    const bpvm_pack_fs_t* st = (const bpvm_pack_fs_t*) user;
+    return bpvm_fs_read_at(st->path, off, dst, n);
+}
+
+int bpvm_pack_open_fs(bpvm_pack_src_t* src, bpvm_pack_fs_t* st, const char* path) {
+    if (!src || !st || !path) return -1;
+    size_t n = strlen(path);
+    if (n + 1 > sizeof st->path) return -1;      /* ruta larga: mejor decirlo */
+    memcpy(st->path, path, n + 1);
+    uint32_t size = 0;
+    if (bpvm_fs_stat(path, &size) != 0 || size == 0) return -1;
+    bpvm_pack_src_stream(src, pack_fs_read_at, st, size);
+    return 0;
+}
+
+/* Lectura de UNA entrada del pack: el loader pide offsets desde 0 (el .mod
+ * empieza donde empieza), así que aquí se le suma dónde vive esa entrada. */
+typedef struct { const bpvm_pack_src_t* src; uint32_t base; } pack_entry_rd_t;
+
+static long pack_entry_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    pack_entry_rd_t* e = (pack_entry_rd_t*) user;
+    return e->src->read_at(e->src->user, e->base + off, dst, n);
+}
+
+bpvm_status_t bpvm_load_pack(bpvm_t* vm, const char* pack_path,
+                             char* main_out, int main_cap) {
+    if (!vm || !pack_path) return BPVM_ERR_IO;
+    bpvm_pack_fs_t st;
+    bpvm_pack_src_t src;
+    if (bpvm_pack_open_fs(&src, &st, pack_path) != 0) {
+        fprintf(stderr, "[bpvm-c] pack '%s' no se puede abrir\n", pack_path);
+        return BPVM_ERR_IO;
+    }
+    char mainmod[BPVM_PACK_NAME_LEN + 1];
+    if (!bpvm_pack_manifest_get(&src, "main", mainmod, (int) sizeof mainmod)) {
+        /* Un pack SIN manifest es perfectamente válido — es una librería. Lo
+         * que no es válido es pedirle que se ejecute, y hay que decirlo. */
+        fprintf(stderr, "[bpvm-c] '%s' no es ejecutable: su manifest no declara 'main'\n",
+                pack_path);
+        return BPVM_ERR_IO;
+    }
+    bpvm_pack_entry_t e;
+    if (!bpvm_pack_find_src(&src, "mod", mainmod, &e)) {
+        fprintf(stderr, "[bpvm-c] '%s' declara main='%s' pero no lleva ese modulo\n",
+                pack_path, mainmod);
+        return BPVM_ERR_IO;
+    }
+
+    /* AQUÍ está la regla de con/sin código, y no es un `if` sobre de dónde
+     * viene: se le PREGUNTA a la fuente si da puntero. Un pack del FS no lo
+     * da (littlefs no mapea) ⇒ carga por stream, con código. Uno de la zona
+     * de packs sí ⇒ XIP, el código se queda en flash. */
+    const uint8_t* xip = bpvm_pack_src_ptr(&src, e.data_off, e.len);
+    bpvm_status_t s;
+    if (xip) {
+        s = bpvm_loader_load_xip(vm, xip, e.len, mainmod);
+    } else {
+        pack_entry_rd_t rd = { &src, e.data_off };
+        s = bpvm_load_mod_stream(vm, pack_entry_read_at, &rd, e.len, mainmod);
+    }
+    if (s != BPVM_OK) return s;
+    if (main_out && main_cap > 0) {
+        size_t n = strlen(mainmod);
+        if (n + 1 > (size_t) main_cap) return BPVM_ERR_IO;
+        memcpy(main_out, mainmod, n + 1);
     }
     return BPVM_OK;
 }

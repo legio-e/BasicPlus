@@ -279,7 +279,20 @@ int main(int argc, char** argv) {
         bpvm_set_debug_hook(vm, debug_trace_hook, NULL, &dbg_state);
     }
 
-    bpvm_status_t s = bpvm_load_mod(vm, path);
+    /* #310 — si lo que se ejecuta es un PACK, el punto de entrada no es el
+     * fichero sino lo que diga su manifest. Se distingue por la extensión, sin
+     * flag nuevo: "ejecutar un pack" es ejecutar, igual que un .mod. */
+    size_t plen = strlen(path);
+    int is_pack = (plen > 5 && strcmp(path + plen - 5, ".pack") == 0);
+    bpvm_status_t s;
+    if (is_pack) {
+        char mainmod[BPVM_PACK_NAME_LEN + 1];
+        s = bpvm_load_pack(vm, path, mainmod, (int) sizeof mainmod);
+        if (s == BPVM_OK)
+            printf("[packs] ejecutando '%s' (main=%s)\n", path, mainmod);
+    } else {
+        s = bpvm_load_mod(vm, path);
+    }
     if (s != BPVM_OK) {
         fprintf(stderr, "load_mod %s: %s\n", path, bpvm_status_str(s));
         bpvm_destroy(vm); free(mem);
