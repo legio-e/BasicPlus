@@ -11,6 +11,7 @@
 #include "bpvm_pack.h"          /* H3.c: resolución de imports contra la zona de packs */
 #include "bpvm_fs.h"            /* #310: un pack ejecutable vive en /app del FS */
 #include "bpvm_alloc.h"         /* #339: guardián de fin de RUN */
+#include "bpvm_entry.h"         /* #344: el RUN, escrito UNA vez */
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"          /* #352: el modelo del GUI se va con la VM */
 #endif
@@ -414,8 +415,10 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
         derive_owner(imp, lib, sizeof(lib), mod, sizeof(mod));
         if (!mod[0]) continue;
         if (module_loaded(vm, lib, mod)) continue;
-        /* Derivar filename + nombre de entrada en pack (mismo base-name). */
-        char filename[512], pname[160];
+        /* Derivar filename + nombre de entrada en pack (mismo base-name).
+         * `pname_file` = el nombre de fichero SIN directorio, que es lo que
+         * come la regla de búsqueda común cuando search_dir no acierta. */
+        char filename[512], pname[160], pname_file[168];
         if (lib[0]) {
             snprintf(filename, sizeof(filename), "%s%s%s.%s.mod",
                      search_dir, search_dir[0] ? "/" : "", lib, mod);
@@ -425,6 +428,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
                      search_dir, search_dir[0] ? "/" : "", mod);
             snprintf(pname, sizeof(pname), "%s", mod);
         }
+        snprintf(pname_file, sizeof(pname_file), "%s.mod", pname);
         /* #310 — ORDEN DE BÚSQUEDA (spec §4, ADITIVO):
          *   0) el PACK EN EJECUCIÓN, si lo hay ← lo único nuevo
          *   1) el FS (que ECLIPSA a la zona de packs: shadow de desarrollo)
@@ -455,21 +459,29 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
             ? bpvm_pack_find(pk_region, pk_region_size, "mod", pname, &pk_len)
             : NULL;
 
-        FILE* f = fopen(filename, "rb");
-        if (!f && !pk_mod) {
+        /* #344 — POR LA FACHADA, no por fopen. Era lo único que ataba esta
+         * función al host y por lo que las 3 familias tenían su propia copia
+         * (más pobre). Además la búsqueda es ahora la ÚNICA: search_dir si lo
+         * hay, y si no el basedir del proyecto → tal cual → /app → /lib. */
+        char found[192];
+        uint32_t fsz = 0;
+        int have_fs = (bpvm_fs_stat(filename, &fsz) == 0);
+        if (have_fs) snprintf(found, sizeof found, "%s", filename);
+        else         have_fs = (bpvm_entry_resolve(pname_file, found, sizeof found, &fsz) == 0);
+
+        if (!have_fs && !pk_mod) {
             fprintf(stderr, "[bpvm-c] dep '%s' (%s) no encontrado: %s\n",
                     imp, mod, filename);
             continue;   /* dejamos que linkAll dispare el error si falta. */
         }
         int idx_before = vm->module_count;
         bpvm_status_t s;
-        if (f) {
-            fclose(f);
+        if (have_fs) {
             if (pk_mod) {
                 fprintf(stderr, "[bpvm-c] aviso: '%s' del FS eclipsa al del pack\n",
                         pname);
             }
-            s = bpvm_loader_load(vm, filename);
+            s = bpvm_load_entry_file(vm, found);
         } else {
             /* H3.c tanda 2 — carga XIP: el código se queda EN LA REGIÓN (flash
              * en placa); a RAM solo van ext-table + data block. */
@@ -644,6 +656,131 @@ bpvm_status_t bpvm_load_mod_buffer(bpvm_t* vm, const uint8_t* data,
     if (!vm || !data || size == 0) return BPVM_ERR_IO;
     /* En target embebido NO descubrimos deps. El caller las carga manualmente. */
     return bpvm_loader_load_buffer(vm, data, size, name_hint);
+}
+
+/* ==========================================================================
+ * #344 — EL RUN, ESCRITO UNA VEZ. Ver include/bpvm_entry.h.
+ *
+ * Había CINCO cargas de "lo que se va a ejecutar", y no eran cinco variantes:
+ * eran la misma regla copiada (las 15 líneas de v1_resolve_path están palabra
+ * por palabra en Pico, ESP32 y STM32). Peor: las cuatro de los REPL eran
+ * versiones POBRES de la del núcleo — cortaban el import por el primer punto
+ * (así que un módulo con nombre compuesto no resolvía) y no sabían nada del
+ * pack en ejecución, que es justo lo que impedía llevar #310 a la placa.
+ *
+ * Así que esto no escribe un sexto resolvedor: hace PORTABLE el bueno. Lo
+ * único que ataba `discover_deps` al host era un fopen; con la fachada del FS
+ * (bpvm_fs_stat/read_at, que ya existía) desaparece y las 5 familias corren
+ * exactamente el mismo código.
+ * ========================================================================== */
+
+int bpvm_entry_resolve(const char* name, char* out, size_t out_cap,
+                       uint32_t* size_out) {
+    if (!name || !out || out_cap == 0) return -1;
+    uint32_t dummy; if (!size_out) size_out = &dummy;
+    /* H19 — el base-dir del proyecto PRIMERO (la carpeta del módulo principal):
+     * un import resuelve contra /app/<proj>/ antes que contra nada más. Plano
+     * (basedir="") o ruta absoluta → se salta este candidato. */
+    const char* bd = bpvm_fs_basedir();
+    if (bd && bd[0] && name[0] != '/') {
+        snprintf(out, out_cap, "%s/%s", bd, name);
+        if (bpvm_fs_stat(out, size_out) == 0) return 0;
+    }
+    snprintf(out, out_cap, "%s", name);
+    if (bpvm_fs_stat(out, size_out) == 0) return 0;
+    snprintf(out, out_cap, "/app/%s", name);
+    if (bpvm_fs_stat(out, size_out) == 0) return 0;
+    snprintf(out, out_cap, "/lib/%s", name);
+    if (bpvm_fs_stat(out, size_out) == 0) return 0;
+    out[0] = '\0';
+    return -1;
+}
+
+/* Adaptador de la fachada al loader por trozos: el .mod se queda en el FS y
+ * sólo se traen los pedazos que hacen falta. Igual en host y en placa. */
+static long entry_fs_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    return bpvm_fs_read_at((const char*) user, off, dst, n);
+}
+
+bpvm_status_t bpvm_load_entry_file(bpvm_t* vm, const char* resolved_path) {
+    uint32_t size = 0;
+    if (bpvm_fs_stat(resolved_path, &size) != 0 || size == 0) return BPVM_ERR_IO;
+    return bpvm_load_mod_stream(vm, entry_fs_read_at, (void*) resolved_path,
+                                (size_t) size, resolved_path);
+}
+
+/* ¿Queda algún import sin dueño cargado? Devuelve 1 y deja el nombre en `out`.
+ * Mejor decir "falta 'Gui'" que dejar que el link reviente doscientas líneas
+ * más tarde con un símbolo que no le dice nada a nadie. */
+static int first_missing(const bpvm_t* vm, char* out, size_t cap) {
+    for (int mi = 0; mi < vm->module_count; mi++) {
+        const bpvm_module_t* m = &vm->modules[mi];
+        for (int k = 0; k < m->import_count; k++) {
+            const char* imp = m->imports[k];
+            if (!imp || !imp[0]) continue;
+            char lib[64], mod[64];
+            derive_owner(imp, lib, sizeof lib, mod, sizeof mod);
+            if (!mod[0] || module_loaded(vm, lib, mod)) continue;
+            if (lib[0]) snprintf(out, cap, "%s.%s", lib, mod);
+            else        snprintf(out, cap, "%s", mod);
+            return 1;
+        }
+    }
+    out[0] = '\0';
+    return 0;
+}
+
+bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
+    bpvm_entry_t local;
+    if (!e) { memset(&local, 0, sizeof local); e = &local; }
+    e->missing[0] = e->resolved[0] = e->main_module[0] = '\0';
+    e->from_pack = 0;
+    if (!vm || !path || !path[0]) return BPVM_ERR_IO;
+
+    /* 1. La regla de búsqueda, una sola. */
+    uint32_t size = 0;
+    if (bpvm_entry_resolve(path, e->resolved, sizeof e->resolved, &size) != 0)
+        return BPVM_ERR_IO;
+
+    /* 2. EL `if` DE .mod/.pack, y vive AQUÍ. Antes sólo el CLI del host sabía
+     *    despachar packs; por eso llevarlos a la placa era copiar la regla en
+     *    cuatro sitios más. */
+    size_t n = strlen(e->resolved);
+    e->from_pack = (n > 5 && strcmp(e->resolved + n - 5, ".pack") == 0);
+
+    bpvm_status_t s;
+    int idx_before = vm->module_count;
+    if (e->from_pack) {
+        s = bpvm_load_pack(vm, e->resolved, e->main_module, (int) sizeof e->main_module);
+        if (s != BPVM_OK) return s;
+        /* bpvm_load_pack ya descubre las deps del main (dentro del pack primero,
+         * y luego junto al propio pack); aquí sólo queda el barrido final. */
+    } else {
+        s = bpvm_load_entry_file(vm, e->resolved);
+        if (s != BPVM_OK) return s;
+        if (vm->module_count > idx_before)
+            snprintf(e->main_module, sizeof e->main_module, "%s",
+                     vm->modules[idx_before].name);
+        /* El directorio del PROPIO módulo es el primer sitio donde buscar sus
+         * dependencias — un proyecto se lleva sus .mod al lado. (Se me olvidó
+         * en el primer intento y la batería lo cazó a la primera: seis targets
+         * con "falta la lib 'X'".) */
+        char dir[256];
+        path_dirname(e->resolved, dir, sizeof dir);
+        for (int j = idx_before; j < vm->module_count; j++) {
+            s = discover_deps(vm, j, dir);
+            if (s != BPVM_OK) return s;
+        }
+    }
+
+    if (e->on_module) {
+        for (int j = idx_before; j < vm->module_count; j++)
+            e->on_module(vm->modules[j].name, e->from_pack ? "pack" : "fs", 0, e->user);
+    }
+
+    /* 3. El guardián: si algo se quedó sin dueño, se NOMBRA. */
+    if (first_missing(vm, e->missing, sizeof e->missing)) return BPVM_ERR_IO;
+    return BPVM_OK;
 }
 
 uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {

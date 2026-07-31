@@ -27,6 +27,7 @@
 #include "bpvm_fs.h"
 #include "bpvm_net.h"   /* H11 — registro del backend TCP del host */
 #include "bpvm_pack.h"  /* H3 — zona de packs simulada (--pack=) */
+#include "bpvm_entry.h" /* #344 — el RUN, escrito una vez */
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"   /* H10 — --screen=WxH / --no-screen (micro simulado) */
 #endif
@@ -245,15 +246,13 @@ int main(int argc, char** argv) {
     /* H2·B1.2 — selección de backend de FS: libc (default, dev-loop de siempre)
      * o littlefs sobre imagen (--fs=lfs:<img> → el ORÁCULO: mismo motor que el
      * micro; formatea la imagen solo si no monta = primer arranque). */
-    if (fs_lfs_img) {
-        if (bpvm_fs_register_lfs_filebd(fs_lfs_img, 0, 0, 1) != 0) {
-            fprintf(stderr, "--fs=lfs: no se pudo montar littlefs sobre %s\n", fs_lfs_img);
-            bpvm_destroy(vm); free(mem);
-            return 1;
-        }
-    } else {
-        bpvm_fs_register_host();   /* file I/O sobre libc (host) */
-    }
+    /* #344 — el ORDEN importa desde que el núcleo carga por la fachada: el
+     * .mod que se ejecuta vive en el disco del HOST aunque `--fs=lfs:` ponga
+     * una imagen littlefs para lo que ve el programa BP. Así que se registra
+     * el host, se carga el entry, y sólo DESPUÉS se cambia a la imagen.
+     * (Antes daba igual porque el loader hacía fopen a pelo — un atajo que
+     * escondía justo esta distinción.) */
+    bpvm_fs_register_host();
     if (basedir) bpvm_fs_set_basedir(basedir);   /* H19-F1: readFile/load relativos resuelven bajo la raíz */
     bpvm_fs_set_main_module_path(path);          /* H19: App.mainModulePath() = el .mod ejecutado */
     bpvm_net_register_host();  /* H11 — sockets TCP del SO (host) */
@@ -279,24 +278,38 @@ int main(int argc, char** argv) {
         bpvm_set_debug_hook(vm, debug_trace_hook, NULL, &dbg_state);
     }
 
-    /* #310 — si lo que se ejecuta es un PACK, el punto de entrada no es el
-     * fichero sino lo que diga su manifest. Se distingue por la extensión, sin
-     * flag nuevo: "ejecutar un pack" es ejecutar, igual que un .mod. */
-    size_t plen = strlen(path);
-    int is_pack = (plen > 5 && strcmp(path + plen - 5, ".pack") == 0);
-    bpvm_status_t s;
-    if (is_pack) {
-        char mainmod[BPVM_PACK_NAME_LEN + 1];
-        s = bpvm_load_pack(vm, path, mainmod, (int) sizeof mainmod);
-        if (s == BPVM_OK)
-            printf("[packs] ejecutando '%s' (main=%s)\n", path, mainmod);
-    } else {
-        s = bpvm_load_mod(vm, path);
-    }
+    /* #344 — UNA sola carga: bpvm_load_entry mira la extensión y despacha
+     * .mod/.pack, resuelve las dependencias con la regla común y avisa si
+     * falta alguna. El `if` del pack ya no vive aquí (vivía SÓLO aquí, y por
+     * eso los packs no llegaban a la placa). */
+    bpvm_entry_t entry;
+    memset(&entry, 0, sizeof entry);
+    bpvm_status_t s = bpvm_load_entry(vm, path, &entry);
+    if (s == BPVM_OK && entry.from_pack)
+        printf("[packs] ejecutando '%s' (main=%s)\n", path, entry.main_module);
     if (s != BPVM_OK) {
-        fprintf(stderr, "load_mod %s: %s\n", path, bpvm_status_str(s));
+        if (entry.missing[0])
+            fprintf(stderr, "load %s: falta el modulo '%s'\n", path, entry.missing);
+        else
+            fprintf(stderr, "load_mod %s: %s\n", path, bpvm_status_str(s));
         bpvm_destroy(vm); free(mem);
         return (int) s;
+    }
+
+    /* Ya con los módulos DENTRO, el FS pasa a ser el que verá el programa BP.
+     * `--fs=lfs:` = modo ORÁCULO (mismo motor que el micro); la imagen se
+     * formatea sólo si no monta = primer arranque. Va aquí y no antes porque
+     * el .mod que se ejecuta vive en el disco del host: el orden separa "de
+     * dónde saco el programa" de "qué FS ve el programa", que antes se
+     * confundían porque el loader hacía fopen a pelo. */
+    if (fs_lfs_img) {
+        if (bpvm_fs_register_lfs_filebd(fs_lfs_img, 0, 0, 1) != 0) {
+            fprintf(stderr, "--fs=lfs: no se pudo montar littlefs sobre %s\n", fs_lfs_img);
+            bpvm_destroy(vm); free(mem);
+            return 1;
+        }
+        if (basedir) bpvm_fs_set_basedir(basedir);
+        bpvm_fs_set_main_module_path(path);
     }
 
     if (smp_workers > 0) {

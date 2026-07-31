@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include "bpvm_fs.h"
 
 #define MEMSZ (512 * 1024)
 
@@ -76,6 +77,9 @@ static void post_action(dbg_chan_t* ch, bpvm_dbg_action_t act) {
 }
 
 int main(int argc, char** argv) {
+    /* #344 — el nucleo resuelve por la FACHADA del FS (antes fopen a
+     * pelo), asi que un driver de host tiene que registrar su backend. */
+    bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
     if (argc < 2) { fprintf(stderr, "uso: test_debug_mt <fichero.mod>\n"); return 2; }
 

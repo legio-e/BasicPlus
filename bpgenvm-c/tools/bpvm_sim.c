@@ -50,6 +50,7 @@
 #include "aot_registry.h"
 #include "json_min.h"
 #ifdef BPVM_GUI
+#include "bpvm_entry.h"   /* #344 — el RUN, escrito una vez */
 #include "bpvm_gui.h"   /* H10 — --screen=WxH / --no-screen */
 #endif
 
@@ -764,10 +765,10 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
     bpvm_fs_set_basedir_from_module(path);
     bpvm_fs_set_main_module_path(path);
 
-    uint32_t size = 0;
-    uint8_t* data = sim_fs_resolve(path, &size);
-    if (!data) { send_err(c, id, "NOT_FOUND", "no existe"); return; }
-    keep_buf(data);
+    { char probe[192]; uint32_t psz = 0;
+      if (bpvm_entry_resolve(path, probe, sizeof probe, &psz) != 0) {
+          send_err(c, id, "NOT_FOUND", "no existe"); return;
+      } }
 
     long session = ++g_session;
     g_run_session = session;
@@ -786,70 +787,20 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
     bpvm_set_output(vm, sim_output_sink, NULL);
 
     clock_t t0 = clock();
-    bpvm_status_t st = bpvm_load_mod_buffer(vm, data, size, path);
 
-    /* Resolución iterativa de imports (≤4 pasadas: deps de deps). El FS ECLIPSA
-     * al pack; si no está en FS se carga XIP desde la zona de packs. Idéntico a
-     * los firmwares. */
-    for (int pass = 0; st == BPVM_OK && pass < 4; pass++) {
-        int loaded_any = 0;
-        int n_before = vm->module_count;
-        for (int mi = 0; mi < n_before && st == BPVM_OK; mi++) {
-            bpvm_module_t* m = &vm->modules[mi];
-            for (int k = 0; k < m->import_count; k++) {
-                const char* imp = m->imports[k];
-                if (!imp || !imp[0]) continue;
-                char owner[64];
-                import_owner(imp, owner, sizeof owner);
-                if (!owner[0] || module_loaded(vm, owner)) continue;
-
-                char fname[80]; snprintf(fname, sizeof fname, "%s.mod", owner);
-                uint32_t pk_rs = 0;
-                const uint8_t* pk_rb = bpvm_pack_mounted(&pk_rs);
-                uint32_t pk_len = 0;
-                const uint8_t* pk_mod = pk_rb
-                    ? bpvm_pack_find(pk_rb, pk_rs, "mod", owner, &pk_len) : NULL;
-                uint32_t dep_size = 0;
-                uint8_t* dep = sim_fs_resolve(fname, &dep_size);
-                if (!dep) {
-                    if (!pk_mod) continue;              /* falta → lo caza el guard */
-                    bpvm_status_t ds = bpvm_loader_load_xip(vm, pk_mod, pk_len, owner);
-                    if (ds != BPVM_OK) { st = ds; break; }
-                    /* Que se vea en la consola del IDE de dónde sale cada módulo:
-                     * "no aparece por ningún lado" y "vino del pack, no del que
-                     * acabas de subir" son dos ratos de búsqueda distintos. */
-                    { char m2[128];
-                      int n2 = snprintf(m2, sizeof m2,
-                                        "[sim] '%s' desde el pack (XIP, %lu B)\n",
-                                        owner, (unsigned long) pk_len);
-                      if (n2 > 0) sim_output_sink(m2, (size_t) n2, NULL); }
-                    loaded_any = 1;
-                    continue;
-                }
-                keep_buf(dep);
-                bpvm_status_t ds = bpvm_load_mod_buffer(vm, dep, dep_size, owner);
-                if (ds != BPVM_OK) { st = ds; break; }
-                loaded_any = 1;
-            }
-        }
-        if (!loaded_any) break;
-    }
-
-    /* Guard: ¿quedó algún import sin resolver? Mejor un error limpio que un
-     * CALL_EXT al vacío. */
-    char missing[64] = {0};
-    if (st == BPVM_OK) {
-        for (int mi = 0; mi < vm->module_count && !missing[0]; mi++) {
-            bpvm_module_t* m = &vm->modules[mi];
-            for (int k = 0; k < m->import_count && !missing[0]; k++) {
-                const char* imp = m->imports[k];
-                if (!imp || !imp[0]) continue;
-                char owner[64];
-                import_owner(imp, owner, sizeof owner);
-                if (owner[0] && !module_loaded(vm, owner))
-                    snprintf(missing, sizeof missing, "%s", owner);
-            }
-        }
+    /* #344 — UNA carga: bpvm_load_entry despacha .mod/.pack, resuelve las
+     * dependencias con la regla comun (FS y, si no, los packs grabados en XIP)
+     * y NOMBRA la que falte. Aqui vivia una copia POBRE de esa regla: cortaba
+     * el import por el primer punto y no sabia nada del pack en ejecucion. */
+    bpvm_entry_t entry;
+    memset(&entry, 0, sizeof entry);
+    bpvm_status_t st = bpvm_load_entry(vm, path, &entry);
+    const char* missing = entry.missing;
+    if (st == BPVM_OK && entry.from_pack) {
+        char m[160];
+        int n = snprintf(m, sizeof m, "[sim] ejecutando el pack '%s' (main=%s)\n",
+                         entry.resolved, entry.main_module);
+        if (n > 0) sim_output_sink(m, (size_t) n, NULL);
     }
 
     /* Overlay AOT (.mdn) del FS, si lo hay. El registry es GLOBAL → clear antes

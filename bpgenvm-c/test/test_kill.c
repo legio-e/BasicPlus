@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "bpvm_fs.h"
 
 static int s_polls = 0;
 
@@ -66,6 +67,9 @@ static int run_phase(int phase, const char* mod_path, int smp) {
 }
 
 int main(int argc, char** argv) {
+    /* #344 — el nucleo resuelve por la FACHADA del FS (antes fopen a
+     * pelo), asi que un driver de host tiene que registrar su backend. */
+    bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
     const char* loop_mod  = (argc > 1) ? argv[1] : "KillLoop.mod";
     const char* sleep_mod = (argc > 2) ? argv[2] : "KillSleep.mod";

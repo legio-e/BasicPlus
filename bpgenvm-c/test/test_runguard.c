@@ -17,6 +17,7 @@
 #include "bpvm_alloc.h"
 #include <stdio.h>
 #include <string.h>
+#include "bpvm_fs.h"
 
 static char g_last[512];
 static void cap(const char* linea) { snprintf(g_last, sizeof g_last, "%s", linea); }
@@ -30,6 +31,9 @@ static void check(const char* que, int cond) {
 static uint8_t g_mem[512 * 1024];
 
 int main(int argc, char** argv) {
+    /* #344 — el nucleo resuelve por la FACHADA del FS (antes fopen a
+     * pelo), asi que un driver de host tiene que registrar su backend. */
+    bpvm_fs_register_host();
     const char* mod = (argc > 1) ? argv[1] : "samples/MethodCall.mod";
     bpvm_alloc_set_report(cap);
 

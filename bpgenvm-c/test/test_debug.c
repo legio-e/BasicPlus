@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "bpvm_fs.h"
 
 #define MEMSZ   (512 * 1024)
 #define MAXP    64
@@ -53,6 +54,9 @@ static bpvm_t* load_vm(uint8_t* mem, const char* path) {
 }
 
 int main(int argc, char** argv) {
+    /* #344 — el nucleo resuelve por la FACHADA del FS (antes fopen a
+     * pelo), asi que un driver de host tiene que registrar su backend. */
+    bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
     if (argc < 2) { fprintf(stderr, "uso: test_debug <fichero.mod>\n"); return 2; }
     const char* path = argv[1];

@@ -13,10 +13,14 @@
 #include "bpvm.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "bpvm_fs.h"
 
 extern void aot_CompressNat_register(struct bpvm* vm);
 
 int main(int argc, char** argv) {
+    /* #344 — el nucleo resuelve por la FACHADA del FS (antes fopen a
+     * pelo), asi que un driver de host tiene que registrar su backend. */
+    bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
     const char* mod_path = (argc > 1) ? argv[1] : "CompressNat.mod";
     size_t mem_size = 512 * 1024;

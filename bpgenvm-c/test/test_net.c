@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include "bpvm_fs.h"
 
 #ifdef _WIN32
   #include <winsock2.h>
@@ -101,6 +102,9 @@ static void capture_sink(const char* data, size_t len, void* user) {
 }
 
 int main(int argc, char** argv) {
+    /* #344 — el nucleo resuelve por la FACHADA del FS (antes fopen a
+     * pelo), asi que un driver de host tiene que registrar su backend. */
+    bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
 
     if (argc > 1 && strcmp(argv[1], "serve") == 0) {
