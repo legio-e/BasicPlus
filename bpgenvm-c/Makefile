@@ -78,6 +78,64 @@ endif
 
 .PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
+# ---------------------------------------------------------------------------
+# $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
+#
+# Los .mod de samples/ son ARTEFACTOS (gitignored). Los targets se limitaban a
+# saltarse la prueba si FALTABAN, pero el modo de fallo caro es otro: que el
+# .mod ESTÉ y sea rancio. Entonces el gate de ABI (#284) lo rechaza y el target
+# sale en ROJO por una razón que no tiene nada que ver con lo que prueba.
+#
+# Ya ha pasado tres veces. test-kill llevaba semanas rojo por eso y se le puso
+# un parche por mtime; el 31-jul se encontró que test-oom, test-excmsggc,
+# test-net y test-iomt estaban rojos IGUAL — y a esos el parche por mtime NO
+# los habría salvado, porque su .mod es más NUEVO que su .bp: lo que caducó no
+# fue el fuente, fue el FORMATO (se quedaron en v5 al pasar a v6 en H6.a).
+#
+# Por eso el guardián mira las tres cosas, y la tercera es la que importa:
+#   1. no está           -> generar
+#   2. el .bp es más nuevo -> regenerar
+#   3. su MAGIC no es el que habla ESTA VM -> regenerar
+#
+# El magic sale de include/bpvm_internal.h, que es donde el loader lo lee: si
+# mañana el formato sube a v7, este guardián se entera solo. Comparación en
+# HEX (od) para no depender de printf \xHH, que no es POSIX.
+#
+# Un test que falla por su andamio enseña a ignorarlo, que es la peor avería.
+# ---------------------------------------------------------------------------
+define fixture
+@want=$$(sed -n 's/.*BPVM_MAGIC_V6[[:space:]]*0x\([0-9A-Fa-f]\{8\}\).*/\1/p' include/bpvm_internal.h | head -1 | tr a-z A-Z); \
+for m in $(1); do \
+  why=""; \
+  if [ ! -f samples/$$m.mod ]; then why="no existe"; \
+  elif [ samples/$$m.bp -nt samples/$$m.mod ]; then why="el .bp es mas nuevo"; \
+  else \
+    got=$$(od -An -tx1 -N4 samples/$$m.mod | tr -d ' \n' | tr a-z A-Z); \
+    if [ "$$got" != "$$want" ]; then why="formato $$got != $$want (rancio)"; fi; \
+  fi; \
+  if [ -n "$$why" ]; then \
+    echo "  (regenerando samples/$$m.mod — $$why)"; \
+    java -jar ../lexer-java/target/basicplus-frontend.jar \
+         samples/$$m.bp --compile samples --backend=mivm >/dev/null 2>&1 || true; \
+  fi; \
+done
+endef
+
+# $(call stdlibdep,Mod1 Mod2 ...) — deja en samples/ los .mod de stdlib que un
+# fixture necesita. Desde H6.a el .mod trae su interfaz dentro, asi que al
+# cargar el raiz el loader busca SUS imports AL LADO del fichero: pasarlos
+# ademas por la linea de comandos ya no basta, porque el fallo ocurre antes.
+# (Se vio en test-net: con TcpEchoTest.mod al dia seguia rojo, y era esto.)
+# Fuente de la verdad = ../bpstdlib/*.mod; aqui solo se copia si falta o difiere.
+define stdlibdep
+@for m in $(1); do \
+  if [ ! -f samples/$$m.mod ] || ! cmp -s ../bpstdlib/$$m.mod samples/$$m.mod; then \
+    echo "  (copiando ../bpstdlib/$$m.mod -> samples/)"; \
+    cp ../bpstdlib/$$m.mod samples/$$m.mod; \
+  fi; \
+done
+endef
+
 all: $(BIN)
 
 $(BIN): $(OBJ)
@@ -150,6 +208,7 @@ CALLBP_BIN = build/test_callbp.exe
 LIBOBJ = $(SRC:%.c=build/%.o)
 test-callbp: $(LIBOBJ)
 	@mkdir -p build
+	$(call fixture,NativeBridge)
 	@if [ ! -f samples/NativeBridge.mod ]; then \
 	  echo "(skip test-callbp: falta samples/NativeBridge.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -168,6 +227,7 @@ test-callbp: $(LIBOBJ)
 BYTENAT_BIN = build/test_bytenat.exe
 test-bytenat: $(LIBOBJ)
 	@mkdir -p build
+	$(call fixture,ByteNat)
 	@if [ ! -f samples/ByteNat.mod ]; then \
 	  echo "(skip test-bytenat: falta samples/ByteNat.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -186,6 +246,7 @@ test-bytenat: $(LIBOBJ)
 COMPRESSNAT_BIN = build/test_compressnat.exe
 test-compressnat: $(LIBOBJ)
 	@mkdir -p build
+	$(call fixture,CompressNat)
 	@if [ ! -f samples/CompressNat.mod ]; then \
 	  echo "(skip test-compressnat: falta samples/CompressNat.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -204,6 +265,7 @@ test-compressnat: $(LIBOBJ)
 COMPRESSBENCH_BIN = build/test_compressbench.exe
 test-compressbench: $(LIBOBJ) $(BIN)
 	@mkdir -p build
+	$(call fixture,CompressBench)
 	@if [ ! -f samples/CompressBench.mod ]; then \
 	  echo "(skip test-compressbench: falta samples/CompressBench.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -223,6 +285,7 @@ test-compressbench: $(LIBOBJ) $(BIN)
 XMOD_BIN = build/test_xmodule.exe
 test-xmodule: $(LIBOBJ)
 	@mkdir -p build
+	$(call fixture,BridgeApp)
 	@if [ ! -f samples/BridgeApp.mod ]; then \
 	  echo "(skip test-xmodule: falta samples/BridgeApp.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -241,6 +304,7 @@ test-xmodule: $(LIBOBJ)
 XMODNAT_BIN = build/test_xmodnat.exe
 test-xmodnat: $(LIBOBJ)
 	@mkdir -p build
+	$(call fixture,XmodNat)
 	@if [ ! -f samples/XmodNat.mod ]; then \
 	  echo "(skip test-xmodnat: falta samples/XmodNat.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -258,6 +322,7 @@ test-xmodnat: $(LIBOBJ)
 XMETHODNAT_BIN = build/test_xmethodnat.exe
 test-xmethodnat: $(LIBOBJ)
 	@mkdir -p build
+	$(call fixture,XMethodNat)
 	@if [ ! -f samples/XMethodNat.mod ]; then \
 	  echo "(skip test-xmethodnat: falta samples/XMethodNat.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -279,6 +344,8 @@ test-xmethodnat: $(LIBOBJ)
 NET_BIN = build/test_net.exe
 test-net: $(LIBOBJ)
 	@mkdir -p build
+	$(call fixture,TcpEchoTest)
+	$(call stdlibdep,Net Core)
 	@if [ ! -f samples/TcpEchoTest.mod ]; then \
 	  echo "(skip test-net: falta samples/TcpEchoTest.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -287,26 +354,13 @@ test-net: $(LIBOBJ)
 	  $(CC) $(CFLAGS) -Isrc test/test_net.c \
 	    $(LIBOBJ) -o $(NET_BIN) $(LDFLAGS); \
 	  echo "--- TCP echo H11 (esperado: conectado / 2 ecos / timeout-len: 0 / fin, PASS) ---"; \
-	  ./$(NET_BIN) samples/TcpEchoTest.mod ../bpstdlib/Net.mod ../bpstdlib/Core.mod; \
+	  ./$(NET_BIN) samples/TcpEchoTest.mod samples/Net.mod samples/Core.mod; \
 	fi
 
 KILL_BIN = build/test_kill.exe
 test-kill: $(LIBOBJ)
 	@mkdir -p build
-	@# Los .mod son ARTEFACTOS (están en .gitignore): se regeneran si faltan o si
-	@# son más viejos que su .bp. Antes el target se limitaba a SALTARSE la prueba
-	@# —y, peor, si el .mod era rancio el gate de ABI (#284) lo rechazaba y el
-	@# target salía en ROJO por una razón que no tenía nada que ver con el KILL.
-	@# Pasó: estuvieron en v5 (12-jun, anteriores al ensanchado 4→8B) y test-kill
-	@# llevaba semanas rojo por eso. Un test que falla por su andamio enseña a
-	@# ignorarlo, que es la peor avería de todas.
-	@for m in KillLoop KillSleep; do \
-	  if [ ! -f samples/$$m.mod ] || [ samples/$$m.bp -nt samples/$$m.mod ]; then \
-	    echo "  (regenerando samples/$$m.mod)"; \
-	    java -jar ../lexer-java/target/basicplus-frontend.jar \
-	         samples/$$m.bp --compile samples --backend=mivm >/dev/null 2>&1 || true; \
-	  fi; \
-	done
+	$(call fixture,KillLoop KillSleep)
 	@if [ ! -f samples/KillLoop.mod ] || [ ! -f samples/KillSleep.mod ]; then \
 	  echo "(skip test-kill: no hay samples/KillLoop.mod / KillSleep.mod y no se han"; \
 	  echo " podido generar — ¿está construido ../lexer-java/target/basicplus-frontend.jar?)"; \
@@ -422,6 +476,7 @@ sim-smoke: sim
 	python tools/sim_smoke.py
 
 test-oom: $(BIN)
+	$(call fixture,OomCatch)
 	@if [ ! -f samples/OomCatch.mod ]; then \
 	  echo "(skip test-oom: falta samples/OomCatch.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -445,6 +500,7 @@ test-oom: $(BIN)
 # memoria acotada para FORZAR el reciclaje de slots que destapa el bug.
 # Esperado: 'caught msg=[ALOAD...' + 'fin', SIN 'use-after-free'.
 test-excmsggc: $(BIN)
+	$(call fixture,ExcMsgGc)
 	@if [ ! -f samples/ExcMsgGc.mod ]; then \
 	  echo "(skip test-excmsggc: falta samples/ExcMsgGc.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -556,6 +612,7 @@ test-fslfsmt: $(LIBOBJ)
 # escribiendo 4 ficheros a la vez sobre el ORÁCULO littlefs con 4 workers
 # REALES (--smp=4). Verde = tamaños exactos + 0 líneas rotas.
 test-iomt: $(BIN)
+	$(call fixture,IoMt)
 	@if [ ! -f samples/IoMt.mod ]; then \
 	  echo "(skip test-iomt: falta samples/IoMt.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -583,6 +640,7 @@ test-fslfs: $(LIBOBJ)
 
 test-throwmsg: $(LIBOBJ)
 	@mkdir -p build
+	$(call fixture,ThrowMsg)
 	@if [ ! -f samples/ThrowMsg.mod ]; then \
 	  echo "(skip test-throwmsg: falta samples/ThrowMsg.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -604,6 +662,7 @@ test-throwmsg: $(LIBOBJ)
 THROWUSER_BIN = build/test_throwuser.exe
 test-throwuser: $(LIBOBJ)
 	@mkdir -p build
+	$(call fixture,ThrowUser)
 	@if [ ! -f samples/ThrowUser.mod ]; then \
 	  echo "(skip test-throwuser: falta samples/ThrowUser.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -622,6 +681,7 @@ test-throwuser: $(LIBOBJ)
 METHOD_BIN = build/test_method.exe
 test-method: $(LIBOBJ)
 	@mkdir -p build
+	$(call fixture,MethodCall)
 	@if [ ! -f samples/MethodCall.mod ]; then \
 	  echo "(skip test-method: falta samples/MethodCall.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
