@@ -1234,6 +1234,9 @@ void vApplicationGetPassiveIdleTaskMemory(StaticTask_t **ppxTCB,
 }
 #endif
 
+/* #353 — sink de diagnóstico de la VM: al log persistente, no al wire. */
+static void diag_al_log(const char* linea) { log_printf("%s", linea); }
+
 int main(void) {
 #if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 1
     /* #292 — bring-up nivel 1: el mínimo absoluto. Sólo USB y un bucle.
@@ -1262,6 +1265,11 @@ int main(void) {
     /* Log persistente: carga el snapshot anterior antes de pisarlo con
      * mensajes del boot actual. */
     log_init();
+    /* #353 — y en cuanto hay log, se le desvía lo que dice la VM. En la Pico
+     * NO es cosmético: el `_write` del SDK manda stderr al MISMO USB CDC que el
+     * wire, y a diferencia de wire_v1_send_line no coge el mutex TX → podía
+     * partir un frame JSON por la mitad. Al log, además, sobrevive al reset. */
+    bpvm_diag_set_sink(diag_al_log);
     log_printf("=== boot " __DATE__ " " __TIME__ " ===");
     /* La causa del reset ya la sabía el firmware (era un builtin de BP), pero no
      * la contaba al arrancar: distinguir "watchdog" de "power-on" es gratis y

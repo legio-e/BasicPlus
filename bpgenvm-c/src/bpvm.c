@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>             /* #353: bpvm_diag es variádica */
 
 /* ==========================================================================
  * #339 — GUARDIÁN DE FIN DE RUN (idea de Eduardo, 28-jul)
@@ -145,7 +146,7 @@ void bpvm_free(void* p) {
         /* Puntero que no salió de aquí. GRITA en vez de corromper la lista:
          * es un error de programación (reservado con malloc y liberado con
          * bpvm_free, o doble free), y en silencio sería indetectable. */
-        fprintf(stderr, "[bpvm] bpvm_free: puntero que no reservó el núcleo (%p)\n", p);
+        bpvm_diag("[bpvm] bpvm_free: puntero que no reservó el núcleo (%p)", p);
         return;
     }
     blk_unlink(b);
@@ -157,7 +158,7 @@ void* bpvm_realloc_at(void* p, size_t n, const char* file, int line) {
     if (!p) return bpvm_alloc_raw(n, 0, BPVM_ALLOC_VM, file, line);
     bpvm_blk_t* old = (bpvm_blk_t*) ((uint8_t*) p - BPVM_BLK_HDR);
     if (old->magic != BPVM_BLK_MAGIC) {
-        fprintf(stderr, "[bpvm] bpvm_realloc: puntero que no reservó el núcleo (%p)\n", p);
+        bpvm_diag("[bpvm] bpvm_realloc: puntero que no reservó el núcleo (%p)", p);
         return NULL;
     }
     bpvm_alloc_kind_t k = BLK_IS_VM(old) ? BPVM_ALLOC_VM : BPVM_ALLOC_OS;
@@ -192,18 +193,47 @@ uint64_t bpvm_alloc_live_bytes (bpvm_alloc_kind_t k) { return g_bytes[k]; }
 
 uint64_t bpvm_alloc_mark(void) { return g_seq_vm; }
 
-/* fflush OBLIGATORIO: con stderr redirigido a fichero o tubería (que es como
- * corre el micro simulado bajo el IDE) el runtime lo vuelve BUFFERIZADO, y si
- * al proceso lo matan el aviso se queda dentro sin llegar a nadie. Un guardián
- * cuyo veredicto se pierde justo en el caso violento no sirve para nada. */
-static void report_stderr(const char* linea) {
-    fprintf(stderr, "%s\n", linea);
+/* ── #353: el canal de diagnóstico de la VM ──────────────────────────────────
+ *
+ * Vive aquí, en bpvm.c, A PROPÓSITO: un .c nuevo del núcleo hay que darlo de
+ * alta en CINCO builds, y olvidar uno significa que esa familia no enlaza y no
+ * te enteras hasta reconstruirla. bpvm.c ya está en los cinco.
+ *
+ * fflush OBLIGATORIO en el default: con stderr redirigido a fichero o tubería
+ * (que es como corre el micro simulado bajo el IDE) el runtime lo vuelve
+ * BUFFERIZADO, y si al proceso lo matan el aviso se queda dentro sin llegar a
+ * nadie. Un guardián cuyo veredicto se pierde justo en el caso violento no
+ * sirve para nada. */
+static void diag_stderr(const char* linea) {
+    fprintf(stderr, "%s\n", linea);   /* el '\n' lo pone EL SINK, no el llamante */
     fflush(stderr);
 }
-static bpvm_alloc_report_fn g_report = report_stderr;
+static bpvm_diag_fn g_diag = diag_stderr;
+
+void bpvm_diag_set_sink(bpvm_diag_fn fn) { g_diag = fn ? fn : diag_stderr; }
+
+void bpvm_diag(const char* fmt, ...) {
+    /* Buffer de PILA y acotado: esto se llama desde el loader y desde el fin de
+     * RUN, en micros con la pila contada. 224 B es lo que ya usaba el guardián
+     * y da de sobra para un nombre de módulo con su explicación. */
+    char linea[224];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(linea, sizeof linea, fmt, ap);
+    va_end(ap);
+    g_diag(linea);
+}
+
+/* El guardián de #339 mantiene su propio sink porque el test lo CAPTURA para
+ * comprobar el veredicto palabra por palabra; si compartiera el de diag, el
+ * test se comería también los mensajes del loader. Su default, eso sí, es el
+ * canal común: así un firmware que instale el sink de diag se lleva el
+ * veredicto del guardián al log sin tener que acordarse de dos cosas. */
+static void report_via_diag(const char* linea) { g_diag(linea); }
+static bpvm_alloc_report_fn g_report = report_via_diag;
 
 void bpvm_alloc_set_report(bpvm_alloc_report_fn fn) {
-    g_report = fn ? fn : report_stderr;
+    g_report = fn ? fn : report_via_diag;
 }
 
 uint64_t bpvm_alloc_sweep(uint64_t mark) {
@@ -475,7 +505,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
         else         have_fs = (bpvm_entry_resolve(pname_file, found, sizeof found, &fsz) == 0);
 
         if (!have_fs && !pk_mod) {
-            fprintf(stderr, "[bpvm-c] dep '%s' (%s) no encontrado: %s\n",
+            bpvm_diag("[bpvm-c] dep '%s' (%s) no encontrado: %s",
                     imp, mod, filename);
             continue;   /* dejamos que linkAll dispare el error si falta. */
         }
@@ -483,7 +513,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
         bpvm_status_t s;
         if (have_fs) {
             if (pk_mod) {
-                fprintf(stderr, "[bpvm-c] aviso: '%s' del FS eclipsa al del pack\n",
+                bpvm_diag("[bpvm-c] aviso: '%s' del FS eclipsa al del pack",
                         pname);
             }
             s = bpvm_load_entry_file(vm, found);
@@ -492,7 +522,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
              * en placa); a RAM solo van ext-table + data block. */
             s = bpvm_loader_load_xip(vm, pk_mod, pk_len, pname);
             if (s == BPVM_OK) {
-                fprintf(stderr, "[bpvm-c] '%s' cargado XIP desde pack (codigo en sitio)\n",
+                bpvm_diag("[bpvm-c] '%s' cargado XIP desde pack (codigo en sitio)",
                         pname);
             }
         }
@@ -606,27 +636,27 @@ bpvm_status_t bpvm_load_pack(bpvm_t* vm, const char* pack_path,
     bpvm_pack_fs_t*  st  = &vm->run_pack_st;
     vm->run_pack_on = 0;
     if (bpvm_pack_open_fs(src, st, pack_path) != 0) {
-        fprintf(stderr, "[bpvm-c] pack '%s' no se puede abrir\n", pack_path);
+        bpvm_diag("[bpvm-c] pack '%s' no se puede abrir", pack_path);
         return BPVM_ERR_IO;
     }
     /* Antes de hablar del manifest, comprobar que esto es un pack: si no,
      * el mensaje del manifest MIENTE (culpa al manifest de un fichero que ni
      * siquiera es un pack) y manda a buscar donde no es. */
     if (!bpvm_pack_src_is_pack(src)) {
-        fprintf(stderr, "[bpvm-c] '%s' no es un pack (cabecera invalida)\n", pack_path);
+        bpvm_diag("[bpvm-c] '%s' no es un pack (cabecera invalida)", pack_path);
         return BPVM_ERR_IO;
     }
     char mainmod[BPVM_PACK_NAME_LEN + 1];
     if (!bpvm_pack_manifest_get(src, "main", mainmod, (int) sizeof mainmod)) {
         /* Un pack SIN manifest es perfectamente válido — es una librería. Lo
          * que no es válido es pedirle que se ejecute, y hay que decirlo. */
-        fprintf(stderr, "[bpvm-c] '%s' no es ejecutable: su manifest no declara 'main'\n",
+        bpvm_diag("[bpvm-c] '%s' no es ejecutable: su manifest no declara 'main'",
                 pack_path);
         return BPVM_ERR_IO;
     }
     bpvm_pack_entry_t e;
     if (!bpvm_pack_find_src(src, "mod", mainmod, &e)) {
-        fprintf(stderr, "[bpvm-c] '%s' declara main='%s' pero no lleva ese modulo\n",
+        bpvm_diag("[bpvm-c] '%s' declara main='%s' pero no lleva ese modulo",
                 pack_path, mainmod);
         return BPVM_ERR_IO;
     }

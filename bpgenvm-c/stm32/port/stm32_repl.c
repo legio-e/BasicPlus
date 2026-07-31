@@ -722,12 +722,20 @@ static void dispatch(int first_char) {
     }
 }
 
+/* #353 — sink de diagnóstico de la VM: al log persistente. */
+static void diag_al_log(const char* linea) { log_printf("%s", linea); }
+
 void stm32_repl_run(void) {
     /* H9 — arranque ESCALONADO: identidad → particiones del env → FS → VM, parando
      * en la 1ª capa que falla. Sin particiones/FS el climb se queda abajo y el host
      * conduce (Gestión de placa: proponer defaults → aplicar → reset). Sustituye al
      * fs_load() de región fija. */
     log_init();                     /* recupera el log de la sesión anterior (post-mortem) */
+    /* #353 — lo que dice la VM (deps que faltan, packs, veredicto del guardián
+     * de #339) al log. Aquí el problema era el opuesto al de la Pico: sin un
+     * `_write` retargeteado, el stderr del núcleo se PERDÍA. Esto devuelve al
+     * log los avisos de pack que este port tenía a mano antes de #344. */
+    bpvm_diag_set_sink(diag_al_log);
     board_mgr_stm32_boot();
     const bpvm_boot_status_t* bs = board_boot_status();
     log_printf("boot: estado %d (%s)%s%s", (int) bs->state, bpvm_boot_state_name(bs->state),

@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include "fs.h"
+#include "bpvm.h"             /* #353: bpvm_diag_set_sink */
 #include "repl_esp32.h"
 #include "hw_esp32.h"
 #include "esp32_mods.h"
@@ -86,6 +87,12 @@ static void vm_buffer_init(void) {
     }
 }
 
+/* #353 — sink de diagnóstico de la VM: al log persistente. Aquí NO había fallo
+ * (el wire es UART0 y la consola es USB-Serial-JTAG: canales distintos), pero
+ * se pone igual para que las tres familias digan lo mismo en el mismo sitio, y
+ * porque el log SOBREVIVE al reset y la consola no. */
+static void diag_al_log(const char* linea) { log_printf("%s", linea); }
+
 void app_main(void)
 {
     /* Estos printf van a la CONSOLA = USB-Serial-JTAG (puerto nativo),
@@ -97,6 +104,7 @@ void app_main(void)
      * (post-mortem: si el arranque previo se fue al garete, aquí está escrito) y
      * queda grabando desde antes del climb del boot. */
     log_init();
+    bpvm_diag_set_sink(diag_al_log);          /* #353 */
     log_printf("=== boot ESP32-S3 ===");
 
     /* El heap de la VM, ANTES del climb: layer_app comprueba s_vm_buffer. */

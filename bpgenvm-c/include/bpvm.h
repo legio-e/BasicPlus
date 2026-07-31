@@ -220,6 +220,31 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers);
  */
 void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user);
 
+/* ── #353: dónde habla la VM cuando NO habla el programa ─────────────────────
+ *
+ * bpvm_set_output es la salida DEL PROGRAMA (print). Esto es otra cosa: lo que
+ * dice la VM al operador — "falta la dep 'Gui'", "'X' del FS eclipsa al del
+ * pack", el veredicto del guardián de #339. Hasta aquí iba a `stderr` a pelo, y
+ * eso en la Pico es un problema MEDIDO, no teórico:
+ *
+ *   - el `_write` del pico-sdk manda stdout Y stderr al MISMO USB CDC, que es
+ *     por donde va el wire (newlib_interface.c:125);
+ *   - `wire_v1_send_line` escribe bajo el mutex TX, pero un fprintf(stderr) del
+ *     núcleo NO lo coge → puede partir un frame por la mitad.
+ *
+ * En el STM32 el efecto es el contrario y también malo: no hay `_write`
+ * retargeteado, así que el diagnóstico se PIERDE. Y en el ESP32 el wire es una
+ * UART aparte, así que ahí no molesta. Tres familias, tres respuestas: justo el
+ * caso de "el núcleo dice QUÉ, la familia decide DÓNDE".
+ *
+ * Sin sink instalado el comportamiento es el de siempre (stderr + fflush), que
+ * es lo que quieren el host y el micro simulado. Los firmwares instalan uno de
+ * una línea que va al log persistente — y de paso el diagnóstico sobrevive al
+ * reset, que en una placa vale más que verlo pasar. */
+typedef void (*bpvm_diag_fn)(const char* linea);
+void bpvm_diag_set_sink(bpvm_diag_fn fn);   /* NULL = vuelve a stderr */
+void bpvm_diag(const char* fmt, ...);
+
 /*
  * Activa traza per-instrucción al stderr (para debug del intérprete
  * mismo). Coste alto, sólo para development.
