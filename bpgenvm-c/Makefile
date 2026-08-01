@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -457,6 +457,16 @@ test-pack:
 # #305 — el CRC por trozos DEBE dar lo mismo que el de una tacada: el IDE se salta
 # el PUT comparándolo con java.util.zip.CRC32, así que una divergencia deja
 # ficheros rancios en la placa EN SILENCIO. Vectores canónicos + tamaños frontera.
+# #350 — agujero de GC en los builtins de cadenas ANTERIORES a #348: pop del
+# origen -> alocar -> seguir leyendo del origen. Test NEGATIVO permanente.
+# El heap ESTRECHO es parte del experimento (con holgura no colecta y pasa
+# aunque el bug este vivo); y BPVM_GC_EVERY NO vale: enmascara en vez de
+# destapar. Antes del fix daba sub_malos=3..6 sobre 3.000 vueltas.
+test-gchole: $(BIN)
+	$(call fixture,GcHoleStr)
+	@echo "--- #350 GC en builtins de cadenas (esperado: sub_malos=0, fb_malos=0, fin) ---"
+	@out=$$(cd samples && ../$(BIN) --mem=40960 GcHoleStr.mod 2>&1); st=$$?; 	 echo "$$out" | grep -vE 'INICIANDO|FIN DE'; 	 if echo "$$out" | grep -q 'sub_malos=0' && echo "$$out" | grep -q 'fb_malos=0' 	    && echo "$$out" | grep -q '^fin' && [ $$st -eq 0 ]; then 	   echo "PASS test-gchole"; 	 else echo "FAIL test-gchole"; exit 1; fi
+
 test-crc:
 	@mkdir -p build
 	$(CC) $(CFLAGS) test/test_crc.c src/crc32.c src/fs_facade.c src/fs_host.c -o build/test_crc.exe

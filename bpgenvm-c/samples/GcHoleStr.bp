@@ -1,0 +1,65 @@
+// GcHoleStr.bp — #350: test NEGATIVO permanente del agujero de GC en los
+// builtins de cadenas anteriores a #348 (substring / fromBytes).
+//
+// EL AGUJERO (documentado en el comentario de peek_ref, builtins.c):
+// el GC marca escaneando [stack_base, sp), o sea que EXCLUYE lo que ya se ha
+// sacado. Un builtin que hace «pop del origen -> alocar el resultado -> seguir
+// leyendo del origen» deja la cadena origen SIN RAIZ justo cuando la reserva
+// puede colectar. #348 estreno `peek_ref` para eso, pero los builtins
+// ANTERIORES (#173 substring, H2 fromBytes) se quedaron con el pop.
+//
+// TRES COSAS QUE HACEN FALTA A LA VEZ, y por eso el primer intento de repro
+// pasaba en verde:
+//
+//  1. Un ARGUMENTO TEMPORAL. Si el llamante guarda ademas el origen en un local
+//     o en un campo, sigue siendo raiz y no pasa nada. Por eso aqui el
+//     argumento es una concatenacion recien creada, que no vive en ningun sitio
+//     mas que en el hueco de pila que el builtin se lleva.
+//       (Ese mismo razonamiento DESCARTA growRefArray/growIntArray como
+//        explotables: el emisor deja `this.items` apuntando al array viejo
+//        hasta despues de la llamada, asi que el GC lo ve.)
+//
+//  2. REPETICION. El GC proactivo salta por umbral de crecimiento del bump
+//     (heap/8, minimo 4096 B). Que salte JUSTO en la reserva de substring es
+//     una loteria de una entre varios cientos. Con un solo intento el test
+//     pasa aunque el bug este vivo — que es exactamente lo que me paso. Miles
+//     de vueltas convierten la loteria en certeza.
+//
+//  3. HEAP ESTRECHO (--mem). NO vale BPVM_GC_EVERY: colectar en cada reserva
+//     ENMASCARA el fallo en vez de destaparlo (leccion de la caceria del
+//     concat). Lo que lo saca es que la reserva tenga que colectar de verdad.
+//
+// ESTO NO LO CAZA LA PARIDAD DUAL-VM: en miVM las referencias viven en locales
+// Java, que la JVM si trata como raices. El agujero es exclusivo de la VM-C.
+//
+//   Esperado: "sub_malos=0" y "fb_malos=0" y "fin".
+//   Con el bug: cuentas > 0, o un RuntimeError de handle (gen que no cuadra).
+module GcHoleStr
+  import Core
+  function main()
+    var sub_malos: integer := 0
+    var fb_malos: integer := 0
+    var i: integer := 0
+
+    while i < 3000 do
+      // substring sobre un TEMPORAL: la concatenacion no la sostiene nadie mas.
+      // El resultado es SIEMPRE "cdefgh" (codepoints 2..8 de "abcdefghij...").
+      var s: string := substring("abcdefghij" + intToString(i), 2, 8)
+      if s != "cdefgh" then
+        sub_malos := sub_malos + 1
+      endif
+
+      // fromBytes sobre un TEMPORAL: mismo patron por el otro builtin.
+      var b: string := fromBytes(toBytes("ABCDE"))
+      if b != "ABCDE" then
+        fb_malos := fb_malos + 1
+      endif
+
+      i := i + 1
+    endwh
+
+    print "sub_malos=" + intToString(sub_malos)
+    print "fb_malos=" + intToString(fb_malos)
+    print "fin"
+  end main
+end GcHoleStr

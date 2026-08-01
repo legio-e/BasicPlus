@@ -1423,7 +1423,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * para que intérprete y AOT den el mismo resultado (#173). */
         int32_t end   = pop_i32(vm, tc);
         int32_t start = pop_i32(vm, tc);
-        bpref_t s = bpref_pop(vm, tc);   /* string ref */
+        /* #350 — PEEK, no pop: el bucle de copia de abajo sigue leyendo de `s`
+         * DESPUÉS de alocar el resultado, y una reserva puede colectar. Con pop,
+         * `s` queda por encima de sp y el marcado conservador no la ve: si el
+         * llamante no la tenía además en un local (p.ej. substring(a+b, ...)),
+         * el GC se la lleva EN VIVO. Medido: 3.000 vueltas con el heap estrecho
+         * daban entre 3 y 6 resultados malos, y subían al encoger el heap. */
+        bpref_t s = peek_ref(vm, tc, 0);
         uint32_t nbytes = bpref_arr_len(vm, s);
         const uint8_t* p = bpref_arr_elem(vm, s, 0, 1);
         uint32_t ncp = bpref_is_null(s) ? 0 : utf8_cp_count(p, nbytes);   /* H2: índices en codepoints */
@@ -1441,6 +1447,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, boff + i, 1);
             out = (uint32_t) bpvm_handle_register(vm, out).v;   /* V4: addr → handle */
         }
+        tc->sp -= BPVM_REF_SIZE;   /* #350: AHORA se saca el origen, ya copiado */
         push_ref(vm, tc, out);   /* string ref result (push_ref ya es genérico) */
         return BPVM_OK;
     }
@@ -1916,47 +1923,70 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * Antes ausente en la VM-C (enum saltaba 44→46) → cualquier List que
          * creciera más allá de su capacidad inicial petaba 'builtin desconocido'. */
         int32_t new_cap = pop_i32(vm, tc);
-        uint32_t old_ref = pop_ref(vm, tc);   /* array ref = 8 bytes (como miVM popTcRef) */
-        if (new_cap < 0) return BPVM_ERR_RUNTIME;
-        uint32_t od = (old_ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(old_ref));   /* V4: fuente handle→addr */
+        /* #350 — PEEK por HIGIENE, no por un fallo demostrado. El bucle de
+         * copia lee del array VIEJO tras alocar el nuevo, o sea que viola el
+         * mismo contrato que substring. Pero HOY NO MUERDE, y conviene que
+         * quede escrito por qué: el emisor genera
+         *     this ; this.items ; this.cap ; CALL grow ; setField items
+         * así que `this.items` sigue apuntando al array viejo hasta DESPUÉS de
+         * la llamada — el GC lo ve y no se lo lleva. Lo que protege es el
+         * llamante, no el builtin; el día que alguien llame a esto desde otro
+         * sitio, lo único que queda de pie es el contrato. */
+        bpref_t oldr = peek_ref(vm, tc, 0);   /* array ref = 8 bytes (como miVM popTcRef) */
+        if (new_cap < 0) { tc->sp -= BPVM_REF_SIZE; return BPVM_ERR_RUNTIME; }
+        uint32_t od = bpref_is_null(oldr) ? 0 : bpref_deref(vm, oldr);   /* V4: fuente handle→addr */
         uint32_t old_len = (od == 0) ? 0 : bpvm_read_u32_be(vm->memory + od);
         uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) new_cap * BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF);
-        if (new_ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+        if (new_ref == 0) {
+            tc->sp -= BPVM_REF_SIZE;
+            return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+        }
+        od = bpref_is_null(oldr) ? 0 : bpref_deref(vm, oldr);   /* re-derivar tras la reserva */
         bpvm_write_u32_be(vm->memory + new_ref, (uint32_t) new_cap);
         uint32_t copy = (old_len < (uint32_t) new_cap) ? old_len : (uint32_t) new_cap;
         for (uint32_t i = 0; i < copy; i++) {   /* ref plana 8B/elem, vía la frontera de codificación */
             bpref_t e = bpref_load(vm, od + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE);
             bpref_store(vm, new_ref + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE, e);
         }
+        tc->sp -= BPVM_REF_SIZE;   /* #350: ya copiado */
                 bpref_push(vm, tc, bpvm_handle_register(vm, new_ref));
         return BPVM_OK;
     }
 
     case BUILTIN_GROW_INT_ARRAY: {
         int32_t new_cap = pop_i32(vm, tc);
-        uint32_t old_ref = pop_ref(vm, tc);   /* V4: array ref = 8 bytes (era pop_i32 4B → drift vs miVM popTcRef) */
-        if (new_cap < 0) return BPVM_ERR_RUNTIME;
-        uint32_t od = (old_ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(old_ref));   /* V4: fuente handle→addr */
+        /* #350 — PEEK por higiene; ver el porqué completo en GROW_REF_ARRAY. */
+        bpref_t oldr = peek_ref(vm, tc, 0);   /* V4: array ref = 8 bytes (era pop_i32 4B → drift vs miVM popTcRef) */
+        if (new_cap < 0) { tc->sp -= BPVM_REF_SIZE; return BPVM_ERR_RUNTIME; }
+        uint32_t od = bpref_is_null(oldr) ? 0 : bpref_deref(vm, oldr);   /* V4: fuente handle→addr */
         uint32_t old_len = (od == 0) ? 0 : bpvm_read_u32_be(vm->memory + od);
         uint32_t new_ref = bpvm_heap_alloc(vm, (uint32_t) new_cap * 4, BPVM_TYPE_ARRAY_I32);
-        if (new_ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+        if (new_ref == 0) {
+            tc->sp -= BPVM_REF_SIZE;
+            return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+        }
+        od = bpref_is_null(oldr) ? 0 : bpref_deref(vm, oldr);   /* re-derivar tras la reserva */
         bpvm_write_u32_be(vm->memory + new_ref, (uint32_t) new_cap);
         uint32_t copy = (old_len < (uint32_t) new_cap) ? old_len : (uint32_t) new_cap;
         for (uint32_t i = 0; i < copy; i++) {
             uint32_t v = bpvm_read_u32_be(vm->memory + od + 4 + i * 4);
             bpvm_write_u32_be(vm->memory + new_ref + 4 + i * 4, v);
         }
+        tc->sp -= BPVM_REF_SIZE;   /* #350: ya copiado */
                 bpref_push(vm, tc, bpvm_handle_register(vm, new_ref));
         return BPVM_OK;
     }
 
     case BUILTIN_CHARS_TO_STRING: {
         int32_t len = pop_i32(vm, tc);
-        uint32_t chars_ref = pop_ref(vm, tc);   /* V4 tanda2: ref de 8B */
-        if (len < 0) return BPVM_ERR_RUNTIME;
-        bpref_t ca = bpref_from_addr(chars_ref);           /* array i32 de codepoints (entrada) */
+        /* #350 — PEEK: el SEGUNDO bucle vuelve a leer de `ca` tras alocar.
+         * Como en fromBytes, sin repro que lo demuestre pero con la misma
+         * violación de contrato. Las salidas de error sacan la fuente a mano
+         * para no dejar la pila descuadrada. */
+        bpref_t ca = peek_ref(vm, tc, 0);                  /* array i32 de codepoints (entrada) */
+        if (len < 0) { tc->sp -= BPVM_REF_SIZE; return BPVM_ERR_RUNTIME; }
         uint32_t avail = bpref_arr_len(vm, ca);
-        if ((uint32_t) len > avail) return BPVM_ERR_RUNTIME;
+        if ((uint32_t) len > avail) { tc->sp -= BPVM_REF_SIZE; return BPVM_ERR_RUNTIME; }
         /* H2: input = array i32 de codepoints; output = string byte[] UTF-8. */
         uint32_t total = 0;
         for (uint32_t i = 0; i < (uint32_t) len; i++) {
@@ -1964,7 +1994,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint8_t tmp[4]; total += utf8_encode(cp, tmp);
         }
         uint32_t new_ref = bpvm_heap_alloc(vm, total, BPVM_TYPE_ARRAY_I8);
-        if (new_ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+        if (new_ref == 0) {
+            tc->sp -= BPVM_REF_SIZE;
+            return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+        }
         bpvm_write_u32_be(vm->memory + new_ref, total);   /* new_ref: alloc fresca (dirección física) */
         uint32_t w = 0;
         for (uint32_t i = 0; i < (uint32_t) len; i++) {
@@ -1972,6 +2005,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             uint8_t enc[4]; uint32_t el = utf8_encode(cp, enc);
             for (uint32_t k = 0; k < el; k++) vm->memory[new_ref + 4 + w++] = enc[k];
         }
+        tc->sp -= BPVM_REF_SIZE;   /* #350: ya copiado */
                 bpref_push(vm, tc, bpvm_handle_register(vm, new_ref));
         return BPVM_OK;
     }
@@ -1981,13 +2015,24 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* H2 (V2): string y byte[] comparten layout (TYPE_ARRAY_I8). La
          * conversión es una copia defensiva (string inmutable / byte[]
          * mutable): mismos bytes, objeto nuevo. */
-        uint32_t ref = pop_ref(vm, tc);
-        uint32_t rd = (ref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(ref));   /* V4: fuente handle→addr */
+        /* #350 — PEEK: el bucle de copia lee de la fuente DESPUÉS de alocar.
+         * Mismo contrato que substring (ver allí). Aquí NO está demostrado con
+         * un repro —el que escribí no lo saca— pero la violación del contrato
+         * es idéntica, así que se cierra igual. */
+        bpref_t bref = peek_ref(vm, tc, 0);
+        uint32_t rd = bpref_is_null(bref) ? 0 : bpref_deref(vm, bref);
         uint32_t n = (rd == 0) ? 0 : bpvm_read_u32_be(vm->memory + rd);
         uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
-        if (out == 0) return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+        if (out == 0) {
+            tc->sp -= BPVM_REF_SIZE;                 /* saca la fuente también al fallar */
+            return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+        }
+        /* Re-derivar TRAS la reserva: hoy el mark-sweep no mueve objetos, pero
+         * depender de eso es una trampa para el día que compacte. */
+        rd = bpref_is_null(bref) ? 0 : bpref_deref(vm, bref);
         bpvm_write_u32_be(vm->memory + out, n);
         for (uint32_t i = 0; i < n; i++) vm->memory[out + 4 + i] = vm->memory[rd + 4 + i];
+        tc->sp -= BPVM_REF_SIZE;   /* #350: ya copiado, ahora sí se saca */
                 bpref_push(vm, tc, bpvm_handle_register(vm, out));   /* H1.2a: string ref result = 8 bytes */
         return BPVM_OK;
     }
