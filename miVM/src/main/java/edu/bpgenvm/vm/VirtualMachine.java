@@ -3711,6 +3711,30 @@ public class VirtualMachine {
      * flag tras CALL_BUILTIN y abandona el bucle inner para que el scheduler
      * haga context switch.
      */
+    /**
+     * #347 — un float en [0, 1), la base de random() y de randomInt().
+     *
+     * Se construye con 24 bits enteros divididos por 2^24, NO con
+     * {@code (float) Math.random()}. El motivo es un borde real: Math.random()
+     * devuelve un double de [0,1), y un double muy pegado a 1 (0.99999999…)
+     * REDONDEA A 1.0f al convertirlo a float — o sea que el "menor que 1" se
+     * rompía justo en el extremo, raras veces y sin avisar. Con 24 bits (los
+     * que caben en la mantisa de un float) el máximo posible es
+     * 16777215/16777216, que sí es menor que 1 exactamente.
+     *
+     * La VM-C hace lo mismo en builtins.c con los 24 bits altos de
+     * bpvm_platform_random_u32(). Las dos VMs nunca darán la misma SECUENCIA
+     * —son fuentes distintas, y eso es lo correcto— pero sí el mismo CONTRATO.
+     *
+     * ThreadLocalRandom y no Math.random() porque esta última comparte un único
+     * Random entre todos los threads: con varios workers se convierte en un
+     * punto de contención, y aquí no hace falta ninguna sincronización.
+     */
+    private static float nextUnit01() {
+        int bits = java.util.concurrent.ThreadLocalRandom.current().nextInt(1 << 24);
+        return bits / 16777216.0f;
+    }
+
     private void dispatchBuiltin(Builtin b, ThreadContext tc) {
         switch (b) {
             case STRLEN: {
@@ -4129,11 +4153,22 @@ public class VirtualMachine {
             case CEIL:  { float x = Float.intBitsToFloat(popTc(tc)); pushTc(tc, (int) Math.ceil(x));  break; }
             case ROUND: { float x = Float.intBitsToFloat(popTc(tc)); pushTc(tc, Math.round(x));       break; }
 
-            case RANDOM:     { pushTc(tc, Float.floatToRawIntBits((float) Math.random())); break; }
+            /* #347 — random / randomInt. MISMA FORMULA que la VM-C (builtins.c),
+             * porque la definicion del lenguaje es la formula, no la prosa.
+             *
+             * Antes esto hacia lo + (int)(rnd * (hi-lo+1)), o sea [lo,hi] CON el
+             * alto dentro — y contradecia a docs/BUILTINS.md y al backend JVM,
+             * que decian [lo,hi). Tres fuentes, dos semanticas. Se unifica en la
+             * forma clasica de BASIC: randomInt NO es un generador aparte, es
+             * random() escalado, y de ahi sale solo que el alto NO entra. */
+            case RANDOM:     { pushTc(tc, Float.floatToRawIntBits(nextUnit01())); break; }
             case RANDOM_INT: {
                 int hi = popTc(tc); int lo = popTc(tc);
-                int r = lo + (int) (Math.random() * (hi - lo + 1));
-                pushTc(tc, r);
+                if (hi <= lo) { pushTc(tc, lo); break; }   /* rango vacio -> lo */
+                long span = (long) hi - (long) lo;         /* en 64b: INT_MAX-INT_MIN desborda int */
+                long off  = (long) ((double) nextUnit01() * (double) span);
+                if (off >= span) off = span - 1;
+                pushTc(tc, (int) (lo + off));
                 break;
             }
 

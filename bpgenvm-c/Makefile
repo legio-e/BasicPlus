@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -466,6 +466,15 @@ test-gchole: $(BIN)
 	$(call fixture,GcHoleStr)
 	@echo "--- #350 GC en builtins de cadenas (esperado: sub_malos=0, fb_malos=0, fin) ---"
 	@out=$$(cd samples && ../$(BIN) --mem=40960 GcHoleStr.mod 2>&1); st=$$?; 	 echo "$$out" | grep -vE 'INICIANDO|FIN DE'; 	 if echo "$$out" | grep -q 'sub_malos=0' && echo "$$out" | grep -q 'fb_malos=0' 	    && echo "$$out" | grep -q '^fin' && [ $$st -eq 0 ]; then 	   echo "PASS test-gchole"; 	 else echo "FAIL test-gchole"; exit 1; fi
+
+# #347 — random / randomInt. Un generador NO se comprueba por igualdad (cada
+# familia tiene su fuente, y la paridad dual-VM es CIEGA a esto). Se comprueba
+# lo que SI es invariante: rango, que el extremo alto NO entre, cobertura de
+# todos los valores, y el rango vacio.
+test-rand: $(BIN)
+	$(call fixture,RandRange)
+	@echo "--- #347 random/randomInt (esperado: 0 malos, 0 altos, 0 sin cubrir) ---"
+	@out=$$(cd samples && ../$(BIN) RandRange.mod 2>&1); st=$$?; 	 echo "$$out" | grep -vE 'INICIANDO|FIN DE'; 	 if echo "$$out" | grep -q 'rango_malos=0' && echo "$$out" | grep -q 'vio_el_alto=0' 	    && echo "$$out" | grep -q 'sin_cubrir=0' && echo "$$out" | grep -q 'vacio=5' 	    && [ $$st -eq 0 ]; then 	   echo "PASS test-rand"; 	 else echo "FAIL test-rand"; exit 1; fi
 
 test-crc:
 	@mkdir -p build

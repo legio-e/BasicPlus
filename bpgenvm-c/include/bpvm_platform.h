@@ -84,6 +84,30 @@ int64_t bpvm_platform_now_ms(void);
  *  - pthread: clock_gettime(CLOCK_MONOTONIC) + spin. */
 void bpvm_platform_busy_wait_us(int us);
 
+/* #347 — 32 bits al azar. LA FUENTE ES DE CADA FAMILIA; el motor es común.
+ *
+ * `random()` y `randomInt()` NO son cómputo puro: necesitan entropía, y de eso
+ * cada micro tiene lo suyo. Por eso #348 los dejó fuera del lote de builtins
+ * portables y por eso esto vive AQUÍ, en la cintura, y no en builtins.c:
+ *
+ *   host / micro simulado : PRNG en software sembrado del reloj
+ *   RP2350 (Pico 2, Metro): get_rand_32() del SDK — TRNG del chip
+ *   ESP32 S3 / P4         : esp_random() — RNG del chip
+ *   STM32 U575            : PRNG en software sembrado del RTC
+ *
+ * De lo de arriba SÓLO salen los 32 bits. Convertirlos a `[0,1)` o a un rango
+ * de enteros lo hace el núcleo, IGUAL para todos: si cada familia hiciera su
+ * propia conversión, el mismo programa daría distribuciones distintas según la
+ * placa — que es justo lo que la doctrina HAL BP viene a evitar.
+ *
+ * Sobre el STM32: el U575 lleva un periférico RNG de verdad, pero CubeMX no lo
+ * inicializa en este proyecto, así que hoy va con PRNG. La consecuencia hay que
+ * saberla: un PRNG en un micro que arranca determinista repite la MISMA
+ * secuencia en cada reset salvo que la semilla varíe — de ahí el RTC. Si algún
+ * día hace falta azar de verdad ahí, se enciende el RNG desde stm32/port/
+ * (código nuestro), nunca tocando los generados de CubeMX. */
+uint32_t bpvm_platform_random_u32(void);
+
 #ifdef __cplusplus
 }
 #endif

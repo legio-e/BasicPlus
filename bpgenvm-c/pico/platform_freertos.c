@@ -21,6 +21,7 @@
 #include "semphr.h"
 
 #include "pico/time.h"   /* busy_wait_us — bpvm_platform_busy_wait_us */
+#include "pico/rand.h"   /* get_rand_32 — bpvm_platform_random_u32 (#347) */
 
 #include "flash_lock.h"  /* #153 — registro de core víctima de lockout */
 
@@ -305,4 +306,11 @@ void bpvm_platform_busy_wait_us(int us) {
      * Es lo deseado para timings críticos (setup/hold de chips,
      * bit-bang fino). */
     busy_wait_us((uint64_t) us);
+}
+
+/* #347 — 32 bits al azar. El RP2350 SÍ trae fuente de hardware: get_rand_32()
+ * del SDK. En el RP2350 se alimenta del TRNG del chip (el RP2040 sólo tenía el
+ * jitter del ROSC), así que aquí no hace falta PRNG ni semilla. */
+uint32_t bpvm_platform_random_u32(void) {
+    return get_rand_32();
 }

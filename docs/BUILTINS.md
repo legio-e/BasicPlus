@@ -67,8 +67,28 @@ Convención general:
 | 24 | `sin` | `(f: float)` | `float` | Radianes. |
 | 25 | `cos` | `(f: float)` | `float` | |
 | 26 | `tan` | `(f: float)` | `float` | |
-| 27 | `random` | `()` | `float` | `[0, 1)`. |
-| 28 | `randomInt` | `(min, max: int)` | `int` | Uniforme en `[min, max)`. |
+| 27 | `random` | `()` | `float` | `[0, 1)`, como el `RND` de siempre. Nunca devuelve 1.0. |
+| 28 | `randomInt` | `(min, max: int)` | `int` | `int(random() * (max-min)) + min` → `[min, max)`, el alto **NO** entra. `max <= min` devuelve `min`. |
+
+> **#347 — `randomInt` no es un generador aparte: es `random()` escalado.**
+> Esa es la definición, y de ella sale sola la respuesta a "¿entra el extremo
+> alto?" — no entra, igual que en el `INT(RND*n)` de toda la vida. Definirlo
+> como la fórmula y no como prosa quita la ambigüedad de raíz: no hay dos
+> conceptos que puedan divergir, hay uno. Y hace que `randomInt(0, len(a))` sea
+> **siempre** un índice válido, que es su uso más frecuente.
+>
+> Un dado, por tanto, es `randomInt(1, 7)`.
+>
+> **No son builtins portables**: necesitan entropía, y la pone cada familia en
+> `bpvm_platform_random_u32()` — TRNG del RP2350, `esp_random()` en el ESP32,
+> PRNG sembrado del reloj en host y en el STM32 (ver `bpvm_platform.h`). La
+> conversión a `[0,1)` y a rango de enteros la hace el núcleo, **igual para
+> todas**: si cada cintura convirtiera a su manera, el mismo programa daría
+> distribuciones distintas según la placa.
+>
+> Por lo mismo, **la paridad dual-VM no puede cubrirlos** (dos fuentes distintas
+> nunca dan la misma salida). Lo que los vigila es `make test-rand`, que
+> comprueba lo que sí es invariante: rango, exclusión del alto y cobertura.
 
 ## 29..30 — Constantes
 

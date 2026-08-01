@@ -1,0 +1,83 @@
+// RandRange.bp — #347: test de random() / randomInt().
+//
+// UN GENERADOR NO SE PUEDE COMPROBAR POR IGUALDAD. Cada familia tiene su fuente
+// (TRNG del RP2350, esp_random(), PRNG sembrado en host y STM32), asi que dos
+// ejecuciones NUNCA dan lo mismo y la paridad dual-VM es CIEGA a esto — igual
+// que lo era al agujero de GC de #350, aunque por otro motivo.
+//
+// Lo que SI se puede comprobar, y es lo que hace este test:
+//
+//   1. RANGO   — que nada se sale. Es el fallo que de verdad muerde: un solo
+//                valor fuera de [min,max) indexando un array es corrupcion.
+//   2. EL BORDE ALTO NO ENTRA — randomInt(0,6) no puede devolver 6 NUNCA.
+//                Es la semantica que se decidio: randomInt no es un generador
+//                aparte, es random() escalado, int(random()*(max-min))+min, y
+//                de ahi sale solo que el alto queda fuera. Como el INT(RND*n)
+//                de toda la vida.
+//   3. COBERTURA — que salgan TODOS los valores posibles. Sin esto, un
+//                generador que devolviera siempre 0 pasaria los dos primeros.
+//   4. RANGO VACIO — randomInt(5,5) devuelve 5, definido, en las dos VMs.
+//
+// Esperado: "rango_malos=0", "vio_el_alto=0", "sin_cubrir=0", "vacio=5", "fin".
+module RandRange
+  import Core
+  function main()
+    var rango_malos: integer := 0
+    var vio_el_alto: integer := 0
+    var i: integer := 0
+
+    // Cobertura de randomInt(0,6): 6 valores posibles (0..5), el 6 NO.
+    var visto: integer[] := newIntArray(7)
+
+    // random() en [0,1): ni negativo ni 1.0
+    while i < 5000 do
+      var f: float := random()
+      if f < 0.0 then
+        rango_malos := rango_malos + 1
+      endif
+      if f >= 1.0 then
+        rango_malos := rango_malos + 1
+      endif
+
+      var n: integer := randomInt(0, 6)
+      if n < 0 then
+        rango_malos := rango_malos + 1
+      endif
+      if n >= 6 then
+        vio_el_alto := vio_el_alto + 1      // 6 estaria FUERA del intervalo
+      endif
+      if n >= 0 then
+        if n <= 6 then
+          visto[n] := 1
+        endif
+      endif
+
+      // Rango con minimo negativo: [-10, -5) -> -10..-6
+      var m: integer := randomInt(-10, -5)
+      if m < -10 then
+        rango_malos := rango_malos + 1
+      endif
+      if m >= -5 then
+        rango_malos := rango_malos + 1
+      endif
+
+      i := i + 1
+    endwh
+
+    // Los 6 valores de 0..5 tienen que haber salido todos en 5.000 vueltas.
+    var sin_cubrir: integer := 0
+    var k: integer := 0
+    while k < 6 do
+      if visto[k] == 0 then
+        sin_cubrir := sin_cubrir + 1
+      endif
+      k := k + 1
+    endwh
+
+    print "rango_malos=" + intToString(rango_malos)
+    print "vio_el_alto=" + intToString(vio_el_alto)
+    print "sin_cubrir=" + intToString(sin_cubrir)
+    print "vacio=" + intToString(randomInt(5, 5))
+    print "fin"
+  end main
+end RandRange

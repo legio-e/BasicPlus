@@ -167,3 +167,25 @@ void bpvm_platform_busy_wait_us(int us) {
         clock_gettime(CLOCK_MONOTONIC, &now);
     } while ((int64_t) now.tv_sec * 1000000000LL + now.tv_nsec < deadline_ns);
 }
+
+/* #347 — 32 bits al azar. El host no tiene TRNG, así que PRNG (xorshift32)
+ * sembrado del reloj: sin la semilla, cada arranque daría LA MISMA secuencia.
+ *
+ * Bajo SMP dos workers pueden entrar a la vez y llevarse el mismo valor. Es
+ * aceptable A PROPÓSITO: `s` es una palabra de 32 bits, no se puede leer a
+ * medias en ninguno de nuestros objetivos, así que lo peor que pasa es un
+ * valor repetido — nunca un estado corrupto. Poner un mutex aquí costaría más
+ * que el propio generador y no compraría nada que el llamante pueda notar. */
+uint32_t bpvm_platform_random_u32(void) {
+    static uint32_t s = 0;
+    if (s == 0) {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        s = (uint32_t) (ts.tv_nsec ^ (ts.tv_sec << 11) ^ (uintptr_t) &ts);
+        if (s == 0) s = 0x9E3779B9u;   /* xorshift se queda clavado en 0 */
+    }
+    s ^= s << 13;
+    s ^= s >> 17;
+    s ^= s << 5;
+    return s;
+}

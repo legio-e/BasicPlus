@@ -23,6 +23,7 @@
 
 #include "esp_timer.h"     /* esp_timer_get_time → now_ms */
 #include "esp_rom_sys.h"   /* esp_rom_delay_us  → busy_wait_us */
+#include "esp_random.h"    /* esp_random       -> random_u32 (#347) */
 
 #include <stdlib.h>
 #include <string.h>
@@ -236,4 +237,16 @@ void bpvm_platform_busy_wait_us(int us) {
     /* esp_rom_delay_us gira sin ceder al scheduler — para timings
      * críticos (setup/hold, bit-bang). */
     esp_rom_delay_us((uint32_t) us);
+}
+
+/* #347 — 32 bits al azar. El ESP32 trae RNG de hardware: esp_random(). Nada de
+ * PRNG ni de semilla aquí.
+ *
+ * Matiz que conviene tener escrito: esp_random() es azar de VERDAD mientras el
+ * subsistema de radio (WiFi/BT) esté arrancado, porque de ahí sale el ruido.
+ * Sin radio degrada a pseudoaleatorio. Para lo que un programa BP pide a
+ * random() da igual; si algún día se usara para algo criptográfico, NO vale —
+ * y ahí habría que exigir la radio encendida o usar otra fuente. */
+uint32_t bpvm_platform_random_u32(void) {
+    return esp_random();
 }

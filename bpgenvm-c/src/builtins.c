@@ -67,6 +67,8 @@ enum {
     BUILTIN_SIN             = 24,
     BUILTIN_COS             = 25,
     BUILTIN_TAN             = 26,
+    BUILTIN_RANDOM          = 27,
+    BUILTIN_RANDOM_INT      = 28,
     BUILTIN_PI              = 29,
     BUILTIN_E               = 30,
     BUILTIN_FLOOR           = 31,
@@ -1729,6 +1731,51 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_TAN: {
         float x = bits_to_f32(pop_i32(vm, tc));
         push_i32(vm, tc, f32_to_bits((float) tan((double) x)));
+        return BPVM_OK;
+    }
+    /* #347 — random / randomInt.
+     *
+     * NO son cómputo puro (por eso #348 los dejó fuera): la entropía la pone la
+     * familia, en bpvm_platform_random_u32(). Lo de aquí es el MOTOR, y es
+     * común a todas a propósito — si cada cintura hiciera su propia conversión,
+     * el mismo programa daría distribuciones distintas según la placa.
+     *
+     * `random()` = [0, 1), como el RND de toda la vida. Se construye dividiendo
+     * por 2^24 (no por 2^32) porque el float de 32 bits sólo tiene 24 bits de
+     * mantisa: usar los 32 sólo añadiría bits que el float no puede representar
+     * y, al redondear hacia arriba, podría devolver 1.0 exacto — rompiendo el
+     * "menor que 1" justo en el borde, que es el bicho clásico de esta rutina. */
+    case BUILTIN_RANDOM: {
+        uint32_t r = bpvm_platform_random_u32() >> 8;      /* 24 bits */
+        push_i32(vm, tc, f32_to_bits((float) r / 16777216.0f));
+        return BPVM_OK;
+    }
+    /* `randomInt(min, max)` NO es un generador aparte: es `random()` escalado,
+     * que es como se ha hecho siempre en BASIC (`INT(RND*n)`). De ahí sale solo
+     * que el intervalo es [min, max) — el alto NO entra:
+     *
+     *     int(random() * (max - min)) + min
+     *
+     * Definirlo como la fórmula, y no como "un entero entre a y b", quita de en
+     * medio la ambigüedad de si el extremo entra: no hay dos conceptos, hay uno.
+     * Y hace que `randomInt(0, len(a))` sea SIEMPRE un índice válido, que es
+     * para lo que se usa el 90% de las veces.
+     *
+     * max <= min devuelve min (rango vacío). Es la respuesta definida y ambas
+     * VMs la comparten; lanzar aquí obligaría a envolver en try/catch un uso
+     * corriente, y devolver basura sería peor que las dos cosas. */
+    case BUILTIN_RANDOM_INT: {
+        int32_t hi = pop_i32(vm, tc);
+        int32_t lo = pop_i32(vm, tc);
+        if (hi <= lo) { push_i32(vm, tc, lo); return BPVM_OK; }
+        uint32_t r    = bpvm_platform_random_u32() >> 8;   /* 24 bits */
+        float    frac = (float) r / 16777216.0f;           /* [0,1) */
+        /* La resta va en 64 bits: hi-lo con hi=INT_MAX y lo=INT_MIN se sale de
+         * int32 y daría un ancho negativo. */
+        int64_t span = (int64_t) hi - (int64_t) lo;
+        int64_t off  = (int64_t) ((double) frac * (double) span);
+        if (off >= span) off = span - 1;   /* red por si el redondeo toca el techo */
+        push_i32(vm, tc, (int32_t) ((int64_t) lo + off));
         return BPVM_OK;
     }
     case BUILTIN_ASIN: {

@@ -191,6 +191,7 @@ target_link_libraries(bpvm_pico PRIVATE
     hardware_pwm         # Pulse.* backend (PWM input-gate edge counting)
     hardware_adc         # Pico.tempC() — sensor de temperatura interno
     pico_unique_id       # Pico.uniqueId() — flash chip ID
+    pico_rand            # #347: get_rand_32() — TRNG del RP2350 para random()
     hardware_flash       # FP2 step 3: erase/program de la región del FS
     hardware_sync        # save_and_disable_interrupts/restore_interrupts
     hardware_pio         # H7.4: NeoPixel WS2812 vía PIO
