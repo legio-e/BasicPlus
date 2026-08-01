@@ -28,6 +28,7 @@
  */
 #include "fs.h"
 #include "bpvm_fs.h"
+#include "bpvm.h"          /* #338: la zona de rascar compartida */
 #include "bpvm_fs_lfs.h"
 #include "flash_lock.h"
 #include "log.h"            /* log_printf: al log PERSISTENTE (printf = solo consola USB) */
@@ -241,42 +242,67 @@ static void snap_cb(const char* name, int is_dir, uint32_t size, void* user) {
     s->n++;
 }
 
+/* #338 — los dos buffers del listado, JUNTOS y en un solo préstamo. Iban
+ * `static` (6.632 + 1.024 = 7.656 B permanentes en .bss) para no reventar el
+ * stack de la comm task; ahora salen de la zona compartida y viven lo que dura
+ * el LIST. Cabe de sobra en los 8 KB, y en UNA estructura se deja al compilador
+ * el relleno y la alineación en vez de repartir el bloque a mano. */
+typedef struct {
+    dir_snapshot_t snap;
+    char           pending[LIST_MAX_DIRS][LIST_NAME_MAX];
+} list_work_t;
+
 int fs_list(fs_list_cb_t cb, void* user) {
-    static char pending[LIST_MAX_DIRS][LIST_NAME_MAX];
-    static dir_snapshot_t snap;                  /* estáticos: fuera del stack */
+    list_work_t* w = (list_work_t*) bpvm_scratch_take(sizeof(list_work_t), "fs_list");
+    if (!w) {
+        /* Sin zona NO se devuelve un listado vacío: eso se leería como "el FS
+         * está vacío", que es mentira y de las caras. Se dice y se sale con
+         * error. */
+        log_printf("fs: LIST sin zona de scratch — listado NO realizado");
+        return 1;
+    }
+    dir_snapshot_t* snap = &w->snap;
     int head = 0, tail = 0;
-    snprintf(pending[tail++], LIST_NAME_MAX, "/");
+    snprintf(w->pending[tail++], LIST_NAME_MAX, "/");
 
     while (head < tail) {
-        const char* dir = pending[head++];
-        snap.n = 0; snap.overflow = 0;
-        if (bpvm_fs_list(dir, snap_cb, &snap) != 0) continue;
-        if (snap.overflow) {
+        const char* dir = w->pending[head++];
+        snap->n = 0; snap->overflow = 0;
+        if (bpvm_fs_list(dir, snap_cb, snap) != 0) continue;
+        if (snap->overflow) {
             log_printf("fs: LISTADO INCOMPLETO — '%s' tiene mas de %d entradas",
                        dir, LIST_MAX_ENTRIES);
             log_flush();
         }
-        for (int i = 0; i < snap.n; i++) {
+        for (int i = 0; i < snap->n; i++) {
             char full[LIST_NAME_MAX];
             int is_root = (dir[1] == '\0');
-            if (snap.isdir[i]) {
+            if (snap->isdir[i]) {
                 if (tail < LIST_MAX_DIRS) {
-                    snprintf(pending[tail], LIST_NAME_MAX, "%s%s%s",
-                             dir, is_root ? "" : "/", snap.names[i]);
+                    snprintf(w->pending[tail], LIST_NAME_MAX, "%s%s%s",
+                             dir, is_root ? "" : "/", snap->names[i]);
                     tail++;
                 } else {
                     log_printf("fs: LISTADO INCOMPLETO — mas de %d directorios; "
-                               "'%s' sin recorrer", LIST_MAX_DIRS, snap.names[i]);
+                               "'%s' sin recorrer", LIST_MAX_DIRS, snap->names[i]);
                     log_flush();
                 }
                 continue;                        /* los dirs no se emiten (legado) */
             }
             /* raíz → nombre pelado ("Hello.mod"); subdir → "/lib/Core.mod" */
-            if (is_root) snprintf(full, sizeof(full), "%s", snap.names[i]);
-            else         snprintf(full, sizeof(full), "%s/%s", dir, snap.names[i]);
-            if (cb(full, snap.sizes[i], user) != 0) return 1;
+            if (is_root) snprintf(full, sizeof(full), "%s", snap->names[i]);
+            else         snprintf(full, sizeof(full), "%s/%s", dir, snap->names[i]);
+            if (cb(full, snap->sizes[i], user) != 0) {
+                /* SALIDA TEMPRANA: el callante corta el listado. Aquí es donde
+                 * se olvida uno de soltar la zona — y entonces el siguiente LIST
+                 * (o el siguiente PACK_DEL) se la encuentra ocupada para
+                 * siempre. */
+                bpvm_scratch_give("fs_list");
+                return 1;
+            }
         }
     }
+    bpvm_scratch_give("fs_list");
     return 0;
 }
 
