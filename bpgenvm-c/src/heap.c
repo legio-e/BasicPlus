@@ -410,6 +410,23 @@ void bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr) {
 /* H3 (V2): sweep que RECONSTRUYE la free-list coalesciendo runs de bloques
  * libres/muertos adyacentes, y RETROCEDE heap_next si el run final lo toca
  * (devuelve memoria al bump sin compactar). Espejo del gcLocked de la VM-Java. */
+/* #355 — ¿SE REUTILIZA LA MEMORIA LIBERADA, O NO?
+ *
+ * En la placa el GC libera 33.724 B a la lista de libres... y acto seguido
+ * `heap_next` sube otros 33.768 B, que es clavado el umbral de la siguiente
+ * colecta. Con 48 bytes vivos. La lectura de esos dos numeros es que el
+ * recolector SI libera y el alocador NO recoge — pero es una lectura, no una
+ * medida, y ya nos ha pasado hoy dar por bueno un razonamiento asi.
+ *
+ * Estos tres contadores lo contestan sin interpretar nada: cuantas reservas
+ * salen de la lista de libres, cuantas del bump, y cuantas RECHAZAN un bloque
+ * suficientemente grande porque el sobrante seria una astilla no representable
+ * (la regla que arreglo el UAF de #352 y que, si muerde mucho, deja la lista
+ * llena de huecos que nadie puede usar). Se imprimen en la linea del GC. */
+static uint32_t g_alloc_de_lista = 0;   /* servidas desde la lista de libres */
+static uint32_t g_alloc_de_bump  = 0;   /* servidas ampliando el heap */
+static uint32_t g_alloc_astilla  = 0;   /* bloques descartados por sobrante no representable */
+
 static void gc_sweep_phase(bpvm_t* vm) {
     uint8_t* mem = vm->memory;
     vm->free_list_head = 0;
@@ -467,6 +484,19 @@ static void gc_sweep_phase(bpvm_t* vm) {
               (unsigned) kept, (unsigned) freed,
               (unsigned) vm->heap_start, (unsigned) vm->heap_next,
               vm->free_list_head ? "si" : "vacia");
+    /* #355 — LA PREGUNTA DE EDUARDO, CONTESTADA CON NUMEROS: "se está agotando
+     * la memoria sin que esta se recicle". Con 48 bytes vivos, un recolector que
+     * hiciera su trabajo daria vueltas indefinidamente; da ~200 mas. Si
+     * `de_lista` se queda pegado a cero mientras `de_bump` sube, el GC libera
+     * pero el alocador NO recoge — y entonces el problema no esta en el
+     * recolector sino en la lista de libres. `astilla` mide cuantas veces se
+     * descarto un bloque que SI cabia porque el sobrante no era representable
+     * (la regla que cerro el UAF de #352): si esa cifra es alta, la lista se
+     * llena de huecos que nadie puede usar y el efecto es el mismo que no
+     * reciclar. Acumulados desde el arranque; se leen por diferencia. */
+    bpvm_diag("[gc] reservas: de_lista=%u de_bump=%u astilla=%u",
+              (unsigned) g_alloc_de_lista, (unsigned) g_alloc_de_bump,
+              (unsigned) g_alloc_astilla);
     if (0) {
         fprintf(stderr, "[gc] kept=%" PRIu32 " freed=%" PRIu32 " heap=[%" PRIu32 "..%" PRIu32 ") freelist=%s\n",
                 kept, freed, vm->heap_start, vm->heap_next,
@@ -669,9 +699,11 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
                     if (prev == 0) vm->free_list_head = next;
                     else bpvm_write_u32_be(mem + prev + 8, next);
                 }
+                g_alloc_de_lista++;   /* #355: servida reciclando */
                 return cur;
             }
             /* sobrante no representable → este bloque no sirve, seguir buscando */
+            g_alloc_astilla++;   /* #355: cabia, pero se descarta por la astilla */
         }
         prev = cur;
         cur = next;
@@ -695,6 +727,7 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
     if (vm->heap_next + total > vm->stack_base - vm->heap_reserve) return 0;
     uint32_t addr = vm->heap_next;
     vm->heap_next += total;
+    g_alloc_de_bump++;   /* #355: servida ampliando el heap, sin reciclar nada */
     return addr;
 }
 
