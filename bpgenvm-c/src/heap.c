@@ -83,7 +83,7 @@ static void bpvm_diag_bloque_mentiroso(const bpvm_t* vm, const char* quien,
                                        uint32_t cur, uint32_t prev, uint32_t total) {
     uint32_t t = bpvm_read_u32_be(vm->memory + cur);
     uint32_t l = bpvm_read_u32_be(vm->memory + cur + 4);
-    bpvm_diag("[gc] !! BLOQUE MENTIROSO (%s) en %u: dice medir %u B y el heap entero "
+    bpvm_diag_urgente("[gc] !! BLOQUE MENTIROSO (%s) en %u: dice medir %u B y el heap entero "
               "son %u. tag=0x%08x len/size=%u tipo=%u libre=%u marcado=%u",
               quien, (unsigned) cur, (unsigned) total,
               (unsigned)(vm->stack_base - vm->heap_start),
@@ -197,7 +197,7 @@ static void build_gc_valid_map(bpvm_t* vm) {
          * miles de bloques. */
         uint32_t tag = (cur + 8 <= vm->stack_base) ? bpvm_read_u32_be(vm->memory + cur) : 0;
         uint32_t len = (cur + 8 <= vm->stack_base) ? bpvm_read_u32_be(vm->memory + cur + 4) : 0;
-        bpvm_diag("[gc] !! HEAP DESCARRILADO: el recorrido de cabeceras acabo en %u, "
+        bpvm_diag_urgente("[gc] !! HEAP DESCARRILADO: el recorrido de cabeceras acabo en %u, "
                   "no en heap_next=%u. En %u hay tag=0x%08x len=%u (tipo=%u, libre=%u). "
                   "Un bloque mide distinto de lo que dice block_total_size() -> el mapa "
                   "sale truncado, is_heap_ref rechaza objetos VIVOS y el barrido se los lleva.",
@@ -362,7 +362,7 @@ static void add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {
      * descarrilamiento garantizado unas cuantas reservas más tarde, ya sin rastro
      * de quién lo escribió. Que se cace EN LA ESCRITURA, no en la lectura. */
     if (size < BPVM_MIN_FREE_BLOCK || addr + size > vm->stack_base) {
-        bpvm_diag("[gc] !! ALTA IMPOSIBLE en la lista de libres: bloque en %u de %u B "
+        bpvm_diag_urgente("[gc] !! ALTA IMPOSIBLE en la lista de libres: bloque en %u de %u B "
                   "(minimo %u, y el heap acaba en %u). No se da de alta: dejarlo entrar "
                   "descarrilaria el recorrido del heap en el proximo GC.",
                   (unsigned) addr, (unsigned) size,
@@ -578,14 +578,14 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
                  * se entera de por que. Con handles hay OOM atrapable desde H1: esto
                  * tiene que salir por ahi, no inventarse una referencia invalida.
                  * De momento GRITA; convertirlo en OOM de verdad es el paso siguiente. */
-                bpvm_diag("[bpvm] SIN MEMORIA para la tabla de handles (%u slots, %u KB): "
+                bpvm_diag_urgente("[bpvm] SIN MEMORIA para la tabla de handles (%u slots, %u KB): "
                           "se devuelve direccion CRUDA y a partir de aqui las refs MIENTEN",
                           (unsigned) new_cap, (unsigned)((new_cap * 4u) / 1024u));
                 r.v = addr; bpvm_smp_unlock(vm); return r;
             }
             uint32_t* ng = (uint32_t*) bpvm_realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
             if (!ng) {
-                bpvm_diag("[bpvm] SIN MEMORIA para handle_gen (%u slots): idem, refs invalidas",
+                bpvm_diag_urgente("[bpvm] SIN MEMORIA para handle_gen (%u slots): idem, refs invalidas",
                           (unsigned) new_cap);
                 vm->handle_addr = na; r.v = addr; bpvm_smp_unlock(vm); return r;
             }
@@ -801,7 +801,7 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
                 static int ya_avisado = 0;
                 if (!ya_avisado) {
                     ya_avisado = 1;
-                    bpvm_diag("[bpvm] SIN MEMORIA en el heap: pedidos %u B y no caben "
+                    bpvm_diag_urgente("[bpvm] SIN MEMORIA en el heap: pedidos %u B y no caben "
                               "(bump %u, tope de pila %u). Este aviso sale UNA vez "
                               "por ejecucion; el que llamo deberia lanzar OOM atrapable.",
                               (unsigned) total, (unsigned) vm->heap_next,

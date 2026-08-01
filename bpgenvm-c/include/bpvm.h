@@ -258,6 +258,23 @@ typedef void (*bpvm_diag_fn)(const char* linea);
 void bpvm_diag_set_sink(bpvm_diag_fn fn);   /* NULL = vuelve a stderr */
 void bpvm_diag(const char* fmt, ...);
 
+/* #355 — CANAL URGENTE: el aviso llega a su soporte definitivo ANTES de seguir.
+ *
+ * En la Pico el log se acumula en RAM y sólo baja a flash en `log_flush()`. Eso
+ * significa que si la VM se cuelga, se pierde TODO lo anotado desde el último
+ * volcado — o sea que el instrumento calla exactamente en el caso que vinimos a
+ * investigar, y de una forma que se lee como "no pasó nada" en vez de "no llegué
+ * a contarlo". Medido por Eduardo: cuando la placa no se cuelga el log se graba;
+ * cuando se cuelga, no.
+ *
+ * Reservado para lo que puede ir SEGUIDO DE UNA MUERTE: sin memoria, excepción
+ * sin handler, bloque descarrilado. Volcar cada línea costaría un borrado de
+ * flash por aviso; volcar sólo éstas cuesta nada porque son raras. El sink de
+ * cada familia registra su volcado con bpvm_diag_set_flush (sin él, no-op). */
+typedef void (*bpvm_diag_flush_fn)(void);
+void bpvm_diag_set_flush(bpvm_diag_flush_fn fn);
+void bpvm_diag_urgente(const char* fmt, ...);
+
 /* ── #338: LA ZONA DE RASCAR COMPARTIDA ──────────────────────────────────────
  *
  * Hay operaciones que necesitan un buffer grande y lo necesitan UN MOMENTO:

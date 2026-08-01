@@ -44,6 +44,34 @@ static bpvm_diag_fn g_diag = diag_stderr;
 
 void bpvm_diag_set_sink(bpvm_diag_fn fn) { g_diag = fn ? fn : diag_stderr; }
 
+/* ── #355: el canal URGENTE ──────────────────────────────────────────────────
+ *
+ * En la Pico `log_printf` sólo escribe en RAM; a flash llega en `log_flush()`,
+ * que se llama en sitios contados. Consecuencia medida por Eduardo: cuando la
+ * placa NO se cuelga el log se graba, y cuando SÍ se cuelga no se graba. O sea
+ * que el instrumento nos falla exactamente en el caso que vinimos a investigar,
+ * y encima de forma que parece "no pasó nada" en vez de "no llegué a contarlo".
+ *
+ * Esto no se arregla volcando cada línea: un borrado+programación de 4 KB por
+ * aviso cuesta decenas de ms y desgasta la flash. Se arregla distinguiendo los
+ * avisos que van SEGUIDOS DE UNA POSIBLE MUERTE —sin memoria, excepción sin
+ * handler, bloque descarrilado— y volcando sólo esos. Son raros por definición:
+ * si se repiten, el problema ya no es el coste del volcado. */
+static void flush_nada(void) { }
+static bpvm_diag_flush_fn g_diag_flush = flush_nada;
+
+void bpvm_diag_set_flush(bpvm_diag_flush_fn fn) { g_diag_flush = fn ? fn : flush_nada; }
+
+void bpvm_diag_urgente(const char* fmt, ...) {
+    char linea[224];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(linea, sizeof linea, fmt, ap);
+    va_end(ap);
+    g_diag(linea);
+    g_diag_flush();   /* que sobreviva a lo que venga detrás */
+}
+
 void bpvm_diag(const char* fmt, ...) {
     /* Buffer de PILA y acotado: esto se llama desde el loader y desde el fin de
      * RUN, en micros con la pila contada. 224 B es lo que ya usaba el guardián

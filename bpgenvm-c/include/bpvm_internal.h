@@ -336,6 +336,11 @@ struct bpvm {
      * Sin esto, quedarse sin memoria significaba quedarse tambien sin poder
      * avisar. 0 = ya gastada (o desactivada). */
     uint32_t heap_reserve;
+    /* #355 — 1 mientras se esta CONSTRUYENDO una excepcion. Solo entonces puede
+     * gastarse la reserva de emergencia: soltarla en cualquier throw se la
+     * llevaba el primer RuntimeError de cualquier clase, y el aviso ademas
+     * mentia ("heap lleno" con el heap recien vaciado). Lo vio el log de la Pico. */
+    int      building_error;
     /* Camino 1 (H-008, v3.0.1): bitmap "¿es inicio de cabecera real?" (1 bit por
      * palabra de 4B del heap). Se reconstruye al empezar cada mark; el scan
      * conservativo solo valida candidatos cuya (v-4) esté aquí → un entero que

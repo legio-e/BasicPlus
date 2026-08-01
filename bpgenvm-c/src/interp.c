@@ -334,13 +334,29 @@ int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
 static int interp_throw_rt(bpvm_t* vm, bpvm_thread_t* tc,
                            uint32_t* sp, uint32_t* bp, uint32_t* pc, uint32_t* cs,
                            uint8_t** mem, const char* msg) {
+    /* #355 — LA MISMA TRAZA QUE builtin_throw, y hacia falta: el log de la Pico
+     * mostro la reserva de emergencia soltandose SIN ninguna linea "throw:".
+     * Solo podia significar una cosa — el throw no venia de un builtin sino de
+     * AQUI (el NEWARRAY del __strconcat, por ejemplo), y yo habia instrumentado
+     * un solo camino de los dos. Media hora de teorias por un hueco de traza. */
+    static int avisos = 0;
+    int hablar = (avisos < 5);
+    if (hablar) { avisos++; bpvm_diag("[bpvm] throw (interp): \"%s\"", msg ? msg : ""); }
+
     tc->sp = *sp; tc->bp = *bp; tc->pc = *pc; tc->cs = *cs;
     bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
-    if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
+    if (bpref_is_null(ref)) {
+        if (hablar) bpvm_diag("[bpvm] throw (interp): NO SE PUDO CONSTRUIR la excepcion "
+                              "-> el programa NO se entera");
+        return 0;
+    }
+    if (bpvm_eh_unwind(vm, tc, ref)) {
+        if (hablar) bpvm_diag("[bpvm] throw (interp): ATRAPADA por un catch del programa");
         *pc = tc->pc; *sp = tc->sp; *bp = tc->bp; *cs = tc->cs;
         *mem = vm->memory;
         return 1;
     }
+    if (hablar) bpvm_diag("[bpvm] throw (interp): construida pero SIN handler -> el RUN termina en error");
     return 0;
 }
 

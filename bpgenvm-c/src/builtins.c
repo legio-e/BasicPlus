@@ -530,7 +530,7 @@ static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* ms
 
     bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
     if (bpref_is_null(ref)) {
-        if (hablar) bpvm_diag("[bpvm] throw: NO SE PUDO CONSTRUIR la excepcion "
+        if (hablar) bpvm_diag_urgente("[bpvm] throw: NO SE PUDO CONSTRUIR la excepcion "
                               "(sin memoria para el mensaje o el objeto, o sin "
                               "clase RuntimeError exportada) -> el programa NO se entera");
         return BPVM_ERR_RUNTIME;

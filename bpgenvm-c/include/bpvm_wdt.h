@@ -15,14 +15,27 @@
  *                      configs por defecto), puede ser inalcanzable
  *                      en práctica — la VM y el SDK ya queman
  *                      cycles antes de que feed() llegue. El
- *                      backend Pico aplica un mínimo de ~50 ms.
+ *                      backend Pico sustituye 0/negativo por 100 ms
+ *                      (el mínimo de verdad lo impone la clase BP
+ *                      Wdt.Timer, MIN_TIMEOUT_MS=100), y recorta por
+ *                      arriba al máximo del HW: en RP2350 el contador
+ *                      es de 24 bits contando µs, así que el techo
+ *                      son ~16777 ms. Pedir más NO da más plazo.
  *   feed():            resetea el contador del watchdog.
- *   disable():         desactiva. En RP2350 el watchdog no se
- *                      puede deshabilitar después de activado (es
- *                      un one-way switch del SDK) — el "disable"
- *                      lo aproximamos seteando un timeout enorme
- *                      (8.4M ms ≈ 2h) que nunca se va a alcanzar
- *                      en uso normal.
+ *   disable():         para el watchdog. En RP2350 SÍ se puede: el
+ *                      SDK expone watchdog_disable(), que limpia
+ *                      WATCHDOG_CTRL_ENABLE_BITS y detiene el
+ *                      contador sin rebotar.
+ *                      OJO al implementar un backend nuevo: NO vale
+ *                      "aproximar" con un timeout enorme. No existe
+ *                      un valor que no dispare — el SDK recorta el
+ *                      load a WATCHDOG_LOAD_BITS, así que ese apaño
+ *                      deja el perro ARMADO (~16,8 s) y la placa se
+ *                      resetea sola. Fue un bug real aquí.
+ *                      Donde el HW no deje pararlo (STM32: el IWDG
+ *                      no se para hasta el reset), el backend hace
+ *                      lo mejor posible y lo DICE en su comentario;
+ *                      no se finge que quede desactivado.
  *
  * El watchdog es un SINGLETON del MCU: solo hay uno. Construir
  * varias instancias de Wdt.Timer en BP es legal pero todas

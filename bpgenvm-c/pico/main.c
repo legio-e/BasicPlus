@@ -1283,6 +1283,12 @@ int main(void) {
      * wire, y a diferencia de wire_v1_send_line no coge el mutex TX → podía
      * partir un frame JSON por la mitad. Al log, además, sobrevive al reset. */
     bpvm_diag_set_sink(diag_al_log);
+    /* #355 — y el volcado del canal URGENTE. `log_printf` sólo escribe en RAM;
+     * sin esto, todo lo anotado desde el último volcado se pierde si la placa se
+     * cuelga — que es justo cuando hace falta. Con esto, los avisos que pueden ir
+     * seguidos de una muerte (sin memoria, excepción sin handler, bloque
+     * descarrilado) están en flash ANTES de que pase lo que sea. */
+    bpvm_diag_set_flush(log_flush);
     log_printf("=== boot " __DATE__ " " __TIME__ " ===");
     /* La causa del reset ya la sabía el firmware (era un builtin de BP), pero no
      * la contaba al arrancar: distinguir "watchdog" de "power-on" es gratis y

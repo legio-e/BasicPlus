@@ -291,6 +291,7 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->last_gc_heap_next = vm->heap_next;
     vm->gc_bump_threshold = 0;   /* off hasta entonces */
     vm->heap_reserve = 0;        /* #355: se arma al fijar el heap real, no aquí */
+    vm->building_error = 0;      /* #355: 1 solo mientras se construye una excepcion */
     vm->main_absolute_address = 0;
     /* V4 — tabla de handles (lazy) + GC suspendido durante la migración. */
     vm->handle_addr  = NULL;
