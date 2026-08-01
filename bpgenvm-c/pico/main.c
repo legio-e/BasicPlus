@@ -915,6 +915,10 @@ static bpvm_boot_step_t layer_app(void* u) {
     return r;
 }
 
+/* #354 — handle de la task de la VM, para poder preguntarle su marca de agua
+ * desde el INFO (lo responde la task de comms, no esta). Ver bpvm_stack_probe. */
+TaskHandle_t g_vm_task = NULL;
+
 static void vm_task(void* arg) {
     (void) arg;
 
@@ -1306,8 +1310,11 @@ int main(void) {
         sleep_ms(500);
     }
 #endif
+    /* #354 — el handle se GUARDA (antes se tiraba con NULL). Sin él no se le
+     * puede preguntar su marca de agua desde la task de comms, que es la que
+     * responde al INFO. Es la unica razon del cambio: diagnostico. */
     BaseType_t r = xTaskCreate(vm_task, "vm_task", 4096, NULL,
-                                tskIDLE_PRIORITY + 2, NULL);
+                                tskIDLE_PRIORITY + 2, &g_vm_task);
     if (r != pdPASS) {
         log_printf("xTaskCreate(vm_task) FAILED");
         log_flush();

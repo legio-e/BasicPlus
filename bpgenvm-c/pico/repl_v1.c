@@ -51,6 +51,7 @@
 /* Buffer VM compartido (declarado en main.c). */
 extern uint8_t* s_vm_buffer;          /* H7.2.b: SRAM interna o ventana PSRAM */
 extern uint32_t s_vm_buffer_size;
+extern TaskHandle_t g_vm_task;        /* #354: para su marca de agua en el INFO */
 
 #ifndef BPVM_PICO_BUILD_DATE
 #define BPVM_PICO_BUILD_DATE  __DATE__ " " __TIME__
@@ -726,6 +727,37 @@ static void handle_info(long id, const json_obj_t* obj) {
                                                  (long)(s_vm_buffer_size - vstack));
         if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                                  (size_t) off, "vmStackBytes", (long) vstack);
+    }
+    /* #354 — LO QUE NUNCA LE HEMOS PREGUNTADO A FreeRTOS: cuanto de lo que se le
+     * reservo llego a usar de verdad. Esto es SOLO DIAGNOSTICO — no se recorta
+     * nada hasta ver los numeros con carga real, y en la duda se deja como esta.
+     *
+     * Las dos cifras contestan a dos preguntas distintas, y conviene no
+     * confundirlas:
+     *
+     *  · rtosHeapMinFreeBytes = lo que quedo libre de `ucHeap` (32 KB) en el
+     *    PEOR momento. OJO: ese heap NO tiene estructuras del kernel, tiene
+     *    PILAS DE TAREAS — 16 KB solo la de vm_task, y 4 KB por cada thread BP.
+     *    Es decir que lo que sobra ahi es el TECHO DE THREADS, no memoria
+     *    muerta: recortarlo baja una capacidad.
+     *
+     *  · vmTaskStackFreeBytes = lo que le sobro a la PILA de vm_task de sus
+     *    16 KB. Aqui si, si sobra mucho, sobra de verdad.
+     *
+     * uxTaskGetStackHighWaterMark devuelve PALABRAS en FreeRTOS de serie (en
+     * ESP-IDF son BYTES — la misma trampa que xTaskCreate). Se multiplica por
+     * sizeof(StackType_t) para mandar bytes en los dos casos.
+     *
+     * Una marca de agua tomada sin haber ejecutado nada no dice nada: hay que
+     * mirarla DESPUES de correr algo con carga (GuiColorDemo, JsonDemo, threads). */
+    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                             (size_t) off, "rtosHeapMinFreeBytes",
+                                             (long) xPortGetMinimumEverFreeHeapSize());
+    if (g_vm_task != NULL) {
+        UBaseType_t words = uxTaskGetStackHighWaterMark(g_vm_task);
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "vmTaskStackFreeBytes",
+                                                 (long)((size_t) words * sizeof(StackType_t)));
     }
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
                                           (size_t) off);

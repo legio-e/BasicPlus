@@ -1492,6 +1492,20 @@ public final class PicoExplorer extends JPanel {
         if (vh > 0 && vs > 0)
             sb.append("VM          : heap ").append(human(vh))
               .append(" + stack ").append(human(vs)).append('\n');
+        // #354 — lo que FreeRTOS sabe y nunca le habíamos preguntado: cuánto de
+        // lo reservado llegó a usarse. SOLO DIAGNÓSTICO (no se recorta nada
+        // hasta ver los números con carga real; en la duda se deja como está).
+        // Ojo al leerlos: "RTOS libre" es el mínimo histórico de ucHeap, y ese
+        // heap NO guarda estructuras del kernel sino PILAS DE TAREAS (16 KB la
+        // de la VM, 4 KB por thread BP) ⇒ lo que sobra ahí es TECHO DE THREADS,
+        // no memoria muerta. "Pila VM libre" sí es holgura de verdad.
+        // Una marca tomada sin haber ejecutado nada no dice nada: mirar DESPUÉS
+        // de correr algo con carga. Tolerante con firmwares que no lo manden.
+        long rh = ilong(m, "rtosHeapMinFreeBytes"), vt = ilong(m, "vmTaskStackFreeBytes");
+        if (rh > 0) sb.append("RTOS libre  : ").append(human(rh))
+                      .append(" (mínimo histórico de ucHeap = techo de threads)\n");
+        if (vt > 0) sb.append("Pila VM     : ").append(human(vt))
+                      .append(" sin usar (marca de agua)\n");
         sb.append("FS          : ").append(human(ilong(m, "fsUsedBytes"))).append(" / ")
           .append(human(ilong(m, "fsTotalBytes"))).append('\n');
         long up = ilong(m, "uptimeMs");

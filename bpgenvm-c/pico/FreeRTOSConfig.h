@@ -82,6 +82,16 @@
 #define INCLUDE_xTaskGetSchedulerState          1
 #define INCLUDE_xTaskGetCurrentTaskHandle       1
 #define INCLUDE_xTimerPendFunctionCall          1
+/* #354 — marca de agua de las pilas. GRATIS aquí: lo que hace posible la medida
+ * es que las pilas se rellenen con un patrón conocido al crearlas, y eso YA se
+ * está pagando por `configCHECK_FOR_STACK_OVERFLOW 2` (arriba). Este define solo
+ * compila la función que lee ese patrón.
+ *
+ * De momento es SOLO DIAGNÓSTICO: sirve para saber si a las pilas les sobra
+ * sitio. No se recorta nada hasta ver los números con carga real en placa, y en
+ * la duda se deja como está — desbordar una pila en un micro no da un error
+ * limpio, da corrupción muda. */
+#define INCLUDE_uxTaskGetStackHighWaterMark      1
 
 /* --- Requisitos del port RP2350_ARM_NTZ (ver README) ---------- */
 #define configENABLE_MPU                        0
