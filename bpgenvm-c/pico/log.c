@@ -39,10 +39,29 @@ typedef struct {
 
 #define LOG_DATA_BYTES   (LOG_REGION_BYTES - sizeof(log_header_t))
 
-/* Buffer en RAM. ANILLO por líneas: si se llena, se tiran las ANTIGUAS para
- * dejar sitio a las nuevas (ver append_raw). Lo que se conserva es la COLA, que
- * es lo que sirve en un post-mortem. */
-static char     s_buf[LOG_DATA_BYTES];
+/* #338 — EL BUFFER DE RAM **ES** LA IMAGEN DE FLASH: [cabecera 16 B][datos].
+ *
+ * Antes había dos: `s_buf` con los datos (4.080 B) y, dentro de log_flush, un
+ * `flash_buf` de 4.096 B más donde se armaba cabecera+datos para escribirlo. Un
+ * buffer permanente de 4 KB que sólo servía durante el volcado, y una copia de
+ * todo el log en cada flush.
+ *
+ * No es una idea nueva: es exactamente lo que hace el núcleo portable
+ * `bpvm_log` («el buffer RAM que aporta el llamador ES la imagen de flash… el
+ * Pico/STM32 se ahorran su antiguo flash_buf»). El ESP32 ya migró a él; la Pico
+ * se quedó atrás. Esto aplica su idea aquí, sin mover todavía el fichero
+ * entero: la migración completa es otra tanda.
+ *
+ * Y OJO: esto NO podía salir de la zona compartida de #338. `fs_list` la tiene
+ * cogida cuando avisa de un listado incompleto, y ese aviso llama a log_printf
+ * + log_flush; el guardián cantaría el choque, pero se perdería la entrada del
+ * log — y el log es el instrumento del post-mortem. El log no depende de nadie.
+ *
+ * ANILLO por líneas: si se llena, se tiran las ANTIGUAS para dejar sitio a las
+ * nuevas (ver append_raw). Lo que se conserva es la COLA, que es lo que sirve
+ * en un post-mortem. */
+static uint8_t s_region[LOG_REGION_BYTES] __attribute__((aligned(4)));
+#define s_buf ((char*) (s_region + sizeof(log_header_t)))
 static uint32_t s_used;
 static int      s_initialized = 0;
 
@@ -81,7 +100,7 @@ static void append_raw(const char* str, size_t n) {
 void log_init(void) {
     s_used = 0;
     s_dropped = 0;
-    memset(s_buf, 0, sizeof(s_buf));
+    memset(s_buf, 0, LOG_DATA_BYTES);
 
     /* Intenta cargar del flash. */
     const uint8_t* flash_base = (const uint8_t*)(XIP_BASE + LOG_FLASH_OFFSET);
@@ -126,18 +145,22 @@ void log_printf(const char* fmt, ...) {
 void log_flush(void) {
     if (!s_initialized) return;
 
-    static uint8_t flash_buf[LOG_REGION_BYTES];
-    memset(flash_buf, 0xFF, sizeof(flash_buf));
-
+    /* #338 — la cabecera se escribe EN SITIO, delante de los datos que ya están
+     * donde tienen que estar: `s_region` YA es la imagen. Ni segundo buffer ni
+     * copia del log entero en cada volcado. */
     log_header_t hdr = { LOG_MAGIC, LOG_VERSION, s_used, 0 };
-    memcpy(flash_buf, &hdr, sizeof(hdr));
-    memcpy(flash_buf + sizeof(hdr), s_buf, s_used);
+    memcpy(s_region, &hdr, sizeof(hdr));
+    /* La cola sin usar a 0xFF (flash borrada): así el volcado no arrastra restos
+     * de un log anterior más largo, que es justo lo que hacía el memset del
+     * buffer que había aquí. */
+    if (s_used < LOG_DATA_BYTES)
+        memset(s_buf + s_used, 0xFF, LOG_DATA_BYTES - s_used);
 
     /* Erase + program. IRQs OFF para que FreeRTOS no cambie de contexto
      * y nadie acceda a XIP durante la operación. */
     uint32_t saved = bpvm_flash_lock_begin();
     flash_range_erase(LOG_FLASH_OFFSET, LOG_REGION_BYTES);
-    flash_range_program(LOG_FLASH_OFFSET, flash_buf, sizeof(flash_buf));
+    flash_range_program(LOG_FLASH_OFFSET, s_region, LOG_REGION_BYTES);
     bpvm_flash_lock_end(saved);
 }
 
@@ -147,7 +170,7 @@ void log_clear_ram(void) {
      * avisando de que "se tiraron lineas ANTIGUAS" cuando ya no faltaba nada:
      * el aviso mentía, que es justo lo que este anillo vino a arreglar. */
     s_dropped = 0;
-    if (s_initialized) memset(s_buf, 0, sizeof(s_buf));
+    if (s_initialized) memset(s_buf, 0, LOG_DATA_BYTES);
 }
 
 void log_clear_flash(void) {
