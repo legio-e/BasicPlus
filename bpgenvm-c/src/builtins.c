@@ -510,9 +510,37 @@ static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t d
  *   - NO atrapado: eh_unwind dejó el thread TERMINATED ⇒ devolvemos
  *     BPVM_ERR_RUNTIME y el dispatcher termina el quantum con error.
  * tc->cs ya está fijado por el dispatcher (lo necesita throw_runtime_error). */
+/* #355 — EL CAMINO DEL THROW, CONTADO PASO A PASO.
+ *
+ * Aqui habia tres cosas distintas que podian estar fallando y desde fuera las
+ * tres se ven IGUAL (el programa acaba sin decir nada):
+ *   1. nadie llama a throw            -> no sale ninguna linea
+ *   2. se llama, pero la excepcion NO SE PUEDE CONSTRUIR (sin memoria para el
+ *      mensaje o para el objeto)      -> sale "no se pudo construir"
+ *   3. se construye pero NO HAY CATCH -> sale "SIN handler"
+ *   4. todo bien                      -> sale "ATRAPADA"
+ *
+ * Adivinar cual de las tres era nos costo varios intentos. Que lo diga el log.
+ * Tope de 5 avisos por ejecucion: un throw no es camino caliente, pero si un
+ * programa entra aqui en bucle no quiero repetir el error del log sin freno. */
 static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
+    static int avisos = 0;
+    int hablar = (avisos < 5);
+    if (hablar) { avisos++; bpvm_diag("[bpvm] throw: \"%s\"", msg ? msg : ""); }
+
     bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
-    return (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) ? BPVM_OK : BPVM_ERR_RUNTIME;
+    if (bpref_is_null(ref)) {
+        if (hablar) bpvm_diag("[bpvm] throw: NO SE PUDO CONSTRUIR la excepcion "
+                              "(sin memoria para el mensaje o el objeto, o sin "
+                              "clase RuntimeError exportada) -> el programa NO se entera");
+        return BPVM_ERR_RUNTIME;
+    }
+    if (bpvm_eh_unwind(vm, tc, ref)) {
+        if (hablar) bpvm_diag("[bpvm] throw: ATRAPADA por un catch del programa");
+        return BPVM_OK;
+    }
+    if (hablar) bpvm_diag("[bpvm] throw: construida pero SIN handler -> el RUN termina en error");
+    return BPVM_ERR_RUNTIME;
 }
 
 #ifdef BPVM_GUI
@@ -1423,7 +1451,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         /* Alocamos un string UTF-8 de 1 codepoint (enc_len bytes). */
         uint32_t out = bpvm_heap_alloc(vm, enc_len, BPVM_TYPE_ARRAY_I8);
-        if (out) {
+        if (out == 0)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
+             * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
+             * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
+             * el fallo aparecia diez pasos mas alla disfrazado de dato malo.
+             * REPRODUCIDO en el PC con --nogc: "if1" salia ANTES del throw. */
+            return builtin_throw(vm, tc, "No space in heap");
+        {   /* la reserva ya esta comprobada arriba */
             bpvm_write_u32_be(vm->memory + out, enc_len);
             for (uint32_t k = 0; k < enc_len; k++) vm->memory[out + 4 + k] = enc[k];
             out = (uint32_t) bpvm_handle_register(vm, out).v;   /* V4: addr → handle */
@@ -1456,7 +1490,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t eoff = utf8_byte_offset(p, nbytes, (uint32_t) end);
         uint32_t n = eoff - boff;                                   /* nº de bytes del rango */
         uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
-        if (out) {
+        if (out == 0)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
+             * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
+             * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
+             * el fallo aparecia diez pasos mas alla disfrazado de dato malo.
+             * REPRODUCIDO en el PC con --nogc: "if1" salia ANTES del throw. */
+            return builtin_throw(vm, tc, "No space in heap");
+        {   /* la reserva ya esta comprobada arriba */
             bpvm_write_u32_be(vm->memory + out, n);   /* out: alloc fresca (dirección física) */
             for (uint32_t i = 0; i < n; i++)
                 vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, boff + i, 1);
@@ -1491,7 +1531,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         bpref_t s = peek_ref(vm, tc, 0);
         uint32_t n = bpref_is_null(s) ? 0 : bpref_arr_len(vm, s);
         uint32_t out = bpvm_heap_alloc(vm, n, BPVM_TYPE_ARRAY_I8);
-        if (out) {
+        if (out == 0)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
+             * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
+             * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
+             * el fallo aparecia diez pasos mas alla disfrazado de dato malo.
+             * REPRODUCIDO en el PC con --nogc: "if1" salia ANTES del throw. */
+            return builtin_throw(vm, tc, "No space in heap");
+        {   /* la reserva ya esta comprobada arriba */
             bpvm_write_u32_be(vm->memory + out, n);
             const uint8_t* p = (n > 0) ? bpref_arr_elem(vm, s, 0, 1) : NULL;
             uint32_t i = 0, o = 0;
@@ -1525,7 +1571,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         uint32_t len = e - b;
         uint32_t out = bpvm_heap_alloc(vm, len, BPVM_TYPE_ARRAY_I8);
-        if (out) {
+        if (out == 0)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
+             * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
+             * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
+             * el fallo aparecia diez pasos mas alla disfrazado de dato malo.
+             * REPRODUCIDO en el PC con --nogc: "if1" salia ANTES del throw. */
+            return builtin_throw(vm, tc, "No space in heap");
+        {   /* la reserva ya esta comprobada arriba */
             bpvm_write_u32_be(vm->memory + out, len);
             for (uint32_t i = 0; i < len; i++)
                 vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, b + i, 1);
@@ -1594,7 +1646,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         uint32_t outn = sn - hits * tn + hits * rn;
         uint32_t out  = bpvm_heap_alloc(vm, outn, BPVM_TYPE_ARRAY_I8);
-        if (out) {
+        if (out == 0)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
+             * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
+             * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
+             * el fallo aparecia diez pasos mas alla disfrazado de dato malo.
+             * REPRODUCIDO en el PC con --nogc: "if1" salia ANTES del throw. */
+            return builtin_throw(vm, tc, "No space in heap");
+        {   /* la reserva ya esta comprobada arriba */
             bpvm_write_u32_be(vm->memory + out, outn);
             /* 2ª pasada: copiar. Los punteros se re-piden tras la alocación. */
             sb = (sn > 0) ? bpref_arr_elem(vm, s,  0, 1) : (const uint8_t*) "";
@@ -1908,7 +1966,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         else if (bn == 0) out_n = an;           /* b vacio -> a tal cual */
         else              out_n = ae + 1 + (bn - bs);
         uint32_t out = bpvm_heap_alloc(vm, out_n, BPVM_TYPE_ARRAY_I8);
-        if (out) {
+        if (out == 0)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
+             * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
+             * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
+             * el fallo aparecia diez pasos mas alla disfrazado de dato malo.
+             * REPRODUCIDO en el PC con --nogc: "if1" salia ANTES del throw. */
+            return builtin_throw(vm, tc, "No space in heap");
+        {   /* la reserva ya esta comprobada arriba */
             bpvm_write_u32_be(vm->memory + out, out_n);
             ap = (an > 0) ? bpref_arr_elem(vm, a, 0, 1) : (const uint8_t*) "";
             bp = (bn > 0) ? bpref_arr_elem(vm, b, 0, 1) : (const uint8_t*) "";
@@ -1954,7 +2018,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         uint32_t len = b1 - b0;
         uint32_t out = bpvm_heap_alloc(vm, len, BPVM_TYPE_ARRAY_I8);
-        if (out) {
+        if (out == 0)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
+             * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
+             * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
+             * el fallo aparecia diez pasos mas alla disfrazado de dato malo.
+             * REPRODUCIDO en el PC con --nogc: "if1" salia ANTES del throw. */
+            return builtin_throw(vm, tc, "No space in heap");
+        {   /* la reserva ya esta comprobada arriba */
             bpvm_write_u32_be(vm->memory + out, len);
             for (uint32_t i = 0; i < len; i++)
                 vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, b0 + i, 1);

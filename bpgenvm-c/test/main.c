@@ -137,6 +137,7 @@ int main(int argc, char** argv) {
     int   debug_trace = 0;
     long  debug_print = 0;
     int   smp_workers = 0;        /* 0 = single-worker legacy */
+    int   no_gc       = 0;        /* #355: --nogc = el recolector no corre (ver repl_v1) */
     size_t mem_size   = 512 * 1024;
     const char* basedir = NULL;   /* H19-F1: raíz de proyecto (paths relativos) */
     const char* fs_lfs_img = NULL;/* H2·B1.2: modo ORÁCULO — littlefs sobre imagen */
@@ -161,6 +162,9 @@ int main(int argc, char** argv) {
         else if (strncmp(a, "--smp=", 6) == 0) {
             smp_workers = (int) strtol(a + 6, NULL, 10);
             if (smp_workers < 1) smp_workers = 1;
+        }
+        else if (strcmp(a, "--nogc") == 0) {
+            no_gc = 1;   /* #355: espejo en el PC del `gc=0` del ENV de la placa */
         }
         else if (strncmp(a, "--basedir=", 10) == 0) {
             basedir = a + 10;        /* H19-F1: raíz de proyecto (paths relativos) */
@@ -310,6 +314,11 @@ int main(int argc, char** argv) {
         }
         if (basedir) bpvm_fs_set_basedir(basedir);
         bpvm_fs_set_main_module_path(path);
+    }
+
+    if (no_gc) {
+        bpvm_set_gc_enabled(vm, 0);
+        printf("=== GC DESACTIVADO (--nogc): memoria de un solo uso ===\n");
     }
 
     if (smp_workers > 0) {

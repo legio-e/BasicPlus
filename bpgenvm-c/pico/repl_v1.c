@@ -1041,6 +1041,25 @@ static void run_module_path(const char* path, long id) {
     if (entry.from_pack)
         log_printf("run: pack '%s' (main=%s)", entry.resolved, entry.main_module);
 
+    /* #355 — INTERRUPTOR DEL RECOLECTOR (idea de Eduardo). `gc=0` en el ENV y la
+     * VM no recolecta: ni por umbral, ni al fallar una reserva, ni con el gc()
+     * manual (los tres pasan por bpvm_gc, que mira gc_suspended).
+     *
+     * Para qué: el bucle que se rompe mueve ~170 KB en un heap de 268 KB, o sea
+     * que CABE ENTERO sin recolectar. Eso permite partir el experimento en dos
+     * dejando TODO lo demás igual —misma placa, misma memoria, mismo programa—
+     * y quitando una sola cosa. Si sin GC va limpio, el agotamiento no es la
+     * causa; si se rompe igual, el GC queda absuelto y hay que mirar al
+     * alocador. Es la diferencia entre medir y opinar.
+     *
+     * Se lee del ENV y no de una macro para no gastar una grabación por cada
+     * cambio de idea. Por defecto va ENCENDIDO: apagarlo tiene que ser un acto
+     * deliberado, nunca el estado en que se queda la placa por descuido. */
+    if (!board_env_bool("gc", 1)) {
+        bpvm_set_gc_enabled(vm, 0);
+        log_printf("run: GC DESACTIVADO por el ENV (gc=0) — memoria de un solo uso");
+    }
+
     /* 4b. H3 #160 — registrar funciones AOT manualmente. Tras link,
      *     la global symbol table tiene "Bench.fib" si Bench.mod cargó;
      *     aot_funcs_register hace lookup y registra el thunk. Tolerante

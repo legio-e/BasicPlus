@@ -220,6 +220,19 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers);
  */
 void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user);
 
+/* #355 — enciende/apaga el RECOLECTOR de basura de esta VM. Apagado, no corre
+ * por ninguna de las tres puertas: ni el umbral proactivo, ni el intento tras
+ * una reserva fallida, ni el gc() manual del programa.
+ *
+ * Es un INSTRUMENTO DE DIAGNÓSTICO, no una opción de uso normal: sin recolector
+ * la memoria es de un solo uso y cualquier programa que no quepa entero en el
+ * heap acabará dando OOM. Existe porque separa en dos un experimento que de
+ * otro modo no se puede partir — mismo micro, misma memoria, mismo programa,
+ * con y sin GC — y esa diferencia es lo que distingue "se agota la memoria" de
+ * "el recolector se lleva algo vivo". Encendido por defecto; apagarlo tiene que
+ * ser deliberado (`--nogc` en el PC, `gc=0` en el ENV de la placa). */
+void bpvm_set_gc_enabled(bpvm_t* vm, int enabled);
+
 /* ── #353: dónde habla la VM cuando NO habla el programa ─────────────────────
  *
  * bpvm_set_output es la salida DEL PROGRAMA (print). Esto es otra cosa: lo que

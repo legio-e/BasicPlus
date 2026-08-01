@@ -67,6 +67,42 @@ static uint32_t block_total_size(const bpvm_t* vm, uint32_t header_addr) {
     return total;
 }
 
+/* #355 — RETRATO DEL BLOQUE QUE MIENTE.
+ *
+ * Todo el recorrido del heap se apoya en que cada bloque diga la verdad sobre su
+ * tamaño, y hay UN camino en block_total_size() que devuelve la palabra de +4 tal
+ * cual, sin clamp ni validación: el de los bloques LIBRES. Si esa palabra se
+ * corrompe, el recorrido salta a cualquier parte y todo lo que viene después —
+ * mapa, marcado, barrido — es ruido.
+ *
+ * En la Pico el barrido sumó 3.272.343.552 bytes liberados sobre un heap de
+ * 268 KB. Esa cifra dice QUE pasó pero no DÓNDE. Esto lo dice: la dirección, lo
+ * que hay en la cabecera, y el bloque ANTERIOR — que es el principal sospechoso,
+ * porque el que pisa una cabecera casi siempre es su vecino de la izquierda. */
+static void bpvm_diag_bloque_mentiroso(const bpvm_t* vm, const char* quien,
+                                       uint32_t cur, uint32_t prev, uint32_t total) {
+    uint32_t t = bpvm_read_u32_be(vm->memory + cur);
+    uint32_t l = bpvm_read_u32_be(vm->memory + cur + 4);
+    bpvm_diag("[gc] !! BLOQUE MENTIROSO (%s) en %u: dice medir %u B y el heap entero "
+              "son %u. tag=0x%08x len/size=%u tipo=%u libre=%u marcado=%u",
+              quien, (unsigned) cur, (unsigned) total,
+              (unsigned)(vm->stack_base - vm->heap_start),
+              (unsigned) t, (unsigned) l,
+              (unsigned)((t & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT),
+              (unsigned)((t & BPVM_TAG_FREE_BIT) ? 1u : 0u),
+              (unsigned)((t & BPVM_TAG_MARK_BIT) ? 1u : 0u));
+    if (prev != 0) {
+        uint32_t pt = bpvm_read_u32_be(vm->memory + prev);
+        uint32_t pl = bpvm_read_u32_be(vm->memory + prev + 4);
+        bpvm_diag("[gc]    el vecino anterior estaba en %u (%u B por delante): "
+                  "tag=0x%08x len/size=%u tipo=%u libre=%u marcado=%u",
+                  (unsigned) prev, (unsigned)(cur - prev), (unsigned) pt, (unsigned) pl,
+                  (unsigned)((pt & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT),
+                  (unsigned)((pt & BPVM_TAG_FREE_BIT) ? 1u : 0u),
+                  (unsigned)((pt & BPVM_TAG_MARK_BIT) ? 1u : 0u));
+    }
+}
+
 /* --- GC mark-sweep conservativo ---
  *
  * Mark phase:
@@ -114,11 +150,24 @@ static void build_gc_valid_map(bpvm_t* vm) {
     }
     if (vm->gc_valid_map == NULL) return;   /* sin memoria → is_heap_ref rechaza todo (conservador) */
     uint32_t cur = vm->heap_start;
+    uint32_t prev = 0;
     while (cur < vm->heap_next) {
         uint32_t total = block_total_size(vm, cur);
         if (total == 0) break;
+        /* #355 — EL AGUJERO DEL GUARDIÁN DE ABAJO. Ese sólo mira DÓNDE acaba el
+         * recorrido, y `cur += total` es aritmética de 32 bits: un bloque que
+         * declare un tamaño gigantesco hace que `cur` DÉ LA VUELTA y siga
+         * paseando por el heap desde el principio. Si tras el rodeo aterriza por
+         * casualidad en heap_next, el guardián se calla con el mapa hecho polvo.
+         * Por eso llevamos dos tandas viéndolo mudo. Aquí se caza el tamaño
+         * imposible EN EL BLOQUE, antes de que la suma tape el rastro. */
+        if (total > vm->stack_base - vm->heap_start) {
+            bpvm_diag_bloque_mentiroso(vm, "mapa", cur, prev, total);
+            break;
+        }
         uint32_t word = (cur - vm->heap_start) / 4u;
         vm->gc_valid_map[word / 8u] |= (uint8_t)(1u << (word % 8u));
+        prev = cur;
         cur += total;
     }
     /* GUARDIÁN DEL INVARIANTE (permanente; coste = UNA comparación por GC).
@@ -137,10 +186,25 @@ static void build_gc_valid_map(bpvm_t* vm) {
      * No abortamos: el mensaje ya identifica la causa, y matar la VM en placa
      * sería peor que dejar que el error normal de la VM siga su curso. */
     if (cur != vm->heap_next) {
-        fprintf(stderr, "[gc] !! HEAP INCONSISTENTE: el recorrido de cabeceras acabó en %" PRIu32
-                        ", no en heap_next=%" PRIu32 ". Hay un bloque cuyo tamaño real no coincide "
-                        "con block_total_size() → el mapa del GC sale truncado y se barrerán "
-                        "objetos vivos.\n", cur, vm->heap_next);
+        /* #355 — POR bpvm_diag, NO por stderr. Este guardián existía y describía
+         * EXACTAMENTE el fallo que hemos perseguido todo el día... pero gritaba
+         * por stderr, que en la placa no llega a ninguna parte. Llevaba horas
+         * avisando al vacío mientras nosotros lanzábamos hipótesis.
+         * (Otro de los 29 fprintf de #353, y el que más caro ha salido.)
+         *
+         * Se añade el ÚLTIMO bloque recorrido y lo que se leyó en él: sin eso el
+         * aviso dice que hay un descarrilamiento pero no dónde, y el heap tiene
+         * miles de bloques. */
+        uint32_t tag = (cur + 8 <= vm->stack_base) ? bpvm_read_u32_be(vm->memory + cur) : 0;
+        uint32_t len = (cur + 8 <= vm->stack_base) ? bpvm_read_u32_be(vm->memory + cur + 4) : 0;
+        bpvm_diag("[gc] !! HEAP DESCARRILADO: el recorrido de cabeceras acabo en %u, "
+                  "no en heap_next=%u. En %u hay tag=0x%08x len=%u (tipo=%u, libre=%u). "
+                  "Un bloque mide distinto de lo que dice block_total_size() -> el mapa "
+                  "sale truncado, is_heap_ref rechaza objetos VIVOS y el barrido se los lleva.",
+                  (unsigned) cur, (unsigned) vm->heap_next, (unsigned) cur,
+                  (unsigned) tag, (unsigned) len,
+                  (unsigned)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT),
+                  (unsigned)((tag & BPVM_TAG_FREE_BIT) ? 1u : 0u));
     }
 }
 
@@ -234,10 +298,25 @@ static void gc_mark_phase(bpvm_t* vm) {
         const bpvm_thread_t* tc = &vm->threads[t];
         uint32_t lo = tc->stack_base;
         uint32_t hi = tc->sp;
+        /* #355 — QUE SE VEA LO QUE SE ESCANEA. El marcado daba 44 bytes vivos con
+         * cuatro cadenas en uso, asi que o no mira donde debe, o mira bien y no
+         * reconoce lo que hay. Estas dos cifras lo separan: cuantas PALABRAS
+         * recorre y cuantas resultan ser referencias al heap. Si recorre 0, el
+         * rango esta mal; si recorre miles y reconoce 0, el problema es el
+         * reconocimiento. */
+        uint32_t palabras = 0, refs = 0;
         for (uint32_t addr = lo; addr + 4 <= hi; addr += 4) {
             uint32_t v = bpvm_read_u32_be(vm->memory + addr);
+            palabras++;
+            {   /* ¿esta palabra apunta a un bloque real del heap? */
+                bpref_t rr; rr.v = v;
+                uint32_t ur = bpref_deref(vm, rr);
+                if (is_heap_ref(vm, ur)) refs++;
+            }
             mark_recursive(vm, v);
         }
+        bpvm_diag("[gc] pila t%d: rango [%u..%u) = %u palabras, %u son refs al heap",
+                  t, (unsigned) lo, (unsigned) hi, (unsigned) palabras, (unsigned) refs);
     }
     /* 2. allocAnchor por thread: objeto anclado durante el unwind de un
      *    RuntimeError (F5), raíz mientras no esté en la pila (H-001/GC-2). */
@@ -277,6 +356,19 @@ static void gc_mark_phase(bpvm_t* vm) {
 /* H3: añade un bloque libre [tag FREE][size@+4][next@+8] al head de la lista. */
 static void add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {
     uint8_t* mem = vm->memory;
+    /* #355 — ÚLTIMA PUERTA. Esta palabra de +4 es la ÚNICA que block_total_size()
+     * devuelve tal cual, sin clamp ni recálculo (camino de bloque libre). Todo el
+     * recorrido del heap se apoya en ella, así que un valor imposible aquí es un
+     * descarrilamiento garantizado unas cuantas reservas más tarde, ya sin rastro
+     * de quién lo escribió. Que se cace EN LA ESCRITURA, no en la lectura. */
+    if (size < BPVM_MIN_FREE_BLOCK || addr + size > vm->stack_base) {
+        bpvm_diag("[gc] !! ALTA IMPOSIBLE en la lista de libres: bloque en %u de %u B "
+                  "(minimo %u, y el heap acaba en %u). No se da de alta: dejarlo entrar "
+                  "descarrilaria el recorrido del heap en el proximo GC.",
+                  (unsigned) addr, (unsigned) size,
+                  (unsigned) BPVM_MIN_FREE_BLOCK, (unsigned) vm->stack_base);
+        return;
+    }
     bpvm_write_u32_be(mem + addr,     BPVM_TAG_FREE_BIT);
     bpvm_write_u32_be(mem + addr + 4, size);
     bpvm_write_u32_be(mem + addr + 8, vm->free_list_head);
@@ -324,9 +416,18 @@ static void gc_sweep_phase(bpvm_t* vm) {
     uint32_t cur = vm->heap_start;
     uint32_t freed = 0, kept = 0;
     uint32_t pend_start = 0, pend_size = 0;   /* 0 = sin run pendiente (heap_start>0) */
+    uint32_t prev_blk = 0;                    /* #355: el vecino de la izquierda del culpable */
     while (cur < vm->heap_next) {
         uint32_t total = block_total_size(vm, cur);
         if (total == 0) break;
+        /* #355 — el mismo cazador que en el mapa. Si salta AQUÍ y no allí, la
+         * corrupción nace ENTRE los dos recorridos, y en medio sólo pasa una
+         * cosa: el marcado escribiendo MARK_BIT en las cabeceras. Si salta en
+         * los dos, ya venía de antes. Esa diferencia es la respuesta. */
+        if (total > vm->stack_base - vm->heap_start) {
+            bpvm_diag_bloque_mentiroso(vm, "barrido", cur, prev_blk, total);
+            break;   /* no seguir: el recorrido ya no significa nada */
+        }
         uint32_t tag = bpvm_read_u32_be(mem + cur);
         int is_free     = (tag & BPVM_TAG_FREE_BIT) != 0;
         int is_unmarked = !is_free && !(tag & BPVM_TAG_MARK_BIT);
@@ -341,6 +442,7 @@ static void gc_sweep_phase(bpvm_t* vm) {
             bpvm_write_u32_be(mem + cur, tag);
             kept += total;
         }
+        prev_blk = cur;
         cur += total;
     }
     if (pend_start != 0) {
@@ -348,7 +450,24 @@ static void gc_sweep_phase(bpvm_t* vm) {
         vm->heap_next = pend_start;
     }
     vm->last_gc_heap_next = vm->heap_next;
-    if (vm->tracing) {
+    /* #355 — EL NUMERO QUE CONTESTA LA PREGUNTA, y llevaba todo el dia escondido
+     * tras --trace y un fprintf que en placa no llega a ninguna parte.
+     *
+     * `vivo` = bytes que el MARCADO dio por alcanzables. Si sale ~0 mientras el
+     * programa esta a media vuelta con sus cadenas en uso, el marcado NO VE LAS
+     * RAICES y el barrido se lleva datos vivos por delante. Eso es exactamente
+     * lo que delato en la Pico el "I32_TO_U8: valor fuera de rango 792" en el
+     * MISMO milisegundo que una colecta que libero el heap entero: un byte de
+     * cadena no puede valer 792; se leyo de memoria ya reciclada.
+     *
+     * Sale SIEMPRE, no solo con --trace, y por bpvm_diag para que llegue al log
+     * de la placa. Una linea por colecta, y las colectas son pocas.
+     * De paso cierra otro de los 29 fprintf de #353. */
+    bpvm_diag("[gc] vivo=%u liberado=%u heap=[%u..%u) freelist=%s",
+              (unsigned) kept, (unsigned) freed,
+              (unsigned) vm->heap_start, (unsigned) vm->heap_next,
+              vm->free_list_head ? "si" : "vacia");
+    if (0) {
         fprintf(stderr, "[gc] kept=%" PRIu32 " freed=%" PRIu32 " heap=[%" PRIu32 "..%" PRIu32 ") freelist=%s\n",
                 kept, freed, vm->heap_start, vm->heap_next,
                 vm->free_list_head ? "si" : "vacia");
@@ -373,6 +492,14 @@ static void gc_table_sweep_phase(bpvm_t* vm) {
             handle_kill_idx(vm, idx);
         }
     }
+}
+
+/* #355 — el interruptor del recolector. Una línea, pero puesta sobre el MISMO
+ * guarda que ya usaba la migración a handles (gc_suspended), que es el único
+ * sitio por el que pasan las tres puertas del GC. Así "apagado" es apagado de
+ * verdad y no queda un camino olvidado que siga recolectando. */
+void bpvm_set_gc_enabled(bpvm_t* vm, int enabled) {
+    if (vm) vm->gc_suspended = enabled ? 0 : 1;
 }
 
 static void bpvm_gc(bpvm_t* vm) {
@@ -620,6 +747,17 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
              * cadenas VACIAS que se imprimen como lineas en blanco y revientan
              * al leerlas. Con handles el OOM es ATRAPABLE desde H1: esto tiene
              * que llegar ahi, no evaporarse. De momento GRITA. */
+            /* #355 — LA RESERVA SE GASTA AQUI Y SOLO AQUI: una reserva que
+             * falla MIENTRAS se construye una excepcion. Antes la soltaba el
+             * throw nada mas entrar, y el log de la Pico lo delato — se la
+             * llevaba el primer RuntimeError de cualquier clase y encima decia
+             * "heap lleno" con el heap recien vaciado. La red es para cuando
+             * de verdad no cabe el error, no para cada excepcion. */
+            if (vm->building_error && vm->heap_reserve != 0u) {
+                bpvm_heap_release_reserve(vm);
+                addr = try_allocate_inner(vm, total);
+                if (addr != 0) goto con_reserva;
+            }
             /* #355 — CON FRENO. La 1a version de esto no lo tenia y fue un
              * ERROR CARO: con el heap lleno CADA intento de reserva ya hace DOS
              * barridos completos (el proactivo y el del reintento), y encima
@@ -638,9 +776,10 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
                 }
             }
             bpvm_smp_unlock(vm);
-            return 0;   /* OOM real. NO se reintenta con la reserva: esa es para el ERROR */
+            return 0;   /* OOM real: ni con la reserva de emergencia cabe */
         }
     }
+con_reserva: ;
 
     uint32_t tag = ((uint32_t)(type & 0x3F)) << BPVM_TAG_TYPE_SHIFT;
     bpvm_write_u32_be(vm->memory + addr, tag);

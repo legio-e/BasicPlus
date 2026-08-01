@@ -868,6 +868,15 @@ static bpvm_boot_status_t s_boot;     /* estado REAL alcanzado por el boot */
 
 const bpvm_boot_status_t* board_boot_status(void) { return &s_boot; }
 
+/* #355 — una clave booleana del ENV, para quien la necesite fuera de main.c.
+ * El env ya vive aquí (s_env, payload en XIP); esto sólo abre la ventanilla en
+ * vez de repartir copias del bloque. Hoy la usa repl_v1 para el interruptor del
+ * GC (`gc=0`): sirve para PARTIR el experimento en dos —misma memoria, mismo
+ * programa, con y sin recolector— sin regrabar la placa entre prueba y prueba. */
+int board_env_bool(const char* key, int def) {
+    return bpvm_env_get_bool(&s_env, key, def);
+}
+
 /* #327 — el layout REAL del arranque, para quien necesite una partición que no
  * sea el FS (hoy: la zona de packs del gestor de placa). NULL mientras el boot
  * no haya pasado de la capa 1: sin layout válido no hay particiones que dar.
