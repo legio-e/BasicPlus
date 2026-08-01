@@ -8,6 +8,7 @@
 
 #include "bpvm_internal.h"
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
+#include "bpvm.h"       /* #338: la zona de rascar compartida */
 #include "bpvm_platform.h"
 #include <stdio.h>
 #include <inttypes.h>
@@ -2570,12 +2571,34 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t grbRef = pop_ref(vm, tc);
         uint32_t grbAddr = ref_addr(vm, grbRef);   /* V4: handle→addr */
         int pin = pop_i32(vm, tc);
-        static uint32_t s_npbuf[256];           /* single-worker: estático OK */
-        int n = count < 0 ? 0 : (count > 256 ? 256 : count);
-        for (int i = 0; i < n; i++) {
-            s_npbuf[i] = (uint32_t) bpvm_read_i32_be(vm->memory + grbAddr + 4 + i * 4);
+        /* #338 — el buffer de transcodificación (BE del heap BP → nativo para
+         * el driver) sale de la zona compartida: 1 KB que sólo hace falta
+         * mientras se empuja una trama, no toda la vida del firmware.
+         *
+         * Soltarlo aquí mismo es SEGURO porque el driver es BLOQUEANTE: el
+         * backend del Pico mete las palabras con pio_sm_put_blocking y espera
+         * los 60 µs de latch del WS2812, así que al volver el buffer ya está
+         * consumido. Si algún día un backend lo hiciera por DMA habría que
+         * retener la zona hasta que termine — está dicho aquí para que no se
+         * descubra por una tira parpadeando en colores raros.
+         *
+         * De propina se cierra un latente: esto era `static` con el comentario
+         * "single-worker: estático OK". Bajo SMP dos workers llamando a la vez
+         * se pisaban EN SILENCIO; ahora el segundo se encuentra la zona cogida
+         * y el guardián lo dice con nombres. */
+        enum { NP_MAX = 256 };
+        uint32_t* npbuf = (uint32_t*) bpvm_scratch_take(NP_MAX * sizeof(uint32_t),
+                                                        "__npShow");
+        if (!npbuf) {          /* el guardián ya ha dicho por qué */
+            push_i32(vm, tc, 0);
+            return BPVM_OK;
         }
-        bpvm_neopixel_show(pin, s_npbuf, n);
+        int n = count < 0 ? 0 : (count > NP_MAX ? NP_MAX : count);
+        for (int i = 0; i < n; i++) {
+            npbuf[i] = (uint32_t) bpvm_read_i32_be(vm->memory + grbAddr + 4 + i * 4);
+        }
+        bpvm_neopixel_show(pin, npbuf, n);
+        bpvm_scratch_give("__npShow");
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
