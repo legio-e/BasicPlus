@@ -667,6 +667,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[32];
         int n = snprintf(buf, sizeof(buf), "%" PRId32, v);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
@@ -681,6 +682,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[64];
         int n = bpvm_format_double(buf, (double) x);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
@@ -691,6 +693,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[32];
         int n = bpvm_format_i64(buf, v);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
@@ -703,6 +706,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[64];
         int n = bpvm_format_double(buf, v);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, (size_t)(n > 0 ? n : 0));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
@@ -711,6 +715,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t v = pop_i32(vm, tc);
         const char* s = v ? "true" : "false";
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
@@ -820,18 +825,21 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         while (base[i] && base[i] != '.' && i + 1 < sizeof(nm)) { nm[i] = base[i]; i++; }
         nm[i] = '\0';
         uint32_t r = bpvm_heap_alloc_string(vm, nm, strlen(nm));
+        if (r == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
         return BPVM_OK;
     }
     case BUILTIN_APP_MAIN_MODULE_PATH: {
         const char* s = bpvm_fs_main_module_path();
         uint32_t r = bpvm_heap_alloc_string(vm, s, strlen(s));
+        if (r == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
         return BPVM_OK;
     }
     case BUILTIN_APP_PROJECT_PATH: {
         const char* s = bpvm_fs_basedir();
         uint32_t r = bpvm_heap_alloc_string(vm, s, strlen(s));
+        if (r == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, r);   /* V4 #8: string = ref 8B (era push_i32 4B → drift + gen=0) */
         return BPVM_OK;
     }
@@ -959,7 +967,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char* buf = NULL;
         size_t n = bpvm_gui_dump_tree(&buf);
         uint32_t ref = bpvm_heap_alloc_string(vm, buf ? buf : "", n);
+        /* #355 — el free va ANTES del throw: si no, el camino de OOM se deja
+         * `buf` sin liberar, y quedarse sin memoria no es excusa para fugarla. */
         bpvm_free(buf);
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
@@ -1067,6 +1078,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int h = pop_i32(vm, tc);
         const char* s = bpvm_gui_get_text(h);
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref); return BPVM_OK;
     }
     case BUILTIN_GUI_CREATE_LIST: return gui_make_child(vm, tc, bpvm_gui_create_list);
@@ -1121,6 +1133,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int col = pop_i32(vm, tc); int row = pop_i32(vm, tc); int h = pop_i32(vm, tc);
         const char* s = bpvm_gui_table_get_cell(h, row, col);
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref); return BPVM_OK;
     }
     case BUILTIN_GUI_IMAGE_NEW: { push_i32(vm, tc, bpvm_gui_image_new()); return BPVM_OK; }
@@ -2589,6 +2602,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[32];
         bpvm_pico_unique_id(buf, sizeof(buf));
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, strlen(buf));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
@@ -2596,12 +2610,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char buf[32];
         bpvm_pico_board_name(buf, sizeof(buf));
         uint32_t ref = bpvm_heap_alloc_string(vm, buf, strlen(buf));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
     case BUILTIN_PICO_RESET_CAUSE: {   /* H10 — causa del último reset (string) */
         const char* s = bpvm_pico_reset_cause();
         uint32_t ref = bpvm_heap_alloc_string(vm, s, strlen(s));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }

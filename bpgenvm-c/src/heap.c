@@ -386,10 +386,33 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
     } else {
         if (vm->handle_next >= vm->handle_cap) {
             uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u : 4096u;
+            /* #355 — QUE SE VEA CRECER. Las dos tablas juntas son new_cap*8 bytes y
+             * salen del malloc de la PLATAFORMA, no del heap de la VM: en la Pico eso
+             * son 64 KB en total (lo dice el log de arranque), asi que doblar a 8192
+             * pide 64 KB *y* ademas el realloc necesita el viejo a la vez. Sin esta
+             * linea, cruzar el limite era MUDO. */
+            bpvm_diag("[bpvm] tabla de handles: %u -> %u slots (%u KB las dos)",
+                      (unsigned) vm->handle_cap, (unsigned) new_cap,
+                      (unsigned)((new_cap * 8u) / 1024u));
             uint32_t* na = (uint32_t*) bpvm_realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
-            if (!na) { r.v = addr; bpvm_smp_unlock(vm); return r; }
+            if (!na) {
+                /* #355 — ESTE ERA EL FALLO MUDO: se devolvia la DIRECCION CRUDA en vez
+                 * de un handle. Todo lo que la trate como handle a partir de aqui da
+                 * null o basura (cadenas corruptas, INVOKE_VIRTUAL sobre null) y NADIE
+                 * se entera de por que. Con handles hay OOM atrapable desde H1: esto
+                 * tiene que salir por ahi, no inventarse una referencia invalida.
+                 * De momento GRITA; convertirlo en OOM de verdad es el paso siguiente. */
+                bpvm_diag("[bpvm] SIN MEMORIA para la tabla de handles (%u slots, %u KB): "
+                          "se devuelve direccion CRUDA y a partir de aqui las refs MIENTEN",
+                          (unsigned) new_cap, (unsigned)((new_cap * 4u) / 1024u));
+                r.v = addr; bpvm_smp_unlock(vm); return r;
+            }
             uint32_t* ng = (uint32_t*) bpvm_realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
-            if (!ng) { vm->handle_addr = na; r.v = addr; bpvm_smp_unlock(vm); return r; }
+            if (!ng) {
+                bpvm_diag("[bpvm] SIN MEMORIA para handle_gen (%u slots): idem, refs invalidas",
+                          (unsigned) new_cap);
+                vm->handle_addr = na; r.v = addr; bpvm_smp_unlock(vm); return r;
+            }
             vm->handle_addr = na;
             vm->handle_gen  = ng;
             vm->handle_cap  = new_cap;
@@ -537,7 +560,19 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
      * safepoint con tc->sp sincronizado; en legacy/single-worker no hay baile). */
     if (!vm->gc_suspended && vm->gc_bump_threshold != 0 &&
         vm->heap_next - vm->last_gc_heap_next >= vm->gc_bump_threshold) {
+        /* #355 — QUE SE VEA SI EL GC RECICLA. Sin esto, una colecta que no
+         * recupera nada es indistinguible de una que va bien: el heap se acaba
+         * y el fallo aparece diez pasos mas alla, disfrazado de cadena vacia.
+         *  es el bump antes de colectar; , tras el barrido (el
+         * sweep RETROCEDE heap_next si la cola queda libre). Si los dos numeros
+         * son iguales colecta a colecta, es que NO se esta reciclando. */
+        uint32_t antes = vm->heap_next;
         gc_stw(vm);
+        bpvm_diag("[bpvm] GC: bump %u -> %u (recupera %d B, tope %u, heap %u..%u)",
+                  (unsigned) antes, (unsigned) vm->heap_next,
+                  (int)((long) antes - (long) vm->heap_next),
+                  (unsigned) vm->gc_bump_threshold,
+                  (unsigned) vm->heap_start, (unsigned) vm->stack_base);
     }
 
     uint32_t addr = try_allocate_inner(vm, total);
@@ -546,6 +581,16 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
         gc_stw(vm);
         addr = try_allocate_inner(vm, total);
         if (addr == 0) {
+            /* #355 — EL OOM ERA MUDO: se devolvia 0 y el que llama decidia si
+             * mirarlo. Los que no lo miran empujan una ref nula, y de ahi salen
+             * cadenas VACIAS que se imprimen como lineas en blanco y revientan
+             * al leerlas. Con handles el OOM es ATRAPABLE desde H1: esto tiene
+             * que llegar ahi, no evaporarse. De momento GRITA. */
+            bpvm_diag("[bpvm] SIN MEMORIA en el heap: pedidos %u B y no caben "
+                      "(bump %u, tope de pila %u). El que llamo puede NO mirarlo "
+                      "y seguir con una ref NULA.",
+                      (unsigned) total, (unsigned) vm->heap_next,
+                      (unsigned) vm->stack_base);
             bpvm_smp_unlock(vm);
             return 0;   /* OOM real */
         }
