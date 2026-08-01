@@ -290,6 +290,7 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->free_list_head    = 0;
     vm->last_gc_heap_next = vm->heap_next;
     vm->gc_bump_threshold = 0;   /* off hasta entonces */
+    vm->heap_reserve = 0;        /* #355: se arma al fijar el heap real, no aquí */
     vm->main_absolute_address = 0;
     /* V4 — tabla de handles (lazy) + GC suspendido durante la migración. */
     vm->handle_addr  = NULL;
@@ -872,6 +873,22 @@ uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {
     vm->last_gc_heap_next = vm->heap_next;
     vm->gc_bump_threshold = (vm->stack_base - vm->heap_start) / 8;
     if (vm->gc_bump_threshold < 4096) vm->gc_bump_threshold = 4096;
+    /* #355 — ARMA LA RESERVA DE EMERGENCIA (idea de Eduardo). 1 KB del final del
+     * heap que el programa no puede tocar; se suelta cuando una reserva ya ha
+     * fallado de verdad, para que quede sitio con el que CONSTRUIR el error
+     * (cadena del mensaje + objeto RuntimeError). Sin esto, quedarse sin memoria
+     * significaba quedarse tambien sin poder avisar, y el programa seguia con
+     * refs nulas — que es como #355 se volvio invisible durante una manana.
+     *
+     * Se arma en cada carga de modulo (o sea, en cada RUN) y se gasta UNA vez.
+     * No se rearma sola a mitad: si lo hiciera, un programa que ignore el OOM
+     * la gastaria en bucle y volveriamos al fallo mudo.
+     *
+     * 1 KB da de sobra: el mensaje mas largo no llega a 100 bytes y el objeto
+     * RuntimeError son unas pocas decenas. Y si el heap es tan pequeno que 1 KB
+     * es una porcion notable, no se arma: mas vale ese K para el programa. */
+    vm->heap_reserve = 1024u;
+    if ((vm->stack_base - vm->heap_start) < 16u * 1024u) vm->heap_reserve = 0u;
     return vm->memory + base;
 }
 

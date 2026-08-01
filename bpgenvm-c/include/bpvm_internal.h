@@ -330,6 +330,12 @@ struct bpvm {
     uint32_t free_list_head;   /* 0 = lista vacía */
     uint32_t last_gc_heap_next;/* heap_next en el último GC (base del umbral) */
     uint32_t gc_bump_threshold;/* bump máx. desde el último GC antes de colectar (0 = off) */
+    /* #355 — reserva de emergencia: bytes del final del heap que el programa NO
+     * puede tocar. Se sueltan cuando una reserva ya ha fallado, para que quede
+     * sitio con el que CONSTRUIR el RuntimeError de OOM (mensaje + objeto).
+     * Sin esto, quedarse sin memoria significaba quedarse tambien sin poder
+     * avisar. 0 = ya gastada (o desactivada). */
+    uint32_t heap_reserve;
     /* Camino 1 (H-008, v3.0.1): bitmap "¿es inicio de cabecera real?" (1 bit por
      * palabra de 4B del heap). Se reconstruye al empezar cada mark; el scan
      * conservativo solo valida candidatos cuya (v-4) esté aquí → un entero que
@@ -738,6 +744,10 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type);
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
  * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */
 void     bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr);
+/* #355 — suelta la reserva de emergencia. La llama SOLO el camino del throw:
+ * si la soltara la reserva normal al fallar, se la quedaria el programa y el
+ * error se volveria a quedar sin memoria con la que construirse. */
+uint32_t bpvm_heap_release_reserve(bpvm_t* vm);
 uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len);
 void     bpvm_heap_gc(bpvm_t* vm);
 

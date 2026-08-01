@@ -290,6 +290,25 @@ static void add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {
  * de Camino 1). Aquí calculamos el tamaño ANTES de tocar la cabecera y lo
  * escribimos vía add_to_free_list ([FREE_BIT][size@+4][next]) → bloque caminable
  * y reutilizable de inmediato. */
+/* #355 — SUELTA LA RESERVA DE EMERGENCIA (idea de Eduardo).
+ *
+ * La llama el camino del THROW, no el de la reserva normal, y esa distincion es
+ * TODO el diseno: si se soltara al fallar una reserva cualquiera y se reintentara,
+ * se la quedaria el programa —la peticion que fallo cabria y seguiria como si
+ * nada— y cuando de verdad hiciera falta construir el error ya no habria nada.
+ * La reserva existe para PODER AVISAR, no para estirar el heap un poco mas.
+ *
+ * Se gasta una vez por RUN. Devuelve los bytes soltados (0 si ya no habia). */
+uint32_t bpvm_heap_release_reserve(bpvm_t* vm) {
+    uint32_t r = vm->heap_reserve;
+    if (r != 0u) {
+        vm->heap_reserve = 0u;
+        bpvm_diag("[bpvm] heap lleno: se suelta la reserva de emergencia (%u B) "
+                  "para poder construir el error", (unsigned) r);
+    }
+    return r;
+}
+
 void bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr) {
     uint32_t size = block_total_size(vm, header_addr);
     if (size == 0) return;   /* defensivo: no tocar si no sabemos el tamaño */
@@ -530,8 +549,23 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
         prev = cur;
         cur = next;
     }
-    /* 2) Bump. */
-    if (vm->heap_next + total > vm->stack_base) return 0;
+    /* 2) Bump.
+     *
+     * #355 — RESERVA DE EMERGENCIA (idea de Eduardo). El techo NO es stack_base:
+     * es stack_base menos `heap_reserve`. Ese hueco queda intocable para el
+     * programa y sólo se suelta cuando la reserva ya ha fallado de verdad, para
+     * que quede sitio con el que CONSTRUIR el error.
+     *
+     * Por qué hacía falta: lanzar el OOM necesita memoria (la cadena del mensaje
+     * y el objeto RuntimeError). Con el heap lleno esa reserva falla también,
+     * `bpvm_throw_runtime_error` devuelve nulo y no hay excepción que lanzar —
+     * el programa se queda sin aviso justo cuando más falta hace. La pescadilla
+     * clásica: te quedas sin memoria para avisar de que no hay memoria.
+     *
+     * Se hace bajando el TECHO y no reservando un bloque a propósito: así no
+     * fragmenta, no hay que llevarle la cuenta a nadie y soltarla es poner un
+     * campo a cero. */
+    if (vm->heap_next + total > vm->stack_base - vm->heap_reserve) return 0;
     uint32_t addr = vm->heap_next;
     vm->heap_next += total;
     return addr;
@@ -586,13 +620,25 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
              * cadenas VACIAS que se imprimen como lineas en blanco y revientan
              * al leerlas. Con handles el OOM es ATRAPABLE desde H1: esto tiene
              * que llegar ahi, no evaporarse. De momento GRITA. */
-            bpvm_diag("[bpvm] SIN MEMORIA en el heap: pedidos %u B y no caben "
-                      "(bump %u, tope de pila %u). El que llamo puede NO mirarlo "
-                      "y seguir con una ref NULA.",
-                      (unsigned) total, (unsigned) vm->heap_next,
-                      (unsigned) vm->stack_base);
+            /* #355 — CON FRENO. La 1a version de esto no lo tenia y fue un
+             * ERROR CARO: con el heap lleno CADA intento de reserva ya hace DOS
+             * barridos completos (el proactivo y el del reintento), y encima
+             * escribia una linea de log. En un bucle, a 150 MHz y con 268 KB,
+             * eso no parece lento: parece un CUELGUE. Lo vio Eduardo en la Pico.
+             * El 1er aviso es el que informa; los demas solo estorban. */
+            {
+                static int ya_avisado = 0;
+                if (!ya_avisado) {
+                    ya_avisado = 1;
+                    bpvm_diag("[bpvm] SIN MEMORIA en el heap: pedidos %u B y no caben "
+                              "(bump %u, tope de pila %u). Este aviso sale UNA vez "
+                              "por ejecucion; el que llamo deberia lanzar OOM atrapable.",
+                              (unsigned) total, (unsigned) vm->heap_next,
+                              (unsigned) vm->stack_base);
+                }
+            }
             bpvm_smp_unlock(vm);
-            return 0;   /* OOM real */
+            return 0;   /* OOM real. NO se reintenta con la reserva: esa es para el ERROR */
         }
     }
 

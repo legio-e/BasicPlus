@@ -387,6 +387,13 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     vm->last_gc_heap_next = vm->heap_next;
     vm->gc_bump_threshold = (vm->stack_base - vm->heap_start) / 8;
     if (vm->gc_bump_threshold < 4096) vm->gc_bump_threshold = 4096;
+    /* #355 — arma la reserva de emergencia (ver el comentario largo en bpvm.c,
+     * donde se hace lo mismo por el otro camino de carga). Los DOS sitios que
+     * fijan el umbral del GC tienen que armarla: si sólo lo hiciera uno, la
+     * mitad de las cargas se quedaría sin red y el fallo volvería a ser mudo
+     * según por dónde hubiera entrado el módulo. */
+    vm->heap_reserve = 1024u;
+    if ((vm->stack_base - vm->heap_start) < 16u * 1024u) vm->heap_reserve = 0u;
 
     if (main_offset >= 0 && vm->main_absolute_address == 0) {
         vm->main_absolute_address = mod_cb + (uint32_t) main_offset;

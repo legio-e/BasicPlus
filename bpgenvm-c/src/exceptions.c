@@ -156,6 +156,20 @@ have_class:
         return bpref_null();
     }
 
+    /* #355 — AQUI se suelta la reserva de emergencia (idea de Eduardo), justo
+     * antes de las dos reservas que hacen falta para MATERIALIZAR el error: la
+     * cadena del mensaje y el objeto RuntimeError.
+     *
+     * Era la pescadilla que nos mordia la cola: si el heap esta lleno, estas dos
+     * reservas fallan tambien, se devolvia bpref_null() y NO HABIA EXCEPCION QUE
+     * LANZAR. El programa seguia con refs nulas y el fallo aparecia diez pasos
+     * mas alla, disfrazado de cadenas vacias (#355, una manana entera).
+     *
+     * El sitio importa: soltarla en el camino de reserva normal seria peor que
+     * no tenerla, porque se la quedaria el programa. Aqui solo se gasta cuando
+     * ya estamos construyendo un error, que es para lo que existe. */
+    bpvm_heap_release_reserve(vm);
+
     /* Alocar el string del mensaje. */
     size_t mlen = msg ? strlen(msg) : 0;
     uint32_t msg_ref = bpvm_heap_alloc_string(vm, msg ? msg : "", mlen);
