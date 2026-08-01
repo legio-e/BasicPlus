@@ -47,6 +47,7 @@ idf_component_register(
         "../../src/bpvm_env.c"                # H9: bloque de env A/B
         "../../src/bpvm_part.c"               # H9: particiones (FS+Packs, un mando)
         "../../src/bpvm_boot.c"               # H9: maquina de estados del arranque
+        "../../src/bpvm_util.c"        # #338/#353: zona de rascar + canal de diagnostico
         "../../src/bpvm_bmgr.c"               # H9: board manager (compone env+part)
         "../../src/bpvm_bmgr_wire.c"          # H9: nucleo del protocolo STATE/ENV/PART
         "../../src/bpvm_pack.c"               # H3 Packs V4: core portable de packs (lo llama bmgr_wire)

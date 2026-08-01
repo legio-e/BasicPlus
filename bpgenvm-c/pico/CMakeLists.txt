@@ -85,6 +85,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_env.c            # bloque de env A/B (formato + CRC + A/B)
     ${BPVM_C_ROOT}/src/bpvm_part.c           # particiones fijas, offsets derivados
     ${BPVM_C_ROOT}/src/bpvm_boot.c           # máquina de estados de arranque + STATE
+    ${BPVM_C_ROOT}/src/bpvm_util.c           # #338/#353: zona de rascar + canal de diagnostico
     ${BPVM_C_ROOT}/src/bpvm_bmgr.c           # board manager (compone env+part)
     ${BPVM_C_ROOT}/src/bpvm_bmgr_wire.c      # adaptador de wire (replies = las del sim)
     ${BPVM_C_ROOT}/src/bpvm_dbg_wire.c       # #326: ramo de depuracion (salio de AQUI; ahora comun)

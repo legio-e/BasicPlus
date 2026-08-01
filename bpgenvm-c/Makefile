@@ -15,7 +15,7 @@ CFLAGS  += $(CFLAGS_EXTRA)
 # incluyen. Sin esto, un cambio de struct dejaba .o desalineados (build stale).
 CFLAGS  += -MMD -MP
 
-SRC     = src/bpvm.c src/loader.c src/interp.c src/heap.c src/builtins.c \
+SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/builtins.c \
           src/link.c src/scheduler.c src/threading.c src/exceptions.c src/events.c \
           src/platform_pthread.c src/gpio.c src/i2c.c src/spi.c src/uart.c \
           src/pulse.c src/pwm.c src/pico.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
@@ -448,7 +448,9 @@ test-bmgr:
 # entre C y Java = rojo (el micro rechazaría los packs del PC).
 test-pack:
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_pack.c src/bpvm_pack.c -o build/test_pack.exe
+	$(CC) $(CFLAGS) test/test_pack.c src/bpvm_pack.c src/bpvm_util.c \
+	      src/bpvm_bmgr_wire.c src/bpvm_bmgr.c src/bpvm_env.c src/bpvm_part.c \
+	      src/bpvm_boot.c src/crc32.c -o build/test_pack.exe
 	@echo "--- H3 zona de packs (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_pack.exe
 

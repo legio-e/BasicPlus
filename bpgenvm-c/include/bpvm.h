@@ -245,6 +245,37 @@ typedef void (*bpvm_diag_fn)(const char* linea);
 void bpvm_diag_set_sink(bpvm_diag_fn fn);   /* NULL = vuelve a stderr */
 void bpvm_diag(const char* fmt, ...);
 
+/* ── #338: LA ZONA DE RASCAR COMPARTIDA ──────────────────────────────────────
+ *
+ * Hay operaciones que necesitan un buffer grande y lo necesitan UN MOMENTO:
+ * borrar un pack (página de RMW), listar un directorio, escanear la zona de
+ * packs. Cada una tenía el suyo `static`, y todos juntos se comían decenas de
+ * KB de `.bss` PERMANENTES para trabajar unos milisegundos al día.
+ *
+ * Pero son mutuamente excluyentes: el wire es petición/respuesta en una sola
+ * comm task — no listas packs mientras borras uno. Así que comparten UNA zona.
+ * No es una idea nueva: `board_mgr_pico.c` ya tomaba prestado el buffer del PUT
+ * exactamente así. Esto es ese préstamo, hecho explícito y vigilado.
+ *
+ * Se prefirió esto a mandarlos al heap (idea original de #338) por dos motivos:
+ * en la Pico `malloc` va a un `ucHeap` de 32 KB, así que mover 8 KB de un sitio
+ * a otro gana poco; y añadiría un camino de fallo —reserva fallida— justo en
+ * operaciones que hoy no pueden fallar. Aquí no hay reserva que falle.
+ *
+ * EL GUARDIÁN ES LA MITAD DEL VALOR: si dos operaciones se solapan, la segunda
+ * NO recibe la zona y se dice por el canal de diagnóstico con los dos nombres.
+ * El día que alguien haga concurrente algo que hoy no lo es, sale a gritos en
+ * vez de corromper el trabajo del otro en silencio. */
+#ifndef BPVM_SCRATCH_BYTES
+#define BPVM_SCRATCH_BYTES 8192   /* el mayor usuario: la página de RMW de packs */
+#endif
+
+/* Devuelve la zona (alineada para cualquier tipo) o NULL: no cabe, o ya la
+ * tiene otro. `quien` es un literal corto para el aviso ("PACK_DEL"). */
+void*  bpvm_scratch_take(size_t n, const char* quien);
+void   bpvm_scratch_give(const char* quien);
+size_t bpvm_scratch_capacity(void);
+
 /*
  * Activa traza per-instrucción al stderr (para debug del intérprete
  * mismo). Coste alto, sólo para development.

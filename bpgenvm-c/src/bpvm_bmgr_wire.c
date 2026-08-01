@@ -6,6 +6,7 @@
 #include "bpvm_bmgr_wire.h"
 #include "bpvm_boot.h"
 #include "bpvm_pack.h"   /* H3 — PACK_LS sobre la zona de packs (bm->packs_base) */
+#include "bpvm.h"        /* #338 — la zona de rascar compartida */
 
 #include <string.h>
 #include <stdio.h>
@@ -165,10 +166,14 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
          * verificación de CRCs); las escrituras (BURN/DEL) llegan en su fase. */
         if (!bm->packs_base || bm->packs_size == 0)
             return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs");
-        /* static: ~1.4 KB que no queremos en el stack de la comm task del micro;
-         * el wire de gestión es single-thread en todos los llamadores. */
-        static bpvm_pack_info_t inf[16];
-        enum { PACK_LS_MAX = (int) (sizeof inf / sizeof inf[0]) };
+        /* #338 — ~1,2 KB que no queremos ni en el stack de la comm task ni
+         * permanentes en .bss: salen de la zona compartida y vuelven al acabar
+         * de escribir la respuesta (los datos se leen DENTRO de este bloque). */
+        enum { PACK_LS_MAX = 16 };
+        bpvm_pack_info_t* inf = (bpvm_pack_info_t*) bpvm_scratch_take(
+                                    PACK_LS_MAX * sizeof(bpvm_pack_info_t), "PACK_LS");
+        if (!inf)
+            return reply_error(out, cap, id, "INTERNAL_ERROR", "zona de scratch no disponible");
         uint32_t end = 0;
         int n = bpvm_pack_scan(bm->packs_base, bm->packs_size, inf, PACK_LS_MAX,
                                /*verify_content=*/1, &end);
@@ -191,6 +196,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
             sb_raw(&s, inf[i].crc_ok ? ",\"crcOk\":true}" : ",\"crcOk\":false}");
         }
         sb_raw(&s, "]}");
+        bpvm_scratch_give("PACK_LS");   /* ANTES del return: el `inf` ya está volcado */
         return s.ok ? (int) s.off : reply_error(out, cap, id, "INTERNAL_ERROR", "reply no cabe");
     }
     if (!strcmp(type, "PACK_ENTRIES")) {
@@ -200,12 +206,20 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
             return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs");
         if (!req->has_off || req->off < 0)
             return reply_error(out, cap, id, "INVALID_PARAM", "falta offset");
-        static bpvm_pack_entry_t es[32];   /* static: fuera del stack de la comm task */
-        enum { PACK_ENT_MAX = (int) (sizeof es / sizeof es[0]) };
+        /* #338 — de la zona compartida, como el PACK_LS. OJO: esta rama tiene
+         * DOS salidas y hay que soltarla en las dos; quedársela colgada
+         * bloquearía todas las operaciones siguientes. */
+        enum { PACK_ENT_MAX = 32 };
+        bpvm_pack_entry_t* es = (bpvm_pack_entry_t*) bpvm_scratch_take(
+                                    PACK_ENT_MAX * sizeof(bpvm_pack_entry_t), "PACK_ENTRIES");
+        if (!es)
+            return reply_error(out, cap, id, "INTERNAL_ERROR", "zona de scratch no disponible");
         int n = bpvm_pack_entries(bm->packs_base, bm->packs_size,
                                   (uint32_t) req->off, es, PACK_ENT_MAX);
-        if (n < 0)
+        if (n < 0) {
+            bpvm_scratch_give("PACK_ENTRIES");            /* salida 1 */
             return reply_error(out, cap, id, "NOT_FOUND", "ahi no hay un pack valido");
+        }
         sb_raw(&s, "{\"type\":\"PACK_ENTRIES_REPLY\",\"id\":"); sb_long(&s, id);
         sb_raw(&s, ",\"offset\":"); sb_long(&s, req->off);
         sb_raw(&s, ",\"count\":"); sb_long(&s, n);
@@ -217,6 +231,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
             sb_raw(&s, "\",\"size\":"); sb_long(&s, (long) es[i].len); sb_raw(&s, "}");
         }
         sb_raw(&s, "]}");
+        bpvm_scratch_give("PACK_ENTRIES");                /* salida 2 */
         return s.ok ? (int) s.off : reply_error(out, cap, id, "INTERNAL_ERROR", "reply no cabe");
     }
     if (!strcmp(type, "PACK_BURN_BEGIN")) {
@@ -265,13 +280,19 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
             return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
         if (!req->has_off)
             return reply_error(out, cap, id, "INVALID_PARAM", "falta offset");
-        /* static: página de RMW fuera del stack de la comm task (8K = la página
-         * más grande entre familias; una mayor se rechaza, no se trunca). */
-        static uint8_t s_del_page[8192];
-        if (bm->packs_flash->erase_block > sizeof s_del_page)
-            return reply_error(out, cap, id, "INTERNAL_ERROR", "bloque de borrado > buffer de RMW");
+        /* #338 — la página de RMW sale de la zona compartida: 8 KB que sólo
+         * viven los milisegundos del borrado, no los del firmware entero. El
+         * tope de la zona hace de guardián de tamaño que ya había aquí (una
+         * página mayor se RECHAZA, nunca se trunca: media escritura de flash
+         * sería peor que no escribir). */
+        uint8_t* del_page = (uint8_t*) bpvm_scratch_take(
+                                bm->packs_flash->erase_block, "PACK_DEL");
+        if (!del_page)
+            return reply_error(out, cap, id, "INTERNAL_ERROR",
+                               "bloque de borrado > zona de scratch (o zona ocupada)");
         int r = bpvm_pack_del(bm->packs_base, bm->packs_size, bm->packs_flash,
-                              (uint32_t) req->off, s_del_page);
+                              (uint32_t) req->off, del_page);
+        bpvm_scratch_give("PACK_DEL");
         if (r == BPVM_PACK_ERR_BADIMG)
             return reply_error(out, cap, id, "NOT_FOUND", "ahi no hay un pack valido");
         if (r == BPVM_PACK_ERR_STATE)

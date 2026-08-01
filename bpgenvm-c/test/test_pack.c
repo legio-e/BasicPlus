@@ -14,6 +14,8 @@
  *   make test-pack
  */
 #include "bpvm_pack.h"
+#include "bpvm_bmgr_wire.h"   /* #338: los verbos de packs sobre la zona compartida */
+#include "bpvm.h"              /* #338: bpvm_scratch_* */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -432,6 +434,91 @@ int main(void) {
             CHECK(rd && memcmp(got, want, fm.len) == 0,
                   "#310 el dato leido por trozos es byte a byte el mismo");
         }
+    }
+
+    /* --- 12. #338 — los verbos de packs sobre la ZONA COMPARTIDA -------------
+     *
+     * PACK_LS, PACK_ENTRIES y PACK_DEL tenían cada uno su buffer `static`
+     * (1.216 + 1.536 + 8.192 B permanentes en .bss) y ahora los tres sacan el
+     * suyo de `bpvm_scratch_*`. Nadie los probaba en host: la batería entera
+     * pasaba SIN ENTRAR aquí, así que un fallo del préstamo (soltar de menos y
+     * bloquear a los siguientes, o soltar de más) sólo habría aparecido en
+     * placa, que es el sitio caro. Esto es esa red.
+     *
+     * Se reusa la región del punto 11: `g_fl` con PackFixA en 0 y PackFixB en
+     * FIX_SIZE, ya validados. */
+    {
+        bpvm_pack_flash_t fl = { fl_erase, fl_program, NULL, 4096u };
+        static uint8_t envA[4096], envB[4096], envS[4096];
+        bpvm_bmgr_t bm;
+        memset(&bm, 0, sizeof bm);
+        bm.a = envA; bm.b = envB; bm.scratch = envS; bm.sector = 4096u;
+        bm.packs_base = g_fl; bm.packs_size = FLREG; bm.packs_flash = &fl;
+
+        bpvm_bmgr_req_t rq;
+        char rep[2048];
+        int slot = -9;
+
+        /* 12.a PACK_LS — el que usaba `inf[16]` */
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_LS"); rq.id = 1;
+        int n1 = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(n1 > 0 && strstr(rep, "PACK_LS_REPLY") != NULL, "#338 PACK_LS responde");
+        CHECK(strstr(rep, "PackFixA") && strstr(rep, "PackFixB"),
+              "#338 PACK_LS ve los dos packs (el prestamo devuelve datos buenos)");
+
+        /* 12.b PACK_ENTRIES — el que usaba `es[32]`; y DOS veces seguidas, que
+         * es lo que caza un give() que falte: la 2ª encontraría la zona ocupada. */
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_ENTRIES"); rq.id = 2;
+        rq.off = 0; rq.has_off = 1;
+        int n2 = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(n2 > 0 && strstr(rep, "PACK_ENTRIES_REPLY") != NULL, "#338 PACK_ENTRIES responde");
+        rq.id = 3;
+        int n3 = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(n3 > 0 && strstr(rep, "PACK_ENTRIES_REPLY") != NULL,
+              "#338 PACK_ENTRIES DOS veces: la zona se devolvio (si no, la 2a fallaria)");
+
+        /* 12.c la salida de error tambien suelta: offset que no es un pack */
+        rq.id = 4; rq.off = 64;   /* a media imagen: ahi no empieza ningun pack */
+        bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(strstr(rep, "NOT_FOUND") != NULL, "#338 offset malo → NOT_FOUND");
+        rq.id = 5; rq.off = 0;
+        int n5 = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(n5 > 0 && strstr(rep, "PACK_ENTRIES_REPLY") != NULL,
+              "#338 y tras el error la zona sigue libre (la salida de error solto)");
+
+        /* 12.d PACK_DEL — el que usaba `s_del_page[8192]`, el mayor de los tres */
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_DEL"); rq.id = 6;
+        rq.off = 0; rq.has_off = 1;
+        int n6 = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(n6 > 0 && strstr(rep, "PACK_DEL_REPLY") != NULL, "#338 PACK_DEL responde OK");
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_LS"); rq.id = 7;
+        bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(strstr(rep, "\"active\":false") != NULL,
+              "#338 tras el DEL el pack figura inactivo (el borrado hizo su trabajo)");
+    }
+
+    /* --- 13. #338 — el GUARDIÁN de la zona compartida ------------------------
+     * La mitad del valor del mecanismo: que si dos operaciones se solapan la
+     * segunda NO reciba la zona. Sin esto, el día que algo se vuelva concurrente
+     * las dos escribirían encima la una de la otra en silencio. */
+    {
+        void* p1 = bpvm_scratch_take(64, "PRUEBA_A");
+        CHECK(p1 != NULL, "#338 la zona se coge");
+        void* p2 = bpvm_scratch_take(64, "PRUEBA_B");
+        CHECK(p2 == NULL, "#338 GUARDIAN: cogida dos veces → la 2a recibe NULL");
+        bpvm_scratch_give("PRUEBA_A");
+        void* p3 = bpvm_scratch_take(64, "PRUEBA_B");
+        CHECK(p3 == p1, "#338 tras soltarla, se vuelve a dar (y es la misma zona)");
+        bpvm_scratch_give("PRUEBA_B");
+        CHECK(bpvm_scratch_take(bpvm_scratch_capacity() + 1, "PRUEBA_C") == NULL,
+              "#338 pedir mas de lo que hay → NULL, NO se trunca");
+        void* p4 = bpvm_scratch_take(bpvm_scratch_capacity(), "PRUEBA_D");
+        CHECK(p4 != NULL, "#338 pedir el tamano exacto SI cabe");
+        bpvm_scratch_give("PRUEBA_D");
     }
 
 done:

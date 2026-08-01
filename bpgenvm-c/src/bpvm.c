@@ -193,43 +193,19 @@ uint64_t bpvm_alloc_live_bytes (bpvm_alloc_kind_t k) { return g_bytes[k]; }
 
 uint64_t bpvm_alloc_mark(void) { return g_seq_vm; }
 
-/* ── #353: el canal de diagnóstico de la VM ──────────────────────────────────
- *
- * Vive aquí, en bpvm.c, A PROPÓSITO: un .c nuevo del núcleo hay que darlo de
- * alta en CINCO builds, y olvidar uno significa que esa familia no enlaza y no
- * te enteras hasta reconstruirla. bpvm.c ya está en los cinco.
- *
- * fflush OBLIGATORIO en el default: con stderr redirigido a fichero o tubería
- * (que es como corre el micro simulado bajo el IDE) el runtime lo vuelve
- * BUFFERIZADO, y si al proceso lo matan el aviso se queda dentro sin llegar a
- * nadie. Un guardián cuyo veredicto se pierde justo en el caso violento no
- * sirve para nada. */
-static void diag_stderr(const char* linea) {
-    fprintf(stderr, "%s\n", linea);   /* el '\n' lo pone EL SINK, no el llamante */
-    fflush(stderr);
-}
-static bpvm_diag_fn g_diag = diag_stderr;
-
-void bpvm_diag_set_sink(bpvm_diag_fn fn) { g_diag = fn ? fn : diag_stderr; }
-
-void bpvm_diag(const char* fmt, ...) {
-    /* Buffer de PILA y acotado: esto se llama desde el loader y desde el fin de
-     * RUN, en micros con la pila contada. 224 B es lo que ya usaba el guardián
-     * y da de sobra para un nombre de módulo con su explicación. */
-    char linea[224];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(linea, sizeof linea, fmt, ap);
-    va_end(ap);
-    g_diag(linea);
-}
+/* #353 (canal de diagnóstico) y #338 (zona de rascar compartida) vivían aquí.
+ * Se mudaron a src/bpvm_util.c: los usan el gestor de placa y las cinturas del
+ * FS, que no tienen por qué enlazar la VM entera para pedir un buffer o soltar
+ * un aviso. Las declaraciones siguen en bpvm.h. */
 
 /* El guardián de #339 mantiene su propio sink porque el test lo CAPTURA para
  * comprobar el veredicto palabra por palabra; si compartiera el de diag, el
  * test se comería también los mensajes del loader. Su default, eso sí, es el
  * canal común: así un firmware que instale el sink de diag se lleva el
  * veredicto del guardián al log sin tener que acordarse de dos cosas. */
-static void report_via_diag(const char* linea) { g_diag(linea); }
+/* "%s" y no `linea` directa: el veredicto lleva rutas y nombres de fichero, y
+ * un '%' suelto ahí convertiría el aviso en lectura de basura de la pila. */
+static void report_via_diag(const char* linea) { bpvm_diag("%s", linea); }
 static bpvm_alloc_report_fn g_report = report_via_diag;
 
 void bpvm_alloc_set_report(bpvm_alloc_report_fn fn) {
