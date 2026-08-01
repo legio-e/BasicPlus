@@ -83,8 +83,20 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
         /* No matchee: seguimos popeando entries (los handlers más
          * exteriores). */
     }
-    /* Sin handler: print error + terminar thread. */
-    fprintf(stderr, "[bpvm-c] excepción no atrapada en tid=%" PRId32 "\n", tc->id);
+    /* Sin handler: print error + terminar thread.
+     *
+     * #355/#353 — POR EL CANAL DE DIAG, NO POR stderr. Este es EL final de
+     * camino de un thread que muere, y en la placa el stderr no llega a ningún
+     * sitio: el programa se apagaba sin decir por qué.
+     *
+     * Y es justo el caso que nos tuvo ciegos: una excepción atrapada por el
+     * `catch` del programa, cuyo manejador vuelve a quedarse sin memoria al
+     * componer el mensaje → lanza OTRA VEZ, ya sin nadie que la recoja → el
+     * thread termina en silencio a mitad del catch. Sin esta línea, la última
+     * señal es la penúltima que el programa alcanzó a imprimir. */
+    bpvm_diag("[bpvm] EXCEPCION NO ATRAPADA en el thread %" PRId32 ": el thread "
+              "TERMINA aqui. Si esto sale dentro de un catch, el manejador se ha "
+              "quedado sin memoria al construir su propio mensaje.", tc->id);
     if (!bpref_is_null(ref)) {
         /* Intenta leer field 0 = msg (asumiendo layout RuntimeError). */
         bpref_t msg_r; msg_r.v = (uint64_t) bpvm_read_i64_be(vm->memory + bpref_deref(vm, ref) + 4);   /* msg = handle 64b */
@@ -96,7 +108,7 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
                 buf[n++] = (char) vm->memory[msg_addr + 4 + i];
             }
             buf[n] = '\0';
-            fprintf(stderr, "  RuntimeError: %s\n", buf);
+            bpvm_diag("[bpvm]   el mensaje que traia: \"%s\"", buf);
         }
     }
     tc->status = BPVM_THREAD_TERMINATED;
@@ -151,8 +163,10 @@ have_class:
     if (!class_ptr) {
         /* Sin RuntimeError disponible — caller debe usar BpThreadFault
          * equivalente (= terminar thread). Aquí imprimimos al menos. */
-        fprintf(stderr, "[bpvm-c] RuntimeError sin clase exportada: %s\n",
-                msg ? msg : "");
+        /* #355 — al canal de diag: en placa el stderr no llega a ningun sitio
+         * util. De paso cierra uno de los 29 fprintf de #353. */
+        bpvm_diag("[bpvm] throw: SIN CLASE RuntimeError exportada, no hay con "
+                  "que construir la excepcion: %s", msg ? msg : "");
         return bpref_null();
     }
 
@@ -168,12 +182,17 @@ have_class:
      * El sitio importa: soltarla en el camino de reserva normal seria peor que
      * no tenerla, porque se la quedaria el programa. Aqui solo se gasta cuando
      * ya estamos construyendo un error, que es para lo que existe. */
-    bpvm_heap_release_reserve(vm);
+    vm->building_error = 1;
 
     /* Alocar el string del mensaje. */
     size_t mlen = msg ? strlen(msg) : 0;
     uint32_t msg_ref = bpvm_heap_alloc_string(vm, msg ? msg : "", mlen);
-    if (msg_ref == 0) return bpref_null();
+    if (msg_ref == 0) {
+        bpvm_diag("[bpvm] throw: sin memoria para el MENSAJE (%u B) ni con la "
+                  "reserva de emergencia soltada", (unsigned) mlen);
+        vm->building_error = 0;
+        return bpref_null();
+    }
     /* GC-safety: el msg AÚN no vive en ninguna raíz y la alocación del objeto de
      * abajo PUEDE disparar el GC (umbral/OOM) → anclarlo para que no lo recicle
      * (su gen queda intacta, clave para el bpref_regen de más abajo). */
@@ -182,7 +201,12 @@ have_class:
     /* Alocar el objeto RuntimeError. */
     uint16_t num_fields = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_NUM_FIELDS);
     uint32_t obj_addr = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4, BPVM_TYPE_OBJECT);
-    if (obj_addr == 0) return bpref_null();
+    if (obj_addr == 0) {
+        bpvm_diag("[bpvm] throw: mensaje OK pero sin memoria para el OBJETO "
+                  "RuntimeError (%u campos)", (unsigned) num_fields);
+        vm->building_error = 0;
+        return bpref_null();
+    }
     bpvm_write_u32_be(vm->memory + obj_addr, class_ptr);
     /* slot 0 = msg (convención del frontend). Guardamos el HANDLE COMPLETO de 64b:
      * bpref_regen re-adjunta la gen VIVA del slot del msg (heap_alloc_string truncó
@@ -197,5 +221,6 @@ have_class:
      * de otra forma. No tocamos el stack BP aquí — eso lo hace
      * eh_unwind tras encontrar handler. El ancla es idx|TAG. */
     tc->alloc_anchor = (int32_t) (uint32_t) obj_h.v;
+    vm->building_error = 0;
     return obj_h;
 }
