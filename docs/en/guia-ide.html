@@ -169,6 +169,7 @@
     <li><a href="#ejecutar">5. Running (and stopping)</a></li>
     <li style="padding-left:0.9rem;font-size:0.9em"><a href="#aot">5.1 native (AOT): the toolchain</a></li>
     <li><a href="#placa">6. Connecting to the board</a></li>
+    <li style="padding-left:0.9rem;font-size:0.9em"><a href="#simulado">6.1 The simulated micro</a></li>
     <li><a href="#consola">7. The micro console</a></li>
     <li><a href="#info">8. Device INFO</a></li>
     <li><a href="#gestion">9. Board management: boot and partitions</a></li>
@@ -335,7 +336,7 @@
       (it reinstalls itself on every boot).</li>
   <li><code>/sys</code> — configuration: <code>board.json</code> (board
       identity), <code>device.json</code>, <code>auto.txt</code> (autorun,
-      §10).</li>
+      §12).</li>
 </ul>
 <p>
   The button bar operates on the selected file: <em>Refresh</em>,
@@ -351,6 +352,51 @@
   protocol is identical.
 </p>
 
+<h3 id="simulado">6.1 The simulated micro: a board that does not exist</h3>
+<p>
+  The third backend, <em>Micro simulado (VM-C)</em>, is <strong>a make-believe
+  board running on your PC</strong>. It is not a silicon emulator: it is the
+  same VM-C that runs on the micros, compiled for the computer and served over
+  TCP — the IDE treats it <em>exactly</em> like a real board. Same file tree,
+  same buttons, same debugger.
+</p>
+<p>
+  It is useful for what you would expect — trying things without the board in
+  front of you, or while it is busy — but above all for <strong>what the plain
+  PC VM cannot do</strong>: the simulated micro has a <em>screen</em>. A
+  program with a graphical interface shows up in its window, painted by the
+  same LVGL that paints on the board.
+</p>
+<p>
+  <strong>Starting and stopping it</strong> is done from the panel itself, and
+  the gear button opens its configuration. And that is where it gets
+  interesting — the <strong>&quot;silicon&quot; is configurable</strong>:
+</p>
+<ul>
+  <li><strong>RAM and PSRAM</strong> — to try your program with the memory the
+      target micro will actually have, not the PC&rsquo;s. It is the cheap way
+      to find out it does not fit.</li>
+  <li><strong>Flash</strong> — the volume size, split the same way as on a
+      board (§9.2).</li>
+  <li><strong>Screen</strong> — width and height, or no screen at all. You can
+      check how your interface looks at 480×320 and at 800×480 without
+      owning both boards.</li>
+</ul>
+<p>
+  Its &quot;flash&quot; and its filesystem are <strong>files on the PC</strong>
+  and they <strong>persist across restarts</strong>, just like on a board: what
+  you upload is still there tomorrow. On first start the FS is empty — unlike a
+  board, which carries the standard library embedded in its firmware — so the
+  IDE burns into it the <em>pack library</em> that ships with the installation
+  (§10).
+</p>
+<p class="note">
+  The simulated micro <strong>has no pins</strong>. The hardware builtins —
+  <code>Gpio</code>, <code>I2c</code>, <code>Spi</code>… — exist and run, but
+  they log to the console instead of moving anything. It is fine for logic,
+  interface and filesystem; hardware still needs the board.
+</p>
+
 <h2 id="consola">7. The micro console</h2>
 <p>
   The <code>/ &gt;</code> prompt under the Console talks directly to the
@@ -361,7 +407,7 @@ kill · autorun [file|off] · mem · save · log · reset · cls · help</code><
 <p>
   Two of them deserve a highlight: <code>kill</code> aborts the running
   program (equivalent to Run → Stop) and <code>autorun</code> manages the
-  standalone startup (§10). If you connect while a program is running, the
+  standalone startup (§12). If you connect while a program is running, the
   explorer will report the board as busy — <code>kill</code> takes back
   control.
 </p>

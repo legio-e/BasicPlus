@@ -169,6 +169,7 @@
     <li><a href="#ejecutar">5. Ejecutar (y parar)</a></li>
     <li style="padding-left:0.9rem;font-size:0.9em"><a href="#aot">5.1 native (AOT): el toolchain</a></li>
     <li><a href="#placa">6. Conectarse a la placa</a></li>
+    <li style="padding-left:0.9rem;font-size:0.9em"><a href="#simulado">6.1 El micro simulado</a></li>
     <li><a href="#consola">7. La consola del micro</a></li>
     <li><a href="#info">8. INFO del dispositivo</a></li>
     <li><a href="#gestion">9. Gestión de placa: arranque y particiones</a></li>
@@ -352,6 +353,52 @@
   El mismo panel sirve para la <em>VM Java (TCP v1)</em>: apuntas a un
   daemon local o remoto y obtienes el mismo árbol y los mismos botones —
   el protocolo es idéntico.
+</p>
+
+<h3 id="simulado">6.1 El micro simulado: una placa que no existe</h3>
+<p>
+  El tercer backend, <em>Micro simulado (VM-C)</em>, es <strong>una placa de
+  mentira que corre en tu PC</strong>. No es un emulador de silicio: es la
+  misma VM-C que va en los micros, compilada para el ordenador y servida por
+  TCP — el IDE la trata <em>exactamente</em> igual que a una placa de verdad.
+  El mismo árbol de ficheros, los mismos botones, el mismo depurador.
+</p>
+<p>
+  Sirve para lo que uno esperaría —probar sin tener la placa delante, o
+  mientras la tienes ocupada— pero sobre todo para <strong>lo que no se puede
+  hacer con la VM del PC a secas</strong>: el micro simulado tiene
+  <em>pantalla</em>. Un programa con interfaz gráfica se ve en su ventana,
+  pintado por el mismo LVGL que pinta en la placa.
+</p>
+<p>
+  <strong>Arrancarlo y pararlo</strong> se hace desde el propio panel:
+  <em>Arrancar</em> lo lanza y <em>Parar</em> lo detiene; el botón del
+  engranaje abre su configuración. Y ahí está lo interesante — el
+  <strong>«silicio» es configurable</strong>:
+</p>
+<ul>
+  <li><strong>RAM y PSRAM</strong> — para probar tu programa con la memoria
+      que de verdad tendrá el micro al que va destinado, no con la del PC.
+      Es la forma barata de descubrir que no cabe.</li>
+  <li><strong>Flash</strong> — el tamaño del volumen, que se reparte igual que
+      en una placa (§9.2).</li>
+  <li><strong>Pantalla</strong> — ancho y alto, o sin pantalla. Puedes
+      comprobar cómo queda tu interfaz en 480×320 y en 800×480 sin tener las
+      dos placas.</li>
+</ul>
+<p>
+  Su «flash» y su sistema de ficheros son <strong>ficheros del PC</strong> y
+  <strong>persisten entre arranques</strong>, igual que en una placa: lo que
+  subas sigue ahí mañana. Al arrancar por primera vez el FS está vacío —a
+  diferencia de una placa, que trae la biblioteca estándar embebida en el
+  firmware—, así que el IDE le graba la <em>biblioteca de packs</em> que
+  acompaña a la instalación (§10).
+</p>
+<p class="note">
+  El micro simulado <strong>no tiene pines</strong>. Los builtins de hardware
+  —<code>Gpio</code>, <code>I2c</code>, <code>Spi</code>…— existen y se
+  ejecutan, pero escriben por la consola en vez de mover nada. Para lógica,
+  interfaz y sistema de ficheros vale; el hardware sigue necesitando la placa.
 </p>
 
 <h2 id="consola">7. La consola del micro</h2>
