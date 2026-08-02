@@ -225,6 +225,11 @@
 
 
 
+    <li class="group"><a href="#eventos">15. Eventos</a></li>
+    <li class="sub"><a href="#ev-declarar">15.1 Declarar y disparar</a></li>
+    <li class="sub"><a href="#ev-escuchar">15.2 Escuchar: function event y ::</a></li>
+    <li class="sub"><a href="#ev-cuando">15.3 raise NO llama al manejador</a></li>
+    <li class="sub"><a href="#ev-async">15.4 Llamadas asíncronas</a></li>
     <li class="group"><a href="#pendientes">17. Pendientes / no soportado</a></li>
   </ul>
   <h2>Referencia (volumen aparte)</h2>
@@ -1599,6 +1604,83 @@ objeto compartido</code></pre>
 </ul>
 
 <!-- =========================================================== -->
+<!-- =========================================================== -->
+<!-- =========================================================== -->
+<h2 id="eventos">15. Eventos</h2>
+<p>Un <strong>evento</strong> permite que un objeto <em>avise</em> de que algo ha
+pasado sin saber quién le escucha. El que emite declara <strong>la firma</strong>
+de lo que va a notificar; el que escucha se <strong>suscribe</strong> con un
+método suyo.</p>
+<p>Es la base de la interfaz gráfica —un botón no sabe qué hace tu programa
+cuando lo pulsan—, pero <strong>no está limitado a ella</strong>: sirve en
+cualquier clase.</p>
+
+<h3 id="ev-declarar">15.1 Declarar y disparar</h3>
+<p>Dentro de la clase que emite, <code>event</code> declara nombre y parámetros.
+Admite <a href="#defaults">valores por defecto</a> como cualquier firma:</p>
+<pre><code><span class="kw">class</span> Boton
+  <span class="kw">var</span> id: <span class="type">integer</span>
+  <span class="kw">event</span> <span class="fn">onClick</span>(sender: Boton, veces: <span class="type">integer</span> := <span class="num">1</span>)
+
+  <span class="kw">public function</span> <span class="fn">pulsa</span>(n: <span class="type">integer</span>)
+    <span class="kw">raise</span> onClick(<span class="kw">this</span>, n)      <span class="comment">// dispara</span>
+  <span class="kw">end</span> pulsa
+<span class="kw">end</span> Boton</code></pre>
+
+<h3 id="ev-escuchar">15.2 Escuchar: <code>function event</code> y <code>::</code></h3>
+<p>El que escucha declara un <strong>manejador</strong> con <code>function
+event</code> y la misma lista de parámetros. No hace falta que sea público — lo
+normal es que sea privado, porque nadie más lo llama.</p>
+<p>La suscripción se escribe con <code>::</code>, que ata <strong>un objeto y un
+método suyo</strong>:</p>
+<pre><code><span class="kw">class</span> Panel
+  <span class="kw">function event</span> <span class="fn">pulsado</span>(b: Boton, veces: <span class="type">integer</span>)
+    <span class="kw">print</span>(<span class="str">"  handler: boton "</span> + b.numero + <span class="str">" x"</span> + veces)
+  <span class="kw">end</span> pulsado
+<span class="kw">end</span> Panel
+
+<span class="kw">var</span> b: Boton := Boton(<span class="num">7</span>)
+<span class="kw">var</span> p: Panel := Panel(<span class="str">"principal"</span>)
+b.onClick := p::pulsado          <span class="comment">// suscribe el metodo de ESE objeto</span></code></pre>
+
+<h3 id="ev-cuando">15.3 Lo importante: <code>raise</code> NO llama al manejador</h3>
+<p class="warn">Esto es lo que hay que tener claro para no llevarse sorpresas:
+<strong><code>raise</code> encola el evento y vuelve inmediatamente</strong>. El
+manejador se ejecuta <em>después</em>, cuando el planificador le inyecta el frame
+al hilo entre dos cortes de ejecución.</p>
+<pre><code><span class="kw">print</span>(<span class="str">"antes del raise"</span>)
+b.pulsa(<span class="num">3</span>)
+<span class="kw">print</span>(<span class="str">"despues del raise (el handler todavia NO ha corrido)"</span>)
+sleep(<span class="num">30</span>)
+<span class="kw">print</span>(<span class="str">"fin"</span>)</code></pre>
+<p>Sale, en este orden:</p>
+<pre><code>antes del raise
+despues del raise (el handler todavia NO ha corrido)
+  handler: boton 7 x3 en principal
+fin</code></pre>
+<p>Dos consecuencias prácticas:</p>
+<ul>
+  <li><strong>Quien dispara no se bloquea.</strong> Por eso un botón puede avisar
+      sin que la interfaz se quede parada esperando a tu código.</li>
+  <li><strong>No cuentes con que el manejador ya haya corrido</strong> en la línea
+      siguiente al <code>raise</code>. Si necesitas el resultado, pásalo por el
+      propio evento o espera a que el manejador lo deje escrito.</li>
+</ul>
+
+<h3 id="ev-async">15.4 Llamadas asíncronas</h3>
+<p>El mismo <code>::</code> sirve para lanzar un método <strong>en otro hilo</strong>,
+sin escribir una clase <code>Thread</code> a mano:</p>
+<pre><code>Thread(obj::metodo(args)).start()</code></pre>
+<p>Está pensado justo para lo que bloquea: una lectura larga, un cálculo pesado o
+un acceso a disco lanzados desde un manejador de la interfaz, para que la pantalla
+siga respondiendo mientras tanto.</p>
+<p class="warn"><strong>Y aquí sí hay que tener cuidado.</strong> Lo que se lanza
+así corre en un <strong>hilo distinto del principal</strong>. Si vas a compartir
+variables con el resto del programa, usa los mecanismos de sincronización del
+lenguaje (ver <a href="#concurrencia">14. Concurrencia</a>) para evitar corromper
+los datos. Un manejador de evento normal <em>no</em> tiene este problema: corre en
+el hilo que lo recibe.</p>
+
 <!-- =========================================================== -->
 <h2 id="pendientes">17. Pendientes / no soportado</h2>
 <p style="color:var(--fg-muted)">Estado al cierre de V3 (julio 2026). Lo
