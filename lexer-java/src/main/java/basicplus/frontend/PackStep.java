@@ -50,13 +50,27 @@ public final class PackStep {
 
         // 1) módulos + nativo del outDir (filtrados a .mod/.mdn: nunca .bpi/.slots)
         collectDir(outDir, entries, OUTDIR_TYPES);
+        // Lo que ha aportado el outDir, ANTES de mezclar los resources. El pack se
+        // valida contra esto y no contra el total: un proyecto con resources/ y
+        // CERO módulos dejaba la lista no-vacía y se colaba (ver abajo).
+        List<PackEntry> modulos = new ArrayList<>(entries);
 
         // 2) resources del proyecto (cualquier extensión), si hay carpeta
         Path resDir = Paths.get(proj.projectDir, "resources");
         if (Files.isDirectory(resDir)) collectDir(resDir, entries, null);
 
-        if (entries.isEmpty())
+        // El pack tiene que poder EJECUTARSE, y eso son dos condiciones. Las dos se
+        // comprueban aquí, al construir, y no en la placa: la VM las detecta y lo
+        // dice bien, pero para entonces ya has grabado un pack inservible.
+        if (modulos.isEmpty())
             throw new IOException("out:pack — no hay .mod/.mdn en " + outDir + " que empaquetar");
+
+        if (!contieneModulo(modulos, proj.main)) {
+            throw new IOException("out:pack — el manifest declara main='" + proj.main
+                    + "' pero ese módulo no está en el pack. Módulos encontrados en "
+                    + outDir + ": [" + nombresDeModulos(modulos) + "]."
+                    + pistaLibrary(modulos, proj.main));
+        }
 
         // 3) manifest → pack ejecutable (modelo jar). Reusa el `main` del .bpbuild.
         String manifest = "main=" + proj.main + "\n";
@@ -78,6 +92,49 @@ public final class PackStep {
             throw new IOException("out:pack — empaquetando: " + pe.getMessage(), pe);
         }
         return out;
+    }
+
+    /** ¿Está el módulo `main` entre las entradas de tipo 'mod'? La comparación es
+     *  la MISMA que hace la VM al arrancar un pack (busca la entrada ("mod", main)
+     *  tal cual): si aquí dijéramos que sí y allí que no, la comprobación no
+     *  serviría de nada. */
+    private static boolean contieneModulo(List<PackEntry> mods, String main) {
+        if (main == null || main.isEmpty()) return false;
+        for (PackEntry e : mods) {
+            if ("mod".equals(e.tipo) && main.equals(e.nombre)) return true;
+        }
+        return false;
+    }
+
+    /** Si el módulo del main SÍ está pero bajo su nombre de librería
+     *  (`com.example.Demo.mod` cuando el main es `Demo`), decirlo — porque el
+     *  usuario NO tiene salida buscándola solo: poner el nombre cualificado en
+     *  `main` tampoco vale, ahí se busca el FICHERO FUENTE, que se llama
+     *  `Demo.bp`. No adivinamos por él (no arreglamos el manifest a su espalda):
+     *  le decimos qué pasa y qué puede hacer. */
+    private static String pistaLibrary(List<PackEntry> mods, String main) {
+        String sufijo = "." + main;
+        for (PackEntry e : mods) {
+            if (!"mod".equals(e.tipo) || !e.nombre.endsWith(sufijo)) continue;
+            return " El módulo SÍ está, pero con su nombre de librería ('"
+                 + e.nombre + "'), porque declara `library`. Hoy un módulo con"
+                 + " `library` no puede ser el main de un pack ejecutable: quítale"
+                 + " el `library` al módulo principal, o publica el pack como"
+                 + " biblioteca (sin main).";
+        }
+        return "";
+    }
+
+    /** Nombres de los .mod, para que el error diga qué SÍ hay (el que se equivoca
+     *  de `main` suele tener el módulo delante con otro nombre). */
+    private static String nombresDeModulos(List<PackEntry> mods) {
+        StringBuilder sb = new StringBuilder();
+        for (PackEntry e : mods) {
+            if (!"mod".equals(e.tipo)) continue;
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(e.nombre);
+        }
+        return sb.toString();
     }
 
     /**
