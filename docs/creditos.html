@@ -54,8 +54,8 @@
   BasicPlus es un stack propio de arriba abajo —compilador, dos máquinas
   virtuales, entorno de desarrollo—, pero <strong>no está hecho en el
   vacío</strong>. Se apoya en trabajo de otros: sistemas de ficheros,
-  bibliotecas gráficas, planificadores, los SDK de cada fabricante y las
-  herramientas con las que se construye todo.
+  bibliotecas gráficas, un sistema operativo en tiempo real, los SDK de cada
+  fabricante y las herramientas con las que se construye todo.
 </p>
 <p class="lead">
   <strong>Este proyecto no habría sido posible sin ellos.</strong> Esta página
@@ -78,10 +78,13 @@
   </tr>
   <tr>
     <td><a href="https://www.freertos.org/">FreeRTOS</a></td>
-    <td>El <strong>planificador</strong> sobre el que corren las tareas de la VM
-        en placa: los <em>workers</em> del intérprete y la tarea de
-        comunicaciones. En la Pico se usa el kernel directamente; en los ESP32
-        llega dentro del ESP-IDF.</td>
+    <td>El <strong>sistema operativo en tiempo real</strong> (RTOS) sobre el que
+        se sostiene la VM en placa. No es sólo el planificador: de él salen las
+        <em>tareas</em> —los <em>workers</em> del intérprete y la de
+        comunicaciones— y también las colas, los semáforos, los mutex y los
+        temporizadores sobre los que se apoyan las clases <code>Thread</code> y
+        <code>Mutex</code> de BasicPlus. En la Pico y el STM32 se usa el kernel
+        directamente; en los ESP32 llega dentro del ESP-IDF.</td>
     <td class="lic">MIT</td>
   </tr>
 </table>
