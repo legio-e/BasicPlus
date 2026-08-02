@@ -367,6 +367,19 @@
   program with a graphical interface shows up in its window, painted by the
   same LVGL that paints on the board.
 </p>
+
+<p><img src="../img/BpIde_VM_GuiColorDemo.png"
+        alt="The IDE with GuiColorDemo open and, on the right, the simulated micro's window showing the colour palette"></p>
+<p>
+  In the screenshot, <code>GuiColorDemo</code> running on a simulated micro
+  with a <strong>480×800 screen</strong> — the size lives in its configuration,
+  not in the program. Bottom left, the <em>backend</em> selector with its three
+  options and the simulator «en marcha :5099»; and in the console, two lines
+  telling where each module came from: <code>Gui</code>, from the filesystem,
+  eclipsing the one in the pack (§10.2), and <code>Core</code>, loaded
+  <em>XIP</em> from the pack — the code runs where it sits, without being
+  copied.
+</p>
 <p>
   <strong>Starting and stopping it</strong> is done from the panel itself, and
   the gear button opens its configuration. And that is where it gets

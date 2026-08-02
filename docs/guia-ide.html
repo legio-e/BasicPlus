@@ -370,6 +370,18 @@
   <em>pantalla</em>. Un programa con interfaz gráfica se ve en su ventana,
   pintado por el mismo LVGL que pinta en la placa.
 </p>
+
+<p><img src="img/BpIde_VM_GuiColorDemo.png"
+        alt="El IDE con GuiColorDemo abierto y, a la derecha, la ventana del micro simulado mostrando la paleta de colores"></p>
+<p>
+  En la captura, <code>GuiColorDemo</code> corriendo en un micro simulado con
+  <strong>pantalla de 480×800</strong> —el tamaño está en su configuración, no
+  en el programa—. Abajo a la izquierda, el selector de <em>backend</em> con
+  las tres opciones y el simulador «en marcha :5099»; y en la consola, dos
+  líneas que cuentan de dónde salió cada módulo: <code>Gui</code>, del sistema
+  de ficheros, eclipsando al del pack (§10.2), y <code>Core</code>, cargado
+  <em>XIP</em> desde el pack —el código se ejecuta donde está, sin copiarse.
+</p>
 <p>
   <strong>Arrancarlo y pararlo</strong> se hace desde el propio panel:
   <em>Arrancar</em> lo lanza y <em>Parar</em> lo detiene; el botón del
