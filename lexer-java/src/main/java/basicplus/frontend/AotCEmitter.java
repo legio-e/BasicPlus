@@ -259,8 +259,20 @@ public final class AotCEmitter {
 
         // Una función + thunk por cada native.
         for (Ast.FuncDef f : nativeFuncs) {
-            emitFunction(f);
-            emitThunk(f);
+            /* #349 — LA FUNCIÓN Y LA LÍNEA, o el aviso no sirve de nada. Los
+             * throw de aquí abajo nacen en sitios que no saben en qué función
+             * están (cType, readHelper...), así que el mensaje llegaba suelto:
+             * "el tipo 'double' ocupa 8 bytes". En un módulo con varias native
+             * eso obliga a buscarlas una a una. Se enriquece aquí, que es el
+             * único punto por el que pasan todas. */
+            try {
+                emitFunction(f);
+                emitThunk(f);
+            } catch (UnsupportedAotException ex) {
+                throw new UnsupportedAotException(
+                    "en la funcion native '" + f.name.name + "' (linea " + f.line + "): "
+                    + ex.getMessage());
+            }
         }
 
         // Función de registro — solo si NO estamos en modo .mdn.
@@ -292,12 +304,22 @@ public final class AotCEmitter {
         w.println();
         w.println("/* Forward decls de las funciones AOT de este módulo. */");
         for (Ast.FuncDef f : nativeFuncDefs.values()) {
-            w.print("static " + cType(f.returnType) + " aot_"
-                + moduleName + "_" + f.name.name + "(struct bpvm* vm");
-            for (Ast.Param p : f.params) {
-                w.print(", " + cType(p.type) + " " + p.name);
+            /* #349 — mismo motivo que en el bucle de emisión: un tipo de la
+             * FIRMA revienta aquí, antes de llegar allí, así que sin este catch
+             * el caso más común (un `double` como parámetro o retorno) era
+             * justo el que salía sin nombre de función. */
+            try {
+                w.print("static " + cType(f.returnType) + " aot_"
+                    + moduleName + "_" + f.name.name + "(struct bpvm* vm");
+                for (Ast.Param p : f.params) {
+                    w.print(", " + cType(p.type) + " " + p.name);
+                }
+                w.println(");");
+            } catch (UnsupportedAotException ex) {
+                throw new UnsupportedAotException(
+                    "en la firma de la funcion native '" + f.name.name
+                    + "' (linea " + f.line + "): " + ex.getMessage());
             }
-            w.println(");");
         }
         w.println();
 
@@ -1450,9 +1472,25 @@ public final class AotCEmitter {
                 case "boolean": return "int32_t";   /* bool como i32 0/1 */
                 case "string":  return "int32_t";   /* #171: handle al heap. */
                 case "long": case "double":
-                    /* 8 bytes: no soportado en signature de native v1. */
+                    /* #349 — 8 bytes: el AOT v1 marshalla todo en slots de 4.
+                     *
+                     * El mensaje NO puede decir "en la signature": cType se usa
+                     * también para las VARIABLES LOCALES, y decía signature en
+                     * los dos casos. Con un `double` declarado dentro del cuerpo,
+                     * el usuario iba a mirar la firma, no encontrar nada raro y
+                     * quedarse atascado. Un recorte anunciado mal es casi tan
+                     * caro como uno mudo.
+                     *
+                     * Y dice QUÉ HACER, que es lo que convierte un error en una
+                     * decisión: o `float` (32 bits, sí soportado) si la precisión
+                     * da, o quitar `native` y que esa función corra interpretada
+                     * — el resto del módulo sigue compilando a nativo igual. */
                     throw new UnsupportedAotException(
-                        "AOT: tipo '" + n + "' (8 bytes) no soportado en signature de native");
+                        "el tipo '" + n + "' ocupa 8 bytes y el AOT v1 sólo maneja "
+                        + "valores de 4 (parámetros, retorno y variables locales). "
+                        + "Opciones: usar 'float' si la precisión de 32 bits basta, "
+                        + "o quitar 'native' de esta función para que corra "
+                        + "interpretada (el resto del módulo sigue yendo a nativo).");
                 default:
                     /* #174b — clase/enum/any: ref u valor de 4 bytes → handle i32.
                      * (El análisis semántico ya validó el tipo, así que un nombre
