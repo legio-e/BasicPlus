@@ -171,8 +171,10 @@
     <li><a href="#placa">6. Conectarse a la placa</a></li>
     <li><a href="#consola">7. La consola del micro</a></li>
     <li><a href="#info">8. INFO del dispositivo</a></li>
-    <li><a href="#debug">9. Depurar</a></li>
-    <li><a href="#autorun">10. Dispositivo autónomo</a></li>
+    <li><a href="#gestion">9. Gestión de placa: arranque y particiones</a></li>
+    <li><a href="#packs">10. Packs</a></li>
+    <li><a href="#debug">11. Depurar</a></li>
+    <li><a href="#autorun">12. Dispositivo autónomo</a></li>
   </ul>
   <h2>Volúmenes</h2>
   <ul>
@@ -234,8 +236,10 @@
       (en la captura: <code>App.bp</code> y <code>Util.bp</code>).</li>
   <li><strong>Resources</strong> — ficheros de datos que el Run copia
       al micro tal cual (configuraciones, tablas…).</li>
-  <li><strong>Output</strong> — lo que produce el compilador:
-      <code>.mod</code> (bytecode) y <code>.bpi</code> (interfaces).</li>
+  <li><strong>Output</strong> — lo que produce el compilador: los
+      <code>.mod</code> (bytecode, con su interfaz dentro), el
+      <code>.mdn</code> si el proyecto usa <code>native</code>, y el
+      <code>.pack</code> si el proyecto empaqueta (§10).</li>
   <li><strong>Dependencies</strong> — módulos importados resueltos.</li>
 </ul>
 
@@ -332,7 +336,7 @@
       firmware (se reinstala sola en cada arranque).</li>
   <li><code>/sys</code> — configuración: <code>board.json</code>
       (identidad de la placa), <code>device.json</code>,
-      <code>auto.txt</code> (autorun, §10).</li>
+      <code>auto.txt</code> (autorun, §12).</li>
 </ul>
 <p>
   La botonera opera sobre el fichero seleccionado:
@@ -359,7 +363,7 @@ kill · autorun [fich|off] · mem · save · log · reset · cls · help</code><
 <p>
   Dos de ellos merecen subrayado: <code>kill</code> aborta el programa
   en ejecución (equivale a Run → Stop) y <code>autorun</code> gestiona
-  el arranque autónomo (§10). Si conectas con un programa corriendo, el
+  el arranque autónomo (§12). Si conectas con un programa corriendo, el
   explorador avisará «placa ocupada» — <code>kill</code> recupera el
   control.
 </p>
@@ -376,7 +380,179 @@ kill · autorun [fich|off] · mem · save · log · reset · cls · help</code><
   el uptime.
 </p>
 
-<h2 id="debug">9. Depurar</h2>
+<h2 id="gestion">9. Gestión de placa: arranque y particiones</h2>
+<p>
+  <strong>Placa</strong> en la barra de herramientas (o <strong>Gestión de
+  placa…</strong> en el menú) abre una ventana aparte que trabaja sobre la
+  conexión ya abierta. A la izquierda, el <em>estado del arranque</em>, las
+  <em>variables de entorno</em> y las <em>particiones</em>; a la derecha, los
+  <em>packs</em> (§10).
+</p>
+<p>
+  No hace falta buscarla: al conectar, el IDE le pregunta su estado a la placa
+  y, <strong>si está sin configurar o degradada, se ofrece a abrirla</strong>.
+  Con una placa sana y configurada no dice nada.
+</p>
+
+<h3 id="estados">9.1 El arranque es escalonado</h3>
+<p>
+  El firmware no arranca de golpe: sube por estados, y cada uno se apoya en el
+  anterior.
+</p>
+<table>
+  <tr><th>Estado</th><th>Significa</th></tr>
+  <tr><td><strong>0 · kernel</strong></td><td>Lo mínimo que responde: comunicaciones. Sin particiones, sin FS, sin VM.</td></tr>
+  <tr><td><strong>1 · particiones</strong></td><td>La tabla de particiones es válida.</td></tr>
+  <tr><td><strong>2 · FS</strong></td><td>El sistema de archivos está montado.</td></tr>
+  <tr><td><strong>3 · app</strong></td><td>La VM corre y la placa acepta programas. Es el estado normal.</td></tr>
+</table>
+<p>
+  Lo que hace útil este escalonado es que <strong>si un paso falla, la placa se
+  queda en el último estado bueno y dice por qué</strong>, en vez de morir sin
+  explicación. Una placa en estado 0 no está rota: está esperando a que la
+  configures, y sigue hablándote. La cabecera del panel muestra el estado, el
+  nombre y el motivo si viene degradada.
+</p>
+
+<h3 id="particiones">9.2 Particiones</h3>
+<p>
+  La flash del micro se reparte en dos zonas, y aquí se ve y se cambia el
+  reparto:
+</p>
+<ul>
+  <li><strong>File System</strong> — el volumen donde viven
+      <code>/app</code>, <code>/lib</code> y <code>/sys</code> (§6).</li>
+  <li><strong>Packs</strong> — la zona de packs, contigua y mapeada en flash
+      (§10).</li>
+</ul>
+<p>
+  La tabla de arriba es <strong>informativa</strong> (offset, tamaño); los
+  tamaños se escriben <strong>abajo, en KB</strong>. <em>Proponer defaults</em>
+  rellena los campos con un reparto razonable para esa flash — se ajusta y se
+  pulsa <em>Aplicar tamaños</em>.
+</p>
+<p class="note">
+  <strong>Sólo se fija el File System.</strong> La última partición —Packs— es
+  <strong>derivada</strong>: se lleva <em>todo lo que quede</em>. Por eso la suma
+  siempre cuadra exactamente con la flash usable y no hay huecos perdidos entre
+  medias. Si escribes un tamaño para Packs, se ignora.
+</p>
+<p>
+  Antes de tocar nada, el firmware <strong>valida</strong>: ningún tamaño a
+  cero, cada uno múltiplo del sector de borrado, y la suma cabe en la flash
+  disponible. Si algo no cuadra, <strong>el entorno no se toca</strong> y el
+  mensaje dice qué partición y qué problema. Aplicado el cambio, la placa se
+  reinicia y sube con el reparto nuevo.
+</p>
+<p class="warn">
+  <strong>Cambiar el reparto mueve las zonas de sitio.</strong> Lo que hubiera
+  escrito en ellas —ficheros del FS, packs grabados— deja de estar donde el
+  firmware lo busca. Es una operación de puesta a punto de la placa, no del día
+  a día: se hace una vez, al principio, y luego se olvida.
+</p>
+
+<h3 id="entorno">9.3 Variables de entorno</h3>
+<p>
+  Ajustes que viven en la placa, fuera del sistema de archivos, y que el
+  firmware lee al arrancar: por ejemplo qué panel de pantalla lleva esa placa
+  concreta, o si tiene PSRAM (esta última, con casilla propia por lo común que
+  es). Se añaden, editan y borran desde la tabla. Los tamaños de partición
+  también viven ahí, pero <strong>no</strong> se listan aquí: los gestiona la
+  sección de particiones, para que no se puedan tocar por dos caminos.
+</p>
+
+<h2 id="packs">10. Packs</h2>
+<p>
+  Un <strong>pack</strong> es un fichero único que agrupa <strong>módulos
+  compilados y recursos</strong> —la idea del <code>.jar</code>, llevada a un
+  micro—. Sirve para dos cosas distintas: publicar una <em>biblioteca</em> que
+  otros programas importan, y empaquetar una <em>aplicación entera</em> en un
+  solo archivo.
+</p>
+
+<h3 id="packs-construir">10.1 Construir uno</h3>
+<p>
+  Es una línea en el <code>.bpbuild</code> del proyecto:
+</p>
+<pre><code>{
+  <span class="str">"sourceDir"</span>: <span class="str">"src"</span>,
+  <span class="str">"outDir"</span>: <span class="str">"out"</span>,
+  <span class="str">"main"</span>: <span class="str">"App"</span>,
+  <span class="str">"out"</span>: <span class="str">"pack"</span>
+}</code></pre>
+<p>Al compilar, dentro del pack acaban:</p>
+<ul>
+  <li>los <code>.mod</code> del proyecto (y los <code>.mdn</code> si usa
+      <code>native</code>);</li>
+  <li><strong>todo lo que haya en <code>resources/</code></strong>, con
+      cualquier extensión — imágenes, fuentes, tablas, un <code>.win</code>…;</li>
+  <li>un <em>manifest</em> con el <code>main</code>, que es lo que lo hace
+      <strong>ejecutable</strong>.</li>
+</ul>
+<p class="note">
+  Dentro del pack, cada fichero se identifica por <strong>(extensión,
+  nombre)</strong> — sin ruta. De ahí dos límites del formato: la
+  <strong>extensión, 4 caracteres</strong> como mucho (un <code>.woff2</code> no
+  cabe) y el <strong>nombre, 32</strong>. No es un recorte silencioso:
+  pasarse es un error al construir el pack, con el nombre del fichero.
+</p>
+
+<h3 id="packs-usar">10.2 Usarlos</h3>
+<p><strong>Como biblioteca.</strong> Un pack grabado en la zona de packs aporta
+  sus módulos al <code>import</code>, igual que si estuvieran sueltos:</p>
+<pre><code><span class="kw">import</span> Graficas                        <span class="comment">// donde se encuentre</span>
+<span class="kw">import</span> Graficas <span class="kw">from pack</span> MisLibs      <span class="comment">// de ese pack y no de otro</span></code></pre>
+<p>
+  Sin cualificar, se resuelve buscando; con <code>from pack</code>, se fija el
+  origen. El sistema de archivos tiene preferencia sobre la zona de packs, así
+  que un módulo suelto en <code>/lib</code> eclipsa al del pack — cómodo para
+  probar un arreglo sin regrabar nada.
+</p>
+<p><strong>Como aplicación.</strong> Un pack con <code>main</code> se ejecuta
+  directamente, y mientras corre <strong>sus recursos se leen solos</strong>: no
+  hay ninguna API de packs que aprender, se usan las funciones de fichero de
+  siempre y por su nombre.</p>
+<pre><code>print readFile(<span class="str">"saludo.txt"</span>)   <span class="comment">// sale de DENTRO del pack</span></code></pre>
+<p>
+  Lo mismo vale para el <code>.win</code> de una ventana, una imagen o una
+  fuente: el pack en ejecución se consulta <em>antes</em> que el sistema de
+  archivos. De la ruta sólo cuenta el nombre del fichero — los directorios se
+  ignoran, porque dentro del pack no hay carpetas.
+</p>
+<p class="warn">
+  <strong>Limitación de esta versión.</strong> Los recursos se leen del
+  <strong>pack en ejecución</strong> y del <strong>sistema de archivos</strong>,
+  pero <strong>no</strong> de los packs grabados en la zona de packs: de ésos
+  hoy sólo se aprovechan los <em>módulos</em>. Una fuente o un icono dentro de
+  un pack de biblioteca están ahí, pero no se pueden leer todavía.
+</p>
+
+<h3 id="packs-panel">10.3 El panel de packs</h3>
+<p>
+  En la ventana de gestión de placa (§9), a la derecha. La tabla lista los
+  packs grabados con su nombre, tamaño y <strong>fecha de construcción</strong>
+  — que es lo que permite ver de un vistazo si el que hay en la placa es más
+  viejo que el que acabas de compilar. Al seleccionar uno se ven los ficheros
+  que lleva dentro. Debajo, una barra con la ocupación de la zona.
+</p>
+<ul>
+  <li><strong>Copiar pack a la placa…</strong> — graba un <code>.pack</code> del
+      PC al final de la cadena.</li>
+  <li><strong>Borrar</strong> — lo marca como retirado. Deja de usarse
+      <em>inmediatamente</em>, pero <strong>sigue ocupando sitio</strong> hasta
+      compactar: en una flash NOR se puede tachar sin borrar, y tachar es
+      seguro. Por eso la tabla enseña la cadena entera, retirados incluidos —
+      es la verdad del espacio.</li>
+  <li><strong>Formatear zona…</strong> — la deja en blanco. Es también la
+      salida cuando la zona trae restos de un uso anterior de esa flash.</li>
+</ul>
+<p>
+  Para actualizar un pack, el orden es <strong>grabar el nuevo y luego retirar
+  el viejo</strong>: si dos packs traen el mismo módulo, gana el último de la
+  cadena.
+</p>
+
+<h2 id="debug">11. Depurar</h2>
 <p>
   El depurador funciona igual contra la VM local y <em>dentro del
   micro</em> (Debug on Device):
@@ -402,7 +578,7 @@ kill · autorun [fich|off] · mem · save · log · reset · cls · help</code><
   propio micro.
 </p>
 
-<h2 id="autorun">10. Dispositivo autónomo</h2>
+<h2 id="autorun">12. Dispositivo autónomo</h2>
 <p>
   Con tu programa ya en la placa: <code>autorun MiApp</code> en la
   consola (escribe <code>/sys/auto.txt</code> y lo persiste) y
