@@ -213,14 +213,17 @@ Dos cosas, y ninguna es de implementación:
   más general— pero conviene decirlo en voz alta, porque de eso depende si el
   usuario puede tapar un icono del sistema poniendo uno suyo en el FS.
 
-- **Las colisiones de nombre, que aquí SÍ importan.** Dentro de un pack la
-  entrada es *(extensión, nombre)*, sin ruta. Con un pack en ejecución eso no
-  da problemas porque hay uno. Con una **librería de packs** habrá varios con
-  `logo.png` o `iconos.font` dentro, y la regla actual —gana el **último** de la
-  cadena— resuelve por orden de grabación, que no es un criterio que el usuario
-  controle ni vea. Si se abre la zona a recursos hay que darle un nombre
-  completo (¿`pack:fuentes/roboto.font`?) o asumir explícitamente que el último
-  grabado manda. **Esto es diseño, no código**, y va antes.
+- ~~Las colisiones de nombre~~ → **YA DECIDIDO** (Eduardo, 2-ago): *«lo de los
+  nombres ya lo hablamos en su día para los módulos»*. Se aplica la MISMA regla,
+  que no hay por qué inventar dos veces:
+
+  > **Si quieres leerlo de un pack concreto, añades el nombre del pack al del
+  > recurso. Si no lo indicas, lee el primero que encuentre.**
+
+  Es exactamente el modelo de los módulos, donde `import Modulo` resuelve por
+  búsqueda y `import Modulo from pack MiPack` fija el origen. Al escribir la
+  forma concreta del nombre del recurso conviene que **se parezca a esa**, para
+  que sea una regla y no dos.
 
 Y un límite del formato que conviene recordar al elegir nombres: la extensión es
 un FourCC —**4 caracteres como mucho**— y el nombre, 32. No es un recorte
