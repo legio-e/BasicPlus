@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -475,6 +475,17 @@ test-rand: $(BIN)
 	$(call fixture,RandRange)
 	@echo "--- #347 random/randomInt (esperado: 0 malos, 0 altos, 0 sin cubrir) ---"
 	@out=$$(cd samples && ../$(BIN) RandRange.mod 2>&1); st=$$?; 	 echo "$$out" | grep -vE 'INICIANDO|FIN DE'; 	 if echo "$$out" | grep -q 'rango_malos=0' && echo "$$out" | grep -q 'vio_el_alto=0' 	    && echo "$$out" | grep -q 'sin_cubrir=0' && echo "$$out" | grep -q 'vacio=5' 	    && [ $$st -eq 0 ]; then 	   echo "PASS test-rand"; 	 else echo "FAIL test-rand"; exit 1; fi
+
+# #355/#357 — la lista de libres: ORDENADA por dirección y con FUSIÓN de huecos
+# contiguos. Existe porque al instrumentarlo salió `fusion_izq=0 fusion_der=0`
+# con el sample real: las dos ramas estaban escritas y SIN EJECUTAR NUNCA (ese
+# programa apenas fragmenta y los huecos del barrido van separados por bloques
+# vivos por construcción). Este test fuerza la adyacencia que el sample no da.
+test-freelist: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_freelist.c $(LIBOBJ) -o build/test_freelist.exe $(LDFLAGS)
+	@echo "--- lista de libres: orden + fusion izq/der (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_freelist.exe
 
 test-crc:
 	@mkdir -p build

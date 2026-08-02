@@ -353,7 +353,45 @@ static void gc_mark_phase(bpvm_t* vm) {
     }
 }
 
-/* H3: añade un bloque libre [tag FREE][size@+4][next@+8] al head de la lista. */
+/* #355 — ¿SE FUSIONAN DE VERDAD? (pregunta de Eduardo). Lo escribí, no lo probé.
+ * OJO AL INTERPRETAR: durante el BARRIDO casi no debe haber fusiones — ese ya
+ * junta los huecos seguidos en su propio recorrido, y los que da de alta están
+ * separados por bloques VIVOS. Donde tiene que verse es en las liberaciones de
+ * FUERA del GC (owner-free / OP_FREE_REF) y en el split del alocador. */
+static uint32_t g_fus_izq = 0, g_fus_der = 0, g_altas = 0;
+
+/* Añade un bloque libre [tag FREE][size@+4][next@+8] a la lista, ORDENADO POR
+ * DIRECCIÓN y FUSIONANDO con los vecinos contiguos.
+ *
+ * ── #355 · propuesta de Eduardo, 2-ago ──────────────────────────────────────
+ *
+ * ANTES se insertaba en la CABEZA. Y el barrido recorre el heap de menor a mayor
+ * dirección, así que la lista acababa ordenada AL REVÉS: de mayor a menor. Como
+ * try_allocate_inner hace first-fit desde la cabeza, eso significaba servir
+ * SIEMPRE desde el bloque más alto — el gran bloque menguante pegado al techo,
+ * que es justo el que no hay que tocar.
+ *
+ * El daño real no era el desperdicio, era este:
+ *
+ *     if (pend_start != 0) vm->heap_next = pend_start;   // en gc_sweep_phase
+ *
+ * el bump SÓLO retrocede si el último hueco llega hasta heap_next. Sirviendo
+ * desde arriba dejábamos objetos vivos pegados al techo en cada vuelta → la cola
+ * nunca quedaba libre → `heap_next` NO RETROCEDÍA JAMÁS. De ahí el "recupera
+ * 0 B" que salía en todos los logs de la placa, colecta tras colecta, con 48
+ * bytes vivos.
+ *
+ * AHORA la lista va de menor a mayor. El first-fit coge de abajo, los objetos se
+ * empaquetan en la parte baja, y el gran bloque queda al final como último
+ * recurso — que es exactamente lo que hay que hacer para que la cola del heap
+ * quede libre y el bump pueda volver atrás.
+ *
+ * La FUSIÓN viene de propina y hace falta igual: sin ella, dos huecos contiguos
+ * liberados en momentos distintos (OP_FREE_REF, owner-free) se quedan como dos
+ * entradas que ninguna petición mediana puede usar, aunque juntas sobren. El
+ * barrido ya fusiona lo que encuentra seguido en UNA pasada; esto lo fusiona
+ * también entre pasadas. Coste: recorrer la lista, que es corta por construcción
+ * (una entrada por hueco, y fusionar las reduce). */
 static void add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {
     uint8_t* mem = vm->memory;
     /* #355 — ÚLTIMA PUERTA. Esta palabra de +4 es la ÚNICA que block_total_size()
@@ -369,10 +407,46 @@ static void add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {
                   (unsigned) BPVM_MIN_FREE_BLOCK, (unsigned) vm->stack_base);
         return;
     }
+    g_altas++;
     bpvm_write_u32_be(mem + addr,     BPVM_TAG_FREE_BIT);
     bpvm_write_u32_be(mem + addr + 4, size);
-    bpvm_write_u32_be(mem + addr + 8, vm->free_list_head);
-    vm->free_list_head = addr;
+
+    /* Busca el sitio: el primer nodo con dirección MAYOR que la nuestra. */
+    uint32_t prev = 0, cur = vm->free_list_head;
+    while (cur != 0u && cur < addr) {
+        prev = cur;
+        cur  = bpvm_read_u32_be(mem + cur + 8);
+    }
+
+    /* Fusión con el vecino de la IZQUIERDA si es contiguo: crece prev y ya está
+     * (no entra un nodo nuevo). Hay que releer su tamaño, que es el que manda. */
+    if (prev != 0u) {
+        uint32_t psize = bpvm_read_u32_be(mem + prev + 4);
+        if (prev + psize == addr) {
+            g_fus_izq++;
+            bpvm_write_u32_be(mem + prev + 4, psize + size);
+            addr = prev;                 /* el bloque fusionado es el de la izquierda */
+            size = psize + size;
+            /* y sigue siendo el mismo nodo de la lista: prev no cambia de sitio */
+        } else {
+            bpvm_write_u32_be(mem + prev + 8, addr);
+            bpvm_write_u32_be(mem + addr + 8, cur);
+        }
+    } else {
+        bpvm_write_u32_be(mem + addr + 8, cur);
+        vm->free_list_head = addr;
+    }
+
+    /* Fusión con el vecino de la DERECHA si es contiguo: se traga `cur` y este
+     * desaparece de la lista. Se hace DESPUÉS de la izquierda a propósito, para
+     * que tres huecos seguidos acaben en uno solo en una sola llamada. */
+    if (cur != 0u && addr + size == cur) {
+        g_fus_der++;
+        uint32_t csize = bpvm_read_u32_be(mem + cur + 4);
+        uint32_t cnext = bpvm_read_u32_be(mem + cur + 8);
+        bpvm_write_u32_be(mem + addr + 4, size + csize);
+        bpvm_write_u32_be(mem + addr + 8, cnext);
+    }
 }
 
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo CONSISTENTE (espejo del
@@ -467,6 +541,7 @@ static void gc_sweep_phase(bpvm_t* vm) {
         vm->heap_next = pend_start;
     }
     vm->last_gc_heap_next = vm->heap_next;
+    vm->alloc_since_gc    = 0u;   /* #357: empieza a contar el siguiente ciclo */
     /* #355 — EL NUMERO QUE CONTESTA LA PREGUNTA, y llevaba todo el dia escondido
      * tras --trace y un fprintf que en placa no llega a ninguna parte.
      *
@@ -497,6 +572,20 @@ static void gc_sweep_phase(bpvm_t* vm) {
     bpvm_diag("[gc] reservas: de_lista=%u de_bump=%u astilla=%u",
               (unsigned) g_alloc_de_lista, (unsigned) g_alloc_de_bump,
               (unsigned) g_alloc_astilla);
+    {   /* #355 — la lista, contada: cuantos huecos quedan, el mayor, y si las
+         * fusiones estan pasando de verdad. Si la lista crece sin parar mientras
+         * fus_izq/fus_der se quedan a cero, la fusion NO funciona. */
+        uint32_t n = 0, mayor = 0, suma = 0, c = vm->free_list_head;
+        while (c != 0u && n < 100000u) {
+            uint32_t sz = bpvm_read_u32_be(vm->memory + c + 4);
+            n++; suma += sz; if (sz > mayor) mayor = sz;
+            c = bpvm_read_u32_be(vm->memory + c + 8);
+        }
+        bpvm_diag("[gc] libres: %u huecos, %u B en total, el mayor %u | altas=%u "
+                  "fusion_izq=%u fusion_der=%u",
+                  (unsigned) n, (unsigned) suma, (unsigned) mayor,
+                  (unsigned) g_altas, (unsigned) g_fus_izq, (unsigned) g_fus_der);
+    }
     if (0) {
         fprintf(stderr, "[gc] kept=%" PRIu32 " freed=%" PRIu32 " heap=[%" PRIu32 "..%" PRIu32 ") freelist=%s\n",
                 kept, freed, vm->heap_start, vm->heap_next,
@@ -664,8 +753,46 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
     uint8_t* mem = vm->memory;
     uint32_t prev = 0, cur = vm->free_list_head;
     while (cur != 0) {
+        /* #355 — DETRÁS DEL HEAP ESTÁ LA PILA (pregunta de Eduardo, y la
+         * respuesta era mala). El mapa es
+         *
+         *   [ módulos ][ HEAP →→→ ][ PILA del thread main ][ pilas del resto ]
+         *               heap_start  stack_base
+         *
+         * o sea que el heap acaba EXACTAMENTE donde empiezan los locales y los
+         * frames del programa. El camino de bump ya no puede cruzar (comprueba
+         * el techo). Este SÍ podía: `cur` sale de una palabra LEÍDA DE LA
+         * MEMORIA (el `next` del bloque anterior) y no se validaba contra nada.
+         * Con esa palabra corrompida —la misma que en la Pico valía
+         * 0xC30C0000— el recorrido se va a la zona de pilas, `return cur`
+         * entrega esa dirección como bloque libre, y el que la pidió escribe su
+         * objeto ENCIMA DE LA PILA. Corrupción a un sitio donde el GC ni mira.
+         *
+         * Aquí se corta: un nodo de la lista tiene que estar dentro del heap
+         * USADO y medir algo representable que quepa. Si no, la lista está rota:
+         * se abandona el recorrido (mejor reservar por bump que servir basura) y
+         * se dice por el canal urgente, que es el que sobrevive a un cuelgue. */
+        if (cur < vm->heap_start || cur + BPVM_MIN_FREE_BLOCK > vm->stack_base) {
+            bpvm_diag_urgente("[gc] !! LISTA DE LIBRES ROTA: el nodo %u cae fuera del "
+                              "heap [%u..%u). Detras del heap estan las PILAS: servir "
+                              "ese bloque habria escrito encima de los locales del "
+                              "programa. Se abandona la lista y se reserva por bump.",
+                              (unsigned) cur, (unsigned) vm->heap_start,
+                              (unsigned) vm->stack_base);
+            vm->free_list_head = 0u;   /* la lista ya no significa nada */
+            break;
+        }
         uint32_t block_size = bpvm_read_u32_be(mem + cur + 4);
         uint32_t next = bpvm_read_u32_be(mem + cur + 8);
+        if (block_size < BPVM_MIN_FREE_BLOCK || cur + block_size > vm->stack_base) {
+            bpvm_diag_urgente("[gc] !! BLOQUE LIBRE IMPOSIBLE en %u: dice medir %u B y "
+                              "acabaria en %u, pasado el final del heap (%u). Se abandona "
+                              "la lista: entregarlo pisaria la pila del programa.",
+                              (unsigned) cur, (unsigned) block_size,
+                              (unsigned)(cur + block_size), (unsigned) vm->stack_base);
+            vm->free_list_head = 0u;
+            break;
+        }
         if (block_size >= total) {
             uint32_t remaining = block_size - total;
             /* INVARIANTE DEL HEAP: un bloque ASIGNADO no guarda su tamaño en
@@ -700,6 +827,7 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
                     else bpvm_write_u32_be(mem + prev + 8, next);
                 }
                 g_alloc_de_lista++;   /* #355: servida reciclando */
+                vm->alloc_since_gc += total;   /* #357: el umbral cuenta VOLUMEN, no bump */
                 return cur;
             }
             /* sobrante no representable → este bloque no sirve, seguir buscando */
@@ -728,6 +856,7 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
     uint32_t addr = vm->heap_next;
     vm->heap_next += total;
     g_alloc_de_bump++;   /* #355: servida ampliando el heap, sin reciclar nada */
+    vm->alloc_since_gc += total;   /* #357 */
     return addr;
 }
 
@@ -753,7 +882,7 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
      * STW (mark scanea las pilas de todos los threads → deben estar en
      * safepoint con tc->sp sincronizado; en legacy/single-worker no hay baile). */
     if (!vm->gc_suspended && vm->gc_bump_threshold != 0 &&
-        vm->heap_next - vm->last_gc_heap_next >= vm->gc_bump_threshold) {
+        vm->alloc_since_gc >= vm->gc_bump_threshold) {
         /* #355 — QUE SE VEA SI EL GC RECICLA. Sin esto, una colecta que no
          * recupera nada es indistinguible de una que va bien: el heap se acaba
          * y el fallo aparece diez pasos mas alla, disfrazado de cadena vacia.

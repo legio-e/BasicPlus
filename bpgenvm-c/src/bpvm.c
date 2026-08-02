@@ -289,6 +289,7 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     /* H3 (V2): el loader fijará el umbral real con el heap_start tras cargar. */
     vm->free_list_head    = 0;
     vm->last_gc_heap_next = vm->heap_next;
+    vm->alloc_since_gc    = 0u;   /* #357 */
     vm->gc_bump_threshold = 0;   /* off hasta entonces */
     vm->heap_reserve = 0;        /* #355: se arma al fijar el heap real, no aquí */
     vm->building_error = 0;      /* #355: 1 solo mientras se construye una excepcion */
@@ -872,6 +873,7 @@ uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {
     vm->heap_next         = vm->heap_start;
     vm->free_list_head    = 0;
     vm->last_gc_heap_next = vm->heap_next;
+    vm->alloc_since_gc    = 0u;   /* #357 */
     vm->gc_bump_threshold = (vm->stack_base - vm->heap_start) / 8;
     if (vm->gc_bump_threshold < 4096) vm->gc_bump_threshold = 4096;
     /* #355 — ARMA LA RESERVA DE EMERGENCIA (idea de Eduardo). 1 KB del final del

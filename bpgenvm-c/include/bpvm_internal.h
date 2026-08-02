@@ -328,7 +328,20 @@ struct bpvm {
     /* H3 (V2): GC con free-list + reuso + coalescing + retreat + disparo por
      * umbral (espejo de la VM-Java). Bloque libre = [tag FREE][size@+4][next@+8]. */
     uint32_t free_list_head;   /* 0 = lista vacía */
-    uint32_t last_gc_heap_next;/* heap_next en el último GC (base del umbral) */
+    uint32_t last_gc_heap_next;/* heap_next en el último GC (histórico; ya no dispara) */
+    /* #357 — BYTES RESERVADOS desde el último GC, vengan de donde vengan (lista de
+     * libres O bump). ESTE es el que dispara la colecta ahora.
+     *
+     * Antes el umbral se medía sobre la DISTANCIA DE BUMP, y eso tenía dos
+     * consecuencias malas: (1) el bump avanzaba un umbral entero por colecta
+     * pasara lo que pasara —con heap/8, ocho colectas y muerte, aunque lo vivo
+     * fueran 48 bytes—; y (2) la colecta caía SIEMPRE justo tras una ráfaga de
+     * bump, o sea con objetos recién nacidos pegados al techo, así que el último
+     * hueco nunca tocaba heap_next y el bump NO RETROCEDÍA JAMÁS ("recupera 0 B"
+     * en todos los logs). Contando volumen, la colecta también ocurre MIENTRAS se
+     * sirve de la lista, que es cuando el techo ya está muerto y se puede
+     * devolver. */
+    uint32_t alloc_since_gc;
     uint32_t gc_bump_threshold;/* bump máx. desde el último GC antes de colectar (0 = off) */
     /* #355 — reserva de emergencia: bytes del final del heap que el programa NO
      * puede tocar. Se sueltan cuando una reserva ya ha fallado, para que quede
