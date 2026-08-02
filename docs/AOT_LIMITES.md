@@ -39,6 +39,17 @@ marshalla todo en slots de 4 bytes.
 esa función concreta —seguirá funcionando, interpretada— y dejar el resto del
 módulo en nativo.
 
+> **Y hay una razón de fondo, no sólo del emisor** (apunte de Eduardo): la FPU
+> de estos micros es de **precisión simple**. El Cortex-M33 lleva FPv5-**SP**
+> —o sea RP2350 y STM32U5, dos de las tres familias— y ahí un `double` **no
+> toca la FPU**: se emula en software, con un coste de otro orden.
+>
+> Es decir, que marcar `native` una función que usa `double` sería pedir
+> velocidad y elegir a la vez el camino lento. El recorte del AOT y lo que
+> conviene hacer apuntan al mismo sitio: **si buscas velocidad en el micro, usa
+> `float`**. `double` sigue estando disponible en el código interpretado para
+> cuando lo que importa es la precisión y no el reloj.
+
 ### 2. `try` / `catch` DENTRO de una función `native`
 
 El `.mdn` no puede usar `setjmp` (#213). Lanzar (`throw`) sí se puede.
