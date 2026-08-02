@@ -194,6 +194,7 @@
     <li class="sub"><a href="#defaults">8.1 Parámetros con valor por defecto</a></li>
     <li class="sub"><a href="#tuplas">8.2 Tuplas (retorno múltiple)</a></li>
     <li class="sub"><a href="#funciones-native">8.3 Funciones native (AOT)</a></li>
+    <li class="sub"><a href="#sobrecarga">8.4 Sobrecarga de funciones</a></li>
     <li class="group"><a href="#clases">9. Clases</a></li>
     <li class="sub"><a href="#campos">9.1 Campos</a></li>
     <li class="sub"><a href="#metodos">9.2 Métodos</a></li>
@@ -856,6 +857,67 @@ lista.add(pair())                      <span class="comment">// entran en colecc
 </ul>
 
 <!-- =========================================================== -->
+
+<h3 id="sobrecarga">8.4 Sobrecarga de funciones</h3>
+<p>Puedes declarar <strong>varias funciones con el mismo nombre</strong> siempre
+que se distingan por sus <strong>parámetros</strong>. El compilador elige la que
+encaja con cada llamada.</p>
+<pre><code><span class="kw">public function</span> <span class="fn">texto</span>(n: <span class="type">integer</span>): <span class="type">string</span>
+  <span class="kw">return</span> <span class="str">"int:"</span> + intToString(n)
+<span class="kw">end</span> texto
+
+<span class="kw">public function</span> <span class="fn">texto</span>(s: <span class="type">string</span>): <span class="type">string</span>          <span class="comment">// distinto TIPO</span>
+  <span class="kw">return</span> <span class="str">"str:"</span> + s
+<span class="kw">end</span> texto
+
+<span class="kw">public function</span> <span class="fn">texto</span>(n: <span class="type">integer</span>, veces: <span class="type">integer</span>): <span class="type">string</span>   <span class="comment">// distinto NUMERO</span>
+  ...
+<span class="kw">end</span> texto</code></pre>
+<p>Funciona con <strong>funciones libres</strong>, <strong>métodos estáticos</strong>,
+<strong>métodos de instancia</strong> y <strong>constructores</strong>. Y también
+<strong>entre módulos</strong>: al importar <code>Fmt</code>, las tres
+<code>Fmt.texto(...)</code> de arriba están disponibles y se resuelven igual.</p>
+
+<h4>Lo que distingue una sobrecarga de otra</h4>
+<p>Sólo <strong>la lista de parámetros</strong> (número y tipos). <strong>El tipo
+de retorno NO cuenta</strong>: dos funciones que sólo se diferencien en lo que
+devuelven son la misma para el compilador.</p>
+<pre><code><span class="kw">function</span> <span class="fn">g</span>(a: <span class="type">integer</span>): <span class="type">integer</span> ...
+<span class="kw">function</span> <span class="fn">g</span>(a: <span class="type">integer</span>): <span class="type">string</span>  ...   <span class="comment">// ERROR</span></code></pre>
+<pre><code>error semántico: sobrecarga duplicada: 'g' con la misma firma de parámetros ya declarada</code></pre>
+<p>El motivo es que en el punto de llamada no siempre hay un tipo esperado con el
+que decidir: <code>print g(1)</code> no dice cuál de las dos quieres.</p>
+
+<h4>Sobrecarga y herencia: redefinir una NO tapa las demás</h4>
+<p>Si una subclase redefine <em>una</em> de las sobrecargas heredadas, las otras
+siguen ahí:</p>
+<pre><code><span class="kw">class</span> Base
+  <span class="kw">public function</span> <span class="fn">saluda</span>(): <span class="type">string</span> ... <span class="comment">// "base"</span>
+  <span class="kw">public function</span> <span class="fn">saluda</span>(n: <span class="type">integer</span>): <span class="type">string</span> ... <span class="comment">// "base N"</span>
+<span class="kw">end</span> Base
+
+<span class="kw">class</span> Hija <span class="kw">extends</span> Base
+  <span class="kw">public function</span> <span class="fn">saluda</span>(): <span class="type">string</span> ... <span class="comment">// "hija" — sólo redefine ESTA</span>
+<span class="kw">end</span> Hija
+
+<span class="kw">var</span> h: Hija := Hija()
+<span class="kw">print</span> h.saluda(), <span class="str">" / "</span>, h.saluda(<span class="num">7</span>)   <span class="comment">// -> hija / base 7</span></code></pre>
+<p>Es decir: la redefinición sustituye la versión <em>con esa misma firma</em>, y
+la de <code>(integer)</code> se hereda intacta.</p>
+
+<h4>Cuidado al mezclarla con valores por defecto</h4>
+<p>Una sobrecarga y un <a href="#defaults">parámetro con valor por defecto</a>
+pueden acabar aceptando la <strong>misma llamada</strong>. El compilador no
+adivina: lo rechaza.</p>
+<pre><code><span class="kw">function</span> <span class="fn">h</span>(a: <span class="type">integer</span>): <span class="type">integer</span> ...
+<span class="kw">function</span> <span class="fn">h</span>(a: <span class="type">integer</span>, b: <span class="type">integer</span> := <span class="num">0</span>): <span class="type">integer</span> ...
+
+h(<span class="num">1</span>)    <span class="comment">// las dos encajan</span></code></pre>
+<pre><code>error semántico: llamada ambigua a 'h' con (integer): varias sobrecargas encajan por igual (usa un cast)</code></pre>
+<p>La salida limpia suele ser quedarse con una de las dos formas: <strong>o</strong>
+sobrecargas, <strong>o</strong> un valor por defecto, pero no las dos cubriendo el
+mismo caso.</p>
+
 <!-- =========================================================== -->
 <h2 id="clases">9. Clases</h2>
 <pre><code><span class="kw">public class</span> Persona
