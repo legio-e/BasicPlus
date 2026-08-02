@@ -212,7 +212,7 @@
 
     <li class="group"><a href="#artefactos">16. Artefactos en disco</a></li>
     <li class="sub"><a href="#mod">16.1 .mod</a></li>
-    <li class="sub"><a href="#bpi">16.2 .bpi</a></li>
+    <li class="sub"><a href="#bpi">16.2 Interfaz del módulo</a></li>
     <li class="sub"><a href="#dbg">16.3 .dbg</a></li>
     <li class="sub"><a href="#mdn">16.4 .mdn</a></li>
     <li class="sub"><a href="#proyecto">16.5 .bpbuild / .bpproject</a></li>
@@ -270,7 +270,7 @@
       <td><code>abs</code> <code>min</code> <code>max</code></td></tr>
   <tr><td>Aritmética float</td>
       <td><code>sqrt</code> <code>pow</code> <code>exp</code>
-          <code>random()</code> <code>randomInt(lo, hi)</code><br>
+          <code><a href="#rnd">random()</a></code> <code><a href="#rnd">randomInt(lo, hi)</a></code><br>
           <em>Trigonometría, logaritmos, π, e y resto requieren
           <code>import Math</code> — ver <a href="#stdlib-math">§13.9</a>.</em></td></tr>
   <tr><td>Conversión num</td>
@@ -411,7 +411,7 @@ sb.appendInt(<span class="num">42</span>)
 
 <h3 id="stdlib-thread">13.7 <code>Thread</code></h3>
 <pre><code><span class="kw">class</span> Worker <span class="kw">extends</span> Thread
-  <span class="kw">public var</span> nombre: <span class="type">string</span>
+  <span class="kw">var</span> nombre: <span class="type">string</span>
   <span class="kw">public function</span> Worker(nombre: <span class="type">string</span>)
     <span class="kw">super</span>(<span class="num">2048</span>)            <span class="comment">// stackSize en bytes</span>
     <span class="kw">this</span>.nombre := nombre
@@ -490,6 +490,37 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 <p>
   No reentrante: si el mismo thread vuelve a llamar <code>lock()</code>
   sobre un mutex que ya tiene, se lanza una excepción.
+</p>
+
+<!-- =========================================================== -->
+<h4 id="rnd">Números aleatorios</h4>
+<p>
+  Son <strong>implícitas</strong> (no hacen falta <code>import</code>) y
+  comparten la misma fuente de entropía: <code>randomInt</code> no es un
+  generador aparte, es <code>random()</code> escalado al rango.
+</p>
+<table>
+  <tr><th>Función</th><th>Devuelve</th></tr>
+  <tr><td><code>random(): float</code></td>
+      <td>Un valor en <strong>[0, 1)</strong> — el 0 puede salir, el 1 no.
+          24 bits de entropía.</td></tr>
+  <tr><td><code>randomInt(lo, hi): integer</code></td>
+      <td>Un entero en <strong>[lo, hi)</strong>: <code>lo</code> incluido,
+          <strong><code>hi</code> excluido</strong>. Uniforme.
+          Si <code>hi &lt;= lo</code> devuelve <code>lo</code> (no lanza).</td></tr>
+</table>
+<p class="warn">
+  <strong>El límite superior NO entra.</strong> Es la confusión habitual, así
+  que conviene el ejemplo: <code>randomInt(1, 4)</code> devuelve
+  <strong>1, 2 o 3</strong>, nunca 4. Para tirar un dado de seis caras,
+  <code>randomInt(1, 7)</code>. Para un índice válido de un array,
+  <code>randomInt(0, len(a))</code> — que es justo por qué el límite se
+  excluye.
+</p>
+<p>
+  De dónde salen los bits depende de la máquina: en el PC, del generador del
+  sistema; en el micro, de lo que ofrezca ese chip. La <em>semantíca</em> —los
+  rangos de arriba— es la misma en todas partes.
 </p>
 
 <!-- =========================================================== -->
@@ -1358,7 +1389,7 @@ Log.error(<span class="str">"sensor no responde"</span>)</code></pre>
 <span class="kw">var</span> ok: <span class="type">boolean</span> := <span class="kw">false</span>
 <span class="kw">var</span> v: <span class="type">integer</span> := <span class="num">0</span>
 { ok, v } := Str.parseInt(<span class="str">"123"</span>)
-<span class="kw">if</span> ok <span class="kw">then</span> <span class="kw">print</span> v <span class="kw">endif</span>
+<span class="kw">if</span> ok <span class="kw">then</span> <span class="kw">print</span> v
 
 <span class="kw">print</span> Str.formatDouble(<span class="num">3.14159d</span>, <span class="num">2</span>)   <span class="comment">// "3.14"</span>
 <span class="kw">print</span> Str.padLeft(<span class="str">"7"</span>, <span class="num">3</span>)             <span class="comment">// "  7"</span></code></pre>
@@ -1565,14 +1596,14 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   <tr><td><code>--tokens</code></td><td>Volcado de tokens del lexer.</td></tr>
   <tr><td><code>--ast</code></td><td>Volcado del AST.</td></tr>
   <tr><td><code>--quiet</code></td><td>Sólo diagnósticos.</td></tr>
-  <tr><td><code>--compile &lt;dir&gt;</code></td><td>Compila a <code>.mod</code> (+ <code>.bpi</code>).</td></tr>
-  <tr><td><code>--interface &lt;dir&gt;</code></td><td>Sólo emite <code>.bpi</code> (sin código).</td></tr>
+  <tr><td><code>--compile &lt;dir&gt;</code></td><td>Compila a <code>.mod</code> (la interfaz va dentro).</td></tr>
+  <tr><td><code>--interface &lt;dir&gt;</code></td><td>Sólo analiza y construye la interfaz — sin código y sin fichero de salida.</td></tr>
   <tr><td><code>--backend=jvm|mivm</code></td><td>Backend (mivm es el predeterminado).</td></tr>
 </table>
 <p>
   Con <code>--compile</code>, el driver es recursivo: encuentra los
-  <code>.bp</code> de los imports faltantes, genera primero sus
-  <code>.bpi</code> (modo INTERFACE), después compila el módulo, y
+  <code>.bp</code> de los imports faltantes, construye primero sus
+  interfaces (modo INTERFACE), después compila el módulo, y
   finalmente recurre en modo FULL para producir los <code>.mod</code> de las
   deps.
 </p>
@@ -1708,15 +1739,14 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   <li><code>sourceDir</code> (string, <strong>obligatorio</strong>):
       directorio con los <code>.bp</code> del proyecto.</li>
   <li><code>outDir</code> (string, <strong>obligatorio</strong>):
-      directorio donde el compilador emite <code>.mod</code> y
-      <code>.bpi</code>. Se crea on-demand.</li>
+      directorio donde el compilador emite los <code>.mod</code>.
+      Se crea on-demand.</li>
   <li><code>main</code> (string, <strong>obligatorio</strong>): nombre
       lógico del módulo principal (sin extensión). El compilador busca
       <code>&lt;sourceDir&gt;/&lt;main&gt;.bp</code>.</li>
   <li><code>dependencies</code> (array de strings, opcional): cada entrada
-      es un directorio (busca cualquier <code>.bpi</code>/<code>.mod</code>
-      dentro al resolver imports) o un fichero <code>.mod</code>/<code>.bpi</code>
-      concreto.</li>
+      es un directorio (busca cualquier <code>.mod</code> dentro al resolver
+      imports) o un fichero <code>.mod</code> concreto.</li>
 </ul>
 <p>
   <strong>Resolución de imports en modo proyecto</strong>:
@@ -1734,7 +1764,7 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
 </p>
 <ul>
   <li><strong>Sources</strong>: todos los <code>.bp</code> bajo <code>sourceDir</code>.</li>
-  <li><strong>Output</strong>: <code>.mod</code> y <code>.bpi</code> bajo <code>outDir</code>.</li>
+  <li><strong>Output</strong>: <code>.mod</code> bajo <code>outDir</code>.</li>
   <li><strong>Dependencies</strong>: las entradas del campo
       <code>dependencies</code>.</li>
 </ul>
@@ -1824,23 +1854,47 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
 <!-- =========================================================== -->
 <h2 id="artefactos">16. Artefactos en disco</h2>
 
-<h3 id="mod">16.1 <code>.mod</code> (binario, MOD5)</h3>
-<pre>[MAGIC=0x4D4F4435]            4 bytes  "MOD5"
+<h3 id="mod">16.1 <code>.mod</code> (binario, MOD6)</h3>
+<pre>[MAGIC=0x4D4F4436]            4 bytes  "MOD6"
 [dataSize]                    4
 [mainOffset]                  4   offset al __startup, o -1
 [importsSize]                 4
 [exportsSize]                 4
 [codeSize]                    4
 [librarySize]                 4
---- header (28) ---
-[library  bytes]              librarySize
-[imports  bytes]              importsSize   pares (name, fromPath) UTF
-[exports  bytes]              exportsSize   pares (name, offset)
+[interfaceSize]               4   0 si no lleva interfaz (sólo v6)
+--- header (32) ---
+[library   bytes]             librarySize
+[imports   bytes]             importsSize   pares (name, fromPath) UTF
+[exports   bytes]             exportsSize   pares (name, offset)
+[interface bytes]             interfaceSize texto de interfaz (§16.2)
 [data block]                  dataSize      strings, constantes, class descriptors
 [code]                        codeSize      bytecode</pre>
+<p>
+  <strong>v6 = módulo autodescriptivo.</strong> Añade <code>interfaceSize</code>
+  al header y una sección <code>interface</code> entre <code>exports</code> y
+  <code>data</code>: el <code>.mod</code> lleva dentro su propia interfaz, y el
+  fichero <code>.bpi</code> aparte <strong>ha dejado de existir</strong>. Las VMs
+  <em>no</em> la necesitan para ejecutar — leen <code>interfaceSize</code> del
+  header y saltan la sección —; quien la usa es el compilador al resolver los
+  <code>import</code>.
+</p>
+<p>
+  Los cargadores siguen aceptando <strong>v5</strong> (<code>MAGIC "MOD5"</code>,
+  header de 28 bytes, sin sección de interfaz) para no romper artefactos
+  antiguos.
+</p>
 
-<h3 id="bpi">16.2 <code>.bpi</code> (interface textual, v6)</h3>
-<pre>bpi 6
+<h3 id="bpi">16.2 Interfaz del módulo (texto, v7)</h3>
+<p>
+  El texto que viaja en la sección <code>interface</code> del
+  <code>.mod</code> (§16.1). Hasta V3 se escribía en un fichero
+  <code>.bpi</code> aparte; desde V4 <strong>no se genera ningún
+  fichero</strong>: es una sección del propio módulo. El formato del
+  texto no ha cambiado, y su línea de versión conserva la palabra
+  <code>bpi</code> como marca.
+</p>
+<pre>bpi 7
 library com.example
 module Util
 interface true                <span class="comment">// sólo si module interface</span>
@@ -1860,13 +1914,14 @@ class Punto public extends Base   <span class="comment">// clases completas (L2 
   prop x:integer public
 end class</pre>
 <p>
-  El <code>.bpi</code> v6 exporta funciones (con defaults), consts
+  La interfaz v7 exporta funciones (con defaults), consts
   (inlineadas en el importador), enums, arrays de primitivos, tuplas en
   signatures, y <strong>clases completas</strong> (layout, constructor,
   métodos, properties, herencia — incluso cross-module). Todos los tipos
   primitivos del lenguaje (incl. <code>long</code>/<code>double</code>/
-  estrechos) valen en signatures. Es regenerable: si la versión en disco
-  es vieja, el compilador lo rehace desde el fuente.
+  estrechos) valen en signatures. Al vivir dentro del <code>.mod</code>,
+  no puede quedarse rancia respecto al código que describe: se emiten
+  juntos o no se emiten.
 </p>
 
 <h3 id="dbg">16.3 <code>.dbg</code> (info de depuración, v3)</h3>
@@ -1925,7 +1980,7 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   BasicPlus reference manual — generado al hilo del desarrollo.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) y
   <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) ·
-  Formatos <code>.mod</code> v5 / <code>.bpi</code> v6.
+  Formato <code>.mod</code> v6 (interfaz embebida v7).
 </p>
 
 </main>

@@ -264,7 +264,7 @@
   "ownership" determinístico para liberación inmediata de recursos.
 </p>
 <p>El pipeline general es:</p>
-<pre><code><span class="comment">// 1) Compilación: cada módulo → un .mod (binario) y un .bpi (interface textual)</span>
+<pre><code><span class="comment">// 1) Compilación: cada módulo → un .mod (binario, con su interfaz dentro)</span>
 java -jar basicplus-frontend.jar samples/hola.bp --compile out --backend=mivm
 
 <span class="comment">// 2) Ejecución: la VM carga el .mod raíz; los .mod de los imports los
@@ -565,8 +565,8 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <p>
   Una <code>const</code> de módulo exige un <strong>literal primitivo</strong>
   (integer/float/long/double/boolean/string, con <code>-</code> opcional) —
-  el valor se inlinea en cada uso, no ocupa slot, y las públicas viajan en el
-  <code>.bpi</code> para que los importadores también las inlineen. Para un
+  el valor se inlinea en cada uso, no ocupa slot, y las públicas viajan en la
+  interfaz para que los importadores también las inlineen. Para un
   valor calculado o de tipo no-primitivo usa una <code>var</code> asignada en
   la función inicializadora del módulo. No es asignable en ningún ámbito y no
   existen const arrays (<a href="#arrays">§4.2.1</a>).
@@ -733,7 +733,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <span class="kw">print</span> msg
 <span class="kw">end</span> imprimir</code></pre>
 <ul>
-  <li><code>public</code> → exportada en el <code>.bpi</code>, llamable cross-library.</li>
+  <li><code>public</code> → exportada en la interfaz, llamable cross-library.</li>
   <li>Por defecto, las funciones son privadas al módulo.</li>
   <li>El tipo de retorno se declara con <code>: T</code> tras los paréntesis.
       Si se omite, la función es <code>void</code>.</li>
@@ -757,7 +757,7 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
   <li>Los parámetros con default van <strong>al final</strong> de la lista;
       los argumentos se rellenan por posición.</li>
   <li>El default se <em>sustituye en el llamante</em> en compilación (cero
-      coste en la VM) y viaja en el <code>.bpi</code>: funciona igual al
+      coste en la VM) y viaja en la interfaz: funciona igual al
       llamar funciones de otra librería.</li>
 </ul>
 
@@ -926,8 +926,8 @@ mismo caso.</p>
 <!-- =========================================================== -->
 <h2 id="clases">9. Clases</h2>
 <pre><code><span class="kw">public class</span> Persona
-  <span class="kw">public var</span> nombre: <span class="type">string</span>
-  <span class="kw">public var</span> edad:   <span class="type">integer</span>
+  <span class="kw">var</span> nombre: <span class="type">string</span>   <span class="comment">// los campos son SIEMPRE privados</span>
+  <span class="kw">var</span> edad:   <span class="type">integer</span>
 
   <span class="kw">public function</span> Persona(nombre: <span class="type">string</span>, edad: <span class="type">integer</span>)
     <span class="kw">this</span>.nombre := nombre
@@ -941,15 +941,21 @@ mismo caso.</p>
 
 <h3 id="campos">9.1 Campos</h3>
 <p>
-  <code>var</code> dentro de la clase declara un campo de instancia.
-  Visibilidad <code>public</code> opcional. Acceso por <code>this.campo</code>
-  desde dentro; <code>obj.campo</code> desde fuera (sólo si es público).
+  <code>var</code> dentro de la clase declara un campo de instancia, y los
+  campos son <strong>siempre privados</strong>: se leen y escriben por
+  <code>this.campo</code> dentro de la clase, y desde fuera no se tocan.
+  Marcar un campo <code>public</code> es un <strong>error de
+  compilación</strong>, y el mensaje te manda a la alternativa correcta:
+  <code>public property</code> (§9.5), que expone un get/set y deja el
+  campo de respaldo privado. La razón es de diseño: lo que cruza la
+  frontera del módulo es un <em>contrato</em>, no la representación
+  interna.
 </p>
 <p>
   Un campo NO admite array de tamaño fijo <code>tipo[N]</code> (error de
   compilación): declara <code>tipo[]</code> e inicialízalo en el constructor
   con <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
-  Los campos no se exportan en el <code>.bpi</code> — son privados del
+  Los campos no viajan en la interfaz — son privados del
   módulo dueño por diseño OO; expón una <code>property</code> si hace falta
   acceso cross-module.
 </p>
@@ -977,7 +983,7 @@ mismo caso.</p>
 
 <h3 id="herencia">9.4 Herencia</h3>
 <pre><code><span class="kw">public class</span> Animal
-  <span class="kw">public var</span> nombre: <span class="type">string</span>
+  <span class="kw">var</span> nombre: <span class="type">string</span>
   <span class="kw">public function</span> Animal(nombre: <span class="type">string</span>)
     <span class="kw">this</span>.nombre := nombre
   <span class="kw">end</span> Animal
@@ -1012,7 +1018,9 @@ mismo caso.</p>
       <span class="kw">return</span> <span class="kw">this</span>._x
     <span class="kw">endget</span>
     <span class="kw">set</span>(v)
-      <span class="kw">if</span> v &lt; <span class="num">0</span> <span class="kw">then throw</span> RuntimeError(<span class="str">"negativo"</span>) <span class="kw">endif</span>
+      <span class="kw">if</span> v &lt; <span class="num">0</span> <span class="kw">then</span>
+        <span class="kw">throw</span> RuntimeError(<span class="str">"negativo"</span>)
+      <span class="kw">endif</span>
       <span class="kw">this</span>._x := v
     <span class="kw">endset</span>
   <span class="kw">endprop</span>
@@ -1091,7 +1099,7 @@ mismo caso.</p>
   BP permite declarar <code>property</code> también fuera de una clase, a
   nivel módulo. Es la forma canónica de exponer estado mutable a otros
   módulos: las <code>var</code> de módulo son privadas por diseño (no se
-  exportan en la <code>.bpi</code>), pero una <code>public property</code>
+  exportan en la interfaz), pero una <code>public property</code>
   expone su getter/setter sintéticos, accesibles vía <code>Modulo.nombre</code>
   desde otro módulo que la importe.
 </p>
@@ -1102,7 +1110,7 @@ mismo caso.</p>
   <li>Un global privado <code>__prop_&lt;nombre&gt;</code> que es el backing field.</li>
   <li>Una función pública <code>__prop_get_&lt;nombre&gt;()</code> que devuelve el valor.</li>
   <li>Una función pública <code>__prop_set_&lt;nombre&gt;(__val)</code> que lo escribe.</li>
-  <li>En el <code>.bpi</code>, una línea <code>prop &lt;nombre&gt;:&lt;tipo&gt; public</code>
+  <li>En la interfaz, una línea <code>prop &lt;nombre&gt;:&lt;tipo&gt; public</code>
       que viaja a los módulos importadores (sin exponer los accesores como
       funciones normales).</li>
 </ul>
@@ -1148,7 +1156,7 @@ mismo caso.</p>
 </p>
 <pre><code><span class="kw">public class</span> Counter
   <span class="kw">public const</span> Counter.MAX: <span class="type">integer</span> := <span class="num">100</span>   <span class="comment">// const estática</span>
-  <span class="kw">public var</span> Counter.viva: <span class="type">integer</span>            <span class="comment">// var estática</span>
+  <span class="kw">var</span> Counter.viva: <span class="type">integer</span>                   <span class="comment">// var estática (privada, como todo campo)</span>
 
   <span class="kw">public property</span> Counter.total: <span class="type">integer</span>     <span class="comment">// property estática (get/set auto;</span>
                                                <span class="comment">// admite get/set custom con `field`)</span>
@@ -1159,7 +1167,7 @@ mismo caso.</p>
 <span class="kw">end</span> Counter
 
 <span class="comment">// Acceso SIEMPRE cualificado, sin instancia — también desde métodos
-// de instancia y desde otros módulos (viajan en el .bpi):</span>
+// de instancia y desde otros módulos (viajan en la interfaz):</span>
 Counter.total := <span class="num">7</span>
 Counter.total += <span class="num">3</span>
 Counter.bump()</code></pre>
@@ -1173,7 +1181,7 @@ Counter.bump()</code></pre>
 
 <h3 id="fields-owner">9.7 Fields owner</h3>
 <pre><code><span class="kw">public class</span> Caja
-  <span class="kw">public var owner</span> contenido: Recurso
+  <span class="kw">var owner</span> contenido: Recurso
   <span class="kw">public function</span> Caja(r: Recurso)
     <span class="kw">this</span>.contenido := r
   <span class="kw">end</span> Caja
@@ -1194,7 +1202,7 @@ Counter.bump()</code></pre>
 <span class="kw">end</span> Util</code></pre>
 <p>
   Si declaras <code>library</code>, el artefacto se nombra
-  <code>com.example.app.Util.mod</code> y <code>.bpi</code>. Sin
+  <code>com.example.app.Util.mod</code>. Sin
   <code>library</code>, se llama <code>Util.mod</code>.
 </p>
 
@@ -1243,8 +1251,7 @@ Counter.bump()</code></pre>
 <span class="kw">end</span> LogApi</code></pre>
 <p>
   Una interfaz es un contrato (Modula-2 <code>DEFINITION MODULE</code>): sólo
-  firmas públicas, sin cuerpo de función. Compila a un <code>.bpi</code> con
-  el flag <code>interface true</code> y no produce <code>.mod</code>.
+  firmas públicas, sin cuerpo de función. Compila sólo a interfaz (flag <code>interface true</code>) y no produce <code>.mod</code>.
 </p>
 <p>
   Las interfaces pueden extender otra interfaz (herencia de contratos):
@@ -1334,7 +1341,7 @@ estar terminado para que el otro compile:</p>
 <pre><code><span class="kw">module</span> Par
   <span class="kw">import</span> Impar
   <span class="kw">public function</span> <span class="fn">esPar</span>(n: <span class="type">integer</span>): <span class="type">boolean</span>
-    <span class="kw">if</span> n == <span class="num">0</span> <span class="kw">then</span> <span class="kw">return</span> <span class="kw">true</span> <span class="kw">endif</span>
+    <span class="kw">if</span> n == <span class="num">0</span> <span class="kw">then</span> <span class="kw">return</span> <span class="kw">true</span>
     <span class="kw">return</span> Impar.esImpar(n - <span class="num">1</span>)   <span class="comment">// llama a Impar</span>
   <span class="kw">end</span> esPar
 <span class="kw">end</span> Par
@@ -1342,7 +1349,7 @@ estar terminado para que el otro compile:</p>
 <span class="kw">module</span> Impar
   <span class="kw">import</span> Par
   <span class="kw">public function</span> <span class="fn">esImpar</span>(n: <span class="type">integer</span>): <span class="type">boolean</span>
-    <span class="kw">if</span> n == <span class="num">0</span> <span class="kw">then</span> <span class="kw">return</span> <span class="kw">false</span> <span class="kw">endif</span>
+    <span class="kw">if</span> n == <span class="num">0</span> <span class="kw">then</span> <span class="kw">return</span> <span class="kw">false</span>
     <span class="kw">return</span> Par.esPar(n - <span class="num">1</span>)       <span class="comment">// ...y Par llama a Impar</span>
   <span class="kw">end</span> esImpar
 <span class="kw">end</span> Impar</code></pre>
@@ -1422,6 +1429,17 @@ otra sin problema.</p>
       índice fuera de rango, fallos en funciones <code>native</code>...) se
       lanzan como <code>RuntimeError</code> y se cazan igual, da igual el módulo
       donde ocurran.</li>
+  <li><strong>Quedarse sin memoria también se atrapa.</strong> Si una
+      reserva no cabe en el heap, la VM lanza un <code>RuntimeError</code>
+      con el mensaje <code>No space in heap</code> en vez de morir: un
+      programa que trabaje al límite puede liberar y reintentar, o al
+      menos dejar constancia antes de rendirse. Igual en el PC que en el
+      micro.
+<pre><code><span class="kw">try</span>
+  procesarLoteGrande()
+<span class="kw">catch</span> e: RuntimeError
+  <span class="kw">print</span> <span class="str">"no ha cabido: "</span> + e.msg
+<span class="kw">endtry</span></code></pre></li>
   <li>Una excepción no atrapada termina la VM mostrando un stack trace
       con el nombre simbólico de cada frame.</li>
 </ul>
@@ -1449,7 +1467,7 @@ otra sin problema.</p>
 
 <h3>12.2 Fields <code>owner</code></h3>
 <p>
-  <code>public var owner f: T</code> dentro de una clase. El descriptor de
+  <code>var owner f: T</code> dentro de una clase. El descriptor de
   la clase guarda un bitmap de owners; al liberar la instancia, cada slot
   marcado se libera recursivamente. El opcode <code>SET_FIELD_OWNER</code>
   libera el valor anterior del campo antes de escribir el nuevo (asignación
@@ -1684,7 +1702,7 @@ el hilo que lo recibe.</p>
 <!-- =========================================================== -->
 <h2 id="pendientes">17. Pendientes / no soportado</h2>
 <p style="color:var(--fg-muted)">Estado al cierre de V3 (julio 2026). Lo
-que estaba aquí y ya se hizo: clases/properties en <code>.bpi</code>
+que estaba aquí y ya se hizo: clases/properties en la interfaz
 (cross-module completo), tipos cualificados <code>Mod.Clase</code>,
 <code>Collections.Map</code>, fichero de proyecto, el safepoint
 stop-the-world del GC (la VM-Java corre además a 1 worker por defecto,
@@ -1731,7 +1749,7 @@ igual que el device) y, en V3, el AOT automático desde el IDE y la GUI
   BasicPlus reference manual — generado al hilo del desarrollo.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) y
   <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) ·
-  Formatos <code>.mod</code> v5 / <code>.bpi</code> v6.
+  Formato <code>.mod</code> v6 (interfaz embebida v7).
 </p>
 
 </main>
