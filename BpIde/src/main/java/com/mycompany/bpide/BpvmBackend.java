@@ -25,7 +25,23 @@ import java.util.List;
 
 public final class BpvmBackend extends AbstractBpvmBackend {
 
-    @Override public String displayName() { return "VM Java (TCP v1)"; }
+    /** Nombre de ESTE extremo, para lo que se le enseña al usuario. Este backend
+     *  sirve a DOS destinos que hablan el mismo wire por TCP —la VM Java y el
+     *  micro simulado— y hasta ahora el nombre estaba a pelo, así que el micro
+     *  simulado se anunciaba como "VM Java" en los cuatro sitios que lo muestran
+     *  (el banner del RUN, el "Connecting to…", el título del log y el aviso de
+     *  log borrado). Quien construye el backend sabe a cuál se conecta: que lo
+     *  diga. */
+    private final String nombre;
+
+    /** Por defecto, la VM Java: es el destino histórico de este backend. */
+    public BpvmBackend() { this("VM Java (TCP v1)"); }
+
+    public BpvmBackend(String nombre) {
+        this.nombre = (nombre == null || nombre.isEmpty()) ? "VM Java (TCP v1)" : nombre;
+    }
+
+    @Override public String displayName() { return nombre; }
 
     @Override protected void openTransport(String endpoint, BpvmClient c) throws IOException {
         String host;

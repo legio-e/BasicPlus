@@ -1070,7 +1070,10 @@ public final class PicoExplorer extends JPanel {
             status.setText(serial ? "No port selected" : "Empty endpoint");
             return;
         }
-        final Backend b = serial ? new SerialBackend() : new BpvmBackend();
+        // El nombre que se enseña sale de a QUÉ nos conectamos, no de la clase:
+        // el mismo backend TCP sirve a la VM Java y al micro simulado.
+        final Backend b = serial ? new SerialBackend()
+                : new BpvmBackend(simulado ? rbSim.getText() : rbVm.getText());
         status.setText("Connecting to " + endpoint + " (" + b.displayName() + ")...");
         runAsync(() -> {
             String hello = b.connect(endpoint);
