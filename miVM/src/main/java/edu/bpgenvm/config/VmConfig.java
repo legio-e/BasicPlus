@@ -78,8 +78,29 @@ public final class VmConfig {
         if (map.containsKey("memorySize") && !map.containsKey("stackBase")) {
             c.stackBase = c.memorySize / 2;
         }
+
+        // Los directorios RELATIVOS se resuelven contra el propio BpVM.cfg, no
+        // contra el cwd del proceso. Es lo que uno espera de un fichero de
+        // configuración, y es lo que hace PORTABLE una instalación: el paquete
+        // trae `"stdlibDir": "lib"` y funciona lo mismo si el IDE se lanza desde
+        // el escritorio, desde una consola o desde la carpeta del proyecto.
+        // (Con el cwd, sólo acertaba por casualidad.) Las rutas ABSOLUTAS no se
+        // tocan — los BpVM.cfg de siempre siguen valiendo tal cual.
+        Path base = file.toAbsolutePath().getParent();
+        c.stdlibDir  = resolveRelativo(c.stdlibDir,  base);
+        c.devicesDir = resolveRelativo(c.devicesDir, base);
+        c.packsDir   = resolveRelativo(c.packsDir,   base);
+
         c.validate(file);
         return c;
+    }
+
+    /** Ruta tal cual si es absoluta o nula; si es relativa, resuelta contra
+     *  {@code base} (el directorio del BpVM.cfg) y normalizada. */
+    private static String resolveRelativo(String dir, Path base) {
+        if (dir == null || dir.isEmpty() || base == null) return dir;
+        Path p = Paths.get(dir);
+        return p.isAbsolute() ? dir : base.resolve(p).normalize().toString();
     }
 
     /**

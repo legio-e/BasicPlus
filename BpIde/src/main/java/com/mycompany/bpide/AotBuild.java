@@ -374,6 +374,11 @@ public final class AotBuild {
                 if (looksLikeBpgenvm(cand)) return cand.toString();
             }
         }
+        // La INSTALACIÓN: en el ZIP viaja un bpgenvm-c/ con include/ y src/ (sólo
+        // las cabeceras — el AOT las usa como -I, no compila esos .c). Va DESPUÉS
+        // del árbol de fuentes a propósito: si estás en el repo, manda el repo.
+        Path dist = IdePrefs.installSubdir("bpgenvm-c");
+        if (looksLikeBpgenvm(dist)) return dist.toString();
         Path dev = Paths.get("C:\\lenguajes\\pm\\bpgenvm-c");          // último recurso (dev)
         if (looksLikeBpgenvm(dev)) return dev.toString();
         return null;

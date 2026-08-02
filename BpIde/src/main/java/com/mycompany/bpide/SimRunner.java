@@ -42,19 +42,40 @@ public final class SimRunner {
     /** Ruta del ejecutable del simulador, o null si no aparece. Sale de la MISMA
      *  raíz de bpgenvm-c que ya se configura para el AOT (una ruta, no dos). */
     public static Path locateExe(IdePrefs prefs) {
+        // 1) La INSTALACIÓN: en el ZIP el binario viaja ya compilado en bin/, que
+        //    es donde lo encontrará quien se baje el paquete y no tenga fuentes.
+        Path bin = IdePrefs.installSubdir("bin");
+        if (bin != null) {
+            Path p = enExiste(bin);
+            if (p != null) return p;
+        }
+        // 2) El árbol de fuentes: <bpgenvm-c>/build, lo que hay al desarrollar.
         String root = (prefs != null && prefs.aotBpgenvmDir != null && !prefs.aotBpgenvmDir.isEmpty())
                 ? prefs.aotBpgenvmDir : AotBuild.autodetectBpgenvm(null);
         if (root == null) return null;
-        Path base = Paths.get(root, "build");
-        Path win  = base.resolve("bpvm-sim.exe");
+        return enExiste(Paths.get(root, "build"));
+    }
+
+    /** bpvm-sim[.exe] dentro de `dir`, o null. Un solo sitio para las dos formas
+     *  del nombre — así añadir un candidato nuevo no duplica el .exe/.sin-exe. */
+    private static Path enExiste(Path dir) {
+        Path win = dir.resolve("bpvm-sim.exe");
         if (Files.isRegularFile(win)) return win;
-        Path nix  = base.resolve("bpvm-sim");
+        Path nix = dir.resolve("bpvm-sim");
         if (Files.isRegularFile(nix)) return nix;
         return null;
     }
 
     /** Mensaje de ayuda cuando falta el binario: decir QUÉ hacer, no sólo que falla. */
     public static String missingExeHelp(IdePrefs prefs) {
+        // Si esto es una INSTALACIÓN (hay bin/ junto al jar), el binario deberia
+        // venir en el paquete: decirle a alguien que "lo compile" seria un mal
+        // consejo — lo que le pasa es que su copia esta incompleta.
+        Path bin = IdePrefs.installSubdir("bin");
+        if (bin != null) {
+            return "falta " + bin.resolve("bpvm-sim.exe")
+                 + " — deberia venir en el paquete; vuelve a descomprimir el ZIP entero";
+        }
         String root = (prefs != null && prefs.aotBpgenvmDir != null && !prefs.aotBpgenvmDir.isEmpty())
                 ? prefs.aotBpgenvmDir : AotBuild.autodetectBpgenvm(null);
         if (root == null) {

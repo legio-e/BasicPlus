@@ -79,24 +79,42 @@ public final class IdePrefs {
      *  entre arranques, como en una placa). Null/empty = $HOME/.bpide-sim. */
     public String  simDataDir;
 
+    /** Directorio de la INSTALACIÓN: el que contiene el jar en ejecución. En la
+     *  distribución (el ZIP) ahí cuelgan `packs/`, `bin/`, `bpgenvm-c/`… y por eso
+     *  todo lo que "viaja con el IDE" se busca relativo a este punto y no a rutas
+     *  absolutas de ninguna máquina.
+     *
+     *  <p>null si no se puede averiguar (jar servido desde una URL rara, sin
+     *  permisos, o clases sueltas en un IDE): quien llame debe tener otro
+     *  candidato detrás. */
+    public static Path installDir() {
+        try {
+            java.net.URI uri = IdePrefs.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI();
+            Path here = Paths.get(uri);
+            return Files.isDirectory(here) ? here : here.getParent();
+        } catch (Exception ignored) {
+            return null;   // el llamante tiene su propio fallback
+        }
+    }
+
+    /** Igual que {@link #installDir()} pero devolviendo la subcarpeta `sub` sólo
+     *  si existe. Azúcar para los tres sitios que buscan cosas de la instalación. */
+    static Path installSubdir(String sub) {
+        Path root = installDir();
+        if (root == null) return null;
+        Path cand = root.resolve(sub);
+        return Files.isDirectory(cand) ? cand : null;
+    }
+
     /** Biblioteca de packs efectiva: la configurada; si no, la que VIAJA CON EL IDE
      *  (una carpeta `packs/` junto al jar) y por último `packs/` en el directorio
      *  de trabajo (útil en el repo). null si no hay ninguna — el compilador dirá
      *  entonces dónde configurarla. */
     public String packsDirEffective() {
         if (packsDir != null && !packsDir.isEmpty()) return packsDir;
-        try {
-            java.net.URI uri = IdePrefs.class.getProtectionDomain()
-                    .getCodeSource().getLocation().toURI();
-            Path here = Paths.get(uri);
-            Path dir = Files.isDirectory(here) ? here : here.getParent();
-            if (dir != null) {
-                Path cand = dir.resolve("packs");
-                if (Files.isDirectory(cand)) return cand.toString();
-            }
-        } catch (Exception ignored) {
-            /* jar en una URL rara / sin permisos: se cae al siguiente candidato */
-        }
+        Path junto = installSubdir("packs");
+        if (junto != null) return junto.toString();
         Path cwd = Paths.get(System.getProperty("user.dir", "."), "packs");
         return Files.isDirectory(cwd) ? cwd.toString() : null;
     }
