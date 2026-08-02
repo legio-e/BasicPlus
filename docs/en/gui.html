@@ -198,6 +198,11 @@
     <li class="sub"><a href="#fuentes">21.2 Fonts</a></li>
 
     <li class="group"><a href="#eventos">22. Events and forms</a></li>
+    <li class="sub"><a href="#ev-handlers">22.1 Handlers: clic and change</a></li>
+    <li class="sub"><a href="#ev-varios">22.2 Several widgets, several handlers</a></li>
+    <li class="sub"><a href="#ev-async">22.3 Long work without freezing the GUI</a></li>
+    <li class="sub"><a href="#ev-slots">22.4 From name to slot (transparent)</a></li>
+    <li class="sub"><a href="#ev-codigo">22.5 Subscribing from code (no .win)</a></li>
 
     <li class="group"><a href="#ejecutar">23. Running (host and board)</a></li>
     <li class="sub"><a href="#ej-preview">23.1 Preview on the PC</a></li>
@@ -218,6 +223,7 @@
     <li><a href="manual.html#intro">Language manual</a></li>
     <li><a href="referencia.html#stdlib">Reference / standard library</a></li>
     <li><a href="guia-ide.html">IDE guide</a></li>
+    <li><a href="creditos.html">Credits and acknowledgements</a></li>
     <li><a href="index.html">Documentation index</a></li>
     <li><a href="../gui.html">🇪🇸 Español</a></li>
   </ul>
@@ -713,6 +719,51 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
   guide</a>).</p>
 </div>
 
+<h3 id="ev-codigo">22.5 Subscribing from code (without a <code>.win</code>)</h3>
+<p>
+  Everything above goes through a <code>.win</code> file, which is the
+  comfortable path. But a widget you build in code needs no file at all: its
+  events are subscribed with <code>::</code>, naming the object and the method
+  that will attend to them.
+</p>
+<pre><code><span class="kw">var</span> boton: Gui.<span class="type">Button</span> := Gui.<span class="type">Button</span>(pantalla)
+boton.setText(<span class="str">"Start"</span>)
+boton.onClick := pantalla::boton_onClick     <span class="comment">// this window attends it</span></code></pre>
+<p>
+  The handler is <strong>a function of any object</strong> — it does not have to
+  inherit from anything:
+</p>
+<pre><code><span class="kw">public function event</span> <span class="fn">boton_onClick</span>(sender: Gui.<span class="type">Component</span>)
+  <span class="kw">print</span> <span class="str">"clicked"</span>
+<span class="kw">end</span> boton_onClick</code></pre>
+<p>
+  <strong>The naming convention</strong> is worth keeping even here, where
+  nothing forces it: <code>&lt;componentName&gt;_&lt;eventName&gt;</code>. The
+  same name in the variable, in the <code>name</code> of the <code>.win</code>
+  and in the handler — so that reading any of the three tells you where the
+  other two are.
+</p>
+<p>
+  And a consequence that is easy to miss: <strong>with no subscriber, nothing
+  happens</strong>. A widget whose event nobody attends simply does not react —
+  it is not an error, and there is no warning. If a button "does nothing", the
+  first thing to check is whether its event was subscribed.
+</p>
+<div class="warn">
+  <p><strong>Migrating from V3.</strong> This <em>replaces</em> the old model
+  and it <strong>breaks</strong> programs: a program that subclassed the widget
+  to attend a button no longer works.</p>
+<pre><code><span class="comment">// V3 — no longer valid          // V4</span>
+<span class="kw">class</span> MyButton <span class="kw">extends</span> Gui.<span class="type">Button</span>     boton.onClick := pantalla::boton_onClick
+  <span class="kw">public function</span> <span class="fn">onClick</span>()
+    ...
+  <span class="kw">end</span> onClick
+<span class="kw">end</span> MyButton</code></pre>
+  <p>The reason for the change: the old model <strong>forced you to create a
+  type for every button</strong> you wanted to attend. The event does the same
+  job in one line, and the handler can live wherever it makes sense.</p>
+</div>
+
 <h2 id="ejecutar">23. Running (host and board)</h2>
 <p>
   A BasicPlus GUI can be run three ways, from fastest to most faithful: preview on the PC (Swing), real
@@ -827,7 +878,7 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
   <tr><td><code>refresh()</code></td><td>function</td><td>Forces a repaint of the widget.</td></tr>
   <tr><td><code>clean()</code></td><td>function</td><td>Removes the widget's CHILDREN (the widget stays).</td></tr>
   <tr><td><code>delete()</code></td><td>function</td><td>Removes the widget (and its children) from the tree.</td></tr>
-  <tr><td><code>onClick()</code> / <code>onChange()</code></td><td>function (virtual)</td><td>Overridable in a subclass: the OO alternative to <code>.win</code> handlers (§22).</td></tr>
+  <tr><td><code>onClick</code> / <code>onChange</code></td><td><strong>event</strong></td><td>Subscribed with <code>::</code>: <code>button.onClick := window::button_onClick</code>. See <a href="#ev-codigo">§22.5</a>. <em>(In V3 these were virtual methods you overrode by subclassing; not any more.)</em></td></tr>
 </table>
 
 <h3 id="ref-widgets">24.3 Widgets</h3>

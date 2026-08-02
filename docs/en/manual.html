@@ -246,7 +246,7 @@
 <h1>BasicPlus — Language manual</h1>
 <p style="color:var(--fg-muted)">
   A structured, typed, module-oriented language. A Java frontend compiles to
-  its own bytecode (the <code>.mod</code> v5 format, "MOD5"), executed by the
+  its own bytecode (the <code>.mod</code> v6 format, "MOD6"), executed by the
   <code>bpgenvm</code> VM (mark-and-sweep GC, deterministic owner handling,
   typed exceptions).
 </p>
@@ -260,7 +260,7 @@
   deterministic "ownership" for immediate release of resources.
 </p>
 <p>The overall pipeline is:</p>
-<pre><code><span class="comment">// 1) Compilation: each module → a .mod (binary) and a .bpi (textual interface)</span>
+<pre><code><span class="comment">// 1) Compilation: each module → a .mod (binary, with its interface inside)</span>
 java -jar basicplus-frontend.jar samples/hola.bp --compile out --backend=mivm
 
 <span class="comment">// 2) Execution: the VM loads the root .mod; the .mod files of its imports are
@@ -561,7 +561,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   A module <code>const</code> requires a <strong>primitive literal</strong>
   (integer/float/long/double/boolean/string, with an optional <code>-</code>) —
   the value is inlined at each use, occupies no slot, and public ones travel in
-  the <code>.bpi</code> so importers inline them too. For a computed value or a
+  the interface so importers inline them too. For a computed value or a
   non-primitive type, use a <code>var</code> assigned in the module's
   initializer function. It is not assignable in any scope, and there are no
   const arrays (<a href="#arrays">§4.2.1</a>).
@@ -728,7 +728,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <span class="kw">print</span> msg
 <span class="kw">end</span> imprimir</code></pre>
 <ul>
-  <li><code>public</code> → exported in the <code>.bpi</code>, callable cross-library.</li>
+  <li><code>public</code> → exported in the interface, callable cross-library.</li>
   <li>By default, functions are private to the module.</li>
   <li>The return type is declared with <code>: T</code> after the parentheses.
       If omitted, the function is <code>void</code>.</li>
@@ -752,7 +752,7 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
   <li>Parameters with defaults go <strong>at the end</strong> of the list;
       arguments are filled by position.</li>
   <li>The default is <em>substituted at the caller</em> at compile time (zero
-      cost in the VM) and travels in the <code>.bpi</code>: it works the same
+      cost in the VM) and travels in the interface: it works the same
       way when calling functions from another library.</li>
 </ul>
 
@@ -859,8 +859,8 @@ lista.add(pair())                      <span class="comment">// go into collecti
 <!-- =========================================================== -->
 <h2 id="clases">9. Classes</h2>
 <pre><code><span class="kw">public class</span> Persona
-  <span class="kw">public var</span> nombre: <span class="type">string</span>
-  <span class="kw">public var</span> edad:   <span class="type">integer</span>
+  <span class="kw">var</span> nombre: <span class="type">string</span>   <span class="comment">// fields are ALWAYS private</span>
+  <span class="kw">var</span> edad:   <span class="type">integer</span>
 
   <span class="kw">public function</span> Persona(nombre: <span class="type">string</span>, edad: <span class="type">integer</span>)
     <span class="kw">this</span>.nombre := nombre
@@ -874,15 +874,20 @@ lista.add(pair())                      <span class="comment">// go into collecti
 
 <h3 id="campos">9.1 Fields</h3>
 <p>
-  A <code>var</code> inside the class declares an instance field.
-  <code>public</code> visibility is optional. Access via <code>this.field</code>
-  from inside; <code>obj.field</code> from outside (only if public).
+  A <code>var</code> inside the class declares an instance field, and fields
+  are <strong>always private</strong>: they are read and written through
+  <code>this.field</code> inside the class, and are not touched from outside.
+  Marking a field <code>public</code> is a <strong>compile error</strong>, and
+  the message points you at the right alternative: <code>public property</code>
+  (§9.5), which exposes a get/set and keeps the backing field private. The
+  reason is by design: what crosses the module boundary is a
+  <em>contract</em>, not the internal representation.
 </p>
 <p>
   A field does NOT allow a fixed-size array <code>type[N]</code> (compile
   error): declare <code>type[]</code> and initialize it in the constructor with
   <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
-  Fields are not exported in the <code>.bpi</code> — they are private to the
+  Fields do not travel in the interface — they are private to the
   owning module by OO design; expose a <code>property</code> if you need
   cross-module access.
 </p>
@@ -911,7 +916,7 @@ lista.add(pair())                      <span class="comment">// go into collecti
 
 <h3 id="herencia">9.4 Inheritance</h3>
 <pre><code><span class="kw">public class</span> Animal
-  <span class="kw">public var</span> nombre: <span class="type">string</span>
+  <span class="kw">var</span> nombre: <span class="type">string</span>
   <span class="kw">public function</span> Animal(nombre: <span class="type">string</span>)
     <span class="kw">this</span>.nombre := nombre
   <span class="kw">end</span> Animal
@@ -945,7 +950,9 @@ lista.add(pair())                      <span class="comment">// go into collecti
       <span class="kw">return</span> <span class="kw">this</span>._x
     <span class="kw">endget</span>
     <span class="kw">set</span>(v)
-      <span class="kw">if</span> v &lt; <span class="num">0</span> <span class="kw">then throw</span> RuntimeError(<span class="str">"negative"</span>) <span class="kw">endif</span>
+      <span class="kw">if</span> v &lt; <span class="num">0</span> <span class="kw">then</span>
+        <span class="kw">throw</span> RuntimeError(<span class="str">"negative"</span>)
+      <span class="kw">endif</span>
       <span class="kw">this</span>._x := v
     <span class="kw">endset</span>
   <span class="kw">endprop</span>
@@ -1023,7 +1030,7 @@ lista.add(pair())                      <span class="comment">// go into collecti
   BP also lets you declare a <code>property</code> outside a class, at module
   level. It is the canonical way to expose mutable state to other modules:
   module <code>var</code>s are private by design (they are not exported in the
-  <code>.bpi</code>), but a <code>public property</code> exposes its synthetic
+  interface), but a <code>public property</code> exposes its synthetic
   getter/setter, accessible via <code>Module.name</code> from another module
   that imports it.
 </p>
@@ -1034,7 +1041,7 @@ lista.add(pair())                      <span class="comment">// go into collecti
   <li>A private global <code>__prop_&lt;name&gt;</code> that is the backing field.</li>
   <li>A public function <code>__prop_get_&lt;name&gt;()</code> that returns the value.</li>
   <li>A public function <code>__prop_set_&lt;name&gt;(__val)</code> that writes it.</li>
-  <li>In the <code>.bpi</code>, a line <code>prop &lt;name&gt;:&lt;type&gt; public</code>
+  <li>In the interface, a line <code>prop &lt;name&gt;:&lt;type&gt; public</code>
       that travels to importing modules (without exposing the accessors as
       normal functions).</li>
 </ul>
@@ -1080,7 +1087,7 @@ lista.add(pair())                      <span class="comment">// go into collecti
 </p>
 <pre><code><span class="kw">public class</span> Counter
   <span class="kw">public const</span> Counter.MAX: <span class="type">integer</span> := <span class="num">100</span>   <span class="comment">// static const</span>
-  <span class="kw">public var</span> Counter.viva: <span class="type">integer</span>            <span class="comment">// static var</span>
+  <span class="kw">var</span> Counter.viva: <span class="type">integer</span>            <span class="comment">// static var</span>
 
   <span class="kw">public property</span> Counter.total: <span class="type">integer</span>     <span class="comment">// static property (auto get/set;</span>
                                                <span class="comment">// custom get/set allowed with `field`)</span>
@@ -1091,7 +1098,7 @@ lista.add(pair())                      <span class="comment">// go into collecti
 <span class="kw">end</span> Counter
 
 <span class="comment">// Access is ALWAYS qualified, with no instance — also from instance
-// methods and from other modules (they travel in the .bpi):</span>
+// methods and from other modules (they travel in the interface):</span>
 Counter.total := <span class="num">7</span>
 Counter.total += <span class="num">3</span>
 Counter.bump()</code></pre>
@@ -1104,7 +1111,7 @@ Counter.bump()</code></pre>
 
 <h3 id="fields-owner">9.7 Fields owner</h3>
 <pre><code><span class="kw">public class</span> Caja
-  <span class="kw">public var owner</span> contenido: Recurso
+  <span class="kw">var owner</span> contenido: Recurso
   <span class="kw">public function</span> Caja(r: Recurso)
     <span class="kw">this</span>.contenido := r
   <span class="kw">end</span> Caja
@@ -1125,7 +1132,7 @@ Counter.bump()</code></pre>
 <span class="kw">end</span> Util</code></pre>
 <p>
   If you declare <code>library</code>, the artifact is named
-  <code>com.example.app.Util.mod</code> and <code>.bpi</code>. Without
+  <code>com.example.app.Util.mod</code>. Without
   <code>library</code>, it is called <code>Util.mod</code>.
 </p>
 
@@ -1174,8 +1181,7 @@ Counter.bump()</code></pre>
 <span class="kw">end</span> LogApi</code></pre>
 <p>
   An interface is a contract (a Modula-2 <code>DEFINITION MODULE</code>): public
-  signatures only, no function bodies. It compiles to a <code>.bpi</code> with
-  the flag <code>interface true</code> and produces no <code>.mod</code>.
+  signatures only, no function bodies. It compiles to interface only (flag <code>interface true</code>) and produces no <code>.mod</code>.
 </p>
 <p>
   Interfaces can extend another interface (contract inheritance):
@@ -1284,6 +1290,16 @@ Counter.bump()</code></pre>
       range, failures in <code>native</code> functions...) are thrown as
       <code>RuntimeError</code> and caught the same way, regardless of the
       module where they occur.</li>
+  <li><strong>Running out of memory is caught too.</strong> If an allocation
+      does not fit in the heap, the VM raises a <code>RuntimeError</code> with
+      the message <code>No space in heap</code> instead of dying: a program
+      working close to the limit can free and retry, or at least leave a
+      record before giving up. The same on the PC and on the micro.
+<pre><code><span class="kw">try</span>
+  procesarLoteGrande()
+<span class="kw">catch</span> e: RuntimeError
+  <span class="kw">print</span> <span class="str">"it did not fit: "</span> + e.msg
+<span class="kw">endtry</span></code></pre></li>
   <li>An uncaught exception terminates the VM, showing a stack trace with the
       symbolic name of each frame.</li>
 </ul>
@@ -1310,7 +1326,7 @@ Counter.bump()</code></pre>
 
 <h3>12.2 Fields <code>owner</code></h3>
 <p>
-  <code>public var owner f: T</code> inside a class. The class descriptor holds
+  <code>var owner f: T</code> inside a class. The class descriptor holds
   a bitmap of owners; when the instance is freed, each marked slot is freed
   recursively. The opcode <code>SET_FIELD_OWNER</code> frees the field's
   previous value before writing the new one (an owner-safe atomic assignment).
@@ -1464,7 +1480,7 @@ shared object</code></pre>
 <!-- =========================================================== -->
 <h2 id="pendientes">17. Pending / not supported</h2>
 <p style="color:var(--fg-muted)">Status at the close of V3 (July 2026). What
-was here and is now done: classes/properties in the <code>.bpi</code>
+was here and is now done: classes/properties in the interface
 (full cross-module), qualified types <code>Mod.Class</code>,
 <code>Collections.Map</code>, the project file, the GC's stop-the-world
 safepoint (the Java VM also runs at 1 worker by default, like the device)
@@ -1509,7 +1525,9 @@ and, in V3, automatic AOT from the IDE and the GUI
   BasicPlus reference manual — generated alongside development.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) and
   <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) ·
-  Formats <code>.mod</code> v5 / <code>.bpi</code> v6.
+  Format <code>.mod</code> v6 (embedded interface v7).<br>
+  BasicPlus rests on other people’s work —
+  <a href="creditos.html">credits and acknowledgements</a>.
 </p>
 
 </main>

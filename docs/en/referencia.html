@@ -210,7 +210,7 @@
 
     <li class="group"><a href="#artefactos">16. On-disk artifacts</a></li>
     <li class="sub"><a href="#mod">16.1 .mod</a></li>
-    <li class="sub"><a href="#bpi">16.2 .bpi</a></li>
+    <li class="sub"><a href="#bpi">16.2 Module interface</a></li>
     <li class="sub"><a href="#dbg">16.3 .dbg</a></li>
     <li class="sub"><a href="#mdn">16.4 .mdn</a></li>
     <li class="sub"><a href="#proyecto">16.5 .bpbuild / .bpproject</a></li>
@@ -271,7 +271,7 @@
       <td><code>abs</code> <code>min</code> <code>max</code></td></tr>
   <tr><td>Float arithmetic</td>
       <td><code>sqrt</code> <code>pow</code> <code>exp</code>
-          <code>random()</code> <code>randomInt(lo, hi)</code><br>
+          <code><a href="#rnd">random()</a></code> <code><a href="#rnd">randomInt(lo, hi)</a></code><br>
           <em>Trigonometry, logarithms, π, e and the rest require
           <code>import Math</code> — see <a href="#stdlib-math">§13.9</a>.</em></td></tr>
   <tr><td>Numeric conversion</td>
@@ -412,7 +412,7 @@ sb.appendInt(<span class="num">42</span>)
 
 <h3 id="stdlib-thread">13.7 <code>Thread</code></h3>
 <pre><code><span class="kw">class</span> Worker <span class="kw">extends</span> Thread
-  <span class="kw">public var</span> name: <span class="type">string</span>
+  <span class="kw">var</span> name: <span class="type">string</span>
   <span class="kw">public function</span> Worker(name: <span class="type">string</span>)
     <span class="kw">super</span>(<span class="num">2048</span>)            <span class="comment">// stackSize in bytes</span>
     <span class="kw">this</span>.name := name
@@ -491,6 +491,38 @@ m.unlock()              <span class="comment">// releases and hands off to the f
 <p>
   Non-reentrant: if the same thread calls <code>lock()</code> again
   on a mutex it already holds, an exception is raised.
+</p>
+
+<!-- =========================================================== -->
+<h4 id="rnd">Random numbers</h4>
+<p>
+  These are <strong>implicit</strong> (no <code>import</code> needed) and share
+  the same source of entropy: <code>randomInt</code> is not a separate
+  generator, it is <code>random()</code> scaled to the range.
+</p>
+<table>
+  <tr><th>Function</th><th>Returns</th></tr>
+  <tr><td><code>random(): float</code></td>
+      <td>A value in <strong>[0, 1)</strong> — 0 can come up, 1 cannot.
+          24 bits of entropy.</td></tr>
+  <tr><td><code>randomInt(lo, hi): integer</code></td>
+      <td>An integer in <strong>[lo, hi)</strong>: <code>lo</code> included,
+          <strong><code>hi</code> excluded</strong>. Uniform.
+          If <code>hi &lt;= lo</code> it returns <code>lo</code> (it does not
+          throw).</td></tr>
+</table>
+<p class="warn">
+  <strong>The upper bound is NOT included.</strong> This is the usual
+  confusion, so here is the example: <code>randomInt(1, 4)</code> returns
+  <strong>1, 2 or 3</strong>, never 4. For a six-sided die,
+  <code>randomInt(1, 7)</code>. For a valid array index,
+  <code>randomInt(0, len(a))</code> — which is exactly why the upper bound is
+  excluded.
+</p>
+<p>
+  Where the bits come from depends on the machine: on the PC, the system
+  generator; on the micro, whatever that chip offers. The <em>semantics</em> —
+  the ranges above — are the same everywhere.
 </p>
 
 <!-- =========================================================== -->
@@ -1566,14 +1598,14 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
   <tr><td><code>--tokens</code></td><td>Dump of the lexer's tokens.</td></tr>
   <tr><td><code>--ast</code></td><td>Dump of the AST.</td></tr>
   <tr><td><code>--quiet</code></td><td>Diagnostics only.</td></tr>
-  <tr><td><code>--compile &lt;dir&gt;</code></td><td>Compiles to <code>.mod</code> (+ <code>.bpi</code>).</td></tr>
-  <tr><td><code>--interface &lt;dir&gt;</code></td><td>Emits only <code>.bpi</code> (no code).</td></tr>
+  <tr><td><code>--compile &lt;dir&gt;</code></td><td>Compiles to <code>.mod</code> (the interface goes inside).</td></tr>
+  <tr><td><code>--interface &lt;dir&gt;</code></td><td>Only parses and builds the interface — no code, no output file.</td></tr>
   <tr><td><code>--backend=jvm|mivm</code></td><td>Backend (mivm is the default).</td></tr>
 </table>
 <p>
   With <code>--compile</code>, the driver is recursive: it finds the
-  <code>.bp</code> of the missing imports, generates their
-  <code>.bpi</code> first (INTERFACE mode), then compiles the module, and
+  <code>.bp</code> of the missing imports, builds their interfaces
+  first (INTERFACE mode), then compiles the module, and
   finally recurses in FULL mode to produce the <code>.mod</code> of the
   deps.
 </p>
@@ -1709,15 +1741,14 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
   <li><code>sourceDir</code> (string, <strong>required</strong>):
       directory with the project's <code>.bp</code> files.</li>
   <li><code>outDir</code> (string, <strong>required</strong>):
-      directory where the compiler emits <code>.mod</code> and
-      <code>.bpi</code>. Created on demand.</li>
+      directory where the compiler emits the <code>.mod</code> files.
+      Created on demand.</li>
   <li><code>main</code> (string, <strong>required</strong>): the logical
       name of the main module (without extension). The compiler looks for
       <code>&lt;sourceDir&gt;/&lt;main&gt;.bp</code>.</li>
   <li><code>dependencies</code> (array of strings, optional): each entry
-      is a directory (looks for any <code>.bpi</code>/<code>.mod</code>
-      inside when resolving imports) or a specific <code>.mod</code>/<code>.bpi</code>
-      file.</li>
+      is a directory (looks for any <code>.mod</code> inside when resolving
+      imports) or a specific <code>.mod</code> file.</li>
 </ul>
 <p>
   <strong>Import resolution in project mode</strong>:
@@ -1735,7 +1766,7 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
 </p>
 <ul>
   <li><strong>Sources</strong>: all the <code>.bp</code> under <code>sourceDir</code>.</li>
-  <li><strong>Output</strong>: <code>.mod</code> and <code>.bpi</code> under <code>outDir</code>.</li>
+  <li><strong>Output</strong>: <code>.mod</code> under <code>outDir</code>.</li>
   <li><strong>Dependencies</strong>: the entries of the
       <code>dependencies</code> field.</li>
 </ul>
@@ -1825,23 +1856,45 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
 <!-- =========================================================== -->
 <h2 id="artefactos">16. On-disk artifacts</h2>
 
-<h3 id="mod">16.1 <code>.mod</code> (binary, MOD5)</h3>
-<pre>[MAGIC=0x4D4F4435]            4 bytes  "MOD5"
+<h3 id="mod">16.1 <code>.mod</code> (binary, MOD6)</h3>
+<pre>[MAGIC=0x4D4F4436]            4 bytes  "MOD6"
 [dataSize]                    4
 [mainOffset]                  4   offset to __startup, or -1
 [importsSize]                 4
 [exportsSize]                 4
 [codeSize]                    4
 [librarySize]                 4
---- header (28) ---
+[interfaceSize]               4   0 if it carries no interface (v6 only)
+--- header (32) ---
 [library  bytes]              librarySize
 [imports  bytes]              importsSize   (name, fromPath) UTF pairs
 [exports  bytes]              exportsSize   (name, offset) pairs
+[interface bytes]             interfaceSize interface text (§16.2)
 [data block]                  dataSize      strings, constants, class descriptors
 [code]                        codeSize      bytecode</pre>
+<p>
+  <strong>v6 = self-describing module.</strong> It adds <code>interfaceSize</code>
+  to the header and an <code>interface</code> section between <code>exports</code>
+  and <code>data</code>: the <code>.mod</code> carries its own interface, and the
+  separate <code>.bpi</code> file <strong>no longer exists</strong>. The VMs do
+  <em>not</em> need it to run — they read <code>interfaceSize</code> from the
+  header and skip the section; the compiler is what uses it, when resolving
+  <code>import</code>s.
+</p>
+<p>
+  Loaders still accept <strong>v5</strong> (<code>MAGIC "MOD5"</code>, 28-byte
+  header, no interface section) so older artifacts keep working.
+</p>
 
-<h3 id="bpi">16.2 <code>.bpi</code> (textual interface, v6)</h3>
-<pre>bpi 6
+<h3 id="bpi">16.2 Module interface (text, v7)</h3>
+<p>
+  The text carried in the <code>interface</code> section of the
+  <code>.mod</code> (§16.1). Up to V3 it was written to a separate
+  <code>.bpi</code> file; since V4 <strong>no file is produced</strong>: it is a
+  section of the module itself. The text format has not changed, and its version
+  line keeps the word <code>bpi</code> as its marker.
+</p>
+<pre>bpi 7
 library com.example
 module Util
 interface true                <span class="comment">// only if module interface</span>
@@ -1861,7 +1914,7 @@ class Punto public extends Base   <span class="comment">// full classes (L2 v3)<
   prop x:integer public
 end class</pre>
 <p>
-  The <code>.bpi</code> v6 exports functions (with defaults), consts
+  The v7 interface exports functions (with defaults), consts
   (inlined in the importer), enums, arrays of primitives, tuples in
   signatures, and <strong>full classes</strong> (layout, constructor,
   methods, properties, inheritance — even cross-module). All the
@@ -1926,7 +1979,9 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   BasicPlus reference manual — generated alongside development.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) and
   <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-P4 / STM32) ·
-  <code>.mod</code> v5 / <code>.bpi</code> v6 formats.
+  <code>.mod</code> v6 format (embedded interface v7).<br>
+  BasicPlus rests on other people’s work —
+  <a href="creditos.html">credits and acknowledgements</a>.
 </p>
 
 </main>

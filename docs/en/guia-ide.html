@@ -171,8 +171,10 @@
     <li><a href="#placa">6. Connecting to the board</a></li>
     <li><a href="#consola">7. The micro console</a></li>
     <li><a href="#info">8. Device INFO</a></li>
-    <li><a href="#debug">9. Debugging</a></li>
-    <li><a href="#autorun">10. Standalone device</a></li>
+    <li><a href="#gestion">9. Board management: boot and partitions</a></li>
+    <li><a href="#packs">10. Packs</a></li>
+    <li><a href="#debug">11. Debugging</a></li>
+    <li><a href="#autorun">12. Standalone device</a></li>
   </ul>
   <h2>Volumes</h2>
   <ul>
@@ -180,6 +182,7 @@
     <li><a href="referencia.html">Reference</a></li>
     <li><a href="gui.html">Graphical interface</a></li>
     <li><a href="../bp-desde-dentro.html">BasicPlus from the inside <small>(Spanish)</small></a></li>
+    <li><a href="creditos.html">Credits and acknowledgements</a></li>
     <li><a href="../guia-ide.html">🇪🇸 Español</a></li>
   </ul>
 </nav>
@@ -232,8 +235,10 @@
       (in the screenshot: <code>App.bp</code> and <code>Util.bp</code>).</li>
   <li><strong>Resources</strong> — data files that Run copies to the
       micro as-is (configuration, tables…).</li>
-  <li><strong>Output</strong> — what the compiler produces:
-      <code>.mod</code> (bytecode) and <code>.bpi</code> (interfaces).</li>
+  <li><strong>Output</strong> — what the compiler produces: the
+      <code>.mod</code> files (bytecode, with their interface inside), the
+      <code>.mdn</code> if the project uses <code>native</code>, and the
+      <code>.pack</code> if the project packages (§10).</li>
   <li><strong>Dependencies</strong> — resolved imported modules.</li>
 </ul>
 
@@ -372,7 +377,172 @@ kill · autorun [file|off] · mem · save · log · reset · cls · help</code><
   self-tested PSRAM (8 MB, used as the VM heap), FS usage and uptime.
 </p>
 
-<h2 id="debug">9. Debugging</h2>
+<h2 id="gestion">9. Board management: boot and partitions</h2>
+<p>
+  <strong>Board</strong> in the toolbar (or <strong>Board management…</strong>
+  in the menu) opens a separate window that works over the connection you
+  already have. On the left, the <em>boot state</em>, the <em>environment
+  variables</em> and the <em>partitions</em>; on the right, the <em>packs</em>
+  (§10).
+</p>
+<p>
+  You do not have to go looking for it: on connecting, the IDE asks the board
+  for its state and, <strong>if it is unconfigured or degraded, offers to open
+  it</strong>. With a healthy, configured board it says nothing.
+</p>
+
+<h3 id="estados">9.1 Booting happens in stages</h3>
+<p>
+  The firmware does not come up all at once: it climbs through states, each one
+  resting on the previous.
+</p>
+<table>
+  <tr><th>State</th><th>Means</th></tr>
+  <tr><td><strong>0 · kernel</strong></td><td>The minimum that answers: communications. No partitions, no FS, no VM.</td></tr>
+  <tr><td><strong>1 · partitions</strong></td><td>The partition table is valid.</td></tr>
+  <tr><td><strong>2 · FS</strong></td><td>The filesystem is mounted.</td></tr>
+  <tr><td><strong>3 · app</strong></td><td>The VM runs and the board accepts programs. This is the normal state.</td></tr>
+</table>
+<p>
+  What makes the staging useful is that <strong>if a step fails, the board stays
+  at the last good state and says why</strong>, instead of dying with no
+  explanation. A board in state 0 is not broken: it is waiting to be configured,
+  and it is still talking to you. The panel header shows the state, its name and
+  the reason if it came up degraded.
+</p>
+
+<h3 id="particiones">9.2 Partitions</h3>
+<p>The micro's flash is split into two areas, and this is where you see and change the split:</p>
+<ul>
+  <li><strong>File System</strong> — the volume where <code>/app</code>,
+      <code>/lib</code> and <code>/sys</code> live (§6).</li>
+  <li><strong>Packs</strong> — the packs area, contiguous and mapped in flash (§10).</li>
+</ul>
+<p>
+  The table on top is <strong>informational</strong> (offset, size); sizes are
+  written <strong>below, in KB</strong>. <em>Propose defaults</em> fills the
+  fields with a sensible split for that flash — adjust and press <em>Apply
+  sizes</em>.
+</p>
+<p class="note">
+  <strong>Only the File System is set.</strong> The last partition — Packs — is
+  <strong>derived</strong>: it takes <em>whatever is left</em>. That is why the
+  sum always matches the usable flash exactly, with no gaps in between. If you
+  type a size for Packs, it is ignored.
+</p>
+<p>
+  Before touching anything the firmware <strong>validates</strong>: no size at
+  zero, each one a multiple of the erase sector, and the sum fits in the
+  available flash. If something does not add up, <strong>the environment is left
+  untouched</strong> and the message says which partition and what problem.
+  Once applied, the board reboots and comes up with the new layout.
+</p>
+<p class="warn">
+  <strong>Changing the split moves the areas.</strong> Whatever was written in
+  them — FS files, burnt packs — is no longer where the firmware looks for it.
+  This is a board setup operation, not a day-to-day one: you do it once, at the
+  start, and then forget about it.
+</p>
+
+<h3 id="entorno">9.3 Environment variables</h3>
+<p>
+  Settings that live on the board, outside the filesystem, read by the firmware
+  at boot: which display panel this particular board carries, for instance, or
+  whether it has PSRAM (that one has a checkbox of its own, being so common).
+  They are added, edited and removed from the table. Partition sizes also live
+  there, but are <strong>not</strong> listed here: the partitions section
+  manages them, so they cannot be changed through two different doors.
+</p>
+
+<h2 id="packs">10. Packs</h2>
+<p>
+  A <strong>pack</strong> is a single file grouping <strong>compiled modules and
+  resources</strong> — the <code>.jar</code> idea, brought to a micro. It serves
+  two distinct purposes: publishing a <em>library</em> that other programs
+  import, and packaging a <em>whole application</em> into one file.
+</p>
+
+<h3 id="packs-construir">10.1 Building one</h3>
+<p>It is one line in the project's <code>.bpbuild</code>:</p>
+<pre><code>{
+  <span class="str">"sourceDir"</span>: <span class="str">"src"</span>,
+  <span class="str">"outDir"</span>: <span class="str">"out"</span>,
+  <span class="str">"main"</span>: <span class="str">"App"</span>,
+  <span class="str">"out"</span>: <span class="str">"pack"</span>
+}</code></pre>
+<p>On compiling, what ends up inside the pack is:</p>
+<ul>
+  <li>the project's <code>.mod</code> files (and the <code>.mdn</code> if it uses
+      <code>native</code>);</li>
+  <li><strong>everything in <code>resources/</code></strong>, with any extension
+      — images, fonts, tables, a <code>.win</code>…;</li>
+  <li>a <em>manifest</em> with the <code>main</code>, which is what makes it
+      <strong>executable</strong>.</li>
+</ul>
+<p class="note">
+  Inside the pack every file is identified by <strong>(extension, name)</strong>
+  — with no path. Hence two limits of the format: the <strong>extension, 4
+  characters</strong> at most (a <code>.woff2</code> does not fit) and the
+  <strong>name, 32</strong>. It is not a silent truncation: going over is an
+  error when building the pack, naming the file.
+</p>
+
+<h3 id="packs-usar">10.2 Using them</h3>
+<p><strong>As a library.</strong> A pack burnt into the packs area contributes
+  its modules to <code>import</code>, just as if they were loose files:</p>
+<pre><code><span class="kw">import</span> Graficas                        <span class="comment">// wherever it is found</span>
+<span class="kw">import</span> Graficas <span class="kw">from pack</span> MisLibs      <span class="comment">// from that pack and no other</span></code></pre>
+<p>
+  Unqualified, it is resolved by searching; with <code>from pack</code>, the
+  origin is fixed. The filesystem takes precedence over the packs area, so a
+  loose module in <code>/lib</code> eclipses the one in the pack — handy for
+  testing a fix without re-burning anything.
+</p>
+<p><strong>As an application.</strong> A pack with a <code>main</code> runs
+  directly, and while it runs <strong>its resources are read by themselves</strong>:
+  there is no pack API to learn, you use the usual file functions and the plain
+  name.</p>
+<pre><code>print readFile(<span class="str">"saludo.txt"</span>)   <span class="comment">// comes from INSIDE the pack</span></code></pre>
+<p>
+  The same goes for a window's <code>.win</code>, an image or a font: the
+  running pack is consulted <em>before</em> the filesystem. Only the file name
+  counts in the path — directories are ignored, because there are no folders
+  inside a pack.
+</p>
+<p class="warn">
+  <strong>Limitation in this version.</strong> Resources are read from the
+  <strong>running pack</strong> and from the <strong>filesystem</strong>, but
+  <strong>not</strong> from packs burnt into the packs area: from those, only
+  the <em>modules</em> are usable today. A font or an icon inside a library pack
+  is there, but cannot be read yet.
+</p>
+
+<h3 id="packs-panel">10.3 The packs panel</h3>
+<p>
+  In the board management window (§9), on the right. The table lists the burnt
+  packs with their name, size and <strong>build date</strong> — which is what
+  lets you see at a glance whether the one on the board is older than the one
+  you just compiled. Selecting one shows the files it carries. Below, a bar with
+  the area's usage.
+</p>
+<ul>
+  <li><strong>Copy pack to the board…</strong> — burns a <code>.pack</code> from
+      the PC at the end of the chain.</li>
+  <li><strong>Delete</strong> — marks it as retired. It stops being used
+      <em>immediately</em>, but <strong>still takes up space</strong> until
+      compaction: on NOR flash you can cross something out without erasing, and
+      crossing out is safe. That is why the table shows the whole chain, retired
+      ones included — it is the truth about the space.</li>
+  <li><strong>Format area…</strong> — leaves it blank. It is also the way out
+      when the area carries leftovers from a previous use of that flash.</li>
+</ul>
+<p>
+  To update a pack, the order is <strong>burn the new one, then retire the
+  old</strong>: if two packs carry the same module, the last one in the chain
+  wins.
+</p>
+
+<h2 id="debug">11. Debugging</h2>
 <p>
   The debugger works the same against the local VM and <em>inside the
   micro</em> (Debug on Device):
@@ -397,7 +567,7 @@ kill · autorun [file|off] · mem · save · log · reset · cls · help</code><
   identical whether you debug on the local VM or on the micro itself.
 </p>
 
-<h2 id="autorun">10. Standalone device</h2>
+<h2 id="autorun">12. Standalone device</h2>
 <p>
   With your program already on the board: <code>autorun MyApp</code> in the
   console (it writes <code>/sys/auto.txt</code> and persists it) and

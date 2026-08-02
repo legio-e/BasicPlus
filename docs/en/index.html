@@ -332,6 +332,25 @@
   RP2350B</strong> shares the firmware image with the Pico.
 </p>
 
+<h2>On other people’s shoulders</h2>
+<p>
+  BasicPlus is a stack of its own from top to bottom — compiler, two virtual
+  machines, IDE — but it is <strong>not built in a vacuum</strong>. The flash
+  filesystem is <strong>littlefs</strong>; the graphical interface is
+  <strong>LVGL</strong>, painting onto <strong>SDL2</strong> on the PC; the VM’s
+  tasks rest on the <strong>FreeRTOS</strong> RTOS; each micro boots with its
+  manufacturer’s SDK — <strong>Pico SDK</strong>, <strong>ESP-IDF</strong>,
+  <strong>STM32Cube</strong>; and the IDE edits with
+  <strong>RSyntaxTextArea</strong> and talks to the board through
+  <strong>PureJavaComm</strong>.
+</p>
+<p>
+  <strong>This project would not have been possible without them.</strong> They
+  are all named, with what each one does inside and under which license, on the
+  <a href="creditos.html"><strong>credits and acknowledgements</strong></a>
+  page.
+</p>
+
 <div class="note">
   <p><strong>The name.</strong> BasicPlus is a homage to <strong>Digital
   Equipment Corporation's BASIC-PLUS</strong>, the structured dialect that
