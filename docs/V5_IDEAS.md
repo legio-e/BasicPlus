@@ -152,3 +152,76 @@ producción.
   si además se ofrece introspección de una BD existente (`PRAGMA table_info` →
   generar el BP), que yo dejaría como herramienta aparte, no como camino
   principal.
+
+---
+
+## La zona de packs debe servir RECURSOS, no sólo módulos — Eduardo, 2-ago
+
+Sale de una pregunta suya mientras se documentaban los packs de V4: *«en los
+packs podemos incluir fuentes e imágenes; ahora, ¿cómo se pueden utilizar desde
+BP?»*.
+
+### Lo que hay hoy (V4), medido
+
+Un pack **en ejecución** sirve sus recursos de forma transparente: no hay API de
+packs, se leen **por su nombre con las funciones de fichero de siempre**. En la
+VM-C está bien puesto —un *overlay* en la **fachada del FS**, un solo sitio— y
+por eso lo heredan sin tocarlos `readFile`, `fileExists`, el `.win`, la carga de
+imagen y la de fuente.
+
+Pero eso vale **sólo para el pack que se está ejecutando**. Un pack **quemado en
+la zona de packs** aporta **módulos** (por `import`) y **nada más**: sus fuentes
+e imágenes están ahí, escritas en la flash, y no hay forma de leerlas.
+
+### Lo que pide Eduardo, y por qué
+
+Que la zona de packs sirva también recursos. Tres usos, y los tres son la misma
+idea: **sacar de la imagen del sistema lo que no tiene por qué estar ahí**.
+
+1. **Fuentes.** Hoy las que quepan en el firmware. En la zona de packs, un
+   número **prácticamente ilimitado** — y se añaden sin reconstruir la imagen.
+2. **Imágenes.** Aquí lo que tiene sentido no es cualquier imagen sino los
+   **iconos de uso corriente y algún logo**: lo que se repite en todas las
+   aplicaciones y hoy o viaja con cada una o no está.
+3. **Drivers de pantalla** (esto mira más lejos). Hoy la imagen del sistema
+   carga con todos los paneles que quiera soportar. La idea es darle la vuelta:
+   **el usuario graba el driver de la pantalla que va a usar de verdad**, y en
+   la imagen quedan **sólo los más comunes**. No es cosmético: es lo que evita
+   que el firmware crezca sin techo según se van añadiendo paneles.
+
+El 3 es el que más lejos llega y engancha con la línea que ya estaba apuntada
+para V5 —**packs de código nativo**, con SQLite de piloto y LVGL después— porque
+un driver de panel no es un recurso: es **código**. Los dos primeros, en cambio,
+son datos y se pueden hacer con lo que ya existe.
+
+### Lo que costaría (los dos primeros)
+
+Poco, y ésa es la parte buena: **la maquinaria ya está**.
+`bpvm_pack_find(base, size, tipo, nombre, len)` **no es específica de módulos**
+—el tipo es un parámetro— y la zona ya está montada (`bpvm_pack_mount`) y ya se
+consulta para resolver `import`. Falta que el overlay de recursos, que hoy sólo
+mira `run_pack_src`, mire **también** la región montada.
+
+### Lo que hay que DECIDIR antes de tocar nada
+
+Dos cosas, y ninguna es de implementación:
+
+- **El orden de precedencia.** Hoy conviven dos reglas distintas: el pack en
+  ejecución va **antes** que el FS (sus recursos son «suyos»), y para los
+  módulos el **FS eclipsa** al pack de la zona (spec §4). Lo natural sería
+  encadenarlas —*pack en ejecución → FS → zona de packs*, de lo más propio a lo
+  más general— pero conviene decirlo en voz alta, porque de eso depende si el
+  usuario puede tapar un icono del sistema poniendo uno suyo en el FS.
+
+- **Las colisiones de nombre, que aquí SÍ importan.** Dentro de un pack la
+  entrada es *(extensión, nombre)*, sin ruta. Con un pack en ejecución eso no
+  da problemas porque hay uno. Con una **librería de packs** habrá varios con
+  `logo.png` o `iconos.font` dentro, y la regla actual —gana el **último** de la
+  cadena— resuelve por orden de grabación, que no es un criterio que el usuario
+  controle ni vea. Si se abre la zona a recursos hay que darle un nombre
+  completo (¿`pack:fuentes/roboto.font`?) o asumir explícitamente que el último
+  grabado manda. **Esto es diseño, no código**, y va antes.
+
+Y un límite del formato que conviene recordar al elegir nombres: la extensión es
+un FourCC —**4 caracteres como mucho**— y el nombre, 32. No es un recorte
+silencioso: pasarse es error al construir el pack.
