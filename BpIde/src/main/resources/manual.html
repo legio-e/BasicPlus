@@ -211,6 +211,7 @@
     <li class="sub"><a href="#implements">10.5 implements</a></li>
     <li class="sub"><a href="#binding">10.6 Binding I:Impl</a></li>
     <li class="sub"><a href="#encapsulacion">10.7 Encapsulación clase↔módulo</a></li>
+    <li class="sub"><a href="#dospasadas">10.8 Dos pasadas y ciclos entre módulos</a></li>
 
     <li class="group"><a href="#excepciones">11. Excepciones</a></li>
     <li class="group"><a href="#owner">12. Owner semantics</a></li>
@@ -1249,6 +1250,76 @@ Counter.bump()</code></pre>
 <span class="kw">end</span> M</code></pre>
 
 <!-- =========================================================== -->
+
+<h3 id="dospasadas">10.8 Dos pasadas: por qué los módulos pueden llamarse entre sí</h3>
+<p>El compilador procesa cada módulo <strong>dos veces</strong>:</p>
+<ol>
+  <li><strong>Pasada de interfaz</strong> — recorre las declaraciones y anota
+      <em>qué</em> expone el módulo: firmas de funciones, clases, properties y
+      constantes públicas. No mira el cuerpo de las funciones.</li>
+  <li><strong>Pasada completa</strong> — ya con las interfaces de todos los
+      módulos disponibles, compila el código de verdad y resuelve cada llamada.</li>
+</ol>
+<p>Esa separación es la que permite que <strong>dos módulos se llamen
+mutuamente</strong>. Cuando se compila el cuerpo de <code>Par</code>, la interfaz
+de <code>Impar</code> ya existe (y al revés), así que ninguno de los dos tiene que
+estar terminado para que el otro compile:</p>
+<pre><code><span class="kw">module</span> Par
+  <span class="kw">import</span> Impar
+  <span class="kw">public function</span> <span class="fn">esPar</span>(n: <span class="type">integer</span>): <span class="type">boolean</span>
+    <span class="kw">if</span> n == <span class="num">0</span> <span class="kw">then</span> <span class="kw">return</span> <span class="kw">true</span> <span class="kw">endif</span>
+    <span class="kw">return</span> Impar.esImpar(n - <span class="num">1</span>)   <span class="comment">// llama a Impar</span>
+  <span class="kw">end</span> esPar
+<span class="kw">end</span> Par
+
+<span class="kw">module</span> Impar
+  <span class="kw">import</span> Par
+  <span class="kw">public function</span> <span class="fn">esImpar</span>(n: <span class="type">integer</span>): <span class="type">boolean</span>
+    <span class="kw">if</span> n == <span class="num">0</span> <span class="kw">then</span> <span class="kw">return</span> <span class="kw">false</span> <span class="kw">endif</span>
+    <span class="kw">return</span> Par.esPar(n - <span class="num">1</span>)       <span class="comment">// ...y Par llama a Impar</span>
+  <span class="kw">end</span> esImpar
+<span class="kw">end</span> Impar</code></pre>
+<p>Esto compila y funciona. <strong>La circularidad en el CÓDIGO está
+permitida</strong>, y vale igual para funciones, para métodos de clase y para
+properties.</p>
+
+<h4>El límite: las DEFINICIONES no pueden ser circulares</h4>
+<p>Lo que no puede cerrar el círculo es <strong>el tipo en sí</strong>. Si una
+clase pública de <code>TA</code> expone un tipo de <code>TB</code>, y la clase de
+<code>TB</code> expone a su vez un tipo de <code>TA</code>, la interfaz no se puede
+construir: para saber qué es <code>TA.Nodo</code> hay que saber antes qué es
+<code>TB.Hoja</code>, y viceversa.</p>
+<pre><code><span class="comment">// TA.bp</span>
+<span class="kw">public class</span> Nodo
+  <span class="kw">public property</span> vecino: TB.Hoja      <span class="comment">// TA depende de TB...</span>
+<span class="kw">end</span> Nodo
+
+<span class="comment">// TB.bp</span>
+<span class="kw">public class</span> Hoja
+  <span class="kw">public property</span> duenyo: TA.Nodo     <span class="comment">// ...y TB de TA -> circulo cerrado</span>
+<span class="kw">end</span> Hoja</code></pre>
+<p>El compilador <strong>no aborta</strong>: avisa y <strong>deja fuera de la
+interfaz</strong> el miembro que no puede resolver.</p>
+<pre><code>-- omitidas en interfaz (1): class Hoja.property duenyo: tipo no exportable</code></pre>
+<p class="warn"><strong>Ojo con este aviso.</strong> El módulo compila, pero esa
+property <em>no existe</em> para quien lo importe: el error real aparecerá más
+tarde, en el módulo que intente usarla. Si ves un «no expone X» que no encaja con
+lo que has escrito, mira si hay un ciclo entre definiciones.</p>
+<p>Cómo romperlo, en orden de preferencia:</p>
+<ul>
+  <li><strong>Un tercer módulo</strong> con los tipos comunes, que importen los
+      dos. Es la solución limpia y la que suele revelar que esos tipos eran una
+      pieza aparte desde el principio.</li>
+  <li><strong>Invertir una de las dos dependencias</strong>: normalmente una de
+      las dos direcciones es la natural y la otra se puede resolver pasando el
+      dato como parámetro en vez de guardarlo como campo.</li>
+  <li><strong>Juntar las dos clases en un módulo</strong>, si de verdad son una
+      sola cosa partida en dos ficheros.</li>
+</ul>
+<p>Recuerda que el límite es sólo para <em>tipos que cruzan la frontera del
+módulo</em>. Dentro de un mismo módulo, dos clases pueden referirse la una a la
+otra sin problema.</p>
+
 <!-- =========================================================== -->
 <h2 id="excepciones">11. Excepciones</h2>
 <pre><code><span class="kw">try</span>
