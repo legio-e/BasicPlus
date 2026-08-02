@@ -311,13 +311,48 @@ public final class GuiBackend {
         images.put(id, new ImageAsset());
         return id;
     }
+    // ── Recursos: el pack en ejecución va PRIMERO (#360) ────────────────────
+    // Espejo de `bpvm_fs_set_overlay` de la VM-C. Allí el overlay vive en la
+    // FACHADA del sistema de ficheros, y por eso lo heredan todos los lectores
+    // sin tocar ninguno; aquí este backend queda FUERA de la VM, así que la VM
+    // le pasa de dónde salen los recursos y el backend lo consulta antes que el
+    // disco. Sin overlay instalado se lee del disco, como siempre.
+    //
+    // Que esto faltara es justo lo que hizo divergir a las dos VMs: una imagen
+    // dentro de un pack ejecutable se cargaba en la VM-C y no aquí.
+    private java.util.function.Function<String, byte[]> resourceOverlay = null;
+
+    /** La VM instala aquí su lector de recursos del pack en ejecución. */
+    public void setResourceOverlay(java.util.function.Function<String, byte[]> f) {
+        this.resourceOverlay = f;
+    }
+
+    /** Bytes del recurso: overlay (el pack) primero, disco después; null si no
+     *  está en ninguno de los dos. UN solo sitio: lo que se añada luego a este
+     *  backend y lea ficheros debe pasar por aquí, no abrirlos por su cuenta. */
+    private byte[] leerRecurso(String path) {
+        if (path == null || path.isEmpty()) return null;
+        if (resourceOverlay != null) {
+            byte[] enPack = resourceOverlay.apply(path);
+            if (enPack != null) return enPack;
+        }
+        try {
+            return java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path));
+        } catch (Exception e) {
+            return null;   // no encontrado / ilegible: lo trata el llamante
+        }
+    }
+
     // Carga un PNG: saca width/height del header IHDR (sin decoder). Devuelve 1
     // si la cabecera PNG es válida, 0 si no (no encontrado / no es PNG).
     public int imageLoadFile(int id, String path) {
         ImageAsset a = images.get(id); if (a == null) return 0;
         a.path = (path != null) ? path : "";
         a.w = 0; a.h = 0; a.loaded = false;
-        try (InputStream in = new FileInputStream(a.path)) {
+        byte[] datos = leerRecurso(a.path);
+        try (InputStream in = (datos != null)
+                ? new java.io.ByteArrayInputStream(datos)
+                : new FileInputStream(a.path)) {
             byte[] b = new byte[24];
             int n = 0;
             while (n < 24) { int r = in.read(b, n, 24 - n); if (r < 0) break; n += r; }

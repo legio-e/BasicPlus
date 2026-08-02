@@ -1080,6 +1080,11 @@ public class VirtualMachine {
      *   stackBase + MAIN_STACK_BYTES &lt;= memorySize  (cabe al menos el main)
      */
     public VirtualMachine(int memorySize, int stackBase) {
+        // #360 — el backend gráfico vive fuera de esta clase, así que hay que
+        // decirle de dónde salen los recursos: el pack en ejecución primero. Se
+        // instala aquí y no en cada uso porque la lambda se evalúa al llamarla
+        // (el ModuleManager puede no existir todavía en este punto).
+        gui.setResourceOverlay(this::packResource);
         if (memorySize <= 0)
             throw new IllegalArgumentException("memorySize debe ser > 0: " + memorySize);
         if (stackBase <= 0)
