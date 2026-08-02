@@ -173,7 +173,7 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
                  * que un lookup directo basta; si aún así falta, es lib ausente
                  * o rancia → mensaje claro al wire (paso 4). */
                 bpvm_link_set_error(vm, needed, m->name);
-                fprintf(stderr, "[bpvm-c link] %s\n", vm->link_error);
+                bpvm_diag_urgente("[bpvm-c link] %s", vm->link_error);
                 return BPVM_ERR_RUNTIME;
             }
             bpvm_write_i32_be(vm->memory + m->ext_table_addr
@@ -186,7 +186,7 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
             uint32_t parent_abs = bpvm_link_lookup(vm, fx->parent_qualified);
             if (parent_abs == 0) {
                 bpvm_link_set_error(vm, fx->parent_qualified, m->name);
-                fprintf(stderr, "[bpvm-c link] L2 v3 fixup (clase '%s'): %s\n",
+                bpvm_diag_urgente("[bpvm-c link] L2 v3 fixup (clase '%s'): %s",
                         fx->child_class_name, vm->link_error);
                 return BPVM_ERR_RUNTIME;
             }
@@ -205,7 +205,7 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
             uint32_t parent_abs = bpvm_link_lookup(vm, fx->parent_qualified);
             if (parent_abs == 0) {
                 bpvm_link_set_error(vm, fx->parent_qualified, m->name);
-                fprintf(stderr, "[bpvm-c link] BUG-2 eh-fixup: %s\n", vm->link_error);
+                bpvm_diag_urgente("[bpvm-c link] BUG-2 eh-fixup: %s", vm->link_error);
                 return BPVM_ERR_RUNTIME;
             }
             int32_t cls_off = (int32_t)(parent_abs - m->code_start);

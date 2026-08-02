@@ -211,7 +211,7 @@ static void worker_loop(void* raw) {
         tc->sched_owner = -1;                /* H2: libera el tc */
         if (s != BPVM_OK) {
             /* Fallo terminal del intérprete → shutdown VM. */
-            fprintf(stderr, "[bpvm-c smp w%d] interp error: status=%d\n",
+            bpvm_diag_urgente("[bpvm-c smp w%d] interp error: status=%d",
                     arg ? 0 : 0, (int) s);
             smp->shutdown = true;
         }
@@ -317,8 +317,8 @@ int bpvm_scheduler_run_smp(bpvm_t* vm) {
      * en la cola, que se sepa. Tirar eventos en silencio es la familia de bug
      * de #326. */
     if (vm->ev_count > 0) {
-        fprintf(stderr, "[bpvm] fin de ejecución con %d evento(s) sin atender "
-                        "(destinatario muerto o encolados por un handler tardío)\n",
+        bpvm_diag("[bpvm] fin de ejecución con %d evento(s) sin atender "
+                        "(destinatario muerto o encolados por un handler tardío)",
                 vm->ev_count);
     }
     return 0;

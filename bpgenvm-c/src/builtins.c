@@ -2231,7 +2231,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t nargs = pop_i32(vm, tc);
         uint32_t masks = (uint32_t) pop_i32(vm, tc);
         if (nargs < 0 || nargs > BPVM_EVENT_MAX_ARGS) {
-            fprintf(stderr, "[bpvm] __eventRaise: aridad %d fuera de rango\n", (int) nargs);
+            bpvm_diag("[bpvm] __eventRaise: aridad %d fuera de rango", (int) nargs);
             push_i32(vm, tc, 0);
             return BPVM_ERR_RUNTIME;
         }
@@ -2252,7 +2252,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t thread_ref = pop_ref(vm, tc);
         int new_tid = bpvm_thread_spawn(vm, thread_ref);
         if (new_tid < 0) {
-            fprintf(stderr, "[bpvm-c] Thread.start falló\n");
+            bpvm_diag_urgente("[bpvm-c] Thread.start falló");
             push_i32(vm, tc, 0);
             return BPVM_ERR_RUNTIME;
         }
@@ -2296,7 +2296,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         int32_t mid = bpvm_read_i32_be(vm->memory + ref_addr(vm, mref) + 4 + 0 * 4);
         if (mid < 0 || mid >= vm->mutex_count) {
-            fprintf(stderr, "[bpvm-c] mutex_lock: mid inválido %" PRId32 "\n", mid);
+            bpvm_diag("[bpvm-c] mutex_lock: mid inválido %" PRId32 "", mid);
             push_i32(vm, tc, 0);
             return BPVM_ERR_RUNTIME;
         }
@@ -2328,7 +2328,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         int32_t mid = bpvm_read_i32_be(vm->memory + ref_addr(vm, mref) + 4 + 0 * 4);
         if (mid < 0 || mid >= vm->mutex_count) {
-            fprintf(stderr, "[bpvm-c] mutex_unlock: mid inválido %" PRId32 "\n", mid);
+            bpvm_diag("[bpvm-c] mutex_unlock: mid inválido %" PRId32 "", mid);
             push_i32(vm, tc, 0);
             return BPVM_ERR_RUNTIME;
         }

@@ -167,7 +167,7 @@ int bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref) {
     int32_t  off      = bpvm_read_i32_be(vm->memory + vt_base);
     if (off == -1) {
         /* run() heredada — buscar en parent. F4 v1 no lo soporta. */
-        fprintf(stderr, "[bpvm-c] Thread.run() en slot 0 = -1 (heredada; no soportado F4 v1)\n");
+        bpvm_diag_urgente("[bpvm-c] Thread.run() en slot 0 = -1 (heredada; no soportado F4 v1)");
         vm->thread_count--;
         vm->next_thread_stack = stack_base;
         bpvm_smp_unlock(vm);

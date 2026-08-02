@@ -36,30 +36,59 @@
 //   Con el bug: cuentas > 0, o un RuntimeError de handle (gen que no cuadra).
 module GcHoleStr
   import Core
+
+  var owner aux1, aux2:string
+  var owner s: string
+  
   function main()
     var sub_malos: integer := 0
     var fb_malos: integer := 0
     var i: integer := 0
+    
 
-    while i < 3000 do
-      // substring sobre un TEMPORAL: la concatenacion no la sostiene nadie mas.
-      // El resultado es SIEMPRE "cdefgh" (codepoints 2..8 de "abcdefghij...").
-      var s: string := substring("abcdefghij" + intToString(i), 2, 8)
-      if s != "cdefgh" then
-        sub_malos := sub_malos + 1
-      endif
-
-      // fromBytes sobre un TEMPORAL: mismo patron por el otro builtin.
-      var b: string := fromBytes(toBytes("ABCDE"))
-      if b != "ABCDE" then
-        fb_malos := fb_malos + 1
-      endif
-
-      i := i + 1
-    endwh
-
+    print "Inicio"
+    try
+        while i <  3_000 do  // 1208 do  //
+          if (i mod 10==0)  then
+            print "i:", i
+            // sleep(10)
+          endif
+          // substring sobre un TEMPORAL: la concatenacion no la sostiene nadie mas.
+          // El resultado es SIEMPRE "cdefgh" (codepoints 2..8 de "abcdefghij...").
+          aux1:="a"  //intToString(i)
+          aux2:="abcdefghij_abcdefghij" + aux1
+          s := substring(aux2,  2, 8)   //    "abcdefghij" + intToString(i), 2, 8)
+          
+          // OJO: substring(_, 2, 8) son 6 codepoints -> "cdefgh". Aqui ponia
+          // "cdefgh_cdefgh" (13), que NO existe como subcadena de la entrada:
+          // fallaba las 10.000 vueltas, tambien con la memoria perfecta, y
+          // dejaba sub_malos inservible como senal. El indicador que si medimos
+          // durante todo #355 fue fb_malos.
+          if s != "cdefgh" then
+            // print "if1"
+            sub_malos := sub_malos + 1
+          endif
+    
+          // fromBytes sobre un TEMPORAL: mismo patron por el otro builtin.
+          var b: string := fromBytes(toBytes("ABCDE_ABCDE"))
+          if b != "ABCDE_ABCDE" then
+            // print "if2"
+            fb_malos := fb_malos + 1
+          endif
+    
+          i := i + 1
+        endwh
+    catch e: RuntimeError
+      print 123
+      print "CAZADO"
+      print "vuelta " + intToString(i)
+      print e.msg
+    endtry
+    print "Hola", i
+    sleep(1000)
     print "sub_malos=" + intToString(sub_malos)
     print "fb_malos=" + intToString(fb_malos)
     print "fin"
+    sleep(1000)
   end main
 end GcHoleStr

@@ -35,8 +35,8 @@ int bpvm_event_enqueue(bpvm_t* vm, int tid, uint64_t recv, int32_t dest,
         /* Que GRITE: un evento perdido en silencio es de los que cuesta una
          * tarde encontrar. La cola llena significa que se producen eventos más
          * deprisa de lo que el thread destino los atiende. */
-        fprintf(stderr, "[bpvm] cola de eventos llena (%d): evento descartado "
-                        "(tid=%d, slot=%d)\n", BPVM_EVENT_QUEUE_CAP, tid, (int) dest);
+        bpvm_diag("[bpvm] cola de eventos llena (%d): evento descartado "
+                        "(tid=%d, slot=%d)", BPVM_EVENT_QUEUE_CAP, tid, (int) dest);
         return 0;
     }
     int idx = (vm->ev_head + vm->ev_count) % BPVM_EVENT_QUEUE_CAP;
@@ -142,8 +142,8 @@ static int inject(bpvm_t* vm, bpvm_thread_t* tc, const bpvm_event_t* e) {
 
     int32_t  hoff; uint32_t hcs;
     if (!resolve_slot(vm, obj, e->dest, &hoff, &hcs)) {
-        fprintf(stderr, "[bpvm] evento: slot %d no resoluble en la clase del "
-                        "receptor — descartado\n", (int) e->dest);
+        bpvm_diag("[bpvm] evento: slot %d no resoluble en la clase del "
+                        "receptor — descartado", (int) e->dest);
         return 0;
     }
 
@@ -152,7 +152,7 @@ static int inject(bpvm_t* vm, bpvm_thread_t* tc, const bpvm_event_t* e) {
     for (int i = 0; i < e->nargs; i++) need += (e->masks & (1u << (8 + i))) ? 8u : 4u;
     if (tc->sp + need > tc->stack_top) {
         /* cast: int32_t no es `int` en todos los ports (en RISC-V es `long`) */
-        fprintf(stderr, "[bpvm] evento: sin pila en tid=%d — descartado\n", (int) tc->id);
+        bpvm_diag("[bpvm] evento: sin pila en tid=%d — descartado", (int) tc->id);
         return 0;
     }
 

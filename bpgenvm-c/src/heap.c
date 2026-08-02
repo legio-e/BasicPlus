@@ -586,11 +586,6 @@ static void gc_sweep_phase(bpvm_t* vm) {
                   (unsigned) n, (unsigned) suma, (unsigned) mayor,
                   (unsigned) g_altas, (unsigned) g_fus_izq, (unsigned) g_fus_der);
     }
-    if (0) {
-        fprintf(stderr, "[gc] kept=%" PRIu32 " freed=%" PRIu32 " heap=[%" PRIu32 "..%" PRIu32 ") freelist=%s\n",
-                kept, freed, vm->heap_start, vm->heap_next,
-                vm->free_list_head ? "si" : "vacia");
-    }
 }
 
 static void handle_kill_idx(bpvm_t* vm, uint32_t idx);   /* def. más abajo (junto a bpvm_handle_kill) */

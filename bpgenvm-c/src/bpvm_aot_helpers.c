@@ -102,7 +102,7 @@ static void h_throw_runtime(bpvm_t* vm, const char* msg) {
     }
     /* Sin boundary armado: no debería ocurrir (los native sólo corren
      * vía el hijack AOT del intérprete). Reportamos al menos. */
-    if (msg) fprintf(stderr, "[aot] throw_runtime sin boundary: %s\n", msg);
+    if (msg) bpvm_diag_urgente("[aot] throw_runtime sin boundary: %s", msg);
 }
 
 /* #175 — throw con mensaje COMPUTADO: el AOT pasa un string-handle BP (objeto
@@ -133,7 +133,7 @@ static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
         f->msg[0] = 0;
         longjmp(f->buf, 1);   /* no retorna */
     }
-    fprintf(stderr, "[aot] throw_ref sin boundary (ref=%" PRIu32 ")\n", exc_ref);
+    bpvm_diag_urgente("[aot] throw_ref sin boundary (ref=%" PRIu32 ")", exc_ref);
 }
 
 /* ---------- Heap / GC ----------
@@ -141,7 +141,7 @@ static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
  * via flag de capabilities en el .mdn. La fase A no los necesita. */
 static int32_t h_newarray_i32(bpvm_t* vm, int32_t size) {
     (void) vm; (void) size;
-    fprintf(stderr, "[aot] newarray_i32 stub — implementar al AOT-ear arrays\n");
+    bpvm_diag_urgente("[aot] newarray_i32 stub — implementar al AOT-ear arrays");
     return 0;
 }
 static int32_t h_newarray_i8(bpvm_t* vm, int32_t size) {

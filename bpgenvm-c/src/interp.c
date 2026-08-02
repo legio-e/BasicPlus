@@ -575,6 +575,13 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             exit_status = BPVM_ERR_BAD_PC; break;
         }
 
+        /* #353 — ESTE SE QUEDA EN stderr A PROPOSITO, y es el unico del
+         * interprete que lo hace. Sale UNA VEZ POR OPCODE: mandarlo al canal de
+         * diagnostico significaria, en la placa, un borrado+programacion de
+         * flash por instruccion ejecutada. Ademas es una herramienta de host
+         * (se enciende con --trace, que en el firmware no existe). El resto de
+         * avisos del interprete SI van por bpvm_diag: aquellos son raros y
+         * cuentan por que se muere algo. */
         if (vm->tracing) {
             fprintf(stderr, "[trace] pc=%" PRIu32 " sp=%" PRIu32 " bp=%" PRIu32 " cs=%" PRIu32 " op=0x%02X\n",
                     pc, sp, bp, cs, mem[pc]);
@@ -631,7 +638,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_HALT:
             /* HALT: termina el thread y la VM si es el main. */
             if (tc->id != 0) {
-                fprintf(stderr, "[bpvm-c] HALT en thread no-main (tid=%" PRId32 ")\n", tc->id);
+                bpvm_diag_urgente("[bpvm-c] HALT en thread no-main (tid=%" PRId32 ")", tc->id);
                 exit_status = BPVM_ERR_RUNTIME;
             } else {
                 exit_status = BPVM_OK;
@@ -1601,8 +1608,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 int32_t parent_off = bpvm_read_i32_be(mem + desc
                                                        + BPVM_CLS_OFF_PARENT_OFF);
                 if (parent_off == 0) {
-                    fprintf(stderr,
-                            "[bpvm-c] INVOKE_VIRTUAL slot %u no resoluble en cadena de herencia\n",
+                    bpvm_diag_urgente(
+                            "[bpvm-c] INVOKE_VIRTUAL slot %u no resoluble en cadena de herencia",
                             vt_slot);
                     exit_status = BPVM_ERR_RUNTIME;
                     goto done;
@@ -1672,13 +1679,13 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
              * Lo encontramos buscando el módulo cuyo code_start == cs. */
             uint32_t ext_table_addr = bpvm_get_ext_table_addr(vm, cs);
             if (ext_table_addr == 0) {
-                fprintf(stderr, "[bpvm-c] CALL_EXT sin ext-table en cs=%" PRIu32 "\n", cs);
+                bpvm_diag_urgente("[bpvm-c] CALL_EXT sin ext-table en cs=%" PRIu32 "", cs);
                 exit_status = BPVM_ERR_RUNTIME; goto done;
             }
             uint32_t target = (uint32_t) bpvm_read_i32_be(mem
                                 + ext_table_addr + (uint32_t) idx * 4);
             if (target == 0) {
-                fprintf(stderr, "[bpvm-c] CALL_EXT idx=%u no resuelto\n", idx);
+                bpvm_diag_urgente("[bpvm-c] CALL_EXT idx=%u no resuelto", idx);
                 exit_status = BPVM_ERR_RUNTIME; goto done;
             }
             /* H3 #160 — AOT hijack para CALL_EXT (mismo patrón que CALL). */
@@ -1775,7 +1782,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
 
         default:
-            fprintf(stderr, "[bpvm-c] opcode 0x%02X desconocido en PC %" PRIu32 "\n",
+            bpvm_diag_urgente("[bpvm-c] opcode 0x%02X desconocido en PC %" PRIu32 "",
                     op, pc - 1);
             exit_status = BPVM_ERR_BAD_OPCODE;
             goto done;
