@@ -228,3 +228,70 @@ Dos cosas, y ninguna es de implementación:
 Y un límite del formato que conviene recordar al elegir nombres: la extensión es
 un FourCC —**4 caracteres como mucho**— y el nombre, 32. No es un recorte
 silencioso: pasarse es error al construir el pack.
+
+---
+
+## Linux, y la Raspberry Pi como PLACA — Eduardo, 2-ago
+
+Sale al decidir el alcance del paquete de V4: **el IDE, de momento, sólo
+Windows**. Textual: *«para Linux hay que probarlo, me temo que hoy por hoy
+muchas cosas no funcionarían por temas de nombres, paths y temas de permisos.
+Eso necesita un trabajo específico que en esta versión no podemos abordar pero
+sí en el futuro»*. Tiene una **Raspberry Pi 400** para las pruebas.
+
+Y añade algo que **no es lo mismo** y conviene no mezclar:
+
+> *«además en ese caso me gustaría que la VM-C soportase la librería de
+> Raspberry y pudiese trabajar con pines, I2C, SPI, etc.»*
+
+### Son dos trabajos, no uno
+
+**(A) El IDE en Linux** — es portabilidad de aplicación de escritorio: rutas y
+separadores, mayúsculas/minúsculas en los nombres de fichero (Windows perdona,
+Linux no), el lanzador (`.bat` → script), los binarios que acompañan
+(`.exe`/`.dll` → ELF/`.so`) y sobre todo **permisos**: el puerto serie en Linux
+pide pertenecer a `dialout`, y eso es justo el tipo de detalle que convierte un
+«no me funciona» en media tarde. Trabajo acotado y aburrido, pero real.
+
+**(B) La Raspberry como PLACA de verdad** — esto es otra cosa, y es la
+interesante: que un programa BP corra en la Pi **moviendo pines de verdad**,
+con I2C y SPI. No es portar el IDE: es **una familia más** en el HAL.
+
+### Por qué (B) encaja tan bien
+
+Encaja con la doctrina de la casa —*motor único + cintura por micro*— con un
+matiz bonito: aquí **la cintura es un sistema operativo, no un chip**. La VM-C
+ya compila y corre en Linux (es C portable; el host build es eso). Lo que falta
+son los **backends de hardware**, y en la Pi no los pone un SDK de fabricante
+sino el propio Linux:
+
+- **GPIO** → `libgpiod` (el `/sys/class/gpio` viejo está deprecado).
+- **I2C** → `/dev/i2c-N` con `ioctl`.
+- **SPI** → `/dev/spidev0.0` con `ioctl`.
+
+Es decir: los mismos `Gpio.Pin`, `I2c.Bus` y `Spi.Bus` que ya existen en BP, con
+una cintura nueva debajo. **El código BP del usuario no cambiaría** — que es
+exactamente la promesa del proyecto, y la Pi sería la prueba más vistosa de
+ella: el mismo `.mod` en una Pico, en un ESP32 y en un ordenador entero.
+
+### Lo que hay que DECIDIR, porque la Pi no es un micro
+
+En la Pi **no hay firmware que flashear**: la VM es un proceso. Eso rompe varias
+suposiciones del modelo de «placa» que hoy damos por sentadas, y ninguna es
+grave pero todas hay que responderlas:
+
+- **El sistema de archivos** ya es un FS de verdad. ¿Sigue habiendo `/app`,
+  `/lib`, `/sys` (como carpetas bajo un directorio raíz), o se usa el del
+  sistema tal cual?
+- **Las particiones y la zona de packs** no tienen sentido literal — no hay
+  flash cruda que repartir. ¿Un fichero-imagen que las simule (como ya hace el
+  micro simulado), o se desactivan y los packs se leen del FS?
+- **El arranque por capas (H9)** — el estado 0 «kernel» no aplica: en la Pi el
+  sistema operativo ya está vivo antes que nosotros.
+- **Cómo se conecta el IDE**: por TCP, como al micro simulado, en vez de por
+  serie. Eso ya existe.
+
+Buena parte de esas respuestas **ya están escritas** en el micro simulado
+(H10): es un proceso de PC que el IDE trata como una placa, con su flash y su
+FS en ficheros. La Pi sería ese mismo modelo, pero con los pines de verdad
+conectados por debajo.
