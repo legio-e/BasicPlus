@@ -85,17 +85,28 @@ static char s_reply_buf[1024];
 /* #294/#334 — el buffer del bulk YA NO tiene que dar para el fichero entero:
  * desde que el IDE sube por trozos (PUT_BEGIN/DATA/END, verificado en placa en
  * las 3 familias el 28-jul) sólo necesita el MAYOR de sus dos papeles:
- *   (a) un trozo de streaming            = PUT_STREAM_CHUNK (16 KB)
- *   (b) el scratch del gestor de placa   = 3*BP_ENV_SECTOR + 512
- * (b) NO es igual en todas: el sector del env es la página de borrado, 4 KB en
- * RP2350/ESP32 pero 8 KB en el U5 → el STM32 necesita 25088 B y los otros 12800.
- * Por eso el recorte no es uniforme, y por eso hay una comprobación EN COMPILACIÓN
- * más abajo: si alguien lo baja de más, no compila en vez de romperse en placa. */
-#define V1_PUT_BUF_SIZE  (20 * 1024)
+ *   (a) un trozo de streaming            = PUT_STREAM_CHUNK
+ *   (b) el scratch del gestor de placa
+ *
+ * #338 (2-ago) — los dos papeles ADELGAZARON, y con ellos el buffer, de 20 a 8 KB:
+ *   (a) el IDE manda trozos de 8 KB (BpvmClient.PUT_STREAM_CHUNK). Si un cliente
+ *       viejo mandase más, el despachador responde NO_SPACE y drena: se queja, no
+ *       se corrompe.
+ *   (b) el gestor ya no pide TRES sectores aquí. Las dos copias del env se las
+ *       presta la zona de rascar compartida (board_mgr_pico.c) y de este buffer
+ *       sale sólo el sector de trabajo + la respuesta = BP_ENV_SECTOR + reply.
+ * La respuesta se queda en 4 KB, que es con lo que el STM32 lleva funcionando
+ * desde el primer día — no es una apuesta nueva.
+ *
+ * El sector del env es la página de borrado y NO es igual en todas (4 KB en
+ * RP2350/ESP32, 8 KB en el U5), así que el número sigue siendo por familia. Por
+ * eso la comprobación EN COMPILACIÓN de abajo: si alguien lo baja de más, no
+ * compila, en vez de romperse en placa. */
+#define V1_PUT_BUF_SIZE  (8 * 1024)
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
 /* C99 no tiene _Static_assert: el truco del array de tamaño negativo. */
-typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 16u*1024u &&
-                             V1_PUT_BUF_SIZE >= 3u*4096u + 512u) ? 1 : -1];
+typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
+                             V1_PUT_BUF_SIZE >= 4096u + 512u) ? 1 : -1];
 
 /* Reparto heap/stacks de la VM. DOS reglas superpuestas:
  *

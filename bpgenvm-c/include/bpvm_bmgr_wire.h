@@ -39,8 +39,27 @@ typedef struct {
     int  confirm_yes;                   /* H3: PACK_FORMAT — "confirm":"YES" (como el FORMAT del FS) */
 } bpvm_bmgr_req_t;
 
+/* #338 — ¿este verbo necesita las copias A/B del env en RAM?
+ *
+ * Los comandos del gestor se parten en DOS grupos que NUNCA se solapan: los del
+ * entorno (STATE, ENV_x, PART_x) leen y reescriben el bloque A/B, y los de packs
+ * (PACK_*) no lo tocan para nada —van contra la zona de packs—. Esa frontera es
+ * lo que permite que los dos sectores del env y los buffers de trabajo de los
+ * PACK_* COMPARTAN la misma memoria (la zona de rascar), en vez de sumarse: en
+ * un micro sin PSRAM eso son 8 KB de .bss que vuelven al heap de la VM.
+ *
+ * Vive aquí, en el núcleo, y no en cada cintura, porque es UNA regla: si un
+ * verbo nuevo lee el env y alguien se olvida de añadirlo, el fallo tiene que ser
+ * el mismo en las cuatro familias, no cuatro fallos distintos.
+ *
+ * Devuelve 1 si hace falta el env (bm->a y bm->b NO pueden ser NULL), 0 si no. */
+int bpvm_bmgr_needs_env(const char* type);
+
 /* Despacha el comando → escribe la línea JSON de reply en `out` (SIN '\n'; el
  * llamador enmarca y envía). Devuelve la longitud (>0), o -1 si no cabe en `out`.
+ * Si el verbo necesita el env (ver arriba) y el llamador no puso `bm->a`/`bm->b`,
+ * responde ERROR en vez de leer un puntero nulo: un descuido de la cintura sale
+ * por el wire con su nombre, no como un reset sin explicación.
  * En *wrote_slot deja el sector A/B modificado (0=A, 1=B) que el llamador debe
  * volcar a flash, o -1 si no hubo escritura. Un verbo desconocido produce un reply
  * ERROR UNSUPPORTED (longitud válida, wrote_slot=-1). */

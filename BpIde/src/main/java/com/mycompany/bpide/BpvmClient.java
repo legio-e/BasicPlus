@@ -729,7 +729,22 @@ public final class BpvmClient implements AutoCloseable {
      * placa. Se deja en 8K (y no en 0) porque casi todos los .mod son de 2-5 KB y
      * asi siguen subiendo en UN viaje en vez de tres. */
     private static final int PUT_SINGLE_SHOT_MAX = 8 * 1024;
-    private static final int PUT_STREAM_CHUNK     = 16 * 1024;
+    /* #338 — 16K -> 8K. Este numero y el buffer del firmware son EL MISMO numero
+     * visto desde los dos lados: el trozo mas grande que el IDE manda de una pieza
+     * es lo que la placa tiene que poder recibir. Bajarlo aqui es lo que permite
+     * que alli s_put_buf baje a 8 KB (Pico/ESP32), que en un micro sin PSRAM son
+     * 8 KB que vuelven al heap de la VM.
+     *
+     * Coste: un .mod de 44 KB viaja en 6 viajes en vez de 3. Sobre USB CDC / serie
+     * el ida y vuelta por trozo es despreciable al lado de los datos, y el umbral
+     * de arriba hace que la mayoria de .mod (2-5 KB) sigan yendo en UN viaje.
+     *
+     * Si un IDE viejo hablase con un firmware nuevo mandaria 16 KB a un buffer de
+     * 8: el firmware responde NO_SPACE y drena — se queja, no se corrompe. Lo
+     * correcto seria que la placa ANUNCIARA su capacidad en el HELLO y el IDE se
+     * ajustara solo; queda apuntado, pero abre superficie de wire en 5
+     * implementaciones y hoy los dos viajan juntos en el mismo ZIP. */
+    private static final int PUT_STREAM_CHUNK     = 8 * 1024;
 
     /** Sube `bytes` al workdir de la VM en `remotePath`. Whole-buffer si cabe;
      *  streaming por trozos si es grande. Bulk raw inline. */

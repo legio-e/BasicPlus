@@ -10,6 +10,7 @@
  */
 #include "board_mgr_esp32.h"
 
+#include "bpvm.h"        /* #338: bpvm_scratch_take/give (zona de rascar compartida) */
 #include "bpvm_bmgr.h"
 #include "bpvm_bmgr_wire.h"
 #include "bpvm_part.h"
@@ -179,10 +180,28 @@ void board_mgr_esp32_boot(void) {
 
 /* ── ramo del wire (STATE/ENV_x/PART_x): repl_esp32 encamina aquí ── */
 
+/* #338 — la zona compartida tiene que dar para las DOS copias del env de ESTA
+ * familia. Si alguien cambia el sector de borrado (o porta a un micro con uno
+ * mayor) sin subir BPVM_SCRATCH_BYTES, aqui no compila — en vez de descubrirlo
+ * en placa como un "zona de scratch no disponible" al abrir el panel. */
+typedef char bp_chk_scratch_env[(BPVM_SCRATCH_BYTES >= 2u * BP_ENV_SECTOR) ? 1 : -1];
+
 void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
                             unsigned char* scratch, unsigned long scratch_len,
                             const unsigned char* bulk, unsigned long bulk_len) {
-    if (scratch == NULL || scratch_len < (unsigned long) (3u * BP_ENV_SECTOR + 512u)) {
+    /* #338 — DOS prestamistas en vez de uno (mismo reparto que Pico y STM32):
+     * del buffer prestado (s_put_buf, libre durante un comando de gestión) salen
+     * el sector de TRABAJO y la respuesta; las dos copias del env las presta la
+     * ZONA DE RASCAR compartida, libre aquí porque sus otros usuarios son los
+     * PACK_x y ésos no tocan el env (bpvm_bmgr_needs_env). Antes este buffer
+     * tenía que dar para los TRES sectores a la vez + la respuesta = 20 KB de
+     * DRAM permanentes, que en el S3 es justo lo que falta. */
+    const int con_env = bpvm_bmgr_needs_env(type);
+    /* Los PACK_x no usan sector de trabajo (sólo part_apply toca bm->scratch), y
+     * además llegan aquí con el buffer ya mordido por su bulk: pedirles un sector
+     * que no van a usar los dejaría sin sitio. */
+    const unsigned long minimo = con_env ? (unsigned long) BP_ENV_SECTOR + 512u : 512u;
+    if (scratch == NULL || scratch_len < minimo) {
         wire_v1_send_error(id, "INTERNAL_ERROR", "scratch insuficiente");
         return;
     }
@@ -190,13 +209,23 @@ void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
         wire_v1_send_error(id, "INTERNAL_ERROR", "sin particion bpenv (reflashear tabla)");
         return;
     }
-    uint8_t* a         = scratch + 0u * BP_ENV_SECTOR;
-    uint8_t* b         = scratch + 1u * BP_ENV_SECTOR;
-    uint8_t* sc        = scratch + 2u * BP_ENV_SECTOR;
-    char*    reply     = (char*)  (scratch + 3u * BP_ENV_SECTOR);
-    size_t   reply_cap = (size_t) (scratch_len - 3u * BP_ENV_SECTOR);
+    uint8_t* sc        = con_env ? scratch : NULL;
+    char*    reply     = (char*)  (con_env ? scratch + BP_ENV_SECTOR : scratch);
+    size_t   reply_cap = (size_t) (con_env ? scratch_len - BP_ENV_SECTOR : scratch_len);
 
-    env_read_slots(a, b);   /* copias frescas del env desde flash */
+    uint8_t* a = NULL;
+    uint8_t* b = NULL;
+    if (con_env) {
+        /* Contiguas y en ese orden: `b` cuelga de `a`. Una petición, un dueño. */
+        a = (uint8_t*) bpvm_scratch_take(2u * (size_t) BP_ENV_SECTOR, "bmgr-env");
+        if (a == NULL) {
+            wire_v1_send_error(id, "INTERNAL_ERROR",
+                               "zona de scratch no disponible para el entorno");
+            return;
+        }
+        b = a + BP_ENV_SECTOR;
+        env_read_slots(a, b);   /* copias frescas del env desde flash */
+    }
 
     bpvm_bmgr_t bm;
     memset(&bm, 0, sizeof bm);         /* campos nuevos (p.ej. packs H3) nunca con basura de pila */
@@ -219,7 +248,15 @@ void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
 
     int wrote = -1;
     int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);
-    if (n < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "reply de gestion no cabe"); return; }
+    /* La zona se suelta en TODAS las salidas —quedársela colgada dejaría mudos los
+     * PACK_x y los comandos del entorno siguientes— y DESPUÉS del volcado, porque
+     * el sector que va a flash vive en ella. */
+    if (n < 0) {
+        if (con_env) bpvm_scratch_give("bmgr-env");
+        wire_v1_send_error(id, "INTERNAL_ERROR", "reply de gestion no cabe");
+        return;
+    }
     if (wrote >= 0) env_write_slot(wrote, wrote == 0 ? a : b);   /* RAM → flash */
+    if (con_env) bpvm_scratch_give("bmgr-env");
     wire_v1_send_line(reply, (size_t) n);
 }

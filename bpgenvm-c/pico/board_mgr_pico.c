@@ -5,6 +5,7 @@
  */
 #include "board_mgr_pico.h"
 
+#include "bpvm.h"        /* #338: bpvm_scratch_take/give (zona de rascar compartida) */
 #include "bpvm_bmgr.h"
 #include "bpvm_bmgr_wire.h"
 #include "bpvm_part.h"
@@ -85,6 +86,12 @@ static void env_write(int slot, const uint8_t* src) {
     bpvm_flash_lock_end(tok);
 }
 
+/* #338 — la zona compartida tiene que dar para las DOS copias del env de ESTA
+ * familia. Si alguien cambia el sector de borrado (o porta a un micro con uno
+ * mayor) sin subir BPVM_SCRATCH_BYTES, aqui no compila — en vez de descubrirlo
+ * en placa como un "zona de scratch no disponible" al abrir el panel. */
+typedef char bp_chk_scratch_env[(BPVM_SCRATCH_BYTES >= 2u * BP_ENV_SECTOR) ? 1 : -1];
+
 void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
                            unsigned char* scratch, unsigned long scratch_len,
                            const unsigned char* bulk, unsigned long bulk_len) {
@@ -98,21 +105,49 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
                            "layout de flash inconsistente (env fuera de la zona 2)");
         return;
     }
-    /* Sin BSS propio: troceamos el buffer prestado (s_put_buf, libre durante un comando
-     * de gestión). 3 sectores (a/b/scratch) + el resto para la reply. */
-    if (scratch == NULL || scratch_len < (unsigned long) (3u * BP_ENV_SECTOR + 512u)) {
+    /* Sin BSS propio, y desde #338 con DOS prestamistas en vez de uno:
+     *
+     *   - del buffer prestado (s_put_buf, libre durante un comando de gestión)
+     *     salen sólo el sector de TRABAJO y la respuesta → 1 sector + reply;
+     *   - las dos copias del env las presta la ZONA DE RASCAR compartida, que
+     *     durante un comando del entorno está libre: sus otros usuarios son los
+     *     PACK_*, y ésos no tocan el env (bpvm_bmgr_needs_env, la frontera).
+     *
+     * El motivo es que antes el buffer del bulk tenía que dar para los TRES
+     * sectores a la vez (12 KB en la Pico) + la respuesta = 20 KB permanentes de
+     * SRAM que en esta placa se le restan al heap de la VM. Compartiendo con una
+     * zona que ya existía, el buffer baja a 8 KB y la memoria NO reaparece en
+     * otro sitio: se comparte, no se duplica. */
+    const int con_env = bpvm_bmgr_needs_env(type);
+    /* Los PACK_* no necesitan sector de trabajo (sólo part_apply usa bm->scratch),
+     * así que el buffer prestado va ENTERO a la respuesta. Importa: en el
+     * PACK_BURN_DATA el bulk ya se ha comido el principio del buffer y aquí llega
+     * sólo el resto — pedirle un sector que no va a usar lo dejaría sin sitio. */
+    const unsigned long minimo = con_env ? (unsigned long) BP_ENV_SECTOR + 512u : 512u;
+    if (scratch == NULL || scratch_len < minimo) {
         wire_v1_send_error(id, "INTERNAL_ERROR", "scratch insuficiente");
         return;
     }
-    uint8_t* a         = scratch + 0u * BP_ENV_SECTOR;
-    uint8_t* b         = scratch + 1u * BP_ENV_SECTOR;
-    uint8_t* sc        = scratch + 2u * BP_ENV_SECTOR;
-    char*    reply     = (char*)  (scratch + 3u * BP_ENV_SECTOR);
-    size_t   reply_cap = (size_t) (scratch_len - 3u * BP_ENV_SECTOR);
+    uint8_t* sc        = con_env ? scratch : NULL;
+    char*    reply     = (char*)  (con_env ? scratch + BP_ENV_SECTOR : scratch);
+    size_t   reply_cap = (size_t) (con_env ? scratch_len - BP_ENV_SECTOR : scratch_len);
 
-    /* Lee las dos copias del env desde flash (XIP) al scratch prestado. */
-    memcpy(a, (const void*)(XIP_BASE + BP_ENV_A_OFFSET), BP_ENV_SECTOR);
-    memcpy(b, (const void*)(XIP_BASE + BP_ENV_B_OFFSET), BP_ENV_SECTOR);
+    uint8_t* a = NULL;
+    uint8_t* b = NULL;
+    if (con_env) {
+        /* Contiguas y en ese orden: `b` cuelga de `a`, como cuando las dos salían
+         * del mismo buffer. Una sola petición = un solo dueño que soltar. */
+        a = (uint8_t*) bpvm_scratch_take(2u * (size_t) BP_ENV_SECTOR, "bmgr-env");
+        if (a == NULL) {
+            wire_v1_send_error(id, "INTERNAL_ERROR",
+                               "zona de scratch no disponible para el entorno");
+            return;
+        }
+        b = a + BP_ENV_SECTOR;
+        /* Lee las dos copias del env desde flash (XIP) a la zona prestada. */
+        memcpy(a, (const void*)(XIP_BASE + BP_ENV_A_OFFSET), BP_ENV_SECTOR);
+        memcpy(b, (const void*)(XIP_BASE + BP_ENV_B_OFFSET), BP_ENV_SECTOR);
+    }
 
     const board_desc_t* bd = board_desc();
     bpvm_bmgr_t bm;
@@ -171,7 +206,15 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
 
     int wrote = -1;
     int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);
-    if (n < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "reply de gestion no cabe"); return; }
+    /* La zona se suelta en TODAS las salidas: quedársela colgada dejaría mudos
+     * los PACK_* y los siguientes comandos del entorno. Y se suelta DESPUÉS del
+     * env_write, porque el sector que hay que volcar a flash vive en ella. */
+    if (n < 0) {
+        if (con_env) bpvm_scratch_give("bmgr-env");
+        wire_v1_send_error(id, "INTERNAL_ERROR", "reply de gestion no cabe");
+        return;
+    }
     if (wrote >= 0) env_write(wrote, wrote == 0 ? a : b);   /* la cintura: RAM → flash */
+    if (con_env) bpvm_scratch_give("bmgr-env");
     wire_v1_send_line(reply, (size_t) n);
 }

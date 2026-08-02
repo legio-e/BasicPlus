@@ -35,7 +35,10 @@ idf_build_set_property(COMPILE_OPTIONS "-DBPVM_LVGL" APPEND)
 get_filename_component(BPVM_LV_CONF "${CMAKE_CURRENT_LIST_DIR}/../include/lv_conf.h" ABSOLUTE)
 idf_build_set_property(COMPILE_OPTIONS "-DLV_CONF_PATH=${BPVM_LV_CONF}" APPEND)
 
-# G6 — Gui.mod (~24 KB) supera el buffer de PUT del wire (16 KB por defecto). El P4
-# tiene RAM de sobra -> 64 KB (cabe Gui.mod + apps/resources moderados). El S3 (con
-# menos RAM) mantiene su default vía el #ifndef de repl_esp32.c.
-idf_build_set_property(COMPILE_OPTIONS "-DV1_PUT_BUF_SIZE=20480" APPEND)
+# G6 (RETIRADO en #338) — este override subía el buffer de PUT porque Gui.mod
+# (~24 KB) no cabía entero en el buffer del wire. Eso era ANTES del streaming: desde
+# #294 el IDE sube por trozos, así que el tamaño del fichero dejó de importar y el
+# override sobraba —y encima su comentario decía 64 KB mientras ponía 20 KB—. El P4
+# usa ahora el mismo default que el S3 (8 KB, repl_esp32.c): una familia, un número.
+# Si algún día hiciera falta subirlo aquí, el guardián de compilación de repl_esp32.c
+# sigue marcando el suelo.

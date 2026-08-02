@@ -47,14 +47,22 @@ static char    s_line[WIRE_LINE_MAX];
  * desde que el IDE sube por trozos (PUT_BEGIN/DATA/END, verificado en placa en
  * las 3 familias el 28-jul) sólo necesita el MAYOR de sus dos papeles:
  *   (a) un trozo de streaming            = PUT_STREAM_CHUNK (16 KB)
- *   (b) el scratch del gestor de placa   = 3*BP_ENV_SECTOR + 512
- * (b) NO es igual en todas: el sector del env es la página de borrado, 4 KB en
- * RP2350/ESP32 pero 8 KB en el U5 → el STM32 necesita 25088 B y los otros 12800.
- * Por eso el recorte no es uniforme, y por eso hay una comprobación EN COMPILACIÓN
- * más abajo: si alguien lo baja de más, no compila en vez de romperse en placa. */
-static uint8_t s_put_buf[28u * 1024u];
-typedef char bp_chk_put_buf[(28u*1024u >= 16u*1024u &&
-                             28u*1024u >= 3u*BP_ENV_SECTOR + 512u) ? 1 : -1];
+ *   (b) el scratch del gestor de placa
+ *
+ * #338 (2-ago) — los dos papeles ADELGAZARON, y con ellos el buffer, de 28 a 12 KB:
+ *   (a) el IDE manda trozos de 8 KB (BpvmClient.PUT_STREAM_CHUNK). Un cliente viejo
+ *       que mandase más recibe NO_SPACE y se drena: se queja, no se corrompe.
+ *   (b) el gestor ya no pide TRES sectores aquí: las dos copias del env se las presta
+ *       la zona de rascar compartida (board_mgr_stm32.c) y de este buffer sale sólo el
+ *       sector de trabajo + la respuesta = BP_ENV_SECTOR + reply.
+ * El sector del env es la página de BORRADO y aquí son 8 KB (el doble que en
+ * RP2350/ESP32), así que esta familia se queda en 12 KB donde las otras bajan a 8:
+ * es el silicio, no una excepción. La comprobación EN COMPILACIÓN de abajo sigue
+ * marcando el suelo: si alguien lo baja de más, no compila. */
+#define V1_PUT_BUF_SIZE  (BP_ENV_SECTOR + 4096u)
+static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
+typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
+                             V1_PUT_BUF_SIZE >= BP_ENV_SECTOR + 512u) ? 1 : -1];
 static uint8_t s_vm_mem[128u * 1024u];        /* RAM que gestiona la VM */
 static char    s_out_esc[2048];               /* salida escapada (sink) */
 static char    s_out_msg[2300];               /* evento OUTPUT completo */

@@ -83,6 +83,16 @@ static int reply_pack_err(char* out, size_t cap, long id, int32_t e) {
     }
 }
 
+/* #338 — la frontera env / packs. Contrato y motivo en bpvm_bmgr_wire.h.
+ * Se define por el NEGATIVO (todo lo que no es PACK_* toca el env) a propósito:
+ * así un verbo nuevo del entorno entra ya protegido, y sólo hay que acordarse
+ * de esta función al añadir uno de packs —que además fallaría en la primera
+ * prueba, no en silencio. */
+int bpvm_bmgr_needs_env(const char* type) {
+    if (!type) return 1;
+    return strncmp(type, "PACK_", 5) != 0;
+}
+
 int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
                             char* out, size_t cap, int* wrote_slot) {
     if (wrote_slot) *wrote_slot = -1;
@@ -90,6 +100,14 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
     const long id = req->id;
     const char* type = req->type;
     sb_t s; sb_init(&s, out, cap);
+
+    /* Guardián de la frontera: el verbo pide env y la cintura no lo puso. Antes
+     * de #338 no podía pasar (los buffers venían siempre); ahora la cintura los
+     * pide prestados sólo cuando hacen falta, así que el descuido es posible y
+     * tiene que DECIRSE. */
+    if (bpvm_bmgr_needs_env(type) && (!bm->a || !bm->b || !bm->scratch))
+        return reply_error(out, cap, id, "INTERNAL_ERROR",
+                           "el comando necesita el entorno y la cintura no presto sus buffers");
 
     if (!strcmp(type, "STATE")) {
         /* Estado: el REAL del boot si el llamador lo provee (firmware, bm->live);

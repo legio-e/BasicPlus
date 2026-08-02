@@ -296,8 +296,22 @@ void bpvm_diag_urgente(const char* fmt, ...);
  * NO recibe la zona y se dice por el canal de diagnóstico con los dos nombres.
  * El día que alguien haga concurrente algo que hoy no lo es, sale a gritos en
  * vez de corromper el trabajo del otro en silencio. */
+/* #338 (2-ago) — desde que el gestor de placa saca de aquí las DOS copias del env,
+ * el suelo de la zona ya no es la página de RMW de packs sino 2*BP_ENV_SECTOR, y
+ * ése es el sector de BORRADO de la flash: 4 KB en RP2350/ESP32, pero 8 KB en el
+ * STM32U5. Por eso el valor por defecto mira la familia — no es lógica propietaria,
+ * es un TAMAÑO que depende del silicio, y el macro lo pone ya el build del
+ * fabricante. Quien quiera otro número lo define y este bloque se aparta.
+ *
+ * Si mañana entra una familia con sector mayor y nadie toca esto, NO se rompe en
+ * placa: cada cintura lleva una comprobación EN COMPILACIÓN de que la zona da para
+ * sus dos copias (bp_chk_scratch_env), así que no enlaza. */
 #ifndef BPVM_SCRATCH_BYTES
-#define BPVM_SCRATCH_BYTES 8192   /* el mayor usuario: la página de RMW de packs */
+#  if defined(STM32U575xx) || defined(STM32U5G9xx)
+#    define BPVM_SCRATCH_BYTES 16384   /* 2 x 8 KB: el sector de borrado del U5 */
+#  else
+#    define BPVM_SCRATCH_BYTES 8192    /* 2 x 4 KB (RP2350, ESP32) y la RMW de packs */
+#  endif
 #endif
 
 /* Devuelve la zona (alineada para cualquier tipo) o NULL: no cabe, o ya la
