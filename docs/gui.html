@@ -198,6 +198,11 @@
     <li class="sub"><a href="#fuentes">21.2 Fuentes</a></li>
 
     <li class="group"><a href="#eventos">22. Eventos y formularios</a></li>
+    <li class="sub"><a href="#ev-handlers">22.1 Handlers: clic y change</a></li>
+    <li class="sub"><a href="#ev-varios">22.2 Varios widgets, varios handlers</a></li>
+    <li class="sub"><a href="#ev-async">22.3 Trabajo largo sin congelar la interfaz</a></li>
+    <li class="sub"><a href="#ev-slots">22.4 De nombre a slot (transparente)</a></li>
+    <li class="sub"><a href="#ev-codigo">22.5 Suscribir desde código (sin .win)</a></li>
 
     <li class="group"><a href="#ejecutar">23. Ejecutar (host y placa)</a></li>
     <li class="sub"><a href="#ej-preview">23.1 Vista previa en el PC</a></li>
@@ -706,6 +711,51 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
   sube al dispositivo junto con el programa (ver <a href="guia-ide.html">Guía del IDE</a>).</p>
 </div>
 
+<h3 id="ev-codigo">22.5 Suscribir desde código (sin <code>.win</code>)</h3>
+<p>
+  Los handlers del <code>.win</code> son la vía cómoda, pero no la única: <code>onClick</code> y
+  <code>onChange</code> son <a href="manual.html#eventos"><strong>eventos</strong></a> del lenguaje, así que
+  puedes suscribirlos tú con <code>::</code>, que ata <strong>un objeto y un método suyo</strong>:
+</p>
+<pre><code><span class="kw">var</span> boton1: Gui.<span class="type">Button</span> := Gui.Button(panel, <span class="str">"Guardar"</span>)
+boton1.onClick := pantalla::boton1_onClick</code></pre>
+<p>
+  El manejador es una función normal de un objeto cualquiera —<strong>no hace falta heredar de
+  nada</strong>— y recibe el widget que disparó:
+</p>
+<pre><code><span class="kw">function event</span> <span class="fn">boton1_onClick</span>(sender: Gui.<span class="type">Component</span>)
+  <span class="kw">print</span> <span class="str">"pulsado"</span>
+<span class="kw">end</span> boton1_onClick</code></pre>
+<p>
+  <strong>Convención de nombres.</strong> Llama al manejador
+  <code>&lt;nombreDelComponente&gt;_&lt;nombreDelEvento&gt;</code>, con el mismo nombre que la variable que
+  sostiene el widget y que su <code>name</code> en el <code>.win</code>. Un nombre en tres sitios: así dos
+  botones tienen manejadores distintos sin inventar nombres.
+</p>
+<p>
+  <strong>Sin suscriptor no pasa nada.</strong> Si nadie escucha, el evento se descarta sin error — un widget
+  al que no le has puesto manejador simplemente no hace nada al pulsarlo.
+</p>
+<p class="warn">
+  <strong>Cambio respecto a V3.</strong> Antes <code>onClick()</code> y <code>onChange()</code> eran
+  <em>métodos virtuales</em>: para atender un botón había que <strong>fabricar una subclase</strong> del widget
+  y sobrescribirlos. <strong>Eso ya no funciona</strong>. Si vienes de V3, cambia
+</p>
+<pre><code><span class="comment">// V3 — ya NO vale</span>
+<span class="kw">class</span> MiBoton <span class="kw">extends</span> Gui.Button
+  <span class="kw">public function</span> <span class="fn">onClick</span>()
+    ...
+  <span class="kw">end</span> onClick
+<span class="kw">end</span> MiBoton</code></pre>
+<p>por esto, que además te ahorra la clase:</p>
+<pre><code><span class="comment">// V4</span>
+boton1.onClick := pantalla::boton1_onClick</code></pre>
+<p>
+  El motivo del cambio es que el modelo viejo obligaba a crear un tipo por cada botón que quisieras atender.
+  Con eventos, el manejador vive donde tiene sentido —normalmente en la ventana, junto al resto de la
+  lógica— y el widget se queda siendo un widget.
+</p>
+
 <h2 id="ejecutar">23. Ejecutar (host y placa)</h2>
 <p>
   Una GUI de BasicPlus se puede ejecutar de tres maneras, de más rápida a más fiel: vista previa en el PC
@@ -817,7 +867,7 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
   <tr><td><code>refresh()</code></td><td>función</td><td>Fuerza repintado del widget.</td></tr>
   <tr><td><code>clean()</code></td><td>función</td><td>Elimina los HIJOS del widget (él queda).</td></tr>
   <tr><td><code>delete()</code></td><td>función</td><td>Elimina el widget (y sus hijos) del árbol.</td></tr>
-  <tr><td><code>onClick()</code> / <code>onChange()</code></td><td>función (virtual)</td><td>Sobrescribibles en una subclase: alternativa OO a los handlers del <code>.win</code> (§22).</td></tr>
+  <tr><td><code>onClick</code> / <code>onChange</code></td><td><strong>evento</strong></td><td>Se suscriben con <code>::</code>: <code>boton.onClick := ventana::boton_onClick</code>. Ver <a href="#ev-codigo">§22.5</a>. <em>(En V3 eran métodos virtuales que se sobrescribían subclaseando; ya no.)</em></td></tr>
 </table>
 
 <h3 id="ref-widgets">24.3 Widgets</h3>
