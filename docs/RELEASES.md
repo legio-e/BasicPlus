@@ -1,7 +1,146 @@
 # Notas de versión — BasicPlus
 
 > Borrador del cuerpo de la *release* de GitHub. La etiqueta propuesta es
-> `v3.0` (v1 cerró en `v1.0`, v2 en `v2.0`). Ajusta versión/fecha al publicar.
+> `v4.0` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`). Ajusta
+> versión/fecha al publicar.
+
+---
+
+## v4.0 — agosto 2026 · «consolidación»
+
+En esta versión nos hemos centrado en **consolidar lo ya hecho** más que en
+añadir características nuevas. En especial hemos reformado **la gestión de la
+memoria** y **el sistema de archivos**, que eran las dos piezas que peor
+envejecían. Aun así, por el camino han entrado algunas cosas nuevas que merecen
+su propio apartado: los **eventos**, la **sobrecarga de funciones** y un **micro
+simulado** dentro del IDE.
+
+### Memoria
+
+Hasta la versión 3 usábamos un **modelo de memoria plano**: una referencia era
+una dirección absoluta. El problema de ese modelo es que es **poco robusto**,
+sobre todo en entornos multitarea: una referencia a un objeto ya liberado sigue
+pareciendo válida, y el fallo aparece mucho más tarde y muy lejos de su causa.
+
+Lo hemos reformado por completo. Ahora una referencia es un **handle**: un
+**índice** a una tabla más un **contador de generación**. Cuando un objeto se
+libera, su contador cambia; si alguien conserva una referencia vieja y la usa,
+los contadores **no coinciden y el error salta ahí mismo**, en vez de corromper
+datos en silencio. Lo importante del modelo nuevo es doble: es **mucho más
+robusto** y **apenas cuesta rendimiento** (se midió antes de adoptarlo).
+
+Además hemos revisado las **zonas de RAM**. Hemos reducido la necesidad de
+buffers y memorias intermedias, y hemos ampliado el uso de la RAM a **toda la
+disponible**. Eso se traduce en más memoria para la pila de ejecución y más
+memoria para crear objetos y vectores. Es especialmente importante en las placas
+con poca memoria, pero también se aprovecha mejor en las que llevan PSRAM.
+
+Y dos cambios en el **recolector de basura** que se notan en programas largos:
+
+- **El heap ya no crece sin parar.** La lista de bloques libres pasa a estar
+  **ordenada por dirección y a fusionar los huecos contiguos**, y el recolector
+  se dispara por **volumen reservado** en vez de por cuánto ha crecido el heap.
+  Antes, un programa consumía memoria nueva en cada recolección aunque no
+  guardara nada, y acababa muriendo; ahora la memoria **se estabiliza y ahí se
+  queda**. Verificado en placa con un bucle de 10.000 vueltas que antes no
+  pasaba de la 1.000.
+- **Quedarse sin memoria es ahora un error que puedes atrapar.** Antes, una
+  reserva fallida podía devolver una referencia vacía sin decir nada y el
+  programa seguía con datos corruptos. Ahora lanza una excepción normal, así que
+  se recoge con `try` / `catch` como cualquier otra.
+
+### Sistema de archivos
+
+El sistema de archivos se ha reformado completamente. Lo primero, se ha
+**unificado para todas las familias**: ahora hay un mismo sistema de archivos en
+todas ellas, con el mismo comportamiento y los mismos límites.
+
+También se ha dividido la **memoria flash en tres bloques**:
+
+1. un bloque pequeño para las **variables de entorno** y el **registro del
+   sistema**,
+2. un segundo bloque para el **sistema de archivos** propiamente dicho,
+3. y un tercero para grabar **Packs**, que es nuevo en esta versión.
+
+El registro del sistema **sobrevive a un reinicio**, así que si una placa se
+queda colgada puedes conectarte después y leer lo último que hizo.
+
+### Packs
+
+Un **Pack** no es más que una forma de guardar varios archivos dentro de uno
+solo. A diferencia de un archivo comprimido, aquí los archivos se guardan **tal
+cual, sin comprimir**, y ese es justo el objetivo: un Pack grabado en la flash
+interna **se usa directamente desde la flash**, sin cargarlo en RAM. En un micro
+donde la RAM es el recurso escaso, eso importa.
+
+Los packs se gestionan **desde el IDE**: puedes crear proyectos que compilen a un
+Pack, y hay una ventana que te permite ver y administrar los packs grabados en
+una placa.
+
+### Eventos
+
+Otra novedad es la introducción de los **eventos**. Es especialmente relevante en
+los entornos gráficos, aunque **no está limitado a ellos**: se puede usar en
+cualquier objeto.
+
+Con los eventos hemos añadido **llamadas asíncronas**, que por dentro usan hilos
+de ejecución pero hacen la programación mucho más sencilla. Están pensadas sobre
+todo para llamar a funciones que tardan sin que se bloquee el entorno gráfico.
+
+> **Ojo**: las funciones que se llaman de forma asíncrona corren en **hilos
+> distintos del principal**. Si vas a compartir variables entre ellas, usa los
+> mecanismos de sincronización que ofrece el lenguaje para evitar corrupciones de
+> datos.
+
+### Sobrecarga de funciones
+
+Ya se pueden declarar **varias funciones con el mismo nombre y distintos
+parámetros**, y el compilador elige la que toca. Funciona con funciones libres,
+métodos estáticos, **métodos de instancia con herencia** y **constructores**, y
+también **entre módulos**.
+
+### Un micro simulado dentro del IDE
+
+Ahora el IDE trae un **micro simulado**: se comporta como una placa de verdad
+—mismo protocolo, mismo sistema de archivos, misma consola— pero corre en el PC.
+Puedes configurarle la RAM, la PSRAM, el tamaño de flash y la pantalla.
+
+Sirve para **desarrollar y probar sin tener una placa delante**, y también para
+comparar: si algo va en el simulado y no en la placa, ya sabes que el problema es
+de la placa y no de tu programa.
+
+### Código nativo
+
+El compilador puede traducir a **código nativo** las funciones que marques, y la
+placa lo carga y lo usa en lugar del bytecode. En esta versión llega también a
+**RISC-V** (ESP32-P4), además de ARM.
+
+La diferencia es grande: en el banco de pruebas, una función de cálculo puro pasa
+de **58 segundos interpretada a 0,5 segundos en nativo**. No todo se puede
+traducir —los límites están documentados y el compilador **avisa siempre al
+compilar, nunca falla en ejecución**—, pero el bytecode sigue estando ahí, así
+que es una optimización que se aplica donde interesa y no cambia nada más.
+
+### Arranque por capas
+
+El arranque de la placa ahora es **escalonado**: primero lo mínimo para
+comunicarse, luego las particiones, luego el sistema de archivos, y por último la
+máquina virtual. Si algo falla, la placa **se queda en el último nivel bueno y lo
+dice**, en vez de quedarse muerta sin explicación. En la práctica significa que
+una placa con el sistema de archivos estropeado **sigue respondiendo** y se puede
+recuperar desde el IDE.
+
+### Otros
+
+- **El compilador ya no genera archivos `.bpi`**: cada módulo compilado lleva su
+  propia interfaz dentro. Menos archivos que sincronizar y menos formas de que
+  algo se quede desfasado.
+- **Subida de archivos grandes por trozos**, para que un archivo grande no
+  dependa de que quepa entero en memoria.
+- **Nuevo widget de gráfica** para representar series de datos de sensores.
+- **`random` y `randomInt`**, con la fuente de entropía de cada micro.
+- El **depurador** muestra mejor las variables, y se han pulido bastantes
+  detalles del lenguaje, la parte gráfica y el IDE.
 
 ---
 
