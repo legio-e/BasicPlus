@@ -366,6 +366,8 @@ se **vuelve a probar lo que falló** — no la fila entera.
 
 ## Registro de hallazgos
 
+> No hay un hallazgo 14: es un salto de numeración mío, no un apunte perdido.
+
 | # | Placa | Qué pasó | Estado |
 |---|---|---|---|
 | 1 | — (paquete) | La ayuda enlazaba 10 anexos `.md` que **no iban dentro del ZIP**: F1 abría el índice y de ahí a PHILOSOPHY, RELEASES, OPCODES… todo 404 en la instalación | ✅ 43dd9b2 — y guardián: si un enlace de la ayuda no resuelve dentro del paquete, el ZIP no se monta |
