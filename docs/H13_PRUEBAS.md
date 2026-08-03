@@ -400,6 +400,26 @@ imagen única, demostrada.
   no es que el `.uf2` funcione en las dos placas, es que **se distingue solo** en
   runtime y la stdlib board-aware coincide con lo que dice el silicio.
 
+- ✅ **Tanda 8 · Pack ejecutable EN LA PLACA** (#310). El pack arranca desde dentro
+  y la llamada cross-module `App` → `Util` se resuelve ahí mismo: `hello,
+  BasicPlus!` / `5 squared = 25`. Con esto **#310 queda demostrado en device**, que
+  es lo que faltaba de la a1 (allí sólo corrió contra la VM Java del PC).
+
+  🐛 **Hallazgo 18, visto por Eduardo en este mismo log:** el pack ejecuta bien,
+  pero el IDE **sube además su contenido suelto** — crea `/app/sampleproject`, sube
+  `Util.mod` y sube `leeme.txt`, y las tres cosas ya van DENTRO del `.pack`
+  (verificado: `PackStep` mete outDir + `resources/`, y `strings App.pack` enseña
+  los símbolos de `Util` y el texto completo del léeme). `packRun` se calcula y se
+  usa para elegir la entrada, pero el bloque de subida lo ignora. Es el hermano del
+  hallazgo 16 —aquél arregló *construir* el pack y dejó sin arreglar *subirlo*— y
+  afecta también a la ruta de host. Importa más que el desperdicio: esas copias
+  quedan en `/app`, que **está en el camino de búsqueda**, o sea la forma exacta
+  del hallazgo 15. **Se arregla en el lote de mañana**, con el jar y el ZIP.
+
+**Con la tanda 8 la a2 queda barrida entera, y con ella la familia RP2350 completa
+(a1 + a2).** Ocho tandas, cero hallazgos del producto desde el arreglo de #369; el
+único hallazgo es del IDE y no afecta a lo que ejecuta la placa.
+
 > ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
 > partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
 > preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
