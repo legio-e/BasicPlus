@@ -95,6 +95,7 @@ X|samples/OoSmoke.bp|humo de OO
 X|samples/StrOps348.bp|operaciones de cadena (#348)
 X|samples/MathOps348.bp|operaciones de Math (#348)
 X|samples/PathOps348.bp|rutas, siempre con '/'
+X|samples/RandomTest.bp|aleatorios contra su CONTRATO: rango, limite excluido, reparto
 D|samples/blink.bp|GPIO en GP25 — SOLO a1: en la Metro GP25 es el NeoPixel|gui
 D|samples/NeoDemo.bp|WS2812 por PIO — en la METRO sustituye a blink (mismo GP25)|gui
 D|samples/BoardTest.bp|identificacion de la placa|gui

@@ -1,0 +1,141 @@
+// RandomTest.bp — H13: los aleatorios, comprobados contra su CONTRATO.
+//
+// POR QUÉ EXISTE: `random` es un HAL con cintura POR PLATAFORMA (#347), o sea
+// que en placa corre código distinto del que corre en el PC. Aun así, en toda la
+// batería sólo lo tocaba `fase5c`, y con UNA llamada que imprimía el valor. Eso
+// demuestra que no revienta; no demuestra que funcione. Una cintura mal portada
+// puede devolver siempre el mismo número, salirse del rango o ignorar `lo`, y
+// una sola tirada lo pasa por alto.
+//
+// EL CONTRATO (referencia §Números aleatorios):
+//   random(): float          → [0, 1)   el 0 puede salir, el 1 NO. 24 bits.
+//   randomInt(lo, hi): int   → [lo, hi) lo entra, hi NO entra. Uniforme.
+//                              Si hi <= lo devuelve lo (y no lanza).
+//   randomInt no es un generador aparte: es random() escalado.
+//
+// La salida es DETERMINISTA a propósito —sólo veredictos, ningún número
+// sorteado— para que se pueda comparar entre las dos VMs byte a byte.
+module RandomTest
+
+  const TIRADAS: integer := 2000
+
+  function Main()
+    var fallos: integer := 0
+
+    // --- 1) randomInt(1, 7): el dado. Rango cerrado por abajo, abierto por arriba.
+    var cara: integer[] := newIntArray(8)     // 0..7, usamos 1..7
+    var i: integer := 0
+    var fuera: integer := 0
+    while i < TIRADAS do
+      var r: integer := randomInt(1, 7)
+      if (r < 1) or (r > 6) then
+        fuera := fuera + 1
+      else
+        cara[r] := cara[r] + 1
+      endif
+      i := i + 1
+    endwh
+    if fuera == 0 then
+      print "rango [1,7) respetado: OK"
+    else
+      print "rango [1,7) VIOLADO en " + intToString(fuera) + " tiradas"
+      fallos := fallos + 1
+    endif
+
+    // El 7 no puede salir NUNCA: es el error clásico de portar el escalado.
+    if cara[7] == 0 then
+      print "el limite superior NO entra: OK"
+    else
+      print "el limite superior SI entro (" + intToString(cara[7]) + " veces)"
+      fallos := fallos + 1
+    endif
+
+    // --- 2) Las seis caras tienen que aparecer. Un generador atascado o con el
+    //        escalado roto deja huecos, y eso el rango solo no lo ve.
+    var huecos: integer := 0
+    var c: integer := 1
+    while c <= 6 do
+      if cara[c] == 0 then
+        huecos := huecos + 1
+      endif
+      c := c + 1
+    endwh
+    if huecos == 0 then
+      print "las 6 caras salen: OK"
+    else
+      print "hay " + intToString(huecos) + " cara(s) que no salieron nunca"
+      fallos := fallos + 1
+    endif
+
+    // --- 3) Reparto no absurdo. No es un test de uniformidad de verdad —eso
+    //        pide estadística—, pero con 2000 tiradas una cara honrada ronda
+    //        333: si alguna baja de 150 o pasa de 700, el generador cojea.
+    var sesgo: integer := 0
+    c := 1
+    while c <= 6 do
+      if (cara[c] < 150) or (cara[c] > 700) then
+        sesgo := sesgo + 1
+      endif
+      c := c + 1
+    endwh
+    if sesgo == 0 then
+      print "reparto razonable: OK"
+    else
+      print "reparto sospechoso en " + intToString(sesgo) + " cara(s)"
+      fallos := fallos + 1
+    endif
+
+    // --- 4) Los casos degenerados NO lanzan, devuelven lo.
+    if randomInt(5, 5) == 5 then
+      print "randomInt(5,5) = 5: OK"
+    else
+      print "randomInt(5,5) no devolvio 5"
+      fallos := fallos + 1
+    endif
+    if randomInt(9, 3) == 9 then
+      print "randomInt(9,3) = 9 (hi<lo): OK"
+    else
+      print "randomInt(9,3) no devolvio 9"
+      fallos := fallos + 1
+    endif
+
+    // --- 5) random(): [0,1) y no atascado. El 1.0 no puede salir.
+    var f_fuera: integer := 0
+    var f_igual: integer := 0
+    var previo: float := -1.0
+    var repes: integer := 0
+    i := 0
+    while i < TIRADAS do
+      var f: float := random()
+      if (f < 0.0) or (f >= 1.0) then
+        f_fuera := f_fuera + 1
+      endif
+      if f == previo then
+        repes := repes + 1
+      endif
+      previo := f
+      i := i + 1
+    endwh
+    if f_fuera == 0 then
+      print "random() en [0,1): OK"
+    else
+      print "random() se salio de [0,1) en " + intToString(f_fuera) + " tiradas"
+      fallos := fallos + 1
+    endif
+    // Repetir el valor anterior una vez es posible; repetirlo cientos de veces
+    // es un generador congelado.
+    if repes < 100 then
+      print "random() no esta atascado: OK"
+    else
+      print "random() repitio el valor anterior " + intToString(repes) + " veces"
+      fallos := fallos + 1
+    endif
+
+    if fallos == 0 then
+      print "=== RandomTest: 8 de 8 ==="
+    else
+      print "=== RandomTest: " + intToString(fallos) + " FALLO(S) ==="
+      throw RuntimeError("los aleatorios no cumplen su contrato")
+    endif
+  end Main
+end RandomTest
