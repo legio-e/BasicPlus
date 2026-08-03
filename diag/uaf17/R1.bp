@@ -1,0 +1,17 @@
+// R1 — lo mínimo: heredar de Thread, arrancar y esperar. run() vacío.
+module R1
+  public class W extends Thread
+    public function W()
+      super(1000)
+    end W
+    public function run()
+    end run
+  end W
+
+  function Main()
+    var w: W := W()
+    w.start()
+    w.join()
+    print "R1 ok"
+  end Main
+end R1

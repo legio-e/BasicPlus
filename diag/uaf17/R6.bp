@@ -1,0 +1,45 @@
+// R6 — R5 + el parámetro n por constructor, que es lo ÚNICO que queda para ser
+// el original. Si R5 pasa y R6 falla, el culpable es pasar el parámetro.
+module R6
+  public class C
+    public property v: integer
+    public function C(v_: integer)
+      v := v_
+    end C
+  end C
+
+  public class W extends Thread
+    var n: integer
+    var total: integer
+    public function W(n_: integer)
+      super(1000)
+      n := n_
+      total := 0
+    end W
+    public function run()
+      var s: integer := 0
+      var i: integer := 1
+      while i <= n do
+        var c: C := C(i)
+        s := s + c.v
+        i := i + 1
+      endwh
+      total := s
+    end run
+    public function getTotal(): integer
+      return this.total
+    end getTotal
+  end W
+
+  function Main()
+    var w1: W := W(200)
+    var w2: W := W(200)
+    w1.start()
+    w2.start()
+    w1.join()
+    w2.join()
+    print "w1 =", w1.getTotal()
+    print "w2 =", w2.getTotal()
+    print "R6 ok (esperado 20100 los dos)"
+  end Main
+end R6
