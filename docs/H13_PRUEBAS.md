@@ -1,0 +1,247 @@
+# H13 — Guión de pruebas finales de V4
+
+> Última verificación antes de publicar. **3 familias · 7 placas**, barrido completo:
+> no dos pruebas y ya. Estimación **2-3 días** según las sorpresas (Eduardo, 3-ago).
+> **Código congelado**: sólo se corrige lo que esté ROTO; toda mejora va a V5. Un bug
+> que salga aquí **bloquea la publicación** — la fecha cede, la calidad no.
+> Marca `[x]` según avances; lo que falle va al **Registro de hallazgos** del final.
+> Guiones históricos: `H14_TEST_PLAN.md` (V2) y `V3_TEST_BATCH.md` (V3).
+
+## Las 7 placas
+
+| | Placa | Familia | Firmware | Pantalla |
+|---|---|---|---|---|
+| **a1** | Pico 2 | RP2350A | `pico` | — |
+| **a2** | Metro RP2350B | RP2350B | `pico` (misma imagen) | — |
+| **b1** | ESP32-S3 DevKit | ESP32 | `esp32` | — |
+| **b2** | ESP32-P4 Kit | ESP32 | `esp32p4` | MIPI-DSI 1024×600 + táctil |
+| **b3** | ESP32-P4 Waveshare 4.3" | ESP32 | `esp32p4-ws` | ST7701 480×800 |
+| **c1** | STM32 Nucleo-U575ZI-Q | STM32 | `stm32` | — |
+| **c2** | STM32 Discovery U5G9J | STM32 | `stm32` | LTDC |
+
+Y dos bancos que **no son placas pero se publican igual**, así que entran al final:
+el **micro simulado** y la **VM Java** del PC.
+
+---
+
+## Puerta 0 — en el PC, antes de tocar una placa
+
+Gratis y encuentra regresiones sin gastar un flasheo. Si esto está verde, lo que quede
+en placa es plataforma (backend HW, boot, wire), no el núcleo del lenguaje.
+
+- [ ] `compat/compat.sh check` → paridad dual-VM **28/0/0**
+- [ ] `make test-env test-part test-boot test-bmgr test-pack test-crc` en `bpgenvm-c`
+- [ ] `make sim-smoke` (wire v1 completo contra el simulado)
+- [ ] `mvn test` en `miVM` → 34/34
+- [ ] Compilar los 5 firmwares y que **no** salga ningún aviso nuevo
+
+---
+
+## Paso 0 — firmware FRESCO en cada placa
+
+> ⚠️ **No reutilizar imágenes viejas.** V4 ha cambiado el modelo de memoria (handles),
+> el arranque (kernel por capas), el FS (littlefs en las 3 familias), el formato `.mod`
+> (v6, sin `.bpi`) y los blobs de stdlib embebidos. Una imagen anterior da **falsas
+> regresiones** — y ayer ya nos costó una cacería de un bug que no existía.
+
+- [ ] **a1/a2** RP2350 — imagen única, la genero yo (`ninja -C pico/build`)
+- [ ] **b1/b2/b3** ESP32 — **las compilas tú** (`idf.py build`): es el único toolchain
+      que no tengo. Bloquea todo el grupo b, conviene lanzarlo antes de empezar
+- [ ] **c1/c2** STM32 — las genero yo (CubeIDE headless)
+
+---
+
+## Batería común (aplica a las 7)
+
+### A · Arranque y conexión
+- [ ] A1 Arranca a **estado 3 (app)**; el log no trae nada raro
+- [ ] A2 `INFO` con los datos correctos de ESA placa (micro, GPIO, flash, PSRAM)
+- [ ] A3 Causa del reset correcta (power-on / pin / watchdog / software)
+- [ ] A4 Conectar y desconectar 3 veces seguidas sin quedarse colgado
+- [ ] A5 `RESET` desde el IDE → vuelve y reconecta
+
+### B · Sistema de ficheros
+- [ ] B1 `LIST` del árbol completo (`/app`, `/lib`, `/sys`)
+- [ ] B2 Subir un fichero pequeño (< 8 KB, un solo viaje) y releerlo idéntico
+- [ ] B3 Subir uno **grande** (> 8 KB → streaming) y releerlo idéntico ← chunk nuevo de #338
+- [ ] B4 Sobrescribir un fichero existente
+- [ ] B5 Borrar, renombrar, crear y borrar directorio
+- [ ] B6 `DF` coherente con lo que hay
+- [ ] B7 Apagar y encender: **todo sigue ahí** (persistencia real)
+- [ ] B8 Formatear el FS y comprobar que se rehace solo
+
+### C · Ejecución
+- [ ] C1 `T` — hilos (2-3, que es el caso real)
+- [ ] C2 `JsonDemo` — strings, objetos, parsing
+- [ ] C3 `FileTest` — FS desde BP
+- [ ] C4 `AsyncDemo` — `Thread(obj::metodo(args))` (#325)
+- [ ] C5 `Ev*` — eventos (#H5.c): `EvFull`, `EvOrder`, `EvMulti`, `EvThrow`
+- [ ] C6 Excepciones: `try/catch` de un `RuntimeError` nativo, y uno de usuario
+- [ ] C7 **OOM atrapable**: forzar sin memoria y que salga `RuntimeError` (no un reset)
+- [ ] C8 Ejecutar el mismo programa **3 veces seguidas**: misma salida, sin arrastre
+- [ ] C9 `Stop` (Ctrl+F2) de un programa en marcha → corta y la placa sigue viva
+
+### D · Gestión de placa (H9 — nuevo en V4)
+- [ ] D1 Panel abre y muestra el estado del arranque
+- [ ] D2 Leer variables de entorno
+- [ ] D3 Editar una y **reiniciar**: persiste
+- [ ] D4 Borrar una
+- [ ] D5 `Proponer defaults` de particiones
+- [ ] D6 Aplicar tamaños válidos → reinicia y arranca con el reparto nuevo
+- [ ] D7 Aplicar un tamaño **inválido** → error claro y el entorno queda **intacto**
+- [ ] D8 Con la placa a medio configurar, el IDE ofrece abrir el panel al conectar
+
+### E · Packs (H3 + #310 — nuevo en V4)
+- [ ] E1 Grabar un pack de librería en la zona de packs
+- [ ] E2 Listarlo: nombre, tamaño, **fecha de compilación**, ficheros que trae
+- [ ] E3 `import` de un módulo del pack desde un programa
+- [ ] E4 Un `.mod` suelto en `/lib` **eclipsa** al del pack
+- [ ] E5 Retirar un pack: deja de usarse al momento
+- [ ] E6 Formatear la zona
+- [ ] E7 Persistencia tras apagar
+- [ ] E8 **Pack EJECUTABLE (#310)**: `samples/sampleproject` (`main: App`) → grabar y
+      ejecutar desde el pack, leyendo un recurso de dentro
+
+### F · Depuración
+- [ ] F1 Poner un breakpoint y que pare ahí
+- [ ] F2 Step (línea a línea)
+- [ ] F3 Panel de variables con valores correctos (#341)
+- [ ] F4 Call stack
+- [ ] F5 Continuar hasta el final
+
+### G · Autónomo
+- [ ] G1 Fijar `autorun` y reiniciar → arranca solo
+- [ ] G2 La **ventana de rescate** (#345) responde a HELLO/Stop antes de lanzar
+- [ ] G3 Quitar el autorun
+
+### H · Memoria (lo más nuevo de V4)
+- [ ] H1 `INFO` recién arrancada: apuntar heap / pila / RTOS libre
+- [ ] H2 Correr carga (T + JsonDemo + un GUI si la placa tiene) y **repetir INFO**
+- [ ] H3 **El heap no crece entre RUN sucesivos** (#357) — 20-30 vueltas
+- [ ] H4 El guardián de fin de RUN (#339) no grita
+- [ ] H5 #338: el buffer de 8 KB no estorba ni a la subida ni al panel de gestión
+
+### I · Recuperación
+- [ ] I1 Desenchufar a media escritura y volver: el FS monta
+- [ ] I2 `LOG_DUMP` tras un reset: el log **sobrevive**
+- [ ] I3 `LOG_CLEAR` y comprobar que se limpia
+
+---
+
+## Matriz placa × bloque
+
+Estado: `[x]` pasa · `[ ]` pendiente · `—` no aplica
+
+| Bloque | a1 Pico | a2 Metro | b1 S3 | b2 P4 Kit | b3 P4 ws | c1 Nucleo | c2 Discovery |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| A arranque/conexión | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| B ficheros | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| C ejecución | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| D gestión de placa | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| E packs | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| F depuración | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| G autónomo | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| H memoria | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| I recuperación | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| **GUI** | — | — | — | [ ] | [ ] | — | [ ] |
+| **AOT nativo** | [ ] | [ ] | — | [ ] | [ ] | [ ] | [ ] |
+
+---
+
+## Lo específico de cada placa
+
+### a1 · Pico 2 (RP2350A)
+Variante A: 30 GPIO, 4 MB flash, sin PSRAM. **AOT ARM**.
+- [ ] `PicoInfo` — ADC/PWM/temperatura reales
+- [ ] GPIO: `blink` en GP25
+- [ ] AOT: un cómputo `native` y comparar con el host (misma salida, mucho más rápido)
+- [ ] #338 ya ✅ verificado 2-ago; se repite dentro del barrido
+> ⚠️ **Sin botón de reset**: sólo se recupera desenchufando. Antes de una prueba que
+> pueda colgarla, ten a mano la imagen buena.
+
+### a2 · Metro RP2350B
+Variante B: 48 GPIO, 16 MB flash, **PSRAM 8 MB**, NeoPixel. **Misma imagen que a1.**
+- [ ] La variante se detecta sola (48 GPIO, 8 ADC en `INFO`)
+- [ ] **El heap va a PSRAM** y se ve en `INFO`
+- [ ] Clamp #292: la flash que dice `INFO` es la real
+- [ ] `NeoDemo` — WS2812 por PIO
+- [ ] Con PSRAM, subir un fichero **grande de verdad** (100 KB+)
+
+### b1 · ESP32-S3 DevKit
+Wire por UART0; consola por USB nativo. Xtensa: `native` **interpretada**, sin AOT.
+- [ ] **#331 — la causa sin probar.** La placa escribe tras `erase-flash`, pero nunca
+      se demostró por qué. Hipótesis: bootloader viejo de 2 MB. Es el único pendiente
+      con riesgo de publicación: si es eso, le pasará a cualquiera con un S3 así.
+      Mirar en el log la línea `flash: configurada N KB | chip físico M KB`; si no
+      cuadran, **reflashear bootloader** y confirmar
+- [ ] DRAM: el bloque de 160 KB (#336) sigue dando de sí con carga
+
+### b2 · ESP32-P4 Kit
+PSRAM 32 MB, MIPI-DSI **EK79007 1024×600**, táctil **GT911 (I2C 0x14)**, Ethernet IP101.
+**AOT RISC-V con `.mdn` dinámico** (#H4, 113×).
+- [ ] `GuiColorDemo` — se ve, con sus colores
+- [ ] `GuiClickDemo` / `GuiTableDemo` — **táctil** respondiendo
+- [ ] Eventos del GUI (#324): el lazo en BP, sin duplicados
+- [ ] **AOT desde el IDE**: generar el `.mdn`, cargarlo y medir la ganancia
+- [ ] `FontLoadDemo`, `GuiImageDemo` — recursos (fuente e imagen) desde el pack
+
+### b3 · ESP32-P4 Waveshare 4.3"
+Panel **ST7701 480×800**, elegido por el **ENV** (`display=st7701`, #311), backlight invertido.
+- [ ] El panel sale del ENV: cambiar la variable y ver que cambia el panel
+- [ ] El backlight enciende (el `bl_invert` viaja con la entrada del catálogo)
+- [ ] Mismo GUI que b2, a otra resolución: comprobar que la interfaz no se sale
+
+### c1 · STM32 Nucleo-U575ZI-Q
+Sin pantalla. Wire por el VCP del ST-LINK. **AOT ARM**. Página de borrado de **8 KB**.
+- [ ] `BlinkStm32` — LED verde PC7
+- [ ] AOT: cómputo `native` y ganancia
+- [ ] #338 aquí deja el buffer en **12 KB** (no 8): es su sector, no una excepción
+
+### c2 · STM32 Discovery U5G9J
+Pantalla **LTDC**. Es la placa gráfica de la familia.
+- [ ] `GuiColorDemo` y compañía
+- [ ] El buffer de PUT de 64 KB del GUI (el que se arregló en H9)
+
+---
+
+## Novedades de V4 a confirmar (transversal — marcar donde aplique)
+
+Lo que V4 ha cambiado por debajo y sólo se ve de verdad en placa:
+
+- [ ] **Handles** (H1): el modelo de memoria nuevo, en las 7. Un UAF aquí sale como
+      basura o reset, no como excepción
+- [ ] **Kernel por capas** (H9): estados 0→3, y que un fallo **baje al último estado
+      bueno reportando** en vez de morir mudo
+- [ ] **littlefs** en las 3 familias (H2)
+- [ ] **Packs** (H3) + **packs ejecutables** (#310)
+- [ ] **`.mod` v6 sin `.bpi`** (H6.a): la interfaz viaja dentro del módulo
+- [ ] **Sobrecarga de funciones** (H5.a) y **eventos** (H5.c) corriendo en placa
+- [ ] **GUI por eventos** (#324) en las 3 con pantalla
+- [ ] **AOT** — ARM en a1/a2/c1/c2, **RISC-V dinámico** en b2/b3, interpretado en b1
+- [ ] **Subida por streaming** (#294) con el trozo nuevo de 8 KB (#338)
+
+---
+
+## Huecos vistos al montar el guión
+
+- **El widget `Chart` (H7, #317) no tiene ningún sample.** Está en `bpstdlib/Gui.bp`
+  pero ningún `.bp` de `samples/` lo usa, así que se publicaría sin haberse ejecutado
+  nunca desde BP. Escribir un sample para probarlo **no es una mejora del producto**:
+  es cerrar un agujero de la batería. Hacerlo antes del grupo gráfico.
+
+---
+
+## Reparto
+
+**Yo:** compilo firmwares (RP2350 y STM32), preparo samples y proyectos de prueba,
+analizo lo que falle, arreglo, y llevo este registro al día.
+**Tú:** flasheas, cableas lo que haga falta, compilas los ESP32 (`idf.py`), y me pasas
+lo que veas — el log persistente es el mejor testigo que tenemos.
+
+---
+
+## Registro de hallazgos
+
+| # | Placa | Qué pasó | Estado |
+|---|---|---|---|
+| | | | |
