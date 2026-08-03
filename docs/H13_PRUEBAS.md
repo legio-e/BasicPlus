@@ -249,6 +249,13 @@ y no sirve para vigilar fugas. El instrumento es la línea de **fin de RUN**.
   La plataforma no se movió: `RTOS libre` 15 KB y marca de agua 11 de 16 KB
   **idénticos** a los de después de la tanda de humo. 16 RUN acumulados en la misma
   sesión, ninguno deja nada.
+- ✅ **Ficheros** (8): `FileTest` `FileOpsTest` `FileBytesTest` `FsPowerCut`
+  `FsImportTest` `JsonDemo` `LogTest` `CompressFileTest`. Dos hallazgos, ninguno del
+  producto: `FsPowerCut` no avisaba de nada (arreglado, 863608d) y `FileOpsTest`
+  chocó con `lastModified`, que **destapó documentación rancia** — el manual seguía
+  describiendo el FS plano de antes de H2 (hallazgo 13, ef04d10). El torturador de
+  corte de corriente llegó a 19.806 de 20.000 sin corromper el contador; el corte
+  físico se prueba aparte.
 
 ### a2 · Metro RP2350B
 Variante B: 48 GPIO, 16 MB flash, **PSRAM 8 MB**, NeoPixel. **Misma imagen que a1.**
