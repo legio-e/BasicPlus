@@ -153,6 +153,15 @@ while IFS='|' read -r g bp desc modo; do
         fi
         continue
     fi
+    # Un thread que muere por excepción NO cambia el código de salida: el thread
+    # termina, Main sigue y el proceso sale 0. Es la semántica de las DOS VMs
+    # (medido 3-ago), igual que en Java, y no se toca. Pero este arnés puntúa por
+    # el código de salida, así que sin esta red cualquier fallo que ocurra DENTRO
+    # de un worker saldría en verde. El aviso sí se imprime: nos agarramos a él.
+    if printf '%s' "$salida" | grep -qi 'no atrapada'; then
+        printf '  FALLA     %-21s murio un thread por excepcion (la VM sale 0 igual)\n' "$nombre"
+        falla=$((falla+1)); continue
+    fi
     if [ $rc -eq 0 ]; then
         printf '  OK        %-21s %s\n' "$nombre" "$desc"; ok=$((ok+1))
     else
