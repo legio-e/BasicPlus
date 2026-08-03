@@ -1,4 +1,19 @@
-// stacktrace.bp — provoca una excepción no atrapada para ver el trace.
+// stacktrace.bp — cómo viaja una excepción por la pila de llamadas.
+//
+// Se lanza tres niveles abajo (nivelTres) y se atrapa arriba del todo, en Main:
+// nadie en medio la toca. Lo que hay que ver es que el mensaje llega INTACTO
+// desde donde se lanzó, y que el programa termina de forma REGULAR.
+//
+// Antes este ejemplo dejaba la excepción sin atrapar "para ver el trace", y en
+// H13 se descubrió que la traza sólo la imprime la VM del PC: en la placa te
+// quedabas con un código de salida y nada más. Un ejemplo que muere sin decir
+// nada no enseña nada. Cuando la VM-C imprima traza, este es el sitio donde se
+// verá.
+//
+// Esperado:
+//   arrancando
+//   atrapada en Main: boom desde nivelTres
+//   fin
 
 module StackTrace
 
@@ -15,7 +30,13 @@ module StackTrace
   end nivelUno
 
   function Main()
-    nivelUno()
+    print "arrancando"
+    try
+      nivelUno()
+    catch e: Core.Exception
+      print "atrapada en Main:", e.msg
+    endtry
+    print "fin"
   end Main
 
 end StackTrace

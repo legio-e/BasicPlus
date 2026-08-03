@@ -84,7 +84,7 @@ L|samples/Field8Test.bp|campos de 8 bytes (long/double)
 L|samples/Wrap8Test.bp|envoltorios de 8 bytes cross-module
 L|samples/PropLongTest.bp|properties long/double
 X|samples/ExcCatchTest.bp|try/catch y jerarquia de excepciones
-X|samples/stacktrace.bp|la traza cuando algo revienta (TERMINA MAL a proposito)|peta
+X|samples/stacktrace.bp|una excepcion sube 3 niveles y se atrapa arriba, con su mensaje
 X|samples/OoSmoke.bp|humo de OO
 X|samples/StrOps348.bp|operaciones de cadena (#348)
 X|samples/MathOps348.bp|operaciones de Math (#348)
