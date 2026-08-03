@@ -239,9 +239,9 @@ y no sirve para vigilar fugas. El instrumento es la línea de **fin de RUN**.
 
 **Tandas cerradas (3-ago, ZIP `bff6e337`):**
 
-- ✅ **Humo** (6): `OoSmoke` `ExcCatchTest` `StrOps348` `MathOps348` `PathOps348`
+- ✅ **Tanda 1 · Humo** (6): `OoSmoke` `ExcCatchTest` `StrOps348` `MathOps348` `PathOps348`
   `stacktrace`. Sin hallazgos.
-- ✅ **Memoria** (10, el tren en orden). Los diez con
+- ✅ **Tanda 2 · Memoria** (10, el tren en orden). Los diez con
   `fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar;
   plataforma: 0 vivos)` — **confirmación en placa de #357**, y no en un test suelto
   sino en toda la batería, con `MemT5_Gc` (~440 KB de churn) y
@@ -249,7 +249,7 @@ y no sirve para vigilar fugas. El instrumento es la línea de **fin de RUN**.
   La plataforma no se movió: `RTOS libre` 15 KB y marca de agua 11 de 16 KB
   **idénticos** a los de después de la tanda de humo. 16 RUN acumulados en la misma
   sesión, ninguno deja nada.
-- ✅ **Ficheros** (8): `FileTest` `FileOpsTest` `FileBytesTest` `FsPowerCut`
+- ✅ **Tanda 3 · Ficheros** (8): `FileTest` `FileOpsTest` `FileBytesTest` `FsPowerCut`
   `FsImportTest` `JsonDemo` `LogTest` `CompressFileTest`. Dos hallazgos, ninguno del
   producto: `FsPowerCut` no avisaba de nada (arreglado, 863608d) y `FileOpsTest`
   chocó con `lastModified`, que **destapó documentación rancia** — el manual seguía
