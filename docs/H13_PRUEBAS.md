@@ -344,6 +344,15 @@ imagen única, demostrada.
   decidía si fallaba era el estado del heap (si el GC había reciclado ya ese hueco),
   no el arranque. De ahí que pareciera ir y no ir sin tocar nada.
 
+  **Pasada en las DOS configuraciones de memoria, y sin querer.** La primera vuelta
+  fue con `PSRAM=0` —la placa se había quedado así del diagnóstico de #369— o sea
+  con **277 KB de heap en SRAM**. Al darnos cuenta se activó la PSRAM y se repitió
+  entera: **7,5 MB de heap en PSRAM**. Verde las dos veces. No son la misma prueba:
+  cambia el camino de código del heap y cambia lo que aprieta —con 277 KB el GC
+  trabaja de verdad; con 7,5 MB sobra sitio para tapar una fuga, y por eso ahí el
+  instrumento **no** es que el heap no crezca sino el contador de `fin de RUN`
+  (`0 bloques sin liberar`, que es lo que salió).
+
 - ⚡ **`FsPowerCut` con CORTE DE CORRIENTE REAL** — lo que en la a1 quedó pendiente
   como «se prueba aparte». Eduardo desenchufó a lo bestia con el contador por
   debajo de 1000 (no había llegado a imprimir el primer hito). Al rearrancar:
