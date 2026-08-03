@@ -112,7 +112,11 @@ ENV, #311).
 - [ ] E6 Formatear la zona
 - [ ] E7 Persistencia tras apagar
 - [ ] E8 **Pack EJECUTABLE (#310)**: `samples/sampleproject` (`main: App`) → grabar y
-      ejecutar desde el pack, leyendo un recurso de dentro
+      ejecutar la app **desde el pack**, con su llamada cross-module (`App` → `Util`)
+      resolviéndose dentro. ⚠️ *Corrección: antes esto pedía «leyendo un recurso de
+      dentro». Los packs de V4 llevan MÓDULOS, no recursos — los `resources/` se
+      suben aparte a `/app/<ruta>`. Servirlos desde el pack es #362, V5.*
+- [ ] E9 `resources/` del proyecto: `leeme.txt` aparece en `/app/…` tras el Run
 
 ### F · Depuración
 - [ ] F1 Poner un breakpoint y que pare ahí
@@ -274,6 +278,12 @@ y no sirve para vigilar fugas. El instrumento es la línea de **fin de RUN**.
   `PropLongTest`. Sin hallazgos. Aquí entran las tuplas (que en el ensanchado
   4→8B se quedaron olvidadas y hubo que cazar), los campos y properties de 8
   bytes, y los tipos estrechos: todo lo que toca anchos en placa.
+- ✅ **Tanda 8 · Pack ejecutable, EN EL PC** (#310, camino de host): `sampleproject`
+  con `out: pack` → se sube **un solo `.pack` de 8 KB**, la app arranca desde dentro
+  y la llamada cross-module `App` → `Util` se resuelve ahí mismo. Corrió contra el
+  backend **VM Java**, no contra la placa (`handshake bpvm-java 1.0`, socket en
+  `localhost`). ⏳ **Falta el mismo proyecto EN LA PICO**, que es donde #310 se
+  demuestra, y con él el **AOT ARM** (`aot: {target: arm}` no pinta nada en el PC).
 - ✅ **Tanda 7 · Dispositivo**: `blink` — GPIO real en GP25. El único periférico
   que se prueba siempre; el resto de dispositivos no se ha tocado en V4 y probarlos
   es lo más caro (decisión de Eduardo al montar la lista).
