@@ -147,3 +147,6 @@ dist/firmware/*.bin
 # H13 y lo que se descarga el usuario son el mismo fichero.
 dist/BasicPlus-*-win/
 dist/BasicPlus-*-win.zip
+
+# Imagen de DIAGNOSTICO (H13/#17): binario grande y temporal, no va al repo.
+dist/diag/

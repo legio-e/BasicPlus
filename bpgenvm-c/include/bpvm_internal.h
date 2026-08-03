@@ -595,6 +595,15 @@ int  bpvm_events_revive_terminated(bpvm_t* vm);
 /* Paso 3 / contrato B — ¿es `r` un handle a un objeto LIBERADO? Solo los handles
  * (con TAG) pueden morir; null/constantes nunca. Lo consulta el deref de PROGRAMA
  * (opcodes de campo/array/invoke) para gritar "objeto eliminado". */
+/* H13/#17 — cuando el deref grita, DECIR QUÉ handle. El mensaje "referencia a
+ * objeto eliminado" a secas nos costó una tarde entera de cacería: no distingue
+ * un truncamiento de una referencia caducada de verdad, y son bugs distintos con
+ * arreglos distintos. Los tres números que hacen falta ya los tiene la VM en la
+ * mano. Implementado en bpvm_util.c para no engordar este inline (sólo la rama
+ * que ya va a abortar paga la llamada). */
+void bpvm_uaf_report(uint32_t idx, uint32_t gen_handle, uint32_t gen_slot,
+                     uint32_t handle_next);
+
 static inline int bpvm_ref_dead(const bpvm_t* vm, bpref_t r) {
     if ((r.v & BPVM_HANDLE_TAG) == 0u) return 0;
     uint32_t idx = (uint32_t) r.v & ~BPVM_HANDLE_TAG;
@@ -602,8 +611,10 @@ static inline int bpvm_ref_dead(const bpvm_t* vm, bpref_t r) {
     /* Paso 4b: compara la gen del handle con la del slot. Monotónico → todo handle
      * lleva gen=0, equivale al dead-flag; en 4c (reuso) un slot reciclado tiene gen
      * bumpeada y un handle rancio no matchea → grita. */
-    return (vm->handle_gen != NULL && idx > 0u && idx < vm->handle_next
-            && vm->handle_gen[idx] != gen) ? 1 : 0;
+    if (vm->handle_gen == NULL || idx == 0u || idx >= vm->handle_next) return 0;
+    if (vm->handle_gen[idx] == gen) return 0;
+    bpvm_uaf_report(idx, gen, vm->handle_gen[idx], vm->handle_next);
+    return 1;
 }
 
 /* V4 — reconstruye el HANDLE de 64b (gen VIVA<<32 | idx|TAG) para un `ref` uint32
