@@ -8,7 +8,11 @@ cmake_minimum_required(VERSION 3.16)
 set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../third_party")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(bpvm_p4_netlog)
+# El binario se llama como la PLACA, no como una fase del desarrollo: se publica
+# como bpvm_esp32p4.bin y sirve a las dos P4 (kit y Waveshare; el panel sale del
+# ENV, #311). Se llamo "bpvm_p4_netlog" mientras el enlace con el IDE era por
+# Ethernet; ese canal esta apagado desde V4 (ver BPVM_P4_NETLOG en main.c).
+project(bpvm_esp32p4)
 
 # G4 — flags GLOBALES (a TODOS los componentes, incluida la LVGL):
 #  - BPVM_BOARD_P4 -> LV_COLOR_DEPTH 16 (RGB565) en include/lv_conf.h, como el DK2.

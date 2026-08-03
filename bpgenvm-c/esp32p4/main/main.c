@@ -83,6 +83,38 @@ void net_logf(const char *fmt, ...)
     if (s_sock >= 0) send(s_sock, buf, n, 0);
 }
 
+/* ===================================================================
+ * CANAL DE LOG POR RED (net_logf → 192.168.2.1:5555) — APAGADO EN V4
+ * ===================================================================
+ * Viene del bring-up del P4, cuando el enlace con el IDE era por Ethernet.
+ * Después se añadió el transporte por UART0 (#138) para que UNA MISMA IMAGEN
+ * sirviera a las dos placas P4 —la del kit, con Ethernet, y la Waveshare, que no
+ * lo tiene— y desde entonces la red aquí sólo alimentaba ese canal de
+ * diagnóstico. Es historia, no una función del producto.
+ *
+ * Lo que costaba en la imagen que se publica (transporte UART, el de por
+ * defecto): `wire_task_uart` esperaba hasta CINCO SEGUNDOS a que subiera el
+ * enlace para que esos logs llegaran. En la Waveshare, sin PHY, ese enlace no
+ * sube NUNCA → cinco segundos de retraso en CADA encendido, esperando un canal
+ * que nadie escucha.
+ *
+ * Se apaga con un interruptor y NO se borra: publicamos las fuentes, así que
+ * quien lo quiera compila con -DBPVM_P4_NETLOG=1 y lo tiene entero. Se prefirió
+ * el interruptor a comentar las líneas por una razón concreta: comentando sólo
+ * las llamadas quedan cuatro funciones estáticas sin usar, y este proyecto
+ * compila con -Werror → no enlazaría. Así el código sigue vivo y compilable.
+ *
+ * OJO: el wire por TCP (BPVM_P4_WIRE=tcp) SÍ necesita la red. Hay un #error
+ * abajo que lo dice en vez de dejarte un binario que no conecta.
+ * =================================================================== */
+#ifndef BPVM_P4_NETLOG
+#define BPVM_P4_NETLOG 0
+#endif
+#if defined(BPVM_P4_WIRE_TCP) && !BPVM_P4_NETLOG
+#error "BPVM_P4_WIRE=tcp necesita la red: compila tambien con -DBPVM_P4_NETLOG=1"
+#endif
+
+#if BPVM_P4_NETLOG
 /* ===== Ethernet — COMÚN a ambos transportes. En TCP lleva el wire (:3333); en
  * UART lleva SOLO los logs (net_logf → :5555) como red de seguridad. (Init
  * verificada en bring-up: IP101 / RMII, pines EV board.) ===== */
@@ -166,6 +198,8 @@ static void tcp_log_task(void *arg)
     }
 }
 
+#endif  /* BPVM_P4_NETLOG */
+
 #ifdef BPVM_P4_WIRE_TCP
 /* ---- Servidor del wire v1: la VM corre AQUÍ (stack holgado). ----
  * Prepara FS + stdlib (independiente del canal de log), abre el socket de
@@ -208,7 +242,9 @@ static void wire_task_uart(void *arg)
     /* Espera Link Up (con timeout) para que net_logf (red de seguridad) llegue al
      * PC antes de arrancar. Si la placa no tiene Ethernet, tras el timeout arranca
      * igual (sin logs por red). */
+#if BPVM_P4_NETLOG
     xEventGroupWaitBits(s_events, LINK_UP_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(5000));
+#endif
 
     board_mgr_esp32_boot();
     const bpvm_boot_status_t* bs = board_boot_status();
@@ -282,6 +318,7 @@ void app_main(void)
 
     s_events = xEventGroupCreate();
 
+#if BPVM_P4_NETLOG
     /* Ethernet — COMÚN: en TCP transporta el wire; en UART transporta SOLO los logs
      * (net_logf → :5555) como red de seguridad. B.5 (#138, 2-jul): NO-FATAL — si la
      * placa no tiene PHY (una P4 sin Ethernet), eth_init falla y seguimos SIN red
@@ -321,6 +358,7 @@ void app_main(void)
                       "(compila con BPVM_P4_WIRE=uart para esta placa)");
 #endif
     }
+#endif  /* BPVM_P4_NETLOG */
 
 #ifdef BPVM_P4_WIRE_TCP
     /* Wire por TCP. */
