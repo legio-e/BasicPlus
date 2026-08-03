@@ -1,0 +1,106 @@
+// ThreadFieldTest.bp — H13: un thread ESCRIBE en su propio campo, y se comprueba.
+//
+// POR QUÉ EXISTE: en toda la batería no había ni un solo programa que leyera de
+// vuelta un campo escrito DENTRO de run(). Se probaba que los threads arrancan,
+// que se sincronizan y que terminan — pero no que `this` llegue bien al método.
+// Por ese hueco #369 sobrevivió hasta la fase de placas: el frame inicial que
+// fabrica el spawn se había quedado con el layout de refs de 4 bytes, así que
+// run() leía su `this` cuatro bytes por debajo de su propia pila. La mitad baja
+// (el índice) salía bien y la alta (la generación) venía de memoria ajena.
+//
+// LA TRAMPA, Y POR QUÉ ESTE TEST HACE CHURN PRIMERO: con la generación a cero el
+// handle COINCIDE por casualidad mientras el GC no haya reciclado ese hueco. En
+// una VM recién arrancada todo está a cero, así que el fallo NO se ve. Sólo
+// aparece cuando el hueco ya se reusó. De ahí la fase 1: se genera basura a
+// mansalva para forzar el reciclaje ANTES de arrancar los threads. Sin eso el
+// programa pasa con el bug vivo, que es justo lo que nos costó un día entero.
+//
+// Vale para las dos VMs y para placa. La salida es determinista: sólo veredictos.
+module ThreadFieldTest
+
+  public const BASURA:  integer := 20000   // objetos usar-y-tirar: fuerzan reciclaje de huecos
+  public const VUELTAS: integer := 200     // 1+2+...+200 = 20100, la suma que tiene que salir
+  public const ESPERADO: integer := 20100
+
+  public class Celda
+    public property v: integer
+    public function Celda(v_: integer)
+      v := v_
+    end Celda
+  end Celda
+
+  // El worker escribe DOS campos: uno entero y uno de referencia (string). Si el
+  // `this` que recibe run() estuviera mal, el entero sale a cero o revienta, y el
+  // string se pierde: dos síntomas distintos del mismo fallo.
+  public class Sumador extends Thread
+    var total: integer
+    var marca: string
+    var factor: integer
+    public function Sumador(factor_: integer)
+      super(1000)
+      total := 0
+      marca := "sin empezar"
+      factor := factor_
+    end Sumador
+    public function run()
+      var s: integer := 0
+      var i: integer := 1
+      while i <= VUELTAS do
+        var c: Celda := Celda(i)
+        s := s + c.v
+        i := i + 1
+      endwh
+      total := s * factor
+      marca := "hecho"
+    end run
+    public function getTotal(): integer
+      return this.total
+    end getTotal
+    public function getMarca(): string
+      return this.marca
+    end getMarca
+  end Sumador
+
+  function Main()
+    var fallos: integer := 0
+
+    // --- fase 1: churn. Sin esto el test pasa aunque el bug esté vivo.
+    var k: integer := 0
+    while k < BASURA do
+      var tirar: Celda := Celda(k)
+      k := k + 1
+    endwh
+    print "huecos reciclados: OK"
+
+    // --- fase 2: dos threads, cada uno escribiendo en lo suyo. Van con FACTOR
+    //     distinto a propósito: si los dos acabaran escribiendo en el mismo
+    //     objeto —`this` cruzado— los totales saldrían iguales y se vería aquí.
+    var w1: Sumador := Sumador(1)
+    var w2: Sumador := Sumador(2)
+    w1.start()
+    w2.start()
+    w1.join()
+    w2.join()
+
+    if (w1.getTotal() == ESPERADO) and (w2.getTotal() == ESPERADO * 2) then
+      print "cada thread escribe en SU campo entero: OK"
+    else
+      print "campo entero MAL: w1=" + intToString(w1.getTotal()) + " (esperado " + intToString(ESPERADO) + ") w2=" + intToString(w2.getTotal()) + " (esperado " + intToString(ESPERADO * 2) + ")"
+      fallos := fallos + 1
+    endif
+
+    if (w1.getMarca() == "hecho") and (w2.getMarca() == "hecho") then
+      print "campo de referencia escrito en run(): OK"
+    else
+      print "campo de referencia MAL: w1='" + w1.getMarca() + "' w2='" + w2.getMarca() + "'"
+      fallos := fallos + 1
+    endif
+
+    if fallos == 0 then
+      print "=== ThreadFieldTest: 3 de 3 ==="
+    else
+      print "=== ThreadFieldTest: " + intToString(fallos) + " FALLO(S) ==="
+      throw RuntimeError("un thread no escribe bien en sus campos")
+    endif
+  end Main
+end ThreadFieldTest

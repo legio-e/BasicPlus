@@ -71,6 +71,7 @@ E|samples/EvNest.bp|un handler dispara otro evento (reentrada)
 E|samples/EvThrow.bp|un handler que atrapa lo suyo: el despacho sigue y acaba bien
 E|samples/EvFin.bp|#342: el evento del thread que muere no se pierde
 E|samples/h5cevuse.bp|eventos CROSS-MODULE
+T|samples/ThreadFieldTest.bp|#369: el thread ESCRIBE en su campo (churn antes, o no se ve)
 T|samples/AsyncDemo.bp|#325: Thread(obj::metodo(args))
 T|samples/ThreadTrasMain.bp|#346: acaba cuando acaban TODOS los threads
 T|samples/mutextest.bp|mutex bajo contencion
