@@ -75,6 +75,11 @@ T|samples/ThreadTrasMain.bp|#346: acaba cuando acaban TODOS los threads
 T|samples/mutextest.bp|mutex bajo contencion
 T|samples/synclisttest.bp|SyncList productor/consumidor
 T|samples/preempttest.bp|worker CPU-bound: la consola sigue viva
+T|samples/synctest.bp|sync property de CLASE (get/set envueltos en Mutex)
+T|samples/modpropsync.bp|sync property de MODULO (el Mutex vive en un global)
+T|samples/l2app.bp|sync property CROSS-MODULE (el lock, en el modulo dueno)
+T|samples/paralleltest.bp|bloque parallel/case/default/endpar
+T|samples/paralleltest_sugar.bp|el azucar del parallel, con default
 L|samples/TupleFirstClass.bp|tuplas first-class
 L|samples/TupCrossTest.bp|tuplas cruzando modulo
 L|samples/DefaultParams.bp|parametros con valor por defecto
@@ -127,7 +132,11 @@ while IFS='|' read -r g bp desc modo; do
     # La stdlib AL LADO del .mod: es lo que la VM busca, y en la placa está en
     # /lib. Sin esto un programa que importe Json/Log/Compress muere al cargar y
     # parece un fallo del sample cuando el que se ha equivocado es el arnés.
-    cp "$STD"/*.mod "$WORK/" 2>/dev/null
+    # -n: NO pisar lo que acaba de compilar el frontend. bpstdlib/ arrastra
+    # .mod rancios (v5) de módulos que NO son stdlib —L2Lib entre ellos—, y un
+    # `cp` a secas sustituía el módulo recién generado por el caducado. El
+    # sample parecía roto y el roto era el arnés.
+    cp -n "$STD"/*.mod "$WORK/" 2>/dev/null
 
     salida="$(cd "$WORK" && timeout 90 "$VMC" "$(basename "$mod")" 2>&1)"; rc=$?
     # Los que TERMINAN mal a propósito (excepción sin atrapar) aprueban al revés.
