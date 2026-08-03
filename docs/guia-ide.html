@@ -192,16 +192,25 @@
 <h1>BasicPlus — Guía del IDE</h1>
 <p style="color:var(--fg-muted)">
   BpIde es el entorno de desarrollo de BasicPlus: editor, compilador,
-  ejecución local y remota, explorador de la placa y depurador — en un
-  único jar sin instalación.
+  ejecución local y remota, explorador de la placa y depurador.
 </p>
 
 <h2 id="arrancar">1. Arrancar el IDE</h2>
-<pre><code>java -jar BpIde-1.0-SNAPSHOT-shaded.jar</code></pre>
 <p>
-  No hay instalador ni configuración previa: el jar lleva dentro el
-  compilador, el cliente de la VM y este manual (<strong>Help →
-  Manual</strong>, F1).
+  <strong>No hay instalador</strong>: se descomprime el ZIP donde quieras y se
+  arranca. Lo único que hace falta tener puesto es <strong>Java</strong>.
+</p>
+<pre><code>bpide.bat</code></pre>
+<p>o, si lo prefieres a mano:</p>
+<pre><code>java -jar BpIde-4.0.jar</code></pre>
+<p>
+  Junto al <code>.jar</code> viajan las carpetas de las que el IDE tira solo,
+  <strong>sin configurar nada</strong>: la biblioteca de packs
+  (<code>packs/</code>, §10), el micro simulado (<code>bin/</code>, §6.1), la
+  documentación (<code>docs/</code>, la que abre <strong>Help →
+  Documentación</strong> con F1) y las imágenes de firmware de las placas
+  (<code>firmware/</code>). Si mueves el jar suelto a otro sitio, deja de
+  encontrarlas — lo que se mueve es la carpeta entera.
 </p>
 
 <h2 id="ventana">2. La ventana</h2>
@@ -295,13 +304,48 @@
   ha de correr también en placa.
 </p>
 
-<h3 id="aot">5.1 <code>native</code> (AOT): instalar el toolchain ARM</h3>
+<h3 id="aot">5.1 <code>native</code> (AOT): el compilador de C</h3>
 <p>
   Si el programa usa <code>function native</code>, en <em>Run on Device</em> el
   IDE compila esas funciones a código máquina (<code>.mdn</code>) y lo sube
-  junto al <code>.mod</code> — en las placas ARM (RP2350 y STM32). Para ese
-  paso hace falta tener instalado en el PC el <strong>toolchain ARM
-  bare-metal</strong> (<code>arm-none-eabi-gcc</code>):
+  junto al <code>.mod</code>. Para ese paso hace falta un <strong>compilador de
+  C cruzado</strong> — y <strong>no viene con BasicPlus</strong>: no es nuestro,
+  así que se instala aparte. Cuál, depende de la placa:
+</p>
+<table>
+  <tr><th>Placas</th><th>Compilador</th><th>De dónde sale</th></tr>
+  <tr>
+    <td>RP2350 (Pico 2, Metro) y STM32</td>
+    <td><code>arm-none-eabi-gcc</code></td>
+    <td><a href="https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads">Arm
+        GNU Toolchain</a> — y si ya usas STM32CubeIDE o el pico-sdk, ya lo tienes</td>
+  </tr>
+  <tr>
+    <td>ESP32-P4</td>
+    <td><code>riscv32-esp-elf-gcc</code></td>
+    <td>viene <strong>dentro del ESP-IDF</strong>
+        (<a href="https://docs.espressif.com/projects/esp-idf/en/stable/esp32p4/get-started/">guía
+        de instalación de Espressif</a>) — <strong>versión 6 o posterior</strong></td>
+  </tr>
+  <tr>
+    <td>ESP32-S3</td>
+    <td>—</td>
+    <td>en esta versión <code>native</code> corre <em>interpretado</em> en el S3</td>
+  </tr>
+</table>
+<p class="warn">
+  <strong>Lo del ESP-IDF hay que decirlo claro.</strong> Programar en BasicPlus
+  <em>no</em> exige tener el ESP-IDF instalado — se puede tener un P4, escribir,
+  subir y ejecutar sin haber visto nunca una línea de C. El ESP-IDF hace falta
+  <strong>sólo</strong> si quieres usar <code>function native</code> en esa placa,
+  y entonces se instala aparte por la guía de Espressif. Y que sea
+  <strong>la versión 6 o posterior</strong>: el P4 necesita un compilador RISC-V
+  que las versiones anteriores no traen en condiciones, y compilar con uno viejo
+  da problemas en vez de un error claro. Si tienes varias instaladas, el IDE
+  coge la más nueva.
+</p>
+<p>
+  Para el ARM, si lo instalas a mano:
 </p>
 <ul>
   <li><strong>Windows</strong> — el instalador del <em>Arm GNU Toolchain</em>
@@ -320,10 +364,11 @@
   <code>.bpbuild</code> del proyecto (sección <code>"aot"</code>).
 </p>
 <p class="note">
-  El toolchain es <strong>opcional</strong>: si no está, el IDE avisa y el
-  programa corre <em>interpretado</em> — mismo comportamiento, menos velocidad
-  en los kernels de cómputo. En los ESP32 (S3 y P4) <code>native</code> corre
-  interpretado en esta versión.
+  El compilador es <strong>opcional</strong>, y esto es lo importante: si no
+  está, <strong>no se rompe nada</strong>. El IDE avisa y esas funciones corren
+  <em>interpretadas</em> — mismo comportamiento, menos velocidad en los kernels
+  de cómputo. Todo lo demás (compilar, subir, ejecutar, depurar, packs, la
+  interfaz gráfica) funciona igual sin haber instalado nada.
 </p>
 
 <h2 id="placa">6. Conectarse a la placa</h2>

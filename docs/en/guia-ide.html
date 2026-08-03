@@ -197,10 +197,21 @@
 </p>
 
 <h2 id="arrancar">1. Starting the IDE</h2>
-<pre><code>java -jar BpIde-1.0-SNAPSHOT-shaded.jar</code></pre>
 <p>
-  There is no installer and no prior setup: the jar carries the compiler,
-  the VM client and this manual (<strong>Help → Manual</strong>, F1).
+  <strong>There is no installer</strong>: unzip it wherever you like and run it.
+  The only thing you need already in place is <strong>Java</strong>.
+</p>
+<pre><code>bpide.bat</code></pre>
+<p>or, by hand:</p>
+<pre><code>java -jar BpIde-4.0.jar</code></pre>
+<p>
+  Next to the <code>.jar</code> travel the folders the IDE finds by itself,
+  <strong>with nothing to configure</strong>: the pack library
+  (<code>packs/</code>, §10), the simulated micro (<code>bin/</code>, §6.1), the
+  documentation (<code>docs/</code>, what <strong>Help →
+  Documentación</strong> opens with F1) and the boards' firmware images
+  (<code>firmware/</code>). Move the bare jar somewhere else and it stops
+  finding them — what you move is the whole folder.
 </p>
 
 <h2 id="ventana">2. The window</h2>
@@ -291,14 +302,48 @@
   board.
 </p>
 
-<h3 id="aot">5.1 <code>native</code> (AOT): installing the ARM toolchain</h3>
+<h3 id="aot">5.1 <code>native</code> (AOT): the C compiler</h3>
 <p>
-  If the program uses <code>function native</code>, on <em>Run on
-  Device</em> the IDE compiles those functions to machine code
-  (<code>.mdn</code>) and uploads it next to the <code>.mod</code> — on the
-  ARM boards (RP2350 and STM32). That step requires the <strong>bare-metal
-  ARM toolchain</strong> (<code>arm-none-eabi-gcc</code>) installed on the
-  PC:
+  If the program uses <code>function native</code>, on <em>Run on Device</em> the
+  IDE compiles those functions to machine code (<code>.mdn</code>) and uploads it
+  next to the <code>.mod</code>. That step needs a <strong>cross C
+  compiler</strong> — and it <strong>does not ship with BasicPlus</strong>: it is
+  not ours, so you install it separately. Which one depends on the board:
+</p>
+<table>
+  <tr><th>Boards</th><th>Compiler</th><th>Where it comes from</th></tr>
+  <tr>
+    <td>RP2350 (Pico 2, Metro) and STM32</td>
+    <td><code>arm-none-eabi-gcc</code></td>
+    <td><a href="https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads">Arm
+        GNU Toolchain</a> — and if you already use STM32CubeIDE or the pico-sdk,
+        you already have it</td>
+  </tr>
+  <tr>
+    <td>ESP32-P4</td>
+    <td><code>riscv32-esp-elf-gcc</code></td>
+    <td>ships <strong>inside ESP-IDF</strong>
+        (<a href="https://docs.espressif.com/projects/esp-idf/en/stable/esp32p4/get-started/">Espressif's
+        install guide</a>) — <strong>version 6 or later</strong></td>
+  </tr>
+  <tr>
+    <td>ESP32-S3</td>
+    <td>—</td>
+    <td>in this version <code>native</code> runs <em>interpreted</em> on the S3</td>
+  </tr>
+</table>
+<p class="warn">
+  <strong>About ESP-IDF, to be clear.</strong> Programming in BasicPlus does
+  <em>not</em> require ESP-IDF — you can own a P4 and write, upload and run
+  without ever seeing a line of C. ESP-IDF is needed <strong>only</strong> if you
+  want <code>function native</code> on that board, and then you install it
+  separately following Espressif's guide. And make it <strong>version 6 or
+  later</strong>: the P4 needs a RISC-V compiler that earlier versions do not
+  carry properly, and building with an old one gives you trouble rather than a
+  clear error. If you have several installed, the IDE takes the newest.
+</p>
+<p>
+  For ARM, if you install it by hand:
 </p>
 <ul>
   <li><strong>Windows</strong> — the <em>Arm GNU Toolchain</em>
@@ -318,10 +363,11 @@
   <code>"aot"</code> section).
 </p>
 <p class="note">
-  The toolchain is <strong>optional</strong>: without it, the IDE warns and
-  the program runs <em>interpreted</em> — same behavior, less speed on
-  compute kernels. On the ESP32s (S3 and P4) <code>native</code> runs
-  interpreted in this version.
+  The compiler is <strong>optional</strong>, and this is the point: if it is not
+  there, <strong>nothing breaks</strong>. The IDE warns and those functions run
+  <em>interpreted</em> — same behaviour, less speed in compute kernels.
+  Everything else (compiling, uploading, running, debugging, packs, the
+  graphical interface) works the same without installing anything.
 </p>
 
 <h2 id="placa">6. Connecting to the board</h2>
