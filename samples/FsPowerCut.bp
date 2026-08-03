@@ -16,6 +16,19 @@
 // a propósito, para NO depender de Str.parse* (tuplas) — hoy las tuplas tienen
 // un bug de memoria pendiente (revisión aparte). El contador es siempre >= 0.
 //
+// ⚠️ ESTE PROGRAMA NO ACABA SOLO EN SEGUIDA, Y DESGASTA LA FLASH. Cada commit son
+// dos operaciones de flash (escribir el temporal + renombrar), así que una tanda de
+// 2000 son 4000. Es lo que se pide de un torturador, pero conviene saberlo: no lo
+// dejes corriendo horas "por si acaso".
+//
+// PARA PARARLO: Stop en el menú Run (Ctrl+F2) o `kill` en la consola del IDE.
+// Pararlo NO invalida nada — el contador es persistente y la próxima ejecución
+// sigue donde ésta lo dejó.
+//
+// EL CONTADOR ES ACUMULATIVO: `iters` no es "para en 2000", es "2000 MÁS que la
+// vez anterior". Está pensado así porque el test consiste en cortarle la corriente
+// y relanzarlo; si parase siempre en el mismo número no se vería la progresión.
+//
 // PROCEDIMIENTO EN PLACA:
 //   1) Run on Device. Verás "ARRANQUE: contador recuperado = N" y commits.
 //   2) CORTA la corriente en cualquier momento (mejor mientras imprime commits:
@@ -50,7 +63,11 @@ module FsPowerCut
   function main()
     var path: string := "pcut.txt"
     var tmp:  string := "pcut.tmp"
-    var iters: integer := 20000        // ~decenas de seg en flash real; si acaba, relanza
+    // 2000 y no 20000: cada commit son DOS operaciones de flash, así que una tanda
+    // son 4000. Con 20000 la tanda se iba a varios minutos y desgastaba de más para
+    // lo que aporta — para cortar la corriente sobran unos segundos de escritura.
+    // Y como el contador es acumulativo, relanzar suma: no se pierde nada.
+    var iters: integer := 2000
 
     // --- Fase de recuperación: leer y VALIDAR el contador comprometido ---
     var bootVal: integer := 0
@@ -64,6 +81,10 @@ module FsPowerCut
       bootVal := pv
     endif
     print "=== ARRANQUE: contador recuperado = " + intToString(bootVal) + " ==="
+    print "    Voy a hacer " + intToString(iters) + " commits, hasta " + intToString(bootVal + iters) + "."
+    print "    CORTA LA CORRIENTE cuando quieras: de eso va la prueba."
+    print "    Para pararlo sin cortar: Stop (Ctrl+F2) o 'kill' en la consola."
+    print "    El contador es acumulativo — relanzar sigue donde lo dejes."
 
     // --- Fase de tortura: reescritura atómica en bucle ---
     var i: integer := bootVal
