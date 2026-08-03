@@ -666,11 +666,22 @@ static int pico_pico_set_cpu_freq_mhz_impl(int mhz) {
     return ok ? 1 : 0;
 }
 
-/* paso 4 cierre — causa del último reset. El RP2350 no expone tanta granularidad
- * como el STM32: watchdog_caused_reboot() distingue el reset por watchdog del
- * resto (power-on / BOOTSEL / run). Registro HW, sin RAM retenida. */
+/* paso 4 cierre — causa del último reset. Registro HW, sin RAM retenida.
+ *
+ * OJO con el watchdog del RP2350: el reinicio por software TAMBIÉN pasa por él.
+ * El verbo RESET del wire llama a watchdog_reboot() (repl_v1.c), así que un
+ * reinicio pedido desde el IDE —cambiar particiones, por ejemplo— dejaba el
+ * INFO diciendo "watchdog", que se lee como un cuelgue. En H13 (3-ago) eso mandó
+ * a buscar un cuelgue inexistente, y peor: con el mismo texto para las dos cosas,
+ * la prueba del watchdog de verdad (WdtTest/WdtDemo) no demostraba nada.
+ *
+ * watchdog_enable_caused_reboot() del SDK sí los separa: sólo es cierto cuando
+ * disparó un watchdog ARMADO con watchdog_enable(), no cuando alguien pidió el
+ * reinicio con watchdog_reboot(). El orden importa — el caso específico primero. */
 static const char* pico_pico_reset_cause_impl(void) {
-    return watchdog_caused_reboot() ? "watchdog" : "power-on/run";
+    if (watchdog_enable_caused_reboot()) return "watchdog";        /* disparó de verdad */
+    if (watchdog_caused_reboot())        return "reinicio pedido"; /* RESET del IDE */
+    return "power-on/run";
 }
 
 static const bpvm_pico_backend_t s_pico_pico_backend = {

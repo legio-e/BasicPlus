@@ -67,7 +67,7 @@ G|bpgenvm-c/samples/ChartDemo.bp|widget Chart (NUEVO en V4)|gui
 E|samples/EvFull.bp|el ciclo completo de un evento
 E|samples/EvOrder.bp|se atienden en el orden en que se disparan
 E|samples/EvNest.bp|un handler dispara otro evento (reentrada)
-E|samples/EvThrow.bp|un handler que lanza y no atrapa (TERMINA MAL a proposito)|peta
+E|samples/EvThrow.bp|un handler que atrapa lo suyo: el despacho sigue y acaba bien
 E|samples/EvFin.bp|#342: el evento del thread que muere no se pierde
 E|samples/h5cevuse.bp|eventos CROSS-MODULE
 T|samples/AsyncDemo.bp|#325: Thread(obj::metodo(args))
