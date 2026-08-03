@@ -1,1 +1,1 @@
-java -jar C:\lenguajes\pm\BpIde\target\BpIde-1.0-SNAPSHOT.jar
+java -jar C:\lenguajes\pm\BpIde\target\BpIde-4.0.jar

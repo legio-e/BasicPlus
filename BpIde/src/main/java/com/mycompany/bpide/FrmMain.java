@@ -17,12 +17,12 @@ import java.awt.event.MouseEvent;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.net.URI;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -312,7 +312,7 @@ public class FrmMain extends javax.swing.JFrame
      * Save, Run-Compile, Run-Run) y double-click de tabla de errores.
      */
     private void setupMvp() {
-        setTitle("BpIde [H9] — Untitled");
+        setTitle(titulo("Untitled"));
         setSize(1100, 720);
         setLocationRelativeTo(null);
 
@@ -1188,7 +1188,7 @@ public class FrmMain extends javax.swing.JFrame
         javax.swing.tree.DefaultMutableTreeNode root =
                 new javax.swing.tree.DefaultMutableTreeNode("(sin proyecto)");
         projectTreeModel.setRoot(root);
-        setTitle("BpIde [H9] — Untitled");
+        setTitle(titulo("Untitled"));
     }
 
     private static boolean isValidModuleName(String s) {
@@ -1209,7 +1209,7 @@ public class FrmMain extends javax.swing.JFrame
             this.currentProject     = proj;
             this.currentProjectFile = bpbuild;
             refreshProjectTree();
-            setTitle("BpIde [H9] — " + bpbuild.getFileName());
+            setTitle(titulo(String.valueOf(bpbuild.getFileName())));
             // IDE-3 — registrar en "Recent Projects".
             IdePrefs prP = IdePrefs.load();
             IdePrefs.pushRecent(prP.recentProjects, bpbuild.toAbsolutePath().toString(), IdePrefs.MAX_RECENT);
@@ -1389,7 +1389,7 @@ public class FrmMain extends javax.swing.JFrame
             if (lblStatusFile != null) {
                 lblStatusFile.setText(of.file != null ? of.file.toString() : "(sin guardar)");
             }
-            setTitle("BpIde [H9]" + (of.file != null ? " — " + of.file : ""));
+            setTitle(titulo(of.file != null ? of.file.toString() : ""));
             updateCaretStatus();
         }
     }
@@ -1504,58 +1504,85 @@ public class FrmMain extends javax.swing.JFrame
         }
     }
 
+    /** #367 — versión del producto para el título de la ventana. Sale del
+     *  manifest del jar (`Implementation-Version`, que el shade rellena desde el
+     *  pom), así que hay UN solo número y no se puede quedar rancio.
+     *
+     *  <p>Antes el título llevaba a piñón una etiqueta interna de un hito viejo, que
+     *  no significa nada para quien abre el programa —y que hoy encima designa otra
+     *  cosa, el kernel por capas—. Es lo primero que se ve al arrancar.
+     *
+     *  <p>Ejecutando desde clases sueltas (desarrollo) no hay manifest: entonces
+     *  pone "dev", que es la verdad y se distingue de un release de un vistazo. */
+    private static final String VERSION = versionDelManifest();
+
+    private static String versionDelManifest() {
+        String v = FrmMain.class.getPackage() == null ? null
+                 : FrmMain.class.getPackage().getImplementationVersion();
+        return (v == null || v.isEmpty()) ? "dev" : v;
+    }
+
+    /** Título de la ventana: "BpIde 4.0 — <lo que sea>". */
+    private static String titulo(String sufijo) {
+        return "BpIde " + VERSION + (sufijo == null || sufijo.isEmpty() ? "" : " — " + sufijo);
+    }
+
     /**
-     * Menú Help con un único item "Manual (F1)" que extrae el HTML
-     * empotrado en el jar a un fichero temporal y lo abre con el
-     * navegador del sistema (vía {@link Desktop#browse}). El recurso
-     * vive en {@code /manual.html} dentro del jar.
+     * Menú Help: abre la documentación con el navegador del sistema.
+     *
+     * <p>#363 — antes se llamaba "Manual" y abría `manual.html`, uno de los DOS
+     * volúmenes que viajaban empotrados en el jar. Pero los volúmenes son CINCO y
+     * están enlazados entre sí, así que el lector pinchaba "Gráficos" o "Guía del
+     * IDE" en la barra de navegación y se encontraba diez enlaces rotos. Ahora se
+     * abre el ÍNDICE, que es la puerta a los cinco, y salen de la carpeta `docs/`
+     * de la instalación (ver {@link IdePrefs#docsDir()}): una sola copia, con sus
+     * imágenes, y sin nada que copiar a mano en cada cambio.
      */
     private void setupHelp() {
         JMenu menuHelp = new JMenu("Help");
-        JMenuItem miManual = mi("Manual", KeyEvent.VK_F1, 0, e -> showManual());
-        menuHelp.add(miManual);
+        JMenuItem miDocs = mi("Documentación", KeyEvent.VK_F1, 0, e -> showManual());
+        menuHelp.add(miDocs);
         jMenuBar1.add(menuHelp);
     }
 
-    /** Path al fichero temporal extraído (cacheado tras la 1ª extracción). */
-    private Path cachedManualPath = null;
+    /** Portada de la documentación en la web, para cuando no está en local. */
+    private static final String DOCS_WEB = "https://legio-e.github.io/basicplus/";
 
     private void showManual() {
+        Path docs = IdePrefs.docsDir();
+        Path portada = (docs == null) ? null : docs.resolve("index.html");
+        if (portada == null || !Files.isRegularFile(portada)) {
+            // No está la carpeta: en vez de un error a secas, se dice DÓNDE debería
+            // estar y se ofrece la web, que es lo que resuelve el problema.
+            int r = JOptionPane.showConfirmDialog(this,
+                    "No encuentro la documentación junto al programa.\n\n"
+                            + "Debería estar en una carpeta 'docs' al lado del .jar\n"
+                            + "(viene así en el ZIP de la distribución).\n\n"
+                            + "¿Abro la documentación en la web?",
+                    "Documentación", JOptionPane.YES_NO_OPTION,
+                    JOptionPane.QUESTION_MESSAGE);
+            if (r == JOptionPane.YES_OPTION) abrirEnNavegador(URI.create(DOCS_WEB), DOCS_WEB);
+            return;
+        }
+        abrirEnNavegador(portada.toUri(), portada.toString());
+    }
+
+    /** Abre `uri` con el navegador del sistema; si la plataforma no lo permite,
+     *  enseña `donde` para que el usuario lo abra a mano. */
+    private void abrirEnNavegador(URI uri, String donde) {
         try {
-            if (cachedManualPath == null || !Files.isRegularFile(cachedManualPath)) {
-                // H13 — el manual son DOS volúmenes enlazados entre sí
-                // (manual.html = lenguaje, referencia.html = stdlib/CLI/
-                // artefactos): hay que extraer ambos al MISMO directorio
-                // para que los href relativos funcionen en el navegador.
-                Path tmpDir = Files.createTempDirectory("bpide-help-");
-                tmpDir.toFile().deleteOnExit();
-                for (String name : new String[]{"manual.html", "referencia.html"}) {
-                    try (InputStream in = getClass().getResourceAsStream("/" + name)) {
-                        if (in == null) {
-                            JOptionPane.showMessageDialog(this,
-                                    name + " no encontrado en los resources del jar.",
-                                    "Error", JOptionPane.ERROR_MESSAGE);
-                            return;
-                        }
-                        Path out = tmpDir.resolve(name);
-                        Files.copy(in, out, StandardCopyOption.REPLACE_EXISTING);
-                        out.toFile().deleteOnExit();
-                    }
-                }
-                cachedManualPath = tmpDir.resolve("manual.html");
-            }
             if (Desktop.isDesktopSupported()
                     && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-                Desktop.getDesktop().browse(cachedManualPath.toUri());
+                Desktop.getDesktop().browse(uri);
             } else {
                 JOptionPane.showMessageDialog(this,
                         "Esta plataforma no soporta abrir URLs con el navegador.\n"
-                                + "El manual está en:\n" + cachedManualPath,
-                        "Manual", JOptionPane.INFORMATION_MESSAGE);
+                                + "La documentación está en:\n" + donde,
+                        "Documentación", JOptionPane.INFORMATION_MESSAGE);
             }
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this,
-                    "No se pudo abrir el manual: " + ex.getMessage(),
+                    "No se pudo abrir la documentación: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -2111,7 +2138,7 @@ public class FrmMain extends javax.swing.JFrame
         try {
             Files.write(of.file, of.editor.getText().getBytes(StandardCharsets.UTF_8));
             setTabTitle(of.scroll, of.file.getFileName().toString());
-            setTitle("BpIde [H9] — " + of.file);
+            setTitle(titulo(String.valueOf(of.file)));
             if (lblStatusFile != null) lblStatusFile.setText(of.file.toString());
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "No se pudo guardar: " + ex.getMessage(),

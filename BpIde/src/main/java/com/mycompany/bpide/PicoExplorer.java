@@ -1498,17 +1498,24 @@ public final class PicoExplorer extends JPanel {
         // #354 — lo que FreeRTOS sabe y nunca le habíamos preguntado: cuánto de
         // lo reservado llegó a usarse. SOLO DIAGNÓSTICO (no se recorta nada
         // hasta ver los números con carga real; en la duda se deja como está).
-        // Ojo al leerlos: "RTOS libre" es el mínimo histórico de ucHeap, y ese
-        // heap NO guarda estructuras del kernel sino PILAS DE TAREAS (16 KB la
-        // de la VM, 4 KB por thread BP) ⇒ lo que sobra ahí es TECHO DE THREADS,
-        // no memoria muerta. "Pila VM libre" sí es holgura de verdad.
+        // Ojo al leerlos: "RTOS libre" es el mínimo histórico de ucHeap (32 KB en
+        // la Pico), que hospeda las tareas de FreeRTOS — vm_task, comms, workers.
+        //
+        // CORREGIDO 3-ago: aquí ponía "= techo de threads" y era FALSO. Los Thread
+        // de BP no crean tareas de FreeRTOS: sus pilas salen de la región de pilas
+        // de la propia VM (src/threading.c, `vm->next_thread_stack`, 2 KB cada
+        // una), así que este número NO baja por más threads que cree el programa.
+        // Lo midió Eduardo en placa: ejecutó T (hilos) + JsonDemo y el mínimo se
+        // quedó clavado en los mismos 15 KB. Quien depurara un "no me caben más
+        // threads" mirando esta línea se iba de cabeza a la pista equivocada.
+        //
         // Una marca tomada sin haber ejecutado nada no dice nada: mirar DESPUÉS
         // de correr algo con carga. Tolerante con firmwares que no lo manden.
         long rh = ilong(m, "rtosHeapMinFreeBytes"), vt = ilong(m, "vmTaskStackFreeBytes");
         if (rh > 0) sb.append("RTOS libre  : ").append(human(rh))
-                      .append(" (mínimo histórico de ucHeap = techo de threads)\n");
+                      .append(" (mínimo histórico de ucHeap)\n");
         if (vt > 0) sb.append("Pila VM     : ").append(human(vt))
-                      .append(" sin usar (marca de agua)\n");
+                      .append(" sin usar de 16 KB (marca de agua)\n");
         sb.append("FS          : ").append(human(ilong(m, "fsUsedBytes"))).append(" / ")
           .append(human(ilong(m, "fsTotalBytes"))).append('\n');
         long up = ilong(m, "uptimeMs");

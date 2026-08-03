@@ -107,6 +107,30 @@ public final class IdePrefs {
         return Files.isDirectory(cand) ? cand : null;
     }
 
+    /** #363 — la carpeta de documentación: los CINCO volúmenes + sus imágenes.
+     *
+     *  <p>Viven en la instalación (`docs/` junto al jar), no dentro del jar. Antes
+     *  se empotraban dos de los cinco y se extraían a un temporal: eso dejaba diez
+     *  enlaces rotos —el lector pinchaba "Gráficos" o "Guía del IDE" y no había
+     *  nada— y además obligaba a copiar a mano los HTML a `src/main/resources` en
+     *  cada cambio, con lo fácil que es olvidarse y publicar documentación rancia.
+     *  Empotrar los cinco CON sus imágenes serían 900 KB sobre un jar de 4,2 (+21%)
+     *  para tener una segunda copia de algo que el ZIP ya trae.
+     *
+     *  <p>Dos candidatos, en este orden y sin adivinar nada más:
+     *  <ol><li>`docs/` junto al jar — la INSTALACIÓN, que es el caso del usuario;
+     *      <li>`../../docs` — el repo, cuando se ejecuta desde `BpIde/target/`
+     *          durante el desarrollo.</ol>
+     *  null si no está en ninguno: quien llame manda al usuario a la web. */
+    static Path docsDir() {
+        Path junto = installSubdir("docs");
+        if (junto != null) return junto;
+        Path root = installDir();
+        if (root == null) return null;
+        Path repo = root.resolve("..").resolve("..").resolve("docs").normalize();
+        return Files.isDirectory(repo) ? repo : null;
+    }
+
     /** Biblioteca de packs efectiva: la configurada; si no, la que VIAJA CON EL IDE
      *  (una carpeta `packs/` junto al jar) y por último `packs/` en el directorio
      *  de trabajo (útil en el repo). null si no hay ninguna — el compilador dirá

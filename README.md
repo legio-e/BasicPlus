@@ -191,7 +191,7 @@ bpgenvm-c/build/bpgenvm-c samples/Blink.mod
 
 # 4. (Optional) the IDE
 mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-3.0.jar
+java -jar BpIde/target/BpIde-4.0.jar
 ```
 
 The firmwares are built with their usual toolchains (pico-sdk + ninja,
