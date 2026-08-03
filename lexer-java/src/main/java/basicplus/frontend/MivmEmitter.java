@@ -3909,12 +3909,23 @@ public final class MivmEmitter {
             // DEBE coincidir con el que ModWriter usa para el .mod (la autoridad).
             // Si divergen → error ruidoso AQUÍ (nunca rotura silenciosa de paridad
             // en el AOT). Es la red de seguridad de la decisión B.
-            int feSlot = cls.slotOf(methodName);
-            int mwSlot = w.methodSlotOrMinus1(cls.name, methodName);
-            if (feSlot >= 0 && mwSlot >= 0 && feSlot != mwSlot) {
-                errors.add("BUG interno #174b: slot divergente para " + cls.name + "."
-                        + methodName + " (frontend=" + feSlot + ", ModWriter=" + mwSlot
-                        + ") — revisar ClassSymbol.ensureMethodSlots");
+            //
+            // Las clases BUILT-IN quedan fuera: las implementa la VM y no tienen
+            // "vtable nuestra" que comparar (lo dice el propio sitio donde se
+            // declaran, SemanticAnalyzer). Preguntarles el slot es la pregunta
+            // equivocada, y para SyncList —la única built-in cuya base es otra
+            // built-in (List)— no era inofensivo: computeClassLayout no sabe
+            // calcular el layout de una base sin AST y ABORTABA el compilador con
+            // una traza Java. La emisión de debajo va por NOMBRE y siempre estuvo
+            // bien; se caía el chequeo, no el código.
+            if (!cls.isBuiltin) {
+                int feSlot = cls.slotOf(methodName);
+                int mwSlot = w.methodSlotOrMinus1(cls.name, methodName);
+                if (feSlot >= 0 && mwSlot >= 0 && feSlot != mwSlot) {
+                    errors.add("BUG interno #174b: slot divergente para " + cls.name + "."
+                            + methodName + " (frontend=" + feSlot + ", ModWriter=" + mwSlot
+                            + ") — revisar ClassSymbol.ensureMethodSlots");
+                }
             }
             w.emitInvokeVirtual(cls.name, methodName, nArgs);
         }
