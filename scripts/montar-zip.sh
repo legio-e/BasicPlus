@@ -113,6 +113,28 @@ done
 # ejemplo que se hubiera quedado rancio.
 [ -d "$RAIZ/samples/errores" ] && cp -r "$RAIZ/samples/errores" "$OUT/samples/"
 
+# --- red: ni un solo .mod caducado dentro del paquete ------------------------
+# En H13 (a1 Pico) el IDE subió a la placa un L2Lib.mod v5 y el sample l2app murió
+# con exit 3. No era el compilador: dentro de bpstdlib/ vivían 24 .mod rancios que
+# nadie había puesto ahí a propósito —23 demos de Gui y L2Lib, restos de una
+# compilación vieja—, y `resolveDeviceDeps` da prioridad de stdlib a CUALQUIER
+# módulo presente en stdlibDir. O sea que el intruso no era adorno: mandaba sobre
+# el módulo recién generado.
+#
+# La regla es una y no hay lista que mantener: si un .mod del paquete no es MOD6,
+# el paquete no sale. Vale igual para un intruso que para una stdlib que se quede
+# atrás en la próxima subida de formato.
+MALOS=""
+while IFS= read -r m; do
+    [ "$(head -c4 "$m")" = "MOD6" ] || MALOS="$MALOS
+  $(printf '%-6s %s' "$(head -c4 "$m")" "${m#$OUT/}")"
+done < <(find "$OUT" -name '*.mod')
+if [ -n "$MALOS" ]; then
+    echo "  .mod CADUCADOS en el paquete (se esperaba MOD6):$MALOS"
+    echo "  Un .mod que la VM rechaza no se publica. Regenéralo o quítalo."
+    rm -rf "$OUT"; exit 1
+fi
+
 # --- red: ningún enlace de la ayuda puede quedar roto DENTRO del paquete -----
 # Se comprueba sobre el árbol YA MONTADO, que es lo que va a ver el usuario: el
 # repo puede tener el fichero y el ZIP no llevarlo (pasó con los 10 anexos .md).
