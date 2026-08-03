@@ -317,6 +317,21 @@ ESP32, que hace falta de todos modos.
 ### a2 · Metro RP2350B
 Variante B: 48 GPIO, 16 MB flash, **PSRAM 8 MB**, NeoPixel. **Misma imagen que a1.**
 
+**Referencia de la placa (FS recién formateado):** heap **7,5 MB** + pilas 512 KB —
+*el heap está en PSRAM* — · RTOS libre 15 KB · pila VM 12 de 16 KB sin usar · FS
+100 KB / 9,8 MB · flash 16 MB · 48 GPIO / 8 ADC · `Reset: reinicio pedido`.
+**Cuatro de los cinco puntos propios de la a2 quedan cerrados con este solo INFO**:
+variante B detectada sola, heap en PSRAM, clamp #292 (la flash que dice es la real)
+y PSRAM vista. Y todo **con el mismo `.uf2`** que la a1 — que es la tesis de la
+imagen única, demostrada.
+
+**Tandas cerradas (3-ago, ZIP `34ea3b0d`):**
+
+- ✅ **Tanda 1 · Humo** (7): las 6 de la a1 + **`RandomTest`, 8 de 8**. Primera vez
+  que los aleatorios se verifican **en placa**: la cintura por plataforma del
+  RP2350 cumple el contrato —límite superior excluido incluido, que es donde se
+  rompen los ports.
+
 > ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
 > partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
 > preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
