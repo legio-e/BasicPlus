@@ -377,6 +377,12 @@ imagen única, demostrada.
   O sea que el guardián **no es sólo verde en el PC: sirve como instrumento en la
   placa**, que es donde hará falta si esto se vuelve a mover.
 
+- ✅ **Tanda 4b · Concurrencia del lenguaje** (5, ahora sí las cinco). Verde.
+  Con ella se cierra el cabo suelto de la a1: **`l2app` — el `sync property`
+  cross-module— se ejecuta por fin EN PLACA**. Allí quedó bloqueado por el
+  hallazgo 15 (el `.mod` rancio que ganaba la resolución stdlib-first), no por el
+  lenguaje; el lote 1 lo desbloqueó y aquí lo confirma el hardware.
+
 > ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
 > partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
 > preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
