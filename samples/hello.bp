@@ -18,14 +18,10 @@ module Hello
   // Constante a nivel módulo
   public const PI: float := 3.14159
 
-  // Clase de excepción mínima (mientras no haya librería estándar).
-  public class RuntimeError
-    var mensaje: string
-
-    public function RuntimeError(mensaje: string)
-      this.mensaje := mensaje
-    end RuntimeError
-  end RuntimeError
+  // La clase de excepción mínima que había aquí ("mientras no haya librería
+  // estándar") ya no hace falta: desde #248 `RuntimeError` viene en Core y se
+  // importa solo. Y tampoco valdría: toda excepción tiene que descender de
+  // Exception, y aquella no descendía de nada.
 
   // Clase con miembros normales y estáticos
   public class Animal
@@ -44,7 +40,7 @@ module Hello
     public property edad: integer := 0
       set(e)
         if e < 0 then
-          throw "edad invalida"
+          throw RuntimeError("edad invalida")
         endif
         field := e
       endset

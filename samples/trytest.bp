@@ -9,7 +9,7 @@ module TryTest
   // Lanza si negativo, OK si positivo.
   public function ChequearPositivo(n: integer): string
     if n < 0 then
-      throw "n era negativo"
+      throw RuntimeError("n era negativo")
     endif
     return "positivo"
   end ChequearPositivo
@@ -29,7 +29,7 @@ module TryTest
     // try anidado: el inner atrapa, el outer ya no ve nada.
     try
       try
-        throw "inner"
+        throw RuntimeError("inner")
       catch e1
         print "inner catch:", e1
       endtry
@@ -41,9 +41,9 @@ module TryTest
     // try anidado: el inner re-lanza, el outer atrapa.
     try
       try
-        throw "primero inner"
+        throw RuntimeError("primero inner")
       catch e1
-        throw "relanzado desde catch"
+        throw RuntimeError("relanzado desde catch")
       endtry
     catch e2
       print "outer atrapa relanzado:", e2

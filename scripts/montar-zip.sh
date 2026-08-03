@@ -90,6 +90,11 @@ for p in sampleproject formdemo imageproject; do
     [ -d "$RAIZ/samples/$p" ] && cp -r "$RAIZ/samples/$p" "$OUT/samples/"
 done
 
+# Los que fallan A PROPÓSITO, aparte y con su LEEME: son la demostración de que el
+# compilador detecta lo que debe. Mezclados con los buenos no se distinguían de un
+# ejemplo que se hubiera quedado rancio.
+[ -d "$RAIZ/samples/errores" ] && cp -r "$RAIZ/samples/errores" "$OUT/samples/"
+
 # --- red: ningún enlace de la ayuda puede quedar roto DENTRO del paquete -----
 # Se comprueba sobre el árbol YA MONTADO, que es lo que va a ver el usuario: el
 # repo puede tener el fichero y el ZIP no llevarlo (pasó con los 10 anexos .md).

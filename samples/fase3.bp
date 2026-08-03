@@ -37,7 +37,7 @@ module Fase3
     public property altura: float := 0.0
       set(h)
         if h < 0.0 then
-          throw "altura negativa"
+          throw RuntimeError("altura negativa")
         endif
         field := h
       endset

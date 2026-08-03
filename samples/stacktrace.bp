@@ -3,7 +3,7 @@
 module StackTrace
 
   public function nivelTres()
-    throw "boom desde nivelTres"
+    throw RuntimeError("boom desde nivelTres")
   end nivelTres
 
   public function nivelDos()

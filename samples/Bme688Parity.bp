@@ -23,8 +23,11 @@ module Bme688Parity
   end dump
 
   function Main()
-    var bus: I2c.Bus := I2c.Bus(0, 20, 21, I2c.FAST())
-    var s: Bme688.Sensor := Bme688.Sensor(bus, 0x77)
+    // El driver toma el ID del bus, no el objeto Bus — igual que Bme688Demo,
+    // que es el que se ejecuta contra el sensor de verdad. Aquí el I2c no llega
+    // a usarse: la calibración es sintética y esto sólo mide codegen y paridad.
+    var BUS: integer := 0
+    var s: Bme688.Sensor := Bme688.Sensor(BUS, 0x77)
     s.setGasBaseline(50000.0d)
 
     // Calibración sintética de 42 bytes (orden del array de

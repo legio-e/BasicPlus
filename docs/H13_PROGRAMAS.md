@@ -144,6 +144,28 @@ despacho de Forms de verdad y `aottest` el AOT: deberían ir.
 
 ---
 
+## Los que fallan a propósito — `samples/errores/`
+
+Idea de Eduardo: publicar aparte los ejemplos que **deben** dar error. No son ejemplos
+rotos: son la demostración de que el compilador detecta lo que tiene que detectar, y
+mezclados con los buenos no se distinguían de un sample que se hubiera quedado rancio.
+
+Son cinco —recovery del parser, las tres reglas de los parámetros por defecto, una
+clase llamando a una función privada del módulo, los rangos de los enteros estrechos, y
+una global tocada desde un `case` de `parallel`— y cada uno lleva escrito **el
+diagnóstico que debe salir**. Eso convierte la carpeta en una prueba:
+
+```bash
+bash scripts/h13-errores.sh
+```
+
+Falla en los dos sentidos, y ambos están comprobados: si uno empieza a **compilar**
+(regla perdida) o si el **mensaje cambia** (diagnóstico que empeoró de rebote). Lo
+segundo es lo que se escapa: un refactor puede dejar el error pero convertirlo en una
+traza ilegible, y sin esto nadie se entera hasta que lo sufre quien acaba de instalar.
+
+---
+
 ## Reparto por placa
 
 | Bloque | a1 Pico | a2 Metro | b1 S3 | b2 P4 Kit | b3 P4 WS | c1 Nucleo | c2 DK2 |

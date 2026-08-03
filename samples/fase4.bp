@@ -39,14 +39,14 @@ module Fase4
   public function Riesgo(x: integer): string
     try
       if x < 0 then
-        throw "x negativo"
+        throw RuntimeError("x negativo")
       endif
       return "ok"
     catch err
       // El catch lanza otra excepción: finally debe ejecutarse igualmente
       // y la excepción nueva sale del Riesgo.
       print "  (finally se ejecutara aunque el catch reemita)"
-      throw "fallo en el catch"
+      throw RuntimeError("fallo en el catch")
     finally
       print "  (finally ejecutado)"
     endtry
