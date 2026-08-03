@@ -2435,16 +2435,42 @@ public class FrmMain extends javax.swing.JFrame
             Path modPath = null;
             @Override
             protected Boolean doInBackground() {
-                publish("== compilando " + bpFile.getFileName() + " para la placa ==\n");
-                boolean ok = invokeWithCapture(() ->
-                        basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm", /*pruneBpi*/ true),
-                        this::publish);
+                // #310 (H13, hallazgo 16) — en modo PROYECTO el build va por
+                // buildProject, igual que el camino de la VM del PC y que la CLI:
+                // compila el proyecto entero y MONTA EL PACK si out:pack. Antes
+                // aquí se llamaba a compileFile con el .bp del main, así que en
+                // placa el .pack ni se construía y subían los .mod sueltos.
+                final boolean ok;
+                if (currentProject != null) {
+                    publish("== construyendo proyecto " + currentProject.main
+                            + ("pack".equals(currentProject.out) ? " (out:pack)" : "")
+                            + " para la placa ==\n");
+                    ok = invokeWithCapture(() -> {
+                        try {
+                            return basicplus.frontend.Main.buildProject(currentProject, "mivm", /*pruneBpi*/ true);
+                        } catch (java.io.IOException ex) {
+                            System.err.println("build: " + ex.getMessage());
+                            return false;
+                        }
+                    }, this::publish);
+                } else {
+                    publish("== compilando " + bpFile.getFileName() + " para la placa ==\n");
+                    ok = invokeWithCapture(() ->
+                            basicplus.frontend.Main.compileFile(bpFile, outDir, "mivm", /*pruneBpi*/ true),
+                            this::publish);
+                }
                 if (!ok) {
                     publish("== compilación falló ==\n");
                     return false;
                 }
                 String moduleName = inferModuleName(bpFile);
-                modPath = outDir.resolve(moduleName + ".mod");
+                // Y lo que se EJECUTA en la placa es el pack, no el .mod suelto:
+                // el firmware despacha .mod/.pack por extensión (#344) y el pack en
+                // ejecución resuelve sus imports DE DENTRO antes que del FS (#310,
+                // orden de búsqueda §4), así que la app viaja cerrada.
+                final boolean packRun = currentProject != null
+                        && "pack".equals(currentProject.out);
+                modPath = outDir.resolve(moduleName + (packRun ? ".pack" : ".mod"));
                 if (!Files.isRegularFile(modPath)) {
                     publish("== no se encontró " + modPath.getFileName() + " ==\n");
                     return false;

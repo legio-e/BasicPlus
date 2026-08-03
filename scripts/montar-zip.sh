@@ -105,7 +105,18 @@ cp "$RAIZ/dist/firmware/"*.uf2 "$RAIZ/dist/firmware/"*.bin \
     cp "$RAIZ/$f" "$OUT/samples/"
 done
 for p in sampleproject formdemo imageproject; do
-    [ -d "$RAIZ/samples/$p" ] && cp -r "$RAIZ/samples/$p" "$OUT/samples/"
+    [ -d "$RAIZ/samples/$p" ] || continue
+    cp -r "$RAIZ/samples/$p" "$OUT/samples/"
+    # Y FUERA su out/. Un proyecto se publica con sus FUENTES; el .mod/.pack lo
+    # hace `Build Project` en la máquina del usuario. Copiarlo tal cual metía en
+    # el ZIP el out/ de mi copia de trabajo: en formdemo/out/ vivían 26 .mod v5
+    # —los 23 demos de Gui y L2Lib, los mismos que se colaron en bpstdlib— y de
+    # ahí salían. Ojo: esto NO lo arregla .gitignore, porque aquí se copia del
+    # disco, no del índice de git.
+    # A CUALQUIER profundidad, no sólo en la raíz del proyecto: en formdemo había
+    # además un src/out/ de una compilación antigua. Ir quitándolos de uno en uno
+    # es cómo se te escapa el siguiente.
+    find "$OUT/samples/$p" -type d -name out -prune -exec rm -rf {} +
 done
 
 # Los que fallan A PROPÓSITO, aparte y con su LEEME: son la demostración de que el
