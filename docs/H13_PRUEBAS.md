@@ -313,6 +313,23 @@ lo que veas — el log persistente es el mejor testigo que tenemos.
 
 ---
 
+## Cómo se trabaja: por lotes
+
+Criterio de Eduardo (3-ago, a mitad de la Pico): **no se rehace el paquete por cada
+hallazgo**. Con 7 placas, cada reconstrucción obliga a reinstalar y reflashear, y así
+la campaña no converge. Además, cambiar el paquete a mitad **invalida lo ya probado**.
+
+Tres cajones, y lo que los separa es qué interrumpe:
+
+| | Qué se hace |
+|---|---|
+| **Crítico** | Parar y arreglar. Sólo lo que impide seguir probando, o lo que haría inválido lo que venga detrás (ejemplo: faltaba `BpVM.cfg` → no compilaba nada con stdlib) |
+| **Error del test en sí** | Corregir y seguir. Sample rancio, expectativa mal escrita, fallo del arnés. **No se reconstruye el paquete**: no es del producto |
+| **Todo lo demás** | Al registro y seguir. Se decide al **terminar la fila** |
+
+Al cerrar cada fila: se agrupan los arreglos, **un solo rebuild, un solo reflasheo**, y
+se **vuelve a probar lo que falló** — no la fila entera.
+
 ## Registro de hallazgos
 
 | # | Placa | Qué pasó | Estado |
