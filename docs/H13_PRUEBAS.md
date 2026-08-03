@@ -291,8 +291,36 @@ y no sirve para vigilar fugas. El instrumento es la línea de **fin de RUN**.
   no se ha tocado en V4 y probarlos es lo más caro (decisión de Eduardo al montar
   la lista).
 
+## 🔁 Lote 1 — el rebuild entre la a1 y la a2 (decidido 3-ago)
+
+**El firmware NO se toca.** La imagen de la Pico se queda como está, bit a bit, y es
+la misma que va a la Metro. Así los 49 verdes de la a1 siguen valiendo y la a2
+arranca con un binario ya barrido. Se rehacen **sólo el jar del IDE y el ZIP**.
+
+1. ⚠️ **Eduardo cierra el BpIde** — el jar no se puede reconstruir con él abierto.
+2. Hallazgo 15: borrar los 24 intrusos de `bpstdlib/` (`.mod` sin `.bp` al lado) y
+   los `.mod`/`.dbg` de `samples/`, + regla en `.gitignore`.
+3. Hallazgo 16: en el camino de placa, `buildProject` cuando hay proyecto y la misma
+   rama `packRun` que ya usa el host para elegir `.pack` en vez de `.mod`.
+4. `mvn package` del IDE + `montar-zip.sh`. El guardián MOD6 tiene que pasar en
+   verde **sin** los intrusos (hoy los caza, que es la prueba de que funciona).
+5. Eduardo reinstala desde el ZIP nuevo.
+
+**Re-prueba en la a1: sólo lo que el lote desbloquea** — `l2app` y `sampleproject`
+contra la placa. Los otros 47 no se repiten: el criterio de trabajo por lotes dice
+re-probar lo que falló, no la fila entera.
+
+Lo del firmware que queda pendiente (mensaje de `lastModified`, retirar `Bench.mdn`,
+y el hallazgo 9 cuando Eduardo decida el tamaño) viaja con la reconstrucción del
+ESP32, que hace falta de todos modos.
+
 ### a2 · Metro RP2350B
 Variante B: 48 GPIO, 16 MB flash, **PSRAM 8 MB**, NeoPixel. **Misma imagen que a1.**
+
+> ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
+> partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
+> preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
+> el gate de ABI rechazará — el mismo susto que costó media mañana en la a1.
 - [ ] La variante se detecta sola (48 GPIO, 8 ADC en `INFO`)
 - [ ] **El heap va a PSRAM** y se ve en `INFO`
 - [ ] Clamp #292: la flash que dice `INFO` es la real
