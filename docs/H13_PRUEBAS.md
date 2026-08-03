@@ -332,6 +332,18 @@ imagen única, demostrada.
   RP2350 cumple el contrato —límite superior excluido incluido, que es donde se
   rompen los ports.
 
+**Tandas cerradas sobre la imagen del lote 2 (3-ago, `.uf2` `7b4fde29`):**
+
+- 🏁 **Tanda 2 · Memoria** (10, repetida ENTERA a propósito porque el firmware es
+  otro). Verde. Y con ella **#369 queda verificado en placa**: el nº 10
+  (`smp_heap_stress_pico`) daba `exit 11 (use-after-free)` de forma **sistemática**
+  en esta placa, y ahora pasa. Era el frame inicial del thread, que se había
+  quedado en el layout de refs de 4 bytes; el `this` de `run()` se leía 4 bytes por
+  debajo de su propia pila y la generación salía de memoria ajena.
+  Vale la pena anotar por qué costó: **no lo arreglaba un reset**, porque lo que
+  decidía si fallaba era el estado del heap (si el GC había reciclado ya ese hueco),
+  no el arranque. De ahí que pareciera ir y no ir sin tocar nada.
+
 > ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
 > partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
 > preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
