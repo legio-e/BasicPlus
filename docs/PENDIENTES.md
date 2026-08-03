@@ -65,3 +65,28 @@ sagrado del proyecto). *(Minor relacionado: `%lld` no va en newlib-nano del STM3
   literal" (el valor de enum es conocido en compilación). Mejora natural: tratarlo
   como literal e inlinarlo desde `EnumSymbol.values`. (Sale de N17, resuelto: una
   const de clase no-literal ya da diagnóstico limpio en vez de tumbar el emisor.)
+
+## 🔬 Prueba de resistencia larga (idea de Eduardo, 3-ago — post-V4)
+
+Dejar una placa corriendo **días** y ver hasta dónde aguanta. No entra en V4: en
+plena campaña de publicación no es razonable, y una prueba así no se improvisa.
+Anotado para hacerla con calma.
+
+Lo que la haría útil, y no sólo larga:
+
+- **Que la muerte deje rastro.** Si se cuelga a las 30 horas y no queda registro, se
+  han perdido 30 horas. El log post-mortem en flash ya es un anillo que sobrevive al
+  reset — hay que apoyarse en él y grabar una marca periódica (vuelta, heap, RTOS
+  libre, marca de agua de pila), no sólo los errores.
+- **Carga VARIADA, no un bucle.** Repetir una sola operación ejercita un único patrón
+  de asignación. Lo que caza fugas y fragmentación es alternar: cadenas, objetos,
+  ficheros, hilos, eventos. La batería de H13 ya es ese repertorio.
+- **RUN largo Y muchos RUN.** Son dos fallos distintos: lo que se acumula dentro de
+  una ejecución y lo que no se devuelve entre ejecuciones. El guardián de fin de RUN
+  (#339) sólo ve el segundo.
+- **Antes, la versión barata en el PC.** El mismo repertorio en host corre órdenes de
+  magnitud más rápido y encuentra gratis lo que sea de memoria pura. No sustituye a
+  la placa —no hay flash real, ni dos núcleos de verdad, ni IRQs— pero se paga solo.
+
+Precedente de que el método funciona: #357 se cerró con 10.000 vueltas en la Pico, y
+el bug que quedaba sólo se manifestaba al estrechar el heap.
