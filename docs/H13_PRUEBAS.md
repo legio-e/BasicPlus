@@ -265,11 +265,18 @@ y no sirve para vigilar fugas. El instrumento es la línea de **fin de RUN**.
   bloque `parallel/case/default/endpar`. ⏳ Queda `l2app` (la forma
   **cross-module** del `sync property`), bloqueado por el hallazgo 15: se repite
   al reconstruir el ZIP.
+- ✅ **Tanda 5 · Eventos** (6): `EvFull` `EvOrder` `EvNest` `EvThrow` `EvFin`
+  `h5cevuse`. Sin hallazgos. Cubre el ciclo completo, el orden de despacho, la
+  reentrada (un handler que dispara otro), el handler que atrapa lo suyo, #342
+  (el evento del thread que muere no se pierde) y el caso cross-module.
 - ✅ **Tanda 6 · Lo nuevo del lenguaje** (8): `TupleFirstClass` `TupCrossTest`
   `DefaultParams` `StaticPropTest` `narrowtypes` `Field8Test` `Wrap8Test`
   `PropLongTest`. Sin hallazgos. Aquí entran las tuplas (que en el ensanchado
   4→8B se quedaron olvidadas y hubo que cazar), los campos y properties de 8
   bytes, y los tipos estrechos: todo lo que toca anchos en placa.
+- ✅ **Tanda 7 · Dispositivo**: `blink` — GPIO real en GP25. El único periférico
+  que se prueba siempre; el resto de dispositivos no se ha tocado en V4 y probarlos
+  es lo más caro (decisión de Eduardo al montar la lista).
 
 ### a2 · Metro RP2350B
 Variante B: 48 GPIO, 16 MB flash, **PSRAM 8 MB**, NeoPixel. **Misma imagen que a1.**
