@@ -124,6 +124,22 @@ done
 # La regla es una y no hay lista que mantener: si un .mod del paquete no es MOD6,
 # el paquete no sale. Vale igual para un intruso que para una stdlib que se quede
 # atrás en la próxima subida de formato.
+# Y el invariante de bpstdlib/, que es donde vivían los intrusos: un módulo de la
+# librería estándar TIENE su fuente al lado. Un .mod suelto ahí no es stdlib —
+# y no es inocuo: `resolveDeviceDeps` da prioridad de stdlib a cualquier módulo
+# presente en stdlibDir, así que taparía al recién compilado. Esto no se puede
+# poner en .gitignore (los .mod buenos SÍ se versionan): tiene que ser un check.
+INTRUSOS=""
+for m in "$RAIZ"/bpstdlib/*.mod; do
+    b="$(basename "$m" .mod)"
+    [ -f "$RAIZ/bpstdlib/$b.bp" ] || INTRUSOS="$INTRUSOS $b.mod"
+done
+if [ -n "$INTRUSOS" ]; then
+    echo "  INTRUSOS en bpstdlib/ (.mod sin su .bp al lado):$INTRUSOS"
+    echo "  Un .mod ahí manda sobre el que acabas de compilar. Sácalo de bpstdlib."
+    rm -rf "$OUT"; exit 1
+fi
+
 MALOS=""
 while IFS= read -r m; do
     [ "$(head -c4 "$m")" = "MOD6" ] || MALOS="$MALOS
