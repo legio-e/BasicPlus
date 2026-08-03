@@ -393,6 +393,13 @@ imagen única, demostrada.
   4→8B se dejó atrás — el segundo, después de las tuplas. Si quedara algún resto
   vivo de esa familia, aquí es donde tenía más probabilidades de asomar. No asomó.
 
+- ✅ **Tanda 7 · Dispositivo** (2). `NeoDemo` —WS2812 por PIO, que en la Metro
+  sustituye a `blink` porque aquí el GP25 es el NeoPixel— y `BoardTest`:
+  `gpioCount=48 · variant=B · GPIO_COUNT=48`. En la a1, **con el mismo binario**,
+  decía `30 · A`. Con esto la **imagen única** queda demostrada por los dos lados:
+  no es que el `.uf2` funcione en las dos placas, es que **se distingue solo** en
+  runtime y la stdlib board-aware coincide con lo que dice el silicio.
+
 > ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
 > partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
 > preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
