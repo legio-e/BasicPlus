@@ -586,12 +586,13 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   Las que sí acceden lanzan <code>RuntimeError</code> atrapable si fallan.
 </p>
 <p>
-  <strong>En placa</strong>: el FS del firmware es plano (sin directorios) —
-  <code>readFile</code>/<code>writeFile</code>/<code>appendFile</code>/
-  <code>fileExists</code>/<code>removeFile</code>/<code>rename</code>/<code>fileSize</code>
-  funcionan; <code>mkdir</code>/<code>rmdir</code>/<code>copyFile</code>/
-  <code>isDirectory</code>/<code>lastModified</code> lanzan
-  <code>RuntimeError</code> atrapable.
+  <strong>En placa</strong>: desde V4 el FS del firmware es littlefs, con
+  directorios de verdad — <code>readFile</code>/<code>writeFile</code>/
+  <code>appendFile</code>/<code>fileExists</code>/<code>removeFile</code>/
+  <code>rename</code>/<code>fileSize</code>/<code>mkdir</code>/<code>rmdir</code>/
+  <code>copyFile</code>/<code>isDirectory</code> funcionan igual que en el PC.
+  La única excepción es <code>lastModified</code>: littlefs no guarda fechas,
+  así que lanza <code>RuntimeError</code> atrapable en vez de inventarse una.
 </p>
 <p>
   Hay aparte un <code>IO.prompt(spec)</code> que pide al IDE conectado
@@ -642,7 +643,8 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   <tr><td><code>isDirectory(p): boolean</code></td>
       <td><code>true</code> si <code>p</code> es un directorio existente.</td></tr>
   <tr><td><code>lastModified(p): integer</code></td>
-      <td>Último <code>mtime</code> en ms epoch (truncado a i32).</td></tr>
+      <td>Último <code>mtime</code> en ms epoch (truncado a i32).
+          <strong>No en placa</strong>: littlefs no guarda fechas.</td></tr>
   <tr><td><code>prompt(spec): string</code></td>
       <td>Pide al IDE conectado que muestre un formulario. <code>spec</code>
           es un JSON con la descripción. Bloquea el thread BP hasta

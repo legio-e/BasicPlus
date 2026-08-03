@@ -588,12 +588,13 @@ m.unlock()              <span class="comment">// releases and hands off to the f
   The ones that do access it raise a catchable <code>RuntimeError</code> if they fail.
 </p>
 <p>
-  <strong>On the board</strong>: the firmware FS is flat (no directories) —
-  <code>readFile</code>/<code>writeFile</code>/<code>appendFile</code>/
-  <code>fileExists</code>/<code>removeFile</code>/<code>rename</code>/<code>fileSize</code>
-  work; <code>mkdir</code>/<code>rmdir</code>/<code>copyFile</code>/
-  <code>isDirectory</code>/<code>lastModified</code> raise a catchable
-  <code>RuntimeError</code>.
+  <strong>On the board</strong>: since V4 the firmware FS is littlefs, with real
+  directories — <code>readFile</code>/<code>writeFile</code>/<code>appendFile</code>/
+  <code>fileExists</code>/<code>removeFile</code>/<code>rename</code>/
+  <code>fileSize</code>/<code>mkdir</code>/<code>rmdir</code>/<code>copyFile</code>/
+  <code>isDirectory</code> work exactly as they do on the PC. The one exception is
+  <code>lastModified</code>: littlefs stores no timestamps, so it raises a catchable
+  <code>RuntimeError</code> instead of making one up.
 </p>
 <p>
   Separately there is <code>IO.prompt(spec)</code>, which asks the connected IDE
@@ -644,7 +645,8 @@ m.unlock()              <span class="comment">// releases and hands off to the f
   <tr><td><code>isDirectory(p): boolean</code></td>
       <td><code>true</code> if <code>p</code> is an existing directory.</td></tr>
   <tr><td><code>lastModified(p): integer</code></td>
-      <td>Last <code>mtime</code> in ms epoch (truncated to i32).</td></tr>
+      <td>Last <code>mtime</code> in ms epoch (truncated to i32).
+          <strong>Not on the board</strong>: littlefs stores no timestamps.</td></tr>
   <tr><td><code>prompt(spec): string</code></td>
       <td>Asks the connected IDE to show a form. <code>spec</code>
           is a JSON with the description. Blocks the BP thread until it

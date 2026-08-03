@@ -11,6 +11,10 @@
 //   rmdir tras limpiar: ok
 //   borrado = false
 //   fin
+//
+// EN PLACA cambia UNA línea: littlefs no guarda fechas, así que lastModified
+// lanza RuntimeError y sale "mtime = no disponible". Todo lo demás —incluidos
+// los directorios— funciona igual que en el PC.
 
 module FileOpsTest
   import IO
@@ -37,8 +41,16 @@ module FileOpsTest
     IO.copyFile("fops_orig.txt", "fops_dir/copia.txt")
     print "copia = [" + readFile("fops_dir/copia.txt") + "]"
 
-    var mt: integer := IO.lastModified("fops_orig.txt")
-    print "mtime>0 = " + boolToString(mt > 0)
+    // lastModified es lo ÚNICO de este fichero que NO existe en placa: littlefs
+    // no guarda fechas (fs_lfs.c: .mtime_ms = NULL), así que la VM lanza un
+    // RuntimeError atrapable —el contrato documentado— en vez de inventarse una.
+    // En el PC sí hay fecha. Las DOS salidas son correctas, cada una en su sitio.
+    try
+      var mt: integer := IO.lastModified("fops_orig.txt")
+      print "mtime>0 = " + boolToString(mt > 0)
+    catch e: Core.Exception
+      print "mtime = no disponible (este FS no guarda fechas)"
+    endtry
 
     // rmdir exige vacío: limpiar y borrar.
     IO.removeFile("fops_dir/copia.txt")
