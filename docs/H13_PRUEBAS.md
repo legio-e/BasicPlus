@@ -258,12 +258,13 @@ y no sirve para vigilar fugas. El instrumento es la línea de **fin de RUN**.
   físico se prueba aparte.
 - ✅ **Tanda 4 · Threads** (5): `AsyncDemo` `ThreadTrasMain` `mutextest`
   `synclisttest` `preempttest`. Sin hallazgos.
-- ⏳ **Tanda 4b · Concurrencia del LENGUAJE** (5, pendiente): `synctest`
-  `modpropsync` `l2app` `paralleltest` `paralleltest_sugar`. **Faltaban en la
-  lista** —lo preguntó Eduardo— y son dos piezas que nadie estaba mirando:
-  `sync property` (con la transformación del compilador de B2 detrás) en sus tres
-  formas (clase, módulo, cross-module) y el bloque `parallel/case/default/endpar`.
-  Las cinco verdes en el PC; queda pasarlas por placa.
+- ✅ **Tanda 4b · Concurrencia del LENGUAJE** (4 de 5): `synctest` `modpropsync`
+  `paralleltest` `paralleltest_sugar`. **Faltaban en la lista** —lo preguntó
+  Eduardo— y son dos piezas que nadie estaba mirando: `sync property` (con la
+  transformación del compilador de B2 detrás) en dos de sus tres formas, y el
+  bloque `parallel/case/default/endpar`. ⏳ Queda `l2app` (la forma
+  **cross-module** del `sync property`), bloqueado por el hallazgo 15: se repite
+  al reconstruir el ZIP.
 
 ### a2 · Metro RP2350B
 Variante B: 48 GPIO, 16 MB flash, **PSRAM 8 MB**, NeoPixel. **Misma imagen que a1.**
