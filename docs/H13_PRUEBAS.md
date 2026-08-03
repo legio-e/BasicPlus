@@ -140,6 +140,40 @@ ENV, #311).
 
 ---
 
+## J · La instalación desde cero — UNA vez, no por placa
+
+> La prueba más valiosa de todas, porque es la única que ve **lo que ve alguien que
+> acaba de llegar**. Y porque los arreglos de distribución (encontrar `packs/`,
+> `bpgenvm-c/`, el ejecutable del simulado, resolver rutas del `.cfg`) **nunca se han
+> ejecutado desde una instalación de verdad** — sólo desde el árbol de fuentes, que es
+> donde todo está en su sitio por casualidad.
+>
+> Se hace **desde el ZIP sellado**, no desde `BpIde/target/`.
+
+- [ ] J1 Descomprimir el ZIP en una carpeta cualquiera. **Con espacios en la ruta**
+      (p.ej. `C:\Mis Programas\BasicPlus 4.0\`): ahí es donde se rompen las cosas
+- [ ] J2 Arrancar con `bpide.bat` **sin configurar nada**
+- [ ] J3 El título de la ventana dice **`BpIde 4.0`** (#367) — ni `[H9]` ni `dev`
+- [ ] J4 **F1** abre el ÍNDICE, y desde ahí se navega a los **cinco** volúmenes y se
+      vuelve. Las imágenes se ven (#363)
+- [ ] J5 Compilar y ejecutar un sample en la VM del PC
+- [ ] J6 Arrancar el **micro simulado** y ejecutar algo con GUI — esto prueba que
+      encontró `bin/` y `packs/`
+- [ ] J7 Conectar una placa y hacer un Run
+- [ ] J8 **Intentar un AOT SIN compilador instalado.** Resultado esperado: aviso claro
+      y el programa corre **interpretado**. Si sale un error feo, es un fallo: ahí se
+      espanta al que acaba de llegar
+- [ ] J9 Instalar el toolchain de Arm y reintentar → lo **detecta solo** (§5.1)
+- [ ] J10 Si no lo detecta, configurarlo a mano en **Project → AOT (toolchain)…**
+- [ ] J11 Mover la carpeta ENTERA a otro sitio y arrancar: sigue funcionando
+- [ ] J12 Mover **sólo el jar** fuera: debe quejarse con sentido (la guía avisa de esto)
+
+**Lo que más me interesa de este bloque son J2 y J8**: el primero ejercita los cuatro
+arreglos de distribución de golpe, y el segundo es el único punto donde un mensaje malo
+tiene coste real — alguien que instala por primera vez y se encuentra una traza.
+
+---
+
 ## Matriz placa × bloque
 
 Estado: `[x]` pasa · `[ ]` pendiente · `—` no aplica

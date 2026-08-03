@@ -140,3 +140,10 @@ bpgenvm-c/esp32p4/dependencies.lock
 # SHA256SUMS.txt, que es el que deja escrito qué se probó exactamente.
 dist/firmware/*.uf2
 dist/firmware/*.bin
+
+# El paquete de la release: el ZIP son 9 MB y se adjunta a la release, y el árbol
+# montado es material de trabajo que rehace `scripts/montar-zip.sh` de una pasada.
+# Va al repo sólo su sello .sha256 — el que permite comprobar que lo que se probó en
+# H13 y lo que se descarga el usuario son el mismo fichero.
+dist/BasicPlus-*-win/
+dist/BasicPlus-*-win.zip
