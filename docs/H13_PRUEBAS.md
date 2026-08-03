@@ -356,6 +356,10 @@ imagen única, demostrada.
   demuestra que no se rompe escribiendo mucho, **no** que sobreviva a un corte.
   Son dos cosas distintas y ahora están las dos.
 
+- ✅ **Tanda 3 · Ficheros** (8), repetida entera. Verde, sin hallazgos nuevos. Los
+  dos de la a1 (`FsPowerCut` mudo y el `lastModified` de `FileOpsTest`) ya venían
+  arreglados y no reaparecen. Dentro va el corte de corriente real de arriba.
+
 > ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
 > partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
 > preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
