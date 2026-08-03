@@ -27,8 +27,9 @@ for f in "$FE" "$VMC"; do
 done
 
 # --- la lista: grupo | fichero .bp | qué demuestra -------------------------
-# El grupo manda el orden de la tanda en placa. `gui` en la 4ª columna = no se
-# ejecuta aquí.
+# El grupo manda el orden de la tanda en placa. `gui` en la 4ª columna = SÓLO SE
+# COMPILA aquí: necesita hardware (pantalla, PIO...) que el PC no tiene. El
+# nombre viene de que al principio eran todos GUI.
 LISTA="
 M|samples/MemT1_Oo.bp|escalon 1: objetos y campos
 M|samples/MemT2_StrField.bp|escalon 2: campo string (referencia) en objeto
@@ -94,7 +95,8 @@ X|samples/OoSmoke.bp|humo de OO
 X|samples/StrOps348.bp|operaciones de cadena (#348)
 X|samples/MathOps348.bp|operaciones de Math (#348)
 X|samples/PathOps348.bp|rutas, siempre con '/'
-D|samples/blink.bp|GPIO: el unico dispositivo que probamos siempre|gui
+D|samples/blink.bp|GPIO en GP25 — SOLO a1: en la Metro GP25 es el NeoPixel|gui
+D|samples/NeoDemo.bp|WS2812 por PIO — en la METRO sustituye a blink (mismo GP25)|gui
 D|samples/BoardTest.bp|identificacion de la placa|gui
 "
 
