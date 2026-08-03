@@ -134,3 +134,9 @@ bpgenvm-c/esp32p4/dependencies.lock
 # ============================================================
 /Captura_pantallas_Graficas/
 /Imagenes IDE/
+
+# dist/firmware — las imágenes buenas de la release (H13). Los BINARIOS no van al
+# repo: son megas y se adjuntan a la release de GitHub. Lo que SÍ va es el manifiesto
+# SHA256SUMS.txt, que es el que deja escrito qué se probó exactamente.
+dist/firmware/*.uf2
+dist/firmware/*.bin

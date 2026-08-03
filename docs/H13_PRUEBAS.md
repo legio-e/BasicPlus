@@ -15,7 +15,7 @@
 | **a2** | Metro RP2350B | RP2350B | `pico` (misma imagen) | — |
 | **b1** | ESP32-S3 DevKit | ESP32 | `esp32` | — |
 | **b2** | ESP32-P4 Kit | ESP32 | `esp32p4` | MIPI-DSI 1024×600 + táctil |
-| **b3** | ESP32-P4 Waveshare 4.3" | ESP32 | `esp32p4-ws` | ST7701 480×800 |
+| **b3** | ESP32-P4 Waveshare 4.3" | ESP32 | `esp32p4` (**la misma que b2**) | ST7701 480×800 |
 | **c1** | STM32 Nucleo-U575ZI-Q | STM32 | `stm32` | — |
 | **c2** | STM32 Discovery U5G9J | STM32 | `stm32` | LTDC |
 
@@ -37,7 +37,17 @@ en placa es plataforma (backend HW, boot, wire), no el núcleo del lenguaje.
 
 ---
 
-## Paso 0 — firmware FRESCO en cada placa
+## Paso 0 — firmware FRESCO, y desde `dist/firmware/`
+
+> **La regla (Eduardo, 3-ago): lo que se prueba y lo que se publica es el MISMO fichero,
+> bit a bit.** Cada imagen se genera UNA vez, se copia a `dist/firmware/` y se sella
+> (`sha256sum`). A partir de ahí se flashea SIEMPRE desde ahí, y de ahí salen los
+> adjuntos de la release. Si hay que recompilar algo, se vuelve a sellar **y se vuelve a
+> probar** lo que dependa de ello. Detalle en `dist/firmware/README.md`.
+
+**Son 5 imágenes para 7 placas** — dos sirven a dos placas cada una, y no es un atajo:
+la variante se decide en runtime (el RP2350 se identifica solo; el panel del P4 sale del
+ENV, #311).
 
 > ⚠️ **No reutilizar imágenes viejas.** V4 ha cambiado el modelo de memoria (handles),
 > el arranque (kernel por capas), el FS (littlefs en las 3 familias), el formato `.mod`
@@ -45,9 +55,11 @@ en placa es plataforma (backend HW, boot, wire), no el núcleo del lenguaje.
 > regresiones** — y ayer ya nos costó una cacería de un bug que no existía.
 
 - [ ] **a1/a2** RP2350 — imagen única, la genero yo (`ninja -C pico/build`)
-- [ ] **b1/b2/b3** ESP32 — **las compilas tú** (`idf.py build`): es el único toolchain
-      que no tengo. Bloquea todo el grupo b, conviene lanzarlo antes de empezar
-- [ ] **c1/c2** STM32 — las genero yo (CubeIDE headless)
+- [ ] **b1** ESP32-S3 y **b2/b3** ESP32-P4 (una sola imagen) — **las compilas tú**
+      (`idf.py build`): es el único toolchain que no tengo. Bloquea el grupo b entero,
+      conviene lanzarlo antes de empezar
+- [ ] **c1/c2** STM32 — las genero yo (CubeIDE headless). Son DOS imágenes distintas
+- [ ] Con las 5 en su sitio: `cd dist/firmware && sha256sum *.uf2 *.bin > SHA256SUMS.txt`
 
 ---
 
