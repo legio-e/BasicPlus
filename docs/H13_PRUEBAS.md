@@ -387,6 +387,12 @@ imagen única, demostrada.
   `EvFin` (#342 — el evento del thread que muere no se pierde) porque toca justo
   la zona removida hoy: threads que terminan. Sale limpio.
 
+- ✅ **Tanda 6 · Lo nuevo del lenguaje** (8). Verde. Esta tanda pesaba más hoy que
+  esta mañana: es **la que prueba anchos en placa** (tuplas, campos y properties de
+  8 bytes, tipos estrechos), y #369 resultó ser **otro** sitio que el ensanchado
+  4→8B se dejó atrás — el segundo, después de las tuplas. Si quedara algún resto
+  vivo de esa familia, aquí es donde tenía más probabilidades de asomar. No asomó.
+
 > ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
 > partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
 > preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
