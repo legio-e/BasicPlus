@@ -232,6 +232,24 @@ Variante A: 30 GPIO, 4 MB flash, sin PSRAM. **AOT ARM**.
 > ⚠️ **Sin botón de reset**: sólo se recupera desenchufando. Antes de una prueba que
 > pueda colgarla, ten a mano la imagen buena.
 
+**Referencia de la placa (FS recién formateado, antes de nada):** heap 277 KB +
+pilas 92 · RTOS libre 15 KB · pila VM 12 de 16 KB sin usar · FS 100 KB / 1,5 MB.
+Ojo: `heap 277 KB` es el **reparto configurado**, no el consumo — no se mueve nunca
+y no sirve para vigilar fugas. El instrumento es la línea de **fin de RUN**.
+
+**Tandas cerradas (3-ago, ZIP `bff6e337`):**
+
+- ✅ **Humo** (6): `OoSmoke` `ExcCatchTest` `StrOps348` `MathOps348` `PathOps348`
+  `stacktrace`. Sin hallazgos.
+- ✅ **Memoria** (10, el tren en orden). Los diez con
+  `fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar;
+  plataforma: 0 vivos)` — **confirmación en placa de #357**, y no en un test suelto
+  sino en toda la batería, con `MemT5_Gc` (~440 KB de churn) y
+  `smp_heap_stress_pico` dentro, y sobre la imagen sellada.
+  La plataforma no se movió: `RTOS libre` 15 KB y marca de agua 11 de 16 KB
+  **idénticos** a los de después de la tanda de humo. 16 RUN acumulados en la misma
+  sesión, ninguno deja nada.
+
 ### a2 · Metro RP2350B
 Variante B: 48 GPIO, 16 MB flash, **PSRAM 8 MB**, NeoPixel. **Misma imagen que a1.**
 - [ ] La variante se detecta sola (48 GPIO, 8 ADC en `INFO`)
