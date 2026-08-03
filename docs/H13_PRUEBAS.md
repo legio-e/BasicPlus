@@ -369,6 +369,14 @@ imagen única, demostrada.
   dos de la a1 (`FsPowerCut` mudo y el `lastModified` de `FileOpsTest`) ya venían
   arreglados y no reaparecen. Dentro va el corte de corriente real de arriba.
 
+- ✅ **Tanda 4 · Threads** (6 — uno nuevo). Verde. El nuevo es **`ThreadFieldTest`**,
+  la red de regresión de #369, y esta es la **primera vez que corre en placa**:
+  `huecos reciclados: OK` · `cada thread escribe en SU campo entero: OK` ·
+  `campo de referencia escrito en run(): OK` · `=== ThreadFieldTest: 3 de 3 ===`.
+  Las tres líneas, con el heap en PSRAM (20.000 objetos de churn ahí dentro).
+  O sea que el guardián **no es sólo verde en el PC: sirve como instrumento en la
+  placa**, que es donde hará falta si esto se vuelve a mover.
+
 > ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
 > partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
 > preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
