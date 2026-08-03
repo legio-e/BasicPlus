@@ -38,6 +38,24 @@ rm -rf "$OUT"; mkdir -p "$OUT"/{bin,packs,docs,firmware,bpstdlib,bpdevices,sampl
 cp "$JAR" "$OUT/"
 printf '@echo off\r\njava -jar "%%~dp0BpIde-%s.jar" %%*\r\n' "$VER" > "$OUT/bpide.bat"
 
+# --- BpVM.cfg: cómo encuentra el compilador la stdlib -----------------------
+# SIN esto el paquete no compila NADA que importe la stdlib. El ZIP lleva los
+# .mod en bpstdlib/, pero `locateImportMod` sólo mira fromPath, outDir, el dir
+# del fuente y `dependencyPaths` — y dependencyPaths se rellena leyendo este
+# fichero. Sin él, `import Core` no resuelve, el compilador lo OMITE y los
+# errores salen luego en el código del usuario (H13, Pico: ExcCatchTest daba 4
+# errores que no eran suyos).
+#
+# Las rutas van RELATIVAS a propósito: VmConfig.resolveRelativo las resuelve
+# contra el directorio de ESTE fichero, no contra el directorio de trabajo. Así
+# la instalación se puede mover de sitio y arrancar desde donde sea.
+cat > "$OUT/BpVM.cfg" <<'CFG'
+{
+  "stdlibDir":  "./bpstdlib",
+  "devicesDir": "./bpdevices"
+}
+CFG
+
 # --- micro simulado (el IDE lo busca en bin/) --------------------------------
 cp "$RAIZ/bpgenvm-c/build/bpvm-sim.exe" "$OUT/bin/"
 cp "$RAIZ/bpgenvm-c/build/SDL2.dll"     "$OUT/bin/"
@@ -128,6 +146,29 @@ fi
 if jar tf "$NOMBRE.zip" | grep -q '\\'; then
     echo "El ZIP lleva '\\' en los nombres — se descomprime mal fuera de Windows"; exit 1
 fi
+
+# --- red: el paquete tiene que COMPILAR, no sólo tener los ficheros ---------
+# El bloque J comprobaba que el IDE ENCUENTRA sus carpetas; nunca compiló nada
+# de verdad desde una instalación, y por eso se coló que faltaba BpVM.cfg: el
+# ZIP llevaba bpstdlib/ pero el compilador no sabía dónde estaba, omitía el
+# `import Core` y los errores salían en el código del usuario (H13, Pico).
+#
+# Se hace sobre el ZIP EXTRAÍDO EN UN TEMPORAL, no sobre dist/: el árbol montado
+# vive dentro del repo, y VmConfig sube directorios buscando BpVM.cfg — o sea que
+# encontraba el del checkout y la comprobación pasaba SIEMPRE. Un guardián con la
+# red de seguridad puesta no comprueba nada.
+echo "-- comprobando que el paquete compila con su propia stdlib --"
+PRUEBA="$(mktemp -d)"
+( cd "$PRUEBA" && jar xf "$RAIZ/dist/$NOMBRE.zip" ) || { echo "  no se pudo extraer"; exit 1; }
+CASO="$PRUEBA/$NOMBRE/samples/ExcCatchTest.bp"     # importa Core + un módulo propio
+if ! ( cd / && java -cp "$PRUEBA/$NOMBRE/BpIde-$VER.jar" basicplus.frontend.Main \
+         "$CASO" --compile "$PRUEBA/out" --backend=mivm > "$PRUEBA/log" 2>&1 ) \
+   || [ -z "$(ls "$PRUEBA/out"/*.mod 2>/dev/null)" ]; then
+    echo "  EL PAQUETE NO COMPILA un programa con stdlib:"
+    grep -E '^\[[0-9]+:|no se localiz|sin interfaz' "$PRUEBA/log" | head -5 | sed 's/^/    /'
+    rm -rf "$PRUEBA" "$NOMBRE.zip"; exit 1
+fi
+rm -rf "$PRUEBA"
 
 sha256sum "$NOMBRE.zip" > "$NOMBRE.zip.sha256"
 

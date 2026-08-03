@@ -159,6 +159,11 @@ ENV, #311).
 - [ ] J5 Compilar y ejecutar un sample en la VM del PC
 - [ ] J6 Arrancar el **micro simulado** y ejecutar algo con GUI — esto prueba que
       encontró `bin/` y `packs/`
+- [ ] J6b **Compilar un programa que importe la stdlib** (`samples/ExcCatchTest.bp`:
+      `import Core` + un módulo propio con clases y excepciones). Este paso es el que
+      faltaba: J2 comprobaba que el IDE *encuentra* sus carpetas, no que *compile*
+      algo de verdad, y por ahí se coló que el ZIP no llevaba `BpVM.cfg` — ver el
+      hallazgo 6
 - [ ] J7 Conectar una placa y hacer un Run
 - [ ] J8 **Intentar un AOT SIN compilador instalado.** Resultado esperado: aviso claro
       y el programa corre **interpretado**. Si sale un error feo, es un fallo: ahí se
@@ -317,3 +322,4 @@ lo que veas — el log persistente es el mejor testigo que tenemos.
 | 3 | — (paquete) | El ZIP salía con **`\` como separador** (`Compress-Archive` de PS 5.1). Windows lo tolera; quien lo abra en Linux o Mac se encuentra ficheros con barras en el nombre, todos en un montón | ✅ se monta con `jar` + guardián que rechaza cualquier `\` en los nombres |
 | 4 | — (compilador) | **`SyncList` abortaba el compilador** con una traza Java. Repro de 6 líneas. Era el cross-check #174b pidiendo el slot de vtable a una clase built-in; `SyncList` es la única cuya base es otra built-in | ✅ 9dd7d10 — el chequeo no corre para built-in. Paridad dual-VM 28/0/0 |
 | 5 | — (paquete) | De los 262 samples publicados, **15 no compilaban**: 5 fallan a propósito, 6 se quedaron rancios (5 con `throw "cadena"` que #248 prohibió, incl. **`hello.bp`**; 1 con la API de I2c anterior a `Bus`), 4 son de `library` y necesitan proyecto | ✅ los 5 a `samples/errores/` con su diagnóstico esperado; los 6 rancios arreglados; los 4 de `library`, pendientes de mirar con su proyecto |
+| 6 | a1 Pico | 🔴 **El paquete no compilaba NADA que importara la stdlib.** El ZIP llevaba `bpstdlib/*.mod`, pero el compilador sólo sabe dónde están si encuentra un `BpVM.cfg` con `stdlibDir`, y ese fichero no iba dentro. En el repo funcionaba porque ahí sí existe. Encima, al no resolver `import Core` el compilador **lo omite y sigue**, así que los 4 errores salían en el código del usuario (`ExcCatchTest`) en vez de decir «no encuentro Core» | ✅ el ZIP lleva `BpVM.cfg` con rutas **relativas** (`./bpstdlib`) — `VmConfig` las resuelve contra el directorio del propio `.cfg`, así que la instalación se puede mover. **Guardián**: el montaje extrae el ZIP a un temporal FUERA del repo y compila `ExcCatchTest`; si falla, borra el ZIP. Verificado que sabe fallar. Encontrado por Eduardo («¿algún problema con el módulo Core?») |
