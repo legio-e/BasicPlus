@@ -383,6 +383,10 @@ imagen única, demostrada.
   hallazgo 15 (el `.mod` rancio que ganaba la resolución stdlib-first), no por el
   lenguaje; el lote 1 lo desbloqueó y aquí lo confirma el hardware.
 
+- ✅ **Tanda 5 · Eventos** (6). Verde, sin hallazgos. Interesaba especialmente
+  `EvFin` (#342 — el evento del thread que muere no se pierde) porque toca justo
+  la zona removida hoy: threads que terminan. Sale limpio.
+
 > ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
 > partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
 > preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
