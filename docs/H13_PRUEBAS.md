@@ -284,9 +284,12 @@ y no sirve para vigilar fugas. El instrumento es la línea de **fin de RUN**.
   backend **VM Java**, no contra la placa (`handshake bpvm-java 1.0`, socket en
   `localhost`). ⏳ **Falta el mismo proyecto EN LA PICO**, que es donde #310 se
   demuestra, y con él el **AOT ARM** (`aot: {target: arm}` no pinta nada en el PC).
-- ✅ **Tanda 7 · Dispositivo**: `blink` — GPIO real en GP25. El único periférico
-  que se prueba siempre; el resto de dispositivos no se ha tocado en V4 y probarlos
-  es lo más caro (decisión de Eduardo al montar la lista).
+- ✅ **Tanda 7 · Dispositivo** (2): `blink` — GPIO real en GP25 — y `BoardTest`,
+  que devuelve `gpioCount=30 · variant=A`: la placa **se identifica sola** y
+  coincide con lo que declara la stdlib board-aware (`GPIO_COUNT=30`). Es el
+  mecanismo del que depende que a1 y a2 compartan imagen. El resto de dispositivos
+  no se ha tocado en V4 y probarlos es lo más caro (decisión de Eduardo al montar
+  la lista).
 
 ### a2 · Metro RP2350B
 Variante B: 48 GPIO, 16 MB flash, **PSRAM 8 MB**, NeoPixel. **Misma imagen que a1.**
