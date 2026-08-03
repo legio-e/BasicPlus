@@ -11,6 +11,14 @@
 #include <string.h>
 #include <setjmp.h>
 
+/* V4/paso4: HANDLE de 64b = [gen:32 | idx|TAG:32]. bpref_t transporta los 64b;
+ * bpref_deref/bpvm_ref_dead enmascaran la palabra baja para idx/tag y la alta
+ * para gen. El TIPO se declara aquí arriba, y no en el bloque de la abstracción
+ * de refs (más abajo), sólo porque hay structs anteriores que guardan una ref
+ * como campo y necesitan el tipo completo. Todo lo demás —el ancho del slot,
+ * los accesores, el deref— sigue viviendo en aquel bloque y sólo allí. */
+typedef struct { uint64_t v; } bpref_t;
+
 /* ============================================================ */
 /*  Constantes extraídas de docs/MOD_FORMAT.md / HEAP_LAYOUT.md  */
 /* ============================================================ */
@@ -210,7 +218,7 @@ struct bpvm_thread {
     int32_t  blocked_on_mutex;  /* mid o -1 */
     int32_t  blocked_on_join;   /* tid o -1 */
     int64_t  wake_at_ms;        /* timestamp absoluto (BLOCKED_SLEEP) */
-    int32_t  thread_ref_heap;   /* user_ref del objeto Thread BP (para join) */
+    bpref_t  thread_ref_heap;   /* ref del objeto Thread BP (handle COMPLETO, con gen) */
 
     /* F5 — Exception Handler Stack. Cada TRY_BEGIN empuja una entry;
      * TRY_END pop. THROW busca el primer handler cuya expected_class
@@ -528,9 +536,8 @@ static inline void bpvm_write_i64_be(uint8_t* p, int64_t v) {
  * footprint en MEMORIA, NO sizeof(bpref_t). Hoy: carril plano de 8 bytes. */
 #define BPVM_REF_SIZE 8
 
-/* V4/paso4: HANDLE de 64b = [gen:32 | idx|TAG:32]. bpref_t transporta los 64b;
- * bpref_deref/bpvm_ref_dead enmascaran la palabra baja para idx/tag y la alta para gen. */
-typedef struct { uint64_t v; } bpref_t;
+/* bpref_t (el HANDLE de 64b) está declarado arriba del todo, junto a los
+ * includes: hay structs anteriores a este bloque que lo guardan como campo. */
 
 /* -- construcción / consulta -- */
 static inline bpref_t bpref_null(void)               { bpref_t r; r.v = 0u; return r; }
@@ -818,7 +825,7 @@ void bpvm_mutex_add_waiter(bpvm_t* vm, int mid, int tid);
 int  bpvm_mutex_pop_waiter(bpvm_t* vm, int mid);
 
 /* Thread BP helpers (F4). */
-int  bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref);  /* devuelve tid o -1 */
+int  bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref);   /* devuelve tid o -1 */
 
 /* F5 — Exception handling helpers. */
 void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,

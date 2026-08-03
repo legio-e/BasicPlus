@@ -4450,9 +4450,11 @@ public class VirtualMachine {
             //   slot 1 = __stackSize   (bytes; 0 = default)
             // Convención de vtable: slot 0 = run() (virtual).
             case THREAD_START: {
-                int threadRef = popTc(tc);
+                // El argumento es una REF: 8 bytes. Con popTc (4B) se perdía la
+                // generación del handle Y la pila quedaba 4 bytes alta.
+                long threadRef = popTcRef(tc);
                 // V4 (tanda 2): threadRef es un HANDLE → refDeref para tocar memory[];
-                // el REF se conserva tal cual como `this` de run() (abajo, writeInt32(sb, threadRef)).
+                // el REF se conserva entero como `this` de run() (abajo, refStore(sb, threadRef)).
                 int ta        = refDeref(threadRef);
                 int classPtr  = readInt32(ta);
                 int stackSize = readInt32(ta + 4 + 1 * 4);   // field 1
@@ -4467,19 +4469,27 @@ public class VirtualMachine {
                     int vtableBase = classPtr + CLS_OFF_FIELD_BITMAP + 2 * bitmapW * 4;
                     int methodOff  = readInt32(vtableBase + 0 * 4);     // slot 0 = run()
                     int runPc      = targetCS + methodOff;
-                    // 3) Preparar el frame inicial en el stack del nuevo thread:
-                    //    [sb+0]  thisRef
-                    //    [sb+4]  saved PC = 0  (sentinela: memory[0] = THREAD_EXIT)
-                    //    [sb+8]  saved BP = sb
-                    //    [sb+12] saved CS = 0
-                    //    bp = sb + 16; sp = sb + 16
+                    // 3) Preparar el frame inicial en el stack del nuevo thread.
+                    //    Tiene que ser IGUAL al que monta INVOKE_VIRTUAL, porque
+                    //    run() es un método corriente y su código lo da por hecho:
+                    //    el emisor le pone GET_LOCAL_L -20, una carga de 8 BYTES.
+                    //    [sb+0..7]  thisRef  (REF_SIZE — refStore, NO writeInt32)
+                    //    [sb+8]     saved PC = 0  (sentinela: memory[0] = THREAD_EXIT)
+                    //    [sb+12]    saved BP = sb
+                    //    [sb+16]    saved CS = 0
+                    //    bp = sb + 20; sp = sb + 20
+                    //
+                    //    Esto valía 16 y la ref se escribía en 4 bytes: el layout de
+                    //    ANTES del ensanchado de ref 4→8B, que aquí no se migró. Con
+                    //    bp = sb+16 run() leía sus 8 bytes en sb-4 y la mitad ALTA
+                    //    —la generación— salía de debajo de su propia pila.
                     int sb = nt.stackBase;
-                    writeInt32(sb,      threadRef);
-                    writeInt32(sb + 4,  0);
-                    writeInt32(sb + 8,  sb);
-                    writeInt32(sb + 12, 0);
-                    nt.sp = sb + 16;
-                    nt.bp = sb + 16;
+                    refStore(memory, sb, threadRef);
+                    writeInt32(sb + 8,  0);
+                    writeInt32(sb + 12, sb);
+                    writeInt32(sb + 16, 0);
+                    nt.sp = sb + 20;
+                    nt.bp = sb + 20;
                     nt.pc = runPc;
                     nt.cs = targetCS;
                     // 4) Notificamos a workers durmiendo en pickNextRunnableTc.
@@ -4489,7 +4499,7 @@ public class VirtualMachine {
                 break;
             }
             case THREAD_JOIN: {
-                int threadRef = popTc(tc);
+                long threadRef = popTcRef(tc);   // REF de 8 bytes, igual que pop_ref en la VM-C
                 if (threadRef == 0) { pushTc(tc, 0); break; }   // null → no-op (como VM-C)
                 int targetTid = readInt32(refDeref(threadRef) + 4 + 0 * 4);   // V4: handle→addr
                 if (targetTid <= 0) {

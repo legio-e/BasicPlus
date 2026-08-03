@@ -97,8 +97,8 @@ int bpvm_mutex_pop_waiter(bpvm_t* vm, int mid) {
  *
  * Devuelve el tid del thread nuevo, o -1 si error.
  */
-int bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref) {
-    if (thread_ref == 0) return -1;
+int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
+    if (bpref_is_null(thread_ref)) return -1;
 
     /* H2 — Thread spawn muta `thread_count`, `next_thread_stack` y
      * `threads[tid]` — todo estado compartido. Bajo `vm_lock` en SMP;
@@ -145,7 +145,7 @@ int bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref) {
     tc->blocked_on_mutex = -1;
     tc->blocked_on_join = -1;
     tc->wake_at_ms = 0;
-    tc->thread_ref_heap = (int32_t) thread_ref;
+    tc->thread_ref_heap = thread_ref;
     tc->last_debug_line = 0;   /* #139: trigger en la primera línea vista */
     tc->ev_depth = 0;          /* H5.c: sin handler de evento en curso */
     tc->ev_post_mortem = -1;   /* #342: vivo; la deuda se calcula al morir */
@@ -157,7 +157,7 @@ int bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref) {
      * encontrar el tc target. V4: thread_ref es un HANDLE → deref para
      * tocar memory[] (thread_ref_heap arriba se queda como REF: es el
      * ancla del GC y el `this` de run()). */
-    uint32_t ta = bpref_deref(vm, bpref_from_addr(thread_ref));
+    uint32_t ta = bpref_deref(vm, thread_ref);
     bpvm_write_i32_be(vm->memory + ta + 4 + 0 * 4, (int32_t) tid);
 
     /* Resolver dirección de Thread.run() (slot 0 de la vtable). */
@@ -175,19 +175,29 @@ int bpvm_thread_spawn(bpvm_t* vm, uint32_t thread_ref) {
     }
     uint32_t target_cs = bpvm_get_cs_for_data_addr(vm, class_ptr);
 
-    /* Frame inicial exacto del Java THREAD_START (líneas 2899-2912):
-     *   [sb+0]  thisRef
-     *   [sb+4]  saved PC = 0 (sentinela mem[0]=THREAD_EXIT cuando run() RET)
-     *   [sb+8]  saved BP = sb
-     *   [sb+12] saved CS = 0
-     *   bp = sb + 16, sp = sb + 16. */
+    /* Frame inicial. Tiene que ser IGUAL al que monta OP_INVOKE_VIRTUAL, porque
+     * run() es un método corriente y su código lo da por hecho: el emisor le
+     * pone `GET_LOCAL_L -20`, o sea una carga de 8 BYTES en bp-20.
+     *   [sb+0..7]   thisRef  (BPVM_REF_SIZE — bpref_store, NO write_i32)
+     *   [sb+8]      saved PC = 0 (sentinela mem[0]=THREAD_EXIT cuando run() RET)
+     *   [sb+12]     saved BP = sb
+     *   [sb+16]     saved CS = 0
+     *   bp = sb + 20, sp = sb + 20.
+     *
+     * Esto valía 16 y la ref se escribía en 4 bytes: era el layout de ANTES del
+     * ensanchado de ref 4→8B, que aquí se quedó sin migrar. Con bp = sb+16,
+     * run() leía sus 8 bytes en sb-4: la mitad baja (idx) salía bien y la ALTA
+     * —la generación— venía de la memoria de debajo de su propia pila, casi
+     * siempre 0. Handle con gen 0 → coincide de casualidad mientras el slot no
+     * se haya reciclado, y da use-after-free en cuanto se recicla. De ahí que
+     * el mismo programa fuera o no fuera según lo ejecutado antes. */
     uint32_t sb = stack_base;
-    bpvm_write_i32_be(vm->memory + sb,      (int32_t) thread_ref);
-    bpvm_write_i32_be(vm->memory + sb + 4,  0);
-    bpvm_write_i32_be(vm->memory + sb + 8,  (int32_t) sb);
-    bpvm_write_i32_be(vm->memory + sb + 12, 0);
-    tc->sp = sb + 16;
-    tc->bp = sb + 16;
+    bpref_store(vm, sb, thread_ref);
+    bpvm_write_i32_be(vm->memory + sb + 8,  0);
+    bpvm_write_i32_be(vm->memory + sb + 12, (int32_t) sb);
+    bpvm_write_i32_be(vm->memory + sb + 16, 0);
+    tc->sp = sb + 20;
+    tc->bp = sb + 20;
     tc->cs = target_cs;
     tc->pc = bpvm_cb_for_cs(vm, tc, target_cs) + (uint32_t) off;   /* H3.c: vtable → cb */
     tc->status = BPVM_THREAD_RUNNABLE;

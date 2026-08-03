@@ -2249,7 +2249,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 
     case BUILTIN_THREAD_START: {
-        uint32_t thread_ref = pop_ref(vm, tc);
+        bpref_t thread_ref = bpref_pop(vm, tc);   /* handle COMPLETO: el gen viaja hasta el `this` de run() */
         int new_tid = bpvm_thread_spawn(vm, thread_ref);
         if (new_tid < 0) {
             bpvm_diag_urgente("[bpvm-c] Thread.start falló");
