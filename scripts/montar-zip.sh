@@ -107,12 +107,23 @@ done
 # --- el ZIP + su sello ------------------------------------------------------
 cd "$RAIZ/dist"
 rm -f "$NOMBRE.zip"
+# NO se usa Compress-Archive de PowerShell: escribe los nombres con `\` (bug conocido
+# de ZipFile en .NET Framework, que es lo que trae PS 5.1). El estándar ZIP manda `/`.
+# Windows lo tolera, pero quien lo descomprima en Linux o Mac —para leer los docs o
+# coger las imágenes de firmware— se encuentra ficheros llamados "BasicPlus-4.0-win\bin\
+# bpvm-sim.exe", todos en el mismo montón. El `jar` del JDK siempre escribe `/`, y el
+# JDK está garantizado: sin él no hay IDE que empaquetar.
 if command -v zip >/dev/null 2>&1; then
     zip -qr "$NOMBRE.zip" "$NOMBRE"
-else   # Windows sin zip: PowerShell lo hace
-    powershell -NoProfile -Command \
-      "Compress-Archive -Path '$NOMBRE' -DestinationPath '$NOMBRE.zip' -Force"
+else
+    jar cfM "$NOMBRE.zip" "$NOMBRE"
 fi
+
+# Guardián de lo anterior: un solo `\` dentro de un nombre y el paquete no vale.
+if jar tf "$NOMBRE.zip" | grep -q '\\'; then
+    echo "El ZIP lleva '\\' en los nombres — se descomprime mal fuera de Windows"; exit 1
+fi
+
 sha256sum "$NOMBRE.zip" > "$NOMBRE.zip.sha256"
 
 echo

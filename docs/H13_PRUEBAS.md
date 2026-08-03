@@ -172,6 +172,28 @@ ENV, #311).
 arreglos de distribución de golpe, y el segundo es el único punto donde un mensaje malo
 tiene coste real — alguien que instala por primera vez y se encuentra una traza.
 
+### Lo ya adelantado sin GUI (3-ago)
+
+El ZIP se descomprimió en una ruta **con espacios** y se ejercitó desde ahí, con el
+directorio de trabajo **en otro sitio** (`C:\Windows`) para que nada colara por el cwd:
+
+| Comprobado | Cómo | Resultado |
+|---|---|---|
+| J1 | descomprimir en `…\Mis Programas\BasicPlus 4.0\` | ✅ |
+| J2 (la parte de rutas) | sonda que llama a `installDir`, `docsDir`, `packsDirEffective`, `SimRunner.locateExe`, `AotBuild.autodetectBpgenvm` | ✅ los cinco resuelven a la instalación |
+| J3 (el valor) | `Implementation-Version` del manifest del jar instalado | ✅ `4.0` |
+| J4 (los ficheros) | índice + los cinco volúmenes + comprobador de enlaces del montaje | ✅ cero enlaces rotos dentro del paquete |
+| J6 (el arranque) | `bin\bpvm-sim.exe` lanzado desde la instalación | ✅ arranca, resuelve su `SDL2.dll` y escucha (0,5 s) |
+
+**Sigue pendiente de ojos**, porque es GUI o necesita hardware: J2 arrancando de
+verdad, J3 leyendo el título, J4 navegando y viendo las imágenes, J5, J7, J8–J12.
+
+Una advertencia del camino: la sonda dio `Implementation-Version = null` la primera vez.
+No era el jar — era **la sonda**: al vivir en un directorio del classpath, era ella
+quien definía el paquete `com.mycompany.bpide`, y un paquete definido desde un
+directorio no tiene manifest. Metida DENTRO del jar, `4.0`. Instrumento mudo, dudar de
+él primero.
+
 ---
 
 ## Matriz placa × bloque
@@ -290,4 +312,6 @@ lo que veas — el log persistente es el mejor testigo que tenemos.
 
 | # | Placa | Qué pasó | Estado |
 |---|---|---|---|
-| | | | |
+| 1 | — (paquete) | La ayuda enlazaba 10 anexos `.md` que **no iban dentro del ZIP**: F1 abría el índice y de ahí a PHILOSOPHY, RELEASES, OPCODES… todo 404 en la instalación | ✅ 43dd9b2 — y guardián: si un enlace de la ayuda no resuelve dentro del paquete, el ZIP no se monta |
+| 2 | — (paquete) | `samples/` se llevaba **27 ficheros sueltos** de mi copia de trabajo (`NB2P0.bp`, `FsMinC30.bp`, `Hola.bp`…) | ✅ 43dd9b2 — van los del repo, que son los revisados |
+| 3 | — (paquete) | El ZIP salía con **`\` como separador** (`Compress-Archive` de PS 5.1). Windows lo tolera; quien lo abra en Linux o Mac se encuentra ficheros con barras en el nombre, todos en un montón | ✅ se monta con `jar` + guardián que rechaza cualquier `\` en los nombres |
