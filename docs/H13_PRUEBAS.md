@@ -344,6 +344,18 @@ imagen única, demostrada.
   decidía si fallaba era el estado del heap (si el GC había reciclado ya ese hueco),
   no el arranque. De ahí que pareciera ir y no ir sin tocar nada.
 
+- ⚡ **`FsPowerCut` con CORTE DE CORRIENTE REAL** — lo que en la a1 quedó pendiente
+  como «se prueba aparte». Eduardo desenchufó a lo bestia con el contador por
+  debajo de 1000 (no había llegado a imprimir el primer hito). Al rearrancar:
+  `contador recuperado = 812`. Un valor **coherente**, ni basura ni cero, y el FS
+  montó sin quejarse. Después siguió acumulando bien: 812 + 2000 = **2812**, exit 0.
+
+  Es el contrato del journal cumplido de punta a punta: puedes perder la última
+  escritura **sin confirmar**, pero nunca te quedas con un estado corrupto. Hasta
+  ahora sólo lo teníamos con el torturador simulado (19.806/20.000 en la a1), que
+  demuestra que no se rompe escribiendo mucho, **no** que sobreviva a un corte.
+  Son dos cosas distintas y ahora están las dos.
+
 > ⚠️ **Antes de la 1ª tanda: formatear el FS de la Metro** (cambiando el tamaño de
 > partición, como en la Pico). Si la placa trae un FS de una imagen anterior, el
 > preinstalado **no lo pisa** (hallazgo 11) y arrastrarías un `/app/Hello.mod` v5 que
