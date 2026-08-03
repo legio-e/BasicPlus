@@ -15,7 +15,7 @@ vez**, se copia aquí, y a partir de ese momento manda esta copia.
 |---|---|---|
 | `bpvm_pico.uf2` | Pico 2 (a1) · Metro RP2350B (a2) | `ninja -C bpgenvm-c/pico/build` |
 | `bpvm_esp32_merged.bin` | ESP32-S3 (b1) | `idf.py build` + `merge_bin` en `bpgenvm-c/esp32` |
-| `bpvm_esp32p4.bin` | P4 Kit (b2) · P4 Waveshare (b3) | `idf.py build` en `bpgenvm-c/esp32p4` |
+| `bpvm_esp32p4_merged.bin` | P4 Kit (b2) · P4 Waveshare (b3) | `idf.py build` + `merge_bin` en `bpgenvm-c/esp32p4` |
 | `bpvm_stm32_nucleo.bin` | Nucleo-U575 (c1) | STM32CubeIDE |
 | `bpvm_stm32_dk2.bin` | Discovery U5G9J (c2) | STM32CubeIDE |
 
@@ -48,3 +48,23 @@ En V3 los binarios se adjuntaban directamente desde sus directorios de compilaci
 funciona mientras nadie recompile en medio — y basta un `ninja` de más para publicar
 algo que nadie ha probado, sin que se note. Ayer mismo (2-ago) una imagen recompilada
 mientras se probaba nos costó una cacería de un bug inexistente: el mecanismo importa.
+
+## Los `_merged` se flashean en el offset 0
+
+Los dos ESP32 llevan `_merged` en el nombre y no es decorativo: son **bootloader +
+tabla de particiones + aplicación en un solo fichero**, listos para grabar de una pieza
+en el **offset 0**. El binario suelto de la aplicación (`bpvm_esp32*.bin` del directorio
+de compilación) va en 0x10000 y **por sí solo no arranca**; publicar ese sería regalar un
+ladrillo a quien no tenga ya el bootloader puesto. El offset del bootloader NO es el
+mismo en los dos chips (0x0 en el S3, 0x2000 en el P4), otra razón para no dejar que
+nadie lo componga a mano.
+
+Se generan con los parámetros que dice el propio build (`build/flasher_args.json`), no
+de memoria:
+
+```bash
+esptool --chip esp32s3 merge_bin -o bpvm_esp32_merged.bin   --flash_mode dio --flash_freq 80m --flash_size 16MB   0x0 bootloader/bootloader.bin 0x8000 partition_table/partition-table.bin   0x10000 bpvm_esp32.bin
+```
+
+Comprobación barata de que el merge salió bien: `tamaño(merged) - 0x10000` tiene que
+dar EXACTAMENTE el tamaño de la aplicación.
