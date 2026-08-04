@@ -155,6 +155,46 @@ producción.
 
 ---
 
+## SQLite en un PACK no es sólo modularidad: adelgaza la construcción de imágenes — Eduardo, 4-ago
+
+> «Lo que vamos a hacer en V5 de enviar el SQLite a un pack no solamente nos es
+> útil por temas de hacerlo modular, es que además **simplifica la construcción
+> de las imágenes de los micros**.»
+
+El argumento es de coste de mantenimiento y es el más fuerte de los dos. Hoy,
+**todo lo que el firmware necesita va compilado DENTRO de la imagen**: núcleo,
+littlefs, LVGL, los blobs de stdlib (`esp32_mods.c`, `stm32_mods.c`…), el
+`Hello` y el `Bench.mdn`. Meter SQLite ahí significaría:
+
+- **Alta en los cinco builds** — el patrón que ya nos ha mordido (olvidar uno =
+  esa familia no enlaza y no te enteras hasta reconstruirla).
+- **Engordar TODAS las imágenes**, incluidas las que no lo van a usar nunca. La
+  Pico tiene 4 MB de flash y 520 KB de SRAM: SQLite no cabe con holgura ahí, y
+  aun así pagaría el peso en el binario.
+- **Atar la versión del motor de BD a la del firmware**: actualizar SQLite
+  pasaría por **reflashear**, con todo lo que eso arrastra.
+
+Como pack: la imagen **no cambia**, sólo lo llevan las placas que lo necesitan,
+actualizarlo es **quemar un pack** en vez de reflashear, y en placa la zona de
+packs es **XIP**, así que el código ejecuta desde flash sin comerse la RAM.
+
+### La base ya está probada, y se probó hoy
+
+Los packs de **código nativo** se apoyan en el **loader `.mdn` del AOT** — el
+mismo que en la tanda del P4 cargó `Bench.mdn` (1 thunk, 130 B) y dio **116×**.
+O sea que el mecanismo de «traer código máquina a una VM en marcha, validarlo
+por ABI y engancharlo» **no hay que inventarlo: está funcionando en placa**.
+
+### Las dos partes duras, dichas de frente
+
+1. **La escala.** Hoy el `.mdn` carga 130 bytes; SQLite son cientos de KB. Ahí
+   el paso de **enlace** del `.text` (el que hizo falta en H4) deja de ser un
+   detalle, y hay que decidir XIP contra copia a RAM.
+2. **Las raíces del GC.** El **paso 3 de #302** —shadow stack / raíces GC del
+   nativo compilado— sigue abierto y se difirió *a AOT-en-placa*. Un cuerpo
+   nativo grande que maneje objetos BP sube esa apuesta: es el prerrequisito
+   real, no un flanco.
+
 ## La zona de packs debe servir RECURSOS, no sólo módulos — Eduardo, 2-ago
 
 Sale de una pregunta suya mientras se documentaban los packs de V4: *«en los
