@@ -88,4 +88,36 @@ Inventario base: `BpIde/` Swing (Java 1.8, GUI builder NetBeans). Componentes:
   razonable**: es una PUESTA AL DÍA, no un rewrite.
 - **Lista de captura: cerrada de momento** (6 ítems). Reabrible si surge algo.
 
+## IDE-7 · Selección múltiple en el árbol del dispositivo — Eduardo, 4-ago (V5)
+
+> «Permitir seleccionar varios. Borrar 1 a 1 es lento, ya que cuando termina
+> tiene que refrescar el árbol y cuando hay muchos archivos se nota.»
+
+Dictado durante las pruebas de placa de H13. **No entra en V4** (freeze): es
+mejora, no bug.
+
+**Lo que hay hoy**, y el porqué de la lentitud — el coste NO está en el borrado,
+está en el refresco:
+
+- `PicoExplorer.java:195` — `TreeSelectionModel.SINGLE_TREE_SELECTION`. Sólo se
+  puede marcar un nodo, así que borrar N son N pasadas.
+- `PicoExplorer.java:1353` `onDelete()` — por **cada** fichero: un diálogo de
+  confirmación, un `b.del(...)` por el wire y **un `onRefresh()` entero**, que
+  vuelve a listar todo el FS. Con muchos ficheros ese listado es lo que se nota,
+  y se paga N veces para borrar N.
+
+**Las tres piezas, independientes entre sí** (se puede hacer la 2 sin la 1 y ya
+se gana):
+
+1. `SINGLE_TREE_SELECTION` → `DISCONTIGUOUS_TREE_SELECTION`. Una línea.
+2. `onDelete()` sobre la selección entera: **una** confirmación para los N
+   («¿Borrar 7 ficheros?»), N borrados, y **un solo `onRefresh()` al final**.
+   Aquí está casi toda la ganancia.
+3. Repasar si el mismo patrón —refrescar dentro del bucle— aparece en las otras
+   operaciones del árbol (subida de varios, sobre todo).
+
+**Cuidado al hacerlo**: la confirmación de N ficheros tiene que **enseñar la
+lista**, no sólo el número. Borrar en la placa no tiene deshacer, y un árbol con
+multiselección es fácil de ampliar sin querer con shift.
+
 ## (pendiente: más ítems que el usuario siga dictando)
