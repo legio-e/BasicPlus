@@ -657,6 +657,19 @@ abajo — el siguiente hereda el fallo y no dice nada nuevo.
 | 15 | Proyecto `formdemo` | **Forms desde `.win`** (`resources/main.win`) | Es lo que colgaba en el P4 y se arregló (super() implícito + widget-sin-contenedor + FS→PSRAM) |
 | 16 | **AOT desde el IDE** | Generar el `.mdn`, cargarlo, medir | El plato fuerte de esta placa. Se compara contra el **propio P4 interpretado**, no contra otra placa |
 
+**Resultado (4-ago) — peldaños 1 a 7, todos verdes, sin sacar la escalera de
+bisección:**
+
+| # | Resultado |
+|---|---|
+| 1 `GuiDemo` | ✅ Pinta |
+| 2 `GuiColorDemo` | ✅ **Cierra #285 por medida**: el cian era el compilador rancio que empaquetaba el IDE, no el render. Ahora, con el IDE nuevo y en la placa donde apareció, sale bien |
+| 3 `GuiGeomDemo` | ✅ |
+| 4 `GuiClickDemo` | ✅ **Táctil**, GT911 en I2C 0x14. De aquí sale el **hallazgo 22** (el `screen` dice 480×320 sobre un panel de 1024×600) |
+| 5 `GuiCheckDemo` | ✅ Widget con `onChange` |
+| 6 `GuiEvSpike` | ✅ **#324 confirmado en RISC-V**, y la lectura tuvo su momento: con el log a medias salían **5 upcalls y 2 handlers** y canté que no cuadraba. Con el log completo son **7 y 7**. Los eventos iban con retraso, que es justo lo que dice el diseño —`raise` **encola** y se drena entre quanta, no es una llamada síncrona—, así que en placa salen a rachas. **El invariante no es la alternancia, es el total.** El control de host, corrido en la VM-C, da la referencia limpia: 1 clic → 1 upcall → 1 handler, y el `3 handler` **antes** del `4 tras run()`, que es el criterio que el propio sample define para el caso bueno |
+| 7 `GuiValueDemo`, `GuiLedSpin` | ✅ switch/slider/bar/spinbox/led, con valores coherentes en el volcado |
+
 **Si algo se rompe, la escalera de bisección ya está escrita** y no hay que
 improvisar: `GuiLblMin` (lo mínimo que debería ir) → `GuiWinMin` (sólo construir
 la Window) → `GuiWinLbl` (Window + Label hijo) → `GuiWinPanel` (Window + Panel) →
