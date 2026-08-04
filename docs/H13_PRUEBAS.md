@@ -590,6 +590,29 @@ ya registrado** — no hace falta volver a anotarlo.
   perfilarlo por micro; y (b) el mismo motor (littlefs + fachada) da el mismo
   número por dos cinturas distintas y en tres ISA — que es exactamente lo que se
   buscaba al diseñarlo con la cintura desde el día uno.
+- ✅ **Tanda 4 · Threads y concurrencia** (11). Verde, y **notablemente más
+  rápida**. `paralleltest` (4M de iteraciones interpretadas, dos threads):
+
+  | | reloj | tiempo | por reloj |
+  |---|---|---|---|
+  | ESP32-S3 (Xtensa) | 240 MHz | 129.262 ms | — |
+  | **ESP32-P4 (RISC-V)** | **360 MHz** | **33.079 ms** | **2,6× mejor** |
+
+  **3,9× más rápido con 1,5× de reloj**, o sea **2,6× por ciclo**. Es el control
+  que faltaba en la duda de rendimiento que dejó abierta la b1: la lentitud del
+  S3 **no es «lo que cuesta ser un micro»** — es del S3. Misma carga, mismo
+  binario del ZIP, y en los dos casos **interpretado** (`paralleltest` no tiene
+  funciones `native`, así que el AOT no entra en esta medida: es intérprete
+  contra intérprete en dos ISA).
+
+  Los dos workers dan `sum=656067456` idéntico, y el planificador de la BP-VM
+  reparte igual de acompasado que en las otras placas — primera vez que ese
+  planificador corre sobre RISC-V.
+
+  Sigue sin cerrarse la pregunta de **por qué** el S3 va lento por ciclo (la
+  sospecha del intérprete desde flash por caché en vez de IRAM), pero ya no es
+  una anomalía sin referencia: hay dos puntos y el reparto entre ellos es
+  arquitectura, no reloj. → **V5**.
 - [ ] `GuiColorDemo` — se ve, con sus colores
 - [ ] `GuiClickDemo` / `GuiTableDemo` — **táctil** respondiendo
 - [ ] Eventos del GUI (#324): el lazo en BP, sin duplicados
