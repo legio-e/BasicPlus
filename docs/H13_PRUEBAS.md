@@ -414,7 +414,18 @@ imagen única, demostrada.
   hallazgo 16 —aquél arregló *construir* el pack y dejó sin arreglar *subirlo*— y
   afecta también a la ruta de host. Importa más que el desperdicio: esas copias
   quedan en `/app`, que **está en el camino de búsqueda**, o sea la forma exacta
-  del hallazgo 15. **Se arregla en el lote de mañana**, con el jar y el ZIP.
+  del hallazgo 15. ✅ **ARREGLADO Y REVERIFICADO EN PLACA** (4-ago, 16c7970): la
+  condición se lee ahora de la extensión del artefacto, no de la config. La tanda 8
+  repetida enseña `[pack] App.pack viaja cerrado: sus módulos y resources van
+  dentro, no se suben por separado`, sube **un solo fichero**, y en el árbol del
+  dispositivo `/app/sampleproject/` queda **sólo `App.pack`** — la limpieza de
+  huérfanos (F2) se llevó sola el `Util.mod` y el `leeme.txt` de la ejecución
+  anterior. La app sigue dando `hello, BasicPlus!` / `5 squared = 25`, exit 0.
+
+  Alcance acotado: de las cuatro rutas de subida, la del device era **la única**
+  rota. La de host ya era correcta desde #310; las de debug-en-placa y micro
+  simulado ejecutan `<base>.mod` explícitamente, nunca un pack, así que sus deps y
+  recursos sí hacen falta.
 
 - ⚡ **AOT ARM demostrado EN PLACA** (4-ago, `Bench`). Era el hueco que la tanda 8
   NO cubría: `sampleproject` no tiene ninguna `native function`, así que su
