@@ -509,6 +509,10 @@ el producto.
   caminos distintos—. Y el aviso del AOT sale como debe: `AOT target 'xtensa' no
   soportado (arm = Cortex-M33 RP2350/STM32 · riscv = ESP32-P4). Los módulos se
   ejecutarán interpretados` — dice qué SÍ hay y qué va a hacer, no sólo que no puede.
+- ✅ **Tanda 3 · Ficheros** (8). Verde. No es una repetición de la Pico: aquí la
+  cintura es `fs_lfs_esp32.c` sobre `esp_partition`, no `flash_range_*`. Mismo
+  littlefs y misma fachada, **trozo de abajo distinto** — o sea que la abstracción
+  de H2 queda probada por su segundo camino.
 
 ### b2 · ESP32-P4 Kit
 PSRAM 32 MB, MIPI-DSI **EK79007 1024×600**, táctil **GT911 (I2C 0x14)**, Ethernet IP101.
