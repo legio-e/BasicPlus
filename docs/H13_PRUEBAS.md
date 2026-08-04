@@ -761,11 +761,25 @@ romperse sin que salte ningún test. Lo que lo hace creíble es que el síntoma
 rompía a los 30 RUN) y el de #344 (el verbo RUN escrito una sola vez), y la
 intermitencia es la firma de la campaña de memoria. **No lo atribuyo a un commit
 concreto**: no hay medida que lo reparta, y aquí eso importa. Lo que sí queda
-⚠️ **CORRECCIÓN (misma tarde, fila b3):** el Stop **vuelve a fallar** en la
-Waveshare, **con el mismo firmware**. O sea que lo de arriba no era «arreglado»:
-era una racha buena, y así hay que leerlo. El dato nuevo además aprieta el
-diagnóstico — **mismo binario, placa distinta, comportamiento distinto** ⇒ es
-**estado o temporización**, no código. Queda como observación ABIERTA.
+⚠️ **CORREGIDO DOS VECES, y la segunda es la buena** (b3, misma tarde). Primero
+anoté que el Stop «volvía a fallar». Luego Eduardo lo caracterizó de verdad, y
+resulta que **son DOS cosas y sólo falla una**:
+
+- ✅ **El KILL del programa BP FUNCIONA** — la aplicación para, que es lo que
+  #257 prometía y lo que de verdad importa.
+- ❌ **Lo que queda mal es el WIRE**: tras el Stop hay que cerrar la comunicación
+  y reconectar, *«y a veces hay que hacerlo una segunda vez»*.
+
+Eso cambia dónde hay que mirar: no es el KILL, es el **estado del transporte
+DESPUÉS del KILL** — la VM muere con un frame a medias y el siguiente comando
+entra desincronizado. Que hagan falta **dos** reconexiones apunta a un buffer que
+se drena por tandas, el mismo terreno que el drenaje adaptativo del `Connect` en
+`SerialBackend`. Criterio de Eduardo: *«eso es mejor que tener que resetear»* →
+**molesto, no bloqueante**: va **al lote**, no a la cabeza.
+
+*Nota de método: mi «vuelve a fallar» era demasiado grueso y habría mandado a
+buscar al KILL, que está bien. La caracterización del usuario valía más que mi
+observación.*
 
 Lo que sí queda dicho es que **el KILL de punta a punta (#257) funciona cuando funciona**,
 y que la forma de trabajar que habilita —demo tras demo sin reset— es la que ha
