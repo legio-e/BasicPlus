@@ -503,6 +503,12 @@ el producto.
 **Tandas (4-ago, ZIP `14ebff58` descomprimido — se prueba el paquete, no el repo):**
 
 - ✅ **Tanda 1 · Humo** (7). Verde.
+- ✅ **Tanda 2 · Memoria** (10). Verde con 96 KB de heap. `smp_heap_stress_pico` da
+  `20100/20100`: es la **tercera arquitectura** que confirma el arreglo de #369
+  —está en código común (`threading.c`), así que Cortex-M33 y Xtensa lo prueban por
+  caminos distintos—. Y el aviso del AOT sale como debe: `AOT target 'xtensa' no
+  soportado (arm = Cortex-M33 RP2350/STM32 · riscv = ESP32-P4). Los módulos se
+  ejecutarán interpretados` — dice qué SÍ hay y qué va a hacer, no sólo que no puede.
 
 ### b2 · ESP32-P4 Kit
 PSRAM 32 MB, MIPI-DSI **EK79007 1024×600**, táctil **GT911 (I2C 0x14)**, Ethernet IP101.
