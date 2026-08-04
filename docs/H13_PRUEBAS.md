@@ -513,6 +513,26 @@ el producto.
   cintura es `fs_lfs_esp32.c` sobre `esp_partition`, no `flash_range_*`. Mismo
   littlefs y misma fachada, **trozo de abajo distinto** — o sea que la abstracción
   de H2 queda probada por su segundo camino.
+- ✅ **Tanda 4 + 4b · Threads y concurrencia** (11). Verde. `paralleltest` pareció
+  colgarse y **no era cuelgue: son 129 segundos** (4M de iteraciones interpretadas)
+  en los que el sample no decía nada. Segunda vez en el mismo día que un programa
+  mudo se confunde con uno colgado (la otra fue `Bench`, 9 s), así que **se le han
+  puesto `print` de progreso** — decisión de Eduardo: *"así el usuario verá lo que
+  está haciendo en vez de pensar que se ha colgado"*.
+
+  **Y lo que enseña el patrón importa más que el tiempo.** Los dos workers avanzan
+  ACOMPASADOS (`w1 @100000` / `w2 @100000` / …) sin un solo `yield` en el programa.
+  Ojo con la lectura: **ninguna placa ejecuta dos workers de intérprete** — en el
+  RP2350 el segundo core lleva la comunicación, no ejecuta BP. O sea que ese
+  reparto lo hace **el planificador de la propia BP-VM** entre quanta, no el
+  sistema operativo. Es H2 funcionando, y aquí sobre Xtensa.
+
+  ⏳ **Abierto (rendimiento, no corrección):** 129.262 ms en el S3 contra 215 ms en
+  el host son **601×**, cuando el `fib(28)` de `Bench` da 50× entre host y Pico.
+  Pero la comparación es coja —cargas distintas— y **falta el control bueno**:
+  `paralleltest` contra `paralleltest` en RP2350. Si el S3 resultara varias veces
+  más lento con la misma carga, la sospecha clásica en ESP32 es el intérprete
+  corriendo desde flash por caché en vez de IRAM. → **V5**, no se toca en freeze.
 
 ### b2 · ESP32-P4 Kit
 PSRAM 32 MB, MIPI-DSI **EK79007 1024×600**, táctil **GT911 (I2C 0x14)**, Ethernet IP101.

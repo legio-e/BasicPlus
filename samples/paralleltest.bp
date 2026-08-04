@@ -1,10 +1,20 @@
 module ParallelTest
 
   // Worker que hace CPU-bound puro: SIN llamadas a yield() / sleep().
-  // Si los 2 cores son reales, ambos workers corren simultáneamente y el
-  // tiempo total ≈ tiempo de UNO solo. Con 1 core físico (numWorkers=1),
-  // como no hay yields, el primero monopoliza hasta terminar y luego va el
-  // segundo: tiempo total ≈ 2× el de uno.
+  //
+  // LO QUE DEMUESTRA: que los dos avancen a la vez NO depende de que haya dos
+  // cores. En las placas hay UN solo worker de intérprete (en el RP2350 el otro
+  // core lleva la comunicación, no ejecuta BP), y aun así los dos threads
+  // progresan acompasados: el cambio de contexto lo hace el planificador de la
+  // propia BP-VM entre quanta, no el sistema operativo. Por eso el test no lleva
+  // yields — si hicieran falta, esto no funcionaría.
+  //
+  // En el PC con --smp=2 sí hay dos workers de verdad y corren en paralelo, así
+  // que el tiempo total ≈ el de uno; con un worker, ≈ 2× el de uno.
+  //
+  // Los `print` de progreso NO son adorno: 2.000.000 de iteraciones interpretadas
+  // son minutos en un micro, y sin ellos el programa está mudo todo ese rato y
+  // parece colgado. Que el usuario vea lo que está haciendo es parte de la prueba.
   class Worker extends Thread
     var id:     integer
     var iters:  integer
@@ -22,6 +32,9 @@ module ParallelTest
       var i:   integer := 0
       while i < this.iters do
         sum := sum + (i * 3) - (i / 2)
+        if (i mod 100000) == 0 then
+          print "w" + intToString(this.id) + " @" + intToString(i)
+        endif
         i := i + 1
       endwh
       this.result := sum
