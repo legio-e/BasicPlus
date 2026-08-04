@@ -705,6 +705,22 @@ Panel **ST7701 480×800**, elegido por el **ENV** (`display=st7701`, #311), back
 - [ ] El backlight enciende (el `bl_invert` viaja con la entrada del catálogo)
 - [ ] Mismo GUI que b2, a otra resolución: comprobar que la interfaz no se sale
 
+**Referencia de la placa (4-ago, MISMA imagen `8e1c3535` que la b2):** `esp32p4` ·
+360 MHz · 55 GPIO · **flash 32 MB** · SRAM 768 KB · PSRAM 32 MB · VM heap 27,5 MB
++ stack 512 KB · **FS 5,0 MB** de una zona de datos de ~10 MB → **hallazgo 27**
+(el límite lo pone la tabla del IDF de la imagen, no el chip; se deja así en V4).
+
+**Esta fila NO repite las 8 tandas, y el motivo importa**: es **la misma imagen**
+que la b2, ya verde de punta a punta. Lo que aquí prueba algo que no esté probado
+ya es lo que **cambia entre las dos placas** — el panel, el táctil y el arranque.
+Repetir el resto mediría el mismo binario dos veces.
+
+**Tandas (4-ago):**
+
+- ✅ **Tanda 1 · Humo** + `RandomTest` (8/8). Verde. Su valor aquí no es el ISA
+  —eso ya lo cubrió la b2— sino que **el mismo binario arranca y opera en una
+  placa distinta**, que es la afirmación que sostiene la imagen única.
+
 ### c1 · STM32 Nucleo-U575ZI-Q
 Sin pantalla. Wire por el VCP del ST-LINK. **AOT ARM**. Página de borrado de **8 KB**.
 - [ ] `BlinkStm32` — LED verde PC7
