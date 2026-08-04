@@ -720,6 +720,29 @@ Repetir el resto mediría el mismo binario dos veces.
 - ✅ **Tanda 1 · Humo** + `RandomTest` (8/8). Verde. Su valor aquí no es el ISA
   —eso ya lo cubrió la b2— sino que **el mismo binario arranca y opera en una
   placa distinta**, que es la afirmación que sostiene la imagen única.
+- ✅ **El panel sale del ENV** (#311) y **el backlight invertido enciende**.
+  `GuiDemo` y `GuiColorDemo` se ven bien con el `ST7701`, lo que ya demuestra que
+  el ENV **se leyó**: sin él habría arrancado con el perfil de la EV a 1024×600.
+- ✅ **Táctil** (`GuiClickDemo`). Es lo único de esta placa que no comparte
+  silicio con lo ya probado en la b2.
+- ✅ **Geometría y tabla** (`GuiGeomDemo`, `GuiTableDemo`). El primero dibuja su
+  panel de `100x50` en `pos=10,20` — correcto, y **no puede enseñar el hallazgo
+  22 porque no usa `align`**: al ser geometría absoluta, el modelo lógico no
+  entra en juego. *(Predije que se vería el efecto y me equivoqué de sample.)*
+  El segundo ocupa sólo la parte superior, pero **eso tampoco lo demuestra**:
+  como observó Eduardo, **la tabla se ajusta a su contenido** (cabecera + una
+  fila), y eso se ve pequeño en cualquier pantalla. **El 22 ya está probado sin
+  necesidad de la vista**: el volcado imprime `screen [480x320]` en una placa de
+  480×**800**. Lo que sí discriminaría, el día que haga falta: un widget con
+  **align BOTTOM** — con el modelo real saldría abajo del todo; con el de 320
+  sale a media pantalla, y eso no admite otra lectura.
+
+**🏁 b3 CERRADA.** No repite las 8 tandas por diseño (misma imagen que la b2): se
+ha probado **lo que cambia entre las dos placas** —arranque, panel por ENV,
+backlight, táctil y layout— y todo verde. Lo que sí ha aportado, y vale más que
+la fila entera, son **dos hallazgos que sólo se ven en una placa recién
+particionada**: el **28** (🔴 crítico, en virgen no arranca ninguna demo gráfica)
+y el **27** (el límite de flash lo pone la imagen). **Cinco placas de siete.**
 
 ### c1 · STM32 Nucleo-U575ZI-Q
 Sin pantalla. Wire por el VCP del ST-LINK. **AOT ARM**. Página de borrado de **8 KB**.
