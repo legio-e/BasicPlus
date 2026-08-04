@@ -571,6 +571,25 @@ toca y lo cuenta, en vez de fallar mudo más adelante.
 
 ⚠️ `BoardTest` dirá `variant=B` también aquí (55 GPIO ≥ 40). **Es el hallazgo 19,
 ya registrado** — no hace falta volver a anotarlo.
+
+**Tandas (4-ago):**
+
+- ✅ **Tanda 1 · Humo** (7). Verde.
+- ✅ **Tanda 2 · Memoria** (10). Verde con **27,5 MB de heap**. Aquí el criterio se
+  da la vuelta respecto al S3: con este heap, que los samples de estrés pasen no
+  demuestra gran cosa — lo que cuenta es que **la memoria vuelva a su sitio al
+  acabar el RUN**, que es lo que mide el guardián de #339.
+- ✅ **Tanda 3 · Ficheros** (8). Verde, y con **una medida de Eduardo que merece
+  quedar escrita**: el FS va **igual de rápido que en las demás placas**. *«Aquí
+  la CPU no aporta diferencia, el FS es el más lento y es el que manda.»*
+
+  No es una anécdota, es la confirmación de que **el FS está limitado por la
+  flash, no por el micro**: un borrado de bloque son milisegundos, y a esa escala
+  da igual ir a 150 MHz o a 360. Dos consecuencias prácticas: (a) el rendimiento
+  del FS es una propiedad **de la placa, no de la familia**, así que no hay que
+  perfilarlo por micro; y (b) el mismo motor (littlefs + fachada) da el mismo
+  número por dos cinturas distintas y en tres ISA — que es exactamente lo que se
+  buscaba al diseñarlo con la cintura desde el día uno.
 - [ ] `GuiColorDemo` — se ve, con sus colores
 - [ ] `GuiClickDemo` / `GuiTableDemo` — **táctil** respondiendo
 - [ ] Eventos del GUI (#324): el lazo en BP, sin duplicados
