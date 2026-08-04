@@ -295,3 +295,69 @@ Buena parte de esas respuestas **ya están escritas** en el micro simulado
 (H10): es un proceso de PC que el IDE trata como una placa, con su flash y su
 FS en ficheros. La Pi sería ese mismo modelo, pero con los pines de verdad
 conectados por debajo.
+
+## Una librería de placa GENÉRICA — Eduardo, 4-ago
+
+> «`Pico.bp` es para la Pico y la Metro y las placas que lleven RP2350. Ésta es
+> otra familia. Si acaso habría que hacer otra librería para Espressif, pero no
+> en V4, ya dijimos que congelamos código. **Apunta hacer una librería genérica
+> para todas las placas. Que sean los micros los que den la información y la
+> librería haga de puente para BP.**»
+
+### De dónde sale
+
+Del **hallazgo 19** de H13. En el ESP32-S3, `BoardTest` imprimió:
+
+```
+gpioCount=45
+variant=B
+GPIO_COUNT=45
+```
+
+Los dos números son correctos; `variant=B` no significa nada en un S3 — «A/B» es
+el bondeado del RP2350 (A = 30 GPIO, B = 48). Sale de `bpstdlib/Pico.bp:92`, que
+**no es un intrínseco**: son cinco líneas de BP puro, `if gpioCount() >= 40 then
+"B" else "A"`, y los 45 pines del S3 caen del lado del 48.
+
+### El reencuadre de Eduardo — que es lo importante
+
+Yo lo leí como «`variant()` miente». No es eso: **`variant()` hace exactamente lo
+que documenta**. Lo que pasa es que `Pico.bp` **es la librería de la familia
+RP2350**, y se está usando en otra familia porque para ésa no hay ninguna. El
+fallo no está en la función: está en que **hay una sola librería de placa y es la
+de un micro concreto**.
+
+### Lo que hay hoy, medido
+
+- `bpstdlib/Pico.bp` va **embebida en las tres familias** (`MODS=(… Pico …)` en
+  los tres `regen_*_mods.sh`), y los samples la importan en todas.
+- Los intrínsecos que expone (`gpioCount`, `boardName`, `resetCause`, `tempC`,
+  `cpuFreqHz`, `uptimeMs`…) **sí bajan al backend por familia** — ésos ya están
+  bien: el dato lo da el micro. El problema son las **derivaciones en BP**, como
+  `variant()`, que hornean el modelo de un micro dentro de la librería común.
+- El firmware del RP2350 **ya tiene el dato de verdad**: `board_desc()->variant`.
+  Lo que falta no es el dato, es el camino hasta BP.
+
+### Lo que pide Eduardo
+
+Una **librería de placa única**, común a todas las familias, en la que:
+
+- **el dato lo da el micro** (backend por familia), y
+- **la librería es sólo el puente a BP** — no la fuente de verdad, no el sitio
+  donde se decide nada.
+
+O sea: la misma forma que ya tienen `Gpio`/`I2c`/`Spi`/`Uart` (fachada BP +
+cintura por micro), aplicada también a la identificación de la placa.
+
+### Lo que hay que decidir antes de tocar nada
+
+- **El nombre.** `Board`, `Mcu`, `Device`… y qué pasa con `Pico`: ¿alias que se
+  mantiene por compatibilidad, o desaparece? (Hoy `Pico` es el nombre de un
+  producto ajeno usado como nombre genérico — parte del lío viene de ahí.)
+- **Qué se hace con lo específico de una familia** (el A/B del RP2350, el PIO,
+  la PSRAM del P4…). ¿Una librería por familia además de la común? ¿O queda todo
+  en la común y cada micro contesta lo suyo?
+- **Y la pregunta que ha destapado el hallazgo: qué contesta la librería cuando
+  el micro NO tiene ese concepto.** Hoy la respuesta es la peor posible —
+  contesta como si lo tuviera. Debe haber una forma de decir *«aquí eso no
+  existe»* que el programa pueda ver, y que no se confunda con un valor válido.
