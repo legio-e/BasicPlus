@@ -553,6 +553,24 @@ está probado por caminos distintos.
 ### b2 · ESP32-P4 Kit
 PSRAM 32 MB, MIPI-DSI **EK79007 1024×600**, táctil **GT911 (I2C 0x14)**, Ethernet IP101.
 **AOT RISC-V con `.mdn` dinámico** (#H4, 113×).
+
+**Referencia de la placa (4-ago, imagen `8e1c3535`):** `esp32p4` · **360 MHz** ·
+55 GPIO · 14 PWM / 14 ADC · flash 16 MB · SRAM 768 KB · **PSRAM 32 MB** · VM heap
+**27,5 MB** + stack 512 KB · FS 100 KB / 6,8 MB (recién formateado — los 100 KB
+son la línea base de un FS vacío, el mismo número que salió en la Pico).
+
+**La otra punta del parque.** El heap es **286×** el del S3 (96 KB) y **110×** el
+de la Pico (257 KB). Aquí un rojo por memoria no es información sobre la
+plataforma: si algo se queda sin memoria con 27 MB, es un bug. Y es la **única
+placa con AOT en marcha**, así que es la tanda que ejercita lo que en el S3 no se
+pudo probar (Xtensa no tiene AOT).
+
+**La placa venía sin particiones y el IDE lo dijo** antes de intentar nada. Es
+H9 (#303) haciendo su trabajo: el arranque por capas se para en el estado que
+toca y lo cuenta, en vez de fallar mudo más adelante.
+
+⚠️ `BoardTest` dirá `variant=B` también aquí (55 GPIO ≥ 40). **Es el hallazgo 19,
+ya registrado** — no hace falta volver a anotarlo.
 - [ ] `GuiColorDemo` — se ve, con sus colores
 - [ ] `GuiClickDemo` / `GuiTableDemo` — **táctil** respondiendo
 - [ ] Eventos del GUI (#324): el lazo en BP, sin duplicados
