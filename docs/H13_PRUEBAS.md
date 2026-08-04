@@ -475,11 +475,20 @@ imagen única, demostrada.
 
 ### b1 · ESP32-S3 DevKit
 Wire por UART0; consola por USB nativo. Xtensa: `native` **interpretada**, sin AOT.
-- [ ] **#331 — la causa sin probar.** La placa escribe tras `erase-flash`, pero nunca
-      se demostró por qué. Hipótesis: bootloader viejo de 2 MB. Es el único pendiente
-      con riesgo de publicación: si es eso, le pasará a cualquiera con un S3 así.
-      Mirar en el log la línea `flash: configurada N KB | chip físico M KB`; si no
-      cuadran, **reflashear bootloader** y confirmar
+- [x] ❌ **#331 — hipótesis REFUTADA (4-ago), y el riesgo de publicación con ella.**
+      El anillo del log **sobrevive al reflasheo** (la imagen fusionada acaba mucho
+      antes de `bpdata @0x118000`), así que conserva arranques del firmware ANTERIOR.
+      Se distinguen por el `buffer de bulk`, que es constante de compilación (#334):
+      los de **20480 B** son de antes de #338 (2-ago) — el firmware que llevaba la
+      placa hasta hoy —, los de **8192 B** son los de hoy. **Y los cuatro dicen
+      `flash: configurada 16384 KB | chip fisico 16384 KB`.**
+      O sea: el bootloader viejo **NO** estaba a 2 MB. La causa de #328 sigue sin
+      conocerse, pero el escenario que daba miedo —«le pasará a cualquiera con un S3
+      así»— **no existe**: ni la imagen vieja ni la nueva configuran mal la flash.
+      Demostrado además en la misma sesión que **repartir + formatear funciona**
+      (región FS 7632 → 10000 KB, 0 ficheros), que es la operación que murió en #328.
+      *Nota de método: di por perdida la evidencia al ver el binario viejo
+      sobrescrito. Estaba en el log post-mortem. El anillo en flash pagó otra vez.*
 - [ ] DRAM: el bloque de 160 KB (#336) sigue dando de sí con carga
 
 ### b2 · ESP32-P4 Kit
