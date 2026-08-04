@@ -195,6 +195,76 @@ por ABI y engancharlo» **no hay que inventarlo: está funcionando en placa**.
    nativo grande que maneje objetos BP sube esa apuesta: es el prerrequisito
    real, no un flanco.
 
+## El PUENTE a SQLite: cómo se llama a un binario dentro de un pack — charla del 4-ago
+
+Diseño de Eduardo, en dos partes:
+
+1. **Un shim en C que se compila JUNTO a SQLite** y construye su tabla de
+   funciones. Va dentro del mismo blob.
+2. **`SQLite.mod`**, un módulo BP con muchas funciones `native` que usan esa
+   tabla y exponen la API al resto del lenguaje.
+
+Los dos viajan **en un mismo pack**, que se graba en la zona de packs.
+
+### Lo que NO se toca, y por qué — criterio de Eduardo
+
+**El código de SQLite NO puede tener dirección fija.** Yo propuse enlazarlo a la
+dirección de la zona de packs para ahorrarnos las relocations, y Eduardo lo paró
+con el argumento bueno: *«si no, el mecanismo que hemos montado de packs habría
+que rehacerlo»*. La zona reparte huecos libremente; un pack que exija una
+dirección concreta **impone esa restricción a todos los demás**. Era optimizar el
+caso local a costa del mecanismo general — justo lo que la doctrina de la cintura
+existe para evitar.
+
+### Lo decidido
+
+- **El pack lo construimos NOSOTROS**, una vez por ISA (**ARM** y **RISC-V**), y
+  **no se recompila nunca**. El usuario sólo lo graba. Consecuencia estratégica:
+  **el usuario no compila C jamás**, ni siquiera para tener una base de datos.
+- **Entrar (exports)**: la tabla guarda **offsets**, no direcciones — igual que el
+  `.mdn`. Al cargar, `base + offset` una vez y a correr.
+- **Salir (imports)**: SQLite necesita llamar al anfitrión (VFS, `malloc`, hora).
+  Esa tabla vive **en el firmware, en una dirección FIJA** — y ahí sí, porque la
+  imagen la controlamos nosotros. Para el blob son constantes de compilación:
+  **cero relocations en esa mitad**.
+- **Y la misma estructura fija sirve en los dos sentidos**: el shim escribe ahí el
+  puntero a su tabla de exports al cargar, y los `native` de `SQLite.mod` lo leen
+  de esa dirección conocida. Un solo punto de encuentro; **sin registro de packs
+  ni búsqueda por nombre**.
+- El **VFS de SQLite** acaba siendo otra **cintura sobre la fachada del FS** — el
+  mismo patrón que ya funcionó tres veces.
+- Regalo de una decisión vieja: desde H2.1 las cadenas BP son **UTF-8 en array de
+  bytes** y SQLite habla `const char*` UTF-8. **No hay capa de conversión.**
+
+### Lo que queda ABIERTO, y se decide midiendo
+
+**¿Necesita relocations el acceso de SQLite a sus PROPIOS datos estáticos?** Es la
+única pregunta que queda, y es empírica. Hay motivos para el optimismo: la
+amalgama es **una sola unidad de traducción** (todos los símbolos son locales) y
+tanto RISC-V (`medany`) como ARM saben direccionar datos locales **PC-relativos,
+sin GOT**. Si sale así, el esquema es **enteramente libre de relocations**:
+PC-relativo por dentro, dirección fija por fuera, offsets para entrar.
+
+Se comprueba en cinco minutos y sin placa:
+
+```sh
+riscv32-esp-elf-readelf -r sqlite_pack.o | head -40
+```
+
+Vacío ⇒ el diseño vale tal cual. Si aparece una GOT, sabremos **cuántas entradas**
+hay que resolver y se decide entonces (la salida natural sería relocalizar **al
+grabar**, que es el único momento en que se conoce la dirección y encima lo hace
+el PC). **Hacer esa medida ANTES de escribir nada.**
+
+### Lo único que cruza el tiempo
+
+El pack se congela, pero **lo de enfrente sigue moviéndose**: los `native` de
+`SQLite.mod` los compila el IDE en cada Run, y el firmware se actualiza. Alguien
+puede tener quemado el pack de V5.0 y un IDE de V5.2. Eso pide **una versión de
+ABI en la cabecera del pack** que el cargador compare y, si no casa, lo diga y se
+pare. Mecanismo ya hecho dos veces: #284 en el `.mod` y el gate de arch del
+`.mdn`. Sin él no falla — **funciona raro**, que es peor.
+
 ## La zona de packs debe servir RECURSOS, no sólo módulos — Eduardo, 2-ago
 
 Sale de una pregunta suya mientras se documentaban los packs de V4: *«en los
