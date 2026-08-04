@@ -621,6 +621,18 @@ ya registrado** — no hace falta volver a anotarlo.
   más importa de las tres**: la escalera de GUI que viene detrás se apoya entera
   en este mecanismo —el lazo de #324 son eventos— así que verlos verdes *antes*
   de tocar la pantalla separa dos causas que si no vendrían juntas.
+- ✅ **Tanda 6 · Lo nuevo del lenguaje** (8). Verde. Tercera arquitectura, sin
+  sorpresas.
+- ✅ **Tanda 7 · Dispositivo**. `BoardTest` verde (con el `variant=B` del hallazgo
+  19, esperado). **`NeoTest` no puntúa aquí tampoco**: el P4 tampoco registra
+  backend de WS2812 — hallazgo 21.
+- ✅ **Tanda 8 · Pack ejecutable EN LA PLACA** (#310). Verde. **Tercera familia**
+  con el pack ejecutándose desde `Run on Device`: con RP2350 y Xtensa detrás, los
+  hallazgos 16 y 18 quedan confirmados en las tres, y #310 con ellos.
+
+**Batería estándar del P4: 8/8.** Lo que queda de la fila b2 es lo propio de esta
+placa —la escalera de GUI de 16 peldaños y el AOT—, o sea que es la placa a la
+que **más le queda por delante**, no la que va más adelantada.
 #### Tanda GUI del P4 — orden de dependencia (4-ago)
 
 **En escalera: cada peldaño supone el anterior.** Si uno falla, no sigas hacia
