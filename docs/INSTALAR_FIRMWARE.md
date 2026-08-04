@@ -60,12 +60,14 @@ La DevKit tiene **dos puertos USB**: flashea y conecta el IDE por el del
 
 ### A. Imagen precompilada (esptool)
 
-`esptool` es un script Python (`pip install esptool`). La release trae la
+`esptool` viene con el ESP-IDF (o `pip install esptool`). **Con el IDF v6 es
+esptool v5**: el ejecutable es `esptool` (no `esptool.py`) y los subcomandos
+llevan GUION (`write-flash`, `merge-bin`, `--flash-size`). La release trae la
 imagen **fusionada** (bootloader + tabla de particiones + app en un solo
 fichero, para flashear en el offset 0):
 
 ```sh
-esptool.py --chip esp32s3 -p <puerto-del-bridge> write_flash 0x0 bpvm_esp32_merged.bin
+esptool --chip esp32s3 -p <puerto-del-bridge> write-flash 0 bpvm_esp32_merged.bin
 ```
 
 ### B. Compilarla (ESP-IDF v6.x)
@@ -80,8 +82,8 @@ Para regenerar la imagen fusionada de la release a partir del build:
 
 ```sh
 cd build
-esptool.py --chip esp32s3 merge_bin -o bpvm_esp32_merged.bin \
-    --flash_mode dio --flash_freq 80m --flash_size 2MB \
+esptool --chip esp32s3 merge-bin -o bpvm_esp32_merged.bin \
+    --flash-mode dio --flash-freq 80m --flash-size 16MB \
     0x0 bootloader/bootloader.bin \
     0x8000 partition_table/partition-table.bin \
     0x10000 bpvm_esp32.bin
@@ -89,21 +91,21 @@ esptool.py --chip esp32s3 merge_bin -o bpvm_esp32_merged.bin \
 
 ---
 
-## ESP32-P4 (placas con pantalla) — `bpvm_esp32p4_generic.bin`
+## ESP32-P4 (placas con pantalla) — `bpvm_esp32p4_merged.bin`
 
 **Una única imagen para las placas P4 soportadas** (ESP32-P4-Function-EV de
 7" 1024×600 y Waveshare Touch-LCD de 4.3" 480×800): el panel se elige en
-runtime leyendo `/sys/board.json` (clave `"display"`); sin fichero, arranca
-con el perfil de la EV. Tras flashear una placa que no sea la EV, ejecuta
-una vez `samples/SetDisplay.bp` desde el IDE para escribir la configuración
-([guía de gráficos §23.4](gui.html#ej-pantalla)).
+runtime desde el **ENV** de la placa (clave `display`, p.ej. `display=st7701`);
+sin valor, arranca con el perfil de la EV. **No hay que ejecutar nada después de
+flashear**: el panel se resuelve solo ([guía de gráficos
+§23.4](gui.html#ej-pantalla)).
 
 El wire (IDE) va por el puerto del **bridge USB-UART** de la placa.
 
 ### A. Imagen precompilada (esptool)
 
 ```sh
-esptool.py --chip esp32p4 -p <puerto-del-bridge> write_flash 0x0 bpvm_esp32p4_generic.bin
+esptool --chip esp32p4 -p <puerto-del-bridge> write-flash 0 bpvm_esp32p4_merged.bin
 ```
 
 ### B. Compilarla (ESP-IDF v6.x)
@@ -115,7 +117,7 @@ idf.py -p <puerto-del-bridge> flash      # flashea las piezas con sus offsets
 ```
 
 Para regenerar la imagen fusionada, los offsets exactos del build están en
-`build/flash_args` (`esptool.py merge_bin` con esa lista). Prerequisitos y
+`build/flash_args` (`esptool merge-bin` con esa lista). Prerequisitos y
 notas del port (ESP-IDF v6.0.1, revisión del silicio) en
 `bpgenvm-c/esp32p4/`.
 

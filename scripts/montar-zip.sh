@@ -70,6 +70,16 @@ cp "$RAIZ/packs/"*.pack        "$OUT/packs/"
 cp "$RAIZ/bpstdlib/"*.mod      "$OUT/bpstdlib/"
 cp "$RAIZ/bpdevices/"*.mod     "$OUT/bpdevices/"
 
+# Los FUENTES de la stdlib también (hallazgo 28, 4-ago). No es un extra para
+# curiosos: el IDE resuelve las dependencias del device de forma TRANSITIVA, y
+# descubre los imports de cada módulo LEYENDO SU .bp (resolveDeviceDeps →
+# parseImports). Sin los fuentes, `Gui` no delata que importa `Json` → Json no
+# se sube → en un dispositivo VIRGEN no arranca NINGUNA demo gráfica. En el repo
+# nunca se vio porque ahí los .bp están; se destapó en la P4 Waveshare recién
+# particionada, la única placa de la campaña con /lib vacío.
+cp "$RAIZ/bpstdlib/"*.bp       "$OUT/bpstdlib/"
+cp "$RAIZ/bpdevices/"*.bp      "$OUT/bpdevices/" 2>/dev/null || true
+
 # --- documentación: los volúmenes + sus imágenes + los anexos que enlazan ----
 cp "$RAIZ/docs/"*.html "$OUT/docs/"
 cp -r "$RAIZ/docs/img" "$OUT/docs/"
@@ -148,6 +158,26 @@ done
 if [ -n "$INTRUSOS" ]; then
     echo "  INTRUSOS en bpstdlib/ (.mod sin su .bp al lado):$INTRUSOS"
     echo "  Un .mod ahí manda sobre el que acabas de compilar. Sácalo de bpstdlib."
+    rm -rf "$OUT"; exit 1
+fi
+
+# El MISMO invariante, pero sobre el PAQUETE MONTADO (hallazgo 28). El de arriba
+# mira el repo; éste mira lo que se va a publicar, que es donde estaba roto: el
+# ZIP llevaba 26 .mod y CERO .bp, y con eso la resolución transitiva del IDE se
+# queda muda (descubre los imports leyendo el .bp de cada módulo). Consecuencia
+# real medida en placa: en un device virgen no arranca ninguna demo gráfica,
+# porque nadie sube Json y Gui depende de él.
+# Es la 3ª vez en la campaña que algo funciona en el repo y está roto desde el
+# ZIP (hallazgos 6, 25 y 28) — por eso el check va aquí y no en la confianza.
+FALTAN=""
+for m in "$OUT"/bpstdlib/*.mod; do
+    b="$(basename "$m" .mod)"
+    [ -f "$OUT/bpstdlib/$b.bp" ] || FALTAN="$FALTAN $b.bp"
+done
+if [ -n "$FALTAN" ]; then
+    echo "  El PAQUETE no lleva los fuentes de la stdlib:$FALTAN"
+    echo "  Sin ellos el IDE no resuelve las deps transitivas y las demos"
+    echo "  gráficas no arrancan en un dispositivo virgen (hallazgo 28)."
     rm -rf "$OUT"; exit 1
 fi
 
