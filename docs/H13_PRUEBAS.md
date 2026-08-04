@@ -670,6 +670,8 @@ bisección:**
 | 6 `GuiEvSpike` | ✅ **#324 confirmado en RISC-V**, y la lectura tuvo su momento: con el log a medias salían **5 upcalls y 2 handlers** y canté que no cuadraba. Con el log completo son **7 y 7**. Los eventos iban con retraso, que es justo lo que dice el diseño —`raise` **encola** y se drena entre quanta, no es una llamada síncrona—, así que en placa salen a rachas. **El invariante no es la alternancia, es el total.** El control de host, corrido en la VM-C, da la referencia limpia: 1 clic → 1 upcall → 1 handler, y el `3 handler` **antes** del `4 tras run()`, que es el criterio que el propio sample define para el caso bueno |
 | 7 `GuiValueDemo`, `GuiLedSpin` | ✅ switch/slider/bar/spinbox/led, con valores coherentes en el volcado |
 | 8 `GuiInputDemo`, `GuiListKbd` | ✅ Teclado en pantalla escribiendo en el textarea. Visto por Eduardo: **la tecla ✓ no hace nada** → **hallazgo 23** |
+| 9 `GuiTabDemo`, `GuiTableDemo`, `GuiMsgDemo` | ✅ tabview, table y el modal devolviendo su índice de botón (`val=0` en el volcado) |
+| 10 `GuiFontDemo`, `FontLoadDemo` | ⚠️ `GuiFontDemo` **salió negra a la primera** → **hallazgo 24** (no era del sample: estado acumulado; con la placa reseteada, verde). `FontLoadDemo` ✅: `loadFont(...) -> id 1` leyendo el `.bin` del FS de la placa y **la fuente cargada se pinta**, confirmado por Eduardo a ojo. Éste es el primer peldaño que cruza **GUI × ficheros**, y hay que saber leerlo: el volcado **no muestra** la fuente cargada —sólo refleja `fontSize` en px, y `setFont(id)` va por otro camino—, así que aquí **el instrumento es ciego y sólo decide el ojo** |
 
 **Si algo se rompe, la escalera de bisección ya está escrita** y no hay que
 improvisar: `GuiLblMin` (lo mínimo que debería ir) → `GuiWinMin` (sólo construir
