@@ -2493,11 +2493,32 @@ public class FrmMain extends javax.swing.JFrame
             protected void done() {
                 try {
                     if (Boolean.TRUE.equals(get()) && modPath != null) {
+                        // #310 / hallazgo 18 — un `.pack` viaja CERRADO: dentro van
+                        // el main, sus módulos Y los resources del proyecto (los mete
+                        // PackStep). Subir además esas copias sueltas no sólo sobra:
+                        // quedan en /app, que ESTÁ en el camino de búsqueda de módulos
+                        // del firmware, y el día que se queden rancias mandan ellas y
+                        // no el pack — la forma exacta del hallazgo 15. Así que con
+                        // pack NO se sube nada más; y la limpieza de huérfanos (F2, en
+                        // uploadAndRun) se lleva sola las copias que dejaron las
+                        // ejecuciones anteriores, sin tener que limpiar a mano.
+                        //
+                        // La condición se lee del ARTEFACTO, no de la config: si lo que
+                        // subimos es un .pack, es autocontenido por definición. Así no
+                        // puede desincronizarse de la línea que eligió la entrada.
+                        final boolean packRun =
+                                modPath.getFileName().toString().endsWith(".pack");
+                        if (packRun) {
+                            appendConsola("[pack] " + modPath.getFileName()
+                                    + " viaja cerrado: sus módulos y resources van dentro,"
+                                    + " no se suben por separado\n");
+                        }
                         // Resolver TODAS las deps (incl. stdlib core) a subir
                         // antes del main. Las stdlib core van a /lib, el resto
                         // a /app (lo decide uploadAndRun con este set).
-                        java.util.List<java.io.File> deps =
-                                resolveDeviceDeps(bpFile, outDir);
+                        java.util.List<java.io.File> deps = packRun
+                                ? java.util.Collections.<java.io.File>emptyList()
+                                : resolveDeviceDeps(bpFile, outDir);
                         java.util.Set<String> libDeps = new java.util.HashSet<>();
                         for (java.io.File d : deps) {
                             String n = d.getName();
@@ -2520,9 +2541,11 @@ public class FrmMain extends javax.swing.JFrame
                                         + "\n");
                             }
                         }
-                        // H12 (#260) — resources/ del proyecto al device.
-                        java.util.Map<String, java.io.File> resources =
-                                collectProjectResources();
+                        // H12 (#260) — resources/ del proyecto al device. Con pack NO:
+                        // ya viajan dentro (ver arriba).
+                        java.util.Map<String, java.io.File> resources = packRun
+                                ? java.util.Collections.<String, java.io.File>emptyMap()
+                                : collectProjectResources();
                         if (!resources.isEmpty()) {
                             appendConsola("[resources] " + resources.size()
                                     + " fichero(s) de resources/ a subir\n");
