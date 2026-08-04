@@ -422,13 +422,24 @@ imagen única, demostrada.
   y el ciclo completo se ve de punta a punta — compilar → `[aot] Bench.mdn ✓
   (1 thunk, 68 B nativo)` → subir → cargar el thunk → ejecutar código máquina:
 
-  | | resultado | tiempo |
-  |---|---|---|
-  | `fib(28)` interpretado | 317811 | **8797 ms** |
-  | `fib(28)` AOT | 317811 | **84 ms** |
+  | placa | interpretado | AOT | ratio |
+  |---|---|---|---|
+  | **a2** Metro (heap en PSRAM) | 8797 ms | 84 ms | 104,7× |
+  | **a1** Pico (heap en SRAM) | 8486 ms | 84 ms | 101,0× |
 
-  **104×, y el mismo número.** Coherente con el 113× medido en H4 sobre RISC-V. Que
-  el resultado coincida importa tanto como la velocidad: el nativo corre *bien*.
+  **~100×, y el mismo número (317811) en las dos.** Coherente con el 113× medido en
+  H4 sobre RISC-V. Que el resultado coincida importa tanto como la velocidad: el
+  nativo corre *bien*.
+
+  **Y de regalo, el peaje de la PSRAM — con su letra pequeña.** La misma prueba en
+  las dos placas da 311 ms de diferencia: **3,5 %**, mucho menos de lo esperado. El
+  motivo es que la PSRAM del RP2350 va por la **caché XIP** y `fib` recursivo tiene
+  un conjunto de trabajo minúsculo, así que cabe en caché y la latencia queda
+  absorbida. Lo medido es «la PSRAM cuesta 3,5 % **cuando el programa cabe en
+  caché**», NO en general: un churn de GC sobre los 7,5 MB fallaría en caché sin
+  parar y ahí el peaje sería otro — ese número no lo tenemos.
+  El AOT sale **84 ms clavados en ambas** (mismo silicio, mismo reloj, código nativo
+  en SRAM en los dos casos): buena señal de que no estamos midiendo ruido.
 
   Dos cosas que salieron de aquí y no son fallos del producto: (a) el programa está
   **mudo 9 segundos** —el primer `print` va después del `fib` interpretado— y eso
