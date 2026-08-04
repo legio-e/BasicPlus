@@ -491,6 +491,19 @@ Wire por UART0; consola por USB nativo. Xtensa: `native` **interpretada**, sin A
       sobrescrito. Estaba en el log post-mortem. El anillo en flash pagó otra vez.*
 - [ ] DRAM: el bloque de 160 KB (#336) sigue dando de sí con carga
 
+**Referencia de la placa (4-ago, imagen nueva `35b70432`):** `esp32s3` · 240 MHz ·
+45 GPIO · 8 PWM / 20 ADC · flash 16 MB · SRAM 512 KB · **sin PSRAM** · VM heap
+**96 KB** + stack 64 KB · FS 9,8 MB (repartido hoy de 7,6 → 10000 KB).
+Ojo al leer resultados aquí: el heap es **la tercera parte** del de la Pico y
+**1/78** del de la Metro, porque de los 512 KB del chip sólo llegan ~312 KB libres
+y el IDF se come otros ~84 KB EN MARCHA (razonamiento medido en `esp32/main/main.c`).
+Un rojo por memoria en esta placa es información sobre **la plataforma**, no sobre
+el producto.
+
+**Tandas (4-ago, ZIP `14ebff58` descomprimido — se prueba el paquete, no el repo):**
+
+- ✅ **Tanda 1 · Humo** (7). Verde.
+
 ### b2 · ESP32-P4 Kit
 PSRAM 32 MB, MIPI-DSI **EK79007 1024×600**, táctil **GT911 (I2C 0x14)**, Ethernet IP101.
 **AOT RISC-V con `.mdn` dinámico** (#H4, 113×).
