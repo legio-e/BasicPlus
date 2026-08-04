@@ -416,6 +416,27 @@ imagen única, demostrada.
   quedan en `/app`, que **está en el camino de búsqueda**, o sea la forma exacta
   del hallazgo 15. **Se arregla en el lote de mañana**, con el jar y el ZIP.
 
+- ⚡ **AOT ARM demostrado EN PLACA** (4-ago, `Bench`). Era el hueco que la tanda 8
+  NO cubría: `sampleproject` no tiene ninguna `native function`, así que su
+  `aot: {target: arm}` no ejercía nada. `Bench` sí la tiene (`native function fib`),
+  y el ciclo completo se ve de punta a punta — compilar → `[aot] Bench.mdn ✓
+  (1 thunk, 68 B nativo)` → subir → cargar el thunk → ejecutar código máquina:
+
+  | | resultado | tiempo |
+  |---|---|---|
+  | `fib(28)` interpretado | 317811 | **8797 ms** |
+  | `fib(28)` AOT | 317811 | **84 ms** |
+
+  **104×, y el mismo número.** Coherente con el 113× medido en H4 sobre RISC-V. Que
+  el resultado coincida importa tanto como la velocidad: el nativo corre *bien*.
+
+  Dos cosas que salieron de aquí y no son fallos del producto: (a) el programa está
+  **mudo 9 segundos** —el primer `print` va después del `fib` interpretado— y eso
+  parece un cuelgue; es del sample. (b) el `MDN: RECHAZADO — ABI 1, esta VM habla 2`
+  del arranque es **el gate funcionando** (#284) contra el blob embebido de mayo:
+  argumento extra para el hallazgo 12, que ya pedía quitarlo — no sólo cuesta
+  105 ms de cada boot, es que además imprime lo que parece un error en todos.
+
 **Con la tanda 8 la a2 queda barrida entera, y con ella la familia RP2350 completa
 (a1 + a2).** Ocho tandas, cero hallazgos del producto desde el arreglo de #369; el
 único hallazgo es del IDE y no afecta a lo que ejecuta la placa.
