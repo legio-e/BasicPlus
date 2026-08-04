@@ -705,6 +705,21 @@ Lo que V4 ha cambiado por debajo y sólo se ve de verdad en placa:
 - [ ] **AOT** — ARM en a1/a2/c1/c2, **RISC-V dinámico** en b2/b3, interpretado en b1
 - [ ] **Subida por streaming** (#294) con el trozo nuevo de 8 KB (#338)
 
+**✅ El Stop dejó de ser una lotería** (Eduardo, 4-ago, sobre el P4): *«Antes los
+stop funcionaban alguna vez, ahora están funcionando. Eso me permite hacer una
+demo tras otra sin necesidad de resetear.»*
+
+Vale la pena escribirlo porque es **un resultado, no una impresión**, y de los
+que se pierden si nadie los anota: *«funciona a veces»* es justo lo que vuelve a
+romperse sin que salte ningún test. Lo que lo hace creíble es que el síntoma
+—encadenar RUN sin reiniciar la placa— es el de #352 (el modelo del GUI se
+rompía a los 30 RUN) y el de #344 (el verbo RUN escrito una sola vez), y la
+intermitencia es la firma de la campaña de memoria. **No lo atribuyo a un commit
+concreto**: no hay medida que lo reparta, y aquí eso importa. Lo que sí queda
+dicho es que **el KILL de punta a punta (#257) hoy se comporta como se prometió**,
+y que la forma de trabajar que habilita —demo tras demo sin reset— es la que ha
+hecho posible correr las tandas de hoy al ritmo que se han corrido.
+
 ---
 
 ## Huecos vistos al montar el guión
