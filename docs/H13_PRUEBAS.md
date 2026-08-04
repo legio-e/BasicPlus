@@ -613,11 +613,42 @@ ya registrado** — no hace falta volver a anotarlo.
   sospecha del intérprete desde flash por caché en vez de IRAM), pero ya no es
   una anomalía sin referencia: hay dos puntos y el reparto entre ellos es
   arquitectura, no reloj. → **V5**.
-- [ ] `GuiColorDemo` — se ve, con sus colores
-- [ ] `GuiClickDemo` / `GuiTableDemo` — **táctil** respondiendo
-- [ ] Eventos del GUI (#324): el lazo en BP, sin duplicados
-- [ ] **AOT desde el IDE**: generar el `.mdn`, cargarlo y medir la ganancia
-- [ ] `FontLoadDemo`, `GuiImageDemo` — recursos (fuente e imagen) desde el pack
+#### Tanda GUI del P4 — orden de dependencia (4-ago)
+
+**En escalera: cada peldaño supone el anterior.** Si uno falla, no sigas hacia
+abajo — el siguiente hereda el fallo y no dice nada nuevo.
+
+| # | Qué se corre | Qué demuestra | Ojo con |
+|---|---|---|---|
+| 1 | `GuiDemo` | Que pinta algo. El primer programa GUI de BP (V3) | Si esto falla, salta a la escalera de bisección de abajo |
+| 2 | `GuiColorDemo` | Color de fondo y de texto | **Es el del cian del P4** (#285). Quedó cerrado: era el compilador rancio que empaquetaba el IDE, no el render. Aquí se confirma con el IDE nuevo |
+| 3 | `GuiGeomDemo` | Geometría explícita (x/y/ancho/alto) | El P4 es 1024×600: es la resolución más grande del parque |
+| 4 | `GuiClickDemo` | **Táctil** + upcall de eventos | GT911 en I2C **0x14** (no la dirección de catálogo) |
+| 5 | `GuiCheckDemo` | Widget con `onChange` | Primer widget con evento propio |
+| 6 | `GuiEvSpike` | Que el lazo de eventos **no duplica** (#324) | No es demo, es una MEDIDA. Lo que importa es el conteo |
+| 7 | `GuiValueDemo`, `GuiLedSpin` | switch / slider / bar / spinbox / led | — |
+| 8 | `GuiInputDemo`, `GuiListKbd` | dropdown, textarea, list, keyboard | Entrada de texto = el táctil trabajando de verdad |
+| 9 | `GuiTabDemo`, `GuiTableDemo`, `GuiMsgDemo` | tabview, table, msgbox modal | — |
+| 10 | `GuiFontDemo`, `FontLoadDemo` | Tamaños de fuente y carga de una `.bin` de LVGL | `FontLoadDemo` lee del FS: cruza GUI × ficheros |
+| 11 | `GuiImageDemo` | Imagen (asset + control) | Con #360 detrás |
+| 12 | `GuiRotDemo` | `Gui.setRotation` en runtime | En MIPI-DSI puede no comportarse como en SPI |
+| 13 | `GuiAsyncDemo` | Trabajo largo desde un handler **sin congelar la GUI** | El cruce eventos × threads. Aquí es donde se nota si el planificador y el lazo de GUI se estorban |
+| 14 | `GuiGcRoot` / `GuiGcRootQ` | Que el objeto BP colgado de un widget **no lo barre el GC** | Guardián de #302 paso 1. Cadena de dos eslabones: el widget lo sostiene el `objptr` y el widget sostiene al oyente por `recv` |
+| 15 | Proyecto `formdemo` | **Forms desde `.win`** (`resources/main.win`) | Es lo que colgaba en el P4 y se arregló (super() implícito + widget-sin-contenedor + FS→PSRAM) |
+| 16 | **AOT desde el IDE** | Generar el `.mdn`, cargarlo, medir | El plato fuerte de esta placa. Se compara contra el **propio P4 interpretado**, no contra otra placa |
+
+**Si algo se rompe, la escalera de bisección ya está escrita** y no hay que
+improvisar: `GuiLblMin` (lo mínimo que debería ir) → `GuiWinMin` (sólo construir
+la Window) → `GuiWinLbl` (Window + Label hijo) → `GuiWinPanel` (Window + Panel) →
+`GuiWinChk` (Window + Checkbox). Es la que cazó el cuelgue de Forms. `GuiRotProbe`
+es la sonda del cian, del mismo estilo.
+
+**Hueco honesto, que conviene decir antes de correr nada:** ningún sample junta
+**AOT y GUI**. El `.mdn` del P4 es de `Bench`, que no pinta. La combinación
+«código nativo compilado que toca objetos BP sostenidos por widgets» es
+justamente el terreno del **paso 3 de #302** (shadow stack / raíces GC del native
+compilado), que quedó diferido *a AOT-en-placa* — o sea, a esta placa. No es un
+rojo esperado: es que **no hay quien lo pruebe**.
 
 ### b3 · ESP32-P4 Waveshare 4.3"
 Panel **ST7701 480×800**, elegido por el **ENV** (`display=st7701`, #311), backlight invertido.
