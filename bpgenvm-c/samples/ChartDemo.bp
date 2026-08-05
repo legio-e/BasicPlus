@@ -32,5 +32,12 @@ module ChartDemo
 
     print "ok"
     print Gui.__guiDumpTree()
+
+    // H13 (5-ago) — SIN ESTO NO SE VE NADA. El sample nacio en H7 como prueba
+    // del MODELO: creaba el chart, volcaba el arbol y salia. Eso bastaba para
+    // comprobar la API, pero en una placa el sintoma es una pantalla en blanco,
+    // porque nunca se entra en el bucle de la interfaz y nadie pinta. El resto
+    // de demos graficas si lo llaman; esta se quedo atras.
+    Gui.run()
   end Main
 end ChartDemo
