@@ -795,6 +795,321 @@ haya subido; 192 KB al empezar la fila, 328 KB tras las tandas 1-3) · página d
   Los 372 KB medidos **son** los 384 que predice la regla de reparto menos lo
   que el propio runtime tiene ya en pie: el modelo no se ha estimado, se ha
   comprobado. Y el hueco entre 244 y 372 es **fragmentación**, exactamente lo
+  que `MemInfo` existe para separar.
+
+  🔁 **Repetida sobre la imagen `-Os`**: **372 / 372 / 369**. Los totales no se
+  mueven ni un KB —el bloque de 512 KB del hallazgo 31 sigue entero, como decía
+  el `bss`— pero el **mayor bloque pasó de 244 a 372**, y eso pedía explicación
+  porque un flag del compilador no tiene por qué tocar el alocador.
+
+  ✅ **RESUELTO, y no era ni el `-Os` ni el alocador: eran DOS VERSIONES DEL
+  SAMPLE.** La medida de la mañana se tomó con el `MemInfo` **anterior al arreglo
+  `b9fceb8`** —el que **biseca**, y que precisamente por bisecar medía mal—.
+  Comprobado ejecutando esa versión recuperada de git en el host con
+  `--mem=786432`: da **244 KB (250.000 B)**, el número exacto de la placa. Y hay
+  una segunda huella que no admite discusión: **el orden de las líneas**. La
+  versión vieja imprime «Mayor bloque» ANTES que «Total en trozos de 4 KB», y la
+  nueva al revés — y los dos logs de Eduardo salen cada uno en su orden.
+
+  ⚠️ **Corrección de una frase mía que estaba mal**: aquí decía *«el mismo
+  binario en el host da los mismos tres números: paridad host↔placa byte a
+  byte»*. **No era cierto** — con el sample arreglado el host daba 372 donde la
+  placa daba 244, y llamé paridad a una comparación que no había hecho número a
+  número. La paridad **sí existe**, pero se demuestra hoy: comparando la misma
+  versión del sample, host y placa dan **372 / 372 / 369** los dos.
+
+  📌 Y la lección es la de siempre, sólo que esta vez la pagué yo: **antes de
+  explicar un número raro, comprobar que los dos lados corren el MISMO código**.
+  Estuve a punto de escribir que el `-Os` había desfragmentado el heap.
+  Criterio de Eduardo al cerrarlo: *«podría ser un bug o puede ser inofensivo;
+  si es un bug los test deberían destaparlo»* — y de hecho ya no hay nada que
+  destapar.
+- ✅ **Tanda 3 · Ficheros** (8). Verde. No es una repetición de la Pico: aquí la
+  cintura es `fs_lfs_esp32.c` sobre `esp_partition`, no `flash_range_*`. Mismo
+  littlefs y misma fachada, **trozo de abajo distinto** — o sea que la abstracción
+  de H2 queda probada por su segundo camino.
+- ✅ **Tanda 4 + 4b · Threads y concurrencia** (11). Verde. `paralleltest` pareció
+  colgarse y **no era cuelgue: son 129 segundos** (4M de iteraciones interpretadas)
+  en los que el sample no decía nada. Segunda vez en el mismo día que un programa
+  mudo se confunde con uno colgado (la otra fue `Bench`, 9 s), así que **se le han
+  puesto `print` de progreso** — decisión de Eduardo: *"así el usuario verá lo que
+  está haciendo en vez de pensar que se ha colgado"*.
+
+  **Y lo que enseña el patrón importa más que el tiempo.** Los dos workers avanzan
+  ACOMPASADOS (`w1 @100000` / `w2 @100000` / …) sin un solo `yield` en el programa.
+  Ojo con la lectura: **ninguna placa ejecuta dos workers de intérprete** — en el
+  RP2350 el segundo core lleva la comunicación, no ejecuta BP. O sea que ese
+  reparto lo hace **el planificador de la propia BP-VM** entre quanta, no el
+  sistema operativo. Es H2 funcionando, y aquí sobre Xtensa.
+
+  ⏳ **Abierto (rendimiento, no corrección):** 129.262 ms en el S3 contra 215 ms en
+  el host son **601×**, cuando el `fib(28)` de `Bench` da 50× entre host y Pico.
+  Pero la comparación es coja —cargas distintas— y **falta el control bueno**:
+  `paralleltest` contra `paralleltest` en RP2350. Si el S3 resultara varias veces
+  más lento con la misma carga, la sospecha clásica en ESP32 es el intérprete
+  corriendo desde flash por caché en vez de IRAM. → **V5**, no se toca en freeze.
+
+  🔎 **Al día 5-ago: la duda sigue abierta pero MUCHO más estrecha, y ahora el S3
+  está solo.** El hallazgo 33 destapó que el STM32 se compilaba a `-O0`; con eso
+  arreglado hay **tres familias con build optimizado** y los ciclos por iteración
+  quedan **2.271** (STM32 `-Os`) · **2.976** (P4 `-Os`) · **7.756** (S3 `-Os`). Los
+  dos primeros se parecen; el S3 va **3,4× peor que el mejor**, y **no es el build**,
+  porque es el mismo `-Os` que el P4. O sea que lo que quedaba de sospecha —dónde
+  ejecuta el intérprete— **sobrevive y ya no tiene alternativas cómodas**.
+- ✅ **Tanda 5 · Eventos** (6). Verde, sin hallazgos — igual que en la Metro.
+- ✅ **Tanda 6 · Lo nuevo del lenguaje** (8). Verde. Tuplas, `long`/`double`,
+  enteros estrechos, sobrecarga: todo lo que ensanchó V4 pasa también en la
+  tercera arquitectura, y con **96 KB de heap**, que es el peor caso del parque.
+- ⚠️ **Tanda 7 · Dispositivo** (2). `BoardTest` verde, con **el hallazgo 19**
+  dentro: `variant=B` en un ESP32-S3 (ver el registro). **`NeoTest` NO cuenta como
+  verde**: en el ESP32 no hay backend de WS2812 —sólo lo registra la Pico— y la
+  fachada devuelve éxito sin hacer nada, así que el sample pasa **sin encender
+  nada**. Es el **hallazgo 21**. *Lo di por bueno al anotar la fila; lo corrijo
+  aquí.*
+- ✅ **Tanda 8 · Pack ejecutable EN LA PLACA** (#310). Verde a la primera, y con
+  ella **la fila b1 cerrada**. Vale doble: es la **segunda familia** que ejecuta
+  un pack desde `Run on Device` —o sea que los hallazgos **16** (construirlo) y
+  **18** (subirlo cerrado) quedan confirmados en un micro que no es RP2350—, y
+  es el camino de pack sobre `fs_lfs_esp32.c`, distinto del de la Metro.
+
+**🏁 b1 CERRADA (4-ago): 8 tandas, 8 verdes.** Un solo hallazgo (el 19,
+informativo, a V5) y **cero rojos**. Con ella son **dos familias completas** —
+RP2350 (a1+a2) y Xtensa (b1)— y las tres arquitecturas donde el arreglo de #369
+está probado por caminos distintos.
+
+### b2 · ESP32-P4 Kit
+PSRAM 32 MB, MIPI-DSI **EK79007 1024×600**, táctil **GT911 (I2C 0x14)**, Ethernet IP101.
+**AOT RISC-V con `.mdn` dinámico** (#H4, 113×).
+
+**Referencia de la placa (4-ago, imagen `8e1c3535`):** `esp32p4` · **360 MHz** ·
+55 GPIO · 14 PWM / 14 ADC · flash 16 MB · SRAM 768 KB · **PSRAM 32 MB** · VM heap
+**27,5 MB** + stack 512 KB · FS 100 KB / 6,8 MB (recién formateado — los 100 KB
+son la línea base de un FS vacío, el mismo número que salió en la Pico).
+
+**La otra punta del parque.** El heap es **286×** el del S3 (96 KB) y **110×** el
+de la Pico (257 KB). Aquí un rojo por memoria no es información sobre la
+plataforma: si algo se queda sin memoria con 27 MB, es un bug. Y es la **única
+placa con AOT en marcha**, así que es la tanda que ejercita lo que en el S3 no se
+pudo probar (Xtensa no tiene AOT).
+
+**La placa venía sin particiones y el IDE lo dijo** antes de intentar nada. Es
+H9 (#303) haciendo su trabajo: el arranque por capas se para en el estado que
+toca y lo cuenta, en vez de fallar mudo más adelante.
+
+⚠️ `BoardTest` dirá `variant=B` también aquí (55 GPIO ≥ 40). **Es el hallazgo 19,
+ya registrado** — no hace falta volver a anotarlo.
+
+**Tandas (4-ago):**
+
+- ✅ **Tanda 1 · Humo** (7). Verde.
+- ✅ **Tanda 2 · Memoria** (10). Verde con **27,5 MB de heap**. Aquí el criterio se
+  da la vuelta respecto al S3: con este heap, que los samples de estrés pasen no
+  demuestra gran cosa — lo que cuenta es que **la memoria vuelva a su sitio al
+  acabar el RUN**, que es lo que mide el guardián de #339.
+- ✅ **Tanda 3 · Ficheros** (8). Verde, y con **una medida de Eduardo que merece
+  quedar escrita**: el FS va **igual de rápido que en las demás placas**. *«Aquí
+  la CPU no aporta diferencia, el FS es el más lento y es el que manda.»*
+
+  No es una anécdota, es la confirmación de que **el FS está limitado por la
+  flash, no por el micro**: un borrado de bloque son milisegundos, y a esa escala
+  da igual ir a 150 MHz o a 360. Dos consecuencias prácticas: (a) el rendimiento
+  del FS es una propiedad **de la placa, no de la familia**, así que no hay que
+  perfilarlo por micro; y (b) el mismo motor (littlefs + fachada) da el mismo
+  número por dos cinturas distintas y en tres ISA — que es exactamente lo que se
+  buscaba al diseñarlo con la cintura desde el día uno.
+- ✅ **Tanda 4 · Threads y concurrencia** (11). Verde, y **notablemente más
+  rápida**. `paralleltest` (4M de iteraciones interpretadas, dos threads):
+
+  | | reloj | tiempo | por reloj |
+  |---|---|---|---|
+  | ESP32-S3 (Xtensa) | 240 MHz | 129.262 ms | — |
+  | **ESP32-P4 (RISC-V)** | **360 MHz** | **33.079 ms** | **2,6× mejor** |
+
+  **3,9× más rápido con 1,5× de reloj**, o sea **2,6× por ciclo**. Es el control
+  que faltaba en la duda de rendimiento que dejó abierta la b1: la lentitud del
+  S3 **no es «lo que cuesta ser un micro»** — es del S3. Misma carga, mismo
+  binario del ZIP, y en los dos casos **interpretado** (`paralleltest` no tiene
+  funciones `native`, así que el AOT no entra en esta medida: es intérprete
+  contra intérprete en dos ISA).
+
+  Los dos threads BP dan `sum=656067456` idéntico, y el planificador de la BP-VM
+  reparte igual de acompasado que en las otras placas — primera vez que ese
+  planificador corre sobre RISC-V.
+
+  ⚠️ **Y conviene dejar escrito qué NO mide esto, porque induce a error**: un
+  **thread de BP no es una task del RTOS ni un núcleo**. Los threads de BP son
+  verdes: los reparte **el planificador de la propia VM entre quanta**, y en
+  placa la VM corre en **una sola task** en las tres familias — verificado en el
+  código: `esp32/main/repl_esp32.c:807` y `stm32/port/stm32_repl.c:561` llaman a
+  `bpvm_run(vm)` a secas (el comentario del ESP32 lo dice: *«el SMP en ESP32 es
+  H4.2+»*), y el Pico sólo entra por `bpvm_run_smp` si se define
+  `BPVM_PICO_SMP_WORKERS` al configurar, que **no está definido** en la imagen
+  que se publica. O sea que **el segundo núcleo del P4 no ejecuta BP**, y esta
+  medida es intérprete contra intérprete **en un solo núcleo a cada lado**: la
+  comparación entre placas es de **reloj y arquitectura, nada más**. (Corrección
+  de Eduardo, 5-ago: *«los BPThreads no son los RTOS_Threads»*.)
+
+  Sigue sin cerrarse la pregunta de **por qué** el S3 va lento por ciclo (la
+  sospecha del intérprete desde flash por caché en vez de IRAM), pero ya no es
+  una anomalía sin referencia: hay dos puntos y el reparto entre ellos es
+  arquitectura, no reloj. → **V5**.
+- ✅ **Tanda 5 · Eventos** (6). Verde. Tercera arquitectura para H5.c, y **la que
+  más importa de las tres**: la escalera de GUI que viene detrás se apoya entera
+  en este mecanismo —el lazo de #324 son eventos— así que verlos verdes *antes*
+  de tocar la pantalla separa dos causas que si no vendrían juntas.
+- ✅ **Tanda 6 · Lo nuevo del lenguaje** (8). Verde. Tercera arquitectura, sin
+  sorpresas.
+- ✅ **Tanda 7 · Dispositivo**. `BoardTest` verde (con el `variant=B` del hallazgo
+  19, esperado). **`NeoTest` no puntúa aquí tampoco**: el P4 tampoco registra
+  backend de WS2812 — hallazgo 21.
+- ✅ **Tanda 8 · Pack ejecutable EN LA PLACA** (#310). Verde. **Tercera familia**
+  con el pack ejecutándose desde `Run on Device`: con RP2350 y Xtensa detrás, los
+  hallazgos 16 y 18 quedan confirmados en las tres, y #310 con ellos.
+
+**Batería estándar del P4: 8/8.** Lo que queda de la fila b2 es lo propio de esta
+placa —la escalera de GUI de 16 peldaños y el AOT—, o sea que es la placa a la
+que **más le queda por delante**, no la que va más adelantada.
+#### Tanda GUI del P4 — orden de dependencia (4-ago)
+
+**En escalera: cada peldaño supone el anterior.** Si uno falla, no sigas hacia
+abajo — el siguiente hereda el fallo y no dice nada nuevo.
+
+| # | Qué se corre | Qué demuestra | Ojo con |
+|---|---|---|---|
+| 1 | `GuiDemo` | Que pinta algo. El primer programa GUI de BP (V3) | Si esto falla, salta a la escalera de bisección de abajo |
+| 2 | `GuiColorDemo` | Color de fondo y de texto | **Es el del cian del P4** (#285). Quedó cerrado: era el compilador rancio que empaquetaba el IDE, no el render. Aquí se confirma con el IDE nuevo |
+| 3 | `GuiGeomDemo` | Geometría explícita (x/y/ancho/alto) | El P4 es 1024×600: es la resolución más grande del parque |
+| 4 | `GuiClickDemo` | **Táctil** + upcall de eventos | GT911 en I2C **0x14** (no la dirección de catálogo) |
+| 5 | `GuiCheckDemo` | Widget con `onChange` | Primer widget con evento propio |
+| 6 | `GuiEvSpike` | Que el lazo de eventos **no duplica** (#324) | No es demo, es una MEDIDA. Lo que importa es el conteo |
+| 7 | `GuiValueDemo`, `GuiLedSpin` | switch / slider / bar / spinbox / led | — |
+| 8 | `GuiInputDemo`, `GuiListKbd` | dropdown, textarea, list, keyboard | Entrada de texto = el táctil trabajando de verdad |
+| 9 | `GuiTabDemo`, `GuiTableDemo`, `GuiMsgDemo` | tabview, table, msgbox modal | — |
+| 10 | `GuiFontDemo`, `FontLoadDemo` | Tamaños de fuente y carga de una `.bin` de LVGL | `FontLoadDemo` lee del FS: cruza GUI × ficheros |
+| 11 | **`samples/imageproject`** (proyecto) | Imagen (asset + control) | **NO el `GuiImageDemo` suelto**: ése no puede subir el `.png` a la placa y encima no viaja en el ZIP → hallazgo 25. El proyecto sí, por su `resources/` |
+| 12 | `GuiRotDemo` | `Gui.setRotation` en runtime | En MIPI-DSI puede no comportarse como en SPI |
+| 13 | `GuiAsyncDemo` | Trabajo largo desde un handler **sin congelar la GUI** | El cruce eventos × threads. Aquí es donde se nota si el planificador y el lazo de GUI se estorban |
+| 14 | `GuiGcRoot` / `GuiGcRootQ` | Que el objeto BP colgado de un widget **no lo barre el GC** | Guardián de #302 paso 1. Cadena de dos eslabones: el widget lo sostiene el `objptr` y el widget sostiene al oyente por `recv` |
+| 15 | Proyecto `formdemo` | **Forms desde `.win`** (`resources/main.win`) | Es lo que colgaba en el P4 y se arregló (super() implícito + widget-sin-contenedor + FS→PSRAM) |
+| 16 | **AOT desde el IDE** | Generar el `.mdn`, cargarlo, medir | El plato fuerte de esta placa. Se compara contra el **propio P4 interpretado**, no contra otra placa |
+
+**Resultado (4-ago) — peldaños 1 a 7, todos verdes, sin sacar la escalera de
+bisección:**
+
+| # | Resultado |
+|---|---|
+| 1 `GuiDemo` | ✅ Pinta |
+| 2 `GuiColorDemo` | ✅ **Cierra #285 por medida**: el cian era el compilador rancio que empaquetaba el IDE, no el render. Ahora, con el IDE nuevo y en la placa donde apareció, sale bien |
+| 3 `GuiGeomDemo` | ✅ |
+| 4 `GuiClickDemo` | ✅ **Táctil**, GT911 en I2C 0x14. De aquí sale el **hallazgo 22** (el `screen` dice 480×320 sobre un panel de 1024×600) |
+| 5 `GuiCheckDemo` | ✅ Widget con `onChange` |
+| 6 `GuiEvSpike` | ✅ **#324 confirmado en RISC-V**, y la lectura tuvo su momento: con el log a medias salían **5 upcalls y 2 handlers** y canté que no cuadraba. Con el log completo son **7 y 7**. Los eventos iban con retraso, que es justo lo que dice el diseño —`raise` **encola** y se drena entre quanta, no es una llamada síncrona—, así que en placa salen a rachas. **El invariante no es la alternancia, es el total.** El control de host, corrido en la VM-C, da la referencia limpia: 1 clic → 1 upcall → 1 handler, y el `3 handler` **antes** del `4 tras run()`, que es el criterio que el propio sample define para el caso bueno |
+| 7 `GuiValueDemo`, `GuiLedSpin` | ✅ switch/slider/bar/spinbox/led, con valores coherentes en el volcado |
+| 8 `GuiInputDemo`, `GuiListKbd` | ✅ Teclado en pantalla escribiendo en el textarea. Visto por Eduardo: **la tecla ✓ no hace nada** → **hallazgo 23** |
+| 9 `GuiTabDemo`, `GuiTableDemo`, `GuiMsgDemo` | ✅ tabview, table y el modal devolviendo su índice de botón (`val=0` en el volcado) |
+| 11 `samples/imageproject` | ✅ Imagen en placa **y de paso el ciclo completo de `resources/`** (#260): el IDE sube el `.png` al `/app` del device y el firmware lo encuentra. Cubre más que el sample suelto, que ni siquiera podía → **hallazgo 25** |
+| 12 `GuiRotDemo` | ✅ `setRotation` en caliente sobre MIPI-DSI, que no es rotar por software un SPI. Eduardo: *«va un pelín lento pero creo que son los eventos»* → **tarea #373 a V5**, y ahí lo primero es **medir**, no optimizar: hay tres candidatos y el suyo es uno, no necesariamente el mayor — (a) el lazo de bombeo está **en BP** desde #324, o sea interpretado en cada frame; (b) la inyección de un frame BP por evento; (c) el repintado de **1024×600, 4× los píxeles del modelo lógico de 480×320** (hallazgo 22) y sin acelerador 2D. La (c) no tiene nada que ver con los eventos y puede ser la gorda |
+| 13 `GuiAsyncDemo` | ✅ **La arquitectura entera a la vez**: el lazo de GUI sigue bombeando y refrescando el progreso mientras un worker hace trabajo largo. Son H2 (threads) + H5.c (eventos) + #325 (`Thread(obj::metodo(args))`) trabajando juntos, en placa y sobre RISC-V. Dato para el #373: si la GUI va fluida **compitiendo** con un worker por el mismo intérprete, el planificador no es el cuello |
+| 14 `GuiGcRoot`, `GuiGcRootQ` | ✅ **Y el verde es FUERTE, no débil.** Avisé de lo contrario —«con 27 MB el GC pasa poco»— y me equivoqué: los dos samples llaman a **`gc()` explícitamente** y comprueban el clic *después*, así que **no dependen de que el heap se llene** y el tamaño aquí da igual. Lo que aguanta una recogida real es la cadena de dos eslabones: el `objptr` sostiene el widget y el widget sostiene al oyente por el campo `recv` del evento. Si a ese campo le faltara el bit de referencia en el layout, el oyente moriría vivo y el clic sería un use-after-free. Guardián de #302 paso 1 |
+| 15 `samples/formdemo` | ✅ **Reverificación de verdad**: Forms desde `.win` es **lo que colgaba en esta placa**, y se arregló con tres cosas a la vez (el `super()` implícito del modelo Java, el widget-sin-contenedor y el FS en PSRAM). El log enseña el ciclo completo: `subido resource /app/formdemo/main.win (390 bytes)` y luego los handlers disparando (`onSaludar`, `checkbox cambiado`). Segundo paso por `resources/`, esta vez con un `.win` en vez de un `.png` |
+| 16 **AOT** (`Bench`) | ✅✅ **116×, y es lo único de toda la campaña que no se puede probar en ninguna otra placa.** `fib(28)`: **4.543 ms interpretado → 39 ms en AOT**, mismo micro, mismo reloj, misma ejecución. Los tres controles pasan: (a) **compiló de verdad** —`AOT: compilando funciones native (target riscv — lo dice la placa)`, `[aot] Bench.mdn ✓ (1 thunk, 130 B nativo)`, `subido AOT /app/Bench.mdn (186 bytes)`—, no el `sin funciones native que compilar` de los samples de GUI; (b) **ningún RECHAZADO** de ABI, que es lo que sí pasa con el `Bench.mdn` embebido y rancio de la Pico (hallazgo 12) — aquí el `.mdn` se genera fresco y habla ABI 2; (c) **y el resultado es el mismo por los dos caminos**, `317811`: no es sólo más rápido, es que **calcula lo mismo**. Por encima de la referencia guardada de la placa (113×). Comparado con esta mañana en ARM (8.486 → 84 ms), el P4 es ~1,9× más rápido interpretando y ~2,2× en nativo |
+| 16 **AOT** (`Bench`) | ✅✅ **116×, y es lo único de toda la campaña que no se puede probar en ninguna otra placa.** `fib(28)`: **4.543 ms interpretado → 39 ms en AOT**, mismo micro, mismo reloj, misma ejecución. Los tres controles pasan: (a) **compiló de verdad** —`AOT: compilando funciones native (target riscv — lo dice la placa)`, `[aot] Bench.mdn ✓ (1 thunk, 130 B nativo)`, `subido AOT /app/Bench.mdn (186 bytes)`—, no el `sin funciones native que compilar` de los samples de GUI; (b) **ningún RECHAZADO** de ABI, que es lo que sí pasa con el `Bench.mdn` embebido y rancio de la Pico (hallazgo 12) — aquí el `.mdn` se genera fresco y habla ABI 2; (c) **y el resultado es el mismo por los dos caminos**, `317811`: no es sólo más rápido, es que **calcula lo mismo**. Por encima de la referencia guardada de la placa (113×). Comparado con esta mañana en ARM (8.486 → 84 ms), el P4 es ~1,9× más rápido interpretando y ~2,2× en nativo |
+| 10 `GuiFontDemo`, `FontLoadDemo` | ⚠️ `GuiFontDemo` **salió negra a la primera** → **hallazgo 24** (no era del sample: estado acumulado; con la placa reseteada, verde). `FontLoadDemo` ✅: `loadFont(...) -> id 1` leyendo el `.bin` del FS de la placa y **la fuente cargada se pinta**, confirmado por Eduardo a ojo. Éste es el primer peldaño que cruza **GUI × ficheros**, y hay que saber leerlo: el volcado **no muestra** la fuente cargada —sólo refleja `fontSize` en px, y `setFont(id)` va por otro camino—, así que aquí **el instrumento es ciego y sólo decide el ojo** |
+
+**Si algo se rompe, la escalera de bisección ya está escrita** y no hay que
+improvisar: `GuiLblMin` (lo mínimo que debería ir) → `GuiWinMin` (sólo construir
+la Window) → `GuiWinLbl` (Window + Label hijo) → `GuiWinPanel` (Window + Panel) →
+`GuiWinChk` (Window + Checkbox). Es la que cazó el cuelgue de Forms. `GuiRotProbe`
+es la sonda del cian, del mismo estilo.
+
+**Hueco honesto, que conviene decir antes de correr nada:** ningún sample junta
+**AOT y GUI**. El `.mdn` del P4 es de `Bench`, que no pinta. La combinación
+«código nativo compilado que toca objetos BP sostenidos por widgets» es
+justamente el terreno del **paso 3 de #302** (shadow stack / raíces GC del native
+compilado), que quedó diferido *a AOT-en-placa* — o sea, a esta placa. No es un
+rojo esperado: es que **no hay quien lo pruebe**.
+
+**🏁 ESCALERA DE GUI COMPLETA: 16/16.** Con la batería estándar (8/8) delante,
+**la fila b2 queda cerrada**. Un rojo real —el **hallazgo 24**, la pantalla que
+deja de pintar tras muchos RUN— y cinco hallazgos informativos (19, 20, 22, 23,
+25). Es la placa que más cubre del parque: la única con **GUI completa + táctil +
+AOT en placa**, y por tanto la única donde V4 se ve entera funcionando a la vez.
+
+### b3 · ESP32-P4 Waveshare 4.3"
+Panel **ST7701 480×800**, elegido por el **ENV** (`display=st7701`, #311), backlight invertido.
+- [ ] El panel sale del ENV: cambiar la variable y ver que cambia el panel
+- [ ] El backlight enciende (el `bl_invert` viaja con la entrada del catálogo)
+- [ ] Mismo GUI que b2, a otra resolución: comprobar que la interfaz no se sale
+
+**Referencia de la placa (4-ago, MISMA imagen `8e1c3535` que la b2):** `esp32p4` ·
+360 MHz · 55 GPIO · **flash 32 MB** · SRAM 768 KB · PSRAM 32 MB · VM heap 27,5 MB
++ stack 512 KB · **FS 5,0 MB** de una zona de datos de ~10 MB → **hallazgo 27**
+(el límite lo pone la tabla del IDF de la imagen, no el chip; se deja así en V4).
+
+**Esta fila NO repite las 8 tandas, y el motivo importa**: es **la misma imagen**
+que la b2, ya verde de punta a punta. Lo que aquí prueba algo que no esté probado
+ya es lo que **cambia entre las dos placas** — el panel, el táctil y el arranque.
+Repetir el resto mediría el mismo binario dos veces.
+
+**Tandas (4-ago):**
+
+- ✅ **Tanda 1 · Humo** + `RandomTest` (8/8). Verde. Su valor aquí no es el ISA
+  —eso ya lo cubrió la b2— sino que **el mismo binario arranca y opera en una
+  placa distinta**, que es la afirmación que sostiene la imagen única.
+- ✅ **El panel sale del ENV** (#311) y **el backlight invertido enciende**.
+  `GuiDemo` y `GuiColorDemo` se ven bien con el `ST7701`, lo que ya demuestra que
+  el ENV **se leyó**: sin él habría arrancado con el perfil de la EV a 1024×600.
+- ✅ **Táctil** (`GuiClickDemo`). Es lo único de esta placa que no comparte
+  silicio con lo ya probado en la b2.
+- ✅ **Geometría y tabla** (`GuiGeomDemo`, `GuiTableDemo`). El primero dibuja su
+  panel de `100x50` en `pos=10,20` — correcto, y **no puede enseñar el hallazgo
+  22 porque no usa `align`**: al ser geometría absoluta, el modelo lógico no
+  entra en juego. *(Predije que se vería el efecto y me equivoqué de sample.)*
+  El segundo ocupa sólo la parte superior, pero **eso tampoco lo demuestra**:
+  como observó Eduardo, **la tabla se ajusta a su contenido** (cabecera + una
+  fila), y eso se ve pequeño en cualquier pantalla. **El 22 ya está probado sin
+  necesidad de la vista**: el volcado imprime `screen [480x320]` en una placa de
+  480×**800**. Lo que sí discriminaría, el día que haga falta: un widget con
+  **align BOTTOM** — con el modelo real saldría abajo del todo; con el de 320
+  sale a media pantalla, y eso no admite otra lectura.
+
+**🏁 b3 CERRADA.** No repite las 8 tandas por diseño (misma imagen que la b2): se
+ha probado **lo que cambia entre las dos placas** —arranque, panel por ENV,
+backlight, táctil y layout— y todo verde. Lo que sí ha aportado, y vale más que
+la fila entera, son **dos hallazgos que sólo se ven en una placa recién
+particionada**: el **28** (🔴 crítico, en virgen no arranca ninguna demo gráfica)
+y el **27** (el límite de flash lo pone la imagen). **Cinco placas de siete.**
+
+### c1 · STM32 Nucleo-U575ZI-Q
+Sin pantalla. Wire por el VCP del ST-LINK. **AOT ARM**. Página de borrado de **8 KB**.
+- [ ] `BlinkStm32` — LED verde PC7
+- [ ] AOT: cómputo `native` y ganancia
+- [ ] #338 aquí deja el buffer en **12 KB** (no 8): es su sector, no una excepción
+
+**Referencia de la placa (5-ago):** `nucleo-u575zi` · 160 MHz · **114 GPIO** (el
+INFO; el lenguaje dice 128 → **hallazgo 32**) · 28 PWM / 20 ADC · flash 2 MB ·
+SRAM 768 KB · **VM: heap 372 KB medidos** tras subir el bloque a 512 KB
+(hallazgo 31; antes 64) · **partición FS 704 KB** (el primer número del panel
+es lo USADO —`fsUsedBytes`—, no una propiedad de la placa: sube según lo que
+haya subido; 192 KB al empezar la fila, 328 KB tras las tandas 1-3) · página de borrado **8 KB**, la
+única de las tres familias que no es de 4 (**hallazgo 29**).
+
+**Tandas (5-ago):**
+
+- ✅ **Tanda 1 · Humo** (7). Verde **dos veces**: una con la imagen de 128 KB de
+  bloque y otra tras subirlo a 512 (hallazgo 31). La segunda es la que cuenta.
+- ✅ **Tanda 2 · Memoria** (10) **+ `MemInfo`**. Verde, y es la tanda que
+  **reverifica el hallazgo 31 en placa**, que era lo único que le faltaba:
+
+  | medida | valor |
+  |---|--:|
+  | mayor bloque reservable | **244 KB** |
+  | total en trozos de 4 KB | **372 KB** |
+  | total en trozos de 1 KB | 369 KB |
+
+  Los 372 KB medidos **son** los 384 que predice la regla de reparto menos lo
+  que el propio runtime tiene ya en pie: el modelo no se ha estimado, se ha
+  comprobado. Y el hueco entre 244 y 372 es **fragmentación**, exactamente lo
   que `MemInfo` existe para separar. El mismo binario en el host con
   `--mem=786432` da los mismos tres números: **paridad host↔placa byte a byte**.
 
