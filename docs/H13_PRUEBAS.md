@@ -970,9 +970,11 @@ se **vuelve a probar lo que falló** — no la fila entera.
 
 | placa | reloj | tiempo | ciclos/iteración |
 |---|--:|--:|--:|
-| ESP32-P4 (RISC-V) | 360 MHz | 33.079 ms | **2.977** |
+| ESP32-P4 (RISC-V) | 360 MHz | 33.064 ms | **2.976** |
 | ESP32-S3 (Xtensa) | 240 MHz | 129.262 ms | 7.756 |
 | **STM32U575 (Cortex-M33)** | **160 MHz** | **207.017 ms** | **8.281** |
+
+**La medida del P4 está REPETIDA, y ese es el control que hacía falta**: Eduardo la volvió a correr el 5-ago y dio **33.064 ms** contra los **33.079** del 4-ago — **15 ms de diferencia en 33 segundos, un 0,05 %**. Otro día, otra sesión, misma imagen. Así que el 6,3× contra la Nucleo no es ruido de una pasada suelta ni un mal momento de la placa: el instrumento repite, y lo que mide es real. (El reloj exacto del P4 mueve un poco la tercera columna —a 350 MHz saldrían 2.894 ciclos— pero no mueve la conclusión.)
 
 Eso no cuadra con el silicio: un M33 con flash interna y caché no tiene por qué ir **peor por ciclo** que un Xtensa. Y la causa está en el build, verificada leyendo los flags reales que usa cada familia, no la documentación:
 
