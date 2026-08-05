@@ -26,29 +26,32 @@ module MemInfo
 
   import Core
 
-  // El mayor bloque reservable, por bisección entre lo que SÍ cabe y lo que no.
-  // Devuelve bytes. Precisión: 1 KB, que sobra para lo que se quiere saber.
+  // El mayor bloque reservable, DESCENDIENDO desde un techo conocido.
   //
-  // ⚠️ POR QUÉ SE BISECA DESDE UN TECHO ALTO Y NO DUPLICANDO DESDE ABAJO. Probé
-  // lo segundo, que parece más fino porque nunca pide un disparate — y MIDE
-  // PEOR: con el mismo heap de 251 KB, duplicar daba 192 KB y bisecar 244. La
-  // razón es que la fase de duplicar deja el heap fragmentado antes de empezar
-  // a medir, así que el límite que encuentra es artificialmente bajo. La medida
-  // buena manda sobre la elegancia.
-  function mayorBloque(): integer
-    var lo: integer := 0            // sabemos que 0 cabe
-    var hi: integer := 32000000     // techo generoso: 32 MB (el P4 tiene 27)
-    while hi - lo > 1024 do
-      var mid: integer := lo + (hi - lo) / 2
+  // ⚠️ POR QUÉ NO SE BISECA, que sería lo natural. Porque bisecar MIDE MAL, y lo
+  // comprobé de dos formas distintas antes de escribir esto:
+  //   - duplicando desde abajo: con heap de 384 KB daba 192 KB
+  //   - bisecando desde un techo alto: daba 244 KB
+  //   - y el total repartido es 372 KB, o sea que los dos se quedaban cortos.
+  // La razón es la misma en los dos casos: **la propia medida fragmenta el heap
+  // que está midiendo**. Cada intento que TIENE ÉXITO deja un hueco que ya no se
+  // fusiona con la zona libre (se ve en el GC: fusion_izq=0 fusion_der=0), así
+  // que el siguiente intento, más grande, ya no encuentra sitio contiguo.
+  //
+  // Descendiendo se evita: sólo hay FALLOS hasta la respuesta, y un fallo no
+  // reserva nada. El primer éxito es el número bueno y ahí se para.
+  function mayorBloque(techo: integer): integer
+    var n: integer := techo
+    var paso: integer := 4096
+    while n > 0 do
       try
-        var b: byte[] := newByteArray(mid)
-        lo := mid                   // cupo
+        var b: byte[] := newByteArray(n)
+        return n                    // primer exito = el mayor: se para aqui
       catch e: RuntimeError
-        hi := mid                   // no cupo
+        n := n - paso               // sigue bajando; el fallo no reserva nada
       endtry
-      gc()                          // suelta el de esta vuelta antes de la otra
     endwh
-    return lo
+    return 0
   end mayorBloque
 
   // Total repartido en trozos de `paso` bytes. Los guarda en una List para que
@@ -85,13 +88,14 @@ module MemInfo
     print " cuanto cabe hay que pedir de mas una vez. El OOM se atrapa.)"
     print ""
 
-    gc()
-    var mayor: integer := mayorBloque()
-    print "Mayor bloque reservable: " + kb(mayor) + "  (" + intToString(mayor) + " B)"
-
+    // El TOTAL primero: sirve de techo para buscar el mayor bloque sin pasarse.
     gc()
     var total: integer := totalPorTrozos(4096)
     print "Total en trozos de 4 KB: " + kb(total) + "  (" + intToString(total) + " B)"
+
+    gc()
+    var mayor: integer := mayorBloque(total)
+    print "Mayor bloque reservable: " + kb(mayor) + "  (" + intToString(mayor) + " B)"
 
     gc()
     var total2: integer := totalPorTrozos(1024)
