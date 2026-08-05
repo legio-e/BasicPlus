@@ -1,0 +1,42 @@
+module MemThenPar
+
+  import Core
+
+  // Fase 1: agotar el heap como hace MemInfo (reservas vivas en una List
+  // hasta OOM, y el OOM ATRAPADO). Es lo unico que MemInfo hace de especial.
+  function agota(paso: integer): integer
+    var lst: List := List()
+    var total: integer := 0
+    var vueltas: integer := 0
+    try
+      while vueltas < 100000 do
+        lst.add(newByteArray(paso))
+        total := total + paso
+        vueltas := vueltas + 1
+      endwh
+    catch e: RuntimeError
+      // esperado
+    endtry
+    return total
+  end agota
+
+  function main(arg: string)
+    print "[1] agotando el heap (trozos de 4 KB)..."
+    var t: integer := agota(4096)
+    print "[1] agotado: " + intToString(t) + " B"
+    gc()
+    print "[2] ahora el azucar parallel/case/default"
+    parallel
+      case t1 := Thread(2048)
+        print "t1 ok"
+
+      case t2 := Thread(2048)
+        print "t2 ok"
+
+      default
+        print "[default] ok"
+    endpar
+    print "[main] fin (si se lee esto, NO reproduce)"
+  end main
+
+end MemThenPar
