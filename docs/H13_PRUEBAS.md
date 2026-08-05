@@ -1297,6 +1297,34 @@ lo que veas — el log persistente es el mejor testigo que tenemos.
 
 ---
 
+## 🛑 Regla del 5-ago (media mañana): SE ACABAN LOS CAMBIOS DE FIRMWARE
+
+Dictada por Eduardo tras repetir las mismas tandas **tres veces en una mañana**
+(hallazgo 31 → reflasheo; hallazgo 33 → reflasheo): *«salvo que salga algo
+terrible, no hacemos más cambios de firmware»*. Y tiene razón: los dos cambios
+valían la pena por separado, pero **el coste no lo pago yo, lo paga él**, y tres
+repeticiones de la misma fila es exactamente lo que el método por lotes existe
+para evitar. Esto no es una regla nueva: es **hacer cumplir la que ya había**.
+
+**Qué cuenta como «terrible»** (y por tanto interrumpe), decidido de antemano
+para no tener que discutirlo cada vez:
+
+- **Se pierden o se corrompen datos** — FS, packs, flash.
+- **La placa no arranca, se cuelga o hay que desenchufarla** para recuperarla.
+- **La VM da resultados incorrectos** o corrompe memoria.
+- **Algo publicado no se puede usar recién instalado**, como el hallazgo 28.
+
+**Qué NO cuenta**, por evidente que parezca la mejora: rendimiento, mensajes
+poco claros, campos que faltan en el INFO, cosméticos, y cualquier cosa que ya
+esté en el lote. Todo eso **se sigue anotando** —el registro no se cierra— pero
+va al lote y no toca la placa.
+
+⚠️ **Lo que sí queda pendiente y hay que decir ahora para que no sorprenda**: el
+lote (12, 13a, 21b, 29, 30, 32 + Stop/wire) **es de firmware**, así que al
+cerrarlo habrá **un reflasheo por familia, UNA vez, al final de las campañas**.
+Eso estaba en el plan desde el principio; lo que se acaba es reflashear **en
+mitad de una fila**.
+
 ## Cómo se trabaja: por lotes
 
 Criterio de Eduardo (3-ago, a mitad de la Pico): **no se rehace el paquete por cada
