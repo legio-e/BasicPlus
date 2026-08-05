@@ -509,6 +509,11 @@ el producto.
   caminos distintos—. Y el aviso del AOT sale como debe: `AOT target 'xtensa' no
   soportado (arm = Cortex-M33 RP2350/STM32 · riscv = ESP32-P4). Los módulos se
   ejecutarán interpretados` — dice qué SÍ hay y qué va a hacer, no sólo que no puede.
+- ✅ **Tanda 6 · Lo nuevo del lenguaje** (8). Verde. **Tercera arquitectura** para
+  todo lo que ensanchó V4 —tuplas locales y cross-module, `long`/`double`,
+  enteros estrechos, campos y envoltorios de 8 bytes, parámetros por defecto y
+  static property—, y la única de las tres que **no** es la que se usó para
+  desarrollarlo. Sin hallazgos: el 4→8B aguanta también en Cortex-M33.
 - ✅ **Tanda 5 · Eventos** (6). Verde. Impresión de Eduardo, **sin cronometrar**:
   los eventos también van más rápido. Tiene mecanismo —el `-Os` alcanzó al
   despacho de eventos, que es núcleo portable: la cola y la inyección del frame
