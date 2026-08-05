@@ -471,3 +471,82 @@ cintura por micro), aplicada también a la identificación de la placa.
   el micro NO tiene ese concepto.** Hoy la respuesta es la peor posible —
   contesta como si lo tuviera. Debe haber una forma de decir *«aquí eso no
   existe»* que el programa pueda ver, y que no se confunda con un valor válido.
+
+## La degradación entre RUN: cómo se investiga — Eduardo, 5-ago
+
+Dictado al cerrar el **hallazgo 34** de H13, que resultó ser el **24** otra vez.
+No es una propuesta de arreglo: es **el método de la investigación**, escrito
+antes de empezarla para no improvisarlo el día que toque.
+
+### El razonamiento de Eduardo, que es el que manda
+
+> «Dos errores similares con diferente hardware e imagen implica un fallo en lo
+> que es común a los dos firmwares. Y puesto que estamos probando Threads, o es
+> la gestión de los Threads o es la memoria (el Heap). Para cuando lo
+> investiguemos: hay que hacerlo determinista, cuando lo podemos provocar de
+> forma sistemática, y separar si es un problema de Threads o del Heap (o de
+> otra cosa).»
+
+**Lo común está delimitado y es poco**: el núcleo portable de `bpgenvm-c/src`,
+los mismos 24 ficheros que enlazan las tres familias (`bpvm` `loader` `interp`
+`heap` `builtins` `link` `scheduler` `threading` `exceptions` …). Lo que **no**
+es común —la cintura por micro, el FS, el transporte, LVGL— queda fuera por
+construcción: **no puede explicar un fallo que sale en dos familias**. Es el
+mismo argumento que cerró la hipótesis de la flash en la c1, y vale igual aquí.
+
+### Una precisión sobre los dos sospechosos
+
+Los dos síntomas **no son el mismo test**: el 24 fue **la pantalla del P4** (con
+LVGL) y el 34 fueron **los threads de la Nucleo** (sin pantalla). Y eso desempata
+parcialmente la lista de Eduardo:
+
+- **El heap explica LOS DOS.** El modelo del GUI **vive en la VM** —eso se
+  demostró en #352, que se rompía a los 30 RUN— así que si lo que se degrada es
+  memoria, pintar y crear threads se rompen los dos.
+- **La gestión de threads explica SÓLO UNO.** El caso del P4 no crea threads de
+  BP.
+
+Luego, sin descartar nada, **el heap es la hipótesis que cubre más evidencia** y
+por ahí conviene empezar. La tercera puerta —«o de otra cosa»— tiene un candidato
+concreto que también es común y también acumula: **la tabla de handles**, que
+crece bajo demanda (`0 -> 4096 slots, 32 KB`) y es de H1.
+
+### Paso 1 — hacerlo determinista, y hacerlo EN EL HOST
+
+La degradación es **entre RUN**, no dentro de uno: no se puede reproducir desde
+un programa BP, porque el bucle tiene que estar **por encima** del RUN. Eso
+descarta escribir un sample y obliga a un arnés que **encadene N ejecuciones**.
+
+Y por eso el primer intento va **en el host**, no en placa: el host tiene modo
+**daemon con `runModule`** (A2.3), y encima están los instrumentos que en placa
+no hay —el guardián de fin de RUN de **#339** (dice *quién* se quedó la memoria,
+con fichero y línea), el volcado del GC con huecos y fusiones, y `--nogc` para
+partir el experimento—. Si reproduce en host, la investigación entera se vuelve
+barata y sin reflashear. Si **no** reproduce en host con el mismo número de
+vueltas, eso ya es un dato grande: apunta a algo que sólo pasa en placa.
+
+### Paso 2 — separar Threads de Heap, cambiando UNA cosa
+
+Dos arneses mínimos, cada uno tocando **una sola variable**, ejecutados con el
+mismo número de vueltas:
+
+| arnés | qué hace en cada RUN | si degrada… |
+|---|---|---|
+| **A — threads sin memoria** | crea y joinea N threads que **casi no reservan** | es la **gestión de threads** |
+| **B — memoria sin threads** | reserva y libera mucho **sin crear un solo thread** | es el **heap** |
+
+Si degradan los dos, es algo por debajo de ambos (candidato: la tabla de
+handles). Si no degrada ninguno, el disparador está en la combinación y hay que
+volver al caso real. Es la receta de la casa —*partir de lo que va y cambiar una
+cosa hasta romper*— aplicada a un fallo que hasta hoy sólo sabíamos provocar por
+acumulación ciega.
+
+### Lo que hay que arreglar ANTES de poder investigar
+
+- **El `exit 11` no dice nada** (hallazgo 34). El mensaje del `RuntimeError` es
+  la primera pista y hoy no llega. Sin eso se investiga a ciegas.
+- **El INFO del STM32 no da el heap** (hallazgo 30), que es justo el instrumento
+  que hacía falta el día que salió.
+
+Los dos están **en el lote de V4**, así que para cuando empiece V5 ya deberían
+estar puestos.
