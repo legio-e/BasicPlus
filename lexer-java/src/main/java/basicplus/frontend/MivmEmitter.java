@@ -2062,6 +2062,17 @@ public final class MivmEmitter {
         w.declareLocalLong(name);
     }
 
+    /** Gemelo con tag de tipo para el .dbg. MISMA semántica que el de arriba —sin el
+     *  `scope.locals.add` de declareLocal/declareLocalLong— y eso es DELIBERADO: al
+     *  añadirle el guarda «por uniformidad» se rompió `modpropsync` (NPE en el emisor),
+     *  porque el camino del Mutex de una sync property de módulo (línea ~538) declara
+     *  un nombre que el scope ya conoce y necesita que el WRITER lo vea igualmente.
+     *  Regla de la casa aplicada en carne propia: se cambia UNA cosa. La rareza queda
+     *  anotada, no arreglada de paso. */
+    private void declareLocalRef(String name, String typeTag) {
+        w.declareLocalLong(name, typeTag);
+    }
+
     /** H1.8 — param que es una REFERENCIA por construcción: el receptor `this` de los
      *  métodos SINTETIZADOS (List/StringBuilder/Object/tuplas), que no tienen un BpType
      *  de su clase a mano.
@@ -2760,11 +2771,20 @@ public final class MivmEmitter {
     private void emitParallel(ParallelStmt p) throws IOException {
         // 1) Construir cada thread y almacenarlo en su variable visible.
         for (ParallelBranch br : p.branches) {
-            declareLocal(br.varName);
+            // 🔴 hallazgo 34 (5-ago): esto era `declareLocal(br.varName)` — un local de
+            // 4 BYTES para guardar un HANDLE de 8. El `emitSetLocal(br.varName)` de abajo
+            // truncaba la referencia al thread, y el `emitGetLocal` de start()/join()
+            // trabajaba con media referencia. No mordía mientras las generaciones de la
+            // tabla de handles valían 0 —los 32 bits que se pierden son justo esos—, así
+            // que el fallo sólo salía DESPUÉS de reciclar slots (agotar el heap y soltar).
+            // Por eso `paralleltest_sugar` moría y su gemelo con clase declarada no: el
+            // camino normal de `var x: Thread := ...` ya declaraba por TIPO.
+            // Es el mismo animal que #369/#281/#293, y el sitio que se saltó la pasada H1.8.
+            declareLocalRef(br.varName, "Thread");
             int id = tempCounter++;
             String newref  = "__par_newref_"  + id;
             String discard = "__par_discard_" + id;
-            declareLocalLong(newref);
+            declareLocalRef(newref);   // H1.8: era declareLocalLong = un 8 a mano
             declareLocal(discard);
             w.emitNewObject(br.synthesizedClassName);
             w.emitSetLocal(newref);
