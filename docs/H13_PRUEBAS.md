@@ -1305,6 +1305,25 @@ el 27 y el 374 (que el recurso lo diga la placa, no una constante).
 
 **Tandas (5-ago):**
 
+- 🔁 **Falsa salida: la placa arrancó con la imagen VIEJA** (la del ZIP anterior,
+  antes del hallazgo 33 y del 31). Lo cazó **`MemInfo` en una sola pasada**:
+  **56 KB** de heap en vez de los 372 esperados — y 56 es exactamente lo que da
+  un bloque de VM de **128 KB** (regla 25/75 ⇒ 64 de pila + 64 de heap, menos lo
+  que el runtime ya tiene en pie). Verificado del otro lado en el `.map` del
+  binario que sí construimos: `.bss.s_vm_mem 0x80000` (**512 KB**) colocado en
+  `0x200df4f4`. Eduardo: *«es la imagen anterior del ZIP, fallo mío»*.
+
+  📌 **Y esto justifica solo el haber dejado `MemInfo` en el plan abreviado**:
+  entró para comprobar la convivencia con LVGL y lo que hizo fue **detectar un
+  firmware equivocado en un RUN**, antes de que la escalera de GUI entera se
+  corriera sobre la imagen que no era. Un instrumento que contesta con un número
+  te dice cosas que no le habías preguntado; los otros seis samples de la tanda 1
+  pasaron en verde **sobre la imagen mala** sin enterarse de nada.
+
+  ⏩ **A repetir tras reflashear** (`bpvm_stm32_dk2.bin`, **869.608 B**, sha
+  `49c39824` — la vieja pesaba 1.243.092 B, así que **el tamaño ya las
+  distingue**): tanda 1 y `MemInfo`.
+
 - ✅ **Tanda 1 · Humo** (7). Verde. **Séptima placa que arranca y ejecuta**, y la
   cuarta imagen distinta del día tras el `-Os`: el binario del U5G9 —otro chip,
   otro mapa de memoria, 2,4× de estático y LVGL dentro— carga y corre igual.
