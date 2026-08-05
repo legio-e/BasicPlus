@@ -1364,6 +1364,9 @@ el 27 y el 374 (que el recurso lo diga la placa, no una constante).
 - ✅ **`GuiValueDemo` + `GuiLedSpin`** — switch, slider, bar.
 - ✅ **`GuiInputDemo` + `GuiListKbd`** — dropdown, textarea y **teclado virtual en
   táctil**. (De la tecla ✓ —hallazgo 23, visto en el P4— no hay reporte aquí.)
+- ✅ **`GuiTabDemo` + `GuiTableDemo` + `GuiMsgDemo`** — tabview, tabla de celdas y
+  msgbox modal. (La tabla ajustándose a su contenido es el hallazgo **22**, no un
+  fallo; aquí además la pantalla es menor, así que llena más.)
 
 ### Plan de la c2: primera parte ABREVIADA, y el peso en el GUI
 
