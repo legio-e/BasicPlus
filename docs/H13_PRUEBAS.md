@@ -509,6 +509,9 @@ el producto.
   caminos distintos—. Y el aviso del AOT sale como debe: `AOT target 'xtensa' no
   soportado (arm = Cortex-M33 RP2350/STM32 · riscv = ESP32-P4). Los módulos se
   ejecutarán interpretados` — dice qué SÍ hay y qué va a hacer, no sólo que no puede.
+- ✅ **Tanda 4 · Threads y concurrencia** (11). Completa y verde **salvo el
+  hallazgo 34** (`paralleltest_sugar`), que resultó ser el 24 y se curó con un
+  reset. `paralleltest` dio **56.781 ms**, el 3,65× del hallazgo 33.
 - ✅ **Tanda 3 · Ficheros** (8). Verde. No es una repetición de la Pico: aquí la
   cintura es `fs_lfs_esp32.c` sobre `esp_partition`, no `flash_range_*`. Mismo
   littlefs y misma fachada, **trozo de abajo distinto** — o sea que la abstracción

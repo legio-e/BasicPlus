@@ -525,6 +525,53 @@ partir el experimento—. Si reproduce en host, la investigación entera se vuel
 barata y sin reflashear. Si **no** reproduce en host con el mismo número de
 vueltas, eso ya es un dato grande: apunta a algo que sólo pasa en placa.
 
+### CORRECCIÓN de Eduardo (mismo día): primero REPRODUCIR, luego minimizar
+
+> «No es por el tamaño, que aquí es razonablemente grande. Y tampoco creo que
+> con un test sencillo lo podamos reproducir. Esto ocurrió después de una tanda
+> completa de test. Quizás para hacerlo sistemático habría que **fusionar toda
+> la tanda de test en uno solo** y ver qué ocurre. Parece que con un uso
+> intensivo del heap algo se degrada, pero eso es una impresión, primero habrá
+> que demostrarlo.»
+
+Tiene razón y **el orden que yo había propuesto estaba del revés**: los dos
+arneses mínimos del paso 2 sirven para **separar** una causa, no para
+**provocarla**, y no se puede bisecar lo que todavía no se sabe disparar. El
+paso que falta va **antes**: una carga **realista y grande** que lo dispare de
+forma fiable. Su propuesta —**fusionar la tanda entera en un solo programa**—
+es la más barata, porque esa carga ya existe y ya se sabe que rompe.
+
+Y de paso ese test fusionado contesta una pregunta que hoy no sabemos y que
+cambia toda la investigación: **¿hace falta cruzar el límite del RUN, o basta
+con muchas operaciones?** Si degrada **dentro de una sola ejecución**, el RUN
+no pinta nada y todo se vuelve mucho más fácil de estudiar; si sólo degrada
+encadenando RUN, entonces lo que se acumula sobrevive al fin de ejecución, que
+es un sitio muy concreto donde mirar.
+
+### Y el tamaño del heap queda DESCARTADO como causa — con números
+
+La observación de Eduardo se puede cerrar del todo con lo que ya está medido:
+
+| caso | placa | heap | ¿degradó? |
+|---|---|--:|:--:|
+| hallazgo 24 | ESP32-P4 | **27,5 MB** | sí |
+| hallazgo 34 | STM32 Nucleo | **372 KB** | sí |
+
+**Un factor de 75× en el heap no cambia nada.** Eso no es quedarse sin memoria:
+lo que se degrada **no escala con el heap**. Y eso descarta un sospechoso y
+asciende a otro:
+
+- ❌ **Agotamiento**: descartado. Con 27 MB no se agota nada haciendo demos.
+- ⬆️ **Recursos de tamaño FIJO que se consumen por operación**: suben al primer
+  puesto. El candidato más claro es la **tabla de handles** (H1) —tiene *slots*,
+  crece por demanda y **su tamaño no depende del heap**—; después, cualquier
+  contador o tabla del núcleo que no se devuelva al terminar.
+- ➡️ **Fragmentación**: sigue viva, pero con matices — el free list no fusiona
+  (`fusion_izq=0 fusion_der=0`), y eso sí es independiente del tamaño.
+
+⚠️ Todo esto sigue siendo **impresión hasta que se demuestre**, que es
+literalmente lo que pidió Eduardo. Lo único demostrado es la tabla de arriba.
+
 ### Paso 2 — separar Threads de Heap, cambiando UNA cosa
 
 Dos arneses mínimos, cada uno tocando **una sola variable**, ejecutados con el
