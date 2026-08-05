@@ -857,6 +857,25 @@ interna. 📝 Candidato a una línea en la guía de elegir placa; no es V4.
 enlaces siguen sin ser comparables. Para convertirlo en dato haría falta
 cronometrar **borrar N ficheros** (flash pura, sin wire) en las dos placas.
 
+**Y el hallazgo 33 obliga a releer esta fila — pero la refuerza, no la tumba.**
+La comparación de la mañana se hizo con la Nucleo compilada a **`-O0`** y el P4
+a `-Os`: o sea que **la Nucleo iba lastrada y aun así ganaba**. Tras reflashear
+con `-Os`, Eduardo la ve *«todo parece más ágil»* — impresión, no medida, pero
+con mecanismo: el `-Os` no llegó sólo al intérprete, llegó a **todo el firmware**
+(el wire, la cintura de littlefs, el JSON del protocolo, los caminos de
+PUT/DEL/LIST).
+
+Dos consecuencias, y conviene no confundirlas:
+
+1. La conclusión de la **b2** —*«la CPU no aporta, el FS es el que manda»*— queda
+   **intacta**: allí se compararon Pico, S3 y P4, y **las tres iban optimizadas**
+   (`-O3`, `-Os`, `-Os`). El `-O0` sólo estaba en el STM32.
+2. Que quitarlo se note en cargar y borrar dice que **nuestro código no era
+   despreciable** en esas operaciones. No contradice que la flash mande, pero sí
+   avisa de que el reparto flash/código no está medido — y ahora que las cinco
+   imágenes van optimizadas, es el momento bueno para medirlo si algún día se
+   quiere.
+
 ### c2 · STM32 Discovery U5G9J
 Pantalla **LTDC**. Es la placa gráfica de la familia.
 - [ ] `GuiColorDemo` y compañía
