@@ -774,7 +774,9 @@ Sin pantalla. Wire por el VCP del ST-LINK. **AOT ARM**. Página de borrado de **
 **Referencia de la placa (5-ago):** `nucleo-u575zi` · 160 MHz · **114 GPIO** (el
 INFO; el lenguaje dice 128 → **hallazgo 32**) · 28 PWM / 20 ADC · flash 2 MB ·
 SRAM 768 KB · **VM: heap 372 KB medidos** tras subir el bloque a 512 KB
-(hallazgo 31; antes 64) · FS 192 KB / 704 KB · página de borrado **8 KB**, la
+(hallazgo 31; antes 64) · **partición FS 704 KB** (el primer número del panel
+es lo USADO —`fsUsedBytes`—, no una propiedad de la placa: sube según lo que
+haya subido; 192 KB al empezar la fila, 328 KB tras las tandas 1-3) · página de borrado **8 KB**, la
 única de las tres familias que no es de 4 (**hallazgo 29**).
 
 **Tandas (5-ago):**
