@@ -1370,6 +1370,12 @@ el 27 y el 374 (que el recurso lo diga la placa, no una constante).
 - ⚠️→✅ **`GuiFontDemo`** — **no pintaba nada tras 13 demos encadenadas**; con
   **reset funciona**. Es el hallazgo **24**, segunda vista — pero ver abajo,
   porque el segundo avistamiento lo hace MENOS genérico, no más.
+- ⛔ **`FontLoadDemo`** — **NO PUNTÚA**: le falta el fichero de la fuente en el
+  paquete (**hallazgo 36**). En la Discovery corre porque el `.bin` está en el FS
+  de esa placa; en el simulador del PC, que no lo tiene, sale el aviso
+  `loadFont(...): no se pudo cargar (id 2 queda sin fuente)`. Las dos mitades
+  confirman el hallazgo.
+- ✅ **`GuiGeomDemo`** — geometría absoluta x/y/w/h.
 
 ### Plan de la c2: primera parte ABREVIADA, y el peso en el GUI
 
