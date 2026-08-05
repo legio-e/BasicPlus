@@ -387,6 +387,8 @@ imagen única, demostrada.
   `EvFin` (#342 — el evento del thread que muere no se pierde) porque toca justo
   la zona removida hoy: threads que terminan. Sale limpio.
 
+- ✅ **Tanda 7 · Dispositivo** y **Tanda 8 · Excepciones y builtins**. Verdes.
+  (`NeoTest` **no puntúa** aquí — hallazgo 21: la fachada contesta éxito sin driver.)
 - ✅ **`BlinkStm32`** (LED verde PC7). Verde.
 - ✅✅ **AOT ARM en placa — y la medida es HONESTA por dos horas de margen.**
   `fib(28)`: **interpretado 7.755 ms → AOT 78 ms = 99×**, mismo resultado
@@ -1260,6 +1262,28 @@ Dos consecuencias, y conviene no confundirlas:
    avisa de que el reparto flash/código no está medido — y ahora que las cinco
    imágenes van optimizadas, es el momento bueno para medirlo si algún día se
    quiere.
+
+**🏁 c1 CERRADA — y es la fila que MÁS ha aportado de las seis.** Ocho tandas +
+`BlinkStm32` + `MemInfo` + AOT, todo verde, con un único fallo (**34**) que se
+curó con un reset y resultó ser el 24. **Sexta placa de siete.**
+
+Lo que ha dejado, que no es poco para una placa sin pantalla:
+
+- 🔴 **Hallazgo 33** — el firmware STM32 se publicaba a **`-O0`**. Arreglado y
+  verificado: **3,65×** y **−40 %** de imagen. Es el hallazgo más grande de
+  H13 después del 28, y **salió de un número que no cuadraba con el silicio**.
+- 🔴 **Hallazgo 31** — medio mega de RAM parado. Arreglado: heap 64 → **372 KB
+  medidos en placa**.
+- 🔴 **Hallazgo 35** — el AOT se publica **sin un solo ejemplo**. Al lote del ZIP.
+- 🟡 **Hallazgos 29, 30, 32** — mensajes e INFO. Al lote de firmware.
+- 🔬 **Hallazgo 34** — segunda vista del 24, **en otra familia y sin LVGL**:
+  eso tacha la pila gráfica y deja la degradación en el núcleo portable. La
+  gravedad se revisó a **condicional** y el método de la investigación quedó
+  escrito en `docs/V5_IDEAS.md`.
+- 🛠️ **`samples/MemInfo.bp`** — herramienta nueva: mide el heap desde BP.
+- 📐 **Paridad host↔placa demostrada con números**: 372 / 372 / 369 en los dos.
+- 📋 **Cuatro tareas de V5** nacidas aquí (#374, #376, #377 y la ampliación de
+  #372), más la hipótesis de la flash interna y la regla del 5-ago.
 
 ### c2 · STM32 Discovery U5G9J
 Pantalla **LTDC**. Es la placa gráfica de la familia.
