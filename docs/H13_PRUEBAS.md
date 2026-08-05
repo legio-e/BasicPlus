@@ -1324,6 +1324,21 @@ el 27 y el 374 (que el recurso lo diga la placa, no una constante).
   `49c39824` — la vieja pesaba 1.243.092 B, así que **el tamaño ya las
   distingue**): tanda 1 y `MemInfo`.
 
+- ✅ **Repetidas sobre la imagen buena: tanda 1 + `MemInfo`.** Verdes, y con el
+  dato que se buscaba: **372 / 368 / 369**, contra los 372 / 372 / 369 de la
+  Nucleo. Los **totales son idénticos al byte** (380.928 y 377.856) ⇒ **el
+  bloque de 512 KB convive con LVGL sin perder nada**, que era la única duda
+  real de esta placa. Y tiene explicación en el código: el framebuffer es
+  **estático** (`gui_display_ltdc.c:34`, ~750 KB en `bss`), así que **LVGL no
+  come del heap de BP** — medido, no supuesto.
+
+  Los 4 KB que baja el mayor bloque son **un solo paso** de `mayorBloque`, que
+  desciende de 4096 en 4096: o sea la **resolución del instrumento**, no un
+  hallazgo. Traducido: hay entre 1 byte y 4 KB menos de espacio contiguo,
+  probablemente por alguna estructura del GUI registrada al arrancar. Si fuera
+  fragmentación de verdad, el total repartido no cuadraría con el mayor bloque
+  — y cuadra.
+
 - ✅ **Tanda 1 · Humo** (7). Verde. **Séptima placa que arranca y ejecuta**, y la
   cuarta imagen distinta del día tras el `-Os`: el binario del U5G9 —otro chip,
   otro mapa de memoria, 2,4× de estático y LVGL dentro— carga y corre igual.
