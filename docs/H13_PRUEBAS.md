@@ -797,6 +797,34 @@ haya subido; 192 KB al empezar la fila, 328 KB tras las tandas 1-3) · página d
   comprobado. Y el hueco entre 244 y 372 es **fragmentación**, exactamente lo
   que `MemInfo` existe para separar. El mismo binario en el host con
   `--mem=786432` da los mismos tres números: **paridad host↔placa byte a byte**.
+
+  🔁 **Repetida sobre la imagen `-Os` (hallazgo 33) — y un número se movió:**
+
+  | medida | con `-O0` | con `-Os` |
+  |---|--:|--:|
+  | total en trozos de 4 KB | 372 KB | **372 KB** (380.928 B) |
+  | total en trozos de 1 KB | 369 KB | **369 KB** |
+  | **mayor bloque** | **244 KB** | **372 KB** ← igual al total |
+
+  Lo importante primero: **los totales no se han movido ni un KB**, que es lo que
+  había que comprobar tras cambiar la imagen — el `bss` decía que el bloque de
+  512 KB seguía entero y la placa lo confirma. El modelo de reparto aguanta.
+
+  ⚠️ **Pero el mayor bloque pasó de 244 a 372 KB, o sea que el hueco de
+  fragmentación se cerró a cero — y eso NO lo predije ni lo sé explicar todavía.**
+  Un flag del compilador no tiene por qué cambiar el comportamiento del alocador:
+  el código es el mismo, la secuencia es determinista y el heap mide igual. Así
+  que antes de contarlo como mejora hay que entenderlo, que es justo lo contrario
+  de lo que apetece cuando un número sale bonito.
+
+  **La sospecha más barata es la HISTORIA**: el «mayor bloque» no mide capacidad,
+  mide **fragmentación**, y por tanto depende de lo que corriera antes. La medida
+  del `-O0` se tomó al final de una tanda 2 entera; ésta, sobre una placa recién
+  reflasheada y arrancada. **El experimento que lo decide cuesta 30 segundos:
+  correr `MemInfo` dos veces seguidas.** Si la segunda vuelve a dar 244, la
+  fragmentación **sobrevive al RUN** —y eso sí sería un hallazgo, porque el heap
+  debería reinicializarse en cada ejecución (es lo que vigila #339)—. Si da 372
+  las dos, la explicación está en otro sitio y habrá que buscarla.
 - ✅ **Tanda 3 · Ficheros** (8). Verde. No es una repetición de las otras dos
   familias: aquí corre la **tercera cintura** del mismo motor
   (`fs_lfs_stm32.c` sobre la HAL — ni `flash_range_*` ni `esp_partition`) y
