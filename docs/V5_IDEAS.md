@@ -548,6 +548,42 @@ no pinta nada y todo se vuelve mucho más fácil de estudiar; si sólo degrada
 encadenando RUN, entonces lo que se acumula sobrevive al fin de ejecución, que
 es un sitio muy concreto donde mirar.
 
+### La GRAVEDAD real, y por qué eso asciende UN experimento por encima de todos
+
+> «Es de los que no salen con casos sencillos pero que pueden aparecer al cabo
+> de 2 días de ejecución sin resetear, **mortal para una máquina de estados sin
+> atención humana**. Lo digo por cuantificar el daño: **inofensivo en pruebas,
+> mortal en explotación.**» — Eduardo, 5-ago
+
+Esto **matiza la decisión del hallazgo 24**, que se cerró con el criterio de que
+*encadenar RUN es actividad de desarrollo*. Sigue siendo verdad, pero sólo
+protege **si lo que se degrada se degrada POR RUN**. Y ahí está la bifurcación,
+que hoy **no sabemos resolver**:
+
+| si lo que se acumula es… | un programa que corre para siempre… | gravedad |
+|---|---|---|
+| **por RUN** (algo que no se suelta al terminar) | **nunca cruza ese límite** | molestia de desarrollo — vale la decisión del 24 |
+| **por OPERACIÓN** (por reserva, por thread, por handle) | **lo alcanza igual, sólo que más tarde** | **mortal en explotación** |
+
+Luego el test fusionado que propone Eduardo **no es sólo la forma barata de
+reproducirlo: es el que decide cuál de las dos filas es la buena**. Eso lo pone
+por delante de todo lo demás de esta investigación — antes que separar threads
+de heap, antes que mirar la tabla de handles. Primero saber **a quién mata**.
+
+**Y hay una prueba parcial que ya está hecha, y cae del lado tranquilizador**:
+**#357** dejó corriendo **10.000 vueltas en UN SOLO programa** en la Pico —exit
+0, y el heap oscilando en una banda de ~130 bytes *indefinidamente*, «no hay
+techo»—. Eso **es** el escenario de explotación en pequeño, y salió limpio. No
+es concluyente y conviene no venderlo como tal: 10.000 vueltas de **un bucle**
+no son dos días de una carga **variada**, no ejercita la tabla de handles ni el
+GUI, y no cruza ningún fin de RUN. Pero es la mejor evidencia que hay hoy sobre
+el caso que preocupa, y apunta a que lo que se acumula **vive en el límite del
+RUN**, no en la operación.
+
+📌 Conclusión operativa: la gravedad queda registrada como **condicional** —
+*inofensivo en pruebas; mortal en explotación **si** resulta ser por
+operación*— y el primer experimento de V5 es el que resuelve esa condición.
+
 ### Y el tamaño del heap queda DESCARTADO como causa — con números
 
 La observación de Eduardo se puede cerrar del todo con lo que ya está medido:
