@@ -624,6 +624,27 @@ volver al caso real. Es la receta de la casa —*partir de lo que va y cambiar u
 cosa hasta romper*— aplicada a un fallo que hasta hoy sólo sabíamos provocar por
 acumulación ciega.
 
+### Los threads NO se descartan — y hay dos apuntes viejos que van al expediente
+
+> «Sigue la duda si los threads afectan en algo (**el último bug que
+> corregimos estaba en los threads**).» — Eduardo, 5-ago
+
+Es un argumento de historial, y es bueno: ese camino **ya ha dado bugs hace
+nada**, así que no se descarta por elegancia del razonamiento. Dos apuntes que
+ya están escritos y que conviene tener delante el día que empiece:
+
+- **#369** — *el frame inicial del thread se quedó en 4 bytes*. Cerrado y
+  verificado en tres arquitecturas, pero es **el último bug de la casa** y
+  estaba **en el arranque de un thread**: el camino tiene historial reciente de
+  anchos de referencia mal migrados en la campaña 4→8B.
+- **#356** — 🔴 **sigue ABIERTO y es el que más se parece a lo que buscamos**:
+  *«la pérdida de bytes NO se manifiesta (era colateral de #357) — queda el
+  **descarte mudo**, latente»*. Una pérdida que **no se manifiesta** es
+  exactamente la forma de algo que se acumula sin avisar hasta que importa. Se
+  rebajó porque no daba la cara; el 24 y el 34 podrían ser **la cara que le
+  faltaba**. Nadie ha demostrado que sea lo mismo — pero es el primer sitio
+  donde miraría después del test fusionado.
+
 ### Lo que hay que arreglar ANTES de poder investigar
 
 - **El `exit 11` no dice nada** (hallazgo 34). El mensaje del `RuntimeError` es
