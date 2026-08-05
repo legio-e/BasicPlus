@@ -509,6 +509,23 @@ el producto.
   caminos distintos—. Y el aviso del AOT sale como debe: `AOT target 'xtensa' no
   soportado (arm = Cortex-M33 RP2350/STM32 · riscv = ESP32-P4). Los módulos se
   ejecutarán interpretados` — dice qué SÍ hay y qué va a hacer, no sólo que no puede.
+- ✅ **Tanda 5 · Eventos** (6). Verde. Impresión de Eduardo, **sin cronometrar**:
+  los eventos también van más rápido. Tiene mecanismo —el `-Os` alcanzó al
+  despacho de eventos, que es núcleo portable: la cola y la inyección del frame
+  entre quanta— así que encaja, pero **sigue siendo impresión**.
+
+  ⚠️ **Aviso para la comparación que quiere hacer con la c2**: *«con la Discovery
+  se verá más claro si los eventos van mejor que en la P4»* — y esa comparación
+  **va a estar contaminada por los PÍXELES**. En cuanto entra la pantalla, el
+  coste de LVGL escala con el **área**, y el panel del P4 es de **1024×600**
+  (hallazgo 22). Si la Discovery parece más ágil, una parte será que tiene menos
+  píxeles que empujar, no que despache eventos mejor.
+
+  **La comparación limpia es la que acaba de hacer**: los 6 samples de esta
+  tanda **no tocan pantalla**, así que c1 contra b1/b2 mide el mecanismo de
+  eventos y nada más. Lo que falta para convertirlo en dato es que **algún
+  sample de eventos imprima un tiempo**, que hoy ninguno hace → anotado para V5,
+  no se toca en freeze.
 - ✅ **Tanda 4 · Threads y concurrencia** (11). Completa y verde **salvo el
   hallazgo 34** (`paralleltest_sugar`), que resultó ser el 24 y se curó con un
   reset. `paralleltest` dio **56.781 ms**, el 3,65× del hallazgo 33.
