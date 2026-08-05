@@ -1392,6 +1392,11 @@ el 27 y el 374 (que el recurso lo diga la placa, no una constante).
   no por keyword), `function event btn_onClick` (H5.c) y `btn.onClick :=
   pant::btn_onClick` (#325, la referencia a método). Ni `async`, ni `await`, ni
   `callback`: el azúcar cuelga de lo que ya existía, que es la norma de la casa.
+- ✅ **`GuiGcRoot` + `GuiGcRootQ`** — raíces del GC con widgets vivos. Los dos
+  llaman a `gc()` explícitamente, así que el verde es **fuerte**: no depende del
+  tamaño del heap ni de cuándo decida recolectar la VM.
+- ✅ **`GuiFormDemo`** — forms. Es el camino del **super() implícito** que se
+  arregló para el P4, corriendo aquí sobre otra pila gráfica.
 
 ### Plan de la c2: primera parte ABREVIADA, y el peso en el GUI
 
