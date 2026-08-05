@@ -726,3 +726,81 @@ mirar los flags.
 eventos*), que es un caso particular de esto mismo, y con la hipótesis de la
 flash interna de la fila c1, que sigue sin cronometrar por no tener justamente
 esta batería.
+
+### El mapa va ANTES que las cosas grandes — Eduardo, 5-ago
+
+> «No es cuestión de optimizar por optimizar. Pero **ganancias de 300 % o 400 %
+> no son despreciables**. Y antes de meternos con cosas más complicadas como
+> trabajar con varios núcleos, una VM más eficiente o compilar a nativo,
+> **conviene hacer un mapa**. Ver cuáles son nuestras fortalezas y debilidades.»
+
+O sea que la batería **no es un fin, es el paso previo** a las tres piezas
+gordas que ya están en la lista —SMP real en placa, intérprete más rápido, y
+[[v6-nativo-y-profiler]]—. Y el orden protege de lo caro: **cualquiera de las
+tres cuesta meses**, y elegir la equivocada sin mapa se paga entero. Hoy mismo
+ha habido un ensayo de lo que evita: el `-Os` dio **3,65×** y costó una opción,
+y sólo apareció porque un número no cuadraba.
+
+La escala que pone Eduardo —**3× o 4×**— también fija el listón de qué se
+persigue: no se trata de arañar un 5 %.
+
+## Diagnóstico del heap DESDE BP — Eduardo, 5-ago
+
+> «Para el tema del heap necesitamos herramientas para diagnosticar. Creo que ya
+> tienes algunas hechas, así que creo que lo mejor es que **se puedan llamar
+> desde un programa BP**. Las preguntas a contestar pueden ser: ¿hay algún handle
+> de memoria degradado?, ¿la memoria está muy fragmentada?, etc.»
+
+**Y tiene razón en las dos mitades: las herramientas existen, y están en el lado
+equivocado.** Censo de lo que hay hoy:
+
+| herramienta | dónde vive | ¿la ve un programa BP? | ¿en placa? |
+|---|---|---|---|
+| `heapFrag` / `heapMap` (builtins 121/122) | **sólo VM-Java** | sí | ❌ **no** |
+| línea del GC (huecos, el mayor, fusiones, `de_lista`/`de_bump`/`astilla`) | VM-C | no, va a consola/log | sí, pero sólo mirando |
+| guardián de fin de RUN (#339) | VM-C | no | sí, sólo al terminar |
+| `MemInfo.bp` | BP, **por fuerza bruta** | sí | sí |
+
+El agujero salta a la vista: **lo único que un programa BP puede preguntar hoy
+no existe en la VM que corre en las placas.** `docs/BUILTINS.md:266` lo dice sin
+rodeos —*«Java-only (diagnóstico) … ❌ intencional»*— y en su día fue una
+decisión razonable; hoy es justo la que estorba, porque el bicho que hay que
+cazar (24/34) **sólo sale en placa**.
+
+**Y `MemInfo.bp` es la prueba de que falta la API.** Mide el heap *reservando
+hasta que falla*, porque no hay forma de preguntar. Lo pagó caro: **dos versiones
+midieron mal** antes de acertar, y las dos por la misma razón —**la medida
+perturbaba lo que medía**—. Con una API que conteste, `MemInfo` son tres líneas
+y no puede mentir.
+
+### Lo que la VM ya sabe y no cuenta
+
+No hay que inventar métricas: están calculadas y se tiran a una línea de texto.
+
+- **Fragmentación**: nº de huecos, bytes libres totales y **el mayor hueco** →
+  el índice sale solo, y el peor caso es *«hay 200 KB libres y el mayor bloque
+  son 4»*.
+- **Por qué se fragmenta**: `de_lista` / `de_bump` / **`astilla`** (`heap.c:500`)
+  —reservas servidas de la lista, del bump, y **bloques rechazados porque el
+  sobrante no era representable**—. Ese tercero es el que delata la degradación
+  si «muerde» mucho.
+- **Fusiones**: `fusion_izq` / `fusion_der`.
+- **Handles**: la tabla tiene *slots*, crece por demanda (`0 -> 4096`) y cada
+  entrada lleva **generación** — o sea que *«¿hay algún handle degradado?»* es
+  contestable: slots en uso, slots nunca devueltos, generación máxima.
+
+### Forma que debería tener
+
+- **Módulo de stdlib con intrínsecos**, como `Math` e `IO` (#25/#26/#27). Clase
+  OO si lleva estado, funciones sueltas si no — norma de la casa: [[bp-object-model-norms]].
+- **En las DOS VMs**, o no sirve: la de placa es la VM-C. Esto **retira** la
+  excepción de `BUILTINS.md:266`.
+- **Barato y sin perturbar**: leer contadores, no recorrer el heap. La lección de
+  `MemInfo` es que un instrumento que reserva memoria para medir memoria miente.
+- **Números, no una cadena bonita**: `heapFrag` devuelve *string*; para que un
+  programa **decida** (o un test falle) hacen falta enteros.
+
+📌 **Y esto no es sólo comodidad: es el instrumento que hoy nos ha faltado.** El
+paso «acorralar» del 24/34 pide preguntar *«¿cuántos slots de handle hay en uso?»*
+al final de cada RUN, y hoy **no hay forma de preguntarlo desde un programa**.
+Con esto, el test fusionado se contesta a sí mismo.
