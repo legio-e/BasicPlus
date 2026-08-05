@@ -609,9 +609,22 @@ ya registrado** — no hace falta volver a anotarlo.
   funciones `native`, así que el AOT no entra en esta medida: es intérprete
   contra intérprete en dos ISA).
 
-  Los dos workers dan `sum=656067456` idéntico, y el planificador de la BP-VM
+  Los dos threads BP dan `sum=656067456` idéntico, y el planificador de la BP-VM
   reparte igual de acompasado que en las otras placas — primera vez que ese
   planificador corre sobre RISC-V.
+
+  ⚠️ **Y conviene dejar escrito qué NO mide esto, porque induce a error**: un
+  **thread de BP no es una task del RTOS ni un núcleo**. Los threads de BP son
+  verdes: los reparte **el planificador de la propia VM entre quanta**, y en
+  placa la VM corre en **una sola task** en las tres familias — verificado en el
+  código: `esp32/main/repl_esp32.c:807` y `stm32/port/stm32_repl.c:561` llaman a
+  `bpvm_run(vm)` a secas (el comentario del ESP32 lo dice: *«el SMP en ESP32 es
+  H4.2+»*), y el Pico sólo entra por `bpvm_run_smp` si se define
+  `BPVM_PICO_SMP_WORKERS` al configurar, que **no está definido** en la imagen
+  que se publica. O sea que **el segundo núcleo del P4 no ejecuta BP**, y esta
+  medida es intérprete contra intérprete **en un solo núcleo a cada lado**: la
+  comparación entre placas es de **reloj y arquitectura, nada más**. (Corrección
+  de Eduardo, 5-ago: *«los BPThreads no son los RTOS_Threads»*.)
 
   Sigue sin cerrarse la pregunta de **por qué** el S3 va lento por ciclo (la
   sospecha del intérprete desde flash por caché en vez de IRAM), pero ya no es
@@ -817,7 +830,7 @@ dos mitades y sin querer:
 
 La primera mitad **varió la CPU dejando la flash igual**: no cambió nada. La
 segunda **cambia la flash con la CPU yendo en contra** —la Nucleo pierde por
-2,2× de reloj, más si se cuentan los dos núcleos del P4— **y aun así gana**. Esa
+2,2× de reloj— **y aun así gana**. Esa
 es la forma fuerte del argumento: cuando la máquina más lenta gana, la velocidad
 del micro no puede ser la explicación. La causa queda en la flash, que es donde
 apuntaba la hipótesis.
