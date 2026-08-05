@@ -1303,6 +1303,41 @@ familia, una imagen***. Con la regla del 5-ago encima, **no se toca en V4** —
 y no está roto: 372 KB es más heap que el S3 y que la Pico. → **V5**, junto con
 el 27 y el 374 (que el recurso lo diga la placa, no una constante).
 
+### Plan de la c2: primera parte ABREVIADA, y el peso en el GUI
+
+Propuesta de Eduardo: *«esta placa tiene un micro casi idéntico al anterior, no
+podemos hacer una primera parte de test abreviados y nos centramos más en la 2ª
+parte con todos los test del GUI»*. **Sí — pero abreviando por lo que DE VERDAD
+cambia, no por parecido.** Y conviene precisar una cosa antes, porque el caso
+**no es el de la b3**: allí era **la misma imagen** en otra placa, y por eso
+repetir las 8 tandas no probaba nada. Aquí el binario **es otro**
+(`bpvm_stm32_dk2.bin` ≠ `bpvm_stm32_nucleo.bin`), el chip es otro (U5G9 vs
+U575), el mapa de memoria es otro y el estático es **2,4× mayor**. Lo idéntico
+son las **fuentes**, no lo que corre.
+
+Así que se queda lo que cubre una diferencia real, y se cae lo que sólo
+repetiría núcleo ya verificado en tres arquitecturas:
+
+| tanda | ¿se hace? | por qué |
+|---|---|---|
+| **1 · Humo** (7) | ✅ **sí** | es la puerta: *¿este binario arranca y ejecuta?* Barata y no negociable |
+| **2 · Memoria** → sólo **`MemInfo`** | ✅ **abreviada a 1** | primera vez que el bloque de VM de 512 KB **convive con los buffers de LVGL** en la misma SRAM. Un solo RUN contesta |
+| **3 · Ficheros** (8) | ✅ **sí** | geometría distinta: flash **4 MB**, partición FS **2 MB** (la Nucleo: 2 MB / 704 KB). Aquí es donde asoma un mal cruce partición↔enlazador |
+| 4 · Threads (11) | ❌ no | núcleo portable puro, mismas fuentes, verde en **tres** arquitecturas |
+| 5 · Eventos (6) | ⚠️ **la cubre el GUI** | el lazo de #324 **son eventos**: si la escalera de GUI va, la 5 está probada por dentro |
+| 6 · Lenguaje (8) | ❌ no | ídem 4 |
+| **7 · Dispositivo** → sólo **`BoardTest`** | ✅ **abreviada a 1** | es donde vive el hallazgo 32, y esta placa lo **agrava** |
+| 8 · Excepciones (7) | ❌ no | ídem 4 |
+
+**≈17 samples en vez de 60**, y cada uno con un motivo escrito.
+
+🎯 **Y hay un premio que Eduardo no ha pedido pero que cae solo**: acaba de
+**reparticionar, «todo limpio»** — que es **exactamente el estado en el que
+apareció el hallazgo 28**, el crítico (en un dispositivo virgen no arrancaba
+ninguna demo gráfica porque `Gui.mod` no viajaba en el ZIP). O sea que el primer
+`GuiDemo` de esta placa **reverifica el 28 en las condiciones donde falló, y en
+otra familia**. Si sube `Gui.mod` solo, el arreglo queda confirmado dos veces.
+
 ⚠️ **Y el INFO trae de serie los hallazgos ya conocidos de la familia**: no dice
 el heap de la VM (**30**) y da `GPIO 114` (**32**) — pero aquí el 32 se agrava,
 ver abajo.
