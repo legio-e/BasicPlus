@@ -804,3 +804,46 @@ No hay que inventar métricas: están calculadas y se tiran a una línea de text
 paso «acorralar» del 24/34 pide preguntar *«¿cuántos slots de handle hay en uso?»*
 al final de cada RUN, y hoy **no hay forma de preguntarlo desde un programa**.
 Con esto, el test fusionado se contesta a sí mismo.
+
+### La anomalía de los eventos: la placa MÁS LENTA va MÁS RÁPIDA — Eduardo, 5-ago
+
+Observada durante la escalera de GUI de la c2, y anotada como lo que es: **una
+anomalía sin medir**, para la batería de #376.
+
+**El criterio que sí se cumple, y es el que manda para V4**: *«lo importante es
+que para un ser humano los eventos van bien en esta placa»*. Eso es lo que la
+tanda comprueba y eso pasa. Lo de abajo es curiosidad de ingeniería, no un
+pendiente de publicación.
+
+**La anomalía**: el STM32 va a **160 MHz** y el P4 a **360**; por ciclo el STM32
+es un 31 % mejor (2.271 vs 2.976 ciclos/iteración) pero en reloj de pared el P4
+debería ganar ~1,7×. Y sin embargo los eventos **se sienten más rápidos en el
+STM32**. Es **la misma forma que la hipótesis de la flash** de por la mañana:
+cuando la máquina más lenta gana, **la CPU no puede ser la explicación**.
+
+**Hipótesis descartadas ya, y con qué:**
+
+| candidato | lo mata |
+|---|---|
+| el transporte | **115200 en las tres familias** (`board.h`, `main.c:153`, `wire_v1.c:22`) — es una **constante** del parque |
+| el área de pantalla | **contraejemplo de Eduardo**: el P4 vertical tiene **menos** píxeles y va **más lento** |
+| la CPU | la placa más lenta gana |
+
+**Y el control que lo estrecha de verdad, que lo aportó Eduardo**: en la
+**Nucleo**, *sin pantalla y sin táctil*, la **tanda 5 de eventos salió verde** —
+o sea que **el mecanismo de despacho está limpio** (cola + inyección del frame
+entre quanta, núcleo portable). Luego lo que difiere **no está en los eventos**:
+está en la capa de GUI/táctil que va encima.
+
+**Lo que queda por mirar**, cuando toque:
+
+- **cadencia de sondeo del táctil** (controlador y bus distintos por placa);
+- **cada cuánto se bombea LVGL** — el periodo de refresco pone el **suelo** de
+  latencia de evento, y no depende ni de píxeles ni de MHz;
+- **el camino de volcado**: en la c2 es `memcpy` fila a fila (`gui_display_ltdc.c:88`),
+  sin DMA; en el P4 es otro camino entero.
+
+⚠️ **Y cómo hay que medirlo**: lo que Eduardo observa es *evento + print + wire*,
+y el wire son 115200 fijos. O sea que **la tasa real de eventos es MAYOR que la
+percibida** — su frase: *«sin el transporte sería mayor»*. Un cronómetro honesto
+tiene que medir **dentro de la placa**, no contando líneas en la consola.
