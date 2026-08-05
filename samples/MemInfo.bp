@@ -1,0 +1,107 @@
+// MemInfo.bp — cuánta memoria hay de verdad, medida desde BP.
+//
+// POR QUÉ EXISTE: el panel INFO del IDE da el heap de la VM en RP2350 y ESP32,
+// pero NO en STM32 (hallazgo 30 de H13), y en ninguna placa dice cuánto queda
+// libre en un momento dado. Este sample no pregunta: MIDE.
+//
+// CÓMO MIDE, y por qué son dos números y no uno:
+//
+//   1. EL MAYOR BLOQUE. Búsqueda binaria del `newByteArray(n)` más grande que
+//      se puede reservar. Es el número que manda cuando quieres UN buffer
+//      grande (una imagen, un fichero entero en memoria).
+//   2. EL TOTAL. Reservas de 4 KB guardadas en una List —para que el GC NO se
+//      las lleve— hasta que falla. Es lo que de verdad cabe repartido en
+//      trozos, y siempre sale >= que el mayor bloque: la diferencia es la
+//      fragmentación.
+//
+// El OOM se ATRAPA (H1: OOM atrapable), así que el programa termina normal y
+// dice el número en vez de morirse — que es justo lo que se quiere de una
+// herramienta de diagnóstico.
+//
+// LA PILA NO SE MIDE, y es deliberado: habría que recursionar hasta desbordarla,
+// y un desbordamiento de pila no está garantizado que sea atrapable — puede
+// corromper en vez de lanzar. No merece la pena arriesgar una placa por un
+// número que el firmware ya sabe.
+module MemInfo
+
+  import Core
+
+  // El mayor bloque reservable, por bisección entre lo que SÍ cabe y lo que no.
+  // Devuelve bytes. Precisión: 1 KB, que sobra para lo que se quiere saber.
+  //
+  // ⚠️ POR QUÉ SE BISECA DESDE UN TECHO ALTO Y NO DUPLICANDO DESDE ABAJO. Probé
+  // lo segundo, que parece más fino porque nunca pide un disparate — y MIDE
+  // PEOR: con el mismo heap de 251 KB, duplicar daba 192 KB y bisecar 244. La
+  // razón es que la fase de duplicar deja el heap fragmentado antes de empezar
+  // a medir, así que el límite que encuentra es artificialmente bajo. La medida
+  // buena manda sobre la elegancia.
+  function mayorBloque(): integer
+    var lo: integer := 0            // sabemos que 0 cabe
+    var hi: integer := 32000000     // techo generoso: 32 MB (el P4 tiene 27)
+    while hi - lo > 1024 do
+      var mid: integer := lo + (hi - lo) / 2
+      try
+        var b: byte[] := newByteArray(mid)
+        lo := mid                   // cupo
+      catch e: RuntimeError
+        hi := mid                   // no cupo
+      endtry
+      gc()                          // suelta el de esta vuelta antes de la otra
+    endwh
+    return lo
+  end mayorBloque
+
+  // Total repartido en trozos de `paso` bytes. Los guarda en una List para que
+  // sigan VIVOS: sin eso el GC los recicla y el bucle no acabaría nunca.
+  function totalPorTrozos(paso: integer): integer
+    var lst: List := List()
+    var total: integer := 0
+    var vueltas: integer := 0
+    try
+      while vueltas < 100000 do
+        lst.add(newByteArray(paso))
+        total := total + paso
+        vueltas := vueltas + 1
+      endwh
+    catch e: RuntimeError
+      // esperado: es la señal de que ya no cabe más
+    endtry
+    return total
+  end totalPorTrozos
+
+  function kb(bytes: integer): string
+    return intToString(bytes / 1024) + " KB"
+  end kb
+
+  function Main()
+    print "============================================"
+    print "  Memoria de la VM, medida desde BP"
+    print "============================================"
+
+    // Aviso al que lee la consola: buscar el límite EXIGE fallar, así que el
+    // firmware va a soltar su "SIN MEMORIA en el heap" una vez. Es esperado y no
+    // es un error del programa — decirlo ANTES evita el susto.
+    print "(el aviso de SIN MEMORIA que sale abajo es ESPERADO: para saber"
+    print " cuanto cabe hay que pedir de mas una vez. El OOM se atrapa.)"
+    print ""
+
+    gc()
+    var mayor: integer := mayorBloque()
+    print "Mayor bloque reservable: " + kb(mayor) + "  (" + intToString(mayor) + " B)"
+
+    gc()
+    var total: integer := totalPorTrozos(4096)
+    print "Total en trozos de 4 KB: " + kb(total) + "  (" + intToString(total) + " B)"
+
+    gc()
+    var total2: integer := totalPorTrozos(1024)
+    print "Total en trozos de 1 KB: " + kb(total2) + "  (" + intToString(total2) + " B)"
+
+    print "--------------------------------------------"
+    print "El mayor bloque manda si necesitas UN buffer grande."
+    print "El total en trozos es lo que cabe repartido."
+    print "La diferencia entre los dos es la fragmentacion."
+    print "============================================"
+  end Main
+
+end MemInfo

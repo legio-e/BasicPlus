@@ -31,6 +31,7 @@ done
 # COMPILA aquí: necesita hardware (pantalla, PIO...) que el PC no tiene. El
 # nombre viene de que al principio eran todos GUI.
 LISTA="
+M|samples/MemInfo.bp|MIDE el heap: mayor bloque + total en trozos (herramienta)
 M|samples/MemT1_Oo.bp|escalon 1: objetos y campos
 M|samples/MemT2_StrField.bp|escalon 2: campo string (referencia) en objeto
 M|samples/MemT3_Inherit.bp|escalon 3: herencia + super() + virtual
