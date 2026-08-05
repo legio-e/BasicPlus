@@ -1586,6 +1586,32 @@ Tres cajones, y lo que los separa es qué interrumpe:
 Al cerrar cada fila: se agrupan los arreglos, **un solo rebuild, un solo reflasheo**, y
 se **vuelve a probar lo que falló** — no la fila entera.
 
+## 🚪 PUERTA FINAL — la prueba de aceptación del paquete (acordada 5-ago, para el 6)
+
+Decidida por Eduardo al cerrar la batería: *«mañana, con el ZIP nuevo hecho,
+hacemos una última prueba: lo desplegamos, probamos un programa en una placa y
+un programa gráfico en el emulador. Debería funcionar pero nos aseguramos»*.
+
+No es humo: es comprobar que **lo arreglado llegó al paquete**, que es
+justamente lo que ningún test de placa comprueba.
+
+**Regla que la hace válida — DESPLEGAR EN CARPETA LIMPIA**, no encima de la
+instalación de trabajo. Los hallazgos **25**, **35** y **36** se escondieron
+exactamente así: el asset estaba en la máquina o en el FS de la placa, y **no en
+el ZIP**. Desplegar encima devuelve los restos y vuelve a taparlo.
+
+**Y eligiendo los dos programas con criterio, la misma prueba sella tres
+pendientes:**
+
+| qué se ejecuta | qué verifica de paso |
+|---|---|
+| **en placa**: `MemInfo` + `paralleltest_sugar` | el **hallazgo 34** EN PLACA — el bug del compilador con la receta de Eduardo (`reset + MemInfo + sugar`) |
+| **en el emulador**: `ChartDemo` | el **20** (que el sample ya viaje en el ZIP) y el **37** (que el `bpvm-sim` publicado tenga pantalla) |
+
+⚠️ Y un tercer chequeo que cuesta un vistazo: que en `samples/` del ZIP estén
+**los benchmarks** (35) y **la fuente `.bin`** (36), que son las dos cosas que
+hoy NO viajaban.
+
 ## Registro de hallazgos
 
 > No hay un hallazgo 14: es un salto de numeración mío, no un apunte perdido.
