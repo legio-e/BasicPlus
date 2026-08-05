@@ -1289,6 +1289,8 @@ Lo que ha dejado, que no es poco para una placa sin pantalla:
 Pantalla **LTDC**. Es la placa gráfica de la familia.
 
 **Referencia de la placa (5-ago, tras reparticionar):** `u5g9j-dk2` · 160 MHz ·
+**panel LTDC 800×480** (`gui_display_ltdc.c:30`, framebuffer RGB565 estático de
+**750 KB** + buffer de render de 48 líneas ≈ 77 KB) ·
 flash **4 MB** · **SRAM 2,9 MB** —la mayor del parque sin contar PSRAM— ·
 partición FS **2 MB** · página de borrado **8 KB** · imagen `-Os` del hallazgo 33
 (`bpvm_stm32_dk2.bin`, `49c39824`).
@@ -1323,6 +1325,11 @@ el 27 y el 374 (que el recurso lo diga la placa, no una constante).
   ⏩ **A repetir tras reflashear** (`bpvm_stm32_dk2.bin`, **869.608 B**, sha
   `49c39824` — la vieja pesaba 1.243.092 B, así que **el tamaño ya las
   distingue**): tanda 1 y `MemInfo`.
+
+- ✅ **Tanda 3 · Ficheros** (8). Verde. Es la **cuarta geometría de flash** del
+  mismo motor: 4 MB con partición FS de **2 MB**, contra los 2 MB / 704 KB de la
+  Nucleo, por la misma cintura `fs_lfs_stm32.c` y con el mismo sector de 8 KB.
+  Con esto **la primera parte abreviada queda cerrada** salvo `BoardTest`.
 
 - ✅ **Repetidas sobre la imagen buena: tanda 1 + `MemInfo`.** Verdes, y con el
   dato que se buscaba: **372 / 368 / 369**, contra los 372 / 372 / 369 de la
