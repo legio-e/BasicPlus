@@ -750,6 +750,34 @@ Sin pantalla. Wire por el VCP del ST-LINK. **AOT ARM**. Página de borrado de **
 - [ ] AOT: cómputo `native` y ganancia
 - [ ] #338 aquí deja el buffer en **12 KB** (no 8): es su sector, no una excepción
 
+**Referencia de la placa (5-ago):** `nucleo-u575zi` · 160 MHz · **114 GPIO** (el
+INFO; el lenguaje dice 128 → **hallazgo 32**) · 28 PWM / 20 ADC · flash 2 MB ·
+SRAM 768 KB · **VM: heap 372 KB medidos** tras subir el bloque a 512 KB
+(hallazgo 31; antes 64) · FS 192 KB / 704 KB · página de borrado **8 KB**, la
+única de las tres familias que no es de 4 (**hallazgo 29**).
+
+**🔬 Observación de Eduardo, sin medir todavía: la flash INTERNA parece bastante
+más rápida.** Cargar y borrar ficheros va notablemente más ágil que en el P4, y
+su hipótesis es el tipo de flash — la Nucleo la tiene **interna**, el P4
+**externa SPI**.
+
+Lo que la refuerza es que **explica también la observación de ayer**: en la fila
+b2 quedó anotado que el FS iba igual de rápido en Pico, S3 y P4 y que *«el FS es
+el más lento y es el que manda»*. Las tres tienen **flash externa SPI**. La
+Nucleo es la primera con flash interna, y es la primera que rompe el patrón —
+una hipótesis que explica a la vez la regularidad y su excepción vale más que
+una corazonada. Los órdenes de magnitud cuadran: una NOR SPI borra un sector de
+4 KB en decenas de ms y programa de 256 en 256 B; la flash del U5 está en el bus,
+borra páginas de 8 KB y programa de 128 bits.
+
+⚠️ **Pero hay un confusor, y conviene dejarlo escrito**: *cargar* pasa por el
+wire **y** por la flash, y los enlaces no son comparables (la Nucleo va por el
+**VCP del ST-LINK**, el P4 por un **bridge USB-UART**). *Borrar* no transfiere
+nada: es flash pura. Como Eduardo observa que **borrar también va más rápido**,
+esa mitad no la explica el enlace. **Sigue siendo hipótesis** hasta que se mida
+con un cronómetro; queda anotada como caracterización, no como hallazgo — aquí
+no hay nada roto.
+
 ### c2 · STM32 Discovery U5G9J
 Pantalla **LTDC**. Es la placa gráfica de la familia.
 - [ ] `GuiColorDemo` y compañía
