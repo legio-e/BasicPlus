@@ -1285,6 +1285,30 @@ Lo que ha dejado, que no es poco para una placa sin pantalla:
 - 📋 **Cuatro tareas de V5** nacidas aquí (#374, #376, #377 y la ampliación de
   #372), más la hipótesis de la flash interna y la regla del 5-ago.
 
+**🏁🏁 c2 CERRADA — Y CON ELLA LAS SIETE PLACAS.** Primera parte abreviada
+(tandas 1, 3, `MemInfo`, `BoardTest`), **17 demos de GUI verdes**, `ChartDemo`
+arreglado el mismo día y **AOT ARM: `fib(28)` 8.943 ms → 86 ms = 104×**.
+
+📐 **Un dato que sale gratis al comparar con la Nucleo** —mismo chip, mismo
+reloj, mismo `-Os`— y que va a la batería de #376:
+
+| | interp | AOT | ganancia |
+|---|--:|--:|--:|
+| Nucleo (**sin** pantalla) | 7.755 ms | 78 ms | 99× |
+| Discovery (**con LTDC**) | 8.943 ms | 86 ms | 104× |
+
+La Discovery va **15 % más lenta interpretando** y sólo **10 % en nativo**.
+Hipótesis con mecanismo, **sin medir**: el LTDC escanea el framebuffer sin parar
+—800×480 RGB565 a ~60 Hz ≈ **46 MB/s de lecturas de SRAM**— y le roba ancho de
+banda al bus. Encaja con que el **intérprete** sufra más que el nativo: el
+intérprete **vive en SRAM** (busca bytecode a cada paso) y el código AOT corre
+desde flash con su caché. Traducido: **tener pantalla cuesta CPU aunque no
+estés dibujando**.
+
+**Exclusiones de la fila, todas justificadas y ninguna del producto en placa**:
+`FontLoadDemo` (36, falta la fuente en el ZIP) y `GuiRotDemo` (38, rotación no
+implementada en LTDC).
+
 ### c2 · STM32 Discovery U5G9J
 Pantalla **LTDC**. Es la placa gráfica de la familia.
 
