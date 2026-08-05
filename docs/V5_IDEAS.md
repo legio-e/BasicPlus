@@ -654,3 +654,75 @@ ya están escritos y que conviene tener delante el día que empiece:
 
 Los dos están **en el lote de V4**, así que para cuando empiece V5 ya deberían
 estar puestos.
+
+## Una batería de rendimiento que sirva para DECIDIR, no para presumir — Eduardo, 5-ago
+
+> «Para V5 tenemos que crear una batería de test de rendimiento de
+> hardware+software, algo que sea **medible**. Lo importante de estas pruebas es,
+> teniendo en cuenta las diferencias de hardware, **si se puede optimizar el
+> software**. Por ejemplo, la escritura en ficheros lenta se puede amortiguar con
+> buffer (en software, no el del SO) o trabajando con streams.»
+
+Dictado al final de la fila c1, después de un día entero de impresiones sin
+número: *«parece más ágil»*, *«los eventos también van más rápido»*, *«el FS va
+igual en todas»*. Todas resultaron interesantes y **ninguna se pudo usar para
+decidir nada** hasta que hubo un número —y el único número del día, los 207.017
+ms del `paralleltest`, es el que destapó el hallazgo 33.
+
+### Lo que la diferencia de un benchmark, que es lo que ya tenemos
+
+**Ya existe una suite** (`samples/benchmarks/`: `Bench` `intbench` `floatbench`
+`stringbench` `arraybench` `sortbench` `sumbench` `fibobench`, tarea #164). Mide
+**cómputo**, y lo hace bien: `Bench.bp` incluso lleva el gemelo interpretado de
+`fib` **para tener línea base en la misma placa y el mismo reloj**, que es
+exactamente la idea correcta.
+
+Lo que pide Eduardo **no es más de eso**. Es otra cosa, y la diferencia está en
+la pregunta:
+
+- Un **benchmark** contesta *«¿cuánto tarda?»* → sirve para comparar placas.
+- Esta batería tiene que contestar *«**¿cuánto de esto es culpa nuestra?**»* →
+  sirve para **decidir si merece la pena optimizar**.
+
+Y eso obliga a que cada prueba traiga **su referencia dentro**, como ya hace
+`Bench` con el gemelo interpretado. El patrón del día 5-ago vale de plantilla: el
+`paralleltest` en bruto decía *«la Nucleo es lenta»* —falso como diagnóstico—;
+**normalizado por reloj** decía *«va peor por ciclo que un Xtensa»*, que no
+cuadra con el silicio y llevó derecho al `-O0`. **El número en bruto miente; el
+número con su referencia habla.**
+
+### Lo que hay que medir, que es el reparto
+
+Para cada operación cara, separar **lo que impone el hardware** de **lo que
+añadimos nosotros**, porque sólo lo segundo es accionable:
+
+| operación | suelo del hardware | lo nuestro (accionable) |
+|---|---|---|
+| escribir fichero | ciclo de borrado + programación de la flash | nº de llamadas, tamaño de caché, copias intermedias |
+| leer fichero | lectura de página | trocear, copias, conversiones |
+| pintar | ancho de banda al panel (escala con **área**) | redibujados de más, invalidaciones |
+| despachar evento | ~nada | cola, inyección del frame, asignaciones por evento |
+
+Si de 100 ms el suelo son 95, **no hay nada que optimizar y hay que dejarlo
+escrito** para no volver a intentarlo cada seis meses. Si son 40, hay 60 que
+ganar y merece la pena.
+
+### El ejemplo de Eduardo tiene un dato concreto detrás
+
+Su propuesta —*amortiguar con buffer propio o trabajar con streams*— apunta a un
+sitio que ya se puede señalar: **la caché de littlefs es de 256 B**
+(`BPVM_FS_LFS_CACHE`, `src/fs_lfs.c:71`), la misma en host y en los tres micros,
+con **dos buffers estáticos** para dos ficheros abiertos a la vez. O sea que hoy
+una escritura pequeña desde BP **paga estructura cada 256 bytes**, y el sector de
+borrado es de **4 KB** (8 KB en STM32): entre 16 y 32 veces más grande que la
+caché. Ahí hay reparto que medir antes de tocar nada.
+
+⚠️ **Y el orden importa**: primero la batería, después la optimización. Lo
+contrario es exactamente lo que la casa no hace — hoy mismo el `-O0` apareció
+porque había una **medida** que no cuadraba, no porque a nadie se le ocurriera
+mirar los flags.
+
+**Emparenta con** la tarea #373 (rendimiento del GUI: *medir antes de tocar los
+eventos*), que es un caso particular de esto mismo, y con la hipótesis de la
+flash interna de la fila c1, que sigue sin cronometrar por no tener justamente
+esta batería.
