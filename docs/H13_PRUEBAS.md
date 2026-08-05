@@ -1384,6 +1384,14 @@ el 27 y el 374 (que el recurso lo diga la placa, no una constante).
   demasiado** y es fácil dar por bueno el malo.
 - ⛔ **`GuiRotDemo`** — **NO PUNTÚA**: la rotación no está implementada en LTDC
   (**hallazgo 38**). El evento se dispara y el modelo gira; el panel no.
+- ✅ **`GuiAsyncDemo`** — trabajo largo sin congelar la UI. Comentario de Eduardo
+  que merece quedar: *«sigue siendo una demo muy bonita, muestra claramente el
+  funcionamiento del lenguaje… hace lo complicado sencillo»*. Y tiene detrás una
+  decisión suya, no un accidente: el sample junta **tres mecanismos y CERO
+  palabras nuevas** — `class Contador extends Thread` (concurrencia por herencia,
+  no por keyword), `function event btn_onClick` (H5.c) y `btn.onClick :=
+  pant::btn_onClick` (#325, la referencia a método). Ni `async`, ni `await`, ni
+  `callback`: el azúcar cuelga de lo que ya existía, que es la norma de la casa.
 
 ### Plan de la c2: primera parte ABREVIADA, y el peso en el GUI
 
