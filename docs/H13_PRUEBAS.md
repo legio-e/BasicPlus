@@ -1303,6 +1303,12 @@ familia, una imagen***. Con la regla del 5-ago encima, **no se toca en V4** —
 y no está roto: 372 KB es más heap que el S3 y que la Pico. → **V5**, junto con
 el 27 y el 374 (que el recurso lo diga la placa, no una constante).
 
+**Tandas (5-ago):**
+
+- ✅ **Tanda 1 · Humo** (7). Verde. **Séptima placa que arranca y ejecuta**, y la
+  cuarta imagen distinta del día tras el `-Os`: el binario del U5G9 —otro chip,
+  otro mapa de memoria, 2,4× de estático y LVGL dentro— carga y corre igual.
+
 ### Plan de la c2: primera parte ABREVIADA, y el peso en el GUI
 
 Propuesta de Eduardo: *«esta placa tiene un micro casi idéntico al anterior, no
