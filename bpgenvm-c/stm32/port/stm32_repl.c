@@ -63,7 +63,21 @@ static char    s_line[WIRE_LINE_MAX];
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
 typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
                              V1_PUT_BUF_SIZE >= BP_ENV_SECTOR + 512u) ? 1 : -1];
-static uint8_t s_vm_mem[128u * 1024u];        /* RAM que gestiona la VM */
+/* H13 hallazgo 31 (5-ago) — 128 KB era un DESCUIDO, no una decisión: se fijó al
+ * nacer el port y nadie volvió a mirarlo. Medido sobre el ELF de la Nucleo: de
+ * los 768 KB de RAM el estático total eran ~247 KB (128 de éstos) ⇒ ~520 KB
+ * PARADOS, en la placa que tenía el heap MÁS PEQUEÑO del parque (64 KB, contra
+ * 96 del S3 y 257 de la Pico). Con 512 KB la regla común (25 % pilas, suelo 64,
+ * techo 512) reparte 384 de heap + 128 de pila.
+ *
+ * El presupuesto que lo justifica, para quien lo revise: 768 total − 512 aquí
+ * − ~119 del resto del estático = ~137 KB libres, y el linker sólo exige 20
+ * (_Min_Heap_Size 16K + _Min_Stack_Size 4K). Margen de 6×.
+ *
+ * Lo comparten LAS DOS placas de la familia y la que manda es la Nucleo: la
+ * Discovery tiene 3008 KB de RAM, así que aquí le sobra. Si algún día se quiere
+ * afinar por placa, el sitio es board.h — no este #define. */
+static uint8_t s_vm_mem[512u * 1024u];        /* RAM que gestiona la VM */
 static char    s_out_esc[2048];               /* salida escapada (sink) */
 static char    s_out_msg[2300];               /* evento OUTPUT completo */
 static long    s_session = 0;                 /* contador de sesiones RUN */
