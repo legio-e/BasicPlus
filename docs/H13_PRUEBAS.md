@@ -1358,6 +1358,10 @@ el 27 y el 374 (que el recurso lo diga la placa, no una constante).
   arrancaba; si la demo corre, **`Gui.mod` llegó solo**. **El crítico queda
   confirmado en dos familias.**
 - ✅ **`GuiColorDemo`** — el que dio guerra en el P4, verde a la primera aquí.
+- ✅ **`GuiClickDemo`** — clic **táctil** aquí, no ratón.
+- ✅ **`GuiCheckDemo` + `GuiEvSpike`** — 4 upcalls / 4 handlers **emparejados**.
+  `Gui.mod` y `Json.mod` ya en el FS y saltados por idénticos: el 28 sigue en pie.
+- ✅ **`GuiValueDemo` + `GuiLedSpin`** — switch, slider, bar.
 
 ### Plan de la c2: primera parte ABREVIADA, y el peso en el GUI
 
