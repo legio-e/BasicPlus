@@ -1350,6 +1350,15 @@ el 27 y el 374 (que el recurso lo diga la placa, no una constante).
   cuarta imagen distinta del día tras el `-Os`: el binario del U5G9 —otro chip,
   otro mapa de memoria, 2,4× de estático y LVGL dentro— carga y corre igual.
 
+**Escalera de GUI (5-ago):**
+
+- ✅ **`GuiDemo`** — y vale doble: es el **primer gráfico de la familia STM32**
+  (LTDC, no MIPI-DSI ni SPI) y **reverifica el hallazgo 28**. Eduardo había
+  reparticionado *«todo limpio»*, que es el estado exacto en el que aquello no
+  arrancaba; si la demo corre, **`Gui.mod` llegó solo**. **El crítico queda
+  confirmado en dos familias.**
+- ✅ **`GuiColorDemo`** — el que dio guerra en el P4, verde a la primera aquí.
+
 ### Plan de la c2: primera parte ABREVIADA, y el peso en el GUI
 
 Propuesta de Eduardo: *«esta placa tiene un micro casi idéntico al anterior, no
