@@ -1362,6 +1362,8 @@ el 27 y el 374 (que el recurso lo diga la placa, no una constante).
 - ✅ **`GuiCheckDemo` + `GuiEvSpike`** — 4 upcalls / 4 handlers **emparejados**.
   `Gui.mod` y `Json.mod` ya en el FS y saltados por idénticos: el 28 sigue en pie.
 - ✅ **`GuiValueDemo` + `GuiLedSpin`** — switch, slider, bar.
+- ✅ **`GuiInputDemo` + `GuiListKbd`** — dropdown, textarea y **teclado virtual en
+  táctil**. (De la tecla ✓ —hallazgo 23, visto en el P4— no hay reporte aquí.)
 
 ### Plan de la c2: primera parte ABREVIADA, y el peso en el GUI
 
