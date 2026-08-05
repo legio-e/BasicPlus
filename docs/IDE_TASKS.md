@@ -88,7 +88,7 @@ Inventario base: `BpIde/` Swing (Java 1.8, GUI builder NetBeans). Componentes:
   razonable**: es una PUESTA AL DÍA, no un rewrite.
 - **Lista de captura: cerrada de momento** (6 ítems). Reabrible si surge algo.
 
-## IDE-7 · Selección múltiple en el árbol del dispositivo — Eduardo, 4-ago (V5)
+## IDE-7 · Selección múltiple en el árbol del dispositivo — Eduardo, 4 y 5-ago (V5)
 
 > «Permitir seleccionar varios. Borrar 1 a 1 es lento, ya que cuando termina
 > tiene que refrescar el árbol y cuando hay muchos archivos se nota.»
@@ -115,6 +115,31 @@ se gana):
    Aquí está casi toda la ganancia.
 3. Repasar si el mismo patrón —refrescar dentro del bucle— aparece en las otras
    operaciones del árbol (subida de varios, sobre todo).
+
+### AMPLIACIÓN (Eduardo, 5-ago): también para SUBIR
+
+> «La optimización de poder seleccionar varios archivos para borrar a la vez creo
+> que mejora en todos los casos. También podría servir para cargar archivos en la
+> placa, ahora solamente se puede hacer de 1 en 1.»
+
+Y no es «además valdría para subir»: es **el mismo arreglo aplicado dos veces**.
+Comprobado en el código — `onUpload()` (`PicoExplorer.java:1251`) usa un
+`JFileChooser` **sin `setMultiSelectionEnabled(true)`**, coge `getSelectedFile()`
+en **singular**, sube uno con `b.put()` y llama a `onRefresh()`. Selección única
++ un refresco por operación, calcado del borrado.
+
+Cuarta pieza, entonces:
+
+4. `onUpload()`: `setMultiSelectionEnabled(true)` + `getSelectedFiles()`, bucle
+   de `put()`, y **un solo `onRefresh()` al final**.
+
+**Por qué importa más de lo que parece.** El coste por fichero no es sólo el
+refresco: en las placas con flash **externa SPI** (Pico, S3, P4) cada escritura
+paga ciclos de borrado lentos. El 5-ago Eduardo observó que en la Nucleo —flash
+**interna**— cargar y borrar va notablemente más ágil, y su hipótesis es
+precisamente el tipo de flash (anotada en `docs/H13_PRUEBAS.md`, fila c1).
+Batear amortiza el refresco **en todas** las placas y además esconde la latencia
+de flash **en las lentas**, que son la mayoría del parque.
 
 **Cuidado al hacerlo**: la confirmación de N ficheros tiene que **enseñar la
 lista**, no sólo el número. Borrar en la placa no tiene deshacer, y un árbol con
