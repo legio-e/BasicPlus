@@ -1148,6 +1148,11 @@ haya subido; 192 KB al empezar la fila, 328 KB tras las tandas 1-3) · página d
   que el tamaño está donde tiene que estar —en la cintura— y no horneado en el
   motor.
 
+  🔁 **Repetida sobre la imagen `-Os`**: verde otra vez, sin hallazgos. Con esto
+  **las tandas 1, 2 y 3 quedan reverificadas sobre el firmware que se publica**,
+  y la c1 vuelve al punto donde estaba antes del hallazgo 33 — pero ya sin
+  deuda: lo que se pruebe de aquí en adelante se prueba **una sola vez**.
+
 **🔬 Observación de Eduardo, sin medir todavía: la flash INTERNA parece bastante
 más rápida.** Cargar y borrar ficheros va notablemente más ágil que en el P4, y
 su hipótesis es el tipo de flash — la Nucleo la tiene **interna**, el P4
