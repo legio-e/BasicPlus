@@ -1934,6 +1934,39 @@ diciendo *«yo lo testeé, el fichero tiene que estar en alguna parte»*.
 existe» no son la misma frase, y yo las junté. Cuando el usuario dice que lo ha
 visto funcionar, **el sitio donde buscar es su máquina, no el índice de git**.
 
+**Y LA HISTORIA COMPLETA, que la puso Eduardo y es la parte que de verdad
+enseña algo:**
+
+> *«La fuente estaba en la demo en MicroPython que copié en su día dentro de `pm`
+> para empezar V3. Pero al terminar la V3 hicimos limpieza y borré esa carpeta.»*
+
+O sea: el fichero **estuvo dentro del proyecto y funcionó** — por eso él lo
+probó y lo vio bien— pero **nunca estuvo en git**. Era una copia sin versionar.
+Eso explica de golpe las tres cosas que no encajaban: que él lo hubiera visto
+funcionar, que mi búsqueda en *todo el historial* diera cero, y que a día de hoy
+no esté ni en el repo ni en la placa.
+
+**La demo lleva UNA VERSIÓN ENTERA rota** —desde la limpieza de cierre de V3— y no
+lo notó nadie. Para eso hicieron falta **dos fallos a la vez**, y cualquiera de
+los dos por separado se habría cazado:
+
+| | el fallo | qué lo habría cazado |
+|---|---|---|
+| 1 | el sample dependía de un fichero **sin versionar** | cualquier prueba en una máquina limpia, o un clon del repo |
+| 2 | `loadFont` **no avisa** cuando falla (id válido siempre + `setFont` no-op) | la propia demo, si pudiera comprobar el resultado |
+
+El 2 es el que convierte al 1 en invisible: con un fallo ruidoso, la primera
+ejecución tras la limpieza habría gritado. Es [[instrumento-mudo-dudar-de-el]] en
+su forma más cara — **un año de silencio**.
+
+**Guardián propuesto para V5** (barato y mecánico): los samples declaran sus
+recursos en el código (`loadFile("x.png")`, `loadFont("y.bin")`). Un check del
+montaje puede **extraer esos literales y exigir que el fichero esté EN GIT** al
+lado del sample. Es el mismo patrón que el guardián de `PUBLICAR_DIRS` (hallazgo
+35) y que el gate de MOD6: no se trata de acordarse, se trata de que **olvidarse
+haga ruido**. Habría cazado esto, el hallazgo 25 (`testimg.png`) y el 36 de una
+sola pasada.
+
 **Lo que sí era cierto del hallazgo** —y por eso no se cierra como falsa alarma—:
 el fichero **no viajaba en el paquete**, así que recién instalado la demo no podía
 hacer lo único para lo que existe. Confirmado además por Eduardo: **tampoco está
