@@ -2355,10 +2355,59 @@ está medido y acotado.
 Las cuatro pruebas de la puerta final pasan **desde una instalación recién
 descomprimida**. El paquete que se publica:
 
-**`dist/BasicPlus-4.0-win.zip`** — 9,2 MB · `sha256 ac2a13685491ee4f7d6642cfc77d598a80ae5c1d4034e9c4e35059fc5657003a`
+**`dist/BasicPlus-4.0-win.zip`** — 9,2 MB · `sha256 a9986f49c1a3cb50553fe1a3d9df37da3c9c821a9984659d29e7ea20428bd68c`
 
 **Lo que se lleva esta fase, en una frase**: los dos bugs gordos —el STM32 a
 `-O0` y el handle del thread truncado— salieron de **medidas que no cuadraban**,
 no de sospechas. Y los cuatro instrumentos que mentían salieron de **probar lo
 que ya dábamos por bueno**. La última prueba, la que más encontró, la propuso
 Eduardo cuando yo ya había dado el trabajo por terminado.
+
+---
+
+# Fase de publicación — lo que apareció DESPUÉS de cerrar H13
+
+## Hallazgo 42 — el ZIP publicaba un proyecto de ejemplo que NO CARGA
+
+`samples/sampleproject/App.bpproject`, el proyecto que abre quien acaba de
+descomprimir, iba con esto dentro:
+
+```json
+  "modulePaths": ["out"]
+  "out": pack
+}
+```
+
+Sin coma y sin comillas: **no es JSON**. Medido con el cargador real
+(`BpProject.load`) sobre la instalación limpia, no teorizado:
+
+```
+CARGA FALLA -> IOException: …App.bpproject:8:3: se esperaba ',' o '}', vi '"'
+```
+
+**Cómo entró**: era una modificación del **árbol de trabajo** (sin commitear), y
+`montar-zip.sh` **copia del disco, no de git**. La misma trampa del hallazgo 39
+(las imágenes rancias) y del `riscv` de `Fibo.bpbuild`, por tercera vez.
+
+De paso viajaban otras dos contaminaciones de las pruebas de H13:
+`App.bpbuild` reescrito por el IDE (perdía su cabecera explicativa y ganaba
+`out:pack` + `aot:arm`) y `stringbench.bp` con `n := 2000` en vez de `20000`.
+
+**Arreglo**: los tres ficheros devueltos a su versión de git, y el paquete
+rehecho. Se pasó además el cargador real por **todos** los proyectos que viajan
+—3 `.bpbuild` y 1 `.bpproject`— no sólo por el que falló.
+
+**Por qué se escapó a la puerta final**: las 4 pruebas ejecutaban programas
+sueltos; **ninguna abría un proyecto**. Un camino no ejecutado no está probado.
+
+## Hallazgo 43 — la portada web llevaba dos versiones de retraso
+
+La española anunciaba «Nuevo en V3: interfaces gráficas» y la **inglesa seguía
+en V2** (tres familias sin el P4, y sin rastro ni de V3 ni de V4). Se veía en la
+web publicada *y* en la instalación, porque `docs/` es a la vez el sitio de
+GitHub Pages y la documentación que abre el IDE.
+
+Detalle que costó un rato: el titular en inglés que aparecía —«New in V3 —
+graphical interfaces»— **no existe en ningún fichero**. Era la portada española
+traducida por el navegador. Buscarlo por texto no podía funcionar; mirar la
+página en vivo, sí.
