@@ -2086,6 +2086,13 @@ comportamiento coinciden, que es más raro de lo que parece.
 
 # 🏁 H13 CERRADO — 6-ago-2026
 
+**Y el emulador arrancado DESDE EL IDE**, no a mano (Eduardo). No es un matiz:
+significa que el IDE de la instalación nueva encuentra su `bin/bpvm-sim.exe` y su
+`SDL2.dll` y los lanza — o sea que lo verificado no es «el binario del simulador
+funciona», es **la cadena entera del paquete**: IDE → micro simulado → programa
+gráfico pintando. Que era justamente lo que estaba roto ayer por dos sitios a la
+vez (el sim sin LVGL y el sample que no viajaba).
+
 **Las tres pruebas de la puerta final pasan, ejecutadas desde una instalación
 recién descomprimida** (`C:\lenguajes\BasicPlus-4.0-prueba`), no sobre la
 instalación vieja. Eso importa: media docena de los hallazgos de esta campaña
