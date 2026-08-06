@@ -160,3 +160,8 @@ dist/BasicPlus-*-win.zip
 
 # Imagen de DIAGNOSTICO (H13/#17): binario grande y temporal, no va al repo.
 dist/diag/
+
+# Charlas de diseño de la version EN CURSO — NO se publican.
+# Publicar es prometer, y no prometemos lo que aun no existe (criterio de
+# Eduardo, 6-ago-2026). Se publican hasta la version entregada, no mas.
+/notas/
