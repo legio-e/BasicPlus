@@ -68,8 +68,12 @@ mordió al menos una vez**.
       pinta**, y el fallo es mudo. Comprobación: `strings build/bpvm-sim.exe |
       grep -c "^lv_"` debe dar **miles**, no 0.
 - [ ] **Montar el paquete**: `bash scripts/montar-zip.sh`.
-      Falla a propósito si aparece una subcarpeta de `samples/` sin decidir
-      (guardián del hallazgo 35) o si hay un `.mod` sin su `.bp` en `bpstdlib/`.
+      Falla a propósito si: aparece una subcarpeta de `samples/` sin decidir
+      (hallazgo 35) · hay un `.mod` sin su `.bp` en `bpstdlib/` · la ayuda tiene
+      enlaces rotos · el paquete no compila con su propia stdlib · **algún
+      fichero de proyecto (`.bpbuild`/`.bpproject`) no abre** (hallazgo 42).
+      ℹ️ El último mira **sólo la sintaxis**: que al proyecto le falte el `.mod`
+      por compilar es normal en un paquete recién montado y NO es fallo.
 - [ ] **Desplegar en carpeta LIMPIA y probar allí** — no sobre una instalación
       vieja, que es donde se esconden los ficheros que ya no se generan.
       La puerta final de H13 fueron 4 pruebas: `reset+MemInfo+paralleltest_sugar`

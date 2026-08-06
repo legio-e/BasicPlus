@@ -310,6 +310,48 @@ if ! ( cd / && java -cp "$PRUEBA/$NOMBRE/BpIde-$VER.jar" basicplus.frontend.Main
     grep -E '^\[[0-9]+:|no se localiz|sin interfaz' "$PRUEBA/log" | head -5 | sed 's/^/    /'
     rm -rf "$PRUEBA" "$NOMBRE.zip"; exit 1
 fi
+
+# ------------------------------------------------------------------
+# GUARDIAN de los ficheros de PROYECTO (hallazgo 42, 6-ago-2026).
+#
+# El ZIP publicado llevaba un samples/sampleproject/App.bpproject con
+# «"out": pack» — sin coma y sin comillas. No es JSON, y el proyecto que
+# abre quien acaba de descomprimir NO CARGABA. Entró porque era una
+# modificación del árbol de trabajo sin commitear y este script copia del
+# DISCO, no de git.
+#
+# Se escapó a la puerta final de H13 porque sus 4 pruebas ejecutaban
+# programas SUELTOS: ninguna abría un proyecto. Un camino no ejecutado no
+# está probado.
+#
+# El guardián sólo mira que el fichero esté BIEN FORMADO: se le pasa al
+# cargador de verdad y se falla si contesta con un error de sintaxis
+# (los nuestros llevan `fichero:línea:columna:`). Que además no compile o
+# le falte el .mod es otra cosa — y no es asunto de este guardián.
+echo "-- comprobando que los proyectos de ejemplo ABREN --"
+malos=0
+for p in $(find "$PRUEBA/$NOMBRE" \( -name '*.bpproject' -o -name '*.bpbuild' \) | sort); do
+    rel="${p#$PRUEBA/$NOMBRE/}"
+    case "$rel" in
+      *.bpbuild)   # lo abre el compilador
+        ( cd "$(dirname "$p")" && java -cp "$PRUEBA/$NOMBRE/BpIde-$VER.jar" \
+            basicplus.frontend.Main --project "$(basename "$p")" --backend=mivm ) \
+            > "$PRUEBA/plog" 2>&1 || true ;;
+      *)           # .bpproject lo abre la VM
+        java -cp "$PRUEBA/$NOMBRE/BpIde-$VER.jar" edu.bpgenvm.Main "$p" \
+            > "$PRUEBA/plog" 2>&1 || true ;;
+    esac
+    if grep -qE ':[0-9]+:[0-9]+: ' "$PRUEBA/plog"; then
+        echo "  MAL FORMADO: $rel"
+        grep -E ':[0-9]+:[0-9]+: ' "$PRUEBA/plog" | head -2 | sed 's/^/    /'
+        malos=$((malos+1))
+    fi
+done
+if [ "$malos" -gt 0 ]; then
+    echo "  $malos fichero(s) de proyecto no abren — no se monta el ZIP"
+    rm -rf "$PRUEBA" "$NOMBRE.zip"; exit 1
+fi
+
 rm -rf "$PRUEBA"
 
 sha256sum "$NOMBRE.zip" > "$NOMBRE.zip.sha256"
