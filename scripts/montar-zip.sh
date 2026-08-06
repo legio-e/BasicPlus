@@ -81,7 +81,17 @@ cp "$RAIZ/bpstdlib/"*.bp       "$OUT/bpstdlib/"
 cp "$RAIZ/bpdevices/"*.bp      "$OUT/bpdevices/" 2>/dev/null || true
 
 # --- documentación: los volúmenes + sus imágenes + los anexos que enlazan ----
-cp "$RAIZ/docs/"*.html "$OUT/docs/"
+#
+# SOLO-WEB: hay HTML que vive en docs/ para que lo sirva GitHub Pages pero que
+# NO viaja en el paquete. Hoy sólo la guía rápida: es una hoja para IMPRIMIR o
+# tener abierta al lado, y su sitio es una URL que se abre en un segundo — no
+# enterrada en un ZIP de 9 MB (criterio de Eduardo, 6-ago-2026). La ayuda la
+# enlaza con su URL absoluta, así que desde la instalación también se llega.
+SOLO_WEB="cheatsheet.html"
+for f in "$RAIZ/docs/"*.html; do
+    case " $SOLO_WEB " in *" $(basename "$f") "*) continue;; esac
+    cp "$f" "$OUT/docs/"
+done
 cp -r "$RAIZ/docs/img" "$OUT/docs/"
 mkdir -p "$OUT/docs/en" && cp "$RAIZ/docs/en/"*.html "$OUT/docs/en/"
 
