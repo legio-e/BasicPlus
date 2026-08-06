@@ -1779,3 +1779,50 @@ Y de ahí sale una consecuencia con suerte: **en el STM32, el código AOT era lo
 | 23 | b2 P4 | **La tecla ✓ del teclado en pantalla no hace nada.** Visto por Eduardo en `GuiListKbd`: *«el teclado virtual funciona y se pinta en el textbox, pero el V no sé si hace algo»*. No hace nada, y **no puede**: en LVGL el ✓ dispara `LV_EVENT_READY` (y el ✗, `LV_EVENT_CANCEL`), y la fachada registra **sólo dos** eventos — `gui.c:1012-1014`, `LV_EVENT_VALUE_CHANGED` y `LV_EVENT_CLICKED`. La clase `Keyboard` (`Gui.bp:569`) tiene constructor y `attach()`, nada más. O sea que el ✓ lo **dibuja LVGL** porque viene en su mapa de teclas por defecto, y por debajo no hay quien lo escuche | 🟡 **AL REGISTRO → V5.** **Más suave que el 21 y el 22**, y conviene no meterlo en el mismo saco: aquí **no se informa nada falso**. Lo que el módulo promete —*«las teclas editan ese campo, que dispara su onChange»*— **funciona**; el ✓ es un botón inerte, no un dato mentiroso. Y el arreglo es **añadir un evento** (`onReady`/`onAccept`) ⇒ fachada C + `Gui.mod` + las imágenes con pantalla: eso es **función nueva**, exactamente lo que el freeze aparta. Lo que sí cabría en V5 junto al evento: decidir si el ✓ además **oculta el teclado** por defecto, que es lo que espera cualquiera que haya usado un móvil |
 | 21 | b1 S3 (y b2, c1, c2) | 🔴 **`NeoTest` pasa en verde SIN ENCENDER NADA fuera del RP2350 — un instrumento que miente.** `bpvm_neopixel_set_backend()` lo llama **un solo sitio en todo el árbol**: `pico/main.c:1321`. ESP32 (S3 y P4) y STM32 compilan la fachada (`src/bpvm_neopixel.c`, en sus CMakeLists) pero **nadie le registra backend**, y sin backend `bpvm_neopixel_init()` hace `return 0` —o sea **éxito**— y `show()` no hace nada. El programa pide un NeoPixel, le dicen que sí, escribe colores y no pasa nada, sin forma de enterarse. En el S3 lo anoté como verde: **no lo era** | 🟡 **AL REGISTRO.** Son **dos cosas y sólo una es bug**: (a) *que no haya driver* de WS2812 en ESP32/STM32 es un hueco de alcance —H7.4 se hizo por PIO para el RP2350 y nunca se prometió en las otras—, va a **V5**; (b) *que la fachada conteste éxito sin hardware* sí es defecto, y del que más duele según el criterio de esta casa: un instrumento mudo que además se declara verde. Arreglarlo toca **código común** ⇒ las 5 imágenes, así que **al lote**, con el mismo patrón que el 13(a). Mientras tanto, en las tandas de las familias sin driver **`NeoTest` no puntúa** |
 | 22 | b2 P4 | **Un programa BP no puede saber el tamaño real de la pantalla: `Gui.Screen()` dice `480x320` en todas las placas.** Visto por Eduardo en el volcado de `GuiClickDemo` sobre un panel de **1024×600** (*«la resolución está a piñón»*) — y no es del sample, que no lleva ningún número: es de `src/gui.c:30`, `GUI_SCREEN_W/H 480/320`. Existe el camino para arreglarlo —`bpvm_gui_set_screen_size()`— pero **no lo llama ningún firmware**: sólo `test/main.c` y `tools/bpvm_sim.c`. Y la costura del P4 descarta lo que le pasan (`void bpvm_gui_disp_init(int w, int h) { (void) w; (void) h; …}`), porque el tamaño físico lo fija el panel. O sea: **modelo lógico 480×320, panel físico 1024×600**, decidido así en su día para que la paridad dual-VM se comprobara por ÁRBOL y no por píxeles. La ironía es que **el micro simulado del IDE sí puede decir «soy una P4 de 1024×600» y la P4 de verdad no** | 🟡 **AL REGISTRO → V5.** Criterio de Eduardo en el momento: *«está a piñón pero bueno, lo importante es que funciona»*. Y el arreglo **no es de freeze aunque sea una línea por familia**: en cuanto el firmware diga la resolución de verdad, **todos los layouts existentes cambian de sitio** — es cambio de comportamiento, no corrección. Emparenta con el 19 y el 21: **tres hallazgos del mismo día y de la misma forma — un dato que la placa contesta sin preguntárselo a la placa** |
+
+
+---
+
+## 🔧 LOTE DE FIRMWARE — CERRADO (6-ago-2026)
+
+Los seis puntos que quedaban de placa, hechos **de una vez** y con **una sola
+reconstrucción de las cinco imágenes**, que es lo que pedía la regla del 5-ago
+(*«salvo que salga algo terrible, no hacemos más cambios de firmware»*): Eduardo
+graba cada placa **una vez**, no una por hallazgo.
+
+### Lo que entra en las imágenes
+
+| # | dónde | qué se arregló | commit |
+|---|---|---|---|
+| **13a** | común (fachada FS) | `lastModified` sobre una cintura que no guarda fechas ya **lanza una excepción que dice el motivo** (`no implementado en esta plataforma`), no un «no se pudo leer» que suena a fallo. **Forma acordada con Eduardo** para cualquier verbo de la fachada que una cintura no cubra: el mensaje dice *dónde* no está implementado, no que sea imposible — así no caduca cuando otra familia lo implemente | `ec45c42` |
+| **21b** | común (builtins) | `Neopixel(pin)` **fuera del RP2350 ya falla en vez de mentir**. La fachada devolvía «no soportado» y el builtin **tiraba el valor de retorno**: el test pasaba en verde sin encender nada | `ec45c42` |
+| **29** | común (particiones) | El error de alineación **dice a qué hay que alinear** y da los dos múltiplos válidos más cercanos, en vez de sólo «un tamaño no está alineado» | `ec45c42` |
+| **30** | STM32 | El INFO manda ya `vmHeapBytes` + `vmStackBytes`, como las otras dos familias. Calculado con **la misma llamada que usa el RUN** | `8c55428` |
+| **12** | Pico | **Tres andamios fuera** (no uno): el `.mdn` ABI 1 que gritaba en cada RUN, el AOT de `Bench` linkado en la imagen, y un `fib(28)` en C **en cada arranque** (~105 ms). Queda el mecanismo bueno: el escaneo de `.mdn` en el FS | `8c55428` |
+
+### Lo que se decidió NO tocar, y por qué
+
+- **Hallazgo 32** (GPIO 114 vs 128 en el STM32) — **decisión de Eduardo**: es
+  informativo. Y el arreglo evidente era el malo; el bueno es preguntárselo a la
+  placa → **#378** de V5. Anotado en el código para que nadie lo unifique a mano.
+- **Stop/wire** — llegó al lote y **sale sin tocar**, por un dato de Eduardo que
+  descarta justo el sitio que yo iba a parchear: *«con las STM32 el stop funcionó
+  perfectamente, en cambio con las P4 iba a veces»*. → **#379** de V5.
+
+### Las cinco imágenes, todas del mismo árbol (commit `8c55428`)
+
+| placa | artefacto | build |
+|---|---|---|
+| Pico 2 + Metro RP2350B (**imagen única**) | `bpgenvm-c/pico/build/bpvm_pico.uf2` (495 KB) | ninja, verde |
+| Nucleo-U575ZI-Q | `bpgenvm-c/stm32/Nucleo_u575b/Nucleo_u575b/Debug/Nucleo_u575b.elf` | CubeIDE headless, **0 errores** |
+| Discovery U5G9J-DK2 | `bpgenvm-c/stm32/Discovery_u5g9j/Discovery_u5g9j/Debug/Discovery_u5g9j.elf` | CubeIDE headless, **0 errores / 0 avisos** |
+| ESP32-S3 DevKit | `bpgenvm-c/esp32/build/bpvm_esp32.bin` (408 KB) | idf.py, verde |
+| ESP32-P4 | `bpgenvm-c/esp32p4/build/bpvm_esp32p4.bin` (1301 KB) | idf.py, verde |
+
+**Los dos STM32 siguen con el `-Os` del hallazgo 33** — no se ha vuelto a `-O0`.
+
+*Nota de un aviso que NO es nuestro y NO se toca:* `builtins.c:565
+'bpvm_resolve_handler' defined but not used`. Es **pre-existente** y sólo sale en
+los builds **sin pantalla** (la Nucleo, el S3): la función está fuera del
+`#ifdef BPVM_GUI` y su único llamante dentro. Cero efecto funcional; bajo freeze
+no se toca un aviso. Queda escrito para que no vuelva a costar dos minutos.
