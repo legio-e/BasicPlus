@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BasicPlus — one-page reference</title>
+<style>
+  :root{
+    --bg:#fbfbfa; --fg:#1d1d1b; --muted:#6b6b66; --line:#e2e0da;
+    --card:#fff; --kw:#8b2f6b; --type:#1f6f8b; --str:#57761f; --com:#8a8a84;
+    --accent:#b4531f;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#16171a; --fg:#e7e6e2; --muted:#9a9a94; --line:#2c2e33;
+      --card:#1c1e22; --kw:#d888b6; --type:#6fc3d9; --str:#a8c96a; --com:#77776f;
+      --accent:#e08a55;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--bg);color:var(--fg);
+       font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  header{max-width:1180px;margin:0 auto 18px}
+  h1{margin:0 0 4px;font-size:22px;letter-spacing:-.01em}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--muted);margin:0;font-size:13px}
+  main{max-width:1180px;margin:0 auto;
+       display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+  h2{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+     color:var(--muted);font-weight:600}
+  pre{margin:0;font:12.5px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;
+      white-space:pre-wrap;word-break:break-word}
+  code{font:inherit}
+  .k{color:var(--kw);font-weight:600}
+  .t{color:var(--type)}
+  .s{color:var(--str)}
+  .c{color:var(--com);font-style:italic}
+  p.note{margin:8px 0 0;color:var(--muted);font-size:12px;line-height:1.45}
+  p.note b{color:var(--fg);font-weight:600}
+  footer{max-width:1180px;margin:18px auto 0;color:var(--muted);font-size:12px}
+  a{color:var(--accent)}
+  @media print{
+    body{padding:0;background:#fff;color:#000;font-size:11px}
+    main{grid-template-columns:repeat(3,1fr);gap:8px}
+    section{break-inside:avoid;border-color:#ccc;padding:8px 10px}
+    pre{font-size:10px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>BasicPlus <span>— one page</span></h1>
+  <p class="sub">A small, statically typed language for microcontrollers. One bytecode
+     runs on a PC and on RP2350, ESP32-S3, ESP32-P4 and STM32 boards.</p>
+</header>
+
+<main>
+
+<section>
+  <h2>Module &amp; entry point</h2>
+<pre><span class="c">// One file = one module = one .mod</span>
+<span class="k">module</span> Hello
+  <span class="k">import</span> Math
+
+  <span class="k">function</span> Main()
+    <span class="k">print</span> <span class="s">"hi "</span> + intToString(<span class="t">42</span>)
+  <span class="k">end</span> Main
+<span class="k">end</span> Hello</pre>
+  <p class="note">Every block closes with what it opens: <code>end Main</code>,
+     <code>endif</code>, <code>next i</code>. You never count braces.
+     <b>No semicolons</b> — a newline ends a statement (a line left open inside
+     <code>( )</code> or <code>[ ]</code> continues on the next one).</p>
+</section>
+
+<section>
+  <h2>Variables &amp; types</h2>
+<pre><span class="k">var</span> n <span class="k">:=</span> <span class="t">5</span>                  <span class="c">// inferred: integer</span>
+<span class="k">var</span> x: <span class="t">float</span> <span class="k">:=</span> <span class="t">1.5</span>
+<span class="k">var</span> big: <span class="t">long</span> <span class="k">:=</span> <span class="t">1000000000L</span>
+<span class="k">var</span> d: <span class="t">double</span> <span class="k">:=</span> <span class="t">2.0d</span>
+<span class="k">var</span> ok: <span class="t">boolean</span> <span class="k">:=</span> <span class="k">true</span>
+<span class="k">var</span> s: <span class="t">string</span> <span class="k">:=</span> <span class="s">"utf-8 inside"</span>
+
+<span class="c">// sized for a micro, not for a PC</span>
+<span class="k">var</span> b: <span class="t">byte</span>, w: <span class="t">word</span>          <span class="c">// unsigned 8 / 16</span>
+<span class="k">var</span> i8: <span class="t">int8</span>, i16: <span class="t">int16</span>       <span class="c">// signed</span>
+
+<span class="k">var</span> buf: <span class="t">byte[]</span> <span class="k">:=</span> newByteArray(<span class="t">256</span>)
+<span class="k">var</span> t: <span class="t">integer[]</span> <span class="k">:=</span> [<span class="t">1</span>, <span class="t">2</span>, <span class="t">3</span>]
+<span class="k">const</span> PI: <span class="t">float</span> = <span class="t">3.14159</span></pre>
+  <p class="note">A <code>byte[]</code> costs <b>one byte per element</b>, not four —
+     which matters when the whole machine has 512 KB.</p>
+</section>
+
+<section>
+  <h2>Control flow</h2>
+<pre><span class="k">if</span> n &gt; <span class="t">10</span> <span class="k">then</span>
+  <span class="k">print</span> <span class="s">"big"</span>
+<span class="k">elseif</span> n &gt; <span class="t">0</span> <span class="k">then</span>
+  <span class="k">print</span> <span class="s">"small"</span>
+<span class="k">else</span>
+  <span class="k">print</span> <span class="s">"zero or less"</span>
+<span class="k">endif</span>
+
+<span class="k">while</span> i &lt; <span class="t">10</span> <span class="k">do</span>
+  i <span class="k">:=</span> i + <span class="t">1</span>
+<span class="k">endwh</span>
+
+<span class="k">for</span> d <span class="k">in</span> devices <span class="k">do</span>
+  <span class="k">print</span> d
+<span class="k">next</span> d
+
+<span class="k">switch</span> colour
+  <span class="k">case</span> Colour.GREEN
+    <span class="k">print</span> <span class="s">"go"</span>
+  <span class="k">default</span>
+    <span class="k">print</span> <span class="s">"stop"</span>
+<span class="k">endsw</span></pre>
+  <p class="note">Also: <code>break</code>, <code>continue</code>, and compound
+     assignment (<code>+=</code>, <code>*=</code>, <code>mod=</code> …).</p>
+</section>
+
+<section>
+  <h2>Functions</h2>
+<pre><span class="k">function</span> add(a: <span class="t">integer</span>, b: <span class="t">integer</span>): <span class="t">integer</span>
+  <span class="k">return</span> a + b
+<span class="k">end</span> add
+
+<span class="c">// default parameter values</span>
+<span class="k">function</span> label(text: <span class="t">string</span>, prefix <span class="k">:=</span> <span class="s">"["</span>): <span class="t">string</span>
+  <span class="k">return</span> prefix + text
+<span class="k">end</span> label
+
+<span class="c">// tuples: return several values, destructure them</span>
+<span class="k">var</span> ok: <span class="t">boolean</span>, v: <span class="t">integer</span>
+{ ok, v } <span class="k">:=</span> Str.parseInt(<span class="s">"123"</span>)</pre>
+  <p class="note"><b>Public by default? No — private.</b> Only what you mark
+     <code>public</code> leaves the module.</p>
+</section>
+
+<section>
+  <h2>Classes</h2>
+<pre><span class="k">public class</span> Counter
+  <span class="k">public property</span> value: <span class="t">integer</span>
+
+  <span class="k">public function</span> Counter(start: <span class="t">integer</span>)
+    <span class="k">this</span>.value <span class="k">:=</span> start
+  <span class="k">end</span> Counter
+
+  <span class="k">public function</span> bump(d: <span class="t">integer</span>)
+    <span class="k">this</span>.value += d
+  <span class="k">end</span> bump
+<span class="k">end</span> Counter
+
+<span class="k">var</span> c: Counter <span class="k">:=</span> Counter(<span class="t">10</span>)
+c.bump(<span class="t">5</span>)
+<span class="k">print</span> c.value</pre>
+  <p class="note"><b>Variables are never public.</b> If it has to be visible it is a
+     <code>property</code>, so the day you need to validate it — or guard it with a
+     mutex — no caller changes. Single inheritance with
+     <code>extends</code>, <code>super(…)</code>, <code>instanceof</code>, and an
+     <code>Object</code> root under everything.</p>
+</section>
+
+<section>
+  <h2>What is static, and what isn’t</h2>
+<pre><span class="c">// Module-level declarations are static already —</span>
+<span class="c">// there is no keyword, and no second copy of them.</span>
+<span class="k">module</span> Config
+  <span class="k">public const</span> MAX = <span class="t">64</span>
+  <span class="k">public function</span> clamp(n: <span class="t">integer</span>): <span class="t">integer</span> …
+<span class="k">end</span> Config
+
+Config.clamp(<span class="t">99</span>)        <span class="c">// call it qualified</span>
+
+<span class="c">// Inside a class, a static is told apart from an</span>
+<span class="c">// instance method by HOW YOU CALL IT:</span>
+Counter.fromString(<span class="s">"10"</span>)   <span class="c">// class name  -&gt; static</span>
+c.bump(<span class="t">5</span>)                 <span class="c">// instance    -&gt; method</span></pre>
+  <p class="note">Coming from Java or C#, this is the one habit to drop: you don’t
+     declare <code>static</code>, you <b>call through the class name</b>.</p>
+</section>
+
+<section>
+  <h2>Errors</h2>
+<pre><span class="k">try</span>
+  <span class="k">var</span> v: <span class="t">integer</span> <span class="k">:=</span> risky()
+<span class="k">catch</span> e: RangeError
+  <span class="k">print</span> <span class="s">"caught: "</span> + e.msg
+<span class="k">endtry</span>
+
+<span class="k">throw</span> RuntimeError(<span class="s">"it broke"</span>)</pre>
+  <p class="note">One hierarchy: <code>Object → Exception → RuntimeError</code>.
+     Runtime faults (divide by zero, index out of range, null reference) are
+     <code>RuntimeError</code> and you catch them like any other — even when the
+     fault happens inside a function compiled to machine code.</p>
+</section>
+
+<section>
+  <h2>Threads</h2>
+<pre><span class="k">class</span> Worker <span class="k">extends</span> Thread
+  <span class="k">var</span> name: <span class="t">string</span>
+  <span class="k">public function</span> Worker(name: <span class="t">string</span>)
+    <span class="k">super</span>(<span class="t">2048</span>)          <span class="c">// stack size in bytes</span>
+    <span class="k">this</span>.name <span class="k">:=</span> name
+  <span class="k">end</span> Worker
+  <span class="k">public function</span> run()
+    <span class="k">print</span> <span class="k">this</span>.name
+    yield()
+  <span class="k">end</span> run
+<span class="k">end</span> Worker
+
+<span class="k">var</span> w: Thread <span class="k">:=</span> Worker(<span class="s">"A"</span>)
+w.start()
+w.join()
+
+<span class="k">var</span> m: Mutex <span class="k">:=</span> Mutex()
+m.lock()  <span class="c">// critical section</span>  m.unlock()</pre>
+  <p class="note">Green threads, scheduled by the VM itself — same model on the PC
+     and on the board. Also <code>SyncList</code> with a blocking
+     <code>popBlocking()</code> for producer/consumer.</p>
+</section>
+
+<section>
+  <h2>Native: real machine code</h2>
+<pre><span class="k">native function</span> fib(n: <span class="t">integer</span>): <span class="t">integer</span>
+  <span class="k">if</span> n &lt; <span class="t">2</span> <span class="k">then</span> <span class="k">return</span> n <span class="k">endif</span>
+  <span class="k">return</span> fib(n-<span class="t">1</span>) + fib(n-<span class="t">2</span>)
+<span class="k">end</span> fib</pre>
+  <p class="note">The compiler also emits C for that function, builds it and ships a
+     <code>.mdn</code> next to the <code>.mod</code>. Measured on a board:
+     <b>fib(28) 8,946 ms interpreted → 85 ms native</b>. If the <code>.mdn</code>
+     is missing or the target has no AOT yet, the bytecode still runs — same
+     result, no speed-up. Bytecode is always the safety net.</p>
+</section>
+
+<section>
+  <h2>Talking to hardware</h2>
+<pre><span class="k">import</span> Gpio
+
+<span class="k">function</span> Main()
+  <span class="k">var</span> led: Gpio.Pin <span class="k">:=</span> Gpio.Pin(<span class="t">25</span>, Gpio.Pin.OUTPUT)
+  <span class="k">var</span> i: <span class="t">integer</span> <span class="k">:=</span> <span class="t">0</span>
+  <span class="k">while</span> i &lt; <span class="t">10</span> <span class="k">do</span>
+    led.on()
+    sleep(<span class="t">250</span>)
+    led.off()
+    sleep(<span class="t">250</span>)
+    i += <span class="t">1</span>
+  <span class="k">endwh</span>
+<span class="k">end</span> Main</pre>
+  <p class="note">Every peripheral is a class: <code>Gpio.Pin</code>,
+     <code>I2c.Bus</code>, <code>Spi.Bus</code>, <code>Uart.Port</code>,
+     <code>Pwm.Slice</code>, <code>Adc.Channel</code>, <code>Rtc.Clock</code>,
+     <code>Wdt.Timer</code>, <code>Timer.Alarm</code>. <b>The same program runs on
+     every family</b> — only the pin numbers change.</p>
+</section>
+
+<section>
+  <h2>Build &amp; run</h2>
+<pre><span class="c"># compile one file</span>
+java -jar basicplus-frontend.jar Hello.bp
+
+<span class="c"># run it on the PC</span>
+java -jar bpgenvm.jar Hello.mod
+
+<span class="c"># a project</span>
+{ <span class="s">"sourceDir"</span>: <span class="s">"src"</span>, <span class="s">"outDir"</span>: <span class="s">"out"</span>,
+  <span class="s">"main"</span>: <span class="s">"App"</span>, <span class="s">"dependencies"</span>: [] }</pre>
+  <p class="note">From the IDE it is one menu: run on the PC, on the simulated micro
+     or on a board — with breakpoints and variable inspection in all three.</p>
+</section>
+
+<section>
+  <h2>Why it looks like this</h2>
+  <p class="note" style="margin-top:0">
+     <b>Blocks read in both directions.</b> You read code downwards while writing it
+     and upwards while fixing it, so every close says what it closes.<br><br>
+     <b>Private by default.</b> A program you can keep under control is one where
+     you chose what to expose.<br><br>
+     <b>The same bytecode everywhere.</b> Two independent VMs — one in Java, one in
+     C99 — must print the same bytes for the same <code>.mod</code>. That rule is
+     the backbone of the project, not a slogan.</p>
+</section>
+
+</main>
+
+<footer>
+  Full reference, graphics guide and internals: see the documentation shipped with
+  the release. &middot; This page covers the language, not the standard library.
+</footer>
+
+</body>
+</html>
