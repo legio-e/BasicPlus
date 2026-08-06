@@ -2584,7 +2584,34 @@ public class FrmMain extends javax.swing.JFrame
         if (haveProject && !currentProject.aotEnabled) return;   // apagado a propósito
         String target = !deviceTarget.isEmpty() ? deviceTarget
                       : haveProject ? currentProject.aotTarget : "";
-        if (target == null || target.isEmpty()) return;   // nadie sabe a qué compilar
+        if (target == null || target.isEmpty()) {
+            /* ⚠️ PARCHE, NO ARREGLO — H13 hallazgo 40 (6-ago-2026). Aquí había un
+             * `return` a secas: sin arquitectura no se compila el .mdn y NO SE DECÍA
+             * NADA. El programa seguía, la función `native` corría interpretada, y un
+             * sample como Bench imprimía "fib(28) AOT = 8869 ms" —exactamente el
+             * mismo número que el interpretado— sin que nada avisara de que el AOT
+             * no había ocurrido. O sea: **el hito grande de V4 daba una medida
+             * falsa**. Lo cazo Eduardo probando el Bench desde la instalación
+             * limpia, y el diagnostico es suyo: había pasado por el emulador antes.
+             *
+             * LA CAUSA de fondo NO se arregla aquí: `fetchDeviceArch()` tiene un
+             * solo sitio que la llama (PicoExplorer:1087, dentro de onConnect) y es
+             * ASÍNCRONA; y el micro simulado no publica `arch` (es x86, no hay .mdn
+             * posible), así que pasar por él deja el IDE con "ninguna". Si al volver
+             * a la placa ese dato no se refresca a tiempo, el AOT se salta.
+             * Reiniciar el IDE lo cura. El arreglo de verdad —invalidar/pedir la
+             * arquitectura al cambiar de dispositivo, y no depender de una carrera—
+             * va a V5: tocar conexión y concurrencia el día de publicar no.
+             *
+             * Lo que SÍ se arregla: que deje de MENTIR en silencio. */
+            log.accept("== AOT: no sé la arquitectura del dispositivo — las funciones "
+                    + "`native` se ejecutan INTERPRETADAS ==\n");
+            log.accept("   Si es el micro simulado, es lo normal: no hay código nativo "
+                    + "para x86.\n"
+                    + "   Si es una placa, desconecta y vuelve a conectar el "
+                    + "explorador y repite el Run.\n");
+            return;
+        }
         /* Sin proyecto, el "proyecto" es la carpeta del .bp. */
         log.accept("== AOT: compilando funciones native (target " + target
                 + (deviceTarget.isEmpty() ? " — del proyecto" : " — lo dice la placa") + ") ==\n");

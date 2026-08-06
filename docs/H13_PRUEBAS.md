@@ -2156,3 +2156,67 @@ Nada de esto bloquea la publicación; todo tiene destino escrito:
 
 **El paquete que se publica está montado y verificado**:
 `dist/BasicPlus-4.0-win.zip` — 9,2 MB, `sha256 fbf6584547be127ab2916240c4243ab6118834b49e29d263641e28cc490ac8e4`.
+
+
+---
+
+## 🔴 Hallazgo 40 — el AOT se saltaba EN SILENCIO, y el sample daba una medida FALSA
+
+**Lo encontró Eduardo añadiendo una cuarta prueba que yo no había puesto**: *«nos
+falta el bench, para confirmar que native funciona desde el IDE»*. Tenía razón en
+que faltaba — el `Bench` de la mañana en la Metro se corrió con **su IDE de
+siempre**, no con el paquete; y el `.mdn` lo genera el IDE, así que era la única
+parte de la cadena que la instalación limpia no había demostrado.
+
+**El síntoma, y por qué es serio:**
+
+```
+fib(28) interp =  317811  in  8869  ms
+fib(28) AOT    =  317811  in  8869  ms
+```
+
+**El mismo número.** Ni una línea de `AOT: compilando funciones native`, ni el
+aviso de toolchain ausente que `AotBuild` sí sabe dar. El paso no se intentó, la
+función `native` corrió interpretada, y el programa **etiquetó ese tiempo como
+«AOT»**. O sea que el hito grande de V4 no sólo no funcionaba: **mentía**. Un
+usuario habría concluido que el AOT no sirve para nada.
+
+**El diagnóstico es de Eduardo** —*«el problema creo que apareció porque había
+estado con el emulador; parece que al conectar con la placa no se ha refrescado
+la arquitectura ARM»*— y el código lo confirma punto por punto:
+
+| hecho | dónde |
+|---|---|
+| el AOT sólo corre si se conoce la arquitectura del dispositivo, y si no **`return` a secas, sin log** | `FrmMain.runAotPass` |
+| `fetchDeviceArch()` tiene **UN solo sitio** que la llama, dentro de `onConnect`, y es **asíncrona** | `PicoExplorer:1087` |
+| **el micro simulado NO publica `arch`** — es x86, `MDN_ARCH_NONE`: no hay `.mdn` posible | `tools/bpvm_sim.c`, `src/mdn_loader.c:45` |
+
+Pasar por el emulador deja el IDE con «ninguna arquitectura». Si al volver a la
+placa ese dato no se refresca a tiempo, el AOT se salta. **Reiniciar el IDE lo
+cura** — lo comprobó él mismo.
+
+### Lo que se ha hecho: PARCHE (A), no arreglo
+
+Decisión de Eduardo: *«podemos hacer A, es un parche. No termina de gustarme
+pero, a poco de publicar, no es bueno tocar cosas.»*
+
+Se arregla **el silencio, no la causa**: cuando no se sabe la arquitectura, ahora
+lo dice y dice qué hacer —«si es el micro simulado es lo normal; si es una placa,
+reconecta y repite el Run»—. El fallo sigue ahí, pero **deja de dar un número
+falso**, que es lo que lo hacía peligroso. Cero cambios en conexión o
+concurrencia: el día de publicar no se tocan las carreras.
+
+**El arreglo de verdad va a V5**: invalidar o volver a pedir la arquitectura al
+**cambiar de dispositivo**, y que el AOT no dependa de una carrera asíncrona.
+
+### La lección, que es la misma de todo H13
+
+Es **el fallo mudo por tercera vez**: el simulador sin LVGL tapaba al `ChartDemo`
+que no viajaba; `loadFont` sin señal de error tapó durante una versión entera que
+faltaba la fuente; y aquí un `return` sin log convirtió «no se pudo compilar» en
+«el AOT no sirve». **Cada vez que un camino de error se calla, el síntoma acaba
+apuntando al sitio equivocado** — y en los tres casos el coste no fue el fallo,
+fue el tiempo perdido buscando donde no era.
+
+Y el método, otra vez: **lo encontró una prueba que no estaba en mi lista**. Yo
+di la puerta final por completa con 3 de 3.
