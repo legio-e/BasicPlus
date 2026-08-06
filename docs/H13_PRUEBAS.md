@@ -1999,3 +1999,29 @@ en la Discovery**, o sea que lo que él vio funcionar era el fallback.
    firmware vía LVGL, o sea que la obligación **ya existía** antes de esta
    fuente—. No bloquea, pero para una publicación pública es un `docs/TERCEROS.md`
    de media hora. **Decisión de Eduardo.**
+
+
+### ✅ Hallazgo 29 — VERIFICADO EN PLACA (6-ago)
+
+Eduardo, al cambiar el tamaño del FS con el firmware nuevo: *«este mensaje es
+nuevo, más claro»*.
+
+```
+VM error [INVALID_PARAM]: un tamaño no está alineado al sector de borrado
+(partición 0: fs). El sector de borrado de esta placa es de 8192 bytes (8 KB)
+y pediste 2052096; los válidos más cercanos son 2048000 y 2056192
+```
+
+**Los números cuadran**: 2052096 / 8192 = **250,5** —cae justo en medio— y los dos
+que ofrece son 250 × 8192 = 2048000 y 251 × 8192 = 2056192. El sector de 8 KB es
+el del STM32U5.
+
+Antes el mensaje decía sólo *«un tamaño no está alineado»* y **dejaba al usuario
+averiguar a qué**: tenía que saber el tamaño de sector de su placa y hacer la
+división él. Ahora el instrumento da las tres cosas que hacen falta para
+corregirlo —la restricción, el valor que pediste, y **dos valores que sí valen**—
+así que el siguiente intento acierta.
+
+Es la misma idea que el 13a y el 21b de este lote: **un error que no dice cómo
+salir de él es medio error**. Los tres iban juntos en `ec45c42` y los tres se ven
+ya en placa.
