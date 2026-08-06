@@ -1826,3 +1826,43 @@ graba cada placa **una vez**, no una por hallazgo.
 los builds **sin pantalla** (la Nucleo, el S3): la función está fuera del
 `#ifdef BPVM_GUI` y su único llamante dentro. Cero efecto funcional; bajo freeze
 no se toca un aviso. Queda escrito para que no vuelva a costar dos minutos.
+
+
+### Hallazgo 39 — `dist/firmware/` estaba entero rancio (lo cazó Eduardo preguntando)
+
+**Cómo salió**: le dije *«la imagen está en `pico/build/bpvm_pico.uf2`»* y Eduardo
+contestó **«¿dónde está la imagen? en `dist` hay una de hace 3 días»**. Ahí estaba
+el problema: `dist/firmware/` es **la carpeta de la que se monta el paquete**, y
+las cinco imágenes eran viejas — la Pico del **3-ago**, las ESP32 del 4, las
+STM32 del 5. O sea que el ZIP de mañana habría salido con firmware **anterior a
+todo el lote** (12, 13a, 21b, 29, 30) y, en el caso de la Pico, anterior también
+al hallazgo 34.
+
+**Y hay un segundo diente en la trampa, que es el que me habría mordido a mí**:
+al ir a copiar vi que los `.bin` del STM32 eran **de ayer**, no de la
+reconstrucción de esta mañana. El `cleanBuild` headless **regenera el `.elf`
+pero NO el `.bin`** (el `.bin` lo produce un paso post-build que sólo corre en la
+GUI). Quien rebuild-ee y copie el `.bin` «recién compilado» se lleva el binario
+anterior **sin ningún aviso**: los dos ficheros están en la misma carpeta y sólo
+los distingue la fecha.
+
+**Arreglado (6-ago)** — las cinco regeneradas desde el árbol de `8c55428`:
+
+| imagen | de dónde sale |
+|---|---|
+| `bpvm_pico.uf2` | copia directa de `pico/build/` |
+| `bpvm_stm32_nucleo.bin` · `bpvm_stm32_dk2.bin` | **`arm-none-eabi-objcopy -O binary` desde el `.elf`** — no del `.bin` que hay al lado |
+| `bpvm_esp32_merged.bin` · `bpvm_esp32p4_merged.bin` | `esptool merge-bin` con los offsets de `build/flash_args` (S3 `0x0/0x8000/0x10000` @80m; P4 `0x2000/0x8000/0x10000` @40m) |
+
+`SHA256SUMS.txt` regenerado con las cinco.
+
+⚠️ **Lo que queda por hacer con esto**: el ZIP montado (`dist/BasicPlus-4.0-win/`
+y su `.zip`, del 4-ago) **sigue llevando las viejas dentro de su `firmware/`**.
+Se corrige solo al remontar el paquete en el lote del ZIP — pero **si alguien
+publicase ese ZIP tal cual, publicaría el firmware de hace tres días**.
+
+**La familia a la que pertenece esto** es la misma de los hallazgos 10, 12 y 15:
+*un artefacto GENERADO que se queda atrás y nadie avisa*. Van cuatro en esta
+campaña —`Hello.mod` v5 embebido, el `Bench.mdn` ABI 1, los `.mod` v5 que subía
+el IDE, y ahora las cinco imágenes de `dist`—. **El patrón no es el descuido: es
+que ninguno de los cuatro tenía un guardián que comparase fecha u origen.**
