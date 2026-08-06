@@ -2025,3 +2025,25 @@ así que el siguiente intento acierta.
 Es la misma idea que el 13a y el 21b de este lote: **un error que no dice cómo
 salir de él es medio error**. Los tres iban juntos en `ec45c42` y los tres se ven
 ya en placa.
+
+
+---
+
+## 🚪 PUERTA FINAL — prueba 1 de 3: ✅ **PASA**
+
+**`reset + MemInfo + paralleltest_sugar` → OK**, ejecutado por Eduardo desde la
+instalación limpia (`C:\lenguajes\BasicPlus-4.0-prueba`) con el ZIP nuevo.
+
+**Por qué esta receta y no otra**: la derivó Eduardo cuando el fallo era
+intermitente, y es lo que convirtió una lotería en un experimento. El `MemInfo`
+de en medio no está de adorno — es lo que fuerza el **reciclado de slots de la
+tabla de handles**, y sin slots reciclados todas las generaciones valen 0 y el
+truncamiento a 4 bytes **funciona por casualidad**. Sin ese paso el bug no
+aparece; con él, aparecía siempre.
+
+**Y lo que sella no es sólo el arreglo, es el CAMINO COMPLETO**: el bug estaba en
+el compilador (`MivmEmitter.emitParallel`), o sea en el frontend, o sea dentro
+del jar del IDE. Que pase **desde una instalación recién descomprimida** demuestra
+las tres cosas de golpe: que el arreglo es correcto, que el jar del paquete lo
+lleva, y que el paquete se despliega bien. Un verde en mi copia de trabajo no
+habría demostrado ninguna de las dos últimas.
