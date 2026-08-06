@@ -2287,3 +2287,78 @@ Los cuatro comparten forma: **un camino que no puede cumplir lo que promete y
 devuelve un valor de aspecto normal en vez de decirlo**. Ninguno era un error de
 cálculo; los cuatro eran **silencio**. Y en los cuatro el coste real no fue el
 fallo, fue el tiempo buscando en el sitio equivocado.
+
+
+---
+
+## 🚪 PUERTA FINAL — prueba 4 de 4: ✅ **PASA** · H13 CERRADO DE VERDAD
+
+**La cuarta prueba no estaba en mi lista: la puso Eduardo** —*«nos falta el
+bench, para confirmar que native funciona desde el IDE»*—. Yo di la puerta por
+completa con 3 de 3. Esa cuarta prueba destapó **dos hallazgos** (40 y 41), y uno
+de ellos hacía que el hito grande de V4 **publicara una medida falsa**.
+
+### 4a · `Bench` en la placa, desde la instalación limpia
+
+```
+== AOT: compilando funciones native (target arm — lo dice la placa) ==
+[aot] Bench.mdn ✓ (1 thunk(s), 68 B nativo)
+[AOT] Bench.mdn OK (rc=0)
+fib(28) interp =  317811  in  8946  ms
+fib(28) AOT    =  317811  in    85  ms
+```
+
+**105×**, el mismo resultado por los dos caminos, y —lo que se probaba— **el
+`.mdn` lo generó el IDE del paquete**, no mi copia de trabajo. Era la única parte
+de la cadena sin demostrar: el AOT no es sólo runtime, la compilación a nativo
+ocurre en el jar.
+
+### 4b · `Bench` en el emulador
+
+```
+== AOT: no sé la arquitectura del dispositivo — las funciones `native` se ejecutan INTERPRETADAS ==
+   Si es el micro simulado, es lo normal: no hay código nativo para x86.
+fib(28) interp =  317811  in  56  ms
+fib(28) AOT    =  317811  in  57  ms
+```
+
+Las dos correcciones de hoy, visibles a la vez: **dice por qué no hay AOT**
+(hallazgo 40) y **el reloj mide** (hallazgo 41). Y los dos tiempos iguales, que
+es la verdad en x86.
+
+---
+
+## ⚠️ Nota de honestidad sobre las imágenes de firmware
+
+**Las cinco imágenes de `dist/firmware` son del commit `8c55428`; el árbol quedó
+en `fdc3eaa`.** El hallazgo 41 tocó `src/pico.c`, que es **código común de las
+cinco**, así que la frase que escribí esta mañana —*«las cinco del mismo
+árbol»*— **ya no es cierta**.
+
+**No se reconstruyen, y el motivo es verificable, no una excusa**: el cambio está
+dentro de `if (!g_backend)`, la rama de «no hay backend registrado». En una placa
+**siempre** hay backend —lo registra el port de cada familia—, así que esa rama
+**no se ejecuta jamás** en un micro real: el `uptimeMs` de las placas sale del
+contador del hardware, como siempre. El comportamiento del firmware es idéntico
+con y sin el cambio. Reconstruir cinco imágenes y pedir un reflasheo por un
+camino muerto sería teatro, y encima rompería la regla del 5-ago.
+
+Queda escrito **aquí** y no en la cabeza de nadie, porque el patrón que más veces
+ha mordido en esta campaña es exactamente ése: un binario que deja de
+corresponderse con su fuente **y nadie lo dice**. La diferencia es que este caso
+está medido y acotado.
+
+---
+
+# 🏁 H13 CERRADO — 4/4 (6-ago-2026)
+
+Las cuatro pruebas de la puerta final pasan **desde una instalación recién
+descomprimida**. El paquete que se publica:
+
+**`dist/BasicPlus-4.0-win.zip`** — 9,2 MB · `sha256 ac2a13685491ee4f7d6642cfc77d598a80ae5c1d4034e9c4e35059fc5657003a`
+
+**Lo que se lleva esta fase, en una frase**: los dos bugs gordos —el STM32 a
+`-O0` y el handle del thread truncado— salieron de **medidas que no cuadraban**,
+no de sospechas. Y los cuatro instrumentos que mentían salieron de **probar lo
+que ya dábamos por bueno**. La última prueba, la que más encontró, la propuso
+Eduardo cuando yo ya había dado el trabajo por terminado.
