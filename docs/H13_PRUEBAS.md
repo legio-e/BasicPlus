@@ -1866,3 +1866,54 @@ publicase ese ZIP tal cual, publicaría el firmware de hace tres días**.
 campaña —`Hello.mod` v5 embebido, el `Bench.mdn` ABI 1, los `.mod` v5 que subía
 el IDE, y ahora las cinco imágenes de `dist`—. **El patrón no es el descuido: es
 que ninguno de los cuatro tenía un guardián que comparase fecha u origen.**
+
+
+### ✅✅ Hallazgo 12 — VERIFICADO EN PLACA (Metro RP2350B, 6-ago)
+
+Eduardo grabó **la Metro** en vez de la Pico —misma imagen, y de paso ejercita el
+camino de PSRAM—. Los tres controles pasan, y **el tercero es el que importaba**:
+lo fácil era comprobar que las líneas molestas desaparecen; lo que había que
+demostrar es que **no me llevé por delante el mecanismo bueno** al quitar las dos
+etapas que iban por delante.
+
+**1. Los andamios están fuera, y se MIDE:**
+```
+[   49] fs: 43 ficheros, 237568/10240000 bytes usados
+[   50] REPL entry (wire v1)
+```
+**Un milisegundo.** Ahí corría el `fib(28)` en C de cada arranque: antes había
+~105 ms entre esas dos líneas. Y no aparece `BENCH native fib(28)=…`. No es que
+el log esté más limpio: **la placa arranca antes**.
+
+**2. Ni rastro del `MDN: RECHAZADO — ABI 1, esta VM habla 2`** en el RUN, que era
+el síntoma original. El gate sigue puesto; lo que ya no hay es un blob rancio al
+que rechazar.
+
+**3. El AOT vive, y por el camino bueno:**
+```
+[185475] AOT/FS: scanning 2 modules for .mdn
+[185479] MDN: 1/1 thunks registrados, 68 code bytes (zero-copy)
+[185479] AOT/FS: Bench.mdn loaded from FS (124 bytes)
+fib(28) interp =  317811  in  8771  ms
+fib(28) AOT    =  317811  in    84  ms
+```
+El `.mdn` se compila fresco en el PC (`target arm — lo dice la placa`), se sube y
+**se carga desde el FS**: el stage 3, el único que queda. `104×`, y **el mismo
+resultado por los dos caminos** — no es sólo más rápido, calcula lo mismo.
+
+**Y un número que confirma un modelo, no sólo un arreglo**: contra la referencia
+ARM anotada (8.486 → 84 ms), aquí el interpretado sale **+3,4 % más lento** y el
+AOT **84 ms clavados**. El peaje de la PSRAM aparece **sólo en el camino
+interpretado** —el nativo corre desde SRAM— que es justo lo que decía la medida
+de la a2. Dos medidas independientes, semanas aparte, dando lo mismo.
+
+**De regalo, el guardián de #339 en verde:**
+`fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar;
+plataforma: 0 vivos)`.
+
+**Con esto el LOTE DE FIRMWARE queda verificado en placa.** No se re-prueban las
+otras cuatro imágenes: el cambio de la Pico era el único con superficie propia
+(tres ficheros fuera y el orden del arranque tocado); 13a/21b/29 son código
+común ya verificado en host, y el 30 del STM32 es una línea más en el INFO que se
+ve sola al conectar. Criterio de trabajo por lotes: se re-prueba lo que tiene
+riesgo, no la fila entera.
