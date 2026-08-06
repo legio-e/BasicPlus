@@ -131,12 +131,26 @@ done
 #    pinta nada en una publicacion (reproducciones minimas, diagnostico de GC).
 #    Hace falta ELEGIR. Lo que no puede ser es que olvidarse sea SILENCIOSO —
 #    por eso, debajo, el guardian.
-PUBLICAR_DIRS="aottest benchmarks errores external formdemo imageproject plugins sampleproject"
+PUBLICAR_DIRS="benchmarks errores external formdemo imageproject plugins sampleproject"
 #    external/ y plugins/ no son demos: son las DEPENDENCIAS de tres samples de
 #    la raiz que importan por ruta (appwithfromimpl -> plugins/filelogger.mod,
 #    frompathtest -> external/helper.mod). Sin ellas esos tres no compilan desde
 #    la instalacion. Misma familia que el hallazgo 6.
-INTERNAS_DIRS="formev formmin holes resources"
+INTERNAS_DIRS="aottest formev formmin holes resources"
+#    aottest/       = banco de pruebas del AOT POR PROYECTO, no un ejemplo. Nacio
+#                     en H12, cuando la arquitectura del .mdn habia que escribirla
+#                     a mano en el .bpbuild ("target": "arm"). En H11 eso cambio:
+#                     EL TARGET LO DICE LA PLACA, y un .bp SUELTO compila su .mdn
+#                     igual — samples/benchmarks/Bench.bp lo demuestra (105x
+#                     medidos el 6-ago desde la instalacion limpia).
+#                     Al ser proyecto es el UNICO caso que todavia puede apagarse
+#                     solo (si el .bpbuild pierde aot.enabled) o apuntar a la ISA
+#                     equivocada — y eso ULTIMO PASO DE VERDAD: el IDE reescribio
+#                     el fichero con "riscv" tras una prueba en el P4, y asi se
+#                     colo en un ZIP. En una Pico o una STM32 ese ejemplo habria
+#                     intentado compilar RISC-V para una placa ARM.
+#                     El AOT lo ensena Bench, que es suelto y coge el target de
+#                     la placa. Decision de Eduardo, 6-ago.
 #    formev/formmin  = reproducciones minimas de Forms, andamio de depuracion.
 #    holes/          = diagnostico de agujeros de GC (21 ficheros).
 #    resources/      = copia duplicada de testimg.png; el bueno es el de la raiz.
