@@ -886,6 +886,27 @@ así que hornear una constante es equivocarse en todas las placas menos una.
 **Qué NO hay que hacer**: unificar los dos números a mano. Deja las dos fuentes
 vivas y sólo tapa el síntoma en la placa que tengas delante.
 
+**⚠️ Y NO es un problema del STM32 — corrección del 6-ago.** Yo escribí esta ficha
+como si fuera cosa de la familia STM32. Salió en el arranque de la Metro que el
+**RP2350 tiene la misma forma**, sólo que en **unidades** en vez de en valores:
+
+| fuente | dice | qué es |
+|---|---|---|
+| panel de INFO | `PWM 24` | **salidas** (12 slices × 2 canales A/B) |
+| log de arranque | `pwm=12` | **slices** |
+| `Pico.PWM_SLICES()` desde BP | `12` | slices |
+
+Aquí **ninguno de los tres miente** —está decidido y explicado en
+`pico/repl_v1.c:718-722`, y el campo del wire conserva el nombre histórico
+`pwmSlices` aunque lleve canales—. Pero para quien mira, el efecto es idéntico al
+del STM32: **el panel dice una cosa y el programa dice otra**, y no hay forma de
+saber que son unidades distintas.
+
+O sea que lo que pide #378 no es sólo *una* fuente de datos: es que la fuente
+diga también **en qué unidad** habla, y que el nombre del campo del wire no
+mienta sobre su contenido. Si al hacer la capa se arregla el valor pero se deja
+el nombre `pwmSlices` llevando canales, la trampa sigue puesta.
+
 **Estado en V4**: se queda como está, **a propósito**. Criterio de Eduardo: *«es
 informativo, no afecta para el resto de funcionalidades»* → no es un bug que
 bloquee la publicación. La divergencia queda **anotada en el código**
