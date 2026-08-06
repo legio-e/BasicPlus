@@ -1917,3 +1917,52 @@ otras cuatro imágenes: el cambio de la Pico era el único con superficie propia
 común ya verificado en host, y el 30 del STM32 es una línea más en el INFO que se
 ve sola al conectar. Criterio de trabajo por lotes: se re-prueba lo que tiene
 riesgo, no la fila entera.
+
+
+### ✅✅ Hallazgo 36 CERRADO — y la fuente la tenía Eduardo
+
+**Yo di la conclusión más ancha que la evidencia.** Escribí que el fichero
+«NO EXISTE: buscado en el repo, en el ZIP, en la instalación y en todo el
+historial de git — cero». Todo eso era cierto **y seguía siendo la conclusión
+equivocada**: existía, en su proyecto de MicroPython
+(`C:\Micropython\GM2_Firmware\GM2_Pantalla_V01onts\montserrat_26_bold.bin`,
+7.380 bytes). De ahí venía la nota de la cabecera del sample —*«mismo formato que
+usa MicroPython»*—, que era la pista y no la vi. Eduardo llevaba tres días
+diciendo *«yo lo testeé, el fichero tiene que estar en alguna parte»*.
+
+**Nota de método, que es lo que hay que llevarse:** «no está en el repo» y «no
+existe» no son la misma frase, y yo las junté. Cuando el usuario dice que lo ha
+visto funcionar, **el sitio donde buscar es su máquina, no el índice de git**.
+
+**Lo que sí era cierto del hallazgo** —y por eso no se cierra como falsa alarma—:
+el fichero **no viajaba en el paquete**, así que recién instalado la demo no podía
+hacer lo único para lo que existe. Confirmado además por Eduardo: **tampoco está
+en la Discovery**, o sea que lo que él vio funcionar era el fallback.
+
+**Arreglado y VERIFICADO — primera vez que se ve funcionando de punta a punta:**
+
+- `samples/montserrat_26_bold.bin` va ya en el paquete (y con el hallazgo 25 la
+  raíz de `samples/` copia también lo que no es `.bp`, así que viaja solo).
+- **Ejecutado en el host con LVGL y con captura** (`BPVM_GUI_SHOT_MS`): la
+  etiqueta «Cargada .bin (26 bold)» sale **en negrita de 26 px**, distinta de la
+  de `fontSize = 32`, y la consola **no** imprime el `no se pudo cargar`.
+  Antes nadie lo había comprobado: la demo *parecía* ir porque el fallback es
+  invisible.
+- Cabecera del sample reescrita con **los dos caminos** (catálogo compilado por
+  `fontSize` vs `loadFont` de fichero), el aviso de que en placa hay que subir el
+  `.bin` a mano, y el aviso de que **la ausencia del fichero no se nota**.
+
+**Lo que queda abierto de aquí, y no es el fichero:**
+
+1. 🔴 **`loadFont` no tiene forma de decir que ha fallado.** Devuelve un id válido
+   siempre —a propósito, para que las dos VMs den los mismos ids— y `setFont` con
+   una fuente que no cargó es un no-op (`gui.c:991-994`). Un programa BP **no
+   puede detectarlo**; sólo lo delata un `printf` de la VM. Es el instrumento
+   mudo otra vez, y es lo que hizo que esto sobreviviera a las pruebas de Eduardo
+   **y a las mías**. → V5.
+2. ⚠️ **El paquete no lleva NINGÚN aviso de licencias de terceros**, y
+   redistribuye LVGL (MIT), littlefs (BSD-3), SDL2 (zlib), FreeRTOS (MIT) y
+   **Montserrat (SIL OFL)** —esta última ya compilada dentro de cada imagen de
+   firmware vía LVGL, o sea que la obligación **ya existía** antes de esta
+   fuente—. No bloquea, pero para una publicación pública es un `docs/TERCEROS.md`
+   de media hora. **Decisión de Eduardo.**
