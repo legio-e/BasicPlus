@@ -33,13 +33,24 @@ end Blink
 On a PC with no GPIO the hardware builtins log to stdout; on the board they
 drive real pins. The program is the same, byte for byte.
 
-## New in V3 — graphical interfaces
+## New in V4 — consolidation
 
-V3 adds **graphical interfaces** built on **LVGL**: around twenty widgets, the
-ability to **design screens in a JSON file** that becomes the window (with its
-event handlers already wired) at runtime, and touch — all with the same "paints
-on the PC, runs on the board". Verified on three screens: **STM32U5G9J-DK2**
-(LTDC), **ESP32-P4-Function-EV** (EK79007) and a **Waveshare ESP32-P4** (ST7701).
+V4 **consolidates** more than it adds. **Memory management** was reworked: a
+reference is no longer an address, it is a **handle** with a generation counter,
+so using an already-freed object **fails right there** instead of silently
+corrupting data. So was the **filesystem**, now littlefs on all three families.
+Along the way came **events**, **function overloading** and a **simulated
+micro** inside the IDE, to try things out without a board.
+
+Full detail in the **[release notes](docs/RELEASES.md)** *(Spanish)*.
+
+## Graphical interfaces (since V3)
+
+Built on **LVGL**: around twenty widgets, the ability to **design screens in a
+JSON file** that becomes the window (with its event handlers already wired) at
+runtime, and touch — all with the same "paints on the PC, runs on the board".
+Verified on three screens: **STM32U5G9J-DK2** (LTDC),
+**ESP32-P4-Function-EV** (EK79007) and a **Waveshare ESP32-P4** (ST7701).
 
 ![GuiColorDemo running on a board — GUI with LVGL](docs/img/guicolordemo.png)
 
@@ -146,7 +157,7 @@ those **same four buses** were validated on the board with real sensors
 non-graphical families are on par**. The **Metro RP2350B** shares the firmware
 image with the Pico.
 
-**V3 — the boards with a screen.** The GUI (LVGL) was verified on the board on
+**The boards with a screen (since V3).** The GUI (LVGL) was verified on the board on
 all three: **STM32U5G9J-DK2** (LTDC 800×480 + GT911 touch),
 **ESP32-P4-Function-EV** (EK79007 1024×600) and **Waveshare ESP32-P4** (ST7701
 480×800) — widget catalog, color, `.win` forms and touch, the same bytecode on
@@ -226,14 +237,15 @@ Documentation is available in **English** (`docs/en/`) and
 
 ## Status
 
-**V3 — graphical interfaces** (July 2026). V1 proved the idea; V2 hardened and
-broadened it; **V3 gives it a face**: a `Gui` module over LVGL, screens designed
-in JSON, and three new boards with a display (STM32U5 Discovery, ESP32-P4-EV,
-Waveshare ESP32-P4) — the same bytecode, now with graphics and touch, verified
-on real hardware.
+**V4 — consolidation** (August 2026). V1 proved the idea; V2 hardened and
+broadened it; V3 gave it a face; **V4 fixes its foundations**: handle-based
+memory — using a freed object fails on the spot instead of corrupting data —,
+a littlefs filesystem on all three families, events, function overloading and a
+simulated micro in the IDE so you can work without a board. Verified on real
+hardware on the four reference boards.
 
-Downloads (7 prebuilt binaries) and full detail: the
-**[v3.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v3.0)** and the
+Downloads and full detail: the
+**[v4.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v4.0)** and the
 **[release notes](docs/RELEASES.md)** *(Spanish)*.
 
 ## License

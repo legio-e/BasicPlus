@@ -34,14 +34,25 @@ end Blink
 En un PC sin GPIO los builtins de hardware loggean por stdout; en la placa
 mueven pines de verdad. El programa es el mismo byte a byte.
 
-## Nuevo en V3 — interfaces gráficas
+## Nuevo en V4 — consolidación
 
-V3 añade **interfaces gráficas** sobre **LVGL**: una veintena de widgets, la
-posibilidad de **diseñar las pantallas en un fichero JSON** que en tiempo de
-ejecución se convierte en la ventana (con sus manejadores de eventos ya
-conectados), y táctil — todo con el mismo "pinta en el PC, corre en la placa".
-Verificado en tres pantallas: **STM32U5G9J-DK2** (LTDC), **ESP32-P4-Function-EV**
-(EK79007) y una **Waveshare ESP32-P4** (ST7701).
+V4 **consolida** más que añade. Se ha reformado la **gestión de memoria**: una
+referencia ya no es una dirección, es un **handle** con contador de generación,
+así que usar un objeto ya liberado **falla ahí mismo** en vez de corromper datos
+en silencio. También el **sistema de archivos**, ahora littlefs en las tres
+familias. Por el camino han entrado los **eventos**, la **sobrecarga de
+funciones** y un **micro simulado** dentro del IDE, para probar sin placa.
+
+Detalle completo en las **[notas de versión](docs/RELEASES.md)**.
+
+## Interfaces gráficas (desde V3)
+
+Sobre **LVGL**: una veintena de widgets, la posibilidad de **diseñar las
+pantallas en un fichero JSON** que en tiempo de ejecución se convierte en la
+ventana (con sus manejadores de eventos ya conectados), y táctil — todo con el
+mismo "pinta en el PC, corre en la placa". Verificado en tres pantallas:
+**STM32U5G9J-DK2** (LTDC), **ESP32-P4-Function-EV** (EK79007) y una
+**Waveshare ESP32-P4** (ST7701).
 
 ![GuiColorDemo en placa — GUI con LVGL](docs/img/guicolordemo.png)
 
@@ -147,7 +158,7 @@ e **I2C** (BME280, T/P). Y en el **ESP32-S3** (DevKitC) se validaron en placa es
 de GPIO y UART) — las **tres familias no gráficas quedan a la par**. El **Metro
 RP2350B** comparte la imagen de firmware con la Pico.
 
-**V3 — las placas con pantalla.** La GUI (LVGL) se ha verificado en placa en las
+**Las placas con pantalla (desde V3).** La GUI (LVGL) se ha verificado en placa en las
 tres: **STM32U5G9J-DK2** (LTDC 800×480 + táctil GT911), **ESP32-P4-Function-EV**
 (EK79007 1024×600) y **Waveshare ESP32-P4** (ST7701 480×800) — catálogo de widgets,
 color, formularios `.win` y táctil, con el mismo bytecode en las tres.
@@ -221,14 +232,15 @@ los **binarios precompilados** de la [última release](https://github.com/legio-
 
 ## Estado
 
-**V3 — interfaces gráficas** (julio 2026). La V1 demostró la idea; la V2 la
-endureció y la amplió; **la V3 le pone cara**: un módulo `Gui` sobre LVGL,
-pantallas diseñadas en JSON, y tres placas nuevas con pantalla (Discovery
-STM32U5, ESP32-P4-EV, Waveshare ESP32-P4) — el mismo bytecode, ahora con
-gráficos y táctil, verificado en hardware real.
+**V4 — consolidación** (agosto 2026). La V1 demostró la idea; la V2 la endureció
+y la amplió; la V3 le puso cara; **la V4 le arregla los cimientos**: memoria por
+handles —usar un objeto liberado falla en el acto en vez de corromper datos—,
+sistema de archivos littlefs en las tres familias, eventos, sobrecarga de
+funciones y un micro simulado en el IDE para trabajar sin placa. Verificado en
+hardware real en las cuatro placas de referencia.
 
-Descargas (7 binarios precompilados) y detalle completo: la
-**[release v3.0](https://github.com/legio-e/BasicPlus/releases/tag/v3.0)** y las
+Descargas y detalle completo: la
+**[release v4.0](https://github.com/legio-e/BasicPlus/releases/tag/v4.0)** y las
 **[notas de versión](docs/RELEASES.md)**.
 
 ## Licencia
