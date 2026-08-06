@@ -171,9 +171,10 @@
     micro.
   </p>
   <div class="badges">
-    <span class="badge">V2 · code frozen</span>
-    <span class="badge">RP2350 · ESP32-S3 · STM32</span>
+    <span class="badge">V4 · consolidation</span>
+    <span class="badge">RP2350 · ESP32-S3/P4 · STM32</span>
     <span class="badge">Two VMs · one byte-identical output</span>
+    <span class="badge">Handle-based memory</span>
     <span class="badge">Tested on real hardware</span>
     <span class="badge">MIT</span>
   </div>
@@ -204,6 +205,17 @@
     <span class="kw">print</span> <span class="str">"Blink done"</span>
   <span class="kw">end</span> Main
 <span class="kw">end</span> Blink</code></pre>
+
+<p style="margin-top:1.4rem">
+  <strong>New in V4:</strong> this release <strong>consolidates</strong> more than it
+  adds. <strong>Memory management</strong> was reworked — a reference is no longer an
+  address, it is a <strong>handle</strong> with a generation counter, so using a freed
+  object <strong>fails right there</strong> instead of silently corrupting data — and so
+  was the <strong>filesystem</strong>. Along the way came <strong>events</strong>,
+  <strong>function overloading</strong> and a <strong>simulated micro</strong> inside the
+  IDE, to try things out without a board.
+  Full detail in the <a href="../RELEASES.md">release notes</a> (Spanish).
+</p>
 
 <h2>Getting started</h2>
 <div class="cards">
@@ -249,11 +261,11 @@
   </a>
   <a class="card" href="../PENDIENTES.md">
     <span class="t">Living backlog → <small>(Spanish)</small></span>
-    <span class="d">The project's honest diary: what's done, what was deferred to v3 and why.</span>
+    <span class="d">The project's honest diary: what's done, what was deferred to v5 and why.</span>
   </a>
   <a class="card" href="../RELEASES.md">
     <span class="t">Release notes → <small>(Spanish)</small></span>
-    <span class="d">What v2.0 brings, the downloadable artifacts and what was deferred to v3.</span>
+    <span class="d">What v4.0 brings, the downloadable artifacts and what was deferred to v5.</span>
   </a>
 </div>
 
@@ -327,9 +339,18 @@
   (DevKitC) those <strong>same four buses</strong> were validated on the
   board with real sensors (BME688 over SPI, BME280 over I2C, GPIO and UART
   loopbacks) — the <strong>three families are on par</strong>. On STM32 and
-  ESP32 the non-critical peripherals (PWM/ADC/RTC/WDT) exist in the API and
-  execute, but their backend is scheduled for v3. The <strong>Metro
-  RP2350B</strong> shares the firmware image with the Pico.
+  ESP32 the non-critical peripherals (PWM/ADC/RTC/WDT) got their hardware
+  backend in v3. The <strong>Metro RP2350B</strong> shares the firmware image
+  with the Pico — one <code>.uf2</code> for both, the variant is decided at
+  runtime.
+</p>
+
+<p>
+  <strong>Boards with a screen (since V3).</strong> The GUI (LVGL) has been verified on
+  hardware on all three: <strong>STM32U5G9J-DK2</strong> (LTDC 800×480 + GT911 touch),
+  <strong>ESP32-P4-Function-EV</strong> (EK79007 1024×600) and
+  <strong>Waveshare ESP32-P4</strong> (ST7701 480×800) — widget catalogue, colour,
+  <code>.win</code> forms and touch, with the same bytecode on all three.
 </p>
 
 <h2>Credits</h2>

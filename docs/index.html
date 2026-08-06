@@ -171,9 +171,9 @@
     <strong>idéntico</strong> en el PC y en el micro.
   </p>
   <div class="badges">
-    <span class="badge">V3 · interfaz gráfica</span>
+    <span class="badge">V4 · consolidación</span>
     <span class="badge">RP2350 · ESP32-S3/P4 · STM32</span>
-    <span class="badge">GUI con LVGL</span>
+    <span class="badge">Memoria por handles</span>
     <span class="badge">Dos VMs · una salida byte-idéntica</span>
     <span class="badge">Probado en hardware real</span>
     <span class="badge">MIT</span>
@@ -215,10 +215,14 @@
 <span class="kw">end</span> Blink</code></pre>
 
 <p style="margin-top:1.4rem">
-  <strong>Nuevo en V3:</strong> interfaces gráficas con <strong>LVGL</strong> — una
-  veintena de widgets, formularios que diseñas en un fichero JSON y táctil, con el
-  mismo «pinta en el PC, ejecuta en la placa». Todo en la
-  <a href="gui.html">guía de interfaz gráfica</a>.
+  <strong>Nuevo en V4:</strong> esta versión <strong>consolida</strong> más que añade.
+  Se ha reformado la <strong>gestión de memoria</strong> —una referencia ya no es una
+  dirección, es un <strong>handle</strong> con contador de generación, así que usar un
+  objeto liberado <strong>falla ahí mismo</strong> en vez de corromper datos en
+  silencio— y el <strong>sistema de archivos</strong>. Por el camino han entrado los
+  <strong>eventos</strong>, la <strong>sobrecarga de funciones</strong> y un
+  <strong>micro simulado</strong> dentro del IDE para probar sin placa.
+  Todo el detalle en las <a href="RELEASES.md">notas de versión</a>.
 </p>
 
 <h2>Empezar</h2>
@@ -265,11 +269,11 @@
   </a>
   <a class="card" href="PENDIENTES.md">
     <span class="t">Backlog vivo →</span>
-    <span class="d">El diario honesto del proyecto: lo hecho, lo diferido a v3 y por qué.</span>
+    <span class="d">El diario honesto del proyecto: lo hecho, lo diferido a v5 y por qué.</span>
   </a>
   <a class="card" href="RELEASES.md">
     <span class="t">Notas de versión →</span>
-    <span class="d">Qué trae v3.0, los artefactos para descargar y lo diferido a v4.</span>
+    <span class="d">Qué trae v4.0, los artefactos para descargar y lo diferido a v5.</span>
   </a>
 </div>
 
@@ -351,7 +355,7 @@
 </p>
 
 <p>
-  <strong>V3 — placas con pantalla.</strong> La GUI (LVGL) se ha verificado en placa en las
+  <strong>Placas con pantalla (desde V3).</strong> La GUI (LVGL) se ha verificado en placa en las
   tres: <strong>STM32U5G9J-DK2</strong> (LTDC 800×480 + táctil GT911),
   <strong>ESP32-P4-Function-EV</strong> (EK79007 1024×600) y <strong>Waveshare ESP32-P4</strong>
   (ST7701 480×800) — catálogo de widgets, color, formularios <code>.win</code> y táctil, con el
