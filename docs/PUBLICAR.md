@@ -78,10 +78,32 @@ mordió al menos una vez**.
       y `build*/`: son salida de build y un `git add -A` los arrastra.
 - [ ] `git push origin main`.
 
-## 3 · GitHub Pages
+## 3 · Las portadas — que son DOS, y no se enteran la una de la otra
+
+⚠️ **Trampa del 6-ago**: «la portada sale en V3» y no estaba en `docs/`.
+El proyecto tiene **dos portadas distintas**, y hay que tocar las dos:
+
+| dónde | fichero | cuándo se ve |
+|---|---|---|
+| página del **repo** (github.com/legio-e/BasicPlus) | `README.md` + `README.es.md` | al instante con el `push` |
+| sitio de **Pages** (legio-e.github.io/BasicPlus) | `docs/index.html` + `docs/en/index.html` | tras construir Pages |
+
+Y la de Pages viaja **además** dentro del ZIP: es la documentación que abre
+el IDE. Si cambias `docs/`, **hay que rehacer el ZIP**; el `README.md` no
+viaja, así que ése no obliga.
+
+⚠️ Los volúmenes en **inglés** se quedan atrás sin que nadie lo note:
+`docs/en/index.html` llegó a estar **dos versiones** por detrás. Búscalo con
+`grep -rn -i "\bv3\b" docs/ README*.md` y decide caso por caso qué es
+historia legítima y qué es texto caducado.
 
 - [ ] Settings → Pages → Source: rama `main`, carpeta **`/docs`** (ya configurado).
 - [ ] `docs/.nojekyll` presente.
+- [ ] **Comprobar que el build de Pages terminó BIEN** — no basta con el push:
+      `gh api repos/legio-e/BasicPlus/pages/builds/latest --jq .status`
+      ⚠️ Dos despliegues seguidos se pisan («*due to in progress deployment*»)
+      y el segundo **falla en silencio**: la web sigue sirviendo la anterior.
+      Se relanza con `gh api -X POST repos/legio-e/BasicPlus/pages/builds`.
 - [ ] Abrir la URL y comprobar: portada, que **carga la captura**
       (`img/guicolordemo.png`), y que los volúmenes (`manual`, `referencia`,
       `guia-ide`, `gui`, `bp-desde-dentro`, `creditos`) abren en ES y EN.
