@@ -2047,3 +2047,26 @@ del jar del IDE. Que pase **desde una instalación recién descomprimida** demue
 las tres cosas de golpe: que el arreglo es correcto, que el jar del paquete lo
 lleva, y que el paquete se despliega bien. Un verde en mi copia de trabajo no
 habría demostrado ninguna de las dos últimas.
+
+
+## 🚪 PUERTA FINAL — prueba 2 de 3: ✅ **PASA**
+
+**`ChartDemo` en el micro simulado → OK**, desde la instalación limpia.
+
+**Sella DOS hallazgos con una sola ejecución**, y no por casualidad: son las dos
+mitades del mismo agujero.
+
+- **Hallazgo 20** — el widget `Chart`, que es lo nuevo de V4 en gráficos (H7,
+  #317), se publicaba **sin una sola demo**: el `ChartDemo.bp` existía pero vivía
+  en `bpgenvm-c/samples/`, la carpeta de desarrollo de la VM-C, que no viaja al
+  ZIP. Que ahora pinte **desde la instalación** demuestra que el sample llegó.
+- **Hallazgo 37** — el `bpvm-sim.exe` que se publicaba estaba compilado **sin
+  LVGL**: ejecutaba los programas gráficos y no pintaba nada. Que se vean las dos
+  series demuestra que el binario del paquete es el bueno.
+
+**Y la relación entre los dos es la lección**: el 37 hacía **invisible** al 20. Con
+un simulador que no pinta, un usuario que abriera `ChartDemo` habría visto lo
+mismo que si el widget estuviera roto — y habría culpado al widget. Es el mismo
+patrón que el hallazgo 36 (fichero ausente + fallo mudo): **un fallo que tapa a
+otro cuesta el doble de encontrar**, porque el síntoma apunta al sitio
+equivocado.
