@@ -2355,7 +2355,7 @@ está medido y acotado.
 Las cuatro pruebas de la puerta final pasan **desde una instalación recién
 descomprimida**. El paquete que se publica:
 
-**`dist/BasicPlus-4.0-win.zip`** — 9,2 MB · `sha256 a9986f49c1a3cb50553fe1a3d9df37da3c9c821a9984659d29e7ea20428bd68c`
+**`dist/BasicPlus-4.0-win.zip`** — 9,2 MB · `sha256 24a755ae83c8388649bc1f5d2ae3ddcd5dd4a5d08762df698d2a1749df7cbd3c`
 
 **Lo que se lleva esta fase, en una frase**: los dos bugs gordos —el STM32 a
 `-O0` y el handle del thread truncado— salieron de **medidas que no cuadraban**,

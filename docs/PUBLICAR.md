@@ -7,20 +7,24 @@ Doc de mantenedor (no enlazado desde la portada). El repo público
 > dice *qué* se hace, *quién* lo hace y **cómo saber que salió bien**. Si un paso
 > no tiene forma de comprobarse, es que está mal escrito.
 
-**Lo que se publica en V4 son 6 artefactos** — cambió respecto a V3, que soltaba
-7 binarios sueltos:
+**Lo que se publica en V4 es UN artefacto**: `BasicPlus-4.0-win.zip` — el paquete
+completo (IDE + compilador + stdlib + samples + docs + micro simulado + **las 5
+imágenes de firmware dentro**, en `firmware/`).
 
-| artefacto | qué es |
-|---|---|
-| `BasicPlus-4.0-win.zip` | **el paquete**: IDE + compilador + stdlib + samples + docs + micro simulado + las 5 imágenes dentro |
-| `bpvm_pico.uf2` | RP2350 — **una imagen** para Pico 2 y Metro RP2350B |
-| `bpvm_esp32_merged.bin` | ESP32-S3 |
-| `bpvm_esp32p4_merged.bin` | ESP32-P4 — una imagen para EV y Waveshare |
-| `bpvm_stm32_nucleo.bin` | Nucleo-U575ZI-Q |
-| `bpvm_stm32_dk2.bin` | Discovery U5G9J-DK2 |
+Cambió respecto a V3, que soltaba 7 binarios sueltos. Y cambió **otra vez el
+6-ago**, a media publicación: se habían adjuntado además las 5 imágenes sueltas
+«para quien sólo quiere reflashear», y Eduardo lo cortó con el argumento que
+zanja el asunto —
 
-Las cinco imágenes van **también sueltas** aunque estén dentro del ZIP: quien
-sólo quiere reflashear no debería bajarse 9 MB.
+> *quien necesita el firmware necesita el IDE, y quien ya tiene el IDE ya tiene
+> las imágenes en `firmware/`.*
+
+Las copias sueltas no le servían a nadie y duplicaban el artefacto. **Un fichero,
+una suma, una cosa que verificar.**
+
+⚠️ Si algún día se vuelven a soltar, hay que revisar `docs/INSTALAR_FIRMWARE.md`
+(las dos versiones): dice de dónde se saca la imagen, y esa frase depende de esta
+decisión.
 
 ---
 
@@ -115,7 +119,7 @@ historia legítima y qué es texto caducado.
 
 - [ ] Tag `v4.0` sobre el commit publicado.
 - [ ] Cuerpo de la release = sección **v4.0** de `docs/RELEASES.md`.
-- [ ] Adjuntar los **6 artefactos** de la tabla de arriba + `SHA256SUMS.txt`.
+- [ ] Adjuntar **el ZIP y nada más** (ver arriba: las imágenes van dentro).
 - [ ] Comprobar desde la propia release: descargar el ZIP y verificar el
       `sha256` contra el que anotaste al montarlo.
 

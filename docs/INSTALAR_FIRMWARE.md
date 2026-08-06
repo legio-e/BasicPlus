@@ -4,9 +4,11 @@
 
 Cómo poner la imagen de la VM en cada placa soportada. Hay dos caminos:
 
-- **A — Imagen precompilada** (el normal): descarga el binario de la
-  *release* de GitHub y flashéalo con la herramienta de cada familia.
-  No necesitas ningún toolchain.
+- **A — Imagen precompilada** (el normal): **ya la tienes**. Las cinco
+  imágenes vienen dentro del paquete, en la carpeta `firmware/`; se
+  flashean con la herramienta de cada familia y no necesitas ningún
+  toolchain. (Si no tienes el paquete, se descarga de la *release* de
+  GitHub.)
 - **B — Compilarla tú**: para quien toca el firmware. Cada port tiene su
   README con los prerequisitos (`bpgenvm-c/{pico,esp32,stm32}/README.md`).
 

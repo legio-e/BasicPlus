@@ -4,9 +4,10 @@
 
 How to put the VM image on each supported board. There are two routes:
 
-- **A — Prebuilt image** (the normal one): download the binary from the
-  GitHub *release* and flash it with each family's tool. No toolchain
-  needed.
+- **A — Prebuilt image** (the normal one): **you already have it**. The
+  five images ship inside the package, in the `firmware/` folder; flash
+  them with each family's tool — no toolchain needed. (If you don't have
+  the package, download it from the GitHub *release*.)
 - **B — Build it yourself**: for firmware hackers. Each port has its
   README with the prerequisites (`bpgenvm-c/{pico,esp32,esp32p4,stm32}/`).
 
