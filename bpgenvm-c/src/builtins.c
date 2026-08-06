@@ -1394,6 +1394,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char path[512];
         read_bp_string(vm, pref, path, sizeof(path));
         long long ms = bpvm_fs_mtime_ms(path);
+        if (ms == -2) {
+            /* H13 hallazgo 13(a) — la capacidad NO ESTA en esta plataforma, que no
+             * es lo mismo que un fallo de lectura: reintentar no va a servir. El
+             * texto habla de la PLATAFORMA, no de littlefs, para que no caduque si
+             * otra familia lo implementa. */
+            char em[576];
+            snprintf(em, sizeof(em),
+                     "lastModified('%s'): no implementado en esta plataforma", path);
+            return builtin_throw(vm, tc, em);
+        }
         if (ms < 0) {
             char em[576];
             snprintf(em, sizeof(em), "lastModified('%s'): no se pudo leer", path);
@@ -2736,9 +2746,24 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_NEOPIXEL_INIT: {
-        /* __npInit(pin): void */
+        /* __npInit(pin): void
+         *
+         * H13 hallazgo 21(b) — ANTES se llamaba y se TIRABA el resultado, asi que
+         * un programa pedia un NeoPixel donde no hay driver, le decian que si, y
+         * escribia colores al vacio sin forma de enterarse. La fachada nunca
+         * minitio: bpvm_neopixel.h documenta "1 OK, 0 fallo" y sin backend
+         * devuelve 0. El que mentia era ESTE builtin al no mirarlo.
+         *
+         * Mismo protocolo que lastModified (13a): no se contesta exito, se dice
+         * que aqui NO ESTA IMPLEMENTADO — y se habla de la plataforma, no del
+         * chip, porque manana puede haber driver en otra familia. */
         int pin = pop_i32(vm, tc);
-        bpvm_neopixel_init(pin);
+        if (!bpvm_neopixel_init(pin)) {
+            char em[128];
+            snprintf(em, sizeof(em),
+                     "Neopixel(%d): no implementado en esta plataforma", pin);
+            return builtin_throw(vm, tc, em);
+        }
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }

@@ -219,10 +219,23 @@ int bpvm_fs_isdir(const char* path) {
     return 0;
 }
 
+/* H13 hallazgo 13(a) — DOS fallos distintos que antes valian lo mismo (-1):
+ *   -1  la cintura SI implementa fechas, pero esta no se pudo leer.
+ *   -2  esta cintura NO IMPLEMENTA la fecha (mtime_ms = NULL).
+ *
+ * OJO CON EL MATIZ, que lo puso Eduardo: -2 NO significa "littlefs no guarda
+ * fechas". Significa "aqui no esta implementado" — que es lo unico cierto y lo
+ * unico que seguira siendo cierto cuando MANANA una familia si lo implemente.
+ * Hornear la causa concreta en el mensaje lo deja caducado el dia que cambie.
+ *
+ * Es la forma de PROTOCOLO para cualquier verbo de la fachada que una cintura no
+ * cubra: no se contesta exito, no se inventa un valor y no se echa la culpa a
+ * una implementacion — se dice "no implementado en esta plataforma". */
 long long bpvm_fs_mtime_ms(const char* path) {
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->mtime_ms) return be->mtime_ms(path);
-    return -1;
+    if (!be) return -1;
+    if (!be->mtime_ms) return -2;      /* no soportado por esta cintura */
+    return be->mtime_ms(path);
 }
 
 /* H2·B1.3 — listado (wire LS+CRC / explorer del IDE). */

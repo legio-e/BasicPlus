@@ -361,9 +361,28 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         int bad = -1, slot = -1;
         bpvm_part_err_t e = bpvm_bmgr_part_apply(bm, bm->sector, sizes, &bad, &slot);
         if (e != BPVM_PART_OK) {
-            char m[128];
-            snprintf(m, sizeof m, "%s (particion %d: %s)", bpvm_part_err_str(e), bad,
-                     (bad >= 0 && bad < BPVM_PART_COUNT) ? bpvm_part_name((bpvm_part_kind_t) bad) : "?");
+            char m[224];
+            const char* pn = (bad >= 0 && bad < BPVM_PART_COUNT)
+                             ? bpvm_part_name((bpvm_part_kind_t) bad) : "?";
+            /* H13 hallazgo 29 — un mensaje que dice la verdad y NO SIRVE es medio
+             * mensaje. Aqui el que se equivoca casi siempre viene de otra familia:
+             * el STM32U5 borra en paginas de 8 KB y ESP32/RP2350 en 4, asi que
+             * mete un numero que ALLI valia. Decirle el sector de ESTA placa y el
+             * multiplo valido mas cercano convierte el error en instruccion. */
+            if (e == BPVM_PART_ERR_UNALIGNED && bad >= 0 && bm->sector != 0) {
+                uint32_t sz   = sizes[bad];
+                uint32_t abajo = (sz / bm->sector) * bm->sector;
+                uint32_t arriba = abajo + bm->sector;
+                snprintf(m, sizeof m,
+                         "%s (particion %d: %s). El sector de borrado de esta placa es "
+                         "de %lu bytes (%lu KB) y pediste %lu; los validos mas cercanos "
+                         "son %lu y %lu",
+                         bpvm_part_err_str(e), bad, pn,
+                         (unsigned long) bm->sector, (unsigned long) (bm->sector / 1024u),
+                         (unsigned long) sz, (unsigned long) abajo, (unsigned long) arriba);
+            } else {
+                snprintf(m, sizeof m, "%s (particion %d: %s)", bpvm_part_err_str(e), bad, pn);
+            }
             return reply_error(out, cap, id, "INVALID_PARAM", m);
         }
         if (wrote_slot) *wrote_slot = slot;
