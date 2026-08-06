@@ -27,7 +27,6 @@
 #include "crc32.h"           /* paso 4 cierre — CRC por fichero en el LS */
 #include "log.h"
 #include "bpvm_dbg_wire.h"   /* #326: el ramo de depuración salió de aquí a src/ */
-#include "aot_funcs.h"       /* H3 #160: registro AOT manual antes de run */
 #include "mdn_loader.h"      /* H3 #158 fase D: cargar .mdn desde FS */
 
 #include "bpvm.h"
@@ -1071,12 +1070,11 @@ static void run_module_path(const char* path, long id) {
         log_printf("run: GC DESACTIVADO por el ENV (gc=0) — memoria de un solo uso");
     }
 
-    /* 4b. H3 #160 — registrar funciones AOT manualmente. Tras link,
-     *     la global symbol table tiene "Bench.fib" si Bench.mod cargó;
-     *     aot_funcs_register hace lookup y registra el thunk. Tolerante
-     *     a símbolos ausentes (si no hay Bench.fib, no-op silencioso). */
+    /* 4b. El registro AOT arranca VACÍO en cada RUN. Antes había aquí dos
+     *     etapas de precarga horneadas en la imagen (Bench linkado + un .mdn
+     *     embebido); se retiraron en H13 (hallazgo 12) — ver aot_funcs.c.
+     *     Lo que llena el registry es el escaneo del FS de justo abajo. */
     bpvm_aot_clear();
-    aot_funcs_register(vm);
 
     /* 4c. H3 #158 fase D — para cada módulo cargado, buscar su .mdn
      *     correspondiente en el FS y, si existe, registrar sus thunks

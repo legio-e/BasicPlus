@@ -33,7 +33,6 @@
 #include "bpvm_part.h"        /* H9: particiones derivadas del env */
 #include "bpvm_boot.h"        /* H9: máquina de estados del arranque */
 #include "hardware/flash.h"   /* FLASH_SECTOR_SIZE */
-#include "bench.h"
 #include "bpvm_gpio.h"
 #include "bpvm_i2c.h"
 #include "bpvm_spi.h"
@@ -1165,10 +1164,12 @@ static void vm_task(void* arg) {
                (unsigned) fs_total_bytes());
     }  /* fin estado >= FS (H9): sin particiones/FS no hay board.json/stdlib */
 
-    /* H3 micro-bench (#159) — fib_native(28) en C puro para medir el
-     * techo de rendimiento del AOT. Compara con Bench.mod corriendo
-     * fib(28) en BP. Si el ratio C:BP < 2× → aparcamos AOT. */
-    bench_run_native();
+    /* H13 hallazgo 12 — AQUÍ CORRÍA UN fib(28) EN C EN CADA ARRANQUE. Era el
+     * micro-bench de #159, el que tenía que decidir si el AOT valía la pena
+     * ("si el ratio C:BP < 2× aparcamos AOT"). La decisión se tomó hace un
+     * año y el AOT está publicado con 113× medidos, así que lo único que
+     * seguía haciendo era gastar ~105 ms de CADA boot de CADA usuario para
+     * escribir un número que ya nadie compara. Retirado con bench.c/.h. */
 
 #ifdef BPVM_PICO_BOOT_LED
     /* #153 bring-up: llegamos al REPL → boot OK. Apaga el LED que

@@ -847,3 +847,106 @@ está en la capa de GUI/táctil que va encima.
 y el wire son 115200 fijos. O sea que **la tasa real de eventos es MAYOR que la
 percibida** — su frase: *«sin el transporte sería mayor»*. Un cronómetro honesto
 tiene que medir **dentro de la placa**, no contando líneas en la consola.
+
+
+---
+
+## #378 — Que cada micro DIGA lo que tiene (capa HAL BP de capacidades)
+
+*Diseño de Eduardo, 6-ago-2026, a raíz del hallazgo 32 de H13.*
+
+**El síntoma que lo destapó** es pequeño y tonto: el INFO del STM32 publica
+`gpioCount:114` y el backend del lenguaje contesta `128`. Dos números a mano en
+dos ficheros para el mismo hecho. Pero el arreglo evidente —tachar uno— es el
+malo, y por eso esto es una tarea de V5 y no un parche de H13:
+
+> «STM fabrica la misma CPU con diferentes encapsulados, diferentes pins pero
+> también **diferentes periféricos**. Si queremos una imagen única para la
+> familia tenemos que soportar el más grande y el más pequeño.»
+
+O sea: **el número correcto no existe en tiempo de compilación**. Una imagen por
+familia sirve a placas que no tienen el mismo pinado *ni los mismos periféricos*,
+así que hornear una constante es equivocarse en todas las placas menos una.
+
+**La forma que pide Eduardo:**
+
+1. **Preguntarle al fabricante.** Primer paso de la tarea: *ver qué hay a nivel
+   de HAL de ST* (y del SDK del RP2350 y del IDF) para consultar en runtime el
+   pinado y los periféricos presentes — registros de identificación del device,
+   tablas de la HAL, lo que haya.
+2. **Una capa HAL BP de capacidades que tire de eso.** Igual que
+   [[hal-bp-capa-comun]]: el verbo es común a las cuatro cinturas y la respuesta
+   la da el micro. `GPIO_COUNT`, `ADC_CHANNELS`, `PWM_SLICES`… dejan de ser
+   `#define` y pasan a ser una pregunta.
+3. **El INFO y el lenguaje beben de la MISMA fuente.** Hoy son dos strings
+   independientes; ahí es donde nace la divergencia. Emparenta con #371
+   (librería de placa genérica: *el micro da el dato, la librería hace de
+   puente*) — es la misma idea aplicada a las capacidades.
+
+**Qué NO hay que hacer**: unificar los dos números a mano. Deja las dos fuentes
+vivas y sólo tapa el síntoma en la placa que tengas delante.
+
+**Estado en V4**: se queda como está, **a propósito**. Criterio de Eduardo: *«es
+informativo, no afecta para el resto de funcionalidades»* → no es un bug que
+bloquee la publicación. La divergencia queda **anotada en el código**
+(`stm32/port/stm32_repl.c`, junto al string del INFO) para que nadie la
+«arregle» por el camino corto.
+
+**Un aviso sobre el número**: en el STM32 los pines se numeran `puerto*16+bit` y
+son **dispersos** — ni 114 ni 128 permiten recorrer los pines de la placa con un
+bucle. Lo que hace falta no es un contador mejor: es **poder preguntar si un pin
+concreto existe**. Tenerlo en cuenta al diseñar la capa.
+
+
+---
+
+## #379 — El wire se queda desincronizado tras el Stop (y **sólo en unas placas**)
+
+*Caracterizado por Eduardo entre el 4 y el 6-ago-2026, durante H13.*
+
+**El síntoma, en sus palabras**: el KILL para el programa —eso funciona, es lo
+que prometía #257— pero *«tras el Stop hay que cerrar la comunicación y
+reconectar, y a veces hay que hacerlo una segunda vez»*.
+
+**El dato que lo convierte en investigable** (6-ago): *«con las STM32 el stop
+funcionó perfectamente, en cambio con las P4 iba a veces»*. **Misma versión, mismo
+IDE, mismo día.** Eso descarta de golpe las dos mitades que uno miraría primero:
+
+| candidato | por qué queda descartado |
+|---|---|
+| el drenaje del `connect` en el IDE | `BpvmClient.connectSerial` + `doHandshake` **no tienen ninguna rama por familia**: si fuera eso, la Nucleo fallaría igual |
+| el KILL / fin de RUN | núcleo portable, idéntico en las tres familias; y la secuencia que emite la placa (`KILL_REPLY` → `EXITED`) está ordenada y verificada en el código |
+
+**Lo que queda, que es por donde hay que empezar**: lo que de verdad cambia entre
+una Discovery y un P4 — **el transporte y quién lo bufferiza**. La STM32 habla
+por el VCP del ST-LINK (UART real a 115200); el P4 por su puente USB-UART. Un
+programa que muere de golpe puede dejar mucho más texto en vuelo en un caso que
+en el otro.
+
+**Por dónde entrar**, en orden:
+
+1. **Reproducirlo a propósito**: un programa que imprima sin parar y matarlo. La
+   hipótesis a batir es que **el fallo escala con el volumen pendiente de salida**
+   en el momento del KILL. Si es así, se reproduce a voluntad y deja de ser
+   «a veces».
+2. **Mirar el lado del micro**: qué pasa con la cola de salida (`oq_*`) y con el
+   buffer del puente cuando la VM muere — ¿se descarta, se vacía, se queda a
+   medias una línea?
+3. **Sólo entonces, el lado del PC.** Y ahí hay dos cosas que están mal *aunque
+   no sean la causa*, y conviene arreglar igual:
+   - el drenaje inicial termina **por tiempo** (300 ms fijos, `BpvmClient:232`),
+     no por sincronización: nada garantiza que el lector arranque en un límite de
+     línea. En un protocolo de líneas, eso es un invariante que hoy no se cumple.
+   - **`doHandshake` se traga su propio fallo**: si el HELLO da timeout, sólo
+     escribe una traza de diagnóstico y el `connect` «tiene éxito» igualmente
+     (`BpvmClient:378-380`). Un handshake que falla en silencio es justo lo que
+     hace que el usuario tenga que adivinar que hay que reconectar otra vez.
+     Esto es [[instrumento-mudo-dudar-de-el]] en el sitio menos oportuno.
+
+⚠️ **Lo que NO hay que hacer, que es lo que estuve a punto de hacer yo**: tocar el
+drenaje del `connect` sin repro. Ya se intentó una vez —un drenaje adaptativo—
+y hubo que revertirlo por retrasos de ~10 s en el primer `LIST` (#154, el motivo
+está escrito en el propio comentario del código). Es un sitio que ya ha mordido.
+
+**Criterio de Eduardo para V4**: *«eso es mejor que tener que resetear»* →
+**molesto, no bloqueante**. No bloquea la publicación.

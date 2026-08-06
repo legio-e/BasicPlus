@@ -129,9 +129,27 @@ static void handle_info(long id) {
         "\"uniqueId\":\"%08lX%08lX%08lX\","
         "\"boardName\":\"%s\",\"cpuFreqHz\":%lu,\"uptimeMs\":%lu,"
         "\"tempMilliC\":0,\"resetReason\":\"%s\","
+        /* H13 hallazgo 32 — OJO: estos cuatro numeros estan a mano AQUI y otra vez
+         * en gpio_stm32.c (el backend que contesta a Pico.GPIO_COUNT() etc), y en
+         * GPIO NO COINCIDEN: aqui 114 (las I/O del encapsulado LQFP144) y alli 128
+         * (8 puertos x 16 = el rango de numeros de pin que el driver acepta). Los
+         * dos son ciertos de cosas distintas, y en el STM32 NINGUNO sirve para
+         * recorrer pines, porque se numeran puerto*16+bit y son dispersos.
+         *   NO se unifica a pelo: decision de Eduardo (6-ago) = es INFORMATIVO, no
+         * afecta a la funcionalidad, y el arreglo bueno es otro -> ver #378 en
+         * docs/V5_IDEAS.md: que cada micro DIGA lo que tiene (preguntando a la HAL
+         * del fabricante) y que la capa HAL BP tire de eso. STM vende el mismo core
+         * en encapsulados con distinto pinado Y distintos perifericos, asi que una
+         * imagen unica por familia obliga a preguntarselo a la placa, no a hornearlo. */
         "\"gpioCount\":114,\"pioCount\":0,\"pwmSlices\":28,\"adcChannels\":20,"
         "\"flashBytes\":%lu,\"sramBytes\":%lu,\"psramBytes\":0,"
         "\"fsTotalBytes\":%lu,\"fsUsedBytes\":%lu,"
+        /* H13 hallazgo 30 — el reparto de la memoria de la VM, que las otras dos
+         * familias ya mandaban y esta no. No es cosmetico: el panel de INFO es el
+         * instrumento con el que se lee la tanda de memoria, y sin esta linea
+         * habia que ir a buscar el numero al fuente. MISMO calculo que usa el RUN
+         * (bpvm_stack_region_bytes sobre el bloque real), no una constante. */
+        "\"vmHeapBytes\":%lu,\"vmStackBytes\":%lu,"
         /* H11 — arquitectura del nativo que ejecuta este firmware: el IDE la
          * usa para compilar el .mdn a la ISA correcta sin que nadie la teclee. */
         "\"arch\":%u}",
@@ -140,6 +158,8 @@ static void handle_info(long id) {
         stm32_reset_cause(),
         flash_bytes, BOARD_SRAM_BYTES,
         (unsigned long) fs_total_bytes(), (unsigned long) fs_used_bytes(),
+        (unsigned long) (sizeof(s_vm_mem) - bpvm_stack_region_bytes(sizeof(s_vm_mem))),
+        (unsigned long) bpvm_stack_region_bytes(sizeof(s_vm_mem)),
         (unsigned) bpvm_mdn_host_arch());
     if (n > 0) stm32_wire_send_line(buf, (size_t) n);
 }

@@ -152,11 +152,8 @@ add_executable(bpvm_pico
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
     flash_lock.c    # H2 #153: ventana XIP-safe (single + dual-core)
-    bench.c         # H3 #159: micro-bench AOT ceiling (fib_native vs BP)
-    aot_funcs.c              # H3 #160: agregador del registro AOT
-    aot_Bench.c              # H3 #157: AOT linkado (estado working confirmado)
+    aot_funcs.c              # hook de trazas del cargador .mdn (H13 h12: ya no precarga nada)
     ${BPVM_C_ROOT}/src/mdn_loader.c   # H3 #158 / H9.5: loader .mdn COMPARTIDO (Pico+STM32); trazas via bpvm_mdn_log (impl fuerte en aot_funcs.c)
-    embedded_bench_mdn.c     # H3 #158 fase C v2: blob .mdn limpio (124 bytes)
     ${BPVM_C_SRC}
 )
 
@@ -164,16 +161,6 @@ add_executable(bpvm_pico
 # (pico_status_led/ws2812.pio, BSD) con pioasm → genera ws2812.pio.h en el build,
 # que incluye neopixel.c. Así no escribimos el ensamblador PIO a mano.
 pico_generate_pio_header(bpvm_pico ${PICO_SDK_PATH}/src/rp2_common/pico_status_led/ws2812.pio)
-
-# H3 #158 fase B — compilar el AOT generado como position-independent.
-# Esto es el paso preparatorio para extraer .text al .mdn. Si la
-# perf se mantiene (~84ms para fib(28)), el código PIC vale tal cual
-# para el loader dinámico de fase C/D.
-set_source_files_properties(
-    aot_Bench.c
-    PROPERTIES
-    COMPILE_FLAGS "-fpic -fno-jump-tables"
-)
 
 target_include_directories(bpvm_pico PRIVATE
     ${BPVM_C_ROOT}/include
