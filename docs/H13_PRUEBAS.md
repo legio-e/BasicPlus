@@ -2220,3 +2220,70 @@ fue el tiempo perdido buscando donde no era.
 
 Y el método, otra vez: **lo encontró una prueba que no estaba en mi lista**. Yo
 di la puerta final por completa con 3 de 3.
+
+
+---
+
+## 🔴 Hallazgo 41 — el reloj del micro simulado no corría: TODO tiempo salía `0 ms`
+
+**Salió del mismo log que el hallazgo 40**, mientras comprobábamos el parche del
+AOT. En medio de la salida del emulador:
+
+```
+fib(28) interp =  317811  in  0  ms
+```
+
+**Cero milisegundos.** El resultado es correcto —`317811`, o sea que el bucle SE
+EJECUTÓ— así que lo que miente no es el cómputo: **es el reloj**.
+
+**La causa, exacta:** `bpvm_pico_uptime_ms()` devolvía `0` a secas cuando no hay
+backend registrado (`src/pico.c`), y **el micro simulado no registra backend**.
+Luego `Pico.uptimeMs()` valía 0 siempre y **cualquier medida de tiempo en el
+emulador salía 0**.
+
+Y el comentario que había allí explica por qué nadie lo vio venir — *«en host sin
+backend no tenemos un boot time relevante para BP en desarrollo»*. Para el host de
+desarrollo era una decisión razonable. **Dejó de serlo cuando el micro simulado
+pasó a ser producto** (H10): lo que era un atajo interno se convirtió en el reloj
+de una plataforma que publicamos.
+
+**Y la exposición la creé yo esta misma mañana**: `samples/benchmarks/` no viajaba
+en el ZIP hasta el hallazgo 35. O sea que el primer usuario que abriera el
+emulador y probara el `Bench` —lo más natural del mundo— habría visto `0 ms`.
+
+**Arreglado** (decisión de Eduardo: *«lo podemos solucionar; volver a hacer el ZIP
+y volver a probar no es costoso en tiempo»*): el camino sin backend usa ahora
+`bpvm_platform_now_ms()` —el reloj **monótono** que ya existía en la capa de
+plataforma— referido al primer uso. No se inventa un boot time: se mide desde que
+el programa pregunta, y **las diferencias, que es para lo que sirve, son exactas**.
+
+**Verificado en el host** (mismo camino sin backend que el sim):
+
+```
+fib(28) interp =  317811  in  42  ms
+fib(28) AOT    =  317811  in  41  ms
+```
+
+Los dos iguales, que es **lo correcto**: en x86 no hay thunk nativo, así que
+ambos van interpretados y el sample ya no finge una diferencia. Control de
+cordura: 42 ms en x86 contra 8.869 ms en la Metro son ~210×, coherente con 4 GHz
+frente a 150 MHz.
+
+⚠️ **Al reconstruir el sim hay que pasar `LVGL=1`** o se deshace el hallazgo 37.
+Comprobado en el binario del paquete: **2014 símbolos LVGL**.
+
+### El recuento que deja esta campaña
+
+**Cuarto instrumento que miente**, y los cuatro cazados en H13:
+
+| | el instrumento | lo que decía | lo que pasaba |
+|---|---|---|---|
+| 21b | `NeoTest` | verde | no encendía nada fuera del RP2350 |
+| 36 | `loadFont` | id válido | la fuente no cargaba |
+| 40 | `Bench` (AOT) | `AOT = 8869 ms` | el AOT no se había ejecutado |
+| 41 | `Bench` (reloj) | `0 ms` | el reloj del emulador no corría |
+
+Los cuatro comparten forma: **un camino que no puede cumplir lo que promete y
+devuelve un valor de aspecto normal en vez de decirlo**. Ninguno era un error de
+cálculo; los cuatro eran **silencio**. Y en los cuatro el coste real no fue el
+fallo, fue el tiempo buscando en el sitio equivocado.

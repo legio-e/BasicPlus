@@ -8,6 +8,7 @@
  */
 
 #include "bpvm_pico.h"
+#include "bpvm_platform.h"   /* H13 h41: reloj monotono para el uptime sin backend */
 #include <stdio.h>
 #include <string.h>
 
@@ -65,9 +66,25 @@ int bpvm_pico_uptime_ms(void) {
     if (g_backend && g_backend->uptimeMs) {
         return g_backend->uptimeMs();
     }
-    /* En host sin backend, devolver 0 — no tenemos un boot time
-     * que sea relevante para BP en desarrollo. */
-    return 0;
+    /* H13 hallazgo 41 (6-ago-2026) — AQUI SE DEVOLVIA 0 A SECAS. El comentario
+     * decia "en host sin backend no tenemos un boot time relevante para BP en
+     * desarrollo", y para el host de desarrollo era razonable. Dejo de serlo
+     * cuando el MICRO SIMULADO paso a ser producto (H10): el sim tampoco registra
+     * backend, asi que Pico.uptimeMs() valia 0 SIEMPRE y CUALQUIER medida de
+     * tiempo en el emulador salia `0 ms`. Lo vio Eduardo corriendo el Bench:
+     *     fib(28) interp = 317811 in 0 ms
+     * El resultado es correcto —el bucle SE EJECUTO— y el reloj es el que miente.
+     * Cuarto "instrumento que miente" de esta campana, y el mas visible: los
+     * benchmarks viajan en el ZIP desde hoy (hallazgo 35).
+     *
+     * Ahora: reloj MONOTONO de la plataforma, referido al primer uso, que es lo
+     * que significa "uptime" para quien lo llama. No se inventa un boot time: se
+     * mide desde que el programa pregunta por primera vez, y las diferencias
+     * —que es para lo que sirve— son exactas. */
+    static int64_t t0 = 0;
+    int64_t now = bpvm_platform_now_ms();
+    if (t0 == 0) t0 = now;
+    return (int) (now - t0);
 }
 
 int bpvm_pico_gpio_count(void) {
