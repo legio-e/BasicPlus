@@ -971,3 +971,98 @@ está escrito en el propio comentario del código). Es un sitio que ya ha mordid
 
 **Criterio de Eduardo para V4**: *«eso es mejor que tener que resetear»* →
 **molesto, no bloqueante**. No bloquea la publicación.
+
+---
+
+## Golden de emisión V4 → V5 — «que el compilador no cambie sin que nos enteremos»
+
+**Idea de Eduardo, 6-ago-2026** (justo después de publicar V4): *«en V4 hemos
+cambiado el formato de los `.mod`; en V5 la idea es mantenerlo, así que podemos
+volver a comparar los `.mod` generados en V5 con los de V4. Es un mecanismo
+adicional de seguridad»*.
+
+### Esto ya existió, y lo apagamos a propósito
+
+`compat/compat.sh` verificaba **tres frentes** contra los goldens de V2:
+
+| frente | qué comprobaba |
+|---|---|
+| comportamiento | la salida de cada `.mod` de V2 no cambia en las VMs nuevas |
+| opcodes | los ids de opcode no se mueven (Java y C) |
+| **emisión** | **el frontend nuevo emite `.mod` byte-idénticos a los de V2** |
+
+El tercero es exactamente la idea. `check` está **desactivado desde el 17-jul**
+por decisión de Eduardo, con el motivo escrito en la cabecera del script: V4
+estaba rompiendo el formato **a propósito**, y un arnés que grita por un cambio
+deliberado no es una red, es ruido. La cápsula no se borró.
+
+Así que esto no es construir infraestructura: es **capturar una cápsula V4** y
+volver a encender `check` con otro criterio.
+
+### Lo que aporta, y que hoy NO tenemos
+
+La paridad dual-VM compara **dos VMs ejecutando el mismo `.mod`**. Si mañana el
+*compilador* empieza a emitir otra cosa, las dos VMs se ponen de acuerdo sobre el
+bytecode nuevo y **la paridad sigue verde**. La red de hoy vigila a las VMs;
+nadie vigila al emisor. El golden tapa ese agujero, y sólo ese.
+
+### Medido antes de diseñar
+
+- **La emisión es determinista**: `Threads`, `TryCatch` y `Strings` compilados dos
+  veces dan ficheros byte-idénticos (6-ago). Sin esto, el arnés daría falsas
+  alarmas y no valdría para nada.
+- **La cápsula sale gratis y es la buena**: la de V2 hubo que archivarla a mano;
+  la de V4 **es el artefacto publicado** (`BpIde-4.0.jar` de la release v4.0). El
+  patrón de oro es, literalmente, lo que entregamos.
+
+### El criterio: no es byte-idéntico, es GRADUADO
+
+Criterio de Eduardo: *«si la herramienta es flexible, mejor; lo importante es que
+detecte los errores de compilación»*. Y con dos ejemplos que fijan la escala:
+
+> *«si en los `.mod` añadimos un nuevo bloque, no debería producirse un error, con
+> un warning vale ("nuevo bloque encontrado"). En cambio si en el código aparece un
+> opCode desconocido ahí debería saltar alguna alarma (podría ser correcto o no,
+> pero habría que investigar)»*.
+
+**Consecuencia técnica, y es la que decide la implementación: esto NO se puede
+hacer comparando bytes.** Un `cmp` sólo sabe decir «difieren en el byte 1428».
+Para distinguir *bloque nuevo* de *opcode desconocido* hay que **entender** el
+`.mod`. O sea: el arnés compara **desensamblados**, no ficheros.
+
+Y las tres piezas ya están hechas:
+- `bpgenvm --disasm` da la vista estructurada: cabecera, bloques con nombre y
+  tamaño, imports/exports, data y código.
+- Ya imprime **`??? opcode desconocido`** (`tools/Disasm.java:336`) — el aviso que
+  pide Eduardo existe literalmente.
+- La cabecera ya trae el **veredicto de ABI** (gate de #284): un `.mod` de formato
+  anterior se rechaza explicando por qué.
+
+**Escala de gravedad propuesta** — el criterio no es «han cambiado bytes», sino
+**«¿esto rompe el `.mod` de otro?»**:
+
+| qué cambia | veredicto |
+|---|---|
+| nada (mismo hash) | silencio — camino rápido, ni se desensambla |
+| aparece un **bloque nuevo** que el lector no conoce | **aviso**: «nuevo bloque encontrado» — evolución aditiva, es lo esperado |
+| tamaños/offsets de bloques conocidos | informativo — consecuencia normal de recompilar |
+| **opcode desconocido en el código** | 🔔 **ALARMA** — puede ser correcto o no, pero hay que mirarlo |
+| un opcode conocido **cambia de id** | 🔔 **ALARMA** — rompe todos los `.mod` ya publicados |
+| desaparece un **export** que existía | 🔔 **ALARMA** — rompe a quien lo importa |
+| cambia **magic/versión** de formato | 🔔 **ALARMA** — es cambio de ABI, y entonces toca re-sellar la cápsula a conciencia |
+| cambia la **salida de ejecución** | ❌ **ERROR** — eso ya no es formato, es comportamiento (frente 1 del arnés viejo, sigue siendo fallo duro) |
+
+Regla que ata todo: **una diferencia es una alarma que hay que explicar, no una
+prohibición**. Si el cambio es deliberado se re-sella el golden *con su motivo
+escrito*; si nadie sabe de dónde sale, es un bug. Mismo espíritu que
+«no se publica con un bug conocido»: no es *no cambies*, es *no cambies sin
+enterarte*.
+
+### Cobertura
+
+Los goldens de V2 son **17 módulos**; hoy hay ~260 samples. La red vale lo que
+cubre → la captura debe ser ancha desde el primer día, no 17 por inercia.
+
+### Estado
+
+**Diseño acordado, sin implementar.** Pendiente de arrancar V5.
