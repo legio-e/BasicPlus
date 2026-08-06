@@ -102,6 +102,13 @@ samples/*.mdn
 # .mod sueltos de demos ad-hoc en la raíz del repo
 /*.mod
 
+# miVM/ — los .mod de los demos los ESCRIBEN los Main*.java (emisores a mano,
+# anteriores al compilador): MainArrays→ArrDemo.mod, MainOOP→OOPDemo.mod, etc.
+# Son salida, no fuente. Se regeneran ejecutando su Main.
+miVM/*.mod
+miVM/*.bpi
+miVM/*.dbg
+
 # Scratch temporal
 /Temp/
 
@@ -110,6 +117,9 @@ bpgenvm-c/pico/CMakeCache.txt
 bpgenvm-c/pico/CMakeFiles/
 bpgenvm-c/stm32/**/*.bpi
 bpgenvm-c/stm32/**/*.dbg
+# Los .mod del port STM32 son intermedios: se compilan del .bp de al lado y de
+# ahí sale el blob embebido (stm32_mods.c), que ESE sí se versiona.
+bpgenvm-c/stm32/**/*.mod
 
 # Logs de samples (LogTest, etc.)
 samples/*.log
