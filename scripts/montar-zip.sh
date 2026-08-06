@@ -110,11 +110,38 @@ cp "$RAIZ/dist/firmware/"*.uf2 "$RAIZ/dist/firmware/"*.bin \
 # OJO con el patrón entre comillas: es pathspec de git, no glob del shell, y ahí el
 # `*` SÍ atraviesa `/` — sin el filtro se traía los .bp de los proyectos y los
 # aplanaba aquí, pisando ficheros distintos con el mismo nombre.
-(cd "$RAIZ" && git ls-files -z -- 'samples/*.bp') | while IFS= read -r -d '' f; do
+# 1) LO SUELTO DE LA RAIZ — y ya no solo los .bp. El patron era 'samples/*.bp',
+#    asi que un sample que se apoya en un asset a su lado viajaba MANCO: eso es
+#    el hallazgo 25 (GuiImageDemo pide testimg.png, que se quedaba en el repo y
+#    daba pantalla en blanco desde la instalacion). Ahora viaja todo lo que este
+#    EN GIT en la raiz de samples/ — los .bp y lo que necesiten.
+(cd "$RAIZ" && git ls-files -z -- 'samples/*') | while IFS= read -r -d '' f; do
     case "${f#samples/}" in */*) continue ;; esac
     cp "$RAIZ/$f" "$OUT/samples/"
 done
-for p in sampleproject formdemo imageproject; do
+
+# 2) LAS SUBCARPETAS. Antes habia aqui un `case ... */*) continue` que DESCARTABA
+#    en silencio todo lo que viviera en un subdirectorio, mas tres proyectos
+#    copiados a mano. Consecuencia (hallazgo 35): `samples/benchmarks/` entero se
+#    quedaba fuera y con el `Bench.bp` — o sea que el AOT, el hito grande de V4,
+#    se publicaba SIN UN SOLO EJEMPLO. Y `aottest/`, que es el proyecto que
+#    genera el .mdn, tampoco salia.
+#
+#    El arreglo NO es copiarlo todo: aqui dentro hay material interno que no
+#    pinta nada en una publicacion (reproducciones minimas, diagnostico de GC).
+#    Hace falta ELEGIR. Lo que no puede ser es que olvidarse sea SILENCIOSO —
+#    por eso, debajo, el guardian.
+PUBLICAR_DIRS="aottest benchmarks errores external formdemo imageproject plugins sampleproject"
+#    external/ y plugins/ no son demos: son las DEPENDENCIAS de tres samples de
+#    la raiz que importan por ruta (appwithfromimpl -> plugins/filelogger.mod,
+#    frompathtest -> external/helper.mod). Sin ellas esos tres no compilan desde
+#    la instalacion. Misma familia que el hallazgo 6.
+INTERNAS_DIRS="formev formmin holes resources"
+#    formev/formmin  = reproducciones minimas de Forms, andamio de depuracion.
+#    holes/          = diagnostico de agujeros de GC (21 ficheros).
+#    resources/      = copia duplicada de testimg.png; el bueno es el de la raiz.
+
+for p in $PUBLICAR_DIRS; do
     [ -d "$RAIZ/samples/$p" ] || continue
     cp -r "$RAIZ/samples/$p" "$OUT/samples/"
     # Y FUERA su out/. Un proyecto se publica con sus FUENTES; el .mod/.pack lo
@@ -129,10 +156,32 @@ for p in sampleproject formdemo imageproject; do
     find "$OUT/samples/$p" -type d -name out -prune -exec rm -rf {} +
 done
 
-# Los que fallan A PROPÓSITO, aparte y con su LEEME: son la demostración de que el
-# compilador detecta lo que debe. Mezclados con los buenos no se distinguían de un
-# ejemplo que se hubiera quedado rancio.
-[ -d "$RAIZ/samples/errores" ] && cp -r "$RAIZ/samples/errores" "$OUT/samples/"
+# 3) EL GUARDIAN — esto es el arreglo de verdad del hallazgo 35. Las dos listas
+#    de arriba hay que mantenerlas a mano (elegir que ve el usuario es una
+#    DECISION, no se puede automatizar), pero olvidarse ya no sale gratis: si
+#    aparece en samples/ una subcarpeta CON FICHEROS EN GIT que no este en
+#    ninguna de las dos, el paquete NO SE MONTA.
+#    Sin esto, `benchmarks/` llevaba meses cayendose del ZIP sin que nadie lo
+#    notara — y no se noto hasta que Eduardo fue a buscar el Bench en la
+#    instalacion y no estaba.
+#    Filtro "con ficheros en git": las carpetas de build (out/) y la basura de un
+#    comando mal escrito no tienen nada versionado y no molestan.
+DESCONOCIDAS=""
+for d in "$RAIZ"/samples/*/; do
+    n="$(basename "$d")"
+    [ -n "$(cd "$RAIZ" && git ls-files -- "samples/$n")" ] || continue
+    case " $PUBLICAR_DIRS $INTERNAS_DIRS " in
+        *" $n "*) ;;
+        *) DESCONOCIDAS="$DESCONOCIDAS $n" ;;
+    esac
+done
+if [ -n "$DESCONOCIDAS" ]; then
+    echo "  ERROR: subcarpeta(s) de samples/ sin decidir:$DESCONOCIDAS"
+    echo "  Anadelas a PUBLICAR_DIRS (van al ZIP) o a INTERNAS_DIRS (se quedan),"
+    echo "  en scripts/montar-zip.sh. Que este script NO decida por ti es aposta."
+    exit 1
+fi
+
 
 # --- red: ni un solo .mod caducado dentro del paquete ------------------------
 # En H13 (a1 Pico) el IDE subió a la placa un L2Lib.mod v5 y el sample l2app murió

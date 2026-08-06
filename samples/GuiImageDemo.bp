@@ -5,6 +5,14 @@
 // (ahorro de memoria). refresh() recarga la imagen en el control SOLO si el
 // asset cambió desde la última vez (version-stamp): 'reloads' cuenta las
 // recargas reales → un refresh sin cambios NO recarga (la optimización).
+//
+// ⚠️ EN EL PC SÍ, EN UNA PLACA NO — y no es un fallo, es el diseño. Este sample
+// hace loadFile("testimg.png") y esa imagen se busca AL LADO del programa. En el
+// PC funciona: el .png viaja en samples/ junto a este fichero. En una placa, no:
+// un sample SUELTO no tiene forma de subir recursos al micro, sólo se sube el
+// .mod. Para el device el camino es un PROYECTO, que sí lleva su resources/ y el
+// IDE lo sube entero — tienes uno hecho en samples/imageproject/, con esta misma
+// imagen. O sea: aquí se ve la API; allí se ve funcionando en el micro.
 module GuiImageDemo
   import Gui
 
