@@ -32,6 +32,11 @@
 #include "bpvm_env.h"         /* H9: env de la zona 2 (bloque A/B) */
 #include "bpvm_part.h"        /* H9: particiones derivadas del env */
 #include "bpvm_boot.h"        /* H9: máquina de estados del arranque */
+#include "bpvm_sqlmem.h"      /* V5/H: regla del bloque de memoria de la BD */
+#include "bpvm_bios.h"        /* V5/I: tabla prestada al pack nativo */
+/* pico/bios_pico.c — la tabla de ESTA placa, ya verificada (NULL si tiene
+ * huecos; el motivo lo deja él mismo en el log). */
+const bpvm_bios_t* bios_pico_get(void);
 #include "hardware/flash.h"   /* FLASH_SECTOR_SIZE */
 #include "bpvm_gpio.h"
 #include "bpvm_i2c.h"
@@ -96,6 +101,22 @@ static uint8_t* vm_sram_region(uint32_t* size_out) {
 
 uint8_t* s_vm_buffer      = NULL;   /* se fija en boot (vm_sram_region o PSRAM) */
 uint32_t s_vm_buffer_size = 0;
+
+/* V5/H — bloque de la BD: se reserva en el arranque desde el ENV (`SQLite=<MB>`)
+ * y NO se toca nunca más (criterio de Eduardo). Sale del principio de la ventana
+ * PSRAM, ANTES de que el buffer de la VM se quede con el resto, para que su
+ * dirección sea DETERMINISTA y no dependa de cuánta PSRAM lleve la placa: el
+ * pack se pre-enlaza contra ella en el PC. 0/NULL = no hay BD. */
+uint8_t* s_sqlite_base    = NULL;
+uint32_t s_sqlite_size     = 0;
+/* Decision de V5/H: el AVISO vive en el INFO (criterio de Eduardo, 7-ago:
+ * "es algo que el usuario puede consultar facilmente, y arreglar con
+ * facilidad"). El INFO es de CONSULTA y refleja el estado ACTUAL — un aviso al
+ * escribir la clave solo aparece en ese instante y luego se pierde. Para que el
+ * aviso no MIENTA hace falta el MOTIVO, no solo el resultado: con SQLite=1 los
+ * bytes son 0 igual que si la clave no estuviera, y son cosas distintas. */
+int      s_sqlite_res      = 0;      /* bpvm_sqlite_res_t                     */
+long     s_sqlite_asked_mb = 0;      /* lo que pedia el ENV (para citarlo)    */
 
 /* --- LED on-board (GP25 en Pico 2 igual que Pico 1) -------------- */
 #ifndef PICO_DEFAULT_LED_PIN
@@ -1057,11 +1078,40 @@ static void vm_task(void* arg) {
      * diferencia con antes: en la placa CON PSRAM no se reserva nada de SRAM
      * interna, porque ya no hay array estático que reservar. */
     if (board_desc()->psram_present && board_desc()->psram_bytes >= (1u << 20)) {
+        /* V5/H — la BD muerde PRIMERO, del principio de la ventana. Así su
+         * dirección es la misma en toda placa con este layout (no depende de
+         * cuánta PSRAM haya), que es lo que el IDE necesita para pre-enlazar el
+         * pack. La regla vive en bpvm_sqlmem (un solo sitio, como #335). */
+        size_t sqlbytes = 0;
+        s_sqlite_asked_mb = bpvm_env_get_long(&s_env, "SQLite", 0);
+        bpvm_sqlite_res_t sqlres = bpvm_sqlite_region(
+                s_sqlite_asked_mb,
+                (size_t) board_desc()->psram_bytes, &sqlbytes);
+        s_sqlite_res = (int) sqlres;
+
         s_vm_buffer      = (uint8_t*) (uintptr_t) PSRAM_XIP_BASE;
         s_vm_buffer_size = board_desc()->psram_bytes;
+
+        if (sqlres == BPVM_SQLITE_OK) {
+            s_sqlite_base     = s_vm_buffer;
+            s_sqlite_size     = (uint32_t) sqlbytes;
+            s_vm_buffer      += sqlbytes;
+            s_vm_buffer_size -= (uint32_t) sqlbytes;
+        }
+
         log_printf("vm: heap en PSRAM %u MB @ 0x%08x (SRAM interna sin reservar)",
                    (unsigned)(s_vm_buffer_size / (1024u * 1024u)),
-                   (unsigned) PSRAM_XIP_BASE);
+                   (unsigned)(uintptr_t) s_vm_buffer);
+        /* El reparto, EXPLÍCITO — igual que en la rama de SRAM: que se vea, en
+         * vez de deducirlo. Y el motivo de un NO se dice siempre: "se pidió mal"
+         * no puede parecerse a "no se pidió" (patrón del clamp de #292). */
+        if (sqlres != BPVM_SQLITE_OFF) {
+            log_printf("bd: %s (SQLite=%ld) -> %u KB @ 0x%08x",
+                       bpvm_sqlite_res_str(sqlres),
+                       s_sqlite_asked_mb,
+                       (unsigned)(s_sqlite_size / 1024u),
+                       (unsigned)(uintptr_t) s_sqlite_base);
+        }
     } else {
         s_vm_buffer = vm_sram_region(&s_vm_buffer_size);
         if (s_vm_buffer == NULL) {
@@ -1076,6 +1126,17 @@ static void vm_task(void* arg) {
                        (unsigned)((s_vm_buffer_size - stk) / 1024u), (unsigned)(stk / 1024u),
                        (unsigned)(((uintptr_t) s_vm_buffer - (uintptr_t) &end) / 1024u));
         }
+    }
+
+    /* V5/I — la tabla BIOS del pack nativo, VERIFICADA aquí aunque no haya
+     * ningún pack grabado. El motivo de comprobarla siempre: un hueco que sólo
+     * se descubre el día que alguien graba un pack aparece cuando YA estás
+     * depurando otra cosa, y entonces cuesta el doble. Que la placa diga en cada
+     * arranque si su BIOS está entera. */
+    {
+        const bpvm_bios_t* bios = bios_pico_get();   /* él ya loguea qué falta */
+        if (bios) log_printf("bios: lista (%d ranuras, v%u)",
+                             bpvm_bios_slot_count(), (unsigned) bios->version);
     }
 
     /* 1)→3): particiones del env → FS → VM. bpvm_boot_climb para en la

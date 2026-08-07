@@ -53,6 +53,41 @@
  * Mismo principio que el JEDEC frente al #define de tamaño de flash. */
 uint16_t bpvm_mdn_host_arch(void) { return (uint16_t) MDN_HOST_ARCH; }
 
+/* V5/H — la CONVENCIÓN DE COMA FLOTANTE, publicada al lado de la arch y por el
+ * mismo motivo: el IDE tiene que sellar con ella el pack de código nativo.
+ *
+ * Por qué NO basta con la arch: `MDN_ARCH_ARM` no distingue `hard` de `softfp`,
+ * y una discrepancia de ABI de coma flotante **no da error de enlace — da
+ * números mal en silencio**, que es la peor clase de fallo. Se ve físicamente en
+ * el toolchain: hay una libgcc por ABI (.../v8-m.main+fp/softfp/libgcc.a).
+ *
+ * Compile-time, como la arch: la fija el toolchain que compila ESTE fichero.
+ *  - ARM: __ARM_PCS_VFP ⇒ hard (args en registros VFP) · __SOFTFP__ ⇒ soft
+ *    (sin FPU) · ninguna de las dos ⇒ softfp (FPU para calcular, args en
+ *    registros enteros). OJO: con -mfloat-abi=softfp NO se define ninguna.
+ *  - RISC-V: el toolchain define __riscv_float_abi_* directamente. */
+const char* bpvm_mdn_host_float_abi(void) {
+#if defined(__arm__) || defined(__thumb__)
+#  if defined(__ARM_PCS_VFP)
+    return "hard";
+#  elif defined(__SOFTFP__)
+    return "soft";
+#  else
+    return "softfp";
+#  endif
+#elif defined(__riscv)
+#  if defined(__riscv_float_abi_double)
+    return "ilp32d";
+#  elif defined(__riscv_float_abi_single)
+    return "ilp32f";
+#  else
+    return "ilp32";
+#  endif
+#else
+    return "";        /* host/Xtensa: sin pack nativo que sellar */
+#endif
+}
+
 /* H9.5 — el loader es compartido entre ports (Pico, STM32, ...). Las trazas
  * van por bpvm_mdn_log, débil no-op aquí: el Pico da una implementación
  * fuerte sobre su log persistente (pico/aot_funcs.c); el STM32 (wire-only)

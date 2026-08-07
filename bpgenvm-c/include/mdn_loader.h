@@ -49,6 +49,13 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size);
  * nadie tenga que teclearla. */
 uint16_t bpvm_mdn_host_arch(void);
 
+/* V5/H — convención de coma flotante del firmware ("softfp"/"hard"/"soft",
+ * "ilp32"/"ilp32f"/"ilp32d", o "" donde no aplica). Va con la arch, no dentro:
+ * `MDN_ARCH_ARM` NO distingue hard de softfp, y esa discrepancia no da error de
+ * enlace — da números mal en silencio. El IDE la necesita para sellar el pack
+ * nativo. Nunca NULL. */
+const char* bpvm_mdn_host_float_abi(void);
+
 /* Legacy del approach con copy/pool. Hoy son no-ops — el registry
  * se limpia vía bpvm_aot_clear() (del aot_registry) y no hay pool
  * de RAM extra que resetear. Mantenidos por compat con callers. */

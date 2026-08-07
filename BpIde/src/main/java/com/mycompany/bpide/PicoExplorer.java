@@ -1495,6 +1495,48 @@ public final class PicoExplorer extends JPanel {
         if (vh > 0 && vs > 0)
             sb.append("VM          : heap ").append(human(vh))
               .append(" + stack ").append(human(vs)).append('\n');
+        // V5/H — el bloque de la BD y lo que el IDE necesita para PRE-ENLAZAR un
+        // pack de código nativo. Tolerante con firmwares viejos (si no vienen, no
+        // se pintan) — pero OJO: mientras no se pinten, este panel NO distingue un
+        // firmware nuevo de uno viejo. Por eso la línea de la BD sale SIEMPRE que
+        // el firmware mande el campo, aunque valga 0: "(no activada)" es una
+        // respuesta, "nada" es un instrumento mudo.
+        if (m.containsKey("sqliteBytes")) {
+            long   sqb = ilong(m, "sqliteBytes"), sqa = ilong(m, "sqliteBase");
+            long   ask = ilong(m, "sqliteAskedMb"), min = ilong(m, "sqliteMinMb");
+            String st  = istr(m, "sqliteStatus");
+            sb.append("BD (SQLite) : ");
+            // El AVISO va con el MOTIVO, no con los bytes: 0 bytes significa
+            // "no se pidió" Y "se pidió mal", y son cosas distintas. Y el
+            // remedio (el mínimo) lo dice la PLACA — si algún día cambia,
+            // cambia en un sitio y este panel se entera solo.
+            switch (st) {
+                case "ok":
+                    sb.append(human(sqb)).append(" @ ").append(hex(sqa));
+                    break;
+                case "low":
+                    sb.append("SQLite=").append(ask).append(" es MENOS del mínimo (")
+                      .append(min).append(" MB) → no se activa. Pon SQLite=").append(min)
+                      .append(" o más y reinicia");
+                    break;
+                case "nofit":
+                    sb.append("SQLite=").append(ask)
+                      .append(" no cabe: la VM se quedaría sin memoria. Baja el valor");
+                    break;
+                default:   // "off" y firmwares que no manden el motivo
+                    sb.append("no activada — añade SQLite=").append(min > 0 ? min : 2)
+                      .append(" al entorno de la placa y reinicia");
+            }
+            sb.append('\n');
+        }
+        long pxb = ilong(m, "packsXipBase"), pln = ilong(m, "packsBytes");
+        if (pxb > 0)
+            sb.append("Zona packs  : ").append(human(pln))
+              .append(" @ ").append(hex(pxb)).append("  (dirección que ve la CPU)\n");
+        String fabi = istr(m, "floatAbi");
+        if (!fabi.isEmpty())
+            sb.append("Coma flot.  : ").append(fabi)
+              .append("  (sello del pack nativo; arch sola NO distingue hard de softfp)\n");
         // #354 — lo que FreeRTOS sabe y nunca le habíamos preguntado: cuánto de
         // lo reservado llegó a usarse. SOLO DIAGNÓSTICO (no se recorta nada
         // hasta ver los números con carga real; en la duda se deja como está).
@@ -1535,6 +1577,13 @@ public final class PicoExplorer extends JPanel {
         try { return v == null ? 0 : Long.parseLong(v.toString().trim()); }
         catch (NumberFormatException e) { return 0; }
     }
+    /** V5/H — dirección en hexadecimal de 32 bits. Las direcciones se leen mal en
+     *  decimal: 0x11000000 (ventana PSRAM) y 0x10180000 (XIP de flash) se
+     *  reconocen de un vistazo, y 285212672 no. */
+    private static String hex(long addr) {
+        return String.format("0x%08X", addr & 0xFFFFFFFFL);
+    }
+
     private static String human(long bytes) {
         if (bytes <= 0) return "0";
         // MB con un decimal: un FS de 2080768 B es "1.98 MB", no "1 MB"

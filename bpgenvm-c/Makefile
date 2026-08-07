@@ -21,7 +21,7 @@ SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/bu
           src/pulse.c src/pwm.c src/pico.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
-          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
+          src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_bios.c src/bpvm_npack.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
           src/bpvm_pack.c \
           src/net.c src/net_host.c \
           src/fs_lfs.c src/fs_lfs_host.c \
@@ -431,6 +431,37 @@ test-boot:
 	$(CC) $(CFLAGS) test/test_boot.c src/bpvm_boot.c -o build/test_boot.exe
 	@echo "--- H9 maquina de estados + STATE (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_boot.exe
+
+# V5/H — regla del bloque de memoria de la BD. Host-only, dependencia CERO (la
+# regla es aritmetica sobre dos numeros). Prueba los bordes: minimo medido (2 MB),
+# suelo que la VM conserva, desbordamiento del valor del entorno, y que cada NO
+# tenga su MOTIVO distinguible.
+test-sqlmem:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_sqlmem.c src/bpvm_sqlmem.c -o build/test_sqlmem.exe
+	@echo "--- V5/H bloque de memoria de la BD (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_sqlmem.exe
+
+# V5/I — la tabla BIOS que se le presta al pack nativo. Host-only, dependencia
+# CERO. Lo que se prueba es el CHIVATO: que un hueco se detecte ANTES de ejecutar
+# nada del pack y que diga QUE falta (no solo que algo falta), y que `log` —la voz
+# del pack— se reporte antes que ninguna otra: sin ella el resto es indiagnosticable.
+test-bios:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_bios.c src/bpvm_bios.c -o build/test_bios.exe
+	@echo "--- V5/I tabla BIOS del pack (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_bios.exe
+
+# V5/I — escalera de validacion del PACK NATIVO. Host-only. Lo que se prueba no
+# es que un pack bueno pase, sino que CADA forma de estar mal se detecte ANTES de
+# saltar y se distinga de las demas: "no cabe" y "otra arquitectura" llevan a
+# sitios distintos. Incluye el bit Thumb de la direccion de salto (olvidarlo es
+# hard fault inmediato).
+test-npack:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_npack.c src/bpvm_npack.c src/mdn_loader.c src/aot_registry.c -o build/test_npack.exe
+	@echo "--- V5/I escalera del pack nativo (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_npack.exe
 
 # H9 — board manager: núcleo portable del protocolo de gestión de placa (ENV_*/
 # PART_*). Compone env+part. Host-only: opera sobre sectores A/B en RAM; simula el

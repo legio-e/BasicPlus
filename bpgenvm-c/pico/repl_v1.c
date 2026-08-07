@@ -48,7 +48,13 @@
 #include <string.h>
 
 /* Buffer VM compartido (declarado en main.c). */
+#include "bpvm_sqlmem.h"   /* V5/H: motivo + minimo, para el aviso del INFO */
+
 extern uint8_t* s_vm_buffer;          /* H7.2.b: SRAM interna o ventana PSRAM */
+extern uint8_t* s_sqlite_base;        /* V5/H: bloque de la BD (NULL = no hay) */
+extern uint32_t s_sqlite_size;
+extern int      s_sqlite_res;         /* motivo (bpvm_sqlite_res_t)            */
+extern long     s_sqlite_asked_mb;    /* lo que pedia el ENV                   */
 extern uint32_t s_vm_buffer_size;
 extern TaskHandle_t g_vm_task;        /* #354: para su marca de agua en el INFO */
 
@@ -737,6 +743,62 @@ static void handle_info(long id, const json_obj_t* obj) {
                                                  (long)(s_vm_buffer_size - vstack));
         if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
                                                  (size_t) off, "vmStackBytes", (long) vstack);
+    }
+    /* V5/H — LO QUE EL IDE NECESITA PARA PRE-ENLAZAR UN PACK NATIVO.
+     *
+     * El pack se enlaza en base 0 y el IDE lo realoja en el PC antes de grabar,
+     * así que tiene que saber DÓNDE va a caer. Cuatro datos, y ninguno se puede
+     * deducir desde fuera:
+     *
+     *  · packsXipBase — ⚠️ la dirección que ve la CPU (XIP_BASE + offset de la
+     *    partición), NO el offset crudo en flash. Sólo la placa conoce ese mapeo,
+     *    y equivocarse ahí desplaza TODO el código por una constante, en
+     *    silencio. Es el error más caro posible en este camino.
+     *  · packsBytes  — para negarse ANTES de compilar 400 KB que no caben.
+     *  · sqliteBase/Bytes — el bloque de RAM que el arranque reservó desde el
+     *    ENV (`SQLite=<MB>`). 0 = no hay BD en esta placa.
+     *  · floatAbi    — junto a `arch`, el SELLO. `arch` solo no distingue hard
+     *    de softfp, y esa discrepancia da números mal sin avisar.
+     */
+    {
+        long packs_xip = 0, packs_len = 0;
+        const bpvm_part_layout_t* lay = board_partitions();
+        if (lay) {
+            const bpvm_part_t* pp = bpvm_part_get(lay, BPVM_PART_PACKS);
+            if (pp && pp->size > 0) {
+                packs_xip = (long) (XIP_BASE + pp->offset);
+                packs_len = (long) pp->size;
+            }
+        }
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "packsXipBase", packs_xip);
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "packsBytes", packs_len);
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "sqliteBase",
+                                                 (long)(uintptr_t) s_sqlite_base);
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "sqliteBytes",
+                                                 (long) s_sqlite_size);
+        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                                   (size_t) off, "floatAbi",
+                                                   bpvm_mdn_host_float_abi());
+        /* El AVISO (decision de Eduardo: vive en el INFO). Van los TRES datos
+         * que hacen falta para redactarlo sin mentir y sin que el IDE se invente
+         * nada: el MOTIVO (0 bytes por "no se pidio" y por "se pidio poco" son
+         * cosas distintas), lo que se PIDIO (para citarlo) y el MINIMO (para que
+         * el remedio salga de la placa y no de un numero copiado en Java —
+         * si un dia cambia, cambia en un sitio). */
+        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                                   (size_t) off, "sqliteStatus",
+                                                   bpvm_sqlite_res_code(
+                                                       (bpvm_sqlite_res_t) s_sqlite_res));
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "sqliteAskedMb",
+                                                 s_sqlite_asked_mb);
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "sqliteMinMb",
+                                                 (long) BPVM_SQLITE_MIN_MB);
     }
     /* #354 — LO QUE NUNCA LE HEMOS PREGUNTADO A FreeRTOS: cuanto de lo que se le
      * reservo llego a usar de verdad. Esto es SOLO DIAGNOSTICO — no se recorta
