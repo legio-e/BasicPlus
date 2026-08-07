@@ -88,6 +88,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_sqlmem.c         # V5/H: regla del bloque de memoria de la BD
     ${BPVM_C_ROOT}/src/bpvm_bios.c           # V5/I: tabla BIOS prestada al pack nativo
     ${BPVM_C_ROOT}/src/bpvm_npack.c          # V5/I: escalera de validacion del pack nativo
+    ${CMAKE_CURRENT_LIST_DIR}/pack_pico.c    # V5/I: el cargador de packs de ESTA placa
     ${CMAKE_CURRENT_LIST_DIR}/bios_pico.c    # V5/I: la tabla de ESTA placa
     ${BPVM_C_ROOT}/src/bpvm_util.c           # #338/#353: zona de rascar + canal de diagnostico
     ${BPVM_C_ROOT}/src/bpvm_bmgr.c           # board manager (compone env+part)

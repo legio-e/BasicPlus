@@ -38,6 +38,12 @@ module SaltoCrudo
     return 0
   end probarAncla
 
+  // Pide al FIRMWARE que busque el pack, lo valide y salte. Lo hace el, no
+  // nosotros: la escalera de siete peldanos no se duplica.
+  native function cargarPack(dir: integer): integer
+    return 0
+  end cargarPack
+
   function Main()
     // ── CONTROL DEL INSTRUMENTO ──
     // El cuerpo bueno esta escrito a mano; el que saldria de compilar ESTE
@@ -76,6 +82,25 @@ module SaltoCrudo
       print "  -> OK: codigo nativo llama al firmware por puntero y VUELVE."
     else
       print "  -> NO. Llegamos a otro sitio, o los argumentos no cuadran."
+      return
+    endif
+
+    // ── PELDANO 3: EL PACK ──
+    // A partir de aqui manda el firmware: busca el pack en la zona XIP, sube la
+    // escalera y salta si la supera entera. El detalle va al LOG (candidatos,
+    // direccion, y la miga de pan del #326 alrededor del salto).
+    print ""
+    print "pidiendo al firmware que cargue el pack..."
+    var p: integer := cargarPack(a)
+    if p >= 0 then
+      print "  -> SALTO. El pack devolvio", p
+      if p == 0 then
+        print "     y 0 es 'todo me cuadra' -> el pack nativo CORRE en la placa."
+      else
+        print "     (1..6 = que comprobacion suya fallo; mira el log)"
+      endif
+    else
+      print "  -> no se salto. Peldano", 0 - p, "- el log dice cual y por que."
     endif
   end Main
 

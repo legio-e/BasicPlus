@@ -144,6 +144,7 @@ int main(void) {
         a.bytes   = (uint16_t) sizeof(bpvm_ancla_t);
         a.bios    = &s_tabla_falsa;
         a.prueba  = (uint16_t (*)(uint16_t, const unsigned char*, uint32_t)) (void*) &s_tabla_falsa;
+        a.cargar_pack = (int32_t (*)(void)) (void*) &s_tabla_falsa;
 
         const unsigned OFF = 64;      /* 64 es multiplo de 4 */
         memcpy(img.b + OFF, &a, sizeof a);
@@ -171,6 +172,9 @@ int main(void) {
         { bpvm_ancla_t m = a; m.prueba = 0; memcpy(img.b + OFF, &m, sizeof m);
           CHECK(bpvm_ancla_buscar(img.b, sizeof img.b) == 0,
                 "marca OK pero sin el control detras -> se rechaza"); }
+        { bpvm_ancla_t m = a; m.cargar_pack = 0; memcpy(img.b + OFF, &m, sizeof m);
+          CHECK(bpvm_ancla_buscar(img.b, sizeof img.b) == 0,
+                "marca OK pero sin el cargador (v2) detras -> se rechaza"); }
 
         /* Y la marca SUELTA, sin nada detras: el caso de la copia del literal
          * que dejaria el compilador si se escribiera "BPANCLA1" a la ligera. */

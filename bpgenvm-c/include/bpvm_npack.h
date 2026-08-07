@@ -121,6 +121,47 @@ bpvm_npack_res_t bpvm_npack_check(const bpvm_npack_hdr_t* h,
  * no dice cómo salir de él obliga a leer el código. Nunca NULL. */
 const char* bpvm_npack_res_str(bpvm_npack_res_t r);
 
+/*
+ * ─── BUSCAR EL PACK ─── idea de Eduardo (7-ago-2026)
+ *
+ * Simétrico del ANCLA de `bpvm_bios.h`: aquello arregla «el firmware se mueve»,
+ * esto arregla «el pack se mueve». Misma medicina.
+ *
+ * Hasta ahora el cargador tenía que SABER dónde está el pack —al principio de la
+ * partición— y esa clase de suposición nos costó, en una tarde, un cuelgue de la
+ * placa y dos diagnósticos equivocados. Aquí no se supone: se BARRE la zona
+ * buscando el magic y se sube la escalera sobre cada candidato.
+ *
+ * No hay validación nueva: los mismos siete peldaños de `bpvm_npack_check`. El
+ * barrido sólo los alimenta, así que la regla sigue en UN sitio.
+ *
+ * ⚠️ Y EL SELLO NO SOBRA, CAMBIA DE PAPEL. Al encontrarlo barriendo,
+ * `aqui_flash` es *dónde ha aparecido*, y el sello comprueba que se realojó
+ * PARA AHÍ. Deja de servir para encontrarlo y pasa a servir para confirmar que
+ * no se ha movido desde que se grabó — el caso de «alguien cambió SQLite=<MB>
+ * y la RAM bailó».
+ */
+typedef struct {
+    uint32_t          addr;        /* dirección de la CABECERA hallada; 0 = ninguna */
+    uint32_t          candidatos;  /* cuántas veces apareció el magic en la zona    */
+    bpvm_npack_res_t  motivo;      /* por qué se rechazó el ÚLTIMO candidato        */
+} bpvm_npack_hallazgo_t;
+
+/*
+ * Barre [base, base+bytes) de 4 en 4 buscando un pack VÁLIDO. Devuelve el
+ * primero que supera la escalera entera.
+ *
+ * `candidatos` y `motivo` son el chivato, y no son adorno: "no lo encuentro" y
+ * "encontré uno pero el sello no cuadra" mandan a sitios MUY distintos, y sin
+ * separarlos habría que adivinar cuál de los dos es. Con candidatos==0 no hay
+ * pack grabado; con candidatos>0 lo hay y `motivo` dice qué le pasa.
+ *
+ * No escribe, no aloca, no salta: sólo mira.
+ */
+bpvm_npack_hallazgo_t bpvm_npack_buscar(const void* base, uint32_t bytes,
+                                        uint32_t aqui_ram, uint32_t sitio_ram,
+                                        const char* bios_falta);
+
 /* La dirección a la que hay que saltar: entrada + base + bit Thumb si toca.
  * En UN sitio porque olvidar el bit 0 es hard fault inmediato, y es justo el
  * tipo de detalle que se copia mal al segundo sitio donde se escriba. */

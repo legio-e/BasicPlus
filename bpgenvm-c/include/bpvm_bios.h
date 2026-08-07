@@ -121,7 +121,7 @@ int bpvm_bios_slot_count(void);
  * argumentos y el retorno cruzan bien. Sin eso, "no se colgó" es todo lo que
  * tendría, y eso no es una prueba.
  */
-#define BPVM_ANCLA_VERSION 1u
+#define BPVM_ANCLA_VERSION 2u
 
 typedef struct bpvm_ancla {
     char     magia[8];      /* 'B','P','A','N','C','L','A','1' — SIN NUL final */
@@ -129,6 +129,15 @@ typedef struct bpvm_ancla {
     uint16_t bytes;         /* sizeof(bpvm_ancla_t): crecer sin romper a nadie */
     const bpvm_bios_t* bios;                                /* la tabla        */
     uint16_t (*prueba)(uint16_t, const uint8_t*, uint32_t);  /* CRC-16          */
+
+    /* v2 — CARGAR UN PACK NATIVO: buscarlo en la zona XIP, subir la escalera y
+     * saltar. Vive en el firmware y no en el pack/`.mdn` porque un `.mdn` no
+     * puede llamar a nada por nombre y tendria que llevar SU COPIA de la
+     * escalera — la unica regla que no puede divergir. Se llama desde aqui.
+     *
+     *   >= 0  se salto, y es lo que devolvio el pack
+     *   <  0  no se salto; -valor es el peldano (bpvm_npack_res_t) */
+    int32_t  (*cargar_pack)(void);
 } bpvm_ancla_t;
 
 /*

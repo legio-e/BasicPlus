@@ -79,6 +79,7 @@ const bpvm_ancla_t* bpvm_ancla_buscar(const void* base, uint32_t bytes)
         if (a->bytes   != sizeof(bpvm_ancla_t)) continue;
         if (a->bios    == 0)                    continue;
         if (a->prueba  == 0)                    continue;
+        if (a->cargar_pack == 0)                continue;
         return a;
     }
     return 0;

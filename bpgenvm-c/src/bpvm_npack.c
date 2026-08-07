@@ -93,3 +93,49 @@ uint32_t bpvm_npack_entry_addr(const bpvm_npack_hdr_t* h, uint32_t aqui_flash)
     if (h->flags & BPVM_NPACK_F_THUMB) a |= 1u;
     return a;
 }
+
+/*
+ * Busca un pack válido barriendo la zona. Ver la explicación en bpvm_npack.h.
+ *
+ * Mismo patrón que `bpvm_ancla_buscar`: avanzar de 4 en 4, descartar barato por
+ * el magic, y sólo entonces gastar en la comprobación completa.
+ */
+bpvm_npack_hallazgo_t bpvm_npack_buscar(const void* base, uint32_t bytes,
+                                        uint32_t aqui_ram, uint32_t sitio_ram,
+                                        const char* bios_falta)
+{
+    bpvm_npack_hallazgo_t h;
+    h.addr = 0; h.candidatos = 0; h.motivo = BPVM_NPACK_E_MAGIC;
+
+    if (base == 0 || bytes < sizeof(bpvm_npack_hdr_t)) return h;
+
+    const unsigned char* p = (const unsigned char*) base;
+    uint32_t i = 0;
+    /* Alinear el arranque: la cabecera lleva enteros de 32 bits y el que la
+     * graba la deja a 4. Mirar las posiciones intermedias sería tiempo tirado. */
+    while ((((uintptr_t) p + i) & 3u) != 0u) i++;
+
+    for (; i + sizeof(bpvm_npack_hdr_t) <= bytes; i += 4) {
+        const bpvm_npack_hdr_t* c = (const bpvm_npack_hdr_t*) (const void*) (p + i);
+        if (c->magic != BPVM_NPACK_MAGIC) continue;   /* descarte barato */
+        h.candidatos++;
+
+        /* Dónde estaría el CÓDIGO si este candidato fuera bueno: la cabecera va
+         * delante, así que el código empieza HDR_BYTES más allá. Ojo, ese es el
+         * `aqui_flash` que espera la escalera — confundirlo con la base del pack
+         * son 64 bytes de desfase (dicho también en el parámetro). */
+        uint32_t aqui_flash = (uint32_t) (uintptr_t) (p + i) + BPVM_NPACK_HDR_BYTES;
+        uint32_t queda      = bytes - i - BPVM_NPACK_HDR_BYTES;
+
+        h.motivo = bpvm_npack_check(c, aqui_flash, aqui_ram, queda, sitio_ram,
+                                    bios_falta);
+        if (h.motivo == BPVM_NPACK_OK) {
+            h.addr = (uint32_t) (uintptr_t) (p + i);
+            return h;
+        }
+        /* Si no pasa, se sigue barriendo: puede haber otro más adelante. Pero el
+         * motivo del último se conserva — un pack rechazado por el SELLO es una
+         * noticia muy distinta de "aquí no hay nada". */
+    }
+    return h;
+}

@@ -195,6 +195,64 @@ int main(void) {
         CHECK(distintos, "los 9 motivos tienen texto y NINGUNO se repite");
     }
 
+
+    /* ─────────── BUSCAR EL PACK (idea de Eduardo, 7-ago) ───────────
+     *
+     * Simetrico del ancla: aquello arregla "el firmware se mueve", esto arregla
+     * "el pack se mueve". Lo que se prueba no es que encuentre uno bueno, sino
+     * que el CHIVATO distinga los tres casos que mandan a sitios distintos:
+     * no hay pack / hay uno pero esta mal / aqui esta. */
+    {
+        /* Una "zona de flash" de mentira: basura, y un pack metido dentro. */
+        static union { unsigned char b[1024]; uint32_t alinea; } zona;
+        for (int i = 0; i < 1024; i++) zona.b[i] = (unsigned char) (i * 31 + 7);
+
+        const unsigned OFF = 256;    /* multiplo de 4 */
+        /* El pack tiene que estar sellado para donde REALMENTE cae: la escalera
+         * compara el sello con `aqui_flash`, y al barrer eso es "donde aparecio".
+         * Es justo lo que hace util al sello cuando ya no hace falta para
+         * encontrarlo: confirma que no se ha movido. */
+        uint32_t base_codigo = (uint32_t) (uintptr_t) (zona.b + OFF)
+                             + BPVM_NPACK_HDR_BYTES;
+
+        bpvm_npack_hdr_t h = buena();
+        h.linked_flash = base_codigo;
+        h.linked_ram   = AQUI_RAM;
+        h.flash_bytes  = 190;
+        memcpy(zona.b + OFF, &h, sizeof h);
+
+        bpvm_npack_hallazgo_t r =
+            bpvm_npack_buscar(zona.b, sizeof zona.b, AQUI_RAM, SITIO_RAM, 0);
+        CHECK(r.addr == (uint32_t) (uintptr_t) (zona.b + OFF),
+              "el pack se encuentra entre la basura, y en su sitio exacto");
+        CHECK(r.candidatos == 1, "y se cuenta UN candidato");
+        CHECK(r.motivo == BPVM_NPACK_OK, "con motivo OK");
+
+        /* EL CASO QUE IMPORTA: hay un pack, pero se movio. Decir "no lo
+         * encuentro" mandaria a buscar por que no esta grabado, cuando lo que
+         * hay que hacer es REGRABARLO. Son sitios muy distintos. */
+        { bpvm_npack_hdr_t m = h; m.linked_flash = base_codigo + 0x1000;
+          memcpy(zona.b + OFF, &m, sizeof m);
+          bpvm_npack_hallazgo_t x =
+              bpvm_npack_buscar(zona.b, sizeof zona.b, AQUI_RAM, SITIO_RAM, 0);
+          CHECK(x.addr == 0, "pack movido -> no se da por bueno");
+          CHECK(x.candidatos == 1, "pero SE CUENTA: hay un pack ahi");
+          CHECK(x.motivo == BPVM_NPACK_E_SELLO,
+                "y el motivo es SELLO, no 'no lo encuentro'"); }
+
+        /* Y la zona VACIA: cero candidatos. Esa es la otra respuesta. */
+        for (int i = 0; i < 1024; i++) zona.b[i] = 0xFF;   /* flash borrada */
+        { bpvm_npack_hallazgo_t x =
+              bpvm_npack_buscar(zona.b, sizeof zona.b, AQUI_RAM, SITIO_RAM, 0);
+          CHECK(x.addr == 0 && x.candidatos == 0,
+                "zona borrada -> 0 candidatos (no hay pack, que NO es lo mismo)"); }
+
+        CHECK(bpvm_npack_buscar(0, 1024, AQUI_RAM, SITIO_RAM, 0).addr == 0,
+              "base NULL -> 0 (sin reventar)");
+        CHECK(bpvm_npack_buscar(zona.b, 8, AQUI_RAM, SITIO_RAM, 0).addr == 0,
+              "zona mas corta que la cabecera -> 0");
+    }
+
     printf("\n[status=%s]\n", g_fail == 0 ? "OK" : "FAIL");
     return g_fail != 0;
 }

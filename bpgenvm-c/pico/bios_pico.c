@@ -26,6 +26,9 @@
  */
 #include "bpvm_bios.h"
 #include "bpvm_pack.h"   /* bpvm_pack_crc16: el control del ancla */
+#include <stdint.h>
+
+int32_t pack_pico_cargar(void);   /* pico/pack_pico.c */
 #include "log.h"
 
 #include <string.h>
@@ -85,7 +88,8 @@ static const bpvm_ancla_t s_ancla = {
     BPVM_ANCLA_VERSION,
     (uint16_t) sizeof(bpvm_ancla_t),
     &s_bios,
-    bpvm_pack_crc16          /* el control: crc16("123456789") == 0x29B1 */
+    bpvm_pack_crc16,         /* el control: crc16("123456789") == 0x29B1 */
+    pack_pico_cargar         /* v2: buscar + escalera + saltar */
 };
 
 /* Para que el arranque compare lo que ENCUENTRA con lo que SABE. */
