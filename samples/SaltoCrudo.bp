@@ -1,0 +1,82 @@
+// SaltoCrudo — V5/I paso 0: llamar al firmware desde codigo nativo, y volver.
+//
+// ─── POR QUE YA NO HAY NINGUNA DIRECCION ESCRITA AQUI ───
+//
+// La primera version llevaba la direccion de una funcion del firmware, sacada
+// de su .elf. Duro dos intentos: colgo la placa una vez, y la segunda no
+// coincidio porque entre medias se habia reconstruido el firmware y la funcion
+// se habia MOVIDO. Es que se mueve siempre: cada enlace la cambia de sitio.
+//
+// La salida (idea de Eduardo) es no acertar la direccion sino BUSCARLA: el
+// firmware lleva un texto constante en su imagen, con los punteros justo
+// detras. Se barre un trozo de flash, se encuentra la marca, y se lee lo que
+// sigue — que lo relleno el enlazador, asi que siempre es correcto para ESA
+// imagen. Se puede reconstruir el firmware las veces que haga falta.
+//
+// Lo unico que queda escrito es 0x10000000, que es donde el RP2350 mapea su
+// flash. Eso no lo mueve ningun enlace: es del chip.
+//
+// ⚠️ El cuerpo de las `native` de aqui abajo NO es este. BasicPlus no sabe
+// decir "barre memoria y llama a esa direccion", asi que el C va escrito a
+// mano (la jugada del #160). Aqui esta la FIRMA. El cuerpo, y como se
+// construye, en `notas/v5-salto-crudo/`.
+module SaltoCrudo
+
+  const XIP_BASE: integer     := 268435456   // 0x10000000 — lo dice el chip
+  const BARRIDO_KB: integer   := 1024        // el firmware cabe de sobra
+  const CRC_ESPERADO: integer := 10673       // 0x29B1, de bpvm_pack.h
+
+  // Barre [base, base+kb*1024) buscando el ancla. Devuelve su direccion, 0 si
+  // no esta, o -1 si se le pasa base 0 (que es el control, ver Main).
+  native function buscarAncla(base: integer, kb: integer): integer
+    return 0
+  end buscarAncla
+
+  // Llama, A TRAVES DEL ANCLA, al CRC-16 del firmware con el vector de
+  // comprobacion estandar. Tiene que devolver 10673.
+  native function probarAncla(dir: integer): integer
+    return 0
+  end probarAncla
+
+  function Main()
+    // ── CONTROL DEL INSTRUMENTO ──
+    // El cuerpo bueno esta escrito a mano; el que saldria de compilar ESTE
+    // fichero devuelve 0 siempre. Y el IDE puede rehacer el .mdn solo:
+    // `runAotPass` unicamente respeta el ajuste "AOT" cuando hay PROYECTO — con
+    // el .bp suelto lo regenera igual. Si eso pasa, el instrumento cambia
+    // debajo y estariamos midiendo otra cosa creyendo que es la nuestra.
+    // Con base 0 el cuerpo bueno devuelve -1. Un instrumento sin control no es
+    // un instrumento.
+    var quien: integer := buscarAncla(0, 0)
+    if quien != -1 then
+      print "PARA: el .mdn que corre NO es el escrito a mano (devolvio", quien, ")"
+      print "  Lo habra regenerado el IDE, o no se subio y va interpretado."
+      print "  Reconstruye con notas/v5-salto-crudo/construir.sh y vuelve a subir."
+      return
+    endif
+    print "control OK: corre el cuerpo escrito a mano"
+
+    // ── PELDANO 1: ENCONTRAR ──
+    print "buscando el ancla desde", XIP_BASE, "en", BARRIDO_KB, "KB..."
+    var a: integer := buscarAncla(XIP_BASE, BARRIDO_KB)
+    if a == 0 then
+      print "  -> NO ESTA. O el firmware es viejo (sin ancla), o no cabe en el"
+      print "     barrido. El arranque tambien lo dice: mira la linea 'ancla:'"
+      return
+    endif
+    print "  -> encontrada en", a
+
+    // ── PELDANO 2: LLAMAR ──
+    // Y no vale con "no se colgo": el CRC-16 tiene RESPUESTA CONOCIDA. Si sale
+    // 10673 es que llegamos a la funcion correcta, le pasamos bien tres
+    // argumentos y recogimos bien el retorno.
+    var r: integer := probarAncla(a)
+    print "  crc16 del vector estandar =", r, "  esperado:", CRC_ESPERADO
+    if r == CRC_ESPERADO then
+      print "  -> OK: codigo nativo llama al firmware por puntero y VUELVE."
+    else
+      print "  -> NO. Llegamos a otro sitio, o los argumentos no cuadran."
+    endif
+  end Main
+
+end SaltoCrudo
