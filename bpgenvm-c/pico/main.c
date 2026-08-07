@@ -27,6 +27,7 @@
 #include "bpvm_neopixel.h"
 #include "repl_v1.h"   /* wire v1: despachador + bucle (#305) + autorun (#256) */
 #include "log.h"
+#include "pack_pico.h"
 #include "board_mgr_pico.h"   /* H9: board_boot_status (estado real del boot) */
 #include "flash_layout.h"     /* H9: BP_ENV_*, BP_PART_BASE (layout 3 zonas) */
 #include "bpvm_env.h"         /* H9: env de la zona 2 (bloque A/B) */
@@ -98,7 +99,12 @@ extern char __HeapLimit;         /* tope de la RAM principal */
  * menos la reserva de malloc. Sin número mágico: si mañana crece el .bss, la VM
  * recibe menos AUTOMÁTICAMENTE en vez de pisarle la memoria a nadie. */
 static uint8_t* vm_sram_region(uint32_t* size_out) {
-    uintptr_t top          = (uintptr_t) &__HeapLimit;
+    /* V5/I — el techo NO es __HeapLimit: encima vive la RAM del pack, y la VM
+     * tiene que pararse debajo. Sin esto la VM se quedaria con TODO hasta el
+     * techo y el `.data` del pack iria a parar dentro de su heap — un fallo que
+     * en la Metro no se veria nunca (alli el heap se va a la PSRAM) y solo
+     * reventaria en la Pico 2, con la MISMA imagen. Lo cazo Eduardo. */
+    uintptr_t top          = (uintptr_t) PACK_RAM_SRAM_BASE;
     uintptr_t malloc_floor = ((uintptr_t) &end + VM_SRAM_MALLOC_MARGIN + 7u) & ~(uintptr_t) 7u;
     if (malloc_floor >= top) { *size_out = 0; return NULL; }
     *size_out = (uint32_t) (top - malloc_floor);
@@ -1103,6 +1109,12 @@ static void vm_task(void* arg) {
             s_sqlite_size     = (uint32_t) sqlbytes;
             s_vm_buffer      += sqlbytes;
             s_vm_buffer_size -= (uint32_t) sqlbytes;
+
+            /* V5/I — la RAM del pack sale del PRINCIPIO de este bloque:
+             * `[estáticos | arena]`, como se decidió al cerrar la RAM de la BD.
+             * Criterio de Eduardo (7-ago): *"la reserva solamente hace falta si
+             * SQLite=0"* — donde hay arena no se le quita nada a la SRAM. */
+            s_pack_ram_base = s_sqlite_base;
         }
 
         log_printf("vm: heap en PSRAM %u MB @ 0x%08x (SRAM interna sin reservar)",
@@ -1119,6 +1131,10 @@ static void vm_task(void* arg) {
                        (unsigned)(uintptr_t) s_sqlite_base);
         }
     } else {
+        /* Sin PSRAM no hay arena de donde sacarla, así que la RAM del pack se
+         * reserva de la SRAM — y `vm_sram_region` ya se para justo debajo. Es el
+         * caso degenerado: cuando hay arena, esto no cuesta nada. */
+        s_pack_ram_base = (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
         s_vm_buffer = vm_sram_region(&s_vm_buffer_size);
         if (s_vm_buffer == NULL) {
             log_printf("vm: NO HAY SITIO en SRAM para el buffer de la VM");
