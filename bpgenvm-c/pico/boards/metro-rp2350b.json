@@ -3,14 +3,5 @@
   "variant": "B",
   "psramCsPin": 47,
   "ledPin": 23,
-  "neopixelPin": 25,
-
-  "sdBus": "spi0",
-  "sdSckPin": 34,
-  "sdMosiPin": 35,
-  "sdMisoPin": 36,
-  "sdCsPin": 39,
-  "sdDat1Pin": 37,
-  "sdDat2Pin": 38,
-  "sdDetectPin": 40
+  "neopixelPin": 25
 }
