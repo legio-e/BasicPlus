@@ -25,6 +25,7 @@
  *    del Rtc. Mientras tanto, que se oigan.
  */
 #include "bpvm_bios.h"
+#include "bpvm_pack.h"   /* bpvm_pack_crc16: el control del ancla */
 #include "log.h"
 
 #include <string.h>
@@ -66,6 +67,29 @@ static const bpvm_bios_t s_bios = {
     bios_malloc, bios_free, bios_realloc,
     bios_localtime
 };
+
+/* ── 4. EL ANCLA, pegada a la tabla ──
+ *
+ * Idea de Eduardo: el pack no puede saber la dirección de `s_bios` —cada enlace
+ * la mueve—, así que en vez de acertarla, la BUSCA. Aquí está la marca, y los
+ * punteros van justo detrás; los rellena el enlazador, o sea que siempre son los
+ * correctos PARA ESTA IMAGEN. El pack barre flash, encuentra el texto y lee.
+ *
+ * ⚠️ La marca se escribe carácter a carácter A PROPÓSITO, no como literal
+ * `"BPANCLA1"`. Con un literal el compilador puede dejar además una COPIA suelta
+ * en .rodata, y entonces habría dos sitios donde la búsqueda encuentra la marca
+ * — uno de ellos sin nada útil detrás. Así sólo existe una.
+ */
+static const bpvm_ancla_t s_ancla = {
+    { 'B','P','A','N','C','L','A','1' },
+    BPVM_ANCLA_VERSION,
+    (uint16_t) sizeof(bpvm_ancla_t),
+    &s_bios,
+    bpvm_pack_crc16          /* el control: crc16("123456789") == 0x29B1 */
+};
+
+/* Para que el arranque compare lo que ENCUENTRA con lo que SABE. */
+const bpvm_ancla_t* bios_pico_ancla(void) { return &s_ancla; }
 
 /*
  * Devuelve la tabla LISTA PARA USAR, o NULL si tiene huecos — y en ese caso deja

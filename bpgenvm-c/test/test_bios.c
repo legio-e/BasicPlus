@@ -122,6 +122,64 @@ int main(void) {
     CHECK(bpvm_bios_slot_count() == 17,
           "17 ranuras (las MEDIDAS en la prueba A: 16 de libc + log)");
 
+    /* ─────────────── EL ANCLA (idea de Eduardo, 7-ago) ───────────────
+     *
+     * El pack no puede saber la direccion de la tabla: cada enlace la mueve.
+     * Asi que se pone una marca en la imagen con los punteros detras, y se
+     * BUSCA. Lo que se prueba aqui no es que encuentre una marca buena — eso es
+     * lo facil — sino que NO se trague las malas: ocho bytes pueden repetirse
+     * por casualidad en un megabyte de codigo, y creerse el primero que aparece
+     * seria leer punteros de basura y saltar a cualquier parte. */
+    {
+        /* Una "imagen" de mentira, con basura alrededor para que la busqueda
+         * tenga que trabajar. Alineada a 4 como la de verdad. */
+        static bpvm_bios_t s_tabla_falsa;
+        union { unsigned char b[256]; uint32_t alinea; } img;
+        for (int i = 0; i < 256; i++) img.b[i] = (unsigned char) (i * 7 + 3);
+
+        bpvm_ancla_t a;
+        memset(&a, 0, sizeof a);
+        memcpy(a.magia, "BPANCLA1", 8);
+        a.version = BPVM_ANCLA_VERSION;
+        a.bytes   = (uint16_t) sizeof(bpvm_ancla_t);
+        a.bios    = &s_tabla_falsa;
+        a.prueba  = (uint16_t (*)(uint16_t, const unsigned char*, uint32_t)) (void*) &s_tabla_falsa;
+
+        const unsigned OFF = 64;      /* 64 es multiplo de 4 */
+        memcpy(img.b + OFF, &a, sizeof a);
+
+        CHECK(bpvm_ancla_buscar(img.b, sizeof img.b)
+              == (const bpvm_ancla_t*) (const void*) (img.b + OFF),
+              "el ancla se encuentra entre la basura, y en su sitio exacto");
+
+        CHECK(bpvm_ancla_buscar(0, 1024) == 0, "base NULL -> NULL (sin reventar)");
+        CHECK(bpvm_ancla_buscar(img.b, 4) == 0, "zona mas corta que el ancla -> NULL");
+        CHECK(bpvm_ancla_buscar(img.b, OFF) == 0,
+              "si la zona ACABA antes del ancla, no se lee de mas");
+
+        /* Los tres casos que de verdad importan: la marca esta, pero lo de
+         * detras NO es un ancla. Fiarse solo de los 8 bytes seria el fallo. */
+        { bpvm_ancla_t m = a; m.version = 99; memcpy(img.b + OFF, &m, sizeof m);
+          CHECK(bpvm_ancla_buscar(img.b, sizeof img.b) == 0,
+                "marca OK pero VERSION de otra epoca -> se rechaza"); }
+        { bpvm_ancla_t m = a; m.bytes = 4; memcpy(img.b + OFF, &m, sizeof m);
+          CHECK(bpvm_ancla_buscar(img.b, sizeof img.b) == 0,
+                "marca OK pero TAMANO que no cuadra -> se rechaza"); }
+        { bpvm_ancla_t m = a; m.bios = 0; memcpy(img.b + OFF, &m, sizeof m);
+          CHECK(bpvm_ancla_buscar(img.b, sizeof img.b) == 0,
+                "marca OK pero sin tabla detras -> se rechaza"); }
+        { bpvm_ancla_t m = a; m.prueba = 0; memcpy(img.b + OFF, &m, sizeof m);
+          CHECK(bpvm_ancla_buscar(img.b, sizeof img.b) == 0,
+                "marca OK pero sin el control detras -> se rechaza"); }
+
+        /* Y la marca SUELTA, sin nada detras: el caso de la copia del literal
+         * que dejaria el compilador si se escribiera "BPANCLA1" a la ligera. */
+        for (int i = 0; i < 256; i++) img.b[i] = (unsigned char) (i * 7 + 3);
+        memcpy(img.b + OFF, "BPANCLA1", 8);
+        CHECK(bpvm_ancla_buscar(img.b, sizeof img.b) == 0,
+              "la marca SOLA, sin ancla detras -> no cuela");
+    }
+
     printf("\n[status=%s]\n", g_fail == 0 ? "OK" : "FAIL");
     return g_fail != 0;
 }

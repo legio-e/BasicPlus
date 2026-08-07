@@ -97,6 +97,53 @@ const char* bpvm_bios_verify(const bpvm_bios_t* b);
  * "BIOS lista (17 ranuras)" es más útil que "BIOS lista". */
 int bpvm_bios_slot_count(void);
 
+/*
+ * ─── EL ANCLA ─── idea de Eduardo (7-ago-2026)
+ *
+ * Un pack necesita la tabla de arriba, pero NO PUEDE SABER SU DIRECCIÓN: cada
+ * enlace del firmware la mueve. Perseguir esa dirección nos costó, en una tarde,
+ * un cuelgue de la placa y un diagnóstico equivocado — y el desfase era MUDO:
+ * el número seguía pareciendo bueno.
+ *
+ * La salida es no acertar la dirección, sino BUSCARLA: se pone un texto
+ * constante en la imagen y **los punteros justo detrás**. Quien los quiera barre
+ * un trozo de flash, encuentra el texto, y lee lo que sigue — que lo rellenó el
+ * enlazador, así que siempre es correcto PARA ESA IMAGEN.
+ *
+ * Y la marca no se comprueba sola: también `version` y `bytes`. Ocho bytes
+ * pueden repetirse por casualidad en 1 MB de código; los cuatro campos a la vez,
+ * no. Es el mismo criterio del gate del .mod (#284): que el desfase GRITE.
+ *
+ * `prueba` es el control del instrumento: un CRC-16 con RESPUESTA CONOCIDA
+ * escrita en bpvm_pack.h — `crc16("123456789") == 0x29B1`. Un pack puede
+ * llamarlo y comprobar el número ANTES de fiarse de nada más. Si sale 0x29B1,
+ * sabe que encontró el ancla de verdad, que sabe llamar al firmware y que los
+ * argumentos y el retorno cruzan bien. Sin eso, "no se colgó" es todo lo que
+ * tendría, y eso no es una prueba.
+ */
+#define BPVM_ANCLA_VERSION 1u
+
+typedef struct bpvm_ancla {
+    char     magia[8];      /* 'B','P','A','N','C','L','A','1' — SIN NUL final */
+    uint16_t version;       /* BPVM_ANCLA_VERSION                              */
+    uint16_t bytes;         /* sizeof(bpvm_ancla_t): crecer sin romper a nadie */
+    const bpvm_bios_t* bios;                                /* la tabla        */
+    uint16_t (*prueba)(uint16_t, const uint8_t*, uint32_t);  /* CRC-16          */
+} bpvm_ancla_t;
+
+/*
+ * Barre [base, base+bytes) buscando el ancla. Devuelve NULL si no está.
+ *
+ * Avanza de 4 en 4 porque el ancla lleva punteros y el compilador la alinea a 4:
+ * mirar las posiciones intermedias sería tiempo tirado. No escribe nada y no
+ * aloca: se puede llamar desde donde sea, incluido un pack.
+ *
+ * ESTA es la función que el firmware usa para verificarse a sí mismo en el
+ * arranque, y la misma regla que implementa el pack. Si el pack no encuentra el
+ * ancla, no es por una discrepancia de criterio.
+ */
+const bpvm_ancla_t* bpvm_ancla_buscar(const void* base, uint32_t bytes);
+
 #ifdef __cplusplus
 }
 #endif

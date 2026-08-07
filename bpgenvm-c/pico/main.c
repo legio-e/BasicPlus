@@ -37,6 +37,12 @@
 /* pico/bios_pico.c — la tabla de ESTA placa, ya verificada (NULL si tiene
  * huecos; el motivo lo deja él mismo en el log). */
 const bpvm_bios_t* bios_pico_get(void);
+const bpvm_ancla_t* bios_pico_ancla(void);
+
+/* Cuánto barrer buscando el ancla. El firmware (texto+rodata) cabe de sobra en
+ * 1 MB; barrer más sería tiempo de arranque tirado. Si algún día la imagen
+ * creciera por encima, el propio arranque lo diría: "ancla: NO SE ENCUENTRA". */
+#define ANCLA_BARRIDO_BYTES  (1u * 1024u * 1024u)
 #include "hardware/flash.h"   /* FLASH_SECTOR_SIZE */
 #include "bpvm_gpio.h"
 #include "bpvm_i2c.h"
@@ -1137,6 +1143,32 @@ static void vm_task(void* arg) {
         const bpvm_bios_t* bios = bios_pico_get();   /* él ya loguea qué falta */
         if (bios) log_printf("bios: lista (%d ranuras, v%u)",
                              bpvm_bios_slot_count(), (unsigned) bios->version);
+
+        /* EL ANCLA, y su CONTROL. No basta con que la búsqueda encuentre algo:
+         * tiene que encontrar EXACTAMENTE el objeto que este firmware conoce por
+         * su nombre. Si difieren, la marca ha aparecido dos veces en la imagen y
+         * el pack leería punteros de otro sitio — que es el fallo que el ancla
+         * viene a evitar, así que sería especialmente tonto no mirarlo.
+         *
+         * Y se comprueba en CADA arranque, haya pack o no: si un día el enlace
+         * deja la marca duplicada, se sabe ese día. */
+        const bpvm_ancla_t* real = bios_pico_ancla();
+        const bpvm_ancla_t* hallada =
+            bpvm_ancla_buscar((const void*) XIP_BASE, ANCLA_BARRIDO_BYTES);
+        if (hallada == real) {
+            log_printf("ancla: en 0x%08lX (la busqueda la encuentra, y es LA misma)",
+                       (unsigned long) (uintptr_t) real);
+        } else if (hallada == 0) {
+            log_printf("ancla: NO SE ENCUENTRA barriendo %u KB desde 0x%08lX "
+                       "(esta en 0x%08lX) -> ningun pack podra hallar la BIOS",
+                       (unsigned) (ANCLA_BARRIDO_BYTES / 1024),
+                       (unsigned long) XIP_BASE, (unsigned long) (uintptr_t) real);
+        } else {
+            log_printf("ancla: DUPLICADA — la busqueda da 0x%08lX y la buena es "
+                       "0x%08lX -> un pack leeria punteros de basura",
+                       (unsigned long) (uintptr_t) hallada,
+                       (unsigned long) (uintptr_t) real);
+        }
     }
 
     /* 1)→3): particiones del env → FS → VM. bpvm_boot_climb para en la

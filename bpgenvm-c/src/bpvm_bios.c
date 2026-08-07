@@ -48,3 +48,38 @@ const char* bpvm_bios_verify(const bpvm_bios_t* b)
     }
     return NULL;                            /* completa */
 }
+
+/*
+ * Busca el ancla. Portable y sin dependencias: el mismo código lo usa el
+ * firmware para verificarse al arrancar y lo replica el pack para encontrar la
+ * tabla. Ver la explicación en bpvm_bios.h.
+ */
+const bpvm_ancla_t* bpvm_ancla_buscar(const void* base, uint32_t bytes)
+{
+    if (base == 0 || bytes < sizeof(bpvm_ancla_t)) return 0;
+
+    const unsigned char* p = (const unsigned char*) base;
+    /* Alinear el arranque: el ancla está a 4, empezar a 1 no la encontraría. */
+    while (((uintptr_t) p & 3u) != 0u) { p++; if (bytes == 0) return 0; bytes--; }
+    if (bytes < sizeof(bpvm_ancla_t)) return 0;
+
+    const unsigned char* fin = p + (bytes - sizeof(bpvm_ancla_t));
+    for (; p <= fin; p += 4) {
+        /* Los 4 primeros bytes descartan casi todo sin tocar nada más. */
+        if (p[0] != 'B' || p[1] != 'P' || p[2] != 'A' || p[3] != 'N') continue;
+        if (p[4] != 'C' || p[5] != 'L' || p[6] != 'A' || p[7] != '1') continue;
+
+        /* ⚠️ La marca SOLA no basta. Ocho bytes pueden repetirse por casualidad
+         * en un megabyte de código, y creerse el primero que aparece es
+         * exactamente el fallo que esto viene a evitar: leeríamos punteros de
+         * basura y saltaríamos a cualquier parte. Los cuatro campos a la vez no
+         * coinciden por azar. */
+        const bpvm_ancla_t* a = (const bpvm_ancla_t*) (const void*) p;
+        if (a->version != BPVM_ANCLA_VERSION)   continue;
+        if (a->bytes   != sizeof(bpvm_ancla_t)) continue;
+        if (a->bios    == 0)                    continue;
+        if (a->prueba  == 0)                    continue;
+        return a;
+    }
+    return 0;
+}
