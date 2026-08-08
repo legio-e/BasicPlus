@@ -235,6 +235,47 @@ static long be_read(const char* path, uint8_t* dst, uint32_t cap) {
 static long be_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
     fs_lock(); long r = be_read_at_impl(path, off, dst, cap); fs_unlock(); return r;
 }
+
+/* V5/H2 — las gemelas de escritura. `LFS_O_CREAT` sin `LFS_O_TRUNC`: abre lo que
+ * haya o lo crea, y a partir de ahí sólo pisa el trozo que le toca.
+ *
+ * Un solo `s_fcfg_a` basta aunque haya dos: las dos configuraciones existen
+ * porque `be_copy` tiene DOS ficheros abiertos a la vez, no por concurrencia —
+ * de eso se encarga el `fs_lock` que envuelve todas las ops. */
+static long be_write_at_impl(const char* path, uint32_t off,
+                             const uint8_t* data, uint32_t len) {
+    lfs_file_t f;
+    if (lfs_file_opencfg(&s_lfs, &f, path,
+                         LFS_O_RDWR | LFS_O_CREAT, &s_fcfg_a) < 0) return -1;
+    long r = -1;
+    /* Más allá del final, littlefs rellena de CEROS al escribir. FatFs deja lo
+     * que hubiera. Por eso el contrato de la fachada promete sólo lo común: el
+     * hueco es INDEFINIDO. Prometer ceros aquí sería prometerlos en las dos. */
+    if (lfs_file_seek(&s_lfs, &f, (lfs_soff_t) off, LFS_SEEK_SET) >= 0) {
+        lfs_ssize_t n = lfs_file_write(&s_lfs, &f, data, len);
+        r = (n < 0) ? -1 : (long) n;
+    }
+    /* El close es quien VUELCA: si falla, lo escrito no está y decir que sí
+     * estaría mintiendo. */
+    if (lfs_file_close(&s_lfs, &f) < 0) r = -1;
+    return r;
+}
+static long be_write_at(const char* path, uint32_t off,
+                        const uint8_t* data, uint32_t len) {
+    fs_lock(); long r = be_write_at_impl(path, off, data, len); fs_unlock(); return r;
+}
+
+static int be_truncate_impl(const char* path, uint32_t size) {
+    lfs_file_t f;
+    if (lfs_file_opencfg(&s_lfs, &f, path,
+                         LFS_O_RDWR | LFS_O_CREAT, &s_fcfg_a) < 0) return -1;
+    int r = (lfs_file_truncate(&s_lfs, &f, (lfs_off_t) size) < 0) ? -1 : 0;
+    if (lfs_file_close(&s_lfs, &f) < 0) r = -1;
+    return r;
+}
+static int be_truncate(const char* path, uint32_t size) {
+    fs_lock(); int r = be_truncate_impl(path, size); fs_unlock(); return r;
+}
 static int be_write(const char* path, const uint8_t* data, uint32_t len, int append) {
     fs_lock(); int r = be_write_impl(path, data, len, append); fs_unlock(); return r;
 }
@@ -275,6 +316,8 @@ static const bpvm_fs_backend_t s_lfs_backend = {
     .mtime_ms = NULL,   /* littlefs no tiene timestamps → "no soportado" limpio */
     .list     = be_list,   /* B1.3 */
     .read_at  = be_read_at, /* #305 — lectura por trozos */
+    .write_at = be_write_at, /* V5/H2 — escritura posicional (base de datos) */
+    .truncate = be_truncate,
 };
 
 int bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed) {

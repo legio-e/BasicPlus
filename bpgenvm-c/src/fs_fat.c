@@ -217,6 +217,53 @@ static long fat_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t c
     return (r == FR_OK) ? (long) leidos : -1;
 }
 
+/* V5/H2 — escritura POSICIONAL. `FA_OPEN_ALWAYS` (abre o crea, sin truncar) es
+ * la elección que la hace usable para una base de datos: crea el fichero la
+ * primera vez y a partir de ahí sólo pisa la página que le toca. */
+static long fat_write_at(const char* path, uint32_t off,
+                         const uint8_t* data, uint32_t len) {
+    const char* p = sin_prefijo(path);
+    if (!p || !s_montado || p[0] == '\0') return -1;
+    FIL f; UINT esc = 0;
+    trabar();
+    FRESULT r = f_open(&f, p, FA_WRITE | FA_OPEN_ALWAYS);
+    if (r == FR_OK) {
+        /* Más allá del final, `f_lseek` EXTIENDE el fichero. Ahí está el hueco
+         * de contenido indefinido que anuncia el contrato: FatFs deja lo que
+         * hubiera en los clústeres. */
+        r = f_lseek(&f, off);
+        if (r == FR_OK && f_tell(&f) != off) r = FR_DISK_ERR;   /* no llegó */
+        if (r == FR_OK) {
+            r = f_write(&f, data, len, &esc);
+            if (r == FR_OK && esc != len) r = FR_DISK_ERR;      /* disco lleno */
+        }
+        FRESULT rc = f_close(&f);        /* el close es donde se vuelca */
+        if (r == FR_OK) r = rc;
+    }
+    destrabar();
+    return (r == FR_OK) ? (long) esc : -1;
+}
+
+/* Fija el tamaño EXACTO. `f_truncate` de FatFs corta por donde esté el puntero,
+ * así que el lseek no es preparación: es quien decide dónde. Y como el lseek
+ * también extiende, la misma pareja sirve para encoger y para agrandar. */
+static int fat_truncate(const char* path, uint32_t size) {
+    const char* p = sin_prefijo(path);
+    if (!p || !s_montado || p[0] == '\0') return -1;
+    FIL f;
+    trabar();
+    FRESULT r = f_open(&f, p, FA_WRITE | FA_OPEN_ALWAYS);
+    if (r == FR_OK) {
+        r = f_lseek(&f, size);
+        if (r == FR_OK && f_tell(&f) != size) r = FR_DISK_ERR;
+        if (r == FR_OK) r = f_truncate(&f);
+        FRESULT rc = f_close(&f);
+        if (r == FR_OK) r = rc;
+    }
+    destrabar();
+    return (r == FR_OK) ? 0 : -1;
+}
+
 static int fat_write(const char* path, const uint8_t* data, uint32_t len, int append) {
     const char* p = sin_prefijo(path);
     if (!p || !s_montado) return -1;
@@ -343,6 +390,8 @@ static const bpvm_fs_backend_t s_backend = {
     .mtime_ms = fat_mtime_ms,
     .list     = fat_list,
     .read_at  = fat_read_at,
+    .write_at = fat_write_at,      /* V5/H2: sin esto no hay base de datos */
+    .truncate = fat_truncate,
 };
 
 /* ─────────────────────────────────────────────────────────────────────────

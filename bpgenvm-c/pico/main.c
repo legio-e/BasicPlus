@@ -35,6 +35,7 @@
 #include "bpvm_boot.h"        /* H9: máquina de estados del arranque */
 #include "bpvm_sqlmem.h"      /* V5/H: regla del bloque de memoria de la BD */
 #include "bpvm_sd.h"          /* V5/H1: lector de SD por SPI (pines del env)  */
+#include "bpvm_fs_fat.h"      /* V5/H2: montarla al arranque si hay tarjeta   */
 #include "bpvm_bios.h"        /* V5/I: tabla prestada al pack nativo */
 /* pico/bios_pico.c — la tabla de ESTA placa, ya verificada (NULL si tiene
  * huecos; el motivo lo deja él mismo en el log). */
@@ -1307,6 +1308,33 @@ static void vm_task(void* arg) {
     log_printf("fs: %d ficheros, %u/%u bytes usados",
                fs_file_count(), (unsigned) fs_used_bytes(),
                (unsigned) fs_total_bytes());
+
+    /* V5/H2 — la tarjeta SD, si la hay. AQUÍ y no antes: /sd se monta ENCIMA de
+     * la fachada, y sin el FS de la placa no hay dónde colgarlo. Y antes del
+     * autoarranque, para que una app encuentre la tarjeta ya montada.
+     *
+     * EL PIN DE DETECCIÓN MANDA (criterio de Eduardo, 8-ago): sin tarjeta
+     * metida no tiene sentido montar, y así el arranque no toca ni el SPI. Es
+     * lo que permite que esto pase a ser automático — hasta ahora se hacía a
+     * mano justamente para no hablarle al vacío en cada encendido.
+     *
+     * ⚠️ Que falle NO degrada el arranque. Una tarjeta ilegible o en exFAT es
+     * un accesorio que no va, no una placa rota: se anota el motivo y se sigue.
+     * Degradar el boot por esto dejaría al usuario sin IDE para averiguar qué
+     * pasa, que es exactamente cuando más falta hace. */
+    if (!s_sd_hay_config) {
+        log_printf("sd: sin configurar en el env — no se monta");
+    } else if (!bpvm_sd_hay_tarjeta(&s_sd_pines)) {
+        log_printf("sd: zocalo VACIO (pin de deteccion) — no se monta");
+    } else {
+        char motivo[80];
+        if (bpvm_fs_fat_montar(&s_sd_pines, "/sd", motivo, sizeof motivo) == 0) {
+            log_printf("sd: montada en /sd (particion en el bloque %u)",
+                       (unsigned) bpvm_fs_fat_lba_particion());
+        } else {
+            log_printf("sd: NO montada — %s", motivo);
+        }
+    }
     }  /* fin estado >= FS (H9): sin particiones/FS no hay board.json/stdlib */
 
     /* H13 hallazgo 12 — AQUÍ CORRÍA UN fib(28) EN C EN CADA ARRANQUE. Era el

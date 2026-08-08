@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -409,6 +409,16 @@ test-smphandles: $(LIBOBJ)
 # dependencia mínima (solo bpvm_env + crc32, sin VM ni pthread): prueba el
 # formato, el CRC, A/B por seq y el flujo de actualización sobre buffers en RAM
 # que hacen de flash. La cintura de flash por-micro llega en su fase (placa).
+# V5/H2 — escritura POSICIONAL y recorte de la fachada. Sobre el backend de
+# host, pero el contrato es el mismo que deben cumplir FatFs y littlefs: un
+# rojo aquí es un rojo en las placas.
+test-fspos:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_fs_posicional.c src/fs_facade.c src/fs_host.c \
+	  src/crc32.c -o build/test_fspos.exe
+	@echo "--- V5/H2 escritura posicional (esperado: 17/17, 0 fallos) ---"
+	@cd build && ./test_fspos.exe
+
 test-env:
 	@mkdir -p build
 	$(CC) $(CFLAGS) test/test_env.c src/bpvm_env.c src/crc32.c -o build/test_env.exe

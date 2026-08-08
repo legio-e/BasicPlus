@@ -9,6 +9,7 @@
 #include "bpvm_fs.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>      /* V5/H2: malloc del truncate por copia */
 
 static int host_stat(const char* path, uint32_t* size) {
     FILE* f = fopen(path, "rb");
@@ -30,6 +31,56 @@ static long host_read(const char* path, uint8_t* dst, uint32_t cap) {
 }
 
 /* #305 — lectura desde un offset (el simulador la usa igual que el micro). */
+/* V5/H2 — las gemelas de escritura. Van TAMBIÉN en el host y no sólo en placa:
+ * si el host no las tuviera, un programa que escriba posicionalmente iría en la
+ * placa y fallaría en el PC, y la paridad dual-VM dejaría de valer justo para
+ * lo que más falta hace probar en el PC — una base de datos.
+ *
+ * "r+b" es abrir sin truncar; si no existe, "w+b" lo crea. Ese orden importa:
+ * al revés se vaciaría el fichero cada vez que se escribe una página. */
+static long host_write_at(const char* path, uint32_t off,
+                          const uint8_t* data, uint32_t len) {
+    FILE* f = fopen(path, "r+b");
+    if (!f) f = fopen(path, "w+b");
+    if (!f) return -1;
+    /* Más allá del final, fseek+fwrite extiende. El hueco lo rellena de ceros
+     * la libc de POSIX, pero el contrato promete INDEFINIDO porque FatFs no lo
+     * hace — no se puede prometer aquí lo que allí no se cumple. */
+    if (fseek(f, (long) off, SEEK_SET) != 0) { fclose(f); return -1; }
+    size_t n = fwrite(data, 1, (size_t) len, f);
+    int mal = (n != (size_t) len) || (fclose(f) != 0);
+    return mal ? -1 : (long) n;
+}
+
+static int host_truncate(const char* path, uint32_t size) {
+    /* No hay truncate portable en C99: Windows tiene _chsize_s y POSIX
+     * ftruncate. Se copia el trozo que sobrevive y se reescribe — es O(n) y
+     * sólo vale porque en el host no hay presión de rendimiento; en las placas
+     * lo hace el motor de verdad (f_truncate / lfs_file_truncate). */
+    FILE* f = fopen(path, "rb");
+    uint8_t* buf = NULL;
+    size_t leidos = 0;
+    if (f) {
+        if (size > 0) {
+            buf = (uint8_t*) malloc(size);
+            if (!buf) { fclose(f); return -1; }
+            leidos = fread(buf, 1, (size_t) size, f);
+        }
+        fclose(f);
+    }
+    FILE* o = fopen(path, "wb");
+    if (!o) { free(buf); return -1; }
+    int mal = 0;
+    if (leidos && fwrite(buf, 1, leidos, o) != leidos) mal = 1;
+    /* Agrandar: ceros hasta el tamaño pedido (mismo hueco "indefinido" del
+     * contrato — aquí sale barato dejarlo definido y no cuesta prometer menos). */
+    for (uint32_t i = (uint32_t) leidos; !mal && i < size; i++)
+        if (fputc(0, o) == EOF) mal = 1;
+    if (fclose(o) != 0) mal = 1;
+    free(buf);
+    return mal ? -1 : 0;
+}
+
 static long host_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
     FILE* f = fopen(path, "rb");
     if (!f) return -1;
@@ -175,6 +226,8 @@ static const bpvm_fs_backend_t s_host_fs = {
     .mtime_ms = host_mtime_ms,
     .list     = host_list,   /* B1.3 */
     .read_at  = host_read_at, /* #305 — lectura por trozos */
+    .write_at = host_write_at, /* V5/H2 — paridad con la placa */
+    .truncate = host_truncate,
 };
 
 void bpvm_fs_register_host(void) {

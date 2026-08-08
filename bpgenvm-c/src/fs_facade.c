@@ -294,6 +294,22 @@ int bpvm_fs_list(const char* path,
 
 /* #305 — lectura parcial. Sin backend que la implemente devuelve -1: el llamante
  * decide si degrada al camino de fichero entero o falla. */
+/* V5/H2 — las gemelas de escritura de read_at. Como `write` y `remove`, NO
+ * consultan el overlay de packs: ése es de sólo lectura y lo que se escribe va
+ * al FS de verdad. */
+long bpvm_fs_write_at(const char* path, uint32_t off,
+                      const uint8_t* data, uint32_t len) {
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->write_at) return be->write_at(path, off, data, len);
+    return -1;
+}
+
+int bpvm_fs_truncate(const char* path, uint32_t size) {
+    const bpvm_fs_backend_t* be = route(path);
+    if (be && be->truncate) return be->truncate(path, size);
+    return -1;
+}
+
 long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
     uint32_t osz = 0;
     if (overlay_claims(path, &osz) && g_ov_read)

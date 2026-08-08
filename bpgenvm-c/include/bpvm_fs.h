@@ -61,6 +61,26 @@ typedef struct {
      * bytes leídos (0 al final) o -1. Campo AL FINAL: los backends que no la
      * implementen la dejan a NULL y el llamante cae al camino de siempre. */
     long (*read_at)(const char* path, uint32_t off, uint8_t* dst, uint32_t cap);
+    /*
+     * V5/H2 — escritura POSICIONAL y recorte. Las gemelas que le faltaban a
+     * read_at, y sin ellas no hay base de datos: una BD reescribe la página N
+     * en medio de un fichero de diez megas, y con sólo `write` habría que
+     * leerlo entero, modificarlo y volver a escribirlo entero. Sobre una SD eso
+     * no es lento: es inviable.
+     *
+     * write_at: bytes escritos, o -1. El fichero se CREA si no existe (una BD
+     * crea el suyo y escribe la página 0), y no se trunca al abrirlo.
+     *
+     * ⚠️ Escribir MÁS ALLÁ del final extiende el fichero, y **el contenido del
+     * hueco queda INDEFINIDO**. No es pereza: FatFs deja ahí lo que hubiera en
+     * los clústeres y littlefs rellena con ceros. Prometer ceros sería mentir
+     * en una de las dos, y rellenarlos a mano puede ser escribir megas.
+     *
+     * truncate: fija el tamaño exacto. Encoger libera; agrandar extiende con el
+     * mismo hueco indefinido de arriba. 0 / -1.
+     */
+    long (*write_at)(const char* path, uint32_t off, const uint8_t* data, uint32_t len);
+    int  (*truncate)(const char* path, uint32_t size);
 } bpvm_fs_backend_t;
 
 /* Registra el backend RAÍZ (una vez al boot). Limpia cualquier montaje
@@ -87,6 +107,12 @@ int  bpvm_fs_mount(const char* prefix, const bpvm_fs_backend_t* backend);
  * caduca en cuanto alguien monte otra cosa.
  */
 int  bpvm_fs_en_raiz(const char* path);
+
+/* V5/H2 — escritura posicional y recorte (ver el contrato en el backend). El
+ * backend que no las traiga devuelve -1 en vez de fingir. */
+long bpvm_fs_write_at(const char* path, uint32_t off,
+                      const uint8_t* data, uint32_t len);
+int  bpvm_fs_truncate(const char* path, uint32_t size);
 
 /* Funciones efectivas (sin backend → fallo limpio). */
 int  bpvm_fs_stat  (const char* path, uint32_t* size);
