@@ -17,7 +17,7 @@ La Metro RP2350B identifica la tarjeta y entrega bloques. Detalle en la memoria
 
 ---
 
-## H2 — La SD como sistema de ficheros ✅ FUNCIONA EN PLACA (8-ago-2026)
+## H2 — La SD como sistema de ficheros 🏁 **CERRADO** (8-ago-2026)
 
 FatFs R0.16 vendorizado, montaje sobre el lector de H1, y el ciclo completo
 probado en la Metro: listar, leer, **crear y escribir** un fichero que el PC
@@ -27,7 +27,11 @@ Information` (nombre largo de 25 caracteres) contrastados contra Windows.
 Coste medido: **12,7 KB de flash y 1,7 KB de RAM** en la imagen de la Pico.
 Detalle y trampas en la memoria `v5-h2-fat-sd`.
 
-### Lo que queda pendiente de H2
+### Lo que queda pendiente de H2 (NO bloquea; se cierra igual)
+
+Eduardo cierra H2 el 8-ago con esto anotado. El criterio: lo que queda no
+impide trabajar con la tarjeta ni con una base de datos encima — es cobertura y
+pulido, y arrastrar el hito abierto por eso sólo emborrona qué está hecho.
 
 Ordenado por lo que bloquea, no por lo que se ve.
 
@@ -132,3 +136,36 @@ siempre que sí**, y el guardián del arranque no guardaba nada.
 Es la MISMA trampa que la MISO de H1. La lección general, y por eso el arreglo
 va donde va: **configurar y leer un pin no pueden vivir en sitios distintos**.
 Quien lee lo deja usable, y entonces da igual quién llame y en qué orden.
+
+
+---
+
+## H3 — (siguiente)
+
+**Aún no empezado.** Instrucción de Eduardo al cerrar H2 (8-ago):
+
+> *"Empezamos H3, pero paso a paso, que si hay algún problema lo detectemos
+> claramente. No tenemos prisa, de hecho vamos mucho más rápido de lo que tenía
+> pensado. Así que lo vamos asegurando todo."*
+
+O sea: peldaños cortos con su verificación cada uno, no tandas grandes. Ir por
+delante del plan **no** es motivo para acelerar; es margen para asegurar.
+
+---
+
+## 📌 ANTES DE H3 — cerrar la cola de V4
+
+Pendiente de la sesión del 8-ago, para hacer **a la vuelta de la pausa**:
+
+**Subir a GitHub lo que queda de V4.** El arreglo de la cintura de flash de la
+Pico —`ee26e35`, *"la cintura de flash de la Pico ignoraba la ALINEACIÓN de la
+dirección"*— está en el historial LOCAL pero no en el remoto, y va mezclado
+entre commits de V5.
+
+Contexto de por qué importa: ese bug hacía **imposible grabar packs** en las
+placas RP2350 y estaba **en la V4 ya publicada**. El ZIP de GitHub ya se
+actualizó a mano con la imagen corregida (cubre al usuario que se baja el ZIP y
+prueba con el IDE), pero **la release 4.0.1 no está hecha**.
+
+Estado al cerrar la sesión: **15 commits locales sin subir**, de `d0ae180` a
+`d4c44a4`. Sólo `ee26e35` es de V4; el resto es V5 (packs nativos, H1 y H2).

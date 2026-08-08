@@ -55,6 +55,18 @@ sagrado del proyecto). *(Minor relacionado: `%lld` no va en newlib-nano del STM3
 
 ## 🟢 Pulido (no urgente)
 
+- **N-listado-plano-trunca-mudo — el árbol del IDE se corta con muchos ficheros,
+  y sólo lo dice el log.** El recorrido que alimenta el árbol es PLANO y recorre
+  el FS entero, con tope de **16 directorios** y **96 entradas por directorio**.
+  Al pasarse trunca: avisa al log del device, pero **al usuario no le dice nada**
+  — el árbol sólo enseña menos cosas, que es la peor forma de fallar.
+  Observado por Eduardo el 8-ago al montar una tarjeta SD (V5/H2), donde deja de
+  ser teórico; pero el tope **es de siempre** y aplica a cualquier versión y a
+  cualquier placa con el FS interno lleno.
+  Arreglo bueno: **árbol perezoso** — pedir los hijos al expandir con `LIST_DIR`
+  (existe desde V5/H2 y ya reporta cuántas entradas dejó fuera). La consola ya lo
+  usa: `dir [ruta]` sí avisa por pantalla cuando trunca.
+
 - **M2 — auto-unbox `any → primitive` con check en runtime** (variante "segura"
   de L1; coste: tag de tipo en cada `any`; discutible si compensa).
 - **M4 — namespace separado para identificadores sintéticos** (`__prop_get_X`,
