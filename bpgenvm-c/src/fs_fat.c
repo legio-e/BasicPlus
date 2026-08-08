@@ -57,6 +57,10 @@ static bpvm_sd_pines_t  s_pines;
 static bpvm_sd_info_t   s_info;
 static uint32_t         s_lba0      = 0;   /* primer bloque de la partición   */
 static int              s_montado   = 0;
+/* V5/H2 — ¿ya se ha intentado montar ESTA inserción? Evita que un montaje que
+ * falla se reintente en cada vuelta de la vigilancia. Se limpia cuando el
+ * zócalo se queda vacío, que es lo que separa una inserción de la siguiente. */
+static int              s_intentada = 0;
 static char             s_prefijo[16] = "/sd";
 
 static bpvm_platform_mutex_handle_t s_lock;
@@ -413,6 +417,10 @@ int bpvm_fs_fat_montar(const bpvm_sd_pines_t* pines, const char* prefijo,
 {
     if (motivo && motivo_cap) motivo[0] = '\0';
     if (!pines) return -1;
+    /* Sea quien sea el que llame —el arranque, `sd mount` o la vigilancia—,
+     * esto cuenta como el intento de ESTA inserción: si sale mal, el vigilante
+     * no lo repite hasta que la tarjeta salga y vuelva a entrar. */
+    s_intentada = 1;
     s_pines = *pines;
     if (prefijo && prefijo[0] == '/' && strlen(prefijo) < sizeof s_prefijo) {
         memcpy(s_prefijo, prefijo, strlen(prefijo) + 1);
@@ -478,6 +486,56 @@ int bpvm_fs_fat_montar(const bpvm_sd_pines_t* pines, const char* prefijo,
     }
 
     return bpvm_fs_mount(s_prefijo, &s_backend);
+}
+
+void bpvm_fs_fat_desmontar(void) {
+    if (!s_montado) return;
+    trabar();
+    /* `f_mount(NULL, ...)` desregistra el volumen en FatFs. Puede fallar si la
+     * tarjeta ya no responde —que es justo el caso normal aquí— y da igual: lo
+     * que importa es que a partir de `s_montado = 0` nadie vuelve a tocarla. */
+    (void) f_mount(NULL, "", 0);
+    s_montado = 0;
+    s_lba0    = 0;
+    destrabar();
+    /* El montaje SIGUE en la tabla de la fachada (no hay forma de quitarlo, ni
+     * hace falta): todas las ops miran `s_montado` y devuelven -1. O sea que
+     * /sd existe y falla, que es exactamente lo que es una tarjeta sacada. */
+}
+
+int bpvm_fs_fat_vigilar(const bpvm_sd_pines_t* pines, const char* prefijo,
+                        char* motivo, unsigned motivo_cap)
+{
+    if (motivo && motivo_cap) motivo[0] = '\0';
+    if (!pines) return 0;
+
+    int hay = bpvm_sd_hay_tarjeta(pines);
+
+    if (!hay) {
+        /* Fuera. Si estaba montada, soltarla; y en cualquier caso rearmar el
+         * intento, porque el zócalo vacío es lo que separa una inserción de la
+         * siguiente. */
+        s_intentada = 0;
+        if (s_montado) {
+            bpvm_fs_fat_desmontar();
+            di_motivo(motivo, motivo_cap, "tarjeta RETIRADA — /sd desmontado");
+            return 1;
+        }
+        return 0;
+    }
+
+    if (s_montado) return 0;            /* metida y montada: nada que hacer */
+
+    /* Metida y sin montar. Se intenta UNA vez por inserción: si falla (viene en
+     * exFAT, o está mal metida), reintentarlo cada vuelta llenaría el log y
+     * machacaría el bus para volver a fallar igual. El flag se limpia arriba,
+     * cuando el zócalo se queda vacío. */
+    if (s_intentada) return 0;
+    s_intentada = 1;
+    if (bpvm_fs_fat_montar(pines, prefijo, motivo, motivo_cap) == 0) {
+        di_motivo(motivo, motivo_cap, "tarjeta METIDA — /sd montado");
+    }
+    return 1;
 }
 
 uint32_t bpvm_fs_fat_lba_particion(void) { return s_lba0; }

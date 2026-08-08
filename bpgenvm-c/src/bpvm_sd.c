@@ -262,6 +262,28 @@ int bpvm_sd_pines_parse(const char* valor, bpvm_sd_pines_t* p,
 int bpvm_sd_hay_tarjeta(const bpvm_sd_pines_t* p)
 {
     if (!p || p->cd < 0) return 1;      /* sin detector no se puede saber */
+
+    /* ⚠️ EL PIN SE CONFIGURA AQUÍ, Y ESO NO ES REDUNDANCIA — ES EL ARREGLO.
+     *
+     * Antes esto sólo leía, y la configuración vivía dentro de `bpvm_sd_init`.
+     * Parecía suficiente porque desde init se llama DESPUÉS de configurar. Pero
+     * se llama de otros dos sitios que ocurren ANTES de que init exista: el
+     * arranque (¿monto la SD?) y `disk_status`. Ahí se leía un pad que nadie
+     * había tocado.
+     *
+     * Y los pads del RP2350 arrancan en pull-DOWN, así que ese pad lee 0 — que
+     * con `cd_activo_bajo` significa "hay tarjeta". O sea que el detector decía
+     * SIEMPRE QUE SÍ, y el guardián del arranque («sin tarjeta no se monta») no
+     * guardaba nada: con el zócalo vacío intentaba montar igual.
+     *
+     * Es la MISMA trampa que la MISO de aquí al lado, y por el mismo motivo: un
+     * pin sin pull no calla, MIENTE. La lección es que configurar y leer no
+     * pueden vivir en sitios distintos — quien lee el pin lo deja usable, y
+     * entonces da igual quién llame y en qué orden. Es idempotente y cuesta dos
+     * escrituras a registro. */
+    bpvm_gpio_init(p->cd, 0);           /* entrada */
+    bpvm_gpio_pull(p->cd, 1);           /* pull-UP: sin tarjeta => 1 => "no hay" */
+
     int v = bpvm_gpio_read(p->cd);
     return p->cd_activo_bajo ? (v == 0) : (v != 0);
 }
@@ -277,10 +299,9 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
      * el SS_N del SPI se levantaría entre tramas y aquí hace falta abajo). */
     bpvm_gpio_init(p->cs, 1);
     cs_alto(p);
-    if (p->cd >= 0) {
-        bpvm_gpio_init(p->cd, 0);
-        bpvm_gpio_pull(p->cd, 1);
-    }
+    /* El pin `cd` lo configura `bpvm_sd_hay_tarjeta` — UN solo sitio. Tenerlo
+     * también aquí es lo que hacía que pareciera correcto: desde init se leía
+     * un pin bien puesto, y desde los otros dos llamantes no. */
     if (!bpvm_sd_hay_tarjeta(p)) return BPVM_SD_E_SIN_TARJETA;
 
     bpvm_spi_init(p->bus, p->sck, p->mosi, p->miso, BAUD_LENTO, 0);

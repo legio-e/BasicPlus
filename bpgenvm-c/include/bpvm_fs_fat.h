@@ -30,6 +30,27 @@ extern "C" {
 int bpvm_fs_fat_montar(const bpvm_sd_pines_t* pines, const char* prefijo,
                        char* motivo, unsigned motivo_cap);
 
+/*
+ * Suelta el volumen: a partir de aquí todas las operaciones sobre el prefijo
+ * fallan limpio en vez de hablarle a una tarjeta que ya no está.
+ *
+ * NO es simetría por gusto. Sin esto, sacar la tarjeta con el FS montado deja a
+ * FatFs creyendo que sigue ahí: la siguiente escritura iría a un bus mudo y
+ * podría dejar la FAT a medias — que es como se corrompe una tarjeta de verdad,
+ * y encima en la de otro.
+ */
+void bpvm_fs_fat_desmontar(void);
+
+/*
+ * Mira el pin de detección y monta o desmonta si ha cambiado. Barata: si no hay
+ * cambio son dos escrituras a registro y una lectura.
+ *
+ * Devuelve 1 si HA HABIDO cambio (para que el llamante pueda contarlo), 0 si
+ * todo sigue igual.
+ */
+int bpvm_fs_fat_vigilar(const bpvm_sd_pines_t* pines, const char* prefijo,
+                        char* motivo, unsigned motivo_cap);
+
 /* Para el diagnóstico: dónde empezó la partición y si hay algo montado. */
 uint32_t bpvm_fs_fat_lba_particion(void);
 int      bpvm_fs_fat_montado(void);

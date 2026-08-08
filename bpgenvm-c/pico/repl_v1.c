@@ -659,6 +659,42 @@ static void handle_sd_info(long id, const json_obj_t* obj) {
 }
 
 /* ============================================================ */
+/* V5/H2 — LA TARJETA PUEDE ENTRAR Y SALIR EN CALIENTE
+ *
+ * El montaje del arranque es de UNA VEZ, así que meter la tarjeta después no
+ * hacía nada: nadie volvía a mirar. Y sacarla con el volumen montado era peor
+ * —FatFs seguía creyendo que estaba— así que la siguiente escritura iría a un
+ * bus mudo y podría dejar la FAT a medias. Eso corrompe tarjetas de verdad.
+ *
+ * Se mira el pin de detección desde el hueco en que la comm task no tiene nada
+ * que hacer. UNA lectura de GPIO cada medio segundo; en el resto de vueltas ni
+ * se entra. Y NO se toca el bus SPI hasta que el pin dice que hay algo.
+ *
+ * Medio segundo es de la escala de un dedo metiendo una tarjeta, no de la del
+ * micro: más a menudo no se notaría y sólo gastaría.
+ */
+#define SD_VIGILA_CADA_MS  500
+
+static void sd_vigilar_tick(void) {
+    extern bpvm_sd_pines_t s_sd_pines;
+    extern int             s_sd_hay_config;
+    if (!s_sd_hay_config) return;
+
+    static int64_t s_proxima = 0;
+    int64_t ahora = bpvm_platform_now_ms();
+    if (ahora < s_proxima) return;
+    s_proxima = ahora + SD_VIGILA_CADA_MS;
+
+    char motivo[80];
+    if (bpvm_fs_fat_vigilar(&s_sd_pines, "/sd", motivo, sizeof motivo)) {
+        /* Sólo se escribe cuando CAMBIA algo: un log que repite "sigue igual"
+         * dos veces por segundo es un log que nadie lee. */
+        log_printf("sd: %s", motivo[0] ? motivo : "cambio en el zocalo");
+        log_flush();
+    }
+}
+
+/* ============================================================ */
 /* LIST_DIR — V5/H2: las entradas de UN directorio
  *
  * VERBO NUEVO, no un LIST arreglado. LIST es carga estructural del Run (el
@@ -1913,6 +1949,7 @@ void repl_v1_run(void) {
     for (;;) {
         int first = getchar_timeout_us(0);
         if (first < 0) {                      /* nada que leer: ceder la CPU */
+            sd_vigilar_tick();                /* V5/H2: ¿ha entrado o salido la SD? */
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
