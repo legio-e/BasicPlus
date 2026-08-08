@@ -553,8 +553,8 @@ public final class BpvmClient implements AutoCloseable {
             Map<String, Object> resp = future.get(timeoutMs, TimeUnit.MILLISECONDS);
             String respType = Json.getString(resp, "type", "");
             if ("ERROR".equals(respType)) {
-                throw new IOException("VM error [" + Json.getString(resp, "code", "?") + "]: "
-                        + Json.getString(resp, "message", "?"));
+                throw new WireError(Json.getString(resp, "code", "?"),
+                                    Json.getString(resp, "message", "?"));
             }
             return resp;
         } catch (TimeoutException te) {
@@ -825,6 +825,69 @@ public final class BpvmClient implements AutoCloseable {
                     Json.getBool(m, "isDir", false)));
         }
         return out;
+    }
+
+    /**
+     * V5/H2 — las entradas de UN directorio, sin recursión y SIN CRC.
+     *
+     * No sustituye a {@link #listFiles}: responden a preguntas distintas y las
+     * dos hacen falta. LIST trae el FS interno ENTERO con el CRC de cada
+     * fichero, que es lo que necesita el Run para saltarse los PUT; esto trae
+     * los hijos de un directorio, que es lo que necesita mirar.
+     *
+     * Con una tarjeta SD montada la diferencia deja de ser estética: LIST
+     * sobre 119 GB leería la tarjeta entera byte a byte para calcular CRCs.
+     *
+     * Lanza IOException si el device no conoce el verbo (firmware anterior a
+     * V5/H2) — que es un "no sé", no un "está vacío", y conviene no
+     * confundirlos.
+     */
+    public DirListing listDir(String remotePath, long timeoutMs) throws IOException {
+        String p = (remotePath == null || remotePath.isEmpty()) ? "/" : remotePath;
+        Map<String, Object> resp = sendRequest("LIST_DIR", "\"path\":" + jsonStr(p), null, timeoutMs);
+        List<Object> arr = Json.getList(resp, "entries");
+        List<RemoteFile> out = new ArrayList<>();
+        if (arr != null) for (Object o : arr) {
+            if (!(o instanceof Map)) continue;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) o;
+            out.add(new RemoteFile(
+                    Json.getString(m, "name", ""),
+                    Json.getLong(m, "size", 0),
+                    -1,                             // aquí NO hay CRC, y es a propósito
+                    Json.getBool(m, "isDir", false)));
+        }
+        return new DirListing(out, Json.getLong(resp, "omitidas", 0));
+    }
+
+    /**
+     * Un ERROR del device, con su CÓDIGO a mano.
+     *
+     * Sigue siendo IOException, así que todo el que ya la capturaba no se
+     * entera. Lo que aporta es poder distinguir "este firmware no conoce el
+     * verbo" (UNSUPPORTED) de "ese fichero no existe" (NOT_FOUND) SIN mirar
+     * dentro del texto del mensaje: emparejar cadenas para tomar decisiones se
+     * rompe el día que alguien reescribe el mensaje, y se rompe en silencio.
+     */
+    public static final class WireError extends IOException {
+        public final String code;
+        WireError(String code, String message) {
+            super("VM error [" + code + "]: " + message);
+            this.code = code;
+        }
+        /** El device no implementa este verbo (firmware más antiguo). */
+        public boolean unsupported() { return "UNSUPPORTED".equals(code); }
+    }
+
+    /** Lo que devuelve {@link #listDir}: las entradas Y cuántas se quedaron
+     *  fuera. El device tiene tope por listado, y que se trunque no puede
+     *  quedarse en su log — quien mira la lista es quien tiene que enterarse.
+     *  Va en el resultado y no en un campo del cliente para que no pueda
+     *  quedarse a cero por descuido ni pisarse entre dos peticiones. */
+    public static final class DirListing {
+        public final List<RemoteFile> files;
+        public final long omitidas;
+        DirListing(List<RemoteFile> f, long o) { this.files = f; this.omitidas = o; }
     }
 
     /** Borra un fichero (no recursivo para dirs — el dir debe estar vacío). */

@@ -644,6 +644,96 @@ static void handle_sd_info(long id, const json_obj_t* obj) {
 }
 
 /* ============================================================ */
+/* LIST_DIR — V5/H2: las entradas de UN directorio
+ *
+ * VERBO NUEVO, no un LIST arreglado. LIST es carga estructural del Run (el
+ * IDE salta los PUT comparando el CRC que trae cada entrada), y la norma de
+ * V5 es añadir sin mover cimientos. Pero es que además responden a preguntas
+ * DISTINTAS, y confundirlas es lo que hacía esto difícil:
+ *
+ *   · LIST     = "todo el FS interno, con CRC" — lo que necesita el Run.
+ *   · LIST_DIR = "los hijos de ESTE directorio" — lo que necesita mirar.
+ *
+ * Y con una SD montada la diferencia deja de ser estética: LIST recorre el FS
+ * ENTERO y calcula el CRC de cada fichero, o sea que sobre una tarjeta de
+ * 119 GB se leería la tarjeta entera byte a byte por SPI. Aquí no hay CRC ni
+ * recursión a propósito, no por ahorrar.
+ *
+ * El listado se hace en dos tiempos —fotografiar y luego emitir— y eso NO es
+ * un rodeo: el callback de la fachada corre DENTRO del cerrojo del sistema de
+ * ficheros, así que escribir al USB desde ahí retendría el cerrojo todo el
+ * rato que el host tarde en leer, y cualquier thread BP que tocara un fichero
+ * se quedaría esperando. Mismo motivo por el que fs_list ya lo hacía así.
+ */
+
+#define LISTDIR_MAX_ENTRIES  96
+#define LISTDIR_NAME_MAX     64
+
+typedef struct {
+    char     nombres[LISTDIR_MAX_ENTRIES][LISTDIR_NAME_MAX];
+    uint32_t tam[LISTDIR_MAX_ENTRIES];
+    uint8_t  esdir[LISTDIR_MAX_ENTRIES];
+    int      n;
+    int      omitidas;      /* las que NO cupieron — jamás en silencio */
+} listdir_foto_t;
+
+static void listdir_cb(const char* name, int is_dir, uint32_t size, void* user) {
+    listdir_foto_t* f = (listdir_foto_t*) user;
+    if (f->n >= LISTDIR_MAX_ENTRIES) { f->omitidas++; return; }
+    snprintf(f->nombres[f->n], LISTDIR_NAME_MAX, "%s", name);
+    f->tam[f->n]   = size;
+    f->esdir[f->n] = (uint8_t) (is_dir ? 1 : 0);
+    f->n++;
+}
+
+static void handle_list_dir(long id, const json_obj_t* obj) {
+    char path[64];
+    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+        snprintf(path, sizeof path, "/");        /* sin path = la raíz */
+    }
+    if (path[0] == '\0') { path[0] = '/'; path[1] = '\0'; }
+
+    listdir_foto_t* f = (listdir_foto_t*) bpvm_scratch_take(sizeof(*f), "LIST_DIR");
+    if (!f) {
+        /* Sin zona NO se contesta un listado vacío: eso se leería como "el
+         * directorio está vacío", que es mentira y de las caras. */
+        wire_v1_send_error(id, "BUSY", "zona de scratch ocupada");
+        return;
+    }
+    f->n = 0; f->omitidas = 0;
+    int r = bpvm_fs_list(path, listdir_cb, f);
+    if (r != 0 && f->n == 0) {
+        bpvm_scratch_give("LIST_DIR");
+        wire_v1_send_error(id, "NOT_FOUND", "no se puede listar");
+        return;
+    }
+    if (f->omitidas) {
+        log_printf("fs: LIST_DIR '%s' INCOMPLETO — %d entradas fuera",
+                   path, f->omitidas);
+        log_flush();
+    }
+
+    /* Y ahora sí, FUERA del cerrojo, a escupirlo. */
+    fputs("{\"type\":\"LIST_DIR_REPLY\",\"id\":", stdout);
+    fprintf(stdout, "%ld,\"entries\":[", id);
+    for (int i = 0; i < f->n; i++) {
+        if (i) fputc(',', stdout);
+        fputs("{\"name\":\"", stdout);
+        for (const char* p = f->nombres[i]; *p; p++) {
+            if (*p == '"' || *p == '\\') fputc('\\', stdout);
+            fputc(*p, stdout);
+        }
+        fprintf(stdout, "\",\"size\":%u,\"isDir\":%s}",
+                (unsigned) f->tam[i], f->esdir[i] ? "true" : "false");
+    }
+    /* El aviso de truncado viaja al IDE, no sólo al log: quien mira el listado
+     * es quien tiene que enterarse de que no está entero. */
+    fprintf(stdout, "],\"omitidas\":%d}\n", f->omitidas);
+    fflush(stdout);
+    bpvm_scratch_give("LIST_DIR");
+}
+
+/* ============================================================ */
 /* SD_MOUNT — V5/H2: montar la tarjeta como sistema de ficheros
  *
  * VERBO APARTE, y no un añadido a SD_INFO, porque SD_INFO es un DIAGNÓSTICO y
@@ -1703,6 +1793,7 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "DEL")      == 0) { handle_del(id, &obj);      return; }
     if (strcmp(type, "SD_INFO")  == 0) { handle_sd_info(id, &obj);  return; }  /* V5/H1 */
     if (strcmp(type, "SD_MOUNT") == 0) { handle_sd_mount(id, &obj); return; }  /* V5/H2 */
+    if (strcmp(type, "LIST_DIR") == 0) { handle_list_dir(id, &obj); return; }  /* V5/H2 */
     if (strcmp(type, "MKDIR")    == 0) { handle_mkdir(id, &obj);    return; }
     if (strcmp(type, "RMDIR")    == 0) { handle_rmdir(id, &obj);    return; }
     if (strcmp(type, "RENAME")   == 0) { handle_rename(id, &obj);   return; }

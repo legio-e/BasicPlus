@@ -239,12 +239,47 @@ long long bpvm_fs_mtime_ms(const char* path) {
 }
 
 /* H2·B1.3 — listado (wire LS+CRC / explorer del IDE). */
+/*
+ * Los MONTAJES que cuelgan DIRECTAMENTE de `path`, emitidos como directorios.
+ *
+ * Hacen falta porque un punto de montaje no es un directorio de nadie: no está
+ * en littlefs (ahí no existe) ni en el volumen montado (ahí es la raíz). Vive
+ * en ESTA tabla y en ningún otro sitio. Sin esto, `/sd` se puede recorrer
+ * escribiendo la ruta a mano pero no aparece al listar `/` — existe y no se ve,
+ * que es la peor de las dos formas de no funcionar.
+ *
+ * "Directamente" = un solo tramo por debajo: listando `/` sale `sd`, pero un
+ * hipotético `/mnt/sd` sólo saldría al listar `/mnt`.
+ */
+static void emite_montajes_hijos(const char* path,
+                                 void (*cb)(const char*, int, uint32_t, void*),
+                                 void* user) {
+    size_t plen = strlen(path);
+    /* La raíz se escribe "/" o "" según quién pregunte; las dos son la raíz. */
+    if (plen == 1 && path[0] == '/') plen = 0;
+    for (int i = 0; i < g_mount_count; i++) {
+        const char* p = g_mounts[i].prefix;
+        if (p[0] == '\0') continue;                     /* el backend raíz     */
+        if (strcmp(p, path) == 0) continue;             /* el montaje es ESTE  */
+        if (strncmp(p, path, plen) != 0) continue;      /* cuelga de otro sitio */
+        /* El '/' de aquí no es cosmético: sin él, listar "/m" daría por hijo
+         * suyo el montaje "/mnt/sd" — el prefijo coincide sin caer en frontera. */
+        const char* resto = p + plen;
+        if (resto[0] != '/' || resto[1] == '\0') continue;
+        if (strchr(resto + 1, '/') != NULL) continue;   /* nieto, no hijo      */
+        cb(resto + 1, 1 /* es directorio */, 0, user);
+    }
+}
+
 int bpvm_fs_list(const char* path,
                  void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
                  void* user) {
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->list) return be->list(path, cb, user);
-    return -1;
+    int r = (be && be->list) ? be->list(path, cb, user) : -1;
+    /* Aunque el backend haya fallado: que no se pueda leer un volumen no borra
+     * los que cuelgan de él. */
+    if (cb && path) emite_montajes_hijos(path, cb, user);
+    return r;
 }
 
 /* #305 — lectura parcial. Sin backend que la implemente devuelve -1: el llamante

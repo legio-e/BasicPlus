@@ -381,6 +381,51 @@ public final class PicoExplorer extends JPanel {
             try {
                 switch (fcmd) {
                     case "dir": {
+                        // V5/H2 — se pregunta POR DIRECTORIO (LIST_DIR) y se cae
+                        // al listado plano de siempre si el device no lo conoce.
+                        //
+                        // No es un capricho: el listado plano recorre el FS entero
+                        // y calcula el CRC de cada fichero. Con una SD montada eso
+                        // sería leerse la tarjeta byte a byte por SPI. Y además el
+                        // plano no puede enseñar /sd, que no es un directorio de
+                        // nadie sino una entrada de la tabla de montajes.
+                        String destino = farg.isEmpty() ? fcwd : resolvePath(farg);
+                        BpvmClient dc = debugClient();
+                        boolean hecho = false;
+                        if (dc != null) {
+                            try {
+                                BpvmClient.DirListing d = dc.listDir(destino, 8000);
+                                int nd = 0;
+                                for (BpvmClient.RemoteFile e : d.files) {
+                                    emitLine(String.format("  %-32s %10s",
+                                             e.name + (e.isDirectory ? "/" : ""),
+                                             e.isDirectory ? "" : Long.toString(e.size)));
+                                    nd++;
+                                }
+                                emitLine("  " + nd + " entrada(s) en " + destino + ".");
+                                // Que se trunque NO puede pasar en silencio: un
+                                // listado corto se lee como "no hay más".
+                                if (d.omitidas > 0) {
+                                    emitLine("  ⚠ LISTADO INCOMPLETO: " + d.omitidas
+                                             + " entrada(s) mas que no caben en una peticion.");
+                                }
+                                hecho = true;
+                            } catch (BpvmClient.WireError we) {
+                                if (we.unsupported()) {
+                                    // Firmware anterior a V5/H2. Se dice y se
+                                    // sigue por el camino de siempre.
+                                    emitLine("  (la placa no tiene LIST_DIR; listado plano)");
+                                } else {
+                                    // Cualquier otro error es del listado EN SÍ
+                                    // (no existe, no se puede leer...). Caer al
+                                    // plano aquí sería tapar el fallo con un
+                                    // listado de otro sitio.
+                                    emitLine("  dir: " + we.getMessage());
+                                    hecho = true;
+                                }
+                            }
+                        }
+                        if (hecho) break;
                         java.util.List<Backend.Entry> all = backend.list();
                         String base = fcwd.equals("/") ? "/" : fcwd + "/";
                         int n = 0;
