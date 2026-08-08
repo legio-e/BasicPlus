@@ -466,6 +466,84 @@ public final class PicoExplorer extends JPanel {
                         // al llegar su EXITED con status KILLED.
                         killRunning();
                         break;
+                    case "sd": {
+                        // V5/H1 — ¿contesta la tarjeta SD, y quién es? Esto NO
+                        // monta un sistema de ficheros: es el primer peldaño de
+                        // la cadena, el que dice si el bus habla. Si esto no
+                        // sale, depurar FAT encima sería depurar sobre nada.
+                        //
+                        // Se manda a mano y no al conectar porque habla con
+                        // hardware que puede no estar: la negociación va a
+                        // 400 kHz por exigencia del estándar y el arranque de
+                        // la tarjeta puede llevarse hasta un segundo.
+                        BpvmClient dc = debugClient();
+                        if (dc == null) {
+                            emitLine("  sd: este backend no habla con la placa");
+                            break;
+                        }
+                        java.util.Map<String, Object> m = dc.getSdInfo(6000);
+                        if (m == null) { emitLine("  sd: sin respuesta"); break; }
+                        boolean ok = "true".equalsIgnoreCase(istr(m, "ok"));
+                        if (!ok) {
+                            // El peldaño es el dato: dice DÓNDE se paró.
+                            emitLine("  sd: NO  — " + istr(m, "motivo"));
+                            String pel = istr(m, "peldano");
+                            if (!pel.isEmpty()) emitLine("      (peldano " + pel + ")");
+                            // La traza es el instrumento: qué mandó la tarjeta
+                            // DE VERDAD. 00 repetido = linea flotante (no es la
+                            // tarjeta hablando); FF = silencio; otra cosa = si
+                            // habla y hay que leer su R1.
+                            String tz = istr(m, "traza");
+                            if (!tz.isEmpty()) {
+                                emitLine("      CMD" + istr(m, "ultimoCmd") + " -> leido: " + tz);
+                            }
+                            break;
+                        }
+                        long bloques = ilong(m, "bloques");
+                        emitLine("  sd: OK");
+                        emitLine("      tarjeta   : " + istr(m, "producto")
+                                 + " (OEM " + istr(m, "oem")
+                                 + ", fabricante 0x" + Long.toHexString(ilong(m, "fabricante")) + ")");
+                        emitLine("      tipo      : " + (ilong(m, "version") == 2
+                                 ? "SDHC/SDXC (CSD v2)" : "SDSC (CSD v1)")
+                                 + ("true".equalsIgnoreCase(istr(m, "altaCap"))
+                                    ? ", direcciona por BLOQUE" : ", direcciona por BYTE"));
+                        // Los bloques son de 512 B SIEMPRE en esta capa (lo que
+                        // varia es como se DIRECCIONAN, no su tamano).
+                        emitLine("      capacidad : " + bloques + " bloques de 512 B  ("
+                                 + human(bloques * 512L) + ")");
+                        emitLine("      fabricada : " + istr(m, "mes") + "/" + istr(m, "anno")
+                                 + "   serie " + istr(m, "serie"));
+                        // El sector 0: que se identifique prueba que responde a
+                        // COMANDOS; esto prueba que entrega DATOS, que es otro
+                        // camino. 55 AA es la respuesta conocida.
+                        if ("true".equalsIgnoreCase(istr(m, "leeSector0"))) {
+                            String f = istr(m, "firma");
+                            emitLine("      sector 0  : firma " + f
+                                     + ("55 AA".equals(f) ? "  ✔ es un sector de arranque"
+                                                          : "  (no es 55 AA — sin formatear?)"));
+                            // MBR o VBR: decide DONDE empieza el sistema de
+                            // ficheros, que es lo primero que necesita H2.
+                            if ("MBR".equals(istr(m, "clase"))) {
+                                long tipo = ilong(m, "parteTipo");
+                                String qué = tipo == 0x0B || tipo == 0x0C ? "FAT32"
+                                           : tipo == 0x07 ? "exFAT/NTFS"
+                                           : tipo == 0x0E || tipo == 0x06 ? "FAT16"
+                                           : "desconocido";
+                                emitLine("      sector 0  : es una TABLA DE PARTICIONES (MBR), "
+                                         + ilong(m, "particiones") + " particion(es)");
+                                emitLine("      particion : tipo 0x"
+                                         + Long.toHexString(tipo).toUpperCase() + " (" + qué + ")"
+                                         + "  empieza en el bloque " + ilong(m, "parteLba")
+                                         + ", " + human(ilong(m, "parteSectores") * 512L));
+                            }
+                            emitLine("      formato   : \"" + istr(m, "oemFs") + "\""
+                                     + "   (quien la formateo)");
+                        } else {
+                            emitLine("      sector 0  : NO se pudo leer — " + istr(m, "motivoSector0"));
+                        }
+                        break;
+                    }
                     case "autorun": {
                         // P-autorun (#256) — gestiona /sys/auto.txt del device.
                         //   autorun           → muestra el actual

@@ -463,6 +463,18 @@ test-npack:
 	@echo "--- V5/I escalera del pack nativo (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_npack.exe
 
+# V5/H1 — decodificadores del CSD/CID de la tarjeta SD. Host-only y a proposito:
+# el dialogo con la tarjeta necesita tarjeta, pero sacar la CAPACIDAD del CSD es
+# funcion pura, son DOS formulas distintas (v1 y v2) con campos partidos entre
+# bytes, y equivocarse ahi no revienta: devuelve un numero. Una tarjeta de 32 GB
+# que dice tener 4 no se nota hasta que el FS escribe fuera.
+test-sd:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_sd.c src/bpvm_sd.c src/spi.c src/gpio.c \
+	      -o build/test_sd.exe
+	@echo "--- V5/H1 CSD/CID de la SD (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_sd.exe
+
 # H9 — board manager: núcleo portable del protocolo de gestión de placa (ENV_*/
 # PART_*). Compone env+part. Host-only: opera sobre sectores A/B en RAM; simula el
 # flujo virgen→defaults→apply→edit y el volcado del slot rancio. La cintura de flash

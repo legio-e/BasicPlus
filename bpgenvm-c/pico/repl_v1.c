@@ -49,6 +49,7 @@
 
 /* Buffer VM compartido (declarado en main.c). */
 #include "bpvm_sqlmem.h"   /* V5/H: motivo + minimo, para el aviso del INFO */
+#include "bpvm_sd.h"       /* V5/H1: SD_INFO — la tarjeta se prueba desde aqui */
 
 extern uint8_t* s_vm_buffer;          /* H7.2.b: SRAM interna o ventana PSRAM */
 extern uint8_t* s_sqlite_base;        /* V5/H: bloque de la BD (NULL = no hay) */
@@ -478,6 +479,167 @@ static void handle_put_end(long id, const json_obj_t* obj) {
         wire_v1_send_error(id, "SIZE_MISMATCH", "bytes recibidos != size anunciado"); return;
     }
     put_stream_reply(id, "PUT_END_REPLY", recv, "size");
+}
+
+/* ============================================================ */
+/* V5/H1 — SD_INFO: ¿contesta la tarjeta, y qué dice de sí misma?
+ *
+ * Se dispara desde la consola del IDE y NO en el arranque, por lo mismo que el
+ * cargador de packs: lo que puede colgarse se dispara cuando el usuario quiere.
+ * Un cuelgue durante un comando se arregla desenchufando una vez; uno en el
+ * arranque obliga a regrabar.
+ *
+ * Y vive AQUÍ y no en `bpvm_bmgr_wire.c` (que es común a las 3 familias) porque
+ * hoy sólo la Pico tiene el driver dado de alta: meterlo en el núcleo dejaría al
+ * ESP32 y al STM32 sin enlazar por algo que aún no tienen. Cuando la cadena esté
+ * probada y se porte en bloque, sube.
+ *
+ * La respuesta lleva SIEMPRE el peldaño, vaya bien o mal: "no hay tarjeta",
+ * "no contesta" y "no arranca" mandan a sitios distintos. */
+static void handle_sd_info(long id, const json_obj_t* obj) {
+    (void) obj;
+    extern bpvm_sd_pines_t s_sd_pines;      /* los rellenó el arranque desde el env */
+    extern int             s_sd_hay_config;
+    extern char            s_sd_motivo[];
+
+    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "SD_INFO_REPLY", id);
+
+    if (!s_sd_hay_config) {
+        if (off >= 0) off = wire_v1_field_bool  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "ok", 0);
+        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "motivo", s_sd_motivo);
+        if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
+        if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "SD_INFO_REPLY no cabe"); return; }
+        wire_v1_send_line(s_reply_buf, (size_t) off);
+        return;
+    }
+
+    /* 25 MHz es el techo de la clase estándar en modo SPI; subir de ahí es
+     * territorio de tarjetas que lo anuncian, y eso se mira en otro momento. */
+    bpvm_sd_info_t info;
+    bpvm_sd_res_t r = bpvm_sd_init(&s_sd_pines, 25000000, &info);
+    log_printf("sd: SD_INFO -> %s", bpvm_sd_res_str(r));
+
+    if (off >= 0) off = wire_v1_field_bool  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "ok", r == BPVM_SD_OK);
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "motivo", bpvm_sd_res_str(r));
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "peldano", (long) r);
+    /* La TRAZA: los bytes que la tarjeta mandó de verdad esperando su respuesta.
+     * Sin esto, "contesta pero no es lo que espero" no dice QUÉ contestó — y la
+     * diferencia entre leer 0x00 (linea flotante) y 0x05 (comando ilegal) manda
+     * a sitios opuestos. 0xAA en la traza = esa posicion no se llego a leer. */
+    {
+        static char hex[3 * 8 + 1];
+        static const char* D = "0123456789ABCDEF";
+        int k = 0;
+        for (int i = 0; i < 8; i++) {
+            if (i) hex[k++] = ' ';
+            hex[k++] = D[(info.traza[i] >> 4) & 0xF];
+            hex[k++] = D[info.traza[i] & 0xF];
+        }
+        hex[k] = '\0';
+        if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "ultimoCmd", info.ultimo_cmd);
+        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "traza", hex);
+    }
+    if (r == BPVM_SD_OK) {
+        if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "version",  info.version);
+        if (off >= 0) off = wire_v1_field_bool  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "altaCap",  info.alta_cap);
+        if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "bloques",  (long) info.bloques);
+        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "producto", info.producto);
+        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "oem",      info.oem);
+        if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "fabricante", info.fabricante);
+        if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "serie",    (long) info.serie);
+        if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "anno",     info.anno);
+        if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "mes",      info.mes);
+
+        /* EL SECTOR 0 — y aquí se prueban DOS cosas por el precio de una:
+         *
+         *  · la RESPUESTA CONOCIDA: un sector de arranque acaba en 55 AA. Que
+         *    la tarjeta se identifique demuestra que responde a COMANDOS; esto
+         *    demuestra que entrega DATOS, que es otro camino.
+         *  · y de regalo, el formato: los bytes 3..10 llevan el nombre de quien
+         *    la formateó ("EXFAT   ", "MSDOS5.0", "mkfs.fat"...). O sea que
+         *    sabemos en qué viene la tarjeta sin una línea de código de FS —
+         *    dato para decidir H2.
+         *
+         * El buffer es estático: 512 B en la pila de la comm task no caben. */
+        static uint8_t sec0[512];
+        bpvm_sd_res_t rl = bpvm_sd_leer_bloque(&s_sd_pines, &info, 0, sec0);
+        log_printf("sd: sector 0 -> %s", bpvm_sd_res_str(rl));
+        if (off >= 0) off = wire_v1_field_bool(s_reply_buf, sizeof(s_reply_buf),
+                                                 (size_t) off, "leeSector0", rl == BPVM_SD_OK);
+        if (rl == BPVM_SD_OK) {
+            static char firma[8], oemfs[9];
+            static const char* D = "0123456789ABCDEF";
+            firma[0] = D[(sec0[510] >> 4) & 0xF]; firma[1] = D[sec0[510] & 0xF];
+            firma[2] = ' ';
+            firma[3] = D[(sec0[511] >> 4) & 0xF]; firma[4] = D[sec0[511] & 0xF];
+            firma[5] = '\0';
+            if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                                       (size_t) off, "firma", firma);
+
+            /* ¿MBR o VBR? Los bytes 3..10 son el nombre ASCII del formateador en
+             * un sector de arranque de FS; en una tabla de particiones son
+             * código o ceros. Ese es el desempate, y decide DÓNDE mirar después:
+             * con MBR el sistema de ficheros no está aquí, está dentro de una
+             * partición. Las SD grandes vienen así de fábrica. */
+            int ascii = 1;
+            for (int i = 0; i < 8; i++) {
+                uint8_t c = sec0[3 + i];
+                oemfs[i] = (c >= 32 && c < 127) ? (char) c : '.';
+                if (c < 32 || c >= 127) ascii = 0;
+            }
+            oemfs[8] = '\0';
+            if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                                       (size_t) off, "clase", ascii ? "VBR" : "MBR");
+            if (ascii) {
+                if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                                           (size_t) off, "oemFs", oemfs);
+            } else {
+                /* La tabla: 4 entradas de 16 B desde el 446. De cada una nos
+                 * importan el TIPO (0x0B/0x0C = FAT32, 0x07 = exFAT/NTFS) y el
+                 * LBA de arranque — que es donde vive el FS de verdad. */
+                int cuantas = 0; uint32_t lba1 = 0; uint8_t tipo1 = 0; uint32_t secs1 = 0;
+                for (int i = 0; i < 4; i++) {
+                    const uint8_t* e = sec0 + 446 + i * 16;
+                    if (e[4] == 0) continue;             /* entrada vacía */
+                    if (cuantas == 0) {
+                        tipo1 = e[4];
+                        lba1  = (uint32_t) e[8] | ((uint32_t) e[9] << 8)
+                              | ((uint32_t) e[10] << 16) | ((uint32_t) e[11] << 24);
+                        secs1 = (uint32_t) e[12] | ((uint32_t) e[13] << 8)
+                              | ((uint32_t) e[14] << 16) | ((uint32_t) e[15] << 24);
+                    }
+                    cuantas++;
+                }
+                if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                         (size_t) off, "particiones", cuantas);
+                if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                         (size_t) off, "parteTipo", tipo1);
+                if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                         (size_t) off, "parteLba", (long) lba1);
+                if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
+                                                         (size_t) off, "parteSectores", (long) secs1);
+                /* Y AHORA sí, el sector de arranque de esa partición: ahí está
+                 * el nombre del formateador y su propio 55 AA. */
+                if (cuantas > 0 && bpvm_sd_leer_bloque(&s_sd_pines, &info, lba1, sec0)
+                                   == BPVM_SD_OK) {
+                    for (int i = 0; i < 8; i++) {
+                        uint8_t c = sec0[3 + i];
+                        oemfs[i] = (c >= 32 && c < 127) ? (char) c : '.';
+                    }
+                    oemfs[8] = '\0';
+                    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                                               (size_t) off, "oemFs", oemfs);
+                }
+            }
+        } else {
+            if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
+                                                       (size_t) off, "motivoSector0",
+                                                       bpvm_sd_res_str(rl));
+        }
+    }
+    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
+    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "SD_INFO_REPLY no cabe"); return; }
+    wire_v1_send_line(s_reply_buf, (size_t) off);
 }
 
 /* ============================================================ */
@@ -1471,6 +1633,7 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "PUT_DATA")  == 0) { handle_put_data(id, &obj, s_put_buf, bulk_size); return; }
     if (strcmp(type, "PUT_END")   == 0) { handle_put_end(id, &obj); return; }
     if (strcmp(type, "DEL")      == 0) { handle_del(id, &obj);      return; }
+    if (strcmp(type, "SD_INFO")  == 0) { handle_sd_info(id, &obj);  return; }  /* V5/H1 */
     if (strcmp(type, "MKDIR")    == 0) { handle_mkdir(id, &obj);    return; }
     if (strcmp(type, "RMDIR")    == 0) { handle_rmdir(id, &obj);    return; }
     if (strcmp(type, "RENAME")   == 0) { handle_rename(id, &obj);   return; }

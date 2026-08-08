@@ -885,6 +885,25 @@ public final class BpvmClient implements AutoCloseable {
         return sendRequest("INFO", null, null, timeoutMs);
     }
 
+    /**
+     * V5/H1 — arranca la tarjeta SD y devuelve lo que dice de sí misma.
+     *
+     * NO es como INFO, y conviene no confundirlos: INFO es consulta barata y
+     * sin efectos; esto HABLA con el hardware, tarda (la negociación va a
+     * 400 kHz por exigencia del estándar) y puede no haber tarjeta. Por eso lo
+     * dispara el usuario desde la consola y no se pide solo al conectar.
+     *
+     * La respuesta trae SIEMPRE `ok` y `motivo`; el resto de campos sólo si
+     * arrancó. `motivo` es el peldaño donde se paró — "no hay tarjeta", "no
+     * contesta" y "no arranca" mandan a sitios distintos.
+     *
+     * Plazo generoso a propósito: el ACMD41 del estándar puede tardar 1 s, y a
+     * eso hay que sumarle el viaje por el wire.
+     */
+    public Map<String, Object> getSdInfo(long timeoutMs) throws IOException {
+        return sendRequest("SD_INFO", null, null, timeoutMs);
+    }
+
     // ============================================================
     // H9 — gestión de placa (protocolo STATE / ENV_* / PART_*).
     // Lo consume FrmBoard sobre el MISMO transporte ya conectado (comparte

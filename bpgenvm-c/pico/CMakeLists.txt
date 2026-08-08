@@ -88,6 +88,12 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_sqlmem.c         # V5/H: regla del bloque de memoria de la BD
     ${BPVM_C_ROOT}/src/bpvm_bios.c           # V5/I: tabla BIOS prestada al pack nativo
     ${BPVM_C_ROOT}/src/bpvm_npack.c          # V5/I: escalera de validacion del pack nativo
+    # V5/H1: dialogo con la tarjeta SD en modo SPI. Portable de nacimiento (va
+    # sobre las fachadas bpvm_spi_*/bpvm_gpio_*, sin un solo #ifdef), pero SOLO
+    # se da de alta AQUI: criterio de Eduardo (8-ago) — a fondo en una placa, y
+    # las demas en bloque cuando la cadena este probada. Darlo de alta en las 5
+    # ahora seria cometer los mismos errores tres veces y corregirlos tres.
+    ${BPVM_C_ROOT}/src/bpvm_sd.c             # V5/H1: SD por SPI (por ahora solo aqui)
     ${CMAKE_CURRENT_LIST_DIR}/pack_pico.c    # V5/I: el cargador de packs de ESTA placa
     ${CMAKE_CURRENT_LIST_DIR}/bios_pico.c    # V5/I: la tabla de ESTA placa
     ${BPVM_C_ROOT}/src/bpvm_util.c           # #338/#353: zona de rascar + canal de diagnostico

@@ -34,6 +34,7 @@
 #include "bpvm_part.h"        /* H9: particiones derivadas del env */
 #include "bpvm_boot.h"        /* H9: máquina de estados del arranque */
 #include "bpvm_sqlmem.h"      /* V5/H: regla del bloque de memoria de la BD */
+#include "bpvm_sd.h"          /* V5/H1: lector de SD por SPI (pines del env)  */
 #include "bpvm_bios.h"        /* V5/I: tabla prestada al pack nativo */
 /* pico/bios_pico.c — la tabla de ESTA placa, ya verificada (NULL si tiene
  * huecos; el motivo lo deja él mismo en el log). */
@@ -121,6 +122,15 @@ uint32_t s_vm_buffer_size = 0;
  * pack se pre-enlaza contra ella en el PC. 0/NULL = no hay BD. */
 uint8_t* s_sqlite_base    = NULL;
 uint32_t s_sqlite_size     = 0;
+
+/* V5/H1 — el lector de SD. El arranque SÓLO lee los pines del env y anota si
+ * la línea era usable; no habla con la tarjeta (eso lo hace SD_INFO cuando el
+ * usuario lo pide). `s_sd_motivo` guarda POR QUÉ no hay configuración, que es
+ * la diferencia entre "esta placa no tiene lector" y "la línea está mal
+ * escrita" — dos sitios distintos donde mirar. */
+bpvm_sd_pines_t s_sd_pines;
+int             s_sd_hay_config = 0;
+char            s_sd_motivo[96] = "sin leer";
 /* Decision de V5/H: el AVISO vive en el INFO (criterio de Eduardo, 7-ago:
  * "es algo que el usuario puede consultar facilmente, y arreglar con
  * facilidad"). El INFO es de CONSULTA y refleja el estado ACTUAL — un aviso al
@@ -1071,6 +1081,32 @@ static void vm_task(void* arg) {
     /* PSRAM conducida por el env (`psram=1` ∧ RP2350B → CS=GPIO47), ANTES de
      * elegir el heap — "distribuir la memoria pronto" (Eduardo, H9). */
     board_desc_psram_from_env(bpvm_env_get_bool(&s_env, "psram", 0));
+
+    /* V5/H1 — los pines del lector de SD, en UNA entrada con etiquetas (decisión
+     * de Eduardo: una sola línea es más simple para el usuario que cinco):
+     *
+     *     sd=sck:34,mosi:35,miso:36,cs:39,cd:40      (los de la Metro)
+     *
+     * Aquí SOLO se leen y se anotan: no se toca la tarjeta. El arranque no es
+     * sitio para hablar con hardware que puede no estar — eso lo dispara el
+     * verbo SD_INFO cuando el usuario quiere, por la misma razón que el pack
+     * nativo (un cuelgue en el arranque se repite en cada arranque). */
+    {
+        char linea[96];
+        int n = bpvm_env_get(&s_env, "sd", linea, sizeof linea);
+        if (n < 0) {
+            s_sd_hay_config = 0;
+            snprintf(s_sd_motivo, sizeof s_sd_motivo,
+                     "esta placa no declara lector de SD (no hay entrada 'sd' en el env)");
+        } else if (bpvm_sd_pines_parse(linea, &s_sd_pines,
+                                       s_sd_motivo, sizeof s_sd_motivo) != 0) {
+            s_sd_hay_config = 0;        /* el motivo ya lo escribió el parser */
+        } else {
+            s_sd_hay_config = 1;
+            s_sd_motivo[0] = '\0';
+        }
+        log_printf("sd: %s", s_sd_hay_config ? "pines configurados" : s_sd_motivo);
+    }
 
 #if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 3
     /* nivel 3 (H9): identidad + env + psram hechos, SIN tocar el FS aún. */
