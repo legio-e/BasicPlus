@@ -102,7 +102,7 @@ por bloque — camino distinto en `bpvm_sd_leer_bloque`), sin MBR
 (cero `#ifdef` de familia), pero **sólo están dados de alta en el build de la
 Pico**. Las demás familias, en bloque y cuando la cadena esté probada.
 
-#### H2-P6 — Montaje automático · ✅ **HECHO** (8-ago) — falta PROBARLO en placa
+#### H2-P6 — Montaje automático y en CALIENTE · ✅ **CERRADO EN PLACA** (8-ago)
 
 Hasta el 8-ago había que teclear `sd mount` después de cada reset, y una app de
 autoarranque encontraría `/sd` inexistente. Estaba así a propósito —no tocar
@@ -110,5 +110,25 @@ hardware que puede no estar hasta tener la cadena probada— y ese motivo ya
 caducó.
 
 Criterio de Eduardo (8-ago): **el pin de detección manda**. Si no hay tarjeta
-metida no tiene sentido montar, y así el arranque no toca ni el SPI. El dato ya
-existe (`bpvm_sd_hay_tarjeta`, y el `cd` sale del ENV).
+metida no tiene sentido montar, y así el arranque no toca ni el SPI.
+
+Verificado en la Metro: arranque con y sin tarjeta, y **meterla y sacarla en
+caliente** — se monta y se desmonta sola en medio segundo. Desde el IDE basta
+con [Refrescar]; no hace falta montar ni desmontar a mano.
+
+##### 🐛 Y por el camino salió un defecto que llevaba desde H1
+
+La primera versión sólo montaba al arranque, y Eduardo probó justo el caso que
+la rompía: arrancar SIN tarjeta y meterla después. Al mirarlo aparecieron DOS
+cosas, y la primera no era la que se buscaba:
+
+**`bpvm_sd_hay_tarjeta` leía el pin pero no lo configuraba** — eso lo hacía
+`bpvm_sd_init`. Parecía correcto porque desde init se llama justo después de
+configurarlo, pero se llama de otros dos sitios que ocurren ANTES de que init
+exista (el arranque y `disk_status`), y ahí se leía un pad virgen. Los pads del
+RP2350 arrancan en pull-DOWN → lee 0 → «hay tarjeta». **El detector decía
+siempre que sí**, y el guardián del arranque no guardaba nada.
+
+Es la MISMA trampa que la MISO de H1. La lección general, y por eso el arreglo
+va donde va: **configurar y leer un pin no pueden vivir en sitios distintos**.
+Quien lee lo deja usable, y entonces da igual quién llame y en qué orden.
