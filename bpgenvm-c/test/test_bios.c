@@ -33,6 +33,15 @@ static void* f_malloc(size_t n) { (void) n; return 0; }
 static void  f_free(void* p) { (void) p; }
 static void* f_realloc(void* p, size_t n) { (void)n; return p; }
 static struct tm* f_localtime(const void* t) { (void) t; return 0; }
+/* V5/H2 — ficheros. Postizas: aqui no se prueba QUE hacen, se prueba que el
+ * verificador se entera si FALTAN. */
+static int  f_abrir(const char* c, int w) { (void)c;(void)w; return 1; }
+static int  f_fd1(int fd) { (void) fd; return 0; }
+static long f_leer(int fd, uint32_t o, void* d, uint32_t n) { (void)fd;(void)o;(void)d;(void)n; return 0; }
+static long f_escr(int fd, uint32_t o, const void* s, uint32_t n) { (void)fd;(void)o;(void)s;(void)n; return 0; }
+static int  f_trunc(int fd, uint32_t t) { (void)fd;(void)t; return 0; }
+static long f_tam(int fd) { (void) fd; return 0; }
+static int  f_camino(const char* c) { (void) c; return 0; }
 
 /* Devuelve una tabla COMPLETA y bien formada. Cada caso la estropea de una
  * manera — un solo cambio por caso, que es como se sabe qué causó qué. */
@@ -48,6 +57,10 @@ static bpvm_bios_t buena(void) {
     b.strspn = f_span;   b.strcspn = f_span;
     b.malloc = f_malloc; b.free = f_free; b.realloc = f_realloc;
     b.localtime = f_localtime;
+    b.abrir = f_abrir; b.cerrar = f_fd1;
+    b.leer = f_leer;   b.escribir = f_escr;
+    b.truncar = f_trunc; b.tamano = f_tam; b.sincronizar = f_fd1;
+    b.borrar = f_camino; b.existe = f_camino;
     return b;
 }
 
@@ -74,9 +87,9 @@ int main(void) {
         CHECK(r && strcmp(r, "realloc") == 0, "hueco en realloc -> lo NOMBRA");
     }
     {
-        bpvm_bios_t b = buena(); b.localtime = NULL;   /* la ULTIMA de la lista */
+        bpvm_bios_t b = buena(); b.existe = NULL;   /* la ULTIMA de la lista */
         const char* r = bpvm_bios_verify(&b);
-        CHECK(r && strcmp(r, "localtime") == 0, "hueco en la ULTIMA ranura -> tambien");
+        CHECK(r && strcmp(r, "existe") == 0, "hueco en la ULTIMA ranura -> tambien");
     }
 
     /* ── 3. `log` es la voz del pack: si falta, se dice ANTES que nada ──
@@ -119,8 +132,8 @@ int main(void) {
     /* ── 7. El contador de ranuras cuadra con la struct ──
      * Si alguien añade un campo y olvida ponerlo en RANURAS, el hueco vuelve a
      * ser mudo. Esto no lo detecta del todo, pero deja el numero a la vista. */
-    CHECK(bpvm_bios_slot_count() == 17,
-          "17 ranuras (las MEDIDAS en la prueba A: 16 de libc + log)");
+    CHECK(bpvm_bios_slot_count() == 26,
+          "26 ranuras (17 de la prueba A + las 9 de ficheros de V5/H2)");
 
     /* ─────────────── EL ANCLA (idea de Eduardo, 7-ago) ───────────────
      *

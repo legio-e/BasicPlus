@@ -31,7 +31,7 @@ Detalle y trampas en la memoria `v5-h2-fat-sd`.
 
 Ordenado por lo que bloquea, no por lo que se ve.
 
-#### H2-P1 — `write_at` y `truncate`: NO SE PUEDE ESCRIBIR EN UNA POSICIÓN · `pendiente`
+#### H2-P1 — `write_at` y `truncate` · ✅ **HECHO** (8-ago, `make test-fspos` 17/17)
 
 La fachada tiene `read_at(camino, desplazamiento, …)` pero su gemela no existe.
 `write(camino, datos, longitud, append)` sólo sabe **reescribir el fichero
@@ -48,19 +48,22 @@ implemente → NULL → la fachada devuelve -1, como el resto de ops opcionales.
 
 ⚠️ `f_truncate` de FatFs exige `FF_FS_MINIMIZE 0` — comprobar antes.
 
-#### H2-P2 — La tabla BIOS no presta el sistema de ficheros · `pendiente`
+#### H2-P2 — Ficheros en la tabla BIOS · ✅ **HECHO** (8-ago, BIOS v2, 26 ranuras)
 
 Lo que se le presta hoy al pack nativo es memoria, cadenas, `malloc` y
 `localtime`. **Cero ficheros.** Y SQLite corre como pack nativo: hoy no tiene
 por dónde abrir un fichero, aunque el FS esté montado y funcionando debajo.
 
-Decisión abierta: la fachada es **por camino** (abre y cierra en cada
-operación), y una BD hace miles de lecturas de página. Por camino funcionaría,
-pero cada lectura vuelve a recorrer el directorio. Lo natural para una BD es
-una **tabla de descriptores** en el firmware: `abrir/leer/escribir/truncar/
-sincronizar/tamaño/cerrar`. Decidir al empezar, no a mitad.
+DECIDIDO: la **forma** es por descriptor (`abrir/leer/escribir/truncar/
+`sincronizar`/`tamaño`/`cerrar` + `borrar`/`existe`), porque la forma de la API
+es lo único que un pack ya grabado NO puede cambiar. El **fondo**, de momento,
+es la fachada por camino: cada lectura vuelve a recorrer el directorio.
 
-`bpvm_bios_t` ya tiene campo `version`: crecer es aditivo si se sube.
+⚠️ **Deuda elegida, no descuido**: sobre una SD por SPI ese recorrido se nota, y
+más cuanto mayor sea el árbol. Cuando moleste, el descriptor pasa a guardar el
+fichero abierto de verdad **y el pack no se entera** — que es justo lo que
+compra haber acertado la forma primero. `sincronizar` hoy devuelve 0 y ya: cada
+operación cierra, y el cierre es quien vuelca.
 
 #### H2-P3 — El árbol del IDE se corta con muchos ficheros · `pendiente`
 
@@ -99,7 +102,7 @@ por bloque — camino distinto en `bpvm_sd_leer_bloque`), sin MBR
 (cero `#ifdef` de familia), pero **sólo están dados de alta en el build de la
 Pico**. Las demás familias, en bloque y cuando la cadena esté probada.
 
-#### H2-P6 — El montaje no es automático · `en curso`
+#### H2-P6 — Montaje automático · ✅ **HECHO** (8-ago) — falta PROBARLO en placa
 
 Hasta el 8-ago había que teclear `sd mount` después de cada reset, y una app de
 autoarranque encontraría `/sd` inexistente. Estaba así a propósito —no tocar

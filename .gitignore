@@ -75,6 +75,15 @@ BpIde/.bpide-prefs
 # ============================================================
 bpgenvm-c/pico/build/
 bpgenvm-c/pico/mdn_build/
+# Artefactos del build de la Pico que NO estan bajo build/: los deja CMake al
+# resolver picotool/pioasm y al generar cabeceras. Se colaron en un commit el
+# 8-ago (301 ficheros, 130.000 lineas) por un `git add -A` sobre pico/ — y el
+# unico arreglo que no depende de acordarse es que git los ignore.
+bpgenvm-c/pico/_deps/
+bpgenvm-c/pico/FREERTOS_KERNEL/
+bpgenvm-c/pico/generated/
+bpgenvm-c/pico/build-bringup/
+bpgenvm-c/pico/pico_flash_region.ld
 bpgenvm-c/build/
 bpgenvm-c/samples/*.mod
 bpgenvm-c/samples/*.bpi

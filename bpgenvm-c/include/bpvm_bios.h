@@ -42,7 +42,7 @@ extern "C" {
 /* Sube al AÑADIR, QUITAR o REORDENAR campos. El pack compara y se niega si no
  * habla su versión: mejor un "no" con nombre que llamar a la ranura equivocada,
  * que es un cuelgue mudo. */
-#define BPVM_BIOS_VERSION  1u
+#define BPVM_BIOS_VERSION  2u   /* 2 = V5/H2: entran las ranuras de ficheros */
 
 struct tm;
 
@@ -78,6 +78,42 @@ typedef struct bpvm_bios {
 
     /* ── tiempo ── */
     struct tm* (*localtime)(const void* t);
+
+    /*
+     * ── ficheros (V5/H2) ──
+     *
+     * Sin esto, un pack nativo NO PUEDE ABRIR UN FICHERO por muy montado que
+     * esté el sistema de ficheros debajo: la tabla sólo prestaba memoria,
+     * cadenas y tiempo. Es lo que le faltaba a SQLite para llegar a la SD.
+     *
+     * ─── POR QUÉ POR DESCRIPTOR Y NO POR CAMINO ───
+     *
+     * La fachada de dentro es por CAMINO (abre y cierra en cada operación).
+     * Exponerla así habría sido más corto, pero una base de datos lee miles de
+     * páginas y cada una volvería a recorrer el directorio. Y sobre todo: la
+     * forma de la API es lo que un pack ya grabado NO puede cambiar. Si nace
+     * por camino y luego hace falta velocidad, hay que romper el contrato.
+     *
+     * Así que la FORMA es la que quiere una BD —abre una vez, lee y escribe por
+     * desplazamiento, cierra— y por dentro, de momento, es la fachada por
+     * camino. Cuando la velocidad moleste, el descriptor pasa a guardar el
+     * fichero abierto de verdad y **el pack no se entera**. Ese es el orden
+     * correcto: acertar la forma ahora, optimizar detrás después.
+     *
+     * ⚠️ `sincronizar` hoy no hace nada más que devolver 0: los backends
+     * vuelcan al cerrar cada operación, así que no hay nada pendiente. Está en
+     * la tabla porque una BD la llama y porque el día que haya escritura con el
+     * fichero abierto SÍ hará falta — y entonces el pack ya la estará llamando.
+     */
+    int   (*abrir)   (const char* camino, int para_escribir);  /* fd, o -1     */
+    int   (*cerrar)  (int fd);                                  /* 0 / -1      */
+    long  (*leer)    (int fd, uint32_t desde, void* dst, uint32_t n);
+    long  (*escribir)(int fd, uint32_t desde, const void* src, uint32_t n);
+    int   (*truncar) (int fd, uint32_t tam);
+    long  (*tamano)  (int fd);                                  /* bytes / -1  */
+    int   (*sincronizar)(int fd);
+    int   (*borrar)  (const char* camino);
+    int   (*existe)  (const char* camino);                      /* 1 / 0       */
 } bpvm_bios_t;
 
 /*
@@ -92,6 +128,23 @@ typedef struct bpvm_bios {
  * devuelven "magic"/"version".
  */
 const char* bpvm_bios_verify(const bpvm_bios_t* b);
+
+/*
+ * V5/H2 — las ranuras de FICHEROS, ya implementadas sobre la fachada `bpvm_fs`
+ * (bpvm_bios_fs.c). Portables: cada firmware sólo apunta sus ranuras aquí en
+ * vez de escribirlas otra vez, que es como divergen las familias.
+ */
+int  bpvm_bios_fs_abrir  (const char* camino, int para_escribir);
+int  bpvm_bios_fs_cerrar (int fd);
+long bpvm_bios_fs_leer   (int fd, uint32_t desde, void* dst, uint32_t n);
+long bpvm_bios_fs_escribir(int fd, uint32_t desde, const void* src, uint32_t n);
+int  bpvm_bios_fs_truncar(int fd, uint32_t tam);
+long bpvm_bios_fs_tamano (int fd);
+int  bpvm_bios_fs_sincronizar(int fd);
+int  bpvm_bios_fs_borrar (const char* camino);
+int  bpvm_bios_fs_existe (const char* camino);
+/* Suelta TODOS los descriptores. Para el arranque y para las pruebas. */
+void bpvm_bios_fs_reset  (void);
 
 /* Cuántas ranuras de función tiene la tabla. Para el log del arranque: decir
  * "BIOS lista (17 ranuras)" es más útil que "BIOS lista". */

@@ -68,7 +68,14 @@ static const bpvm_bios_t s_bios = {
     memcpy, memmove, memset, memcmp, memchr,
     strlen, strcmp, strncmp, strchr, strrchr, strspn, strcspn,
     bios_malloc, bios_free, bios_realloc,
-    bios_localtime
+    bios_localtime,
+    /* V5/H2 — ficheros. Se apuntan a la implementación PORTABLE (bpvm_bios_fs.c,
+     * sobre la fachada bpvm_fs) en vez de escribirlas aquí: escribirlas por
+     * familia es exactamente como divergen las familias. */
+    bpvm_bios_fs_abrir, bpvm_bios_fs_cerrar,
+    bpvm_bios_fs_leer,  bpvm_bios_fs_escribir,
+    bpvm_bios_fs_truncar, bpvm_bios_fs_tamano, bpvm_bios_fs_sincronizar,
+    bpvm_bios_fs_borrar, bpvm_bios_fs_existe
 };
 
 /* ── 4. EL ANCLA, pegada a la tabla ──

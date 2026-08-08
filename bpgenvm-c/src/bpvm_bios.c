@@ -23,6 +23,11 @@ static const ranura_t RANURAS[] = {
     R(strspn), R(strcspn),
     R(malloc), R(free), R(realloc),
     R(localtime),
+    /* V5/H2 — ficheros. Van AQUI y no solo en la struct: esta lista es la
+     * unica fuente de verdad del verificador, y un campo sin su R() vuelve a
+     * ser un hueco mudo, que es justo lo que este array evita. */
+    R(abrir), R(cerrar), R(leer), R(escribir), R(truncar),
+    R(tamano), R(sincronizar), R(borrar), R(existe),
 };
 
 #define N_RANURAS ((int)(sizeof(RANURAS) / sizeof(RANURAS[0])))

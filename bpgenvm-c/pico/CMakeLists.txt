@@ -87,6 +87,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_boot.c           # máquina de estados de arranque + STATE
     ${BPVM_C_ROOT}/src/bpvm_sqlmem.c         # V5/H: regla del bloque de memoria de la BD
     ${BPVM_C_ROOT}/src/bpvm_bios.c           # V5/I: tabla BIOS prestada al pack nativo
+    ${BPVM_C_ROOT}/src/bpvm_bios_fs.c        # V5/H2: sus ranuras de ficheros (portable)
     ${BPVM_C_ROOT}/src/bpvm_npack.c          # V5/I: escalera de validacion del pack nativo
     # V5/H1: dialogo con la tarjeta SD en modo SPI. Portable de nacimiento (va
     # sobre las fachadas bpvm_spi_*/bpvm_gpio_*, sin un solo #ifdef), pero SOLO
