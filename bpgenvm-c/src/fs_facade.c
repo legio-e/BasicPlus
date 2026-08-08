@@ -239,6 +239,16 @@ long long bpvm_fs_mtime_ms(const char* path) {
 }
 
 /* H2·B1.3 — listado (wire LS+CRC / explorer del IDE). */
+int bpvm_fs_en_raiz(const char* path) {
+    const bpvm_fs_backend_t* be = route(path);
+    /* El backend raíz es el del prefijo vacío. Si no hay ninguno registrado,
+     * la respuesta honesta es "sí": no hay montaje que pueda atenderlo. */
+    for (int i = 0; i < g_mount_count; i++) {
+        if (g_mounts[i].prefix[0] == '\0') return be == g_mounts[i].be;
+    }
+    return 1;
+}
+
 /*
  * Los MONTAJES que cuelgan DIRECTAMENTE de `path`, emitidos como directorios.
  *

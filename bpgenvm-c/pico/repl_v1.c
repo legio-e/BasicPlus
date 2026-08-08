@@ -287,9 +287,24 @@ static int list_cb(const char* name, uint32_t size, void* user) {
      * scratch de 128 KB... por cada fichero del listado, uno detrás de otro. Con
      * bpvm_fs_crc32 el coste es un buffer de 256 B en la pila, y el resultado es
      * bit a bit el mismo (mismo algoritmo, sólo encadenado). */
-    uint32_t crc = 0;
-    if (bpvm_fs_crc32(name, &crc) != 0) crc = 0;
-    fprintf(stdout, ",\"size\":%u,\"crc\":%u,\"isDir\":false}", (unsigned) size, (unsigned) crc);
+    /* V5/H2 — pero SÓLO del FS propio del micro. Desde que la fachada publica
+     * los montajes, este recorrido baja también al volumen montado, y ahí el
+     * CRC es puro gasto: sirve para saltarse los PUT, y al montaje no se le
+     * sube nada. Sin este corte, cada refresco del árbol se leería la tarjeta
+     * ENTERA por SPI para tirar el resultado — con 119 GB delante eso deja de
+     * ser un detalle.
+     *
+     * Se manda -1, que el IDE ya entiende como "este firmware no da CRC" y
+     * resuelve comparando tamaños. Y va CON SIGNO: un (uint32_t)-1 impreso
+     * como %u sale 4294967295, o sea un CRC de aspecto perfectamente normal
+     * que no coincidiría nunca. Mentir con un número creíble es peor que
+     * callarse. */
+    long crc = -1;
+    if (bpvm_fs_en_raiz(name)) {
+        uint32_t c = 0;
+        crc = (bpvm_fs_crc32(name, &c) == 0) ? (long) c : 0;
+    }
+    fprintf(stdout, ",\"size\":%u,\"crc\":%ld,\"isDir\":false}", (unsigned) size, crc);
     return 0;
 }
 

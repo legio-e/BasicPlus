@@ -73,6 +73,21 @@ void bpvm_fs_set_backend(const bpvm_fs_backend_t* backend);
  * rename/copy ENTRE montajes distintos → -1 (fase B decidirá). 0 / -1. */
 int  bpvm_fs_mount(const char* prefix, const bpvm_fs_backend_t* backend);
 
+/*
+ * ¿Atiende este camino el backend RAÍZ (1), o un volumen montado encima (0)?
+ *
+ * No es curiosidad: hay trabajo que sólo tiene sentido sobre el FS propio del
+ * micro. El caso que lo pidió es el CRC del listado (V5/H2) — existe para que
+ * el IDE se salte los PUT comparando contenido, y al volumen montado no se le
+ * sube nada, así que calcularlo allí es leerse la tarjeta entera por SPI para
+ * tirar el resultado. Con una SD de 119 GB eso deja de ser un detalle.
+ *
+ * Preguntar aquí y no adivinar por el nombre del camino: los prefijos los
+ * conoce la tabla de montajes y nadie más, y una comparación con "/sd" a mano
+ * caduca en cuanto alguien monte otra cosa.
+ */
+int  bpvm_fs_en_raiz(const char* path);
+
 /* Funciones efectivas (sin backend → fallo limpio). */
 int  bpvm_fs_stat  (const char* path, uint32_t* size);
 long bpvm_fs_read  (const char* path, uint8_t* dst, uint32_t cap);
