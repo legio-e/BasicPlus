@@ -53,20 +53,48 @@ static int packs_fl_erase(void* user, uint32_t off, uint32_t len) {
     return 0;
 }
 
+/*
+ * flash_range_program pide DOS cosas, y la versión anterior sólo daba una:
+ *
+ *   "Flash address of the first byte to be programmed. Must be aligned to a
+ *    256-byte flash page. [...] count [...] must be a multiple of 256 bytes."
+ *                              — pico-sdk, hardware/flash.h
+ *
+ * El tamaño estaba contemplado (la cola se rellenaba con 0xFF); la DIRECCIÓN no.
+ * Y el núcleo no las manda alineadas: con la cabecera de 128 B retenida, el
+ * primer trozo entra en `off+128`, y al activar el pack la cabecera se escribe
+ * en `off+16`. Tres `program` desalineados por grabación.
+ *
+ * En el SDK la comprobación es `invalid_params_if(...)`, que en release SE
+ * COMPILA FUERA: la dirección torcida llega a la ROM sin una queja, y lo que
+ * queda en flash no es lo que se mandó → el readback de `burn_end` no cuadra y
+ * sale VERIFY_FAIL. Muy difícil de ver, porque en el RP2350 los packs son el
+ * ÚNICO sitio que programa desalineado: littlefs escribe siempre en múltiplos
+ * de su cache (256), así que el FS jamás toca este caso.
+ *
+ * La cintura del STM32 no tiene el problema porque el U5 escribe por quadword
+ * en la dirección que le den — por eso allí los packs iban y aquí no.
+ *
+ * Ahora cada escritura se parte por FRONTERA DE PÁGINA: se calcula la página que
+ * toca, se rellena de 0xFF y se coloca el tramo en su sitio dentro de ella. El
+ * relleno es neutro en NOR (0xFF no baja ningún bit), así que reprogramar una
+ * página para completar otro tramo no altera lo ya escrito.
+ */
 static int packs_fl_program(void* user, uint32_t off, const uint8_t* d, uint32_t len) {
     (void) user;
-    /* flash_range_program exige múltiplo de FLASH_PAGE_SIZE (256). El núcleo
-     * garantiza múltiplos de 16 (contrato uniforme de los 3 micros), así que la
-     * cola se completa con 0xFF —neutro en NOR, no altera lo ya escrito. */
     static uint8_t page[FLASH_PAGE_SIZE];
+    uint32_t abs  = s_packs_off + off;
     uint32_t done = 0;
     while (done < len) {
-        uint32_t run = len - done;
-        if (run > FLASH_PAGE_SIZE) run = FLASH_PAGE_SIZE;
+        uint32_t cur  = abs + done;
+        uint32_t base = cur & ~(uint32_t) (FLASH_PAGE_SIZE - 1);  /* la página */
+        uint32_t sesgo = cur - base;                  /* dónde caemos dentro   */
+        uint32_t run  = FLASH_PAGE_SIZE - sesgo;      /* hasta el fin de página */
+        if (run > len - done) run = len - done;
         memset(page, 0xFF, sizeof page);
-        memcpy(page, d + done, run);
+        memcpy(page + sesgo, d + done, run);
         uint32_t tok = bpvm_flash_lock_begin();
-        flash_range_program(s_packs_off + off + done, page, FLASH_PAGE_SIZE);
+        flash_range_program(base, page, FLASH_PAGE_SIZE);
         bpvm_flash_lock_end(tok);
         done += run;
     }

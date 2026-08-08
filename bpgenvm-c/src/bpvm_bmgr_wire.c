@@ -77,7 +77,25 @@ static int reply_pack_err(char* out, size_t cap, long id, int32_t e) {
     case BPVM_PACK_ERR_NOSPACE: return reply_error(out, cap, id, "NO_SPACE",      "no cabe en la zona de packs (o cadena corrupta)");
     case BPVM_PACK_ERR_ALIGN:   return reply_error(out, cap, id, "BAD_ALIGN",     "el tamano no es multiplo del bloque de borrado");
     case BPVM_PACK_ERR_STATE:   return reply_error(out, cap, id, "INVALID_STATE", "sesion de burn invalida (begin/data/end desordenados)");
-    case BPVM_PACK_ERR_VERIFY:  return reply_error(out, cap, id, "VERIFY_FAIL",   "el CRC no cuadra al verificar en flash");
+    /* El motivo sale de la SESIÓN, no de otro código de error: los tres fallos
+     * son el mismo suceso ("lo releído de flash no es lo que mandé") y merecen
+     * el mismo code para el IDE; lo que hacía falta es que el MENSAJE diga en
+     * cuál de los tres se cayó, que es lo que decide dónde mirar después. */
+    case BPVM_PACK_ERR_VERIFY:
+        switch (s_burn.paso) {
+        case BPVM_PACK_PASO_RECORRIDO:
+            return reply_error(out, cap, id, "VERIFY_FAIL",
+                               "verify 1/3: la cadena de entradas releida de flash descarrila");
+        case BPVM_PACK_PASO_CRC_CONT:
+            return reply_error(out, cap, id, "VERIFY_FAIL",
+                               "verify 2/3: la cadena va, pero el CRC del contenido en flash no cuadra");
+        case BPVM_PACK_PASO_CABECERA:
+            return reply_error(out, cap, id, "VERIFY_FAIL",
+                               "verify 3/3: el contenido va, pero la cabecera no se quedo escrita");
+        default:
+            return reply_error(out, cap, id, "VERIFY_FAIL",
+                               "el CRC no cuadra al verificar en flash");
+        }
     case BPVM_PACK_ERR_IO:      return reply_error(out, cap, id, "FLASH_ERROR",   "fallo de erase/program en la flash");
     default:                    return reply_error(out, cap, id, "INTERNAL_ERROR", "error de packs desconocido");
     }

@@ -485,6 +485,7 @@ int32_t bpvm_pack_burn_end(const uint8_t* base, uint32_t region_size,
     (void) region_size;
     if (!s->active) return BPVM_PACK_ERR_STATE;
     s->active = 0;                                          /* la sesión muere aquí, pase lo que pase */
+    s->paso   = BPVM_PACK_PASO_NINGUNO;   /* que no se lea el de la grabación anterior */
     if (s->received != s->total) return BPVM_PACK_ERR_STATE;
 
     /* 1) cabecera retenida: magic + verfmt + size_total coherente + crc_cab. */
@@ -503,11 +504,13 @@ int32_t bpvm_pack_burn_end(const uint8_t* base, uint32_t region_size,
         uint32_t rel = BPVM_PACK_HEADER_SIZE;
         int r;
         while ((r = next_entry(&vsrc, s->off, s->total, &rel, NULL)) == 1) { }
-        if (r < 0) return BPVM_PACK_ERR_VERIFY;
+        if (r < 0) { s->paso = BPVM_PACK_PASO_RECORRIDO; return BPVM_PACK_ERR_VERIFY; }
         uint16_t cc = bpvm_pack_crc16(BPVM_PACK_CRC16_INIT,
                                       base + s->off + BPVM_PACK_HEADER_SIZE,
                                       rel - BPVM_PACK_HEADER_SIZE);
-        if (cc != get_u16(h + OFF_CRC_CONT)) return BPVM_PACK_ERR_VERIFY;
+        if (cc != get_u16(h + OFF_CRC_CONT)) {
+            s->paso = BPVM_PACK_PASO_CRC_CONT; return BPVM_PACK_ERR_VERIFY;
+        }
     }
 
     /* 3) ACTIVAR: cabecera [16,128) primero, el quadword del MAGIC al FINAL.
@@ -517,8 +520,9 @@ int32_t bpvm_pack_burn_end(const uint8_t* base, uint32_t region_size,
     if (fl->program(fl->user, s->off, s->hdr, 16) != 0)
         return BPVM_PACK_ERR_IO;
     /* 4) verificación final de la cabecera en flash (readback del quadword). */
-    if (memcmp(base + s->off, s->hdr, BPVM_PACK_HEADER_SIZE) != 0)
-        return BPVM_PACK_ERR_VERIFY;
+    if (memcmp(base + s->off, s->hdr, BPVM_PACK_HEADER_SIZE) != 0) {
+        s->paso = BPVM_PACK_PASO_CABECERA; return BPVM_PACK_ERR_VERIFY;
+    }
     return (int32_t) s->off;
 }
 

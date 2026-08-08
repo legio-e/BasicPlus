@@ -213,12 +213,22 @@ typedef struct bpvm_pack_flash {   /* con tag: bpvm_bmgr.h lo forward-declara */
     uint32_t erase_block;
 } bpvm_pack_flash_t;
 
+/* Cuál de las verificaciones de `burn_end` dijo que no. Las TRES devolvían
+ * BPVM_PACK_ERR_VERIFY y el wire contestaba el mismo "el CRC no cuadra" a las
+ * tres: un chivato que no distingue "lo grabado está mal" de "la cabecera no se
+ * quedó" no dice dónde mirar. Con esto, el mensaje del IDE nombra el paso. */
+#define BPVM_PACK_PASO_NINGUNO   0
+#define BPVM_PACK_PASO_RECORRIDO 1  /* la cadena de entradas leída de flash descarrila */
+#define BPVM_PACK_PASO_CRC_CONT  2  /* la cadena va, pero el contenido no es el mandado */
+#define BPVM_PACK_PASO_CABECERA  3  /* el contenido va; la cabecera no se quedó escrita */
+
 /* Sesión de burn (la guarda el llamador; una a la vez por región). */
 typedef struct {
     int      active;
     uint32_t off;                            /* destino en la región (append) */
     uint32_t total;                          /* tamaño anunciado en el BEGIN */
     uint32_t received;
+    uint8_t  paso;                           /* BPVM_PACK_PASO_*: quién dijo VERIFY */
     uint8_t  hdr[BPVM_PACK_HEADER_SIZE];     /* cabecera retenida (se graba al final) */
 } bpvm_pack_burn_t;
 
