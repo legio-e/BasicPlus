@@ -17,6 +17,7 @@
 #define CMD9_SEND_CSD       9
 #define CMD10_SEND_CID     10
 #define CMD17_READ_SINGLE  17
+#define CMD24_WRITE_SINGLE 24
 #define CMD55_APP          55
 #define CMD58_READ_OCR     58
 #define ACMD41_SEND_OP_COND 41
@@ -29,6 +30,8 @@
 #define PLAZO_ARRANQUE_MS  1000
 #define PLAZO_R1_BYTES       10   /* la tarjeta contesta en <=8; damos 10      */
 #define PLAZO_TOKEN_MS      200
+/* Grabar puede llevarse cientos de ms si a la tarjeta le toca borrar. */
+#define PLAZO_OCUPADA_MS    2000
 
 /* Reloj de negociación. NO es una precaución de manual: por encima de 400 kHz
  * la tarjeta no está obligada a entenderte mientras negocia, y el fallo sale
@@ -384,6 +387,42 @@ bpvm_sd_res_t bpvm_sd_leer_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* info
     return BPVM_SD_OK;
 }
 
+bpvm_sd_res_t bpvm_sd_escribir_bloque(const bpvm_sd_pines_t* p, bpvm_sd_info_t* info,
+                                      uint32_t lba, const uint8_t src[512])
+{
+    if (!p || !info || !src) return BPVM_SD_E_PINES;
+    uint32_t arg = info->alta_cap ? lba : (lba * 512u);
+
+    cs_bajo(p);
+    uint8_t r1 = manda_cmd(p->bus, CMD24_WRITE_SINGLE, arg, 0xFF, info);
+    if (r1 != 0) { cs_alto(p); return BPVM_SD_E_ESCRITURA; }
+
+    (void) intercambia(p->bus, 0xFF);            /* un hueco antes del token   */
+    (void) intercambia(p->bus, TOKEN_DATO);
+    for (int i = 0; i < 512; i++) (void) intercambia(p->bus, src[i]);
+    (void) intercambia(p->bus, 0xFF);            /* CRC16 apagado, pero va     */
+    (void) intercambia(p->bus, 0xFF);
+
+    /* La tarjeta contesta si ACEPTA los datos, y el veredicto está en 5 bits. */
+    uint8_t resp = intercambia(p->bus, 0xFF);
+    if ((resp & 0x1F) != 0x05) { cs_alto(p); return BPVM_SD_E_ESCRITURA; }
+
+    /* Y AHORA se queda ocupada grabando: tira de MISO a 0 y no lo suelta hasta
+     * terminar. Puede ser mucho —si le toca borrar un bloque interno, cientos
+     * de ms—, así que el plazo es generoso: si se agota es que algo está roto,
+     * no que iba justo. Volver antes de tiempo deja el comando siguiente
+     * hablando con una tarjeta sorda, y eso se manifiesta LEJOS de aquí. */
+    int64_t t0 = bpvm_platform_now_ms();
+    while (intercambia(p->bus, 0xFF) == 0x00) {
+        if (bpvm_platform_now_ms() - t0 > PLAZO_OCUPADA_MS) {
+            cs_alto(p); return BPVM_SD_E_OCUPADA;
+        }
+    }
+    cs_alto(p);
+    (void) intercambia(p->bus, 0xFF);
+    return BPVM_SD_OK;
+}
+
 const char* bpvm_sd_res_str(bpvm_sd_res_t r)
 {
     switch (r) {
@@ -399,6 +438,8 @@ const char* bpvm_sd_res_str(bpvm_sd_res_t r)
     case BPVM_SD_E_CSD:          return "no se pudo leer el CSD (CMD9)";
     case BPVM_SD_E_CSD_VER:      return "el CSD es de una version que no sabemos leer";
     case BPVM_SD_E_LECTURA:      return "arranco pero no entrega datos (CMD17)";
+    case BPVM_SD_E_ESCRITURA:    return "no acepta los datos al escribir (CMD24)";
+    case BPVM_SD_E_OCUPADA:      return "acepto los datos pero no termina de grabar";
     }
     return "desconocido";
 }

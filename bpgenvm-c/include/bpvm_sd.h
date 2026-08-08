@@ -61,7 +61,9 @@ typedef enum {
     BPVM_SD_E_CID,          /* CMD10 (leer CID) falló                           */
     BPVM_SD_E_CSD,          /* CMD9 (leer CSD) falló                            */
     BPVM_SD_E_CSD_VER,      /* el CSD dice una versión que no sabemos decodificar*/
-    BPVM_SD_E_LECTURA       /* CMD17: la tarjeta arrancó pero no entrega datos   */
+    BPVM_SD_E_LECTURA,      /* CMD17: la tarjeta arrancó pero no entrega datos   */
+    BPVM_SD_E_ESCRITURA,    /* CMD24: no acepta los datos                        */
+    BPVM_SD_E_OCUPADA       /* aceptó, pero no termina de grabar (plazo agotado) */
 } bpvm_sd_res_t;
 
 /* Texto del peldaño. Literal estático; nunca hay que liberarlo. */
@@ -179,6 +181,19 @@ void bpvm_sd_cid_desglosar(const uint8_t cid[16], bpvm_sd_info_t* info);
 bpvm_sd_res_t bpvm_sd_leer_bloque(const bpvm_sd_pines_t* pines,
                                   bpvm_sd_info_t* info,
                                   uint32_t lba, uint8_t dst[512]);
+
+/*
+ * Escribe UN bloque de 512 B. Mismo criterio de direccionamiento que la lectura.
+ *
+ * ⚠️ Y aquí hay algo que la lectura no tiene: tras aceptar los datos la tarjeta
+ * se queda OCUPADA grabando —tira de MISO a 0— y puede tardar cientos de
+ * milisegundos si le toca borrar un bloque interno. Volver antes de que suelte
+ * la línea deja el siguiente comando hablando con una tarjeta sorda. Por eso se
+ * espera a que suelte, con plazo.
+ */
+bpvm_sd_res_t bpvm_sd_escribir_bloque(const bpvm_sd_pines_t* pines,
+                                      bpvm_sd_info_t* info,
+                                      uint32_t lba, const uint8_t src[512]);
 
 #ifdef __cplusplus
 }

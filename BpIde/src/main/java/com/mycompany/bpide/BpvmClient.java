@@ -904,6 +904,25 @@ public final class BpvmClient implements AutoCloseable {
         return sendRequest("SD_INFO", null, null, timeoutMs);
     }
 
+    /**
+     * V5/H2 — monta la tarjeta como sistema de ficheros bajo /sd.
+     *
+     * VERBO APARTE de SD_INFO, y a propósito: SD_INFO es un diagnóstico que no
+     * cambia nada, y esto sí. Con las dos cosas en un solo comando no habría
+     * forma de mirar una tarjeta sin montarla.
+     *
+     * La respuesta trae siempre `ok`, `motivo`, `prefijo` y `lba`; si montó,
+     * además `etiqueta`, `kbTotal`, `kbLibres`, `entradasRaiz` y `primera`.
+     * `primera` es el nombre del primer fichero de la raíz — el dato que se
+     * compara con lo que enseña el PC para saber si la cadena entera (SPI →
+     * bloques → FAT → nombres largos) traduce bien.
+     *
+     * Mismo plazo largo que SD_INFO: monta incluye arrancar la tarjeta.
+     */
+    public Map<String, Object> mountSd(long timeoutMs) throws IOException {
+        return sendRequest("SD_MOUNT", null, null, timeoutMs);
+    }
+
     // ============================================================
     // H9 — gestión de placa (protocolo STATE / ENV_* / PART_*).
     // Lo consume FrmBoard sobre el MISMO transporte ya conectado (comparte

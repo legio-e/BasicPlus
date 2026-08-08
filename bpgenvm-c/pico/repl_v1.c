@@ -50,6 +50,7 @@
 /* Buffer VM compartido (declarado en main.c). */
 #include "bpvm_sqlmem.h"   /* V5/H: motivo + minimo, para el aviso del INFO */
 #include "bpvm_sd.h"       /* V5/H1: SD_INFO — la tarjeta se prueba desde aqui */
+#include "bpvm_fs_fat.h"   /* V5/H2: SD_MOUNT — la tarjeta como sistema de ficheros */
 
 extern uint8_t* s_vm_buffer;          /* H7.2.b: SRAM interna o ventana PSRAM */
 extern uint8_t* s_sqlite_base;        /* V5/H: bloque de la BD (NULL = no hay) */
@@ -639,6 +640,73 @@ static void handle_sd_info(long id, const json_obj_t* obj) {
     }
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
     if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "SD_INFO_REPLY no cabe"); return; }
+    wire_v1_send_line(s_reply_buf, (size_t) off);
+}
+
+/* ============================================================ */
+/* SD_MOUNT — V5/H2: montar la tarjeta como sistema de ficheros
+ *
+ * VERBO APARTE, y no un añadido a SD_INFO, porque SD_INFO es un DIAGNÓSTICO y
+ * un diagnóstico que cambia el estado deja de servir para diagnosticar: con las
+ * dos cosas juntas no habría forma de mirar una tarjeta sin montarla, ni de
+ * volver a mirarla después de cambiarla.
+ *
+ * Tampoco lo hace el arranque todavía. Cuando la cadena esté probada en placa,
+ * el sitio natural es el estado 3 del boot leyendo la entrada `sd` del ENV — y
+ * entonces `/sd` estará sin que nadie escriba nada. Hasta entonces, el hardware
+ * que puede no estar se toca cuando el usuario lo pide.
+ */
+
+static void handle_sd_mount(long id, const json_obj_t* obj) {
+    (void) obj;
+    extern bpvm_sd_pines_t s_sd_pines;
+    extern int             s_sd_hay_config;
+    extern char            s_sd_motivo[];
+
+    int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "SD_MOUNT_REPLY", id);
+
+    if (!s_sd_hay_config) {
+        if (off >= 0) off = wire_v1_field_bool  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "ok", 0);
+        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "motivo", s_sd_motivo);
+        if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
+        if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "SD_MOUNT_REPLY no cabe"); return; }
+        wire_v1_send_line(s_reply_buf, (size_t) off);
+        return;
+    }
+
+    static char motivo[80];
+    int r = bpvm_fs_fat_montar(&s_sd_pines, "/sd", motivo, sizeof motivo);
+    log_printf("sd: montar -> %s%s%s", r == 0 ? "OK" : "FALLO",
+               r == 0 ? "" : " — ", r == 0 ? "" : motivo);
+
+    if (off >= 0) off = wire_v1_field_bool  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "ok", r == 0);
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "motivo",
+                                               r == 0 ? "montada" : motivo);
+    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "prefijo", "/sd");
+    /* El LBA se manda SIEMPRE, también cuando falla: si el montaje se cae con
+     * un LBA de 0 en una tarjeta que sí trae MBR, el fallo está en leer la
+     * tabla, no en el FAT — y eso son dos sitios distintos. */
+    if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "lba",
+                                               (long) bpvm_fs_fat_lba_particion());
+
+    if (r == 0) {
+        bpvm_fs_fat_resumen_t res;
+        if (bpvm_fs_fat_resumen(&res) == 0) {
+            log_printf("sd: raiz %d entradas, 1a='%s'", res.entradas_raiz, res.primera);
+            if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "etiqueta", res.etiqueta);
+            if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "kbTotal",  (long) res.kb_total);
+            if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "kbLibres", (long) res.kb_libres);
+            if (off >= 0) off = wire_v1_field_long  (s_reply_buf, sizeof(s_reply_buf), (size_t) off, "entradasRaiz", res.entradas_raiz);
+            if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "primera", res.primera);
+        } else {
+            /* Montada pero no recorrible: eso ES un hallazgo, no un detalle. */
+            log_printf("sd: montada pero el resumen FALLA");
+            if (off >= 0) off = wire_v1_field_bool(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "resumenFalla", 1);
+        }
+    }
+
+    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
+    if (off < 0) { wire_v1_send_error(id, "INTERNAL_ERROR", "SD_MOUNT_REPLY no cabe"); return; }
     wire_v1_send_line(s_reply_buf, (size_t) off);
 }
 
@@ -1634,6 +1702,7 @@ void repl_v1_handle_request(int first_char) {
     if (strcmp(type, "PUT_END")   == 0) { handle_put_end(id, &obj); return; }
     if (strcmp(type, "DEL")      == 0) { handle_del(id, &obj);      return; }
     if (strcmp(type, "SD_INFO")  == 0) { handle_sd_info(id, &obj);  return; }  /* V5/H1 */
+    if (strcmp(type, "SD_MOUNT") == 0) { handle_sd_mount(id, &obj); return; }  /* V5/H2 */
     if (strcmp(type, "MKDIR")    == 0) { handle_mkdir(id, &obj);    return; }
     if (strcmp(type, "RMDIR")    == 0) { handle_rmdir(id, &obj);    return; }
     if (strcmp(type, "RENAME")   == 0) { handle_rename(id, &obj);   return; }

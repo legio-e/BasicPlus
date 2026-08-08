@@ -356,6 +356,8 @@ public final class PicoExplorer extends JPanel {
             case "help": case "?":
                 emitLine("  comandos: dir [ruta] · cd <ruta> · type <fich> · edit <fich> · new <fich> · run <fich> · del <fich>");
                 emitLine("            kill · autorun [fich|off] · mem · save · log · reset · cls · help");
+                emitLine("            sd            — identifica la tarjeta SD (no monta nada)");
+                emitLine("            sd mount      — la monta como sistema de ficheros en /sd");
                 emitLine("  type=volcar fichero a la consola · edit=ver/editar en ventana · new=crear fichero nuevo");
                 emitLine("  kill=aborta el programa en ejecución (también menú Run → Stop, Ctrl+F2)");
                 emitLine("  autorun=app que arranca al boot (/sys/auto.txt); con la app corriendo");
@@ -479,6 +481,40 @@ public final class PicoExplorer extends JPanel {
                         BpvmClient dc = debugClient();
                         if (dc == null) {
                             emitLine("  sd: este backend no habla con la placa");
+                            break;
+                        }
+                        // V5/H2 — `sd mount` monta la tarjeta bajo /sd. Va como
+                        // subcomando y no como verbo nuevo: es la MISMA tarjeta,
+                        // el peldaño siguiente. Y sigue separado de `sd` a secas
+                        // porque un diagnóstico que cambia el estado deja de
+                        // servir para diagnosticar.
+                        if (farg.equalsIgnoreCase("mount")) {
+                            java.util.Map<String, Object> mm = dc.mountSd(8000);
+                            if (mm == null) { emitLine("  sd mount: sin respuesta"); break; }
+                            if (!"true".equalsIgnoreCase(istr(mm, "ok"))) {
+                                emitLine("  sd mount: NO  — " + istr(mm, "motivo"));
+                                // El LBA aunque falle: un 0 en una tarjeta que SÍ
+                                // trae MBR señala la lectura de la tabla, no el FAT.
+                                emitLine("      particion empieza en el bloque " + ilong(mm, "lba"));
+                                break;
+                            }
+                            String et = istr(mm, "etiqueta");
+                            emitLine("  sd mount: OK — montada en " + istr(mm, "prefijo"));
+                            emitLine("      particion : empieza en el bloque " + ilong(mm, "lba"));
+                            emitLine("      volumen   : " + (et.isEmpty() ? "(sin etiqueta)" : "\"" + et + "\"")
+                                     + "   " + human(ilong(mm, "kbLibres") * 1024L) + " libres de "
+                                     + human(ilong(mm, "kbTotal") * 1024L));
+                            if ("true".equalsIgnoreCase(istr(mm, "resumenFalla"))) {
+                                // Montada pero no recorrible ES un hallazgo.
+                                emitLine("      raiz      : MONTADA PERO NO SE PUEDE RECORRER");
+                                break;
+                            }
+                            // La respuesta conocida: este nombre se compara con
+                            // lo que enseña el PC. Si sale texto raro, la cadena
+                            // falla al TRADUCIR, no al leer.
+                            emitLine("      raiz      : " + ilong(mm, "entradasRaiz") + " entradas"
+                                     + (istr(mm, "primera").isEmpty() ? " (vacia)"
+                                        : ";  la 1a es \"" + istr(mm, "primera") + "\""));
                             break;
                         }
                         java.util.Map<String, Object> m = dc.getSdInfo(6000);
@@ -1664,11 +1700,15 @@ public final class PicoExplorer extends JPanel {
 
     private static String human(long bytes) {
         if (bytes <= 0) return "0";
-        // MB con un decimal: un FS de 2080768 B es "1.98 MB", no "1 MB"
-        // (la división entera perdía casi 1 MB de golpe en el redondeo).
-        if (bytes >= 1024L * 1024L)
-            return String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0));
-        if (bytes >= 1024L)         return (bytes / 1024L) + " KB";
+        // Se paraba en MB, y con las tarjetas SD (V5/H2) eso deja de valer: una
+        // de 128 GB salía como "121942.0 MB", que es exacto y no se lee.
+        final long K = 1024L, M = K * K, G = M * K, T = G * K;
+        // Un decimal: un FS de 2080768 B es "1.98 MB", no "1 MB" (la división
+        // entera perdía casi 1 MB de golpe en el redondeo).
+        if (bytes >= T) return String.format(java.util.Locale.US, "%.1f TB", bytes / (double) T);
+        if (bytes >= G) return String.format(java.util.Locale.US, "%.1f GB", bytes / (double) G);
+        if (bytes >= M) return String.format(java.util.Locale.US, "%.1f MB", bytes / (double) M);
+        if (bytes >= K) return (bytes / K) + " KB";
         return bytes + " B";
     }
 

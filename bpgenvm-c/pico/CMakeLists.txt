@@ -94,6 +94,11 @@ set(BPVM_C_SRC
     # las demas en bloque cuando la cadena este probada. Darlo de alta en las 5
     # ahora seria cometer los mismos errores tres veces y corregirlos tres.
     ${BPVM_C_ROOT}/src/bpvm_sd.c             # V5/H1: SD por SPI (por ahora solo aqui)
+    # V5/H2: la SD como sistema de ficheros. Mismo criterio de alta que bpvm_sd.c
+    # — una sola placa hasta que la cadena este probada de punta a punta.
+    ${BPVM_C_ROOT}/src/fs_fat.c              # backend FAT de la fachada + cintura de disco
+    ${BPVM_C_ROOT}/third_party/fatfs/ff.c            # H2: motor FatFs R0.16 (in-tree)
+    ${BPVM_C_ROOT}/third_party/fatfs/ffunicode.c     # tabla de la CP850 (nombres largos)
     ${CMAKE_CURRENT_LIST_DIR}/pack_pico.c    # V5/I: el cargador de packs de ESTA placa
     ${CMAKE_CURRENT_LIST_DIR}/bios_pico.c    # V5/I: la tabla de ESTA placa
     ${BPVM_C_ROOT}/src/bpvm_util.c           # #338/#353: zona de rascar + canal de diagnostico
@@ -177,6 +182,10 @@ target_include_directories(bpvm_pico PRIVATE
     ${BPVM_C_ROOT}/include
     ${BPVM_C_ROOT}/src                          # aot_registry.h (H3)
     ${BPVM_C_ROOT}/third_party/littlefs         # H2-B2: lfs.h
+    # V5/H2: ff.h/diskio.h. VA DESPUES de include/ a proposito: el ffconf.h que
+    # manda es el NUESTRO. El del paquete se borro al vendorizar justo para que
+    # esto no dependa del orden — ver third_party/README.md.
+    ${BPVM_C_ROOT}/third_party/fatfs
     ${CMAKE_CURRENT_LIST_DIR}                   # FreeRTOSConfig.h + embedded_mods.h
 )
 
