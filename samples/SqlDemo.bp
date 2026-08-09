@@ -56,9 +56,13 @@ module SqlDemo
       endif
       // 20.0, 20.5, 21.0 … y una marca de tiempo en milisegundos, que NO cabe
       // en 32 bits — de ahí que `lastInsertId` devuelva `long`.
+      //
+      // ⚠️ Fíjate en la **L** de `1754300000000L`. Sin ella el literal se trunca
+      // a 32 bits EN SILENCIO y aquí saldría 1953343232 (tarea #385). Con `long`
+      // grande, el sufijo no es decoración.
       db.exec("INSERT INTO medidas(sensor, valor, t) VALUES('" + sensor + "', "
               + Str.doubleToString(20.0d + double(i) * 0.5d) + ", "
-              + Str.longToString(1754300000000 + long(i) * 1000) + ")")
+              + Str.longToString(1754300000000L + long(i) * 1000) + ")")
       i := i + 1
     endwh
 

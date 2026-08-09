@@ -538,6 +538,27 @@ test-rand: $(BIN)
 # SOLOS, antes de que exista el emisor que los usa: si la conversion de cadena
 # trunca o el resolutor devuelve el simbolo equivocado, el fallo sale dentro del
 # pack —en la placa, con una BD abierta— y no se parece a lo que es.
+# V5/H4 — EL CICLO ENTERO EN EL PC: un programa BP que consulta una base de
+# datos de verdad. Junta lo que hasta ahora estaba probado por separado —la
+# librería, el puente generado, el pack, SQLite y el VFS— porque mientras no
+# estén juntos, "funciona" es una suma de promesas.
+#
+# La amalgama NO se copia al repo (9,5 MB): se saca del zip ya descargado, igual
+# que hace el arnés de notas/. Las opciones son las MISMAS del binario de la
+# placa, leídas de él y no supuestas.
+SQLNOTAS = ../notas/v5-sqlite-prueba
+SQLZIP   = /c/lenguajes/sqlite-amalgamation-3530400.zip
+SQLDEF   = -DSQLITE_OS_OTHER=1 -DSQLITE_THREADSAFE=0 -DSQLITE_ENABLE_MEMSYS5            -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_TEMP_STORE=3
+
+test-sqldemo: $(LIBOBJ)
+	@mkdir -p build/sql
+	@[ -f build/sql/sqlite3.c ] || unzip -o -j $(SQLZIP) "*/sqlite3.c" "*/sqlite3.h" 	    -d build/sql >/dev/null
+	@if [ ! -f build/sql/aot_SQLite.c ]; then 	  echo "(falta build/sql/aot_SQLite.c — generalo con:"; 	  echo "   java -cp '../lexer-java/target/classes;../pack/target/classes' \\"; 	  echo "        basicplus.frontend.AotMain ../bpstdlib/SQLite.bp build/sql)"; 	  exit 1; 	fi
+	@[ -f build/sql/sqlite3.o ] || $(CC) -O1 -w -c build/sql/sqlite3.c 	    -o build/sql/sqlite3.o -Ibuild/sql $(SQLDEF)
+	$(CC) $(CFLAGS) -Isrc -Ibuild/sql -I$(SQLNOTAS)/H 	    test/test_sqldemo.c build/sql/aot_SQLite.c 	    $(SQLNOTAS)/I/sqlite_shim.c $(SQLNOTAS)/I/vfs_bp.c $(SQLNOTAS)/H/packglue.c 	    build/sql/sqlite3.o $(LIBOBJ) -o build/sqldemo.exe $(LDFLAGS) $(SQLDEF)
+	@echo "--- V5/H4: un programa BP consultando una base de datos ---"
+	@cd build/sql && rm -f medidas.db && ../sqldemo.exe SqlDemo.mod
+
 test-packhelp: $(LIBOBJ)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc test/test_packhelp.c $(LIBOBJ) -o build/test_packhelp.exe $(LDFLAGS)
