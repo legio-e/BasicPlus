@@ -37,6 +37,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <setjmp.h>
 
 static int fallos = 0;
 static void ok(const char* que, int cond) {
@@ -144,6 +145,66 @@ int main(void)
        H->pack_sym(MARCA_FALSA, 1u, "prb_sum") == 0);
     ok("nombre NULL       -> NULL, no revienta",
        H->pack_sym(MARCA_FALSA, 1u, 0) == 0);
+
+    /* -- el AVISO -------------------------------------------------------------
+     * El texto NO puede vivir en el codigo generado: un literal de C se va a
+     * `.rodata` y el .mdn solo se lleva `.text`, sin aplicar relocs. Asi que lo
+     * redacta la VM. Aqui se comprueba lo unico que importa de el: que DIGA CON
+     * QUE paso -- la marca en letras y el simbolo por su nombre. Un "error en el
+     * pack" a secas no sirve de nada cuando el pack trae 17 simbolos.
+     *
+     * `pack_fallo` no retorna: hace longjmp al boundary que arma el interprete
+     * alrededor de cada thunk. Aqui lo armamos a mano para poder volver. */
+    /* -- long[] / double[]: la vuelta de los valores de 8 bytes ---------------
+     * Existen porque el AOT v1 no marshalla 8 bytes: un `rowid` o una marca de
+     * tiempo en milisegundos vuelven del pack por ARRAY DE SALIDA. El caso que
+     * importa es justo el que NO cabe en 32 bits — con 4 bytes saldria un numero
+     * plausible y equivocado, que es la peor forma de fallar. */
+    printf("\n  -- long[] y double[] (elementos de 8 bytes) --\n");
+    {
+        uint32_t cru = bpvm_heap_alloc(vm, 2 * 8, BPVM_TYPE_ARRAY_I64);
+        uint32_t arr;
+        bpvm_write_u32_be(vm->memory + cru, 2);
+        arr = (uint32_t) bpvm_handle_register(vm, cru).v;
+
+        H->array_store_i64(vm, arr, 0, 1754300000789LL);
+        ok("un timestamp en ms va y vuelve entero (NO cabe en 32 bits)",
+           H->array_load_i64(vm, arr, 0) == 1754300000789LL);
+        H->array_store_i64(vm, arr, 1, -1LL);
+        ok("negativo: -1, no 4294967295",  H->array_load_i64(vm, arr, 1) == -1LL);
+        ok("y el vecino no se pisa",       H->array_load_i64(vm, arr, 0) == 1754300000789LL);
+
+        H->array_store_f64(vm, arr, 0, 21.5);
+        H->array_store_f64(vm, arr, 1, 22.5);
+        ok("double: 21.5 + 22.5 = 44.0 sin perder",
+           H->array_load_f64(vm, arr, 0) + H->array_load_f64(vm, arr, 1) == 44.0);
+    }
+
+    printf("\n  -- pack_fallo: el mensaje --\n");
+    {
+        bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
+        f->armed = 1; f->msg[0] = 0;
+        if (setjmp(f->buf) == 0) {
+            H->pack_fallo(vm, MARCA_FALSA, 7u, "prb_suma", 1);
+            ok("pack_fallo NO retorna", 0);
+        } else {
+            printf("      \"%s\"\n", f->msg);
+            ok("vuelve por el boundary (longjmp), no sigue ejecutando", 1);
+            ok("nombra la MARCA en letras, no en hexadecimal",
+               strstr(f->msg, "PRUB") != 0 && strstr(f->msg, "0x") == 0);
+            ok("nombra el SIMBOLO que falta", strstr(f->msg, "prb_suma") != 0);
+            ok("y la VERSION que se pedia",   strstr(f->msg, "7") != 0);
+        }
+        f->armed = 1; f->msg[0] = 0;
+        if (setjmp(f->buf) == 0) {
+            H->pack_fallo(vm, MARCA_FALSA, 1u, "prb_suma", 2);
+        } else {
+            printf("      \"%s\"\n", f->msg);
+            ok("motivo 2 dice que es de TAMANO, y cuanto cabe",
+               strstr(f->msg, "no cabe") != 0 && strstr(f->msg, "512") != 0);
+        }
+        f->armed = 0;
+    }
 
     printf("\n==========================================\n");
     printf(fallos == 0 ? "  [status=OK]\n" : "  [status=FAIL] %d\n", fallos);

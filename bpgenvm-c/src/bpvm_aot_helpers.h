@@ -230,7 +230,62 @@ struct aot_helpers_v2 {
                                      char* dst, int32_t cap);
     bpvm_pack_fn_t (*pack_sym)(uint32_t marca, uint32_t version,
                                const char* nombre);
+
+    /* V5/H4 — el AVISO cuando el puente al pack no puede seguir. NO RETORNA.
+     *
+     * Este tercer slot NO estaba en el plan: lo obligó una MEDIDA. El código
+     * generado no puede llevarse el texto consigo, porque un literal de C vive
+     * en `.rodata` y el `.mdn` empaqueta `.text` Y NADA MÁS —sin aplicar ni una
+     * reloc—. Comprobado con el toolchain de verdad: `.rodata.str1.1` más un
+     * `R_ARM_REL32` en `.text`, en TODOS los niveles de optimización. En placa
+     * ese puntero no apuntaría a ningún sitio, y pasárselo a la excepción sería
+     * cambiar un fallo con nombre por un cuelgue.
+     *
+     * Así que el texto se queda AQUÍ, en la VM, que se compila y enlaza normal.
+     * El thunk sólo dice QUÉ pasó y CON QUÉ; la frase la redacta la VM:
+     *
+     *   motivo 1 → ese pack no ofrece ese símbolo. Los tres casos posibles —no
+     *              está grabado, es otra versión, no trae esa función— se
+     *              cuentan igual porque desde el thunk son indistinguibles; el
+     *              mensaje enumera los tres para que el usuario sepa dónde mirar.
+     *   motivo 2 → una cadena no cabe en el buffer del puente.
+     *
+     * `marca` se imprime como los 4 caracteres que es ('SQLI'), no como número:
+     * 0x53514C49 no le dice nada a nadie. */
+    void (*pack_fallo)(struct bpvm* vm, uint32_t marca, uint32_t version,
+                       const char* nombre, int32_t motivo);
+
+    /* V5/H4 — elementos de 8 bytes: `long[]` y `double[]`.
+     *
+     * Faltaban desde H1.2c: el lenguaje tiene `long[]` desde entonces, pero la
+     * tabla sólo llegaba a 4 bytes (i32) y 1 (i8). Nadie lo notó porque hasta
+     * ahora ningún `native` había tocado uno.
+     *
+     * Los saca a la luz el puente a un pack: un `rowid` o una marca de tiempo en
+     * milisegundos NO caben en 32 bits, y como el AOT v1 no marshalla 8 bytes
+     * (tarea #381), la vuelta es por ARRAY DE SALIDA — el array cruza como
+     * handle de 4 bytes y el thunk deja el valor en su elemento 0. Sin estos
+     * cuatro slots ese rodeo no se podía cerrar.
+     *
+     * Mismo contrato que los de i32: índice fuera de rango o array nulo lanzan,
+     * no devuelven basura. */
+    int64_t (*array_load_i64) (struct bpvm* vm, uint32_t ref, int32_t idx);
+    void    (*array_store_i64)(struct bpvm* vm, uint32_t ref, int32_t idx, int64_t v);
+    double  (*array_load_f64) (struct bpvm* vm, uint32_t ref, int32_t idx);
+    void    (*array_store_f64)(struct bpvm* vm, uint32_t ref, int32_t idx, double v);
 };
+
+/* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.
+ *
+ * Un pack recibe `const char*`, así que la cadena BP hay que copiarla a un
+ * buffer, y ese buffer sale de la PILA del thunk. De ahí el número: no es una
+ * limitación de las cadenas de BP, es cuánta pila se le puede pedir prestada a
+ * un micro por llamada. Si no cabe, se DICE (motivo 2) — nunca se trunca.
+ *
+ * Está aquí, en un solo sitio, porque lo tienen que compartir dos lados que se
+ * compilan por separado: el emisor lo estampa en el `.c` generado y la VM lo
+ * nombra en el mensaje de error. Si se separan, el aviso mentiría. */
+#define BPVM_AOT_PACK_STR  512
 
 /* Tabla v2 instanciada en el runtime con los punteros a las funciones
  * reales. Compartida entre todas las VMs del proceso. Pasada a cada

@@ -255,6 +255,38 @@ static void h_array_store_i32(bpvm_t* vm, uint32_t ref, int32_t idx, int32_t v) 
     }
     bpvm_write_i32_be(mem + addr + 4 + (uint32_t) idx * 4, v);
 }
+/* V5/H4 — elementos de 8 bytes. Calcados de los de i32 salvo el paso (8 en vez
+ * de 4). `double` viaja por el mismo camino que `long`: mismos bits, misma
+ * anchura — sólo cambia cómo se leen. */
+static uint8_t* elem8(bpvm_t* vm, uint32_t ref, int32_t idx, const char* quien) {
+    uint32_t addr, length;
+    if (ref == 0) { bpvm_aot_helpers_v2.throw_runtime(vm, quien); return 0; }
+    addr   = A(vm, ref);
+    length = bpvm_read_u32_be(vm->memory + addr);
+    if (idx < 0 || (uint32_t) idx >= length) {
+        bpvm_aot_helpers_v2.throw_runtime(vm, quien);   /* no retorna */
+        return 0;
+    }
+    return vm->memory + addr + 4 + (uint32_t) idx * 8u;
+}
+static int64_t h_array_load_i64(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    uint8_t* p = elem8(vm, ref, idx, "long[]: indice fuera de rango o array nulo");
+    return p ? bpvm_read_i64_be(p) : 0;
+}
+static void h_array_store_i64(bpvm_t* vm, uint32_t ref, int32_t idx, int64_t v) {
+    uint8_t* p = elem8(vm, ref, idx, "long[]: indice fuera de rango o array nulo");
+    if (p) bpvm_write_i64_be(p, v);
+}
+static double h_array_load_f64(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    uint8_t* p = elem8(vm, ref, idx, "double[]: indice fuera de rango o array nulo");
+    if (!p) return 0.0;
+    { int64_t bits = bpvm_read_i64_be(p); double d; memcpy(&d, &bits, 8); return d; }
+}
+static void h_array_store_f64(bpvm_t* vm, uint32_t ref, int32_t idx, double v) {
+    uint8_t* p = elem8(vm, ref, idx, "double[]: indice fuera de rango o array nulo");
+    if (p) { int64_t bits; memcpy(&bits, &v, 8); bpvm_write_i64_be(p, bits); }
+}
+
 static int32_t h_array_length(bpvm_t* vm, uint32_t ref) {
     if (ref == 0) return 0;   /* null array → length 0 (BP semantics) */
     return (int32_t) bpvm_read_u32_be(vm->memory + A(vm, ref));
@@ -477,6 +509,28 @@ static bpvm_pack_fn_t h_pack_sym(uint32_t marca, uint32_t version, const char* n
     return bpvm_pack_api_find(api, nombre);
 }
 
+/* V5/H4 — redacta y lanza. NO retorna (longjmp al boundary del intérprete).
+ * El porqué de que el texto viva aquí y no en el código generado, en la
+ * cabecera: el `.mdn` no se lleva `.rodata`. */
+static void h_pack_fallo(bpvm_t* vm, uint32_t marca, uint32_t version,
+                         const char* nombre, int32_t motivo) {
+    char m[4], buf[200];
+    m[0] = (char) ((marca >> 24) & 0xFF); m[1] = (char) ((marca >> 16) & 0xFF);
+    m[2] = (char) ((marca >>  8) & 0xFF); m[3] = (char) ( marca        & 0xFF);
+    if (nombre == 0) nombre = "?";
+    if (motivo == 2) {
+        snprintf(buf, sizeof buf,
+                 "pack '%.4s': el texto que se le pasa a '%s' no cabe en el puente"
+                 " (%d bytes como mucho)", m, nombre, BPVM_AOT_PACK_STR);
+    } else {
+        snprintf(buf, sizeof buf,
+                 "pack '%.4s': no ofrece '%s'. O no esta grabado en esta placa, o"
+                 " no habla la version %u, o no trae esa funcion",
+                 m, nombre, (unsigned) version);
+    }
+    h_throw_runtime(vm, buf);   /* no retorna */
+}
+
 static uint32_t h_string_from_cstr(bpvm_t* vm, const char* s, int32_t len) {
     if (!s || len < 0) return 0;
     return bpvm_heap_alloc_string(vm, s, (size_t) len);
@@ -521,6 +575,11 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     /* V5/H4 — llamar a un pack: convertir la cadena y resolver el símbolo. */
     .string_to_cstr      = h_string_to_cstr,
     .pack_sym            = h_pack_sym,
+    .pack_fallo          = h_pack_fallo,
+    .array_load_i64      = h_array_load_i64,
+    .array_store_i64     = h_array_store_i64,
+    .array_load_f64      = h_array_load_f64,
+    .array_store_f64     = h_array_store_f64,
     .int_to_string       = h_int_to_string,
     /* Puente native→BP (P-aot-call-bp). call_bp_i32 vive en interp.c. */
     .find_function       = h_find_function,
