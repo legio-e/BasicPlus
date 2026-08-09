@@ -540,8 +540,37 @@ public final class Parser {
                       + "\"` las funciones `native` son EXTERNAS: se declaran sin"
                       + " cuerpo y sin `end`, como un `intrinsic`");
             }
+            // Y AHORA EL CUERPO — que no es «ninguno», y ahí estaba el peligro.
+            //
+            // Una externa se resuelve al pack por el camino del AOT (el emisor
+            // le genera un puente). Pero el `.mod` se compila IGUAL, y una
+            // función sin sentencias compila a una que devuelve el cero de su
+            // tipo. O sea que sin el pack cargado, `sql_open` habría devuelto 0,
+            // `sql_fetch` habría dicho «no hay filas» y el programa habría
+            // parecido funcionar con una base de datos vacía. Eso no es un
+            // fallo: es una mentira, que es peor.
+            //
+            // Así que se le pone cuerpo aquí: uno que LANZA. Cuando el pack sí
+            // está, este bytecode no llega a ejecutarse nunca —el registro de
+            // AOT desvía la llamada al puente antes de entrar—, así que no
+            // cuesta nada y sólo habla cuando hay algo que decir.
+            //
+            // (El día que exista `PACK_CALL` —tarea #383, la idea de Eduardo de
+            // reusar el mecanismo de los `intrinsic`— este cuerpo se sustituye
+            // por la llamada de verdad y los packs funcionarán interpretados.)
+            List<IStmt> cuerpoAviso = new ArrayList<>();
+            List<IExpr> argsAviso = new ArrayList<>();
+            argsAviso.add(new StringLitExpr(
+                    name.name + ": falta el codigo nativo del pack '" + packNativoMarca
+                    + "' v" + packNativoVersion + ". Este modulo no puede funcionar sin el.",
+                    tok.line, tok.column));
+            cuerpoAviso.add(new ThrowStmt(
+                    new CallExpr(new IdentifierExpr("RuntimeError", tok.line, tok.column),
+                                 argsAviso, tok.line, tok.column),
+                    tok.line, tok.column));
+
             FuncDef ext = new FuncDef(isPublic, isFinal, false, true, name, paramList, retType,
-                                      new ArrayList<>(), tok.line, tok.column);
+                                      cuerpoAviso, tok.line, tok.column);
             ext.isPackExtern = true;
             return ext;
         }

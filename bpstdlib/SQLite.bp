@@ -1,0 +1,395 @@
+// ============================================================
+// SQLite.bp — bases de datos desde BasicPlus (V5/H4).
+//
+// El motor no está aquí: está en un PACK de código nativo grabado en la placa,
+// que publica su API bajo la marca "SQLI". Este módulo es la capa BP que la
+// hace usable, y es lo único que el programa toca.
+//
+// ─── DÓNDE VIVE ESTE FICHERO, Y POR QUÉ ──────────────────────────────────────
+//
+// En `bpstdlib/` pero FUERA de la librería: el proyecto `Stdlib.bpbuild` sigue
+// los `import` de `Stdlib.bp`, y éste no está entre ellos. O sea que convive con
+// los módulos estándar pero no entra en `Stdlib.pack`.
+//
+// Y no es sólo una decisión de momento (Eduardo, 9-ago): `Stdlib.pack` es
+// PORTABLE —el mismo para las 3 familias— y este módulo necesita código nativo,
+// que es de una arquitectura concreta. Meterlo dentro obligaría a un pack por
+// familia, que es exactamente lo que el pack existe para evitar.
+//
+// ─── PARA QUIÉN ES ESTA CAPA ─────────────────────────────────────────────────
+//
+// El usuario normal trabajará con el ORM; esto queda para consultas especiales.
+// Eso ordena las prioridades y evita construir de más:
+//
+//  · Los parámetros (`?`) NO entran de momento. El SQL se compone como texto.
+//    Sí, un valor con apóstrofo rompería la sentencia — pero quien escriba SQL
+//    a mano aquí sabe lo que hace. Cuando el ORM genere SQL con valores del
+//    usuario, ÉSE es el momento de decidirlo, y se añade sin tocar nada de esto.
+//  · Y por lo mismo, no hay sentencia preparada reutilizable: un INSERT en bucle
+//    recompila. Es el precio, se sabe dónde duele, y quien lo pague será el ORM
+//    — que podrá optimizarlo en UN sitio.
+//
+// ─── LA FORMA DE LA API (diseño de Eduardo, 9-ago) ───────────────────────────
+//
+// Un objeto `Db` con `connect()` y `close()`. Y luego **un método de ejecución
+// por cada FORMA DE RESPUESTA**: nada, un entero, un long, un real, un texto, o
+// un objeto con cursor.
+//
+// Lo que ordena todo es esto: **salvo la consulta, todos terminan solos.**
+// Preparan, ejecutan, leen y sueltan por dentro; cuando vuelven no queda nada
+// vivo. Sólo el `SELECT` de filas necesita las operaciones por separado, porque
+// el cursor tiene que sobrevivir entre una fila y la siguiente.
+//
+// Consecuencia, y es la que hace la librería difícil de equivocar:
+//
+//     · `close()`   — se le hace a la BASE DE DATOS, una vez, al terminar.
+//     · `release()` — se le hace a una CONSULTA, y es LO ÚNICO que se libera.
+//
+// Hubo un intento previo con una clase intermedia que compilaba el SQL y
+// llevaba los parámetros. Eduardo lo paró con el argumento bueno: mezclaba
+// **cómo se construye** una sentencia con **cómo se ejecuta**, y por ese camino
+// acabas necesitando un caso por verbo — uno para CREATE, otro para UPDATE…
+// Aquí no: `INSERT`, `CREATE`, `UPDATE`, `DELETE`, `DROP` y `PRAGMA` son todos
+// el mismo método, porque lo que los agrupa no es el verbo sino que no
+// devuelven nada.
+// ============================================================
+module SQLite
+  import v1 from pack "SQLI"
+
+  // -------- Tipo del valor de una columna (Query.columnType) --------
+  //
+  // ⚠️ Se pregunta POR FILA, no por columna. SQLite es de tipado dinámico: una
+  // columna declarada TEXT puede traer un entero en la fila 3. Quien venga de
+  // otra base de datos dará por hecho un esquema fijo, y ahí es donde se lleva
+  // la sorpresa — y con una BD que el usuario copió de su PC, pasa.
+  public const TYPE_INTEGER := 1
+  public const TYPE_FLOAT   := 2
+  public const TYPE_TEXT    := 3
+  public const TYPE_BLOB    := 4
+  public const TYPE_NULL    := 5
+
+  // ============================================================
+  //  Query — el cursor sobre las filas de un SELECT
+  // ============================================================
+  //
+  // Lo único de esta librería que sigue vivo cuando vuelve el método que lo
+  // creó, y por tanto lo único que hay que liberar.
+  //
+  // ⚠️ Nacerá descendiendo de `Core.Closeable` y ganará su `~Query()` cuando
+  // exista la liberación automática (diseño de Eduardo — tarea #380: destructor
+  // + `var owner`, cuatro capas). Por eso el método ya se llama `release()` y no
+  // `close()`: cuando eso entre, esta librería no se toca.
+  public class Query
+
+    public property h: integer   // handle del pack (índice + generación)
+
+    public function Query()
+      this.h := 0
+    end Query
+
+    // Avanza a la siguiente fila. true = hay fila; false = se acabaron.
+    //
+    // Se llama `nextRow` y no `next` porque **`next` es palabra reservada**:
+    // es la que cierra un `for … next`. Y no se descubre leyendo — el
+    // compilador se CUELGA en vez de decirlo (tarea #384, con repro mínimo).
+    // Segunda vez en el mismo día que una palabra reservada muerde: la otra
+    // fue `step`, que por eso en el puente se llama `sql_fetch`.
+    // Un error de verdad (BD corrupta, tarjeta) lanza excepción desde el pack.
+    public function nextRow(): boolean
+      return sql_fetch(this.h) == 1
+    end nextRow
+
+    // -------- La fila actual --------
+    //
+    // El índice de columna es 0-BASADO, como los arrays de BP.
+    public function columnCount(): integer
+      return sql_col_count(this.h)
+    end columnCount
+
+    public function columnName(i: integer): string
+      return sql_col_name(this.h, i)
+    end columnName
+
+    // Devuelve una de las constantes TYPE_* de arriba. Ver el aviso de allí: se
+    // pregunta por FILA.
+    public function columnType(i: integer): integer
+      return sql_col_type(this.h, i)
+    end columnType
+
+    public function getInt(i: integer): integer
+      return sql_get_int(this.h, i)
+    end getInt
+
+    public function getLong(i: integer): long
+      var b: long[1]
+      sql_get_long(this.h, i, b)
+      return b[0]
+    end getLong
+
+    public function getDouble(i: integer): double
+      var b: double[1]
+      sql_get_double(this.h, i, b)
+      return b[0]
+    end getDouble
+
+    public function getStr(i: integer): string
+      return sql_get_str(this.h, i)
+    end getStr
+
+    // Suelta la consulta. NO cierra la base de datos — eso es `Db.close()`.
+    // Tolerante: llamarlo dos veces no hace nada.
+    public function release()
+      if this.h != 0 then
+        sql_release(this.h)
+        this.h := 0
+      endif
+    end release
+
+  end Query
+
+
+  // ============================================================
+  //  Db — la conexión
+  // ============================================================
+  public class Db
+
+    // Handle que reparte el pack: índice + generación, NO un puntero.
+    //
+    // Un puntero no cabría en 4 bytes en el PC de 64 bits, y el mismo programa
+    // BP tiene que valer en el PC y en la placa. Pero además se gana algo: usar
+    // una conexión ya cerrada apunta a una ranura cuya generación no cuadra, y
+    // eso se DICE — con un puntero crudo sería un salto a memoria liberada.
+    public property h: integer
+
+    public function Db()
+      this.h := 0
+    end Db
+
+    // Abre (o CREA) la base de datos. false = no se pudo.
+    //
+    // Que no se pueda abrir es un RESULTADO NORMAL, no una excepción — mismo
+    // criterio que `Net.Tcp.connect`. Tarjeta fuera, ruta mala o disco lleno son
+    // cosas que pasan, y el programa decide qué hacer.
+    public function connect(path: string): boolean
+      this.h := sql_open(path, false)
+      return this.h != 0
+    end connect
+
+    // Abre en SÓLO LECTURA. Falla si no existe: no crea nada y no toca el
+    // fichero. Es la forma correcta de mirar una BD que trajo el usuario.
+    public function connectRead(path: string): boolean
+      this.h := sql_open(path, true)
+      return this.h != 0
+    end connectRead
+
+    public function isOpen(): boolean
+      return this.h != 0
+    end isOpen
+
+    // Lo que dijo el motor del último fallo. Sirve para el mensaje al usuario
+    // cuando `connect` devuelve false.
+    public function errorMessage(): string
+      return sql_errmsg(this.h)
+    end errorMessage
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  EJECUTAR — un método por FORMA DE RESPUESTA
+    //
+    //  Los cinco primeros hacen dentro todo el trabajo con el motor —preparar,
+    //  ejecutar, leer, soltar— y vuelven con la respuesta. No dejan nada vivo,
+    //  así que no hay nada que liberar.
+    //
+    //  El sexto, `query`, es el único que no puede: un cursor tiene que
+    //  sobrevivir entre una fila y la siguiente.
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── Sin respuesta ──
+    // INSERT, UPDATE, DELETE, CREATE, DROP, PRAGMA… Admite varias sentencias
+    // separadas por `;`.
+    //
+    // Un error AQUÍ sí es excepción: un SQL mal escrito es un fallo del
+    // programa, no una condición del mundo. Obligar a comprobar un código en
+    // cada llamada llena el código de `if` que nadie mira.
+    //
+    // ¿Cuántas filas se tocaron? `changes()`. ¿Qué clave se generó?
+    // `lastInsertId()`. Van aparte porque no siempre interesan.
+    public function exec(sql: string)
+      if sql_exec(this.h, sql) != 0 then
+        throw RuntimeError("SQLite: " + sql_errmsg(this.h))
+      endif
+    end exec
+
+    // ── Una respuesta escalar ──
+    //
+    //     var n: integer := db.execInt("SELECT count(*) FROM medidas")
+    //
+    // Primera columna de la primera fila. Hay uno por tipo porque BP es de
+    // tipado estático y el tipo de retorno tiene que estar decidido al compilar;
+    // no es una decisión de comodidad.
+    //
+    // `siFalta` es la respuesta cuando la consulta NO DEVUELVE NINGUNA FILA, y
+    // es un parámetro en vez de un cero fijo a propósito: para un `count(*)`
+    // siempre hay fila, pero un `SELECT valor WHERE id = 99` puede no traer
+    // nada, y ahí «no hay» y «vale 0» son cosas distintas que sólo sabe
+    // distinguir quien pregunta.
+    //
+    // ⚠️ Una fila con NULL SÍ existe: devuelve el cero de su tipo, que tampoco
+    // es «no hay fila». Si esa diferencia importa, usa `query` y mira
+    // `columnType(0)`.
+    public function execInt(sql: string, siFalta: integer := 0): integer
+      var q: Query := this.query(sql)
+      var v: integer := siFalta
+      if q.nextRow() then
+        v := q.getInt(0)
+      endif
+      q.release()
+      return v
+    end execInt
+
+    public function execLong(sql: string, siFalta: long := 0): long
+      var q: Query := this.query(sql)
+      var v: long := siFalta
+      if q.nextRow() then
+        v := q.getLong(0)
+      endif
+      q.release()
+      return v
+    end execLong
+
+    // AÑADIDO a la lista de Eduardo (que era void/int/long/string), y con
+    // motivo: `AVG` y `SUM` sobre medidas son el pan de cada día de un
+    // registrador de datos — la prueba que corrió en la Metro devolvía
+    // justamente un AVG. Sin esto habría que pedirlo como texto y parsearlo.
+    public function execDouble(sql: string, siFalta: double := 0.0d): double
+      var q: Query := this.query(sql)
+      var v: double := siFalta
+      if q.nextRow() then
+        v := q.getDouble(0)
+      endif
+      q.release()
+      return v
+    end execDouble
+
+    public function execStr(sql: string, siFalta: string := ""): string
+      var q: Query := this.query(sql)
+      var v: string := siFalta
+      if q.nextRow() then
+        v := q.getStr(0)
+      endif
+      q.release()
+      return v
+    end execStr
+
+    // ── Filas: el ÚNICO que devuelve algo vivo ──
+    //
+    //     var q: Query := db.query("SELECT sensor, valor FROM medidas")
+    //     while q.nextRow() do
+    //       print q.getStr(0), q.getDouble(1)
+    //     endwh
+    //     q.release()
+    //
+    // Y por eso es el único que pide un `release()`: el cursor tiene que
+    // sobrevivir entre vueltas del bucle, así que no puede soltarse solo.
+    //
+    // ── VARIAS CONSULTAS VIVAS A LA VEZ, y es a propósito ──
+    //
+    // Cada `Query` lleva su propia sentencia y su propio cursor, y avanzan
+    // independientes. Sobre UNA conexión caben muchas: en la campaña del 7-ago
+    // se probaron 64 a la vez sin problema. El motor no pone un tope — lo que
+    // limita es la memoria que tenga reservada el pack.
+    //
+    // Eso es lo que habilita el patrón que de verdad hace falta, el anidado:
+    //
+    //     var q: Query := db.query("SELECT id, nombre FROM sensores")
+    //     while q.nextRow() do
+    //       var n: integer := db.execInt("SELECT count(*) FROM medidas WHERE sensor = "
+    //                           + str(q.getInt(0)))
+    //       print q.getStr(1), n
+    //     endwh
+    //     q.release()
+    //
+    // Los `exec*` de dentro abren y sueltan el suyo sin tocar el de fuera.
+    //
+    // ⚠️ LA TRAMPA, y es la única: leer en paralelo es seguro, pero MODIFICAR
+    // una tabla mientras la estás recorriendo con un cursor abierto NO lo es.
+    // El motor lo permite, pero lo que vea el cursor a partir de ahí queda sin
+    // definir — puede saltarse filas o repetirlas. Si hay que actualizar según
+    // lo que se lee: primero se recorre y se guardan las claves, y después se
+    // escribe.
+    public function query(sql: string): Query
+      var q: Query := Query()
+      q.h := sql_prepare(this.h, sql)
+      if q.h == 0 then
+        throw RuntimeError("SQLite: " + sql_errmsg(this.h))
+      endif
+      return q
+    end query
+
+    // Clave (rowid) de la última fila insertada.
+    public function lastInsertId(): long
+      var b: long[1]
+      sql_last_id(this.h, b)
+      return b[0]
+    end lastInsertId
+
+    // Filas afectadas por el último INSERT / UPDATE / DELETE.
+    public function changes(): integer
+      return sql_changes(this.h)
+    end changes
+
+    // HE TERMINADO CON LA BASE DE DATOS. Tolerante: dos veces no hace nada.
+    //
+    // Por debajo acepta que queden consultas vivas y las recoge. Es una RED, no
+    // el mecanismo: una conexión puede estar abierta días, así que casi nunca
+    // llega a actuar.
+    public function close()
+      if this.h != 0 then
+        sql_close(this.h)
+        this.h := 0
+      endif
+    end close
+
+  end Db
+
+  // ============================================================
+  //  EL PUENTE — 16 símbolos, resueltos POR NOMBRE contra la tabla que publica
+  //  el pack (`import v1 from pack "SQLI"` de arriba).
+  //
+  //  Todo lo de arriba es BP normal escrito sobre estas 16, así que el pack sólo
+  //  tiene que ofrecer ÉSTAS: cualquier comodidad que añadamos después no le
+  //  afecta.
+  //
+  //  ⚠️ TODO ES DE 4 BYTES, y no es capricho: el AOT v1 sólo marshalla valores
+  //  de 4 — un `native` que devuelva `long` se rechaza con un error claro.
+  //  Consecuencia: lo de 8 bytes sale por ARRAY DE SALIDA (`long[]`/`double[]`),
+  //  que sí cruza porque el array viaja como handle. Un `rowid` o una marca de
+  //  tiempo en milisegundos NO caben en 32 bits: no es teórico.
+  //
+  //  Nada de esto se ve desde fuera: `lastInsertId()` devuelve `long` y
+  //  `getDouble()` un `double`. El rodeo vive aquí y sólo aquí, y se retira
+  //  cuando el AOT marshalle 8 bytes (tarea #381).
+  //
+  //  🔴 FALTA `getBytes` (BLOBs). El puente aún no sabe pasar un `byte[]` como
+  //  buffer, y prefiero no declarar un método que no puede funcionar: ver la
+  //  tarea del blob. Cuando entre, se añade aquí y en `Query` sin tocar nada más.
+  // ============================================================
+
+  public native function sql_open(camino: string, soloLectura: boolean): integer
+  public native function sql_exec(db: integer, sql: string): integer
+  public native function sql_prepare(db: integer, sql: string): integer
+  public native function sql_last_id(db: integer, destino: long[])
+  public native function sql_changes(db: integer): integer
+  public native function sql_close(db: integer)
+  public native function sql_errmsg(db: integer): string
+
+  public native function sql_fetch(st: integer): integer
+  public native function sql_col_count(st: integer): integer
+  public native function sql_col_name(st: integer, i: integer): string
+  public native function sql_col_type(st: integer, i: integer): integer
+  public native function sql_get_int(st: integer, i: integer): integer
+  public native function sql_get_long(st: integer, i: integer, destino: long[])
+  public native function sql_get_double(st: integer, i: integer, destino: double[])
+  public native function sql_get_str(st: integer, i: integer): string
+  public native function sql_release(st: integer)
+
+end SQLite

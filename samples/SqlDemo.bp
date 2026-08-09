@@ -1,0 +1,124 @@
+// SqlDemo.bp — un registro de medidas en una base de datos (V5/H4).
+//
+// Enseña las tres formas de hablar con la base, que son las tres que hay:
+//
+//   1. `exec`      — mandar y ya (CREATE, INSERT, UPDATE, DELETE…)
+//   2. `execInt` y compañía — pedir UN dato (un contador, una media)
+//   3. `query`     — recorrer filas con un cursor
+//
+// Y la regla que hace difícil equivocarse: **sólo lo que devuelve `query` hay
+// que liberarlo**. Todo lo demás termina solo.
+//
+// ── PARA CORRERLO HACE FALTA EL PACK ────────────────────────────────────────
+// El motor no está en la VM: está en un pack nativo grabado en la placa que se
+// publica como "SQLI". Sin él, la primera llamada lanza una excepción que lo
+// DICE con ese nombre — no devuelve ceros ni se cuelga.
+//
+// El camino de la base cambia según dónde corras:
+//   · en el PC                 "medidas.db"
+//   · en la Metro con tarjeta  "/sd/medidas.db"
+
+module SqlDemo
+  import SQLite
+  import Str
+
+  function Main(arg: string)
+    var camino: string := "medidas.db"
+    if arg != "" then
+      camino := arg
+    endif
+
+    var db: SQLite.Db := SQLite.Db()
+
+    // connect() devuelve false en vez de lanzar: que no haya tarjeta o que la
+    // ruta esté mal es algo que PASA, y el programa decide qué hacer.
+    if not db.connect(camino) then
+      print "no se pudo abrir", camino, "->", db.errorMessage()
+      return
+    endif
+    print "base abierta:", camino
+
+    // ── 1. Mandar y ya ────────────────────────────────────────────────────
+    // Varias sentencias en una llamada, separadas por ';'. Si el SQL está mal
+    // escrito eso SÍ es excepción: es un fallo del programa, no del mundo.
+    db.exec("DROP TABLE IF EXISTS medidas;"
+          + "CREATE TABLE medidas ("
+          + "  id     INTEGER PRIMARY KEY,"
+          + "  sensor TEXT,"
+          + "  valor  REAL,"
+          + "  t      INTEGER)")
+
+    var i: integer := 0
+    while i < 6 do
+      var sensor: string := "temp"
+      if i mod 2 == 1 then
+        sensor := "hum"
+      endif
+      // 20.0, 20.5, 21.0 … y una marca de tiempo en milisegundos, que NO cabe
+      // en 32 bits — de ahí que `lastInsertId` devuelva `long`.
+      db.exec("INSERT INTO medidas(sensor, valor, t) VALUES('" + sensor + "', "
+              + Str.doubleToString(20.0d + double(i) * 0.5d) + ", "
+              + Str.longToString(1754300000000 + long(i) * 1000) + ")")
+      i := i + 1
+    endwh
+
+    print "filas insertadas:", 6
+    print "  el ultimo id:  ", db.lastInsertId()
+    print "  changes():     ", db.changes()
+
+    // ── 2. Pedir UN dato ──────────────────────────────────────────────────
+    // Hay un método por tipo de respuesta porque BP es de tipado estático: el
+    // tipo de retorno tiene que estar decidido al compilar.
+    print ""
+    print "cuantas medidas:  ", db.execInt("SELECT count(*) FROM medidas")
+    print "cuantas de 'temp':", db.execInt("SELECT count(*) FROM medidas"
+                                         + " WHERE sensor = 'temp'")
+    print "media de 'temp':  ", db.execDouble("SELECT avg(valor) FROM medidas"
+                                            + " WHERE sensor = 'temp'")
+    print "el primer sensor: ", db.execStr("SELECT sensor FROM medidas"
+                                         + " ORDER BY id LIMIT 1")
+
+    // El segundo parámetro es qué contestar CUANDO NO HAY NINGUNA FILA, que no
+    // es lo mismo que "vale cero". Aquí no existe el sensor, así que sale -1.
+    print "un sensor que no existe:", db.execInt("SELECT valor FROM medidas"
+                                               + " WHERE sensor = 'viento'", -1)
+
+    // ── 3. Recorrer filas ─────────────────────────────────────────────────
+    print ""
+    print "-- todas las medidas --"
+    var q: SQLite.Query := db.query("SELECT sensor, valor, t FROM medidas"
+                                  + " ORDER BY valor")
+    var n: integer := 0
+    while q.nextRow() do
+      // Las columnas van por índice, empezando en 0 como los arrays de BP.
+      print "  ", q.getStr(0), q.getDouble(1), q.getLong(2)
+      n := n + 1
+    endwh
+    q.release()          // ← LO ÚNICO que hay que liberar
+    print "  (", n, "filas )"
+
+    // ── Y lo que de verdad hace falta: una consulta DENTRO de otra ─────────
+    //
+    // Se puede porque cada `query` lleva su propio cursor y avanzan
+    // independientes. Los `execInt` de dentro abren y sueltan el suyo sin
+    // tocar el de fuera.
+    print ""
+    print "-- cuantas medidas por sensor --"
+    var s: SQLite.Query := db.query("SELECT DISTINCT sensor FROM medidas")
+    while s.nextRow() do
+      var nombre: string := s.getStr(0)
+      var cuantas: integer := db.execInt("SELECT count(*) FROM medidas"
+                                       + " WHERE sensor = '" + nombre + "'")
+      print "  ", nombre, "->", cuantas
+    endwh
+    s.release()
+
+    // ── Terminar ──────────────────────────────────────────────────────────
+    // `close` es de la BASE DE DATOS y va una sola vez, al final. No tiene
+    // nada que ver con el `release` de las consultas.
+    db.close()
+    print ""
+    print "cerrada."
+  end Main
+
+end SqlDemo
