@@ -341,6 +341,11 @@ public final class Ast {
          *  y al emisor AOT (#157). El runtime ignora el flag — quien
          *  decide ejecutar AOT vs bytecode es el AOT registry tras link. */
         public final boolean isNative;
+
+        /** V5/H4 — `native` EXTERNA: sin cuerpo, resuelta al campo homónimo de
+         *  la tabla que publica un pack (`import v1 from pack "SQLI"`). Mutable
+         *  como `isEventHandler`: la marca el parser tras construir el nodo. */
+        public boolean isPackExtern = false;
         public final DeclName name;
         public final List<Param> params;
         public final TypeRef returnType;     // null si void

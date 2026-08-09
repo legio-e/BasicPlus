@@ -35,6 +35,14 @@ public final class Parser {
      */
     private boolean inInterface = false;
 
+    /* V5/H4 — `import v1 from pack "SQLI"`. Si está puesto, las funciones
+     * `native` de este módulo son EXTERNAS: viven en la tabla que publica ese
+     * pack, y por tanto se declaran sin cuerpo y sin `end`, igual que un
+     * `intrinsic`. Null = módulo normal, y `native` significa lo de siempre
+     * (función BP con cuerpo, candidata a AOT). */
+    private String packNativoMarca   = null;
+    private int    packNativoVersion = 0;
+
     public Parser(List<Token> tokens) {
         if (tokens == null) throw new IllegalArgumentException("tokens no puede ser null");
         this.tokens = tokens;
@@ -184,7 +192,36 @@ public final class Parser {
             // el código que ya use 'pack' como identificador.
             if (check(TokenType.IDENTIFIER) && "pack".equals(current().lexeme)) {
                 advance();
-                packName = consumeIdentifier("nombre del pack tras 'from pack'");
+                // V5/H4 — dos cosas distintas, y el STRING las desambigua sin
+                // ambigüedad ni palabra nueva:
+                //
+                //   import Modulo from pack MiPack    (H5.b) el MÓDULO vive
+                //                                     dentro de ese pack
+                //   import v1 from pack "SQLI"        (H4)   este módulo usa la
+                //                                     API v1 del pack nativo
+                //                                     que se publica como 'SQLI'
+                //
+                // Sintaxis de Eduardo (9-ago). Lo bueno: la versión de ABI queda
+                // VISIBLE en el fuente, que es exactamente lo que hay que
+                // comparar con la que traiga la tabla del pack — en vez de vivir
+                // escondida en el build.
+                if (check(TokenType.STRING_LIT)) {
+                    Object marcaVal = current().value;
+                    advance();
+                    if (!(marcaVal instanceof String) || ((String) marcaVal).length() != 4) {
+                        error("la marca de un pack nativo son 4 caracteres, p.ej. \"SQLI\"");
+                    } else {
+                        packNativoMarca = (String) marcaVal;
+                    }
+                    // El "path" de este import no es un módulo: es la VERSIÓN.
+                    if (path.size() != 1 || !path.get(0).matches("v[0-9]+")) {
+                        error("se esperaba la versión de la API — `import v1 from pack \"SQLI\"`");
+                    } else {
+                        packNativoVersion = Integer.parseInt(path.get(0).substring(1));
+                    }
+                } else {
+                    packName = consumeIdentifier("nombre del pack tras 'from pack'");
+                }
             } else {
                 Token litTok = current();
                 if (!check(TokenType.STRING_LIT)) {
@@ -467,6 +504,33 @@ public final class Parser {
         if (isIntrinsic || inInterface) {
             return new FuncDef(isPublic, isFinal, isIntrinsic, false, name, paramList, retType,
                                new ArrayList<>(), tok.line, tok.column);
+        }
+
+        // V5/H4 — `native` EXTERNA: en un módulo que declara `import vN from
+        // pack "XXXX"`, una `native` no trae cuerpo. Su implementación está en
+        // la tabla que publica ese pack, y el enlace es POR NOMBRE: esta función
+        // se resuelve al campo homónimo de la tabla.
+        //
+        // Se decide por el modificador y no adivinando por lookahead, que es
+        // como lo hace `intrinsic` — adivinar dónde acaba una cabecera sin
+        // cuerpo es exactamente el tipo de regla que falla con el primer
+        // programa raro.
+        if (isNative && packNativoMarca != null) {
+            // Chivato: si alguien le pone cuerpo, decirlo con nombre en vez de
+            // dejar que el `end` sobrante cascadee diez errores más abajo.
+            if (!check(TokenType.PUBLIC) && !check(TokenType.NATIVE)
+                    && !check(TokenType.INTRINSIC) && !check(TokenType.FUNCTION)
+                    && !check(TokenType.CLASS) && !check(TokenType.CONST)
+                    && !check(TokenType.VAR) && !check(TokenType.END)
+                    && !check(TokenType.EOF)) {
+                error("en un módulo con `import ... from pack \"" + packNativoMarca
+                      + "\"` las funciones `native` son EXTERNAS: se declaran sin"
+                      + " cuerpo y sin `end`, como un `intrinsic`");
+            }
+            FuncDef ext = new FuncDef(isPublic, isFinal, false, true, name, paramList, retType,
+                                      new ArrayList<>(), tok.line, tok.column);
+            ext.isPackExtern = true;
+            return ext;
         }
 
         List<IStmt> body = parseBody(TokenType.END);
