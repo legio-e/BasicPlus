@@ -37,6 +37,28 @@
  * conoce el GC, y no debe—. Devuelve `const char*` UTF-8 y punteros crudos, y
  * convertirlos es trabajo de nuestro lado. Regalo de H2.1: las cadenas BP ya
  * son UTF-8, así que es copiar, no traducir.
+ *
+ * ─── Y TODO DE 4 BYTES. UN PACK REPARTE HANDLES, NO PUNTEROS ─────────────────
+ *
+ * Vale para CUALQUIER pack, no sólo para SQLite, así que va aquí y no en la
+ * cabecera de uno concreto. Dos motivos, uno duro y otro bueno:
+ *
+ *  · **DURO**: el AOT v1 sólo marshalla valores de 4 bytes — un `native` no
+ *    puede tomar ni devolver un `long` (verificado; da un error claro, no falla
+ *    en silencio). Y un puntero cabe en 4 bytes en el micro pero NO en el PC de
+ *    64 bits, donde también corre el mismo `.mdn`. O sea que un objeto interno
+ *    del pack NO PUEDE viajar como puntero.
+ *  · **BUENO, y es el que importa a largo plazo**: repartir un índice + una
+ *    generación —la doctrina de los handles de V4— hace que un handle caducado
+ *    se DETECTE. Usar una conexión ya cerrada apunta a una ranura cuya
+ *    generación no cuadra, y eso se dice; con un puntero crudo era un
+ *    use-after-free mudo. Cerrar dos veces pasa a ser inofensivo en vez de
+ *    catastrófico.
+ *
+ * Y lo que sí necesite 8 bytes (un `rowid`, una marca de tiempo en ms) sale por
+ * ARRAY DE SALIDA: el array es un handle de 4 bytes, así que cruza, y BP lee su
+ * elemento 0. Rodeo confinado a las funciones que lo necesitan; cuando el AOT
+ * soporte i64 (tarea #381) se retira sin tocar nada más.
  */
 #ifndef BPVM_PACK_API_H
 #define BPVM_PACK_API_H
