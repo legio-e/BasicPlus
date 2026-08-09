@@ -96,6 +96,41 @@ public final class MdnPack {
                     + "Disponibles: " + f.sectionNames());
         }
 
+        /* ── EL GUARDIÁN: .text TIENE QUE BASTARSE SOLA (V5/H4, 9-ago) ──────
+         *
+         * Esta herramienta empaqueta `.text` Y NADA MÁS: ni copia `.rodata` ni
+         * aplica una sola reubicación. Eso quiere decir que si el código
+         * referencia algo de fuera —un literal de cadena, una variable global,
+         * `strlen`— en el `.mdn` queda una palabra sin rellenar, y en la placa
+         * eso es un puntero a ninguna parte. NO da error al empaquetar, ni al
+         * cargar, ni al llamar: da basura, o un reset mudo.
+         *
+         * Se descubrió midiendo, al escribir el puente a los packs: un literal
+         * de C acaba en `.rodata.str1.1` con un `R_ARM_REL32` en `.text`. Y de
+         * propina, gcc reconoce un bucle `while (p[k]) k++` y lo convierte en
+         * una llamada a `strlen`, que es otra reloc — la trampa no estaba sólo
+         * en lo que uno escribe, sino en lo que el compilador escribe por uno.
+         *
+         * Así que a partir de aquí el desfase GRITA en el build, en vez de
+         * viajar a la placa. Si esto salta, el código generado usa algo que el
+         * `.mdn` no puede llevarse: hay que quitarlo del código (materializar la
+         * constante, acotar el bucle) o enseñar a esta herramienta a llevar
+         * `.rodata` y aplicar relocs — que es la solución de verdad y está
+         * apuntada como tarea aparte. */
+        List<String> pendientes = f.relocSymbols(".text");
+        if (!pendientes.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("el .o tiene ").append(pendientes.size())
+              .append(" referencia(s) a cosas FUERA de .text, y un .mdn solo se lleva .text:\n");
+            for (String r : pendientes) sb.append("    - ").append(r).append("\n");
+            sb.append("  En la placa cada una de esas seria un puntero a ninguna parte, en silencio.\n")
+              .append("  Causas tipicas en codigo generado:\n")
+              .append("    * un literal de cadena  -> materializarlo byte a byte en la pila\n")
+              .append("    * while (p[k]) k++      -> gcc lo convierte en strlen; acotar el bucle\n")
+              .append("    * una variable static   -> no hay .data/.bss en un .mdn");
+            throw new PackException(sb.toString());
+        }
+
         // Símbolos exportados: nombre que empieza por "thunk_<Module>_". En Thumb-2
         // el bit 0 del valor indica "modo Thumb" (no es parte del offset): lo
         // limpiamos; el loader del firmware re-añade `| 1u` al construir la dirección.
@@ -289,6 +324,53 @@ public final class MdnPack {
         }
 
         List<Symbol> symbols() { return syms; }
+
+        /**
+         * Nombres de los símbolos a los que apunta cada reubicación de la sección
+         * dada. Lista vacía = esa sección se basta sola.
+         *
+         * Mira las dos formas que puede tomar (`.rel.X` con entradas de 8 bytes y
+         * `.rela.X` de 12): ARM usa REL y RISC-V usa RELA, y las dos familias
+         * pasan por aquí. Leer sólo una habría dejado media flota sin guardián,
+         * que es peor que no tenerlo — daría una sensación falsa de cobertura.
+         */
+        List<String> relocSymbols(String seccion) {
+            List<String> fuera = new ArrayList<>();
+            for (Section rs : sections) {
+                boolean rela = rs.name.equals(".rela" + seccion);
+                if (!rela && !rs.name.equals(".rel" + seccion)) continue;
+                int paso = rela ? 12 : 8;
+                Section symtab = null;
+                if (rs.link >= 0 && rs.link < sections.size()) symtab = sections.get(rs.link);
+                for (int off = 0; off + paso <= rs.size; off += paso) {
+                    int info = u32(rs.offset + off + 4);
+                    int simIdx = info >>> 8;
+                    String nom = nombreDeSimbolo(symtab, simIdx);
+                    if (!fuera.contains(nom)) fuera.add(nom);
+                }
+            }
+            return fuera;
+        }
+
+        /** Nombre del símbolo `idx` del symtab dado, o algo legible si no se puede. */
+        private String nombreDeSimbolo(Section symtab, int idx) {
+            if (symtab == null) return "(simbolo #" + idx + ")";
+            int ent = symtab.offset + idx * 16;   /* el parser ya asume entradas de 16 */
+            if (ent + 4 > data.length) return "(simbolo #" + idx + ")";
+            int nameOff = u32(ent);
+            if (symtab.link < 0 || symtab.link >= sections.size()) return "(simbolo #" + idx + ")";
+            Section str = sections.get(symtab.link);
+            String n = readCStr(str.offset + nameOff);
+            /* Un símbolo de SECCIÓN no tiene nombre propio; el interesante es a qué
+             * sección apunta, que es justo lo que hay que enseñar (".rodata"). */
+            if (n == null || n.isEmpty()) {
+                int shndx = (ent + 14 + 2 <= data.length) ? u16(ent + 14) : -1;
+                if (shndx >= 0 && shndx < sections.size()) return sections.get(shndx).name;
+                return "(simbolo #" + idx + ")";
+            }
+            return n;
+        }
+
 
         List<String> sectionNames() {
             List<String> ns = new ArrayList<>();

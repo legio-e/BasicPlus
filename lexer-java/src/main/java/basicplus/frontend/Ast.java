@@ -56,6 +56,14 @@ public final class Ast {
         public final String implementsName;
         public final List<ImportNode> imports;
         public final List<ITopLevelDecl> defs;
+        /** V5/H4 — `import v1 from pack "SQLI"`: marca (4 chars) y versión de la
+         *  API del pack NATIVO del que este módulo toma sus `native` externas.
+         *  null = módulo normal. Es propiedad del MÓDULO, no de cada función:
+         *  un módulo habla con UN pack, igual que un `.mod` declara sus imports.
+         *  Mutable a propósito — el parser las descubre al leer los imports, que
+         *  van antes que las funciones, y el ModuleNode se construye al final. */
+        public String packNativoMarca   = null;
+        public int    packNativoVersion = 0;
         public ModuleNode(String library, String name, List<ImportNode> imports, List<ITopLevelDecl> defs, int line, int column) {
             this(library, name, false, null, imports, defs, line, column);
         }

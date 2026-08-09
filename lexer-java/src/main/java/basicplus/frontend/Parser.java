@@ -157,8 +157,14 @@ public final class Parser {
         }
 
         this.inInterface = prevInIface;
-        return new ModuleNode(library, name, isInterface, implementsName,
+        ModuleNode mn = new ModuleNode(library, name, isInterface, implementsName,
                               imports, defs, startTok.line, startTok.column);
+        /* V5/H4 — el pack nativo del que salen las `native` externas viaja en el
+         * módulo hasta el emisor de AOT, que es quien tiene que estampar marca y
+         * versión en cada thunk. */
+        mn.packNativoMarca   = packNativoMarca;
+        mn.packNativoVersion = packNativoVersion;
+        return mn;
     }
 
     // ============================================================

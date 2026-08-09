@@ -112,6 +112,16 @@ public final class AotCEmitter {
      *  El loader del .mdn registra automáticamente desde el symtab. */
     private boolean omitRegisterFunc = false;
 
+    /* V5/H4 - `import v1 from pack "SQLI"`: identidad del pack NATIVO del que
+     * este modulo toma sus `native` externas. 0 = no habla con ninguno.
+     * La marca viaja como uint32 con los 4 caracteres empaquetados, que es como
+     * la publica el pack y como la espera `pack_sym`. */
+    private int packMarca   = 0;
+    private int packVersion = 0;
+    /** Una comilla simple. Aparece mucho al emitir C (nombres byte a byte,
+     *  mensajes que citan un símbolo) y escaparla cada vez se lee fatal. */
+    private static final String Q = "'";
+
     private int indentLevel = 0;
 
     public AotCEmitter(String moduleName) {
@@ -248,6 +258,14 @@ public final class AotCEmitter {
         }
         if (nativeFuncs.isEmpty()) return "";
 
+        /* V5/H4 - el pack del que salen las `native` sin cuerpo. */
+        if (module.packNativoMarca != null) {
+            String m = module.packNativoMarca;   /* el parser ya valido 4 chars */
+            packMarca = ((m.charAt(0) & 0xFF) << 24) | ((m.charAt(1) & 0xFF) << 16)
+                      | ((m.charAt(2) & 0xFF) <<  8) |  (m.charAt(3) & 0xFF);
+            packVersion = module.packNativoVersion;
+        }
+
         // #172 — Pre-pass: asignar offsets CS-relativos a vars/consts
         // nivel-módulo recorriendo en orden de declaración. MivmEmitter
         // sigue la misma convención (cf. ModWriter.registerSymbol):
@@ -266,7 +284,11 @@ public final class AotCEmitter {
              * eso obliga a buscarlas una a una. Se enriquece aquí, que es el
              * único punto por el que pasan todas. */
             try {
-                emitFunction(f);
+                /* V5/H4 - una `native` EXTERNA no tiene cuerpo que traducir: lo
+                 * pone el pack. Lo que se emite en su lugar es el PUENTE. El
+                 * thunk es el mismo de siempre: desde la pila BP, llamar a un
+                 * pack o a codigo traducido se ve exactamente igual. */
+                if (f.isPackExtern) emitPackExtern(f); else emitFunction(f);
                 emitThunk(f);
             } catch (UnsupportedAotException ex) {
                 throw new UnsupportedAotException(
@@ -411,6 +433,188 @@ public final class AotCEmitter {
         }
         w.println("}");
         w.println();
+    }
+
+    // ============ V5/H4: puente a un pack nativo ============
+
+    /**
+     * Emite el cuerpo de una `native` EXTERNA: la declarada sin cuerpo en un
+     * modulo con `import v<N> from pack "MARCA"`. Hace dos cosas y ya - resolver
+     * el simbolo por nombre y adaptar los tipos.
+     *
+     * NI UN LITERAL DE CADENA AQUI DENTRO. Medido con el toolchain real: un
+     * literal de C se va a `.rodata.str1.1` y en `.text` queda un `R_ARM_REL32`;
+     * MdnPack empaqueta `.text` y NADA MAS, sin aplicar relocs. En placa ese
+     * puntero no apuntaria a ningun sitio. Por eso el nombre del simbolo se
+     * materializa BYTE A BYTE en la pila (medido: cero relocs de -O0 a -Os), y
+     * el texto de los errores lo redacta la VM (helper `pack_fallo`).
+     *
+     * Y ojo con la FORMA: `char n[] = {ESE_ARRAY}` no vale - gcc reconoce el
+     * inicializador y lo vuelve a sacar a `.rodata`. Asignacion a asignacion si.
+     */
+    private void emitPackExtern(Ast.FuncDef f) {
+        currentFuncName = f.name.name;
+        String sim   = f.name.name;
+        String fname = "aot_" + moduleName + "_" + sim;
+        String marca = String.format("0x%08Xu", packMarca);
+        String ver   = packVersion + "u";
+        int n = f.params.size();
+
+        w.println("/* " + sim + " - EXTERNA: la trae el pack " + Q + marcaTexto() + Q
+                  + " v" + packVersion + ".");
+        w.println(" * No hay cuerpo en el .bp: lo pone el pack. Esto es el puente. */");
+        w.print("static " + cType(f.returnType) + " " + fname + "(struct bpvm* vm");
+        for (Ast.Param p : f.params) w.print(", " + cType(p.type) + " " + p.name);
+        w.println(") {");
+        w.println("    const struct aot_helpers_v2* H = vm->aot_helpers;");
+
+        /* La firma REAL, la que el pack expone. */
+        StringBuilder sig = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            if (i > 0) sig.append(", ");
+            sig.append(cTypePack(f.params.get(i).type, sim));
+        }
+        if (n == 0) sig.append("void");
+        w.println("    typedef " + cTypePack(f.returnType, sim) + " (*fn_t)(" + sig + ");");
+        w.println("    fn_t fn;");
+
+        /* Todas las DECLARACIONES juntas y antes de cualquier sentencia: el .c
+         * generado se compila con toolchains distintos y no todos son C99. */
+        w.println("    char nm[" + (sim.length() + 1) + "];");
+        for (int i = 0; i < n; i++) {
+            Ast.TypeRef t = f.params.get(i).type;
+            if (esString(t))             w.println("    char b" + i + "[BPVM_AOT_PACK_STR];");
+            else if (salida8(t) != null) w.println("    " + salida8(t) + " o" + i + " = 0;");
+        }
+        /* El nombre, byte a byte - ver la nota de arriba. */
+        StringBuilder ln = new StringBuilder("   ");
+        for (int i = 0; i < sim.length(); i++) {
+            ln.append(" nm[").append(i).append("]=").append(Q).append(sim.charAt(i)).append(Q).append(";");
+            if (ln.length() > 66) { w.println(ln); ln = new StringBuilder("   "); }
+        }
+        ln.append(" nm[").append(sim.length()).append("]=0;");
+        w.println(ln);
+
+        w.println("    fn = (fn_t) H->pack_sym(" + marca + ", " + ver + ", nm);");
+        w.println("    if (fn == 0) H->pack_fallo(vm, " + marca + ", " + ver
+                  + ", nm, 1);   /* no retorna */");
+        for (int i = 0; i < n; i++) {
+            if (!esString(f.params.get(i).type)) continue;
+            String pn = f.params.get(i).name;
+            w.println("    if (H->string_to_cstr(vm, (uint32_t) " + pn + ", b" + i
+                      + ", (int32_t) sizeof b" + i + ") < 0)");
+            w.println("        H->pack_fallo(vm, " + marca + ", " + ver
+                      + ", nm, 2);   /* no retorna */");
+        }
+
+        StringBuilder args = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            Ast.TypeRef t = f.params.get(i).type;
+            if (i > 0) args.append(", ");
+            if (esString(t))             args.append("b").append(i);
+            else if (salida8(t) != null) args.append("&o").append(i);
+            else                         args.append(f.params.get(i).name);
+        }
+        boolean devuelveCadena = esString(f.returnType);
+        boolean hayCajas = false;
+        for (int i = 0; i < n; i++) if (salida8(f.params.get(i).type) != null) hayCajas = true;
+
+        if (f.returnType == null) {
+            w.println("    fn(" + args + ");");
+        } else if (devuelveCadena) {
+            /* El pack devuelve `const char*`; BP quiere una cadena del heap. La
+             * longitud se cuenta a mano: `strlen` seria un simbolo externo, y en
+             * el .mdn eso es otra reloc que no resuelve nadie. */
+            w.println("    { const char* r = fn(" + args + "); int32_t k = 0;");
+            w.println("      if (r == 0) return 0;");
+            /* ACOTADO a proposito, y por dos motivos que coinciden:
+             *  1. gcc reconoce `while (r[k]) k++;` y lo sustituye por una
+             *     llamada a strlen -> simbolo externo -> reloc -> el .mdn no la
+             *     resuelve. MEDIDO: era el UNICO reloc que quedaba.
+             *  2. si el pack devuelve un buffer sin terminar, un bucle sin tope
+             *     se sale de la memoria. Con tope, se corta. */
+            w.println("      while (k < BPVM_AOT_PACK_STR && r[k]) k++;");
+            w.println("      return (int32_t) H->string_from_cstr(vm, r, k); }");
+        } else {
+            w.println("    { " + cTypePack(f.returnType, sim) + " r = fn(" + args + ");");
+        }
+
+        /* Las cajas se vuelcan al elemento 0 de su array. CONVENIO: un
+         * `long[]`/`double[]` en una externa es una caja de UN valor - la vuelta
+         * que hay para 8 bytes mientras el AOT no los marshalle (#381).
+         * `array_store_*` comprueba el indice, asi que un array vacio lo DICE. */
+        for (int i = 0; i < n; i++) {
+            String t8 = salida8(f.params.get(i).type);
+            if (t8 == null) continue;
+            String hp = t8.equals("int64_t") ? "array_store_i64" : "array_store_f64";
+            w.println("    H->" + hp + "(vm, (uint32_t) " + f.params.get(i).name
+                      + ", 0, o" + i + ");   /* caja de salida */");
+        }
+        if (f.returnType != null && !devuelveCadena) w.println("    return r; }");
+        else if (hayCajas && f.returnType == null)   { /* nada: no se abrio bloque */ }
+        w.println("}");
+        w.println();
+    }
+
+    /** Los 4 caracteres de la marca, para los comentarios del .c generado. */
+    private String marcaTexto() {
+        return "" + (char)((packMarca >> 24) & 0xFF) + (char)((packMarca >> 16) & 0xFF)
+                  + (char)((packMarca >>  8) & 0xFF) + (char)( packMarca        & 0xFF);
+    }
+
+    private boolean esString(Ast.TypeRef t) {
+        return (t instanceof Ast.SimpleTypeRef)
+            && "string".equals(((Ast.SimpleTypeRef) t).name);
+    }
+
+    /** `long[]` / `double[]` como CAJA DE SALIDA - el pack recibe un puntero. */
+    private String salida8(Ast.TypeRef t) {
+        if (!(t instanceof Ast.ArrayTypeRef)) return null;
+        Ast.TypeRef e = ((Ast.ArrayTypeRef) t).element;
+        if (!(e instanceof Ast.SimpleTypeRef)) return null;
+        String n = ((Ast.SimpleTypeRef) e).name;
+        if ("long".equals(n))   return "int64_t";
+        if ("double".equals(n)) return "double";
+        return null;
+    }
+
+    /**
+     * El tipo tal como lo ve EL PACK, que no es el que ve BP: una cadena BP es un
+     * handle al heap y el pack quiere `const char*`; un `long[]` de salida es un
+     * handle y el pack quiere `int64_t*`.
+     *
+     * Lo que NO cruza se rechaza AQUI y CON NOMBRE. Un objeto BP no puede viajar
+     * a un pack: el pack no conoce el GC ni debe, y darle un puntero al heap es
+     * exactamente el use-after-free que costo media V4.
+     */
+    private String cTypePack(Ast.TypeRef t, String sim) {
+        if (t == null) return "void";
+        if (esString(t)) return "const char*";
+        String s8 = salida8(t);
+        if (s8 != null) return s8 + "*";
+        if (t instanceof Ast.SimpleTypeRef) {
+            String n = ((Ast.SimpleTypeRef) t).name;
+            if ("integer".equals(n) || "int".equals(n))  return "int32_t";
+            if ("boolean".equals(n) || "bool".equals(n)) return "int32_t";
+            if ("float".equals(n))                       return "float";
+            if ("long".equals(n) || "double".equals(n)) {
+                throw new UnsupportedAotException(
+                    Q + sim + Q + " usa " + Q + n + Q + " (8 bytes) y el puente a un "
+                    + "pack solo pasa valores de 4. Para traerse un valor de 8 bytes "
+                    + "se usa un ARRAY DE SALIDA: declara el parametro como " + Q + n
+                    + "[]" + Q + " y el pack escribe en su elemento 0. (El rodeo se "
+                    + "quitara cuando el AOT marshalle 8 bytes - tarea #381.)");
+            }
+            throw new UnsupportedAotException(
+                Q + sim + Q + " usa el tipo " + Q + n + Q + ", que no puede cruzar a "
+                + "un pack. Un pack no conoce el GC de BP, asi que solo cruzan "
+                + "VALORES: integer, boolean, float, string, y long[]/double[] como "
+                + "caja de salida. Un objeto se reparte como HANDLE (un integer que "
+                + "el pack valida).");
+        }
+        throw new UnsupportedAotException(
+            Q + sim + Q + ": ese tipo de array no cruza a un pack. Solo long[] y "
+            + "double[], y solo como caja de salida de un valor de 8 bytes.");
     }
 
     private boolean endsWithReturn(List<Ast.IStmt> body) {
