@@ -28,6 +28,11 @@ static const ranura_t RANURAS[] = {
      * ser un hueco mudo, que es justo lo que este array evita. */
     R(abrir), R(cerrar), R(leer), R(escribir), R(truncar),
     R(tamano), R(sincronizar), R(borrar), R(existe),
+    /* V5/H3 — la arena de la BD. Se exige NO NULA como cualquier otra: la
+     * FUNCION tiene que estar siempre, aunque devuelva NULL porque no haya
+     * arena. Son cosas distintas — "el firmware no sabe darte arena" es un
+     * hueco en la tabla; "hoy no hay arena" es una respuesta legitima. */
+    R(arena),
 };
 
 #define N_RANURAS ((int)(sizeof(RANURAS) / sizeof(RANURAS[0])))

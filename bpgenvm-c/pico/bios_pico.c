@@ -26,9 +26,14 @@
  */
 #include "bpvm_bios.h"
 #include "bpvm_pack.h"   /* bpvm_pack_crc16: el control del ancla */
+#include "pack_pico.h"   /* PACK_RAM_BYTES: los estáticos que van DELANTE     */
 #include <stdint.h>
 
 int32_t pack_pico_cargar(void);   /* pico/pack_pico.c */
+
+/* El bloque de la BD, decidido en el arranque (pico/main.c). NULL = no hay. */
+extern uint8_t* s_sqlite_base;
+extern uint32_t s_sqlite_size;
 #include "log.h"
 
 #include <string.h>
@@ -60,6 +65,29 @@ static struct tm* bios_localtime(const void* t) {
     return 0;
 }
 
+/* ── V5/H3 — la arena de la BD ──
+ *
+ * El bloque reservado en el arranque MENOS los estáticos del pack, que viven en
+ * su principio (`[estáticos | arena]`). El descuento se hace AQUÍ y no en el
+ * llamante: quien pide la arena no tiene por qué saberse el reparto, y si lo
+ * supiera habría dos sitios que mantener de acuerdo.
+ *
+ * Devolver NULL no es un fallo — es la respuesta correcta cuando no se pidió BD
+ * o no cupo. Pero se dice en el log, porque desde el otro lado "no hay arena" y
+ * "la ranura está rota" se parecen demasiado.
+ */
+static void* bios_arena(size_t* bytes) {
+    if (bytes) *bytes = 0;
+
+    if (s_sqlite_base == 0 || s_sqlite_size <= PACK_RAM_BYTES) {
+        log_printf("BIOS: el pack pidio la arena y NO HAY "
+                   "(SQLite=0 en el ENV, o no cupo — mira la linea 'bd:' del arranque)");
+        return 0;
+    }
+    if (bytes) *bytes = (size_t) (s_sqlite_size - PACK_RAM_BYTES);
+    return s_sqlite_base + PACK_RAM_BYTES;
+}
+
 /* ── 3. La tabla, estática: su dirección no cambia y se le puede prestar al
  *      pack sin que nadie tenga que mantenerla viva. ── */
 static const bpvm_bios_t s_bios = {
@@ -75,7 +103,9 @@ static const bpvm_bios_t s_bios = {
     bpvm_bios_fs_abrir, bpvm_bios_fs_cerrar,
     bpvm_bios_fs_leer,  bpvm_bios_fs_escribir,
     bpvm_bios_fs_truncar, bpvm_bios_fs_tamano, bpvm_bios_fs_sincronizar,
-    bpvm_bios_fs_borrar, bpvm_bios_fs_existe
+    bpvm_bios_fs_borrar, bpvm_bios_fs_existe,
+    /* V5/H3 — la arena de la BD. */
+    bios_arena
 };
 
 /* ── 4. EL ANCLA, pegada a la tabla ──

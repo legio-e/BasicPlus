@@ -42,7 +42,8 @@ extern "C" {
 /* Sube al AÑADIR, QUITAR o REORDENAR campos. El pack compara y se niega si no
  * habla su versión: mejor un "no" con nombre que llamar a la ranura equivocada,
  * que es un cuelgue mudo. */
-#define BPVM_BIOS_VERSION  2u   /* 2 = V5/H2: entran las ranuras de ficheros */
+#define BPVM_BIOS_VERSION  3u   /* 3 = V5/H3: entra la ranura de la ARENA     */
+                                /* 2 = V5/H2: entran las ranuras de ficheros  */
 
 struct tm;
 
@@ -114,6 +115,32 @@ typedef struct bpvm_bios {
     int   (*sincronizar)(int fd);
     int   (*borrar)  (const char* camino);
     int   (*existe)  (const char* camino);                      /* 1 / 0       */
+
+    /* ── V5/H3 — LA ARENA DE LA BD ────────────────────────────────────────────
+     *
+     * Devuelve la BASE del bloque libre para la base de datos, y deja su tamaño
+     * en `*bytes`. NULL (y `*bytes` a 0) = no hay arena, porque no se pidió o
+     * porque no cupo. Ver `bpvm_sqlmem.h` para la REGLA de cuánta se reserva.
+     *
+     * Es una FUNCIÓN y no dos campos de datos por dos motivos:
+     *  · el verificador de arriba recorre las ranuras como punteros a función y
+     *    exige que ninguna sea NULL; un par de campos de datos se quedaría fuera
+     *    de esa red, que es exactamente el hueco mudo que la lista evita;
+     *  · el firmware decide la base EN EL ARRANQUE (depende de si hay PSRAM y de
+     *    lo que diga el ENV), así que hornearla en una constante volvería a
+     *    poner una dirección donde no debe haberla.
+     *
+     * ⚠️ NO es un alocador: es el bloque CRUDO. Lo gestiona SQLite con su propio
+     * MEMSYS5 (`sqlite3_config(SQLITE_CONFIG_HEAP, …)`), que es con lo que se
+     * MIDIÓ el mínimo de 2 MB y la regla del ~40 %. Poner aquí un malloc nuestro
+     * sería otro sistema de memoria y esas medidas dejarían de aplicar.
+     *
+     * ⚠️ Y NO es todo el bloque de la BD: los ~7 KB del principio son la
+     * `.data`/`.bss` del propio pack (`[estáticos | arena]`). Esta ranura ya
+     * devuelve la arena con esos bytes descontados — quien la llama no tiene que
+     * saberse el reparto.
+     */
+    void* (*arena)(size_t* bytes);
 } bpvm_bios_t;
 
 /*

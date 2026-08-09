@@ -42,6 +42,10 @@ static long f_escr(int fd, uint32_t o, const void* s, uint32_t n) { (void)fd;(vo
 static int  f_trunc(int fd, uint32_t t) { (void)fd;(void)t; return 0; }
 static long f_tam(int fd) { (void) fd; return 0; }
 static int  f_camino(const char* c) { (void) c; return 0; }
+/* V5/H3 — la arena. Devolver NULL es una respuesta LEGÍTIMA (no hay BD), así
+ * que el doble puede hacerlo: lo que el verificador exige es que la ranura
+ * exista, no que haya arena. */
+static void* f_arena(size_t* b) { if (b) *b = 0; return NULL; }
 
 /* Devuelve una tabla COMPLETA y bien formada. Cada caso la estropea de una
  * manera — un solo cambio por caso, que es como se sabe qué causó qué. */
@@ -61,6 +65,7 @@ static bpvm_bios_t buena(void) {
     b.leer = f_leer;   b.escribir = f_escr;
     b.truncar = f_trunc; b.tamano = f_tam; b.sincronizar = f_fd1;
     b.borrar = f_camino; b.existe = f_camino;
+    b.arena = f_arena;
     return b;
 }
 
@@ -87,9 +92,13 @@ int main(void) {
         CHECK(r && strcmp(r, "realloc") == 0, "hueco en realloc -> lo NOMBRA");
     }
     {
-        bpvm_bios_t b = buena(); b.existe = NULL;   /* la ULTIMA de la lista */
+        /* La ÚLTIMA de la lista, que es donde el bucle podría quedarse corto.
+         * Cuando la tabla crece hay que MOVER este caso a la nueva última: si
+         * se queda en la de antes deja de probar el borde y nadie se entera —
+         * seguiría en verde comprobando una ranura del medio. */
+        bpvm_bios_t b = buena(); b.arena = NULL;
         const char* r = bpvm_bios_verify(&b);
-        CHECK(r && strcmp(r, "existe") == 0, "hueco en la ULTIMA ranura -> tambien");
+        CHECK(r && strcmp(r, "arena") == 0, "hueco en la ULTIMA ranura -> tambien");
     }
 
     /* ── 3. `log` es la voz del pack: si falta, se dice ANTES que nada ──
@@ -132,8 +141,8 @@ int main(void) {
     /* ── 7. El contador de ranuras cuadra con la struct ──
      * Si alguien añade un campo y olvida ponerlo en RANURAS, el hueco vuelve a
      * ser mudo. Esto no lo detecta del todo, pero deja el numero a la vista. */
-    CHECK(bpvm_bios_slot_count() == 26,
-          "26 ranuras (17 de la prueba A + las 9 de ficheros de V5/H2)");
+    CHECK(bpvm_bios_slot_count() == 27,
+          "27 ranuras (17 de la prueba A + 9 de ficheros V5/H2 + arena V5/H3)");
 
     /* ─────────────── EL ANCLA (idea de Eduardo, 7-ago) ───────────────
      *

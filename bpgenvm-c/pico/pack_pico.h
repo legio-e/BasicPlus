@@ -38,14 +38,21 @@
  * reparto dejaría de ser cierto EN SILENCIO. */
 #define PACK_SRAM_TECHO  0x20080000u
 
-/* 7168 = lo que MIDIÓ la prueba A que necesita SQLite de estáticos (`ram=7168`
- * en el manifest). No es un número redondo a ojo: es el que hay.
+/* Esto es lo que el firmware OFRECE, no lo que el pack necesita — eso lo declara
+ * el pack en su cabecera (`data_bytes` + `bss_bytes`) y la escalera los compara:
+ * si un pack pidiera más, sale con su peldaño TAMAÑO en vez de escribir fuera.
  *
- * Y esto es lo que el firmware OFRECE, no lo que el pack necesita — eso lo
- * declara el pack en su cabecera (`data_bytes` + `bss_bytes`) y la escalera los
- * compara: si un pack pidiera más, sale con su peldaño TAMAÑO en vez de escribir
- * fuera. El pack mínimo pide 8 bytes y le sobra casi todo; SQLite pedirá esto. */
-#define PACK_RAM_BYTES   7168u
+ * ─── POR QUÉ 8192 Y NO 7168 ───
+ *
+ * 7168 era lo que midió la prueba A (7-ago), y era JUSTO: SQLite pedía 7072 y
+ * sobraban 96 bytes. Al añadirle el VFS (8-ago) subió a 7176 — se pasaba por
+ * OCHO. No habría roto nada (la escalera lo caza y lo dice), pero es la clase de
+ * número que se queda corto cada vez que el pack crece un poco.
+ *
+ * 8192 da ~1 KB de margen sobre lo que hoy pide. El coste es 1 KB menos de arena
+ * de un bloque de 2 MB, o 1 KB más de SRAM en las placas sin PSRAM: despreciable
+ * comparado con volver a tocarlo por cada estructura nueva. */
+#define PACK_RAM_BYTES   8192u
 
 /* Sólo para el caso SIN PSRAM: la cola de la SRAM principal. Con PSRAM la base
  * es el principio del bloque de la BD, y la fija el arranque en
