@@ -1195,15 +1195,30 @@ public final class BpvmClient implements AutoCloseable {
      *  (magic al final): un corte o un error deja la zona como estaba.
      *  Devuelve el offset donde quedó grabado. */
     public long packBurn(byte[] img, long timeoutMs) throws IOException {
+        return packBurn(img, timeoutMs, null);
+    }
+
+    /** Lo llama `packBurn` tras CADA chunk confirmado por el device: (hechos,
+     *  total) en bytes. Se avisa de lo ya CONFIRMADO, no de lo enviado — así el
+     *  número no puede ir por delante de la placa. */
+    public interface BurnProgress { void avance(int hechos, int total); }
+
+    /** Igual, pero informando del avance. Un pack de SQLite son ~410 KB en
+     *  chunks de 4 KB ≈ 100 pasos: sin esto el usuario no distingue "va" de "se
+     *  ha colgado", que en una operación que BORRA flash es justo la duda que no
+     *  se le puede dejar. */
+    public long packBurn(byte[] img, long timeoutMs, BurnProgress cb) throws IOException {
         Map<String, Object> r = sendRequest("PACK_BURN_BEGIN",
                 "\"size\":" + img.length, null, timeoutMs);
         int chunk = (int) Json.getLong(r, "chunkMax", 4096);
         chunk -= chunk % 16;                       // contrato: chunks múltiplos de 16
         if (chunk <= 0) chunk = 4096;
+        if (cb != null) cb.avance(0, img.length);
         for (int o = 0; o < img.length; o += chunk) {
             int n = Math.min(chunk, img.length - o);
             byte[] part = java.util.Arrays.copyOfRange(img, o, o + n);
             sendRequest("PACK_BURN_DATA", null, part, timeoutMs);
+            if (cb != null) cb.avance(o + n, img.length);
         }
         Map<String, Object> end = sendRequest("PACK_BURN_END", null, null, timeoutMs);
         return Json.getLong(end, "offset", -1);

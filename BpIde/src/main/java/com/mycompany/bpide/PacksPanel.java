@@ -210,7 +210,15 @@ public final class PacksPanel extends JPanel {
         summaryLabel.setText("grabando " + f.getName() + "…");
         bg(() -> {
             byte[] img = java.nio.file.Files.readAllBytes(f.toPath());
-            long off = client.packBurn(img, 30000);   // el burn borra+programa: T holgado
+            // El avance va a la MISMA etiqueta que ya dice "grabando…": es donde
+            // el usuario está mirando. Y se pinta en el hilo de Swing, que es de
+            // donde NO viene esta llamada (esto corre en el hilo de fondo).
+            long off = client.packBurn(img, 30000, (hechos, total) -> {   // T holgado: borra+programa
+                final int pct = total > 0 ? (int) ((hechos * 100L) / total) : 0;
+                javax.swing.SwingUtilities.invokeLater(() -> summaryLabel.setText(
+                        "grabando " + f.getName() + "… " + pct + " %"
+                        + "  (" + (hechos / 1024) + "/" + (total / 1024) + " KB)"));
+            });
             return new Object[] { img.length, off };
         }, r -> {
             log.accept("[Packs] grabado " + f.getName() + " (" + r[0] + " B) en offset " + r[1]);
