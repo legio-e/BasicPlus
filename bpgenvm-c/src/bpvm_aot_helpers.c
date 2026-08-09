@@ -10,6 +10,7 @@
 
 #include "bpvm_aot_helpers.h"
 #include "bpvm_internal.h"
+#include "bpvm_bios.h"      /* V5/H4: el registro de packs, para `pack_sym` */
 
 #include <stdio.h>
 #include <string.h>
@@ -440,6 +441,42 @@ static int32_t h_string_eq(bpvm_t* vm, uint32_t a, uint32_t b) {
         if (mem[aa + 4 + i] != mem[ba + 4 + i]) return 0;
     return 1;
 }
+/* ── V5/H4 — la INVERSA de string_from_cstr ────────────────────────────────
+ *
+ * Hacía falta para poder pasarle una cadena BP a una función de C: una cadena
+ * BP es un array de bytes CON LONGITUD y sin NUL, y todo C quiere `const char*`.
+ *
+ * NO TRUNCA EN SILENCIO. Si no cabe devuelve -1 y deja el buffer vacío. Truncar
+ * un camino de fichero abriría OTRO fichero — un fallo que no se parece a un
+ * fallo, que es la peor clase. */
+static int32_t h_string_to_cstr(bpvm_t* vm, uint32_t ref, char* dst, int32_t cap) {
+    uint32_t addr, nbytes, i;
+    if (dst == 0 || cap <= 0) return -1;
+    dst[0] = 0;
+    if (ref == 0) return 0;                       /* cadena nula -> "" */
+    addr   = A(vm, ref);
+    nbytes = bpvm_read_u32_be(vm->memory + addr);
+    if ((int32_t) nbytes >= cap) return -1;       /* +1 para el NUL */
+    for (i = 0; i < nbytes; i++) dst[i] = (char) vm->memory[addr + 4 + i];
+    dst[nbytes] = 0;
+    return (int32_t) nbytes;
+}
+
+/* ── V5/H4 — resolver un símbolo de un pack POR NOMBRE ─────────────────────
+ *
+ * Es TODO lo que la VM sabe de los packs: busca la tabla por su marca,
+ * comprueba que habla la versión que se le pide (gate grueso) y devuelve el
+ * símbolo (gate fino). No conoce SQLite ni conocerá LVGL.
+ *
+ * NULL significa «ese pack no está grabado» o «no trae esa función», y es lo
+ * que el thunk convierte en una excepción BP CON NOMBRE. Sin este NULL, un pack
+ * que falta sería un salto a ninguna parte. */
+static bpvm_pack_fn_t h_pack_sym(uint32_t marca, uint32_t version, const char* nombre) {
+    const bpvm_pack_api_t* api = (const bpvm_pack_api_t*) bpvm_bios_busca(marca);
+    if (bpvm_pack_api_verify(api, marca, version) != 0) return 0;
+    return bpvm_pack_api_find(api, nombre);
+}
+
 static uint32_t h_string_from_cstr(bpvm_t* vm, const char* s, int32_t len) {
     if (!s || len < 0) return 0;
     return bpvm_heap_alloc_string(vm, s, (size_t) len);
@@ -481,6 +518,9 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     .string_substring    = h_string_substring,
     .string_eq           = h_string_eq,
     .string_from_cstr    = h_string_from_cstr,
+    /* V5/H4 — llamar a un pack: convertir la cadena y resolver el símbolo. */
+    .string_to_cstr      = h_string_to_cstr,
+    .pack_sym            = h_pack_sym,
     .int_to_string       = h_int_to_string,
     /* Puente native→BP (P-aot-call-bp). call_bp_i32 vive en interp.c. */
     .find_function       = h_find_function,

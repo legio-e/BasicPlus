@@ -23,6 +23,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "bpvm_pack_api.h"   /* V5/H4: bpvm_pack_fn_t para `pack_sym` */
 
 struct bpvm;
 
@@ -109,10 +110,18 @@ struct aot_helpers_v2 {
 
     /* --- Strings (H3 #173) ----------------------------------------
      * Un string BP es un objeto heap con layout
-     *   [len:u32 BE][codepoint_0:u32 BE]...[codepoint_{len-1}:u32 BE]
-     * (TYPE_ARRAY_I32 — 1 codepoint de 4 bytes por carácter, igual que
-     * un integer[]). El "handle" que circula por el código native es el
-     * offset `ref` a ese objeto (0 = string null). Estos helpers
+     *   [nbytes:u32 BE][byte_0]...[byte_{nbytes-1}]
+     * (TYPE_ARRAY_I8 — los bytes UTF-8 TAL CUAL, 1 byte por elemento; ver
+     * `bpvm_heap_alloc_string` en heap.c, que es la autoridad).
+     *
+     * ⚠️ Este comentario decía «codepoint de 4 bytes / TYPE_ARRAY_I32», que era
+     * cierto en la época de #173 y dejó de serlo en H2.1 (V4), cuando las
+     * cadenas pasaron a UTF-8. Se corrigió al escribir `string_to_cstr`: de
+     * haberme fiado del comentario habría decodificado codepoints de 4 bytes
+     * sobre bytes UTF-8, y eso no da error — da basura.
+     *
+     * El "handle" que circula por el código native es el ref empaquetado
+     * (0 = string null). Estos helpers
      * replican las ops de string del intérprete/builtins para que el
      * código AOT las invoque como C call directa.
      *
@@ -199,6 +208,28 @@ struct aot_helpers_v2 {
      * para los args/retorno de tipo referencia. */
     uint32_t (*read_ref)(const uint8_t* p);
     void     (*write_ref)(struct bpvm* vm, uint8_t* p, uint32_t ref);
+
+    /* ── V5/H4 — LO QUE HACE FALTA PARA LLAMAR A UN PACK ─────────────────────
+     *
+     * Los dos son GENÉRICOS: ni la VM ni estos slots saben qué es SQLite. Como
+     * siempre, AL FINAL — el .mdn referencia por offset, así que meterlos en
+     * medio rompería los módulos ya compilados.
+     *
+     * `string_to_cstr` es la inversa de `string_from_cstr`, que ya estaba. Hacía
+     * falta porque una cadena BP es un array de bytes CON LONGITUD y sin NUL
+     * final, y cualquier función de C que reciba texto quiere un `const char*`.
+     * Copia y termina en NUL; devuelve los bytes copiados (sin contar el NUL), o
+     * -1 si no cabe. NO trunca en silencio: un camino de fichero cortado a la
+     * mitad abriría OTRO fichero, y eso es peor que un error.
+     *
+     * `pack_sym` resuelve un símbolo de un pack por NOMBRE (el modelo
+     * publics/externals). NULL = no está, y ese NULL es lo que convierte «el
+     * usuario no grabó ese pack» en una excepción BP con nombre en vez de un
+     * salto a ninguna parte. La versión se comprueba dentro: gate grueso. */
+    int32_t        (*string_to_cstr)(struct bpvm* vm, uint32_t ref,
+                                     char* dst, int32_t cap);
+    bpvm_pack_fn_t (*pack_sym)(uint32_t marca, uint32_t version,
+                               const char* nombre);
 };
 
 /* Tabla v2 instanciada en el runtime con los punteros a las funciones

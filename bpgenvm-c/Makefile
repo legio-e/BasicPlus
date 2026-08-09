@@ -534,6 +534,16 @@ test-rand: $(BIN)
 # con el sample real: las dos ramas estaban escritas y SIN EJECUTAR NUNCA (ese
 # programa apenas fragmenta y los huecos del barrido van separados por bloques
 # vivos por construcción). Este test fuerza la adyacencia que el sample no da.
+# V5/H4 — los DOS helpers con los que un `native` llama a un pack. Se prueban
+# SOLOS, antes de que exista el emisor que los usa: si la conversion de cadena
+# trunca o el resolutor devuelve el simbolo equivocado, el fallo sale dentro del
+# pack —en la placa, con una BD abierta— y no se parece a lo que es.
+test-packhelp: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_packhelp.c $(LIBOBJ) -o build/test_packhelp.exe $(LDFLAGS)
+	@echo "--- V5/H4 string_to_cstr + pack_sym (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_packhelp.exe
+
 test-freelist: $(LIBOBJ)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc test/test_freelist.c $(LIBOBJ) -o build/test_freelist.exe $(LDFLAGS)
