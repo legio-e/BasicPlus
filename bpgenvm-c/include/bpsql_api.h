@@ -34,8 +34,40 @@
  * es copiar, no traducir.
  *
  * ⚠️ VIDA DE LO QUE DEVUELVEN `col_name`, `get_str` y `get_blob`: es de SQLite,
- * y vale **hasta el siguiente `step` o el `release`**. Hay que copiarlo ANTES.
+ * y vale **hasta el siguiente `fetch` o el `release`**. Hay que copiarlo ANTES.
  * Guardarse el puntero es un use-after-free que no falla el día que se escribe.
+ *
+ * ─── Y EL GC, QUE ES LA PREGUNTA QUE SIEMPRE VUELVE ──────────────────────────
+ *
+ * Con esta API NO HAY PELIGRO DE GC, y por CUATRO motivos que se sostienen a la
+ * vez (razonamiento de Eduardo, 9-ago):
+ *
+ *  1. Lo que SQLite tiene entre manos vive en la arena que le prestamos
+ *     (`SQLITE_CONFIG_HEAP`): el GC de BP ni la conoce ni la recorre.
+ *  2. Los objetos BP están ENRAIZADOS por los locales de quien llama durante
+ *     toda la llamada. Y `Db`/`Query` guardan un `long` —puntero crudo, no
+ *     referencia—, así que el GC tampoco puede confundirlo con algo suyo.
+ *  3. El GC sólo corre AL ASIGNAR, y de estas 17 funciones sólo asignan las que
+ *     devuelven cadena o blob, **una sola vez cada una**. No hay ventana en la
+ *     que el nativo sostenga un objeto BP sin raíz mientras asigna otro.
+ *  4. El GC **no mueve objetos** (`heap.c`: "F2 v1: no compacta"), así que un
+ *     puntero derivado dentro del nativo sigue valiendo mientras el objeto viva.
+ *
+ * Y esas cuatro se cumplen por cómo está DISEÑADA la librería —cada función
+ * tiene principio y fin, no guarda estado entre llamadas y no encadena
+ * asignaciones—, no por casualidad. El único fallo posible es una FUGA (nadie
+ * suelta la consulta), no un uso-después-de-liberar.
+ *
+ * ⚠️ LO QUE HARÍA CAER EL PUNTO 3, y hay que recordarlo al AMPLIAR: una función
+ * de puente que asigne DOS veces, o que sostenga un objeto BP mientras llama a
+ * algo que asigna. Ahí sí entraría el paso 3 de #302 (raíces del GC del nativo
+ * compilado), que está abierto.
+ *
+ * ⚠️ Y AL AÑADIR LOS PARÁMETROS (`?`), que hoy no existen: nunca dar a
+ * `bind_text`/`bind_blob` un puntero a los bytes de una cadena BP con
+ * `SQLITE_STATIC`. SQLite se lo queda hasta el `reset`, que puede sobrevivir al
+ * local que enraizaba la cadena — y entonces el GC sí puede recogerla (moverla
+ * no; ver punto 4). Siempre `SQLITE_TRANSIENT`, que copia.
  */
 #ifndef BPSQL_API_H
 #define BPSQL_API_H
@@ -55,6 +87,24 @@ extern "C" {
  * se niega si no habla su versión. El pack se congela y el IDE no, así que ese
  * desfase VA a existir — mejor que grite. Mismo gate que el .mod (#284). */
 #define BPSQL_VERSION  1u
+
+/* ⚠️ LOS NOMBRES DE LOS CAMPOS SON IDENTIFICADORES DE BP, y eso es una
+ * RESTRICCIÓN, no una casualidad.
+ *
+ * El enlace entre `SQLite.bp` y esta tabla es POR NOMBRE: una
+ * `native function open(...)` sin cuerpo se resuelve al campo `open` de aquí.
+ * Así que cada nombre tiene que ser un identificador válido de BP y NO una
+ * palabra reservada.
+ *
+ * Ya mordió una vez: el campo se llamaba `step` —el nombre natural, y el de la
+ * propia función de SQLite— y `step` es palabra reservada en BP (el `for … step`
+ * de toda la vida). Por eso ahora se llama `fetch`, que además es el término
+ * clásico de bases de datos para «trae la siguiente fila».
+ *
+ * Al añadir un campo: comprobarlo. El compilador lo caza —«se esperaba nombre»
+ * en la declaración— así que no es un fallo silencioso, pero es un viaje de ida
+ * y vuelta que se ahorra mirando la lista de keywords antes.
+ */
 
 /* Lo que devuelve `col_type`. Los valores son los de SQLite, y coinciden con
  * las constantes TYPE_* de SQLite.bp — un sitio menos donde desalinearse. */
@@ -96,7 +146,7 @@ typedef struct bpsql_api {
      *  0 = se acabaron
      * <0 = error de verdad (BD corrupta, tarjeta). En BP eso es excepción, y
      *      el texto sale de `errmsg` de su conexión. */
-    int         (*step)      (void* st);
+    int         (*fetch)     (void* st);
 
     int32_t     (*col_count) (void* st);
     const char* (*col_name)  (void* st, int32_t i);
@@ -139,7 +189,7 @@ static inline const char* bpsql_api_verify(const bpsql_api_t* a)
         { offsetof(bpsql_api_t, changes), "changes"    },
         { offsetof(bpsql_api_t, close), "close"      },
         { offsetof(bpsql_api_t, errmsg), "errmsg"     },
-        { offsetof(bpsql_api_t, step), "step"       },
+        { offsetof(bpsql_api_t, fetch), "fetch"      },
         { offsetof(bpsql_api_t, col_count), "col_count"  },
         { offsetof(bpsql_api_t, col_name), "col_name"   },
         { offsetof(bpsql_api_t, col_type), "col_type"   },

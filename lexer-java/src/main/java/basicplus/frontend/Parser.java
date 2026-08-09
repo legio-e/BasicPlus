@@ -518,11 +518,18 @@ public final class Parser {
         if (isNative && packNativoMarca != null) {
             // Chivato: si alguien le pone cuerpo, decirlo con nombre en vez de
             // dejar que el `end` sobrante cascadee diez errores más abajo.
-            if (!check(TokenType.PUBLIC) && !check(TokenType.NATIVE)
-                    && !check(TokenType.INTRINSIC) && !check(TokenType.FUNCTION)
-                    && !check(TokenType.CLASS) && !check(TokenType.CONST)
-                    && !check(TokenType.VAR) && !check(TokenType.END)
-                    && !check(TokenType.EOF)) {
+            //
+            // Se mira POR DELANTE saltando líneas en blanco, sin consumirlas: una
+            // línea vacía entre declaraciones es lo normal, y contarla como
+            // "cuerpo" hacía saltar el aviso en el sitio equivocado.
+            int k = pos;
+            while (k < tokens.size() && tokens.get(k).type == TokenType.NEWLINE) k++;
+            TokenType sig = (k < tokens.size()) ? tokens.get(k).type : TokenType.EOF;
+            if (sig != TokenType.PUBLIC && sig != TokenType.NATIVE
+                    && sig != TokenType.INTRINSIC && sig != TokenType.FUNCTION
+                    && sig != TokenType.CLASS && sig != TokenType.CONST
+                    && sig != TokenType.VAR && sig != TokenType.END
+                    && sig != TokenType.EOF) {
                 error("en un módulo con `import ... from pack \"" + packNativoMarca
                       + "\"` las funciones `native` son EXTERNAS: se declaran sin"
                       + " cuerpo y sin `end`, como un `intrinsic`");
