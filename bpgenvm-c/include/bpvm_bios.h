@@ -42,7 +42,8 @@ extern "C" {
 /* Sube al AÑADIR, QUITAR o REORDENAR campos. El pack compara y se niega si no
  * habla su versión: mejor un "no" con nombre que llamar a la ranura equivocada,
  * que es un cuelgue mudo. */
-#define BPVM_BIOS_VERSION  3u   /* 3 = V5/H3: entra la ranura de la ARENA     */
+#define BPVM_BIOS_VERSION  4u   /* 4 = V5/H4: el PUNTO DE ENCUENTRO de packs  */
+                                /* 3 = V5/H3: entra la ranura de la ARENA     */
                                 /* 2 = V5/H2: entran las ranuras de ficheros  */
 
 struct tm;
@@ -141,6 +142,44 @@ typedef struct bpvm_bios {
      * saberse el reparto.
      */
     void* (*arena)(size_t* bytes);
+
+    /* ── V5/H4 — EL PUNTO DE ENCUENTRO ────────────────────────────────────────
+     *
+     * Hasta aquí la tabla iba en UN solo sentido: el firmware presta y el pack
+     * consume. Pero un pack también tiene algo que ofrecer —SQLite tiene una
+     * API entera— y hacía falta un sitio donde dejarla.
+     *
+     * Estas dos ranuras son ese sitio, y son LO ÚNICO que la VM sabe de todo
+     * esto. No conoce SQLite, ni LVGL, ni ningún driver de pantalla: sólo sabe
+     * guardar un puntero bajo una marca y devolverlo. Por eso añadir un pack
+     * nuevo NO toca la VM — que es la propiedad que hace que los packs valgan
+     * la pena, y que se perdería entera si cada librería necesitara builtins
+     * propios (con 5 imágenes hoy y 7 en cuanto entren el C3 y el C6).
+     *
+     * ─── POR QUÉ UNA MARCA Y NO UN NOMBRE ───
+     *
+     * `'SQLI'`, `'LVGL'`, `'PANT'`… cuatro bytes comparados con `==`. Buscar
+     * por nombre pediría `strcmp` en un bucle y, sobre todo, una convención de
+     * nombres que alguien acabaría escribiendo mal en silencio. La marca entra
+     * en un registro y el desajuste no existe: o coincide o no.
+     *
+     * ─── EL CONTRATO ───
+     *
+     * `publica` la llama el pack UNA vez, al arrancar, desde su propia entrada.
+     * Devuelve 0, o <0 si no hay hueco o la marca ya estaba (republicar sería
+     * un pack cargado dos veces, que es un problema, no una actualización).
+     *
+     * `busca` devuelve NULL si esa marca no está — y ese NULL es lo que
+     * convierte "el usuario no grabó el pack de SQLite" en un mensaje claro en
+     * vez de un salto a ninguna parte.
+     *
+     * ⚠️ La tabla que se publica DEBE empezar por su propia marca y versión: el
+     * que la recoge tiene que poder comprobar que habla su idioma. El pack se
+     * congela y el IDE no, así que ese desfase va a existir — mejor que GRITE.
+     * Es el mismo gate que el .mod (#284) y que esta misma tabla.
+     */
+    int         (*publica)(uint32_t marca, const void* tabla);
+    const void* (*busca)  (uint32_t marca);
 } bpvm_bios_t;
 
 /*
@@ -172,6 +211,17 @@ int  bpvm_bios_fs_borrar (const char* camino);
 int  bpvm_bios_fs_existe (const char* camino);
 /* Suelta TODOS los descriptores. Para el arranque y para las pruebas. */
 void bpvm_bios_fs_reset  (void);
+
+/*
+ * V5/H4 — el registro del punto de encuentro, ya implementado y PORTABLE
+ * (bpvm_bios.c). Cada firmware apunta sus ranuras `publica`/`busca` aquí; no
+ * hay nada que decidir por familia y tenerlo cinco veces sólo daría cinco
+ * sitios donde divergir.
+ */
+int         bpvm_bios_publica(uint32_t marca, const void* tabla);
+const void* bpvm_bios_busca  (uint32_t marca);
+/* Olvida todas las tablas. Para el arranque y para las pruebas. */
+void        bpvm_bios_packs_reset(void);
 
 /* Cuántas ranuras de función tiene la tabla. Para el log del arranque: decir
  * "BIOS lista (17 ranuras)" es más útil que "BIOS lista". */

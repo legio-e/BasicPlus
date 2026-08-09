@@ -33,6 +33,11 @@ static const ranura_t RANURAS[] = {
      * arena. Son cosas distintas — "el firmware no sabe darte arena" es un
      * hueco en la tabla; "hoy no hay arena" es una respuesta legitima. */
     R(arena),
+    /* V5/H4 — el punto de encuentro. Mismo criterio: las FUNCIONES tienen que
+     * estar siempre, aunque `busca` conteste NULL porque nadie ha publicado
+     * nada. "No sé guardar tablas de packs" y "hoy no hay ninguna" son cosas
+     * distintas y sólo la primera es un hueco. */
+    R(publica), R(busca),
 };
 
 #define N_RANURAS ((int)(sizeof(RANURAS) / sizeof(RANURAS[0])))
@@ -57,6 +62,62 @@ const char* bpvm_bios_verify(const bpvm_bios_t* b)
         if (*p == NULL) return RANURAS[i].name;
     }
     return NULL;                            /* completa */
+}
+
+/* ── V5/H4 — EL REGISTRO DE TABLAS DE PACK ────────────────────────────────────
+ *
+ * Cuatro entradas. No es una limitación disfrazada de decisión: los packs de
+ * código nativo los construimos NOSOTROS y son contados (SQLite, y algún día
+ * LVGL o los drivers de pantalla). Una lista fija se ve entera de un vistazo,
+ * no aloca, y sobre todo no puede fallar por falta de memoria en el arranque —
+ * que es cuando menos ganas hay de diagnosticar nada.
+ *
+ * Y si algún día se queda corta, `publica` lo DICE (devuelve -2) en vez de
+ * ignorar la cuarta tabla en silencio.
+ *
+ * Portable a propósito: vive aquí, con el verificador, y no en la cintura de
+ * cada familia. Guardar un puntero bajo una marca no tiene nada de específico
+ * de un micro, y tenerlo cinco veces sería cinco sitios donde divergir.
+ */
+#define BPVM_PACK_MAX 4
+
+static struct { uint32_t marca; const void* tabla; } s_packs[BPVM_PACK_MAX];
+
+int bpvm_bios_publica(uint32_t marca, const void* tabla)
+{
+    if (marca == 0 || tabla == 0) return -1;
+
+    for (int i = 0; i < BPVM_PACK_MAX; i++) {
+        /* Ya publicada. NO se sobrescribe: eso sería el mismo pack cargado dos
+         * veces, o dos packs peleándose por la misma marca, y las dos cosas son
+         * un problema que hay que ver — no una actualización que aceptar. */
+        if (s_packs[i].marca == marca) return -3;
+    }
+    for (int i = 0; i < BPVM_PACK_MAX; i++) {
+        if (s_packs[i].marca == 0) {
+            s_packs[i].tabla = tabla;
+            s_packs[i].marca = marca;   /* la marca la ÚLTIMA: hasta que se
+                                         * escribe, `busca` no ve la entrada a
+                                         * medio hacer */
+            return 0;
+        }
+    }
+    return -2;                          /* sin hueco */
+}
+
+const void* bpvm_bios_busca(uint32_t marca)
+{
+    if (marca == 0) return 0;
+    for (int i = 0; i < BPVM_PACK_MAX; i++) {
+        if (s_packs[i].marca == marca) return s_packs[i].tabla;
+    }
+    return 0;                           /* nadie la publicó: el que llama tiene
+                                         * que saber decirlo con nombre */
+}
+
+void bpvm_bios_packs_reset(void)
+{
+    for (int i = 0; i < BPVM_PACK_MAX; i++) { s_packs[i].marca = 0; s_packs[i].tabla = 0; }
 }
 
 /*

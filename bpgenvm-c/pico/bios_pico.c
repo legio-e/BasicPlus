@@ -105,7 +105,9 @@ static const bpvm_bios_t s_bios = {
     bpvm_bios_fs_truncar, bpvm_bios_fs_tamano, bpvm_bios_fs_sincronizar,
     bpvm_bios_fs_borrar, bpvm_bios_fs_existe,
     /* V5/H3 — la arena de la BD. */
-    bios_arena
+    bios_arena,
+    /* V5/H4 — el punto de encuentro. Portable: no hay nada que decidir aquí. */
+    bpvm_bios_publica, bpvm_bios_busca
 };
 
 /* ── 4. EL ANCLA, pegada a la tabla ──

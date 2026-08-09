@@ -46,6 +46,10 @@ static int  f_camino(const char* c) { (void) c; return 0; }
  * que el doble puede hacerlo: lo que el verificador exige es que la ranura
  * exista, no que haya arena. */
 static void* f_arena(size_t* b) { if (b) *b = 0; return NULL; }
+/* V5/H4 — el punto de encuentro. Igual que la arena: que `busca` no encuentre
+ * nada es una respuesta legítima; lo que se exige es que la ranura esté. */
+static int         f_publica(uint32_t m, const void* t) { (void)m;(void)t; return 0; }
+static const void* f_busca  (uint32_t m) { (void) m; return NULL; }
 
 /* Devuelve una tabla COMPLETA y bien formada. Cada caso la estropea de una
  * manera — un solo cambio por caso, que es como se sabe qué causó qué. */
@@ -66,6 +70,7 @@ static bpvm_bios_t buena(void) {
     b.truncar = f_trunc; b.tamano = f_tam; b.sincronizar = f_fd1;
     b.borrar = f_camino; b.existe = f_camino;
     b.arena = f_arena;
+    b.publica = f_publica; b.busca = f_busca;
     return b;
 }
 
@@ -96,9 +101,53 @@ int main(void) {
          * Cuando la tabla crece hay que MOVER este caso a la nueva última: si
          * se queda en la de antes deja de probar el borde y nadie se entera —
          * seguiría en verde comprobando una ranura del medio. */
+        bpvm_bios_t b = buena(); b.busca = NULL;
+        const char* r = bpvm_bios_verify(&b);
+        CHECK(r && strcmp(r, "busca") == 0, "hueco en la ULTIMA ranura -> tambien");
+    }
+    {
         bpvm_bios_t b = buena(); b.arena = NULL;
         const char* r = bpvm_bios_verify(&b);
-        CHECK(r && strcmp(r, "arena") == 0, "hueco en la ULTIMA ranura -> tambien");
+        CHECK(r && strcmp(r, "arena") == 0, "hueco en arena -> lo NOMBRA");
+    }
+
+    /* ── V5/H4: el REGISTRO del punto de encuentro ──
+     * Es lo que hace que añadir un pack no toque la VM, así que su contrato se
+     * prueba entero: guardar, recuperar, y NEGARSE en los casos que son un
+     * problema disfrazado de éxito. */
+    {
+        static const int TABLA_A = 1, TABLA_B = 2;
+        bpvm_bios_packs_reset();
+
+        CHECK(bpvm_bios_busca(0x53514C49u) == NULL,
+              "buscar una marca que nadie publico -> NULL (no basura)");
+        CHECK(bpvm_bios_publica(0x53514C49u, &TABLA_A) == 0, "publicar 'SQLI' -> 0");
+        CHECK(bpvm_bios_busca(0x53514C49u) == &TABLA_A,
+              "buscar 'SQLI' -> LA MISMA tabla que se publico");
+        CHECK(bpvm_bios_busca(0x4C56474Cu) == NULL,
+              "otra marca sigue sin estar (no devuelve la primera que haya)");
+
+        /* Republicar es un pack cargado dos veces, o dos packs peleandose por
+         * la marca. Sobrescribir en silencio dejaria al primero con clientes
+         * apuntando a una tabla que ya no es la suya. */
+        CHECK(bpvm_bios_publica(0x53514C49u, &TABLA_B) < 0,
+              "republicar la MISMA marca -> se NIEGA (no la pisa)");
+        CHECK(bpvm_bios_busca(0x53514C49u) == &TABLA_A,
+              "y tras negarse, la tabla original sigue en su sitio");
+
+        CHECK(bpvm_bios_publica(0, &TABLA_B) < 0,        "marca 0 -> se niega");
+        CHECK(bpvm_bios_publica(0x4C56474Cu, NULL) < 0,  "tabla NULL -> se niega");
+
+        /* Llenar el registro y comprobar que el desbordamiento se DICE. Un
+         * cuarto pack ignorado en silencio seria un fallo imposible de leer. */
+        CHECK(bpvm_bios_publica(0x4C56474Cu, &TABLA_B) == 0, "cabe una segunda");
+        CHECK(bpvm_bios_publica(0x50414E54u, &TABLA_B) == 0, "cabe una tercera");
+        CHECK(bpvm_bios_publica(0x46554E54u, &TABLA_B) == 0, "cabe una cuarta");
+        CHECK(bpvm_bios_publica(0x58585858u, &TABLA_B) < 0,
+              "la QUINTA no cabe -> lo DICE (no la descarta callando)");
+
+        bpvm_bios_packs_reset();
+        CHECK(bpvm_bios_busca(0x53514C49u) == NULL, "reset -> el registro se vacia");
     }
 
     /* ── 3. `log` es la voz del pack: si falta, se dice ANTES que nada ──
@@ -141,8 +190,8 @@ int main(void) {
     /* ── 7. El contador de ranuras cuadra con la struct ──
      * Si alguien añade un campo y olvida ponerlo en RANURAS, el hueco vuelve a
      * ser mudo. Esto no lo detecta del todo, pero deja el numero a la vista. */
-    CHECK(bpvm_bios_slot_count() == 27,
-          "27 ranuras (17 de la prueba A + 9 de ficheros V5/H2 + arena V5/H3)");
+    CHECK(bpvm_bios_slot_count() == 29,
+          "29 ranuras (17 prueba A + 9 ficheros H2 + arena H3 + 2 del encuentro H4)");
 
     /* ─────────────── EL ANCLA (idea de Eduardo, 7-ago) ───────────────
      *
