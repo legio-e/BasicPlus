@@ -36,6 +36,7 @@
 #include "board_mgr_pico.h"  /* H9: gestión de placa (entorno + particiones) */
 #include "bpvm_rtc.h"        /* TIME: set epoch */
 #include "aot_registry.h"    /* H3 #160: bpvm_aot_clear */
+#include "pack_pico.h"       /* V5/H4: cargar los packs nativos en el primer Run */
 
 #include "pico/bootrom.h"    /* reset_usb_boot (BOOTSEL) */
 #include "pico/stdlib.h"     /* getchar_timeout_us (poll de KILL, #257) */
@@ -1394,6 +1395,49 @@ static int pico_run_poll_cb(bpvm_t* vm, void* user) {
  * omite el RUN_REPLY y los errores de resolución van al log persistente
  * en vez de al wire. Todo lo demás (sesión, OUTPUT events, poll de
  * KILL/HELLO, EXITED) es idéntico — un autorun ES un run normal. */
+/* V5/H4 — LOS PACKS SE CARGAN AQUÍ, EN EL PRIMER Run.
+ *
+ * Un pack nativo publica su API al arrancar (`bp_pack_init` → `publica`), y un
+ * programa BP que use esa API la busca por su marca. O sea que alguien tiene
+ * que haber cargado el pack ANTES de que corra el programa. Ese alguien es
+ * esto.
+ *
+ * ─── POR QUÉ EN EL Run Y NO EN EL ARRANQUE ───
+ *
+ * Decisión de Eduardo, de la tanda del 7-ago (commit 262bb01): el salto al
+ * pack es el único paso que puede colgar. Un cuelgue durante un Run se arregla
+ * desenchufando UNA vez; uno en el arranque se repite en CADA arranque y
+ * obliga a regrabar. Con la Metro, que no tiene botón de reset, eso no es una
+ * molestia: es perder la placa hasta reflashearla.
+ *
+ * ─── UNA VEZ, Y SÓLO SI SALIÓ BIEN ───
+ *
+ * El pack se carga y se queda; volver a saltar a su entrada intentaría publicar
+ * la misma marca dos veces y el punto de encuentro lo rechazaría (-3). Por eso
+ * la bandera se pone SÓLO cuando salió bien: si no hay pack grabado, el
+ * siguiente Run lo vuelve a intentar — que es justo lo que quieres después de
+ * grabarlo, sin reiniciar.
+ *
+ * Y no se trata como error: un programa que no use packs no tiene por qué
+ * llevar ninguno. Quien los necesite se enterará por su nombre cuando el puente
+ * no encuentre la marca. */
+static void packs_cargar_una_vez(void) {
+    static int s_ok = 0;
+    if (s_ok) return;
+
+    int32_t r = pack_pico_cargar();
+    if (r >= 0) {
+        s_ok = 1;
+        log_printf("packs: cargado, la entrada devolvio %ld", (long) r);
+    } else {
+        /* r<0 = no se saltó; el detalle (cuántos candidatos, por qué peldaño)
+         * ya lo dejó `pack_pico_cargar` en el log. Aquí sólo se dice que se
+         * sigue sin pack, que es lo que el usuario tiene que saber. */
+        log_printf("packs: sin pack utilizable (peldano %ld) — se sigue sin el",
+                   (long) -r);
+    }
+}
+
 static void run_module_path(const char* path, long id) {
     if (s_active_session != 0) {
         if (id >= 0) wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
@@ -1405,6 +1449,11 @@ static void run_module_path(const char* path, long id) {
      * (el IDE manda la ruta cualificada). Plano (/app/X.mod o nombre suelto) →
      * sin base-dir = modo plano. Se resetea en cada run. */
     bpvm_fs_set_basedir_from_module(path);
+
+    /* V5/H4 — antes de nada, los packs: si el programa usa una API de pack,
+     * tiene que estar publicada cuando llegue la primera llamada. Ver arriba
+     * por qué aquí y no en el arranque. */
+    packs_cargar_una_vez();
 
     /* 1. Resolver el módulo principal en el FS (ruta + tamaño; los bytes se
      *    leen por trozos al cargarlo). */
