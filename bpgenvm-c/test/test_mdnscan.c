@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
     bpvm_pack_mount(NULL, 0);
     vm_con_modulo(&vm, "SQLite", 1);
     bpvm_mdn_escanear(&vm, fs_falso, anota, NULL);
-    comprueba(dijo_que_contenga("pero su .mdn no esta ahi"),
+    comprueba(dijo_que_contenga("pero su .mdn NO esta ahi"),
               "modulo del PACK sin .mdn dentro: cae al FS y lo explica");
     bpvm_pack_mount(pack, pack_len);
 

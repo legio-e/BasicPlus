@@ -32,7 +32,9 @@ int bpvm_mdn_escanear(struct bpvm* vm,
     const uint8_t* zona = bpvm_pack_mounted(&zona_len);
 
     int cargados = 0;
-    char msg[160];
+    /* 80 del nombre + el texto fijo mas largo (~100). Con 160 el compilador
+     * avisaba de truncado, y truncar un telltale es peor que no tenerlo. */
+    char msg[224];
 
     for (int i = 0; i < vm->module_count; i++) {
         const char* mod = vm->modules[i].name;
@@ -68,19 +70,26 @@ int bpvm_mdn_escanear(struct bpvm* vm,
          *
          * El reverso vale igual: si el módulo lo has subido TÚ al FS, su
          * puente se busca en el FS primero. Cada uno manda en lo suyo. */
+        /* `fuente` es SIEMPRE una palabra ("pack" o "FS"). Cualquier matiz sale
+         * en su propia línea: si se metiera dentro, un nombre de módulo largo
+         * podría empujar el mensaje más allá del buffer y **cortar justo el
+         * porqué**, que es lo único que hace útil a un telltale. Lo cazó
+         * -Wformat-truncation, y tenía razón. */
         const uint8_t* datos;
         uint32_t        len;
         const char*     fuente;
         const char*     tapado = NULL;
+        int             sin_puente_en_su_pack = 0;
 
         if (vm->modules[i].en_pack) {
             if (del_pack)         { datos = del_pack;    len = pack_len; fuente = "pack";
-                                    if (del_fichero) tapado = "el del FS"; }
-            else if (del_fichero) { datos = del_fichero; len = fs_len;   fuente = "FS (el modulo es del pack, pero su .mdn no esta ahi)"; }
+                                    if (del_fichero) tapado = "FS"; }
+            else if (del_fichero) { datos = del_fichero; len = fs_len;   fuente = "FS";
+                                    sin_puente_en_su_pack = 1; }
             else                  continue;
         } else {
             if (del_fichero)      { datos = del_fichero; len = fs_len;   fuente = "FS";
-                                    if (del_pack) tapado = "el del pack"; }
+                                    if (del_pack) tapado = "pack"; }
             else if (del_pack)    { datos = del_pack;    len = pack_len; fuente = "pack"; }
             else                  continue;   /* no hay .mdn: normal, y no es error */
         }
@@ -89,8 +98,16 @@ int bpvm_mdn_escanear(struct bpvm* vm,
          * en que alguien sube un .mdn a mano para probar, se olvida de
          * borrarlo, y meses después mira el que no se está usando. */
         if (tapado) {
-            snprintf(msg, sizeof msg, "AOT: %s se toma del %s; %s queda TAPADO",
+            snprintf(msg, sizeof msg, "AOT: %s se toma del %s; el del %s queda TAPADO",
                      nombre, fuente, tapado);
+            decir(dicho, user, msg);
+        }
+        /* Y este otro matiz merece decirse porque contradice la expectativa:
+         * el módulo vino del pack, así que uno espera su puente ahí dentro. */
+        if (sin_puente_en_su_pack) {
+            snprintf(msg, sizeof msg,
+                     "AOT: %s — el modulo es del pack pero su .mdn NO esta ahi",
+                     nombre);
             decir(dicho, user, msg);
         }
 
@@ -113,8 +130,8 @@ int bpvm_mdn_escanear(struct bpvm* vm,
 
         if (rc == MDN_OK && nuevos <= 0) {
             snprintf(msg, sizeof msg,
-                     "AOT: %s del %s cargo pero NO engancho NI UN thunk — "
-                     "¿no corresponde a este .mod? Se sigue interpretado",
+                     "AOT: %s del %s cargo pero NO engancho NI UN thunk "
+                     "(¿no corresponde a este .mod?) — se sigue interpretado",
                      nombre, fuente);
         } else if (rc == MDN_OK) {
             cargados++;

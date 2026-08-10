@@ -28,6 +28,7 @@
 #include "log.h"
 #include "bpvm_dbg_wire.h"   /* #326: el ramo de depuración salió de aquí a src/ */
 #include "mdn_loader.h"      /* H3 #158 fase D: cargar .mdn desde FS */
+#include "bpvm_mdn_scan.h"   /* V5/H4: el escaneo del .mdn, compartido */
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* inspect deps en handle_run */
@@ -1438,6 +1439,45 @@ static void packs_cargar_una_vez(void) {
     }
 }
 
+/* ── V5/H4: la CINTURA del escaneo de .mdn en esta familia ─────────────────
+ *
+ * El bucle, el orden de búsqueda y los mensajes están en `bpvm_mdn_escanear`
+ * (src/bpvm_mdn_scan.c), compartidos. Aquí queda lo único que es del RP2350:
+ * de dónde sale la RAM ejecutable cuando el `.mdn` viene del FS.
+ *
+ * Del pack no pasa por aquí — se ejecuta EN SITIO desde la flash y no gasta
+ * arena. Ésa es, de hecho, una de las ganancias de meterlo en el pack. */
+static const uint8_t* pico_mdn_del_fs(void* user, const char* nombre,
+                                      uint32_t* len) {
+    bpvm_t* vm = (bpvm_t*) user;
+    char     real[FS_NAME_LEN];
+    uint32_t size = 0;
+    if (v1_resolve_path(nombre, real, sizeof(real), &size) != FS_OK) return NULL;
+
+    /* H11 — ZERO-COPY: los thunks se registran como punteros DENTRO de este
+     * buffer, así que tiene que seguir vivo toda la ejecución. Se reserva de la
+     * arena exactamente lo que ocupa, 4-alineado (lo que pide Thumb-2). */
+    uint8_t* dst = bpvm_arena_reserve(vm, size, 4);
+    if (!dst) {
+        /* Se dice AQUÍ y no arriba: para el escaneo esto es "no está", y un
+         * descarte por tamaño en silencio no se distinguiría de no tenerlo. */
+        log_printf("AOT: %s (%u B) no cabe en la arena — sin overlay",
+                   real, (unsigned) size);
+        return NULL;
+    }
+    if (bpvm_fs_read(real, dst, size) != (long) size) {
+        log_printf("AOT: %s no se pudo leer — sin overlay", real);
+        return NULL;
+    }
+    *len = size;
+    return dst;
+}
+
+static void pico_mdn_decir(void* user, const char* msg) {
+    (void) user;
+    log_printf("%s", msg);
+}
+
 static void run_module_path(const char* path, long id) {
     if (s_active_session != 0) {
         if (id >= 0) wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
@@ -1558,46 +1598,15 @@ static void run_module_path(const char* path, long id) {
      *     Lo que llena el registry es el escaneo del FS de justo abajo. */
     bpvm_aot_clear();
 
-    /* 4c. H3 #158 fase D — para cada módulo cargado, buscar su .mdn
-     *     correspondiente en el FS y, si existe, registrar sus thunks
-     *     (zero-copy — apuntando al buffer FS). El registry queda con
-     *     la versión .mdn más reciente para los símbolos en cuestión. */
-    log_printf("AOT/FS: scanning %d modules for .mdn", vm->module_count);
-    for (int mi = 0; mi < vm->module_count; mi++) {
-        const char* mname = vm->modules[mi].name;
-        if (!mname || !mname[0]) continue;
-        char mdn_path[48];
-        snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
-        char mdn_real[FS_NAME_LEN]; uint32_t mdn_size;
-        fs_status_t fs_s = v1_resolve_path(mdn_path, mdn_real, sizeof(mdn_real), &mdn_size);
-        if (fs_s != FS_OK) {
-            log_printf("AOT/FS: %s not found (fs=%d) — sin overlay", mdn_path, (int) fs_s);
-            continue;
-        }
-        /* H11 — el .mdn es ZERO-COPY: los thunks se registran como punteros
-         * DENTRO de este buffer, así que tiene que seguir vivo y en RAM toda la
-         * ejecución. Antes vivía en el scratch de 128 KB; ahora se le reserva
-         * de la arena exactamente lo que ocupa (4-alineado, que es lo que pide
-         * Thumb-2). Si no cabe, se dice y se sigue sin overlay. */
-        uint8_t* mdn_data = bpvm_arena_reserve(vm, mdn_size, 4);
-        if (!mdn_data) {
-            log_printf("AOT/FS: %s (%u B) no cabe en la arena — sin overlay",
-                       mdn_real, (unsigned) mdn_size);
-            continue;
-        }
-        if (bpvm_fs_read(mdn_real, mdn_data, mdn_size) != (long) mdn_size) {
-            log_printf("AOT/FS: %s no se pudo leer — sin overlay", mdn_real);
-            continue;
-        }
-        int rc = bpvm_load_mdn(vm, mdn_data, (size_t) mdn_size);
-        if (rc == MDN_OK) {
-            log_printf("AOT/FS: %s loaded from FS (%u bytes) buf=%p",
-                       mdn_path, (unsigned) mdn_size, (const void*) mdn_data);
-        } else {
-            log_printf("AOT/FS: %s load failed rc=%d", mdn_path, rc);
-        }
-    }
-    log_printf("AOT/FS: scan done, about to bpvm_run");
+    /* 4c. V5/H4 — el .mdn de cada módulo, del FS o del PACK.
+     *
+     * Esto era un bucle de 35 líneas aquí, y otros tres iguales en las otras
+     * familias. Ahora el bucle, el orden de búsqueda (el puente sigue a su
+     * módulo) y los mensajes están en `bpvm_mdn_escanear`; de esta familia
+     * queda sólo la cintura de arriba. */
+    log_printf("AOT: buscando el .mdn de %d modulos (FS + pack)", vm->module_count);
+    bpvm_mdn_escanear(vm, pico_mdn_del_fs, pico_mdn_decir, vm);
+    log_printf("AOT: scan done, about to bpvm_run");
     log_flush();   /* CHECKPOINT — si vemos hasta aquí, fase D loaded
                     * correctamente. Lo siguiente que crashee es la
                     * ejecución del thunk desde el buffer del FS. */
