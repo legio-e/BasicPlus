@@ -14,20 +14,25 @@
 // publica como "SQLI". Sin él, la primera llamada lanza una excepción que lo
 // DICE con ese nombre — no devuelve ceros ni se cuelga.
 //
-// El camino de la base cambia según dónde corras:
-//   · en el PC                 "medidas.db"
-//   · en la Metro con tarjeta  "/sd/medidas.db"
+// ── POR QUÉ EL CAMINO NO ES UN ARGUMENTO ────────────────────────────────────
+// Porque HOY NO SE PUEDE (tarea #386): el `arg` de `main` lo hornea el
+// compilador como cadena vacía y no hay forma de darle otro valor, ni por el
+// wire ni por el IDE. Así que el trabajo está en `correr(camino)`, pública, y
+// quien quiera otra base escribe un módulo de tres líneas que la llame — mira
+// SqlDemoSd.bp, que apunta a la tarjeta.
+//
+//   · en el PC                 "medidas.db"      <- este módulo
+//   · en la Metro con tarjeta  "/sd/medidas.db"  <- SqlDemoSd
 
 module SqlDemo
   import SQLite
   import Str
 
   function Main(arg: string)
-    var camino: string := "medidas.db"
-    if arg != "" then
-      camino := arg
-    endif
+    correr("medidas.db")
+  end Main
 
+  public function correr(camino: string)
     var db: SQLite.Db := SQLite.Db()
 
     // connect() devuelve false en vez de lanzar: que no haya tarjeta o que la
@@ -123,6 +128,6 @@ module SqlDemo
     db.close()
     print ""
     print "cerrada."
-  end Main
+  end correr
 
 end SqlDemo

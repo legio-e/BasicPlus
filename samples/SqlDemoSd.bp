@@ -1,0 +1,22 @@
+// SqlDemoSd.bp — el mismo ejemplo de SqlDemo, pero contra la TARJETA (V5/H4).
+//
+// Existe por una limitación, no por gusto: el `arg` de `main` lo hornea el
+// compilador como cadena vacía, así que hoy no hay manera de decirle a un
+// programa dónde está su base de datos sin recompilarlo (tarea #386). Cuando
+// eso se arregle, este módulo sobra.
+//
+// Mientras tanto es la forma honesta de tener las dos versiones: el trabajo
+// está escrito UNA vez, en `SqlDemo.correr`, y aquí sólo cambia el camino. Si
+// mañana el ejemplo crece, crece en un sitio.
+//
+// Hace falta una tarjeta montada en /sd. Si no la hay, `connect` devuelve
+// false y el programa lo DICE con el mensaje del motor — no se cuelga.
+
+module SqlDemoSd
+  import SqlDemo
+
+  function Main(arg: string)
+    SqlDemo.correr("/sd/medidas.db")
+  end Main
+
+end SqlDemoSd
