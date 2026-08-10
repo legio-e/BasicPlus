@@ -256,6 +256,9 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     mod->code_start     = code_start;
     mod->end_addr       = end_addr;
     mod->cb             = mod_cb;
+    /* V5/H4 — de dónde vino. Se marca AQUÍ, en el único sitio que lo sabe de
+     * primera mano, para que nadie tenga que adivinarlo después. */
+    mod->en_pack        = (uint8_t) (xip ? 1 : 0);
 
     /* --- Procesar la sección exports ---
      *

@@ -159,6 +159,20 @@ typedef struct {
      * rango de código para "¿de qué módulo es este pc?" es [cb, cb+code_size). */
     uint32_t cb;
 
+    /* V5/H4 — ¿este módulo salió de un PACK (carga XIP) o del FS?
+     *
+     * Criterio de Eduardo, y es de coherencia: *«lo que está en un pack busca
+     * primero dentro del pack»*. Un pack se graba como un CONJUNTO —motor,
+     * módulo y puente, una versión— y nada de fuera debería poder subvertirlo:
+     * si un `.mdn` suelto y olvidado en el FS ganara, algo que siempre
+     * funcionó dejaría de funcionar sin que nadie tocara el pack.
+     *
+     * Lo usa `bpvm_mdn_escanear` para decidir en qué orden busca el `.mdn` de
+     * CADA módulo: el puente sigue a su módulo. Se guarda como bandera en vez
+     * de deducirse de [xip_lo, xip_hi) porque esa unión cubre también los
+     * huecos entre packs: deducirlo sería cierto hoy y frágil siempre. */
+    uint8_t  en_pack;
+
     /* F3 — imports cualificados (e.g. "L2Lib.Counter.__init"). Cada
      * entry k corresponde al slot k de la ext-table. */
     char**   imports;          /* malloc-ed; cada slot también malloc-ed */

@@ -22,7 +22,7 @@ SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/bu
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c \
           src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_npack.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
-          src/bpvm_pack.c \
+          src/bpvm_pack.c src/bpvm_mdn_scan.c \
           src/net.c src/net_host.c \
           src/fs_lfs.c src/fs_lfs_host.c \
           third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \
@@ -564,6 +564,21 @@ test-packhelp: $(LIBOBJ)
 	$(CC) $(CFLAGS) -Isrc test/test_packhelp.c $(LIBOBJ) -o build/test_packhelp.exe $(LDFLAGS)
 	@echo "--- V5/H4 string_to_cstr + pack_sym (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_packhelp.exe
+
+# V5/H4 — el .mdn dentro del pack. Construye un pack de PRUEBA con el escritor
+# REAL (Pack.jar) a partir del .mdn REAL, y comprueba que el escaneo lo
+# encuentra ahi y que el del FS lo eclipsa DICIENDOLO. Ver la cabecera del .c
+# para por que esto se prueba en host y no en placa.
+PACKJAR = ../pack/target/pack-1.0.jar
+
+test-mdnscan: $(LIBOBJ)
+	@mkdir -p build/sql
+	@if [ ! -f build/sql/SQLite.mdn ]; then 	  echo "(falta build/sql/SQLite.mdn — generalo con AotMain, como test-sqldemo)"; 	  exit 1; 	fi
+	@cp -f build/sql/SQLite.mdn build/sql/_mdntest/SQLite.mdn 2>/dev/null || 	  (mkdir -p build/sql/_mdntest && cp -f build/sql/SQLite.mdn build/sql/_mdntest/SQLite.mdn)
+	@java -cp "$(PACKJAR)" basicplus.pack.PackCli build 	    --out build/sql/mdntest.pack --name MdnTest --version 1 --date 0 	    build/sql/_mdntest/SQLite.mdn
+	$(CC) $(CFLAGS) -Isrc test/test_mdnscan.c $(LIBOBJ) -o build/test_mdnscan.exe $(LDFLAGS)
+	@echo "--- V5/H4: el .mdn se busca tambien en el pack (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_mdnscan.exe build/sql/mdntest.pack build/sql/SQLite.mdn
 
 test-freelist: $(LIBOBJ)
 	@mkdir -p build

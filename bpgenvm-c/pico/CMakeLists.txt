@@ -89,6 +89,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_bios.c           # V5/I: tabla BIOS prestada al pack nativo
     ${BPVM_C_ROOT}/src/bpvm_bios_fs.c        # V5/H2: sus ranuras de ficheros (portable)
     ${BPVM_C_ROOT}/src/bpvm_npack.c          # V5/I: escalera de validacion del pack nativo
+    ${BPVM_C_ROOT}/src/bpvm_mdn_scan.c       # V5/H4: buscar el .mdn (FS + pack) en UN sitio
     # V5/H1: dialogo con la tarjeta SD en modo SPI. Portable de nacimiento (va
     # sobre las fachadas bpvm_spi_*/bpvm_gpio_*, sin un solo #ifdef), pero SOLO
     # se da de alta AQUI: criterio de Eduardo (8-ago) — a fondo en una placa, y
