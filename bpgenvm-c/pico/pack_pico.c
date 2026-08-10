@@ -33,6 +33,7 @@
  * un cuelgue no dice ni siquiera si se llegó a saltar.
  */
 #include "bpvm_npack.h"
+#include "bpvm_pack.h"      /* V5/H4: montar la zona para que se vean los .mod y .mdn */
 #include "bpvm_bios.h"
 #include "bpvm_part.h"
 #include "log.h"
@@ -71,6 +72,25 @@ int32_t pack_pico_cargar(void)
     }
     const void* base  = (const void*) (uintptr_t) (XIP_BASE + pp->offset);
     uint32_t    bytes = (uint32_t) pp->size;
+
+    /* 1b — MONTAR la zona, que es cosa aparte de buscar código nativo en ella.
+     *
+     * Un pack puede llevar tres cosas: código nativo (`npk`), módulos BP (`mod`)
+     * y puentes AOT (`mdn`). El nativo se encuentra BARRIENDO —justo abajo— y no
+     * necesita nada más; los otros dos los busca la VM por `bpvm_pack_mounted()`,
+     * y si nadie ha montado, ahí no hay nada que encontrar.
+     *
+     * ⚠️ Esto FALTABA, y no era una regresión: el camino «cargar un módulo desde
+     * la zona XIP» no se había ejercitado nunca en esta familia. #310 corre packs
+     * del FS por streaming (`run_pack_src`, otro camino) y #327 verificó grabar y
+     * persistir, no ejecutar desde la zona. Se vio en placa: `falta el modulo
+     * 'SQLite'` teniendo el .mod dentro del pack.
+     *
+     * Va ANTES del barrido y pase lo que pase con él: un pack de sólo módulos,
+     * sin código nativo, tiene que valer igual. */
+    bpvm_pack_mount((const uint8_t*) base, bytes);
+    log_printf("pack: zona montada en 0x%08lX (%u KB) — modulos y .mdn visibles",
+               (unsigned long) (uintptr_t) base, (unsigned) (bytes / 1024));
 
     /* 2 — la BIOS que le vamos a prestar, ANTES de nada. Si tiene huecos, el
      *     pack se colgaría DENTRO, donde no hay depurador. */
