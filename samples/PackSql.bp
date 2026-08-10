@@ -1,0 +1,50 @@
+// PackSql.bp — el rastro, escrito en BP.
+//
+// `PackHola` ya demostró que cargar y ejecutar módulos del pack va bien. Falta
+// saber DÓNDE se para lo de SQLite, y para eso no hace falta reflashear: basta
+// con imprimir un hito entre paso y paso. El último número que salga por la
+// consola es la respuesta.
+//
+// Cada paso está elegido para que falle SOLO uno:
+//
+//   1  la VM arranca y ejecuta este módulo            (nada de SQLite)
+//   2  el módulo SQLite se INICIALIZA                 (su __init, sus clases)
+//   3  se construye un objeto Db                      (NEW_OBJECT, sin llamar)
+//   4  la PRIMERA llamada al puente AOT               (aquí entra el .mdn)
+//   5  una consulta de verdad
+//
+// Entre el 3 y el 4 está la frontera interesante: hasta el 3 es BP puro; el 4
+// es la primera vez que se salta a un thunk del puente y de ahí al motor.
+
+module PackSql
+  import SQLite
+
+  function Main(arg: string)
+    print "paso 1: la VM ejecuta este modulo"
+
+    // El `import` ya forzó el __init de SQLite al cargar. Si no llegamos aquí,
+    // el problema está en la inicialización del módulo, no en su uso.
+    print "paso 2: el modulo SQLite esta inicializado"
+
+    var db: SQLite.Db := SQLite.Db()
+    print "paso 3: objeto Db construido (sin llamar a nada nativo)"
+
+    // PRIMERA llamada que cruza al puente: connect -> sql_open -> motor.
+    // Si el rastro se corta AQUÍ, el fallo está en el puente o en el motor,
+    // y no en la VM ni en el pack.
+    var ok: boolean := db.connect("prueba.db")
+    print "paso 4: connect volvio, ok =", ok
+
+    if not ok then
+      print "  (no abrio):", db.errorMessage()
+      return
+    endif
+
+    print "paso 5: cuantas tablas hay ->",
+          db.execInt("SELECT count(*) FROM sqlite_master", -1)
+
+    db.close()
+    print "paso 6: cerrada. TODO BIEN"
+  end Main
+
+end PackSql

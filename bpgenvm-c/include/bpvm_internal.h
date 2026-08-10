@@ -316,14 +316,44 @@ struct aot_helpers_v2;
 #define BPVM_MAX_BREAKPOINTS 32
 
 struct bpvm {
+    /* ══ PREFIJO CONGELADO ══════════════════════════════════════════════════
+     *
+     * NO REORDENAR. NO METER NADA DELANTE. Un campo nuevo va DESPUÉS.
+     *
+     * El código AOT de un `.mdn` accede a estos dos campos POR SU
+     * DESPLAZAMIENTO, que lleva horneado desde que se generó — es código
+     * relocatable puro y no puede resolver nada por nombre. Los thunks de
+     * SQLite, por ejemplo, hacen 34 accesos a `aot_helpers` y 16 a `memory`.
+     *
+     * ─── POR QUÉ ESTO ESTÁ AQUÍ (11-ago, y costó una mañana) ───
+     *
+     * Las DOS TABLAS de este sistema están bien diseñadas: la BIOS le llega al
+     * pack COMO PARÁMETRO, y la de helpers está versionada y sólo crece por el
+     * final. Ninguna se mueve.
+     *
+     * Lo que se movía no era ninguna tabla: era el PUNTERO a la tabla. Añadí un
+     * `uint8_t` a `bpvm_module_t` —que va en `modules[16]` aquí dentro— y el
+     * desplazamiento de `aot_helpers` se corrió 128 bytes. Los `.mdn` ya
+     * generados siguieron leyendo la dirección vieja, cogieron basura y
+     * saltaron ahí: cuelgue mudo en placa, sin un solo mensaje.
+     *
+     * O sea: EL CONTRATO SE HABÍA FILTRADO. El `.mdn` dependía del layout de
+     * una struct interna que nadie había prometido mantener quieta.
+     *
+     * Criterio de Eduardo, que es el que arregla esto de raíz: *«tendría que
+     * ser algo casi inmutable, debería como mucho crecer al final»*. Pues eso
+     * — aquí delante, quietos, y con los asertos de abajo para que meter algo
+     * delante ROMPA EL BUILD en vez de producir un firmware que cuelga. */
+    uint8_t*                     memory;       /* offset 0 */
+    const struct aot_helpers_v2* aot_helpers;  /* offset sizeof(void*) */
+    /* ══ FIN DEL PREFIJO CONGELADO ══════════════════════════════════════════ */
+
     /* #339 — marca del guardián de fin de RUN: el número de secuencia de
      * reserva que había justo al arrancar este programa. Todo bloque con
      * secuencia >= esta marca que siga vivo cuando bpvm_destroy termine es
      * memoria que se quedó sin limpiar. Ver bpvm_alloc.h. */
     uint64_t run_mark;
 
-    /* Buffer del caller. */
-    uint8_t* memory;
     size_t   memory_size;
     uint32_t stack_base;       /* offset donde termina heap y empiezan stacks */
     /* H3.c — ventana de PC válido para código XIP (fuera de memory_size): la
@@ -448,11 +478,6 @@ struct bpvm {
     uint8_t* scratch;
     size_t   scratch_size;
 
-    /* H3 #158 — Tabla de helpers para código AOT. Apunta a la
-     * instancia global del runtime (bpvm_aot_helpers_v2). El código
-     * AOT C-emitido accede a helpers vía vm->aot_helpers->func(...).
-     * Inicializado en bpvm_init. Definición en bpvm_aot_helpers.h. */
-    const struct aot_helpers_v2* aot_helpers;
 
     /* #139 — Debug hook + lookup pc→línea. Si debug_hook == NULL el
      * inner loop sólo paga un null-check por opcode (negligible).
@@ -498,6 +523,19 @@ struct bpvm {
      * BPVM_ERR_RUNTIME (no atrapado). "" = sin error. Fijo (MCU-friendly). */
     char runtime_error[192];
 };
+
+
+/* El guardián del prefijo congelado. Si alguien mete un campo delante de
+ * `memory` o `aot_helpers`, o los reordena, ESTO NO COMPILA — que es
+ * exactamente lo que hacía falta: el fallo pasa de "cuelgue mudo en placa" a
+ * "no compila, y dice por qué". Ver el comentario largo dentro de la struct. */
+#include <stddef.h>
+_Static_assert(offsetof(struct bpvm, memory) == 0,
+    "PREFIJO CONGELADO: `memory` tiene que estar la PRIMERA — el codigo AOT de "
+    "los .mdn ya generados lee ese offset horneado. Pon tu campo DESPUES.");
+_Static_assert(offsetof(struct bpvm, aot_helpers) == sizeof(void*),
+    "PREFIJO CONGELADO: `aot_helpers` va JUSTO DETRAS de `memory`. Pon tu campo "
+    "DESPUES del prefijo.");
 
 /* ============================================================ */
 /*  Helpers (util.c)                                             */

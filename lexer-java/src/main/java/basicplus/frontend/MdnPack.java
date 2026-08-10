@@ -49,10 +49,11 @@ public final class MdnPack {
      * mudo en placa. Se destapó el 26-jul al arreglar el gate. */
     private static final byte[] MAGIC = {'M', 'D', 'N', 0};
     private static final int MDN_VERSION = 1;
-    static final int MDN_ABI_VERSION = 3;   /* V5/H4 — aot_helpers v2 + 6 slots
-                                                    * (pack_sym, pack_fallo,
-                                                    *  string_to_cstr, long[]/double[]).
-                                                    * Ver mdn_format.h para el porqué. */
+    static final int MDN_ABI_VERSION = 4;   /* 11-ago — el .mdn tambien depende
+                                                    * del OFFSET de `memory` y
+                                                    * `aot_helpers` dentro de
+                                                    * `struct bpvm`, no solo de la
+                                                    * tabla. Ver mdn_format.h. */
     private static final int MDN_NAME_MAX = 32;
 
     public static void main(String[] args) throws IOException {

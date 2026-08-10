@@ -451,6 +451,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
                 int idx0 = vm->module_count;
                 bpvm_status_t rs = load_from_pack(vm, &vm->run_pack_src, &pe, pname);
                 if (rs != BPVM_OK) return rs;
+                bpvm_diag("[bpvm-c] dep '%s' -> pack EN EJECUCION", pname);
                 for (int j = idx0; j < vm->module_count; j++) {
                     bpvm_status_t r = discover_deps(vm, j, search_dir);
                     if (r != BPVM_OK) return r;
@@ -484,10 +485,21 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
         else         have_fs = (bpvm_entry_resolve(pname_file, found, sizeof found, &fsz) == 0);
 
         if (!have_fs && !pk_mod) {
-            bpvm_diag("[bpvm-c] dep '%s' (%s) no encontrado: %s",
+            bpvm_diag("[bpvm-c] dep '%s' (%s) NO ENCONTRADO: %s",
                     imp, mod, filename);
             continue;   /* dejamos que linkAll dispare el error si falta. */
         }
+        /* RASTRO — una línea por dependencia resuelta, diciendo DE DÓNDE.
+         *
+         * Hasta ahora esto sólo hablaba cuando fallaba o cuando el FS eclipsaba
+         * al pack. O sea que en un arranque normal no se veía QUÉ módulos
+         * entraron ni por dónde, y cuando algo se tuerce entre la carga y el
+         * primer `print` no hay nada que mirar. Eduardo, cazándome
+         * especulando: *«hay que empezar viendo el error y acotando... lo que
+         * necesitamos son más mensajes en el log que nos permitan ver un
+         * rastro»*. Tenía razón: esto es barato y se queda. */
+        bpvm_diag("[bpvm-c] dep '%s' -> %s", pname,
+                  have_fs ? found : "PACK (XIP)");
         int idx_before = vm->module_count;
         bpvm_status_t s;
         if (have_fs) {

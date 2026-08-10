@@ -1,0 +1,29 @@
+// PackHola.bp — el programa MÁS pequeño que carga módulos desde el pack.
+//
+// No es un ejemplo: es un INSTRUMENTO. Existe para contestar una pregunta y
+// nada más — ¿funciona cargar y ejecutar un módulo BP que sale de la zona de
+// packs? Sin SQLite, sin puente AOT, sin código nativo. Si esto va, el
+// problema está en la parte de SQLite; si esto se cuelga, tenemos el fallo
+// reproducido en diez líneas en vez de en 410 KB de motor.
+//
+// Idea de Eduardo, y es la buena: aislar la pieza sospechosa en lugar de
+// seguir mirando el sistema entero.
+//
+// CÓMO SE USA: con `Core.mod` y `Str.mod` DENTRO del pack y BORRADOS del FS
+// del micro. Si siguen en `/app`, el FS eclipsa al pack y esto no prueba nada
+// — lo dirá el log con «del FS eclipsa al del pack».
+
+module PackHola
+  import Str
+
+  function Main(arg: string)
+    // 1. Lo más simple que existe: que la VM llegue aquí y escriba.
+    print "hola desde el pack"
+
+    // 2. Y ahora que se USE de verdad un módulo del pack: si Str viene de ahí,
+    //    esta llamada cruza a su código. Imprimir no basta — `print` es un
+    //    builtin y no toca ningún módulo.
+    print "Str dice:", Str.longToString(1754300000000L)
+  end Main
+
+end PackHola

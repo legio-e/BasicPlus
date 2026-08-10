@@ -31,21 +31,28 @@
 
 #define MDN_MAGIC          { 'M', 'D', 'N', 0 }
 #define MDN_VERSION        1   /* incrementar si cambia el header layout */
-#define MDN_ABI_VERSION    3   /* V5/H4 — aot_helpers_v2_t creció con SEIS slots:
-                                * string_to_cstr, pack_sym, pack_fallo y los cuatro de
-                                * long[]/double[]. Van al final, así que un .mdn VIEJO
-                                * seguiría funcionando... pero uno NUEVO en un firmware
-                                * VIEJO leería fuera de la tabla y saltaría a un puntero
-                                * de basura. Por eso sube el número: para que ese caso se
-                                * RECHACE con un mensaje en vez de reventar mudo.
+#define MDN_ABI_VERSION    4   /* 11-ago — el .mdn NO solo depende de la TABLA de
+                                * helpers: su codigo lee `vm->memory` y
+                                * `vm->aot_helpers` POR DESPLAZAMIENTO dentro de
+                                * `struct bpvm`. Ayer añadi un campo a
+                                * `bpvm_module_t` y el offset se corrio 128 bytes:
+                                * los .mdn ya generados leian basura y saltaban
+                                * ahi. CUELGUE MUDO en placa.
                                 *
-                                * Histórico: la 2 fue #302 paso 2 (refs = handles de 64b).
-                                * Un .mdn de ABI 1 pasaba offsets crudos a helpers que ya
-                                * esperaban handles → corrupción.
+                                * Los dos campos viven ahora en un PREFIJO
+                                * CONGELADO al principio de la struct, con
+                                * _Static_assert: meter algo delante ya no
+                                * compila. Pero los .mdn de antes llevan los
+                                * offsets viejos, asi que la ABI sube y se
+                                * RECHAZAN con mensaje.
                                 *
-                                * ⚠️ SUBIR ESTE NÚMERO INVALIDA TODOS LOS .mdn EXISTENTES,
-                                * y eso es lo correcto: son artefactos de compilación y se
-                                * regeneran. El loader dice cuál sobra y por qué. */
+                                * Histórico: 3 = V5/H4, seis slots nuevos de
+                                * helpers. 2 = #302, refs como handles de 64b.
+                                *
+                                * ⚠️ SUBIR ESTE NUMERO INVALIDA TODOS LOS .mdn, y
+                                * eso es lo correcto: son artefactos y se
+                                * regeneran. Vale la pena subirlo tambien cuando
+                                * cambie el PREFIJO, no solo la tabla. */
 #define MDN_NAME_MAX       32  /* longitud max de qualified name */
 
 /* Arquitectura del código nativo del .mdn = e_machine del ELF de origen (H4).

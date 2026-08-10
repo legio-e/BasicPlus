@@ -1368,8 +1368,32 @@ static void map_vm_status(bpvm_status_t rs, const char** status, int* exit_code)
 /* ============================================================ */
 static long s_kill_ack_id = -1;   /* id del KILL recibido en-run, o -1 */
 
+static int s_latido_on = 0;   /* V5/H4: lo enciende el ENV `latido=1` */
+
+/* V5/H4 — EL LATIDO. Para un cuelgue, saber que "no responde" no vale de nada:
+ * hace falta saber DONDE esta girando. El poll ya se llama periodicamente
+ * durante el run, asi que cuesta un contador.
+ *
+ * Sale cada 256 pasadas para no ahogar el log —que en placa es flash— y dice el
+ * pc y el estado de cada thread vivo. Si el cuelgue esta en el interprete,
+ * veras el pc moverse (bucle) o clavado (bloqueado). Si NO sale ni una linea,
+ * se colgo ANTES del primer quantum, que tambien es un dato.
+ *
+ * Se enciende con `aot_trace=1` en el ENV; apagado no cuesta ni una division. */
+static void latido(bpvm_t* vm) {
+    static unsigned n = 0;
+    if ((n++ & 0xFFu) != 0) return;
+    for (int i = 0; i < BPVM_MAX_THREADS; i++) {
+        if (vm->threads[i].status == BPVM_THREAD_TERMINATED) continue;
+        log_printf("latido: th%d pc=%lu estado=%d",
+                   i, (unsigned long) vm->threads[i].pc,
+                   (int) vm->threads[i].status);
+    }
+}
+
 static int pico_run_poll_cb(bpvm_t* vm, void* user) {
-    (void) vm; (void) user;
+    (void) user;
+    if (s_latido_on) latido(vm);
     int c = getchar_timeout_us(0);
     if (c < 0) return 0;                      /* nada pendiente */
     int n = wire_v1_recv_line(c, s_line_buf, sizeof(s_line_buf));
@@ -1606,6 +1630,20 @@ static void run_module_path(const char* path, long id) {
      * queda sólo la cintura de arriba. */
     log_printf("AOT: buscando el .mdn de %d modulos (FS + pack)", vm->module_count);
     bpvm_mdn_escanear(vm, pico_mdn_del_fs, pico_mdn_decir, vm);
+    /* V5/H4 — QUE MODULOS HAY Y DE DONDE SALIERON, antes de arrancar.
+     *
+     * Sin esto no se ve si Core y Str llegaron a entrar, ni por que via. Y era
+     * justo el hueco: la resolucion de dependencias solo hablaba al fallar. */
+    log_printf("modulos cargados: %d", vm->module_count);
+    for (int mi = 0; mi < vm->module_count; mi++) {
+        log_printf("  [%d] %-12s %s cb=0x%08lX main=%ld",
+                   mi, vm->modules[mi].name,
+                   vm->modules[mi].en_pack ? "PACK" : "FS  ",
+                   (unsigned long) vm->modules[mi].cb,
+                   (long) vm->modules[mi].main_offset);
+    }
+    s_latido_on = board_env_bool("latido", 0);
+    if (s_latido_on) log_printf("latido: ENCENDIDO (ENV latido=1)");
     log_printf("AOT: scan done, about to bpvm_run");
     log_flush();   /* CHECKPOINT — si vemos hasta aquí, fase D loaded
                     * correctamente. Lo siguiente que crashee es la
