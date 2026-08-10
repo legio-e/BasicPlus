@@ -43,7 +43,23 @@ public final class MdnInspect {
     private static final int    MDN_MAGIC_2 = 'N';
     private static final int    MDN_MAGIC_3 = 0;
     private static final int    MDN_VERSION     = 1;
-    private static final int    MDN_ABI_VERSION = 1;
+    /* La ABI NO se copia aquí: se lee de MdnPack, que es quien la ESTAMPA.
+     * Tenerla dos veces ya salió caro — esta copia se quedó en 1 mientras la
+     * de verdad iba por 2, así que la herramienta de diagnóstico daba FAIL a
+     * .mdn perfectamente buenos. Un inspector que miente es peor que no
+     * tenerlo: manda a buscar el fallo donde no está. */
+    private static final int    MDN_ABI_VERSION = MdnPack.MDN_ABI_VERSION;
+
+    /** El campo que hasta H4 se llamaba `_reserved` y ahora dice la ISA del código.
+     *  Un .mdn de otra arquitectura son instrucciones basura, así que el loader
+     *  lo rechaza — y el inspector tiene que saber leerlo o dará una alarma
+     *  falsa por cada .mdn correcto, que es lo que hacía. */
+    private static String nombreArch(long a) {
+        if (a == 0)   return "legacy, se trata como ARM";
+        if (a == 40)  return "ARM Thumb-2";
+        if (a == 243) return "RISC-V";
+        return "desconocida";
+    }
     private static final int    MDN_NAME_MAX    = 32;
 
     private static final int    HEADER_SIZE = 20;
@@ -98,12 +114,12 @@ public final class MdnInspect {
         }
         System.out.println("version=" + version + " abi_version=" + abi + " (OK)");
 
-        // 4. code_size + sym_count + _reserved
+        // 4. code_size + sym_count + arch (era _reserved hasta H4)
         long codeSize  = bb.getInt(8)  & 0xffffffffL;
         long symCount  = bb.getInt(12) & 0xffffffffL;
         long reserved  = bb.getInt(16) & 0xffffffffL;
         System.out.println("code_size=" + codeSize + " sym_count=" + symCount
-            + " _reserved=" + reserved);
+            + " arch=" + reserved + " (" + nombreArch(reserved) + ")");
         if (codeSize == 0) {
             System.err.println("FAIL: code_size=0 — .mdn sin código");
             return 14;
@@ -118,8 +134,12 @@ public final class MdnInspect {
         if (symCount > 1024) {
             System.err.println("WARN: sym_count=" + symCount + " > 1024 (sospechoso)");
         }
-        if (reserved != 0) {
-            System.err.println("WARN: _reserved=" + reserved + " (debería ser 0)");
+        /* Sólo avisa de lo que NO reconoce. Antes avisaba de todo lo distinto de
+         * cero, o sea de TODOS los .mdn con tag de arquitectura — una alarma por
+         * cada fichero correcto enseña a ignorar las alarmas. */
+        if (reserved != 0 && reserved != 40 && reserved != 243) {
+            System.err.println("WARN: arch=" + reserved + " desconocida"
+                    + " (0=legacy ARM, 40=ARM, 243=RISC-V)");
         }
 
         // 5. Tamaño total

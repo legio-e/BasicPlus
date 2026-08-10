@@ -49,7 +49,10 @@ public final class MdnPack {
      * mudo en placa. Se destapó el 26-jul al arreglar el gate. */
     private static final byte[] MAGIC = {'M', 'D', 'N', 0};
     private static final int MDN_VERSION = 1;
-    private static final int MDN_ABI_VERSION = 2;   /* #302 paso 2 — aot_helpers v2 */
+    static final int MDN_ABI_VERSION = 3;   /* V5/H4 — aot_helpers v2 + 6 slots
+                                                    * (pack_sym, pack_fallo,
+                                                    *  string_to_cstr, long[]/double[]).
+                                                    * Ver mdn_format.h para el porqué. */
     private static final int MDN_NAME_MAX = 32;
 
     public static void main(String[] args) throws IOException {

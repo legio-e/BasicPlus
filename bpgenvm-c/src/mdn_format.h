@@ -31,10 +31,21 @@
 
 #define MDN_MAGIC          { 'M', 'D', 'N', 0 }
 #define MDN_VERSION        1   /* incrementar si cambia el header layout */
-#define MDN_ABI_VERSION    2   /* #302 paso 2 — matches aot_helpers_v2_t (refs = handles).
-                                * Un .mdn de ABI 1 (refs = offset crudo) pasaría offsets a
-                                * helpers que ahora esperan handles → corrupción; el loader
-                                * lo RECHAZA con MDN_ERR_ABI (gate estilo #284). */
+#define MDN_ABI_VERSION    3   /* V5/H4 — aot_helpers_v2_t creció con SEIS slots:
+                                * string_to_cstr, pack_sym, pack_fallo y los cuatro de
+                                * long[]/double[]. Van al final, así que un .mdn VIEJO
+                                * seguiría funcionando... pero uno NUEVO en un firmware
+                                * VIEJO leería fuera de la tabla y saltaría a un puntero
+                                * de basura. Por eso sube el número: para que ese caso se
+                                * RECHACE con un mensaje en vez de reventar mudo.
+                                *
+                                * Histórico: la 2 fue #302 paso 2 (refs = handles de 64b).
+                                * Un .mdn de ABI 1 pasaba offsets crudos a helpers que ya
+                                * esperaban handles → corrupción.
+                                *
+                                * ⚠️ SUBIR ESTE NÚMERO INVALIDA TODOS LOS .mdn EXISTENTES,
+                                * y eso es lo correcto: son artefactos de compilación y se
+                                * regeneran. El loader dice cuál sobra y por qué. */
 #define MDN_NAME_MAX       32  /* longitud max de qualified name */
 
 /* Arquitectura del código nativo del .mdn = e_machine del ELF de origen (H4).
