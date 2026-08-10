@@ -1,0 +1,169 @@
+// Medidas.bp — la ENTIDAD y su DAO, escritos a mano (V5/H5, paso 1).
+//
+// Esto es el objetivo que un día generará el compilador solo. Escribirlo a
+// mano primero es criterio de Eduardo: se genera contra algo que YA funciona,
+// no contra una idea de cómo debería quedar.
+//
+// ─── EL REPARTO ────────────────────────────────────────────────────────────
+//
+//   Medida       una FILA. Datos y nada más: ni SQL, ni conexión, ni saber
+//                que existe una base de datos.
+//   MedidasDao   la TABLA. TODO el SQL vive aquí y sólo aquí. Quien usa el DAO
+//                no escribe una sola sentencia — que es justo para lo que está.
+//
+// ─── EL FLUJO QUE SUPONE (Eduardo) ─────────────────────────────────────────
+//
+// La base se diseña en el PC y se copia hecha a la tarjeta. O sea que el DAO
+// NO crea tablas ni migra esquemas: se encuentra la tabla puesta y trabaja con
+// ella. Un `crearTabla()` aquí sería resolver un problema que el usuario no
+// tiene.
+//
+// ─── LO QUE FALTA, DICHO ───────────────────────────────────────────────────
+//
+// El SQL se compone concatenando, porque `SQLite.bp` todavía no tiene `bind`.
+// Con un texto que lleve un apóstrofo la sentencia se rompe. Decisión de hoy:
+// no tocarlo ahora — primero el DAO funcionando, y los mecanismos de SQL
+// vienen después. Queda escrito aquí para que nadie lo descubra por su cuenta.
+
+module Medidas
+  import SQLite
+  import Str
+
+  // ── LA ENTIDAD ────────────────────────────────────────────────────────────
+  //
+  // `id` es la clave, y la pone la BD: en un objeto recién construido vale 0,
+  // que es como se distingue "esto todavía no está guardado".
+  public class Medida
+    public property id:     long
+    public property sensor: string
+    public property valor:  double
+    public property t:      long
+
+    public function Medida()
+      this.id     := 0
+      this.sensor := ""
+      this.valor  := 0.0d
+      this.t      := 0
+    end Medida
+  end Medida
+
+  // ── EL DAO ────────────────────────────────────────────────────────────────
+  //
+  // Cada verbo va SOBRECARGADO por clave y por objeto, que es lo natural: unas
+  // veces tienes el id y otras el objeto en la mano, y no deberías tener que
+  // acordarte de cuál acepta cada método.
+  public class MedidasDao
+    public property db: SQLite.Db
+
+    public function MedidasDao(base: SQLite.Db)
+      this.db := base
+    end MedidasDao
+
+    // ── load ────────────────────────────────────────────────────────────────
+    //
+    // Por CLAVE: devuelve la fila, o null si no está. No lanza — que una fila
+    // no exista es algo que PASA, no un fallo del programa. Mismo criterio que
+    // `connect`, que devuelve false en vez de romper.
+    public function load(id: long): Medida
+      var q: SQLite.Query := this.db.query(
+            "SELECT id, sensor, valor, t FROM medidas WHERE id = "
+            + Str.longToString(id))
+      var m: Medida := null
+      if q.nextRow() then
+        m := this.leerFila(q)
+      endif
+      q.release()
+      return m
+    end load
+
+    // Por OBJETO: lo rellena a partir de su propio id. Devuelve si lo encontró.
+    public function load(m: Medida): boolean
+      var otro: Medida := this.load(m.id)
+      if otro == null then
+        return false
+      endif
+      this.copiar(otro, m)
+      return true
+    end load
+
+    // ── refresh ─────────────────────────────────────────────────────────────
+    //
+    // Releer del disco lo que ya tenías. Hace lo mismo que `load(objeto)`, y
+    // existe aparte porque DICE otra cosa: no es "traer", es "volver a traer
+    // por si alguien lo cambió". El nombre es la documentación.
+    public function refresh(m: Medida): boolean
+      return this.load(m)
+    end refresh
+
+    // ── insert / add ────────────────────────────────────────────────────────
+    //
+    // Al volver, el objeto lleva su `id` puesto — el que asignó la BD. Sin eso
+    // el llamante tendría que ir a buscarlo, que es justo el trabajo que el DAO
+    // viene a quitar.
+    public function insert(m: Medida)
+      this.db.exec("INSERT INTO medidas(sensor, valor, t) VALUES('"
+            + m.sensor + "', "
+            + Str.doubleToString(m.valor) + ", "
+            + Str.longToString(m.t) + ")")
+      m.id := this.db.lastInsertId()
+    end insert
+
+    // Mismo verbo, otro nombre. Cuesta dos líneas y le ahorra a cada uno tener
+    // que recordar cuál de los dos eligió esta librería.
+    public function add(m: Medida)
+      this.insert(m)
+    end add
+
+    // ── update ──────────────────────────────────────────────────────────────
+    //
+    // Devuelve si tocó alguna fila: false = ese id no estaba. La diferencia
+    // entre "actualizado" y "no había nada que actualizar" importa, y sin esto
+    // las dos serían indistinguibles.
+    public function update(m: Medida): boolean
+      this.db.exec("UPDATE medidas SET sensor = '" + m.sensor + "'"
+            + ", valor = " + Str.doubleToString(m.valor)
+            + ", t = "     + Str.longToString(m.t)
+            + " WHERE id = " + Str.longToString(m.id))
+      return this.db.changes() > 0
+    end update
+
+    // ── delete ──────────────────────────────────────────────────────────────
+    public function delete(id: long): boolean
+      this.db.exec("DELETE FROM medidas WHERE id = " + Str.longToString(id))
+      return this.db.changes() > 0
+    end delete
+
+    // Por objeto: además de borrar, le pone el `id` a 0 — porque después del
+    // borrado ese objeto ya no corresponde a ninguna fila, y dejarle el id
+    // viejo invita a volver a usarlo como si existiera.
+    public function delete(m: Medida): boolean
+      var fue: boolean := this.delete(m.id)
+      if fue then
+        m.id := 0
+      endif
+      return fue
+    end delete
+
+    // ── de aquí para abajo, cocina ──────────────────────────────────────────
+
+    // Un solo sitio que sabe qué columna es cuál. Si mañana la consulta cambia
+    // de orden, se cambia AQUÍ y no en cada método.
+    function leerFila(q: SQLite.Query): Medida
+      var m: Medida := Medida()
+      m.id     := q.getLong(0)
+      m.sensor := q.getStr(1)
+      m.valor  := q.getDouble(2)
+      m.t      := q.getLong(3)
+      return m
+    end leerFila
+
+    function copiar(de: Medida, a: Medida)
+      a.id     := de.id
+      a.sensor := de.sensor
+      a.valor  := de.valor
+      a.t      := de.t
+    end copiar
+
+  end MedidasDao
+
+end Medidas

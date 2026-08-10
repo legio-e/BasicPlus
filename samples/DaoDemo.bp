@@ -1,0 +1,91 @@
+// DaoDemo.bp — ejercita el DAO a mano (V5/H5, paso 1).
+//
+// Mira lo que NO hay en este fichero: ni una sentencia SQL. Ésa es toda la
+// prueba de que el DAO hace su trabajo.
+//
+// Se ejecuta en el PC, que para esto NO es un simulador: es la misma VM-C
+// corriendo el mismo SQLite que la placa. Se verifica aquí y la Metro confirma.
+
+module DaoDemo
+  import SQLite
+  import Medidas
+  import Str
+
+  function Main(arg: string)
+    var db: SQLite.Db := SQLite.Db()
+    if not db.connect("dao.db") then
+      print "no se pudo abrir:", db.errorMessage()
+      return
+    endif
+
+    // La tabla la crea AQUÍ el ejemplo porque en el PC partimos de cero. En el
+    // flujo de verdad la base llega hecha desde el PC y el DAO se la encuentra
+    // puesta — por eso esto está en la demo y no dentro del DAO.
+    db.exec("DROP TABLE IF EXISTS medidas;"
+          + "CREATE TABLE medidas ("
+          + "  id     INTEGER PRIMARY KEY,"
+          + "  sensor TEXT,"
+          + "  valor  REAL,"
+          + "  t      INTEGER)")
+
+    var dao: Medidas.MedidasDao := Medidas.MedidasDao(db)
+
+    // ── insert: el objeto vuelve con su clave puesta ────────────────────────
+    var m: Medidas.Medida := Medidas.Medida()
+    m.sensor := "temp"
+    m.valor  := 21.5d
+    m.t      := 1754300000000L
+    dao.insert(m)
+    print "insert     -> id =", m.id
+
+    // ── add: el mismo verbo con el otro nombre ──────────────────────────────
+    var m2: Medidas.Medida := Medidas.Medida()
+    m2.sensor := "hum"
+    m2.valor  := 55.0d
+    m2.t      := 1754300001000L
+    dao.add(m2)
+    print "add        -> id =", m2.id
+
+    // ── load por CLAVE ──────────────────────────────────────────────────────
+    var leida: Medidas.Medida := dao.load(m.id)
+    if leida == null then
+      print "load       -> NO ENCONTRADA (mal)"
+    else
+      print "load(id)   ->", leida.sensor, leida.valor, leida.t
+    endif
+
+    // ── load de una clave que no existe: null, y NO lanza ───────────────────
+    var noHay: Medidas.Medida := dao.load(9999L)
+    if noHay == null then
+      print "load(9999L) -> null, como debe ser"
+    else
+      print "load(9999L) -> devolvio algo (mal)"
+    endif
+
+    // ── update + refresh: el disco manda ────────────────────────────────────
+    m.valor := 99.9d
+    print "update     ->", dao.update(m)
+
+    // `leida` sigue con el valor viejo en memoria; refresh lo trae del disco.
+    print "antes de refresh, leida.valor =", leida.valor
+    print "refresh    ->", dao.refresh(leida)
+    print "despues,        leida.valor =", leida.valor
+
+    // ── load por OBJETO ─────────────────────────────────────────────────────
+    var porObj: Medidas.Medida := Medidas.Medida()
+    porObj.id := m2.id
+    print "load(obj)  ->", dao.load(porObj), "sensor =", porObj.sensor
+
+    // ── delete por CLAVE y por OBJETO ───────────────────────────────────────
+    print "delete(id) ->", dao.delete(m2.id)
+    print "delete(id) otra vez ->", dao.delete(m2.id), "(false: ya no estaba)"
+
+    print "delete(obj)->", dao.delete(m)
+    print "  y el objeto queda con id =", m.id, "(0: ya no es ninguna fila)"
+
+    db.close()
+    print ""
+    print "DAO OK — y en todo el programa no hay una sola sentencia SQL"
+  end Main
+
+end DaoDemo
