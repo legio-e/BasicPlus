@@ -38,6 +38,10 @@ int bpvm_sdio_pines_parse(const char* valor, bpvm_sdio_pines_t* p,
     p->d1 = p->d2 = p->d3 = -1;
     p->ancho = 1;
     p->pwr = -1;
+    /* Activo BAJO. Verificado EN PLACA (P4, 11-ago): con GPIO45 a 0 la tarjeta
+     * arranca y monta; a 1, no. Coincide con lo que dice el transistor —un
+     * MOSFET de canal P con la fuente en 3V3 conduce con la puerta baja— y
+     * NO con una medida de 3,3 V en el zócalo que resultó ser ambigua. */
     p->pwr_activo_alto = 0;
     p->khz = 0;
     /* El LDO interno que alimenta las E/S de SDMMC. Por defecto ENCENDIDO en el

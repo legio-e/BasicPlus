@@ -78,9 +78,11 @@ static sd_pwr_ctrl_handle_t s_ldo = NULL;
  * Leer el `Kconfig` del ejemplo del IDF como «o uno o el otro» costó una tarde
  * de depuración: su ayuda habla del «SD VDD» y el API dice «SDMMC **IO**».
  *
- * ⚠️ La POLARIDAD sale del ENV (`pwralto`), no horneada, y no está cerrada:
- * el análisis del transistor decía activo bajo y la medida en placa apunta a
- * lo contrario. Hasta que se cierre, el ENV manda.
+ * La POLARIDAD sale del ENV (`pwralto`) y es **activo BAJO** — cerrado en placa
+ * el 11-ago: con GPIO45 a 0 monta, a 1 no. Coincide con lo que dice el
+ * transistor. Hubo por medio una medida de 3,3 V en el zócalo que parecía
+ * decir lo contrario y era AMBIGUA (con el raíl siempre encendido, o a medias,
+ * da lo mismo): costó dos rondas creerla por encima del análisis.
  *
  * Se conduce SIEMPRE y explícitamente, sin confiar en el estado de reposo: el
  * divisor de la puerta deja 1,65 V si nadie manda, y a esa tensión el MOSFET no
