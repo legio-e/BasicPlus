@@ -94,6 +94,7 @@ idf_component_register(
         "../../include"
         "../../src"
         "../../third_party/littlefs"   # H2-B3: lfs.h
+        "../../third_party/fatfs"      # V5/H6: ff.h (nuestro ffconf.h sale de ../../include)
         "../../esp32/main"
     REQUIRES
         esp_eth

@@ -114,9 +114,9 @@ static int p4_init(void) {
     slot.clk   = (gpio_num_t) s_p.clk;
     slot.cmd   = (gpio_num_t) s_p.cmd;
     slot.d0    = (gpio_num_t) s_p.d0;
-    slot.d1    = (gpio_num_t) (s_p.ancho == 4 ? s_p.d1 : -1);
-    slot.d2    = (gpio_num_t) (s_p.ancho == 4 ? s_p.d2 : -1);
-    slot.d3    = (gpio_num_t) (s_p.ancho == 4 ? s_p.d3 : -1);
+    slot.d1    = (s_p.ancho == 4) ? (gpio_num_t) s_p.d1 : GPIO_NUM_NC;
+    slot.d2    = (s_p.ancho == 4) ? (gpio_num_t) s_p.d2 : GPIO_NUM_NC;
+    slot.d3    = (s_p.ancho == 4) ? (gpio_num_t) s_p.d3 : GPIO_NUM_NC;
     slot.d4    = GPIO_NUM_NC;     /* ⚠️ NO tocar: en esta placa el 45 es pwr */
     slot.d5    = GPIO_NUM_NC;
     slot.d6    = GPIO_NUM_NC;
