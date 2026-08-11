@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -507,6 +507,16 @@ test-sdio:
 	$(CC) $(CFLAGS) test/test_sdio.c src/bpvm_blk_sdmmc_cfg.c -o build/test_sdio.exe
 	@echo "--- V5/H6 entrada 'sd' SDIO (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_sdio.exe
+
+# V5/H6 paso 3 - LIST_DIR, el nucleo comun. Vivia dentro del despachador del
+# Pico, donde solo se podia ejercer con placa; al sacarlo a src/ se corre sobre
+# el backend de HOST y se comprueba lo que importa: que el JSON es el que el IDE
+# espera, que los nombres van escapados y que un truncado nunca sale en silencio.
+test-listdir:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_listdir.c src/bpvm_listdir.c src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_util.c src/bpvm_log.c -o build/test_listdir.exe
+	@echo "--- V5/H6 LIST_DIR comun (esperado: solo 'ok', [status=OK]) ---"
+	@cd build && ./test_listdir.exe
 
 # H9 — board manager: núcleo portable del protocolo de gestión de placa (ENV_*/
 # PART_*). Compone env+part. Host-only: opera sobre sectores A/B en RAM; simula el

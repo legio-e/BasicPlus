@@ -17,6 +17,7 @@
 #include "json_min.h"
 #include "fs.h"
 #include "bpvm_fs.h"   /* H19-F1: base-dir por proyecto (bpvm_fs_set_basedir_from_module) */
+#include "bpvm_listdir.h"  /* V5/H6 paso 3: LIST_DIR, nucleo comun */
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* recorrido de vm->modules[] para los .mdn del AOT */
@@ -271,6 +272,39 @@ static int list_cb(const char* name, uint32_t size, void* user) {
                   (unsigned long) size, (unsigned long) crc);
     wire_v1_send_bulk((const uint8_t*) e, (size_t) o);
     return 0;
+}
+
+/* ── LIST_DIR — V5/H6 paso 3 ────────────────────────────────────────────
+ *
+ * Nació en el Pico (V5/H2) y se quedó allí, así que esta familia no lo tenía
+ * — y el P4, que usa ESTE despachador, se quedaba sin él. Consecuencia real,
+ * vista en placa: el IDE caía al `LIST` de arriba, que calcula el CRC de CADA
+ * fichero recorriendo el FS entero; con una tarjeta montada eso es leerse la
+ * tarjeta para pintar un árbol.
+ *
+ * El cuerpo está en `src/bpvm_listdir.c`. Aquí sólo queda lo de esta familia:
+ * por dónde sale el texto (el wire, troceado) y cómo se cierra la línea. */
+static void listdir_sink(const char* txt, size_t n, void* user) {
+    (void) user;
+    wire_v1_send_bulk((const uint8_t*) txt, n);
+}
+
+static void handle_list_dir(long id, const json_obj_t* obj) {
+    char path[64];
+    if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
+        snprintf(path, sizeof path, "/");        /* sin path = la raiz */
+    }
+    switch (bpvm_listdir_emitir(path, id, listdir_sink, NULL, NULL)) {
+    case BPVM_LISTDIR_OCUPADO:
+        wire_v1_send_error(id, "BUSY", "zona de scratch ocupada");
+        return;
+    case BPVM_LISTDIR_NO_LISTA:
+        wire_v1_send_error(id, "NOT_FOUND", "no se puede listar");
+        return;
+    case BPVM_LISTDIR_OK:
+        break;
+    }
+    wire_v1_send_line("", 0);   /* cierra la linea; el nucleo no la cierra */
 }
 
 static void handle_list(long id, const json_obj_t* obj) {
@@ -1004,7 +1038,8 @@ static void handle_request(const char* line, int len) {
      * con el sistema de ficheros" (Eduardo). */
     {
         const bpvm_boot_status_t* bs = board_boot_status();
-        int is_fs = strcmp(type, "LIST") == 0 || strcmp(type, "STAT") == 0
+        int is_fs = strcmp(type, "LIST") == 0 || strcmp(type, "LIST_DIR") == 0
+                 || strcmp(type, "STAT") == 0
                  || strcmp(type, "GET")  == 0 || strcmp(type, "PUT")  == 0
                  || strncmp(type, "PUT_", 4) == 0   /* #294 streaming: PUT_BEGIN/DATA/END */
                  || strcmp(type, "DEL")  == 0
@@ -1018,6 +1053,7 @@ static void handle_request(const char* line, int len) {
             return;
         }
     }
+    if (strcmp(type, "LIST_DIR") == 0) { handle_list_dir(id, &obj); return; }  /* V5/H6 ANTES que LIST: el prefijo no debe comerselo */
     if (strcmp(type, "LIST")  == 0) { handle_list(id, &obj);  return; }
     if (strcmp(type, "STAT")  == 0) { handle_stat(id, &obj);  return; }
     if (strcmp(type, "GET")   == 0) { handle_get(id, &obj);   return; }

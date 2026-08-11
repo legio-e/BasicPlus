@@ -53,6 +53,7 @@
 #include "bpvm_sqlmem.h"   /* V5/H: motivo + minimo, para el aviso del INFO */
 #include "bpvm_sd.h"       /* V5/H1: SD_INFO — la tarjeta se prueba desde aqui */
 #include "bpvm_sd_blk.h"   /* V5/H6: la misma SD como dispositivo de bloque    */
+#include "bpvm_listdir.h" /* V5/H6: LIST_DIR, nucleo comun a las familias    */
 #include "bpvm_fs_fat.h"   /* V5/H2: SD_MOUNT — la tarjeta como sistema de ficheros */
 
 extern uint8_t* s_vm_buffer;          /* H7.2.b: SRAM interna o ventana PSRAM */
@@ -720,24 +721,16 @@ static void sd_vigilar_tick(void) {
  * se quedaría esperando. Mismo motivo por el que fs_list ya lo hacía así.
  */
 
-#define LISTDIR_MAX_ENTRIES  96
-#define LISTDIR_NAME_MAX     64
-
-typedef struct {
-    char     nombres[LISTDIR_MAX_ENTRIES][LISTDIR_NAME_MAX];
-    uint32_t tam[LISTDIR_MAX_ENTRIES];
-    uint8_t  esdir[LISTDIR_MAX_ENTRIES];
-    int      n;
-    int      omitidas;      /* las que NO cupieron — jamás en silencio */
-} listdir_foto_t;
-
-static void listdir_cb(const char* name, int is_dir, uint32_t size, void* user) {
-    listdir_foto_t* f = (listdir_foto_t*) user;
-    if (f->n >= LISTDIR_MAX_ENTRIES) { f->omitidas++; return; }
-    snprintf(f->nombres[f->n], LISTDIR_NAME_MAX, "%s", name);
-    f->tam[f->n]   = size;
-    f->esdir[f->n] = (uint8_t) (is_dir ? 1 : 0);
-    f->n++;
+/* V5/H6 paso 3 — el cuerpo del verbo se fue a `src/bpvm_listdir.c`, común a
+ * las familias. Aquí queda lo único que es DE ESTA PLACA: por dónde sale el
+ * texto (stdout, que es su transporte) y con qué palabras se contesta el error.
+ *
+ * Lo movió el P4: usa el despachador del S3 y se quedó sin LIST_DIR, así que el
+ * IDE le caía al LIST con CRC — o sea, leerse la tarjeta entera para pintar un
+ * árbol. */
+static void sink_stdout(const char* txt, size_t n, void* user) {
+    (void) user;
+    fwrite(txt, 1, n, stdout);
 }
 
 static void handle_list_dir(long id, const json_obj_t* obj) {
@@ -745,46 +738,21 @@ static void handle_list_dir(long id, const json_obj_t* obj) {
     if (json_get_str(obj, "path", path, sizeof(path)) < 0) {
         snprintf(path, sizeof path, "/");        /* sin path = la raíz */
     }
-    if (path[0] == '\0') { path[0] = '/'; path[1] = '\0'; }
 
-    listdir_foto_t* f = (listdir_foto_t*) bpvm_scratch_take(sizeof(*f), "LIST_DIR");
-    if (!f) {
-        /* Sin zona NO se contesta un listado vacío: eso se leería como "el
-         * directorio está vacío", que es mentira y de las caras. */
+    switch (bpvm_listdir_emitir(path, id, sink_stdout, NULL, NULL)) {
+    case BPVM_LISTDIR_OCUPADO:
         wire_v1_send_error(id, "BUSY", "zona de scratch ocupada");
         return;
-    }
-    f->n = 0; f->omitidas = 0;
-    int r = bpvm_fs_list(path, listdir_cb, f);
-    if (r != 0 && f->n == 0) {
-        bpvm_scratch_give("LIST_DIR");
+    case BPVM_LISTDIR_NO_LISTA:
         wire_v1_send_error(id, "NOT_FOUND", "no se puede listar");
         return;
+    case BPVM_LISTDIR_OK:
+        break;
     }
-    if (f->omitidas) {
-        log_printf("fs: LIST_DIR '%s' INCOMPLETO — %d entradas fuera",
-                   path, f->omitidas);
-        log_flush();
-    }
-
-    /* Y ahora sí, FUERA del cerrojo, a escupirlo. */
-    fputs("{\"type\":\"LIST_DIR_REPLY\",\"id\":", stdout);
-    fprintf(stdout, "%ld,\"entries\":[", id);
-    for (int i = 0; i < f->n; i++) {
-        if (i) fputc(',', stdout);
-        fputs("{\"name\":\"", stdout);
-        for (const char* p = f->nombres[i]; *p; p++) {
-            if (*p == '"' || *p == '\\') fputc('\\', stdout);
-            fputc(*p, stdout);
-        }
-        fprintf(stdout, "\",\"size\":%u,\"isDir\":%s}",
-                (unsigned) f->tam[i], f->esdir[i] ? "true" : "false");
-    }
-    /* El aviso de truncado viaja al IDE, no sólo al log: quien mira el listado
-     * es quien tiene que enterarse de que no está entero. */
-    fprintf(stdout, "],\"omitidas\":%d}\n", f->omitidas);
+    /* El cierre de línea lo pone el transporte: es lo único que cada familia
+     * hace distinto, y por eso el núcleo no lo escribe. */
+    fputc('\n', stdout);
     fflush(stdout);
-    bpvm_scratch_give("LIST_DIR");
 }
 
 /* ============================================================ */

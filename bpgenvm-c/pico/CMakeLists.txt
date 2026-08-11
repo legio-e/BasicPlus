@@ -101,6 +101,7 @@ set(BPVM_C_SRC
     # tambien es comun aunque hoy solo la monte esta placa — es PROTOCOLO, no
     # familia. Ver la cabecera de include/bpvm_blk.h.
     ${BPVM_C_ROOT}/src/bpvm_blk.c            # V5/H6: contrato de bloque + tabla de particiones
+    ${BPVM_C_ROOT}/src/bpvm_listdir.c        # V5/H6: LIST_DIR comun (salio de repl_v1.c)
     ${BPVM_C_ROOT}/src/bpvm_sd_blk.c         # V5/H6: la SD por SPI cumpliendo ese contrato
     # V5/H2: la SD como sistema de ficheros. Mismo criterio de alta que bpvm_sd.c
     # — una sola placa hasta que la cadena este probada de punta a punta.

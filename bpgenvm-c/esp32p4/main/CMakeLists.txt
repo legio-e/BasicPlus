@@ -34,6 +34,7 @@ idf_component_register(
         # --- V5/H6: la SD por SDMMC ---------------------------------------
         "blk_sdmmc_p4.c"                      # H6 paso 2: cintura SDMMC sobre sdmmc_host
         "../../src/bpvm_blk.c"                # H6 paso 1: contrato de bloque + tabla de particiones
+        "../../src/bpvm_listdir.c"     # V5/H6: LIST_DIR comun (salio del repl del Pico)
         "../../src/bpvm_blk_sdmmc_cfg.c"      # H6 paso 2: la linea `sd` del ENV (portable, test-sdio)
         "../../src/fs_fat.c"                  # H2: backend FAT de la fachada (el MISMO que la Metro)
         "../../third_party/fatfs/ff.c"        # H2: motor FatFs R0.16 — el NUESTRO, no el del IDF
