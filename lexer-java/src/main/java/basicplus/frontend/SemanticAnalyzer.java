@@ -105,6 +105,7 @@ public final class SemanticAnalyzer {
         injectImports(mod);
         resolveTypesPass(mod);
         bodyPass(mod);
+        validateAnnotations(mod);
         validateModuleEntryPoints(mod);
         verifyImplementsContract(mod);
         return info;
@@ -127,6 +128,11 @@ public final class SemanticAnalyzer {
         // driver (Main.compileInterface) antes de llamar aquí.
         injectImports(mod);
         resolveTypesPass(mod);
+        // V5/H5 — las anotaciones se validan TAMBIÉN aquí. Un módulo con
+        // entidades se compila muchas veces en modo interfaz (como dependencia
+        // de otro), y si sólo validara la pasada completa, un `@BD` mal escrito
+        // pasaría desapercibido en todas ellas.
+        validateAnnotations(mod);
         return info;
     }
 
@@ -3560,6 +3566,122 @@ public final class SemanticAnalyzer {
     // ============================================================
     // ENTRY POINTS
     // ============================================================
+    // ============================================================
+    // V5/H5 — ANOTACIONES  (`@BD{ ... }`)
+    // ============================================================
+    //
+    // El parser acepta una anotación delante de CUALQUIER declaración y no
+    // interpreta las claves. Toda la semántica está aquí, y por dos motivos:
+    //
+    //   · un `@BD` en el sitio equivocado da un mensaje que explica el
+    //     problema, en vez de un error de sintaxis que no dice nada;
+    //   · añadir una clave nueva es tocar esta función y nada más — la
+    //     gramática no se entera.
+    //
+    // ⚠️ Esto corre SIEMPRE, se vaya a generar un DAO o no. Si sólo se validara
+    // al generar, un `@BD{ tabl = "medidas" }` mal escrito no se vería hasta la
+    // primera generación — o peor, saldría un DAO con la tabla vacía.
+
+    private static final String ANN_BD = "BD";
+    /** Claves que hoy admite `@BD` sobre una CLASE. */
+    private static final Set<String> BD_CLAVES_CLASE = new HashSet<>(java.util.Arrays.asList("tabla"));
+    /** Claves que hoy admite `@BD` sobre una PROPERTY. */
+    private static final Set<String> BD_CLAVES_PROP  = new HashSet<>(java.util.Arrays.asList("columna"));
+
+    private void validateAnnotations(ModuleNode mod) {
+        for (ITopLevelDecl def : mod.defs) {
+            if (def instanceof ClassDef) {
+                ClassDef cd = (ClassDef) def;
+                boolean esEntidad = cd.annotation != null;
+                if (esEntidad) validarBdEnClase(cd);
+                for (ITopLevelDecl m : cd.members) {
+                    if (!(m instanceof Node)) continue;
+                    Node n = (Node) m;
+                    if (n.annotation == null) continue;
+                    if (!(m instanceof PropertyDef)) {
+                        rechazarAnotacion(n, "dentro de una clase, '@" + n.annotation.name
+                                + "' sólo puede ir sobre una `property`");
+                        continue;
+                    }
+                    validarBdEnProperty((PropertyDef) m, cd, esEntidad);
+                }
+            } else if (def instanceof Node && ((Node) def).annotation != null) {
+                rechazarAnotacion((Node) def, "'@" + ((Node) def).annotation.name
+                        + "' sólo puede ir sobre una `class` (la entidad) o sobre una `property` suya");
+            }
+        }
+    }
+
+    /** Nombre desconocido o sitio equivocado: un solo mensaje, con el porqué. */
+    private void rechazarAnotacion(Node n, String motivo) {
+        Ast.Annotation a = n.annotation;
+        err(a.line, a.column, motivo);
+    }
+
+    private boolean nombreConocido(Ast.Annotation a) {
+        if (ANN_BD.equals(a.name)) return true;
+        err(a.line, a.column, "anotación desconocida '@" + a.name
+                + "'; la única que existe hoy es '@" + ANN_BD + "'");
+        return false;
+    }
+
+    private void validarBdEnClase(ClassDef cd) {
+        Ast.Annotation a = cd.annotation;
+        if (!nombreConocido(a)) return;
+
+        clavesConocidas(a, BD_CLAVES_CLASE, "una clase");
+
+        Ast.AnnEntry tabla = a.get("tabla");
+        if (tabla == null) {
+            err(a.line, a.column, "'@BD' sobre la clase '" + cd.name
+                    + "' tiene que decir a qué tabla corresponde: `@BD{ tabla = \"...\" }`");
+        } else if (!(tabla.value instanceof String)) {
+            err(tabla.line, tabla.column, "'tabla' tiene que ser una cadena, por ejemplo `tabla = \"medidas\"`");
+        } else if (((String) tabla.value).isEmpty()) {
+            err(tabla.line, tabla.column, "'tabla' no puede estar vacía");
+        }
+    }
+
+    private void validarBdEnProperty(PropertyDef p, ClassDef cd, boolean claseEsEntidad) {
+        Ast.Annotation a = p.annotation;
+        if (!nombreConocido(a)) return;
+
+        // Una propiedad no puede mapear a una columna si su clase no es una
+        // entidad: no hay tabla contra la que mapear.
+        if (!claseEsEntidad) {
+            err(a.line, a.column, "'@BD' sobre '" + p.name.name + "' no tiene sentido: su clase '"
+                    + cd.name + "' no está marcada como entidad. Añade `@BD{ tabla = \"...\" }` a la clase");
+            return;
+        }
+        if (p.name.isStatic()) {
+            err(a.line, a.column, "'@BD' no vale en una property estática ('" + p.name.name
+                    + "'): una columna pertenece a la FILA, no a la clase");
+            return;
+        }
+
+        clavesConocidas(a, BD_CLAVES_PROP, "una property");
+
+        Ast.AnnEntry col = a.get("columna");
+        if (col != null) {
+            if (!(col.value instanceof String))
+                err(col.line, col.column, "'columna' tiene que ser una cadena, por ejemplo `columna = \"sensor_id\"`");
+            else if (((String) col.value).isEmpty())
+                err(col.line, col.column, "'columna' no puede estar vacía");
+        }
+        // Sin `columna`, la columna se llama como la property. Es deliberado:
+        // nada de convertir `sensorId` en `sensor_id` por nuestra cuenta — una
+        // regla más que recordar y que muerde cuando no la esperas.
+    }
+
+    /** Señala las claves que esta anotación no admite, una por una y en su sitio. */
+    private void clavesConocidas(Ast.Annotation a, Set<String> validas, String donde) {
+        for (Ast.AnnEntry e : a.entries) {
+            if (validas.contains(e.key)) continue;
+            err(e.line, e.column, "'@" + a.name + "' sobre " + donde + " no conoce la clave '" + e.key
+                    + "'; hoy admite: " + String.join(", ", validas));
+        }
+    }
+
     private void validateModuleEntryPoints(ModuleNode mod) {
         // Las interfaces son contratos puros: sin main, sin entry-point. No
         // tiene sentido avisar de su ausencia.

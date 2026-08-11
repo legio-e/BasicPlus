@@ -1,0 +1,48 @@
+module AnnMal
+
+  // 1. anotación desconocida
+  @XY{ algo }
+  public class Uno
+    public function Uno() end Uno
+  end Uno
+
+  // 2. clase entidad SIN tabla
+  @BD{}
+  public class Dos
+    public function Dos() end Dos
+  end Dos
+
+  // 3. tabla que no es cadena  +  4. clave desconocida
+  @BD{ tabla = 42, esquema = "x" }
+  public class Tres
+    public function Tres() end Tres
+  end Tres
+
+  // 5. property anotada en clase que NO es entidad
+  public class Cuatro
+    @BD{} public property id: long
+    public function Cuatro()
+      this.id := 0
+    end Cuatro
+  end Cuatro
+
+  // 6. clave desconocida en property  +  7. columna vacía
+  @BD{ tabla = "t" }
+  public class Cinco
+    @BD{ clave }          public property id: long
+    @BD{ columna = "" }   public property otro: long
+    public function Cinco()
+      this.id := 0
+      this.otro := 0
+    end Cinco
+  end Cinco
+
+  // 8. anotación sobre algo que no es clase ni property
+  @BD{ tabla = "t" }
+  public function suelta()
+  end suelta
+
+  function Main(arg: string)
+    print "no deberia llegar"
+  end Main
+end AnnMal

@@ -25,9 +25,64 @@ public final class Ast {
     public static abstract class Node {
         public final int line;
         public final int column;
+        /** V5/H5 — anotación que precede a esta declaración, o null.
+         *
+         *  Vive en `Node` (y no sólo en ClassDef/PropertyDef) a propósito: el
+         *  PARSER la acepta delante de cualquier declaración y es el SEMÁNTICO
+         *  quien decide dónde es legal. Así un `@BD` en el sitio equivocado da
+         *  un diagnóstico que explica el problema, en vez de un error de
+         *  sintaxis que no dice nada.
+         *
+         *  NO se persiste: no toca el .mod ni el .bpi. Es sólo para el
+         *  compilador y el generador de DAOs — todo lo que dice acaba siendo
+         *  código normal dentro del DAO generado, así que no tiene consumidor
+         *  en tiempo de ejecución. */
+        public Annotation annotation;
         protected Node(int line, int column) {
             this.line = line;
             this.column = column;
+        }
+    }
+
+    // ---- Anotaciones (V5/H5) ----
+
+    /** Una entrada `clave = valor` dentro de `@Nombre{ ... }`.
+     *
+     *  Guarda su propia línea/columna para poder señalar LA CLAVE concreta en
+     *  un diagnóstico, y no la anotación entera. */
+    public static final class AnnEntry {
+        public final String key;
+        public final Object value;      // hoy siempre un literal de cadena
+        public final int line;
+        public final int column;
+        public AnnEntry(String key, Object value, int line, int column) {
+            this.key = key;
+            this.value = value;
+            this.line = line;
+            this.column = column;
+        }
+    }
+
+    /** `@BD{ tabla = "medidas" }` — anotación colgada de la declaración que la sigue.
+     *
+     *  El parser NO interpreta las claves: recoge pares `clave = valor` y ya.
+     *  Qué claves son válidas y en qué declaración lo decide el semántico, de
+     *  forma que añadir una clave nueva no toca la gramática. */
+    public static final class Annotation {
+        public final String name;              // "BD"
+        public final List<AnnEntry> entries;
+        public final int line;
+        public final int column;
+        public Annotation(String name, List<AnnEntry> entries, int line, int column) {
+            this.name = name;
+            this.entries = entries;
+            this.line = line;
+            this.column = column;
+        }
+        /** La entrada con esa clave, o null. */
+        public AnnEntry get(String key) {
+            for (AnnEntry e : entries) if (e.key.equals(key)) return e;
+            return null;
         }
     }
 

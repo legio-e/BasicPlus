@@ -246,7 +246,98 @@ public final class Parser {
     // ============================================================
     // DEFINICIONES (top-level y miembros de clase)
     // ============================================================
+    /** V5/H5 — puerta única de las declaraciones, con la anotación opcional delante.
+     *
+     *  La anotación se recoge aquí y se cuelga del nodo que salga, SEA EL QUE SEA.
+     *  El parser no juzga dónde es legal: eso lo hace el semántico, que puede dar
+     *  un mensaje que explique el problema en vez de un error de sintaxis mudo. */
     private ITopLevelDecl parseDefStmt() {
+        Ast.Annotation ann = check(TokenType.AT) ? parseAnnotation() : null;
+        ITopLevelDecl d = parseDefStmtBody();
+        if (ann != null && d instanceof Node) ((Node) d).annotation = ann;
+        return d;
+    }
+
+    /** V5/H5 — anotación. Gramática (EBNF de Eduardo):
+     *
+     *      anotacion ::= '@' ID '{' [ entrada { ',' entrada } ] '}'
+     *      entrada   ::= ID [ '=' valor ]
+     *      valor     ::= literal
+     *
+     *  El valor es OPCIONAL: una entrada suelta es una BANDERA. Eso da
+     *  `@BD{}`, `@BD{ clave }` y `@BD{ tabla = "medidas" }` con una sola regla.
+     *
+     *  El parser NO sabe qué claves existen ni cuáles admite cada declaración:
+     *  recoge pares y ya. Añadir una clave nueva es un cambio del semántico, no
+     *  de la gramática. */
+    private Ast.Annotation parseAnnotation() {
+        Token at = current();
+        advance();                                   // '@'
+
+        String nombre = "?";
+        if (check(TokenType.IDENTIFIER)) {
+            nombre = current().lexeme;
+            advance();
+        } else {
+            error("se esperaba el nombre de la anotación tras '@' (por ejemplo `@BD{ ... }`)");
+        }
+
+        List<Ast.AnnEntry> entradas = new ArrayList<>();
+        if (!check(TokenType.LBRACE)) {
+            error("se esperaba '{' tras '@" + nombre + "': las llaves son obligatorias aunque no lleven nada (`@"
+                    + nombre + "{}`)");
+            return new Ast.Annotation(nombre, entradas, at.line, at.column);
+        }
+        advance();                                   // '{'
+
+        // Dentro de las llaves los saltos de línea no cuentan — misma regla que
+        // ya vale dentro de paréntesis y corchetes (L5/#249), para que una
+        // anotación larga se pueda repartir en varias líneas.
+        skipNewlines();
+        while (!check(TokenType.RBRACE) && !isAtEnd()) {
+            Token k = current();
+            if (!check(TokenType.IDENTIFIER)) {
+                error("se esperaba el nombre de una clave dentro de '@" + nombre + "{ ... }', encontrado '"
+                        + k.lexeme + "'");
+                break;
+            }
+            advance();
+
+            Object valor = null;                     // sin '=' => bandera (presencia = true)
+            if (check(TokenType.EQUALS)) {
+                advance();
+                skipNewlines();
+                Token v = current();
+                switch (v.type) {
+                    case STRING_LIT: case INTEGER_LIT: case LONG_LIT:
+                    case FLOAT_LIT:  case DOUBLE_LIT:
+                        valor = v.value; advance(); break;
+                    case TRUE:  valor = Boolean.TRUE;  advance(); break;
+                    case FALSE: valor = Boolean.FALSE; advance(); break;
+                    default:
+                        error("el valor de '" + k.lexeme + "' en '@" + nombre
+                                + "' tiene que ser un literal, encontrado '" + v.lexeme + "'");
+                }
+            }
+            entradas.add(new Ast.AnnEntry(k.lexeme, valor, k.line, k.column));
+
+            skipNewlines();
+            if (check(TokenType.COMMA)) { advance(); skipNewlines(); continue; }
+            break;                                   // sin coma, se acabó la lista
+        }
+
+        skipNewlines();
+        if (check(TokenType.RBRACE)) {
+            advance();
+        } else {
+            error("falta '}' que cierre '@" + nombre + "{'");
+        }
+        // La declaración anotada puede ir en la línea siguiente o en la misma.
+        skipNewlines();
+        return new Ast.Annotation(nombre, entradas, at.line, at.column);
+    }
+
+    private ITopLevelDecl parseDefStmtBody() {
         boolean isPublic = match(TokenType.PUBLIC);
         boolean isFinal  = false;
 
@@ -890,7 +981,15 @@ public final class Parser {
             return new ExprStmt(lhs, startTok.line, startTok.column);
         }
 
-        error("se esperaba una asignación o una llamada como sentencia");
+        // V5/H5 — '=' es token desde que existen las anotaciones, así que aquí
+        // llega como tal en vez de morir en el lexer. Aprovechamos para decir lo
+        // que falta, en vez de dejar un mensaje genérico: es el error más típico
+        // de quien viene de otro lenguaje. Mismo criterio que '<>' → '!=' (#265).
+        if (check(TokenType.EQUALS)) {
+            error("'=' no asigna en BP: usa ':='  (el '=' sólo vale dentro de una anotación, `@BD{ clave = valor }`)");
+        } else {
+            error("se esperaba una asignación o una llamada como sentencia");
+        }
         synchronize();
         return null;
     }

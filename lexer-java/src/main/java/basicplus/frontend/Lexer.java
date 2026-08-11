@@ -574,6 +574,13 @@ public final class Lexer {
             case ']': return make1(TokenType.RBRACKET,  "]", startLine, startColumn);
             case '{': return make1(TokenType.LBRACE,    "{", startLine, startColumn);  // tuplas: { a, b } := f()
             case '}': return make1(TokenType.RBRACE,    "}", startLine, startColumn);
+            case '@': return make1(TokenType.AT,        "@", startLine, startColumn);  // V5/H5: anotaciones
+            // '=' suelto. Llega aquí SÓLO si no era '==' (eso se resuelve antes,
+            // en el bloque de dos caracteres). Su uso legítimo es dentro de una
+            // anotación; en cualquier otro sitio el parser lo rechaza sugiriendo
+            // ':='. Antes de V5/H5 esto era un error léxico genérico ("carácter
+            // inesperado"), que no ayudaba a nadie.
+            case '=': return make1(TokenType.EQUALS,    "=", startLine, startColumn);
             case ',': return make1(TokenType.COMMA,     ",", startLine, startColumn);
             case ';': return make1(TokenType.SEMICOLON, ";", startLine, startColumn);
             case ':': return make1(TokenType.COLON,     ":", startLine, startColumn);
