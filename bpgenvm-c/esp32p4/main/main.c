@@ -41,6 +41,8 @@
 #include "p4_board_id.h"      /* identidad de placa esp32p4 para INFO/HELLO */
 #include "gui_display_dsi.h"  /* G3: display MIPI-DSI (panel + backlight + rojo) */
 #include "hw_esp32.h"         /* H14: backends HW (GPIO/UART/SPI/I2C) reusados del S3 */
+#include "bpvm_blk_sdmmc.h"   /* V5/H6: la SD por SDIO como dispositivo de bloque */
+#include "bpvm_fs_fat.h"      /* V5/H6: montar esa tarjeta como FAT bajo /sd      */
 
 static const char *TAG = "bpvm_p4";
 
@@ -200,6 +202,47 @@ static void tcp_log_task(void *arg)
 
 #endif  /* BPVM_P4_NETLOG */
 
+/* ---------------------------------------------------------------------------
+ * V5/H6 — la tarjeta SD, si el env la configura.
+ *
+ * AQUI y no antes: /sd se monta ENCIMA de la fachada, y sin el FS de la placa no
+ * hay donde colgarlo. Y antes del autoarranque, para que una app encuentre la
+ * tarjeta ya montada.
+ *
+ * Lo llaman los DOS caminos de arranque (TCP y UART) desde una sola funcion, que
+ * es lo que evita el clasico "lo arregle en uno y me olvide del otro".
+ *
+ * (!) A diferencia de la Metro, el zocalo del P4 NO tiene deteccion de tarjeta
+ * (~CD solo lleva su pull-up, leido del esquema), asi que NO se usa
+ * `bpvm_fs_fat_vigilar`: esa funcion se rearma en la rama "no hay medio", que
+ * aqui no se ejecutaria nunca, y quedaria dando UN intento por arranque sin
+ * decir por que. En esta placa el montaje es explicito.
+ *
+ * (!) Que falle NO degrada el arranque. Una tarjeta ilegible, ausente o en exFAT
+ * es un accesorio que no va, no una placa rota: se anota el motivo y se sigue.
+ * Degradar el boot por esto dejaria al usuario sin IDE justo cuando mas falta
+ * hace para averiguar que pasa.
+ * ------------------------------------------------------------------------- */
+static void p4_montar_sd(void)
+{
+    char linea[160];
+    int n = bpvm_env_get(board_mgr_env(), "sd", linea, sizeof linea);
+    if (n <= 0) { net_logf("[p4] sd: sin configurar en el env - no se monta"); return; }
+
+    bpvm_sdio_pines_t pines;
+    char motivo[120];
+    if (bpvm_sdio_pines_parse(linea, &pines, motivo, sizeof motivo) != 0) {
+        net_logf("[p4] sd: %s", motivo);      /* el parser ya dice QUE falta */
+        return;
+    }
+    if (bpvm_fs_fat_montar(bpvm_blk_sdmmc(&pines), "/sd", motivo, sizeof motivo) == 0) {
+        net_logf("[p4] sd: montada en /sd (%d bits, particion en el bloque %u)",
+                 pines.ancho, (unsigned) bpvm_fs_fat_lba_particion());
+    } else {
+        net_logf("[p4] sd: NO montada - %s", motivo);
+    }
+}
+
 #ifdef BPVM_P4_WIRE_TCP
 /* ---- Servidor del wire v1: la VM corre AQUÍ (stack holgado). ----
  * Prepara FS + stdlib (independiente del canal de log), abre el socket de
@@ -214,6 +257,7 @@ static void wire_task(void *arg)
     board_mgr_esp32_boot();
     const bpvm_boot_status_t* bs = board_boot_status();
     if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
+    if (bs->state >= BPVM_BOOT_FS) p4_montar_sd();   /* V5/H6 */
     net_logf("[p4] boot estado %d (%s)%s, %d ficheros",
              (int) bs->state, bpvm_boot_state_name(bs->state),
              bs->degraded ? " DEGRADADO" : "", fs_file_count());
@@ -249,6 +293,7 @@ static void wire_task_uart(void *arg)
     board_mgr_esp32_boot();
     const bpvm_boot_status_t* bs = board_boot_status();
     if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
+    if (bs->state >= BPVM_BOOT_FS) p4_montar_sd();   /* V5/H6 */
     net_logf("[p4] boot estado %d (%s)%s (UART), %d ficheros",
              (int) bs->state, bpvm_boot_state_name(bs->state),
              bs->degraded ? " DEGRADADO" : "", fs_file_count());
