@@ -40,7 +40,10 @@
 #include "bpvm_blk_sdmmc.h"
 
 #include "driver/sdmmc_host.h"
-#include "driver/sd_pwr_ctrl_by_on_chip_ldo.h"   /* el LDO que alimenta las E/S */
+/* Sin prefijo `driver/`: este vive en el componente `sdmmc`, no en
+ * `esp_driver_sdmmc` como su vecino `driver/sdmmc_host.h`. Lo mismo que
+ * `sdmmc_cmd.h` de abajo, y lo mismo que escribe el ejemplo del IDF. */
+#include "sd_pwr_ctrl_by_on_chip_ldo.h"   /* el LDO que alimenta las E/S */
 #include "driver/gpio.h"
 #include "sdmmc_cmd.h"
 #include "esp_err.h"
