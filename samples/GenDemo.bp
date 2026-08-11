@@ -1,0 +1,66 @@
+// GenDemo.bp — usa DAOs GENERADOS, no escritos a mano.
+//
+// Las entidades están en `Modelo.bp` (código del usuario) y los DAOs en
+// `ModeloDao.bp`, que produce `DAO build` y nadie edita. Este programa no
+// distingue: los usa igual que a los de ayer.
+module GenDemo
+  import SQLite
+  import Orm
+  import Modelo
+  import ModeloDao
+  import Str
+
+  function Main(arg: string)
+    var db: SQLite.Db := SQLite.Db()
+    if not db.connect("gen.db") then
+      print "no se pudo abrir:", db.errorMessage()
+      return
+    endif
+    db.exec("DROP TABLE IF EXISTS medidas;"
+          + "DROP TABLE IF EXISTS sensores;"
+          + "CREATE TABLE sensores (id INTEGER PRIMARY KEY, nombre TEXT, unidad TEXT, sitio TEXT);"
+          + "CREATE TABLE medidas (id INTEGER PRIMARY KEY, sensor_id INTEGER, valor REAL, t INTEGER)")
+
+    var sdao: ModeloDao.SensorDao := ModeloDao.SensorDao(db)
+    var mdao: ModeloDao.MedidaDao := ModeloDao.MedidaDao(db)
+
+    var s: Modelo.Sensor := Modelo.Sensor()
+    s.nombre := "O'Brien"          // el apostrofo, que el generado escapa solo
+    s.unidad := "C"
+    s.sitio  := "sala"
+    sdao.insert(s)
+    print "insert  -> id =", s.id, " nombre =", s.nombre
+
+    var m: Modelo.Medida := Modelo.Medida()
+    m.sensorId := s.id
+    m.valor    := 21.5d
+    m.t        := 1754300000000L
+    mdao.add(m)
+    print "add     -> id =", m.id
+
+    var leida: Modelo.Medida := mdao.loadById(m.id)
+    print "loadById->", leida.sensorId, leida.valor, leida.t
+
+    m.valor := 99.9d
+    print "update  ->", mdao.update(m)
+    print "refresh ->", mdao.refresh(leida), " valor =", leida.valor
+
+    var w: Orm.Where := Orm.Where()
+    w.eq("sensor_id", s.id)
+    var suyas: List := mdao.list(w)
+    print "list    ->", suyas.length(), "medidas"
+
+    var conApostrofo: Orm.Where := Orm.Where()
+    conApostrofo.eq("nombre", "O'Brien")
+    var raros: List := sdao.list(conApostrofo)
+    print "apostrofo->", raros.length(), "sensor (escapado por el generado)"
+
+    print "delete  ->", mdao.delete(m), " y el objeto queda con id =", m.id
+
+    mdao.close()
+    sdao.close()
+    db.close()
+    print ""
+    print "DAO GENERADO OK"
+  end Main
+end GenDemo

@@ -231,6 +231,7 @@ public final class Main {
         String compileOutDir   = null;
         String interfaceOutDir = null;
         String projectFile     = null;
+        boolean daoBuild       = false;
         String backend = "jvm";
         boolean showTokens = true;
         boolean showAst    = true;
@@ -257,6 +258,13 @@ public final class Main {
                 if (i + 1 < args.length) projectFile = args[++i];
                 else { System.err.println("--project requiere ruta a un .bpbuild"); System.exit(1); return; }
             }
+            else if ("--dao".equals(a)) {
+                // V5/H5 — `DAO build`: genera los DAOs de las entidades y PARA.
+                // No compila. Es un acto aparte a propósito: el usuario hereda
+                // del DAO generado, y regenerarlo dentro del build le
+                // reescribiría por debajo la clase de la que cuelga su código.
+                showAst = false; showTokens = false; daoBuild = true;
+            }
             else if (a.startsWith("--backend=")) {
                 backend = a.substring("--backend=".length()).toLowerCase();
                 if (!backend.equals("jvm") && !backend.equals("mivm")) {
@@ -278,6 +286,7 @@ public final class Main {
                 // No impiden compilar, pero no pueden pasar callados.
                 for (String w : proj.warnings)
                     System.out.println("aviso proyecto: " + w);
+                if (daoBuild) { System.exit(generarDaos(proj) ? 0 : 2); return; }
                 // H3: el build de proyecto (compila + out:pack) vive en buildProject,
                 // reutilizado por el IDE → un solo camino de build.
                 System.exit(buildProject(proj, backend, pruneBpi) ? 0 : 2);
@@ -2307,6 +2316,37 @@ public final class Main {
      * library/module. Devuelve un mapa "<library>.<Module>" → Path (más una
      * entrada por nombre simple "<Module>" como fallback).
      */
+    /**
+     * V5/H5 — `DAO build`. Genera los DAOs y se detiene: no compila.
+     *
+     * Verbo aparte y no un paso del build, por dos motivos:
+     *
+     *   · el usuario HEREDA del DAO generado, y regenerarlo dentro del build le
+     *     reescribiría por debajo la clase de la que cuelga su código —la
+     *     regeneración tiene que ser un ACTO, no un efecto secundario;
+     *   · el compilador va dirigido por demanda, así que al resolver
+     *     `import MedidasDao` se encontraría con que ese fichero todavía no
+     *     existe. Generando ANTES, cuando arranca el build ya es un .bp más.
+     *
+     * Es la misma idea que el `.win` del diseñador de ventanas: se genera
+     * fuera y entra como fuente.
+     */
+    private static boolean generarDaos(BpBuild proj) {
+        DaoGen.Resultado r = DaoGen.generar(proj, true);
+        for (String a : r.avisos)  System.out.println("aviso: " + a);
+        for (String e : r.errores) System.err.println("error: " + e);
+        for (String f : r.escritos)   System.out.println("  generado : " + f);
+        for (String f : r.sinCambios) System.out.println("  al dia   : " + f);
+        if (!r.ok()) {
+            System.err.println("DAO build: NO se ha generado nada (" + r.errores.size() + " errores)");
+            return false;
+        }
+        System.out.println("DAO build: " + r.entidades + " entidad(es), "
+                + r.escritos.size() + " fichero(s) escrito(s), "
+                + r.sinCambios.size() + " ya al dia");
+        return true;
+    }
+
     private static Map<String, Path> scanBpSources(Path dir) throws IOException {
         Map<String, Path> result = new HashMap<>();
         if (dir == null || !Files.isDirectory(dir)) return result;

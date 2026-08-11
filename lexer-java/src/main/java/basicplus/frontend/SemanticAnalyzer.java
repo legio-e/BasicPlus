@@ -3585,8 +3585,12 @@ public final class SemanticAnalyzer {
     private static final String ANN_BD = "BD";
     /** Claves que hoy admite `@BD` sobre una CLASE. */
     private static final Set<String> BD_CLAVES_CLASE = new HashSet<>(java.util.Arrays.asList("tabla"));
-    /** Claves que hoy admite `@BD` sobre una PROPERTY. */
-    private static final Set<String> BD_CLAVES_PROP  = new HashSet<>(java.util.Arrays.asList("columna"));
+    /** Claves que hoy admite `@BD` sobre una PROPERTY.
+     *
+     *  `pk` es una BANDERA (sin valor) y marca la clave primaria. Está en
+     *  notación de base de datos —criterio de Eduardo— y no traducida, porque
+     *  PK es lo que pone en cualquier esquema. */
+    private static final Set<String> BD_CLAVES_PROP  = new HashSet<>(java.util.Arrays.asList("columna", "pk"));
 
     private void validateAnnotations(ModuleNode mod) {
         for (ITopLevelDecl def : mod.defs) {
@@ -3594,6 +3598,7 @@ public final class SemanticAnalyzer {
                 ClassDef cd = (ClassDef) def;
                 boolean esEntidad = cd.annotation != null;
                 if (esEntidad) validarBdEnClase(cd);
+                List<PropertyDef> pks = new ArrayList<>();
                 for (ITopLevelDecl m : cd.members) {
                     if (!(m instanceof Node)) continue;
                     Node n = (Node) m;
@@ -3603,7 +3608,24 @@ public final class SemanticAnalyzer {
                                 + "' sólo puede ir sobre una `property`");
                         continue;
                     }
-                    validarBdEnProperty((PropertyDef) m, cd, esEntidad);
+                    PropertyDef p = (PropertyDef) m;
+                    validarBdEnProperty(p, cd, esEntidad);
+                    if (esEntidad && p.annotation.get("pk") != null) pks.add(p);
+                }
+                // Una entidad necesita saber cuál es su clave primaria: sin ella
+                // no hay `loadById`, ni `update`, ni `delete`. Y sólo UNA: las
+                // claves compuestas no están soportadas, y decirlo aquí es mejor
+                // que emitir un DAO que hace algo raro con la segunda.
+                if (esEntidad && pks.isEmpty()) {
+                    err(cd.annotation.line, cd.annotation.column, "la entidad '" + cd.name
+                            + "' no dice cuál es su clave primaria: marca una property con `@BD{ pk }`");
+                } else if (pks.size() > 1) {
+                    for (int i = 1; i < pks.size(); i++) {
+                        PropertyDef extra = pks.get(i);
+                        err(extra.annotation.line, extra.annotation.column, "'" + cd.name
+                                + "' ya marcó '" + pks.get(0).name.name + "' como `pk`; las claves compuestas"
+                                + " todavía no están soportadas");
+                    }
                 }
             } else if (def instanceof Node && ((Node) def).annotation != null) {
                 rechazarAnotacion((Node) def, "'@" + ((Node) def).annotation.name

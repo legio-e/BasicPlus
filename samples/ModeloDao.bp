@@ -1,0 +1,186 @@
+// ⚠️  NO EDITAR — este fichero lo genera `DAO build` a partir de las
+//     entidades de `Modelo.bp`, y se REHACE cada vez.
+//
+//     Si necesitas más de lo que hay aquí, NO lo toques: crea una clase
+//     que herede de la que quieras ampliar. Así puedes regenerar sin
+//     perder tus cambios, que es para lo que está pensado.
+//
+// @generado 50c3648e0696b052
+
+module ModeloDao
+  import SQLite
+  import Orm
+  import Modelo
+  import Str
+
+  // Medida  <->  tabla 'medidas'
+  public class MedidaDao extends Orm.Dao
+
+    public function MedidaDao(base: SQLite.Db)
+      super(base)
+    end MedidaDao
+
+    public function tabla(): string
+      return "medidas"
+    end tabla
+
+    // EL ORDEN. `read` lo respeta, y por eso van pegados.
+    public function columnas(): string
+      return "id, sensor_id, valor, t"
+    end columnas
+
+    public function read(q: SQLite.Query): Object
+      var e: Modelo.Medida := Modelo.Medida()
+      e.id := q.getLong(0)
+      e.sensorId := q.getLong(1)
+      e.valor := q.getDouble(2)
+      e.t := q.getLong(3)
+      return e
+    end read
+
+    public function loadById(id: long): Modelo.Medida
+      return this.uno("id = " + Str.longToString(id))
+    end loadById
+
+    public function load(e: Modelo.Medida): boolean
+      var otro: Modelo.Medida := this.loadById(e.id)
+      if otro == null then
+        return false
+      endif
+      this.copiar(otro, e)
+      return true
+    end load
+
+    public function refresh(e: Modelo.Medida): boolean
+      return this.load(e)
+    end refresh
+
+    // Al volver, el objeto lleva su clave puesta — la que asignó la BD.
+    public function insert(e: Modelo.Medida)
+      this.db.exec("INSERT INTO " + this.tabla() + "(sensor_id, valor, t) VALUES("
+            + Str.longToString(e.sensorId) + ", "
+            + Str.doubleToString(e.valor) + ", "
+            + Str.longToString(e.t)
+            + ")")
+      e.id := this.db.lastInsertId()
+    end insert
+
+    public function add(e: Modelo.Medida)
+      this.insert(e)
+    end add
+
+    // Devuelve si tocó alguna fila: false = esa clave no estaba.
+    public function update(e: Modelo.Medida): boolean
+      this.db.exec("UPDATE " + this.tabla()
+            + " SET sensor_id = " + Str.longToString(e.sensorId)
+            + ", valor = " + Str.doubleToString(e.valor)
+            + ", t = " + Str.longToString(e.t)
+            + " WHERE id = " + Str.longToString(e.id))
+      return this.db.changes() > 0
+    end update
+
+    // Por clave lo hereda de `Orm.Dao`. Éste además pone la pk a 0:
+    // tras el borrado el objeto ya no es ninguna fila.
+    public function delete(e: Modelo.Medida): boolean
+      var fue: boolean := this.deleteById(e.id)
+      if fue then
+        e.id := 0
+      endif
+      return fue
+    end delete
+
+    function copiar(de: Modelo.Medida, a: Modelo.Medida)
+      a.id := de.id
+      a.sensorId := de.sensorId
+      a.valor := de.valor
+      a.t := de.t
+    end copiar
+
+  end MedidaDao
+
+  // Sensor  <->  tabla 'sensores'
+  public class SensorDao extends Orm.Dao
+
+    public function SensorDao(base: SQLite.Db)
+      super(base)
+    end SensorDao
+
+    public function tabla(): string
+      return "sensores"
+    end tabla
+
+    // EL ORDEN. `read` lo respeta, y por eso van pegados.
+    public function columnas(): string
+      return "id, nombre, unidad, sitio"
+    end columnas
+
+    public function read(q: SQLite.Query): Object
+      var e: Modelo.Sensor := Modelo.Sensor()
+      e.id := q.getLong(0)
+      e.nombre := q.getStr(1)
+      e.unidad := q.getStr(2)
+      e.sitio := q.getStr(3)
+      return e
+    end read
+
+    public function loadById(id: long): Modelo.Sensor
+      return this.uno("id = " + Str.longToString(id))
+    end loadById
+
+    public function load(e: Modelo.Sensor): boolean
+      var otro: Modelo.Sensor := this.loadById(e.id)
+      if otro == null then
+        return false
+      endif
+      this.copiar(otro, e)
+      return true
+    end load
+
+    public function refresh(e: Modelo.Sensor): boolean
+      return this.load(e)
+    end refresh
+
+    // Al volver, el objeto lleva su clave puesta — la que asignó la BD.
+    public function insert(e: Modelo.Sensor)
+      this.db.exec("INSERT INTO " + this.tabla() + "(nombre, unidad, sitio) VALUES("
+            + "'" + Orm.esc(e.nombre) + "'" + ", "
+            + "'" + Orm.esc(e.unidad) + "'" + ", "
+            + "'" + Orm.esc(e.sitio) + "'"
+            + ")")
+      e.id := this.db.lastInsertId()
+    end insert
+
+    public function add(e: Modelo.Sensor)
+      this.insert(e)
+    end add
+
+    // Devuelve si tocó alguna fila: false = esa clave no estaba.
+    public function update(e: Modelo.Sensor): boolean
+      this.db.exec("UPDATE " + this.tabla()
+            + " SET nombre = " + "'" + Orm.esc(e.nombre) + "'"
+            + ", unidad = " + "'" + Orm.esc(e.unidad) + "'"
+            + ", sitio = " + "'" + Orm.esc(e.sitio) + "'"
+            + " WHERE id = " + Str.longToString(e.id))
+      return this.db.changes() > 0
+    end update
+
+    // Por clave lo hereda de `Orm.Dao`. Éste además pone la pk a 0:
+    // tras el borrado el objeto ya no es ninguna fila.
+    public function delete(e: Modelo.Sensor): boolean
+      var fue: boolean := this.deleteById(e.id)
+      if fue then
+        e.id := 0
+      endif
+      return fue
+    end delete
+
+    function copiar(de: Modelo.Sensor, a: Modelo.Sensor)
+      a.id := de.id
+      a.nombre := de.nombre
+      a.unidad := de.unidad
+      a.sitio := de.sitio
+    end copiar
+
+  end SensorDao
+
+end ModeloDao

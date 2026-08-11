@@ -1,0 +1,34 @@
+// Modelo.bp — sólo las ENTIDADES. El DAO lo genera `DAO build`.
+module Modelo
+
+  @BD{ tabla = "medidas" }
+  public class Medida
+    @BD{ pk }                      public property id:       long
+    @BD{ columna = "sensor_id" }   public property sensorId: long
+    @BD{}                          public property valor:    double
+    @BD{}                          public property t:        long
+
+    public function Medida()
+      this.id       := 0
+      this.sensorId := 0
+      this.valor    := 0.0d
+      this.t        := 0
+    end Medida
+  end Medida
+
+  @BD{ tabla = "sensores" }
+  public class Sensor
+    @BD{ pk } public property id:     long
+    @BD{}     public property nombre: string
+    @BD{}     public property unidad: string
+    @BD{}     public property sitio:  string
+
+    public function Sensor()
+      this.id     := 0
+      this.nombre := ""
+      this.unidad := ""
+      this.sitio  := ""
+    end Sensor
+  end Sensor
+
+end Modelo
