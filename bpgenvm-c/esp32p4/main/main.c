@@ -241,6 +241,17 @@ static void p4_montar_sd(void)
         log_printf("sd: %s", motivo);         /* el parser ya dice QUE falta */
         return;
     }
+    /* La CONFIGURACION que de verdad ha llegado al driver, ANTES de intentar
+     * nada. Esta linea existe por una tarde entera de rondas preguntandonos dos
+     * cosas que el log no contestaba: "¿la imagen que corre es la nueva?" y
+     * "¿el env llego hasta aqui?". Ahora las dos se leen de un vistazo, y ADEMAS
+     * cambia cuando cambia el codigo, que es justo lo que el sello de build no
+     * hace. Un chivato de configuracion vale mas que uno de resultado. */
+    log_printf("sd: SDIO slot %d, %d bit(s), clk %d cmd %d d0 %d | pwr %d (activo %s) | ldo %d | %d kHz",
+               pines.slot, pines.ancho, pines.clk, pines.cmd, pines.d0,
+               pines.pwr, pines.pwr_activo_alto ? "alto" : "bajo",
+               pines.ldo, pines.khz);
+
     if (bpvm_fs_fat_montar(bpvm_blk_sdmmc(&pines), "/sd", motivo, sizeof motivo) == 0) {
         log_printf("sd: montada en /sd (%d bits, particion en el bloque %u)",
                    pines.ancho, (unsigned) bpvm_fs_fat_lba_particion());
