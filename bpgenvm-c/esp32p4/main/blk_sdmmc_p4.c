@@ -40,6 +40,7 @@
 #include "bpvm_blk_sdmmc.h"
 
 #include "driver/sdmmc_host.h"
+#include "driver/sd_pwr_ctrl_by_on_chip_ldo.h"   /* el LDO que alimenta las E/S */
 #include "driver/gpio.h"
 #include "sdmmc_cmd.h"
 #include "esp_err.h"
@@ -54,6 +55,8 @@ static int          s_configurado = 0;
 static int          s_arrancada   = 0;
 static sdmmc_card_t s_card;
 static esp_err_t    s_ultimo      = ESP_OK;
+/* El LDO interno de las E/S. Se crea una vez y se conserva (ver p4_init 2.a). */
+static sd_pwr_ctrl_handle_t s_ldo = NULL;
 
 /* Reloj por defecto si el ENV no dice otra cosa. CONSERVADOR a propósito: los
  * pull-ups de esta placa son de 51 K, que es flojo para ir rápido, y un bus
@@ -62,12 +65,19 @@ static esp_err_t    s_ultimo      = ESP_OK;
  * vuelta), no por optimismo. */
 #define SDIO_KHZ_POR_DEFECTO  20000
 
-/* ── La alimentación: un GPIO, no el LDO interno ──────────────────────────
+/* ── La alimentación de la TARJETA: un GPIO ───────────────────────────────
  *
- * El `Kconfig` del ejemplo del IDF sugiere el LDO interno canal 4, y su propia
- * ayuda dice «lee antes el esquema». Se leyó: en esta placa el VDD del zócalo
- * sale de 3V3 conmutado por un MOSFET de canal P cuya puerta manda el GPIO45,
- * y se enciende poniéndolo a CERO (medido en la placa, no deducido).
+ * El VDD del zócalo sale de 3V3 conmutado por un MOSFET cuya puerta manda el
+ * GPIO45 (leído del esquema de la placa).
+ *
+ * ⚠️ Esto NO sustituye al LDO interno, que es lo que alimenta las E/S del
+ * micro — son dos raíles distintos y hacen falta los dos (ver `p4_init` 2.a).
+ * Leer el `Kconfig` del ejemplo del IDF como «o uno o el otro» costó una tarde
+ * de depuración: su ayuda habla del «SD VDD» y el API dice «SDMMC **IO**».
+ *
+ * ⚠️ La POLARIDAD sale del ENV (`pwralto`), no horneada, y no está cerrada:
+ * el análisis del transistor decía activo bajo y la medida en placa apunta a
+ * lo contrario. Hasta que se cierre, el ENV manda.
  *
  * Se conduce SIEMPRE y explícitamente, sin confiar en el estado de reposo: el
  * divisor de la puerta deja 1,65 V si nadie manda, y a esa tensión el MOSFET no
@@ -92,14 +102,34 @@ static int p4_init(void) {
     if (!s_configurado) { s_ultimo = ESP_ERR_INVALID_STATE; return -1; }
     if (s_arrancada) return 0;                   /* volver a llamar no duele */
 
-    /* 1 — el raíl. Y esperar: la tarjeta exige la alimentación estable ANTES
-     *     de los primeros comandos, y el condensador de desacoplo tarda. Diez
-     *     milisegundos es de sobra y se pagan una vez. */
+    /* 1 — el raíl de la TARJETA. Y esperar: la tarjeta exige la alimentación
+     *     estable ANTES de los primeros comandos, y el condensador de desacoplo
+     *     tarda. Diez milisegundos es de sobra y se pagan una vez. */
     alimentar(1);
     vTaskDelay(pdMS_TO_TICKS(10));
 
     /* 2 — el periférico. */
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+
+    /* 2.a — ⚠️ EL DOMINIO DE E/S DEL MICRO, que NO es lo mismo que el raíl de
+     *       la tarjeta y costó una tarde confundirlos.
+     *
+     *       En el ESP32-P4 los pads de SDMMC los alimenta un LDO INTERNO. Con
+     *       la tarjeta alimentada y este LDO apagado, los pads no pueden
+     *       conducir el bus: `sdmmc_card_init` agota el plazo y las líneas se
+     *       quedan en tensiones intermedias (medidas: 1,2 V con pull-ups de
+     *       51 K a 3V3). O sea, el sintoma es EXACTAMENTE el de un bus roto.
+     *
+     *       El handle se crea UNA vez y se conserva: es del periférico, no de
+     *       la tarjeta, y no hay motivo para soltarlo entre montajes. */
+    if (s_p.ldo > 0) {
+        if (s_ldo == NULL) {
+            sd_pwr_ctrl_ldo_config_t cfg = { .ldo_chan_id = s_p.ldo };
+            s_ultimo = sd_pwr_ctrl_new_on_chip_ldo(&cfg, &s_ldo);
+            if (s_ultimo != ESP_OK) { s_ldo = NULL; alimentar(0); return -1; }
+        }
+        host.pwr_ctrl_handle = s_ldo;
+    }
     host.slot         = s_p.slot;
     host.max_freq_khz = s_p.khz > 0 ? s_p.khz : SDIO_KHZ_POR_DEFECTO;
     if (s_p.ancho == 1) {

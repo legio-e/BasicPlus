@@ -44,7 +44,26 @@ typedef struct {
     int pwr;           /* GPIO que enciende el raíl; <0 = raíl fijo         */
     int pwr_activo_alto; /* 0 = enciende poniendo el pin a 0 (lo normal)    */
     int khz;           /* reloj de trabajo; 0 = el que ponga el driver      */
+    int ldo;           /* canal del LDO interno que alimenta las E/S; 0 = ninguno */
 } bpvm_sdio_pines_t;
+
+/*
+ * ⚠️ `ldo` NO es lo mismo que `pwr`, y confundirlos cuesta una tarde.
+ *
+ *   `pwr` → el **VDD de la TARJETA**. Fuera del micro: en esta placa, 3V3
+ *           conmutado por un MOSFET.
+ *   `ldo` → el **dominio de E/S del micro** para esos pads. Dentro del chip:
+ *           en el ESP32-P4 los pines de SDMMC los alimenta un LDO interno, y
+ *           mientras no se enciende, los pads NO PUEDEN CONDUCIR EL BUS.
+ *
+ * Los dos hacen falta a la vez. Con la tarjeta alimentada y el LDO apagado, el
+ * síntoma es `ESP_ERR_TIMEOUT` con las líneas en tensiones intermedias — la
+ * tarjeta tiene corriente y el micro no le puede hablar.
+ *
+ * Qué canal es, es un dato de PLACA (por eso está en el ENV). El 4 es el que
+ * usan tanto el kit de Espressif como la Waveshare. `ldo:0` lo desactiva, para
+ * una placa que alimente esas E/S por fuera.
+ */
 
 /*
  * Lee la entrada `sd` del ENV en su variante SDIO. Mismo criterio que la de SPI

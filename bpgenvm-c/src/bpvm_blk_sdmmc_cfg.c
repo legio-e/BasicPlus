@@ -38,8 +38,12 @@ int bpvm_sdio_pines_parse(const char* valor, bpvm_sdio_pines_t* p,
     p->d1 = p->d2 = p->d3 = -1;
     p->ancho = 1;
     p->pwr = -1;
-    p->pwr_activo_alto = 0;      /* medido en la placa: se enciende con 0 */
+    p->pwr_activo_alto = 0;
     p->khz = 0;
+    /* El LDO interno que alimenta las E/S de SDMMC. Por defecto ENCENDIDO en el
+     * canal 4, que es el que usan tanto el kit de Espressif como la Waveshare.
+     * `ldo:0` lo desactiva. No es lo mismo que `pwr` — ver bpvm_blk_sdmmc.h. */
+    p->ldo = 4;
 
     if (!valor || !*valor) { di(motivo, motivo_cap, "la entrada 'sd' esta vacia", 0); return -1; }
 
@@ -54,7 +58,7 @@ int bpvm_sdio_pines_parse(const char* valor, bpvm_sdio_pines_t* p,
             { "clk", 0 }, { "cmd", 1 },
             { "d0", 2 }, { "d1", 3 }, { "d2", 4 }, { "d3", 5 },
             { "pwralto", 6 }, { "pwr", 7 },
-            { "slot", 8 }, { "khz", 9 }
+            { "slot", 8 }, { "khz", 9 }, { "ldo", 10 }
         };
         const char* v = 0;
         int campo = -1;
@@ -83,6 +87,7 @@ int bpvm_sdio_pines_parse(const char* valor, bpvm_sdio_pines_t* p,
         case 7: p->pwr  = n; break;
         case 8: p->slot = n; break;
         case 9: p->khz  = n; break;
+        case 10: p->ldo = n; break;
         default: break;
         }
         s = v;

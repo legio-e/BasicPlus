@@ -41,6 +41,23 @@ int main(void)
         CHECK(p.pwr == 45,                   "P4: la alimentacion es el GPIO45");
         CHECK(p.pwr_activo_alto == 0,        "P4: activo BAJO por defecto (medido en placa)");
         CHECK(p.slot == 0 && p.khz == 0,     "P4: slot y reloj, a su valor por defecto");
+        CHECK(p.ldo == 4,                    "P4: el LDO de las E/S, canal 4 por defecto");
+    }
+
+    /* ── El LDO de las E/S: NO es `pwr`, y por eso tiene su propia etiqueta ──
+     * `pwr` alimenta la TARJETA (un MOSFET, fuera del micro); `ldo` alimenta
+     * los PADS del micro. Con la tarjeta alimentada y el LDO apagado, el
+     * sintoma es un timeout indistinguible de un bus roto. */
+    {
+        bpvm_sdio_pines_t p;
+        char motivo[120];
+        CHECK(bpvm_sdio_pines_parse("clk:43,cmd:44,d0:39,ldo:3", &p, motivo, sizeof motivo) == 0
+              && p.ldo == 3,                 "'ldo' se puede fijar a otro canal");
+        CHECK(bpvm_sdio_pines_parse("clk:43,cmd:44,d0:39,ldo:0", &p, motivo, sizeof motivo) == 0
+              && p.ldo == 0,                 "'ldo:0' lo desactiva (E/S alimentadas por fuera)");
+        /* Y que `ldo` y `pwr` NO se pisen: son cosas distintas. */
+        CHECK(bpvm_sdio_pines_parse("clk:43,cmd:44,d0:39,pwr:45,ldo:4", &p, motivo, sizeof motivo) == 0
+              && p.pwr == 45 && p.ldo == 4,  "'pwr' y 'ldo' conviven sin pisarse");
     }
 
     /* ── El orden da igual, que es para lo que están las etiquetas ───────── */
