@@ -1,0 +1,41 @@
+// ProbeBase.bp — probe del paso 2 del ORM: ¿aguanta el lenguaje un DAO base
+// genérico que hable de Object y hijas que hablen de su entidad?
+//
+// Sin SQLite de por medio a propósito: la pregunta es del LENGUAJE, y mezclarla
+// con la base de datos sólo la haría más cara de contestar.
+//
+// La base va en OTRO módulo porque así será de verdad (la nuestra en la stdlib,
+// la generada en el proyecto del usuario).
+module ProbeBase
+
+  public class Base
+    public property n: integer
+
+    public function Base()
+      this.n := 0
+    end Base
+
+    // "Abstracta": la hija la redefine. Devuelve Object porque la base no
+    // sabe de qué entidad se trata.
+    public function read(i: integer): Object
+      return null
+    end read
+
+    public function etiqueta(): string
+      return "base"
+    end etiqueta
+
+    // EL MÉTODO GENÉRICO: escrito UNA vez, en la base, y llama al `read` de
+    // quien sea. Si esto no despacha a la hija, todo el plan se cae.
+    public function listar(cuantos: integer): List
+      var out: List := List()
+      var i: integer := 0
+      while i < cuantos do
+        out.add(this.read(i))
+        i := i + 1
+      endwh
+      return out
+    end listar
+  end Base
+
+end ProbeBase

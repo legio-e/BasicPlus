@@ -1,0 +1,412 @@
+// Orm.bp — el DAO GENÉRICO del que descienden todos, y el Where (V5/H5, paso 2).
+//
+// Decisión de Eduardo, al ver que los dos primeros DAOs escritos a mano eran
+// idénticos en 10 de sus 14 métodos:
+//
+//   > «Los DAOs pueden descender de un DAO común, que trabaje con Object,
+//   > genérico. Y los DAOs específicos lo hacen con una entidad concreta.»
+//
+// Y el tercer nivel, que es el que decide la forma de todo esto:
+//
+//   > «Si alguien quiere ampliar el DAO que nosotros generamos puede heredar
+//   > del nuestro, mejor que escribir sobre el generado — porque si hay que
+//   > volver a generar, perdería sus cambios.»
+//
+//        Orm.Dao          nuestro. Genérico, habla de Object.
+//          └─ MedidasDao     GENERADO. Nadie lo edita: se rehace.
+//               └─ MisMedidas   del usuario. Añade lo suyo y sobrevive
+//                               a que el de en medio se regenere.
+//
+// Eso obliga a que el generado sea HEREDABLE, no sólo correcto: lo que la capa
+// de abajo necesita tiene que estar a su alcance.
+//
+// ─── EL CONTRATO: TRES COSAS ───────────────────────────────────────────────
+//
+// Una hija sólo tiene que contestar a tres preguntas:
+//
+//   tabla()      cómo se llama su tabla
+//   columnas()   en qué ORDEN lee sus columnas
+//   read(q)      cómo se convierte una fila en su entidad
+//
+// Con eso, esta base ya sabe hacer `list`, `selectDonde`, `uno` y `deleteById`
+// para cualquier tabla, y no hay que volver a escribirlos nunca.
+//
+// `columnas()` y `read()` son EL MISMO contrato dicho dos veces —el orden— así
+// que van juntos, obligatoriamente, en el mismo sitio y en la misma clase. Si
+// se separan, un día uno cambia y el otro no, y entonces no falla: devuelve
+// datos de otra columna, callado.
+//
+// ─── NOMBRADO DE LOS VERBOS (Eduardo) ──────────────────────────────────────
+//
+// **El verbo pelado toma la ENTIDAD; `...ById` toma la clave.** Una regla y ya
+// está: `load(e)` / `loadById(id)`, `delete(e)` / `deleteById(id)`. Como efecto
+// lateral no queda NINGÚN verbo sobrecargado en la jerarquía, que hoy además
+// esquiva #392.
+//
+// ─── POR QUÉ `Object` ──────────────────────────────────────────────────────
+//
+// La base no puede saber de qué entidad hablan sus hijas, así que `read` y
+// `uno` devuelven `Object`, la raíz del modelo de objetos, y la hija estrecha
+// el tipo en su propia API (`loadById(id): Medida`).
+//
+// ⚠️ Hoy ese estrechamiento NO se comprueba: el analizador trata `Object` como
+// el `any` interno, así que un DAO que devolviera la entidad equivocada daría
+// datos de otra clase sin protestar (medido: #389). Cuando #389 se cierre, este
+// diseño no cambia — sólo pasa a fallar cuando debe.
+//
+// ─── POR QUÉ TANTO `public` ────────────────────────────────────────────────
+//
+// Casi todo aquí querría ser `protected`: es maquinaria, no API. Pero hoy en BP
+// (medido, no supuesto):
+//
+//   · lo no-público es INVISIBLE para las descendientes, no protegido (#390);
+//   · sólo lo público entra en la vtable, o sea **virtual ⇒ público** (#391).
+//
+// Así que los tres del contrato son públicos por necesidad —si no, la hija no
+// podría sobreescribirlos— y los ayudantes también, para que la hija los
+// alcance. Cuando caigan #390 y #391 se les quita el `public` y NADA MÁS
+// cambia: ni una llamada, ni una firma de las de abajo.
+//
+// ─── DÓNDE VIVE ESTO ───────────────────────────────────────────────────────
+//
+// En `samples/` mientras sea un experimento. Su sitio es la stdlib, pero eso se
+// gana: primero que funcione con dos tablas de verdad.
+
+module Orm
+  import SQLite
+  import Str
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  esc — EL escapado. Uno solo, para toda la librería.
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Duplicar el apóstrofo es el escapado estándar de SQL: O'Brien -> O''Brien.
+  //
+  // Está a nivel de MÓDULO y no dentro de `Where` por una lección que costó una
+  // ejecución: metí el escapado en `Where` creyendo que tapaba el agujero, y el
+  // programa reventó igual — en el `INSERT`. `Where` escapa al LEER, pero
+  // `insert` y `update` construyen su SQL por su cuenta, y el lado de ESCRITURA
+  // es justo por donde entran los datos del usuario.
+  //
+  // O sea que el sitio correcto no era «dentro del que yo estaba escribiendo»
+  // sino «donde lo alcancen todos los que lo necesitan». `Where` lo usa, y las
+  // hijas también: en un DAO generado, cada columna de texto va con `Orm.esc`.
+  public function esc(v: string): string
+    var sb: StringBuilder := StringBuilder()
+    var n: integer := strlen(v)
+    var i: integer := 0
+    while i < n do
+      var c: string := charAt(v, i)
+      if c == "'" then
+        sb.appendStr("''")
+      else
+        sb.appendStr(c)
+      endif
+      i := i + 1
+    endwh
+    return sb.toString()
+  end esc
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  Where — construir la condición con métodos, no concatenando texto
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Idea de Eduardo, «algo similar a Linq de C#». El patrón se llama **interfaz
+  // fluida** (fluent interface) montada sobre un **builder**: cada método
+  // devuelve `this`, así que se encadenan. LINQ además hace otra cosa —el
+  // compilador convierte la consulta en un árbol de expresión que el proveedor
+  // traduce— y eso aquí no hace falta.
+  //
+  //     var w: Where := Where()
+  //     w.eq("sensor_id", s.id).gt("valor", 20.0d)
+  //     mdao.list(w)                   -->  WHERE sensor_id = 1 AND valor > 20
+  //
+  // ─── PERO NO ES AZÚCAR: ES EL AGUJERO DEL APÓSTROFO ───────────────────────
+  //
+  // Con `list("nombre = " + ...)` quien monta la cadena es el USUARIO, y un
+  // nombre como O'Brien parte la sentencia. Aquí los valores entran TIPADOS y
+  // el escapado lo hace `esc` —el de arriba, el único que hay—, que es la forma
+  // de que no se olvide en el sitio número 12.
+  //
+  // ⚠️ Encadenar (`w.eq(...).lt(...)`) NO compila hoy: lo que devuelve un método
+  // pierde sus miembros (#388). Los métodos ya devuelven `this`, así que el día
+  // que eso caiga el encadenado funciona sin tocar nada de aquí. Mientras tanto,
+  // una llamada por línea sobre la misma variable.
+  //
+  // ─── Y ES EL PUENTE A `bind` ──────────────────────────────────────────────
+  //
+  // Hoy `Where` mete el valor en el texto porque `SQLite.bp` todavía no tiene
+  // sentencias preparadas. Cuando las tenga, `Where` pasará a emitir `?` y a
+  // guardar los valores aparte — y **no cambiará una sola línea de código de
+  // usuario**. Ésa es la razón de peso para meter el objeto ahora en vez de
+  // seguir pasando cadenas: una cadena no se puede migrar, un objeto sí.
+  //
+  // ─── LO QUE NO TIENE, Y POR QUÉ ───────────────────────────────────────────
+  //
+  //   · Sin paréntesis: `a AND (b OR c)` no se puede expresar. Haría falta
+  //     anidar otro `Where` y decidir cómo se lee; se hará cuando haga falta
+  //     de verdad, no antes.
+  //   · Sin `<` `>` para cadenas: ordenar texto depende del cotejo y es fuente
+  //     de sorpresas. Quien lo necesite, `raw`.
+  //   · `raw(sql)` es la salida de emergencia y NO escapa nada — el nombre lo
+  //     dice, para que quien la use sepa lo que está haciendo.
+  public class Where
+
+    property texto:    string
+    property conector: string     // el que se usará ANTES de la siguiente
+
+    public function Where()
+      this.texto    := ""
+      this.conector := " AND "
+    end Where
+
+    // ══ EL MOTOR ═══════════════════════════════════════════════════════════
+
+    // Pega un trozo ya formado con el conector que toque. Después, el conector
+    // vuelve a AND: `or()` afecta a UNA condición, no a todas las que sigan.
+    function pegar(trozo: string): Where
+      if this.texto == "" then
+        this.texto := trozo
+      else
+        this.texto := this.texto + this.conector + trozo
+      endif
+      this.conector := " AND "
+      return this
+    end pegar
+
+    function cmpStr(col: string, op: string, v: string): Where
+      return this.pegar(col + " " + op + " '" + esc(v) + "'")
+    end cmpStr
+
+    function cmpNum(col: string, op: string, v: string): Where
+      return this.pegar(col + " " + op + " " + v)
+    end cmpNum
+
+    // ══ LO PÚBLICO ═════════════════════════════════════════════════════════
+
+    // Une la SIGUIENTE condición con OR en vez de AND. Sólo la siguiente.
+    //
+    // Se llama `orNext` y no `or` porque **`or` es palabra reservada** (el
+    // operador lógico). Y no es que el compilador lo rechace: SE CUELGA, sin
+    // un mensaje. Es #384 en vivo. El nombre largo, además, dice la verdad:
+    // afecta a la condición que viene, no a las de más allá.
+    public function orNext(): Where
+      this.conector := " OR "
+      return this
+    end orNext
+
+    public function eq(col: string, v: string): Where
+      return this.cmpStr(col, "=", v)
+    end eq
+    public function eq(col: string, v: long): Where
+      return this.cmpNum(col, "=", Str.longToString(v))
+    end eq
+    public function eq(col: string, v: double): Where
+      return this.cmpNum(col, "=", Str.doubleToString(v))
+    end eq
+
+    public function ne(col: string, v: string): Where
+      return this.cmpStr(col, "<>", v)
+    end ne
+    public function ne(col: string, v: long): Where
+      return this.cmpNum(col, "<>", Str.longToString(v))
+    end ne
+    public function ne(col: string, v: double): Where
+      return this.cmpNum(col, "<>", Str.doubleToString(v))
+    end ne
+
+    public function lt(col: string, v: long): Where
+      return this.cmpNum(col, "<", Str.longToString(v))
+    end lt
+    public function lt(col: string, v: double): Where
+      return this.cmpNum(col, "<", Str.doubleToString(v))
+    end lt
+
+    public function le(col: string, v: long): Where
+      return this.cmpNum(col, "<=", Str.longToString(v))
+    end le
+    public function le(col: string, v: double): Where
+      return this.cmpNum(col, "<=", Str.doubleToString(v))
+    end le
+
+    public function gt(col: string, v: long): Where
+      return this.cmpNum(col, ">", Str.longToString(v))
+    end gt
+    public function gt(col: string, v: double): Where
+      return this.cmpNum(col, ">", Str.doubleToString(v))
+    end gt
+
+    public function ge(col: string, v: long): Where
+      return this.cmpNum(col, ">=", Str.longToString(v))
+    end ge
+    public function ge(col: string, v: double): Where
+      return this.cmpNum(col, ">=", Str.doubleToString(v))
+    end ge
+
+    // El patrón SÍ se escapa; los comodines % y _ los pone el usuario a
+    // propósito, así que ésos no se tocan.
+    public function like(col: string, patron: string): Where
+      return this.cmpStr(col, "LIKE", patron)
+    end like
+
+    public function isNull(col: string): Where
+      return this.pegar(col + " IS NULL")
+    end isNull
+
+    public function isNotNull(col: string): Where
+      return this.pegar(col + " IS NOT NULL")
+    end isNotNull
+
+    // La salida de emergencia. NO escapa: lo que escribas va tal cual.
+    public function raw(sql: string): Where
+      return this.pegar(sql)
+    end raw
+
+    // El texto de la condición, SIN la palabra WHERE — ésa la pone el DAO.
+    public function sql(): string
+      return this.texto
+    end sql
+
+    public function isEmpty(): boolean
+      return this.texto == ""
+    end isEmpty
+
+  end Where
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  Dao — la base genérica
+  // ══════════════════════════════════════════════════════════════════════════
+  public class Dao
+
+    // La conexión llega de FUERA, ya abierta, y se COMPARTE con los demás DAOs.
+    // El DAO la usa; no la abre, no la cierra, y no es suya.
+    public property db: SQLite.Db
+
+    public function Dao(base: SQLite.Db)
+      this.db := base
+    end Dao
+
+    // ══ EL CONTRATO — las tres que la hija DEBE contestar ═══════════════════
+    //
+    // Aquí devuelven lo neutro. Una hija que se olvide de contestar no se
+    // estrella: hace un SELECT contra la tabla "" y SQLite lo dirá con su
+    // propio mensaje, que es mejor diagnóstico que cualquiera que yo invente.
+
+    public function tabla(): string
+      return ""
+    end tabla
+
+    public function columnas(): string
+      return ""
+    end columnas
+
+    public function read(q: SQLite.Query): Object
+      return null
+    end read
+
+    // ══ LO QUE LA BASE YA SABE HACER — para CUALQUIER tabla ═════════════════
+
+    // El SELECT. Nadie más escribe la lista de columnas: sale de `columnas()`.
+    // `cond` vacía = todas las filas; `limite` a 0 = sin LIMIT.
+    //
+    // Sigue tomando la condición como TEXTO porque es la última capa antes del
+    // SQL. Quien la llama desde fuera es `list`, que ya recibe un `Where`.
+    public function selectDonde(cond: string, limite: integer := 0): SQLite.Query
+      var sql: string := "SELECT " + this.columnas() + " FROM " + this.tabla()
+      if cond != "" then
+        sql := sql + " WHERE " + cond
+      endif
+      // El LIMIT va en el SQL y no en el bucle: así SQLite para de leer, en vez
+      // de que nosotros construyamos objetos para tirarlos después.
+      if limite > 0 then
+        sql := sql + " LIMIT " + Str.longToString(limite)
+      endif
+      return this.db.query(sql)
+    end selectDonde
+
+    // El bucle del cursor, incluido el `release()` — que es lo único que hay
+    // que acordarse de soltar, y por eso conviene que esté en UN sitio para
+    // todas las tablas del programa.
+    //
+    // Devuelve una List de la entidad de la hija, porque llama a SU `read`.
+    //
+    // Toma un `Where`, no una cadena: así el escapado de los valores ocurre en
+    // un solo sitio, y el día que haya `bind` no cambia nada aquí arriba.
+    //
+    // `w` NO lleva valor por defecto: hoy los defectos tienen que ser literales
+    // constantes y `null` no cuela. Para "todas las filas" está `listAll()`,
+    // que además se lee mejor que un `list()` a secas — dice que sabes que las
+    // quieres todas.
+    //
+    // ── EL TOPE ─────────────────────────────────────────────────────────────
+    //
+    // Idea de Eduardo. Y en un micro no es comodidad: con 250 KB de heap, un
+    // listado contra una tabla de 100.000 filas construye 100.000 objetos y se
+    // lleva la VM por delante. El programa moriría por una consulta que en el
+    // PC ni se nota.
+    //
+    // Es un `LIMIT` y NADA MÁS: pedir 1.000 y recibir 1.000 es correcto, no es
+    // un truncamiento — es exactamente lo que dijiste que querías. Lo intenté
+    // con un aviso cuando se llenaba el tope y estaba mal por dos motivos: SQL
+    // no se comporta así, y además el código no puede distinguir "pidió 10" de
+    // "se dejó el defecto" (los defectos se sustituyen en el llamante), o sea
+    // que un `list(w, 10)` con 11 filas también habría protestado.
+    //
+    // Quien necesite saber si hay más, que pida `max + 1` y compare: eso es
+    // suyo, y en SQL se hace igual.
+    public function list(w: Where, max: integer := 1000): List
+      var cond: string := ""
+      if w != null then
+        cond := w.sql()
+      endif
+      var q: SQLite.Query := this.selectDonde(cond, max)
+      var out: List := List()
+      while q.nextRow() do
+        out.add(this.read(q))
+      endwh
+      q.release()
+      return out
+    end list
+
+    // Todas las filas — con el mismo tope, que aquí es donde más falta hace.
+    // Existe como verbo propio en vez de como `list()` sin argumentos porque
+    // pedir la tabla entera merece decirlo en voz alta.
+    public function listAll(max: integer := 1000): List
+      return this.list(Where(), max)
+    end listAll
+
+    // La primera fila, o null. Sobre esto se montan todos los `load` de las
+    // hijas, cada uno con su condición y su tipo.
+    public function uno(cond: string): Object
+      var q: SQLite.Query := this.selectDonde(cond)
+      var o: Object := null
+      if q.nextRow() then
+        o := this.read(q)
+      endif
+      q.release()
+      return o
+    end uno
+
+    // Borrar por clave no necesita saber de qué entidad se trata: es la única
+    // operación de escritura que sale gratis en la base. `insert` y `update` no
+    // pueden estar aquí — leen los campos de la entidad, y ésos sólo los
+    // conoce la hija.
+    public function deleteById(id: long): boolean
+      this.db.exec("DELETE FROM " + this.tabla() + " WHERE id = " + Str.longToString(id))
+      return this.db.changes() > 0
+    end deleteById
+
+    // Cierra EL DAO. La conexión NO: es de quien la abrió y la comparten los
+    // demás DAOs. Si un DAO cerrase la conexión, cerrar el primero dejaría
+    // ciego al segundo — un fallo a distancia, y de los caros de ver.
+    //
+    // Hoy suelta poco. Existe porque es el sitio donde irán las sentencias
+    // preparadas cuando `SQLite.bp` tenga `bind`: hoy cada consulta se
+    // recompila, y el precio está anotado allí.
+    public function close()
+      this.db := null
+    end close
+
+  end Dao
+
+end Orm

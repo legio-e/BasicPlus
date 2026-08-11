@@ -1,0 +1,120 @@
+// Sensores.bp — el lado *1* de una relación 1 → N (V5/H5, paso 2).
+//
+// `sensores` (aquí) tiene muchas `medidas` ([[Medidas.bp]]). Son dos MÓDULOS
+// distintos a propósito: un DAO por tabla, que es lo que tendrá que emitir el
+// generador, y así se ve que dos DAOs de módulos distintos comparten sin
+// problema una sola conexión.
+//
+// El contrato de la base y el porqué de cada pieza están en [[Orm.bp]]; el
+// reparto entidad/DAO, en `Medidas.bp`. Aquí sólo lo que este DAO añade:
+//
+//   loadByNombre   buscar por la OTRA clave. `nombre` es único en esta tabla,
+//                  así que es tan clave como el `id`. Sigue la misma regla de
+//                  nombrado: por clave, `...By<algo>`.
+
+module Sensores
+  import SQLite
+  import Orm
+  import Str
+
+  public class Sensor
+    public property id:     long
+    public property nombre: string
+    public property unidad: string
+    public property sitio:  string
+
+    public function Sensor()
+      this.id     := 0
+      this.nombre := ""
+      this.unidad := ""
+      this.sitio  := ""
+    end Sensor
+  end Sensor
+
+  public class SensoresDao extends Orm.Dao
+
+    public function SensoresDao(base: SQLite.Db)
+      super(base)
+    end SensoresDao
+
+    // ══ LAS TRES DEL CONTRATO ═══════════════════════════════════════════════
+
+    public function tabla(): string
+      return "sensores"
+    end tabla
+
+    public function columnas(): string
+      return "id, nombre, unidad, sitio"
+    end columnas
+
+    public function read(q: SQLite.Query): Object
+      var s: Sensor := Sensor()
+      s.id     := q.getLong(0)
+      s.nombre := q.getStr(1)
+      s.unidad := q.getStr(2)
+      s.sitio  := q.getStr(3)
+      return s
+    end read
+
+    // ══ LOS VERBOS QUE CONOCEN LA ENTIDAD ═══════════════════════════════════
+
+    public function loadById(id: long): Sensor
+      return this.uno("id = " + Str.longToString(id))
+    end loadById
+
+    // Por NOMBRE, que en esta tabla también es clave. Un finder propio de la
+    // tabla: el generador lo emitiría por cada columna UNIQUE.
+    public function loadByNombre(nombre: string): Sensor
+      return this.uno("nombre = '" + nombre + "'")
+    end loadByNombre
+
+    public function load(s: Sensor): boolean
+      var otro: Sensor := this.loadById(s.id)
+      if otro == null then
+        return false
+      endif
+      this.copiar(otro, s)
+      return true
+    end load
+
+    public function refresh(s: Sensor): boolean
+      return this.load(s)
+    end refresh
+
+    public function insert(s: Sensor)
+      this.db.exec("INSERT INTO " + this.tabla() + "(nombre, unidad, sitio) VALUES('"
+            + Orm.esc(s.nombre) + "', '" + Orm.esc(s.unidad) + "', '" + Orm.esc(s.sitio) + "')")
+      s.id := this.db.lastInsertId()
+    end insert
+
+    public function add(s: Sensor)
+      this.insert(s)
+    end add
+
+    public function update(s: Sensor): boolean
+      this.db.exec("UPDATE " + this.tabla()
+            + " SET nombre = '" + Orm.esc(s.nombre) + "'"
+            + ", unidad = '"    + Orm.esc(s.unidad) + "'"
+            + ", sitio = '"     + Orm.esc(s.sitio) + "'"
+            + " WHERE id = " + Str.longToString(s.id))
+      return this.db.changes() > 0
+    end update
+
+    public function delete(s: Sensor): boolean
+      var fue: boolean := this.deleteById(s.id)
+      if fue then
+        s.id := 0
+      endif
+      return fue
+    end delete
+
+    function copiar(de: Sensor, a: Sensor)
+      a.id     := de.id
+      a.nombre := de.nombre
+      a.unidad := de.unidad
+      a.sitio  := de.sitio
+    end copiar
+
+  end SensoresDao
+
+end Sensores

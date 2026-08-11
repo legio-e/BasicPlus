@@ -1,91 +1,192 @@
-// DaoDemo.bp — ejercita el DAO a mano (V5/H5, paso 1).
+// DaoDemo.bp — dos DAOs, una conexión, una relación 1 → N (V5/H5, paso 1).
 //
 // Mira lo que NO hay en este fichero: ni una sentencia SQL. Ésa es toda la
 // prueba de que el DAO hace su trabajo.
+//
+// La secuencia es la que describió Eduardo, en este orden:
+//
+//   1. conectar                          (UNA conexión)
+//   2. construir el DAO 1, trabajar
+//   3. construir el DAO 2, trabajar      (comparte la MISMA conexión)
+//   4. buscar una entrada en la tabla 1
+//   5. con ella, sus N entradas en la 2  -> list(where)
+//   6. cerrar los dos DAOs
+//   7. cerrar la conexión                (el último, y lo hace quien la abrió)
 //
 // Se ejecuta en el PC, que para esto NO es un simulador: es la misma VM-C
 // corriendo el mismo SQLite que la placa. Se verifica aquí y la Metro confirma.
 
 module DaoDemo
   import SQLite
+  import Orm
+  import Sensores
   import Medidas
   import Str
 
   function Main(arg: string)
+
+    // ── 1. UNA conexión, para los dos DAOs ──────────────────────────────────
     var db: SQLite.Db := SQLite.Db()
     if not db.connect("dao.db") then
       print "no se pudo abrir:", db.errorMessage()
       return
     endif
 
-    // La tabla la crea AQUÍ el ejemplo porque en el PC partimos de cero. En el
-    // flujo de verdad la base llega hecha desde el PC y el DAO se la encuentra
-    // puesta — por eso esto está en la demo y no dentro del DAO.
+    // Las tablas las crea AQUÍ el ejemplo porque en el PC partimos de cero. En
+    // el flujo de verdad la base llega hecha desde el PC y los DAOs se la
+    // encuentran puesta — por eso esto está en la demo y no dentro del DAO.
     db.exec("DROP TABLE IF EXISTS medidas;"
-          + "CREATE TABLE medidas ("
+          + "DROP TABLE IF EXISTS sensores;"
+          + "CREATE TABLE sensores ("
           + "  id     INTEGER PRIMARY KEY,"
-          + "  sensor TEXT,"
-          + "  valor  REAL,"
-          + "  t      INTEGER)")
+          + "  nombre TEXT UNIQUE,"
+          + "  unidad TEXT,"
+          + "  sitio  TEXT);"
+          + "CREATE TABLE medidas ("
+          + "  id        INTEGER PRIMARY KEY,"
+          + "  sensor_id INTEGER,"
+          + "  valor     REAL,"
+          + "  t         INTEGER)")
 
-    var dao: Medidas.MedidasDao := Medidas.MedidasDao(db)
+    // ── 2. DAO 1: los sensores (el lado *1*) ────────────────────────────────
+    var sdao: Sensores.SensoresDao := Sensores.SensoresDao(db)
 
-    // ── insert: el objeto vuelve con su clave puesta ────────────────────────
-    var m: Medidas.Medida := Medidas.Medida()
-    m.sensor := "temp"
-    m.valor  := 21.5d
-    m.t      := 1754300000000L
-    dao.insert(m)
-    print "insert     -> id =", m.id
+    var temp: Sensores.Sensor := Sensores.Sensor()
+    temp.nombre := "temp"
+    temp.unidad := "C"
+    temp.sitio  := "sala"
+    sdao.insert(temp)
 
-    // ── add: el mismo verbo con el otro nombre ──────────────────────────────
-    var m2: Medidas.Medida := Medidas.Medida()
-    m2.sensor := "hum"
-    m2.valor  := 55.0d
-    m2.t      := 1754300001000L
-    dao.add(m2)
-    print "add        -> id =", m2.id
+    var hum: Sensores.Sensor := Sensores.Sensor()
+    hum.nombre := "hum"
+    hum.unidad := "%"
+    hum.sitio  := "sala"
+    sdao.add(hum)
 
-    // ── load por CLAVE ──────────────────────────────────────────────────────
-    var leida: Medidas.Medida := dao.load(m.id)
-    if leida == null then
-      print "load       -> NO ENCONTRADA (mal)"
-    else
-      print "load(id)   ->", leida.sensor, leida.valor, leida.t
+    print "sensores insertados -> temp id =", temp.id, " hum id =", hum.id
+
+    // ── 3. DAO 2: las medidas (el lado *N*), MISMA conexión ─────────────────
+    var mdao: Medidas.MedidasDao := Medidas.MedidasDao(db)
+
+    grabar(mdao, temp.id, 21.5d, 1754300000000L)
+    grabar(mdao, temp.id, 22.0d, 1754300060000L)
+    grabar(mdao, temp.id, 22.5d, 1754300120000L)
+    grabar(mdao, hum.id,  55.0d, 1754300000000L)
+    grabar(mdao, hum.id,  56.5d, 1754300060000L)
+    var todas: List := mdao.listAll()
+    print "medidas insertadas  ->", todas.length(), "en total"
+
+    // ── 4. una entrada CONCRETA de la tabla 1 ───────────────────────────────
+    //
+    // Por nombre, que en `sensores` también es clave. Regla de nombrado: el
+    // verbo pelado toma la entidad, `...By<algo>` toma una clave.
+    var s: Sensores.Sensor := sdao.loadByNombre("temp")
+    if s == null then
+      print "no encontrado (mal)"
+      return
     endif
-
-    // ── load de una clave que no existe: null, y NO lanza ───────────────────
-    var noHay: Medidas.Medida := dao.load(9999L)
-    if noHay == null then
-      print "load(9999L) -> null, como debe ser"
-    else
-      print "load(9999L) -> devolvio algo (mal)"
-    endif
-
-    // ── update + refresh: el disco manda ────────────────────────────────────
-    m.valor := 99.9d
-    print "update     ->", dao.update(m)
-
-    // `leida` sigue con el valor viejo en memoria; refresh lo trae del disco.
-    print "antes de refresh, leida.valor =", leida.valor
-    print "refresh    ->", dao.refresh(leida)
-    print "despues,        leida.valor =", leida.valor
-
-    // ── load por OBJETO ─────────────────────────────────────────────────────
-    var porObj: Medidas.Medida := Medidas.Medida()
-    porObj.id := m2.id
-    print "load(obj)  ->", dao.load(porObj), "sensor =", porObj.sensor
-
-    // ── delete por CLAVE y por OBJETO ───────────────────────────────────────
-    print "delete(id) ->", dao.delete(m2.id)
-    print "delete(id) otra vez ->", dao.delete(m2.id), "(false: ya no estaba)"
-
-    print "delete(obj)->", dao.delete(m)
-    print "  y el objeto queda con id =", m.id, "(0: ya no es ninguna fila)"
-
-    db.close()
     print ""
-    print "DAO OK — y en todo el programa no hay una sola sentencia SQL"
+    print "sensor '" + s.nombre + "' -> id =", s.id, " unidad =", s.unidad, " sitio =", s.sitio
+
+    // ── 5. y sus N entradas en la tabla 2 ───────────────────────────────────
+    //
+    // Aquí está el 1 → N. Y fíjate en lo que NO hubo que escribir: ni el
+    // SELECT, ni el mapeo fila->objeto, ni una comilla. `Where` pone el valor
+    // ya escapado y `list` usa el mismo `read` que `load`.
+    var wSuyas: Orm.Where := Orm.Where()
+    wSuyas.eq("sensor_id", s.id)
+    var suyas: List := mdao.list(wSuyas)
+    print "  sus medidas:", suyas.length()
+    var i: integer := 0
+    while i < suyas.length() do
+      var m: Medidas.Medida := suyas.get(i)
+      print "    id =", m.id, " valor =", m.valor, s.unidad, " t =", m.t
+      i := i + 1
+    endwh
+
+    // El otro lado, para que se vea que la condición es lo único que cambia.
+    var wHum: Orm.Where := Orm.Where()
+    wHum.eq("sensor_id", hum.id)
+    var deHum: List := mdao.list(wHum)
+    print "  medidas de 'hum':", deHum.length()
+    todas := mdao.listAll()
+    print "  y sin condicion :", todas.length()
+
+    // ── el apostrofo: la razon de ser de Where ──────────────────────────────
+    //
+    // Este sensor lleva un apostrofo en el nombre. Concatenando a mano, la
+    // sentencia se parte; con Where entra escapado y no pasa nada.
+    var raro: Sensores.Sensor := Sensores.Sensor()
+    raro.nombre := "O'Brien"
+    raro.unidad := "u"
+    raro.sitio  := "taller"
+    sdao.add(raro)
+    var w: Orm.Where := Orm.Where()
+    var conApostrofo: List := sdao.list(w.eq("nombre", "O'Brien"))
+    print ""
+    print "apostrofo       ->", conApostrofo.length(), "fila (Where lo escapo)"
+
+    // Dos condiciones, con AND implicito entre ellas.
+    //
+    // Se escribe en dos lineas y no encadenado —w2.eq(...).lt(...)— porque HOY
+    // no se puede: lo que devuelve un metodo pierde sus miembros (#388). El
+    // objeto sale igual de bien; lo que falta es la FORMA. `Where` ya devuelve
+    // `this` en todos sus metodos, asi que el dia que #388 caiga el encadenado
+    // funciona sin tocar la libreria.
+    var w2: Orm.Where := Orm.Where()
+    w2.eq("sensor_id", s.id)
+    w2.lt("valor", 22.2d)
+    var frias: List := mdao.list(w2)
+    print "encadenado      ->", frias.length(), "medidas de temp por debajo de 22.2"
+    print "   el SQL era   ->", w2.sql()
+
+    // Y el OR, que solo afecta a la condicion SIGUIENTE.
+    //
+    // Se llama orNext y no or porque `or` es palabra reservada — y usarla como
+    // nombre de metodo no da error: CUELGA el compilador (#384).
+    var w3: Orm.Where := Orm.Where()
+    w3.eq("nombre", "temp")
+    w3.orNext()
+    w3.eq("nombre", "hum")
+    var dos: List := sdao.list(w3)
+    print "orNext          ->", dos.length(), "sensores"
+    print "   el SQL era   ->", w3.sql()
+
+    // ── el resto de los verbos, sobre los dos DAOs ──────────────────────────
+    print ""
+    var una: Medidas.Medida := suyas.get(0)
+    una.valor := 99.9d
+    print "update(medida)  ->", mdao.update(una)
+
+    var copia: Medidas.Medida := Medidas.Medida()
+    copia.id := una.id
+    print "load(objeto)    ->", mdao.load(copia), " valor =", copia.valor
+
+    print "refresh(sensor) ->", sdao.refresh(s)
+
+    print "delete(medida)  ->", mdao.delete(una), " y el objeto queda con id =", una.id
+    print "delete otra vez ->", mdao.deleteById(una.id), "(false: ya no estaba)"
+    todas := mdao.listAll()
+    print "quedan          ->", todas.length(), "medidas"
+
+    // ── 6. cerrar los DOS DAOs... ───────────────────────────────────────────
+    mdao.close()
+    sdao.close()
+
+    // ── 7. ...y ENTONCES la conexión ────────────────────────────────────────
+    db.close()
+
+    print ""
+    print "DAO OK — dos tablas, una conexion, y ni una sentencia SQL en este fichero"
   end Main
+
+  // Un ayudante del ejemplo, no del DAO: ahorra repetir cuatro líneas.
+  function grabar(dao: Medidas.MedidasDao, sensorId: long, valor: double, t: long)
+    var m: Medidas.Medida := Medidas.Medida()
+    m.sensorId := sensorId
+    m.valor    := valor
+    m.t        := t
+    dao.add(m)
+  end grabar
 
 end DaoDemo

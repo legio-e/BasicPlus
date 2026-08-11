@@ -1,0 +1,43 @@
+// ProbeMal.bp — ¿cómo FALLA un DAO mal generado?
+//
+// `Object` es `any` en el analizador, así que el downcast va sin comprobar.
+// La pregunta no es si eso es cómodo (lo es) sino si un error se nota o se
+// traga. Aquí el `read` devuelve la entidad EQUIVOCADA a propósito.
+module ProbeMal
+  import ProbeBase
+
+  public class Cosa
+    public property v: integer
+    public function Cosa()
+      this.v := 0
+    end Cosa
+  end Cosa
+
+  public class Otra
+    public property texto: string
+    public property w: integer
+    public function Otra()
+      this.texto := "soy Otra"
+      this.w := 0
+    end Otra
+  end Otra
+
+  public class DaoMalo extends ProbeBase.Base
+    public function DaoMalo()
+    end DaoMalo
+
+    // MAL A PROPÓSITO: dice que lee Cosas y devuelve Otras.
+    public function read(i: integer): Object
+      var o: Otra := Otra()
+      o.w := i * 10
+      return o
+    end read
+  end DaoMalo
+
+  function Main(arg: string)
+    var dao: DaoMalo := DaoMalo()
+    print "voy a pedir una Cosa a un DAO que devuelve Otra..."
+    var c: Cosa := dao.read(7)
+    print "no ha protestado. c.v =", c.v, "(la verdad seria 70 en o.w)"
+  end Main
+end ProbeMal

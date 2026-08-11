@@ -1,0 +1,43 @@
+module ProbeDao
+  import ProbeBase
+
+  public class Cosa
+    public property v: integer
+    public function Cosa()
+      this.v := 0
+    end Cosa
+  end Cosa
+
+  public class CosaDao extends ProbeBase.Base
+    public function CosaDao()
+    end CosaDao
+
+    // PRUEBA 1: misma firma que la base (retorno Object) — ¿override o choque?
+    public function read(i: integer): Object
+      var c: Cosa := Cosa()
+      c.v := i * 10
+      return c
+    end read
+
+    public function etiqueta(): string
+      return "cosa"
+    end etiqueta
+
+    // TRES sobrecargas...
+    public function buscar(i: integer): integer
+      return i
+    end buscar
+    public function buscar(s: string): integer
+      return 2
+    end buscar
+    public function buscar(c: Cosa): integer
+      return 3
+    end buscar
+
+    // ...y un metodo DESPUES de ellas. Este es el que se corre.
+    public function despues(): string
+      return "despues() OK"
+    end despues
+  end CosaDao
+
+end ProbeDao

@@ -1,0 +1,16 @@
+// ProbeUso.bp — la MISMA prueba, pero desde un TERCER modulo.
+// Orm(base) -> Medidas(hija) -> DaoDemo(usuario) son 3 modulos, y ahi es donde
+// se cayo. Aqui se aisla: ProbeBase -> ProbeDao -> ProbeUso.
+module ProbeUso
+  import ProbeBase
+  import ProbeDao
+
+  function Main(arg: string)
+    var dao: ProbeDao.CosaDao := ProbeDao.CosaDao()
+    print "propio de la hija :", dao.etiqueta()
+    var l: List := dao.listar(3)          // <-- HEREDADO de ProbeBase.Base
+    print "heredado 3 modulos:", l.length(), "elementos"
+    print "tras 3 sobrecargas:", dao.despues()
+    print "PROBE USO OK"
+  end Main
+end ProbeUso
