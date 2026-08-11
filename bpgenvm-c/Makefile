@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -497,6 +497,16 @@ test-blk:
 	      src/bpvm_sd.c src/spi.c src/gpio.c -o build/test_blk.exe
 	@echo "--- V5/H6 contrato de bloque (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_blk.exe
+
+# V5/H6 paso 2 - la linea 'sd' en variante SDIO. La cintura del P4 necesita
+# idf.py y NO se puede compilar aqui; esto es la parte portable, y es donde
+# viven los fallos mudos: una clave que se come a otra por ser su prefijo deja
+# un pin plausible y equivocado, y eso no se ve hasta que la placa no contesta.
+test-sdio:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_sdio.c src/bpvm_blk_sdmmc_cfg.c -o build/test_sdio.exe
+	@echo "--- V5/H6 entrada 'sd' SDIO (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_sdio.exe
 
 # H9 — board manager: núcleo portable del protocolo de gestión de placa (ENV_*/
 # PART_*). Compone env+part. Host-only: opera sobre sectores A/B en RAM; simula el

@@ -31,6 +31,13 @@ idf_component_register(
         "../../esp32/main/platform_esp32.c"
         "../../esp32/main/gpio_esp32.c"       # H14: backends HW del P4 = REÚSO del S3 (GPIO/UART/SPI/I2C, ESP-IDF estándar)
         "../../esp32/main/fs_lfs_esp32.c"    # H2-B3: littlefs (reutilizado del S3) — reemplaza fs_ram.c
+        # --- V5/H6: la SD por SDMMC ---------------------------------------
+        "blk_sdmmc_p4.c"                      # H6 paso 2: cintura SDMMC sobre sdmmc_host
+        "../../src/bpvm_blk.c"                # H6 paso 1: contrato de bloque + tabla de particiones
+        "../../src/bpvm_blk_sdmmc_cfg.c"      # H6 paso 2: la linea `sd` del ENV (portable, test-sdio)
+        "../../src/fs_fat.c"                  # H2: backend FAT de la fachada (el MISMO que la Metro)
+        "../../third_party/fatfs/ff.c"        # H2: motor FatFs R0.16 — el NUESTRO, no el del IDF
+        "../../third_party/fatfs/ffunicode.c" # tabla de la CP850 (nombres largos)
         # --- núcleo VM (portable C99) ---
         "../../src/bpvm.c"
         "../../src/loader.c"
@@ -108,6 +115,7 @@ idf_component_register(
         esp_adc          # H14: backend ADC del P4 (esp_adc oneshot)
         esp_driver_tsens # H14: sensor de temperatura interno (Pico.tempC)
         esp_driver_pcnt  # H14: backend contador de pulsos (PCNT)
+        esp_driver_sdmmc # V5/H6: sdmmc_host + sdmmc_cmd (la tarjeta por SDIO)
 )
 
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas.
