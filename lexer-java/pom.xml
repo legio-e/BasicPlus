@@ -20,6 +20,18 @@
     </properties>
 
     <dependencies>
+        <!-- V5/H5 — SQLite por JDBC, SOLO para verificar las entidades contra el
+             esquema real. Es de tiempo de construccion y de PC: no se acerca al
+             micro. Se declara `optional` a proposito: `Esquema.java` se compila
+             contra java.sql y nada mas, asi que sin este jar el compilador
+             funciona igual y la verificacion dice que no puede hacerse. Quitarlo
+             del bundle es una linea y no rompe nada. -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.46.0.0</version>
+            <optional>true</optional>
+        </dependency>
         <!-- ASM para emitir bytecode JVM -->
         <dependency>
             <groupId>org.ow2.asm</groupId>

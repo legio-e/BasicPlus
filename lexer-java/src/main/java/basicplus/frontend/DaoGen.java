@@ -69,7 +69,7 @@ public final class DaoGen {
 
     // ---- Modelo intermedio: lo que el generador necesita saber ----
 
-    private static final class Campo {
+    static final class Campo {
         final String prop;      // nombre de la property en BP
         final String columna;   // nombre en la tabla
         final String tipo;      // tipo sintáctico: long | integer | double | float | string | boolean
@@ -79,7 +79,7 @@ public final class DaoGen {
         }
     }
 
-    private static final class Entidad {
+    static final class Entidad {
         final String clase;
         final String tabla;
         final List<Campo> campos = new ArrayList<>();
@@ -94,6 +94,8 @@ public final class DaoGen {
         public final List<String> escritos = new ArrayList<>();   // ficheros generados
         public final List<String> sinCambios = new ArrayList<>(); // ya estaban al día
         public int entidades = 0;
+        /** Una linea con el estado, para saber por donde vas sin leer avisos. */
+        public String resumen;
         public boolean ok() { return errores.isEmpty(); }
     }
 
@@ -114,15 +116,30 @@ public final class DaoGen {
     public static Resultado generar(BpBuild proj, boolean escribir) {
         Resultado r = new Resultado();
         Path srcDir = Paths.get(proj.sourceDir);
+        Map<String, List<Entidad>> porModulo = barrer(srcDir, r);
+        if (porModulo == null) return r;
 
-        // Entidades agrupadas por módulo: un módulo de DAOs por módulo de
-        // entidades, que es la disposición que pidió Eduardo.
+        if (porModulo.isEmpty()) {
+            r.avisos.add("no hay ninguna entidad: ninguna clase lleva `@BD{ tabla = \"...\" }`");
+            return r;
+        }
+        if (!r.ok()) return r;   // con entidades mal declaradas no se genera nada
+
+        for (Map.Entry<String, List<Entidad>> e : porModulo.entrySet()) {
+            r.entidades += e.getValue().size();
+            emitirModulo(proj, srcDir, e.getKey(), e.getValue(), escribir, r);
+        }
+        return r;
+    }
+
+    /** Recorre el sourceDir y agrupa las entidades por modulo. null si no se
+     *  pudo ni recorrer. Lo comparten generar() y verificar(). */
+    private static Map<String, List<Entidad>> barrer(Path srcDir, Resultado r) {
         Map<String, List<Entidad>> porModulo = new LinkedHashMap<>();
-
         try (DirectoryStream<Path> ds = Files.newDirectoryStream(srcDir, "*.bp")) {
             for (Path f : ds) {
                 // Los propios generados se saltan: si no, la segunda pasada
-                // intentaría generar el DAO de un DAO.
+                // intentaria generar el DAO de un DAO.
                 if (esGenerado(f)) continue;
                 try {
                     String fuente = new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
@@ -136,20 +153,163 @@ public final class DaoGen {
             }
         } catch (IOException ex) {
             r.errores.add("no se pudo recorrer " + srcDir + ": " + ex.getMessage());
+            return null;
+        }
+        return porModulo;
+    }
+
+    // ========================================================================
+    //  VERIFICAR contra el esquema REAL
+    // ========================================================================
+    //
+    // Lo llama el COMPILADOR en cada build, y **solo emite AVISOS, nunca
+    // errores** — criterio de Eduardo, con un motivo concreto: una base se
+    // puede disenar entera antes que el programa, asi que con 40 tablas por
+    // delante nadie escribe las 40 entidades de un tiron. Si una tabla sin
+    // entidad fuese error, no podrias compilar hasta terminarlas todas, y la
+    // herramienta pasaria de ayuda a estorbo.
+    //
+    // --- LA GRANULARIDAD, QUE ES LO QUE DECIDE SI ESTO SIRVE ---
+    //
+    // Un aviso que sale siempre deja de leerse. Con medio esquema sin mapear,
+    // avisar de cada columna seria un muro de texto en cada compilacion y a la
+    // tercera se ignora. Asi que el criterio sigue al trabajo incremental:
+    //
+    //   . tabla SIN NINGUNA entidad     -> callar; solo cuenta en el resumen.
+    //   . tabla CON entidad e incompleta-> avisar: esa la empezaste y le
+    //                                      dejaste un hueco.
+    //   . entidad que nombra algo que NO existe -> avisar siempre.
+    //
+    // Y una linea de resumen para saber por donde vas sin ruido.
+
+    public static Resultado verificar(BpBuild proj) {
+        Resultado r = new Resultado();
+        if (!proj.hasDatabase()) return r;      // sin base declarada, nada que contrastar
+
+        Path srcDir = Paths.get(proj.sourceDir);
+        Map<String, List<Entidad>> porModulo = barrer(srcDir, r);
+        if (porModulo == null || porModulo.isEmpty()) return r;
+
+        Esquema es = Esquema.leer(proj.database);
+        if (!es.disponible()) {
+            r.avisos.add("no se han podido contrastar las entidades: " + es.motivoFallo);
             return r;
         }
 
-        if (porModulo.isEmpty()) {
-            r.avisos.add("no hay ninguna entidad: ninguna clase lleva `@BD{ tabla = \"...\" }`");
-            return r;
-        }
-        if (!r.ok()) return r;   // con entidades mal declaradas no se genera nada
+        int nEnt = 0, conDiferencias = 0;
+        java.util.Set<String> tablasMapeadas = new java.util.HashSet<>();
 
-        for (Map.Entry<String, List<Entidad>> e : porModulo.entrySet()) {
-            r.entidades += e.getValue().size();
-            emitirModulo(proj, srcDir, e.getKey(), e.getValue(), escribir, r);
+        for (List<Entidad> ents : porModulo.values()) {
+            for (Entidad e : ents) {
+                nEnt++;
+                List<Esquema.Col> cols = es.columnasDe(e.tabla);
+                if (cols == null) {
+                    r.avisos.add("la entidad '" + e.clase + "' dice ser la tabla '" + e.tabla
+                            + "' y esa tabla no esta en la base");
+                    conDiferencias++;
+                    continue;
+                }
+                tablasMapeadas.add(e.tabla.toLowerCase());
+                boolean hubo = false;
+
+                for (Campo c : e.campos) {
+                    Esquema.Col col = buscarCol(cols, c.columna);
+                    if (col == null) {
+                        r.avisos.add(e.clase + "." + c.prop + " -> la tabla '" + e.tabla
+                                + "' no tiene la columna '" + c.columna + "'");
+                        hubo = true;
+                        continue;
+                    }
+                    String choque = chequeoDeTipo(c.tipo, col.tipoDeclarado);
+                    if (choque != null) {
+                        r.avisos.add(e.clase + "." + c.prop + " es " + c.tipo + " y la columna '"
+                                + col.nombre + "' esta declarada " + col.tipoDeclarado + ": " + choque);
+                        hubo = true;
+                    }
+                }
+                for (Esquema.Col col : cols) {
+                    if (buscarCampo(e, col.nombre) == null) {
+                        r.avisos.add("la tabla '" + e.tabla + "' tiene la columna '" + col.nombre
+                                + "' y '" + e.clase + "' no la mapea");
+                        hubo = true;
+                    }
+                }
+                Campo pk = e.pk();
+                Esquema.Col colPk = (pk == null) ? null : buscarCol(cols, pk.columna);
+                if (colPk != null && !colPk.pk) {
+                    r.avisos.add(e.clase + ": marcaste '" + pk.prop + "' como pk, pero en la tabla '"
+                            + e.tabla + "' la clave primaria no es '" + pk.columna + "'");
+                    hubo = true;
+                }
+                if (hubo) conDiferencias++;
+            }
         }
+
+        int sinEntidad = 0;
+        for (String t : es.tablas.keySet())
+            if (!tablasMapeadas.contains(t.toLowerCase())) sinEntidad++;
+
+        StringBuilder res = new StringBuilder();
+        res.append("entidades ").append(nEnt).append(" / tablas ").append(es.tablas.size());
+        if (conDiferencias > 0) res.append(" - ").append(conDiferencias).append(" con diferencias");
+        if (sinEntidad > 0)     res.append(" - ").append(sinEntidad).append(" tabla(s) sin entidad todavia");
+        r.resumen = res.toString();
+        r.entidades = nEnt;
         return r;
+    }
+
+    /**
+     * Compatibilidad BP <-> SQLite. De tipo BP a clase de almacenamiento es una
+     * FUNCION; al reves es solo una comprobacion de sensatez, y por eso lo que
+     * sale de aqui son AVISOS: en SQLite el tipo declarado es AFINIDAD, o sea
+     * orientativo, y una columna BOOLEAN acepta texto igualmente.
+     *
+     * Devuelve el motivo del choque, o null si la pareja es razonable.
+     */
+    private static String chequeoDeTipo(String tipoBp, String tipoCol) {
+        String af = afinidad(tipoCol);
+        if (af == null) return null;                 // sin tipo declarado: SQLite lo permite
+        switch (tipoBp) {
+            case "boolean":
+                if (af.equals("INTEGER") || af.equals("NUMERIC")) return null;
+                return "un boolean se guarda como 0/1 en una columna entera";
+            case "byte": case "int8": case "word": case "int16":
+            case "integer": case "long":
+                if (af.equals("INTEGER") || af.equals("NUMERIC")) return null;
+                if (af.equals("REAL")) return "un entero en una columna REAL vuelve con decimales";
+                return "un entero no encaja en una columna de texto";
+            case "float": case "double":
+                if (af.equals("REAL") || af.equals("NUMERIC") || af.equals("INTEGER")) return null;
+                return "un decimal no encaja en una columna de texto";
+            case "string":
+                if (af.equals("TEXT") || af.equals("BLOB")) return null;
+                return "una cadena en una columna numerica se convierte al leerla";
+            default:
+                return null;
+        }
+    }
+
+    /** Afinidad de una columna segun las reglas de SQLite (por el NOMBRE del
+     *  tipo declarado, que es como lo decide el propio motor). */
+    private static String afinidad(String tipoDeclarado) {
+        if (tipoDeclarado == null) return null;
+        String t = tipoDeclarado.trim().toUpperCase();
+        if (t.isEmpty()) return null;                 // sin tipo: afinidad BLOB (todo vale)
+        if (t.contains("INT"))  return "INTEGER";
+        if (t.contains("CHAR") || t.contains("CLOB") || t.contains("TEXT")) return "TEXT";
+        if (t.contains("BLOB")) return "BLOB";
+        if (t.contains("REAL") || t.contains("FLOA") || t.contains("DOUB")) return "REAL";
+        return "NUMERIC";
+    }
+
+    private static Esquema.Col buscarCol(List<Esquema.Col> cols, String nombre) {
+        for (Esquema.Col c : cols) if (c.nombre.equalsIgnoreCase(nombre)) return c;
+        return null;
+    }
+
+    private static Campo buscarCampo(Entidad e, String columna) {
+        for (Campo c : e.campos) if (c.columna.equalsIgnoreCase(columna)) return c;
+        return null;
     }
 
     // ========================================================================

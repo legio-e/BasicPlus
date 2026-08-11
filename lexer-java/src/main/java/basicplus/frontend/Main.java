@@ -187,6 +187,15 @@ public final class Main {
                 + ", sourceDir=" + proj.sourceDir
                 + ", outDir=" + proj.outDir
                 + ", dependencies=" + proj.dependencies + ")");
+        // V5/H5 — el compilador CONTRASTA las entidades con la base real. Solo
+        // avisos, nunca errores: una base se puede disenar entera antes que el
+        // programa, y con 40 tablas por delante nadie escribe las 40 entidades
+        // de un tiron. Bloquear el build por eso convertiria la herramienta en
+        // un estorbo (criterio de Eduardo).
+        DaoGen.Resultado ver = DaoGen.verificar(proj);
+        for (String w : ver.avisos) System.out.println("aviso BD: " + w);
+        if (ver.resumen != null)    System.out.println("BD: " + ver.resumen);
+
         Path mainBp = Paths.get(proj.sourceDir, proj.main + ".bp")
                 .toAbsolutePath().normalize();
         if (!Files.exists(mainBp)) {
