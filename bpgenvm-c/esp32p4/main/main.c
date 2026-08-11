@@ -222,24 +222,30 @@ static void tcp_log_task(void *arg)
  * es un accesorio que no va, no una placa rota: se anota el motivo y se sigue.
  * Degradar el boot por esto dejaria al usuario sin IDE justo cuando mas falta
  * hace para averiguar que pasa.
+ *
+ * (!) Va por `log_printf` y NO por `net_logf`: el segundo escribe a la consola
+ * del IDF y al socket de log por red, que esta APAGADO por defecto. El log que
+ * de verdad se mira -el persistente, el que sobrevive a un cuelgue y el que
+ * enseña el IDE- es el de `log_printf`, y es donde estan las demas lineas del
+ * arranque. Un chivato en el canal equivocado es un chivato mudo.
  * ------------------------------------------------------------------------- */
 static void p4_montar_sd(void)
 {
     char linea[160];
     int n = bpvm_env_get(board_mgr_env(), "sd", linea, sizeof linea);
-    if (n <= 0) { net_logf("[p4] sd: sin configurar en el env - no se monta"); return; }
+    if (n <= 0) { log_printf("sd: sin configurar en el env - no se monta"); return; }
 
     bpvm_sdio_pines_t pines;
     char motivo[120];
     if (bpvm_sdio_pines_parse(linea, &pines, motivo, sizeof motivo) != 0) {
-        net_logf("[p4] sd: %s", motivo);      /* el parser ya dice QUE falta */
+        log_printf("sd: %s", motivo);         /* el parser ya dice QUE falta */
         return;
     }
     if (bpvm_fs_fat_montar(bpvm_blk_sdmmc(&pines), "/sd", motivo, sizeof motivo) == 0) {
-        net_logf("[p4] sd: montada en /sd (%d bits, particion en el bloque %u)",
-                 pines.ancho, (unsigned) bpvm_fs_fat_lba_particion());
+        log_printf("sd: montada en /sd (%d bits, particion en el bloque %u)",
+                   pines.ancho, (unsigned) bpvm_fs_fat_lba_particion());
     } else {
-        net_logf("[p4] sd: NO montada - %s", motivo);
+        log_printf("sd: NO montada - %s", motivo);
     }
 }
 
