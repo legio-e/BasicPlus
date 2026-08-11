@@ -35,6 +35,7 @@
 #include "bpvm_boot.h"        /* H9: máquina de estados del arranque */
 #include "bpvm_sqlmem.h"      /* V5/H: regla del bloque de memoria de la BD */
 #include "bpvm_sd.h"          /* V5/H1: lector de SD por SPI (pines del env)  */
+#include "bpvm_sd_blk.h"      /* V5/H6: esa SD, vista como dispositivo de bloque */
 #include "bpvm_fs_fat.h"      /* V5/H2: montarla al arranque si hay tarjeta   */
 #include "bpvm_bios.h"        /* V5/I: tabla prestada al pack nativo */
 /* pico/bios_pico.c — la tabla de ESTA placa, ya verificada (NULL si tiene
@@ -1328,7 +1329,11 @@ static void vm_task(void* arg) {
         log_printf("sd: zocalo VACIO (pin de deteccion) — no se monta");
     } else {
         char motivo[80];
-        if (bpvm_fs_fat_montar(&s_sd_pines, "/sd", motivo, sizeof motivo) == 0) {
+        /* V5/H6 — el montaje ya no recibe pines: recibe un DISPOSITIVO DE
+         * BLOQUE. Aquí se elige cuál (la SD por SPI); en el P4 será el de
+         * SDMMC y esta línea es la única que cambia. */
+        if (bpvm_fs_fat_montar(bpvm_sd_blk(&s_sd_pines), "/sd",
+                               motivo, sizeof motivo) == 0) {
             log_printf("sd: montada en /sd (particion en el bloque %u)",
                        (unsigned) bpvm_fs_fat_lba_particion());
         } else {

@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -484,6 +484,19 @@ test-sd:
 	      -o build/test_sd.exe
 	@echo "--- V5/H1 CSD/CID de la SD (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_sd.exe
+
+# V5/H6 - el contrato de dispositivo de bloque. Lo que de verdad se prueba aqui
+# es DONDE EMPIEZA EL SISTEMA DE FICHEROS: esa decodificacion estaba enterrada
+# dentro del montaje, donde no se podia ejercer sin placa Y sin tarjeta, y es
+# justo la clase de codigo que al equivocarse no revienta - devuelve un numero.
+# Un numero equivocado ahi manda a reformatear una tarjeta que estaba bien.
+# Los dos desplazamientos del test son los MEDIDOS en el banco (2048 y 32768).
+test-blk:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_blk.c src/bpvm_blk.c src/bpvm_sd_blk.c \
+	      src/bpvm_sd.c src/spi.c src/gpio.c -o build/test_blk.exe
+	@echo "--- V5/H6 contrato de bloque (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_blk.exe
 
 # H9 — board manager: núcleo portable del protocolo de gestión de placa (ENV_*/
 # PART_*). Compone env+part. Host-only: opera sobre sectores A/B en RAM; simula el

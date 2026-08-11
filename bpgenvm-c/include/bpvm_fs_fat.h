@@ -1,33 +1,39 @@
 /*
- * bpvm_fs_fat.h — V5/H2: montar la tarjeta SD como sistema de ficheros.
+ * bpvm_fs_fat.h — V5/H2: montar una tarjeta como sistema de ficheros.
  *
- * Une FatFs (motor vendorizado), bpvm_sd (H1) y la fachada `bpvm_fs`. Los
- * motivos de diseño están en fs_fat.c; aquí sólo el contrato.
+ * Une FatFs (motor vendorizado), un DISPOSITIVO DE BLOQUE (`bpvm_blk.h`) y la
+ * fachada `bpvm_fs`. Los motivos de diseño están en fs_fat.c; aquí sólo el
+ * contrato.
+ *
+ * V5/H6 — antes ponía «bpvm_sd (H1)» y las firmas llevaban `bpvm_sd_pines_t`:
+ * este fichero sabía lo que es un pin de SPI. Ya no. Recibe un dispositivo de
+ * bloque y le da igual si debajo hay SPI, SDMMC o un fichero — que es lo que
+ * permite que el P4 monte con FatFs sin tocar nada de aquí.
  */
 #ifndef BPVM_FS_FAT_H
 #define BPVM_FS_FAT_H
 
 #include <stdint.h>
-#include "bpvm_sd.h"
+#include "bpvm_blk.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /*
- * Arranca la tarjeta, localiza la partición, monta FAT y registra el backend
+ * Arranca el medio, localiza la partición, monta FAT y registra el backend
  * bajo `prefijo` (por defecto "/sd" si se pasa NULL).
  *
  * Devuelve 0, o -1 y escribe en `motivo` un texto para el log. El motivo NO es
- * decorativo: distingue "la tarjeta no contesta" (peldaño de H1, cableado) de
- * "no hay FAT32 en la partición" (la tarjeta viene en exFAT), que mandan a
- * sitios opuestos.
+ * decorativo: distingue "la tarjeta no contesta" (peldaño del driver, cableado)
+ * de "no hay FAT32 en la partición" (la tarjeta viene en exFAT), que mandan a
+ * sitios opuestos. El primero lo pone el dispositivo de bloque en su `motivo()`.
  *
- * ⚠️ Llamarlo DESPUÉS de que el ENV haya dado los pines. No lo llama el
- * arranque por su cuenta: hablar con hardware que puede no estar se dispara
- * cuando el usuario quiere, no cuando la placa enciende.
+ * ⚠️ Llamarlo DESPUÉS de que el ENV haya configurado el dispositivo. No lo
+ * llama el arranque por su cuenta: hablar con hardware que puede no estar se
+ * dispara cuando el usuario quiere, no cuando la placa enciende.
  */
-int bpvm_fs_fat_montar(const bpvm_sd_pines_t* pines, const char* prefijo,
+int bpvm_fs_fat_montar(const bpvm_blk_backend_t* blk, const char* prefijo,
                        char* motivo, unsigned motivo_cap);
 
 /*
@@ -42,13 +48,13 @@ int bpvm_fs_fat_montar(const bpvm_sd_pines_t* pines, const char* prefijo,
 void bpvm_fs_fat_desmontar(void);
 
 /*
- * Mira el pin de detección y monta o desmonta si ha cambiado. Barata: si no hay
- * cambio son dos escrituras a registro y una lectura.
+ * Pregunta al dispositivo si hay medio y monta o desmonta si ha cambiado.
+ * Barata: en SPI, si no hay cambio son dos escrituras a registro y una lectura.
  *
  * Devuelve 1 si HA HABIDO cambio (para que el llamante pueda contarlo), 0 si
  * todo sigue igual.
  */
-int bpvm_fs_fat_vigilar(const bpvm_sd_pines_t* pines, const char* prefijo,
+int bpvm_fs_fat_vigilar(const bpvm_blk_backend_t* blk, const char* prefijo,
                         char* motivo, unsigned motivo_cap);
 
 /* Para el diagnóstico: dónde empezó la partición y si hay algo montado. */

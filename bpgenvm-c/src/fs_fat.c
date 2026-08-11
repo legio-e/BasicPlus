@@ -1,19 +1,25 @@
 /*
- * fs_fat.c — V5/H2: la tarjeta SD como sistema de ficheros de la VM.
+ * fs_fat.c — V5/H2: una tarjeta como sistema de ficheros de la VM.
  *
  * Une tres cosas que ya existían y no se conocían: **FatFs** (motor
- * vendorizado), **bpvm_sd** (el diálogo con la tarjeta, H1) y la **fachada
+ * vendorizado), un **dispositivo de bloque** (`bpvm_blk.h`) y la **fachada
  * `bpvm_fs`** (lo que la VM y el wire saben usar).
  *
- * ─── ES PORTABLE, Y ESO NO ESTABA PLANEADO ───
+ * ─── V5/H6: AQUÍ DEBAJO YA NO HAY UNA SD, HAY UN DISPOSITIVO DE BLOQUE ───
  *
- * La cintura de disco de FatFs quiere "dame el bloque N". Y `bpvm_sd_leer_bloque`
- * ya es portable, porque va sobre las fachadas `bpvm_spi_*`/`bpvm_gpio_*`. Así
- * que este fichero tampoco lleva un solo #ifdef de familia: lo único que cambia
- * entre placas son los números de pin, y ésos vienen del ENV.
+ * Hasta H2 este fichero llamaba a `bpvm_sd_leer_bloque` directamente y guardaba
+ * los pines de SPI en sus propios estáticos. Funcionaba porque sólo había una
+ * forma de hablar con una tarjeta. El P4 la parte en dos: su zócalo es SDIO y
+ * el protocolo lo habla el SDK del fabricante, no nosotros (el porqué, en la
+ * cabecera de `bpvm_blk.h`).
  *
- * Pero SE DA DE ALTA SÓLO EN EL BUILD DE LA PICO. Criterio de Eduardo: a fondo
- * en una placa, y las demás en bloque cuando la cadena esté probada.
+ * Así que ahora la cintura de disco de FatFs pide sus bloques a un backend, y
+ * este fichero **no sabe qué es un pin**. Lo de arriba —FatFs, la fachada, los
+ * verbos del wire— sirve igual con SPI debajo que con SDMMC.
+ *
+ * Sigue sin llevar un solo #ifdef de familia. Pero SE DA DE ALTA SÓLO EN EL
+ * BUILD DE LA PICO. Criterio de Eduardo: a fondo en una placa, y las demás en
+ * bloque cuando la cadena esté probada.
  *
  * ─── EL DESPLAZAMIENTO DE LA PARTICIÓN LO SUMAMOS AQUÍ ───
  *
@@ -43,7 +49,7 @@
  */
 #include "bpvm_fs_fat.h"   /* el propio: así el compilador CONTRASTA los dos */
 #include "bpvm_fs.h"
-#include "bpvm_sd.h"
+#include "bpvm_blk.h"
 #include "bpvm_rtc.h"
 #include "bpvm_platform.h"
 #include "ff.h"
@@ -51,10 +57,13 @@
 
 #include <string.h>
 
-/* ── Estado. Uno solo: una tarjeta, un volumen. ──────────────────────────── */
+/* ── Estado. Uno solo: un medio, un volumen. ─────────────────────────────── */
 static FATFS            s_fatfs;
-static bpvm_sd_pines_t  s_pines;
-static bpvm_sd_info_t   s_info;
+/* V5/H6 — el dispositivo, no sus pines. Antes aquí vivían un `bpvm_sd_pines_t`
+ * y un `bpvm_sd_info_t`: este fichero sabía lo que es una tarjeta SD y lo que
+ * es un pin de SPI, y las dos cosas sobraban. Ahora ese estado está donde lo
+ * entiende alguien (`bpvm_sd_blk.c`), y aquí sólo queda a quién preguntar. */
+static const bpvm_blk_backend_t* s_blk = NULL;
 static uint32_t         s_lba0      = 0;   /* primer bloque de la partición   */
 static int              s_montado   = 0;
 /* V5/H2 — ¿ya se ha intentado montar ESTA inserción? Evita que un montaje que
@@ -74,10 +83,10 @@ static void destrabar(void){ if (s_lock_listo) bpvm_platform_mutex_unlock(&s_loc
 
 DSTATUS disk_status(BYTE pdrv) {
     if (pdrv != 0) return STA_NOINIT;
-    if (!s_montado) return STA_NOINIT;
+    if (!s_montado || !s_blk) return STA_NOINIT;
     /* Si la placa tiene detector y dice que no hay tarjeta, decirlo: mejor un
      * "no hay disco" honesto que veinte comandos al vacío. */
-    if (!bpvm_sd_hay_tarjeta(&s_pines)) return STA_NODISK;
+    if (!s_blk->hay_medio()) return STA_NODISK;
     return 0;
 }
 
@@ -87,40 +96,46 @@ DSTATUS disk_initialize(BYTE pdrv) {
     return disk_status(pdrv);
 }
 
+/* El `count` se pasa ENTERO al dispositivo, en vez de trocearlo en un bucle de
+ * bloques sueltos como se hacía antes. Con SPI da exactamente lo mismo —la
+ * implementación hace el bucle por dentro—, pero en SDMMC la lectura múltiple
+ * (CMD18/CMD25) es donde está la ganancia, y trocear aquí la habría hecho
+ * imposible sin volver a tocar este fichero. */
 DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count) {
-    if (pdrv != 0 || !s_montado) return RES_NOTRDY;
-    for (UINT i = 0; i < count; i++) {
-        /* AQUÍ se suma el desplazamiento de la partición (ver cabecera). */
-        if (bpvm_sd_leer_bloque(&s_pines, &s_info, s_lba0 + (uint32_t) sector + i,
-                                buff + i * 512u) != BPVM_SD_OK)
-            return RES_ERROR;
-    }
+    if (pdrv != 0 || !s_montado || !s_blk) return RES_NOTRDY;
+    /* AQUÍ se suma el desplazamiento de la partición (ver cabecera). */
+    if (s_blk->leer(s_lba0 + (uint32_t) sector, (uint32_t) count, buff) != 0)
+        return RES_ERROR;
     return RES_OK;
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count) {
-    if (pdrv != 0 || !s_montado) return RES_NOTRDY;
-    for (UINT i = 0; i < count; i++) {
-        if (bpvm_sd_escribir_bloque(&s_pines, &s_info, s_lba0 + (uint32_t) sector + i,
-                                    buff + i * 512u) != BPVM_SD_OK)
-            return RES_ERROR;
-    }
+    if (pdrv != 0 || !s_montado || !s_blk) return RES_NOTRDY;
+    if (s_blk->escribir(s_lba0 + (uint32_t) sector, (uint32_t) count, buff) != 0)
+        return RES_ERROR;
     return RES_OK;
 }
 
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff) {
-    if (pdrv != 0 || !s_montado) return RES_NOTRDY;
+    if (pdrv != 0 || !s_montado || !s_blk) return RES_NOTRDY;
     switch (cmd) {
-    case CTRL_SYNC:          return RES_OK;   /* CMD24 ya espera a que grabe */
-    case GET_SECTOR_SIZE:    *(WORD*)  buff = 512;  return RES_OK;
-    case GET_BLOCK_SIZE:     *(DWORD*) buff = 1;    return RES_OK;
-    case GET_SECTOR_COUNT:
-        /* Los de la PARTICIÓN, no los de la tarjeta: FatFs cree que el disco
+    case CTRL_SYNC:
+        /* Si el dispositivo no tiene nada en el aire no ofrece `sincronizar`, y
+         * entonces esto es un OK de verdad y no un OK por no saber qué hacer —
+         * es el caso de SPI, donde la escritura ya espera a que la tarjeta
+         * termine de grabar. */
+        if (s_blk->sincronizar && s_blk->sincronizar() != 0) return RES_ERROR;
+        return RES_OK;
+    case GET_SECTOR_SIZE:    *(WORD*)  buff = BPVM_BLK_TAM;  return RES_OK;
+    case GET_BLOCK_SIZE:     *(DWORD*) buff = 1;             return RES_OK;
+    case GET_SECTOR_COUNT: {
+        /* Los de la PARTICIÓN, no los del medio: FatFs cree que el disco
          * empieza donde empieza el FS, y creerse la capacidad entera le dejaría
          * direccionar más allá del final. */
-        *(LBA_t*) buff = (LBA_t) (s_info.bloques > s_lba0
-                                  ? s_info.bloques - s_lba0 : 0);
+        uint32_t total = s_blk->bloques();
+        *(LBA_t*) buff = (LBA_t) (total > s_lba0 ? total - s_lba0 : 0);
         return RES_OK;
+    }
     default: return RES_PARERR;
     }
 }
@@ -412,54 +427,45 @@ static void di_motivo(char* motivo, unsigned cap, const char* texto) {
     motivo[i] = '\0';
 }
 
-int bpvm_fs_fat_montar(const bpvm_sd_pines_t* pines, const char* prefijo,
+int bpvm_fs_fat_montar(const bpvm_blk_backend_t* blk, const char* prefijo,
                        char* motivo, unsigned motivo_cap)
 {
     if (motivo && motivo_cap) motivo[0] = '\0';
-    if (!pines) return -1;
+    if (!blk || !blk->init || !blk->leer || !blk->bloques) return -1;
     /* Sea quien sea el que llame —el arranque, `sd mount` o la vigilancia—,
      * esto cuenta como el intento de ESTA inserción: si sale mal, el vigilante
      * no lo repite hasta que la tarjeta salga y vuelva a entrar. */
     s_intentada = 1;
-    s_pines = *pines;
+    s_blk = blk;
     if (prefijo && prefijo[0] == '/' && strlen(prefijo) < sizeof s_prefijo) {
         memcpy(s_prefijo, prefijo, strlen(prefijo) + 1);
     }
 
-    /* 1 — la tarjeta. Si esto falla, el peldaño ya dice dónde (H1). */
-    bpvm_sd_res_t sr = bpvm_sd_init(&s_pines, 25000000, &s_info);
-    if (sr != BPVM_SD_OK) { di_motivo(motivo, motivo_cap, bpvm_sd_res_str(sr)); return -1; }
+    /* 1 — el medio. Si esto falla, su `motivo()` ya dice dónde se paró. */
+    if (s_blk->init() != 0) {
+        di_motivo(motivo, motivo_cap,
+                  s_blk->motivo ? s_blk->motivo() : "el dispositivo no arranca");
+        return -1;
+    }
 
     /* 2 — ¿dónde empieza el sistema de ficheros? Una SD trae MBR y el FS NO
      *     está en el bloque 0. Se lee la tabla y se coge la primera partición.
      *     Si NO hubiera MBR (tarjeta "superfloppy", sin particionar), el FS
-     *     empieza en el 0 y el desplazamiento es cero — los dos casos valen. */
+     *     empieza en el 0 y el desplazamiento es cero — los dos casos valen.
+     *
+     *     La decodificación está en `bpvm_blk_lba0_de_mbr`, fuera de aquí y
+     *     pura: es el sitio con casos raros y ahora se prueba en el PC
+     *     (`make test-blk`) en vez de sólo con una tarjeta en la mano. */
     /* ESTÁTICO, no de pila: esto lo llama la comm task, y medio kilo de buffer
      * en su pila no cabe (el mismo motivo por el que handle_sd_info lo hace
      * así). Un desbordamiento de pila aquí no se ve: se manifiesta más tarde y
      * en otro sitio. */
-    static uint8_t sec0[512];
-    if (bpvm_sd_leer_bloque(&s_pines, &s_info, 0, sec0) != BPVM_SD_OK) {
+    static uint8_t sec0[BPVM_BLK_TAM];
+    if (s_blk->leer(0, 1, sec0) != 0) {
         di_motivo(motivo, motivo_cap, "no se puede leer el sector 0");
         return -1;
     }
-    s_lba0 = 0;
-    if (sec0[510] == 0x55 && sec0[511] == 0xAA) {
-        int ascii = 1;
-        for (int i = 0; i < 8; i++) {
-            uint8_t c = sec0[3 + i];
-            if (c < 32 || c >= 127) { ascii = 0; break; }
-        }
-        if (!ascii) {                       /* es un MBR, no un sector de FS */
-            for (int i = 0; i < 4; i++) {
-                const uint8_t* e = sec0 + 446 + i * 16;
-                if (e[4] == 0) continue;
-                s_lba0 = (uint32_t) e[8] | ((uint32_t) e[9] << 8)
-                       | ((uint32_t) e[10] << 16) | ((uint32_t) e[11] << 24);
-                break;
-            }
-        }
-    }
+    s_lba0 = bpvm_blk_lba0_de_mbr(sec0);
 
     /* 3 — el lock ANTES de tocar FatFs: `f_mount` ya es una operación. */
     if (!s_lock_listo) {
@@ -503,13 +509,13 @@ void bpvm_fs_fat_desmontar(void) {
      * /sd existe y falla, que es exactamente lo que es una tarjeta sacada. */
 }
 
-int bpvm_fs_fat_vigilar(const bpvm_sd_pines_t* pines, const char* prefijo,
+int bpvm_fs_fat_vigilar(const bpvm_blk_backend_t* blk, const char* prefijo,
                         char* motivo, unsigned motivo_cap)
 {
     if (motivo && motivo_cap) motivo[0] = '\0';
-    if (!pines) return 0;
+    if (!blk || !blk->hay_medio) return 0;
 
-    int hay = bpvm_sd_hay_tarjeta(pines);
+    int hay = blk->hay_medio();
 
     if (!hay) {
         /* Fuera. Si estaba montada, soltarla; y en cualquier caso rearmar el
@@ -532,7 +538,7 @@ int bpvm_fs_fat_vigilar(const bpvm_sd_pines_t* pines, const char* prefijo,
      * cuando el zócalo se queda vacío. */
     if (s_intentada) return 0;
     s_intentada = 1;
-    if (bpvm_fs_fat_montar(pines, prefijo, motivo, motivo_cap) == 0) {
+    if (bpvm_fs_fat_montar(blk, prefijo, motivo, motivo_cap) == 0) {
         di_motivo(motivo, motivo_cap, "tarjeta METIDA — /sd montado");
     }
     return 1;

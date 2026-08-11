@@ -52,6 +52,7 @@
 /* Buffer VM compartido (declarado en main.c). */
 #include "bpvm_sqlmem.h"   /* V5/H: motivo + minimo, para el aviso del INFO */
 #include "bpvm_sd.h"       /* V5/H1: SD_INFO — la tarjeta se prueba desde aqui */
+#include "bpvm_sd_blk.h"   /* V5/H6: la misma SD como dispositivo de bloque    */
 #include "bpvm_fs_fat.h"   /* V5/H2: SD_MOUNT — la tarjeta como sistema de ficheros */
 
 extern uint8_t* s_vm_buffer;          /* H7.2.b: SRAM interna o ventana PSRAM */
@@ -688,7 +689,7 @@ static void sd_vigilar_tick(void) {
     s_proxima = ahora + SD_VIGILA_CADA_MS;
 
     char motivo[80];
-    if (bpvm_fs_fat_vigilar(&s_sd_pines, "/sd", motivo, sizeof motivo)) {
+    if (bpvm_fs_fat_vigilar(bpvm_sd_blk(&s_sd_pines), "/sd", motivo, sizeof motivo)) {
         /* Sólo se escribe cuando CAMBIA algo: un log que repite "sigue igual"
          * dos veces por segundo es un log que nadie lee. */
         log_printf("sd: %s", motivo[0] ? motivo : "cambio en el zocalo");
@@ -818,7 +819,7 @@ static void handle_sd_mount(long id, const json_obj_t* obj) {
     }
 
     static char motivo[80];
-    int r = bpvm_fs_fat_montar(&s_sd_pines, "/sd", motivo, sizeof motivo);
+    int r = bpvm_fs_fat_montar(bpvm_sd_blk(&s_sd_pines), "/sd", motivo, sizeof motivo);
     log_printf("sd: montar -> %s%s%s", r == 0 ? "OK" : "FALLO",
                r == 0 ? "" : " — ", r == 0 ? "" : motivo);
 
