@@ -71,6 +71,40 @@ public final class BpBuild {
      *  un pack EJECUTABLE (el `main` va al manifest). */
     public String out = "normal";
 
+    /** V5/H5 — base de datos del proyecto, para el ORM. Path ABSOLUTO ya
+     *  resuelto, o null si el proyecto no declara ninguna.
+     *
+     *  ⚠️ Es la base **del PC**, no la del dispositivo, y **NO se copia al
+     *  micro**. Decisión de Eduardo, y el motivo es que la base no es un
+     *  artefacto: es un DATO. Todo lo demás que sube el IDE —.mod, resources—
+     *  se deriva del proyecto y se puede regenerar; la base acumula lo que no
+     *  existe en ningún otro sitio, así que copiarla en cada Run convertiría
+     *  «ejecutar» en «perder los datos de campo».
+     *
+     *  Sirve para que la herramienta VERIFIQUE las entidades contra el esquema
+     *  real y para generar los DAOs. En ejecución, el programa abre la ruta que
+     *  le dé la gana (`/sd/medidas.db` en la placa) — son dos cosas distintas y
+     *  conviene no confundirlas.
+     *
+     *  📌 Y en la placa, la base va en la SD, no en la flash interna: **las
+     *  bases tienden a crecer** y llenar la flash del micro es cuestión de
+     *  tiempo. La SD se carga desde un lector en el PC o desde el IDE. */
+    public String database;
+
+    /** Lo que el usuario escribió en el .bpbuild, sin resolver. Para que un
+     *  diagnóstico pueda citar su texto y no un absoluto que no reconoce. */
+    public String databaseRaw;
+
+    /** Avisos recogidos al cargar el proyecto. NO son errores: el proyecto se
+     *  carga igual y se puede compilar.
+     *
+     *  Existen porque hay problemas que no deben impedir compilar pero tampoco
+     *  pueden pasar callados — una `database` vacía o que apunta a un fichero
+     *  que no está. Si eso abortara la carga, un clon limpio sin el `.db` no
+     *  podría ni compilar el programa; y si no dijera nada, trabajarías
+     *  creyendo que hay una base detrás. */
+    public final List<String> warnings = new ArrayList<>();
+
     /** El objeto JSON tal cual se parseó (LinkedHashMap → conserva el orden de
      *  claves). save() lo re-serializa tras actualizar los campos editables → se
      *  conservan rutas relativas y campos no modelados; solo se pierden los
@@ -148,6 +182,41 @@ public final class BpBuild {
                 // No exigimos que exista al cargar — el compilador intenta
                 // cada entry al resolver imports y la descarta si no aplica.
                 b.dependencies.add(resolved.toString());
+            }
+        }
+
+        // database: opcional (V5/H5). Relativa al projectDir, o absoluta.
+        //
+        // Ni la cadena vacía ni un fichero que no está ABORTAN la carga: son
+        // AVISOS. Cargar el proyecto no puede fallar por un fichero de DATOS —
+        // un clon limpio sin el `.db` tiene que poder compilar el programa—,
+        // pero tampoco pueden pasar callados, o trabajarías creyendo que hay
+        // una base detrás cuando no la hay. Criterio de Eduardo.
+        //
+        // Lo único que sí es error es que no sea una cadena: eso es el fichero
+        // de proyecto mal escrito, no un dato que falta.
+        Object dbVal = map.get("database");
+        if (dbVal != null) {
+            if (!(dbVal instanceof String))
+                throw new IOException(file + ": 'database' debe ser string");
+            String raw = ((String) dbVal).trim();
+            if (raw.isEmpty()) {
+                b.warnings.add("'database' está vacía; quítala del proyecto si no hay base de datos");
+            } else {
+                b.databaseRaw = raw;
+                Path dbPath = projectDirPath.resolve(raw).toAbsolutePath().normalize();
+                b.database = dbPath.toString();
+                if (!Files.isRegularFile(dbPath)) {
+                    b.warnings.add("'database' apunta a '" + raw + "' y ahí no hay ningún fichero ("
+                            + dbPath + "); las entidades no se podrán contrastar contra el esquema");
+                } else if (b.databaseIsInsideResources()) {
+                    // El agujero que ya existe: `resources/` se copia al micro en
+                    // cada Run (#260), así que una base ahí se machacaría en cada
+                    // ejecución — justo el accidente que evita "la BD no se copia".
+                    b.warnings.add("'database' está dentro de resources/, y esa carpeta se copia al "
+                            + "dispositivo en cada Run: la base se sobreescribiría y perderías los datos. "
+                            + "Sácala de ahí");
+                }
             }
         }
 
@@ -271,6 +340,32 @@ public final class BpBuild {
     }
 
     public List<String> dependencies() { return Collections.unmodifiableList(dependencies); }
+
+    // ---- V5/H5: la base de datos del proyecto ----
+
+    /** ¿El proyecto declara base de datos? */
+    public boolean hasDatabase() { return database != null; }
+
+    /** ¿Y existe el fichero? Falso también si no se declara ninguna. */
+    public boolean databaseExists() {
+        return database != null && Files.isRegularFile(Paths.get(database));
+    }
+
+    /**
+     * ¿La base cae DENTRO de `resources/`? Entonces hay un problema serio, y no
+     * se ve a simple vista: `resources/` se copia al micro en cada Run (#260),
+     * así que una base ahí se machacaría en cada ejecución — exactamente el
+     * accidente que la decisión de «la BD no se copia» quiere evitar.
+     *
+     * El mecanismo para provocarlo YA existe, y `resources/` es el sitio donde
+     * cualquiera dejaría un fichero de datos si no le damos otro. Por eso esto
+     * se comprueba en vez de suponer que nadie lo hará.
+     */
+    public boolean databaseIsInsideResources() {
+        if (database == null || projectDir == null) return false;
+        Path res = Paths.get(projectDir).resolve("resources").toAbsolutePath().normalize();
+        return Paths.get(database).startsWith(res);
+    }
 
     // ============================================================
     // Mini parser JSON — copia de la del VmConfig pero soportando arrays

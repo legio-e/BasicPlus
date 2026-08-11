@@ -274,6 +274,10 @@ public final class Main {
         if (projectFile != null) {
             try {
                 BpBuild proj = BpBuild.load(Paths.get(projectFile));
+                // V5/H5 — avisos del proyecto (p.ej. `database` que no está).
+                // No impiden compilar, pero no pueden pasar callados.
+                for (String w : proj.warnings)
+                    System.out.println("aviso proyecto: " + w);
                 // H3: el build de proyecto (compila + out:pack) vive en buildProject,
                 // reutilizado por el IDE → un solo camino de build.
                 System.exit(buildProject(proj, backend, pruneBpi) ? 0 : 2);
