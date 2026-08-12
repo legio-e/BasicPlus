@@ -1086,8 +1086,16 @@ public class FrmMain extends javax.swing.JFrame
                     : proj.aotTargets;
             log.accept("== AOT del pack: " + familias.size() + " familia(s) "
                     + familias + " ==\n");
+            /* Si el proyecto dice sus `sources`, se compilan ÉSOS. Barrer
+             * `sourceDir` cuando resulta ser la stdlib entera lanzaría el
+             * emisor por cada .bp que hubiera dentro. */
+            java.util.List<java.nio.file.Path> soloEstos = null;
+            if (!proj.sources.isEmpty()) {
+                soloEstos = new java.util.ArrayList<>();
+                for (String s : proj.sources) soloEstos.add(java.nio.file.Paths.get(s));
+            }
             AotBuild.Result r = AotBuild.buildPackTargets(
-                    java.nio.file.Paths.get(proj.sourceDir),
+                    java.nio.file.Paths.get(proj.sourceDir), soloEstos,
                     java.nio.file.Paths.get(proj.outDir),
                     java.nio.file.Paths.get(proj.projectDir),
                     familias, IdePrefs.load(), msg -> log.accept(msg + "\n"));

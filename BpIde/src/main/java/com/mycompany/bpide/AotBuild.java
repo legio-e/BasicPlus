@@ -122,7 +122,7 @@ public final class AotBuild {
      */
     public static Result buildProject(Path sourceDir, Path outDir, Path projectDir,
                                       String target, IdePrefs prefs, Consumer<String> log) {
-        return build(sourceDir, null, outDir, projectDir,
+        return build(sourceDir, (List<Path>) null, outDir, projectDir,
                      java.util.Collections.singletonList(target), false, prefs, log);
     }
 
@@ -142,7 +142,22 @@ public final class AotBuild {
     public static Result buildPackTargets(Path sourceDir, Path outDir, Path projectDir,
                                           List<String> targets, IdePrefs prefs,
                                           Consumer<String> log) {
-        return build(sourceDir, null, outDir, projectDir, targets, true, prefs, log);
+        return buildPackTargets(sourceDir, null, outDir, projectDir, targets, prefs, log);
+    }
+
+    /**
+     * V5/H8 — igual, pero con los `.bp` DICHOS uno a uno (`sources` del
+     * proyecto). Si `soloEstos` es null se barre `sourceDir` como siempre.
+     *
+     * <p>No es sólo comodidad: barrer una carpeta que resulta ser la stdlib
+     * entera lanza el emisor por cada `.bp` que hay dentro. Con la lista se
+     * compila lo que se ha pedido y nada más.
+     */
+    public static Result buildPackTargets(Path sourceDir, List<Path> soloEstos,
+                                          Path outDir, Path projectDir,
+                                          List<String> targets, IdePrefs prefs,
+                                          Consumer<String> log) {
+        return build(sourceDir, soloEstos, outDir, projectDir, targets, true, prefs, log);
     }
 
     /**
@@ -154,7 +169,8 @@ public final class AotBuild {
      */
     public static Result buildSingle(Path bpFile, Path outDir, Path workRoot,
                                      String target, IdePrefs prefs, Consumer<String> log) {
-        return build(bpFile.getParent(), bpFile, outDir, workRoot,
+        return build(bpFile.getParent(), java.util.Collections.singletonList(bpFile),
+                     outDir, workRoot,
                      java.util.Collections.singletonList(target), false, prefs, log);
     }
 
@@ -166,8 +182,8 @@ public final class AotBuild {
      *                 false = nombre pelado `<Mod>.mdn`, que es lo que busca el
      *                 dispositivo en su FS al subirlo en un Run.
      */
-    private static Result build(Path sourceDir, Path only, Path outDir, Path projectDir,
-                                List<String> targets, boolean sufijar,
+    private static Result build(Path sourceDir, List<Path> soloEstos, Path outDir,
+                                Path projectDir, List<String> targets, boolean sufijar,
                                 IdePrefs prefs, Consumer<String> log) {
         Result res = new Result();
 
@@ -210,8 +226,8 @@ public final class AotBuild {
         Path work = (projectDir != null ? projectDir : outDir).resolve("target");
         try { Files.createDirectories(work); } catch (IOException ignore) {}
 
-        List<Path> bps = (only != null)
-                ? java.util.Collections.singletonList(only)
+        List<Path> bps = (soloEstos != null && !soloEstos.isEmpty())
+                ? soloEstos
                 : listBpFiles(sourceDir);
         if (bps.isEmpty()) {
             log.accept("[aot] no hay .bp bajo " + sourceDir);

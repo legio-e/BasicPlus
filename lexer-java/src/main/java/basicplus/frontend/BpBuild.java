@@ -58,6 +58,22 @@ public final class BpBuild {
     /** Path absoluto al .bpbuild de origen (informativo). */
     public String sourcePath;
 
+    /**
+     * V5/H8 — los `.bp` que este proyecto COMPILA, uno a uno (rutas absolutas).
+     * Vacía = el de siempre, `sourceDir/main.bp` y su cierre.
+     *
+     * <p>Idea de Eduardo, y da en el clavo: <b>en un pack con `main` se ve solo
+     * qué dependencias hacen falta —cuelgan de la raíz—, pero en una librería
+     * no.</b> Una librería no tiene una raíz: tiene varias, y cuáles publica lo
+     * sabe únicamente quien la escribe. Con esto lo dice.
+     *
+     * <p>De regalo arregla dos cosas que arrastrábamos: los fuentes de una
+     * librería ya no tienen que vivir en la misma carpeta, y la pasada AOT deja
+     * de barrer todo `sourceDir` (con la stdlib entera dentro) para compilar
+     * exactamente lo que se le ha dicho.
+     */
+    public List<String> sources = new ArrayList<>();
+
     /** AOT (H12): si true, al subir al device el IDE compila las funciones
      *  `function native` del proyecto a un `.mdn` nativo y lo sube junto al
      *  `.mod`. Si false (default), todo se interpreta — el .mod es suficiente. */
@@ -208,11 +224,57 @@ public final class BpBuild {
             throw new IOException(file + ": falta 'outDir' (string)");
         b.outDir = projectDirPath.resolve((String) odVal).toAbsolutePath().normalize().toString();
 
-        // main: obligatorio
+        /* sources: opcional, lista de .bp CONCRETOS (V5/H8).
+         *
+         * Idea de Eduardo: «para un pack con un main es sencillo ver qué
+         * dependencias necesita, pero para una librería no es evidente». Y es
+         * cierto — una librería no tiene una raíz de la que colgar el cierre;
+         * tiene VARIAS, y sólo su autor sabe cuáles publica.
+         *
+         * Con esto el proyecto las nombra, y de paso se arregla algo que
+         * arrastrábamos: los fuentes de una librería no tienen por qué vivir
+         * todos en la misma carpeta. `sourceDir` sigue siendo dónde BUSCAR los
+         * imports por nombre; `sources` dice qué se COMPILA. */
+        Object srcsVal = map.get("sources");
+        if (srcsVal != null) {
+            if (!(srcsVal instanceof List))
+                throw new IOException(file + ": 'sources' debe ser un array de rutas .bp");
+            for (Object e : (List<?>) srcsVal) {
+                if (!(e instanceof String) || ((String) e).isEmpty())
+                    throw new IOException(file + ": 'sources' sólo admite rutas (strings)");
+                Path p = projectDirPath.resolve((String) e).toAbsolutePath().normalize();
+                if (!((String) e).endsWith(".bp"))
+                    throw new IOException(file + ": 'sources' son ficheros .bp; '" + e
+                        + "' no lo es. (Las CARPETAS donde buscar imports son"
+                        + " 'sourceDir' y 'dependencies'.)");
+                /* Que falte se dice AQUÍ. Si no, el build compila lo que sí
+                 * está, el pack sale sin ese módulo y el fallo aparece en la
+                 * placa como un import que no resuelve. */
+                if (!Files.isRegularFile(p))
+                    throw new IOException(file + ": 'sources' apunta a '" + e
+                        + "' y ahí no hay ningún fichero (" + p + ")");
+                if (!b.sources.contains(p.toString())) b.sources.add(p.toString());
+            }
+            if (b.sources.isEmpty())
+                throw new IOException(file + ": 'sources' está vacía. Quítala (y se"
+                    + " usará 'main') o di qué módulos publica esta librería.");
+        }
+
+        /* main: obligatorio SALVO que haya `sources` — una librería no tiene por
+         * qué llevar main (criterio de Eduardo), y con `sources` ya sabemos qué
+         * compilar. Sigue admitiéndose junto a `sources`: entonces nombra la
+         * entrada del pack ejecutable. */
         Object mainVal = map.get("main");
-        if (!(mainVal instanceof String) || ((String) mainVal).isEmpty())
-            throw new IOException(file + ": falta 'main' (nombre del módulo principal)");
-        b.main = (String) mainVal;
+        if (!(mainVal instanceof String) || ((String) mainVal).isEmpty()) {
+            if (b.sources.isEmpty())
+                throw new IOException(file + ": falta 'main' (nombre del módulo"
+                    + " principal). Si es una librería sin main, di qué compilar"
+                    + " con 'sources': [\"a/X.bp\", \"b/Y.bp\"].");
+            /* Sin main, el pack se llama como el proyecto. */
+            b.main = nombreSinExtension(file);
+        } else {
+            b.main = (String) mainVal;
+        }
 
         // dependencies: opcional, lista de strings
         Object depsVal = map.get("dependencies");
@@ -451,6 +513,13 @@ public final class BpBuild {
                 + ", dependencies=" + dependencies
                 + (sourcePath == null ? "" : ", source=" + sourcePath)
                 + "}";
+    }
+
+    /** `SQLite.bpbuild` → `SQLite`. El nombre del pack cuando no hay `main`. */
+    private static String nombreSinExtension(Path file) {
+        String n = file.getFileName().toString();
+        int p = n.lastIndexOf('.');
+        return (p > 0) ? n.substring(0, p) : n;
     }
 
     /**

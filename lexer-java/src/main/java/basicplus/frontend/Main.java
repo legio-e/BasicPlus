@@ -250,11 +250,25 @@ public final class Main {
         for (String w : ver.avisos) System.out.println("aviso BD: " + w);
         if (ver.resumen != null)    System.out.println("BD: " + ver.resumen);
 
-        Path mainBp = Paths.get(proj.sourceDir, proj.main + ".bp")
-                .toAbsolutePath().normalize();
-        if (!Files.exists(mainBp)) {
-            System.err.println("no se encuentra el fichero del main: " + mainBp);
-            return false;
+        /* QUÉ SE COMPILA (V5/H8). Con `sources` lo dice el proyecto, uno a uno;
+         * sin ella, el de siempre: `sourceDir/main.bp`.
+         *
+         * Una librería no tiene UNA raíz de la que cuelgue todo — tiene varias,
+         * y cuáles publica lo sabe sólo quien la escribe (idea de Eduardo). */
+        List<Path> raices = new ArrayList<>();
+        if (!proj.sources.isEmpty()) {
+            for (String s : proj.sources) raices.add(Paths.get(s));
+            System.out.println("sources: " + raices.size() + " modulo(s) — "
+                    + proj.sources.stream().map(s -> Paths.get(s).getFileName().toString())
+                        .collect(java.util.stream.Collectors.joining(", ")));
+        } else {
+            Path mainBp = Paths.get(proj.sourceDir, proj.main + ".bp")
+                    .toAbsolutePath().normalize();
+            if (!Files.exists(mainBp)) {
+                System.err.println("no se encuentra el fichero del main: " + mainBp);
+                return false;
+            }
+            raices.add(mainBp);
         }
         Ctx ctx = new Ctx();
         ctx.backend    = backend;
@@ -265,7 +279,15 @@ public final class Main {
         Files.createDirectories(ctx.outDir);
         for (String d : proj.dependencies) ctx.dependencyPaths.add(Paths.get(d));
         ctx.pruneBpi = pruneBpi;
-        boolean ok = compileFull(mainBp, ctx, /*depth*/0);
+        boolean ok = true;
+        for (Path raiz : raices) {
+            /* `raizTieneMain` se pone a depth 0 en cada raíz. Con varias, lo que
+             * decide si el pack es ejecutable es si ALGUNA la tiene — y en la
+             * práctica sólo puede tenerla la que nombra `main`. */
+            boolean teniaMain = ctx.raizTieneMain;
+            if (!compileFull(raiz, ctx, /*depth*/0)) ok = false;
+            ctx.raizTieneMain = teniaMain || ctx.raizTieneMain;
+        }
         boolean success = ok && ctx.totalErrors == 0;
         if (success && ctx.pruneBpi) pruneWrittenBpi(ctx);
         // H3 Packs: tras el build correcto, si out:pack empaqueta el proyecto
