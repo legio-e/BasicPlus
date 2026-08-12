@@ -77,6 +77,26 @@ public final class AotBuild {
         "-Wl,-Ttext=0", "-Wl,-e,0",
     };
 
+    /**
+     * UNA FAMILIA: su toolchain y sus flags. Lo demás —el nombre canónico y el
+     * sufijo de la doble extensión— sale del catálogo de
+     * {@link basicplus.frontend.NpackReloc#DESTINOS}, que es donde se da de
+     * alta una familia nueva. Aquí sólo vive lo que es propio del PC: qué gcc
+     * y con qué banderas.
+     */
+    private static final class Familia {
+        final basicplus.frontend.NpackReloc.Destino destino;
+        final String   gcc;
+        final String[] cflags;
+        final boolean  enlazar;      /* RISC-V necesita el paso extra de enlace */
+        Familia(basicplus.frontend.NpackReloc.Destino d, String gcc,
+                String[] cflags, boolean enlazar) {
+            this.destino = d; this.gcc = gcc; this.cflags = cflags; this.enlazar = enlazar;
+        }
+        String target() { return destino.targetAot; }
+        String sufijo() { return destino.sufijo; }
+    }
+
     /** Resultado global de un pase AOT sobre el proyecto. */
     public static final class Result {
         /** `.mdn` generados (alongside de sus `.mod` en outDir). */
@@ -102,7 +122,27 @@ public final class AotBuild {
      */
     public static Result buildProject(Path sourceDir, Path outDir, Path projectDir,
                                       String target, IdePrefs prefs, Consumer<String> log) {
-        return build(sourceDir, null, outDir, projectDir, target, prefs, log);
+        return build(sourceDir, null, outDir, projectDir,
+                     java.util.Collections.singletonList(target), false, prefs, log);
+    }
+
+    /**
+     * V5/H8 — el proyecto declara VARIAS familias (`aot.targets`) y sale un
+     * `.mdn` por cada una, con su doble extensión: `SQLite.mdn.RISCV`.
+     *
+     * <p><b>Un build, un `.bp`, un `.mod`, un C.</b> Lo único que se repite es
+     * compilar ese C intermedio con cada toolchain — el `.c` se emite UNA vez y
+     * lo comparten todas. No es un ahorro de tiempo: es que así los `.mdn` del
+     * pack no pueden divergir entre sí ni del bytecode que llevan al lado.
+     *
+     * <p>El sufijo es sólo para el PC. Al grabar, {@code PackBurn} se queda con
+     * el de la placa, le quita el sufijo y poda los demás — el micro encuentra
+     * `SQLite.mdn` de siempre y no se entera de que hubo hermanas.
+     */
+    public static Result buildPackTargets(Path sourceDir, Path outDir, Path projectDir,
+                                          List<String> targets, IdePrefs prefs,
+                                          Consumer<String> log) {
+        return build(sourceDir, null, outDir, projectDir, targets, true, prefs, log);
     }
 
     /**
@@ -114,25 +154,46 @@ public final class AotBuild {
      */
     public static Result buildSingle(Path bpFile, Path outDir, Path workRoot,
                                      String target, IdePrefs prefs, Consumer<String> log) {
-        return build(bpFile.getParent(), bpFile, outDir, workRoot, target, prefs, log);
+        return build(bpFile.getParent(), bpFile, outDir, workRoot,
+                     java.util.Collections.singletonList(target), false, prefs, log);
     }
 
-    /** Núcleo común: si `only` != null se compila SOLO ese fichero. */
+    /**
+     * Núcleo común: si `only` != null se compila SOLO ese fichero.
+     *
+     * @param targets  las familias para las que compilar (una o varias).
+     * @param sufijar  true = el `.mdn` sale con su doble extensión (pack);
+     *                 false = nombre pelado `<Mod>.mdn`, que es lo que busca el
+     *                 dispositivo en su FS al subirlo en un Run.
+     */
     private static Result build(Path sourceDir, Path only, Path outDir, Path projectDir,
-                                String target, IdePrefs prefs, Consumer<String> log) {
+                                List<String> targets, boolean sufijar,
+                                IdePrefs prefs, Consumer<String> log) {
         Result res = new Result();
 
-        boolean riscv = "riscv".equalsIgnoreCase(target);
-        if (target != null && !target.equalsIgnoreCase("arm") && !riscv) {
-            String w = "AOT target '" + target + "' no soportado (arm = Cortex-M33 "
-                + "RP2350/STM32 · riscv = ESP32-P4). Los módulos se ejecutarán interpretados.";
-            res.warnings.add(w);
-            log.accept("[aot] " + w);
+        List<Familia> familias = new ArrayList<>();
+        for (String target : targets) {
+            basicplus.frontend.NpackReloc.Destino d =
+                    basicplus.frontend.NpackReloc.porTargetAot(target);
+            if (d == null) {
+                String w = "AOT target '" + target + "' no soportado (hay: "
+                    + basicplus.frontend.NpackReloc.targetsConocidos()
+                    + "). Los módulos se ejecutarán interpretados.";
+                res.warnings.add(w);
+                log.accept("[aot] " + w);
+                return res;
+            }
+            boolean riscv = d == basicplus.frontend.NpackReloc.RISCV32_ESP_P4;
+            familias.add(new Familia(d,
+                    riscv ? resolveRiscvGcc(prefs) : resolveGcc(prefs),
+                    riscv ? RISCV_P4_FLAGS : ARM_M33_FLAGS,
+                    /*enlazar*/ riscv));
+        }
+        if (familias.isEmpty()) {
+            log.accept("[aot] no se ha dicho para qué familia compilar");
             return res;
         }
 
-        String   gcc    = riscv ? resolveRiscvGcc(prefs) : resolveGcc(prefs);
-        String[] cflags = riscv ? RISCV_P4_FLAGS : ARM_M33_FLAGS;
         String bpgenvm = resolveBpgenvm(prefs, outDir);
         if (bpgenvm == null) {
             res.toolchainMissing = true;
@@ -159,8 +220,8 @@ public final class AotBuild {
 
         for (Path bp : bps) {
             try {
-                Path mdn = buildOne(bp, outDir, work, gcc, cflags, riscv, bpgenvm, res, log);
-                if (mdn != null) res.mdnFiles.add(mdn);
+                res.mdnFiles.addAll(
+                        buildOne(bp, outDir, work, familias, sufijar, bpgenvm, res, log));
             } catch (ToolchainMissing tm) {
                 // gcc no se pudo ni lanzar — no tiene sentido reintentar el resto.
                 res.toolchainMissing = true;
@@ -182,13 +243,22 @@ public final class AotBuild {
         ToolchainMissing(String m) { super(m); }
     }
 
-    /** AOT de un único .bp. Devuelve el `.mdn` generado, o null si el módulo no
-     *  tiene funciones `native` (lo normal para la mayoría de módulos). */
-    private static Path buildOne(Path bp, Path outDir, Path work, String gcc,
-                                 String[] cflags, boolean link,
-                                 String bpgenvm, Result res, Consumer<String> log)
+    /**
+     * AOT de un único .bp. Devuelve los `.mdn` generados —uno por familia—, o la
+     * lista vacía si el módulo no tiene funciones `native` (lo normal en la
+     * mayoría de módulos).
+     *
+     * <p><b>El `.c` se emite UNA sola vez</b> y lo comparten todas las familias:
+     * el código intermedio no depende de la ISA, sólo su compilación. Emitirlo
+     * por familia no sería una ineficiencia sino un riesgo — dos pasadas del
+     * emisor son dos oportunidades de divergir, y el resultado serían `.mdn`
+     * hermanos que no lo son.
+     */
+    private static List<Path> buildOne(Path bp, Path outDir, Path work,
+                                       List<Familia> familias, boolean sufijar,
+                                       String bpgenvm, Result res, Consumer<String> log)
             throws Exception {
-        // 1) Emitir aot_<Mod>.c (modo --mdn). cFile==null → sin native.
+        // 1) UNA VEZ: emitir aot_<Mod>.c (modo --mdn). cFile==null → sin native.
         AotMain.AotResult ar;
         try {
             ar = AotMain.emitAotC(bp, work, /*mdnMode=*/true);
@@ -197,46 +267,58 @@ public final class AotBuild {
                 + " (se ejecutará interpretado)";
             res.warnings.add(w);
             log.accept("[aot] " + w);
-            return null;
+            return java.util.Collections.emptyList();
         }
         for (String w : ar.warnings) log.accept("[aot] aviso " + ar.moduleName + ": " + w);
-        if (ar.cFile == null) return null;   // sin funciones native — nada que compilar
+        if (ar.cFile == null)                // sin funciones native — nada que compilar
+            return java.util.Collections.emptyList();
 
-        String mod   = ar.moduleName;
-        Path oFile   = work.resolve("aot_" + mod + ".o");
-        Path mdnFile = outDir.resolve(mod + ".mdn");
+        String mod = ar.moduleName;
+        List<Path> salidas = new ArrayList<>();
 
-        // 2) gcc → .o (ARM: PIC Thumb-2 · RISC-V: -fno-pic, se resuelve al enlazar).
-        List<String> cmd = new ArrayList<>();
-        cmd.add(gcc);
-        cmd.addAll(Arrays.asList(cflags));
-        cmd.add("-I" + Paths.get(bpgenvm, "include"));
-        cmd.add("-I" + Paths.get(bpgenvm, "src"));
-        cmd.add("-c"); cmd.add(ar.cFile.toString());
-        cmd.add("-o"); cmd.add(oFile.toString());
-        runGcc(cmd, mod, log);
+        // 2) POR FAMILIA: compilar ese mismo .c con su toolchain.
+        for (Familia f : familias) {
+            /* Los intermedios llevan la familia en el nombre SIEMPRE. Con una
+             * sola da igual; con dos, el segundo gcc pisaría el .o del primero y
+             * el .mdn saldría con el código de la otra ISA — un fallo que no
+             * daría error aquí, sino un cuelgue en la placa. */
+            Path oFile   = work.resolve("aot_" + mod + "." + f.target() + ".o");
+            Path mdnFile = outDir.resolve(sufijar ? mod + ".mdn." + f.sufijo()
+                                                  : mod + ".mdn");
 
-        // 2b) RISC-V: paso EXTRA de enlace. El .text RISC-V (a diferencia de ARM) NO
-        // sale autocontenido — lleva relocalizaciones internas PC-relativas (la
-        // recursión, etc.) que MdnPack no resuelve. Enlazamos a -Ttext=0 para
-        // resolverlas dejando el código position-independent. Empaquetamos el .elf.
-        Path packInput = oFile;
-        if (link) {
-            Path elf = work.resolve("aot_" + mod + ".elf");
-            List<String> lk = new ArrayList<>();
-            lk.add(gcc);
-            lk.addAll(Arrays.asList(RISCV_LINK_FLAGS));
-            lk.add(oFile.toString());
-            lk.add("-o"); lk.add(elf.toString());
-            runGcc(lk, mod, log);
-            packInput = elf;
+            // 2a) gcc → .o (ARM: PIC Thumb-2 · RISC-V: -fno-pic, resuelto al enlazar).
+            List<String> cmd = new ArrayList<>();
+            cmd.add(f.gcc);
+            cmd.addAll(Arrays.asList(f.cflags));
+            cmd.add("-I" + Paths.get(bpgenvm, "include"));
+            cmd.add("-I" + Paths.get(bpgenvm, "src"));
+            cmd.add("-c"); cmd.add(ar.cFile.toString());
+            cmd.add("-o"); cmd.add(oFile.toString());
+            runGcc(cmd, mod, log);
+
+            // 2b) RISC-V: paso EXTRA de enlace. El .text RISC-V (a diferencia de ARM)
+            // NO sale autocontenido — lleva relocalizaciones internas PC-relativas (la
+            // recursión, etc.) que MdnPack no resuelve. Enlazamos a -Ttext=0 para
+            // resolverlas dejando el código position-independent. Empaquetamos el .elf.
+            Path packInput = oFile;
+            if (f.enlazar) {
+                Path elf = work.resolve("aot_" + mod + "." + f.target() + ".elf");
+                List<String> lk = new ArrayList<>();
+                lk.add(f.gcc);
+                lk.addAll(Arrays.asList(RISCV_LINK_FLAGS));
+                lk.add(oFile.toString());
+                lk.add("-o"); lk.add(elf.toString());
+                runGcc(lk, mod, log);
+                packInput = elf;
+            }
+
+            // 2c) MdnPack → .mdn.
+            MdnPack.PackResult pr = MdnPack.pack(packInput, mdnFile, mod);
+            log.accept("[aot] " + mdnFile.getFileName() + " ✓ (" + pr.symbols
+                + " thunk(s), " + pr.codeBytes + " B nativo)");
+            salidas.add(mdnFile);
         }
-
-        // 3) MdnPack → .mdn (alongside del .mod en outDir; PicoExplorer lo sube).
-        MdnPack.PackResult pr = MdnPack.pack(packInput, mdnFile, mod);
-        log.accept("[aot] " + mod + ".mdn ✓ (" + pr.symbols + " thunk(s), "
-            + pr.codeBytes + " B nativo)");
-        return mdnFile;
+        return salidas;
     }
 
     /** Lanza gcc y espera. Captura stdout+stderr para el diagnóstico. */

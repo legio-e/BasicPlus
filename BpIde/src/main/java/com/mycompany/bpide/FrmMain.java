@@ -1064,6 +1064,41 @@ public class FrmMain extends javax.swing.JFrame
         }
     }
 
+    /**
+     * V5/H8 — el paso AOT de un proyecto `out:pack`, para {@code Main.buildProject}.
+     *
+     * <p>Va entre compilar y empaquetar porque los `.mdn` tienen que estar en el
+     * `outDir` cuando PackStep lo barre. Si el proyecto declara varias familias
+     * (`aot.targets`), sale uno por familia con su doble extensión; con una
+     * sola, el nombre de siempre.
+     *
+     * <p>Devuelve siempre true: <b>el AOT no bloquea el pack</b>. Un pack sin
+     * `.mdn` es un pack que corre interpretado — más lento, no roto —, y ese ha
+     * sido el criterio desde H12. Lo que no puede es fallar callando, y por eso
+     * los avisos van a la consola.
+     */
+    private static basicplus.frontend.Main.PasoAntesDelPack pasoAotDelPack(
+            java.util.function.Consumer<String> log) {
+        return proj -> {
+            if (!proj.aotEnabled) return true;
+            java.util.List<String> familias = proj.aotTargets.isEmpty()
+                    ? java.util.Collections.singletonList(proj.aotTarget)
+                    : proj.aotTargets;
+            log.accept("== AOT del pack: " + familias.size() + " familia(s) "
+                    + familias + " ==\n");
+            AotBuild.Result r = AotBuild.buildPackTargets(
+                    java.nio.file.Paths.get(proj.sourceDir),
+                    java.nio.file.Paths.get(proj.outDir),
+                    java.nio.file.Paths.get(proj.projectDir),
+                    familias, IdePrefs.load(), msg -> log.accept(msg + "\n"));
+            if (!r.mdnFiles.isEmpty())
+                log.accept("== AOT: " + r.mdnFiles.size() + " .mdn al pack ==\n");
+            else if (!r.toolchainMissing)
+                log.accept("== AOT: sin funciones native que compilar ==\n");
+            return true;
+        };
+    }
+
     /** H3/IDE — Build Project: construye el proyecto abierto (compila todo +
      *  monta el pack si out:pack), por el MISMO camino que la CLI (buildProject).
      *  Acción explícita de build de proyecto (sin ejecutar). */
@@ -1083,7 +1118,8 @@ public class FrmMain extends javax.swing.JFrame
                         + ("pack".equals(proj.out) ? " (out:pack)" : "") + " ==\n");
                 boolean ok = invokeWithCapture(() -> {
                     try {
-                        return basicplus.frontend.Main.buildProject(proj, "mivm", /*pruneBpi*/ true);
+                        return basicplus.frontend.Main.buildProject(proj, "mivm", /*pruneBpi*/ true,
+                                pasoAotDelPack(this::publish));
                     } catch (java.io.IOException ex) {
                         System.err.println("build: " + ex.getMessage());
                         return false;
@@ -2341,7 +2377,8 @@ public class FrmMain extends javax.swing.JFrame
                             + ("pack".equals(currentProject.out) ? " (out:pack)" : "") + " ==\n");
                     ok = invokeWithCapture(() -> {
                         try {
-                            return basicplus.frontend.Main.buildProject(currentProject, "mivm", /*pruneBpi*/ true);
+                            return basicplus.frontend.Main.buildProject(currentProject, "mivm", /*pruneBpi*/ true,
+                                    pasoAotDelPack(this::publish));
                         } catch (java.io.IOException ex) {
                             System.err.println("build: " + ex.getMessage());
                             return false;
@@ -2447,7 +2484,8 @@ public class FrmMain extends javax.swing.JFrame
                             + " para la placa ==\n");
                     ok = invokeWithCapture(() -> {
                         try {
-                            return basicplus.frontend.Main.buildProject(currentProject, "mivm", /*pruneBpi*/ true);
+                            return basicplus.frontend.Main.buildProject(currentProject, "mivm", /*pruneBpi*/ true,
+                                    pasoAotDelPack(this::publish));
                         } catch (java.io.IOException ex) {
                             System.err.println("build: " + ex.getMessage());
                             return false;

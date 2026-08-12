@@ -182,6 +182,28 @@ public final class Main {
      */
     public static boolean buildProject(BpBuild proj, String backend, boolean pruneBpi)
             throws IOException {
+        return buildProject(proj, backend, pruneBpi, null);
+    }
+
+    /**
+     * Lo que hay que hacer DESPUÉS de compilar y ANTES de empaquetar.
+     *
+     * <p>Existe por el AOT: los `.mdn` tienen que estar escritos en el `outDir`
+     * cuando {@code PackStep} lo barre, o el pack sale sin ellos. Y el AOT no
+     * puede vivir aquí —necesita las rutas de los toolchain, que son de cada
+     * máquina y las guarda el IDE—, así que el frontend deja el hueco y quien
+     * sabe compilar lo rellena. Sin esto habría que partir el build en dos y
+     * duplicar el paso de empaquetado en los dos llamantes.
+     */
+    public interface PasoAntesDelPack {
+        /** @return false si el paso falló de forma que NO se debe empaquetar. */
+        boolean ejecutar(BpBuild proj) throws IOException;
+    }
+
+    /** Igual, con un paso intermedio (ver {@link PasoAntesDelPack}). */
+    public static boolean buildProject(BpBuild proj, String backend, boolean pruneBpi,
+                                       PasoAntesDelPack antesDelPack)
+            throws IOException {
         System.out.println("project: " + proj.sourcePath
                 + " (main=" + proj.main
                 + ", sourceDir=" + proj.sourceDir
@@ -217,6 +239,12 @@ public final class Main {
         // H3 Packs: tras el build correcto, si out:pack empaqueta el proyecto
         // (el manifest reusa `main` → pack ejecutable). IOException la ve el caller.
         if (success && "pack".equals(proj.out)) {
+            // V5/H8 — el AOT va AQUÍ, entre compilar y empaquetar: los `.mdn` de
+            // cada familia tienen que existir cuando PackStep barre el outDir.
+            if (antesDelPack != null && !antesDelPack.ejecutar(proj)) {
+                System.err.println("no se empaqueta: el paso previo al pack fallo");
+                return false;
+            }
             Path packPath = PackStep.buildPack(proj);
             System.out.println("pack generado: " + packPath);
         }
@@ -359,6 +387,9 @@ public final class Main {
     // MODO DIAGNÓSTICOS (sin emisión, comportamiento original)
     // ============================================================
     private static void runDiagnosticsOnly(Path p, Ctx ctx) {
+        // 2a raiz de build. ESTE es el modo del incidente del 12-ago: 17 errores
+        // de sintaxis y ni una pista de que el compilador era de otra epoca.
+        Version.banner();
         Parsed parsed = parseAndPrint(p, ctx, /*isRoot*/true);
         if (parsed == null || parsed.module == null) return;
         if (!parsed.parser.getErrors().isEmpty()) return;
@@ -375,6 +406,12 @@ public final class Main {
     // y, tras emitir, recursivamente garantiza .mod de cada import.
     // ============================================================
     private static boolean compileFull(Path src, Ctx ctx, int depth) throws IOException {
+        // QUIEN esta compilando (Eduardo, 12-ago). depth 0 = raiz del build, asi
+        // que sale UNA vez y no una por modulo. Ver Version.java para el caso
+        // que lo motiva; y ojo, hay otras DOS raices que tambien lo llaman
+        // (compileInterface y runDiagnosticsOnly): si algun dia se anade un
+        // cuarto modo de arranque, tiene que llevarlo tambien.
+        if (depth == 0) Version.banner();
         Path srcAbs = src.toAbsolutePath().normalize();
         if (ctx.compilingFull.contains(srcAbs)) {
             indent(depth); System.out.println("(ciclo full detectado, skip: " + srcAbs.getFileName() + ")");
@@ -653,6 +690,8 @@ public final class Main {
     // para extraer la firma).
     // ============================================================
     private static boolean compileInterface(Path src, Ctx ctx, int depth) throws IOException {
+        // 3a raiz de build (--interface). Mismo criterio que compileFull.
+        if (depth == 0) Version.banner();
         Path srcAbs = src.toAbsolutePath().normalize();
         if (ctx.compilingInterface.contains(srcAbs)) {
             indent(depth); System.out.println("(ciclo interface detectado, skip: " + srcAbs.getFileName() + ")");

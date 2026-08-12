@@ -2,6 +2,7 @@ package basicplus.frontend;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -149,6 +150,10 @@ public final class NpackReloc {
          * no se teclea en el build, el IDE y los docs por separado — tres sitios
          * para el mismo dato es el error que cuesta caro (#299, #315). */
         public final String sufijo;
+        /* Como se llama esta familia en el `.bpbuild` (`aot.target(s)`) y en el
+         * INFO de la placa: "arm", "riscv". Es el MISMO destino visto desde el
+         * proyecto, asi que vive aqui y no en una tabla paralela del IDE. */
+        public final String targetAot;
         /* La convencion de coma flotante, tal como la escribe la cabecera del
          * .npk y la compara el dispositivo. Un desajuste NO da error: da
          * NUMEROS MAL, asi que sale de aqui y no de quien empaqueta. */
@@ -159,11 +164,12 @@ public final class NpackReloc {
         final Set<Integer> ignorar;        /* PC-relativas: NO se tocan */
         final Parcheador patch;
 
-        Destino(String nombre, String sufijo, String floatAbi,
+        Destino(String nombre, String sufijo, String targetAot, String floatAbi,
                 int machine, boolean rela,
                 String[] flashSecs, String[] dataSecs, String[] bssSecs,
                 Integer[] ignorar, Parcheador patch) {
-            this.nombre = nombre; this.sufijo = sufijo; this.floatAbi = floatAbi;
+            this.nombre = nombre; this.sufijo = sufijo; this.targetAot = targetAot;
+            this.floatAbi = floatAbi;
             this.machine = machine; this.rela = rela;
             this.flashSecs = Arrays.asList(flashSecs);
             this.dataSecs  = Arrays.asList(dataSecs);
@@ -175,7 +181,7 @@ public final class NpackReloc {
 
     /** ARM Cortex-M33 (ARMv8-M Mainline, FPU simple): Metro RP2350 y STM32. */
     public static final Destino ARM_CORTEX_M33 = new Destino(
-            "arm-cortex-m33", "ARMV8", "softfp", Elf32Machine.ARM, /*rela*/ false,
+            "arm-cortex-m33", "ARMV8", "arm", "softfp", Elf32Machine.ARM, /*rela*/ false,
             new String[]{".text", ".rodata"},
             new String[]{".data"},
             new String[]{".bss"},
@@ -187,7 +193,7 @@ public final class NpackReloc {
 
     /** RISC-V RV32 del ESP32-P4 (ilp32f). */
     public static final Destino RISCV32_ESP_P4 = new Destino(
-            "riscv32-esp-p4", "RISCV", "ilp32f", Elf32Machine.RISCV, /*rela*/ true,
+            "riscv32-esp-p4", "RISCV", "riscv", "ilp32f", Elf32Machine.RISCV, /*rela*/ true,
             /* `.eh_frame` viaja aunque nadie desenrolle: son unos cientos de
              * bytes y asi la imagen de flash es LITERALMENTE lo que el
              * enlazador puso, sin huecos que justificar. */
@@ -228,6 +234,49 @@ public final class NpackReloc {
                 }
                 return false;
             });
+
+    /**
+     * EL CATÁLOGO DE FAMILIAS. Añadir una tercera se hace <b>aquí y sólo
+     * aquí</b>: el proyecto (`aot.targets`), el nombre de la doble extensión,
+     * la poda del grabado y el oráculo salen todos de esta lista.
+     *
+     * <p>Antes cada uno de esos cuatro llevaba su propio `if` con las dos
+     * familias escritas a mano. Con dos aún se ve; con las «4, 6 o n» que
+     * vendrán, olvidar uno es lo normal — y lo que falla es la que falta, en
+     * silencio y tarde.
+     */
+    public static final List<Destino> DESTINOS =
+            Collections.unmodifiableList(Arrays.asList(ARM_CORTEX_M33, RISCV32_ESP_P4));
+
+    /** Por su nombre largo (`riscv32-esp-p4`). null si no existe. */
+    public static Destino porNombre(String n) {
+        for (Destino d : DESTINOS) if (d.nombre.equals(n)) return d;
+        return null;
+    }
+
+    /** Por el target del proyecto / del INFO de la placa (`arm`, `riscv`). */
+    public static Destino porTargetAot(String t) {
+        if (t == null) return null;
+        for (Destino d : DESTINOS) if (d.targetAot.equalsIgnoreCase(t.trim())) return d;
+        return null;
+    }
+
+    /** Por el sufijo de la doble extensión (`RISCV`), SIN el punto. */
+    public static Destino porSufijo(String s) {
+        if (s == null) return null;
+        for (Destino d : DESTINOS) if (d.sufijo.equals(s)) return d;
+        return null;
+    }
+
+    /** Los nombres que valen en `aot.target(s)`, para los mensajes de error. */
+    public static String targetsConocidos() {
+        StringBuilder sb = new StringBuilder();
+        for (Destino d : DESTINOS) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(d.targetAot).append(" = ").append(d.nombre);
+        }
+        return sb.toString();
+    }
 
     /** Los `e_machine` que nos importan. Mismo catálogo que `mdn_format.h`. */
     public static final class Elf32Machine {

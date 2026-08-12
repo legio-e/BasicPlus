@@ -66,6 +66,24 @@ public final class BpBuild {
      *  .mdn PIC para ambos). Futuro (V4): "esp32" (Xtensa / RISC-V). */
     public String aotTarget = "arm";
 
+    /**
+     * V5/H8 — las FAMILIAS del proyecto, cuando son varias (`aot.targets`).
+     * Vacía = proyecto de una sola familia, y manda {@link #aotTarget}.
+     *
+     * <p>De un proyecto con varias sale <b>un</b> `.mod` y <b>varios</b>
+     * `.mdn`, uno por familia y con su doble extensión (`SQLite.mdn.RISCV`).
+     * No son builds distintos: es el MISMO `.bp`, el MISMO `.mod` y el MISMO
+     * C intermedio; lo único que se repite es compilar ese C con cada
+     * toolchain. Así es imposible que dos `.mdn` del pack no se correspondan
+     * con el bytecode que llevan al lado.
+     *
+     * <p>Los nombres válidos salen de {@link NpackReloc#DESTINOS} y se
+     * comprueban AL LEER el `.bpbuild` — un target mal escrito se ve en el
+     * fichero, que es donde se arregla, y no tres pasos después en forma de
+     * familia que falta en el pack.
+     */
+    public List<String> aotTargets = new ArrayList<>();
+
     /** Salida del build (H3 Packs): "normal" (default) o "pack". En "pack", tras
      *  el build normal se empaquetan los .mod/.mdn del outDir + los resources en
      *  un pack EJECUTABLE (el `main` va al manifest). */
@@ -220,7 +238,7 @@ public final class BpBuild {
             }
         }
 
-        // aot: opcional, objeto { "enabled": bool, "target": string }
+        // aot: opcional, { "enabled": bool, "target": string | "targets": [string] }
         Object aotVal = map.get("aot");
         if (aotVal != null) {
             if (!(aotVal instanceof Map))
@@ -229,8 +247,40 @@ public final class BpBuild {
             Map<String, Object> aot = (Map<String, Object>) aotVal;
             Object en = aot.get("enabled");
             if (en instanceof Boolean) b.aotEnabled = (Boolean) en;
-            Object tg = aot.get("target");
-            if (tg instanceof String && !((String) tg).isEmpty()) b.aotTarget = ((String) tg).trim();
+            Object tg  = aot.get("target");
+            Object tgs = aot.get("targets");
+
+            /* Las dos a la vez NO se resuelven eligiendo una: son dos respuestas
+             * distintas a la misma pregunta, y cualquier preferencia que
+             * pusiéramos aquí sería una regla que nadie recuerda. Se dice. */
+            if (tg != null && tgs != null)
+                throw new IOException(file + ": 'aot' trae 'target' y 'targets' a la"
+                    + " vez. Son la misma cosa dicha de dos formas — deja sólo una"
+                    + " ('targets' si el proyecto va a varias familias).");
+
+            if (tg instanceof String && !((String) tg).isEmpty()) {
+                b.aotTarget = validarTarget(((String) tg).trim(), file);
+            }
+            if (tgs != null) {
+                if (!(tgs instanceof List))
+                    throw new IOException(file + ": 'aot.targets' debe ser una lista"
+                        + " JSON de familias, p.ej. [\"arm\", \"riscv\"]");
+                for (Object o : (List<?>) tgs) {
+                    if (!(o instanceof String))
+                        throw new IOException(file + ": 'aot.targets' sólo admite"
+                            + " nombres de familia (strings)");
+                    String t = validarTarget(((String) o).trim(), file);
+                    if (!b.aotTargets.contains(t)) b.aotTargets.add(t);
+                }
+                if (b.aotTargets.isEmpty())
+                    throw new IOException(file + ": 'aot.targets' está vacía. Si el"
+                        + " proyecto no tiene código nativo, quita el bloque 'aot';"
+                        + " si lo tiene, di para qué familias.");
+                /* El singular queda apuntando a la primera: lo que se sube al
+                 * device en un Run sin placa conectada tiene que ser ALGO
+                 * concreto, y la primera de la lista es lo menos sorprendente. */
+                b.aotTarget = b.aotTargets.get(0);
+            }
         }
 
         // out: opcional, "normal" (default) | "pack"
@@ -257,11 +307,14 @@ public final class BpBuild {
         // out: solo se escribe si es "pack" (default "normal" = ausente, sin ensuciar).
         if ("pack".equals(out)) m.put("out", "pack");
         else                    m.remove("out");
-        // aot: objeto {enabled,target}. Solo si está activo (off = ausente).
+        // aot: objeto {enabled, target|targets}. Solo si está activo (off = ausente).
         if (aotEnabled) {
             Map<String, Object> aot = new LinkedHashMap<>();
             aot.put("enabled", Boolean.TRUE);
-            aot.put("target", aotTarget);
+            // Se reescribe COMO SE DECLARÓ: quien puso `targets` no debe encontrarse
+            // un `target` al guardar desde el IDE (y perder familias sin enterarse).
+            if (!aotTargets.isEmpty()) aot.put("targets", new ArrayList<>(aotTargets));
+            else                       aot.put("target",  aotTarget);
             m.put("aot", aot);
         } else {
             m.remove("aot");
@@ -337,6 +390,19 @@ public final class BpBuild {
                 + ", dependencies=" + dependencies
                 + (sourcePath == null ? "" : ", source=" + sourcePath)
                 + "}";
+    }
+
+    /**
+     * Un target sólo vale si está en el catálogo de familias. Se comprueba al
+     * LEER: escribir "risc-v" o "RISCV" en vez de "riscv" no debe descubrirse
+     * cuando falte esa familia en el pack, sino aquí.
+     */
+    private static String validarTarget(String t, Path file) throws IOException {
+        NpackReloc.Destino d = NpackReloc.porTargetAot(t);
+        if (d == null)
+            throw new IOException(file + ": familia AOT desconocida '" + t
+                + "'. Las que hay: " + NpackReloc.targetsConocidos() + ".");
+        return d.targetAot;              /* canónico: siempre en minúsculas */
     }
 
     public List<String> dependencies() { return Collections.unmodifiableList(dependencies); }

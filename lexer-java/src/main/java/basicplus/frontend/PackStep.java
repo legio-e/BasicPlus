@@ -35,9 +35,27 @@ public final class PackStep {
 
     private PackStep() {}
 
-    /** Extensiones del outDir que van al pack (ejecutables del build). */
+    /**
+     * Extensiones del outDir que van al pack (ejecutables del build).
+     *
+     * <p>`npk` entró en V5/H8 (D4): el motor nativo es un tipo de PRIMERA, no un
+     * recurso. Entrando por aquí queda dentro de las comprobaciones de «este
+     * pack se puede ejecutar» que se hacen abajo (#361), en vez de colarse por
+     * `resources/`, que acepta cualquier cosa sin mirarla.
+     */
     private static final Set<String> OUTDIR_TYPES =
-            new HashSet<>(Arrays.asList("mod", "mdn"));
+            new HashSet<>(Arrays.asList("mod", "mdn", "npk"));
+
+    /**
+     * Los tipos que pueden venir con DOBLE EXTENSIÓN, uno por destino
+     * (V5/H8, D1): `sqlite.npk.RISCV`, `SQLite.mdn.ARMV8`.
+     *
+     * <p>Un `.mod` NUNCA la lleva: es bytecode portable, el mismo para todas
+     * las placas. Si apareciera un `Algo.mod.RISCV` sería un error de quien lo
+     * construyó, no un caso a soportar.
+     */
+    private static final Set<String> TIPOS_POR_DESTINO =
+            new HashSet<>(Arrays.asList("mdn", "npk"));
 
     /**
      * Empaqueta el resultado del build en {@code <outDir>/<main>.pack}.
@@ -58,6 +76,22 @@ public final class PackStep {
         // 2) resources del proyecto (cualquier extensión), si hay carpeta
         Path resDir = Paths.get(proj.projectDir, "resources");
         if (Files.isDirectory(resDir)) collectDir(resDir, entries, null);
+
+        /* ── EL `npk` VA EL PRIMERO (V5/H8, D5) ─────────────────────────────
+         *
+         * No hace falta para que funcione —desde que el IDE relocaliza AL
+         * GRABAR, la posición dentro del pack da igual: conoce el offset de
+         * cada entrada porque él mismo lo montó—. Se hace por PREDECIBILIDAD:
+         *
+         *   · de primero, su offset es `128 + N*48` y sólo se mueve si cambia
+         *     el NÚMERO de entradas;
+         *   · en medio, se mueve si cambia el TAMAÑO de cualquier cosa que
+         *     vaya antes — tocar una coma de un `.mod` lo desplaza.
+         *
+         * Lo segundo hace ilegible cualquier diagnóstico de direcciones. Es
+         * una línea y ahorra tardes. */
+        entries.sort((a, b) -> Boolean.compare(!"npk".equals(a.tipo),
+                                               !"npk".equals(b.tipo)));
 
         // El pack tiene que poder EJECUTARSE, y eso son dos condiciones. Las dos se
         // comprueban aquí, al construir, y no en la placa: la VM las detecta y lo
@@ -154,8 +188,46 @@ public final class PackStep {
             int dot = base.lastIndexOf('.');
             if (dot < 0) continue;                       // sin extensión → no sé el tipo
             String tipo = base.substring(dot + 1).toLowerCase();
-            if (onlyTypes != null && !onlyTypes.contains(tipo)) continue;
             String nombre = base.substring(0, dot);
+
+            /* ── DOBLE EXTENSIÓN (V5/H8, D1) ────────────────────────────────
+             *
+             * `sqlite.npk.RISCV` → tipo `npk`, nombre `sqlite.RISCV`.
+             *
+             * NO se puede derivar de la última extensión, que es lo que hace el
+             * caso normal: daría tipo `riscv`, y el tipo de una entrada es un
+             * fourcc de 4 caracteres en minúsculas (`PackFormat.TYPE_LEN`), o
+             * sea que ni cabe ni vale. El destino tiene que irse al NOMBRE.
+             *
+             * Y el nombre es donde debe estar: el dispositivo busca por tipo y
+             * nombre (`bpvm_pack_find(zona, len, "mdn", modulo, …)`), así que
+             * al grabar el IDE se queda con el del destino y lo renombra
+             * quitándole el sufijo — y el micro encuentra exactamente lo de
+             * siempre, sin cambiar una línea de C. */
+            int dot2 = nombre.lastIndexOf('.');
+            if (dot2 > 0) {
+                String tipoReal = nombre.substring(dot2 + 1).toLowerCase();
+                if (TIPOS_POR_DESTINO.contains(tipoReal)) {
+                    String sufijo = base.substring(dot + 1);      /* SIN pasar a minúsculas */
+                    nombre = nombre.substring(0, dot2) + "." + sufijo;
+                    tipo   = tipoReal;
+                } else if (OUTDIR_TYPES.contains(tipoReal)) {
+                    /* `Algo.mod.RISCV` — un tipo que SÍ va al pack pero que NO
+                     * admite destino. El `.mod` es bytecode portable: no hay
+                     * uno por familia, y ponerle sufijo es un error de quien lo
+                     * construyó.
+                     *
+                     * Sin este aviso el fichero se caía por el filtro de abajo
+                     * (tipo `riscv` no está en OUTDIR_TYPES) y DESAPARECÍA en
+                     * silencio: un pack sin ese módulo, y a buscar por qué. */
+                    throw new IOException(base + ": un '." + tipoReal
+                        + "' NO lleva destino — es portable, el mismo para todas"
+                        + " las placas. Quita el sufijo '." + base.substring(dot + 1)
+                        + "'. (Lo llevan sólo: " + TIPOS_POR_DESTINO + ")");
+                }
+            }
+
+            if (onlyTypes != null && !onlyTypes.contains(tipo)) continue;
             entries.add(new PackEntry(tipo, nombre, Files.readAllBytes(f)));
         }
     }
