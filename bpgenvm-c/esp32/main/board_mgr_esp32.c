@@ -9,6 +9,7 @@
  * usable=bpdata->size → el mismo núcleo que el RP2350, solo cambia de dónde salen.
  */
 #include "board_mgr_esp32.h"
+#include "bpvm_pack.h"   /* V5/H7: bpvm_pack_flash_t, la cintura de escritura */
 
 #include "bpvm.h"        /* #338: bpvm_scratch_take/give (zona de rascar compartida) */
 #include "bpvm_bmgr.h"
@@ -17,7 +18,10 @@
 #include "bpvm_env.h"
 #include "wire_v1.h"
 #include "fs.h"
-#include "log.h"          /* el resultado del climb, al log persistente */
+#include "log.h"
+#if CONFIG_IDF_TARGET_ESP32P4
+#include "pack_p4.h"   /* V5/H8: s_pack_ram_base — la RAM del motor nativo */
+#endif          /* el resultado del climb, al log persistente */
 
 #include "esp_partition.h"
 #include "esp_flash.h"    /* #328 — el tamaño REAL del chip, no el que dice la tabla */
@@ -61,6 +65,82 @@ const bpvm_boot_status_t* board_boot_status(void) { return &s_boot; }
 
 const bpvm_env_t* board_mgr_env(void) { return &s_env; }
 
+/*
+ * ─── V5/H7 — LA ZONA DE PACKS, POR FIN CABLEADA EN ESTA FAMILIA ──────────────
+ *
+ * Hasta hoy `PACK_LS` contestaba "sin zona de packs" en los DOS ESP32, y no era
+ * un fallo de configuración de nadie: `bm.packs_*` no se rellenaba. Los verbos
+ * PACK_* estaban encaminados pero sin nada detrás — la media función de
+ * [[portar-familia-adaptador-completo]], que ya mordió en el Pico (#327) y que
+ * su propio comentario describe: *"encaminar los verbos y no rellenar su
+ * petición es la misma media función que dejar bm.packs_* a cero"*. Aquí
+ * faltaban LAS DOS mitades.
+ *
+ * ─── POR QUÉ LA VISTA SE REGISTRA Y NO SE CALCULA AQUÍ ───
+ *
+ * Leer la zona necesita un PUNTERO que la CPU pueda seguir, y ahí las dos
+ * familias no se parecen: el P4 tiene que MAPEARLA (`esp_partition_mmap`, y la
+ * dirección la asigna la MMU en runtime), mientras que el S3 hará lo suyo
+ * cuando le toque. Calcularlo aquí obligaría a este fichero —que es común— a
+ * saberse el mapeo de cada micro.
+ *
+ * Así que la familia la REGISTRA cuando la tiene. Y el que no la registre se
+ * queda como estaba: `packs_base` a NULL y `PACK_LS` diciendo "sin zona de
+ * packs", que para el S3 hoy es LA VERDAD. Un `#ifdef` habría dado el mismo
+ * resultado escondiendo que una familia está a medias; esto lo deja a la vista.
+ */
+static const uint8_t* s_packs_view      = 0;
+static uint32_t       s_packs_view_size = 0;
+
+void board_mgr_esp32_set_packs_view(const void* base, uint32_t size) {
+    s_packs_view      = (const uint8_t*) base;
+    s_packs_view_size = size;
+}
+
+/* ── Cintura de ESCRITURA. Ésta SÍ es común a los dos ESP32: los dos graban por
+ *    `esp_partition_*`, así que no hay nada que separar por familia.
+ *
+ * Los offsets que llegan son RELATIVOS a la región de packs; aquí se suman al
+ * offset de la región dentro de `bpdata`, que es la partición real. Esa suma es
+ * justo lo que la cintura existe para hacer: el núcleo de packs no sabe —ni
+ * tiene por qué— dónde empieza la región. */
+static uint32_t packs_off_en_bpdata(void) {
+    const bpvm_part_t* pp = bpvm_part_get(&s_layout, BPVM_PART_PACKS);
+    return pp ? pp->offset : 0u;
+}
+
+static int packs_fl_erase(void* user, uint32_t off, uint32_t len) {
+    (void) user;
+    if (!s_bpdata) return -1;
+    return esp_partition_erase_range(s_bpdata, packs_off_en_bpdata() + off, len)
+           == ESP_OK ? 0 : -1;
+}
+
+static int packs_fl_program(void* user, uint32_t off, const uint8_t* d, uint32_t len) {
+    (void) user;
+    if (!s_bpdata) return -1;
+    return esp_partition_write(s_bpdata, packs_off_en_bpdata() + off, d, len)
+           == ESP_OK ? 0 : -1;
+}
+
+static const bpvm_pack_flash_t s_packs_fl = {
+    packs_fl_erase, packs_fl_program, 0,
+    4096u    /* granularidad de borrado del ESP32 */
+};
+
+/* V5/H7 — dónde está la zona de packs, para que el cargador nativo la mapee.
+ * Devuelto como `const void*` en el .h para no arrastrar `esp_partition.h` a
+ * quien sólo quiera el layout; el que mapea ya lo incluye de todas formas. */
+const void* board_mgr_esp32_bpdata(void) { return (const void*) s_bpdata; }
+
+const bpvm_part_t* board_mgr_esp32_packs(void) {
+    /* Sin layout válido no hay zona: el arranque no llegó al estado 2. Devolver
+     * NULL y no un rango a cero, porque "no hay" y "hay pero mide 0" mandan a
+     * sitios distintos y el llamante tiene que poder decirlo. */
+    if (!s_layout.complete && s_layout.parts[BPVM_PART_PACKS].size == 0u) return 0;
+    return bpvm_part_get(&s_layout, BPVM_PART_PACKS);
+}
+
 /* ── cintura del env: lee/escribe los 2 sectores A/B de la partición bpenv ── */
 
 static int env_read_slots(uint8_t* a, uint8_t* b) {
@@ -81,6 +161,49 @@ static void env_write_slot(int slot, const uint8_t* buf) {
 }
 
 static uint32_t data_usable(void) { return s_bpdata ? (uint32_t) s_bpdata->size : 0u; }
+
+/*
+ * V5/H7 — EL ENV, ANTES DE TIEMPO. Sólo el env: ni particiones, ni FS, ni VM.
+ *
+ * ─── POR QUÉ HACE FALTA ───
+ *
+ * El bloque de memoria de la BD tiene DOS exigencias que chocan en el orden de
+ * arranque del P4:
+ *
+ *   · su TAMAÑO lo dice el env (`SQLite=<MB>`)      -> hay que leer flash
+ *   · su DIRECCIÓN sólo es determinista si muerde
+ *     ANTES que el heap de la VM                    -> hay que reservar pronto
+ *
+ * Y en el P4 el env se carga DESPUÉS del reparto de PSRAM: `app_main` llama a
+ * `vm_buffer_init_psram()` enseguida, y `board_mgr_esp32_boot()` sólo corre más
+ * tarde, ya dentro de la tarea de transporte. (En el Pico no se nota porque allí
+ * el env ya está leído cuando se parte la PSRAM.)
+ *
+ * Que la dirección sea determinista NO es un lujo: el pack nativo se realoja en
+ * el PC para una dirección concreta y lleva ese SELLO dentro. Si `heap_caps_malloc`
+ * devolviera otra en el siguiente arranque, el pack grabado dejaría de valer —
+ * y el síntoma sería de los peores: funciona una vez y luego no, sin patrón.
+ *
+ * ─── POR QUÉ ADITIVA Y NO MOVER EL BOOT ───
+ *
+ * Adelantar `board_mgr_esp32_boot()` entero movería el arranque de una placa que
+ * hoy funciona, y arrastraría con él las particiones, el FS y la VM. Esto es
+ * leer dos sectores y elegir el bueno: exactamente lo que `layer_partitions`
+ * vuelve a hacer luego. Leerlo dos veces no cuesta nada y no cambia nada del
+ * camino existente — que sigue intacto.
+ *
+ * Idempotente a propósito: rellena los MISMOS `s_env_a`/`s_env_b`, así que la
+ * vista de `board_mgr_env()` (que apunta dentro de ellos) sigue siendo válida
+ * después de que el boat de verdad los relea.
+ */
+void board_mgr_esp32_env_temprano(void) {
+    if (!s_bpenv) {
+        s_bpenv = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
+                                           ESP_PARTITION_SUBTYPE_ANY, "bpenv");
+    }
+    env_read_slots(s_env_a, s_env_b);
+    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &s_env);
+}
 
 /* ── arranque escalonado: particiones del env → FS (sub-rango de bpdata) → VM ── */
 
@@ -235,6 +358,29 @@ void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
     bm.usable_flash = data_usable();   /* la tabla vendor ES el límite; sin clamp #292 */
     bm.live = &s_boot;                 /* STATE cuenta el estado REAL del boot */
 
+    /* V5/H7 — la zona de packs. Sólo si la familia registró su vista Y el layout
+     * dice que la región existe: las dos condiciones, porque una vista sin
+     * región sería leer fuera, y una región sin vista no se puede leer. */
+    {
+        const bpvm_part_t* pp = bpvm_part_get(&s_layout, BPVM_PART_PACKS);
+        if (s_packs_view && pp && pp->size > 0) {
+            bm.packs_base  = s_packs_view;
+            bm.packs_size  = (s_packs_view_size < pp->size) ? s_packs_view_size
+                                                            : pp->size;
+            bm.packs_flash = &s_packs_fl;
+        }
+    }
+
+    /* V5/H8 — la RAM de trabajo de un motor nativo: el PRINCIPIO del bloque de
+     * la BD (`[estaticos | arena]`). El P4 ya lo calcula al arrancar y lo
+     * imprime; aquí sólo se expone para que `PACK_BURN_BEGIN` se lo diga al
+     * IDE. En el S3 no hay bloque: queda a 0 y el IDE lo dirá en vez de grabar
+     * un motor que no podría arrancar. */
+#if CONFIG_IDF_TARGET_ESP32P4
+    bm.pack_ram_base = (uint32_t) (uintptr_t) s_pack_ram_base;
+    bm.pack_ram_size = s_sqlite_size;
+#endif
+
     bpvm_bmgr_req_t req;
     memset(&req, 0, sizeof req);
     snprintf(req.type, sizeof req.type, "%s", type);
@@ -245,6 +391,25 @@ void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
         req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
     req.bulk     = bulk;            /* #327 H3: PACK_BURN_DATA (ya recibido) */
     req.bulk_len = (long) bulk_len;
+
+    /* V5/H7 — LA OTRA MITAD. De los seis campos que piden los PACK_*, el ESP32
+     * rellenaba SOLO `bulk`: sin `off` no van ENTRIES/DEL/READ, sin `size` no
+     * arranca el BURN_BEGIN, y sin `confirm_yes` el FORMAT rechaza aunque el IDE
+     * mande el confirm (que lo manda). Es exactamente el mismo agujero que se
+     * arregló en el Pico copiándolo del STM32 — y aquí seguía abierto. */
+    req.off      = json_get_long(obj, "offset", -1);   /* PACK_ENTRIES/DEL/READ */
+    req.has_off  = req.off >= 0;
+    req.size     = json_get_long(obj, "size", -1);     /* PACK_BURN_BEGIN */
+    req.has_size = req.size >= 0;
+    {                                                  /* PACK_FORMAT (confirm=YES) */
+        /* Es una CADENA "YES", no un booleano: el formateo borra la zona entera
+         * y el contrato pide escribirlo, no marcar una casilla. Copiado literal
+         * del Pico — leerlo como número aquí habría hecho que el FORMAT
+         * rechazara SIEMPRE, con el IDE mandando el confirm correcto. */
+        char confirm[8];
+        req.confirm_yes = json_get_str(obj, "confirm", confirm, sizeof confirm) >= 0
+                          && strcmp(confirm, "YES") == 0;
+    }
 
     int wrote = -1;
     int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);

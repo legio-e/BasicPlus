@@ -283,7 +283,25 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         if (r < 0) return reply_pack_err(out, cap, id, r);
         sb_raw(&s, "{\"type\":\"PACK_BURN_BEGIN_REPLY\",\"id\":"); sb_long(&s, id);
         sb_raw(&s, ",\"offset\":"); sb_long(&s, r);
-        sb_raw(&s, ",\"chunkMax\":"); sb_long(&s, BPVM_PACK_BURN_CHUNK); sb_raw(&s, "}");
+        sb_raw(&s, ",\"chunkMax\":"); sb_long(&s, BPVM_PACK_BURN_CHUNK);
+        /* V5/H8 — LAS DOS DIRECCIONES DEL SELLO.
+         *
+         * Van AQUI y no en el INFO por una razon de orden: el pack nativo hay
+         * que relocalizarlo ANTES de escribirlo, y hasta este momento no se
+         * sabe donde cae. BEGIN ya eligio el hueco (`r`), asi que la respuesta
+         * puede ser AUTOSUFICIENTE: el IDE realoja con lo que la placa acaba de
+         * decirle, no con una tabla de suposiciones por placa.
+         *
+         * `flashAddr` es la direccion que ve la CPU, no el offset: en el P4 la
+         * asigna la MMU al mapear y NO se puede calcular desde el PC.
+         * `ramBase` es el principio del bloque de la BD. Un 0 significa «esta
+         * placa no da RAM a packs nativos», y el IDE lo dira en vez de grabar
+         * un motor que no podria arrancar. */
+        sb_raw(&s, ",\"flashAddr\":");
+        sb_long(&s, (long) ((uintptr_t) bm->packs_base + (uintptr_t) r));
+        sb_raw(&s, ",\"ramBase\":"); sb_long(&s, (long) bm->pack_ram_base);
+        sb_raw(&s, ",\"ramSize\":"); sb_long(&s, (long) bm->pack_ram_size);
+        sb_raw(&s, "}");
         return s.ok ? (int) s.off : -1;
     }
     if (!strcmp(type, "PACK_BURN_DATA")) {

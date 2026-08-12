@@ -49,6 +49,25 @@ typedef struct {
     /* H3 — cintura de ESCRITURA de la zona de packs (erase/program por-micro).
      * NULL = packs de solo lectura (PACK_BURN responde UNSUPPORTED). */
     const struct bpvm_pack_flash* packs_flash;
+    /*
+     * V5/H8 — LA RAM DE TRABAJO DE UN MOTOR NATIVO (`.npk`).
+     *
+     * El principio del bloque de la BD: `[estaticos | arena]`. Metro 0x11000000
+     * (los 2 MB), P4 0x48001000 (los 4 MB). Cada placa lo CALCULA ya —lo
+     * imprime en su log de arranque—; esto sólo lo pone donde el wire pueda
+     * leerlo.
+     *
+     * Sale a `PACK_BURN_BEGIN_REPLY` porque el PC NO PUEDE deducirlo: en el P4
+     * el bloque depende del ENV y la direccion de flash la asigna
+     * `esp_mmu_map()` en tiempo de EJECUCION. Que el IDE lo supusiera es
+     * exactamente la clase de suposicion que ya costo un cuelgue de placa. La
+     * placa lo dice; el IDE reloja con eso.
+     *
+     * 0 = esta placa no da RAM a packs nativos → el IDE avisa en vez de grabar
+     * un `.npk` que no podria arrancar.
+     */
+    uint32_t pack_ram_base;
+    uint32_t pack_ram_size;
 } bpvm_bmgr_t;
 
 /* --- Lectura: entorno --- */

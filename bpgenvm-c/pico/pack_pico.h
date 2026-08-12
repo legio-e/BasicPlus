@@ -63,6 +63,10 @@
  * que se le pasa a la escalera como `aqui_ram`, y contra la que el pack tiene
  * que estar sellado. */
 extern uint8_t* s_pack_ram_base;
+/* V5/H8 — tamaño del bloque de la BD, del que `s_pack_ram_base` es el
+ * principio. Sale al wire (`PACK_BURN_BEGIN`) como el sitio de RAM que
+ * tiene el motor: el sello del `.npk` se comprueba contra él. */
+extern uint32_t s_sqlite_size;
 
 /* Carga y ejecuta el pack de la zona XIP. Ver pack_pico.c.
  *   >= 0  se saltó, y es lo que devolvió el pack

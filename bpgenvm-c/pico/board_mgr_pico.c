@@ -14,6 +14,7 @@
 #include "flash_lock.h"
 #include "board_desc.h"
 #include "flash_layout.h"
+#include "pack_pico.h"   /* V5/H8: s_pack_ram_base — la RAM del motor nativo */
 
 #include "pico/stdlib.h"
 #include "hardware/flash.h"
@@ -204,6 +205,13 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
             bm.packs_flash = &s_packs_fl;
         }
     }
+
+    /* V5/H8 — la RAM de trabajo de un motor nativo: el PRINCIPIO del bloque de
+     * la BD (`[estaticos | arena]`). Ya lo calcula el arranque; aquí sólo se
+     * expone para que `PACK_BURN_BEGIN` pueda decírselo al IDE, que es quien
+     * relocaliza. Si no hay bloque, queda a 0 y el IDE lo dirá. */
+    bm.pack_ram_base = (uint32_t) (uintptr_t) s_pack_ram_base;
+    bm.pack_ram_size = s_sqlite_size;
 
     bpvm_bmgr_req_t req;
     memset(&req, 0, sizeof req);
