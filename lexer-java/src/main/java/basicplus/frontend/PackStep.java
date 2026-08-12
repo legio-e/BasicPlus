@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -58,11 +59,44 @@ public final class PackStep {
             new HashSet<>(Arrays.asList("mdn", "npk"));
 
     /**
+     * V5/H8 — LO QUE EL BUILD SABE Y EL PACK NECESITA SABER.
+     *
+     * <p>Pregunta de Eduardo: «si un usuario construye un pack, ¿cómo sabe qué
+     * dependencias va a necesitar?». Esto es la respuesta: el compilador lo sabe
+     * —recorre el cierre de imports para compilar— y aquí lo entrega.
+     */
+    public static final class Cierre {
+        /** Módulo → el `.mod` PRECOMPILADO que USÓ el compilador. Los que no
+         *  compila este build: la stdlib y demás. Van DENTRO del pack. */
+        public final Map<String, Path> modsExternos;
+        /** Fourcc de los packs de los que se importa (`from pack "SQLI"`). Son
+         *  las dependencias OPCIONALES: hay que grabarlas aparte, y es lo que
+         *  el usuario no puede adivinar. */
+        public final Set<String> packsRequeridos;
+        /** ¿El módulo raíz tiene `main`? Si no, es una LIBRERÍA. */
+        public final boolean ejecutable;
+
+        public Cierre(Map<String, Path> mods, Set<String> packs, boolean ejec) {
+            this.modsExternos = mods; this.packsRequeridos = packs; this.ejecutable = ejec;
+        }
+        /** Para los llamantes que aún no lo calculan: se comporta como antes. */
+        public static Cierre desconocido() {
+            return new Cierre(java.util.Collections.emptyMap(),
+                              java.util.Collections.emptySet(), true);
+        }
+    }
+
+    /** Compatibilidad: sin cierre, el pack sale como salía. */
+    public static Path buildPack(BpBuild proj) throws IOException {
+        return buildPack(proj, Cierre.desconocido());
+    }
+
+    /**
      * Empaqueta el resultado del build en {@code <outDir>/<main>.pack}.
      * @return el path del pack generado.
      * @throws IOException si no hay nada que empaquetar o falla la E/S / el formato.
      */
-    public static Path buildPack(BpBuild proj) throws IOException {
+    public static Path buildPack(BpBuild proj, Cierre cierre) throws IOException {
         Path outDir = Paths.get(proj.outDir);
         List<PackEntry> entries = new ArrayList<>();
 
@@ -72,6 +106,36 @@ public final class PackStep {
         // valida contra esto y no contra el total: un proyecto con resources/ y
         // CERO módulos dejaba la lista no-vacía y se colaba (ver abajo).
         List<PackEntry> modulos = new ArrayList<>(entries);
+
+        /* 1b) LAS DEPENDENCIAS EXTERNAS (V5/H8) — la stdlib y demás módulos que
+         *     este build NO compiló pero SÍ usó.
+         *
+         * Decisión de Eduardo: «metemos las librerías estándar aunque no me
+         * termina de gustar, pero es mejor ir sobre seguro».
+         *
+         * Lo que se mete es el `.mod` EXACTO que resolvió el compilador, no uno
+         * equivalente. Eso convierte en imposible el riesgo que preocupaba —que
+         * el pack lleve un `Str` distinto del que compiló contra él—: son el
+         * mismo fichero. Lo que NO resuelve, y hay que decidir aparte, es la
+         * precedencia frente al que ya trae el firmware.
+         *
+         * Si un módulo ya vino del outDir, gana ése: es el que acabamos de
+         * construir. */
+        int externos = 0;
+        for (Map.Entry<String, Path> e : cierre.modsExternos.entrySet()) {
+            Path mod = e.getValue();
+            String base = mod.getFileName().toString();
+            if (!base.endsWith(".mod")) continue;
+            String nombre = base.substring(0, base.length() - 4);
+            if (yaEsta(entries, "mod", nombre)) continue;      // el del outDir manda
+            if (!Files.isRegularFile(mod)) continue;
+            entries.add(new PackEntry("mod", nombre, Files.readAllBytes(mod)));
+            modulos.add(entries.get(entries.size() - 1));
+            externos++;
+        }
+        if (externos > 0)
+            System.out.println("pack: " + externos
+                + " modulo(s) de dependencia incluidos (los MISMOS contra los que se compilo)");
 
         // 2) resources del proyecto (cualquier extensión), si hay carpeta
         Path resDir = Paths.get(proj.projectDir, "resources");
@@ -99,17 +163,45 @@ public final class PackStep {
         if (modulos.isEmpty())
             throw new IOException("out:pack — no hay .mod/.mdn en " + outDir + " que empaquetar");
 
-        if (!contieneModulo(modulos, proj.main)) {
+        /* Sólo se exige el módulo del `main` si el pack es EJECUTABLE. Una
+         * librería no lleva main (criterio de Eduardo) y no tiene por qué. */
+        if (cierre.ejecutable && !contieneModulo(modulos, proj.main)) {
             throw new IOException("out:pack — el manifest declara main='" + proj.main
                     + "' pero ese módulo no está en el pack. Módulos encontrados en "
                     + outDir + ": [" + nombresDeModulos(modulos) + "]."
                     + pistaLibrary(modulos, proj.main));
         }
 
-        // 3) manifest → pack ejecutable (modelo jar). Reusa el `main` del .bpbuild.
-        String manifest = "main=" + proj.main + "\n";
+        /* ── 3) EL MANIFEST ─────────────────────────────────────────────────
+         *
+         * `main=` es OPCIONAL (V5/H8): sólo va si el módulo raíz tiene de verdad
+         * una función `main`. Y eso se SABE —lo dice el analizador—, no se
+         * declara: un campo en el `.bpbuild` sería un segundo sitio para la
+         * misma verdad, y los dos sitios acaban separándose.
+         *
+         * `requires-pack=` es la respuesta a «¿cómo sé qué dependencias
+         * necesito?». Sale de los `import ... from pack "XXXX"` que el
+         * compilador ha visto. NO se comprueba aquí: el PC no sabe qué hay en
+         * una placa concreta —cada firmware embebe un conjunto distinto y puede
+         * haber otros packs grabados—. Sólo se DECLARA; quien carga, que es el
+         * único que sabe lo que tiene, comparará. */
+        StringBuilder mf = new StringBuilder();
+        if (cierre.ejecutable) mf.append("main=").append(proj.main).append('\n');
+        List<String> faltan = new ArrayList<>();
+        for (String p : cierre.packsRequeridos)
+            if (!p.equals(proj.packProvides)) faltan.add(p);
+        if (!faltan.isEmpty()) mf.append("requires-pack=").append(String.join(",", faltan)).append('\n');
+        if (proj.packNotas != null && !proj.packNotas.isEmpty())
+            mf.append("notas=").append(proj.packNotas.replace('\n', ' ')).append('\n');
         entries.add(new PackEntry(PackFormat.TYPE_MANIFEST, PackFormat.MANIFEST_NAME,
-                manifest.getBytes(StandardCharsets.UTF_8)));
+                mf.toString().getBytes(StandardCharsets.UTF_8)));
+
+        System.out.println("pack: " + (cierre.ejecutable
+                ? "EJECUTABLE (main=" + proj.main + ")"
+                : "LIBRERIA (el modulo raiz no tiene `main`, y no le hace falta)"));
+        if (!faltan.isEmpty())
+            System.out.println("pack: NECESITA ademas estos packs grabados: " + faltan
+                + " — no van dentro, se graban aparte");
 
         // 4) empaquetar (Pack.jar = librería). fecha = ahora (la no-determinación
         //    intencionada del formato). Bloque 8 KB = el bloque de borrado MÁS
@@ -119,7 +211,13 @@ public final class PackStep {
         final int PORTABLE_BLOCK = 8192;
         Path out = outDir.resolve(proj.main + ".pack");
         try {
-            byte[] img = PackWriter.build(proj.main, "", System.currentTimeMillis() / 1000L,
+            /* LA VERSIÓN va en la CABECERA, no en el manifest: el formato ya
+             * tiene `version_contenido` (≤16 B) y llevaba vacío desde H3. Es un
+             * campo estructurado que el dispositivo lee sin parsear texto. El
+             * manifest es para lo que ahí no cabe (las notas). */
+            byte[] img = PackWriter.build(proj.main,
+                    proj.packVersion == null ? "" : proj.packVersion,
+                    System.currentTimeMillis() / 1000L,
                     entries, PORTABLE_BLOCK);
             Files.write(out, img);
         } catch (PackException pe) {
@@ -157,6 +255,14 @@ public final class PackStep {
                  + " biblioteca (sin main).";
         }
         return "";
+    }
+
+    /** ¿Ya hay una entrada con ese tipo y nombre? El outDir tiene prioridad
+     *  sobre las dependencias externas: es lo que acabamos de construir. */
+    private static boolean yaEsta(List<PackEntry> entries, String tipo, String nombre) {
+        for (PackEntry e : entries)
+            if (tipo.equals(e.tipo) && nombre.equals(e.nombre)) return true;
+        return false;
     }
 
     /** Nombres de los .mod, para que el error diga qué SÍ hay (el que se equivoca

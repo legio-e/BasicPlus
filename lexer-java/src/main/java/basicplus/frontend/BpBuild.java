@@ -84,6 +84,34 @@ public final class BpBuild {
      */
     public List<String> aotTargets = new ArrayList<>();
 
+    /**
+     * V5/H8 — la VERSIÓN del contenido del pack (`"pack": {"version": "3.53.4"}`).
+     *
+     * <p>Va a la CABECERA del pack, no al manifest: el formato ya tiene
+     * `version_contenido` (≤16 B) y llevaba vacío desde H3. Es un campo
+     * estructurado que el dispositivo lee sin parsear texto.
+     */
+    public String packVersion;
+
+    /** V5/H8 — observaciones libres del pack. Éstas SÍ van al manifest: no hay
+     *  sitio para ellas en la cabecera y no las lee nadie automáticamente. */
+    public String packNotas;
+
+    /**
+     * V5/H8 — el fourcc de la API que este pack PUBLICA, si su motor nativo
+     * publica alguna (`"provides": "SQLI"`).
+     *
+     * <p>Hace falta porque el nombre del `.npk` y el fourcc de su API son cosas
+     * distintas: la entrada se llama `sqlite` y el motor se anuncia como
+     * `'SQLI'`. Deducir uno del otro sería adivinar —cortar a 4 y subir a
+     * mayúsculas funciona aquí y falla en cuanto haya un nombre que no se
+     * parezca—, así que se declara.
+     *
+     * <p>Sirve para una cosa concreta: que un pack que importa de SU PROPIO
+     * motor no se declare dependiente de sí mismo.
+     */
+    public String packProvides;
+
     /** Salida del build (H3 Packs): "normal" (default) o "pack". En "pack", tras
      *  el build normal se empaquetan los .mod/.mdn del outDir + los resources en
      *  un pack EJECUTABLE (el `main` va al manifest). */
@@ -280,6 +308,39 @@ public final class BpBuild {
                  * device en un Run sin placa conectada tiene que ser ALGO
                  * concreto, y la primera de la lista es lo menos sorprendente. */
                 b.aotTarget = b.aotTargets.get(0);
+            }
+        }
+
+        // pack: opcional, { "version": string, "notas": string } — metadatos del
+        // pack. Separado de `out` a propósito: `out` dice CÓMO se construye, esto
+        // dice QUÉ se está construyendo.
+        Object packVal = map.get("pack");
+        if (packVal != null) {
+            if (!(packVal instanceof Map))
+                throw new IOException(file + ": 'pack' debe ser un objeto JSON {}");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> pk = (Map<String, Object>) packVal;
+            Object v = pk.get("version");
+            if (v instanceof String && !((String) v).isEmpty()) {
+                String s = ((String) v).trim();
+                /* El campo de la cabecera son 16 B UTF-8. Cortarlo en silencio
+                 * daría una versión PLAUSIBLE y equivocada — el peor fallo. */
+                if (s.getBytes(StandardCharsets.UTF_8).length > 16)
+                    throw new IOException(file + ": 'pack.version' no cabe — el campo"
+                        + " de la cabecera son 16 bytes y '" + s + "' ocupa "
+                        + s.getBytes(StandardCharsets.UTF_8).length + ".");
+                b.packVersion = s;
+            }
+            Object n = pk.get("notas");
+            if (n instanceof String && !((String) n).isEmpty()) b.packNotas = ((String) n).trim();
+            Object pv = pk.get("provides");
+            if (pv instanceof String && !((String) pv).isEmpty()) {
+                String s = ((String) pv).trim();
+                if (s.length() != 4)
+                    throw new IOException(file + ": 'pack.provides' es un fourcc de"
+                        + " EXACTAMENTE 4 caracteres (el que publica el motor, p.ej."
+                        + " \"SQLI\"); '" + s + "' tiene " + s.length() + ".");
+                b.packProvides = s;
             }
         }
 

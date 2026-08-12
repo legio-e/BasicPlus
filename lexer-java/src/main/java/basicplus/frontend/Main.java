@@ -70,6 +70,38 @@ public final class Main {
         Map<String, Path> bpSources;
         Path rootSrcDir;
 
+        /* ── V5/H8 — LO QUE EL BUILD SABE Y ANTES NO CONTABA ────────────────
+         *
+         * Pregunta de Eduardo: «si un usuario construye un pack, ¿cómo sabe qué
+         * dependencias va a necesitar?». La respuesta es que el compilador YA lo
+         * sabe —recorre el cierre transitivo de imports para compilar— y
+         * simplemente no lo decía. Esto lo apunta.
+         *
+         * Lo que el PC NO puede saber es qué hay en UNA PLACA: cada firmware
+         * embebe un conjunto distinto y encima puede haber otros packs grabados.
+         * Por eso esto no decide nada, sólo DECLARA: el pack dice lo que
+         * necesita, y quien lo carga —el único que sabe lo que tiene— compara. */
+
+        /** Nombre canónico del módulo → el `.mod` PRECOMPILADO del que salió su
+         *  interfaz. Sólo los que NO compila este build (la stdlib y demás
+         *  dependencias); los propios se emiten al outDir y ya están ahí.
+         *
+         *  <p>Es la ruta REAL que resolvió {@link #locateImportMod}, no una
+         *  reconstruida después — así el pack se lleva exactamente aquello
+         *  contra lo que se compiló, y un desfase dentro del pack es imposible. */
+        final Map<String, Path> modsUsados = new java.util.LinkedHashMap<>();
+
+        /** Los packs de los que este build importa algo (`import v1 from pack
+         *  "SQLI"`). Son las dependencias OPCIONALES: no están en el micro y hay
+         *  que grabarlas aparte. Justo lo que el usuario no puede adivinar hoy. */
+        final Set<String> packsRequeridos = new LinkedHashSet<>();
+
+        /** ¿El módulo raíz tiene función `main`? Decide si el pack es EJECUTABLE.
+         *  Una librería no tiene por qué llevar main (criterio de Eduardo), y esto
+         *  se SABE, no se declara: preguntarlo otra vez en el `.bpbuild` sería un
+         *  segundo sitio para la misma verdad, y los dos sitios se separan. */
+        boolean raizTieneMain = false;
+
         /** H6.a-lite — .bpi que ESTE build ha ESCRITO (en outDir), para poder
          *  borrarlos al terminar. Sólo entra lo que escribimos: los .bpi de
          *  librerías precompiladas (stdlib) se LEEN de libPaths, no se escriben,
@@ -245,7 +277,11 @@ public final class Main {
                 System.err.println("no se empaqueta: el paso previo al pack fallo");
                 return false;
             }
-            Path packPath = PackStep.buildPack(proj);
+            /* El pack se lleva lo que el build SUPO: los `.mod` que resolvió,
+             * los packs de los que importa, y si la raíz tiene `main`. Nada de
+             * esto se declara aparte — se sabe. */
+            Path packPath = PackStep.buildPack(proj, new PackStep.Cierre(
+                    ctx.modsUsados, ctx.packsRequeridos, ctx.raizTieneMain));
             System.out.println("pack generado: " + packPath);
         }
         return success;
@@ -523,7 +559,14 @@ public final class Main {
 
             // 3) Análisis completo.
             SemanticInfo info = analyzer.analyze(module);
-            if (depth == 0) printSemantics(info, module);
+            if (depth == 0) {
+                printSemantics(info, module);
+                /* V5/H8 — ¿es EJECUTABLE lo que estamos construyendo? Lo dice
+                 * tener `main`, no un campo del proyecto. Una librería no tiene
+                 * por qué llevarlo (criterio de Eduardo), y así el manifest del
+                 * pack no declara una entrada que no existe. */
+                ctx.raizTieneMain = info.module != null && info.module.mainFunction != null;
+            }
             int errs = countSemErrors(info);
             ctx.totalErrors += errs;
             if (errs > 0) {
@@ -939,6 +982,10 @@ public final class Main {
                 && readInterfaceCached(preMod, ctx) != null) {
             indent(depth); System.out.printf("-- interfaz de '%s' desde %s (embebida) --%n",
                     qualifiedName, preMod.getFileName());
+            /* V5/H8 — apuntar de DÓNDE salió. Si este build acaba en un pack,
+             * el pack se lleva ESTE fichero: el mismo contra el que se ha
+             * compilado, no uno que se parezca. */
+            anotarDependencia(ctx, qualifiedName, preMod, imp);
             return;
         }
 
@@ -1295,6 +1342,21 @@ public final class Main {
         String n = p.getFileName().toString();
         if (n.endsWith(".bpi") || n.endsWith(".mod")) return n.substring(0, n.length() - 4);
         return n;
+    }
+
+    /**
+     * V5/H8 — apunta una dependencia resuelta: de qué `.mod` salió, y si venía
+     * de un pack, de cuál.
+     *
+     * <p>Se llama desde donde se RESUELVE, no desde un recorrido aparte: un
+     * segundo recorrido puede no coincidir con el que compiló de verdad, y
+     * entonces el pack declararía una cosa y llevaría otra.
+     */
+    private static void anotarDependencia(Ctx ctx, String nombre, Path mod,
+                                          Ast.ImportNode imp) {
+        if (mod != null) ctx.modsUsados.put(nombre, mod.toAbsolutePath().normalize());
+        if (imp != null && imp.packName != null && !imp.packName.isEmpty())
+            ctx.packsRequeridos.add(imp.packName);
     }
 
     /** H6.a — localiza el .mod PRECOMPILADO de un import. Mismo orden de
