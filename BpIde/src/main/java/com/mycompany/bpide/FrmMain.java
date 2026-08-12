@@ -3303,6 +3303,12 @@ public class FrmMain extends javax.swing.JFrame
             return;
         }
         FrmBoard fb = new FrmBoard(client, s -> appendConsola(s + "\n"));
+        /* V5/H8 — la familia de la placa, para grabar packs con motor nativo: hay
+         * que elegir qué motor va y relocalizarlo. Se pasa el PROVEEDOR y no el
+         * valor porque entre abrir esta ventana y darle a grabar puede haberse
+         * cambiado de placa, y grabar el motor de otra familia no da error: da un
+         * salto a un sitio que no es. */
+        fb.setArchPlaca(() -> picoExplorer != null ? picoExplorer.deviceArch() : 0);
         fb.setSize(760, 520);
         fb.setLocationRelativeTo(this);
         fb.setVisible(true);

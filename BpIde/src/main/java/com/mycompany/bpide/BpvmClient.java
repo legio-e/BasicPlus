@@ -1207,9 +1207,51 @@ public final class BpvmClient implements AutoCloseable {
      *  chunks de 4 KB ≈ 100 pasos: sin esto el usuario no distingue "va" de "se
      *  ha colgado", que en una operación que BORRA flash es justo la duda que no
      *  se le puede dejar. */
+    /**
+     * V5/H8 — el hueco donde el IDE RELOCALIZA, entre que la placa dice dónde
+     * cae el pack y que empiezan a salir los datos.
+     *
+     * <p>Existe porque un motor nativo (`.npk`) hay que sellarlo para la
+     * dirección REAL, y ésa no se sabe hasta que `PACK_BURN_BEGIN` elige el
+     * hueco. La placa la dice; aquí se aplica.
+     */
+    public interface AntesDeEnviar {
+        /**
+         * @param flashAddr dirección que verá la CPU para el pack (no el offset)
+         * @param ramBase   base del bloque de RAM del motor; 0 = esta placa no da
+         * @return la imagen DEFINITIVA. Debe medir lo mismo que la declarada.
+         */
+        byte[] transformar(long flashAddr, long ramBase, long ramSize) throws IOException;
+    }
+
     public long packBurn(byte[] img, long timeoutMs, BurnProgress cb) throws IOException {
+        return packBurn(img, timeoutMs, null, cb);
+    }
+
+    /** Igual, con el paso de relocalización entre BEGIN y los DATA. */
+    public long packBurn(byte[] img, long timeoutMs, AntesDeEnviar sello, BurnProgress cb)
+            throws IOException {
         Map<String, Object> r = sendRequest("PACK_BURN_BEGIN",
                 "\"size\":" + img.length, null, timeoutMs);
+        if (sello != null) {
+            long flashAddr = Json.getLong(r, "flashAddr", 0);
+            long ramBase   = Json.getLong(r, "ramBase",   0);
+            long ramSize   = Json.getLong(r, "ramSize",   0);
+            /* Un firmware anterior a V5/H8 no manda estos campos. Grabar
+             * igualmente sellaría el motor para la direccion 0 y la placa lo
+             * rechazaría MUCHO después, con un mensaje sobre el sello que no
+             * apunta aquí. Mejor pararlo con el motivo verdadero. */
+            if (flashAddr == 0)
+                throw new IOException("el firmware de la placa no dice dónde cae el pack"
+                    + " (falta `flashAddr` en PACK_BURN_BEGIN). Es anterior a V5/H8:"
+                    + " no se puede grabar un pack con motor nativo hasta actualizarlo.");
+            int antes = img.length;
+            img = sello.transformar(flashAddr, ramBase, ramSize);
+            /* El tamaño YA se declaró en BEGIN y el device ya borró para él. */
+            if (img.length != antes)
+                throw new IOException("la relocalización cambió el tamaño del pack ("
+                    + antes + " → " + img.length + "); el device ya reservó el hueco");
+        }
         int chunk = (int) Json.getLong(r, "chunkMax", 4096);
         chunk -= chunk % 16;                       // contrato: chunks múltiplos de 16
         if (chunk <= 0) chunk = 4096;

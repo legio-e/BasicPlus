@@ -78,7 +78,7 @@ public final class PackReader {
             if (dataOff + elen > sizeTotal)
                 throw new PackException("datos de '" + enombre + "' (" + elen + " B) exceden el pack");
             byte[] data = Arrays.copyOfRange(img, dataOff, (int) (dataOff + elen));
-            entries.add(new PackEntry(etipo, enombre, data));
+            entries.add(new PackEntry(etipo, enombre, data, dataOff));
             off = dataOff + align4((int) elen);
         }
         int contentEnd = off;

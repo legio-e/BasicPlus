@@ -35,6 +35,13 @@ public class FrmBoard extends javax.swing.JFrame {
     }
 
     /** Engancha (o re-engancha) el cliente compartido y refresca. */
+    /** V5/H8 — de dónde sale la arquitectura de la placa, para que el grabado
+     *  pueda elegir qué motor del pack va y relocalizarlo. Lo sabe el explorador
+     *  de la ventana principal, así que se le pide a él. */
+    public void setArchPlaca(java.util.function.IntSupplier s) {
+        if (packsPanel != null) packsPanel.setArchPlaca(s);
+    }
+
     public void attach(BpvmClient client) {
         if (boardPanel != null) boardPanel.attach(client);
         if (packsPanel != null) packsPanel.attach(client);

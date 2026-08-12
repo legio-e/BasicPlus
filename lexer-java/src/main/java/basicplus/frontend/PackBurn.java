@@ -20,6 +20,23 @@ import java.util.List;
  *     mdn  SQLite.ARMV8
  * </pre>
  *
+ * <h3>DOS PASOS, y el orden no es opcional</h3>
+ * Grabar impone una secuencia que obliga a partir esto en dos:
+ *
+ * <pre>
+ *   1. podar(pack, destino)      → el pack de ESTA familia. Ya tiene su tamaño
+ *                                  FINAL, que es lo que hay que declarar.
+ *   2. PACK_BURN_BEGIN(tamaño)   → el dispositivo elige el hueco y DICE dónde
+ *                                  cae y qué RAM le da.
+ *   3. sellar(prep, flash, ram)  → parchea en sitio y pone el sello.
+ * </pre>
+ *
+ * <p>No se puede hacer del tirón porque <b>la dirección no se sabe hasta el
+ * paso 2</b>, y el tamaño hay que darlo en el paso 2. La clave para que encaje:
+ * quitar la tabla de relocalizaciones SÍ cambia el tamaño, pero relocalizar y
+ * sellar NO — son bytes parcheados en sitio. Así que se poda primero (tabla
+ * fuera, tamaño ya definitivo) y se sella después.
+ *
  * <h3>Dos disparadores INDEPENDIENTES</h3>
  * Matiz de Eduardo, y no es un detalle: un pack puede necesitar uno, el otro,
  * los dos o ninguno.
@@ -40,9 +57,6 @@ import java.util.List;
  * no puede fallar.</b> Y el coste aquí es tiempo de PC en una operación que se
  * hace de vez en cuando.
  *
- * <p>Además el IDE YA tiene que rehacer el pack por el `.npk`, así que la poda
- * del `.mdn` se apunta a un viaje que ya se hacía.
- *
  * <h3>Cero cambios en el micro</h3>
  * Tras la poda, el dispositivo encuentra `npk sqlite` y `mdn SQLite` — los
  * mismos nombres de siempre. Su búsqueda (`bpvm_pack_find(zona, len, "mdn",
@@ -57,24 +71,56 @@ public final class PackBurn {
         public BurnException(String m) { super(m); }
     }
 
-    /** Qué se hizo, para el log del IDE. */
-    public static final class Resultado {
-        public final byte[] pack;
-        public final int relocalizados;   /* .npk realojados */
-        public final int podados;         /* entradas de otras familias quitadas */
+    /**
+     * El pack ya podado para una familia, a la espera de dirección.
+     *
+     * <p>Si {@link #necesitaDireccion} es false ya está listo: no lleva motor
+     * nativo y `bytes` es lo que se graba tal cual.
+     */
+    public static final class Preparado {
+        /** El pack de esta familia. Tamaño DEFINITIVO (la tabla ya no está). */
+        public final byte[] bytes;
+        /** ¿Lleva `.npk`? Entonces hay que sellarlo antes de grabar. */
+        public final boolean necesitaDireccion;
+        public final int relocalizaciones;   /* cuántas hay que aplicar */
+        public final int podados;            /* entradas de otras familias fuera */
         public final List<String> detalle = new ArrayList<>();
-        Resultado(byte[] p, int r, int d) { pack = p; relocalizados = r; podados = d; }
+
+        final int npkOff;                    /* dónde vive el .npk dentro de `bytes` */
+        final NpackReloc.Imagen img;
+        final NpackFile.Meta meta;
+        final NpackReloc.Destino destino;
+        /* Las entradas y la cabecera, para REARMAR al sellar. El pack lleva un
+         * CRC de contenido: parchear los bytes en sitio lo dejaría mal, y
+         * recalcularlo aquí sería tener la aritmética del formato en dos
+         * sitios. Se rearma con la librería, que es quien lo sabe.
+         * (Lo cazó la prueba contra `ld`: "crc_contenido no cuadra".) */
+        final List<PackEntry> entradas;
+        final int idxNpk;
+        final String nombrePack, versionPack;
+        final long fechaPack;
+
+        Preparado(byte[] b, int off, NpackReloc.Imagen i, NpackFile.Meta m,
+                  NpackReloc.Destino d, int podados,
+                  List<PackEntry> entradas, int idxNpk,
+                  String nombrePack, String versionPack, long fechaPack) {
+            this.bytes = b; this.npkOff = off; this.img = i; this.meta = m;
+            this.destino = d; this.podados = podados;
+            this.entradas = entradas; this.idxNpk = idxNpk;
+            this.nombrePack = nombrePack; this.versionPack = versionPack;
+            this.fechaPack = fechaPack;
+            this.necesitaDireccion = (off >= 0);
+            this.relocalizaciones  = (i != null) ? i.sitios.size() : 0;
+        }
     }
 
     /**
-     * Prepara el pack para `destino`.
+     * PASO 1 — deja el pack con lo de ESTA familia y nada más.
      *
-     * @param baseFlash dónde va a quedar el CÓDIGO del `.npk` en la zona de
-     *   packs (no la base del pack: el código empieza tras la cabecera).
-     * @param baseRam   base del bloque de RAM que la placa le va a dar.
+     * <p>El `.npk` sale ya sin su tabla (por eso el tamaño es el definitivo)
+     * pero SIN relocalizar y SIN sello: todavía no tiene dirección.
      */
-    public static Resultado paraDestino(byte[] packBytes, NpackReloc.Destino destino,
-                                        int baseFlash, int baseRam)
+    public static Preparado podar(byte[] packBytes, NpackReloc.Destino destino)
             throws BurnException {
         PackReader.Pack p;
         try {
@@ -86,8 +132,10 @@ public final class PackBurn {
         String sufMio = "." + destino.sufijo;
         List<PackEntry> salida = new ArrayList<>();
         List<String> ajenas = new ArrayList<>();
-        int relocs = 0, podadas = 0;
-        Resultado tmp = null;
+        int podadas = 0;
+        String nombreNpk = null;
+        NpackReloc.Imagen img = null;
+        NpackFile.Meta meta = null;
 
         for (PackEntry e : p.entries) {
             int punto = e.nombre.lastIndexOf('.');
@@ -104,9 +152,29 @@ public final class PackBurn {
 
             String pelado = e.nombre.substring(0, punto);
             if ("npk".equals(e.tipo)) {
-                salida.add(new PackEntry("npk", pelado,
-                        relocalizar(e, destino, baseFlash, baseRam)));
-                relocs++;
+                if (img != null)
+                    throw new BurnException("el pack trae DOS motores para '"
+                        + destino.nombre + "' ('" + nombreNpk + "' y '" + pelado
+                        + "'). Cuál arrancaría no está definido: sobra uno.");
+                try {
+                    /* Las bases de ENLACE del .npk sin relocalizar: el fichero las
+                     * trae a cero (no tiene sello todavía), así que se le dicen.
+                     * Son las del enlace de referencia con que se construyó. */
+                    NpackFile.Leido l = NpackFile.leer(e.data, destino, 0, 0x20000000);
+                    if (l.relocalizado)
+                        throw new BurnException("'" + e.nombre + "' ya viene"
+                            + " relocalizado (sin tabla). Un pack distribuido debe"
+                            + " traerla: se realoja AL GRABAR, no antes.");
+                    img  = l.imagen;
+                    meta = l.meta;
+                    nombreNpk = pelado;
+                    /* Sin tabla YA: el tamaño que declaremos al dispositivo tiene
+                     * que ser el definitivo. Sellar luego no lo cambia. */
+                    salida.add(new PackEntry("npk", pelado,
+                            NpackFile.escribirSinSellar(l.imagen, l.meta)));
+                } catch (NpackReloc.RelocException ex) {
+                    throw new BurnException("'" + e.nombre + "': " + ex.getMessage());
+                }
             } else {
                 /* El `.mdn` no se toca: es position-independent. Sólo pierde el
                  * sufijo, que era para que el IDE supiera cuál era el suyo. */
@@ -115,12 +183,11 @@ public final class PackBurn {
         }
 
         /* ¿Había familias y ninguna era la nuestra? Eso NO puede pasar callando:
-         * se grabaria un pack sin motor y el fallo saldria mucho despues. */
-        if (relocs == 0 && !ajenas.isEmpty() && !hayAlgoMio(p, sufMio)) {
+         * se grabaría un pack sin motor y el fallo saldría mucho después. */
+        if (img == null && !ajenas.isEmpty() && !hayAlgoMio(p, sufMio))
             throw new BurnException("este pack no trae nada para '" + destino.nombre
                     + "' (sufijo " + destino.sufijo + "). Lleva: " + ajenas
                     + ". Hay que construirlo para este destino.");
-        }
 
         byte[] nuevo;
         try {
@@ -128,13 +195,98 @@ public final class PackBurn {
         } catch (PackException ex) {
             throw new BurnException("no se puede rearmar el pack: " + ex.getMessage());
         }
-        Resultado r = new Resultado(nuevo, relocs, podadas);
-        r.detalle.add("destino " + destino.nombre + " (" + destino.sufijo + ")");
-        r.detalle.add(relocs + " .npk relocalizado(s) y sellado(s)");
-        r.detalle.add(podadas + " entrada(s) de otras familias podada(s)"
+
+        /* Dónde ha quedado el motor DENTRO del pack ya montado. Se relee en vez
+         * de calcularlo: el que sabe dónde pone cada entrada es el formato, y
+         * repetir aquí su aritmética sería tenerla en dos sitios. */
+        int npkOff = -1;
+        if (img != null) {
+            try {
+                for (PackEntry e : PackReader.read(nuevo).entries)
+                    if ("npk".equals(e.tipo) && e.nombre.equals(nombreNpk)) npkOff = e.dataOff;
+            } catch (PackException ex) {
+                throw new BurnException("el pack recién montado no se relee: " + ex.getMessage());
+            }
+            if (npkOff < 0)
+                throw new BurnException("no encuentro el motor '" + nombreNpk
+                        + "' en el pack recién montado");
+        }
+
+        int idxNpk = -1;
+        for (int i = 0; i < salida.size(); i++)
+            if ("npk".equals(salida.get(i).tipo) && salida.get(i).nombre.equals(nombreNpk)) idxNpk = i;
+
+        Preparado prep = new Preparado(nuevo, npkOff, img, meta, destino, podadas,
+                salida, idxNpk, p.nombre, p.versionContenido, p.fechaUnix);
+        prep.detalle.add("destino " + destino.nombre + " (" + destino.sufijo + ")");
+        prep.detalle.add(podadas + " entrada(s) de otras familias podada(s)"
                 + (ajenas.isEmpty() ? "" : " " + ajenas));
-        r.detalle.add(salida.size() + " entradas en el pack a grabar");
-        return r;
+        prep.detalle.add(salida.size() + " entradas, " + nuevo.length + " B");
+        if (img != null)
+            prep.detalle.add("motor '" + nombreNpk + "' en el pack+0x"
+                    + Integer.toHexString(npkOff) + " — "
+                    + img.sitios.size() + " relocalizacion(es) pendientes de direccion");
+        else
+            prep.detalle.add("sin motor nativo: se graba tal cual");
+        return prep;
+    }
+
+    /**
+     * PASO 2 — con la dirección que ha dicho el dispositivo: relocaliza el motor
+     * y lo sella.
+     *
+     * @param baseFlash dirección que verá la CPU para el CÓDIGO del motor. NO es
+     *   la del pack ni la de la entrada: el código empieza tras la cabecera del
+     *   `.npk`. Confundirlos son 64 bytes de desfase y un salto a mitad de
+     *   instrucción, así que lo calcula {@link #baseDelCodigo}.
+     * @param baseRam base del bloque de RAM que la placa le da.
+     */
+    public static byte[] sellar(Preparado prep, int baseFlash, int baseRam)
+            throws BurnException {
+        if (!prep.necesitaDireccion) return prep.bytes;
+        if (baseRam == 0)
+            throw new BurnException("esta placa no da RAM a packs nativos"
+                    + " (ramBase = 0), asi que el motor no podria arrancar."
+                    + " No se graba a medias.");
+        try {
+            NpackReloc.Imagen puesta = NpackReloc.relocalizar(prep.img, baseFlash, baseRam);
+            byte[] npk = NpackFile.escribirGrabable(puesta, prep.meta);
+
+            /* Debe medir EXACTAMENTE lo mismo que el sin-sellar: de eso depende
+             * que el tamaño declarado al dispositivo siga valiendo. Si un día
+             * dejaran de medir igual, esto lo dice en vez de mandar un pack de
+             * otro tamaño del que se anunció. */
+            int antes = prep.entradas.get(prep.idxNpk).data.length;
+            if (npk.length != antes)
+                throw new BurnException("el motor sellado mide " + npk.length
+                        + " B y el podado medía " + antes + " — el tamaño ya se"
+                        + " declaró al empezar a grabar y no puede cambiar");
+
+            List<PackEntry> finales = new ArrayList<>(prep.entradas);
+            finales.set(prep.idxNpk, new PackEntry("npk",
+                    prep.entradas.get(prep.idxNpk).nombre, npk));
+            byte[] out = PackWriter.build(prep.nombrePack, prep.versionPack,
+                                          prep.fechaPack, finales);
+            if (out.length != prep.bytes.length)
+                throw new BurnException("el pack sellado mide " + out.length
+                        + " B y el podado medía " + prep.bytes.length);
+            return out;
+        } catch (NpackReloc.RelocException ex) {
+            throw new BurnException("relocalizando el motor: " + ex.getMessage());
+        } catch (PackException ex) {
+            throw new BurnException("rearmando el pack sellado: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * La dirección del CÓDIGO, a partir de dónde cae el pack.
+     *
+     * <p>Está aquí y no en el llamante porque los 64 bytes de la cabecera son
+     * justo el error que `bpvm_npack.h` avisa de no cometer: «confundirlos son
+     * 64 bytes de desfase y un salto a mitad de instruccion».
+     */
+    public static int baseDelCodigo(Preparado prep, int direccionDelPack) {
+        return direccionDelPack + prep.npkOff + NpackFile.HDR_BYTES;
     }
 
     /** ¿Hay ALGUNA entrada con nuestro sufijo? (para el aviso de arriba). */
@@ -149,26 +301,5 @@ public final class PackBurn {
      */
     private static boolean esSufijoDeDestino(String sufijoConPunto) {
         return NpackReloc.porSufijo(sufijoConPunto.substring(1)) != null;
-    }
-
-    private static byte[] relocalizar(PackEntry e, NpackReloc.Destino d,
-                                      int baseFlash, int baseRam)
-            throws BurnException {
-        try {
-            /* Las bases de ENLACE del .npk sin relocalizar: el fichero las trae
-             * a cero (no tiene sello todavia), asi que se le dicen. Son las del
-             * enlace de referencia con que se construyo: flash 0, RAM el umbral. */
-            NpackFile.Leido l = NpackFile.leer(e.data, d, 0, 0x20000000);
-            if (l.relocalizado) {
-                throw new BurnException("'" + e.nombre + "' ya viene relocalizado"
-                    + " (sin tabla). Un pack distribuido debe traerla: se realoja"
-                    + " AL GRABAR, no antes.");
-            }
-            NpackReloc.Imagen puesta =
-                    NpackReloc.relocalizar(l.imagen, baseFlash, baseRam);
-            return NpackFile.escribirGrabable(puesta, l.meta);
-        } catch (NpackReloc.RelocException ex) {
-            throw new BurnException("'" + e.nombre + "': " + ex.getMessage());
-        }
     }
 }

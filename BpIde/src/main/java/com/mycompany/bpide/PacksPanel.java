@@ -82,6 +82,14 @@ public final class PacksPanel extends JPanel {
 
     public void setLog(Consumer<String> l) { if (l != null) this.log = l; }
 
+    /** V5/H8 — de dónde sale la arquitectura de la placa (la publica el INFO y
+     *  la guarda el explorador al conectar). Se pide en vez de guardarla: entre
+     *  que se conectó y que se graba puede haber cambiado de placa. */
+    private java.util.function.IntSupplier archPlaca = () -> 0;
+    public void setArchPlaca(java.util.function.IntSupplier s) {
+        if (s != null) this.archPlaca = s;
+    }
+
     public void attach(BpvmClient c) {
         this.client = c;
         if (c == null) { summaryLabel.setText("(sin conexión)"); clearAll(); }
@@ -210,10 +218,37 @@ public final class PacksPanel extends JPanel {
         summaryLabel.setText("grabando " + f.getName() + "…");
         bg(() -> {
             byte[] img = java.nio.file.Files.readAllBytes(f.toPath());
+
+            /* ── V5/H8: EL PACK SE PREPARA PARA ESTA PLACA ──────────────────
+             *
+             * Un pack universal trae el motor de VARIAS familias. Aquí se poda
+             * a la de esta placa, y el motor que quede se relocaliza para la
+             * direccion REAL — que no se sabe hasta que el device elige el
+             * hueco, o sea DENTRO de packBurn, entre el BEGIN y los datos.
+             *
+             * Si el pack no lleva motor nativo esto no hace nada: `podar`
+             * devuelve el mismo contenido y `sellar` lo pasa tal cual. */
+            final basicplus.frontend.PackBurn.Preparado prep = prepararParaLaPlaca(img);
+            byte[] aGrabar = (prep != null) ? prep.bytes : img;
+
             // El avance va a la MISMA etiqueta que ya dice "grabando…": es donde
             // el usuario está mirando. Y se pinta en el hilo de Swing, que es de
             // donde NO viene esta llamada (esto corre en el hilo de fondo).
-            long off = client.packBurn(img, 30000, (hechos, total) -> {   // T holgado: borra+programa
+            long off = client.packBurn(aGrabar, 30000,
+                (flashAddr, ramBase, ramSize) -> {
+                    if (prep == null || !prep.necesitaDireccion) return aGrabar;
+                    int codigo = basicplus.frontend.PackBurn.baseDelCodigo(prep, (int) flashAddr);
+                    log.accept(String.format(
+                        "[Packs] pack en 0x%08X · motor en 0x%08X · RAM 0x%08X (%d KB)"
+                        + " — relocalizando %d sitio(s)%n",
+                        flashAddr, codigo, ramBase, ramSize / 1024, prep.relocalizaciones));
+                    try {
+                        return basicplus.frontend.PackBurn.sellar(prep, codigo, (int) ramBase);
+                    } catch (basicplus.frontend.PackBurn.BurnException be) {
+                        throw new java.io.IOException(be.getMessage(), be);
+                    }
+                },
+                (hechos, total) -> {   // T holgado: borra+programa
                 final int pct = total > 0 ? (int) ((hechos * 100L) / total) : 0;
                 javax.swing.SwingUtilities.invokeLater(() -> summaryLabel.setText(
                         "grabando " + f.getName() + "… " + pct + " %"
@@ -224,6 +259,37 @@ public final class PacksPanel extends JPanel {
             log.accept("[Packs] grabado " + f.getName() + " (" + r[0] + " B) en offset " + r[1]);
             refresh();
         });
+    }
+
+    /**
+     * V5/H8 — deja el pack con lo de ESTA placa: poda las familias que no son y
+     * prepara el motor para sellarlo cuando se sepa la dirección.
+     *
+     * <p>Devuelve null si no hay que tocar nada (pack sin familias). Un fallo NO
+     * se traga: grabar un pack a medias es peor que no grabarlo, y el mensaje
+     * de `PackBurn` ya dice qué pasa y qué hacer.
+     */
+    private basicplus.frontend.PackBurn.Preparado prepararParaLaPlaca(byte[] img)
+            throws java.io.IOException {
+        /* La familia la dice la PLACA, igual que en la pasada AOT: un desplegable
+         * del IDE podría estar puesto en otra cosa, y el motor equivocado no da
+         * error — da un salto a un sitio que no es. */
+        String arch = PicoExplorer.archName(archPlaca.getAsInt());
+        basicplus.frontend.NpackReloc.Destino d =
+                basicplus.frontend.NpackReloc.porTargetAot(arch);
+        if (d == null)
+            throw new java.io.IOException("no sé la arquitectura de la placa"
+                + (arch.isEmpty() ? "" : " ('" + arch + "')")
+                + ". Desconecta y vuelve a conectar el explorador: sin eso no se"
+                + " puede elegir qué motor grabar.");
+        try {
+            basicplus.frontend.PackBurn.Preparado prep =
+                    basicplus.frontend.PackBurn.podar(img, d);
+            for (String s : prep.detalle) log.accept("[Packs] " + s + "\n");
+            return prep;
+        } catch (basicplus.frontend.PackBurn.BurnException be) {
+            throw new java.io.IOException(be.getMessage(), be);
+        }
     }
 
     /** "Borrar" = fase 3, tombstone del pack seleccionado: se MARCA borrado

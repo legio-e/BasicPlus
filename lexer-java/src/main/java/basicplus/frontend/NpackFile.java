@@ -82,6 +82,23 @@ public final class NpackFile {
         return escribir(img, meta, /*sello*/ true, /*conTabla*/ false);
     }
 
+    /**
+     * V5/H8 — INTERMEDIO: sin tabla y SIN sellar. Nunca sale del PC.
+     *
+     * <p>Existe por el orden que impone grabar: el dispositivo elige el hueco al
+     * empezar (`PACK_BURN_BEGIN`), y hasta ese momento no se sabe la dirección
+     * — pero el TAMAÑO hay que declararlo antes. Quitar la tabla cambia el
+     * tamaño; relocalizar y sellar, no. Así que se quita la tabla primero, se
+     * pregunta la dirección, y luego se parchea en sitio.
+     *
+     * <p>Mide EXACTAMENTE lo mismo que {@link #escribirGrabable}: mismas
+     * imágenes, misma cabecera, ninguno lleva tabla. De eso depende que el
+     * parcheo posterior quepa donde tiene que caber.
+     */
+    public static byte[] escribirSinSellar(NpackReloc.Imagen img, Meta meta) {
+        return escribir(img, meta, /*sello*/ false, /*conTabla*/ false);
+    }
+
     private static byte[] escribir(NpackReloc.Imagen img, Meta meta,
                                    boolean sello, boolean conTabla) {
         byte[] h = new byte[HDR_BYTES];
