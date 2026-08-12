@@ -114,6 +114,24 @@ public final class BpBuild {
     public String packNotas;
 
     /**
+     * V5/H8 — CÓMO SE LLAMA EL PACK (`"pack": {"name": "SQLite"}`).
+     *
+     * <p>Sale de su propia entrada, y si no la hay, del nombre del `.bpbuild`
+     * (criterio de Eduardo). Lo que ya <b>no</b> lo decide es `main`: el nombre
+     * del pack es una propiedad del pack, no de su punto de entrada — y una
+     * librería no tiene entrada, con lo cual antes ni había de dónde sacarlo.
+     *
+     * <p>El build lo IMPRIME junto con su procedencia. Es un fichero que se
+     * distribuye y se graba: si un día cambia de nombre, tiene que verse.
+     */
+    public String packName;
+
+    /** ¿Venía de `pack.name` o lo hemos sacado del fichero? Sólo para DECIRLO
+     *  al construir: el nombre de un artefacto que se distribuye no debe
+     *  cambiar sin que se vea. */
+    public boolean packNameDeclarado;
+
+    /**
      * V5/H8 — el fourcc de la API que este pack PUBLICA, si su motor nativo
      * publica alguna (`"provides": "SQLI"`).
      *
@@ -270,11 +288,18 @@ public final class BpBuild {
                 throw new IOException(file + ": falta 'main' (nombre del módulo"
                     + " principal). Si es una librería sin main, di qué compilar"
                     + " con 'sources': [\"a/X.bp\", \"b/Y.bp\"].");
-            /* Sin main, el pack se llama como el proyecto. */
+            /* Sin main, el resto del IDE necesita ALGO no vacío como nombre de
+             * módulo; el del proyecto es lo menos sorprendente. Ojo: esto NO es
+             * el nombre del pack — ése lo decide `packName`. */
             b.main = nombreSinExtension(file);
         } else {
             b.main = (String) mainVal;
         }
+
+        /* El nombre del pack: su entrada si la hay, y si no la hay, el del
+         * fichero de proyecto. NUNCA `main` (criterio de Eduardo). */
+        if (b.packName == null || b.packName.isEmpty())
+            b.packName = nombreSinExtension(file);
 
         // dependencies: opcional, lista de strings
         Object depsVal = map.get("dependencies");
@@ -395,6 +420,16 @@ public final class BpBuild {
             }
             Object n = pk.get("notas");
             if (n instanceof String && !((String) n).isEmpty()) b.packNotas = ((String) n).trim();
+            Object nm = pk.get("name");
+            if (nm instanceof String && !((String) nm).isEmpty()) {
+                String s = ((String) nm).trim();
+                /* Es un nombre de FICHERO y de entrada del pack, no una ruta. */
+                if (s.indexOf('/') >= 0 || s.indexOf('\\') >= 0)
+                    throw new IOException(file + ": 'pack.name' es un nombre, no una"
+                        + " ruta ('" + s + "'). El sitio lo decide 'outDir'.");
+                b.packName = s;
+                b.packNameDeclarado = true;
+            }
             Object pv = pk.get("provides");
             if (pv instanceof String && !((String) pv).isEmpty()) {
                 String s = ((String) pv).trim();

@@ -196,6 +196,9 @@ public final class PackStep {
         entries.add(new PackEntry(PackFormat.TYPE_MANIFEST, PackFormat.MANIFEST_NAME,
                 mf.toString().getBytes(StandardCharsets.UTF_8)));
 
+        System.out.println("pack: nombre '" + proj.packName + "' ("
+                + (proj.packNameDeclarado ? "de pack.name" : "del fichero de proyecto")
+                + ")");
         System.out.println("pack: " + (cierre.ejecutable
                 ? "EJECUTABLE (main=" + proj.main + ")"
                 : "LIBRERIA (el modulo raiz no tiene `main`, y no le hace falta)"));
@@ -209,13 +212,17 @@ public final class PackStep {
         //    Pico/ESP32) → el MISMO pack se puede grabar en cualquiera (regla de
         //    portabilidad de la spec §2.1; el BURN valida la alineación).
         final int PORTABLE_BLOCK = 8192;
-        Path out = outDir.resolve(proj.main + ".pack");
+        /* El nombre del pack sale de `pack.name` o del fichero de proyecto —
+         * NO de `main` (V5/H8). Se DICE, con su procedencia: es un fichero que
+         * se distribuye y se graba; si un dia cambia de nombre tiene que verse
+         * al construirlo, no al no encontrarlo. */
+        Path out = outDir.resolve(proj.packName + ".pack");
         try {
             /* LA VERSIÓN va en la CABECERA, no en el manifest: el formato ya
              * tiene `version_contenido` (≤16 B) y llevaba vacío desde H3. Es un
              * campo estructurado que el dispositivo lee sin parsear texto. El
              * manifest es para lo que ahí no cabe (las notas). */
-            byte[] img = PackWriter.build(proj.main,
+            byte[] img = PackWriter.build(proj.packName,
                     proj.packVersion == null ? "" : proj.packVersion,
                     System.currentTimeMillis() / 1000L,
                     entries, PORTABLE_BLOCK);
