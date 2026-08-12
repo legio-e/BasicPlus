@@ -273,8 +273,40 @@ public final class PacksPanel extends JPanel {
             throws java.io.IOException {
         /* La familia la dice la PLACA, igual que en la pasada AOT: un desplegable
          * del IDE podría estar puesto en otra cosa, y el motor equivocado no da
-         * error — da un salto a un sitio que no es. */
-        String arch = PicoExplorer.archName(archPlaca.getAsInt());
+         * error — da un salto a un sitio que no es.
+         *
+         * Y si el explorador todavía no la tiene, SE LA PEDIMOS. El valor se
+         * cachea al conectar mediante una petición ASÍNCRONA, así que puede no
+         * haber llegado —o venir de otra placa anterior—. Depender de ese
+         * cacheo es una carrera; preguntar aquí no lo es, y estamos en el hilo
+         * de fondo con la conexión abierta, que es el sitio para hacerlo. */
+        int a = archPlaca.getAsInt();
+        if (a == 0 && client != null) {
+            java.util.Map<String, Object> inf;
+            try {
+                inf = client.getInfo(T);
+            } catch (java.io.IOException io) {
+                /* NO es lo mismo «no lo tengo cacheado» que «la placa no
+                 * contesta», y mandan a sitios distintos: reconectar el
+                 * explorador no arregla un wire caído. Decir cuál es. */
+                throw new java.io.IOException("la placa no responde al INFO ("
+                    + io.getMessage() + "). Sin eso no se puede saber qué motor"
+                    + " grabar. Resetea la placa y vuelve a conectar; comprueba"
+                    + " con el botón INFO antes de grabar.", io);
+            }
+            Object v = (inf != null) ? inf.get("arch") : null;
+            /* Número O cadena, igual que `PicoExplorer.ilong`: el wire manda
+             * JSON y según el camino un entero puede llegar de las dos formas.
+             * Aceptar sólo una lo dejaría a 0 EN SILENCIO. */
+            if (v instanceof Number) a = ((Number) v).intValue();
+            else if (v != null) {
+                try { a = Integer.parseInt(v.toString().trim()); }
+                catch (NumberFormatException ignore) { }
+            }
+            if (a != 0) log.accept("[Packs] la placa dice arch=" + a
+                    + " (" + PicoExplorer.archName(a) + ")\n");
+        }
+        String arch = PicoExplorer.archName(a);
         basicplus.frontend.NpackReloc.Destino d =
                 basicplus.frontend.NpackReloc.porTargetAot(arch);
         if (d == null)
