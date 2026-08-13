@@ -47,6 +47,39 @@ public final class Lexer {
     // el lexema con toLowerCase().
     private static final Map<String, TokenType> KEYWORDS = buildKeywords();
 
+    /**
+     * Los tipos de token que NACEN de una palabra reservada.
+     *
+     * <p>Existe para que un mensaje de error pueda decir *por qué* algo no vale
+     * como nombre. La comprobación de que una reservada no puede serlo NO hace
+     * falta escribirla: sale sola de que el lexer devuelva su token propio y no
+     * `IDENTIFIER` — donde el parser pide un nombre, el tipo ya no encaja. Esto
+     * es sólo para el TEXTO.
+     *
+     * <p>Se deriva del mapa, no se escribe a mano: una palabra nueva queda
+     * cubierta el día que se añada, sin que nadie se acuerde de este conjunto.
+     */
+    private static final java.util.Set<TokenType> RESERVADAS =
+            Collections.unmodifiableSet(new java.util.HashSet<>(KEYWORDS.values()));
+
+    /** ¿Este token viene de una palabra reservada del lenguaje? */
+    public static boolean esPalabraReservada(TokenType t) {
+        return RESERVADAS.contains(t);
+    }
+
+    /**
+     * Todas las palabras reservadas, en minúsculas. Para el TEST que comprueba
+     * que ninguna puede colarse como nombre (#384).
+     *
+     * <p>Se expone en vez de que el test escriba su propia lista, y ése es el
+     * punto: una palabra nueva entra en la prueba el día que se añade aquí, sin
+     * que nadie tenga que acordarse. Una lista copiada envejece en silencio y
+     * entonces el test dice «todas pasan» sobre un conjunto viejo.
+     */
+    public static java.util.Set<String> palabrasReservadas() {
+        return Collections.unmodifiableSet(KEYWORDS.keySet());
+    }
+
     private static Map<String, TokenType> buildKeywords() {
         Map<String, TokenType> m = new HashMap<>();
         // estructura

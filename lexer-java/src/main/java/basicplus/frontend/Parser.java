@@ -501,7 +501,7 @@ public final class Parser {
             advance();
             return t.lexeme;
         }
-        error("se esperaba " + what + ", encontrado '" + t.lexeme + "'");
+        errorNombreEsperado(what, t);
         return "?";
     }
 
@@ -581,6 +581,21 @@ public final class Parser {
         // como `property owner` / `var owner`. Marca que puede colgar de un
         // evento, y por tanto que necesita slot de vtable aunque sea privada.
         boolean isEventHandler = match(TokenType.EVENT);
+        /* `event` es el ÚNICO caso en que el error genérico no sirve: como aquí
+         * es un modificador legítimo, se consume, y el fallo aparece dos tokens
+         * más allá señalando al '(' — sin nombrar `event` por ningún lado. El
+         * usuario que quería llamar `event` a su función lee «se esperaba
+         * nombre, encontrado '('» y no entiende nada.
+         *
+         * Las dos lecturas caben en una frase, y no hace falta elegir cuál era:
+         * o falta el nombre tras el modificador, o querías usar la palabra como
+         * nombre y no puede ser. Lo cazó el censo de las 73 keywords (13-ago):
+         * 70 daban un mensaje que nombraba la palabra, y ésta no. */
+        if (isEventHandler && check(TokenType.LPAREN)) {
+            error("tras 'function event' falta el nombre del manejador"
+                + " — y si querías llamar 'event' a la función, no puede ser:"
+                + " es una palabra reservada");
+        }
         DeclName name = parseDeclName();
 
         consume(TokenType.LPAREN, "se esperaba '(' tras el nombre de la función");
@@ -1672,8 +1687,34 @@ public final class Parser {
             advance();
             return name;
         }
-        error("se esperaba " + what + ", encontrado '" + current().lexeme + "'");
+        errorNombreEsperado(what, current());
         return "?";
+    }
+
+    /**
+     * El error de «aquí iba un nombre y no lo hay», en UN sitio.
+     *
+     * <p>Las dos funciones que consumen nombres —la estricta y la que admite
+     * las contextuales— escribían este texto cada una por su cuenta. Da igual
+     * mientras sea una línea; deja de dar igual en cuanto el mensaje tiene algo
+     * que explicar, porque entonces una de las dos se queda corta y nadie lo ve.
+     *
+     * <p>Lo que añade: si lo que hay es una PALABRA RESERVADA, decirlo. El
+     * usuario que escribe `function next()` no necesita saber que se esperaba un
+     * nombre —eso ya lo sabía—, necesita saber que `next` está cogida. Sin esto
+     * el mensaje es correcto y no ayuda, que es la peor combinación.
+     *
+     * <p>No lleva una explicación por palabra a propósito: serían 73 textos que
+     * envejecen y que hay que mantener sincronizados con el lexer. Con saber
+     * que está reservada, renombrar es inmediato.
+     */
+    private void errorNombreEsperado(String what, Token t) {
+        String msg = "se esperaba " + what + ", encontrado '" + t.lexeme + "'";
+        if (Lexer.esPalabraReservada(t.type)) {
+            msg += " — '" + t.lexeme + "' es una palabra reservada del lenguaje;"
+                 + " elige otro nombre";
+        }
+        error(msg);
     }
 
     /**
