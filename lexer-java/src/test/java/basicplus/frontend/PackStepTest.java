@@ -35,6 +35,10 @@ class PackStepTest {
         b.outDir = outDir.toString();
         b.main = "App";
         b.out = "pack";
+        // V5/H8 — el nombre del pack ya NO sale de `main`: es suyo (`pack.name`
+        // o el fichero de proyecto). Un BpBuild hecho a mano no tiene fichero,
+        // así que lo dice. Ver el comentario largo en PackStep.buildPack.
+        b.packName = "App";
 
         Path pack = PackStep.buildPack(b);
         assertTrue(Files.exists(pack));
@@ -64,6 +68,10 @@ class PackStepTest {
         b.outDir = outDir.toString();
         b.main = "App";
         b.out = "pack";
+        // V5/H8 — el nombre del pack ya NO sale de `main`: es suyo (`pack.name`
+        // o el fichero de proyecto). Un BpBuild hecho a mano no tiene fichero,
+        // así que lo dice. Ver el comentario largo en PackStep.buildPack.
+        b.packName = "App";
         assertThrows(IOException.class, () -> PackStep.buildPack(b));
     }
 }

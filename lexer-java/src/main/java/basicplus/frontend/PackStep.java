@@ -216,6 +216,22 @@ public final class PackStep {
          * NO de `main` (V5/H8). Se DICE, con su procedencia: es un fichero que
          * se distribuye y se graba; si un dia cambia de nombre tiene que verse
          * al construirlo, no al no encontrarlo. */
+        /* V5/H8 — el nombre del pack es SUYO: sale de `pack.name` o, si no, del
+         * fichero de proyecto. NUNCA de `main`, que es otra cosa (cuál es el
+         * módulo de entrada) y cambiaría el nombre del artefacto al cambiar de
+         * punto de arranque.
+         *
+         * Aquí no se inventa uno por defecto: quien construye un BpBuild a mano
+         * —sin fichero de proyecto del que sacarlo— tiene que decirlo. Antes
+         * llegaba `null` hasta `PackWriter.build` y salía un NullPointer sin
+         * pista; lo cazó `PackStepTest` al pasar la suite del frontend, un día
+         * después de introducirlo. */
+        if (proj.packName == null || proj.packName.trim().isEmpty()) {
+            throw new IOException("out:pack — el proyecto no dice cómo se llama el pack."
+                    + " Ponle `\"pack\": { \"name\": \"...\" }` en el .bpbuild, o"
+                    + " construye el BpBuild con `packName` puesto (no se deduce"
+                    + " de `main`: son cosas distintas).");
+        }
         Path out = outDir.resolve(proj.packName + ".pack");
         try {
             /* LA VERSIÓN va en la CABECERA, no en el manifest: el formato ya
