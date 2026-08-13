@@ -407,7 +407,21 @@ public final class Parser {
             case CLASS:    return parseClassDef(isPublic);
             case ENUM:     return parseEnumDef(isPublic);
             default:
-                error("se esperaba const/var/function/property/event/class/enum, encontrado '" + tok.lexeme + "'");
+                {
+                    String msg = "se esperaba const/var/function/property/event/class/enum,"
+                               + " encontrado '" + tok.lexeme + "'";
+                    // BP no tiene `static`: un miembro de clase se CUALIFICA con
+                    // su clase. Lo dice aquí porque es lo primero que escribe
+                    // quien viene de Java o de VB, y sin la pista el mensaje es
+                    // correcto pero no ayuda (mismo criterio que #384: el error
+                    // tiene que decir QUÉ hay que cambiar).
+                    if ("static".equals(tok.lexeme) || "shared".equals(tok.lexeme)) {
+                        msg += " — BP no tiene '" + tok.lexeme + "': un miembro de clase se"
+                             + " cualifica con la clase, p. ej. 'public function Caja.metodo()'"
+                             + " o 'public const Caja.MAX: integer := 10'";
+                    }
+                    error(msg);
+                }
                 synchronize();
                 return null;
         }
@@ -832,9 +846,22 @@ public final class Parser {
             skipNewlines();
             if (isAtEnd() || check(TokenType.END)) break;
             panicMode = false;                  // §7a: cada miembro de clase parte "limpio"
+            int posBefore = pos;
             ITopLevelDecl m = parseDefStmt();
             if (m != null) members.add(m);
             drainPendingVarDecls(members);      // var multi-grupo (fields)
+            // §7a watchdog anti-cuelgue — el MISMO que ya tenían parseBody y
+            // parseModule, y que a este bucle nunca llegó.
+            //
+            // Sin él, cualquier palabra que no empiece un miembro válido dejaba
+            // a parseDefStmt sin avanzar y el compilador se quedaba dando
+            // vueltas PARA SIEMPRE: en el IDE, congelado y sin un mensaje.
+            //
+            // Y no es un caso raro: lo dispara `public static function ...`, que
+            // es lo primero que escribe quien viene de Java. BP no tiene
+            // `static` —un miembro de clase se cualifica, `public function
+            // Cls.metodo()`— pero eso hay que DECIRLO, no colgarse.
+            if (pos == posBefore && !isAtEnd()) advance();
             skipNewlines();
         }
         consume(TokenType.END, "se esperaba 'end' al final de la clase");
