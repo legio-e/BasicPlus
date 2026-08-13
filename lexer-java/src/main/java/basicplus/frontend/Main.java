@@ -2408,7 +2408,7 @@ public final class Main {
             Symbol.ClassSymbol cls = candidate.classes.get(name);
             if (cls != null) return new basicplus.frontend.BpType.ClassType(cls);
         }
-        return t;
+        return resolverComoBuiltin(t, name);   // #388 — List/Map/… no son de nadie
     }
 
     private static Path locateImportBpi(Ast.ImportNode imp, String bpiName, String library, String alias,
@@ -2461,7 +2461,25 @@ public final class Main {
         String name = ((basicplus.frontend.BpType.UnresolvedClassRef) t).name;
         Symbol.ClassSymbol cls = ns.classes.get(name);
         if (cls != null) return new basicplus.frontend.BpType.ClassType(cls);
-        return t;
+        return resolverComoBuiltin(t, name);
+    }
+
+    /**
+     * #388 — último recurso al resolver un tipo de una interfaz importada: las
+     * clases BUILT-IN (List, Map, StringBuilder…) no son de ningún módulo, así
+     * que no aparecen en `ns.classes` por mucho que se busque bien.
+     *
+     * <p>Sin esto, `public function list(w: Where): List` cruzaba el import con
+     * el retorno SIN RESOLVER, y entonces `dao.list(w).length()` decía «el tipo
+     * 'List' no tiene miembros» — mientras que `var l: List := dao.list(w)`
+     * seguía yendo, porque ahí los miembros salen del tipo DECLARADO de la
+     * variable y no del de la expresión. Esa asimetría era justo lo que hacía
+     * imposible encadenar.
+     */
+    private static basicplus.frontend.BpType resolverComoBuiltin(
+            basicplus.frontend.BpType t, String name) {
+        Symbol.ClassSymbol bi = SemanticAnalyzer.claseBuiltin(name);
+        return (bi != null) ? new basicplus.frontend.BpType.ClassType(bi) : t;
     }
 
     private static Path findExistingBpi(String bpiName, Path importerDir, Path outDir) {

@@ -697,6 +697,23 @@ public final class SemanticAnalyzer {
         s.tryDefine(fn);
     }
 
+    /**
+     * #388 — la clase BUILT-IN que se llama así (List, Map, StringBuilder…), o
+     * null si no hay ninguna.
+     *
+     * <p>Existe para el resolvedor de imports: una firma cross-module que
+     * devuelva o tome `List` llega como {@code UnresolvedClassRef("List")}, y él
+     * sólo sabía mirar entre las clases DEL MÓDULO importado — donde `List` no
+     * está, porque no es de nadie: la declara aquí el propio analizador. El tipo
+     * se quedaba sin resolver y `dao.list(w).length()` decía «el tipo 'List' no
+     * tiene miembros», aunque `var l: List := dao.list(w)` sí funcionara.
+     */
+    static ClassSymbol claseBuiltin(String name) {
+        Symbol sym = builtinScope().tryLookup(name);
+        return (sym instanceof ClassSymbol && ((ClassSymbol) sym).isBuiltin)
+                ? (ClassSymbol) sym : null;
+    }
+
     /** ¿Es 's' un símbolo built-in (no del usuario)? */
     public static boolean isBuiltin(Symbol sym) {
         Scope s = builtinScope();
