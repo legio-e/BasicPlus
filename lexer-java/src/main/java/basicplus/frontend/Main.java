@@ -1673,6 +1673,30 @@ public final class Main {
     }
 
     /**
+     * #387 — TODAS las firmas de un grupo de sobrecargas, empezando por la cabeza.
+     *
+     * <p>Las 2ª y siguientes NO están en el mapa del scope: cuelgan de la primera
+     * por {@code nextOverload}. O sea que un bucle sobre {@code getSymbols()} —o
+     * sobre {@code ns.functions.values()}— ve UNA firma por nombre y se salta las
+     * demás sin decir nada. Quien recorra símbolos importados para TOCARLOS (no
+     * sólo para mirarlos) tiene que pasar por aquí.
+     *
+     * <p>Lo que costó: los pases que resuelven los tipos de un import se saltaban
+     * las sobrecargas, así que sus parámetros de clase se quedaban en
+     * {@code UnresolvedClassRef} — que es «asignable desde todo» A PROPÓSITO, como
+     * red para no soltar errores confusos si algo no se resolvió. Resultado:
+     * {@code dao.load(9999)} con {@code load(long)} y {@code load(Medida)}
+     * empataba a coste 1 y salía «llamada ambigua», cuando sólo una de las dos era
+     * viable. Y sólo pasaba CROSS-MODULE: dentro del módulo los tipos ya vienen
+     * resueltos del análisis.
+     */
+    private static java.util.List<Symbol.FunctionSymbol> firmasDe(Symbol.FunctionSymbol head) {
+        java.util.List<Symbol.FunctionSymbol> out = new java.util.ArrayList<>();
+        for (Symbol.FunctionSymbol f = head; f != null; f = f.nextOverload) out.add(f);
+        return out;
+    }
+
+    /**
      * #392 — reparte los slots de vtable de una clase IMPORTADA. UNA sola
      * función, porque hay dos momentos en que se puede sembrar (al leer la
      * interfaz, o en el post-pass si la base vive en otro módulo) y antes eran
@@ -2130,10 +2154,12 @@ public final class Main {
                 for (Symbol.ClassSymbol stub : ns.classes.values()) {
                     for (Symbol mem : stub.instanceMembers.getSymbols()) {
                         if (mem instanceof Symbol.FunctionSymbol) {
-                            Symbol.FunctionSymbol f = (Symbol.FunctionSymbol) mem;
-                            f.returnType = resolveTypeAgainst(f.returnType, ns);
-                            for (Symbol.ParamSymbol p : f.params)
-                                p.type = resolveTypeAgainst(p.type, ns);
+                            // #387 — la cadena ENTERA: las sobrecargas no están en el mapa.
+                            for (Symbol.FunctionSymbol f : firmasDe((Symbol.FunctionSymbol) mem)) {
+                                f.returnType = resolveTypeAgainst(f.returnType, ns);
+                                for (Symbol.ParamSymbol p : f.params)
+                                    p.type = resolveTypeAgainst(p.type, ns);
+                            }
                         } else if (mem instanceof Symbol.PropertySymbol) {
                             Symbol.PropertySymbol p = (Symbol.PropertySymbol) mem;
                             p.type = resolveTypeAgainst(p.type, ns);
@@ -2200,19 +2226,23 @@ public final class Main {
         // disponibles. Sólo toca refs que no se resolvieron contra el propio
         // ns en el primer pass.
         for (Symbol.ImportedNamespaceSymbol ns : loadedNs) {
-            for (Symbol.FunctionSymbol fn : ns.functions.values()) {
-                fn.returnType = resolveCrossModuleType(fn.returnType, loadedNs);
-                for (Symbol.ParamSymbol p : fn.params) {
-                    p.type = resolveCrossModuleType(p.type, loadedNs);
+            for (Symbol.FunctionSymbol head : ns.functions.values()) {
+                // #387 — idem con las funciones LIBRES: el mapa guarda la 1ª firma.
+                for (Symbol.FunctionSymbol fn : firmasDe(head)) {
+                    fn.returnType = resolveCrossModuleType(fn.returnType, loadedNs);
+                    for (Symbol.ParamSymbol p : fn.params) {
+                        p.type = resolveCrossModuleType(p.type, loadedNs);
+                    }
                 }
             }
             for (Symbol.ClassSymbol stub : ns.classes.values()) {
                 for (Symbol mem : stub.instanceMembers.getSymbols()) {
                     if (mem instanceof Symbol.FunctionSymbol) {
-                        Symbol.FunctionSymbol f = (Symbol.FunctionSymbol) mem;
-                        f.returnType = resolveCrossModuleType(f.returnType, loadedNs);
-                        for (Symbol.ParamSymbol p : f.params)
-                            p.type = resolveCrossModuleType(p.type, loadedNs);
+                        for (Symbol.FunctionSymbol f : firmasDe((Symbol.FunctionSymbol) mem)) {
+                            f.returnType = resolveCrossModuleType(f.returnType, loadedNs);
+                            for (Symbol.ParamSymbol p : f.params)
+                                p.type = resolveCrossModuleType(p.type, loadedNs);
+                        }
                     } else if (mem instanceof Symbol.PropertySymbol) {
                         Symbol.PropertySymbol p = (Symbol.PropertySymbol) mem;
                         p.type = resolveCrossModuleType(p.type, loadedNs);

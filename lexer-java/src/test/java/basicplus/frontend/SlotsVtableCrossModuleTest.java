@@ -8,8 +8,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -124,27 +122,6 @@ class SlotsVtableCrossModuleTest {
         return out;
     }
 
-    // ── Extracción de símbolos ─────────────────────────────────────────────
-    //
-    // Las cadenas del .mod van con la LONGITUD delante (2 bytes big-endian), o
-    // sea que se pueden sacar exactas y no «buscando texto»: sin la longitud,
-    // un `#10` seguido de una cadena que empiece por dígito se leería como
-    // `#103` y la prueba mentiría en la dirección peor (verde falso).
-
-    private static List<String> cadenasDe(byte[] d) {
-        List<String> out = new ArrayList<>();
-        for (int i = 0; i + 2 < d.length; i++) {
-            int len = ((d[i] & 0xFF) << 8) | (d[i + 1] & 0xFF);
-            if (len < 3 || len > 200 || i + 2 + len > d.length) continue;
-            boolean imprimible = true;
-            for (int k = i + 2; k < i + 2 + len; k++) {
-                if (d[k] < 0x20 || d[k] > 0x7E) { imprimible = false; break; }
-            }
-            if (imprimible) out.add(new String(d, i + 2, len, StandardCharsets.US_ASCII));
-        }
-        return out;
-    }
-
     /** `Modulo.Clase#clave#slot` — la forma con la que un módulo PIDE un método
      *  de una clase importada. La clave puede venir mangleada (`buscar$LCosa;`),
      *  así que ahí vale cualquier cosa que no sea '#'. */
@@ -155,8 +132,8 @@ class SlotsVtableCrossModuleTest {
     @DisplayName("todo método que se PIDE con un slot, su dueño lo EXPORTA con ese slot")
     void loQueSePideEsLoQueSeExporta(@TempDir Path tmp) throws Exception {
         Path out = compilarLosTres(tmp);
-        Set<String> exportaDao = new HashSet<>(cadenasDe(Files.readAllBytes(out.resolve("SlotDao.mod"))));
-        List<String> delUso    = cadenasDe(Files.readAllBytes(out.resolve("SlotUso.mod")));
+        Set<String> exportaDao = ModSimbolos.conjunto(out.resolve("SlotDao.mod"));
+        List<String> delUso    = ModSimbolos.de(out.resolve("SlotUso.mod"));
 
         int comprobados = 0;
         for (String s : delUso) {
@@ -183,7 +160,7 @@ class SlotsVtableCrossModuleTest {
     @DisplayName("la hija numera DETRÁS de la base, y cada sobrecarga gasta su ranura")
     void cadaSobrecargaGastaSuRanura(@TempDir Path tmp) throws Exception {
         Path out = compilarLosTres(tmp);
-        Set<String> dao = new HashSet<>(cadenasDe(Files.readAllBytes(out.resolve("SlotDao.mod"))));
+        Set<String> dao = ModSimbolos.conjunto(out.resolve("SlotDao.mod"));
 
         // La cuenta, escrita entera para que un cambio de layout se vea aquí y
         // haya que decidirlo, en vez de descubrirlo enlazando:
@@ -203,9 +180,6 @@ class SlotsVtableCrossModuleTest {
     }
 
     private static String ordenados(Set<String> todos, String prefijo) {
-        List<String> l = new ArrayList<>();
-        for (String s : todos) if (s.startsWith(prefijo)) l.add(s);
-        l.sort(String::compareTo);
-        return l.toString();
+        return ModSimbolos.conPrefijo(todos, prefijo).toString();
     }
 }
