@@ -1028,6 +1028,42 @@ public final class Main {
             indent(depth); System.out.printf("-- .bpi obsoleta (%s); regenerando --%n", bpiInOut.getFileName());
         }
 
+        // 2b) V5 — NADA SUELTO: ¿lo trae algún pack INSTALADO?
+        //
+        // El runtime, al cargar, mira el FS *y* la zona de packs. El compilador
+        // sólo miraba los packs si el import decía cuál (`from pack X`). Esa
+        // asimetría es la que obliga a dejar copias sueltas de un `.mod` que ya
+        // viaja dentro del pack — y copiar a mano un artefacto es exactamente
+        // como se llega a compilar contra uno y ejecutar otro.
+        //
+        // No adivina: si lo traen DOS, no elige — los nombra y pide `from pack`.
+        //
+        // Sólo para imports sin librería: `Lib.Modulo` tiene su propio esquema de
+        // nombres y hoy ningún pack guarda entradas así. Cuando lo hagan, aquí es
+        // donde se amplía, no en otro sitio.
+        // `bpSource == null` no es un detalle: si el módulo tiene FUENTE aquí, es
+        // que lo estás desarrollando, y entonces manda la tuya. El pack es el
+        // último recurso, no el primero — al revés, tocar el .bp no cambiaría
+        // nada y no habría forma de entender por qué.
+        if (bpSource == null && library.isEmpty()) {
+            java.util.List<Path> traen = packsQueTraen(moduleName, ctx);
+            if (traen.size() == 1) {
+                cargarInterfazDelPack(traen.get(0), traen.get(0).getFileName().toString(),
+                                      moduleName, ifaceCacheKey, ctx, depth);
+                return;
+            }
+            if (traen.size() > 1) {
+                /* Con la RUTA de cada uno: el nombre a secas no basta para
+                 * decidir, y si además coincidieran, el mensaje parecería roto. */
+                StringBuilder cuales = new StringBuilder();
+                for (Path p : traen) cuales.append("\n    ").append(p);
+                throw new IOException("el módulo '" + moduleName + "' lo traen " + traen.size()
+                        + " packs instalados:" + cuales
+                        + "\n  Di cuál quieres: `import " + moduleName
+                        + " from pack <NombreDelPack>`.");
+            }
+        }
+
         // 3) Compila la interfaz desde el .bp source.
         if (bpSource == null) {
             indent(depth); System.out.printf("-- no se localizó .bp ni .bpi para import '%s'; se omitirá --%n", qualifiedName);
@@ -1473,11 +1509,28 @@ public final class Main {
                     + ". Configura la biblioteca de packs (IDE: engranaje del micro"
                     + " simulado → 'Librería de packs'; CLI: 'packsDir' en BpVM.cfg).");
         }
+        cargarInterfazDelPack(packFile, imp.packName, moduleName, ifaceCacheKey, ctx, depth);
+    }
+
+    /**
+     * Saca la interfaz del módulo `moduleName` de un `.pack` YA LOCALIZADO.
+     *
+     * <p>Separado de {@link #loadInterfaceFromPack} porque hay dos maneras de
+     * llegar aquí y sólo una de ellas sabe el nombre del pack por adelantado:
+     * el `from pack X` lo trae escrito, y la búsqueda por módulo lo descubre.
+     * De la localización en adelante el trabajo es idéntico —abrir, encontrar la
+     * entrada, extraer la interfaz—, así que vive una vez. Si se hubiera copiado,
+     * el día que cambie el formato del pack una de las dos vías se quedaría atrás
+     * y sólo se notaría en la que menos se usa.
+     */
+    private static void cargarInterfazDelPack(Path packFile, String etiquetaPack,
+                                              String moduleName, String ifaceCacheKey,
+                                              Ctx ctx, int depth) throws IOException {
         basicplus.pack.PackReader.Pack pk;
         try {
             pk = basicplus.pack.PackReader.read(Files.readAllBytes(packFile));
         } catch (basicplus.pack.PackException e) {
-            throw new IOException("pack '" + imp.packName + "' (" + packFile + ") ilegible: "
+            throw new IOException("pack '" + etiquetaPack + "' (" + packFile + ") ilegible: "
                     + e.getMessage(), e);
         }
         // La clave dentro del pack es (tipo, nombre) con tipo = extensión y nombre
@@ -1494,18 +1547,27 @@ public final class Main {
             for (basicplus.pack.PackEntry e : pk.entries) {
                 if ("mod".equals(e.tipo)) { if (hay.length() > 0) hay.append(", "); hay.append(e.nombre); }
             }
-            throw new IOException("el pack '" + imp.packName + "' (" + packFile.getFileName()
+            throw new IOException("el pack '" + etiquetaPack + "' (" + packFile.getFileName()
                     + ") no contiene el módulo '" + want + "'. Módulos del pack: ["
                     + hay + "]");
         }
         byte[] ifaceBytes = extractInterfaceSection(modBytes);
         if (ifaceBytes == null) {
-            throw new IOException("el módulo '" + want + "' dentro del pack '" + imp.packName
+            throw new IOException("el módulo '" + want + "' dentro del pack '" + etiquetaPack
                     + "' no lleva interfaz embebida (¿.mod de una versión anterior?); recompílalo");
         }
         ModuleInterface iface = ModuleInterface.fromBytes(ifaceBytes,
                 packFile.getFileName() + "!" + want);
         ctx.interfaceCache.put(ifaceCacheKey, iface);
+        /* V5/H8 — el pack del que salió queda apuntado, venga de `from pack` o de
+         * la búsqueda. Antes sólo se anotaba la vía del `.mod` suelto, así que un
+         * proyecto que importara de un pack construía su manifest SIN el
+         * `requires-pack=` correspondiente: el pack decía no necesitar nada y sí
+         * lo necesitaba. Se apunta el nombre REAL del fichero, no el que escribió
+         * el usuario, que puede diferir en mayúsculas o traer la extensión. */
+        String nombrePack = packFile.getFileName().toString();
+        if (nombrePack.endsWith(".pack")) nombrePack = nombrePack.substring(0, nombrePack.length() - 5);
+        ctx.packsRequeridos.add(nombrePack);
         indent(depth); System.out.printf("-- interfaz de '%s' desde el pack %s --%n",
                 moduleName, packFile.getFileName());
     }
@@ -1521,11 +1583,16 @@ public final class Main {
         packsDirOverride = (dir == null || dir.isEmpty()) ? null : dir;
     }
 
-    /** H5.b — busca `<nombre>.pack`: primero la BIBLIOTECA DE PACKS (la que fija el
-     *  IDE, o packsDir del BpVM.cfg — la carpeta que distribuimos: stdlib, GUI, …),
-     *  luego el outDir del proyecto (packs recién construidos) y los dirs de deps. */
-    private static Path locatePackFile(String packName, Ctx ctx, java.util.List<Path> tried) {
-        String fname = packName.endsWith(".pack") ? packName : packName + ".pack";
+    /** Las carpetas donde vive un pack, en orden: primero la BIBLIOTECA DE PACKS
+     *  (la que fija el IDE, o `packsDir` del BpVM.cfg — la carpeta que
+     *  distribuimos: stdlib, GUI, …), luego el `outDir` del proyecto (packs
+     *  recién construidos) y los dirs de dependencias.
+     *
+     *  <p>UNA sola lista: la usan tanto
+     *  el `from pack <nombre>` (que sabe cuál quiere) como la búsqueda por
+     *  módulo (que no lo sabe). Si divergieran, un import encontraría un pack
+     *  que el otro no, y eso es de los fallos que no se entienden mirando. */
+    private static java.util.List<Path> dirsDePacks(Ctx ctx) {
         java.util.List<Path> dirs = new java.util.ArrayList<>();
         if (packsDirOverride != null) dirs.add(Paths.get(packsDirOverride));
         try {
@@ -1534,7 +1601,69 @@ public final class Main {
         } catch (Throwable ignored) { /* sin config: solo dirs del proyecto */ }
         if (ctx.outDir != null) dirs.add(ctx.outDir);
         dirs.addAll(ctx.dependencyPaths);
-        for (Path d : dirs) {
+        return dirs;
+    }
+
+    /**
+     * V5 — qué packs INSTALADOS traen el módulo `moduleName`. Devuelve TODOS los
+     * que lo traen, no el primero.
+     *
+     * <p>Devolver todos y no el primero es la diferencia entre preguntar y
+     * adivinar: con dos packs que traigan el mismo módulo, quedarse con el
+     * primero elige por orden de carpeta —que el usuario no ve y no controla— y
+     * el día que instale otro pack le cambia el programa sin tocar una línea.
+     * Con la lista, el llamante puede decir «hay dos, dime cuál» y el usuario
+     * desempata con `from pack`.
+     *
+     * <p>Recorre el índice de cada `.pack`, que es barato: la cabecera y la
+     * tabla de entradas, sin tocar el contenido.
+     */
+    private static java.util.List<Path> packsQueTraen(String moduleName, Ctx ctx) {
+        java.util.List<Path> hallados = new java.util.ArrayList<>();
+        /* Por NOMBRE de fichero, no por ruta: el mismo pack puede estar copiado
+         * en la biblioteca y en el outDir, y eso NO es una ambigüedad — es el
+         * mismo pack encontrado dos veces. La lista de carpetas es un orden de
+         * prioridad, así que gana la primera, igual que hace `locatePackFile`
+         * cuando el import nombra el pack. Ambiguo es que lo traigan packs
+         * DISTINTOS, que es lo único que el usuario tiene que desempatar.
+         *
+         * En minúsculas porque en Windows `SQLite.pack` y `sqlite.pack` son el
+         * mismo fichero, y decir que hay dos sería mentira en esta máquina. */
+        java.util.Set<String> vistos = new LinkedHashSet<>();
+        for (Path d : dirsDePacks(ctx)) {
+            if (d == null || !Files.isDirectory(d)) continue;
+            java.util.List<Path> packs = new java.util.ArrayList<>();
+            try (java.util.stream.Stream<Path> s = Files.list(d)) {
+                s.filter(p -> p.getFileName().toString().endsWith(".pack"))
+                 .forEach(packs::add);
+            } catch (IOException ignored) { continue; }   /* carpeta ilegible: no es un error del usuario */
+            java.util.Collections.sort(packs);            /* orden estable entre máquinas */
+            for (Path p : packs) {
+                Path abs = p.toAbsolutePath().normalize();
+                if (!vistos.add(abs.getFileName().toString().toLowerCase())) continue;
+                try {
+                    basicplus.pack.PackReader.Pack pk =
+                            basicplus.pack.PackReader.read(Files.readAllBytes(abs));
+                    for (basicplus.pack.PackEntry e : pk.entries) {
+                        if (!"mod".equals(e.tipo)) continue;
+                        if (moduleName.equals(e.nombre) || (moduleName + ".mod").equals(e.nombre)) {
+                            hallados.add(abs); break;
+                        }
+                    }
+                } catch (Exception ignored) {
+                    /* Un .pack ilegible NO puede tumbar la compilación de un
+                     * programa que no lo usa: aquí sólo estamos mirando a ver
+                     * quién trae el módulo. Si el usuario lo nombra a mano con
+                     * `from pack`, ahí sí revienta con su motivo. */
+                }
+            }
+        }
+        return hallados;
+    }
+
+    private static Path locatePackFile(String packName, Ctx ctx, java.util.List<Path> tried) {
+        String fname = packName.endsWith(".pack") ? packName : packName + ".pack";
+        for (Path d : dirsDePacks(ctx)) {
             if (d == null) continue;
             Path p = d.resolve(fname);
             tried.add(p);
