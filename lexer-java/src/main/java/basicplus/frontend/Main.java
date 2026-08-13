@@ -1672,6 +1672,42 @@ public final class Main {
         return null;
     }
 
+    /**
+     * #392 — reparte los slots de vtable de una clase IMPORTADA. UNA sola
+     * función, porque hay dos momentos en que se puede sembrar (al leer la
+     * interfaz, o en el post-pass si la base vive en otro módulo) y antes eran
+     * dos repartos distintos.
+     *
+     * <p>Precondición: los slots HEREDADOS ya están dentro de
+     * {@code stub.externalMethodSlots} —los pone el llamante, que es quien sabe
+     * de dónde vienen (otra clase del mismo .mod, los builtins de Object o de
+     * Thread, o una base cross-module ya resuelta)— y ocupan 0..n-1. De ahí que
+     * la siguiente ranura libre sea sencillamente el tamaño del mapa.
+     *
+     * <p>Las claves propias llegan EN ORDEN DE DECLARACIÓN y ya calculadas: una
+     * clave que ya venía de la base es un OVERRIDE y conserva su ranura; una
+     * nueva consume la siguiente. Y son claves, no nombres: una sobrecarga llega
+     * MANGLEADA (regla H5.a: pelada la 1ª firma del grupo, mangleadas las
+     * demás), que es justo lo que el reparto viejo del post-pass no sabía. Con
+     * tres `buscar` en una clase hija, las dos mangleadas colisionaban en la
+     * misma clave, no gastaban ranura, y todo lo declarado detrás quedaba
+     * corrido: el dueño exportaba `despues` en el slot 10 y el importador lo
+     * pedía en el 8 → fallo al ENLAZAR, con el .mod correcto en las dos manos.
+     *
+     * <p>Por eso recibe una lista de claves y no la {@code ClassSig}: quién es
+     * la primera firma de cada grupo sólo lo sabe el bucle que construye los
+     * símbolos, y esa cuenta no se puede rehacer aquí sin repetirla.
+     */
+    private static void sembrarSlotsDeVtable(Symbol.ClassSymbol stub,
+                                             java.util.List<String> clavesPropias) {
+        int next = stub.externalMethodSlots.size();
+        for (String clave : clavesPropias) {
+            if (!stub.externalMethodSlots.containsKey(clave)) {
+                stub.externalMethodSlots.put(clave, next++);
+            }
+        }
+    }
+
     /** H6.a — lee una interfaz usando el caché EN MEMORIA como fuente primaria.
      *  Orden: (1) caché por nombre canónico; (2) si `path` es un .mod v6, su
      *  sección `interface` embebida (fromBytes); (3) fallback .bpi (readFrom).
@@ -1910,7 +1946,13 @@ public final class Main {
                                 cs.binaryNumFields, cs.binaryNumMethods,
                                 cs.binaryFieldBitmap, cs.binaryOwnerBitmap);
                     }
-                    int nextSlot = 0;
+                    // #392 — claves de vtable PROPIAS de esta clase, en orden de
+                    // declaración: get/set de cada property, y luego cada método
+                    // con su slotKey (pelada la 1ª firma de un grupo, MANGLEADA
+                    // las siguientes). Se acumulan aquí porque hay DOS momentos
+                    // en que se puede sembrar la vtable —ahora, o en el post-pass
+                    // si la base vive en otro módulo— y las reparte UNA función.
+                    java.util.List<String> clavesPropias = new java.util.ArrayList<>();
                     // Herencia cross-module: si la clase extiende una base del
                     // MISMO módulo (ya procesada antes en el .bpi — no se puede
                     // extender una clase declarada después), sembrar sus slots
@@ -1929,7 +1971,6 @@ public final class Main {
                         // miembros heredados (e.msg sobre el stub hijo).
                         stub.baseClass = baseStub;
                         stub.externalMethodSlots.putAll(baseStub.externalMethodSlots);
-                        nextSlot = baseStub.externalMethodSlots.size();
                     } else if (cs.baseClassName == null) {
                         // H5.1.a — raíz implícita Object: TODA clase de usuario
                         // desciende de Object, cuyos 2 métodos virtuales ocupan
@@ -1940,7 +1981,6 @@ public final class Main {
                         // correcta (mismo riesgo BUG-5 si se omite).
                         stub.externalMethodSlots.put("toString", 0);
                         stub.externalMethodSlots.put("compareTo", 1);
-                        nextSlot = 2;
                     } else if ("Object".equals(cs.baseClassName)) {
                         // #291 — base builtin EXPLÍCITA `extends Object`: misma
                         // siembra que la raíz implícita. Antes caía al defer de
@@ -1948,7 +1988,6 @@ public final class Main {
                         // métodos propios numeraban desde 0 (slot de toString).
                         stub.externalMethodSlots.put("toString", 0);
                         stub.externalMethodSlots.put("compareTo", 1);
-                        nextSlot = 2;
                     } else if ("Thread".equals(cs.baseClassName)) {
                         // #291 — base builtin Thread (SIN Object: run=0 lo asume
                         // __threadStart en las VMs). Antes este caso caía al
@@ -1960,7 +1999,6 @@ public final class Main {
                         stub.externalMethodSlots.put("run",   0);
                         stub.externalMethodSlots.put("start", 1);
                         stub.externalMethodSlots.put("join",  2);
-                        nextSlot = 3;
                         for (String mn : new String[]{"run", "start", "join"}) {
                             Symbol.FunctionSymbol thf = new Symbol.FunctionSymbol(
                                     mn, true, false, false, stub, null);
@@ -1975,7 +2013,6 @@ public final class Main {
                         // Sin esto los métodos propios numeraban desde 0 →
                         // INVOKE_VIRTUAL a la ranura equivocada (getCode → toString).
                         deferSlots = true;
-                        pendingCrossBase.add(new Object[]{ns, stub, cs});
                     }
                     // Properties → getter (slot N) + setter (slot N+1)
                     for (ModuleInterface.PropSig p : cs.properties) {
@@ -1988,11 +2025,9 @@ public final class Main {
                                 p.name, p.isPublic, false, false, stub, null);
                         psym.type = p.type;
                         stub.instanceMembers.tryDefine(psym);
-                        if (!deferSlots) {
-                            String capName = Character.toUpperCase(p.name.charAt(0)) + p.name.substring(1);
-                            stub.externalMethodSlots.put("get" + capName, nextSlot++);
-                            stub.externalMethodSlots.put("set" + capName, nextSlot++);
-                        }
+                        String capName = Character.toUpperCase(p.name.charAt(0)) + p.name.substring(1);
+                        clavesPropias.add("get" + capName);
+                        clavesPropias.add("set" + capName);
                     }
                     // H5.c-E2 — EVENTOS. No tocan la vtable (viven en campos), así
                     // que no entran en el conteo de slots: se importan con el slot
@@ -2043,12 +2078,17 @@ public final class Main {
                             stub.instanceMembers.tryDefine(fsym);
                             fsym.slotKey = fsym.name;
                         }
-                        // Override de un método heredado → mantiene su slot base
-                        // (ya sembrado). Método nuevo/sobrecarga → siguiente slot libre.
-                        if (!deferSlots && !stub.externalMethodSlots.containsKey(fsym.slotKey())) {
-                            stub.externalMethodSlots.put(fsym.slotKey(), nextSlot++);
-                        }
+                        clavesPropias.add(fsym.slotKey());
                     }
+                    // La vtable se siembra AHORA si la base ya está a mano; si vive
+                    // en otro módulo, en el post-pass —que necesita todos los
+                    // namespaces cargados—, pero con la MISMA función y la MISMA
+                    // lista de claves. Ahí estaba #392: eran dos repartos distintos
+                    // y el del post-pass numeraba por el nombre pelado, así que las
+                    // sobrecargas de una clase HIJA no gastaban ranura y todo lo
+                    // declarado detrás quedaba corrido.
+                    if (deferSlots) pendingCrossBase.add(new Object[]{ns, stub, cs, clavesPropias});
+                    else            sembrarSlotsDeVtable(stub, clavesPropias);
                     // L2 v3.d — static consts públicos del .bpi. Se añaden al
                     // staticMembers del stub con literalValue para que el
                     // emisor los inlinee en el call-site (mismo path que
@@ -2144,17 +2184,9 @@ public final class Main {
                     if (baseStillPending) continue;
                     stub.baseClass = base;
                     stub.externalMethodSlots.putAll(base.externalMethodSlots);
-                    int next = base.externalMethodSlots.size();
-                    for (ModuleInterface.PropSig p : cs.properties) {
-                        String capName = Character.toUpperCase(p.name.charAt(0)) + p.name.substring(1);
-                        stub.externalMethodSlots.put("get" + capName, next++);
-                        stub.externalMethodSlots.put("set" + capName, next++);
-                    }
-                    for (ModuleInterface.FuncSig m : cs.methods) {
-                        if (!stub.externalMethodSlots.containsKey(m.name)) {
-                            stub.externalMethodSlots.put(m.name, next++);
-                        }
-                    }
+                    @SuppressWarnings("unchecked")
+                    java.util.List<String> clavesPropias = (java.util.List<String>) e[3];
+                    sembrarSlotsDeVtable(stub, clavesPropias);
                     it.remove();
                     progress = true;
                 }
