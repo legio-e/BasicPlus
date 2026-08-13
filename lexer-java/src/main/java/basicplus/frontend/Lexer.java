@@ -62,6 +62,37 @@ public final class Lexer {
     private static final java.util.Set<TokenType> RESERVADAS =
             Collections.unmodifiableSet(new java.util.HashSet<>(KEYWORDS.values()));
 
+    /**
+     * #385 — el TIPO de un literal entero lo decide su MAGNITUD.
+     *
+     * <p>Si no cabe en 32 bits con signo, el literal ES un `long`. No hace falta
+     * el sufijo `L`: éste queda para desambiguar cuando el valor sí cabe pero se
+     * quiere el tipo ancho igualmente.
+     *
+     * <p>Criterio de Eduardo (13-ago), y es lo que hacen C, Java y C#: *«si
+     * luego la constante o la variable es un entero será un error semántico de
+     * conversión de tipos»*. O sea que el error no desaparece — se mueve al
+     * sitio donde se ve, con línea y con nombre, en vez de salir como un número
+     * plausible y equivocado. Antes `1754300000000` se convertía en
+     * `1953343232` sin decir nada, y un hexadecimal grande salía NEGATIVO.
+     *
+     * <p>MISMA REGLA PARA DECIMAL, HEXADECIMAL Y BINARIO. C trata distinto al
+     * hexadecimal —uno que llena los 32 bits se queda en `int` con su patrón de
+     * bits— para no romper máscaras. Aquí se censó antes de decidir: de 602
+     * literales hexadecimales en `bpstdlib`, `samples` y `bpdevices`, sólo 5
+     * llenan 8 dígitos, y de ésos sólo `0xFFFFFFFF` cambiaría de valor... y su
+     * única aparición está DENTRO DE UN COMENTARIO. Cero código afectado, así
+     * que la excepción no se ha ganado el sitio: una regla en vez de dos.
+     *
+     * <p>El valor no se toca: el lexer ya construía el `long` correcto en los
+     * tres sitios. Lo único que estaba mal era la ETIQUETA.
+     */
+    private static TokenType tipoSegunMagnitud(long valor, boolean sufijoL) {
+        if (sufijoL) return TokenType.LONG_LIT;
+        return (valor < Integer.MIN_VALUE || valor > Integer.MAX_VALUE)
+                ? TokenType.LONG_LIT : TokenType.INTEGER_LIT;
+    }
+
     /** ¿Este token viene de una palabra reservada del lenguaje? */
     public static boolean esPalabraReservada(TokenType t) {
         return RESERVADAS.contains(t);
@@ -401,7 +432,8 @@ public final class Lexer {
             }
             try {
                 long val = Long.parseLong(hexLex.substring(2).replace("_", ""), 16);
-                return new Token(TokenType.INTEGER_LIT, hexLex, val, startLine, startColumn);
+                /* #385 — misma regla que el decimal: la magnitud manda. */
+                return new Token(tipoSegunMagnitud(val, false), hexLex, val, startLine, startColumn);
             } catch (NumberFormatException nfe) {
                 errors.add(new LexerError("literal hexadecimal inválido o fuera de rango: " + hexLex,
                         startLine, startColumn));
@@ -422,7 +454,8 @@ public final class Lexer {
             }
             try {
                 long val = Long.parseLong(binLex.substring(2).replace("_", ""), 2);
-                return new Token(TokenType.INTEGER_LIT, binLex, val, startLine, startColumn);
+                /* #385 — misma regla que el decimal: la magnitud manda. */
+                return new Token(tipoSegunMagnitud(val, false), binLex, val, startLine, startColumn);
             } catch (NumberFormatException nfe) {
                 errors.add(new LexerError("literal binario inválido o fuera de rango: " + binLex,
                         startLine, startColumn));
@@ -486,14 +519,15 @@ public final class Lexer {
             // H1.2 (V2): sufijo L/l tras un entero decimal → literal long (i64).
             boolean isLong = false;
             if (peek() == 'L' || peek() == 'l') { advance(); isLong = true; }
-            TokenType ity = isLong ? TokenType.LONG_LIT : TokenType.INTEGER_LIT;
             try {
                 long n = Long.parseLong(lex.replace("_", ""));
-                return new Token(ity, lex, n, startLine, startColumn);
+                /* #385 — el tipo lo decide la magnitud; el sufijo sólo fuerza. */
+                return new Token(tipoSegunMagnitud(n, isLong), lex, n, startLine, startColumn);
             } catch (NumberFormatException nfe) {
                 errors.add(new LexerError("literal entero inválido o fuera de rango: " + lex,
                         startLine, startColumn));
-                return new Token(ity, lex, 0L, startLine, startColumn);
+                return new Token(isLong ? TokenType.LONG_LIT : TokenType.INTEGER_LIT,
+                        lex, 0L, startLine, startColumn);
             }
         }
     }
