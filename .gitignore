@@ -174,3 +174,10 @@ dist/diag/
 # Publicar es prometer, y no prometemos lo que aun no existe (criterio de
 # Eduardo, 6-ago-2026). Se publican hasta la version entregada, no mas.
 /notas/
+
+# Packs construidos: son ARTEFACTOS de distribución, van en el ZIP de
+# instalación, no en el repo (criterio de Eduardo, 13-ago). Lo que sí está
+# versionado es lo que los PRODUCE — el .bpbuild y las fuentes.
+# `Stdlib.pack` sigue trackeado porque ya lo estaba; esta regla sólo afecta a
+# los nuevos. Si algún día se saca también, es un `git rm --cached`.
+packs/*.pack
