@@ -565,25 +565,19 @@ static long pack_entry_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t 
  * Del path sólo importa el BASENAME, porque dentro del pack una entrada es
  * (tipo, nombre) = (extensión, nombre sin extensión) — así lo empaqueta
  * PackStep. `/app/x/main.win` → ("win", "main"). */
+
 static int pack_res_entry(bpvm_t* vm, const char* path, bpvm_pack_entry_t* out) {
     if (!vm->run_pack_on || !path) return 0;
     /* Nunca reclamar el fichero del PROPIO pack: se lee por el FS de verdad y
      * reclamarlo aquí sería morderse la cola. */
     if (strcmp(path, vm->run_pack_st.path) == 0) return 0;
-    const char* base = path;
-    for (const char* p = path; *p; p++) if (*p == '/' || *p == '\\') base = p + 1;
-    const char* dot = NULL;
-    for (const char* p = base; *p; p++) if (*p == '.') dot = p;
-    if (!dot || dot == base) return 0;                  /* sin extensión: no sé el tipo */
     char tipo[BPVM_PACK_TYPE_LEN + 1], nombre[BPVM_PACK_NAME_LEN + 1];
-    size_t nlen = (size_t)(dot - base), tlen = strlen(dot + 1);
-    if (nlen > BPVM_PACK_NAME_LEN || tlen > BPVM_PACK_TYPE_LEN) return 0;
-    memcpy(nombre, base, nlen); nombre[nlen] = '\0';
-    for (size_t i = 0; i < tlen; i++) {                 /* el tipo va en minúsculas */
-        char c = dot[1 + i];
-        tipo[i] = (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
-    }
-    tipo[tlen] = '\0';
+    char pack[BPVM_PACK_NAME_LEN + 1];
+    if (!bpvm_pack_key_de_path(path, tipo, nombre, pack)) return 0;
+    /* Cualificado: sólo es mío si el pack en ejecución es ÉSE. Si se pide otro,
+     * aquí se dice que no y el recurso sigue su camino (FS → zona). */
+    if (pack[0])
+        return bpvm_pack_find_in_src(&vm->run_pack_src, pack, tipo, nombre, out);
     return bpvm_pack_find_src(&vm->run_pack_src, tipo, nombre, out);
 }
 

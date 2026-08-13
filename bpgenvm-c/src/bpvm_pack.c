@@ -14,6 +14,7 @@
  * ADD se niega: eso lo repara la compactación desde el PC, no un append a ciegas.
  */
 #include "bpvm_pack.h"
+#include "bpvm_fs.h"   /* #362: la zona se engancha como respaldo de LECTURA */
 #include <string.h>
 
 /* ── offsets de cabecera (espejo de PackFormat.java) ── */
@@ -103,9 +104,105 @@ static uint16_t src_crc(const bpvm_pack_src_t* s, uint32_t off, uint32_t len, in
 static const uint8_t* s_mounted_base = NULL;
 static uint32_t       s_mounted_size = 0;
 
+/* ── #362: la zona MONTADA sirve también RECURSOS (fuentes, iconos) ──────────
+ * Los recursos no van por donde los módulos: se leen por la fachada del FS. La
+ * zona se engancha ahí como RESPALDO —por debajo del FS, ver bpvm_fs.h—, y el
+ * orden completo queda:
+ *
+ *     pack en ejecución  →  FS  →  zona de packs grabados
+ *
+ * Se instala AQUÍ, en el propio mount, y no en quien arranca la VM: montar la
+ * zona y ofrecer sus recursos son el mismo acto. Repartirlo en dos llamadas
+ * significaría que las cinco cinturas que montan zona (Pico, ESP32, ESP32-P4,
+ * STM32, micro simulado) tienen que acordarse de la segunda — y la que se
+ * olvidara no fallaría al compilar: simplemente no encontraría las fuentes. */
+static int  zone_res_stat(void* user, const char* path, uint32_t* size);
+static long zone_res_read(void* user, const char* path, uint32_t off,
+                          uint8_t* dst, uint32_t cap);
+
 void bpvm_pack_mount(const uint8_t* base, uint32_t size) {
     s_mounted_base = base;
     s_mounted_size = size;
+    bpvm_fs_set_fallback(zone_res_stat, zone_res_read, NULL);
+}
+
+/* La CLAVE de un recurso dentro de un pack: (tipo, nombre) = (extensión,
+ * nombre sin extensión), que es como lo empaqueta PackStep. Del path sólo
+ * importa el BASENAME: `/app/x/main.win` → ("win", "main").
+ *
+ * Reconoce además la forma CUALIFICADA `pack:<Pack>/<fichero.ext>`, que dice de
+ * QUÉ pack se quiere el recurso — la salida para cuando dos packs traen uno que
+ * se llama igual. Sin cualificar, `pack` queda vacío.
+ *
+ * Vive aquí y no en la VM porque lo usan los dos: el pack EN EJECUCIÓN (que lo
+ * resuelve la VM) y la zona (aquí abajo). Dos copias serían dos formas de leer
+ * el mismo path. 1 = clave derivada; 0 = este path no nombra una entrada. */
+int bpvm_pack_key_de_path(const char* path, char* tipo, char* nombre, char* pack) {
+    if (!path) return 0;
+    pack[0] = '\0';
+    const char* resto = path;
+    if (strncmp(path, BPVM_PACK_URI, sizeof(BPVM_PACK_URI) - 1) == 0) {
+        const char* p = path + sizeof(BPVM_PACK_URI) - 1;
+        const char* barra = NULL;
+        for (const char* q = p; *q; q++) if (*q == '/' || *q == '\\') { barra = q; break; }
+        if (!barra || barra == p) return 0;             /* sin nombre de pack o sin fichero */
+        size_t plen = (size_t)(barra - p);
+        if (plen > BPVM_PACK_NAME_LEN) return 0;
+        memcpy(pack, p, plen); pack[plen] = '\0';
+        resto = barra + 1;
+    }
+    const char* base = resto;
+    for (const char* p = resto; *p; p++) if (*p == '/' || *p == '\\') base = p + 1;
+    const char* dot = NULL;
+    for (const char* p = base; *p; p++) if (*p == '.') dot = p;
+    if (!dot || dot == base) return 0;                  /* sin extensión: no sé el tipo */
+    size_t nlen = (size_t)(dot - base), tlen = strlen(dot + 1);
+    if (nlen > BPVM_PACK_NAME_LEN || tlen > BPVM_PACK_TYPE_LEN) return 0;
+    memcpy(nombre, base, nlen); nombre[nlen] = '\0';
+    for (size_t i = 0; i < tlen; i++) {                 /* el tipo va en minúsculas */
+        char c = dot[1 + i];
+        tipo[i] = (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+    }
+    tipo[tlen] = '\0';
+    return 1;
+}
+
+static int zone_res_entry(const char* path, bpvm_pack_src_t* src,
+                          bpvm_pack_entry_t* out) {
+    if (!s_mounted_base || s_mounted_size == 0) return 0;    /* sin zona montada */
+    char tipo[BPVM_PACK_TYPE_LEN + 1], nombre[BPVM_PACK_NAME_LEN + 1];
+    char pack[BPVM_PACK_NAME_LEN + 1];
+    if (!bpvm_pack_key_de_path(path, tipo, nombre, pack)) return 0;
+    bpvm_pack_src_mem(src, s_mounted_base, s_mounted_size);
+    /* Cualificado → SÓLO ese pack. Sin cualificar → toda la cadena, y gana el
+     * último grabado (la regla de siempre: actualizar es añadir + tumbar). */
+    return pack[0] ? bpvm_pack_find_in_src(src, pack, tipo, nombre, out)
+                   : bpvm_pack_find_src(src, tipo, nombre, out);
+}
+
+static int zone_res_stat(void* user, const char* path, uint32_t* size) {
+    (void) user;
+    bpvm_pack_src_t src; bpvm_pack_entry_t e;
+    if (!zone_res_entry(path, &src, &e)) return -1;           /* no está en la zona */
+    if (size) *size = e.len;
+    return 0;
+}
+
+static long zone_res_read(void* user, const char* path, uint32_t off,
+                          uint8_t* dst, uint32_t cap) {
+    (void) user;
+    bpvm_pack_src_t src; bpvm_pack_entry_t e;
+    if (!zone_res_entry(path, &src, &e)) return -1;
+    if (off >= e.len) return 0;
+    uint32_t n = e.len - off;
+    if (n > cap) n = cap;
+    /* La zona SIEMPRE es memoria direccionable (XIP en placa, RAM en el
+     * simulador): se monta con un puntero base. Si no diera puntero sería que
+     * la entrada se sale de la región, y eso es un no, no un "léelo a trozos". */
+    const uint8_t* p = bpvm_pack_src_ptr(&src, e.data_off + off, n);
+    if (!p) return -1;
+    memcpy(dst, p, n);
+    return (long) n;
 }
 
 const uint8_t* bpvm_pack_mounted(uint32_t* size_out) {
@@ -286,7 +383,11 @@ int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_o
     return bpvm_pack_entries_src(&src, pack_off, out, max);
 }
 
-int bpvm_pack_find_src(const bpvm_pack_src_t* src,
+/* UN solo recorrido de la cadena para las dos búsquedas (#362): `solo_pack` a
+ * NULL busca en todos los packs activos, y con nombre se mira SÓLO ese. Tener
+ * dos copias del bucle sería tener dos reglas de "quién gana" que se irían
+ * separando en cuanto una cambiase. */
+static int find_src_en(const bpvm_pack_src_t* src, const char* solo_pack,
                        const char* tipo, const char* nombre,
                        bpvm_pack_entry_t* out) {
     int found = 0;
@@ -298,7 +399,7 @@ int bpvm_pack_find_src(const bpvm_pack_src_t* src,
         if (get_u32(mg) != BPVM_PACK_MAGIC) break;          /* virgen o corrupto = fin */
         bpvm_pack_info_t info;
         if (parse_header(src, off, &info) != 0) break;
-        if (info.alive) {
+        if (info.alive && (!solo_pack || strcmp(info.nombre, solo_pack) == 0)) {
             uint32_t rel = BPVM_PACK_HEADER_SIZE;
             bpvm_pack_entry_t e;
             while (next_entry(src, off, info.size_total, &rel, &e) == 1) {
@@ -311,6 +412,19 @@ int bpvm_pack_find_src(const bpvm_pack_src_t* src,
         off += info.size_total;
     }
     return found;
+}
+
+int bpvm_pack_find_src(const bpvm_pack_src_t* src,
+                       const char* tipo, const char* nombre,
+                       bpvm_pack_entry_t* out) {
+    return find_src_en(src, NULL, tipo, nombre, out);
+}
+
+int bpvm_pack_find_in_src(const bpvm_pack_src_t* src, const char* pack,
+                          const char* tipo, const char* nombre,
+                          bpvm_pack_entry_t* out) {
+    if (!pack || !*pack) return 0;      /* sin nombre no hay búsqueda cualificada */
+    return find_src_en(src, pack, tipo, nombre, out);
 }
 
 int bpvm_pack_src_is_pack(const bpvm_pack_src_t* src) {

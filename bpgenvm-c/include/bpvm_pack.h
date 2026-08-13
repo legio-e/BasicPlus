@@ -43,6 +43,12 @@ extern "C" {
 #define BPVM_PACK_CRC16_INIT   0xFFFF
 uint16_t bpvm_pack_crc16(uint16_t crc, const uint8_t* data, uint32_t len);
 
+/* #362 — prefijo que CUALIFICA un recurso: "pack:<Pack>/<fichero.ext>" pide ese
+ * fichero DENTRO de ese pack, sin mirar ningún otro. Vive aquí, en un solo
+ * sitio, porque lo escriben los programas BP y lo lee la VM: si se deletreara
+ * en dos, un día dejarían de ser el mismo. */
+#define BPVM_PACK_URI "pack:"
+
 /* Descriptor ligero de un pack de la cadena (sin copiar datos). */
 typedef struct {
     uint32_t off;            /* offset del pack dentro de la región */
@@ -145,6 +151,13 @@ int bpvm_pack_entries_src(const bpvm_pack_src_t* src, uint32_t pack_off,
 const uint8_t* bpvm_pack_find(const uint8_t* base, uint32_t region_size,
                               const char* tipo, const char* nombre, uint32_t* len);
 
+/* #362 — la CLAVE (tipo, nombre) de un recurso a partir de su path, y el
+ * nombre del pack si viene CUALIFICADO como "pack:<Pack>/<fichero.ext>".
+ * Buffers del caller: tipo[BPVM_PACK_TYPE_LEN+1], nombre[BPVM_PACK_NAME_LEN+1],
+ * pack[BPVM_PACK_NAME_LEN+1] (queda "" si no se cualificó).
+ * 1 = clave derivada; 0 = ese path no puede nombrar una entrada de pack. */
+int bpvm_pack_key_de_path(const char* path, char* tipo, char* nombre, char* pack);
+
 /* #310 — la misma sobre una fuente. NO devuelve puntero (una fuente por trozos
  * no lo tiene): devuelve la ENTRADA (data_off + len) y el caller decide con
  * bpvm_pack_src_ptr() si puede usarla en sitio o tiene que leerla por trozos.
@@ -152,6 +165,15 @@ const uint8_t* bpvm_pack_find(const uint8_t* base, uint32_t region_size,
 int bpvm_pack_find_src(const bpvm_pack_src_t* src,
                        const char* tipo, const char* nombre,
                        bpvm_pack_entry_t* out);
+
+/* #362 — la misma búsqueda pero DENTRO DE UN PACK con nombre: el resto de la
+ * cadena ni se mira. Es lo que hace falta para decir "esta fuente, la de este
+ * pack", cuando dos packs traen un recurso que se llama igual. Si ese pack no
+ * está en la cadena devuelve 0, igual que si estuviera y no llevara el
+ * fichero: para quien pregunta son el mismo "no lo tengo". */
+int bpvm_pack_find_in_src(const bpvm_pack_src_t* src, const char* pack,
+                          const char* tipo, const char* nombre,
+                          bpvm_pack_entry_t* out);
 
 /* ¿Empieza esta fuente por un pack? 1 = sí, 0 = no (o no cabe la cabecera).
  * Existe para que quien abre un pack pueda decir "esto NO es un pack" en vez

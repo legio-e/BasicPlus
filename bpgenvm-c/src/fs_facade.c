@@ -120,6 +120,20 @@ const char* bpvm_fs_resolve(const char* path, char* out, size_t outsz) {
         snprintf(out, outsz, "%s", path);
         return out;
     }
+    /* #362 — un path CON ESQUEMA ("algo:loquesea") es una dirección exacta, no
+     * una ruta relativa que haya que ir buscando: se deja intacta. La fachada
+     * no necesita saber QUÉ esquemas hay —eso es de quien los sirve—, sólo que
+     * a una dirección no se le pone delante el base-dir.
+     *
+     * Sin esto, "pack:Iconos/logo.png" se probaría primero como
+     * "<basedir>/pack:Iconos/logo.png"; quien resuelve se queda con el
+     * basename, el prefijo se perdería por el camino y el recurso saldría del
+     * pack que tocara — lo contrario de lo que se pidió. De regalo, en el host
+     * un "C:/..." deja de tratarse como relativo. */
+    for (const char* p = path; *p; p++) {
+        if (*p == '/' || *p == '\\') break;           /* ya es ruta: no hay esquema */
+        if (*p == ':') { snprintf(out, outsz, "%s", path); return out; }
+    }
     uint32_t sz = 0;
     if (g_basedir[0]) {                               /* (1) proyecto */
         snprintf(out, outsz, "%s/%s", g_basedir, path);
@@ -143,16 +157,31 @@ void bpvm_fs_set_overlay(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd, void* use
     g_ov_stat = st; g_ov_read = rd; g_ov_user = user;
 }
 
+/* #362 — respaldo de lectura: el espejo del overlay, por DEBAJO del backend. */
+static bpvm_fs_ov_stat_fn g_fb_stat = NULL;
+static bpvm_fs_ov_read_fn g_fb_read = NULL;
+static void*              g_fb_user = NULL;
+
+void bpvm_fs_set_fallback(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd, void* user) {
+    g_fb_stat = st; g_fb_read = rd; g_fb_user = user;
+}
+
 /* 1 = el overlay reclama este path (y deja el tamaño en *size). */
 static int overlay_claims(const char* path, uint32_t* size) {
     return g_ov_stat && g_ov_stat(g_ov_user, path, size) == 0;
+}
+
+/* Ídem para el respaldo. Mismo contrato: 0 = es suyo. */
+static int fallback_claims(const char* path, uint32_t* size) {
+    return g_fb_stat && g_fb_stat(g_fb_user, path, size) == 0;
 }
 
 int bpvm_fs_stat(const char* path, uint32_t* size) {
     uint32_t osz = 0;
     if (overlay_claims(path, &osz)) { if (size) *size = osz; return 0; }
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->stat) return be->stat(path, size);
+    if (be && be->stat && be->stat(path, size) == 0) return 0;
+    if (fallback_claims(path, &osz)) { if (size) *size = osz; return 0; }
     return -1;
 }
 
@@ -161,7 +190,12 @@ long bpvm_fs_read(const char* path, uint8_t* dst, uint32_t cap) {
     if (overlay_claims(path, &osz) && g_ov_read)
         return g_ov_read(g_ov_user, path, 0, dst, cap);
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->read) return be->read(path, dst, cap);
+    if (be && be->read) {
+        long n = be->read(path, dst, cap);
+        if (n >= 0) return n;
+    }
+    if (fallback_claims(path, &osz) && g_fb_read)
+        return g_fb_read(g_fb_user, path, 0, dst, cap);
     return -1;
 }
 

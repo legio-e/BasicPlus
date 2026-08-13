@@ -523,6 +523,34 @@ static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t d
  * Adivinar cual de las tres era nos costo varios intentos. Que lo diga el log.
  * Tope de 5 avisos por ejecucion: un throw no es camino caliente, pero si un
  * programa entra aqui en bucle no quiero repetir el error del log sin freno. */
+/* ── #362: pedir un recurso DE UN PACK CONCRETO y que no esté es un error ────
+ * "pack:<Pack>/<fichero>" no es una ruta que se busca por ahí: es una petición
+ * explícita ("quiero ESE, del pack ESE"). Devolver un objeto vacío en silencio
+ * —que es lo que hacía loadFont— deja al programa dibujando con una fuente que
+ * no está y sin manera de enterarse. Como es un error BP, el programa puede
+ * atraparlo con try/catch si prefiere seguir sin el recurso.
+ *
+ * Ojo: sólo se aplica a la forma CUALIFICADA. Sin cualificar, la ausencia de un
+ * recurso sigue comportándose como siempre; cambiar eso es otra decisión y
+ * afecta a programas que ya existen. */
+static int pack_uri_falta(const char* path) {
+    if (!path || strncmp(path, BPVM_PACK_URI, sizeof(BPVM_PACK_URI) - 1) != 0) return 0;
+    return !bpvm_fs_exists(path);
+}
+
+/* El mensaje, en un buffer estático: se construye para tirarlo inmediatamente
+ * (builtin_throw ya copia el texto al objeto de la excepción). */
+static const char* recurso_no_esta(const char* path) {
+    static char msg[400];
+    /* %.200s: el path puede venir de un buffer mayor que éste. Se acota aquí y
+     * a la vista —y el buffer da de sobra para el texto fijo—, en vez de dejar
+     * que el truncado ocurra por accidente. */
+    snprintf(msg, sizeof msg,
+             "el recurso '%.200s' no esta: o ese pack no esta grabado en la placa,"
+             " o no lleva ese fichero", path ? path : "");
+    return msg;
+}
+
 static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
     static int avisos = 0;
     int hablar = (avisos < 5);
@@ -841,7 +869,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_SET_BG_COLOR:   { uint32_t rgb = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_bg_color(h, rgb);   push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SET_TEXT_COLOR: { uint32_t rgb = (uint32_t) pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_text_color(h, rgb); push_i32(vm, tc, 0); return BPVM_OK; }
     case BUILTIN_GUI_SET_FONT:       { int f = pop_i32(vm, tc); int h = pop_i32(vm, tc); bpvm_gui_set_font(h, f); push_i32(vm, tc, 0); return BPVM_OK; }
-    case BUILTIN_GUI_LOAD_FONT:      { uint32_t ref = pop_ref(vm, tc); char path[256]; read_bp_string(vm, ref, path, sizeof(path)); push_i32(vm, tc, bpvm_gui_load_font(path)); return BPVM_OK; }
+    case BUILTIN_GUI_LOAD_FONT:      { uint32_t ref = pop_ref(vm, tc); char path[256]; read_bp_string(vm, ref, path, sizeof(path));
+                                       if (pack_uri_falta(path)) return builtin_throw(vm, tc, recurso_no_esta(path));
+                                       push_i32(vm, tc, bpvm_gui_load_font(path)); return BPVM_OK; }
     case BUILTIN_GUI_SET_ROTATION:   { int deg = pop_i32(vm, tc); bpvm_gui_set_rotation(deg); push_i32(vm, tc, 0); return BPVM_OK; }
 
     /* H19 — App.* introspección del proyecto en ejecución (id 211-213). */
@@ -1168,6 +1198,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GUI_IMAGE_LOAD_FILE: {
         uint32_t ref = pop_ref(vm, tc); int id = pop_i32(vm, tc);
         char buf[512]; read_bp_string(vm, ref, buf, sizeof(buf));
+        if (pack_uri_falta(buf)) return builtin_throw(vm, tc, recurso_no_esta(buf));
         push_i32(vm, tc, bpvm_gui_image_load_file(id, buf)); return BPVM_OK;
     }
     case BUILTIN_GUI_IMAGE_WIDTH:  { int id = pop_i32(vm, tc); push_i32(vm, tc, bpvm_gui_image_width(id));  return BPVM_OK; }

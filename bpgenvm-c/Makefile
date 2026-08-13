@@ -619,6 +619,20 @@ test-freelist: $(LIBOBJ)
 	@echo "--- lista de libres: orden + fusion izq/der (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_freelist.exe
 
+# #362 — la ZONA de packs sirve RECURSOS (fuentes, iconos), no solo modulos.
+# Los dos packs se construyen con PackCli (el escritor DE VERDAD) y traen el
+# mismo 'logo.png' con contenido distinto: es el unico montaje donde se
+# distingue 'cualificar funciona' de 'cualificar se ignora'.
+test-packres: $(LIBOBJ)
+	@mkdir -p build/packres/a build/packres/b
+	@printf 'ICONOS' > build/packres/a/logo.png
+	@printf 'OTROS'  > build/packres/b/logo.png
+	@java -cp "$(PACKJAR)" basicplus.pack.PackCli build --out build/packres/iconos.pack --name Iconos --version 1 --date 0 build/packres/a/logo.png
+	@java -cp "$(PACKJAR)" basicplus.pack.PackCli build --out build/packres/otros.pack  --name Otros  --version 1 --date 0 build/packres/b/logo.png
+	$(CC) $(CFLAGS) -Isrc test/test_packres.c $(LIBOBJ) -o build/test_packres.exe $(LDFLAGS)
+	@echo "--- #362 recursos desde la zona de packs (esperado: solo 'ok', [status=OK]) ---"
+	@cd build && ./test_packres.exe packres/iconos.pack packres/otros.pack
+
 test-crc:
 	@mkdir -p build
 	$(CC) $(CFLAGS) test/test_crc.c src/crc32.c src/fs_facade.c src/fs_host.c -o build/test_crc.exe

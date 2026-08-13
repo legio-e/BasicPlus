@@ -177,6 +177,23 @@ typedef long (*bpvm_fs_ov_read_fn)(void* user, const char* path, uint32_t off,
                                    uint8_t* dst, uint32_t cap);
 void bpvm_fs_set_overlay(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd, void* user);
 
+/* ── #362: RESPALDO de lectura (el espejo del overlay) ───────────────────────
+ * Mismo contrato y mismos tipos que el overlay, pero se consulta DESPUÉS del
+ * backend, y sólo si éste no tiene el fichero.
+ *
+ * Existe porque el orden no es uno solo, son tres, y el de en medio es el FS:
+ *
+ *     pack EN EJECUCIÓN  →  FS  →  zona de packs GRABADOS
+ *     (overlay, arriba)     (backend)   (respaldo, aquí)
+ *
+ * Con un único gancho "antes" no se puede expresar: la zona quedaría por
+ * delante del FS, y entonces un fichero puesto a mano en el dispositivo ya no
+ * podría tapar al de un pack grabado — que es justo lo que el FS debe poder
+ * hacer (spec §4: el FS ECLIPSA al pack).
+ *
+ * Sólo LECTURA, igual que el overlay, y coste cero sin instalar. */
+void bpvm_fs_set_fallback(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd, void* user);
+
 /* Backend host (libc). Implementado en fs_host.c (host-only); el firmware
  * registra el suyo (fs_get/fs_put). */
 void bpvm_fs_register_host(void);
