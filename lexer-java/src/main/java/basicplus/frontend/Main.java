@@ -1722,14 +1722,76 @@ public final class Main {
      * la primera firma de cada grupo sólo lo sabe el bucle que construye los
      * símbolos, y esa cuenta no se puede rehacer aquí sin repetirla.
      */
-    private static void sembrarSlotsDeVtable(Symbol.ClassSymbol stub,
-                                             java.util.List<String> clavesPropias) {
+    private static int sembrarSlotsDeVtable(Symbol.ClassSymbol stub,
+                                            java.util.List<String> clavesPropias,
+                                            String etiqueta) {
         int next = stub.externalMethodSlots.size();
         for (String clave : clavesPropias) {
             if (!stub.externalMethodSlots.containsKey(clave)) {
                 stub.externalMethodSlots.put(clave, next++);
             }
         }
+        return cruzarSlots(stub, clavesPropias, etiqueta);
+    }
+
+    /**
+     * #393 — CROSS-CHECK DEL IMPORTADOR. El dueño ya tiene el suyo (#299, «no se
+     * publica un layout que miente»); el importador reconstruía los slots por su
+     * cuenta y NADIE comprobaba el resultado.
+     *
+     * <p>La invariante es «lo que calculé es lo que sembré»: cada clave de la
+     * lista tiene que haber acabado en el mapa, y dos claves distintas no pueden
+     * compartir ranura. Eso es EXACTAMENTE lo que fallaba en #392: las claves
+     * mangleadas se calculaban bien, pero el reparto las ignoraba y nunca las
+     * metía — el llamante pedía el slot 8 y el dueño lo tenía en el 10, y no se
+     * sabía hasta ENLAZAR, con un mensaje que sugería un `.mod` rancio que no
+     * existía.
+     *
+     * <p><b>Lo que este guardián NO puede comprobar</b>, y conviene tenerlo
+     * escrito: que el NÚMERO coincida con el del dueño. Comparar contra
+     * {@code binaryNumMethods} sería lo natural y está MAL: un {@code function
+     * event} PRIVADO ocupa ranura (la regla del emisor es
+     * {@code isPublic || isEventHandler}) pero no se exporta, así que el
+     * importador cuenta legítimamente menos. Medido: una clase con un manejador
+     * privado publica 4 y el importador reconstruye 3. Con esa comparación el
+     * guardián saltaría en toda clase que maneje eventos — o sea, en todas las de
+     * GUI. Para comprobar el número haría falta que la interfaz publicase el slot
+     * de cada método, que es cambio de formato (ver la ficha).
+     *
+     * @return número de incoherencias encontradas (0 = todo bien).
+     */
+    static int cruzarSlots(Symbol.ClassSymbol stub,
+                                   java.util.List<String> clavesPropias,
+                                   String etiqueta) {
+        int fallos = 0;
+        for (String clave : clavesPropias) {
+            if (!stub.externalMethodSlots.containsKey(clave)) {
+                System.err.printf(
+                        "-- error interno del compilador: al leer la clase importada '%s' no"
+                      + " se ha sabido colocar el método '%s' en la tabla de métodos de la"
+                      + " clase.%n"
+                      + "   No es un fallo de tu programa, ni un fichero desactualizado. Si"
+                      + " la compilación siguiera, esa llamada acabaría en el método"
+                      + " equivocado. --%n",
+                        etiqueta, clave);
+                fallos++;
+            }
+        }
+        // Dos claves distintas en la misma ranura = una tapa a la otra.
+        java.util.Map<Integer, String> porSlot = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, Integer> e : stub.externalMethodSlots.entrySet()) {
+            String otra = porSlot.put(e.getValue(), e.getKey());
+            if (otra != null) {
+                System.err.printf(
+                        "-- error interno del compilador: al leer la clase importada '%s',"
+                      + " los métodos '%s' y '%s' han quedado en la MISMA posición (%d) de"
+                      + " la tabla de métodos.%n"
+                      + "   No es un fallo de tu programa. Uno de los dos taparía al otro. --%n",
+                        etiqueta, otra, e.getKey(), e.getValue());
+                fallos++;
+            }
+        }
+        return fallos;
     }
 
     /** H6.a — lee una interfaz usando el caché EN MEMORIA como fuente primaria.
@@ -2112,7 +2174,8 @@ public final class Main {
                     // sobrecargas de una clase HIJA no gastaban ranura y todo lo
                     // declarado detrás quedaba corrido.
                     if (deferSlots) pendingCrossBase.add(new Object[]{ns, stub, cs, clavesPropias});
-                    else            sembrarSlotsDeVtable(stub, clavesPropias);
+                    else ctx.totalErrors += sembrarSlotsDeVtable(stub, clavesPropias,
+                                                ns.moduleName + "." + cs.name);
                     // L2 v3.d — static consts públicos del .bpi. Se añaden al
                     // staticMembers del stub con literalValue para que el
                     // emisor los inlinee en el call-site (mismo path que
@@ -2212,7 +2275,8 @@ public final class Main {
                     stub.externalMethodSlots.putAll(base.externalMethodSlots);
                     @SuppressWarnings("unchecked")
                     java.util.List<String> clavesPropias = (java.util.List<String>) e[3];
-                    sembrarSlotsDeVtable(stub, clavesPropias);
+                    ctx.totalErrors += sembrarSlotsDeVtable(stub, clavesPropias,
+                                            ownNs.moduleName + "." + cs.name);
                     it.remove();
                     progress = true;
                 }
