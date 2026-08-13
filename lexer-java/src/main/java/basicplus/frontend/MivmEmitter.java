@@ -615,8 +615,33 @@ public final class MivmEmitter {
             if (info.module != null && info.module.mainFunction != null) {
                 Symbol.FunctionSymbol fm = info.module.mainFunction;
                 if (fm.params.size() == 1) {
-                    String emptyStrSym = internString("");
-                    w.emitLeaGlobal(emptyStrSym);
+                    // #386 — el argumento de Main sale de su VALOR POR DEFECTO
+                    // (H8.1), y sólo vale "" si no declara ninguno.
+                    //
+                    // Antes se horneaba "" mirando únicamente que hubiera UN
+                    // parámetro: `Main(arg: string := "/sd/medidas.db")`
+                    // compilaba sin una palabra y llegaba vacío, así que todo
+                    // `if arg != "" then ...` era código muerto sin avisar
+                    // (samples/SqlDemo.bp lo tenía, y el LEEME de H4 llegó a
+                    // prometer algo imposible). Aceptar un valor y tirarlo es
+                    // peor que no aceptarlo.
+                    //
+                    // Idea de Eduardo: no hace falta mecanismo nuevo — el
+                    // lenguaje YA tiene dónde escribir ese valor. Sin default el
+                    // comportamiento es idéntico al de siempre, así que no se
+                    // mueve nada de lo que ya funciona.
+                    //
+                    // El literal se lee directo y no se emite como expresión
+                    // porque aquí no hay ámbito: el semántico ya garantizó que
+                    // el único parámetro de Main es `string` y que su default
+                    // es asignable a él, o sea que si hay default es un
+                    // StringLitExpr. Pasar el runtime el argumento DE VERDAD
+                    // (wire + IDE + los 3 firmwares) sigue pendiente aparte.
+                    ParamSymbol p0 = fm.params.get(0);
+                    String valor = (p0.defaultExpr instanceof StringLitExpr)
+                                 ? ((StringLitExpr) p0.defaultExpr).value
+                                 : "";
+                    w.emitLeaGlobal(internString(valor));
                 }
                 w.emitCall(fm.name);
                 w.emitSetLocal("__discard");
