@@ -606,10 +606,31 @@ static void run_module_path(const char* path, long id) {
                 session, (int) st, (unsigned long) dt, link_err);
             if (n > 0) stm32_wire_send_line(buf, (size_t) n);
         } else {
-            emit_exited(session,
-                        (st == BPVM_OK)     ? "OK"
-                      : (st == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR",
-                        (st == BPVM_KILLED) ? 130 : (int) st, dt);
+            /* #406 — el DETALLE del error de ejecucion, no solo la categoria.
+             *
+             * Esta familia se habia quedado corta: el Pico y los ESP32 ya
+             * miraban bpvm_runtime_error() y el STM32 solo trataba link_err, asi
+             * que en el IDE salia «RUNTIME_ERROR» pelado y el texto —el motivo
+             * real— se perdia. Es el patron de siempre: el comun crecio y una
+             * copia privada no.
+             *
+             * El mensaje lo rellena la VM tanto si el error lo lanza ella como
+             * si es un `throw` de clase de usuario sin atrapar (eso ultimo es lo
+             * que anadio #406 en src/exceptions.c). */
+            const char* rt_err = bpvm_runtime_error(vm);
+            if (st != BPVM_OK && st != BPVM_KILLED && rt_err[0]) {
+                char buf[320];
+                int n = snprintf(buf, sizeof(buf),
+                    "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
+                    "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"%s\"}",
+                    session, (int) st, (unsigned long) dt, rt_err);
+                if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+            } else {
+                emit_exited(session,
+                            (st == BPVM_OK)     ? "OK"
+                          : (st == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR",
+                            (st == BPVM_KILLED) ? 130 : (int) st, dt);
+            }
         }
     }
     bpvm_destroy(vm);

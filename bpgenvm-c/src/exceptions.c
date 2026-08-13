@@ -109,6 +109,42 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
             }
             buf[n] = '\0';
             bpvm_diag("[bpvm]   el mensaje que traia: \"%s\"", buf);
+            /* #406 — Y AL SITIO DEL QUE LO SACA EL WIRE.
+             *
+             * Habia DOS formas de morir y solo una tenia voz: el detalle del
+             * EXITED lo rellena bpvm_throw_runtime_error (abajo), o sea el
+             * camino de los errores que lanza LA VM. Un `throw` de clase de
+             * USUARIO no pasa por ahi, asi que en la placa el IDE recibia
+             * `exit 11` pelado y el texto se perdia — justo la forma en que
+             * muere el programa de un usuario normal.
+             *
+             * La linea de arriba ya lo decia, pero por el canal de diag: sirve
+             * mirando la consola, no para que el host lo cuente. Esto es lo que
+             * lo cruza.
+             *
+             * Va en el NUCLEO (src/) y no en cada repl: son tres familias, y el
+             * fallo de esta manana fue tres veces «el comun crecio y la copia
+             * privada no». Desde aqui viaja solo. */
+            /* El recorte se DICE (%.160s) en vez de dejarlo al snprintf: cabe
+             * de sobra en runtime_error[192] y asi no hay un aviso del
+             * compilador que alguien tenga que volver a mirar.
+             *
+             * Y se distingue el mensaje VACIO: un «excepcion no atrapada: » con
+             * nada detras es medio mensaje, y este arreglo va justo de eso. La
+             * cadena puede existir y estar vacia, asi que no basta con mirar si
+             * hay objeto. */
+            if (n > 0) {
+                snprintf(vm->runtime_error, sizeof(vm->runtime_error),
+                         "excepcion no atrapada: %.160s", buf);
+            } else {
+                snprintf(vm->runtime_error, sizeof(vm->runtime_error),
+                         "excepcion no atrapada (sin mensaje)");
+            }
+        } else {
+            /* Ni siquiera hay objeto de mensaje. Que se sepa QUE paso: «exit 11»
+             * a secas no distingue esto de un fallo de la propia VM. */
+            snprintf(vm->runtime_error, sizeof(vm->runtime_error),
+                     "excepcion no atrapada (sin mensaje)");
         }
     }
     tc->status = BPVM_THREAD_TERMINATED;
