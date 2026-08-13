@@ -95,6 +95,31 @@ static uint32_t       s_packs_view_size = 0;
 void board_mgr_esp32_set_packs_view(const void* base, uint32_t size) {
     s_packs_view      = (const uint8_t*) base;
     s_packs_view_size = size;
+
+    /* ─── Y MONTARLA, que son DOS consumidores, no uno ────────────────────
+     *
+     * Con la vista registrada, el IDE ya puede listar y grabar. Pero la VM
+     * busca los módulos (`mod`) y los puentes (`mdn`) del pack por otro sitio
+     * —`bpvm_pack_mounted()`—, y si nadie ha montado, ahí no hay nada que
+     * encontrar. Son la misma dirección para dos usos distintos.
+     *
+     * ⚠️ Esto FALTABA en la familia ESP32 y no era una regresión: el camino
+     * «cargar un módulo desde la zona» no se había ejercitado nunca aquí. El
+     * pack nativo de V5/H8 sí corría, porque a ése se le encuentra BARRIENDO
+     * la zona, que no necesita montaje. Se vio con el caso mínimo de Eduardo
+     * (13-ago): un pack con UN módulo dentro y `falta el modulo 'mod1'`,
+     * mientras el mismo pack en host iba. En la Pico ya se había cazado igual
+     * — ver el aviso gemelo en `pico/pack_pico.c`.
+     *
+     * Va AQUÍ y no en `pack_p4.c` a propósito: éste es el punto por el que
+     * pasa cualquier familia que consiga su puntero, así que el S3 lo tendrá
+     * el día que registre el suyo sin que nadie se acuerde de esta línea.
+     *
+     * Y va pase lo que pase con el código nativo: un pack de sólo módulos,
+     * sin `npk`, tiene que valer igual. */
+    bpvm_pack_mount(s_packs_view, s_packs_view_size);
+    log_printf("pack: zona montada en %p (%u KB) — modulos y .mdn visibles",
+               (const void*) s_packs_view, (unsigned) (s_packs_view_size / 1024u));
 }
 
 /* ── Cintura de ESCRITURA. Ésta SÍ es común a los dos ESP32: los dos graban por

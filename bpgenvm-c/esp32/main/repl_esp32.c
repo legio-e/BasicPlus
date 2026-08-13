@@ -41,6 +41,11 @@
  * en TODA la familia — el S3 también tiene que decir a qué ISA compilar. Sólo la
  * CARGA de .mdn dinámico es de momento del P4. */
 #include "mdn_loader.h"      /* H4/H11: bpvm_load_mdn + bpvm_mdn_host_arch (INFO) */
+#include "bpvm_mdn_scan.h"   /* V5: el bucle que busca el .mdn en FS *y* pack.
+                              * Su .c ya estaba en el CMakeLists de las dos
+                              * placas ESP32 — compilándose sin que nadie lo
+                              * llamara, que es la forma silenciosa de tener
+                              * media función. */
 
 #if defined(__riscv)
 #include "esp_cache.h"       /* H4 AOT: sync de cachés tras copiar .mdn a RAM exec */
@@ -683,6 +688,69 @@ static long s_kill_ack_id = -1;
 #define MDN_MAX_EXEC 16
 static void* s_mdn_exec[MDN_MAX_EXEC];
 static int   s_mdn_exec_n;
+
+/*
+ * Trae un `.mdn` DEL FS a RAM ejecutable. Es el callback de
+ * `bpvm_mdn_escanear`: la parte que sólo esta familia sabe hacer.
+ *
+ * <p>La otra fuente —el pack— NO pasa por aquí y es a propósito: su zona está
+ * mapeada como INST, o sea que su código ya es ejecutable donde está y copiarlo
+ * sería gastar RAM para nada. El bucle común le pasa al loader el puntero XIP
+ * directamente. Lo confirma el arranque: *«INST y DATA dan LA MISMA
+ * dirección»*.
+ *
+ * <p>La DRAM del ESP32 sí necesita la copia: en Xtensa hay IRAM y DRAM
+ * separadas y la segunda no ejecuta. En el P4 (RISC-V) la RAM interna es
+ * unificada y por eso `MALLOC_CAP_EXEC` ni existe ahí — de ahí el #ifdef.
+ */
+static const uint8_t* esp32_mdn_del_fs(void* user, const char* nombre,
+                                       uint32_t* len) {
+    (void) user;
+    if (s_mdn_exec_n >= MDN_MAX_EXEC) return NULL;   /* ya no caben más overlays */
+
+    char     real[FS_NAME_LEN];
+    uint32_t size = 0;
+    if (v1_resolve_path(nombre, real, sizeof(real), &size) != FS_OK) return NULL;
+
+#ifdef MALLOC_CAP_EXEC
+    void* exec = heap_caps_malloc(size, MALLOC_CAP_EXEC);
+#else
+    void* exec = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+#endif
+    if (!exec) {
+        /* Se dice AQUÍ: para el bucle esto es «no está», y un descarte por
+         * memoria en silencio no se distinguiría de no tenerlo. */
+        log_printf("AOT: %s (%u B) sin RAM ejecutable — sin overlay",
+                   real, (unsigned) size);
+        return NULL;
+    }
+    if (bpvm_fs_read(real, (uint8_t*) exec, size) != (long) size) {
+        log_printf("AOT: %s no se pudo leer entero — sin overlay", real);
+        heap_caps_free(exec);
+        return NULL;
+    }
+#if defined(__riscv)
+    /* Coherencia de cachés: bajar la D-cache a memoria (C2M), invalidar la
+     * I-cache y `fence.i`. Sin esto se ejecutaría código rancio o basura.
+     * Va antes de que el loader registre nada: los thunks apuntan aquí. */
+    esp_cache_msync(exec, size,
+        ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+    esp_cache_msync(exec, size,
+        ESP_CACHE_MSYNC_FLAG_TYPE_INST | ESP_CACHE_MSYNC_FLAG_INVALIDATE
+        | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+    __asm__ volatile ("fence.i" ::: "memory");
+#endif
+    /* Se apunta para liberarlo al acabar el RUN, cargue o no: si el loader lo
+     * rechaza (arch/ABI), el buffer ya está pedido y hay que devolverlo igual. */
+    s_mdn_exec[s_mdn_exec_n++] = exec;
+    *len = size;
+    return (const uint8_t*) exec;
+}
+
+static void esp32_mdn_decir(void* user, const char* msg) {
+    (void) user;
+    log_printf("%s", msg);
+}
 #endif
 
 static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
@@ -777,54 +845,28 @@ static void run_module_path(const char* path, long id) {
     esp_aot_register(vm);
 
 #if defined(__riscv)
-    /* H4 AOT — .mdn DINÁMICO (RISC-V). Por cada módulo cargado, buscar su .mdn en
-     * el FS y, si existe, COPIARLO a RAM EJECUTABLE (la DRAM del ESP32 no ejecuta;
-     * el Pico sí, por eso allí el loader es zero-copy desde el buffer del FS) y
-     * registrar sus thunks. El gate de arch del loader rechaza un .mdn que no sea
-     * RISC-V. El buffer exec persiste durante el run; se libera al terminar. */
+    /* ── H4 AOT — los `.mdn` de este RUN, con EL BUCLE COMÚN ──────────────────
+     *
+     * `bpvm_mdn_escanear` recorre los módulos cargados y busca el puente de
+     * cada uno en LAS DOS fuentes —el FS y la zona de packs—, aplicando el
+     * criterio de Eduardo *«lo que está en un pack busca primero dentro del
+     * pack»*, y avisando de los dos casos que se investigan como otra cosa: el
+     * eclipse (*«se toma del FS; el del pack queda TAPADO»*) y el .mdn que
+     * carga sin enganchar ni un thunk.
+     *
+     * ⚠️ Aquí había una COPIA de ese bucle que sólo miraba el FS. Con
+     * `SQLite.mod` viniendo del pack y su `.mdn` dentro del pack —que es el
+     * caso normal desde V5/H8— el puente no se encontraba nunca, las funciones
+     * `native` se quedaban sin implementación y la primera llamada lanzaba un
+     * RuntimeError sin una sola línea de salida previa. Costó el 13 de agosto
+     * entero, y fue el TERCER fallo del mismo día con esta forma: un arreglo
+     * que vive en el bucle común y no llega a la familia que tiene su propia
+     * copia (los otros dos: la zona sin montar y el detalle del RuntimeError).
+     *
+     * De aquí en adelante lo específico de la familia es sólo el callback:
+     * traer el fichero del FS a RAM ejecutable. El QUÉ y el ORDEN son de todos. */
     s_mdn_exec_n = 0;
-    for (int mi = 0; mi < vm->module_count && s_mdn_exec_n < MDN_MAX_EXEC; mi++) {
-        const char* mname = vm->modules[mi].name;
-        if (!mname || !mname[0]) continue;
-        char mdn_path[80];   /* nombre de módulo (<=63) + ".mdn" + NUL, holgado */
-        snprintf(mdn_path, sizeof(mdn_path), "%s.mdn", mname);
-        char mdn_real[FS_NAME_LEN]; uint32_t mdn_size;
-        if (v1_resolve_path(mdn_path, mdn_real, sizeof(mdn_real), &mdn_size) != FS_OK) continue;
-        /* El P4 (RISC-V) NO tiene MALLOC_CAP_EXEC (su RAM interna es unificada =
-         * ejecutable; ese cap solo existe en targets con split IRAM/DRAM como
-         * Xtensa). RAM interna normal, que la CPU puede ejecutar. */
-#ifdef MALLOC_CAP_EXEC
-        void* exec = heap_caps_malloc(mdn_size, MALLOC_CAP_EXEC);
-#else
-        void* exec = heap_caps_malloc(mdn_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-#endif
-        if (!exec) { ESP_LOGW("AOT", "%s: sin RAM exec (%u B)", mdn_path, (unsigned) mdn_size); continue; }
-        /* H11 — del FS DIRECTO a la RAM ejecutable. Antes iba al espejo de 64 KB y
-         * de ahí un memcpy: dos copias y un estático permanente para nada. */
-        if (bpvm_fs_read(mdn_real, (uint8_t*) exec, mdn_size) != (long) mdn_size) {
-            ESP_LOGW("AOT", "%s: lectura incompleta", mdn_path);
-            heap_caps_free(exec);
-            continue;
-        }
-        /* Coherencia de cachés (RISC-V): escribir la D-cache a memoria (C2M),
-         * invalidar la I-cache, y fence.i para sincronizar el flujo de
-         * instrucciones. Sin esto se ejecutaría código rancio/basura. */
-        esp_cache_msync(exec, mdn_size,
-            ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
-        esp_cache_msync(exec, mdn_size,
-            ESP_CACHE_MSYNC_FLAG_TYPE_INST | ESP_CACHE_MSYNC_FLAG_INVALIDATE
-            | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
-        __asm__ volatile ("fence.i" ::: "memory");
-        int rc = bpvm_load_mdn(vm, (const uint8_t*) exec, (size_t) mdn_size);
-        if (rc == MDN_OK) {
-            s_mdn_exec[s_mdn_exec_n++] = exec;
-            ESP_LOGI("AOT", "%s: .mdn RISC-V cargado (%u B) en RAM exec %p",
-                     mdn_path, (unsigned) mdn_size, exec);
-        } else {
-            heap_caps_free(exec);
-            ESP_LOGW("AOT", "%s: bpvm_load_mdn rc=%d (arch/abi/formato?)", mdn_path, rc);
-        }
-    }
+    bpvm_mdn_escanear(vm, esp32_mdn_del_fs, esp32_mdn_decir, NULL);
 #endif
 
     /* Ejecutar. bpvm_run single-thread (el SMP en ESP32 es H4.2+). */
@@ -850,8 +892,26 @@ static void run_module_path(const char* path, long id) {
                            : (rs == BPVM_KILLED) ? "KILLED"
                            : (link_err[0])       ? "LINK_ERROR" : "RUNTIME_ERROR";
     int exit_code = (rs == BPVM_OK) ? 0 : (rs == BPVM_KILLED) ? 130 : (int) rs;
+    /* ── QUÉ error, no SÓLO que hubo uno ────────────────────────────────────
+     *
+     * Tres fuentes, de la más concreta a la más genérica: el fallo de enlace,
+     * el DETALLE del RuntimeError (`bpvm_runtime_error`, p.ej. "referencia a
+     * objeto eliminado" o el texto del throw), y por último el nombre del
+     * status.
+     *
+     * ⚠️ El del medio FALTABA en esta familia. La Pico lo manda desde #280 y
+     * aquí no se llevó, así que la P4 sólo podía decir `exit 11 (RuntimeError
+     * BP no atrapado)` — que es la categoría, no el error. Dos días de
+     * diagnóstico a ciegas costó, el 12 y el 13 de agosto: se veía QUE fallaba
+     * y no HABÍA forma de saber por qué desde el IDE.
+     *
+     * Es el mismo patrón que el montaje de la zona de packs de esta mañana:
+     * un arreglo que entra en una familia y no viaja a las otras. Si se toca
+     * este orden, tocarlo también en `pico/repl_v1.c`. */
+    const char* rt_err = bpvm_runtime_error(vm);
     const char* err_msg = (rs == BPVM_OK) ? NULL
-                        : (link_err[0] ? link_err : bpvm_status_str(rs));
+                        : (link_err[0] ? link_err
+                                       : (rt_err[0] ? rt_err : bpvm_status_str(rs)));
     send_exited(session, status_str, exit_code, (long) dt, err_msg);
 
 #if defined(__riscv)
