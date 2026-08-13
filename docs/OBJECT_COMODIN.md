@@ -111,6 +111,52 @@ se aborda antes alguna parte suelta.
 
 ---
 
+## Refinamiento de Eduardo: envolver es trabajo de la LIBRERÍA, no del compilador
+
+> «El objeto de dentro se podría asignar con un `set` sobrecargado, y que cada
+> `set` se encargue de construir el objeto contenedor. En cuanto al `get`, podría
+> devolver el objeto, y en el caso de los escalares necesitaría un `getValue()`
+> adicional. Son ideas para **no tener que modificar el compilador con casos
+> especiales**.»
+
+Es la línea correcta, y además ahora es POSIBLE: la sobrecarga cross-module se
+arregló el 13-ago (#387). Antes de eso, un `set` sobrecargado importado ni
+siquiera resolvía bien.
+
+### Dónde va ese `set`: NO en `Object`
+
+`Object` es la raíz REAL y tiene vtable: `toString` en el slot 0, `compareTo` en
+el 1, y los métodos propios de toda clase de usuario numeran **desde el 2**
+(medido al cerrar #392). Añadirle dos métodos correría todos los slots — el mismo
+mecanismo de #324, *«quitar un método de una base de stdlib CORRE los slots»*— y
+obligaría a recompilar cada `.mod` existente.
+
+Así que:
+
+- **`Object` se queda como raíz mínima**, sin métodos nuevos. Cero coste de ABI.
+- **El contenedor es una clase APARTE** con el `set` sobrecargado:
+  `set(v: integer)`, `set(v: long)`, `set(v: double)`, `set(v: string)`,
+  `set(v: Object)`… y cada uno construye su envoltorio. Escrito en BP, en la
+  stdlib, sin un solo caso especial en el compilador.
+
+Queda por decidir el nombre (`Box`, `Valor`, …) y si el contenedor guarda un
+`Object` a secas o distingue «vacío» de «null».
+
+### Lo que ese esquema NO puede cubrir solo
+
+BP sobrecarga **por parámetros, no por tipo de retorno**. Así que `get()` sólo
+puede devolver `Object`: sacar de ahí una `Cosa` sigue siendo un **downcast**, y
+ahí es donde vive la comprobación de #389. La maquinaria ya está — `instanceof`
+en ejecución (#52).
+
+`getValue()` resuelve la mitad de los escalares; la otra mitad —los objetos
+normales— la resuelve el downcast comprobado.
+
+**Reparto final:** envolver = librería (sin tocar el compilador);
+desenvolver con seguridad = lenguaje (con lo que ya hay).
+
+---
+
 ## Lo que NO cambia
 
 - El que declara el tipo no paga nada: esto sólo afecta a quien escribe `Object`.
