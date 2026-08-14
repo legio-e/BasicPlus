@@ -29,7 +29,7 @@ module SqlDemo
   import Str
 
   function Main(arg: string)
-    correr("medidas.db")
+    correr("/sd/medidas.db")
   end Main
 
   public function correr(camino: string)
