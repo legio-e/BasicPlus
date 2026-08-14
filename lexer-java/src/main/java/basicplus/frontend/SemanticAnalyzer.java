@@ -340,6 +340,37 @@ public final class SemanticAnalyzer {
         addBuiltin(s, "__mutexLock",    VoidType.INSTANCE,     new String[]{"m"},              new BpType[]{AnyType.INSTANCE});
         addBuiltin(s, "__mutexUnlock",  VoidType.INSTANCE,     new String[]{"m"},              new BpType[]{AnyType.INSTANCE});
 
+        // ---- Clase RAÍZ del lenguaje: Object ----
+        // La clase existía ya, pero sólo en el EMISOR: `MivmEmitter`
+        // .synthesizeObjectClass la fabrica en cada módulo con su vtable fija
+        // (toString slot 0, compareTo slot 1) y cuelga de ella toda clase de
+        // usuario. Lo que no existía era su SÍMBOLO: el analizador no la tenía
+        // en esta lista, así que el nombre `Object` no resolvía a nada — y por
+        // eso `case "Object"` de resolveType tenía que devolver `any`.
+        //
+        // Aquí sólo se da de alta. Que el NOMBRE pase a significar esta clase
+        // (en vez de `any`) es el paso siguiente, y ése sí cambia semántica.
+        //
+        // isBuiltin = true como sus vecinas, y por un motivo concreto: el
+        // cross-check de slots #174b (MivmEmitter) pide el layout a las clases
+        // NO builtin, y `computeClassLayout` no sabe calcularlo sin AST —
+        // abortaba el compilador con una traza Java. Es lo que ya ocurrió con
+        // SyncList. El layout de Object no se calcula: está tabulado por nombre
+        // (`ModuleInterface.objectBaseLayout`, línea 722).
+        //
+        // Sin constructor a propósito: el emisor tampoco lo sintetiza. Si algún
+        // día se quiere `Object()` en fuente, hay que ponerlo en los DOS sitios.
+        ClassSymbol objectCls = new ClassSymbol("Object", true, null, null, 0, 0);
+        objectCls.isBuiltin = true;   // vtable la pone el emisor; layout tabulado
+        {
+            objectCls.instanceMembers.tryDefine(makeMethod("toString",  objectCls,
+                    PrimitiveType.STRING,  new String[]{}, new BpType[]{}));
+            objectCls.instanceMembers.tryDefine(makeMethod("compareTo", objectCls,
+                    PrimitiveType.INTEGER, new String[]{"other"},
+                    new BpType[]{new BpType.ClassType(objectCls)}));
+        }
+        s.tryDefine(objectCls);
+
         // ---- Clase stdlib: List (lista dinámica de refs a objetos) ----
         // Las firmas que toman/devuelven `any` permiten almacenar instancias
         // de cualquier clase de usuario sin fricción de tipos.
