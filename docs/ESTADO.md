@@ -16,8 +16,17 @@
   **sistema de ficheros** (littlefs en las tres familias).
 - **V5 — EN CURSO**, y corta por decisión: SQLite + ORM, el traslado al P4, los
   pendientes y cositas del IDE. Lo grande (partir común/hardware) es V6.
-- ⚠️ **El registro vivo de V5 está FUERA del repo**: `notas/V5_BACKLOG.md` y
-  `notas/V5_IDEAS.md` (commit `62d4b3b`: de la versión EN CURSO no se publica nada).
+- 📋 **LAS FICHAS ESTÁN EN `notas/FICHAS.md`** (creado el 14-ago). Es el registro
+  numerado —abiertas, cerradas con su commit, y las que no se han podido
+  catalogar— y se mantiene a mano: una línea al abrir, la marca y el commit al
+  cerrar. **Antes no existía**: las fichas vivían en la lista de tareas de una
+  sesión, y por eso el 14-ago se dio una lista de 11 pendientes cuando había 36,
+  se dio por pendiente lo ya hecho (H7) y lo que se decidió no hacer (la release
+  4.0.1). Un número de ficha que no se puede buscar no sirve de nada.
+- ⚠️ **El resto del registro vivo de V5 está FUERA del repo**: `notas/V5_BACKLOG.md`
+  y `notas/V5_IDEAS.md` (commit `62d4b3b`: de la versión EN CURSO no se publica
+  nada). Ojo: el backlog está **parado el 12-ago** y sus "pendientes" pueden estar
+  hechos o anulados — contrastar con `FICHAS.md` y el `git log` antes de creerlo.
   Y ese backlog **se quedó el 12-ago**: H8 entero, la tanda H9 y todo lo del 13 y
   14-ago sólo constan en el `git log`. Si hace falta el detalle de esos dos días,
   está en los mensajes de commit, que son largos a propósito.
