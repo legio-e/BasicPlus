@@ -104,6 +104,26 @@ int main(void) {
       CHECK(chk(&h, 0) == BPVM_NPACK_E_SIN_RELOC,
             "trae su tabla de relocs -> SIN_RELOC (no paso por el IDE)"); }
 
+    /* EL CASO DE VERDAD (V5/H8, 12-ago): un pack recien construido y SIN
+     * realojar no tiene sello puesto — las dos cosas fallan a la vez. El test
+     * de arriba no lo cubria: partia de una cabecera con el sello BUENO, que
+     * es una combinacion que no se da en la naturaleza.
+     *
+     * Con el orden anterior (sello antes que reloc_count) esto contestaba
+     * "realojado para OTRA direccion", que es MENTIRA: no se ha realojado
+     * nunca. Los dos motivos mandan al IDE, asi que el fallo no se notaba en el
+     * resultado — solo en el diagnostico, que es justo lo que esta escalera
+     * existe para dar.
+     *
+     * Y con el modelo de H8 deja de ser un caso de laboratorio: un pack
+     * DISTRIBUIDO viene asi, y el IDE lo realoja al grabar. */
+    { bpvm_npack_hdr_t h = buena();
+      h.reloc_count  = 4;      /* trae su tabla                              */
+      h.linked_flash = 0;      /* y NO tiene sello: nadie le ha dado sitio    */
+      h.linked_ram   = 0;
+      CHECK(chk(&h, 0) == BPVM_NPACK_E_SIN_RELOC,
+            "sin realojar Y sin sello -> SIN_RELOC (no SELLO: la causa es esa)"); }
+
     /* ── Peldaño 6: tamaños ── */
     { bpvm_npack_hdr_t h = buena(); h.flash_bytes = SITIO_FLASH + 1;
       CHECK(chk(&h, 0) == BPVM_NPACK_E_TAMANO, "mas grande que la zona -> TAMANO"); }

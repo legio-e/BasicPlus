@@ -36,16 +36,28 @@ bpvm_npack_res_t bpvm_npack_check(const bpvm_npack_hdr_t* h,
     if (!igual(h->float_abi, bpvm_mdn_host_float_abi()))
                                                   return BPVM_NPACK_E_ABI;
 
-    /* 4 — EL SELLO. El pack lleva punteros absolutos dentro; si está en otro
+    /* 4 — ¿llegó realojado? Un pack recién distribuido trae su tabla; lo que se
+     *     GRABA ya no. Que el contador sea 0 ES la prueba de que pasó por el
+     *     IDE — no hay un campo "ya_realojado" aparte que pueda mentir.
+     *
+     *     ⚠️ VA ANTES QUE EL SELLO, y el orden no es cosmético (V5/H8, 12-ago).
+     *     Un pack sin realojar NO TIENE sello puesto, así que comprobarlo antes
+     *     hacía que fallara por el peldaño equivocado: decía "realojado para
+     *     OTRA direccion" cuando la verdad era "no se ha realojado nunca". Los
+     *     dos mandan al IDE, así que el resultado coincidía y el error habría
+     *     pasado inadvertido — pero el diagnóstico mentía, que es justo lo que
+     *     esta escalera existe para evitar.
+     *
+     *     Y con el modelo de V5/H8 —el IDE reloca AL GRABAR— esto deja de ser
+     *     un caso raro: un pack distribuido SIN realojar pasa a ser lo NORMAL.
+     *     Juzgar su sello es juzgar una dirección que nadie le ha asignado. */
+    if (h->reloc_count != 0)                      return BPVM_NPACK_E_SIN_RELOC;
+
+    /* 5 — EL SELLO. El pack lleva punteros absolutos dentro; si está en otro
      *     sitio del que se realojó, apuntan a cualquier parte. Caso NORMAL:
      *     alguien cambió SQLite=<MB> y el bloque de RAM se movió. */
     if (h->linked_flash != aqui_flash || h->linked_ram != aqui_ram)
                                                   return BPVM_NPACK_E_SELLO;
-
-    /* 5 — ¿llegó realojado? Un pack recién distribuido trae su tabla; lo que se
-     *     GRABA ya no. Que el contador sea 0 ES la prueba de que pasó por el
-     *     IDE — no hay un campo "ya_realojado" aparte que pueda mentir. */
-    if (h->reloc_count != 0)                      return BPVM_NPACK_E_SIN_RELOC;
 
     /* 6 — tamaños. Antes de copiar nada, que quepa; y que la entrada apunte
      *     DENTRO del código, no más allá. */
