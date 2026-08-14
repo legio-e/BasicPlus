@@ -64,13 +64,20 @@ confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
   escritas a mano). `Map` ya está en `Object` y no se toca. ⚠️ El día que se haga,
   `samples/AnyNumGc.bp` se queda sin sujeto: hoy prueba que un escalar crudo en un
   slot trazado no descarrila el GC, y ese camino sólo existe ya por `List.add`.
-- **🔴 Trabajo del P4** (12-ago): commiteado el 14-ago (`c917bd6`) pero **verificado
-  sólo en host** — no se ha reconstruido ningún firmware ni se ha tocado placa. Lo
-  que queda de H7, por orden (backlog 12-ago): **1)** que el P4 **diga su dirección
-  de packs** por el INFO — bloquea el sello y sin ella no se graba nada; **4)**
-  sellar con la dirección de verdad, grabar y probar en placa; **5)** reconstruir y
-  **re-verificar el pack ARM** (cambió al ganar `fabs`); **6)** los dos juegos de
-  arquitectura en un solo pack.
+- **H7 — verificado en el P4** (Eduardo, 14-ago). ⚠️ La lista "PARA MAÑANA" del
+  backlog **no vale**: se escribió el 12-ago por la mañana y esa misma tarde se
+  resolvió casi entera, pero el backlog se quedó parado y sólo lo cuenta el
+  `git log`. Está hecho: la placa **dice dónde cae el pack** (`40075b2`, por
+  `PACK_BURN_BEGIN_REPLY` — `flashAddr`/`ramBase`/`ramSize`, no por INFO); el
+  **sellado** verificado contra `ld` sobre el pack real (`13622e9`); y el **pack
+  ARM re-verificado** con el SQLite entero (`4420746`, #402: ARM 412.999 B y
+  RISC-V 529.796 B idénticos al enlazador).
+  Queda por confirmar sólo **los dos juegos de arquitectura en un solo pack**:
+  #402 dice que ya se PUEDE, no que se haya hecho.
+- **El WIP del P4 estaba sin commitear desde el 12-ago**; se guardó el 14
+  (`c917bd6`). Ojo al leer ese commit: dice "en placa, nada" porque en ESA tanda
+  no se tocó placa, no porque el trabajo esté sin probar — Eduardo lo había
+  verificado antes en el P4 con ese mismo código en su árbol.
 - **#362 (recursos desde la zona de packs) no se ha probado en placa.** Verde en
   host: `make test-packres` 12/12, end-to-end con un PNG real y control en rojo,
   paridad dual-VM 28/28. Su propio commit lo dice: las cinco cinturas montan zona
@@ -123,8 +130,8 @@ confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
    hoy da error de compilación (antes se lo tragaba mudo).
 3. **`List`/`SyncList`/`OwnerList` de `any` a `Object`** (lo pidió Eduardo). Ojo a
    lo que eso le hace a `samples/AnyNumGc.bp`.
-4. **Cerrar H7**: pasos 1, 4, 5 y 6 de la lista del backlog; el WIP del P4 está
-   commiteado pero sin compilar para firmware ni probar en placa.
+4. **Cerrar H7**: confirmar si falta el pack con las DOS arquitecturas dentro; el
+   resto está verificado en el P4.
 5. **Probar #362 en placa** (la zona de packs sirviendo recursos).
 6. (Backlog) árbol perezoso del IDE con `LIST_DIR`; **#379** (timeout de INFO en el
    P4, arrastrado y se recupera solo); la media flash del P4 (aparcada a propósito:
