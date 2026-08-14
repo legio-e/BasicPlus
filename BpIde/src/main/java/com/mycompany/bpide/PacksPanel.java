@@ -254,9 +254,17 @@ public final class PacksPanel extends JPanel {
                         "grabando " + f.getName() + "… " + pct + " %"
                         + "  (" + (hechos / 1024) + "/" + (total / 1024) + " KB)"));
             });
-            return new Object[] { img.length, off };
+            /* Lo GRABADO, no el fichero de origen. Con la poda ya no son lo
+             * mismo (1.122.304 en disco → 569.344 en la placa), y un log que
+             * dijera el del fichero contradiría al panel de packs, que lee de
+             * la flash. Dos instrumentos discrepando es peor que ninguno: hoy
+             * mismo el tamaño ha sido el dato que distinguía qué IDE grababa. */
+            return new Object[] { aGrabar.length, off, img.length };
         }, r -> {
-            log.accept("[Packs] grabado " + f.getName() + " (" + r[0] + " B) en offset " + r[1]);
+            log.accept("[Packs] grabado " + f.getName() + " (" + r[0] + " B"
+                    + (((Integer) r[2]).intValue() != ((Integer) r[0]).intValue()
+                       ? " — podado de " + r[2] + " para esta placa" : "")
+                    + ") en offset " + r[1]);
             refresh();
         });
     }
