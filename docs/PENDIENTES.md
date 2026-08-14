@@ -20,6 +20,18 @@
 > `B-gc-allocanchor`, `B-freeref-no-recursivo` — exigen tocar slots/GC con red de pruebas, no
 > son fixes contenidos de V3.
 
+### #389 — el estrechamiento de `Object` a una clase NO se comprueba en ejecución
+Desde el 14-ago, `Object` es la raíz real del modelo de objetos: subir es implícito y **bajar hay
+que escribirlo** (`Cosa(o)`, `string(o)`, la misma forma que `byte(someInt)`). Eso quita el fallo
+mudo —antes `var c: Cosa := dao.read(7)` compilaba sin una palabra—, pero la conversión **sólo fija
+el tipo estático**: si el DAO dice devolver `Cosa` y devuelve `Otra`, sigue leyendo el slot de otra
+clase y sale un **número plausible** (504 en `diag/orm-slots/ProbeMal.bp`, que es el reproductor).
+Falta que **lance**, sobre `instanceof` (#52, ya existe en el lenguaje). Toca las DOS VMs y el AOT,
+por eso salió de H9. Con él van dos hermanos: `toString()`/`compareTo()` sobre un `Object` que lleva
+una **cadena** no tienen vtable que despachar —una cadena es referencia pero no desciende de
+`Object`—; las dos VMs *pueden* detectarlo, porque el tag del handle y el tipo del bloque distinguen
+array de objeto. Diseño de fondo en `docs/OBJECT_COMODIN.md`.
+
 ### N-readfile-msg-skew — el mensaje de `RuntimeError` de `readFile(ausente)` difiere entre VMs
 Al abrir un fichero inexistente, **ambas** VMs lanzan `RuntimeError` (bien), pero el **texto** difiere:
 miVM `readFile('x'): x` vs VM-C `readFile('x'): no se pudo abrir`. Si un programa lo atrapa e imprime

@@ -34,42 +34,48 @@
 | H6 | la SD del P4 por **SDMMC** + `LIST_DIR` a código común | 11-ago, en placa |
 | H7 | **SQLite en el P4**: nativo RISC-V ejecutándose, motor arrancado y API publicada | 12-ago (falta grabar el pack: ver abajo) |
 | H8 | *la herramienta antes que el artefacto*: relocalizador que coincide con `ld`, `sources`, un `.mod` y N `.mdn`, botón de grabar que relocaliza | 13-ago, en host |
-| H9 | la tanda de **arreglos del compilador** (#384, #385, #386, #387, #388, #392, #393, #406) | **en curso** |
+| H9 | la tanda de **arreglos del compilador** (#384, #385, #386, #387, #388, #392, #393, #406) + `Object` como raíz real (#389, la mitad estática) | **14-ago** |
 
 *(El nombre de H8/H9 no está en ningún doc: sale de los prefijos de commit. Ojo con
 confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
 
 ## En curso / a medias
 
-- **🔴 Trabajo del P4 sin commitear desde el 12-ago** (dos días parado). Son los
-  pasos 2-3 de la lista "PARA MAÑANA" del backlog: inicializador común de la tabla
-  BIOS + alta de `bpvm_bios_fs.c` en los dos builds ESP32 + el cargador de packs
-  del P4. Ficheros:
-  - **nuevos y ni siquiera dados de alta en git**: `bpgenvm-c/esp32p4/main/bios_p4.c`,
-    `bpgenvm-c/esp32p4/main/pack_p4.c`.
-  - modificados: `esp32p4/main/main.c` (+116), los dos `CMakeLists.txt` de ESP32,
-    `esp32/main/board_mgr_esp32.h`, `include/bpvm_bios.h`, `pico/bios_pico.c`,
-    `src/bpvm_npack.c`, `test/test_npack.c`, `pico/scripts/bpvm-pico.py`,
-    `BpIde/.../PacksPanel.java`.
-  - Nadie sabe hoy si eso compila en las cinco familias: se dejó a medias.
-- **Lo que queda de H7**, por orden (backlog 12-ago): **1)** que el P4 **diga su
-  dirección de packs** por el INFO — bloquea el sello y sin ella no se graba nada;
-  **4)** sellar con la dirección de verdad, grabar y probar en placa; **5)**
-  reconstruir y **re-verificar el pack ARM** (cambió al ganar `fabs`); **6)** los
-  dos juegos de arquitectura en un solo pack.
+- **🟠 #389 — falta la COMPROBACIÓN EN EJECUCIÓN.** Lo hecho el 14-ago es la mitad
+  estática: `Object` es la raíz de verdad, subir es implícito y **bajar hay que
+  escribirlo** (`Cosa(o)`, `string(o)`, misma forma que `byte(someInt)`). Pero esa
+  conversión **sólo fija el tipo**: si el DAO dice `Cosa` y devuelve `Otra`, sigue
+  saliendo el **504**. Lo que falta es que lance, sobre `instanceof` (#52, ya
+  existe), y eso toca **las dos VMs y el AOT** — por eso salió de H9.
+  Con ella van dos hermanos medidos: `toString()`/`compareTo()` sobre un `Object`
+  que lleva una **cadena** no tienen vtable que despachar (una cadena es
+  referencia pero no desciende de `Object`); las dos VMs *pueden* detectarlo,
+  porque el tag del handle y el tipo del bloque distinguen array de objeto.
+  Diseño de fondo en `docs/OBJECT_COMODIN.md`.
+- **La clase contenedora (`Box`) sigue SIN escribir.** Es la otra mitad del reparto
+  de Eduardo —**envolver = librería** (una clase aparte con `set` sobrecargado,
+  posible desde que #387 arregló la sobrecarga cross-module); **desenvolver con
+  seguridad = lenguaje**—. Sin ella, meter un escalar en un `Object` obliga a
+  escribir `Integer(5)` a mano. Decisiones abiertas: el nombre, si distingue
+  «vacío» de `null`, y cómo se saca un escalar (BP no sobrecarga por retorno, así
+  que o N getters con nombre o `get(porDefecto: integer)`).
+- **`List` / `SyncList` / `OwnerList` siguen con firmas `any`.** Eduardo pidió
+  pasarlas a `Object` (`SemanticAnalyzer`, 15 apariciones de `AnyType.INSTANCE`
+  escritas a mano). `Map` ya está en `Object` y no se toca. ⚠️ El día que se haga,
+  `samples/AnyNumGc.bp` se queda sin sujeto: hoy prueba que un escalar crudo en un
+  slot trazado no descarrila el GC, y ese camino sólo existe ya por `List.add`.
+- **🔴 Trabajo del P4** (12-ago): commiteado el 14-ago (`c917bd6`) pero **verificado
+  sólo en host** — no se ha reconstruido ningún firmware ni se ha tocado placa. Lo
+  que queda de H7, por orden (backlog 12-ago): **1)** que el P4 **diga su dirección
+  de packs** por el INFO — bloquea el sello y sin ella no se graba nada; **4)**
+  sellar con la dirección de verdad, grabar y probar en placa; **5)** reconstruir y
+  **re-verificar el pack ARM** (cambió al ganar `fabs`); **6)** los dos juegos de
+  arquitectura en un solo pack.
 - **#362 (recursos desde la zona de packs) no se ha probado en placa.** Verde en
   host: `make test-packres` 12/12, end-to-end con un PNG real y control en rojo,
   paridad dual-VM 28/28. Su propio commit lo dice: las cinco cinturas montan zona
   por el mismo `bpvm_pack_mount`, *"pero eso es un argumento, no una medida"*.
 - **Metro (RP2350) y S3 compiladas y sin correr** desde el 12-ago.
-- **H9 — lo que falta**: **#389**, el estrechamiento de `Object` a una clase no se
-  comprueba (un DAO que dice devolver `Cosa` y devuelve `Otra` imprime **504**:
-  basura plausible). Con él van dos bugs hermanos medidos el 13-ago: un `Object`
-  con una cadena imprime **el handle**, y un `double` metido en un `Object` sale
-  **0**. El diseño ya está decidido y escrito — `docs/OBJECT_COMODIN.md`, *"decidido
-  13-ago, **sin implementar**"* — con el reparto: **envolver = librería** (una clase
-  contenedora con `set` sobrecargado, posible desde que #387 arregló la sobrecarga
-  cross-module), **desenvolver con seguridad = lenguaje** (sobre `instanceof`, #52).
 
 ## Riesgos / decisiones pendientes (atacar ANTES de seguir)
 
@@ -110,14 +116,17 @@ confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
 
 ## Próximos pasos
 
-1. **Ordenar el árbol de trabajo**: decidir qué entra del WIP del P4 (12-ago) y
-   commitearlo o tirarlo. Es lo más viejo y lo que más estorba a cualquier tanda.
-2. **H9: #389 y los dos bugs de `Object`**, con el diseño ya decidido en
-   `OBJECT_COMODIN.md`. Empezar por la clase contenedora (librería), que no toca
-   el compilador.
-3. **Cerrar H7**: pasos 1, 4, 5 y 6 de la lista del backlog.
-4. **Probar #362 en placa** (la zona de packs sirviendo recursos).
-5. (Backlog) árbol perezoso del IDE con `LIST_DIR`; **#379** (timeout de INFO en el
+1. **La clase contenedora (`Box`)** — es librería, no toca el compilador, y es lo
+   que hace llevadero tener que escribir `Integer(5)`. Empezar por ahí.
+2. **#389, la comprobación en ejecución**: que el downcast LANCE. Toca las dos VMs
+   y el AOT; verificar con `diag/orm-slots/ProbeMal.bp`, que es el reproductor y
+   hoy da error de compilación (antes se lo tragaba mudo).
+3. **`List`/`SyncList`/`OwnerList` de `any` a `Object`** (lo pidió Eduardo). Ojo a
+   lo que eso le hace a `samples/AnyNumGc.bp`.
+4. **Cerrar H7**: pasos 1, 4, 5 y 6 de la lista del backlog; el WIP del P4 está
+   commiteado pero sin compilar para firmware ni probar en placa.
+5. **Probar #362 en placa** (la zona de packs sirviendo recursos).
+6. (Backlog) árbol perezoso del IDE con `LIST_DIR`; **#379** (timeout de INFO en el
    P4, arrastrado y se recupera solo); la media flash del P4 (aparcada a propósito:
    32 MB físicos, bootloader configurado para 16).
 
@@ -133,6 +142,26 @@ confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-14 (noche) — Eduardo + Claude. 🏁 H9 CERRADO.** `Object` deja de ser un
+  alias de `any` y pasa a ser la raíz REAL del modelo de objetos (existía desde
+  H5.1.a, pero sólo en el emisor: al semántico nadie se la había presentado).
+  Subir es implícito, bajar se escribe con el nombre del tipo —`Cosa(o)`,
+  `string(o)`— que es la regla que ya regía entre primitivos (`byte(someInt)`).
+  **#389 queda pendiente**: falta que la conversión COMPRUEBE en ejecución.
+  Antes se guardó el trabajo suelto en 6 commits (el WIP del P4 del 12-ago, la
+  documentación) y se arregló `test-pack`, que no enlazaba desde #362.
+  Lo que enseñó la tanda, y conviene no olvidar:
+  - **el desfase de `.mod` ANESTESIA los cambios**: con la stdlib vieja (interfaz
+    `any`, que traga cualquier cosa) la suite y la paridad daban verde con
+    `string → Object` sin implementar. No se vio hasta regenerar la stdlib;
+  - **un SKIP no es un PASS**: el arnés dijo "VERDE" con 3 SKIP mientras tres
+    samples no compilaban;
+  - **el censo sólo vale con el directorio de salida BORRADO** (el compilador es
+    incremental): mintió tres veces en el mismo día, una de ellas diciendo "2 de
+    26 módulos" cuando eran 26;
+  - **prueba fuerte que sí sirvió**: 24 de 26 `.mod` byte-idénticos, y los 2 que
+    cambian sólo en la interfaz — `+69 = 23×3` y `+15 = 5×3`, exactamente lo que
+    crece `"any"` al pasar a `"Object"`. Cero `any` en las interfaces publicadas.
 - **2026-08-14 (tarde) — Eduardo + Claude.** Reescrito este documento con datos del
   repo en vez del andamiaje inicial. Dos cosas que decía y **eran falsas**:
   (a) **#310 no está abierto** — se cerró en V4 y está verificado en las tres

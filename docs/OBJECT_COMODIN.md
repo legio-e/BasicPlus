@@ -1,6 +1,17 @@
 # `Object` como comodín — decisión de diseño
 
-**Estado:** decidido por Eduardo el 13-ago-2026. Sin implementar.
+**Estado:** decidido por Eduardo el 13-ago-2026. **Implementada la mitad estática el
+14-ago** (H9): `Object` es la raíz real, subir es implícito y bajar se escribe con el
+nombre del tipo — `Cosa(o)`, `string(o)`. **Falta**: que esa conversión COMPRUEBE en
+ejecución (#389, sigue abierto; toca las dos VMs y el AOT) y la clase contenedora, que
+no se ha escrito.
+
+⚠️ Una precisión que este documento tenía mal, y que cambió el arreglo: `Object` **no
+era** "un alias de `any`" a secas. La clase existía desde H5.1.a con su vtable
+(`toString` slot 0, `compareTo` slot 1) y toda clase de usuario colgaba de ella — pero
+sólo en el EMISOR. Lo que faltaba era su símbolo en el analizador, y por eso el *nombre*
+`Object` resolvía a `any`. La cita de `SemanticAnalyzer.java:1377` también quedó vieja:
+tras #390 esa línea era la 1407, y hoy ya no existe.
 **Relacionado:** #389 (el downcast se traga cualquier cosa), #52 (`instanceof` en
 ejecución, ya hecho), #236 (tipos built-in cross-module).
 
