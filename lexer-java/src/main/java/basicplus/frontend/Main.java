@@ -327,7 +327,14 @@ public final class Main {
         String interfaceOutDir = null;
         String projectFile     = null;
         boolean daoBuild       = false;
-        String backend = "jvm";
+        // El default de la CLI es `mivm`, que es lo que emite el producto y lo que
+        // pide el IDE en sus cuatro llamadas (FrmMain: buildProject/compileFile con
+        // "mivm" a pelo). Estuvo en "jvm" por historia —contradiciendo al propio
+        // Ctx.backend, que ya era "mivm"— y eso mandaba a quien compilaba a mano
+        // con el jar a una RAMA OBSOLETA (ver la cabecera de JvmEmitter): salían
+        // errores raros de una clase importada, y parecían un bug del compilador.
+        // Eso fue #403. `--backend=jvm` sigue disponible para quien lo quiera.
+        String backend = "mivm";
         boolean showTokens = true;
         boolean showAst    = true;
         boolean pruneBpi   = false;   // borra los .bpi del build al terminar (opt-in)
@@ -365,6 +372,14 @@ public final class Main {
                 if (!backend.equals("jvm") && !backend.equals("mivm")) {
                     System.err.println("--backend desconocido: " + backend + " (usa jvm|mivm)");
                     System.exit(1); return;
+                }
+                // Que lo diga ANTES de compilar, no después con 20 errores raros.
+                if (backend.equals("jvm")) {
+                    System.err.println("-- aviso: el backend 'jvm' (.class) es una RAMA OBSOLETA y no se"
+                            + " mantiene. No soporta clases de OTRO módulo: si tu programa usa una,"
+                            + " saldrán errores del tipo \"no se puede llamar a 'X' sobre '<error>'\"."
+                            + " El backend del producto es 'mivm' (.mod), que es el que ejecutan las"
+                            + " dos VMs. --");
                 }
             }
             else if (path == null)         path = a;

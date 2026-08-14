@@ -1,5 +1,29 @@
 // ============================================================
 // JvmEmitter.java
+//
+// ⚠️ RAMA OBSOLETA — NO SE MANTIENE (decisión de Eduardo, 14-ago-2026)
+//
+//   «Ya no compilamos a .class desde casi el principio. Ese camino no se va a
+//    retomar. No hace falta mantener compatibilidad con todo eso.»
+//
+// El producto emite `.mod` (MivmEmitter), que ejecutan las DOS VMs: miVM en Java
+// y la VM-C en host y en las placas. Este emisor produce `.class` para correr
+// sobre la JVM sin nuestra VM, y se quedó atrás hace mucho.
+//
+// CONCRETAMENTE, lo que le falta y no se le va a dar: **clases de otro módulo**.
+// L2 (#12 y la serie L2 v3 — clases exportadas y usables cross-module) se hizo en
+// el emisor mivm y éste no lo recibió. Medido el 14-ago con un caso mínimo y con
+// un sample del repo (GuiImageDemo, 20 errores): falla si la clase viene de otro
+// módulo, DA IGUAL si viene de un pack, de un .mod suelto o del fuente de al
+// lado; sólo va si la clase está en el mismo módulo. Eso era #403, que se archivó
+// por esto: no era un bug de packs, era esta rama.
+//
+// Si algún día se retoma, el trabajo NO es un arreglo: es darle L2 entero.
+//
+// (Sigue compilando y sigue accesible con `--backend=jvm` a propósito: nadie ha
+//  pedido borrarlo, y borrar 117 KB de código que no molesta es una decisión
+//  aparte de marcarlo.)
+//
 // Compilador de BASICPLUS a bytecode JVM (.class) usando ASM.
 //
 // FASE 2 — alcance:
