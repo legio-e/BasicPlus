@@ -138,6 +138,43 @@ relocalizado al grabar, corriendo en dos silicios distintos.
   `e.msg`, la salida no es byte-idéntica. Alinear el wording en miVM y/o
   `bpgenvm-c/src/builtins.c`.
 
+## ⏭️ SIGUIENTE SESIÓN: tanda de verificación en placa
+
+Decisión de Eduardo (14-ago): *«la siguiente sesión verificamos en la Metro y en
+la P4 lo que esté pendiente, y así cerramos entradas y desbloqueamos lo
+siguiente»*. Es lo que más desbloquea por hora invertida: casi todo lo abierto de
+packs y de la SD espera una medida, no código.
+
+**Antes de tocar placa** — reconstruir los firmwares desde el árbol limpio. El
+trabajo del P4 se commiteó el 14-ago (`c917bd6`) y **nadie lo ha compilado desde
+cero**: lo que se probó vivía en el árbol de Eduardo sin commitear. Y ojo con la
+stdlib, que se regeneró ese día (`Collections.mod` y `Gui.mod` cambiaron): el
+grupo embebido en los firmwares es Core y los drivers, así que *no debería*
+afectar — pero eso es un argumento, no una medida.
+
+**En la Metro (RP2350)**
+1. **`#417` — los recursos de la zona de packs (#362) en placa.** Es la ficha que
+   bloquea H11 entero: fuente o icono grabados en un pack y cargados desde flash.
+2. **`H2-P4` — las seis operaciones del FS que nunca se han ejecutado**: `remove`,
+   `rename`, `mkdir`, `rmdir`, `mtime_ms` y el `write` en modo *append*.
+3. **`H2-P5` — una segunda tarjeta**: SDSC (direcciona por BYTE, camino distinto
+   en `bpvm_sd_leer_bloque`) y/o sin MBR.
+4. **`#415`** — comprobar si el grupo 1 de la stdlib es el que debe ser (la Pico
+   perdió `Math` e `IO`).
+
+**En el P4**
+1. **La prueba del bus SANO** — MB de patrón conocido, ida y vuelta, al reloj
+   objetivo. ⚠️ **Es la más importante de toda la lista**: un bus marginal no falla
+   en el `mount`, y debajo de SQLite **corrompe la base en silencio**. Con
+   pull-ups de 51 K, que es el punto flojo conocido de esa placa. Está anotada
+   como condición previa para fiarse de esa tarjeta.
+2. **`#379`** — mirar si el `INFO` sigue perdiendo la respuesta, y cronometrar la
+   respuesta **en el firmware**, no en el IDE: son dos fallos distintos (tarda más
+   que su timeout / se pierde) y sólo esa medida los separa.
+
+Todo lo demás (fichas de compilador, IDE, AOT) puede esperar: no depende de tener
+la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
+
 ## Próximos pasos
 
 1. **La clase contenedora (`Box`)** — es librería, no toca el compilador, y es lo
