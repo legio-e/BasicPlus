@@ -963,8 +963,56 @@ mismo caso.</p>
 <h3 id="metodos">9.2 Métodos</h3>
 <p>
   Como funciones pero dentro de la clase. El parámetro implícito
-  <code>this</code> apunta a la instancia. Todos los métodos no-estáticos
-  son virtuales (dispatch dinámico vía vtable).
+  <code>this</code> apunta a la instancia. Los métodos no-estáticos son
+  virtuales (dispatch dinámico vía vtable) <strong>salvo los
+  <code>private</code></strong>, que se llaman directamente — ver
+  <a href="#visibilidad">9.2.1</a>.
+</p>
+
+<h4 id="visibilidad">9.2.1 Visibilidad: los tres niveles</h4>
+<p>
+  Un miembro de clase tiene uno de tres niveles. El del medio es el que sale
+  <em>sin escribir nada</em>, porque al montar una jerarquía lo normal es que la
+  hija pueda usar lo de la madre:
+</p>
+<table>
+  <tr><th>Se escribe</th><th>Quién lo ve</th><th>¿Virtual?</th></tr>
+  <tr><td><code>public</code></td><td>Todo el mundo</td><td>Sí</td></tr>
+  <tr><td><em>(nada)</em> — <strong>protegido</strong></td>
+      <td>Su clase y sus descendientes, aunque estén en otro módulo</td><td>Sí</td></tr>
+  <tr><td><code>private</code></td><td>Sólo su propia clase</td><td><strong>No</strong></td></tr>
+</table>
+<pre><code>public class Base
+  public function Base()
+  end Base
+
+  public function saluda(): string      // lo ve cualquiera
+    return this.adorna(this.crudo())
+  end saluda
+
+  function adorna(s: string): string    // PROTEGIDO: la hija puede usarlo
+    return "&lt;&lt; " + s + " &gt;&gt;"
+  end adorna
+
+  private function crudo(): string      // sólo esta clase, ni la hija
+    return "hola"
+  end crudo
+end Base</code></pre>
+<p>
+  <strong>No hay palabra <code>virtual</code>, y no hace falta:</strong> virtual es
+  todo menos <code>private</code>. Un método protegido entra en la tabla de métodos
+  igual que uno público — la diferencia entre ellos es <em>quién puede nombrarlo</em>,
+  no cómo se llama ni cuánto cuesta.
+</p>
+<p>
+  <code>private</code> sólo tiene sentido dentro de una clase: a nivel de módulo, lo
+  que no es <code>public</code> ya es privado del módulo, y ahí no hay descendientes
+  a quien proteger. Y <code>public private</code> no existe: son excluyentes.
+</p>
+<p>
+  <strong>Al elegir:</strong> pon <code>private</code> cuando quieras poder cambiar o
+  borrar ese método sin mirar quién hereda de la clase. Si lo dejas sin marcar, una
+  hija —tuya o de quien use tu librería— puede estar apoyándose en él.
 </p>
 
 <h3 id="ctor">9.3 Constructor</h3>
