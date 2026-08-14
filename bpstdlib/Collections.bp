@@ -39,8 +39,8 @@ module Collections
       super()
     end StringComparator
     public function compare(a: Object, b: Object): integer
-      var sa: string := a
-      var sb: string := b
+      var sa: string := string(a)
+      var sb: string := string(b)
       return Str.compare(sa, sb)
     end compare
   end StringComparator
@@ -74,7 +74,7 @@ module Collections
       return this.v
     end value
     public function compareTo(other: Object): integer
-      var o: Integer := other
+      var o: Integer := Integer(other)
       if this.v < o.v then
         return -1
       endif
@@ -98,7 +98,7 @@ module Collections
       return this.v
     end value
     public function compareTo(other: Object): integer
-      var o: Long := other
+      var o: Long := Long(other)
       if this.v < o.v then
         return -1
       endif
@@ -122,7 +122,7 @@ module Collections
       return this.v
     end value
     public function compareTo(other: Object): integer
-      var o: Double := other
+      var o: Double := Double(other)
       if this.v < o.v then
         return -1
       endif
@@ -146,7 +146,7 @@ module Collections
       return this.v
     end value
     public function compareTo(other: Object): integer
-      var o: Float := other
+      var o: Float := Float(other)
       if this.v < o.v then
         return -1
       endif
@@ -170,7 +170,7 @@ module Collections
       return this.v
     end value
     public function compareTo(other: Object): integer
-      var o: Boolean := other
+      var o: Boolean := Boolean(other)
       if (not this.v) and o.v then
         return -1
       endif
@@ -192,7 +192,7 @@ module Collections
       super()
     end NaturalComparator
     public function compare(a: Object, b: Object): integer
-      var ca: Comparable := a
+      var ca: Comparable := Comparable(a)
       return ca.compareTo(b)
     end compare
   end NaturalComparator

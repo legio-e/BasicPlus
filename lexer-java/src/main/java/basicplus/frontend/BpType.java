@@ -207,8 +207,29 @@ public abstract class BpType {
             if (source instanceof UnresolvedClassRef)
                 return ((UnresolvedClassRef) source).name.equals(cls.name);
             if (!(source instanceof ClassType)) return false;
-            // Subclase asignable a base
             Symbol.ClassSymbol cur = ((ClassType) source).cls;
+            // #389 — TODA clase es un `Object`. Esa arista no está en `baseClass`:
+            // vive en el EMISOR, que cuelga cada clase de la raíz al sintetizarla
+            // (`MivmEmitter`: `w.addClass(cls, "Object")`). Aquí, una clase de
+            // usuario sin base declarada tiene `baseClass = null`, así que subir
+            // la cadena nunca llega a Object.
+            //
+            // Se reconoce aquí y NO se arregla poniéndole `baseClass = objectCls`
+            // a todas: eso cambiaría el layout que calcula el frontend y correría
+            // los slots de la jerarquía entera — el mecanismo de #324, «quitar un
+            // método de una base de stdlib CORRE los slots». La arista es real en
+            // el .mod; lo que faltaba era que el semántico la supiera.
+            //
+            // EXCEPCIÓN, y la dice el propio emisor: `Thread` y sus subclases NO
+            // descienden de Object (`synthesizeThreadClass`), así que un Thread
+            // no es asignable a Object. Sin esto, el semántico aceptaría algo que
+            // en ejecución no lleva la vtable de Object.
+            if (cls.isBuiltin && "Object".equals(cls.name)) {
+                for (Symbol.ClassSymbol c = cur; c != null; c = c.baseClass)
+                    if ("Thread".equals(c.name)) return false;
+                return true;
+            }
+            // Subclase asignable a base
             while (cur != null) {
                 if (cur == cls) return true;
                 cur = cur.baseClass;

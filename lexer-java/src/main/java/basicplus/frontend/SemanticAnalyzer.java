@@ -1429,13 +1429,19 @@ public final class SemanticAnalyzer {
                 case "int16":   return PrimitiveType.INT16;
                 case "long":    return PrimitiveType.LONG;   // H1.2 (V2)
                 case "double":  return PrimitiveType.DOUBLE; // H1.3 (V2)
-                // H5 (V2) — tipo raíz universal expresable en fuente. Es el
-                // mismo `any` interno que usan List/SyncList, ahora con nombre
-                // OO. Habilita contenedores genéricos escritos en BP puro
-                // (Map). Modelo de objetos estilo Java: los primitivos se
-                // envuelven a mano (Integer(x), ...) para meterlos en
-                // contenedores. Serializa como "any" en .bpi (mismo tipo).
-                case "Object":  return AnyType.INSTANCE;
+                // `Object` NO tiene caso aquí a propósito: cae al `default` y
+                // resuelve, como cualquier otro nombre, a la CLASE dada de alta
+                // arriba (la raíz que el emisor sintetiza desde H5.1.a).
+                //
+                // Hasta V5 devolvía `AnyType.INSTANCE`. Aquello venía de H5 (V2),
+                // cuando la clase raíz aún no existía y se quiso un tipo comodín
+                // expresable en fuente para escribir `Map` en BP puro. Pero `any`
+                // es un hueco SIN etiqueta, así que el valor no sabe lo que es y
+                // decide quien lo lee: una cadena en un `Object` imprimía su
+                // handle, un `double` salía por sus 32 bits bajos, y estrechar a
+                // una clase equivocada daba un número plausible en vez de fallar
+                // (#389). Y contradecía al manual §4.5, que dice que `any` NO se
+                // puede escribir en BP source: éste era el agujero por el que sí.
                 default:        return resolveNamedType(st);
             }
         }
@@ -3048,6 +3054,28 @@ public final class SemanticAnalyzer {
                     err(ce.line, ce.column, id.name + "(): se esperaba un valor numérico, no '" + at.display() + "'");
                 return castT;
             }
+            // #389 — CONVERSIÓN DE REFERENCIA: `Cosa(o)`, `string(o)`.
+            // La misma regla que ya rige entre primitivos —el nombre del tipo
+            // como constructor: `byte(someInt)` (L10), `integer(d)` (H1.3b)—
+            // extendida a referencias. Subir a `Object` es implícito; bajar de
+            // `Object` lo escribe el programador, como en cualquier lenguaje.
+            //
+            // Aquí NO se comprueba nada en ejecución: la conversión sólo fija el
+            // tipo estático. Lo que arregla hoy es que el estrechamiento SE VEA
+            // en el código, en vez de colarse mudo y dar un número plausible.
+            if (ce.args.size() == 1 && puedeSerCastDeRef(id.name, scope)) {
+                BpType at = analyzeExpr(ce.args.get(0), scope, null);
+                BpType destinoRef = refCastTarget(id.name, scope, at);
+                if (destinoRef != null) {
+                    info.refCasts.add(ce);
+                    return destinoRef;
+                }
+                // Gana el constructor: seguimos por el camino normal. El
+                // argumento se re-analiza allí; `analyzeExpr` es idempotente en
+                // tipos, así que lo único que puede repetirse es un diagnóstico
+                // del propio argumento, y sólo en llamadas de UN argumento cuyo
+                // nombre es una clase.
+            }
             target = module.members.resolve(id.name);
             // Gating: si estamos dentro de una clase y el match en el módulo
             // es un símbolo privado (function/var/const/property no public),
@@ -3397,6 +3425,66 @@ public final class SemanticAnalyzer {
 
     private static boolean isLong(BpType t) {   // H1.2 (V2)
         return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.LONG;
+    }
+
+    /**
+     * #389 — destino de una conversión de REFERENCIA escrita con el nombre del
+     * tipo (`Cosa(o)`, `string(o)`), o null si esa llamada no lo es.
+     *
+     * NO adivina. Sólo entra cuando la clase destino **no declara un constructor
+     * de un argumento**: si lo declara, gana el constructor y esto se aparta. Es
+     * la misma regla de "si lo declaras tú, yo me quito" con la que el emisor
+     * trata `Object`, `List`, `SyncList` y `OwnerList`.
+     *
+     * Y por eso analizar aquí el argumento no duplica trabajo ni diagnósticos:
+     * si llegamos, la llamada por el camino normal iba a fallar de todas formas
+     * por aridad ("se esperaban 0, se pasaron 1").
+     */
+    private BpType refCastTarget(String name, Scope scope, BpType argT) {
+        // SÓLO se convierte lo que viene de la RAÍZ. Bajar de `Object` es lo
+        // único que no se puede escribir de otra forma; cualquier otra cosa es
+        // una llamada normal y no hay que robársela.
+        //
+        // Esta condición no es prudencia, es una MEDIDA: sin ella, `Punto("x")`
+        // de una clase con constructores SOBRECARGADOS se tomaba por conversión
+        // y dejaba de compilar (OverloadCtor, SlotThreadSub). El motivo es que
+        // `cls.constructor` guarda UNA sola firma —con H5.a las demás van
+        // mangleadas— así que preguntarle a ella sola por la aridad decide mal
+        // en cuanto hay sobrecarga. Mirando el tipo del ARGUMENTO no hace falta
+        // saber cuántos constructores hay: si no viene de `Object`, no es esto.
+        if (!esObjetoRaiz(argT)) return null;
+        if ("string".equals(name)) return PrimitiveType.STRING;
+        ClassSymbol cls = claseDeNombre(name, scope);
+        if (cls == null) return null;
+        // Y si la clase declara un constructor que SÍ acepta un `Object`, gana
+        // el suyo: misma regla de "si lo declaras tú, yo me aparto" que usan
+        // Object/List/SyncList/OwnerList en el emisor.
+        if (cls.constructor != null && cls.constructor.params.size() == 1) {
+            BpType pt = cls.constructor.params.get(0).type;
+            if (pt == null || pt.isAssignableFrom(argT)) return null;
+        }
+        return new BpType.ClassType(cls);
+    }
+
+    /** #389 — ¿este nombre PODRÍA ser una conversión de referencia? Pregunta
+     *  barata (no analiza el argumento) para no meter trabajo extra en todas las
+     *  llamadas de un argumento del programa. */
+    private boolean puedeSerCastDeRef(String name, Scope scope) {
+        return "string".equals(name) || claseDeNombre(name, scope) != null;
+    }
+
+    private ClassSymbol claseDeNombre(String name, Scope scope) {
+        Symbol sym = module.members.resolve(name);
+        if (sym == null && scope != null) sym = scope.resolve(name);
+        return (sym instanceof ClassSymbol) ? (ClassSymbol) sym : null;
+    }
+
+    /** #389 — ¿es el tipo la clase RAÍZ `Object`? (la built-in, no una clase de
+     *  usuario que se llame igual). */
+    private static boolean esObjetoRaiz(BpType t) {
+        return t instanceof BpType.ClassType
+                && ((BpType.ClassType) t).cls.isBuiltin
+                && "Object".equals(((BpType.ClassType) t).cls.name);
     }
 
     /** H1.3b (V2) — destino de un cast numérico general integer()/long()/

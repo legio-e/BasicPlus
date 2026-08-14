@@ -3716,6 +3716,16 @@ public final class MivmEmitter {
             emitNumericConversion(info.exprTypes.get(c.args.get(0)), ((IdentifierExpr) c.callee).name);
             return;
         }
+        // #389 — conversión de REFERENCIA (`Cosa(o)`, `string(o)`): en bytecode
+        // no es NADA. Un handle es un handle; lo único que cambió es el tipo con
+        // el que el compilador lo mira a partir de aquí. Quién es conversión y
+        // quién es constructor lo decidió el semántico (`info.refCasts`), que es
+        // el que sabe qué constructores declara la clase: aquí no se repite esa
+        // regla, para que no pueda divergir.
+        if (info.refCasts.contains(c)) {
+            emitExpr(c.args.get(0));
+            return;
+        }
         // len(x) — intrínseco global type-directed (azúcar estilo Python). El
         // usuario puede shadowear con su propia función `len`: en ese caso el
         // analyzer le asigna símbolo (exprSymbols != null) y caemos al camino

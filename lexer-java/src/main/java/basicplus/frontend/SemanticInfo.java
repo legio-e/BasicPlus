@@ -25,6 +25,22 @@ public final class SemanticInfo {
      *  sólo tiene que escribirlo: así el slot se decide en UN sitio. */
     public final Map<Ast.IExpr, Integer> methodRefSlots = new IdentityHashMap<>();
 
+    /** #389 — las llamadas que NO son llamadas: `Cosa(o)` / `string(o)`, o sea
+     *  la conversión de REFERENCIA escrita con el nombre del tipo (la misma
+     *  forma que `byte(someInt)` de L10 o `integer(d)` de H1.3b, extendida a
+     *  referencias).
+     *
+     *  La decide el semántico —que es quien sabe si la clase declara un
+     *  constructor de un argumento, en cuyo caso gana el constructor— y el
+     *  emisor se limita a consultar este conjunto. Misma disciplina que
+     *  `methodRefSlots`: la regla vive en UN sitio y no puede divergir.
+     *
+     *  En bytecode no emite NADA: un handle es un handle, y lo único que cambia
+     *  es el tipo estático con el que el compilador mira el valor a partir de
+     *  ahí. Por eso los `.mod` salen idénticos. */
+    public final java.util.Set<Ast.IExpr> refCasts =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.IExpr, Boolean>());
+
     /** #325 — cada `Thread(obj::metodo(args))` VÁLIDO del módulo, en orden de
      *  análisis. El emisor sintetiza una subclase de Thread por entrada, y las
      *  clases hay que emitirlas antes que el código que las construye. Se
