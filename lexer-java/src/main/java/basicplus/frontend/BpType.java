@@ -206,6 +206,27 @@ public abstract class BpType {
             // usuario retornadas/pasadas cross-module.
             if (source instanceof UnresolvedClassRef)
                 return ((UnresolvedClassRef) source).name.equals(cls.name);
+            // #389 — `string` TAMBIÉN sube a `Object`. Una cadena ya ES una
+            // referencia: si sale del heap lleva su cabecera y su handle, y si
+            // es un literal es una dirección de globales que el GC rechaza por
+            // ESTRUCTURA (`is_valid_header`) sin daño ninguno — vive en la
+            // imagen y no se libera nunca.
+            //
+            // No es un adorno: sin esto, `map.put("kiwi", v)` —el uso NORMAL de
+            // Map, con claves de texto— deja de compilar en cuanto la stdlib se
+            // regenera. Medido: 8 errores en MapTest contra la stdlib nueva,
+            // mientras contra la vieja (que aún decía `any`) pasaba. Es el falso
+            // verde clásico del desfase de `.mod`.
+            //
+            // ⚠️ Lo que una cadena NO tiene es la vtable de Object, así que
+            // `toString()`/`compareTo()` sobre un `Object` que lleva una cadena
+            // no tienen nada que despachar. Queda ANOTADO, no resuelto:
+            // detectarlo es trabajo de las dos VMs (el tag del handle y el tipo
+            // del bloque sí distinguen array de objeto).
+            if (cls.isBuiltin && "Object".equals(cls.name)
+                    && source instanceof PrimitiveType
+                    && ((PrimitiveType) source).tag == PrimitiveType.Kind.STRING)
+                return true;
             if (!(source instanceof ClassType)) return false;
             Symbol.ClassSymbol cur = ((ClassType) source).cls;
             // #389 — TODA clase es un `Object`. Esa arista no está en `baseClass`:
