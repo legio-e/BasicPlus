@@ -32,7 +32,7 @@
 | H4 | un programa BP **consulta una BD de verdad** | 10-ago, salida idéntica al host |
 | H5 | **el ORM**: DAO a mano → `@BD{...}` → generador → verificador | 11-ago |
 | H6 | la SD del P4 por **SDMMC** + `LIST_DIR` a código común | 11-ago, en placa |
-| H7 | **SQLite en el P4**: nativo RISC-V ejecutándose, motor arrancado y API publicada | 12-ago (falta grabar el pack: ver abajo) |
+| H7 | **SQLite en el P4**: nativo RISC-V ejecutándose, motor arrancado, pack grabado y `SqlDemo` corriendo | **CERRADO**, verificado en placa |
 | H8 | *la herramienta antes que el artefacto*: relocalizador que coincide con `ld`, `sources`, un `.mod` y N `.mdn`, botón de grabar que relocaliza | 13-ago, en host |
 | H9 | la tanda de **arreglos del compilador** (#384, #385, #386, #387, #388, #392, #393, #406) + `Object` como raíz real (#389, la mitad estática) | **14-ago** |
 
@@ -64,25 +64,33 @@ confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
   escritas a mano). `Map` ya está en `Object` y no se toca. ⚠️ El día que se haga,
   `samples/AnyNumGc.bp` se queda sin sujeto: hoy prueba que un escalar crudo en un
   slot trazado no descarrila el GC, y ese camino sólo existe ya por `List.add`.
-- **H7 — verificado en el P4** (Eduardo, 14-ago). ⚠️ La lista "PARA MAÑANA" del
-  backlog **no vale**: se escribió el 12-ago por la mañana y esa misma tarde se
-  resolvió casi entera, pero el backlog se quedó parado y sólo lo cuenta el
-  `git log`. Está hecho: la placa **dice dónde cae el pack** (`40075b2`, por
-  `PACK_BURN_BEGIN_REPLY` — `flashAddr`/`ramBase`/`ramSize`, no por INFO); el
-  **sellado** verificado contra `ld` sobre el pack real (`13622e9`); y el **pack
-  ARM re-verificado** con el SQLite entero (`4420746`, #402: ARM 412.999 B y
-  RISC-V 529.796 B idénticos al enlazador).
-  Queda por confirmar sólo **los dos juegos de arquitectura en un solo pack**:
-  #402 dice que ya se PUEDE, no que se haya hecho.
 - **El WIP del P4 estaba sin commitear desde el 12-ago**; se guardó el 14
   (`c917bd6`). Ojo al leer ese commit: dice "en placa, nada" porque en ESA tanda
-  no se tocó placa, no porque el trabajo esté sin probar — Eduardo lo había
-  verificado antes en el P4 con ese mismo código en su árbol.
+  no se tocó placa, **no porque el trabajo estuviera sin probar**.
+- **La S3 (Xtensa) es la única familia que no corre esto.** Está sólo *compilada*:
+  se le dio de alta `bpvm_bios_fs.c` en su build, pero **no tiene `bios_s3.c`**,
+  así que no ofrece tabla BIOS y no puede alojar un pack nativo. Es una familia
+  por hacer, no una prueba pendiente. *(Y el firmware ya responde bien a eso:
+  `ramBase == 0` significa «esta placa no da RAM a packs nativos», y el IDE lo
+  dice en vez de grabar un motor que no arrancaría.)*
 - **#362 (recursos desde la zona de packs) no se ha probado en placa.** Verde en
   host: `make test-packres` 12/12, end-to-end con un PNG real y control en rojo,
   paridad dual-VM 28/28. Su propio commit lo dice: las cinco cinturas montan zona
   por el mismo `bpvm_pack_mount`, *"pero eso es un argumento, no una medida"*.
-- **Metro (RP2350) y S3 compiladas y sin correr** desde el 12-ago.
+
+### 📦 El pack de SQLite: UNO, con las dos familias dentro
+
+Eduardo, 14-ago — está cerrado y conviene que no se vuelva a dar por pendiente:
+
+- **`SQLite.pack` lleva ya las DOS familias** (ARM y RISC-V) en el mismo pack.
+- **El IDE lo REHACE al grabarlo** en el micro: poda y deja sólo el código BP y el
+  nativo que le toca a esa placa. Por eso el log de grabado dice el tamaño podado
+  y no el del fichero (`ddb3ddc`): 1.122.304 B en disco → 569.344 en la placa.
+- **Probado y verificado en la Metro y en el P4**, y `SqlDemo` ejecutada en las
+  dos familias.
+
+Esto cierra H7 y, con él, la cadena entera: un mismo pack con dos arquitecturas,
+relocalizado al grabar, corriendo en dos silicios distintos.
 
 ## Riesgos / decisiones pendientes (atacar ANTES de seguir)
 
