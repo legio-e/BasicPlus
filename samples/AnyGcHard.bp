@@ -40,7 +40,7 @@ module AnyGcHard
     var h: Holder := Holder()
     stash(h)
     var s: integer := deep(200)
-    var p: Payload := h.get()
+    var p: Payload := Payload(h.get())   // #389: sacar de un `Object` es estrechar
     print "val =", p.val()
     print "s =", s
   end Main

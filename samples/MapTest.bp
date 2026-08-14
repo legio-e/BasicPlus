@@ -10,7 +10,10 @@ module MapTest
 
     print "size=" + intToString(m.size())
 
-    var v: string := m.get("manzana")
+    // #389 — el Map guarda `Object`; sacar una cadena es ESTRECHAR, y eso se
+    // escribe (misma forma que `byte(i)`). Subir es implícito: el `put` de
+    // arriba no lleva nada.
+    var v: string := string(m.get("manzana"))
     print "manzana -> " + v
 
     print "contains uva: " + boolToString(m.containsKey("uva"))
@@ -22,7 +25,7 @@ module MapTest
     endif
 
     m.put("uva", "morada")
-    var v2: string := m.get("uva")
+    var v2: string := string(m.get("uva"))
     print "uva actualizada -> " + v2
     print "size tras update=" + intToString(m.size())
 
@@ -31,8 +34,8 @@ module MapTest
 
     var i: integer := 0
     while i < m.size() do
-      var k: string := m.keyAt(i)
-      var vv: string := m.valueAt(i)
+      var k: string := string(m.keyAt(i))
+      var vv: string := string(m.valueAt(i))
       print "  [" + intToString(i) + "] " + k + " = " + vv
       i := i + 1
     endwh

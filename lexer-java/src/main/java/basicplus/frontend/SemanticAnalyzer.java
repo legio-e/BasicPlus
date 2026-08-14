@@ -3063,18 +3063,16 @@ public final class SemanticAnalyzer {
             // Aquí NO se comprueba nada en ejecución: la conversión sólo fija el
             // tipo estático. Lo que arregla hoy es que el estrechamiento SE VEA
             // en el código, en vez de colarse mudo y dar un número plausible.
-            if (ce.args.size() == 1 && puedeSerCastDeRef(id.name, scope)) {
+            // `string(o)` — el único destino de conversión que NO es una clase,
+            // así que se resuelve aquí. El de las clases va más abajo, en el
+            // punto donde confluyen el nombre simple y el CUALIFICADO
+            // (`Collections.Long(o)`): allí basta escribir la regla una vez.
+            if ("string".equals(id.name) && ce.args.size() == 1) {
                 BpType at = analyzeExpr(ce.args.get(0), scope, null);
-                BpType destinoRef = refCastTarget(id.name, scope, at);
-                if (destinoRef != null) {
+                if (esObjetoRaiz(at)) {
                     info.refCasts.add(ce);
-                    return destinoRef;
+                    return PrimitiveType.STRING;
                 }
-                // Gana el constructor: seguimos por el camino normal. El
-                // argumento se re-analiza allí; `analyzeExpr` es idempotente en
-                // tipos, así que lo único que puede repetirse es un diagnóstico
-                // del propio argumento, y sólo en llamadas de UN argumento cuyo
-                // nombre es una clase.
             }
             target = module.members.resolve(id.name);
             // Gating: si estamos dentro de una clase y el match en el módulo
@@ -3116,6 +3114,36 @@ public final class SemanticAnalyzer {
                     && ce.args.get(0) instanceof Ast.BoundCallExpr) {
                 analyzeThreadOfBoundCall(ce, scope);
                 return new ClassType(cls);
+            }
+            // #389 — CONVERSIÓN DE REFERENCIA: `Cosa(o)` con `o` de tipo
+            // `Object`. Va aquí y no en la rama del identificador porque a este
+            // punto llegan las dos formas de nombrar la clase —simple y
+            // CUALIFICADA (`Collections.Long(o)`)— y la cualificada es
+            // justamente la del caso que originó #389: un DAO que devuelve
+            // `Object` y una entidad que vive en otro módulo.
+            //
+            // Sólo se convierte lo que viene de la RAÍZ: cualquier otro
+            // argumento es una construcción normal y no hay que robársela.
+            // Y si la clase declara un constructor que SÍ acepta un `Object`,
+            // gana el suyo.
+            //
+            // LIMITACIÓN conocida: con constructores SOBRECARGADOS se mira el
+            // que devuelve `findConstructor()`. Una clase que sobrecargue un
+            // constructor de `Object` entre varios podría quedar tapada; hoy no
+            // existe ninguna, y forzarlo pediría resolver la sobrecarga antes de
+            // saber si esto es una llamada.
+            if (ce.args.size() == 1) {
+                BpType at0 = analyzeExpr(ce.args.get(0), scope, null);
+                if (esObjetoRaiz(at0)) {
+                    FunctionSymbol c1 = cls.findConstructor();
+                    boolean ctorLoAcepta = c1 != null && c1.params.size() == 1
+                            && c1.params.get(0).type != null
+                            && c1.params.get(0).type.isAssignableFrom(at0);
+                    if (!ctorLoAcepta) {
+                        info.refCasts.add(ce);
+                        return new ClassType(cls);
+                    }
+                }
             }
             FunctionSymbol ctor = cls.findConstructor();
             if (ctor == null) {
@@ -3440,45 +3468,6 @@ public final class SemanticAnalyzer {
      * si llegamos, la llamada por el camino normal iba a fallar de todas formas
      * por aridad ("se esperaban 0, se pasaron 1").
      */
-    private BpType refCastTarget(String name, Scope scope, BpType argT) {
-        // SÓLO se convierte lo que viene de la RAÍZ. Bajar de `Object` es lo
-        // único que no se puede escribir de otra forma; cualquier otra cosa es
-        // una llamada normal y no hay que robársela.
-        //
-        // Esta condición no es prudencia, es una MEDIDA: sin ella, `Punto("x")`
-        // de una clase con constructores SOBRECARGADOS se tomaba por conversión
-        // y dejaba de compilar (OverloadCtor, SlotThreadSub). El motivo es que
-        // `cls.constructor` guarda UNA sola firma —con H5.a las demás van
-        // mangleadas— así que preguntarle a ella sola por la aridad decide mal
-        // en cuanto hay sobrecarga. Mirando el tipo del ARGUMENTO no hace falta
-        // saber cuántos constructores hay: si no viene de `Object`, no es esto.
-        if (!esObjetoRaiz(argT)) return null;
-        if ("string".equals(name)) return PrimitiveType.STRING;
-        ClassSymbol cls = claseDeNombre(name, scope);
-        if (cls == null) return null;
-        // Y si la clase declara un constructor que SÍ acepta un `Object`, gana
-        // el suyo: misma regla de "si lo declaras tú, yo me aparto" que usan
-        // Object/List/SyncList/OwnerList en el emisor.
-        if (cls.constructor != null && cls.constructor.params.size() == 1) {
-            BpType pt = cls.constructor.params.get(0).type;
-            if (pt == null || pt.isAssignableFrom(argT)) return null;
-        }
-        return new BpType.ClassType(cls);
-    }
-
-    /** #389 — ¿este nombre PODRÍA ser una conversión de referencia? Pregunta
-     *  barata (no analiza el argumento) para no meter trabajo extra en todas las
-     *  llamadas de un argumento del programa. */
-    private boolean puedeSerCastDeRef(String name, Scope scope) {
-        return "string".equals(name) || claseDeNombre(name, scope) != null;
-    }
-
-    private ClassSymbol claseDeNombre(String name, Scope scope) {
-        Symbol sym = module.members.resolve(name);
-        if (sym == null && scope != null) sym = scope.resolve(name);
-        return (sym instanceof ClassSymbol) ? (ClassSymbol) sym : null;
-    }
-
     /** #389 — ¿es el tipo la clase RAÍZ `Object`? (la built-in, no una clase de
      *  usuario que se llame igual). */
     private static boolean esObjetoRaiz(BpType t) {

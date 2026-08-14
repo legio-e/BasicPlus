@@ -10,7 +10,7 @@ module MapNumTest
     m.put(Collections.Integer(42), "cuarentaydos")
 
     print "size=" + intToString(m.size())
-    var v: string := m.get(Collections.Integer(42))
+    var v: string := string(m.get(Collections.Integer(42)))
     print "get(42) -> " + v
     print "contains 5: " + boolToString(m.containsKey(Collections.Integer(5)))
     print "contains 7: " + boolToString(m.containsKey(Collections.Integer(7)))
@@ -19,8 +19,8 @@ module MapNumTest
     // no lexicográfico (que daría 100,30,42,5).
     var i: integer := 0
     while i < m.size() do
-      var k: Collections.Integer := m.keyAt(i)
-      var vv: string := m.valueAt(i)
+      var k: Collections.Integer := Collections.Integer(m.keyAt(i))
+      var vv: string := string(m.valueAt(i))
       print "  [" + intToString(i) + "] " + intToString(k.value()) + " = " + vv
       i := i + 1
     endwh

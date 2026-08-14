@@ -1,17 +1,31 @@
-// Seguridad de #14: un campo `Object` (any) que contiene un NÚMERO, ahora que el
-// GC lo traza (bit puesto). markObject hace mark_recursive(número) → debe VALIDAR
-// y saltarlo, sin crash. Peor caso: -1 (todos los bits altos) y 0x40000001 (que
-// PARECE un handle tageado idx=1). Esperado: n=-1 / m=1073741825 / fin, sin crash.
+// Seguridad de #14: un slot que el GC TRAZA y que contiene un NÚMERO, no una
+// referencia. markObject hace mark_recursive(número) → debe VALIDAR y saltarlo,
+// sin crash. Peor caso: -1 (todos los bits altos) y 0x40000001 (que PARECE un
+// handle tageado idx=1). Esperado: n=-1 / m=1073741825 / fin, sin crash.
+//
+// #389 — el número entraba antes por un campo `Object`, cuando `Object` era un
+// alias de `any`. Ya no: `Object` es la raíz del modelo de objetos y un escalar
+// no entra sin envolver, que es EXACTAMENTE lo que #389 buscaba. Pero el caso
+// que este sample vigila sigue siendo real, porque `List.add` toma `any` —el
+// comodín interno del compilador— y guarda el número crudo en un array de refs
+// que el GC recorre entero. Así que se prueba por ahí, que es donde vive hoy.
+//
+// ⚠️ El día que `List` pase también a `Object`, este camino desaparece de fuente
+// BP: entonces habrá que decidir si el test se retira (porque el modelo hace el
+// fallo inalcanzable) o se fuerza desde la VM. No envolverlo en `Integer(...)`
+// para "arreglarlo": eso deja el sample verde SIN PROBAR NADA, porque entonces
+// lo que hay en el slot es una referencia de verdad.
 module AnyNumGc
   class Box
-    var v: Object
+    var l: List
     public function Box()
+      this.l := List()
     end Box
-    public function put(x: Object)
-      this.v := x
+    public function put(x: integer)
+      this.l.add(x)
     end put
     public function getInt(): integer
-      return this.v
+      return this.l.get(0)
     end getInt
   end Box
 
