@@ -165,15 +165,27 @@ def cmd_del(s: serial.Serial, name: str) -> None:
     print(expect_ok(s) or "OK")
 
 
-def cmd_run(s: serial.Serial, name: str) -> None:
+def cmd_run(s: serial.Serial, name: str, total_timeout: float = 20.0) -> None:
     send_line(s, f"RUN {name}")
     # El RUN imprime "--- VM output ---" y luego output libre hasta
     # "--- VM finished: STATUS ---". Streameamos todo.
+    #
+    # ROBUSTEZ: presupuesto TOTAL de pared (total_timeout). Si la VM no
+    # termina (módulo bloqueante: prompt sin input, while true, deadlock),
+    # salimos LIMPIO al agotarse — el `finally` del caller cierra el puerto,
+    # así no lo dejamos colgado. OJO: el REPL de texto del firmware ejecuta
+    # bpvm_run síncrono, así que un módulo que no termina deja el device
+    # atascado (necesita reset físico); por eso aquí solo corremos módulos
+    # que TERMINAN. Para módulos largos sube total_timeout con --run-timeout.
     in_output = False
     end_marker = "--- VM finished:"
     print(f"RUN {name}")
-    while True:
-        line = read_line(s, timeout=30.0)
+    deadline = time.monotonic() + total_timeout
+    while time.monotonic() < deadline:
+        try:
+            line = read_line(s, timeout=min(2.0, max(0.1, deadline - time.monotonic())))
+        except TimeoutError:
+            continue   # sin datos aún; reintenta hasta el deadline total
         if line.startswith("ERR"):
             sys.exit(line)
         if line.startswith("--- VM output ---"):
@@ -182,10 +194,13 @@ def cmd_run(s: serial.Serial, name: str) -> None:
             continue
         if line.startswith(end_marker):
             print(line)
-            break
+            return
         if in_output:
             print(line)
         # antes del marker de inicio puede haber prompts; los ignoramos
+    print(f"[timeout: la VM no terminó en {total_timeout:.0f}s "
+          f"(¿módulo bloqueante/loop?) — puerto cerrado limpio, "
+          f"reset del device si quedó atascado]")
 
 
 def cmd_save(s: serial.Serial) -> None:
