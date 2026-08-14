@@ -92,44 +92,44 @@ lines
 2871 266
 2887 271
 2897 272
-2910 273
-2919 274
-2939 276
-2960 278
-2976 283
-2986 284
-2999 285
-3004 286
-3013 287
-3031 289
-3041 290
-3060 294
-3070 295
-3085 296
-3095 297
-3111 302
-3121 303
-3134 304
-3137 305
-3146 306
-3158 307
-3170 308
-3178 310
-3188 311
-3204 323
-3214 324
-3227 325
-3237 326
-3256 330
-3266 331
-3279 332
-3289 333
-3308 211
-3332 212
-3356 213
-3380 214
-3470 347
-3505 352
+2908 273
+2917 274
+2937 276
+2956 278
+2972 283
+2982 284
+2993 285
+2998 286
+3007 287
+3025 289
+3035 290
+3054 294
+3064 295
+3077 296
+3087 297
+3103 302
+3113 303
+3124 304
+3127 305
+3136 306
+3148 307
+3160 308
+3168 310
+3178 311
+3194 323
+3204 324
+3217 325
+3227 326
+3246 330
+3256 331
+3269 332
+3279 333
+3298 211
+3322 212
+3346 213
+3370 214
+3460 347
+3495 352
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -215,16 +215,16 @@ func SyncList.__init 1126
 this -20 8 0 ?
 func Comparator.compare 1201
 this -36 8 0 ?
-a -28 8 0 ?
-b -20 8 0 ?
+a -28 8 0 ref
+b -20 8 0 ref
 func Comparator.__init 1216
 this -20 8 0 ?
 func __cls_init_Comparator 1252
 this -20 8 0 ?
 func StringComparator.compare 1266
 this -36 8 0 ?
-a -28 8 0 ?
-b -20 8 0 ?
+a -28 8 0 ref
+b -20 8 0 ref
 sa 4 8 0 string
 sb 12 8 0 string
 func StringComparator.__init 1301
@@ -233,7 +233,7 @@ func __cls_init_StringComparator 1347
 this -20 8 0 ?
 func Comparable.compareTo 1361
 this -28 8 0 ?
-other -20 8 0 ?
+other -20 8 0 ref
 func Comparable.__init 1376
 this -20 8 0 ?
 func __cls_init_Comparable 1412
@@ -242,7 +242,7 @@ func Integer.value 1426
 this -20 8 0 ?
 func Integer.compareTo 1445
 this -28 8 0 ?
-other -20 8 0 ?
+other -20 8 0 ref
 o 4 8 0 ?
 func Integer.toString 1525
 this -20 8 0 ?
@@ -258,7 +258,7 @@ func Long.value 1620
 this -20 8 0 ?
 func Long.compareTo 1641
 this -28 8 0 ?
-other -20 8 0 ?
+other -20 8 0 ref
 o 4 8 0 ?
 func Long.toString 1721
 this -20 8 0 ?
@@ -274,7 +274,7 @@ func Double.value 1819
 this -20 8 0 ?
 func Double.compareTo 1840
 this -28 8 0 ?
-other -20 8 0 ?
+other -20 8 0 ref
 o 4 8 0 ?
 func Double.toString 1920
 this -20 8 0 ?
@@ -290,7 +290,7 @@ func Float.value 2018
 this -20 8 0 ?
 func Float.compareTo 2037
 this -28 8 0 ?
-other -20 8 0 ?
+other -20 8 0 ref
 o 4 8 0 ?
 func Float.toString 2117
 this -20 8 0 ?
@@ -306,7 +306,7 @@ func Boolean.value 2213
 this -20 8 0 ?
 func Boolean.compareTo 2232
 this -28 8 0 ?
-other -20 8 0 ?
+other -20 8 0 ref
 o 4 8 0 ?
 func Boolean.toString 2334
 this -20 8 0 ?
@@ -320,8 +320,8 @@ this -24 8 0 ?
 x -16 4 0 boolean
 func NaturalComparator.compare 2429
 this -36 8 0 ?
-a -28 8 0 ?
-b -20 8 0 ?
+a -28 8 0 ref
+b -20 8 0 ref
 ca 4 8 0 ?
 func NaturalComparator.__init 2458
 this -20 8 0 ?
@@ -332,7 +332,7 @@ this -28 8 0 ?
 c -20 8 0 ref
 func Map.bsearch 2565
 this -28 8 0 ?
-key -20 8 0 ?
+key -20 8 0 ref
 lo 4 4 0 integer
 hi 8 4 0 integer
 mid 12 4 0 integer
@@ -341,44 +341,44 @@ c 24 4 0 integer
 func Map.insertAt 2698
 this -40 8 0 ?
 ip -32 4 0 integer
-key -28 8 0 ?
-val -20 8 0 ?
+key -28 8 0 ref
+val -20 8 0 ref
 i 4 4 0 integer
 func Map.size 2838
 this -20 8 0 ?
 n 8 4 0 integer
 func Map.put 2884
 this -36 8 0 ?
-key -28 8 0 ?
-val -20 8 0 ?
+key -28 8 0 ref
+val -20 8 0 ref
 idx 4 4 0 integer
-func Map.get 2973
+func Map.get 2969
 this -28 8 0 ?
-key -20 8 0 ?
+key -20 8 0 ref
 idx 12 4 0 integer
 result 16 8 0 ?
-func Map.containsKey 3057
+func Map.containsKey 3051
 this -28 8 0 ?
-key -20 8 0 ?
+key -20 8 0 ref
 found 8 4 0 boolean
-func Map.remove 3108
+func Map.remove 3100
 this -28 8 0 ?
-key -20 8 0 ?
+key -20 8 0 ref
 idx 8 4 0 integer
 existed 12 4 0 boolean
-func Map.keyAt 3201
+func Map.keyAt 3191
 this -24 8 0 ?
 i -16 4 0 integer
 k 12 8 0 ?
-func Map.valueAt 3253
+func Map.valueAt 3243
 this -24 8 0 ?
 i -16 4 0 integer
 v 12 8 0 ?
-func Map.__init 3305
+func Map.__init 3295
 this -20 8 0 ?
-func __cls_init_Map 3437
+func __cls_init_Map 3427
 this -20 8 0 ?
-func __strconcat 3559
+func __strconcat 3549
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
