@@ -28,6 +28,10 @@
 #include "esp_event.h"
 #include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
 #include "log.h"               /* log persistente (post-mortem) — lo antes posible */
+#include "bpvm_sqlmem.h"       /* V5/H7: la REGLA del bloque de la BD (un solo sitio) */
+#include "bpvm_env.h"          /* V5/H7: SQLite=<MB> del entorno */
+#include "bpvm_bios.h"         /* V5/H7: la tabla que se le presta al pack */
+#include "pack_p4.h"           /* V5/H7: PACK_RAM_BYTES + s_pack_ram_base + bios_p4_get */
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"   /* heap_caps_malloc: heap de la VM en PSRAM */
@@ -64,6 +68,13 @@ static const char *TAG = "bpvm_p4";
 #define VM_MEM_MIN                (2u * 1024u * 1024u)    /* piso si algo va mal */
 uint8_t*       s_vm_buffer      = NULL;
 uint32_t       s_vm_buffer_size = 0;
+
+/* V5/H7 — el bloque de la BD (SQLite), mordido de la PSRAM ANTES que el heap de
+ * la VM. Los lee `bios_p4.c` para servir la arena. NULL/0 = no se pidió o no cupo. */
+uint8_t*       s_sqlite_base    = NULL;
+uint32_t       s_sqlite_size    = 0;
+static int     s_sqlite_res     = 0;      /* bpvm_sqlite_res_t, para el INFO */
+static long    s_sqlite_asked_mb = 0;
 
 static EventGroupHandle_t s_events;   /* gate de Link Up (Ethernet — ambos transportes) */
 static int s_sock = -1;     /* socket del canal de log (lo usa net_logf, común) */
@@ -275,6 +286,11 @@ static void wire_task(void *arg)
     const bpvm_boot_status_t* bs = board_boot_status();
     if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
     if (bs->state >= BPVM_BOOT_FS) p4_montar_sd();   /* V5/H6 */
+    /* V5/H7 — mapear la zona de packs y DECIR sus direcciones. Se hace
+     * aunque no haya pack grabado: con `0 candidatos` el log ya deja el
+     * dato que el IDE necesita para SELLAR uno (la direccion la asigna la
+     * MMU en runtime, o sea que no se puede saber desde el PC). */
+    if (bs->state >= BPVM_BOOT_FS) (void) pack_p4_cargar();
     net_logf("[p4] boot estado %d (%s)%s, %d ficheros",
              (int) bs->state, bpvm_boot_state_name(bs->state),
              bs->degraded ? " DEGRADADO" : "", fs_file_count());
@@ -311,6 +327,11 @@ static void wire_task_uart(void *arg)
     const bpvm_boot_status_t* bs = board_boot_status();
     if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
     if (bs->state >= BPVM_BOOT_FS) p4_montar_sd();   /* V5/H6 */
+    /* V5/H7 — mapear la zona de packs y DECIR sus direcciones. Se hace
+     * aunque no haya pack grabado: con `0 candidatos` el log ya deja el
+     * dato que el IDE necesita para SELLAR uno (la direccion la asigna la
+     * MMU en runtime, o sea que no se puede saber desde el PC). */
+    if (bs->state >= BPVM_BOOT_FS) (void) pack_p4_cargar();
     net_logf("[p4] boot estado %d (%s)%s (UART), %d ficheros",
              (int) bs->state, bpvm_boot_state_name(bs->state),
              bs->degraded ? " DEGRADADO" : "", fs_file_count());
@@ -331,6 +352,83 @@ static void wire_task_uart(void *arg)
  * operativo → abort con mensaje claro (mejor que arrancar y colgar luego en el
  * primer programa grande). Los firmwares sin PSRAM (S3/Pico/STM32) mantienen su
  * buffer en SRAM; esto es board-specific del P4. */
+/*
+ * V5/H7 — EL BLOQUE DE LA BD, Y MUERDE PRIMERO.
+ *
+ * Va ANTES de `vm_buffer_init_psram()` y no es una preferencia: es lo que hace
+ * que su dirección sea DETERMINISTA. El pack nativo de SQLite se realoja en el
+ * PC para una dirección concreta y lleva ese SELLO dentro (`linked_ram`); si el
+ * bloque saliera de lo que quedara libre, lo daría el alocador y podría cambiar
+ * entre arranques — y un pack ya grabado funcionaría una vez y luego no, sin
+ * patrón. Es la misma regla que la Metro: *la BD muerde primero*.
+ *
+ * El tamaño sale del env (`SQLite=<MB>`) y la regla de cuánto se reserva vive en
+ * `bpvm_sqlmem` — un solo sitio para el arranque, el INFO y el IDE. Por eso hay
+ * que leer el env ANTES, con `board_mgr_esp32_env_temprano()`: el arranque
+ * escalonado corre mucho después (ver el porqué largo en `board_mgr_esp32.c`).
+ *
+ * No reservar NO es un fallo: es la respuesta correcta si nadie pidió BD. Pero
+ * se dice en el log SIEMPRE y con el motivo, porque "no se pidió", "se pidió
+ * poco" y "no cupo" mandan a sitios distintos.
+ */
+static void vm_sqlite_init_psram(void)
+{
+    board_mgr_esp32_env_temprano();
+    s_sqlite_asked_mb = bpvm_env_get_long(board_mgr_env(), "SQLite", 0);
+
+    size_t freeps  = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    size_t sqlbytes = 0;
+    bpvm_sqlite_res_t r = bpvm_sqlite_region(s_sqlite_asked_mb, freeps, &sqlbytes);
+    s_sqlite_res = (int) r;
+
+    if (r != BPVM_SQLITE_OK) {
+        log_printf("bd: SIN bloque — %s (SQLite=%ld en el ENV, PSRAM libre %u KB)",
+                   bpvm_sqlite_res_str(r), s_sqlite_asked_mb,
+                   (unsigned) (freeps / 1024u));
+        return;
+    }
+
+    /*
+     * ALINEADO A PÁGINA, y las dos razones son distintas:
+     *
+     * 1. CORRECCIÓN. Las secciones `.data`/`.sdata` del pack piden alineación 8
+     *    (lo dice su ELF) y ahí viven estructuras de SQLite con `double` y
+     *    enteros de 64 bits. `heap_caps_malloc` devuelve alineado a 4: el primer
+     *    arranque dio 0x48000a7c, que NO es múltiplo de 8. El Pico ya lo hacía
+     *    (`& ~7u`, "porque ahí van estructuras del pack") y al portarlo se me
+     *    quedó fuera.
+     *
+     * 2. ESTABILIDAD DEL SELLO, que es lo que de verdad importa. Ese 0xa7c de
+     *    desplazamiento es de lo que la IDF reservara en PSRAM ANTES que
+     *    nosotros; si un día eso crece o mengua, nuestra dirección se mueve y el
+     *    pack grabado deja de valer. Pidiendo página (4 KB), el alocador
+     *    redondea hacia arriba y una variación pequeña de lo que hay delante
+     *    YA NO NOS MUEVE — sólo saltaría de página si el cambio pasara de 4 KB.
+     *    No es una garantía absoluta (no existe con un alocador de por medio),
+     *    pero convierte "frágil ante cualquier byte" en "estable salvo cambio
+     *    grande". Y si aun así se moviera, el SELLO lo caza y lo dice.
+     */
+    s_sqlite_base = (uint8_t*) heap_caps_aligned_alloc(4096, sqlbytes, MALLOC_CAP_SPIRAM);
+    if (s_sqlite_base == NULL) {
+        /* Pedirlo y no conseguirlo NO se traga: la regla dijo que cabía y el
+         * alocador dice que no, y esa discrepancia hay que verla. La VM sigue
+         * arrancando (sin BD), que es mejor que abortar por una función opcional. */
+        s_sqlite_res = (int) BPVM_SQLITE_NO_CABE;
+        log_printf("bd: la regla daba %u KB pero heap_caps_malloc DIJO QUE NO "
+                   "(PSRAM libre %u KB) — se sigue SIN BD",
+                   (unsigned) (sqlbytes / 1024u), (unsigned) (freeps / 1024u));
+        return;
+    }
+    s_sqlite_size   = (uint32_t) sqlbytes;
+    /* La RAM del pack sale del PRINCIPIO de este bloque: `[estáticos | arena]`. */
+    s_pack_ram_base = s_sqlite_base;
+
+    log_printf("bd: bloque %u KB @%p (SQLite=%ld MB) | pack %u B delante, arena %u KB",
+               (unsigned) (sqlbytes / 1024u), (void*) s_sqlite_base, s_sqlite_asked_mb,
+               (unsigned) PACK_RAM_BYTES,
+               (unsigned) ((sqlbytes - PACK_RAM_BYTES) / 1024u));
+}
+
 static void vm_buffer_init_psram(void)
 {
     /* Toda la PSRAM libre MENOS la reserva del display (que LVGL alocará luego,
@@ -375,8 +473,24 @@ void app_main(void)
     log_init();
     log_printf("=== boot ESP32-P4 ===");
 
-    /* Heap de la VM en PSRAM (común a todos los transportes). */
+    /* V5/H7 — el bloque de la BD muerde ANTES que el heap de la VM: su dirección
+     * va SELLADA dentro del pack nativo y tiene que ser la misma cada arranque.
+     * Ver el porqué en vm_sqlite_init_psram(). */
+    vm_sqlite_init_psram();
+
+    /* Heap de la VM en PSRAM (común a todos los transportes), con lo que quede. */
     vm_buffer_init_psram();
+
+    /* La tabla BIOS se verifica SIEMPRE, haya pack o no: así un hueco se
+     * descubre hoy y no el día que alguien grabe uno. El que la usa es el pack,
+     * por el ancla; esto sólo comprueba.
+     *
+     * Y DICE QUE SÍ, no sólo que no. `bios_p4_get()` ya escribe cuál ranura
+     * falta cuando falla, pero callar al ir bien deja un silencio ambiguo: no
+     * distingue "completa" de "esta línea no se ejecutó". En un arranque nuevo
+     * eso es justo lo que hay que poder distinguir. */
+    log_printf("bios: tabla %s (%d ranuras)",
+               bios_p4_get() ? "COMPLETA" : "INCOMPLETA", bpvm_bios_slot_count());
 
     s_events = xEventGroupCreate();
 

@@ -29,6 +29,7 @@ idf_component_register(
         "../../src/bpvm_boot.c"        # H9: maquina de estados del arranque
         "../../src/bpvm_sqlmem.c"      # V5/H: regla del bloque de memoria de la BD
         "../../src/bpvm_bios.c"        # V5/I: tabla BIOS prestada al pack nativo
+        "../../src/bpvm_bios_fs.c"     # V5/H2: sus ranuras de ficheros (PORTABLE) — faltaba de alta
         "../../src/bpvm_npack.c"       # V5/I: escalera de validacion del pack nativo
         "../../src/bpvm_mdn_scan.c"    # V5/H4: buscar el .mdn (FS + pack) en UN sitio
         "../../src/bpvm_util.c"        # #338/#353: zona de rascar + canal de diagnostico

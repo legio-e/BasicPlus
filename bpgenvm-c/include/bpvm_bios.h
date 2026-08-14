@@ -183,6 +183,50 @@ typedef struct bpvm_bios {
 } bpvm_bios_t;
 
 /*
+ * ─── EL INICIALIZADOR, PEGADO A LA STRUCT ─────────────────────────────────────
+ *
+ * Rellena la tabla entera dejando SÓLO los seis huecos que de verdad dependen de
+ * la placa. Nació al montar la segunda familia (V5/H7, el P4): de las 29
+ * ranuras, **26 son idénticas** — 12 de libc que trae newlib (y el ESP32 usa
+ * newlib igual que el RP2350), 9 de ficheros que ya son portables, 2 del punto
+ * de encuentro, y 3 de memoria que hoy son chivatos.
+ *
+ * ⚠️ POR QUÉ AQUÍ Y NO EN UN .c POR FAMILIA. El orden de estos campos cruza una
+ * frontera BINARIA: el pack se compila aparte, se graba, y llama por posición.
+ * Si hubiera un inicializador por familia y alguien reordenara la struct
+ * olvidándose de uno, ese firmware llamaría a `memcpy` y ejecutaría otra cosa —
+ * sin error de compilación ni de enlace. Ya nos costó dos veces por el mismo
+ * motivo (#299 layout de clase, #315 slots de vtable), y las dos veces la
+ * solución fue la misma: que el orden viva en UN sitio. Aquí está pegado a la
+ * declaración, así que reordenar sin tocarlo obliga a verlo.
+ *
+ * El llamante necesita `<string.h>` (las de libc se toman por su dirección) y
+ * declara la tabla `static const`: vive en la imagen, que es lo que hace que se
+ * le pueda prestar al pack sin que nadie tenga que mantenerla viva.
+ *
+ * Los seis parámetros son, en orden: la VOZ del pack, sus tres de memoria, el
+ * tiempo, y la arena de la BD.
+ */
+#define BPVM_BIOS_TABLA(LOG, MALLOC, FREE, REALLOC, LOCALTIME, ARENA) { \
+    BPVM_BIOS_MAGIC, BPVM_BIOS_VERSION,                                 \
+    (LOG),                                                              \
+    memcpy, memmove, memset, memcmp, memchr,                            \
+    strlen, strcmp, strncmp, strchr, strrchr, strspn, strcspn,          \
+    (MALLOC), (FREE), (REALLOC),                                        \
+    (LOCALTIME),                                                        \
+    /* V5/H2 — ficheros: la implementación PORTABLE, sobre la fachada   \
+     * `bpvm_fs`. Escribirlas por familia es exactamente como divergen  \
+     * las familias. */                                                 \
+    bpvm_bios_fs_abrir, bpvm_bios_fs_cerrar,                            \
+    bpvm_bios_fs_leer,  bpvm_bios_fs_escribir,                          \
+    bpvm_bios_fs_truncar, bpvm_bios_fs_tamano, bpvm_bios_fs_sincronizar,\
+    bpvm_bios_fs_borrar, bpvm_bios_fs_existe,                           \
+    (ARENA),                                                            \
+    /* V5/H4 — el punto de encuentro. Portable: nada que decidir. */    \
+    bpvm_bios_publica, bpvm_bios_busca                                  \
+}
+
+/*
  * Verifica la tabla ENTERA antes de entregársela a nadie.
  *
  * Un NULL en cualquier ranura es un CUELGUE ESPERANDO A OCURRIR, y —esto es lo

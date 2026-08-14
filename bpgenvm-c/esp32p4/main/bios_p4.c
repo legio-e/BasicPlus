@@ -1,42 +1,43 @@
-/* bios_pico.c — la tabla BIOS de ESTA placa (V5/I).
+/* bios_p4.c — la tabla BIOS de ESTA placa (V5/H7, ESP32-P4).
  *
- * Rellena bpvm_bios_t con las funciones reales del firmware y la VERIFICA antes
- * de que nadie la use. La verificación no es ceremonia: un NULL en una ranura es
- * un cuelgue esperando a ocurrir, y aquí se detecta SIN ejecutar nada del pack.
+ * Hermano de `pico/bios_pico.c`, y conviene ver lo PEQUEÑO que es: de las 29
+ * ranuras de `bpvm_bios_t`, **26 son idénticas en cualquier placa** y las pone
+ * `BPVM_BIOS_TABLA` (en `bpvm_bios.h`, pegado a la struct). Aquí sólo viven las
+ * TRES que dependen del hierro — su voz, su reloj y su arena — más los chivatos
+ * de memoria, que aún no salen de ningún sitio.
  *
- * ─── DOS CLASES DE RANURA, Y CONVIENE NO CONFUNDIRLAS ───
+ * ⚠️ Y ESE REPARTO NO ES COMODIDAD. El orden de los campos de esa tabla cruza
+ * una frontera BINARIA: el pack se compila aparte, se graba, y llama POR
+ * POSICIÓN. Si esta familia tuviera su propia copia del inicializador y alguien
+ * reordenara la struct olvidándose de una, este firmware llamaría a `memcpy` y
+ * ejecutaría otra cosa — sin error de compilación ni de enlace. Es exactamente
+ * el fallo de #299 (layout de clase) y #315 (slots de vtable), y las dos veces
+ * la cura fue la misma: que el orden viva en UN sitio.
  *
- * 1. REALES — las de memoria y cadenas: newlib ya las trae en la imagen.
- *    Cero coste: sólo se toma su dirección.
+ * ─── DOS CLASES DE RANURA, COMO EN LA PICO ───
  *
- * 2. CHIVATOS — malloc/free/realloc/localtime: NO se implementan todavía, y
- *    en vez de dejarlas a NULL (que la verificación rechazaría) o apuntarlas al
- *    heap del sistema (que sería SILENCIOSAMENTE peligroso: el pack comería del
- *    heap de FreeRTOS, justo lo que la arena separada existe para evitar), se
- *    apuntan a stubs que GRITAN en el log y devuelven el fallo.
+ * 1. REALES — memoria y cadenas: newlib ya está en la imagen (el ESP-IDF usa
+ *    newlib igual que el SDK del RP2350). Cero coste: sólo su dirección.
  *
- *    Eso convierte "el pack usa memoria por un camino que no habíamos previsto"
- *    —un fallo que de otro modo aparecería como corrupción semanas después— en
- *    una línea de log en el instante en que ocurre. Criterio de Eduardo (7-ago):
- *    *"hay que poner chivatos que nos digan qué es lo que no funciona, para
- *    saber dónde y no sólo funciona/no funciona"*.
- *
- *    Las tres de memoria saldrán de la arena del ENV cuando toque; `localtime`
- *    del Rtc. Mientras tanto, que se oigan.
+ * 2. CHIVATOS — malloc/free/realloc/localtime: aún sin implementar. NO se dejan
+ *    a NULL (la verificación las rechazaría) ni se apuntan al heap del sistema
+ *    (que sería SILENCIOSAMENTE peligroso: el pack comería del heap de FreeRTOS,
+ *    justo lo que la arena separada evita). Se apuntan a stubs que GRITAN en el
+ *    log y devuelven el fallo. Criterio de Eduardo (7-ago): *"hay que poner
+ *    chivatos que nos digan qué es lo que no funciona, para saber dónde y no
+ *    sólo funciona/no funciona"*.
  */
 #include "bpvm_bios.h"
 #include "bpvm_pack.h"   /* bpvm_pack_crc16: el control del ancla */
-#include "pack_pico.h"   /* PACK_RAM_BYTES: los estáticos que van DELANTE     */
-#include <stdint.h>
-
-int32_t pack_pico_cargar(void);   /* pico/pack_pico.c */
-
-/* El bloque de la BD, decidido en el arranque (pico/main.c). NULL = no hay. */
-extern uint8_t* s_sqlite_base;
-extern uint32_t s_sqlite_size;
+#include "pack_p4.h"     /* PACK_RAM_BYTES: los estáticos que van DELANTE */
 #include "log.h"
 
+#include <stdint.h>
 #include <string.h>
+
+/* El bloque de la BD, decidido en el arranque (main.c). NULL = no hay. */
+extern uint8_t* s_sqlite_base;
+extern uint32_t s_sqlite_size;
 
 /* ── 1. La voz del pack. La ranura más importante de la tabla. ── */
 static void bios_log(const char* msg) {
@@ -65,7 +66,7 @@ static struct tm* bios_localtime(const void* t) {
     return 0;
 }
 
-/* ── V5/H3 — la arena de la BD ──
+/* ── LA ARENA DE LA BD ──
  *
  * El bloque reservado en el arranque MENOS los estáticos del pack, que viven en
  * su principio (`[estáticos | arena]`). El descuento se hace AQUÍ y no en el
@@ -89,12 +90,7 @@ static void* bios_arena(size_t* bytes) {
 }
 
 /* ── 3. La tabla, estática: su dirección no cambia y se le puede prestar al
- *      pack sin que nadie tenga que mantenerla viva.
- *
- * El relleno lo hace `BPVM_BIOS_TABLA` (en `bpvm_bios.h`, pegado a la struct):
- * de las 29 ranuras sólo estas seis dependen de la placa. Antes estaban aquí las
- * 29 escritas a mano, y al montar el P4 eso habría sido una SEGUNDA COPIA del
- * orden — el error de #299/#315 otra vez, pero cruzando una frontera binaria. */
+ *      pack sin que nadie tenga que mantenerla viva. ── */
 static const bpvm_bios_t s_bios = BPVM_BIOS_TABLA(
     bios_log,
     bios_malloc, bios_free, bios_realloc,
@@ -106,7 +102,7 @@ static const bpvm_bios_t s_bios = BPVM_BIOS_TABLA(
  * Idea de Eduardo: el pack no puede saber la dirección de `s_bios` —cada enlace
  * la mueve—, así que en vez de acertarla, la BUSCA. Aquí está la marca, y los
  * punteros van justo detrás; los rellena el enlazador, o sea que siempre son los
- * correctos PARA ESTA IMAGEN. El pack barre flash, encuentra el texto y lee.
+ * correctos PARA ESTA IMAGEN.
  *
  * ⚠️ La marca se escribe carácter a carácter A PROPÓSITO, no como literal
  * `"BPANCLA1"`. Con un literal el compilador puede dejar además una COPIA suelta
@@ -119,11 +115,11 @@ static const bpvm_ancla_t s_ancla = {
     (uint16_t) sizeof(bpvm_ancla_t),
     &s_bios,
     bpvm_pack_crc16,         /* el control: crc16("123456789") == 0x29B1 */
-    pack_pico_cargar         /* v2: buscar + escalera + saltar */
+    pack_p4_cargar           /* v2: buscar + escalera + saltar */
 };
 
 /* Para que el arranque compare lo que ENCUENTRA con lo que SABE. */
-const bpvm_ancla_t* bios_pico_ancla(void) { return &s_ancla; }
+const bpvm_ancla_t* bios_p4_ancla(void) { return &s_ancla; }
 
 /*
  * Devuelve la tabla LISTA PARA USAR, o NULL si tiene huecos — y en ese caso deja
@@ -134,7 +130,7 @@ const bpvm_ancla_t* bios_pico_ancla(void) { return &s_ancla; }
  * SIEMPRE, no sólo el día que alguien grabe uno. Un fallo que sólo aparece
  * cuando ya estás depurando otra cosa cuesta el doble.
  */
-const bpvm_bios_t* bios_pico_get(void) {
+const bpvm_bios_t* bios_p4_get(void) {
     const char* falta = bpvm_bios_verify(&s_bios);
     if (falta) {
         log_printf("BIOS: INCOMPLETA — falta '%s' (%d ranuras esperadas)",
