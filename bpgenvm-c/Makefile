@@ -536,7 +536,7 @@ test-pack:
 	@mkdir -p build
 	$(CC) $(CFLAGS) test/test_pack.c src/bpvm_pack.c src/bpvm_util.c \
 	      src/bpvm_bmgr_wire.c src/bpvm_bmgr.c src/bpvm_env.c src/bpvm_part.c \
-	      src/bpvm_boot.c src/crc32.c -o build/test_pack.exe
+	      src/bpvm_boot.c src/crc32.c src/fs_facade.c -o build/test_pack.exe
 	@echo "--- H3 zona de packs (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_pack.exe
 
