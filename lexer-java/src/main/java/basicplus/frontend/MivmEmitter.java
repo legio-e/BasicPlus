@@ -1228,7 +1228,11 @@ public final class MivmEmitter {
                 if (m instanceof FuncDef) {
                     FuncDef fn = (FuncDef) m;
                     FunctionSymbol fs = (FunctionSymbol) info.declSymbols.get(fn);
-                    if (fs == null || fs.isStatic || fs.isConstructor || !fs.isPublic) continue;
+                    // #390 — la MISMA pregunta que emitInstanceMethod y que
+                    // computeClassLayout: si no se declara aquí la ranura de un
+                    // método virtual, el layout dice que la tiene y el emisor no la
+                    // reserva. Ése fue el fallo de la 1ª pasada.
+                    if (fs == null || fs.isStatic || fs.isConstructor || !fs.esVirtual()) continue;
                     w.declareMethodSlot(emitName(fs));   // H5.a-E3: clave de slot
                 }
             }
@@ -1528,7 +1532,7 @@ public final class MivmEmitter {
         // properties privadas, cuyos accesores llevan años en la vtable.
         // La condición tiene que ser LA MISMA que en computeClassLayout o el
         // cross-check de #299 aborta.
-        if (fs.isPublic || fs.isEventHandler) {
+        if (fs.esVirtual()) {
             w.addMethod(emitName(fs));          // vtable + función; declara "this"
         } else {
             w.addPrivateMethod(emitName(fs));   // solo función llamable; declara "this"
@@ -3081,8 +3085,9 @@ public final class MivmEmitter {
                 w.emitGetParam("__recv");
                 for (int i = 0; i < bc.args.size(); i++) w.emitGetParam("__a" + i);
                 // Mismo criterio que una llamada normal: un método privado no
-                // está en la vtable y se llama directo.
-                if (!fn.isPublic && !fn.isExternal) {
+                // está en la vtable y se llama directo.  (#390: lo que el
+                // comentario decía con palabras ahora lo dice el código.)
+                if (!fn.esVirtual() && !fn.isExternal) {
                     w.emitCall(fn.ownerClass.name + "." + emitName(fn));
                 } else {
                     emitInvokeVirtualSmart(rc, emitName(fn), argSlotCount(fn));
@@ -3886,7 +3891,7 @@ public final class MivmEmitter {
                 emitExpr(c.args.get(i));
                 if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
             }
-            if (!fs.isPublic && !fs.isExternal) {
+            if (!fs.esVirtual() && !fs.isExternal) {   // #390: no virtual ⇒ CALL directo
                 w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a-E3
             } else {
                 // BUG-6: numArgs = slots de 4 bytes (long/double = 2), no nº de args.

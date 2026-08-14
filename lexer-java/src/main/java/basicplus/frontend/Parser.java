@@ -339,6 +339,21 @@ public final class Parser {
 
     private ITopLevelDecl parseDefStmtBody() {
         boolean isPublic = match(TokenType.PUBLIC);
+        // #390 — `private` explícito. Sin marcar nada, un miembro de clase es
+        // PROTECTED (lo ven la clase y sus descendientes) y ocupa ranura de
+        // vtable; con `private` sólo lo ve su propia clase y se queda fuera de
+        // la tabla. `public private` no existe: son excluyentes y decirlo aquí
+        // evita que el que lo escriba se quede con la duda de cuál gana.
+        boolean isPrivate = false;
+        if (check(TokenType.PRIVATE)) {
+            if (isPublic) {
+                error("'public' y 'private' son excluyentes: un miembro es público,"
+                        + " o privado, o —sin escribir nada— protegido (lo ven la"
+                        + " clase y sus descendientes)");
+            }
+            isPrivate = true;
+            advance();
+        }
         boolean isFinal  = false;
 
         if (check(TokenType.FINAL)) {
@@ -396,7 +411,13 @@ public final class Parser {
                 // esta función. Así un error en cabecera o body
                 // no descarrila el parseo del resto del módulo.
                 try {
-                    return parseFuncDef(isPublic, isFinal, isIntrinsic, isNative);
+                    FuncDef fd = parseFuncDef(isPublic, isFinal, isIntrinsic, isNative);
+                    // #390 — `private` se pega AQUÍ, en el nodo ya construido, en
+                    // vez de como 5º parámetro: parseFuncDef tiene cuatro
+                    // sobrecargas y añadirlo a todas sólo para pasarlo a plomo
+                    // multiplica los sitios donde se puede olvidar.
+                    if (fd != null) fd.isPrivate = isPrivate;
+                    return fd;
                 } catch (RuntimeException ex) {
                     if (ex.getMessage() != null) error(ex.getMessage());
                     synchronizeToFunctionEnd();

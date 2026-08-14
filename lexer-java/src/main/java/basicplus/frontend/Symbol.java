@@ -200,6 +200,29 @@ public abstract class Symbol {
         /** H5.c — `function event f()`: necesita slot de vtable aunque sea
          *  privada, porque el destino de un evento ES un slot. */
         public boolean isEventHandler = false;
+        /** #390 — `private` EXPLÍCITO: sólo la ve su propia clase. Sin marcar,
+         *  un método es *protected* (la clase y sus descendientes). */
+        public boolean isPrivate = false;
+
+        /** #390 — **¿este método es VIRTUAL?**, o sea: ¿va en la tabla de métodos?
+         *
+         *  Regla de hoy: **lo es todo MENOS lo `private`**. Los manejadores de
+         *  evento son virtuales siempre, incluso privados, porque el destino de un
+         *  evento ES un slot.
+         *
+         *  Existe como función explícita a petición de Eduardo, y el nombre es el
+         *  suyo: pregunta por el CONCEPTO del lenguaje, no por su consecuencia en
+         *  la vtable. Así los sitios de llamada siguen leyéndose bien el día que la
+         *  regla cambie — que era el motivo: *«si mañana se cambia la lógica, es
+         *  más sencillo de mantener»*.
+         *
+         *  Y hacía falta: la pregunta estaba escrita A MANO en SIETE sitios, cada
+         *  uno con su `isPublic`, dos de ellos con un comentario que ya decía
+         *  «privado ⇒ no está en la vtable» sin poder decirlo con código. Eso es
+         *  justo lo que la norma de #299 prohíbe («dos funciones calculando lo
+         *  mismo = bug casi seguro»): cambiar la regla obligaba a acertar en las
+         *  siete, y en la primera pasada fallé la tercera. */
+        public boolean esVirtual() { return !isPrivate || isEventHandler; }
         /** Auto-super (modelo Java): este constructor NO escribió super() y el
          *  padre tiene un constructor invocable sin argumentos → el emisor inyecta
          *  la llamada implícita al __init del padre. Lo marca el SemanticAnalyzer. */

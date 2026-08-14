@@ -24,7 +24,12 @@ public enum TokenType {
     PROPERTY, GET, SET, ENDPROP, ENDGET, ENDSET,
 
     // ---- Palabras clave: visibilidad ----
+    // #390 — tres niveles: `private` (sólo la clase, FUERA de la vtable),
+    // nada = protected (la clase y sus descendientes, en la vtable) y `public`
+    // (todos, en la vtable). El defecto es protected a propósito: lo normal al
+    // escribir una jerarquía es que la hija pueda usar lo de la madre.
     PUBLIC,
+    PRIVATE,
 
     // ---- Modificador de ownership en var ----
     OWNER,

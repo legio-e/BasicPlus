@@ -441,7 +441,14 @@ public final class ModuleInterface {
                         if (o.astNode == fn) { fsym = o; break; }
                     }
                     if (fsym == null) continue;
-                    if (!fsym.isPublic) continue;
+                    // #390 — se exporta todo MENOS lo `private`. Un método sin marcar
+                    // es *protected*: ocupa ranura y la clase HIJA tiene que poder
+                    // verlo aunque viva en otro módulo — si no se publica, cruzando
+                    // la frontera la hija ni siquiera sabe que existe. Lo `private`
+                    // no sale: no ocupa ranura y nadie de fuera puede nombrarlo.
+                    // Va marcado con su visibilidad, igual que las properties (#316):
+                    // publicar NO es hacer público, y de eso se encarga checkVisibility.
+                    if (fsym.isPrivate) continue;
                     if (fsym.isConstructor) continue;          // se exporta vía ctorParams
                     if (fsym.isStatic) continue;               // v1: sin estáticos
                     String issue = signatureIssue(fsym);
@@ -451,7 +458,7 @@ public final class ModuleInterface {
                     }
                     List<ParamSig> ps = new ArrayList<>(fsym.params.size());
                     for (ParamSymbol p : fsym.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
-                    methods.add(new FuncSig(fsym.name, true, false, ps, fsym.returnType));
+                    methods.add(new FuncSig(fsym.name, fsym.isPublic, false, ps, fsym.returnType));
                 }
             }
         }
@@ -891,7 +898,7 @@ public final class ModuleInterface {
                      o != null; o = o.nextOverload) {
                     if (o.astNode == fn) { f = o; break; }
                 }
-                if (f != null && (f.isPublic || f.isEventHandler) && !f.isStatic && !f.isConstructor
+                if (f != null && f.esVirtual() && !f.isStatic && !f.isConstructor
                         && !names.contains(f.slotKey())) {
                     names.add(f.slotKey());
                 }
@@ -1086,7 +1093,7 @@ public final class ModuleInterface {
                         appendParam(sb, m.params.get(i));
                     }
                     sb.append("):").append(typeToString(m.returnType));
-                    sb.append(" public");
+                    if (m.isPublic) sb.append(" public");   // #390: como en `prop`
                     pw.println(sb.toString());
                 }
                 pw.println("end class");

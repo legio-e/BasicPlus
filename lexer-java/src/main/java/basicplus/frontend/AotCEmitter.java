@@ -1291,7 +1291,9 @@ public final class AotCEmitter {
                      * slot que computa el frontend (ClassSymbol.slotOf, decisión
                      * B). Privado/super/estático van por el throw de abajo (no
                      * virtuales → sin asidero, pendientes). */
-                    if (fs.ownerClass != null && !fs.isStatic && fs.isPublic
+                    // #390 — el comentario de arriba ya decía «no virtuales → sin
+                    // asidero»; ahora la condición lo pregunta de verdad.
+                    if (fs.ownerClass != null && !fs.isStatic && fs.esVirtual()
                             && !(ma.target instanceof Ast.SuperExpr)) {
                         emitVirtualMethodCall(fs, ma, c);
                         return;

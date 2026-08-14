@@ -969,8 +969,15 @@ public final class SemanticAnalyzer {
             err(f.line, f.column, "'intrinsic' sólo es válido en funciones a nivel módulo, no en métodos");
         if (f.isIntrinsic && !f.isPublic)
             err(f.line, f.column, "'intrinsic' implica visibilidad pública — añade 'public'");
+        // #390 — `private` sólo tiene sentido DENTRO de una clase: a nivel de
+        // módulo la visibilidad ya la da `public`/nada, y ahí no hay descendientes
+        // a quien proteger. Decirlo evita que alguien lo escriba esperando algo.
+        if (f.isPrivate && owner == null)
+            err(f.line, f.column, "'private' solo es válido en miembros de clase;"
+                    + " a nivel de módulo, lo que no es 'public' ya es privado del módulo");
         FunctionSymbol sym = new FunctionSymbol(f.name.name, f.isPublic, f.isFinal, isStatic, owner, f);
         sym.isEventHandler = f.isEventHandler;   // H5.c — `function event`
+        sym.isPrivate = f.isPrivate && owner != null;   // #390
         sym.isIntrinsic = f.isIntrinsic;
         for (Param p : f.params) {
             ParamSymbol psym = new ParamSymbol(p.name, p.line, p.column);
@@ -3461,11 +3468,37 @@ public final class SemanticAnalyzer {
         else if (sub instanceof PropertySymbol) isPublic = ((PropertySymbol) sub).isPublic;
         else                                    isPublic = true;
 
+        // #390 — `private` es de su clase Y DE NADIE MÁS, ni de sus hijas. Se
+        // comprueba ANTES del atajo de abajo, que es justo el que deja pasar a
+        // las descendientes: sin esto, `private` no se distinguiría de no poner
+        // nada. (El atajo, tal cual estaba, YA implementaba *protected* — sólo
+        // que sin nombre y sin nada más estricto al lado.)
+        // OJO: `owner` es la clase del RECEPTOR, no la que DECLARA el miembro. Con
+        // `hija.metodoDeLaBase()` llega la HIJA, porque lookupInstance sube por la
+        // cadena y devuelve el símbolo de la base. Esa diferencia no importaba
+        // mientras «clase o descendiente» tuvieran los mismos permisos; con
+        // `private` sí, porque es justo a la hija a quien hay que decirle que no.
+        // Para eso se pregunta por la clase DECLARANTE (FunctionSymbol.ownerClass).
+        boolean esPrivado = (sub instanceof FunctionSymbol) && ((FunctionSymbol) sub).isPrivate;
+        if (esPrivado) {
+            ClassSymbol declarante = ((FunctionSymbol) sub).ownerClass;
+            if (currentClass == null || currentClass != declarante) {
+                err(line, col, "'" + sub.name + "' es private de '"
+                        + (declarante != null ? declarante.name : "?") + "': sólo lo usa"
+                        + " esa clase. Si quieres que también lo usen sus descendientes,"
+                        + " quítale 'private' — un miembro sin marcar ya es protegido.");
+            }
+            return;
+        }
+
         if (currentClass != null && owner != null
                 && (currentClass == owner || currentClass.isSubclassOf(owner)))
             return;
         if (!isPublic)
-            err(line, col, "miembro privado '" + sub.name + "' inaccesible aquí");
+            err(line, col, "'" + sub.name + "' es protegido de '"
+                    + (owner != null ? owner.name : "?") + "': lo ven esa clase y sus"
+                    + " descendientes, no desde fuera. Hazlo 'public' si tiene que"
+                    + " usarse desde cualquier sitio.");
     }
 
     // ============================================================

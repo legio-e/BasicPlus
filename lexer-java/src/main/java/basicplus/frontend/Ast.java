@@ -409,6 +409,10 @@ public final class Ast {
          *  la tabla que publica un pack (`import v1 from pack "SQLI"`). Mutable
          *  como `isEventHandler`: la marca el parser tras construir el nodo. */
         public boolean isPackExtern = false;
+        /** #390 — `private` EXPLÍCITO. Mutable por el mismo motivo que los dos de
+         *  arriba: lo pega el parser sobre el nodo ya construido. Sin marcar, un
+         *  miembro de clase es *protected* (clase + descendientes). */
+        public boolean isPrivate = false;
         public final DeclName name;
         public final List<Param> params;
         public final TypeRef returnType;     // null si void

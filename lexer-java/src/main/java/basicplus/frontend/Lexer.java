@@ -136,6 +136,7 @@ public final class Lexer {
         m.put("endset",   TokenType.ENDSET);
         // visibilidad y herencia
         m.put("public",    TokenType.PUBLIC);
+        m.put("private",   TokenType.PRIVATE);   // #390
         m.put("final",     TokenType.FINAL);
         m.put("sync",      TokenType.SYNC);
         m.put("intrinsic", TokenType.INTRINSIC);

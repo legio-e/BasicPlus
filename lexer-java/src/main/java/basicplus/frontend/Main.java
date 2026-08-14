@@ -740,7 +740,9 @@ public final class Main {
                     Symbol ms = cls.instanceMembers.tryLookup(fn.name.name);
                     if (!(ms instanceof Symbol.FunctionSymbol)) continue;
                     Symbol.FunctionSymbol fsym = (Symbol.FunctionSymbol) ms;
-                    if (!fsym.isPublic || fsym.isStatic || fsym.isConstructor) continue;
+                    // #390 — se pregunta por la RANURA, así que la condición es
+                    // «¿es virtual?», no «¿es público?».
+                    if (!fsym.esVirtual() || fsym.isStatic || fsym.isConstructor) continue;
                     int slot = cls.slotOf(fn.name.name);
                     if (slot < 0) continue;
                     if (anyM) methods.append(", ");
@@ -2148,8 +2150,12 @@ public final class Main {
                     }
                     // Methods en orden de declaración
                     for (ModuleInterface.FuncSig m : cs.methods) {
+                        // #390 — la visibilidad DECLARADA, no un `true` a pelo: un
+                        // método no público se importa igual (la hija tiene que
+                        // saber que existe) y es checkVisibility quien decide quién
+                        // puede llamarlo, exactamente como con las properties.
                         Symbol.FunctionSymbol fsym = new Symbol.FunctionSymbol(
-                                m.name, true, false, false, stub, null);
+                                m.name, m.isPublic, false, false, stub, null);
                         fsym.returnType = m.returnType;
                         for (ModuleInterface.ParamSig pp : m.params) {
                             Symbol.ParamSymbol psm = new Symbol.ParamSymbol(pp.name, 0, 0);
