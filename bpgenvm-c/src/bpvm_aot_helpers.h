@@ -273,6 +273,28 @@ struct aot_helpers_v2 {
     void    (*array_store_i64)(struct bpvm* vm, uint32_t ref, int32_t idx, int64_t v);
     double  (*array_load_f64) (struct bpvm* vm, uint32_t ref, int32_t idx);
     void    (*array_store_f64)(struct bpvm* vm, uint32_t ref, int32_t idx, double v);
+
+    /* #381 — I/O de 8 BYTES en la pila BP: el marshalling de `long`.
+     *
+     * Hasta aquí un `native` sólo movía valores de 4 bytes, y un `long` en un
+     * parámetro, un retorno o una variable local abortaba la compilación
+     * (`AOT_LIMITES.md` §1). Estos dos slots son lo que lo desbloquea.
+     *
+     * No inventan representación: el intérprete YA guarda los `long` en la pila
+     * como 8 bytes big-endian (`bpvm_read_i64_be`, `bpvm_internal.h:568`), y
+     * esto es exactamente eso, expuesto al `.mdn` — que no puede llamar al
+     * runtime por nombre y sólo alcanza lo que esté en esta tabla.
+     *
+     * El thunk avanza `sp` de 8 en 8 con ellos, igual que ya hace con las
+     * REFERENCIAS desde #302: el patrón de «este argumento ocupa el doble»
+     * estaba escrito y probado, sólo faltaba el tipo.
+     *
+     * `double` NO entra aquí todavía (ficha #426): comparte este marshalling y
+     * nada más — necesita la emulación de coma flotante enlazada dentro del
+     * `.mdn`. Sus dos slots irán DETRÁS de éstos cuando toque, que es para lo
+     * que esta tabla sólo crece por el final. */
+    int64_t (*read_i64_be)(const uint8_t* p);
+    void    (*write_i64_be)(uint8_t* p, int64_t v);
 };
 
 /* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.

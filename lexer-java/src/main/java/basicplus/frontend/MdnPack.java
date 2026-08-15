@@ -132,6 +132,24 @@ public final class MdnPack {
               .append("    * un literal de cadena  -> materializarlo byte a byte en la pila\n")
               .append("    * while (p[k]) k++      -> gcc lo convierte en strlen; acotar el bucle\n")
               .append("    * una variable static   -> no hay .data/.bss en un .mdn");
+            /* #381 — y la causa que trajo `long`: la ARITMETICA QUE EL MICRO NO
+             * TIENE. El Cortex-M no divide enteros de 64 bits en hardware, asi
+             * que gcc emite una llamada a una rutina de libgcc; con `double`
+             * pasa lo mismo con casi todas las operaciones. El sintoma es este
+             * mismo error, pero las tres causas de arriba no lo explican y uno
+             * se queda mirando un `__aeabi_ldivmod` sin saber de donde sale. */
+            if (pendientes.stream().anyMatch(MdnPack::esRutinaAritmetica)) {
+                sb.append("\n  * UNA RUTINA DE ARITMETICA de la libreria del compilador\n")
+                  .append("    (__aeabi_ldivmod, __aeabi_dadd, __divdi3, __adddf3...).\n")
+                  .append("    El micro no sabe hacer esa operacion por hardware y gcc la\n")
+                  .append("    delega. Sale con: dividir o hacer el modulo de un 'long', y\n")
+                  .append("    casi cualquier cosa con 'double'.\n")
+                  .append("    Que hacer HOY: sacar esa operacion de la funcion 'native' (el\n")
+                  .append("    resto del modulo sigue yendo a nativo), o quitarle el 'native'\n")
+                  .append("    a esa funcion para que corra interpretada.\n")
+                  .append("    Que lo arreglaria de raiz: enlazar libgcc dentro del .mdn.\n")
+                  .append("    Esta analizado en docs/AOT_ABI8_IDEAS.md (#381 F3).");
+            }
             throw new PackException(sb.toString());
         }
 
@@ -185,6 +203,26 @@ public final class MdnPack {
 
         Files.write(outPath, out.toByteArray());
         return new PackResult(code.length, exports.size());
+    }
+
+    /**
+     * #381 — ¿este símbolo indefinido es una rutina de aritmética de la
+     * librería del compilador?
+     *
+     * <p>Se reconocen las dos familias que emiten los toolchains que usamos:
+     * `__aeabi_*` (ARM EABI: `__aeabi_ldivmod`, `__aeabi_dadd`…) y los nombres
+     * genéricos de libgcc (`__divdi3`, `__adddf3`, `__muldf3`…), que son los
+     * que salen en RISC-V.
+     *
+     * <p>Sólo sirve para AFINAR UN MENSAJE. Si algún nombre se escapa del
+     * patrón, el error salta igual —la lista de símbolos se imprime entera—:
+     * lo único que se pierde es la explicación de dónde viene. Por eso puede
+     * ser una heurística sin que eso apague nada.
+     */
+    private static boolean esRutinaAritmetica(String sym) {
+        if (sym == null) return false;
+        if (sym.startsWith("__aeabi_")) return true;
+        return sym.matches("__[a-z]{2,8}(di3|df3|sf3|si3)");
     }
 
     /* El lector de ELF32 vive en Elf32.java: lo comparte con el relocalizador

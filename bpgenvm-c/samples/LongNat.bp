@@ -1,0 +1,89 @@
+// LongNat.bp — #381: `long` cruzando a una función `native`.
+//
+// Hasta ahora un `long` en un parámetro, un retorno o una variable local de una
+// `native` abortaba la compilación: el AOT sólo marshallaba 4 bytes. Este
+// programa es el caso mínimo que lo ejercita, y está escrito para que la
+// comparación entre las dos VMs sea capaz de PILLAR un fallo, no sólo de correr:
+//
+//   · Números que NO caben en 32 bits. Con valores pequeños, un marshalling
+//     roto a 4 bytes daría el mismo resultado y la prueba pasaría en verde.
+//   · El paso del `sp`: varios parámetros y llamadas encadenadas. Si el thunk
+//     avanzara 4 donde debe avanzar 8, el frame se descuadra y lo que se rompe
+//     es la llamada SIGUIENTE, no ésta.
+//   · Mezcla de anchos en la misma firma (integer + long): ahí es donde un
+//     avance mal calculado se nota antes.
+//   · Negativos y el mínimo de 64 bits, que es donde viven los off-by-one del
+//     signo.
+//
+// Se ejecuta en las DOS VMs y la salida tiene que ser byte-idéntica.
+module LongNat
+
+  // Suma de dos longs. El caso base del marshalling: dos entradas de 8 bytes
+  // y una salida de 8.
+  native function sumaL(a: long, b: long): long
+    return a + b
+  end sumaL
+
+  // ANCHOS MEZCLADOS en una firma. Si el thunk se equivoca en el avance del sp
+  // al leer los argumentos, el segundo llega corrompido.
+  native function mezcla(n: integer, grande: long, m: integer): long
+    return grande + n - m
+  end mezcla
+
+  // Multiplicación: en ARM la hace GCC en línea (umull/mla), sin llamar a
+  // libgcc. Se prueba a propósito porque es la operación más cara que sigue
+  // siendo autónoma — la división NO lo es, y por eso no está aquí (#381 F3).
+  native function mulL(a: long, b: long): long
+    return a * b
+  end mulL
+
+  // Variable LOCAL de 8 bytes, que era el otro sitio donde saltaba el recorte.
+  native function acumula(veces: integer, paso: long): long
+    var t: long := 0L
+    var i: integer := 0
+    while i < veces do
+      t := t + paso
+      i := i + 1
+    endwh
+    return t
+  end acumula
+
+  // Estrechar a 32 bits desde nativo. NO es `native` todavía: el emisor AOT
+  // aún no traduce la conversión `integer(x)` dentro de una nativa (la ve como
+  // una llamada a una función desconocida). Se queda interpretada a propósito
+  // — que una funcione interpretada y las otras compiladas es EXACTAMENTE lo
+  // que el AOT promete, y de paso lo prueba.
+  function bajaA32(v: long): integer
+    return integer(v)
+  end bajaA32
+
+  function Main()
+    // Más allá de 32 bits: 2^40 y 2^35. Con un marshalling de 4 bytes esto
+    // saldría 0, que es justo lo que se quiere detectar.
+    const G1: long := 1099511627776L      // 2^40
+    const G2: long := 34359738368L        // 2^35
+
+    print "sumaL   : " + sumaL(G1, G2)
+    print "mezcla  : " + mezcla(7, G1, 3)
+    print "mulL    : " + mulL(G2, 4L)
+    print "acumula : " + acumula(5, G2)
+
+    // Negativos y el borde del signo.
+    print "neg     : " + sumaL(0L - G1, G2)
+    print "minmax  : " + sumaL(9223372036854775807L, 0L)
+
+    // Truncar a 32: 2^40 no cabe, así que se queda en 0; 2^40+123 en 123.
+    print "baja0   : " + bajaA32(G1)
+    print "baja123 : " + bajaA32(G1 + 123L)
+
+    // Encadenadas: si el sp se descuadra, es AQUÍ donde se ve.
+    var acc: long := 0L
+    var i: integer := 0
+    while i < 4 do
+      acc := sumaL(acc, G2)
+      i := i + 1
+    endwh
+    print "cadena  : " + acc
+  end Main
+
+end LongNat

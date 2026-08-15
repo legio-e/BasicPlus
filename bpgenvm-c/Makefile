@@ -239,6 +239,22 @@ test-bytenat: $(LIBOBJ)
 	  ./$(BYTENAT_BIN) samples/ByteNat.mod; \
 	fi
 
+# #381 — `long` CRUZANDO A UNA FUNCION `native` (8 bytes por la pila BP).
+#
+# Hasta esta ficha un `native` solo movia valores de 4 bytes. El programa esta
+# escrito para que un marshalling roto SE NOTE: numeros que no caben en 32 bits
+# (con valores pequenos, leer 4 bytes daria el mismo resultado y pasaria en
+# verde), anchos mezclados en una firma, y llamadas encadenadas — si el `sp`
+# avanzara 4 donde debe avanzar 8, lo que falla es la llamada SIGUIENTE.
+#
+# El oraculo es la VM-Java sobre el mismo .mod: la salida tiene que ser
+# byte-identica. Ver test/test_longnat.c.
+LONGNAT_BIN = build/test_longnat.exe
+test-longnat: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,LongNat)
+	@if [ ! -f samples/LongNat.mod ]; then 	  echo "(skip test-longnat: falta samples/LongNat.mod)"; 	else 	  java -cp "../lexer-java/target/classes;../pack/target/classes" 	    basicplus.frontend.AotMain samples/LongNat.bp build/aotlong >/dev/null; 	  cp build/aotlong/aot_LongNat.c test/aot_LongNat.c; 	  $(CC) $(CFLAGS) -Isrc test/test_longnat.c test/aot_LongNat.c 	    $(LIBOBJ) -o $(LONGNAT_BIN) $(LDFLAGS); 	  echo "--- #381 long en native (la salida debe ser la de la VM-Java) ---"; 	  ./$(LONGNAT_BIN) samples/LongNat.mod; 	fi
+
 # #240 — Compress.decompress (LZSS) en variante NATIVE. Compila el thunk AOT
 # (byte[] + shl/shr/mod, helpers array_load_u8 / array_store_i8) y corre
 # CompressNat.mod. La salida (n = 6 / out = ABABAB) debe ser byte-idéntica a la

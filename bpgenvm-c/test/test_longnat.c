@@ -1,0 +1,50 @@
+/*
+ * test_longnat.c — driver host de #381: `long` cruzando a una función `native`.
+ *
+ * Carga LongNat.mod y registra los thunks AOT de sumaL/mezcla/mulL/acumula, que
+ * son los que mueven 8 bytes por la pila BP (read_i64_be / write_i64_be).
+ *
+ * LO QUE PRUEBA, que no es "que no reviente": la salida por el camino NATIVE
+ * tiene que ser **byte-idéntica** a la interpretada. El programa está escrito
+ * para que un marshalling roto se note — números que no caben en 32 bits,
+ * anchos mezclados en una firma y llamadas encadenadas (si el `sp` avanzara 4
+ * donde debe avanzar 8, el frame se descuadra y lo que falla es la llamada
+ * siguiente, no la primera).
+ *
+ * El oráculo es `samples/aottest/out/LongNat.mod` corrido en la VM-Java; aquí
+ * sólo se ejecuta, y la comparación la hace quien invoca (o el ojo).
+ */
+#include "bpvm.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include "bpvm_fs.h"
+
+extern void aot_LongNat_register(struct bpvm* vm);
+
+int main(int argc, char** argv) {
+    /* #344 — el núcleo resuelve por la FACHADA del FS, así que un driver de
+     * host tiene que registrar su backend. */
+    bpvm_fs_register_host();
+    setvbuf(stdout, NULL, _IONBF, 0);
+    const char* mod_path = (argc > 1) ? argv[1] : "LongNat.mod";
+    size_t mem_size = 512 * 1024;
+    uint8_t* mem = (uint8_t*) calloc(1, mem_size);
+    if (!mem) { fprintf(stderr, "OOM\n"); return 1; }
+
+    bpvm_t* vm = bpvm_init(mem, mem_size, 0);
+    if (!vm) { fprintf(stderr, "bpvm_init failed\n"); free(mem); return 1; }
+
+    bpvm_status_t s = bpvm_load_mod(vm, mod_path);
+    if (s != BPVM_OK) {
+        fprintf(stderr, "load_mod %s: %s\n", mod_path, bpvm_status_str(s));
+        bpvm_destroy(vm); free(mem); return (int) s;
+    }
+
+    aot_LongNat_register(vm);   /* hijack: las native de long → thunk */
+
+    s = bpvm_run(vm);
+    fprintf(stderr, "[status=%s]\n", bpvm_status_str(s));
+
+    bpvm_destroy(vm); free(mem);
+    return (int) s;
+}

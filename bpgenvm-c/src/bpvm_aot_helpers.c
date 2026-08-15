@@ -82,6 +82,16 @@ static void h_write_i16_be(uint8_t* p, int16_t v) {
     p[0] = (uint8_t)((v >> 8) & 0xFF);
     p[1] = (uint8_t)(v & 0xFF);
 }
+/* #381 — los de 8 bytes, para el marshalling de `long`. Mismas funciones que
+ * usa el intérprete para poner un `long` en la pila, ni una más: si aquí se
+ * escribiera otra cosa, un `long` valdría distinto según fuera interpretado o
+ * compilado, que es justo el invariante que no se puede romper. */
+static int64_t h_read_i64_be(const uint8_t* p) {
+    return bpvm_read_i64_be(p);
+}
+static void h_write_i64_be(uint8_t* p, int64_t v) {
+    bpvm_write_i64_be(p, v);
+}
 
 /* ---------- Control de ejecución ----------
  * throw_runtime levanta un BpThreadFault que sube por la pila de
@@ -597,4 +607,9 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     /* #302 paso 2 — frontera de referencias thunk↔pila BP. */
     .read_ref            = h_read_ref,
     .write_ref           = h_write_ref,
+    /* #381 — la misma frontera para `long`: 8 bytes big-endian, igual que los
+     * escribe el intérprete. Son las funciones del runtime tal cual; el `.mdn`
+     * no puede llamarlas por nombre y por eso pasan por aquí. */
+    .read_i64_be         = h_read_i64_be,
+    .write_i64_be        = h_write_i64_be,
 };

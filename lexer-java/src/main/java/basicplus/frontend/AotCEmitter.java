@@ -659,8 +659,14 @@ public final class AotCEmitter {
                 w.println("    " + cType(p.type) + " a" + i
                     + " = (int32_t) H->read_ref(mem + sp - 8); sp -= 8;  /* ref: 8B */");
             } else {
+                /* #381 — un `long` ocupa 8 bytes en la pila BP, igual que una
+                 * referencia. El paso del sp lo decide el TIPO, no una constante:
+                 * antes era 4 en todas partes y ahí es donde se colaba el error
+                 * silencioso si se añadía un tipo ancho sin tocar el avance. */
+                int w8 = slotBytes(p.type);
                 w.println("    " + cType(p.type) + " a" + i + " = H->"
-                    + readHelper(p.type) + "(mem + sp - 4); sp -= 4;");
+                    + readHelper(p.type) + "(mem + sp - " + w8 + "); sp -= " + w8 + ";"
+                    + (w8 == 8 ? "  /* long: 8B */" : ""));
             }
         }
         // C call con args en orden original a0, a1, a2...
@@ -680,8 +686,10 @@ public final class AotCEmitter {
              * la gen VIVA (write_ref regen internamente) y avanzar sp += 8. */
             w.println("    H->write_ref(vm, mem + sp, (uint32_t) r); sp += 8;  /* ref: 8B */");
         } else if (!isVoid) {
+            int w8 = slotBytes(f.returnType);
             w.println("    H->" + writeHelper(f.returnType)
-                + "(mem + sp, r); sp += 4;");
+                + "(mem + sp, r); sp += " + w8 + ";"
+                + (w8 == 8 ? "  /* long: 8B */" : ""));
         } else {
             /* #177 FIX — Las funciones BP normal con OP_RET siempre push
              * un ret_val (incluso si son void). El compilador BP emite
@@ -1153,6 +1161,22 @@ public final class AotCEmitter {
     private void emitExpr(Ast.IExpr e) {
         if (e instanceof Ast.IntLitExpr) {
             w.print(((Ast.IntLitExpr) e).value);
+            return;
+        }
+        if (e instanceof Ast.LongLitExpr) {
+            /* #381 — literal de 64 bits. El sufijo `LL` NO es decorativo: sin
+             * él, `1099511627776` es un literal cuyo tipo lo elige el
+             * compilador de C, y una expresión como `1 << 40` o una constante
+             * que quepa justo se evaluaría en 32 bits. Es la misma trampa que
+             * en BP costó la ficha #385 (un literal sin `L` daba un número
+             * plausible y equivocado), y aquí sería peor: saldría bien en el
+             * host de 64 bits y mal en el micro.
+             *
+             * `Long.MIN_VALUE` se escribe como (-9223372036854775807LL - 1):
+             * su valor absoluto no es un literal válido en C. */
+            long v = ((Ast.LongLitExpr) e).value;
+            if (v == Long.MIN_VALUE) w.print("(-9223372036854775807LL - 1)");
+            else                     w.print(v + "LL");
             return;
         }
         if (e instanceof Ast.FloatLitExpr) {
@@ -1677,8 +1701,17 @@ public final class AotCEmitter {
                 case "float":   return "float";
                 case "boolean": return "int32_t";   /* bool como i32 0/1 */
                 case "string":  return "int32_t";   /* #171: handle al heap. */
-                case "long": case "double":
-                    /* #349 — 8 bytes: el AOT v1 marshalla todo en slots de 4.
+                case "long":
+                    /* #381 — `long` YA se marshalla: 8 bytes big-endian en la
+                     * pila BP, los mismos que escribe el intérprete. El thunk
+                     * avanza `sp` de 8 en 8 con read_i64_be/write_i64_be. */
+                    return "int64_t";
+                case "double":
+                    /* #349/#426 — 8 bytes, y `double` sigue fuera: no es el
+                     * marshalling lo que le falta (ése ya está, lo comparte con
+                     * `long`), es que su aritmética se emula por software y esas
+                     * rutinas de libgcc no caben en un `.mdn`, que se carga sin
+                     * enlazador. Ver docs/AOT_ABI8_IDEAS.md.
                      *
                      * El mensaje NO puede decir "en la signature": cType se usa
                      * también para las VARIABLES LOCALES, y decía signature en
@@ -1692,10 +1725,13 @@ public final class AotCEmitter {
                      * da, o quitar `native` y que esa función corra interpretada
                      * — el resto del módulo sigue compilando a nativo igual. */
                     throw new UnsupportedAotException(
-                        "el tipo '" + n + "' ocupa 8 bytes y el AOT v1 sólo maneja "
-                        + "valores de 4 (parámetros, retorno y variables locales). "
-                        + "Opciones: usar 'float' si la precisión de 32 bits basta, "
-                        + "o quitar 'native' de esta función para que corra "
+                        "el tipo 'double' todavía no cruza a una función native. "
+                        + "('long' sí, desde #381.) La razón no es el tamaño: es que "
+                        + "su aritmética la emula el software y esas rutinas no caben "
+                        + "en el código nativo del módulo. Opciones: usar 'float', que "
+                        + "sí va y ADEMÁS usa la FPU del micro (la de estos chips es de "
+                        + "precisión simple, así que un 'double' tampoco correría por "
+                        + "ella); o quitar 'native' de esta función para que corra "
                         + "interpretada (el resto del módulo sigue yendo a nativo).");
                 default:
                     /* #174b — clase/enum/any: ref u valor de 4 bytes → handle i32.
@@ -1715,6 +1751,28 @@ public final class AotCEmitter {
 
     /** Para el thunk: nombre del helper que lee un valor del tipo
      *  indicado desde el stack BP. Cada slot ocupa 4 bytes BE. */
+    /**
+     * #381 — CUÁNTO OCUPA ESTE TIPO EN LA PILA BP.
+     *
+     * <p>Cuatro para todo lo de siempre, ocho para `long` — y para `double` el
+     * día que entre (#426). Existe como función y no como constante porque el
+     * thunk tenía el 4 escrito a mano en dos sitios: ahí es exactamente donde se
+     * cuela el fallo mudo si se añade un tipo ancho y se olvida el avance del
+     * `sp`. Un frame que se descuadra 4 bytes por llamada no da error: da
+     * basura, unas llamadas más tarde.
+     *
+     * <p>Las REFERENCIAS también ocupan 8, pero no pasan por aquí: el thunk las
+     * trata aparte con `read_ref`/`write_ref` porque además regeneran la
+     * generación del handle (#302).
+     */
+    private int slotBytes(Ast.TypeRef t) {
+        if (t instanceof Ast.SimpleTypeRef) {
+            String n = ((Ast.SimpleTypeRef) t).name;
+            if ("long".equals(n) || "double".equals(n)) return 8;
+        }
+        return 4;
+    }
+
     private String readHelper(Ast.TypeRef t) {
         if (t instanceof Ast.SimpleTypeRef) {
             String n = ((Ast.SimpleTypeRef) t).name;
@@ -1723,9 +1781,12 @@ public final class AotCEmitter {
                     return "read_i32_be";
                 case "float":
                     return "read_f32_be";
-                case "long": case "double":
+                case "long":
+                    return "read_i64_be";      /* #381 — 8 bytes en la pila BP */
+                case "double":
                     throw new UnsupportedAotException(
-                        "AOT: tipo '" + n + "' (8 bytes) no soportado en thunk native");
+                        "AOT: tipo 'double' no soportado en thunk native (ficha #426; "
+                        + "'long' sí, desde #381)");
                 default:
                     /* #174b — clase/enum/any: handle/valor i32. */
                     return "read_i32_be";
@@ -1749,9 +1810,12 @@ public final class AotCEmitter {
                     return "write_i32_be";
                 case "float":
                     return "write_f32_be";
-                case "long": case "double":
+                case "long":
+                    return "write_i64_be";      /* #381 — 8 bytes en la pila BP */
+                case "double":
                     throw new UnsupportedAotException(
-                        "AOT: tipo '" + n + "' (8 bytes) no soportado en thunk native");
+                        "AOT: tipo 'double' no soportado en thunk native (ficha #426; "
+                        + "'long' sí, desde #381)");
                 default:
                     /* #174b — clase/enum/any: handle/valor i32. */
                     return "write_i32_be";
