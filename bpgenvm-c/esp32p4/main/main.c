@@ -28,6 +28,7 @@
 #include "esp_event.h"
 #include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
 #include "log.h"               /* log persistente (post-mortem) — lo antes posible */
+#include "bpvm.h"              /* #353: bpvm_diag_set_sink — el rastro de la VM al log */
 #include "bpvm_sqlmem.h"       /* V5/H7: la REGLA del bloque de la BD (un solo sitio) */
 #include "bpvm_env.h"          /* V5/H7: SQLite=<MB> del entorno */
 #include "bpvm_bios.h"         /* V5/H7: la tabla que se le presta al pack */
@@ -464,6 +465,22 @@ static void vm_buffer_init_psram(void)
                (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 }
 
+/* #353 — sink de diagnóstico de la VM: al log persistente.
+ *
+ * ⚠️ Esto FALTABA en el P4, y era la única familia sin ponerlo — el S3 lo tiene
+ * en su main.c y el STM32 en su repl. Consecuencia, medida el 15-ago con
+ * Eduardo: en esta placa había log de ARRANQUE (lo escribe este fichero con
+ * `log_printf`) pero NINGUNO de ejecución. Todo lo que dice la VM mientras corre
+ * un programa —de dónde salió cada módulo, qué dependencia no encontró, el
+ * veredicto del guardián de fin de RUN— se iba al `stderr` por defecto, que aquí
+ * es la consola USB-JTAG: un sitio que nadie mira y que además no sobrevive al
+ * reset.
+ *
+ * El coste real de no tenerlo: una mañana entera de hipótesis sobre por qué un
+ * `Core.mod` en `/lib` daba «IO error», con el firmware sabiendo la respuesta y
+ * contándosela a nadie. */
+static void diag_al_log(const char* linea) { log_printf("%s", linea); }
+
 void app_main(void)
 {
     /* LO PRIMERO: el log persistente. Recupera el snapshot de la sesión anterior
@@ -471,6 +488,7 @@ void app_main(void)
      * queda grabando desde antes de la PSRAM y del climb del boot — vive en RAM
      * interna + un sector libre de bpenv, así que no depende de ninguno. */
     log_init();
+    bpvm_diag_set_sink(diag_al_log);           /* #353 — FALTABA en esta familia */
     log_printf("=== boot ESP32-P4 ===");
 
     /* V5/H7 — el bloque de la BD muerde ANTES que el heap de la VM: su dirección
