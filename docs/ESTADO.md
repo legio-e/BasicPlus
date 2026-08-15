@@ -246,6 +246,27 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-15 (mañana) — Eduardo + Claude.** Tanda de placa y de packs. Cerradas
+  **`#414`** (módulo `Packs`: `list()` / `listIn()`, verificado en el P4 el mismo
+  día que se escribió), **`H2-P4`** (las seis operaciones del FS, en los DOS
+  volúmenes) y **`#411`** en su parte de carpeta: `bpstdlib/sqlite/` con fuentes,
+  los cuatro nativos versionados y un `LEEME` con la cadena — **el pack ya se
+  puede reconstruir desde un clon limpio**, que antes no. Arregladas además
+  `#418` (el resolutor mira `/sys`) y **`#420`, el P4 era la única familia sin
+  log de EJECUCIÓN**.
+  Lo que enseñó la mañana, y es una sola cosa dicha de cuatro maneras:
+  - **el instrumento cómodo no dice la verdad sobre la placa**. El FS del host
+    daba 11/11 y tapaba que en littlefs `mtime` no existe; lo destapó
+    `--fs=lfs:`, que usa el mismo motor que el micro;
+  - **lo que no se compara, se pudre**: un `/lib/Core.mod` rancio del mismo
+    tamaño que el bueno costó media mañana, y el IDE nunca mira el CRC de `/lib`
+    porque sube a `/app` (#422);
+  - **la red de seguridad hizo su trabajo**: el pack de SQLite no salió igual dos
+    veces seguidas, y por eso no se borró nada de `notas/`;
+  - y las tres fichas que se cerraron salieron de **predecir desde el código y
+    usar la placa para confirmar**. Las horas se fueron en lo contrario.
+  Pendiente de la tanda: `#418` en placa, `H2-P5` (otras tarjetas) y **la prueba
+  del bus sano**, que sigue siendo la que más pesa.
 - **2026-08-14 (noche) — Eduardo + Claude. 🏁 H9 CERRADO.** `Object` deja de ser un
   alias de `any` y pasa a ser la raíz REAL del modelo de objetos (existía desde
   H5.1.a, pero sólo en el emisor: al semántico nadie se la había presentado).
