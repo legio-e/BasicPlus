@@ -152,10 +152,13 @@ stdlib, que se regeneró ese día (`Collections.mod` y `Gui.mod` cambiaron): el
 grupo embebido en los firmwares es Core y los drivers, así que *no debería*
 afectar — pero eso es un argumento, no una medida.
 
+✅ **`#417` YA ESTÁ HECHA** (14-ago, en el P4): un pack con una fuente `.bin`
+dentro, y `FontLoadDemo` cargándola. Los recursos de la zona de packs funcionan en
+placa, y **H11 queda desbloqueado**. Detalle de cómo se verificó —y por qué el
+instrumento obvio no valía— en `notas/FICHAS.md`.
+
 **En la Metro (RP2350)**
-1. **`#417` — los recursos de la zona de packs (#362) en placa.** Es la ficha que
-   bloquea H11 entero: fuente o icono grabados en un pack y cargados desde flash.
-2. **`H2-P4` — las seis operaciones del FS que nunca se han ejecutado**: `remove`,
+1. **`H2-P4` — las seis operaciones del FS que nunca se han ejecutado**: `remove`,
    `rename`, `mkdir`, `rmdir`, `mtime_ms` y el `write` en modo *append*.
 3. **`H2-P5` — una segunda tarjeta**: SDSC (direcciona por BYTE, camino distinto
    en `bpvm_sd_leer_bloque`) y/o sin MBR.
@@ -171,6 +174,17 @@ afectar — pero eso es un argumento, no una medida.
 2. **`#379`** — mirar si el `INFO` sigue perdiendo la respuesta, y cronometrar la
    respuesta **en el firmware**, no en el IDE: son dos fallos distintos (tarda más
    que su timeout / se pierde) y sólo esa medida los separa.
+3. **`#419`** — con y sin tarjeta: **sin SD arranca sin errores y más rápido**, y
+   el árbol del IDE también refresca antes (observado el 14-ago). Medir dónde se
+   va el tiempo antes de tocar nada — se junta con `#408`.
+
+**Y una ficha que salió de rebote y no necesita placa: `#418`.** Los módulos que
+viven en `/sys` **no se encuentran**: el resolutor mira basedir → tal cual →
+`/app` → `/lib`, y `/sys` sólo se usa para `auto.txt`. Un `Core.mod` ahí es
+invisible para un `import`, y el síntoma engaña —el IDE dice `exit 1 (IO error)`,
+que en realidad es el guardián del enlace diciendo que falta un módulo—. Decisión
+de Eduardo: **tiene que poder encontrarlos**, o sea que el arreglo va en el
+resolutor. Es trabajo de escritorio y desatasca cualquier prueba en placa.
 
 Todo lo demás (fichas de compilador, IDE, AOT) puede esperar: no depende de tener
 la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
