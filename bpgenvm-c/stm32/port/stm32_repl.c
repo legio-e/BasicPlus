@@ -871,6 +871,13 @@ void stm32_repl_run(void) {
 
     /* P-autorun (#256) — el wire ya está vivo: si la app de auto.txt se
      * queda en bucle, el IDE puede conectar (HELLO) y matarla (KILL). */
+    /* #423 — A PARTIR DE AQUI, EL LOG LO MANDA EL ENTORNO (`log=0|1`).
+     * Mismo punto que en las otras familias: el arranque entero se registra
+     * siempre (son ~15 lineas y hacen falta cuando una placa no arranca) y lo
+     * que se apaga es el rastro de EJECUCION, que es el que llena la region.
+     * Por defecto APAGADO: `log=1` cuando se va a depurar. */
+    bpvm_log_set_enabled(board_mgr_stm32_env_bool("log", 0));
+
     autorun_boot();
 
     uint32_t last_blink = HAL_GetTick();

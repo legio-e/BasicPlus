@@ -435,6 +435,16 @@ test-fspos:
 	@echo "--- V5/H2 escritura posicional (esperado: 17/17, 0 fallos) ---"
 	@cd build && ./test_fspos.exe
 
+# #423 — el INTERRUPTOR del log (`log=0|1` en el entorno). Cuatro cosas, y las
+# cuatro importan: que por defecto este ENCENDIDO (el arranque queda registrado
+# siempre, que es cuando menos se puede preguntar nada), que apagado no anada,
+# que apagar NO BORRE lo ya escrito, y que se pueda volver a encender.
+test-logsw:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_log_switch.c src/bpvm_log.c -o build/test_logsw.exe
+	@echo "--- #423 interruptor del log (esperado: solo 'ok', [status=OK]) ---"
+	@cd build && ./test_logsw.exe
+
 test-env:
 	@mkdir -p build
 	$(CC) $(CFLAGS) test/test_env.c src/bpvm_env.c src/crc32.c -o build/test_env.exe

@@ -1362,6 +1362,15 @@ static void vm_task(void* arg) {
      * antes) se cumple solo: el wire ya está vivo y el poll del run
      * atiende HELLO/KILL, así que el IDE puede conectar y parar la app
      * aunque sea un bucle infinito. */
+    /* #423 — A PARTIR DE AQUI, EL LOG LO MANDA EL ENTORNO (`log=0|1`).
+     *
+     * El arranque entero queda registrado SIEMPRE: son unas quince lineas y no
+     * llenan nada, y son justo las que hacen falta cuando una placa no arranca.
+     * Lo que se apaga es el rastro de EJECUCION — el que llena la region en
+     * ~26 colectas del GC y hacia que un cuelgue no dejara su ultimo momento
+     * escrito. Por defecto APAGADO: `log=1` cuando se va a depurar. */
+    bpvm_log_set_enabled(bpvm_env_get_bool(&s_env, "log", 0));
+
     if (s_boot.state == BPVM_BOOT_APP && !s_boot.degraded)
         repl_v1_autorun();   /* H9: autorun solo con la placa SANA en estado 3 */
     repl_v1_run();

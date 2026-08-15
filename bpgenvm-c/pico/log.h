@@ -38,6 +38,20 @@ void log_init(void);
  * + newline. No bloquea, no toca flash. */
 void log_printf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 
+/* #423 — EL INTERRUPTOR DEL LOG (`log=0|1` en el entorno). Arranca ENCENDIDO:
+ * lo que pase antes de que el arranque lea su entorno se registra siempre.
+ * Apagado no borra nada, sólo deja de añadir.
+ *
+ * ⚠️ ESTA FAMILIA TIENE SU PROPIO LOG. `bpvm_log.h` dice ser «el núcleo
+ * portable que unifica los logs de Pico/STM32/ESP32 en UNA implementación», y
+ * el Pico nunca migró: `pico/log.c` lleva su copia completa. Por eso esto se
+ * declara e implementa aquí y no se hereda. Migrarlo es otra ficha; duplicar
+ * dos líneas hoy es más barato que mover el log de la placa a estas horas —
+ * pero que quede escrito, porque es exactamente la clase de copia que se queda
+ * atrás cuando el común crece. */
+void bpvm_log_set_enabled(int on);
+int  bpvm_log_enabled(void);
+
 /* Persiste el buffer RAM a flash (erase + program del sector). Bloquea
  * ~50 ms con IRQs OFF. Llamar en momentos críticos. */
 void log_flush(void);

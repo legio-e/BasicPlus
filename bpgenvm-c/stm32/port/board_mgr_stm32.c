@@ -82,6 +82,16 @@ static const bpvm_pack_flash_t s_packs_fl =
 
 /* ── arranque escalonado: particiones del env → FS (sub-rango de BP_DATA) → VM ── */
 
+/* #423 — leer una bandera del entorno desde fuera. El STM32 guardaba sus slots
+ * en estaticos y no los publicaba: nadie de fuera habia necesitado preguntar.
+ * Lo necesita el interruptor del log (`log=0|1`), y se resuelve con esto en vez
+ * de sacar los slots, que es estado que no tiene por que salir de aqui. */
+int board_mgr_stm32_env_bool(const char* key, int def) {
+    bpvm_env_t env;
+    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &env);
+    return bpvm_env_get_bool(&env, key, def);
+}
+
 static bpvm_boot_step_t layer_partitions(void* u) {
     (void) u;
     bpvm_boot_step_t r; r.ok = 0; r.reason[0] = '\0';

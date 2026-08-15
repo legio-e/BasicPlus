@@ -357,6 +357,19 @@ static void wire_task_uart(void *arg)
     wire_v1_uart_init();
     net_logf("[p4] VM.3 (UART0): wire v1 por el bridge USB-UART; conecta el IDE");
 
+    /* #423 — A PARTIR DE AQUI, EL LOG LO MANDA EL ENTORNO (`log=0|1`).
+     *
+     * El arranque entero queda registrado SIEMPRE: son unas quince lineas y no
+     * llenan nada, y son justo las que hacen falta cuando una placa no arranca.
+     * Lo que se apaga es el rastro de EJECUCION — el que llena la region de
+     * 8 KB en ~26 colectas del GC y hacia que un cuelgue no dejara su ultimo
+     * momento escrito (#423).
+     *
+     * Por defecto APAGADO: se enciende con `log=1` en el entorno cuando se va a
+     * depurar, que es lo que pidio Eduardo. Para moverlo mas arriba, basta con
+     * subir esta llamada: todo lo que quede por encima se registra siempre. */
+    bpvm_log_set_enabled(bpvm_env_get_bool(board_mgr_env(), "log", 0));
+
     if (bs->state == BPVM_BOOT_APP && !bs->degraded) repl_esp32_autorun();  /* H9 */
     repl_esp32_run();            /* no retorna */
 }

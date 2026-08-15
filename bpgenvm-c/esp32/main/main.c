@@ -128,6 +128,19 @@ void app_main(void)
      * HELLO/KILL: el IDE puede conectar y parar la app en cualquier
      * momento. */
     if (board_boot_status()->state == BPVM_BOOT_APP && !board_boot_status()->degraded)
+    /* #423 — A PARTIR DE AQUI, EL LOG LO MANDA EL ENTORNO (`log=0|1`).
+     *
+     * El arranque entero queda registrado SIEMPRE: son unas quince lineas y no
+     * llenan nada, y son justo las que hacen falta cuando una placa no arranca.
+     * Lo que se apaga es el rastro de EJECUCION — el que llena la region de
+     * 8 KB en ~26 colectas del GC y hacia que un cuelgue no dejara su ultimo
+     * momento escrito (#423).
+     *
+     * Por defecto APAGADO: se enciende con `log=1` en el entorno cuando se va a
+     * depurar, que es lo que pidio Eduardo. Para moverlo mas arriba, basta con
+     * subir esta llamada: todo lo que quede por encima se registra siempre. */
+    bpvm_log_set_enabled(bpvm_env_get_bool(board_mgr_env(), "log", 0));
+
         repl_esp32_autorun();   /* H9: autorun solo con la placa sana en estado 3 */
     repl_esp32_run();   /* no retorna */
 }

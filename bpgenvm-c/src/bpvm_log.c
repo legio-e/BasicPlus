@@ -59,8 +59,16 @@ void bpvm_log_init(const bpvm_log_cintura_t* cintura) {
     s_init = 1;
 }
 
+/* #423 — el interruptor (ver bpvm_log.h). ENCENDIDO de salida: lo que ocurra
+ * antes de que el arranque lea su entorno se registra siempre. */
+static int s_enabled = 1;
+
+void bpvm_log_set_enabled(int on) { s_enabled = on ? 1 : 0; }
+int  bpvm_log_enabled(void)       { return s_enabled; }
+
 void log_printf(const char* fmt, ...) {
     if (!s_init) return;
+    if (!s_enabled) return;   /* #423 — apagado: no añade. Lo escrito se queda. */
 
     char line[256];
     uint32_t ms = s_c.now_ms ? s_c.now_ms() : 0u;

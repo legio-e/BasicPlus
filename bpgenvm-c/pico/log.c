@@ -115,7 +115,13 @@ void log_init(void) {
     s_initialized = 1;
 }
 
+/* #423 — el interruptor (ver log.h). ENCENDIDO de salida. */
+static int s_log_enabled = 1;
+void bpvm_log_set_enabled(int on) { s_log_enabled = on ? 1 : 0; }
+int  bpvm_log_enabled(void)       { return s_log_enabled; }
+
 void log_printf(const char* fmt, ...) {
+    if (!s_log_enabled) return;   /* #423 — apagado: no anade; lo escrito se queda. */
     if (!s_initialized) return;
 
     /* Prefijo timestamp ms. */

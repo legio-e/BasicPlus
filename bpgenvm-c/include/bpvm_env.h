@@ -20,6 +20,23 @@
  * El CRC cubre seq+payload (contiguos) → detecta escritura a medias; magic +
  * version + len se validan estructuralmente. A/B (dos copias en dos sectores):
  * la robustez contra corte de corriente a mitad de escritura.
+ *
+ * ─── CLAVES QUE LEE EL FIRMWARE (las conocidas; una desconocida se ignora) ───
+ *
+ *   sd=<pines>     la tarjeta: pines y, opcionalmente, el reloj
+ *   display=<pan>  qué panel lleva la placa (`display=st7701`) — #311
+ *   psram=0|1      si la placa tiene PSRAM
+ *   SQLite=<MB>    cuánta memoria se reserva para la base de datos
+ *   fs=…, packs=…  tamaños de las particiones
+ *   log=0|1        SI SE REGISTRA EL RASTRO DE EJECUCIÓN (#423, por defecto 0)
+ *
+ * Sobre `log`, que es la única que cambia lo que la placa CUENTA de sí misma:
+ * el arranque se registra SIEMPRE —hasta que se lee este bloque nadie puede
+ * apagar nada, y es justo el tramo que hace falta cuando una placa no arranca—.
+ * Lo que gobierna es lo de después. Por defecto 0 porque el rastro de ejecución
+ * llena la región de 8 KB en ~26 colectas del GC, y un log lleno deja de
+ * escribir: el post-mortem se quedaba sin el final, que es lo único que
+ * importaba. Se pone a 1 cuando se va a depurar.
  */
 #ifndef BPVM_ENV_H
 #define BPVM_ENV_H

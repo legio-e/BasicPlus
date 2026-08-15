@@ -60,6 +60,37 @@ void bpvm_log_init(const bpvm_log_cintura_t* cintura);
 /* Añade una línea (auto-prefija "[ms] " + newline). No bloquea, no toca flash. */
 void log_printf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 
+/*
+ * #423 — EL INTERRUPTOR DEL LOG. Decisión de Eduardo (15-ago): *«una variable
+ * de entorno log=0 o 1. El log de arranque hasta que llegue a las variables de
+ * entorno va fijo, los siguientes ya depende del valor. Así solamente
+ * registramos cuando queramos depurar»*.
+ *
+ * ─── EL PROBLEMA QUE RESUELVE ───
+ *
+ * La región son 8 KB (4 en el S3) y el GC escribe TRES líneas por colecta
+ * —unos 300 B—, así que **~26 colectas y el log está lleno**. Y `append_raw`
+ * es append-only: al llenarse deja de escribir y pone `[LOG OVERFLOW]`. O sea
+ * que el log de una placa que se cuelga contenía el arranque y las primeras
+ * colectas, y NO el momento del cuelgue — lo contrario de para lo que existe un
+ * post-mortem. Se destapó en la P4 el 15-ago, en cuanto #420 conectó por fin el
+ * diagnóstico de la VM al log de esa familia.
+ *
+ * ─── EL CONTRATO ───
+ *
+ * Arranca ENCENDIDO, y eso no es un detalle: lo que pase antes de que nadie
+ * llame aquí queda registrado siempre. Si la placa se muere antes de leer su
+ * entorno —que es cuando menos se puede preguntar nada—, el rastro está.
+ *
+ * Apagado NO borra: lo ya escrito se conserva y se sigue pudiendo volcar. Sólo
+ * deja de añadir.
+ *
+ * `log_flush` sigue funcionando apagado, a propósito: apagar el log es decidir
+ * qué se GUARDA, no impedir persistir lo que ya se guardó.
+ */
+void bpvm_log_set_enabled(int on);
+int  bpvm_log_enabled(void);
+
 /* Persiste el buffer al sector de flash (momentos críticos: boot, antes de RESET). */
 void log_flush(void);
 
