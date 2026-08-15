@@ -145,6 +145,14 @@ la P4 lo que esté pendiente, y así cerramos entradas y desbloqueamos lo
 siguiente»*. Es lo que más desbloquea por hora invertida: casi todo lo abierto de
 packs y de la SD espera una medida, no código.
 
+🆕 **15-ago (sábado)** — dos cosas nuevas que se prueban en esta misma tanda:
+- **`#418`** (el resolutor mira `/sys`): subir un módulo SÓLO a `/sys` y ver que
+  un `import` lo encuentra. En host no se pudo probar — `/sys` es del device.
+- **`#414`** (módulo `Packs`): correr `samples/PacksDemo.bp`. En el P4, con
+  `SQLite` y `test1` grabados, debería listar los dos y su contenido. ⚠️ **Exige
+  firmware nuevo**: los cuatro builtins son código de la VM-C, así que con una
+  imagen vieja el programa se topa con un opcode que no conoce.
+
 **Antes de tocar placa** — reconstruir los firmwares desde el árbol limpio. El
 trabajo del P4 se commiteó el 14-ago (`c917bd6`) y **nadie lo ha compilado desde
 cero**: lo que se probó vivía en el árbol de Eduardo sin commitear. Y ojo con la
