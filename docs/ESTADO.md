@@ -192,9 +192,22 @@ instrumento obvio no valía— en `notas/FICHAS.md`.
 3. **`#379`** — mirar si el `INFO` sigue perdiendo la respuesta, y cronometrar la
    respuesta **en el firmware**, no en el IDE: son dos fallos distintos (tarda más
    que su timeout / se pierde) y sólo esa medida los separa.
-4. **`#419`** — con y sin tarjeta: **sin SD arranca sin errores y más rápido**, y
-   el árbol del IDE también refresca antes (observado el 14-ago). Medir dónde se
-   va el tiempo antes de tocar nada — se junta con `#408`.
+4. 🔺 **`#419` — el arranque con SD, que SUBE DE PRIORIDAD** (Eduardo, 15-ago:
+   *«hace muy difícil trabajar con la placa»*). Ya se sabe **por qué se nota
+   tanto**: el wire se abre **después** de montar la tarjeta
+   (`p4_montar_sd` en `main.c:345`, `wire_v1_uart_init` en `:357`), así que lo que
+   tarde el montaje es tiempo en que el IDE no puede conectar — el árbol no
+   refresca «más rápido» sin tarjeta, es que el wire abre antes.
+   **Lo único que hace falta para decidir es un log de arranque CON tarjeta y
+   otro SIN**: cada línea lleva ya su `[ms]` (`bpvm_log.c:67`), o sea que el
+   reparto está escrito y no hay que instrumentar nada. Descartado el sospechoso
+   obvio: la espera de Ethernet no se compila (`BPVM_P4_NETLOG=0` desde V4).
+   Después de ver el número —y sólo después— la salida candidata es la de
+   Eduardo: **la E/S que bloquea, a un hilo aparte**. Con dos condiciones
+   (que el sistema sepa decir «montando», y que la fachada del FS —que hoy no
+   tiene un solo mutex— aguante montar con el REPL vivo) y un aviso: en este
+   mismo tramo, el primer boot tardaba ~46 s y la causa no era la obvia; un hilo
+   lo habría escondido en vez de arreglarlo.
 
 **Y una ficha que salió de rebote y no necesita placa: `#418`.** Los módulos que
 viven en `/sys` **no se encuentran**: el resolutor mira basedir → tal cual →
