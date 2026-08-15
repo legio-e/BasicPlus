@@ -251,7 +251,61 @@ static void handle_reset(long id, const json_obj_t* obj) {
 
 /* ====================== FILES ====================== */
 
-typedef struct { int first; } list_ctx_t;
+/* #398/#408 — LA MEDIDA DEL REFRESCO DEL ÁRBOL.
+ *
+ * «El refresco del árbol tarda 1-2 s sin SD y 5 s o más con SD» (Eduardo,
+ * 15-ago) — y cualquier operación que refresque (añadir, borrar) lo paga. El
+ * arranque ya se midió y NO era: 965 ms con tarjeta, wire listo. O sea que el
+ * tiempo se va aquí, en el LIST que alimenta el árbol.
+ *
+ * Esto NO arregla nada: MIDE, que es lo que toca antes de tocar. Y mide
+ * repartiendo por CARPETA RAÍZ en vez de preguntar «¿es la SD?», para no
+ * asumir la respuesta: si la cara resulta ser `/lib`, también lo dirá.
+ *
+ * El sospechoso que hay que confirmar o descartar es el CRC de abajo: se
+ * calcula para CADA fichero, leyéndolo entero, en CADA listado. Por eso se
+ * cronometra aparte del resto.
+ *
+ * Coste del instrumento: dos lecturas de reloj por entrada y una línea de log
+ * por refresco (ojo con #423, que el log se llena). */
+#define LS_RAICES_MAX 8
+
+typedef struct {
+    int      first;
+    uint32_t t0;                        /* ms al empezar el listado           */
+    int      n;                         /* entradas emitidas                  */
+    uint32_t crc_ms;                    /* SÓLO el tiempo dentro del CRC      */
+    uint32_t crc_kb;                    /* KB leídos para calcularlo          */
+    int      nraices;
+    char     raiz[LS_RAICES_MAX][16];   /* "app", "lib", "sd"…                */
+    int      raiz_n[LS_RAICES_MAX];
+    uint32_t raiz_ms[LS_RAICES_MAX];
+} list_ctx_t;
+
+static uint32_t ls_ms(void) { return (uint32_t) (esp_timer_get_time() / 1000); }
+
+/* Apunta la entrada en el casillero de su carpeta raíz. Un fichero de la raíz
+ * (`auto.txt`) cuenta como "/" — que también es un dato: dice si el coste está
+ * en los sueltos o en un volumen. */
+static void ls_apunta(list_ctx_t* c, const char* name, uint32_t ms) {
+    char r[16];
+    const char* p = (name[0] == '/') ? name + 1 : name;
+    const char* s = strchr(p, '/');
+    if (s == NULL) { snprintf(r, sizeof r, "/"); }
+    else {
+        size_t len = (size_t) (s - p);
+        if (len >= sizeof r) len = sizeof r - 1;
+        memcpy(r, p, len); r[len] = '\0';
+    }
+    for (int i = 0; i < c->nraices; i++) {
+        if (strcmp(c->raiz[i], r) == 0) { c->raiz_n[i]++; c->raiz_ms[i] += ms; return; }
+    }
+    if (c->nraices >= LS_RAICES_MAX) return;      /* no cabe: el total sigue bien */
+    snprintf(c->raiz[c->nraices], sizeof c->raiz[0], "%s", r);
+    c->raiz_n[c->nraices]  = 1;
+    c->raiz_ms[c->nraices] = ms;
+    c->nraices++;
+}
 
 static int list_cb(const char* name, uint32_t size, void* user) {
     /* Construimos cada entry en un buffer pequeño y la mandamos como bulk
@@ -263,7 +317,13 @@ static int list_cb(const char* name, uint32_t size, void* user) {
     /* H11 — CRC por trozos (buffer de 256 B en la pila dentro de la fachada), no
      * leyendo el fichero entero a un espejo. Misma función que usa el Pico. */
     uint32_t crc = 0;
+    uint32_t t_crc = ls_ms();
     if (bpvm_fs_crc32(name, &crc) != 0) crc = 0;
+    t_crc = ls_ms() - t_crc;
+    ctx->crc_ms += t_crc;
+    ctx->crc_kb += (size + 1023u) / 1024u;
+    ctx->n++;
+    ls_apunta(ctx, name, t_crc);
     char e[128];
     int o = 0;
     if (!ctx->first) e[o++] = ',';
@@ -317,9 +377,32 @@ static void handle_list(long id, const json_obj_t* obj) {
     char head[64];
     int hn = snprintf(head, sizeof(head), "{\"type\":\"LIST_REPLY\",\"id\":%ld,\"entries\":[", id);
     wire_v1_send_bulk((const uint8_t*) head, (size_t) hn);
-    list_ctx_t ctx = { 1 };
+    /* memset y no `= { 1 }`: con la struct ya no de un solo campo, la
+     * inicialización parcial saca -Wmissing-field-initializers, y estos builds
+     * van con -Werror. No lo puedo comprobar aquí (sin ESP-IDF en esta máquina),
+     * así que se escribe de la forma que no da lugar a ello. */
+    list_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.first = 1;
+    ctx.t0 = ls_ms();
     fs_list(list_cb, &ctx);
     wire_v1_send_line("]}", 2);   /* cierra + '\n' */
+
+    /* #398/#408 — el desglose, en UNA línea (el log es un bien escaso, #423).
+     * `total` es lo que tarda el device; lo que el usuario ve incluye además el
+     * viaje por el wire y el pintado del árbol, y eso lo mide el IDE. Que los
+     * dos números existan es lo que dirá si el tiempo se va aquí o allí. */
+    uint32_t total = ls_ms() - ctx.t0;
+    char det[160];
+    int o = 0;
+    for (int i = 0; i < ctx.nraices && o < (int) sizeof(det) - 24; i++) {
+        o += snprintf(det + o, sizeof(det) - (size_t) o, " %s:%d/%ums",
+                      ctx.raiz[i], ctx.raiz_n[i], (unsigned) ctx.raiz_ms[i]);
+    }
+    det[o] = '\0';
+    log_printf("ls: %d ent en %u ms | crc %u ms de %u KB |%s",
+               ctx.n, (unsigned) total, (unsigned) ctx.crc_ms,
+               (unsigned) ctx.crc_kb, det);
 }
 
 /* ── SAVE / DF / MKDIR: el IDE los manda y la familia ESP32 no los tenía ──

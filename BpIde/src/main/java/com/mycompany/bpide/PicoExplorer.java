@@ -1248,21 +1248,48 @@ public final class PicoExplorer extends JPanel {
         });
     }
 
+    /* #398/#408 — EL REFRESCO, CRONOMETRADO EN TRES TRAMOS.
+     *
+     * «El refresco del árbol tarda 1-2 s sin SD y 5 s o más con SD, y cualquier
+     * operación que refresque lo paga» (Eduardo, 15-ago). El arranque de la
+     * placa ya se midió y no era él (965 ms con tarjeta, wire listo), así que el
+     * tiempo se va en este camino — pero «este camino» son tres cosas muy
+     * distintas y hasta ahora se veían como una:
+     *
+     *   ls    = el LIST: la placa recorre su FS y calcula el CRC de CADA fichero
+     *   mem   = la pregunta de memoria, que va detrás en la misma tanda
+     *   árbol = reconstruir y repintar los nodos de Swing
+     *
+     * Va al status, que ya está a la vista, en vez de a la consola: se mide en
+     * CADA refresco y una línea por refresco sería ruido. El device apunta su
+     * mitad en su propio log (`ls: N ent en X ms | crc …`), así que las dos
+     * medidas se pueden restar: lo que sobra es el viaje por el wire. */
     private void onRefresh() {
         if (!isConnected()) return;
         final Backend b = this.backend;
         runAsync(() -> {
+            long t0 = System.currentTimeMillis();
             List<Backend.Entry> fs = b.list();
+            long tLs = System.currentTimeMillis() - t0;
             String mem;
+            long t1 = System.currentTimeMillis();
             try { mem = b.mem(); }
             catch (java.io.IOException ie) { mem = "(no mem info)"; }
-            return new Object[]{fs, mem};
+            long tMem = System.currentTimeMillis() - t1;
+            return new Object[]{fs, mem, tLs, tMem};
         }, result -> {
+            Object[] r = (Object[]) result;
             @SuppressWarnings("unchecked")
-            List<Backend.Entry> fs = (List<Backend.Entry>) ((Object[]) result)[0];
-            String mem = (String) ((Object[]) result)[1];
+            List<Backend.Entry> fs = (List<Backend.Entry>) r[0];
+            String mem  = (String) r[1];
+            long   tLs  = (Long)   r[2];
+            long   tMem = (Long)   r[3];
+            long t2 = System.currentTimeMillis();
             rebuildTree(fs);
-            status.setText(fs.size() + " files  |  " + mem);
+            long tArbol = System.currentTimeMillis() - t2;
+            status.setText(fs.size() + " files  |  " + (tLs + tMem + tArbol) + " ms"
+                    + " (ls " + tLs + " · mem " + tMem + " · arbol " + tArbol + ")"
+                    + "  |  " + mem);
         });
     }
 
