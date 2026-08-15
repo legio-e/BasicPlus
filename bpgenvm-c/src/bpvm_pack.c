@@ -398,10 +398,12 @@ int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_o
  * programa en una variable local, cada hilo tiene el suyo y no hay nada que
  * liberar.
  *
- * ⚠️ `cursor = offset + 1`, y NO es cosmético: el primer pack vive en el offset
- * 0 de la región, así que 0 no puede significar a la vez «el primero» y «no
- * hay». Desplazando uno, **0 queda libre** para las dos puntas del bucle:
- * `iter(0)` da el primero y el fin devuelve 0.
+ * LAS DOS PUNTAS DEL BUCLE (modelo de Eduardo): **`0` empieza, `-1` termina**.
+ * Y el cursor es `offset + 1`, que no es cosmético: el primer pack vive en el
+ * offset 0 de la región, así que el 0 crudo no puede significar a la vez «el
+ * primero» y «empieza». Desplazando uno, el 0 queda libre para arrancar y el -1
+ * para decir que se acabó — dos valores distintos para dos cosas distintas, en
+ * vez de un centinela que hace de las dos.
  *
  * ⚠️ El cursor es OPACO y no debe imprimirse: es un offset de región, distinto
  * en cada VM (miVM no tiene zona), así que un `print` de esto rompería la
@@ -411,59 +413,61 @@ int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_o
  * BP y puede ser cualquier entero. La zona es de sólo lectura, así que un número
  * inventado no corrompe nada — pero devuelve 0, no basura. */
 
-/* Siguiente pack de la cadena. cur=0 → el primero. 0 = no hay más. */
-uint32_t bpvm_pack_iter(const bpvm_pack_src_t* src, uint32_t cur) {
-    if (!src) return 0;
+/* Siguiente pack de la cadena. cur=0 → el primero. -1 = no hay más. */
+int32_t bpvm_pack_iter(const bpvm_pack_src_t* src, int32_t cur) {
+    if (!src || cur < 0) return -1;
     bpvm_pack_info_t info;
     uint32_t off = 0;
     if (cur != 0) {
-        if (parse_header(src, cur - 1, &info) != 0) return 0;   /* cursor inválido */
-        off = (cur - 1) + info.size_total;                      /* salto O(1) */
+        if (parse_header(src, (uint32_t) cur - 1, &info) != 0) return -1;  /* cursor inválido */
+        off = ((uint32_t) cur - 1) + info.size_total;                      /* salto O(1) */
     }
-    if (off + 4 > src->size) return 0;
+    if (off + 4 > src->size) return -1;
     uint8_t mg[4];
-    if (!src_read(src, off, mg, 4)) return 0;
-    if (get_u32(mg) != BPVM_PACK_MAGIC) return 0;   /* virgen (0xFF..) o basura = fin */
-    if (parse_header(src, off, &info) != 0) return 0;
-    return off + 1;
+    if (!src_read(src, off, mg, 4)) return -1;
+    if (get_u32(mg) != BPVM_PACK_MAGIC) return -1;   /* virgen (0xFF..) o basura = fin */
+    if (parse_header(src, off, &info) != 0) return -1;
+    if (off + 1 > (uint32_t) INT32_MAX) return -1;   /* región absurda: no cabe en el cursor */
+    return (int32_t) (off + 1);
 }
 
-/* Descriptor del pack en `cur`. 0 = OK, -1 = cursor inválido. */
-int bpvm_pack_iter_info(const bpvm_pack_src_t* src, uint32_t cur,
+/* Descriptor del pack en `cur`. 0 = OK, -1 = cursor inválido (y `out` intacto:
+ * quien pregunte por un cursor que no vale se lleva "" arriba, no basura). */
+int bpvm_pack_iter_info(const bpvm_pack_src_t* src, int32_t cur,
                         bpvm_pack_info_t* out) {
-    if (!src || !out || cur == 0) return -1;
-    return parse_header(src, cur - 1, out) == 0 ? 0 : -1;
+    if (!src || !out || cur <= 0) return -1;
+    return parse_header(src, (uint32_t) cur - 1, out) == 0 ? 0 : -1;
 }
 
 /* Siguiente entrada DENTRO del pack en `pack_cur`. cur=0 → la primera.
- * 0 = no hay más (o cualquiera de los dos cursores es inválido). */
-uint32_t bpvm_pack_iter_entry(const bpvm_pack_src_t* src, uint32_t pack_cur,
-                              uint32_t cur) {
-    if (!src || pack_cur == 0) return 0;
+ * -1 = no hay más (o cualquiera de los dos cursores es inválido). */
+int32_t bpvm_pack_iter_entry(const bpvm_pack_src_t* src, int32_t pack_cur,
+                             int32_t cur) {
+    if (!src || pack_cur <= 0 || cur < 0) return -1;
     bpvm_pack_info_t info;
-    uint32_t pack_off = pack_cur - 1;
-    if (parse_header(src, pack_off, &info) != 0) return 0;
+    uint32_t pack_off = (uint32_t) pack_cur - 1;
+    if (parse_header(src, pack_off, &info) != 0) return -1;
     uint32_t rel = BPVM_PACK_HEADER_SIZE;
     bpvm_pack_entry_t e;
     if (cur != 0) {
-        rel = cur - 1;
+        rel = (uint32_t) cur - 1;
         /* leer la actual es lo que deja `rel` en la siguiente: el tamaño de una
          * entrada está en su propia cabecera, no hay forma de saltarla sin ella. */
-        if (next_entry(src, pack_off, info.size_total, &rel, &e) != 1) return 0;
+        if (next_entry(src, pack_off, info.size_total, &rel, &e) != 1) return -1;
     }
     uint32_t probe = rel;                      /* ¿hay entrada ahí? sin mover `rel` */
-    if (next_entry(src, pack_off, info.size_total, &probe, &e) != 1) return 0;
-    return rel + 1;
+    if (next_entry(src, pack_off, info.size_total, &probe, &e) != 1) return -1;
+    return (int32_t) (rel + 1);
 }
 
 /* La entrada en `cur` (dentro de `pack_cur`). 0 = OK, -1 = cursor inválido. */
-int bpvm_pack_iter_entry_info(const bpvm_pack_src_t* src, uint32_t pack_cur,
-                              uint32_t cur, bpvm_pack_entry_t* out) {
-    if (!src || !out || pack_cur == 0 || cur == 0) return -1;
+int bpvm_pack_iter_entry_info(const bpvm_pack_src_t* src, int32_t pack_cur,
+                              int32_t cur, bpvm_pack_entry_t* out) {
+    if (!src || !out || pack_cur <= 0 || cur <= 0) return -1;
     bpvm_pack_info_t info;
-    uint32_t pack_off = pack_cur - 1;
+    uint32_t pack_off = (uint32_t) pack_cur - 1;
     if (parse_header(src, pack_off, &info) != 0) return -1;
-    uint32_t rel = cur - 1;
+    uint32_t rel = (uint32_t) cur - 1;
     return next_entry(src, pack_off, info.size_total, &rel, out) == 1 ? 0 : -1;
 }
 

@@ -149,8 +149,8 @@ int main(void) {
         bpvm_pack_info_t ref[4];
         int nref = bpvm_pack_scan(fixA, FIX_SIZE, ref, 4, 0, NULL);
         int k = 0;
-        uint32_t c = bpvm_pack_iter(&s, 0);
-        while (c != 0 && k < nref) {
+        int32_t c = bpvm_pack_iter(&s, 0);
+        while (c != -1 && k < nref) {
             bpvm_pack_info_t got;
             CHECK(bpvm_pack_iter_info(&s, c, &got) == 0, "iter_info resuelve el cursor");
             CHECK(got.off == ref[k].off && strcmp(got.nombre, ref[k].nombre) == 0,
@@ -158,12 +158,12 @@ int main(void) {
             k++;
             c = bpvm_pack_iter(&s, c);
         }
-        CHECK(k == nref && c == 0, "recorre TODOS los packs y termina en 0");
+        CHECK(k == nref && c == -1, "recorre TODOS los packs y termina en -1");
 
-        uint32_t p = bpvm_pack_iter(&s, 0);
+        int32_t p = bpvm_pack_iter(&s, 0);
         int j = 0;
-        uint32_t ec = bpvm_pack_iter_entry(&s, p, 0);
-        while (ec != 0 && j < 3) {
+        int32_t ec = bpvm_pack_iter_entry(&s, p, 0);
+        while (ec != -1 && j < 3) {
             bpvm_pack_entry_t got;
             CHECK(bpvm_pack_iter_entry_info(&s, p, ec, &got) == 0, "iter_entry_info resuelve");
             CHECK(strcmp(got.tipo, es[j].tipo) == 0 && strcmp(got.nombre, es[j].nombre) == 0
@@ -172,16 +172,16 @@ int main(void) {
             j++;
             ec = bpvm_pack_iter_entry(&s, p, ec);
         }
-        CHECK(j == 3 && ec == 0, "itera las 3 entradas y termina en 0");
+        CHECK(j == 3 && ec == -1, "itera las 3 entradas y termina en -1");
 
         /* Los cursores vienen de BP, asi que pueden ser cualquier entero. La
          * zona es de solo lectura —no hay nada que corromper— pero tiene que
          * contestar 0, no basura. */
         bpvm_pack_info_t tmp;
-        CHECK(bpvm_pack_iter(&s, 999999) == 0,            "cursor de pack inventado -> 0");
-        CHECK(bpvm_pack_iter(&s, 2) == 0,                 "cursor a mitad de cabecera -> 0");
-        CHECK(bpvm_pack_iter_entry(&s, p, 999999) == 0,   "cursor de entrada inventado -> 0");
-        CHECK(bpvm_pack_iter_entry(&s, 0, 0) == 0,        "sin pack no hay entradas");
+        CHECK(bpvm_pack_iter(&s, 999999) == -1,           "cursor de pack inventado -> -1");
+        CHECK(bpvm_pack_iter(&s, 2) == -1,                "cursor a mitad de cabecera -> -1");
+        CHECK(bpvm_pack_iter_entry(&s, p, 999999) == -1,  "cursor de entrada inventado -> -1");
+        CHECK(bpvm_pack_iter_entry(&s, 0, 0) == -1,       "sin pack no hay entradas");
         CHECK(bpvm_pack_iter_info(&s, 0, &tmp) == -1,     "info del cursor 0 = invalido");
     }
 
