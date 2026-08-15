@@ -1,7 +1,29 @@
 dbg 3
-module Stdlib
-source C:\lenguajes\pm\bpstdlib\Stdlib.bp
+module Packs
+source C:\lenguajes\pm\bpstdlib\Packs.bp
 lines
+1220 40
+1242 41
+1248 42
+1258 43
+1271 44
+1280 46
+1299 52
+1321 53
+1327 54
+1337 55
+1355 56
+1363 57
+1373 58
+1383 59
+1399 60
+1415 62
+1431 65
+1440 67
+1459 74
+1472 75
+1485 77
+1499 78
 vars
 func Object.toString 0
 this -20 8 0 ?
@@ -85,7 +107,21 @@ func SyncList.popBlocking 1015
 this -20 8 0 ?
 func SyncList.__init 1126
 this -20 8 0 ?
-func __strconcat 1322
+func list 1217
+l 8 8 0 ?
+c 28 4 0 integer
+func listIn 1296
+pack -28 8 0 string
+ext -20 8 0 string
+l 8 8 0 ?
+p 28 4 0 integer
+e 32 4 0 integer
+f 36 8 0 string
+func acaba 1456
+f -28 8 0 string
+ext -20 8 0 string
+suf 4 8 0 string
+func __strconcat 1533
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

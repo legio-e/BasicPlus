@@ -1,0 +1,45 @@
+// PacksDemo.bp — #414: un programa que descubre SOLO qué packs hay grabados en
+// la placa y qué lleva cada uno, sin que nadie se lo diga por adelantado.
+//
+// Idea de Eduardo: «así un programa puede buscar los packs y dentro de los packs
+// por sí mismo». Útil, por ejemplo, para que una app cargue las fuentes o los
+// iconos que resulte que estén grabados, en vez de exigir unos concretos.
+//
+// EN EL PC no hay zona de packs —es de la placa— así que la lista sale VACÍA y
+// el programa acaba diciendo 0. No es un error y no hace falta ningún `if`: el
+// mismo binario corre en el PC, en una placa sin grabar y en una con packs, y en
+// cada sitio encuentra lo que haya.
+//
+// Para verlo con contenido en el PC, préstale una zona simulada:
+//     bpgenvm-c --pack=samples/PackFixA.pack PacksDemo.mod
+module PacksDemo
+  import Packs
+
+  function Main()
+    var l: List := Packs.list()
+    print "packs grabados: " + intToString(l.length())
+
+    var i: integer := 0
+    while i < l.length() do
+      var nombre: string := l.get(i)
+      print "- " + nombre
+
+      // Todo lo que lleva dentro (extensión vacía = sin filtro).
+      var f: List := Packs.listIn(nombre, "")
+      var j: integer := 0
+      while j < f.length() do
+        print "    " + f.get(j)
+        j := j + 1
+      endwh
+
+      // Y lo mismo filtrando: sólo los módulos.
+      var m: List := Packs.listIn(nombre, "mod")
+      print "  modulos: " + intToString(m.length())
+
+      i := i + 1
+    endwh
+
+    print "fin"
+  end Main
+
+end PacksDemo

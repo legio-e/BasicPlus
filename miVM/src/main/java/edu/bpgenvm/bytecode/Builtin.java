@@ -468,7 +468,31 @@ public enum Builtin {
      *  handlers de eventos. También AL FINAL: el id es ordinal(). */
     GUI_RUN_ONCE("__guiRunOnce"),                      // () → boolean                          [222]
     // #324 tanda 2b — reflexión mínima: (obj, nombre) → slot de vtable (-1 = no existe).
-    GUI_SLOT_OF("__guiSlotOf");                        // (Object, string) → integer            [223]
+    GUI_SLOT_OF("__guiSlotOf"),                        // (Object, string) → integer            [223]
+
+    /* ── #414 — que un programa BP recorra los packs GRABADOS y su contenido ──
+     *
+     * Modelo de Eduardo: una llamada devuelve la POSICIÓN siguiente y otra el
+     * texto de esa posición — dos funciones en vez de una que devuelva dos
+     * cosas. La lista se arma en BP, así que ningún builtin tiene que construir
+     * un objeto (hoy ninguno lo hace).
+     *
+     * El cursor es un VALOR que lleva el programa: 0 empieza, -1 termina. No hay
+     * estado aquí, y eso importa con hilos preemptivos — dos hilos listando no
+     * se pisan, no hay nada que cerrar y nada sobrevive al RUN.
+     *
+     * ⚠️ El cursor es OPACO: un `print` de él rompería la paridad (es un offset
+     * de región, y miVM no tiene zona). Va dicho en la doc de Packs.bp.
+     *
+     * En miVM no hay zona de packs: los `next` devuelven -1 a la primera y los
+     * `info` cadena vacía, así que `Packs.list()` da una lista vacía y la salida
+     * es byte-idéntica a la de la VM-C sin un solo caso especial.
+     *
+     * AL FINAL del enum, como los tres de arriba: el id es ordinal(). */
+    PACK_NEXT("__packNext"),                           // (cur) → cur siguiente, -1 fin         [224]
+    PACK_INFO("__packInfo"),                           // (cur) → string (nombre del pack)      [225]
+    PACK_ENTRY_NEXT("__packEntryNext"),                // (packCur, cur) → cur, -1 fin          [226]
+    PACK_ENTRY_INFO("__packEntryInfo");                // (packCur, cur) → string (fichero.ext) [227]
 
     public final String bpName;
     public final int id;

@@ -1,0 +1,81 @@
+// Packs.bp — #414: que un programa BP descubra SOLO qué packs hay grabados en
+// la placa y qué lleva cada uno, sin que nadie se lo diga por adelantado.
+//
+// Idea de Eduardo (13-ago): «así un programa puede buscar los packs y dentro de
+// los packs por sí mismo».
+//
+// CÓMO ESTÁ HECHO, por si alguien se pregunta por qué no hay un solo intrínseco
+// que devuelva la lista: hoy NINGÚN intrínseco devuelve una clase — todos
+// devuelven primitivos. Que el nativo construyera un `List` sería estrenar
+// maquinaria en las dos VMs. Así que el nativo da UNA cosa por llamada y la
+// lista se arma aquí, en BP:
+//
+//     __packNext(cur)              avanza; 0 empieza, -1 se acabó
+//     __packInfo(cur)              el nombre del pack en esa posición
+//     __packEntryNext(pack, cur)   lo mismo dentro de un pack
+//     __packEntryInfo(pack, cur)   el nombre del fichero, con extensión
+//
+// El cursor es un VALOR que lleva el programa, no estado guardado en la VM: cada
+// hilo tiene el suyo, no hay nada que cerrar y no queda nada colgando al acabar
+// el RUN. Avanzar es O(1) — no se releen los anteriores.
+//
+// ⚠️ EL CURSOR ES OPACO: no lo imprimas ni lo guardes entre ejecuciones. Es un
+// desplazamiento dentro de la zona de packs, distinto en cada máquina, y en el
+// PC no hay zona. Un `print` de un cursor daría números diferentes en la VM del
+// PC y en la placa.
+//
+// EN EL PC no hay packs grabados —la zona es de la placa— así que `list()`
+// devuelve una lista VACÍA. No es un error ni hace falta un `if`: el mismo
+// programa corre en las dos y en la placa encuentra lo que haya.
+module Packs
+  import Str
+
+  public intrinsic function __packNext(cur: integer): integer
+  public intrinsic function __packInfo(cur: integer): string
+  public intrinsic function __packEntryNext(pack: integer, cur: integer): integer
+  public intrinsic function __packEntryInfo(pack: integer, cur: integer): string
+
+  // Los packs grabados, por orden de la cadena. Lista vacía si no hay ninguno.
+  public function list(): List
+    var l: List := List()
+    var c: integer := __packNext(0)
+    while c != -1 do
+      l.add(__packInfo(c))
+      c := __packNext(c)
+    endwh
+    return l
+  end list
+
+  // Los ficheros que lleva un pack. `ext` filtra por extensión ("bin", "mod");
+  // vacío = todos. El pack se nombra como lo devuelve `list()`.
+  public function listIn(pack: string, ext: string): List
+    var l: List := List()
+    var p: integer := __packNext(0)
+    while p != -1 do
+      if Str.compare(__packInfo(p), pack) == 0 then
+        var e: integer := __packEntryNext(p, 0)
+        while e != -1 do
+          var f: string := __packEntryInfo(p, e)
+          if acaba(f, ext) then
+            l.add(f)
+          endif
+          e := __packEntryNext(p, e)
+        endwh
+      endif
+      p := __packNext(p)
+    endwh
+    return l
+  end listIn
+
+  // ¿`f` acaba en "."+ext? Con ext vacío, todo vale. No hay `endsWith` en Str,
+  // así que se hace con lo que hay: la última aparición del sufijo tiene que
+  // caer justo al final.
+  function acaba(f: string, ext: string): boolean
+    if len(ext) == 0 then
+      return true
+    endif
+    var suf: string := "." + ext
+    return Str.lastIndexOf(f, suf) == len(f) - len(suf)
+  end acaba
+
+end Packs

@@ -226,6 +226,15 @@ public final class Intrinsics {
         register("Gui.__guiRunOnce",      w -> emitBuiltin(w, Builtin.GUI_RUN_ONCE));   // #324
         register("Gui.__guiSlotOf",       w -> emitBuiltin(w, Builtin.GUI_SLOT_OF));    // #324
         register("Gui.__guiDumpTree",     w -> emitBuiltin(w, Builtin.GUI_DUMP_TREE));
+
+        // ---- #414 — Packs: recorrer los packs GRABADOS desde BP ----
+        // Dos funciones por nivel: una avanza (devuelve la posición siguiente,
+        // -1 al final) y otra dice el texto de esa posición. Así ninguna tiene
+        // que devolver dos cosas, y la lista se arma en BP.
+        register("Packs.__packNext",      w -> emitBuiltin(w, Builtin.PACK_NEXT));
+        register("Packs.__packInfo",      w -> emitBuiltin(w, Builtin.PACK_INFO));
+        register("Packs.__packEntryNext", w -> emitBuiltin(w, Builtin.PACK_ENTRY_NEXT));
+        register("Packs.__packEntryInfo", w -> emitBuiltin(w, Builtin.PACK_ENTRY_INFO));
         // H3.4 — eventos. __guiDispatch NO va aquí: es función BP normal (cuerpo
         // self.onClick()); la VM la llama por nombre al pulsar.
         register("Gui.__guiBindClick",    w -> emitBuiltin(w, Builtin.GUI_BIND_CLICK));

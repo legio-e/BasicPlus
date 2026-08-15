@@ -25,6 +25,7 @@
 #include "bpvm_pico.h"
 #include "bpvm_neopixel.h"
 #include "bpvm_rtc.h"
+#include "bpvm_pack.h"   /* #414 — recorrer los packs grabados desde BP */
 #include "bpvm_adc.h"
 #include "bpvm_wdt.h"
 #include "bpvm_uart.h"
@@ -343,7 +344,20 @@ enum {
      * En headless devuelve 1 si esta pasada drenó algo: así el lazo da UNA VUELTA
      * MÁS y el scheduler tiene dónde correr los handlers antes de salir. */
     BUILTIN_GUI_RUN_ONCE         = 222,
-    BUILTIN_GUI_SLOT_OF          = 223
+    BUILTIN_GUI_SLOT_OF          = 223,
+
+    /* #414 — recorrer los packs GRABADOS y su contenido desde BP. Dos por
+     * nivel: uno AVANZA (devuelve la posición siguiente, -1 al final) y otro
+     * dice el TEXTO de esa posición. Así ninguno devuelve dos cosas y la lista
+     * se arma en BP — ningún builtin construye objetos.
+     *
+     * ⚠️ Estos números se escriben A MANO aquí y tienen que ser el ordinal() del
+     * enum Builtin de miVM. Si divergen, la VM-C ejecuta OTRO builtin y el
+     * síntoma no apunta a esto. */
+    BUILTIN_PACK_NEXT            = 224,
+    BUILTIN_PACK_INFO            = 225,
+    BUILTIN_PACK_ENTRY_NEXT      = 226,
+    BUILTIN_PACK_ENTRY_INFO      = 227
 };
 
 /* Helpers: pop / push del thread actual. */
@@ -1029,6 +1043,63 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * `buf` sin liberar, y quedarse sin memoria no es excusa para fugarla. */
         bpvm_free(buf);
         if (ref == 0) return builtin_throw(vm, tc, "No space in heap");   /* #355: OOM ATRAPABLE, antes se empujaba una ref NULA en silencio */
+        push_ref(vm, tc, ref);
+        return BPVM_OK;
+    }
+    /* ── #414 — los packs GRABADOS, recorridos desde BP ───────────────────────
+     *
+     * Sin zona montada no es un error: es «ya estás al final». Eso hace que un
+     * mismo programa valga en una placa con packs, en una sin ellos y en miVM
+     * (que no tiene zona) sin un solo `if` de plataforma — el bucle no entra y
+     * la lista sale vacía. */
+    case BUILTIN_PACK_NEXT: {
+        int32_t cur = pop_i32(vm, tc);
+        uint32_t zsz = 0;
+        const uint8_t* zona = bpvm_pack_mounted(&zsz);
+        if (zona == NULL) { push_i32(vm, tc, -1); return BPVM_OK; }
+        bpvm_pack_src_t s;
+        bpvm_pack_src_mem(&s, zona, zsz);
+        push_i32(vm, tc, bpvm_pack_iter(&s, cur));
+        return BPVM_OK;
+    }
+    case BUILTIN_PACK_ENTRY_NEXT: {
+        /* OJO al orden: el último argumento es el que está ARRIBA en la pila. */
+        int32_t cur  = pop_i32(vm, tc);
+        int32_t pcur = pop_i32(vm, tc);
+        uint32_t zsz = 0;
+        const uint8_t* zona = bpvm_pack_mounted(&zsz);
+        if (zona == NULL) { push_i32(vm, tc, -1); return BPVM_OK; }
+        bpvm_pack_src_t s;
+        bpvm_pack_src_mem(&s, zona, zsz);
+        push_i32(vm, tc, bpvm_pack_iter_entry(&s, pcur, cur));
+        return BPVM_OK;
+    }
+    case BUILTIN_PACK_INFO:
+    case BUILTIN_PACK_ENTRY_INFO: {
+        /* Un cursor que no vale devuelve "" y no lanza: el que itera bien nunca
+         * llega aquí con basura, y el que la trae ya se enterará por la cadena
+         * vacía. Lanzar obligaría a envolver en try/catch un bucle normal. */
+        char texto[BPVM_PACK_NAME_LEN + BPVM_PACK_TYPE_LEN + 2];
+        texto[0] = '\0';
+        int32_t cur  = pop_i32(vm, tc);
+        int32_t pcur = (id == BUILTIN_PACK_ENTRY_INFO) ? pop_i32(vm, tc) : 0;
+        uint32_t zsz = 0;
+        const uint8_t* zona = bpvm_pack_mounted(&zsz);
+        if (zona != NULL) {
+            bpvm_pack_src_t s;
+            bpvm_pack_src_mem(&s, zona, zsz);
+            if (id == BUILTIN_PACK_INFO) {
+                bpvm_pack_info_t info;
+                if (bpvm_pack_iter_info(&s, cur, &info) == 0)
+                    snprintf(texto, sizeof texto, "%s", info.nombre);
+            } else {
+                bpvm_pack_entry_t e;
+                if (bpvm_pack_iter_entry_info(&s, pcur, cur, &e) == 0)
+                    snprintf(texto, sizeof texto, "%s.%s", e.nombre, e.tipo);
+            }
+        }
+        uint32_t ref = bpvm_heap_alloc_string(vm, texto, strlen(texto));
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }

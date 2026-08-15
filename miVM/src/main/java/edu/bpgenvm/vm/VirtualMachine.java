@@ -3943,6 +3943,26 @@ public class VirtualMachine {
                 break;
             }
             case GUI_DUMP_TREE: { pushTcRef(tc, allocVmString(gui.dumpTree())); break; }
+
+            /* ── #414 — recorrer los packs GRABADOS desde BP ──────────────────
+             *
+             * miVM NO tiene zona de packs: es la VM de referencia del PC y los
+             * packs grabados son de la placa. Así que la respuesta honesta a
+             * «dame el siguiente» es -1, «ya estás al final».
+             *
+             * Y eso da la paridad GRATIS, que era la duda abierta del diseño:
+             * el bucle de `Packs.list()` no entra, devuelve una lista vacía, y
+             * la salida es byte-idéntica a la de la VM-C sin un solo caso
+             * especial ni un `if` de plataforma en el programa BP.
+             *
+             * Los `info` no debería llamarlos nadie —para llegar a ellos hay que
+             * tener un cursor, y aquí no hay ninguno— pero si alguien lo hace,
+             * cadena vacía: lo mismo que contesta la VM-C ante un cursor que no
+             * vale. */
+            case PACK_NEXT:       { popTc(tc);              pushTc(tc, -1); break; }
+            case PACK_ENTRY_NEXT: { popTc(tc); popTc(tc);   pushTc(tc, -1); break; }
+            case PACK_INFO:       { popTc(tc);              pushTcRef(tc, allocVmString("")); break; }
+            case PACK_ENTRY_INFO: { popTc(tc); popTc(tc);   pushTcRef(tc, allocVmString("")); break; }
             case GUI_BIND_CLICK: {
                 int self = popTc(tc); int hnd = popTc(tc);
                 gui.bindClick(hnd, self); pushTc(tc, 0); break;

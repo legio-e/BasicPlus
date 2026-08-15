@@ -22,6 +22,7 @@ module Stdlib
   import Json             // parseo y escritura JSON
   import Log              // logger
   import Math             // funciones matemáticas
+  import Packs            // #414 — qué packs hay grabados y qué llevan dentro
   import Stats            // estadística
   import Str              // cadenas
   import Timer            // temporizadores
