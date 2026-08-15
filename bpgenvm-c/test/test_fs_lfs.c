@@ -19,6 +19,7 @@
  * make test-fslfs. Verde = "fachada bpvm_fs sobre littlefs OK (N asserts)".
  */
 #include "bpvm_fs.h"
+#include "crc32.h"   /* #398 — el oraculo del CRC por trozos */
 #include <stdio.h>
 #include <string.h>
 
@@ -91,6 +92,44 @@ int main(void) {
     OK(bpvm_fs_remove("/lib/a/b/f.txt") == 0, "remove fichero");
     OK(bpvm_fs_rmdir("/lib/a/b") == 0, "rmdir ya vacío");
     OK(bpvm_fs_isdir("/lib/a/b") == 0, "dir borrado");
+
+    /* -- #398: EL CRC DEL BACKEND == EL BUCLE DE read_at, SOBRE LITTLEFS --
+     *
+     * Es el motor del FS interno de las tres placas, o sea el que de verdad va
+     * a correr el camino nuevo. Se comprueba aquí y no sólo en `test_crc`
+     * (que va sobre el backend de host) porque lo que se sustituye es la
+     * implementación DE CADA BACKEND: que el host coincida no dice nada de
+     * littlefs.
+     *
+     * El camino nuevo abre el fichero una vez; el viejo hacía un
+     * `opencfg`+`seek`+`read`+`close` por cada 256 B — 512 aperturas para
+     * 128 KB, 1589 ms medidos en la P4. Lo que NO puede cambiar es el número:
+     * el IDE lo compara con `java.util.zip.CRC32` para saltarse subidas. */
+    {
+        const uint32_t TAMS[] = { 0, 1, 255, 256, 257, 512, 1000, 5001 };
+        for (unsigned t = 0; t < sizeof(TAMS)/sizeof(TAMS[0]); t++) {
+            uint32_t n = TAMS[t];
+            static uint8_t datos[5001];
+            for (uint32_t i = 0; i < n; i++) datos[i] = (uint8_t) (i * 31 + 7);
+            OK(bpvm_fs_write("/crc.bin", datos, n, 0) == 0, "crc: escribir el caso");
+
+            uint32_t via_backend = 0xDEADu;
+            OK(bpvm_fs_crc32("/crc.bin", &via_backend) == 0, "crc: el backend contesta");
+
+            uint32_t st = BPVM_CRC32_INIT, off = 0;
+            uint8_t  tr[256];
+            int malo = 0;
+            while (off < n) {
+                long got = bpvm_fs_read_at("/crc.bin", off, tr, sizeof tr);
+                if (got <= 0) { malo = 1; break; }
+                st = bpvm_crc32_update(st, tr, (size_t) got);
+                off += (uint32_t) got;
+            }
+            OK(!malo && bpvm_crc32_final(st) == via_backend,
+               "crc: backend == bucle de read_at (littlefs)");
+        }
+        OK(bpvm_fs_remove("/crc.bin") == 0, "crc: limpiar");
+    }
 
     /* -- PERSISTENCIA entre attach + mount-primero-no-reformatear -- */
     OK(bpvm_fs_write("/marca.txt", (const uint8_t*) "sobrevivo", 9, 0) == 0, "marca");

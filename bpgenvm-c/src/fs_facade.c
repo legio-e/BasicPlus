@@ -358,6 +358,16 @@ long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap)
  * es el mismo tamaño que ya usa littlefs para sus buffers de lectura, así que no
  * introduce un número nuevo que cuadrar. */
 int bpvm_fs_crc32(const char* path, uint32_t* crc_out) {
+    /* #398 — si el backend sabe hacerlo, que lo haga ÉL: abre el fichero una
+     * vez y lo lee en secuencia. El bucle de abajo, que va por `read_at`, paga
+     * una apertura + un seek desde el principio POR CADA 256 B — medido en la
+     * P4: el 99 % del tiempo del listado del árbol, 5432 aperturas para 1,3 MB.
+     * Se queda como camino de respaldo para backends sin `crc32`, y como
+     * ORÁCULO del nuevo en `test/test_fscrc.c`: los dos tienen que dar el mismo
+     * número, que además es el de `java.util.zip.CRC32`. */
+    const bpvm_fs_backend_t* be_crc = route(path);
+    if (be_crc && be_crc->crc32) return be_crc->crc32(path, crc_out);
+
     uint32_t size = 0;
     if (bpvm_fs_stat(path, &size) != 0) return -1;
     uint32_t st = BPVM_CRC32_INIT;

@@ -7,6 +7,7 @@
  * VM-Java cuando no hay workdir configurado).
  */
 #include "bpvm_fs.h"
+#include "crc32.h"      /* #398 — CRC del fichero entero con UNA apertura */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>      /* V5/H2: malloc del truncate por copia */
@@ -28,6 +29,27 @@ static long host_read(const char* path, uint8_t* dst, uint32_t cap) {
     size_t n = fread(dst, 1, (size_t) cap, f);
     fclose(f);
     return (long) n;
+}
+
+/* #398 — el CRC del fichero entero con UNA apertura. En el host el camino viejo
+ * (un `fopen`+`fseek`+`fread`+`fclose` por cada 256 B) no se notaba —el SO
+ * cachea— y por eso el problema sólo apareció en placa: 5432 aperturas para
+ * 1,3 MB de tarjeta. Se implementa aquí IGUAL que en los otros dos backends
+ * para que el host siga siendo un oráculo válido: si el host tomara un camino
+ * y la placa otro, un CRC distinto entre los dos no lo cazaría nadie. */
+static int host_crc32(const char* path, uint32_t* crc_out) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return -1;
+    uint8_t  buf[512];
+    uint32_t st = BPVM_CRC32_INIT;
+    size_t   n;
+    while ((n = fread(buf, 1, sizeof buf, f)) > 0)
+        st = bpvm_crc32_update(st, buf, n);
+    int err = ferror(f);
+    fclose(f);
+    if (err) return -1;
+    if (crc_out) *crc_out = bpvm_crc32_final(st);
+    return 0;
 }
 
 /* #305 — lectura desde un offset (el simulador la usa igual que el micro). */
@@ -228,6 +250,7 @@ static const bpvm_fs_backend_t s_host_fs = {
     .read_at  = host_read_at, /* #305 — lectura por trozos */
     .write_at = host_write_at, /* V5/H2 — paridad con la placa */
     .truncate = host_truncate,
+    .crc32    = host_crc32,   /* #398 — mismo camino que la placa: oraculo valido */
 };
 
 void bpvm_fs_register_host(void) {

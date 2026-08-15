@@ -81,6 +81,34 @@ typedef struct {
      */
     long (*write_at)(const char* path, uint32_t off, const uint8_t* data, uint32_t len);
     int  (*truncate)(const char* path, uint32_t size);
+    /*
+     * V5 (#398) — CRC32 DEL FICHERO ENTERO, hecho por el backend.
+     *
+     * Existe por una medida, no por elegancia. La fachada sabe calcular el CRC
+     * con `read_at` en trozos de 256 B, y eso parecía razonable hasta que se
+     * cronometró el refresco del árbol en la P4 (15-ago):
+     *
+     *     ls: 27 ent en 6953 ms | crc 6903 ms de 1486 KB | ... sd:8/5314ms
+     *
+     * El 99 % del listado era el CRC. Y el coste NO era leer: `read_at` recibe
+     * el PATH, así que cada trozo de 256 B abre el fichero, hace `lseek` desde
+     * el principio, lee y cierra. 1358 KB de tarjeta = 5432 aperturas, con un
+     * seek que crece con el offset — cuadrático con el tamaño del fichero.
+     * Medido: 80 KB/s en el flash interno, 255 KB/s en la SD.
+     *
+     * Con el fichero abierto UNA vez y leído en secuencia, eso desaparece. El
+     * backend es el único que puede hacerlo: la fachada no tiene descriptores.
+     *
+     * ⚠️ EL VALOR NO PUEDE CAMBIAR: tiene que ser el mismo CRC-32 que
+     * `java.util.zip.CRC32`, porque el IDE compara el suyo con éste para
+     * saltarse subidas. Un CRC "casi igual" haría que dejara de subir ficheros
+     * que sí cambiaron, en silencio. Por eso el camino nuevo se verifica contra
+     * el viejo en `test/test_fscrc.c`, no sólo contra sí mismo.
+     *
+     * Devuelve 0 y escribe *crc, o -1. Campo AL FINAL: el backend que no lo
+     * implemente lo deja a NULL y la fachada usa el bucle de `read_at`.
+     */
+    int  (*crc32)(const char* path, uint32_t* crc);
 } bpvm_fs_backend_t;
 
 /* Registra el backend RAÍZ (una vez al boot). Limpia cualquier montaje

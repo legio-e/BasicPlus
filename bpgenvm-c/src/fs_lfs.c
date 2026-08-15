@@ -28,6 +28,7 @@
 #include "bpvm_fs.h"
 #include "bpvm_fs_lfs.h"
 #include "bpvm_platform.h"
+#include "crc32.h"      /* #398 — CRC del fichero entero con UNA apertura */
 #include <string.h>
 
 static lfs_t s_lfs;
@@ -125,6 +126,34 @@ static long be_read_at_impl(const char* path, uint32_t off, uint8_t* dst, uint32
     }
     lfs_file_close(&s_lfs, &f);
     return r;
+}
+
+/* #398 — el CRC del fichero ENTERO, con UNA apertura.
+ *
+ * El camino genérico de la fachada (read_at en trozos de 256 B) hacía aquí un
+ * `opencfg` + `seek` + `read` + `close` por cada trozo: 512 aperturas para
+ * 128 KB, medidas en la P4 en 1589 ms — el 98 % del refresco del árbol. Con el
+ * fichero abierto, littlefs lee en secuencia y el seek desaparece.
+ *
+ * El buffer de 512 B va en la pila a propósito: con el fichero ya abierto lo
+ * que se ahorraba agrandándolo es marginal, y esto lo llama también el firmware
+ * más apretado. */
+static int be_crc32_impl(const char* path, uint32_t* crc_out) {
+    lfs_file_t f;
+    if (lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a) < 0) return -1;
+    uint8_t  buf[512];
+    uint32_t st = BPVM_CRC32_INIT;
+    int      err = 0;
+    for (;;) {
+        lfs_ssize_t n = lfs_file_read(&s_lfs, &f, buf, sizeof buf);
+        if (n < 0) { err = 1; break; }
+        if (n == 0) break;
+        st = bpvm_crc32_update(st, buf, (size_t) n);
+    }
+    lfs_file_close(&s_lfs, &f);
+    if (err) return -1;
+    if (crc_out) *crc_out = bpvm_crc32_final(st);
+    return 0;
 }
 
 static int be_write_impl(const char* path, const uint8_t* data, uint32_t len, int append) {
@@ -235,6 +264,13 @@ static long be_read(const char* path, uint8_t* dst, uint32_t cap) {
 static long be_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
     fs_lock(); long r = be_read_at_impl(path, off, dst, cap); fs_unlock(); return r;
 }
+/* #398 — y aquí el lock se toma UNA vez, no una por trozo. El camino viejo
+ * (crc por `read_at` de 256 B) entraba y salía de la sección crítica 512 veces
+ * para un fichero de 128 KB: además del coste, dejaba huecos por los que otro
+ * hilo podía escribir el fichero A MITAD de su propio CRC. */
+static int be_crc32(const char* path, uint32_t* crc_out) {
+    fs_lock(); int r = be_crc32_impl(path, crc_out); fs_unlock(); return r;
+}
 
 /* V5/H2 — las gemelas de escritura. `LFS_O_CREAT` sin `LFS_O_TRUNC`: abre lo que
  * haya o lo crea, y a partir de ahí sólo pisa el trozo que le toca.
@@ -318,6 +354,7 @@ static const bpvm_fs_backend_t s_lfs_backend = {
     .read_at  = be_read_at, /* #305 — lectura por trozos */
     .write_at = be_write_at, /* V5/H2 — escritura posicional (base de datos) */
     .truncate = be_truncate,
+    .crc32    = be_crc32,   /* #398 — sin esto, 512 aperturas por 128 KB */
 };
 
 int bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed) {

@@ -30,9 +30,21 @@ int main(void) {
     ok(bpvm_crc32_final(st) == 0x414FA339u, "encadenado 1+7+resto == de una tacada");
 
     /* Y sobre un FICHERO real, por la fachada: tamaños que cruzan el buffer de
-     * 256 B de bpvm_fs_crc32 y que no son múltiplos de él. */
+     * 256 B de bpvm_fs_crc32 y que no son múltiplos de él.
+     *
+     * #398 — AHORA SON TRES CAMINOS Y LOS TRES TIENEN QUE COINCIDIR:
+     *   1. el CRC del buffer entero en memoria (la verdad de referencia);
+     *   2. el CAMINO NUEVO: `crc32` del backend, que abre el fichero UNA vez;
+     *   3. el CAMINO VIEJO: el bucle de `read_at` en trozos de 256 B, que es lo
+     *      que hacía la fachada y aquí se reproduce como ORÁCULO.
+     *
+     * El 3 no es redundante: el camino nuevo se añadió por RENDIMIENTO (en la
+     * P4, el CRC era el 99 % del refresco del árbol: 5432 aperturas de fichero
+     * para 1,3 MB de tarjeta), y una optimización que cambie el VALOR haría que
+     * el IDE dejara de subir ficheros que sí cambiaron, en silencio. Por eso el
+     * que sustituye se compara contra el sustituido, y no sólo consigo mismo. */
     bpvm_fs_register_host();
-    const uint32_t TAMS[] = { 0, 1, 255, 256, 257, 1000, 4096, 5001 };
+    const uint32_t TAMS[] = { 0, 1, 255, 256, 257, 511, 512, 513, 1000, 4096, 5001 };
     for (unsigned t = 0; t < sizeof(TAMS)/sizeof(TAMS[0]); t++) {
         uint32_t n = TAMS[t];
         uint8_t* buf = (uint8_t*) malloc(n ? n : 1);
@@ -40,8 +52,21 @@ int main(void) {
         bpvm_fs_write("t_crc.bin", buf, n, 0);
         uint32_t esperado = bpvm_crc32(buf, n), obtenido = 0xDEAD;
         int rc = bpvm_fs_crc32("t_crc.bin", &obtenido);
-        char msg[80]; snprintf(msg, sizeof msg, "fichero de %u B: por trozos == entero", n);
+        char msg[96]; snprintf(msg, sizeof msg, "fichero de %u B: por trozos == entero", n);
         ok(rc == 0 && obtenido == esperado, msg);
+
+        /* El oráculo: el bucle de 256 B por `read_at`, tal cual era. */
+        uint32_t st2 = BPVM_CRC32_INIT, off = 0;
+        uint8_t  t256[256];
+        int malo = 0;
+        while (off < n) {
+            long got = bpvm_fs_read_at("t_crc.bin", off, t256, sizeof t256);
+            if (got <= 0) { malo = 1; break; }
+            st2 = bpvm_crc32_update(st2, t256, (size_t) got);
+            off += (uint32_t) got;
+        }
+        snprintf(msg, sizeof msg, "fichero de %u B: backend == bucle de read_at (#398)", n);
+        ok(!malo && bpvm_crc32_final(st2) == obtenido, msg);
         free(buf);
     }
     remove("t_crc.bin");

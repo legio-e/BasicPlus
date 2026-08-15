@@ -52,6 +52,7 @@
 #include "bpvm_blk.h"
 #include "bpvm_rtc.h"
 #include "bpvm_platform.h"
+#include "crc32.h"     /* #398 — CRC del fichero entero con UNA apertura */
 #include "ff.h"
 #include "diskio.h"
 
@@ -216,6 +217,42 @@ static long fat_read(const char* path, uint8_t* dst, uint32_t cap) {
     if (r == FR_OK) { r = f_read(&f, dst, cap, &leidos); f_close(&f); }
     destrabar();
     return (r == FR_OK) ? (long) leidos : -1;
+}
+
+/* #398 — el CRC del fichero ENTERO, con UNA apertura. AQUÍ ESTABA EL AGUJERO.
+ *
+ * El camino genérico de la fachada calcula el CRC llamando a `read_at` por
+ * trozos de 256 B, y `fat_read_at` (justo debajo) hace `f_open` + `f_lseek` +
+ * `f_read` + `f_close` en CADA llamada. Sobre la tarjeta del P4 eso se midió el
+ * 15-ago: 1358 KB de listado = **5432 aperturas**, 5314 ms, el 76 % de un
+ * refresco de árbol de casi siete segundos. Y no es sólo el número de
+ * aperturas: `f_lseek` recorre la cadena de clústeres DESDE EL PRINCIPIO, así
+ * que el coste crece con el offset — cuadrático con el tamaño del fichero.
+ *
+ * Con el fichero abierto una vez y leído en secuencia, FatFs mantiene el
+ * puntero y no hay seek. El buffer de 512 B es medio sector: leer de sector en
+ * sector evita que FatFs parta cada lectura en dos. */
+static int fat_crc32(const char* path, uint32_t* crc_out) {
+    const char* p = sin_prefijo(path);
+    if (!p || !s_montado) return -1;
+    FIL f;
+    uint8_t  buf[512];
+    uint32_t st = BPVM_CRC32_INIT;
+    trabar();
+    FRESULT r = f_open(&f, p, FA_READ);
+    if (r == FR_OK) {
+        for (;;) {
+            UINT leidos = 0;
+            r = f_read(&f, buf, sizeof buf, &leidos);
+            if (r != FR_OK || leidos == 0) break;
+            st = bpvm_crc32_update(st, buf, (size_t) leidos);
+        }
+        f_close(&f);
+    }
+    destrabar();
+    if (r != FR_OK) return -1;
+    if (crc_out) *crc_out = bpvm_crc32_final(st);
+    return 0;
 }
 
 static long fat_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
@@ -411,6 +448,7 @@ static const bpvm_fs_backend_t s_backend = {
     .read_at  = fat_read_at,
     .write_at = fat_write_at,      /* V5/H2: sin esto no hay base de datos */
     .truncate = fat_truncate,
+    .crc32    = fat_crc32,   /* #398 — sin esto, 5432 aperturas por 1,3 MB */
 };
 
 /* ─────────────────────────────────────────────────────────────────────────
