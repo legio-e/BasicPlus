@@ -1,0 +1,173 @@
+// BusTest.bp — la prueba que distingue «funciona» de «PARECE que funciona».
+//
+// Cola de H6, y sigue pendiente: *«monta y se ven los ficheros» NO vale*. Un bus
+// marginal no falla en el `mount`; falla a ratos, a reloj alto o con la placa
+// caliente. Y debajo de SQLite eso no da error: CORROMPE LA BASE EN SILENCIO.
+// Con pull-ups de 51 K —el punto flojo conocido del P4— esto no es teórico.
+//
+// La prueba es barata: escribir MB de patrón CONOCIDO, releerlos y comparar byte
+// a byte. Una sola diferencia = mirar el hierro antes de seguir construyendo.
+//
+// POR QUÉ ESTÁ ESCRITO ASÍ:
+//
+//   · Muchos ficheros medianos en vez de uno grande. Desde BP no hay lectura
+//     posicional (`IO` no expone read_at), sólo `readFile` entero, y un fichero
+//     de 2 MB no cabe en el heap de la Metro. Con trozos de 64 KB entra en las
+//     dos placas.
+//   · Cada fichero lleva SU NÚMERO dentro del patrón. Si el bus cruza sectores
+//     entre ficheros, el contenido seguiría siendo «un patrón válido» — pero de
+//     otro fichero. Sin el número, ese fallo pasaría por bueno.
+//   · Va DICIENDO POR DÓNDE VA (Eduardo, 15-ago: «si no dice nada no se sabe si
+//     está funcionando o se ha colgado»). Y de paso, si se cuelga, la última
+//     línea dice exactamente en qué fichero.
+//   · La comparación rápida es `==`, que la hace la VM. El bucle que busca el
+//     PRIMER byte distinto sólo se paga cuando ya hay un fallo que investigar.
+//
+// HACE FALTA SITIO: 2 MB en el destino. En la SD sobra y en el FS interno de la
+// placa también (7,3 MB), pero la imagen de pruebas del host es de 1 MB — allí
+// hay que bajar `FICHEROS` o se para a media escritura con «error de escritura»,
+// que es verdad pero despista.
+//
+// EL RELOJ no lo fija este programa: sale del ENV del driver. El log de arranque
+// de la placa ya lo dice («sd: SDIO slot 0, 4 bit(s) ... | N kHz»), así que la
+// medida queda junto a su configuración sin que haya que imprimirla aquí.
+//
+// Se limpia al terminar.
+module BusTest
+  import IO
+
+  // Dónde y cuánto. `BASE` vacío = el FS interno; "/sd/" = la tarjeta, que es
+  // para lo que existe esta prueba.
+  const BASE:     string  := "/sd/"
+  const FICHEROS: integer := 128     // 128 x 16 KB = 2 MB
+  const BLOQUES:  integer := 16      // bloques de 1 KB por fichero
+  const PASO:     integer := 8       // cada cuantos ficheros se informa
+
+  // ⚠️ EL TAMAÑO DE FICHERO LO MANDA EL HEAP, no el gusto. Se probó primero con
+  // 64 KB y saltó "No space in heap" en el host: construir el contenido cuesta
+  // el DOBLE de su tamaño (el StringBuilder y luego su `toString`), y al
+  // comparar hay dos copias vivas a la vez — el esperado y el leído. Con 16 KB
+  // el pico es de ~64 KB y entra también en la Metro. Si se sube, hay que
+  // subirlo con `--mem=` y comprobarlo en la placa PEQUEÑA, no en el PC.
+
+  var fallos: integer
+
+  // Un bloque de 1 KB con el número de fichero dentro. El relleno son
+  // caracteres imprimibles que CAMBIAN a lo largo del bloque: si el bus repite
+  // o desplaza un trozo, el contenido deja de cuadrar.
+  function bloque(nf: integer, nb: integer): string
+    var sb: StringBuilder := StringBuilder()
+    sb.appendStr("[f")
+    sb.appendInt(nf)
+    sb.appendStr("b")
+    sb.appendInt(nb)
+    sb.appendStr("]")
+    var i: integer := sb.length()
+    while i < 1024 do
+      sb.appendChar(33 + ((i + nf) mod 90))
+      i := i + 1
+    endwh
+    return sb.toString()
+  end bloque
+
+  function contenido(nf: integer): string
+    var sb: StringBuilder := StringBuilder()
+    var b: integer := 0
+    while b < BLOQUES do
+      sb.appendStr(bloque(nf, b))
+      b := b + 1
+    endwh
+    return sb.toString()
+  end contenido
+
+  // Dónde empieza a diferir. Sólo se llama si ya sabemos que difieren, así que
+  // su coste no lo paga el camino bueno.
+  function primeraDiferencia(a: string, b: string): integer
+    var n: integer := len(a)
+    if len(b) < n then
+      n := len(b)
+    endif
+    var i: integer := 0
+    while i < n do
+      if charCodeAt(a, i) != charCodeAt(b, i) then
+        return i
+      endif
+      i := i + 1
+    endwh
+    return n
+  end primeraDiferencia
+
+  function Main()
+    fallos := 0
+    var dir: string := BASE + "bustest"
+    var kb: integer := FICHEROS * BLOQUES
+
+    print "=== Prueba del bus: patron conocido, ida y vuelta ==="
+    print "  destino  : " + dir
+    print "  ficheros : " + intToString(FICHEROS) + " x " + intToString(BLOQUES) + " KB"
+    print "  total    : " + intToString(kb) + " KB"
+    print ""
+
+    if IO.isDirectory(dir) == false then
+      IO.mkdir(dir)
+    endif
+
+    print "-- escribiendo --"
+    var i: integer := 0
+    while i < FICHEROS do
+      var ruta: string := dir + "/f" + intToString(i) + ".bin"
+      if fileExists(ruta) then
+        IO.removeFile(ruta)
+      endif
+      writeFile(ruta, contenido(i))
+      if ((i + 1) mod PASO) == 0 then
+        print "  [" + intToString(i + 1) + "/" + intToString(FICHEROS) + "] " +
+              intToString((i + 1) * BLOQUES) + " KB escritos"
+      endif
+      i := i + 1
+    endwh
+
+    print ""
+    print "-- releyendo y comparando --"
+    i := 0
+    while i < FICHEROS do
+      var ruta: string := dir + "/f" + intToString(i) + ".bin"
+      var esperado: string := contenido(i)
+      var leido: string := readFile(ruta)
+      if leido == esperado then
+        if ((i + 1) mod PASO) == 0 then
+          print "  [" + intToString(i + 1) + "/" + intToString(FICHEROS) + "] " +
+                intToString((i + 1) * BLOQUES) + " KB verificados"
+        endif
+      else
+        fallos := fallos + 1
+        print "  [" + intToString(i + 1) + "/" + intToString(FICHEROS) + "] DIFIERE" +
+              " — esperados " + intToString(len(esperado)) + " B, leidos " +
+              intToString(len(leido)) + " B, primer byte distinto en " +
+              intToString(primeraDiferencia(esperado, leido))
+      endif
+      i := i + 1
+    endwh
+
+    print ""
+    print "-- limpiando --"
+    i := 0
+    while i < FICHEROS do
+      var ruta: string := dir + "/f" + intToString(i) + ".bin"
+      if fileExists(ruta) then
+        IO.removeFile(ruta)
+      endif
+      i := i + 1
+    endwh
+    IO.rmdir(dir)
+
+    print ""
+    if fallos == 0 then
+      print "=== BUS SANO: " + intToString(kb) + " KB ida y vuelta, 0 diferencias ==="
+    else
+      print "=== BUS SOSPECHOSO: " + intToString(fallos) + " ficheros de " +
+            intToString(FICHEROS) + " no cuadran — MIRAR EL HIERRO ==="
+    endif
+  end Main
+
+end BusTest
