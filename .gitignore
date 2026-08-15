@@ -181,3 +181,6 @@ dist/diag/
 # `Stdlib.pack` sigue trackeado porque ya lo estaba; esta regla sólo afecta a
 # los nuevos. Si algún día se saca también, es un `git rm --cached`.
 packs/*.pack
+
+# V5/#411 - el build del pack de SQLite (los ingredientes SI van: nativo/)
+/bpstdlib/sqlite/out/

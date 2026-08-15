@@ -1,0 +1,29 @@
+{
+  "_comentario": [
+    "Proyecto del PACK de SQLite. Todo lo suyo vive en esta carpeta (decision de",
+    "Eduardo, 14-ago): fuentes, el nativo de cada familia y el build.",
+    "",
+    "   java -jar lexer-java/target/basicplus-frontend.jar \\",
+    "        --project bpstdlib/sqlite/SQLite.bpbuild --backend=mivm",
+    "",
+    "ANTES de construir hay que copiar los .npk a outDir: el pack recoge del",
+    "outDir los tipos mod/mdn/npk (PackStep.OUTDIR_TYPES), y el compilador solo",
+    "genera los dos primeros. El nativo es un INGREDIENTE, no una salida.",
+    "",
+    "   copy nativo\\sqlite.npk.* out\\",
+    "",
+    "Los .bp NO estan en sourceDir a proposito: se nombran uno a uno en `sources`",
+    "para que quede escrito que este pack son ESAS dos librerias y no lo que",
+    "haya en la carpeta."
+  ],
+  "sourceDir":    "..",
+  "sources":      ["./SQLite.bp", "./Orm.bp"],
+  "outDir":       "out",
+  "dependencies": [],
+  "out":          "pack",
+  "pack":         { "name":     "SQLite",
+                    "version":  "3.53.4",
+                    "provides": "SQLI",
+                    "notas":    "SQLite 3.53.4 — motor ARM + RISC-V, libreria BP y ORM" },
+  "aot":          { "enabled": true, "targets": ["arm", "riscv"] }
+}
