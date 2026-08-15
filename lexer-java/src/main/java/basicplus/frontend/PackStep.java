@@ -75,9 +75,22 @@ public final class PackStep {
         public final Set<String> packsRequeridos;
         /** ¿El módulo raíz tiene `main`? Si no, es una LIBRERÍA. */
         public final boolean ejecutable;
+        /** V5/H11 (#365) — el NOMBRE DE LA ENTRADA del módulo de arranque dentro
+         *  del pack: su nombre canónico, cualificado si declara `library`
+         *  (`com.example.Demo`). Vacío = no se sabe, y entonces se usa
+         *  `proj.main`, que es lo de siempre y sigue valiendo sin `library`.
+         *
+         *  <p>Es un dato del COMPILADOR, no del proyecto: `proj.main` nombra el
+         *  fichero fuente (`Demo.bp`) y no hay forma de escribir ahí el nombre
+         *  cualificado — ése era exactamente el callejón sin salida de #365. */
+        public final String mainEntry;
 
         public Cierre(Map<String, Path> mods, Set<String> packs, boolean ejec) {
+            this(mods, packs, ejec, "");
+        }
+        public Cierre(Map<String, Path> mods, Set<String> packs, boolean ejec, String mainEntry) {
             this.modsExternos = mods; this.packsRequeridos = packs; this.ejecutable = ejec;
+            this.mainEntry = (mainEntry == null) ? "" : mainEntry;
         }
         /** Para los llamantes que aún no lo calculan: se comporta como antes. */
         public static Cierre desconocido() {
@@ -163,13 +176,26 @@ public final class PackStep {
         if (modulos.isEmpty())
             throw new IOException("out:pack — no hay .mod/.mdn en " + outDir + " que empaquetar");
 
+        /* ── QUÉ NOMBRE LLEVA EL ARRANQUE (V5/H11, #365) ────────────────────
+         *
+         * El manifest dice el nombre de la ENTRADA, no el del fichero fuente, y
+         * quien arranca lo busca LITERAL — la VM-C en `bpvm.c` y miVM en
+         * `ModuleManager.executeRootPack`, las dos igual. Por eso el nombre lo
+         * pone aquí ya resuelto el compilador: así soportar `library` no cuesta
+         * ni una línea en las dos VMs, y no hay dos sitios componiendo el mismo
+         * nombre con el riesgo de que un día compongan distinto.
+         *
+         * Sin `library` (el caso de siempre) el canónico ES `proj.main`, así que
+         * los packs que ya existen no cambian ni un byte. */
+        String mainEntry = cierre.mainEntry.isEmpty() ? proj.main : cierre.mainEntry;
+
         /* Sólo se exige el módulo del `main` si el pack es EJECUTABLE. Una
          * librería no lleva main (criterio de Eduardo) y no tiene por qué. */
-        if (cierre.ejecutable && !contieneModulo(modulos, proj.main)) {
-            throw new IOException("out:pack — el manifest declara main='" + proj.main
+        if (cierre.ejecutable && !contieneModulo(modulos, mainEntry)) {
+            throw new IOException("out:pack — el manifest declara main='" + mainEntry
                     + "' pero ese módulo no está en el pack. Módulos encontrados en "
                     + outDir + ": [" + nombresDeModulos(modulos) + "]."
-                    + pistaLibrary(modulos, proj.main));
+                    + pistaLibrary(modulos, mainEntry));
         }
 
         /* ── 3) EL MANIFEST ─────────────────────────────────────────────────
@@ -186,7 +212,7 @@ public final class PackStep {
          * haber otros packs grabados—. Sólo se DECLARA; quien carga, que es el
          * único que sabe lo que tiene, comparará. */
         StringBuilder mf = new StringBuilder();
-        if (cierre.ejecutable) mf.append("main=").append(proj.main).append('\n');
+        if (cierre.ejecutable) mf.append("main=").append(mainEntry).append('\n');
         List<String> faltan = new ArrayList<>();
         for (String p : cierre.packsRequeridos)
             if (!p.equals(proj.packProvides)) faltan.add(p);
@@ -200,7 +226,8 @@ public final class PackStep {
                 + (proj.packNameDeclarado ? "de pack.name" : "del fichero de proyecto")
                 + ")");
         System.out.println("pack: " + (cierre.ejecutable
-                ? "EJECUTABLE (main=" + proj.main + ")"
+                ? "EJECUTABLE (main=" + mainEntry
+                  + (mainEntry.equals(proj.main) ? "" : ", cualificado por su `library`") + ")"
                 : "LIBRERIA (el modulo raiz no tiene `main`, y no le hace falta)"));
         if (!faltan.isEmpty())
             System.out.println("pack: NECESITA ademas estos packs grabados: " + faltan
@@ -262,20 +289,25 @@ public final class PackStep {
     }
 
     /** Si el módulo del main SÍ está pero bajo su nombre de librería
-     *  (`com.example.Demo.mod` cuando el main es `Demo`), decirlo — porque el
-     *  usuario NO tiene salida buscándola solo: poner el nombre cualificado en
-     *  `main` tampoco vale, ahí se busca el FICHERO FUENTE, que se llama
-     *  `Demo.bp`. No adivinamos por él (no arreglamos el manifest a su espalda):
-     *  le decimos qué pasa y qué puede hacer. */
+     *  (`com.example.Demo.mod` cuando el manifest dice `Demo`), decirlo.
+     *
+     *  <p>Desde #365 esto YA NO ES UNA LIMITACIÓN: un módulo con `library` puede
+     *  arrancar un pack, porque el manifest lleva el nombre canónico que compone
+     *  el compilador. Así que llegar aquí significa que el nombre canónico no
+     *  llegó — se empaquetó por la vía corta, `buildPack(proj)` sin `Cierre`, que
+     *  sólo conoce `proj.main` (el nombre del FICHERO FUENTE). Eso es lo que hay
+     *  que decir: no le mandamos a cambiar su código por un fallo nuestro. */
     private static String pistaLibrary(List<PackEntry> mods, String main) {
         String sufijo = "." + main;
         for (PackEntry e : mods) {
             if (!"mod".equals(e.tipo) || !e.nombre.endsWith(sufijo)) continue;
             return " El módulo SÍ está, pero con su nombre de librería ('"
-                 + e.nombre + "'), porque declara `library`. Hoy un módulo con"
-                 + " `library` no puede ser el main de un pack ejecutable: quítale"
-                 + " el `library` al módulo principal, o publica el pack como"
-                 + " biblioteca (sin main).";
+                 + e.nombre + "'), porque declara `library`. Eso está soportado"
+                 + " (#365) y el manifest debería llevar ese nombre: si sale este"
+                 + " error, el pack se construyó sin pasarle el cierre del"
+                 + " compilador (`buildPack(proj)` a secas), que es el único que"
+                 + " sabe el nombre canónico. Construye el proyecto con"
+                 + " `--project`.";
         }
         return "";
     }
@@ -333,8 +365,22 @@ public final class PackStep {
              * al grabar el IDE se queda con el del destino y lo renombra
              * quitándole el sufijo — y el micro encuentra exactamente lo de
              * siempre, sin cambiar una línea de C. */
+            /* ⚠️ …PERO SÓLO SI LA ÚLTIMA EXTENSIÓN NO ES YA UN TIPO (#365).
+             *
+             * `com.example.Npk.mod` — un módulo llamado `Npk` dentro de una
+             * librería — tiene tipo `mod`, que es un tipo de pleno derecho: no
+             * hay nada que interpretar. Sin esta condición, la regla de abajo
+             * miraba el penúltimo componente, veía `npk`, y renombraba la
+             * entrada a `com.example.mod` con tipo `npk`. Muda, y en un pack
+             * grabado. Con `Mod` en vez de `Npk` daba el otro extremo: un error
+             * diciendo que un `.mod` no lleva destino, que era falso.
+             *
+             * La doble extensión existe para `sqlite.npk.RISCV`, donde la última
+             * (`riscv`) NO es un tipo — y ahí sí hay que ir a buscar el tipo al
+             * penúltimo. Con esta guarda, ese caso entra igual y el de arriba se
+             * queda fuera, que es justo lo que se quiere. */
             int dot2 = nombre.lastIndexOf('.');
-            if (dot2 > 0) {
+            if (dot2 > 0 && !OUTDIR_TYPES.contains(tipo)) {
                 String tipoReal = nombre.substring(dot2 + 1).toLowerCase();
                 if (TIPOS_POR_DESTINO.contains(tipoReal)) {
                     String sufijo = base.substring(dot + 1);      /* SIN pasar a minúsculas */

@@ -1,0 +1,39 @@
+// Demo.bp — un pack EJECUTABLE cuyo módulo de arranque declara `library` (#365).
+//
+// Hasta V5 esto no se podía, y el motivo era de nombres: el `.mod` de un módulo
+// con `library` se llama `com.example.Demo.mod`, así que su entrada dentro del
+// pack es `com.example.Demo`; pero el manifest escribía `main=Demo`, que es como
+// se llama el FICHERO FUENTE. Quien arranca busca la entrada literal —la VM-C en
+// `bpvm.c` y miVM en `ModuleManager.executeRootPack`, las dos igual— y no la
+// encontraba. Poner el nombre cualificado en `main` tampoco valía: ahí se busca
+// el fuente, y `com.example.Demo.bp` no existe.
+//
+// El arreglo fue que el manifest lleve el nombre CANÓNICO, que lo compone el
+// compilador (que es quien lo sabe) y no las VMs: soportar `library` en un pack
+// no costó una sola línea de C ni de Java de runtime.
+//
+// CÓMO SE PRUEBA (en el PC, sin placa):
+//
+//   java -jar lexer-java/target/basicplus-frontend.jar \
+//        --project samples/packlib/Demo.bpbuild --backend=mivm
+//   java -jar miVM/target/bpgenvm-1.0.jar samples/packlib/out/DemoLib.pack
+//   bpgenvm-c/build/bpgenvm-c            samples/packlib/out/DemoLib.pack
+//
+// Al construir tiene que decir «EJECUTABLE (main=com.example.Demo, cualificado
+// por su `library`)», y las dos VMs la MISMA salida — que es lo que se comprobó
+// al cerrarlo (15-ago).
+library "com.example"
+module Demo
+
+  function Main()
+    print "pack con library: arranca"
+    var i: integer := 0
+    var suma: integer := 0
+    while i < 5 do
+      suma := suma + i
+      i := i + 1
+    endwh
+    print "suma = " + intToString(suma)
+  end Main
+
+end Demo

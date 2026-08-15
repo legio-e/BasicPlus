@@ -102,6 +102,17 @@ public final class Main {
          *  segundo sitio para la misma verdad, y los dos sitios se separan. */
         boolean raizTieneMain = false;
 
+        /** V5/H11 (#365) — CÓMO SE LLAMA la entrada del módulo de arranque dentro
+         *  del pack: su nombre canónico, cualificado si declara `library`
+         *  (`com.example.Demo`). No coincide con `proj.main`, que nombra el
+         *  FICHERO FUENTE (`Demo.bp`) — y ésa era justo la razón por la que un
+         *  módulo con `library` no podía arrancar un pack: el manifest decía
+         *  `Demo` y dentro la entrada se llamaba `com.example.Demo`.
+         *
+         *  Se toma de la raíz que TIENE main, no de la última compilada, y el
+         *  primero gana (con varias raíces, sólo una nombra el arranque). */
+        String raizEntry = "";
+
         /** H6.a-lite — .bpi que ESTE build ha ESCRITO (en outDir), para poder
          *  borrarlos al terminar. Sólo entra lo que escribimos: los .bpi de
          *  librerías precompiladas (stdlib) se LEEN de libPaths, no se escriben,
@@ -303,10 +314,29 @@ public final class Main {
              * los packs de los que importa, y si la raíz tiene `main`. Nada de
              * esto se declara aparte — se sabe. */
             Path packPath = PackStep.buildPack(proj, new PackStep.Cierre(
-                    ctx.modsUsados, ctx.packsRequeridos, ctx.raizTieneMain));
+                    ctx.modsUsados, ctx.packsRequeridos, ctx.raizTieneMain,
+                    ctx.raizEntry));
             System.out.println("pack generado: " + packPath);
         }
         return success;
+    }
+
+    /**
+     * EL NOMBRE CANÓNICO de un módulo: `Demo` a secas, o `com.example.Demo` si
+     * declara `library`. Es el nombre con el que se escribe su `.mod`, con el que
+     * lo busca un `import` y con el que entra en un pack — o sea, el nombre por
+     * el que se le conoce en todas partes menos en el fichero fuente.
+     *
+     * <p>La concatenación está escrita a mano en una veintena de sitios de este
+     * fichero (el resolutor de imports, sobre todo). Este helper NO viene a
+     * unificarlos —eso es un refactor aparte, y del camino más delicado que hay
+     * aquí—: viene a que el sitio donde el nombre decide el CONTENIDO DE UN
+     * ARTEFACTO tenga una sola forma de calcularlo. Es lo que añade #365: si el
+     * manifest del pack compusiera el nombre de una manera y el emisor del `.mod`
+     * de otra, el pack no arrancaría y el error no diría por qué.
+     */
+    static String nombreCanonico(String library, String name) {
+        return (library == null || library.isEmpty()) ? name : library + "." + name;
     }
 
     /** H6.a-lite — borra los .bpi que este build escribió. Sólo los nuestros:
@@ -603,6 +633,12 @@ public final class Main {
                  * por qué llevarlo (criterio de Eduardo), y así el manifest del
                  * pack no declara una entrada que no existe. */
                 ctx.raizTieneMain = info.module != null && info.module.mainFunction != null;
+                /* #365 — y CÓMO SE LLAMA esa raíz dentro del pack. Sólo de la que
+                 * tiene main, y el primero gana: con varias raíces sólo una es el
+                 * arranque, y machacarlo con la última compilada haría que el
+                 * manifest apuntara a un módulo que no arranca nada. */
+                if (ctx.raizTieneMain && ctx.raizEntry.isEmpty())
+                    ctx.raizEntry = nombreCanonico(module.library, module.name);
             }
             int errs = countSemErrors(info);
             ctx.totalErrors += errs;

@@ -60,6 +60,80 @@ class PackStepTest {
                 assertEquals("main=App\n", new String(e.data, StandardCharsets.UTF_8));
     }
 
+    /**
+     * #365 — UN MÓDULO CON `library` PUEDE ARRANCAR UN PACK.
+     *
+     * <p>Antes no podía, y el motivo era éste: el `.mod` de un módulo con
+     * `library` se llama `com.example.Demo.mod`, o sea que su entrada en el pack
+     * es `com.example.Demo`; pero el manifest escribía `main=<proj.main>`, y
+     * `proj.main` nombra el FICHERO FUENTE (`Demo.bp`). Quien arranca busca la
+     * entrada LITERAL, así que no la encontraba — y poner el nombre cualificado
+     * en `main` tampoco valía, porque entonces no encontraba el fuente.
+     *
+     * <p>El arreglo es que el manifest lleve el nombre CANÓNICO, que lo compone
+     * el compilador y llega en el `Cierre`. Lo que se comprueba aquí es
+     * exactamente eso: que el manifest dice `com.example.Demo` (y no `Demo`), que
+     * es la entrada que existe de verdad dentro del pack.
+     */
+    @Test void moduloConLibraryPuedeSerElMain(@TempDir Path tmp) throws Exception {
+        Path outDir = Files.createDirectories(tmp.resolve("out"));
+        Files.write(outDir.resolve("com.example.Demo.mod"), "demo".getBytes(StandardCharsets.UTF_8));
+
+        BpBuild b = new BpBuild();
+        b.projectDir = tmp.toString();
+        b.outDir = outDir.toString();
+        b.main = "Demo";              // el FUENTE se llama Demo.bp
+        b.out = "pack";
+        b.packName = "Demo";
+
+        PackStep.Cierre c = new PackStep.Cierre(
+                java.util.Collections.emptyMap(), java.util.Collections.emptySet(),
+                /*ejecutable*/ true, /*mainEntry*/ "com.example.Demo");
+
+        PackReader.Pack p = PackReader.read(Files.readAllBytes(PackStep.buildPack(b, c)));
+        Set<String> got = new HashSet<>();
+        for (PackEntry e : p.entries) got.add(e.tipo + ":" + e.nombre);
+        assertTrue(got.contains("mod:com.example.Demo"), got.toString());
+
+        for (PackEntry e : p.entries)
+            if ("mft".equals(e.tipo))
+                assertEquals("main=com.example.Demo\n", new String(e.data, StandardCharsets.UTF_8),
+                        "el manifest tiene que nombrar la ENTRADA, no el fichero fuente");
+    }
+
+    /**
+     * #365, la trampa de al lado: un módulo llamado `Npk` (o `Mdn`) DENTRO de una
+     * librería produce `com.example.Npk.mod`, y la regla de doble extensión
+     * —la que existe para `sqlite.npk.RISCV`— miraba el penúltimo componente, veía
+     * `npk` y renombraba la entrada a `com.example.mod` con tipo `npk`. Muda, y
+     * dentro de un pack ya grabado.
+     */
+    @Test void nombreCualificadoQueTerminaEnUnTipoNoSeMalinterpreta(@TempDir Path tmp) throws Exception {
+        Path outDir = Files.createDirectories(tmp.resolve("out"));
+        Files.write(outDir.resolve("com.example.Npk.mod"), "demo".getBytes(StandardCharsets.UTF_8));
+        /* Y el de verdad, para que quede claro que la doble extensión sigue viva:
+         * éste SÍ tiene que salir como tipo `npk` con el destino en el nombre. */
+        Files.write(outDir.resolve("motor.npk.RISCV"), new byte[]{9});
+
+        BpBuild b = new BpBuild();
+        b.projectDir = tmp.toString();
+        b.outDir = outDir.toString();
+        b.main = "Npk";
+        b.out = "pack";
+        b.packName = "Demo";
+
+        PackStep.Cierre c = new PackStep.Cierre(
+                java.util.Collections.emptyMap(), java.util.Collections.emptySet(),
+                true, "com.example.Npk");
+
+        PackReader.Pack p = PackReader.read(Files.readAllBytes(PackStep.buildPack(b, c)));
+        Set<String> got = new HashSet<>();
+        for (PackEntry e : p.entries) got.add(e.tipo + ":" + e.nombre);
+        assertTrue(got.contains("mod:com.example.Npk"), got.toString());
+        assertFalse(got.contains("npk:com.example.mod"), "la doble extensión se comió el nombre: " + got);
+        assertTrue(got.contains("npk:motor.RISCV"), "…y la doble extensión de verdad sigue funcionando: " + got);
+    }
+
     @Test void outDirSinModulosEsError(@TempDir Path tmp) throws Exception {
         Path outDir = Files.createDirectories(tmp.resolve("out"));
         Files.write(outDir.resolve("App.bpi"), "solo-interfaz".getBytes(StandardCharsets.UTF_8));

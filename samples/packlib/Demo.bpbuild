@@ -1,0 +1,18 @@
+{
+  "_comentario": [
+    "#365 — el caso minimo de un pack EJECUTABLE cuyo main declara `library`.",
+    "",
+    "   java -jar lexer-java/target/basicplus-frontend.jar \\",
+    "        --project samples/packlib/Demo.bpbuild --backend=mivm",
+    "",
+    "`main` nombra el FICHERO FUENTE (Demo.bp). La entrada del pack se llamara",
+    "com.example.Demo, porque es el nombre canonico del modulo, y eso es lo que",
+    "el manifest tiene que decir. Ver el comentario de Demo.bp."
+  ],
+  "sourceDir":    ".",
+  "outDir":       "out",
+  "main":         "Demo",
+  "dependencies": [],
+  "out":          "pack",
+  "pack":         { "name": "DemoLib", "version": "1.0" }
+}
