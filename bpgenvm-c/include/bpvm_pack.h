@@ -141,6 +141,22 @@ int bpvm_pack_scan_src(const bpvm_pack_src_t* src,
  * Devuelve el nº de entradas (puede ser > max) o -1 si la cabecera no valida. */
 int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_off,
                       bpvm_pack_entry_t* out, int max);
+
+/* #414 — ITERADORES para BP: una llamada, una entrada. Los de arriba llenan un
+ * array, que no sirve desde BP porque ningún intrínseco devuelve una clase.
+ *
+ * El cursor es un VALOR que lleva el programa (no hay estado aquí: reentrante
+ * entre hilos, nada que cerrar, nada que sobreviva al RUN), y vale
+ * `offset + 1` para dejar el 0 libre como «empieza» y «se acabó» — el primer
+ * pack vive en el offset 0. Es OPACO: no debe imprimirse (rompería la paridad
+ * dual-VM). Todo cursor se valida antes de usarse. Detalle en el .c. */
+uint32_t bpvm_pack_iter(const bpvm_pack_src_t* src, uint32_t cur);
+int      bpvm_pack_iter_info(const bpvm_pack_src_t* src, uint32_t cur,
+                             bpvm_pack_info_t* out);
+uint32_t bpvm_pack_iter_entry(const bpvm_pack_src_t* src, uint32_t pack_cur,
+                              uint32_t cur);
+int      bpvm_pack_iter_entry_info(const bpvm_pack_src_t* src, uint32_t pack_cur,
+                                   uint32_t cur, bpvm_pack_entry_t* out);
 int bpvm_pack_entries_src(const bpvm_pack_src_t* src, uint32_t pack_off,
                           bpvm_pack_entry_t* out, int max);
 

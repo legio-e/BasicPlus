@@ -383,6 +383,90 @@ int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_o
     return bpvm_pack_entries_src(&src, pack_off, out, max);
 }
 
+/* ── #414 — ITERADORES, para que un programa BP recorra la cadena ────────────
+ *
+ * Los dos de arriba llenan un array de golpe: valen para el IDE y para el boot,
+ * pero no para BP, porque hoy NINGÚN intrínseco devuelve una clase — todos
+ * devuelven primitivos. Modelo de Eduardo (15-ago): *«que siempre devuelva una
+ * dirección y que info devuelva el string, así en vez de una función que
+ * devuelva 2 cosas utilizas 2 funciones»*. La lista se arma en BP.
+ *
+ * EL CURSOR ES UN VALOR, no estado guardado aquí. Eso importa en este lenguaje:
+ * con hilos preemptivos, un cursor global no sería reentrante (dos hilos
+ * listando se pisarían), habría que cerrarlo, y lo que no se cierre sobrevive al
+ * RUN — justo lo que el guardián de #339 existe para detectar. Llevándolo el
+ * programa en una variable local, cada hilo tiene el suyo y no hay nada que
+ * liberar.
+ *
+ * ⚠️ `cursor = offset + 1`, y NO es cosmético: el primer pack vive en el offset
+ * 0 de la región, así que 0 no puede significar a la vez «el primero» y «no
+ * hay». Desplazando uno, **0 queda libre** para las dos puntas del bucle:
+ * `iter(0)` da el primero y el fin devuelve 0.
+ *
+ * ⚠️ El cursor es OPACO y no debe imprimirse: es un offset de región, distinto
+ * en cada VM (miVM no tiene zona), así que un `print` de esto rompería la
+ * paridad. Va dicho en la doc del módulo BP.
+ *
+ * Todo cursor que llega se VALIDA con `parse_header` antes de fiarse: viene de
+ * BP y puede ser cualquier entero. La zona es de sólo lectura, así que un número
+ * inventado no corrompe nada — pero devuelve 0, no basura. */
+
+/* Siguiente pack de la cadena. cur=0 → el primero. 0 = no hay más. */
+uint32_t bpvm_pack_iter(const bpvm_pack_src_t* src, uint32_t cur) {
+    if (!src) return 0;
+    bpvm_pack_info_t info;
+    uint32_t off = 0;
+    if (cur != 0) {
+        if (parse_header(src, cur - 1, &info) != 0) return 0;   /* cursor inválido */
+        off = (cur - 1) + info.size_total;                      /* salto O(1) */
+    }
+    if (off + 4 > src->size) return 0;
+    uint8_t mg[4];
+    if (!src_read(src, off, mg, 4)) return 0;
+    if (get_u32(mg) != BPVM_PACK_MAGIC) return 0;   /* virgen (0xFF..) o basura = fin */
+    if (parse_header(src, off, &info) != 0) return 0;
+    return off + 1;
+}
+
+/* Descriptor del pack en `cur`. 0 = OK, -1 = cursor inválido. */
+int bpvm_pack_iter_info(const bpvm_pack_src_t* src, uint32_t cur,
+                        bpvm_pack_info_t* out) {
+    if (!src || !out || cur == 0) return -1;
+    return parse_header(src, cur - 1, out) == 0 ? 0 : -1;
+}
+
+/* Siguiente entrada DENTRO del pack en `pack_cur`. cur=0 → la primera.
+ * 0 = no hay más (o cualquiera de los dos cursores es inválido). */
+uint32_t bpvm_pack_iter_entry(const bpvm_pack_src_t* src, uint32_t pack_cur,
+                              uint32_t cur) {
+    if (!src || pack_cur == 0) return 0;
+    bpvm_pack_info_t info;
+    uint32_t pack_off = pack_cur - 1;
+    if (parse_header(src, pack_off, &info) != 0) return 0;
+    uint32_t rel = BPVM_PACK_HEADER_SIZE;
+    bpvm_pack_entry_t e;
+    if (cur != 0) {
+        rel = cur - 1;
+        /* leer la actual es lo que deja `rel` en la siguiente: el tamaño de una
+         * entrada está en su propia cabecera, no hay forma de saltarla sin ella. */
+        if (next_entry(src, pack_off, info.size_total, &rel, &e) != 1) return 0;
+    }
+    uint32_t probe = rel;                      /* ¿hay entrada ahí? sin mover `rel` */
+    if (next_entry(src, pack_off, info.size_total, &probe, &e) != 1) return 0;
+    return rel + 1;
+}
+
+/* La entrada en `cur` (dentro de `pack_cur`). 0 = OK, -1 = cursor inválido. */
+int bpvm_pack_iter_entry_info(const bpvm_pack_src_t* src, uint32_t pack_cur,
+                              uint32_t cur, bpvm_pack_entry_t* out) {
+    if (!src || !out || pack_cur == 0 || cur == 0) return -1;
+    bpvm_pack_info_t info;
+    uint32_t pack_off = pack_cur - 1;
+    if (parse_header(src, pack_off, &info) != 0) return -1;
+    uint32_t rel = cur - 1;
+    return next_entry(src, pack_off, info.size_total, &rel, out) == 1 ? 0 : -1;
+}
+
 /* UN solo recorrido de la cadena para las dos búsquedas (#362): `solo_pack` a
  * NULL busca en todos los packs activos, y con nombre se mira SÓLO ese. Tener
  * dos copias del bucle sería tener dos reglas de "quién gana" que se irían

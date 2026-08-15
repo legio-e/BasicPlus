@@ -137,6 +137,54 @@ int main(void) {
         CHECK(fixA[es[0].data_off + 37] == 0xFF, "pad de alineacion = 0xFF (NOR)");
     }
 
+    /* --- 3-bis. #414: los ITERADORES dan lo MISMO que los de array ---
+     *
+     * El oraculo no hay que inventarlo: `scan` y `entries` ya recorren la cadena
+     * y estan probados arriba. Si el iterador —que es el camino que usara BP—
+     * dice algo distinto, uno de los dos miente. */
+    {
+        bpvm_pack_src_t s;
+        bpvm_pack_src_mem(&s, fixA, FIX_SIZE);
+
+        bpvm_pack_info_t ref[4];
+        int nref = bpvm_pack_scan(fixA, FIX_SIZE, ref, 4, 0, NULL);
+        int k = 0;
+        uint32_t c = bpvm_pack_iter(&s, 0);
+        while (c != 0 && k < nref) {
+            bpvm_pack_info_t got;
+            CHECK(bpvm_pack_iter_info(&s, c, &got) == 0, "iter_info resuelve el cursor");
+            CHECK(got.off == ref[k].off && strcmp(got.nombre, ref[k].nombre) == 0,
+                  "el pack iterado es el mismo que el de scan");
+            k++;
+            c = bpvm_pack_iter(&s, c);
+        }
+        CHECK(k == nref && c == 0, "recorre TODOS los packs y termina en 0");
+
+        uint32_t p = bpvm_pack_iter(&s, 0);
+        int j = 0;
+        uint32_t ec = bpvm_pack_iter_entry(&s, p, 0);
+        while (ec != 0 && j < 3) {
+            bpvm_pack_entry_t got;
+            CHECK(bpvm_pack_iter_entry_info(&s, p, ec, &got) == 0, "iter_entry_info resuelve");
+            CHECK(strcmp(got.tipo, es[j].tipo) == 0 && strcmp(got.nombre, es[j].nombre) == 0
+                  && got.len == es[j].len && got.data_off == es[j].data_off,
+                  "la entrada iterada es IDENTICA a la del array");
+            j++;
+            ec = bpvm_pack_iter_entry(&s, p, ec);
+        }
+        CHECK(j == 3 && ec == 0, "itera las 3 entradas y termina en 0");
+
+        /* Los cursores vienen de BP, asi que pueden ser cualquier entero. La
+         * zona es de solo lectura —no hay nada que corromper— pero tiene que
+         * contestar 0, no basura. */
+        bpvm_pack_info_t tmp;
+        CHECK(bpvm_pack_iter(&s, 999999) == 0,            "cursor de pack inventado -> 0");
+        CHECK(bpvm_pack_iter(&s, 2) == 0,                 "cursor a mitad de cabecera -> 0");
+        CHECK(bpvm_pack_iter_entry(&s, p, 999999) == 0,   "cursor de entrada inventado -> 0");
+        CHECK(bpvm_pack_iter_entry(&s, 0, 0) == 0,        "sin pack no hay entradas");
+        CHECK(bpvm_pack_iter_info(&s, 0, &tmp) == -1,     "info del cursor 0 = invalido");
+    }
+
     /* --- 4. find (XIP): puntero directo al dato dentro de la región --- */
     {
         uint32_t len = 0;
