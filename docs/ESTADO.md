@@ -175,11 +175,14 @@ instrumento obvio no valía— en `notas/FICHAS.md`.
    perdió `Math` e `IO`).
 
 **En el P4**
-1. **La prueba del bus SANO** — MB de patrón conocido, ida y vuelta, al reloj
-   objetivo. ⚠️ **Es la más importante de toda la lista**: un bus marginal no falla
-   en el `mount`, y debajo de SQLite **corrompe la base en silencio**. Con
-   pull-ups de 51 K, que es el punto flojo conocido de esa placa. Está anotada
-   como condición previa para fiarse de esa tarjeta.
+1. ~~**La prueba del bus SANO**~~ — ✅ **CERRADA el 15-ago**. `samples/BusTest.bp`:
+   **2048 KB de patrón conocido, ida y vuelta, 0 diferencias**, en 4 bits y **a
+   20 MHz** (el env no fija `khz`, así que el driver aplica su defecto — el
+   conservador que eligieron los pull-ups de 51 K). El instrumento se validó
+   antes con un control **en rojo**. Con esto ya se puede poner SQLite encima de
+   esa tarjeta: era la condición previa.
+   *Se reabre si se sube el reloj* — un bus marginal aguanta despacio y falla
+   arriba, y ese es el caso que esta prueba existe para pillar.
 2. **`#379`** — mirar si el `INFO` sigue perdiendo la respuesta, y cronometrar la
    respuesta **en el firmware**, no en el IDE: son dos fallos distintos (tarda más
    que su timeout / se pierde) y sólo esa medida los separa.
@@ -246,6 +249,32 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-15 (tarde) — Eduardo + Claude. 🏁 EL BUS DE LA SD DEL P4 ES SANO.**
+  `samples/BusTest.bp` en la tarjeta: **2048 KB de patrón conocido, ida y vuelta,
+  0 diferencias**, 4 bits, **20 MHz**. Era la ficha que más pesaba de la tanda —
+  la condición previa para poner SQLite encima de esa tarjeta— y queda cerrada.
+  El instrumento se validó antes con un control **en rojo** (meterle al fichero 5
+  el contenido del 6: lo cazó por el byte 2, que es donde va el número dentro del
+  patrón). *Se reabre si se sube el reloj*: un bus marginal aguanta despacio y
+  falla arriba.
+  **Y el instrumento tenía un fallo que casi deja la medida sin valor** (`0a4e25c`):
+  el log de arranque imprimía `pines.khz` —lo que PIDE el env—, y con el env
+  vacío eso sale `| 0 kHz`. La prueba estaba hecha y no se podía decir a qué
+  velocidad. El driver resuelve `khz > 0 ? khz : SDIO_KHZ_POR_DEFECTO`, así que
+  fueron 20 MHz; ahora el log hace la misma cuenta y dice de dónde sale el
+  número, y la constante vive en `blk_sdmmc_p4.h` en vez de escondida en el `.c`.
+  ⏳ **sin compilar** (no hay ESP-IDF en esta máquina).
+  Lo que enseñó la tarde: **un número imposible en un log no es cosmética, es
+  el log diciendo que no sabe de qué habla**. `0 kHz` no es «no lo sé», es un
+  dato falso — y estuvo ahí, leído varias veces, hasta que hizo falta anotarlo.
+  Un chivato que anuncia un valor que no existe es peor que no tener chivato.
+  **Abierta `#423`**, que salió del pie de ese mismo log (`[LOG OVERFLOW]`): el
+  GC escribe **3 líneas por colecta** (~300 B) y el log mide **8 KB** en el P4 y
+  **4 KB** en el S3 → **~26 colectas y está lleno**. Está en las cuatro familias.
+  Lo grave no es que se llene: `append_raw` es append-only y **se calla por el
+  final**, o sea que el log de una placa colgada contiene el arranque y no el
+  cuelgue. Decisión de Eduardo pendiente — esas líneas son el instrumento con el
+  que se cazaron #355 y #357.
 - **2026-08-15 (mañana) — Eduardo + Claude.** Tanda de placa y de packs. Cerradas
   **`#414`** (módulo `Packs`: `list()` / `listIn()`, verificado en el P4 el mismo
   día que se escribió), **`H2-P4`** (las seis operaciones del FS, en los DOS
@@ -265,8 +294,9 @@ se hace en ese mismo momento y no a trozos por el camino.
     veces seguidas, y por eso no se borró nada de `notas/`;
   - y las tres fichas que se cerraron salieron de **predecir desde el código y
     usar la placa para confirmar**. Las horas se fueron en lo contrario.
-  Pendiente de la tanda: `#418` en placa, `H2-P5` (otras tarjetas) y **la prueba
-  del bus sano**, que sigue siendo la que más pesa.
+  Pendiente de la tanda: `#418` en placa y `H2-P5` (otras tarjetas). **La prueba
+  del bus sano — la que más pesaba — se cerró al día siguiente** (ver la entrada
+  del 15-ago).
 - **2026-08-14 (noche) — Eduardo + Claude. 🏁 H9 CERRADO.** `Object` deja de ser un
   alias de `any` y pasa a ser la raíz REAL del modelo de objetos (existía desde
   H5.1.a, pero sólo en el emisor: al semántico nadie se la había presentado).
