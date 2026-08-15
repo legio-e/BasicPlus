@@ -38,6 +38,7 @@
  * un hallazgo sobre la placa, y tocaría bajar el reloj y anotarlo.
  */
 #include "bpvm_blk_sdmmc.h"
+#include "blk_sdmmc_p4.h"                 /* SDIO_KHZ_POR_DEFECTO, compartido con main.c */
 
 #include "driver/sdmmc_host.h"
 /* Sin prefijo `driver/`: este vive en el componente `sdmmc`, no en
@@ -61,12 +62,9 @@ static esp_err_t    s_ultimo      = ESP_OK;
 /* El LDO interno de las E/S. Se crea una vez y se conserva (ver p4_init 2.a). */
 static sd_pwr_ctrl_handle_t s_ldo = NULL;
 
-/* Reloj por defecto si el ENV no dice otra cosa. CONSERVADOR a propósito: los
- * pull-ups de esta placa son de 51 K, que es flojo para ir rápido, y un bus
- * marginal no falla al montar — falla a ratos y con la placa caliente. Subir
- * esto es una decisión que se toma MIDIENDO (el patrón conocido de ida y
- * vuelta), no por optimismo. */
-#define SDIO_KHZ_POR_DEFECTO  20000
+/* El reloj por defecto vive en el .h: lo aplica este fichero y lo IMPRIME el
+ * arranque (main.c). Dos sitios haciendo la misma cuenta con dos constantes
+ * distintas es como se acaba anunciando una velocidad y usando otra. */
 
 /* ── La alimentación de la TARJETA: un GPIO ───────────────────────────────
  *

@@ -47,6 +47,7 @@
 #include "gui_display_dsi.h"  /* G3: display MIPI-DSI (panel + backlight + rojo) */
 #include "hw_esp32.h"         /* H14: backends HW (GPIO/UART/SPI/I2C) reusados del S3 */
 #include "bpvm_blk_sdmmc.h"   /* V5/H6: la SD por SDIO como dispositivo de bloque */
+#include "blk_sdmmc_p4.h"     /* SDIO_KHZ_POR_DEFECTO: para ANUNCIAR el reloj de verdad */
 #include "bpvm_fs_fat.h"      /* V5/H6: montar esa tarjeta como FAT bajo /sd      */
 
 static const char *TAG = "bpvm_p4";
@@ -259,10 +260,24 @@ static void p4_montar_sd(void)
      * "¿el env llego hasta aqui?". Ahora las dos se leen de un vistazo, y ADEMAS
      * cambia cuando cambia el codigo, que es justo lo que el sello de build no
      * hace. Un chivato de configuracion vale mas que uno de resultado. */
-    log_printf("sd: SDIO slot %d, %d bit(s), clk %d cmd %d d0 %d | pwr %d (activo %s) | ldo %d | %d kHz",
+    /* ⚠️ EL RELOJ, EL EFECTIVO. Antes se imprimía `pines.khz`, que es lo que
+     * PIDE el env — y con el env vacío eso sale «0 kHz», que no es ninguna
+     * velocidad. Costó dar por buena una prueba del bus sin saber a qué
+     * frecuencia se había hecho (15-ago): 2 MB ida y vuelta sin una diferencia,
+     * y el log diciendo «0».
+     *
+     * El driver resuelve `khz > 0 ? khz : SDIO_KHZ_POR_DEFECTO`, así que aquí se
+     * hace la misma cuenta y se dice de DÓNDE sale. Un chivato de configuración
+     * que declara un valor imposible es peor que no tenerlo: éste es el fichero
+     * donde se decide a qué velocidad va el bus, y esa decisión —dice su propio
+     * comentario— «se toma MIDIENDO, no por optimismo». Sin este dato no se
+     * puede anotar la medida. */
+    log_printf("sd: SDIO slot %d, %d bit(s), clk %d cmd %d d0 %d | pwr %d (activo %s) | ldo %d | %d kHz (%s)",
                pines.slot, pines.ancho, pines.clk, pines.cmd, pines.d0,
                pines.pwr, pines.pwr_activo_alto ? "alto" : "bajo",
-               pines.ldo, pines.khz);
+               pines.ldo,
+               pines.khz > 0 ? pines.khz : SDIO_KHZ_POR_DEFECTO,
+               pines.khz > 0 ? "del env" : "por defecto");
 
     if (bpvm_fs_fat_montar(bpvm_blk_sdmmc(&pines), "/sd", motivo, sizeof motivo) == 0) {
         log_printf("sd: montada en /sd (%d bits, particion en el bloque %u)",
