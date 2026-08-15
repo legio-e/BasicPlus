@@ -214,6 +214,26 @@ la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
    P4, arrastrado y se recupera solo); la media flash del P4 (aparcada a propósito:
    32 MB físicos, bootloader configurado para 16).
 
+## 🧹 Al CERRAR V5 (van con el push, no antes)
+
+Por la norma: nada sube a GitHub hasta terminar la versión, así que la limpieza
+se hace en ese mismo momento y no a trozos por el camino.
+
+- **Limpiar `notas/`** — cinco carpetas de experimentos, ~56 MB (`metro-h4`, `p4`,
+  `v5-salto-crudo`, `v5-sqlite-prueba`, `v5-sqlite_edu`). Decisión de Eduardo
+  (15-ago): borrarlas, pero al cerrar. Lo único no duplicado son los `.elf` de
+  SQLite, regenerables del amalgama con los toolchains. Ver `notas/FICHAS.md`
+  (#411), donde está el inventario de qué se va.
+- **Los sobrantes del árbol**: `docs/390-private-wip.patch` (borrador superado),
+  `miVM/.claude/worktrees/` (copia completa del repo que duplica todo `grep`),
+  `docs/V4_SAMPLES_ROJOS.md` (censo del 15-jul), y los artefactos sueltos
+  (`.slots`, `fc.txt`, `ff.txt`, `fileio_test.txt`, `auto.txt`, `bigfile.bin`).
+- **`dist/BasicPlus-4.0-win/`** lleva la distribución construida de V4 —
+  compilador y `Stdlib.pack` viejos. Correcto que esté congelada, pero conviene
+  decidir si se regenera o se retira al publicar.
+- **Y el registro**: `notas/FICHAS.md` y el backlog dejan de ser «promesa» al
+  cerrar la versión y pueden subir con ella.
+
 ## Ideas aparcadas (no urgente)
 
 - **Prueba de resistencia larga** (post-V4): dejar una placa corriendo días con
