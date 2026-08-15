@@ -696,9 +696,15 @@ public final class Parser {
             // AOT desvía la llamada al puente antes de entrar—, así que no
             // cuesta nada y sólo habla cuando hay algo que decir.
             //
-            // (El día que exista `PACK_CALL` —tarea #383, la idea de Eduardo de
-            // reusar el mecanismo de los `intrinsic`— este cuerpo se sustituye
-            // por la llamada de verdad y los packs funcionarán interpretados.)
+            // ESTE CUERPO ES DEFINITIVO, no un provisional (15-ago-2026). Aquí
+            // ponía que el día que existiera `PACK_CALL` —#383, la idea de
+            // reusar el mecanismo de los `intrinsic` para llamar al pack sin
+            // AOT— se sustituiría por la llamada de verdad. Esa ficha está
+            // CANCELADA: lo que compraba era que MANTENER un pack nativo no
+            // exigiera los dos toolchains cruzados, y como los packs nativos los
+            // hace el propio proyecto —que los tiene—, esa barrera no existe en
+            // la práctica (decisión de Eduardo). O sea que en un pack nativo el
+            // AOT no es una optimización: es un requisito, a propósito.
             List<IStmt> cuerpoAviso = new ArrayList<>();
             List<IExpr> argsAviso = new ArrayList<>();
             argsAviso.add(new StringLitExpr(

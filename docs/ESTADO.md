@@ -249,6 +249,25 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-15 (tarde, 3) — Eduardo + Claude. 🏁 H11 (PACKS) CERRADO.** Las
+  cuatro fichas que colgaban de él, resueltas: `#417` y `#414` verificadas en
+  placa, `#365` verificada en las dos VMs, `#411` en su parte de packs — y
+  **`PACK_CALL` (#383) CANCELADA**.
+  **Dos decisiones de alcance de Eduardo, y las dos son la misma idea**: sacar
+  del hito lo que no era suyo. La **limpieza de `notas/`** (5 carpetas, ~56 MB)
+  no es trabajo de packs sino de cierre de versión, y estaba trabando el hito;
+  se movió a su sitio. Y **`PACK_CALL`** —llamar a un pack sin AOT— se cancela:
+  *«estos packs los hacemos nosotros, así que el sistema actual está bien»*. Lo
+  que compraba era que **mantener** un pack nativo no exigiera los dos toolchains
+  cruzados, y como el único que publica packs nativos es el proyecto, esa barrera
+  no existe en la práctica.
+  ⚠️ **Lo que eso deja aceptado, y conviene tenerlo escrito**: en un pack nativo
+  el AOT **no es una optimización, es un requisito** — sin `.mdn` para esa
+  arquitectura, sus funciones lanzan. Y el AOT **es mudo por línea de comandos**:
+  si no puede generarlos, el pack sale más pequeño sin decir nada. Eso deja de
+  ser «algo que PACK_CALL arreglará» y pasa a ser definitivo. El comentario del
+  parser que lo daba por futuro está corregido.
+  **Queda H10 (IDE) como único hito abierto de V5.**
 - **2026-08-15 (tarde, 2) — Eduardo + Claude. ✅ `#365` CERRADA** (`88e75a4`): un
   módulo con `library` ya puede **arrancar** un pack. No era «`library` +
   `out:pack` es imposible», como decía la ficha: era el arranque. El `.mod` de un
@@ -268,8 +287,7 @@ se hace en ese mismo momento y no a trozos por el camino.
   Verificado de punta a punta: `samples/packlib/` corre igual en **las dos VMs**,
   104/104 frontend (2 tests nuevos), 34/34 miVM, paridad 28/0/0, y el
   `SQLite.pack` real reconstruye sus 9 entradas idénticas.
-  **H11 está a un paso**: de sus cuatro fichas quedan `PACK_CALL` y la limpieza
-  de `notas/` (que va al cierre de versión).
+  Con ésta, **H11 se quedó a una ficha** — y se cerró esa misma tarde (arriba).
 - **2026-08-15 (tarde) — Eduardo + Claude. 🏁 EL BUS DE LA SD DEL P4 ES SANO.**
   `samples/BusTest.bp` en la tarjeta: **2048 KB de patrón conocido, ida y vuelta,
   0 diferencias**, 4 bits, **20 MHz**. Era la ficha que más pesaba de la tanda —
