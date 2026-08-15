@@ -282,6 +282,38 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-15 (noche) — Eduardo + Claude. ⚡ EL ÁRBOL DEL IDE: 6953 ms → 155 ms
+  (45×), verificado en la P4.** Y el arranque, de paso, 965 → 717 ms.
+  **Cómo se llegó, que es lo que hay que repetir**: Eduardo dijo *«no hace falta
+  especular, lo podemos medir; lo que hace falta es que el log lo registre»*. Se
+  instrumentó el refresco en los dos extremos (`b44f15e`) y el instrumento
+  contestó a la primera: **el CRC era el 98-99 % del tiempo**. Antes de eso, la
+  hipótesis en la mesa era el arranque —y la medida la había descartado ya: 965
+  ms hasta el wire, 266 de ellos por la tarjeta—. **Dos arreglos evitados por
+  medir, uno acertado por medir.**
+  **La causa no era «el CRC es caro»**, y ahí está la lección: `bpvm_fs_crc32`
+  troceaba el fichero de 256 en 256 B y cada trozo iba por `read_at`, que recibe
+  el PATH — o sea que **cada 256 B se abría el fichero otra vez**. 5432 aperturas
+  para 1,3 MB, con un `f_lseek` que recorre la FAT desde el principio: cuadrático
+  con el tamaño. El dato que lo delató fue una rareza en los números: **el flash
+  interno iba tres veces más lento que la SD**, lo que ya decía que el cuello no
+  era leer.
+  Arreglado en dos mitades: `f4e5c1f` (el backend calcula el CRC con UNA
+  apertura; 16,5× medido en el PC sobre littlefs, los tres backends) y `10b4467`
+  (el listado no calcula CRC; se pide con `STAT {crc:true}` justo antes de subir
+  ese fichero). Verificado contra el **simulador** —LIST, STAT y el valor
+  idéntico a `java.util.zip.CRC32`—, con `sim-smoke`/`boardsim-smoke`, la
+  batería del FS, paridad 28/0/0, y **el firmware de la Metro construido con el
+  toolchain ARM**.
+  🩸 **Y por qué la P4 sufría más que la Metro**: el corte que evitaba calcular
+  el CRC de los volúmenes montados estaba **sólo en el Pico** desde V5/H2. La
+  familia ESP32 nunca lo recibió. *Un arreglo que no viaja entre familias es
+  medio arreglo* — van ya unos cuantos.
+  🔸 De rebote, el `ESP_ERR_TIMEOUT` del montaje no ha vuelto a aparecer. **No se
+  da por muerto**: era intermitente y una pasada buena no prueba nada; la
+  hipótesis (y cómo confirmarla) está en la ficha.
+  🔸 **El tramo más caro del arranque es ahora otro**: 337 ms escaneando la zona
+  de packs para encontrar `0 candidatos`, casi la mitad de los 717 ms.
 - **2026-08-15 (tarde, 3) — Eduardo + Claude. 🏁 H11 (PACKS) CERRADO.** Las
   cuatro fichas que colgaban de él, resueltas: `#417` y `#414` verificadas en
   placa, `#365` verificada en las dos VMs, `#411` en su parte de packs — y
