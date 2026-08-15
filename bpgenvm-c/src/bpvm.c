@@ -712,6 +712,21 @@ int bpvm_entry_resolve(const char* name, char* out, size_t out_cap,
     if (bpvm_fs_stat(out, size_out) == 0) return 0;
     snprintf(out, out_cap, "/lib/%s", name);
     if (bpvm_fs_stat(out, size_out) == 0) return 0;
+    /* #418 — y `/sys`, el tercer directorio de la jerarquía del device. Faltaba,
+     * y el síntoma no ayudaba: un `Core.mod` que viva ahí es INVISIBLE para un
+     * import, y lo que se ve es `exit 1 (IO error)` — que no es un fallo de
+     * entrada/salida, sino el guardián del enlace de abajo diciendo que algo se
+     * quedó sin dueño. El firmware sí nombra lo que falta; el IDE enseña sólo el
+     * código de salida, así que desde fuera parece un fallo del programa.
+     *
+     * Va el ÚLTIMO a propósito: así esto es puramente aditivo y no cambia
+     * ninguna resolución que hoy funcione. La precedencia queda de lo más
+     * específico a lo más general — lo del proyecto, luego la app, luego la
+     * librería, y el sistema al final. Visto en el P4 el 14-ago con
+     * `FontLoadDemo` (Eduardo: «evidentemente tiene que poder encontrar los
+     * módulos de /sys»). */
+    snprintf(out, out_cap, "/sys/%s", name);
+    if (bpvm_fs_stat(out, size_out) == 0) return 0;
     out[0] = '\0';
     return -1;
 }
