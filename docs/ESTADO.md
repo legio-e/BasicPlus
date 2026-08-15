@@ -282,6 +282,34 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-15 (noche, 2) — Eduardo + Claude. 🟢 `long` YA CRUZA A UNA FUNCIÓN
+  `native`** (`f599574`, `bd5002f`). Hasta hoy el AOT sólo marshallaba 4 bytes.
+  **Dos decisiones de Eduardo hicieron el trabajo, y las dos ahorraron camino:**
+  1. *«long es una cosa y double otra; empecemos por long»*. La ficha decía
+     «long, double y float JUNTOS» y la medida le dio la razón: compilando lo
+     que emite el AOT con los flags reales, `long` `+ - *` no deja **ni un**
+     símbolo sin resolver (GCC lo hace en línea) y `double` llama a libgcc para
+     casi todo. Comparten el marshalling y nada más. `double` → ficha `#426`.
+  2. Para la división —lo único de `long` que llamaba a `__aeabi_ldivmod`—:
+     *«¿y si la reemplazamos en el emisor por una llamada a una función?»*. Y
+     resultó que **ni siquiera hay que escribir una división por software**: el
+     que no puede llamar a libgcc es el `.mdn`, no el runtime. Así que
+     `idiv64`/`imod64` van en la tabla de helpers y el módulo nativo queda
+     limpio — sin tocar el pipeline de ninguna arquitectura.
+  Salió barato porque tres piezas ya estaban puestas: la pila BP ya guarda los
+  `long` como 8 bytes big-endian (misma representación que el intérprete), el
+  thunk ya movía 8 bytes con las refs (#302), y la tabla de helpers está hecha
+  para crecer por el final.
+  **Verificado** con `make test-longnat` (nuevo): la salida por los thunks AOT
+  es idéntica a la de la VM-Java con 2^40, anchos mezclados en una firma,
+  negativos, el máximo de 64 bits, llamadas encadenadas, división, módulo y
+  división por cero **atrapada con `try/catch`** desde código nativo. El objeto
+  ARM real no deja un solo símbolo indefinido. Más `test-bytenat`,
+  `test-compressnat`, `test-callbp`, `test-throwmsg`, paridad 28/0/0,
+  frontend 104/104, miVM 34/34.
+  ⏭️ **Falta**: el cast `integer(x)` dentro de una `native`, y **probarlo en
+  placa** — el `.mdn` sólo se carga de verdad allí. Análisis y plan en
+  `docs/AOT_ABI8_IDEAS.md`.
 - **2026-08-15 (noche) — Eduardo + Claude. ⚡ EL ÁRBOL DEL IDE: 6953 ms → 155 ms
   (45×), verificado en la P4.** Y el arranque, de paso, 965 → 717 ms.
   **Cómo se llegó, que es lo que hay que repetir**: Eduardo dijo *«no hace falta
