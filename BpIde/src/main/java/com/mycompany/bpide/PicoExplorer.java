@@ -794,6 +794,21 @@ public final class PicoExplorer extends JPanel {
         byte[] data = Files.readAllBytes(file.toPath());
         long crc = crc32(data);
         Long devCrc = deviceCrcByPath.get(remote);
+        /* #398 — si el listado no trajo CRC (que ya es lo normal: calcularlo
+         * para todo el FS en cada refresco costaba el 99 % del tiempo del
+         * árbol), se pide AQUÍ el de ESTE fichero. Es una pregunta por fichero
+         * a subir en vez de una lectura del FS entero por refresco, y conserva
+         * la propiedad que hacía valioso el CRC: detecta un rancio venga de
+         * donde venga, no sólo de lo que subió esta sesión. Sólo si el device
+         * dice que el fichero ya está (deviceSize != null): preguntar por uno
+         * que no existe es un viaje para que nos digan NOT_FOUND. */
+        if (devCrc == null && deviceSize != null) {
+            BpvmClient dc = debugClient();
+            if (dc != null) {
+                long c = dc.fileCrc(remote, 8000);
+                if (c >= 0) devCrc = Long.valueOf(c);
+            }
+        }
         if (devCrc != null) {
             if (devCrc.longValue() == crc) return false;   // contenido REAL del device == local
         } else {

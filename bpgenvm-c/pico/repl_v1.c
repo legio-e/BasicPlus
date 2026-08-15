@@ -303,12 +303,21 @@ static int list_cb(const char* name, uint32_t size, void* user) {
      * como %u sale 4294967295, o sea un CRC de aspecto perfectamente normal
      * que no coincidiría nunca. Mentir con un número creíble es peor que
      * callarse. */
-    long crc = -1;
-    if (bpvm_fs_en_raiz(name)) {
-        uint32_t c = 0;
-        crc = (bpvm_fs_crc32(name, &c) == 0) ? (long) c : 0;
-    }
-    fprintf(stdout, ",\"size\":%u,\"crc\":%ld,\"isDir\":false}", (unsigned) size, crc);
+    /* #398 (15-ago) — Y AHORA TAMPOCO DEL FS PROPIO. El corte de arriba era la
+     * mitad buena de la idea: ahorraba leerse la tarjeta, pero el flash interno
+     * se seguía leyendo ENTERO en cada refresco del árbol. Medido en la P4 —que
+     * no tenía ni siquiera ese corte, ver abajo—: 1589 ms sólo del FS propio con
+     * 19 ficheros y 128 KB, el 98 % del listado.
+     *
+     * El CRC se pide ahora con `STAT {crc:true}`, fichero a fichero y justo
+     * antes de subirlo, que es el único momento en que sirve para algo.
+     *
+     * 🩸 Y la razón por la que esto se arregla en los DOS sitios a la vez: el
+     * corte de la tarjeta estaba SÓLO AQUÍ. El ESP32/P4 calculaba el CRC de
+     * todo, montajes incluidos, y por eso allí un refresco con SD costaba casi
+     * siete segundos y aquí no. Un arreglo que no viaja entre familias es medio
+     * arreglo. */
+    fprintf(stdout, ",\"size\":%u,\"crc\":-1,\"isDir\":false}", (unsigned) size);
     return 0;
 }
 
@@ -344,6 +353,16 @@ static void handle_stat(long id, const json_obj_t* obj) {
     off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
                               "size", (long) size);
     if (off < 0) goto err;
+    /* #398 — el CRC, SÓLO SI SE PIDE. Aquí es donde vive ahora el CRC que antes
+     * calculaba el LIST para todos los ficheros en cada refresco del árbol. Se
+     * pregunta por UN fichero, justo antes de subirlo. Mismo verbo y mismo
+     * campo que en la familia ESP32: el protocolo es UNO. */
+    if (json_get_bool(obj, "crc", 0)) {
+        uint32_t c = 0;
+        long v = (bpvm_fs_crc32(path, &c) == 0) ? (long) c : -1L;
+        off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "crc", v);
+        if (off < 0) goto err;
+    }
     off = wire_v1_field_bool(s_reply_buf, sizeof(s_reply_buf), (size_t) off,
                               "isDir", 0);
     if (off < 0) goto err;

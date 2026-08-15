@@ -274,8 +274,6 @@ typedef struct {
     int      first;
     uint32_t t0;                        /* ms al empezar el listado           */
     int      n;                         /* entradas emitidas                  */
-    uint32_t crc_ms;                    /* SÓLO el tiempo dentro del CRC      */
-    uint32_t crc_kb;                    /* KB leídos para calcularlo          */
     int      nraices;
     char     raiz[LS_RAICES_MAX][16];   /* "app", "lib", "sd"…                */
     int      raiz_n[LS_RAICES_MAX];
@@ -311,19 +309,22 @@ static int list_cb(const char* name, uint32_t size, void* user) {
     /* Construimos cada entry en un buffer pequeño y la mandamos como bulk
      * raw (sin newline) — el wire en UART0 no tiene stdout. */
     list_ctx_t* ctx = (list_ctx_t*) user;
-    /* paso 4 cierre — CRC del contenido (mismo que java.util.zip.CRC32) para
-     * que el IDE salte el PUT por contenido REAL del device. fs_get es una
-     * búsqueda barata en RAM; si fallara, crc=0 (el IDE re-subirá, seguro). */
-    /* H11 — CRC por trozos (buffer de 256 B en la pila dentro de la fachada), no
-     * leyendo el fichero entero a un espejo. Misma función que usa el Pico. */
-    uint32_t crc = 0;
-    uint32_t t_crc = ls_ms();
-    if (bpvm_fs_crc32(name, &crc) != 0) crc = 0;
-    t_crc = ls_ms() - t_crc;
-    ctx->crc_ms += t_crc;
-    ctx->crc_kb += (size + 1023u) / 1024u;
+    /* #398 — EL CRC YA NO SE CALCULA AQUÍ, y el `-1` es deliberado.
+     *
+     * Estaba para que el IDE se saltara un PUT cuyo contenido ya está en la
+     * placa: una optimización de la SUBIDA que se cobraba en TODOS los
+     * listados, leyendo el FS entero en cada refresco del árbol. Medido en la
+     * P4 el 15-ago: `crc 6903 ms` de un refresco de 6953 — el 99 %.
+     *
+     * Ahora se pide fichero a fichero con `STAT {crc:true}`, que es el único
+     * momento en que sirve: justo antes de subir ESE fichero.
+     *
+     * `-1` no es cero: es el valor que el IDE ya interpretaba como «este
+     * firmware no da CRC» (`if (rf.crc >= 0)`), así que un IDE viejo contra
+     * este firmware degrada a su heurístico de siempre en vez de creerse un
+     * CRC falso y saltarse una subida que hacía falta. */
+    uint32_t t_ent = ls_ms();
     ctx->n++;
-    ls_apunta(ctx, name, t_crc);
     char e[128];
     int o = 0;
     if (!ctx->first) e[o++] = ',';
@@ -333,9 +334,12 @@ static int list_cb(const char* name, uint32_t size, void* user) {
         if (*p == '"' || *p == '\\') e[o++] = '\\';
         e[o++] = *p;
     }
-    o += snprintf(e + o, sizeof(e) - o, "\",\"size\":%lu,\"crc\":%lu,\"isDir\":false}",
-                  (unsigned long) size, (unsigned long) crc);
+    o += snprintf(e + o, sizeof(e) - o, "\",\"size\":%lu,\"crc\":-1,\"isDir\":false}",
+                  (unsigned long) size);
     wire_v1_send_bulk((const uint8_t*) e, (size_t) o);
+    /* El reparto por carpeta raíz se queda aunque el CRC se haya ido: es el
+     * chivato que dirá si algún día vuelve a haber un listado caro, y dónde. */
+    ls_apunta(ctx, name, ls_ms() - t_ent);
     return 0;
 }
 
@@ -400,9 +404,7 @@ static void handle_list(long id, const json_obj_t* obj) {
                       ctx.raiz[i], ctx.raiz_n[i], (unsigned) ctx.raiz_ms[i]);
     }
     det[o] = '\0';
-    log_printf("ls: %d ent en %u ms | crc %u ms de %u KB |%s",
-               ctx.n, (unsigned) total, (unsigned) ctx.crc_ms,
-               (unsigned) ctx.crc_kb, det);
+    log_printf("ls: %d ent en %u ms |%s", ctx.n, (unsigned) total, det);
 }
 
 /* ── SAVE / DF / MKDIR: el IDE los manda y la familia ESP32 no los tenía ──
@@ -557,6 +559,15 @@ static void handle_stat(long id, const json_obj_t* obj) {
     if (bpvm_fs_stat(path, &size) != 0) { wire_v1_send_error(id, "NOT_FOUND", "no existe"); return; }
     int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0, "STAT_REPLY", id);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "size", (long) size);
+    /* #398 — el CRC, SÓLO SI SE PIDE. Aquí es donde vive ahora el CRC que antes
+     * calculaba el LIST de todos los ficheros en cada refresco del árbol: se
+     * pregunta por UN fichero y justo antes de subirlo, que es cuando sirve.
+     * Calcularlo siempre sería mudar el problema de sitio, no quitarlo. */
+    if (json_get_bool(obj, "crc", 0)) {
+        uint32_t crc = 0;
+        long v = (bpvm_fs_crc32(path, &crc) == 0) ? (long) crc : -1L;
+        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "crc", v);
+    }
     if (off >= 0) off = wire_v1_field_bool(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "isDir", 0);
     if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf), (size_t) off, "mtime", 0);
     if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);

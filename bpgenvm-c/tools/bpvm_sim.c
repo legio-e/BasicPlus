@@ -361,21 +361,30 @@ static void fs_walk(sb_t* sb) {
     for (int i = 0; i < g_n_dirs && i < WALK_MAX_DIRS; i++)
         bpvm_fs_list(g_dirs[i], collect_cb, g_dirs[i]);
 
-    /* Fase 2: ya fuera del lock — leer para el CRC y emitir. */
+    /* Fase 2: emitir.
+     *
+     * #398 — AQUÍ YA NO SE CALCULA EL CRC, y el `-1` es deliberado.
+     *
+     * El CRC servía para que el IDE se saltara un PUT cuyo contenido ya está en
+     * el device: una optimización de la SUBIDA que se cobraba en TODOS los
+     * listados, leyendo el FS entero cada vez que se refresca el árbol. Medido
+     * en la P4 (15-ago): 6903 ms de 6953 — el 99 % del refresco.
+     *
+     * Ahora el CRC se pide fichero a fichero con `STAT {crc:true}`, que es
+     * cuando de verdad hace falta: justo antes de subir ESE fichero.
+     *
+     * `-1` no es "cero": es el valor que el IDE ya interpretaba como «este
+     * firmware no da CRC» (`PicoExplorer`: `if (rf.crc >= 0)`), así que un IDE
+     * viejo contra este sim degrada al heurístico de siempre en vez de creerse
+     * un CRC falso y saltarse una subida que hacía falta. */
     for (int i = 0; i < g_n_ents; i++) {
         g_tally.used += g_ents[i].size;
         g_tally.count++;
         if (!sb) continue;
-        /* CRC del contenido (== java.util.zip.CRC32): con él el IDE se salta el
-         * PUT cuando el fichero ya está idéntico en el device. */
-        uint32_t crc = 0, fsz = 0;
-        uint8_t* d = fs_read_all(g_ents[i].path, &fsz);
-        if (d) { crc = bpvm_crc32(d, fsz); free(d); }
-
         if (i > 0) sb_raw(sb, ",");
         sb_raw(sb, "{\"name\":\""); sb_esc(sb, g_ents[i].path);
         sb_raw(sb, "\",\"size\":");   sb_ulong(sb, (unsigned long) g_ents[i].size);
-        sb_raw(sb, ",\"crc\":");      sb_ulong(sb, (unsigned long) crc);
+        sb_raw(sb, ",\"crc\":-1");
         sb_raw(sb, ",\"isDir\":false,\"mtime\":0}");
     }
     /* Si se truncó, que se SEPA: un listado corto silencioso se lee como "no hay
@@ -451,9 +460,18 @@ static void handle_stat(sock_t c, long id, const json_obj_t* obj) {
     }
     uint32_t size = 0;
     if (bpvm_fs_stat(path, &size) != 0) { send_err(c, id, "NOT_FOUND", "no existe"); return; }
-    char buf[160]; sb_t s; sb_init(&s, buf, sizeof buf);
+    char buf[192]; sb_t s; sb_init(&s, buf, sizeof buf);
     sb_raw(&s, "{\"type\":\"STAT_REPLY\",\"id\":"); sb_long(&s, id);
     sb_raw(&s, ",\"size\":"); sb_ulong(&s, (unsigned long) size);
+    /* #398 — el CRC, SÓLO SI SE PIDE (`"crc":true` en la petición). Calcularlo
+     * siempre sería mover el problema aquí: el listado dejaría de leer el FS
+     * entero y lo leería el STAT del siguiente que pase. Se pide justo antes de
+     * subir un fichero, que es el único momento en que sirve. */
+    if (json_get_bool(obj, "crc", 0)) {
+        uint32_t crc = 0;
+        if (bpvm_fs_crc32(path, &crc) == 0) { sb_raw(&s, ",\"crc\":"); sb_ulong(&s, (unsigned long) crc); }
+        else                                  sb_raw(&s, ",\"crc\":-1");
+    }
     sb_raw(&s, ",\"isDir\":false,\"mtime\":0}");
     if (s.ok) send_line(c, s.buf);
 }

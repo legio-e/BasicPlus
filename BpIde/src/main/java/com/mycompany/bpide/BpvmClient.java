@@ -861,6 +861,29 @@ public final class BpvmClient implements AutoCloseable {
     }
 
     /**
+     * #398 — EL CRC DE UN FICHERO DEL DEVICE, pedido a propósito.
+     *
+     * Antes venía de gorra en cada entrada del `LIST`, y por eso refrescar el
+     * árbol leía el sistema de ficheros ENTERO: medido en la P4 el 15-ago, el
+     * 99 % de un refresco de casi siete segundos. Ahora el listado no lo trae
+     * (manda -1) y se pide aquí, de uno en uno y justo antes de subir ese
+     * fichero — que es el único momento en que sirve para algo.
+     *
+     * Devuelve -1 si el fichero no está, si el firmware no conoce el flag o si
+     * no pudo calcularlo. -1 significa siempre lo mismo: «no lo sé», y quien
+     * llama debe subir en vez de arriesgarse a saltarse una subida buena.
+     */
+    public long fileCrc(String remotePath, long timeoutMs) {
+        try {
+            Map<String, Object> r = sendRequest(
+                    "STAT", "\"path\":" + jsonStr(remotePath) + ",\"crc\":true", null, timeoutMs);
+            return Json.getLong(r, "crc", -1);
+        } catch (IOException e) {
+            return -1;      // no existe, verbo desconocido, timeout… todo es "no lo sé"
+        }
+    }
+
+    /**
      * Un ERROR del device, con su CÓDIGO a mano.
      *
      * Sigue siendo IOException, así que todo el que ya la capturaba no se
