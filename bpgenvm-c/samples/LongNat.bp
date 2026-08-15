@@ -37,6 +37,18 @@ module LongNat
     return a * b
   end mulL
 
+  // #381 — DIVISION Y MODULO de 64 bits. El micro no los tiene en hardware, y
+  // el `/` de C se convertiria en una llamada a libgcc que un `.mdn` no puede
+  // resolver. Van por helper (idea de Eduardo), y el helper hace exactamente lo
+  // mismo que el interprete — incluido lanzar si el divisor es cero.
+  native function divL(a: long, b: long): long
+    return a / b
+  end divL
+
+  native function modL(a: long, b: long): long
+    return a mod b
+  end modL
+
   // Variable LOCAL de 8 bytes, que era el otro sitio donde saltaba el recorte.
   native function acumula(veces: integer, paso: long): long
     var t: long := 0L
@@ -83,7 +95,21 @@ module LongNat
       acc := sumaL(acc, G2)
       i := i + 1
     endwh
+    print "divL    : " + divL(G1, 1024L)
+    print "divNeg  : " + divL(0L - G1, 3L)
+    print "modL    : " + modL(G1, 1000L)
     print "cadena  : " + acc
+
+    // DIVISION POR CERO DESDE CODIGO NATIVO. Es el caso que valida el helper:
+    // el `/` de C con divisor cero seria comportamiento indefinido (un reset en
+    // la placa), y lo que tiene que pasar es EXACTAMENTE lo del interprete —
+    // un error de BP, atrapable, con su mensaje. Si esto se atrapa, el throw
+    // cruza bien la frontera nativo→VM.
+    try
+      print "div0    : " + divL(1L, 0L)
+    catch e: RuntimeError
+      print "div0    : atrapado"
+    endtry
   end Main
 
 end LongNat

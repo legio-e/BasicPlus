@@ -147,6 +147,17 @@ public final class AotCEmitter {
             && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING;
     }
 
+    /** #381 — ¿el tipo resuelto de `e` es long? Decide dos cosas: que su hueco
+     *  en la pila BP son 8 bytes, y que su división va por helper y no con el
+     *  `/` de C (que en el micro sería una llamada a libgcc, imposible en un
+     *  `.mdn`). */
+    private boolean isLongExpr(Ast.IExpr e) {
+        if (semInfo == null) return false;
+        BpType t = semInfo.exprTypes.get(e);
+        return (t instanceof PrimitiveType)
+            && ((PrimitiveType) t).tag == PrimitiveType.Kind.LONG;
+    }
+
     /** #173 — ¿el tipo resuelto de `e` es integer? */
     private boolean isIntExpr(Ast.IExpr e) {
         if (semInfo == null) return false;
@@ -1257,6 +1268,32 @@ public final class AotCEmitter {
                 emitExpr(b.right);
                 w.print(")");
                 if (neg) w.print(")");
+                return;
+            }
+            /* #381 — DIVISIÓN Y MÓDULO DE 64 BITS: por helper, no con `/`.
+             *
+             * Escribir `a / b` con dos int64_t hace que gcc emita una llamada a
+             * `__aeabi_ldivmod` (el Cortex-M no divide 64 bits en hardware), y
+             * eso en un `.mdn` es un símbolo sin resolver: el empaquetador lo
+             * rechaza, así que la división de `long` sencillamente no se podía
+             * usar en una función `native`.
+             *
+             * Idea de Eduardo: reemplazarla en el emisor por una llamada a una
+             * función. Va a la tabla de helpers —que es como el código nativo
+             * alcanza TODO lo que no puede resolver por nombre— y la división de
+             * verdad la hace el runtime, que sí se enlaza con libgcc. El `.mdn`
+             * queda limpio y no hay que tocar el build de ninguna arquitectura.
+             *
+             * Basta con que UN operando sea `long`: en C la promoción haría el
+             * resto de 64 bits igualmente, y es lo que hace el intérprete. */
+            if (("/".equals(b.op) || "mod".equals(b.op) || "%".equals(b.op))
+                    && (isLongExpr(b.left) || isLongExpr(b.right))) {
+                w.print("vm->aot_helpers->"
+                        + ("/".equals(b.op) ? "idiv64" : "imod64") + "(vm, (int64_t)(");
+                emitExpr(b.left);
+                w.print("), (int64_t)(");
+                emitExpr(b.right);
+                w.print("))");
                 return;
             }
             /* Numérico/lógico normal. */

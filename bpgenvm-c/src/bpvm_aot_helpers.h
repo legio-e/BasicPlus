@@ -295,6 +295,31 @@ struct aot_helpers_v2 {
      * que esta tabla sólo crece por el final. */
     int64_t (*read_i64_be)(const uint8_t* p);
     void    (*write_i64_be)(uint8_t* p, int64_t v);
+
+    /* #381 — DIVISIÓN Y MÓDULO DE 64 BITS. Idea de Eduardo, y resuelve un
+     * problema que parecía pedir enlazar libgcc dentro del `.mdn`.
+     *
+     * El Cortex-M no divide enteros de 64 bits en hardware, así que gcc emite
+     * una llamada a `__aeabi_ldivmod`... que en un `.mdn` es un símbolo sin
+     * resolver, o sea un salto a ninguna parte. (No llega a la placa: el
+     * guardián de `MdnPack` lo rechaza al empaquetar. Pero rechazado tampoco es
+     * soportado.)
+     *
+     * La vuelta es ésta: el que NO puede llamar a libgcc es el `.mdn`; el
+     * runtime sí — se compila y enlaza con el firmware como cualquier otro
+     * fichero. Así que la división se hace aquí y el código nativo la alcanza
+     * por la tabla, igual que ya alcanza `string_concat` o `array_load_i32`.
+     * Cero símbolos nuevos en el `.mdn`, cero cambios en el pipeline de build,
+     * y sirve para las dos arquitecturas a la vez.
+     *
+     * ⚠️ Y hacen EXACTAMENTE lo que hace el intérprete, no lo que sería «más
+     * correcto»: mismo chequeo de divisor cero, mismo mensaje
+     * («División por cero» / «Módulo por cero») y el `/` de C para el resto.
+     * Si el camino compilado fuera más listo que el interpretado, el mismo
+     * programa daría dos resultados según llevara `.mdn` o no — que es
+     * justamente el invariante que no se puede romper. */
+    int64_t (*idiv64)(struct bpvm* vm, int64_t a, int64_t b);
+    int64_t (*imod64)(struct bpvm* vm, int64_t a, int64_t b);
 };
 
 /* V5/H4 — cuánto texto cabe cruzando hacia un pack, en BYTES.

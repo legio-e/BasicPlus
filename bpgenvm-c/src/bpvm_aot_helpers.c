@@ -93,6 +93,33 @@ static void h_write_i64_be(uint8_t* p, int64_t v) {
     bpvm_write_i64_be(p, v);
 }
 
+/* #381 — división y módulo de 64 bits para el código nativo (ver el .h).
+ *
+ * ESPEJO EXACTO de `OP_LDIV`/`OP_LMOD` del intérprete (`interp.c:1141`): el
+ * mismo chequeo, el mismo mensaje y el mismo operador de C. Cualquier mejora
+ * que se le hiciera a uno hay que hacérsela al otro el mismo día, o el mismo
+ * programa daría resultados distintos según se ejecute compilado o interpretado.
+ *
+ * (Nota de un caso que YA diverge hoy, y que esto no empeora ni arregla:
+ * `LONG_MIN / -1` desborda. En Java el resultado es `LONG_MIN`; en C es
+ * comportamiento indefinido. El intérprete de la VM-C tiene el mismo `a / b`
+ * a pelo, así que la divergencia es preexistente y le toca a su propia ficha —
+ * arreglarlo sólo aquí sería introducir una diferencia nueva.) */
+static int64_t h_idiv64(bpvm_t* vm, int64_t a, int64_t b) {
+    if (b == 0) {
+        bpvm_aot_helpers_v2.throw_runtime(vm, "División por cero");   /* no retorna */
+        return 0;
+    }
+    return a / b;
+}
+static int64_t h_imod64(bpvm_t* vm, int64_t a, int64_t b) {
+    if (b == 0) {
+        bpvm_aot_helpers_v2.throw_runtime(vm, "Módulo por cero");     /* no retorna */
+        return 0;
+    }
+    return a % b;
+}
+
 /* ---------- Control de ejecución ----------
  * throw_runtime levanta un BpThreadFault que sube por la pila de
  * frames hasta el handler más cercano (o tumba el thread). */
@@ -612,4 +639,7 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
      * no puede llamarlas por nombre y por eso pasan por aquí. */
     .read_i64_be         = h_read_i64_be,
     .write_i64_be        = h_write_i64_be,
+    /* #381 — la división de 64 bits, que el micro no tiene en hardware. */
+    .idiv64              = h_idiv64,
+    .imod64              = h_imod64,
 };
