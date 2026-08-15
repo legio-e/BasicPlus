@@ -1,0 +1,106 @@
+// FsOpsTest.bp — H2-P4: las seis operaciones del FS que NUNCA se habían ejecutado.
+//
+// Al cerrar H2 (8-ago) quedó anotado que en placa habían corrido `list`, `stat`,
+// `isdir`, `read`, `write` y `read_at`, y que estas otras estaban sólo escritas
+// y enlazadas: `mkdir`, `rmdir`, `remove`, `rename`, `mtime` y el `write` en
+// modo APPEND. Un camino compilado no es un camino probado.
+//
+// Cada operación COMPRUEBA SU EFECTO — que no reviente no basta:
+//   mkdir   → el directorio existe y es directorio
+//   append  → el contenido es lo de antes MÁS lo nuevo (no lo pisó)
+//   mtime   → devuelve algo > 0
+//   rename  → el origen ya NO está y el destino SÍ
+//   remove  → deja de existir
+//   rmdir   → deja de existir
+//
+// La marca de tiempo NO se imprime a propósito: cambia en cada ejecución y en
+// cada máquina, y este sample tiene que dar la MISMA salida en las dos VMs.
+//
+// Se limpia al empezar y al terminar, así que se puede correr las veces que haga
+// falta. Deja el árbol como estaba.
+module FsOpsTest
+  import IO
+
+  var fallos: integer
+
+  function comprueba(ok: boolean, que: string)
+    if ok then
+      print "  ok    : " + que
+    else
+      print "  FALLO : " + que
+      fallos := fallos + 1
+    endif
+  end comprueba
+
+  function Main()
+    fallos := 0
+    print "=== H2-P4: las seis operaciones que no se habian ejecutado ==="
+
+    var dir: string := "probafs"
+    var uno: string := "probafs/uno.txt"
+    var dos: string := "probafs/dos.txt"
+
+    // Por si una vuelta anterior se quedó a medias.
+    if fileExists(uno) then
+      IO.removeFile(uno)
+    endif
+    if fileExists(dos) then
+      IO.removeFile(dos)
+    endif
+    if IO.isDirectory(dir) then
+      IO.rmdir(dir)
+    endif
+
+    // ---- 1. mkdir ----
+    IO.mkdir(dir)
+    comprueba(IO.isDirectory(dir), "mkdir: el directorio existe y es directorio")
+
+    // ---- 2. write (control) + 3. append ----
+    writeFile(uno, "AAA")
+    comprueba(fileExists(uno), "write: el fichero existe")
+    comprueba(readFile(uno) == "AAA", "write: el contenido es el escrito")
+
+    appendFile(uno, "BBB")
+    // La prueba de fuego del append: si en vez de añadir hubiera reescrito,
+    // aqui saldria "BBB" y el fichero mediria 3.
+    comprueba(readFile(uno) == "AAABBB", "append: aniade al final, NO reescribe")
+    comprueba(IO.fileSize(uno) == 6, "append: el tamanio es 6")
+
+    // ---- 4. mtime — OJO, no existe en todos los volumenes ----
+    //
+    // No es una operacion "sin probar": es que SOLO la tienen algunos backends.
+    // littlefs no guarda timestamps (`mtime_ms = NULL` en fs_lfs.c), asi que en
+    // el FS interno de la placa lanza "no soportado" — y esta bien que lo haga.
+    // En la SD (FatFs) si funciona, y con fecha de verdad. Por eso aqui se
+    // atrapa: el sample tiene que poder correr en los tres sitios y DECIR cual
+    // es el caso, en vez de morirse en el volumen equivocado.
+    try
+      var t: integer := IO.lastModified(uno)
+      comprueba(t > 0, "mtime: devuelve una marca > 0")
+    catch e
+      print "  (mtime no soportado en este volumen — normal en littlefs)"
+    endtry
+
+    // ---- 5. rename ----
+    IO.rename(uno, dos)
+    comprueba(fileExists(dos), "rename: el destino existe")
+    comprueba(fileExists(uno) == false, "rename: el origen ya NO existe")
+    comprueba(readFile(dos) == "AAABBB", "rename: el contenido viaja intacto")
+
+    // ---- 6. remove ----
+    IO.removeFile(dos)
+    comprueba(fileExists(dos) == false, "remove: deja de existir")
+
+    // ---- 7. rmdir ----
+    IO.rmdir(dir)
+    comprueba(IO.isDirectory(dir) == false, "rmdir: deja de existir")
+
+    print ""
+    if fallos == 0 then
+      print "TODAS LAS OPERACIONES OK"
+    else
+      print "FALLOS: " + intToString(fallos)
+    endif
+  end Main
+
+end FsOpsTest
