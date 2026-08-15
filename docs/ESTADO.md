@@ -148,10 +148,11 @@ packs y de la SD espera una medida, no código.
 🆕 **15-ago (sábado)** — dos cosas nuevas que se prueban en esta misma tanda:
 - **`#418`** (el resolutor mira `/sys`): subir un módulo SÓLO a `/sys` y ver que
   un `import` lo encuentra. En host no se pudo probar — `/sys` es del device.
-- **`#414`** (módulo `Packs`): correr `samples/PacksDemo.bp`. En el P4, con
-  `SQLite` y `test1` grabados, debería listar los dos y su contenido. ⚠️ **Exige
-  firmware nuevo**: los cuatro builtins son código de la VM-C, así que con una
-  imagen vieja el programa se topa con un opcode que no conoce.
+- ✅ **`#414` CERRADA** — verificada en el P4 el mismo 15-ago: `PacksDemo` listó
+  `SQLite` (7 entradas) y `test1` (3), y el filtro por extensión dio 4 módulos y
+  1. Los conteos **cuadran con lo que el IDE lee por el wire**, que es un camino
+  distinto. *(Recordatorio para la próxima: los builtins son código de la VM-C, o
+  sea que probar esto exige reflashear.)*
 
 **Antes de tocar placa** — reconstruir los firmwares desde el árbol limpio. El
 trabajo del P4 se commiteó el 14-ago (`c917bd6`) y **nadie lo ha compilado desde
