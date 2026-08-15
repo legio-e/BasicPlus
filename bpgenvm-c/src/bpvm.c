@@ -738,10 +738,25 @@ static long entry_fs_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n)
 }
 
 bpvm_status_t bpvm_load_entry_file(bpvm_t* vm, const char* resolved_path) {
+    /* #421 — el rastro se acababa justo aquí, que es donde falla. Un `IO error`
+     * significaba a la vez «no existe», «mide cero» y «no se pudo leer», y sin
+     * decir NUNCA la ruta — que está en la mano. Costó una mañana de hipótesis
+     * (15-ago) con el firmware sabiendo la respuesta y contándosela a nadie. */
     uint32_t size = 0;
-    if (bpvm_fs_stat(resolved_path, &size) != 0 || size == 0) return BPVM_ERR_IO;
-    return bpvm_load_mod_stream(vm, entry_fs_read_at, (void*) resolved_path,
-                                (size_t) size, resolved_path);
+    if (bpvm_fs_stat(resolved_path, &size) != 0) {
+        bpvm_diag("[bpvm-c] cargar '%s': NO se puede leer (stat falla)", resolved_path);
+        return BPVM_ERR_IO;
+    }
+    if (size == 0) {
+        bpvm_diag("[bpvm-c] cargar '%s': mide 0 bytes (subida a medias?)", resolved_path);
+        return BPVM_ERR_IO;
+    }
+    bpvm_status_t s = bpvm_load_mod_stream(vm, entry_fs_read_at, (void*) resolved_path,
+                                           (size_t) size, resolved_path);
+    if (s != BPVM_OK)
+        bpvm_diag("[bpvm-c] cargar '%s' (%u B): %s", resolved_path,
+                  (unsigned) size, bpvm_status_str(s));
+    return s;
 }
 
 /* #345 — la primera línea de /sys/auto.txt, limpia. Ver bpvm_entry.h. */
