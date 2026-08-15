@@ -183,10 +183,16 @@ instrumento obvio no valía— en `notas/FICHAS.md`.
    esa tarjeta: era la condición previa.
    *Se reabre si se sube el reloj* — un bus marginal aguanta despacio y falla
    arriba, y ese es el caso que esta prueba existe para pillar.
-2. **`#379`** — mirar si el `INFO` sigue perdiendo la respuesta, y cronometrar la
+2. **`#424` — los eventos del GUI van lentos, y SÓLO en la P4.** Tiene una prueba
+   de una línea esperando: el lazo de la P4 duerme **hasta 50 ms** entre vueltas
+   (`gui_display_dsi.c:546`) y el del STM32 —que va bien— despierta por IRQ con
+   SysTick de 1 ms. Como el táctil se lee dentro de `lv_timer_handler`, en la P4
+   se muestrea a ~20 Hz. Bajar ese tope y ver. **Cambiando UNA cosa**, y sabiendo
+   que el tope está puesto a propósito (CPU y watchdog de tareas).
+3. **`#379`** — mirar si el `INFO` sigue perdiendo la respuesta, y cronometrar la
    respuesta **en el firmware**, no en el IDE: son dos fallos distintos (tarda más
    que su timeout / se pierde) y sólo esa medida los separa.
-3. **`#419`** — con y sin tarjeta: **sin SD arranca sin errores y más rápido**, y
+4. **`#419`** — con y sin tarjeta: **sin SD arranca sin errores y más rápido**, y
    el árbol del IDE también refresca antes (observado el 14-ago). Medir dónde se
    va el tiempo antes de tocar nada — se junta con `#408`.
 
@@ -200,6 +206,20 @@ resolutor. Es trabajo de escritorio y desatasca cualquier prueba en placa.
 
 Todo lo demás (fichas de compilador, IDE, AOT) puede esperar: no depende de tener
 la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
+
+> 🔌 **LO PRIMERO DE LA PRÓXIMA SESIÓN CON LA P4 DELANTE: hay firmware tocado y
+> SIN COMPILAR.** En esta máquina no hay ESP-IDF (`idf.py` no está en el PATH ni
+> hay `IDF_PATH`), así que estos dos cambios están commiteados pero **nadie los
+> ha construido**:
+> - **`#420`** (`29da27c`) — el sink del diagnóstico de la VM al log persistente.
+>   Es lo que hace que el P4 tenga por fin **log de ejecución**, y lo que cierra
+>   la ficha es repetir con él el caso del `Core.mod`.
+> - **el reloj efectivo de la SD** (`0a4e25c`) — el arranque debe decir
+>   `| 20000 kHz (por defecto)` en vez de `| 0 kHz`.
+>
+> Los dos se comprueban de un vistazo en el log de arranque. Y ojo: con `#420`
+> dentro, el log se llena en ~26 colectas (**`#423`**), así que puede que la
+> primera imagen nueva salga ya con `[LOG OVERFLOW]` al pie.
 
 ## Próximos pasos
 
