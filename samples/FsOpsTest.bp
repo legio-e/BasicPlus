@@ -32,13 +32,22 @@ module FsOpsTest
     endif
   end comprueba
 
+  // DONDE se prueba. Una sola linea que cambiar, porque el volumen IMPORTA:
+  //   ""        → junto al programa (el FS interno de la placa, littlefs)
+  //   "/sd/"    → la tarjeta (FatFs) — el unico sitio donde `mtime` funciona
+  // Verificado en placa el 15-ago con los dos valores: littlefs 10/10 (mtime
+  // dice "no soportado", que es lo correcto) y SD 11/11 con la fecha de verdad.
+  // Cuando este #412 (pasarle un argumento al `run`) esto se elegira sin
+  // recompilar.
+  const BASE: string := ""
+
   function Main()
     fallos := 0
     print "=== H2-P4: las seis operaciones que no se habian ejecutado ==="
 
-    var dir: string := "probafs"
-    var uno: string := "probafs/uno.txt"
-    var dos: string := "probafs/dos.txt"
+    var dir: string := BASE + "probafs"
+    var uno: string := BASE + "probafs/uno.txt"
+    var dos: string := BASE + "probafs/dos.txt"
 
     // Por si una vuelta anterior se quedó a medias.
     if fileExists(uno) then
