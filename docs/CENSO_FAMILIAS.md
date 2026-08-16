@@ -119,6 +119,34 @@ para pillar.*
 **Alcance**: 1, 2, 3 y 8 caben en V5 sin riesgo (cambios chicos, verificables).
 4, 5, 6, 7 son unificación → V6, salvo que alguno se vuelva urgente.
 
+## Por qué el STM32 está donde está (Eduardo, 17-ago — no estaba escrito)
+
+*«El STM32 está atrasado por muchas razones; la principal es que la única placa
+que tengo con SD en esa familia es de un micro que no tenemos soportado, así
+que implica hacer el desarrollo para el micro, añadir soporte de SD, packs
+nativos y SQLite. Demasiado para esta versión y por eso lo aplazamos a V6.»*
+
+O sea: el atraso no es descuido, es **alcance decidido**. Lo razonable y chico
+se hace en V5 (el `#421`, el `json_min`); la puesta al día de la familia es V6.
+
+## El censo de V6 — la ampliación (especificación de Eduardo, 17-ago)
+
+Este documento es la **base**; en V6 se amplía a un censo FUNCIONAL:
+
+*«Haremos una lista con todo lo que existe actualmente a nivel funcional: Boot,
+SD, memoria, FS, Fat32, GC, Packs, VM, drivers de hardware, etc. Lo que
+revisaremos es si están implementados, si es código específico o común, si
+respetan las relaciones entre módulos (por ejemplo que la VM no llame al HAL
+directamente, para evitar que no sea hardware-independiente). Consumos de
+memoria y tiempos. Con eso podremos detectar anomalías y carencias. Es mucho
+trabajo pero tenemos una versión completa dedicada a ello, la V6.»*
+
+Es decir, cuatro ejes por FUNCIÓN (no por fichero, que es lo que mira este
+censo): **implementado/dónde** · **específico vs común** · **capas respetadas**
+(la VM no toca el HAL: la regla de independencia del hardware) · **memoria y
+tiempos medidos**. Este doc aporta el primer eje y medio; los otros dos son el
+trabajo de V6.
+
 ---
 *Generado con: los `CMakeLists`/`Makefile`/`sdkconfig`/`subdir.mk` de cada
 imagen, `md5sum` de los gemelos, `grep strcmp(type,…)` de los despachadores, y

@@ -88,7 +88,7 @@
 						<entry excluding="draw/sw/blend/neon|draw/sw/blend/helium" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="lvgl"/>
 						<entry excluding="stm32_fs.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="port"/>
 						<entry excluding="bd" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="littlefs"/>
-						<entry excluding="fs_lfs_host.c|fs_host.c|platform_pthread.c|gui_display_sdl.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
+						<entry excluding="fs_lfs_host.c|fs_host.c|platform_pthread.c|gui_display_sdl.c|fs_fat.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

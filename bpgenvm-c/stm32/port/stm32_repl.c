@@ -595,6 +595,20 @@ static void run_module_path(const char* path, long id) {
             "\"errorMessage\":\"falta el modulo %s en el FS (stdlib no embebida?)\"}",
             session, missing);
         if (n > 0) stm32_wire_send_line(buf, (size_t) n);
+    } else if (st != BPVM_OK && entry.fallo[0]) {
+        /* #421 (17-ago) — el PORQUÉ del fallo de CARGA, con su ruta. El resto
+         * de familias lo mandaba desde el 16-ago y ésta seguía con el «IO
+         * error» pelado — lo destapó el CENSO (docs/CENSO_FAMILIAS.md §5): el
+         * patrón de siempre, el común creció y esta copia no. Va antes del
+         * error de enlace porque un fichero que no se puede leer no llega a
+         * enlazarse. */
+        BOARD_LED_ERR_ON();
+        char buf[288];
+        int n = snprintf(buf, sizeof(buf),
+            "{\"type\":\"EXITED\",\"session\":%ld,\"status\":\"RUNTIME_ERROR\","
+            "\"exitCode\":%d,\"elapsedMs\":%lu,\"errorMessage\":\"load: %s\"}",
+            session, (int) st, (unsigned long) dt, entry.fallo);
+        if (n > 0) stm32_wire_send_line(buf, (size_t) n);
     } else {
         if (st != BPVM_OK && st != BPVM_KILLED) BOARD_LED_ERR_ON();
         const char* link_err = bpvm_link_error(vm);   /* paso 4 — "" salvo fallo de link */

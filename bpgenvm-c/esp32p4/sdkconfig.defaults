@@ -48,3 +48,10 @@ CONFIG_ESP_CONSOLE_NONE=y
 # codigo de confianza de nuestro propio toolchain. (Al desactivar MEMPROT,
 # HEAP_HAS_EXEC_HEAP pasa a 'y' -> MALLOC_CAP_EXEC disponible.)
 CONFIG_ESP_SYSTEM_MEMPROT=n
+
+# El CENSO (docs/CENSO_FAMILIAS.md, 17-ago) cazo que esta familia compilaba a
+# -Og (DEBUG) mientras el S3 iba a -Os — la leccion del STM32-a-O0 de V4,
+# repetida. Se fija AQUI, en los defaults, para que un menuconfig o un
+# sdkconfig regenerado no lo devuelva a DEBUG en silencio: los flags de build
+# son de CADA familia y nadie los compara si no estan escritos.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
