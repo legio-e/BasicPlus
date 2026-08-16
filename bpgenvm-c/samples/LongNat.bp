@@ -60,14 +60,19 @@ module LongNat
     return t
   end acumula
 
-  // Estrechar a 32 bits desde nativo. NO es `native` todavía: el emisor AOT
-  // aún no traduce la conversión `integer(x)` dentro de una nativa (la ve como
-  // una llamada a una función desconocida). Se queda interpretada a propósito
-  // — que una funcione interpretada y las otras compiladas es EXACTAMENTE lo
-  // que el AOT promete, y de paso lo prueba.
-  function bajaA32(v: long): integer
+  // Estrechar a 32 bits desde nativo (#381). En BP una conversión se escribe
+  // con el nombre del tipo, así que al emisor le llega como una llamada y hasta
+  // ahora moría con «función desconocida». Se emite el cast de C, que es
+  // literalmente lo que hace el opcode del intérprete (`OP_I64_TO_I32` es
+  // `(int32_t) v`): no es una conversión equivalente, es LA MISMA.
+  native function bajaA32(v: long): integer
     return integer(v)
   end bajaA32
+
+  // Y el sentido contrario: ensanchar de 32 a 64 dentro de una nativa.
+  native function sube(n: integer, base: long): long
+    return base + long(n)
+  end sube
 
   function Main()
     // Más allá de 32 bits: 2^40 y 2^35. Con un marshalling de 4 bytes esto
@@ -98,6 +103,7 @@ module LongNat
     print "divL    : " + divL(G1, 1024L)
     print "divNeg  : " + divL(0L - G1, 3L)
     print "modL    : " + modL(G1, 1000L)
+    print "sube    : " + sube(7, G1)
     print "cadena  : " + acc
 
     // DIVISION POR CERO DESDE CODIGO NATIVO. Es el caso que valida el helper:

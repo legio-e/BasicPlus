@@ -1372,6 +1372,37 @@ public final class AotCEmitter {
             }
             String name = ((Ast.IdentifierExpr) c.callee).name;
 
+            /* #381 — CONVERSIONES NUMÉRICAS: `integer(x)`, `long(x)`, `float(x)`.
+             *
+             * En BP una conversión se escribe con el nombre del tipo, así que al
+             * emisor le llega como una llamada — y hasta ahora moría con «call a
+             * función desconocida 'integer'». Iba antes de que `long` existiera
+             * en las nativas, pero con `long` dentro es lo primero que hace
+             * falta: bajar a 32 bits para indexar o imprimir es el gesto normal.
+             *
+             * Se emite el CAST DE C, y eso no es una aproximación: los opcodes
+             * del intérprete son literalmente eso — `OP_I64_TO_I32` es
+             * `(int32_t) v`, `OP_I2F` es `(float) v`, `OP_F2L` es `(int64_t) f`
+             * (`interp.c:1213`, `:1091`, `:1355`). El código compilado ejecuta la
+             * misma conversión que el interpretado, no una equivalente.
+             *
+             * Va ANTES de los builtins a propósito: si alguien declarase una
+             * función suya llamada `integer`, la conversión debe seguir siendo la
+             * conversión — es sintaxis del lenguaje, no una llamada cualquiera. */
+            if (c.args.size() == 1 && esCastNumerico(name)) {
+                if ("double".equals(name)) {
+                    throw new UnsupportedAotException(
+                        "AOT: la conversión 'double(x)' no cruza a una función native "
+                        + "(ficha #426; 'integer', 'long' y 'float' sí). La aritmética "
+                        + "de 'double' la emula el software y esas rutinas no caben en "
+                        + "el código nativo del módulo.");
+                }
+                w.print("((" + cType(new Ast.SimpleTypeRef(name, c.line, c.column)) + ") (");
+                emitExpr(c.args.get(0));
+                w.print("))");
+                return;
+            }
+
             /* Builtins (H3 #168) — antes que native funcs por si hubiera
              * colisión de nombres. Lista hardcoded por ahora; expansible. */
             if (emitBuiltinCall(name, c.args)) return;
@@ -1921,6 +1952,15 @@ public final class AotCEmitter {
                 }
             }
         }
+    }
+
+    /** #381 — ¿este nombre es una conversión numérica escrita como llamada?
+     *  Los cuatro que el lenguaje admite; `double` entra en la lista para poder
+     *  RECHAZARLO con su motivo (#426) en vez de dejarlo caer en el genérico
+     *  «función desconocida», que no explicaría nada. */
+    private boolean esCastNumerico(String n) {
+        return "integer".equals(n) || "long".equals(n)
+            || "float".equals(n)   || "double".equals(n);
     }
 
     /** True si el tipo BP cabe en un slot de 4 bytes (integer/float/bool).
