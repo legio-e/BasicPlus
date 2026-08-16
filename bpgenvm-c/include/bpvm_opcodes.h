@@ -231,4 +231,16 @@
 #define OP_LPOW            0xAD
 #define OP_DPOW            0xAE
 
+/* 0xAF — #389 (V5): la mitad DINÁMICA del estrechamiento de `Object`.
+ * `Cosa(o)` / `string(o)` compilaban a NADA: el cast solo fijaba el tipo
+ * estático, y si el objeto no era un `Cosa` el error aparecía después,
+ * disfrazado (el 504 del despacho). CHECKCAST mira (sin consumir) la ref en
+ * la cima: null pasa; si no, el bloque tiene que ser un OBJETO descendiente
+ * de la clase destino — o, con cls_off==0 (centinela: en cs+0 empieza el
+ * código, nunca hay un descriptor), una CADENA (ARRAY_I8). Si no cuadra,
+ * RuntimeError atrapable cuyo mensaje NOMBRA el tipo esperado: el segundo
+ * operando apunta al literal [u32 len][utf8] del nombre en la región de
+ * datos. Operandos: cls_off:i16 + name_off:i16, cs-relativos. */
+#define OP_CHECKCAST       0xAF
+
 #endif /* BPVM_OPCODES_H */

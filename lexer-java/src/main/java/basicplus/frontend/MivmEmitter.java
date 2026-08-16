@@ -3724,6 +3724,23 @@ public final class MivmEmitter {
         // regla, para que no pueda divergir.
         if (info.refCasts.contains(c)) {
             emitExpr(c.args.get(0));
+            /* #389, la mitad DINÁMICA (16-ago): el cast ya no es solo una
+             * reinterpretación — COMPRUEBA. Si el objeto no es de la clase
+             * destino (o no es una cadena, en `string(o)`), CHECKCAST lanza un
+             * RuntimeError atrapable que nombra el tipo esperado, en vez del
+             * 504 disfrazado que salía después. `Object(x)` no emite nada: un
+             * Object puede llevar legítimamente una cadena (string→Object es
+             * ensanchamiento), y exigirle "ser objeto" la rechazaría. */
+            BpType t = info.exprTypes.get(c);
+            if (t instanceof PrimitiveType
+                    && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING) {
+                w.emitCheckCastString(internString("string"));
+            } else if (t instanceof ClassType) {
+                Symbol.ClassSymbol cls = ((ClassType) t).cls;
+                if (!"Object".equals(cls.name)) {
+                    w.emitCheckCast(cls.name, internString(cls.name));
+                }
+            }
             return;
         }
         // len(x) — intrínseco global type-directed (azúcar estilo Python). El

@@ -1,0 +1,116 @@
+// CastRt.bp — #389: la mitad DINAMICA del estrechamiento de Object.
+//
+// La mitad estatica (14-ago) hizo que bajar se ESCRIBA: `Cosa(o)`, `string(o)`.
+// Pero esa conversion solo fijaba el tipo: si el Object llevaba otra cosa, el
+// error aparecia despues, disfrazado (el 504 del despacho). Desde hoy el cast
+// COMPRUEBA: si no cuadra, RuntimeError atrapable que NOMBRA el tipo esperado.
+//
+// Cada caso prueba una cosa distinta:
+//   1. bajar a la clase correcta        -> pasa
+//   2. bajar a una clase hermana        -> lanza (nombra 'Gato')
+//   3. bajar a la BASE desde una hija   -> pasa (herencia)
+//   4. string(o) cuando lleva un objeto -> lanza (nombra 'string')
+//   5. Cosa(o) cuando lleva una cadena  -> lanza (el bloque no es un objeto)
+//   6. string(o) cuando lleva cadena    -> pasa
+//   7. null                             -> pasa (como en Java)
+//   8. instanceof con cadena dentro     -> false LIMPIO (el endurecimiento:
+//      antes la VM-C recorria la longitud de la cadena como si fuera un
+//      descriptor de clase — basura; miVM ya contestaba 0)
+module CastRt
+
+  class Animal
+    var nombre: string
+    function Animal()
+      this.nombre := "animal"
+    end Animal
+    public function di(): string
+      return "soy " + this.nombre
+    end di
+  end Animal
+
+  class Perro extends Animal
+    function Perro()
+      super()
+      this.nombre := "perro"
+    end Perro
+  end Perro
+
+  class Gato extends Animal
+    function Gato()
+      super()
+      this.nombre := "gato"
+    end Gato
+  end Gato
+
+  // El DAO de mentira: devuelve un Object que lleva lo que le pidan.
+  function da(cual: integer): Object
+    if cual == 1 then
+      return Perro()
+    endif
+    if cual == 2 then
+      return "una cadena"
+    endif
+    return null
+  end da
+
+  function Main()
+    // 1. bajar a la clase correcta
+    var p: Perro := Perro(da(1))
+    print "1: " + p.di()
+
+    // 2. bajar a una clase HERMANA: lanza y nombra el tipo
+    try
+      var g: Gato := Gato(da(1))
+      print "2: NO DEBERIA LLEGAR AQUI"
+    catch e: RuntimeError
+      print "2: " + e.msg
+    endtry
+
+    // 3. bajar a la BASE desde una hija: la herencia pasa
+    var a: Animal := Animal(da(1))
+    print "3: " + a.di()
+
+    // 4. string(o) cuando lleva un objeto
+    try
+      var s: string := string(da(1))
+      print "4: NO DEBERIA LLEGAR AQUI"
+    catch e: RuntimeError
+      print "4: " + e.msg
+    endtry
+
+    // 5. Cosa(o) cuando lleva una CADENA (el bloque ni es un objeto)
+    try
+      var p2: Perro := Perro(da(2))
+      print "5: NO DEBERIA LLEGAR AQUI"
+    catch e: RuntimeError
+      print "5: " + e.msg
+    endtry
+
+    // 6. string(o) cuando lleva cadena: pasa
+    var s2: string := string(da(2))
+    print "6: " + s2
+
+    // 7. null pasa (como en Java: el cast de null no lanza)
+    var p3: Perro := Perro(da(3))
+    print "7: null ok"
+
+    // 8. instanceof con una cadena dentro: false LIMPIO
+    var o: Object := da(2)
+    if o instanceof Perro then
+      print "8: NO DEBERIA SER UN PERRO"
+    else
+      print "8: una cadena no es un Perro"
+    endif
+
+    // 9. el HERMANO: despachar un metodo sobre un Object que lleva una cadena.
+    //    Antes leia la longitud de la cadena como class_ptr y el error salia
+    //    despues, disfrazado (el 504). Ahora se dice aqui, y atrapable.
+    try
+      print "9: " + o.toString()
+      print "9: NO DEBERIA LLEGAR AQUI"
+    catch e: RuntimeError
+      print "9: " + e.msg
+    endtry
+  end Main
+
+end CastRt

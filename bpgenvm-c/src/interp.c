@@ -87,6 +87,53 @@ static void emit_newline(bpvm_t* vm) {
  *   2 = fault NO cazado (eh_unwind dejó el thread TERMINATED).
  * tc->cs debe estar fijado por el caller (throw_runtime_error localiza
  * la clase RuntimeError por el cs del módulo en curso). */
+/* #389 — class_ptr del bloque de una ref, o 0 si la ref no apunta a un OBJETO
+ * vivo del heap. ESPEJO de `classPtrOfRefOr0` de la VM-Java, que ya validaba
+ * el tipo de bloque; aquí INSTANCEOF leía el class_ptr A CIEGAS, así que una
+ * cadena dentro de un `Object` hacía que el recorrido de herencia caminara
+ * sobre su longitud como si fuera un descriptor — basura, y una divergencia
+ * de paridad latente (miVM contestaba 0 limpio). La usan INSTANCEOF y
+ * CHECKCAST: una regla, un sitio. */
+static uint32_t class_ptr_of_ref_or0(bpvm_t* vm, bpref_t ref) {
+    if (bpref_is_null(ref)) return 0;
+    uint32_t ur = bpref_deref(vm, ref);
+    if (ur == 0) return 0;
+    uint32_t header = ur - 4;
+    if (header < vm->heap_start || header >= vm->heap_next) return 0;
+    uint32_t tag = bpvm_read_u32_be(vm->memory + header);
+    if (tag & BPVM_TAG_FREE_BIT) return 0;
+    if ((int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT) != BPVM_TYPE_OBJECT)
+        return 0;
+    return (uint32_t) bpvm_read_i32_be(vm->memory + ur);
+}
+
+/* #389 — ¿la ref es una CADENA? Para `string(o)`. Y las cadenas viven en DOS
+ * sitios, que es lo que el primer intento no sabía (lo cazó el caso 6 del
+ * reproductor: `string(o)` con un literal dentro LANZABA):
+ *
+ *   - en el HEAP (las construidas: concat, substring…): bloque con cabecera,
+ *     el tag tiene que decir ARRAY_I8 y no estar libre;
+ *   - en la REGIÓN DE DATOS (los literales, `[u32 len][utf8]` SIN cabecera de
+ *     bloque): cualquier dirección por debajo del heap. Ahí no hay tag que
+ *     mirar — y no hace falta: en un `Object` sólo pueden vivir objetos
+ *     (siempre heap), cadenas y null, así que una dirección de datos SOLO
+ *     puede ser un literal de cadena. Es el sistema de tipos el que lo
+ *     garantiza, no esta función.
+ *
+ * Direcciones por ENCIMA del heap (la zona de pilas) se rechazan: una cadena
+ * legítima no vive ahí. */
+static int ref_es_cadena(bpvm_t* vm, bpref_t ref) {
+    if (bpref_is_null(ref)) return 0;
+    uint32_t ur = bpref_deref(vm, ref);
+    if (ur == 0) return 0;
+    if (ur < vm->heap_start) return 1;              /* literal en datos */
+    uint32_t header = ur - 4;
+    if (header >= vm->heap_next) return 0;          /* zona de pilas: jamás */
+    uint32_t tag = bpvm_read_u32_be(vm->memory + header);
+    if (tag & BPVM_TAG_FREE_BIT) return 0;
+    return (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT) == BPVM_TYPE_ARRAY_I8;
+}
+
 static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
                             bpvm_aot_thunk_t aot, uint32_t* sp, uint32_t* bp) {
     bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
@@ -1593,7 +1640,12 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             bpref_t this_obj = bpref_load(vm, this_addr);
             if (bpref_is_null(this_obj)) { exit_status = BPVM_ERR_NULL_RECEIVER; goto done; }
             if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B: método sobre objeto liberado */
-            uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, this_obj));
+            /* #389 — el "hermano" del cast: despachar un método sobre un Object
+             * que lleva una CADENA leía su longitud como class_ptr y el error
+             * salía después, disfrazado (el 504). El helper valida el tipo de
+             * bloque; si no es un objeto, se dice AQUÍ y atrapable. */
+            uint32_t class_ptr = class_ptr_of_ref_or0(vm, this_obj);
+            if (class_ptr == 0) BPVM_RT_THROW("el receptor no es un objeto (una cadena o un array no despachan metodos)");
 
             /* L2 v3: fall-back al parent si vt[slot] == -1 o slot >= num_methods.
              * El bucle termina al encontrar un methodOff válido o llegar
@@ -1647,8 +1699,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t expected = (uint32_t)((int32_t) cs + cs_off);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             int32_t result = 0;
-            if (!bpref_is_null(obj)) {
-                uint32_t cur = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, obj));
+            {   /* #389 — el class_ptr, VALIDADO: una cadena o un array dentro de
+                 * un Object daba aquí una lectura ciega (la longitud como
+                 * descriptor). miVM ya validaba; ahora las dos igual. */
+                uint32_t cur = class_ptr_of_ref_or0(vm, obj);
                 while (cur != 0) {
                     if (cur == expected) { result = 1; break; }
                     int32_t parent_off = bpvm_read_i32_be(mem + cur
@@ -1659,6 +1713,52 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 }
             }
             bpvm_write_i32_be(mem + sp, result); sp += 4;
+            break;
+        }
+
+        /* #389 — LA MITAD DINÁMICA del estrechamiento de Object (ver el .h del
+         * opcode). Mira SIN CONSUMIR: si pasa, el valor sigue su camino con el
+         * tipo nuevo; si no, RuntimeError atrapable que NOMBRA el tipo. */
+        case OP_CHECKCAST: {
+            int16_t cls_off  = bpvm_read_i16_be(mem + pc); pc += 2;
+            int16_t name_off = bpvm_read_i16_be(mem + pc); pc += 2;
+            bpref_t obj = bpref_load(vm, sp - BPVM_REF_SIZE);   /* peek */
+            int ok = 1;
+            if (!bpref_is_null(obj)) {
+                if (cls_off == 0) {
+                    ok = ref_es_cadena(vm, obj);
+                } else {
+                    uint32_t expected = (uint32_t)((int32_t) cs + cls_off);
+                    uint32_t cur = class_ptr_of_ref_or0(vm, obj);
+                    ok = 0;
+                    while (cur != 0) {
+                        if (cur == expected) { ok = 1; break; }
+                        int32_t parent_off = bpvm_read_i32_be(mem + cur
+                                                                + BPVM_CLS_OFF_PARENT_OFF);
+                        if (parent_off == 0) break;
+                        uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, cur);
+                        cur = (uint32_t)((int32_t) cur_cs + parent_off);
+                    }
+                }
+            }
+            if (!ok) {
+                char msg[96];
+                uint32_t naddr = (uint32_t)((int32_t) cs + name_off);
+                uint32_t nlen  = (uint32_t) bpvm_read_i32_be(mem + naddr);
+                if (nlen > 40u) nlen = 40u;
+                snprintf(msg, sizeof msg,
+                         "conversion invalida: el valor no es un '%.*s'",
+                         (int) nlen, (const char*) (mem + naddr + 4));
+                tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+                bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+                if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
+                    pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+                    mem = vm->memory; break;
+                }
+                exit_status = BPVM_ERR_RUNTIME;
+                if (yielded) *yielded = 1;
+                goto done;
+            }
             break;
         }
 

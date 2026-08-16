@@ -282,7 +282,13 @@ public enum OpCode {
     // en f64 (parity-safe, incl. x^2 float); fraccionario → exp(exp*ln(base)).
     IPOW           (0xAC, OperandKind.NONE),   // i32 base, i32 exp → i32
     LPOW           (0xAD, OperandKind.NONE),   // i64 base, i64 exp → i64
-    DPOW           (0xAE, OperandKind.NONE);   // f64 base, f64 exp → f64
+    DPOW           (0xAE, OperandKind.NONE),   // f64 base, f64 exp → f64
+    // #389 — la mitad dinámica del estrechamiento de Object. Mira SIN consumir
+    // la ref en la cima: null pasa; cls_off==0 = "tiene que ser una cadena";
+    // si no, objeto descendiente del descriptor en cs+cls_off. Si no cuadra,
+    // RuntimeError atrapable que NOMBRA el tipo: name_off apunta al literal
+    // [u32 len][utf8] del nombre en la región de datos.
+    CHECKCAST      (0xAF, OperandKind.CLS_NAME_I16_I16);
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;
@@ -312,6 +318,8 @@ public enum OpCode {
         SLOT_NUMARGS_U8U8 (2),
         // i32 (handler offset relativo al PC del TRY_BEGIN) + i16 (cs_off de clase, 0=any)
         TRY_HANDLER_I32_I16 (6),
+        // #389 — cls_off:i16 + name_off:i16 (los dos cs-relativos)
+        CLS_NAME_I16_I16 (4),
         // BUG-2 — i32 (handler offset) + i32 (cs_off de clase cross-module)
         TRY_HANDLER_I32_I32 (8);
 

@@ -3458,6 +3458,34 @@ public class VirtualMachine {
                     break;
                 }
 
+                case 0xAF: { // CHECKCAST — #389, la mitad dinámica del cast de Object
+                    short clsOff  = (short) readI16(mem, pc); pc += 2;
+                    short nameOff = (short) readI16(mem, pc); pc += 2;
+                    long ref = refLoad(mem, sp - REF_SIZE);   // peek: no consume
+                    boolean ok = true;
+                    if (ref != 0) {
+                        if (clsOff == 0) {
+                            // string(o): el bloque tiene que ser una cadena.
+                            ok = blockTypeOfRefIs(ref, TYPE_ARRAY_I8);
+                        } else {
+                            int objClass = classPtrOfRefOr0(ref);
+                            ok = (objClass != 0) && isDescendantOf(objClass, cs + clsOff);
+                        }
+                    }
+                    if (!ok) {
+                        int naddr = cs + nameOff;
+                        int nlen  = readInt32(naddr);
+                        if (nlen > 40) nlen = 40;
+                        String nombre = new String(mem, naddr + 4, nlen,
+                                java.nio.charset.StandardCharsets.UTF_8);
+                        // ⚠️ MISMO mensaje, byte a byte, que interp.c — paridad.
+                        tc.sp = sp; tc.bp = bp; tc.pc = pc; tc.cs = cs;
+                        throwBpRuntimeError(tc,
+                                "conversion invalida: el valor no es un '" + nombre + "'");
+                    }
+                    break;
+                }
+
                 // --- Variantes compactas para reducir tamaño del bytecode.
                 //     Estos cases tienen el writeI32/readI32 INLINE explícito
                 //     porque el JIT del HotSpot considera readI32/writeI32
@@ -3553,7 +3581,15 @@ public class VirtualMachine {
                         break;
                     }
                     requireAlive(tc, sp, thisRef);   // contrato B: método sobre objeto liberado → grita
-                    int classPtr   = readI32(mem, refDeref(thisRef));
+                    // #389 — el "hermano" del cast: un Object con una CADENA
+                    // dentro no despacha métodos. Validado, no leído a ciegas.
+                    // ⚠️ MISMO mensaje que interp.c, byte a byte — paridad.
+                    int classPtr   = classPtrOfRefOr0(thisRef);
+                    if (classPtr == 0) {
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
+                        break;
+                    }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
 
                     // L2 v3 — herencia cross-module: si vt[slot] == -1 o el slot
@@ -5383,6 +5419,25 @@ public class VirtualMachine {
      * con header TAG_TYPE = TYPE_OBJECT), devuelve su class_ptr. En caso
      * contrario (null, no-ref, ref a array, ref fuera del heap, etc.) devuelve 0.
      */
+    /** #389 — ¿el bloque de la ref es del tipo dado y está vivo? Para el modo
+     *  cadena de CHECKCAST (`string(o)`). Mismas validaciones que
+     *  classPtrOfRefOr0, sin exigir OBJETO. */
+    private boolean blockTypeOfRefIs(long ref, int wantedType) {
+        if (ref <= 0) return false;
+        int addr = refDeref(ref);
+        // Las cadenas viven en DOS sitios (lo cazó el caso 6 del reproductor):
+        // heap (construidas, con cabecera) y REGIÓN DE DATOS (literales, sin
+        // cabecera). Una dirección de datos en un Object sólo puede ser un
+        // literal de cadena — el sistema de tipos no deja entrar otra cosa.
+        // ESPEJO de ref_es_cadena en interp.c.
+        if (addr > 0 && addr < heapStart) return wantedType == TYPE_ARRAY_I8;
+        int headerAddr = addr - 4;
+        if (headerAddr < heapStart || headerAddr >= heapNext) return false;
+        int tag = readInt32(headerAddr);
+        if ((tag & TAG_FREE_BIT) != 0) return false;
+        return ((tag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT) == wantedType;
+    }
+
     private int classPtrOfRefOr0(long ref) {
         if (ref <= 0) return 0;
         int headerAddr = refDeref(ref) - 4;

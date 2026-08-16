@@ -1564,6 +1564,30 @@ public class ModWriter {
         currentBytecodeSize += 3;
     }
 
+    /** #389 — CHECKCAST a una CLASE: el cast `Cosa(o)` comprueba en ejecución.
+     *  `nameSym` es el literal internado con el nombre (para el mensaje). */
+    public void emitCheckCast(String className, String nameSym) throws IOException {
+        Integer clsOff = dataSymbolOffset.get(className);
+        if (clsOff == null) throw new RuntimeException("Clase '" + className + "' no declarada para CHECKCAST");
+        Integer nameOff = dataSymbolOffset.get(nameSym);
+        if (nameOff == null) throw new RuntimeException("Literal '" + nameSym + "' no internado para CHECKCAST");
+        codeOut.writeByte(OpCode.CHECKCAST.code);
+        codeOut.writeShort(clsOff.shortValue());
+        codeOut.writeShort(nameOff.shortValue());
+        currentBytecodeSize += 5;
+    }
+
+    /** #389 — CHECKCAST a CADENA: `string(o)`. cls_off=0 es el centinela del
+     *  modo cadena (en cs+0 empieza el código: nunca hay un descriptor). */
+    public void emitCheckCastString(String nameSym) throws IOException {
+        Integer nameOff = dataSymbolOffset.get(nameSym);
+        if (nameOff == null) throw new RuntimeException("Literal '" + nameSym + "' no internado para CHECKCAST");
+        codeOut.writeByte(OpCode.CHECKCAST.code);
+        codeOut.writeShort(0);
+        codeOut.writeShort(nameOff.shortValue());
+        currentBytecodeSize += 5;
+    }
+
     public void emitTryEnd() throws IOException {
         codeOut.writeByte(OpCode.TRY_END.code);
         currentBytecodeSize += 1;
