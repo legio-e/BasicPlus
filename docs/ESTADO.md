@@ -348,6 +348,54 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 ## Última sesión
 
+### 17-ago (tarde) — LA SESIÓN DE PLACA: la Metro entera, y un cuelgue cazado
+
+**Seis fichas verificadas EN PLACA en una tarde**: `#389` (CastRt, 9 líneas byte
+a byte con el opcode nuevo), `#381`/`#428` (LongNat: 8/8 thunks, el `.mdn` del
+pipeline enlazado corriendo en ARM), `#430`, `#302` paso 3, `#422` (los dos
+caminos) y `#418`. **La Metro queda COMPLETA.**
+
+**Lo gordo fue `#430`**, y no era lo que parecía. La Metro se colgaba muda
+ejecutando el sample que venía a probar el escaneo de la pila C — o sea, el
+instrumento moría antes de medir. Eduardo lo acotó en tres pasos, ninguno
+teórico: quitar el `native` (murió igual ⇒ el nativo, exonerado), llamar al
+`gc()` a mano (terminó limpio ⇒ el GC va bien, nadie lo llamaba) y **el test de
+desplazamiento**: un gemelo que gasta el doble de handles por vuelta murió a la
+mitad de camino. La causa: el disparo del GC contaba VOLUMEN y no SLOTS, la
+tabla de handles sólo doblaba, y su salto a 65536 pide 512 KB **de SRAM** (las
+tablas salen del malloc de plataforma, no del heap de la VM, que está en PSRAM).
+El malloc fallaba y el hook de FreeRTOS parpadea para siempre: un cuelgue, no un
+error. Arreglado en las DOS VMs con las tres ideas de Eduardo — la marca al
+final de la tabla, el tope por puerto (Pico: 16384 slots) y la **excepción
+prefabricada** en el prólogo del RUN, que hace que quedarse sin memoria para
+contar el error deje de ser una muerte muda. Ficha completa en `notas/FICHAS.md`.
+
+Herramientas arregladas por el camino: el **Upload del Explorer** subía siempre a
+`/app` (sin eso, `#422` y `#418` no se podían ni probar), y **miVM escribía su
+diagnóstico de GC por stdout** — cualquier programa que colectara rompía el
+invariante en Java.
+
+**⏭️ AL VOLVER, por este orden:**
+
+1. **El P4** (lo único que queda del grupo A): remedir `#424` (los eventos del
+   GUI, **sin tocar nada primero** — la foto pudo cambiar sola con `#398` y
+   `-Os`; si siguen lentos, la prueba de una línea está localizada en
+   `gui_display_dsi.c:546`) y anotar las **nuevas líneas base a `-Os`**
+   (arranque, árbol, SD: las de estos días eran a `-Og` y ya no valen). El
+   guión, en `notas/SESION_PLACA_A.md`.
+2. **Grupo B**, ya de escritorio. Estaba empezando `#429` (que el IDE detecte su
+   propio compilador rancio: nos costó tiempo dos veces el 16 y el 17-ago). El
+   sitio está localizado — `lexer-java/.../Version.java`, que ya sabe de dónde
+   salió y de cuándo es; falta la comparación contra el `basicplus-frontend.jar`
+   del árbol y el aviso. Lo demás de B: `List`/`SyncList`/`OwnerList` de `any` a
+   `Object`, `#412`, `GAP-4` y el **`#431` nuevo** (miVM busca las deps en el
+   CWD en vez de junto al `.mod`, y revienta con stack trace de Java).
+
+Estado del repo: todo committeado (6 commits, `1ed8ebc`..`17df39a`), **sin push**
+(norma: nada a GitHub hasta cerrar la versión). Imagen de la Metro al día
+(`bpvm_pico.uf2`, 17:53) con la anterior guardada como known-good; fat-jar del
+IDE de las 17:54 y verificado por conducta.
+
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
 - **2026-08-17 (2) — ✅ `#389` CERRADA EN HOST: el downcast de `Object` LANZA**
