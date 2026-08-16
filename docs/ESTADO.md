@@ -239,14 +239,29 @@ la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
 La lista de pendientes se revisa EXCLUYENDO V6 (18 fichas movidas a su sección
 de FICHAS.md). Lo que queda, por grupos y en orden:
 
-**A — LA SESIÓN DE PLACA (lo siguiente, al volver del descanso).** Una tarde de
-flasheo con la imagen nueva (que ya irá a `-Os`) cierra en bloque:
-`#424` (eventos del GUI: REMEDIR primero — sin el CRC machacando y a -Os la
-foto pudo cambiar sola; si no, la prueba de una línea está lista) · nuevas
-líneas base a `-Os` (las medidas de estos días se tomaron a `-Og`) · `CastRt`
-(#389, opcode nuevo = reflashear) · el rastro `pila C del native` con `log=1`
-(#302) · el chivato del `/lib` (#422, tocar uno a propósito) · `/sys` (#418) ·
-la confirmación fina de los literales (#428).
+**A — LA SESIÓN DE PLACA.** 🟢 **En marcha, la Metro ya casi entera** (17-ago;
+el guión vivo, con lo que tiene que salir en cada paso, en `notas/SESION_PLACA_A.md`):
+
+- ✅ `#389` **CastRt** — las 9 líneas byte a byte con el host, incluidas las 3
+  rutas de error del CHECKCAST nuevo y el guard del despacho.
+- ✅ `#381`/`#428` **LongNat** — `MDN: 8/8 thunks registrados`: el `.mdn` del
+  pipeline **enlazado** (`mdn.ld`) corre en placa, tabla idéntica al host.
+- 🔥 `#430` **el cuelgue de la Metro, cazado y arreglado** — no era el nativo ni
+  el GC: era la **tabla de handles** creciendo hasta pedir 512 KB de SRAM sin
+  que nadie colectara. Ficha entera (con cómo se acotó) en FICHAS.md. En placa:
+  `AotGcRt2` llega a `fin` con `malos : 0`, antes moría al 1000.
+- ✅ `#302` paso 3 **VERIFICADO EN PLACA** — `AotGcRt` en su forma `native` con
+  el `.mdn` cargado: 10.000 vueltas, ~20 colectas, 7 de cada 12 reservas dentro
+  de la native, y **cero** desviaciones. El escaneo conservador de la pila C
+  protege en ARM.
+
+  Queda de la Metro: el chivato del `/lib` (`#422`, con el señuelo ya preparado
+  en `samples/out/Gpio.mod`) y `/sys` (`#418`). Los dos necesitaban que el
+  Upload del IDE respetara la carpeta del árbol — **arreglado** (subía siempre
+  a `/app`), fat-jar de las 17:54.
+
+  Y el P4 entero: `#424` (eventos del GUI: REMEDIR primero) · nuevas líneas base
+  a `-Os` (las de estos días se tomaron a `-Og`).
 
 **B — De escritorio, caso a caso**: `List`/`SyncList`/`OwnerList` de `any` a
 `Object` (encargo de Eduardo; ojo a `AnyNumGc.bp`) · `#429` (el IDE debe
