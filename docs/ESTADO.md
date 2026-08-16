@@ -236,6 +236,18 @@ la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
 
 ## Próximos pasos
 
+0. 🔎 **`#427` — EL CENSO DE LAS FAMILIAS, antes de documentar y finalizar.**
+   Decisión de Eduardo (16-ago): revisar TODAS las familias e imágenes para
+   tener un censo real de qué tiene cada una del común, qué lleva por su cuenta
+   y qué le falta. **El censo es de V5; la unificación que salga, de V6** — y lo
+   que se pueda adelantar, bienvenido.
+   *No es una intuición*: en dos días salieron cuatro fallos del mismo tipo (el
+   corte del CRC sólo en el Pico, el log propio del Pico, la carga del pack en
+   el arranque del P4, y `read_at` sin el fallback de la zona), y los cuatro
+   aparecieron persiguiendo otra cosa. El método —mecánico, no a ojo— está en la
+   ficha.
+
+
 1. **La clase contenedora (`Box`)** — es librería, no toca el compilador, y es lo
    que hace llevadero tener que escribir `Integer(5)`. Empezar por ahí.
 2. **#389, la comprobación en ejecución**: que el downcast LANCE. Toca las dos VMs
