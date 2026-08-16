@@ -294,6 +294,16 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-16 — ✅ `#428` CERRADA, VERIFICADA EN LA METRO** (`7ddbfec`): una
+  `native` puede llevar LITERALES. `RoTest` imprime `valor 7` / `negativo` con
+  las cadenas viajando dentro del `.mdn` (188 B). La solución fue la de Eduardo
+  —los literales como parte del código— vía un guión de enlace compartido que
+  fusiona `.rodata` en `.text` (relocatable comprobado: byte-idéntico a dos
+  direcciones). En los dos pipelines; el manual estaba además roto desde V5
+  (classpath) y nadie lo notó. AOT en V5 queda: sólo `#302` (raíces GC).
+  ⚠️ Matiz apuntado en la ficha: la salida limpia no distingue nativo de
+  interpretado (esa es la gracia del degrade); la confirmación de 30 s es un
+  Run con `log=1` mirando la línea del loader. Vale también para `#381`.
 - **2026-08-16 — ✅ `#381` CERRADA, VERIFICADA EN LA METRO.** `long` en una
   función `native`, con la salida en ARM **byte a byte la del PC** y el `.mdn`
   generado por el propio IDE (8 thunks, 560 B). Lo que confirma: números de más
