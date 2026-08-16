@@ -21,17 +21,38 @@ static int      s_init = 0;
 static uint8_t* data_ptr(void) { return s_c.region_buf + LOG_HEADER; }
 static uint32_t data_cap(void) { return s_c.region_size - LOG_HEADER; }
 
+/* #433 — ANILLO, no truncado. Esto CORTABA POR EL FINAL: al llenarse dejaba de
+ * anotar y se quedaba con el PRINCIPIO. Para un post-mortem es exactamente al
+ * reves — lo que importa es lo ULTIMO que paso antes de morir. Y encima callaba:
+ * el aviso "[LOG OVERFLOW]" solo se ponia si le cabian sus 16 bytes, asi que en
+ * la practica truncaba EN SILENCIO y el log parecia terminar donde se habia
+ * acabado el sitio.
+ *
+ * La Pico ya lo arreglo en #326 (pico/log.c), donde habia mandado la caza a un
+ * sitio equivocado DOS veces. El COMUN se quedo atras, asi que el P4, el S3 y el
+ * STM32 seguian con el bug — y volvio a morder el 17-ago: la instrumentacion del
+ * lazo del GUI (#424) "no registraba nada" porque el log venia lleno del arranque
+ * anterior (se restaura de flash al arrancar) y todo lo nuevo se tiraba callando.
+ *
+ * Ahora se tiran lineas ENTERAS del principio hasta que quepa lo nuevo, y el
+ * volcado LO DICE. Mismo algoritmo que pico/log.c, que es la fuente. */
+static int s_dropped = 0;
+
 static void append_raw(const char* str, uint32_t n) {
     uint32_t cap = data_cap();
     uint8_t*  d  = data_ptr();
+    if (n > cap) n = cap;                      /* linea absurda: recorta */
     if (s_used + n > cap) {
-        const char* trunc = "\n[LOG OVERFLOW]\n";
-        uint32_t tl = (uint32_t) strlen(trunc);
-        if (s_used + tl <= cap && s_used > 0 && d[s_used - 1] != ']') {
-            memcpy(d + s_used, trunc, tl);
-            s_used += tl;
+        uint32_t need = s_used + n - cap;
+        uint32_t drop = 0;
+        while (drop < need && drop < s_used) { /* por LINEAS, no por bytes */
+            const uint8_t* nl = (const uint8_t*) memchr(d + drop, '\n', s_used - drop);
+            if (!nl) { drop = s_used; break; }
+            drop = (uint32_t) (nl - d) + 1u;
         }
-        return;
+        memmove(d, d + drop, s_used - drop);
+        s_used -= drop;
+        s_dropped = 1;
     }
     memcpy(d + s_used, str, n);
     s_used += n;
@@ -40,6 +61,7 @@ static void append_raw(const char* str, uint32_t n) {
 void bpvm_log_init(const bpvm_log_cintura_t* cintura) {
     s_c = *cintura;
     s_used = 0;
+    s_dropped = 0;   /* #433: arranque limpio; el anillo se marca al llenarse */
     memset(s_c.region_buf, 0, s_c.region_size);
 
     /* Recupera el snapshot: lee la región y valida el header. */
@@ -108,6 +130,11 @@ void log_flush(void) {
 void log_clear_ram(void) {
     if (!s_init) return;
     s_used = 0;
+    /* #433 — y la bandera del anillo. Si no, tras vaciar el log el volcado
+     * seguiria avisando de que "se tiraron lineas ANTIGUAS" cuando ya no falta
+     * nada: el aviso mentiria, que es justo lo que este anillo vino a arreglar.
+     * (Misma correccion que lleva pico/log.c.) */
+    s_dropped = 0;
     memset(data_ptr(), 0, data_cap());
 }
 
@@ -119,6 +146,13 @@ void log_clear_flash(void) {
 
 void log_dump(log_sink_t cb, void* user) {
     if (!s_init || !cb || s_used == 0) return;
+    /* #433 — que se VEA que faltan lineas. Un log que empieza por el medio sin
+     * decirlo se lee como un log completo, y su primera linea miente. */
+    if (s_dropped) {
+        const char* w = "[LOG: buffer lleno - se tiraron lineas ANTIGUAS "
+                        "(anillo); lo de abajo es la cola]\n";
+        cb(w, strlen(w), user);
+    }
     const uint8_t* d = data_ptr();
     uint32_t off = 0;
     while (off < s_used) {
