@@ -366,8 +366,18 @@ static size_t s_rot_buf_size = 0;
  * Con rotacion != 0 gira primero por software — patron OFICIAL de los drivers LVGL
  * (lv_linux_fbdev.c / lv_sdl_window.c) portado de esp32p4-ws: lv_draw_sw_rotate +
  * lv_display_rotate_area; el core NO gira pixeles en 9.2, es contrato del flush. */
+/* #424 — CRONOMETROS DEL LAZO (us acumulados + nº de llamadas). La medida del
+ * ritmo dijo 50 Hz clavados con 0 topes: el retardo no manda, manda el TRABAJO
+ * (10-20 ms por vuelta, deducido de que se pierde un borde de tick). Estos dos
+ * lo reparten entre los dos sospechosos que salieron de comparar con el STM32,
+ * que va bien: el táctil (aquí se lee ENTERO cada vez; el STM32 sale antes si
+ * el GT911 no tiene frame) y el flush (aquí MIPI-DSI + giro por software; el
+ * STM32 es un memcpy). Los publica bpvm_gui_disp_pump en su resumen. */
+static uint32_t s_tact_us, s_tact_n, s_flush_us, s_flush_n;
+
 static void p4_lv_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
+    int64_t t0_flush = esp_timer_get_time();   /* #424 */
     lv_display_rotation_t rotation = lv_display_get_rotation(disp);
 
     if (rotation != LV_DISPLAY_ROTATION_0) {
@@ -382,6 +392,7 @@ static void p4_lv_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_m
             if (nb == NULL) {
                 ESP_LOGE(TAG, "sin PSRAM para el buffer de rotacion (%u B) — frame saltado",
                          (unsigned) buf_size);
+                s_flush_us += (uint32_t)(esp_timer_get_time() - t0_flush); s_flush_n++;   /* #424 */
                 lv_display_flush_ready(disp);
                 return;
             }
@@ -401,12 +412,14 @@ static void p4_lv_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_m
         lv_display_rotate_area(disp, &rotated_area);   /* area logica -> area fisica del panel */
         esp_lcd_panel_draw_bitmap(s_panel, rotated_area.x1, rotated_area.y1,
                                   rotated_area.x2 + 1, rotated_area.y2 + 1, px_map);
+        s_flush_us += (uint32_t)(esp_timer_get_time() - t0_flush); s_flush_n++;   /* #424 */
         lv_display_flush_ready(disp);
         return;
     }
 
     esp_lcd_panel_draw_bitmap(s_panel, area->x1, area->y1,
                               area->x2 + 1, area->y2 + 1, px_map);
+    s_flush_us += (uint32_t)(esp_timer_get_time() - t0_flush); s_flush_n++;   /* #424 */
     lv_display_flush_ready(disp);
 }
 
@@ -486,6 +499,7 @@ static void p4_lv_touch_read(lv_indev_t *indev, lv_indev_data_t *data)
     (void) indev;
     uint16_t x = 0, y = 0;
     uint8_t  cnt = 0;
+    int64_t t0_tact = esp_timer_get_time();   /* #424 */
     esp_lcd_touch_read_data(s_tp);
     bool pressed = esp_lcd_touch_get_coordinates(s_tp, &x, &y, NULL, &cnt, 1);
     if (pressed && cnt > 0) {
@@ -497,6 +511,8 @@ static void p4_lv_touch_read(lv_indev_t *indev, lv_indev_data_t *data)
     }
     data->point.x = s_tp_x;
     data->point.y = s_tp_y;
+    s_tact_us += (uint32_t)(esp_timer_get_time() - t0_tact);   /* #424 */
+    s_tact_n++;
 }
 
 /* Clic del botón -> actualiza la etiqueta: prueba VISIBLE de que el toque llega. */
@@ -549,6 +565,7 @@ void bpvm_gui_disp_pump(void)
     /* Una iteración del lazo LVGL. La llama Gui.run() (builtins.c) entre frames; ese
      * mismo lazo polea vm->poll_cb para el KILL. Cedemos SIEMPRE >=1 tick (a 100 Hz
      * pdMS_TO_TICKS(<10)=0 -> vTaskDelay(0) no cede a IDLE0 -> TWDT). */
+    int64_t t0_trab = esp_timer_get_time();   /* #424: el trabajo de la vuelta */
     uint32_t idle_ms = lv_timer_handler();
     if (idle_ms > 50) idle_ms = 50;
     TickType_t ticks = pdMS_TO_TICKS(idle_ms);
@@ -569,20 +586,35 @@ void bpvm_gui_disp_pump(void)
      * Si dice ~100 y pocas en el tope, el tope no pinta nada y el techo es el
      * tick. Los dos casos se arreglan distinto, y sin esto no se distinguen. */
     {
-        static uint32_t s_vueltas, s_en_tope, s_suma_ms, s_t0;
+        static uint32_t s_vueltas, s_en_tope, s_suma_ms, s_t0, s_trab_us;
         uint32_t ahora = (uint32_t) (xTaskGetTickCount() * portTICK_PERIOD_MS);
         if (s_t0 == 0) s_t0 = ahora;
         s_vueltas++;
         s_suma_ms += idle_ms;
+        s_trab_us += (uint32_t)(esp_timer_get_time() - t0_trab);
         if (idle_ms >= 50) s_en_tope++;
         if (ahora - s_t0 >= 1000u) {
+            uint32_t ms = ahora - s_t0;
             log_printf("gui pump: %u vueltas en %u ms (%u en el tope de 50, "
                        "idle medio %u ms) - tactil a ~%u Hz",
-                       (unsigned) s_vueltas, (unsigned)(ahora - s_t0),
-                       (unsigned) s_en_tope,
+                       (unsigned) s_vueltas, (unsigned) ms, (unsigned) s_en_tope,
                        (unsigned)(s_vueltas ? s_suma_ms / s_vueltas : 0),
-                       (unsigned)(s_vueltas * 1000u / (ahora - s_t0)));
-            s_vueltas = 0; s_en_tope = 0; s_suma_ms = 0; s_t0 = ahora;
+                       (unsigned)(s_vueltas * 1000u / ms));
+            /* #424 — EL REPARTO: de los ~20 ms de cada vuelta, cuanto es TRABAJO
+             * (lv_timer_handler) y como se parte ese trabajo entre el tactil y el
+             * flush. Lo que no sumen los dos es render de LVGL. */
+            log_printf("gui reparto: trabajo %u.%u ms/vuelta | tactil %u llam, "
+                       "%u.%u ms/llam | flush %u llam, %u.%u ms/llam",
+                       (unsigned)(s_vueltas ? s_trab_us / s_vueltas / 1000u : 0),
+                       (unsigned)(s_vueltas ? (s_trab_us / s_vueltas / 100u) % 10u : 0),
+                       (unsigned) s_tact_n,
+                       (unsigned)(s_tact_n ? s_tact_us / s_tact_n / 1000u : 0),
+                       (unsigned)(s_tact_n ? (s_tact_us / s_tact_n / 100u) % 10u : 0),
+                       (unsigned) s_flush_n,
+                       (unsigned)(s_flush_n ? s_flush_us / s_flush_n / 1000u : 0),
+                       (unsigned)(s_flush_n ? (s_flush_us / s_flush_n / 100u) % 10u : 0));
+            s_vueltas = 0; s_en_tope = 0; s_suma_ms = 0; s_t0 = ahora; s_trab_us = 0;
+            s_tact_us = 0; s_tact_n = 0; s_flush_us = 0; s_flush_n = 0;
         }
     }
 
