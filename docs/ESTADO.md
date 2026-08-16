@@ -234,6 +234,37 @@ la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
 > dentro, el log se llena en ~26 colectas (**`#423`**), así que puede que la
 > primera imagen nueva salga ya con `[LOG OVERFLOW]` al pie.
 
+## 🎯 EL PLAN DE CIERRE DE V5 (Eduardo, 17-ago) — la lista queda en 21
+
+La lista de pendientes se revisa EXCLUYENDO V6 (18 fichas movidas a su sección
+de FICHAS.md). Lo que queda, por grupos y en orden:
+
+**A — LA SESIÓN DE PLACA (lo siguiente, al volver del descanso).** Una tarde de
+flasheo con la imagen nueva (que ya irá a `-Os`) cierra en bloque:
+`#424` (eventos del GUI: REMEDIR primero — sin el CRC machacando y a -Os la
+foto pudo cambiar sola; si no, la prueba de una línea está lista) · nuevas
+líneas base a `-Os` (las medidas de estos días se tomaron a `-Og`) · `CastRt`
+(#389, opcode nuevo = reflashear) · el rastro `pila C del native` con `log=1`
+(#302) · el chivato del `/lib` (#422, tocar uno a propósito) · `/sys` (#418) ·
+la confirmación fina de los literales (#428).
+
+**B — De escritorio, caso a caso**: `List`/`SyncList`/`OwnerList` de `any` a
+`Object` (encargo de Eduardo; ojo a `AnyNumGc.bp`) · `#429` (el IDE debe
+detectar su compilador rancio) · `#412` (`run` con argumento) · `GAP-4`
+(primero REPRODUCIR la divergencia, luego decidir).
+
+**C — SUSPENDIDO pero se hace ANTES de cerrar V5**: H10 entero (`#425`, `#394`,
+`#395`, `IDE-7`) y la clase contenedora (`Box`).
+
+**D — V6**: todo lo movido (18 fichas: HAL de capacidades, features de lenguaje
+no encargadas, unificaciones del censo, Linux…) vive en la sección «Aplazadas a
+V6» de FICHAS.md y NO cuenta como pendiente de V5.
+
+Fuera de grupos quedan las de placa sin urgencia (`#379`, `#408`, `#415`,
+`H2-P5`, Q1, media flash del P4) — se pescan cuando la placa esté delante — y
+las 3 tareas de cierre (borrar `notas/`, restos, subir FICHAS), que van con el
+push.
+
 ## Próximos pasos
 
 0. 🔎 **`#427` — EL CENSO DE LAS FAMILIAS, antes de documentar y finalizar.**
