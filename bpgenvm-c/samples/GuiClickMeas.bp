@@ -1,0 +1,73 @@
+// GuiClickMeas.bp — #424: banco de medida de los eventos del GUI que SE SALE SOLO.
+//
+// El problema que resuelve (Eduardo, 17-ago): las demos del GUI corren hasta el
+// reset, y en el P4 no siempre se puede parar desde el IDE. Pero el log vive en
+// RAM y el reset se lo lleva — o sea que la instrumentacion del lazo escribia
+// bien y nunca se podia LEER. Este programa cuenta los clics y TERMINA solo al
+// decimo, asi que al acabar la placa sigue viva, el log intacto y se lee con el
+// boton Log sin resetear nada.
+//
+// El truco: Gui.run() no es magia, es `while __guiRunOnce() do endwh` — y ese
+// intrinsic es publico. Aqui se escribe el mismo lazo con una condicion de
+// salida propia. Sirve de patron para cualquier demo que quiera terminar.
+//
+// Que mirar en el log (con log=1) mientras se pulsa:
+//   gui pump   : cuantas vueltas por segundo da el lazo (el ritmo del tactil).
+//   gui reparto: de esas vueltas, cuanto es trabajo, y como se reparte entre
+//                leer el tactil y volcar el frame.
+module GuiClickMeas
+
+  import Gui
+
+  public const OBJETIVO: integer := 10
+
+  class Marcador
+    var n: integer
+    var lbl: Gui.Label
+
+    public function Marcador(l: Gui.Label)
+      this.n := 0
+      this.lbl := l
+    end Marcador
+
+    public function cuantos(): integer
+      return this.n
+    end cuantos
+
+    function event btn_onClick(quien: Gui.Component)
+      this.n := this.n + 1
+      this.lbl.setText("clic " + this.n + " de " + OBJETIVO)
+      print "clic " + this.n
+    end btn_onClick
+  end Marcador
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+
+    var titulo: Gui.Label := Gui.Label(scr, "#424 - pulsa " + OBJETIVO + " veces y termina solo")
+    titulo.align(Gui.Align.TOP_MID, 0, 10)
+
+    var estado: Gui.Label := Gui.Label(scr, "clic 0 de " + OBJETIVO)
+    estado.fontSize := 24
+    estado.align(Gui.Align.CENTER, 0, -40)
+
+    var m: Marcador := Marcador(estado)
+
+    var btn: Gui.Button := Gui.Button(scr, "PULSA AQUI")
+    btn.onClick := m::btn_onClick
+    btn.align(Gui.Align.CENTER, 0, 40)
+
+    // El lazo de Gui.run(), con puerta de salida. Cada vuelta es frontera de
+    // instruccion, asi que el scheduler drena los eventos igual que siempre.
+    var seguir: boolean := true
+    while seguir do
+      seguir := Gui.__guiRunOnce()
+      if m.cuantos() >= OBJETIVO then
+        seguir := false
+      endif
+    endwh
+
+    print "fin: " + m.cuantos() + " clics - la placa sigue viva, mira el Log"
+  end Main
+
+end GuiClickMeas
