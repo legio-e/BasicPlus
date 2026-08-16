@@ -255,13 +255,23 @@ el guión vivo, con lo que tiene que salir en cada paso, en `notas/SESION_PLACA_
   de la native, y **cero** desviaciones. El escaneo conservador de la pila C
   protege en ARM.
 
-  Queda de la Metro: el chivato del `/lib` (`#422`, con el señuelo ya preparado
-  en `samples/out/Gpio.mod`) y `/sys` (`#418`). Los dos necesitaban que el
-  Upload del IDE respetara la carpeta del árbol — **arreglado** (subía siempre
-  a `/app`), fat-jar de las 17:54.
+- ✅ `#422` **el chivato del `/lib`, por sus DOS caminos** — módulo ausente: se
+  repone en silencio (`preinstall: /lib/Core.mod`); módulo rancio: canta con sus
+  bytes (`/lib/Gpio.mod NO es el de esta imagen (3152 B en FS, 4068 embebido)`).
+  Distinguir las dos situaciones es el diseño: reponer es normal, no anomalía.
+- ✅ `#418` **`/sys` resuelve** — con la única copia de la dep en `/sys` y Run
+  desde el árbol (sin recompilar, que volvería a subirla a `/app`), el programa
+  imprime lo mismo. `/sys` va el ÚLTIMO: rescata sin tapar a nadie.
 
-  Y el P4 entero: `#424` (eventos del GUI: REMEDIR primero) · nuevas líneas base
-  a `-Os` (las de estos días se tomaron a `-Og`).
+**La Metro queda COMPLETA.** Lo que resta de A es el **P4**: `#424` (eventos del
+GUI: REMEDIR primero, sin tocar nada — la foto pudo cambiar sola con #398 y
+`-Os`) y las nuevas líneas base a `-Os` (arranque, árbol, SD: las de estos días
+se tomaron a `-Og` y ya no valen). Los ficheros de prueba están en
+`bpgenvm-c/samples/`; el guión vivo, en `notas/SESION_PLACA_A.md`.
+
+Herramienta arreglada por el camino: el **Upload del Explorer** subía SIEMPRE a
+`/app` (hardcodeado) — sin eso, `#422` y `#418` eran imposibles de probar. Ahora
+sube a la carpeta seleccionada del árbol; sin selección, `/app` como siempre.
 
 **B — De escritorio, caso a caso**: `List`/`SyncList`/`OwnerList` de `any` a
 `Object` (encargo de Eduardo; ojo a `AnyNumGc.bp`) · `#429` (el IDE debe
