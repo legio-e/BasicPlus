@@ -508,6 +508,12 @@ const char* bpvm_status_str(bpvm_status_t s);
  */
 const char* bpvm_link_error(const bpvm_t* vm);
 
+/* #421 — por qué falló la CARGA de un módulo (ruta + motivo), "" si no hubo
+ * fallo. Hermano de bpvm_link_error: el REPL lo manda por el wire en vez del
+ * «IO error» mudo. Lo rellena el cargador, tanto para el módulo principal como
+ * para sus dependencias — que es donde pasa de verdad. */
+const char* bpvm_load_error(const bpvm_t* vm);
+
 /* Detalle del último RuntimeError lanzado (msg de bpvm_throw_runtime_error),
  * p.ej. "referencia a objeto eliminado (use-after-free)". "" si no hubo. Los
  * handlers de RUN lo surten al wire/host cuando el status es BPVM_ERR_RUNTIME,

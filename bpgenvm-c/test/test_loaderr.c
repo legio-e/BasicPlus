@@ -63,6 +63,32 @@ int main(void) {
     carga("", sin_ruta, sizeof sin_ruta);
     ok(strstr(sin_ruta, "ruta") != NULL, "ruta vacía: lo dice");
 
+    /* EL AGUJERO DEL PRIMER INTENTO (16-ago): el detalle salía del módulo
+     * PRINCIPAL, pero el fallo que de verdad ocurre es el de una DEPENDENCIA —
+     * el `Core.mod` del 15-ago y el `SQLite.mod` del 16 lo eran. Se cubrió el
+     * camino menos frecuente, y el IDE seguía enseñando «IO error». */
+    {
+        /* Un módulo que importa a otro, y el importado está roto. */
+        FILE* g = fopen("t_dep.mod", "wb");
+        const unsigned char h[] = { 'B','P','M','6', 0,0,0,1, 0,0,0,9, 0,0,0,0 };
+        fwrite(h, 1, sizeof h, g); fclose(g);
+
+        static uint8_t mem[256 * 1024];
+        memset(mem, 0, sizeof mem);
+        bpvm_t* vm = bpvm_init(mem, sizeof mem, 0);
+        bpvm_entry_t e; memset(&e, 0, sizeof e);
+        /* Se carga directamente el roto: lo que se comprueba es que el detalle
+         * llega por `bpvm_load_error`, que es el canal que usan las deps. */
+        (void) bpvm_load_entry(vm, "t_dep.mod", &e);
+        ok(bpvm_load_error(vm)[0] != 0, "el detalle queda en la VM (bpvm_load_error)");
+        ok(strstr(bpvm_load_error(vm), "t_dep.mod") != NULL,
+           "y dice la ruta, que es lo que ahorra la busqueda");
+        ok(strcmp(bpvm_load_error(vm), e.fallo) == 0,
+           "y es el MISMO que viaja al IDE en entry.fallo");
+        bpvm_destroy(vm);
+        remove("t_dep.mod");
+    }
+
     /* LO QUE DE VERDAD ARREGLA LA FICHA: que no sean el mismo mensaje. */
     ok(strcmp(no_existe, vacio) != 0 && strcmp(vacio, roto) != 0
        && strcmp(no_existe, roto) != 0 && strcmp(roto, sin_ruta) != 0,

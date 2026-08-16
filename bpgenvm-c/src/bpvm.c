@@ -412,6 +412,11 @@ static bpvm_status_t load_from_pack(bpvm_t* vm, const bpvm_pack_src_t* src,
 /* Resuelve recursivamente las dependencias del módulo en `mod_idx`,
  * cargándolas desde `search_dir` por convención de naming
  * (<lib>.<mod>.mod o <mod>.mod). */
+/* #421 — el cargador que DEJA DICHO por qué falló (en `vm->load_error`). Se
+ * declara aquí porque `discover_deps`, de abajo, lo usa para las dependencias:
+ * el fallo que de verdad le pasa a la gente no es el del módulo principal. */
+static bpvm_status_t load_entry_file_det(bpvm_t* vm, const char* resolved_path);
+
 static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_dir) {
     /* Re-snapshot del import_count: si cargamos un dep, vm->modules crece
      * pero el mod actual no muta. */
@@ -507,7 +512,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
                 bpvm_diag("[bpvm-c] aviso: '%s' del FS eclipsa al del pack",
                         pname);
             }
-            s = bpvm_load_entry_file(vm, found);
+            s = load_entry_file_det(vm, found);   /* #421: deja el porqué en la VM */
         } else {
             /* H3.c tanda 2 — carga XIP: el código se queda EN LA REGIÓN (flash
              * en placa); a RAM solo van ext-table + data block. */
@@ -747,17 +752,36 @@ static long entry_fs_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n)
  *
  * Así que el motivo se escribe además en `det`, que el llamante manda al IDE.
  * `det` puede ser NULL: entonces esto se comporta como siempre. */
-static bpvm_status_t load_entry_file_det(bpvm_t* vm, const char* resolved_path,
-                                         char* det, size_t det_cap) {
+static void load_err(bpvm_t* vm, const char* fmt, ...) {
+    if (!vm) return;
+    va_list ap; va_start(ap, fmt);
+    vsnprintf(vm->load_error, sizeof vm->load_error, fmt, ap);
+    va_end(ap);
+}
+
+/* Pasa el detalle de la VM a la estructura que el REPL manda por el wire. Son
+ * dos sitios porque son dos vidas distintas: el de la VM lo escribe quien falla
+ * (a veces recursivamente, cargando una dependencia) y el de `bpvm_entry_t` es
+ * lo que ve el IDE. */
+static void recoge_fallo(bpvm_t* vm, bpvm_entry_t* e) {
+    if (!vm || !e || e->fallo[0] || !vm->load_error[0]) return;
+    snprintf(e->fallo, sizeof e->fallo, "%s", vm->load_error);
+}
+
+const char* bpvm_load_error(const bpvm_t* vm) {
+    return vm ? vm->load_error : "";
+}
+
+static bpvm_status_t load_entry_file_det(bpvm_t* vm, const char* resolved_path) {
     uint32_t size = 0;
     if (bpvm_fs_stat(resolved_path, &size) != 0) {
         bpvm_diag("[bpvm-c] cargar '%s': NO se puede leer (stat falla)", resolved_path);
-        if (det) snprintf(det, det_cap, "no se puede leer '%s'", resolved_path);
+        load_err(vm, "no se puede leer '%s'", resolved_path);
         return BPVM_ERR_IO;
     }
     if (size == 0) {
         bpvm_diag("[bpvm-c] cargar '%s': mide 0 bytes (subida a medias?)", resolved_path);
-        if (det) snprintf(det, det_cap, "'%s' mide 0 bytes (subida a medias?)", resolved_path);
+        load_err(vm, "'%s' mide 0 bytes (subida a medias?)", resolved_path);
         return BPVM_ERR_IO;
     }
     bpvm_status_t s = bpvm_load_mod_stream(vm, entry_fs_read_at, (void*) resolved_path,
@@ -770,21 +794,18 @@ static bpvm_status_t load_entry_file_det(bpvm_t* vm, const char* resolved_path,
          * VERSIÓN —un `.mod` v5 grita con su error propio—, no la INTEGRIDAD; un
          * v6 truncado pasa el control y muere aquí. Decirlo con el tamaño es lo
          * que separa «está rancio» de «se subió a medias». */
-        if (det) {
-            if (s == BPVM_ERR_IO)
-                snprintf(det, det_cap,
-                         "'%s' (%u B) se lee pero no cuadra con su cabecera: "
+        if (s == BPVM_ERR_IO)
+            load_err(vm, "'%s' (%u B) se lee pero no cuadra con su cabecera: "
                          "truncado o de otra version", resolved_path, (unsigned) size);
-            else
-                snprintf(det, det_cap, "'%s' (%u B): %s", resolved_path,
-                         (unsigned) size, bpvm_status_str(s));
-        }
+        else
+            load_err(vm, "'%s' (%u B): %s", resolved_path,
+                     (unsigned) size, bpvm_status_str(s));
     }
     return s;
 }
 
 bpvm_status_t bpvm_load_entry_file(bpvm_t* vm, const char* resolved_path) {
-    return load_entry_file_det(vm, resolved_path, NULL, 0);
+    return load_entry_file_det(vm, resolved_path);
 }
 
 /* #345 — la primera línea de /sys/auto.txt, limpia. Ver bpvm_entry.h. */
@@ -901,12 +922,12 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
     int idx_before = vm->module_count;
     if (e->from_pack) {
         s = bpvm_load_pack(vm, e->resolved, e->main_module, (int) sizeof e->main_module);
-        if (s != BPVM_OK) return s;
+        if (s != BPVM_OK) { recoge_fallo(vm, e); return s; }   /* #421 */
         /* bpvm_load_pack ya descubre las deps del main (dentro del pack primero,
          * y luego junto al propio pack); aquí sólo queda el barrido final. */
     } else {
-        s = load_entry_file_det(vm, e->resolved, e->fallo, sizeof e->fallo);   /* #421 */
-        if (s != BPVM_OK) return s;
+        s = load_entry_file_det(vm, e->resolved);
+        if (s != BPVM_OK) { recoge_fallo(vm, e); return s; }
         if (vm->module_count > idx_before)
             /* Precisión explícita otra vez: main_module tiene el ancho de un
              * nombre de pack (33) y un nombre de módulo puede ser mayor. Lo
@@ -922,7 +943,7 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
         path_dirname(e->resolved, dir, sizeof dir);
         for (int j = idx_before; j < vm->module_count; j++) {
             s = discover_deps(vm, j, dir);
-            if (s != BPVM_OK) return s;
+            if (s != BPVM_OK) { recoge_fallo(vm, e); return s; }   /* #421 */
         }
     }
 

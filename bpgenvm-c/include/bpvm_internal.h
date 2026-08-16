@@ -522,6 +522,20 @@ struct bpvm {
      * setea en CADA throw; solo se REPORTA cuando el run acaba con
      * BPVM_ERR_RUNTIME (no atrapado). "" = sin error. Fijo (MCU-friendly). */
     char runtime_error[192];
+
+    /* #421 — detalle del ÚLTIMO fallo de CARGA de un módulo: qué ruta y qué le
+     * pasa. Tercer hermano de `link_error` y `runtime_error`, y por la misma
+     * razón: sin él, el wire mandaba «IO error» y el IDE enseñaba
+     * `exit 1 (IO error)` — que en esa función significa a la vez «no existe»,
+     * «mide cero», «está truncado» y «la ruta venía vacía», y nunca decía CUÁL
+     * era la ruta.
+     *
+     * Va en la VM y no en un parámetro porque el fallo que de verdad ocurre no
+     * es el del módulo principal, sino el de una DEPENDENCIA — y ésas se cargan
+     * en `discover_deps`, que es recursiva y no ve la estructura del llamante.
+     * Ése fue el agujero del primer intento (16-ago): se arregló el camino menos
+     * frecuente. "" = sin error. Fijo, sin malloc. */
+    char load_error[160];
 };
 
 

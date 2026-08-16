@@ -457,6 +457,15 @@ test-packskip:
 	@echo "--- V5/H7 saltarse el barrido sin packs (esperado: solo 'ok') ---"
 	@./build/test_packskip.exe samples/PackFixA.pack
 
+# La regla de la fachada: si `stat` dice que un fichero existe, se tiene que
+# poder LEER — entero y POR TROZOS. Se rompio (read_at no miraba la zona de
+# packs) y costo una tarde en la P4 con el SQLite.pack grabado.
+test-fsfb:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_fsfallback.c src/fs_facade.c src/fs_host.c 	  src/bpvm_pack.c src/crc32.c -o build/test_fsfb.exe
+	@echo "--- stat/read/read_at miran los mismos sitios (esperado: solo 'ok') ---"
+	@./build/test_fsfb.exe samples/PackFixA.pack
+
 test-logsw:
 	@mkdir -p build
 	$(CC) $(CFLAGS) test/test_log_switch.c src/bpvm_log.c -o build/test_logsw.exe

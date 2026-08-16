@@ -349,7 +349,28 @@ long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap)
     if (overlay_claims(path, &osz) && g_ov_read)
         return g_ov_read(g_ov_user, path, off, dst, cap);
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->read_at) return be->read_at(path, off, dst, cap);
+    if (be && be->read_at) {
+        long n = be->read_at(path, off, dst, cap);
+        if (n >= 0) return n;
+    }
+    /* EL FALLBACK, que aquí FALTABA (16-ago). `stat` y `read` lo consultan
+     * desde V5/H4 y esto no, así que un fichero de la ZONA DE PACKS existía
+     * para `stat` —con su tamaño— y no se podía leer por trozos.
+     *
+     * No es teórico y costó una tarde: con el SQLite.pack grabado en la P4, el
+     * resolutor probaba `/app/SQLite.mod`, el `stat` decía que sí (8325 B, los
+     * del pack, aunque en `/app` no hubiera nada), y la carga —que va por
+     * `read_at` desde #305— moría con `IO error`. De propina, el firmware
+     * avisaba de que «el FS eclipsa al del pack» cuando no había ningún fichero
+     * en el FS: el que reclamaba el `stat` era el pack mismo.
+     *
+     * La regla que se restablece es la única que hace usable una fachada: **si
+     * `stat` dice que un fichero existe, se tiene que poder leer, por trozos o
+     * entero**. Que dos de las tres funciones consultaran una capa y la tercera
+     * no era la incoherencia; `read_at` llegó en #305 y el fallback en H4, y
+     * nunca se juntaron. */
+    if (fallback_claims(path, &osz) && g_fb_read)
+        return g_fb_read(g_fb_user, path, off, dst, cap);
     return -1;
 }
 
