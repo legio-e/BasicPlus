@@ -375,7 +375,20 @@ Herramientas arregladas por el camino: el **Upload del Explorer** subía siempre
 diagnóstico de GC por stdout** — cualquier programa que colectara rompía el
 invariante en Java.
 
-**⏭️ AL VOLVER, por este orden:**
+**📊 LA CUENTA (17-ago, contada del fichero): 17 pendientes de V5** —
+12 fichas numeradas + 2 encargos sin número (`List`→`Object` y `Box`) + 3 tareas
+de cierre. Veníamos de **45**. Hoy: cerradas 4 (`#430` nació y murió el mismo
+día), abierta 1 (`#431`).
+
+**⏭️ AL VOLVER — plan de Eduardo:**
+
+- **Hoy se cierra con `#424`** (los eventos del GUI del P4) y con eso basta:
+  cierra el grupo A entero.
+- **Otro día, el bloque del IDE** (grupo C / H10: `#425`, `#394`, `#395`,
+  `IDE-7` y `Box`). ⚠️ Eduardo trae cambios que añadir a esas fichas — leer lo
+  que diga ANTES de planificar el bloque, que el enunciado puede crecer.
+
+Detalle de los dos primeros pasos:
 
 1. **El P4** (lo único que queda del grupo A): remedir `#424` (los eventos del
    GUI, **sin tocar nada primero** — la foto pudo cambiar sola con `#398` y
