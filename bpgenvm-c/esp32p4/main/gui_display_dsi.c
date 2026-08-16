@@ -567,7 +567,20 @@ void bpvm_gui_disp_pump(void)
      * pdMS_TO_TICKS(<10)=0 -> vTaskDelay(0) no cede a IDLE0 -> TWDT). */
     int64_t t0_trab = esp_timer_get_time();   /* #424: el trabajo de la vuelta */
     uint32_t idle_ms = lv_timer_handler();
-    if (idle_ms > 50) idle_ms = 50;
+    /* #424 — EL TOPE, MEDIDO (antes 50 ms). La medida del 17-ago dijo que el
+     * de 50 NO disparaba NUNCA (0 topes en 60 s) y que el trabajo son 0,4 ms
+     * por vuelta: el lazo no estaba ocupado, estaba DURMIENDO. Duerme lo que
+     * LVGL pide, y LVGL pide su periodo de refresco (33 ms) — que con el tick
+     * de 10 ms son 3 ticks. Resultado: una respuesta invalidada justo despues
+     * de una pasada espera hasta 30 ms a que la pinten. El STM32, que va bien,
+     * no espera: __WFI + SysTick de 1 ms.
+     * Con el tope en 10 ms toda vuelta cuesta 1 tick y el lazo pasa de ~50 a
+     * ~95 Hz. Lo que cuesta es CPU, y ahora se sabe cuanta: 0,4 ms de trabajo
+     * a 95 Hz ~= 4 % de un nucleo (antes 2 %). El tope sigue existiendo por lo
+     * que decia su comentario original — ceder siempre >=1 tick para no girar
+     * al 100 % ni disparar el TWDT—; lo que cambia es el numero, y ya no es
+     * una corazonada. */
+    if (idle_ms > 10) idle_ms = 10;
     TickType_t ticks = pdMS_TO_TICKS(idle_ms);
     if (ticks == 0) ticks = 1;
 
@@ -592,10 +605,10 @@ void bpvm_gui_disp_pump(void)
         s_vueltas++;
         s_suma_ms += idle_ms;
         s_trab_us += (uint32_t)(esp_timer_get_time() - t0_trab);
-        if (idle_ms >= 50) s_en_tope++;
+        if (idle_ms >= 10) s_en_tope++;
         if (ahora - s_t0 >= 1000u) {
             uint32_t ms = ahora - s_t0;
-            log_printf("gui pump: %u vueltas en %u ms (%u en el tope de 50, "
+            log_printf("gui pump: %u vueltas en %u ms (%u en el tope de 10, "
                        "idle medio %u ms) - tactil a ~%u Hz",
                        (unsigned) s_vueltas, (unsigned) ms, (unsigned) s_en_tope,
                        (unsigned)(s_vueltas ? s_suma_ms / s_vueltas : 0),
