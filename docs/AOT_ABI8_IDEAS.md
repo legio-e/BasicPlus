@@ -105,7 +105,19 @@ Cada fase deja algo verificable, y ninguna rompe lo anterior.
 
 ### Lo que NO entra aquí
 
-- **`double` → ficha `#426`.** Comparte F1 (el marshalling) y nada más: necesita
+- **`double` → `#426`, y APLAZADO A V6** (Eduardo, 16-ago). El motivo no es el
+  coste: es que **el diseño no está pensado todavía**. Sus palabras: *«los micros
+  como los STM32F7 tienen coprocesador que soporta float y double. Lo correcto
+  sería: si el micro soporta double por hardware, por hardware; si no, por
+  software. Quizás lo mejor sería meter las funciones de coma flotante en la
+  BIOS o en opcodes»*.
+  Eso cambia la pregunta: no es «cómo meto libgcc en el `.mdn`» sino **«quién
+  provee la coma flotante y cómo lo dice cada placa»** — la misma que `#378`. La
+  FPU del Cortex-M33 es de precisión simple, pero la del **STM32F7 es de doble**:
+  la respuesta correcta depende de la placa y no puede ser una constante en el
+  emisor. Resolverlo ahora por helpers sería cerrar la puerta al diseño bueno.
+- *(lo que sigue es el análisis original, que se mantiene como material para V6)*
+  **`double` → ficha `#426`.** Comparte F1 (el marshalling) y nada más: necesita
   la emulación de coma flotante entera enlazada dentro del `.mdn`, y arrastra el
   riesgo serio de paridad. Además, el aviso que ya está en `AOT_LIMITES.md` §1
   sigue siendo verdad: **la FPU de estos micros es de precisión simple**
