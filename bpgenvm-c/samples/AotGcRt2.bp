@@ -1,0 +1,41 @@
+// AotGcRt2.bp — el experimento de DESPLAZAMIENTO (acotando el cuelgue de la
+// tabla de handles en la Metro, 17-ago-2026).
+//
+// Identico a AotGcRt sin gc(), pero gastando EL DOBLE de handles por vuelta
+// (eco y esperado construyen 4 fragmentos en vez de 2). La prediccion:
+//
+//   · si la muerte sigue a la CUENTA de handles (la tabla al cruzar 32768),
+//     tiene que ADELANTARSE a la mitad de vueltas: ~1500 en vez de ~3100;
+//   · si siguiera a las vueltas o al volumen del heap, se quedaria donde
+//     estaba.
+//
+// Sin gc() A PROPOSITO: queremos que la tabla crezca hasta el cruce.
+module AotGcRt2
+
+  function eco(n: integer): string
+    var a: string := ("v" + n) + ("w" + n)
+    var b: string := ("x" + n) + ("y" + n)
+    return a + b
+  end eco
+
+  function Main()
+    var i: integer := 0
+    var malos: integer := 0
+    var ultimo: string := ""
+    while i < 10000 do
+      if (i mod 500)==0 then
+        print i
+      endif
+      ultimo := eco(i)
+      var esperado: string := ("v" + i + "w" + i) + ("x" + i + "y" + i)
+      if ultimo != esperado then
+        malos := malos + 1
+      endif
+      i := i + 1
+    endwh
+    print "malos  : " + malos
+    print "ultimo : " + ultimo
+    print "fin"
+  end Main
+
+end AotGcRt2

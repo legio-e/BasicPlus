@@ -660,6 +660,15 @@ public class VirtualMachine {
     private int[] handleFreeList = new int[256];
     private int   handleFreeTop  = 0;
     private int   handleNext = 1;   // 0 reservado para null
+    // #430 — LA MARCA: los últimos HANDLE_MARCA slots son zona marcada; repartir uno
+    // arma handlePressure y la puerta de heapAlloc colecta (o crece). El margen cubre
+    // los registros en vuelo entre un alloc y su register. Espejo de heap.c.
+    private static final int HANDLE_MARCA = 64;
+    private boolean handlePressure = false;
+    // #430 — la excepción PREFABRICADA del OOM: se construye en el prólogo del run,
+    // cuando construir es gratis, y se lanza cuando construir el error ya no cabe.
+    // Raíz explícita del GC (scanRoots). 0 = no hay.
+    private long oomExc = 0;
 
     // H1 — guarda anti-recursión del OOM: al quedarse sin heap, la alocación lanza un
     // RuntimeError BP ATRAPABLE, pero CONSTRUIR ese objeto-excepción vuelve a alocar; si
@@ -1104,6 +1113,7 @@ public class VirtualMachine {
         this.heapNext   = stackBase;
         this.lastGcHeapNext = stackBase;
         this.handleNext = 1;   // V4: la tabla de handles se reinicia con el heap
+        this.handlePressure = false;   // #430: y su marca
         this.nextStackBase = stackBase + MAIN_STACK_BYTES;
 
         // memory[0] = 0x70 (opcode THREAD_EXIT). Es la sentinela de salida
@@ -1204,6 +1214,7 @@ public class VirtualMachine {
         // (tras cargar el data block). Umbral ~1/8 del heap, con suelo de 4 KB.
         this.lastGcHeapNext = addr;
         this.handleNext = 1;   // V4: la tabla de handles se reinicia con el heap
+        this.handlePressure = false;   // #430: y su marca
         this.gcBumpThreshold = Math.max(4096, (STACK_BASE - addr) / 8);
     }
 
@@ -1279,8 +1290,32 @@ public class VirtualMachine {
             // H3: GC PROACTIVO por umbral de crecimiento de bump. Evita el
             // over-commit (que el heap suba a su pico de bump antes de colectar):
             // si el bump ha avanzado >= umbral desde el último GC, colecta ahora.
-            if (!gcSuspended && heapNext - lastGcHeapNext >= gcBumpThreshold) {
+            //
+            // #430 — SEGUNDO EJE: la TABLA DE HANDLES. El umbral cuenta VOLUMEN
+            // y un programa de objetos chicos se le escapa: son pocos KB pero
+            // decenas de miles de SLOTS. Aquí la tabla crece con un Arrays.copyOf
+            // que el runtime de Java paga sin rechistar, así que el síntoma es
+            // sólo de placa (la Metro se colgaba: 512 KB de SRAM que no tiene) —
+            // pero el ALGORITMO es el mismo en las dos VMs, y el invariante es
+            // que lo sea. La presión llega como MARCA (handlePressure, armada en
+            // handleRegister al repartir slot de la zona final).
+            boolean porTabla = handlePressure
+                    || (handleFreeTop == 0 && handleNext >= handleAddr.length);
+            if (!gcSuspended
+                    && (heapNext - lastGcHeapNext >= gcBumpThreshold || porTabla)) {
                 gcSafepoint(myTid);
+                // Resolver la presión: si la colecta recicló slots, resuelta; si
+                // no (todo VIVO), crecer aquí — donde crecer es una decisión y no
+                // un accidente en medio de un register.
+                if (handlePressure) {
+                    if (handleFreeTop > 0) {
+                        handlePressure = false;
+                    } else {
+                        handleAddr = java.util.Arrays.copyOf(handleAddr, handleAddr.length * 2);
+                        handleGen  = java.util.Arrays.copyOf(handleGen,  handleGen.length  * 2);
+                        handlePressure = false;
+                    }
+                }
             }
             int addr = tryAllocateInner(totalSize);
             if (addr != -1) {
@@ -1316,6 +1351,18 @@ public class VirtualMachine {
                 // reentrante bajo vmLock); la guarda throwingOom evita recursión si NI la
                 // excepción cabe → fallback incatchable (BpThreadFault).
                 if (throwingOom || me == null) {
+                    // #430 — LA PREFABRICADA (idea de Eduardo): construida en el
+                    // prólogo del run, cuando construir era gratis. Lanzarla no
+                    // aloja NADA, así que el "ni para la excepción" deja de ser
+                    // una muerte incatchable y pasa a ser un OOM que el programa
+                    // puede atrapar — igual que en la VM-C (exceptions.c).
+                    if (oomExc != 0 && me != null) {
+                        writeI64(memory, me.sp, oomExc);
+                        me.sp += 8;
+                        me.allocAnchor = (int) oomExc;
+                        throwingOom = false;
+                        throw new BpExceptionPending((int) oomExc);
+                    }
                     throw new BpThreadFault("No space in heap (ni para la excepción): pido "
                             + totalSize + " bytes; libre=" + (STACK_BASE - heapNext));
                 }
@@ -1559,6 +1606,15 @@ public class VirtualMachine {
             }
         }
 
+        // #430 — la excepción PREFABRICADA del OOM: construida en el prólogo del
+        // run y sin más referencia que ésta. Tiene que sobrevivir TODAS las
+        // colectas para que lanzarla, cuando no queda memoria ni para contar el
+        // error, no aloje nada. Espejo de gc_mark_phase 2a-bis.
+        if (oomExc != 0) {
+            int oomHeader = refDeref((int) oomExc) - 4;
+            if (valid.contains(oomHeader)) markObject(oomHeader, valid);
+        }
+
         // Roots #302: objptr retenidos por el backend GUI (widgets con bindClick +
         // cola de eventos pendientes). Viven en objetos Java, FUERA de mem[] → el
         // scan conservador no los ve; sin esto un objeto cuyo único holder es el
@@ -1655,7 +1711,10 @@ public class VirtualMachine {
             while (p != 0) { afterFreeListBytes += readInt32(p + 4); p = readInt32(p + 8); }
         }
 
-        System.out.printf("VM [GC]: heap=%d bytes (alive=%d, libres=%d, bump_remain=%d) | antes free_list=%d%n",
+        // Diagnóstico → stderr, como el bpvm_diag de la VM-C. Por stdout
+        // rompería el invariante en cuanto un programa colecta: el stdout
+        // es del PROGRAMA, byte a byte entre las dos VMs.
+        System.err.printf("VM [GC]: heap=%d bytes (alive=%d, libres=%d, bump_remain=%d) | antes free_list=%d%n",
                 beforeBumpUsed, aliveBytes, afterFreeListBytes, STACK_BASE - heapNext, beforeFreeListBytes);
     }
 
@@ -1847,6 +1906,12 @@ public class VirtualMachine {
                 }
                 idx = handleNext++;
                 handleGen[idx] = 0;   // slot fresco
+                // #430 — LA MARCA (idea de Eduardo): repartir un slot de la zona
+                // final anuncia la frontera; la puerta de heapAlloc la consulta y
+                // colecta (o crece) ANTES de que la tabla se llene. Una comparación
+                // por slot FRESCO — el reuso de free-list ni pasa por aquí, y con
+                // reciclados no hay presión que anunciar.
+                if (idx + HANDLE_MARCA >= handleAddr.length) handlePressure = true;
             }
             handleAddr[idx] = addr;   // paso 7c: publicado bajo synchronized(vmLock) → release en el monitor-exit
             // Handle 64b = gen(slot)<<32 | (idx|TAG). El deref valida gen(handle)==gen(slot):
@@ -2014,6 +2079,24 @@ public class VirtualMachine {
         main.sp = this.SP;
         main.bp = this.BP;
         main.cs = this.CS;
+        // #430 — LA EXCEPCIÓN PREFABRICADA (idea de Eduardo): el OOM se fabrica
+        // AQUÍ, antes de arrancar el programa, cuando fabricarlo es gratis. Así,
+        // cuando de verdad no quede memoria ni para construir el error, lanzarla
+        // no aloja NADA y el OOM sigue siendo atrapable. Espejo de bpvm_run.
+        // Raíz propia del GC (scanRoots). Se construye con el mecanismo normal y
+        // se le quita el efecto: el prólogo no es un error.
+        oomExc = 0;
+        try {
+            throwBpRuntimeError(main, "No space in heap");
+        } catch (BpExceptionPending pend) {
+            oomExc = readI64(memory, main.sp - 8);   // el handle 64b que empujó
+            main.sp -= 8;                            // deshacer el push
+            main.allocAnchor = 0;
+        } catch (BpThreadFault ignored) {
+            // Sin RuntimeError exportado (mod legado): no hay prefabricada, y el
+            // camino de siempre (BpThreadFault) sigue cubriendo el caso.
+        }
+
         // main arranca RUNNABLE en la cola; el primer worker que lo pille lo ejecuta.
         synchronized (vmLock) {
             main.status = ThreadStatus.RUNNABLE;

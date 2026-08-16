@@ -224,6 +224,17 @@ have_class:
     size_t mlen = msg ? strlen(msg) : 0;
     uint32_t msg_ref = bpvm_heap_alloc_string(vm, msg ? msg : "", mlen);
     if (msg_ref == 0) {
+        /* #430 — sin memoria ni para el mensaje: la PREFABRICADA (idea de
+         * Eduardo). Construida en el prologo del RUN cuando construir era
+         * gratis; lanzarla no aloja NADA. El detalle especifico ya quedo en
+         * vm->runtime_error (arriba) para el reporte de no-atrapados; el
+         * catch de BP ve e.msg="No space in heap", que es la verdad. */
+        if (vm->oom_exc.v != 0) {
+            bpvm_diag("[bpvm] throw: sin memoria para el mensaje -> "
+                      "excepcion PREFABRICADA (#430)");
+            vm->building_error = 0;
+            return vm->oom_exc;
+        }
         bpvm_diag_urgente("[bpvm] throw: sin memoria para el MENSAJE (%u B) ni con la "
                   "reserva de emergencia soltada", (unsigned) mlen);
         vm->building_error = 0;
@@ -238,6 +249,12 @@ have_class:
     uint16_t num_fields = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_NUM_FIELDS);
     uint32_t obj_addr = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4, BPVM_TYPE_OBJECT);
     if (obj_addr == 0) {
+        if (vm->oom_exc.v != 0) {   /* #430: idem — la prefabricada */
+            bpvm_diag("[bpvm] throw: sin memoria para el objeto -> "
+                      "excepcion PREFABRICADA (#430)");
+            vm->building_error = 0;
+            return vm->oom_exc;
+        }
         bpvm_diag_urgente("[bpvm] throw: mensaje OK pero sin memoria para el OBJETO "
                   "RuntimeError (%u campos)", (unsigned) num_fields);
         vm->building_error = 0;
@@ -252,6 +269,12 @@ have_class:
         bpref_store(vm, obj_addr + 4 + 0 * 4, bpref_regen(vm, msg_ref));
     }
     bpref_t obj_h = bpvm_handle_register(vm, obj_addr);   /* V4: handle 64b (gen preservada — clave si el slot fue reciclado) */
+    if (obj_h.v == 0u && vm->oom_exc.v != 0) {
+        /* #430 — objeto construido pero sin SLOT para registrarlo: prefabricada. */
+        bpvm_diag("[bpvm] throw: sin slot para la excepcion -> PREFABRICADA (#430)");
+        vm->building_error = 0;
+        return vm->oom_exc;
+    }
 
     /* Anclar para GC; el caller decide si pasarlo a eh_unwind o usarlo
      * de otra forma. No tocamos el stack BP aquí — eso lo hace

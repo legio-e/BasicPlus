@@ -1299,7 +1299,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 8, BPVM_TYPE_ARRAY_I64);
             if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
-                        bpref_store(vm, sp, bpvm_handle_register(vm, ref)); sp += BPVM_REF_SIZE;
+                        { bpref_t h430 = bpvm_handle_register(vm, ref);
+                          if (h430.v == 0u) BPVM_RT_THROW("No space in heap");   /* #430: tabla de handles agotada, mismo OOM */
+                          bpref_store(vm, sp, h430); } sp += BPVM_REF_SIZE;
             mem = vm->memory;
             break;
         }
@@ -1420,7 +1422,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 4, BPVM_TYPE_ARRAY_I32);
             if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
-                        bpref_store(vm, sp, bpvm_handle_register(vm, ref)); sp += BPVM_REF_SIZE;
+                        { bpref_t h430 = bpvm_handle_register(vm, ref);
+                          if (h430.v == 0u) BPVM_RT_THROW("No space in heap");   /* #430: tabla de handles agotada, mismo OOM */
+                          bpref_store(vm, sp, h430); } sp += BPVM_REF_SIZE;
             mem = vm->memory;  /* heap_alloc no realoca pero defensivo */
             break;
         }
@@ -1431,7 +1435,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size, BPVM_TYPE_ARRAY_I8);
             if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
-                        bpref_store(vm, sp, bpvm_handle_register(vm, ref)); sp += BPVM_REF_SIZE;
+                        { bpref_t h430 = bpvm_handle_register(vm, ref);
+                          if (h430.v == 0u) BPVM_RT_THROW("No space in heap");   /* #430: tabla de handles agotada, mismo OOM */
+                          bpref_store(vm, sp, h430); } sp += BPVM_REF_SIZE;
             break;
         }
         case OP_NEWARRAY_I16: {
@@ -1441,7 +1447,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) size * 2, BPVM_TYPE_ARRAY_I16);
             if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
             bpvm_write_u32_be(mem + ref, (uint32_t) size);
-                        bpref_store(vm, sp, bpvm_handle_register(vm, ref)); sp += BPVM_REF_SIZE;
+                        { bpref_t h430 = bpvm_handle_register(vm, ref);
+                          if (h430.v == 0u) BPVM_RT_THROW("No space in heap");   /* #430: tabla de handles agotada, mismo OOM */
+                          bpref_store(vm, sp, h430); } sp += BPVM_REF_SIZE;
             break;
         }
         case OP_ALOAD: {
@@ -1590,7 +1598,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
             bpvm_write_u32_be(mem + ref, class_ptr);   /* slot[0] = class_ptr (alloc fresca) */
             /* fields ya zeroed por heap_alloc. */
-                        bpref_store(vm, sp, bpvm_handle_register(vm, ref)); sp += BPVM_REF_SIZE;
+                        { bpref_t h430 = bpvm_handle_register(vm, ref);
+                          if (h430.v == 0u) BPVM_RT_THROW("No space in heap");   /* #430: tabla de handles agotada, mismo OOM */
+                          bpref_store(vm, sp, h430); } sp += BPVM_REF_SIZE;
             mem = vm->memory;
             break;
         }

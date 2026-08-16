@@ -295,6 +295,9 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->building_error = 0;      /* #355: 1 solo mientras se construye una excepcion */
     vm->main_absolute_address = 0;
     /* V4 — tabla de handles (lazy) + GC suspendido durante la migración. */
+    vm->handle_cap_max = BPVM_HANDLE_CAP_MAX;   /* #430: tope del puerto (0 = sin tope) */
+    vm->handle_pressure = 0u;                   /* #430: la marca, sin cruzar */
+    vm->oom_exc.v = 0u;                         /* #430: la prefabricada, aun no */
     vm->handle_addr  = NULL;
     vm->handle_gen   = NULL;     /* paso 3: generación por índice (contrato B) */
     vm->handle_free_list = NULL; /* paso 4c: free-list de slots reciclables */
@@ -1041,6 +1044,20 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
     /* Default quantum si no se ajustó. */
     if (vm->quantum_ops == 0) vm->quantum_ops = 1024;
 
+    /* #430 — LA EXCEPCION PREFABRICADA (idea de Eduardo): el OOM se fabrica
+     * AQUI, antes de arrancar el programa, cuando fabricarlo es gratis — y
+     * cuando de verdad no quede memoria (de heap o de tabla), lanzar esta no
+     * aloja NADA. Es raiz propia del GC (gc_mark_phase 2a-bis) y vive toda la
+     * ejecucion. Se pone a 0 antes de refabricar: en modo daemon el RUN
+     * anterior dejo una que apunta a un heap ya reseteado. */
+    vm->oom_exc.v = 0u;
+    {
+        bpref_t pre = bpvm_throw_runtime_error(vm, main_tc, "No space in heap");
+        vm->oom_exc = pre;                 /* .v == 0 si ni esto se pudo */
+        vm->runtime_error[0] = 0;          /* el prologo no es un error */
+        main_tc->alloc_anchor = 0;         /* el ancla era transitoria */
+    }
+
     bpvm_status_t rs = bpvm_scheduler_run(vm);
     /* #310 (Eduardo) — al TERMINAR se vuelve al camino estándar: el del pack
      * desaparece. Si no, en un daemon (que es como lo usa el IDE) el Run
@@ -1076,6 +1093,16 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     main_tc->bp = main_tc->stack_base;
     main_tc->status = BPVM_THREAD_RUNNABLE;
     if (vm->quantum_ops == 0) vm->quantum_ops = 1024;
+
+    /* #430 — misma prefabricada que en bpvm_run (ver alli). */
+    vm->oom_exc.v = 0u;
+    {
+        bpvm_thread_t* tc0 = &vm->threads[0];
+        bpref_t pre = bpvm_throw_runtime_error(vm, tc0, "No space in heap");
+        vm->oom_exc = pre;
+        vm->runtime_error[0] = 0;
+        tc0->alloc_anchor = 0;
+    }
 
     if (bpvm_smp_init(vm, n_workers) != 0) return BPVM_ERR_OOM;
     int rc = bpvm_scheduler_run_smp(vm);

@@ -265,6 +265,19 @@ target_compile_definitions(bpvm_pico PRIVATE
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=0
 )
 
+# #430 — TOPE de la tabla de handles. Las dos tablas salen del malloc de
+# PLATAFORMA, que aquí es SRAM (520 KB en todo el RP2350), no del heap de la VM
+# (que puede estar en PSRAM). Doblar a 65536 slots pide 512 KB *y* el realloc
+# necesita las viejas a la vez: imposible. Y el fallo del malloc de FreeRTOS
+# acaba en vApplicationMallocFailedHook, que PARPADEA PARA SIEMPRE — un cuelgue,
+# no un error (así se colgaba la Metro con AotGcRt2, 17-ago). Con el tope, pasar
+# de aquí es un OOM atrapable y el programa decide qué hacer.
+#   16384 slots = 128 KB las dos tablas ≈ 1/4 de la SRAM. Un programa que
+#   necesite más objetos VIVOS a la vez pide más de lo que esta placa da.
+target_compile_definitions(bpvm_pico PRIVATE
+    BPVM_HANDLE_CAP_MAX=16384
+)
+
 # H2 Pico SMP — opt-in al scheduler multi-worker.
 # Por defecto NO se define ⇒ repl_v1.c usa bpvm_run() (legacy).
 # Activar con:

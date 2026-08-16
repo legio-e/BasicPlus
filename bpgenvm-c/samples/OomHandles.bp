@@ -1,0 +1,58 @@
+// OomHandles.bp — #430: la tabla de handles se AGOTA con todo VIVO y el
+// resultado tiene que ser un OOM ATRAPABLE — ni cuelgue ni refs que mienten.
+//
+// Una cadena de 1.500 nodos, cada uno con su string: ~3.000 handles VIVOS,
+// enganchados a la raiz — el GC no puede reciclar ninguno. (1.500 y no mas:
+// el marcado del GC es RECURSIVO en las dos VMs y una cadena mas honda tumba
+// la pila del marcador — esa liebre la levanto este sample y tiene su ficha.)
+// En el PC se ejecuta con --handlecap=2048 (el tope de una placa imaginaria):
+// al cruzar la marca
+// la colecta no rellena nada, crecer esta prohibido por el tope, y la
+// reserva siguiente tiene que salir por el cauce del OOM — que un try/catch
+// de BP atrapa como cualquier RuntimeError. Se imprime EN QUE NODO salto para
+// ver que fue cerca del tope, y que el programa sigue vivo despues.
+//
+// Sin tope (las dos VMs de PC a secas) construye los 5.000 y no lanza nada:
+// esa es la salida de la paridad dual-VM. El tope es cosa del host C.
+module OomHandles
+
+  class Nodo
+    var siguiente: Nodo
+    var etiqueta: string
+    function Nodo()
+      this.etiqueta := ""
+    end Nodo
+    public function engancha(sig: Nodo, eti: string)
+      this.siguiente := sig
+      this.etiqueta := eti
+    end engancha
+    public function dime(): string
+      return this.etiqueta
+    end dime
+  end Nodo
+
+  function Main()
+    var cabeza: Nodo := null
+    var i: integer := 0
+    try
+      while i < 1500 do
+        var n: Nodo := Nodo()
+        n.engancha(cabeza, "n" + i)
+        cabeza := n
+        i := i + 1
+      endwh
+      print "cupieron todos"
+    catch e: RuntimeError
+      // Ojo: literal a secas — el catch corre con la tabla al borde y un
+      // concat aqui seria OTRO OOM (esta vez fuera del try). La historia
+      // completa: atrapar, SOLTAR lo que ocupa, y entonces si, seguir.
+      print "OOM atrapado"
+      cabeza := null
+    endtry
+    // Aqui ya se puede alojar con normalidad: si hubo OOM, la cadena suelta
+    // se recicla en la primera colecta y la tabla respira.
+    print "tras el catch, i = " + i
+    print "fin"
+  end Main
+
+end OomHandles

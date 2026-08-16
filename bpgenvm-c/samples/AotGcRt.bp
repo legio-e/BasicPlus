@@ -1,0 +1,50 @@
+// AotGcRt.bp — #302 paso 3: forzar una colecta DENTRO de una funcion native.
+//
+// LongNat demostro que el codigo nativo corre en placa, pero en su ventana no
+// cayo ningun GC: el camino del escaneo de la pila C quedo COMPILADO en la
+// imagen y no PROBADO en ella. Este programa lo fuerza sin tocar el firmware:
+//
+//   · eco() construye su resultado con concatenaciones ANIDADAS. El resultado
+//     del parentesis izquierdo vive solo como temporal de C (registro o pila)
+//     MIENTRAS el derecho aloja tres veces mas. Esa es exactamente la ventana
+//     del bug que el test rojo (test_aotgc.c) pillo en host: sin el escaneo,
+//     el GC recicla el temporal y la cadena sale corrupta.
+//   · Main la llama decenas de miles de veces: varios MB de churn contra un
+//     heap de pocos MB ⇒ VARIAS colectas, y casi todas caen dentro de eco,
+//     porque alli se hacen 7 de cada 12 allocs de la vuelta.
+//   · Cada resultado se compara con el esperado construido a nivel BP. Un solo
+//     reciclado en 30.000 vueltas y `malos` deja de ser 0 — no hace falta que
+//     el fallo sea reproducible, basta con que sea POSIBLE.
+//
+// En las dos VMs de PC la native corre interpretada (no hay .mdn x86): validan
+// el programa. La prueba del escaneo la da la PLACA con log=1, que ademas del
+// `malos : 0` tiene que ensenar el rastro `[gc] pila C del native`.
+module AotGcRt
+
+  // native 
+  function eco(n: integer): string
+    return ("v" + n) + ("w" + n)
+  end eco
+
+  function Main()
+    var i: integer := 0
+    var malos: integer := 0
+    var ultimo: string := ""
+    while i < 10000 do
+      if (i mod 1000)==0 then
+        print i
+        gc()
+      endif
+      ultimo := eco(i)
+      var esperado: string := "v" + i + "w" + i
+      if ultimo != esperado then
+        malos := malos + 1
+      endif
+      i := i + 1
+    endwh
+    print "malos  : " + malos
+    print "ultimo : " + ultimo
+    print "fin"
+  end Main
+
+end AotGcRt

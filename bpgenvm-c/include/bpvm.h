@@ -233,6 +233,12 @@ void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user);
  * ser deliberado (`--nogc` en el PC, `gc=0` en el ENV de la placa). */
 void bpvm_set_gc_enabled(bpvm_t* vm, int enabled);
 
+/* #430 — tope de la tabla de handles (slots; 0 = sin tope). El default lo pone
+ * el build del puerto (BPVM_HANDLE_CAP_MAX); esto lo cambia en runtime — su
+ * cliente real es el host de pruebas (`--handlecap`), que asi reproduce el
+ * limite de una placa sin build especial. */
+void bpvm_set_handle_cap_max(bpvm_t* vm, uint32_t slots);
+
 /* ── #353: dónde habla la VM cuando NO habla el programa ─────────────────────
  *
  * bpvm_set_output es la salida DEL PROGRAMA (print). Esto es otra cosa: lo que

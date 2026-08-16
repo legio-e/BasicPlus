@@ -138,6 +138,7 @@ int main(int argc, char** argv) {
     long  debug_print = 0;
     int   smp_workers = 0;        /* 0 = single-worker legacy */
     int   no_gc       = 0;        /* #355: --nogc = el recolector no corre (ver repl_v1) */
+    long  handle_cap  = -1;       /* #430: --handlecap=N; -1 = el default del build */
     size_t mem_size   = 512 * 1024;
     const char* basedir = NULL;   /* H19-F1: raíz de proyecto (paths relativos) */
     const char* fs_lfs_img = NULL;/* H2·B1.2: modo ORÁCULO — littlefs sobre imagen */
@@ -165,6 +166,12 @@ int main(int argc, char** argv) {
         }
         else if (strcmp(a, "--nogc") == 0) {
             no_gc = 1;   /* #355: espejo en el PC del `gc=0` del ENV de la placa */
+        }
+        else if (strncmp(a, "--handlecap=", 12) == 0) {
+            /* #430: fuerza en host el tope de tabla de un puerto (0 = sin tope).
+             * Con el la prueba del OOM-por-tabla corre aqui, sin build especial. */
+            handle_cap = strtol(a + 12, NULL, 10);
+            if (handle_cap < 0) handle_cap = 0;
         }
         else if (strncmp(a, "--basedir=", 10) == 0) {
             basedir = a + 10;        /* H19-F1: raíz de proyecto (paths relativos) */
@@ -319,6 +326,11 @@ int main(int argc, char** argv) {
     if (no_gc) {
         bpvm_set_gc_enabled(vm, 0);
         printf("=== GC DESACTIVADO (--nogc): memoria de un solo uso ===\n");
+    }
+
+    if (handle_cap >= 0) {
+        bpvm_set_handle_cap_max(vm, (uint32_t) handle_cap);   /* #430 */
+        fprintf(stderr, "config: handle_cap_max=%ld (--handlecap)\n", handle_cap);
     }
 
     if (smp_workers > 0) {

@@ -325,6 +325,11 @@ static void gc_mark_phase(bpvm_t* vm) {
         uint32_t anchor = (uint32_t) vm->threads[t].alloc_anchor;
         if (anchor != 0) mark_recursive(vm, anchor);
     }
+    /* 2a-bis. #430 — la excepcion PREFABRICADA del OOM (idea de Eduardo):
+     *     construida en el prologo del RUN, sin mas referencia que esta raiz.
+     *     Tiene que sobrevivir TODAS las colectas para que lanzarla, cuando
+     *     no queda memoria ni para contar el error, no aloje nada. */
+    if (vm->oom_exc.v != 0) mark_recursive(vm, (uint32_t) vm->oom_exc.v);
     /* 2b. #302 — raíces del GUI: los objptr ligados a widgets (bind_click) y la
      *     cola de eventos viven en GLOBALS C (gui.c), FUERA de vm->memory → el
      *     scan conservador no los ve. Sin esto, un objeto BP cuyo único holder
@@ -671,6 +676,12 @@ void bpvm_set_gc_enabled(bpvm_t* vm, int enabled) {
     if (vm) vm->gc_suspended = enabled ? 0 : 1;
 }
 
+/* #430 — tope de tabla en runtime; cliente real: el host de pruebas
+ * (--handlecap), que reproduce el límite de una placa sin build especial. */
+void bpvm_set_handle_cap_max(bpvm_t* vm, uint32_t slots) {
+    if (vm) vm->handle_cap_max = slots;
+}
+
 static void bpvm_gc(bpvm_t* vm) {
     /* V4: GC suspendido durante la migración a handles — guarda en el NÚCLEO
      * (espejo del gcLocked de miVM): cubre gc_stw Y bpvm_heap_gc (builtin gc()).
@@ -682,11 +693,49 @@ static void bpvm_gc(bpvm_t* vm) {
     gc_sweep_phase(vm);
 }
 
+/* #430 — LA MARCA: repartir un slot de los ultimos BPVM_HANDLE_MARCA arma la
+ * presion (una comparacion por slot fresco). Cuando ni colectando ni creciendo
+ * hay slot, el OOM se cuenta con la excepcion PREFABRICADA en el prologo del
+ * RUN (idea de Eduardo, exceptions.c): construida cuando construir era gratis,
+ * lanzarla no aloja nada. */
+#define BPVM_HANDLE_MARCA   64u
+
+/* #430 — crecimiento de la tabla (x2), UNICO para el gate y para register.
+ * Devuelve 1 si tras la llamada hay sitio para registrar; 0 si no se puede:
+ * por el TOPE del puerto (handle_cap_max, p.ej. la SRAM de la Pico no da para
+ * el par de tablas de 65536) o porque el malloc de plataforma dijo que no.
+ * NO grita aqui: el que llama decide si es OOM (la puerta de heap_alloc) o
+ * aviso urgente (register como ultimo recurso). Se llama BAJO el vm_lock. */
+static int handle_table_grow(bpvm_t* vm) {
+    uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u : 4096u;
+    /* El tope RECORTA, no prohibe: con tope < 4096 la tabla nace ya recortada,
+     * y un tope que no es potencia de 2 recibe un ultimo crecimiento parcial.
+     * Solo se falla cuando el recorte no da ni un slot nuevo. */
+    if (vm->handle_cap_max != 0u && new_cap > vm->handle_cap_max)
+        new_cap = vm->handle_cap_max;
+    if (new_cap <= vm->handle_cap) return 0;
+    /* #355 — QUE SE VEA CRECER. Las dos tablas juntas son new_cap*8 bytes y
+     * salen del malloc de la PLATAFORMA, no del heap de la VM: en la Pico eso
+     * es SRAM (520 KB en total), y el realloc necesita el viejo a la vez. */
+    bpvm_diag("[bpvm] tabla de handles: %u -> %u slots (%u KB las dos)",
+              (unsigned) vm->handle_cap, (unsigned) new_cap,
+              (unsigned)((new_cap * 8u) / 1024u));
+    uint32_t* na = (uint32_t*) bpvm_realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
+    if (!na) return 0;
+    uint32_t* ng = (uint32_t*) bpvm_realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
+    if (!ng) { vm->handle_addr = na; return 0; }   /* la de addr ya crecio: inocuo */
+    vm->handle_addr = na;
+    vm->handle_gen  = ng;
+    vm->handle_cap  = new_cap;
+    return 1;
+}
+
 /* V4/paso4c — registra un objeto de HEAP y devuelve su HANDLE 64b (gen(slot)<<32 |
  * idx|TAG). Reusa un slot de la free-list si lo hay (con su gen ya bumpeada); si no,
  * crece la tabla. Devuelve bpref_t: al asignarlo a un uint32_t da error de compilación
  * → el compilador caza cada sitio que perdería la generación. Si no puede crecer,
- * devuelve la dirección cruda (sin tag → bpref_deref por identidad). */
+ * devuelve ref NULA (0) → viaja por el contrato "ref 0 = OOM" (#430; antes
+ * devolvía la dirección cruda y las refs MENTIAN). */
 bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
     /* Paso 7 — la tabla (free-list/handle_next) es estado COMPARTIDO: bajo SMP dos
      * workers registran a la vez (handle_register corre FUERA del vm_lock, heap_alloc
@@ -700,40 +749,27 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
         idx = vm->handle_free_list[--vm->handle_free_top];   /* REUSO: slot reciclado, gen ya bumpeada */
     } else {
         if (vm->handle_next >= vm->handle_cap) {
-            uint32_t new_cap = vm->handle_cap ? vm->handle_cap * 2u : 4096u;
-            /* #355 — QUE SE VEA CRECER. Las dos tablas juntas son new_cap*8 bytes y
-             * salen del malloc de la PLATAFORMA, no del heap de la VM: en la Pico eso
-             * son 64 KB en total (lo dice el log de arranque), asi que doblar a 8192
-             * pide 64 KB *y* ademas el realloc necesita el viejo a la vez. Sin esta
-             * linea, cruzar el limite era MUDO. */
-            bpvm_diag("[bpvm] tabla de handles: %u -> %u slots (%u KB las dos)",
-                      (unsigned) vm->handle_cap, (unsigned) new_cap,
-                      (unsigned)((new_cap * 8u) / 1024u));
-            uint32_t* na = (uint32_t*) bpvm_realloc(vm->handle_addr, (size_t) new_cap * sizeof(uint32_t));
-            if (!na) {
-                /* #355 — ESTE ERA EL FALLO MUDO: se devolvia la DIRECCION CRUDA en vez
-                 * de un handle. Todo lo que la trate como handle a partir de aqui da
-                 * null o basura (cadenas corruptas, INVOKE_VIRTUAL sobre null) y NADIE
-                 * se entera de por que. Con handles hay OOM atrapable desde H1: esto
-                 * tiene que salir por ahi, no inventarse una referencia invalida.
-                 * De momento GRITA; convertirlo en OOM de verdad es el paso siguiente. */
-                bpvm_diag_urgente("[bpvm] SIN MEMORIA para la tabla de handles (%u slots, %u KB): "
-                          "se devuelve direccion CRUDA y a partir de aqui las refs MIENTEN",
-                          (unsigned) new_cap, (unsigned)((new_cap * 4u) / 1024u));
-                r.v = addr; bpvm_smp_unlock(vm); return r;
+            /* #430 — con la presion de tabla en la puerta de heap_alloc este
+             * crecimiento es el ULTIMO RECURSO (registros en vuelo mas alla del
+             * margen). Si no se puede, el "paso siguiente" que prometia #355:
+             * ref NULA → el llamador la trata como el OOM que ya sabe tratar.
+             * Nada de direcciones crudas — las refs no mienten. */
+            if (!handle_table_grow(vm)) {
+                bpvm_diag_urgente("[bpvm] tabla de handles AGOTADA (%u slots, tope %u): "
+                          "ref nula -> OOM atrapable",
+                          (unsigned) vm->handle_cap, (unsigned) vm->handle_cap_max);
+                r.v = 0u; bpvm_smp_unlock(vm); return r;
             }
-            uint32_t* ng = (uint32_t*) bpvm_realloc(vm->handle_gen,  (size_t) new_cap * sizeof(uint32_t));
-            if (!ng) {
-                bpvm_diag_urgente("[bpvm] SIN MEMORIA para handle_gen (%u slots): idem, refs invalidas",
-                          (unsigned) new_cap);
-                vm->handle_addr = na; r.v = addr; bpvm_smp_unlock(vm); return r;
-            }
-            vm->handle_addr = na;
-            vm->handle_gen  = ng;
-            vm->handle_cap  = new_cap;
         }
         idx = vm->handle_next++;
         vm->handle_gen[idx] = 0u;   /* slot fresco */
+        /* #430 — LA MARCA (idea de Eduardo): repartir un slot de la zona final
+         * anuncia la frontera — arma el flag que la puerta de heap_alloc
+         * consulta para colectar (o crecer) ANTES de que la tabla se llene.
+         * Una comparacion por slot FRESCO (el reuso de free-list ni pasa por
+         * aqui: si hay reciclados, no hay presion). El margen cubre los
+         * registros en vuelo alloc→register. */
+        if (idx + BPVM_HANDLE_MARCA >= vm->handle_cap) vm->handle_pressure = 1u;
     }
     /* Paso 7c — A1: publica el slot con RELEASE → todo lo escrito ANTES (init del objeto)
      * es visible para quien lo lea con ACQUIRE (bpref_deref). Mitad ESCRITOR del apretón.
@@ -930,22 +966,77 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
      * over-commit (que el heap suba a su pico antes de colectar): si el bump
      * avanzó >= umbral desde el último GC, colecta ahora. gc_stw hace el baile
      * STW (mark scanea las pilas de todos los threads → deben estar en
-     * safepoint con tc->sp sincronizado; en legacy/single-worker no hay baile). */
-    if (!vm->gc_suspended && vm->gc_bump_threshold != 0 &&
-        vm->alloc_since_gc >= vm->gc_bump_threshold) {
-        /* #355 — QUE SE VEA SI EL GC RECICLA. Sin esto, una colecta que no
-         * recupera nada es indistinguible de una que va bien: el heap se acaba
-         * y el fallo aparece diez pasos mas alla, disfrazado de cadena vacia.
-         *  es el bump antes de colectar; , tras el barrido (el
-         * sweep RETROCEDE heap_next si la cola queda libre). Si los dos numeros
-         * son iguales colecta a colecta, es que NO se esta reciclando. */
-        uint32_t antes = vm->heap_next;
-        gc_stw(vm);
-        bpvm_diag("[bpvm] GC: bump %u -> %u (recupera %d B, tope %u, heap %u..%u)",
-                  (unsigned) antes, (unsigned) vm->heap_next,
-                  (int)((long) antes - (long) vm->heap_next),
-                  (unsigned) vm->gc_bump_threshold,
-                  (unsigned) vm->heap_start, (unsigned) vm->stack_base);
+     * safepoint con tc->sp sincronizado; en legacy/single-worker no hay baile).
+     *
+     * #430 — SEGUNDO EJE de presión: la TABLA DE HANDLES. El umbral #357 cuenta
+     * VOLUMEN, y un programa de objetos chicos se le escapaba: 30.000 strings
+     * son ~600 KB (bajo el umbral de 704 KB de la Metro) pero 30.000 slots — y
+     * el salto de tabla a 65536 pide ~512 KB de SRAM que la Pico no tiene. Se
+     * moría SIN haber colectado ni una vez (AotGcRt/AotGcRt2, 17-ago). El aviso
+     * llega por la MARCA del final de la tabla (register arma handle_pressure
+     * al repartir slot de la zona final) y dispara la MISMA colecta en la MISMA
+     * puerta segura. Resolución abajo: reciclado ⇒ listo; todo vivo ⇒ crecer;
+     * no se puede crecer ⇒ OOM atrapable. */
+    {
+        /* #430 — la presion de tabla llega como FLAG, no como aritmetica: la
+         * MARCA al final de la tabla (idea de Eduardo) se cruza en register al
+         * repartir un slot fresco de la zona final, y aqui solo se consulta.
+         * Una colecta por cruce — el ritmo correcto sin heuristicas.
+         * El segundo termino es el LLENO-DURO: los reusos de free-list no
+         * rearman la marca, asi que la tabla puede llegar a llenarse del todo
+         * con el flag en 0 (se vio con --handlecap=2048: el register de un
+         * OP_NEW_OBJECT devolvia null y moria en INVOKE_VIRTUAL). Barato: solo
+         * es verdad con la free-list seca. */
+        int por_tabla = (vm->handle_pressure != 0) ||
+                        (vm->handle_cap != 0u && vm->handle_free_top == 0u &&
+                         vm->handle_next >= vm->handle_cap);
+        int por_volumen = (vm->gc_bump_threshold != 0 &&
+                           vm->alloc_since_gc >= vm->gc_bump_threshold);
+        if (!vm->gc_suspended && (por_volumen || por_tabla)) {
+            if (por_tabla)
+                bpvm_diag("[bpvm] GC por TABLA de handles: %u/%u slots (marca cruzada)",
+                          (unsigned) vm->handle_next, (unsigned) vm->handle_cap);
+            /* #355 — QUE SE VEA SI EL GC RECICLA. Sin esto, una colecta que no
+             * recupera nada es indistinguible de una que va bien: el heap se acaba
+             * y el fallo aparece diez pasos mas alla, disfrazado de cadena vacia.
+             *  es el bump antes de colectar; , tras el barrido (el
+             * sweep RETROCEDE heap_next si la cola queda libre). Si los dos numeros
+             * son iguales colecta a colecta, es que NO se esta reciclando. */
+            uint32_t antes = vm->heap_next;
+            gc_stw(vm);
+            bpvm_diag("[bpvm] GC: bump %u -> %u (recupera %d B, tope %u, heap %u..%u)",
+                      (unsigned) antes, (unsigned) vm->heap_next,
+                      (int)((long) antes - (long) vm->heap_next),
+                      (unsigned) vm->gc_bump_threshold,
+                      (unsigned) vm->heap_start, (unsigned) vm->stack_base);
+        }
+    }
+
+    /* #430 — resolver la presion de tabla, si la habia. Dos salidas buenas:
+     * la colecta rellena la free-list (recicla) o, si todo sigue VIVO, se
+     * crece AQUI — donde fallar tiene camino digno: el mismo contrato
+     * "return 0 = OOM atrapable" del heap lleno. El flag se desarma en las
+     * dos; volvera a armarse solo al cruzar la marca siguiente. (El segundo
+     * termino: mismo lleno-duro que arriba — la colecta de la puerta pudo no
+     * reciclar nada y el flag estar en 0.) */
+    if (vm->handle_pressure != 0 ||
+        (vm->handle_cap != 0u && vm->handle_free_top == 0u &&
+         vm->handle_next >= vm->handle_cap)) {
+        if (vm->handle_free_top > 0u) {
+            vm->handle_pressure = 0;          /* reciclado: presion resuelta */
+        } else if (handle_table_grow(vm)) {
+            vm->handle_pressure = 0;          /* todo vivo: tabla mas grande */
+        } else {
+            static int ya_avisado_tabla = 0;
+            if (!ya_avisado_tabla) {
+                ya_avisado_tabla = 1;
+                bpvm_diag_urgente("[bpvm] SIN SITIO para mas handles (%u slots, tope %u): "
+                          "OOM atrapable. Este aviso sale UNA vez por ejecucion.",
+                          (unsigned) vm->handle_cap, (unsigned) vm->handle_cap_max);
+            }
+            bpvm_smp_unlock(vm);
+            return 0;   /* mismo cauce que el heap lleno: el caller lanza OOM */
+        }
     }
 
     uint32_t addr = try_allocate_inner(vm, total);

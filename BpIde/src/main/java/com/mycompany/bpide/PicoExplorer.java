@@ -1435,6 +1435,35 @@ public final class PicoExplorer extends JPanel {
         cur.add(leaf);
     }
 
+    /** Carpeta seleccionada en el árbol (o la del fichero seleccionado),
+     *  como path del device ("/lib"); null si no hay selección o si lo
+     *  seleccionado es la raíz. Las carpetas del árbol son nodos de texto
+     *  (segmento) y las hojas llevan la Entry con el path completo. */
+    private String selectedDirPath() {
+        TreePath sel = fileTree.getSelectionPath();
+        if (sel == null) return null;
+        Object[] nodes = sel.getPath();
+        int last = nodes.length - 1;
+        Object lastUo = ((DefaultMutableTreeNode) nodes[last]).getUserObject();
+        if (lastUo instanceof Backend.Entry && !((Backend.Entry) lastUo).isDir) {
+            last--;   // un fichero: su carpeta es el padre
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= last; i++) {   // nodes[0] = etiqueta "Placa"
+            Object uo = ((DefaultMutableTreeNode) nodes[i]).getUserObject();
+            String seg;
+            if (uo instanceof Backend.Entry) {
+                String n = ((Backend.Entry) uo).name;
+                int slash = n.lastIndexOf('/');
+                seg = slash >= 0 ? n.substring(slash + 1) : n;
+            } else {
+                seg = String.valueOf(uo);
+            }
+            sb.append('/').append(seg);
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
     /** Devuelve la Entry del nodo seleccionado, o null si no hay nada
      *  seleccionado o el nodo seleccionado es una carpeta. */
     private Backend.Entry getSelectedEntry() {
@@ -1470,9 +1499,13 @@ public final class PicoExplorer extends JPanel {
             prefs.lastUploadDir = parent.getAbsolutePath();
             prefs.save();
         }
-        // Sube a /app/<name> por convención (relevante en Pico; en VM
-        // Java es un path arbitrario dentro del workdir).
-        String remote = toAppPath(f.getName());
+        // Sube a la carpeta seleccionada en el árbol (así se puede dejar
+        // algo en /lib o /sys a propósito); sin selección, a /app por
+        // convención (relevante en Pico; en VM Java es un path arbitrario
+        // dentro del workdir).
+        String dir = selectedDirPath();
+        String remote = (dir != null) ? dir + "/" + f.getName()
+                                      : toAppPath(f.getName());
         status.setText("Uploading " + remote + "...");
         runAsync(() -> {
             byte[] data = Files.readAllBytes(f.toPath());

@@ -57,6 +57,12 @@ typedef struct { uint64_t v; } bpref_t;
 #define BPVM_OBJ_HEADER_SIZE 8
 #define BPVM_MIN_FREE_BLOCK  12
 
+/* #430 — tope de arranque de la tabla de handles (slots). 0 = sin tope (host).
+ * Los puertos con malloc de plataforma chico (SRAM) lo fijan en su build. */
+#ifndef BPVM_HANDLE_CAP_MAX
+#define BPVM_HANDLE_CAP_MAX 0u
+#endif
+
 /* Offsets del class descriptor (MOD_FORMAT.md §8). */
 #define BPVM_CLS_OFF_NUM_FIELDS   0
 #define BPVM_CLS_OFF_NUM_METHODS  2
@@ -418,7 +424,9 @@ struct bpvm {
     /* V4 — TABLA DE HANDLES (paso 2b, espejo de miVM). Un objeto de HEAP se
      * registra aquí y su ref es un HANDLE = índice | tag; bpref_deref lo resuelve.
      * Modo neutro: monotónica, sin generación (pasos 3-4). handle_addr[i] = addr
-     * físico. El GC se SUSPENDE durante la migración (gc_suspended). */
+     * físico. El GC se SUSPENDE durante la migración (gc_suspended).
+     * #430 — BPVM_HANDLE_CAP_MAX: valor de arranque de handle_cap_max (abajo);
+     * cada puerto lo fija en su build (la Pico: 32768). 0 = sin tope. */
     uint32_t* handle_addr;
     /* Paso 3 — GENERACIÓN por índice (contrato B). Monotónica-no-reuso: 0 = vivo;
      * >0 = LIBERADO. El deref de PROGRAMA (bpvm_ref_dead) lo consulta → use-after-free
@@ -432,6 +440,24 @@ struct bpvm {
     uint32_t* handle_free_list;
     uint32_t  handle_free_top;
     uint32_t  handle_free_cap;
+    /* #430 — TOPE de la tabla (slots; 0 = sin tope). Las tablas salen del
+     * malloc de PLATAFORMA: en la Pico eso es SRAM (520 KB en total) y el
+     * salto a 65536 pide ~512 KB con las viejas aun vivas — el puerto fija
+     * aqui lo que su silicio puede pagar y el exceso es OOM atrapable, no
+     * un malloc imposible (cuyo hook CUELGA la placa). Runtime y no #define
+     * a secas para que el host pueda forzarlo en tests (--handlecap). */
+    uint32_t  handle_cap_max;
+    /* #430 — LA MARCA cruzada (idea de Eduardo): register lo arma al repartir
+     * un slot fresco de la zona final de la tabla (últimos 64); la puerta de
+     * heap_alloc lo consulta y lo resuelve (colecta / crece / OOM). Así la
+     * frontera se anuncia sola: una colecta por cruce, cero aritmética por
+     * alloc. */
+    uint32_t  handle_pressure;
+    /* #430 — la excepcion PREFABRICADA del OOM (idea de Eduardo): se construye
+     * en el prologo del RUN, cuando construir es gratis, y se lanza cuando la
+     * construccion normal del error falla por falta de memoria (de heap o de
+     * tabla). Raiz explicita del GC (gc_mark_phase 2a-bis). 0 = no hay. */
+    bpref_t   oom_exc;
     int       gc_suspended;    /* 1 = GC no corre (migración a handles) */
 
     /* Módulos cargados. */
