@@ -952,6 +952,26 @@ typedef struct {
     bpvm_thread_t* tc;      /* thread cuyo stack usa el puente */
     uint32_t*      sp_p;    /* &sp local del intérprete (in/out) */
     uint32_t*      bp_p;    /* &bp local del intérprete (in/out) */
+    /* #302 paso 3 — TECHO DE LA PILA DE C del native en curso (0 = no hay).
+     *
+     * Idea de Eduardo (16-ago): en vez del shadow stack del diseño, que el GC
+     * ESCANEE la pila que el native ya usa. Un handle que el native retiene
+     * vive en sus locales/registros — en la pila de C, no en la de BP — y el
+     * marcado no lo veía: `make test-aotgc` demostró que un intermedio de
+     * `"valor " + intToString(n)` se recicla en mitad de la expresión (NULs con
+     * status=OK, corrupción muda).
+     *
+     * `aot_call_guarded` apunta aquí la dirección de un local suyo al entrar al
+     * thunk MÁS EXTERNO (con anidamiento native→BP→native gana el de fuera: sus
+     * frames están por encima y también hay que verlos). El GC, que corre más
+     * hondo en la misma pila (native → helper → alloc → gc), escanea desde su
+     * propio frame hasta este techo. La pila crece hacia abajo en las tres
+     * arquitecturas de la casa (x86-64, ARM, RISC-V).
+     *
+     * Cero coste fuera del AOT: sin thunk activo esto es 0 y el GC ni mira. Y
+     * cero cambio de ABI: el thunk no sabe que esto existe — por eso los `.mdn`
+     * ya grabados se vuelven seguros sin regenerarlos. */
+    uintptr_t      cstack_hi;
 } bpvm_aot_callctx_t;
 
 /* Contexto AOT del worker actual (TLS en host). */

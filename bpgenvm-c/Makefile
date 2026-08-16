@@ -442,13 +442,14 @@ test-fspos:
 # #421 — que un fallo de carga DIGA QUE HA PASADO. Fija los cuatro mensajes y,
 # sobre todo, que sean DISTINTOS entre si: antes los cuatro eran «IO error», y
 # eso costo media mañana con un .mod rancio (15-ago).
-# #302 paso 3 — EL TEST ROJO (16-ago): raices GC del native COMPILADO.
-# HOY FALLA, y a proposito: es el criterio de aceptacion del paso 3. Un native
-# que encadena dos alocaciones ("valor " + intToString(n)) pierde la primera si
-# el GC cae en medio — el handle solo vive en un temporal de C y el marcado no
-# lo ve. Salida: NULs con status=OK (corrupcion MUDA). El control interpretado
-# (test-aotgc-control) pasa con el mismo GC agresivo: la diferencia es el
-# camino compilado. NO esta en la lista de targets verdes hasta que se arregle.
+# #302 paso 3 — raices GC del native COMPILADO. Nacio ROJO (16-ago) y se puso
+# VERDE el 17 con el escaneo conservador de la pila de C (idea de Eduardo: que
+# el GC mire donde el native YA tiene sus handles, en vez de shadow stack).
+# Lo que vigila: un native que encadena dos alocaciones ("valor " +
+# intToString(n)) con el GC forzado POR ALOCACION — la ventana convertida en
+# certeza. Si esto vuelve a rojo, un handle retenido solo en un local/registro
+# de C se esta reciclando en mitad de una expresion: corrupcion MUDA (NULs con
+# status=OK). El detalle del arreglo: heap.c paso 2d + aot_call_guarded.
 test-aotgc:
 	@mkdir -p build
 	$(call fixture,RoTest)

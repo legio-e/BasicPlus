@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <setjmp.h>   /* #302 p3: volcar registros al escanear la pila de C del native */
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"   /* #302: bpvm_gui_visit_roots (raíces GC del GUI) */
 #endif
@@ -338,6 +339,60 @@ static void gc_mark_phase(bpvm_t* vm) {
      *     pendiente no los ve el scan conservativo. Sin esto, un objeto cuyo
      *     único holder es un evento en cola se recolecta EN VIVO. */
     bpvm_event_mark_roots(vm, mark_recursive);
+    /* 2d. #302 paso 3 — LA PILA DE C DEL NATIVE COMPILADO (idea de Eduardo:
+     *     que el GC mire donde el native ya tiene sus handles, en vez de
+     *     obligar al native a apartarlos a un shadow stack).
+     *
+     *     Si esta colecta la disparó una alocación hecha DESDE un thunk AOT
+     *     (un helper como string_concat), los handles que el native retiene
+     *     están en sus locales de C y en registros — y hasta hoy no los veía
+     *     nadie: `make test-aotgc` demostró que un intermedio de
+     *     `"valor " + intToString(n)` se reciclaba en mitad de la expresión,
+     *     imprimiendo NULs con status=OK. Corrupción MUDA, y en host.
+     *
+     *     El rango: desde este frame (el GC corre más hondo en la MISMA pila:
+     *     native → helper → alloc → gc) hasta el techo que apuntó
+     *     `aot_call_guarded` al entrar al thunk más externo. Se recorre
+     *     palabra a palabra dándoselo a `mark_recursive`, que ya valida — es
+     *     EXACTAMENTE lo que el paso 1 hace con la pila BP, que también es
+     *     conservadora. Un falso positivo retiene de más una colecta;
+     *     este GC no compacta, así que retener nunca corrompe.
+     *
+     *     El `setjmp` no es un salto: es el truco clásico (Boehm) para VOLCAR
+     *     los registros preservados a la pila. Un handle puede vivir SOLO en
+     *     un registro que nadie del camino native→GC haya tocado; setjmp los
+     *     guarda todos en `regs`, que es un local de este frame y cae dentro
+     *     del rango escaneado.
+     *
+     *     Con el callctx sin thunk activo (tc==NULL), cero trabajo: los
+     *     programas sin AOT no pagan nada. Y en SMP el callctx es TLS por
+     *     worker, y el STW garantiza que los demás workers están aparcados en
+     *     frontera de quantum — nunca a mitad de un native. */
+    {
+        bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+        if (cc->tc != NULL && cc->cstack_hi != 0) {
+            jmp_buf regs;
+            if (setjmp(regs) == 0) { /* volcado de registros, no un salto */ }
+            uintptr_t lo = (uintptr_t) &regs;
+            uintptr_t marca = (uintptr_t) &cc;         /* otro local: el menor manda */
+            if (marca < lo) lo = marca;
+            lo = (lo + 3u) & ~(uintptr_t) 3u;
+            uintptr_t hi = cc->cstack_hi;
+            uint32_t palabras = 0, refs = 0;
+            for (uintptr_t a = lo; a + 4u <= hi; a += 4u) {
+                uint32_t v;
+                memcpy(&v, (const void*) a, 4);        /* palabra NATIVA, no BE */
+                palabras++;
+                {   bpref_t rr; rr.v = v;
+                    uint32_t ur = bpref_deref(vm, rr);
+                    if (is_heap_ref(vm, ur)) refs++;
+                }
+                mark_recursive(vm, v);
+            }
+            bpvm_diag("[gc] pila C del native: [%p..%p) = %u palabras, %u refs",
+                      (void*) lo, (void*) hi, (unsigned) palabras, (unsigned) refs);
+        }
+    }
     /* 3. GC-2: data blocks de módulo. Consts + globales de módulo viven en
      *    [data_start, code_start) (crecen hacia atrás desde CS). Un global que
      *    apunte a heap es una RAÍZ; sin escanearlo se recolecta en vivo (UAF).

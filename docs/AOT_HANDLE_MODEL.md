@@ -107,8 +107,18 @@ verificado (oráculo interpretado + paridad dual-VM), no co-evolucionando.
    ref según occupies8Bytes; ref_mask desde la firma del callee) + bump
    MDN_ABI_VERSION→2. **Los 9 rojos VERDES** (throwmsg/throwuser/method/callbp/
    bytenat/xmodule/xmodnat/xmethodnat/compressnat), paridad 17/1/0, GUI intacto.
-3. 🔴 **PENDIENTE — y el argumento del aplazamiento QUEDÓ REFUTADO el
-   16-ago-2026** (`make test-aotgc`, test rojo que es el criterio de
+3. 🟢 **HECHO EN HOST (17-ago-2026) — y con OTRO diseño que el previsto**: en
+   vez del shadow stack, **escaneo conservador de la pila de C** (idea de
+   Eduardo: que el GC mire donde el native ya tiene sus handles). El techo lo
+   apunta `aot_call_guarded` en el callctx TLS; el marcado recorre desde su
+   propio frame hasta ese techo con `mark_recursive` (que ya validaba basura,
+   igual que el escaneo de la pila BP); un `setjmp` vuelca los registros
+   preservados a la pila escaneada (Boehm). Cero cambios de emisor, cero subida
+   de ABI —los `.mdn` grabados quedan protegidos sin regenerar—, cero coste sin
+   AOT activo. Criterio: `make test-aotgc`, de rojo a verde. El shadow stack
+   queda como plan B si el conservador encontrara un muro. Falta placa (rastro
+   `pila C del native` con `log=1`).
+   *(Historia: el argumento del aplazamiento QUEDÓ REFUTADO el 16-ago-2026)* (`make test-aotgc`, test rojo que es el criterio de
    aceptación): en V4 el GC corre DENTRO de `bpvm_heap_alloc` (#357) —también
    cuando aloca un helper llamado desde native— y recicla de verdad. Un
    intermedio cuyo único handle vive en un temporal de C se recolecta en mitad

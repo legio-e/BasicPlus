@@ -99,6 +99,17 @@ static int aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
     bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
     bpvm_aot_callctx_t prev_cc = *cc;
     cc->tc = tc; cc->sp_p = sp; cc->bp_p = bp;
+    /* #302 paso 3 — el techo para el escaneo conservador del GC (ver el campo).
+     * Con anidamiento gana el guard MÁS EXTERNO: sus frames quedan por encima
+     * del interno y también contienen handles vivos. `prev_cc` es un local de
+     * ESTE frame, así que su dirección es un techo válido. El restore de abajo
+     * (`*cc = prev_cc`) lo deja como estaba, anidado o no. */
+    if (cc->cstack_hi == 0) cc->cstack_hi = (uintptr_t) &prev_cc;
+    /* Y tc->sp al día: el GC marca la pila BP hasta tc->sp, y el camino AOT era
+     * el único que alocaba (vía helpers) sin sincronizarlo — los 19 safepoints
+     * del intérprete lo hacen siempre. Aquí `*sp` aún es el valor PRE-pop, así
+     * que los slots de los argumentos quedan dentro del rango escaneado. */
+    tc->sp = *sp;
     if (setjmp(f->buf) == 0) {
         f->armed = 1;
         f->pending_ref = 0;   /* #213: estado fresco por invocación */

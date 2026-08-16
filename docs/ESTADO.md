@@ -294,6 +294,19 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-17 — 🟢 `#302` paso 3 HECHO EN HOST: el test rojo del día anterior,
+  VERDE con el diseño de Eduardo.** Escaneo conservador de la pila de C en vez
+  del shadow stack: el GC recorre `[su frame .. el techo que apuntó el guard del
+  thunk]` con el mismo `mark_recursive` conservador de la pila BP, y un `setjmp`
+  vuelca los registros (Boehm). Tres sitios: un campo TLS en el callctx, el
+  paso 2d del marcado, y la sincronización de `tc->sp` al entrar al thunk.
+  **Por qué esta forma gana**: cero emisor, cero ABI (los `.mdn` grabados quedan
+  protegidos sin regenerarlos), cero coste sin AOT, y miVM ni se entera — la
+  paridad sigue 28/0/0. Medido: ~180 palabras por colecta, y el rastro marca
+  `1 refs` justo en la colecta que antes reciclaba el intermedio.
+  El test queda de guardián permanente (`make test-aotgc`); en placa falta ver
+  el rastro `pila C del native` con `log=1` — va con las pruebas finales.
+  **Con esto, el bug conocido que bloqueaba el cierre de V5 está arreglado.**
 - **2026-08-16 — 🔴 `#302` paso 3: EL ARGUMENTO DEL APLAZAMIENTO, REFUTADO CON
   TEST.** Se difirió con «el native corre síncrono sin GC asíncrono y F2 no
   compacta», y las dos patas caducaron en V4: el GC corre DENTRO de la
