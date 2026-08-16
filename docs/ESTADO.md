@@ -362,6 +362,42 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 ## Última sesión
 
+### 17-ago (tarde-noche) — LA SESIÓN DE PLACA COMPLETA, y un bug de memoria de V4
+
+**Ocho fichas resueltas o verificadas en placa**: `#389`, `#381`/`#428`, `#430`,
+`#302`p3, `#422`, `#418`, `#433` y `#424`. Grupo A cerrado. Pendientes de V5:
+**16** (veníamos de 21 esa mañana, y de 45).
+
+**Lo más importante, en la lectura de Eduardo: `#430` es un bug de V4 y seguimos
+CONSOLIDANDO las VMs.** La tabla de handles nació en la migración de V4/H1 y el
+disparo del GC por volumen es de `#357`: el eje de presión que faltaba —los
+SLOTS— llevaba ahí desde entonces, latente. Solo se manifestó al coincidir las
+tres condiciones (muchos objetos chicos + heap grande + SRAM pequeña), y se
+manifestó como lo peor posible: un cuelgue mudo. Ahora es una colecta a tiempo
+y, si de verdad no hay sitio, un OOM atrapable. Matiza
+`v4-es-la-base-lo-siguiente-es-aditivo`: la base de V4 sigue asentándose.
+
+**Lo demás de la tarde**, por si hace falta el hilo: `#430` se acotó con el test
+de desplazamiento (el gemelo que gasta el doble murió a la mitad de camino);
+`#302`p3 quedó verificado en ARM en cuanto `#430` dejó de estorbar; `#424` se
+midió en vez de suponerse —el tope de 50 ms no disparaba nunca y el lazo no
+estaba ocupado sino dormido— y de intentar leer esa medida salió `#433`, el log
+común que truncaba en silencio mientras la Pico llevaba anillo desde `#326`.
+
+**⏭️ PRÓXIMOS DÍAS: H10 ENTERO, hasta terminarlo** (decisión de Eduardo). Es el
+grupo C: `#425` (el árbol del IDE trunca en silencio), `#394` (subir eligiendo
+destino — ojo, el Upload ya respeta la carpeta del árbol desde hoy, así que la
+ficha puede haber encogido), `#395` (botón `DAO build`), `IDE-7` y la clase
+`Box`. ⚠️ **Eduardo trae cambios que añadir a esas fichas: escucharlos ANTES de
+planificar el bloque**, que el enunciado puede crecer. Después de H10 queda muy
+poco.
+
+Estado del repo: todo committeado, **sin push** (norma: nada a GitHub hasta
+cerrar la versión). Imágenes al día: Metro `bpvm_pico.uf2` (17:53) y P4 a `-Os`
+con el instrumento del lazo dentro (gated por `log=1`). El IDE, fat-jar de las
+17:54. Y desde hoy **ESP-IDF se usa desde aquí** (`C:\esp6.0.1\esp-idf`): el
+P4 y el S3 se compilan antes de pedir un flasheo.
+
 ### 17-ago (tarde) — LA SESIÓN DE PLACA: la Metro entera, y un cuelgue cazado
 
 **Seis fichas verificadas EN PLACA en una tarde**: `#389` (CastRt, 9 líneas byte
