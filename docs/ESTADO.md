@@ -294,6 +294,22 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-16 — 🔴 `#302` paso 3: EL ARGUMENTO DEL APLAZAMIENTO, REFUTADO CON
+  TEST.** Se difirió con «el native corre síncrono sin GC asíncrono y F2 no
+  compacta», y las dos patas caducaron en V4: el GC corre DENTRO de la
+  alocación (#357) —también desde un helper llamado por código nativo— y
+  recicla. `make test-aotgc` (HOY ROJO a propósito: es el criterio de
+  aceptación) lo demuestra: `"valor " + intToString(n)` en una native, con GC
+  por alocación, imprime DOCE BYTES NUL con status=OK — el intermedio, cuyo
+  único handle vive en un temporal de C, se recicla en mitad de la expresión.
+  El control interpretado con el mismo GC imprime bien. Corrupción MUDA, y en
+  HOST — cae también el «el AOT-en-host la tiene gratis» del doc de diseño
+  (anotado allí, conservando el texto original).
+  Gravedad hoy: ventana estrecha y natives que apenas encadenan alocaciones —
+  pero `#428` acaba de abrir la puerta a cadenas en natives, que es justo el
+  patrón vulnerable. El arreglo sigue siendo el diseñado (shadow stack), más
+  dos piezas que el experimento añade: sincronizar `tc->sp` al entrar al thunk
+  y enraizar los intermedios de expresiones con ≥2 alocaciones.
 - **2026-08-16 — ✅ `#428` CERRADA, VERIFICADA EN LA METRO** (`7ddbfec`): una
   `native` puede llevar LITERALES. `RoTest` imprime `valor 7` / `negativo` con
   las cadenas viajando dentro del `.mdn` (188 B). La solución fue la de Eduardo

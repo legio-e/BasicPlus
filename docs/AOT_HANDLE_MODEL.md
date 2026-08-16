@@ -107,8 +107,16 @@ verificado (oráculo interpretado + paridad dual-VM), no co-evolucionando.
    ref según occupies8Bytes; ref_mask desde la firma del callee) + bump
    MDN_ABI_VERSION→2. **Los 9 rojos VERDES** (throwmsg/throwuser/method/callbp/
    bytenat/xmodule/xmodnat/xmethodnat/compressnat), paridad 17/1/0, GUI intacto.
-3. ⏳ **PENDIENTE (diferido a AOT-en-device)** — **Raíces de GC del native
-   COMPILADO** (shadow stack): Capa 2, solo para AOT-en-placa; el lado inline y
+3. 🔴 **PENDIENTE — y el argumento del aplazamiento QUEDÓ REFUTADO el
+   16-ago-2026** (`make test-aotgc`, test rojo que es el criterio de
+   aceptación): en V4 el GC corre DENTRO de `bpvm_heap_alloc` (#357) —también
+   cuando aloca un helper llamado desde native— y recicla de verdad. Un
+   intermedio cuyo único handle vive en un temporal de C se recolecta en mitad
+   de la expresión: `"valor " + intToString(n)` imprime NULs con status=OK,
+   mientras el control interpretado (mismo GC agresivo) imprime bien. O sea que
+   NO es «solo para AOT-en-placa»: es host también. El párrafo siguiente se
+   conserva como estaba, para el registro de por qué se creyó lo contrario:
+   *(texto original)* Capa 2, solo para AOT-en-placa; el lado inline y
    el AOT-en-host la tienen gratis (el native corre síncrono dentro de un quantum
    sin GC asíncrono y F2 no compacta). Se empareja con la fase de AOT-en-device.
 

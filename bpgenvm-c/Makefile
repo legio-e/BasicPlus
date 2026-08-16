@@ -442,6 +442,25 @@ test-fspos:
 # #421 — que un fallo de carga DIGA QUE HA PASADO. Fija los cuatro mensajes y,
 # sobre todo, que sean DISTINTOS entre si: antes los cuatro eran «IO error», y
 # eso costo media mañana con un .mod rancio (15-ago).
+# #302 paso 3 — EL TEST ROJO (16-ago): raices GC del native COMPILADO.
+# HOY FALLA, y a proposito: es el criterio de aceptacion del paso 3. Un native
+# que encadena dos alocaciones ("valor " + intToString(n)) pierde la primera si
+# el GC cae en medio — el handle solo vive en un temporal de C y el marcado no
+# lo ve. Salida: NULs con status=OK (corrupcion MUDA). El control interpretado
+# (test-aotgc-control) pasa con el mismo GC agresivo: la diferencia es el
+# camino compilado. NO esta en la lista de targets verdes hasta que se arregle.
+test-aotgc:
+	@mkdir -p build
+	$(call fixture,RoTest)
+	@java -cp "../lexer-java/target/classes;../pack/target/classes" 	  basicplus.frontend.AotMain samples/RoTest.bp build/aotro >/dev/null
+	@cp build/aotro/aot_RoTest.c test/aot_RoTest.c
+	$(CC) $(CFLAGS) -Isrc test/test_aotgc.c test/aot_RoTest.c $(LIBOBJ) 	  -o build/test_aotgc.exe $(LDFLAGS)
+	@echo "--- #302p3 native compilado + GC por alocacion (VERDE = arreglado) ---"
+	@./build/test_aotgc.exe samples/RoTest.mod 2>/dev/null | grep -q "valor 7" 	  && echo "[status=OK] el intermedio sobrevive al GC" 	  || { echo "[status=ROJO] el GC recicla el intermedio del native (esperado hoy)"; exit 1; }
+
+test-aotgc-control: test-aotgc
+	@true
+
 test-loaderr: $(LIBOBJ)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc test/test_loaderr.c $(LIBOBJ) -o build/test_loaderr.exe $(LDFLAGS)
