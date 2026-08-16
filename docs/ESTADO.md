@@ -282,6 +282,27 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-16 (noche) — 🏁 `SqlDemo` CORRIENDO CONTRA LA SD, con todo lo de hoy
+  dentro.** `exit 0 (OK)`: el pack de SQLite se carga en el primer `Run`,
+  publica su API (17 símbolos), el módulo `SQLite.mod` se resuelve **desde la
+  zona de packs**, y la demo inserta 6 filas en `/sd/medidas.db`, hace
+  agregados y agrupa. Es la prueba que valida la cadena entera.
+  🩸 **Y llegar ahí destapó un bug de los buenos** (`1d4ccbf`): la fachada del
+  FS **no era coherente consigo misma**. `stat` y `read` consultaban el fallback
+  de la zona de packs y **`read_at` no**, así que un módulo del pack existía
+  para `stat` y no se podía leer por trozos — y cargar un módulo va por `read_at`
+  desde #305. El síntoma era `IO error` sobre un `/app/SQLite.mod` que **no
+  existe**, con el firmware avisando de que «el FS eclipsa al del pack» sin que
+  hubiera ningún fichero en el FS.
+  No era regresión: `read_at` llegó en #305 y el fallback en H4, y nunca se
+  juntaron. Sólo aparece con un pack grabado **y** un módulo suyo que no esté
+  además en el FS — la combinación que sólo se da usándolo de verdad. La regla
+  queda fijada en un test: *si `stat` dice que existe, se tiene que poder leer,
+  entero y por trozos*.
+  Y `#421` estaba a medias por mi parte: el detalle salía del módulo principal y
+  **el fallo real siempre es una dependencia** (el `Core.mod` del 15 y este
+  `SQLite.mod`). Ahora vive en `vm->load_error`, junto a `link_error` y
+  `runtime_error`, que ya existían para lo mismo.
 - **2026-08-16 (tarde) — ⚡ EL ARRANQUE DEL P4: 717 ms → 386 ms, verificado en
   placa** (`bd8a916`). Con la imagen del 15-ago eran 965: **dos veces y media**.
   Y no se optimizó nada — se quitó del arranque lo que no debía estar ahí.
