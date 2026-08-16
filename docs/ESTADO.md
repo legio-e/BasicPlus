@@ -294,6 +294,23 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-16 — ✅ `#381` CERRADA, VERIFICADA EN LA METRO.** `long` en una
+  función `native`, con la salida en ARM **byte a byte la del PC** y el `.mdn`
+  generado por el propio IDE (8 thunks, 560 B). Lo que confirma: números de más
+  de 32 bits, anchos mezclados en una firma, la división y el módulo por helper
+  —la idea de Eduardo que evitó enlazar libgcc— y `div0: atrapado`, que es
+  dividir por cero desde código nativo sin reiniciar la placa.
+  🩸 **Y de camino, ficha nueva `#429`**: el IDE compila con SU copia del
+  compilador (el fat-jar lo empaqueta) y **no avisa cuando está rancia**. Costó
+  el primer intento de esta prueba: el IDE decía «no puede utilizar long en
+  código nativo» con un fat-jar de ayer y el cambio de esta mañana. El aviso
+  lleva tiempo en las notas y aun así se escapó — un aviso que hay que recordar
+  cada vez ya ha fallado; lo que falta es que el desfase **se detecte y se
+  diga**. Modo de fallo malo: no da un error raro, da uno PLAUSIBLE (el mensaje
+  correcto de una versión anterior).
+  📤 **`#426` (`double` en AOT) sale de los pendientes de V5** y pasa a una
+  sección propia de V6, por decisión de Eduardo: lo que no es de esta versión no
+  debe engordar su lista.
 - **2026-08-16 (noche) — 🏁 `SqlDemo` CORRIENDO CONTRA LA SD, con todo lo de hoy
   dentro.** `exit 0 (OK)`: el pack de SQLite se carga en el primer `Run`,
   publica su API (17 símbolos), el módulo `SQLite.mod` se resuelve **desde la
