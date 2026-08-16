@@ -43,7 +43,7 @@ de referencia, que ésa es la parte que no es gratis.
 | fichero | host | pico | s3 | p4 | stm32 | veredicto |
 |---|---|---|---|---|---|---|
 | `platform_pthread.c`, `gui_display_sdl.c` | x | – | – | – | – | ✔ host-only por diseño |
-| `fs_host.c`, `fs_lfs_host.c`, `net_host.c`, `comm_host.c` | x | – | (†) | (†) | 🟡 x | ✔ host-only… **pero los compilan otras** (†S3/P4 llevan `comm_host.c`; STM32 los tres) → 🟡 **¿código muerto en la imagen?** verificar |
+| `fs_host.c`, `fs_lfs_host.c`, `net_host.c`, `comm_host.c` | x | – | (†) | (†) | ✔ – | ✔ host-only. **El 🟡 del STM32, RESUELTO el mismo día**: su `.cproject` SÍ los excluye — era el `subdir.mk` rancio del Debug mintiendo (el instrumento, no el código). †S3/P4 sí llevan `comm_host.c`: verificar |
 | `bpvm_sd.c`, `bpvm_sd_blk.c` | x | x | – | – | – | ✔ SD por SPI = sólo Pico |
 | `bpvm_blk.c`, `bpvm_blk_sdmmc_cfg.c` | x | x/– | – | x | – | ✔ capa de bloque = donde hay SD |
 | `fs_fat.c` | 🔴 **–** | x | – | x | – | 🔴 **el host NO compila FatFs** → no hay oráculo host del backend de la SD; `fat_crc32` (#398) sólo se ha compilado en ARM, nunca ejecutado en host |
@@ -113,11 +113,18 @@ para pillar.*
 7. **El log propio del Pico** → migrar a `bpvm_log.c` (el STM32 enseña cómo:
    cintura de 53 líneas).
 8. **`hello_mod.c` del STM32** → regenerar del mismo fuente que las demás.
-9. 🟡 Verificar la columna STM32 contra el `.cproject` (fuente Debug/subdir.mk)
-   y si `comm_host`/`fs_host`/`net_host` en placas es código muerto.
+9. ~~🟡 Verificar la columna STM32~~ — **HECHO el mismo día, y con premio**: el
+   `.cproject` ya excluía los de host (el `subdir.mk` rancio mentía), pero al
+   compilar de verdad salió que **el `cleanBuild` del STM32 estaba ROTO**:
+   `fs_fat.c` entró en `src/` en V5/H2 y nadie lo excluyó. Curado en los dos
+   proyectos (`ec81afc`), build headless 0 errores. Queda el † del ESP32
+   (`comm_host.c` en S3/P4).
 
-**Alcance**: 1, 2, 3 y 8 caben en V5 sin riesgo (cambios chicos, verificables).
-4, 5, 6, 7 son unificación → V6, salvo que alguno se vuelva urgente.
+**Alcance**: 1, 2, 3 y 8 caben en V5 — **y 1, 2 y 3 se hicieron el mismo día**
+(`ec81afc`): el P4 a `-Os` (fijado en `sdkconfig.defaults` con su porqué), el
+`#421` al STM32 y el `json_min` resincronizado (los tres md5 idénticos), todo
+verificado con el build headless. Queda el 8 (`hello_mod`, necesita el pipeline
+de embebido). 4, 5, 6, 7 son unificación → V6.
 
 ## Por qué el STM32 está donde está (Eduardo, 17-ago — no estaba escrito)
 
