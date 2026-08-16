@@ -1,0 +1,10 @@
+module RfSkew
+  function Main()
+    try
+      var s: string := readFile("/no/existe/jamas.txt")
+      print "leido: " + s
+    catch e: RuntimeError
+      print "msg: " + e.msg
+    endtry
+  end Main
+end RfSkew

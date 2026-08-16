@@ -4312,7 +4312,13 @@ public class VirtualMachine {
                     if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
                     pushTcRef(tc, allocVmString(new String(data, java.nio.charset.StandardCharsets.UTF_8)));
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "readFile('" + path + "'): " + e.getMessage());
+                    // N-readfile-msg-skew — el mensaje era e.getMessage(): la ruta
+                    // NORMALIZADA POR LA PLATAFORMA (en Windows, con barras
+                    // invertidas), o sea distinto por SO y distinto de la VM-C.
+                    // Toca el invariante: el mismo .mod debe fallar con el mismo
+                    // texto. Gana el mensaje de la VM-C (builtins.c:1354), que
+                    // ademas no repite la ruta que ya va delante.
+                    throwBpRuntimeError(tc, "readFile('" + path + "'): no se pudo abrir");
                 }
                 break;
             }
