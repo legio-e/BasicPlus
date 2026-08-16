@@ -234,7 +234,7 @@ la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
 > dentro, el log se llena en ~26 colectas (**`#423`**), así que puede que la
 > primera imagen nueva salga ya con `[LOG OVERFLOW]` al pie.
 
-## 🎯 EL PLAN DE CIERRE DE V5 (Eduardo, 17-ago) — la lista queda en 21
+## 🎯 EL PLAN DE CIERRE DE V5 (Eduardo, 17-ago) — la lista queda en 16
 
 La lista de pendientes se revisa EXCLUYENDO V6 (18 fichas movidas a su sección
 de FICHAS.md). Lo que queda, por grupos y en orden:
@@ -263,11 +263,25 @@ el guión vivo, con lo que tiene que salir en cada paso, en `notas/SESION_PLACA_
   desde el árbol (sin recompilar, que volvería a subirla a `/app`), el programa
   imprime lo mismo. `/sys` va el ÚLTIMO: rescata sin tapar a nadie.
 
-**La Metro queda COMPLETA.** Lo que resta de A es el **P4**: `#424` (eventos del
-GUI: REMEDIR primero, sin tocar nada — la foto pudo cambiar sola con #398 y
-`-Os`) y las nuevas líneas base a `-Os` (arranque, árbol, SD: las de estos días
-se tomaron a `-Og` y ya no valen). Los ficheros de prueba están en
-`bpgenvm-c/samples/`; el guión vivo, en `notas/SESION_PLACA_A.md`.
+- ✅ `#424` **los eventos del GUI del P4: medidos y mejorados** — 50 → 100 Hz de
+  lazo (`f96c957`), *«se nota más ágil»*. La ficha culpaba al tope de 50 ms y la
+  medida dijo que **no dispara nunca**: el lazo no estaba ocupado (0,4 ms de
+  trabajo por vuelta), **dormía** lo que LVGL le pedía. Queda un factor ~1,5
+  contra el STM32 que se va a V6 como `#434` (desacoplar los eventos del lazo,
+  idea de Eduardo). El instrumento se queda en el firmware, gated por `log=1`.
+- ✅ `#433` **el log común truncaba por el final y en silencio** — lo destapó lo
+  anterior («no registra nada»). La Pico llevaba anillo desde #326 y el común se
+  quedó atrás: P4, S3 y STM32 lo arrastraban. Portado.
+
+**LA SESIÓN DE PLACA (grupo A) QUEDA CERRADA.** Ocho fichas verificadas o
+resueltas en placa en una tarde. El guión, con lo que salió en cada paso, en
+`notas/SESION_PLACA_A.md`.
+
+Queda suelto del P4, sin urgencia: **las líneas base a `-Os`** (arranque, árbol,
+SD) no se anotaron formalmente — pero de la corrida de `#424` se leen: arranque
+a `REPL entry` **531 ms**, refresco del árbol **184-196 ms** con 33 entradas
+(app+lib+SD), montaje de la SD **~90 ms**. Sirven de referencia mientras no se
+tomen a propósito.
 
 Herramienta arreglada por el camino: el **Upload del Explorer** subía SIEMPRE a
 `/app` (hardcodeado) — sin eso, `#422` y `#418` eran imposibles de probar. Ahora
