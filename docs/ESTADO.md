@@ -282,6 +282,27 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-16 (tarde) — ⚡ EL ARRANQUE DEL P4: 717 ms → 386 ms, verificado en
+  placa** (`bd8a916`). Con la imagen del 15-ago eran 965: **dos veces y media**.
+  Y no se optimizó nada — se quitó del arranque lo que no debía estar ahí.
+  **Era una decisión de Eduardo que no había viajado entre familias**: el pack
+  nativo se carga en el primer `Run` y no al arrancar, *«porque un cuelgue
+  durante un Run se arregla desenchufando una vez y uno en el arranque obliga a
+  regrabar»*. Estaba escrita en `pico/pack_pico.c` desde el 7-ago y el P4 hacía
+  lo contrario: 338 ms de cada arranque, y el único paso que puede colgar puesto
+  justo donde no se sale sin regrabar.
+  La parte fina fue **qué se mueve**: el log ya separaba las dos mitades
+  (`mapear` 0 ms, `barrer` 338 ms). El mapeo se queda —el IDE necesita ver la
+  zona desde el arranque— y se retrasa el barrido y el salto.
+  🔍 **Y un test evitó un bug**: la idea inicial era «si la zona empieza virgen,
+  no busques». `test_npack.c` tiene un caso que pone el pack en el offset 256
+  entre basura — el ancla existe precisamente para no depender de dónde esté.
+  ⏳ Falta ejercitar la línea del primer `Run` y que `PACK_LS` siga viendo la
+  zona sin Run previo.
+  **Van tres arreglos en dos días del mismo tipo**: algo que se decidió o se
+  arregló en una familia y no llegó a otra (el corte del CRC de la SD, el log
+  propio del Pico, y esto). Empieza a merecer una revisión sistemática, no
+  seguir cazándolos de uno en uno.
 - **2026-08-16 — Eduardo + Claude. Tres cerradas, y el grupo de «módulos y
   arranque» baja de cinco a dos.**
   ✅ **`#423` y `#420`, VERIFICADAS EN LA P4** con la imagen nueva. Eduardo:
