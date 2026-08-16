@@ -25,6 +25,7 @@
 #include "freertos/FreeRTOS.h"  /* G4: vTaskDelay en el bombeo */
 #include "freertos/task.h"
 #include "driver/i2c_master.h"   /* G5: bus I2C del táctil (driver nuevo) */
+#include "log.h"                 /* #424: el ritmo del lazo, al log (gated por log=1) */
 #include "esp_lcd_panel_io.h"    /* G5: esp_lcd_new_panel_io_i2c */
 #include "esp_lcd_touch.h"       /* G5: esp_lcd_touch_* (read_data / get_coordinates) */
 #include "esp_lcd_touch_gt911.h" /* G5: driver GT911 */
@@ -552,6 +553,39 @@ void bpvm_gui_disp_pump(void)
     if (idle_ms > 50) idle_ms = 50;
     TickType_t ticks = pdMS_TO_TICKS(idle_ms);
     if (ticks == 0) ticks = 1;
+
+    /* #424 — EL RITMO DEL LAZO, MEDIDO (con log=1; con log=0 no cuesta ni una
+     * linea). "Los eventos van lentos" es una sensacion; la magnitud que hay
+     * debajo es cuantas veces por segundo se muestrea el tactil, porque se lee
+     * DENTRO de lv_timer_handler: una vez por vuelta.
+     *
+     * Y hay DOS mandos que la limitan, no uno — por eso se cuentan por separado:
+     *   · el TOPE de 50 ms de aqui arriba (si LVGL no tiene nada que hacer);
+     *   · el TICK de FreeRTOS, que en el P4 es de 10 ms (CONFIG_FREERTOS_HZ=100):
+     *     aunque el tope fuese 0, vTaskDelay(1) ya son 10 ms => 100 Hz de techo.
+     * El STM32, que va bien, no tiene ninguno de los dos: __WFI + SysTick de 1 ms.
+     *
+     * Si el resumen dice ~20 vueltas/s y casi todas "en el tope", manda el tope.
+     * Si dice ~100 y pocas en el tope, el tope no pinta nada y el techo es el
+     * tick. Los dos casos se arreglan distinto, y sin esto no se distinguen. */
+    {
+        static uint32_t s_vueltas, s_en_tope, s_suma_ms, s_t0;
+        uint32_t ahora = (uint32_t) (xTaskGetTickCount() * portTICK_PERIOD_MS);
+        if (s_t0 == 0) s_t0 = ahora;
+        s_vueltas++;
+        s_suma_ms += idle_ms;
+        if (idle_ms >= 50) s_en_tope++;
+        if (ahora - s_t0 >= 1000u) {
+            log_printf("gui pump: %u vueltas en %u ms (%u en el tope de 50, "
+                       "idle medio %u ms) - tactil a ~%u Hz",
+                       (unsigned) s_vueltas, (unsigned)(ahora - s_t0),
+                       (unsigned) s_en_tope,
+                       (unsigned)(s_vueltas ? s_suma_ms / s_vueltas : 0),
+                       (unsigned)(s_vueltas * 1000u / (ahora - s_t0)));
+            s_vueltas = 0; s_en_tope = 0; s_suma_ms = 0; s_t0 = ahora;
+        }
+    }
+
     vTaskDelay(ticks);
 }
 
