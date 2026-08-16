@@ -10,6 +10,7 @@
 #include "fs.h"
 #include "bpvm_fs.h"
 #include "crc32.h"    /* #422: comparar lo desplegado con lo embebido */   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */
+#include "bpvm_log.h" /* #422: log_printf — el chivato del /lib rancio */
 #include <stdint.h>
 
 static const unsigned char core_mod[] = {
