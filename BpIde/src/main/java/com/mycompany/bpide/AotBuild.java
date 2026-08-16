@@ -71,6 +71,15 @@ public final class AotBuild {
      *  símbolo externo → --unresolved-symbols=ignore-all lo deja en 0 (nunca se
      *  ejecuta: el loader registra los thunks por la tabla del .mdn). MdnPack lee
      *  el .elf enlazado igual que un .o; con -Ttext=0, valor de símbolo == offset. */
+    /** #428 — lo que el enlace del `.mdn` necesita en CUALQUIER familia. La
+     *  dirección la fija el guión (`bpgenvm-c/aot/mdn.ld`), que además mete los
+     *  literales dentro de `.text` — sin eso, una `native` con una cadena
+     *  produce un `.rodata` que el `.mdn` no puede llevarse. */
+    private static final String[] LINK_FLAGS_COMUNES = {
+        "-nostdlib", "-nostartfiles",
+        "-Wl,--unresolved-symbols=ignore-all", "-Wl,-e,0",
+    };
+
     private static final String[] RISCV_LINK_FLAGS = {
         "-nostdlib", "-nostartfiles",
         "-Wl,--no-relax", "-Wl,--unresolved-symbols=ignore-all",
@@ -88,13 +97,18 @@ public final class AotBuild {
         final basicplus.frontend.NpackReloc.Destino destino;
         final String   gcc;
         final String[] cflags;
-        final boolean  enlazar;      /* RISC-V necesita el paso extra de enlace */
+        final boolean  enlazar;      /* #428 — hoy SIEMPRE: ver LINK_FLAGS_COMUNES */
         Familia(basicplus.frontend.NpackReloc.Destino d, String gcc,
                 String[] cflags, boolean enlazar) {
             this.destino = d; this.gcc = gcc; this.cflags = cflags; this.enlazar = enlazar;
         }
         String target() { return destino.targetAot; }
         String sufijo() { return destino.sufijo; }
+        /** RISC-V necesita además `--no-relax` al enlazar: la relajación genera
+         *  relocalizaciones que `MdnPack` no resuelve. */
+        boolean enlazarRiscv() {
+            return destino == basicplus.frontend.NpackReloc.RISCV32_ESP_P4;
+        }
     }
 
     /** Resultado global de un pase AOT sobre el proyecto. */
@@ -200,10 +214,15 @@ public final class AotBuild {
                 return res;
             }
             boolean riscv = d == basicplus.frontend.NpackReloc.RISCV32_ESP_P4;
+            /* #428 — ENLAZAN LAS DOS. RISC-V ya lo hacía (su `.text` no sale
+             * autocontenido); ARM no, y por eso una `native` no podía llevar ni
+             * un literal de cadena: el literal se queda en `.rodata`, fuera de
+             * lo único que un `.mdn` se lleva. El guión de enlace lo mete
+             * DENTRO de `.text`, y eso hace falta en las dos familias. */
             familias.add(new Familia(d,
                     riscv ? resolveRiscvGcc(prefs) : resolveGcc(prefs),
                     riscv ? RISCV_P4_FLAGS : ARM_M33_FLAGS,
-                    /*enlazar*/ riscv));
+                    /*enlazar*/ true));
         }
         if (familias.isEmpty()) {
             log.accept("[aot] no se ha dicho para qué familia compilar");
@@ -321,7 +340,11 @@ public final class AotBuild {
                 Path elf = work.resolve("aot_" + mod + "." + f.target() + ".elf");
                 List<String> lk = new ArrayList<>();
                 lk.add(f.gcc);
-                lk.addAll(Arrays.asList(RISCV_LINK_FLAGS));
+                lk.addAll(Arrays.asList(LINK_FLAGS_COMUNES));
+                /* RISC-V necesita además desactivar la relajación, que genera
+                 * relocs que MdnPack no resuelve. */
+                if (f.enlazarRiscv()) lk.add("-Wl,--no-relax");
+                lk.add("-Wl,-T," + Paths.get(bpgenvm, "aot", "mdn.ld"));
                 lk.add(oFile.toString());
                 lk.add("-o"); lk.add(elf.toString());
                 runGcc(lk, mod, log);

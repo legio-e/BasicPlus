@@ -1,0 +1,21 @@
+// RoTest.bp — #428: una funcion `native` con LITERALES de cadena dentro.
+//
+// Hasta hoy esto no compilaba a `.mdn`: el literal se queda en `.rodata` y un
+// `.mdn` sólo se lleva `.text`, así que `MdnPack` lo rechazaba — con razón, en
+// la placa habría sido un puntero a ninguna parte. Ahora el paso de enlace mete
+// los literales DENTRO del código.
+module RoTest
+
+  native function etiqueta(n: integer): string
+    if n < 0 then
+      return "negativo"
+    endif
+    return "valor " + intToString(n)
+  end etiqueta
+
+  function Main()
+    print etiqueta(7)
+    print etiqueta(0 - 1)
+  end Main
+
+end RoTest
