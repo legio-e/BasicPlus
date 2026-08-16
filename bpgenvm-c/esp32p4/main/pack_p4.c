@@ -35,6 +35,7 @@
  */
 #include "pack_p4.h"
 #include "bpvm_npack.h"
+#include "bpvm_pack.h"   /* V5/H7: saber si hay packs antes de barrer */
 #include "bpvm_bios.h"
 #include "bpvm_part.h"
 #include "mdn_loader.h"   /* bpvm_mdn_host_arch / _float_abi: lo que ESTA placa es */
@@ -140,6 +141,29 @@ static int mapear_zona(void)
  * Así que el mapeo se queda aquí y el barrido se va al primer `Run`, que es
  * donde la Pico lo tenía desde el principio. `mapear_zona` es idempotente, así
  * que da igual quién llegue primero. */
+/* V5/H7 (16-ago) - ¿HAY ALGO QUE BUSCAR? El barrido del ancla recorre la zona
+ * ENTERA de 4 en 4 bytes: 2800 KB son ~700.000 comparaciones y 338 ms medidos en
+ * la P4. Se pagaban en cada arranque; desde que la carga es perezosa se pagan en
+ * CADA `Run` mientras no haya pack, porque sin pack la carga no se marca como
+ * hecha (a propósito: así, tras grabar uno, funciona sin reiniciar).
+ *
+ * Se pueden no pagar, y sin tocar el buscador ni contradecir el ancla: un
+ * `.npk` vive SIEMPRE dentro de un pack, así que si en la zona no hay ningún
+ * pack grabado no hay ancla que encontrar. Y saberlo es barato — `bpvm_pack_scan`
+ * lee la primera cabecera y para.
+ *
+ * ⚠️ Esto NO es «si la zona empieza virgen, no busques» metido en el buscador.
+ * Esa era la idea equivocada: `test_npack.c` tiene un caso que pone el pack en
+ * el offset 256 entre basura, porque el ancla existe justo para no depender de
+ * dónde esté. Aquí el buscador sigue barriendo TODO lo que se le dé; lo único
+ * que cambia es que no se le llama cuando se sabe que no hay nada. */
+static int hay_algun_pack(const uint8_t* base, uint32_t bytes) {
+    if (base == 0 || bytes == 0) return 0;
+    uint32_t fin = 0;
+    int n = bpvm_pack_scan(base, bytes, 0, 0, 0, &fin);
+    return n > 0;
+}
+
 int32_t pack_p4_mapear(void)
 {
     return mapear_zona() ? 0 : -1;
@@ -159,6 +183,12 @@ int32_t pack_p4_cargar(void)
      * del pack, o sea un cuelgue donde no hay depurador. */
     const char* falta = 0;
     if (bios_p4_get() == 0) falta = "la BIOS de esta placa tiene huecos";
+
+    /* Si no hay ni un pack grabado, no hay ancla que buscar (ver arriba). */
+    if (!hay_algun_pack((const uint8_t*) s_map_inst, s_zona_bytes)) {
+        log_printf("pack: la zona no tiene ningun pack grabado - no se barre");
+        return -(int32_t) BPVM_NPACK_E_MAGIC;
+    }
 
     /* Barrer + subir la escalera. La MISMA de las tres familias. */
     bpvm_npack_hallazgo_t h = bpvm_npack_buscar(

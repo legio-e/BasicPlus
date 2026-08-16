@@ -448,6 +448,15 @@ test-loaderr: $(LIBOBJ)
 	@echo "--- #421 el fallo de carga se explica (esperado: solo 'ok', [status=OK]) ---"
 	@cd build && ./test_loaderr.exe
 
+# V5/H7 — cuando NO hace falta barrer la zona buscando el ancla (338 ms medidos
+# en la P4). Protege sobre todo el caso POSITIVO: un falso «no hay pack» dejaria
+# uno grabado sin cargar, en silencio.
+test-packskip:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_packskip.c src/bpvm_pack.c src/crc32.c 	  src/fs_facade.c src/fs_host.c -o build/test_packskip.exe
+	@echo "--- V5/H7 saltarse el barrido sin packs (esperado: solo 'ok') ---"
+	@./build/test_packskip.exe samples/PackFixA.pack
+
 test-logsw:
 	@mkdir -p build
 	$(CC) $(CFLAGS) test/test_log_switch.c src/bpvm_log.c -o build/test_logsw.exe

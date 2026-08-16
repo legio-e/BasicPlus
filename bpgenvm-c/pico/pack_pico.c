@@ -60,6 +60,26 @@ uint8_t* s_pack_ram_base = 0;
  * devuelve negativo. El detalle —cuántos candidatos, dónde, por qué— va al LOG,
  * que es donde se diagnostica y donde ya sabemos mirar.
  */
+/* V5/H7 (16-ago) - ¿HAY ALGO QUE BUSCAR? El barrido de abajo recorre la zona
+ * ENTERA de 4 en 4 bytes. En la P4 eso son 2800 KB = ~700.000 comparaciones y
+ * 338 ms MEDIDOS, y se pagan en cada intento mientras no haya pack (sin pack la
+ * carga no se marca como hecha, a propósito: así, tras grabar uno, funciona sin
+ * reiniciar).
+ *
+ * Se pueden no pagar sin tocar el buscador: un `.npk` vive SIEMPRE dentro de un
+ * pack, así que si no hay ningún pack grabado no hay ancla que encontrar. Y eso
+ * es barato de saber — `bpvm_pack_scan` lee la primera cabecera y para.
+ *
+ * ⚠️ No confundir con «si la zona empieza virgen, no busques» METIDO EN EL
+ * BUSCADOR: eso sí contradiría el ancla, que existe para no depender de dónde
+ * esté el pack (`test_npack.c` lo prueba poniendo uno en el offset 256 entre
+ * basura). Aquí el buscador sigue barriendo todo lo que se le dé. */
+static int hay_algun_pack(const uint8_t* base, uint32_t bytes) {
+    if (base == 0 || bytes == 0) return 0;
+    uint32_t fin = 0;
+    return bpvm_pack_scan(base, bytes, 0, 0, 0, &fin) > 0;
+}
+
 int32_t pack_pico_cargar(void)
 {
     /* 1 — ¿dónde está la zona de packs? La dice la tabla de particiones, no una
@@ -106,6 +126,12 @@ int32_t pack_pico_cargar(void)
     log_printf("pack: su RAM en 0x%08lX (%u B disponibles)",
                (unsigned long) (uintptr_t) s_pack_ram_base,
                (unsigned) PACK_RAM_BYTES);
+
+    /* 3.5 — ¿hay algo grabado? Si no, no hay ancla que buscar (ver arriba). */
+    if (!hay_algun_pack((const uint8_t*) base, bytes)) {
+        log_printf("pack: la zona no tiene ningun pack grabado - no se barre");
+        return -(int32_t) BPVM_NPACK_E_MAGIC;
+    }
 
     /* 4 — BUSCARLO, no acertar dónde está (idea de Eduardo). */
     bpvm_npack_hallazgo_t h = bpvm_npack_buscar(
