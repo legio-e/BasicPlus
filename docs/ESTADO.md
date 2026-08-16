@@ -282,6 +282,25 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-16 — Eduardo + Claude. Tres cerradas, y el grupo de «módulos y
+  arranque» baja de cinco a dos.**
+  ✅ **`#423` y `#420`, VERIFICADAS EN LA P4** con la imagen nueva. Eduardo:
+  *«con log=0 no muestra mensajes de ejecución y con log=1 sí; los mensajes de
+  arranque se mantienen siempre»* — el contrato de las tres partes, cumplido. Y
+  esa misma prueba cierra `#420`: para que con `log=1` aparezca rastro de
+  EJECUCIÓN tiene que estar conectado el sink del diagnóstico de la VM, que es
+  lo que a esa familia le faltaba.
+  ✅ **`#421`** (`e62a7fc`): los cuatro fallos de carga que antes decían
+  `IO error` ahora dicen cosas distintas **y viajan por el wire** — al log ya
+  iban desde ayer; lo que faltaba era que llegaran al IDE. El caso que costó la
+  mañana del 15-ago («se lee pero no cuadra con su cabecera: truncado o de otra
+  versión») se probó cortando un `.mod` por la mitad contra el simulador.
+  ✅ **`#381` completa en host** (`072c864`): las conversiones numéricas dentro
+  de una nativa. Sólo le falta la placa.
+  Lo que enseñó el día: **el patrón que se repite es «el sistema lo sabe y no lo
+  dice»** — el log que no existía en el P4, el motivo de carga que se quedaba en
+  el firmware, el CRC que nadie pedía y todos pagaban. Tres fichas distintas, un
+  solo tipo de bug.
 - **2026-08-15 (noche, 2) — Eduardo + Claude. 🟢 `long` YA CRUZA A UNA FUNCIÓN
   `native`** (`f599574`, `bd5002f`). Hasta hoy el AOT sólo marshallaba 4 bytes.
   **Dos decisiones de Eduardo hicieron el trabajo, y las dos ahorraron camino:**
