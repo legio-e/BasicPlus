@@ -8,7 +8,8 @@
  */
 #include "esp32_mods.h"
 #include "fs.h"
-#include "bpvm_fs.h"   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */
+#include "bpvm_fs.h"
+#include "crc32.h"    /* #422: comparar lo desplegado con lo embebido */   /* H11: bpvm_fs_stat — sólo se pregunta si el .mod ya está */
 #include <stdint.h>
 
 static const unsigned char core_mod[] = {
@@ -4010,9 +4011,34 @@ void esp32_mods_install(void) {
         /* No sobreescribas si ya está (p.ej. el usuario subió una versión). */
         /* H11 — sólo se pregunta si EXISTE; leerlo entero para eso costaba el
          * espejo de 64 KB (y por 14 módulos, uno detrás de otro). */
-        uint32_t sz_dummy;
-        if (bpvm_fs_stat(s_mods[i].path, &sz_dummy) != 0) {
+        uint32_t sz = 0;
+        if (bpvm_fs_stat(s_mods[i].path, &sz) != 0) {
             if (fs_put(s_mods[i].path, s_mods[i].data, s_mods[i].len) == FS_OK) installed++;
+        } else {
+            /* #422 — EL /lib RANCIO, POR FIN VISIBLE. Reflashear NO refresca
+             * estos módulos (la condición de arriba: solo se despliega si no
+             * existe, para no pisar lo que el usuario suba), así que una placa
+             * puede llevar imagen de hoy y un /lib de hace semanas — y el
+             * síntoma aparece LEJOS, como un «IO error» al quitar la copia de
+             * /app que lo tapaba (costó media mañana el 15-ago).
+             *
+             * Esto no cambia la política — REFRESCAR sigue siendo decisión
+             * pendiente, porque «difiere» no distingue «rancio» de «lo subió el
+             * usuario» sin más estado—. Pero ahora el arranque LO DICE, que es
+             * lo que convierte media mañana de hipótesis en una línea leída.
+             *
+             * Coste: tamaño gratis (el stat de arriba); CRC solo si empatan, y
+             * desde #398 el backend lo hace con UNA apertura. */
+            int difiere = (sz != s_mods[i].len);
+            if (!difiere) {
+                uint32_t c_fs = 0;
+                if (bpvm_fs_crc32(s_mods[i].path, &c_fs) == 0)
+                    difiere = (c_fs != bpvm_crc32(s_mods[i].data, s_mods[i].len));
+            }
+            if (difiere)
+                log_printf("lib: %s NO es el de esta imagen (%u B en FS, %u embebido)"
+                           " - ¿rancio de otro firmware, o subido por ti?",
+                           s_mods[i].path, (unsigned) sz, (unsigned) s_mods[i].len);
         }
     }
     fs_autosave_resume(installed > 0);

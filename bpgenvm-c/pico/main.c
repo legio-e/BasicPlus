@@ -20,7 +20,8 @@
 #include "bpvm.h"
 #include "embedded_mods.h"
 #include "fs.h"
-#include "bpvm_fs.h"     /* H11: stat + lectura por trozos (el .mod no pasa entero por RAM) */
+#include "bpvm_fs.h"
+#include "crc32.h"    /* #422: comparar lo desplegado con lo embebido */     /* H11: stat + lectura por trozos (el .mod no pasa entero por RAM) */
 #include "board_desc.h"
 #include "psram.h"
 #include "neopixel.h"
@@ -1300,7 +1301,27 @@ static void vm_task(void* arg) {
         { "/app/Hello.mod",    hello_mod,    &hello_mod_len    },
     };
     for (size_t i = 0; i < sizeof(PREINSTALL) / sizeof(PREINSTALL[0]); i++) {
-        if (fs_exists(PREINSTALL[i].path)) continue;
+        if (fs_exists(PREINSTALL[i].path)) {
+            /* #422 — el /lib rancio, VISIBLE (espejo del chivato del ESP32:
+             * mismo criterio, mismo mensaje). Reflashear no refresca estos
+             * módulos; que al menos el arranque diga cuándo lo desplegado no
+             * es lo embebido. Tamaño primero (gratis), CRC solo si empatan. */
+            uint32_t sz = 0;
+            int difiere = (bpvm_fs_stat(PREINSTALL[i].path, &sz) == 0
+                           && sz != *PREINSTALL[i].len);
+            if (!difiere && sz == *PREINSTALL[i].len) {
+                uint32_t c_fs = 0;
+                if (bpvm_fs_crc32(PREINSTALL[i].path, &c_fs) == 0)
+                    difiere = (c_fs != bpvm_crc32(PREINSTALL[i].data,
+                                                  *PREINSTALL[i].len));
+            }
+            if (difiere)
+                log_printf("lib: %s NO es el de esta imagen (%u B en FS, %u embebido)"
+                           " - ¿rancio de otro firmware, o subido por ti?",
+                           PREINSTALL[i].path, (unsigned) sz,
+                           (unsigned) *PREINSTALL[i].len);
+            continue;
+        }
         fs_put(PREINSTALL[i].path, PREINSTALL[i].data, *PREINSTALL[i].len);
         log_printf("preinstall: %s (%u bytes)", PREINSTALL[i].path,
                    (unsigned) *PREINSTALL[i].len);
