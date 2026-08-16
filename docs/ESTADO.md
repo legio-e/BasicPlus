@@ -294,6 +294,18 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 <!-- Fecha — quién — resumen del traspaso. La entrada más reciente arriba. -->
 
+- **2026-08-17 (2) — ✅ `#389` CERRADA EN HOST: el downcast de `Object` LANZA**
+  (`05acc0d`) — el último bug conocido del lenguaje. Opcode nuevo `CHECKCAST`
+  (0xAF, las dos VMs): mira sin consumir, null pasa, y el error NOMBRA el tipo
+  esperado (el nombre viaja como literal internado — el descriptor no lo
+  lleva). De hacerlo salieron dos arreglos más: INSTANCEOF de la VM-C leía el
+  class_ptr a ciegas (paridad latente con miVM, que ya validaba) y el despacho
+  virtual sobre un Object-con-cadena daba el 504 disfrazado — ahora lanza
+  atrapable, mismo mensaje byte a byte. Y una trampa cazada por el reproductor:
+  los literales de cadena viven en la región de datos SIN cabecera, y el primer
+  intento los rechazaba en `string(o)`.
+  Verificado con `CastRt.bp` (9 casos, salida idéntica en las dos VMs), toda la
+  batería, y el IDE reconstruido. Falta placa (reflashear: opcode nuevo).
 - **2026-08-17 — 🟢 `#302` paso 3 HECHO EN HOST: el test rojo del día anterior,
   VERDE con el diseño de Eduardo.** Escaneo conservador de la pila de C en vez
   del shadow stack: el GC recorre `[su frame .. el techo que apuntó el guard del
