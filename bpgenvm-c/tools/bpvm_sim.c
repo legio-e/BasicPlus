@@ -873,6 +873,12 @@ static void handle_run(sock_t c, long id, const json_obj_t* obj) {
                            : "Si es de la libreria estandar, configura la libreria de packs "
                              "(engranaje del micro simulado) y reinicia el simulador.");
         emit_exited(c, session, "RUNTIME_ERROR", -2, 0, msg);
+    } else if (st != BPVM_OK && entry.fallo[0]) {
+        /* #421 — no se pudo ni CARGAR, y el porqué se sabe: la ruta y qué le
+         * pasa. Antes esto caía en la rama de abajo y salía `IO error` a secas,
+         * que es lo que el IDE enseñaba. Va antes del error de enlace porque un
+         * fichero que no se puede leer no llega a enlazarse. */
+        emit_exited(c, session, "RUNTIME_ERROR", (int) st, dt, entry.fallo);
     } else {
         const char* link_err = bpvm_link_error(vm);
         if (link_err[0]) {

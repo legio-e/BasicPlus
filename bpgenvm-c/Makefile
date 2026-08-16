@@ -439,6 +439,15 @@ test-fspos:
 # cuatro importan: que por defecto este ENCENDIDO (el arranque queda registrado
 # siempre, que es cuando menos se puede preguntar nada), que apagado no anada,
 # que apagar NO BORRE lo ya escrito, y que se pueda volver a encender.
+# #421 — que un fallo de carga DIGA QUE HA PASADO. Fija los cuatro mensajes y,
+# sobre todo, que sean DISTINTOS entre si: antes los cuatro eran «IO error», y
+# eso costo media mañana con un .mod rancio (15-ago).
+test-loaderr: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_loaderr.c $(LIBOBJ) -o build/test_loaderr.exe $(LDFLAGS)
+	@echo "--- #421 el fallo de carga se explica (esperado: solo 'ok', [status=OK]) ---"
+	@cd build && ./test_loaderr.exe
+
 test-logsw:
 	@mkdir -p build
 	$(CC) $(CFLAGS) test/test_log_switch.c src/bpvm_log.c -o build/test_logsw.exe

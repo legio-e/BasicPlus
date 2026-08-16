@@ -56,6 +56,27 @@ typedef struct {
     char main_module[BPVM_PACK_NAME_LEN + 1];
     /* 1 si el entry era un pack. */
     int  from_pack;
+    /*
+     * #421 — POR QUÉ FALLÓ LA CARGA, en una frase y con la ruta ("" si no hubo
+     * fallo o si no se supo más).
+     *
+     * Es el gemelo de `missing` para el camino de ENTRADA/SALIDA, y existe
+     * porque ese camino no tenía ninguno: cuando falta un módulo, el REPL manda
+     * «falta el modulo 'Gui'» y se entiende; cuando el fichero no se puede
+     * leer, mandaba `bpvm_status_str(ls)` = **«IO error»** y ahí se acababa la
+     * información. En esa función TODOS los errores de E/S son `bc_read_be32`
+     * fallando, o sea «no pude leer los siguientes 4 bytes»: sale igual si el
+     * fichero no existe, si mide cero, si está truncado o si la ruta venía
+     * vacía. Y nunca decía CUÁL era la ruta, teniéndola en la mano (`resolved`).
+     *
+     * Coste medido: media mañana del 15-ago con un `Core.mod` rancio en `/lib`
+     * — el firmware sabía la respuesta desde el primer intento y lo único que
+     * salía por el wire era `exit 1 (IO error)`.
+     *
+     * Lo rellena quien detecta el fallo, que es quien sabe lo que pasó; el REPL
+     * sólo lo reenvía. Si está vacío, se manda lo de siempre.
+     */
+    char fallo[160];
 
     /* --- ENTRADA (opcional; 0/NULL = nada) --- */
     /* Se llama por cada módulo cargado, para que el REPL pueda contarlo por la

@@ -920,9 +920,15 @@ static void run_module_path(const char* path, long id) {
     memset(&entry, 0, sizeof entry);
     bpvm_status_t ls = bpvm_load_entry(vm, path, &entry);
     if (ls != BPVM_OK) {
+        /* #421 — el detalle VIAJA. Antes, todo lo que no fuera «falta un
+         * modulo» salia como `bpvm_status_str(ls)`, o sea «IO error», y el IDE
+         * mostraba `exit 1 (IO error)`: el firmware sabia por que habia fallado
+         * —y lo escribia en su log— pero por el wire no iba nada. */
         if (entry.missing[0]) {
             char em[80]; snprintf(em, sizeof(em), "falta el modulo '%s'", entry.missing);
             send_exited(session, "RUNTIME_ERROR", (int) ls, 0, em);
+        } else if (entry.fallo[0]) {
+            send_exited(session, "RUNTIME_ERROR", (int) ls, 0, entry.fallo);
         } else {
             send_exited(session, "RUNTIME_ERROR", (int) ls, 0, bpvm_status_str(ls));
         }

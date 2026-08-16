@@ -737,26 +737,54 @@ static long entry_fs_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n)
     return bpvm_fs_read_at((const char*) user, off, dst, n);
 }
 
-bpvm_status_t bpvm_load_entry_file(bpvm_t* vm, const char* resolved_path) {
-    /* #421 — el rastro se acababa justo aquí, que es donde falla. Un `IO error`
-     * significaba a la vez «no existe», «mide cero» y «no se pudo leer», y sin
-     * decir NUNCA la ruta — que está en la mano. Costó una mañana de hipótesis
-     * (15-ago) con el firmware sabiendo la respuesta y contándosela a nadie. */
+/* #421 — el mismo cargador, pero DEJANDO DICHO por qué falló.
+ *
+ * El rastro se acababa justo aquí, que es donde falla. Un `IO error` significaba
+ * a la vez «no existe», «mide cero» y «no se pudo leer», sin decir NUNCA la ruta
+ * — que está en la mano. Costó una mañana de hipótesis (15-ago) con el firmware
+ * sabiendo la respuesta y contándosela a nadie: al log iba (`18effeb`), pero por
+ * el wire salía «IO error» a secas y el log de la P4 ni siquiera existía.
+ *
+ * Así que el motivo se escribe además en `det`, que el llamante manda al IDE.
+ * `det` puede ser NULL: entonces esto se comporta como siempre. */
+static bpvm_status_t load_entry_file_det(bpvm_t* vm, const char* resolved_path,
+                                         char* det, size_t det_cap) {
     uint32_t size = 0;
     if (bpvm_fs_stat(resolved_path, &size) != 0) {
         bpvm_diag("[bpvm-c] cargar '%s': NO se puede leer (stat falla)", resolved_path);
+        if (det) snprintf(det, det_cap, "no se puede leer '%s'", resolved_path);
         return BPVM_ERR_IO;
     }
     if (size == 0) {
         bpvm_diag("[bpvm-c] cargar '%s': mide 0 bytes (subida a medias?)", resolved_path);
+        if (det) snprintf(det, det_cap, "'%s' mide 0 bytes (subida a medias?)", resolved_path);
         return BPVM_ERR_IO;
     }
     bpvm_status_t s = bpvm_load_mod_stream(vm, entry_fs_read_at, (void*) resolved_path,
                                            (size_t) size, resolved_path);
-    if (s != BPVM_OK)
+    if (s != BPVM_OK) {
         bpvm_diag("[bpvm-c] cargar '%s' (%u B): %s", resolved_path,
                   (unsigned) size, bpvm_status_str(s));
+        /* El caso que costó la mañana: el fichero está y se lee, pero su
+         * contenido no cuadra con su cabecera. El gate de ABI (#284) valida la
+         * VERSIÓN —un `.mod` v5 grita con su error propio—, no la INTEGRIDAD; un
+         * v6 truncado pasa el control y muere aquí. Decirlo con el tamaño es lo
+         * que separa «está rancio» de «se subió a medias». */
+        if (det) {
+            if (s == BPVM_ERR_IO)
+                snprintf(det, det_cap,
+                         "'%s' (%u B) se lee pero no cuadra con su cabecera: "
+                         "truncado o de otra version", resolved_path, (unsigned) size);
+            else
+                snprintf(det, det_cap, "'%s' (%u B): %s", resolved_path,
+                         (unsigned) size, bpvm_status_str(s));
+        }
+    }
     return s;
+}
+
+bpvm_status_t bpvm_load_entry_file(bpvm_t* vm, const char* resolved_path) {
+    return load_entry_file_det(vm, resolved_path, NULL, 0);
 }
 
 /* #345 — la primera línea de /sys/auto.txt, limpia. Ver bpvm_entry.h. */
@@ -843,13 +871,25 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
     bpvm_entry_t local;
     if (!e) { memset(&local, 0, sizeof local); e = &local; }
     e->missing[0] = e->resolved[0] = e->main_module[0] = '\0';
+    e->fallo[0] = '\0';                       /* #421 */
     e->from_pack = 0;
-    if (!vm || !path || !path[0]) return BPVM_ERR_IO;
+    if (!vm || !path || !path[0]) {
+        snprintf(e->fallo, sizeof e->fallo, "no se dijo que ejecutar (ruta vacia)");
+        return BPVM_ERR_IO;
+    }
 
     /* 1. La regla de búsqueda, una sola. */
     uint32_t size = 0;
-    if (bpvm_entry_resolve(path, e->resolved, sizeof e->resolved, &size) != 0)
+    if (bpvm_entry_resolve(path, e->resolved, sizeof e->resolved, &size) != 0) {
+        /* #421 — «no aparece» y «aparece pero no se puede leer» son dos ratos de
+         * búsqueda distintos, y hasta ahora los dos decían `IO error`. Decir
+         * DÓNDE se ha buscado ahorra la mitad: si el fichero está donde el
+         * usuario cree, entonces el problema es el nombre. */
+        snprintf(e->fallo, sizeof e->fallo,
+                 "no encuentro '%s' (buscado junto al modulo, tal cual, y en /app, /lib y /sys)",
+                 path);
         return BPVM_ERR_IO;
+    }
 
     /* 2. EL `if` DE .mod/.pack, y vive AQUÍ. Antes sólo el CLI del host sabía
      *    despachar packs; por eso llevarlos a la placa era copiar la regla en
@@ -865,7 +905,7 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
         /* bpvm_load_pack ya descubre las deps del main (dentro del pack primero,
          * y luego junto al propio pack); aquí sólo queda el barrido final. */
     } else {
-        s = bpvm_load_entry_file(vm, e->resolved);
+        s = load_entry_file_det(vm, e->resolved, e->fallo, sizeof e->fallo);   /* #421 */
         if (s != BPVM_OK) return s;
         if (vm->module_count > idx_before)
             /* Precisión explícita otra vez: main_module tiene el ancho de un

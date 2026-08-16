@@ -1572,6 +1572,13 @@ static void run_module_path(const char* path, long id) {
             fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
                             "\"errorMessage\":\"falta el modulo '%s'\"}\n",
                     session, (int) ls, entry.missing);
+        } else if (entry.fallo[0]) {
+            /* #421 — el PORQUÉ, con la ruta. Antes aquí salía «load: IO error»
+             * y el IDE mostraba `exit 1 (IO error)`: el firmware sabía lo que
+             * había pasado y no lo contaba. */
+            fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
+                            "\"errorMessage\":\"load: %s\"}\n",
+                    session, (int) ls, entry.fallo);
         } else {
             fprintf(stdout, "%ld,\"status\":\"RUNTIME_ERROR\",\"exitCode\":%d,"
                             "\"errorMessage\":\"load: %s\"}\n",
