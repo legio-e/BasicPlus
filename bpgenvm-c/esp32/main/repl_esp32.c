@@ -132,6 +132,52 @@ static const repl_board_id_t *s_board_id = &s_default_board;
 
 void repl_set_board_id(const repl_board_id_t *id) { if (id) s_board_id = id; }
 
+/* == V5/H7 - EL PACK NATIVO SE CARGA EN EL PRIMER `Run`, NO AL ARRANCAR ====
+ *
+ * La razon es de Eduardo y estaba escrita en `pico/pack_pico.c` desde el 7-ago:
+ * *«un cuelgue durante un Run se arregla desenchufando una vez; un cuelgue en el
+ * ARRANQUE se repite en cada arranque y obliga a regrabar. El salto es el unico
+ * paso que puede colgar, asi que se dispara cuando tu quieres, no cuando la
+ * placa enciende.»*
+ *
+ * La decision se aplico en la Pico y NO llego a esta familia: el P4 barria la
+ * zona y saltaba dentro de `wire_task`, antes del REPL. Costaba 338 ms de cada
+ * arranque -medidos en placa el 16-ago, casi la mitad de los 717 hasta que el
+ * wire esta listo- y, lo que importa mas, ponia el unico paso que puede colgar
+ * en el sitio del que no se sale sin regrabar.
+ *
+ * OJO A LO QUE NO SE MUEVE: **mapear** la zona sigue en el arranque. Es gratis
+ * (0 ms en el log) y el IDE la necesita desde el principio para poder listar y
+ * grabar packs. Lo que se retrasa es BUSCAR el ancla y SALTAR.
+ *
+ * Y el registro es un SETTER explicito, no weak/strong, por lo mismo que la
+ * identidad de placa de aqui arriba: en ESP-IDF cada componente es un `.a` y el
+ * override debil no se enlaza. El S3 sencillamente no registra ninguno -no
+ * tiene pack nativo- y aqui eso es un puntero nulo, no un caso especial. */
+static int32_t (*s_packs_loader)(void) = 0;
+
+void repl_set_packs_loader(int32_t (*fn)(void)) { s_packs_loader = fn; }
+
+/* Se llama en CADA Run y solo trabaja la primera vez que sale bien. Si no hay
+ * pack grabado no se marca como hecho: el siguiente Run lo reintenta, que es
+ * justo lo que se quiere despues de grabar uno, sin reiniciar la placa. */
+static void packs_cargar_una_vez(void) {
+    static int s_hecho = 0;
+    if (s_hecho || s_packs_loader == 0) return;
+    int32_t r = s_packs_loader();
+    if (r >= 0) {
+        s_hecho = 1;
+        log_printf("packs: cargado, la entrada devolvio %ld", (long) r);
+    } else {
+        /* El detalle -cuantos candidatos, que peldano fallo- ya lo dejo el
+         * cargador en el log. Aqui solo se dice que se sigue sin pack, que no
+         * es un error: un programa que no use packs no tiene por que llevar
+         * ninguno. */
+        log_printf("packs: sin pack utilizable (peldano %ld) - se sigue sin el",
+                   (long) -r);
+    }
+}
+
 /* ---- fs_status_t → (code, message) v1 ---- */
 static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
     switch (s) {
@@ -879,6 +925,11 @@ static void run_module_path(const char* path, long id) {
      * (el IDE manda la ruta cualificada). Plano (/app/X.mod o nombre suelto) →
      * sin base-dir = modo plano. Se resetea en cada run. */
     bpvm_fs_set_basedir_from_module(path);
+
+    /* V5/H7 - los packs, ANTES de resolver: si el programa usa una API de pack
+     * tiene que estar publicada cuando llegue la primera llamada. Ver arriba
+     * por que aqui y no en el arranque. */
+    packs_cargar_una_vez();
     /* H19-F2 diag — confirma en consola (idf.py monitor) la raíz del proyecto:
      * con proyecto sale basedir='/app/<proj>'; en fichero-suelto basedir=''.
      * Si esta línea NO aparece, el firmware es PRE-H19 (reflashear). */

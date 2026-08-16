@@ -127,6 +127,24 @@ static int mapear_zona(void)
     return 1;
 }
 
+/* V5/H7 - MAPEAR la zona, y sólo eso. Lo llama el ARRANQUE.
+ *
+ * Está separado de `pack_p4_cargar` desde el 16-ago porque las dos cosas que
+ * hacía esa función tienen tiempos y riesgos muy distintos, y se midieron:
+ *
+ *   mapear  ->  0 ms en el log, y el IDE lo NECESITA desde el arranque: sin la
+ *               vista publicada, `PACK_LS` contesta «sin zona de packs» y no
+ *               hay forma de grabar nada desde el IDE.
+ *   barrer  ->  338 ms, y es el único paso que puede COLGAR (el salto al pack).
+ *
+ * Así que el mapeo se queda aquí y el barrido se va al primer `Run`, que es
+ * donde la Pico lo tenía desde el principio. `mapear_zona` es idempotente, así
+ * que da igual quién llegue primero. */
+int32_t pack_p4_mapear(void)
+{
+    return mapear_zona() ? 0 : -1;
+}
+
 int32_t pack_p4_cargar(void)
 {
     if (!mapear_zona()) return -1;

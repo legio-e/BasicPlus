@@ -68,4 +68,15 @@ extern uint32_t s_sqlite_size;
  */
 int32_t pack_p4_cargar(void);
 
+/*
+ * Mapea la zona de packs y la PUBLICA (para el IDE y para que se vean los .mod
+ * y .mdn que lleve dentro). Lo llama el arranque; es barato y no salta a nada.
+ * 0 si la zona quedó mapeada, -1 si no hay zona o falló el mapeo.
+ *
+ * Lo otro -buscar el ancla y saltar- es `pack_p4_cargar`, y se dispara en el
+ * primer `Run` (ver repl_esp32.c): es el único paso que puede colgar, y un
+ * cuelgue en el arranque se repite en cada arranque.
+ */
+int32_t pack_p4_mapear(void);
+
 #endif /* PACK_P4_H */

@@ -8,6 +8,13 @@
 #ifndef BPVM_ESP32_REPL_H
 #define BPVM_ESP32_REPL_H
 
+/* Esta cabecera no incluía nada y funcionaba porque sus declaraciones no usaban
+ * tipos de ancho fijo. `repl_set_packs_loader` sí (V5/H7), y una cabecera que
+ * depende de que el .c haya incluido antes lo que ella necesita es una trampa
+ * para el siguiente — más aún aquí, donde el build de esta familia no se puede
+ * comprobar desde el PC. */
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,6 +49,13 @@ typedef struct {
 
 /* Fija la identidad reportada por INFO/HELLO. Idempotente; id NULL se ignora. */
 void repl_set_board_id(const repl_board_id_t *id);
+
+/* V5/H7 - quien carga el pack nativo, y se hace en el PRIMER `Run` (no al
+ * arrancar: el salto es el unico paso que puede colgar, y un cuelgue en el
+ * arranque obliga a regrabar). La familia que tenga pack nativo registra aqui
+ * su cargador; el S3 no registra ninguno y no pasa nada.
+ * Devuelve >=0 si salto (lo que devolvio el pack), <0 si no. */
+void repl_set_packs_loader(int32_t (*fn)(void));
 
 #ifdef __cplusplus
 }

@@ -306,7 +306,14 @@ static void wire_task(void *arg)
      * aunque no haya pack grabado: con `0 candidatos` el log ya deja el
      * dato que el IDE necesita para SELLAR uno (la direccion la asigna la
      * MMU en runtime, o sea que no se puede saber desde el PC). */
-    if (bs->state >= BPVM_BOOT_FS) (void) pack_p4_cargar();
+    /* V5/H7 (16-ago) - el arranque MAPEA la zona (barato, y el IDE la necesita
+     * ya); BUSCAR el ancla y SALTAR se hace en el primer `Run`, como en la
+     * Pico. Antes aquí se hacía todo: 338 ms de cada arranque, y el único paso
+     * que puede colgar puesto justo donde un cuelgue obliga a regrabar. */
+    if (bs->state >= BPVM_BOOT_FS) {
+        (void) pack_p4_mapear();
+        repl_set_packs_loader(pack_p4_cargar);
+    }
     net_logf("[p4] boot estado %d (%s)%s, %d ficheros",
              (int) bs->state, bpvm_boot_state_name(bs->state),
              bs->degraded ? " DEGRADADO" : "", fs_file_count());
@@ -347,7 +354,14 @@ static void wire_task_uart(void *arg)
      * aunque no haya pack grabado: con `0 candidatos` el log ya deja el
      * dato que el IDE necesita para SELLAR uno (la direccion la asigna la
      * MMU en runtime, o sea que no se puede saber desde el PC). */
-    if (bs->state >= BPVM_BOOT_FS) (void) pack_p4_cargar();
+    /* V5/H7 (16-ago) - el arranque MAPEA la zona (barato, y el IDE la necesita
+     * ya); BUSCAR el ancla y SALTAR se hace en el primer `Run`, como en la
+     * Pico. Antes aquí se hacía todo: 338 ms de cada arranque, y el único paso
+     * que puede colgar puesto justo donde un cuelgue obliga a regrabar. */
+    if (bs->state >= BPVM_BOOT_FS) {
+        (void) pack_p4_mapear();
+        repl_set_packs_loader(pack_p4_cargar);
+    }
     net_logf("[p4] boot estado %d (%s)%s (UART), %d ficheros",
              (int) bs->state, bpvm_boot_state_name(bs->state),
              bs->degraded ? " DEGRADADO" : "", fs_file_count());
