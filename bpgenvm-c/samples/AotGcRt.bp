@@ -9,20 +9,25 @@
 //     MIENTRAS el derecho aloja tres veces mas. Esa es exactamente la ventana
 //     del bug que el test rojo (test_aotgc.c) pillo en host: sin el escaneo,
 //     el GC recicla el temporal y la cadena sale corrupta.
-//   · Main la llama decenas de miles de veces: varios MB de churn contra un
-//     heap de pocos MB ⇒ VARIAS colectas, y casi todas caen dentro de eco,
-//     porque alli se hacen 7 de cada 12 allocs de la vuelta.
+//   · Main la llama 10.000 veces: varios MB de churn contra un heap de pocos
+//     MB ⇒ VARIAS colectas, y casi todas caen dentro de eco, porque alli se
+//     hacen 7 de cada 12 allocs de la vuelta.
 //   · Cada resultado se compara con el esperado construido a nivel BP. Un solo
-//     reciclado en 30.000 vueltas y `malos` deja de ser 0 — no hace falta que
+//     reciclado en 10.000 vueltas y `malos` deja de ser 0 — no hace falta que
 //     el fallo sea reproducible, basta con que sea POSIBLE.
 //
 // En las dos VMs de PC la native corre interpretada (no hay .mdn x86): validan
 // el programa. La prueba del escaneo la da la PLACA con log=1, que ademas del
 // `malos : 0` tiene que ensenar el rastro `[gc] pila C del native`.
+//
+// HISTORIA (17-ago): la primera vez en placa este programa NO llego a probar
+// nada — se colgaba a las ~2.300 vueltas, y resulto que la culpa no era del
+// escaneo sino de la TABLA DE HANDLES (#430): sin presion de tabla el GC no
+// se disparaba nunca y la tabla crecia hasta pedir 512 KB de SRAM. Arreglado
+// #430, este sample vuelve a su trabajo original.
 module AotGcRt
 
-  // native 
-  function eco(n: integer): string
+  native function eco(n: integer): string
     return ("v" + n) + ("w" + n)
   end eco
 
@@ -31,9 +36,11 @@ module AotGcRt
     var malos: integer := 0
     var ultimo: string := ""
     while i < 10000 do
-      if (i mod 1000)==0 then
+      // Latido: en placa el bucle tarda decenas de segundos y sin esto no se
+      // distingue "va por la mitad" de "se ha colgado". (Lo pidio la realidad:
+      // la primera version era muda y parecia colgada cuando trabajaba.)
+      if (i mod 1000) == 0 then
         print i
-        gc()
       endif
       ultimo := eco(i)
       var esperado: string := "v" + i + "w" + i
