@@ -1,0 +1,11 @@
+// SysLib.bp — el modulo que se sube a /sys para la prueba de #418.
+//
+// Trivial a proposito: lo que se prueba no es lo que hace, sino DE DONDE lo
+// saca el resolutor. Su pareja es SysUse.bp; la receta esta alli.
+module SysLib
+
+  public function saluda(quien: string): string
+    return "hola " + quien + ", desde /sys"
+  end saluda
+
+end SysLib

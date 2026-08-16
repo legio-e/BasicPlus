@@ -1,0 +1,30 @@
+// SysUse.bp — #418: que el resolutor encuentre un modulo en /sys.
+//
+// El resolutor mira /app, luego /lib y /sys el ULTIMO: asi /sys nunca TAPA a
+// nadie, solo rescata. Probarlo tiene una trampa: al compilar+ejecutar, el IDE
+// sube la dependencia a /app automaticamente — y entonces /app la resuelve y
+// /sys no se llega a consultar. La prueba seria es en tres gestos:
+//
+//   1. Compilar+Run esto una vez. Funciona, pero NO prueba nada todavia: el
+//      IDE acaba de subir SysLib.mod a /app. (Salida esperada abajo.)
+//   2. Seleccionar la carpeta `sys` en el arbol y Upload de SysLib.mod; luego
+//      BORRAR /app/SysLib.mod. Ahora la unica copia viva esta en /sys.
+//   3. Seleccionar /app/SysUse.mod en el arbol y darle a Run (el boton del
+//      arbol, NO compilar+ejecutar: eso volveria a subir la dep a /app).
+//
+// Si el paso 3 imprime lo mismo que el paso 1, el resolutor encontro el modulo
+// en /sys. Si dice que falta la dependencia, #418 no esta.
+//
+// Salida esperada (identica en los dos pasos):
+//   hola placa, desde /sys
+//   y 2 + 2 = 4
+module SysUse
+
+  import SysLib
+
+  function Main()
+    print SysLib.saluda("placa")
+    print "y 2 + 2 = " + (2 + 2)
+  end Main
+
+end SysUse
