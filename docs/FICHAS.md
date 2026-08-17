@@ -1246,10 +1246,12 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   sobre flash real. Y probar `mtime` en `/sd`, que es donde debe funcionar.
 - `H2-P5` — **variedad de tarjetas.** 🟢 **El enunciado original ya NO aplica**: era
   *«una sola tarjeta y una sola placa»* y son **dos y dos** (Eduardo, 17-ago): la
-  SanDisk de **128 GB en las dos placas**, y la de **32 GB en la Pico**.
-  *(`#425` documenta una medida con una SD de 32 GB **en la Metro** el 17-ago —38
-  ficheros, `ls` 99 ms—. Si es la misma corrida, la placa es la Metro; si fueron
-  dos, mejor todavía. No se da por sabido: se anota lo que dijo cada fuente.)*
+  SanDisk de **128 GB en las dos placas** (Metro y P4) y la de **32 GB en la
+  Metro** —la medida que documenta `#425`: 38 ficheros, `ls` 99 ms—.
+  📌 **Ojo con el nombre**, que ya despistó una vez: la **Pico no tiene lector de
+  SD**, así que ninguna prueba de tarjeta puede ser suya. Lo que se llama «Pico»
+  es la **imagen** del firmware, que es **única para Pico y Metro** (RP2350, la
+  variante se decide en runtime). Placa ≠ imagen.
   📐 **Qué queda cubierto de verdad** — mirando sobre qué se bifurca el driver
   (`bpvm_sd.c:129`), no la etiqueta comercial. Hay **dos caminos**, no tres:
   **CSD v1 = SDSC** (capacidad por tres campos, direcciona **por BYTE**) y
