@@ -87,10 +87,17 @@ confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
   por hacer, no una prueba pendiente. *(Y el firmware ya responde bien a eso:
   `ramBase == 0` significa «esta placa no da RAM a packs nativos», y el IDE lo
   dice en vez de grabar un motor que no arrancaría.)*
-- **#362 (recursos desde la zona de packs) no se ha probado en placa.** Verde en
-  host: `make test-packres` 12/12, end-to-end con un PNG real y control en rojo,
-  paridad dual-VM 28/28. Su propio commit lo dice: las cinco cinturas montan zona
-  por el mismo `bpvm_pack_mount`, *"pero eso es un argumento, no una medida"*.
+- **#362 (recursos desde la zona de packs): SÍ está probado en placa** — lo
+  verificó `#417` en el P4 el 14-ago (pack `test1` con `montserrat_26_bold.bin`
+  dentro y `FontLoadDemo` cargándola, comprobado por la AUSENCIA de la línea de
+  fallo, porque el `id` que devuelve `loadFont` no prueba nada). ⚠️ Esta entrada
+  decía lo contrario y llevaba días contradiciendo a la ficha; lo pilló Eduardo
+  el 18-ago al leer la lista de placa: *«ya probamos cargar una fuente de un pack
+  y funcionó»*. **Corregido.**
+  Lo que sí queda sin medir es más estrecho de lo que esto decía: los RECURSOS
+  (entradas que no son `.mod`) sólo se han sacado de la zona en el **P4**. En la
+  Metro y el STM32 está probado el montaje —el pack de SQLite corre en las dos—
+  pero no servir un recurso desde él. No urge: es la misma `bpvm_pack_mount`.
 
 ### 📦 El pack de SQLite: UNO, con las dos familias dentro
 
