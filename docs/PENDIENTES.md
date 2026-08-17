@@ -1,42 +1,30 @@
-# BasicPlus — Pendientes vivos
+# BasicPlus — Limitaciones y pulido conocidos
 
-> Documento **vivo**: bugs abiertos y limitaciones/decisiones del lenguaje que
-> aplican a cualquier versión (se pueden tocar en cualquier momento, también
-> durante V3 — son bugs/pulido, no features).
+> **Qué es esto, y qué NO.** Aquí van las **limitaciones y decisiones del lenguaje**
+> que alguien que USA BasicPlus debe conocer: cosas que son así y de momento se
+> quedan así. Es documentación, y por eso la citan `QUICKSTART`, `PHILOSOPHY` y los
+> README.
+>
+> **Lo que ya NO va aquí: el estado del trabajo.** Qué ficha está abierta, cerrada
+> o en curso vive **sólo** en `docs/FICHAS.md`. Decisión de Eduardo (17-ago): *«Estado
+> y pendientes son ficheros de trabajo tuyos. Pero el que dice realmente cuál es la
+> situación es Fichas.»* **Si este fichero contradice a `FICHAS.md`, manda `FICHAS.md`**
+> y esto se corrige.
+>
+> El motivo es concreto: el 17-ago este fichero daba por abiertos dos bugs cerrados
+> ese mismo día, y de las 51 fichas que citaba `ESTADO`, 49 eran una segunda copia de
+> las de `FICHAS`. Una lista de bugs más larga que la real es justo lo que este
+> documento venía a evitar.
 >
 > **Mapa de docs:**
-> - **`V3_BACKLOG.md`** — lo aparcado para V3 (fuente única del backlog de V3).
-> - **`HECHO_V2.md`** — snapshot **inmutable** del backlog tal como quedó al
->   cerrar V2 (el "diario" de cómo se resolvió cada cosa; no se actualiza).
-> - **`HECHO_V1.md`** — puntero a `PROJECT_ROADMAP.md` (crónica de v1).
+> - **`docs/FICHAS.md`** — el registro de fichas. **La fuente de verdad.**
+> - **`docs/ESTADO.md`** — el traspaso entre sesiones (diario, por fechas).
+> - **`V4_BACKLOG.md`** / **`HECHO_V*.md`** — snapshots inmutables de versiones cerradas.
 >
-> Convención: B=bug · L=limitación · N=hallazgo · M=mejora.
+> Convención: L=limitación · N=hallazgo · M=mejora. (Los bugs, **B**, se fueron a
+> `FICHAS.md`: tienen estado.)
 
 ---
-
-## 🔴 Bugs abiertos
-
-> Bugs **delicados** (vtable/módulos + GC) movidos a **`V4_BACKLOG.md`** (27-jun): `B-174b`,
-> `B-gc-allocanchor`, `B-freeref-no-recursivo` — exigen tocar slots/GC con red de pruebas, no
-> son fixes contenidos de V3.
-
-### #441 — el `.mdn` no recuerda con qué RECETA se compiló
-`mdnIsStale` (`BpIde/.../PicoExplorer.java:1239`) decide por **fecha**: si el `.mod` es más nuevo, el
-`.mdn` se rehace. Eso caza el fuente cambiado, pero **no** que hayan cambiado los *flags* de
-compilación ni que el `.mdn` sea de **otra familia** — su propio comentario ya nombra "los `.o` sin
-memoria de sus flags" como una de las cuatro mordeduras de artefacto rancio del proyecto.
-Lo destapó **#440** el 17-ago: al añadir `-mcmodel=medany` a `RISCV_P4_FLAGS`, **todos** los `.mdn`
-de RISC-V ya generados quedaron mal —con direccionamiento absoluto, o sea cuelgue mudo en placa— y
-ninguno se habría regenerado, porque ningún `.bp` había cambiado. Hubo que borrarlos a mano.
-Forma del arreglo: sellar en el `.mdn` una huella de su receta (arquitectura + hash de los flags) y
-que un sello distinto cuente como rancio, igual que la fecha. La arquitectura ya viaja en la
-cabecera (`arch=40`/`243`) pero **nadie la compara** con la de la placa antes de subirlo.
-
-*(Cerradas el 17-ago y sacadas de aquí, que estaban dando una lista de bugs más larga que la real:*
-*`#389` —el estrechamiento de `Object` ya COMPRUEBA en ejecución en las dos VMs, opcode `CHECKCAST`,*
-*`05acc0d`; era el último bug conocido del lenguaje— y `N-readfile-msg-skew` —miVM pegaba la ruta*
-*normalizada por Java, o sea distinta por SO; gana el mensaje de la VM-C, paridad 28/0/0, `RfSkew.bp`*
-*en el repo—. Ficha completa de las dos en `notas/FICHAS.md`.)*
 
 ## 🟡 Limitaciones / decisiones documentadas del lenguaje
 
@@ -90,28 +78,8 @@ cabecera (`arch=40`/`243`) pero **nadie la compara** con la de la placa antes de
 
 ## 🟢 Pulido (no urgente)
 
-- **El «pwm» del arranque y el del INFO no son la misma unidad, y se llaman
-  igual.** El log de boot dice `pwm=12` (SLICES, de `board_desc`) y el INFO
-  responde `24` (SALIDAS: cada slice tiene canales A y B, que es la cifra que
-  anuncian las placas). Las dos son correctas y el porqué está comentado en
-  `pico/repl_v1.c:1089`, pero quien ponga las dos líneas una al lado de otra ve
-  una contradicción y va a buscarla — pasó el 17-ago. Basta con que cada una
-  DIGA su unidad (`pwm=12 slices` / `PWM: 24 salidas`). El campo del wire
-  conserva el nombre histórico `pwmSlices` aunque lleve salidas, que es la otra
-  mitad de la confusión.
-
-
-- **N-listado-plano-trunca-mudo — el árbol del IDE se corta con muchos ficheros,
-  y sólo lo dice el log.** El recorrido que alimenta el árbol es PLANO y recorre
-  el FS entero, con tope de **16 directorios** y **96 entradas por directorio**.
-  Al pasarse trunca: avisa al log del device, pero **al usuario no le dice nada**
-  — el árbol sólo enseña menos cosas, que es la peor forma de fallar.
-  Observado por Eduardo el 8-ago al montar una tarjeta SD (V5/H2), donde deja de
-  ser teórico; pero el tope **es de siempre** y aplica a cualquier versión y a
-  cualquier placa con el FS interno lleno.
-  Arreglo bueno: **árbol perezoso** — pedir los hijos al expandir con `LIST_DIR`
-  (existe desde V5/H2 y ya reporta cuántas entradas dejó fuera). La consola ya lo
-  usa: `dir [ruta]` sí avisa por pantalla cuando trunca.
+*(El aviso del «pwm» y el truncado mudo del árbol se subieron a `docs/FICHAS.md`
+el 17-ago: tienen trabajo pendiente, así que su sitio es el registro.)*
 
 - **M2 — auto-unbox `any → primitive` con check en runtime** (variante "segura"
   de L1; coste: tag de tipo en cada `any`; discutible si compensa).

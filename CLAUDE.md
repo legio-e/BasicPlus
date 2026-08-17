@@ -3,8 +3,9 @@
 > **Qué es este fichero.** El mapa mental del proyecto que Claude Code carga
 > **en cada sesión**. Su razón de ser es que no haya que volver a explicar la
 > visión de conjunto ni redescubrir los comandos cada vez. Si algo estructural
-> cambia, se actualiza aquí. El **estado vivo** (qué está en curso, bugs, próximos
-> pasos) NO va aquí: va en `docs/ESTADO.md` y `docs/PENDIENTES.md`.
+> cambia, se actualiza aquí. El **estado vivo** (qué está en curso, qué está
+> cerrado, qué falta) NO va aquí: va en **`docs/FICHAS.md`**, que es la **fuente
+> única de verdad** del proyecto.
 
 ## Qué es BasicPlus
 
@@ -135,8 +136,11 @@ Cualquier diferencia de `stdout` es un fallo del invariante, aunque el programa
 Antes de bucear en el código, el doc correcto suele ahorrar el viaje:
 
 - **Por qué / decisiones de diseño** → `docs/PHILOSOPHY.md`
-- **Estado vivo, WIP, próximos pasos** → `docs/ESTADO.md`
-- **Bugs y limitaciones abiertas** → `docs/PENDIENTES.md`
+- **🔒 QUÉ ESTÁ ABIERTO, CERRADO O EN CURSO** → **`docs/FICHAS.md`**. La fuente única
+  de verdad: el registro numerado de fichas, con su commit al cerrarlas.
+  **Léelo antes de listar pendientes** — y si otro doc lo contradice, manda éste.
+- **Qué pasó en cada sesión** (diario, por fechas) → `docs/ESTADO.md`
+- **Limitaciones del lenguaje de cara al usuario** → `docs/PENDIENTES.md`
 - **Formato del bytecode** → `docs/MOD_FORMAT.md` · **Opcodes** → `docs/OPCODES.md`
 - **Heap / memoria** → `docs/HEAP_LAYOUT.md` · **Builtins** → `docs/BUILTINS.md`
 - **Protocolo de debug** → `docs/BPVM_WIRE_PROTOCOL.md`
@@ -147,9 +151,18 @@ Antes de bucear en el código, el doc correcto suele ahorrar el viaje:
 ## Convenciones de trabajo
 
 - **Idioma:** español (código, docs, commits, conversación).
-- **Versión actual:** V4 (consolidación) cerrando; primeros trabajos de V5. Ver `ESTADO.md`.
-- `docs/PENDIENTES.md` es el "diario honesto": bugs/limitaciones vivos (B/L/N/M).
+- **Versión actual:** V5, **en fase de cerrar** (V4 se publicó el 6-ago). Qué queda,
+  en `docs/FICHAS.md`.
+- **`docs/FICHAS.md` es la fuente única de verdad.** Decisión de Eduardo (17-ago):
+  *«Estado y pendientes son ficheros de trabajo tuyos. Pero el que dice realmente
+  cuál es la situación es Fichas.»* Al abrir una ficha, una línea allí; al cerrarla,
+  se marca con su commit y se queda. `ESTADO.md` (diario) y `PENDIENTES.md`
+  (limitaciones) **no llevan estado de fichas**: si lo llevan, se corrigen ellos.
+  El porqué está medido: cuando el estado vivía en tres sitios, se desincronizaban
+  —dos bugs cerrados seguían apareciendo como abiertos, un censo hecho como
+  pendiente— y costaba tiempo real.
 - `docs/HECHO_V*.md` son snapshots **inmutables** de versiones cerradas: no se tocan.
-- **Al terminar una sesión de trabajo, deja el traspaso en `docs/ESTADO.md`**
+- **Al terminar una sesión, actualiza `docs/FICHAS.md` (lo que cambió de estado) y deja
+  el traspaso en `docs/ESTADO.md`** (lo que pasó)
   (qué quedó cerrado, qué está a medias, qué riesgo acecha), para que la siguiente
   sesión arranque sabiendo dónde estábamos sin depender de mantener el contexto vivo.
