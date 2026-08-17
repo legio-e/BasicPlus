@@ -1247,27 +1247,29 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   la verdad sobre la placa.
   ⏳ Falta en placa: el littlefs de host corre sobre una imagen en fichero, no
   sobre flash real. Y probar `mtime` en `/sd`, que es donde debe funcionar.
-- `H2-P5` — **variedad de tarjetas.** Probado con una SanDisk de 128 GB (FAT32 con
-  MBR) y, el **17-ago, una de 32 GB** (Eduardo: *«hoy hemos probado la de 32G»*).
-  📐 **Qué cubre eso y qué no** — mirando sobre qué se bifurca el driver de verdad
+- `H2-P5` — **variedad de tarjetas.** 🟢 **El enunciado original ya NO aplica**: era
+  *«una sola tarjeta y una sola placa»* y son **dos y dos** (Eduardo, 17-ago): la
+  SanDisk de **128 GB en las dos placas**, y la de **32 GB en la Pico**.
+  📐 **Qué queda cubierto de verdad** — mirando sobre qué se bifurca el driver
   (`bpvm_sd.c:129`), no la etiqueta comercial. Hay **dos caminos**, no tres:
   **CSD v1 = SDSC** (capacidad por tres campos, direcciona **por BYTE**) y
   **CSD v2 = SDHC *y* SDXC juntas** (un solo campo, direcciona **por BLOQUE**).
   La de 32 GB es SDHC y la de 128 GB es SDXC —*la ficha la llamaba «SDHC»: error
-  de etiqueta, aunque para el driver den lo mismo*— así que **las dos caen en la
-  MISMA rama**. Queda probado que el driver **no está afinado a una tarjeta
-  concreta** (init, CID, timing) y que las dos clases de alta capacidad van; pero
-  el camino distinto sigue sin tocarse.
-  ⏭️ Lo que falta de verdad, por orden de riesgo:
-  1. **SDSC** — el único cambio de CAMINO. En SDHC/SDXC el argumento de CMD17 es
-     el bloque y en SDSC es el byte: confundirlos no da error, da **datos de otro
-     sitio** (avisado en `bpvm_sd.h:173`). Hace falta una tarjeta de ≤2 GB.
-  2. **exFAT** y **«superfloppy» sin MBR** — ésos no son del driver SD sino de
-     FatFs y del arranque de partición, o sea **otra capa**: se prueban
-     reformateando cualquiera de las dos tarjetas que ya hay, sin comprar nada.
-  📌 Pendiente de anotar: **en qué placa** se probó la de 32 GB. Si fue en el P4 y
-  la de 128 GB fue en la Metro, cae también la otra mitad del enunciado («una sola
-  placa») y esta ficha se queda sólo con SDSC.
+  de etiqueta, aunque para el driver den lo mismo*—, o sea que **las dos clases de
+  alta capacidad están probadas** y el driver **no está afinado a una tarjeta ni a
+  una placa**. Eso era el grueso de la ficha, y está hecho.
+  ⏭️ **Lo que queda es sólo esto, y son dos cosas de capas distintas:**
+  1. 🔴 **SDSC — el único cambio de CAMINO que falta.** En SDHC/SDXC el argumento
+     de CMD17 es el **bloque** y en SDSC es el **byte**: confundirlos no da error,
+     da **datos de otro sitio** (avisado en `bpvm_sd.h:173`). Exige una tarjeta de
+     **≤2 GB**, que hoy no se compran. **Decisión pendiente de Eduardo**: buscar
+     una vieja y probarlo, o documentar el riesgo y cerrar la ficha — el mismo
+     criterio que se aplicó con los subnormales (L14): si no se puede medir, se
+     dice, no se supone.
+  2. 🟡 **exFAT y «superfloppy» sin MBR** — NO son del driver SD sino de **FatFs y
+     del arranque de partición**, o sea otra capa. Se prueban **reformateando
+     cualquiera de las dos tarjetas que ya hay**, sin comprar nada: es lo barato
+     que queda de esta ficha.
 - (de H6) — la **polaridad de Q1**: con qué nivel de GPIO45 se enciende el raíl.
   *(La de `pwr` sí está cerrada: activo bajo, medido.)*
 ### Cierre de V5 — lo que se hace AL CERRAR, no antes
