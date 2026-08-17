@@ -213,7 +213,17 @@ public final class PacksPanel extends JPanel {
         fc.setDialogTitle("Copiar pack a la placa");
         fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Packs (*.pack)", "pack"));
         if (fc.showOpenDialog(this) != javax.swing.JFileChooser.APPROVE_OPTION) return;
-        final java.io.File f = fc.getSelectedFile();
+        grabarPack(fc.getSelectedFile());
+    }
+
+    /** #435 — LA GRABACIÓN, separada de cómo se ELIGE el fichero. La elección
+     *  ya no es sólo el chooser: el panel de carpetas de {@link BoardMgrPanel}
+     *  manda aquí el `.pack` seleccionado con el botón «Añadir». Un solo camino
+     *  de grabado para las dos entradas — si fueran dos, el día que cambie la
+     *  poda o el relocalizado se arreglaría uno y el otro se quedaría atrás. */
+    public void grabarPack(final java.io.File f) {
+        if (client == null) { summaryLabel.setText("(sin conexión)"); return; }
+        if (f == null || !f.isFile()) { summaryLabel.setText("(no es un fichero)"); return; }
         lastBurnDir = f.getParentFile();
         summaryLabel.setText("grabando " + f.getName() + "…");
         bg(() -> {

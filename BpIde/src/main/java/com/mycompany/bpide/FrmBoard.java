@@ -28,6 +28,7 @@ public class FrmBoard extends javax.swing.JFrame {
     public FrmBoard(BpvmClient client, java.util.function.Consumer<String> log) {
         this();
         if (log != null) {
+            this.logSink = log;
             boardPanel.setLog(log);
             packsPanel.setLog(log);
         }
@@ -43,8 +44,36 @@ public class FrmBoard extends javax.swing.JFrame {
     }
 
     public void attach(BpvmClient client) {
+        this.clienteActual = client;   // #435: el diálogo del entorno lo necesita
         if (boardPanel != null) boardPanel.attach(client);
         if (packsPanel != null) packsPanel.attach(client);
+    }
+
+    /* #435 — el cliente vigente, para abrir el diálogo del entorno con él. */
+    private BpvmClient clienteActual;
+    private EnvDialog envDialog;
+    private java.util.function.Consumer<String> logSink = s -> { };
+
+    /** Abre (o trae al frente) el diálogo de variables de entorno. Modeless a
+     *  propósito: se consulta MIENTRAS se miran las particiones, que es
+     *  justamente lo que se perdía al tenerlo todo en la misma ventana. */
+    private void abrirEnvDialog() {
+        if (clienteActual == null) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "Sin conexión con la placa.", "Variables de entorno",
+                    javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (envDialog != null && envDialog.isDisplayable()) {
+            envDialog.toFront();
+            envDialog.refresh();
+            return;
+        }
+        // Las particiones viven en el MISMO env (part.<x>.size), así que al
+        // tocar una variable se repinta el panel de la izquierda.
+        envDialog = new EnvDialog(this, clienteActual, logSink,
+                () -> { if (boardPanel != null) boardPanel.refresh(); });
+        envDialog.setVisible(true);
     }
 
     /**
@@ -63,6 +92,18 @@ public class FrmBoard extends javax.swing.JFrame {
         jSplitPane1.setLeftComponent(boardPanel);
         jSplitPane1.setRightComponent(packsPanel);
         jSplitPane1.setDividerLocation(560);
+
+        /* #435 — LOS DOS PANELES, UNIDOS AQUI. El de carpetas (izquierda) sabe
+         * QUE fichero se ha elegido; el de packs (derecha) sabe GRABARLO. Que
+         * los una FrmBoard, que tiene los dos, evita que se conozcan entre sí y
+         * deja un solo camino de grabado. */
+        boardPanel.setAlAnyadir(f -> packsPanel.grabarPack(f));
+
+        /* Y la entrada al entorno, que ya no está en la ventana: el botón lo
+         * pone BoardMgrPanel en su barra, y lo que hace lo pone aquí — el
+         * contentPane de esta ventana es un GridLayout(1,1) y no admite una
+         * barra suelta al lado del split. */
+        boardPanel.setAlAbrirEnv(this::abrirEnvDialog);
     }
 
     /**

@@ -29,10 +29,11 @@ import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
 import javax.swing.BorderFactory;
+import javax.swing.DefaultListModel;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -45,13 +46,6 @@ import javax.swing.table.DefaultTableModel;
 public final class BoardMgrPanel extends JPanel {
 
     private static final long T = 8000;    // timeout wire
-    /* Clave CANÓNICA del env (minúsculas): el firmware lee "psram" EXACTO
-     * (bpvm_env_get es case-sensitive). Escribir "PSRAM" fue el bug que dejó
-     * la PSRAM de la Metro apagada con el checkbox marcado (19-jul). La
-     * lectura de abajo usa equalsIgnoreCase a propósito: tolera una entrada
-     * vieja en mayúsculas para MOSTRARLA, pero aquí siempre se escribe en
-     * minúsculas. */
-    private static final String PSRAM_KEY = "psram";
 
     private BpvmClient client;
     private Consumer<String> log = s -> { };
@@ -59,13 +53,19 @@ public final class BoardMgrPanel extends JPanel {
 
     private final JLabel stateLabel = new JLabel("(sin conexión)");
     private final JLabel flashLabel = new JLabel(" ");
-    private final JCheckBox psramCheck = new JCheckBox("PSRAM presente (0/1)");
-
-    private final DefaultTableModel envModel =
-            new DefaultTableModel(new Object[] { "Clave", "Valor" }, 0) {
-                @Override public boolean isCellEditable(int r, int c) { return false; }
-            };
-    private final JTable envTable = new JTable(envModel);
+    /* #435 — EL PANEL DE CARPETAS, donde estaba el cuadro del entorno. Enseña
+     * una carpeta del PC (por defecto la de packs) y deja navegar; con un
+     * `.pack` seleccionado, «Añadir» lo graba en la placa sin pasar por el
+     * chooser. La grabación NO vive aquí: la hace PacksPanel y las une
+     * FrmBoard, que es quien tiene los dos paneles — así no se acoplan entre
+     * sí ni se duplica el camino de grabado. */
+    private final DefaultListModel<java.io.File> carpetaModel = new DefaultListModel<>();
+    private final JList<java.io.File> carpetaList = new JList<>(carpetaModel);
+    private final JLabel carpetaLabel = new JLabel(" ");
+    private final JButton anyadirBtn = new JButton("Añadir a la placa");
+    private java.io.File carpetaActual;
+    private Consumer<java.io.File> alAnyadir = f -> { };
+    private Runnable alAbrirEnv = () -> { };
 
     // tabla de particiones AHORA es solo-lectura (los tamaños se editan abajo)
     private final DefaultTableModel partModel =
@@ -101,27 +101,16 @@ public final class BoardMgrPanel extends JPanel {
         JButton refresh = new JButton("Refrescar");
         refresh.addActionListener(e -> refresh());
         north.add(refresh);
+        /* #435 — la entrada al entorno, que ya no vive en esta ventana. Va en
+         * la barra que ya estaba, junto a las demás acciones de placa; quien
+         * abre el diálogo es FrmBoard, que tiene la conexión. */
+        JButton envBtn = new JButton("Variables de entorno…");
+        envBtn.addActionListener(e -> alAbrirEnv.run());
+        north.add(envBtn);
         add(north, BorderLayout.NORTH);
 
-        // --- entorno ---
-        JPanel envPanel = new JPanel(new BorderLayout(4, 4));
-        envPanel.setBorder(BorderFactory.createTitledBorder("Variables de entorno"));
-        // PSRAM como checkbox de conveniencia (arriba)
-        JPanel envTop = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        psramCheck.addActionListener(e -> onPsramToggle());
-        envTop.add(psramCheck);
-        envPanel.add(envTop, BorderLayout.NORTH);
-        envPanel.add(new JScrollPane(envTable), BorderLayout.CENTER);
-        JPanel envBtns = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        JButton envSet = new JButton("Añadir / editar…");
-        JButton envDel = new JButton("Borrar");
-        envSet.addActionListener(e -> onEnvSet());
-        envDel.addActionListener(e -> onEnvDel());
-        envBtns.add(envSet);
-        envBtns.add(envDel);
-        envPanel.add(envBtns, BorderLayout.SOUTH);
+        JPanel carpetaPanel = construirPanelCarpeta();
 
-        // --- particiones (tabla read-only arriba, edición de tamaños abajo) ---
         JPanel partPanel = new JPanel(new BorderLayout(4, 4));
         partPanel.setBorder(BorderFactory.createTitledBorder("Particiones (edita los tamaños abajo)"));
         partPanel.add(new JScrollPane(partTable), BorderLayout.CENTER);
@@ -140,13 +129,12 @@ public final class BoardMgrPanel extends JPanel {
         partSouth.add(partBtns, BorderLayout.SOUTH);
         partPanel.add(partSouth, BorderLayout.SOUTH);
 
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, envPanel, partPanel);
-        split.setResizeWeight(0.45);
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, partPanel, carpetaPanel);
+        split.setResizeWeight(0.55);
         add(split, BorderLayout.CENTER);
     }
 
     private void clearTables() {
-        envModel.setRowCount(0);
         partModel.setRowCount(0);
         sizeFields.clear();
         sizeForm.removeAll();
@@ -168,44 +156,34 @@ public final class BoardMgrPanel extends JPanel {
 
     // ---- acciones ----
 
-    /** STATE + ENV_LS + PART_LS (+ defaults si virgen) → repuebla todo. */
+    /** STATE + PART_LS (+ defaults si virgen) → repuebla todo.
+     *
+     *  <p>#435 — ya NO pide ENV_LS: el entorno se fue a {@link EnvDialog} y con
+     *  él su consulta. Una petición menos por refresco, que en placa se nota. */
     public void refresh() {
         if (client == null) { stateLabel.setText("(sin conexión)"); return; }
         stateLabel.setText("consultando…");
         bg(() -> {
             BpvmClient.BoardState st = client.boardState(T);
-            List<BpvmClient.EnvVar> env = client.envList(T);
             BpvmClient.PartTable lay = client.partLayout(T);
             // en placa virgen la tabla de particiones viene vacía; usamos DEFAULTS
             // para conocer el conjunto fijo y proponer tamaños en el editor de abajo.
             BpvmClient.PartTable defs = lay.missing ? client.partDefaults(T) : null;
-            return new Object[] { st, env, lay, defs };
+            return new Object[] { st, lay, defs };
         }, arr -> {
             BpvmClient.BoardState st = (BpvmClient.BoardState) arr[0];
-            @SuppressWarnings("unchecked")
-            List<BpvmClient.EnvVar> env = (List<BpvmClient.EnvVar>) arr[1];
-            BpvmClient.PartTable lay = (BpvmClient.PartTable) arr[2];
-            BpvmClient.PartTable defs = (BpvmClient.PartTable) arr[3];
-            fill(st, env, lay, defs);
+            BpvmClient.PartTable lay = (BpvmClient.PartTable) arr[1];
+            BpvmClient.PartTable defs = (BpvmClient.PartTable) arr[2];
+            fill(st, lay, defs);
         });
     }
 
-    private void fill(BpvmClient.BoardState st, List<BpvmClient.EnvVar> env,
+    private void fill(BpvmClient.BoardState st,
                       BpvmClient.PartTable lay, BpvmClient.PartTable defs) {
         updatingUi = true;
         try {
             stateLabel.setText("estado " + st.state + " — " + st.name
                     + (st.degraded ? "  ⚠ DEGRADADO: " + st.reason : ""));
-
-            // entorno: sin las claves de partición; PSRAM alimenta también el checkbox
-            envModel.setRowCount(0);
-            boolean psram = false;
-            for (BpvmClient.EnvVar e : env) {
-                if (isPartKey(e.key)) continue;                 // gestionada abajo
-                envModel.addRow(new Object[] { e.key, e.value });
-                if (PSRAM_KEY.equalsIgnoreCase(e.key)) psram = "1".equals(e.value.trim());
-            }
-            psramCheck.setSelected(psram);
 
             // tabla de particiones (solo lectura): el layout actual
             partModel.setRowCount(0);
@@ -241,48 +219,8 @@ public final class BoardMgrPanel extends JPanel {
         sizeForm.repaint();
     }
 
-    private void onPsramToggle() {
-        if (updatingUi || client == null) return;
-        final String val = psramCheck.isSelected() ? "1" : "0";
-        bg(() -> { client.envSet(PSRAM_KEY, val, T); return null; }, r -> {
-            log.accept("[FrmBoard] " + PSRAM_KEY + "=" + val);
-            refresh();
-        });
-    }
 
-    private void onEnvSet() {
-        int row = envTable.getSelectedRow();
-        String defKey = row >= 0 ? String.valueOf(envModel.getValueAt(row, 0)) : "";
-        String defVal = row >= 0 ? String.valueOf(envModel.getValueAt(row, 1)) : "";
-        JTextField keyF = new JTextField(defKey, 16);
-        JTextField valF = new JTextField(defVal, 16);
-        JPanel form = new JPanel(new GridLayout(2, 2, 4, 4));
-        form.add(new JLabel("Clave:"));  form.add(keyF);
-        form.add(new JLabel("Valor:"));  form.add(valF);
-        int ok = JOptionPane.showConfirmDialog(this, form, "Variable de entorno",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (ok != JOptionPane.OK_OPTION) return;
-        String key = keyF.getText().trim();
-        if (key.isEmpty()) return;
-        if (isPartKey(key)) { info("Los tamaños de partición se editan en la sección de particiones."); return; }
-        String val = valF.getText();
-        bg(() -> { client.envSet(key, val, T); return null; }, r -> {
-            log.accept("[FrmBoard] ENV_SET " + key + "=" + val);
-            refresh();
-        });
-    }
 
-    private void onEnvDel() {
-        int row = envTable.getSelectedRow();
-        if (row < 0) { info("Selecciona una variable para borrar."); return; }
-        String key = String.valueOf(envModel.getValueAt(row, 0));
-        if (JOptionPane.showConfirmDialog(this, "¿Borrar la variable '" + key + "'?",
-                "Confirmar", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
-        bg(() -> { client.envDel(key, T); return null; }, r -> {
-            log.accept("[FrmBoard] ENV_DEL " + key);
-            refresh();
-        });
-    }
 
     private void onDefaults() {
         if (client == null) return;
@@ -315,6 +253,142 @@ public final class BoardMgrPanel extends JPanel {
             info("Tamaños aplicados. El device se reiniciará y subirá con el layout nuevo.");
             refresh();
         });
+    }
+
+    // ---- #435: el panel de carpetas ----
+
+    /** Enseña una carpeta del PC y deja navegar. Reemplaza al chooser para
+     *  añadir packs: el fichero ya está a la vista y basta seleccionarlo.
+     *
+     *  <p>Enseña TODO (carpetas y ficheros) y habilita «Añadir» sólo con un
+     *  `.pack` seleccionado, en vez de filtrar. Filtrando, un pack con el
+     *  nombre mal escrito «no está» y no se ve por qué; así se ve que está y
+     *  que no vale. */
+    private JPanel construirPanelCarpeta() {
+        JPanel panel = new JPanel(new BorderLayout(4, 4));
+        panel.setBorder(BorderFactory.createTitledBorder("Carpeta (doble clic para entrar)"));
+
+        JPanel top = new JPanel(new BorderLayout(4, 0));
+        JButton arriba = new JButton("↑");
+        arriba.setToolTipText("Carpeta superior");
+        arriba.addActionListener(e -> {
+            if (carpetaActual != null && carpetaActual.getParentFile() != null)
+                verCarpeta(carpetaActual.getParentFile());
+        });
+        JButton otra = new JButton("Otra…");
+        otra.addActionListener(e -> elegirCarpeta());
+        JPanel topBtns = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        topBtns.add(arriba); topBtns.add(otra);
+        carpetaLabel.setToolTipText("Carpeta que se está mostrando");
+        top.add(topBtns, BorderLayout.WEST);
+        top.add(carpetaLabel, BorderLayout.CENTER);
+        panel.add(top, BorderLayout.NORTH);
+
+        carpetaList.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        carpetaList.setCellRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override public java.awt.Component getListCellRendererComponent(
+                    javax.swing.JList<?> l, Object v, int i, boolean sel, boolean foco) {
+                super.getListCellRendererComponent(l, v, i, sel, foco);
+                java.io.File f = (java.io.File) v;
+                setText(f.isDirectory() ? "[" + f.getName() + "]" : f.getName());
+                return this;
+            }
+        });
+        carpetaList.addListSelectionListener(e -> actualizarAnyadir());
+        carpetaList.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() != 2) return;
+                java.io.File f = carpetaList.getSelectedValue();
+                if (f != null && f.isDirectory()) verCarpeta(f);
+            }
+        });
+        panel.add(new JScrollPane(carpetaList), BorderLayout.CENTER);
+
+        JPanel sur = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        anyadirBtn.setEnabled(false);
+        anyadirBtn.addActionListener(e -> {
+            java.io.File f = carpetaList.getSelectedValue();
+            if (f != null && f.isFile()) alAnyadir.accept(f);
+        });
+        sur.add(anyadirBtn);
+        panel.add(sur, BorderLayout.SOUTH);
+
+        verCarpeta(carpetaPorDefecto());
+        return panel;
+    }
+
+    /** Qué carpeta se enseña al abrir: LA DE PACKS, que es lo que se viene a
+     *  buscar aquí (Eduardo). Y no se inventa cuál es: `packsDirEffective()` ya
+     *  resuelve la configurada → la que viaja junto al jar → `packs/` del
+     *  directorio de trabajo, que es la misma cadena que usa el compilador. Si
+     *  no hay ninguna, el directorio de trabajo — con la navegación a mano para
+     *  ir a otra parte. */
+    private static java.io.File carpetaPorDefecto() {
+        String packs = IdePrefs.load().packsDirEffective();
+        if (packs != null) {
+            java.io.File d = new java.io.File(packs);
+            if (d.isDirectory()) return d;
+        }
+        return new java.io.File(".").getAbsoluteFile();
+    }
+
+    private void verCarpeta(java.io.File dir) {
+        if (dir == null || !dir.isDirectory()) return;
+        carpetaActual = dir;
+        carpetaLabel.setText(dir.getAbsolutePath());
+        carpetaModel.clear();
+        java.io.File[] hijos = dir.listFiles();
+        if (hijos == null) {
+            // Sin permisos o desconectada: se DICE. Una lista vacía se leería
+            // como "aquí no hay nada", que es otra cosa.
+            carpetaLabel.setText(dir.getAbsolutePath() + "   (no se puede leer)");
+            return;
+        }
+        java.util.Arrays.sort(hijos, (a, b) -> {
+            if (a.isDirectory() != b.isDirectory()) return a.isDirectory() ? -1 : 1;
+            return a.getName().compareToIgnoreCase(b.getName());
+        });
+        for (java.io.File f : hijos) carpetaModel.addElement(f);
+        actualizarAnyadir();
+    }
+
+    private void elegirCarpeta() {
+        javax.swing.JFileChooser fc = new javax.swing.JFileChooser(carpetaActual);
+        fc.setFileSelectionMode(javax.swing.JFileChooser.DIRECTORIES_ONLY);
+        fc.setDialogTitle("Ver carpeta");
+        if (fc.showOpenDialog(this) == javax.swing.JFileChooser.APPROVE_OPTION)
+            verCarpeta(fc.getSelectedFile());
+    }
+
+    private void actualizarAnyadir() {
+        java.io.File f = carpetaList.getSelectedValue();
+        boolean esPack = f != null && f.isFile() && esPack(f.getName());
+        anyadirBtn.setEnabled(esPack);
+        anyadirBtn.setToolTipText(esPack
+                ? "Graba " + f.getName() + " en la placa"
+                : "Selecciona un fichero .pack de la lista");
+    }
+
+    /** ¿es un pack? ⚠️ Esta regla está escrita a mano en varios sitios más
+     *  (`bpvm.c`, `Main.java`, `FrmMain` ×2, `SimRunner`) y está fichada como
+     *  riesgo en ESTADO.md. Aquí NO se inventa una sexta: se usa el mismo
+     *  criterio —extensión `.pack`, sin distinguir mayúsculas— y se deja dicho,
+     *  para que el día que se unifique aparezca en el grep. */
+    private static boolean esPack(String nombre) {
+        return nombre != null && nombre.toLowerCase().endsWith(".pack");
+    }
+
+    /** #435 — qué hacer con el fichero que se «añade». Lo pone FrmBoard, que es
+     *  quien tiene también el panel de packs: así este panel no sabe grabar y
+     *  el de packs no sabe de carpetas. */
+    public void setAlAnyadir(Consumer<java.io.File> h) {
+        if (h != null) this.alAnyadir = h;
+    }
+
+    /** #435 — qué hace el botón «Variables de entorno…». Lo pone FrmBoard, que
+     *  es quien tiene la conexión y el diálogo. */
+    public void setAlAbrirEnv(Runnable h) {
+        if (h != null) this.alAbrirEnv = h;
     }
 
     // ---- helpers ----
