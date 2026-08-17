@@ -192,8 +192,11 @@ public final class PicoExplorer extends JPanel {
         // Árbol de ficheros remotos con render personalizado.
         fileTree.setRootVisible(true);
         fileTree.setShowsRootHandles(true);
+        /* IDE-7 — selección MÚLTIPLE. Borrar diez ficheros de uno en uno son
+         * diez confirmaciones y diez refrescos del árbol; con la SD delante eso
+         * era la diferencia entre incómodo e inviable. */
         fileTree.getSelectionModel().setSelectionMode(
-                TreeSelectionModel.SINGLE_TREE_SELECTION);
+                TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         fileTree.setCellRenderer(new DefaultTreeCellRenderer() {
             @Override
             public Component getTreeCellRendererComponent(JTree tree,
@@ -1631,30 +1634,77 @@ public final class PicoExplorer extends JPanel {
         }
         fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
                 ".mod files", "mod"));
+        fc.setMultiSelectionEnabled(true);   // IDE-7: subir varios de una vez
         if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
-        File f = fc.getSelectedFile();
-        if (f == null) return;
+        File[] elegidos = fc.getSelectedFiles();
+        if (elegidos == null || elegidos.length == 0) {
+            File uno = fc.getSelectedFile();
+            if (uno == null) return;
+            elegidos = new File[] { uno };
+        }
+        final File[] ficheros = elegidos;
+        File f = ficheros[0];
         // Recordar la carpeta para la próxima vez.
         File parent = f.getParentFile();
         if (parent != null) {
             prefs.lastUploadDir = parent.getAbsolutePath();
             prefs.save();
         }
-        // Sube a la carpeta seleccionada en el árbol (así se puede dejar
-        // algo en /lib o /sys a propósito); sin selección, a /app por
-        // convención (relevante en Pico; en VM Java es un path arbitrario
-        // dentro del workdir).
+        /* #394 — EL DESTINO SE VE Y SE PUEDE CAMBIAR. Antes era implícito: lo
+         * decidía la selección del árbol y no aparecía en ningún sitio, así que
+         * había que SABER esa regla; y una carpeta que aún no existiera no se
+         * podía elegir, porque no está en el árbol para seleccionarla.
+         *
+         * Se propone lo mismo que antes —la carpeta seleccionada, o /app— y se
+         * deja editar. Un Enter y sigue igual de rápido, con la diferencia de
+         * que ya no hay que adivinar dónde va a caer. Las carpetas del device
+         * son namespace (MKDIR es idempotente y no hay nodos de directorio), así
+         * que escribir una que no existe la crea al poner el fichero. */
         String dir = selectedDirPath();
-        String remote = (dir != null) ? dir + "/" + f.getName()
-                                      : toAppPath(f.getName());
-        status.setText("Uploading " + remote + "...");
+        String carpeta = (dir != null) ? dir : "/app";
+        /* Con UN fichero se propone la ruta entera (permite renombrar al subir);
+         * con VARIOS se pregunta la CARPETA una sola vez — preguntar N veces
+         * convertiría la comodidad en una penitencia. */
+        String propuesta = (ficheros.length == 1) ? carpeta + "/" + f.getName() : carpeta;
+        String titulo = (ficheros.length == 1) ? "Subir " + f.getName()
+                                               : "Subir " + ficheros.length + " ficheros";
+        String etiqueta = (ficheros.length == 1) ? "Destino en la placa:"
+                                                 : "Carpeta de destino en la placa:";
+        String elegido = (String) JOptionPane.showInputDialog(this,
+                etiqueta, titulo, JOptionPane.PLAIN_MESSAGE, null, null, propuesta);
+        if (elegido == null) return;                      // cancelado
+        elegido = elegido.trim();
+        if (elegido.isEmpty()) return;
+        if (!elegido.startsWith("/")) elegido = "/" + elegido;
+        final String destino = elegido;
+        status.setText("Subiendo " + ficheros.length + " fichero(s) a " + destino + "...");
         runAsync(() -> {
-            byte[] data = Files.readAllBytes(f.toPath());
-            b.put(remote, data);
-            return data.length;
-        }, n -> {
-            status.setText("Uploaded " + remote + " (" + n + " bytes)");
-            onRefresh();
+            int hechos = 0; long bytes = 0;
+            StringBuilder fallos = new StringBuilder();
+            for (File uno : ficheros) {
+                String ruta = (ficheros.length == 1 && !destino.endsWith("/"))
+                        ? destino                              // ruta completa dada
+                        : destino + (destino.endsWith("/") ? "" : "/") + uno.getName();
+                try {
+                    byte[] data = Files.readAllBytes(uno.toPath());
+                    b.put(normalizePath(ruta), data);
+                    hechos++; bytes += data.length;
+                } catch (java.io.IOException ex) {
+                    fallos.append("\n   ").append(uno.getName()).append(": ").append(ex.getMessage());
+                }
+            }
+            return new Object[] { hechos, bytes, fallos.toString() };
+        }, r -> {
+            int hechos = (Integer) r[0];
+            long bytes = (Long) r[1];
+            String fallos = (String) r[2];
+            if (!fallos.isEmpty() && outputSink != null) {
+                outputSink.accept("[Explorer] no se pudieron subir "
+                        + (ficheros.length - hechos) + " fichero(s):" + fallos);
+            }
+            status.setText("Subidos " + hechos + " de " + ficheros.length
+                    + " (" + bytes + " bytes) a " + destino);
+            onRefresh();                       // UNO, al final (IDE-7)
         });
     }
 
@@ -1725,17 +1775,69 @@ public final class PicoExplorer extends JPanel {
         });
     }
 
+    /** IDE-7 — borra TODO lo seleccionado con UNA confirmación y UN refresco.
+     *
+     *  <p>Lo que falla NO detiene al resto: se borra lo que se pueda y al final
+     *  se dice qué no se pudo y por qué. Pararse en el primer error dejaría el
+     *  lote a medias sin decir por dónde iba, que es peor que terminar. */
     private void onDelete() {
         if (!isConnected()) return;
         final Backend b = this.backend;
-        Backend.Entry sel = getSelectedEntry();
-        if (sel == null) return;
-        int rc = JOptionPane.showConfirmDialog(this,
-                "Borrar " + sel.name + "?", "Confirmar",
-                JOptionPane.YES_NO_OPTION);
-        if (rc != JOptionPane.YES_OPTION) return;
-        runAsync(() -> { b.del(sel.name); return null; },
-                v -> { status.setText("Deleted " + sel.name); onRefresh(); });
+        final java.util.List<Backend.Entry> sels = getSelectedEntries();
+        if (sels.isEmpty()) return;
+
+        String msg;
+        if (sels.size() == 1) {
+            msg = "Borrar " + sels.get(0).name + "?";
+        } else {
+            StringBuilder sb = new StringBuilder("Borrar " + sels.size() + " ficheros?\n");
+            int n = 0;
+            for (Backend.Entry e : sels) {
+                if (n++ == 8) { sb.append("   … y ").append(sels.size() - 8).append(" más"); break; }
+                sb.append("   ").append(e.name).append('\n');
+            }
+            msg = sb.toString();
+        }
+        if (JOptionPane.showConfirmDialog(this, msg, "Confirmar",
+                JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+
+        runAsync(() -> {
+            int hechos = 0;
+            StringBuilder fallos = new StringBuilder();
+            for (Backend.Entry e : sels) {
+                try { b.del(e.name); hechos++; }
+                catch (java.io.IOException ex) {
+                    fallos.append("\n   ").append(e.name).append(": ").append(ex.getMessage());
+                }
+            }
+            return new Object[] { hechos, fallos.toString() };
+        }, r -> {
+            int hechos = (Integer) r[0];
+            String fallos = (String) r[1];
+            status.setText("Borrados " + hechos + " de " + sels.size());
+            if (!fallos.isEmpty() && outputSink != null) {
+                outputSink.accept("[Explorer] no se pudieron borrar " + (sels.size() - hechos)
+                        + " fichero(s):" + fallos);
+            }
+            onRefresh();                       // UNO, al final
+        });
+    }
+
+    /** IDE-7 — las Entry de TODO lo seleccionado (las carpetas se ignoran: son
+     *  namespace, no ficheros que se puedan borrar). */
+    private java.util.List<Backend.Entry> getSelectedEntries() {
+        java.util.List<Backend.Entry> out = new java.util.ArrayList<>();
+        javax.swing.tree.TreePath[] sels = fileTree.getSelectionPaths();
+        if (sels == null) return out;
+        for (javax.swing.tree.TreePath tp : sels) {
+            Object last = tp.getLastPathComponent();
+            if (!(last instanceof DefaultMutableTreeNode)) continue;
+            Object uo = ((DefaultMutableTreeNode) last).getUserObject();
+            if (uo instanceof Backend.Entry && !((Backend.Entry) uo).isDir) {
+                out.add((Backend.Entry) uo);
+            }
+        }
+        return out;
     }
 
     private void onSave() {
