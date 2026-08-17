@@ -1,0 +1,45 @@
+// NatMin.bp — la funcion `native` MAS SIMPLE que se puede escribir.
+//
+// Por que existe: en el ESP32-P4, `AotGcRt` y `GcNatP4` mueren los dos en la
+// PRIMERA llamada a su nativa (lo vio Eduardo mirando el orden del bucle: la
+// ultima linea impresa es siempre la de JUSTO ANTES de llamarla). O sea que no
+// es el GC ni la presion de memoria: o falla el mecanismo del thunk, o falla
+// algo de lo que la nativa hace por dentro.
+//
+// Esta nativa no hace NADA: ni aloja, ni concatena, ni llama a un helper. Solo
+// suma dos enteros y vuelve. Es el minimo absoluto del camino .mdn -> thunk ->
+// ejecutar codigo RISC-V -> volver.
+//
+//   · si esto FUNCIONA -> el mecanismo esta bien y el problema esta en lo que
+//     hace `eco`: los helpers de cadena (int_to_string, string_concat).
+//   · si esto CUELGA   -> el problema es el thunk en si, y ninguna funcion
+//     `native` compilada a .mdn ha funcionado NUNCA en RISC-V.
+//
+// Se imprime ANTES y DESPUES de cada llamada: la ultima linea que salga por el
+// wire dice exactamente donde muere (el log no sobrevive a un cuelgue, #439).
+module NatMin
+
+  native function suma(a: integer, b: integer): integer
+    return a + b
+  end suma
+
+  function Main()
+    print "1: antes de la primera llamada"
+    var r: integer := suma(2, 3)
+    print "2: volvio, r = " + r
+
+    print "3: antes de la segunda"
+    r := suma(r, 10)
+    print "4: volvio, r = " + r
+
+    // Unas cuantas seguidas: si el fallo fuera acumulativo se veria aqui.
+    var i: integer := 0
+    while i < 100 do
+      r := suma(i, 1)
+      i := i + 1
+    endwh
+    print "5: 100 llamadas mas, r = " + r
+    print "fin"
+  end Main
+
+end NatMin

@@ -1,0 +1,70 @@
+// NatEsc.bp — LA ESCALERA: que sabe hacer una `native` en esta placa, y desde
+// donde deja de saber.
+//
+// Contexto: en el ESP32-P4 mueren `AotGcRt` y `GcNatP4`, los dos en la PRIMERA
+// llamada a su nativa. `NatMin` prueba el minimo absoluto (sumar enteros). Esto
+// es el peldano siguiente: sube de uno en uno hasta llegar a lo que hace `eco`,
+// imprimiendo ANTES y DESPUES de cada escalon.
+//
+// La gracia es que UNA sola corrida da el punto exacto de ruptura, sin ir
+// pidiendo variantes de una en una. La ultima linea que salga por el wire dice
+// hasta donde llego (el log no sobrevive a un cuelgue, #439).
+//
+// Los escalones estan puestos por lo que exigen POR DEBAJO, que es lo que de
+// verdad cambia entre uno y otro:
+//
+//   1  aritmetica pura            — nada, solo codigo RISC-V y el retorno
+//   2  devolver un literal        — string_from_cstr (aloja en el heap)
+//   3  recibir una cadena         — leer una ref que viene de BP (charCodeAt)
+//   4  numero -> cadena           — int_to_string
+//   5  concatenar dos cadenas     — string_concat
+//   6  lo que hace `eco`          — los tres juntos y anidados
+module NatEsc
+
+  native function e1(a: integer, b: integer): integer
+    return a + b
+  end e1
+
+  native function e2(): string
+    return "hola"
+  end e2
+
+  native function e3(s: string): integer
+    return charCodeAt(s, 0)
+  end e3
+
+  native function e4(n: integer): string
+    return intToString(n)
+  end e4
+
+  native function e5(a: string, b: string): string
+    return a + b
+  end e5
+
+  native function e6(n: integer): string
+    return ("v" + n) + ("w" + n)
+  end e6
+
+  function Main()
+    print "-- 1: aritmetica"
+    print "   = " + e1(2, 3)
+
+    print "-- 2: devolver literal"
+    print "   = " + e2()
+
+    print "-- 3: recibir cadena"
+    print "   = " + e3("hola")   // 104 = la h
+
+    print "-- 4: numero a cadena"
+    print "   = " + e4(42)
+
+    print "-- 5: concatenar"
+    print "   = " + e5("ab", "cd")
+
+    print "-- 6: lo de eco"
+    print "   = " + e6(7)
+
+    print "fin"
+  end Main
+
+end NatEsc
