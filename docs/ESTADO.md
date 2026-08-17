@@ -344,6 +344,53 @@ se hace en ese mismo momento y no a trozos por el camino.
 
 ## Última sesión
 
+### 18-ago — H10 ENTERO, el grupo B mecánico, y una ficha que no existía
+
+**H10 cerrado, las siete** (`#425`, `#437`, `#435`, `#436`, `#394`, `IDE-7`,
+`#395`) — detalle en el plan de cierre, arriba. Y del **grupo B** lo que se podía
+hacer sin conversación previa: `#431`, `#429`, `#412` (a V6 con su diseño) y
+`GAP-4`.
+
+**Lo más aprovechable del día, por si sirve de aviso:**
+
+- **`GAP-4` no existía.** Decía que la notación científica de `double` en la VM-C
+  estaba pendiente y que el invariante sagrado podía estar roto en magnitudes
+  extremas. La medida dice que **no**: 22 casos byte a byte, incluidos los dos
+  lados de cada frontera y los extremos del tipo. La ficha **nació de leer mal
+  una palabra** — el comentario dice *«TODO en aritmética IEEE determinista»* y
+  ese `TODO` es el **castellano** («todo ello»), no el marcador inglés de
+  pendiente. `SciPar.bp` queda en el corpus de paridad: **29 PASS**.
+- **`#425` era el mismo mal que `#433`**, y estaba en CUATRO sitios, no tres: el
+  cuarto era el micro simulado, que es con quien habla el IDE en modo Sim. Lo
+  cazó el grep de quién-más-lo-hace; de memoria se habría escapado.
+- **`#429` enseñó algo al probarlo**: la primera versión ponía las fechas con
+  precisión de minuto, y como el desfase típico es de segundos las dos salían
+  IGUALES — un aviso cuya evidencia no se ve se lee como falsa alarma. Con
+  segundos.
+
+**Herramientas nuevas que se quedan:** `FrmBoardShot` y `EnvDialogShot` (pintan
+una ventana o un diálogo del IDE a PNG sin display ni placa; la primera cazó un
+botón sobre un `GridLayout(1,1)` que compilaba y rompía el layout), y
+`make test-listtrunc`.
+
+**⏭️ AL VOLVER — orden decidido por Eduardo:** *«prefiero hacer las pruebas en
+placa y después meternos con `List` y `Box`, que es desarrollo nuevo.»*
+
+1. **La sesión de placa B**, con su guión ya escrito en
+   `notas/SESION_PLACA_B.md`: `SciPar` (la pata de placa de GAP-4, 5 min y sin
+   reflashear), `#379` (el wire tras el Stop — primero SABER en qué placas),
+   `#362` (recursos del pack, verde en host y nunca en placa), `#408` (los dos
+   cuellos, con las fotos ya cambiadas) y `#415`.
+2. **`List`/`SyncList`/`OwnerList` → `Object` y `#438` (`Box`)**, que son la
+   MISMA conversación y tienen decisiones que son de Eduardo: el nombre, si
+   distingue «vacío» de `null`, y cómo se saca un escalar — la asimetría de los N
+   getters que ya salió al diseñar `File`/`TextFile` para V6. Conviene
+   resolverla igual en los dos sitios.
+
+Estado del repo: todo committeado, **sin push**. Imágenes al día (Metro 17-ago
+15:57 con `#425`; el P4 se construye y sale a `-Os`). Toolchain reconstruida:
+frontend, miVM y el fat-jar del IDE.
+
 ### 17-ago (tarde-noche) — LA SESIÓN DE PLACA COMPLETA, y un bug de memoria de V4
 
 **Ocho fichas resueltas o verificadas en placa**: `#389`, `#381`/`#428`, `#430`,
