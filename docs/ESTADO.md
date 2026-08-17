@@ -27,6 +27,59 @@
 
 ## Última sesión
 
+### 17-ago (tarde) — el cuelgue del P4, y UNA fuente de verdad
+
+**Lo gordo: `#440`, verificada en el P4.** Toda `native` que tocara un literal
+de cadena colgaba la placa. No era el GC ni la memoria, como parecía: era el
+**modo de direccionamiento**. RISC-V compilaba con `-fno-pic` y el modelo por
+defecto, que llega a sus datos metiendo la dirección de ENLACE como constante
+(`lui`+`addi`); enlazar a `-Ttext=0` deja relativos los SALTOS pero no los
+DATOS, y como el `.mdn` se carga donde caiga, eso es un puntero salvaje →
+cuelgue mudo. ARM nunca lo sufrió (`-fpic`, remata con `add r1, pc`). Arreglo:
+`-mcmodel=medany`. Con él cayeron de paso **la pata del P4 de `#430`** y
+**`#302` paso 3 en la segunda arquitectura** (`AotGcRt`: 10.000 vueltas,
+`malos: 0`).
+
+**Cómo se localizó, que es lo reutilizable:** la ESCALERA (`NatEsc.bp`, en el
+repo). Una `native` por peldaño, cada una exigiendo una cosa más por debajo,
+con un print antes y después. Una sola corrida da el punto de ruptura sin ir
+pidiendo variantes de una en una. `NatMin` (sumar enteros) pasaba y el escalón
+2 (devolver un literal) moría → el thunk estaba sano y lo roto era tocar datos.
+
+**`H2-P5`: el camino SDSC, probado sin tarjeta SDSC.** Eduardo: *«no tengo
+tarjetas de 2G ni voy a tener»*. Pero lo que daba miedo era una cuenta
+(`arg = alta_cap ? lba : lba*512`), y eso es aritmética pura → `make test-sdsc`,
+con control por caso y rojo verificado.
+
+**Y el cambio de fondo: `docs/FICHAS.md` es LA FUENTE ÚNICA**, y ya está en
+git. Eduardo: *«me estoy volviendo loco con cosas que aparecen y desaparecen»*.
+Estaba medido: de las 51 fichas que citaba este documento, **49 eran una
+segunda copia**. Ahora `ESTADO` es sólo este diario, `PENDIENTES` sólo
+limitaciones de cara al usuario, y `CLAUDE.md` apunta a `FICHAS`.
+
+⚠️ **Tres errores míos de registro, todos del mismo tipo**, y conviene tenerlos
+presentes porque volverán: (1) moví «el árbol trunca mudo» de `PENDIENTES` a
+`FICHAS` sin contrastarlo — era `#425`, cerrada ese mismo día; (2) di los
+cuatro rojos del censo como pendientes cuando 1, 2 y 3 se cerraron el 16-ago
+(`ec81afc`) — no los vi porque viven DENTRO de una ficha cerrada, invisible a
+un barrido; (3) repetí que «todas las medidas llevan `-Og`» cuando eso sólo
+vale hasta el 16-ago a mediodía. Los tres los cazó Eduardo leyendo la lista.
+**La lección: al mover algo de sitio, contrastarlo con lo cerrado; y lo que sea
+trabajo de V5 no puede vivir dentro de una ficha cerrada.**
+
+**Sin cerrar:** `#379` — probando los 5 ciclos en el P4, **el Stop cuelga**. La
+hipótesis de que era `#398` disfrazado NO se sostiene. La pregunta que parte el
+problema sigue sin hacerse: **¿está colgado el device o el IDE?** (pedir `Info`
+por la consola con el cuelgue puesto). Se paró ahí a propósito.
+
+⏭️ **MAÑANA: LA TIJERA.** Decisión de Eduardo al ver la lista: *«esto sigue
+enrevesado, demasiadas cosas; mañana metemos la tijera a ver si podemos cerrar
+unos cuantos»*. O sea que el marco del día siguiente es **cerrar y descartar,
+no abrir** — y cancelar sigue siendo un resultado válido. Quedan **11** de V5
+(barrido mecánico de `FICHAS`, sin V4 ni V6) + 4 tareas de cierre. De los 11,
+sólo dos son desarrollo nuevo (`#438` `Box` y `List`→`Object`, que son la misma
+conversación); el resto es cerrar cosas, y `hello_mod` es el más mecánico.
+
 ### 17-ago — H10 ENTERO, el grupo B mecánico, y una ficha que no existía
 
 **H10 cerrado, las siete** (`#425`, `#437`, `#435`, `#436`, `#394`, `IDE-7`,
