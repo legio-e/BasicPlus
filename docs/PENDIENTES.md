@@ -95,6 +95,17 @@ verificada.)*
 
 ## 🟢 Pulido (no urgente)
 
+- **El «pwm» del arranque y el del INFO no son la misma unidad, y se llaman
+  igual.** El log de boot dice `pwm=12` (SLICES, de `board_desc`) y el INFO
+  responde `24` (SALIDAS: cada slice tiene canales A y B, que es la cifra que
+  anuncian las placas). Las dos son correctas y el porqué está comentado en
+  `pico/repl_v1.c:1089`, pero quien ponga las dos líneas una al lado de otra ve
+  una contradicción y va a buscarla — pasó el 18-ago. Basta con que cada una
+  DIGA su unidad (`pwm=12 slices` / `PWM: 24 salidas`). El campo del wire
+  conserva el nombre histórico `pwmSlices` aunque lleve salidas, que es la otra
+  mitad de la confusión.
+
+
 - **N-listado-plano-trunca-mudo — el árbol del IDE se corta con muchos ficheros,
   y sólo lo dice el log.** El recorrido que alimenta el árbol es PLANO y recorre
   el FS entero, con tope de **16 directorios** y **96 entradas por directorio**.
