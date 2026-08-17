@@ -1285,13 +1285,14 @@ public final class PicoExplorer extends JPanel {
         runAsync(() -> {
             long t0 = System.currentTimeMillis();
             List<Backend.Entry> fs = b.list();
+            long omitidas = b.lastListOmitted();   // #425
             long tLs = System.currentTimeMillis() - t0;
             String mem;
             long t1 = System.currentTimeMillis();
             try { mem = b.mem(); }
             catch (java.io.IOException ie) { mem = "(no mem info)"; }
             long tMem = System.currentTimeMillis() - t1;
-            return new Object[]{fs, mem, tLs, tMem};
+            return new Object[]{fs, mem, tLs, tMem, omitidas};
         }, result -> {
             Object[] r = (Object[]) result;
             @SuppressWarnings("unchecked")
@@ -1302,9 +1303,24 @@ public final class PicoExplorer extends JPanel {
             long t2 = System.currentTimeMillis();
             rebuildTree(fs);
             long tArbol = System.currentTimeMillis() - t2;
-            status.setText(fs.size() + " files  |  " + (tLs + tMem + tArbol) + " ms"
+            long omitidas = (Long) r[4];   // #425
+            // Que el árbol se quede corto NO puede pasar en silencio: se lee
+            // como "no hay más", y de esas mentiras uno se fía. Misma voz que
+            // el aviso del `dir` de la consola.
+            String aviso = (omitidas > 0)
+                    ? "  |  ⚠ LISTADO INCOMPLETO: faltan " + omitidas + " entrada(s)"
+                    : "";
+            status.setText(fs.size() + " files" + aviso + "  |  " + (tLs + tMem + tArbol) + " ms"
                     + " (ls " + tLs + " · mem " + tMem + " · arbol " + tArbol + ")"
                     + "  |  " + mem);
+            if (omitidas > 0 && outputSink != null) {
+                // Y también al panel de salida: la barra de estado se pisa con
+                // la siguiente operación, y esto tiene que quedar escrito.
+                outputSink.accept("[Explorer] ⚠ LISTADO INCOMPLETO: el árbol enseña "
+                        + fs.size() + " entrada(s) y en la placa hay " + omitidas
+                        + " más que no caben en el recorrido (topes del listado plano)."
+                        + " Usa `dir <carpeta>` en la consola para ver esa carpeta entera.");
+            }
         });
     }
 

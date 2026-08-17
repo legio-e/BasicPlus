@@ -436,7 +436,13 @@ static void handle_list(long id, const json_obj_t* obj) {
     ctx.first = 1;
     ctx.t0 = ls_ms();
     fs_list(list_cb, &ctx);
-    wire_v1_send_line("]}", 2);   /* cierra + '\n' */
+    /* #425 - LA COLA DEL LISTADO DICE SI ESTA ENTERO. El recorrido plano tiene
+     * topes y al pasarse recortaba EN SILENCIO: el firmware lo anotaba en su log
+     * pero por aqui salia una lista corta que el IDE pintaba como si fuera todo.
+     * Campo nuevo y opcional: un cliente viejo lo ignora, uno nuevo avisa. */
+    { char cola[40];
+      int cn = snprintf(cola, sizeof(cola), "],\"omitted\":%d}", fs_list_omitidas());
+      wire_v1_send_line(cola, (size_t) cn); }   /* cierra + '\n' */
 
     /* #398/#408 — el desglose, en UNA línea (el log es un bien escaso, #423).
      * `total` es lo que tarda el device; lo que el usuario ve incluye además el

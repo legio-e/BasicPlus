@@ -35,6 +35,14 @@ int  fs_del(const char* name);
 int  fs_count(void);
 int  fs_entry(int i, const char** name, uint32_t* size);
 
+/* #425 — cuantas entradas dejo FUERA el ultimo recorrido. 0 = listado COMPLETO.
+ * Valido inmediatamente despues de fs_count(). Mismo contrato y mismo nombre que
+ * en el Pico y el ESP32 (fs.h de cada uno): las tres familias recorren distinto,
+ * asi que lo uniforme es lo que se REPORTA, no la firma del recorrido.
+ * Por que existe: al pasarse de los topes el listado se recortaba EN SILENCIO y
+ * el IDE lo pintaba como si fuera todo. El wire lo manda en LIST_REPLY. */
+int  fs_list_omitidas(void);
+
 uint32_t fs_total_bytes(void);
 uint32_t fs_used_bytes(void);
 void     fs_format(void);

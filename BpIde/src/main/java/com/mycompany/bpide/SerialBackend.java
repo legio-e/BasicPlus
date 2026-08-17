@@ -53,7 +53,7 @@ public final class SerialBackend extends AbstractBpvmBackend {
         // fileCount lo sacamos del LIST (barato — entries ya van en RAM
         // del firmware).
         int fileCount;
-        try { fileCount = client.listFiles("", TIMEOUT_MS).size(); }
+        try { fileCount = client.listFiles("", TIMEOUT_MS).files.size(); }
         catch (IOException ioe) { fileCount = -1; }
         return "total=" + total + " used=" + used + " free=" + free
                 + " count=" + fileCount;

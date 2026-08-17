@@ -216,7 +216,13 @@ static void handle_list(long id, json_obj_t* obj) {
         stm32_wire_send_bulk((const uint8_t*) ent, (size_t) w);
         first = 0;
     }
-    stm32_wire_send_line("]}", 2);   /* cierra + '\n' */
+    /* #425 - LA COLA DEL LISTADO DICE SI ESTA ENTERO. El recorrido plano tiene
+     * topes y al pasarse recortaba EN SILENCIO: el firmware lo anotaba en su log
+     * pero por aqui salia una lista corta que el IDE pintaba como si fuera todo.
+     * Campo nuevo y opcional: un cliente viejo lo ignora, uno nuevo avisa. */
+    { char cola[40];
+      int cn = snprintf(cola, sizeof(cola), "],\"omitted\":%d}", fs_list_omitidas());
+      stm32_wire_send_line(cola, (size_t) cn); }   /* cierra + '\n' */
 }
 
 static void handle_stat(long id, json_obj_t* obj) {

@@ -116,7 +116,7 @@ typedef struct {
  * descenso a subdirs y las mutaciones pasan FUERA del callback. */
 static void dirlist_cb(const char* name, int is_dir, uint32_t size, void* user) {
     dirlist_t* d = (dirlist_t*) user;
-    if (d->n >= LIST_MAX_ENTRIES) { d->overflow = 1; return; }   /* NO en silencio */
+    if (d->n >= LIST_MAX_ENTRIES) { d->overflow++; return; }   /* NO en silencio (#425: CUENTA) */
     snprintf(d->names[d->n], LIST_NAME_MAX, "%s", name);
     d->isdir[d->n] = (uint8_t) is_dir;
     d->sizes[d->n] = size;
@@ -126,6 +126,13 @@ static void dirlist_cb(const char* name, int is_dir, uint32_t size, void* user) 
 /* snapshot BFS de paths PLANOS (raíz → "Hello.mod"; subdir → "/lib/Core.mod"),
  * como el FS viejo. Lo rellena fs_count(); fs_entry() lo lee (el wire llama
  * fs_count y luego fs_entry en secuencia). */
+/* #425 — las que NO cupieron en el ULTIMO snapshot, para que el wire lo diga
+ * (ver fs_list_omitidas en fs.h). El STM32 tiene TRES topes, no dos: entradas
+ * por directorio, directorios a visitar y ficheros del FS entero — y el tercero
+ * cortaba con un `return` seco. Los tres suman aqui. */
+static int      s_list_omitidas = 0;
+int fs_list_omitidas(void) { return s_list_omitidas; }
+
 static char     s_snap_names[SNAP_MAX_FILES][LIST_NAME_MAX];
 static uint32_t s_snap_sizes[SNAP_MAX_FILES];
 static int      s_snap_n = 0;
@@ -141,6 +148,7 @@ static void rebuild_snapshot(void) {
     static dirlist_t dl;
     int head = 0, tail = 0;
     s_snap_n = 0;
+    s_list_omitidas = 0;   /* #425 */
     snprintf(pending[tail++], LIST_NAME_MAX, "/");
 
     while (head < tail) {
@@ -149,20 +157,25 @@ static void rebuild_snapshot(void) {
         int is_root = (dir[1] == '\0');
         dl.n = 0; dl.overflow = 0;
         if (bpvm_fs_list(dir, dirlist_cb, &dl) != 0) continue;
-        if (dl.overflow)
-            log_printf("fs: LISTADO INCOMPLETO — '%s' tiene mas de %d entradas",
-                       dir, LIST_MAX_ENTRIES);
+        if (dl.overflow) {
+            s_list_omitidas += dl.overflow;   /* #425 */
+            log_printf("fs: LISTADO INCOMPLETO — '%s' tiene mas de %d entradas (%d fuera)",
+                       dir, LIST_MAX_ENTRIES, dl.overflow);
+        }
         for (int i = 0; i < dl.n; i++) {
             if (dl.isdir[i]) {
                 if (tail < LIST_MAX_DIRS)
                     snprintf(pending[tail++], LIST_NAME_MAX, "%s%s%s",
                              dir, is_root ? "" : "/", dl.names[i]);
-                else
+                else {
+                    s_list_omitidas++;   /* #425: un directorio sin recorrer TAMBIEN falta */
                     log_printf("fs: LISTADO INCOMPLETO — mas de %d directorios; "
                                "'%s' sin recorrer", LIST_MAX_DIRS, dl.names[i]);
+                }
                 continue;                        /* los dirs no se emiten (legado plano) */
             }
             if (s_snap_n >= SNAP_MAX_FILES) {
+                s_list_omitidas++;   /* #425: al menos este; el `return` corta el resto */
                 /* EL efecto ventana. Antes era un `return` a secas: el resto del
                  * FS —tipicamente /lib— simplemente no salia, y desde el IDE
                  * parecia que los ficheros no estaban. */

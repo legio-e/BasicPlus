@@ -327,7 +327,11 @@ static void handle_list(long id, const json_obj_t* obj) {
     fprintf(stdout, "%ld,\"entries\":[", id);
     list_ctx_t ctx = { id, 1 };
     fs_list(list_cb, &ctx);
-    fputs("]}\n", stdout);
+    /* #425 - LA COLA DEL LISTADO DICE SI ESTA ENTERO. El recorrido plano tiene
+     * topes y al pasarse recortaba EN SILENCIO: el firmware lo anotaba en su log
+     * pero por aqui salia una lista corta que el IDE pintaba como si fuera todo.
+     * Campo nuevo y opcional: un cliente viejo lo ignora, uno nuevo avisa. */
+    fprintf(stdout, "],\"omitted\":%d}\n", fs_list_omitidas());
     fflush(stdout);
 }
 

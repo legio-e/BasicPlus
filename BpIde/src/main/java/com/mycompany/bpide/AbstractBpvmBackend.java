@@ -90,11 +90,16 @@ public abstract class AbstractBpvmBackend implements Backend {
 
     // ---- FS — idénticos en ambos backends ----
 
+    /** #425 — lo que el device dijo que dejó fuera en el último list(). */
+    private volatile long lastOmitted = 0;
+    @Override public long lastListOmitted() { return lastOmitted; }
+
     @Override public List<Entry> list() throws IOException {
         require();
-        List<BpvmClient.RemoteFile> raw = client.listFiles("", TIMEOUT_MS);
-        List<Entry> out = new ArrayList<>(raw.size());
-        for (BpvmClient.RemoteFile f : raw) {
+        BpvmClient.DirListing lst = client.listFiles("", TIMEOUT_MS);
+        lastOmitted = lst.omitidas;   // #425
+        List<Entry> out = new ArrayList<>(lst.files.size());
+        for (BpvmClient.RemoteFile f : lst.files) {
             out.add(new Entry(f.name, f.size, f.crc, f.isDirectory));   // paso 4 cierre: propaga el CRC del device
         }
         return out;

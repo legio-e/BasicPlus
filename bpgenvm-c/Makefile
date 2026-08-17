@@ -76,7 +76,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke boardsim boardsim-smoke gui-smoke gui-imgdecode
+.PHONY: all clean smoke test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -736,6 +736,13 @@ boardsim-smoke: sim
 sim-smoke: sim
 	@echo "--- H10 sim smoke (FILES + TERMINAL) ---"
 	python tools/sim_smoke.py
+
+# #425 — el listado DECLARA lo que deja fuera. Contra el micro simulado, que
+# tiene el mismo agujero y los mismos topes en pequeño. Trae su CONTROL (por
+# debajo del tope omitted DEBE ser 0), que es lo que lo hace valer.
+test-listtrunc: sim
+	@echo "--- #425: el LIST_REPLY declara lo omitido (esperado: solo 'ok', [status=OK]) ---"
+	python tools/list_trunc_smoke.py
 
 test-oom: $(BIN)
 	$(call fixture,OomCatch)

@@ -240,9 +240,14 @@ typedef struct {
     int      overflow;   /* 1 si este directorio tiene MÁS de los que caben */
 } dir_snapshot_t;
 
+/* #425 — las que NO cupieron en el ÚLTIMO recorrido, para que el wire lo diga
+ * (ver fs_list_omitidas en fs.h). Se pone a cero al empezar fs_list. */
+static int s_list_omitidas = 0;
+int fs_list_omitidas(void) { return s_list_omitidas; }
+
 static void snap_cb(const char* name, int is_dir, uint32_t size, void* user) {
     dir_snapshot_t* s = (dir_snapshot_t*) user;
-    if (s->n >= LIST_MAX_ENTRIES) { s->overflow = 1; return; }   /* NO en silencio */
+    if (s->n >= LIST_MAX_ENTRIES) { s->overflow++; s_list_omitidas++; return; }   /* NO en silencio */
     snprintf(s->names[s->n], LIST_NAME_MAX, "%s", name);
     s->sizes[s->n] = size;
     s->isdir[s->n] = (uint8_t) is_dir;
@@ -250,6 +255,7 @@ static void snap_cb(const char* name, int is_dir, uint32_t size, void* user) {
 }
 
 int fs_list(fs_list_cb_t cb, void* user) {
+    s_list_omitidas = 0;   /* #425 */
     static char pending[LIST_MAX_DIRS][LIST_NAME_MAX];
     static dir_snapshot_t snap;
     int head = 0, tail = 0;
@@ -264,8 +270,8 @@ int fs_list(fs_list_cb_t cb, void* user) {
         snap.n = 0; snap.overflow = 0;
         if (bpvm_fs_list(dir, snap_cb, &snap) != 0) continue;
         if (snap.overflow) {
-            log_printf("fs: LISTADO INCOMPLETO — '%s' tiene mas de %d entradas",
-                       dir, LIST_MAX_ENTRIES);
+            log_printf("fs: LISTADO INCOMPLETO — '%s' tiene mas de %d entradas (%d fuera)",
+                       dir, LIST_MAX_ENTRIES, snap.overflow);
             log_flush();
         }
         for (int i = 0; i < snap.n; i++) {
@@ -277,6 +283,7 @@ int fs_list(fs_list_cb_t cb, void* user) {
                              dir, is_root ? "" : "/", snap.names[i]);
                     tail++;
                 } else {
+                    s_list_omitidas++;   /* #425: un directorio sin recorrer TAMBIEN falta */
                     log_printf("fs: LISTADO INCOMPLETO — mas de %d directorios; "
                                "'%s' sin recorrer", LIST_MAX_DIRS, snap.names[i]);
                     log_flush();

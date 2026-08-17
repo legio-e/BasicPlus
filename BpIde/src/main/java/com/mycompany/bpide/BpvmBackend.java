@@ -74,7 +74,7 @@ public final class BpvmBackend extends AbstractBpvmBackend {
         // — mismo formato que SerialBackend para que la UI muestre algo
         // uniforme en la status bar.
         require();
-        List<BpvmClient.RemoteFile> files = client.listFiles("", TIMEOUT_MS);
+        List<BpvmClient.RemoteFile> files = client.listFiles("", TIMEOUT_MS).files;
         long usedBytes = 0;
         for (BpvmClient.RemoteFile f : files) usedBytes += f.size;
         return "files=" + files.size() + " usedBytes=" + usedBytes;

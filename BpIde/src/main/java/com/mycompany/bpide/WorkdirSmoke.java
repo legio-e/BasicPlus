@@ -69,7 +69,7 @@ public final class WorkdirSmoke {
             System.out.println("UPLOAD " + remoteName + " (" + size + " bytes)");
 
             // 5) Confirmar via listFiles.
-            List<BpvmClient.RemoteFile> files = vm.listFiles("", 5000);
+            List<BpvmClient.RemoteFile> files = vm.listFiles("", 5000).files;
             System.out.println("LISTED " + files.size() + " files:");
             for (BpvmClient.RemoteFile f : files) System.out.println("  " + f);
 

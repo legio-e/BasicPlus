@@ -73,6 +73,20 @@ fs_status_t fs_save_to_flash(void);
 typedef int (*fs_list_cb_t)(const char* name, uint32_t size, void* user);
 int fs_list(fs_list_cb_t cb, void* user);
 
+/* #425 — cuantas entradas dejo FUERA el ultimo recorrido de fs_list. 0 = el
+ * listado es COMPLETO. Valido inmediatamente despues de la llamada.
+ *
+ * Por que existe: el recorrido plano tiene topes (entradas por directorio y
+ * directorios a visitar) y al pasarse recortaba EN SILENCIO — el firmware lo
+ * anotaba en su log, pero por el wire salia una lista corta que el IDE pintaba
+ * como si fuera todo. Un listado corto que no se declara corto es una mentira,
+ * y de las que se creen. El wire lo manda ahora en LIST_REPLY.
+ *
+ * Es un accesor y no un parametro de salida porque las tres familias recorren
+ * de formas distintas (callback aqui y en el ESP32, snapshot en el STM32): lo
+ * que puede ser UNIFORME es el contrato de lo que se reporta, no la firma. */
+int fs_list_omitidas(void);
+
 /* H11 — `fs_get` RETIRADO. Devolvía un puntero "válido hasta el siguiente
  * fs_put/fs_delete", y ese contrato exigía tener el fichero ENTERO en RAM: un
  * scratch estático de 128 KB. Lo que de verdad hacía falta era cargar un

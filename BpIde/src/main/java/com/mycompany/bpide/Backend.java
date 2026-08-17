@@ -66,6 +66,16 @@ public interface Backend extends AutoCloseable {
     // ---- Operaciones de FS ----
 
     List<Entry> list() throws IOException;
+
+    /** #425 — cuántas entradas dejó FUERA el último {@link #list()}. 0 = el
+     *  listado está completo, o este backend no lo sabe (firmware anterior).
+     *
+     *  <p>Existe porque el recorrido plano del device tiene topes y al pasarse
+     *  recortaba EN SILENCIO: el árbol enseñaba menos ficheros de los que hay y
+     *  eso se lee como «no hay más». Un listado corto que no se declara corto es
+     *  una mentira, y de las que se creen. Método `default` para que un backend
+     *  que no lo sepa no tenga que fingir que sí. */
+    default long lastListOmitted() { return 0; }
     byte[] get(String path) throws IOException;
     void   put(String path, byte[] data) throws IOException;
     void   del(String path) throws IOException;

@@ -319,7 +319,7 @@ static void ensure_parent_dirs(const char* path) {
 #define WALK_MAX_DIRS     64
 #define WALK_MAX_ENTRIES 512
 
-typedef struct { uint32_t used; int count; int truncated; } fs_tally_t;
+typedef struct { uint32_t used; int count; int truncated; } fs_tally_t;   /* #425: truncated CUENTA, no es bandera */
 static fs_tally_t g_tally;
 
 typedef struct { char path[PATH_MAX_SIM]; uint32_t size; } fs_ent_t;
@@ -338,7 +338,7 @@ static void collect_cb(const char* name, int is_dir, uint32_t size, void* user) 
 
     if (is_dir) {
         if (g_n_dirs < WALK_MAX_DIRS) snprintf(g_dirs[g_n_dirs++], PATH_MAX_SIM, "%s", full);
-        else g_tally.truncated = 1;
+        else g_tally.truncated++;   /* #425 */
         return;
     }
     if (g_n_ents < WALK_MAX_ENTRIES) {
@@ -346,7 +346,7 @@ static void collect_cb(const char* name, int is_dir, uint32_t size, void* user) 
         g_ents[g_n_ents].size = size;
         g_n_ents++;
     } else {
-        g_tally.truncated = 1;
+        g_tally.truncated++;   /* #425 */
     }
 }
 
@@ -448,7 +448,11 @@ static void handle_list(sock_t c, long id) {
     sb_raw(&s, "{\"type\":\"LIST_REPLY\",\"id\":"); sb_long(&s, id);
     sb_raw(&s, ",\"entries\":[");
     fs_walk(&s);
-    sb_raw(&s, "]}");
+    /* #425 — LA COLA DEL LISTADO DICE SI ESTA ENTERO. El simulador ya sabia que
+     * habia truncado (lo imprimia en SU consola) pero por el wire salia una
+     * lista corta que el IDE pintaba como si fuera todo — el mismo agujero que
+     * tenian las tres familias. */
+    sb_raw(&s, "],\"omitted\":"); sb_long(&s, (long) g_tally.truncated); sb_raw(&s, "}");
     if (s.ok) send_line(c, s.buf);
     else      send_err(c, id, "INTERNAL_ERROR", "LIST_REPLY no cabe");
 }

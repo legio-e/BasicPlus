@@ -807,13 +807,23 @@ public final class BpvmClient implements AutoCloseable {
         }
     }
 
-    /** Lista los ficheros bajo `remotePath` ("" o "." = raíz del workdir). */
-    public List<RemoteFile> listFiles(String remotePath, long timeoutMs) throws IOException {
+    /** Lista los ficheros bajo `remotePath` ("" o "." = raíz del workdir).
+     *
+     * <p>#425 — devuelve {@link DirListing} y no una lista pelada porque el
+     * recorrido plano del device tiene topes (entradas por directorio,
+     * directorios a visitar y —en el STM32— ficheros del FS entero) y al
+     * pasarse recortaba <b>en silencio</b>: el firmware lo anotaba en su log
+     * pero por el wire salía una lista corta que el árbol pintaba como si fuera
+     * todo. Un listado corto que no se declara corto es una mentira, y de las
+     * que se creen. Ahora el device manda `omitted` y esto lo pasa arriba —
+     * mismo par (files, omitidas) que ya usaba {@link #listDir}, que es de donde
+     * sale la forma. */
+    public DirListing listFiles(String remotePath, long timeoutMs) throws IOException {
         String extra = "\"path\":" + jsonStr(remotePath == null ? "" : remotePath);
         Map<String, Object> resp = sendRequest("LIST", extra, null, timeoutMs);
         List<Object> arr = Json.getList(resp, "entries");
         List<RemoteFile> out = new ArrayList<>();
-        if (arr == null) return out;
+        if (arr == null) return new DirListing(out, Json.getLong(resp, "omitted", 0));
         for (Object o : arr) {
             if (!(o instanceof Map)) continue;
             @SuppressWarnings("unchecked")
@@ -824,7 +834,10 @@ public final class BpvmClient implements AutoCloseable {
                     Json.getLong(m, "crc", -1),   // paso 4 cierre: -1 = firmware sin crc → fallback
                     Json.getBool(m, "isDir", false)));
         }
-        return out;
+        /* Firmware anterior a #425: sin campo → 0 = "no me consta que falte
+         * nada". No es lo mismo que "está completo", pero es lo único honesto
+         * que se puede decir de un device que no lo cuenta. */
+        return new DirListing(out, Json.getLong(resp, "omitted", 0));
     }
 
     /**
