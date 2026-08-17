@@ -1295,6 +1295,10 @@ static void vm_task(void* arg) {
         { "/lib/Adc.mod",      adc_mod,      &adc_mod_len      },
         { "/lib/Wdt.mod",      wdt_mod,      &wdt_mod_len      },
         { "/lib/Timer.mod",    timer_mod,    &timer_mod_len    },
+        /* #415 — la stdlib BASE, igual en las tres familias. Iban ya en el
+         * ESP32 y el STM32 y aqui faltaban. */
+        { "/lib/Math.mod",     math_mod,     &math_mod_len     },
+        { "/lib/IO.mod",       io_mod,       &io_mod_len       },
         { "/lib/Neopixel.mod", neopixel_mod, &neopixel_mod_len },
         /* Los drivers de dispositivo (PCA9554, BME280, SSD1306...) NO se
          * pre-instalan: los sube el IDE como deps al hacer Run. */

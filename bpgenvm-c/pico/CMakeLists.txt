@@ -160,6 +160,8 @@ add_executable(bpvm_pico
     adc_mod.c       # stdlib core pre-instalada (ADC del MCU)
     wdt_mod.c       # stdlib core pre-instalada (watchdog)
     timer_mod.c     # stdlib core pre-instalada (Timer.Alarm BP-puro)
+    math_mod.c      # #415: stdlib base, igual en las 3 familias
+    io_mod.c        # #415: idem
     neopixel_mod.c  # H7.4: stdlib Neopixel.Strip (WS2812 vía PIO)
     # NOTA: drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO
     # se embeben aquí — viajan con la app del usuario al hacer upload

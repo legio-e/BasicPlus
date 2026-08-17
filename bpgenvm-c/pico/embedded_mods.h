@@ -15,6 +15,16 @@ extern "C" {
 extern const uint8_t       hello_mod[];
 extern const unsigned int  hello_mod_len;
 
+/* #415 — Math e IO. La Metro se habia quedado sin ellos mientras el ESP32 y el
+ * STM32 si los llevaban, asi que el mismo `import Math` funcionaba en una placa
+ * y fallaba en otra hasta subir el modulo a mano — con la portabilidad como
+ * promesa del lenguaje, eso es un agujero. La stdlib BASE tiene que ser la
+ * MISMA en las tres familias (Eduardo, 18-ago). */
+extern const uint8_t       math_mod[];
+extern const unsigned int  math_mod_len;
+extern const uint8_t       io_mod[];
+extern const unsigned int  io_mod_len;
+
 /* Stdlib pre-instalada (Gpio, Math, IO en su día) — se carga al FS al
  * boot si no está ya persistida. Permite que `import Gpio` en un .bp
  * compilado e instalado a la Pico resuelva sin uploads manuales. */
