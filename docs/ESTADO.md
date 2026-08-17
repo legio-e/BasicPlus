@@ -61,13 +61,18 @@ confundir el H9 de V5 con el H9 de V4, que era el kernel por capas.)*
   referencia pero no desciende de `Object`); las dos VMs *pueden* detectarlo,
   porque el tag del handle y el tipo del bloque distinguen array de objeto.
   Diseño de fondo en `docs/OBJECT_COMODIN.md`.
-- **La clase contenedora (`Box`) sigue SIN escribir.** Es la otra mitad del reparto
-  de Eduardo —**envolver = librería** (una clase aparte con `set` sobrecargado,
-  posible desde que #387 arregló la sobrecarga cross-module); **desenvolver con
-  seguridad = lenguaje**—. Sin ella, meter un escalar en un `Object` obliga a
-  escribir `Integer(5)` a mano. Decisiones abiertas: el nombre, si distingue
-  «vacío» de `null`, y cómo se saca un escalar (BP no sobrecarga por retorno, así
-  que o N getters con nombre o `get(porDefecto: integer)`).
+- **La clase contenedora (`Box`) sigue SIN escribir — ficha `#438`.** ⚠️ Es de
+  **LENGUAJE, no del IDE** (Eduardo, 18-ago): estuvo agrupada por error con el
+  bloque H10. Es la otra mitad del reparto que él hizo —**envolver = librería**
+  (una clase aparte con `set` sobrecargado, posible desde que #387 arregló la
+  sobrecarga cross-module); **desenvolver con seguridad = lenguaje**, que ya está
+  hecho (es el `CHECKCAST` de #389)—. Sin ella, meter un escalar en un `Object`
+  obliga a escribir `Integer(5)` a mano. Decisiones abiertas: el nombre, si
+  distingue «vacío» de `null`, y cómo se saca un escalar (BP no sobrecarga por
+  retorno, así que o N getters con nombre o `get(porDefecto: integer)`) — la
+  MISMA asimetría que salió al diseñar `File`/`TextFile`, y conviene resolverla
+  igual en los dos sitios. Va enlazada con lo de abajo (`List` → `Object`): son
+  la misma conversación.
 - **`List` / `SyncList` / `OwnerList` siguen con firmas `any`.** Eduardo pidió
   pasarlas a `Object` (`SemanticAnalyzer`, 15 apariciones de `AnyType.INSTANCE`
   escritas a mano). `Map` ya está en `Object` y no se toca. ⚠️ El día que se haga,
@@ -292,9 +297,13 @@ sube a la carpeta seleccionada del árbol; sin selección, `/app` como siempre.
 detectar su compilador rancio) · `#412` (`run` con argumento) · `GAP-4`
 (primero REPRODUCIR la divergencia, luego decidir).
 
-**C — LO SIGUIENTE: H10 entero, hasta terminarlo** (Eduardo, 17-ago). Deja de
-estar suspendido. Lo que había —`#425`, `#394`, `#395`, `IDE-7` y la clase
-`Box`— **más los tres cambios que trajo Eduardo esa noche**, ya fichados con su
+**C — H10, el bloque del IDE.** ⚠️ **La clase `Box` NO va aquí** (Eduardo,
+18-ago): no es del IDE, es lenguaje — hermana de `#389` y del comodín `Object`.
+Sale del grupo y pasa a `#438`, en «Lenguaje y VM», enlazada con el encargo de
+`List`/`SyncList`/`OwnerList` de `any` a `Object`, que es la misma conversación.
+
+Lo que había —`#425`, `#394`, `#395`, `IDE-7`— **más los tres cambios que trajo
+Eduardo esa noche**, ya fichados con su
 detalle en `notas/FICHAS.md`:
 
 - `#435` **la ventana de la placa, reordenada**: el env sale a diálogo propio, y
