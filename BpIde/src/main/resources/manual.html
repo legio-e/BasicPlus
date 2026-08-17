@@ -392,6 +392,21 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   signo según el tipo). Asignar un literal fuera de rango es error de
   compilación con el rango exacto en el mensaje.
 </p>
+<p>
+  <strong>Una salvedad de <code>double</code> en el RP2350</strong> (Pico 2,
+  Metro): los valores <em>subnormales</em> —los que están por debajo de
+  <code>2.2250738585072014e-308</code>— se aplastan a <code>0</code>. Todo lo
+  que esté por encima de esa frontera es exacto, y byte-idéntico al PC, al
+  ESP32-P4 y al STM32. El motivo es que el SDK de esa placa usa unas rutinas de
+  coma flotante optimizadas que descartan los subnormales a cambio de velocidad
+  (medido: recuperarlos costaría un 24 % de tiempo en toda la aritmética de
+  <code>double</code>).
+  En la práctica no afecta a nada: <code>double</code> se usa para medidas que
+  piden precisión, y la instrumentación se mueve en 6 u 8 dígitos
+  significativos, no en potencias de diez negativas de tres cifras. Lo único que
+  conviene saber es que un cálculo que <em>desborde por abajo</em> dará
+  <code>0</code> en esa placa y un número diminuto en las demás.
+</p>
 <h4>4.1.1 Promoción y casts</h4>
 <p>
   En operaciones mixtas y asignación hay <strong>promoción automática al tipo
