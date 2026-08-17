@@ -532,6 +532,9 @@ public class FrmMain extends javax.swing.JFrame
         JMenuItem miBoard = new JMenuItem("Gestión de placa…");
         miBoard.addActionListener(e -> openBoardManager());
         jMenu3.add(miBoard);
+        JMenuItem miEnv = new JMenuItem("Variables de entorno…");
+        miEnv.addActionListener(e -> openEnvDialog());
+        jMenu3.add(miEnv);
 
         jMenu3.addSeparator();
         JMenuItem miClear = new JMenuItem("Clear console");
@@ -583,7 +586,8 @@ public class FrmMain extends javax.swing.JFrame
                   toolButton("Run",           "Ejecutar (VM local)", e -> doRun(true)),
                   toolButton("Run Window",    "Ver la ventana en el PC (VM-C nativa)", e -> doRunWindow()),
                   toolButton("Run on Device", "Ejecutar en placa",   e -> doRunOnPico()),
-                  toolButton("Placa",         "Gestión de placa (entorno + particiones)", e -> openBoardManager()),
+                  toolButton("Placa",         "Gestión de placa (particiones + packs)", e -> openBoardManager()),
+                  toolButton("Entorno",       "Variables de entorno de la placa", e -> openEnvDialog()),
                   toolButton("Debug",         "Depurar",             e -> doDebug()),
                   toolButton("Stop",          "Parar (Ctrl+F2)",     e -> onStopRun()));
 
@@ -3275,6 +3279,34 @@ public class FrmMain extends javax.swing.JFrame
      * el boardsim de host). Si no hay conexión, avisa. El log de FrmBoard va a la
      * consola del IDE.
      */
+    /** #435 — el ENTORNO, desde la ventana PRINCIPAL. Eduardo (18-ago): lo
+     *  quiere aquí «para no tener que pasar por la ventana de gestión de
+     *  placas» — es lo que más se toca (`log`, `psram`, `sd`, `display`) y
+     *  hacerlo colgar de otra ventana lo dejaba a dos saltos.
+     *
+     *  <p>Abre el MISMO diálogo que el botón de FrmBoard: uno solo, sin copia. */
+    private EnvDialog envDialogPrincipal;
+
+    private void openEnvDialog() {
+        BpvmClient client = picoExplorer != null ? picoExplorer.debugClient() : null;
+        if (client == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Conéctate primero a la placa (o al simulador) desde el explorador de dispositivo.",
+                    "Variables de entorno", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (envDialogPrincipal != null && envDialogPrincipal.isDisplayable()) {
+            envDialogPrincipal.toFront();
+            envDialogPrincipal.requestFocus();
+            envDialogPrincipal.refresh();
+            return;
+        }
+        envDialogPrincipal = new EnvDialog(this, client, s -> appendConsola(s + "\n"), () -> { });
+        envDialogPrincipal.setVisible(true);
+        envDialogPrincipal.toFront();
+        envDialogPrincipal.requestFocus();
+    }
+
     private void openBoardManager() {
         BpvmClient client = picoExplorer != null ? picoExplorer.debugClient() : null;
         if (client == null) {
