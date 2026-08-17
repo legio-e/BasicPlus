@@ -239,102 +239,45 @@ la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
 > dentro, el log se llena en ~26 colectas (**`#423`**), así que puede que la
 > primera imagen nueva salga ya con `[LOG OVERFLOW]` al pie.
 
-## 🎯 EL PLAN DE CIERRE DE V5 — la lista queda en 18 (17-ago, noche)
+## 🎯 EL PLAN DE CIERRE DE V5 — quedan 12 (18-ago)
 
-La lista de pendientes se revisa EXCLUYENDO V6 (18 fichas movidas a su sección
-de FICHAS.md). Lo que queda, por grupos y en orden:
+**A — LA SESIÓN DE PLACA: ✅ CERRADA** (17-ago). Ocho fichas verificadas o
+resueltas en placa; detalle en «Última sesión».
 
-**A — LA SESIÓN DE PLACA.** 🟢 **En marcha, la Metro ya casi entera** (17-ago;
-el guión vivo, con lo que tiene que salir en cada paso, en `notas/SESION_PLACA_A.md`):
+**C — H10, EL BLOQUE DEL IDE: ✅ CERRADO** (18-ago). Las siete:
 
-- ✅ `#389` **CastRt** — las 9 líneas byte a byte con el host, incluidas las 3
-  rutas de error del CHECKCAST nuevo y el guard del despacho.
-- ✅ `#381`/`#428` **LongNat** — `MDN: 8/8 thunks registrados`: el `.mdn` del
-  pipeline **enlazado** (`mdn.ld`) corre en placa, tabla idéntica al host.
-- 🔥 `#430` **el cuelgue de la Metro, cazado y arreglado** — no era el nativo ni
-  el GC: era la **tabla de handles** creciendo hasta pedir 512 KB de SRAM sin
-  que nadie colectara. Ficha entera (con cómo se acotó) en FICHAS.md. En placa:
-  `AotGcRt2` llega a `fin` con `malos : 0`, antes moría al 1000.
-- ✅ `#302` paso 3 **VERIFICADO EN PLACA** — `AotGcRt` en su forma `native` con
-  el `.mdn` cargado: 10.000 vueltas, ~20 colectas, 7 de cada 12 reservas dentro
-  de la native, y **cero** desviaciones. El escaneo conservador de la pila C
-  protege en ARM.
+| ficha | qué |
+|---|---|
+| `#425` | el listado **declara lo que deja fuera** — el árbol dejó de mentir |
+| `#437` | la consola llega donde el árbol: `copy`, `get`, `logclr` |
+| `#435` | ventana reordenada, entorno a diálogo propio **y en la principal** |
+| `#436` | editar el `.bpbuild` (salida, sources, familias, pack) |
+| `#394` | subir **eligiendo destino**: ahora se ve y se puede editar |
+| `IDE-7` | selección múltiple: borrar y subir en lote, con UN refresco |
+| `#395` | botón `DAO build`, habilitado sólo con proyecto abierto |
 
-- ✅ `#422` **el chivato del `/lib`, por sus DOS caminos** — módulo ausente: se
-  repone en silencio (`preinstall: /lib/Core.mod`); módulo rancio: canta con sus
-  bytes (`/lib/Gpio.mod NO es el de esta imagen (3152 B en FS, 4068 embebido)`).
-  Distinguir las dos situaciones es el diseño: reponer es normal, no anomalía.
-- ✅ `#418` **`/sys` resuelve** — con la única copia de la dep en `/sys` y Run
-  desde el árbol (sin recompilar, que volvería a subirla a `/app`), el programa
-  imprime lo mismo. `/sys` va el ÚLTIMO: rescata sin tapar a nadie.
-
-- ✅ `#424` **los eventos del GUI del P4: medidos y mejorados** — 50 → 100 Hz de
-  lazo (`f96c957`), *«se nota más ágil»*. La ficha culpaba al tope de 50 ms y la
-  medida dijo que **no dispara nunca**: el lazo no estaba ocupado (0,4 ms de
-  trabajo por vuelta), **dormía** lo que LVGL le pedía. Queda un factor ~1,5
-  contra el STM32 que se va a V6 como `#434` (desacoplar los eventos del lazo,
-  idea de Eduardo). El instrumento se queda en el firmware, gated por `log=1`.
-- ✅ `#433` **el log común truncaba por el final y en silencio** — lo destapó lo
-  anterior («no registra nada»). La Pico llevaba anillo desde #326 y el común se
-  quedó atrás: P4, S3 y STM32 lo arrastraban. Portado.
-
-**LA SESIÓN DE PLACA (grupo A) QUEDA CERRADA.** Ocho fichas verificadas o
-resueltas en placa en una tarde. El guión, con lo que salió en cada paso, en
-`notas/SESION_PLACA_A.md`.
-
-Queda suelto del P4, sin urgencia: **las líneas base a `-Os`** (arranque, árbol,
-SD) no se anotaron formalmente — pero de la corrida de `#424` se leen: arranque
-a `REPL entry` **531 ms**, refresco del árbol **184-196 ms** con 33 entradas
-(app+lib+SD), montaje de la SD **~90 ms**. Sirven de referencia mientras no se
-tomen a propósito.
-
-Herramienta arreglada por el camino: el **Upload del Explorer** subía SIEMPRE a
-`/app` (hardcodeado) — sin eso, `#422` y `#418` eran imposibles de probar. Ahora
-sube a la carpeta seleccionada del árbol; sin selección, `/app` como siempre.
+Herramientas que dejó el bloque, y que se quedan: **`FrmBoardShot`** pinta una
+ventana o un diálogo del IDE a un PNG sin display ni placa (cazó un botón puesto
+sobre un `GridLayout(1,1)` que compilaba y rompía el layout), **`EnvDialogShot`**
+abre un diálogo contra el micro simulado y lo fotografía —contesta en un minuto
+a «¿está roto o es que no se ve?»—, y **`make test-listtrunc`**, que fuerza el
+truncado del listado contra el simulador con su control en verde.
 
 **B — De escritorio, caso a caso**: `List`/`SyncList`/`OwnerList` de `any` a
-`Object` (encargo de Eduardo; ojo a `AnyNumGc.bp`) · `#429` (el IDE debe
-detectar su compilador rancio) · `#412` (`run` con argumento) · `GAP-4`
-(primero REPRODUCIR la divergencia, luego decidir).
+`Object` (encargo de Eduardo, hermano de `#438`) · `#429` (el IDE debe detectar
+su compilador rancio) · `#412` (`run` con argumento) · `#431` (miVM busca las
+deps en el CWD) · `GAP-4` (primero REPRODUCIR la divergencia).
 
-**C — H10, el bloque del IDE.** ⚠️ **La clase `Box` NO va aquí** (Eduardo,
-18-ago): no es del IDE, es lenguaje — hermana de `#389` y del comodín `Object`.
-Sale del grupo y pasa a `#438`, en «Lenguaje y VM», enlazada con el encargo de
-`List`/`SyncList`/`OwnerList` de `any` a `Object`, que es la misma conversación.
+**Lenguaje**: `#438` la clase `Box` — **no es del IDE**; va con el `List` →
+`Object`, que es la misma conversación.
 
-Lo que había —`#425`, `#394`, `#395`, `IDE-7`— **más los tres cambios que trajo
-Eduardo esa noche**, ya fichados con su
-detalle en `notas/FICHAS.md`:
+**Placa cuando toque**: `#379`, `#408`, `#415`.
 
-- `#435` **la ventana de la placa, reordenada**: el env sale a diálogo propio, y
-  en su hueco entra un panel de carpetas (por defecto la de packs, navegable)
-  desde el que añadir un pack con un botón en vez del `JFileChooser`.
-- `#436` **editar el `.bpbuild` desde el IDE**, «como el pom de Maven»: tipo de
-  salida, ficheros incluidos, familias nativas. Lo difícil ya está —
-  `BpBuild.save()` conserva lo que no se edita— y hoy la edición vive repartida
-  en tres diálogos.
-- `#437` **la consola no llega a donde llega el árbol**: censado, le faltan
-  `copy` (PUT), `get` y vaciar el log; y al revés, `new`/`autorun`/`sd` sólo
-  están en consola.
+**Cierre de versión** (van con el push): borrar las cinco carpetas de `notas/`,
+los restos del árbol, y `FICHAS.md` deja de ser material en curso.
 
-⚠️ **`#435`, `#394` y `#437` tocan el MISMO gesto desde tres superficies** (panel
-de carpetas, Upload con destino, `copy` de consola). Hacerlas juntas y con un
-único código de resolver rutas; si no, es el patrón de «el arreglo que no viaja»
-pero dentro del IDE. Y ojo: `#394` puede haberse quedado sin contenido propio,
-porque el Upload ya respeta la carpeta del árbol desde el 17-ago.
-
-**D — V6**: además de las fichas movidas, hay ahora un **`notas/V6_IDEAS.md`**
-con las charlas de diseño de la noche del 17-ago — la clase `File`/`TextFile`
-(decidida: binaria la base, UTF-8 la hija, y la hija AÑADE sobrecargas en vez de
-redefinir), la fusión del `.mdn` dentro del `.mod` con un bloque nativo por
-familia, y el `double` en funciones `native` por helpers. Todo lo movido (fichas: HAL de capacidades, features de lenguaje
-no encargadas, unificaciones del censo, Linux…) vive en la sección «Aplazadas a
-V6» de FICHAS.md y NO cuenta como pendiente de V5.
-
-Fuera de grupos quedan las de placa sin urgencia (`#379`, `#408`, `#415`,
-`H2-P5`, Q1, media flash del P4) — se pescan cuando la placa esté delante — y
-las 3 tareas de cierre (borrar `notas/`, restos, subir FICHAS), que van con el
-push.
+**D — V6**: fichas aplazadas + `notas/V6_IDEAS.md` (la clase `File`/`TextFile`,
+fundir el `.mdn` en el `.mod` con un bloque por familia, `double` en `native`).
 
 ## Próximos pasos
 
