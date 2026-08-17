@@ -285,7 +285,9 @@ Queda de B lo que tiene conversación previa: **`List`/`SyncList`/`OwnerList` de
 **Lenguaje**: `#438` la clase `Box` — **no es del IDE**; va con el `List` →
 `Object`, que es la misma conversación.
 
-**Placa cuando toque**: `#379`, `#408`, `#415`.
+**Placa cuando toque**: `#379`, `#408` — y `SciPar`, la pata de placa de
+`GAP-4`. (`#415` ✅ **verificada en la Metro el 18-ago**: `/lib` de 14 a 16
+módulos, `Math` e `IO` con su tamaño correcto.)
 
 **Cierre de versión** (van con el push): borrar las cinco carpetas de `notas/`,
 los restos del árbol, y `FICHAS.md` deja de ser material en curso.
