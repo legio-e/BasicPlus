@@ -129,7 +129,10 @@ public final class BoardMgrPanel extends JPanel {
         partSouth.add(partBtns, BorderLayout.SOUTH);
         partPanel.add(partSouth, BorderLayout.SOUTH);
 
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, partPanel, carpetaPanel);
+        /* El orden importa y lo fijó Eduardo (18-ago): la CARPETA arriba —donde
+         * estaba el entorno, que es el hueco que vino a ocupar— y las
+         * particiones debajo. */
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, carpetaPanel, partPanel);
         split.setResizeWeight(0.55);
         add(split, BorderLayout.CENTER);
     }

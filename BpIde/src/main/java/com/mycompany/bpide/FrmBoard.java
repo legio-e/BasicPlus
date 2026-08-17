@@ -74,6 +74,11 @@ public class FrmBoard extends javax.swing.JFrame {
         envDialog = new EnvDialog(this, clienteActual, logSink,
                 () -> { if (boardPanel != null) boardPanel.refresh(); });
         envDialog.setVisible(true);
+        /* Al frente Y con el foco. Es modeless: sin esto puede quedarse DETRAS
+         * de la ventana de placa —basta con volver a pinchar en ella— y desde
+         * fuera eso se lee como "el botón no hace nada". */
+        envDialog.toFront();
+        envDialog.requestFocus();
     }
 
     /**
