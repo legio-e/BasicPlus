@@ -74,6 +74,16 @@ public final class BpBuild {
      */
     public List<String> sources = new ArrayList<>();
 
+    /** #436 — las rutas de `sources` TAL COMO ESTÁN ESCRITAS en el `.bpbuild`.
+     *
+     *  <p>`sources` (arriba) las guarda ya resueltas a absolutas, que es lo que
+     *  necesita el build. Pero al GUARDAR desde el IDE hay que devolver al
+     *  fichero lo que había: escribir las absolutas convertiría un
+     *  `"./SQLite.bp"` en `"C:/lenguajes/pm/bpstdlib/sqlite/SQLite.bp"` y el
+     *  proyecto dejaría de funcionar en otra máquina — sin dar ningún error,
+     *  que es lo peor. Se mantienen las dos listas en el mismo orden. */
+    public List<String> sourcesDeclarados = new ArrayList<>();
+
     /** AOT (H12): si true, al subir al device el IDE compila las funciones
      *  `function native` del proyecto a un `.mdn` nativo y lo sube junto al
      *  `.mod`. Si false (default), todo se interpreta — el .mod es suficiente. */
@@ -271,7 +281,10 @@ public final class BpBuild {
                 if (!Files.isRegularFile(p))
                     throw new IOException(file + ": 'sources' apunta a '" + e
                         + "' y ahí no hay ningún fichero (" + p + ")");
-                if (!b.sources.contains(p.toString())) b.sources.add(p.toString());
+                if (!b.sources.contains(p.toString())) {
+                    b.sources.add(p.toString());
+                    b.sourcesDeclarados.add((String) e);   /* #436: lo ESCRITO */
+                }
             }
             if (b.sources.isEmpty())
                 throw new IOException(file + ": 'sources' está vacía. Quítala (y se"
@@ -476,6 +489,29 @@ public final class BpBuild {
             m.put("aot", aot);
         } else {
             m.remove("aot");
+        }
+        /* #436 — `sources` y el bloque `pack`, para que el IDE pueda editarlos.
+         * Mismo criterio que arriba: sólo se escribe lo que TIENE valor, para no
+         * ensuciar el fichero con claves vacías que antes no estaban. */
+        if (sourcesDeclarados != null && !sourcesDeclarados.isEmpty())
+            m.put("sources", new ArrayList<>(sourcesDeclarados));
+        Map<String, Object> pk = new LinkedHashMap<>();
+        if (packNameDeclarado && packName != null && !packName.isEmpty()) pk.put("name", packName);
+        if (packVersion  != null && !packVersion.isEmpty())  pk.put("version",  packVersion);
+        if (packProvides != null && !packProvides.isEmpty()) pk.put("provides", packProvides);
+        if (packNotas    != null && !packNotas.isEmpty())    pk.put("notas",    packNotas);
+        if (!pk.isEmpty()) {
+            /* Se CONSERVA lo que hubiera dentro de `pack` y no gestionemos aquí:
+             * el mismo criterio que el mapa crudo — el IDE no debe llevarse por
+             * delante lo que no entiende. */
+            Object antes = m.get("pack");
+            if (antes instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> viejo = new LinkedHashMap<>((Map<String, Object>) antes);
+                viejo.putAll(pk);
+                pk = viejo;
+            }
+            m.put("pack", pk);
         }
         StringBuilder sb = new StringBuilder();
         writeJson(m, sb, 0);

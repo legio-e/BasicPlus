@@ -38,8 +38,17 @@ public final class FrmBoardShot {
 
         SwingUtilities.invokeAndWait(() -> {
             try {
-                FrmBoard f = new FrmBoard();
-                f.setSize(1100, 620);
+                /* #436 — la misma foto sirve para el diálogo del proyecto:
+                 * `-Dexec.args="salida.png proyecto <ruta.bpbuild>"`. */
+                java.awt.Window f;
+                if (args.length >= 3 && "proyecto".equals(args[1])) {
+                    java.nio.file.Path pf = java.nio.file.Paths.get(args[2]);
+                    f = new ProjectDialog(null, pf,
+                            basicplus.frontend.BpBuild.load(pf), s -> { });
+                } else {
+                    f = new FrmBoard();
+                }
+                f.setSize(f instanceof FrmBoard ? 1100 : 760, f instanceof FrmBoard ? 620 : 640);
                 // pack() no: queremos el tamaño real de uso, que es donde se ve
                 // si algo se come el sitio de otro.
                 f.addNotify();                 // crea los peers -> los layouts corren
@@ -49,7 +58,9 @@ public final class FrmBoardShot {
                  * se consideran pintables). printAll es el camino de impresión
                  * y sí dibuja sin display. Se pinta el contentPane —lo que hay
                  * dentro del marco—, que es lo que interesa mirar. */
-                java.awt.Container cp = f.getContentPane();
+                java.awt.Container cp = (f instanceof javax.swing.RootPaneContainer)
+                        ? ((javax.swing.RootPaneContainer) f).getContentPane()
+                        : f;
                 cp.setSize(f.getWidth(), f.getHeight());
                 cp.doLayout();
                 validarTodo(cp);

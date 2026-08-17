@@ -1019,48 +1019,29 @@ public class FrmMain extends javax.swing.JFrame
     /** H3/IDE — Propiedades del proyecto: editar `out` (checkbox pack) y AOT sin
      *  tocar el .bpbuild a mano. Persiste vía BpBuild.save() (conserva rutas
      *  relativas y campos ajenos; se pierden los comentarios //). */
+    /** #436 — el editor del proyecto. Sustituye al formulario mínimo que había
+     *  (out:pack + AOT con UN target en un campo de texto): ahora se editan
+     *  también los `sources` y las FAMILIAS, y lo guardado se comprueba
+     *  recargándolo con el mismo cargador que lo leerá al construir. */
     private void onProjectProperties() {
         if (currentProject == null || currentProjectFile == null) {
             javax.swing.JOptionPane.showMessageDialog(this,
                     "No hay proyecto abierto. Abre o crea un proyecto (.bpbuild).",
-                    "Propiedades del proyecto", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+                    "Proyecto", javax.swing.JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        javax.swing.JCheckBox cbPack = new javax.swing.JCheckBox(
-                "Empaquetar en un pack al construir (out:pack)", "pack".equals(currentProject.out));
-        javax.swing.JCheckBox cbAot = new javax.swing.JCheckBox(
-                "AOT: compilar 'native' a .mdn al subir al device", currentProject.aotEnabled);
-        javax.swing.JTextField tfTarget = new javax.swing.JTextField(currentProject.aotTarget, 8);
-
-        javax.swing.JPanel panel = new javax.swing.JPanel(new java.awt.GridBagLayout());
-        java.awt.GridBagConstraints c = new java.awt.GridBagConstraints();
-        c.insets = new java.awt.Insets(3, 3, 3, 3);
-        c.anchor = java.awt.GridBagConstraints.WEST;
-        c.gridx = 0; c.gridy = 0; c.gridwidth = 2;
-        panel.add(new javax.swing.JLabel("Proyecto: " + currentProject.main
-                + "   (" + currentProjectFile.getFileName() + ")"), c);
-        c.gridy = 1; panel.add(cbPack, c);
-        c.gridy = 2; panel.add(cbAot, c);
-        c.gridwidth = 1;
-        c.gridx = 0; c.gridy = 3; panel.add(new javax.swing.JLabel("     target AOT:"), c);
-        c.gridx = 1; c.gridy = 3; panel.add(tfTarget, c);
-
-        int res = javax.swing.JOptionPane.showConfirmDialog(this, panel, "Propiedades del proyecto",
-                javax.swing.JOptionPane.OK_CANCEL_OPTION, javax.swing.JOptionPane.PLAIN_MESSAGE);
-        if (res != javax.swing.JOptionPane.OK_OPTION) return;
-
-        currentProject.out        = cbPack.isSelected() ? "pack" : "normal";
-        currentProject.aotEnabled = cbAot.isSelected();
-        String tg = tfTarget.getText().trim();
-        if (!tg.isEmpty()) currentProject.aotTarget = tg;
+        ProjectDialog dlg = new ProjectDialog(this, currentProjectFile, currentProject,
+                                              this::appendConsola);
+        dlg.setVisible(true);
+        if (!dlg.seGuardo()) return;
+        /* Se RECARGA de disco en vez de quedarse con el objeto editado: así lo
+         * que el IDE tiene en memoria es exactamente lo que hay en el fichero,
+         * con las rutas resueltas por el cargador y no por el diálogo. */
         try {
-            currentProject.save(currentProjectFile);
-            appendConsola("[ide] proyecto guardado: out=" + currentProject.out
-                    + ", aot=" + (currentProject.aotEnabled ? currentProject.aotTarget : "off") + "\n");
-        } catch (java.io.IOException ex) {
-            javax.swing.JOptionPane.showMessageDialog(this,
-                    "No se pudo guardar el .bpbuild: " + ex.getMessage(),
-                    "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
+            currentProject = basicplus.frontend.BpBuild.load(currentProjectFile);
+        } catch (Exception ex) {
+            appendConsola("[ide] aviso: el proyecto se guardó pero no se pudo recargar: "
+                    + ex.getMessage() + "\n");
         }
     }
 
