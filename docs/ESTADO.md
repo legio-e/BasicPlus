@@ -297,7 +297,14 @@ fundir el `.mdn` en el `.mod` con un bloque por familia, `double` en `native`).
 
 ## Próximos pasos
 
-0. 🔎 **`#427` — EL CENSO DE LAS FAMILIAS, antes de documentar y finalizar.**
+0. ✅ **`#427` — EL CENSO, HECHO el 17-ago** → `docs/CENSO_FAMILIAS.md`.
+   Lo que dejó pendiente **para V5** (prioridad de Eduardo, ficha a ficha): el
+   **`-Og` del P4** (todas las medidas de estos días llevan optimización de
+   depuración), **`#421` que no llegó al STM32**, el **`json_min.c` del STM32**
+   (copia vieja del parser del wire, 220 vs 263 líneas) y **`hello_mod`**. El
+   resto de los rojos es unificación → V6.
+   *(Enunciado original abajo, que el porqué sigue valiendo.)*
+   🔎 **El encargo era:**
    Decisión de Eduardo (16-ago): revisar TODAS las familias e imágenes para
    tener un censo real de qué tiene cada una del común, qué lleva por su cuenta
    y qué le falta. **El censo es de V5; la unificación que salga, de V6** — y lo
