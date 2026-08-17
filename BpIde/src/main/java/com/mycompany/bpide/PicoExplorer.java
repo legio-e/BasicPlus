@@ -334,6 +334,84 @@ public final class PicoExplorer extends JPanel {
     }
 
     /** Resuelve un argumento de path contra el cwd (absoluto si empieza por /). */
+    /* ── #437 — helpers de los comandos de fichero ────────────────────────
+     * Partir en DOS respetando comillas: en Windows las rutas con espacios son
+     * la norma (`C:\Program Files\...`), y un split por espacios a secas las
+     * parte por la mitad y el error sale lejos. */
+    /** Puerta para {@link ConsolaArgsSmoke}: el troceo es la unica parte de los
+     *  comandos de fichero con logica propia, y probarla no justifica abrir el
+     *  metodo entero. */
+    static String[] partirDosParaPruebas(String arg) { return partirDos(arg); }
+
+    private static String[] partirDos(String arg) {
+        String a = (arg == null) ? "" : arg.trim();
+        if (a.isEmpty()) return new String[] { "", "" };
+        String primero, resto;
+        if (a.charAt(0) == '"') {
+            int fin = a.indexOf('"', 1);
+            if (fin < 0) { primero = a.substring(1); resto = ""; }
+            else { primero = a.substring(1, fin); resto = a.substring(fin + 1).trim(); }
+        } else {
+            int sp = a.indexOf(' ');
+            if (sp < 0) { primero = a; resto = ""; }
+            else { primero = a.substring(0, sp); resto = a.substring(sp + 1).trim(); }
+        }
+        if (resto.length() >= 2 && resto.charAt(0) == '"' && resto.endsWith("\"")) {
+            resto = resto.substring(1, resto.length() - 1);
+        }
+        return new String[] { primero, resto };
+    }
+
+    /** Destino EN LA PLACA de un `copy`. Sin destino, la carpeta actual; si el
+     *  destino acaba en '/' o es una carpeta conocida del arbol, se le pega el
+     *  nombre del fichero; si no, es la ruta completa (permite renombrar). */
+    private String destinoDe(String arg, String nombreLocal) {
+        if (arg == null || arg.isEmpty()) return resolvePath(nombreLocal);
+        String d = arg.trim();
+        if (d.endsWith("/")) return resolvePath(d + nombreLocal);
+        String abs = resolvePath(d);
+        return esCarpetaConocida(abs) ? normalizePath(abs + "/" + nombreLocal) : abs;
+    }
+
+    /** ¿el arbol conoce esta ruta como carpeta? (las carpetas del device son
+     *  namespace: existen porque hay algo dentro, no como nodo propio). */
+    private boolean esCarpetaConocida(String abs) {
+        String pref = abs.endsWith("/") ? abs : abs + "/";
+        for (int i = 0; i < fileTree.getRowCount(); i++) {
+            Object last = fileTree.getPathForRow(i).getLastPathComponent();
+            if (!(last instanceof DefaultMutableTreeNode)) continue;
+            Object uo = ((DefaultMutableTreeNode) last).getUserObject();
+            if (uo instanceof Backend.Entry) {
+                String n = ((Backend.Entry) uo).name;
+                if (!n.startsWith("/")) n = "/" + n;
+                if (n.startsWith(pref)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** Carpeta del PC donde cae un `get` sin destino: la ultima que se uso para
+     *  subir (IdePrefs, la misma que recuerda el chooser) o el directorio de
+     *  trabajo. No se estrena una preferencia nueva al lado de la que ya hay. */
+    private String carpetaLocalPorDefecto() {
+        IdePrefs prefs = IdePrefs.load();
+        if (prefs.lastUploadDir != null) {
+            java.io.File d = new java.io.File(prefs.lastUploadDir);
+            if (d.isDirectory()) return d.getAbsolutePath();
+        }
+        return new java.io.File(".").getAbsolutePath();
+    }
+
+    /** Destino EN EL PC de un `get`. Una carpeta existente recibe el basename. */
+    private java.io.File destinoLocal(String arg, String remoto) {
+        String base = remoto;
+        int sl = base.lastIndexOf('/');
+        if (sl >= 0) base = base.substring(sl + 1);
+        if (arg == null || arg.isEmpty()) return new java.io.File(carpetaLocalPorDefecto(), base);
+        java.io.File f = new java.io.File(arg);
+        return f.isDirectory() ? new java.io.File(f, base) : f;
+    }
+
     private String resolvePath(String arg) {
         if (arg == null || arg.isEmpty()) return consoleCwd;
         if (arg.startsWith("/")) return normalizePath(arg);
@@ -355,10 +433,13 @@ public final class PicoExplorer extends JPanel {
         switch (cmd) {
             case "help": case "?":
                 emitLine("  comandos: dir [ruta] · cd <ruta> · type <fich> · edit <fich> · new <fich> · run <fich> · del <fich>");
-                emitLine("            kill · autorun [fich|off] · mem · save · log · reset · cls · help");
+                emitLine("            copy <local> [destino] · get <remoto> [local]");
+                emitLine("            kill · autorun [fich|off] · mem · save · log · logclr · reset · cls · help");
                 emitLine("            sd            — identifica la tarjeta SD (no monta nada)");
                 emitLine("            sd mount      — la monta como sistema de ficheros en /sd");
                 emitLine("  type=volcar fichero a la consola · edit=ver/editar en ventana · new=crear fichero nuevo");
+                emitLine("  copy=sube un fichero del PC (sin destino, a la carpeta actual; comillas si hay espacios)");
+                emitLine("  get=baja un fichero de la placa al PC · logclr=vacia el log de la placa");
                 emitLine("  kill=aborta el programa en ejecución (también menú Run → Stop, Ctrl+F2)");
                 emitLine("  autorun=app que arranca al boot (/sys/auto.txt); con la app corriendo");
                 emitLine("          el IDE puede conectar y pararla con kill");
@@ -493,6 +574,50 @@ public final class PicoExplorer extends JPanel {
                         emitLine("  abriendo editor: " + p);
                         break;
                     }
+                    /* #437 — COPY / GET / LOGCLR. La consola no llegaba a donde
+                     * llega el arbol: subir, bajar y vaciar el log solo existian
+                     * como boton. Los tres verbos ya los tenia el Backend, asi
+                     * que esto es fontaneria y no capacidad nueva. Se llaman
+                     * `copy` y `get` y no `put`/`download` porque esta consola
+                     * habla en DOS (dir, type, del, cls) y ahi `copy` se lee
+                     * solo. */
+                    case "copy": case "cp": {
+                        String[] cp = partirDos(farg);
+                        if (cp[0].isEmpty()) {
+                            emitLine("  uso: copy <fichero-del-PC> [destino-en-la-placa]");
+                            emitLine("       sin destino va a la carpeta actual (" + consoleCwd + ")");
+                            emitLine("       las rutas con espacios, entre comillas");
+                            break;
+                        }
+                        java.io.File local = new java.io.File(cp[0]);
+                        if (!local.isFile()) { emitLine("  no existe o no es un fichero: " + local.getPath()); break; }
+                        String destino = destinoDe(cp[1], local.getName());
+                        byte[] datos = java.nio.file.Files.readAllBytes(local.toPath());
+                        backend.put(destino, datos);
+                        emitLine("  copiado: " + local.getName() + " -> " + destino
+                                 + " (" + datos.length + " bytes)");
+                        SwingUtilities.invokeLater(this::onRefresh);
+                        break;
+                    }
+                    case "get": {
+                        String[] cp = partirDos(farg);
+                        if (cp[0].isEmpty()) {
+                            emitLine("  uso: get <fichero-de-la-placa> [destino-en-el-PC]");
+                            emitLine("       sin destino se guarda en " + carpetaLocalPorDefecto());
+                            break;
+                        }
+                        String remoto = resolvePath(cp[0]);
+                        byte[] datos = backend.get(remoto);
+                        java.io.File destino = destinoLocal(cp[1], remoto);
+                        java.nio.file.Files.write(destino.toPath(), datos);
+                        emitLine("  bajado: " + remoto + " -> " + destino.getPath()
+                                 + " (" + datos.length + " bytes)");
+                        break;
+                    }
+                    case "logclr":
+                        backend.clearLog();
+                        emitLine("  log de la placa vaciado");
+                        break;
                     case "del":
                         if (farg.isEmpty()) { emitLine("  uso: del <fichero>"); break; }
                         backend.del(resolvePath(farg));
