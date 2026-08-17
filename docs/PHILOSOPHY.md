@@ -383,7 +383,7 @@ Este es un documento de "por qué" — no de "cómo". Para los detalles
 técnicos:
 
 - `docs/manual.html` — referencia del lenguaje y de la VM.
-- `docs/PENDIENTES.md` — backlog de bugs y mejoras.
+- `docs/PENDIENTES.md` — limitaciones conocidas del lenguaje y mejoras anotadas.
 - `basicplus_grammar.ebnf.txt` — gramática formal.
 
 Cuando aparezca una decisión nueva de diseño que tenga raíz en la

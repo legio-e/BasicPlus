@@ -232,8 +232,8 @@ Documentation is available in **English** (`docs/en/`) and
 - Specs *(Spanish)*: [.mod format](docs/MOD_FORMAT.md),
   [opcodes](docs/OPCODES.md), [heap layout](docs/HEAP_LAYOUT.md),
   [builtins](docs/BUILTINS.md), [wire protocol](docs/BPVM_WIRE_PROTOCOL.md).
-- [Living backlog](docs/PENDIENTES.md) *(Spanish)* — the project's honest
-  diary.
+- [Known limitations](docs/PENDIENTES.md) *(Spanish)* — what the language does
+  not do yet, stated plainly.
 
 ## Status
 

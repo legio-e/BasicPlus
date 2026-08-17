@@ -228,7 +228,7 @@ los **binarios precompilados** de la [última release](https://github.com/legio-
 - Especificaciones: [formato .mod](docs/MOD_FORMAT.md),
   [opcodes](docs/OPCODES.md), [layout del heap](docs/HEAP_LAYOUT.md),
   [builtins](docs/BUILTINS.md), [protocolo wire](docs/BPVM_WIRE_PROTOCOL.md).
-- [Backlog vivo](docs/PENDIENTES.md) — el diario honesto del proyecto.
+- [Limitaciones conocidas](docs/PENDIENTES.md) — lo que el lenguaje aún no hace, dicho sin adornos.
 
 ## Estado
 

@@ -140,4 +140,4 @@ otras placas. AOT activo (mismo Cortex-M33 que el RP2350).
   (ESP32-P4, STM32-DK2): widgets, color y fuentes, formularios `.win`.
 - `samples/` — ejemplos: GPIO OO, I²C/SPI/UART, threads, excepciones,
   tuplas, `native` AOT, TCP…
-- `docs/PENDIENTES.md` — el backlog vivo y honesto del proyecto.
+- `docs/PENDIENTES.md` — las limitaciones conocidas del lenguaje, dichas sin adornos.

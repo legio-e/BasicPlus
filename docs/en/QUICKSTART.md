@@ -141,4 +141,4 @@ other boards. AOT enabled (same Cortex-M33 as the RP2350).
   (ESP32-P4, STM32-DK2): widgets, color and fonts, `.win` forms.
 - `samples/` — examples: OO GPIO, I²C/SPI/UART, threads, exceptions,
   tuples, `native` AOT, TCP…
-- `docs/PENDIENTES.md` *(Spanish)* — the project's living, honest backlog.
+- `docs/PENDIENTES.md` *(Spanish)* — the language's known limitations, stated plainly.
