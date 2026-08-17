@@ -564,6 +564,12 @@ test-sd:
 # justo la clase de codigo que al equivocarse no revienta - devuelve un numero.
 # Un numero equivocado ahi manda a reformatear una tarjeta que estaba bien.
 # Los dos desplazamientos del test son los MEDIDOS en el banco (2048 y 32768).
+test-sdsc:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_sdsc.c src/bpvm_sd.c -o build/test_sdsc.exe
+	@echo "--- H2-P5: el camino SDSC forzado sin tarjeta (esperado: solo 'ok') ---"
+	./build/test_sdsc.exe
+
 test-blk:
 	@mkdir -p build
 	$(CC) $(CFLAGS) test/test_blk.c src/bpvm_blk.c src/bpvm_sd_blk.c \

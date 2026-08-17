@@ -1259,13 +1259,25 @@ rutas ya resueltas) — por eso ha vivido tanto tiempo sin verse. Grupo B.
   alta capacidad están probadas** y el driver **no está afinado a una tarjeta ni a
   una placa**. Eso era el grueso de la ficha, y está hecho.
   ⏭️ **Lo que queda es sólo esto, y son dos cosas de capas distintas:**
-  1. 🔴 **SDSC — el único cambio de CAMINO que falta.** En SDHC/SDXC el argumento
-     de CMD17 es el **bloque** y en SDSC es el **byte**: confundirlos no da error,
-     da **datos de otro sitio** (avisado en `bpvm_sd.h:173`). Exige una tarjeta de
-     **≤2 GB**, que hoy no se compran. **Decisión pendiente de Eduardo**: buscar
-     una vieja y probarlo, o documentar el riesgo y cerrar la ficha — el mismo
-     criterio que se aplicó con los subnormales (L14): si no se puede medir, se
-     dice, no se supone.
+  1. 🟢 **SDSC — la parte que corrompe en silencio, YA PROBADA sin tarjeta**
+     (17-ago, `make test-sdsc`). Eduardo: *«no tengo tarjetas de 2G ni voy a
+     tener, están obsoletas»* — y tiene razón, pero lo que daba miedo de SDSC no
+     era la tarjeta, era **una cuenta**: `arg = alta_cap ? lba : lba*512`
+     (`bpvm_sd.c:400` y `:415`). En SDHC/SDXC el argumento de CMD17/CMD24 es el
+     BLOQUE y en SDSC el BYTE, y confundirlos no da error: lee o escribe otro
+     sitio. Eso es aritmética pura sobre un dato del OCR, y lo único que tocaba
+     el hardware eran dos funciones de plataforma — `bpvm_spi_transfer` y
+     `bpvm_gpio_write` —, que el test pone él. **No hacía falta la tarjeta.**
+     Cada caso va con su gemelo de alta capacidad (lba 2 → 1024 vs 2), y el
+     bloque 0 se comprueba aparte porque es el único donde un driver roto
+     acierta por casualidad — o sea que arrancar no distingue el fallo.
+     **Verificado en las dos direcciones**: invirtiendo la línea del driver, el
+     test se pone rojo SÓLO en los casos SDSC y el gemelo sigue verde.
+     *(El decodificador del CSD v1 ya estaba cubierto en `test_sd.c` desde H1.)*
+     ⚠️ **Lo que sigue sin poderse medir**, y así se queda: las rarezas
+     eléctricas y de arranque de una SDSC real (no contesta a CMD8, negociación
+     distinta). Sin tarjeta no hay forma, y suponerlo sería peor que decirlo.
+     Mismo criterio que L14: si no se puede medir, se dice.
   2. 🟡 **exFAT y «superfloppy» sin MBR** — NO son del driver SD sino de **FatFs y
      del arranque de partición**, o sea otra capa. Se prueban **reformateando
      cualquiera de las dos tarjetas que ya hay**, sin comprar nada: es lo barato
