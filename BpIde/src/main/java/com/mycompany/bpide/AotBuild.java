@@ -59,10 +59,31 @@ public final class AotBuild {
      *  tampoco los pasa → casan por construcción. A diferencia de ARM, el .text
      *  RISC-V NO sale autocontenido (la llamada recursiva, refs PC-relativas dejan
      *  relocalizaciones que MdnPack no resuelve) → hace falta el paso de enlace
-     *  (RISCV_LINK_FLAGS). -mno-relax evita las relocs de relajación. */
+     *  (RISCV_LINK_FLAGS). -mno-relax evita las relocs de relajación.
+     *
+     *  #440 — `-mcmodel=medany` NO es opcional: es lo que hace el .mdn cargable
+     *  fuera de la dirección 0. Enlazar a -Ttext=0 deja relativos los SALTOS,
+     *  pero con el modelo por defecto (medlow) los DATOS se direccionan en
+     *  absoluto. Un literal en el offset 0x288 salía así:
+     *
+     *      lui  a1,0x0  /  add a1,a1,648      ← a1 = 648, dirección absoluta
+     *
+     *  o sea que en la placa `string_from_cstr` recibía el puntero 648 y se
+     *  ponía a leer memoria salvaje: cuelgue. ARM no lo sufre porque va con
+     *  -fpic y remata con `add r1, pc`. Con medany sale el equivalente:
+     *
+     *      auipc a1,0x0 /  add a1,a1,528      ← a1 = PC + offset
+     *
+     *  Medido desensamblando las dos familias: 3 refs absolutas → 0. Y hace
+     *  falta el -mno-relax de arriba, que la relajación deshace los auipc. */
     private static final String[] RISCV_P4_FLAGS = {
-        "-fno-pic", "-mno-relax", "-fno-jump-tables", "-Os",
+        "-fno-pic", "-mcmodel=medany", "-mno-relax", "-fno-jump-tables", "-Os",
     };
+
+    /** Para `AotRiscvPicSmoke`, que compila el mismo `.c` con y sin `medany`:
+     *  los flags los coge de aquí para que el experimento use los REALES y no
+     *  una copia que se quede rancia. */
+    static String[] flagsRiscvParaPruebas() { return RISCV_P4_FLAGS.clone(); }
 
     /** Paso EXTRA de RISC-V (bifurcación A, decidida con Eduardo): enlazar el .o a
      *  -Ttext=0 resolviendo las relocalizaciones internas PC-relativas → el .text
@@ -331,6 +352,16 @@ public final class AotBuild {
             cmd.add("-o"); cmd.add(oFile.toString());
             runGcc(cmd, mod, log);
 
+            /* #440 — el .o TIENE que direccionar sus datos relativo al PC. Se
+             * comprueba AQUÍ y no después porque al enlazar las relocs se
+             * consumen y ya no se distingue una de otra: en el .elf las dos
+             * variantes son bytes plausibles. Y se mira el .o, no el .c, que
+             * esto lo decide el compilador, no lo que escribimos.
+             *
+             * El .mdn se carga donde caiga, así que una dirección absoluta es
+             * un puntero salvaje en la placa — y no revienta: se CUELGA. */
+            exigirDireccionamientoRelativo(oFile, f, mod);
+
             // 2b) RISC-V: paso EXTRA de enlace. El .text RISC-V (a diferencia de ARM)
             // NO sale autocontenido — lleva relocalizaciones internas PC-relativas (la
             // recursión, etc.) que MdnPack no resuelve. Enlazamos a -Ttext=0 para
@@ -358,6 +389,52 @@ public final class AotBuild {
             salidas.add(mdnFile);
         }
         return salidas;
+    }
+
+    /* #440 — RISC-V: relocalizaciones de direccionamiento ABSOLUTO. Son las que
+     * emite el modelo `medlow` (el de por defecto) para llegar a un símbolo:
+     * `lui`+`addi` con la dirección de enlace metida como constante. Un `lui` de
+     * constante grande NO lleva relocalización, así que ver una de éstas en el
+     * `.text` significa siempre lo mismo: el código sólo vale cargado en la
+     * dirección de enlace. Y el `.mdn` se carga donde caiga.
+     *
+     * Medido con `NatEsc` (3 literales) en las dos direcciones:
+     *    sin `-mcmodel=medany`  →  {26×3, 27×3}   ← absoluto, cuelga en placa
+     *    con `-mcmodel=medany`  →  {23×3, 24×3}   ← PCREL_HI20/LO12_I, correcto
+     * y el control de la familia que SÍ funciona, ARM: {3×3} = R_ARM_REL32. */
+    private static final int R_RISCV_HI20 = 26, R_RISCV_LO12_I = 27, R_RISCV_LO12_S = 28;
+
+    /** Comprueba que el `.o` de RISC-V direcciona sus datos relativo al PC.
+     *  Se mira el `.o` y no el `.elf` porque al enlazar las relocalizaciones se
+     *  consumen: en el enlazado las dos variantes son bytes igual de plausibles
+     *  y ya no hay nada que distinguir. Sólo RISC-V — ARM va con `-fpic`, que no
+     *  tiene este modo de fallo (y está verificado en placa). */
+    private static void exigirDireccionamientoRelativo(Path oFile, Familia f, String mod)
+            throws IOException {
+        if (!f.enlazarRiscv()) return;
+        int abs = relocsAbsolutasRiscv(oFile);
+        if (abs > 0) {
+            throw new IOException(
+                "AOT " + mod + " (" + f.target() + "): el .o direcciona datos en ABSOLUTO ("
+                + abs + " relocalización(es) R_RISCV_HI20/LO12). El .mdn se carga en"
+                + " cualquier dirección, así que en la placa saldría un puntero salvaje"
+                + " y un cuelgue mudo. Falta '-mcmodel=medany' en RISCV_P4_FLAGS (#440).");
+        }
+    }
+
+    /** Cuántas relocalizaciones de direccionamiento ABSOLUTO hay en el `.text`
+     *  de un `.o` de RISC-V. Separado de la guarda para que `AotRiscvPicSmoke`
+     *  pueda medir las dos variantes y comprobar que esto DISTINGUE — una
+     *  guarda sin control es un instrumento mudo. */
+    static int relocsAbsolutasRiscv(Path oFile) throws IOException {
+        basicplus.frontend.Elf32 elf =
+                basicplus.frontend.Elf32.parse(Files.readAllBytes(oFile));
+        int abs = 0;
+        for (basicplus.frontend.Elf32.Reloc r : elf.relocs(".text")) {
+            if (r.type == R_RISCV_HI20 || r.type == R_RISCV_LO12_I
+                    || r.type == R_RISCV_LO12_S) abs++;
+        }
+        return abs;
     }
 
     /** Lanza gcc y espera. Captura stdout+stderr para el diagnóstico. */

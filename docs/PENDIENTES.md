@@ -20,6 +20,18 @@
 > `B-gc-allocanchor`, `B-freeref-no-recursivo` — exigen tocar slots/GC con red de pruebas, no
 > son fixes contenidos de V3.
 
+### #441 — el `.mdn` no recuerda con qué RECETA se compiló
+`mdnIsStale` (`BpIde/.../PicoExplorer.java:1239`) decide por **fecha**: si el `.mod` es más nuevo, el
+`.mdn` se rehace. Eso caza el fuente cambiado, pero **no** que hayan cambiado los *flags* de
+compilación ni que el `.mdn` sea de **otra familia** — su propio comentario ya nombra "los `.o` sin
+memoria de sus flags" como una de las cuatro mordeduras de artefacto rancio del proyecto.
+Lo destapó **#440** el 17-ago: al añadir `-mcmodel=medany` a `RISCV_P4_FLAGS`, **todos** los `.mdn`
+de RISC-V ya generados quedaron mal —con direccionamiento absoluto, o sea cuelgue mudo en placa— y
+ninguno se habría regenerado, porque ningún `.bp` había cambiado. Hubo que borrarlos a mano.
+Forma del arreglo: sellar en el `.mdn` una huella de su receta (arquitectura + hash de los flags) y
+que un sello distinto cuente como rancio, igual que la fecha. La arquitectura ya viaja en la
+cabecera (`arch=40`/`243`) pero **nadie la compara** con la de la placa antes de subirlo.
+
 ### #389 — el estrechamiento de `Object` a una clase NO se comprueba en ejecución
 Desde el 14-ago, `Object` es la raíz real del modelo de objetos: subir es implícito y **bajar hay
 que escribirlo** (`Cosa(o)`, `string(o)`, la misma forma que `byte(someInt)`). Eso quita el fallo
