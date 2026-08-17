@@ -239,7 +239,7 @@ la placa delante. Detalle de cada ficha en `notas/FICHAS.md`.
 > dentro, el log se llena en ~26 colectas (**`#423`**), así que puede que la
 > primera imagen nueva salga ya con `[LOG OVERFLOW]` al pie.
 
-## 🎯 EL PLAN DE CIERRE DE V5 — quedan 12 (18-ago)
+## 🎯 EL PLAN DE CIERRE DE V5 — quedan 9 (18-ago)
 
 **A — LA SESIÓN DE PLACA: ✅ CERRADA** (17-ago). Ocho fichas verificadas o
 resueltas en placa; detalle en «Última sesión».
@@ -263,10 +263,17 @@ abre un diálogo contra el micro simulado y lo fotografía —contesta en un min
 a «¿está roto o es que no se ve?»—, y **`make test-listtrunc`**, que fuerza el
 truncado del listado contra el simulador con su control en verde.
 
-**B — De escritorio, caso a caso**: `List`/`SyncList`/`OwnerList` de `any` a
-`Object` (encargo de Eduardo, hermano de `#438`) · `#429` (el IDE debe detectar
-su compilador rancio) · `#412` (`run` con argumento) · `#431` (miVM busca las
-deps en el CWD) · `GAP-4` (primero REPRODUCIR la divergencia).
+**B — De escritorio: ✅ hecho lo mecánico** (18-ago). `#431` (miVM buscaba las
+deps en el CWD y reventaba con un stack trace — ahora busca junto al `.mod` y un
+módulo que falta se DICE, con exit 1) y `#429` (el compilador embebido avisa de
+que se ha quedado rancio, con segundos en las fechas para que la diferencia se
+VEA). `#412` **se fue a V6** por decisión de Eduardo, con su diseño ya cerrado
+en `notas/V6_IDEAS.md` — el argumento siempre en el heap, idea suya, que además
+borra la asimetría literal-de-datos vs cadena-de-heap.
+
+Queda de B lo que tiene conversación previa: **`List`/`SyncList`/`OwnerList` de
+`any` a `Object`** (encargo de Eduardo, la misma conversación que `#438`) y
+**`GAP-4`** (primero REPRODUCIR la divergencia, luego decidir).
 
 **Lenguaje**: `#438` la clase `Box` — **no es del IDE**; va con el `List` →
 `Object`, que es la misma conversación.
