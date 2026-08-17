@@ -101,6 +101,90 @@ public final class Version {
      */
     public static void banner() {
         System.out.println(linea());
+        String aviso = avisoDeDesfase();
+        if (aviso != null) System.out.println(aviso);
+    }
+
+    /**
+     * #429 — ¿ME HE QUEDADO RANCIO? Devuelve el aviso, o null si no hay motivo.
+     *
+     * <h3>El caso, que ha pasado DOS veces en dos días</h3>
+     * BpIde empaqueta su PROPIA copia del compilador en el fat-jar. Al tocar el
+     * frontend y no reempaquetar el IDE, el IDE sigue compilando con la copia
+     * vieja: el mismo `.bp` da 0 errores por línea de órdenes y un error absurdo
+     * desde el IDE («no puede utilizar long en código nativo»). El banner de
+     * arriba ya deja verlo —si uno pone las dos líneas una encima de otra— pero
+     * eso exige sospecharlo primero. Esto lo dice sin que nadie sospeche nada.
+     *
+     * <h3>Cómo se decide, sin adivinar</h3>
+     * No hay heurística: se comparan FECHAS de ficheros que existen o no.
+     * <ul>
+     *   <li>Si esta copia ES el frontend (su jar o sus clases), no hay nada que
+     *       comparar — se calla.</li>
+     *   <li>Si está EMBEBIDA en otro artefacto y al lado hay un frontend
+     *       construido MÁS TARDE, eso es un desfase y se dice.</li>
+     *   <li>Si no hay frontend al lado —una distribución, la máquina de un
+     *       usuario— no se dice nada. Ausencia de dato no es dato.</li>
+     * </ul>
+     *
+     * <p>Nunca lanza, como todo lo de esta clase: un fallo averiguando esto no
+     * puede tumbar una compilación.
+     */
+    public static String avisoDeDesfase() {
+        try {
+            File mio = procedencia();
+            if (mio == null) return null;
+            long tMio = mio.lastModified();
+            if (tMio <= 0) return null;
+
+            String nombre = mio.getName();
+            // ¿Soy YO el frontend? Entonces no hay copia de la que desfasarse.
+            if (nombre.startsWith("basicplus-frontend")) return null;
+            if (mio.isFile() && nombre.endsWith(".class")
+                    && mio.getPath().replace('\\', '/').contains("/lexer-java/target/classes/")) {
+                return null;
+            }
+
+            File frontend = buscarFrontend();
+            if (frontend == null) return null;
+            long tFront = frontend.lastModified();
+            if (tFront <= 0 || tFront <= tMio) return null;
+
+            /* CON SEGUNDOS, y no es un detalle: el desfase que hay que cazar
+             * suele ser de minutos o menos —se toca el frontend, se compila, y
+             * se olvida reempaquetar el IDE—, así que con precisión de minuto
+             * las dos fechas salen IGUALES y el aviso parece contradecirse a sí
+             * mismo. Un aviso cuya evidencia no se ve se lee como falsa alarma,
+             * y a la tercera ya no lo mira nadie. */
+            SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            return "  AVISO: este compilador va EMBEBIDO y es MAS VIEJO que el del arbol."
+                 + System.lineSeparator()
+                 + "         embebido: " + nombreCorto(mio) + "  " + f.format(new Date(tMio))
+                 + System.lineSeparator()
+                 + "         al lado  : " + frontend.getName() + "  " + f.format(new Date(tFront))
+                 + System.lineSeparator()
+                 + "         Reconstruye el artefacto que lo embebe (BpIde) o compilaras"
+                 + " con reglas viejas.";
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** El frontend construido que haya en el árbol, si lo hay. Se prueban las
+     *  rutas del repo desde el directorio de trabajo — nada de buscar por el
+     *  disco: o está donde se construye, o no cuenta. */
+    private static File buscarFrontend() {
+        String[] candidatos = {
+            "lexer-java/target/basicplus-frontend.jar",
+            "../lexer-java/target/basicplus-frontend.jar",
+            "lexer-java/target/classes/basicplus/frontend/Version.class",
+            "../lexer-java/target/classes/basicplus/frontend/Version.class",
+        };
+        for (String c : candidatos) {
+            File f = new File(c);
+            if (f.isFile()) return f;
+        }
+        return null;
     }
 
     /**
